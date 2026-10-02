@@ -24,7 +24,8 @@ CASES = (("bf16-x-64", "bf16", 64, ROLE_X), ("bf16-w-4096", "bf16", 4096, ROLE_W
          ("fp32-x-64", "fp32", 64, ROLE_X), ("fp32-w-4096", "fp32", 4096, ROLE_W),
          ("nvfp4-p-x-64", "nvfp4-p", 64, ROLE_X), ("nvfp4-p-w-4096", "nvfp4-p", 4096, ROLE_W),
          ("fp8-p-x-64", "fp8-p", 64, ROLE_X), ("fp8-p-w-4096", "fp8-p", 4096, ROLE_W),
-         ("tile-2x33", "tile", (2, 33), ROLE_X), ("tile-64x64", "tile", (64, 64), ROLE_X))
+         ("tile-2x33", "tile", (2, 33), ROLE_X), ("tile-64x64", "tile", (64, 64), ROLE_X),
+         ("ok-x", "ok", 64, ROLE_X), ("ok-w", "ok", 4096, ROLE_W))
 
 
 def shake(case: str, part: str, n: int) -> bytes:
@@ -55,6 +56,8 @@ def inputs(case: str, row: str, k) -> dict:
         return {"codes": codes(case, "codes", k, 4), "scales": codes(case, "scales", k // 16, 8), "p": u16(case, "p", L.P_WORDS)}
     if row == "fp8-p":
         return {"codes": codes(case, "codes", k, 8), "p": u16(case, "p", L.P_WORDS)}
+    if row == "ok":
+        return {"ok": codes(case, "ok", 1, 1)[0]}
     tm, tn = k
     return {"c": [u32(case, f"c{i}", tn) for i in range(tm)], "u": [u32(case, f"u{i}", tn) for i in range(tm)]}
 
@@ -68,6 +71,8 @@ def words(row: str, x: dict) -> list[int]:
         return L.words_nvfp4_p(x["codes"], x["scales"], x["p"])
     if row == "fp8-p":
         return L.words_fp8_p(x["codes"], x["p"])
+    if row == "ok":
+        return L.words_ok(x["ok"])
     return L.words_tile(C.leaf(types.SimpleNamespace(c=x["c"], u=x["u"])))
 
 

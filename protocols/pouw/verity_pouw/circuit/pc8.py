@@ -12,8 +12,8 @@ The roots are `pc4`'s: `Pc8Weight{K,N,DEV}` holds the B rows; `Pc8Call{M,K,N,TM,
 reading the weight's B̃ and P_B as committed inputs; `Pc8Check` is both in one root.  The partition is
 `Q_template_instances` over the templates (`query`), and every value is computed in exactly one unit.  Forming v0 (#311's
 port) has no circuit here.  The hiding Programs are `pc4`'s (``Shape.hidden``): `Pc8TileHidden` returns its tile digest in
-place of C̃ and U, and the rows are C-Flock-committed ports (`PORTS`), with fp32 input rows and fp8-p rows (A′_i ‖ P_A,i,
-B̃_j ‖ P_B,j; `leaves`).
+place of C̃ and U, and the rows are C-Flock-committed ports (`PORTS`), with fp32 input rows, fp8-p rows (A′_i ‖ P_A,i,
+B̃_j ‖ P_B,j; `leaves`) and each row's ``ok`` row, and the anchored inputs public input regions.
 
 ``DEV`` names a device record (`pearl_c_device.DEVICES`): its E4M3 k32 atom (`HopperE4m3QgmmaDot32` on the H100,
 `BlackwellE4m3QmmaDot32` on sm_120) and its promotion period G.  The peel's BF16 k16 step is `HopperBF16WgmmaDot16` on
@@ -35,14 +35,15 @@ every atom, cast, chain and peel factor is finite.  E′_B's FP32 decode is the 
 back to that decode.
 
 The noise lines (E_A, E_B, F_A, F_B) and G = F_Bᵀ·F_A (`pearl_c.gram`) are verifier-derived public inputs
-(`anchors.TileAnchors`, `Shape.anchored`): the verifier derives the lines from public seeds and computes G from them, so no
-unit computes G.
+(`anchors.TileAnchors`, `DERIVATIONS`): the verifier derives the lines from public seeds and computes G from them, so no
+unit computes G.  In a unit's proof each is a C-Flock public input region, as in `pc4`: one u16 word per E4M3 code, two
+per FP32 word of G, low half first.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Sequence
+from typing import Any, ClassVar
 
 from verity.commitments.rowleaf import ROLE_W, ROLE_X
 from verity.ir import partition_object as PO
@@ -58,6 +59,7 @@ from ..protocol import DomainError
 from ..schemes import pearl_c as C
 from ..schemes import pearl_kw as P
 from ..schemes.pearl_c_device import DEVICES
+from . import anchors as A
 from . import leaves as L
 from . import pc4
 from . import words as W
@@ -223,13 +225,59 @@ Pc8TileHiddenDef = CompositeDefinition(
     doc="`Pc8Tile` with its checked words hidden: their tile digest (`leaves.PearlTileDigest`, `pearl_c.leaf` of C̃ and U).",
     conformance="protocol-defined")
 
-#: each unit's ports under hiding, as `pc4.PORTS`: fp32 input rows and fp8-p rows
+#: each unit's ports under hiding, as `pc4.PORTS`: fp32 input rows, fp8-p rows and ok rows, and the anchors' regions
 PORTS = {
-    "row_b": {"rows": (("fp32", ROLE_W, ("x",)), ("fp8-p", ROLE_W, (0, 1))), "anchors": ("e", "fb", "fa", "g"), "public": (2,)},
-    "row_a": {"rows": (("fp32", ROLE_X, ("x",)), ("fp8-p", ROLE_X, (0, 1))), "anchors": ("e", "fa", "fb"), "public": (2,)},
+    "row_b": {"rows": (("fp32", ROLE_W, ("x",)), ("fp8-p", ROLE_W, (0, 1)), ("ok", ROLE_W, (2,))),
+              "regions": {"e": "eb", "fb": "fb", "fa": "fa", "g": "g"}},
+    "row_a": {"rows": (("fp32", ROLE_X, ("x",)), ("fp8-p", ROLE_X, (0, 1)), ("ok", ROLE_X, (2,))),
+              "regions": {"e": "ea", "fa": "fa", "fb": "fb"}},
     "tile": {"rows": (("fp8-p", ROLE_X, ("ac", "pa")), ("fp8-p", ROLE_W, ("bc", "pb")), ("tile", ROLE_X, (0,))),
-             "anchors": (), "public": ()},
+             "regions": {}},
 }
+
+
+# ---- the anchors: public input regions, each with its recomputation ------------------------------------------------------
+
+def line_ea(shape, seed_a: bytes, i: int) -> list[int]:
+    """E_A's line for A's global row i: `pearl_kw.sample_line(seed_A, 0, 0, i)` (norm 256)."""
+    return P.sample_line(seed_a, 0, 0, i)
+
+
+def line_eb(shape, seed_b: bytes, j: int) -> list[int]:
+    """E_B's line for B's global row j: `pearl_kw.sample_line(seed_B, 1, 0, j)` (norm 256)."""
+    return P.sample_line(seed_b, 1, 0, j)
+
+
+def basis_fa(shape, seed_b: bytes, _i=None) -> list[int]:
+    """F_A, line t for position t < k: `pearl_c._basis(seed_B, 0, k, LINE_NORM_V1)`."""
+    return [c for ln in C._basis(seed_b, 0, shape.k, C.LINE_NORM_V1) for c in ln]
+
+
+def basis_fb(shape, seed_b: bytes, _i=None) -> list[int]:
+    """F_B, line t for position t < k: `pearl_c._basis(seed_B, 1, k, LINE_NORM_V1)`."""
+    return [c for ln in C._basis(seed_b, 1, shape.k, C.LINE_NORM_V1) for c in ln]
+
+
+def gram_g(shape, seed_b: bytes, _i=None) -> list[int]:
+    """G = F_Bᵀ·F_A by row p, then column q, on the record's chain: `pearl_c.gram(seed_B, k, LINE_NORM_V1, DEVICES[dev])`."""
+    return [w for row in C.gram(seed_b, shape.k, C.LINE_NORM_V1, DEVICES[shape.dev]) for w in row]
+
+
+_LINE = ("BLAKE3 keyed by keyed(seed, \"pearl/v4/FP8/noise-line\") over side ‖ factor ‖ index u32 LE zero-padded to 64 "
+         "bytes; byte b is ±((b & 0x7F) + 1), bit 7 the sign; scaled in BF16 to L2 norm {} and cast to E4M3 "
+         "(`pearl_kw.sample_line`); ")
+#: each anchor's recomputation from `pearl_c`'s seeds (`noise`: seed_A = BLAKE3 keyed by blake3("pearl-c/v0/seed-A") over
+#: salt ‖ root_A ‖ root_B ‖ matmul u64 LE, seed_B keyed by blake3("pearl-c/v0/seed-B") over salt ‖ root_B)
+DERIVATIONS = {
+    "ea": A.Derivation("seed_a", _LINE.format(256) + "side 0, factor 0, index A's global row", line_ea, 8, per_row=True),
+    "eb": A.Derivation("seed_b", _LINE.format(256) + "side 1, factor 0, index B's global row", line_eb, 8, per_row=True),
+    "fa": A.Derivation("seed_b", _LINE.format(16) + "side 0, factor 1, index the position t < k", basis_fa, 8),
+    "fb": A.Derivation("seed_b", _LINE.format(16) + "side 1, factor 1, index the position t < k", basis_fb, 8),
+    "g": A.Derivation("seed_b", "G_pq = the record's chain (`pearl_c.chain`: its atom and promotion) over F_B[:, p]·F_A[:, q]; "
+                      "FP32 words", gram_g, 32),
+}
+#: each seed as a public input port names it: the scheme's label for it
+SEEDS = {"seed_a": C.LABELS["seed-A"].decode(), "seed_b": C.LABELS["seed-B"].decode()}
 
 
 @lru_cache(maxsize=16)
@@ -246,7 +294,7 @@ def templates(k: int, tile: tuple[int, int] = TILE, dev: str = "sm120",
 @dataclass(frozen=True)
 class Shape:
     """M rows of A and N rows of B at depth k on device ``dev``, cut into tiles of ``tile`` (the scheme's is 64 x 64);
-    ``hidden``, the hiding Programs."""
+    ``hidden``, the hiding Programs.  `anchors.TileAnchors` reads its units' ports and its anchors' derivations."""
 
     m: int
     k: int
@@ -254,6 +302,9 @@ class Shape:
     tile: tuple[int, int] = TILE
     dev: str = "sm120"
     hidden: bool = False
+    ports: ClassVar[dict] = PORTS
+    derivations: ClassVar[dict] = DERIVATIONS
+    seeds: ClassVar[dict] = SEEDS
 
     def check(self) -> None:
         d = DEVICES.get(self.dev)
@@ -263,18 +314,6 @@ class Shape:
         if (self.k % d.window or not 0 < self.k <= d.k_max or min(self.m, self.n, tm, tn) <= 0 or self.m % tm
                 or self.n % tn):
             raise DomainError(f"Pearl-C's circuit needs {d.window} | k <= {d.k_max} and whole tiles on each side: {self}")
-
-    def anchored(self, seed_a: bytes, seed_b: bytes, rows: Sequence[int], cols: Sequence[int],
-                 names: Sequence[str]) -> dict[str, list[int]]:
-        """The anchored inputs ``names`` by parameter, from the scheme's seeds (`pearl_c`'s `noise`, forming v1): E_A's lines
-        for A's rows ``rows``, E_B's for B's rows ``cols``, F_A, F_B and G on this record's chain."""
-        k, flat = self.k, lambda lines: [c for ln in lines for c in ln]                # noqa: E731
-        derive = {"ea": lambda: flat(P.sample_line(seed_a, 0, 0, i) for i in rows),
-                  "eb": lambda: flat(P.sample_line(seed_b, 1, 0, j) for j in cols),
-                  "fa": lambda: flat(C._basis(seed_b, 0, k, C.LINE_NORM_V1)),
-                  "fb": lambda: flat(C._basis(seed_b, 1, k, C.LINE_NORM_V1)),
-                  "g": lambda: flat(C.gram(seed_b, k, C.LINE_NORM_V1, DEVICES[self.dev]))}
-        return {p: derive[p]() for p in names}
 
 
 def _weight_units(B, k: int, dev: str, b, eb, fa, fb, g):
@@ -407,5 +446,5 @@ def unit_cut(fn: SpecializedDefinition):
     return pc4.unit_cut(fn, _ROLE_OF)
 
 
-__all__ = ["ATOMS", "BASIS", "GRAM", "LINE", "PEELS", "PORTS", "P_ROW", "ROLES", "TILE", "Shape", "call", "check", "query",
-           "templates", "unit_cut", "units", "weight"]
+__all__ = ["ATOMS", "BASIS", "DERIVATIONS", "GRAM", "LINE", "PEELS", "PORTS", "P_ROW", "ROLES", "SEEDS", "TILE", "Shape",
+           "basis_fa", "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "query", "templates", "unit_cut", "units", "weight"]

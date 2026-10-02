@@ -17,12 +17,14 @@ rows), so the row's bytes are the tensor's memory; a registration domain binds t
                                   byte first), then P's 64 BF16 words
     fp8-p (pouw/row-fp8-p/v1)     k E4M3 codes two per word (low byte first), then   k/2 + 64           X or W
                                   P's 64 BF16 words
+    ok (pouw/row-ok/v1)           the row's admission bit, bit 0 of one word         1                  X (A_i) or W (B_j)
     tile (pouw/tile-h0/v1)        the 32-byte tile digest (`PearlTileDigest`), two   16                 X
                                   bytes per word, low byte first
 
 nvfp4-p's codes and scales are `rowleaf.nvfp4_row_bytes`' bytes.  Which unit ports make up each row is `pc4.PORTS` and
 `pc8.PORTS`.  `words_*` are each row's words from its elements, and `commit` and `tree_leaf` the hm96-sha512/row/v1 commit
-string and tree leaf of a row; ``tests/vectors/pouw_rows.json`` pins them, against which C-Flock's ports are mapped.
+string and tree leaf of a row; ``tests/vectors/pouw_rows.json`` pins them, against which C-Flock's ports are mapped.  The
+anchored inputs are no row: they are public input regions (`anchors.region_words`).
 """
 from __future__ import annotations
 
@@ -45,9 +47,9 @@ DIGEST = Array(8, U32)
 P_WORDS = 64
 #: each row's schema id, which a registration domain binds with the row's word count (`ROW_WORDS`, at depth k)
 SCHEMAS = {"bf16": "pouw/row-bf16/v1", "fp32": "pouw/row-fp32/v1", "nvfp4-p": "pouw/row-nvfp4-p/v1",
-           "fp8-p": "pouw/row-fp8-p/v1", "tile": "pouw/tile-h0/v1"}
+           "fp8-p": "pouw/row-fp8-p/v1", "ok": "pouw/row-ok/v1", "tile": "pouw/tile-h0/v1"}
 ROW_WORDS = {"bf16": lambda k: k, "fp32": lambda k: 2 * k, "nvfp4-p": lambda k: k // 4 + k // 32 + P_WORDS,
-             "fp8-p": lambda k: k // 2 + P_WORDS, "tile": lambda k: 16}
+             "fp8-p": lambda k: k // 2 + P_WORDS, "ok": lambda k: 1, "tile": lambda k: 16}
 
 
 def _tile_digest_body(B, S_, c, u):
@@ -101,6 +103,12 @@ def words_fp8_p(codes: Sequence[int], p: Sequence[int]) -> list[int]:
     return [(codes[2 * w] & 0xFF) | (codes[2 * w + 1] & 0xFF) << 8 for w in range(len(codes) // 2)] + words_bf16(p)
 
 
+def words_ok(ok: int) -> list[int]:
+    if ok not in (0, 1):
+        raise ValueError("an ok row is one admission bit")
+    return [ok]
+
+
 def words_tile(digest: bytes) -> list[int]:
     if len(digest) != 32:
         raise ValueError("a tile digest is 32 bytes")
@@ -118,4 +126,4 @@ def tree_leaf(bc: bytes) -> bytes:
 
 
 __all__ = ["DIGEST", "INST", "KEY", "PearlTileDigestDef", "P_WORDS", "ROW_WORDS", "SCHEMAS", "commit", "digest_bytes",
-           "tile_digest", "tree_leaf", "words_bf16", "words_fp32", "words_fp8_p", "words_nvfp4_p", "words_tile"]
+           "tile_digest", "tree_leaf", "words_bf16", "words_fp32", "words_fp8_p", "words_nvfp4_p", "words_ok", "words_tile"]

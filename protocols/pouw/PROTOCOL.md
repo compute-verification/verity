@@ -495,13 +495,15 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     `live_row` on exact squares. `words.PouwSqAcc`, `PouwSqCeil` and `PouwSqGe` scale each square by 2^300 into a
     576-bit integer, which never leaves the row unit. No other rejection of the scheme's is reachable on such a row (the
     module docstring).
-  - The noise lines and G are verifier-derived public inputs, as in `pc4` (`anchors.TileAnchors`, G on the record's chain).
+  - The noise lines and G are verifier-derived public inputs, as in `pc4` (`anchors.TileAnchors`, G on the record's
+    chain), and each is a public input region in a unit's proof (`pc8.DERIVATIONS`; one u16 word per E4M3 code).
   - The Programs evaluate to `pearl_c.json`'s pinned H100 test instance, and to the scheme on sm_120's records. Every
     partition computes each value in exactly one unit.
   - The hiding Programs are `pc4`'s (``Shape.hidden``; the rows and their vectors are under `circuit.pc4` below):
     `Pc8TileHidden` returns its tile digest in place of C̃ and U, the weight's Program is `Pc8Weight`, and the rows are
-    C-Flock's committed ports (`pc8.PORTS`), with `pouw/row-fp32/v1` input rows and `pouw/row-fp8-p/v1` rows. A 64 × 64
-    tile's digest is 281 Keccak-p[1600, 12] in gates. `plan.tile_layout` draws a tile with its rows, as for `pc4`.
+    C-Flock's committed ports (`pc8.PORTS`), with `pouw/row-fp32/v1` input rows, `pouw/row-fp8-p/v1` rows and
+    `pouw/row-ok/v1` rows. A 64 × 64 tile's digest is 281 Keccak-p[1600, 12] in gates. `plan.tile_layout` draws a tile
+    with its rows, as for `pc4`.
   - Not in it yet: the debit and the cap. Until they land, Pearl-C's runs are checked by its reference audit, a
     development shortcut that opens rows.
 
@@ -702,18 +704,24 @@ useful    U/(α_A·α_B), glue
     salt, A's root, B's registered root and the matmul index; seed_B the salt and B's root), and G = F_Bᵀ·F_A (`gram`)
     is a function of them. `check_inputs` refuses any other. Both Programs read F_A and F_B; E_A is the call's, E_B and
     G the weight's.
-  - The Programs evaluate to the pinned ``test-16-nvfp4`` vector, and every partition computes each value in exactly one
-    unit.
+  - In a unit's proof each anchored input is a C-Flock public input region (`In`), costing no gate: `pc4.PORTS` names
+    each row unit's regions, and each region names its recomputation (`pc4.DERIVATIONS`: the seed, the domain and the
+    derivation function; as C-Flock's circuit names them, `anchors.public_ports`: the seed by the scheme's label,
+    `pc4.SEEDS`, and the function by name). The verifier values them from its own `--public-inputs` file
+    (`TileAnchors.public_inputs`, C-Flock's `verity/flock-public-inputs/v1`: a header line naming the ports, then each
+    instance's regions), whose content for one unit is `TileAnchors.regions`: every value unpacked into u16 words (one
+    per E2M1 code, two per FP32 word of G, low half first), each region whole 128-bit words, its bytes the words
+    little-endian. `tests/vectors/pouw_regions.json` pins both.
   - The hiding Programs (``Shape.hidden``: `Pc4CallHidden`, `Pc4CheckHidden`) differ from the plain ones only in the
     tile: `Pc4TileHidden` is `Pc4Tile` and its tile digest (`circuit.leaves.PearlTileDigest`, `pearl_c.leaf` of C̃ and
     U, on `hashes.KeccakP1600R12`), which it returns in place of C̃ and U. The weight's Program is `Pc4Weight` under
-    hiding too. A root publishes only admission bits and tile digests, and every partition still computes each value
-    in exactly one unit.
+    hiding too. A root returns only admission bits and tile digests, and every partition still computes each value in
+    exactly one unit.
   - The hiding is C-Flock's: every row a unit reads or writes is a committed port, which C-Flock commits as an
     hm96-sha512 row and hashes in the proof (`--zk`), so the Programs hold no leaf and no salt. `pc4.PORTS` names each
-    unit's committed rows: a row unit's input row (bf16) and the nvfp4-p row it writes, and a tile's TM + TN nvfp4-p
-    rows and its tile digest. A tile reads each row as its row unit wrote it (the same words, schema and salt), so the
-    units link by equal commit strings b ‖ c.
+    unit's committed rows: a row unit's input row (bf16), the nvfp4-p row it writes and its ``ok`` row (every output is
+    committed, #757), and a tile's TM + TN nvfp4-p rows and its tile digest. A tile reads each row as its row unit wrote
+    it (the same words, schema and salt), so the units link by equal commit strings b ‖ c.
   - The rows are `hm96-sha512/row/v1` rows of 16-bit words: `sha512/row/v1`'s prefix block names the role, the word
     width (16) and the word count, and a registration domain binds the schema id and the word count. Every narrower
     element is packed low bits first, so a row's bytes are the tensor's memory:
@@ -725,6 +733,7 @@ useful    U/(α_A·α_B), glue
     pouw/row-nvfp4-p/v1  k E2M1 codes two per byte (low nibble first), the k/16    k/4 + k/32 + 64   X (A′_i ‖ P_A,i),
                          UE4M3 scale bytes, then P's 64 BF16 words                                   W (B̃_j ‖ P_B,j)
     pouw/row-fp8-p/v1    k E4M3 codes, then P's 64 BF16 words                      k/2 + 64          X, W
+    pouw/row-ok/v1       the row's admission bit, bit 0 of one word                1                 X, W
     pouw/tile-h0/v1      the tile's 32-byte h0 digest (`pearl_c.leaf` of C̃, U)    16                X
     ~~~
 

@@ -293,9 +293,10 @@ def test_the_hiding_programs_publish_only_admission_bits_and_tile_digests():
 
 @pytest.mark.parametrize("role", ["row_b", "row_a", "tile"])
 def test_the_ports_are_each_hiding_units_committed_rows(role):
-    """`PORTS` lists every parameter and output of each hiding unit once: fp32 input rows, fp8-p rows and the tile digest."""
+    """`PORTS` lists every parameter and output of each hiding unit once: fp32 input rows, fp8-p rows, ok rows and the tile
+    digest, and the anchored inputs as public input regions."""
     tm, tn = HIDDEN.tile
-    CF.check_ports(pc8.templates(K, HIDDEN.tile, HIDDEN.dev, True)[role], pc8.PORTS[role], K,
+    CF.check_ports(pc8.templates(K, HIDDEN.tile, HIDDEN.dev, True)[role], pc8.PORTS[role], pc8.DERIVATIONS, K,
                    {"ac": tm, "pa": tm, "bc": tn, "pb": tn})
 
 
@@ -308,6 +309,8 @@ def test_the_verifier_derives_the_anchored_inputs(dev):
     t = TileAnchors.of(s, ctx, shape)
     assert t.inputs(pc8.weight(shape)) == {"eb": eb, "fa": fa, "fb": fb, "g": g}
     assert t.inputs(pc8.call(shape)) == {"ea": ea, "fa": fa, "fb": fb}
+    assert t.regions("row_a", 3) == {"e": ea[96:128], "fa": fa, "fb": fb}
+    assert t.regions("row_b", 5) == {"e": eb[160:192], "fb": fb, "fa": fa, "g": [h for w in g for h in (w & 0xFFFF, w >> 16)]}
     with pytest.raises(DomainError):
         t.check_inputs(pc8.weight(shape), [b, eb, fa, fb, g[:-1] + [g[-1] ^ 1]])
     lay = plan.tile_layout(replace(shape, hidden=True), 1)

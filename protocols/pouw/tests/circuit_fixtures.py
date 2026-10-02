@@ -48,15 +48,22 @@ def tile_digests(tile: tuple[int, int], c, u) -> tuple[int, ...]:
     return tuple(out)
 
 
-def check_ports(fn, ports: dict, k: int, reads: dict[str, int]) -> None:
+def check_ports(fn, ports: dict, derivations: dict, k: int, reads: dict[str, int]) -> None:
     """``ports`` (`pc4.PORTS[role]`) lists every parameter and output of the unit template ``fn`` exactly once, as a committed
-    row's port, an anchored input or a public output, and each committed row is its schema's word count
-    (`leaves.ROW_WORDS`): a port a tile reads ``reads[name]`` rows of counted for one row."""
+    row's port or a public input region.  Each committed row is its schema's word count (`leaves.ROW_WORDS`, the last word's
+    high bits zero): a port a tile reads ``reads[name]`` rows of counted for one row.  Each region is a parameter, in the
+    unit's parameter order, whose every leaf has its anchor's width (``derivations``), and its leaves unpacked fill whole
+    128-bit words."""
     params, out = fn.signature()
     outs = out.fields if isinstance(out, Tuple) else (out,)
-    listed = [p for _schema, _role, ps in ports["rows"] for p in ps] + list(ports["anchors"]) + list(ports["public"])
+    listed = [p for _schema, _role, ps in ports["rows"] for p in ps] + list(ports["regions"])
     assert Counter(listed) == Counter([name for name, _t in params] + list(range(len(outs)))), fn.id
     types_ = dict(params) | dict(enumerate(outs))
     for schema, _role, ps in ports["rows"]:
         bits = sum(sum(types_[p].leaf_widths()) // reads.get(p, 1) for p in ps)
-        assert bits == 16 * L.ROW_WORDS[schema](k), (fn.id, schema)
+        assert -(-bits // 16) == L.ROW_WORDS[schema](k), (fn.id, schema)
+    assert list(ports["regions"]) == [name for name, _t in params if name in ports["regions"]], fn.id
+    for port, anchor in ports["regions"].items():
+        widths = types_[port].leaf_widths()
+        assert set(widths) == {derivations[anchor].bits}, (fn.id, port)
+        assert len(widths) * -(-widths[0] // 16) * 16 % 128 == 0, (fn.id, port)
