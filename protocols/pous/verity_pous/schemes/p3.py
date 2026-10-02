@@ -2,7 +2,7 @@
 encoded and decoded by the reference codec `verity_pous.scheme`.
 
 It has no certificate.  Lean proves P3 with the overwrite-chain `H`, in the ideal two-permutation model, with no
-hypothesis: `Pous.Pinned.P3ConcreteMeets64` (`p3SchemeC 2384 B(220, 12)`, one segment, `D = 10`, `Q = 2^20`,
+hypothesis: `Pous.SecurityProofs.P3ConcreteMeets64` (`p3SchemeC 2384 B(220, 12)`, one segment, `D = 10`, `Q = 2^20`,
 `k = 106`), `P3ConcreteMeets14GB` (the same at 971 segments) and `P3ConcreteMeets64D12` (`D = 12` on `B(220, 16)`).
 `OPERATING_POINT` has their parameters (`n = 220`, `wc = 2384`, `B(220, 12)`, a 24-byte salt, `tag_s = salt ‖ u64 s`),
 but not their `H`: Lean's chain starts from `iv(domP3 tag L v)`, zeros and then `tag_s ‖ u256(2v + L)` in the 512-bit

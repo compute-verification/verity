@@ -9,7 +9,9 @@ both forms:
     fn(*args, **statics) -> the output leaves in the Definition's leaf order  |  raises Declined(why) or ValueError
 
 The core kernel runs `fn` per instance and declines the instances it raises on; a batch it declines entirely returns
-NotImplemented, so `evaluate_batch` computes it with the reference.  To move upstream once core has them: the instance form
+NotImplemented, so `evaluate_batch` computes it with the reference.  A kernel may also give its batch form,
+`rows(*arrays, **statics) -> (out, declined) | None`: the same words as `fn` on every instance `fn` claims, declined where `fn`
+raises, or None for a batch it leaves to `fn` per instance.  To move upstream once core has them: the instance form
 with its decline reason (`instance`), the per-specialisation domain (`covers`: why a kernel does not claim a
 specialisation at all, where core's `domain` is a description), the specialisations a kernel's self-check binds when the
 served statics are too wide for the gate reference (`check_targets`), and the list of registered (Definition, kernel)
@@ -53,11 +55,15 @@ class Registered:
 _REGISTERED: dict[tuple[str, str], Registered] = {}
 
 
-def _batch(fn: Callable[..., Any], claims: Callable[[dict], str | None]) -> Callable[..., Any]:
+def _batch(fn: Callable[..., Any], claims: Callable[[dict], str | None], batch: Callable[..., Any] | None = None) -> Callable[..., Any]:
     def run(*arrays: np.ndarray, **statics: Any):
         n = arrays[0].shape[0] if arrays else 0
         if claims(statics):
             return NotImplemented
+        if batch is not None and n:
+            got = batch(*arrays, **statics)
+            if got is not None:
+                return got
         rows: list[np.ndarray | None] = [None] * n
         for i in range(n):
             try:
@@ -78,14 +84,15 @@ def _batch(fn: Callable[..., Any], claims: Callable[[dict], str | None]) -> Call
 def register(target: Any, fn: Callable[..., Any], *, kernel: str, domain: str = "", version: int = 1,
              sample: Callable[..., Sequence[np.ndarray]] | None = None,
              check_targets: Callable[[np.random.Generator], Sequence[Any]] = _no_targets,
-             covers: Callable[[dict], str | None] = _claims_all) -> Registered:
+             covers: Callable[[dict], str | None] = _claims_all, batch: Callable[..., Any] | None = None) -> Registered:
     """Register the instance kernel `fn` of `target` (a Definition or its id) with core under `kernel`, and here with
     `check_targets(rng)`, the specialisations its self-check binds, and `covers(statics)`, the reason it does not claim a
-    specialisation (None: it does).  Re-registering the same `fn` is a no-op."""
+    specialisation (None: it does); `batch`, its batch form (module docstring), runs first.  Re-registering the same `fn` is a
+    no-op."""
     prev = _REGISTERED.get((key_of(target), kernel))
     if prev is not None and prev.fn is fn:
         return prev
-    core = register_kernel(target, _batch(fn, covers), kernel=kernel, domain=domain, version=version, sample=sample)
+    core = register_kernel(target, _batch(fn, covers, batch), kernel=kernel, domain=domain, version=version, sample=sample)
     reg = _REGISTERED[(core.key, kernel)] = Registered(core.key, kernel, fn, check_targets, covers, core)
     return reg
 
