@@ -8677,6 +8677,10 @@
    "assumptions": [],
    "type_hash": "36906b103677801e37a225289f88f2fb1a17ccfca99fd53128defa577409b6d2"
   },
+  "FlockSoundness.Discharge.ZkCoins.committed_le": {},
+  "FlockSoundness.Discharge.ZkCoins.committed_le_hm96": {},
+  "FlockSoundness.Discharge.ZkCoins.session_coins_hm96": {},
+  "FlockSoundness.Discharge.ZkCoins.session_coins_sound": {},
   "FlockSoundness.Discharge.ZkSession.TabZK.after_sound": {
    "signature": [
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
