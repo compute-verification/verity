@@ -1417,14 +1417,14 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
   `rows` entry and compressions after the input rows'. `per_vu[hm96] = next_pow2(rows)`.
 - **Δ** then copies, per VU, output word `k`'s bit `t` (of the returning unit, the last tail stage's port or a typed
   root's output group) to its row's message bit `t % 8` of byte `2k + t / 8`; past `w` words, the forced-zero row.
-  Unit leaves and leaf cuts read input rows only; `HmRow.checkTyped` puts a template's output rows after its input rows.
+  Unit leaves and leaf cuts read input rows only; `HmRow.checkTyped` puts a template's output rows after its inputs.
 - **Regions.** `Digest(p)` per row and no `Out`, so the region-word check has no shared word.
 - **Public file.** §16.10's header without the content digest; the body is every row's `b ‖ c` (instance-major, inputs
   then outputs) and nothing else; one frame-v3-sha512 tree per row. Under `shared_rows` an output row's table is the
-  instances' rows in order (`R_p = n`, never deduplicated) and instance `i`'s ref is `i`. A padding instance's output rows
-  are the zero instance's (`dummy.outputs`) under zero salts, each row's `dummy.bc` checked.
+  instances' rows (`R_p = n`, never deduplicated), instance `i`'s ref `i`. A padding instance's output rows are the zero
+  instance's (`dummy.outputs`) under zero salts, each row's `dummy.bc` checked.
 - **Identity** adds `outputs`: `"hidden: each output port an hm96-sha512/row/v1 row hashed in the circuit; the public file
-  has no output word"`.
+  has no output word"` (`v2` under `row_schemas`).
 - **Linking.** An output row is committed as an input row of the same words, so a reader committing it under the producer's
   salt has the producer's `b ‖ c` as its input leaf. A salt commits one row value: reused for another row, it reveals
   `b₁ ⊕ b₂ = x₁ ⊕ x₂`. A link is as good as both proofs (under a draw, an undrawn producer instance's output is unproven),

@@ -885,8 +885,8 @@ def test_bit_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_r
         assert p.returncode == 0, p.stdout + p.stderr
         digests[i] = json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"]
     assert digests == {
-        0: "e5424314d09f298df6cb04ce8840c710e2a981d9aae8194a713c67c5ff210126fef18614885e8a9021a723cf901753504b62e37aa73130b2e24e71b6370756a4",
-        1: "6c1a5283ae5983bb04435a27ba8ed4c151cffc495c4aaeaa3b49a07cf2a097d777cdb4cd8299092f9a25b24d58722e837920dbd4830276394beafb767e67def8"}
+        0: "ec816457e07f36dfc5dfbad8aa070700ab04529cb7617992079365261c6e8c38a3fc3d4f338ef398e97615dbd98266230e5422c933d9058aef2ed9705ca5ee20",
+        1: "15296dad533cdc251ebc07816bb8d723bfdd56e535f1758faac4ce7a101107602511999a51f30e9adc7d9dd7f0fee55853d71df107753515ff515a52158b797d"}
 
     d = tmp_path / "s0"
     head, meta_line, rest = (d / "c.txt").read_text().split("\n", 2)

@@ -218,6 +218,7 @@ fn identity(c: &Composite) -> Value {
     // only for bit rows (META `row_schemas`): a `sha512/row/v1` statement's digest must not move
     if c.meta.get("row_schemas").is_some() {
         id["hashes"]["row_leaf_in_circuit"] = json!("hm96-sha512/row/v2 over sha512/row/v2");
+        id["outputs"] = json!("hidden: each output port an hm96-sha512/row/v2 row hashed in the circuit; the public file has no output word");
     }
     id
 }

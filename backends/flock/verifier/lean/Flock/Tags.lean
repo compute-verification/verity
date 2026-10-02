@@ -185,10 +185,15 @@ def identityHm96 (seedInjection : Bool) (sha512Text : Bool := false) (statement 
       ("transcript", s "none (live verifier coins)"), ("row_leaf_in_circuit", s "hm96-sha512/row/v1 over sha512/row/v1")]),
     ("hooks", hooksNoMask)]
 
-/-- A bit-row statement's identity (META `row_schemas`): `row_leaf_in_circuit` names `hm96-sha512/row/v2`, as the prover's
-does; a `sha512/row/v1` statement keeps its identity unchanged. -/
+/-- A hidden-output identity's `outputs`, its output rows `leaf` rows. -/
+def hiddenOutputsText (leaf : String) : String :=
+  s!"hidden: each output port an {leaf} row hashed in the circuit; the public file has no output word"
+
+/-- A bit-row statement's identity (META `row_schemas`): `row_leaf_in_circuit`, and a hidden-output identity's `outputs`,
+name `hm96-sha512/row/v2`, as the prover's do; a `sha512/row/v1` statement keeps its identity unchanged. -/
 def rowV2Identity (id : Json) : Json :=
-  id.setObjVal! "hashes" ((id.getObjValD "hashes").setObjVal! "row_leaf_in_circuit" (s "hm96-sha512/row/v2 over sha512/row/v2"))
+  let id := id.setObjVal! "hashes" ((id.getObjValD "hashes").setObjVal! "row_leaf_in_circuit" (s "hm96-sha512/row/v2 over sha512/row/v2"))
+  if (id.getObjVal? "outputs").toOption.isSome then id.setObjVal! "outputs" (s (hiddenOutputsText "hm96-sha512/row/v2")) else id
 
 /-- `verity/flock-circuit` (PR #83 from `eb90718f`): serving rows are `hm96-sha512/row/v1` leaves proved in the circuit,
 every identity and binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and the unit draw is live. -/
@@ -238,8 +243,7 @@ def circuitTypes210d32e1Selftest : Tags :=
 
 /-- The identity of a statement with hidden outputs: `967b8d06`'s text (or the typed statement's), naming them. -/
 def identityHidden (seedInjection : Bool) (statement : String := "verity/flock-circuit") : Json :=
-  (identityHm96 seedInjection true statement).setObjVal! "outputs"
-    (s "hidden: each output port an hm96-sha512/row/v1 row hashed in the circuit; the public file has no output word")
+  (identityHm96 seedInjection true statement).setObjVal! "outputs" (s (hiddenOutputsText "hm96-sha512/row/v1"))
 
 /-- `verity/flock-circuit` (PROTOCOL.md §16.13): `967b8d06`'s statement with every output hidden, an `hm96-sha512/row/v1` row
 hashed in the circuit after the input rows; the public file holds every row's `b ‖ c` and no output word. -/
