@@ -353,4 +353,19 @@ theorem bindColl_isColl (root : D) (os os' : List (CoinOpening D Coin Salt)) (h 
   exact coinColl_isColl H T.E T.mix T.mix_inj T.chainTag T.roundTag op.pos T.lp T.sp root op.idx op.cs op'.cs op.Tn op'.Tn
     op.y op'.y op.sibs op'.sibs hlen hne hsibs T.ME h1 h2
 
+/-- **The `⊥_bind` collision for the keyed tree** (`coin-tree/hm96-sha512/v2`, every hash `fun m => H (ν ++ m)`), as a
+collision of `H`: the colliding inputs with the prefix `ν`. -/
+def bindCollKeyed (ν : List UInt8) (root : D) (os os' : List (CoinOpening D Coin Salt)) : Pair :=
+  (bindColl (fun m => H (ν ++ m)) T root os os').map fun p => (ν ++ p.1, ν ++ p.2)
+
+/-- **T6 as an algorithm, on views, keyed tree**: when two lists of openings conflict under a root of the keyed tree,
+`bindCollKeyed` outputs a collision of `H`. -/
+theorem bindCollKeyed_isColl (ν : List UInt8) (root : D) (os os' : List (CoinOpening D Coin Salt))
+    (h : conflicts (fun m => H (ν ++ m)) T root os os' = true) : IsColl H (bindCollKeyed H T ν root os os') := by
+  obtain ⟨a, b, hab, hne, heq⟩ := bindColl_isColl (fun m => H (ν ++ m)) T root os os' h
+  refine ⟨ν ++ a, ν ++ b, ?_, fun h => hne (List.append_cancel_left h), heq⟩
+  unfold bindCollKeyed
+  rw [hab]
+  rfl
+
 end FlockSoundness.ZK.GK

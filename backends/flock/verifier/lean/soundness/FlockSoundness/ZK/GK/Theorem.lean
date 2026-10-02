@@ -198,9 +198,9 @@ theorem hyb₂_real {δC : ℝ} (hC : m.PrefinalClose δC) (t M : ℕ) (hM : 0 <
   set A := if p = 0 then 0 else S / p with hA
   have hSA : S = p * A := by
     by_cases h : p = 0
-    · rw [hA, if_pos h, h, zero_mul]
+    · rw [hA, ite_eq_left h, h, zero_mul]
       linarith
-    · rw [hA, if_neg h]
+    · rw [hA, ite_eq_right h]
       field_simp
   have hA0 : 0 ≤ A := by
     rw [hA]
@@ -484,6 +484,36 @@ theorem gk_simulate {D : Type} (H : List UInt8 → D) (pick : V → V → Pair)
     |Rand.ev (fun o => Out.val φ o.1) (m.sim t M) - avgR (fun ω => φ (m.real ω))| ≤
       3 * δC + 8 * t * δB + (1 / 3) ^ t + t / M + q ^ 2 / 2 ^ (513 : ℝ) :=
   (m.gk_close hB hC t M hM φ h0 h1).trans (by linarith [m.pr_bind_le H pick hpick t M hcr])
+
+/-- **Theorem GK with T6's extraction on the coin tree** (`coin-tree/hm96-sha512/v1`): when `bad` is a conflict between
+the two views' coin openings under the first view's root (`conflicts`), the finder reads a `bind` outcome with
+`bindColl`, and the bound holds under `SHA512CRStrict` for that finder. -/
+theorem gk_simulate_coins {D Coin Salt : Type} [DecidableEq D] [DecidableEq Coin] (H : List UInt8 → D)
+    (T : CoinTree D Coin Salt) (root : V → D) (opens : V → List (CoinOpening D Coin Salt))
+    (hbad : ∀ v₀ v, m.bad v₀ v = conflicts H T (root v₀) (opens v₀) (opens v)) {δB δC q : ℝ}
+    (hB : m.RewindClose δB) (hC : m.PrefinalClose δC) (t M : ℕ) (hM : 0 < M)
+    (hcr : Assumptions.SHA512CRStrict H (m.finder (fun v₀ v => bindColl H T (root v₀) (opens v₀) (opens v)) t M).toGame
+      (m.finder (fun v₀ v => bindColl H T (root v₀) (opens v₀) (opens v)) t M).strat id (fun _ => q) q)
+    (φ : V → ℝ) (h0 : ∀ v, 0 ≤ φ v) (h1 : ∀ v, φ v ≤ 1) :
+    |Rand.ev (fun o => Out.val φ o.1) (m.sim t M) - avgR (fun ω => φ (m.real ω))| ≤
+      3 * δC + 8 * t * δB + (1 / 3) ^ t + t / M + q ^ 2 / 2 ^ (513 : ℝ) :=
+  m.gk_simulate H _ (fun v₀ v hb => bindColl_isColl H T (root v₀) (opens v₀) (opens v) ((hbad v₀ v).symm.trans hb))
+    hB hC t M hM hcr φ h0 h1
+
+/-- **Theorem GK with T6's extraction on the keyed coin tree** (`coin-tree/hm96-sha512/v2`, every hash
+`fun m => H (ν ++ m)` under the session nonce `ν` of the first view): the same with `bindCollKeyed`. -/
+theorem gk_simulate_coins_keyed {D Coin Salt : Type} [DecidableEq D] [DecidableEq Coin] (H : List UInt8 → D)
+    (T : CoinTree D Coin Salt) (ν : V → List UInt8) (root : V → D) (opens : V → List (CoinOpening D Coin Salt))
+    (hbad : ∀ v₀ v, m.bad v₀ v = conflicts (fun x => H (ν v₀ ++ x)) T (root v₀) (opens v₀) (opens v)) {δB δC q : ℝ}
+    (hB : m.RewindClose δB) (hC : m.PrefinalClose δC) (t M : ℕ) (hM : 0 < M)
+    (hcr : Assumptions.SHA512CRStrict H
+      (m.finder (fun v₀ v => bindCollKeyed H T (ν v₀) (root v₀) (opens v₀) (opens v)) t M).toGame
+      (m.finder (fun v₀ v => bindCollKeyed H T (ν v₀) (root v₀) (opens v₀) (opens v)) t M).strat id (fun _ => q) q)
+    (φ : V → ℝ) (h0 : ∀ v, 0 ≤ φ v) (h1 : ∀ v, φ v ≤ 1) :
+    |Rand.ev (fun o => Out.val φ o.1) (m.sim t M) - avgR (fun ω => φ (m.real ω))| ≤
+      3 * δC + 8 * t * δB + (1 / 3) ^ t + t / M + q ^ 2 / 2 ^ (513 : ℝ) :=
+  m.gk_simulate H _ (fun v₀ v hb =>
+    bindCollKeyed_isColl H T (ν v₀) (root v₀) (opens v₀) (opens v) ((hbad v₀ v).symm.trans hb)) hB hC t M hM hcr φ h0 h1
 
 end Model
 
