@@ -540,6 +540,7 @@ theorem ligerito_accepts_opening {D : Type} (ms : MerkleScheme) (sch : Flock.Sch
     (sws : Array Switched) (n : ℕ) (op : Model.OpenOut 𝔽) (hop : OpenRel sch.m n T sws op) (cap : Array ByteArray)
     (p : LigeritoProof) (r : ℕ) (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
+    (hα1 : ∀ i < sch.levels.size, ceilLog2 (sch.levels.getD i default).q ≠ 1)
     (ho : ∀ ℓ < sch.levels.size, ∀ j < (sch.levels.getD ℓ default).q,
       (o r ℓ j).1 = ((openAt p (sch.levels.size - 1) ℓ).1)[j]!.toList.map fOf)
     {t t' : Transcript} (hwf : RoundsWF t.rounds)
@@ -550,7 +551,7 @@ theorem ligerito_accepts_opening {D : Type} (ms : MerkleScheme) (sch : Flock.Sch
       pend.caps = (List.range (sch.levels.size - 1)).map (fun j => capD p.recursiveCaps[j]!) ∧
       (∀ req ∈ pend.reqs, ReqOK ms sch cap p req) ∧ pend.verdict o = true := by
   rw [hop.T]
-  exact ligerito_accepts ms sch T cap p (basis sws) r op.b capD o hdim hlv ho
+  exact ligerito_accepts ms sch T cap p (basis sws) r op.b capD o hdim hlv hα1 ho
     (fun orig y horig hy => basis_eq hop orig sch.ext horig y hy) hwf h
 
 end FlockSoundness.Refine

@@ -10,7 +10,8 @@ quantities derived from it. These theorems say the two agree, for every `m`:
 * `fast100_level`: at every level, the stratified queries (§13.5), the cap depth and path length (§14), the
   consistency-coin count and the codeword length are the model's (`LevelSeam`);
 * `fast100_dims`: the dimensions the executable's Ligerito loop tracks are the ones the model's rounds use (`DimSeam`,
-  §13.3).
+  §13.3);
+* `fast100_alpha`: at every level the consistency coins are more than one, so the model draws them as a vector.
 
 The kernel checks each for `m < 40`, and both schedules are `none` above 35.
 -/
@@ -43,6 +44,19 @@ theorem fast100_level (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = som
     ∀ lv ∈ s.levels, LevelSeam lv := by
   by_cases hm : m < 40
   · have key : ∀ m : Fin 40, ∀ s ∈ Flock.fast100 m.val, (s.levels.all fun lv => decide (LevelSeam lv)) = true := by
+      decide +kernel
+    intro lv hlv
+    obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hlv
+    simpa using Array.all_eq_true.1 (key ⟨m, hm⟩ s hs) i hi
+  · rw [exec_fast100_none m (by omega)] at hs; cases hs
+
+/-- **More than one consistency coin.** At each level of an executable `fast100` schedule, `ceilLog2 q ≠ 1`, so the
+level's consistency coins are a vector draw of `Fin (ceilLog2 q) → 𝔽`, not a scalar one. -/
+theorem fast100_alpha (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = some s) :
+    ∀ lv ∈ s.levels, ceilLog2 lv.q ≠ 1 := by
+  by_cases hm : m < 40
+  · have key : ∀ m : Fin 40, ∀ s ∈ Flock.fast100 m.val,
+        (s.levels.all fun lv => decide (ceilLog2 lv.q ≠ 1)) = true := by
       decide +kernel
     intro lv hlv
     obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hlv
