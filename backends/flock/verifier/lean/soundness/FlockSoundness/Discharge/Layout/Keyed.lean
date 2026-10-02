@@ -45,7 +45,8 @@ variable {outs popOf} in
 /-- **`rs` at the production program's places**: `keyRowsEnc` at row widths `16 · words`, with the constant's and the
 zero's gates from [e2e-const] and [e2e-zero]. -/
 noncomputable def keyedRows (ho : c.outNet = c.unitNet)
-    (hsite : ∀ S R u (h : u ∈ S), BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
+    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
+      BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (houts : OutsOut c hU n outs) (hkeys : KeysRow c hU (portRowW c)) :
     Binding.HmRows (keyedLayout hparse outs saltCol popOf) :=
   keyRowsEnc (rowW := portRowW c) (hparse := hparse) (saltCol := saltCol) ho hsite hkeys houts
@@ -53,7 +54,8 @@ noncomputable def keyedRows (ho : c.outNet = c.unitNet)
 
 /-- `keyedRows`' `enc` is `rowEnc`. -/
 theorem keyedRows_enc (ho : c.outNet = c.unitNet)
-    (hsite : ∀ S R u (h : u ∈ S), BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
+    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
+      BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (houts : OutsOut c hU n outs) (hkeys : KeysRow c hU (portRowW c)) :
     (keyedRows hparse saltCol ho hsite houts hkeys).enc = rowEnc := rfl
 
@@ -63,7 +65,8 @@ has only its leaf group, and every input a unit row reads is a port bit (`PortRe
 noncomputable def keyedRowsOfParse {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     (hc : HmRow.parse tags bytes tables = .ok c) (h1 : c.unit.inGroups.size = 1) (hpr : PortReads c hU)
     (ho : c.outNet = c.unitNet)
-    (hsite : ∀ S R u (h : u ∈ S), BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
+    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
+      BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (houts : OutsOut c hU n outs) :
     Binding.HmRows (keyedLayout hparse outs saltCol popOf) :=
   keyedRows hparse saltCol ho hsite houts (keysRow_of_parse hc h1 hpr)
@@ -74,7 +77,8 @@ variable {popOf} in
 noncomputable def keyedRowsOuts {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     (hc : HmRow.parse tags bytes tables = .ok c) (h1 : c.unit.inGroups.size = 1) (hpr : PortReads c hU)
     (ho : c.outNet = c.unitNet)
-    (hsite : ∀ S R u (h : u ∈ S), BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
+    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
+      BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
     Binding.HmRows (keyedLayout hparse (outsOf c hU n) saltCol popOf) :=
   keyedRowsOfParse hparse saltCol hc h1 hpr ho hsite (outsOut_outsOf c hU n)
 

@@ -414,9 +414,10 @@ theorem keyProg_copies :
 include hparse in
 /-- **The rows' `b ‖ c` at `keyProg`'s sites is the registration's**: at each row port a drawn unit reads, the bytes at
 its `hm96` output are the population's `b ‖ c` of the unit (`bc_site`), at every site whose rank is the unit
-(`BcSite`). -/
+(`BcSite`, at the sites whose table some witness satisfies). -/
 theorem keyProg_bcPinned
-    (hsite : ∀ S R u (h : u ∈ S), BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
+    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
+      BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
     (keyReaders rowW hparse outs saltCol popOf outBit).BcPinned (P := (keyProg c hU n).partition outs) := by
   refine ofRows_bcPinned _ fun S R u hu M hM g hg u' q k hr => ?_
   obtain ⟨x, rfl⟩ := exists_col_of_io ((keyPlace hparse outs) S R u hu).inst hg
@@ -424,7 +425,7 @@ theorem keyProg_bcPinned
   rw [hu']
   have hc := (si.acc S R u hu).c_eq (hparse S R u hu)
   have hnp : (si.acc S R u hu).st.c.ports.size = c.ports.size := by rw [hc]
-  have := bc_site_of (hsite S R u hu) hM (si.hvu S R u hu) (p := q.val) (by rw [hnp]; exact q.isLt)
+  have := bc_site_of (hsite S R u hu M hM) hM (si.hvu S R u hu) (p := q.val) (by rw [hnp]; exact q.isLt)
   rw [hnp] at this
   unfold keyBcAddr
   simp only [hu, ↓reduceDIte]
@@ -570,7 +571,8 @@ variable (rowW) in
 noncomputable def keyRows (enc : BitVal (Finset.univ.sup rowW + 1) → List UInt8)
     (enc_inj : Function.Injective enc) (encO : BitVal (Finset.univ.sup rowW + 1) → List UInt8)
     (encO_inj : Function.Injective encO)
-    (hsite : ∀ S R u (h : u ∈ S), BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
+    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
+      BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (hkeys : KeysRow c hU rowW)
     (hc1 : ((keyProg c hU n).partition outs).ConstCols plan tab (keyPlace hparse outs)
       {oneG (c := c) (hU := hU) (n := n)})
