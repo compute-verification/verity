@@ -163,8 +163,38 @@ theorem ConverseExact : Guarantees.ConverseExact := by
   calc M * (1 - δ ^ ((K : ℝ)⁻¹)) = (1 - δ ^ ((K : ℝ)⁻¹)) * M := mul_comm _ _
     _ ≤ meanDraws L := h2
 
+/-- `e^{−x} ≤ 1 − x + x²/2` for `x ≥ 0`: `e^x ≥ 1 + x + x²/2`, and `(1 + x + x²/2)(1 − x + x²/2) = 1 + x⁴/4`. -/
+theorem exp_neg_le (x : ℝ) (hx : 0 ≤ x) : Real.exp (-x) ≤ 1 - x + x ^ 2 / 2 := by
+  have h1 := Real.quadratic_le_exp_of_nonneg hx
+  have hq : 0 < 1 + x + x ^ 2 / 2 := by positivity
+  have hprod : (1 + x + x ^ 2 / 2) * (1 - x + x ^ 2 / 2) = 1 + (x ^ 2) ^ 2 / 4 := by ring
+  have h4 : 0 ≤ (x ^ 2) ^ 2 / 4 := by positivity
+  rw [Real.exp_neg]
+  calc (Real.exp x)⁻¹ ≤ (1 + x + x ^ 2 / 2)⁻¹ := inv_anti₀ hq h1
+    _ = (1 + x + x ^ 2 / 2)⁻¹ * 1 := (mul_one _).symm
+    _ ≤ (1 + x + x ^ 2 / 2)⁻¹ * ((1 + x + x ^ 2 / 2) * (1 - x + x ^ 2 / 2)) := by
+        gcongr
+        linarith
+    _ = 1 - x + x ^ 2 / 2 := by field_simp
+
 theorem ConverseAsymptotic : Guarantees.ConverseAsymptotic := by
-  sorry
+  intro n K L δ hK hKn hδ0 hδ1 hmiss
+  refine le_trans ?_ (ConverseExact n K L δ hK hKn hmiss)
+  have hKpos : (0 : ℝ) < K := by exact_mod_cast hK
+  have hKn' : (K : ℝ) ≤ n := by exact_mod_cast hKn
+  set Λ := Real.log δ⁻¹ with hΛdef
+  have hΛ : 0 ≤ Λ := Real.log_nonneg ((one_le_inv₀ hδ0).2 hδ1)
+  have hroot : δ ^ ((K : ℝ)⁻¹) = Real.exp (-(Λ / K)) := by
+    rw [Real.rpow_def_of_pos hδ0]
+    congr 1
+    simp only [Λ, Real.log_inv]
+    ring
+  rw [hroot]
+  have hx := exp_neg_le (Λ / K) (div_nonneg hΛ hKpos.le)
+  have hM : 0 ≤ (n : ℝ) - K + 1 := by linarith
+  calc ((n : ℝ) - K + 1) / K * Λ * (1 - Λ / (2 * K)) = ((n : ℝ) - K + 1) * (Λ / K - (Λ / K) ^ 2 / 2) := by
+        field_simp
+    _ ≤ ((n : ℝ) - K + 1) * (1 - Real.exp (-(Λ / K))) := mul_le_mul_of_nonneg_left (by linarith) hM
 
 theorem Achievability : Guarantees.Achievability := by
   sorry

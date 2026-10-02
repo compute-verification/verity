@@ -32,7 +32,24 @@ theorem converse :
     ((Law.subset 4 2 (by norm_num)).miss 2).toReal ≤ 1 / 6 ∧
     1 < ((4 : ℝ) - 2 + 1) * (1 - (1 / 6 : ℝ) ^ ((2 : ℝ)⁻¹)) ∧
     0 < ((4 : ℝ) - 2 + 1) / 2 * Real.log (1 / 6 : ℝ)⁻¹ * (1 - Real.log (1 / 6 : ℝ)⁻¹ / (2 * 2)) := by
-  sorry
+  refine ⟨?_, ?_, ?_⟩
+  · rw [Law.subset_miss _ (by norm_num), ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
+    norm_num [Nat.choose]
+  · have h : (1 / 6 : ℝ) ^ ((2 : ℝ)⁻¹) < 2 / 3 := by
+      have := Real.rpow_lt_rpow (by norm_num : (0 : ℝ) ≤ 1 / 6) (by norm_num : (1 / 6 : ℝ) < (2 / 3) ^ 2)
+        (by norm_num : (0 : ℝ) < (2 : ℝ)⁻¹)
+      rwa [show ((2 : ℝ)⁻¹) = ((2 : ℕ) : ℝ)⁻¹ by norm_num, Real.pow_rpow_inv_natCast (by norm_num) (by norm_num)]
+        at this
+    linarith
+  · have h6 : Real.log (1 / 6 : ℝ)⁻¹ = Real.log 6 := by norm_num
+    rw [h6]
+    have hpos : 0 < Real.log 6 := Real.log_pos (by norm_num)
+    have hlt : Real.log 6 < 4 := by
+      rw [Real.log_lt_iff_lt_exp (by norm_num)]
+      have := Real.quadratic_le_exp_of_nonneg (by norm_num : (0 : ℝ) ≤ 4)
+      linarith
+    have : 0 < 1 - Real.log 6 / (2 * 2) := by linarith
+    positivity
 
 theorem achievability : min 1 (Real.log (1 / 2 : ℝ)⁻¹ / 2 * 1) + 1 / 4 < 1 := by
   sorry
