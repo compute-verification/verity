@@ -118,6 +118,9 @@ def main() -> int:
     ap.add_argument("--delta", type=float, default=0.01)
     ap.add_argument("--port", type=int, default=7561)
     ap.add_argument("--statement", default="verity/flock-circuit@967b8d06+seed-injection")
+    ap.add_argument("--zk-bin", default=None, help="a flock-circuit build with --zk: one registered and one in-statement "
+                                                     "statement proved under M0 and --zk, M0's own verifier")
+    ap.add_argument("--zk-runs", type=int, default=2)
     a = ap.parse_args()
     a0.STATEMENT_ID = a.statement
     out = Path(a.out)
@@ -227,10 +230,74 @@ def main() -> int:
         print(f"A4 {name} " + json.dumps(windows[-1], sort_keys=True, default=str), flush=True)
         os.remove(st["dir"] / f"inst-{n}.bin")
     summary["windows"] = windows
+    if a.zk_bin:
+        summary["zk"] = zk_sessions(a, text, s, out / "zk", rows["x"], outs, reg, pos, n, st_dir)
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     ok = all(x.get("accepted") for x in windows) and all(v["refused"] for x in windows for v in (x.get("negatives") or {}).values())
     print("A4 " + json.dumps({"ok": ok}), flush=True)
     return 0 if ok else 1
+
+
+def zk_sessions(a, text: str, s: InputSet, out: Path, rows_x, outs, reg: G.Registered, pos: list[int], n: int, st_dir: Path) -> dict:
+    """A registered statement and an in-statement one, each proved by `--zk-bin` in loopback sessions under M0 and `--zk`
+    (`--zk-runs` sessions each, no draw), verified by that build's own server; the Lean verifier's statement check of the
+    registered public file (`statement --registered`: every table row's path and every instance's position), and its
+    verdict on a `--zk` session."""
+    import subprocess
+
+    res: dict = {}
+    for i, (name, registered) in enumerate((("registered", True), ("in-statement", False))):
+        st = stage_window(text, s, out / name, rows_x, outs, reg, pos, registered, n)
+        d = st["dir"]
+        res[name] = {"stage_s": st["stage_s"], "pub_bytes": (d / f"pub-{n}.bin").stat().st_size}
+        for j, mode in enumerate(("m0", "zk")):
+            z = ["--zk"] if mode == "zk" else []
+            port = a.port + 50 + 4 * i + j
+            log = out / f"{name}-{mode}.serve.log"
+            with open(log, "w") as f:
+                serve = subprocess.Popen([a.zk_bin, "serve", *z, "--listen", f"127.0.0.1:{port}", "--out", str(out / f"sessions-{name}-{mode}"),
+                                          "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), "--tables",
+                                          str(d / "tables"), "--pin", st["pin"], "--operator", "a4-zk", "--sessions", str(a.zk_runs)],
+                                         stdout=f, stderr=subprocess.STDOUT)
+            try:
+                for _ in range(1800):
+                    if "SERVING" in log.read_text() or serve.poll() is not None:
+                        break
+                    time.sleep(0.5)
+                p = a0.run([a.zk_bin, "prove", *z, "--verifier", f"127.0.0.1:{port}", "--instances", str(d / f"inst-{n}.bin"),
+                            "--circuit", str(d / "circuit.txt"), "--tables", str(d / "tables"), "--warm", "0", "--runs", str(a.zk_runs)],
+                           out / f"{name}-{mode}.prove.log")
+                serve.wait(timeout=600)
+            finally:
+                if serve.poll() is None:
+                    serve.kill()
+            lives = [json.loads(line[5:]) for line in p.stdout.splitlines() if line.startswith("LIVE\t")]
+            res[name][mode] = [{"accepted": v.get("accepted"), "why": v.get("why"), "prove_total_s": v.get("prove_total_s"),
+                                "witness_s": v.get("witness_s"), "e2e_s": v.get("e2e_s"), "proof_bytes": v.get("proof_bytes"),
+                                "verify_s": (v.get("verdict") or {}).get("verify_s"), "dense_m": v.get("dense_m"),
+                                "zk": ((v.get("identity") or {}).get("hooks") or {}).get("zk"),
+                                "proof_class": (v.get("identity") or {}).get("proof_class")} for v in lives] or [{"accepted": False, "why": p.stderr[-600:]}]
+            print(f"A4 zk {name} {mode} " + json.dumps(res[name][mode]), flush=True)
+        if registered:
+            stmt = a.statement.split("+", 1)[0]
+            p = subprocess.run([a.lean, "statement", "--statement", stmt, "--circuit", str(d / "circuit.txt"), "--public", str(d / f"pub-{n}.bin"),
+                                "--partition", str(st_dir / "partition.json"), "--program", str(st_dir / "program.json"),
+                                "--registered", str(st_dir / "registered.json")], capture_output=True, text=True, check=False)
+            line = (p.stdout.strip().splitlines() or [""])[0]
+            res[name]["lean_statement"] = {"rc": p.returncode, "registered": (json.loads(line).get("registered") if line.startswith("{") else None),
+                                           "why": None if p.returncode == 0 else (p.stdout + p.stderr)[-400:]}
+            zs = sorted((out / f"sessions-{name}-zk").glob("*/session.json"))
+            if zs:
+                zd = out / "lean-zk"
+                zd.mkdir(exist_ok=True)
+                if not (zd / "sessions").exists():
+                    (zd / "sessions").symlink_to(zs[-1].parent.parent)
+                v = a0.lean_verify(a.lean, {**st, "partition_file": st_dir / "partition.json", "program_file": st_dir / "program.json",
+                                            "registered_file": st_dir / "registered.json"}, n, zd)
+                res[name]["lean_verify_zk_session"] = {"accepted": v["accepted"], "why": v.get("why")}
+            print(f"A4 zk {name} lean " + json.dumps({k: v for k, v in res[name].items() if k.startswith("lean")}), flush=True)
+        os.remove(d / f"inst-{n}.bin")
+    return res
 
 
 def lean_refuses(lean: str, st: dict, n: int, wd: Path, name: str) -> dict:
