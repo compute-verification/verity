@@ -2,6 +2,7 @@ import FlockSoundness.Discharge.Layout.Readers
 import FlockSoundness.Discharge.Layout.Bytes
 import FlockSoundness.Discharge.Layout.Region
 import FlockSoundness.Discharge.Layout.HmRegion
+import FlockSoundness.Discharge.Layout.Pins
 
 /-!
 # `lay` and `rs` of `Prog.flock_headline`, discharged
@@ -13,5 +14,7 @@ from the decoder's places and the executable's regions:
 * `Region`: what a region of the executable's statement pins in a satisfying witness, and where (`region_read`,
   `inBlock_mkRegion`, `inBlock_lt`);
 * `HmRegion`: the `b ‖ c` the statement pins at the `hm96` slots' outputs (`bc_pinned`, at `bcAddr`, the slot's output
-  column by `bcAddr_eq_slotCol`), and setupH's regions (`setupH_regions`).
+  column by `bcAddr_eq_slotCol`), and setupH's regions (`setupH_regions`);
+* `Pins`: `lay` and `rs` from fixed readers (`Readers`) and three facts of every satisfying witness: Δ's copies
+  (`Readers.Copies`), the rows' pinned `b ‖ c` (`Readers.BcPinned`) and the other pinned values (`Readers.ValPinned`).
 -/
