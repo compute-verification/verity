@@ -61,7 +61,9 @@ PACK_MODELS, batch <= 8, a tree with the deferred replay; never TP2, Gemma-2, Py
 be, to `$PACK_SPOOL/queue/` (default <root>/pack) instead of submitted, and still-suspended gpu Jobs of eligible items are taken
 off Kueue into the spool (PACK_ADOPT, default 1). At most PACK_PODS (1 during node 1's storage emergency; infra 3:36 PM PDT)
 `commit-pack` Jobs run at once (sky/jobs/commit-pack.yaml, its pilot sky/commit_pack.py), each running up to 3 spooled Commits on its
-one GPU under MPS. With /workspace at PACK_DISK_PAUSE (80%) or fuller, nothing new is spooled, adopted or started (the Commit goes
+one GPU under MPS; one starts only when a queued entry passes the pilot's replay-bundle cap with every claimed entry counted as
+running, since a pod that can claim nothing idles 3 min and exits (66 of them ran no Commit on Oct 1). With /workspace at
+PACK_DISK_PAUSE (80%) or fuller, nothing new is spooled, adopted or started (the Commit goes
 out as a normal Job), and the pilot claims nothing. Their `results/` come back into the
 chain whatever the flag: rc 0 submits the next task (the CPU replay), 99 spools it again, and anything else (an MPS fault included)
 resubmits the task once as a normal 1-GPU Job with `unpacked` set on the item; a Commit that then fails ends as any failure does.
@@ -110,6 +112,7 @@ import ast
 import calendar
 import fnmatch
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -846,14 +849,49 @@ def pack_hold(jobs: list[dict], dry: bool = False) -> None:
 
 
 def pack_pods(jobs: list[dict], dry: bool = False) -> None:
-    """Keep up to PACK_PODS commit-pack Jobs while the spool holds more than the running pods' free slots."""
+    """Keep up to PACK_PODS commit-pack Jobs while the spool holds more than the running pods' free slots and a new pod could
+    claim one of its entries."""
     if quiet() or held() or disk_full():
         return
     active = active_pack_jobs(jobs)
     claimed = len(list(PACK.glob("claimed/*/*.json")))
     queued = len(list(PACK.glob("queue/*.json")))
     if queued and len(active) < PACK_PODS and queued > PACK_SLOTS * len(active) - claimed:
+        if not pack_fits():
+            if dry:
+                print("would start no pack pod: no queued entry fits the replay-bundle cap")
+            return
         submit_pack_pod(dry=dry)
+
+
+def read_entries(pattern: str) -> list[dict]:
+    out = []
+    for f in PACK.glob(pattern):
+        try:
+            out.append(json.loads(f.read_text()))
+        except (OSError, ValueError):
+            continue
+    return out
+
+
+def pack_fits() -> bool:
+    """Whether some queued entry passes the pilot's own claim rule (sky/commit_pack.py's bundle_ok), on the bundles waiting now
+    and with every claimed entry counted as running."""
+    spec = importlib.util.spec_from_file_location("dispatch_commit_pack", HERE / "sky" / "commit_pack.py")
+    pilot = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = pilot     # its dataclass looks its module up by name while the module runs
+    try:
+        spec.loader.exec_module(pilot)
+    finally:
+        sys.modules.pop(spec.name, None)
+    running, waiting = read_entries("claimed/*/*.json"), None
+    for entry in read_entries("queue/*.json"):
+        if pilot.batch(entry) < pilot.BUNDLE_BATCH:
+            return True
+        waiting = pilot.bundle_bytes(pilot.BUNDLE_GLOBS) if waiting is None else waiting
+        if pilot.bundle_ok(entry, waiting, running):
+            return True
+    return False
 
 
 def submit_pack_pod(priority: str | None = None, dry: bool = False) -> str:
@@ -1455,6 +1493,7 @@ def main(argv: list[str]) -> int:
     s.add_argument("--task", type=int, default=0, help="start the chain at this task (resume after an earlier task succeeded)")
     s.add_argument("--try", dest="tries", type=int, default=0, help="the try number in the Job name (a resubmission)")
     s.add_argument("--template-sha", help="render from this pinned template (resume a chain on the template it started on)")
+    s.add_argument("--lease", choices=("wrap", "self"), help="the item's \"lease\" (the docstring's GPU leases)")
     s.add_argument("--dry-run", action="store_true")
     sp = sub.add_parser("spool", help="queue one item's task for a commit-pack pod now, whatever PACK_COMMITS says")
     sp.add_argument("template")
@@ -1482,7 +1521,7 @@ def main(argv: list[str]) -> int:
         item = {"id": ns.key.split("/", 1)[-1], "template": ns.template, "tree": ns.tree,
                 "env": dict(e.split("=", 1) for e in ns.env)}
         for k, v in (("queue", ns.queue), ("priority", ns.priority), ("class", ns.cls), ("resources", ns.resources),
-                     ("template_sha", ns.template_sha)):
+                     ("template_sha", ns.template_sha), ("lease", ns.lease)):
             if v:
                 item[k] = v
         submit(item, ns.key, ns.task, ns.tries, dry=ns.dry_run)

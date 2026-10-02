@@ -11,9 +11,11 @@ queues at 12:10Z), or after an MPS fault; it exits once nothing runs and the que
 PACK_MAX_WALL_S, when whatever still runs is stopped. At 12:28Z it drains: every Commit still running is stopped and reported
 `drained` (not a fault), the dispatcher requeues each unpacked, and the pod exits, so none runs into the 12:30Z quiet hour.
 Storage (infra and circuits, 3:25-3:36 PM PDT Sep 30): it claims nothing while /workspace is PACK_DISK_PAUSE (80%) full or more,
-and no Commit of batch 8 or more that would take the replay bundles on the node past PACK_BUNDLE_CAP_GB (150): the bundles waiting,
-plus an estimate for each Commit running here and for the candidate (PACK_BUNDLE_EST_GB, 120, for B8 with 1,024 + 128 tokens,
-scaled by batch and tokens; phi3-mini's was 113 GB, SmolLM2's B16 256-token one 3 GB).
+and no Commit of batch 8 or more that would take the replay bundles on the node past PACK_BUNDLE_CAP_GB (400): the bundles waiting,
+plus an estimate for each Commit running here and for the candidate (its model's in BUNDLE_EST_GB, else PACK_BUNDLE_EST_GB, 60, for
+B8 with 1,024 + 128 tokens, scaled by batch and tokens; phi3-mini's was 113 GB, the grid's B8 1k ones of smaller models 25-57 GB,
+SmolLM2's B16 256-token one 3 GB). At 150 GB and 120 GB for every model it held small Commits for 70-110 min with 6 of node 1's 8
+GPUs empty (circuits, 12:50 PM PDT Oct 1).
 
 **MPS.** `nvidia-cuda-mps-control -d` with its pipe and log directories under the pod's scratch ($TMPDIR/commit-pack-<pod>, removed at
 exit). Each client gets CUDA_MPS_PINNED_DEVICE_MEM_LIMIT (0=28G) and CUDA_MPS_ACTIVE_THREAD_PERCENTAGE (100), and the Commit
@@ -67,9 +69,11 @@ BUNDLE_GLOBS = os.environ.get("PACK_BUNDLE_GLOBS", "/workspace/jobs/cov/*/*/comm
                               "/workspace/jobs/probe-jit/*/*/sweep/*/commit/replay_bundle_p*,"
                               "/workspace/research/runs/*/*/sweep/*/commit/replay_bundle_p*,"
                               "/workspace/research/runs/*/*/*/commit/replay_bundle_p*").split(",")
-BUNDLE_CAP = float(os.environ.get("PACK_BUNDLE_CAP_GB", "150")) * 1e9
+BUNDLE_CAP = float(os.environ.get("PACK_BUNDLE_CAP_GB", "400")) * 1e9
 BUNDLE_BATCH = 8
-BUNDLE_EST = float(os.environ.get("PACK_BUNDLE_EST_GB", "120")) * 1e9
+BUNDLE_EST = float(os.environ.get("PACK_BUNDLE_EST_GB", "60")) * 1e9
+# phi3-mini's measured 113 GB; the packable 3-4B models nobody has measured are taken to be as large
+BUNDLE_EST_GB = {"phi3-mini": 120, "qwen3-4b": 120, "qwen25-3b": 120, "llama32-3b": 120}
 FAULT_EXIT = 87
 HOLD = ((12, 10), (13, 30))     # node 1's quota cutover (Kueue holds its queues at 12:10Z) and the quiet hour (12:30-13:30Z)
 DRAIN = (12, 28)                # pack pods must be gone by 12:35Z
@@ -109,10 +113,12 @@ def batch(entry: dict) -> int:
 
 
 def bundle_est(entry: dict) -> float:
-    """Bytes the Commit's sealed replay bundle may take: BUNDLE_EST for B8 with 1,024 + 128 tokens, scaled by batch and tokens."""
+    """Bytes the Commit's sealed replay bundle may take: its model's BUNDLE_EST_GB (else BUNDLE_EST) for B8 with 1,024 + 128
+    tokens, scaled by batch and tokens."""
     parts = str((entry.get("env") or {}).get("ROW", "")).split("__")
     tokens = sum(int(p[1:]) for p in parts if re.fullmatch(r"[io]\d+", p)) or 1152
-    return BUNDLE_EST * max(batch(entry), 1) / 8 * tokens / 1152
+    base = BUNDLE_EST_GB[parts[0]] * 1e9 if parts[0] in BUNDLE_EST_GB else BUNDLE_EST
+    return base * max(batch(entry), 1) / 8 * tokens / 1152
 
 
 def bundle_ok(entry: dict, waiting: int, running: list[dict]) -> bool:
