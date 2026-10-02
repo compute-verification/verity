@@ -1,36 +1,12 @@
 /-
-SHA-512's compression (FIPS 180-4 §6.4.2) on 64-bit vectors, in the shape of the verifier's builder (`Flock.HmNets`): the
-schedule one word at a time, the rounds from constant `t`, the feed-forward. `Compress` proves the builder's rows force it.
+SHA-512's compression (FIPS 180-4 §6.4.2) on 64-bit vectors, in the builder's shape (`Flock.HmNets`): the schedule one word at
+a time, the rounds from constant `t`, the feed-forward. `Compress` proves the builder's rows force it.
 -/
-import Flock.Hash
-import Flock.Hm96
+import Flock.HmNets
 
 namespace FlockSoundness.Discharge.Hm
 
-/-- SHA-512's eight working variables. -/
-structure Regs (α : Type) where
-  a : α
-  b : α
-  c : α
-  d : α
-  e : α
-  f : α
-  g : α
-  h : α
-
-namespace Regs
-
-def ofList {α : Type} [Inhabited α] (l : List α) : Regs α :=
-  ⟨l[0]!, l[1]!, l[2]!, l[3]!, l[4]!, l[5]!, l[6]!, l[7]!⟩
-
-def toList {α : Type} (r : Regs α) : List α := [r.a, r.b, r.c, r.d, r.e, r.f, r.g, r.h]
-
-def map {α β : Type} (f : α → β) (r : Regs α) : Regs β := ⟨f r.a, f r.b, f r.c, f r.d, f r.e, f r.f, f r.g, f r.h⟩
-
-end Regs
-
-/-- Round constant `t` (`Flock.Sha512.k`). -/
-def kAt (t : Nat) : BitVec 64 := (Flock.Sha512.k[t]!).toBitVec
+open Flock.HmNets hiding and
 
 /-- SHA-512's `Ch`. -/
 def chV (e f g : BitVec 64) : BitVec 64 := (e &&& f) ^^^ (~~~e &&& g)

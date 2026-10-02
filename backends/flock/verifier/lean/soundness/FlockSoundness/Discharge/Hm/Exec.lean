@@ -7,6 +7,8 @@ import FlockSoundness.Discharge.Hm.Spec
 
 namespace FlockSoundness.Discharge.Hm
 
+open Flock.HmNets hiding and
+
 open Flock
 
 /-- Message word `i` of the block at `off`, big-endian (`Sha512.compress`'s first loop). -/
@@ -120,20 +122,20 @@ theorem loop2_bv : ∀ (n : ℕ) (w : Array UInt64), 16 ≤ w.size →
       exact loop2_bv n _ (by rw [size_schedU]; omega)
 
 /-- The round state as registers. -/
-def toRU (s : U8) : Regs (BitVec 64) :=
+def toR (s : U8) : Regs (BitVec 64) :=
   ⟨s.1.toBitVec, s.2.1.toBitVec, s.2.2.1.toBitVec, s.2.2.2.1.toBitVec, s.2.2.2.2.1.toBitVec, s.2.2.2.2.2.1.toBitVec,
     s.2.2.2.2.2.2.1.toBitVec, s.2.2.2.2.2.2.2.toBitVec⟩
 
 theorem roundU_bv (w : Array UInt64) (s : U8) (i : ℕ) :
-    toRU (roundU w s i) = roundV (kAt i) (w[i]!).toBitVec (toRU s) := by
-  simp only [roundU, roundV, toRU, kAt, chV, majV, bsig0, bsig1, UInt64.toBitVec_add, UInt64.toBitVec_xor,
+    toR (roundU w s i) = roundV (kAt i) (w[i]!).toBitVec (toR s) := by
+  simp only [roundU, roundV, toR, kAt, chV, majV, bsig0, bsig1, UInt64.toBitVec_add, UInt64.toBitVec_xor,
     UInt64.toBitVec_and, UInt64.toBitVec_not,
     rotr_bv _ 14 14 (by omega) (by decide) (by decide), rotr_bv _ 18 18 (by omega) (by decide) (by decide),
     rotr_bv _ 41 41 (by omega) (by decide) (by decide), rotr_bv _ 28 28 (by omega) (by decide) (by decide),
     rotr_bv _ 34 34 (by omega) (by decide) (by decide), rotr_bv _ 39 39 (by omega) (by decide) (by decide)]
 
 theorem loop3_bv (w : Array UInt64) : ∀ (n t : ℕ) (s : U8),
-    toRU ((List.range' t n).foldl (roundU w) s) = roundsV (toBV w) n t (toRU s)
+    toR ((List.range' t n).foldl (roundU w) s) = roundsV (toBV w) n t (toR s)
   | 0, t, s => rfl
   | n + 1, t, s => by
       rw [List.range'_succ, List.foldl_cons, roundsV, loop3_bv w n (t + 1), roundU_bv, getD_toBV]
@@ -156,10 +158,10 @@ theorem compress_eq (h : Array UInt64) (data : ByteArray) (off : ℕ) :
   have hr := loop3_bv (List.foldl schedU
     (List.foldl (fun w i => w.push (wordBE data off i)) (Array.mkEmpty 80) (List.range' 0 16)) (List.range' 16 64)) 80 0
     (h[0]!, h[1]!, h[2]!, h[3]!, h[4]!, h[5]!, h[6]!, h[7]!)
-  have hcv : Regs.ofList ((List.range 8).map fun i => h[i]!.toBitVec) = toRU (h[0]!, h[1]!, h[2]!, h[3]!, h[4]!, h[5]!,
+  have hcv : Regs.ofList ((List.range 8).map fun i => h[i]!.toBitVec) = toR (h[0]!, h[1]!, h[2]!, h[3]!, h[4]!, h[5]!,
       h[6]!, h[7]!) := rfl
   rw [hcv, ← hr]
   generalize List.foldl (roundU _) _ _ = s
-  simp [toBV, toRU, Regs.toList, List.range_succ]
+  simp [toBV, toR, Regs.toList, List.range_succ]
 
 end FlockSoundness.Discharge.Hm
