@@ -1,0 +1,129 @@
+import FlockSoundness.Discharge.Integrate.Sites
+
+/-!
+# The headline at the executable, with every open guarantee named
+
+`Prog.flock_headline` is about the unsalted batched session. At the production statements (`hm96-sha512/v1` leaves) an
+honest transcript fails its openings check, so the headline the executable instantiates is e2e-exec's salted, one-table
+form at flock-verify's verdict, `Prog.flock_headline_live`, whose hypotheses are `Prog.flock_headline`'s (`pp`, `hConst`,
+`hZero`, `lay`, `rs`, `hHm`, A3, `hKS`, `hCR`) with R11 discharged up to R11b (`hdec`).
+
+`flock_headline_exec` instantiates it at the production program `Placed.keyProg c hU n` (the circuit's program on Δ's
+source keys), its returned outputs' bits for the program's outputs (`Layout.outsOf`), and the one-table plan of the
+session's inputs (`planAt`, `Sites.lean`), with:
+* `pp := Placed.Sites.progPlaces_keyProg` at `sitesAt` (W6 and `Layout.Aliased` at keyProg's places);
+* `hConst := Const.constCols_keyProg`, `hZero := Zero.zeroCols_keyProg`, at `ones := {oneG}`, `zeros := {zeroG}`;
+* `lay := Layout.keyedLayout` (`layAt`) and `rs := Layout.keyedRowsOuts` (`rsAt`) at row widths `16 · words`, with
+  `hsite` from `sitesAt_bcSite`.
+-/
+
+namespace FlockSoundness.Discharge.Integrate
+
+open Game Model Accounting Refine Audit Audit.Partition Flock
+open FlockSoundness.Discharge.Exec
+open scoped ENNReal
+
+local notation "𝔽" => FlockLevel3.GF128
+
+variable {c : Flock.Circuit} (hU : Built c.unit) {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
+  (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
+  {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀)) {pub : Public}
+  (hpub : HmRow.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none)
+  (ho : c.outNet = c.unitNet) (h1 : c.unit.inGroups.size = 1) (hpr : Layout.PortReads c hU)
+  (saltCol : Flock.Circuit → ℕ → ℕ → ℕ → ℕ → ℕ) {Reg : Type}
+
+/-- **`lay` at the session's tables**: e2e-layout's `keyedLayout` at `sitesAt`, the program's outputs the returned
+outputs' bits, the registration's bits the population's returned outputs. -/
+noncomputable abbrev layAt :
+    Binding.Layout ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) (planAt (Reg := Reg) ht dj x₀)
+      (tabAt ht dj x₀)
+      (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).placeDecoder (planAt ht dj x₀) (tabAt ht dj x₀)
+        (Layout.keyPlace (sitesAt_parse ht dj x₀ hc) (Layout.outsOf c hU n))) :=
+  Layout.keyedLayout (sitesAt_parse ht dj x₀ hc) (Layout.outsOf c hU n) saltCol fun _ => pub
+
+/-- **`rs` at the session's tables**: e2e-layout's `keyedRowsOuts` at `sitesAt`, with `hsite` from
+`sitesAt_bcSite`. -/
+noncomputable abbrev rsAt : Binding.HmRows (layAt hU ht hc dj x₀ (pub := pub) saltCol (Reg := Reg)) :=
+  Layout.keyedRowsOuts (sitesAt_parse ht dj x₀ hc) saltCol hc h1 hpr ho (sitesAt_bcSite ht dj x₀ hc ho hpub hpt)
+
+/-- The one-table plan's tables, as `Prog.flock_headline_live` takes them. -/
+noncomputable abbrev tablesAt : Finset (Fin n) → Reg → TabSpec mPts := fun S _ => (tableAt ht dj x₀ S).T
+
+/-- **The headline at the executable.** Let `I` be a verify command's inputs (one table) whose one circuit file parses
+to an untyped circuit `c` (`hc`, `ht`) and whose public file loads to `pub`, and let the coin server write draw `S` as
+the JSON `dj S` (`x₀` one draw it sets up). Let the verifier draw the units with `Flock.Draw.drawOS`'s stratified law on
+a byte source A3 makes uniform, and let each draw's session be the live coin server's one table (`liveTable`, A6),
+written out by `wr`. Against any live prover `τ`, flock-verify accepts with at least `K` wrong units of the production
+program `Placed.keyProg c hU n`, at the simulated prover's committed values (1 on the constant's gate, 0 on the zero's,
+the plurality of its openings elsewhere), with probability at most `miss(K) + ε_ks + δ_link`.
+
+Its hypotheses, past the session's inputs:
+* conditions on the circuit that e2e-layout's `rs` takes: the unit returns the outputs (`ho`), has only its leaf group
+  (`h1`), and every input a unit row reads is a port bit (`hpr`, `PortReads`, a real condition: e2e-layout's finding);
+  the public file has no tables (`hpt`);
+* `hHm` (`HmRowComputes` at keyProg's rows), open: owner e2e-hm, at `saltCol := Discharge.Hm.saltCol`;
+* `hdec` (`DecodesAll`, R11b), open: owner e2e-exec (the framing decoder, `wr` as the server's record, `opn`, `fin`,
+  `capOf`). At a draw whose `DrawSetup` exists, the table is setupH's statement as `Layout.model` reads it
+  (`tableAt_stmt`); e2e-exec's acceptance plays `stmtOf`'s, so `hdec` there needs `Layout.model = stmtOf` (no branch
+  proves it; owner e2e-integrate). At a draw flock-verify accepts without a `DrawSetup` (its link points not `mPts`, a
+  one-level schedule) the table is unsatisfiable and `hdec` fails, so `hdec` also needs the law's draws to set up at
+  `mPts`;
+* the assumptions of record: A3 (`hA3`, `uniform/io-getrandombytes`), `cr/sha-512` for the knowledge finders (`hKS`),
+  `ecr/sha-512` for the link finders (`hCR`); A6 (`uniform/flock-coin-server`) is the live session `liveTable` itself;
+* numeric conditions and the strata's match (`hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht'`).
+
+Scope. W6 is definitional on the untyped path: the unit's rows are the parsed net's (`Rows.ofNet`), and nothing verifies
+that the unit net lowers its template's Definition. The tail stages of `tc_units` templates are outside every unit's
+rows. The typed path is not production. `keyProg` has no edges between units: the headline bounds VUs that fail at their
+own committed values, and a VU reading its producers' outputs is carried by the copy constraints and the region pins,
+not by an edge of the program. The proof coins are the live coin server's per-round OS coins (A6): seed-derived coins
+are outside the headline, so an M0 session counts only under `FC_COINS=os`. Sessions of more than one table are outside
+it (M0's default is one). -/
+theorem flock_headline_exec
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
+    (hA3 : Assumptions.UniformRandomBytes Lb src)
+    (hHm : (rsAt hU ht hc dj x₀ hpub hpt ho h1 hpr saltCol (Reg := Reg)).Computes)
+    {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
+    (hr : ∀ S R j, rateB (planAt (Reg := Reg) ht dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
+    (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
+    (opn : Finset (Fin n) → Reg → Array ByteArray → Opens 𝔽 Dig × Salts (List UInt8)) (dg : ByteArray → ByteArray)
+    (dec : Finset (Fin n) → Reg → ℕ → ByteArray → List Msg) (one : Finset (Fin n) → Reg → ℕ → Bool)
+    (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
+    (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap Dig)) (N : ℕ)
+    (hdec : DecodesAll H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dec one fin capOf)
+    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
+    (hCR : LinkCRL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 leaf512
+      (planAt ht dj x₀) (tabAt ht dj x₀) ((rsAt hU ht hc dj x₀ hpub hpt ho h1 hpr saltCol).binding hHm)
+      (reg (simAudit H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))
+      (cont (simAudit H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ)) k Rw M t')
+    {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H512 enc512 leaf512
+      (planAt ht dj x₀ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
+        (reg (simAudit H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))) j
+      (batchStratL H512 enc512 leaf512 (planAt ht dj x₀)
+        (cont (simAudit H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
+    prob (fun o => LiveAccepts I o ∧
+        K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+          (Xpub {Layout.oneG} {Layout.zeroG}
+            (XplurL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 leaf512 (planAt ht dj x₀)
+              (tabAt ht dj x₀) ((rsAt hU ht hc dj x₀ hpub hpt ho h1 hpr saltCol).binding hHm)
+              (reg (simAudit H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))
+              (cont (simAudit H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))
+              k Rw))).card)
+        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
+      (Law.stratified σs ks hks).miss K +
+        StrictCR.ksAvgStrict (planAt ht dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
+          (reg (simAudit H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ)) +
+        ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).linkBoundE
+          (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (planAt ht dj x₀) (tabAt ht dj x₀)
+          ((rsAt hU ht hc dj x₀ hpub hpt ho h1 hpr saltCol).binding hHm) k Rw M ρ t' :=
+  (Placed.keyProg c hU n).flock_headline_live (Layout.outsOf c hU n) σs ks hks St hS Kd pop Lb src hA3
+    (tablesAt ht dj x₀) (tabAt ht dj x₀)
+    (Placed.Sites.progPlaces_keyProg hU (sitesAt_parse ht dj x₀ hc) (Layout.outsOf c hU n))
+    {Layout.oneG} (Const.constCols_keyProg hU (sitesAt_parse ht dj x₀ hc) (Layout.outsOf c hU n))
+    {Layout.zeroG} (Zero.zeroCols_keyProg hU (sitesAt_parse ht dj x₀ hc) (Layout.outsOf c hU n))
+    (layAt hU ht hc dj x₀ saltCol) (rsAt hU ht hc dj x₀ hpub hpt ho h1 hpr saltCol) hHm hk hRw hM hρ hr ht' K I wr
+    opn dg dec one fin capOf N hdec τ hCR hKS
+
+end FlockSoundness.Discharge.Integrate
