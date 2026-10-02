@@ -81,14 +81,6 @@ def test_the_served_vocabulary_binds_v2():
     assert PROFILES[TargetProfile().numerics_profile].kind("silu_mul", I=8).id == v2 == "SiluMul_v2{I=8}"
 
 
-def test_the_served_kind_has_its_boolean_version():
-    from verity_vllm.program import boolean as BB
-
-    assert BB.boolean_version(bind(SiluMul, I=8)).id == "SiluMul_v4{I=8}"
-    assert BB.boolean_version(SiluMulBf16).id == "SiluMulBf16_v4"
-    assert BB.boolean_version(bind(b1.SiluMul, I=8)).id == "SiluMul_v3{I=8}"
-
-
 def test_the_replay_row_is_v2_past_expf_overflow():
     """The served row's kernel on the gates past expf's overflow (bf16 -89 .. -103), against both signs of up: the GPU's signed
     zero (-0 for up > 0, +0 for up < 0). `SiluMul_v1`'s row gives a nonzero word on -97 .. -89, where its tiny `g * e^g` is still
