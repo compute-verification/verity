@@ -180,6 +180,7 @@ def test_the_vectors_reproduce_from_the_file_alone(doc):
     for v in doc["vectors"]:
         i = v["inputs"]
         r = rows[(i["cell"], i["metric"], i["op"], i["timestamping"])]
+        assert r["max_us"] < doc["t_us"][-1]
         got = E.survival_at(doc["t_us"], r["s"], r["max_us"], r["n"], i["t_us"])
         assert got == pytest.approx(v["expected"]["survival_fraction"], rel=v["tolerance"]["relative"], abs=0)
     assert {v["expected"]["survival_fraction"] for v in doc["vectors"]} >= {0.0, 1.0}

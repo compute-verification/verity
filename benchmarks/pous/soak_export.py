@@ -134,6 +134,9 @@ def stall_label(attr: str, comps: dict[str, float], gpu_us: float, elapsed_us: f
         su = f", server user time {_dur(server_user_us)}" if server_user_us is not None else ""
         return f"twin without kernel stamps: elapsed {_dur(elapsed_us)}{su}"
     k = max(comps, key=lambda c: comps[c])
+    if "send" not in comps:
+        return (f"no kernel TX stamp: the largest stamped part, {k.replace('_', ' ')}, took {_dur(comps[k])} of "
+                f"{_dur(elapsed_us)}")
     return f"no single cause: the largest part, {k.replace('_', ' ')}, took {_dur(comps[k])} of {_dur(elapsed_us)}"
 
 
@@ -678,7 +681,7 @@ class Builder:
                     "start_utc": _utc(self.t_first) if self.t_first else None,
                     "end_utc": _utc(self.t_last) if self.t_last else None,
                     "chunks": arts, "answers": self.n_answers, "wrong": self.wrong, "schedule_seed": self.seed,
-                    "notes": self.notes(extra_notes)},
+                    "notes": self.notes(extra_notes, survival)},
             "cells": cells, "metrics": metrics_table(), "t_us": [_r(t, 10) for t in T_US], "survival": survival,
             "quantiles": quantiles,
             "thresholds": [{"block_bytes": b, "call_ns": self.calls[b],
@@ -703,7 +706,7 @@ class Builder:
                 "load (load.switched false), so the load ran throughout with no challenge or ping in flight; a run that "
                 "switched the load is not used, its new load starting inside the settle; " + "; ".join(parts))
 
-    def notes(self, extra: list[str]) -> list[str]:
+    def notes(self, extra: list[str], survival: list[dict[str, Any]]) -> list[str]:
         out = list(extra)
         out += [
             "NVML (GPU 7's SM utilisation, power, temperature), the 10 s GPU utilisations and loadavg are missing before "
@@ -726,7 +729,12 @@ class Builder:
             ("survival counts are exact (values ≥ t_us[i]) and max_us is the exact maximum, unrounded; interpolation (the "
              "vectors): 1 below t_us[0], ln s linear in ln t between grid points, and on the segment straddling max_us "
              "(t_i ≤ max_us < t_{i+1}, s_{i+1} = 0) ln s linear in ln t from (t_i, s_i) to (max_us, 1/n), n the row's n: "
-             "exactly 1/n at max_us, 0 past it; a max_us past the grid's last point would run the same from that point"),
+             "exactly 1/n at max_us, 0 past it"),
+            ("rows whose max_us passes the grid's last point (100 ms), which the spec's rule does not cover: "
+             + (", ".join(f"cell {r['cell']} {r['metric']} {r['op']} (max {r['max_us'] / 1000:.1f} ms)" for r in survival
+                          if r["max_us"] > T_US[-1]) or "none")
+             + "; there survival_at runs ln s linearly in ln t from (t_us[200], s[200]) to (max_us, 1/n), and the vectors "
+             "leave these rows out"),
             ("the ToR model (contract §3) on node 2: mlx5_core, 400 Gb/s, MTU 1500 (MSS 1448, 90 B per frame), B_pcie 25 GB/s, "
             "rx-usecs 8 for default (t_nic_rx 10 µs) and 2 µs for tuned; the 100 Gb/s variants use the same terms at 100 Gb/s; "
             "response bytes = the 192 B header (24 words) + the block (pings carry the cell's block from the staging buffer)"),
@@ -754,7 +762,7 @@ def vectors(doc: dict[str, Any], rows: int = 6) -> list[dict[str, Any]]:
     """Interpolation lookups from `survival_at` over a spread of the file's survival rows: below the grid, on and between
     grid points, three inside the segment straddling the row's max, at the max exactly and just past it."""
     t_us = doc["t_us"]
-    cand = sorted((r for r in doc["survival"] if r["n"] >= 2), key=lambda r: -r["n"])
+    cand = sorted((r for r in doc["survival"] if r["n"] >= 2 and r["max_us"] < t_us[-1]), key=lambda r: -r["n"])
     longest = max(cand, key=lambda x: x["max_us"]) if cand else None
     wants = (lambda r: r["op"] == "challenge" and r["timestamping"] and r["metric"] == "elapsed",
              lambda r: r["op"] == "challenge" and r["metric"] == "tor_400_tuned",
