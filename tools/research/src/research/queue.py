@@ -42,7 +42,10 @@ with no effect on them.
 
 Files.  The queue works only in its own clone (`--workdir`, default ~/.research/queue/verity), and fetches with forced refspecs: a
 local copy of a branch that wasn't force-fetched once put a train on a stale base.  `state.json` beside the clone keeps ejections and
-the notices sent; losing it costs a retry.  One queue command runs at a time per workdir (`queue.lock`).
+the notices sent; losing it costs a retry.  One queue command runs at a time per workdir (`queue.lock`).  The clone authenticates as
+the caller's checkout does (`credential_args`): a cloud VM sets its credential helper in the checkout's own config, which a clone
+elsewhere never reads.  Git never prompts, so a remote the queue can't read fails the command instead of answering from what the
+clone fetched last.
 """
 from __future__ import annotations
 
@@ -52,6 +55,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -73,6 +77,7 @@ LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9][A-Za-z0-9._-]*)`?", re
 AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
 TRAILER_RE = re.compile(r"^(PR|Head|Owner): (.+)$", re.M)
 SLUG_RE = re.compile(r"github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$")
+AUTH_FAILED_RE = re.compile(r"could not read (Username|Password)|Authentication failed|unable to get password")
 
 
 class QueueError(Exception):
@@ -81,7 +86,7 @@ class QueueError(Exception):
 
 def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
     r = subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=repo, capture_output=True, text=True,
-                       env={**os.environ, **(env or {})})
+                       env={**os.environ, "GIT_TERMINAL_PROMPT": "0", **(env or {})})
     if check and r.returncode:
         raise QueueError(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()[-400:]}")
     return r
@@ -89,6 +94,21 @@ def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) ->
 
 def _out(repo: Path, *args: str) -> str:
     return _git(repo, *args).stdout.strip()
+
+
+def credential_args(repo: Path, remote: str) -> tuple[str, ...]:
+    """`git -c` options that let the queue's own clone authenticate to `remote` as the checkout `repo` does: the `credential.*`
+    settings its own config has for the remote (a cloud VM's helper lives there), else `gh auth git-credential` when no helper
+    applies to the remote at all and `gh` is on PATH.  None when git's global config already serves it, or the remote isn't http."""
+    if not re.match(r"https?://", remote):
+        return ()
+    found = _git(repo, "config", "--local", "--get-urlmatch", "credential", remote, check=False).stdout.splitlines()
+    conf = dict(line.split(" ", 1) for line in found if " " in line)
+    if not conf.get("credential.helper"):
+        if _git(repo, "config", "--get-urlmatch", "credential.helper", remote, check=False).stdout.strip() or not (gh := shutil.which("gh")):
+            return ()
+        conf = {"credential.helper": f"!{shlex.quote(gh)} auth git-credential"}
+    return ("-c", "credential.helper=", *(o for k, v in conf.items() for o in ("-c", f"{k}={v}")))
 
 
 # ---- the open PRs -------------------------------------------------------------------------------------------------------------------
@@ -250,19 +270,30 @@ def _message(pr: PR) -> str:
 
 class Queue:
     def __init__(self, workdir: Path, *, remote: str, github, grants: Callable[[int, str], set[str]], ready: Callable[[int, str], bool],
-                 store=None, shadow: bool = False, rules: Rules | None = None, notes: Path | None = None, log: Callable[[str], None] = print):
+                 store=None, shadow: bool = False, rules: Rules | None = None, notes: Path | None = None, log: Callable[[str], None] = print,
+                 auth: tuple[str, ...] = ()):
         self.workdir, self.remote, self.github, self.grants, self.ready, self.store = Path(workdir), remote, github, grants, ready, store
-        self.shadow, self.log, self._rules = shadow, log, rules
+        self.shadow, self.log, self._rules, self.auth = shadow, log, rules, auth
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.notes = Path(notes or os.environ.get("RESEARCH_NOTES") or Path.home() / ".research" / "notes")
         self.state_path = self.workdir.parent / f"{self.workdir.name}.state.json"
 
     # -- the clone and its state
 
+    def _remote(self, cwd: Path, *args: str, ok: tuple[int, ...] | None = (0,)) -> subprocess.CompletedProcess:
+        """A git command that talks to the remote, with `auth` (`credential_args`); one that exits outside `ok` raises."""
+        r = _git(cwd, *self.auth, *args, check=False)
+        if ok is not None and r.returncode not in ok:
+            err = (r.stderr or r.stdout).strip()[-400:]
+            hint = ("; no credential helper applies to the remote outside the caller's checkout: set one in git's global config, "
+                    "or put an authenticated `gh` on PATH") if not self.auth and AUTH_FAILED_RE.search(err) else ""
+            raise QueueError(f"git {' '.join(args)}: {err}{hint}")
+        return r
+
     def _clone(self) -> None:
         if not (self.workdir / ".git").exists():
             self.workdir.parent.mkdir(parents=True, exist_ok=True)
-            _git(self.workdir.parent, "clone", "-q", self.remote, str(self.workdir))
+            self._remote(self.workdir.parent, "clone", "-q", self.remote, str(self.workdir))
         # the caller's origin as it is now: a token embedded in the URL the clone was made from rotates
         _git(self.workdir, "remote", "set-url", "origin", self.remote)
         _git(self.workdir, "merge", "--abort", check=False)
@@ -272,9 +303,10 @@ class Queue:
     def fetch(self, prs: Iterable[PR] = ()) -> None:
         """Forced refspecs only: `main`, the queue's branch when it exists, and each open PR's head as `refs/queue/pr/{n}`."""
         specs = ["+refs/heads/main:refs/remotes/origin/main", *(f"+refs/pull/{p.number}/head:refs/queue/pr/{p.number}" for p in prs)]
-        _git(self.workdir, "fetch", "-q", "--prune", "origin", *specs)
-        if _git(self.workdir, "ls-remote", "--exit-code", "origin", f"refs/heads/{self.branch}", check=False).returncode == 0:
-            _git(self.workdir, "fetch", "-q", "origin", f"+refs/heads/{self.branch}:refs/remotes/origin/{self.branch}")
+        self._remote(self.workdir, "fetch", "-q", "--prune", "origin", *specs)
+        # exit 2: no such branch; any other failure is the remote's, never an empty queue
+        if self._remote(self.workdir, "ls-remote", "--exit-code", "origin", f"refs/heads/{self.branch}", ok=(0, 2)).returncode == 0:
+            self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/heads/{self.branch}:refs/remotes/origin/{self.branch}")
         else:
             _git(self.workdir, "update-ref", "-d", f"refs/remotes/origin/{self.branch}", check=False)
 
@@ -412,8 +444,8 @@ class Queue:
             entries[m.pr].state, entries[m.pr].position, entries[m.pr].commit = "queued", i, m.commit
         old = _git(self.workdir, "rev-parse", "--verify", "-q", f"refs/remotes/origin/{self.branch}", check=False).stdout.strip()
         if tip != old and not dry_run:
-            _git(self.workdir, "push", "-q", f"--force-with-lease=refs/heads/{self.branch}:{old}", "origin",
-                 f"{tip}:refs/heads/{self.branch}")
+            self._remote(self.workdir, "push", "-q", f"--force-with-lease=refs/heads/{self.branch}:{old}", "origin",
+                         f"{tip}:refs/heads/{self.branch}")
         self.log(f"research queue: `{self.branch}` at {tip[:12]}: {len(members)} PR(s) above `main`"
                  + (f", kept {k}, merged {len(members) - k}" if members else "") + (" (dry run: not pushed)" if dry_run else ""))
         if not dry_run:
@@ -463,7 +495,7 @@ class Queue:
                 self.log(f"research queue: would land {prs} ({m.commit[:12]}, check {attempt})" + (" [shadow]" if self.shadow else ""))
                 return m
             _git(self.workdir, "merge", "-q", "--ff-only", m.commit)
-            r = _git(self.workdir, "push", "-q", "origin", "main:refs/heads/main", check=False)
+            r = self._remote(self.workdir, "push", "-q", "origin", "main:refs/heads/main", ok=None)
             if r.returncode:
                 _git(self.workdir, "reset", "-q", "--hard", "refs/remotes/origin/main")
                 self.log(f"research queue: pushing `main` to {m.commit[:12]} was refused ({r.stderr.strip()[-200:]}); "
@@ -664,7 +696,7 @@ def main(argv: list[str]) -> int:
             return ready(GitHub(repo), store, a.pr, a.by, QuickTier(Path(_out(Path.cwd(), "rev-parse", "--show-toplevel")), remote))
         labels = StoreGrants(store)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), grants=labels, ready=labels.ready, store=store, shadow=a.shadow,
-                  rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None)
+                  rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None, auth=credential_args(Path.cwd(), remote))
         lock = _lock(a.workdir)  # noqa: F841
         if a.command == "status":
             entries = q.status()
