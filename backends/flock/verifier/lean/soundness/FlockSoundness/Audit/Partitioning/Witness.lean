@@ -123,6 +123,11 @@ theorem riskConcave_needs_small_p :
 theorem concentration :
     detectionRisk 2 2 (1 / 2) 2 + detectionRisk 2 2 (1 / 2) 0 <
       detectionRisk 2 2 (1 / 2) 1 + detectionRisk 2 2 (1 / 2) 1 := by
-  sorry
+  have e0 : detectionRisk 2 2 (1 / 2) 0 = 0 := by norm_num [detectionRisk]
+  have e1 : detectionRisk 2 2 (1 / 2) 1 = -Real.log (1 / 2) := by norm_num [detectionRisk]
+  have e2 : detectionRisk 2 2 (1 / 2) 2 = -Real.log (1 / 2) := by norm_num [detectionRisk]
+  rw [e0, e1, e2]
+  have h : Real.log (1 / 2 : ℝ) < 0 := Real.log_neg (by norm_num) (by norm_num)
+  linarith
 
 end FlockSoundness.Audit.Partitioning.Witness

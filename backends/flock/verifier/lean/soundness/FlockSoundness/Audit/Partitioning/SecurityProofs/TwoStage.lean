@@ -124,6 +124,48 @@ theorem RiskConcave : Guarantees.RiskConcave := by
   linarith
 
 theorem Concentration : Guarantees.Concentration := by
-  sorry
+  intro N k R p hk hkN hp0 hp
+  have hN : 0 < N := by omega
+  set ψ : ℕ → ℝ := detectionRisk N k p with hψ
+  have h0 : ψ 0 = 0 := by
+    have hT : (N.choose k : ℝ) ≠ 0 := by exact_mod_cast (Nat.choose_pos hkN).ne'
+    simp [ψ, detectionRisk, hT]
+  have hanti : Antitone fun t => ψ (t + 1) - ψ t :=
+    antitone_nat_of_succ_le fun t => RiskConcave N k t p hk hp0 hp
+  have shift : ∀ c b t, c ≤ b → ψ (b + t) - ψ b ≤ ψ (c + t) - ψ c := by
+    intro c b t hcb
+    induction t with
+    | zero => simp
+    | succ t ih =>
+        have := hanti (show c + t ≤ b + t by omega)
+        simp only at this
+        rw [← add_assoc, ← add_assoc]
+        linarith
+  have step : ∀ M a, a ≤ N →
+      (((M + a) / N : ℕ) : ℝ) * ψ N + ψ ((M + a) % N) ≤ ((M / N : ℕ) : ℝ) * ψ N + ψ (M % N) + ψ a := by
+    intro M a ha
+    have hr : M % N < N := Nat.mod_lt _ hN
+    have hM := Nat.mod_add_div M N
+    by_cases h : M % N + a < N
+    · obtain ⟨h1, h2⟩ := (Nat.div_mod_unique hN).2 ⟨show M % N + a + N * (M / N) = M + a by omega, h⟩
+      rw [h1, h2]
+      have := shift 0 a (M % N) (Nat.zero_le _)
+      rw [zero_add, h0, add_comm a] at this
+      linarith
+    · obtain ⟨h1, h2⟩ := (Nat.div_mod_unique hN).2
+        ⟨show M % N + a - N + N * (M / N + 1) = M + a by rw [mul_add, mul_one]; omega, by omega⟩
+      rw [h1, h2]
+      have := shift (M % N + a - N) a (N - a) (by omega)
+      rw [show a + (N - a) = N by omega, show M % N + a - N + (N - a) = M % N by omega] at this
+      push_cast
+      linarith
+  intro m hm
+  induction R with
+  | zero => simp [h0]
+  | succ R ih =>
+      have ih' := ih (fun i => m i.castSucc) (fun i => hm _)
+      have hs := step (∑ i : Fin R, m i.castSucc) (m (Fin.last R)) (hm _)
+      simp only [Fin.sum_univ_castSucc]
+      linarith
 
 end FlockSoundness.Audit.Partitioning.SecurityProofs
