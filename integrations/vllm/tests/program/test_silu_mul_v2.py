@@ -1,5 +1,6 @@
-"""`SiluMul_v2` (quarantine `act`) is vLLM `_C.silu_and_mul` on the words the red-team measured on sm_120 where `SiluMul_v1` is not
-(r20260930-092038-7dbc, `silu-edge-cases`), and `SiluMul_v1` on every other word; no vocabulary binds it, so no record moves."""
+"""`SiluMul_v2` (`registry.act`, promoted from quarantine `act`) is vLLM `_C.silu_and_mul` on the words the red-team measured on
+sm_120 where `SiluMul_v1` is not (r20260930-092038-7dbc, `silu-edge-cases`), and `SiluMul_v1` on every other word. The served
+vocabulary `b1-eager-v3` binds it; the older vocabularies keep `SiluMul_v1`. The replay's row kernel is the same function."""
 from __future__ import annotations
 
 import numpy as np
@@ -8,6 +9,8 @@ import pytest
 from verity.evaluation import evaluate
 from verity.ir.defs import bind
 from verity_vllm.program.frontend.rules.vocab import PROFILES
+from verity_vllm.program.frontend.target_profile import TargetProfile
+from verity_vllm.program.kernels import rows as RK
 from verity_vllm.program.registry import b1, prims as P
 from verity_vllm.program.registry.act import SiluMul, SiluMulBf16
 from verity_vllm.program.registry.quarantine.act import silu_mul_difftest as DT
@@ -71,10 +74,42 @@ def test_the_row_is_the_element_per_lane():
     assert got == [V2(g, u) for g, u in zip(gates, ups)]
 
 
-def test_no_vocabulary_binds_v2():
-    for name, vocab in PROFILES.items():
-        k = vocab.kind("silu_mul", I=8)
-        assert k is None or k.id == bind(b1.SiluMul, I=8).id, (name, k)
+def test_the_served_vocabulary_binds_v2():
+    got = {name: vocab.kind("silu_mul", I=8).id for name, vocab in PROFILES.items()}
+    v1, v2 = bind(b1.SiluMul, I=8).id, bind(SiluMul, I=8).id
+    assert got == {"b1-eager": v1, "b1-eager-v2": v1, "b1-eager-v3": v2, "dense2-eager-v1": v2, None: v1}
+    assert PROFILES[TargetProfile().numerics_profile].kind("silu_mul", I=8).id == v2 == "SiluMul_v2{I=8}"
+
+
+def test_the_served_kind_has_its_boolean_version():
+    from verity_vllm.program import boolean as BB
+
+    assert BB.boolean_version(bind(SiluMul, I=8)).id == "SiluMul_v4{I=8}"
+    assert BB.boolean_version(SiluMulBf16).id == "SiluMulBf16_v4"
+    assert BB.boolean_version(bind(b1.SiluMul, I=8)).id == "SiluMul_v3{I=8}"
+
+
+def test_the_replay_row_is_v2_past_expf_overflow():
+    """The served row's kernel on the gates past expf's overflow (bf16 -89 .. -103), against both signs of up: the GPU's signed
+    zero (-0 for up > 0, +0 for up < 0). `SiluMul_v1`'s row gives a nonzero word on -97 .. -89, where its tiny `g * e^g` is still
+    a bf16 subnormal."""
+    pairs = [(g, u) for g in range(0x8000, 0xFF80) if -103.0 <= _f(g) <= -89.0 for u in (ONE, NEG_ONE, 0x4183, 0xC183)]
+    gu = np.array([g for g, _ in pairs] + [u for _, u in pairs], dtype=np.uint16)
+    got = RK.ROWS["SiluMul_v2"].fn({"I": len(pairs)}, [gu])["out"]
+    old = RK.ROWS["SiluMul_v1"].fn({"I": len(pairs)}, [gu])["out"]
+    want = [NEG_ZERO if u & 0x8000 == 0 else POS_ZERO for _, u in pairs]
+    assert [int(w) for w in got] == want == [V2(g, u) for g, u in pairs]
+    band = [k for k, (g, _) in enumerate(pairs) if _f(g) >= -97.0]
+    assert len(band) == 4 * 17 and all(int(old[k]) not in (POS_ZERO, NEG_ZERO) for k in band)
+    assert RK.EVALUATORS["SiluMul_v2"].startswith("verity_vllm.program.kernels.act_rows.silu_mul_expf_rows")
+
+
+def test_the_replay_row_is_the_element_on_every_gate_word():
+    ups = (POS_ZERO, NEG_ZERO, ONE, NEG_ONE, POS_INF, NEG_INF, 0x7FC0, 0x0001, 0x4049)
+    for u in ups:
+        gu = np.concatenate([np.arange(1 << 16, dtype=np.uint16), np.full(1 << 16, u, dtype=np.uint16)])
+        got = RK.ROWS["SiluMul_v2"].fn({"I": 1 << 16}, [gu])["out"]
+        assert [int(w) for w in got] == [V2(g, u) for g in range(1 << 16)], hex(u)
 
 
 def test_the_adapter_covers_every_edge_kind_and_the_edge_words():

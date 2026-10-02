@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from verity.ir.defs import bind as ir_bind
+from verity_vllm.program.registry import act as _act
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
 from verity_vllm.program.registry import fa2_check_inf as _f2
 from verity_vllm.program.registry import fa3_check_inf as _f3
@@ -263,6 +264,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
     "b1-eager-v3", "profile", "b1-eager-v3",
     kinds={**PROFILE_B1_EAGER.kinds, **_PAD_KINDS, **_DNK,
            "attention": lambda T, NH, KVH, D: ir_bind(b1.AttentionV3, T=T, NH=NH, KVH=KVH, D=D, BN=b1.fa2_kblock_n(D)),
+           # `_C.silu_and_mul` as `SiluMul_v2` (registry.act): `SiluMul_v1` on every word but the red-team's edge words (expf's overflow,
+           # up = -0, gate -inf / -0, NaN 0x7FFF); the older vocabularies keep `SiluMul_v1`
+           "silu_mul": lambda I: ir_bind(_act.SiluMul, I=I),
            # [R13 hopper] the target-keyed variants (`verity_vllm.program.registry.targets`): the same bodies with the k16 tensor-core step and (for
            # attention) the block size / epilogue as declared statics — bound by the vLLM rules when the active TargetProfile is not the
            # accepted records' (Ampere-family step under FA2); those keep `gemm` / `attention` above, so their digests do not move.
@@ -336,6 +340,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                       "= SplitsFor_v1(|live|, num_SMs)), Gumbel-max with key tl.randint(seed, pos), first global maximum "
                                       "(registry.sampling; difftest 72/72 bit-exact on L40S; R16 GPU fixture at S = 1..32)",
            "attention": "Attention_v3{T,NH,KVH,D,BN=fa2_kblock_n(D)}: FA2 causal GQA, kBlockN as a declared static (b1.AttentionV3)",
+           "silu_mul": "SiluMul_v2{I}: vLLM _C.silu_and_mul (act_and_mul_kernel<bf16, silu_kernel>) -- SiluMulBf16_v2 per element: "
+                       "expf's overflow (gate <= -89 -> -0), up + 0.0f, gate -0 kept, NaN 0x7FFF (registry.act)",
            "gemm_dot": "Gemm_v2{K,N,DOT}: the batch-invariant Triton GEMM with the target's registered k16 step (registry.targets.gemm_spec)",
            "gemm_bias_dot": "GemmBias_v2{K,N,DOT}: Gemm_v2 then BiasAdd_v1 per output word, the biased linear on a target whose record says "
                             "gemm_bias_dot (registry.targets.gemm_bias_spec)",

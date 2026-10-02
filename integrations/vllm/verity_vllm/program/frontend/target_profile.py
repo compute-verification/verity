@@ -203,7 +203,7 @@ class TargetProfile:
     #: it binds (one Program per construction; the digest differs by construction on the same trace)
     MOE_CONSTRUCTIONS = {"indexed-read": {"rules": "vllm_moe MOE-01 (TopkSoftmax / MoeAlignBlockSize / FusedMoeKernel / MoeSum)",
                                           "definitions": ("MoeRouterTopK_v1{E,TOPK,VPT}", "MoeExpertGemm_v1{E,K,N}", "MoeExpertGemmW_v1{E,K,N}",
-                                                          "SiluMul_v1{I}", "MoeSum_v1{TOPK,H}"),
+                                                          "SiluMul_v2{I}", "MoeSum_v1{TOPK,H}"),
                                           "population": "|Q(P)|: one VU per (token, slot) pair row + router + sum per token"},
                          "padded": {"rules": "vllm_moe padded (PaddedTopkSoftmax / PaddedMoeAlignBlockSize / PaddedFusedMoeKernel / PaddedSiluAndMul / "
                                              "PaddedMoeSum -> ONE MoeFfnFixedL_v1 per token)",
@@ -213,7 +213,7 @@ class TargetProfile:
                                                   "labelled with its actual population, never equated to the indexed-read row's (R17-45 (1))"},
                          "indexed-read-ordered": {"rules": "vllm_moe MOE-01, the router stated in its selection order over one committed softmax (the same function as MOE-01's)",
                                                  "definitions": ("MoeRouterTopKOrdered_v1{E,TOPK,VPT}", "MoeExpertGemm_v1{E,K,N}", "MoeExpertGemmW_v1{E,K,N}",
-                                                                 "SiluMul_v1{I}", "MoeSum_v1{TOPK,H}"),
+                                                                 "SiluMul_v2{I}", "MoeSum_v1{TOPK,H}"),
                                                  "population": "indexed-read's; the router commits its softmax once (2E+2 values per token), not the rounds' masked scores"}}
     DEFAULT_MOE_CONSTRUCTION = "indexed-read-ordered"
     #: the registered FA3 attention constructions: value -> the attention Definition every FA3 row binds
