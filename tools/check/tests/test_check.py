@@ -483,6 +483,45 @@ def test_keep_going_runs_every_other_group_to_its_end(tmp_path, monkeypatch):
     assert not passed and {s["step"]: s["status"] for s in done} == {"fails": "failed", "a": "passed", "b": "passed"}
 
 
+def test_a_lean_module_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
+    """`lean-changed` exits only once `slow` is running (the FIFO): under --keep-going its failure still stops `slow`."""
+    import os
+
+    gate = tmp_path / "gate"
+    os.mkfifo(gate)
+    slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
+    changed = _py("import sys\nopen(sys.argv[1]).read()\nsys.exit(1)", gate)
+    _fake_run(monkeypatch, [[("slow", slow, tmp_path)], [("lean-changed", changed, tmp_path)]])
+    passed, done = CHECK.run(tmp_path, 2, keep_going=True)
+    by = {s["step"]: s for s in done}
+    assert not passed and by["lean-changed"]["status"] == "failed"
+    assert by["slow"]["status"] == "stopped" and by["slow"]["detail"] == "stopped: lean-changed failed"
+
+
+def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_path):
+    steps = CHECK.Steps(tmp_path, keep_going=True)
+    steps.end({"step": "pytest", "status": "failed"})
+    assert not steps.stopping
+    steps.end({"step": "lean-changed", "status": "failed"})
+    assert steps.stopping and steps.halted == "lean-changed"
+    steps = CHECK.Steps(tmp_path)
+    steps.end({"step": "pytest", "status": "failed"})
+    assert steps.stopping and steps.halted == "pytest"
+
+
+def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_path, monkeypatch):
+    out, _ = _pinned(tmp_path, monkeypatch)
+    gs = CHECK.groups(out, 8)
+    assert len(gs) == 4 and [n for n, _, _ in gs[3]] == ["lean-changed"] and "lean-changed" in CHECK.HALTS
+    argv = gs[3][0][1]
+    assert argv[1].endswith("tools/check/lean_changed.py")
+    assert argv[argv.index("--cache") + 1] == gs[2][2][1][gs[2][2][1].index("--cache") + 1], "the audit's own passes"
+    assert argv[argv.index("--deps") + 1] == gs[2][2][1][gs[2][2][1].index("--deps") + 1], "and its kept dependencies"
+    assert CHECK.groups(out, 8, cache=False)[3][0][1].startswith("skipped: --no-cache")
+    monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "no-verifier")
+    assert len(CHECK.groups(out, 8)) == 3
+
+
 def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_path, monkeypatch):
     marker = tmp_path / "ran"
     touch = _py("open(__import__('sys').argv[1], 'w')", marker)
