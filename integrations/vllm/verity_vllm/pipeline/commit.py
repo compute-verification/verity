@@ -71,7 +71,7 @@ import torch  # noqa: E402
 
 from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
-from verity_vllm.commit import challenge as CH, hiding, opened as OV, scheme  # noqa: E402
+from verity_vllm.commit import binding as B, challenge as CH, hiding, opened as OV, partition as PT, scheme  # noqa: E402
 from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 
