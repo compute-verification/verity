@@ -93,10 +93,10 @@
       "usergroup": "S0C5LSDENA1"
     },
     {
-      "handle": "pr-captain",
-      "holder": "the PR captain, ci (bc-7ff3de9e-dd31-5d7f-9e53-265bfba177d0)",
+      "handle": "ci",
+      "holder": "the CI lead (bc-7ff3de9e-dd31-5d7f-9e53-265bfba177d0)",
       "remit": "Open PRs: shepherds each to a passing check and into the merge trains.",
-      "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles)",
+      "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
       "usergroup": null
     },
     {

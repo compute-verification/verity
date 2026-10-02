@@ -173,7 +173,9 @@ class Index:
         """Upsert one artifact.  `local`/`remote`/`repo_path` left None keep the current value (so a push can flip `remote` alone)."""
         p = manifest_doc.get("payload") or {}
         with self.db:
-            self.db.execute("BEGIN")
+            # IMMEDIATE: a transaction that has read cannot wait to write (SQLite skips the busy timeout, as waiting could deadlock),
+            # so a deferred BEGIN failed "database is locked" at once whenever another writer was mid-transaction.
+            self.db.execute("BEGIN IMMEDIATE")
             row = self.db.execute("SELECT local, remote, repo_path FROM artifacts WHERE id=?", (art_id,)).fetchone()
             cur = row or (0, 0, None)
             self.db.execute("INSERT OR REPLACE INTO artifacts VALUES (?,?,?,?,?,?,?,?)",
