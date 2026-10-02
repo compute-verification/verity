@@ -89,6 +89,6 @@ import FlockSoundness.Discharge.Exec.LawDraw
 * `LiveOn`: `Live`'s R11 and headline with the decoder right at the law's draws only (`DecodesOn`, `execRefines_on`,
   `Prog.flock_headline_live_on`), which `DecodesAll` implies (`decodesOn_of_all`, `simAudit_eq_on`);
 * `LawDraw`: every draw of the live stratified law has `∑ s, k s` units, or is every unit where the run reads past the
-  model's bytes (`execOS_draw_card`, `execOS_draw_card_or`), so a draw file with no closure sets up at
+  source's bytes (`execOS_draw_card`, `execOS_draw_card_or`), so a draw file with no closure sets up at
   `mPtsOf c.g (∑ s, k s)` or `mPtsOf c.g n` (`setupH_mPts_execOS`, `setupH_mPts_execOS_or`).
 -/

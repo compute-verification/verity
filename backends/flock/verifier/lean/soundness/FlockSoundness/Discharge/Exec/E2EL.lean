@@ -20,8 +20,8 @@ collision advantages; under `SHA512CRStrict` it is at most `StrictCR.ksAvgStrict
 the `_hm96` forms state (`Binding/E2E.lean`).
 
 **What the statement carries today.**
-* "Accept" is `execAccept`, any event on the audit's outcome that implies the model's acceptance (`hExec`). So as pinned,
-  these are the model-level theorems. The executable's verdict, `flock-verify` on the run's transcript, is not an event
+* "Accept" is `execAccept`, any event on the audit's outcome that implies the Lean protocol's acceptance (`hExec`). So as pinned,
+  these are theorems about the protocol as Lean defines it. The executable's verdict, `flock-verify` on the run's transcript, is not an event
   on that outcome. It enters when `hExec` is discharged, and that changes the statement's shape.
 * "Rows derived by the verifier" is not in the generic statement: `unitRows` appears only in `dp`. In the `Prog` forms the
   units' rows are the program's (`Prog.rows`), and `ProgPlaces.placed` says the table's statement holds them.
@@ -29,7 +29,7 @@ the `_hm96` forms state (`Binding/E2E.lean`).
 **The composition.** It composes `flock_batched_count_publicL` and `flock_batched_drawn_publicL`, which are the compiled
 audit, the link theorem and knowledge soundness, all on `main`. Each piece not yet proved is a named hypothesis. The
 checklist `assumptions/e2e-checklist.md` gives each one's owner and how it is discharged:
-* `hExec`: the executable verifier's acceptance implies the model's. This is the refinement lane's theorem;
+* `hExec`: the executable verifier's acceptance implies the Lean protocol's. This is the refinement lane's theorem;
 * `dp : DerivedPlaces`: each drawn unit's place in its table, for the rows the verifier derives. For the program's
   circuit it is `ProgPlaces`: `placed`, the table's statement holds the unit's rows (`placement_of_setupH` for the rows
   `Rows.ofNet` reads off setupH's net, and W6, that those are the program's), and `aliased` (`Layout.Aliased`);
@@ -59,7 +59,7 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D Sl : Type} 
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
   {L : Law n}
 
-/-- **The end-to-end count curve (skeleton).** If `execAccept` holds (an event that implies the model's acceptance), the
+/-- **The end-to-end count curve (skeleton).** If `execAccept` holds (an event that implies the Lean protocol's acceptance), the
 probability that at least `K` units of the committed circuit are wrong at the committed values is at most
 `miss_L(K) + ε_ks(σ) + δ_link`. The committed values are 1 on `ones`, 0 on `zeros` and the plurality elsewhere
 (`Xpub`). The gaps are named hypotheses: `hExec`, `dp`, `hConst`, `hZero` and `vb` (`assumptions/e2e-checklist.md`);
@@ -82,7 +82,7 @@ theorem flock_e2e_countL
     (flock_batched_count_publicL P H E Lf plan tab vb ones zeros (P.pubDecodes_of_place plan tab dp.place hConst hZero)
       (P.loweringSoundB_of_place plan tab dp.place) hk hRw hM hρ hr ht K σ hCR)
 
-/-- **The end-to-end drawn-unit bound (skeleton).** If `execAccept` holds (an event that implies the model's
+/-- **The end-to-end drawn-unit bound (skeleton).** If `execAccept` holds (an event that implies the Lean protocol's
 acceptance), the probability that a drawn unit of the committed circuit is wrong at the committed values (`Xpub`, as in
 `flock_e2e_countL`) is at most `ε_ks(σ) + δ_link`. -/
 theorem flock_e2e_drawnL
