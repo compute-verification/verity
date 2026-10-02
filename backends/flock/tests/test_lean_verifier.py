@@ -751,6 +751,7 @@ def first_and_row(lines: list[str], name: str) -> int:
 ROW_NETS = [("sha512x3", "three SHA-512 compressions"), ("hm96", "hm96-sha512/row/v1 commit")]
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_row_nets_are_the_verifiers(tmp_path):
     """The `sha512x3` and `hm96` sections come from the prover, so setup refuses either unless it is the net the verifier
