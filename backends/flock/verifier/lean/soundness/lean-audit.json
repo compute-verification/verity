@@ -5827,6 +5827,13 @@
    "assumptions": [],
    "type_hash": "607a4a9eaee30e48aec21d8fb83f079600f24e67df47b6a7bd73e81444d3d4d6"
   },
+  "FlockSoundness.Discharge.Hidden.commitPair_spec": {},
+  "FlockSoundness.Discharge.Hidden.hidden_delta": {},
+  "FlockSoundness.Discharge.Hidden.hidden_layout": {},
+  "FlockSoundness.Discharge.Hidden.outputs_binding": {},
+  "FlockSoundness.Discharge.Hidden.outputs_committed": {},
+  "FlockSoundness.Discharge.Hidden.public_exposes": {},
+  "FlockSoundness.Discharge.Hidden.setupHidden_spec": {},
   "FlockSoundness.Discharge.HiddenExec.accepts_allRetainedAny": {
    "signature": [
     "FlockSoundness.Discharge.HiddenExec.accepts_allRetainedAny : FlockSoundness.Discharge.HiddenExec.AcceptsAllRetainedAny"
