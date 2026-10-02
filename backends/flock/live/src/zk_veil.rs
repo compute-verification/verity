@@ -1171,6 +1171,48 @@ mod tests {
         assert!(verify_inner(&pr2, &lay, vec![("t", l)], &mut Tape::new(&coins)).is_err());
     }
 
+    /// `final_c'` is a constant of two rows (`replay`'s c_eval, the ring switch's c claim), so a prover who knew `γ` before
+    /// fixing it could cancel any failing row. Coins are committed in advance (M2) and only the rounds' bytes bind a message:
+    /// the verifier accepts when the inner proof checks and its rounds are the ones the prover sent before each coin.
+    #[test]
+    fn final_c_solved_after_the_batching_coins_is_refused() {
+        let lay = Layout::new(20, 16, 0, 0);
+        let s = lay.len();
+        let mut rng = ProverRng::from_seed(ProverSeed::injected([7; 32]));
+        let p = Pads::draw(&mut rng, &lay, 0);
+        let code = Code::new(s + K_PAD);
+        let ic = InnerCommit::new(&p, crate::zk_hooks::LeafSalts::for_seed(&ProverSeed::injected([8; 32])).expand(9, code.n));
+        let v = F128::new(0xc0ffee, 0x5eed);
+        let fc = v + p.h[lay.fc()];
+        let cons = |fc: F128, broken: bool| -> Vec<(&'static str, Lin)> {
+            let ab = p.h[lay.fa()] + if broken { F128::ONE } else { F128::ZERO };
+            vec![("zerocheck c_eval", Lin::masked(fc, lay.fc(), s).add_const(v)), ("zerocheck final a·b", Lin::masked(ab, lay.fa(), s)),
+                 ("ring switch c", Lin::masked(fc, lay.fc(), s).add_const(v))]
+        };
+        let coin = |k: u64| F128::new(k.wrapping_mul(0x9e37_79b9_7f4a_7c15), k + 1);
+        let schedule = vec![vec![coin(1)], (10..16).map(coin).collect(), vec![coin(99)], (100..100 + Q as u64).map(coin).collect()];
+        let run = |broken: bool, solve: bool| -> bool {
+            let mut pch = crate::RecordingChallenger::new(b"rep", schedule.clone());
+            let pr = prove_inner(&ic, &p, &lay, cons(fc, broken), &mut pch).unwrap();
+            let mut sent = fc;
+            if solve {
+                let mut all = cons(fc, broken);
+                all.extend(triple_constraints(&lay, schedule[0][0], pr.rho, pr.sigma));
+                let g = &schedule[1];
+                let (c, t) = batch(&all, g);
+                let sum = c.iter().zip(&p.h).fold(t, |a, (x, y)| a + *x * *y);
+                sent += sum * (g[0] + g[2]).inv();
+            }
+            let mut vch = crate::RecordingChallenger::new(b"rep", schedule.clone());
+            let ok = verify_inner(&pr, &lay, cons(sent, broken), &mut vch).is_ok();
+            assert!(pch.mismatch.is_none() && vch.mismatch.is_none());
+            ok && vch.rounds == pch.rounds
+        };
+        assert!(run(false, false), "the honest proof");
+        assert!(!run(true, false), "a failing row");
+        assert!(!run(true, true), "a failing row cancelled by final_c' solved after γ");
+    }
+
     #[test]
     fn level0_query_counts() {
         // the least counts at t_pad = 2q (the red team's table), and none where the padding outgrows the lane at rate 1/2
