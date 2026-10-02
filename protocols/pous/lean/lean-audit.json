@@ -285,6 +285,17 @@
    "assumptions": [],
    "type_hash": "ea38f93ac88c505e672f942af16f2f7ffe9ef67fc3b69c5fd1c3735643338bdb"
   },
+  "PousP2Ring.not_meetsOn_b19_k88": {
+   "signature": [
+    "PousP2Ring.not_meetsOn_b19_k88 (hP : Pous.P2.Assumptions.PrimeP16448) (b D Q L k : Nat) (hD : instLENat.le 2 D)",
+    "  (hQ : instLENat.le 2 Q) (hL : instLENat.le (instHPow.hPow 2 30) L) (hk : instLENat.le k 88) (ε : ENNReal) :",
+    "  Not",
+    "    (Pous.MeetsOn (Pous.p2ring (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065) b)",
+    "      Pous.Reveal.sequential D Q L k ε)"
+   ],
+   "assumptions": ["Pous.P2.Assumptions.PrimeP16448"],
+   "type_hash": "e814675cd0c38f3261ff2ad2b8b741801c7c2d3292c5966fae7bd1fca8530119"
+  },
   "PousP2Ring.tight": {
    "signature": [
     "PousP2Ring.tight (B w p b : Nat) [NeZero B] [NeZero p] (hp : Nat.Prime p) (h4 : Eq (instHMod.hMod p 4) 3)",
@@ -593,18 +604,9 @@
    "signature": ["PousProofs.TransposeMixing : Pous.Pinned.TransposeMixing"],
    "assumptions": [],
    "type_hash": "e94f8f3ccca2b6da0a0e6cd9e91039ecb2947ece93dd7b20fd3ce99d5e44f934"
-  },
-  "PousP2Ring.not_meetsOn_b19_k88": {}
+  }
  },
  "reads": {
-  "Pous.Accounting.LemmaA": {
-   "digest": "f4a49cb4d1bb6df5741e228b2ef0d6dec2da7481c1229a919cf3677dedcfe53a",
-   "definitions": {
-    "Pous.gammaM1": "4a0f62291e2d9bf20f1b3eec843e8c6e8d282e713db13101eeef86d360fae435",
-    "Pous.histCount": "9975b29e76e83cf69f068e5708ac8aa47033bc25f87db5f4cb0f0b655a71a654"
-   },
-   "pins": ["PousP2Ring.meetsOn_b19_k88", "PousP2Ring.meetsOn_of_row", "PousP2Ring.ringLemmaA_sat"]
-  },
   "Pous.Accounting.Numbers": {
    "digest": "c3e0e039ee4f67955e1ec7df458e92c10ee04d5cdc34ccb108696be0762cb008",
    "definitions": {
@@ -636,9 +638,8 @@
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
     "PousP2Ring.complete",
-    "PousP2Ring.meetsOn_b19_k88",
-    "PousP2Ring.meetsOn_of_row",
     "PousP2Ring.meets_of_meetsOn",
+    "PousP2Ring.not_meetsOn_b19_k88",
     "PousP2Ring.tight",
     "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
@@ -724,10 +725,8 @@
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
     "PousP2Ring.complete",
-    "PousP2Ring.meetsOn_b19_k88",
-    "PousP2Ring.meetsOn_of_row",
     "PousP2Ring.meets_of_meetsOn",
-    "PousP2Ring.ringLemmaA_sat",
+    "PousP2Ring.not_meetsOn_b19_k88",
     "PousP2Ring.tight",
     "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
@@ -803,10 +802,8 @@
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
     "PousP2Ring.complete",
-    "PousP2Ring.meetsOn_b19_k88",
-    "PousP2Ring.meetsOn_of_row",
     "PousP2Ring.meets_of_meetsOn",
-    "PousP2Ring.ringLemmaA_sat",
+    "PousP2Ring.not_meetsOn_b19_k88",
     "PousP2Ring.tight",
     "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
@@ -890,10 +887,8 @@
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
     "PousP2Ring.complete",
-    "PousP2Ring.meetsOn_b19_k88",
-    "PousP2Ring.meetsOn_of_row",
     "PousP2Ring.meets_of_meetsOn",
-    "PousP2Ring.ringLemmaA_sat",
+    "PousP2Ring.not_meetsOn_b19_k88",
     "PousP2Ring.tight",
     "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
@@ -1147,9 +1142,7 @@
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
     "PousP2Ring.complete",
-    "PousP2Ring.meetsOn_b19_k88",
-    "PousP2Ring.meetsOn_of_row",
-    "PousP2Ring.ringLemmaA_sat",
+    "PousP2Ring.not_meetsOn_b19_k88",
     "PousP2Ring.tight",
     "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
@@ -1192,10 +1185,8 @@
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
     "PousP2Ring.complete",
-    "PousP2Ring.meetsOn_b19_k88",
-    "PousP2Ring.meetsOn_of_row",
     "PousP2Ring.meets_of_meetsOn",
-    "PousP2Ring.ringLemmaA_sat",
+    "PousP2Ring.not_meetsOn_b19_k88",
     "PousP2Ring.tight",
     "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
@@ -1341,10 +1332,8 @@
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
     "PousP2Ring.complete",
-    "PousP2Ring.meetsOn_b19_k88",
-    "PousP2Ring.meetsOn_of_row",
     "PousP2Ring.meets_of_meetsOn",
-    "PousP2Ring.ringLemmaA_sat",
+    "PousP2Ring.not_meetsOn_b19_k88",
     "PousP2Ring.tight",
     "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
@@ -1386,22 +1375,14 @@
    ]
   },
   "Pous.P2.Assumptions": {
-   "digest": "f5ec080c66527ba97399b3200c4788874b475729d5c7b2af5faf08ebdef3f3d4",
+   "digest": "2f4bb409e3a24391702c966699a2c6945839431dcd705dc402474016e9bcbd26",
    "definitions": {
-    "Pous.P2.Assumptions.LemmaAOn": "bb7712abf29c2386fec4cc1c274a551a25909450c676c7884b3232d1a1a51c62",
-    "Pous.P2.Assumptions.PrimeP16448": "88582f4a680fa4e016b25a000b822b465fd7754100edbea9718994503e8d20fe",
-    "Pous.P2.Assumptions.RingLemmaA": "b4481ff648011b8797b69d18042612aab1a8198910817e4b52fd78a6f01156bf",
-    "Pous.P2.Assumptions.RingLemmaAP2": "6f835d72a33e0744dc3de75ce0ab54859bbe106f927ae67e60b31a40aab69c01"
+    "Pous.P2.Assumptions.PrimeP16448": "88582f4a680fa4e016b25a000b822b465fd7754100edbea9718994503e8d20fe"
    },
-   "pins": [
-    "PousP2Ring.meetsOn_b19_k88",
-    "PousP2Ring.meetsOn_of_row",
-    "PousP2Ring.ringLemmaA_sat",
-    "PousP2Ring.tight_p16448"
-   ]
+   "pins": ["PousP2Ring.not_meetsOn_b19_k88", "PousP2Ring.tight_p16448"]
   },
   "Pous.P2.Cost": {
-   "digest": "5b65ba111b67d51ba2976ba180df0738fcf314a31ebd87f1c7ec068d17b654ec",
+   "digest": "5abba780cc73de0811c80ce3bf600d3225649b2d99da669b1143fbebe1fe4e11",
    "definitions": {
     "Pous.AuditSecureOn": "a64457dcd109df60a0fe2c0a2130bb8f15f3f5796d89700d3e953a82b2a05482",
     "Pous.KeyPart": "50ba6e14ab1a8a8f8c39a03ba7b2d9c8a5c5e3fc2d31644a815aacb1aaf5e32a",
@@ -1410,8 +1391,6 @@
     "Pous.MeetsOn": "8928d9e4e559021ef1dd7bf7762ad57bcef63c75985a5f32b3df930e2f4d8a4a",
     "Pous.MeetsWithSlack": "21fc671e6d73e305d0c6ef8db1e7f39bd781aa58a45ea5ddceef0539c5566037",
     "Pous.OddLabeling": "13c546c720dcea535ac7749b5929b317f1d34e052bed62248d7008b3e75df6a3",
-    "Pous.ProdResponderOn": "18d0650abce3e47c002e173b4848aeb5630dbf012af9f013fdaf4e05344569c8",
-    "Pous.ProdResponderOn.prog": "704f253a0cb039aa2adf3426552b201f65682f8dbcb2b38058bc60d2228457ac",
     "Pous.Prog.RingBounded": "52e3e55117db8dd0134cba49966e0ee7828c77124b6919be721584f1a9c93295",
     "Pous.Prog.keyWork": "fca873b0cd0311e31091ce9f1d955fa525d941390b46d911d6570a98c57d1cca",
     "Pous.Prog.mulDepth": "2d3f6426d2aa42f2f0b8ec83e165188fddc797b862ce0cc52ee55363491ac15a",
@@ -1423,7 +1402,6 @@
     "Pous.RingQry.key": "89e2dbbc6c106e303a60100cbfe4cf53b43fb5934d62ea9a68b12c364a51db98",
     "Pous.RingQry.mul": "cc97284a2a2b51d2e0acd983d424bb0f5fe16891de0895a766c992bdb0b8bd55",
     "Pous.RingQry.one": "40b26cdba5058a1531f90d38ea3d36fcdf673ae39d3d7e55ffdd6c9ff4bf61c5",
-    "Pous.RingRow": "88ecedf6aa8f979aa480a0831c4ded610bd41a985334c78f93d4dd57645d5ea6",
     "Pous.SeqResponderOn": "a3bc66a3ed2ab3aecba132b2032b5631acec15749aca42234627e50ebaea0057",
     "Pous.SeqResponderOn.step": "0c7b0adfa7625a66eda41d0003d31b68183669ce97aca4defc64c1ebb4b1a421",
     "Pous.SimResponderOn": "c457aff17af43873e0491b82782d0fae10e963ff55d7987aa99ea4d2219e3a0b",
@@ -1450,10 +1428,8 @@
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
     "PousP2Ring.complete",
-    "PousP2Ring.meetsOn_b19_k88",
-    "PousP2Ring.meetsOn_of_row",
     "PousP2Ring.meets_of_meetsOn",
-    "PousP2Ring.ringLemmaA_sat",
+    "PousP2Ring.not_meetsOn_b19_k88",
     "PousP2Ring.tight",
     "PousP2Ring.tight_p16448"
    ]
