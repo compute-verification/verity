@@ -162,6 +162,19 @@
       ]
     },
     {
+      "name": "an announcement to a user group whose mention has no label goes to that group alone, not to every handle",
+      "msg": {
+        "ts": "1700000010.000002",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": ":mega: *Announcement* from @infra to <!subteam^SCIRC>\nheld-idle alert, node 1"
+      },
+      "root": null,
+      "targets": [
+        "circuits"
+      ]
+    },
+    {
       "name": "a reply wakes the root's poster",
       "msg": {
         "ts": "1700000011.000002",

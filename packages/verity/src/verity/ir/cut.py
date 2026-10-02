@@ -9,10 +9,10 @@ specified in `verity/ir/PROTOCOL.md` (pinned by `tests/ir/format_vectors.json`);
 
 0. **Applicability.**  Q_word v1 applies to a program that is topological -- every node of every body names only its body's
    parameters and earlier nodes, a body's `ret` any of its nodes (`partition_object.order_violation`, checked for every query) -- and
-   whose root body's nodes other than its Input nodes are each of form `call` or `primitive`.  Otherwise the query is inapplicable:
+   whose root body's nodes other than its input nodes are each of form `call` or `primitive`.  Otherwise the query is inapplicable:
    `evaluate` raises `QueryInapplicable` and `verify` refuses with `query-inapplicable` (where, and why).  `CallGraph`'s own check
    (step 3: an operand inside the Call comes before its gate) is a backstop the program-level rule already implies.
-1. **Calls.**  The root body's nodes that are not Input nodes (callee id `Input<w>_v1`), in body order.  Each is cut as its Definition's activation
+1. **Calls.**  The root body's nodes that are not input nodes (callee id `Input<w>_v1` or `RegisteredInput<w>_v1`), in body order.  Each is cut as its Definition's activation
    in a one-Call Program (`call_scope`): the Definition's parameter leaves are Input gates `0..L-1` in parameter order, its own gates
    `L..L+gates-1`.  Activations of one Definition share its cut.  A primitive Call is one gate: it reads its inputs and is returned.
 2. **Evaluate(fn, X).**  A primitive is one unit, or none when it has no parameters or its id is in `WIRING`.  A separable body
@@ -94,9 +94,10 @@ included, to check the cut on it.
    input unit), recomputes reported as under Q_word v2 (keys
    below), and the width rule is w_out <= X (`unit-too-wide`).  Served commits, numbered as `CallGates` compacts the computing
    gates, are held to the derived set.
-   Recomputes: `key(j) = (primitive id, operand tokens)`, a parameter's token from `("i", leaf)`, a constant's from
-   `("c", primitive id)`; a computing gate whose key an earlier one `f` had is the pair `(j, f)` and takes `f`'s token, else its
-   own, `("g", j)`.
+   Recomputes: `key(j) = (primitive id, operand tokens)`, a parameter's token from `("i", leaf)`, a constant's (an operation's own
+   bits) from `("c", primitive id)`; a computing gate whose key an earlier one `f` had is the pair `(j, f)` and takes `f`'s token,
+   else its own, `("g", j)`.  A program's data reaches the Call through its parameters, from registered or run input gates, so it
+   is compared by leaf, never by value.
 
 **Cost.**  O(n) to build `CallGates` (one pass over the gates and their operands), O(n · depth) for the cut, each piece's w_out
 one scan of its interval.
@@ -721,12 +722,17 @@ def evaluate_call(fn: Any, X: int = CALL_X, memo: dict | None = None) -> CallCut
         raise QueryInapplicable(f"{fn.id}: gate {j} ({G.prim[j]}) is {G.width[j]} bits, wider than Q_call's X = {X}",
                                 {"definition": fn.id, "gate": j, "primitive": G.prim[j], "width": G.width[j], "X": X, "why": "gate-too-wide"})
     units = call_units(G, X)
-    owner = [0] * G.nc
+    owner = [-1] * G.nc
     for u, (lo, hi, _path) in enumerate(units):
         for g in range(lo, hi):
             i = G.idx[g]
             if i >= 0:
+                if owner[i] >= 0:
+                    raise ValueError(f"{fn.id}: computing gate {g} is in units {owner[i]} and {u}")
                 owner[i] = u
+    gaps = [G.keep[i] for i, u in enumerate(owner) if u < 0]
+    if gaps:
+        raise ValueError(f"{fn.id}: computing gates {gaps[:8]} are in no unit ({len(gaps)} in all)")
     r = memo[key] = CallCut(fn, units, owner)
     return r
 
