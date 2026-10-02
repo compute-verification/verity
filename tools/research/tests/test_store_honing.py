@@ -143,6 +143,42 @@ def test_evict_runs_only_preserved_terminal_quiet_runs_and_leaves_a_restore_reco
     assert out["runs"]["runs_root"] == str(runs) and out["store"]["reached_target"]
 
 
+def test_evict_runs_takes_the_files_of_a_preserved_tree_output_from_under_its_tree_path(store, fs_remote, tmp_path, capsys):
+    """Node 1's dispatcher runs (2026-10-02): 465 GB of Build, verdict and slim-replay outputs, every artifact verified on the
+    remote, and none evictable, because only the `run_files` tree was matched against the run dir."""
+    from research.store import evict as EV
+
+    runs = tmp_path / "runs"
+    build = {"weights/w0.bin": os.urandom(5000), "weights/w1.bin": os.urandom(4000), "context.json": b"{}"}
+    rd = _tree(runs / RUN, {**{f"outputs/build/{k}": v for k, v in build.items()}, "logs/stdout.log": os.urandom(2000)})
+    (rd / "outputs.json").write_text(json.dumps({"schema": "research/outputs/v0.1", "outputs": [
+        {"name": "build", "kind": "vllm-build/v1", "meta": {}, "tree": "outputs/build"}]}))
+    build_art = store.put_artifact("vllm-build/v1", {"run": RUN}, tree=rd / "outputs/build")
+    logs_art = store.put_artifact("run-files/v1", {"run": RUN}, tree=_tree(tmp_path / "rf", {"logs/stdout.log": (rd / "logs/stdout.log").read_bytes()}))
+    store.put_attempt(_attempt(outputs={"run_files": logs_art, "build": build_art}))
+    for p in rd.rglob("*"):
+        os.utime(p, (1_600_000_000, 1_600_000_000))
+
+    assert EV.plan_runs(store, runs, min_bytes=1000, log=print) == []
+    assert "not verified on the remote" in capsys.readouterr().out
+    assert store.push(build_art)["preserved"]
+    (plan,) = EV.plan_runs(store, runs, min_bytes=1000)
+    assert [(f["path"], f["artifact"]) for f in plan["files"]] == [("outputs/build/weights/w0.bin", build_art), ("outputs/build/weights/w1.bin", build_art)], \
+        "the output's files, under its tree path, while the unpushed run_files tree keeps the log"
+    assert plan["artifact"] == build_art and plan["restore"] == f"research data fetch {build_art} --to {rd / 'outputs/build'}"
+
+    assert store.push(logs_art)["preserved"]
+    (plan,) = EV.plan_runs(store, runs, min_bytes=1000)
+    assert {f["path"] for f in plan["files"]} == {"outputs/build/weights/w0.bin", "outputs/build/weights/w1.bin", "logs/stdout.log"}
+    rep = EV.evict_runs(store, runs, target_free_bytes=1, min_bytes=1000, free_fn=lambda: 0)
+    assert rep["evicted_bytes"] == 11000 and not (rd / "outputs/build/weights/w0.bin").exists() and (rd / "outputs/build/context.json").exists()
+    rec = json.loads((rd / EV.EVICTED_FILE).read_text())
+    assert rec["artifact"] == logs_art and rec["restore"] == (f"research data fetch {logs_art} --to {rd} && "
+                                                              f"research data fetch {build_art} --to {rd / 'outputs/build'}")
+    store.fetch(build_art, rd / "outputs/build", paths=["weights/*"])
+    assert (rd / "outputs/build/weights/w0.bin").read_bytes() == build["weights/w0.bin"], "the restore brings the output back in place"
+
+
 # ---- item 1: fetch --path / --list -----------------------------------------------------------------------------------------------------------
 
 def test_fetch_subtree_and_listing(store, fs_remote, tmp_path, capsys):

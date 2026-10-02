@@ -225,8 +225,9 @@ def _core_roots() -> list[Any]:
 
 def _boolean_roots() -> list[Any]:
     """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64, the GEMM at K = 32, N = 3, the E4M3
-    coordinate on both FP8 steps at K = 64, and the NVFP4 and MXFP4 coordinates at K = 128; `silu_and_mul`'s row at I = 8
-    (`verity_vllm.program.registry.boolean_silu`), the final-logit softcap's tanh row at N = 8 (`boolean_activation`),
+    coordinate on both FP8 steps at K = 64, and the NVFP4 and MXFP4 coordinates at K = 128; `silu_and_mul`'s rows at I = 8
+    (`verity_vllm.program.registry.boolean_silu`: `SiluMul_v3` and `SiluMul_v4`, and v4's word view, the served
+    `SiluMul_v2` of `registry.act`), the final-logit softcap's tanh row at N = 8 (`boolean_activation`),
     `registry.dense`'s rows on bits at 8 elements with Gemma-2's constants (`boolean_dense`: `gelu_tanh_and_mul` at I = 8, the
     RMSNorm chain's and the logit softcap's element-wise rows at N = 8), and OLMoE's routed sum at TOPK = 8 over 8 columns
     and its router at 8 experts, 2 slots, 4 values per thread (`boolean_moe`); the steps, the cast, attention's softmax operations (`verity.ml.boolean.attention`), the element-wise
@@ -248,6 +249,7 @@ def _boolean_roots() -> list[Any]:
     from verity.ml.boolean import attention as BAT
     from verity.ml.boolean import gemm as BG
     from verity.ml.boolean import mufu as BM
+    from verity_vllm.program.registry import act
     from verity_vllm.program.registry import boolean_activation as BA
     from verity_vllm.program.registry import boolean_dense as BDN
     from verity_vllm.program.registry import boolean_dense_norm as DN
@@ -270,7 +272,7 @@ def _boolean_roots() -> list[Any]:
             bind(BG.Gemm, K=32, N=3, **BG.GEMM_AMPERE), bind(BG.Gemm, K=32, N=3, **BG.GEMM_HOPPER),
             bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_HOPPER_E4M3), bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_SM120_E4M3),
             bind(BG.GemmCoordinateNvf4, K=128, **BG.GEMM_SM120_NVF4), bind(BG.GemmCoordinateMxf4, K=128, **BG.GEMM_SM120_MXF4),
-            bind(BSL.SiluMul, I=8),
+            bind(BSL.SiluMul, I=8), bind(BSL.SiluMulExpf, I=8), bind(act.SiluMul, I=8),
             bind(boolean_rope.RoPE, NHEADS=2, D=8), bind(SB.TokenSelect, V=50), bind(SB.TokenSelect, V=200),
             bind(SB.TokenSelect, V=4161),
             bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, **BN.CUDA_WORD), bind(BN.RMSNormTriton, N=16, EPS=1e-5, **BN.TRITON_WORD),
@@ -349,8 +351,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("AttentionSoftcap_v4", lambda: bind(VI.AttentionSoftcapV4, T=17, NH=1, KVH=1, D=16, BN=16)),
         ("AttentionSoftcap_v5", lambda: bind(VI.AttentionSoftcapV5, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1,
                                              DOT=hopper.HopperBF16WgmmaDot16, INV=b1.P.Fa2InvSum)),
-        # the Definitions that read a registered table (`gelu_tanh_bf16`) through `TableRead16x1_v1`
+        # the Definitions that read a registered table (`gelu_tanh_bf16`, `tanh_rn`) through `TableRead16x1_v1`, `TableRead27x2_v1`
         ("GeluTanhMul_v3", lambda: bind(tables.GeluTanhMulV3, I=16)),
+        ("TanhF32Rn_v2", lambda: bind(tables.TanhF32RnV2)),
         ("LMoeFfnL_v1", lambda: bind(moe_pad.LMoeFfnL, E=4, TOPK=2, VPT=2, H=16, I=16)),
         ("AllReduce_v2", lambda: b1_tp2.all_reduce(4, 8)),
         ("AllGather_v1", lambda: b1_tp2.all_gather(4, 8)),
@@ -382,9 +385,28 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     ]
 
 
+def _tanh_rn_probe(reads: Callable[[int], Any]) -> Any:
+    """`tanh_rn` (2^27 entries of two words) as parameter 1, probed at its ends and its regions' edges (`TANH_RN_REGIONS`)."""
+    from verity_vllm.program.registry import tables
+
+    from .vectors import TableProbe
+
+    return TableProbe(1, tables.tanh_rn_table(), 2, tables.TANH_RN_REGIONS, reads)
+
+
+def _tanh_rn_word(i: int) -> int:
+    """The word of `tanh_rn`'s region whose low 27 bits are entry ``i`` (past HI where no region word has them)."""
+    from verity_vllm.program.registry import tables
+
+    return 0x38000000 | i if (0x38000000 | i) >= tables.TANH_RN_LO else 0x40000000 | i
+
+
 #: the registered tables the correspondence probes rather than flattens (`vectors.TableProbe`), by the id of the Definition that
 #: reads one; a Definition with a parameter over `checks.Options.input_budget` leaves needs its table here
-TABLE_PROBES: dict[str, Callable[[], Any]] = {}
+TABLE_PROBES: dict[str, Callable[[], Any]] = {
+    "TableRead27x2_v1": lambda: _tanh_rn_probe(lambda i: [[i], [i | 0xF8000000]]),
+    "TanhF32Rn_v2": lambda: _tanh_rn_probe(lambda i: [[_tanh_rn_word(i)], [_tanh_rn_word(i) | 0x80000000]]),
+}
 
 
 def table_probe(fn: Any) -> Any:

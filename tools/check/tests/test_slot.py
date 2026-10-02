@@ -130,7 +130,9 @@ def test_a_slot_outside_the_processs_cores_is_skipped_never_pinned_onto(tmp_path
     with pytest.raises(Exec):
         SLOT.main(["--", "true"], now=lambda: NOW)
     assert ran["env"]["CHECK_SLOT"] == "a" and ran["cpus"] == {0}
-    assert "skipping d (128-159): outside this process's cores" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "skipping d (128-159): outside this process's cores" in err and "add the slot's cores there" in err
+    assert "/etc/vy/direct-cpus" in err                     # the fix, named where the skip is seen
     (tmp_path / "slots").write_text("d 128-159\n")
     with pytest.raises(SystemExit, match="none of .* slots is within this process's cores"):
         SLOT.main(["--", "true"], now=lambda: NOW)
