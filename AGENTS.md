@@ -32,7 +32,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     `And<n>_v1`, `Xor<n>_v1` (any n >= 2), `Not_v1`, the constant bits,
     `is_boolean` and the word view (`word_type`, `bit_type`).
   - `verity.evaluation`: the one evaluator. The plain-integer reference
-    (`evaluate`, the IR oracle), `evaluate_batch` over numpy arrays,
+    (`evaluate`, the IR oracle, which also takes a table held in a registered
+    input lazily, as a `RegisteredTable`), `evaluate_batch` over numpy arrays,
     `register_kernel`, `self_check`. Every registered kernel must be listed
     in `tests/evaluation/test_evaluation.py`, which self-checks it.
     `bits` evaluates Boolean Definitions bit-sliced (`evaluate_bits`, and
