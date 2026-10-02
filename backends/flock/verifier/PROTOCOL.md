@@ -1327,14 +1327,12 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   failing cut refuses the partition, naming the Call and its codes. Set 10's object, over RoPE's own program (a root batch), is refused with `--program`, as core's `evaluate`
   refuses it. For any other query, or without `--program`, `units` is `as stated`, with the reason in `note`, which an
   audit reports as a gap.
-- **Registered reads** (`Flock.Registered`). A shared-row header may name `registered`, `{port: {value, positions,
-  paths}}`: rows of a value committed at registration. The verifier then needs its own `--registered F`
-  (`verity/registered-reads/v0`: per port the value, root, leaf count, domain, each unit's read position, and the row
-  width, `words` leaves of `word_bits` 16 or 32; absent, the port's own 16-bit rows). The port's rows must be the
-  registered rows' u16 words (`word_bits / 16` per leaf, padded to whole blocks). Every table row's `hm96-sha512/row/v1`
-  leaf must climb its path to the root at its position, and every instance's ref must name the position the verifier's
-  program reads for its unit, so units must be `derived`. A port named on one side only refuses. Verdicts report
-  `registered`.
+- **Registered reads**. A shared-row header may name `registered`, `{port: {value, positions, paths}}`: registered rows.
+  The verifier needs its own `--registered F` (`verity/registered-reads/v0`: per port the value, root, leaves, domain,
+  read positions, `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows); the port's rows must be their
+  u16 words, padded. Each table row's `hm96-sha512/row/v1` leaf must climb its path to the root at its position, each
+  instance's ref name its unit's read position in the verifier's program (units `derived`). A port on one side only
+  refuses; verdicts report `registered`.
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.
