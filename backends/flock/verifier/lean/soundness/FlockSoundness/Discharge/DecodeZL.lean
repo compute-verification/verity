@@ -4,12 +4,13 @@ import FlockSoundness.Discharge.DecodeZL.ZL
 import FlockSoundness.Discharge.DecodeZL.Sizes
 import FlockSoundness.Discharge.DecodeZL.Runs
 import FlockSoundness.Discharge.DecodeZL.Assemble
+import FlockSoundness.Discharge.DecodeZL.OP
 
 /-!
-# R11b's message half: the per-Kind decoder, the zerocheck's and lincheck's chunks, and `DecodesOn` at the headline
+# R11b's message half: the per-Kind decoder, the zerocheck's, lincheck's and opening's chunks, and `DecodesOn` at the headline
 
 * `Wire.lean`: the decoder (`Wire`, `decRound`, `decOf`) and the chunk lemma's shape (`Carries`, `Carries.append`).
 * `Statements.lean`: the frozen statements.
 * `ZL.lean`: `zl_carries`. `Sizes.lean`: `decodeProof_sizes`. `Runs.lean`: a decoded repetition's `RepRun`.
-  `Assemble.lean`: `decodesOn_exec`.
+  `Assemble.lean`: `decodesOn_exec`. `OP.lean`: `op_carries`, the opening's chunk lemma at `wOP`.
 -/
