@@ -376,12 +376,18 @@ def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, ro
     (`fa2_check_inf`) also reads how many query rows the sequence has there (`own_rows`).  A logit soft cap `cap` selects the softcapped
     chain: `AttentionSoftcap_v1` on the accepted target, `AttentionSoftcap_v2` under FA2's per-iteration `Check_inf`, nothing elsewhere.
     `scale_input`: the chain that reads the softmax scale as an input (its last parameter, `scale_log2`): `Attention_v10` on the
-    accepted target, nothing elsewhere yet."""
+    accepted target, `Attention_v11` under FA2's per-iteration `Check_inf`, nothing elsewhere yet."""
     g = attention_geometry(profile, D, seqlen_q, NH, KVH)
     if scale_input:
-        if cap is not None or not uses_accepted_kinds(profile):
-            raise UnregisteredTarget("the attention scale is an input only on the accepted target's unsoftcapped chain (Attention_v10)")
-        return bind(b1.AttentionV10, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"])
+        if cap is not None:
+            raise UnregisteredTarget("the attention scale is an input only on the unsoftcapped chains (Attention_v10, Attention_v11)")
+        if uses_accepted_kinds(profile):
+            return bind(b1.AttentionV10, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"])
+        if fa2_check_inf(profile) and row is not None and own_rows is not None:
+            return bind(F2.AttentionV11, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], DOT=g["DOT"], INV=g["INV"],
+                        MASKED_FROM=fa2_masked_from(profile, T, D, seqlen_q, row, own_rows))
+        raise UnregisteredTarget("the attention scale is an input on the accepted target (Attention_v10) and under FA2's per-iteration "
+                                 "Check_inf with the row's index and its sequence's query rows (Attention_v11) only")
     if cap is not None:
         from verity_vllm.program.registry import dense as DN, fa2_softcap as F2S  # noqa: PLC0415
         if uses_accepted_kinds(profile):

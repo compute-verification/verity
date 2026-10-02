@@ -10,7 +10,8 @@ from verity.evaluation import evaluate
 from verity.ir.constants import program_data
 from verity.ir.defs import bind
 from verity.ir.program import Program
-from verity_vllm.program.registry import b1
+from verity_vllm.program.registry import b1, hopper
+from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import prims as P
 
 
@@ -68,3 +69,20 @@ def test_attention_scale_input():
         assert _flat(evaluate(new, q, kc, vc, scale)) == _flat(evaluate(old, q, kc, vc))
     assert _const_id(scale) in _held(old)
     assert _const_id(scale) not in _held(new)
+
+
+@pytest.mark.parametrize("masked_from", [0, 1])
+def test_fa2_check_inf_attention_scale_input(masked_from):
+    """The FA2 per-iteration Check_inf chain (`Attention_v5`, the RTX PRO 6000's) over two key blocks, block 0 guarded or not."""
+    rng = np.random.default_rng(4)
+    T, NH, KVH, D, BN = 20, 2, 1, 16, 16
+    scale = b1._scale_log2_bits(D)
+    st = dict(T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum, MASKED_FROM=masked_from)
+    old, new = bind(F2.AttentionV5, **st), bind(F2.AttentionV11, **st)
+    assert new.id.startswith("Attention_v11{")
+    for _ in range(2):
+        q, kc, vc = _bf16(rng, NH * D, 0.5), _bf16(rng, T * KVH * D, 0.5), _bf16(rng, T * KVH * D)
+        assert _flat(evaluate(new, q, kc, vc, scale)) == _flat(evaluate(old, q, kc, vc))
+    assert _const_id(scale) in _held(old)
+    assert _const_id(scale) not in _held(new)
+
