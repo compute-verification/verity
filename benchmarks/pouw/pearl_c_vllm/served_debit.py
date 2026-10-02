@@ -10,8 +10,8 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
   cycled, and a uniform tile of each, so a stratum of 32 matmuls at N = 128 gives each matmul 4 tiles and one of 2,048 gives
   64 of its matmuls 1 each.
 - **Per tile:** the verdict at the scheme's cap; the debit and the cap of its credited cells and their ratio (over 1 is a
-  rejection); the debit's share of the cells' credit, and that share at Lean's rev1 credit (`creditDevRev1`: each credited
-  cell's credit less its first promotion add, one FADD at the scheme's prices).
+  rejection); the debit's share of the cells' credit, the cap over ρ (`tile_numbers`), which is already rev1's
+  (`creditDevRev1`, the first promotion add of every word out).
 - **The estimates** weight each stratum by its share of the pass's tiles and of its credited MACs (credited rows × credited
   columns × kept k, from the records), with the share over each cap within the stratum taken from its sample.
 
@@ -179,13 +179,18 @@ def one(tid: int) -> dict:
     rows, cols = rec.credited(ref.tile)
     out.update(ok=reason is None, reason=reason, credited_rows=len(rows), credited_cols=len(cols), macs=len(rows) * len(cols) * rec.k_kept)
     if rows and cols:
-        debit, cap = _SEEN[-1] if _SEEN else _DEBIT_CAP(scheme, rec, ref.tile, ops, rows, cols)
-        credit = cap / scheme.cap
-        credit_rev1 = credit - scheme.prices.fadd * len(rows) * len(cols)
-        out.update(debit=float(debit), cap=float(cap), ratio=float(debit / cap), share=float(debit / credit),
-                   share_rev1=float(debit / credit_rev1), debit_exact=str(debit), credit_exact=str(credit))
+        out.update(tile_numbers(scheme, *(_SEEN[-1] if _SEEN else _DEBIT_CAP(scheme, rec, ref.tile, ops, rows, cols))))
     out["seconds"] = round(time.perf_counter() - t0, 1)
     return out
+
+
+def tile_numbers(scheme, debit: Fraction, cap: Fraction) -> dict:
+    """The tile rule's (debit, cap) as a tile's line records them: their ratio, and the debit's share of the credited cells'
+    credit, the cap over ρ.  That credit is `pearl_c_work.tile_cap`'s `creditDevRev1` share, so the first promotion add is
+    out of it once; taking it out again would overstate every share."""
+    credit = cap / scheme.cap
+    return {"debit": float(debit), "cap": float(cap), "ratio": float(debit / cap), "share": float(debit / credit),
+            "debit_exact": str(debit), "credit_exact": str(credit)}
 
 
 def summarize(label: str, job: dict, strata: dict, tiles: list[dict]) -> dict:
@@ -203,8 +208,7 @@ def summarize(label: str, job: dict, strata: dict, tiles: list[dict]) -> dict:
         if got:
             sh = [t["share"] for t in got]
             macs = sum(t["macs"] for t in got)
-            row.update(share_max=max(sh), share_median=statistics.median(sh), share_rev1_max=max(t["share_rev1"] for t in got),
-                       worst_tile=max(got, key=lambda t: t["share"])["tile"],
+            row.update(share_max=max(sh), share_median=statistics.median(sh), worst_tile=max(got, key=lambda t: t["share"])["tile"],
                        over={c: sum(t["share"] > float(r) for t in got) for c, r in CAPS.items()},
                        over_macs={c: sum(t["macs"] for t in got if t["share"] > float(r)) / macs for c, r in CAPS.items()})
             for c in CAPS:
@@ -221,9 +225,8 @@ def summarize(label: str, job: dict, strata: dict, tiles: list[dict]) -> dict:
             "over": {c: sum(t["share"] > float(r) for t in measured) for c, r in CAPS.items()},
             "tile_share_over": est_tiles, "mac_share_over": est_macs,
             "upper95_if_none_over": 1 - 0.05 ** (1 / n) if n else None,
-            "share_max": worst["share"] if worst else None, "share_rev1_max": max((t["share_rev1"] for t in measured), default=None),
-            "ratio_max": worst["ratio"] if worst else None,
-            "worst": {k: worst[k] for k in ("tile", "matmul", "m", "k", "n", "row0", "col0", "share", "share_rev1", "ratio")} if worst else None,
+            "share_max": worst["share"] if worst else None, "ratio_max": worst["ratio"] if worst else None,
+            "worst": {k: worst[k] for k in ("tile", "matmul", "m", "k", "n", "row0", "col0", "share", "ratio")} if worst else None,
             "share_median": statistics.median(t["share"] for t in measured) if measured else None,
             "share_p99": float(np.quantile([t["share"] for t in measured], 0.99)) if measured else None,
             "cpu_seconds": round(sum(t["seconds"] for t in tiles), 1), "strata": out_strata}

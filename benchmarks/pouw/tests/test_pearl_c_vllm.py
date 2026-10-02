@@ -9,6 +9,7 @@ import json
 import shutil
 import sys
 import types
+from fractions import Fraction
 from pathlib import Path
 from typing import ClassVar
 
@@ -487,8 +488,27 @@ def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_
         ops = s.encode(ctx, s.noise(ctx), a, b, ref.tile)
         rows, cols = rec.credited(ref.tile)
         debit, cap = PW._debit_cap(s, rec, ref.tile, ops, rows, cols)
-        assert (t["debit_exact"], t["ratio"]) == (str(debit), float(debit / cap))
+        credit = PW.cell_credit(s, rec) * len(rows) * len(cols)
+        assert (t["debit_exact"], t["ratio"], t["credit_exact"]) == (str(debit), float(debit / cap), str(credit))
+        assert {key: t[key] for key in t if key.startswith("share")} == {"share": float(debit / credit)}
         assert t["ok"] == (PW.check_opened(s, rec, ref.tile, a, b, ops) is None)
+
+
+def test_served_debits_share_is_the_tile_rules_debit_over_its_rev1_credit():
+    """served_debit's credit is the tile rule's cap over ρ, `creditDevRev1`'s share of the credited cells, with the first
+    promotion add of every word out once: every share it records is `tileDebitRev1` over that credit, none with the add
+    taken out a second time."""
+    s = PPD.scheme_of(SCHEME)
+    rng, shape, rows, cols = np.random.default_rng(11), Shape(64, 512, 48), 3, 2
+    rec = PW.UnitRecord(Matmul(0, shape, 0), shape.m, shape.k, (), ())
+    codes = lambda r: [[0] * shape.k] + [[int(c) for c in rng.integers(0, 0x70, shape.k) | (rng.integers(0, 2, shape.k) << 7)]
+                                         for _ in range(r - 1)]
+    debit, cap = PW.tile_cap(s, rec, codes(rows), codes(cols))
+    credit = Fraction(s.credit_of(Shape(1, shape.k, shape.n)), shape.n) * rows * cols
+    assert s.first_adds(Shape(1, shape.k, shape.n)) == s.prices.fadd * shape.n > 0 and debit > 0
+    got = SD.tile_numbers(s, debit, cap)
+    assert (got["debit_exact"], got["credit_exact"], got["ratio"]) == (str(debit), str(credit), float(debit / cap))
+    assert {key: got[key] for key in got if key.startswith("share")} == {"share": float(debit / credit)}
 
 
 # ---- the panel rows -----------------------------------------------------------------------------------------------
