@@ -4,7 +4,7 @@ contrast, not a protocol candidate).
 
   bench.py ... --arm-path benchmarks/pouw/pearl_c4 --arm pearl_c4_arm:PearlC4Nv --arm pearl_c4_arm:PearlC4Mx
   env: PEARLC4_CUBIN (default pearl_c4.cubin beside this file; build.sh makes it), PEARLC4_GATE_TILES (default 2),
-  PEARLC4_VERIFY_WORKERS (the verifier's processes, default 16)
+  PEARLC4_VERIFY_WORKERS (the reference replay's processes, default 16)
 
 The prover is dev.py's `Pipeline` on BF16 A and B: per call, A's commitment as the verifier checks it (`audit.commit_rows`,
 SHA-256 whole-row leaves) and seed_a from its root, A's forming with E_A's lines, A′F_B, the chain with the peel and the
@@ -14,9 +14,10 @@ operands, the salt and the two domain ids (verity.commitments', public before A 
 shortcut for a public round).  The harness makes each shape's transcript after the timed items (`bench.poison_dump`):
 it fills every buffer of the hash call's ``transcript_buffers`` with 0xA5, runs the weight side and the call, and has
 `dump` read them back into ``transcripts/<arm>/<shape>/``; then it poisons them again, launches nothing, and has `dump`
-write the no-write control into ``negative/<arm>/<shape>/``.  The build record names the verifier (``verifier``) that
-proves and verifies both after timing: `verity_pouw.schemes.pearl_c4_replay`'s ``prove`` and ``verify``, whose ACCEPT
-line names the transcript's sha256, and which must reject the control.  The build record's ``binaries`` is the cubin
+write the no-write control into ``negative/<arm>/<shape>/``.  The build record names the reference replay (``verifier``)
+that proves and checks both after timing: `verity_pouw.schemes.pearl_c4_replay`'s ``prove`` and ``verify``, whose ACCEPT
+line names the transcript's sha256, and which must reject the control.  That ACCEPT is replay-verified (development
+shortcut; the protocol's check is a ZK proof, PROTOCOL.md).  The build record's ``binaries`` is the cubin
 (loaded with ``cuModuleLoadData``, so never mapped).
 Flag roles: ``hash`` (all of it), ``nohash`` (no hashing: no commitment, E_A's lines primed once, no digests or leaves) and
 ``plain`` (the forming and the chain alone: y from C̃).  The scheme's domain is m a multiple of 64 (its 64 x 64 tile), so
@@ -154,7 +155,7 @@ class _Call:
         """What the harness does with this call (`bench.poison_dump`), for arm_smoke.py, which runs without it: every
         buffer of `transcript_buffers` poisoned with 0xA5, the weight side and the call launched once more on its operands
         as they stand, then `write_dump`.  write=False leaves both launches out: the no-write negative control, which the
-        verifier must reject (server.md 11:50Z)."""
+        reference replay must reject (server.md 11:50Z)."""
         for b in self.transcript_buffers.values():
             self.d.write(b.ptr, bytes([POISON]) * b.nbytes)
         if write:
@@ -210,8 +211,9 @@ class _PearlC4:
 
     @staticmethod
     def verifier() -> dict:
-        """The reference verifier on each shape's dump (arm interface v0.5): ``prove`` makes the transcript from the dump in
-        ``{dir}``, ``verify`` checks it and prints the ACCEPT line naming its sha256.  The harness's dump is under
+        """The reference replay on each shape's dump (arm interface v0.5's ``verifier``): ``prove`` makes the transcript
+        from the dump in ``{dir}``, ``verify`` checks it and prints the ACCEPT line naming its sha256, replay-verified
+        (development shortcut; the protocol's check is a ZK proof, PROTOCOL.md).  The harness's dump is under
         ``transcripts/{arm}/{shape}/``, so verify.py runs the same commands on the no-write control under ``negative/``,
         which they must reject; ``--path`` names whichever of the two it is."""
         r = ["{python}", "-m", "verity_pouw.schemes.pearl_c4_replay"]
