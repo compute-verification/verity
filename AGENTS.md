@@ -86,8 +86,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  C-Flock's circuit prover (M0, `verity_flock.circuit`, run from the pinned tree
  that `--m0-pythonpath` names, not from the checkout) and the Lean
  verifier. `protocols/pous` (`verity_pous`) is proof of useful space: the reference
- codecs, setup and timed audit, its `PROTOCOL.md`, and its Lean package (`lean/`:
- pinned statements, proofs and a submission grader). `protocols/pouw` (`verity_pouw`)
+ codecs, setup and timed audit, its `PROTOCOL.md`, and its Lean package (`lean/`: the
+ statements of its guarantees, their proofs and a submission grader). `protocols/pouw` (`verity_pouw`)
  is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
  (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme, Pearl-C), each with
  pinned vectors, `circuit`, `ncp-v2` as a Program that sampled proofs verifies, and its Lean
@@ -173,9 +173,9 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
 
 - The Lean packages are `backends/flock/verifier/lean/` (the executable verifier, no dependencies), its `level3/` (proofs
   about the executable's definitions, Mathlib) and `soundness/` (the protocol's proofs, ArkLib), and
-  `protocols/pous/lean/` (POUS's pinned statements, proofs and grader, Mathlib), `protocols/pouw/lean/` (PoUW's games,
+  `protocols/pous/lean/` (POUS's guarantees, their proofs and grader, Mathlib), `protocols/pouw/lean/` (PoUW's games,
   named assumptions and the proofs behind its γ, Mathlib), `protocols/network_warden/lean/` (the network
-  warden's timing-channel statements and proofs, Mathlib), `protocols/nci/lean/` (NCI's policy and guarantees, on
+  warden's timing-channel guarantees and their proofs, Mathlib), `protocols/nci/lean/` (NCI's policy and guarantees, on
   core's), and `packages/verity/lean/` (the model every protocol states its guarantees in: circuits, partitions,
   declarations and games; and core's own proofs about `verity`'s definitions, such as `verity.ml.tc`'s step relation;
   Mathlib only). New Lean goes into the package whose dependencies it needs, in a subdirectory and namespace of its own;
@@ -190,8 +190,9 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
   `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; an assumption is a named
   `Prop` in the package's assumptions module, taken as a hypothesis; every `.lean` file is built, and every declaration
   is replayed through the kernel.
-- A theorem that a ledger, a table or a PR cites as proved is pinned in `lean-audit.json`. `audit.py --update` records
-  it. A changed record means the theorem now says something else (its statement, or a definition the statement reads).
+- A guarantee (README "Glossary"), the theorem a ledger, a table or a PR cites as proved, is pinned in `lean-audit.json`.
+  `audit.py --update` records it. A changed record means the guarantee now says something else (its statement, or a
+  definition the statement reads).
   No axiom check can catch a weakened definition, so a changed record needs a named statement reviewer, who reads what
   `--update` prints (each changed signature before and after, each changed definition as it is now), and the PR
   description names them. A guarantee that only moved to another module or name needs no reviewer when `--update

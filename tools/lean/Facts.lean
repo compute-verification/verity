@@ -21,7 +21,7 @@ judgement; `audit.py` holds the policy.
   declares can change how its statements read.
 
 The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `audit.py` keeps them only to check records written
-before SHA-256. When `CONFIG` names a `canon` path, the pinned statements and the definitions they read are also written
+before SHA-256. When `CONFIG` names a `canon` path, the pins' statements and the definitions they read are also written
 there, one JSON line each, as `canon` texts, and `audit.py` hashes those with SHA-256.
 
 With `moved` (pairs of a new name, a declaration or a namespace, and the old name it moved from), each of those texts is

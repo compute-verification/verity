@@ -72,7 +72,7 @@ def test_every_field_of_a_reads_record_is_checked():
     assert A.judge(stale, facts(), FILES)[0] == ["pins: the digest recorded for P.Defs is not the SHA-256 of its definitions; "
                                                  "`python tools/lean/merge.py --normalize` recomputes it"]
     readers = pol | {"reads": pol["reads"] | {"P.Defs": group | {"pins": ["P.t", "P.u"]}}}
-    assert A.judge(readers, facts(), FILES)[0] == ["pins: the pinned statements that read P.Defs are P.t; the record lists "
+    assert A.judge(readers, facts(), FILES)[0] == ["pins: the pins that read P.Defs are P.t; the record lists "
                                                    "P.t, P.u; run `audit.py --update`"]
 
 
@@ -121,7 +121,7 @@ def test_a_changed_statement_or_meaning_fails_until_updated():
                        {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32}])
     assert A.judge(pol, facts(pins={"P.t": moved}), FILES)[0] == ["pins: definitions in P.Defs that P.t read changed (changed: P.f)"]
     grown = pin(reads=pin()["reads"] + [{"name": "P.g", "module": "P.More", "kind": "def", "hash": "4" * 32}])
-    assert A.judge(pol, facts(pins={"P.t": grown}), FILES)[0] == ["pins: the pinned statements now read definitions in P.More (P.t)"]
+    assert A.judge(pol, facts(pins={"P.t": grown}), FILES)[0] == ["pins: the pins now read definitions in P.More (P.t)"]
 
 
 def test_a_32_bit_record_is_checked_as_it_is_and_rehashed_by_update():
@@ -390,7 +390,7 @@ def test_a_compile_time_listing_is_tied_to_its_file_and_kept_out_of_what_pins_re
     assert notes[0].startswith("compile_time P.Tac (P/Tac.lean): the file changed since its listing was reviewed")
     read = {"P.Defs": {"why": "why", "digest": A.sha256(tmp_path / "P" / "Defs.lean")}}
     assert A.listings(tmp_path, files, {"compile_time": read}, pins)[0][0].startswith(
-        "compile-time: P.Defs is listed under `compile_time`, and pinned statements are declared or read there (P.t)")
+        "compile-time: P.Defs is listed under `compile_time`, and pins are declared or read there (P.t)")
     declared = {"pins": {"P.t": {"module": "P.Tac", "reads": []}}}
     tac = {"P.Tac": {"why": "why", "digest": A.sha256(tmp_path / "P" / "Tac.lean")}}
     assert "(P.t)" in A.listings(tmp_path, files, {"compile_time": tac}, declared)[0][0]

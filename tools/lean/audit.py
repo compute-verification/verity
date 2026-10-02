@@ -20,8 +20,8 @@ environment extension loaded, so none of the package's code runs), and replays t
     compile-time a source file runs code while it compiles (an initializer, `#eval`, `run_cmd`, an elaborator or macro:
                  each can do IO) outside a module listed under `compile_time`, or the package has a `lakefile.lean`; a
                  listing names one module with the digest of its file as it was reviewed, so a later edit needs a new
-                 review (`--update` records the digest), and no listed module may declare a pinned theorem or a
-                 definition a pinned statement reads
+                 review (`--update` records the digest), and no listed module may declare a pin or a definition a pin
+                 reads
     policy       the package has no `lean-audit.json` (the message carries a template)
     dependencies the `.olean` files of the imported modules that a fetched package (Mathlib's cache, ArkLib's build) or the
                  toolchain provides differ from the record, which changes only with the package's imports or at a bump
@@ -29,7 +29,7 @@ environment extension loaded, so none of the package's code runs), and replays t
                  `imports` prefixes
     pins         a theorem in `pins` is missing or not a theorem, uses a disallowed axiom, has a closed `Prop` hypothesis
                  that is not a constant of an `assumptions` module, or no longer says what its record says: signature,
-                 named assumptions, type hash, and (under `reads`, per module) the definitions the pinned statements read,
+                 named assumptions, type hash, and (under `reads`, per module) the definitions the pins read,
                  the pins that read them and the digest of those definitions; the hashes are SHA-256 over a canonical form
                  of the term that ignores what `Expr.hash` ignores (records written with its 32 bits are checked as they
                  are until `--update` rewrites them)
@@ -261,8 +261,8 @@ def scans(pkg: Path, files: dict[str, str], policy: dict) -> list[str]:
 def listings(pkg: Path, files: dict[str, str], policy: dict, facts: dict, update: bool = False
              ) -> tuple[list[str], dict, list[str]]:
     """The `compile_time` entries against the package.  Each names one module, with the reason and the digest of its file
-    as it was reviewed, so a later edit needs a new review.  No listed module may declare a pinned theorem or a definition
-    a pinned statement reads: compile-time code there (a term elaborator, a notation, a macro) could change what a
+    as it was reviewed, so a later edit needs a new review.  No listed module may declare a pin or a definition a pin
+    reads: compile-time code there (a term elaborator, a notation, a macro) could change what a
     statement means.  Returns (failures, the entries with today's digests, what `--update` asks a reviewer to read)."""
     fails, now, notes = [], {}, []
     pinned: dict[str, set[str]] = {}
@@ -278,8 +278,8 @@ def listings(pkg: Path, files: dict[str, str], policy: dict, facts: dict, update
         digest = sha256(pkg / files[m])
         now[m] = {"why": why, "digest": digest}
         if m in pinned:
-            fails.append(f"compile-time: {m} is listed under `compile_time`, and pinned statements are declared or read "
-                         f"there ({', '.join(sorted(pinned[m]))}): code that runs while it compiles (a term elaborator, a "
+            fails.append(f"compile-time: {m} is listed under `compile_time`, and pins are declared or read there "
+                         f"({', '.join(sorted(pinned[m]))}): code that runs while it compiles (a term elaborator, a "
                          f"notation, a macro) could change what a statement means; move the compile-time code or the "
                          f"definitions to another module")
         if recorded != digest:
@@ -419,7 +419,7 @@ def old_group(record: dict) -> bool:
 
 
 def pinned_reads(facts: dict) -> dict[str, dict[str, dict]]:
-    """{module: {definition: its read entry, with the pinned theorems that read it}} for the theorems among the pins."""
+    """{module: {definition: its read entry, with the pins that read it}} for the theorems among the pins."""
     reads: dict[str, dict[str, dict]] = {}
     for name, f in sorted(facts["pins"].items()):
         if f.get("kind") == "theorem":
@@ -548,9 +548,9 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             a = old.get(m)
             b = (old_reads if a is not None and old_group(a) else now_reads).get(m)
             if a is None:
-                fails.append(f"pins: the pinned statements now read definitions in {m} ({', '.join(b['pins'])})")
+                fails.append(f"pins: the pins now read definitions in {m} ({', '.join(b['pins'])})")
             elif b is None:
-                fails.append(f"pins: the pinned statements no longer read {m}")
+                fails.append(f"pins: the pins no longer read {m}")
             elif (x := definitions(a)) != (y := b["definitions"]):
                 change = "; ".join(s for s in (
                     f"changed: {', '.join(d for d in sorted(set(x) & set(y)) if x[d] is not None and x[d] != y[d])}",
@@ -558,7 +558,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                     if not s.endswith(": ")) or "a definition's content"
                 fails.append(f"pins: definitions in {m} that {', '.join(b['pins'])} read changed ({change})")
             elif a.get("pins") != b["pins"]:
-                fails.append(f"pins: the pinned statements that read {m} are {', '.join(b['pins'])}; the record lists "
+                fails.append(f"pins: the pins that read {m} are {', '.join(b['pins'])}; the record lists "
                              f"{', '.join(a.get('pins', [])) or 'none'}; run `audit.py --update`")
             elif a.get("digest") != b["digest"]:
                 fails.append(f"pins: the digest recorded for {m} is not the SHA-256 of its definitions; "
@@ -1145,7 +1145,7 @@ def main(argv: list[str]) -> int:
             head = f"AUDIT {pkg}: {'PASS' if not rep['failures'] else 'FAIL'}"
             if "modules" in rep:
                 head += (f"  {n} declarations in {rep['modules']} modules; axioms {', '.join(rep['axioms']) or 'none'}; "
-                         f"{len(rep['pins'])} pinned theorems; {rep['seconds']}")
+                         f"{len(rep['pins'])} pins; {rep['seconds']}")
             if "sandbox" in rep:
                 head += "; built in the sandbox" if rep["sandbox"] else "; built WITHOUT a sandbox (unshare unavailable here)"
             print(head, flush=True)
@@ -1161,7 +1161,7 @@ def main(argv: list[str]) -> int:
     reports = [reports[p] for p in pkgs]
     failed = by_controls + [str(r["package"]) for r in reports if r["failures"]]
     if changed := [r["package"] for r in reports if r.get("statement_changes")]:
-        print(f"audit: pinned statements, the definitions they read, or listed compile-time code changed in "
+        print(f"audit: pins, the definitions they read, or listed compile-time code changed in "
               f"{', '.join(changed)}: the merge handoff must name the reviewer who read the changes above (review.txt in "
               f"each package's reports)", flush=True)
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reports}, indent=1,
