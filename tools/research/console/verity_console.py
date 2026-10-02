@@ -1223,10 +1223,7 @@ def idle_panel(readings: list[dict], now: datetime) -> dict:
                           "a lease pool is held for the lease's time, busy by that GPU's DCGM reading, unmeasured (never idle) "
                           "without one; the pool holder outside a lease is 'lease pool, not leased'. Node 2: by coordinator id. "
                           "Change: points against the hour before; infra alerts a lane above target that improves by under 5 "
-                          "points. Commit leases by phase: node 1 circuits' Commit leases in the hour, from their timelines "
-                          "(circuits' hi-lease.py phases; `other` is leased time outside them; 'outside Commit leases' is the "
-                          "lane's held time no Commit lease covers, such as whole-GPU pods; gaps between leases are 'lease pool, "
-                          "not leased'). Newest first."))
+                          "points. Phases: node 1 circuits' Commit leases, from their timelines. Newest first."))
 
 
 # ---------------------------------------------------------------------------------------------------------------- pool (infra/*)
