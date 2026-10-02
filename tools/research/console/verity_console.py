@@ -552,6 +552,10 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
     except Exception as e:  # noqa: BLE001  the node-1 panels still go out
         errors.append(f"hillclimb: {type(e).__name__}: {e}")
     try:
+        out += dot_overhead_panels(now, errors) + vllm_overhead_panels(now, errors)
+    except Exception as e:  # noqa: BLE001  the node-1 panels still go out
+        errors.append(f"prover-overhead: {type(e).__name__}: {e}")
+    try:
         out += overnight_panels(errors)
     except Exception as e:  # noqa: BLE001  the node-1 panels still go out
         errors.append(f"overnight: {type(e).__name__}: {e}")
@@ -600,6 +604,146 @@ def hillclimb_panels(now: datetime, errors: list) -> list[dict]:
                                       "prover buckets alone. One row per step.")))
         except Exception as e:  # noqa: BLE001  one bad file doesn't stop the others
             errors.append(f"hillclimb {f.name}: {type(e).__name__}: {e}")
+    return out
+
+
+# ------------------------------------------------------------------------------------------------- private-value prover overhead
+
+DOT_DTYPES = ("bf16", "e4m3", "nvf4", "mxf4")
+DOT_KS = (2048, 4096, 8192, 16384)
+N1_STORE = Path("/workspace/research/store/catalog.sqlite")  # node 1's evidence-store catalog, read as it is
+VLLM_CAMPAIGN = "private-overheads-oct2"
+
+
+def point_mode(p: dict) -> str:
+    """A hill-climb point's prover: `zk` (private values, `--zk`) or `m0`, the default when the point doesn't say."""
+    return "zk" if str(p.get("mode") or "").strip().lstrip("-").lower() == "zk" else "m0"
+
+
+def dot_points(errors: list) -> dict[tuple[str, int], dict[str, list[dict]]]:
+    """Every byte-identical point with an overhead, per (dtype, K) cell and mode, oldest first."""
+    cells: dict[tuple[str, int], dict[str, list[dict]]] = defaultdict(lambda: {"zk": [], "m0": []})
+    for f in sorted(HILLCLIMB.glob("*.json")) if HILLCLIMB.is_dir() else []:
+        try:
+            doc = json.loads(f.read_text())
+            sub = doc["subcircuit"]
+            key = (str(sub.get("dtype") or "").lower(), sub.get("K"))
+            for p in doc.get("points") or []:
+                if sig(p.get("overhead")) is None or p.get("byte_identical") is False or not isoz(p.get("time_utc")):
+                    continue
+                cells[key][point_mode(p)].append(p)
+        except Exception as e:  # noqa: BLE001  one bad file doesn't stop the others
+            errors.append(f"prover-overhead {f.name}: {type(e).__name__}: {e}")
+    for modes in cells.values():
+        for ps in modes.values():
+            ps.sort(key=lambda p: isoz(p.get("time_utc")))
+    return cells
+
+
+def dot_overhead_panels(now: datetime, errors: list) -> list[dict]:
+    cells = dot_points(errors)
+    src = "proofs' hill-climb roll-ups (vy-nebius-1 /workspace/usage/hillclimb), 74-gemm-hill.sh points from hillclimb.json"
+    rows, when = [], []
+    for d in DOT_DTYPES:
+        for k in DOT_KS:
+            zk, m0 = cells.get((d, k), {}).get("zk", []), cells.get((d, k), {}).get("m0", [])
+            zl, ml = (zk[-1] if zk else None), (m0[-1] if m0 else None)
+            best = lambda ps: min((p["overhead"] for p in ps), default=None)  # noqa: E731
+            last = max([isoz(p["time_utc"]) for p in (zl, ml) if p], default=None)
+            when += [last] if last else []
+            rows.append([d.upper(), k, sig(zl and zl["overhead"]), sig(best(zk)), zl.get("step") if zl else None,
+                         sig(ml and ml["overhead"]), sig(best(m0)), ratio(zl and zl["overhead"], ml and ml["overhead"]),
+                         len(zk), len(m0), last])
+    any_zk = any(r[8] for r in rows)
+    note = ("Overhead = census dense peak ÷ (2·K·VUs ÷ session time), the session being the whole interactive proof job. "
+            "Latest = the cell's newest byte-identical point of that prover; best = its lowest. ZK ÷ M0 compares the two latests. "
+            "A point is ZK when its record says mode zk; otherwise M0.")
+    if not any_zk:
+        note = "No --zk points yet. " + note
+    out = [panel("prover-overhead-dot-products", "Private-value (--zk) prover overhead per dot-product cell, M0 beside it", "table",
+                 ["Dtype", "K", "ZK latest (×)", "ZK best (×)", "ZK step", "M0 latest (×)", "M0 best (×)", "ZK ÷ M0",
+                  "ZK points", "M0 points", "Latest (UTC)"],
+                 rows, updated_at=max(when, default=None) or iso(now), source=src, note=note[:500])]
+    series = [(f"{d.upper()} K={k}", cells[(d, k)]["zk"]) for d in DOT_DTYPES for k in DOT_KS if cells.get((d, k), {}).get("zk")]
+    times = sorted({isoz(p["time_utc"]) for _, ps in series for p in ps})
+    by = [{isoz(p["time_utc"]): sig(p["overhead"]) for p in ps} for _, ps in series]
+    out.append(panel("prover-overhead-dot-products-steps", "Private-value (--zk) prover overhead per cell, by hill-climb step",
+                     "line", ["Time (UTC)", *[n for n, _ in series]] if series else ["Time (UTC)", "no --zk points yet"],
+                     [[t, *[b.get(t) for b in by]] for t in times], unit="× peak", y_scale="log",
+                     updated_at=times[-1] if times else iso(now), source=src,
+                     note="Each --zk hill-climb point at the time it was measured, one line per cell; lower is better; log scale."))
+    return out
+
+
+def vllm_points(path: Path | None = None) -> list[dict]:
+    """The vLLM proof-unit-weighted overhead points: attempts labelled `ov.ws prover`, `ov.metric overhead` and an `ov.config`
+    of `vllm/<model>/<all|prefill|decode>/<zk|m0>`; the latest assertion of each key wins."""
+    path = path or N1_STORE
+    if not path.exists():
+        return []
+    import sqlite3  # noqa: PLC0415
+    db = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30)
+    try:
+        rows = db.execute("SELECT target, key, value, ts FROM labels WHERE target IN "
+                          "(SELECT target FROM labels WHERE key = 'ov.config' AND value LIKE 'vllm/%') "
+                          "AND (key LIKE 'ov.%' OR key = 'campaign') ORDER BY ts").fetchall()
+    finally:
+        db.close()
+    by: dict[str, dict] = defaultdict(dict)
+    for target, key, value, ts in rows:
+        by[target][key] = value
+        by[target]["_ts"] = ts
+    out = []
+    for target, v in by.items():
+        try:
+            value = float(v.get("ov.value"))
+        except (TypeError, ValueError):
+            continue
+        if v.get("ov.ws") != "prover" or v.get("ov.metric") != "overhead" or v.get("campaign", VLLM_CAMPAIGN) != VLLM_CAMPAIGN:
+            continue
+        try:
+            attempt = int(v.get("ov.attempt") or 0)
+        except ValueError:
+            attempt = 0
+        out.append({"target": target, "config": v["ov.config"], "attempt": attempt, "value": value,
+                    "line": v.get("ov.line"), "when": isoz(v["_ts"])})
+    return out
+
+
+def vllm_overhead_panels(now: datetime, errors: list) -> list[dict]:
+    try:
+        pts = vllm_points()
+    except Exception as e:  # noqa: BLE001  an empty panel still goes out
+        errors.append(f"prover-overhead-vllm: {type(e).__name__}: {e}")
+        pts = []
+    src = f"node 1's evidence store: campaign {VLLM_CAMPAIGN}, ov.ws prover, ov.metric overhead, ov.config vllm/*"
+    configs = sorted({p["config"] for p in pts})[:19]
+    latest: dict[tuple[str, int], dict] = {}
+    for p in sorted(pts, key=lambda p: p["when"] or ""):
+        latest[(p["config"], p["attempt"])] = p
+    attempts = sorted({a for _, a in latest})
+    when = max((p["when"] for p in pts if p["when"]), default=None) or iso(now)
+    out = [panel("prover-overhead-vllm", "vLLM prover overhead, weighted over every proof unit of the run", "line",
+                 ["attempt", *configs] if configs else ["attempt", "no points yet"],
+                 [[a, *[sig(latest[(c, a)]["value"]) if (c, a) in latest else None for c in configs]] for a in attempts],
+                 unit="× native", y_scale="log", updated_at=when, source=src,
+                 note=("Prover seconds summed over the run's q-word units ÷ the run's native GPU seconds; x is the hill-climb step "
+                       "(ov.attempt), one line per model, phase and prover. TP1 B1 1024/128 greedy. Lower is better; log scale."
+                       + ("" if configs else " No points yet.")))]
+    rows = []
+    for c in configs:
+        mine = sorted((p for (cc, _), p in latest.items() if cc == c), key=lambda p: p["attempt"])
+        last = mine[-1]
+        parts = c.split("/")
+        other = "/".join(parts[:-1] + ["m0" if parts[-1] == "zk" else "zk"])
+        twin = max((p for (cc, _), p in latest.items() if cc == other), key=lambda p: p["attempt"], default=None)
+        rows.append([c, last["attempt"], (last["line"] or "")[:200] or None, sig(last["value"]),
+                     sig(min(p["value"] for p in mine)),
+                     ratio(last["value"], twin["value"]) if twin and parts[-1] == "zk" else None, len(mine), last["when"]])
+    out.append(panel("prover-overhead-vllm-latest", "vLLM prover overhead: latest step per model, phase and prover", "table",
+                     ["Config", "Step", "Step label", "Latest (× native)", "Best (× native)", "ZK ÷ M0", "Steps", "Labelled (UTC)"],
+                     rows, updated_at=when, source=src,
+                     note="One row per ov.config; ZK ÷ M0 compares a --zk config's latest step with its M0 twin's."))
     return out
 
 
