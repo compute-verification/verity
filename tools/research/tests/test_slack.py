@@ -1059,15 +1059,17 @@ def test_inbox_read_shows_unread_doorbells_urgent_first_and_marks_them_read(fake
 
 
 def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(fake, registry, routes_dirs, capsys):
-    inbox(fake, routes_dirs, "circuits")
+    box = inbox(fake, routes_dirs, "circuits")
+    add_route(routes_dirs[0], "old-circuits", box, closed="2026-10-01T18:00Z", forward_to="circuits")   # renamed: one inbox
     run(capsys, "ask", "--as", "infra", "--to", "@circuits", "--text", "one")
     old = fake.add(COORD, text="@proofs ancient ask", username="infra", bot_id=BOT, ts="1600000000.000001")
+    fyi = fake.add(COORD, text="@proofs ancient fyi (quiet)", username="infra", bot_id=BOT, ts="1600000000.000002")
     fake.add(COORD, text="@no-such-lane hello", username="infra", bot_id=BOT)
     rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
     rep = json.loads(out)
-    assert rc == 0 and {"name": "circuits", "doorbells": 1, "peak_per_hour": 1, "paused": 0} in rep["inboxes"]
+    assert rc == 0 and [x for x in rep["inboxes"] if x["doorbells"]] == [{"name": "circuits", "doorbells": 1, "peak_per_hour": 1, "paused": 0}]
     assert [d["name"] for d in rep["dropped"]] == ["no-such-lane"]
-    assert old["ts"] in [s["ts"] for s in rep["unanswered"]]
+    assert old["ts"] in [s["ts"] for s in rep["unanswered"]] and fyi["ts"] not in [s["ts"] for s in rep["unanswered"]]
 
 
 def test_verify_author_accepts_a_routed_workers_name_and_the_router(fake, registry, routes_dirs, capsys):

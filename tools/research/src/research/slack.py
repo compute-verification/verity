@@ -1394,10 +1394,11 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     api, ch, routes = client(ns), channel_id(ns, reg, FRONT_DOOR), routes_of(ns)
     now = time.time() if ns.now is None else float(ns.now)
     since = now - ns.hours * 3600
-    rows = []
-    for r in sorted(routes.all().values(), key=lambda r: r["name"]):
-        if not r.get("inbox_ts"):
-            continue
+    rows, counted = [], set()
+    for r in sorted(routes.all().values(), key=lambda r: (bool(r.get("closed")), r["name"])):
+        if not r.get("inbox_ts") or r["inbox_ts"] in counted:
+            continue                                                 # a renamed name forwards into its successor's inbox
+        counted.add(r["inbox_ts"])
         bells = [m for m in api.paged("conversations.replies", "messages", channel=r.get("channel") or ch, ts=r["inbox_ts"],
                                       oldest=f"{since:.6f}") if m.get("ts") != r["inbox_ts"]]
         hours: dict[int, int] = {}
@@ -1412,7 +1413,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         for n in lead_names(m.get("text") or "", reg):
             if not routes.get_route(n) and n not in handles:
                 dropped.append({"name": n, "ts": m["ts"], "by": poster(m, reg)})
-        is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m)
+        is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m) and QUIET not in (m.get("text") or "")
         answered = m.get("reply_count") or any(x.get("name") in ("eyes", "white_check_mark", "x") for x in m.get("reactions", []))
         if is_ask and not answered and now - float(m["ts"]) > ns.stale_h * 3600:
             stale.append({"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)})
