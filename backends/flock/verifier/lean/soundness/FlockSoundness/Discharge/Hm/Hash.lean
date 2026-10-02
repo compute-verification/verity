@@ -163,8 +163,8 @@ theorem getLsbD_wordL (l : List UInt8) (off i : ℕ) {p : ℕ} (hp : p < 64) :
   rw [wordL, getLsbD_foldBE _ 8 le_rfl p]
   simp [hp]
 
-theorem wordL_congr {l l' : List UInt8} {off off' i : ℕ}
-    (h : ∀ j < 8, l.getD (off + 8 * i + j) 0 = l'.getD (off' + 8 * i + j) 0) : wordL l off i = wordL l' off' i := by
+theorem wordL_congr {l l' : List UInt8} {off off' i i' : ℕ}
+    (h : ∀ j < 8, l.getD (off + 8 * i + j) 0 = l'.getD (off' + 8 * i' + j) 0) : wordL l off i = wordL l' off' i' := by
   unfold wordL
   refine List.foldl_ext _ _ _ fun x j hj => ?_
   rw [h j (by simp at hj; omega)]
