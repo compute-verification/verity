@@ -895,6 +895,10 @@ def test_send_names_each_addressee_once(fake, registry, routes_dirs, capsys):
     assert rc == 0 and posted(fake, out)["text"].startswith("@circuits #712 is ready")
     rc, out, _ = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "@proofs see this")
     assert rc == 0 and posted(fake, out)["text"].startswith("@circuits @proofs see this")
+    rc, out, _ = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--to", "@proofs", "--text", "both")
+    assert rc == 0 and posted(fake, out)["text"].startswith("@circuits @proofs both")
+    assert run(capsys, "announce", "--as", "infra", "--to", "@circuits", "--to", "@proofs", "--text", "x")[0] == 0
+    assert fake.messages[COORD][-1]["text"].split("\n")[0].endswith("to @circuits @proofs")
 
 
 def test_a_reply_to_a_replys_ts_lands_in_its_thread(fake, registry, routes_dirs, capsys):
