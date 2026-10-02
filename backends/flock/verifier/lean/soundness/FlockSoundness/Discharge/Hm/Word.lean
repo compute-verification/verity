@@ -3,6 +3,7 @@ Words of the builder (`Builder`) and what their gadgets force: a word's value as
 XORs as `BitVec` operations, `Ch` and `Maj` bit by bit, commit, and the ripple-carry adder as addition mod `2^64`.
 -/
 import FlockSoundness.Discharge.Hm.Gadget
+import FlockSoundness.Discharge.Hm.Spec
 
 namespace FlockSoundness.Discharge.Hm
 
@@ -148,12 +149,6 @@ theorem sound_mapM {β : Type} (f : β → M Lin) (g : (Var → Bool) → β →
       | succ i =>
           have := hbits i (by simpa using h)
           simpa [bit] using this
-
-/-- SHA-512's `Ch`. -/
-def chV (e f g : BitVec 64) : BitVec 64 := (e &&& f) ^^^ (~~~e &&& g)
-
-/-- SHA-512's `Maj`. -/
-def majV (a b c : BitVec 64) : BitVec 64 := (a &&& b) ^^^ (a &&& c) ^^^ (b &&& c)
 
 theorem sound_chW (e f g : Word) : Sound (chW e f g) fun z r =>
     e.length = 64 → f.length = 64 → g.length = 64 → r.length = 64 ∧ bv z r = chV (bv z e) (bv z f) (bv z g) := by
