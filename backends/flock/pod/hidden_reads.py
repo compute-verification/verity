@@ -37,8 +37,10 @@ import numpy as np
 
 from verity.commitments import hm96
 from verity.ml.boolean.forms import NOT, ONE, ZERO, Circuit, and_reduce, const_bits
+from verity.ml.boolean.forms import table as table_words
 
 from verity_flock import sha512_circuit as S
+from verity_flock import tail_pieces  # noqa: F401  registers the gelu_tanh_bf16 table's loader
 
 H5 = hm96.SHA512
 KEY = H5.default_key
@@ -346,16 +348,18 @@ def all_counts(heavy: bool) -> dict:
     return out
 
 
+def gelu_bits(g: int) -> int:
+    """``GeluTanhMulBf16_v1``'s activation word for the bf16 word g: the pinned ``gelu_tanh_bf16`` table's entry."""
+    return int(table_words("gelu_tanh_bf16")[g])
+
+
 def today_counts(heavy: bool) -> dict:
     """Today's reads with public contents: ``boolean_export.table_gates`` (the prover's inline read) and the Boolean IR's band."""
     from verity_flock import boolean_export as BE
     from verity.ml.boolean.elementwise import bf16_band
-    from verity_vllm.program.registry import boolean_dense as BD
-    from verity_vllm.program.registry import dense as D
 
     out = {"gelu_tanh_bf16_table_gates": BE.table_gates("gelu_tanh_bf16")}
-    out["gelu_band_public"] = delta(lambda C: bf16_band(C, C.input("g", 16), D.gelu_tanh_bf16_bits, 118, (128, 129)))
-    out["gelu_tanh_bf16_boolean_ir"] = delta(lambda C: BD.gelu_tanh_bf16(C, C.input("g", 16)))
+    out["gelu_band_public"] = delta(lambda C: bf16_band(C, C.input("g", 16), gelu_bits, 118, (128, 129)))
     for t in ("ex2", "rcp") + (("tanh_rn", "tanh_mufu") if heavy else ()):
         try:
             out[f"{t}_table_gates"] = BE.table_gates(t)
@@ -414,14 +418,13 @@ def check(seed: int = 1) -> dict:
         o, _ = C.evaluate(vals, 1)
         ok &= sum(b << j for j, b in enumerate(o["v"])) == tab[i]
     res["mux_tree"] = ok
-    from verity_vllm.program.registry import dense as D
     from verity.ml.boolean.elementwise import bf16_band
     C = Circuit()
     g = C.input("g", 16)
     tb = [[C.input(f"t{r}_{k}", 15) for k in range(256)] for r in range(12)]
     C.output("h", band_hidden(C, g, tb))
-    C.output("p", bf16_band(C, g, D.gelu_tanh_bf16_bits, 118, (128, 129)))
-    words = [[(D.gelu_tanh_bf16_bits(s << 15 | (e0 | k >> 7) << 7 | k & 0x7F) & 0x7FFF if 118 <= (e0 | k >> 7) <= (128, 129)[s] else 0)
+    C.output("p", bf16_band(C, g, gelu_bits, 118, (128, 129)))
+    words = [[(gelu_bits(s << 15 | (e0 | k >> 7) << 7 | k & 0x7F) & 0x7FFF if 118 <= (e0 | k >> 7) <= (128, 129)[s] else 0)
               for k in range(256)] for s, e0 in band_rows()]
     T = 64
     gs = [rng.randrange(1 << 16) for _ in range(T)]
@@ -645,8 +648,7 @@ def table(counts: dict, rt: dict, reads_per_block: tuple[int, ...] = (1024, 4096
     add("gelu_tanh_bf16 (2^16 x 16)", "d sorted batch, 2^16 reads", d["ands"] / 65536, (d["rows"] + g["binding_per_unit"]["rows"]) / 65536, "mux",
         f"{d['rows'] + g['binding_per_unit']['rows']} rows in one block (> 2^{K_MAX_BLOCK})", feasible=False)
     gb = today["gelu_band_public"]
-    add("gelu band (3072 x 15, the Boolean IR's)", "c today (public band)", gb["ands"], gb["rows"], "mux",
-        f"the whole gelu_tanh_bf16 element is {today['gelu_tanh_bf16_boolean_ir']['ands']} ANDs")
+    add("gelu band (3072 x 15, the Boolean IR's)", "c today (public band)", gb["ands"], gb["rows"], "mux")
     add("gelu band (3072 x 15, the Boolean IR's)", "a merkle, packed leaf, c2", b["a_packed_c2"]["ands"], b["a_packed_c2"]["rows"], "merkle")
     add("gelu band (3072 x 15, the Boolean IR's)", "a merkle, packed leaf, c1", b["a_packed_c1"]["ands"], b["a_packed_c1"]["rows"], "merkle")
     bind = b["binding_per_unit"]["rows"]
