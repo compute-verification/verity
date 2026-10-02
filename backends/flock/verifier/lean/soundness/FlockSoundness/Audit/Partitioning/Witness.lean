@@ -22,6 +22,8 @@ so it meets every target. Two more show that `RiskConcave`'s hypotheses can't be
 * `riskConcave_needs_small_p`: at `k = 2`, `p = 4/5` (`N = 3`) they rise too.
 * `concentration`: at `N = k = 2`, `p = 1/2`, two wrong proof units in one replay unit are strictly less detectable than
   one in each of two.
+* `nestedEscape`: under `nested` with two replay units of two proof units, `k = 1` and `p = 1/2`, one wrong proof unit
+  escapes with probability `3/4`, strictly between `1 − p` and 1.
 -/
 
 namespace FlockSoundness.Audit.Partitioning.Witness
@@ -129,5 +131,9 @@ theorem concentration :
   rw [e0, e1, e2]
   have h : Real.log (1 / 2 : ℝ) < 0 := Real.log_neg (by norm_num) (by norm_num)
   linarith
+
+theorem nestedEscape :
+    ((nested 2 2 1 1 2 (by norm_num)).escape {finProdFinEquiv (0, 0)}).toReal = 3 / 4 := by
+  sorry
 
 end FlockSoundness.Audit.Partitioning.Witness

@@ -34,6 +34,8 @@ on the leak, not leaks an adversary achieves.
 * `RiskConcave`: for `k ≥ 2` and `p ≤ 1/2`, the increments of `ψ` do not increase.
 * `Concentration`: so for wrong proof units spread over replay units with `m_i` each, `∑_i ψ(m_i)` is smallest when
   they fill whole replay units, with at most one partial: the prover's least detectable placement concentrates.
+* `NestedEscape`: `ψ` is the nested law's detection risk. Under `nested`, a wrong set with `m_i` wrong proof units in
+  replay unit `i` escapes with probability `∏_i (1 − p + p · C(N − m_i, k)/C(N, k)) = exp(−∑_i ψ(m_i))`.
 -/
 
 namespace FlockSoundness.Audit.Partitioning.Guarantees
@@ -138,5 +140,16 @@ def Concentration : Prop :=
   ∀ (N k R : ℕ) (p : ℝ), 2 ≤ k → k ≤ N → 0 ≤ p → p ≤ 1 / 2 → ∀ m : Fin R → ℕ, (∀ i, m i ≤ N) →
     (((∑ i, m i) / N : ℕ) : ℝ) * detectionRisk N k p N + detectionRisk N k p ((∑ i, m i) % N) ≤
       ∑ i, detectionRisk N k p (m i)
+
+/-- **The nested law's escape.** Under `nested R N k a b`, with `p = a/b ≤ 1`, a set `B` of proof units with
+`m_i = wrongIn B i` of them in replay unit `i` escapes with probability `∏_i (1 − p + p · C(N − m_i, k)/C(N, k))`: each
+replay unit escapes its two stages independently of the others. For `p < 1` that is `exp(−∑_i ψ(m_i))`, with
+`ψ = detectionRisk N k p`. -/
+def NestedEscape : Prop :=
+  ∀ (R N k a b : ℕ) [NeZero b] (hk : k ≤ N), a ≤ b → ∀ B : Finset (Fin (R * N)),
+    ((nested R N k a b hk).escape B).toReal =
+        ∏ i, (1 - (a / b : ℝ) + (a / b : ℝ) * ((N - wrongIn B i).choose k : ℝ) / (N.choose k : ℝ)) ∧
+      (a < b → ((nested R N k a b hk).escape B).toReal =
+        Real.exp (-∑ i, detectionRisk N k (a / b) (wrongIn B i)))
 
 end FlockSoundness.Audit.Partitioning.Guarantees

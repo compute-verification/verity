@@ -168,4 +168,7 @@ theorem Concentration : Guarantees.Concentration := by
       simp only [Fin.sum_univ_castSucc]
       linarith
 
+theorem NestedEscape : Guarantees.NestedEscape := by
+  sorry
+
 end FlockSoundness.Audit.Partitioning.SecurityProofs
