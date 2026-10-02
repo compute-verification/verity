@@ -8874,6 +8874,7 @@
    "assumptions": [],
    "type_hash": "2386f576abc57848b6fe5ea8bdd0e4d1776794a50eb344567e7b64bec1a487f7"
   },
+  "FlockSoundness.Discharge.ZkLink.batchedSessionZC_one": {},
   "FlockSoundness.Discharge.ZkLink.sessionZC_eq": {
    "signature": [
     "FlockSoundness.Discharge.ZkLink.sessionZC_eq {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
@@ -8885,6 +8886,7 @@
    "assumptions": [],
    "type_hash": "2f42b90cce44782a55ca0ded950a2df82e9dce742306b5c5484b6967e1b80096"
   },
+  "FlockSoundness.Discharge.ZkLink.sessionZC_one": {},
   "FlockSoundness.Discharge.ZkLink.sessionZK_eq": {
    "signature": [
     "FlockSoundness.Discharge.ZkLink.sessionZK_eq {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",

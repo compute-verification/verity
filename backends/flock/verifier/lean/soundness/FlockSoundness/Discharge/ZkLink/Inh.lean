@@ -16,31 +16,36 @@ open Game Model Accounting ZkSession
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 variable {D Sl : Type}
 
-/-- One step of every `AllInh` proof here: through `pure`, `recv`, `draw`, `bind` and the matches. -/
-local macro "inh_steps" : tactic => `(tactic| repeat' (first
-    | exact AllInh.ret _
-    | exact AllInh.pure' _
-    | exact AllInh.recv' _
-    | exact AllInh.draw' _
-    | refine AllInh.bind' ?_ fun _ => ?_
-    | intro _
-    | split
-    | dsimp only))
-
 omit [DecidableEq F] in
 theorem allInh_residualRoundsZK {np : ℕ} (P : PadsA np) :
     ∀ (n j : ℕ) (req : Fin n → F) (claim : LinF F np), AllInh (residualRoundsZK P n j req claim)
   | 0, _, _, _ => .ret _
   | n + 1, j, req, claim => by
       simp only [residualRoundsZK]
-      inh_steps
+      repeat' (first
+          | exact AllInh.ret _
+          | exact AllInh.pure' _
+          | exact AllInh.recv' _
+          | exact AllInh.draw' _
+          | refine AllInh.bind' ?_ fun _ => ?_
+          | intro _
+          | split
+          | dsimp only)
       all_goals exact allInh_residualRoundsZK P n _ _ _
 
 omit [DecidableEq F] [Fintype K] [DecidableEq K] in
 theorem allInh_zerocheckZK (A : Arith F K) (m : ℕ) {np : ℕ} (P : PadsA np) (tr : Triple np) :
     AllInh (zerocheckZK A m P tr) := by
   unfold zerocheckZK
-  inh_steps
+  repeat' (first
+      | exact AllInh.ret _
+      | exact AllInh.pure' _
+      | exact AllInh.recv' _
+      | exact AllInh.draw' _
+      | refine AllInh.bind' ?_ fun _ => ?_
+      | intro _
+      | split
+      | dsimp only)
   all_goals exact allInh_residualRoundsZK P _ _ _ _
 
 omit [DecidableEq F] in
@@ -49,20 +54,36 @@ theorem allInh_lincheckRoundsZK {np : ℕ} (P : PadsA np) :
   | 0, _, _ => .ret _
   | n + 1, j, claim => by
       simp only [lincheckRoundsZK]
-      inh_steps
+      repeat' (first
+          | exact AllInh.ret _
+          | exact AllInh.pure' _
+          | exact AllInh.recv' _
+          | exact AllInh.draw' _
+          | refine AllInh.bind' ?_ fun _ => ?_
+          | intro _
+          | split
+          | dsimp only)
       all_goals exact allInh_lincheckRoundsZK P n _ _
 
 omit [DecidableEq F] [Fintype K] [DecidableEq K] in
 theorem allInh_lincheckZK (A : Arith F K) (S : Statement) {np : ℕ} (P : PadsA np) (zc : ZcZK F np S.m) :
     AllInh (lincheckZK A S P zc) := by
   unfold lincheckZK
-  inh_steps
+  repeat' (first
+      | exact AllInh.ret _
+      | exact AllInh.pure' _
+      | exact AllInh.recv' _
+      | exact AllInh.draw' _
+      | refine AllInh.bind' ?_ fun _ => ?_
+      | intro _
+      | split
+      | dsimp only)
   all_goals exact allInh_lincheckRoundsZK P _ _ _
 
 omit [Fintype K] [DecidableEq K] in
 theorem allInh_openingZK (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (a c : Claim F m) (extra : List (Claim F m)) :
     AllInh (openingZK A hm a c extra) := by
-  have hs : ∀ c' : Claim F m, AllInh (opStep c') := fun _ => by unfold opStep; inh_steps
+  have hs : ∀ c' : Claim F m, AllInh (opStep c') := fun _ => by unfold opStep; repeat' (first | exact AllInh.ret _ | exact AllInh.pure' _ | exact AllInh.recv' _ | exact AllInh.draw' _ | refine AllInh.bind' ?_ fun _ => ?_)
   unfold openingZK
   refine AllInh.bind' (hs a) fun _ => AllInh.bind' (hs c) fun _ =>
     AllInh.bind' (AllInh.mapM _ hs _) fun _ => AllInh.bind' (AllInh.draw' _) fun _ => .ret _
@@ -84,7 +105,15 @@ theorem allInh_foldRoundsZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) :
   | k + 2, j, _, q => by
       simp only [foldRoundsZK]
       refine AllInh.bind' (allInh_drawK A) fun _ => ?_
-      inh_steps
+      repeat' (first
+          | exact AllInh.ret _
+          | exact AllInh.pure' _
+          | exact AllInh.recv' _
+          | exact AllInh.draw' _
+          | refine AllInh.bind' ?_ fun _ => ?_
+          | intro _
+          | split
+          | dsimp only)
       all_goals exact allInh_foldRoundsZK A P (k + 1) (j + 1) _ _
 
 variable [Nonempty D]
@@ -92,7 +121,15 @@ variable [Nonempty D]
 theorem allInh_ligeritoPadZC (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (sch : Schedule) (t : ℕ) (c₀ : F) (r : ℕ)
     (T : F) (b : ℕ → F) : AllInh (ligeritoPadZC (D := D) A P sch t c₀ r T b) := by
   unfold ligeritoPadZC ligTailC queryAndBatchPadC
-  inh_steps
+  repeat' (first
+      | exact AllInh.ret _
+      | exact AllInh.pure' _
+      | exact AllInh.recv' _
+      | exact AllInh.draw' _
+      | refine AllInh.bind' ?_ fun _ => ?_
+      | intro _
+      | split
+      | dsimp only)
   all_goals first
     | exact allInh_foldRoundsZK A P _ _ _ _
     | exact allInh_drawKs A _
@@ -107,7 +144,15 @@ theorem allInh_repMaskedZC (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA 
     (allInh_zerocheckZK A S.m PA tr)
   unfold restZC
   refine AllInh.bind' (allInh_openingZK A _ _ _ _) fun _ => ?_
-  inh_steps
+  repeat' (first
+      | exact AllInh.ret _
+      | exact AllInh.pure' _
+      | exact AllInh.recv' _
+      | exact AllInh.draw' _
+      | refine AllInh.bind' ?_ fun _ => ?_
+      | intro _
+      | split
+      | dsimp only)
   all_goals exact allInh_ligeritoPadZC A _ _ _ _ _ _ _
 
 omit [DecidableEq F] in
@@ -116,7 +161,12 @@ theorem allInh_innerGameC (H : List UInt8 → D) (Ep : Merkle.Enc (F × F) D) (L
     (rows : Fin nA → Lin F s) (tr : Triple s) (root : D) :
     AllInh (innerGameC H Ep Lp Lτ dom s nP q pos rows tr root) := by
   unfold innerGameC
-  inh_steps
+  repeat' (first
+      | exact AllInh.ret _
+      | exact AllInh.pure' _
+      | exact AllInh.recv' _
+      | exact AllInh.draw' _
+      | refine AllInh.bind' ?_ fun _ => ?_)
 
 /-- **Every message a compiled `--zk` rep receives has an inhabited type** (`Refine.live_le`'s `hinh` at
 `G := repZCAt A Hs T`). -/
