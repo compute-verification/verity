@@ -185,7 +185,7 @@ def main() -> int:
         fv = header["frame_v3"]
         leaf_layer = a0.sha512_file(pub)
         roots = a0.registered_roots(header, want)
-        window = {"kind": "registered-gemm", "window": w + 1, "of": name}
+        window = {"kind": "stand-in", "of": f"a4 {name}: the generated set {s.name}, committed by this driver", "window": w + 1}
         prior = log if registered else []
         rec = R.record(program, query, law, SCHEME, roots, window, leaf_layer=leaf_layer,
                        previous=R.digest(prior[-1]) if prior else None, registered=[reg.entry()] if registered else ())
