@@ -357,6 +357,38 @@ def test_the_weights_root_is_registered_once_while_the_weights_are_the_same(monk
     assert whats == ["weights.computed", "weights.reused", "weights.computed", "weights.computed", "weights.computed"]
 
 
+class ModeCom(Com):
+    """Hashes in the mode `native_host.register_weights` reads (``VERITY_WEIGHTS_HASH``) and records it as ``hash``."""
+
+    def register_weights(self):
+        super().register_weights()
+        self.weights["hash"] = os.environ["VERITY_WEIGHTS_HASH"]
+        return self.weights
+
+
+def test_a_reused_weights_root_was_hashed_in_the_rows_own_mode(monkeypatch):
+    """The group's one leased process hashes on the device (`gpu_lease.run` sets ``VERITY_WEIGHTS_HASH``) and every row's environment
+    keeps it; `commit.main` hands the committer the row's ``--weights-hash`` before it registers, and a later row reuses only a root
+    registered in that mode, so a reused root's ``hash`` is the row's ``--weights-hash`` (its versions.json)."""
+    src = (TREE / "verity_vllm" / "pipeline" / "commit.py").read_text()
+    assert src.index('os.environ["VERITY_WEIGHTS_HASH"] = args.weights_hash') < src.index("GR.register_weights(_HOT, com, args.weights_hash)")
+    torch, m = _model()
+    Com.calls = 0
+    env0 = {"VERITY_WEIGHTS_HASH": "device", "CUDA_VISIBLE_DEVICES": "3"}
+    eng = SimpleNamespace(environ={"CUBLAS_WORKSPACE_CONFIG": ":16:8", "CUBLASLT_WORKSPACE_SIZE": "1"})
+    hot = _hot()
+    for job, row in enumerate(_spec(Path("/sweep"), "a", "b", "c")["rows"], start=1):
+        hot["jobs"] = job
+        mode = CG.row_environ(env0, row, eng)["VERITY_WEIGHTS_HASH"]
+        monkeypatch.setenv("VERITY_WEIGHTS_HASH", mode)
+        w = GR.register_weights(hot, ModeCom(m), mode)
+        assert mode == "device" and w["hash"] == "device"
+    assert Com.calls == 1 and w["reused"]["from_job"] == 1
+    hot["jobs"] = 4
+    monkeypatch.setenv("VERITY_WEIGHTS_HASH", "host")
+    assert GR.register_weights(hot, ModeCom(m), "host")["hash"] == "host" and Com.calls == 2
+
+
 def test_the_live_digests_are_taken_once_while_the_weights_are_the_same():
     torch, m = _model()
     taken: list[int] = []
