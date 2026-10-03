@@ -277,6 +277,8 @@ def _under_policy(limits: str) -> str:
     ("limits max=8 borrow=4 borrow-until=2026-10-04T10:30:00Z from=policy", 0, "ok", None),
     ("limits max=6 borrow=4 borrow-until=2026-10-04T10:30:00Z from=environment", 1, "drift",
      "n1_lease.py can't read $VY_POOL_POLICY, so its environment's values are in force"),
+    ("limits max=7 borrow=4 borrow-until=2026-10-04T10:30:00Z from=last-policy", 1, "drift",
+     "n1_lease.py can't read $VY_POOL_POLICY, so the values it last read there are in force"),
     ("limits", 3, "unknown", "n1_lease.py runs under $VY_POOL_POLICY and its n1-lease.limits can't be read"),
     ("limits max=8 borrow=4", 3, "unknown",
      "n1_lease.py runs under $VY_POOL_POLICY and its n1-lease.limits lacks borrow-until, from"),

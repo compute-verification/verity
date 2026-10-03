@@ -26,9 +26,10 @@ Each tick, with the brain absent (local rules):
 With `$VY_POOL_POLICY` set (a command printing this pool's keys of the cluster policy in force, `cluster/policy/v1` JSON:
 `python3 -m cluster policy show --key vy-nebius-1.lease-pool.provers --json` from tools/cluster), the pool's `max`, `borrow` and
 `borrow-until` come from it instead, read again every `POLICY_EVERY_S`, so an override (`cluster policy override`) takes effect
-without a restart. A key it lacks, and all three while it fails or answers a `max` or `borrow` that isn't a whole number of the
-node's GPUs, keep the environment's values; each change is logged (`policy`),
-and the three in force are written to `$GPU_LEASE_DIR/n1-lease.limits` at each read (`cluster policy diff` reads them there).
+without a restart. A key it lacks keeps the environment's value; while it fails or answers a `max` or `borrow` that isn't a
+whole number of the node's GPUs, the three it last answered stay (the environment's, before it ever has). Each change is logged
+(`policy`), and the three in force are written to `$GPU_LEASE_DIR/n1-lease.limits` at each read with where they came from,
+`from=policy`, `last-policy` or `environment` (`cluster policy diff` reads them there).
 **Heartbeat and expiry.** Each tick reads every lease (lock holders from /proc/locks, the owner line, the pod from the holder's
 cgroup) into `n1-lease.json`; that record is the lease's heartbeat. A lease held `$VY_LEASE_EXPIRY_GRACE_S` past its `until=` (a
 hung job gpu-lease's own timeout didn't end) has its pod deleted. A lease on a GPU outside the pool (its holder was deleted by
@@ -274,10 +275,12 @@ class Controller:
         self.limits: dict = {"max": POOL_MAX, "borrow": BORROW, "borrow-until": BORROW_UNTIL}
         self.policy_at: float | None = None
         self.policy_error: str | None = None
+        self.policy_last: dict | None = None           # the limits $VY_POOL_POLICY last answered
 
     def pool_limits(self, t: float, dry: bool = False) -> dict:
         """The pool's max, borrow and borrow-until: `$VY_POOL_POLICY`'s while it answers with whole numbers of the node's GPUs
-        and a UTC borrow-until, else the environment's. Nothing the command prints raises out of here."""
+        and a UTC borrow-until, else those it last answered, else the environment's. Nothing the command prints raises out of
+        here."""
         if not POLICY or (self.policy_at is not None and t - self.policy_at < POLICY_EVERY_S):
             return self.limits
         self.policy_at = t
@@ -299,11 +302,14 @@ class Controller:
                     raise ValueError(f"borrow-until {v!r} isn't %Y-%m-%dT%H:%M:%SZ")
                 got[f] = str(v) if f == "borrow-until" else gpu_count(f, v, len(self.table))
         except Exception as e:  # noqa: BLE001  (a bad policy must never stop the loop)
-            got, err = env, f"{type(e).__name__}: {e}"[:200]
+            got, err = self.policy_last or env, f"{type(e).__name__}: {e}"[:200]
+        else:
+            self.policy_last = got
+        source = "policy" if not err else "last-policy" if self.policy_last else "environment"
         if not dry:
             if got != self.limits or err != self.policy_error:
-                self.log(t, "policy", limits=got, **({"error": err, "fallback": "environment"} if err else {}))
-            write(DIR / "n1-lease.limits", " ".join(f"{k}={v}" for k, v in got.items()) + f" from={'environment' if err else 'policy'}\n")
+                self.log(t, "policy", limits=got, **({"error": err, "fallback": source} if err else {}))
+            write(DIR / "n1-lease.limits", " ".join(f"{k}={v}" for k, v in got.items()) + f" from={source}\n")
         self.limits, self.policy_error = got, err
         return got
 

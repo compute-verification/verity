@@ -560,8 +560,10 @@ def _read_limits(prefix: str, text: str | None, live: Live) -> None:
             continue
         if got[f]:
             live.values[key] = got[f]
-        if got["from"] == "environment":
-            live.notes[key] = f"n1_lease.py can't read ${POLICY_VAR}, so its environment's values are in force"
+        if got["from"] != "policy":
+            live.notes[key] = (f"n1_lease.py can't read ${POLICY_VAR}, so "
+                               + ("the values it last read there are" if got["from"] == "last-policy"
+                                  else "its environment's values are") + " in force")
 
 
 def _read_kueue(node: str, raw: str | Exception, holds: str | Exception, live: Live) -> None:

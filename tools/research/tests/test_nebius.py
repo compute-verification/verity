@@ -1817,25 +1817,26 @@ def _policy_lease(monkeypatch, tmp_path, max_: int, policy: str | None = None):
 
 
 @needs_flock
-def test_n1_lease_takes_its_pool_limits_from_the_policy_command_and_the_environments_while_it_fails(monkeypatch, tmp_path, reap):
+def test_n1_lease_takes_its_pool_limits_from_the_policy_command_and_keeps_the_last_while_it_fails(monkeypatch, tmp_path, reap):
     t = 1_800_000_000.0
     m, calls, fd, doc, keys = _policy_lease(monkeypatch, tmp_path, 1)
     c = m.Controller()
-    steps = [(lambda: keys(max=3, borrow=0, idle_s=600), t, 3, None),            # 3 wanted, 3 nominal, max 3 by policy
-             (lambda: keys(max=2), t + 1, 3, None),                                # read again only after POLICY_EVERY_S
-             (lambda: None, t + m.POLICY_EVERY_S, 2, None),
-             (lambda: doc.write_text("Traceback"), t + 2 * m.POLICY_EVERY_S, 1, "JSONDecodeError"),   # the environment's 1
-             (lambda: keys(max=3, borrow_until="tomorrow"), t + 3 * m.POLICY_EVERY_S, 1, "borrow-until 'tomorrow'"),
-             (lambda: keys(("provers", "circuits"), max=3), t + 4 * m.POLICY_EVERY_S, 1, "two keys give max")]
-    for change, at, want, error in steps:
+    steps = [(lambda: doc.write_text("Traceback"), t, 1, "JSONDecodeError", "environment"),  # never answered: the environment's 1
+             (lambda: keys(max=3, borrow=0, idle_s=600), t + 1, 1, None, "environment"),     # read again after POLICY_EVERY_S
+             (lambda: None, t + m.POLICY_EVERY_S, 3, None, "policy"),            # 3 wanted, 3 nominal, max 3 by policy
+             (lambda: keys(max=2), t + 2 * m.POLICY_EVERY_S, 2, None, "policy"),
+             (lambda: doc.write_text("Traceback"), t + 3 * m.POLICY_EVERY_S, 2, "JSONDecodeError", "last-policy"),
+             (lambda: keys(max=3, borrow_until="tomorrow"), t + 4 * m.POLICY_EVERY_S, 2, "borrow-until 'tomorrow'", "last-policy"),
+             (lambda: keys(("provers", "circuits"), max=3), t + 5 * m.POLICY_EVERY_S, 2, "two keys give max", "last-policy")]
+    for change, at, want, error, source in steps:
         change()
         calls.clear()
         events = [e for e in c.tick(at)["events"] if e["ev"] == "policy"]
         assert len([a for a, _ in calls if a[0] == "create"]) == want, (at - t, want)
         if error:
-            assert len(events) == 1 and error in events[0]["error"] and events[0]["limits"]["max"] == 1
-        assert (tmp_path / "gl" / "n1-lease.limits").read_text() == \
-            f"max={want} borrow=0 borrow-until= from={'environment' if error else 'policy'}\n"
+            assert len(events) == 1 and error in events[0]["error"] and \
+                (events[0]["limits"]["max"], events[0]["fallback"]) == (want, source)
+        assert (tmp_path / "gl" / "n1-lease.limits").read_text() == f"max={want} borrow=0 borrow-until= from={source}\n"
     os.close(fd)
 
 
