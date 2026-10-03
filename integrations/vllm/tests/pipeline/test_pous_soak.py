@@ -671,7 +671,11 @@ def test_a_stub_server_answers_a_remote_verifier_and_reports_the_network_term(fa
     assert line["wrong"] == 0 and line["runs"] == 9 and v["blocks"]["equal"] and v["offset"]["empty"] == 0
     with np.load(job / line["chunk"]) as z:
         meta = json.loads(str(z["meta_json"]))
+        read = z["rec"][:, S.COL["op"]] == S.OP_READ
+        read_cells = {str(int(c)) for c in np.unique(z["rec_cell"][read])}
     assert meta["transport"] == "loopback (test)" and meta["ready"]["stub"]
     assert meta["transport_probe_open"]["stdout"] == "probed\n" == meta["transport_probe_close"]["stdout"]
     net = v["network"]
-    assert net["negative"] == 0 and len(net["cells"]) == 9 and all("reads" in c for c in net["cells"].values())
+    # a 0.3 s cell at 10/s draws no read about one time in 15: every cell that answered a read has its term
+    assert net["negative"] == 0 and len(read_cells) >= 6
+    assert {k for k, c in net["cells"].items() if "reads" in c} == read_cells
