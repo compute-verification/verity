@@ -12,6 +12,7 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import sqlite3
@@ -692,6 +693,32 @@ def test_launch_refuses_to_spend_without_yes_and_a_lease():
     assert r.returncode == 1 and "NEBIUS_SA_ID is not set" in r.stderr
 
 
+def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_still_takes_the_multi_line_secret(tmp_path):
+    fake = tmp_path / "nebius"
+    fake.write_text('#!/bin/bash\nwhile [ $# -gt 0 ]; do [ "$1" = --private-key-file-path ] && cp "$2" "$OUT"; shift; done\n')
+    fake.chmod(0o755)
+    body = "dummy line one\ndummy line two\n"
+
+    def auth(**env: str) -> tuple[subprocess.CompletedProcess, str]:
+        out = tmp_path / "key.out"
+        out.unlink(missing_ok=True)
+        r = subprocess.run(["bash", "-c", f". {NEBIUS / 'common.sh'}; nebius_auth"], capture_output=True, text=True,
+                           env={"PATH": os.environ["PATH"], "NEBIUS_BIN": str(fake), "OUT": str(out), "XDG_RUNTIME_DIR": str(tmp_path),
+                                "NEBIUS_SA_ID": "sa-dummy", "NEBIUS_SA_PUBLIC_KEY_ID": "pk-dummy", **env})
+        return r, out.read_text() if out.exists() else ""
+
+    r, key = auth(NEBIUS_SA_PRIVATE_KEY_B64=base64.b64encode(body.encode()).decode())
+    assert r.returncode == 0 and key == body and r.stdout == r.stderr == ""
+    r, key = auth(NEBIUS_SA_PRIVATE_KEY=body.rstrip("\n"))
+    assert r.returncode == 0 and key == body
+    r, _ = auth(NEBIUS_SA_PRIVATE_KEY_B64="not base64!")
+    assert r.returncode == 1 and "NEBIUS_SA_PRIVATE_KEY_B64 is not base64" in r.stderr
+    r, _ = auth()
+    assert r.returncode == 1 and "NEBIUS_SA_PRIVATE_KEY_B64 is not set" in r.stderr
+    r, _ = auth(CLOUD_AGENT_INJECTED_SECRET_NAMES="NEBIUS_SA_ID,NEBIUS_SA_PRIVATE_KEY_B64")    # injected, but lost from this shell
+    assert r.returncode == 1 and "the Nebius key is not in this shell though this VM injects it" in r.stderr
+
+
 # ---- the weight list -----------------------------------------------------------------------------------------------------------------------
 
 def test_the_weight_list_pins_the_integrations_revisions():
@@ -813,10 +840,19 @@ def test_fill_runner_lets_a_verity_cpu_job_run_a_whole_build_and_freezes_its_sco
                        ("gpus=1 max_min=300 project=verity", 30), ("gpus=0 max_min=300 project=pous", 30)):
         job.write_text(f"#!/usr/bin/env bash\n# fill: owner=t {head}\n")
         assert fr.header(job)["max_min"] == want, head
-    monkeypatch.setattr(fr, "MAX_MIN_EXCEPTIONS", {"gate.sh": 60})
-    gate = tmp_path / "gate.sh"
-    gate.write_text("# fill: owner=t gpus=1 max_min=90 project=verity\n")
-    assert fr.header(gate)["max_min"] == 60
+    (tmp_path / "fill").mkdir()
+    (tmp_path / "fill" / "max-min").write_text("# glob minutes until\nsoak-* 540 2026-10-02T14:45Z  # infra, thread 1\n"
+                                               "gate.sh 60 2026-10-02T14:45Z\nbroken.sh sixty 2026-10-02T14:45Z\n")
+    gate, soak, other = tmp_path / "gate.sh", tmp_path / "soak-a.sh", tmp_path / "broken.sh"
+    for p in (gate, soak, other):
+        p.write_text("# fill: owner=t gpus=1 max_min=900 project=pous\n")
+    at = datetime.datetime(2026, 10, 2, 6, 30, tzinfo=datetime.timezone.utc).timestamp()
+    assert fr.header(gate, at)["max_min"] == 60
+    assert fr.header(soak, at)["max_min"] == 495                        # never past the line's until: 06:30 + 495 min = 14:45
+    assert fr.header(other, at)["max_min"] == 30                        # a malformed line grants nothing
+    late = datetime.datetime(2026, 10, 2, 14, 44, 30, tzinfo=datetime.timezone.utc).timestamp()
+    assert fr.header(soak, late)["max_min"] == 30                       # under a minute left: the exception is over
+    assert fr.header(soak, late + 3600)["max_min"] == 30
     calls = []
     monkeypatch.setattr(fr.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0))
     assert fr.scope({"unit": "fill-verity-1"}, "freeze") and calls == [["systemctl", "--user", "freeze", "fill-verity-1.scope"]]
@@ -1237,6 +1273,80 @@ def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
+def test_n2_commit_keeps_a_row_whose_plans_are_keyed_to_other_code_on_node_1(tmp_path):
+    """cov-gm176's Build wrote its plans from a job tree that the 14:17Z redeploy (2 Oct) replaced. Node 2's Commit ran from the new
+    tree, found the plans' code key differing and derived both with GPU 6 held: two 25-min leases at 0%. submit refuses such a row
+    before it touches node 2, so node 1's leased Commit derives the plans before it takes a GPU. The job tree is a stand-in whose
+    source_identity hashes one file (integrations/vllm's own tests cover code_identity)."""
+    row_name = "gemma2-9b__bf16__rtxpro6000__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
+    tree, row, bin_, log = tmp_path / "tree", tmp_path / "sweep" / row_name, tmp_path / "bin", tmp_path / "ssh.log"
+    pipeline = tree / "integrations" / "vllm" / "verity_vllm" / "pipeline"
+    for d in (pipeline, row / "plan", bin_):
+        d.mkdir(parents=True)
+    (pipeline.parent / "__init__.py").write_text("")
+    (pipeline / "__init__.py").write_text("")
+    (pipeline / "source_identity.py").write_text(
+        "import hashlib, pathlib\nTREE = pathlib.Path(__file__).resolve().parents[4]\n"
+        "def code_identity(root):\n    return {'sha256': hashlib.sha256((pathlib.Path(root) / 'code').read_bytes()).hexdigest()}\n")
+    (tree / "code").write_text("after the redeploy")
+    new, old = hashlib.sha256(b"after the redeploy").hexdigest(), hashlib.sha256(b"before it").hexdigest()
+    (bin_ / "ssh").write_text(f'#!/bin/sh\necho "$*" >> {log}\nexit 1\n')
+    (bin_ / "ssh").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "VY_JOB_PY": sys.executable, "VY_N1": "n1.invalid",
+           "VY_N2": "n2.invalid", "VY_N2_SRC": str(tree)}
+
+    def plans(commit: str | None, boundary: str | None) -> None:
+        for name, code in (("plan/commit_plan.json", commit), ("call_boundary_plan.json", boundary)):
+            (row / name).unlink(missing_ok=True)
+            if code is not None:
+                (row / name).write_text(json.dumps({"schema": "s", "key": {"program_digest": "d", "code": code}}))
+
+    def keyed(t: Path = tree) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(NEBIUS / "n2_commit.sh"), "plan-keyed", str(t), str(row)], capture_output=True, text=True,
+                              env=env)
+
+    assert keyed().returncode == 0
+    plans(new, new)
+    assert keyed().returncode == 0
+    plans(new, old)
+    r = keyed()
+    assert r.returncode == 1 and r.stderr.strip() == f"call_boundary_plan.json is keyed to code {old[:16]}, the Commit's job tree is {new[:16]}"
+    plans(old, new)
+    assert "plan/commit_plan.json is keyed to code" in keyed().stderr
+    plans(None, None)
+    (row / "plan" / "commit_plan.json").write_text("not json")
+    r = keyed()
+    assert r.returncode == 1 and "plan/commit_plan.json is unreadable" in r.stderr
+    (tmp_path / "empty").mkdir()
+    r = keyed(tmp_path / "empty")
+    assert r.returncode == 1 and r.stderr.startswith("source_identity came from ") and r.stderr.strip().endswith("/empty"), r.stderr
+    (tree / "code").unlink()
+    r = keyed()
+    assert r.returncode == 1 and "the job tree's code identity isn't computable (FileNotFoundError" in r.stderr, r.stderr
+    (tree / "code").write_text("after the redeploy")
+
+    item = tmp_path / "item.json"
+    item.write_text(json.dumps({"template": "config-run", "tree": "/t", "env": {
+        "ROW": row_name, "ROLE": "GEMMA2_9B", "REPO": "unsloth/gemma-2-9b", "REVISION": "9145841c", "SWEEP_DIR": str(row.parent)}}))
+    (row / "manifest.json").write_text("{}")
+    (row / "two-task-build-run").write_text("r20261002-120300-0000")
+
+    def submit() -> subprocess.CompletedProcess:
+        log.write_text("")
+        return subprocess.run(["bash", str(NEBIUS / "n2_commit.sh"), "submit", "vllm-epoch-run-cov-gm176", str(item)],
+                              capture_output=True, text=True, env=env)
+
+    plans(old, old)
+    r = submit()
+    assert r.returncode == 3 and "plan/commit_plan.json is keyed to code" in r.stderr and "not queued" in r.stderr, r.stderr
+    assert log.read_text() == ""
+    plans(new, new)
+    r = submit()
+    assert r.returncode == 3 and "isn't staged on node 2" in r.stderr, r.stderr
+    assert log.read_text().startswith("-n n2.invalid ")
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
 def test_n2_commit_marks_a_commit_it_hands_back_so_offload_never_moves_it_to_node_2_again(tmp_path):
     """cov-cg04-norm-taps-2 went from node 1 to node 2 seven times (22:30-23:06Z, 1 Oct): node 2 handed it back after two stops,
     and node 1's offload moved it again 120 s later. A Commit handed back (task 1) goes into node 1's reclaimed.txt, which offload
@@ -1262,6 +1372,28 @@ def test_n2_commit_marks_a_commit_it_hands_back_so_offload_never_moves_it_to_nod
     [replay] = hand_back(2)
     assert "--task 2" in replay
     assert hand_back(1, proof="1") == []
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
+def test_a_commit_that_goes_back_to_node_1_keeps_its_lease_and_pinned_template(tmp_path):
+    """A `lease: self` Commit that comes back from node 2 without its lease runs as a whole-GPU pod and holds the GPU through its CPU
+    prep. Both ways back (dispatch_n1 after a stop or failure, reclaim after a long wait) take their `dispatch.py submit` flags from
+    submit_args, which keeps every item field that submit takes."""
+    text = (NEBIUS / "n2_commit.sh").read_text()
+    body = lambda name: re.search(rf"^{name}\(\) \{{.*?^\}}\n", text, re.M | re.S).group(0)
+    item = tmp_path / "item.json"
+    item.write_text(json.dumps({"tree": "/t", "lease": "self", "template_sha": "87e09228d7e0", "priority": "circuits-gpu",
+                                "resources": {"gpu": {"gpus": 1}}, "env": {"ROW": "gemma2-9b__bf16", "REPLAY_DEFERRED": "1"},
+                                "n2": {"commit_key": "vllm-epoch-run/cov-gm148-r2"}}))
+    out = subprocess.run(["bash", "-c", f"set -euo pipefail\n{body('submit_args')}\nsubmit_args {item}"], check=True, capture_output=True,
+                         text=True).stdout
+    words = shlex.split(out)
+    pairs = dict(zip(words[::2], words[1::2]))
+    assert pairs["--lease"] == "self" and pairs["--template-sha"] == "87e09228d7e0" and pairs["--priority"] == "circuits-gpu"
+    assert json.loads(pairs["--resources"]) == {"gpu": {"gpus": 1}}
+    assert [w for w in words if w.startswith("ROW=") or w.startswith("REPLAY_DEFERRED=")] == ["ROW=gemma2-9b__bf16", "REPLAY_DEFERRED=1"]
+    assert 'ITEM_ARGS=($(submit_args "$1"))' in body("load_item") and 'args=($(submit_args "$item"))' in body("reclaim")
+    assert "--priority" not in body("load_item") + body("reclaim"), "one list of the item's flags, in submit_args"
 
 
 def test_publish_pool_merges_node_1s_own_file_only_while_it_is_fresh():
@@ -1427,6 +1559,34 @@ def test_gpu_stray_allows_device_plugin_and_leased_gpus_and_blocks_the_pool_of_a
     monkeypatch.setattr(m, "compute_apps", lambda: [(10, "GPU-a"), (11, "GPU-b")])
     (pool / "blocked").unlink()
     assert m.check(1_800_000_060.0) == [] and not (pool / "blocked").exists()
+
+
+def test_gpu_stray_judges_only_a_process_listed_before_and_after_the_leases_are_read(monkeypatch, tmp_path):
+    """Node 1, 06:58Z Oct 2: a leased engine was still listed while its context reset, and its lease ended before the locks were
+    read, so the probe blocked its pool. A second listing after the locks drops it."""
+    spec = importlib.util.spec_from_file_location("gpu_stray_under_test", NEBIUS / "gpu_stray.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    pool = tmp_path / "gpu-lease"
+    pool.mkdir()
+    monkeypatch.setattr(m, "POOL_DIRS", [pool])
+    monkeypatch.setattr(m, "LOG", tmp_path / "stray.jsonl")
+    # 20 released its lease on GPU 0 between the listings; 21 holds GPU 1 with no lease all along; 22 started after the first
+    listings = iter([[(20, "GPU-a"), (21, "GPU-b")], [(21, "GPU-b"), (22, "GPU-c")]])
+    monkeypatch.setattr(m, "compute_apps", lambda: next(listings))
+    monkeypatch.setattr(m, "gpu_table", lambda: {"GPU-a": (0, 0), "GPU-b": (1, 1), "GPU-c": (2, 2)})
+    monkeypatch.setattr(m, "leases", lambda: {})
+    monkeypatch.setattr(m, "dev_minors", lambda pid: set(range(8)))
+    monkeypatch.setattr(m, "pod_uid_of", lambda pid: "u")
+    monkeypatch.setattr(m, "ancestors", lambda pid: {pid})
+    monkeypatch.setattr(m, "environ", lambda pid: {})
+    monkeypatch.setattr(m, "alive", lambda pid: True)
+    monkeypatch.setattr(m, "cmdline", lambda pid: f"python w{pid}.py")
+    monkeypatch.setattr(m, "pods_by_uid", lambda: {"u": {"metadata": {"uid": "u", "namespace": "default", "name": "nd-x"},
+                                                         "spec": {"containers": [{}],
+                                                                  "volumes": [{"name": "gpu-lease", "hostPath": {"path": str(pool)}}]}}})
+    assert [(s["pid"], s["gpu"]) for s in m.check(1_800_000_000.0)] == [(21, 1)]
+    assert "pid 21 (default/nd-x) ran on GPU 1 without a lease" in (pool / "blocked").read_text()
 
 
 @needs_flock

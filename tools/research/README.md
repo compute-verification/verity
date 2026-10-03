@@ -196,6 +196,16 @@ needs no credentials), `teardown.sh` stops or deletes it, `check.py` is its boot
 cache from `weights.tsv`, and its lease is `sh/lease.sh` with `LEASE_MACHINE_ID` and a stop command in place of RunPod's key.
 Its runs share its GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: one flock per GPU, `CUDA_VISIBLE_DEVICES` set).
 
+What runs on the Nebius nodes outside a run (infra's loops, timers and services, and the files they read) is listed in
+`pods/nebius/deploy.toml`, each with the repository file it comes from, and goes there only through `research deploy install
+NODE --by WHO [PATH ...]` from a commit an origin branch holds (`main`, or a PR's head for a hotfix that can't wait for its
+train). `research deploy drift` reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
+`missing`), every process still running a file installed after it started (`restart`), and every file in a managed directory
+that no entry lists (`stray`); the hourly preflight probe posts its findings whenever they change (`research/deploy.py`). A new
+loop or script goes into the repository and the manifest before it runs; a backup of a replaced file is
+`.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ...
+--by WHO` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
+
 An unlisted or foreign machine is refused before anything is contacted. The
 tool ships as a content-addressed source snapshot under `<root>/tool/` and
 runs via `PYTHONPATH`; no pip, no credentials on the machine. The machine
