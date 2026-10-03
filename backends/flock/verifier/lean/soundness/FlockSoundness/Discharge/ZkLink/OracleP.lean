@@ -62,12 +62,63 @@ theorem value_repZP_le {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F →
   refine iSup_le fun O => le_iSup_of_le (padWords O) ?_
   exact value_bind_mono phase fun o => value_innerGameP_le dom s nP q pos o.1 tr _ _ _ p
 
+/-! ## Reordered rows -/
+
+/-- The batch's rows reordered by `π`, its last three (the triple's) kept. -/
+def appendPerm {nA : ℕ} (π : Equiv.Perm (Fin nA)) : Equiv.Perm (Fin (nA + 3)) :=
+  finSumFinEquiv.symm.trans ((Equiv.sumCongr π (Equiv.refl _)).trans finSumFinEquiv)
+
+omit [Field F] [Fintype F] [DecidableEq F] in
+theorem append_comp_perm {s nA : ℕ} (π : Equiv.Perm (Fin nA)) (rows : Fin nA → Lin F s) (T : Fin 3 → Lin F s) :
+    Fin.append (rows ∘ π) T = Fin.append rows T ∘ appendPerm π := by
+  funext i
+  refine Fin.addCases (fun i => ?_) (fun i => ?_) i <;> simp [appendPerm, Fin.append_left, Fin.append_right]
+
+omit [Fintype F] [DecidableEq F] in
+theorem innerCheck_perm {N : ℕ} (dom : Fin N ↪ F) {s nP q : ℕ} (pos : F → Fin N) {nA : ℕ} (π : Equiv.Perm (Fin nA))
+    (rows : Fin nA → Lin F s) (tr : Triple s) (Ch Cμ : Fin N → F) (ε : F) (ρσ : F × F) (γ : Fin (nA + 3) → F)
+    (τ β : F) (y : Fin (s + nP) → F) (w : Fin q → F) :
+    innerCheck dom pos (rows ∘ π) tr Ch Cμ ε ρσ γ τ β y w ↔
+      innerCheck dom pos rows tr Ch Cμ ε ρσ (γ ∘ (appendPerm π).symm) τ β y w := by
+  have hc : ∀ (R : Fin (nA + 3) → Lin F s) i,
+      batchCoef γ (R ∘ appendPerm π) i = batchCoef (γ ∘ (appendPerm π).symm) R i := fun R i => by
+    simp only [batchCoef, Function.comp]
+    exact Fintype.sum_equiv (appendPerm π) _ _ fun k => by simp
+  have ht : ∀ R : Fin (nA + 3) → Lin F s,
+      batchT γ (R ∘ appendPerm π) = batchT (γ ∘ (appendPerm π).symm) R := fun R => by
+    simp only [batchT, Function.comp]
+    exact congrArg Neg.neg (Fintype.sum_equiv (appendPerm π) _ _ fun k => by simp)
+  simp only [innerCheck, append_comp_perm, hc, ht]
+
+/-- **The inner proof does not see its rows' order**: `γ` is uniform, so reordering the rows reorders its coefficients. -/
+theorem value_innerGameP_perm {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F → Fin N) {nA : ℕ}
+    (π : Equiv.Perm (Fin nA)) (rows : Fin nA → Lin F s) (tr : Triple s) (Ch Cμ : Fin N → F) {γ' : Type}
+    (k : Bool → Game γ') (p : γ' → Prop) :
+    value p ((innerGameP dom s nP q pos (rows ∘ π) tr Ch Cμ).bind k) =
+      value p ((innerGameP dom s nP q pos rows tr Ch Cμ).bind k) := by
+  simp only [innerGameP, bind_eq, pure_eq, draw, recv, bind_coin, bind_send, bind_ret, value_coin, value_send]
+  refine Finset.sum_congr rfl fun ε _ => congrArg (_ * ·) (iSup_congr fun ρσ =>
+    Fintype.sum_equiv (Equiv.arrowCongr (appendPerm π) (Equiv.refl F)) _ _ fun γ => ?_)
+  simp only [innerCheck_perm]
+  rfl
+
+/-- **The primed rep does not see its rows' order.** -/
+theorem value_repZP_perm {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F → Fin N) {nA : ℕ} (tr : Triple s)
+    (π : Equiv.Perm (Fin nA)) (phase : Game ((Fin nA → Lin F s) × Bool)) (p : Bool → Prop) :
+    value p (repZP dom s nP q pos tr (phase.map fun o => (o.1 ∘ π, o.2))) = value p (repZP dom s nP q pos tr phase) := by
+  simp only [repZP, map, bind_eq, pure_eq, recv, bind_send, bind_assoc, bind_ret, value_send]
+  refine iSup_congr fun O => ?_
+  exact le_antisymm (value_bind_mono phase fun o => (value_innerGameP_perm dom s nP q pos π o.1 tr _ _ _ p).le)
+    (value_bind_mono phase fun o => (value_innerGameP_perm dom s nP q pos π o.1 tr _ _ _ p).ge)
+
 /-! ## The primed table -/
 
-/-- **Rep `r` of the primed table** (`repZP` over the masked rep). -/
+/-- **Rep `r` of the primed table** (`repZP` over the masked rep, its rows in flock-verify's order, as
+`repMaskedZC`'s). -/
 noncomputable def repZPAt (A : Arith F K) (T : TabZK F mPts) (C₀ : Oracle F) (r : ℕ)
     (extra : List (Claim F T.S.m)) : Game Bool :=
-  repZP T.dom T.np T.nP T.q T.pos T.tr (repMaskedZK A T.pads T.padsA T.tr T.S T.sch T.hm T.t T.c₀ r C₀ extra)
+  repZP T.dom T.np T.nP T.q T.pos T.tr
+    ((repMaskedZK A T.pads T.padsA T.tr T.S T.sch T.hm T.t T.c₀ r C₀ extra).map fun o => (o.1 ∘ rowOrder, o.2))
 
 /-- **The primed table after its link points**, with the dummy last message (the compiled table's openings). -/
 noncomputable def tabOrcP (A : Arith F K) (T : TabZK F mPts) (C₀ : Oracle F) (pts : Fin 2 → Fin mPts → F) :
@@ -104,7 +155,8 @@ theorem tabOrcP_sound [Inhabited D] [Inhabited Sl] (A : Arith F K) (hA : A.Corre
       (link_sound_pad A hA T.S T.sch T.t T.hpad T.c₀ T.ptLocal mPts C₀ hC T.hlay) fun pts hpts => ?_).trans ?_
     · rw [not_not] at hpts
       rw [value_bind_dummy]
-      have hrep := fun r => (value_repZP_le T.dom T.np T.nP T.q T.pos T.tr _ (· = true)).trans
+      have hrep := fun r => (value_repZP_perm T.dom T.np T.nP T.q T.pos T.tr rowOrder _ (· = true)).le.trans <|
+        (value_repZP_le T.dom T.np T.nP T.q T.pos T.tr _ (· = true)).trans
         (rep_sound_pad_zk A hA T.S T.sch T.hshape T.hmsch T.hm T.t T.hpad T.c₀ T.e r mPts C₀ _
           (extraClaims_length T.S T.ptLocal mPts pts) hpts T.pads T.padsA T.tr T.dom T.nP T.q T.pos T.hpos T.δ T.hL
           T.hδ)

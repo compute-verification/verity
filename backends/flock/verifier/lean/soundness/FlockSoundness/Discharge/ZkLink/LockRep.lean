@@ -143,12 +143,16 @@ noncomputable def lockRestZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} 
           (lockLigPadZ A r hr P₀ t c₀ op.T op.b C₀ sch))
     (Lock.same _)
 
-/-- **A masked rep in lockstep** (`repMaskedZK` beside `repMaskedZC`). -/
+/-- **A masked rep in lockstep** (`repMaskedZK`, its rows in flock-verify's order, beside `repMaskedZC`). -/
 noncomputable def lockMaskedZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
     (tr : Triple np) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) :
     Lock (Oracle F) (Cap D) (getRep r) (MRelZ r C₀ (2 ^ sch.k0 + 2 * e) sch) (fun _ => none)
-      (repMaskedZK A P₀ PA tr S sch hm t c₀ r C₀ extra) (repMaskedZC (D := D) A P₀ PA tr S sch hm t c₀ r extra) :=
+      ((repMaskedZK A P₀ PA tr S sch hm t c₀ r C₀ extra).map fun o => (o.1 ∘ rowOrder, o.2))
+      (repMaskedZC (D := D) A P₀ PA tr S sch hm t c₀ r extra) :=
+  Lock.map (R₂ := MRelZ r C₀ (2 ^ sch.k0 + 2 * e) sch) (fun o => (o.1 ∘ rowOrder, o.2))
+    (fun o => (o.1 ∘ ![3, 0, 1, 2, 4, 5, 6], o.2))
+    (fun _ a b (h : MRelZ r C₀ (2 ^ sch.k0 + 2 * e) sch _ a b) => ⟨by rw [h.1]; rfl, h.2⟩) <|
   Lock.bind (R := fun i' (o o' : ZcZK F np S.m × LinF F np) => i' = (fun _ => none : IRep F D) ∧ o = o')
     (fun i' o o' h => by
       obtain ⟨rfl, rfl⟩ := h
@@ -336,7 +340,7 @@ theorem aligned_lockMaskedZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} 
     (extra : List (Claim F S.m)) :
     Lock.Aligned (lockMaskedZ (D := D) A r hr P₀ PA tr S sch hm t c₀ C₁ extra)
       (lockMaskedZ (D := D) A r hr P₀ PA tr S sch hm t c₀ C₂ extra) := by
-  refine Lock.Aligned.bind ?_ (Lock.Aligned.same _)
+  refine Lock.Aligned.map (Lock.Aligned.bind ?_ (Lock.Aligned.same _))
   intro i₁ a₁ i₂ a₂ b r₁ r₂
   obtain ⟨hi₁, ha₁⟩ := r₁
   obtain ⟨hi₂, ha₂⟩ := r₂

@@ -124,13 +124,23 @@ noncomputable def restZC (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : 
       pure (![(ab.value + cF o.2.1).toLin, (zc.vc + mskF PA.fc fc).toLin, (mskF PA.fc fc + cF o.2.2).toLin,
         limbRows A lv.1 0, limbRows A lv.1 1], lv.2)
 
-/-- **A masked rep, compiled** (`repMaskedZK` with `restZC`): its seven rows and its pending Ligerito verdict. -/
+/-- **flock-verify's order of a masked rep's level-0 rows**: `c_eval` (row `3` of `repMaskedZK`'s) first, then `a·b`,
+the lincheck final and `rs ab`, the rest kept. -/
+def rowOrder : Equiv.Perm (Fin 7) where
+  toFun := ![3, 0, 1, 2, 4, 5, 6]
+  invFun := ![1, 2, 3, 0, 4, 5, 6]
+  left_inv := by decide
+  right_inv := by decide
+
+/-- **A masked rep, compiled** (`repMaskedZK` with `restZC`): its seven rows, in flock-verify's batching order (`c_eval`
+first, then `a·b`, the lincheck final and `rs ab`), and its pending Ligerito verdict. -/
 noncomputable def repMaskedZC (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np) (tr : Triple np)
     (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (extra : List (Claim F S.m)) :
     Game ((Fin 7 → Lin F np) × PendL F D) :=
-  (zerocheckZK A S.m PA tr).bind fun o =>
+  ((zerocheckZK A S.m PA tr).bind fun o =>
     ((lincheckZK A S PA o.1).bind fun o' =>
-      (restZC (D := D) A P₀ PA S sch hm t c₀ r extra o.1 o'.1).map (consRowC o'.2.toLin)).map (consRowC o.2.toLin)
+      (restZC (D := D) A P₀ PA S sch hm t c₀ r extra o.1 o'.1).map (consRowC o'.2.toLin)).map (consRowC o.2.toLin)).map
+    fun o => (o.1 ∘ ![3, 0, 1, 2, 4, 5, 6], o.2)
 
 /-! ## The inner proof, compiled -/
 
