@@ -68,6 +68,25 @@ theorem mem_partS {I : Inputs} {d : Lean.Json} {S : Finset (Fin n)} {u : Fin n} 
     u ∈ partS I d S (partOf I d u.val) :=
   Finset.mem_filter.2 ⟨h, rfl⟩
 
+/-! ## Table `j`'s tags: the identity alone differs, which the circuit and public parses do not read -/
+
+theorem parse_identity (tags : Tags) (x : Lean.Json) (b : ByteArray) (t : List (String × ByteArray)) :
+    HmRow.parse { tags with identity := x } b t = HmRow.parse tags b t := by
+  have hc : ∀ c l, HmRow.check c { tags with identity := x } l = HmRow.check c tags l := fun _ _ => rfl
+  simp only [HmRow.parse, hc]
+
+theorem parse_tagsAt (tags : Tags) (count j : ℕ) (b : ByteArray) (t : List (String × ByteArray)) :
+    HmRow.parse (tagsAt tags count j) b t = HmRow.parse tags b t := by
+  unfold tagsAt
+  split_ifs
+  · rfl
+  · exact parse_identity _ _ _ _
+
+theorem loadPublic_tagsAt (tags : Tags) (count j : ℕ) (c : Flock.Circuit) (b : ByteArray) :
+    HmRow.loadPublic (tagsAt tags count j) c b = HmRow.loadPublic tags c b := by
+  unfold tagsAt
+  split_ifs <;> rfl
+
 /-- **A table `verify --zk` sets up**, on table `j`'s inputs `I'` (`inputsJ I j`): `DrawSetupZK`'s fields at a
 `DrawSetup` of `I'`. -/
 structure DrawSetupZJ (I' : Inputs) (mPts : ℕ) (S : Finset (Fin n)) (d : Lean.Json) where
@@ -235,7 +254,14 @@ include hc in
 theorem sitesShJ_parse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
     HmRow.parse ((sitesShJ dj y₀ ht).acc S R u h).tags ((sitesShJ dj y₀ ht).acc S R u h).cf
       ((sitesShJ dj y₀ ht).acc S R u h).tables = .ok c := by
-  sorry
+  intro S R u h
+  show HmRow.parse (tableShJ dj y₀ ht S (partOf I (dj S) u.val)).acc.tags
+    (tableShJ dj y₀ ht S (partOf I (dj S) u.val)).acc.cf (tableShJ dj y₀ ht S (partOf I (dj S) u.val)).acc.tables = .ok c
+  unfold tableShJ
+  by_cases hS : Nonempty (DrawSetupZJ (inputsJ I (partOf I (dj S) u.val)) mPts (partS I (dj S) S (partOf I (dj S) u.val))
+    (drawJ I (dj S) (partOf I (dj S) u.val)))
+  · rw [dite_eq_left_of_eq_true (eq_true hS)]; exact (parse_tagsAt _ _ _ _ _).trans hc
+  · rw [dite_eq_right_of_eq_false (eq_false hS)]; exact hc
 
 include hc in
 theorem sitesZJ_parse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
@@ -252,7 +278,17 @@ theorem decAgreeJ : DecAgree (P := (keyProg c hU n).partition (Layout.outsOf c h
       ((sitesZJ dj y₀ ht).placeKey hU (sitesZJ_parse dj y₀ ht hc) (Layout.outsOf c hU n)))
     (decS := ((keyProg c hU n).partition (Layout.outsOf c hU n)).placeDecoder (planShJ dj y₀ ht) (tabShJ dj y₀ ht)
       (Layout.keyPlace (sitesShJ_parse dj y₀ ht hc) (Layout.outsOf c hU n))) := by
-  sorry
+  intro S R u hu M' M hM hM' g hg
+  simp only [decodeOfPlace, Partition.placeDecoder, hu, ↓reduceDIte, UnitPlace.decode]
+  congr 1
+  funext x
+  congr 1
+  have hM2 : witnessOf execArith (Partition.tabOf (planShJ dj y₀ ht) (tabShJ dj y₀ ht) S R u).S.m
+      (Partition.tabOf (planShJ dj y₀ ht) (tabShJ dj y₀ ht) S R u).sch.k0
+      (Partition.tabOf (planShJ dj y₀ ht) (tabShJ dj y₀ ht) S R u).sch.level₀.logCols M =
+      witOf (planZJ_S dj y₀ ht S R u) (witZ execArith (planZJ dj y₀) (tabZJ dj y₀) S R u M') := hM
+  rw [hM2]
+  exact block_witOf _ _ _ _ _ _ rfl rfl
 
 /-- **`lay` at `J` tables**: e2e-layout's `keyedLayout` at the public sites, moved to the `--zk` tables. -/
 noncomputable abbrev layZJ :
@@ -263,6 +299,12 @@ noncomputable abbrev layZJ :
     (Layout.keyedLayout (sitesShJ_parse dj y₀ ht hc) (Layout.outsOf c hU n) Hm.saltCol fun _ => pub)
     (decAgreeJ dj y₀ ht hc hU)
 
+omit ht in
+theorem bcSite_recast {T T' : Model.Statement} (a : Placed.Accepted T) (e : T = T') (pop : Public)
+    (o : Fin (2 ^ T.nbl)) (h' : 2 ^ T.nbl = 2 ^ T'.nbl) (g u : ℕ) (hs : Layout.BcSite a pop o g u) :
+    Layout.BcSite (recastAcc a e) pop (Fin.cast h' o) g u :=
+  hs
+
 include hc hU hpub hpt hscope in
 /-- **`BcSite` at every satisfiable public site** at `J` tables (`sitesSh_bcSite`): at a table `verify --zk` sets up by
 `table_bcSite` at table `j`'s inputs; at a refused one no message satisfies the table. -/
@@ -272,7 +314,25 @@ theorem sitesShJ_bcSite :
       Binding.Sat (planShJ dj y₀ ht) (tabShJ dj y₀ ht) S R u M →
         Layout.BcSite ((sitesShJ dj y₀ ht).acc S R u h) pub ((sitesShJ dj y₀ ht).o S R u h)
           ((sitesShJ dj y₀ ht).vu S R u h) u.val := by
-  sorry
+  intro S R u h M hM
+  refine bcSite_recast _ (congrArg TabSpec.S (tabOfShJ_eq dj y₀ ht S R u)).symm _ _
+    (congrArg (fun T : TabSpec mPts => 2 ^ T.S.nbl) (tabOfShJ_eq dj y₀ ht S R u)).symm _ _ ?_
+  show Layout.BcSite (tableShJ dj y₀ ht S (partOf I (dj S) u.val)).acc pub
+    ((tableShJ dj y₀ ht S (partOf I (dj S) u.val)).o u (mem_partS h))
+    ((tableShJ dj y₀ ht S (partOf I (dj S) u.val)).vu u (mem_partS h)) u.val
+  by_cases hS : Nonempty (DrawSetupZJ (inputsJ I (partOf I (dj S) u.val)) mPts (partS I (dj S) S (partOf I (dj S) u.val))
+    (drawJ I (dj S) (partOf I (dj S) u.val)))
+  · have e : tableShJ dj y₀ ht S (partOf I (dj S) u.val) = (Classical.choice hS).x.table (typedJ ht _) := by
+      unfold tableShJ; rw [dite_eq_left_of_eq_true (eq_true hS)]
+    rw [e]
+    exact table_bcSite (typedJ ht _) (fun _ => drawJ I (dj S) (partOf I (dj S) u.val))
+      ((parse_tagsAt _ _ _ _ _).trans hc) (Layout.scopeOk_spec hU hscope).2.1 ((loadPublic_tagsAt _ _ _ _ _).trans hpub)
+      hpt (Classical.choice hS).x (mem_partS h)
+  · have e : tableShJ dj y₀ ht S (partOf I (dj S) u.val) = y₀.x.refused (zkTyped ht) _ := by
+      unfold tableShJ; rw [dite_eq_right_of_eq_false (eq_false hS)]
+    have hns : ∀ z, ¬ (Partition.tabOf (planShJ (Reg := Reg) dj y₀ ht) (tabShJ dj y₀ ht) S R u).S.Satisfies z := by
+      rw [tabOfShJ_eq, e]; exact y₀.x.refused_unsat (zkTyped ht) _
+    exact absurd hM (hns _)
 
 /-- **`rs` at `J` tables**: e2e-layout's `keyedRowsOuts` at the public sites, moved to the `--zk` tables. -/
 noncomputable abbrev rsZJ : HmRowsZ (layZJ (Reg := Reg) dj y₀ ht hc hU (pub := pub)) :=
