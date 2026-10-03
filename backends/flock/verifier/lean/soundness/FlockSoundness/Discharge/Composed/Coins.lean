@@ -135,14 +135,14 @@ theorem wr_bijective {W Hi VL : Type} {z : Sizes} (T : Coined GF256 W Hi VL z) (
 
 /-- **The coin facts from `Admits`**: at a coin vector the honest prover doesn't refuse, a table that reads its coins
 passes the rank check, has each `W^r` bijective and each `β ≠ 0`. -/
-theorem coin_facts (C : CoinedSetup) (c : CoinsZK C.z.nC C.Rest) (hc : C.Admits c)
+theorem coin_facts (C : CoinedSetup) (c : CoinsZK C.Rest) (hc : C.Admits c)
     (hβ : ∀ r, (C.T c).β r = fOf (c.beta r))
     (hρ : ∀ r, (C.T c).ρ r 0 = GF256.of (c.rho r).1 ∧ (C.T c).ρ r 1 = GF256.of (c.rho r).2)
-    (hw : ∀ k x, (C.T c).eqw k x = fOf (eqWord (c.points k) (C.maskWords x)))
+    (hw : ∀ k x, (C.T c).eqw k x = fOf (eqWord (C.points c k) (C.maskWords x)))
     (he : ∀ a : F128, (C.T c).embed (fOf a) = GF256.of ⟨a, 0⟩) :
     (C.T c).tab.Rank ∧ (∀ r, Function.Bijective fun p : 𝔽 × 𝔽 => (C.T c).tab.Wr r p.1 p.2) ∧
       ∀ r, (C.T c).tab.β r ≠ 0 := by
-  obtain ⟨hb, hm, hr⟩ := hc
+  obtain ⟨hb, hm, hr, -⟩ := hc
   refine ⟨rank_of_maskRankOk _ _ _ hw hm, fun r => wr_bijective _ r _ (hρ r).1 (hρ r).2 he (hr r), fun r => ?_⟩
   show (C.T c).β r ≠ 0
   rw [hβ r]

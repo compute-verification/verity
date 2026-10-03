@@ -114,7 +114,7 @@ theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : 
       ((coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).ρ r 1 = GF256.of (c.rho r).2 :=
     fun _ => ⟨rfl, rfl⟩
   have hw : ∀ k x, ((coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).eqw k x =
-      fOf (eqWord (c.points k) ((coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).maskWords x)) :=
+      fOf (eqWord ((coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).points c k) ((coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).maskWords x)) :=
     fun _ _ => rfl
   have he : ∀ a : F128, ((coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).embed (fOf a) =
       GF256.of ⟨a, 0⟩ := fun _ => rfl

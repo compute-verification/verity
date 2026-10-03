@@ -1,0 +1,94 @@
+import FlockSoundness.Discharge.ZkLink
+import FlockSoundness.Discharge.ZkExec
+import FlockSoundness.Discharge.ZkView
+import FlockSoundness.Discharge.ZkBind
+
+/-!
+# A draw's `--zk` table: its coins and sizes
+
+What `coinedOf` (`Composed/Defs.lean`) and `innerOf` (`Composed/Inner.lean`) both read:
+
+* `CoinsZK`: a table's coin vector, the coins `refused_coins` reads (`β`, `ρ`) and the others (`rest`).
+* `RestZK`, `RestOf`: the other coins at a draw, every coin `verify --zk` draws for a rep, in its order: level 0's queries,
+  the zerocheck's (`rSkip`, `rOuter`, `z`, the residual rounds' `ρ`), the lincheck's (`α`, `β`, its rounds', `r′`), the ring
+  switch's (`rpp` per claim, `γ` per claim), level 0's out-of-domain and lane coins, and the inner proof's (`ε`, its
+  constraints' `γ`, its queries).
+* `pointsOf`: the rank check's claim points, from those coins (`abcClaims`; `point_parts`: a claim's point but its first
+  coordinate), rep 0's `ab`, `c`, then rep 1's.
+* `hiCount`, `padLenOf`, `padNOf`, `HiOf`: the hidden salts and the pads layout's sizes.
+* `pubRegOf`: the statement's public region values.
+-/
+
+namespace FlockSoundness.Discharge.Composed
+
+open Flock Model ZkSession
+
+local notation "𝔽" => FlockLevel3.GF128
+
+variable {mPts : ℕ}
+
+/-- **A table's coin vector**: each rep's inner-proof `β` (`Zk.verifyInner`) and Ligerito's `ρ` (`ZkLigerito`), the coins
+`refused_coins` reads but the rank check's points, and the table's other coins. -/
+structure CoinsZK (Rest : Type) where
+  beta : Fin 2 → F128
+  rho : Fin 2 → F256 × F256
+  rest : Rest
+
+/-- **A `--zk` table's other coins**, each rep's, in the order `verify --zk` draws them: `q₀` level-0 queries over `L₀`
+positions; the zerocheck's skip coins, outer coins (rounds `7 … m−7`), `z` and the residual rounds' `ρ`; the lincheck's
+`α`, `β`, its `kLog − 6` rounds' coins and `r′`; the ring switch's 7 coins per claim and `γ` per claim (`nCl` claims);
+level 0's out-of-domain coins and lane challenges; the triple's sacrifice coin `ε`; the inner proof's constraints' `γ`
+(ten); its `Q` queries. -/
+structure RestZK (q0 L0 k0 m kLog nCl nOod : ℕ) where
+  q0s : Fin 2 → Fin q0 → Fin L0
+  rSkip : Fin 2 → Fin 6 → F128
+  rOuter : Fin 2 → Fin (m - 13) → F128
+  zc : Fin 2 → F128
+  rho : Fin 2 → Fin (m - 6) → F128
+  lcAlpha : Fin 2 → F128
+  lcBeta : Fin 2 → F128
+  ts : Fin 2 → Fin (kLog - 6) → F128
+  rPrime : Fin 2 → F128
+  rpp : Fin 2 → Fin nCl → Fin 7 → F128
+  rsGamma : Fin 2 → Fin nCl → F128
+  ood : Fin 2 → Fin nOod → F128
+  lane : Fin 2 → Fin k0 → F256
+  zeta : Fin 2 → F128
+  gammas : Fin 2 → Fin 10 → F128
+  qP : Fin 2 → Fin Zk.Q → F128
+
+/-- The salts of levels ≥ 1, one per leaf of each level's tree in each rep (`Table`'s `Hi`). -/
+def hiCount (Tz : TabZK 𝔽 mPts) : ℕ := 2 * (Tz.sch.levels.tail.map fun l => 2 ^ l.logLen).sum
+
+/-- The pads message's length before its `K_PAD` padding symbols (`verify --zk`'s `PadLayout.new st.m st.kLog k0`). -/
+def padLenOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : ℕ := (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).len
+
+/-- The pads code's length (`verifyInner`'s `n`: the message rounded up to a power of two, at rate `2^-3`). -/
+def padNOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : ℕ :=
+  (padLenOf Tz st + Zk.K_PAD).nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE
+
+/-- **The draw's other coins**: `q₀ = t_pad / 2` level-0 queries (`Zk.schedule`) over `2^logLen` positions, the
+executable statement's `m` and `kLog`, a claim per region besides `ab` and `c`, and the layout's one out-of-domain
+coin. -/
+abbrev RestOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : Type :=
+  RestZK (Tz.t / 2) (2 ^ Tz.sch.level₀.logLen) Tz.sch.k0 st.m st.c.kLog (2 + st.regions.size)
+    (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).nOod0
+
+/-- The draw's hidden-salt type. -/
+abbrev HiOf (Tz : TabZK 𝔽 mPts) : Type := Fin (hiCount Tz) → ZkView.Salt
+
+/-- **Rep `r`'s claims** (`abcClaims`) at its coins: `ab` at the lincheck's point, `c` at the zerocheck's. -/
+def claimsOf {q0 L0 k0 m kLog nCl nOod : ℕ} (ρ : RestZK q0 L0 k0 m kLog nCl nOod) (r : Fin 2) : Array Claim :=
+  abcClaims m kLog (⟨ρ.zc r, Array.ofFn (ρ.rho r), pinned ++ Array.ofFn (ρ.rOuter r), 0, 0, 0⟩ : ZcOut)
+    (⟨0, ρ.rPrime r, (Array.ofFn (ρ.ts r)).reverse⟩ : LcOut)
+
+/-- **The rank check's claim points** (`claim_word_points`): rep 0's `ab`, `c`, then rep 1's, each its claim's point
+but the first coordinate (`point_parts`). -/
+def pointsOf {q0 L0 k0 m kLog nCl nOod : ℕ} (ρ : RestZK q0 L0 k0 m kLog nCl nOod) (k : Fin Zk.RANK_POINTS) :
+    List F128 :=
+  ((claimsOf ρ (if k.val < 2 then 0 else 1))[k.val % 2]!).x.toList.drop 1
+
+/-- **The statement's public region values** (open: the registered regions' public words from `st.pub`). -/
+noncomputable def pubRegOf (st : Stmt) : Fin st.regions.size → Fin 128 → 𝔽 := sorry
+
+end FlockSoundness.Discharge.Composed

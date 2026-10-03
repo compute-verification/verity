@@ -2,6 +2,7 @@ import FlockSoundness.Discharge.ZkLink
 import FlockSoundness.Discharge.ZkExec
 import FlockSoundness.Discharge.ZkView
 import FlockSoundness.Discharge.ZkBind
+import FlockSoundness.Discharge.Composed.Base
 import FlockSoundness.Discharge.Composed.Inner
 
 /-!
@@ -167,14 +168,6 @@ def maskWordsOf (st : Stmt) : List ℕ :=
   | some r => (List.range (2 ^ st.nbl)).flatMap fun b =>
       (List.range (2 ^ (r.slotLog - 7))).map fun j => b * 2 ^ (st.c.kLog - 7) + r.start / 128 + j
 
-/-- **A table's coin vector**, the coins `refused_coins` reads named: each rep's inner-proof `β`
-(`Zk.verifyInner`) and Ligerito's `ρ` (`ZkLigerito`), each claim's rank-check point, and the table's other coins. -/
-structure CoinsZK (nC : ℕ) (Rest : Type) where
-  beta : Fin 2 → F128
-  rho : Fin 2 → F256 × F256
-  points : Fin nC → List F128
-  rest : Rest
-
 /-- **The positions below `L` nobody opens**, in increasing order, the `u`-th of them. -/
 def unPos {t : ℕ} (L : ℕ) (opened : Fin t → ℕ) (u : ℕ) : ℕ :=
   ((List.range L).filter (fun x => decide (x ∉ List.ofFn opened))).getD u 0
@@ -199,18 +192,22 @@ structure CoinedSetup where
   Rest : Type
   z : ZkView.Sizes
   maskWords : Fin z.nMask → ℕ
-  T : CoinsZK z.nC Rest → ZkView.Coined FlockLevel3.GF256 (Witness S.m) Hi VL z
+  T : CoinsZK Rest → ZkView.Coined FlockLevel3.GF256 (Witness S.m) Hi VL z
   cols : ℕ
-  pos : CoinsZK z.nC Rest → Fin z.nS → ℕ
+  pos : CoinsZK Rest → Fin z.nS → ℕ
+  points : CoinsZK Rest → Fin z.nC → List F128
+  rOuter : CoinsZK Rest → Fin 2 → List F128
 
 attribute [instance] CoinedSetup.addHi CoinedSetup.finHi CoinedSetup.decHi
 
 /-- **The coin vectors the honest prover doesn't refuse** (`refused_coins`, `flock-circuit.rs`): `β ≠ 0` in both reps
 (`beta.isZero`, which `Zk.verifyInner` also checks), the mask slot's weights at the claim points of rank `128·k`
 (`mask_rank_ok`, the rank check in `at_open`; the verifier does not check it), and `ρ₀, ρ₁` independent over F128 in both
-reps (`ZkLigerito.rhoIndependent`, which the verifier also checks). -/
-def CoinedSetup.Admits (C : CoinedSetup) (c : CoinsZK C.z.nC C.Rest) : Prop :=
-  (∀ r, (c.beta r).isZero = false) ∧ MaskRankOk c.points C.maskWords ∧ ∀ r, Zk.rhoIndependent (c.rho r) = true
+reps (`ZkLigerito.rhoIndependent`, which the verifier also checks); and no zerocheck outer coin `1` in either rep (the
+residual round's `(1 + r_j)⁻¹`, `inv 0 = 0`: a bad event, not a refusal of the prover). -/
+def CoinedSetup.Admits (C : CoinedSetup) (c : CoinsZK C.Rest) : Prop :=
+  (∀ r, (c.beta r).isZero = false) ∧ MaskRankOk (C.points c) C.maskWords ∧ (∀ r, Zk.rhoIndependent (c.rho r) = true) ∧
+    ∀ r, ∀ x ∈ C.rOuter c r, x ≠ 1
 
 /-- **The valid witnesses**: those satisfying the table's statement (`Statement.Satisfies`: the R1CS in every block, the
 pin, and the public regions' values). -/
@@ -247,37 +244,12 @@ structure CoinedBody (S : Statement) (nMask t : ℕ) where
   padLen : ℕ
   padN : ℕ
   padQueries : Fin 2 → Rest → List ℕ
-  T : CoinsZK Zk.RANK_POINTS Rest → ZkView.Coined FlockLevel3.GF256 (Witness S.m) Hi VL (withMask sz nMask t)
+  T : CoinsZK Rest → ZkView.Coined FlockLevel3.GF256 (Witness S.m) Hi VL (withMask sz nMask t)
 
-/-- The salts of levels ≥ 1, one per leaf of each level's tree in each rep (`Table`'s `Hi`). -/
-def hiCount (Tz : TabZK 𝔽 mPts) : ℕ := 2 * (Tz.sch.levels.tail.map fun l => 2 ^ l.logLen).sum
-
-/-- The pads message's length before its `K_PAD` padding symbols (`verify --zk`'s `PadLayout.new st.m st.kLog k0`). -/
-def padLenOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : ℕ := (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).len
-
-/-- The pads code's length (`verifyInner`'s `n`: the message rounded up to a power of two, at rate `2^-3`). -/
-def padNOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : ℕ :=
-  (padLenOf Tz st + Zk.K_PAD).nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE
-
-/-- **A `--zk` table's coins other than `β`, `ρ` and the claim points**: each rep's `q₀` level-0 queries over its `L₀` positions,
-each rep's `Q` pads queries over its `nP` positions, each rep's sacrifice coin `ζ`, and each rep's level-0 lane point
-`r̄^r` over its `k₀` lane bits. -/
-structure RestZK (q0 L0 nP k0 : ℕ) where
-  q0s : Fin 2 → Fin q0 → Fin L0
-  qP : Fin 2 → Fin Zk.Q → Fin nP
-  zeta : Fin 2 → F128
-  rbarPt : Fin 2 → Fin k0 → F256
 
 /-- `eq(p, l)` over K at lane `l`'s bits, least significant first. -/
 noncomputable def eqLane {k : ℕ} (p : Fin k → F256) (l : ℕ) : FlockLevel3.GF256 :=
   ∏ i : Fin k, if l.testBit i.val then FlockLevel3.GF256.of (p i) else 1 + FlockLevel3.GF256.of (p i)
-
-/-- The draw's other coins: `q₀ = t_pad / 2` level-0 queries (`Zk.schedule`) over `2^logLen` positions. -/
-abbrev RestOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : Type :=
-  RestZK (Tz.t / 2) (2 ^ Tz.sch.level₀.logLen) (padNOf Tz st) Tz.sch.k0
-
-/-- The draw's hidden-salt type. -/
-abbrev HiOf (Tz : TabZK 𝔽 mPts) : Type := Fin (hiCount Tz) → ZkView.Salt
 
 /-- **The draw's other sizes** (`withMask` sets the rest): a region claim per region, `2^k₀` witness lanes of `2^cols`
 words, level 0's `2^logLen − t_pad` positions nobody opens, the pads but `h_ab` and the triple's `x, y, w` (`PadIdx`'s
@@ -296,10 +268,10 @@ def szOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : ZkView.Sizes where
   nPU := padNOf Tz st - Zk.Q
   nPad := 0
 
-/-- **The draw's tables but their coin-fixed fields** (open, refinement: `nu`, `sReg`, `pubReg` from `verify --zk` at the draw; `coinedOf` and `bodyOf` replace the
+/-- **The draw's tables but their coin-fixed fields** (open, refinement: `nu`, `sReg` from `verify --zk` at the draw; `coinedOf` and `bodyOf` replace the
 others). -/
 noncomputable def tableOf (Tz : TabZK 𝔽 mPts) (st : Stmt) :
-    CoinsZK Zk.RANK_POINTS (RestOf Tz st) →
+    CoinsZK (RestOf Tz st) →
       ZkView.Coined FlockLevel3.GF256 (Witness Tz.S.m) (HiOf Tz) ByteArray
         (withMask (szOf Tz st) (maskWordsOf st).length Tz.t) := sorry
 
@@ -315,9 +287,6 @@ theorem fa_lt (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     Zk.PadLayout.lc, Zk.PadLayout.fc, Zk.PadLayout.fb, Zk.PadLayout.fa]
   omega
 
-theorem padNOf_pos (Tz : TabZK 𝔽 mPts) (st : Stmt) : 0 < padNOf Tz st :=
-  Nat.mul_pos (Nat.pos_of_ne_zero (Nat.ne_of_gt (Nat.pos_of_isPowerOfTwo (Nat.isPowerOfTwo_nextPowerOfTwo _)))) (Nat.two_pow_pos _)
-
 /-- **The draw's `--zk` table's refinement**: levels ≥ 1's salts, `ByteArray` value lists, `RestOf`'s coins (both reps'
 level-0 queries, opened as `S = Q⁰ ∪ Q¹`, the pads queries, `ζ`), the pads layout's sizes, and `tableOf`'s tables reading `ζ` and `r̄` (`rbar = eq(r̄^r, l)`), each claim's rep (the rank check's points: rep 0's `ab`, `c`, then rep 1's), and
 the exposed `h_fa`, `h_fb` (`ia`, `ib`). -/
@@ -325,16 +294,19 @@ noncomputable def bodyOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedBody Tz.S (m
   Hi := HiOf Tz
   VL := ByteArray
   Rest := RestOf Tz st
-  rest0 := ⟨fun _ _ => ⟨0, Nat.two_pow_pos _⟩, fun _ _ => ⟨0, padNOf_pos Tz st⟩, fun _ => 0, fun _ _ => 0⟩
+  rest0 := ⟨fun _ _ => ⟨0, Nat.two_pow_pos _⟩, fun _ _ => 0, fun _ _ => 0, fun _ => 0, fun _ _ => 0, fun _ => 0,
+    fun _ => 0, fun _ _ => 0, fun _ => 0, fun _ _ _ => 0, fun _ _ => 0, fun _ _ => 0, fun _ _ => 0, fun _ => 0,
+    fun _ _ => 0, fun _ _ => 0⟩
   sz := szOf Tz st
   queries := fun ρ => (List.ofFn (ρ.q0s 0) ++ List.ofFn (ρ.q0s 1)).map Fin.val
   padLen := padLenOf Tz st
   padN := padNOf Tz st
-  padQueries := fun r ρ => (List.ofFn (ρ.qP r)).map Fin.val
+  padQueries := fun r ρ => (List.ofFn (ρ.qP r)).map fun w => w.lo.toNat % padNOf Tz st
   T := fun c =>
     { tableOf Tz st c with
       ζ := fun r => fOf (c.rest.zeta r)
-      rbar := fun r l => eqLane (c.rest.rbarPt r) l.val
+      pubReg := pubRegOf st
+      rbar := fun r l => eqLane (c.rest.lane r) l.val
       rep := fun k => if k.val < 2 then 0 else 1
       ia := ⟨(Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).fa, Nat.lt_of_succ_lt (fa_lt Tz st)⟩
       ib := ⟨(Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).fb, fa_lt Tz st⟩ }
@@ -353,9 +325,9 @@ noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
   letI := B.finHi
   letI := B.decHi
   let cols := Tz.sch.level₀.logCols
-  let pos := fun c : CoinsZK Zk.RANK_POINTS B.Rest => padPos (2 ^ (cols + 1)) Tz.t (B.queries c.rest)
+  let pos := fun c : CoinsZK B.Rest => padPos (2 ^ (cols + 1)) Tz.t (B.queries c.rest)
   let pL := max (min B.padN (2 ^ 63)) Zk.Q
-  let ppos := fun (r : Fin 2) (c : CoinsZK Zk.RANK_POINTS B.Rest) => padPos pL Zk.Q (B.padQueries r c.rest)
+  let ppos := fun (r : Fin 2) (c : CoinsZK B.Rest) => padPos pL Zk.Q (B.padQueries r c.rest)
   { S := Tz.S
     Hi := B.Hi
     VL := B.VL
@@ -363,7 +335,7 @@ noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
     z := withMask B.sz (maskWordsOf st).length Tz.t
     maskWords := fun x => (maskWordsOf st).getD x.val 0
     T := fun c =>
-      let I := innerOf Tz st B.Hi B.VL (withMask B.sz (maskWordsOf st).length Tz.t) (CoinsZK Zk.RANK_POINTS B.Rest) c
+      let I := innerOf Tz st B.Hi B.VL (withMask B.sz (maskWordsOf st).length Tz.t) (CoinsZK B.Rest) c
       { B.T c with
         lanes := I.lanes
         vals := I.vals
@@ -386,11 +358,13 @@ noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
         sP := fun r => treeEquiv (Sum.elim (ppos r c) fun u => unPos B.padN (ppos r c) u.val)
         Ch := fun r k i => fOf ⟨(ppos r c k + 1).toUInt64, 0⟩ ^ padIdx i
         Cp := fun r k j => fOf ⟨(ppos r c k + 1).toUInt64, 0⟩ ^ (B.padLen + j.val)
-        eqw := fun k x => fOf (eqWord (c.points k) ((maskWordsOf st).getD x.val 0))
+        eqw := fun k x => fOf (eqWord (pointsOf c.rest k) ((maskWordsOf st).getD x.val 0))
         Gp := fun q i => fOf Zk.PAD_C * execArith.Xhat i.val (cols + 1) (execArith.omega (pos c q))
           + execArith.Xhat (2 ^ cols + i.val) (cols + 1) (execArith.omega (pos c q)) }
     cols := cols
-    pos := pos }
+    pos := pos
+    points := fun c => pointsOf c.rest
+    rOuter := fun c r => List.ofFn (c.rest.rOuter r) }
 
 /-- **The structural facts Lemma B reads**, of a `CoinedSetup` at the arithmetic `A` and M1's padding constant `κ`: M1's
 level-0 padding geometry (`cols ≤ 40`, `t_pad ≤ 2^cols`, at most `t_pad` opened positions), and at every coin vector
@@ -400,11 +374,11 @@ weights `eq(p_k, x)` and `embed` the inclusion of F128 in F256), the rank check,
 public ones. -/
 def CoinedOK (A : Arith 𝔽 FlockLevel3.GF256) (κ : 𝔽) (C : CoinedSetup) : Prop :=
   C.cols ≤ 40 ∧ C.z.tpad ≤ 2 ^ C.cols ∧ C.z.nS ≤ C.z.tpad ∧
-    ∀ c : CoinsZK C.z.nC C.Rest, C.Admits c →
+    ∀ c : CoinsZK C.Rest, C.Admits c →
       (Function.Injective (C.pos c) ∧ ∀ q, C.pos c q < 2 ^ (C.cols + 1)) ∧
       ((∀ r, (C.T c).β r = fOf (c.beta r)) ∧
         (∀ r, (C.T c).ρ r 0 = FlockLevel3.GF256.of (c.rho r).1 ∧ (C.T c).ρ r 1 = FlockLevel3.GF256.of (c.rho r).2) ∧
-        (∀ k x, (C.T c).eqw k x = fOf (eqWord (c.points k) (C.maskWords x))) ∧
+        (∀ k x, (C.T c).eqw k x = fOf (eqWord (C.points c k) (C.maskWords x))) ∧
         ∀ a : F128, (C.T c).embed (fOf a) = FlockLevel3.GF256.of ⟨a, 0⟩) ∧
       (C.T c).tab.Rank ∧
       (∀ q i, (C.T c).tab.Gp q i = κ * A.Xhat i.val (C.cols + 1) (A.omega (C.pos c q))
@@ -432,7 +406,7 @@ coin vector the honest prover doesn't refuse, for any encoding `enc` of the view
 at any valid witness `w` whose registered values are the public ones and `S_shvzk`'s at any `w0` are within
 `2·|Hid|·δ₁`, both ways. -/
 def ZkViewAt (C : CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=
-  ∀ (c : CoinsZK C.z.nC C.Rest), C.Admits c → ∀ {Out : Type} (enc : (∀ _ : Fin 1, (C.T c).tab.View) → Out)
+  ∀ (c : CoinsZK C.Rest), C.Admits c → ∀ {Out : Type} (enc : (∀ _ : Fin 1, (C.T c).tab.View) → Out)
     (w w0 : Fin 1 → Witness C.S.m), (∀ j, C.Valid (w j)) → ∀ (_hreg : ∀ j, (C.T c).tab.sReg (w j) = (C.T c).tab.pubReg)
     (E : Out → Prop),
     Game.prCoin (fun p : ∀ _ : Fin 1, (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) =>
