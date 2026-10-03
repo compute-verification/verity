@@ -462,6 +462,58 @@ def test_a_lean_review_carries_under_the_same_rule(tmp_path, monkeypatch, capsys
             f"differs (x.txt)") in out
 
 
+def test_a_head_with_two_merge_bases_carries_no_grant_and_needs_every_one(tmp_path, monkeypatch, capsys):
+    """Red team of #955: a head merging #30's commit (which `main` merged too) into the reviewed head while keeping the reviewed
+    tree drops #30's pins.  Its merge bases with `main` are both the reviewed head's base and #30's commit; `git merge-base`
+    printed the first (the newer), against which the head changes what the reviewed one did, so the grant carried and the train
+    reverted #30's pins.  `git merge` diffs against all of them: neither the grant nor the rules may read one."""
+    from research.store.local import LocalStore
+
+    _store_remote(tmp_path, monkeypatch)
+    main, _feat, _tip = _repos(tmp_path)
+    audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
+    (main / "tools" / "check").mkdir(parents=True)
+    (main / "other").mkdir()
+    days = iter(range(1, 10))
+
+    def next_day() -> None:
+        monkeypatch.setenv("GIT_COMMITTER_DATE", f"2026-01-0{next(days)}T00:00:00 +0000")
+
+    next_day()
+    origin, _ = _origin_with(tmp_path, main, {
+        "tools/check/queue.toml": '[[grant]]\nrole = "statement-reviewer"\nlean_audit = ["pins", "reads"]\n',
+        "lean-audit.json": json.dumps(audit, indent=1),
+        "other/lean-audit.json": json.dumps({**audit, "pins": {"O.t": {"type_hash": "old"}}}, indent=1)}, {})
+    next_day()
+    theirs = _files_branch(main, "pr30", {"other/lean-audit.json": json.dumps({**audit, "pins": {"O.t": {"type_hash": "new"}}})})
+    next_day()
+    _main_moves(main, origin)
+    next_day()
+    old = _files_branch(main, "pr20", {"lean-audit.json": json.dumps({**audit, "pins": {"P.t": {"type_hash": "2"}}}, indent=1)})
+    LocalStore().add_label(f"pr:20@{old}", "grant", "statement-reviewer", "reviewer")
+    next_day()
+    _git(main, "merge", "-q", "--no-ff", "--no-edit", "pr30")
+    _git(main, "push", "-q", "origin", "main")
+    next_day()
+    new = _git(main, "commit-tree", f"{old}^{{tree}}", "-p", old, "-p", theirs, "-m", "Merge branch pr30")
+    _git(main, "push", "-q", "origin", f"{new}:refs/pull/20/head")
+    monkeypatch.chdir(main)
+    assert merge_main(["--train", "--prepare", "train-prep/c", f"20@{new[:9]}", "--lint", "true"]) == 1
+    out, err = capsys.readouterr()
+    tip = _git(main, "rev-parse", "main")
+    listed = _git(main, "merge-base", "--all", tip, new).split()
+    assert sorted(listed) == sorted([_git(main, "rev-parse", "main^1"), theirs])
+    assert _git(main, "merge-base", tip, new) == listed[0] == _git(main, "rev-parse", "main^1"), "the base the grant would carry over"
+    bases = ", ".join(b[:12] for b in listed)
+    assert (f"research merge: {new[:12]} has 2 merge bases with {tip[:12]} ({bases}), so no one diff says what merging it changes: "
+            f"it needs every grant the rules name until {tip[:12]} is merged into it again") in out
+    assert (f"research merge: grant statement-reviewer on pr:20@{old} doesn't carry to {new[:12]}: {new[:12]} has 2 merge bases "
+            f"with {tip[:12]} ({bases}), so no one diff says what merging it changes; merging {tip[:12]} into it again gives it "
+            f"one") in out
+    assert f"#20 needs the statement-reviewer grant at {new[:12]}" in err and "nothing was built" in err
+    assert _git(origin, "for-each-ref", "refs/heads/train-prep") == ""
+
+
 _RESULT = ("import json, os; d = os.environ['RESEARCH_RUN_DIR']; json.dump({'schema': 'research/result/v0.1', 'kind': 'check/v1', "
            "'run_id': os.environ['RESEARCH_RUN_ID'], 'workload_fingerprint': {}, 'validation': {'status': 'passed', 'checker': 't'}, "
            "'measurements': [], 'steps': [{'step': 'agree', 'status': '%s'}]}, open(d + '/result.json', 'w'))")

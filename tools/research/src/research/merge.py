@@ -391,14 +391,17 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
             break
     else:
         return []
-    grants = StoreGrants(store, lambda s: log(s.replace("research queue:", "research merge:", 1)), repo=repo, base=base)
+    def say(s: str) -> None:
+        log(s.replace("research queue:", "research merge:", 1))
+
+    grants = StoreGrants(store, say, repo=repo, base=base)
     out = []
     try:
         rules = Rules.parse(r.stdout, path)
         lean = {g.role for g in rules.grants if g.lean_audit}
         for label, sha in pins:
             pr = int(label[1:]) if label.startswith("#") else None
-            need = sorted(rules.needs(repo, base, sha, (lambda: grants.reviews(pr, sha)) if pr else list) & set(TRAIN_GRANTS))
+            need = sorted(rules.needs(repo, base, sha, (lambda: grants.reviews(pr, sha)) if pr else list, log=say) & set(TRAIN_GRANTS))
             if need and pr is None:
                 out.append(f"{label} needs the {', '.join(need)} grant ({path}), which only a pull request's pinned head can hold: "
                            f"name it as N@SHA")

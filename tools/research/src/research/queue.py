@@ -24,7 +24,8 @@ under listed paths (`merge_requires`' syntax, `!` patterns included), or for a c
 store label `grant = {role}` on the target `pr:{number}@{head sha}`.  It carries to a new head of the PR that only restacks it or
 merges `main` into it: one whose change against `main` is the granted head's, every file from the same bytes to the same bytes, its
 `lean-audit.json` change included (`carry`, Daniel's ruling of 2 Oct); the queue prints the head each grant carried from, or why one
-didn't.  Any other push needs new grants, and so does a head whose history git can't compare.  A `lean-audit.json` change needs no
+didn't.  Any other push needs new grants, and so does a head whose history git can't compare (no merge base with `main`, or
+several: then the rules can't tell what it changes either, and it needs every grant they name).  A `lean-audit.json` change needs no
 grant when a `lean_review` label on the target, or carried to it the same way, names the audit.json of an `audit.py --update`
 (`--moved` for a move) that printed that whole change as the same statements (`reviewed`).  Grants and ready are read after
 pulling the target's labels (for a carry, every head's) from the store's remote; when that pull can't happen (no remote here, one
@@ -209,13 +210,22 @@ class Rules:
         who = ", ".join(f"{r} from {by[r]}" if by.get(r) else f"{r} (no `by` in {self.source})" for r in sorted(roles))
         return f"{who}; granted with `research data label {grant_target(pr, head)} grant ROLE --by LANE` ({self.source})"
 
-    def needs(self, repo: Path, base: str, head: str, reviews: Callable[[], list[dict]] = list) -> set[str]:
+    def needs(self, repo: Path, base: str, head: str, reviews: Callable[[], list[dict]] = list,
+              log: Callable[[str], None] = lambda s: None) -> set[str]:
         """The roles whose grants the change `base`...`head` (from their merge base) needs.  A `lean_audit` role isn't needed for a
         lean-audit.json whose change one of the `audit.py --update` reports from `reviews()` printed whole as the same statements
-        (`reviewed`): Daniel's ruling (AGENTS.md "Lean") that a guarantee that only moved needs no statement reviewer."""
+        (`reviewed`): Daniel's ruling (AGENTS.md "Lean") that a guarantee that only moved needs no statement reviewer.  A head with
+        several merge bases with `base` (`merge_bases`) needs every role, with a line saying why: no one diff says what merging
+        it changes, and a wait (the queue) or a refusal of that ref (a train) is how both callers hold a PR back."""
         from .merge import rule_touches
 
-        mb = _out(repo, "merge-base", base, head)
+        mbs = _out(repo, "merge-base", "--all", base, head).split()
+        if len(mbs) > 1:
+            log(f"research queue: {head[:12]} has {len(mbs)} merge bases with {_named(base)} ({', '.join(m[:12] for m in mbs)}), so "
+                f"no one diff says what merging it changes: it needs every grant the rules name until {_named(base)} is merged into it "
+                f"again")
+            return {r.role for r in self.grants}
+        mb = mbs[0]
         changed = [p for p in _out(repo, "diff", "--name-only", mb, head).splitlines() if p]
         roles = {r.role for r in self.grants if r.paths and rule_touches(list(r.paths), changed)}
         audits = [p for p in changed if p == "lean-audit.json" or p.endswith("/lean-audit.json")]
@@ -269,13 +279,26 @@ def _is_audit(path: str) -> bool:
     return path == "lean-audit.json" or path.endswith("/lean-audit.json")
 
 
+def merge_bases(repo: Path, base: str, head: str) -> list[str]:
+    """Every best common ancestor of ``base`` and ``head`` (`git merge-base --all`); none when they share no history or git can't
+    say.  Several when ``head`` merged a commit that ``base`` merged too since (a criss-cross): `git merge` then diffs against a
+    virtual base built from them all, so no one diff against one of them says what merging ``head`` changes."""
+    r = _git(repo, "merge-base", "--all", base, head, check=False)
+    return [] if r.returncode else r.stdout.split()
+
+
+def _named(base: str) -> str:
+    return base[:12] if re.fullmatch(r"[0-9a-f]{40}", base) else base
+
+
 def own_change(repo: Path, base: str, head: str) -> dict[str, tuple[str, ...]] | None:
     """What ``head`` changes against its merge base with ``base``: {path: (old mode, new mode, old blob, new blob)}, a rename as a
-    deletion and an addition.  None when git can't say (``head`` isn't in ``repo``, or shares no history with ``base``)."""
-    mb = _git(repo, "merge-base", base, head, check=False)
-    if mb.returncode:
+    deletion and an addition.  None when git can't say (``head`` isn't in ``repo``, or hasn't exactly one merge base with ``base``:
+    `merge_bases`)."""
+    mbs = merge_bases(repo, base, head)
+    if len(mbs) != 1:
         return None
-    r = _git(repo, "diff", "--raw", "--no-renames", "--no-abbrev", "-z", mb.stdout.strip(), head, check=False)
+    r = _git(repo, "diff", "--raw", "--no-renames", "--no-abbrev", "-z", mbs[0], head, check=False)
     if r.returncode:
         return None
     fields = r.stdout.split("\0")
@@ -291,22 +314,29 @@ def carry(repo: Path, base: str, old: str, new: str) -> tuple[bool, str]:
     `main`), ``new`` changes exactly the paths ``old`` changes, each from the same bytes to the same bytes (`own_change`: mode and
     blob, before and after).  That is what a rebase onto `main`, a restack after a parent landed, or a merge of `main` leaves when
     `main`'s own changes didn't touch the PR's files, and every `lean-audit.json` the PR changes is among those paths.  So it
-    carries only to a head whose change is the one that was granted, whatever its history: a merge commit can hold edits of its
-    own and a rebase rewrites every commit, but neither can make two different changes compare equal.  Nothing else carries:
-    a head that changes any file more, less or differently (a `lean-audit.json` that `main` changed meanwhile included, since
-    then its base bytes differ), or one git can't compare (``old`` isn't in ``repo``, no merge base), needs new grants."""
+    carries only to a head whose change is the one that was granted, whatever its history: with one merge base, a merge commit
+    can hold edits of its own and a rebase rewrites every commit, but neither can make two different changes compare equal.
+    Nothing else carries: a head that changes any file more, less or differently (a `lean-audit.json` that `main` changed
+    meanwhile included, since then its base bytes differ), or one git can't compare (``old`` isn't in ``repo``, no merge base, or
+    several, where a merge can drop a change `main` merged without any diff against one of them showing it), needs new grants."""
     for h in (old, new):
         if _git(repo, "cat-file", "-e", f"{h}^{{commit}}", check=False).returncode:
             return False, f"{h[:12]} isn't in {repo}, so its change can't be compared (fetch it)"
+    name = _named(base)
+    for h in (old, new):
+        if not (mbs := merge_bases(repo, base, h)):
+            return False, f"{h[:12]} shares no history with {name}"
+        if len(mbs) > 1:
+            return False, (f"{h[:12]} has {len(mbs)} merge bases with {name} ({', '.join(m[:12] for m in mbs)}), so no one diff says "
+                           f"what merging it changes; merging {name} into it again gives it one")
     was, now = own_change(repo, base, old), own_change(repo, base, new)
-    base = base[:12] if re.fullmatch(r"[0-9a-f]{40}", base) else base
     if was is None or now is None:
-        return False, f"{(old if was is None else new)[:12]} shares no history with {base}"
+        return False, f"git can't diff {(old if was is None else new)[:12]} against its merge base with {name}"
     if differ := sorted(p for p in was.keys() | now.keys() if was.get(p) != now.get(p)):
         if audits := [p for p in differ if _is_audit(p)]:
             return False, f"its lean-audit.json change isn't byte-identical ({', '.join(audits)})"
         more = f" and {len(differ) - 3} more" if len(differ) > 3 else ""
-        return False, f"its change against {base} differs ({', '.join(differ[:3])}{more})"
+        return False, f"its change against {name} differs ({', '.join(differ[:3])}{more})"
     how = "merge of main" if _git(repo, "merge-base", "--is-ancestor", old, new, check=False).returncode == 0 else "restack"
     return True, f"{how}; lean-audit.json change identical" if any(map(_is_audit, now)) else f"{how}; no lean-audit.json change"
 
@@ -537,7 +567,7 @@ class Queue:
 
     def missing(self, rules: Rules, p: PR) -> set[str]:
         """The roles ``p``'s change needs that no grant gives at its head, on it or carried to it from another (`carry`)."""
-        need = rules.needs(self.workdir, "origin/main", p.head, lambda: self.reviews(p.number, p.head))
+        need = rules.needs(self.workdir, "origin/main", p.head, lambda: self.reviews(p.number, p.head), log=self.log)
         missing = need - self.grants(p.number, p.head)
         return missing - self.carry(p.number, p.head, missing) if missing else missing
 
