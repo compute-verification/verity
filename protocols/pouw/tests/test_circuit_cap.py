@@ -1,12 +1,13 @@
-"""Pearl-C's per-tile cap on a circuit (`verity_pouw.circuit.cap`) against the scheme's replay (`pearl_c_debit`): a word's
-flags are `word_flags`, its later +0 promotions rev1's (main's `word_debit`, mirrored here from `pearl_c_debit`'s own
-pieces), its C̃ `pc8`'s, and only the exact certificates pass; a tile's verdict is rev1's capOK (`pearlCTilesDevRev1`) on
-the debit those give, on random tiles and adversarial ones (zero rows, absorbed groups, a total cancelled to zero, refused
-rows, and the cap's boundary).  Codes are finite E4M3: the atom has no NaN operand (`verity.ml.tc` raises), and neither
-does the replay."""
+"""Pearl-C's per-tile cap on a circuit (`verity_pouw.circuit.cap`) against the scheme's replay: a word's flags and later
++0 promotions are `pearl_c_debit.word_debit`'s, its C̃ `pearl_c.chain`'s, and only the exact certificates pass; a tile's
+verdict is rev1's capOK (`pearlCTilesDevRev1`) on `chain_debit` and `debit_units` against the device's `cap` times
+`credit_of`, on random tiles and adversarial ones (zero rows, absorbed groups, a total cancelled to zero, refused rows,
+and the cap's boundary).  Codes are finite E4M3: the atom has no NaN operand (`verity.ml.tc` raises), and neither does
+the replay."""
 from __future__ import annotations
 
 import random
+from dataclasses import replace
 from fractions import Fraction
 
 import pytest
@@ -21,24 +22,6 @@ from verity_pouw.schemes.pearl_c_device import DEVICES
 
 FINITE = [c for c in range(256) if c not in (0x7F, 0xFF)]
 SMALL = [c for c in FINITE if c & 0x7F < 0x10]                     # E4M3 subnormals and the smallest normals
-
-
-def _zeros(a, b, d) -> int:
-    """rev1's later promotions into a +0 total (main's `pearl_c_debit.word_debit`): the totals after g groups, g in
-    [1, k/(32·G)), that are ±0."""
-    atoms = [(a[s:s + 32], b[s:s + 32]) for s in range(0, len(a), 32)]
-    totals = [0]
-    for g in range(0, len(atoms), d.g):
-        totals.append(D._promote(totals[-1], D._masked(atoms[g:g + d.g], d)[0]))
-    return sum(1 for t in totals[1:-1] if t == 0)
-
-
-def _total(a, b, d) -> int:
-    atoms = [(a[s:s + 32], b[s:s + 32]) for s in range(0, len(a), 32)]
-    total = 0
-    for g in range(0, len(atoms), d.g):
-        total = D._promote(total, D._masked(atoms[g:g + d.g], d)[0])
-    return total
 
 
 def _word(k: int, dev: str, a, b, cert=None):
@@ -64,16 +47,15 @@ def _words(k: int, rng: random.Random) -> dict[str, tuple[list[int], list[int]]]
 
 @pytest.mark.parametrize("dev, k", [("sm120", 256), ("sm120", 512), ("h100", 384)])
 def test_the_word_is_the_debits_replay(dev, k):
-    """On every word, with the prover's certificates: the flags are `word_flags`, the later +0 promotions rev1's, C̃ the
+    """On every word, with the prover's certificates: the flags and later +0 promotions are `word_debit`'s, C̃ the
     chain's, and good is 1; the adversarial words exercise flags, absorption and a +0 total after a group."""
     d, rng = DEVICES[dev], random.Random(f"cap-word-{dev}-{k}")
     flagged = zeroed = 0
     for name, (a, b) in _words(k, rng).items():
         got = _word(k, dev, a, b)
         assert got["good"] == 1, name
-        assert got["flags"] == D.word_flags(a, b, d), name
-        assert got["zeros"] == _zeros(a, b, d), name
-        assert got["c"] == _total(a, b, d), name
+        assert (got["flags"], got["zeros"]) == D.word_debit(a, b, d), name
+        assert got["c"] == C.chain(a, b, d), name
         flagged += sum(got["flags"])
         zeroed += got["zeros"]
     assert flagged and zeroed
@@ -113,26 +95,24 @@ def test_only_the_exact_certificates_pass(k):
 # ---- the tile -------------------------------------------------------------------------------------------------------------
 
 def _rev1_cap(dev: str, k: int, n: int, rho: int, rows: int, cols: int) -> Fraction:
-    """ρ·creditDevRev1·tileShare: rev1's credit is `credit_of` less every word's first promotion add (main's
-    `pearl_c.PearlC.first_adds`), at an m that cancels."""
-    d, m = DEVICES[dev], 64
-    credit = C.PearlC(forming="v1", device=d).credit_of(Shape(m, k, n)) - d.prices.fadd * m * n
-    return Fraction(1, rho) * credit * rows * cols / (m * n)
+    """ρ·creditDevRev1·tileShare: the device's `cap` (ρ = 1/rho here) times `credit_of` (rev1's credit), at an m that
+    cancels."""
+    d, m = replace(DEVICES[dev], cap=Fraction(1, rho)), 64
+    return d.cap * C.PearlC(forming="v1", device=d).credit_of(Shape(m, k, n)) * rows * cols / (m * n)
 
 
 def _reference(dev: str, k: int, n: int, rho: int, ac, bc, ok, sd) -> bool:
-    """rev1's per-tile capOK on the replay: the debit over the passing rows' words and every column (`pearlCTilesDevRev1`),
-    False where the replay raises."""
+    """rev1's per-tile capOK on the replay: `chain_debit` and `debit_units` over the passing rows' words and every column
+    (`pearlCTilesDevRev1`), False where the replay raises."""
     d = DEVICES[dev]
     rows = [i for i, o in enumerate(ok) if o]
     try:
-        atoms = D.chain_atoms([ac[i] for i in rows], bc, d)
+        atoms, zeros = D.chain_debit([ac[i] for i in rows], bc, d)
         flags = {(i, j): D.word_flags(ac[i], bc[j], d) for i in rows for j in range(len(bc))}
     except P.Reject:
         return False
-    zeros = sum(_zeros(ac[i], b, d) for i in rows for b in bc)
     elems = sum(32 if all(flags[i, j][t] for j in range(len(bc))) else sd[i][t] for i in rows for t in range(k // 32))
-    debit = D.debit_units(atoms, Fraction(len(bc) * elems, n), device=d) + d.prices.fadd * zeros
+    debit = D.debit_units(atoms, Fraction(len(bc) * elems, n), device=d, zeros=zeros)
     return debit <= _rev1_cap(dev, k, n, rho, len(rows), len(bc))
 
 
@@ -231,6 +211,7 @@ def test_a_wrong_certificate_fails_the_tile():
 def test_the_deployed_shape_fits_and_a_larger_one_is_refused():
     """The cap's integer form fits 31 bits at the deployed 64 × 64 tile, K = 8,192 and a unit of 16,384 columns; a unit of
     64 × 2^20 + 64 columns, whose shares need wider sums, and fewer than two promotion windows are refused."""
+    assert [cap.templates(256, dev)["tile"].bindings["RHO"] for dev in ("sm120", "h100")] == [1000, 400]
     atom, zero, n_g, elem_g, l_max, table = cap._cap_constants(8192, 64, 64, 16384, 1000, "sm120")
     assert (atom, zero) == (136, 32) and len(table) == 65 and table[0] == 0 < l_max
     with pytest.raises(DomainError):

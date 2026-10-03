@@ -55,7 +55,7 @@ from verity.ir.types import Array, Tuple, Value
 from verity.ml.fp32 import F32AddV2
 from verity.ml.scalar import Bf16GtStrict, BitAnd, BitNot, BitOr, F32Fabs, F32IsFinite, I32Add, I32Eq, I32Le, SelectI32
 
-from ..protocol import DomainError
+from ..protocol import DomainError, Shape
 from ..schemes import pearl_c as C
 from ..schemes import pearl_c_debit as D
 from ..schemes.pearl_c_device import DEVICES
@@ -261,14 +261,11 @@ def _cap_constants(k: int, tm: int, tn: int, n: int, rho: int, dev: str) -> tupl
     d, ng = _promoted(dev, k)
     if not (0 < tn <= n and n % tn == 0 and tm > 0 and rho > 0):
         raise DomainError(f"Pearl-C's cap circuit needs TN | N and ρ = 1/RHO: TM={tm}, TN={tn}, N={n}, RHO={rho}")
-    p, g_, r = d.prices, d.g, C.R
-    per_cell = (Fraction(k) + Fraction(k * p.fadd, SLICE * g_) + Fraction(k * r, n) + 2 * p.bf16_mac * r
-                + Fraction(p.forming_credited * k, n) - p.fadd)
-    big_p = g_ * n * per_cell
-    assert big_p.denominator == 1
+    p, g_ = d.prices, d.g
+    big_p = g_ * C.PearlC(forming="v1", device=d).credit_of(Shape(1, k, n))
     atom, zero, elem = SLICE * g_ + p.fadd, g_ * p.fadd, g_ * p.forming_credited * tn
     gg = gcd(n, elem)
-    table = tuple(int(Fraction(rows * tn * int(big_p), rho * gg)) for rows in range(tm + 1))
+    table = tuple(int(Fraction(rows * tn * big_p, rho * gg)) for rows in range(tm + 1))
     l_max = table[-1] // (n // gg)
     words = tm * tn * (k // SLICE)
     if (atom * words + zero * tm * tn * ng > _I32_TOP or (n // gg) * l_max + (elem // gg) * tm * k > _I32_TOP
@@ -361,11 +358,14 @@ def certificates(a: Sequence[int], b: Sequence[int], dev: str = "sm120") -> list
 
 @lru_cache(maxsize=16)
 def templates(k: int, dev: str = "sm120", tile: tuple[int, int] = (1, 1), n: int | None = None,
-              rho: int = 1000) -> dict[str, SpecializedDefinition]:
+              rho: int | None = None) -> dict[str, SpecializedDefinition]:
     """The word at depth ``k`` on ``dev``, and the tile with its cap at ``tile``, the unit's ``n`` (the tile's columns by
-    default) and ρ = 1/``rho``."""
+    default) and ρ = 1/``rho`` (the device's `cap` by default)."""
+    cap = DEVICES[dev].cap if rho is None else Fraction(1, rho)
+    if cap.numerator != 1:
+        raise DomainError(f"Pearl-C's cap circuit needs ρ = 1/RHO: not {cap}")
     return {"word": bind(Pc8CapWordDef, K=k, DEV=dev),
-            "tile": bind(Pc8TileCapDef, K=k, TM=tile[0], TN=tile[1], N=n or tile[1], RHO=rho, DEV=dev)}
+            "tile": bind(Pc8TileCapDef, K=k, TM=tile[0], TN=tile[1], N=n or tile[1], RHO=cap.denominator, DEV=dev)}
 
 
 __all__ = ["Pc8CapWordDef", "Pc8TileCapDef", "certificates", "templates"]
