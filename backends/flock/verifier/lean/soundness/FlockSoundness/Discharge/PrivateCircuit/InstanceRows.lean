@@ -47,7 +47,10 @@ theorem hreg_call {c : Universal.Cls} {Lu : ℕ} {rd : Registered.Reads lay rs} 
     (ps : ProgSites rd rt (Universal.units c * Lu)) (rowU : c.Unit → Fin Lu → lay.Val) (p : c.Prog)
     (h : ∀ (j : Fin (Universal.units c)) (r : Fin Lu), rd.wv (ps.site (finProdFinEquiv (j, r))) = rowU (p j) r) :
     ∀ i, rd.wv (ps.site i) = callRow rowU p i := by
-  sorry
+  intro i
+  have := h (finProdFinEquiv.symm i).1 (finProdFinEquiv.symm i).2
+  rw [Prod.mk.eta, Equiv.apply_symm_apply] at this
+  exact this
 
 end Sites
 

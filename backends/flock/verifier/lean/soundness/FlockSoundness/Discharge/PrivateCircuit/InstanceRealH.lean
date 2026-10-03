@@ -96,7 +96,11 @@ under the count curve's side conditions. -/
 theorem zkSessionSound_realHR (hS : Law.ExecStrata σs ks St) (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planAtZKH (Reg := Reg) dj y₀ S R) j k ≤ ρ) (ht' : 0 ≤ t') :
     ZkSessionSound (realSessionHR I ht own dj y₀ wr dg N hc hU hpub hscope σs ks hks St Kd pop Lb src k Rw M ρ t' qF qS) := by
-  sorry
+  intro hA3 hA6 τ hCR K₀
+  have hA6' : A6ZH I dj wr St Kd pop Lb src (mPts := mPts) := hA6
+  simp only [realSessionHR, hA6', ↓reduceDIte] at hCR ⊢
+  exact (zk_session_soundHR I ht own dj y₀ wr dg N hc hU hpub hscope σs ks hks St hS Kd pop Lb src hA3 hA6'.2.2
+    hA6'.1 hA6'.2.1 hk hRw hM hρ hr ht' K₀ τ hCR).1
 
 end Session
 
@@ -171,7 +175,14 @@ theorem private_circuit_sound_realH
       prob (fun o => LiveAcceptsZKR I own o ∧
           K₀ + K₁ ≤ wrong (Universal.eval C) (Universal.size C) (xOf (s.vals τ o)) (yOf (s.vals τ o))) s.G τ
         ≤ s.Lm.miss K₀ + s.Lm.miss K₁ + s.εks τ + s.δlink τ + ENNReal.ofReal (q ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  intro s
+  exact private_circuit_sound_drawn _ C hC progOf xOf yOf hunit rd ps row hreg s
+    (zkSessionSound_realHR I ht own dj y₀ wr dg N hc hU hpub hscope σs ks hks St Kd pop Lb src k Rw M ρ t' qF qS hS hk
+      hRw hM hρ hr ht')
+    hA3 hA6 (fun o => ownAtH own c pub o.2.2 rd.port rd.readAt) (fun o => regPathsH c pub o.2.2 rd.port)
+    (fun o ho => checked_of_acceptsH I ht own dj y₀ hc hU hpub hscope hA6.1 o ho
+      (readsOn rd (ownAtH own c pub o.2.2 rd.port rd.readAt)) fun p hp => hp.2 p rfl)
+    τ hCR (fun o => o.2.1) valPair hstep K₀ cost q hcost hBind
 
 /-- **Protocol 2 is sound end to end at the universal unit's hidden-output `--zk --registered` session.**
 `private_circuit_sound_wired` at `realSessionHR`, under `private_circuit_sound_realH`'s hypotheses and the claimed values
@@ -220,7 +231,14 @@ theorem private_circuit_sound_wiredH
     (ForgedMiss s τ (fun o => o.2.1) (fun o => forged C cls (progOf (s.vals τ o))) 1 →
       prob (fun o => LiveAcceptsZKR I own o ∧ OwedWrong T C (xIn (s.vals τ o)) (yOf (s.vals τ o))) s.G τ
         ≤ s.Lm.miss 1 + s.Lm.miss 1 + s.εks τ + s.δlink τ + ENNReal.ofReal (q ^ 2 / 2 ^ (513 : ℝ))) := by
-  sorry
+  intro s
+  exact private_circuit_sound_wired _ C hC progOf xOf yOf hunit T xIn hwire rd ps s
+    (zkSessionSound_realHR I ht own dj y₀ wr dg N hc hU hpub hscope σs ks hks St Kd pop Lb src k Rw M ρ t' qF qS hS hk
+      hRw hM hρ hr ht')
+    hA3 hA6 (fun o => ownAtH own c pub o.2.2 rd.port rd.readAt) (fun o => regPathsH c pub o.2.2 rd.port)
+    (fun o ho => checked_of_acceptsH I ht own dj y₀ hc hU hpub hscope hA6.1 o ho
+      (readsOn rd (ownAtH own c pub o.2.2 rd.port rd.readAt)) fun p hp => hp.2 p rfl)
+    τ hCR (fun o => o.2.1) valPair hstep cost q hcost hBind
 
 /-- **Protocol 2's cone bound at the universal unit's hidden-output `--zk --registered` session.**
 `private_circuit_sound_cone` at `realSessionHR`: for every unit `i` of `C`, accepting with unit `i`'s owed outputs other
@@ -263,7 +281,12 @@ theorem private_circuit_sound_coneH
         prob (fun o => LiveAcceptsZKR I own o ∧ (∀ u ∈ o.2.1, progOf (s.vals τ o) u = Universal.pad C cls u) ∧
           ∃ j ∈ coneOf T cls i, progOf (s.vals τ o) j ≠ Universal.pad C cls j) s.G τ +
         ENNReal.ofReal (q ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  intro s
+  exact private_circuit_sound_cone _ C hC progOf xOf yOf hunit T xIn hwire rd ps s
+    (fun o => ownAtH own c pub o.2.2 rd.port rd.readAt) (fun o => regPathsH c pub o.2.2 rd.port)
+    (fun o ho => checked_of_acceptsH I ht own dj y₀ hc hU hpub hscope hA6.1 o ho
+      (readsOn rd (ownAtH own c pub o.2.2 rd.port rd.readAt)) fun p hp => hp.2 p rfl)
+    τ (fun o => o.2.1) valPair hstep cost q hcost hBind i hi
 
 end Instance
 
