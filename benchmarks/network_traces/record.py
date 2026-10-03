@@ -14,8 +14,8 @@ instance hits another's prefix cache. The requests sent before t0, the warm-up a
 only load the engine. The trace starts at t0 and keeps whole windows.
 
 **Modes.** `plaintext` is vLLM's stock server. `commit` serves the same load from vLLM's engine inside the recorder, built
-as the Commit stage builds it (batch-invariant, eager), with `native_host`, the reference committer, hashing every Call
-output of every step; each window is one commitment run, finalized at the window's end. `bi-eager` is that engine without
+as the Commit stage builds it (batch-invariant, eager), with `native_collect`, the served committer, hashing every Call
+output of every step on the GPU; each window is one commitment run, finalized at the window's end. `bi-eager` is that engine without
 the committer. Both stamp the tokens each engine step adds when the step returns, and add `steps.jsonl` (each step's end
 and duration) and, for `commit`, `commits.jsonl` (each run's finalization stall). A step or a finalization that takes
 `STALL_S` is hung: every thread's stack goes to stderr and the job exits, rather than holding its GPU to the lease's end.
@@ -229,11 +229,12 @@ async def replay(port: int, model: str, requests: list[dict], t0: float, drain_u
 
 def offline_engine(args: argparse.Namespace, commit: bool, meta: dict, mix: Sequence[tuple[str, list[dict], float]]):
     """vLLM's engine in this process as the Commit stage builds it (`verity_vllm.engine.build`: batch-invariant, eager,
-    no prefix cache), and with `commit` the reference committer (`native_host`), which hashes every Call output of
-    every step into the step's Merkle root on host threads (or on the GPU, `--gpu-tree`), keeping the tree levels but
-    not the values. At about 1.4 MB of Call outputs per token, the host path can't keep up with the mixes. Its device
-    staging is sized from the mix's envelope as the Commit stage arms it (`size_arena`: two decode-sized blocks and one
-    prefill-sized one), and refused here, before any request, when it doesn't fit beside the engine."""
+    no prefix cache), and with `commit` the served committer (`native_collect`), which hashes every Call output of
+    every step into the step's Merkle root on the GPU (CMT-2's chunk tree), keeping the tree levels but not the values.
+    At about 1.4 MB of Call outputs per token, hashing on host threads (`native_host`) can't keep up with the mixes, and
+    its unsized step blocks deadlock on a prefill that overflows them. The device staging is sized from the mix's
+    envelope as the Commit stage arms it (`size_arena`: two decode-sized blocks and one prefill-sized one, each step
+    taking the one its shape needs), and refused here, before any request, when it doesn't fit beside the engine."""
     from verity_vllm.engine import vllm_adapter as va
 
     eng = va.build_engine(CHECKPOINTS, max_num_seqs=args.max_num_seqs, case=ROLES[args.model], execution="bi-eager",
@@ -244,17 +245,16 @@ def offline_engine(args: argparse.Namespace, commit: bool, meta: dict, mix: Sequ
                       "env": eng.env_flags, "effective": eng.effective, "build_s": round(eng.build_s, 1)}
     if not commit:
         return eng, None
-    from verity_vllm.commit.committer.native_host import NativeHostCommitter
+    from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
-    com = NativeHostCommitter(eng, run_id="network-traces", hash_threads=args.hash_threads, retain_values=False,
-                              arena_bytes=None, gpu_tree=args.gpu_tree)
+    com = NativeCollectCommitter(eng, run_id="network-traces", retain_values=False, arena_bytes=None)
     t = clock()
     com.register_weights()
     rows = [r for _, reqs, _ in mix for r in reqs]
     arena = com.size_arena({"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt"]) for r in rows),
                             "max_new": max(r["max_tokens"] for r in rows),
                             "max_num_batched_tokens": args.max_num_batched_tokens, "max_model_len": args.max_model_len})
-    meta["committer"] = {"name": com.name, "hash_threads": args.hash_threads, "retain_values": False,
+    meta["committer"] = {"name": com.name, "retain_values": False,
                          "run_s": WINDOW_BUCKETS * BUCKET_MS / 1000, "register_weights_s": round(clock() - t, 1),
                          "arena": {k: arena.get(k) for k in ("decode_block_bytes", "prefill_block_bytes", "blocks_preallocated",
                                                              "step_bound_bytes", "per_token_bytes")}}
@@ -749,9 +749,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--max-num-batched-tokens", type=int, default=8192, help="the offline engine's (the stock server's own)")
     r.add_argument("--gpu-memory-utilization", type=float, default=0.7,
                    help="the offline engine's, leaving the committer's prefill-sized staging block room beside it")
-    r.add_argument("--hash-threads", type=int, default=2, help="the committer's (the Commit stage's default)")
-    r.add_argument("--gpu-tree", action="store_true",
-                   help="the committer hashes each step's stream on the GPU (CMT-2's chunk tree), with no copy to the host")
     c = sub.add_parser("convert", help="rebuild trace.json and summary.json in job directories")
     c.add_argument("dirs", nargs="+", type=Path)
     c.add_argument("--ingress-bytes", choices=("text", "body"), default="text")
