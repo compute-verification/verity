@@ -46,6 +46,7 @@ def node2(tmp_path, monkeypatch):
     fill, gl = tmp_path / "fill", tmp_path / "gl"
     for d in ("queue", "running", "logs", "done", "failed"):
         (fill / d).mkdir(parents=True)
+    (fill / "timing-owners").write_text("net  # network accounting's chunks\n")
     gl.mkdir()
     for k, v in {"FILL_DIR": fill, "GPU_LEASE_DIR": gl, "FILL_CGROUP_ROOT": cg, "FILL_CPU_ROOT": tmp_path / "cpu",
                  "FILL_YIELD_LOCK": tmp_path / "check-d.lock"}.items():
@@ -190,6 +191,31 @@ def test_no_exception_lifts_a_timing_job_past_its_cap_and_a_commit_is_never_one(
     queue(fill, "verity-commit-x.sh", "owner=c gpus=1 timing=1 cpus=16 max_min=120 project=verity")
     h = fr.header(fill / "queue" / "verity-commit-x.sh")
     assert (h["timing"], h["gpus"], h["max_min"]) == (False, 1, 120)
+
+
+def test_a_timing_job_needs_an_owner_infra_lists_and_gets_at_most_a_gpus_memory_share(node2, monkeypatch):
+    """timing=1 takes a GPU and whole cores nothing preempts, so only an owner FILL_DIR/timing-owners names (a glob) may set it;
+    anyone else's job goes to failed/, and without the file everyone's does. Its scope's MemoryMax is its mem_gb up to
+    gpu-lease's per-GPU share, which no other GPU job can exceed either."""
+    load, fill, _ = node2
+    monkeypatch.setenv("GPU_LEASE_MEM_GB_PER_GPU", "200")
+    fr = load()
+    held, want, started, stopped, run = fake_node(fr, monkeypatch, fill)
+    events = []
+    monkeypatch.setattr(fr, "event", lambda kind, job, **kw: events.append((kind, job, kw.get("why"))))
+    (fill / "timing-owners").write_text("net  # network accounting\nnetwork-*  # its lanes\n")
+    queue(fill, "pous-x.sh", "owner=pm gpus=1 timing=1 cpus=16 max_min=60 mem_gb=100000 project=pous")
+    queue(fill, "nw-a.sh", TIMING.replace("mem_gb=48", "mem_gb=100000"))
+    queue(fill, "nw-b.sh", TIMING.replace("owner=net", "owner=network-n3"))
+    fr.tick(8)
+    assert [(kind, job, why) for kind, job, why in events if kind == "failed"] == [
+        ("failed", "pous-x.sh", "header: timing=1 (owner pm isn't in FILL_DIR/timing-owners)")]
+    assert [name for name, _, _ in started] == ["nw-a.sh", "nw-b.sh"]
+    assert (fr.running["nw-a.sh"]["h"]["mem_gb"], fr.running["nw-b.sh"]["h"]["mem_gb"]) == (200, 48)
+    (fill / "timing-owners").unlink()
+    queue(fill, "nw-c.sh", TIMING)
+    fr.tick(8)
+    assert (fill / "failed" / "nw-c.sh").exists() and len(started) == 2
 
 
 def test_fill_never_stops_a_timing_job_and_a_whole_node_window_waits_for_it(node2, monkeypatch):

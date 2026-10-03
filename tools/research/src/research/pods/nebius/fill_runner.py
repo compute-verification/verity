@@ -12,8 +12,11 @@ A fill job is an executable script in FILL_DIR/queue/.  Its header says what it 
 #   jobs of that kind running goes next), then the longest-queued job (a requeued job queues afresh);
     #   project pous (default) or verity (Verity's work, which runs only when no pous job is queued, except circuits' Commit
 #   guests, verity-commit-*.sh, which rank above every other job); mem_gb: a CPU job's memory cap
-#   (default 128; a GPU job's cap is gpu-lease's, 90% of RAM over the GPU count, a timing job's its own scope's, default 128);
-#   timing=1: a timing chunk (network accounting's), on one GPU with cpus CPUs of its own (1 to 16, whole cores; see below)
+#   (default 128; a GPU job's cap is gpu-lease's, 90% of RAM over the GPU count, a timing job's its own scope's, default 128
+#   and at most gpu-lease's);
+#   timing=1: a timing chunk (network accounting's), from an owner FILL_DIR/timing-owners lists (one glob per line, infra's:
+#   `network-accounting  # who, why`; anyone else's goes to failed/), on one GPU with cpus CPUs of its own (1 to 16, whole
+#   cores; see below)
 #   and its thread pools (OMP_NUM_THREADS, OPENBLAS_, MKL_, NUMEXPR_) one per core, max_min <= FILL_TIMING_MAX_MIN (60)
 #   whatever max-min line or fence names it (a Commit guest's timing=1 is ignored);
 #   a value fill reads as a whole number that isn't one sends the job to failed/ (event `failed`, why `header: gpus=one`)
@@ -209,12 +212,35 @@ def max_min_exception(name: str, t: float | None = None) -> int | None:
     return None
 
 
+def timing_owners() -> list[str]:
+    """FILL_DIR/timing-owners: the owners whose jobs may be timing jobs, one glob per line (`network-accounting  # who, why`),
+    written by infra.  A timing job holds a GPU and whole cores that nothing preempts, so without the file nobody's may."""
+    try:
+        lines = (FILL / "timing-owners").read_text().splitlines()
+    except OSError:
+        return []
+    return [f[0] for f in (line.split("#")[0].split() for line in lines) if f]
+
+
+def mem_share(n: int) -> int:
+    """gpu-lease's memory cap per GPU, in GB: GPU_LEASE_MEM_GB_PER_GPU, else 90% of MemTotal over the n GPUs."""
+    per = os.environ.get("GPU_LEASE_MEM_GB_PER_GPU", "")
+    if per.isdigit():
+        return int(per)
+    try:
+        kb = next(int(l.split()[1]) for l in Path("/proc/meminfo").read_text().splitlines() if l.startswith("MemTotal:"))
+    except (OSError, StopIteration, IndexError, ValueError):
+        return CPU_MEM_GB
+    return int(kb * 0.9 / 2**20 / max(n, 1))
+
+
 HEADER = {"owner": "unknown", "gpus": 1, "max_min": 25, "cpus": 8, "project": "pous", "on": None, "prio": 0, "mem_gb": CPU_MEM_GB}
 
 
 def header(p: Path, t: float | None = None) -> dict:
     """The job's header, normalized.  A value fill reads as a whole number that isn't one (gpus, max_min, prio; a CPU or timing
-    job's mem_gb; a timing job's cpus) keeps its default and is named in h["bad"]: the runner files a queued job so under failed/."""
+    job's mem_gb; a timing job's cpus) keeps its default and is named in h["bad"], as is timing=1 from an owner
+    FILL_DIR/timing-owners doesn't list: the runner files a queued job so under failed/."""
     h = {k: v for k, v in HEADER.items() if k != "mem_gb"}
     for line in p.read_text(errors="replace").splitlines()[:20]:
         m = re.match(r"#\s*fill:\s*(.*)", line)
@@ -232,6 +258,9 @@ def header(p: Path, t: float | None = None) -> dict:
 
     commit = p.name.startswith(COMMIT_PREFIX)
     h["timing"] = h.get("timing") == 1 and not commit
+    if h["timing"] and not any(fnmatch.fnmatchcase(str(h["owner"]), g) for g in timing_owners()):
+        bad.append(f"timing=1 (owner {h['owner']} isn't in FILL_DIR/timing-owners)")
+        h["timing"] = False
     for k in ("gpus", "max_min", "prio"):
         h[k] = whole(k)
     h["gpus"] = 1 if h["timing"] else min(max(h["gpus"], 0), 2 if commit else 1)
@@ -859,7 +888,8 @@ def tick(n: int) -> str:
             for i in got:
                 idle.remove(i)
             if h.get("timing"):
-                h = {**h, "timing_cpus": carve(pool, local_cpus(got[0]), h["cpus"])}
+                h = {**h, "timing_cpus": carve(pool, local_cpus(got[0]), h["cpus"]),
+                     "mem_gb": min(int(h.get("mem_gb", CPU_MEM_GB)), mem_share(n))}
                 pool -= gpu_set(h["timing_cpus"], 1 << 16) or set()
             start(p, {**h, "on": ",".join(map(str, got))}, backfill=backfill)
             counts[h["owner"]] += 1
