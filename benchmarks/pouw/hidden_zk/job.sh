@@ -141,7 +141,7 @@ controls() {  # controls D O ROLE: the selftest build's cases, recorded for the 
 
 lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at once as fit beside each other
   local D=$1 O=$2 role=$3 each par cap running=0 c tag args s case pub own
-  each=$(( $(stat -c %s "$D/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 ))       # GB: about 3.3x the circuit text at K=256
+  each=$(( $(stat -c %s "$D/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 ))       # GB: its peak is about 5x the circuit text at K=256
   par=$(( STAGE_GB / each )); [ $par -lt 1 ] && par=1; [ $par -gt 8 ] && par=8
   cap=$(( STAGE_GB / par ))
   local base="verify --zk --circuit $D/circuit.txt"
