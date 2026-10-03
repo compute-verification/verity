@@ -19,6 +19,7 @@ build for the devices the inventory and the tests run on).
     verity-vllm capture-map check --map M.json --config config.json --inventory inv.json [--rank R]
     verity-vllm capture-map counts --map M.json --config config.json
     verity-vllm capture-map ids --map M.json --config config.json --t 0 --phase prefill --rank 0 [--route R] [--binder B --names]
+        [--off-target]
 """
 from __future__ import annotations
 
@@ -264,7 +265,10 @@ class IdsOptions:
     rank: int | None = option("--rank", type=int, default=None, help="the tensor-parallel rank (`s=`; default: none)")
     binder: list[str] | None = option("--binder", action="append", default=None,
                                       help="only the taps this committer binder binds (`commit.binder`; default: every tap)")
-    names: bool = option("--names", action="store_true", help="each bound tap's id and the tensor name the committer binds it as")
+    names: bool = option("--names", action="store_true", default=False,
+                         help="each bound tap's id and the tensor name the committer binds it as")
+    off_target: bool = option("--off-target", action="store_true", default=False,
+                              help="a rank off the map's target device: leave out the target_only taps")
     cmd: str = field(default="ids", init=False)
 
 
@@ -277,7 +281,8 @@ def main(a: CheckOptions | CountsOptions | IdsOptions) -> int:
     tp = a.tp or cmap["target"]["tensor_parallel_size"]
     env = symbols(cmap, config, tp)
     if a.cmd == "ids":
-        step = {"phase": a.phase, "routes": tuple(a.route) if a.route else None, "binders": tuple(a.binder) if a.binder else None}
+        step = {"phase": a.phase, "routes": tuple(a.route) if a.route else None, "binders": tuple(a.binder) if a.binder else None,
+                "on_target": not a.off_target}
         if a.names:
             for name, (tap, layer) in committer_names(cmap, env, rank=a.rank or 0, **step).items():
                 print(tap_value_id(tap, layer, profile=a.profile, request=a.request, t=a.t, phase=a.phase, rank=a.rank), name)

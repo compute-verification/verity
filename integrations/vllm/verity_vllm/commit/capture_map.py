@@ -136,10 +136,13 @@ def at_layer(pattern: str, layer: int | None) -> str:
 
 
 def _step_taps(cmap: dict[str, Any], env: dict[str, int], phase: str, routes: tuple[str, ...] | None,
-               binders: tuple[str, ...] | None = None):
-    """(tap, layer) for every tap one step captures on `routes` (all when None); with `binders`, only the taps one of them binds."""
+               binders: tuple[str, ...] | None = None, on_target: bool = True):
+    """(tap, layer) for every tap one step captures on `routes` (all when None); with `binders`, only the taps one of them binds;
+    off the map's target device (`on_target` False), no `target_only` tap."""
     for tap in cmap["taps"]:
         if tap.get("route") is not None and routes is not None and tap["route"] not in routes:
+            continue
+        if tap.get("target_only") and not on_target:
             continue
         if tap.get("phases") and phase not in tap["phases"]:
             continue
@@ -156,19 +159,22 @@ def tap_value_id(tap: dict[str, Any], layer: int | None, *, profile: str, reques
 
 
 def identities(cmap: dict[str, Any], env: dict[str, int], *, profile: str, request: str, t: int, phase: str,
-               routes: tuple[str, ...] | None = None, rank: int | None = None, binders: tuple[str, ...] | None = None) -> list[str]:
+               routes: tuple[str, ...] | None = None, rank: int | None = None, binders: tuple[str, ...] | None = None,
+               on_target: bool = True) -> list[str]:
     """The canonical value ids of every tap one step captures on one rank (`s=<rank>` when `rank` is given), for the step's
-    `routes` (all of them when None); with `binders`, only the taps those committer binders bind (`commit.binder`)."""
+    `routes` (all of them when None); with `binders`, only the taps those committer binders bind (`commit.binder`); off the
+    target (`on_target` False), none of the `target_only` taps."""
     return [tap_value_id(tap, layer, profile=profile, request=request, t=t, phase=phase, rank=rank)
-            for tap, layer in _step_taps(cmap, env, phase, routes, binders)]
+            for tap, layer in _step_taps(cmap, env, phase, routes, binders, on_target)]
 
 
 def committer_names(cmap: dict[str, Any], env: dict[str, int], *, phase: str = "prefill", routes: tuple[str, ...] | None = None,
-                    rank: int = 0, binders: tuple[str, ...] | None = None) -> dict[str, tuple[dict[str, Any], int | None]]:
+                    rank: int = 0, binders: tuple[str, ...] | None = None, on_target: bool = True
+                    ) -> dict[str, tuple[dict[str, Any], int | None]]:
     """The committer's tensor name (`commit.name`: `{i}` the layer, `{r}` the rank) of every bound tap one step captures on one
-    rank -> (tap, layer).  Two taps of one step under one name is a `MapError`."""
+    rank -> (tap, layer), the `target_only` ones only on the target.  Two taps of one step under one name is a `MapError`."""
     out: dict[str, tuple[dict[str, Any], int | None]] = {}
-    for tap, layer in _step_taps(cmap, env, phase, routes, binders):
+    for tap, layer in _step_taps(cmap, env, phase, routes, binders, on_target):
         c = tap.get("commit")
         if c is None:
             continue
@@ -180,11 +186,11 @@ def committer_names(cmap: dict[str, Any], env: dict[str, int], *, phase: str = "
 
 
 def bind_names(cmap: dict[str, Any], env: dict[str, int], names, *, profile: str, request: str, t: int, phase: str,
-               routes: tuple[str, ...] | None = None, rank: int | None = None, binders: tuple[str, ...] | None = None
-               ) -> dict[str, list[str]]:
+               routes: tuple[str, ...] | None = None, rank: int | None = None, binders: tuple[str, ...] | None = None,
+               on_target: bool = True) -> dict[str, list[str]]:
     """One step's committed tensor names on one rank against the map: `ids`, the value id of every name the map lists; `unknown`,
     the names it does not list; `missing`, the names of bound taps (of `binders`, when given) the step did not commit."""
-    want = committer_names(cmap, env, phase=phase, routes=routes, rank=rank or 0, binders=binders)
+    want = committer_names(cmap, env, phase=phase, routes=routes, rank=rank or 0, binders=binders, on_target=on_target)
     got = set(names)
     return {"ids": sorted(tap_value_id(*want[n], profile=profile, request=request, t=t, phase=phase, rank=rank) for n in got & want.keys()),
             "unknown": sorted(got - want.keys()), "missing": sorted(want.keys() - got)}

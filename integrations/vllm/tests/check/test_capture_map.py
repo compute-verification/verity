@@ -196,9 +196,21 @@ def test_the_bound_tap_counts():
         c = CM.counts(CMAP, ENV, routes)
         return c["bound_taps_per_step"], c["bound_taps_per_step_by_binder"]
 
-    assert bound(("dense-mha",)) == (1663, {"allreduce_norm": 468, "module_hook": 667, "moe": 525, "sampler": 1, "tp_partial": 2})
-    assert bound(("dense-mha", "sparse-mqa")) == bound(("dense-mha",)), "a mixed step binds what a dense-mha step does"
-    assert bound(("sparse-mqa",)) == (1585, {"allreduce_norm": 468, "module_hook": 589, "moe": 525, "sampler": 1, "tp_partial": 2})
+    common = {"allreduce_norm": 468, "moe": 525, "sampler": 1, "tp_partial": 2}
+    assert bound(("dense-mha",)) == (2272, {**common, "attention": 609, "module_hook": 667})
+    assert bound(("sparse-mqa",)) == (2293, {**common, "attention": 708, "module_hook": 589})
+    assert bound(("dense-mha", "sparse-mqa")) == (2449, {**common, "attention": 786, "module_hook": 667}), \
+        "a mixed step binds both routes' attention taps, each over its own rows"
+
+
+def test_target_only_taps_are_named_on_the_target_only():
+    """Off the map's target device a step commits no `target_only` tap: forward_mqa's attention and the indexer's taps."""
+    for routes, off in ((("dense-mha",), 63), (("sparse-mqa",), 63 + 78 + 21)):
+        on = CM.committer_names(CMAP, ENV, routes=routes, rank=0)
+        elsewhere = CM.committer_names(CMAP, ENV, routes=routes, rank=0, on_target=False)
+        assert set(elsewhere) < set(on) and len(on) - len(elsewhere) == off
+        assert all(tap["target_only"] for n, (tap, _layer) in on.items() if n not in elsewhere)
+    assert "model.layers.4.self_attn/attn_mqa" not in elsewhere and "model.layers.4.self_attn/v_absorb" in elsewhere
 
 
 @pytest.mark.parametrize("route", ["dense-mha", "sparse-mqa"])

@@ -1975,8 +1975,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         module-tensor NAMES (with multiplicity: a shared RotaryEmbedding is legitimately called once per layer) is the same in every step of
         the run -- the per-step call structure of the model does not depend on the token count.  A step that drops one tensor and
         duplicates another keeps its count and FAILS (1) or (4).  With a route source (`acquire.sources.route_source`: the capture map's
-        model), (1) expects the hooked modules the map binds on the step's routes, and the names the map lists are held to the map's names
-        for those routes (`routes_bad`) instead of (4).  -> `RunCommitment.extra['identity_check']`."""
+        model), the names the map lists are held to the map's names for the step's routes (`routes_bad`) instead of (1) and (4), and (1)
+        covers the hooked modules the map has no entry for.  -> `RunCommitment.extra['identity_check']`."""
         from collections import Counter
 
         from verity_vllm.acquire import fa2_plane_classes as FP
@@ -2038,10 +2038,11 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                     tp_bad["<foreign rank tag>"] = sum(c for n, c in names.items() if TP_PARTIAL_RE.search(n) and not n.endswith(f"_rank{rk}"))
             elif tp_counts:
                 tp_bad = {"<undeclared tp source>": sum(tp_counts.values())}
+            mod_names, rt_bad = rt_src.split_step_names(mod_names, step, padding_only) if rt_src is not None else (mod_names, {})
             by_module = Counter()
             for n, c in mod_names.items():
                 by_module[self._module_of(n)] += c
-            step_expected = rt_src.step_modules(step, expected_modules, padding_only) if rt_src is not None else expected_modules
+            step_expected = rt_src.step_modules(expected_modules) if rt_src is not None else expected_modules
             missing = sorted(step_expected - set(by_module))
             unknown = sorted(set(by_module) - expected_modules)
             fa2_layers = FP.counts_by_layer(names_all.elements())
@@ -2079,7 +2080,6 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             n_ids = (1 if "runner.sampler/sampled_token_ids" in pad_ident else 0) if padding_only else names.get("runner.sampler/sampled_token_ids", 0)
             sampler_bad = bool(man["sampler_ids"]) and n_ids != man["sampler_ids"]
             mod_names, cb_bad = cb_src.split_step_names(mod_names, step, padding_only) if cb_src is not None else (mod_names, {})
-            mod_names, rt_bad = rt_src.split_step_names(mod_names, step, padding_only) if rt_src is not None else (mod_names, {})
             split_bad = {k: bad for k, bad in (("call_boundaries", cb_bad), ("routes", rt_bad)) if bad}
             ref_names = mod_names if ref_names is None else ref_names
             if padding_only:                                              # (b): set equality of identity names with step 0, not multiplicity

@@ -296,7 +296,8 @@
   "sampler": "the committer's runner.sample wrap: runner.sampler/sampled_token_ids",
   "tp_partial": "TPPartialSource (acquire/sources/partial_source.py): a collective's rank-local input, <site>/part_rank<r> or <site>/shard_rank<r>",
   "moe": "MoeBlockSource (acquire/sources/moe_source.py): moe/L<i>/<plane>, snapshotted after each kernel of the fused-MoE block",
-  "allreduce_norm": "TPPartialSource's fused_allreduce_rms_norm wrap (acquire/sources/allreduce_norm.py): on every call the partial as <norm>/part_rank<r>, copied before the call; on the FlashInfer path, where the norm module never runs, the returns as <norm>/0 and <norm>/1. On the all-reduce + RMSNorm path the norm module runs and the module hook binds those two names, so a step commits the same names on either path"
+  "allreduce_norm": "TPPartialSource's fused_allreduce_rms_norm wrap (acquire/sources/allreduce_norm.py): on every call the partial as <norm>/part_rank<r>, copied before the call; on the FlashInfer path, where the norm module never runs, the returns as <norm>/0 and <norm>/1. On the all-reduce + RMSNorm path the norm module runs and the module hook binds those two names, so a step commits the same names on either path",
+  "attention": "AttentionSource (acquire/sources/attention_source.py), on every attention layer: _sparse_indexer_and_attn's arguments before it runs (fused_norm_rope's q_c, kv_c_out and k_pe_out, the W_UK_T product, fused_q's outputs) and the layer's cache rows at the step's slot mapping, read from the caches fused_norm_rope was given; after it returns, the rows of output that forward_mqa's rows were up-projected into and topk_indices_buffer[:M, :TOPK]; impl.forward_mqa's return; impl.forward_mha's output argument after it returns (not bound with a chunked context). <attn>/<value> for the layer's values, <indexer>/<value> and <k_cache>/rows for the indexer's"
  },
  "taps": [
   {
@@ -825,7 +826,11 @@
      "param": "model.layers.{i}.self_attn.q_a_layernorm.weight",
      "provenance": "checkpoint"
     }
-   ]
+   ],
+   "commit": {
+    "name": "model.layers.{i}.self_attn/q_c",
+    "binder": "attention"
+   }
   },
   {
    "id": "kv_a_layernorm",
@@ -853,7 +858,11 @@
      "param": "model.layers.{i}.self_attn.kv_a_layernorm.weight",
      "provenance": "checkpoint"
     }
-   ]
+   ],
+   "commit": {
+    "name": "model.layers.{i}.self_attn/kv_c",
+    "binder": "attention"
+   }
   },
   {
    "id": "k_pe_rope",
@@ -882,7 +891,11 @@
      "provenance": "computed at init (get_rope, base 8e6)",
      "shared": true
     }
-   ]
+   ],
+   "commit": {
+    "name": "model.layers.{i}.self_attn/k_pe",
+    "binder": "attention"
+   }
   },
   {
    "id": "mla_kv_cache",
@@ -905,7 +918,11 @@
    "rank_identical": true,
    "target_only": false,
    "manifest_family": "instance_outputs",
-   "note": "what the attention core of every later step reads; word-equal to the two fused_norm_rope outputs it copies"
+   "note": "what the attention core of every later step reads; word-equal to the two fused_norm_rope outputs it copies",
+   "commit": {
+    "name": "model.layers.{i}.self_attn/kv_cache_rows",
+    "binder": "attention"
+   }
   },
   {
    "id": "q_b_proj",
@@ -970,7 +987,11 @@
      "after_load": true
     }
    ],
-   "note": "computed on both routes; only the sparse route reads it (the MQA query's latent half)"
+   "note": "computed on both routes; only the sparse route reads it (the MQA query's latent half)",
+   "commit": {
+    "name": "model.layers.{i}.self_attn/ql_nope",
+    "binder": "attention"
+   }
   },
   {
    "id": "kv_b_proj",
@@ -1029,7 +1050,12 @@
    "rank_identical": false,
    "target_only": false,
    "manifest_family": "instance_outputs",
-   "route": "dense-mha"
+   "route": "dense-mha",
+   "note": "bound as forward_mha's output argument, [rows, NHL * DV], the prefill rows of the o_proj input; a mixed step's are its last M - num_decode_tokens rows (its decode rows take the MQA path)",
+   "commit": {
+    "name": "model.layers.{i}.self_attn/attn_mha",
+    "binder": "attention"
+   }
   },
   {
    "id": "q_pe_rope",
@@ -1053,7 +1079,11 @@
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
-   "manifest_family": "instance_outputs"
+   "manifest_family": "instance_outputs",
+   "commit": {
+    "name": "model.layers.{i}.self_attn/mqa_q",
+    "binder": "attention"
+   }
   },
   {
    "id": "attn",
@@ -1079,7 +1109,11 @@
    "target_only": true,
    "manifest_family": "instance_outputs",
    "route": "sparse-mqa",
-   "note": "layers in 'shared_topk' read the indices the most recent 'indexer' layer wrote (IndexShare); see topk_source"
+   "note": "layers in 'shared_topk' read the indices the most recent 'indexer' layer wrote (IndexShare), committed as that layer's indexer.topk. A dense-mha step with decode tokens calls it from forward_impl on its first num_decode_tokens rows only",
+   "commit": {
+    "name": "model.layers.{i}.self_attn/attn_mqa",
+    "binder": "attention"
+   }
   },
   {
    "id": "v_absorb",
@@ -1110,7 +1144,12 @@
      "provenance": "load-derived: kv_b_proj dequantized to bf16 and split ([NHL, KVL, DV])",
      "after_load": true
     }
-   ]
+   ],
+   "note": "the rows of output forward_mqa's rows were up-projected into: every row on the sparse route; on a dense-mha step with decode tokens the first num_decode_tokens, through forward_impl's _v_up_proj (the same bmm)",
+   "commit": {
+    "name": "model.layers.{i}.self_attn/v_absorb",
+    "binder": "attention"
+   }
   },
   {
    "id": "o_proj",
@@ -1237,7 +1276,11 @@
    "rank_identical": true,
    "target_only": true,
    "manifest_family": "instance_outputs",
-   "note": "computed on both routes; only the sparse route scores with it"
+   "note": "computed on both routes; only the sparse route scores with it",
+   "commit": {
+    "name": "model.layers.{i}.self_attn.indexer/q_fp8",
+    "binder": "attention"
+   }
   },
   {
    "id": "indexer.weights",
@@ -1261,7 +1304,11 @@
    "rank_identical": true,
    "target_only": true,
    "manifest_family": "instance_outputs",
-   "note": "computed on both routes; only the sparse route scores with it"
+   "note": "computed on both routes; only the sparse route scores with it",
+   "commit": {
+    "name": "model.layers.{i}.self_attn.indexer/weights",
+    "binder": "attention"
+   }
   },
   {
    "id": "indexer.k_cache",
@@ -1293,7 +1340,11 @@
      "param": "model.layers.{i}.self_attn.indexer.k_norm.bias",
      "provenance": "checkpoint"
     }
-   ]
+   ],
+   "commit": {
+    "name": "model.layers.{i}.self_attn.indexer.k_cache/rows",
+    "binder": "attention"
+   }
   },
   {
    "id": "indexer.logits",
@@ -1316,7 +1367,8 @@
    "rank_identical": true,
    "target_only": true,
    "manifest_family": "instance_outputs",
-   "route": "sparse-mqa"
+   "route": "sparse-mqa",
+   "note": "not bound: one call per prefill chunk plus one for the decode rows, so the count per step follows the scheduler's chunking, and each is M x CTX f32 (a decode row is max_model_len wide). The topk tap and its inputs (q_fp8, weights, k_cache) are what the attention reads; a Program that needs the logits recomputes them from those"
   },
   {
    "id": "indexer.topk",
@@ -1340,7 +1392,11 @@
    "target_only": true,
    "manifest_family": "instance_outputs",
    "route": "sparse-mqa",
-   "note": "the dense-mha route leaves the buffer untouched; record which route each step took"
+   "note": "bound after _sparse_indexer_and_attn returns, on a step whose layer ran forward_mqa (the sparse route, or decode tokens): every row the indexer scored. A dense-mha step without decode tokens leaves the buffer untouched and binds none",
+   "commit": {
+    "name": "model.layers.{i}.self_attn.indexer.indexer_op/topk",
+    "binder": "attention"
+   }
   },
   {
    "id": "mlp.gate_up_proj",
@@ -2557,11 +2613,13 @@
   },
   {
    "item": 4,
-   "work": "record per step which route each layer took (dense-mha or sparse-mqa: prefill_max_seq_len <= TOPK) so a dense-mha step binds kv_b_proj and attn.mha and not q_nope_absorb, attn, v_absorb or the indexer's scoring taps"
+   "work": "record per step which route each layer took (dense-mha or sparse-mqa: prefill_max_seq_len <= TOPK) so a dense-mha step binds kv_b_proj and attn.mha and not q_nope_absorb, attn, v_absorb or the indexer's scoring taps",
+   "done": "route source (acquire/sources/route_source.py): route_site wrapped on every attention layer, each step's routes recorded per layer; identity_check holds the step's module-hook, sampler, all-reduce-norm and attention names to committer_names for those routes (capture-map ids --route R --binder B --names prints them), and its every-hooked-module-ran rule covers only the hooked modules the map has no entry for. q_nope_absorb, indexer.wq_b, indexer.q_fp8 and indexer.weights lose their route: forward computes them on both"
   },
   {
    "item": 5,
-   "work": "function-return and out-argument taps inside DeepseekV32Attention.forward: fused_norm_rope (q_c, kv_c_out, k_pe_out), the W_UK_T bmm, fused_q, forward_mqa, the W_UV bmm into output"
+   "work": "function-return and out-argument taps inside DeepseekV32Attention.forward: fused_norm_rope (q_c, kv_c_out, k_pe_out), the W_UK_T bmm, fused_q, forward_mqa, the W_UV bmm into output",
+   "done": "attention source (acquire/sources/attention_source.py): _sparse_indexer_and_attn's arguments (q_c, kv_c, k_pe, ql_nope, mqa_q) bound before it runs, the W_UV rows of output after it, impl.forward_mqa's return (target only) and impl.forward_mha's output argument; a mixed dense-mha step binds attn and v_absorb over its decode rows and attn.mha over its prefill rows"
   },
   {
    "item": 6,
@@ -2570,7 +2628,8 @@
   },
   {
    "item": 7,
-   "work": "the indexer: wrap the DeepGEMM logits calls and read topk_indices_buffer[:M] after sparse_attn_indexer; read the indexer cache and MLA cache rows at slot_mapping after fused_norm_rope"
+   "work": "the indexer: wrap the DeepGEMM logits calls and read topk_indices_buffer[:M] after sparse_attn_indexer; read the indexer cache and MLA cache rows at slot_mapping after fused_norm_rope",
+   "done": "the same source: index_q_fp8 and index_weights_out bound before _sparse_indexer_and_attn, topk_indices_buffer[:M, :TOPK] after it when the layer ran forward_mqa, and the MLA and indexer cache rows at fused_norm_rope's slot mapping (the indexer cache's per-block key bytes then scale bytes regrouped per row); all indexer taps target only. Not done: indexer.logits (see its note)"
   }
  ]
 }
