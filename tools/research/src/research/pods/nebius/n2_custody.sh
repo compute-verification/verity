@@ -29,7 +29,10 @@
 # a round refuses (exit 3), as it does while another round holds STATE/.lock. Exit 0 ok, 1 a run not yet home, 2 usage, 3 refused.
 # Node 2's timed windows (PoUW's measurements) run with nothing else on the node: a round starts, and starts each push, only while the
 # fill runner's status is fresh and says no window runs or waits, and no booked window is on or starts within the round's bound
-# (PASS_S + PUSH_S); else it stops there, with one log line and exit 0, and the next round asks again.
+# (PASS_S + PUSH_S); else it stops there, with one log line and exit 0, and the next round asks again. Its Jobs run on node 1, so it
+# keeps node 1's daily hold (VY_CUSTODY_QUIET, 12:10-13:30Z, as n1_custody.sh does) the same way, and no Job of it runs into node 1's
+# quiet hour: a push starts only while its rsync and a Job of at least JOB_MIN_S end before 12:30Z, and the Job's
+# activeDeadlineSeconds ends it by then.
 set -u
 ROOTS=${VY_CUSTODY_ROOTS:-/workspace/jobs/runs=/workspace/jobs/runs,/workspace/research/runs=/workspace/jobs/runs-n2}
 STATE=${VY_CUSTODY_STATE:-/workspace/research/custody-push}
@@ -42,6 +45,10 @@ SRC=${VY_CUSTODY_SRC:-/workspace/jobs/custody}
 LOOP=${VY_CUSTODY_LOOP:-$STATE/push.sh}
 FILL=${VY_CUSTODY_FILL:-/workspace/pouw/fill}
 PUSH_S=3600     # the most one push takes: rsync 20 min, the Job's wait 35 min, the calls around them
+RSYNC_S=1200
+JOB_MIN_S=300   # a Job left less time before node 1's quiet hour isn't started
+QUIET=${VY_CUSTODY_QUIET-1210-1330}     # node 1's daily hold, HHMM-HHMM UTC (dispatch's PACK_HOLD through its quiet hour's end)
+BY=1230                                 # its quiet hour, which no Job runs into
 N1=${VY_N1:-vy-n1}
 DRY=0
 case "${1:-}" in
@@ -110,6 +117,21 @@ EOF
 }
 if ! why=$(window 2>&1); then
   log "skipped: node 2's timed window: $why; the next round asks again"
+  exit 0
+fi
+# n1_left: the seconds a Job started on node 1 now may run before its quiet hour (BY), 0 in its daily hold; to the minute, so a minute
+# less
+n1_left() {
+  [ -n "$QUIET" ] || { echo 86400; return; }
+  local t q0 q1 by
+  t=$(date -u +%H%M)
+  t=$((10#${t:0:2} * 60 + 10#${t:2:2})) by=$((10#${BY:0:2} * 60 + 10#${BY:2:2}))
+  q0=$((10#${QUIET:0:2} * 60 + 10#${QUIET:2:2})) q1=$((10#${QUIET:5:2} * 60 + 10#${QUIET:7:2}))
+  if [ "$t" -ge "$q0" ] && [ "$t" -lt "$q1" ]; then echo 0; else echo $(( (by - t + 1440) % 1440 * 60 - 60 )); fi
+}
+HOLD="node 1's daily hold ($QUIET UTC; no Job of it runs past ${BY}Z, where node 1's quiet hour starts)"
+if [ "$DRY" = 0 ] && [ "$(n1_left)" -lt $((RSYNC_S + JOB_MIN_S)) ]; then
+  log "skipped: $HOLD; the next round asks again"
   exit 0
 fi
 [ "$DRY" = 1 ] || stopgap
@@ -207,7 +229,8 @@ with open(f"{d}/.custody.tmp", "w") as fh:
 EOF
 }
 
-push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 held (hold= says what to decide), else 1; why= says
+push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 held (hold= says what to decide), 6 no Job started
+  # for node 1's daily hold (the copy waits there), else 1; why= says
   local root=$1 dst=$2 r=$3 name force=
   [ "$4" = dead ] && force=--force
   name=n2-custody-$(echo "$r" | tr -cd 'a-z0-9-' | tail -c 40)
@@ -217,12 +240,18 @@ push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 he
   start="$KUBE delete job $name --ignore-not-found > /dev/null && $KUBE create -f - > /dev/null"
   case $job in
     "" | *Complete=True* | *Failed=True*)
-      timeout 1200 rsync -a --timeout=300 --rsync-path="sudo -n rsync" --chown=1000:1000 --mkpath "$root/$r/" "$N1:$dst/$r/" \
+      timeout "$RSYNC_S" rsync -a --timeout=300 --rsync-path="sudo -n rsync" --chown=1000:1000 --mkpath "$root/$r/" "$N1:$dst/$r/" \
         || { why="rsync to $N1 failed ($?)"; return 1; } ;;
     *)
       start=true
       log "$root/$r: node 1's Job $name, from an earlier round, has not finished: waiting on it" ;;
   esac
+  deadline=$(n1_left)
+  [ "$deadline" -gt 3600 ] && deadline=3600
+  if [ "$start" != true ] && [ "$deadline" -lt "$JOB_MIN_S" ]; then
+    why="$HOLD: ${deadline}s left, the copy waits on node 1"
+    return 6
+  fi
   # a failed Job never completes: wait for either condition, then name the failure from its log
   if ! timeout 2100 "${SSH[@]}" "$N1" "$start &&
     end=\$((\$(date +%s) + 1800)) && while [ \$(date +%s) -lt \$end ]; do
@@ -230,7 +259,7 @@ push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 he
     *Complete=True*) exit 0 ;; *Failed=True*) $KUBE logs job/$name --tail=3 >&2; exit 1 ;; esac; sleep 5; done
     echo 'Job not done in 30 min' >&2; exit 1" 2> "$STATE/.job.err" << EOF; then
 {"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": "$name", "labels": {"verity.dev/lane": "n2-custody", "verity.dev/kind": "custody"}},
- "spec": {"backoffLimit": 1, "activeDeadlineSeconds": 3600, "ttlSecondsAfterFinished": 3600, "template": {"metadata": {"labels": {"verity.dev/lane": "n2-custody"}}, "spec": {
+ "spec": {"backoffLimit": 1, "activeDeadlineSeconds": $deadline, "ttlSecondsAfterFinished": 3600, "template": {"metadata": {"labels": {"verity.dev/lane": "n2-custody"}}, "spec": {
   "restartPolicy": "Never", "nodeSelector": {"verity.dev/server": "vy-nebius-1"},
   "tolerations": [{"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}],
   "securityContext": {"runAsUser": 1000, "runAsGroup": 1000},
@@ -330,6 +359,11 @@ for c in "${fresh[@]}" "${retry[@]}"; do
     left=$((left + 1))
     continue
   fi
+  if [ "$(n1_left)" -lt $((RSYNC_S + JOB_MIN_S)) ]; then
+    paused=$HOLD
+    left=$((left + 1))
+    continue
+  fi
   stopgap
   tried=$((tried + 1))
   why= hold=
@@ -342,6 +376,9 @@ for c in "${fresh[@]}" "${retry[@]}"; do
   elif [ "$rc" = 4 ]; then
     echo "$why" > "$STATE/held/$r"
     log "$d ($camp, $state): held: $why. $hold; then mv $STATE/held/$r $STATE/pushed/"
+  elif [ "$rc" = 6 ]; then
+    paused=$why
+    tried=$((tried - 1)) left=$((left + 1))
   else
     n=$(( $(cat "$STATE/failures/$r" 2> /dev/null || echo 0) + 1 ))
     echo "$n" > "$STATE/failures/$r"

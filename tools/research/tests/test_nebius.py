@@ -1601,6 +1601,31 @@ def test_n2_custody_pauses_for_node_2s_timed_windows(tmp_path):
     assert n2.round_().returncode == 0 and n2.names("pushed") == [first.name, second.name]
 
 
+@N2_CUSTODY
+def test_n2_custody_starts_no_job_that_could_run_into_node_1s_quiet_hour(tmp_path):
+    """n2_custody.sh's Jobs run on node 1, yet it started them through node 1's daily hold (12:10-13:30Z), which n1_custody.sh
+    keeps, and a Job started at 12:09Z could run to 13:09Z (activeDeadlineSeconds 3600), into node 1's quiet hour. No push starts in
+    the hold, or unless its rsync (20 min) and a Job of 5 min end before 12:30Z, and its Job's deadline ends it before 12:30Z."""
+    n2 = _n2_custody(tmp_path)
+    a, b, c = (n2.run(f"r20261003-10000{i}-000{i}", {"state": "done"}) for i in (1, 2, 3))
+    at = lambda hhmm: N2_NOW + (int(hhmm[:2]) - 3) * 3600 + int(hhmm[2:]) * 60          # N2_NOW is 03:00Z
+    for hhmm in ("1210", "1229", "1230", "1329", "1206"):
+        held = n2.round_(clock=at(hhmm))
+        assert held.returncode == 0 and "skipped: node 1's daily hold (1210-1330 UTC; no Job of it runs past 1230Z" in held.stdout, hhmm
+    assert not n2.calls() and f"would push {a}" in n2.round_("--dry-run", clock=at("1215")).stdout, "a dry run starts no Job"
+
+    assert n2.round_(clock=at("1150"), VY_CUSTODY_MAX_RUNS="1").returncode == 0 and n2.names("pushed") == [a.name]
+    assert '"activeDeadlineSeconds": 2340,' in n2.calls(), "40 min to 12:30Z, less the minute"
+    cut = n2.round_(clock=at("1204"), CLOCK_AFTER_RSYNC=str(at("1226")))
+    assert cut.returncode == 0 and n2.names("pushed") == [a.name] and f"data custody /n1/runs/{b.name}" not in n2.calls()
+    assert ("paused after 0 push(es), for node 1's daily hold (1210-1330 UTC; no Job of it runs past 1230Z, where node 1's quiet hour "
+            "starts): 0s left, the copy waits on node 1: 2 run dir(s) left for the next round") in cut.stdout
+    late = n2.round_(clock=at("1331"))
+    assert late.returncode == 0 and n2.names("pushed") == [a.name, b.name, c.name]
+    assert n2.calls().count('"activeDeadlineSeconds": 3600,') == 2
+    assert n2.round_(clock=at("1215"), VY_CUSTODY_QUIET="").returncode == 0, "VY_CUSTODY_QUIET='' turns the hold off"
+
+
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
 def test_n2_commit_fetches_only_missing_manifests_that_hash_to_their_id(tmp_path):
     """Node 2's store has no remote, so a cited Build's manifest missing there failed cov-g217's precheck after a 19-min bootstrap:
