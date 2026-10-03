@@ -138,7 +138,7 @@ def make(source_root: Path, dest: Path, *, commit: str | None = None, clean: boo
     if commit and head != commit:
         raise Refused(f"{src} is at {head}, not {commit}, the commit the run was shipped for")
     if clean:
-        st = _git(["status", "--porcelain"], src)
+        st = _git(["status", "--porcelain", "--untracked-files=all"], src)
         if st.returncode or st.stdout.strip():
             raise Refused(f"{src} has uncommitted or untracked files, which a clone of HEAD would not carry: commit them, or pass "
                           f"--cwd source to run in the checkout as it is")
@@ -149,7 +149,7 @@ def make(source_root: Path, dest: Path, *, commit: str | None = None, clean: boo
         if r.returncode:
             raise Refused(f"git could not clone {src} into {dest}: {_why(r)}")
         got = _git(["rev-parse", "HEAD"], dest).stdout.strip()
-        st = _git(["status", "--porcelain"], dest)
+        st = _git(["status", "--porcelain", "--untracked-files=all"], dest)
         if got != head or st.returncode or st.stdout.strip():
             raise Refused(f"the clone in {dest} is not a clean checkout of {head} (HEAD {got or 'unknown'}"
                           f"{', with changes' if st.stdout.strip() else ''})")

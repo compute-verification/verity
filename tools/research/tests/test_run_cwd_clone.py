@@ -185,6 +185,17 @@ def test_a_source_root_that_cannot_be_cloned_is_refused_naming_cwd_source(tmp_pa
     assert not list((tmp_path / "runs").glob("r*")) and _clones(tmp_path) == [], "refused before a run dir; no clone left"
 
 
+def test_untracked_files_count_whatever_status_shows(tmp_path, repo, capsys):
+    """`status.showUntrackedFiles=no` hid an untracked file from `git status --porcelain`, so a checkout the clone would not
+    match passed as clean; `ship_source` read the same."""
+    _git(repo, "config", "status.showUntrackedFiles", "no")
+    (repo / "pkg" / "new.py").write_text("x = 1\n")
+    assert _run(tmp_path / "runs", "clone") == 3
+    assert "has uncommitted or untracked files" in capsys.readouterr().err and _clones(tmp_path) == []
+    with pytest.raises(remote.Refused, match="has uncommitted changes"):
+        remote.ship_source(["false"], str(tmp_path / "machine"), repo)
+
+
 def test_the_callers_git_dir_does_not_point_the_clone_at_the_source(tmp_path, repo, monkeypatch):
     """GIT_DIR in the caller's environment (a git hook, a wrapper) made the clone's `checkout --detach` act on the source."""
     branch = _git(repo, "symbolic-ref", "-q", "HEAD")

@@ -804,7 +804,7 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
          nothing or a complete tree with its marker); the marker is read back and its identity checked.
     Any failure (transport rc != 0, the launcher's timeout, digest or manifest mismatch) removes the partial directory and raises
     SourceNotReady; `<identity>/` is never created by a failed ship.  The machine side (`launch_request`) enforces `require_ready_source`."""
-    st = subprocess.run(["git", "status", "--porcelain"], cwd=git_dir, capture_output=True, text=True)
+    st = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"], cwd=git_dir, capture_output=True, text=True)
     if st.returncode != 0:
         raise Refused(f"{git_dir} is not a git checkout")
     if st.stdout.strip():
