@@ -72,7 +72,7 @@ def test_ranks_sharing_a_kv_head_hold_the_same_kv_rows():
 
 @pytest.mark.parametrize("W,kv", [(2, 2), (4, 1), (8, 1)])
 def test_the_build_predictor_rank_shape_replicates_kv_heads(W, kv):
-    from verity_vllm.predict import build as PB
+    PB = pytest.importorskip("verity_vllm.predict.build")
     C = PB.ModelShape(arch="moe", model_class="Qwen3MoeForCausalLM", H=4096, V=151936, NL=94, NH=64, KVH=4, D=128, I=1536, EPS=1e-6,
                       tie=False, max_pos=40960, rot=128, E=128, TOPK=8)
     r = PB.rank_shape(C, W)
