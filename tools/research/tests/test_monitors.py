@@ -297,6 +297,8 @@ def test_held_idle_alerts_a_lane_above_target_that_isnt_falling_to_that_lane(tmp
     assert [(f.key, f.owners) for f in got] == [("2026-10-03T18:00Z|node 1|circuits", ("circuits",)),
                                                 ("2026-10-03T18:00Z|node 1|circuits-tp8", ("infra",))]
     assert "80.0% of 4.0 held GPU-hours" in got[0].text and "-2.0 points" in got[0].text
+    write_rows(tmp_path, [held_row("2026-10-02T19:00Z"), held_row("2026-10-02T20:00Z", lane="proofs")])
+    assert [f.key for f in M.held_idle(M.Ctx(now=T0, root=tmp_path))] == ["2026-10-02T20:00Z|node 1|proofs"]
 
 
 def test_held_idle_is_stale_70_minutes_after_the_newest_hour_ends(tmp_path):

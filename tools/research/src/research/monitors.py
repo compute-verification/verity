@@ -218,6 +218,13 @@ def stalls_n1(ctx: Ctx) -> list[Finding]:
 # ---- the held-idle panel (node 1's held-idle-hourly.jsonl, which verity-console.service writes) ---------------------------------
 
 HELD_IDLE = "/workspace/usage/held-idle-hourly.jsonl"
+HELD_IDLE_RECENT_S = 86400      # well inside EVENTS_KEEP_S, so an hour the state has forgotten is never posted again
+
+
+def _hour_end(r: dict) -> float | None:
+    if not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:00Z", str(r.get("hour"))):
+        return None
+    return calendar.timegm(time.strptime(r["hour"], "%Y-%m-%dT%H:00Z")) + 3600
 
 
 def _held_rows(ctx: Ctx) -> list[dict]:
@@ -237,11 +244,13 @@ def _held_rows(ctx: Ctx) -> list[dict]:
 
 
 def held_idle(ctx: Ctx) -> list[Finding]:
-    """A lane above its held-idle target whose share fell by less than 5 points from the hour before: once per completed hour,
-    node and lane, to that lane."""
+    """A lane above its held-idle target whose share fell by less than 5 points from the hour before: once per hour completed
+    in the last day, node and lane, to that lane."""
     out = []
     for r in _held_rows(ctx):
-        t, pct, ch = r.get("target_pct"), r.get("held_idle_pct"), r.get("change_pts")
+        t, pct, ch, end = r.get("target_pct"), r.get("held_idle_pct"), r.get("change_pts"), _hour_end(r)
+        if end is None or ctx.now - end > HELD_IDLE_RECENT_S:
+            continue
         if t is None or pct is None or pct <= t or (ch is not None and ch <= -5):
             continue
         lane = r.get("lane") or "?"
@@ -262,13 +271,11 @@ def held_idle(ctx: Ctx) -> list[Finding]:
 
 def held_idle_stale(ctx: Ctx) -> list[Finding]:
     """No completed hour in node 1's held-idle-hourly.jsonl for 70 minutes: the held-idle panel has stopped."""
-    hours = [calendar.timegm(time.strptime(r["hour"], "%Y-%m-%dT%H:00Z")) for r in _held_rows(ctx)
-             if re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:00Z", str(r["hour"]))]
-    newest = max(hours, default=0)
-    late = ctx.now - (newest + 3600)
+    ends = [e for e in map(_hour_end, _held_rows(ctx)) if e is not None]
+    late = ctx.now - max(ends, default=3600)
     if late <= 70 * 60:
         return []
-    last = f"the newest completed hour in it is {iso(newest)[11:16]}Z" if newest else "it has no hour at all"
+    last = f"the newest completed hour in it is {iso(max(ends) - 3600)[11:16]}Z" if ends else "it has no hour at all"
     return [Finding("stale", f"*Held-idle panel: no reading for {late / 60:.0f} minutes*: {last} (node 1's `{HELD_IDLE}`).",
                     cleared="*Cleared:* the held-idle panel has a new hour.")]
 
