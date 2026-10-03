@@ -570,8 +570,9 @@ a = sys.argv[1:]
 with open({log!r}, "a") as f:
     f.write(" ".join(a) + "\\n")
 if a[0] == "checkout":
-    sha, repo, tree = a[1], a[a.index("--repo") + 1], a[a.index("--tree") + 1]
-    subprocess.run(["git", "clone", "-q", "--no-checkout", repo, tree], check=True)
+    sha, repo, main, tree = a[1], a[a.index("--repo") + 1], a[a.index("--main") + 1], a[a.index("--tree") + 1]
+    subprocess.run(["git", "init", "-q", tree], check=True)
+    subprocess.run(["git", "-C", tree, "fetch", "-q", repo, f"+{{main}}:refs/remotes/origin/main"], check=True)
     subprocess.run(["git", "-C", tree, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", sha], check=True)
 elif a[0] == "run":
     if {run_rc}:
@@ -596,19 +597,25 @@ elif a[:2] == ["cache", "stage"]:
 }
 
 
+#: fetches one dependency the way Mathlib's cache does (a build 0600), with a setuid tool a root copy must not keep
+FAKE_SETUP = """d="$1/.lake/packages/dep"
+mkdir -p "$d" && printf olean > "$d/M.olean" && chmod 600 "$d/M.olean" && printf '#!/bin/sh\\n' > "$d/tool" && chmod 4700 "$d/tool"
+"""
+
+
 def node(tmp: Path, url: str, run_rc: int = 0, clean_rc: int = 0) -> tuple["D.Node", Path, str]:
-    """GitHub's main (`pkg`, and a `setup.sh` that fetches a dependency), an empty bare repository, a sandbox that runs
-    the build as this user, and the key file; returns the node, the sandbox's log and main's commit."""
-    gh, sha = repo(tmp, "github")
-    (gh / "tools" / "lean").mkdir(parents=True)
-    (gh / "tools" / "lean" / "setup.sh").write_text('mkdir -p "$1/.lake/packages/dep"\n')
-    sh("git", "add", ".", cwd=gh)
-    sh("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "setup", cwd=gh)
-    sh("git", "init", "-q", "--bare", str(tmp / "bare.git"))
+    """Node 1's bare repository with main (`pkg`, and a `setup.sh` that fetches a dependency), a sandbox that runs the
+    build as this user, and the key file; returns the node, the sandbox's log and main's commit."""
+    src, _ = repo(tmp, "src")
+    (src / "tools" / "lean").mkdir(parents=True)
+    (src / "tools" / "lean" / "setup.sh").write_text(FAKE_SETUP)
+    sh("git", "add", ".", cwd=src)
+    sh("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "setup", cwd=src)
+    sh("git", "clone", "-q", "--bare", str(src), str(tmp / "bare.git"))
     bin_ = tmp / "bin"
     bin_.mkdir()
-    for name, src in FAKE_BIN.items():
-        (bin_ / name).write_text(f"#!{sys.executable}\n{src}")
+    for name, code in FAKE_BIN.items():
+        (bin_ / name).write_text(f"#!{sys.executable}\n{code}")
         (bin_ / name).chmod(0o755)
     path = f"{bin_}{os.pathsep}{os.environ['PATH']}"
     box = tmp / "sandbox.py"
@@ -618,20 +625,26 @@ def node(tmp: Path, url: str, run_rc: int = 0, clean_rc: int = 0) -> tuple["D.No
     key.write_text(f"AWS_ACCESS_KEY_ID={WRITE[0]}\nAWS_SECRET_ACCESS_KEY={WRITE[1]}\nR2_ENDPOINT={url}\n"
                    f"R2_BUCKET=verity-lean-cache\n")
     n = D.Node(bare=tmp / "bare.git", tree=tmp / "build" / "verity", out=tmp / "build" / "out", prep=tmp / "prep",
-               lock=tmp / "lock", url=str(gh), sandbox=[sys.executable, str(box)], research=["env", f"PATH={path}"],
-               builder=D.pwd.getpwuid(os.getuid()).pw_name, key_file=str(key), python=sys.executable)
-    return n, tmp / "sandbox.log", subprocess.run(["git", "-C", str(gh), "rev-parse", "HEAD"], capture_output=True,
+               deps=tmp / "var" / "deps", lock=tmp / "lock", sandbox=[sys.executable, str(box)],
+               research=["env", f"PATH={path}"], builder=D.pwd.getpwuid(os.getuid()).pw_name, key_file=str(key),
+               python=sys.executable)
+    return n, tmp / "sandbox.log", subprocess.run(["git", "-C", str(src), "rev-parse", "HEAD"], capture_output=True,
                                                   text=True).stdout.strip()
 
 
 def test_the_daily_run_builds_in_the_sandbox_and_publishes_only_after_clean(s3, tmp_path):
     b, url = s3
     n, log, sha = node(tmp_path, url)
+    (n.deps / "stale-key").mkdir(parents=True)
     lines = []
     assert D.daily(n, lines.append) == 0, "\n".join(lines)
     steps = log.read_text().splitlines()
     assert [s.split()[0] for s in steps] == ["checkout", "run", "clean"]
-    assert f"--deps pkg={n.prep}/pkg/.lake/packages --rw {n.out}/pkg -E LAKE_ARTIFACT_CACHE=true" in steps[1]
+    copy = n.deps / D.deps_key(n.prep / "pkg")
+    assert f"--deps pkg={copy} --rw {n.out}/pkg -E LAKE_ARTIFACT_CACHE=true" in steps[1]
+    assert [p.name for p in n.deps.iterdir()] == [copy.name]
+    assert (copy / "dep" / "M.olean").stat().st_mode & 0o7777 == 0o644
+    assert (copy / "dep" / "tool").stat().st_mode & 0o7777 == 0o755
     rec = json.loads(b.objects[C.record_key(C.identity(n.tree, "pkg", PLAT), sha)][0])
     assert rec["files"]["bb.ltar"]["sha256"] == hashlib.sha256(b"module archive").hexdigest()
     assert not (n.out / "pkg" / "lake-cache").exists()
