@@ -510,7 +510,7 @@ def test_the_lease_command_reads_only_the_loop_process_and_its_pool_variables(tm
                     "/proc/100/cmdline": "bash\0-c\0cd /workspace && python3 tools/n1_lease.py loop\0",
                     "/proc/100/environ": "VY_POOL_MAX=99\0",
                     "/proc/101/cmdline": "/usr/bin/python3\0/workspace/infra/n1_lease.py\0loop\0",
-                    "/proc/101/environ": "VY_POOL_MAX=8\0HF_TOKEN=hf_x\0GPU_LEASE_DIR=/run/gpu-lease\0VY_POOL_BORROW=4\0",
+                    "/proc/101/environ": "VY_POOL_MAX=8\0HF_TOKEN=dummy\0GPU_LEASE_DIR=/run/gpu-lease\0VY_POOL_BORROW=4\0",
                     "/proc/300/cmdline": "python3\0n1_lease.py\0loop\0", "/proc/300/environ": "VY_POOL_MAX=1\0"})
     for f in bin_.iterdir():
         f.chmod(0o755)
@@ -538,11 +538,11 @@ def test_the_lease_command_reads_the_limits_file_of_a_loop_under_the_policy(tmp_
 
 
 def test_the_files_commands_mark_absent_files_and_read_one_line_of_the_dispatch_env(tmp_path):
-    _put(tmp_path, {policy.LEAN_SLOTS: "check 2\naudit 2", policy.DISPATCH_ENV: "HF_TOKEN=hf_x\nVY_PROVER_CPUS=160-191\n"})
+    _put(tmp_path, {policy.LEAN_SLOTS: "check 2\naudit 2", policy.DISPATCH_ENV: "HF_TOKEN=dummy\nVY_PROVER_CPUS=160-191\n"})
     files = policy._files(_sh(policy.COMMANDS["files"], tmp_path))
     assert files == {policy.LEAN_SLOTS: "check 2\naudit 2\n", policy.CHECK_SLOTS: None, "/etc/vy/direct-gpus": None,
                      "/etc/vy/direct-cpus": None, policy.USER_CPUSET: None, policy.DISPATCH_ENV: "VY_PROVER_CPUS=160-191\n"}
-    _put(tmp_path, {policy.DISPATCH_ENV: "HF_TOKEN=hf_x\n"})
+    _put(tmp_path, {policy.DISPATCH_ENV: "HF_TOKEN=dummy\n"})
     assert policy._files(_sh(policy.COMMANDS["files"], tmp_path))[policy.DISPATCH_ENV] == ""
     _put(tmp_path, {QUIET: "provers\n"})
     assert policy._files(_sh(policy.COMMANDS["holds"], tmp_path)) == {DISK: None, QUIET: "provers\n\n"}
