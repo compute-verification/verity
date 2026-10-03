@@ -40,7 +40,22 @@ theorem exec_le_of_refines_drawn {L : Law n} {live : Finset (Fin n) → Reg → 
     (Q : Reg → Finset (Fin n) → Prop) {B : ℝ≥0∞}
     (hB : prob (fun o => o.1 = true ∧ Q (reg σ) o.2) (audit L Reg session) σ ≤ B) :
     prob (fun o => acc o.2.2 ∧ Q o.1 o.2.1) (auditLive L Reg live) τ ≤ B := by
-  sorry
+  classical
+  obtain ⟨R, τ₂⟩ := τ
+  obtain ⟨R', σ₂⟩ := σ
+  obtain rfl : R' = R := hreg
+  refine le_trans ?_ hB
+  show ∑ ω : L.Ω, (Fintype.card L.Ω : ℝ≥0∞)⁻¹ *
+      prob (fun o => acc o.2.2 ∧ Q o.1 o.2.1) ((live (L.draw ω) R').map fun t => (R', L.draw ω, t)) (τ₂ ω) ≤
+    ∑ ω : L.Ω, (Fintype.card L.Ω : ℝ≥0∞)⁻¹ *
+      prob (fun o => o.1 = true ∧ Q R' o.2) ((session (L.draw ω) R').map fun ok => (ok, L.draw ω)) (σ₂ ω)
+  refine Finset.sum_le_sum fun ω _ => mul_le_mul_right ?_ _
+  rw [prob_map, prob_map]
+  show prob (fun t => acc t ∧ Q R' (L.draw ω)) _ _ ≤ prob (fun ok => ok = true ∧ Q R' (L.draw ω)) _ _
+  rw [prob_and_const, prob_and_const]
+  split_ifs
+  · exact hat ω
+  · exact le_rfl
 
 end Transfer
 
@@ -64,7 +79,34 @@ theorem zk_headline_exec_drawn (hdec : DecodesOnZK A Hs T I wr opn dec one fin c
     (hB : prob (fun o => o.1 = true ∧ Q (reg (simZ A Hs T I wr opn dg dec one fin capOf N hdec τ)) o.2)
       (audit L Reg (batchedSessionZC A Hs (planOf T))) (simZ A Hs T I wr opn dg dec one fin capOf N hdec τ) ≤ B) :
     prob (fun o => LiveAcceptsZK I o ∧ Q o.1 o.2.1) (auditLive L Reg (liveOf dg mPts N wr)) τ ≤ B := by
-  sorry
+  have hc : ∀ (g : Finset (Fin n) → Reg → Game Bool)
+      (h : ZkExec.sessionZC (Gz A Hs T) (outz Hs T) (accz T) = g),
+      prob (fun o => o.1 = true ∧ Q (reg (cast (congrArg (fun g => Strategy (audit L Reg g)) h)
+          (simAuditZKOn A Hs T I wr opn dg dec one fin capOf N hdec τ))) o.2) (audit L Reg g)
+          (cast (congrArg (fun g => Strategy (audit L Reg g)) h)
+            (simAuditZKOn A Hs T I wr opn dg dec one fin capOf N hdec τ)) =
+        prob (fun o => o.1 = true ∧ Q (reg (simAuditZKOn A Hs T I wr opn dg dec one fin capOf N hdec τ)) o.2)
+          (audit L Reg (ZkExec.sessionZC (Gz A Hs T) (outz Hs T) (accz T)))
+          (simAuditZKOn A Hs T I wr opn dg dec one fin capOf N hdec τ) := by
+    intro g h
+    subst h
+    rfl
+  have hB' := (hc _ (sessionZC_planOf A Hs T)).symm.trans_le hB
+  refine exec_le_of_refines_drawn τ (simAuditZKOn A Hs T I wr opn dg dec one fin capOf N hdec τ) rfl (AcceptsZK I)
+    (fun ω => ?_) Q hB'
+  have h : prob (LiveAcceptsZK I) ((liveOf dg mPts N wr (L.draw ω) τ.1).map fun t => (τ.1, L.draw ω, t)) (τ.2 ω) ≤
+      prob (fun o => o.1 = true)
+        ((ZkExec.sessionZC (Gz A Hs T) (outz Hs T) (accz T) (L.draw ω) τ.1).map fun ok => (ok, L.draw ω))
+        ((simAuditZKOn A Hs T I wr opn dg dec one fin capOf N hdec τ).2 ω) := by
+    unfold simAuditZKOn ZkExec.sessionZC
+    rw [prob_strategy_map, prob_strategy_map, prob_map]
+    unfold liveOf
+    rw [prob_map]
+    exact live_le (outz Hs T (L.draw ω) τ.1) _ (fun x => accz T (L.draw ω) τ.1 x = true) (opn (L.draw ω) τ.1) dg
+      (dec (L.draw ω) τ.1) (one (L.draw ω) τ.1) (fin (L.draw ω) τ.1) (capOf (L.draw ω) τ.1) N
+      (Gz A Hs T (L.draw ω) τ.1) (fun pts r => allInh_repZCAt A Hs (T (L.draw ω) τ.1) pts r) (hdec ω τ.1) _
+  rw [prob_map] at h
+  exact h.trans_eq (prob_map _ _ _ _)
 
 end On
 
@@ -93,7 +135,14 @@ theorem zk_flock_drawnC_cr (hA : A.Correct) {L : Law n}
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)) o.2)
         (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
       ksAvgStrictZ planZ L k qF qS (reg σ) + linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) := by
-  sorry
+  have hlow := loweringSoundZK_of_place A P planZ tab place
+  have hj := jointZC_ksBound A hA Hs planZ hk
+  exact (extraction_audit_drawn
+      (analysisZC A Hs P planZ tab (decodeOfPlace A P planZ tab place)
+        (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k (fun S R j => (hr S R j).trans_lt hρ) hlow _ hj)
+      (zc_knowledgeSound A Hs P planZ tab _ _ _ hlow hj)
+      (zk_linkSoundC A Hs P planZ tab vb hlow hRw hM hρ hr hj ht) σ).trans
+    (add_le_add (ksAvgZC_le_strict A Hs planZ k (reg σ) (cont σ) hCR) le_rfl)
 
 end Drawn
 
@@ -144,6 +193,18 @@ theorem zk_session_drawnR
           ((rsZAtS ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtS_computes ht dj y₀ hc hU hpub hscope))
           k Rw M ρ t' (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ))
           (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ)) := by
-  sorry
+  have hdec := decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
+    (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)
+  have hc' := zk_flock_drawnC_cr execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀)
+    (tabZAt dj y₀) execArith_correct ((sitesZAt ht dj y₀).placeKey hU (sitesZAt_parse ht dj y₀ hc) (Layout.outsOf c hU n))
+    ((rsZAtS ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtS_computes ht dj y₀ hc hU hpub hscope)) hk hRw hM hρ hr ht'
+    (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ) hCR
+  exact le_trans (prob_mono (fun o h => ⟨acceptsZK_of_R h.1, h.2⟩) _ _)
+    (zk_headline_exec_drawn execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ (fun _ S => ¬ Disjoint
+      (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀) (tabZAt dj y₀)
+          ((rsZAtS ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtS_computes ht dj y₀ hc hU hpub hscope))
+          (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ)) (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ))
+          k Rw)) S) _ hc')
 
 end FlockSoundness.Discharge.ZkReg
