@@ -26,7 +26,7 @@
 # and a run dir over VY_CUSTODY_MAX_FILES files or VY_CUSTODY_MAX_GB GiB is held instead of mirrored: STATE/held/RUN says why, and the
 # round exits 1 while it is there. Move the bulk out of the run dir (or declare it elsewhere), then remove STATE/held/RUN.
 # The stopgap this replaces, STATE/push.sh in a tmux loop, shares STATE/pushed/ and the Jobs' names but takes no lock: while it runs,
-# a round refuses (exit 3). Exit 0 ok, 1 a run not yet home, 2 usage, 3 refused.
+# a round refuses (exit 3), as it does while another round holds STATE/.lock. Exit 0 ok, 1 a run not yet home, 2 usage, 3 refused.
 set -u
 ROOTS=${VY_CUSTODY_ROOTS:-/workspace/jobs/runs=/workspace/jobs/runs,/workspace/research/runs=/workspace/jobs/runs-n2}
 STATE=${VY_CUSTODY_STATE:-/workspace/research/custody-push}
@@ -48,9 +48,9 @@ KUBE="KUBECONFIG=\$HOME/.kube/config kubectl --request-timeout=30s"
 # a dropped link ends the call within a minute; a short call has `timeout` around it too
 SSH=(ssh -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
 mkdir -p "$STATE/pushed" "$STATE/failures" "$STATE/held"
-exec 9> "$STATE/.lock"
-flock -n 9 || { echo "n2_custody.sh: another round holds $STATE/.lock"; exit 0; }
 log() { echo "$(date -u +%FT%TZ) $*" | tee -a "$STATE/log"; }
+exec 9> "$STATE/.lock"
+flock -n 9 || { log "refused: another round holds $STATE/.lock"; exit 3; }
 # the loop's own bash, not a tmux server whose first session started it (its argv keeps that session's command)
 if [ "$DRY" = 0 ] && pids=$(pgrep -f -- "^[^ ]*bash $LOOP( |\$)"); then
   log "refused: the stopgap loop $LOOP still runs (pid $(echo $pids)) and takes no lock; stop it while it sleeps between rounds" \

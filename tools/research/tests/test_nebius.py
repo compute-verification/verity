@@ -1339,7 +1339,8 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     wrote; a live one, one still settling and one its own custody preserved don't. A round pushes at most VY_CUSTODY_MAX_RUNS within
     VY_CUSTODY_PASS_S, runs that failed before going last; a run dir over the file bound is held, never mirrored, and so is one whose
     attempt node 1 holds without a run record; a failed push is never given up and fails the round until it succeeds. While the
-    stopgap loop runs, or node 1 lacks the research tree, a round refuses."""
+    stopgap loop runs, while another round holds the lock (logged, so a round that never ran is seen), or while node 1 lacks the
+    research tree, a round refuses."""
     n2 = _n2_custody(tmp_path)
     root, state = n2.root, n2.state
     R = {k: f"r20261003-{100000 + i}-{i:04x}" for i, k in enumerate(
@@ -1374,6 +1375,11 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
         loop.stdin.close()
         loop.wait()
     assert refused.returncode == 3 and "refused: the stopgap loop" in refused.stdout and not n2.calls()
+    with open(state / ".lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        locked = n2.round_()
+    assert locked.returncode == 3 and f"refused: another round holds {state}/.lock" in (state / "log").read_text()
+    assert not n2.calls()
     no_src = n2.round_(NO_SRC="1")
     assert no_src.returncode == 3 and "no research tree at n1.invalid:/n1/src/abc" in no_src.stdout and "rsync" not in n2.calls()
     unreached = n2.round_(UNREACHABLE="1")
