@@ -75,9 +75,10 @@ TIMING_SLICE = os.environ.get("FILL_TIMING_SLICE", "vy-timing.slice")
 
 
 def in_timing_slice(pid: int) -> bool:
-    """Fill's timing jobs run in scopes of FILL_TIMING_SLICE (fill_runner.py), on cores of their own."""
+    """Fill's timing jobs run in scopes of the top-level FILL_TIMING_SLICE (fill_runner.py, through root's systemd-run), on cores
+    of their own.  A slice of that name under a user's manager (`systemd-run --user --slice=...`) is anyone's to make."""
     try:
-        return f"/{TIMING_SLICE}/" in Path(f"/proc/{pid}/cgroup").read_text()
+        return any(l.startswith(f"0::/{TIMING_SLICE}/") for l in Path(f"/proc/{pid}/cgroup").read_text().splitlines())
     except OSError:
         return False
 

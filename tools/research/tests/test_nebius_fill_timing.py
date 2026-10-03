@@ -525,17 +525,35 @@ def test_a_fence_takes_no_core_a_running_timing_job_holds(node2, monkeypatch, tm
     assert fr.fences(t)[0]["cpus"] == "140-141"
 
 
-def test_node_ops_quiet_never_pauses_a_timing_job_for_a_timed_window(tmp_path, monkeypatch):
-    """A stall over 1 s voids a whole chunk (benchmarks/network_traces' record.py), so while a timed window holds GPUs, Quiet
-    pauses another CPU-heavy group but leaves one in the timing slice running."""
+def node_ops(tmp_path, monkeypatch, cgroups: dict[int, str]):
+    """node_ops, with /proc/<pid>/cgroup of each pid in `cgroups` read from a file of that text."""
     monkeypatch.setenv("OPS_DIR", str(tmp_path))
     monkeypatch.delenv("QUIET_MATCH", raising=False)
-    (tmp_path / "logs").mkdir()
+    (tmp_path / "logs").mkdir(exist_ok=True)
     spec = importlib.util.spec_from_file_location("node_ops_timing", NODE_OPS)
     ops = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ops)
+    real = ops.Path
+    for pid, text in cgroups.items():
+        (tmp_path / f"cgroup.{pid}").write_text(text)
+    monkeypatch.setattr(ops, "Path", lambda p, *a: real(p, *a) if str(p) not in {f"/proc/{pid}/cgroup" for pid in cgroups}
+                        else tmp_path / f"cgroup.{str(p).split('/')[2]}")
+    return ops
+
+
+def test_node_ops_exempts_only_the_top_level_timing_slice(tmp_path, monkeypatch):
+    """Quiet's exemption is the system manager's vy-timing.slice, which only root's systemd-run reaches; any user can make a
+    vy-timing.slice of their own (`systemd-run --user --scope --slice=vy-timing.slice`), which used to exempt them too."""
+    ops = node_ops(tmp_path, monkeypatch, {1: "0::/vy-timing.slice/fill-timing-1.scope\n",
+                                           2: "0::/user.slice/user-1001.slice/user@1001.service/vy-timing.slice/run-r1.scope\n",
+                                           3: "0::/user.slice/vy-timing.slice/x.scope\n"})
+    assert [ops.in_timing_slice(pid) for pid in (1, 2, 3, 1 << 22)] == [True, False, False, False]
+
+
+def test_node_ops_quiet_never_pauses_a_timing_job_for_a_timed_window(tmp_path, monkeypatch):
+    """A stall over 1 s voids a whole chunk (benchmarks/network_traces' record.py), so while a timed window holds GPUs, Quiet
+    pauses another CPU-heavy group but leaves one in the timing slice running. Each group's cgroup file says where it runs."""
     token = f"quiet-timing-test-{os.getpid()}"                         # Quiet touches no other process of this user
-    monkeypatch.setattr(ops, "QUIET_MATCH", re.compile(re.escape(token)))
     busy = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()", "-m", "research.telemetry", "sample",
             token]
     procs = [subprocess.Popen(busy, stdout=subprocess.PIPE, text=True, start_new_session=True) for _ in range(2)]
@@ -543,7 +561,9 @@ def test_node_ops_quiet_never_pauses_a_timing_job_for_a_timed_window(tmp_path, m
         for p in procs:
             assert p.stdout.readline().strip() == "ready"
         chunk, other = procs
-        monkeypatch.setattr(ops, "in_timing_slice", lambda pid: pid == chunk.pid)
+        ops = node_ops(tmp_path, monkeypatch, {chunk.pid: "0::/vy-timing.slice/fill-timing-1.scope\n",
+                                               other.pid: "0::/user.slice/user-1000.slice/user@1000.service/vy-timing.slice/r.scope\n"})
+        monkeypatch.setattr(ops, "QUIET_MATCH", re.compile(re.escape(token)))
         monkeypatch.setattr(ops.Quiet, "window", lambda self: 1 << 22)
         q = ops.Quiet()
         q.tick()
