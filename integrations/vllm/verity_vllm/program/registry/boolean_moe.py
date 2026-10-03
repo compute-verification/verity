@@ -7,6 +7,13 @@ bits (I32 = F32 = Array<32, Value<1>>, BF16 = Array<16, Value<1>>).
     MoeRouterProbs_v2{E,VPT}              (logits: Array<E, BF16>) -> Array<E, F32>            word view: MoeRouterProbs_v1{E,VPT}
     MoeRouterTopKOrdered_v2{E,TOPK,VPT}   (logits: Array<E, BF16>) -> (Array<TOPK, F32>, Array<TOPK, I32>)
                                                                                                word view: MoeRouterTopKOrdered_v1{E,TOPK,VPT}
+    NvSigmoid_v2                          (x: F32) -> F32                                      word view: NvSigmoid_v1
+    MoeRouterBiasScore_v2                 (x, sig, b: F32) -> F32                              word view: MoeRouterBiasScore_v1
+    MoeRouterSigmoidNorm_v2{TOPK,SCALE,KERNEL}
+                                          (w, v: Array<TOPK, F32>) -> Array<TOPK, F32>         word view: MoeRouterSigmoidNorm_v1{...}
+    MoeRouterSigmoidBias_v2{E,TOPK,SCALE,KERNEL}
+                                          (logits, bias: Array<E, F32>) -> (Array<TOPK, F32>, Array<TOPK, I32>)
+                                                                                               word view: MoeRouterSigmoidBias_v1{...}
 
 `MoeSumCoordinate_v2{TOPK}` is traced for each TOPK (`elementwise.specialized`) from ``bf16_rn(((0 + f32(col[0])) + f32(col[1])) +
 ...)`` through `verity.ml.boolean.fp`, the first add written as what it does (``+0 + x`` is x but for -0, which becomes +0). Its
@@ -31,6 +38,18 @@ and NaN or Inf is 0), so `MoeRouterShift_v1` and `MoeRouterNormalize_v1` make ca
 0x7FFFFFFF; `NvExpf_v2` is `NvExpf_v1` on every word. `MoeRouterSelect_v1` compares f32 values by their place in f32's order (an
 unsigned 32-bit key, +0 and -0 at one place): `F32GtStrict_v1`, `F32Eq_v1` and the kernel's tie on the lower expert id are one
 carry chain each. No sub-Call is a word Definition.
+
+GLM-5.3's sigmoid router is cut the same way, at its two MUFUs:
+
+    NvSigmoid_v2                  `NvSigmoidIn_v1` (x -> the ex2 operand and h = x/2), `MufuEx2Ftz_v2`, `NvSigmoidMid_v1` (+ 1),
+                                  `MufuRcpFtz_v2`, then `NvSigmoidOut_v1` (tanhf's ranges and polynomial, ``0.5 * t + 0.5``)
+    MoeRouterSigmoidBias_v2       E `NvSigmoid_v2` and `MoeRouterBiasScore_v2`, `MoeRouterBiasSelect_v1` (the TOPK slots of
+                                  `MoeRouterFirst_v1`, `MoeRouterBiasNext_v1` and `MoeRouterPickPair_v1` by keys), then
+                                  `MoeRouterSigmoidNorm_v2`
+
+`NvSigmoid_v2` is `NvSigmoid_v1` on every word: a NaN anywhere inside makes the last FFMA's 0x7FC00000, so its pieces make canonical
+NaNs. `MoeRouterBiasScore_v2` and `MoeRouterSigmoidNorm_v2` keep the word primitives' NaN words, so they are their word views on
+every word; `MoeRouterBiasSelect_v1` is the word rounds on every selection score but NaN, which `MoeRouterBiasScore_v1` never makes.
 """
 from __future__ import annotations
 
@@ -40,14 +59,17 @@ from verity.ir.types import Array, Tuple
 from verity.ml.boolean import elementwise as EW
 from verity.ml.boolean import fp
 from verity.ml.boolean.forms import NOT, OR, ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, shr, sub
-from verity.ml.boolean.mufu import MufuEx2Ftz
+from verity.ir.refs import tuple_of
+from verity.ml.boolean.mufu import MufuEx2Ftz, MufuRcpFtz
 from verity.ml.boolean.trace import definition
 from verity_vllm.program.registry import moe as M
 from verity_vllm.program.registry import prims as P
 
-__all__ = ["MoeRouterNormalize", "MoeRouterProbs", "MoeRouterSelect", "MoeRouterShift", "MoeRouterTopKOrdered", "MoeSum",
-           "MoeSumCoordinate", "NvExpf", "NvExpfIn", "NvExpfOut", "jb_low_byte", "moe_sum", "nv_expf_in",
-           "nv_expf_out"]
+__all__ = ["MoeRouterBiasScore", "MoeRouterBiasSelect", "MoeRouterNormalize", "MoeRouterProbs", "MoeRouterSelect", "MoeRouterShift",
+           "MoeRouterSigmoidBias", "MoeRouterSigmoidNorm", "MoeRouterTopKOrdered", "MoeSum", "MoeSumCoordinate", "NvExpf", "NvExpfIn",
+           "NvExpfOut", "NvSigmoid", "NvSigmoidIn", "NvSigmoidMid", "NvSigmoidOut", "jb_low_byte", "moe_sum", "nv_expf_in",
+           "nv_expf_out", "nv_sigmoid_in", "nv_sigmoid_mid", "nv_sigmoid_out", "router_bias_score", "router_bias_select",
+           "router_sigmoid_norm"]
 
 BF16 = Array(16, BL.BIT)
 F32 = I32 = Array(32, BL.BIT)
@@ -306,3 +328,167 @@ def _topk(B, S, logits):
 MoeRouterTopKOrdered = EW.on_bits("MoeRouterTopKOrdered", 2, ("E", "TOPK", "VPT"),
                                   lambda S: ((("logits", Array(S.E, BF16)),), Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
                                   _topk, M.MoeRouterTopKOrdered)
+
+
+# --- the sigmoid router (`noaux_tc`, one group) ----------------------------------------------------------------------------------
+
+def nv_sigmoid_in(C, x):
+    """`NvSigmoid_v1` up to its MUFU.EX2: ``h = x * 0.5`` and the ex2 operand ``|h| * 2 log2 e`` (a NaN canonical: every NaN ends
+    in the last FFMA's 0x7FC00000)."""
+    h = fp.f32_mul(C, x, _f32(0.5))
+    return [fp.f32_mul(C, list(h[:31]) + [ZERO], const_bits(0x4038AA3B, 32)), h]
+
+
+def nv_sigmoid_mid(C, e):
+    """`NvSigmoid_v1` between its MUFUs: ``e + 1``."""
+    return fp.f32_add(C, e, _f32(1.0))
+
+
+def nv_sigmoid_out(C, h, r):
+    """`NvSigmoid_v1` after its MUFU.RCP: ``big = |h| > 0x41102CB3 ? 1 : fma(r, -2, 1)``, with h's sign; the polynomial
+    ``fma(h, q, h)`` unless ``0x3F199999 < |h|`` and h is not NaN; ``fma(t, 0.5, 0.5)``.  Where big is taken, h is neither NaN nor
+    +-0, so its sign bit is ``h < 0``."""
+    mag = list(h[:31])
+    t_big = C.AND(_less(C, const_bits(0x3F199999, 31), mag), NOT(_less(C, const_bits(0x7F800000, 31), mag)))
+    one = _f32(1.0)
+    big = mux(C, _less(C, const_bits(0x41102CB3, 31), mag), one, fp.f32_fma(C, r, _f32(-2.0), one))
+    big = big[:31] + [big[31] ^ h[31]]
+    s = fp.f32_mul(C, h, h)
+    p = fp.f32_fma(C, s, const_bits(0x3C80F082, 32), const_bits(0xBD563CAE, 32))
+    p = fp.f32_fma(C, s, p, const_bits(0x3E085941, 32))
+    p = fp.f32_fma(C, s, p, const_bits(0xBEAAA9ED, 32))
+    t = mux(C, t_big, big, fp.f32_fma(C, h, fp.f32_fma(C, s, p, _f32(0.0)), h))
+    return fp.f32_fma(C, t, _f32(0.5), _f32(0.5))
+
+
+NvSigmoidIn = definition("NvSigmoidIn", 1, nv_sigmoid_in, (("x", F32),), Tuple(F32, F32),
+                         doc="NvSigmoid_v1 up to its MUFU.EX2: the ex2 operand |x/2| * 2 log2 e and h = x/2")
+NvSigmoidMid = definition("NvSigmoidMid", 1, nv_sigmoid_mid, (("e", F32),), F32, doc="NvSigmoid_v1 between its MUFUs: e + 1")
+NvSigmoidOut = definition("NvSigmoidOut", 1, nv_sigmoid_out, (("h", F32), ("r", F32)), F32,
+                          doc="NvSigmoid_v1 after its MUFU.RCP: tanhf's ranges, its polynomial, then 0.5 * t + 0.5")
+
+
+def _nv_sigmoid(B, S, x):
+    """`sigmoid_accurate` (`NvSigmoid_v1`) on bits: `NvSigmoidIn_v1`, `MufuEx2Ftz_v2`, `NvSigmoidMid_v1`, `MufuRcpFtz_v2`,
+    `NvSigmoidOut_v1`."""
+    ah = B.call(NvSigmoidIn, x)
+    return B.call(NvSigmoidOut, ah[1], B.call(MufuRcpFtz, B.call(NvSigmoidMid, B.call(MufuEx2Ftz, ah[0]))))
+
+
+NvSigmoid = EW.on_bits("NvSigmoid", 2, (), lambda S: ((("x", F32),), F32), _nv_sigmoid, M.NvSigmoid)
+
+
+def router_bias_score(C, x, sig, b):
+    """`MoeRouterBiasScore_v1`: ``b + sig`` (F32Add_v1's NaN words), +-0 made +0, -inf unless x and b are finite."""
+    biased = fp.f32_add(C, b, sig, ir_nan=True)
+    nonzero = or_reduce(C, biased[:31])
+    finite = C.AND(NOT(and_reduce(C, x[23:31])), NOT(and_reduce(C, b[23:31])))
+    return mux(C, finite, [C.AND(nonzero, v) for v in biased], const_bits(0xFF800000, 32))
+
+
+MoeRouterBiasScore = definition("MoeRouterBiasScore", 2, router_bias_score, (("x", F32), ("sig", F32), ("b", F32)), F32,
+                                word=bind(M.MoeRouterBiasScore),
+                                doc="preprocess_score's selection score on bits: MoeRouterBiasScore_v1")
+
+
+def router_bias_select(S):
+    """`MoeRouterSigmoidBias_v1`'s TOPK slots on its selection scores s and second values v: ``ids[0] = MoeRouterFirst_v1(s)``,
+    ``ids[k] = MoeRouterBiasNext_v1(s, w[k-1], ids[k-1])``, ``(w[k], v[k]) = MoeRouterPickPair_v1(s, v, ids[k])``, for every s
+    without a NaN.  A round's argmax runs over the keys of the experts after slot k-1 (`_key`, the kernel's tie on the lower
+    expert one carry chain), the others' keys 0, below -inf's 0x007FFFFF."""
+    E, nb = S.E, max(1, (S.E - 1).bit_length())
+
+    def build(C, *sv):
+        s, v = sv[:E], sv[E:]
+        key = [_key(C, w) for w in s]
+        rows = [list(a) + list(b) for a, b in zip(s, v)]
+        rows += [rows[0]] * ((1 << nb) - E)
+
+        def argmax(keys):
+            best, idx = keys[0], [ZERO] * nb
+            for j in range(1, E):
+                gt = _less(C, best, keys[j])
+                best, idx = mux(C, gt, keys[j], best), mux(C, gt, const_bits(j, nb), idx)
+            return idx
+
+        def pick(idx):
+            level = rows
+            for bit in idx:
+                level = [mux(C, bit, level[i + 1], level[i]) for i in range(0, len(level), 2)]
+            return level[0][:32], level[0][32:]
+
+        ids = [argmax(key)]
+        picked = [pick(ids[0])]
+        for _ in range(1, S.TOPK):
+            kw, e = _key(C, picked[-1][0]), ids[-1]
+            ids.append(argmax([[C.AND(_less(C, key[i], kw, _less(C, e, const_bits(i, nb))), b) for b in key[i]] for i in range(E)]))
+            picked.append(pick(ids[-1]))
+        return [w for w, _ in picked] + [u for _, u in picked] + [i + [ZERO] * (32 - nb) for i in ids]
+
+    return build
+
+
+MoeRouterBiasSelect = EW.specialized("MoeRouterBiasSelect", 1, ["E", "TOPK"], router_bias_select,
+                                     lambda S: ((("s", Array(S.E, F32)), ("v", Array(S.E, F32))),
+                                                Tuple(Array(S.TOPK, F32), Array(S.TOPK, F32), Array(S.TOPK, I32))),
+                                     doc="grouped_topk's TOPK slots on bits (MoeRouterFirst_v1, MoeRouterBiasNext_v1, "
+                                         "MoeRouterPickPair_v1)")
+
+
+def _eq_word(C, w, c: int):
+    return and_reduce(C, [b if (c >> i) & 1 else NOT(b) for i, b in enumerate(w)])
+
+
+def router_sigmoid_norm(S):
+    """`MoeRouterSigmoidNorm_v1{TOPK,SCALE,KERNEL}`: its word body on bits, the same adds (`moe._lane0_sum`'s tree), divide and
+    multiplies with the `_v1` primitives' NaN words (the warp launch's ``w - v`` F32Sub_v1's 0x7FC00000)."""
+    kernel, T = M._router_kernel(S), S.TOPK
+    scale, even = P.bits_of(S.SCALE), P.F32Div.evaluate(P.bits_of(1.0), P.bits_of(float(T)))
+
+    def build(C, *wv):
+        w, v = wv[:T], wv[T:]
+        fin = [NOT(_eq_word(C, w[k], 0xFF800000)) for k in range(T)]
+        u = [list(v[k]) if kernel == "block" else fp.f32_sub(C, w[k], v[k]) for k in range(T)]
+        z = [[C.AND(fin[k], b) for b in u[k]] for k in range(T)]
+        lanes: dict[tuple[int, int], list | None] = {}
+
+        def lane(j: int, t: int):
+            if j == 0:
+                return z[t] if t < T else None
+            if (j, t) not in lanes:
+                a, b = lane(j - 1, t), lane(j - 1, t ^ M.WARP_BUTTERFLY[j - 1])
+                lanes[j, t] = a if b is None else b if a is None else fp.f32_add(C, a, b, ir_nan=True)
+            return lanes[j, t]
+
+        total = fp.f32_add(C, lane(len(M.WARP_BUTTERFLY), 0), const_bits(P.bits_of(1e-20), 32), ir_nan=True)
+        q = fp.f32_div(C, const_bits(scale, 32), total, ir_nan=True)
+        any_fin = or_reduce(C, fin)
+        return [mux(C, any_fin, [C.AND(fin[k], b) for b in fp.f32_mul(C, z[k], q, ir_nan=True)], const_bits(even, 32))
+                for k in range(T)]
+
+    return build
+
+
+MoeRouterSigmoidNorm = EW.specialized("MoeRouterSigmoidNorm", 2, ["TOPK", "SCALE", "KERNEL"], router_sigmoid_norm,
+                                      lambda S: ((("w", Array(S.TOPK, F32)), ("v", Array(S.TOPK, F32))), Array(S.TOPK, F32)),
+                                      doc="grouped_topk's write_outputs (renormalize, x SCALE) on bits",
+                                      word=lambda b: bind(M.MoeRouterSigmoidNorm, TOPK=b["TOPK"], SCALE=b["SCALE"],
+                                                          KERNEL=b["KERNEL"]))
+
+
+def _sigmoid_bias(B, S, logits, bias):
+    """`MoeRouterSigmoidBias_v1` on bits: E `NvSigmoid_v2` and `MoeRouterBiasScore_v2`, then `MoeRouterBiasSelect_v1` on the
+    selection scores with the sigmoids (`KERNEL="block"`) or the biases (`"warp"`), then `MoeRouterSigmoidNorm_v2`."""
+    kernel = M._router_kernel(S)
+    if S.TOPK > S.E:
+        raise ValueError("TOPK must not exceed E")
+    sig = B.batch(NvSigmoid, logits, axes=(0,))
+    s = B.batch(MoeRouterBiasScore, logits, sig, bias, axes=(0, 0, 0))
+    sel = B.call(bind(MoeRouterBiasSelect, E=S.E, TOPK=S.TOPK), s, sig if kernel == "block" else bias)
+    return tuple_of(B.call(bind(MoeRouterSigmoidNorm, TOPK=S.TOPK, SCALE=S.SCALE, KERNEL=kernel), sel[0], sel[1]), sel[2])
+
+
+MoeRouterSigmoidBias = EW.on_bits("MoeRouterSigmoidBias", 2, ("E", "TOPK", "SCALE", "KERNEL"),
+                                  lambda S: ((("logits", Array(S.E, F32)), ("bias", Array(S.E, F32))),
+                                             Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
+                                  _sigmoid_bias, M.MoeRouterSigmoidBias)
