@@ -63,6 +63,34 @@ shallower leaf. A leaf over L bytes is a tree over its ⌈L/256⌉ segments (one
 never the prover's root). A scheme's noise is its own derivation from the salt and the prover's roots, Fiat-Shamir inside
 the scheme, whose grinding is inside the conjecture's error term.
 
+## The proof's identifier (v1) (`identifier`)
+
+Where a drawn tile is checked by a C-Flock proof rather than recomputed, the proof is bound to the oracle, the salt and the
+workload it is for by its `identifier`, a JSON object in the proof's header:
+
+~~~text
+identifier  {"format": "verity/pouw/identifier/v1", "scheme": name, "salt": hex(salt), "workload": hex(SHA-512(canonical(W)))}
+W           {"matmuls": [{"index": "i", "m": m, "k": k, "n": n, "weight": "w"}, …], "weights_root": hex(weights_root)}
+~~~
+
+- **The fields.** `scheme` is the scheme's registered name (`schemes.get`), which names the oracle H, so there is no seed
+  digest. A name `schemes.get` doesn't register has no identifier. `salt` is the epoch's 32 bytes. Hex is lowercase.
+- **The declared workload** W (`workload_json`) is every matmul in declaration order, then the weights root, which binds
+  every weight's row root (Lifecycle, step 1). The index and the weight id are 64-bit, so they are decimal strings: RFC 8785
+  writes a number as an IEEE 754 double, which is exact only up to 2^53. m, k and n are numbers.
+- **The canonical form** is RFC 8785 (`verity.ir.codec.canonical_json`) on its domain, ASCII strings and integers of
+  magnitude at most 2^53 − 1: members in key order, no whitespace, and no escapes, since no string here needs one. A
+  dimension past 2^53 − 1 is refused; no scheme's domain holds one. The identifier's bytes are this form of the object
+  (`identifier_bytes`), and `workload` hashes this form of W (`workload_bytes`).
+- **What binds it.** The proof binds its header's object through `pub.sha`, which seeds C-Flock's Fiat-Shamir transcript:
+  Σ = SHA-512(sigmaTag ‖ c.sha ‖ digest ‖ pub.sha), under `cr/sha-512`.
+- **The verifier's rule.** The verifier never takes the prover's identifier. It recomputes its own from the scheme and the
+  epoch it audits, and hands those bytes to C-Flock's verifier (`--identifier F`). C-Flock's verifier compares them with the
+  proof's header byte for byte, and reports the object in its verdict without reading a field. So a proof that names
+  another scheme, salt or workload is refused.
+- **Vectors:** `tests/vectors/identifier_v1.json` (`tests/identifier_vectors.py`) holds one case or more per named scheme:
+  its inputs, W, both canonical byte strings as hex, and their SHA-512. A 64-bit case pins the decimal strings past 2^53.
+
 ## `ncp-v1`: noise-cancelling polarization under TTNCP_U(0.5%), route U at β = 128
 
 For int7 A and B (entries in [−64, 63], one two's-complement byte each):
@@ -695,6 +723,8 @@ useful    U/(α_A·α_B), glue
   are gated by these vectors when they land. Pearl-C's H100 kernel is `benchmarks/pouw/pearl_c/`, its sm_120 kernel
   `benchmarks/pouw/pearl_c_sm120/`.
 - The per-weight share of the honest reference's work in `wref`, and a `TargetProfile` Definition of the NCP GEMM.
+- C-Flock's side of the proof's identifier: the header's `identifier`, its binding through `pub.sha`, and the verifier's
+  `--identifier` (proofs' lane).
 - For `ncp-v2`:
   - the lead domain's shapes (k ≥ 1,088) as a recorded run rather than a test;
   - C-Flock pieces for the PoUW primitives;
