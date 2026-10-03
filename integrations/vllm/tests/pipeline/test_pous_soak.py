@@ -379,23 +379,24 @@ def test_tuned_buffers_are_set_only_where_the_kernel_grants_them_whole(fake):
     assert got == (2 * min(1 << 20, rmem) if 2 * rmem >= 1 << 20 else default), (got, rmem)
 
 
-def _starving_proxy(upstream_port, budget):
-    """A relay to the responder that forwards the first ``budget`` bytes of its answers and drops the rest, as a stalled receive
-    window does; it ends both connections when the client closes."""
+def _starving_proxy(upstream_port, *budgets):
+    """A relay to the responder for one connection per budget, in turn: each forwards the first ``budget`` bytes of its answers
+    (all of them for None) and drops the rest, as a receive window that stays shut does; a connection ends when its client
+    closes."""
     import threading
 
     lst = socket.create_server(("127.0.0.1", 0))
     done = threading.Event()
 
-    def serve():
-        cli, _ = lst.accept()
-        lst.close()
+    def relay(cli, budget):
         up = socket.create_connection(("127.0.0.1", upstream_port))
 
         def down():
             left = budget
             while chunk := up.recv(1 << 16):
-                if left > 0:
+                if left is None:
+                    cli.sendall(chunk)
+                elif left > 0:
                     cli.sendall(chunk[:left])
                     left -= len(chunk)
 
@@ -407,6 +408,11 @@ def _starving_proxy(upstream_port, budget):
         t.join()
         up.close()
         cli.close()
+
+    def serve():
+        for budget in budgets:
+            relay(lst.accept()[0], budget)
+        lst.close()
         done.set()
 
     threading.Thread(target=serve, daemon=True).start()
@@ -434,6 +440,46 @@ def test_a_stalled_answer_ends_the_cell_and_the_responder_serves_the_next(fake, 
     ping = after.exchange(S.OP_PING, 0)
     after.close()
     assert int(ping[15]) == S.MAGIC and int(ping[0]) == 0
+
+
+@pytest.mark.parametrize("tuned", [True, False])
+def test_a_cell_goes_on_over_a_new_connection_after_a_stall(fake, tuned, monkeypatch, tmp_path):
+    import threading
+
+    monkeypatch.setattr(S, "STALL_S", 0.2)
+    monkeypatch.setattr(S, "SETTLE_S", 0.0)
+    nbytes = 144 * 1024
+    want = S.HEADER_BYTES + nbytes
+    port, done = _starving_proxy(fake.resp.port, S.HEADER_BYTES + 30 * want + want // 2, None)
+    soak = S.Soak(SimpleNamespace(job=tmp_path, state=tmp_path, setup=tmp_path, loads="idle", configs="baseline,tuned", cell_s=2.0))
+    soak.mode = "idle"
+    ring = S.Ring(nslots=32)
+    stop = threading.Event()
+
+    def checker():  # the checker's tail, without the checks (the loops' tests run them)
+        while not stop.is_set():
+            ring.ctl[S.Ring.TAIL] = ring.ctl[S.Ring.HEAD]
+
+    t = threading.Thread(target=checker, daemon=True)
+    t.start()
+    cell = {"id": 3, "load": "idle", "rate": 100, "kib": 144, "config": "tuned" if tuned else "baseline"}
+    try:
+        run = soak.cell(fake.lib, ring, {"port": port, "blocks": fake.blocks}, cell, 0, 0, 2**62)
+    finally:
+        stop.set()
+        t.join()
+    done.wait()
+    first, second = soak.runs
+    assert (first["segment"], first["status"], first["done"]) == (0, "stalled", 30)
+    assert (second["segment"], second["status"]) == (1, "done") and second["done"] == second["scheduled"] > 0
+    assert second["first"] > 30 and second["first"] + second["scheduled"] == first["scheduled"]
+    assert run is second and run["segments"] == 2 and run["cell_done"] == 30 + second["done"]
+    rec, meta = np.concatenate(soak.recs), np.concatenate(soak.rec_meta)
+    assert len(rec) == run["cell_done"] and meta[:, 2].tolist() == [0] * 30 + [1] * second["done"]
+    assert np.all(rec[:, S.COL["magic"]] == S.MAGIC) and np.all(rec[:, S.COL["status"]] == 0)
+    assert np.all(np.diff(rec[:, S.COL["t_sched"]]) > 0), "the second segment takes up the schedule after the first"
+    v = S.validate(rec, meta[:, 2], soak.runs, np.zeros((0, 8), np.int64), {}, 0, 2.0)
+    assert v["stalled_runs"] == [0] and v["per_run_counts"]["runs_done"] == 0
 
 
 def test_one_host_brackets_hold_zero_over_a_real_connection(fake):

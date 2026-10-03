@@ -66,7 +66,7 @@ CONFIGS = ("baseline", "tuned")
 ALL_CONFIGS = (*CONFIGS, "zerocopy")   # zerocopy: tuned, and the responder sends with MSG_ZEROCOPY
 CELL_S = 60.0
 SETTLE_S = 2.0
-STALL_S = 5.0               # an answer not complete this long after its request ends its cell as "stalled"
+STALL_S = 5.0               # an answer not complete this long after its request "stalled": its connection is spent
 STATUSES = ("done", "connection", "halted", "sigterm", "deadline", "stalled")
 CHUNK_S = 1800.0            # a chunk closes after the cell that ends this long after it opened: a crash loses at most one
 PASSES = 6
@@ -1405,76 +1405,97 @@ class Soak:
 
     def cell(self, lib: ctypes.CDLL, ring: Ring, ready: dict[str, Any], cell: dict[str, Any], pas: int, pos: int,
              deadline_ns: int, ts: bool = True) -> dict[str, Any]:
+        """One cell's schedule, as one run per connection.  An answer that stalls (`STALL_S`) spends its connection: the cell goes
+        on over a new one from the first request scheduled after it opens, as the next segment (a run of its own, ``segment``
+        1, 2, ...), so a stall costs the cell its seconds, not the rest of it.  Returns the last segment's run, with the cell's
+        ``segments`` and ``cell_done``."""
         tuned, zerocopy = cell["config"] != "baseline", cell["config"] == "zerocopy"
         nbytes = cell["kib"] * 1024
-        run: dict[str, Any] = {"cell": cell["id"], "pass": pas, "position": pos, "ts": ts, "start_utc": utc(),
-                               "start_ns": time.time_ns()}
-        run["load"] = self.set_load(cell["load"])
-        t_lock = time.time_ns()
-        run["verifier_mlockall"] = {"rc": int(lib.soak_mlockall(1)) if tuned else None, "ns": time.time_ns() - t_lock}
-        run["verifier_fifo"] = None
-        if tuned:
-            try:
-                os.sched_setscheduler(0, os.SCHED_FIFO, os.sched_param(1))
-                run["verifier_fifo"] = "in effect"
-            except OSError as e:
-                run["verifier_fifo"] = f"refused: {e.strerror}"
-        c = Client(lib, ready["port"], tuned, ts, zerocopy, self.host)
-        h = c.config
-        run["server_config"] = {"mlock_ns": int(h[1]), "sndbuf": int(h[2]), "rcvbuf": int(h[14]), "flags": int(h[10]),
-                                "fifo": int(h[21])}
-        if zerocopy and not int(h[10]) & 128:
-            raise OSError(f"the responder refused SO_ZEROCOPY (flags {int(h[10])})")
-        run["client_rcvbuf"] = c.rcvbuf
-        time.sleep(SETTLE_S)
-        rng = np.random.default_rng(int.from_bytes(os.urandom(8), "little"))
-        t0 = time.time_ns() + 50_000_000
-        t_sched = poisson_times(rng, cell["rate"], self.a.cell_s, t0)
-        blk = block_starts(rng, len(t_sched), ready["blocks"], nbytes)
-        ops = np.where(rng.random(len(t_sched)) < PING_FRACTION, OP_PING, OP_READ).astype(np.int64)
-        rec = np.zeros((len(t_sched), len(REC)), np.int64)
-        run["t0_ns"], run["scheduled"] = int(t0), len(t_sched)
-        gc.collect()
-        gc.freeze()
-        gc.disable()
-        try:
+        load = self.set_load(cell["load"])
+        sched: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
+        seg = start = cell_done = 0
+        while True:
+            run: dict[str, Any] = {"cell": cell["id"], "pass": pas, "position": pos, "ts": ts, "segment": seg, "start_utc": utc(),
+                                   "start_ns": time.time_ns(), "load": load if seg == 0 else {"mode": cell["load"], "switched": False}}
+            t_lock = time.time_ns()
+            run["verifier_mlockall"] = {"rc": int(lib.soak_mlockall(1)) if tuned else None, "ns": time.time_ns() - t_lock}
+            run["verifier_fifo"] = None
             if tuned:
-                n, status = run_tuned(lib, c, ring, t_sched, blk, ops, nbytes, rec, deadline_ns, cell["id"])
+                try:
+                    os.sched_setscheduler(0, os.SCHED_FIFO, os.sched_param(1))
+                    run["verifier_fifo"] = "in effect"
+                except OSError as e:
+                    run["verifier_fifo"] = f"refused: {e.strerror}"
+            c = Client(lib, ready["port"], tuned, ts, zerocopy, self.host)
+            h = c.config
+            run["server_config"] = {"mlock_ns": int(h[1]), "sndbuf": int(h[2]), "rcvbuf": int(h[14]), "flags": int(h[10]),
+                                    "fifo": int(h[21])}
+            if zerocopy and not int(h[10]) & 128:
+                raise OSError(f"the responder refused SO_ZEROCOPY (flags {int(h[10])})")
+            run["client_rcvbuf"] = c.rcvbuf
+            if sched is None:
+                time.sleep(SETTLE_S)
+                rng = np.random.default_rng(int.from_bytes(os.urandom(8), "little"))
+                t0 = time.time_ns() + 50_000_000
+                t_all = poisson_times(rng, cell["rate"], self.a.cell_s, t0)
+                blk_all = block_starts(rng, len(t_all), ready["blocks"], nbytes)
+                ops_all = np.where(rng.random(len(t_all)) < PING_FRACTION, OP_PING, OP_READ).astype(np.int64)
+                sched = (t_all, blk_all, ops_all)
+                run["t0_ns"] = int(t0)
             else:
-                n, status = run_baseline(c, ring, t_sched, blk, ops, nbytes, rec, deadline_ns, cell["id"], self.stopped)
-        finally:
-            gc.enable()
-        run["done"], run["status"] = n, STATUSES[status]
-        if status in (0, 4):
+                start = max(start, int(np.searchsorted(sched[0], time.time_ns() + 50_000_000)))
+            t_sched, blk, ops = (np.ascontiguousarray(x[start:]) for x in sched)
+            rec = np.zeros((len(t_sched), len(REC)), np.int64)
+            run["first"], run["scheduled"] = start, len(t_sched)
+            gc.collect()
+            gc.freeze()
+            gc.disable()
             try:
-                ping = c.exchange(OP_PING, 0)
-                run["final_ping"] = {"srv_ktx_newest": int(ping[6]), "srv_ktx_key": int(ping[7]), "srv_prev_send_calls": int(ping[8]),
-                                     "srv_prev_send_end": int(ping[9]), "srv_prev_last_key": int(ping[14]),
-                                     "srv_ktx_prev": int(ping[22]), "srv_ktx_prev2": int(ping[23])}
+                if tuned:
+                    n, status = run_tuned(lib, c, ring, t_sched, blk, ops, nbytes, rec, deadline_ns, cell["id"])
+                else:
+                    n, status = run_baseline(c, ring, t_sched, blk, ops, nbytes, rec, deadline_ns, cell["id"], self.stopped)
+            finally:
+                gc.enable()
+            run["done"], run["status"] = n, STATUSES[status]
+            if status in (0, 4):
+                try:
+                    ping = c.exchange(OP_PING, 0)
+                    run["final_ping"] = {"srv_ktx_newest": int(ping[6]), "srv_ktx_key": int(ping[7]),
+                                         "srv_prev_send_calls": int(ping[8]), "srv_prev_send_end": int(ping[9]),
+                                         "srv_prev_last_key": int(ping[14]), "srv_ktx_prev": int(ping[22]),
+                                         "srv_ktx_prev2": int(ping[23])}
+                except OSError as e:
+                    run["final_ping"] = {"error": str(e)}
+            try:
+                run["tcp_info"] = c.tcp_info()
             except OSError as e:
-                run["final_ping"] = {"error": str(e)}
-        try:
-            run["tcp_info"] = c.tcp_info()
-        except OSError as e:
-            run["tcp_info"] = {"error": str(e)}
-        c.close()
-        if tuned:
-            lib.soak_mlockall(0)
-            if run["verifier_fifo"] == "in effect":
-                os.sched_setscheduler(0, os.SCHED_OTHER, os.sched_param(0))
-        run["end_utc"], run["end_ns"] = utc(), time.time_ns()
-        t_wait = time.monotonic()
-        while int(ring.ctl[Ring.TAIL]) < int(ring.ctl[Ring.HEAD]) and not ring.ctl[Ring.HALT] and not self.stopped[0]:
-            if not self.checking() or time.monotonic() - t_wait > 60:
-                run["checker_lost"] = True
+                run["tcp_info"] = {"error": str(e)}
+            c.close()
+            if tuned:
+                lib.soak_mlockall(0)
+                if run["verifier_fifo"] == "in effect":
+                    os.sched_setscheduler(0, os.SCHED_OTHER, os.sched_param(0))
+            run["end_utc"], run["end_ns"] = utc(), time.time_ns()
+            t_wait = time.monotonic()
+            while int(ring.ctl[Ring.TAIL]) < int(ring.ctl[Ring.HEAD]) and not ring.ctl[Ring.HALT] and not self.stopped[0]:
+                if not self.checking() or time.monotonic() - t_wait > 60:
+                    run["checker_lost"] = True
+                    break
+                time.sleep(0.001)
+            meta = np.zeros((n, 3), np.int64)
+            meta[:, 0], meta[:, 1], meta[:, 2] = cell["id"], pas, len(self.runs)
+            self.recs.append(rec[:n])
+            self.rec_meta.append(meta)
+            run["wrong"] = int(ring.ctl[Ring.WRONG])
+            self.runs.append(run)
+            cell_done += n
+            start += n + 1
+            if (run["status"] != "stalled" or run.get("checker_lost") or run["wrong"] or ring.ctl[Ring.HALT] or self.stopped[0]
+                    or int(np.searchsorted(sched[0], time.time_ns() + 50_000_000)) >= len(sched[0])):
                 break
-            time.sleep(0.001)
-        meta = np.zeros((n, 3), np.int64)
-        meta[:, 0], meta[:, 1], meta[:, 2] = cell["id"], pas, len(self.runs)
-        self.recs.append(rec[:n])
-        self.rec_meta.append(meta)
-        run["wrong"] = int(ring.ctl[Ring.WRONG])
-        self.runs.append(run)
+            seg += 1
+        run["segments"], run["cell_done"] = seg + 1, cell_done
         return run
 
 
@@ -1656,7 +1677,7 @@ def validate(rec: np.ndarray, run_idx: np.ndarray, runs: list[dict[str, Any]], s
         if "cell" not in run or "error" in run:
             continue
         c = table[run["cell"]]
-        if run.get("status") == "done":
+        if run.get("status") == "done" and not run.get("segment"):
             counted += 1
             rate_dev.append(abs(run["done"] - c["rate"] * cell_s) / (c["rate"] * cell_s))
         if c["load"] != "idle" and len(steps) and "start_ns" in run and "end_ns" in run:
@@ -1873,7 +1894,7 @@ def cmd_verify(a) -> int:
                 break
             with open(Path(a.state) / "cells.log", "a") as f:
                 f.write(json.dumps({k: run.get(k) for k in ("cell", "pass", "position", "ts", "start_utc", "end_utc", "scheduled",
-                                                            "done", "status", "wrong")}) + "\n")
+                                                            "done", "status", "wrong", "segments", "cell_done")}) + "\n")
             if run["wrong"] or ring.ctl[Ring.HALT]:
                 rc = 3
                 break
@@ -1884,7 +1905,7 @@ def cmd_verify(a) -> int:
                 soak.advance(pos, {k: run[k] for k in ("cell", "pass", "position", "end_utc")})
                 pos += 1
             elif run["status"] == "stalled":
-                # the cell keeps the answers before the stall; its connection is spent, and the next cell opens another
+                # a stall too near the cell's end to go on: the cell keeps its answers
                 soak.advance(pos, {k: run[k] for k in ("cell", "pass", "position", "end_utc", "status")})
                 pos += 1
             elif run["status"] in ("sigterm",):
