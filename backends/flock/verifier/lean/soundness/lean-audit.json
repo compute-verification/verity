@@ -6319,6 +6319,7 @@
    "assumptions": [],
    "type_hash": "8196be5fb7e2f8fb6184ec5f389ffcd2d1ce2da7a65959dd12907179c064f88c"
   },
+  "FlockSoundness.Discharge.HiddenDec.decodesOn_execH": {},
   "FlockSoundness.Discharge.HiddenExec.accepts_allRetainedAny": {
    "signature": [
     "FlockSoundness.Discharge.HiddenExec.accepts_allRetainedAny : FlockSoundness.Discharge.HiddenExec.AcceptsAllRetainedAny"

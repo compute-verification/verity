@@ -157,4 +157,5 @@ import FlockSoundness.Discharge.DrawWords
 import FlockSoundness.Discharge.PlaysCoin
 import FlockSoundness.ZK.GK
 import FlockSoundness.Discharge.HiddenExec
+import FlockSoundness.Discharge.HiddenDec
 import FlockSoundness.Discharge.Hidden
