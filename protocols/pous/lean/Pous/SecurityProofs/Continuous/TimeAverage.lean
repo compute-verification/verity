@@ -19,10 +19,12 @@ slot `t` iff its coin is below `a`.
    (`contMem_slot`). The arriving slots inject into the records (`misses_le`), so an accepting run has at most `f`
    arriving slots that miss.
 4. **One slot.** In the view at `t` the history `histAt a x t` and the schedule are fixed by the earlier draws, so
-   `PerAnswer.lean`'s `pr_bad_le` and `miss_ge` apply as they are: off `bad`, the slot's draw `(c, i)` misses with
-   probability at least `(a/b)·(ε_t − ε_proof)`.
+   `PerAnswer.lean`'s `pr_bad_le` and `miss_ge` apply as they are: off `bad`, the slot's draw `(c, i)` is an arrival
+   that misses with probability at least `(a/b)·(ε_t − ε_proof)` (`slotQ_le`, with `pr_coin` and `pr_and_prod`).
 5. **Counting** (`pr_misses_gt_le`) over the `T` slot draws, with `q_t = (a/b)·max(ε_t − ε_proof, 0)` at an idle slot
-   off `bad`, and the stopped union over the `T` slots, `T·(β + 1)·π`.
+   off `bad` (`slotQ_eq`) and `0` elsewhere; the history `pr_misses_gt_le` indexes by is the list of earlier draws,
+   read back as a schedule by `pad`. The stopped union over the `T` slots costs `T·(β + 1)·π`
+   (`continuous_time_average`).
 -/
 
 namespace PousContinuous
