@@ -3,7 +3,7 @@
     research data lookup --tool NAME [--param k=v]... [--input name=art:...]... [--condition k=v]... [--source-tree SHA] [--any-source] [-- ARGV...]
     research data pull --from MACHINE RUN --project P            copy an attempt + its outputs' manifests and blobs from a machine's store (ssh)
     research data attempt publish RUN_DIR|RUN_ID [--tool SPEC] [--force] | --all [--runs-dir D]
-    research data custody RUN_DIR|RUN_ID [--publish] | --triage [--verify] [--runs-dir D]   run custody on the remote (store.custody)
+    research data custody RUN_DIR|RUN_ID [--publish [--force]] | --triage [--verify] [--older-min N] [--runs-dir D ...]   run custody on the remote (store.custody)
 
 `research.store.cli` (lane store-core) owns the `research data` dispatcher and merges COMMANDS into its table; `main` here is the
 same dispatch for tests and for `python -m research.store.cli_prov`.
@@ -427,29 +427,48 @@ def cmd_custody(argv: list[str]) -> int:
     ap.add_argument("--publish", action="store_true", help="publish the attempt with its run record first (when not yet in the store) and push it; "
                                                          "once custody holds, the run dir's files of 1 MiB and more are removed (store.evict.evict_custody)")
     ap.add_argument("--keep-local", action="store_true", help="--publish: keep every local run file")
+    ap.add_argument("--force", action="store_true", help="--publish: publish a run whose status.json is not terminal (its runner was "
+                                                       "killed before it recorded an end); the attempt keeps the state it last wrote")
     ap.add_argument("--triage", action="store_true", help="every run under --runs-dir by custody state; exit 1 while any needs action")
-    ap.add_argument("--verify", action="store_true", help="--triage: check preservation on the remote (default: the catalog's recorded replicas)")
-    ap.add_argument("--runs-dir", default=None)
+    ap.add_argument("--verify", action="store_true", help="--triage: check preservation on the remote (default: the catalog's recorded replicas, "
+                                                        "else the run dir's .custody)")
+    ap.add_argument("--older-min", type=float, default=None, metavar="N",
+                    help="--triage: a run needs action only once its records last changed N minutes ago; younger ones are listed as settling")
+    ap.add_argument("--runs-dir", action="append", default=None, help="a runs root; --triage takes several (repeat it)")
     ap.add_argument("--store", default=None)
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     if bool(ns.run) == bool(ns.triage):
         ap.error("RUN or --triage")
-    st = A.open_store(None, ns.store)
-    root = R.runs_root(ns.runs_dir)
+    if ns.run and len(ns.runs_dir or []) > 1:
+        ap.error("RUN takes one --runs-dir")
+    if ns.older_min is not None and (not ns.triage or ns.older_min < 0):
+        ap.error("--older-min N (N >= 0) is for --triage")
+    if ns.force and not ns.publish:
+        ap.error("--force is for --publish")
+    roots = [R.runs_root(x) for x in ns.runs_dir] if ns.runs_dir else [R.runs_root(None)]
     if ns.triage:
-        rows = CU.triage(st, root, verify_remote=ns.verify)
-        todo = [r for r in rows if r["state"] in ("no-custody", "attempt-unpreserved", "attempt-no-record")]
+        missing = [str(r) for r in roots if not r.is_dir()]
+        if missing:
+            print(f"research data custody --triage: no runs root at {', '.join(missing)}", file=sys.stderr)
+            return 2
+        st = A.open_store(None, ns.store)
+        rep = CU.triage_report(st, roots, older_min=ns.older_min, verify_remote=ns.verify)
+        todo = [r for r in rep["rows"] if r["state"] in CU.NEEDS_ACTION and not r["settling"]]
         if ns.json:
-            print(json.dumps({"runs_root": str(root), "rows": rows, "needs_action": len(todo)}, indent=2, sort_keys=True))
+            print(json.dumps(rep, indent=2, sort_keys=True))
         else:
-            counts = {s: sum(1 for r in rows if r["state"] == s) for s in CU.TRIAGE_STATES}
-            print(f"{len(rows)} run(s) under {root}: " + ", ".join(f"{n} {s}" for s, n in counts.items() if n))
+            print(f"{len(rep['rows'])} run(s) under {', '.join(rep['runs_roots'])}: "
+                  + ", ".join(f"{n} {s}" for s, n in rep["counts"].items() if n))
             for r in todo:
                 print(f"  {r['run']}  {r['state']:<20} {r['bytes'] / 2**20:8.1f} MB  {r['why']}  -> {r['next']}")
+            if rep["settling"]:
+                print(f"{rep['settling']} more ended under {ns.older_min:g} min ago (settling: their custody may still be running)")
             print(f"{len(todo)} need action (publish, fetch, or `research data label RUN custody waived|never-ran --by WHO`)" if todo
                   else "nothing needs action")
         return 1 if todo else 0
+    st = A.open_store(None, ns.store)
+    root = roots[0]
     try:
         d = R.resolve(root, ns.run) if not Path(ns.run).is_dir() else Path(ns.run)
     except (FileNotFoundError, LookupError) as e:
@@ -457,7 +476,7 @@ def cmd_custody(argv: list[str]) -> int:
         return 1
     pushed: list[str] | None = None
     if ns.publish:
-        out = A.publish(d, store=st, remote_push=False, run_record=True)
+        out = A.publish(d, store=st, remote_push=False, run_record=True, force=ns.force)
         if not out.get("published"):
             print(f"research data custody: {d.name}: attempt not published: {out.get('error')}", file=sys.stderr)
             return 1

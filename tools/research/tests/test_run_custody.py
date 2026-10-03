@@ -438,6 +438,107 @@ def test_triage_sorts_every_run_by_custody_state(tmp_path, monkeypatch, capsys):
     assert "2 need action" in out and lost.name in out and plain.name in out
 
 
+HOST = ("node-2", "boot-1")
+
+
+def _on_host(d: Path, host: tuple[str, str], state: str | None, t: float, **transition) -> None:
+    """The run dir as the machine that ran it sees it: job.json's host, a status (None: none yet), every file last changed at `t`."""
+    job = json.loads((d / "job.json").read_text())
+    job["environment"].update(hostname=host[0], boot_id=host[1])
+    (d / "job.json").write_text(json.dumps(job))
+    (d / "status.json").unlink()
+    if state:
+        (d / "status.json").write_text(json.dumps({"state": state, "transitions": [{"state": state, **transition}]}))
+    for p in d.iterdir():
+        os.utime(p, (t, t))
+
+
+@pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="a runner's liveness is read from /proc")
+def test_triage_on_the_machine_tells_a_live_runner_from_a_dead_one_and_a_pods_run_from_a_stale_one(tmp_path):
+    """Node 2 runs `research run` as host processes, node 1 in Kubernetes pods. A run still marked running has ended when its runner's
+    pid (same start time) is gone from the host that ran it, or, when that runner is in another pid namespace, when none of its
+    records changed for 24 h: node 1 had 326 such runs on 3 Oct, preempted before they recorded an end, that nothing published."""
+    runs, st = tmp_path / "runs", LocalStore(tmp_path / "s", config_path=tmp_path / "absent.toml")
+    me = int(Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19])
+    live, dead, pod, stale, starting = (_fixture_run(runs, f"r20260925-01000{i}-aaaa") for i in range(5))
+    _on_host(live, HOST, "running", NOW - 7200, pid=os.getpid(), starttime_ticks=me)
+    _on_host(dead, HOST, "running", NOW - 7200, pid=2**22 + 7, starttime_ticks=1)
+    _on_host(pod, ("pod-xyz", "boot-1"), "running", NOW - 7200, pid=1, starttime_ticks=1)
+    _on_host(stale, ("pod-xyz", "boot-1"), "running", NOW - CU.STALE_S - 60, pid=1, starttime_ticks=1)
+    _on_host(starting, HOST, None, NOW - 60)
+    rows = {r["run"]: r for r in CU.triage(st, runs, now=NOW, host=HOST)}
+    assert {k: r["state"] for k, r in rows.items()} == {live.name: "running", dead.name: "no-custody", pod.name: "running",
+                                                       stale.name: "no-custody", starting.name: "running"}
+    assert rows[dead.name]["why"].startswith("dead: its runner (pid 4194311)") and "--publish --force" in rows[dead.name]["next"]
+    assert rows[stale.name]["why"].startswith("stale: status running") and rows[pod.name]["why"].startswith("running elsewhere")
+    assert rows[dead.name]["age_min"] == 120.0 and rows[dead.name]["bytes"] > 0 and rows[live.name]["bytes"] is None
+    other_boot = {r["run"]: r["state"] for r in CU.triage(st, runs, now=NOW, host=(HOST[0], "boot-2"))}
+    assert other_boot[live.name] == "running", "after a reboot the pid means nothing: the 24 h rule decides"
+
+
+def test_triage_takes_a_valid_custody_marker_where_the_catalog_cannot_say(tmp_path, monkeypatch):
+    """Node 2's runs are published on node 1 (n2_custody.sh), so node 2's own catalog never sees them on the remote: the .custody that
+    node 1's verify wrote, copied back beside identical files, says so instead, and stops saying so once a file changes after it."""
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    n1_runs, n2_runs = tmp_path / "n1-runs", tmp_path / "n2-runs"
+    d1 = _fixture_run(n1_runs, "r20260925-010001-aaaa")
+    shutil.copytree(d1, n2_runs / d1.name, copy_function=shutil.copy2)
+    assert data_main(["custody", str(d1), "--publish", "--keep-local", "--store", str(tmp_path / "n1-store")]) == 0
+    d2 = n2_runs / d1.name
+    shutil.copy2(d1 / CU.MARKER, d2 / CU.MARKER)
+    n2 = LocalStore(tmp_path / "n2-store", config_path=tmp_path / "absent.toml")
+    (row,) = CU.triage(n2, n2_runs, host=HOST)
+    assert row["state"] == "r2" and row["why"].startswith("on the remote (.custody, verified ") and row["next"] is None
+    (d2 / "late.txt").write_text("written after custody")
+    (row,) = CU.triage(n2, n2_runs, host=HOST)
+    assert row["state"] == "no-custody"
+
+
+def test_older_min_counts_only_runs_that_ended_n_minutes_ago_across_every_runs_root(tmp_path, capsys):
+    """The monitors' invariant, per node: ended runs not on the remote N minutes after they ended. One read-only command over every
+    runs root of the node, `research/custody-triage/v1` with --json, exit 1 on a finding; a run that just ended is settling (its own
+    custody, or the node's, may still be on the way) and doesn't count."""
+    jobs, research = tmp_path / "jobs-runs", tmp_path / "research-runs"
+    old, new = _fixture_run(jobs, "r20260925-010001-aaaa"), _fixture_run(research, "r20260925-010002-bbbb")
+    for d, t in ((old, NOW - 3600), (new, NOW - 600)):
+        for p in d.iterdir():
+            os.utime(p, (t, t))
+    st = LocalStore(tmp_path / "s", config_path=tmp_path / "absent.toml")
+    rep = CU.triage_report(st, [jobs, research], older_min=30, now=NOW, host=HOST)
+    assert rep["schema"] == "research/custody-triage/v1" and rep["needs_action"] == 1 and rep["settling"] == 1
+    assert {r["run"]: (r["root"], r["settling"]) for r in rep["rows"]} == {old.name: (str(jobs), False), new.name: (str(research), True)}
+    assert CU.triage_report(st, [jobs, research], now=NOW, host=HOST)["needs_action"] == 2
+    for d, t in ((old, 1_000_000_000), (new, 4_102_444_800)):    # the CLI reads the clock itself: 2001 is older than any N, 2100 younger
+        for p in d.iterdir():
+            os.utime(p, (t, t))
+    base = ["custody", "--triage", "--store", str(tmp_path / "s"), "--older-min", "30"]
+    assert data_main([*base, "--runs-dir", str(jobs), "--runs-dir", str(research), "--json"]) == 1
+    doc = json.loads(capsys.readouterr().out)
+    assert (doc["needs_action"], doc["settling"], doc["runs_roots"]) == (1, 1, [str(jobs), str(research)])
+    assert data_main([*base, "--runs-dir", str(research)]) == 0
+    assert "1 more ended under 30 min ago (settling" in capsys.readouterr().out
+    assert data_main([*base, "--runs-dir", str(tmp_path / "typo")]) == 2, "a runs root that isn't there is not an empty one"
+    for bad in (["custody", old.name, "--older-min", "5"], ["custody", "--triage", "--older-min", "-1"], ["custody", old.name, "--force"]):
+        with pytest.raises(SystemExit):
+            data_main(bad)
+
+
+def test_publish_force_takes_home_a_run_whose_runner_died_before_recording_an_end(tmp_path, monkeypatch, capsys):
+    """n2_custody.sh publishes a dead run (an OOM-killed scope, a preempted pod) through `research data custody --publish`, which needs
+    --force for a status that never became terminal; without it the run is refused, as `attempt publish` refuses it."""
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    d = _fixture_run(tmp_path / "runs", "r20260925-010001-aaaa")
+    _on_host(d, HOST, "running", 1_000_000_000, pid=2**22 + 7, starttime_ticks=1)
+    assert data_main(["custody", str(d), "--publish", "--keep-local"]) == 1
+    assert "the store only sees completed or failed attempts" in capsys.readouterr().err
+    assert data_main(["custody", str(d), "--publish", "--keep-local", "--force"]) == 0
+    assert CU.has_custody(d) == (True, "on the remote (.custody)")
+
+
 def test_a_launch_longer_than_the_default_custody_key_needs_an_explicit_ttl_capped_at_24h(capsys):
     assert cli._custody_ttl_problem(None, ["--timeout", "3600"]) is None
     assert "outlives the custody key's default lifetime (6h)" in cli._custody_ttl_problem(None, ["--timeout=30000"])
