@@ -14,6 +14,14 @@
   "Flock.Registered"
  ],
  "compile_time": {
+  "FlockSoundness.Discharge.ZkBind.HmRowsZ.ofShadow_computes": {},
+  "FlockSoundness.Discharge.ZkBind.decAgreeAt": {},
+  "FlockSoundness.Discharge.ZkBind.rsZAt_computes": {},
+  "FlockSoundness.Discharge.ZkBind.sitesZAt_at": {},
+  "FlockSoundness.Discharge.ZkBind.sitesZAt_parse": {},
+  "FlockSoundness.Discharge.ZkBind.tableAtZK_S": {},
+  "FlockSoundness.Discharge.ZkBind.wit_surj": {},
+  "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at": {},
   "FlockSoundness.Refine.Walk": {
    "why": "walk_step, the tactic that steps through a successful computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
    "digest": "c86a84bed584d07dde045f113c2e8937b7d5887fb9cda37aebe771db55960a14"
