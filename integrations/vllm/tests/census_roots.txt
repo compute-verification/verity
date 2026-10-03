@@ -41,5 +41,6 @@ verity_vllm.properties.vocab_range_exactness
 verity_vllm.program.registry.rope_difftest     # properties-admission --adapter: imported by name
 verity_vllm.program.registry.moe_difftest      # properties-admission --adapter: imported by name
 verity_vllm.program.registry.collectives_difftest      # properties-admission --adapter: imported by name
+verity_vllm.engine.meta_inventory          # a model's modules without its weights (run on a node with the pinned vLLM)
 verity_vllm/protocol_options/      # the adapters, imported by name when a run enables their protocol (protocol_options.adapter)
 tests/regression/
