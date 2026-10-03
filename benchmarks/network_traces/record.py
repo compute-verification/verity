@@ -235,7 +235,8 @@ def offline_engine(args: argparse.Namespace, commit: bool, meta: dict, mix: Sequ
 
     eng = va.build_engine(CHECKPOINTS, max_num_seqs=args.max_num_seqs, case=ROLES[args.model], execution="bi-eager",
                           engine_args={"max_model_len": args.max_model_len,
-                                       "max_num_batched_tokens": args.max_num_batched_tokens})
+                                       "max_num_batched_tokens": args.max_num_batched_tokens,
+                                       "gpu_memory_utilization": args.gpu_memory_utilization})
     meta["engine"] = {"kwargs": {k: v for k, v in eng.kwargs.items() if k not in ("model", "tokenizer")},
                       "env": eng.env_flags, "effective": eng.effective, "build_s": round(eng.build_s, 1)}
     if not commit:
@@ -725,6 +726,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--server-arg", action="append", default=[], help="passed to the vLLM server, e.g. --server-arg=--enforce-eager")
     r.add_argument("--max-num-seqs", type=int, default=256, help="the offline engine's")
     r.add_argument("--max-num-batched-tokens", type=int, default=8192, help="the offline engine's (the stock server's own)")
+    r.add_argument("--gpu-memory-utilization", type=float, default=0.7,
+                   help="the offline engine's, leaving the committer's prefill-sized staging block room beside it")
     r.add_argument("--hash-threads", type=int, default=2, help="the committer's (the Commit stage's default)")
     c = sub.add_parser("convert", help="rebuild trace.json and summary.json in job directories")
     c.add_argument("dirs", nargs="+", type=Path)
