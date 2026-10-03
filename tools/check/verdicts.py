@@ -9,8 +9,9 @@ A verdict is a pass that one step stored under a key of everything it read: a su
 and under `$CHECK_CACHE` a circuit-check target's report, a Lean package's audit (`lean_audit.py`) and the agreement's pass
 (`check.py`).  A step looks an entry up by the key it computes from this machine's own inputs, so a pack can answer only for inputs
 identical to the ones that earned it.  It is trusted as far as its source: the merge queue builds packs only from recorded runs.
-Never packed, since they aren't verdicts: `lean-deps/` (fetched dependencies), the suites' `logs/` and `durations.json`, and any file
-that isn't a finished `.json` entry.
+Never packed, since they aren't verdicts: `lean-deps/` (fetched dependencies), `lean-changed/` and `lean-records/` (the trees check's
+early Lean step and the Lean fast path build on, not even walked: a tree holds a package's dependencies, some 170k files), the
+suites' `logs/` and `durations.json`, and any file that isn't a finished `.json` entry.
 
 A pack is a gzipped tar of regular files under `check/` and `tests/`. `import` refuses a pack holding anything else (a link, an
 absolute or `..` path, a device, another prefix), and it never overwrites an entry that exists here.
@@ -27,7 +28,7 @@ import sys
 import tarfile
 from pathlib import Path
 
-SKIP = {"check": {"lean-deps"}, "tests": {"logs", "durations.json"}}
+SKIP = {"check": {"lean-deps", "lean-changed", "lean-records"}, "tests": {"logs", "durations.json"}}
 
 
 def roots() -> dict[str, Path]:
@@ -44,10 +45,15 @@ def entries() -> dict[str, Path]:
     for prefix, base in roots().items():
         if not base.is_dir():
             continue
-        for p in sorted(base.rglob("*.json")):
-            rel = p.relative_to(base)
-            if p.is_file() and not p.is_symlink() and rel.parts[0] not in SKIP[prefix] and not any(x.startswith(".") for x in rel.parts):
-                out[f"{prefix}/{rel.as_posix()}"] = p
+        for d, dirs, names in os.walk(base):
+            top = Path(d) == base
+            dirs[:] = [x for x in dirs if not x.startswith(".") and not (top and x in SKIP[prefix])]
+            for name in names:
+                p = Path(d) / name
+                rel = p.relative_to(base)
+                if (name.endswith(".json") and not name.startswith(".") and rel.parts[0] not in SKIP[prefix] and p.is_file()
+                        and not p.is_symlink()):
+                    out[f"{prefix}/{rel.as_posix()}"] = p
     return out
 
 
