@@ -79,8 +79,8 @@ def test_sq_ge_on_each_side_of_its_threshold():
     rng = np.random.default_rng(20261004)
     x = np.concatenate([F32_EDGES, F32_BINADES, rng.integers(0, 1 << 32, 1 << 14), rng.integers(0, 1 << 23, 1 << 12)])
     v = np.array([W.up48(W.sq300(int(t))) for t in x], dtype=np.uint64)
-    th = np.concatenate([v, v + np.uint64(1), np.where(v > 0, v - np.uint64(1), v), np.zeros_like(v), np.full_like(v, (1 << 64) - 1),
-                         rng.integers(0, 1 << 63, len(x)).astype(np.uint64) << np.uint64(1)])
+    th = np.concatenate([v, v + np.uint64(1), np.where(v > 0, v - np.uint64(1), v), np.zeros_like(v),
+                         np.full_like(v, (1 << 64) - 1), rng.integers(0, 1 << 63, len(x)).astype(np.uint64) << np.uint64(1)])
     _words(B.PouwSqGe, W.PouwSqGe, np.tile(x, 6), th)
 
 
@@ -108,8 +108,8 @@ def test_sq_ceil_at_its_rounding_boundaries():
             ns.append(n)
     for _ in range(600):
         n = R.choice([R.getrandbits(32) or 1, R.randrange(1, 1 << 14), R.randrange(1, 64)])
-        q = R.choice([(1 << 48) - 1, 1 << 48, (1 << 48) + 1, ((1 << 48) - 1) << R.randrange(1, 500), (((1 << 48) - 1) << R.randrange(1, 500)) + 1,
-                      R.getrandbits(R.randrange(1, 570))])
+        top = ((1 << 48) - 1) << R.randrange(1, 500)
+        q = R.choice([(1 << 48) - 1, 1 << 48, (1 << 48) + 1, top, top + 1, R.getrandbits(R.randrange(1, 570))])
         t = R.choice([-(-q * n // 64), q * n // 64, R.getrandbits(R.randrange(0, 577))])
         ts.append(t & M576)
         ns.append(n)
