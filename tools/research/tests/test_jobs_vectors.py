@@ -106,6 +106,33 @@ def test_train_case(case):
 UNREAD = f"{trains.TOOL_PY} on main has no CHECK = Tool(...) this gate can read: one, at module level, of keyword arguments only"
 RULES_UNREAD = f"{trains.TOOL_PY} on main has a merge_requires this gate can't read"
 OK = 'CHECK = Tool(name="check", produces=["check/v1"]'
+#: main's own layout: `preflight` after `merge_requires`
+MAINS = ('CHECK = Tool(name="check", version="1", command=["uv", "run", "--locked", "--extra", "torch-cpu", "python", '
+         '"tools/check/check.py"],\n             produces=["check/v1"],\n'
+         '             merge_requires={"lean-agreement": ["backends/flock/", "!README.md", "!PROTOCOL.md"]},\n'
+         '             preflight=["tools/check/preflight.py"])\n')
+
+
+def _train_on(tool_py: str | None, pr: int, kind: str = "check/v1"):
+    """(the service, its one train, the PR's head): PR ``pr`` as a train on a main whose tools/check/tool.py is ``tool_py``,
+    checked by run r9 with a ``kind`` result whose one step, suites, passed, after the reconcile cron."""
+    s = service(TRAINS)
+    head = s.github.prs[pr]["head"]
+    run_case({"name": "tool.py", "steps": [
+        {"at": 0, "github_push": {"ref": "main", "sha": "m9", "parents": ["m0"], "files": {trains.TOOL_PY: tool_py}}},
+        {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [pr]},
+         "expect": {"status": 201, "body": {"tip": f"m9+{head}"}}},
+        {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch",
+         "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L": "lease_token"}},
+        {"at": 2, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch",
+         "body": {"lease_token": "$L", "outcome": "passed", "run_id": "r9"}, "expect": {"status": 200}},
+        {"at": 3, "store": {"attempts": {"r9": {"id": "r9", "tool": {"name": "check"}, "source": {"commit": f"m9+{head}", "dirty": False},
+                                                "status": {"state": "done", "rc": 0}, "outputs": {"result": "art:r9"}}},
+                            "manifests": {"art:r9": {"kind": kind, "meta": {"steps": [{"step": "suites", "status": "passed"}]}}}}},
+        {"at": 4, "reconcile": True, "expect": {"moved": [1]}},
+    ]}, s, TRAINS)
+    (tr,) = s.trains.values()
+    return s, tr, head
 
 
 @pytest.mark.parametrize(("tool_py", "pr", "state", "why"), [
@@ -123,29 +150,30 @@ OK = 'CHECK = Tool(name="check", produces=["check/v1"]'
     pytest.param(f"CHECK = tool.{OK[8:]})\n", 2, "stuck", UNREAD, id="not-Tool"),
     pytest.param(None, 2, "stuck", f"main has no {trains.TOOL_PY}", id="no-tool-py"),
     pytest.param(f"{OK})\n", 6, "landed", None, id="no-merge_requires-requires-nothing"),
+    pytest.param(MAINS, 6, "stuck", "the change needs lean-agreement absent to have passed in run r9", id="mains-layout"),
 ])
 def test_the_gate_reads_only_a_check_declaration_it_can_parse(tool_py, pr, state, why):
     """Python-only beside the vectors: a syntax error's why is Python's own message; a missing `merge_requires` asks for no
     step, so a backends/flock/ change lands without lean-agreement."""
-    s = service(TRAINS)
-    head = s.github.prs[pr]["head"]
-    run_case({"name": "tool.py", "steps": [
-        {"at": 0, "github_push": {"ref": "main", "sha": "m9", "parents": ["m0"], "files": {trains.TOOL_PY: tool_py}}},
-        {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [pr]},
-         "expect": {"status": 201, "body": {"tip": f"m9+{head}"}}},
-        {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch",
-         "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L": "lease_token"}},
-        {"at": 2, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch",
-         "body": {"lease_token": "$L", "outcome": "passed", "run_id": "r9"}, "expect": {"status": 200}},
-        {"at": 3, "store": {"attempts": {"r9": {"id": "r9", "tool": {"name": "check"}, "source": {"commit": f"m9+{head}", "dirty": False},
-                                                "status": {"state": "done", "rc": 0}, "outputs": {"result": "art:r9"}}},
-                            "manifests": {"art:r9": {"kind": "check/v1", "meta": {"steps": [{"step": "suites", "status": "passed"}]}}}}},
-        {"at": 4, "reconcile": True, "expect": {"moved": [1]}},
-    ]}, s, TRAINS)
-    (tr,) = s.trains.values()
+    s, tr, head = _train_on(tool_py, pr)
     assert tr.state == state, tr.why
     assert tr.why is None if why is None else tr.why.startswith(why), tr.why
     assert s.github.refs["main"] == ("m9" if why else f"m9+{head}")
+
+
+@pytest.mark.parametrize("above", [
+    'BENCH = Tool(name="bench", version="1", produces=["bench-result/v1"])\n',
+    '#: the old bench declaration had produces=["bench-result/v1"]\n',
+    '"""A docstring that quotes produces=["bench-result/v1"]."""\n',
+    'QUICK = Tool(name="quick", version="1", also_produces=["bench-result/v1"])\n',
+], ids=["another-tool", "comment", "docstring", "suffix-keyword"])
+def test_the_gate_reads_checks_own_produces_whatever_quotes_one_above_it(above):
+    """A pattern for `produces=[...]` took the first one anywhere in main's tool.py: another Tool's, a comment's, a docstring's,
+    or a keyword that merely ends in `produces` (red team, #990).  A bench-result/v1 never lands as a check."""
+    _s, tr, _head = _train_on(above + MAINS, 2, "bench-result/v1")
+    assert (tr.state, tr.why) == ("stuck", f"run r9's result is a bench-result/v1, and {trains.TOOL_PY} on main produces check/v1")
+    _s, tr, _head = _train_on(above + MAINS, 2)
+    assert tr.state == "landed", tr.why
 
 
 def test_the_repositorys_own_check_declaration_parses_to_what_importing_it_declares():
