@@ -2,7 +2,8 @@
 
 Writes scoped samples to `resources.jsonl` (schema telemetry/resources/v0.1) and a heartbeat `sampler.json`.  Every record has
 `kind`, `scope`, `t_utc`, `t_mono`, `seq`, `stream`.  Bounded: fixed reads, --max-pids, --max-bytes (cadence doubles, never stops the
-workload), errors rate-limited and counted.  Survivable: SIGHUP ignored, SIGTERM/SIGINT -> final readings + `sampler_end`, workload death
+workload), errors rate-limited and counted; smaps_rollup, which holds a process's mmap lock while it is read, never for a process over
+--pss-max-rss-gb and at most 1/PSS_HOLD_FACTOR of any process's time.  Survivable: SIGHUP ignored, SIGTERM/SIGINT -> final readings + `sampler_end`, workload death
 -> final readings + linger.  It never signals the workload.
 """
 from __future__ import annotations
@@ -27,6 +28,9 @@ from .procs import diskstats, gpu_sample, pss, snapshot_tree, statvfs
 clock = time.monotonic
 #: The RSS breakdown that /proc/<pid>/status gave the process snapshot: what a process whose smaps_rollup is not read records instead.
 STATUS_RSS = ("rss_bytes", "rss_anon_bytes", "rss_file_bytes", "rss_shmem_bytes")
+#: A process's smaps_rollup is read again no sooner than this many times its last read took, so that the reads hold its mmap lock
+#: at most 1/PSS_HOLD_FACTOR of its time.
+PSS_HOLD_FACTOR = 200
 
 
 class Sampler:
@@ -57,6 +61,7 @@ class Sampler:
         self.known_outsiders: dict[int, tuple[int, str]] = {}
         self.topology_changed_at = 0.0
         self.last_pss = 0.0
+        self.pss_hold: dict[tuple[int, int | None], tuple[float, float]] = {}   # (pid, starttime) -> (no read before, last read's s)
         self.last_gpu = 0.0
         self.last_storage = 0.0
         self.last_self = 0.0
@@ -126,6 +131,8 @@ class Sampler:
                                      or (self.topology_changed_at and now - self.topology_changed_at < self.cadence and now - self.last_pss >= 5.0)):
             try:
                 out = [self._pss(r) for r in rows[: self.a.max_pids]]
+                live = {(r["pid"], r.get("starttime_ticks")) for r in rows}
+                self.pss_hold = {k: v for k, v in self.pss_hold.items() if k in live}
                 tot = sum(x["pss_bytes"] for x in out if x.get("pss_bytes") is not None)
                 rss_sum = sum(r.get("rss_bytes") or 0 for r in rows)
                 skipped = sum(1 for x in out if x.get("skipped"))
@@ -166,14 +173,26 @@ class Sampler:
         return alive
 
     def _pss(self, row: dict[str, Any]) -> dict[str, Any]:
-        """The process's smaps_rollup, unless its RSS is over --pss-max-rss-gb: the read walks the whole address space under the
-        process's mmap lock, which stalls a large process for seconds."""
+        """The process's smaps_rollup, unless its RSS is over --pss-max-rss-gb or its last read was less than PSS_HOLD_FACTOR times
+        that read's length ago: the read walks the whole address space under the process's mmap lock, which stalls a large process
+        for seconds."""
         rss = row.get("rss_bytes", row.get("rss_bytes_stat"))
+        skipped = {"pid": row["pid"], "pss_bytes": None, "skipped": True, **{k: row.get(k) for k in STATUS_RSS}}
         if rss is not None and rss > self.a.pss_max_rss_gb * 1e9:
-            return {"pid": row["pid"], "pss_bytes": None, "skipped": True, **{k: row.get(k) for k in STATUS_RSS},
-                    "reason": f"skipped: rss {rss / 1e9:.1f} GB over --pss-max-rss-gb {self.a.pss_max_rss_gb:g} "
-                              "(smaps_rollup holds the process's mmap lock for seconds)"}
-        return pss(row["pid"])
+            return {**skipped, "reason": f"skipped: rss {rss / 1e9:.1f} GB over --pss-max-rss-gb {self.a.pss_max_rss_gb:g} "
+                                         "(smaps_rollup holds the process's mmap lock for seconds)"}
+        key = (row["pid"], row.get("starttime_ticks"))
+        t0 = clock()
+        not_before, took = self.pss_hold.get(key, (t0, 0.0))
+        if t0 < not_before:
+            return {**skipped, "reason": f"skipped: its last smaps_rollup read took {took:.3f} s, so the next waits {PSS_HOLD_FACTOR}x "
+                                         f"that ({not_before - t0:.1f} s more): reads hold its mmap lock at most 1/{PSS_HOLD_FACTOR} "
+                                         "of its time"}
+        out = pss(row["pid"])
+        took = clock() - t0
+        self.pss_hold[key] = (t0 + PSS_HOLD_FACTOR * took, took)
+        out["read_s"] = round(took, 4)
+        return out
 
     def write_self(self) -> None:
         ru = resource.getrusage(resource.RUSAGE_SELF)

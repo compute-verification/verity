@@ -889,3 +889,31 @@ def test_research_run_passes_the_pss_flags_through_tele_run_to_the_sampler(tmp_p
         assert argv[:4] == [*trun._tele_argv(), "sample"]
         got = ap.parse_args(argv[4:])
         assert (got.pss_every, got.pss_max_rss_gb, got.root_pid) == (*want, 4242)
+
+
+def test_a_slow_read_holds_that_process_off_for_200_times_its_length(tmp_path, monkeypatch):
+    """Under --pss-max-rss-gb a read can still take long. A process is read again no sooner than 200x its last read took, so the reads
+    hold its mmap lock at most 0.5% of its time (a p99 shows a perturbation over 1%), while the other processes keep the cadence."""
+    from research.telemetry import sample
+
+    clk = _Clock(1000.0)
+    monkeypatch.setattr(sample, "clock", clk)
+    opened = []
+
+    def read(pid):
+        opened.append((pid, clk.t))
+        clk.t += 0.5 if pid == 11 else 0.001
+        return {"pid": pid, "pss_bytes": GB // 2}
+
+    s = _sampler(tmp_path, monkeypatch, [_proc(11, 2 * GB), _proc(12, GB)], read, "--pss-every", "5")
+    for i in range(22):
+        clk.t = 1000.0 + 5 * i
+        s.round()
+    recs = _records(tmp_path, "pss")
+    assert len(recs) == 22 and [t for p, t in opened if p == 11] == [1000.0, 1100.0] and sum(p == 12 for p, _ in opened) == 22
+    assert [r["skipped"] for r in recs] == [0] + [1] * 19 + [0, 1] and all(r["denied"] == 0 for r in recs)
+    assert recs[0]["processes"][0]["read_s"] == 0.5
+    held = recs[1]["processes"][0]
+    assert held["skipped"] is True and held["pss_bytes"] is None and held["rss_bytes"] == 2 * GB and held["rss_file_bytes"] == GB // 2
+    assert held["reason"] == ("skipped: its last smaps_rollup read took 0.500 s, so the next waits 200x that (95.0 s more): reads hold "
+                              "its mmap lock at most 1/200 of its time")
