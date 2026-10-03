@@ -48,7 +48,8 @@ Pous/SecurityProofs/Chain/Flat.lean proved, generated: P3 with a concrete `H`, t
                                     the public encoder over the overwrite chain (the graded lanes, flattened)
 Pous/SecurityProofs/Continuous/     the continuous audit: MissCount (proved, pinned: the bound on misses whose
                                     conditional probabilities are at least q_j); Game (draft, unreviewed: the
-                                    variable-state responder and two statements) and PerAnswer (their proofs)
+                                    variable-state responder and two statements), PerAnswer (their proofs) and
+                                    Band (the guarantee on the 64 KiB band at D = 5)
 lean-audit.json                     the policy and pin records for tools/lean/audit.py
 CheckAxioms.lean                    one #print axioms line per headline theorem
 PousTargets.lean                    untrusted, not in the default build: the open statements as sorry targets
