@@ -9432,6 +9432,8 @@
    "assumptions": [],
    "type_hash": "830470269c8de370eacabc9cbd381362d0f6e1c00295c377166dad976546ce73"
   },
+  "FlockSoundness.Discharge.PrivateCircuit.private_circuit_private": {},
+  "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound": {},
   "FlockSoundness.Discharge.PrivateCircuit.ran_registered": {
    "signature": [
     "FlockSoundness.Discharge.PrivateCircuit.ran_registered : FlockSoundness.Discharge.PrivateCircuit.RanRegistered"
