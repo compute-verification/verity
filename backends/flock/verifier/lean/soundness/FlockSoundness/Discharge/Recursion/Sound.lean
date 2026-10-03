@@ -47,7 +47,7 @@ theorem recursive_sound [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos]
     (hout : probAt σ (fun ω t s b => Acc σ.1 ω t b ∧
       ¬ I.accepts (wstmt (dec σ.1 ω t s)) ((wmsg (dec σ.1 ω t s)).zip (t.map Prod.snd))) ≤ εo)
     (hP : probAt σ (fun ω t s b => Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t s) ≠ x σ.1 ω) ≤ εP)
-    (htr : ∀ k < I.r, ∀ ω t (s : Strategy (outer σ.1 ω t)) (v : Pos → V) (e : Cm × I.Coin), t[k]? = some e →
+    (htr : ∀ k < I.r, AllAt σ fun ω t s => ∀ (v : Pos → V) (e : Cm × I.Coin), t[k]? = some e →
       prob (fun b => Acc σ.1 ω t b ∧ (wmsg (dec σ.1 ω t s))[k]? ≠ some (msg v)) (outer σ.1 ω t) s ≤
         εtr k σ.1 ω t s +
           ∑ pos, κ k pos * prob (OffAt ob (cmt e.1 pos) (v pos)) (T k σ.1 ω t s pos).g (T k σ.1 ω t s pos).s)

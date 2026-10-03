@@ -106,8 +106,8 @@ theorem stage_bind [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos] {Msg :
     (T : (t : List (Cm × C)) → Strategy (f t) → Pos → Finder (Finset ob.Op)) (s : Strategy (rounds Cm C r f))
     (E : (t : List (Cm × C)) → Strategy (f t) → Option Msg → ℝ≥0∞)
     (εtr : (t : List (Cm × C)) → Strategy (f t) → ℝ≥0∞) (κ : Pos → ℝ≥0∞)
-    (htr : ∀ t s' (v : Pos → V) (e : Cm × C), t[k]? = some e →
-      E t s' (some (msg v)) ≤ εtr t s' + ∑ pos, κ pos * prob (OffAt ob (cmt e.1 pos) (v pos)) (T t s' pos).g (T t s' pos).s)
+    (htr : AllLeaves r f (fun t s' => ∀ (v : Pos → V) (e : Cm × C), t[k]? = some e →
+      E t s' (some (msg v)) ≤ εtr t s' + ∑ pos, κ pos * prob (OffAt ob (cmt e.1 pos) (v pos)) (T t s' pos).g (T t s' pos).s) s)
     {q : ℝ} (hCR : ∀ pos, (forkF ob cmt pos k r f T s).CR H q) :
     ∃ refv : List (Cm × C) → Cm → Pos → V,
       leafAvg r f (fun t s' => E t s' ((t[k]?).map fun e => msg (refv (t.take k) e.1))) s ≤

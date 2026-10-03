@@ -157,6 +157,28 @@ theorem leafAvg_le_one {r : ℕ} {f : List (M × C) → Game β} {F : (t : List 
     (h : ∀ t s', F t s' ≤ 1) (s : Strategy (rounds M C r f)) : leafAvg r f F s ≤ 1 :=
   (leafAvg_mono h s).trans (leafAvg_const 1 s).le
 
+/-- **A property of every leaf the strategy reaches**: at the leaf the transcript `t` reaches, `P t` holds of the strategy
+there. A hypothesis that holds only of the prover's own strategies (`cr/sha-512` for finders built from them) is stated
+this way: a strategy no transcript reaches may hard-code anything. -/
+def AllLeaves : (r : ℕ) → (f : List (M × C) → Game β) → ((t : List (M × C)) → Strategy (f t) → Prop) →
+    Strategy (rounds M C r f) → Prop
+  | 0, _, P, s => P [] s
+  | r + 1, f, P, s => ∀ ρ, AllLeaves r (fun t => f ((s.1, ρ) :: t)) (fun t => P ((s.1, ρ) :: t)) (s.2 ρ)
+
+theorem AllLeaves.mono {r : ℕ} {f : List (M × C) → Game β} {P Q : (t : List (M × C)) → Strategy (f t) → Prop}
+    {s : Strategy (rounds M C r f)} (h : AllLeaves r f P s) (hPQ : ∀ t s', t.length = r → P t s' → Q t s') :
+    AllLeaves r f Q s := by
+  induction r generalizing f with
+  | zero => exact hPQ [] s rfl h
+  | succ r ih => exact fun ρ => ih (h ρ) fun t s' ht => hPQ _ s' (by simp [ht])
+
+theorem leafAvg_mono_all {r : ℕ} {f : List (M × C) → Game β} {F G : (t : List (M × C)) → Strategy (f t) → ℝ≥0∞}
+    {s : Strategy (rounds M C r f)} (h : AllLeaves r f (fun t s' => F t s' ≤ G t s') s) :
+    leafAvg r f F s ≤ leafAvg r f G s := by
+  induction r generalizing f with
+  | zero => exact h
+  | succ r ih => exact avg_mono fun ρ => ih (h ρ)
+
 /-- **The transcript the simulated inner prover produces**: each commitment `c` replaced by its reference opening
 `ref p c`, `p` the transcript before it. -/
 def relabel {N : Type} : (List (M × C) → M → N) → List (M × C) → List (N × C)
@@ -213,6 +235,13 @@ noncomputable def expAt (σ : Strategy (recGame L Reg I Cm outer))
     (F : (ω : L.Ω) → (t : List (Cm × I.Coin)) → Strategy (outer σ.1 ω t) → ℝ≥0∞) : ℝ≥0∞ :=
   avg fun ω => leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
     (fun t s => F ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω)
+
+/-- **A property of the prover's strategy at the start of every outer session it reaches**, after each draw `ω` and
+transcript `t`. -/
+def AllAt (σ : Strategy (recGame L Reg I Cm outer))
+    (P : (ω : L.Ω) → (t : List (Cm × I.Coin)) → Strategy (outer σ.1 ω t) → Prop) : Prop :=
+  ∀ ω, AllLeaves I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
+    (fun t s => P ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω)
 
 /-- **The probability of an event of the outer session** that may read the prover's strategy at its start (a decoded
 witness, say): `expAt` of its probability. -/
