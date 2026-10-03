@@ -11038,7 +11038,24 @@
    "assumptions": [],
    "type_hash": "f7e115cd41fd17353112e2538f83cb14c8306506584e66399c19b404d0a998f5"
   },
-  "FlockSoundness.Discharge.ZkLink.drawOkZK_of_exec": {},
+  "FlockSoundness.Discharge.ZkLink.drawOkZK_of_exec": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkLink.drawOkZK_of_exec {n : Nat} (I : FlockSoundness.Discharge.Exec.Inputs)",
+    "  (ht : Eq I.tags.typed Bool.false) {c : Flock.Circuit}",
+    "  (hc : Eq (Flock.HmRow.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok c))",
+    "  {m : Nat} (σs : Fin n → Fin m) (ks : Fin m → Nat)",
+    "  (hks : ∀ (s : Fin m), instLENat.le (ks s) (FlockSoundness.Audit.Law.stratum σs s).card)",
+    "  (St : Fin m → Flock.Draw.Stratum) (hS : FlockSoundness.Audit.Law.ExecStrata σs ks St) (Kd pop : Nat) {Ω : Type}",
+    "  [Fintype Ω] [Nonempty Ω] (Lb : Fin m → Nat) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)",
+    "  (dj : Finset (Fin n) → Lean.Json)",
+    "  (hdj : FlockSoundness.Discharge.ZkLink.DrawFileZK dj (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :",
+    "  FlockSoundness.Discharge.ZkLink.DrawOkZK I dj",
+    "    (FlockSoundness.Discharge.Exec.mPtsOf c.g (Finset.univ.sum fun s => ks s))",
+    "    ((FlockSoundness.Audit.Law.execOS src (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop).draw ω)"
+   ],
+   "assumptions": [],
+   "type_hash": "b5134539e446715277f30f6b8573f3721c8f7f18cd865a587726dc8b37e81149"
+  },
   "FlockSoundness.Discharge.ZkLink.jointZC_ksBound": {
    "signature": [
     "FlockSoundness.Discharge.ZkLink.jointZC_ksBound {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
@@ -33934,6 +33951,14 @@
     "FlockSoundness.Discharge.ZkLink.zk_flock_countC_execOS_strict",
     "FlockSoundness.Discharge.ZkLink.zk_linkSoundC"
    ]
+  },
+  "FlockSoundness.Discharge.ZkLink.DrawOk": {
+   "digest": "41e52bc6c334ac2b89de66bd03242878f0a7cd7f6efa1159c169c1617583fe09",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkLink.DrawFileZK": "ed0f0c63bc94a1cfa14945fe0612099ac06c96ea16040e699b06836ba24f57ca",
+    "FlockSoundness.Discharge.ZkLink.drawOf": "ef60d41dd614d169fc272ee62e10e6c07a47af85af2fe43a6322d3092d3ff1ea"
+   },
+   "pins": ["FlockSoundness.Discharge.ZkLink.drawOkZK_of_exec"]
   },
   "FlockSoundness.Discharge.ZkLink.Link": {
    "digest": "763f09043c734bb9a1b60180ec9d6012977a5c776150f069a9fd75a415a49a97",
