@@ -80,6 +80,16 @@ def test_jobs_default_to_the_cpus_this_process_may_use(tmp_path, monkeypatch):
     assert 1 <= S.cpus() <= (len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count())
 
 
+def test_jobs_default_to_no_more_test_processes_than_available_memory_holds(tmp_path, monkeypatch):
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "cpus", lambda: 4)
+    meminfo = tmp_path / "meminfo"
+    for gb, want in ((12, 2), (64, 4), (1, 1)):
+        meminfo.write_text(f"MemTotal:       99999999 kB\nMemAvailable:   {gb << 20} kB\n")
+        assert S.default_jobs(meminfo) == want
+    assert S.default_jobs(tmp_path / "absent") == 4
+
+
 def _workspace(root: Path) -> None:
     """Members `a` (on numpy, with a `plot` extra on matplotlib) and `b` (on nothing), and the workspace's dev group."""
     (root / "pyproject.toml").write_text('[project]\nname = "ws"\n\n[tool.uv.workspace]\nmembers = ["a", "b"]\n\n'
