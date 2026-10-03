@@ -125,6 +125,15 @@ about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bound
 The inference-only policy charges an isolation unit the ingress covert capacity from the last wipe before it starts,
 plus what survived that wipe. `capacity.k_share` expresses bits as a share of `K = 9.12e7` bits.
 
+The shipped schedule's egress bounds are proved in Lean for `constantRate`, the Program of `schedule`, with no
+dataflow hypothesis: for every frame function, sync set and operator. The clock-sync bound is
+`SecurityProofs.EncardAccSeqsLeConstantRate`, which is 7 bits per window at 16 × 8 sync values. Under J with one sync
+value it is 0 bits of timing (`SecurityProofs.EncardAccSeqsLeConstantRateFixedClock`). A horizon within the first m
+windows is charged only those m windows (`SecurityProofs.EncardAccSeqsLeConstantRateWindows`), and a decoder of the
+wire recovers no more (`SecurityProofs.EncardDecodableLeConstantRate`). The block cap does not sharpen these:
+Theorem 3's dataflow conditions fail for this schedule, since δ and ⌊λ/ρ⌋ carry a frame into later windows and the
+queue carries across them (`constantRate_not_framesRead_counts`, `constantRate_not_windowBlocks`).
+
 The ingress bound is proved in Lean, for a decoder in X that reads the wire (`SecurityProofs.EncardIngressDecodableLe`)
 or the records (`SecurityProofs.EncardIngressObsDecodableLe`). It counts `(r_in + 1)^T` occupancies per ingress
 link-window (times `D^T` for jitter, 1 under J), given the frames' content, on runs whose statuses are all complete

@@ -145,9 +145,10 @@ The audit checks them like every declaration, and they use only the three axioms
 The statements were frozen and reviewed by a red team before their proofs, and a second round's verdict was GO. The
 ingress bound's statements were frozen before their proofs as well; the review of the first two is on the pull request
 that added them (danielreuter/verity#894), and the review of the content versions is on the one stacked on it. The
-reference implementation, `protocols/network_warden` (`verity_network_warden`), mirrors 15 of the pins and the three
-unpinned lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python
-counterpart.
+constant-rate Program's five statements and the definitions they read were frozen on `sorry` stubs and pinned before
+their proofs, and their statement review is on danielreuter/verity#949. All 47 pins are proved. The reference
+implementation, `protocols/network_warden` (`verity_network_warden`), mirrors 19 of the pins and the three unpinned
+lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
 
 ## Modelling choices a statement reviewer checks
 
