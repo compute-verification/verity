@@ -10,3 +10,6 @@ import FlockSoundness.Discharge.ZkLink.OracleP
 import FlockSoundness.Discharge.ZkLink.LockLevel
 import FlockSoundness.Discharge.ZkLink.AlignLevel
 import FlockSoundness.Discharge.ZkLink.LockRep
+import FlockSoundness.Discharge.ZkLink.BadZ
+import FlockSoundness.Discharge.ZkLink.SessionZ
+import FlockSoundness.Discharge.ZkLink.StrictZ
