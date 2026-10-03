@@ -45,7 +45,16 @@ theorem UnitWrong.card {C : Audit.Circuit} {c : Universal.Cls} {P : Audit.Partit
     {progOf : (Fin C.N → Bool) → c.Prog} {xOf : (Fin C.N → Bool) → ℕ → ℕ → Bool}
     {yOf : (Fin C.N → Bool) → ℕ → List Bool} (h : UnitWrong P progOf xOf yOf) (v : Fin C.N → Bool) :
     (P.wrong v).card = wrong (Universal.run c (progOf v)) (Universal.units c) (xOf v) (yOf v) := by
-  sorry
+  unfold wrong
+  rw [← Finset.card_map Fin.valEmbedding]
+  congr 1
+  ext k
+  simp only [Finset.mem_map, Fin.valEmbedding_apply, Finset.mem_filter, Finset.mem_range]
+  constructor
+  · rintro ⟨i, hi, rfl⟩
+    exact ⟨i.2, (h v i).1 hi⟩
+  · rintro ⟨hk, hne⟩
+    exact ⟨⟨k, hk⟩, (h v ⟨k, hk⟩).2 hne, rfl⟩
 
 section Sites
 
@@ -112,6 +121,41 @@ theorem private_circuit_sound
           ∃ i, lay.regLeaf (s.regOf o) (ps.site i) ≠
             (ExplicitLeaf.hm96 rs.enc rs.enc_inj).leaf (row (Universal.pad C c) i) (rd.ws (ps.site i)))) s.G τ
       ≤ s.Lm.miss K₀ + s.εks τ + s.δlink τ + ENNReal.ofReal (q ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  classical
+  have hcoll : ∀ o, s.Accepts o → (ps.leaves (s.regOf o) ≠ ps.regLeaves ∨
+      progOf (s.vals τ o) ≠ Universal.pad C c) → Binding.Collides (progPair ps s path valPair o) := by
+    intro o ho h
+    by_cases hl : ps.leaves (s.regOf o) = ps.regLeaves
+    · simp only [progPair, hl, ↓reduceIte]
+      exact (hstep o ho hl).resolve_left (h.resolve_left (not_not.2 hl))
+    · simp only [progPair, hl, ↓reduceIte]
+      exact progCommit_binding L rt _ _ _ _ (ps.opens_of_checked (hchk o ho)) ps.opens_reg hl
+  have hle : prob (fun o => s.Accepts o ∧
+        (K₀ ≤ wrong (Universal.eval C) (Universal.size C) (xOf (s.vals τ o)) (yOf (s.vals τ o)) ∨
+          ∃ i, lay.regLeaf (s.regOf o) (ps.site i) ≠
+            (ExplicitLeaf.hm96 rs.enc rs.enc_inj).leaf (row (Universal.pad C c) i) (rd.ws (ps.site i)))) s.G τ
+      ≤ prob (fun o => (s.Accepts o ∧ K₀ ≤ ((UP c).wrong (s.vals τ o)).card) ∨
+          ∃ x y, some (progPair ps s path valPair o) = some (x, y) ∧ x ≠ y ∧ H512 x = H512 y) s.G τ := by
+    refine prob_mono (fun o ⟨ha, hq⟩ => ?_) s.G τ
+    have hc : Binding.Collides (progPair ps s path valPair o) →
+        ∃ x y, some (progPair ps s path valPair o) = some (x, y) ∧ x ≠ y ∧ H512 x = H512 y :=
+      fun h => ⟨_, _, congrArg some Prod.mk.eta.symm, h.1, h.2⟩
+    rcases hq with hw | ⟨i, hi⟩
+    · by_cases hp : progOf (s.vals τ o) = Universal.pad C c
+      · refine Or.inl ⟨ha, le_trans hw ?_⟩
+        rw [hunit.card, hp]
+        exact (pad_wrong Universal.fits Universal.pad Universal.units Universal.size Universal.run Universal.eval
+          Universal.dummy pad_correct C c hC (xOf (s.vals τ o)) (yOf (s.vals τ o))).1
+      · exact Or.inr (hc (hcoll o ha (Or.inr hp)))
+    · refine Or.inr (hc (hcoll o ha (Or.inl fun hl => hi ?_)))
+      have hi' := congrFun hl i
+      simp only [ProgSites.leaves, ProgSites.regLeaves, Reads.leaf, hreg] at hi'
+      exact hi'
+  have hfin : prob (fun o => ∃ x y, some (progPair ps s path valPair o) = some (x, y) ∧ x ≠ y ∧ H512 x = H512 y)
+      s.G τ ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _)
+  calc _ ≤ _ := hle
+    _ ≤ _ := prob_or_le _ _ s.G τ
+    _ ≤ _ := add_le_add (hS hA3 hA6 τ hCR K₀)
+        ((ENNReal.le_ofReal_iff_toReal_le hfin (by positivity)).2 (hBind hcost))
 
 end FlockSoundness.Discharge.PrivateCircuit
