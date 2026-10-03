@@ -130,15 +130,18 @@ def test_the_job_cpu_rule_counts_co_tenants_not_our_own_use() -> None:
         rec.build_trace(records, samples(4), name="t", windows=4, cpu_rule="own")
 
 
+def write_job(out: Path, windows: int, records: list[dict], sampled: list[dict]) -> None:
+    """A job directory as `run` leaves it, on an 8-CPU cpuset, for `convert`."""
+    meta = {"t0_mono": 0.0, "windows": windows, "mode": "plaintext", "model": "m", "mix": "b4=1", "host": "h",
+            "gpu": {"name": "g", "uuid": "u"}, "env": {"RESEARCH_RUN_ID": "r1"}, "affinity": list(range(8))}
+    (out / "meta.json").write_text(json.dumps(meta))
+    (out / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
+    (out / "samples.jsonl").write_text("".join(json.dumps(s | {"mono": s["t_ms"] / 1000}) + "\n" for s in sampled))
+
+
 def test_convert_takes_the_cpuset_from_meta_and_the_rule_from_its_flag(tmp_path: Path) -> None:
     records = [request(c, w * WINDOW_MS + 50.0, [[w * WINDOW_MS + 150.0, 1]]) for w, c in enumerate("ab")]
-    at = {f"t{30_000}": {"affinity_busy": 0.95, "own_cores": 6.0}}
-    meta = {"t0_mono": 0.0, "windows": 2, "mode": "plaintext", "model": "m", "mix": "b4=1", "host": "h",
-            "gpu": {"name": "g", "uuid": "u"}, "env": {"RESEARCH_RUN_ID": "r1"}, "affinity": list(range(8))}
-    (tmp_path / "meta.json").write_text(json.dumps(meta))
-    (tmp_path / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
-    (tmp_path / "samples.jsonl").write_text("".join(json.dumps(s | {"mono": s["t_ms"] / 1000}) + "\n"
-                                                    for s in samples(2, **at)))
+    write_job(tmp_path, 2, records, samples(2, **{f"t{30_000}": {"affinity_busy": 0.95, "own_cores": 6.0}}))
     assert rec.main(["convert", str(tmp_path)]) == 0
     assert json.loads((tmp_path / "summary.json").read_text())["windows_kept"] == 2
     assert rec.main(["convert", str(tmp_path), "--cpu-rule", "total"]) == 0
@@ -146,19 +149,55 @@ def test_convert_takes_the_cpuset_from_meta_and_the_rule_from_its_flag(tmp_path:
     assert summary["windows_dropped"] == {"0": "job's CPUs saturated"} and summary["cpu_rule"] == "total"
 
 
+@pytest.mark.parametrize("field", ["hb_max_ms", "loop_max_ms"])
+@pytest.mark.parametrize(("at", "stall", "dropped"), [(WINDOW_MS + 10_000, 3000.0, [1, 2]),
+                                                      (WINDOW_MS + 2000, 4000.0, [0, 1, 2]),
+                                                      (WINDOW_MS + 10_000, rec.FREEZE_REST_MS, [1, 2])])
+def test_a_stall_drops_the_windows_it_overlaps_and_the_next(field: str, at: int, stall: float, dropped: list) -> None:
+    """Inside window 1, from window 0 into window 1, and at the guard but not over it."""
+    records = [request(c, w * WINDOW_MS + 50.0, [[w * WINDOW_MS + 150.0, 1]]) for w, c in enumerate("abcde")]
+    configs, summary = rec.build_trace(records, samples(5, **{f"t{at}": {field: stall}}), name="t", windows=5)
+    assert not summary["frozen"] and summary["freeze_scope"] == "window"
+    assert summary["windows_dropped"] == {str(w): "stalled" for w in dropped}
+    assert summary["windows_kept"] == 5 - len(dropped) == sum(hi - lo for lo, hi in summary["segments"])
+    assert [c["name"] for c in configs] == [f"t/w{lo}-{hi}" for lo, hi in summary["segments"]]
+
+
+def test_a_stall_over_the_guard_drops_the_rest_of_its_chunk() -> None:
+    records = [request(c, w * WINDOW_MS + 50.0, [[w * WINDOW_MS + 150.0, 1]]) for w, c in enumerate("abcde")]
+    long = {f"t{WINDOW_MS + 10_000}": {"hb_max_ms": rec.FREEZE_REST_MS + 1}}
+    configs, summary = rec.build_trace(records, samples(5, **long), name="t", windows=5)
+    assert not summary["frozen"] and summary["windows_dropped"] == {str(w): "stalled" for w in range(1, 5)}
+    assert [c["name"] for c in configs] == ["t/w0-1"]
+    _, raised = rec.build_trace(records, samples(5, **long), name="t", windows=5, freeze_rest_ms=10_000.0)
+    assert raised["windows_dropped"] == {"1": "stalled", "2": "stalled"} and raised["segments"] == [(0, 1), (3, 5)]
+
+
 @pytest.mark.parametrize("stall", [{"hb_max_ms": 1500.0}, {"loop_max_ms": 1500.0}])
-def test_a_stall_voids_the_chunk(stall: dict) -> None:
-    records = [request("a", 50.0, [[120.0, 1]])]
-    configs, summary = rec.build_trace(records, samples(1, t30000=stall), name="t", windows=1)
-    assert configs == [] and summary["frozen"]
-
-
-def test_a_window_scoped_stall_drops_the_windows_it_overlaps_and_the_next() -> None:
+def test_the_chunk_scope_voids_the_whole_chunk_on_any_stall(stall: dict) -> None:
+    """The old rule, kept for sensitivity: where the window rule drops windows 1 and 2, the chunk rule keeps nothing."""
     records = [request(c, w * WINDOW_MS + 50.0, [[w * WINDOW_MS + 150.0, 1]]) for w, c in enumerate("abcd")]
-    stall = {f"t{WINDOW_MS + 10_000}": {"hb_max_ms": 15_000.0}}
-    configs, summary = rec.build_trace(records, samples(4, **stall), name="t", windows=4, freeze_scope="window")
-    assert not summary["frozen"] and summary["windows_dropped"] == {"0": "stalled", "1": "stalled", "2": "stalled"}
-    assert [c["name"] for c in configs] == ["t/w3-4"]
+    at = {f"t{WINDOW_MS + 10_000}": stall}
+    configs, summary = rec.build_trace(records, samples(4, **at), name="t", windows=4, freeze_scope="chunk")
+    assert configs == [] and summary["frozen"] and summary["windows_kept"] == 0 and summary["freeze_scope"] == "chunk"
+    _, window = rec.build_trace(records, samples(4, **at), name="t", windows=4)
+    assert not window["frozen"] and window["segments"] == [(0, 1), (3, 4)]
+    with pytest.raises(ValueError, match="freeze_scope"):
+        rec.build_trace(records, samples(4), name="t", windows=4, freeze_scope="segment")
+
+
+def test_convert_takes_the_freeze_rule_from_its_flags(tmp_path: Path) -> None:
+    records = [request(c, w * WINDOW_MS + 50.0, [[w * WINDOW_MS + 150.0, 1]]) for w, c in enumerate("abcde")]
+    write_job(tmp_path, 5, records, samples(5, **{f"t{WINDOW_MS + 10_000}": {"loop_max_ms": 8000.0}}))
+
+    def kept(*flags: str) -> tuple:
+        assert rec.main(["convert", str(tmp_path), *flags]) == 0
+        summary = json.loads((tmp_path / "summary.json").read_text())
+        return summary["segments"], summary["frozen"]
+
+    assert kept() == ([[0, 1]], False)
+    assert kept("--freeze-rest-ms", "10000") == ([[0, 1], [3, 5]], False)
+    assert kept("--freeze-scope", "chunk") == ([], True)
 
 
 def test_the_windows_after_the_monitor_stopped_are_dropped() -> None:
