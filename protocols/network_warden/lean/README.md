@@ -63,7 +63,9 @@ is X's devices; the record's rows are what the ingress links release into X; the
 outside sees every record and can recompute X's moves from them, so it reacts to X's egress. The ingress frames'
 content and order are the Program's input, charged as reads; `Guarantees.EncardIngressObsDecodableLe` bounds what
 their timing carries into X for a decoder reading the records, and `Guarantees.EncardIngressDecodableLe` for one
-reading the wire.
+reading the wire. Both are proved: on the runs counted, a record sequence is determined by each step's frame count on
+each link and its jitter class, since under W4 a row is its frames in slot order and the content fixes which frames
+come next.
 
 ## The trusted layer (`NetTiming.Assumptions`)
 
@@ -114,6 +116,8 @@ The audit checks them like every declaration, and they use only the three axioms
 `lean-audit.json`, so no citation may call them pinned. Pinning them needs a statement reviewer.
 
 The statements were frozen and reviewed by a red team before their proofs, and a second round's verdict was GO. The
+ingress bound's two statements were frozen before their proofs as well; their statement review is on the pull request
+that added them (danielreuter/verity#894). The
 reference implementation, `protocols/network_warden` (`verity_network_warden`), mirrors 15 of the pins and the three
 unpinned lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python
 counterpart.
