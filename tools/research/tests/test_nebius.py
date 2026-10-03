@@ -1926,6 +1926,30 @@ def test_n1_custody_forces_a_status_that_never_ended_only_once_its_runner_is_see
     assert node.round_(VY_CUSTODY_BOOT=boot).returncode == 0 and node.created()[-1] == f"n1-custody-{R['alive']}", "its pod ended"
 
 
+@N1_CUSTODY
+def test_n1_custody_holds_as_never_ran_only_a_run_that_shows_no_sign_it_started(tmp_path):
+    """#1004's red-team F3: the never-ran hold took any status that never ended with empty stdout and stderr, counting the sampler's
+    readings and the events as the runner's bookkeeping, and asked a person to label the run `custody never-ran`. All six runs node 1
+    would have held (overnight-sep30) were `running` with a pid, span_start and sampler_start events and 6-70 sampler readings of
+    the workload's processes: they ran, were killed and printed nothing. Only a status before `running` with none of ran_evidence's
+    signs of a start is held; a killed run is a failed attempt, published --force once its pod is gone."""
+    node = _n1_custody(tmp_path)
+    killed, spoke, idle = (f"r20261003-2000{i:02d}-0d{i:02d}" for i in (1, 2, 3))
+    d = node.run(node.jobs, killed, "running", stdout="", files={
+        "stderr.log": "", "sampler.log": "", "resources.jsonl": '{"kind": "sample", "root_pid": 450, "processes": [{"pid": 451}]}\n' * 55,
+        "events.jsonl": '{"kind": "started"}\n{"kind": "span_start", "stage": "run", "cmd0": "python"}\n{"kind": "sampler_start"}\n'})
+    shutil.rmtree(d / "out")
+    for p in ("result.json", "failure.json"):
+        (d / p).unlink()
+    node.run(node.jobs, spoke, "submitted", status={"state": "submitted"}, files={"events.jsonl": ""})
+    node.run(node.jobs, idle, "admitted", empty=True, status={"state": "admitted"})
+    out = node.round_()
+    assert out.returncode == 1 and node.held() == [idle], out.stdout + out.stderr
+    assert f"{node.jobs}/runs/{idle}: held: never ran its workload (r21-fixture, status admitted: no pid, start event" in out.stdout
+    assert {f"n1-custody-{killed}", f"n1-custody-{spoke}"} <= set(node.created())
+    assert node.command(f"n1-custody-{killed}")[5].endswith("--keep-local --force --runner-gone")
+
+
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
 def test_n2_commit_fetches_only_missing_manifests_that_hash_to_their_id(tmp_path):
     """Node 2's store has no remote, so a cited Build's manifest missing there failed cov-g217's precheck after a 19-min bootstrap:

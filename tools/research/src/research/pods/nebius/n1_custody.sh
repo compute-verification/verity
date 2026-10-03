@@ -16,9 +16,10 @@
 # A status that never became terminal (a pod preempted before its runner recorded an end) is published with --force --runner-gone,
 # keeping the state it last wrote, only once its runner is seen gone: a host run's pid gone (force_refusal, here), a pod's
 # `kubectl get pod POD` (job.json's hostname) NotFound, as backfill_attempts.sh asks. A pod Kubernetes still lists waits, however long
-# its records have been quiet. A run that never ran its workload (empty stdout and stderr, no file but the runner's bookkeeping) is
-# held, never published as evidence. `attempt-no-record` (an attempt published without its run record, which it can never gain) gets
-# no Job: triage lists it until a person waives its logs.
+# its records have been quiet. A run that never ran its workload (a status before `running`, and none of ran_evidence's signs of a
+# start: a pid, a started, span_start or sampler_start event, a sampler reading, output) is held, never published as evidence, until
+# a `custody never-ran` label lifts it; any other is evidence, a killed run a failed attempt. `attempt-no-record` (an attempt
+# published without its run record, which it can never gain) gets no Job: triage lists it until a person waives its logs.
 # Bounds as n2_custody.sh's: at most VY_CUSTODY_MAX_RUNS Jobs, none started after VY_CUSTODY_PASS_S, runs that failed before going
 # last; a run dir over VY_CUSTODY_MAX_FILES files or VY_CUSTODY_MAX_GB GiB is held. A failed Job is logged with its last line and
 # retried every round, except a remote that holds another attempt document (triage's `conflict`; an attempt key is write-once), which
@@ -184,12 +185,10 @@ from collections import Counter
 from pathlib import Path
 
 from research.store.attempt import TERMINAL
-from research.store.custody import NEEDS_ACTION, force_refusal, run_files
+from research.store.custody import NEEDS_ACTION, force_refusal, ran_evidence
 
 tmp, state, boot, max_files, max_bytes = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], int(sys.argv[4]), int(sys.argv[5]) << 30
 boots = {boot, *((state / "boots").read_text().split() if (state / "boots").exists() else [])}
-BOOKKEEPING = {"job.json", "status.json", "stdout.log", "stderr.log", "launcher.log", "sampler.log", "sampler.json", "resources.jsonl",
-               "events.jsonl", "launch.json"}
 held = {p.name for p in (state / "held").iterdir()}
 here = socket.gethostname()
 
@@ -226,11 +225,10 @@ for i, root in enumerate(s.split("=")[0] for s in sys.argv[6].split(",")):
             continue
         status = read(d / "status.json").get("state") or "no status"
         camp = ((job.get("store") or {}).get("campaign")) or "-"
-        if status not in TERMINAL:
-            files = run_files(d)
-            if all(f in BOOKKEEPING for f in files) and not any((d / f).exists() and (d / f).stat().st_size for f in ("stdout.log", "stderr.log")):
-                holds.append(f"hold|{root}|{r}|never ran its workload ({field(camp)}, status {status}, no output, only the runner's bookkeeping)")
-                continue
+        # `running` is what the runner writes once it spawned the workload: a run killed after that is a failed attempt, and evidence
+        if status in ("no status", "submitted", "admitted") and ran_evidence(d) is None:
+            holds.append(f"hold|{root}|{r}|never ran its workload ({field(camp)}, status {status}: no pid, start event, sampler reading or output)")
+            continue
         if row["files"] > max_files or row["bytes"] > max_bytes:
             holds.append(f"hold|{root}|{r}|over " + (f"{max_files} files" if row["files"] > max_files else f"{max_bytes >> 30} GiB"))
             continue
