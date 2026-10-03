@@ -177,7 +177,8 @@ class TimedVerifier:
     `LATE_ROUNDS` calls of the parameters' `call_ns`, or more than the band's `d`.  An answer past `Δ_late + RTT` is
     rejected without checking its block.  Once that deadline has passed with no answer, `expire()` closes the challenge
     as rejected, and so does the next `challenge()` before it reveals another index.  Without it, the verifier waits for
-    each answer however late it is.
+    each answer however late it is.  The continuous audit runs on `continuous.ContinuousVerifier`, never on this class
+    alone: `respond(block)` names no challenge, so a stale answer to an expired challenge would answer the next one.
     """
 
     def __init__(self, vk: VerifierKey, key: Key, k: int | None = None, deadline_ns: int = DEADLINE_NS,

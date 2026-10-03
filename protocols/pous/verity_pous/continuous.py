@@ -48,8 +48,13 @@ class ContinuousVerifier:
     """`n` challenges, each closed by its answer or its hard deadline before the next is revealed.
 
     `challenge()` returns `(j, index)`; `respond(j, block)` answers challenge `j` and refuses any other than the open
-    one; `expire()` closes the open challenge as rejected once its hard deadline has passed.  The stream accepts when
-    all `n` are closed with at most `max_misses` misses."""
+    one; `expire()` closes the open challenge as rejected once its hard deadline has passed (`overdue`).  The stream
+    accepts when all `n` are closed with at most `max_misses` misses.
+
+    The continuous audit runs only on this class, never on a bare `TimedVerifier` with a hard deadline.  That one's
+    `respond(block)` names no challenge, so once a challenge expires, an answer to it still in flight is credited to
+    the next one, a hit when both ask for the same block.  That block was on the wire, not in the memory the model
+    measures at the send time, so the audit would credit storage the responder does not hold (#954's red team)."""
 
     def __init__(self, vk: VerifierKey, key: Key, n: int, *, late_deadline_ns: int, max_misses: int = 0,
                  deadline_ns: int = DEADLINE_NS, rtt_allowance_ns: int = RTT_ALLOWANCE_NS,

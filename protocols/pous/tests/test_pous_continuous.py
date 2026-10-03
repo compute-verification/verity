@@ -233,6 +233,19 @@ def test_a_stale_answer_is_not_credited_to_the_next_challenge(world):
     assert v.respond(1, blocks[i]).on_time and v.misses == 1
 
 
+def test_a_bare_timed_verifier_would_credit_it(world):
+    """Why the continuous audit runs only on `ContinuousVerifier`: the same sequence on a bare `TimedVerifier` with a
+    hard deadline credits answer 0, which names no challenge, to challenge 1 as a hit."""
+    blocks, vk = world
+    clock = Clock()
+    v = TimedVerifier(vk, challenge_key(_same_block_twice(vk), vk), 2, clock=clock, late_deadline_ns=LATE)
+    i = v.challenge()
+    clock.now = LATE + 1
+    assert v.challenge() == i
+    a = v.respond(blocks[i])
+    assert (a.j, a.correct, a.on_time) == (1, True, True)
+
+
 # 2. A hard deadline.
 
 @pytest.mark.parametrize("rtt", [0, 40_000])

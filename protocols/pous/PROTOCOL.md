@@ -286,7 +286,8 @@ fixed before the stream, so the stream is never stopped or extended on misses, t
 game's three requirements on the protocol:
 
 1. **No pipelining.** `challenge()` reveals index `j + 1` only once answer `j` is in or `Δ_late + RTT` has passed since
-   index `j` was revealed, and in that case it first closes challenge `j` as rejected. Each deadline runs from the
+   index `j` was revealed, and in that case it first closes challenge `j` as rejected; the close stands even when `j`
+   was the last and `challenge()` then refuses (`run_continuous` closes it with `expire()`). Each deadline runs from the
    verifier's own clock reading at the reveal; a latency the responder reports (`Answer.report`) is never read. An
    answer names its challenge (`respond(j, block)`), and an answer to any challenge but the open one is refused,
    whether that challenge is closed or not yet revealed. So a stale answer is never credited to the next challenge,
@@ -299,6 +300,11 @@ game's three requirements on the protocol:
 3. **Every late answer counted.** Every challenge closes with exactly one `Answer`, whether it was answered, rejected
    or expired. `AuditResult.misses` counts every wrong or late answer, and `AuditResult.late` every answer past
    `Δ + RTT`, rejected ones included.
+
+Run the continuous audit only on `ContinuousVerifier`, never on a bare `TimedVerifier` with `late_deadline_ns`. Its
+`respond(block)` names no challenge, so once challenge `j` expires, an answer to `j` still in flight is credited to
+`j + 1`, a hit when both ask for the same block. That block was on the wire, not in the memory the model measures at
+the send time, so the audit would credit storage the responder does not hold (#954's red team).
 
 `run_continuous(verifier, send, receive, wait=...)` drives the stream over a transport. `wait(j)` returns at arrival
 `j`, `send(j, i)` sends challenge `j`, and `receive(until)` returns the next `Reply(j, block, path, report)`, or None
