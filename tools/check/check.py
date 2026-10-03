@@ -25,7 +25,8 @@ once it passes, so a check that one of them fails ends in seconds, not hours.
 A step that fails stops the others: each running step's processes get SIGINT (Python code runs its `finally`s, so the Lean audit
 removes its scratch tree) and whatever is left of them SIGKILL after `STOP_GRACE_S`, and no group starts another step. Such a
 step's status is `stopped`. `--keep-going` lets every group run to its end instead, keeping the verdicts its passing steps store,
-except after a step in `HALTS`: a Lean module that doesn't compile fails the audit too, so nothing still running is worth the slot.
+except after a step in `HALTS`: a Lean module that doesn't compile, or a pin whose record is stale, fails the audit too, so
+nothing still running is worth the slot.
 The steps stay in this process's group, which a runner's timeout and a manual stop signal as a whole. Each step's record is
 appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run.
 

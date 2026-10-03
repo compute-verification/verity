@@ -221,7 +221,9 @@ def test_a_pinned_record_a_merge_left_stale_fails_it_and_an_unreadable_build_ski
     assert "lean-changed: PASS: built 2 of the 3 package(s) whose audit misses; compared the pins of 1" in out
     calls = Path(f"{log}.args").read_text().splitlines()
     assert calls[:2] == ["build", "build +C"], "a package with pins has its roots built, as the audit builds them"
-    assert calls[2].startswith("env lean --run ") and calls[2].split()[3].endswith("tools/lean/Facts.lean")
+    assert calls[2].split()[:4] == ["env", "lean", "--run", str(tree / "c" / ".lake" / "lean-changed-facts" / "Facts.lean")]
+    assert (tree / "c" / ".lake" / "lean-changed-facts" / "Facts.lean").read_bytes() == (
+        LC.AUDIT.TOOL / "Facts.lean").read_bytes(), "the audit's own `Facts.lean`, copied where the sandbox shows it"
     assert not (tree / "p" / ".lake" / "lean-changed-facts").exists(), "a package without pins is only built"
 
     facts.write_text(json.dumps(_facts("def c := 2")))
@@ -256,11 +258,13 @@ def test_only_the_pins_failures_fail_it(tmp_path, monkeypatch):
     assert LC.records("c", tree, str(lake)) == ["pins: C.gone is missing"]
 
 
-def test_the_facts_are_read_in_the_sandbox(tmp_path):
+def test_the_facts_are_read_in_the_sandbox(tmp_path, monkeypatch):
     """`Facts.lean` runs as `lake env` in the package, whose `.lake/packages` are hard links to the dependencies the audit
-    keeps: it reads them there, and cannot write them."""
+    keeps: it reads them there, and cannot write them. It runs from a copy in the package's `.lake`, since the sandbox's
+    private /tmp hides a checkout there."""
     if not LC.sandboxed():
         pytest.skip("no unprivileged user namespaces here (`unshare`); lean_changed skips its builds where there are none")
+    _tree(tmp_path, monkeypatch)
     tree = tmp_path / "tree"
     pkg = tree / "c"
     store = tmp_path / "deps" / "k"
@@ -273,6 +277,7 @@ def test_the_facts_are_read_in_the_sandbox(tmp_path):
     (tmp_path / "facts.json").write_text(json.dumps(doc))
     lake = tmp_path / "lake"
     lake.write_text(f"#!/usr/bin/env bash\necho tampered > .lake/packages/dep/Dep.olean 2>/dev/null && exit 3\n"
+                    f'[ -r "$4" ] && [[ "$4" == {pkg / ".lake"}/* ]] || exit 4\n'
                     f"{sys.executable} -c 'import json, sys\nconfig, facts = (json.load(open(p)) for p in sys.argv[1:])\n"
                     f"json.dump(facts[\"facts\"], open(config[\"out\"], \"w\"))\nopen(config[\"canon\"], \"w\").write("
                     f"\"\".join(json.dumps(r) + \"\\n\" for r in facts[\"canon\"]))' \"${{@: -1}}\" {tmp_path / 'facts.json'}\n")

@@ -18,10 +18,10 @@ without the kernel replay, so a record two merges left stale (a statement or a d
 
 The audit still builds and audits every package cold and decides the run: a pass here vouches for nothing. So this step fails
 only on a Lean error at a position in one of the tree's own `.lean` files, or on a pin the audit fails (`judge`'s `pins:`
-failures). Anything else that stops a build or a reading (no sandbox or `lake` here, dependencies this machine doesn't keep
-yet, another check holding the tree, a dependency the links lack) skips the package by name and drops its links, so the next
-run takes the audit's again. `check.py` ends the run when this step fails, even under `--keep-going`. Delete the tree to start
-it over.
+failures). Anything else that stops a build (no sandbox or `lake` here, dependencies this machine doesn't keep yet, another
+check holding the tree, a dependency the links lack) skips the package by name and drops its links, so the next run takes the
+audit's again; anything that stops a reading (a policy that can't be read, `Facts.lean` failing) skips its pins by name.
+`check.py` ends the run when this step fails, even under `--keep-going`. Delete the tree to start it over.
 """
 from __future__ import annotations
 
@@ -173,23 +173,27 @@ def pinned_roots(pkg: str, tree: Path) -> list[str]:
 
 def records(pkg: str, tree: Path, lake: str) -> list[str]:
     """The audit's failures about the pins on the tree's build of ``pkg`` (`audit.py`'s `facts_of` and `judge`, without the
-    kernel replay): a pin missing or no longer a theorem, using an axiom the policy does not allow or assuming an unnamed
-    `Prop`, or whose statement or the definitions it reads no longer match its record. Raises RuntimeError when `Facts.lean`
-    cannot read the build."""
+    kernel replay): a pin missing, no longer a theorem or with no record, using an axiom the policy does not allow or assuming
+    an unnamed `Prop`, whose statement or the definitions it reads no longer match its record, or a `reads` entry that no
+    longer lists the modules the pins read, the pins that read them or their definitions' digest. Raises RuntimeError when
+    `Facts.lean` cannot read the build."""
     policy = AUDIT.load(tree / pkg)
     work = tree / pkg / FACTS
     work.mkdir(parents=True, exist_ok=True)
-    plain = AUDIT.run
+    plain, tool = AUDIT.run, AUDIT.TOOL
+    # the sandbox mounts a private /tmp, where this checkout may be; the copy sits in the writable `.lake`, as the audit runs
+    # its tool from a copy
+    shutil.copy2(tool / "Facts.lean", work / "Facts.lean")
 
-    def lake_in_sandbox(argv: list[str], cwd: Path, log: Path | None = None, timeout: float = 4 * 3600) -> tuple[int, str]:
+    def lake_in_sandbox(argv: list[str], cwd: Path, *a, **kw) -> tuple[int, str]:
         # the audit runs `lake env` unsandboxed on a tree of its own; here `.lake/packages` holds links to the files it keeps
-        return plain(in_sandbox(pkg, tree, [lake, *argv[1:]]), cwd, log, timeout)
+        return plain(in_sandbox(pkg, tree, [lake, *argv[1:]] if argv[:1] == ["lake"] else argv), cwd, *a, **kw)
 
-    AUDIT.run = lake_in_sandbox
+    AUDIT.run, AUDIT.TOOL = lake_in_sandbox, work
     try:
         facts = AUDIT.facts_of(tree / pkg, policy, work)
     finally:
-        AUDIT.run = plain
+        AUDIT.run, AUDIT.TOOL = plain, tool
     fails, _ = AUDIT.judge(policy, facts, AUDIT.lean_modules(tree / pkg))
     return [f for f in fails if f.startswith("pins:")]
 
@@ -262,7 +266,7 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
                 t0 = time.monotonic()
                 try:
                     stale = records(pkg, tree, lake)
-                except (RuntimeError, OSError, ValueError, KeyError) as e:
+                except (RuntimeError, OSError, ValueError, KeyError, TypeError, AttributeError) as e:
                     log(f"lean-changed: {pkg}: its pins are not compared here: {str(e)[-2000:]}")
                     continue
                 took = time.monotonic() - t0
