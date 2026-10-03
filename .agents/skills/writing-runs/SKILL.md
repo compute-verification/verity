@@ -1,7 +1,8 @@
 ---
 name: writing-runs
 description: >
-  How to write a job for `research run` in Verity so its custody stays small: pick the working directory (`--cwd source`),
+  How to write a job for `research run` in Verity so its custody stays small: pick the working directory (`--cwd source`, or
+  `--cwd clone` for a job that writes into the tree),
   write results under one output directory, declare them with `--declared-output GLOB`, and keep scratch, caches and build
   trees in a `mktemp -d` directory outside the run dir. Custody uploads the run's own logs and records, the declared files, and undeclared
   files only up to 256 MiB; the rest it lists by path, size and sha256 without bytes. Use when writing or launching a
