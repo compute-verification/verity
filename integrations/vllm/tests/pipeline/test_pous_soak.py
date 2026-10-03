@@ -273,3 +273,104 @@ def test_the_second_engine_reads_every_weight_each_step(tmp_path):
 def test_record_layout_matches_the_library(fake):
     assert fake.lib.soak_record_words() == len(S.REC) and ctypes.sizeof(ctypes.c_int64) * S.HEADER_WORDS == S.HEADER_BYTES
     assert Path(S.SOURCE).exists()
+
+
+def test_cpu_list_reads_ranges_and_singles():
+    assert S.cpu_list("96-98,116,120-121") == (96, 97, 98, 116, 120, 121)
+    assert S.cpu_list("") == () and S.cpu_list("5,3-4,5") == (3, 4, 5)
+
+
+def test_dcgm_rows_reads_dmon_lines_and_marks_na():
+    lines = [(1, "#Entity   DRAMA  PCITX  PCIRX  GPUTL  MCUTL"), (2, "ID"), (3, "GPU 7   0.912  1000  2000  98  40"),
+             (4, "GPU 7   N/A  1000  2000  98  40"), (5, "Error: something")]
+    rows = S.dcgm_rows(lines)
+    assert rows.shape == (2, 1 + len(S.DCGM_FIELDS)) and rows[0].tolist() == [3, 0.912, 1000, 2000, 98, 40]
+    assert np.isnan(rows[1, 1]) and S.dcgm_rows([]).shape == (0, 1 + len(S.DCGM_FIELDS))
+
+
+def _serve_loop(ctl, acked, stop):
+    """The serve loop's side of `Control`: each load taken is applied and acknowledged."""
+    while not stop.is_set() and not ctl.stopped.is_set():
+        w = ctl.take()
+        if w is not None:
+            acked.append(w)
+            ctl.ack(w[1], {"mode": w[0], "seq": w[1], "t_ns": 1})
+        stop.wait(0.001)
+
+
+def test_control_round_trip_ready_clock_load_rotate_and_stop(tmp_path):
+    import threading
+
+    (tmp_path / "steps.bin").write_bytes(S.STEP.pack(*range(8)) + S.STEP.pack(*range(8, 16)) + b"\x00\x01")
+    ctl = S.Control("127.0.0.1", 0, "127.0.0.1", {"root": "ab", "port": 1}, tmp_path, None)
+    acked, stop = [], threading.Event()
+    loop = threading.Thread(target=_serve_loop, args=(ctl, acked, stop), daemon=True)
+    loop.start()
+    c = S.ControlClient("127.0.0.1", ctl.port)
+    try:
+        assert c.call("ready")[0] == {"root": "ab", "port": 1}
+        clk = c.clock(20)
+        assert clk["lo_ns"] <= clk["offset_at_rtt_min_ns"] <= clk["hi_ns"] and clk["lo_ns"] <= 0 <= clk["hi_ns"], "one clock"
+        assert c.call("load", mode="serving", seq=1)[0]["mode"] == "serving" and acked == [("serving", 1)]
+        _, blobs = c.call("rotate")
+        (tmp_path / "got.bin").write_bytes(blobs["steps"])
+        assert len(blobs["steps"]) == 2 * S.STEP.size, "whole steps only"
+        assert S.read_steps(tmp_path / "got.bin").tolist() == [list(range(8)), list(range(8, 16))]
+        with open(tmp_path / "steps.bin", "ab") as f:
+            f.write(b"\x02" * (S.STEP.size - 2) + S.STEP.pack(*range(16, 24)))
+        assert len(c.call("rotate")[1]["steps"]) == 2 * S.STEP.size, "the next rotate starts where the last ended"
+        with pytest.raises(OSError, match="unknown op"):
+            c.call("nope")
+        c.close()
+        assert ctl.stopped.wait(5)
+    finally:
+        stop.set()
+        ctl.close()
+
+
+def test_control_closes_a_connection_from_another_address(tmp_path):
+    ctl = S.Control("127.0.0.1", 0, "10.9.9.9", {}, tmp_path, None)
+    try:
+        c = S.ControlClient("127.0.0.1", ctl.port)
+        with pytest.raises((ConnectionError, OSError)):
+            c.call("ready")
+        c.close(stop=False)
+        assert not ctl.stopped.is_set()
+    finally:
+        ctl.close()
+
+
+def test_a_remote_server_clock_is_bracketed_and_checked_within_each_host():
+    rec = np.zeros((3, len(S.REC)), np.int64)
+    col, theta = S.COL, 7_000_000
+    for i in range(3):
+        b = 10**12 + i * 10**6
+        rec[i, [col[k] for k in ("t_sched", "t_send0", "c_ktx", "c_krx_first", "c_krx_last", "t_recv")]] = \
+            [b, b + 1000, b + 2000, b + 40_000, b + 41_000, b + 42_000]
+        rec[i, [col[k] for k in ("srv_krx", "srv_urx", "srv_utx")]] = [b + theta + 12_000, b + theta + 14_000, b + theta + 20_000]
+        rec[i, col["op"]] = S.OP_PING
+    run_idx = np.zeros(3, np.int64)
+    lo, hi = S.offset_brackets(rec, run_idx)[0]
+    assert lo <= theta <= hi and (lo, hi) == (theta - 20_000, theta + 10_000)
+    runs = [{"cell": 0, "ts": True}]
+    v = S.validate(rec, run_idx, runs, np.zeros((0, 8), np.int64), {}, 0, 60.0, remote=True)
+    assert not any(v["order_violations"].values()) and v["offset"]["empty"] == 0 and v["offset"]["width_ns_p50"] == 30_000
+    assert "K_tx_resp<=V1" not in v["order_violations"]
+    local = S.validate(rec, run_idx, runs, np.zeros((0, 8), np.int64), {}, 0, 60.0)
+    assert local["order_violations"]["..<=K_rx_req"] == 0, "server later than the verifier: no chain step goes backwards"
+    rec[1, col["srv_krx"]] = rec[1, col["c_ktx"]] + theta - 30_000      # an answer received before it was sent, given the rest
+    assert S.validate(rec, run_idx, runs, np.zeros((0, 8), np.int64), {}, 0, 60.0, remote=True)["offset"]["empty"] == 1
+
+
+def test_one_host_brackets_hold_zero_over_a_real_connection(fake):
+    ring = S.Ring(nslots=32)
+    n = 20
+    c = S.Client(fake.lib, fake.resp.port, True, True, False, host="127.0.0.1")
+    rec = np.zeros((n, len(S.REC)), np.int64)
+    done, status = S.run_tuned(fake.lib, c, ring, np.zeros(n, np.int64), np.zeros(n, np.int64), np.full(n, S.OP_PING), S.BLOCK,
+                               rec, 2**62, 0)
+    info = c.tcp_info()
+    c.close()
+    assert (done, status) == (n, 0) and info["peer"] == ["127.0.0.1", fake.resp.port]
+    lo, hi = S.offset_brackets(rec, np.zeros(n, np.int64))[0]
+    assert lo <= 1000 and hi >= -1000, (lo, hi)

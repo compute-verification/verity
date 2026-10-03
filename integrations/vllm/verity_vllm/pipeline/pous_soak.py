@@ -38,7 +38,9 @@ import struct
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -55,6 +57,7 @@ CTL_BYTES = 4096
 OP_PING, OP_CLOSE, OP_READ, OP_CONFIG = 2, 3, 4, 5
 
 LOADS = ("idle", "decode", "prefill", "mixed")
+ALL_LOADS = (*LOADS, "serving")   # serving: a real model served at full load (`Serving`, serve --model)
 RATES = (10, 100, 1000)
 SIZES_KIB = (64, 144, 384)
 CONFIGS = ("baseline", "tuned")
@@ -138,6 +141,15 @@ def _text(path: str) -> str | None:
 
 def utc(ns: float | None = None) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime((time.time_ns() if ns is None else ns) / 1e9))
+
+
+def cpu_list(spec: str) -> tuple[int, ...]:
+    """The cores of ``96-106,116-123``, sorted."""
+    out: set[int] = set()
+    for part in filter(None, spec.split(",")):
+        lo, _, hi = part.partition("-")
+        out.update(range(int(lo), int(hi or lo) + 1))
+    return tuple(sorted(out))
 
 
 # ---- the native library --------------------------------------------------------------------------------------------------
@@ -452,22 +464,275 @@ def load_call(engine: Any, mode: str, rng: np.random.Generator, prompts: list[st
         raise ValueError(f"unknown load {mode!r}")
 
 
+SERVING_PROMPT = (128, 2048)    # each request's prompt tokens, uniform over this range (random ids: no prefix-cache hit)
+SERVING_OUTPUT = (64, 512)      # and its generated tokens, uniform, EOS ignored
+
+
+class Serving:
+    """A model served at full load: ``concurrency`` requests always in flight through the engine's continuous batching
+    (`LLMEngine.add_request` and `step`), each a fresh prompt of `SERVING_PROMPT` tokens generating `SERVING_OUTPUT` tokens,
+    replaced as it finishes.  `pause` aborts every request in flight and steps the engine empty, so idle is idle."""
+
+    def __init__(self, llm: Any, rng: np.random.Generator, concurrency: int, prompt: tuple[int, int] = SERVING_PROMPT,
+                 output: tuple[int, int] = SERVING_OUTPUT, vocab: tuple[int, int] = (1000, 20000)) -> None:
+        from vllm import SamplingParams
+
+        try:
+            from vllm.sampling_params import RequestOutputKind
+            kind = {"output_kind": RequestOutputKind.FINAL_ONLY}
+        except ImportError:
+            kind = {}
+        self.eng, self.rng, self.concurrency = llm.llm_engine, rng, concurrency
+        self.prompt, self.output, self.vocab = prompt, output, vocab
+        self.params = lambda n: SamplingParams(temperature=0.0, max_tokens=n, ignore_eos=True, **kind)
+        self.live: set[str] = set()
+        self.added = self.finished = self.tokens = self.aborted = 0
+
+    def _add(self) -> None:
+        rid = f"serving-{self.added}"
+        self.added += 1
+        ids = [int(x) for x in self.rng.integers(self.vocab[0], self.vocab[1], int(self.rng.integers(*self.prompt, endpoint=True)))]
+        self.eng.add_request(rid, {"prompt_token_ids": ids}, self.params(int(self.rng.integers(*self.output, endpoint=True))))
+        self.live.add(rid)
+
+    def step(self) -> None:
+        while len(self.live) < self.concurrency:
+            self._add()
+        for out in self.eng.step():
+            if out.finished:
+                self.live.discard(out.request_id)
+                self.finished += 1
+                self.tokens += len(out.outputs[0].token_ids)
+
+    def pause(self) -> None:
+        if self.live:
+            self.eng.abort_request(sorted(self.live))
+            self.aborted += len(self.live)
+            self.live.clear()
+        while self.eng.has_unfinished_requests():
+            self.eng.step()
+
+    def stats(self) -> dict[str, int]:
+        return {"added": self.added, "finished": self.finished, "aborted": self.aborted, "finished_tokens": self.tokens}
+
+
+DCGM_FIELDS = (1005, 1009, 1010, 203, 204)   # DRAM active (fraction of cycles), PCIe TX and RX bytes/s, GPU and copy utilization
+DCGM_NAMES = ("dram_active", "pcie_tx_bytes", "pcie_rx_bytes", "gpu_util", "mem_copy_util")
+
+
+def dcgm_rows(lines: list[tuple[int, str]]) -> np.ndarray:
+    """``dcgmi dmon`` output lines, each with the realtime ns it was read at, as rows of t_ns and `DCGM_FIELDS` (NaN for N/A)."""
+    rows = []
+    for t, ln in lines:
+        parts = ln.split()
+        if len(parts) < 2 + len(DCGM_FIELDS) or parts[0] != "GPU":
+            continue
+        vals = []
+        for x in parts[2:2 + len(DCGM_FIELDS)]:
+            try:
+                vals.append(float(x))
+            except ValueError:
+                vals.append(float("nan"))
+        rows.append([float(t), *vals])
+    return np.array(rows, np.float64).reshape(-1, 1 + len(DCGM_FIELDS))
+
+
+class Control:
+    """The server's control port, for a verifier on another host: one JSON line per request and per reply, the raw bytes a reply
+    lists in ``blobs`` after it.  ``ready``: the server's facts (`ready.json`'s); ``clock``: this host's realtime ns; ``load``:
+    the load ``mode`` (sequence ``seq``), replied once the serve loop has applied it; ``rotate``: the server's samples since the
+    last rotate (the sampler stopped, its ``samples.npz`` sent, a new one started) and its vLLM steps since then; ``stop``.
+    Only ``allow`` may connect, one connection at a time."""
+
+    def __init__(self, host: str, port: int, allow: str, ready: dict[str, Any], job: Path,
+                 sampler: Callable[[], subprocess.Popen] | None) -> None:
+        import threading
+
+        self.ready, self.job, self.allow, self.start_sampler = ready, job, allow, sampler
+        self.sampler = sampler() if sampler else None
+        self.want: tuple[str, int] | None = None
+        self.acked: dict[int, dict[str, Any]] = {}
+        self.cv = threading.Condition()
+        self.stopped = threading.Event()
+        self.steps_off = 0
+        self.last = time.monotonic()
+        self.srv = socket.create_server((host, port))
+        self.port = self.srv.getsockname()[1]
+        self.thread = threading.Thread(target=self._serve, name="control", daemon=True)
+        self.thread.start()
+
+    def _serve(self) -> None:
+        while not self.stopped.is_set():
+            try:
+                conn, peer = self.srv.accept()
+            except OSError:
+                return
+            if self.allow and peer[0] != self.allow:
+                conn.close()
+                continue
+            with conn, conn.makefile("rb") as f:
+                for line in f:
+                    self.last = time.monotonic()
+                    try:
+                        doc, blobs = self.handle(json.loads(line))
+                    except Exception as e:  # noqa: BLE001  (the verifier sees the error and stops)
+                        doc, blobs = {"error": repr(e)}, []
+                    doc["blobs"] = [[n, len(b)] for n, b in blobs]
+                    conn.sendall((json.dumps(doc, default=str) + "\n").encode() + b"".join(b for _, b in blobs))
+                    if self.stopped.is_set():
+                        return
+
+    def handle(self, req: dict[str, Any]) -> tuple[dict[str, Any], list[tuple[str, bytes]]]:
+        op = req.get("op")
+        if op == "clock":
+            return {"t_ns": time.time_ns()}, []
+        if op == "ready":
+            return dict(self.ready), []
+        if op == "load":
+            seq = int(req["seq"])
+            with self.cv:
+                self.want = (str(req["mode"]), seq)
+                if not self.cv.wait_for(lambda: seq in self.acked, timeout=120):
+                    raise TimeoutError(f"the serve loop did not take load {req['mode']} in 120 s")
+                return self.acked.pop(seq), []
+        if op == "rotate":
+            return self.rotate()
+        if op == "stop":
+            self.stopped.set()
+            return {"stopped": True}, []
+        raise ValueError(f"unknown op {op!r}")
+
+    def take(self) -> tuple[str, int] | None:
+        """The load the verifier asked for, once (the serve loop's side)."""
+        with self.cv:
+            w, self.want = self.want, None
+            return w
+
+    def ack(self, seq: int, doc: dict[str, Any]) -> None:
+        with self.cv:
+            self.acked[seq] = doc
+            self.cv.notify_all()
+
+    def rotate(self) -> tuple[dict[str, Any], list[tuple[str, bytes]]]:
+        blobs: list[tuple[str, bytes]] = []
+        if self.sampler is not None:
+            self.sampler.send_signal(signal.SIGTERM)
+            try:
+                self.sampler.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                self.sampler.kill()
+            sp = self.job / "samples.npz"
+            if sp.exists():
+                blobs.append(("samples", sp.read_bytes()))
+                sp.unlink()
+            self.sampler = self.start_sampler()
+        raw = (self.job / "steps.bin").read_bytes()[self.steps_off:] if (self.job / "steps.bin").exists() else b""
+        raw = raw[:len(raw) - len(raw) % STEP.size]
+        self.steps_off += len(raw)
+        blobs.append(("steps", raw))
+        return {"t_ns": time.time_ns()}, blobs
+
+    def close(self) -> None:
+        self.stopped.set()
+        self.srv.close()
+        if self.sampler is not None:
+            self.sampler.send_signal(signal.SIGTERM)
+            try:
+                self.sampler.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                self.sampler.kill()
+
+
+class ControlClient:
+    """The verifier's end of `Control`."""
+
+    def __init__(self, host: str, port: int, timeout: float = 150.0) -> None:
+        self.host = host
+        self.sock = socket.create_connection((host, port), timeout=timeout)
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.f = self.sock.makefile("rb")
+
+    def call(self, op: str, **kw: Any) -> tuple[dict[str, Any], dict[str, bytes]]:
+        self.sock.sendall((json.dumps({"op": op, **kw}) + "\n").encode())
+        line = self.f.readline()
+        if not line:
+            raise ConnectionError("the server closed its control port")
+        doc = json.loads(line)
+        blobs = {n: self.f.read(k) for n, k in doc.pop("blobs", [])}
+        if "error" in doc:
+            raise OSError(f"server: {doc['error']}")
+        return doc, blobs
+
+    def clock(self, n: int = 200) -> dict[str, Any]:
+        """The server's clock against this one over ``n`` control round trips: the offset (server minus verifier) lies in
+        [lo, hi], the intersection of each exchange's [t_srv - t1, t_srv - t0]; and the offset at the shortest round trip."""
+        lo, hi, best = -(2**62), 2**62, None
+        for _ in range(n):
+            t0 = time.time_ns()
+            s = self.call("clock")[0]["t_ns"]
+            t1 = time.time_ns()
+            lo, hi = max(lo, s - t1), min(hi, s - t0)
+            if best is None or t1 - t0 < best[0]:
+                best = (t1 - t0, s - (t0 + t1) // 2)
+        return {"exchanges": n, "lo_ns": lo, "hi_ns": hi, "rtt_min_ns": best[0], "offset_at_rtt_min_ns": best[1], "t_ns": time.time_ns()}
+
+    def close(self, stop: bool = True) -> None:
+        """Closes the connection; with ``stop``, the server ends too (else it waits for the next verifier, up to its idle exit)."""
+        if stop:
+            try:
+                self.call("stop")
+            except OSError:
+                pass
+        self.f.close()
+        self.sock.close()
+
+
+def store_beside(setup: Path, own: dict[str, Any]) -> Any:
+    """``C`` of the setup's committed ``W`` (``w.bin``, ``commit.json``) under its salt, on this process's device beside a served
+    model (`protocol_options.pous._device_store`: the scheme's GPU twin, once it reproduced its pinned vector)."""
+    from verity_vllm.pipeline import pous_run as R
+    from verity_vllm.protocol_options import pous as PO
+
+    doc, layout, scheme, w = R.committed_w(setup)
+    return PO._device_store(layout, scheme, w, bytes.fromhex(doc["commitment"]), own)
+
+
 def cmd_serve(a) -> int:
     from verity_vllm.engine import engine_profile as ep
     from verity_vllm.pipeline import pous_run as R
 
     job, setup = Path(a.job), Path(a.setup)
-    lo, hi = (int(x) for x in a.serve_cpus.split("-"))
-    os.sched_setaffinity(0, set(range(lo, hi + 1)) & os.sched_getaffinity(0) or os.sched_getaffinity(0))
+    os.sched_setaffinity(0, set(cpu_list(a.serve_cpus)) & os.sched_getaffinity(0) or os.sched_getaffinity(0))
     own: dict[str, Any] = {"codec": "gpu", "build_dir": a.build_dir, "salt": _read(setup / "salt.json")["salt"], "host": "127.0.0.1",
                            "drop_fraction": 0.0, "drop_source": os.urandom(32).hex()}
     if a.kernels:
         own["kernels"] = json.loads(a.kernels)
+    rng = np.random.default_rng(int.from_bytes(os.urandom(8), "little"))
     t0 = time.perf_counter()
-    engine, comp = R.build(a.case, f"pous:{a.scheme}", {"pous": own}, engine_args={"max_num_batched_tokens": R.MAX_BATCHED_TOKENS})
-    opt = comp.get("pous")
+    serving, model_info, comp = None, None, None
+    if a.model:
+        # A model served for real (its own weights, compiled, CUDA graphs) in this process, C encoded beside it on the same
+        # device: the responder's copies share the served model's CUDA context, as a co-served store's would.
+        os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+        from vllm import LLM
+
+        llm = LLM(model=a.model, dtype="bfloat16", gpu_memory_utilization=a.gpu_memory_utilization, max_model_len=a.max_model_len,
+                  max_num_seqs=a.max_num_seqs, seed=0)
+        engine = SimpleNamespace(llm=llm)
+        model_build_s = time.perf_counter() - t0
+        store = store_beside(setup, own)
+        root = store.storage_root.hex()
+        serving = Serving(llm, rng, a.serving_concurrency)
+        model_info = {"model": a.model, "build_s": model_build_s, "store_encode_s": store.stats.get("encode_s"),
+                      "gpu_memory_utilization": a.gpu_memory_utilization, "max_model_len": a.max_model_len,
+                      "max_num_seqs": a.max_num_seqs, "concurrency": a.serving_concurrency, "prompt_tokens": list(SERVING_PROMPT),
+                      "output_tokens": list(SERVING_OUTPUT), "vllm": __import__("vllm").__version__}
+    else:
+        engine, comp = R.build(a.case, f"pous:{a.scheme}", {"pous": own}, engine_args={"max_num_batched_tokens": R.MAX_BATCHED_TOKENS})
+        opt = comp.get("pous")
+        store, root = opt.store, opt.commitment()["storage_root"]
     build_s = time.perf_counter() - t0
-    store, p = opt.store, opt.store.scheme.params
+    p = store.scheme.params
     total = p.blocks * p.block_bytes
     if p.block_bytes != BLOCK or not store.c.is_contiguous() or store.c.numel() * store.c.element_size() < total:
         raise SystemExit(f"C is not {p.blocks} contiguous {BLOCK}-byte blocks")
@@ -476,9 +741,11 @@ def cmd_serve(a) -> int:
         step_error = None
     except Exception as e:  # noqa: BLE001  (the soak still runs; its records then carry no vLLM state)
         steps, step_error = None, repr(e)
-    rng = np.random.default_rng(int.from_bytes(os.urandom(8), "little"))
-    for mode in ("mixed", "decode", "prefill"):
-        load_call(engine, mode, rng, R.PROMPTS)
+    if serving is not None:
+        model_info["warm"] = warm_serving(serving, a.warm_s, a.dcgm_gpu)
+    else:
+        for mode in ("mixed", "decode", "prefill"):
+            load_call(engine, mode, rng, R.PROMPTS)
     if steps is not None:
         steps.flush()
     engine2, engine2_info = None, None
@@ -487,38 +754,107 @@ def cmd_serve(a) -> int:
         engine2_info = engine2.warm()
         engine2.start()
     lib = load_native(Path(a.native))
-    resp = Responder(lib, store.c.data_ptr(), total, store.c.device.index, a.responder_cpu)
-    _write(job / "ready.json", {"port": resp.port, "pid": os.getpid(), "responder_tid": resp.stat()["tid"],
-                                "root": opt.commitment()["storage_root"], "blocks": p.blocks, "block_bytes": p.block_bytes,
-                                "total": total, "build_s": build_s, "warm_steps": steps.steps if steps else None,
-                                "step_log_error": step_error, "second_engine": engine2_info, "utc": utc()})
+    resp = Responder(lib, store.c.data_ptr(), total, store.c.device.index, a.responder_cpu, a.listen, a.port)
+    ready = {"port": resp.port, "host": a.listen, "pid": os.getpid(), "responder_tid": resp.stat()["tid"], "root": root,
+             "blocks": p.blocks, "block_bytes": p.block_bytes, "total": total, "build_s": build_s,
+             "warm_steps": steps.steps if steps else None, "step_log_error": step_error, "second_engine": engine2_info,
+             "served_model": model_info, "hostname": socket.gethostname(),
+             "clocksource": _text("/sys/devices/system/clocksource/clocksource0/current_clocksource"), "utc": utc()}
+    ctl = None
+    if a.control_port:
+        def sampler() -> subprocess.Popen:
+            cmd = [sys.executable, "-m", "verity_vllm.pipeline.pous_soak", "sample", "--job", str(job), "--cpu",
+                   str(a.sampler_cpu), "--targets", f"{os.getpid()}:{ready['responder_tid']},{os.getpid()}:{os.getpid()}",
+                   "--cpus", a.sample_cpus, "--gpu-uuid", a.gpu_uuid]
+            return subprocess.Popen(cmd + (["--dcgm", str(a.dcgm_gpu)] if a.dcgm_gpu >= 0 else []))
+        ctl = Control(a.listen, a.control_port, a.control_allow, ready, job, sampler)
+        ready["control_port"] = ctl.port
+    _write(job / "ready.json", ready)
     control, ack, stop = job / "load.json", job / "load-ack.json", job / "stop-serve"
     mode, seq, seen = "idle", -1, 0.0
     calls: dict[str, int] = {}
-    while not stop.exists():
+    idle_exit = None
+    while not stop.exists() and not (ctl is not None and ctl.stopped.is_set()):
+        if ctl is not None and a.idle_exit_s > 0 and time.monotonic() - ctl.last > a.idle_exit_s:
+            idle_exit = f"no control request in {a.idle_exit_s:.0f} s"
+            break
         try:
-            m = control.stat().st_mtime_ns
-            if m != seen:
-                doc = _read(control)
-                seen, mode, seq = m, doc["mode"], doc["seq"]
-                if engine2 is not None and mode == "idle":
-                    engine2.on.clear()
-                elif engine2 is not None:
-                    engine2.on.set()
-                _write(ack, {"mode": mode, "seq": seq, "t_ns": time.time_ns()})
+            if ctl is not None:
+                w = ctl.take()
+            else:
+                m = control.stat().st_mtime_ns
+                w = None
+                if m != seen:
+                    doc = _read(control)
+                    seen, w = m, (doc["mode"], doc["seq"])
+            if w is not None:
+                mode, seq = w
+                error = None
+                if mode != "idle" and (mode == "serving") != (serving is not None):
+                    error, mode = f"load {mode!r} is not this server's (serve --model: idle or serving; else not serving)", "idle"
+                if engine2 is not None:
+                    (engine2.on.clear if mode == "idle" else engine2.on.set)()
+                if serving is not None and mode == "idle":
+                    serving.pause()
+                doc = {"mode": mode, "seq": seq, "t_ns": time.time_ns(), **({"error": error} if error else {})}
+                ctl.ack(seq, doc) if ctl is not None else _write(ack, doc)
         except (FileNotFoundError, json.JSONDecodeError, KeyError):
             pass
-        load_call(engine, mode, rng, R.PROMPTS)
+        if serving is not None and mode == "serving":
+            serving.step()
+        elif serving is not None:
+            time.sleep(0.005)
+        else:
+            load_call(engine, mode, rng, R.PROMPTS)
         calls[mode] = calls.get(mode, 0) + 1
     out = resp.stop()
+    if serving is not None:
+        serving.pause()
+    if ctl is not None:
+        ctl.close()
     if steps is not None:
         steps.close()
     if engine2 is not None:
         engine2.close()
-    comp.close()
+    if comp is not None:
+        comp.close()
     _write(job / "serve.json", {"responder": out, "load_calls": calls, "steps": steps.steps if steps else None, "build_s": build_s,
-                                "second_engine_steps": engine2.steps if engine2 else None, "utc": utc()})
+                                "second_engine_steps": engine2.steps if engine2 else None,
+                                "serving": serving.stats() if serving else None, "idle_exit": idle_exit, "utc": utc()})
     return 0
+
+
+def warm_serving(serving: Serving, seconds: float, dcgm_gpu: int) -> dict[str, Any]:
+    """``seconds`` of the serving load before the soak, with DCGM's DRAM activity read once a second (GPU ``dcgm_gpu``, its
+    physical index; none when negative): the served model's device-memory traffic as measured, not estimated."""
+    import threading
+
+    lines: list[tuple[int, str]] = []
+    proc = None
+    if dcgm_gpu >= 0:
+        try:
+            proc = subprocess.Popen(["dcgmi", "dmon", "-i", str(dcgm_gpu), "-e", ",".join(map(str, DCGM_FIELDS)), "-d", "1000"],
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            threading.Thread(target=lambda: [lines.append((time.time_ns(), ln)) for ln in proc.stdout], daemon=True).start()
+        except OSError as e:
+            lines.append((0, f"dcgmi: {e}"))
+    t0, s0 = time.monotonic(), serving.stats()
+    t_ns0 = time.time_ns()
+    while time.monotonic() - t0 < seconds:
+        serving.step()
+    s1, dt = serving.stats(), time.monotonic() - t0
+    serving.pause()
+    if proc is not None:
+        proc.terminate()
+        proc.wait(timeout=10)
+    rows = dcgm_rows(lines)
+    rows = rows[rows[:, 0] >= t_ns0 + 5e9] if len(rows) else rows   # the first 5 s ramp up
+    dram = rows[:, 1] if len(rows) else np.zeros(0)
+    return {"seconds": round(dt, 1), "finished": s1["finished"] - s0["finished"],
+            "tokens_per_s": round((s1["finished_tokens"] - s0["finished_tokens"]) / dt, 1),
+            "dcgm_samples": len(rows), "dram_active_mean": round(float(np.nanmean(dram)), 4) if len(dram) else None,
+            "dram_active_min": round(float(np.nanmin(dram)), 4) if len(dram) else None,
+            "dcgm_raw": [ln for _, ln in lines[:3]] if not len(rows) else None}
 
 
 # ---- the verifier ----------------------------------------------------------------------------------------------------------
@@ -679,8 +1015,17 @@ def cmd_sample(a) -> int:
     stop = [False]
     signal.signal(signal.SIGTERM, lambda *_: stop.__setitem__(0, True))
     targets = [tuple(int(x) for x in t.split(":")) for t in a.targets.split(",") if t]
-    lo, hi = (int(x) for x in a.cpus.split("-"))
-    cpus = tuple(range(lo, hi + 1))
+    cpus = cpu_list(a.cpus)
+    dcgm_lines: list[tuple[int, str]] = []
+    dcgm = None
+    if a.dcgm >= 0:
+        import threading
+        try:
+            dcgm = subprocess.Popen(["dcgmi", "dmon", "-i", str(a.dcgm), "-e", ",".join(map(str, DCGM_FIELDS)), "-d", "1000"],
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            threading.Thread(target=lambda: [dcgm_lines.append((time.time_ns(), ln)) for ln in dcgm.stdout], daemon=True).start()
+        except OSError as e:
+            dcgm_lines.append((0, f"dcgmi: {e}"))
     try:
         nvml: Nvml | None = Nvml(a.gpu_uuid)
         nvml_error = None
@@ -777,7 +1122,16 @@ def cmd_sample(a) -> int:
         tick += a.period
         time.sleep(max(0.0, tick - time.monotonic()))
     n, nt = len(t_ns), len(targets)
+    if dcgm is not None:
+        dcgm.terminate()
+        try:
+            dcgm.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            dcgm.kill()
+    drows = dcgm_rows(dcgm_lines)
     np.savez_compressed(Path(a.job) / "samples.npz", t_ns=np.array(t_ns, np.int64), cpus=np.array(cpus),
+                        dcgm_t_ns=drows[:, 0].astype(np.int64), dcgm=drows[:, 1:], dcgm_fields=np.array(DCGM_NAMES),
+                        dcgm_error=np.array("" if len(drows) or a.dcgm < 0 else " | ".join(ln for _, ln in dcgm_lines[:3])),
                         clock_triple=np.array(triples, np.int64).reshape(n, 3), cpu_freq_khz=np.array(freq, np.int64),
                         thread_faults=np.array(faults, np.int64).reshape(n, nt, 2),
                         thread_ctxt=np.array(ctxt, np.int64).reshape(n, nt, 2),
@@ -798,9 +1152,10 @@ def cmd_sample(a) -> int:
 class Client:
     """One connection to the soak responder, configured for one cell."""
 
-    def __init__(self, lib: ctypes.CDLL, port: int, tuned: bool, ts: bool = True, zerocopy: bool = False) -> None:
+    def __init__(self, lib: ctypes.CDLL, port: int, tuned: bool, ts: bool = True, zerocopy: bool = False,
+                 host: str = "127.0.0.1") -> None:
         self.lib, self.tuned, self.ts = lib, tuned, ts
-        self.sock = socket.create_connection(("127.0.0.1", port))
+        self.sock = socket.create_connection((host, port))
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.rcvbuf = int(lib.soak_client_tune(self.sock.fileno(), int(tuned), int(ts)))
         self.sock.setblocking(False)
@@ -815,7 +1170,9 @@ class Client:
         names = ("rto", "ato", "snd_mss", "rcv_mss", "unacked", "sacked", "lost", "retrans", "fackets", "last_data_sent",
                  "last_ack_sent", "last_data_recv", "last_ack_recv", "pmtu", "rcv_ssthresh", "rtt", "rttvar", "snd_ssthresh",
                  "snd_cwnd", "advmss", "reordering", "rcv_rtt", "rcv_space", "total_retrans")
-        return {"retransmits": raw[2], **dict(zip(names, u32))}
+        return {"retransmits": raw[2], **dict(zip(names, u32)),
+                "incoming_cpu": self.sock.getsockopt(socket.SOL_SOCKET, getattr(socket, "SO_INCOMING_CPU", 49)),
+                "local": list(self.sock.getsockname()[:2]), "peer": list(self.sock.getpeername()[:2])}
 
     def exchange(self, op: int, arg: int) -> np.ndarray:
         """A request without payload (ping, configure) and its header."""
@@ -927,9 +1284,12 @@ class Soak:
         self.load_seq = 0
         self.mode: str | None = None
         self.checking = lambda: True
+        self.ctl: ControlClient | None = None
+        self.host = "127.0.0.1"
+        self.server_arrays: dict[str, np.ndarray] = {}
         loads, configs = tuple(a.loads.split(",")), tuple(a.configs.split(","))
-        if not set(loads) <= set(LOADS) or not set(configs) <= set(ALL_CONFIGS):
-            raise SystemExit(f"--loads {a.loads} --configs {a.configs}: loads are of {LOADS}, configs of {ALL_CONFIGS}")
+        if not set(loads) <= set(ALL_LOADS) or not set(configs) <= set(ALL_CONFIGS):
+            raise SystemExit(f"--loads {a.loads} --configs {a.configs}: loads are of {ALL_LOADS}, configs of {ALL_CONFIGS}")
         self.table = cells(loads, configs)
 
     def schedule(self) -> dict[str, Any]:
@@ -957,6 +1317,10 @@ class Soak:
             return {"mode": mode, "switched": False}
         self.load_seq += 1
         t0 = time.time_ns()
+        if self.ctl is not None:
+            doc, _ = self.ctl.call("load", mode=mode, seq=self.load_seq)
+            self.mode = mode
+            return {"mode": mode, "switched": True, "reply_ns": time.time_ns() - t0, "server_t_ns": doc["t_ns"]}
         _write(self.job / "load.json", {"mode": mode, "seq": self.load_seq})
         ack = self.job / "load-ack.json"
         while not self.stopped[0]:
@@ -988,7 +1352,7 @@ class Soak:
                 run["verifier_fifo"] = "in effect"
             except OSError as e:
                 run["verifier_fifo"] = f"refused: {e.strerror}"
-        c = Client(lib, ready["port"], tuned, ts, zerocopy)
+        c = Client(lib, ready["port"], tuned, ts, zerocopy, self.host)
         h = c.config
         run["server_config"] = {"mlock_ns": int(h[1]), "sndbuf": int(h[2]), "rcvbuf": int(h[14]), "flags": int(h[10]),
                                 "fifo": int(h[21])}
@@ -1108,12 +1472,33 @@ def response_tx(rec: np.ndarray, run_idx: np.ndarray, runs: list[dict[str, Any]]
     return ktx, s4
 
 
+def offset_brackets(rec: np.ndarray, run_idx: np.ndarray) -> dict[int, tuple[int, int]]:
+    """Per run, the bracket [lo, hi] that the server's clock minus the verifier's must lie in, from its timestamped answers: a
+    request reaches the server's kernel after the verifier's kernel sent it (K_rx_req - c_ktx >= offset), and the response's
+    first byte reaches the verifier's kernel after the server's responder stamped S3 before sending it (offset >= S3 -
+    c_krx_first).  No one-way delay is assumed; the bracket's width is the two directions' shortest delays."""
+    col, out = COL, {}
+    ok = rec[:, col["status"]] == 0
+    fwd = ok & (rec[:, col["srv_krx"]] > 0) & (rec[:, col["c_ktx"]] > 0)
+    back = ok & (rec[:, col["srv_utx"]] > 0) & (rec[:, col["c_krx_first"]] > 0)
+    for r in np.unique(run_idx):
+        i = run_idx == r
+        f, b = fwd & i, back & i
+        if f.any() and b.any():
+            out[int(r)] = (int((rec[b, col["srv_utx"]] - rec[b, col["c_krx_first"]]).max()),
+                           int((rec[f, col["srv_krx"]] - rec[f, col["c_ktx"]]).min()))
+    return out
+
+
 def validate(rec: np.ndarray, run_idx: np.ndarray, runs: list[dict[str, Any]], steps: np.ndarray, samples: dict[str, np.ndarray],
-             checked_blocks: int | None, cell_s: float, table: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+             checked_blocks: int | None, cell_s: float, table: list[dict[str, Any]] | None = None,
+             remote: bool = False) -> dict[str, Any]:
     """The chunk's §6 counts (the measurement contract): order violations along t_sched <= V0 <= K_rx_req <= S0 <= S1 <= S2 <= S3
     <= K_tx_resp <= S4 and K_tx_resp <= V1 (every stamp REALTIME, tolerance 1 µs), G <= S2 - S1 + 1 µs, absent kernel stamps
     (timestamping-on runs), clock offset steps, answers against verified blocks, statuses, per-run counts against rate x time,
-    loaded runs that served no tokens, and retransmits."""
+    loaded runs that served no tokens, and retransmits.  ``remote`` (the server on another host, its own clock): the order is
+    checked within each host, t_sched <= V0 <= c_ktx <= c_krx_first <= c_krx_last <= V1 on the verifier's clock and K_rx_req <=
+    S0 <= ... <= S4 on the server's, and each run's offset bracket (`offset_brackets`) must not be empty."""
     col, tol = COL, 1000
     out: dict[str, Any] = {"answers": len(rec)}
     ktx, s4 = response_tx(rec, run_idx, runs)
@@ -1121,20 +1506,33 @@ def validate(rec: np.ndarray, run_idx: np.ndarray, runs: list[dict[str, Any]], s
     ok = rec[:, col["status"]] == 0 if len(rec) else np.zeros(0, bool)
     read = (rec[:, col["op"]] == OP_READ) & ok if len(rec) else np.zeros(0, bool)
     st = {n: rec[:, col[c]] for n, c in (("t_sched", "t_sched"), ("V0", "t_send0"), ("K_rx_req", "srv_krx"), ("S0", "srv_urx"),
-                                          ("S1", "srv_s1"), ("S2", "srv_s2"), ("S3", "srv_utx"), ("V1", "t_recv"))}
+                                          ("S1", "srv_s1"), ("S2", "srv_s2"), ("S3", "srv_utx"), ("V1", "t_recv"),
+                                          ("c_ktx", "c_ktx"), ("c_krx_first", "c_krx_first"), ("c_krx_last", "c_krx_last"))}
     st["K_tx_resp"], st["S4"] = ktx, s4
-    chain = ["t_sched", "V0", "K_rx_req", "S0", "S1", "S2", "S3", "K_tx_resp", "S4"]
+    server = ["K_rx_req", "S0", "S1", "S2", "S3", "K_tx_resp", "S4"]
+    chains = ([["t_sched", "V0", "c_ktx", "c_krx_first", "c_krx_last", "V1"], server] if remote
+              else [["t_sched", "V0", *server]])
     order: dict[str, int] = {}
     checked: dict[str, int] = {}
-    prev = np.zeros(len(rec), np.int64)
-    for b in chain:
-        present = (st[b] > 0) & ok & (read if b in ("S1", "S2") else True)
-        cmp = present & (prev > 0)
-        order[f"..<={b}"] = int(np.count_nonzero(cmp & (prev > st[b] + tol)))
-        checked[b] = int(np.count_nonzero(cmp))
-        prev = np.where(present, st[b], prev)
-    kv = (ktx > 0) & ok
-    order["K_tx_resp<=V1"] = int(np.count_nonzero(kv & (ktx > st["V1"] + tol)))
+    for chain in chains:
+        prev = np.zeros(len(rec), np.int64)
+        for b in chain:
+            present = (st[b] > 0) & ok & (read if b in ("S1", "S2") else True)
+            cmp = present & (prev > 0)
+            order[f"..<={b}"] = int(np.count_nonzero(cmp & (prev > st[b] + tol)))
+            checked[b] = int(np.count_nonzero(cmp))
+            prev = np.where(present, st[b], prev)
+    if remote and len(rec):
+        br = offset_brackets(rec, run_idx)
+        width = np.array([hi - lo for lo, hi in br.values()], np.int64)
+        mid = np.array([(lo + hi) / 2 for lo, hi in br.values()])
+        out["offset"] = {"runs": len(br), "empty": int(np.count_nonzero(width < -tol)),
+                         "width_ns_p50": int(np.median(width)) if len(width) else None,
+                         "mid_ns_min": int(mid.min()) if len(mid) else None, "mid_ns_max": int(mid.max()) if len(mid) else None,
+                         "per_run": [[r, lo, hi] for r, (lo, hi) in sorted(br.items())]}
+    elif not remote:
+        kv = (ktx > 0) & ok
+        order["K_tx_resp<=V1"] = int(np.count_nonzero(kv & (ktx > st["V1"] + tol)))
     out["order_violations"] = order
     out["order_checked"] = checked
     span = st["S2"] - st["S1"]
@@ -1187,9 +1585,11 @@ def write_chunk(path: Path, soak: Soak, extra: dict[str, Any]) -> dict[str, Any]
     rec = np.concatenate(soak.recs) if soak.recs else np.zeros((0, len(REC)), np.int64)
     meta = np.concatenate(soak.rec_meta) if soak.rec_meta else np.zeros((0, 3), np.int64)
     steps = read_steps(soak.job / "steps.bin")
+    remote = bool(extra.get("remote"))
     if "chunk_start_ns" in extra and len(steps):
         steps = steps[steps[:, 2] >= extra["chunk_start_ns"] - 5_000_000_000]
-    state, reqs, running = join_steps(rec[:, COL["t_send0"]], steps)
+    # the steps are on the server's clock: with the server on another host, an answer's step is the one holding its S0
+    state, reqs, running = join_steps(rec[:, COL["srv_urx" if remote else "t_send0"]], steps)
     arrays: dict[str, Any] = {"rec": rec, "rec_columns": np.array(REC), "rec_cell": meta[:, 0].astype(np.int16),
                               "rec_pass": meta[:, 1].astype(np.int16), "rec_run": meta[:, 2].astype(np.int32),
                               "rec_vllm_state": state, "rec_vllm_reqs": reqs, "rec_vllm_running": running,
@@ -1207,10 +1607,11 @@ def write_chunk(path: Path, soak: Soak, extra: dict[str, Any]) -> dict[str, Any]
         with np.load(sp) as s:
             samples = {k: s[k] for k in s.files}
             arrays.update({f"sample_{k}": v for k, v in samples.items()})
+    arrays.update(getattr(soak, "server_arrays", None) or {})
     arrays["rec_k_tx_resp"], arrays["rec_s4"] = response_tx(rec, meta[:, 2], soak.runs)
     summary = summarize(rec, meta)
     validation = validate(rec, meta[:, 2], soak.runs, steps, samples, extra.get("checked_blocks"),
-                          float(extra.get("cell_s", CELL_S)), table)
+                          float(extra.get("cell_s", CELL_S)), table, remote)
     if e2 is not None:
         validation["second_engine"] = engine2_by_run(soak.runs, e2)
     doc = {"schema": KIND, "runs": soak.runs, "summary": summary, "validation": validation, "cells": table, "answers": len(rec),
@@ -1232,25 +1633,47 @@ def cmd_verify(a) -> int:
     lib = load_native(Path(a.native))
     lib.soak_install_sigterm()
     doc, _, _ = R.load_vk(Path(a.setup))
-    ready_path = job / "ready.json"
-    while not ready_path.exists():
-        if soak.stopped[0] or time.time() > a.until:
-            return 99 if soak.stopped[0] else 0
-        time.sleep(1.0)
-    ready = _read(ready_path)
+    if a.server:
+        host, port = a.server.rsplit(":", 1)
+        while soak.ctl is None:
+            try:
+                soak.ctl = ControlClient(host, int(port))
+            except OSError:
+                if soak.stopped[0] or time.time() > a.until:
+                    return 99 if soak.stopped[0] else 0
+                time.sleep(5.0)
+        soak.host = host
+        ready = soak.ctl.call("ready")[0]
+        _write(job / "ready.json", ready)
+    else:
+        ready_path = job / "ready.json"
+        while not ready_path.exists():
+            if soak.stopped[0] or time.time() > a.until:
+                return 99 if soak.stopped[0] else 0
+            time.sleep(1.0)
+        ready = _read(ready_path)
+    clocks = "every stamp CLOCK_REALTIME (kernel software timestamps, clock_gettime in both processes)"
+    if a.server:
+        clocks = ("two hosts, two clocks, each CLOCK_REALTIME: t_sched, V0, V1 and the c_* kernel stamps are the verifier's, the "
+                  "srv_* stamps (and the vLLM steps and server samples) the server's; no interval mixes them, and the offset between "
+                  "them is only bracketed (validation.offset per run, control_clock_* per chunk)")
     extra: dict[str, Any] = {"job": job.name, "ready": ready, "vk_root": doc["root"], "root_matches_vk": ready["root"] == doc["root"],
                              "until_utc": utc(a.until * 1e9), "env": json.loads(a.env or "{}"), "cell_s": a.cell_s,
-                             "clocks": "every stamp CLOCK_REALTIME (kernel software timestamps, clock_gettime in both processes)",
+                             "clocks": clocks, "remote": {"server": a.server, "hostname": socket.gethostname()} if a.server else None,
                              "clocksource": _text("/sys/devices/system/clocksource/clocksource0/current_clocksource"),
                              "node": _text(a.node) if a.node else None}
     if not extra["root_matches_vk"]:
         _write(job / "WRONG.json", {"why": f"server root {ready['root']} is not vk's {doc['root']}", "utc": utc()})
         write_chunk(job / f"chunk-{job.name}.npz", soak, extra)
+        if soak.ctl is not None:
+            soak.ctl.close()
         return 3
     ring = Ring()
     checker = subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.pous_soak", "check", "--setup", a.setup, "--job", a.job,
                                 "--fd", str(ring.fd), "--cpu", str(a.checker_cpu)], pass_fds=(ring.fd,))
-    targets = f"{ready['pid']}:{ready['responder_tid']},{os.getpid()}:{os.getpid()},{checker.pid}:{checker.pid}"
+    targets = f"{os.getpid()}:{os.getpid()},{checker.pid}:{checker.pid}"
+    if not a.server:
+        targets = f"{ready['pid']}:{ready['responder_tid']},{targets}"
     soak.checking = lambda: checker.poll() is None
     sched = soak.schedule()
     extra["schedule_seed"] = sched["seed"]
@@ -1276,7 +1699,8 @@ def cmd_verify(a) -> int:
             lib.soak_clock_cost(clk, 1_000_000, out)
             cost[name] = {"min": out[0], "p50": out[1], "p999": out[2]}
         return {"index": len(chunks), "start_ns": time.time_ns(), "start_utc": utc(), "position_start": pos,
-                "checked0": int(ring.ctl[Ring.CHECKED]), "clock_cost_ns": cost}
+                "checked0": int(ring.ctl[Ring.CHECKED]), "clock_cost_ns": cost,
+                "control_clock_open": soak.ctl.clock() if soak.ctl is not None else None}
 
     def close_chunk(c: dict[str, Any], rc_: int) -> dict[str, Any]:
         """The chunk so far into ``chunk-<job>-<index>.npz`` (the sampler stopped first, so its samples are the chunk's), and
@@ -1287,10 +1711,23 @@ def cmd_verify(a) -> int:
         e = {**extra, "chunk_index": c["index"], "chunk_start_utc": c["start_utc"], "chunk_start_ns": c["start_ns"],
              "clock_cost_ns": c["clock_cost_ns"], "position_start": c["position_start"], "position_end": pos,
              "checked_blocks": int(ring.ctl[Ring.CHECKED]) - c["checked0"], "wrong": int(ring.ctl[Ring.WRONG]), "rc": rc_,
-             "end_utc": utc()}
+             "end_utc": utc(), "control_clock_open": c["control_clock_open"]}
+        if soak.ctl is not None:
+            try:
+                _, blobs = soak.ctl.call("rotate")
+                with open(job / "steps.bin", "ab") as f:
+                    f.write(blobs.get("steps", b""))
+                if blobs.get("samples"):
+                    (job / "server-samples.npz").write_bytes(blobs["samples"])
+                    with np.load(job / "server-samples.npz") as z:
+                        soak.server_arrays = {f"server_sample_{k}": z[k] for k in z.files}
+                e["control_clock_close"] = soak.ctl.clock()
+            except (OSError, ValueError) as err:
+                e["rotate_error"] = repr(err)
         out = write_chunk(job / name, soak, e)
         (job / "samples.npz").unlink(missing_ok=True)
-        soak.runs, soak.recs, soak.rec_meta = [], [], []
+        (job / "server-samples.npz").unlink(missing_ok=True)
+        soak.runs, soak.recs, soak.rec_meta, soak.server_arrays = [], [], [], {}
         with open(Path(a.state) / "chunks.log", "a") as f:
             f.write(json.dumps({"chunk": name, "answers": out["answers"], "wrong": out["wrong"],
                                 "checked_blocks": out["checked_blocks"], "runs": len(out["runs"]), "rc": out["rc"],
@@ -1348,6 +1785,10 @@ def cmd_verify(a) -> int:
         stop_sampler(sampler)
         extra["wrong"] = int(ring.ctl[Ring.WRONG])
         chunks.append(close_chunk(chunk, rc if not soak.stopped[0] else 99))
+        if soak.ctl is not None:
+            # A finished cross, the deadline or a wrong answer ends the server; a SIGTERM or a lost connection leaves it for a
+            # resumed verifier (or its idle exit).
+            soak.ctl.close(stop=rc in (0, 3) and not soak.stopped[0])
     if extra["wrong"] or (job / "WRONG.json").exists():
         return 3
     return 99 if soak.stopped[0] else rc
@@ -1403,7 +1844,23 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--second-engine-layers", type=int, default=0,
                    help="Llama-3.1-8B decoder layers of a second engine's weights streamed while loaded (0: none; 32: the model)")
     s.add_argument("--second-engine-batch", type=int, default=32, help="the second engine's sequences per decode step")
+    s.add_argument("--model", default="", help="serve this checkpoint for real (a local HF directory), C beside it from --setup's w.bin")
+    s.add_argument("--gpu-memory-utilization", type=float, default=0.80)
+    s.add_argument("--max-model-len", type=int, default=4096)
+    s.add_argument("--max-num-seqs", type=int, default=256)
+    s.add_argument("--serving-concurrency", type=int, default=128, help="requests in flight under the serving load")
+    s.add_argument("--warm-s", type=float, default=60.0, help="seconds of the serving load before the soak (DCGM read throughout)")
+    s.add_argument("--listen", default="127.0.0.1", help="the responder's (and control port's) address")
+    s.add_argument("--port", type=int, default=0, help="the responder's port (0: any)")
+    s.add_argument("--control-port", type=int, default=0, help="a control port for a verifier on another host (0: the job's files)")
+    s.add_argument("--control-allow", default="", help="the one address the control port accepts")
+    s.add_argument("--sampler-cpu", type=int, default=90, help="with --control-port: the server's own sampler's core")
+    s.add_argument("--sample-cpus", default=f"{SAMPLE_CPUS[0]}-{SAMPLE_CPUS[-1]}", help="with --control-port: the cores it samples")
+    s.add_argument("--gpu-uuid", default="", help="with --control-port: the GPU it samples through NVML")
+    s.add_argument("--dcgm-gpu", type=int, default=-1, help="the physical GPU index DCGM reads (warm-up and sampler; -1: none)")
+    s.add_argument("--idle-exit-s", type=float, default=900.0, help="with --control-port: end after this long without a request")
     v = sub.add_parser("verify")
+    v.add_argument("--server", default="", help="HOST:PORT of the server's control port, on another host (else the job's files)")
     v.add_argument("--setup", required=True)
     v.add_argument("--job", required=True)
     v.add_argument("--state", required=True)
@@ -1432,8 +1889,9 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--cpu", type=int, default=90)
     m.add_argument("--targets", default="", help="pid:tid,... whose schedstat is sampled")
     m.add_argument("--period", type=float, default=0.1)
-    m.add_argument("--cpus", default=f"{SAMPLE_CPUS[0]}-{SAMPLE_CPUS[-1]}", help="the cores sampled, lo-hi")
+    m.add_argument("--cpus", default=f"{SAMPLE_CPUS[0]}-{SAMPLE_CPUS[-1]}", help="the cores sampled: 96-106,116-123")
     m.add_argument("--gpu-uuid", default="", help="the GPU whose NVML readings are sampled every second")
+    m.add_argument("--dcgm", type=int, default=-1, help="the physical GPU whose DCGM DRAM activity is read every second (-1: none)")
     p = sub.add_parser("preserve")
     p.add_argument("--custody", required=True)
     p.add_argument("--soak", default="honest-latency-soak")
