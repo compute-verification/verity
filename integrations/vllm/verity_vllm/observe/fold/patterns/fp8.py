@@ -66,7 +66,9 @@ def _arg(a: dict[str, Any], *names: str, pos: int) -> Any:
 class PerTokenGroupFp8Quant:
     """`_C.per_token_group_fp8_quant` (csrc/quantization/fp8/per_token_group_quant.cu, `per_token_group_quant_8bit_kernel`) on a
     bf16 `[M, K]` activation: per row and per G-wide group, `s = fmaxf-fold(eps, |f32(x)|) / 448`, `q = e4m3(clamp(f32(x) / s))`;
-    both outputs are materialised (`x_q` e4m3 `[M, K]`, `x_s` f32 `[M, K/G]`, column-major when vLLM asks for it)."""
+    both outputs are materialised (`x_q` e4m3 `[M, K]`, `x_s` f32 `[M, K/G]`, column-major when vLLM asks for it).  `group` is the G
+    this instance resolves (the checkpoint's weight block for the dense linears, the refined block inside a fused-MoE scope), one of
+    `fp8.QUANT_GROUPS`; a launch at another G is refused."""
 
     group: int
     name: str = "fp8.per_token_group_fp8_quant"
@@ -85,7 +87,9 @@ class PerTokenGroupFp8Quant:
         if not all(isinstance(v, ViewDesc) for v in (x, xq, xs)) or not isinstance(G, int) or eps is None or lo is None or hi is None:
             return unsupported(node, "per_token_group_fp8_quant arguments not bound as expected", args={k: _fmt(v) for k, v in a.items()})
         if G != self.group:
-            return unsupported(node, "group size differs from the checkpoint's weight block", group_size=G, pinned=self.group)
+            return unsupported(node, "group size differs from the group this pattern resolves", group_size=G, pinned=self.group)
+        if G not in fp8.QUANT_GROUPS:
+            return unsupported(node, "group size is not one Fp8GroupQuant_v1 is registered at", group_size=G, registered=list(fp8.QUANT_GROUPS))
         if eps != QUANT_EPS or lo != -FP8_MAX or hi != FP8_MAX or bool(ue8m0):
             return unsupported(node, "quantisation knobs differ from the registered Fp8GroupQuant_v1 (eps 1e-10, [-448, 448], no ue8m0)",
                                eps=eps, fp8_min=lo, fp8_max=hi, scale_ue8m0=ue8m0)

@@ -274,13 +274,20 @@ def QuantLinearFp8(B, S, x, w, sw, *bias):
 
 FP8_BLOCK = 128           # the checkpoint's weight_block_size (both axes) and the activation group size (GroupShape(1, 128))
 C_EPS_QUANT = b1.const(32, bits_of(np.float32(1e-10)))   # `eps` of per_token_group_quant_fp8 (the fold's start value)
+#: the group sizes `Fp8GroupQuant_v1{K,G}` is registered at: 128 (the dense linears) and 64 (fused_moe's inputs at block [64, 64], vLLM's
+#: refinement of 128x128 checkpoint blocks at TP8).  `_C.per_token_group_fp8_quant` runs one kernel at every group size,
+#: `per_token_group_quant_8bit_kernel` (csrc/libtorch_stable/quantization/w8a8/fp8/per_token_group_quant.cu:42-160 at d9105ea80, launched
+#: by :193 for any G; the register-resident G = 128 kernel at :289 is the packed UE8M0 op), whose max is exact and whose two divisions
+#: are true ones: G changes nothing but the group's width.
+QUANT_GROUPS = (64, 128)
 
 _BLOCK_CONF = ("exact-model-tested; H100 80GB 2026-09-19 (vLLM d9105ea80, CUTLASS v4.7.1, VLLM_USE_DEEP_GEMM=0): _C.cutlass_scaled_mm "
                "blockwise vs the model at 2400/2400 sampled coordinates over seven Qwen3-4B shapes (K 2560/4096/9728, N 2560/6144/19456, M 1..16, "
                "both kernel variants), 0 mismatches; the f32 promotion pinned by adversarial operands (FFMA vs mul+add: 160/160 FFMA, ascending "
                "vs descending k: 160/160 ascending, s = FMUL(sfa, sfb) vs the other associations: 240/240) — out/gen/sweep/evidence/fp8/")
 _QUANT_CONF = ("exact-model-tested; H100 80GB 2026-09-19: _C.per_token_group_fp8_quant vs the model on 290,304 e4m3 words and 2,268 group scales "
-               "(seven shapes, rows of varying magnitude with outliers), 0 mismatches — out/gen/sweep/evidence/fp8/check_block_gemm.json")
+               "(seven shapes, rows of varying magnitude with outliers), 0 mismatches — out/gen/sweep/evidence/fp8/check_block_gemm.json; "
+               "all at G = 128: G = 64 (QUANT_GROUPS) is the same kernel over narrower groups, not yet compared")
 
 
 @composite("Fp8GroupScale", 1, ["G"], lambda S: ((("x", Array(S.G, BF16)),), F32), conformance=_QUANT_CONF)

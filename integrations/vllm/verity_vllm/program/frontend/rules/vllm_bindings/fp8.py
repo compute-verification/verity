@@ -11,7 +11,7 @@ from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_
 from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import _C_op
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, _untransposed, aten
-from verity_vllm.program.registry.fp8 import weight_blocks
+from verity_vllm.program.registry.fp8 import QUANT_GROUPS, weight_blocks
 
 
 # -- [R15 fp8] the block-scaled FP8 linear: dynamic per-token-group activation quant + the blockwise CUTLASS scaled GEMM -----------------
@@ -20,6 +20,7 @@ FP8_E4M3 = torch.float8_e4m3fn
 #: the quant op's pinned scalars (`per_token_group_quant_fp8(..., group_size=128, eps=1e-10, dtype=e4m3, use_ue8m0=False)` as vLLM's
 #: `QuantFP8(group_shape=(1, 128), use_ue8m0=False)` calls it for `CutlassFp8BlockScaledMMKernel`); the Definition `Fp8GroupQuant_v1{K,G}`
 #: hard-codes eps and the e4m3 range, so a launch with other values is refused (another kernel configuration, not this Definition).
+#: `group_size` is the blockwise GEMM's block; the quant takes any of `fp8.QUANT_GROUPS`.
 FP8_QUANT_PINS = {"group_size": 128, "eps": 1e-10, "fp8_min": -448.0, "fp8_max": 448.0, "use_ue8m0": False}
 
 
@@ -38,7 +39,8 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
                     applies_to="_C.per_token_group_fp8_quant(x, Tensor! x_q, Tensor! x_s, group_size, eps, fp8_min, fp8_max, use_ue8m0, column_major_scales, tma_aligned_scales)",
                     preconditions=("x is bf16 [.., K] with K % group_size == 0", "x_q is an unwritten allocation float8_e4m3fn [.., K]",
                                    "x_s is an unwritten allocation (or a view of one) f32 [.., K/group_size]",
-                                   "group_size == 128, eps == 1e-10f, fp8_min/max == -448/448, use_ue8m0 == False (the pinned Definition)"),
+                                   "group_size in fp8.QUANT_GROUPS (64, 128), eps == 1e-10f, fp8_min/max == -448/448, use_ue8m0 == False "
+                                   "(the pinned Definition)"),
                     evidence_domain="structural; numerics: Fp8GroupQuant_v1 (exact-model-tested on the H100 against _C.per_token_group_fp8_quant)")
 
     def targets(self):
@@ -60,8 +62,8 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
             return r
         xs_shape = shape(ctx, a["x"])
         G = a["group_size"]
-        if not isinstance(G, int) or G != FP8_QUANT_PINS["group_size"]:
-            return f"numerics_unregistered: group_size={G!r}; Fp8GroupQuant_v1 is pinned for group 128"
+        if not isinstance(G, int) or isinstance(G, bool) or G not in QUANT_GROUPS:
+            return f"numerics_unregistered: group_size={G!r}; Fp8GroupQuant_v1 is registered for the groups {list(QUANT_GROUPS)}"
         if xs_shape[-1] % G:
             return f"K={xs_shape[-1]} is not a multiple of the group size {G}"
         for key in ("eps", "fp8_min", "fp8_max"):
