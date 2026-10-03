@@ -370,6 +370,15 @@ def test_a_remote_server_clock_is_bracketed_and_checked_within_each_host():
     assert S.validate(rec, run_idx, runs, np.zeros((0, 8), np.int64), {}, 0, 60.0, remote=True)["offset"]["empty"] == 1
 
 
+def test_tuned_buffers_are_set_only_where_the_kernel_grants_them_whole(fake):
+    rmem = int(Path("/proc/sys/net/core/rmem_max").read_text())
+    default = int(Path("/proc/sys/net/ipv4/tcp_rmem").read_text().split()[1])
+    c = S.Client(fake.lib, fake.resp.port, True, True)
+    got = c.rcvbuf
+    c.close()
+    assert got == (2 * min(1 << 20, rmem) if 2 * rmem >= 1 << 20 else default), (got, rmem)
+
+
 def test_one_host_brackets_hold_zero_over_a_real_connection(fake):
     ring = S.Ring(nslots=32)
     n = 20

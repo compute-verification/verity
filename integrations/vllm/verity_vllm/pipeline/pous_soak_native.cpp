@@ -72,6 +72,7 @@ static inline cudaError_t cudaFreeHost(void* p) { std::free(p); return cudaSucce
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <string>
 #include <thread>
@@ -87,6 +88,24 @@ constexpr uint64_t BLOCK = 65536;
 constexpr int TS_FLAGS = SOF_TIMESTAMPING_RX_SOFTWARE | SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_SOFTWARE |
                          SOF_TIMESTAMPING_OPT_ID | SOF_TIMESTAMPING_OPT_TSONLY;
 constexpr int TUNED_BUF = 1 << 20;
+
+// TUNED_BUF-byte send and receive buffers where the kernel grants them whole (net.core.[wr]mem_max >= TUNED_BUF / 2).  A
+// smaller grant would lock the buffer below what autotuning reaches (tcp_[wr]mem's max): a loopback peer's 64 KiB segments then
+// close the receive window around a lost one, and the connection waits out the probe timer's backoff.  Else autotuned.
+static bool grants_tuned_buf(const char* path) {
+  long v = 0;
+  if (FILE* f = std::fopen(path, "r")) {
+    if (std::fscanf(f, "%ld", &v) != 1) v = 0;
+    std::fclose(f);
+  }
+  return 2 * v >= TUNED_BUF;
+}
+
+static void tune_buffers(int fd) {
+  int b = TUNED_BUF;
+  if (grants_tuned_buf("/proc/sys/net/core/wmem_max")) ::setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &b, sizeof(b));
+  if (grants_tuned_buf("/proc/sys/net/core/rmem_max")) ::setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &b, sizeof(b));
+}
 
 inline int64_t realtime_ns() {
   timespec ts;
@@ -290,11 +309,7 @@ class SoakResponder {
       mlocked_.store(0);
     }
     head[1] = (uint64_t)(realtime_ns() - t0);
-    if (tuned) {
-      int b = TUNED_BUF;
-      ::setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &b, sizeof(b));
-      ::setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &b, sizeof(b));
-    }
+    if (tuned) tune_buffers(fd);
     int v = 0;
     socklen_t l = sizeof(v);
     ::getsockopt(fd, SOL_SOCKET, SO_SNDBUF, &v, &l);
@@ -550,11 +565,7 @@ int soak_client_tune(int fd, int tuned, int ts) {
     int tsf = TS_FLAGS;
     ::setsockopt(fd, SOL_SOCKET, SO_TIMESTAMPING, &tsf, sizeof(tsf));
   }
-  if (tuned) {
-    int b = TUNED_BUF;
-    ::setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &b, sizeof(b));
-    ::setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &b, sizeof(b));
-  }
+  if (tuned) tune_buffers(fd);
   int v = 0;
   socklen_t l = sizeof(v);
   ::getsockopt(fd, SOL_SOCKET, SO_RCVBUF, &v, &l);

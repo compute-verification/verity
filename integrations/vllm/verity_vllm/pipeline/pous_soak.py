@@ -16,8 +16,9 @@ it whenever the load is not idle, its steps in ``engine2.bin``.
 `verify` runs cells (`cells`: load x Poisson rate x bytes per answer x responder configuration) in the order of
 ``schedule.json`` (passes of random permutations, drawn once and kept in the state directory with the position reached, so
 the order survives the jobs a 30-minute GPU cap splits the soak into).  Each cell is a fresh connection; ``tuned`` is the C hot
-loop (`soak_client_run`) with mlockall, 1 MiB socket buffers and TCP_QUICKACK on both ends, ``baseline`` the series' Python
-loop (`pous_verifier.LiveResponder`'s) against the same responder with default buffers, ``zerocopy`` tuned with the responder
+loop (`soak_client_run`) with mlockall, 1 MiB socket buffers (where the kernel grants them whole, else autotuned) and
+TCP_QUICKACK on both ends, ``baseline`` the series' Python loop (`pous_verifier.LiveResponder`'s) against the same responder
+with default buffers, ``zerocopy`` tuned with the responder
 sending through MSG_ZEROCOPY (`ALL_CONFIGS`; ``--loads`` and ``--configs`` pick the cross).  Every response lands in a shared
 ring that a checker process (`check`) verifies against `vk`, every 64 KiB block it contains; a wrong answer halts the soak.  A
 sampler process (`sample`) reads /proc/softirqs, /proc/interrupts, /proc/stat and the hot threads' schedstat every 100 ms.
