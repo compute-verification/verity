@@ -38,10 +38,6 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("VY_BUNDLE_SIZES", str(tmp_path_factory.mktemp("bundle-sizes") / "bundle-sizes.json"))
     # ... nor the agent's Cursor identity: without SLACK_BOT_TOKEN, research slack asks this socket for an OIDC token for its broker
     monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path_factory.mktemp("cursor") / "absent.sock"))
-    # ... nor the VM's tmux server, whose environment holds the injected secrets that `research` recovers (secret_hint.recover):
-    # $TMUX names a pane's server, and $TMUX_TMPDIR is where tmux looks for one otherwise
-    monkeypatch.delenv("TMUX", raising=False)
-    monkeypatch.setenv("TMUX_TMPDIR", str(tmp_path_factory.mktemp("tmux")))
 
 
 @pytest.fixture(autouse=True)

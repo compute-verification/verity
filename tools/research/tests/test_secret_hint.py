@@ -41,6 +41,8 @@ def test_research_takes_a_lost_secret_from_the_tmux_server_and_leaves_the_rest(t
     assert secret_hint.recover() == [] and not (bin_ / "tmux.calls").exists()       # no injected list: tmux is never asked
     monkeypatch.setenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", INJECTED)
     monkeypatch.setenv("R2_ENDPOINT", "https://r2.invalid")
+    assert secret_hint.recover() == [] and not (bin_ / "tmux.calls").exists()       # under a test: what it unset stays unset
+    monkeypatch.delenv("PYTEST_CURRENT_TEST")
     assert secret_hint.recover() == ["R2_BUCKET", "NEBIUS_SA_ID"]
     assert os.environ["R2_BUCKET"] == "bucket" and os.environ["NEBIUS_SA_ID"] == "line one\nline two"
     assert os.environ["R2_ENDPOINT"] == "https://r2.invalid" and os.environ["RUNPOD_SSH_KEY_B64"] == ""     # set here; removed in tmux

@@ -15,7 +15,10 @@ def _injected() -> list[str]:
 
 def recover() -> list[str]:
     """Set each secret in $CLOUD_AGENT_INJECTED_SECRET_NAMES that is unset here from the tmux server's global environment, and
-    return the names set. A laptop, a pod or a node has no such list and runs nothing; a value is never printed."""
+    return the names set. A laptop, a pod or a node has no such list and runs nothing; a value is never printed. Nor does a
+    process under a test (`$PYTEST_CURRENT_TEST`, which a test's subprocesses inherit): a secret a test unset is its setup."""
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return []
     got = []
     for n in (n for n in _injected() if not os.environ.get(n)):
         try:
