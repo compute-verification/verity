@@ -279,19 +279,31 @@ def szOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : ZkView.Sizes where
   nPU := padNOf Tz st - Zk.Q
   nPad := 0
 
-/-- **The draw's tables but their coin-fixed fields** (open, refinement: `nu`, `sReg`, `pubReg`, `E`, `rbar`, `ia`, `ib`,
-`Ch`, `rep`, `EU`, `GpU`, `ChU`, `CpU`, `s0`, `sP` from `verify --zk` at the draw; `coinedOf` and `bodyOf` replace the
+/-- **The draw's tables but their coin-fixed fields** (open, refinement: `nu`, `sReg`, `pubReg`, `E`, `rbar`, `EU`, `GpU`, `ChU`, `CpU`, `s0`, `sP` from `verify --zk` at the draw; `coinedOf` and `bodyOf` replace the
 others). -/
 noncomputable def tableOf (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     CoinsZK Zk.RANK_POINTS (RestOf Tz st) →
       ZkView.Coined FlockLevel3.GF256 (Witness Tz.S.m) (HiOf Tz) ByteArray
         (withMask (szOf Tz st) (maskWordsOf st).length Tz.t) := sorry
 
+/-- A pad's index in the pads layout: the exposed ones first, then `h_ab` and the triple's `x, y, w` (`PadLayout.hab ..
+tw`, the layout's last four). -/
+def padIdx {nE : ℕ} : ZK.PadIdx nE → ℕ
+  | .inl i => i.val
+  | .inr j => nE + j.val
+
+theorem fa_lt (Tz : TabZK 𝔽 mPts) (st : Stmt) :
+    (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).fb < (szOf Tz st).nE := by
+  simp only [szOf, padLenOf, Zk.PadLayout.new, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.hab, Zk.PadLayout.zp,
+    Zk.PadLayout.lc, Zk.PadLayout.fc, Zk.PadLayout.fb, Zk.PadLayout.fa]
+  omega
+
 theorem padNOf_pos (Tz : TabZK 𝔽 mPts) (st : Stmt) : 0 < padNOf Tz st :=
   Nat.mul_pos (Nat.pos_of_ne_zero (Nat.ne_of_gt (Nat.pos_of_isPowerOfTwo (Nat.isPowerOfTwo_nextPowerOfTwo _)))) (Nat.two_pow_pos _)
 
 /-- **The draw's `--zk` table's refinement**: levels ≥ 1's salts, `ByteArray` value lists, `RestOf`'s coins (both reps'
-level-0 queries, opened as `S = Q⁰ ∪ Q¹`, the pads queries, `ζ`), the pads layout's sizes, and `tableOf`'s tables reading `ζ`. -/
+level-0 queries, opened as `S = Q⁰ ∪ Q¹`, the pads queries, `ζ`), the pads layout's sizes, and `tableOf`'s tables reading `ζ`, each claim's rep (the rank check's points: rep 0's `ab`, `c`, then rep 1's), and
+the exposed `h_fa`, `h_fb` (`ia`, `ib`). -/
 noncomputable def bodyOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedBody Tz.S (maskWordsOf st).length Tz.t where
   Hi := HiOf Tz
   VL := ByteArray
@@ -302,13 +314,18 @@ noncomputable def bodyOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedBody Tz.S (m
   padLen := padLenOf Tz st
   padN := padNOf Tz st
   padQueries := fun r ρ => (List.ofFn (ρ.qP r)).map Fin.val
-  T := fun c => { tableOf Tz st c with ζ := fun r => fOf (c.rest.zeta r) }
+  T := fun c =>
+    { tableOf Tz st c with
+      ζ := fun r => fOf (c.rest.zeta r)
+      rep := fun k => if k.val < 2 then 0 else 1
+      ia := ⟨(Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).fa, Nat.lt_of_succ_lt (fa_lt Tz st)⟩
+      ib := ⟨(Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).fb, fa_lt Tz st⟩ }
 
 /-- **The draw's `--zk` table as `Coined` tables**: `bodyOf`'s tables over `Tz.S`, with `RANK_POINTS` claim points over
 the mask slot's words (`maskWordsOf st`), with `innerOf`'s inner-proof fields, reading their coins (`β`, `ρ`, the rank check's weights `eq(p_k, x)`, `embed`
 the inclusion of F128 in F256), level 0's `cols` and `t_pad` from the table's level 0, the opened positions `padPos` of
 each coin's queries below `2^(cols+1)`, and M1's padding columns there, each rep's pads code's padding columns at the
-opened pads positions `p` (`codeAt`: padding symbol `j` contributes `X^(len + j)` at `X = p + 1`, `padPos` of the
+opened pads positions `p` (`codeAt`: pad `i` contributes `X^i` at its layout index, padding symbol `j` `X^(len + j)` at `X = p + 1`, `padPos` of the
 queries below `n`), `κ·X̂_i + X̂_{2^cols + i}` at
 `κ = PAD_C`. -/
 noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
@@ -337,6 +354,7 @@ noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
         embed := FlockLevel3.embed
         β := fun r => fOf (c.beta r)
         ρ := fun r i => if i = 0 then FlockLevel3.GF256.of (c.rho r).1 else FlockLevel3.GF256.of (c.rho r).2
+        Ch := fun r k i => fOf ⟨(ppos r c k + 1).toUInt64, 0⟩ ^ padIdx i
         Cp := fun r k j => fOf ⟨(ppos r c k + 1).toUInt64, 0⟩ ^ (B.padLen + j.val)
         eqw := fun k x => fOf (eqWord (c.points k) ((maskWordsOf st).getD x.val 0))
         Gp := fun q i => fOf Zk.PAD_C * execArith.Xhat i.val (cols + 1) (execArith.omega (pos c q))
