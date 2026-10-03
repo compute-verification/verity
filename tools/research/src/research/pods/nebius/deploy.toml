@@ -35,6 +35,11 @@ path = "/usr/local/sbin/vy-nebius-stop"
 src = "tools/research/src/research/pods/nebius/vm_stop.sh"
 nodes = ["vy-nebius-1", "vy-nebius-2"]
 
+[[file]]  # after installing it, `systemctl --user daemon-reexec` as research (the file says why)
+path = "/etc/systemd/system/user@.service.d/vy-cpuset.conf"
+src = "tools/research/src/research/pods/nebius/user-cpuset.conf"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+
 [[file]]
 path = "/home/research/.research/lease.sh"
 src = "tools/research/src/research/pods/sh/lease.sh"
@@ -310,6 +315,22 @@ nodes = ["vy-nebius-2"]
 [[file]]
 path = "/home/research/.config/systemd/user/infra-pool-publish.timer"
 src = "tools/research/src/research/pods/nebius/infra-pool-publish.timer"
+nodes = ["vy-nebius-2"]
+
+[[file]]  # node 2's runs to node 1's store and R2: the custody n2_commit.sh and n2_build.sh name to `research run`
+path = "/workspace/pouw/infra/bin/n2_custody.sh"
+src = "tools/research/src/research/pods/nebius/n2_custody.sh"
+nodes = ["vy-nebius-2"]
+run = ["user-systemd:n2-custody.timer"]
+
+[[file]]
+path = "/home/research/.config/systemd/user/n2-custody.service"
+src = "tools/research/src/research/pods/nebius/n2-custody.service"
+nodes = ["vy-nebius-2"]
+
+[[file]]
+path = "/home/research/.config/systemd/user/n2-custody.timer"
+src = "tools/research/src/research/pods/nebius/n2-custody.timer"
 nodes = ["vy-nebius-2"]
 
 [[file]]

@@ -54,6 +54,43 @@ def test_a_tree_that_is_not_a_checkout_is_refused(tmp_path, monkeypatch, capsys)
     assert S.main(["--list"]) == 2 and "is not a git checkout" in capsys.readouterr().err
 
 
+def test_the_tests_get_the_callers_pythonpath_entries_inside_the_tree_only(tmp_path, monkeypatch):
+    """An `export PYTHONPATH=...` naming another checkout, left in a shell, would run this tree's tests against that checkout."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join(["/tmp/s1350/packages/verity/src", str(tmp_path / "src"), ""]))
+    assert S.tests_pythonpath() == os.pathsep.join([str(S.CHILD), str(tmp_path / "src")])
+    monkeypatch.delenv("PYTHONPATH")
+    assert S.tests_pythonpath() == str(S.CHILD)
+
+
+def test_a_python_that_imports_the_trees_packages_from_another_checkout_is_named(tmp_path, monkeypatch):
+    tree, other = tmp_path / "tree", tmp_path / "other"
+    for root in (tree, other):
+        (root / "protocols" / "pous" / "verity_pous").mkdir(parents=True)
+        (root / "protocols" / "pous" / "verity_pous" / "__init__.py").write_text("")
+    S = _suites(monkeypatch, tree)
+    pkgs = {"verity-pous": "protocols/pous", "research": "tools/research"}
+    env = dict(os.environ, PYTHONPATH=str(other / "protocols" / "pous"))
+    assert S.foreign(pkgs, env) == f"verity_pous from {other / 'protocols' / 'pous' / 'verity_pous' / '__init__.py'}"
+    env["PYTHONPATH"] = str(tree / "protocols" / "pous")
+    assert S.foreign(pkgs, env) is None
+
+
+def test_suites_refuse_a_python_that_imports_the_trees_packages_from_elsewhere(tmp_path, monkeypatch, capsys):
+    (tmp_path / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
+    (tmp_path / "pkg" / "tests").mkdir(parents=True)
+    (tmp_path / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setenv("PYTHONPATH", f"/tmp/explorer/a{os.pathsep}{tmp_path / 'pkg'}")
+    probed = []
+    monkeypatch.setattr(S, "foreign", lambda pkgs, env: probed.append(env["PYTHONPATH"]) or "verity_pous from /tmp/s1350/x.py")
+    assert S.main([]) == 2
+    assert "against another checkout's code (verity_pous from /tmp/s1350/x.py)" in capsys.readouterr().err
+    assert probed == [os.pathsep.join([str(S.CHILD), str(tmp_path / "pkg")])]
+    assert S.main(["--list"]) == 0 and len(probed) == 1
+
+
 def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
     """Git ignores build outputs, so a suite whose tests run or skip on one declares it (`[tool.verity.tests] artifacts`), and
     its pass is reused only for the same build."""
@@ -78,6 +115,16 @@ def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
 def test_jobs_default_to_the_cpus_this_process_may_use(tmp_path, monkeypatch):
     S = _suites(monkeypatch, tmp_path)
     assert 1 <= S.cpus() <= (len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count())
+
+
+def test_jobs_default_to_no_more_test_processes_than_available_memory_holds(tmp_path, monkeypatch):
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "cpus", lambda: 4)
+    meminfo = tmp_path / "meminfo"
+    for gb, want in ((13, 1), (20, 2), (64, 4), (1, 1)):
+        meminfo.write_text(f"MemTotal:       99999999 kB\nMemAvailable:   {gb << 20} kB\n")
+        assert S.default_jobs(meminfo) == want
+    assert S.default_jobs(tmp_path / "absent") == 4
 
 
 def _workspace(root: Path) -> None:
