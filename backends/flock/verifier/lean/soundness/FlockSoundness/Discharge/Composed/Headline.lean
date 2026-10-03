@@ -30,6 +30,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- **Zero knowledge at a `CoinedSetup` from its facts**: Lemma B (`session_shvzk_hm96`) at one table, its leaves'
 hiding `HashDerivedKey`'s, its row (ii) `padOnto_M1`'s from `PadNonvanishing`. -/
+set_option maxRecDepth 8000 in
 theorem zkViewAt_of_ok (C : CoinedSetup FlockLevel3.GF256) (hC : CoinedOK execArith (fOf Zk.PAD_C) C)
     (hKey : Assumptions.HashDerivedKey ZkView.My ZkView.saltHash)
     (hPad : ∀ cols ≤ 40, Assumptions.PadNonvanishing execArith cols (fOf Zk.PAD_C)) :
