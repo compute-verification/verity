@@ -278,12 +278,13 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 
 ## The continuous audit's verifier (`continuous`)
 
-`continuous.ContinuousVerifier(vk, key, n, late_deadline_ns=Δ_late, max_misses=f₀)` verifies the continuous game
-(`lean/Pous/SecurityProofs/Continuous/`, a draft, not pinned): `n` challenges over time, drawn as the timed audit's
-indices, accepted when at most `f₀` answers miss. A miss is an answer that is wrong or later than `Δ + RTT`. `n` is
-fixed before the stream, so the stream is never stopped or extended on misses, though it may reject early
-(`exceeded`). The verifier is one `audit.TimedVerifier` over the stream with a hard deadline, and it enforces the
-game's three requirements on the protocol:
+`continuous.ContinuousVerifier(vk, key, n, late_deadline_ns=Δ_late, max_misses=f₀)` is the verifier of the
+continuous audit's model, `lean/Pous/Protocol/Model/Continuous.lean`, with the guarantee
+`Pous.SecurityProofs.ContinuousAudit` (#954): `n` challenges over time, drawn as the timed audit's indices, accepted
+when at most `f₀` answers miss. A miss is an answer that is wrong or later than `Δ + RTT`. `n` is fixed before the
+stream, so the stream is never stopped or extended on misses, though it may reject early (`exceeded`). The verifier is
+one `audit.TimedVerifier` over the stream with a hard deadline, and it enforces the three requirements that
+`lean/Pous/SecurityProofs/Continuous/Verifier.lean` proves of the model's verifier:
 
 1. **No pipelining.** `challenge()` reveals index `j + 1` only once answer `j` is in or `Δ_late + RTT` has passed since
    index `j` was revealed, and in that case it first closes challenge `j` as rejected; the close stands even when `j`
@@ -296,7 +297,8 @@ game's three requirements on the protocol:
    So is a challenge still unanswered by then, closed by `expire()` or by the next `challenge()`. `TimedVerifier`
    refuses a `Δ_late` below `Δ`, and one whose `D_late` exceeds `audit.LATE_ROUNDS = 12` or the band's `d`, where
    `D_late` is the number of 241.5 µs calls that fit in `Δ_late + RTT`; at `d = 12`, `Δ_late + RTT` must be under
-   3,139,500 ns. `ContinuousVerifier` refuses to run without a hard deadline.
+   3,139,500 ns. That cap is the graded audit's; `ContinuousAudit` holds at every `D_late`, so for it the cap is only
+   conservative. `ContinuousVerifier` refuses to run without a hard deadline.
 3. **Every late answer counted.** Every challenge closes with exactly one `Answer`, whether it was answered, rejected
    or expired. `AuditResult.misses` counts every wrong or late answer, and `AuditResult.late` every answer past
    `Δ + RTT`, rejected ones included.

@@ -1,17 +1,20 @@
-"""The continuous audit's verifier (Lean `PousContinuous.ContinuousAudit`, a draft): `n` challenges over time, each
-answered in turn, accepted when at most `max_misses` of them miss.
+"""The continuous audit's verifier: `n` challenges over time, each answered in turn, accepted when at most `max_misses`
+of them miss.
 
-The game (`lean/Pous/SecurityProofs/Continuous/Game.lean`) draws `n` uniform, independent indices and counts a miss for
-every answer that is wrong or late.  It holds only for a protocol that keeps three requirements, and
-`ContinuousVerifier` enforces each one on a single `audit.TimedVerifier` over the whole stream, with its clock and its
-index draws:
+Its model is the verifier of `lean/Pous/Protocol/Model/Continuous.lean` (#954), with the guarantee
+`Pous.SecurityProofs.ContinuousAudit`.  That verifier sends `n` uniform, independent indices and counts a miss for
+every round that is not a hit: wrong, late or rejected.  Three requirements are theorems about it
+(`lean/Pous/SecurityProofs/Continuous/Verifier.lean`), and `ContinuousVerifier` enforces each one on a single
+`audit.TimedVerifier` over the whole stream, with its clock and its index draws:
 
 1. **No pipelining.** Challenge `j + 1` is revealed only once answer `j` is in or its hard deadline has passed
    (`TimedVerifier.challenge`), and each deadline runs from the verifier's own clock reading when it reveals the index,
    never from a time the responder reports.  An answer names the challenge it answers; one for any other challenge
    than the open one (an earlier, closed one, or one not yet revealed) is refused.
-2. **A hard deadline.** An answer past `Δ_late + RTT`, or none by then, is rejected and its block is never checked.
-   A `Δ_late` past `D_late ≤ min(d, 12)` is refused.
+2. **A hard deadline.** An answer past `Δ_late + RTT`, or none by then, is rejected and its block is never checked;
+   `run_continuous` closes a challenge with none by then with `expire()`.  A `Δ_late` past `D_late ≤ min(d, 12)` is
+   refused.  That cap is the graded audit's; `ContinuousAudit` holds at every `D_late`, so for it the cap is only
+   conservative.
 3. **Every late answer counted.** Every answer past `Δ + RTT`, rejected or not, is a miss, and so is every wrong one
    (`AuditResult.misses`).  Every challenge closes with an `Answer` recorded, whether answered, rejected or expired.
 
