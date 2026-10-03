@@ -84,9 +84,10 @@ def lean(d: Path) -> dict:
 
 def one(d: Path) -> dict:
     st, t = load(d / "stage.json"), load(d / "stage.time")
-    rec = {"tag": d.name, "stage_time": t, "stage_error": None if st else tail(d / "stage.err", 3)}
+    rec = {"tag": d.name, "stage_time": t, "stage_error": None if st else tail(d / "stage.err", 3),
+           "stage_cache": load(d / "stage-cache.json")}
     if st:
-        rec.update({k: st.get(k) for k in ("role", "k", "n", "definition", "binding", "ands", "k_log", "vus_per_block",
+        rec.update({k: st.get(k) for k in ("role", "k", "n", "definition", "binding", "staging", "ands", "k_log", "vus_per_block",
                                            "circuit_bytes", "circuit_sha512", "public_inputs", "own_bytes", "own_sha256",
                                            "flipped", "inst_bytes", "pub_bytes", "seconds")},
                    stage_maxrss_gb=gb(t), stage_wall_s=(t or {}).get("wall_s"))
@@ -101,8 +102,8 @@ rows = [one(d) for d in sorted(p for p in OUT.iterdir() if p.is_dir() and (p / "
 (OUT / "summary.json").write_text(json.dumps(rows, indent=1))
 for r in rows:
     z = r.get("zk") or {}
-    print(json.dumps({k: r.get(k) for k in ("tag", "binding", "ands", "k_log", "stage_maxrss_gb", "stage_wall_s", "stage_error",
-                                            "all_pass")}
+    print(json.dumps({k: r.get(k) for k in ("tag", "binding", "staging", "ands", "k_log", "circuit_sha512", "stage_maxrss_gb",
+                                            "stage_wall_s", "stage_error", "all_pass")}
                      | {"zk": {k: z.get(k) for k in ("accepted", "k_log", "proof_bytes_total", "prove_total_s_median",
                                                       "rust_verify_s_median", "prover_maxrss_gb", "error")},
                         "controls": {c: v.get("pass") for c, v in r["controls"].items()},

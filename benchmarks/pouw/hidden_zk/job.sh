@@ -16,10 +16,14 @@
 #                       and public_input_claim_false (a false anchor claim, the verifier's file agreeing with it) REJECT
 #      A tile has no public input, so it runs honest-own without --public-inputs and none of the anchor controls.
 #   3. summarize.py: out/<role>-k<K>/summary.json and out/summary.json
+# A staged config is kept under $HZ_CACHE/stage, keyed by its role, K, N, HZ_STAGE, the venv and every source stage.py
+# reads; a later run with the same key proves the kept files (stage-cache.json says which, stage.json their own staging).
 # The row units lower BitAnd_v1, E4m3ToF32_v1 and F32ToE2m1Sat_v1 through core3_scratch.py, a development binding: their
 # results are labelled 'core3 scratch'.
 # env: HZ_CONFIGS="row_a:256 row_b:256 tile:256"  HZ_N=16  HZ_MEM_GB (the job's --mem-gb)  HZ_RUNS=2  HZ_WARM=1
-#      HZ_CASES (selftest cases)  HZ_CACHE (build cache dir)  FLOCK_PROVE / FLOCK_SELFTEST / FLOCK_VERIFY / HZ_PYTHON (prebuilt)
+#      HZ_CASES (selftest cases)  HZ_CACHE (build and stage cache dir)  FLOCK_PROVE / FLOCK_SELFTEST / FLOCK_VERIFY / HZ_PYTHON
+#      (prebuilt)  HZ_STAGE (stage.py's: fast, the default, or library)  HZ_STAGE_ONLY=1 (stage and keep, nothing else)
+#      HZ_LEAN (the Lean checks to run, as globs over their tags: "st-*"; default every one)
 set -uo pipefail
 SRC=$(pwd)
 J=$SRC/benchmarks/pouw/hidden_zk
@@ -33,6 +37,8 @@ MEM_GB=${HZ_MEM_GB:?}
 RUNS=${HZ_RUNS:-2}
 WARM=${HZ_WARM:-1}
 CASES=${HZ_CASES:-honest output_row_committed_false output_claim_false unit_internal_bit_flipped public_input_claim_false}
+LEAN_ONLY=${HZ_LEAN:-*}
+export HZ_STAGE=${HZ_STAGE:-fast}
 STAGE_GB=$(( MEM_GB * 90 / 100 ))
 PROVE_GB=$(( MEM_GB * 60 / 100 ))
 SERVE_GB=$(( MEM_GB * 30 / 100 ))
@@ -42,7 +48,8 @@ log() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/job.log"; }
 vlimit() { echo "ulimit -v $(( $1 * 1024 * 1024 ));"; }
 
 # ---- 1. builds -----------------------------------------------------------------------------------------------------------
-tree_key() { (cd "$SRC" && find "$@" -type f -not -path '*/.lake/*' -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16); }
+tree_key() { (cd "$SRC" && find "$@" -type f -not -path '*/.lake/*' -not -path '*/__pycache__/*' -print0 | sort -z \
+  | xargs -0 sha256sum | sha256sum | cut -c1-16); }
 
 build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/flock-circuit-selftest
   export PATH="$HOME/.cargo/bin:$PATH"
@@ -84,8 +91,8 @@ cached() {          # cached NAME KEY BUILDER: the build's directory, built once
 setup() {
   log "hidden-zk: source ${RESEARCH_SOURCE_SHA:-$(git -C "$SRC" rev-parse HEAD 2>/dev/null)}, $TH CPUs, mem $MEM_GB GB" \
       "(stage cap $STAGE_GB, prove $PROVE_GB, serve $SERVE_GB), N=$N, runs $RUNS + $WARM warm, configs: $CONFIGS"
-  { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "threads $TH"; grep -E 'MemTotal|MemAvailable' /proc/meminfo; cat /proc/self/cgroup; } \
-    > "$OUT/host.txt" 2>&1
+  { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "threads $TH"; grep -E 'MemTotal|MemAvailable' /proc/meminfo; cat /proc/self/cgroup
+    taskset -pc $$; df -h "${HZ_CACHE:-$W}" "$W"; } > "$OUT/host.txt" 2>&1
   local fail=0 p
   [ -n "${FLOCK_PROVE:-}" ] || cached flock "$(tree_key backends/flock/live backends/flock/*.patch)" build_circuit > "$W/flock.dir" &
   [ -n "${FLOCK_VERIFY:-}" ] || cached lean "$(tree_key backends/flock/verifier/lean)" build_lean > "$W/lean.dir" &
@@ -141,7 +148,7 @@ controls() {  # controls D O ROLE: the selftest build's cases, recorded for the 
 
 lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at once as fit beside each other
   local D=$1 O=$2 role=$3 each par cap running=0 c tag args s case pub own
-  each=$(( $(stat -c %s "$D/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 ))       # GB: its peak is about 5x the circuit text at K=256
+  each=$(( $(stat -L -c %s "$D/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 ))       # GB: its peak is about 5x the circuit text at K=256
   par=$(( STAGE_GB / each )); [ $par -lt 1 ] && par=1; [ $par -gt 8 ] && par=8
   cap=$(( STAGE_GB / par ))
   local base="verify --zk --circuit $D/circuit.txt"
@@ -168,7 +175,14 @@ open(sys.argv[3], 'wb').write(h + b'\n' + p[len(p) - len(b):])" "$D/public-input
     fi
     cmds+=("st-$case|$base --statement verity/flock-circuit+seed-injection --public $pub ${own:+--public-inputs $own} --session $s")
   done
-  log "  lean: ${#cmds[@]} checks, $par at a time, cap $cap GB each"
+  local keep=() globs g
+  read -ra globs <<< "$LEAN_ONLY"
+  for c in "${cmds[@]}"; do
+    tag=${c%%|*}
+    for g in "${globs[@]}"; do [[ $tag == $g ]] && { keep+=("$c"); break; }; done
+  done
+  cmds=("${keep[@]}")
+  log "  lean: ${#cmds[@]} checks ($LEAN_ONLY), $par at a time, cap $cap GB each"
   for c in "${cmds[@]}"; do
     tag=${c%%|*} args=${c#*|}
     $TIME "$O/lean-$tag.time" bash -c "$(vlimit $cap) exec $LEAN $args" > "$O/lean-$tag.out" 2> "$O/lean-$tag.err" &
@@ -186,20 +200,43 @@ $(tail -1 "$O/lean-$tag.err" | cut -c1-160)"
   done
 }
 
+stage_config() {   # stage_config ROLE K TAG D O: D holds the config's staged files, from the stage cache or staged now
+  local role=$1 k=$2 tag=$3 D=$4 O=$5 key S rc=0
+  key=$(tree_key benchmarks/pouw/hidden_zk/stage.py benchmarks/pouw/hidden_zk/fast_stage.py benchmarks/pouw/hidden_zk/core3_scratch.py \
+    benchmarks/pouw/hidden_zk/hash_scratch.py backends/flock/python packages/verity/src protocols/pouw/verity_pouw \
+    protocols/pouw/tests/pouw_rows_vectors.py)
+  S=${HZ_CACHE:-$W/cache}/stage/$tag-n$N-$HZ_STAGE-$(basename "$(dirname "$(dirname "$PY")")")-$key
+  mkdir -p "$(dirname "$S")"
+  (
+    flock 9
+    if [ -e "$S/.done" ]; then
+      echo '{"hit": true, "dir": "'"$S"'"}' > "$O/stage-cache.json"
+    else
+      rm -rf "$S" && mkdir -p "$S"
+      $TIME "$O/stage.time" bash -c "$(vlimit $STAGE_GB) exec $PY $J/stage.py $role $k $N $S" > "$O/stage.out" 2> "$O/stage.err" || exit 1
+      cp "$O/stage.time" "$S/stage.time" && touch "$S/.done"
+      echo '{"hit": false, "dir": "'"$S"'"}' > "$O/stage-cache.json"
+    fi
+  ) 9> "$S.lock" || rc=1
+  [ $rc = 0 ] || { rm -rf "$S"; return 1; }
+  cp "$S/stage.time" "$O/stage.time"
+  for f in "$S"/*; do [ "$(basename "$f")" = stage.time ] || ln -s "$f" "$D/"; done
+}
+
 run_configs() {
   local cfg role k tag D O
   for cfg in $CONFIGS; do
     role=${cfg%%:*} k=${cfg#*:} tag=${cfg%%:*}-k${cfg#*:}
     D=$W/$tag O=$OUT/$tag
     mkdir -p "$D" "$O"
-    log "$tag: staging"
-    if ! $TIME "$O/stage.time" bash -c "$(vlimit $STAGE_GB) exec $PY $J/stage.py $role $k $N $D" \
-        > "$O/stage.out" 2> "$O/stage.err"; then
+    log "$tag: staging ($HZ_STAGE)"
+    if ! stage_config "$role" "$k" "$tag" "$D" "$O"; then
       log "$tag: staging FAILED: $(tail -1 "$O/stage.err")"; rm -rf "$D"; "$PY" "$J/summarize.py" "$OUT" > /dev/null; continue
     fi
     cp "$D/stage.json" "$D/pin.txt" "$O/"
     [ -e "$D/public-inputs.bin" ] && cp "$D/public-inputs.bin" "$D/public-inputs-wrong.bin" "$O/"
-    log "$tag: staged: $("$PY" -c "import json; s = json.load(open('$O/stage.json')); print(s['definition'], s['ands'], 'ANDs, k_log', s['k_log'], s['circuit_bytes'], 'B, peak', s['maxrss_gb'], 'GB,', s['seconds']['total'], 's')")"
+    log "$tag: staged: $("$PY" -c "import json; s = json.load(open('$O/stage.json')); c = json.load(open('$O/stage-cache.json')); print(s['definition'], s['ands'], 'ANDs, k_log', s['k_log'], s['circuit_bytes'], 'B, sha512', s['circuit_sha512'][:16], 'peak', s['maxrss_gb'], 'GB,', s['seconds']['total'], 's,', s.get('staging'), 'staging, cache', 'hit' if c['hit'] else 'miss')")"
+    if [ "${HZ_STAGE_ONLY:-0}" = 1 ]; then "$PY" "$J/summarize.py" "$OUT" > /dev/null; rm -rf "$D"; continue; fi
     log "$tag: --zk session ($WARM warm + $RUNS timed)"
     session "$D" "$O" || log "$tag: --zk session FAILED: $(tail -2 "$O/prove.err")"
     controls "$D" "$O" "$role"
