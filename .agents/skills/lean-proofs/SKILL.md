@@ -127,7 +127,8 @@ simp with that.
   one line that needs no reviewer; the rest prints in full. Moving a definition to another module needs no map. For the
   merge gates (`research merge --train`, `research queue`), a run that printed nothing a reviewer must read stands in for
   the grant: `research data put --kind lean-review/v1 --file OUT/audit.json`, then `research data label pr:N@SHA
-  lean_review art:ID --by LANE` (a new push needs a new label).
+  lean_review art:ID --by LANE`. A new push needs a new label unless it only restacks the PR or merges `main` into it
+  (`research.queue.carry`: the same files changed from the same bytes to the same bytes; the gates print what carried).
 
 ## Before the PR
 
