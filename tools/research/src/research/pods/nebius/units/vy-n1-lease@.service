@@ -15,7 +15,9 @@ WorkingDirectory=/home/research
 EnvironmentFile=/etc/environment
 EnvironmentFile=/etc/vy/env/research.env
 EnvironmentFile=/etc/vy/env/%N.env
-ExecStart=/usr/bin/python3 /workspace/verity-guest/bin/n1_lease.py loop --every 5
+# A host lease ends through its scope (`systemctl --user kill`), which needs research's runtime directory (research lingers);
+# systemd reads $$ as $
+ExecStart=/bin/sh -c 'export XDG_RUNTIME_DIR=/run/user/$$(id -u); exec /usr/bin/python3 /workspace/verity-guest/bin/n1_lease.py loop --every 5'
 # A fence (a detached flock per GPU) must outlive the controller, so a stop or a crash fails closed and the next start adopts
 # the fences it finds in /proc; the default, killing the whole cgroup, would unfence every GPU.
 KillMode=process
