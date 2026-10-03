@@ -430,13 +430,17 @@ def run_wired(a, G: int, N_IN: int, N_OUT: int, out: Path) -> dict:
         live, recorded = live_session(a, sdir, n, dd, pin, warm, runs)
         rec = {"live": live}
         if a.lean and recorded:
-            v, dt, err = lean_verify(a.lean, sdir / "circuit.txt", sdir / f"pub-{n}.bin", part, recorded, program=desc)
+            v, dt, err = lean_verify(a.lean, sdir / "circuit.txt", sdir / f"pub-{n}.bin", part, recorded)
             rec["lean"] = {"accepted": len(v) == len(recorded) and all(x["accepted"] for x in v), "sessions": len(v),
                            "why": sorted({x["why"] for x in v}), "wall_s": round(dt, 3), "wall_s_per_session": round(dt / max(1, len(v)), 3),
                            "partition": (v[0].get("partition") if v else None), **({"stderr_tail": err} if not v else {})}
             other = (stage if tag == "made_up_input" else bad) / f"pub-{n}.bin"
-            x = (lean_verify(a.lean, sdir / "circuit.txt", other, part, recorded[:1], program=desc)[0] or [none])[0]
+            x = (lean_verify(a.lean, sdir / "circuit.txt", other, part, recorded[:1])[0] or [none])[0]
             rec["lean"]["against_the_other_public_file"] = {"refused": not x["accepted"], "why": x["why"][:160]}
+            # with the program the verifier would derive the units itself, but a class statement's template is its unit class
+            # (`class_statement._shims`), not the Definition the query lists
+            x = (lean_verify(a.lean, sdir / "circuit.txt", sdir / f"pub-{n}.bin", part, recorded[:1], program=desc)[0] or [none])[0]
+            rec["lean"]["with_program"] = {"accepted": x["accepted"], "why": x["why"][:200], "partition": x.get("partition")}
         if tag == "honest":
             row["honest"] = rec
         else:
