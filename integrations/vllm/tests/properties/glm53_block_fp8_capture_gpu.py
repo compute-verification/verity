@@ -1,6 +1,7 @@
 """GLM-5.3-FP8's block-scaled FP8 GEMMs on Hopper against their Programs: the H200's first-hour go/no-go for binding
 `fp8.ScaledMmFp8Block_v1` (CUTLASS blockwise, `CutlassFp8BlockScaledMMKernel`), `fp8_moe.MoeExpertFp8BlockGemm(W)_v1` (Triton
-`fused_moe_kernel`) and `fp8.Fp8GroupQuant_v1` (`_C.per_token_group_fp8_quant`) at GLM-5.3's shapes.
+`fused_moe_kernel`), `fp8_moe.SiluMulFp8BlockQuant_v1` (`silu_and_mul_per_block_quant` between the expert launches) and
+`fp8.Fp8GroupQuant_v1` (`_C.per_token_group_fp8_quant`) at GLM-5.3's shapes.
 
 One GPU process writes `<out>/glm53_block_fp8_capture.json`, the property record `glm53_block_fp8_capture` (`properties.record`), and
 prints one line per case and then `GLM53-BLOCK-FP8 GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and
@@ -24,10 +25,13 @@ instead.  A phase that raises records its error and fails the verdict without st
              SWAP_AB as invoke_fused_moe_triton_kernel computes them, fused_moe.py:789-846), every (token, slot) row of the w13 launch
              against `MoeExpertFp8BlockGemm_v1{K=6144,N=2I,G=128,KB,SWAP}`, of the w2 launch against `MoeExpertFp8BlockGemmW_v1{K=I,
              N=6144,...}` (twin `fp8_moe_rows.moe_expert_fp8_block_row`), and the w13 activation's quant against `Fp8GroupQuant_v1`.  TritonExperts's
-             own w2 input, `silu_and_mul_per_block_quant` of the w13 output (triton_moe.py:471-485), is launched as `served_w2`.
+             own w2 input, `silu_and_mul_per_block_quant` of the w13 output (triton_moe.py:471-485), is launched as `served_w2`, and
+             its (q, scale) on every pair against `SiluMulFp8BlockQuant_v1{I,128}` of that pair's w13 output row (twin
+             `fp8_moe_rows.silu_mul_fp8_block_quant_rows`): the `act` rows.
              Every launch's (token, slot) -> expert assignment is checked against the routing, and its tile against `wgmma_tile`.
   reference  on a sample of the coordinates and rows of every launch, the plain-integer reference (`verity.evaluation.evaluate`) of
-             `ScaledMmFp8BlockCoordinate_v1`, `MoeExpertFp8BlockCoordinate(W)_v1` and `Fp8GroupQuant_v1`, which the twins must equal.
+             `ScaledMmFp8BlockCoordinate_v1`, `MoeExpertFp8BlockCoordinate(W)_v1`, `Fp8GroupQuant_v1` and `SiluMulFp8BlockQuant_v1`, which
+             the twins must equal.
   ptx        every `fused_moe_kernel` compiled in the run's Triton cache: its dot is wgmma, every wgmma `.m64nNk32.f32.e4m3.e4m3`, and
              no `mma.sync`.
   bind       the Programs bind at every shape (`ScaledMmFp8Block_v1{6144,2624,128}` reads cdiv(2624, 128) = 21 weight-scale rows).
@@ -41,8 +45,8 @@ configs with every such entry widened to BLOCK_SIZE_N 64, the shape the same fil
 same tiles.
 
 GO needs 0 mismatches and 0 unresolved words (a twin flags a word it cannot claim: a non-finite accumulator; these operands are finite
-and none should occur), deterministic reruns, every expert launch on a wgmma tile, and with `--batch-invariant` every expert launch at
-BLOCK_SIZE_K 32 without SWAP_AB.
+and none should occur), every MoE case's `act` rows compared with 0 mismatches, deterministic reruns, every expert launch on a wgmma
+tile, and with `--batch-invariant` every expert launch at BLOCK_SIZE_K 32 without SWAP_AB.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_block_fp8_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--wgmma-configs] [--batch-invariant]
@@ -320,8 +324,7 @@ def compare_dense(job: dict[str, Any]) -> dict[str, Any]:
 
     a = _load(job["paths"])
     K, N = job["K"], job["N"]
-    rec = {"words": 0, "mismatch": 0, "unresolved": 0, "quant_rows": 0, "quant_mismatch": 0, "reference_coords": 0, "reference_quant_rows": 0,
-           "twin_mismatch": 0, "first_mismatch": None}
+    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
     r0, r1 = job["rows"]
     for r in range(r0, r1):
         q, s = DR.fp8_group_quant_row(a["x"][r], G=GROUP)
@@ -488,6 +491,8 @@ def moe_launches(work: Path, name: str, inter: int, M: int, hot: int, seed: int,
                   "C": _u16(L["C"].reshape(n_pairs, N))}
         if kind == "w13":
             arrays["x"] = _u16(x)
+        if kind == "served_w2":
+            arrays["gu"] = _u16(w13["C"].reshape(n_pairs, 2 * inter))
         job = {"phase": "moe", "case": name, "launch": kind, "K": int(K), "N": int(N), "KB": L["KB"], "SWAP": L["SWAP"],
                "mul": L["mul_routed_weight"], "top_k": L["top_k"], "pairs": int(n_pairs), "statics_known": statics_known,
                "paths": _save(d, **arrays)}
@@ -499,9 +504,29 @@ def moe_launches(work: Path, name: str, inter: int, M: int, hot: int, seed: int,
     return launches, jobs
 
 
+def compare_act(a: dict[str, np.ndarray], p0: int, p1: int, reference: bool, rec: dict[str, Any]) -> None:
+    """The served w2 launch's A and A_scale on pairs [p0, p1), `silu_and_mul_per_block_quant`'s (q, scale), against
+    `SiluMulFp8BlockQuant_v1{I,128}` of the pairs' w13 output rows `gu` (the twin), and the reference on pair p0."""
+    from verity.evaluation import evaluate
+    from verity.ir.defs import bind
+    from verity_vllm.program.kernels.fp8_moe_rows import silu_mul_fp8_block_quant_rows
+    from verity_vllm.program.registry import fp8_moe as MO
+
+    q, s = silu_mul_fp8_block_quant_rows(a["gu"][p0:p1], G=GROUP)
+    bad = ~((q == np.asarray(a["A"][p0:p1])).all(axis=1) & (s == np.asarray(a["As"][p0:p1])).all(axis=1))
+    rec["act_rows"] += p1 - p0
+    rec["act_mismatch"] += int(bad.sum())
+    if bad.any() and rec["first_mismatch"] is None:
+        rec["first_mismatch"] = {"act_pair": p0 + int(np.flatnonzero(bad)[0])}
+    if reference:
+        y = evaluate(bind(MO.SiluMulFp8BlockQuant, I=q.shape[1], G=GROUP), a["gu"][p0].tolist())
+        rec["reference_act_rows"] += 1
+        rec["twin_mismatch"] += list(y) != q[0].tolist() + s[0].tolist()
+
+
 def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
     """Pairs [p0, p1) of one expert launch: the GEMM twin at the launch's statics against the kernel's words, the w13 activation's
-    quant twin, and the reference on a sample."""
+    quant twin, the served w2 launch's input against the activation's twin, and the reference on a sample."""
     from verity.evaluation import evaluate
     from verity.ir.defs import bind
     from verity_vllm.program.kernels import derived_rows as DR
@@ -509,13 +534,14 @@ def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
     from verity_vllm.program.registry import fp8 as F
     from verity_vllm.program.registry import fp8_moe as MO
 
-    rec = {"words": 0, "mismatch": 0, "unresolved": 0, "quant_rows": 0, "quant_mismatch": 0, "reference_coords": 0, "reference_quant_rows": 0,
-           "twin_mismatch": 0, "first_mismatch": None}
+    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
     out = {"phase": "moe", "case": job["case"], "launch": job["launch"], "pair_range": job["pair_range"]}
+    a = _load(job["paths"])
+    if job["launch"] == "served_w2":
+        compare_act(a, *job["pair_range"], job["reference"], rec)
     if not job["statics_known"]:
         p0, p1 = job["pair_range"]
         return {**out, **rec, "words": (p1 - p0) * job["N"], "unresolved": (p1 - p0) * job["N"]}
-    a = _load(job["paths"])
     K, N, KB, SWAP, top_k = job["K"], job["N"], job["KB"], job["SWAP"], job["top_k"]
     p0, p1 = job["pair_range"]
     for p in range(p0, p1):
@@ -582,6 +608,10 @@ def bind_check(statics: set[tuple[int, bool]]) -> dict[str, Any]:
         params, _ = bind(F.ScaledMmFp8Block, K=K, N=N, G=GROUP).signature()
         out[f"ScaledMmFp8Block_v1{{K={K},N={N},G={GROUP}}}"] = list(type_shape(dict(params)["ws"])) == [cdiv(N, GROUP), K // GROUP]
         out[f"Fp8GroupQuant_v1{{K={K},G={GROUP}}}"] = bool(bind(F.Fp8GroupQuant, K=K, G=GROUP).signature())
+    for inter in sorted({c[1] for c in MOE}):
+        params, ret = bind(MO.SiluMulFp8BlockQuant, I=inter, G=GROUP).signature()
+        out[f"SiluMulFp8BlockQuant_v1{{I={inter},G={GROUP}}}"] = (list(type_shape(dict(params)["gu"])) == [2 * inter]
+                                                                  and [list(type_shape(t)) for t in ret.fields] == [[inter], [inter // GROUP]])
     for KB, SWAP in sorted(statics or {(32, False)}):
         for inter in sorted({c[1] for c in MOE}):
             for fam, K, N in ((MO.MoeExpertFp8BlockGemm, HIDDEN, 2 * inter), (MO.MoeExpertFp8BlockGemmW, inter, HIDDEN)):
@@ -592,7 +622,8 @@ def bind_check(statics: set[tuple[int, bool]]) -> dict[str, Any]:
 
 
 # ------------------------------------------------------------------------------------------------------------------------- run
-TOTALS = ("words", "mismatch", "unresolved", "quant_rows", "quant_mismatch", "reference_coords", "reference_quant_rows", "twin_mismatch")
+TOTALS = ("words", "mismatch", "unresolved", "quant_rows", "quant_mismatch", "reference_coords", "reference_quant_rows", "twin_mismatch",
+          "act_rows", "act_mismatch", "reference_act_rows")
 
 
 def _launch_ok(x: dict[str, Any]) -> bool:
@@ -603,6 +634,10 @@ def _launch_ok(x: dict[str, Any]) -> bool:
 def _words_ok(t: dict[str, Any]) -> bool:
     return (t["words"] > 0 and t["mismatch"] == 0 and t["unresolved"] == 0 and t["quant_rows"] > 0 and t["quant_mismatch"] == 0
             and t["reference_coords"] > 0 and t["reference_quant_rows"] > 0 and t["twin_mismatch"] == 0)
+
+
+def _act_ok(t: dict[str, Any]) -> bool:
+    return t["act_rows"] > 0 and t["act_mismatch"] == 0 and t["reference_act_rows"] > 0
 
 
 def _case(x: dict[str, Any]) -> str:
@@ -631,7 +666,7 @@ def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
     for key, c in out.items():
         phase, name = key.split("/")[:2]
         errors = [e for e in doc["errors"] if e.startswith(key) or e.startswith(f"compare/{phase}/{name}/")]
-        c["ok"] = c["launches_ok"] and _words_ok(c["totals"]) and not errors
+        c["ok"] = c["launches_ok"] and _words_ok(c["totals"]) and (phase != "moe" or _act_ok(c["totals"])) and not errors
     return out
 
 
@@ -639,7 +674,8 @@ def _verdict(doc: dict[str, Any]) -> bool:
     launches = doc["launches"]
     return (doc["gate"]["ok"] and not doc["errors"] and doc["selection"].get("dense_ok") is True and doc["selection"].get("moe_ok") is True
             and doc["ptx"].get("ok") is True and doc["bind"].get("ok") is True
-            and {x["phase"] for x in launches} == {"dense", "moe"} and all(_launch_ok(x) for x in launches) and _words_ok(doc["totals"]))
+            and {x["phase"] for x in launches} == {"dense", "moe"} and all(_launch_ok(x) for x in launches) and _words_ok(doc["totals"])
+            and _act_ok(doc["totals"]))
 
 
 def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: int, workers: int, quick: bool, batch_invariant: bool,
@@ -722,13 +758,15 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     for r in doc["comparisons"]:
         print(f"[glm53-block-fp8] words {r['phase']:5s} {r['case']:28s} {r['launch'] or ('M=' + str(r['M'])):9s} words={r['words']} "
               f"!={r['mismatch']} unresolved={r['unresolved']} quant={r['quant_rows']}!={r['quant_mismatch']} "
-              f"ref={r['reference_coords']}+{r['reference_quant_rows']} twin!={r['twin_mismatch']}", flush=True)
+              f"act={r['act_rows']}!={r['act_mismatch']} ref={r['reference_coords']}+{r['reference_quant_rows']}+{r['reference_act_rows']} "
+              f"twin!={r['twin_mismatch']}", flush=True)
     doc["totals"] = {k: sum(r[k] for r in doc["comparisons"]) for k in TOTALS}
     doc["cases"] = cases(doc)
     for key, c in doc["cases"].items():
         t = c["totals"]
         print(f"[glm53-block-fp8] case {key:40s} {'GO' if c['ok'] else 'NO-GO':5s} launches_ok={c['launches_ok']} words={t['words']} "
-              f"!={t['mismatch']} unresolved={t['unresolved']} quant!={t['quant_mismatch']} twin!={t['twin_mismatch']} "
+              f"!={t['mismatch']} unresolved={t['unresolved']} quant!={t['quant_mismatch']} act={t['act_rows']}!={t['act_mismatch']} "
+              f"twin!={t['twin_mismatch']} "
               f"{' '.join(c['tiles'])}", flush=True)
     doc = seal_record(doc, _verdict(doc))
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
