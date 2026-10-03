@@ -64,12 +64,14 @@ theorem table_verdict_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statemen
         (opnOf st sch extra.length #[b₀, b₁])).accepted = true := by
   obtain ⟨p₀, p₁, s₀, s₁, pend₀, pend₁, hp₀, hp₁, hs₀, hs₁, hpl₀, hpl₁, hv₀, hv₁, hok₀, hok₁⟩ :=
     table_refines_hm96 spec st S hm hmS hkS hfold hms extra sess hext hwf sch hf i b₀ b₁ c h0 h1
-  have h14 : 14 ≤ S.m := by have := exec_fast100_ge hf; omega
+  have h15 : 15 ≤ S.m := by have := exec_fast100_ge hf; omega
   obtain ⟨hdim, hsm⟩ := fast100_dims st.m sch hf
   have hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default) := fun i hi =>
     fast100_level st.m sch hf _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
-  obtain ⟨-, p₀', -, hp₀', hc₀, hroot, -, hw₀, -⟩ := rep_refines (D := Dig) spec st S hm h14 sch hmS hkS hfold
-    extra sess hext hdim hlv (hsm.trans hmS) hwf i 0 _ _ h0
+  have hα1 : ∀ i < sch.levels.size, Accounting.ceilLog2 (sch.levels.getD i default).q ≠ 1 := fun i hi =>
+    fast100_alpha st.m sch hf _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
+  obtain ⟨-, p₀', -, hp₀', hc₀, hroot, -, hw₀, -⟩ := rep_refines (D := Dig) spec st S hm h15 sch hmS hkS hfold
+    extra sess hext hdim hlv hα1 (hsm.trans hmS) hwf i 0 _ _ h0
   obtain rfl : p₀' = p₀ := Except.ok.inj (hp₀'.symm.trans hp₀)
   rw [hms] at hw₀
   have hcap : capDig p₀'.cap = capOfRoot sess.rootB[i]! :=
