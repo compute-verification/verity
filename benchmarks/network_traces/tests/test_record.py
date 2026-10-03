@@ -103,9 +103,45 @@ def test_contamination_and_failures_drop_windows_and_split_the_chunk() -> None:
     busy = {f"t{WINDOW_MS}": {"others_busy": 0.9}}
     _, summary = rec.build_trace(records[1:], samples(4, **busy), name="t", windows=4)
     assert summary["windows_dropped"] == {"0": "NUMA node busy", "1": "NUMA node busy"}
-    crowded = {f"t{WINDOW_MS}": {"affinity_busy": 0.95}}
-    _, summary = rec.build_trace(records[1:], samples(4, **crowded), name="t", windows=4)
-    assert summary["windows_dropped"] == {"0": "job's CPUs saturated", "1": "job's CPUs saturated"}
+    crowded = {f"t{WINDOW_MS}": {"affinity_busy": 0.99}}
+    _, summary = rec.build_trace(records[1:], samples(4, **crowded), name="t", windows=4, affinity_cpus=32)
+    assert summary["windows_dropped"] == {"0": "co-tenants on the job's CPUs", "1": "co-tenants on the job's CPUs"}
+
+
+def test_the_job_cpu_rule_counts_co_tenants_not_our_own_use() -> None:
+    """On an 8-CPU cpuset, window 1 is 95% busy with the job using 6 cores (co-tenants 20%), and window 3 is 95% busy
+    with the job using 0.8 (co-tenants 85%, under the line) and then 0.16 (93%). The co-tenant rule keeps window 1 and
+    drops window 3; the total rule drops both."""
+    records = [request(c, w * WINDOW_MS + 50.0, [[w * WINDOW_MS + 150.0, 1]]) for w, c in enumerate("abcd")]
+    at = {f"t{WINDOW_MS + 30_000}": {"affinity_busy": 0.95, "own_cores": 6.0},
+          f"t{3 * WINDOW_MS + 20_000}": {"affinity_busy": 0.95, "own_cores": 0.8},
+          f"t{3 * WINDOW_MS + 30_000}": {"affinity_busy": 0.95, "own_cores": 0.16}}
+    configs, summary = rec.build_trace(records, samples(4, **at), name="t", windows=4, affinity_cpus=8)
+    assert summary["windows_dropped"] == {"3": "co-tenants on the job's CPUs"} and summary["cpu_rule"] == "cotenants"
+    assert [c["name"] for c in configs] == ["t/w0-3"] and summary["cotenant_busy"]["max"] == pytest.approx(0.93)
+    _, total = rec.build_trace(records, samples(4, **at), name="t", windows=4, affinity_cpus=8, cpu_rule="total")
+    assert total["windows_dropped"] == {"1": "job's CPUs saturated", "3": "job's CPUs saturated"}
+    _, unsized = rec.build_trace(records, samples(4, **at), name="t", windows=4)
+    assert unsized["windows_dropped"] == total["windows_dropped"] | {"1": "co-tenants on the job's CPUs",
+                                                                      "3": "co-tenants on the job's CPUs"}
+    with pytest.raises(ValueError, match="cpu_rule"):
+        rec.build_trace(records, samples(4), name="t", windows=4, cpu_rule="own")
+
+
+def test_convert_takes_the_cpuset_from_meta_and_the_rule_from_its_flag(tmp_path: Path) -> None:
+    records = [request(c, w * WINDOW_MS + 50.0, [[w * WINDOW_MS + 150.0, 1]]) for w, c in enumerate("ab")]
+    at = {f"t{30_000}": {"affinity_busy": 0.95, "own_cores": 6.0}}
+    meta = {"t0_mono": 0.0, "windows": 2, "mode": "plaintext", "model": "m", "mix": "b4=1", "host": "h",
+            "gpu": {"name": "g", "uuid": "u"}, "env": {"RESEARCH_RUN_ID": "r1"}, "affinity": list(range(8))}
+    (tmp_path / "meta.json").write_text(json.dumps(meta))
+    (tmp_path / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
+    (tmp_path / "samples.jsonl").write_text("".join(json.dumps(s | {"mono": s["t_ms"] / 1000}) + "\n"
+                                                    for s in samples(2, **at)))
+    assert rec.main(["convert", str(tmp_path)]) == 0
+    assert json.loads((tmp_path / "summary.json").read_text())["windows_kept"] == 2
+    assert rec.main(["convert", str(tmp_path), "--cpu-rule", "total"]) == 0
+    summary = json.loads((tmp_path / "summary.json").read_text())
+    assert summary["windows_dropped"] == {"0": "job's CPUs saturated"} and summary["cpu_rule"] == "total"
 
 
 @pytest.mark.parametrize("stall", [{"hb_max_ms": 1500.0}, {"loop_max_ms": 1500.0}])
