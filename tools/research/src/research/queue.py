@@ -19,8 +19,8 @@ the ready label is what says one is done.  The hold label keeps a PR out whateve
 on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
 `main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs: a role for changed files
 under listed paths (`merge_requires`' syntax, `!` patterns included), or for a change to listed sections of any `lean-audit.json`
-(`pins`, `reads`).  A grant is a store label `grant = {role}` on the target `pr:{number}@{head sha}`, so a new push needs new
-grants.  A `lean-audit.json` change needs no grant when a `lean_review` label on the target names the audit.json of an
+(`pins`, `reads`), and who gives each (`by`, which `status` prints with the label command to a PR waiting on it).  A grant is a
+store label `grant = {role}` on the target `pr:{number}@{head sha}`, so a new push needs new grants.  A `lean-audit.json` change needs no grant when a `lean_review` label on the target names the audit.json of an
 `audit.py --update` (`--moved` for a move) that printed that whole change as the same statements (`reviewed`).  Grants and ready are read after pulling the target's labels from the store's remote; when that pull can't happen (no
 remote here, one that's unusable, a failed pull) the command fails with `STALE`, never answering from this machine's labels alone.
 
@@ -171,12 +171,14 @@ class Rule:
     role: str
     paths: tuple[str, ...] = ()        # `merge_requires`' syntax: a changed file under a prefix and matching no `!` pattern needs the role
     lean_audit: tuple[str, ...] = ()   # a change to one of these top-level sections of any `lean-audit.json` needs the role
+    by: str = ""                       # who gives the grant, as `queue status` tells a waiting owner
 
 
 @dataclass(frozen=True)
 class Rules:
     grants: tuple[Rule, ...] = ()
     hold_label: str = "hold"
+    source: str = RULES
 
     @classmethod
     def parse(cls, text: str, source: str = RULES) -> "Rules":
@@ -186,14 +188,20 @@ class Rules:
             raise QueueError(f"{source}: unknown keys {sorted(unknown)}")
         rules = []
         for i, g in enumerate(doc.get("grant", [])):
-            if set(g) - {"role", "paths", "lean_audit"}:
-                raise QueueError(f"{source}: grant {i}: unknown keys {sorted(set(g) - {'role', 'paths', 'lean_audit'})}")
+            if set(g) - {"role", "paths", "lean_audit", "by"}:
+                raise QueueError(f"{source}: grant {i}: unknown keys {sorted(set(g) - {'role', 'paths', 'lean_audit', 'by'})}")
             if (why := vocab.check(vocab.GRANT, g.get("role"))) is not None:
                 raise QueueError(f"{source}: grant {i}: {why}")
             if not (g.get("paths") or g.get("lean_audit")):
                 raise QueueError(f"{source}: grant {i} ({g['role']}) names neither paths nor lean_audit sections")
-            rules.append(Rule(g["role"], tuple(g.get("paths", ())), tuple(g.get("lean_audit", ()))))
-        return cls(tuple(rules), doc.get("hold_label", "hold"))
+            rules.append(Rule(g["role"], tuple(g.get("paths", ())), tuple(g.get("lean_audit", ())), str(g.get("by", ""))))
+        return cls(tuple(rules), doc.get("hold_label", "hold"), source)
+
+    def asks(self, pr: int, head: str, roles: set[str]) -> str:
+        """Who gives each of ``roles`` (its rule's `by`) and the label that grants it, for a PR waiting on them."""
+        by = {r.role: r.by for r in self.grants}
+        who = ", ".join(f"{r} from {by[r]}" if by.get(r) else f"{r} (no `by` in {self.source})" for r in sorted(roles))
+        return f"{who}; granted with `research data label {grant_target(pr, head)} grant ROLE --by LANE` ({self.source})"
 
     def needs(self, repo: Path, base: str, head: str, reviews: Callable[[], list[dict]] = list) -> set[str]:
         """The roles whose grants the change `base`...`head` (from their merge base) needs.  A `lean_audit` role isn't needed for a
@@ -417,7 +425,8 @@ class Queue:
                 e.state, e.why = "waiting", f"not marked ready at {p.head[:8]}: `research queue ready {p.number}`"
             elif missing := rules.needs(self.workdir, "origin/main", p.head, lambda: self.reviews(p.number, p.head)) - \
                     self.grants(p.number, p.head):
-                e.state, e.why = "waiting", f"waiting for the {', '.join(sorted(missing))} grant at {p.head[:8]}"
+                e.state, e.why = "waiting", (f"waiting for the {', '.join(sorted(missing))} grant at {p.head[:8]}: "
+                                             f"{rules.asks(p.number, p.head, missing)}")
             below = _out(self.workdir, "rev-list", f"origin/main..{p.head}").split()
             e.after = tuple(sorted(heads[h] for h in below if h in heads and heads[h] != p.number))
         changed = True

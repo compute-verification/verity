@@ -27,6 +27,7 @@ hold_label = "hold"
 [[grant]]
 role = "vllm-coordinator"
 paths = ["integrations/vllm/"]
+by = "the vLLM coordinator"
 
 [[grant]]
 role = "statement-reviewer"
@@ -166,7 +167,9 @@ def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world
     world.gh.put(4, world.change({"c.txt": "stacked\n"}, base=parent))
     q = world.queue()
     members, entries = q.sync()
-    assert members == [] and entries[5].why == f"waiting for the vllm-coordinator grant at {parent[:8]}"
+    assert members == [] and entries[5].why == (
+        f"waiting for the vllm-coordinator grant at {parent[:8]}: vllm-coordinator from the vLLM coordinator; granted with "
+        f"`research data label pr:5@{parent} grant ROLE --by LANE` (ci/queue.toml)"), "who gives it, and the label that does"
     assert entries[4].state == "waiting" and entries[4].after == (5,)      # it carries #5's change, grant included
     world.grants[(5, parent)] = {"vllm-coordinator"}
     world.grants[(4, world.gh.prs[4].head)] = {"vllm-coordinator"}     # #4 carries #5's change, so it needs the grant too
@@ -183,6 +186,7 @@ def test_grants_follow_paths_and_lean_audit_sections_at_the_exact_head(world):
     _, entries = q.sync()
     assert entries[1].why.startswith("waiting for the vllm-coordinator grant")
     assert entries[2].why.startswith("waiting for the statement-reviewer grant")
+    assert "statement-reviewer (no `by` in ci/queue.toml)" in entries[2].why
     assert entries[3].state == "queued"                         # a dependency digest isn't a statement
     world.grants[(1, world.gh.prs[1].head)] = {"vllm-coordinator"}
     assert 1 in [m.pr for m in q.sync()[0]]
