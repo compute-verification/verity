@@ -52,6 +52,7 @@ A tile takes about 100 s at k = 4,096 and up to 11 min at k = 14,336 on one of n
 from __future__ import annotations
 
 import argparse
+import bisect
 import gc
 import hashlib
 import json
@@ -120,9 +121,32 @@ def _chain_recorded(*args, **kwargs):
     return out
 
 
-def load(path: Path) -> dict:
+class TileIndex:
+    """The workload's tile enumeration as `audit.tile_refs` numbers it (each matmul's `scheme.tiles` in order), without a
+    `TileRef` a tile: (matmul, tile) of an id, and each matmul's ids and areas."""
+
+    def __init__(self, scheme, records):
+        grids: dict[Shape, list] = {}
+        self.grids, self.first, n = [], [], 0
+        for r in records:
+            self.grids.append(grids.setdefault(r.matmul.shape, scheme.tiles(r.matmul.shape)))
+            self.first.append(n)
+            n += len(self.grids[-1])
+        self.count = n
+
+    def __call__(self, tid: int):
+        pos = bisect.bisect_right(self.first, tid) - 1
+        return pos, self.grids[pos][tid - self.first[pos]]
+
+    def of(self, pos: int) -> tuple[list[int], list[int]]:
+        grid = self.grids[pos]
+        return list(range(self.first[pos], self.first[pos] + len(grid))), [len(t.rows) * len(t.cols) for t in grid]
+
+
+def load(path: Path, light: bool = False) -> dict:
     """The pass as `verify_run.verify` reads it: the epoch from the beacon and the weights' roots, the records held to their
-    published root, the transcript's roots and the verifier's tile enumeration."""
+    published root, the transcript's roots and the verifier's tile enumeration.  `light`: the manifest alone (no verifier,
+    no file of the pass is opened), for reading recorded lines back (``--resumed-only``)."""
     raw = path.read_bytes()
     man = json.loads(raw)
     if man.get("schema") != PD.MANIFEST_SCHEMA:
@@ -142,12 +166,18 @@ def load(path: Path) -> dict:
     if reason is not None:
         raise ValueError(reason)
     c = man["commitment"]
+    index = TileIndex(scheme, records)
+    if index.count != c["count"]:
+        raise ValueError(f"the commitment counts {c['count']} tiles; the workload has {index.count}")
+    sha = hashlib.sha256(raw).hexdigest()
+    if light:
+        return {"man": man, "sha256": sha, "scheme": scheme, "epoch": epoch, "records": records, "tile": index}
     transcript = Transcript(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]), ())
     view = _Kept(scheme)
     verifier = Verifier(view, epoch)
     if len(verifier.refs) != c["count"]:
         raise ValueError(f"the commitment counts {c['count']} tiles; the workload has {len(verifier.refs)}")
-    return {"man": man, "sha256": hashlib.sha256(raw).hexdigest(), "scheme": scheme, "view": view, "epoch": epoch,
+    return {"man": man, "sha256": sha, "scheme": scheme, "view": view, "epoch": epoch, "tile": index,
             "records": records, "transcript": transcript, "verifier": verifier,
             "prover": VR.Opened(man, VR.Files(path.parent), verifier.refs)}
 
@@ -364,22 +394,27 @@ def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) 
     geometry held to this pass's enumeration, a fresh trial's salt to its own), the others measured over `jobs` forked
     workers, a matmul's tiles in runs of a few so that a worker's per-weight noise caches hit.  Every line is written to
     `path` as it is known.  Raises if a cross-checked tile's batch and scalar replays differ."""
-    refs, records = job["verifier"].refs, job["records"]
+    tile, records = job["tile"], job["records"]
     prior = resumed(opts.get("resume") or [], job["sha256"])
     tile_of = lambda item: item if isinstance(item, int) else item[0]
     got: dict = {}
     for item in picks:
         t = prior.get(_item_key(item))
         if t is not None:
-            ref = refs[tile_of(item)]
+            tid = tile_of(item)
+            pos, tl = tile(tid)
             if not isinstance(item, int) and t["salt"] != item[3].hex():
                 raise ValueError(f"{label}: resumed trial {line_key(t)} has another salt (another --fresh-source)")
             if (t["tile"], t["matmul"], t["row0"], t["rows"], t["col0"], t["cols"]) != (
-                    ref.id, ref.matmul, ref.tile.rows[0], len(ref.tile.rows), ref.tile.cols[0], len(ref.tile.cols)):
-                raise ValueError(f"{label}: resumed line {line_key(t)} is not this pass's tile {ref.id}")
+                    tid, pos, tl.rows[0], len(tl.rows), tl.cols[0], len(tl.cols)):
+                raise ValueError(f"{label}: resumed line {line_key(t)} is not this pass's tile {tid}")
             got[_item_key(item)] = t
     todo = sorted((x for x in picks if _item_key(x) not in got),
-                  key=lambda x: (-records[refs[tile_of(x)].matmul].matmul.shape.k, refs[tile_of(x)].matmul, _item_key(x)))
+                  key=lambda x: (-records[tile(tile_of(x))[0]].matmul.shape.k, tile(tile_of(x))[0], _item_key(x)))
+    if opts.get("resumed_only"):
+        print(f"{label}: {len(got)} of {len(picks)} resumed; {len(todo)} unmeasured, left out (--resumed-only)", flush=True)
+        path.write_text("".join(json.dumps(t) + "\n" for t in got.values()))
+        return got
     print(f"{label}: {len(got)} of {len(picks)} tiles resumed, {len(todo)} to measure "
           f"({'scalar' if opts.get('scalar') else 'batch'} replay, cross-check every {opts.get('cross_check') or 'no'} tile id)", flush=True)
     _JOB.clear()
@@ -423,10 +458,6 @@ def pick_inputs(job: dict, per_linear: int, census_max: int, draws: int, seed: i
     its tiles' weights.  An input of at most `census_max` tiles is measured in full; a larger one by `draws` work-weighted
     draws with replacement, as the audit draws.  A tile's weight is its area (rows × cols): within one input every tile has
     the same k, so its share of the input's `W_ref` is its share of the cells."""
-    refs = job["verifier"].refs
-    tiles: dict[int, list[int]] = {}
-    for ref in refs:
-        tiles.setdefault(ref.matmul, []).append(ref.id)
     groups: dict[tuple[int, int], list[int]] = {}
     for pos, rec in enumerate(job["records"]):
         groups.setdefault((rec.matmul.shape.k, rec.matmul.shape.n), []).append(pos)
@@ -434,8 +465,7 @@ def pick_inputs(job: dict, per_linear: int, census_max: int, draws: int, seed: i
     out = []
     for kn in sorted(groups):
         for pos in sorted(rng.choice(groups[kn], size=min(per_linear, len(groups[kn])), replace=False).tolist()):
-            ids = tiles[pos]
-            area = [len(refs[t].tile.rows) * len(refs[t].tile.cols) for t in ids]
+            ids, area = job["tile"].of(pos)
             if len(ids) <= census_max:
                 method, drawn = "census", list(ids)
             else:
@@ -520,7 +550,7 @@ def measure_inputs(path: Path, per_linear: int, census_max: int, draws: int, see
     an input with its failures at the scheme's cap (a tile whose openings hold and the tile rule rejects), `W` and
     `w_max`.  The bound is added once every pass's inputs are known (`m`)."""
     label = label or path.parent.name
-    job = load(path)
+    job = load(path, light=bool(opts.get("resumed_only")))
     inputs = pick_inputs(job, per_linear, census_max, draws, seed)
     fresh = opts.get("fresh_draws")
     if fresh:
@@ -534,10 +564,13 @@ def measure_inputs(path: Path, per_linear: int, census_max: int, draws: int, see
     got = _run_tiles(label, job, picks, jobs, out_dir / f"{label}.{'fresh' if fresh else 'input'}-tiles.jsonl", opts)
     rows = []
     for row in inputs:
-        seen = [got[_item_key(x)] for x in row["drawn"]]
+        seen = [got[_item_key(x)] for x in row["drawn"] if _item_key(x) in got]
+        if row["method"] == "census" and len(seen) < len(row["drawn"]):
+            raise ValueError(f"{label}: census input {row['matmul']} has {len(row['drawn']) - len(seen)} tiles unmeasured")
         fail = [t for t in seen if t["openings_ok"] and not t["ok"]]
         rows.append({k: v for k, v in row.items() if k not in ("area", "drawn")} | {
-            "pass": label, "run": job["man"].get("run"), "manifest_sha256": job["sha256"], "drawn": len(row["drawn"]),
+            "pass": label, "run": job["man"].get("run"), "manifest_sha256": job["sha256"], "drawn": len(seen),
+            "unmeasured_draws": len(row["drawn"]) - len(seen),
             "openings_failed": sum(not t["openings_ok"] for t in seen), "failures": len(fail),
             "failures_weighted": sum(row["area"][t["tile"]] for t in (fail if fresh else {t["tile"]: t for t in fail}.values())),
             "share_max": max((t["share"] for t in seen if "share" in t), default=None),
@@ -593,6 +626,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--resume", nargs="+", default=[], metavar="FILE[=MANIFEST_SHA256]",
                    help="reuse an earlier run's tile lines on the same pass (a *.tiles.jsonl or *.input-tiles.jsonl); "
                         "=SHA256 names the manifest of lines that do not name one")
+    p.add_argument("--resumed-only", action="store_true",
+                   help="per-input mode: measure nothing; read the inputs' tiles from --resume alone (the manifests, not the "
+                        "pass's files), leaving a sampled input's unmeasured draws out (they were not chosen by their outcome) "
+                        "and refusing a census input with any tile unmeasured")
     p.add_argument("--scalar", action="store_true", help="replay every tile on the scalar reference only (no batch forms)")
     p.add_argument("--cross-check", type=int, default=64, metavar="N",
                    help="replay every tile whose id is a multiple of N on the scalar reference too, and fail on any difference "
@@ -619,7 +656,9 @@ def main(argv: list[str] | None = None) -> int:
         p.error("one --tiles per manifest")
     out_dir = a.out or Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "out"
     out_dir.mkdir(parents=True, exist_ok=True)
-    opts = {"resume": a.resume, "scalar": a.scalar, "cross_check": a.cross_check}
+    opts = {"resume": a.resume, "scalar": a.scalar, "cross_check": a.cross_check, "resumed_only": a.resumed_only}
+    if a.resumed_only and (a.per_input is None or not a.resume):
+        p.error("--resumed-only takes --per-input and --resume")
     fresh = None
     if a.fresh_draws:
         if a.per_input is None:

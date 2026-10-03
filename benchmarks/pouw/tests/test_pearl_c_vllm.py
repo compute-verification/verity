@@ -523,6 +523,18 @@ def test_served_debit_per_input_bounds_each_input_on_its_own(honest_pass, tmp_pa
         assert row["drawn"] == (len(ids) if row["method"] == "census" else 3) and row["openings_failed"] == 0
         assert 0 < row["upper"] <= 1 and (row["k"], row["n"]) == (records[row["matmul"]].matmul.shape.k, records[row["matmul"]].matmul.shape.n)
     assert doc["cited_upper"] == max(r["upper"] for r in doc["inputs"])
+    lines = (out / f"{path.parent.name}.input-tiles.jsonl").read_text().splitlines()
+    for d in ("calls", "weights"):
+        shutil.rmtree(path.parent / d)
+    again = tmp_path / "again"
+    args = [str(path), "--per-input", "1", "--census-max", "4", "--draws", "3", "--jobs", "1", "--resumed-only"]
+    assert SD.main([*args, "--out", str(again), "--resume", str(out / f"{path.parent.name}.input-tiles.jsonl")]) == 0
+    assert json.loads((again / "inputs.json").read_text())["inputs"] == doc["inputs"]
+    census = next(r for r in doc["inputs"] if r["method"] == "census")
+    drop = next(x for x in lines if json.loads(x)["matmul"] == census["matmul"])
+    (tmp_path / "short.jsonl").write_text("\n".join(x for x in lines if x != drop) + "\n")
+    with pytest.raises(ValueError, match="unmeasured"):
+        SD.main([*args, "--out", str(tmp_path / "short"), "--resume", str(tmp_path / "short.jsonl")])
 
 
 @pytest.mark.slow
