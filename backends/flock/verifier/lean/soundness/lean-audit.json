@@ -6403,7 +6403,16 @@
    "assumptions": [],
    "type_hash": "7b099b9cb3ad2e10ac594f2361acad091b14100e72ba778fc557546a91e943c9"
   },
-  "FlockSoundness.Discharge.Hidden.setupH_g_pos": {},
+  "FlockSoundness.Discharge.Hidden.setupH_g_pos": {
+   "signature": [
+    "FlockSoundness.Discharge.Hidden.setupH_g_pos {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins}",
+    "  {tables : List (Prod String ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}",
+    "  {st : Flock.Stmt} (ht : Eq tags.typed Bool.false)",
+    "  (h : Eq (Flock.Stmt.setupH tags cf pf coins tables draw partition program) (Except.ok st)) : instLTNat.lt 0 st.c.g"
+   ],
+   "assumptions": [],
+   "type_hash": "ab8c2996f86075cb0c9483de07a597e723a66f783d6e5fea0bbfe8d62415681f"
+  },
   "FlockSoundness.Discharge.Hidden.setupHidden_spec": {
    "signature": ["FlockSoundness.Discharge.Hidden.setupHidden_spec : FlockSoundness.Discharge.Hidden.SetupHiddenSpec"],
    "assumptions": [],
