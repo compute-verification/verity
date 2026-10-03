@@ -29,7 +29,7 @@ theorem gap_eq {K W Hi VL : Type} [Field K] {J : ℕ} {zs : Fin J → Sizes} (T 
   exact Finset.sum_congr rfl fun j _ => by rw [card_hid]
 
 theorem circuit_private_of_zk (hzk : ZkWireFixed) : CircuitPrivate := by
-  intro Cls Circ Out Prog Rr Rv _ K W Hi VL _ _ _ _ _ _ S c ε hε o hU C w hw p₀ w₀ Obs enc E
+  intro Cls Circ Out Prog Rr Rv _ K W Hi VL _ _ _ _ _ _ S c ε hε o C w hU hw p₀ w₀ Obs enc E
   set f : Rv c → ℝ≥0∞ := fun v =>
     prCoin fun q : ∀ j, (S.U c o v j).tab.SimRand × ((S.U c o v j).tab.Hid → Salt) =>
       E v (enc v fun j => (S.U c o v j).simExe (w₀ j) (q j).1 (q j).2)
@@ -43,7 +43,7 @@ theorem circuit_private_of_zk (hzk : ZkWireFixed) : CircuitPrivate := by
   have hstep : ∀ r, g r ≤ f (S.reg c (S.pad C c) r) + zkGap (S.zs c) ∧
       f (S.reg c (S.pad C c) r) ≤ g r + zkGap (S.zs c) := by
     intro r
-    have hU' := hU (S.reg c (S.pad C c) r)
+    have hU' := hU r
     have h := hzk (S.zs c) (S.U c o (S.reg c (S.pad C c) r)) (enc (S.reg c (S.pad C c) r)) (fun j => (hU' j).1)
       (fun j => (hU' j).2.1) (fun j => (hU' j).2.2.1) (fun j => (hU' j).2.2.2.1) (fun j => (hU' j).2.2.2.2) (w r)
       (fun j => (hw r j).1) (fun j => (hw r j).2) w₀ (E (S.reg c (S.pad C c) r))
@@ -65,12 +65,12 @@ theorem circuit_private_of_zk (hzk : ZkWireFixed) : CircuitPrivate := by
       _ = realPr S c o (S.pad C c) w enc E + (ε + zkGap (S.zs c)) := by rw [hreal]; ring
 
 theorem circuit_indist_of_zk (hzk : ZkWireFixed) : CircuitIndist := by
-  intro Cls Circ Out Prog Rr Rv _ K W Hi VL _ _ _ _ _ _ S c ε hε o hU C C' w w' hw hw' Obs enc E
+  intro Cls Circ Out Prog Rr Rv _ K W Hi VL _ _ _ _ _ _ S c ε hε o C C' w w' hU hU' hw hw' Obs enc E
   rcases isEmpty_or_nonempty (Rr c) with hR | hR
   · simp [realPr, avg]
   obtain ⟨r₀⟩ := hR
-  have h₁ := (circuit_private_of_zk hzk S c ε hε o hU C w hw (S.pad C' c) (w r₀) enc E).1
-  have h₂ := (circuit_private_of_zk hzk S c ε hε o hU C' w' hw' (S.pad C' c) (w r₀) enc E).2
+  have h₁ := (circuit_private_of_zk hzk S c ε hε o C w hU hw (S.pad C' c) (w r₀) enc E).1
+  have h₂ := (circuit_private_of_zk hzk S c ε hε o C' w' hU' hw' (S.pad C' c) (w r₀) enc E).2
   calc realPr S c o (S.pad C c) w enc E ≤ simPr S c o (S.pad C' c) (w r₀) enc E + (ε + zkGap (S.zs c)) := h₁
     _ ≤ realPr S c o (S.pad C' c) w' enc E + (ε + zkGap (S.zs c)) + (ε + zkGap (S.zs c)) := by gcongr
     _ = realPr S c o (S.pad C' c) w' enc E + 2 * (ε + zkGap (S.zs c)) := by ring
