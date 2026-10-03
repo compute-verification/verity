@@ -459,8 +459,11 @@ class LocalStore:
             final = self.root / "trees" / hex_
             if final.is_dir() and all((final / f.path).is_file() for f in wanted):
                 return final
-            if paths:                                                   # a partial fetch lands in place; the cache is complete when every file is there
-                self._materialise(srcs, final)
+            # A tree already in trees/ (a partial fetch, or another process's fetch that landed first) is completed in place with
+            # the files it lacks, and nothing in it is replaced or removed: another process may be reading it.  Each file lands
+            # whole, so the cache is complete when every file is there.
+            if paths or final.is_dir():
+                self._materialise([(f, b) for f, b in srcs if not (final / f.path).is_file()], final)
                 return final
             work = final.parent / f".tmp-{hex_}-{os.getpid()}"
             shutil.rmtree(work, ignore_errors=True)
@@ -468,11 +471,8 @@ class LocalStore:
             try:
                 os.rename(work, final)
             except OSError:
-                shutil.rmtree(final, ignore_errors=True)                # an incomplete partial fetch is superseded by the full one
-                try:
-                    os.rename(work, final)
-                except OSError:
-                    shutil.rmtree(work, ignore_errors=True)
+                self._materialise([(f, b) for f, b in srcs if not (final / f.path).is_file()], final)
+                shutil.rmtree(work, ignore_errors=True)
             return final
         self._materialise(srcs, Path(to))
         return Path(to)
