@@ -334,7 +334,9 @@ def runs(window_s: float = 7200) -> tuple[list[dict], list[dict]]:
             st = json.loads((d / "status.json").read_text())
         except (OSError, ValueError):
             continue
-        tr = (st.get("transitions") or [{}])[-1]
+        # the runner's transition, the last naming a pid: `tele set-timeout` appends a `running` one without
+        trs = [t for t in st.get("transitions") or [] if isinstance(t, dict)]
+        tr = next((t for t in reversed(trs) if t.get("pid") is not None), trs[-1] if trs else {})
         cmd = " ".join(tr.get("command") or [])[:120]
         if st.get("state") == "running":
             ok = alive(tr.get("pid"), tr.get("starttime_ticks"))

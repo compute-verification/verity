@@ -2076,6 +2076,24 @@ def test_n1_custody_triages_with_no_remote_another_uid_could_name(tmp_path):
     assert len(triage) == 2 and all(f" HOME={tmp_path / 'home'} " in ln and " RESEARCH_STORE_CONFIG=/dev/null " in ln for ln in triage), triage
 
 
+@pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="node_ops reads /proc")
+def test_node_ops_reads_a_runs_pid_from_its_runners_transition_not_the_last(tmp_path, monkeypatch):
+    """`tele set-timeout` appends a `running` transition without a pid, and node_ops read the pid from the last transition only, so it
+    alerted dead-run on a run whose runner was alive (the reading #1004's red team found in triage, F1)."""
+    from research.pods.nebius import node_ops as NO
+
+    me = int(Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19])
+    d = tmp_path / "r20261003-200000-1301"
+    d.mkdir()
+    (d / "status.json").write_text(json.dumps({"state": "running", "pid": os.getpid(), "starttime_ticks": me, "transitions": [
+        {"state": "running", "pid": os.getpid(), "starttime_ticks": me, "command": ["python", "x.py"], "started_utc": "2026-10-03T20:00:00.000Z"},
+        {"state": "running", "timeout_s": 7200, "timeout_changed_utc": "2026-10-03T21:00:00.000Z"}]}))
+    alerts = []
+    monkeypatch.setattr(NO, "RUNS", tmp_path)
+    monkeypatch.setattr(NO, "alert", lambda *a, **kw: alerts.append(a))
+    assert NO.runs() == ([{"run": d.name, "since": "2026-10-03T20:00:00", "cmd": "python x.py", "alive": True}], []) and alerts == []
+
+
 @N1_CUSTODY
 def test_n1_custody_pushes_no_record_less_attempt_that_never_left_node_1(tmp_path, monkeypatch):
     """#1004's red-team F7: a local attempt published without its run record that R2 lacks is `attempt-unpreserved`, so a round ran
