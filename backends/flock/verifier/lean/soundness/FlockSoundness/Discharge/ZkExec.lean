@@ -22,3 +22,8 @@ import FlockSoundness.Discharge.ZkExec.PlaysLig
 import FlockSoundness.Discharge.ZkExec.PlaysInner
 import FlockSoundness.Discharge.ZkExec.PlaysRep
 import FlockSoundness.Discharge.ZkExec.PlaysRun
+import FlockSoundness.Discharge.ZkExec.PlaysDet
+import FlockSoundness.Discharge.ZkExec.VerdictStatements
+import FlockSoundness.Discharge.ZkExec.Verdict
+import FlockSoundness.Discharge.ZkExec.LiveStatements
+import FlockSoundness.Discharge.ZkExec.RunsLive

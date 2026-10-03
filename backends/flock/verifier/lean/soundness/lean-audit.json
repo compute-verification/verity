@@ -9332,6 +9332,7 @@
    "assumptions": [],
    "type_hash": "f1e9329e27d785e454b30a80a0450af5d9731d60b96a76deb8a50b8c4e70bf09"
   },
+  "FlockSoundness.Discharge.ZkExec.plays_det": {},
   "FlockSoundness.Discharge.ZkExec.repZCAt_kinds": {
    "signature": [
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
@@ -9362,6 +9363,7 @@
    "assumptions": [],
    "type_hash": "fbea58a87bb102044e7cb39c360ae1368240183655f5f1b51167c2edec35dae0"
   },
+  "FlockSoundness.Discharge.ZkExec.runsZC_live": {},
   "FlockSoundness.Discharge.ZkExec.verifyInner_ok": {
    "signature": ["FlockSoundness.Discharge.ZkExec.verifyInner_ok : FlockSoundness.Discharge.ZkExec.ZkInnerOk"],
    "assumptions": [],
@@ -9582,6 +9584,7 @@
    "assumptions": [],
    "type_hash": "1337a082823da1e49cad959d2e3d6900396132cd9e96ccd67d65fdab51ebb83e"
   },
+  "FlockSoundness.Discharge.ZkExec.zk_inner_accepts": {},
   "FlockSoundness.Discharge.ZkExec.zk_inner_plays": {
    "signature": ["FlockSoundness.Discharge.ZkExec.zk_inner_plays : FlockSoundness.Discharge.ZkExec.ZkInnerPlays"],
    "assumptions": [],
@@ -9592,6 +9595,7 @@
    "assumptions": [],
    "type_hash": "20ce9f55f17946ff711e4cb0b2d1140dd765d29bbc194230e9200ab466dbec18"
   },
+  "FlockSoundness.Discharge.ZkExec.zk_rep_accepts": {},
   "FlockSoundness.Discharge.ZkExec.zk_rep_frames": {
    "signature": ["FlockSoundness.Discharge.ZkExec.zk_rep_frames : FlockSoundness.Discharge.ZkExec.ZkRepFrames"],
    "assumptions": [],
@@ -9617,6 +9621,8 @@
    "assumptions": [],
    "type_hash": "d97ab2252c4b6e0b63e5a9bc59438adb3b6159c297aee1ece450dd27ea650367"
   },
+  "FlockSoundness.Discharge.ZkExec.zk_table_verdict": {},
+  "FlockSoundness.Discharge.ZkExec.zk_table_verdict_of": {},
   "FlockSoundness.Discharge.ZkExec.zk_verifyRep_ok": {
    "signature": ["FlockSoundness.Discharge.ZkExec.zk_verifyRep_ok : FlockSoundness.Discharge.ZkExec.ZkRepOk"],
    "assumptions": [],
