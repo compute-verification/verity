@@ -94,6 +94,11 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's.
 
+- 2026-10-03: a test tier too slow for `check` (the vLLM reference regression's manifest rebuilds, about an hour) runs as a
+  detached job after each train lands on `main` (`tools/check/post_train.py`, started by `research merge --push`) and labels
+  the landing's check attempt `note=regression pass` or `fail:<rows>`, which circuits sweeps daily; `check` blocks on the
+  cheap tier only (its T0 checks, about four minutes), and under `VERITY_STORE_REQUIRED=1` a fixture or input that doesn't
+  resolve fails rather than skips.
 - 2026-10-02 (10:27 PM PDT): a statement review or red-team grant on a PR carries across a restack or a merge of `main`
   when the restacked head's `lean-audit.json` change against its base is byte-identical to the one that was granted.
   Any other change to `lean-audit.json` needs a new grant.
