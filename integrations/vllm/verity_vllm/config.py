@@ -277,6 +277,9 @@ class BuildConfig:
     program_cache: str | None = option("--program-cache", env="PROGRAM_CACHE", default=None,
                                        help="a directory of derived Programs shared by the host's runs (pipeline.program_cache): each derive "
                                             "restores a cached entry of the same key or publishes its own; default off")
+    build_relabel: str = option("--build-relabel", env="BUILD_RELABEL", default="off", choices=("off", "on"),
+                                help="TP: one template rank's request derives write the other ranks' (pipeline.tp.relabel_build), behind a "
+                                     "step guard over every rank and a canary request derived in full; default off")
 
 
 @dataclass(frozen=True, kw_only=True)
