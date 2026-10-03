@@ -126,7 +126,7 @@ coins.
 - **Tree coins (`--zk`).** Under `--zk` the coins are committed, not drawn round by round (`coin-tree/hm96-sha512/v2`,
   `live/src/coin_tree.rs`; the live `PROTOCOL.md` §9). A6 for these sessions is the following.
   - *The coins.* At `Hello`, after the prover's nonce and before its first message (`Commit`), the coin server reads
-    from `/dev/urandom` a fresh 256-byte hm96 key, then a block of coins and a 192-byte salt for each stream and round
+    from `/dev/urandom` a fresh hm96 key (256 bytes, bit 2047 cleared: hm96 §2's key space), then a block of coins and a 192-byte salt for each stream and round
     (`CoinTree::draw_with`, called at `Hello` in `live/src/lib.rs`). It commits to every block at once, as keyed hm96
     leaves under one SHA-512 tree, and answers `Hello` with the root and the key. It opens round `r`'s leaves only in
     its answer to the prover's round-`r` message. That ordering takes the place of "drawn after the prover's message"
@@ -147,9 +147,12 @@ coins.
     `N = (1 + 2J)·256` for `J` tables: `768·2^-256 < 2^-246` at one table.
   - *What the bound needs.* The salts are uniform and independent, one per leaf, never reused. The key is independent
     of the salts, drawn after the prover's nonce, and never reused across sessions. Both come from `/dev/urandom`, which
-    is A6's source, not A3's. A5's snapshot caveat (The platform, under A5) applies to the draw at `Hello`. A server
-    given a coin tape (`inject_coin_tape`: a ChaCha20 tape, under the test-only `seed-injection` feature) draws no OS
-    coins and is outside A6.
+    is A6's source, not A3's. A5's snapshot caveat (The platform, under A5) applies to the draw at `Hello`. Two test
+    hooks are outside A6, both under the test-only `seed-injection` feature: a server given a coin tape
+    (`inject_coin_tape`, a ChaCha20 tape) draws no OS coins, and one given an edit (`inject_coin_edit`) commits to
+    coins of its choosing. Unlike the opening order, this exclusion is checkable from the record: the backend identity
+    carries `seed_injection` (`live/src/bin/flock-circuit.rs`), the statement digest pins it (`Flock/Tags.lean`), and it
+    is false in every proving build (`check_build.sh`).
   - *Citing condition* (@lean, Oct 3). Until a Lean lemma states the hybrid, every citation of a `--zk` headline
     (`zk_session_sound` and its hidden-output, J-table and registered forms) gives δ as the Lean bound plus
     `N·2^-256`, and names that term as a step argued by hand.
