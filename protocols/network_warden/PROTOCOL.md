@@ -141,9 +141,27 @@ dataflow hypothesis: for every frame function, sync set and operator, over a hor
 `SecurityProofs.EncardAccSeqsLeConstantRate`, which is 7 bits per window at 16 × 8 sync values. Under J with one sync
 value it is 0 bits of timing (`SecurityProofs.EncardAccSeqsLeConstantRateFixedClock`). A horizon within the first m
 windows is charged only those m windows (`SecurityProofs.EncardAccSeqsLeConstantRateWindows`), and a decoder of the
-wire recovers no more (`SecurityProofs.EncardDecodableLeConstantRate`). The block cap does not sharpen these:
-Theorem 3's dataflow conditions fail for this schedule, since δ and ⌊λ/ρ⌋ carry a frame into later windows and the
-queue carries across them (`constantRate_not_framesRead_counts`, `constantRate_not_windowBlocks`).
+wire recovers no more (`SecurityProofs.EncardDecodableLeConstantRate`).
+
+**The block cap** (`SecurityProofs.EncardAccSeqsLeBlocks`) sharpens these only on a small grid or a horizon of a few
+buckets. Its conditions fail for blocks of one window, since δ and ⌊λ/ρ⌋ carry a frame into later windows and the
+queue carries across them (`constantRate_not_windowBlocks`). So for this schedule it applies only with the horizon as
+one block, whose timing advice is every window's sync. In its count form (`SecurityProofs.EncardAccSeqsLeBlocksCounts`)
+a cell is one link's bucket and its occupancy a count from 0 to r, and the one block caps a horizon of n buckets on L
+egress links at `#Ac · D^n · min(#Σ_sync^W, (r + 1)^(L·n))`: the lesser of the advice cap and the left-packed envelope.
+The count form's first condition holds only when each bucket's counts fix its rows, as when every frame has the same
+payload; with two payloads it fails (`constantRate_not_framesRead_counts`).
+
+So for a horizon of n buckets within the first m windows, the one-block cap is below the advice cap `#Σ_sync^m`
+exactly when the envelope is: `(r + 1)^(L·n) < #Σ_sync^m`. On whole windows (n = m·T) that is
+`(r + 1)^(L·T) < #Σ_sync`, and since L ≥ 1 it can hold only if `T·log2(r + 1) < log2 #Σ_sync`: a window's grid shows
+fewer patterns than Σ_sync has values.
+- **At T = 600 with 16 × 8 sync values** the one-block cap is below the advice cap only on a horizon shorter than
+  `7/(L·log2(r + 1))` buckets, inside the first window (7 buckets on one link at r = 1). One link's grid carries at
+  least 600 bits per window against the sync's 7, and a horizon that reaches window m ≥ 2 has more than (m − 1)·600
+  buckets, each worth at least one bit, against 7m.
+- **On a small grid it does sharpen them:** at T = 2, r = 1 and W = 3 on one link, the one-block cap is 2^6 = 64,
+  against the advice cap's 128^3 = 2,097,152.
 
 The ingress bound is proved in Lean, for a decoder in X that reads the wire (`SecurityProofs.EncardIngressDecodableLe`)
 or the records (`SecurityProofs.EncardIngressObsDecodableLe`). It counts `(r_in + 1)^T` occupancies per ingress

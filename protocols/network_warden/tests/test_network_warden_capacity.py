@@ -246,6 +246,9 @@ def test_sync_set_lists_each_value_once():
 def test_doc_numbers():
     s = SyncSet(tuple(range(16)), tuple(range(1, 9)))
     assert s.size == 128 and s.bits == 7
+    # the block cap with one block: below the advice cap at T = 2, r = 1, W = 3, and far above it at T = 600
+    assert capacity.left_packed_patterns(2, 1) ** 3 == 64 < s.size**3 == 2_097_152
+    assert capacity.envelope_bits(600, 1) == 600 > s.bits == capacity.envelope_bits(7, 1)
     assert math.isclose(capacity.ingress_rate(64), 60.2, rel_tol=1e-3)
     assert math.isclose(capacity.ingress_rate(64, 1000), 6.02, rel_tol=1e-3)
     two_links_hour = (capacity.ingress_rate(64) + capacity.ingress_rate(1024)) * 3600
