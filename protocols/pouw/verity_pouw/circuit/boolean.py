@@ -1,5 +1,6 @@
 """PoUW's own word primitives as Boolean Definitions: the next version of each `words` primitive Pearl-C4's (`pc4`) and
-Pearl-C's (`pc8`) row units call, the same function on bits.
+Pearl-C's (`pc8`) row units and Pearl-C4's hiding tile (its TurboSHAKE128 digest, `hashes.KeccakP1600R12`) call, the same
+function on bits.
 
     PouwF32SqrtRn_v2   (a: Array<32, Value<1>>) -> Array<32, Value<1>>                          word view: PouwF32SqrtRn_v1
     PouwETilde_v2      (e: Array<4, Value<1>>, ae: Array<8, Value<1>>) -> Array<16, Value<1>>    word view: PouwETilde_v1
@@ -7,9 +8,14 @@ Pearl-C's (`pc8`) row units call, the same function on bits.
     PouwSqAcc_v2       (acc: Array<576, Value<1>>, x: Array<32, Value<1>>) -> Array<576, Value<1>>  word view: PouwSqAcc_v1
     PouwSqCeil_v2      (t: Array<576, Value<1>>, n: Array<32, Value<1>>) -> Array<64, Value<1>>     word view: PouwSqCeil_v1
     PouwSqGe_v2        (x: Array<32, Value<1>>, th: Array<64, Value<1>>) -> Value<1>                word view: PouwSqGe_v1
+    PouwXor32_v2       (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>                          word view: PouwXor32_v1
+    PouwChi32_v2       (a, b, c: Array<32, Value<1>>) -> Array<32, Value<1>>                       word view: PouwChi32_v1
+    PouwRotl64Lo_v2    (lo, hi, c: Array<32, Value<1>>) -> Array<32, Value<1>>                     word view: PouwRotl64Lo_v1
+    PouwRotl64Hi_v2    (lo, hi, c: Array<32, Value<1>>) -> Array<32, Value<1>>                     word view: PouwRotl64Hi_v1
 
 Each is traced from a builder over core's `forms` (`verity.ml.boolean.trace.definition`), so its And gates are the builder's
-live ANDs; a backend whose lowering takes `forms` builders (C-Flock's pieces) can run the builder itself (``.build``).
+live ANDs but for its commits (`forms.Circuit.commit`, rows of a lowering and no gate); a backend whose lowering takes
+`forms` builders (C-Flock's pieces) can run the builder itself (``.build``).
 
 * `f32_sqrt_rn`: the significand normalized, the exponent made even by doubling it, and a digit-by-digit root (`isqrt`) of
   the 50-bit radicand to 25 bits; the last bit rounds, since no square root of a float lies halfway between two (the
@@ -21,6 +27,10 @@ live ANDs; a backend whose lowering takes `forms` builders (C-Flock's pieces) ca
 * `sq_ceil`: ⌈64 t / n⌉ by non-restoring division (one 34-bit add or subtract per quotient bit, then the remainder's
   sign correction), plus 1 when the remainder is nonzero, rounded up to 48 significant bits with a right shift and its
   sticky bit; n = 0 gives every bit set.
+* `chi32`, `rotl64`: Keccak-p's word operations.  χ's output is committed: in a lowering each bit is one row more (32 a
+  half-lane), and the next round's θ reads one column a bit, where the form it would otherwise read grows round over round
+  (one Keccak-p[1600, 12] in C-Flock's forms without the commits runs out of memory at 3.5 GB; with them it is 38,400 ANDs).
+  A rotation is a barrel shifter on c's low six bits, which a constant count (each of Keccak's) folds to wiring.
 """
 from __future__ import annotations
 
@@ -33,8 +43,9 @@ from verity.ml.boolean.trace import definition
 
 from . import words as W
 
-__all__ = ["PouwBf16Neg", "PouwETilde", "PouwF32SqrtRn", "PouwSqAcc", "PouwSqCeil", "PouwSqGe", "e_tilde", "f32_sqrt_rn",
-           "isqrt", "sq_acc", "sq_ceil", "sq_ge", "square", "up48"]
+__all__ = ["PouwBf16Neg", "PouwChi32", "PouwETilde", "PouwF32SqrtRn", "PouwRotl64Hi", "PouwRotl64Lo", "PouwSqAcc",
+           "PouwSqCeil", "PouwSqGe", "PouwXor32", "chi32", "e_tilde", "f32_sqrt_rn", "isqrt", "rotl64", "sq_acc", "sq_ceil",
+           "sq_ge", "square", "up48"]
 
 BIT = BL.BIT
 F32 = U32 = Array(32, BIT)
@@ -155,6 +166,20 @@ def sq_ge(C, x, th):
     return [NOT(sub(C, m + ex + [ZERO] * 7, th, 64)[1])]
 
 
+def chi32(C, a, b, c):
+    """``PouwChi32_v1``: a xor (not b and c), committed."""
+    return C.commit([x ^ C.AND(NOT(y), z) for x, y, z in zip(a, b, c)])
+
+
+def rotl64(C, lo, hi, c):
+    """``hi:lo`` rotated left by ``c mod 64``, LSB first: one mux stage per bit of c's low six."""
+    x = list(lo) + list(hi)
+    for k in range(6):
+        r = 1 << k
+        x = mux(C, c[k], x[-r:] + x[:-r], x)
+    return x
+
+
 PouwF32SqrtRn = definition("PouwF32SqrtRn", 2, f32_sqrt_rn, (("a", F32),), F32, word=W.PouwF32SqrtRn,
                            conformance=W.PouwF32SqrtRn.conformance,
                            doc="sqrt.rn.f32 on bits: PouwF32SqrtRn_v1, NaN and negative operands 0x7FFFFFFF")
@@ -168,3 +193,13 @@ PouwSqCeil = definition("PouwSqCeil", 2, sq_ceil, (("t", SQ), ("n", U32)), SQ48,
                         conformance=W.PouwSqCeil.conformance, doc="up48(⌈64 t / n⌉) on bits: PouwSqCeil_v1")
 PouwSqGe = definition("PouwSqGe", 2, sq_ge, (("x", F32), ("th", SQ48)), BIT, word=W.PouwSqGe,
                       conformance=W.PouwSqGe.conformance, doc="up48(2^300 · x²) >= θ on bits: PouwSqGe_v1")
+PouwXor32 = definition("PouwXor32", 2, lambda C, a, b: [x ^ y for x, y in zip(a, b)], (("a", U32), ("b", U32)), U32,
+                       word=W.PouwXor32, conformance=W.PouwXor32.conformance, doc="a xor b on bits: PouwXor32_v1")
+PouwChi32 = definition("PouwChi32", 2, chi32, (("a", U32), ("b", U32), ("c", U32)), U32, word=W.PouwChi32,
+                       conformance=W.PouwChi32.conformance, doc="Keccak's χ on one half-lane, on bits: PouwChi32_v1")
+PouwRotl64Lo = definition("PouwRotl64Lo", 2, lambda C, lo, hi, c: rotl64(C, lo, hi, c)[:32],
+                          (("lo", U32), ("hi", U32), ("c", U32)), U32, word=W.PouwRotl64Lo, conformance=W.PouwRotl64Lo.conformance,
+                          doc="The low half of hi:lo rotated left by c mod 64, on bits: PouwRotl64Lo_v1")
+PouwRotl64Hi = definition("PouwRotl64Hi", 2, lambda C, lo, hi, c: rotl64(C, lo, hi, c)[32:],
+                          (("lo", U32), ("hi", U32), ("c", U32)), U32, word=W.PouwRotl64Hi, conformance=W.PouwRotl64Hi.conformance,
+                          doc="The high half of hi:lo rotated left by c mod 64, on bits: PouwRotl64Hi_v1")

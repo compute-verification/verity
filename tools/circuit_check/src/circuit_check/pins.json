@@ -441,11 +441,20 @@
   "PouwBf16Neg_v2": {
    "and": 0
   },
+  "PouwChi32_v2": {
+   "and": 32
+  },
   "PouwETilde_v2": {
    "and": 88
   },
   "PouwF32SqrtRn_v2": {
    "and": 937
+  },
+  "PouwRotl64Hi_v2": {
+   "and": 352
+  },
+  "PouwRotl64Lo_v2": {
+   "and": 352
   },
   "PouwSqAcc_v2": {
    "and": 2511
@@ -455,6 +464,9 @@
   },
   "PouwSqGe_v2": {
    "and": 1036
+  },
+  "PouwXor32_v2": {
+   "and": 0
   },
   "RMSNormArgCuda_v1{N=16,EPS=1e-05,NW=1}": {
    "and": 1673

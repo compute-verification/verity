@@ -131,3 +131,64 @@ def test_sq_ceil_at_its_rounding_boundaries():
 
     assert is_boolean(B.PouwSqCeil.bind())
     _wide(B.PouwSqCeil, W.PouwSqCeil, [ts, ns], [576, 32])
+
+
+# --- Keccak-p's word operations (the hiding tile's TurboSHAKE128 digest) ------------------------------------------------------
+
+KECCAK = ((B.PouwXor32, W.PouwXor32), (B.PouwChi32, W.PouwChi32), (B.PouwRotl64Lo, W.PouwRotl64Lo),
+          (B.PouwRotl64Hi, W.PouwRotl64Hi))
+U32_EDGES = [0, 1, 2, 0x7FFFFFFF, 0x80000000, 0x80000001, 0x55555555, 0xAAAAAAAA, 0xFFFFFFFE, M32]
+
+
+def test_keccaks_operations_name_their_words_are_boolean_and_register():
+    """`hashes.KeccakP1600R12` is written in these four, so building a hiding tile (`pc4`) registers them, in a fresh
+    interpreter where nothing else imported `boolean`."""
+    import subprocess
+    import sys
+
+    from verity.ir.boolean import is_boolean
+    from verity.ml.boolean.trace import word_of
+
+    for d, w in KECCAK:
+        assert word_of(d) is w and d.id == w.id.replace("_v1", "_v2") and is_boolean(d.bind())
+    ids = [d.id for d, _ in KECCAK]
+    code = ("import sys, verity_pouw.circuit.pc4\nfrom verity.ir.defs import REGISTRY\n"
+            f"missing = [i for i in {ids!r} if i not in REGISTRY]\nsys.exit(','.join(missing) if missing else 0)")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+
+
+def test_xor_and_chi_on_every_triple_of_edges_and_random_words():
+    rng = np.random.default_rng(20261007)
+    e = np.array(U32_EDGES, dtype=np.uint64)
+    grid = [g.ravel() for g in np.meshgrid(e, e, e, indexing="ij")]
+    a, b, c = (np.concatenate([g, rng.integers(0, 1 << 32, 1 << 14)]) for g in grid)
+    _words(B.PouwXor32, W.PouwXor32, a, b)
+    _words(B.PouwChi32, W.PouwChi32, a, b, c)
+
+
+def test_rotations_by_every_count():
+    """Every count from 0 to 127 (the count is taken mod 64, so 64 to 127 wrap) on edge and random halves, and random counts
+    with high bits set."""
+    rng = np.random.default_rng(20261008)
+    lo = np.concatenate([np.array(U32_EDGES, dtype=np.uint64), rng.integers(0, 1 << 32, 22)])
+    hi = np.concatenate([np.array(U32_EDGES[::-1], dtype=np.uint64), rng.integers(0, 1 << 32, 22)])
+    cs = np.arange(128, dtype=np.uint64)
+    L_, C_ = (g.ravel() for g in np.meshgrid(np.arange(len(lo)), cs, indexing="ij"))
+    R = rng.integers(0, 1 << 32, 1 << 12)
+    for d, w in KECCAK[2:]:
+        _words(d, w, np.concatenate([lo[L_], R]), np.concatenate([hi[L_], R[::-1]]),
+               np.concatenate([C_, rng.integers(0, 1 << 32, 1 << 12)]))
+
+
+def test_chi_commits_its_output_in_forms_and_traces_no_gate_for_it():
+    """In `forms` (C-Flock's pieces run ``.build``) each χ output bit is a committed bit of its own, one row more than its AND
+    (64 for a half-lane), so Keccak's next θ reads one column a bit; the Definition's gates are its 32 Ands."""
+    from verity.ml.boolean.forms import Circuit
+
+    C = Circuit()
+    a, b, c = (C.input(n, 32) for n in "abc")
+    out = B.PouwChi32.build(C, a, b, c)
+    C.output("o", out)
+    assert C.counts()["ands"] == 64 and all(len(x.s) == 1 and x.c == 0 for x in out)
+    assert B.PouwChi32.traced().counts == {"and": 32, "xor": 32, "not": 32}
