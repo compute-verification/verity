@@ -13,10 +13,12 @@ for), never one of the `audit` pool's, where hour-long audits hold every slot, w
 started it holds. Slot `build/I`'s tree is `lean-records/build-I` under the check cache, whoever holds that slot's lock owns
 it, and audit.py inherits the lock's descriptor, so the slot is held until audit.py exits; with no SLOTS (a laptop) the tree
 is `lean-records/local`. `--tree` names another only under `lean-records/`. The tree's fetched dependencies are its own copy
-of the audit's (taken once per manifest and toolchain, else fetched cold), never links: where there is no sandbox its build writes as this user, and nothing it writes may reach what
-the audit keeps. A tree keeps one package's copy (about 170k inodes, 8 GB), so auditing another package that fetches
-dependencies there drops it first. `--update` writes the record back into this checkout, but not in a recorded run, whose
-source tree the commit's other runs share: there it is in the run's `lean-audit/audit-*/`.
+of the audit's (taken once per manifest and toolchain, else fetched cold), never links, so what Lake writes there stays out of
+what the audit keeps. That bounds Lake's own writes, not compile-time code: audit.py builds in its sandbox only where the
+machine allows one, and without it that code can write anything this user can, the audit's kept dependencies and passes
+included, as any build this user runs by hand can. A tree keeps one package's copy (about 170k inodes, 8 GB), so auditing
+another package that fetches dependencies there drops it first. `--update` writes the record back into this checkout, but not
+in a recorded run, whose source tree the commit's other runs share: there it is in the run's `lean-audit/audit-*/`.
 
 Its result is of kind `FAST_KIND`, never a Lean verdict: no kernel replay and no tests. The kind is written into the
 `audit.json` and each package's `report.json` it leaves (`--out`, else the run's `lean-audit/`, else a temporary directory) and,
