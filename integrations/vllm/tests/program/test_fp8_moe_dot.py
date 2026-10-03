@@ -1,6 +1,6 @@
 """The block-FP8 fused-MoE expert GEMMs with the target's e4m3 k32 step (`fp8_moe` `MoeExpertFp8Block*_v3{..., DOT}`), their
 expert-indexed pair forms (`fp8_moe_experts` `MoeExpertFp8Gemm(W)_v1{E,K,N,G,KB,SWAP,DOT}`), and their binding on the declared target
-(`targets.moe_expert_fp8_gemm_spec`, keyed on `GemmTarget.fp8_dot`):
+(`targets.moe_expert_fp8_gemm_spec`, keyed on `GemmTarget.fp8_moe_dot`):
 
 * with Hopper's step the `_v3` forms are the `_v1` Definitions, and with sm_120's they are its chain (`moe_model` with the step);
 * one 32-wide tile the two steps sum differently, which the w13 word shows at BLOCK_SIZE_K 32, the sm_120 launch's;
@@ -8,9 +8,12 @@ expert-indexed pair forms (`fp8_moe_experts` `MoeExpertFp8Gemm(W)_v1{E,K,N,G,KB,
 * the pair forms at expert e are the `_v3` GEMMs over that expert's rows and scales, and an id outside [0, E) selects NaN words;
 * their Boolean versions (`boolean_fp8_moe`: `_v4` of the `_v3` forms, `_v2` of the pair forms and gathers) agree with their word
   views, routed ids in range and out of it, and the switch maps each word view to them;
-* cc 12.0 binds them with `BlackwellE4m3QmmaDot32_v1`, and the targets that record no e4m3 step refuse by name.
+* cc 12.0 binds them with `BlackwellE4m3QmmaDot32_v1` once blackwell_consumer records the step (registered here by the `sm120_moe_step`
+  fixture), refuses by name until then, and the targets that record no e4m3 step refuse by name.
 """
 from __future__ import annotations
+
+import dataclasses
 
 import numpy as np
 import pytest
@@ -30,6 +33,7 @@ from verity_vllm.program.kernels import fp8_moe_rows as MR
 from verity_vllm.program.registry import boolean_fp8_moe as BM
 from verity_vllm.program.registry import fp8_moe as M
 from verity_vllm.program.registry import fp8_moe_experts as X
+from verity_vllm.program.registry import gemm_targets as GT
 from verity_vllm.program.registry import targets as T
 from tests.program.test_boolean_fp8 import _flat, _inputs
 from tests.program.test_fp8_moe import ONE, _bf16, _ffma, _fmul, _operands, _twin_agrees, _wide
@@ -198,7 +202,21 @@ def _tp(cc):
     return TargetProfile(compute_capability=cc)
 
 
-def test_cc12_binds_the_sm120_step_and_the_others_refuse() -> None:
+@pytest.fixture
+def sm120_moe_step(monkeypatch):
+    """blackwell_consumer with the Triton fused-MoE e4m3 step recorded, as its registration with P1's evidence will record it."""
+    gt = dataclasses.replace(GT.REGISTERED["blackwell_consumer"], fp8_moe_dot="BlackwellE4m3QmmaDot32")
+    monkeypatch.setitem(GT.REGISTERED, "blackwell_consumer", gt)
+
+
+def test_cc12_refuses_until_blackwell_consumer_records_the_moe_step() -> None:
+    """The step is the fused-MoE kernel's own measurement: cc 12.0's per-tensor FP8 step (`fp8_dot`) does not register it."""
+    assert GT.REGISTERED["blackwell_consumer"].fp8_dot == "BlackwellE4m3QmmaDot32"
+    with pytest.raises(T.UnregisteredTarget, match=r"blackwell_consumer \(12\.0\): no registered e4m3 step \(GemmTarget.fp8_moe_dot\)"):
+        T.moe_expert_fp8_gemm_spec(_tp((12, 0)), 128, 4096, 384, 64, 32, False, routed=False)
+
+
+def test_cc12_binds_the_sm120_step_and_the_others_refuse(sm120_moe_step) -> None:
     assert T.moe_expert_fp8_dot(_tp((12, 0))) is BW
     assert T.moe_expert_fp8_gemm_spec(_tp((12, 0)), 128, 4096, 384, 64, 32, False, routed=False).id == \
         "MoeExpertFp8Gemm_v1{E=128,K=4096,N=384,G=64,KB=32,SWAP=False,DOT=BlackwellE4m3QmmaDot32_v1}"

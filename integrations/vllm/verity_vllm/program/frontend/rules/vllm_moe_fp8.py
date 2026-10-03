@@ -12,7 +12,7 @@
 (K/G, 1), B_scale's (cdiv(N, G) * K/G, 1, K/G) as (stride_bse, stride_bsk, stride_bsn), and `BLOCK_SIZE_K = min(BLOCK_SIZE_K, G)`.
 The pins are `vllm_moe.MOE_GEMM_PINS`' (the same kernel body, the batch-invariant default tile BLOCK 64/64/32, GROUP_SIZE_M 8, 4 warps,
 3 stages) with the FP8 numeric constexprs; SWAP_AB is False (`enable_swap_ab` holds on cc 9.0 only) and DOT is the target's e4m3 step
-(`registry.targets.moe_expert_fp8_dot`: cc 12.0 binds `BlackwellE4m3QmmaDot32`, every other target refuses by name).  The schedule
+(`registry.targets.moe_expert_fp8_dot`, the GEMM target's `fp8_moe_dot`; a target that records none refuses by name).  The schedule
 (sorted or naive) and the routed weights are `FusedMoeKernelRule`'s.
 """
 
