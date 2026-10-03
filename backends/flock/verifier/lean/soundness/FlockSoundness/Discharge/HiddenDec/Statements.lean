@@ -39,8 +39,8 @@ def DrawOkH (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : F
     ∀ st, Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some (dj S)) I.partition I.program =
       .ok st → st.mPts = mPts
 
-/-- **The openings at draw `S`, under hidden outputs**: `opnOf` at the statement setupHidden sets up at the record's draw
-`dj S` and its `fast100` schedule, on the first two proof files. -/
+/-- **The openings at draw `S`, under hidden outputs**: `opnOf` at the statement setupHidden sets up at the record's
+draw `dj S` and its `fast100` schedule, on the first two proof files. -/
 noncomputable def opnAtH (T : Finset (Fin n) → Reg → TabSpec mPts) (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
     (S : Finset (Fin n)) (R : Reg) (proofs : Array ByteArray) : Opens 𝔽 Dig × Salts (List UInt8) :=
   match Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some (dj S)) I.partition I.program with
