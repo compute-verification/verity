@@ -247,13 +247,14 @@ def test_a_recorded_runs_steps_require_the_store_and_get_its_custody_dir(tmp_pat
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     env = CHECK.env()
     assert env[CHECK.STORE_REQUIRED_ENV] == "1" and CHECK.CUSTODY_ENV not in env, "no key staged: required, nothing to pass"
+    assert env[CHECK.REGRESSION_ENV] == "1", "a recorded check blocks on the vLLM reference regression's T0 tier"
     (custody / "store.toml").write_text("[remote]\n")
     (custody / "cred.json").write_text("{}")
     env = CHECK.env()
     assert env[CHECK.CUSTODY_ENV] == str(custody.resolve()) and not any(k.startswith("RESEARCH_") for k in env)
     assert CHECK.CUSTODY_ENV not in CHECK._env_key(env), "the per-run path must not change what a pass is keyed on"
     monkeypatch.delenv("RESEARCH_RUN_ID")
-    assert CHECK.STORE_REQUIRED_ENV not in CHECK.env() and CHECK.CUSTODY_ENV not in CHECK.env()
+    assert not {CHECK.STORE_REQUIRED_ENV, CHECK.CUSTODY_ENV, CHECK.REGRESSION_ENV} & set(CHECK.env())
 
 
 def _repo(root: Path):
