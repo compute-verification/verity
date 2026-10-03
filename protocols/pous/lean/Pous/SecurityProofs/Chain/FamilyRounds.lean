@@ -274,4 +274,40 @@ theorem band_meets_64_d1 (d : ℕ) (hd : 1 ≤ d) (salt : Bits 256) :
   have h := (band_meets_family_d1 1 (by norm_num) d hd).2 salt
   rwa [chainBandSeg_one] at h
 
+/-! ## Proposal, not approved and not pinned: `D = 0`, `k = 89`
+
+At `D = 0` the responder makes no `Π₂` call and answers from its state alone, so the band needs no bound on its
+in-degree (every `d ≥ 0`). The same recipe gives `k = 89`, which `N = 1` (`p₀ ≤ 0.949459`) and `N ≥ 2` (`p₀ ≤ 0.949106`
+at `N = 2`) both need, with `r = 9495/10000` (`r^89 ≈ 0.00993`). `ProposedBandMultiMeetsFamilyD0` is
+`BandMultiMeetsFamily` with `D = 0`, `k = 89` and no bound on `d`. It is not a guarantee: it is not in `Pous.Guarantees`,
+not pinned, and cited by nothing. -/
+
+/-- **Proposed, not approved: the band store at `D = 0` rounds and `k = 89`**, every `1 ≤ N ≤ 2^64` and every `d`,
+both domain layouts. -/
+def ProposedBandMultiMeetsFamilyD0 : Prop :=
+  ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ,
+    (∀ salt : Bits 192,
+      Pous.Meets (chainBandSeg N (2 ^ 9) d 524288 512 (segDom salt (2 ^ 9))) .sequential 0 (2 ^ 20) 89
+        ((2⁻¹ : ℝ≥0∞) ^ 128)) ∧
+    (∀ salt : Bits 256,
+      Pous.Meets (chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) .sequential 0 (2 ^ 20) 89
+        ((2⁻¹ : ℝ≥0∞) ^ 128))
+
+/-- The certificate's numbers at `D = 0`, `k = 89`, `r = 9495/10000`. -/
+theorem βOne_0_89 : βOne 0 89 = 267874909 := rfl
+
+theorem cert_d0_one : (1 - (9495 / 10000 : ℝ)) * 2 ^ 28 + 18 / 19 * 2 ^ 28 + 512 ≤ ((βOne 0 89 : ℕ) : ℝ) := by
+  rw [βOne_0_89]; norm_num
+
+theorem cert_d0_fam :
+    (1 - (9495 / 10000 : ℝ)) * 2 ^ 28 + 18 / 19 * 2 ^ 28 + 512 + 266294 ≤ ((523898 * (512 - 0) : ℕ) : ℝ) := by
+  norm_num
+
+theorem cert_d0_pow : (9495 / 10000 : ℝ) ^ 89 ≤ 1 / 100 := by norm_num
+
+/-- **`ProposedBandMultiMeetsFamilyD0`, proved** (unconditional). -/
+theorem band_meets_family_d0 : ProposedBandMultiMeetsFamilyD0 := fun N _ hN d =>
+  band_meets_rounds chainExPostFactoG_v6 0 89 _ _ (by norm_num) (by norm_num) cert_d0_one (by norm_num) cert_d0_pow
+    cert_d0_fam (by norm_num) cert_d0_pow N hN d (Nat.zero_le d)
+
 end Pous.BandMulti.Rounds
