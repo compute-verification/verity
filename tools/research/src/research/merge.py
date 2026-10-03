@@ -3,6 +3,8 @@
 `research merge --train --prepare BRANCH [--onto BASE] N@SHA ...`: build a train and push it as BRANCH for its check (`prepare`).
 `research merge --sweep [--into BRANCH] [--remote origin] [--dry-run]`: close the pull requests that landed and delete their branches
 (`sweep`).
+`research merge --canary [--tool check] [--json]`: the gates' self-test, run daily: three attempts they must refuse and a control
+they must admit, in scratch stores (`canary`).
 
 Run in the checkout of the target branch.  It merges the commit REF names (`git merge --no-ff`) only if the evidence store holds
 a passing attempt of the tool (default `check`) for that exact commit: `state` done, rc 0, source commit REF's, tree clean, as
@@ -210,6 +212,69 @@ def unchecked_pushes(repo: Path, lines: list[str], store, into: str = "main", to
                    for x in [tip, *parents[1:]]):
             bad.append(tip)
     return bad
+
+
+CANARY_SCHEMA = "research/merge-canary/v1"
+#: `--canary`'s attempts of one commit, each alone in a store: (case, what it is); every gate must refuse all but the control
+CANARY = (("no-result", "a passing check that published no result"),
+          ("wrong-kind", "a passing check whose result is a bench-result/v1"),
+          ("unreadable-record", "a passing check whose attempt record can't be read"),
+          ("control", "a passing check whose result is of a kind the declaration produces"))
+
+
+def canary(repo: Path, tool: str = "check") -> dict:
+    """The `research/merge-canary/v1` report of `--canary`: each CANARY attempt, alone in a scratch store with no remote, put to
+    the gate and the push guard for a commit of a scratch repository whose declaration of ``tool`` is ``repo``'s own; ``ok``
+    when both refuse every bad one and admit the control.  Nothing of ``repo``'s or the evidence store's is read or written
+    beyond that declaration."""
+    from .runs import new_run_id
+    from .store import tools_registry
+    from .store.local import LocalStore
+
+    rel = Path(*tools_registry.REGISTRY.get(tool, tool).rpartition(":")[0].split(".")).with_suffix(".py")
+    if not (repo / rel).is_file():
+        raise Refused(f"this checkout has no {rel}, its declaration of `{tool}`: run the canary in the target's checkout")
+    kinds = sorted(produced(repo, tool))
+    ident = ("-c", "user.name=research merge canary", "-c", "user.email=canary@research.invalid", "-c", "commit.gpgsign=false",
+             "-c", "core.hooksPath=/dev/null")
+    cases = []
+    with tempfile.TemporaryDirectory(prefix="research-merge-canary-") as tmp:
+        scratch = Path(tmp) / "repo"
+        (scratch / rel).parent.mkdir(parents=True)
+        (scratch / rel).write_bytes((repo / rel).read_bytes())
+        _git(Path(tmp), "init", "-q", "-b", "main", str(scratch))
+        _git(scratch, "add", "-A")
+        _git(scratch, *ident, "commit", "-q", "-m", "the canary's target")
+        base = _git(scratch, "rev-parse", "HEAD").stdout.strip()
+        _git(scratch, "checkout", "-q", "-b", "candidate")
+        (scratch / "candidate.txt").write_text("a change no step of the declaration covers\n")
+        _git(scratch, "add", "candidate.txt")
+        _git(scratch, *ident, "commit", "-q", "-m", "the canary's candidate")
+        commit = _git(scratch, "rev-parse", "HEAD").stdout.strip()
+        _git(scratch, "checkout", "-q", "main")
+        for case, what in CANARY:
+            store = LocalStore(Path(tmp) / f"store-{case}", config_path=Path(tmp) / "no-remote.toml")
+            kind = {"no-result": None, "wrong-kind": "bench-result/v1"}.get(case, kinds[0] if kinds else "check/v1")
+            rid = new_run_id()
+            store.put_attempt({
+                "schema": "research/attempt/v0.1", "id": rid, "tool": {"name": tool, "version": None}, "derivation": "drv:" + "0" * 64,
+                "reuse_key": None, "argv": [], "params": {}, "key_params": [], "inputs": {}, "conditions": {}, "key_conditions": [],
+                "source": {"commit": commit, "dirty": False}, "closure": None, "execution": {}, "cost": None,
+                "status": {"state": "done", "rc": 0}, "outputs": {"result": store.put_artifact(kind, {"steps": []})} if kind else {},
+                "telemetry": None})
+            if case == "unreadable-record":
+                store.attempt_path(rid).unlink()
+                store.attempt_path(rid).write_text("{")
+            try:
+                gate(scratch, commit, "main", store, tool, log=lambda *_: None)
+                at_gate = "admitted"
+            except Refused as e:
+                at_gate = f"refused: {e}"
+            pushed = unchecked_pushes(scratch, [f"refs/heads/main {commit} refs/heads/main {base}"], store, "main", tool)
+            want = "admitted" if case == "control" else "refused"
+            cases.append({"case": case, "attempt": what, "want": want, "gate": at_gate, "push_guard": "refused" if pushed else "admitted",
+                          "ok": at_gate.split(":")[0] == want and ("refused" if pushed else "admitted") == want})
+    return {"schema": CANARY_SCHEMA, "tool": tool, "produces": kinds, "cases": cases, "ok": all(c["ok"] for c in cases)}
 
 
 def install_push_guard(repo: Path, into: str = "main", tool: str = "check") -> Path | None:
@@ -688,10 +753,34 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
     ap.add_argument("--guard-push", action="store_true", help="the pre-push hook `research merge` installs: read git's pre-push "
                     "lines on stdin and refuse a push that adds to --into a commit with no passing --tool attempt of its tree")
+    ap.add_argument("--canary", action="store_true", help="merge nothing: put the three attempts every gate must refuse (no "
+                    "result, a result of another kind, a record that can't be read) and a control it must admit to the gate and the "
+                    "push guard, in scratch stores, under this checkout's declaration of --tool; exit 1 unless all are refused and "
+                    "the control admitted")
+    ap.add_argument("--json", action="store_true", help=f"--canary: print its report as JSON ({CANARY_SCHEMA})")
     a = ap.parse_args(argv)
     from .store.local import LocalStore
 
     repo = Path.cwd()
+    if a.json and not a.canary:
+        ap.error("--json goes with --canary")
+    if a.canary:
+        if a.ref or a.train or a.sweep or a.guard_push:
+            ap.error("--canary takes no refs and no other mode")
+        try:
+            report = canary(repo, a.tool)
+        except Refused as e:
+            return refuse(PROG, str(e))
+        if a.json:
+            print(json.dumps(report, indent=1))
+        for c in report["cases"]:
+            seen = f"the gate {c['gate'].split(':')[0]} it, the push guard {c['push_guard']} it"
+            print(f"research merge: canary: {c['case']} ({c['attempt']}): {seen}" + ("" if c["ok"] else f"; it must be {c['want']}: "
+                  f"{c['gate']}"), file=sys.stderr if a.json else sys.stdout)
+        if not report["ok"]:
+            print(f"research merge: canary FAILED: a gate admits what it must refuse, or refuses the control (`--tool {a.tool}` "
+                  f"produces {', '.join(report['produces']) or 'nothing'})", file=sys.stderr)
+        return OK if report["ok"] else FINDING
     if a.guard_push:
         bad = unchecked_pushes(repo, sys.stdin.read().splitlines(), LocalStore(a.store), a.into, a.tool)
         for c in bad:

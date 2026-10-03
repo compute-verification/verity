@@ -581,3 +581,45 @@ def test_the_push_guard_allows_a_train_fast_forward_and_its_hook_ignores_other_b
     pushed = subprocess.run([str(hook)], input=f"refs/heads/main {stray} refs/heads/main {base}\n", text=True, cwd=main,
                             env=env, capture_output=True)
     assert pushed.returncode == 3 and "refused: the push" in pushed.stderr
+
+
+def test_the_canary_passes_only_while_every_gate_refuses_the_three_bad_attempts_and_admits_the_control(tmp_path, monkeypatch, capsys):
+    """The monitors' daily `research merge --canary`: under the target's own declaration, an attempt with no result, one of
+    another kind and one whose record can't be read must each be refused by the gate and the push guard, and a good one
+    admitted.  A gate that stops reading the record (main before this, as `refused` answering None) admits all three; one whose
+    declaration produces nothing refuses the control.  It reads and writes nothing of the evidence store."""
+    import research.merge as M
+    from research.store.local import LocalStore
+
+    main, _feat, _tip = _repos(tmp_path)
+    monkeypatch.chdir(main)
+    assert merge_main(["--canary", "--json"]) == 0
+    out, _ = capsys.readouterr()
+    report = json.loads(out)
+    assert report["schema"] == "research/merge-canary/v1" and report["produces"] == ["check/v1"] and report["ok"]
+    assert [(c["case"], c["gate"].split(":")[0], c["push_guard"]) for c in report["cases"]] == [
+        ("no-result", "refused", "refused"), ("wrong-kind", "refused", "refused"), ("unreadable-record", "refused", "refused"),
+        ("control", "admitted", "admitted")]
+    assert "its attempt can't be read" in report["cases"][2]["gate"]
+    assert not LocalStore().index.sql("SELECT id FROM attempts")
+    assert _git(main, "status", "--porcelain") == "" and "pre-push" not in os.listdir(main / ".git" / "hooks")
+
+    with monkeypatch.context() as m:
+        m.setattr(M, "refused", lambda *a, **k: None)
+        assert merge_main(["--canary"]) == 1
+        out, err = capsys.readouterr()
+        assert out.count("the gate admitted it, the push guard admitted it") == 4 and "canary FAILED" in err
+    with monkeypatch.context() as m:
+        m.setattr(M, "produced", lambda *a: frozenset())
+        assert merge_main(["--canary"]) == 1
+        assert "control (a passing check whose result is of a kind the declaration produces): the gate refused it" in capsys.readouterr().out
+
+    monkeypatch.chdir(tmp_path)
+    assert merge_main(["--canary"]) == 3 and "no tools/check/tool.py, its declaration of `check`" in capsys.readouterr().err
+    for argv in (["--canary", "feat"], ["--canary", "--sweep"], ["--json", "feat"]):
+        try:
+            merge_main(argv)
+        except SystemExit as e:
+            assert e.code == 2, argv
+        else:
+            raise AssertionError(f"{argv} is a usage error")

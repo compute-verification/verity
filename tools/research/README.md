@@ -94,6 +94,7 @@ research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
 research merge --train --prepare BRANCH [--onto BASE] N@SHA ...      # build a train, lint it, push it for train.sh
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
+research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
 research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research slack ask|announce|reply|pickup|done|decline|roster|match|verify-author|read|handles|subscriptions|groups sync [--dry-run]   # Slack (slack.py, below)
@@ -109,8 +110,10 @@ map's payload from the two mirrors.
 `research merge` is how `main` receives a merge: in the target's checkout it runs `git merge --no-ff REF` only when the store
 (refreshed from the remote first, when one is usable) holds an attempt of the tool, default `check`, with `state` done, rc 0,
 and a clean source at REF's exact commit, and when the target's tip is an ancestor of REF, so the merged tree is the checked one.
-The merge commit carries a `Check: <attempt id>` trailer. The tool is the repository's (`tools/check`); `research` only reads
-its attempts.
+The attempt's own record must agree, and its result be of a kind the target's declaration produces (`check/v1`): no result, or an
+unreadable record or result, passes no gate. The merge commit carries a `Check: <attempt id>` trailer. The tool is the
+repository's (`tools/check`); `research` only reads its attempts. A refusal exits 3. `--canary` checks, in scratch stores, that the
+gate and the push guard refuse an attempt with no result, one of another kind and one with an unreadable record, and admit a good one.
 
 `research merge --train A B C` merges the refs in order onto the target's tip in a scratch worktree (one `--no-ff` merge each,
 so the chain's commits are the train's prefixes), records the tool on the last (`research run --tool`, `--on` a machine and
