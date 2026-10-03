@@ -8,10 +8,11 @@ import Verity.SecurityProofs.Game.Prob
 * **One prover** (`gammaHidden_of_sampled`): on each draw, when the hidden audit accepts while some drawn tile is
   neither good nor blank, that tile's verdict was accept (`hidden_pointwise`). So the hidden audit's win probability is
   at most `GγSampled`'s plus, over the `t` draws, `TileProofSound`'s per-draw error.
-* **Every prover in the class** (`gammaHidden_of_sampled_all`): `GγSampled` and `TileProofSoundAll` give `GγHidden`, at
-  `t·ηzk(q)` more error, for any hidden audit.
-* **The headline** (`pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192`): v1 under rev1 per tile at 1/1,000, 8192³,
-  0.36949% under the hidden audit.
+* **Every prover in the class** (`gammaHidden_of_sampled_all`): `GγSampled` and the open obligation
+  `TileProofSoundAll` give `GγHidden`, at `t·ηzk(q)` more error, for any hidden audit and every opening.
+* **The headline, conditional** (`pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192`): v1 under rev1 per tile at 1/1,000,
+  8192³, 0.36949% under the hidden audit, for a free hidden audit and `ηzk`; nothing about C-Flock until its instance
+  lands.
 -/
 
 namespace Pouw.PearlC
@@ -76,8 +77,9 @@ theorem gammaHidden_of_sampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype 
     (η : ℕ → ℕ → ℝ) (h : GγSampled CM P TR D γ η) (U : Workload) (hU : U.InDomain P D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ)
     (hq : q ≤ 2 ^ 64) (A : Adversary CM) (hA : A.Bounded U T q) (w : ℕ → ℕ) (κ : ℝ) (hκ : 0 < κ)
     (hw : ∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) (t : ℕ) (εs : ℝ) (hεs : εs ≤ 1)
-    (σ : HA.Prover TR U (A.transcript U) w t) (ηzk : ℝ) (hσ : TileProofSound P TR HA U (A.transcript U) σ ηzk) :
-    HA.winProb TR U (A.transcript U) σ γ T εs ≤ (1 - εs) ^ t + η q U.layout.N + t * ηzk := by
+    (op : (Q → R) → S → HA.Opening) (σ : HA.Prover TR U (A.transcript U) op w t) (ηzk : ℝ)
+    (hσ : TileProofSound P TR HA U (A.transcript U) op σ ηzk) :
+    HA.winProb TR U (A.transcript U) op σ γ T εs ≤ (1 - εs) ^ t + η q U.layout.N + t * ηzk := by
   classical
   have hs := h U hU T hT q hq A hA w κ hκ hw t εs hεs
   refine le_trans (ex_mono fun x => hidden_pointwise _ (σ x)
@@ -88,25 +90,31 @@ theorem gammaHidden_of_sampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype 
       if ((x.2.2 i).1 : ℕ) ∈ goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
           blankTiles TR U (A.transcript U x.1 x.2.1) then 0 else
         (Verity.Game.prob (fun v => v.getD i false = true)
-          (HA.batch x.1 x.2.1 U (HA.root U (A.transcript U x.1 x.2.1)) x.2.2) (σ x)).toReal) ≤ t * ηzk := by
+          (HA.batch x.1 x.2.1 U (HA.root U (A.transcript U x.1 x.2.1) (op x.1 x.2.1)) x.2.2) (σ x)).toReal) ≤
+        t * ηzk := by
     refine le_trans (Finset.sum_le_sum fun i _ => hσ i) ?_
     simp
   linarith
 
-/-- **L2: the hidden audit keeps the sampled audit's γ**, for every prover in the proof system's class: `GγSampled` and
-`TileProofSoundAll` give `GγHidden`, at `t·ηzk(q)` more error, for any hidden audit. -/
+/-- **L2: the hidden audit keeps the sampled audit's γ**, for every opening and every prover in the proof system's
+class: `GγSampled` and the open obligation `TileProofSoundAll` give `GγHidden`, at `t·ηzk(q)` more error, for any
+hidden audit. -/
 theorem gammaHidden_of_sampled_all [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (HA : HiddenAudit Q R S) (γ : ℝ)
     (η : ℕ → ℕ → ℝ) (ηzk : ℕ → ℝ) (h : GγSampled CM P TR D γ η) (hzk : TileProofSoundAll P TR D HA ηzk) :
     GγHidden CM P TR D HA γ η ηzk :=
-  fun U hU T hT q hq A hA w κ hκ hw t εs hεs σ hσ =>
-    gammaHidden_of_sampled CM P TR D HA γ η h U hU T hT q hq A hA w κ hκ hw t εs hεs σ (ηzk q)
-      (hzk U hU (A.transcript U) w t q σ hσ)
+  fun U hU T hT q hq A hA w κ hκ hw t εs hεs op σ hσ =>
+    gammaHidden_of_sampled CM P TR D HA γ η h U hU T hT q hq A hA w κ hκ hw t εs hεs op σ (ηzk q)
+      (hzk U hU (A.transcript U) op w t q σ hσ)
 
 variable [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (sem : PearlCSem Q R S)
 
-/-- **v1 under rev1 per audit tile at the cap 1/1,000, 8192³, under the hidden audit**, FP32 at 8.376, the honest cast at
-8.72: `γ = 1648180439/446072750000` (0.36949%), for any hidden audit sound per tile up to `ηzk(q)`. -/
+/-- **v1 under rev1 per audit tile at the cap 1/1,000, 8192³, under the hidden audit, conditional**, FP32 at 8.376, the
+honest cast at 8.72: `γ = 1648180439/446072750000` (0.36949%), for any hidden audit sound per tile up to `ηzk(q)`.
+
+Conditional: `HA` and `ηzk` are free, and the open obligation `TileProofSoundAll` holds at a degenerate hidden audit
+(`Bounded := fun _ _ _ _ _ => False`, an empty class) for any `ηzk ≥ 0`, so this says nothing about C-Flock until
+C-Flock's `HiddenAudit` instance and the obligation's discharge at it land. Cite it only as conditional. -/
 theorem pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192 (HA : HiddenAudit Q R S) (ηzk : ℕ → ℝ)
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000))
     (hzk : TileProofSoundAll (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000)
