@@ -29,7 +29,37 @@ theorem prob_auditLive_escape_le (L : Law n) (live : Finset (Fin n) → Reg → 
     (τ : Strategy (auditLive L Reg live)) (acc : Reg × Finset (Fin n) × Exec.Transcript → Prop)
     (F : Reg → Finset (Fin n)) (K : ℕ) :
     prob (fun o => acc o ∧ (∀ u ∈ o.2.1, u ∉ F o.1) ∧ K ≤ (F o.1).card) (auditLive L Reg live) τ ≤ L.miss K := by
-  sorry
+  classical
+  refine (prob_le_value _ _ τ).trans ?_
+  refine (value_mono (q := fun o => Disjoint o.2.1 (F o.1) ∧ K ≤ (F o.1).card)
+    (fun o h => ⟨Finset.disjoint_left.2 h.2.1, h.2.2⟩) _).trans ?_
+  unfold auditLive
+  rw [value_send]
+  refine iSup_le fun R => ?_
+  rw [value_coin]
+  have hω : ∀ ω : L.Ω, value (fun o => Disjoint o.2.1 (F o.1) ∧ K ≤ (F o.1).card)
+      ((live (L.draw ω) R).map fun t => (R, L.draw ω, t)) ≤
+      if Disjoint (L.draw ω) (F R) ∧ K ≤ (F R).card then 1 else 0 := by
+    intro ω
+    rw [value_map]
+    by_cases hd : Disjoint (L.draw ω) (F R) ∧ K ≤ (F R).card
+    · rw [ite_eq_left_of_eq_true _ _ (eq_true hd)]
+      exact value_le_one _ _
+    · rw [ite_eq_right_of_eq_false _ _ (eq_false hd), value_congr (q := fun _ => False) (fun _ => iff_false_intro hd),
+        value_false]
+  calc ∑ ω : L.Ω, (Fintype.card L.Ω : ℝ≥0∞)⁻¹ *
+        value (fun o => Disjoint o.2.1 (F o.1) ∧ K ≤ (F o.1).card)
+          ((live (L.draw ω) R).map fun t => (R, L.draw ω, t))
+      ≤ prCoin fun ω => Disjoint (L.draw ω) (F R) ∧ K ≤ (F R).card :=
+        Finset.sum_le_sum fun ω _ => by beta_reduce; convert mul_le_mul_right (hω ω) _ using 2; congr
+    _ ≤ L.miss K := by
+        by_cases hK : K ≤ (F R).card
+        · exact (prCoin_mono fun ω h => h.1).trans (L.escape_le_miss hK)
+        · have h0 : (prCoin fun ω => Disjoint (L.draw ω) (F R) ∧ K ≤ (F R).card) = 0 := by
+            unfold prCoin avg
+            simp [hK]
+          rw [h0]
+          exact zero_le
 
 section Session
 
@@ -55,7 +85,19 @@ theorem forgedMiss_realR (hS : Law.ExecStrata σs ks St) (hA3 : Assumptions.Unif
     (hF : ∀ o o' : Reg × Finset (Fin n) × Exec.Transcript, o.1 = o'.1 → F o = F o') (K : ℕ) :
     ForgedMiss (realSessionR I ht own dj y₀ wr dg N hc hU hpub hscope σs ks hks St Kd pop Lb src k Rw M ρ t' qF qS) τ
       (fun o => o.2.1) F K := by
-  sorry
+  unfold ForgedMiss
+  have e : (fun o : Reg × Finset (Fin n) × Exec.Transcript =>
+      LiveAcceptsZKR I own o ∧ (∀ u ∈ o.2.1, u ∉ F o) ∧ K ≤ (F o).card) =
+      fun o => LiveAcceptsZKR I own o ∧ (∀ u ∈ o.2.1, u ∉ F (o.1, ∅, ⟨"", #[]⟩)) ∧
+        K ≤ (F (o.1, ∅, ⟨"", #[]⟩)).card :=
+    funext fun o => by rw [hF o (o.1, ∅, ⟨"", #[]⟩) rfl]
+  change prob (fun o : Reg × Finset (Fin n) × Exec.Transcript =>
+      LiveAcceptsZKR I own o ∧ (∀ u ∈ o.2.1, u ∉ F o) ∧ K ≤ (F o).card)
+    (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
+      (Law.stratified σs ks hks).miss K
+  rw [e]
+  exact (prob_auditLive_escape_le _ _ τ _ (fun R => F (R, ∅, ⟨"", #[]⟩)) K).trans
+    (Law.execOS_miss_le σs ks hks St hS Kd pop Lb src hA3 K)
 
 end Session
 
@@ -115,6 +157,10 @@ theorem private_circuit_sound_realF {cls : Universal.Cls}
     ∀ K₁, prob (fun o => LiveAcceptsZKR I own o ∧
           K₀ + K₁ ≤ wrong (Universal.eval C) (Universal.size C) (xOf (s.vals τ o)) (yOf (s.vals τ o))) s.G τ
         ≤ s.Lm.miss K₀ + s.Lm.miss K₁ + s.εks τ + s.δlink τ + ENNReal.ofReal (q ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  intro s
+  have h := private_circuit_sound_real I ht own dj y₀ wr dg N hc hU hpub hscope σs ks hks St hS Kd pop Lb src hA3 hA6
+    hk hRw hM hρ hr ht' C hC progOf xOf yOf hunit rd ps row hreg τ hCR valPair hstep K₀ cost q hcost hBind
+  exact ⟨h.1, fun K₁ => h.2 K₁ (forgedMiss_realR I ht own dj y₀ wr dg N hc hU hpub hscope σs ks hks St Kd pop Lb src
+    k Rw M ρ t' qF qS hS hA3 τ _ (fun _ _ _ => rfl) K₁)⟩
 
 end FlockSoundness.Discharge.PrivateCircuit
