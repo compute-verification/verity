@@ -9274,7 +9274,11 @@
    "assumptions": [],
    "type_hash": "34bdb7ce18f3be8417d7cf4de685cd805721dcd057c0f5da346c4e6ac64d2b84"
   },
-  "FlockSoundness.Discharge.ZkExec.zk_cut": {},
+  "FlockSoundness.Discharge.ZkExec.zk_cut": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_cut : FlockSoundness.Discharge.ZkExec.ZkCut"],
+   "assumptions": [],
+   "type_hash": "affaa3e82e9726a8255ba9947edd0606d840d21a9948ef3744546e7e1d866cc6"
+  },
   "FlockSoundness.Discharge.ZkExec.zk_decode_sizes": {
    "signature": ["FlockSoundness.Discharge.ZkExec.zk_decode_sizes : FlockSoundness.Discharge.ZkExec.ZkDecodeSizes"],
    "assumptions": [],
@@ -15534,6 +15538,7 @@
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_execOS",
@@ -15806,6 +15811,7 @@
     "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
     "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -16380,6 +16386,7 @@
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
     "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_execOS",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_runs",
@@ -16708,6 +16715,7 @@
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
     "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_execOS",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_runs",
@@ -19048,14 +19056,22 @@
     "FlockSoundness.Discharge.DecodeZL.wLev": "34615fbf1d9437e8edc00f193d6b4a66a0a5ca88c5f2ebd7e1ee79dc0367eb54",
     "FlockSoundness.Discharge.DecodeZL.wMid": "a10467e4576de872572766132148aaaef8a943e493bf94fae4e52ab8b0283f6f"
    },
-   "pins": ["FlockSoundness.Discharge.DecodeZL.lig_carries", "FlockSoundness.Discharge.ZkExec.zk_carries"]
+   "pins": [
+    "FlockSoundness.Discharge.DecodeZL.lig_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut"
+   ]
   },
   "FlockSoundness.Discharge.DecodeZL.OP": {
    "digest": "9018e2d637cf66590bbc2608db4d121e4fc3132f1155b237c75da7463a5e8019",
    "definitions": {
     "FlockSoundness.Discharge.DecodeZL.wOP": "fc88e5df91481d2c4eeec5021441e42abf6c64be5f7c5ea26a70643eab92ab5d"
    },
-   "pins": ["FlockSoundness.Discharge.DecodeZL.op_carries", "FlockSoundness.Discharge.ZkExec.zk_carries"]
+   "pins": [
+    "FlockSoundness.Discharge.DecodeZL.op_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut"
+   ]
   },
   "FlockSoundness.Discharge.DecodeZL.Statements": {
    "digest": "e6e4f0ef0f5876b1fbe3ca12ec310432cc7d510a9f08b9750d31182c6eae74db",
@@ -19115,7 +19131,8 @@
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
     "FlockSoundness.Discharge.DecodeZL.op_carries",
     "FlockSoundness.Discharge.DecodeZL.zl_carries",
-    "FlockSoundness.Discharge.ZkExec.zk_carries"
+    "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut"
    ]
   },
   "FlockSoundness.Discharge.DrawWords.Statements": {
@@ -19196,6 +19213,7 @@
     "FlockSoundness.Discharge.Exec.verify_cap_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Game.Plays.toT"
    ]
   },
@@ -19219,6 +19237,7 @@
     "FlockSoundness.Discharge.Exec.ringSwitch_emitted",
     "FlockSoundness.Discharge.Exec.zerocheck_emitted",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Discharge.ZkExec.zk_rep_frames"
    ]
   },
@@ -19375,6 +19394,7 @@
     "FlockSoundness.Discharge.Exec.rep_rounds",
     "FlockSoundness.Discharge.Exec.rep_rounds_retained",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Discharge.ZkExec.zk_rep_frames"
    ]
   },
@@ -19397,6 +19417,7 @@
     "FlockSoundness.Discharge.Exec.ringSwitch_emitted",
     "FlockSoundness.Discharge.Exec.zerocheck_emitted",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Discharge.ZkExec.zk_rep_frames"
    ]
   },
@@ -19626,6 +19647,7 @@
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
     "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_runs"
    ]
   },
@@ -20404,6 +20426,7 @@
     "FlockSoundness.Discharge.PlaysCoin.tapeOfGroups",
     "FlockSoundness.Discharge.PlaysCoin.toT_exact",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_runs"
    ]
   },
@@ -20539,6 +20562,7 @@
    },
    "pins": [
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Discharge.ZkExec.zk_decode_sizes",
     "FlockSoundness.Discharge.ZkExec.zk_rep_frames",
     "FlockSoundness.Discharge.ZkExec.zk_schedule_seams"
@@ -20558,6 +20582,7 @@
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
     "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_runs"
    ]
   },
@@ -20584,6 +20609,7 @@
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.verifyInner_ok",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
     "FlockSoundness.Discharge.ZkExec.zk_rep_frames",
     "FlockSoundness.Discharge.ZkExec.zk_verifyRep_ok",
@@ -23919,6 +23945,7 @@
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
     "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_execOS",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_runs",
@@ -24878,6 +24905,7 @@
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Refine.basis_eq",
     "FlockSoundness.Refine.final_refines",
     "FlockSoundness.Refine.ligerito_accepts",
@@ -24934,6 +24962,7 @@
     "FlockSoundness.Discharge.Exec.zerocheck_emitted",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Discharge.ZkExec.zk_rep_frames",
     "FlockSoundness.Refine.encs_inj",
     "FlockSoundness.Refine.zerocheck_frames"
@@ -24953,6 +24982,7 @@
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Refine.final_refines",
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
@@ -24985,6 +25015,7 @@
     "FlockSoundness.Discharge.Exec.opnOf_pair",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Refine.final_refines",
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
@@ -25213,6 +25244,7 @@
     "FlockSoundness.Discharge.Layout.keyRowsEnc_enc",
     "FlockSoundness.Discharge.Layout.keyedRows_enc",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Discharge.ZkExec.zk_rep_frames",
     "FlockSoundness.Prog.flock_headline",
     "FlockSoundness.Prog.flock_headline_L",
@@ -25383,6 +25415,8 @@
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
     "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt",
+    "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_execOS",
@@ -25490,6 +25524,7 @@
     "FlockSoundness.Discharge.Exec.rep_rounds_retained",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Discharge.ZkExec.zk_schedule_seams",
     "FlockSoundness.Refine.fast100_dims",
     "FlockSoundness.Refine.fast100_level",
@@ -25602,6 +25637,7 @@
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
+    "FlockSoundness.Discharge.ZkExec.zk_cut",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_execOS",
