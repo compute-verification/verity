@@ -6289,6 +6289,9 @@
    "assumptions": [],
    "type_hash": "607a4a9eaee30e48aec21d8fb83f079600f24e67df47b6a7bd73e81444d3d4d6"
   },
+  "FlockSoundness.Discharge.HdecCor.flock_headline_exec_dec": {},
+  "FlockSoundness.Discharge.HdecCor.flock_headline_exec_hidden_dec": {},
+  "FlockSoundness.Discharge.HdecCor.headline_tables_subset_dec": {},
   "FlockSoundness.Discharge.Hidden.commitPair_spec": {
    "signature": ["FlockSoundness.Discharge.Hidden.commitPair_spec : FlockSoundness.Discharge.Hidden.CommitPairSpec"],
    "assumptions": [],
