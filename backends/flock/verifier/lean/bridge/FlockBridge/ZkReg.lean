@@ -43,8 +43,6 @@ def OwnAtDraws (own : Array Flock.Registered.Port)
     OwnReads own c pub o.2.2
       (restrict rd (drawnReads (laySh (Reg := Reg) ht dj y₀ hc hU (pub := pub)) o.2.1)).isRead rd.port rd.readAt
 
--- Elaborating this at `laySh` exceeds the default 200000 heartbeats.
-set_option maxHeartbeats 4000000 in
 /-- **Registered reads of a `--zk --registered` session are sound.** In any game `G` on the live audit's outcomes (the
 registration, the draw and the transcript), played by `σ`: if the registrant's reads `rd` are the verifier's own at each
 accepted run's draw (`OwnAtDraws`), the registered-path finder meets `cr/sha-512` at `qR`, and the registrant's values
