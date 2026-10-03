@@ -3,7 +3,8 @@ outputs, one `Q_template_instance` class staged with `class_statement.Wiring`. T
 writers' output rows' `b || c`; a prover that gives layer 1 a made-up input, and one that commits the right value under a salt
 of its own, stage the same circuit with link rows that differ. The Lean verifier (`flock-verify statement --program`, when a Lean
 toolchain is present) accepts the honest statement and refuses both cheats and a linked statement without its program; a
-one-layer statement, with no cut wire, is accepted as before. When ``FLOCK_CIRCUIT`` names a build of ``flock-circuit``, the
+one-layer statement, with no cut wire, is accepted with its units derived when staged with `Wiring`, and as before when
+staged without. When ``FLOCK_CIRCUIT`` names a build of ``flock-circuit``, the
 live verifier gives the same verdicts with its own links file."""
 from __future__ import annotations
 
@@ -89,8 +90,9 @@ def _lanes(units, cl, tp, inputs: list[int], made_up=None):
 
 
 def _stage(topo, d: Path, wired: bool):
-    """The program, its partition and the stagings: honest, and with ``wired`` the two cheats (layer 1's x reads layer 0's
-    outputs flipped; the honest rows under link salts of their own)."""
+    """The program, its partition and the stagings: honest (with `Wiring`), and with ``wired`` the two cheats (layer 1's x reads
+    layer 0's outputs flipped; the honest rows under link salts of their own), else the honest lanes staged without `Wiring`
+    (``plain``)."""
     rng = random.Random(f"test-wired-links/{len(topo)}")
     fn, program = _program(topo)
     nets = [U.pad(U.Netlist(N_IN, tuple((rng.randrange(4), rng.randrange(N_IN + g), rng.randrange(N_IN + g)) for g in range(G)),
@@ -104,9 +106,11 @@ def _stage(topo, d: Path, wired: bool):
     (d / "partition.json").write_text(json.dumps(PO.build(program, query), sort_keys=True))
     (d / "program.desc").write_bytes(canonical_json(encode_program(program)))
     key = hashlib.sha256(b"test-wired-links").digest()
-    wiring = CS.Wiring(program, query, list(range(tp.population))) if wired else None
+    wiring = CS.Wiring(program, query, list(range(tp.population)))
     st = {"honest": CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "honest", key, packed=True, wiring=wiring)}
-    if wired:
+    if not wired:
+        st["plain"] = CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "plain", key, packed=True)
+    else:
         flip = {N + t: (lambda w: w[:-N_OUT] + [1 - b for b in w[-N_OUT:]]) for t in range(N)}
         st["made_up"] = CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs, flip), d / "made_up", key, packed=True,
                                  wiring=replace(wiring, strict=False))
@@ -204,11 +208,16 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
     bad, out = _lean("--circuit", str(d / "honest" / "circuit.txt"), "--public", str(d / "honest" / f"pub-{n}.bin"),
                      "--partition", str(d / "partition.json"))
     assert bad is None and "Linking needs the verifier's own program" in out, out
-    # a one-layer class: no cut wire, no links, accepted with its units derived
-    ok, out = _lean("--circuit", str(flat / "honest" / "circuit.txt"), "--public", str(flat / "honest" / f"pub-{tp2.population}.bin"),
+    # a one-layer class: staged with Wiring, no cut wire and no links, its units derived; staged without, as before (its
+    # template the unit class's own, so its units are taken as stated)
+    k = tp2.population
+    ok, out = _lean("--circuit", str(flat / "honest" / "circuit.txt"), "--public", str(flat / "honest" / f"pub-{k}.bin"),
                     "--partition", str(flat / "partition.json"), "--program", str(flat / "program.desc"))
     assert ok is not None and "no cut wire" in ok["partition_check"]["note"], out
-    assert "links" not in _meta(flat / "honest")
+    assert "links" not in _meta(flat / "honest") and not {"links", "definition"} & set(_meta(flat / "plain"))
+    ok, out = _lean("--circuit", str(flat / "plain" / "circuit.txt"), "--public", str(flat / "plain" / f"pub-{k}.bin"),
+                    "--partition", str(flat / "partition.json"))
+    assert ok is not None and ok["partition_check"]["units"] == "as stated", out
 
 
 @pytest.mark.skipif(not (os.environ.get("FLOCK_CIRCUIT") and Path(os.environ["FLOCK_CIRCUIT"]).exists()),
@@ -227,5 +236,5 @@ def test_the_live_verifier_checks_links_against_its_own_file(staged):
     for cheat in ("made_up", "wrong_salt"):
         assert "the reader's row is not the writer's committed output row" in live(d / cheat, n, *links)
     assert "pass the verifier's own links file" in live(d / "honest", n)
-    assert "STATEMENT\t" in live(flat / "honest", tp2.population)
-    assert "the circuit declares no links" in live(flat / "honest", tp2.population, *links)
+    assert "STATEMENT\t" in live(flat / "plain", tp2.population)
+    assert "the circuit declares no links" in live(flat / "plain", tp2.population, *links)
