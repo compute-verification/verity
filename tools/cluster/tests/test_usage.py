@@ -88,12 +88,16 @@ def test_rows_split_at_the_hour_and_come_held_first_by_owner_then_the_free_time(
         ("2026-10-03T08:00Z", "circuits", "Kueue vllm-epoch-run", 60), ("2026-10-03T08:00Z", "proofs", "gpu-lease", 30),
         ("2026-10-03T08:00Z", None, None, 0)]
     assert all(r["schema"] == usage.ROW and r["node"] == "vy-nebius-1" for r in rows)
+    # 07Z was read for one minute, 08Z for one (two GPUs); GPU 2's lease reads nothing
+    assert {(r["hour"], r["minutes_read"]) for r in rows} == {("2026-10-03T07:00Z", 1), ("2026-10-03T08:00Z", 1)}
 
 
-def row(h: str, node: str, owner: str | None, kind: str | None, busy: float, idle: float, um: float = 0, useful: float | None = None):
+def row(h: str, node: str, owner: str | None, kind: str | None, busy: float, idle: float, um: float = 0, useful: float | None = None,
+        read: int = 60):
     held = owner is not None
     return {"schema": usage.ROW, "hour": h, "node": node, "owner": owner, "kind": kind, "held_s": busy + idle + um if held else 0,
-            "busy_s": busy, "idle_s": idle, "unmeasured_s": um, "useful_s": (busy if held else 0) if useful is None else useful}
+            "busy_s": busy, "idle_s": idle, "unmeasured_s": um, "useful_s": (busy if held else 0) if useful is None else useful,
+            "minutes_read": read}
 
 
 NAMES = {"vy-nebius-1": "node 1", "vy-nebius-2": "node 2"}
@@ -134,6 +138,7 @@ def test_record_writes_each_complete_hour_the_window_covered_whole_once_per_key(
     assert {(d["hour"], d["node"]) for d in map(json.loads, p.read_text().splitlines())} == {
         (h, n) for h in ("2026-10-03T08:00Z", "2026-10-03T09:00Z") for n in ("vy-nebius-1", "vy-nebius-2")}
     late = [row("2026-10-03T09:00Z", "vy-nebius-1", "proofs", "gpu-lease", 1, 1), row("2026-10-03T10:00Z", "vy-nebius-1", "x", "y", 1, 1)]
+    assert usage.record(late, p, ("hour", "node"), epoch("2026-10-03T11:02:00Z"), since) == 0   # 10Z's last scrape may be out
     assert usage.record(late, p, ("hour", "node"), epoch("2026-10-03T11:05:00Z"), since) == 1   # 09Z was written whole; 10Z now is
     lines = [{**row("2026-10-03T09:00Z", "vy-nebius-1", "circuits", "gpu-lease", 1, 1), "lane": "circuits", "complete": True}]
     q = tmp_path / "held-idle-hourly.jsonl"
@@ -191,11 +196,33 @@ def test_hourly_reports_the_last_h_hours_per_node_and_exits_1_when_a_node_is_sta
     assert [(r["hour"][11:13], r["node"]) for r in rep["rows"]] == [
         (h, n) for h in ("09", "08", "07") for n in ("vy-nebius-2", "vy-nebius-1")]
     assert rep["rows"][0]["busy_pct"] == 50.0 and rep["targets"] == {"busy_pct": 95.0, "useful_pct": 90.0}
-    rc, out = run(capsys, "hourly", "--node", "nebius-2", "--file", f)
+    rc, out = run(capsys, "hourly", "--node", "nebius-2", "--hours", "3", "--file", f)
     assert rc == 0 and "vy-nebius-1" not in out and "useful today:" in out
-    monkeypatch.setattr(usage, "clock", lambda: epoch("2026-10-03T12:30:00Z"))   # 09Z ended 3.5 h ago
+    monkeypatch.setattr(usage, "clock", lambda: epoch("2026-10-03T12:30:00Z"))   # 09Z ended 2.5 h ago
     rc, out = run(capsys, "hourly", "--file", f, "--json")
-    assert rc == 1 and len(json.loads(out)["findings"]) == 2
+    findings = json.loads(out)["findings"]
+    assert rc == 1 and [x.split(":")[0] for x in findings] == ["vy-nebius-1", "vy-nebius-1", "vy-nebius-2", "vy-nebius-2"]
+    assert "newest recorded hour is 2026-10-03T09:00Z" in findings[0]
+    assert findings[1].startswith("vy-nebius-1: 17 of the last 24 hours ended over 2 h ago and aren't recorded, from 2026-10-02T12:00Z")
+
+
+def test_an_hour_read_for_under_50_minutes_has_no_shares_and_a_part_read_or_missing_hour_is_a_finding(tmp_path, capsys,
+                                                                                                    monkeypatch):
+    # red team N: node 2's 8 GPUs read for 15 minutes of 08Z are 100 % busy of what was read, not of the hour
+    monkeypatch.setattr(usage, "clock", lambda: epoch("2026-10-03T11:20:00Z"))   # 07Z and 08Z ended over 2 h ago; 09Z not yet
+    f = record_file(tmp_path, [row("2026-10-03T07:00Z", "vy-nebius-2", "memory-accounting", "fill", 8 * 3600, 0),
+                               row("2026-10-03T08:00Z", "vy-nebius-2", "memory-accounting", "fill", 8 * 15 * 60, 0, read=15),
+                               row("2026-10-03T10:00Z", "vy-nebius-2", "memory-accounting", "fill", 8 * 3600, 0),
+                               *(row(f"2026-10-03T{h}:00Z", "vy-nebius-1", "proofs", "gpu-lease", 8 * 3600, 0) for h in ("08", "09", "10"))])
+    rc, out = run(capsys, "hourly", "--hours", "4", "--file", f, "--json")
+    rep = json.loads(out)
+    n2 = next(r for r in rep["rows"] if r["node"] == "vy-nebius-2" and r["hour"] == "2026-10-03T08:00Z")
+    assert (n2["gpu_s"], n2["minutes_read"], n2["busy_pct"], n2["useful_pct"]) == (7200.0, 15, None, None)
+    assert rc == 1 and rep["findings"] == [
+        "vy-nebius-1: 1 of the last 4 hours ended over 2 h ago and aren't recorded, from 2026-10-03T07:00Z",
+        "vy-nebius-2 2026-10-03T08:00Z: 15 of its 60 minutes read, so it has no busy or useful share"]
+    rc, out = run(capsys, "hourly", "--hours", "4", "--file", f)
+    assert rc == 1 and "MIN READ" in out and any(ln.startswith("2026-10-03T08:00Z  vy-nebius-2  15 ") for ln in out.splitlines())
 
 
 def test_wasters_ranks_one_days_holdings_and_finds_a_day_with_no_hours(tmp_path, capsys, monkeypatch):

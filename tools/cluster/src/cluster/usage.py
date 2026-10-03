@@ -22,6 +22,10 @@ read without utilization (node 2's sampler reads no NVML in a timed window, so a
 - A row's `owner` is the lane its holder's GPU-time counts to and its `kind` the job family the holder's name gives (a
   Kueue job's, a SkyPilot cluster's, the `who=` prefix of a node-2 lease, `gpu-lease` for a pool's lease), as the caller's
   `attribute` maps them; not yet a kind registered in `kinds/<owner>.toml`. Time nobody holds has owner and kind None.
+- A GPU-minute nobody read (the sampler down, a DCGM gap) is in no row unless a lease held it, so every row of an hour carries
+  `minutes_read`, the minutes of that hour with a reading of the node. An hour with fewer than `WHOLE_MIN` has no busy or
+  useful share, and `hourly` names it, as it names an hour missing from the record.
+- The console records an hour once, `SETTLE_S` after its end, when its last minute's readings are in.
 
 **Useful, today** (`USEFUL_TODAY`): busy time inside a holding the node's records name, a lease or a pod. Busy time on a
 GPU that only memory or a process holds (`NO_POD`, `NO_LEASE`), or a lease pool outside its leases (`POOL_UNLEASED`),
@@ -59,6 +63,8 @@ USEFUL_TODAY = ("busy inside a lease or a pod the node's records name; not on a 
 TARGET_BUSY_PCT = 95.0    # Daniel: per node and hour, >= 95% of the GPU time busy
 TARGET_USEFUL_PCT = 90.0  # and >= 90% of the busy time useful
 STALE_S = 2 * 3600        # the console records an hour within minutes of its end
+SETTLE_S = 180            # after an hour ends, its last minute's DCGM scrape and sampler lines are in by then
+WHOLE_MIN = 50            # of an hour's 60 minutes, read: fewer, and its shares say little about the hour
 TAIL_BYTES = 8 << 20      # of a record, more than a day of rows: what `record` reads for the keys it has
 NODES = {"nebius-1": nebius1.NODE, "nebius-2": nebius2.NODE}
 
@@ -86,8 +92,8 @@ def _unmeasured(r: tuple) -> float:
 def hourly(node: str, minutes: Iterable[tuple], leases: Iterable[Lease] | None = None, *,
            attribute: Callable[[str], tuple[str, str]], pooled: Callable[[str], bool] = lambda holder: False) -> list[dict]:
     """The node's rows, one per UTC hour, owner and kind, by the module's rules: `{schema, hour, node, owner, kind, held_s,
-    busy_s, idle_s, unmeasured_s, useful_s}`, held hours first by owner and kind, then the hour's time nobody held.
-    `attribute(holder)` is a reading's holder's (owner, kind); `leases` is None on a node without lease pools, and
+    busy_s, idle_s, unmeasured_s, useful_s, minutes_read}`, held hours first by owner and kind, then the hour's time nobody
+    held. `attribute(holder)` is a reading's holder's (owner, kind); `leases` is None on a node without lease pools, and
     `pooled(holder)` says a holder is a pool's own pod."""
     acc: dict[tuple, list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0])  # busy, idle, unmeasured seconds
     minutes = list(minutes)
@@ -128,13 +134,17 @@ def hourly(node: str, minutes: Iterable[tuple], leases: Iterable[Lease] | None =
             x[0] += rest * r[4]
             x[1] += rest * r[5]
             x[2] += rest * um
+    read: dict[str, set] = defaultdict(set)
+    for r in minutes:
+        read[hour(r[0])].add(r[0])
     out = []
     for (h, owner, kind), (busy, idle, um) in sorted(acc.items(), key=lambda kv: (kv[0][0], kv[0][1] is None,
                                                                                   kv[0][1] or "", kv[0][2] or "")):
         held = owner is not None
         out.append({"schema": ROW, "hour": h, "node": node, "owner": owner, "kind": kind,
                     "held_s": round(busy + idle + um, 3) if held else 0.0, "busy_s": round(busy, 3), "idle_s": round(idle, 3),
-                    "unmeasured_s": round(um, 3), "useful_s": round(busy, 3) if held and kind not in NOT_USEFUL else 0.0})
+                    "unmeasured_s": round(um, 3), "useful_s": round(busy, 3) if held and kind not in NOT_USEFUL else 0.0,
+                    "minutes_read": len(read[h])})
     return out
 
 
@@ -166,9 +176,9 @@ def held_idle(rows: Iterable[dict], now: float, targets: dict | None = None, nam
 
 
 def record(lines: Iterable[dict], path: str | Path, keys: tuple[str, ...], now: float, since: float = 0) -> int:
-    """Append each line of a UTC hour that has ended by `now` and started at or after `since` (so the readings covered it
-    whole) whose `keys` no line in the file has yet, without its `complete`; returns how many it wrote. It reads the
-    file's last TAIL_BYTES for the keys it has, which hold every hour since `since`."""
+    """Append each line of a UTC hour that ended SETTLE_S or more before `now` and started at or after `since` (so the
+    readings covered it whole) whose `keys` no line in the file has yet, without its `complete`; returns how many it wrote.
+    It reads the file's last TAIL_BYTES for the keys it has, which hold every hour since `since`."""
     path, have = Path(path), set()
     if path.exists():
         with open(path, "rb") as f:
@@ -181,7 +191,7 @@ def record(lines: Iterable[dict], path: str | Path, keys: tuple[str, ...], now: 
             except ValueError:
                 continue
             have.add(tuple(d.get(k) for k in keys))
-    new = [ln for ln in lines if since <= hour_t(ln["hour"]) and hour_t(ln["hour"]) + 3600 <= now
+    new = [ln for ln in lines if since <= hour_t(ln["hour"]) and hour_t(ln["hour"]) + 3600 + SETTLE_S <= now
            and tuple(ln.get(k) for k in keys) not in have]
     if new:
         with open(path, "a") as f:
@@ -192,19 +202,24 @@ def record(lines: Iterable[dict], path: str | Path, keys: tuple[str, ...], now: 
 # ------------------------------------------------------------------------------------------------- reading the record
 
 def node_hours(rows: Iterable[dict]) -> list[dict]:
-    """Each (hour, node)'s totals, newest first: GPU-seconds seen, held, busy, idle, unmeasured, useful and held idle,
-    busy as a share of the measured time, useful as a share of the busy time, and its holdings, most held idle first."""
+    """Each (hour, node)'s totals, newest first: GPU-seconds seen, held, busy, idle, unmeasured, useful and held idle, the
+    minutes read, busy as a share of the measured time and useful as a share of the busy time (None for an hour read for
+    fewer than WHOLE_MIN minutes), and its holdings, most held idle first."""
     by: dict[tuple, list[dict]] = defaultdict(list)
     for r in rows:
         by[(r["hour"], r["node"])].append(r)
     out = []
     for (h, node), rs in sorted(by.items(), reverse=True):
         s = {k: sum(r[k] for r in rs) for k in ("held_s", "busy_s", "idle_s", "unmeasured_s", "useful_s")}
+        read = max(r.get("minutes_read", 0) for r in rs)
+        whole = read >= WHOLE_MIN
         held = sorted((r for r in rs if r["owner"] is not None), key=lambda r: (-r["idle_s"], r["owner"], r["kind"] or ""))
         out.append({"hour": h, "node": node, "gpu_s": round(s["busy_s"] + s["idle_s"] + s["unmeasured_s"], 1),
                     **{k: round(v, 1) for k, v in s.items()}, "held_idle_s": round(sum(r["idle_s"] for r in held), 1),
-                    "busy_pct": round(100 * s["busy_s"] / (s["busy_s"] + s["idle_s"]), 1) if s["busy_s"] + s["idle_s"] else None,
-                    "useful_pct": round(100 * s["useful_s"] / s["busy_s"], 1) if s["busy_s"] else None,
+                    "minutes_read": read,
+                    "busy_pct": round(100 * s["busy_s"] / (s["busy_s"] + s["idle_s"]), 1)
+                    if whole and s["busy_s"] + s["idle_s"] else None,
+                    "useful_pct": round(100 * s["useful_s"] / s["busy_s"], 1) if whole and s["busy_s"] else None,
                     "holdings": [{k: r[k] for k in ("owner", "kind", "held_s", "busy_s", "idle_s", "unmeasured_s", "useful_s")}
                                  for r in held]})
     return out
@@ -291,11 +306,11 @@ def render_hourly(rep: dict) -> str:
     out = [f"GPU usage per UTC hour, the last {rep['hours']} h ({rep['source']})",
            f"targets: busy >= {TARGET_BUSY_PCT:g}% of measured GPU time, useful >= {TARGET_USEFUL_PCT:g}% of busy; "
            f"useful today: {USEFUL_TODAY}"]
-    cells = [("HOUR", "NODE", "GPU-H", "BUSY %", "USEFUL %", "HELD IDLE GPU-H", "UNMEASURED GPU-H", "MOST HELD IDLE")]
+    cells = [("HOUR", "NODE", "MIN READ", "GPU-H", "BUSY %", "USEFUL %", "HELD IDLE GPU-H", "UNMEASURED GPU-H", "MOST HELD IDLE")]
     for r in rep["rows"]:
         w = r["holdings"][0] if r["holdings"] and r["holdings"][0]["idle_s"] > 0 else None
-        cells.append((r["hour"], r["node"], _h(r["gpu_s"]), _pct(r["busy_pct"]), _pct(r["useful_pct"]), _h(r["held_idle_s"]),
-                      _h(r["unmeasured_s"]), f"{w['owner']}/{w['kind']} {_h(w['idle_s'])}" if w else "-"))
+        cells.append((r["hour"], r["node"], str(r["minutes_read"]), _h(r["gpu_s"]), _pct(r["busy_pct"]), _pct(r["useful_pct"]),
+                      _h(r["held_idle_s"]), _h(r["unmeasured_s"]), f"{w['owner']}/{w['kind']} {_h(w['idle_s'])}" if w else "-"))
     out += _cols(cells) if len(cells) > 1 else ["no hours recorded"]
     out += [f"finding: {f}" for f in rep["findings"]]
     return "\n".join(out) + "\n"
@@ -315,9 +330,10 @@ clock = time.time
 
 
 def main(a: argparse.Namespace, runner: Callable[[str], str] | None = None) -> int:
-    """`cluster usage hourly|wasters`: 0 with the report, 1 when the record can't be read, has no rows, or (hourly) a
-    node's newest recorded hour ended over STALE_S ago, 2 on bad arguments (argparse's). Reads only: one `tail` or
-    `grep` of RECORD on vy-nebius-1 over SSH, or `--file`."""
+    """`cluster usage hourly|wasters`: 0 with the report, 1 when the record can't be read or has no rows, or (hourly) a
+    node's newest recorded hour ended over STALE_S ago, an hour of the window that ended that long ago isn't recorded, or one
+    was read for fewer than WHOLE_MIN minutes; 2 on bad arguments (argparse's). Reads only: one `tail` or `grep` of RECORD on
+    vy-nebius-1 over SSH, or `--file`."""
     from . import status
 
     now = clock()
@@ -338,16 +354,24 @@ def main(a: argparse.Namespace, runner: Callable[[str], str] | None = None) -> i
         nodes = list(NODES.values()) if a.node == "all" else [NODES[a.node]]
         first = hour_t(hour(now)) - 3600 * a.hours
         mine = [r for r in rows if r["node"] in nodes]
+        hours = node_hours(r for r in mine if hour_t(r["hour"]) >= first)
+        due = [hour(first + 3600 * k) for k in range(a.hours) if first + 3600 * (k + 1) + STALE_S <= now]
         for n in nodes if not findings else ():
             newest = max((hour_t(r["hour"]) for r in mine if r["node"] == n), default=None)
             if newest is None:
                 findings.append(f"{n}: no hours in {src}")
-            elif newest + 3600 < now - STALE_S:
+                continue
+            if newest + 3600 < now - STALE_S:
                 findings.append(f"{n}: its newest recorded hour is {hour(newest)}, over {STALE_S // 3600} h before now: "
                                 "is the console recording (verity-console.timer on vy-nebius-1)?")
+            have = {h["hour"] for h in hours if h["node"] == n}
+            if missing := [h for h in due if h not in have]:
+                findings.append(f"{n}: {len(missing)} of the last {a.hours} hours ended over {STALE_S // 3600} h ago and aren't "
+                                f"recorded, from {missing[0]}")
+            findings += [f"{n} {h['hour']}: {h['minutes_read']} of its 60 minutes read, so it has no busy or useful share"
+                         for h in sorted(hours, key=lambda h: h["hour"]) if h["node"] == n and h["minutes_read"] < WHOLE_MIN]
         rep = {"schema": HOURLY, "t": int(now), "source": src, "hours": a.hours, "nodes": nodes, "useful_rule": USEFUL_TODAY,
-               "targets": {"busy_pct": TARGET_BUSY_PCT, "useful_pct": TARGET_USEFUL_PCT},
-               "rows": node_hours(r for r in mine if hour_t(r["hour"]) >= first), "findings": findings}
+               "targets": {"busy_pct": TARGET_BUSY_PCT, "useful_pct": TARGET_USEFUL_PCT}, "rows": hours, "findings": findings}
         render = render_hourly
     else:
         day = [r for r in rows if r["hour"].startswith(f"{a.day}T")]
