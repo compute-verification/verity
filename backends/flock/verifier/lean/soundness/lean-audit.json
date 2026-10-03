@@ -6479,7 +6479,8 @@
   "FlockSoundness.Discharge.Hm.port_commit": {
    "signature": [
     "FlockSoundness.Discharge.Hm.port_commit (c : Flock.Circuit) (w : Nat → Bool) (g p : Nat) {words n : Nat}",
-    "  (hn : instLTNat.lt 0 n) (hw : Eq (instHMul.hMul 2 words) (instHMul.hMul 128 n))",
+    "  (hs : Eq (Array.instGetElem?NatLtSize.getElem! c.ports p).segs Option.none) (hn : instLTNat.lt 0 n)",
+    "  (hw : Eq (instHMul.hMul 2 words) (instHMul.hMul 128 n))",
     "  (hslots : instLENat.le n (Array.instGetElem?NatLtSize.getElem! (Flock.HmRow.rowSlots c.ports).snd p).size)",
     "  (hsub : ∀ (k : Nat), instLTNat.lt k n → instLTNat.lt (FlockSoundness.Discharge.Hm.shaSub c p k) 3)",
     "  (hsin :",
@@ -6575,12 +6576,13 @@
     "      (FlockSoundness.Discharge.Hm.bytesOf w 192 (FlockSoundness.Discharge.Hm.saltCol c g p)))"
    ],
    "assumptions": [],
-   "type_hash": "80605b64938c387eef8ff7d9162c4a75cc378a75961d6781ef4aba050dd72459"
+   "type_hash": "703cae319aa5f2e8403bbd862e0565a7338d71d17704ba0d01fb6d7c6b9c7c9d"
   },
   "FlockSoundness.Discharge.Hm.port_commit_rows": {
    "signature": [
     "FlockSoundness.Discharge.Hm.port_commit_rows (c : Flock.Circuit) (w : Nat → Bool) (g p : Nat) {words n : Nat}",
-    "  (hn : instLTNat.lt 0 n) (hw : Eq (instHMul.hMul 2 words) (instHMul.hMul 128 n))",
+    "  (hs : Eq (Array.instGetElem?NatLtSize.getElem! c.ports p).segs Option.none) (hn : instLTNat.lt 0 n)",
+    "  (hw : Eq (instHMul.hMul 2 words) (instHMul.hMul 128 n))",
     "  (hslots : instLENat.le n (Array.instGetElem?NatLtSize.getElem! (Flock.HmRow.rowSlots c.ports).snd p).size)",
     "  (hck : Eq (Flock.HmNets.check c) (Except.ok Unit.unit))",
     "  (hsub : ∀ (k : Nat), instLTNat.lt k n → instLTNat.lt (FlockSoundness.Discharge.Hm.shaSub c p k) 3)",
@@ -6640,7 +6642,7 @@
     "      (FlockSoundness.Discharge.Hm.bytesOf w 192 (FlockSoundness.Discharge.Hm.saltCol c g p)))"
    ],
    "assumptions": [],
-   "type_hash": "d29860570b20e9bf0dd4c86e4003f757cf277fa774ceb7be1202ffd68432e6aa"
+   "type_hash": "aac4631ba9c53f01f782adb9616a91e8c0656422e9d75284b348386e27cd2ac0"
   },
   "FlockSoundness.Discharge.Hm.row_bc_flat": {
    "signature": [
@@ -19670,9 +19672,9 @@
    ]
   },
   "FlockSoundness.ExecCircuit": {
-   "digest": "e5cf2fa79b0f687f847927b31fcd619e2ba1bb0338a0709d0e1f301c39b5fee3",
+   "digest": "8761150578d19e11be8fe9b34ec40ef5df571a51360c5f77b175ea6863e80a58",
    "definitions": {
-    "FlockSoundness.ParseFacts": "c29d3b663153209f0bce9115b583ba79f89cf41470d39854fcaecbc2e7a57bdb"
+    "FlockSoundness.ParseFacts": "2ba368e643936e2cc5c5cbe26a2a304cc5b4637d2b30fe9634ab958064ecde3e"
    },
    "pins": [
     "FlockSoundness.Discharge.Aliased.aliased_of_copies",
@@ -20088,9 +20090,9 @@
    ]
   },
   "FlockSoundness.ExecTyped": {
-   "digest": "711968a52117002c64c2a817dcd0d9b2cce9074dc3500f8f1a203eac68305b64",
+   "digest": "4e58f2b9461246d6e31a8fa82e6b926236f78fb741f1432d993240714ba177e6",
    "definitions": {
-    "FlockSoundness.Typed.msgCol": "8b81e38c2cd841d2330941f0c9535e43c05fe7625d92fdbdef1ac92c0455cece",
+    "FlockSoundness.Typed.msgCol": "2b48c37d2a59d77e5151b16428eca974b15ba888bf0cbae309cba6218eb5b649",
     "FlockSoundness.Typed.starts": "1e4b3378bcc0ab7e6bb2d562ba84d6923853bd201b4d09cedb724ceb084b781b"
    },
    "pins": [
