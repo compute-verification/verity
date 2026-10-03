@@ -332,7 +332,10 @@ class Controller:
         if not dry:
             if got != self.limits or err != self.policy_error:
                 self.log(t, "policy", limits=got, **({"error": err, "fallback": source} if err else {}))
-            write(DIR / "n1-lease.limits", " ".join(f"{k}={v}" for k, v in got.items()) + f" from={source}\n")
+            try:
+                write(DIR / "n1-lease.limits", " ".join(f"{k}={v}" for k, v in got.items()) + f" from={source}\n")
+            except OSError as e:
+                self.log(t, "limits-write-failed", error=str(e)[:200])
         self.limits, self.policy_error = got, err
         return got
 

@@ -1866,6 +1866,17 @@ def test_n1_lease_kills_everything_a_policy_command_that_overruns_started(monkey
 
 
 @needs_flock
+def test_n1_lease_logs_a_limits_file_it_cant_write_and_goes_on(monkeypatch, tmp_path, reap):
+    m, calls, fd, _, keys = _policy_lease(monkeypatch, tmp_path, 1)
+    keys(max=3)
+    (tmp_path / "gl" / "n1-lease.limits").mkdir()
+    events = [e["ev"] for e in m.Controller().tick(1_800_000_000.0)["events"]]
+    os.close(fd)
+    assert events[:2] == ["policy", "limits-write-failed"]
+    assert len([a for a, _ in calls if a[0] == "create"]) == 3
+
+
+@needs_flock
 @pytest.mark.parametrize("value", ["-1", -1, 1.5, float("inf"), "8x", 5, True, None])
 def test_n1_lease_refuses_a_policy_max_that_isnt_a_whole_number_of_its_gpus_and_goes_on(monkeypatch, tmp_path, reap, value):
     m, calls, fd, _, keys = _policy_lease(monkeypatch, tmp_path, 3)
