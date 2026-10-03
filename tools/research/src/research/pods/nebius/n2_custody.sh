@@ -51,12 +51,16 @@ mkdir -p "$STATE/pushed" "$STATE/failures" "$STATE/held"
 log() { echo "$(date -u +%FT%TZ) $*" | tee -a "$STATE/log"; }
 exec 9> "$STATE/.lock"
 flock -n 9 || { log "refused: another round holds $STATE/.lock"; exit 3; }
-# the loop's own bash, not a tmux server whose first session started it (its argv keeps that session's command)
-if [ "$DRY" = 0 ] && pids=$(pgrep -f -- "^[^ ]*bash $LOOP( |\$)"); then
+# the loop's own bash, not a tmux server whose first session started it (its argv keeps that session's command); asked again
+# before every push, since the loop can be started while a round runs
+stopgap() {
+  local pids
+  pids=$(pgrep -f -- "^[^ ]*bash $LOOP( |\$)") || return 0
   log "refused: the stopgap loop $LOOP still runs (pid $(echo $pids)) and takes no lock; stop it while it sleeps between rounds" \
     "(tmux custody-push-3), and the next round takes over"
   exit 3
-fi
+}
+[ "$DRY" = 1 ] || stopgap
 
 # "CAMPAIGN STATE AGE_S FILES BYTES": STATE is the status's, dead for a run still marked running whose process is gone, or custody
 # while its runner holds its custody key (<root>/../requests/RUN/custody/cred.json) and the key hasn't expired; AGE_S since
@@ -269,6 +273,7 @@ for c in "${fresh[@]}" "${retry[@]}"; do
     [ "$rc" = 0 ] || { log "refused: node 1 not reached (\`ssh $N1\` exited $rc)"; exit 3; }
     src_ok=1
   fi
+  stopgap
   tried=$((tried + 1))
   why= hold=
   push_run "$root" "$dst" "$r" "$state"

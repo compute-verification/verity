@@ -1241,8 +1241,9 @@ def test_n2_commit_gives_a_long_row_the_long_max_min():
 
 #: n2_custody.sh's node 1, faked under N1_FS: rsync copies the run dir there, and ssh answers the round's calls as node 1 would: the
 #: research tree, the Job (its verify writes .custody over node 1's copy; a run JOB_ERR's file names fails with that line instead),
-#: and the cat of that .custody; DURING_JOB=RUN:PATH appends to PATH while RUN's Job runs, ACTIVE_JOB=RUN says RUN's Job has not
-#: finished, UNREACHABLE fails every call. Every call is a line of FAKE_LOG.
+#: and the cat of that .custody; DURING_JOB=RUN:PATH appends to PATH while RUN's Job runs, LOOP_DURING_JOB=RUN starts the stopgap
+#: loop (STATE/push.sh, its pid in STATE/push.pid) then, ACTIVE_JOB=RUN says RUN's Job has not finished, UNREACHABLE fails every
+#: call. Every call is a line of FAKE_LOG.
 _N2_RSYNC = r'''
 import os, shutil, sys
 with open(os.environ["FAKE_LOG"], "a") as f:
@@ -1250,7 +1251,7 @@ with open(os.environ["FAKE_LOG"], "a") as f:
 shutil.copytree(sys.argv[-2], os.environ["N1_FS"] + sys.argv[-1].split(":", 1)[1], symlinks=True, dirs_exist_ok=True)
 '''
 _N2_SSH = r'''
-import hashlib, json, os, re, sys
+import hashlib, json, os, re, subprocess, sys
 env, args = os.environ, sys.argv[1:]
 at = args.index(env["VY_N1"])
 cmd, spec = " ".join(args[at + 1:]), "" if "-n" in args[:at] else sys.stdin.read()
@@ -1279,6 +1280,11 @@ run, _, path = env.get("DURING_JOB", "").partition(":")
 if run == os.path.basename(d):
     with open(path, "a") as f:
         f.write("a line node 2 wrote after the rsync\n")
+if env.get("LOOP_DURING_JOB") == os.path.basename(d):
+    loop = subprocess.Popen(["bash", env["VY_CUSTODY_STATE"] + "/push.sh"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, start_new_session=True)
+    with open(env["VY_CUSTODY_STATE"] + "/push.pid", "w") as f:
+        f.write(str(loop.pid))
 copy, files = env["N1_FS"] + d, {}
 for base, _, names in os.walk(copy):
     for n in names:
@@ -1490,6 +1496,24 @@ def test_n2_custody_waits_on_a_job_an_earlier_round_left_running_and_never_delet
     assert f"node 1's Job n2-custody-{d.name}, from an earlier round, has not finished: waiting on it" in again.stdout
     calls = n2.calls()
     assert calls.count(f"{d}/ n1.invalid") == 1 and calls.count(f"delete job n2-custody-{d.name}") == 1 and " n1.invalid true &&" in calls
+
+
+@N2_CUSTODY
+def test_n2_custody_asks_before_every_push_whether_the_stopgap_loop_runs(tmp_path):
+    """The stopgap loop takes no lock, and a round asked for it once, at its start: a loop started during a round's 20-min pass (tmux
+    custody-push-3 restarted) pushed beside it, both deleting and creating the same Jobs. Every push asks again."""
+    n2 = _n2_custody(tmp_path)
+    first, second = (n2.run(f"r20261003-10000{i}-000{i}", {"state": "done"}) for i in (1, 2))
+    n2.state.mkdir()
+    os.mkfifo(tmp_path / "gate")
+    (n2.state / "push.sh").write_text(f"read x <> {tmp_path / 'gate'}\n")
+    try:
+        refused = n2.round_(LOOP_DURING_JOB=first.name)
+    finally:
+        if (n2.state / "push.pid").exists():
+            os.kill(int((n2.state / "push.pid").read_text()), signal.SIGKILL)
+    assert refused.returncode == 3 and n2.names("pushed") == [first.name] and second.name not in n2.calls()
+    assert f"refused: the stopgap loop {n2.state}/push.sh still runs" in refused.stdout
 
 
 @N2_CUSTODY
