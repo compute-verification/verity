@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -19,6 +20,7 @@ from research import monitors as M
 T0 = 1791060000.0           # 2026-10-03T20:40:00Z
 SRC = Path(__file__).resolve().parents[1] / "src"
 REPO = Path(__file__).resolve().parents[3]
+UNIT = SRC / "research/pods/nebius/monitoring/vy-monitors.service"
 
 
 def iso(t: float) -> str:
@@ -149,6 +151,66 @@ def test_a_write_to_the_alert_dir_that_fails_opens_nothing_and_the_next_pass_tri
     (tmp_path / "alerts").unlink()
     assert [e["key"] for e in passes(state, mon(found()), [["a"]], tmp_path / "alerts", t0=T0 + 60)[0]] == ["m|a"]
     assert "sink_error" not in state
+
+
+def test_the_alert_dir_leaves_out_an_open_or_clear_its_key_already_ends_on_and_an_event_it_has(tmp_path):
+    def ev(kind, key):
+        return {"event": kind, "key": key, "monitor": "m", "severity": "warn", "owners": ["infra"], "text": "*x*", "action": "a",
+                "by": "t"}
+
+    seq = [("open", "m|a"), ("open", "m|a"), ("clear", "m|a"), ("clear", "m|a"), ("open", "m|a"), ("event", "m|e"),
+           ("event", "m|e"), ("clear", "m|b")]
+    d = M.AlertDir(tmp_path)
+    assert [d.write(ev(k, key), T0) for k, key in seq] == [True, False, True, False, True, True, False, True]
+
+
+def test_a_pass_run_again_from_the_state_before_it_writes_nothing_twice_and_the_relay_posts_it_once(tmp_path):
+    alerts, keys = tmp_path / "alerts", ["old"]
+    e = mon(lambda ctx: [M.Finding(k, f"*{k}*") for k in keys], id="held-idle", events=True)
+    st = M.new_state()
+    M.step(st, [e], lambda memo: M.Ctx(now=T0, memo=memo), T0, M.AlertDir(alerts), by="test")
+    before = json.dumps(st)
+    keys.append("19:00Z|node 1|circuits")
+    for now in (T0 + 65, T0 + 130):                                         # the first is killed before it saves its state
+        st = json.loads(before)
+        M.step(st, [mon(found("a")), e], lambda memo, now=now: M.Ctx(now=now, memo=memo), now, M.AlertDir(alerts), by="test")
+    lines = (alerts / "monitors.jsonl").read_text().splitlines()
+    assert [(x["event"], x["key"]) for x in map(json.loads, lines)] == [("open", "m|a"), ("event", "held-idle|19:00Z|node 1|circuits")]
+    assert len(list((alerts / "outbox").iterdir())) == 2
+    posted, src, rstate = [], FakeSource("node1"), {}
+    M.relay_pass(rstate, [src], lambda ev, th: posted.append(ev["key"]) or {"ts": "1"}, T0)
+    src.all = lines
+    M.relay_pass(rstate, [src], lambda ev, th: posted.append(ev["key"]) or {"ts": "1"}, T0 + 200)
+    assert posted == ["m|a", "held-idle|19:00Z|node 1|circuits"]
+
+
+def test_the_state_is_saved_after_each_monitor_so_a_pass_killed_midway_keeps_what_it_wrote(tmp_path):
+    path, st = tmp_path / "state.json", M.new_state()
+
+    def killed(ctx):
+        raise KeyboardInterrupt                                             # systemd's kill, as far as the pass can tell
+
+    with pytest.raises(KeyboardInterrupt):
+        M.step(st, [mon(found("a")), mon(killed, id="k")], lambda memo: M.Ctx(now=T0, memo=memo), T0, M.AlertDir(tmp_path / "a"),
+               by="test", checkpoint=lambda: M.save(path, st))
+    assert list(M.load(path)["open"]) == ["m|a"]
+
+
+def test_checks_still_due_at_the_passs_deadline_are_late_and_run_next_pass(tmp_path):
+    t, ran, state = [0.0], [], M.new_state()
+    slow = mon(lambda ctx: t.__setitem__(0, t[0] + M.PASS_S - 2) or [], id="slow", every_s=600)
+    after = mon(lambda ctx: ran.append(ctx.now) or [], id="after", every_s=600)
+    for now in (T0, T0 + 60):
+        M.step(state, [slow, after], lambda memo, now=now: M.Ctx(now=now, memo=memo), now, M.AlertDir(tmp_path), by="test",
+               clock=lambda: t[0])
+        t[0] += 1000
+    assert ran == [T0 + 60] and state["monitors"]["after"]["skipped"] is None
+    late = M.Ctx(now=T0, run=Run(), pass_=M.Pass(deadline=20.0, clock=lambda: 0.0))
+    with pytest.raises(M.Late, match="too little for node 2's session"):
+        late.node2()
+    run = session()
+    M.Ctx(now=T0, run=run, pass_=M.Pass(deadline=50.0, clock=lambda: 0.0)).node2()
+    assert "timeout -k 5 40 " in run.calls[0][0][-1] and '"budget": 25.0' in run.calls[0][1]
 
 
 def test_the_webhook_gets_each_event_retries_until_slack_takes_it_and_never_logs_its_url(tmp_path):
@@ -312,6 +374,24 @@ def test_node_2s_session_reads_each_part_and_stops_once_the_status_isnt_quiet(tm
     assert doc["parts"]["a"]["out"] == "from stdin" and doc["parts"]["b"]["out"] == "B\n" and "c" not in doc["parts"]
     assert doc["status"].endswith("timed False, window waiting False") and doc["stopped"].endswith("timed True, window waiting False")
     assert doc["windows"] == "2026-10-04T10:00Z 30 # x\n"
+
+
+def unit_timeout() -> float:
+    return float(re.search(r"^TimeoutStartSec=(\d+)$", UNIT.read_text(), re.M)[1])
+
+
+def test_a_pass_with_node_2_hung_waits_on_it_once_and_ends_well_inside_the_units_timeout(tmp_path):
+    """Node 2 takes the connection, then never answers: each ssh runs to its own timeout."""
+    waited = []
+
+    def hung(argv, input=None, capture_output=True, text=True, timeout=None, env=None):
+        waited.append(timeout)
+        raise subprocess.TimeoutExpired(argv, timeout)
+
+    state = M.new_state()
+    n2_pass(state, hung, T0, tmp_path)
+    assert waited == [M.N2_S] and M.N2_S < M.PASS_S <= unit_timeout() - 30
+    assert all("TimeoutExpired" in state["monitors"][m.id]["error"] for m in N2)
 
 
 def test_a_part_that_fails_is_its_own_checks_error_and_one_the_session_didnt_reach_is_a_skip():

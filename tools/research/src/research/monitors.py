@@ -17,7 +17,9 @@ for `unread_s` it opens `<id>|unreadable` for infra.
 
 **Sinks.** Each open and clear is a line of `<alerts>/monitors.jsonl` (`research/monitors-event/v1`), and each open also a note
 in `<alerts>/outbox/` in alert_sink.py's format, so one relay posts these and Grafana's alike. A write there that fails opens or
-clears nothing, so the next pass tries again. With `$VY_MONITORS_SLACK_WEBHOOK` set (an incoming webhook; its URL is never
+clears nothing, so the next pass tries again. A node pass ends by PASS_S, inside the unit's timeout: a check still due then is
+Late and runs next pass. The state is saved after each monitor, and an event monitors.jsonl already has (a pass killed before
+it saved) isn't written again. With `$VY_MONITORS_SLACK_WEBHOOK` set (an incoming webhook; its URL is never
 logged), the runner also posts each event there, retrying on later passes until Slack takes it, and the relay leaves those
 events alone.
 
@@ -78,6 +80,7 @@ N2_GUARD = (f'ok=0; s=$(head -n 1 {FILL_STATUS} 2>/dev/null); n=$(date +%s); t=$
             f'case "$a" in -*) ;; *) case "$s" in *"{QUIET}"*) [ "$a" -gt {FILL_GO_S} ] || ok=1;; esac;; esac; '
             f'[ "$ok" = 1 ] || {{ printf "%s %s %s %s\\n" "{SKIPPED}" "$n" "$a" "$s"; exit 0; }}; ')
 N2_S = 90                                        # node 2's one session per pass, local; node 2's `timeout` ends it 10 s sooner
+PASS_S = 180                                     # a node pass's deadline, well inside vy-monitors.service's TimeoutStartSec
 HANDLES = ("infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console")
 EVENTS_KEEP_S = 14 * 86400
 RETRY_KEEP_S = 86400
@@ -85,6 +88,10 @@ RETRY_KEEP_S = 86400
 
 class Skip(Exception):
     """The check can't look now, by design (node 2 in a timed window): nothing opens or clears."""
+
+
+class Late(Skip):
+    """The pass's deadline came first: the check is still due, and runs next pass."""
 
 
 class Refused(Skip):
@@ -149,10 +156,15 @@ class N2Read:
 @dataclass
 class Pass:
     """What one pass's checks share: the node-2 parts its due checks read, node 2's state kept between passes (`read_t`, the
-    booked `windows`), and its one session on node 2 (an N2Read, or what opening it raised)."""
+    booked `windows`), its one session on node 2 (an N2Read, or what opening it raised), and its deadline on `clock`."""
     n2_parts: frozenset[str] = frozenset()
     n2_state: dict = field(default_factory=dict)
     n2: N2Read | Exception | None = None
+    deadline: float = float("inf")
+    clock: Callable[[], float] = time.monotonic
+
+    def left(self) -> float:
+        return self.deadline - self.clock()
 
 
 @dataclass
@@ -173,8 +185,15 @@ class Ctx:
     def path(self, p: str) -> Path:
         return self.root / p.lstrip("/")
 
+    def bound(self, timeout: float) -> float:
+        """`timeout`, cut to what is left of the pass; Late when that is under 5 s."""
+        left = self.pass_.left()
+        if left < 5:
+            raise Late("the pass's deadline came first")
+        return min(timeout, left)
+
     def sh(self, argv: list[str], *, input: str | None = None, timeout: float = 60, ok: tuple[int, ...] = (0,)) -> str:
-        r = self.run(argv, input=input, capture_output=True, text=True, timeout=timeout)
+        r = self.run(argv, input=input, capture_output=True, text=True, timeout=self.bound(timeout))
         if r.returncode not in ok:
             what = argv[-1] if argv[0] == "ssh" else " ".join(argv[:4])
             raise RuntimeError(f"`{what[-120:]}` exited {r.returncode}: {(r.stderr or r.stdout or '').strip()[-300:]}")
@@ -183,6 +202,7 @@ class Ctx:
     def n2(self, script: str, *, input: str | None = None, timeout: float = N2_S) -> str:
         """`script` on node 2 behind N2_GUARD in the same ssh call, under `timeout` and niced there too; Refused when the guard
         refuses."""
+        timeout = self.bound(timeout)
         bound = f"timeout -k 5 {max(5, int(timeout) - 10)} {' '.join(NICE)} sh -c {shlex.quote(script)}"
         out = self.sh([*SSH, self.n2_host, N2_GUARD + bound], input=input, timeout=timeout)
         if out.startswith(SKIPPED):
@@ -207,8 +227,11 @@ class Ctx:
         for start, end, who in st.get("windows") or []:
             if start <= self.now < end:
                 raise Skip(f"node 2 is in a booked window until {iso(end)[11:16]}Z ({who or 'no name'}): no login until it ends")
+        t = self.bound(N2_S)
+        if t < 30:
+            raise Late(f"{t:.0f} s of the pass is left, too little for node 2's session")
         try:
-            out = self.n2("python3 -", input=n2_driver(n2_parts(names), N2_S - 25))
+            out = self.n2("python3 -", input=n2_driver(n2_parts(names), t - 25), timeout=t)
         except Refused as e:
             return N2Read(e.status, e.now, refused=e)
         try:
@@ -662,8 +685,8 @@ def units(node: str) -> Callable[[Ctx], list[Finding]]:
         else:
             text = ctx.sh(["systemctl", "--failed", "--no-legend", "--plain"])
             env = {**os.environ, "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
-            r = ctx.run(["systemctl", "--user", "--failed", "--no-legend", "--plain"], capture_output=True, text=True, timeout=30,
-                        env=env)
+            r = ctx.run(["systemctl", "--user", "--failed", "--no-legend", "--plain"], capture_output=True, text=True,
+                        timeout=ctx.bound(30), env=env)
             if r.returncode and "connect to bus" not in (r.stderr or ""):
                 raise RuntimeError(f"systemctl --user exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
             text += "---\n" + (r.stdout if r.returncode == 0 else "")
@@ -709,7 +732,7 @@ def unpreserved(ctx: Ctx) -> list[Finding]:
     out = []
     for mach in ctx.machines:
         r = ctx.run([*ctx.research, "pods", "unpreserved", mach, "--older-min", "30", "--json"], capture_output=True, text=True,
-                    timeout=900)
+                    timeout=ctx.bound(900))
         if r.returncode == 2 and "unrecognized arguments" in (r.stderr or ""):
             raise RuntimeError("`research pods unpreserved` here has no --older-min (the custody lane's "
                                "cursor/node-custody-unit-558b adds it)")
@@ -824,10 +847,35 @@ def note(ev: dict, now: float) -> tuple[str, str]:
 
 
 class AlertDir:
+    """An alert dir: monitors.jsonl, and the outbox's notes. A pass killed after writing an event but before saving its state
+    writes it again next pass, so `write` leaves out what monitors.jsonl's tail already has."""
+
     def __init__(self, path: Path):
         self.path = Path(path)
 
-    def write(self, ev: dict, now: float) -> None:
+    def check(self) -> None:
+        """OSError unless the alert dir takes writes."""
+        (self.path / "outbox").mkdir(parents=True, exist_ok=True)
+        open(self.path / "monitors.jsonl", "a").close()
+
+    def written(self, ev: dict) -> bool:
+        """Whether monitors.jsonl's tail has `ev` already: an open or clear as its key's last, or the event itself."""
+        try:
+            lines = tail(self.path / "monitors.jsonl")
+        except FileNotFoundError:
+            return False
+        mark, last = json.dumps(ev["key"]), None
+        for ln in lines:
+            if mark in ln and (e := _event(ln)).get("key") == ev["key"]:
+                if ev["event"] == e.get("event") == "event":
+                    return True
+                last = e.get("event")
+        return ev["event"] in ("open", "clear") and last == ev["event"]
+
+    def write(self, ev: dict, now: float) -> bool:
+        """Append `ev` (an open with its note); False when monitors.jsonl has it already."""
+        if self.written(ev):
+            return False
         if ev["event"] != "clear":
             name, text = note(ev, now)
             out = self.path / "outbox" / name
@@ -838,6 +886,7 @@ class AlertDir:
             ev["note"] = name
         with open(self.path / "monitors.jsonl", "a") as f:
             f.write(json.dumps(ev) + "\n")
+        return True
 
 
 def message(ev: dict, tag: Callable[[str], str] = lambda h: "@" + h) -> str:
@@ -867,11 +916,14 @@ def new_state() -> dict:
 
 
 def step(state: dict, monitors: list[Monitor], ctx_for: Callable[[dict], Ctx], now: float, sink: AlertDir, *, by: str,
-         webhook: str | None = None, post: Callable[[str, str], None] = webhook_post, force: bool = False) -> list[dict]:
-    """One pass: each due monitor's check, its incidents opened and cleared through `sink` (and `webhook`). Returns the events."""
+         webhook: str | None = None, post: Callable[[str, str], None] = webhook_post, force: bool = False,
+         checkpoint: Callable[[], None] | None = None, pass_s: float | None = PASS_S,
+         clock: Callable[[], float] = time.monotonic) -> list[dict]:
+    """One pass: each due monitor's check, its incidents opened and cleared through `sink` (and `webhook`), `checkpoint()` after
+    each. A check still due at the pass's deadline (`pass_s` on `clock`) is Late and runs next pass. Returns the events."""
     for k, v in new_state().items():
         state.setdefault(k, v)
-    opened, pending, seen = state["open"], state["pending"], state["events"]
+    seen = state["events"]
     emitted: list[dict] = []
 
     def emit(m: Monitor, kind: str, key: str, f: Finding | None, o: dict | None = None) -> bool:
@@ -882,70 +934,29 @@ def step(state: dict, monitors: list[Monitor], ctx_for: Callable[[dict], Ctx], n
         if o:
             ev["since"] = o["since"]
         try:
-            sink.write(ev, now)
+            fresh = sink.write(ev, now)
         except OSError as e:
             state["sink_error"] = f"{iso(now)} {type(e).__name__}: {e}"[:300]
             return False
         state.pop("sink_error", None)
-        if webhook:
+        if fresh and webhook:
             state["retry"].append({"t": now, "text": message(ev)})
-        emitted.append(ev)
+        if fresh:
+            emitted.append(ev)
         return True
 
+    try:
+        sink.check()
+        state.pop("sink_error", None)
+    except OSError as e:
+        state["sink_error"] = f"{iso(now)} {type(e).__name__}: {e}"[:300]
     due = [m for m in monitors if force or now - state["monitors"].get(m.id, {}).get("last_run", 0) >= m.every_s - 5]
-    shared = Pass(n2_parts=frozenset(m.n2 for m in due if m.n2), n2_state=state["node2"])
+    shared = Pass(n2_parts=frozenset(m.n2 for m in due if m.n2), n2_state=state["node2"], clock=clock,
+                  deadline=clock() + (pass_s if pass_s is not None else float("inf")))
     for m in due:
-        st = state["monitors"].setdefault(m.id, {"since": now})
-        st["last_run"] = now
-        try:
-            ctx = ctx_for(st.setdefault("memo", {}))
-            ctx.pass_ = shared
-            found: dict[str, Finding | None] = {f.key: f for f in m.check(ctx)}
-            st.update(last_ok=now, error=None, skipped=None)
-            ok = True
-        except Skip as e:
-            st.update(last_ok=now, skipped=str(e)[:300])
-            continue
-        except Exception as e:  # noqa: BLE001  (an input that can't be read is the monitor's own finding, in time)
-            st["error"] = f"{type(e).__name__}: {e}"[:500]
-            late = now - st.get("last_ok", st["since"])
-            if late < m.unread_s:
-                continue
-            ok = False
-            found = {k.split("|", 1)[1]: None for k, o in opened.items() if o["monitor"] == m.id}
-            found["unreadable"] = Finding("unreadable", f"*Monitor `{m.id}` can't read its input, for {late / 60:.0f} minutes "
-                                          f"now*: {st['error']}", owners=("infra",), severity="warn", for_s=0,
-                                          cleared=f"*Cleared:* monitor `{m.id}` reads its input again.")
-        if m.events and ok:
-            new = [f for f in found.values() if f and f"{m.id}|{f.key}" not in seen]
-            if st.get("primed"):
-                for f in new:
-                    if emit(m, "event", f"{m.id}|{f.key}", f):
-                        seen[f"{m.id}|{f.key}"] = now
-            else:
-                seen.update({f"{m.id}|{f.key}": now for f in new})
-                st["primed"] = True
-            found = {}
-        for k, f in found.items():
-            key = f"{m.id}|{k}"
-            if key in opened:
-                opened[key].pop("absent_since", None)
-                continue
-            if f is None:
-                continue
-            first = pending.setdefault(key, now)
-            if now - first >= (f.for_s if f.for_s is not None else m.for_s) and emit(m, "open", key, f):
-                opened[key] = {"monitor": m.id, "since": iso(now), "owners": list(f.owners or (m.owner,)),
-                               "severity": f.severity or m.severity, "text": f.text,
-                               "cleared": f.cleared or f"*Cleared:* {title(f.text)}"}
-                del pending[key]
-        for key in [k for k in pending if k.split("|", 1)[0] == m.id and k.split("|", 1)[1] not in found]:
-            del pending[key]
-        for key in [k for k, o in opened.items() if o["monitor"] == m.id and k.split("|", 1)[1] not in found]:
-            o = opened[key]
-            o.setdefault("absent_since", now)
-            if now - o["absent_since"] >= (0 if key.endswith("|unreadable") else m.clear_s) and emit(m, "clear", key, None, o):
-                del opened[key]
+        judge(m, state, shared, ctx_for, now, emit)
+        if checkpoint:
+            checkpoint()
     for k in [k for k, t in seen.items() if now - t > EVENTS_KEEP_S]:
         del seen[k]
     if webhook:
@@ -962,6 +973,73 @@ def step(state: dict, monitors: list[Monitor], ctx_for: Callable[[dict], Ctx], n
         state["retry"] = left
     state["last_pass"] = now
     return emitted
+
+
+def judge(m: Monitor, state: dict, shared: Pass, ctx_for: Callable[[dict], Ctx], now: float,
+          emit: Callable[..., bool]) -> None:
+    """One monitor's part of a pass: run its check, then open, clear or post what it found."""
+    opened, pending, seen = state["open"], state["pending"], state["events"]
+    st = state["monitors"].setdefault(m.id, {"since": now})
+    ran = st.get("last_run")
+    st["last_run"] = now
+    try:
+        if shared.left() < 5:
+            raise Late("the pass's deadline came first")
+        ctx = ctx_for(st.setdefault("memo", {}))
+        ctx.pass_ = shared
+        found: dict[str, Finding | None] = {f.key: f for f in m.check(ctx)}
+        st.update(last_ok=now, error=None, skipped=None)
+        ok = True
+    except Late as e:
+        st["skipped"] = str(e)[:300]
+        if ran is None:
+            del st["last_run"]
+        else:
+            st["last_run"] = ran
+        return
+    except Skip as e:
+        st.update(last_ok=now, skipped=str(e)[:300])
+        return
+    except Exception as e:  # noqa: BLE001  (an input that can't be read is the monitor's own finding, in time)
+        st["error"] = f"{type(e).__name__}: {e}"[:500]
+        late = now - st.get("last_ok", st["since"])
+        if late < m.unread_s:
+            return
+        ok = False
+        found = {k.split("|", 1)[1]: None for k, o in opened.items() if o["monitor"] == m.id}
+        found["unreadable"] = Finding("unreadable", f"*Monitor `{m.id}` can't read its input, for {late / 60:.0f} minutes "
+                                      f"now*: {st['error']}", owners=("infra",), severity="warn", for_s=0,
+                                      cleared=f"*Cleared:* monitor `{m.id}` reads its input again.")
+    if m.events and ok:
+        new = [f for f in found.values() if f and f"{m.id}|{f.key}" not in seen]
+        if st.get("primed"):
+            for f in new:
+                if emit(m, "event", f"{m.id}|{f.key}", f):
+                    seen[f"{m.id}|{f.key}"] = now
+        else:
+            seen.update({f"{m.id}|{f.key}": now for f in new})
+            st["primed"] = True
+        found = {}
+    for k, f in found.items():
+        key = f"{m.id}|{k}"
+        if key in opened:
+            opened[key].pop("absent_since", None)
+            continue
+        if f is None:
+            continue
+        first = pending.setdefault(key, now)
+        if now - first >= (f.for_s if f.for_s is not None else m.for_s) and emit(m, "open", key, f):
+            opened[key] = {"monitor": m.id, "since": iso(now), "owners": list(f.owners or (m.owner,)),
+                           "severity": f.severity or m.severity, "text": f.text,
+                           "cleared": f.cleared or f"*Cleared:* {title(f.text)}"}
+            del pending[key]
+    for key in [k for k in pending if k.split("|", 1)[0] == m.id and k.split("|", 1)[1] not in found]:
+        del pending[key]
+    for key in [k for k, o in opened.items() if o["monitor"] == m.id and k.split("|", 1)[1] not in found]:
+        o = opened[key]
+        o.setdefault("absent_since", now)
+        if now - o["absent_since"] >= (0 if key.endswith("|unreadable") else m.clear_s) and emit(m, "clear", key, None, o):
+            del opened[key]
 
 
 def load(path: Path) -> dict:
@@ -1193,7 +1271,8 @@ def run_once(ns: argparse.Namespace, where: str, state_path: Path, alerts: Path,
     try:
         state = load(state_path)
         evs = step(state, select(where, ns.only), _ctx_for(ns, now), now, AlertDir(alerts), by=ns.by,
-                   webhook=os.environ.get(WEBHOOK_ENV) or None)
+                   webhook=os.environ.get(WEBHOOK_ENV) or None, checkpoint=lambda: save(state_path, state),
+                   pass_s=PASS_S if where == "node" else None)
         save(state_path, state)
         return state, evs
     finally:
