@@ -118,6 +118,7 @@ import Pouw.SecurityProofs.PearlC.TileGamma
 import Pouw.SecurityProofs.PearlC.TileUOnlyGamma
 import Pouw.SecurityProofs.PearlC.UOnlyGamma
 import Pouw.SecurityProofs.PearlC.UOnlyLoopGamma
+import Pouw.SecurityProofs.PearlC.WholeCircuit
 import Pouw.SecurityProofs.Prob
 import Pouw.SecurityProofs.QTree
 import Pouw.SecurityProofs.Reduction
