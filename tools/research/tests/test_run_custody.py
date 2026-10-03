@@ -523,10 +523,10 @@ def test_triage_takes_a_valid_custody_marker_where_the_catalog_cannot_say(tmp_pa
     assert row["state"] == "no-custody"
 
 
-def test_older_min_counts_only_runs_that_ended_n_minutes_ago_across_every_runs_root(tmp_path, capsys):
+def test_older_min_counts_only_runs_that_ended_n_minutes_ago_across_every_runs_root(tmp_path, capsys, monkeypatch):
     """The monitors' invariant, per node: ended runs not on the remote N minutes after they ended. One read-only command over every
-    runs root of the node, `research/custody-triage/v1` with --json, exit 1 on a finding; a run that just ended is settling (its own
-    custody, or the node's, may still be on the way) and doesn't count."""
+    runs root of the node, `research/custody-triage/v1` with --json, exit 1 on a finding and 3 when triage itself fails; a run that
+    just ended is settling (its own custody, or the node's, may still be on the way) and doesn't count."""
     jobs, research = tmp_path / "jobs-runs", tmp_path / "research-runs"
     old, new = _fixture_run(jobs, "r20260925-010001-aaaa"), _fixture_run(research, "r20260925-010002-bbbb")
     for d, t in ((old, NOW - 3600), (new, NOW - 600)):
@@ -537,6 +537,9 @@ def test_older_min_counts_only_runs_that_ended_n_minutes_ago_across_every_runs_r
     assert rep["schema"] == "research/custody-triage/v1" and rep["needs_action"] == 1 and rep["settling"] == 1
     assert {r["run"]: (r["root"], r["settling"]) for r in rep["rows"]} == {old.name: (str(jobs), False), new.name: (str(research), True)}
     assert CU.triage_report(st, [jobs, research], now=NOW, host=HOST)["needs_action"] == 2
+    (old / "resources.jsonl").write_text("{}\n")
+    os.utime(old / "resources.jsonl", (NOW - 600, NOW - 600))
+    assert CU.triage_report(st, [jobs], older_min=30, now=NOW, host=HOST)["settling"] == 1, "the sampler's last sample is a record"
     for d, t in ((old, 1_000_000_000), (new, 4_102_444_800)):    # the CLI reads the clock itself: 2001 is older than any N, 2100 younger
         for p in d.iterdir():
             os.utime(p, (t, t))
@@ -547,6 +550,13 @@ def test_older_min_counts_only_runs_that_ended_n_minutes_ago_across_every_runs_r
     assert data_main([*base, "--runs-dir", str(research)]) == 0
     assert "1 more ended under 30 min ago (settling" in capsys.readouterr().out
     assert data_main([*base, "--runs-dir", str(tmp_path / "typo")]) == 2, "a runs root that isn't there is not an empty one"
+
+    def crash(*a, **k):
+        raise KeyError("transitions")
+
+    monkeypatch.setattr(CU, "triage_report", crash)
+    assert data_main([*base, "--runs-dir", str(jobs), "--json"]) == 3
+    assert "crashed, nothing triaged: KeyError" in capsys.readouterr().err
     for bad in (["custody", old.name, "--older-min", "5"], ["custody", "--triage", "--older-min", "-1"], ["custody", old.name, "--force"]):
         with pytest.raises(SystemExit):
             data_main(bad)

@@ -554,7 +554,7 @@ from its record. A failure whose key had expired says so in the marker's `error`
   (same host and boot), or, when the runner isn't visible there (a Kubernetes pod), when none of its records changed for 24 h; a
   valid `.custody` counts as `r2` where the catalog can't say (node 2's runs are published on node 1). `--older-min N` leaves runs
   that ended under N minutes ago out of the count (`settling`), so `needs_action` (`research/custody-triage/v1`, exit 1) is the
-  monitors' invariant "ended runs not on the remote after N minutes", per node.
+  monitors' invariant "ended runs not on the remote after N minutes", per node; a triage that fails exits 3.
 - `research pods drain|unpreserved --custody-r2` and `research notes watch --reap --custody-r2` (`pods.drain.pod_custody`) refresh
   the catalog from the remote, require every attempt tied to the pod to be preserved, and read the pod guard's state for its run
   dirs: without a guard state younger than 10 min, custody is unknown and nothing is terminated.

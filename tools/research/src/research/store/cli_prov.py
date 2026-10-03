@@ -429,7 +429,8 @@ def cmd_custody(argv: list[str]) -> int:
     ap.add_argument("--keep-local", action="store_true", help="--publish: keep every local run file")
     ap.add_argument("--force", action="store_true", help="--publish: publish a run whose status.json is not terminal (its runner was "
                                                        "killed before it recorded an end); the attempt keeps the state it last wrote")
-    ap.add_argument("--triage", action="store_true", help="every run under --runs-dir by custody state; exit 1 while any needs action")
+    ap.add_argument("--triage", action="store_true", help="every run under --runs-dir by custody state; exit 1 while any needs action, "
+                                                        "3 when triage itself fails")
     ap.add_argument("--verify", action="store_true", help="--triage: check preservation on the remote (default: the catalog's recorded replicas, "
                                                         "else the run dir's .custody)")
     ap.add_argument("--older-min", type=float, default=None, metavar="N",
@@ -452,8 +453,11 @@ def cmd_custody(argv: list[str]) -> int:
         if missing:
             print(f"research data custody --triage: no runs root at {', '.join(missing)}", file=sys.stderr)
             return 2
-        st = A.open_store(None, ns.store)
-        rep = CU.triage_report(st, roots, older_min=ns.older_min, verify_remote=ns.verify)
+        try:
+            rep = CU.triage_report(A.open_store(None, ns.store), roots, older_min=ns.older_min, verify_remote=ns.verify)
+        except Exception as e:  # noqa: BLE001  exit 1 is a finding, so a monitor must tell a crash from one
+            print(f"research data custody --triage: crashed, nothing triaged: {type(e).__name__}: {e}", file=sys.stderr)
+            return 3
         todo = [r for r in rep["rows"] if r["state"] in CU.NEEDS_ACTION and not r["settling"]]
         if ns.json:
             print(json.dumps(rep, indent=2, sort_keys=True))

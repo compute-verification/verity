@@ -458,7 +458,7 @@ NEEDS_ACTION = ("no-custody", "attempt-unpreserved", "attempt-no-record")
 #: A run whose runner this machine can't see (it ran in another pid namespace: a Kubernetes pod on node 1) has ended once none of
 #: its records changed for this long: a pod preempted or killed before its runner recorded an end leaves its status `running`.
 STALE_S = 24 * 3600
-_RECORDS = ("status.json", "job.json", "stdout.log", "stderr.log", "launcher.log", "sampler.log", "events.jsonl")
+_RECORDS = ("status.json", "job.json", "stdout.log", "stderr.log", "launcher.log", "sampler.log", "events.jsonl", "resources.jsonl")
 
 
 def this_host() -> tuple[str, str | None]:
