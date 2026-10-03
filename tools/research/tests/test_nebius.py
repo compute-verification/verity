@@ -1281,6 +1281,9 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     run("r1-done", {"state": "done"})
     run("r2-dead", {"state": "running", "transitions": [{"pid": 2**22 + 7, "starttime_ticks": 1}]})
     run("r3-live", {"state": "running", "transitions": [{"pid": os.getpid(), "starttime_ticks": me}]})
+    run("r3-retimed", {"state": "running", "pid": os.getpid(), "starttime_ticks": me,     # status.json after `tele set-timeout`
+                       "transitions": [{"state": "running", "pid": os.getpid(), "starttime_ticks": me}, {"state": "running", "timeout_s": 60}]})
+    run("r3-unread", {"state": "running", "transitions": [{"state": "running", "pid": "?"}]})
     run("r4-fresh", {"state": "failed"}, settled=False)
     run("r5-preserved", {"state": "done"}, custody={"preserved": True})
     run("r6-fails", {"state": "failed"})
@@ -1298,7 +1301,7 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     assert dry.returncode == 0 and not log.exists() and not list((state / "pushed").iterdir())
     assert f"would push {root}/r1-done (c1, done, 2 files" in dry.stdout and f"would push {root}/r2-dead (c1, dead" in dry.stdout
     assert f"would hold {root}/r7-big (c1, done): over 4 files" in dry.stdout
-    assert "r3-live" not in dry.stdout and "r4-fresh" not in dry.stdout and "r5-preserved" not in dry.stdout
+    assert not [r for r in ("r3-live", "r3-retimed", "r3-unread", "r4-fresh", "r5-preserved") if r in dry.stdout]
 
     (state / "push.sh").write_text("read x\n")
     loop = subprocess.Popen(["bash", str(state / "push.sh")], stdin=subprocess.PIPE)
@@ -1313,7 +1316,7 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
 
     assert round_(VY_CUSTODY_PASS_S="0").returncode == 0 and "rsync" not in log.read_text()
     bounded = round_(VY_CUSTODY_MAX_RUNS="1")
-    assert bounded.returncode == 0 and "round bounded (1 push(es)" in bounded.stdout and "7 run dir(s) left" in bounded.stdout
+    assert bounded.returncode == 0 and "round bounded (1 push(es)" in bounded.stdout and "9 run dir(s) left" in bounded.stdout
     assert sorted(p.name for p in (state / "pushed").iterdir()) == ["r1-done"]
     assert json.loads((root / "r1-done" / ".custody").read_text())["preserved"] is True
 
@@ -1323,7 +1326,8 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     assert sorted(p.name for p in (state / "held").iterdir()) == ["r7-big", "r8-legacy"] and "2 run(s) held" in first.stdout
     assert "held: node 1's store holds its attempt without a run record" in first.stdout
     calls = log.read_text()
-    assert f"{root}/r1-done/ n1.invalid:/n1/runs/r1-done/" in calls and "r3-live" not in calls and "r4-fresh" not in calls
+    assert f"{root}/r1-done/ n1.invalid:/n1/runs/r1-done/" in calls and "r4-fresh" not in calls
+    assert "r3-live" not in calls and "r3-retimed" not in calls and "r3-unread" not in calls, "a live run is never published as dead"
     assert "data custody /n1/runs/r2-dead --publish --keep-local --force" in calls
     assert 'data custody /n1/runs/r1-done --publish --keep-local "]' in calls
     assert "PYTHONPATH=/n1/src/abc/tools/research/src" in calls and "r5-preserved" not in calls and "r7-big" not in calls

@@ -481,21 +481,48 @@ def _changed(d: Path) -> float | None:
     return max(ts) if ts else None
 
 
+def _runner_pid(status: dict[str, Any]) -> tuple[Any, Any]:
+    """(pid, starttime_ticks) of the run's runner: status.json's own, which `set_status` keeps when a later `running` transition
+    carries none (`tele set-timeout`'s), else the last transition that has one."""
+    for t in (status, *reversed(status.get("transitions") or [])):
+        if isinstance(t, dict) and t.get("pid") is not None:
+            return t.get("pid"), t.get("starttime_ticks")
+    return None, None
+
+
+def _alive(pid: Any, ticks: Any) -> bool | None:
+    """Whether process `pid` with that start time runs here; None when `pid` doesn't read as one, which is never taken for dead."""
+    try:
+        if int(pid) <= 0:
+            return None
+        fields = Path(f"/proc/{int(pid)}/stat").read_text().rsplit(")", 1)[1].split()
+    except FileNotFoundError:
+        return False
+    except (OSError, ValueError, TypeError):
+        return None
+    try:
+        return ticks is None or int(fields[19]) == int(ticks)
+    except (ValueError, IndexError, TypeError):
+        return None
+
+
 def _runner(d: Path, status: dict[str, Any], now: float, host: tuple[str, str | None]) -> tuple[bool, str]:
     """(ended, how) for a run dir without a launcher's remote.json, i.e. on the machine that ran it, whose status isn't terminal:
     its runner's pid with the same start time when job.json says it ran on this host since this boot; else STALE_S."""
     env = (_read(d / "job.json") or {}).get("environment") or {}
-    t = (status.get("transitions") or [{}])[-1]
-    if status and (env.get("hostname"), env.get("boot_id")) == host and host[1]:
-        try:
-            alive = int(Path(f"/proc/{int(t['pid'])}/stat").read_text().rsplit(")", 1)[1].split()[19]) == t["starttime_ticks"]
-        except (KeyError, OSError, ValueError, IndexError, TypeError):
-            alive = False
-        return (False, "running here") if alive else (True, f"dead: its runner (pid {t.get('pid')}) is gone without recording an end")
+    local = bool(status) and (env.get("hostname"), env.get("boot_id")) == host and bool(host[1])
+    pid, ticks = _runner_pid(status)
+    alive = _alive(pid, ticks) if local else None
+    if alive is False:
+        return True, f"dead: its runner (pid {pid}) is gone without recording an end"
+    if alive:
+        return False, "running here"
     changed = _changed(d)
     if changed is not None and now - changed > STALE_S:
         return True, f"stale: status {status.get('state') or 'absent'}, and no record changed for {(now - changed) / 3600:.0f} h"
-    return False, "running elsewhere (its runner is not visible from here)" if status else "starting (no status.json yet)"
+    if not status:
+        return False, "starting (no status.json yet)"
+    return False, "running here (its status names no pid that reads)" if local else "running elsewhere (its runner is not visible from here)"
 
 
 def triage_row(st: Any, run_dir: Path, *, verify_remote: bool = False, now: float | None = None,

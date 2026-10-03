@@ -22,6 +22,7 @@ from research.store import preserved as P
 from research.store.cli import main as data_main
 from research.store.local import LocalStore, object_key
 from research.store.model import Label
+from research.telemetry.job import set_status
 
 from test_pod_guard_daemon import QUIET, _env, idle_since
 from waits import Gate, wait_runner
@@ -476,6 +477,27 @@ def test_triage_on_the_machine_tells_a_live_runner_from_a_dead_one_and_a_pods_ru
     assert rows[dead.name]["age_min"] == 120.0 and rows[dead.name]["bytes"] > 0 and rows[live.name]["bytes"] is None
     other_boot = {r["run"]: r["state"] for r in CU.triage(st, runs, now=NOW, host=(HOST[0], "boot-2"))}
     assert other_boot[live.name] == "running", "after a reboot the pid means nothing: the 24 h rule decides"
+
+
+@pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="a runner's liveness is read from /proc")
+def test_a_live_run_whose_timeout_was_changed_is_running_and_a_status_naming_no_pid_is_never_dead(tmp_path):
+    """`tele set-timeout` appends a `running` transition without a pid. Triage and n2_custody.sh read the last transition's pid,
+    found none and took a live run for dead, and n2_custody.sh published it --force: an attempt in state running with no result,
+    which no later publish can replace. The runner's pid is status.json's own (set_status keeps it), and a status naming no pid
+    that reads is never taken for dead."""
+    runs, st = tmp_path / "runs", LocalStore(tmp_path / "s", config_path=tmp_path / "absent.toml")
+    me = int(Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19])
+    live, dead, nopid = (_fixture_run(runs, f"r20260925-01000{i}-aaaa") for i in range(3))
+    for d, pid, ticks in ((live, os.getpid(), me), (dead, 2**22 + 7, 1)):
+        _on_host(d, HOST, None, NOW - 7200)
+        set_status(d, "running", pid=pid, pgid=pid, starttime_ticks=ticks, stage="t")
+        set_status(d, "running", timeout_s=60, timeout_changed_utc="2026-09-25T01:00:00.000Z")
+        assert "pid" not in json.loads((d / "status.json").read_text())["transitions"][-1]
+    _on_host(nopid, HOST, "running", NOW - 7200, pid="?")
+    rows = {r["run"]: r for r in CU.triage(st, runs, now=NOW, host=HOST)}
+    assert {k: r["state"] for k, r in rows.items()} == {live.name: "running", dead.name: "no-custody", nopid.name: "running"}
+    assert rows[live.name]["why"] == "running here" and rows[dead.name]["why"].startswith("dead: its runner (pid 4194311)")
+    assert rows[nopid.name]["why"] == "running here (its status names no pid that reads)"
 
 
 def test_triage_takes_a_valid_custody_marker_where_the_catalog_cannot_say(tmp_path, monkeypatch):

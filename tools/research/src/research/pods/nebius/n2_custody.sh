@@ -68,11 +68,17 @@ except (OSError, ValueError):
     st = {}
 state = st.get("state") or "running"
 if state == "running":
-    t = (st.get("transitions") or [{}])[-1]
+    # the runner's pid is status.json's own: `tele set-timeout` appends a `running` transition without one
     try:
-        alive = int(open(f"/proc/{t['pid']}/stat").read().rsplit(")", 1)[1].split()[19]) == t["starttime_ticks"]
-    except (KeyError, OSError, ValueError, IndexError):
-        alive = not st          # no status yet: a run that is starting
+        t = next(t for t in (st, *reversed(st.get("transitions") or [])) if t.get("pid") is not None)
+        if int(t["pid"]) <= 0:
+            raise ValueError(t["pid"])
+        f = open(f"/proc/{int(t['pid'])}/stat").read().rsplit(")", 1)[1].split()
+        alive = t.get("starttime_ticks") is None or int(f[19]) == int(t["starttime_ticks"])
+    except FileNotFoundError:
+        alive = False
+    except Exception:           # no status yet, or no pid that parses: never taken for dead
+        alive = True
     state = "running" if alive else "dead"
 mt = max([os.path.getmtime(p) for p in (f"{d}/status.json", f"{d}/.custody") if os.path.exists(p)] or [time.time()])
 n = size = 0
