@@ -5,8 +5,10 @@ learns a plan of its own. A cache that kept every plan's metas for the life of t
 step, and every full collection of the serving process's heap walks all of it. A step reuses a plan learned in its own run
 or in the run before it (the warm-up learns the plans the record run follows), so the cache keeps two generations: the
 plans of the current run and those of the previous one. `end_run` retires the older generation, and a plan used again moves
-to the current one. The C++ collector keeps every plan, so a plan that falls out of this cache is exported again by the
-serving thread on its next use and rebuilt with the same layout.
+to the current one. The C++ collector drops its plans by the same rule (`native_plans.h`), and a plan it learns after a drop
+takes a version above every dropped one, so a key here never names that plan. A plan the collector holds and this cache does
+not (a step the worker has not absorbed yet, or failed) is exported again by the serving thread and rebuilt with the same
+layout.
 
 The worker reads and fills the cache while the serving thread asks whether a plan is in it (`in`), so a plan is added to
 the current generation before it leaves the previous one, and `in` looks at the previous generation first: a plan never
