@@ -8,10 +8,12 @@ import fnmatch
 import importlib.util
 import json
 import os
+import shutil
 import signal
 import socket
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -64,6 +66,14 @@ def prep(**kw) -> dict:
     return {"geteuid": lambda: 0, "getpwnam": getpwnam, "getgrall": lambda: GROUPS,
             "host": lambda d: SimpleNamespace(st_dev=1, st_ino=2), "listdir": lambda d: ["lean-cache.env", "hf-token"],
             "io_idle": lambda: False, "net_unix": lambda: NET_UNIX, "exists": lambda p: True, **kw}
+
+
+@pytest.fixture(autouse=True)
+def _umask():
+    """The unit's UMask=0022, under which Lake writes nothing its group or others can write."""
+    old = os.umask(0o022)
+    yield
+    os.umask(old)
 
 
 @pytest.fixture
@@ -445,13 +455,13 @@ def test_checkout_is_a_fresh_clone_of_a_commit_on_main_and_clean_holds_until_som
     assert S.dirty(str(t), origin.on) == []
     (t / "pkg" / ".lake" / "build").mkdir()
     (t / "pkg" / ".lake" / "build" / "A.olean").write_text("o")
-    assert S.dirty(str(t), origin.on) == [] and S.main(["clean", "--tree", str(t), "--sha", origin.on]) == S.OK
+    assert S.dirty(str(t), origin.on) == [] and _clean(t, origin.on) == S.OK
     (t / "build.log").write_text("l")
     (t / "pkg" / "B.lean").write_text("b")
     (t / "README.md").write_text("changed\n")
     assert sorted(S.dirty(str(t), origin.on)) == [" M README.md", "!! build.log", "?? pkg/B.lean"]
     assert S.dirty(str(t), origin.off)[0] == f"HEAD is {origin.on[:12]}, not {origin.off[:12]}"
-    assert S.main(["clean", "--tree", str(t), "--sha", origin.on]) == S.FAILED
+    assert _clean(t, origin.on) == S.FAILED
     empty = t.parent / "empty"
     _git("init", "-q", str(empty), cwd=t.parent)
     assert S.dirty(str(empty)) == [f"{empty} has no commit checked out"]
@@ -482,6 +492,150 @@ def test_checkout_refuses_and_leaves_no_tree(origin, tmp_path):
     with pytest.raises(S.Refused, match="below a top-level one"):
         S.checkout(origin.on, origin.bare, S.MAIN, t, 990, 990, chown=lambda *a: None)
     assert S.main(["checkout", origin.on, "--repo", origin.bare, "--tree", t], geteuid=lambda: 1001) == S.REFUSED
+
+
+# ---- clean: what a publisher waits on
+
+ME = os.getuid()
+BUILD = ME or 990                                   # the build's user: the tree's owner, or beside root's tree
+
+
+def _clean(tree, sha, procs=(), units="", units_rc=0, uid=BUILD, euid=0, calls=None) -> int:
+    """`clean` as root on node 1, with a /proc of ``procs`` ((pid, its four uids, its name), or (pid,) for one that ended
+    while it was read) and `systemctl list-units` answering ``units``."""
+    proc = Path(tempfile.mkdtemp())
+    try:
+        (proc / "self").mkdir()
+        for pid, *rest in procs:
+            (proc / str(pid)).mkdir()
+            if rest:
+                uids, name = rest
+                (proc / str(pid) / "status").write_text(f"Name:\t{name}\nState:\tS (sleeping)\nUid:\t{uids}\nGid:\t0\t0\t0\t0\n")
+
+        def systemctl(argv):
+            (calls if calls is not None else []).append(argv)
+            return units_rc, units
+
+        return S.main(["clean", "--tree", str(tree), "--sha", sha], geteuid=lambda: euid,
+                      getpwnam=lambda n: SimpleNamespace(pw_uid=uid, pw_gid=uid), proc=proc, systemctl=systemctl)
+    finally:
+        shutil.rmtree(proc)
+
+
+@pytest.fixture
+def built(origin):
+    """A tree after an honest build: checked out, Lake's outputs in each `.lake`, and the dependencies' mount point empty."""
+    t = origin.tree
+    S.checkout(origin.on, origin.bare, S.MAIN, str(t), ME, os.getgid(), chown=lambda *a: None)
+    for p in ("pkg/.lake/build/lib/lean/A.olean", "pkg/.lake/build/lib/lean/A.ilean", "pkg/.lake/build/ir/A.c",
+              "pkg/.lake/config/p/lakefile.olean", "pkg/nested/.lake/build/lib/lean/N.trace"):
+        (t / p).parent.mkdir(parents=True, exist_ok=True)
+        (t / p).write_text("o")
+    (t / "pkg" / ".lake" / "packages").mkdir()
+    return SimpleNamespace(tree=t, sha=origin.on, lake=t / "pkg" / ".lake", lib=t / "pkg" / ".lake" / "build" / "lib" / "lean")
+
+
+UNITS = ("vy-lean-sandbox-probe-7-a1b2c3.service loaded inactive dead    /usr/bin/python3 -I -c ...\n"
+         "vy-lean-sandbox-build-7-a1b2c3.service loaded failed   failed  /usr/bin/env lake build\n")
+
+
+def test_clean_passes_an_honest_tree_once_nothing_of_the_build_runs(built, capsys):
+    calls = []
+    procs = [(1, "0\t0\t0\t0", "systemd"), (2, f"{ME + 1}\t{ME + 1}\t{ME + 1}\t{ME + 1}", "sshd"), (3,)]
+    assert _clean(built.tree, built.sha, procs, UNITS, calls=calls) == S.OK, capsys.readouterr().err
+    assert calls == [["list-units", "--all", "--plain", "--no-legend", "--full", "vy-lean-sandbox-*"]]
+
+
+@pytest.mark.parametrize("field", range(4), ids=["real", "effective", "saved", "filesystem"])
+def test_clean_fails_while_a_process_has_the_builds_uid_as_any_of_its_uids(built, capsys, field):
+    uids = "\t".join(str(BUILD if i == field else 0) for i in range(4))
+    assert _clean(built.tree, built.sha, [(1, "0\t0\t0\t0", "systemd"), (4242, uids, "lake")]) == S.FAILED
+    assert f"still running: pid 4242 uid {BUILD} (lake)" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("units, rc, why", [
+    *((UNITS.replace("inactive", s, 1), 0, f"unit vy-lean-sandbox-probe-7-a1b2c3.service is {s}")
+      for s in ("active", "activating", "deactivating", "reloading")),
+    ("● vy-lean-sandbox-build-7-a1b2c3.service loaded active running lake\n", 0, "build-7-a1b2c3.service is active"),
+    ("", 1, "`systemctl list-units` exited 1"),
+    ("garbage\n", 0, "systemctl listed 'garbage'"),
+], ids=["active", "activating", "deactivating", "reloading", "a bullet", "systemctl failed", "unparsed"])
+def test_clean_fails_while_a_sandbox_unit_is_up_or_unknown(built, capsys, units, rc, why):
+    assert _clean(built.tree, built.sha, units=units, units_rc=rc) == S.FAILED
+    assert why in capsys.readouterr().err
+
+
+def _socket(b):
+    cwd = os.getcwd()
+    os.chdir(b.lib)
+    try:
+        with socket.socket(socket.AF_UNIX) as s:
+            s.bind("relay.sock")
+    finally:
+        os.chdir(cwd)
+
+
+def _deep(b):
+    d = b.lake / "build"
+    for _ in range(S.DEPTH):
+        d = d / "d"
+    d.mkdir(parents=True)
+
+
+LEFT = {
+    "a linked directory": (lambda b: (b.lake / "build" / "keys").symlink_to("/etc/verity"), "pkg/.lake/build/keys: a symbolic link"),
+    "a linked file": (lambda b: (b.lib / "B.olean").symlink_to("/etc/verity/lean-cache.env"),
+                      "pkg/.lake/build/lib/lean/B.olean: a symbolic link"),
+    "a hard link": (lambda b: os.link(b.lib / "A.olean", b.lib / "A2.olean"), "pkg/.lake/build/lib/lean/A.olean: a file with 2 names"),
+    "a FIFO": (lambda b: os.mkfifo(b.lib / "B.olean"), "pkg/.lake/build/lib/lean/B.olean: a FIFO"),
+    "a socket": (_socket, "pkg/.lake/build/lib/lean/relay.sock: a socket"),
+    "a linked .lake": (lambda b: (shutil.rmtree(b.tree / "pkg" / "nested" / ".lake"),
+                                  (b.tree / "pkg" / "nested" / ".lake").symlink_to(b.lake)),
+                       "pkg/nested/.lake: a symbolic link, not a directory"),
+    "writable by others": (lambda b: (b.lake / "build").chmod(0o777), "pkg/.lake/build: writable by group or others (mode 777)"),
+    "writable by its group": (lambda b: (b.lib / "A.olean").chmod(0o664), "A.olean: writable by group or others (mode 664)"),
+    "setuid": (lambda b: (b.lib / "A.olean").chmod(0o4755), "A.olean: setuid or setgid (mode 4755)"),
+    "too deep": (_deep, f"more than {S.DEPTH} directories down"),
+}
+
+
+@pytest.mark.parametrize("case", LEFT)
+def test_clean_fails_on_what_a_build_could_leave_in_a_lake(built, capsys, case):
+    make, why = LEFT[case]
+    assert _clean(built.tree, built.sha) == S.OK
+    make(built)
+    assert _clean(built.tree, built.sha) == S.FAILED
+    assert why in capsys.readouterr().err
+
+
+def test_clean_fails_on_a_file_owned_by_a_third_user(built, capsys):
+    if ME == 0:
+        os.chown(built.lib / "A.olean", 4242, 4242)
+        assert _clean(built.tree, built.sha) == S.FAILED
+        assert "A.olean: owned by uid 4242" in capsys.readouterr().err
+    else:                                           # the tree's ours: as another build user's, all of it is a third user's
+        assert _clean(built.tree, built.sha, uid=ME + 7) == S.FAILED
+        assert f"pkg/.lake: owned by uid {ME}" in capsys.readouterr().err
+
+
+def test_clean_refuses_unless_root_and_the_build_user_exist(built):
+    assert _clean(built.tree, built.sha, euid=1001) == S.REFUSED
+
+    def nobody(name):
+        raise KeyError(name)
+
+    assert S.main(["clean", "--tree", str(built.tree)], geteuid=lambda: 0, getpwnam=nobody) == S.REFUSED
+
+
+def test_the_unit_is_stopped_whole_so_run_returns_only_after_its_last_process(host):
+    run = Systemd()
+    assert S.main(args(host), run=run, **prep()) == S.OK
+    for argv, _, _ in run.calls:
+        props = _opts(argv, "-p")
+        assert {"KillMode=control-group", "SendSIGKILL=yes"} <= set(props)
+        assert [p for p in props if p.startswith("KillMode=")] == ["KillMode=control-group"]
+        assert not [p for p in props if p.startswith(("RemainAfterExit", "SendSIGKILL=no"))]
+        assert "--wait" in argv and not {"--remain-after-exit", "-r", "--scope", "--no-block"} & set(argv)
 
 
 # ---- what deploys it

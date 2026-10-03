@@ -5,7 +5,7 @@ node's credentials and nothing writable outside its build tree, probed from insi
     vy-lean-sandbox checkout SHA [--repo DIR] [--main REF] [--tree DIR]
     vy-lean-sandbox run [UNIT] [--slot-wait S | --held-slot build/I] [--by WHO] -- CMD...
     vy-lean-sandbox probe [UNIT]
-    vy-lean-sandbox clean [--tree DIR] [--sha SHA]
+    vy-lean-sandbox clean [--tree DIR] [--sha SHA] [--user NAME]
 
 UNIT: --tree DIR[:DEST] (default /build/verity, bound read-write at DEST, the same path by default: a module built at a fixed
 path is byte-identical), --deps PKG=DIR (DIR read-only at DEST/PKG/.lake/packages, restored outside first and readable by
@@ -22,8 +22,13 @@ properties: who it runs as, its privileges, sudo, the network, the host's Unix s
 tree, a private /tmp, /var/tmp and /dev/shm, its environment and other users' processes. If one gets through, nothing is built.
 
 `checkout` makes the tree a fresh clone of SHA, which must be on REF (default refs/heads/main) of DIR (default node 1's bare
-repository): root owns the sources and the build's user only each Lake package's `.lake`. `clean` says whether the tree is
-still SHA's, with nothing changed or added outside the `.lake` directories.
+repository): root owns the sources and the build's user only each Lake package's `.lake`. `clean` is what a publisher waits
+on: it passes when no process of the build's user is alive and no sandbox unit is active; when nothing in a `.lake` directory
+is a link, a FIFO, socket or device, a file with a second name, setuid, writable by group or others, or owned by anyone but
+root and the build's user; and when the tree is still SHA's outside them. Once it passes, nothing but root changes the tree
+until the next `run`. A publisher still opens every directory from its parent's descriptor with O_NOFOLLOW and takes only
+regular files with one name, by fstat: O_NOFOLLOW alone covers only a path's last component, and a build can make a directory
+such as `.lake/build` a link to /etc/verity.
 
 Exit status: 0 done (the command succeeded, the probes held, the tree is clean), 1 the command failed or the tree isn't clean,
 2 refused or the unit couldn't start (the command never runs another way, nor as another user), 3 a probe got through and
@@ -69,6 +74,10 @@ TASKS = 16384
 MAX_SEC = 3 * 3600
 POLL_S = 20
 PYTHON = "/usr/bin/python3"
+UNIT_PREFIX = "vy-lean-sandbox-"
+PROC = Path("/proc")
+#: `clean` descends at most this far below the tree (Lake's deepest outputs are about fifteen)
+DEPTH = 64
 
 #: users the build never runs as, and groups its user is never in
 FORBIDDEN_USERS = ("root", "research")
@@ -374,7 +383,7 @@ def prepare(ns: argparse.Namespace, geteuid=os.geteuid, getpwnam=pwd.getpwnam, g
         if not mount.is_dir():
             if not mount.parent.is_dir():
                 raise Refused(f"--deps {d!r}: {mount.parent} isn't a Lake package's .lake (checkout makes one per package)")
-            mount.mkdir()
+            mount.mkdir(mode=0o755)
         deps.append((src, str(Path(tree_in) / pkg / ".lake" / "packages")))
     for dst in (ELAN_IN, tree_in, *(d for _, d in (*ro, *rw))):
         if not exists(dst):
@@ -432,6 +441,8 @@ def unit_argv(spec: Spec, unit: str, cmd: list[str]) -> list[str]:
         *(f"BindReadOnlyPaths={s}:{d}" for s, d in spec.ro),
         *(f"BindPaths={s}:{d}" for s, d in spec.rw),
         f"MemoryMax={spec.memory}", f"TasksMax={TASKS}", f"RuntimeMaxSec={spec.max_sec}", f"Nice={spec.nice}",
+        # `--wait` returns when the unit is inactive: with these, only once every process in its cgroup is gone
+        "KillMode=control-group", "SendSIGKILL=yes",
         *([f"AllowedCPUs={spec.cpus}"] if spec.cpus else []),
         *(["IOSchedulingClass=idle"] if spec.io_idle else []),
     ]
@@ -473,7 +484,7 @@ def systemd_run(argv: list[str], capture: bool, unit: str) -> tuple[int, str]:
 def sandboxed(spec: Spec, cmd: list[str] | None, run: Runner = systemd_run, tag: str | None = None) -> int:
     """The probes, then ``cmd`` (None: the probes only), each in its own unit."""
     tag = tag or f"{os.getpid()}-{os.urandom(3).hex()}"
-    unit = f"vy-lean-sandbox-probe-{tag}"
+    unit = f"{UNIT_PREFIX}probe-{tag}"
     rc, out = run(unit_argv(spec, unit, probe_cmd(spec)), True, unit)
     results = verdict(out)
     if results is None:
@@ -487,7 +498,7 @@ def sandboxed(spec: Spec, cmd: list[str] | None, run: Runner = systemd_run, tag:
         return BREACH
     if cmd is None:
         return OK
-    unit = f"vy-lean-sandbox-build-{tag}"
+    unit = f"{UNIT_PREFIX}build-{tag}"
     log(f"building in {unit} as {spec.user} in {spec.tree_in}: {' '.join(cmd)}")
     rc, _ = run(unit_argv(spec, unit, ["/usr/bin/env", *cmd]), False, unit)
     if rc in SETUP_FAILED:
@@ -710,6 +721,125 @@ def dirty(tree: str, sha: str | None = None) -> list[str]:
     return out
 
 
+Systemctl = Callable[[list[str]], "tuple[int, str]"]
+
+
+def _systemctl(argv: list[str]) -> tuple[int, str]:
+    try:
+        r = subprocess.run(["systemctl", *argv], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return -1, str(e)
+    return r.returncode, r.stdout if r.returncode == 0 else r.stderr
+
+
+def alive(uid: int, proc: Path = PROC, systemctl: Systemctl = _systemctl) -> list[str]:
+    """What of a build may still run: a process with ``uid`` as its real, effective, saved or filesystem uid, and a sandbox unit
+    neither inactive nor failed. A process that ends while it is read is gone, not a reason."""
+    out = []
+    for pid in sorted((p for p in os.listdir(proc) if p.isdigit()), key=int):
+        try:
+            st = dict(ln.split(":", 1) for ln in (proc / pid / "status").read_text().splitlines() if ":" in ln)
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        except OSError as e:
+            out.append(f"pid {pid}: its status is unreadable ({e})")
+            continue
+        uids = st.get("Uid", "").split()
+        if len(uids) != 4:
+            out.append(f"pid {pid}: no uids in its status")
+        elif str(uid) in uids:
+            out.append(f"still running: pid {pid} uid {uid} ({st.get('Name', '').strip()})")
+    rc, text = systemctl(["list-units", "--all", "--plain", "--no-legend", "--full", f"{UNIT_PREFIX}*"])
+    if rc != 0:
+        return [*out, f"the sandbox's units are unknown (`systemctl list-units` exited {rc}: {text.strip()[-200:]})"]
+    for ln in text.splitlines():
+        f = ln.split()
+        f = f[1:] if f[:1] == ["●"] else f
+        if not f:
+            continue
+        if len(f) < 3 or not f[0].startswith(UNIT_PREFIX):
+            out.append(f"systemctl listed {ln.strip()!r}")
+        elif f[2] not in ("inactive", "failed"):
+            out.append(f"unit {f[0]} is {f[2]}")
+    return out
+
+
+KINDS = {stat.S_IFLNK: "a symbolic link", stat.S_IFIFO: "a FIFO", stat.S_IFSOCK: "a socket", stat.S_IFBLK: "a block device",
+         stat.S_IFCHR: "a character device", stat.S_IFREG: "a file", stat.S_IFDIR: "a directory"}
+
+
+def _untrusted(st: os.stat_result, uid: int) -> str | None:
+    kind = stat.S_IFMT(st.st_mode)
+    if kind not in (stat.S_IFREG, stat.S_IFDIR):
+        return KINDS.get(kind, f"of type {kind:o}")
+    if kind == stat.S_IFREG and st.st_nlink > 1:
+        return f"a file with {st.st_nlink} names"
+    if st.st_uid not in (0, uid):
+        return f"owned by uid {st.st_uid}"
+    if st.st_mode & 0o022:                                      # an ACL granting another user write shows in the group bits
+        return f"writable by group or others (mode {stat.S_IMODE(st.st_mode):o})"
+    if st.st_mode & (stat.S_ISUID | stat.S_ISGID):
+        return f"setuid or setgid (mode {stat.S_IMODE(st.st_mode):o})"
+    return None
+
+
+def unsafe(tree: str, uid: int) -> list[str]:
+    """What in ``tree``'s `.lake` directories a publisher can't trust (see `clean`), and a `.lake` that isn't a directory;
+    walked from directory descriptors, never following a link nor leaving the tree's filesystem."""
+    out: list[str] = []
+
+    def walk(fd: int, rel: str, inside: bool, depth: int) -> None:
+        try:
+            names = sorted(os.listdir(fd))
+        except OSError as e:
+            out.append(f"{rel or '.'}: {e.strerror}")
+            return
+        for name in names:
+            p = rel + name
+            if p == ".git":
+                continue
+            try:
+                st = os.stat(name, dir_fd=fd, follow_symlinks=False)
+            except OSError as e:
+                out.append(f"{p}: {e.strerror}")
+                continue
+            lake = inside or name == ".lake"
+            if name == ".lake" and not inside and not stat.S_ISDIR(st.st_mode):
+                out.append(f"{p}: {KINDS.get(stat.S_IFMT(st.st_mode), 'not a directory')}, not a directory")
+                continue
+            if lake and (why := _untrusted(st, uid)):
+                out.append(f"{p}: {why}")
+                continue
+            if not stat.S_ISDIR(st.st_mode):
+                continue
+            if st.st_dev != dev:
+                out.append(f"{p}: another filesystem")
+                continue
+            if depth >= DEPTH:
+                out.append(f"{p}: more than {DEPTH} directories down")
+                continue
+            try:
+                sub = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            except OSError as e:
+                out.append(f"{p}: {e.strerror}")
+                continue
+            try:
+                walk(sub, p + "/", lake, depth + 1)
+            finally:
+                os.close(sub)
+
+    try:
+        top = os.open(tree, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError as e:
+        return [f"can't open {tree}: {e.strerror}"]
+    try:
+        dev = os.fstat(top).st_dev
+        walk(top, "", False, 0)
+    finally:
+        os.close(top)
+    return out
+
+
 # ---- the command line
 
 def _unit_opts(p: argparse.ArgumentParser) -> None:
@@ -742,14 +872,15 @@ def parser() -> argparse.ArgumentParser:
     r.add_argument("--by", default=None)
     r.add_argument("command", nargs=argparse.REMAINDER)
     _unit_opts(sub.add_parser("probe", help="the probes only"))
-    k = sub.add_parser("clean", help="whether the tree is still SHA's, outside its .lake directories")
+    k = sub.add_parser("clean", help="whether the build is over and its tree is safe to publish")
     k.add_argument("--tree", default=TREE)
     k.add_argument("--sha", default=None)
+    k.add_argument("--user", default=USER)
     return ap
 
 
 def main(argv: list[str], run: Runner = systemd_run, now=lambda: datetime.now(timezone.utc), sleep=time.sleep,
-         geteuid=os.geteuid, **prep) -> int:
+         geteuid=os.geteuid, getpwnam=pwd.getpwnam, proc: Path = PROC, systemctl: Systemctl = _systemctl, **prep) -> int:
     if argv[:1] == ["_probe"]:
         print(MARK + json.dumps(probe(json.loads(argv[1]))), flush=True)
         return OK
@@ -759,7 +890,7 @@ def main(argv: list[str], run: Runner = systemd_run, now=lambda: datetime.now(ti
             if geteuid() != 0:
                 raise Refused("run as root (`sudo -n vy-lean-sandbox checkout ...`)")
             try:
-                pw = pwd.getpwnam(ns.user)
+                pw = getpwnam(ns.user)
             except KeyError:
                 raise Refused(f"no user {ns.user!r}: `sudo -n vy-lean-build-setup` creates it") from None
             checkout(ns.sha, ns.repo, ns.main, ns.tree, pw.pw_uid, pw.pw_gid)
@@ -767,13 +898,20 @@ def main(argv: list[str], run: Runner = systemd_run, now=lambda: datetime.now(ti
                 raise Refused(f"{ns.tree} isn't {ns.sha[:12]}'s tree after the checkout: {'; '.join(bad[:5])}")
             return OK
         if ns.cmd == "clean":
-            bad = dirty(ns.tree, ns.sha)
+            if geteuid() != 0:
+                raise Refused("run as root (`sudo -n vy-lean-sandbox clean ...`): only root sees every process and file of "
+                              "the build")
+            try:
+                uid = getpwnam(ns.user).pw_uid
+            except KeyError:
+                raise Refused(f"no user {ns.user!r}") from None
+            bad = [*alive(uid, proc, systemctl), *unsafe(ns.tree, uid), *dirty(ns.tree, ns.sha)]
             for b in bad[:20]:
                 log(f"{ns.tree}: {b}")
             if bad:
-                log(f"{ns.tree} isn't clean ({len(bad)} path(s)): don't upload it")
+                log(f"{ns.tree} isn't clean ({len(bad)} reason(s)): don't upload it")
             return FAILED if bad else OK
-        spec = prepare(ns, geteuid=geteuid, **prep)
+        spec = prepare(ns, geteuid=geteuid, getpwnam=getpwnam, **prep)
         if ns.cmd == "probe":
             return sandboxed(spec, None, run)
         cmd = ns.command[1:] if ns.command[:1] == ["--"] else ns.command

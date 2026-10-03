@@ -214,7 +214,9 @@ A Lean build that must not touch the node's credentials, such as the Lean build 
 (`pods/nebius/lean_sandbox.py`, run as root): `checkout SHA` makes `/build/verity` a fresh clone of a commit on `main`, `run
 [--deps PKG=DIR] -- CMD` takes a slot of the `build` pool in node 1's Lean slot file and runs CMD as `lean-build` in a transient
 systemd unit with no network, no `/home`, no `/etc/verity`, an empty `/run` and `/workspace`, nothing writable but the tree, and
-only the variables passed with `-E`, and `clean` says whether the tree is still the commit's outside `.lake`. Probes run inside
+only the variables passed with `-E`, and `clean`, which a publisher waits on, passes once no process of `lean-build` is alive, no
+sandbox unit is up, the tree is still the commit's outside `.lake`, and nothing in a `.lake` is a link, a hard link, a special
+file, setuid, writable by group or others, or another user's. Probes run inside
 the unit before every build; one that gets through stops it (exit 3), and a unit that can't start is a refusal (exit 2), never
 a build as another user. Dependencies are restored outside first and bound read-only (readable by others: `chmod -R a+rX`).
 `vy-lean-build-setup` (`pods/nebius/lean_build_setup.sh`) makes the user and checks it from that user's side.
