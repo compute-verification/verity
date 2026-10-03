@@ -62,6 +62,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
+import fast_tile as FT  # noqa: E402
 import run_result  # noqa: E402
 import verify_run as VR  # noqa: E402
 from verity.commitments import Commitment  # noqa: E402
@@ -98,10 +99,12 @@ def _recorded(*args, **kwargs):
 
 _CHAINS: list = []
 _CHAIN_DEBIT = PW.D.chain_debit
+#: the debit's implementation `_chain_recorded` calls: the scalar reference, or `fast_tile`'s batch form
+_IMPL = {"chain_debit": _CHAIN_DEBIT}
 
 
 def _chain_recorded(*args, **kwargs):
-    out = _CHAIN_DEBIT(*args, **kwargs)
+    out = _IMPL["chain_debit"](*args, **kwargs)
     _CHAINS.append(out)
     return out
 
@@ -173,6 +176,26 @@ _JOB: dict = {}
 
 
 def one(tid: int) -> dict:
+    """One tile's line, on the batch forms when they are installed; every `cross_check`-th tile (by id) is replayed again on
+    the scalar reference, and any field that differs is recorded (``cross_check_failed``), which fails the run."""
+    out = _measure(tid)
+    every = _JOB.get("cross_check", 0)
+    if _JOB.get("undo") is not None and every and tid % every == 0:
+        _JOB["undo"]()
+        _IMPL["chain_debit"] = _CHAIN_DEBIT
+        try:
+            ref = _measure(tid)
+        finally:
+            _JOB["undo"] = FT.install(_JOB["scheme"], debit=False)
+            _IMPL["chain_debit"] = FT.chain_debit
+        diff = {k: [out.get(k), ref.get(k)] for k in set(out) | set(ref) if k not in ("seconds", "replay") and out.get(k) != ref.get(k)}
+        out["cross_checked"] = True
+        if diff:
+            out["cross_check_failed"] = diff
+    return out
+
+
+def _measure(tid: int) -> dict:
     j = _JOB
     scheme, view, epoch, transcript, verifier, records = (j[x] for x in ("scheme", "view", "epoch", "transcript", "verifier", "records"))
     t0 = time.perf_counter()
@@ -180,7 +203,8 @@ def one(tid: int) -> dict:
     rec, u = records[ref.matmul], epoch.workload.matmuls[ref.matmul]
     s = u.shape
     out = {"tile": tid, "matmul": ref.matmul, "m": s.m, "k": s.k, "n": s.n, "row0": ref.tile.rows[0], "rows": len(ref.tile.rows),
-           "col0": ref.tile.cols[0], "cols": len(ref.tile.cols)}
+           "col0": ref.tile.cols[0], "cols": len(ref.tile.cols), "manifest_sha256": j["sha256"],
+           "replay": "scalar" if j.get("undo") is None or _IMPL["chain_debit"] is _CHAIN_DEBIT else "batch"}
     opened = j["prover"].open(epoch, tid)
     view.kept = None
     v = verifier.check_tile(transcript, opened)
@@ -255,36 +279,86 @@ def summarize(label: str, job: dict, strata: dict, tiles: list[dict]) -> dict:
             "cpu_seconds": round(sum(t["seconds"] for t in tiles), 1), "strata": out_strata}
 
 
-def measure(path: Path, per: int, seed: int, jobs: int, out_dir: Path) -> dict:
+def measure(path: Path, per: int, seed: int, jobs: int, out_dir: Path, opts: dict, label: str | None = None) -> dict:
     """One pass: its sample measured over `jobs` forked workers, a line a tile as each finishes, then its summary."""
-    label, t0 = path.parent.name, time.perf_counter()
+    label, t0 = label or path.parent.name, time.perf_counter()
     job = load(path)
     strata, picks = sample(job, per, seed)
-    refs = job["verifier"].refs
-    picks.sort(key=lambda t: -job["records"][refs[t].matmul].matmul.shape.k)
-    print(f"{label}: {job['man'].get('run')} {job['scheme'].name} cap {job['scheme'].cap}: {len(picks)} tiles of {len(refs)} "
-          f"in {len(strata)} strata (loaded in {time.perf_counter() - t0:.0f} s)", flush=True)
-    _JOB.clear()
-    _JOB.update(job)
-    gc.collect()
-    # the workers share the parent's tile enumeration copy-on-write; frozen, no collection in them touches its pages
-    gc.freeze()
-    tiles: list[dict] = []
-    try:
-        with open(out_dir / f"{label}.tiles.jsonl", "w") as fh, \
-                multiprocessing.get_context("fork").Pool(max(1, min(jobs, len(picks)))) as pool:
-            for t in pool.imap_unordered(one, picks, chunksize=1):
-                tiles.append(t)
-                fh.write(json.dumps(t) + "\n")
-                fh.flush()
-                if len(tiles) % 32 == 0 or len(tiles) == len(picks):
-                    worst = max((x["share"] for x in tiles if "share" in x), default=None)
-                    print(f"{label}: {len(tiles)}/{len(picks)} tiles, worst share {worst}", flush=True)
-    finally:
-        gc.unfreeze()
+    print(f"{label}: {job['man'].get('run')} {job['scheme'].name} cap {job['scheme'].cap}: {len(picks)} tiles of "
+          f"{len(job['verifier'].refs)} in {len(strata)} strata (loaded in {time.perf_counter() - t0:.0f} s)", flush=True)
+    tiles = list(_run_tiles(label, job, picks, jobs, out_dir / f"{label}.tiles.jsonl", opts).values())
     out = summarize(label, job, strata, tiles)
     print(json.dumps({k: v for k, v in out.items() if k != "strata"}), flush=True)
     return out
+
+
+def resumed(paths: list[str], sha256: str) -> dict[int, dict]:
+    """The tile lines of earlier runs on this pass, by tile id, from ``--resume FILE[=MANIFEST_SHA256]``: a line counts when it
+    names this manifest (``manifest_sha256``), or names none and its file was given with this manifest's digest (lines
+    written before tile lines named their pass), and its openings were checked.  A line whose cross-check failed is never
+    reused."""
+    out: dict[int, dict] = {}
+    for spec in paths:
+        name, _, given = spec.partition("=")
+        for line in Path(name).read_text().splitlines():
+            t = json.loads(line)
+            if t.get("manifest_sha256", given) == sha256 and "openings_ok" in t and "cross_check_failed" not in t:
+                out[t["tile"]] = t | {"manifest_sha256": sha256, "resumed_from": t.get("resumed_from", name)}
+    return out
+
+
+def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) -> dict[int, dict]:
+    """Every picked tile's line, by id: a resumed one as recorded (its geometry held to this pass's enumeration), the others
+    measured over `jobs` forked workers, a matmul's tiles in runs of a few so that a worker's per-weight noise caches hit.
+    Every line is written to `path` as it is known.  Raises if a cross-checked tile's batch and scalar replays differ."""
+    refs, records = job["verifier"].refs, job["records"]
+    prior = resumed(opts.get("resume") or [], job["sha256"])
+    got: dict[int, dict] = {}
+    for tid in picks:
+        t = prior.get(tid)
+        if t is not None:
+            ref = refs[tid]
+            if (t["matmul"], t["row0"], t["rows"], t["col0"], t["cols"]) != (ref.matmul, ref.tile.rows[0], len(ref.tile.rows),
+                                                                             ref.tile.cols[0], len(ref.tile.cols)):
+                raise ValueError(f"{label}: resumed tile {tid} is not this pass's tile {tid}")
+            got[tid] = t
+    todo = sorted((t for t in picks if t not in got), key=lambda t: (-records[refs[t].matmul].matmul.shape.k, refs[t].matmul, t))
+    print(f"{label}: {len(got)} of {len(picks)} tiles resumed, {len(todo)} to measure "
+          f"({'scalar' if opts.get('scalar') else 'batch'} replay, cross-check every {opts.get('cross_check') or 'no'} tile id)", flush=True)
+    _JOB.clear()
+    _JOB.update(job, cross_check=opts.get("cross_check", 0), undo=None)
+    if not opts.get("scalar"):
+        _JOB["undo"] = FT.install(job["scheme"], debit=False)
+        _IMPL["chain_debit"] = FT.chain_debit
+    gc.collect()
+    # the workers share the parent's tile enumeration copy-on-write; frozen, no collection in them touches its pages
+    gc.freeze()
+    failed = []
+    try:
+        with open(path, "w") as fh:
+            for t in got.values():
+                fh.write(json.dumps(t) + "\n")
+            fh.flush()
+            if todo:
+                with multiprocessing.get_context("fork").Pool(max(1, min(jobs, len(todo)))) as pool:
+                    for n, t in enumerate(pool.imap_unordered(one, todo, chunksize=max(1, min(4, len(todo) // max(1, jobs)))), 1):
+                        got[t["tile"]] = t
+                        fh.write(json.dumps(t) + "\n")
+                        fh.flush()
+                        if "cross_check_failed" in t:
+                            failed.append(t["tile"])
+                        if n % 32 == 0 or n == len(todo):
+                            print(f"{label}: {n}/{len(todo)} measured, {sum(not x['ok'] for x in got.values())} rejected, "
+                                  f"{sum(bool(x.get('cross_checked')) for x in got.values())} cross-checked, "
+                                  f"worst share {max((x['share'] for x in got.values() if 'share' in x), default=None)}", flush=True)
+    finally:
+        gc.unfreeze()
+        if _JOB.get("undo") is not None:
+            _JOB["undo"]()
+        _IMPL["chain_debit"] = _CHAIN_DEBIT
+    if failed:
+        raise RuntimeError(f"{label}: the batch replay differs from the scalar reference on tiles {failed}")
+    return got
 
 
 def pick_inputs(job: dict, per_linear: int, census_max: int, draws: int, seed: int) -> list[dict]:
@@ -347,31 +421,17 @@ def input_bound(row: dict, delta: float) -> tuple[float, str]:
     return 1.0, "sampled with failures: measure this input in full"
 
 
-def measure_inputs(path: Path, per_linear: int, census_max: int, draws: int, seed: int, jobs: int, out_dir: Path) -> list[dict]:
+def measure_inputs(path: Path, per_linear: int, census_max: int, draws: int, seed: int, jobs: int, out_dir: Path, opts: dict,
+                   label: str | None = None) -> list[dict]:
     """Per-input mode on one pass: every chosen input's tiles measured over `jobs` forked workers, a line a tile, then a row
     an input with its failures at the scheme's cap (a tile whose openings hold and the tile rule rejects), `W` and
     `w_max`.  The bound is added once every pass's inputs are known (`m`)."""
-    label = path.parent.name
+    label = label or path.parent.name
     job = load(path)
     inputs = pick_inputs(job, per_linear, census_max, draws, seed)
-    picks = sorted({t for row in inputs for t in row["drawn"]}, key=lambda t: -job["records"][job["verifier"].refs[t].matmul].matmul.shape.k)
+    picks = sorted({t for row in inputs for t in row["drawn"]})
     print(f"{label}: {job['man'].get('run')} {job['scheme'].name}: {len(inputs)} inputs, {len(picks)} tiles", flush=True)
-    _JOB.clear()
-    _JOB.update(job)
-    gc.collect()
-    gc.freeze()
-    got: dict[int, dict] = {}
-    try:
-        with open(out_dir / f"{label}.input-tiles.jsonl", "w") as fh, \
-                multiprocessing.get_context("fork").Pool(max(1, min(jobs, len(picks)))) as pool:
-            for t in pool.imap_unordered(one, picks, chunksize=1):
-                got[t["tile"]] = t
-                fh.write(json.dumps(t) + "\n")
-                fh.flush()
-                if len(got) % 32 == 0 or len(got) == len(picks):
-                    print(f"{label}: {len(got)}/{len(picks)} tiles, {sum(not x['ok'] for x in got.values())} rejected", flush=True)
-    finally:
-        gc.unfreeze()
+    got = _run_tiles(label, job, picks, jobs, out_dir / f"{label}.input-tiles.jsonl", opts)
     rows = []
     for row in inputs:
         seen = [got[t] for t in row["drawn"]]
@@ -407,6 +467,13 @@ def write_inputs(rows: list[dict], seed: int, census_max: int, draws: int, out_d
     return 0 if ok else 1
 
 
+def labels_of(manifests: list[Path]) -> list[str]:
+    """Each manifest's label, its directory's name (``decode``, ``prefill``), qualified by the run's directory when two
+    manifests share one."""
+    names = [m.parent.name for m in manifests]
+    return [f"{m.parent.parent.name}-{n}" if names.count(n) > 1 else n for m, n in zip(manifests, names)]
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("manifests", type=Path, nargs="*")
@@ -418,6 +485,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--rebound", type=Path, default=None, metavar="INPUTS_JSON",
                    help="recompute an inputs.json's bounds from its recorded counts (no tile is measured; manifests unused)")
     p.add_argument("--seed", type=int, default=SEED)
+    p.add_argument("--resume", nargs="+", default=[], metavar="FILE[=MANIFEST_SHA256]",
+                   help="reuse an earlier run's tile lines on the same pass (a *.tiles.jsonl or *.input-tiles.jsonl); "
+                        "=SHA256 names the manifest of lines that do not name one")
+    p.add_argument("--scalar", action="store_true", help="replay every tile on the scalar reference only (no batch forms)")
+    p.add_argument("--cross-check", type=int, default=64, metavar="N",
+                   help="replay every tile whose id is a multiple of N on the scalar reference too, and fail on any difference "
+                        "(0: none)")
     p.add_argument("--jobs", type=int, default=len(os.sched_getaffinity(0)))
     p.add_argument("--out", type=Path, default=None)
     a = p.parse_args(argv)
@@ -434,16 +508,19 @@ def main(argv: list[str] | None = None) -> int:
         p.error("one --tiles per manifest")
     out_dir = a.out or Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "out"
     out_dir.mkdir(parents=True, exist_ok=True)
+    opts = {"resume": a.resume, "scalar": a.scalar, "cross_check": a.cross_check}
+    labels = labels_of(a.manifests)
     if a.per_input is not None:
         PW._debit_cap, PW.D.chain_debit = _recorded, _chain_recorded
         try:
-            rows = [r for path in a.manifests for r in measure_inputs(path, a.per_input, a.census_max, a.draws, a.seed, a.jobs, out_dir)]
+            rows = [r for path, label in zip(a.manifests, labels)
+                    for r in measure_inputs(path, a.per_input, a.census_max, a.draws, a.seed, a.jobs, out_dir, opts, label)]
         finally:
             PW._debit_cap, PW.D.chain_debit = _DEBIT_CAP, _CHAIN_DEBIT
         return write_inputs(rows, a.seed, a.census_max, a.draws, out_dir)
     PW._debit_cap, PW.D.chain_debit = _recorded, _chain_recorded
     try:
-        passes = [measure(path, per, a.seed, a.jobs, out_dir) for path, per in zip(a.manifests, a.tiles)]
+        passes = [measure(path, per, a.seed, a.jobs, out_dir, opts, label) for path, per, label in zip(a.manifests, a.tiles, labels)]
     finally:
         PW._debit_cap, PW.D.chain_debit = _DEBIT_CAP, _CHAIN_DEBIT
     summary = {"tool": "pouw_pearl_c_served_debit", "seed": a.seed, "caps": {c: str(r) for c, r in CAPS.items()}, "passes": passes}

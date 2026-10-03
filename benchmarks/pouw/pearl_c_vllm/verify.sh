@@ -3,6 +3,7 @@
 # $WORK/passes/<window run id>, J processes each; the verdicts (verify.json) are copied into this run's directory.
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <run tree> --cwd source \
 #     --env GPU_LEASE_WHO=bc-dd22acf8 -- bash benchmarks/pouw/pearl_c_vllm/verify.sh <window run id> [J]
+# FAST=1 replays on fast_tile's batch forms (verify_run.py --fast, every 64th tile id cross-checked on the scalar reference).
 # Prints each pass's ACCEPT or REJECT line and exits non-zero unless the prefill and decode passes are accepted and every
 # negative control's pass (control, and control-leaves where the window retained it) is rejected.  An ACCEPT is
 # replay-verified (development shortcut; the protocol's check is a ZK proof, PROTOCOL.md).
@@ -13,7 +14,7 @@ export PYTHONPATH=$PWD/packages/verity/src:$PWD/protocols/pouw:$PWD/integrations
 status=0
 for pass in prefill decode control control-leaves; do
   [ "$pass" = control-leaves ] && [ ! -f "$PASSES/$pass/manifest.json" ] && continue
-  "$PY" benchmarks/pouw/pearl_c_vllm/verify_run.py "$PASSES/$pass/manifest.json" --jobs "$JOBS" \
+  "$PY" benchmarks/pouw/pearl_c_vllm/verify_run.py "$PASSES/$pass/manifest.json" --jobs "$JOBS" ${FAST:+--fast} \
     $(case "$pass" in control*) echo --expect-reject;; esac) || status=1
   cp "$PASSES/$pass/verify.json" "$OUT/$pass-verify.json" && cp "$PASSES/$pass/manifest.json" "$OUT/$pass-manifest.json"
 done

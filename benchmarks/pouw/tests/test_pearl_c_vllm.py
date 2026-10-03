@@ -445,6 +445,11 @@ def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
     assert got["transcript"] == f"{RUN}:{path} sha256:{got['transcript_sha256']}" and got["transcript"] in got["line"]
     assert VR.main([str(path), "--jobs", "1", "--commit", "0" * 7]) == 0
     assert VR.main([str(path), "--jobs", "1", "--commit", "0" * 7, "--expect-reject"]) == 1
+    fast = VR.verify(path, 3, 1, "test", source, fast=True, cross_check=1)
+    assert fast["replay"] == "batch" and fast["cross_checked"] == fast["tiles"] and "cross_check_failed" not in fast
+    assert {k: fast[k] for k in ("accepted", "tiles", "verdicts")} == {k: got[k] for k in ("accepted", "tiles", "verdicts")}
+    assert C.form_v1 is SD.FT._SCALAR["form_v1"]
+    assert VR.main([str(path), "--jobs", "2", "--commit", "0" * 7, "--fast", "--cross-check", "1"]) == 0
 
 
 @pytest.mark.slow
@@ -459,6 +464,8 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
     rows.write_bytes(bytes(bad))
     r = VR.verify(path, 3, 1, "test", b"verifier" * 4)
     assert not r["accepted"] and "weight opening" in r["line"] and r["line"].startswith("REJECT") and RUN in r["line"]
+    assert {k: VR.verify(path, 3, 1, "test", b"verifier" * 4, fast=True, cross_check=1)[k] for k in ("accepted", "verdicts")} == \
+        {k: r[k] for k in ("accepted", "verdicts")}
     assert VR.main([str(path), "--jobs", "1", "--commit", "0" * 7, "--expect-reject"]) == 0
     rows.write_bytes(good)
     man["matmuls"][0]["excluded_a"] = []
@@ -547,6 +554,93 @@ def test_served_debit_rebound_recomputes_an_inputs_json(tmp_path):
     assert doc["m"] == 2 and doc["delta_per_input"] == 0.025 and doc["seed"] == 7
     assert [r["upper"] for r in doc["inputs"]] == [SD.input_bound(r, 0.025)[0] for r in rows]
     assert doc["cited_upper"] == doc["inputs"][1]["upper"] and doc["cited_input"]["matmul"] == 1
+
+
+def _debit_codes(rng, rows: int, k: int, zero_first: bool) -> list[list[int]]:
+    """E4M3 code rows whose words flag atoms: small codes with some large 32-code slices (the small ones' atoms then round
+    away), and the first promotion group zero when `zero_first` (a later promotion into a +0 total)."""
+    c = rng.integers(1, 0x10, (rows, k))
+    for t in range(0, k, 32):
+        if rng.random() < 0.3:
+            c[:, t:t + 32] = rng.integers(0x50, 0x7E, (rows, 32))
+    if zero_first:
+        c[:, :128] = 0
+    return [[int(x) for x in row] for row in c | rng.integers(0, 2, (rows, k)) << 7]
+
+
+def test_the_batch_debit_is_the_scalar_debit_and_a_nan_code_is_the_scalars_rejection():
+    FT, s = SD.FT, PPD.scheme_of("pearl-c-sm120-v1-h2")
+    rng, seen = np.random.default_rng(3), set()
+    for trial in range(8):
+        a, b = _debit_codes(rng, 3, 384, trial % 2 == 0), _debit_codes(rng, 4, 384, trial % 2 == 0)
+        want = PW.D.chain_debit(a, b, s.device)
+        assert FT.chain_debit(a, b, s.device) == want
+        seen.add(want[1] > 0)
+        assert want[0] > 0
+    assert seen == {True, False}
+    a[0][5] = 0x7F
+    with pytest.raises(Exception) as want:
+        PW.D.chain_debit(a, b, s.device)
+    with pytest.raises(type(want.value), match=str(want.value)):
+        FT.chain_debit(a, b, s.device)
+
+
+def test_the_batch_forms_encode_and_check_a_tile_as_the_scalar_ones():
+    """`fast_tile.install`'s forms (forming, the peel factors, G, C̃ and U, the debit, native BLAKE3) give a tile's encoding,
+    check and debit field for field as the scalar reference, and its undo puts every scalar function back."""
+    FT, s = SD.FT, PPD.scheme_of("pearl-c-sm120-v1-h2")
+    rng = np.random.default_rng(5)
+    shape = Shape(8, 256, 64)
+    mm, tile = Matmul(0, shape, 0), s.tiles(shape)[0]
+    a = [x.tobytes() for x in bf16_words(rng, len(tile.rows), shape.k)]
+    b = [x.tobytes() for x in bf16_words(rng, len(tile.cols), shape.k, 0.02)]
+    ctx = Context(bytes(range(32)), mm, bytes(32), bytes(range(1, 33)))
+
+    def run():
+        ops = s.encode(ctx, s.noise(ctx), a, b, tile)
+        return ops, s.checked(ctx, ops), PW.D.chain_debit(ops.a.codes, ops.b.codes, s.device)
+
+    before = (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, PW.D.chain_debit, type(s).checked, C.blake3)
+    undo = FT.install(s)
+    assert C.form_v1 is FT.form_v1 and PW.D.chain_debit is FT.chain_debit
+    fast = run()
+    undo()
+    assert (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, PW.D.chain_debit, type(s).checked, C.blake3) == before
+    ref = run()
+    for side in ("a", "b"):
+        for field in ("codes", "alpha", "beta", "s", "rho", "ep", "x"):
+            assert getattr(getattr(fast[0], side), field) == getattr(getattr(ref[0], side), field), (side, field)
+    assert (fast[0].pa, fast[0].pb) == (ref[0].pa, ref[0].pb)
+    assert (fast[1].c, fast[1].u) == (ref[1].c, ref[1].u) and fast[2] == ref[2]
+    with pytest.raises(ValueError):
+        FT.install(PPD.scheme_of("pearl-c-sm120-unpromoted-v1-h1"))
+
+
+@pytest.mark.slow
+def test_served_debits_batch_replay_and_resume_record_the_scalar_lines(honest_pass, tmp_path):
+    """The batch replay writes the scalar replay's tile lines (all of them cross-checked here), and `--resume` on them
+    measures nothing again and writes the same summary."""
+    path, *_ = honest_pass
+    lines = {}
+    for name, extra in (("scalar", ["--scalar"]), ("batch", ["--cross-check", "1"])):
+        out = tmp_path / name
+        assert SD.main([str(path), "--tiles", "3", "--jobs", "1", "--out", str(out), *extra]) == 0
+        lines[name] = [json.loads(x) for x in (out / f"{path.parent.name}.tiles.jsonl").read_text().splitlines()]
+    drop = ("seconds", "replay", "cross_checked", "resumed_from")
+    strip = lambda ts: sorted(({k: v for k, v in t.items() if k not in drop} for t in ts), key=lambda t: t["tile"])
+    assert strip(lines["scalar"]) == strip(lines["batch"]) and all(t["cross_checked"] for t in lines["batch"])
+    assert {t["replay"] for t in lines["batch"]} == {"batch"} and {t["replay"] for t in lines["scalar"]} == {"scalar"}
+    out = tmp_path / "resumed"
+    src = tmp_path / "batch" / f"{path.parent.name}.tiles.jsonl"
+    assert SD.main([str(path), "--tiles", "3", "--jobs", "1", "--out", str(out), "--resume", str(src)]) == 0
+    again = [json.loads(x) for x in (out / f"{path.parent.name}.tiles.jsonl").read_text().splitlines()]
+    assert strip(again) == strip(lines["batch"]) and all(t["resumed_from"] == str(src) for t in again)
+    summary = lambda d: {k: v for k, v in json.loads((d / "summary.json").read_text())["passes"][0].items() if k != "cpu_seconds"}
+    assert summary(out) == summary(tmp_path / "batch")
+    unstamped = tmp_path / "unstamped.jsonl"
+    unstamped.write_text("".join(json.dumps({k: v for k, v in t.items() if k != "manifest_sha256"}) + "\n" for t in lines["batch"]))
+    assert SD.resumed([str(unstamped)], lines["batch"][0]["manifest_sha256"]) == {}
+    assert len(SD.resumed([f"{unstamped}={lines['batch'][0]['manifest_sha256']}"], lines["batch"][0]["manifest_sha256"])) == len(lines["batch"])
 
 
 def test_served_debits_share_is_the_tile_rules_debit_over_its_rev1_credit():
