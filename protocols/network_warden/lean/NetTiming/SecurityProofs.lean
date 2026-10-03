@@ -48,5 +48,9 @@ theorem EncardIngressObsDecodableLe : NetTiming.Guarantees.EncardIngressObsDecod
   @NetTiming.encard_ingress_obsDecodable_le
 theorem EncardIngressDecodableLe : NetTiming.Guarantees.EncardIngressDecodableLe :=
   @NetTiming.encard_ingress_decodable_le
+theorem EncardIngressObsDecodableLeContents : NetTiming.Guarantees.EncardIngressObsDecodableLeContents :=
+  @NetTiming.encard_ingress_obsDecodable_le_contents
+theorem EncardIngressDecodableLeContents : NetTiming.Guarantees.EncardIngressDecodableLeContents :=
+  @NetTiming.encard_ingress_decodable_le_contents
 
 end NetTiming.SecurityProofs

@@ -246,4 +246,30 @@ def EncardIngressDecodableLe : Prop :=
     (dec : List Wire → Msg) (hdec : ∀ m ∈ Ms, dec (I.wireRun m n) = m),
     Ms.encard ≤ (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞)
 
+/-- **Content plus timing, from the records.** As `EncardIngressObsDecodableLe`, but the content is no longer
+prescribed: each message's frames on every link `ℓ` are a prefix of `c ℓ` for some content assignment `c` in `Cs`.
+Then there are at most `#Cs · (∏_ℓ (r ℓ + 1))^n · D^n` messages: `log2 #Cs` bits of content plus the timing bound. -/
+def EncardIngressObsDecodableLeContents : Prop :=
+  ∀ {L K S : ℕ} {Msg In Act Wire : Type}
+    (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
+    (hW4 : Packed I.warden) (hr : Allocated I.warden r) (hJ : JitterBounded I.warden D)
+    (Cs : Set (Fin L → List (List Bool))) (Ms : Set Msg)
+    (hacc : ∀ m ∈ Ms, StatusComplete n (I.obsRun m n))
+    (hc : ∀ m ∈ Ms, ∃ c ∈ Cs, ∀ ℓ, linkFrames (I.obsRun m n) ℓ <+: c ℓ)
+    (dec : List (Obs L K S) → Msg) (hdec : ∀ m ∈ Ms, dec (I.obsRun m n) = m),
+    Ms.encard ≤ Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞)
+
+/-- **Content plus timing.** As `EncardIngressDecodableLe` (the decoder reads the wire, under W2), but each message's
+frames follow some content assignment in `Cs`: at most `#Cs · (∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
+def EncardIngressDecodableLeContents : Prop :=
+  ∀ {L K S : ℕ} {Msg In Act Wire : Type}
+    (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
+    (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.warden view) (hW4 : Packed I.warden)
+    (hr : Allocated I.warden r) (hJ : JitterBounded I.warden D)
+    (Cs : Set (Fin L → List (List Bool))) (Ms : Set Msg)
+    (hacc : ∀ m ∈ Ms, StatusComplete n (I.obsRun m n))
+    (hc : ∀ m ∈ Ms, ∃ c ∈ Cs, ∀ ℓ, linkFrames (I.obsRun m n) ℓ <+: c ℓ)
+    (dec : List Wire → Msg) (hdec : ∀ m ∈ Ms, dec (I.wireRun m n) = m),
+    Ms.encard ≤ Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞)
+
 end NetTiming.Guarantees

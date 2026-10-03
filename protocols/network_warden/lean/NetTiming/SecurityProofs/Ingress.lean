@@ -179,4 +179,27 @@ theorem encard_ingress_decodable_le (I : Interaction L K S Msg In Act Wire) (n D
   encard_ingress_obsDecodable_le I n D r hW4 hr hJ c Ms hacc hc (fun o => dec (o.mapIdx view))
     (fun m hm => by rw [← I.wireRun_eq view hW2]; exact hdec m hm)
 
+/-- **Content plus timing, from the records.** When each message's frames follow some content assignment in `Cs`, a
+decoder inside X that reads the records tells apart at most `#Cs · (∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
+theorem encard_ingress_obsDecodable_le_contents (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
+    (hW4 : Packed I.warden) (hr : Allocated I.warden r) (hJ : JitterBounded I.warden D)
+    (Cs : Set (Fin L → List (List Bool))) (Ms : Set Msg)
+    (hacc : ∀ m ∈ Ms, StatusComplete n (I.obsRun m n))
+    (hc : ∀ m ∈ Ms, ∃ c ∈ Cs, ∀ ℓ, linkFrames (I.obsRun m n) ℓ <+: c ℓ)
+    (dec : List (Obs L K S) → Msg) (hdec : ∀ m ∈ Ms, dec (I.obsRun m n) = m) :
+    Ms.encard ≤ Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞) := by
+  sorry
+
+/-- **Content plus timing.** When each message's frames follow some content assignment in `Cs`, a decoder inside X
+that reads the wire tells apart at most `#Cs · (∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
+theorem encard_ingress_decodable_le_contents (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
+    (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.warden view) (hW4 : Packed I.warden)
+    (hr : Allocated I.warden r) (hJ : JitterBounded I.warden D)
+    (Cs : Set (Fin L → List (List Bool))) (Ms : Set Msg)
+    (hacc : ∀ m ∈ Ms, StatusComplete n (I.obsRun m n))
+    (hc : ∀ m ∈ Ms, ∃ c ∈ Cs, ∀ ℓ, linkFrames (I.obsRun m n) ℓ <+: c ℓ)
+    (dec : List Wire → Msg) (hdec : ∀ m ∈ Ms, dec (I.wireRun m n) = m) :
+    Ms.encard ≤ Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞) := by
+  sorry
+
 end NetTiming
