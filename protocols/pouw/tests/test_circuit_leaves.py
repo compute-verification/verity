@@ -131,6 +131,24 @@ def test_statement_rows_refuse_ports_that_are_no_statement():
             L.statement_rows({"rows": rows}, 64, {"ac": 2, "pa": 3})
 
 
+def test_advice_is_in_no_read_set():
+    """Advice (`pc8.PORTS`: the cap tile's certificates) is plain witness only while no row or region reads it: each of
+    `pc8`'s units names its advice apart from its rows and regions; a tile with the cap's advice has the same statement
+    rows as without, so no committed row (and no link, which reads one) holds a bit of it; and advice that is also a
+    row's port or a public input region, or that names an output, is refused."""
+    from verity_pouw.circuit import cap
+
+    for role, unit in pc8.PORTS.items():
+        bound = {p for _r, _rl, ps in unit["rows"] for p in ps} | set(unit["regions"])
+        assert not set(unit["advice"]) & bound and all(isinstance(p, str) for p in unit["advice"]), role
+    reads = {"ac": 2, "pa": 2, "bc": 3, "pb": 3}
+    tile = pc8.PORTS["tile"]
+    assert L.statement_rows({**tile, "advice": cap.ADVICE}, 128, reads) == L.statement_rows(tile, 128, reads)
+    for unit in ({**tile, "advice": ("pa",)}, {**pc8.PORTS["row_a"], "advice": ("fa",)}, {**tile, "advice": (0,)}):
+        with pytest.raises(ValueError, match="no committed row and no public input region"):
+            L.statement_rows(unit, 128, reads)
+
+
 SEG_TAG, SEGMENT_TAG = b"verity/sha512-row-seg/v1\0", b"verity/sha512-row-seg/v1/segment\0"
 
 

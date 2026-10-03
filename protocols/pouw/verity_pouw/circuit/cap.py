@@ -176,6 +176,10 @@ def _finite(e: pc4._Emit, ok, x):
     return _and(e, ok, e.call(F32IsFinite, x))
 
 
+#: the cap templates' advice (`pc8.PORTS`' class): Freeze's certificates, which the prover supplies and nothing binds; the
+#: cap tile's `pc8.PORTS` entry, with RowA's ``sd`` row and the public verdict, comes with its hiding form
+ADVICE = ("cert",)
+
 #: each core atom's window of masked words (`words.WINDOW`: G = 4)
 WINDOWS = {"blackwell_sm120_e4m3_m16n8k32": W.PouwBlackwellE4m3Window, "hopper_e4m3_wgmma_k32": W.PouwHopperE4m3Window}
 
@@ -373,4 +377,4 @@ def templates(k: int, dev: str = "sm120", tile: tuple[int, int] = (1, 1), n: int
             "tile": bind(Pc8TileCapDef, K=k, TM=tile[0], TN=tile[1], N=n or tile[1], RHO=cap.denominator, DEV=dev)}
 
 
-__all__ = ["Pc8CapWordDef", "Pc8TileCapDef", "certificates", "templates"]
+__all__ = ["ADVICE", "Pc8CapWordDef", "Pc8TileCapDef", "WINDOWS", "certificates", "templates"]

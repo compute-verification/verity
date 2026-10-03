@@ -50,15 +50,18 @@ def tile_digests(tile: tuple[int, int], c, u) -> tuple[int, ...]:
 
 def check_ports(fn, ports: dict, derivations: dict, k: int, reads: dict[str, int]) -> None:
     """``ports`` (`pc4.PORTS[role]`) lists every parameter and output of the unit template ``fn`` exactly once, as a committed
-    row's port or a public input region.  Each committed row's port bits are exactly its schema's words (`leaves.ROW_WORDS`),
+    row's port, a public input region or advice (`pc8.PORTS`), and every advice port is a parameter.  Each committed row's
+    port bits are exactly its schema's words (`leaves.ROW_WORDS`),
     so no bit of a committed row is outside the unit's ports (an ok row's word too, `pc4.ok_word`): a port a tile reads
     ``reads[name]`` rows of counted for one row.  Each region is a parameter, in the
     unit's parameter order, whose every leaf has its anchor's width (``derivations``), and its leaves unpacked fill whole
     128-bit words."""
     params, out = fn.signature()
     outs = out.fields if isinstance(out, Tuple) else (out,)
-    listed = [p for _schema, _role, ps in ports["rows"] for p in ps] + list(ports["regions"])
+    advice = list(ports.get("advice", ()))
+    listed = [p for _schema, _role, ps in ports["rows"] for p in ps] + list(ports["regions"]) + advice
     assert Counter(listed) == Counter([name for name, _t in params] + list(range(len(outs)))), fn.id
+    assert set(advice) <= {name for name, _t in params}, (fn.id, advice)
     types_ = dict(params) | dict(enumerate(outs))
     for schema, role, ps in ports["rows"]:
         bits = sum(sum(types_[p].leaf_widths()) // reads.get(p, 1) for p in ps)

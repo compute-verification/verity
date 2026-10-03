@@ -300,6 +300,17 @@ def test_the_ports_are_each_hiding_units_committed_rows(role):
                    {"ac": tm, "pa": tm, "bc": tn, "pb": tn})
 
 
+def test_the_port_check_holds_advice_to_unread_parameters():
+    """Advice is a port's third class (`PORTS`): a row's port also named advice is listed twice, and an output named
+    advice in place of its row is no parameter, so the port check fails on both."""
+    tm, tn = HIDDEN.tile
+    tile, ports = pc8.templates(K, HIDDEN.tile, HIDDEN.dev, True)["tile"], pc8.PORTS["tile"]
+    reads = {"ac": tm, "pa": tm, "bc": tn, "pb": tn}
+    for bad in ({**ports, "advice": ("pa",)}, {**ports, "rows": ports["rows"][:-1], "advice": (0,)}):
+        with pytest.raises(AssertionError):
+            CF.check_ports(tile, bad, pc8.DERIVATIONS, K, reads)
+
+
 @pytest.mark.parametrize("dev", ["h100", "sm120"])
 def test_the_verifier_derives_the_anchored_inputs(dev):
     """`TileAnchors.of` derives the scheme's E_A, E_B, F_A, F_B and G (on the record's chain) from its seeds, and the tile

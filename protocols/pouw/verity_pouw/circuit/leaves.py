@@ -193,8 +193,14 @@ def statement_rows(unit: dict, k: int, reads: dict[str, int] | None = None) -> d
     rows in their order (``reads[p]`` rows of a row whose ports a tile reads one row of each of, row r of each port its r-th)
     then the output rows, each a row of exactly its words, and ``out_row_ports``, each output row's run of output ports,
     which META names when an output row is a row-seg row or a run of several (else every output row is one port's).  The
-    output rows' ports are the unit's outputs, once each and in order."""
+    output rows' ports are the unit's outputs, once each and in order.  An advice port (``unit["advice"]``, `pc8.PORTS`)
+    is a parameter in no row and no public input region (else ValueError), so no row here holds a bit of it."""
     reads = reads or {}
+    advice = set(unit.get("advice", ()))
+    bound = {p for _row, _role, ps in unit["rows"] for p in ps} | set(unit.get("regions", {}))
+    if not all(isinstance(p, str) for p in advice) or advice & bound:
+        raise ValueError(f"advice ports {sorted(map(str, advice))} are parameters in no committed row and no public "
+                         f"input region: not {sorted(map(str, advice & bound)) or 'outputs'}")
     ins, outs, runs = [], [], []
     for row, role, ps in unit["rows"]:
         entry = [ROW_SCHEMA[row, role], 16 * ROW_WORDS[row](k)]

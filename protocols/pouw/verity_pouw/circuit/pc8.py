@@ -225,14 +225,17 @@ Pc8TileHiddenDef = CompositeDefinition(
     doc="`Pc8Tile` with its checked words hidden: their tile digest (`leaves.PearlTileDigest`, `pearl_c.leaf` of C̃ and U).",
     conformance="protocol-defined")
 
-#: each unit's ports under hiding, as `pc4.PORTS`: fp32 input rows, fp8-p rows and ok rows, and the anchors' regions
+#: each unit's ports under hiding, as `pc4.PORTS`: fp32 input rows, fp8-p rows and ok rows, the anchors' regions, and its
+#: advice: parameters the prover supplies that no unit computes and nothing binds (the cap tile's certificates,
+#: `cap.ADVICE`), which C-Flock proves as private inputs.  An advice port is in the unit's io and in no read set: in no
+#: committed row (so in no link either) and in no public input region, which `leaves.statement_rows` enforces.
 PORTS = {
     "row_b": {"rows": (("fp32", ROLE_W, ("x",)), ("fp8-p", ROLE_W, (0, 1)), ("ok", ROLE_W, (2,))),
-              "regions": {"e": "eb", "fb": "fb", "fa": "fa", "g": "g"}},
+              "regions": {"e": "eb", "fb": "fb", "fa": "fa", "g": "g"}, "advice": ()},
     "row_a": {"rows": (("fp32", ROLE_X, ("x",)), ("fp8-p", ROLE_X, (0, 1)), ("ok", ROLE_X, (2,))),
-              "regions": {"e": "ea", "fa": "fa", "fb": "fb"}},
+              "regions": {"e": "ea", "fa": "fa", "fb": "fb"}, "advice": ()},
     "tile": {"rows": (("fp8-p", ROLE_X, ("ac", "pa")), ("fp8-p", ROLE_W, ("bc", "pb")), ("tile", ROLE_X, (0,))),
-             "regions": {}},
+             "regions": {}, "advice": ()},
 }
 
 

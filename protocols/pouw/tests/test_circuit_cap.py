@@ -73,6 +73,13 @@ def test_the_window_is_the_debits_masked_words(dev):
         assert masked[15] == 0 and window.evaluate(*a, *b) == sum(masked[m] << 32 * m for m in range(15)), name
 
 
+def test_the_certificates_are_each_templates_advice():
+    """`ADVICE` (`pc8.PORTS`' class) names a parameter of the word and of the tile: the certificates are in the cap tile
+    unit's io, which C-Flock proves as private inputs."""
+    for t in cap.templates(256, "sm120", (2, 2)).values():
+        assert set(cap.ADVICE) <= {name for name, _t in t.signature()[0]}, t.id
+
+
 def _keyed(w: int, dk: int) -> int:
     return D._word(D._key(w) + dk)
 
