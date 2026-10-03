@@ -379,6 +379,63 @@ def test_tuned_buffers_are_set_only_where_the_kernel_grants_them_whole(fake):
     assert got == (2 * min(1 << 20, rmem) if 2 * rmem >= 1 << 20 else default), (got, rmem)
 
 
+def _starving_proxy(upstream_port, budget):
+    """A relay to the responder that forwards the first ``budget`` bytes of its answers and drops the rest, as a stalled receive
+    window does; it ends both connections when the client closes."""
+    import threading
+
+    lst = socket.create_server(("127.0.0.1", 0))
+    done = threading.Event()
+
+    def serve():
+        cli, _ = lst.accept()
+        lst.close()
+        up = socket.create_connection(("127.0.0.1", upstream_port))
+
+        def down():
+            left = budget
+            while chunk := up.recv(1 << 16):
+                if left > 0:
+                    cli.sendall(chunk[:left])
+                    left -= len(chunk)
+
+        t = threading.Thread(target=down, daemon=True)
+        t.start()
+        while chunk := cli.recv(1 << 16):
+            up.sendall(chunk)
+        up.shutdown(socket.SHUT_RDWR)
+        t.join()
+        up.close()
+        cli.close()
+        done.set()
+
+    threading.Thread(target=serve, daemon=True).start()
+    return lst.getsockname()[1], done
+
+
+@pytest.mark.parametrize("tuned", [True, False])
+def test_a_stalled_answer_ends_the_cell_and_the_responder_serves_the_next(fake, tuned, monkeypatch):
+    monkeypatch.setattr(S, "STALL_S", 0.2)
+    nbytes, n = 144 * 1024, 8
+    want = S.HEADER_BYTES + nbytes
+    port, done = _starving_proxy(fake.resp.port, S.HEADER_BYTES + 3 * want + want // 2)
+    ring = S.Ring(nslots=32)
+    rec = np.zeros((n, len(S.REC)), np.int64)
+    c = S.Client(fake.lib, port, tuned, True, host="127.0.0.1")
+    t_sched, blk, ops = np.zeros(n, np.int64), np.zeros(n, np.int64), np.full(n, S.OP_READ, np.int64)
+    if tuned:
+        got = S.run_tuned(fake.lib, c, ring, t_sched, blk, ops, nbytes, rec, 2**62, 0)
+    else:
+        got = S.run_baseline(c, ring, t_sched, blk, ops, nbytes, rec, 2**62, 0, [False])
+    c.close()
+    done.wait()
+    assert got == (3, 5) and S.STATUSES[got[1]] == "stalled" and int(ring.ctl[S.Ring.HEAD]) == 3
+    after = S.Client(fake.lib, fake.resp.port, tuned, True)
+    ping = after.exchange(S.OP_PING, 0)
+    after.close()
+    assert int(ping[15]) == S.MAGIC and int(ping[0]) == 0
+
+
 def test_one_host_brackets_hold_zero_over_a_real_connection(fake):
     ring = S.Ring(nslots=32)
     n = 20

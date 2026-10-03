@@ -66,6 +66,8 @@ CONFIGS = ("baseline", "tuned")
 ALL_CONFIGS = (*CONFIGS, "zerocopy")   # zerocopy: tuned, and the responder sends with MSG_ZEROCOPY
 CELL_S = 60.0
 SETTLE_S = 2.0
+STALL_S = 5.0               # an answer not complete this long after its request ends its cell as "stalled"
+STATUSES = ("done", "connection", "halted", "sigterm", "deadline", "stalled")
 CHUNK_S = 1800.0            # a chunk closes after the cell that ends this long after it opened: a crash loses at most one
 PASSES = 6
 TWINS_PER_PASS = 7          # timestamping-off twins of random cells in each pass (about 10%): the instrument's own cost
@@ -194,7 +196,7 @@ def load_native(path: Path) -> ctypes.CDLL:
     lib.soak_magic.restype = u64
     lib.soak_client_tune.argtypes = [ip, ip, ip]
     lib.soak_client_run.restype = i64
-    lib.soak_client_run.argtypes = [ip, i64, vp, vp, vp, i64, vp, i64, i64, vp, vp, i64, i64, ip, ip, vp, vp]
+    lib.soak_client_run.argtypes = [ip, i64, vp, vp, vp, i64, vp, i64, i64, vp, vp, i64, i64, ip, ip, vp, vp, i64]
     lib.soak_clock_cost.argtypes = [ip, i64, vp]
     lib.soak_client_drain.argtypes = [ip, vp, i64, i64]
     lib.soak_mlockall.argtypes = [ip]
@@ -1270,7 +1272,7 @@ def run_tuned(lib: ctypes.CDLL, c: Client, ring: Ring, t_sched: np.ndarray, blk:
     r0 = c.reqs
     n = lib.soak_client_run(c.fd, len(t_sched), t_sched.ctypes.data, blk.ctypes.data, ops.ctypes.data, nbytes, ring.base + CTL_BYTES,
                             SLOT_BYTES, ring.nslots, ring.ctl.ctypes.data, rec.ctypes.data, deadline_ns, cell, 1, int(c.ts),
-                            ctypes.byref(reqs), ctypes.byref(status))
+                            ctypes.byref(reqs), ctypes.byref(status), int(STALL_S * 1e9))
     c.reqs = reqs.value
     if c.ts:
         lib.soak_client_drain(c.fd, rec.ctypes.data, n, r0)
@@ -1312,13 +1314,15 @@ def run_baseline(c: Client, ring: Ring, t_sched: np.ndarray, blk: np.ndarray, op
         sock.send(pack(o | (nbytes << 8), b))
         s1 = now()
         c.reqs += 1
-        got, calls, first = 0, 0, 0
+        got, calls, first, stall = 0, 0, 0, s1 + int(STALL_S * 1e9)
         while got < want:
             try:
                 k = sock.recv_into(resp[got:], want - got)
             except BlockingIOError:
                 if stopped[0]:
                     return i, 3
+                if now() > stall:
+                    return i, 5
                 continue
             if k == 0:
                 return i, 1
@@ -1440,7 +1444,7 @@ class Soak:
                 n, status = run_baseline(c, ring, t_sched, blk, ops, nbytes, rec, deadline_ns, cell["id"], self.stopped)
         finally:
             gc.enable()
-        run["done"], run["status"] = n, ("done", "connection", "halted", "sigterm", "deadline")[status]
+        run["done"], run["status"] = n, STATUSES[status]
         if status in (0, 4):
             try:
                 ping = c.exchange(OP_PING, 0)
@@ -1667,6 +1671,7 @@ def validate(rec: np.ndarray, run_idx: np.ndarray, runs: list[dict[str, Any]], s
                              "max_rel_dev": round(float(dev.max()), 4) if len(dev) else None}
     out["loaded_runs_without_tokens"] = loaded_idle
     out["loopback_retransmits"] = retrans
+    out["stalled_runs"] = [r for r, run in enumerate(runs) if run.get("status") == "stalled"]
     return out
 
 
@@ -1877,6 +1882,10 @@ def cmd_verify(a) -> int:
                 break
             if run["status"] == "done":
                 soak.advance(pos, {k: run[k] for k in ("cell", "pass", "position", "end_utc")})
+                pos += 1
+            elif run["status"] == "stalled":
+                # the cell keeps the answers before the stall; its connection is spent, and the next cell opens another
+                soak.advance(pos, {k: run[k] for k in ("cell", "pass", "position", "end_utc", "status")})
                 pos += 1
             elif run["status"] in ("sigterm",):
                 rc = 99

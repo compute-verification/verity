@@ -575,10 +575,11 @@ int soak_client_tune(int fd, int tuned, int ts) {
 // One cell: n requests at realtime t_sched[i] (spinning; late ones go at once) for `nbytes` from block blk[i], each response
 // received into ring slot seq % nslots and published through ctl[0] (head); ctl[1] is the checker's tail, ctl[2] its halt flag.
 // `*reqs` counts requests sent on this connection (for the TX timestamps' keys) and is advanced.  Returns the records written;
-// *status: 0 done, 1 the connection failed, 2 the checker halted, 3 SIGTERM, 4 the deadline passed.
+// *status: 0 done, 1 the connection failed, 2 the checker halted, 3 SIGTERM, 4 the deadline passed, 5 an answer stalled (not
+// complete `stall_ns` after its request: a receiver whose window stays shut never recovers, and the connection is spent).
 int64_t soak_client_run(int fd, int64_t n, const int64_t* t_sched, const int64_t* blk, const int64_t* ops, int64_t nbytes,
                         uint8_t* ring, int64_t slot_bytes, int64_t nslots, volatile int64_t* ctl, int64_t* rec, int64_t deadline_ns,
-                        int64_t cell, int tuned, int ts, int64_t* reqs, int64_t* status) {
+                        int64_t cell, int tuned, int ts, int64_t* reqs, int64_t* status, int64_t stall_ns) {
   const int one = 1;
   const size_t want = HEADER_BYTES + (size_t)nbytes;
   int64_t r0 = *reqs;
@@ -658,6 +659,9 @@ int64_t soak_client_run(int fd, int64_t n, const int64_t* t_sched, const int64_t
         if (got == want) r[R_RECV] = t;
       } else if (k == 0 || (errno != EAGAIN && errno != EWOULDBLOCK) || g_stop) {
         *status = k == 0 || !g_stop ? 1 : 3;
+        return i;
+      } else if (realtime_ns() - r[R_SEND1] > stall_ns) {
+        *status = 5;
         return i;
       }
     }
