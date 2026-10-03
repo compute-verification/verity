@@ -52,7 +52,9 @@ status instead, which is 32 bytes per link-window, or about 46 KB per link per d
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 
 The Program fixes each real frame's content, its **anchor** and its **logical index** λ. The anchor is the recorded
-bucket of the request it answers. λ is its position within its session, from the canonical gate order.
+bucket of the request it answers. λ is its position within its session, from the canonical gate order, so it is never
+negative: `LogicalFrame` rejects a negative index, as Lean's ℕ does. With one, a frame anchored in window 1 could be
+eligible in window 0, and window 0's grid would read window 1's sync.
 
 A window declares one clock-sync value `ClockSync(δ, ρ)`, from the protocol's set `SyncSet`: for example 16 offsets ×
 8 rates, which is 7 bits. δ is a whole number of buckets. ρ is a positive fraction of frames per bucket, below 1 for a
@@ -139,9 +141,27 @@ dataflow hypothesis: for every frame function, sync set and operator, over a hor
 `SecurityProofs.EncardAccSeqsLeConstantRate`, which is 7 bits per window at 16 × 8 sync values. Under J with one sync
 value it is 0 bits of timing (`SecurityProofs.EncardAccSeqsLeConstantRateFixedClock`). A horizon within the first m
 windows is charged only those m windows (`SecurityProofs.EncardAccSeqsLeConstantRateWindows`), and a decoder of the
-wire recovers no more (`SecurityProofs.EncardDecodableLeConstantRate`). The block cap does not sharpen these:
-Theorem 3's dataflow conditions fail for this schedule, since δ and ⌊λ/ρ⌋ carry a frame into later windows and the
-queue carries across them (`constantRate_not_framesRead_counts`, `constantRate_not_windowBlocks`).
+wire recovers no more (`SecurityProofs.EncardDecodableLeConstantRate`).
+
+**The block cap** (`SecurityProofs.EncardAccSeqsLeBlocks`) sharpens these only on a small grid or a horizon of a few
+buckets. Its conditions fail for blocks of one window, since δ and ⌊λ/ρ⌋ carry a frame into later windows and the
+queue carries across them (`constantRate_not_windowBlocks`). So for this schedule it applies only with the horizon as
+one block, whose timing advice is every window's sync. In its count form (`SecurityProofs.EncardAccSeqsLeBlocksCounts`)
+a cell is one link's bucket and its occupancy a count from 0 to r, and the one block caps a horizon of n buckets on L
+egress links at `#Ac · D^n · min(#Σ_sync^W, (r + 1)^(L·n))`: the lesser of the advice cap and the left-packed envelope.
+The count form's first condition holds only when each bucket's counts fix its rows, as when every frame has the same
+payload; with two payloads it fails (`constantRate_not_framesRead_counts`).
+
+So for a horizon of n buckets within the first m windows, the one-block cap is below the advice cap `#Σ_sync^m`
+exactly when the envelope is: `(r + 1)^(L·n) < #Σ_sync^m`. On whole windows (n = m·T) that is
+`(r + 1)^(L·T) < #Σ_sync`, and since L ≥ 1 it can hold only if `T·log2(r + 1) < log2 #Σ_sync`: a window's grid shows
+fewer patterns than Σ_sync has values.
+- **At T = 600 with 16 × 8 sync values** the one-block cap is below the advice cap only on a horizon shorter than
+  `7/(L·log2(r + 1))` buckets, inside the first window (7 buckets on one link at r = 1). One link's grid carries at
+  least 600 bits per window against the sync's 7, and a horizon that reaches window m ≥ 2 has more than (m − 1)·600
+  buckets, each worth at least one bit, against 7m.
+- **On a small grid it does sharpen them:** at T = 2, r = 1 and W = 3 on one link, the one-block cap is 2^6 = 64,
+  against the advice cap's 128^3 = 2,097,152.
 
 The ingress bound is proved in Lean, for a decoder in X that reads the wire (`SecurityProofs.EncardIngressDecodableLe`)
 or the records (`SecurityProofs.EncardIngressObsDecodableLe`). It counts `(r_in + 1)^T` occupancies per ingress
@@ -171,13 +191,20 @@ docstring) and sizes:
     windows. A configuration's windows are the windows its egress frames span, 1 + its largest anchor // T, and the
     high end is the least median rate t such that the configurations with a median rate at most t span at least
     ⌈W/2⌉ of all W windows. So a run cut into more configurations, at a dropped window say, keeps its high end.
-- **The honest prover's choice:** per window, the met value with the least total hand time over the window's frames
-  (their total shaping delay). Taking the least δ first would pick a slow ρ to save one bucket, and hold every later
-  frame for seconds. Frames are in the Program's canonical order, which is step-major for a batching engine, so a long
-  session interleaves with later windows' frames.
+- **The honest prover's choice:** one clock per spatial unit, so per window one value for every egress link of the
+  configuration: the value met on all of them with the least total hand time over the window's frames on every link
+  (their total shaping delay), with ties to the smaller δ, then the larger ρ. Taking the least δ first would pick a
+  slow ρ to save one bucket, and hold every later frame for seconds. Each link's frames are in the Program's canonical
+  order, which is step-major for a batching engine, so a long session interleaves with later windows' frames.
   While a window is chosen, later windows take their most eager value; that only lowers hand times, so a window found
   met stays met.
-- **The honest miss rate:** a window that no value meets is a miss, which is a violation. The target is 1e-4.
+- **The honest miss rate:** a window that no value meets on every egress link is a miss, which is a violation. A
+  larger δ or a smaller ρ only raises hand times, so a window misses exactly when the most lenient value misses on some
+  link. A window is the configuration's, so the rate is the configurations' missed windows over their windows
+  (1 + largest anchor // T each), and a link's `honest_windows` and `honest_misses` are those of its configurations.
+  One clock can miss where a choice per link would not: the value met on every link can hand one link's frames earlier
+  than that link's own choice, and a later window whose frames were met only behind them then misses. The target is
+  1e-4.
 - **The egress allocation r:** the least r at or above twice the p99.9 of per-bucket demand whose FIFO replay has no
   overflow and a p99 queueing delay of at most one bucket. Both improve monotonically in r, so the search doubles and
   then bisects. If one bucket's demand exceeds Q, every r overflows: the tool exits with an error naming the demand and
@@ -216,7 +243,8 @@ statements on examples and prove nothing. By name, they mirror 19 of the Lean pa
     tests above, for the shipped schedule;
   - `SecurityProofs.EncardAccSeqsLeConstantRateWindows`: runs accepted on their first m windows show at most
     `#Σ_sync^m` grid prefixes;
-  - `SecurityProofs.ExpectedRowCausal`: a window's grid is unchanged when later windows' syncs are drawn again;
+  - `SecurityProofs.ExpectedRowCausal`: a window's grid is unchanged when later windows' syncs are drawn again, and a
+    negative logical index, which would break it, is rejected;
 - **`test_network_warden_audit.py`:** record-and-reject and each violation, which no Lean statement names; one clock
   per spatial unit, the advice `SecurityProofs.EncardAccSeqsLeSync` counts; and the ingress links' status check, Lean's
   `StatusComplete`;
@@ -224,7 +252,8 @@ statements on examples and prove nothing. By name, they mirror 19 of the Lean pa
   - the elided digest is injective on left-packed grids, by enumeration;
   - it binds the link, window, status and parameters;
   - the committed audit's verdicts equal the raw audit's;
-- **`test_network_warden_calibration.py`:** the calibration tool.
+- **`test_network_warden_calibration.py`:** the calibration tool, and the honest prover's choice against its rule by
+  brute force, on one link and on several under one clock;
 
 No test mirrors the other eight pins of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
 `SecurityProofs.EncardDecodableLe`, `SecurityProofs.NoFaultOfAccepted`, `SecurityProofs.RecordedRowEqFill`,
