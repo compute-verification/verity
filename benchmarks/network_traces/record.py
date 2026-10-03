@@ -13,6 +13,12 @@ request runs to its `max_tokens` (`ignore_eos`). Its first prompt token is repla
 instance hits another's prefix cache. The requests sent before t0, the warm-up after model load and CUDA graph capture,
 only load the engine. The trace starts at t0 and keeps whole windows.
 
+**Modes.** `plaintext` is vLLM's stock server. `commit` serves the same load from vLLM's engine inside the recorder, built
+as the Commit stage builds it (batch-invariant, eager), with `native_host`, the reference committer, hashing every Call
+output of every step; each window is one commitment run, finalized at the window's end. `bi-eager` is that engine without
+the committer. Both stamp the tokens each engine step adds when the step returns, and add `steps.jsonl` (each step's end
+and duration) and, for `commit`, `commits.jsonl` (each run's finalization stall).
+
 **What a job writes** to `--out`:
 - `requests.jsonl`, one line per request as it finishes, so an evicted job keeps what it finished;
 - `samples.jsonl`, every 2 s: the host's load average, the CPU use (ours and everyone else's) of the NUMA nodes of the
@@ -61,6 +67,9 @@ MIXES = {
     "b4": "llama32-1b__bf16__l40s__tp1__b4__i256__o32__mixed-arrivals__greedy__bi-eager.json",
     "b64": "llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager.json",
 }
+CHECKPOINTS = WORKLOADS.parent / "manifests/checkpoints.json"
+ROLES = {"unsloth/Llama-3.2-1B": "LLAMA32_1B", "Qwen/Qwen2.5-0.5B": "QWEN05"}
+OFFLINE = {"bi-eager": False, "commit": True}
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE_CAPACITY = 100, 600, 4096, 1 << 16
 SAMPLE_S, HEARTBEAT_S = 2.0, 0.01
 FREEZE_MS, MAX_OTHERS_BUSY, TAIL_MS = 1000.0, 0.5, 10_000
@@ -137,7 +146,7 @@ class JsonLines:
     """JSON lines, flushed per line so that a killed job keeps every line written."""
 
     def __init__(self, path: Path, mode: str = "w"):
-        self.fh = open(path, mode, encoding="utf-8")
+        self.fh = open(path, mode, encoding="utf-8")  # noqa: SIM115  (open for the job's life)
 
     def __call__(self, rec: dict) -> None:
         self.fh.write(json.dumps(rec, separators=(",", ":")) + "\n")
@@ -147,11 +156,19 @@ class JsonLines:
         self.fh.close()
 
 
-async def send(session, url: str, model: str, q: dict, t0: float, sink: Callable[[dict], None]) -> None:
-    body = json.dumps({"model": model, "prompt": q["prompt"], "max_tokens": q["max_tokens"], "temperature": 0.0,
+def request_body(model: str, q: dict) -> bytes:
+    return json.dumps({"model": model, "prompt": q["prompt"], "max_tokens": q["max_tokens"], "temperature": 0.0,
                        "ignore_eos": True, "stream": True, "return_token_ids": True}).encode()
+
+
+def request_record(q: dict, body: bytes) -> dict:
     rec = {k: q[k] for k in ("rid", "workload", "instance", "index", "max_tokens")}
-    rec |= {"prompt_len": len(q["prompt"]), "request_bytes": len(body), "sched_ms": ms(q["at_s"])}
+    return rec | {"prompt_len": len(q["prompt"]), "request_bytes": len(body), "sched_ms": ms(q["at_s"])}
+
+
+async def send(session, url: str, model: str, q: dict, t0: float, sink: Callable[[dict], None]) -> None:
+    body = request_body(model, q)
+    rec = request_record(q, body)
     stream = Stream(t0)
     rec["send_ms"] = ms(clock() - t0)
     try:
@@ -201,6 +218,89 @@ async def replay(port: int, model: str, requests: list[dict], t0: float, drain_u
             t.cancel()
         ended["unfinished"] = len(pending)
     watcher.cancel()
+    return ended
+
+
+def offline_engine(args: argparse.Namespace, commit: bool, meta: dict):
+    """vLLM's engine in this process as the Commit stage builds it (`verity_vllm.engine.build`: batch-invariant, eager,
+    no prefix cache), and with `commit` the reference committer (`native_host`), which hashes every Call output of
+    every step into the step's Merkle root on host threads, keeping the tree levels but not the values."""
+    from verity_vllm.engine import vllm_adapter as va
+
+    eng = va.build_engine(CHECKPOINTS, max_num_seqs=args.max_num_seqs, case=ROLES[args.model], execution="bi-eager",
+                          engine_args={"max_model_len": args.max_model_len,
+                                       "max_num_batched_tokens": args.max_num_batched_tokens})
+    meta["engine"] = {"kwargs": {k: v for k, v in eng.kwargs.items() if k not in ("model", "tokenizer")},
+                      "env": eng.env_flags, "effective": eng.effective, "build_s": round(eng.build_s, 1)}
+    if not commit:
+        return eng, None
+    from verity_vllm.commit.committer.native_host import NativeHostCommitter
+
+    com = NativeHostCommitter(eng, run_id="network-traces", hash_threads=args.hash_threads, retain_values=False)
+    t = clock()
+    com.register_weights()
+    meta["committer"] = {"name": "native_host", "hash_threads": args.hash_threads, "retain_values": False,
+                         "run_s": WINDOW_BUCKETS * BUCKET_MS / 1000, "register_weights_s": round(clock() - t, 1)}
+    return eng, com
+
+
+def offline_replay(eng, com, requests: list[dict], t0: float, drain_until: float, sink, steps, commits) -> dict:
+    """Admit each request between engine steps once its time has come, step while any runs, and stamp the tokens each
+    step adds at the step's return. A request's send time is its scheduled arrival; `admit_ms` is when the loop took
+    it. With a committer, each window is one commitment run: at every window boundary the loop finalizes the run's root
+    (waiting for the hashing to drain) and starts the next, and that stall is part of the trace."""
+    from verity_vllm.engine.engine_driver import external_id
+    from vllm import SamplingParams
+
+    core = eng.llm.llm_engine
+    stop = threading.Event()
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
+    window_s = WINDOW_BUCKETS * BUCKET_MS / 1000
+    pending, live = list(reversed(requests)), {}
+    ended: dict = {"stopped_ms": None}
+    next_run = t0 if com is not None else math.inf
+    if com is not None:
+        com.reset()
+        com.install()
+    while (now := clock()) < drain_until and (pending or live):
+        if stop.is_set():
+            ended["stopped_ms"] = ms(now - t0)
+            break
+        while pending and t0 + pending[-1]["at_s"] <= now:
+            q = pending.pop()
+            live[q["rid"]] = request_record(q, request_body("served", q)) | {
+                "send_ms": ms(q["at_s"]), "admit_ms": ms(now - t0), "chunks": [], "n_tokens": 0}
+            core.add_request(q["rid"], {"prompt_token_ids": q["prompt"]},
+                             SamplingParams(max_tokens=q["max_tokens"], temperature=0.0, ignore_eos=True))
+        if now >= next_run:
+            com.finalize()
+            com.uninstall()
+            com.reset()
+            com.install()
+            commits({"t_ms": ms(now - t0), "finalize_ms": ms(clock() - now)})
+            next_run += window_s
+            continue
+        if not core.has_unfinished_requests():
+            stop.wait(max(0.0, min(t0 + pending[-1]["at_s"] if pending else drain_until, next_run) - clock()))
+            continue
+        outs = core.step()
+        t = clock()
+        n = 0
+        for o in outs:
+            rec = live.get(external_id(o.request_id))
+            if rec is None:
+                continue
+            if (k := len(o.outputs[0].token_ids) - rec["n_tokens"]) > 0:
+                rec["chunks"].append([ms(t - t0), k])
+                rec["n_tokens"] += k
+                n += k
+            if o.finished:
+                rec["ok"] = rec["n_tokens"] == rec["max_tokens"]
+                sink(live.pop(rec["rid"]))
+        steps({"t_ms": ms(t - t0), "dur_ms": ms(t - now), "running": len(live), "tokens": n})
+    ended["unfinished"] = len(live)
+    if com is not None:
+        com.uninstall()
     return ended
 
 
@@ -384,6 +484,8 @@ def local_model(name: str, hf_home: Path) -> str:
 def run(args: argparse.Namespace) -> int:
     start = clock()
     deadline = start + 60 * args.minutes
+    if args.mode in OFFLINE and args.model not in ROLES:
+        raise ValueError(f"--mode {args.mode} builds a pinned checkpoint: one of {sorted(ROLES)}")
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     mix = [(name, load_workload(name), period) for name, period in parse_mix(args.mix)]
@@ -391,24 +493,29 @@ def run(args: argparse.Namespace) -> int:
                          "workloads": {name: MIXES[name] for name, _, _ in mix}, "minutes": args.minutes,
                          "warmup_s": args.warmup_s, "grid": {"bucket_ms": BUCKET_MS, "window_buckets": WINDOW_BUCKETS,
                                                              "frame_bytes": FRAME_BYTES}}
-    port = free_port()
-    served = "served"
+    port, served, server, offline = free_port(), "served", None, args.mode in OFFLINE
     model = local_model(args.model, Path(os.environ.get("HF_HOME", Path.home() / ".cache/huggingface")))
     server_argv = [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", model,
                    "--served-model-name", served, "--host", "127.0.0.1", "--port", str(port), "--seed", "0",
                    "--max-model-len", str(args.max_model_len), "--disable-uvicorn-access-log", *args.server_arg]
-    meta["server_argv"] = server_argv[1:]
+    if not offline:
+        meta["server_argv"] = server_argv[1:]
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
     stall = {"hb": 0.0, "loop": 0.0}
     samples, requests = JsonLines(out / "samples.jsonl"), JsonLines(out / "requests.jsonl")
+    steps, commits = (JsonLines(out / "steps.jsonl"), JsonLines(out / "commits.jsonl")) if offline else (None, None)
     monitor = Monitor(samples, meta["gpu"], meta["watched"], stall)
     monitor.start()
     signal.signal(signal.SIGTERM, evicted)
-    with open(out / "server.log", "wb") as log:
-        server = subprocess.Popen(server_argv, stdout=log, stderr=subprocess.STDOUT)
+    if not offline:
+        with open(out / "server.log", "wb") as log:
+            server = subprocess.Popen(server_argv, stdout=log, stderr=subprocess.STDOUT)
     ended: dict = {"stopped_ms": None, "unfinished": 0}
     try:
-        wait_ready(server, port, deadline - args.drain_s - 120)
+        if offline:
+            eng, com = offline_engine(args, OFFLINE[args.mode], meta)
+        else:
+            wait_ready(server, port, deadline - args.drain_s - 120)
         ready = clock()
         t0 = ready + args.warmup_s
         window_s = WINDOW_BUCKETS * BUCKET_MS / 1000
@@ -419,15 +526,20 @@ def run(args: argparse.Namespace) -> int:
         meta |= {"t0_mono": t0, "t0_unix": time.time() + (t0 - clock()), "startup_s": round(ready - start, 1),
                  "windows": windows, "requests": len(reqs)}
         (out / "meta.json").write_text(json.dumps(meta, indent=1))
-        ended = asyncio.run(replay(port, served, reqs, t0, deadline - 20, requests, stall))
+        if offline:
+            ended = offline_replay(eng, com, reqs, t0, deadline - 20, requests, steps, commits)
+        else:
+            ended = asyncio.run(replay(port, served, reqs, t0, deadline - 20, requests, stall))
     except SystemExit:
         ended["stopped_ms"] = ms(clock() - meta.get("t0_mono", clock()))
     finally:
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         monitor.halt.set()
-        stop_server(server)
-        requests.close()
-        samples.close()
+        if server is not None:
+            stop_server(server)
+        for f in (requests, samples, steps, commits):
+            if f is not None:
+                f.close()
     meta["ended"] = ended
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
     convert(out)
@@ -581,13 +693,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--out", required=True)
     r.add_argument("--model", required=True, help="a model in the local Hugging Face cache (HF_HOME)")
     r.add_argument("--mix", default="b16=3,b4=1,b64=10", help="NAME=PERIOD_S,... over " + ", ".join(MIXES))
-    r.add_argument("--mode", default="plaintext", help="the serving mode's label")
+    r.add_argument("--mode", default="plaintext", help="plaintext (the OpenAI server), or one of the offline engine's "
+                   + ", ".join(OFFLINE) + f" (models {', '.join(ROLES)})")
     r.add_argument("--minutes", type=float, default=55, help="the whole job, startup included")
     r.add_argument("--warmup-s", type=float, default=90, help="load before t0 that the trace leaves out")
     r.add_argument("--drain-s", type=float, default=60, help="time kept after the last window for in-flight requests")
     r.add_argument("--max-model-len", type=int, default=2048)
     r.add_argument("--seed", type=int, default=0)
     r.add_argument("--server-arg", action="append", default=[], help="passed to the vLLM server, e.g. --server-arg=--enforce-eager")
+    r.add_argument("--max-num-seqs", type=int, default=256, help="the offline engine's")
+    r.add_argument("--max-num-batched-tokens", type=int, default=16384, help="the offline engine's")
+    r.add_argument("--hash-threads", type=int, default=8, help="the committer's")
     c = sub.add_parser("convert", help="rebuild trace.json and summary.json in job directories")
     c.add_argument("dirs", nargs="+", type=Path)
     c.add_argument("--ingress-bytes", choices=("text", "body"), default="text")

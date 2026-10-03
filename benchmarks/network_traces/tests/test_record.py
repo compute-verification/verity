@@ -110,7 +110,7 @@ def test_a_stall_or_a_gap_in_the_samples_voids_the_chunk(stall: dict) -> None:
 
 def test_a_stopped_chunk_keeps_the_whole_windows_before_the_stop() -> None:
     records = [request("a", 50.0, [[120.0, 1]]), request("b", WINDOW_MS + 50.0, [[WINDOW_MS + 150.0, 1]], ok=False)]
-    configs, summary = rec.build_trace(records, samples(3), name="t", windows=3, stopped_ms=WINDOW_MS + 30_000.0)
+    _, summary = rec.build_trace(records, samples(3), name="t", windows=3, stopped_ms=WINDOW_MS + 30_000.0)
     assert summary["windows_planned"] == 1 and summary["segments"] == [(0, 1)] and summary["requests"] == 1
 
 
