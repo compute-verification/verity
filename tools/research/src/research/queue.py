@@ -639,13 +639,17 @@ SUITES = "tools/check/suites.py"
 QUICK_TIER = ["uv", "run", "--locked", "--extra", "torch-cpu", "python", SUITES, "--quick"]
 #: variables that would point the quick tier's Python at the caller's tree or environment instead of the checkout's own
 CALLER_ENV = ("PYTHONPATH", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT")
+#: the Lake packages whose builds the suites' tests run, built before `suites.py` as `check` builds them before those suites: each
+#: test worker runs `lake build` there, and workers building one from cold at once fail (`lake build` exit 1, a binary missing)
+LEAN_BUILDS = ("backends/flock/verifier/lean",)
 
 
 class QuickTier:
     """`suites.py --quick --changed {merge base with main}` at a PR's head, from a clean checkout: one worktree of the caller's
-    repository per machine under `root`, checked out at the head and cleaned of everything but its `.venv` for each PR (one PR at a
-    time: `{name}.lock`), so its environment syncs only what moved.  Passes are cached by input (`suites.py`), so a re-run after a
-    failure runs only what failed."""
+    repository per machine under `root`, checked out at the head and cleaned of everything but its `.venv` and the `.lake` of each
+    of `LEAN_BUILDS` for each PR (one PR at a time: `{name}.lock`), so its environment syncs only what moved and Lake rebuilds only
+    what changed.  Each of `LEAN_BUILDS` is built first (with `lake` on the PATH; a failed build refuses).  Passes are cached by
+    input (`suites.py`), so a re-run after a failure runs only what failed."""
 
     def __init__(self, repo: Path, remote: str, root: Path | None = None):
         self.repo, self.remote = Path(repo), remote
@@ -669,11 +673,16 @@ class QuickTier:
                 _git(self.repo, "worktree", "add", "-q", "--detach", "--force", str(wt), pr.head)
             else:
                 _git(wt, "checkout", "-q", "--detach", "--force", pr.head)
-            _git(wt, "clean", "-qffdx", "-e", "/.venv")
+            _git(wt, "clean", "-qffdx", "-e", "/.venv", *(x for d in LEAN_BUILDS for x in ("-e", f"/{d}/.lake")))
             base = _out(self.repo, "merge-base", "refs/queue/ready/main", pr.head)
             report, logs = self.root / f"{wt.name}.json", self.root / "logs" / f"{pr.number}-{pr.head[:12]}"
             report.unlink(missing_ok=True)
             env = {k: v for k, v in os.environ.items() if k not in CALLER_ENV}
+            for d in LEAN_BUILDS if shutil.which("lake") else ():
+                if (wt / d / "lakefile.toml").is_file():
+                    print(f"research queue: `lake build` in {d}", flush=True)
+                    if rc := subprocess.run(["lake", "build"], cwd=wt / d, env=env).returncode:
+                        return f"`lake build` in {d} exited {rc} (its output is above)"
             runner = wt / SUITES
             changed = ["--changed", base]
             if runner.is_file() and '"--changed"' not in runner.read_text():
