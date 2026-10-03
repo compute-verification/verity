@@ -9,7 +9,8 @@ this, detached, after each push it lands (`after_land` in `tool.py`); run it by 
 
 COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in.  Its tree is checked
 out in a worktree of its own and the rebuilds run there through `research run --on MACHINE`, pinned to --cores, under
-VERITY_REGRESSION_REBUILD=1 and VERITY_STORE_REQUIRED=1.  When the run ends, that check attempt is labelled `note=regression pass` or
+VERITY_REGRESSION_REBUILD=1 and VERITY_STORE_REQUIRED=1.  `research run --on` returns at launch, so this fetches the run's records
+until they show its end (each POLL_S); then that check attempt is labelled `note=regression pass` or
 `note=regression fail:<rows>` (`--by regression --ref <run>`), and circuits sweeps those labels daily.  A landing whose attempt has
 no such label is one whose job didn't finish here (the caller's VM suspended, the machine refused the run): run this again.  The
 run is preserved from the machine either way; only the label needs this process to live.  An attempt that has its label already
@@ -30,6 +31,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -43,7 +45,14 @@ PASS = f"{PREFIX}pass"
 MARKS = "regression and rebuild"
 SUITE = "verity-vllm"
 LOCK = Path(tempfile.gettempdir()) / "verity-post-train.lock"
-RUN_RE = re.compile(r"\brun (r20\d{6}-\d{6}-[0-9a-f]{4}) launched\b")
+#: the run's bound on the machine: the rebuilds take about an hour on cores 96-127 beside other lanes' jobs
+TIMEOUT_S = 3 * 3600
+#: `research run --on` returns once the run is launched, so its records are fetched until they show its end (`research merge` too)
+POLL_S = 60
+#: a runner that died before writing its end is waited for no longer than the run's bound and the runner's publish margin, twice
+POLLS = (TIMEOUT_S + 1800) // POLL_S
+SLEEP = time.sleep
+ENDED = ("done", "failed", "cancelled")
 CHECK_RE = re.compile(r"^Check: (r20\d{6}-\d{6}-[0-9a-f]{4})$", re.M)
 ROW_RE = re.compile(r"-(r\d+)\]$")
 
@@ -129,6 +138,13 @@ def carried(sha: str, tree: Path) -> dict | None:
     return {**lab, "from": prev}
 
 
+def _status(p: Path) -> dict:
+    try:
+        return json.loads(p.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
 def job(cores: str, workers: int) -> str:
     return JOB.format(pin=f"taskset -c {cores} " if cores else "", marks=shlex.quote(MARKS), workers=workers)
 
@@ -142,6 +158,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--project", default="verity")
     ap.add_argument("--force", action="store_true", help="run even when the attempt has its label, or could carry the one before's")
     ap.add_argument("--dry-run", action="store_true", help="run, and print the label instead of writing it (any commit: a branch's too)")
+    ap.add_argument("--run", metavar="RID", help="a run this job launched for the commit before (its caller ended first): wait for "
+                                                  "it and label from it instead of launching another")
     a = ap.parse_args(argv)
     git("fetch", "-q", "origin", "main")
     sha = git("rev-parse", "--verify", f"{a.commit}^{{commit}}")
@@ -172,19 +190,32 @@ def _land(a: argparse.Namespace, sha: str, attempt: str | None) -> int:
             print(f"post-train: {attempt} ({sha[:12]}): note={c['value']} (ref {c['ref']}), carried from {c['from']}: the change from "
                   f"{sha[:12]}^1 touches none of {SUITE}'s inputs")
             return 0 if lab.returncode == 0 and c["value"] == PASS else 1
-        print(f"post-train: {sha[:12]} (check {attempt}) on {a.on}, cores {a.cores or 'any'}", flush=True)
-        p = research("run", "--on", a.on, "--project", a.project, "--stage", "post-train-regression", "--source", str(tree),
-                     "--cwd", "source", "--declared-output", "out/*", "--", "bash", "-c", job(a.cores, a.workers), cwd=tree)
-        print((p.stdout + p.stderr)[-4000:], flush=True)
-        m = RUN_RE.search(p.stdout + p.stderr)
-        if not m:
-            print("post-train: no run launched; nothing labelled", file=sys.stderr)
+        from research.runs import new_run_id, runs_root
+        rid = a.run or new_run_id()
+        if not a.run:
+            print(f"post-train: {sha[:12]} (check {attempt}) on {a.on}, cores {a.cores or 'any'}: run {rid}", flush=True)
+            p = research("run", "--id", rid, "--on", a.on, "--project", a.project, "--stage", "post-train-regression", "--timeout",
+                         str(TIMEOUT_S), "--source", str(tree), "--cwd", "source", "--declared-output", "out/*", "--",
+                         "bash", "-c", job(a.cores, a.workers), cwd=tree)
+            print((p.stdout + p.stderr)[-4000:], flush=True)
+            if p.returncode:
+                print(f"post-train: run {rid} was not launched; nothing labelled", file=sys.stderr)
+                return 1
+        status = runs_root() / rid / "status.json"
+        st = _status(status)
+        for _ in range(POLLS):
+            if st.get("state") in ENDED:
+                break
+            SLEEP(POLL_S)
+            research("fetch", rid, "--on", a.on, cwd=tree)
+            st = _status(status)
+        if st.get("state") not in ENDED:
+            print(f"post-train: run {rid} showed no end in {POLLS} fetches; nothing labelled (`--run {rid}` waits for it again)",
+                  file=sys.stderr)
             return 1
-        rid = m.group(1)
         f = research("fetch", rid, "--all", "--on", a.on, cwd=tree)
         print((f.stdout + f.stderr).strip()[-1000:], flush=True)
-        from research.runs import runs_root
-        v = verdict(runs_root() / rid / "out" / "junit.xml", p.returncode)
+        v = verdict(runs_root() / rid / "out" / "junit.xml", st.get("rc"))
         if a.dry_run:
             print(f"post-train: {sha[:12]}: --dry-run, so {attempt or 'no check attempt'} gets no note={v} (ref {rid})")
             return 0 if v == PASS else 1
