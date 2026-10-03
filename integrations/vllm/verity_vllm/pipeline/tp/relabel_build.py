@@ -36,6 +36,8 @@ TELEMETRY = {
 }
 #: a relabeled rank's `inputs.json` is the template's trace: what the process that wrote its bytes read
 SKIPPED = ("inputs.json",)
+#: the digests and summaries of the other files
+SUMMARIES = ("artifact.json", "construction_manifest.json", "result.json")
 #: a differing JSON file is parsed for its first differing path up to this size (larger: the byte offset only)
 PARSE_MAX_BYTES = 64 << 20
 _BLOCK = 1 << 20
@@ -48,23 +50,22 @@ def template_rank(world: int) -> int:
 # ------------------------------------------------------------------------------------------------ comparing two rank directories
 def compare_dirs(real: str, relabel: str) -> dict | None:
     """None when `relabel` (a rank's directory written from the template) equals `real` (the rank derived), else the first
-    difference: ``{file, path}`` (a JSON path), ``{file, offset, real, relabel}`` (a byte offset and the bytes around it), or
-    ``{file, only_in}``.  Every file is compared byte for byte (``.gz`` decompressed) except `TELEMETRY`'s, compared as JSON
-    without those keys, and `SKIPPED`."""
-    names = sorted((set(os.listdir(real)) | set(os.listdir(relabel))) - set(SKIPPED))
+    difference, ``{file, path, real, relabel}`` (a JSON path), ``{file, offset, real, relabel}`` (a byte offset and the bytes
+    around it) or ``{file, only_in}``, with ``files``: every file that differs.  Every file is compared byte for byte (``.gz``
+    decompressed) except `TELEMETRY`'s, compared as JSON without those keys, and `SKIPPED`; the files `SUMMARIES` derives from
+    the others come last, so the first difference is in the file that holds it."""
+    names = sorted((set(os.listdir(real)) | set(os.listdir(relabel))) - set(SKIPPED), key=lambda n: (n in SUMMARIES, n))
+    diffs = []
     for name in names:
         a, b = os.path.join(real, name), os.path.join(relabel, name)
         if os.path.isdir(a) and os.path.isdir(b):
             d = compare_dirs(a, b)
-            if d is not None:
-                return {**d, "file": f"{name}/{d['file']}"}
-            continue
-        if not (os.path.isfile(a) and os.path.isfile(b)):
-            return {"file": name, "only_in": "real" if os.path.exists(a) else "relabel"}
-        d = _compare_file(name, a, b)
-        if d is not None:
-            return {"file": name, **d}
-    return None
+            diffs += [] if d is None else [{**d, "file": f"{name}/{d['file']}"}]
+        elif not (os.path.isfile(a) and os.path.isfile(b)):
+            diffs.append({"file": name, "only_in": "real" if os.path.exists(a) else "relabel"})
+        elif (d := _compare_file(name, a, b)) is not None:
+            diffs.append({"file": name, **d})
+    return {**diffs[0], "files": [d["file"] for d in diffs]} if diffs else None
 
 
 def _compare_file(name: str, a: str, b: str) -> dict | None:
@@ -262,4 +263,4 @@ def _write(chk: str, doc: dict) -> None:
     json.dump(doc, open(f"{chk}/guard.json", "w"), indent=1, default=str)
 
 
-__all__ = ["PARSE_MAX_BYTES", "SCHEMA", "SKIPPED", "TELEMETRY", "compare_dirs", "derive", "step_guard", "template_rank"]
+__all__ = ["PARSE_MAX_BYTES", "SCHEMA", "SKIPPED", "SUMMARIES", "TELEMETRY", "compare_dirs", "derive", "step_guard", "template_rank"]
