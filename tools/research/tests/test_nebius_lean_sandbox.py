@@ -11,6 +11,7 @@ import os
 import shutil
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -416,6 +417,62 @@ def test_no_slot_file_or_no_build_pool_is_a_refusal(host, text):
         host.slots.write_text(text)
     run = Systemd()
     assert S.main(args(host), run=run, **prep()) == S.REFUSED and run.calls == []
+
+
+@pytest.fixture
+def as_root(monkeypatch):
+    """`take` as root, which gives what it makes in the lock directory that directory's owner (here, this test's user)."""
+    monkeypatch.setattr(S.os, "geteuid", lambda: 0)
+
+
+def _key(tmp: Path) -> Path:
+    key = tmp / "etc-verity" / "lean-cache.env"
+    key.parent.mkdir()
+    key.write_text("AWS_SECRET_ACCESS_KEY=real\n")
+    key.chmod(0o600)
+    return key
+
+
+PLANTED = {"a link to the key": os.symlink, "a second name of the key": os.link, "a FIFO": lambda key, at: os.mkfifo(at)}
+
+
+@pytest.mark.parametrize("plant", PLANTED.values(), ids=PLANTED)
+def test_a_lock_that_isnt_a_plain_file_is_refused_and_left_as_it_was(host, as_root, plant, capsys):
+    """The red team's F1 on #1011: root opened lean-build-0.lock through whatever research left there and gave what it opened
+    research and 0664, so a link to /etc/verity/lean-cache.env made the cache's key research's."""
+    key = _key(host.tmp)
+    before = key.stat()
+    lock = host.locks / "lean-build-0.lock"
+    plant(key, lock)
+    run = Systemd()
+    assert S.main(args(host), run=run, **prep()) == S.REFUSED and run.calls == []
+    assert f"{lock}" in capsys.readouterr().err
+    after = key.stat()
+    assert (stat.S_IMODE(after.st_mode), after.st_uid, after.st_gid) == (0o600, before.st_uid, before.st_gid)
+    assert key.read_text() == "AWS_SECRET_ACCESS_KEY=real\n"
+    assert not list((host.locks / "lean-line-build").iterdir()) and not (host.locks / "lean-build-0.who").exists()
+    lock.unlink()
+    assert S.main(args(host), run=Systemd(), **prep()) == S.OK
+    assert stat.S_IMODE(lock.stat().st_mode) == 0o664                  # one root makes is research's, for lean_slot.py
+
+
+def test_a_line_that_is_a_link_is_refused_and_a_link_in_the_line_is_no_waiter(host, as_root):
+    """Root waits in lean-line-build and removes dead waiters' tickets from it: through a link it would make and remove files
+    in any directory, and open what a link named like a ticket points at."""
+    key = _key(host.tmp)
+    elsewhere = host.tmp / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "0-not-a-ticket").write_text("x\n")
+    line = host.locks / "lean-line-build"
+    line.symlink_to(elsewhere)
+    run = Systemd()
+    assert S.main(args(host), run=run, **prep()) == S.REFUSED and run.calls == []
+    assert [p.name for p in elsewhere.iterdir()] == ["0-not-a-ticket"]
+    line.unlink()
+    line.mkdir()
+    (line / "0-planted").symlink_to(key)
+    assert S.main(args(host), run=Systemd(), **prep()) == S.OK
+    assert (line / "0-planted").is_symlink() and stat.S_IMODE(key.stat().st_mode) == 0o600
 
 
 # ---- the tree

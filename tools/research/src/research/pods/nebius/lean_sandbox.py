@@ -16,10 +16,12 @@ adm). Every DEST must exist: systemd would make a missing one on the host's disk
 
 Run it as root (`sudo -n`). `run` takes a slot of the `build` pool in node 1's Lean slot file, in `tools/check/lean_slot.py`'s
 format (`lean-build-I.lock` and `.who` beside the file, waiting in arrival order in `lean-line-build`), unless the caller holds
-one (`--held-slot`, which must be held). It holds the slot while the unit runs, and stops the unit when it is stopped itself;
-a unit whose wrapper was killed ends at --max-sec. Before the command, the probes run in a unit of their own with the same
-properties: who it runs as, its privileges, sudo, the network, the host's Unix sockets, the credentials, writes outside the
-tree, a private /tmp, /var/tmp and /dev/shm, its environment and other users' processes. If one gets through, nothing is built.
+one (`--held-slot`, which must be held). The lock directory is research's, so root opens nothing there through a link, takes
+only regular files with one name, and gives research only what it made itself; anything else there is refused. It holds the
+slot while the unit runs, and stops the unit when it is stopped itself; a unit whose wrapper was killed ends at --max-sec.
+Before the command, the probes run in a unit of their own with the same properties: who it runs as, its privileges, sudo, the
+network, the host's Unix sockets, the credentials, writes outside the tree, a private /tmp, /var/tmp and /dev/shm, its
+environment and other users' processes. If one gets through, nothing is built.
 
 `checkout` makes the tree a fresh clone of SHA, which must be on REF (default refs/heads/main) of DIR (default node 1's bare
 repository): root owns the sources and the build's user only each Lake package's `.lake`. `clean` is what a publisher waits
@@ -512,17 +514,40 @@ def sandboxed(spec: Spec, cmd: list[str] | None, run: Runner = systemd_run, tag:
 
 # ---- the `build` slot, in lean_slot.py's files
 
-def _owned(path: Path, d: Path, mode: int, fd: int | None = None) -> None:
-    """Give a file root made in the shared lock directory that directory's owner, so lean_slot.py (as research) can use it."""
+def _owned(fd: int, d: Path, mode: int) -> None:
+    """Give what root just made in the shared lock directory its owner, so lean_slot.py (as research) can use it."""
     if os.geteuid() != 0:
         return
     st = d.stat()
-    if fd is None:
-        os.chown(path, st.st_uid, st.st_gid)
-        os.chmod(path, mode)
-    else:
-        os.fchown(fd, st.st_uid, st.st_gid)
-        os.fchmod(fd, mode)
+    os.fchown(fd, st.st_uid, st.st_gid)
+    os.fchmod(fd, mode)
+
+
+def _plain(fd: int, where: Path) -> int:
+    """``fd`` if it is a regular file with one name; otherwise closed, and refused."""
+    st = os.fstat(fd)
+    if stat.S_ISREG(st.st_mode) and st.st_nlink == 1:
+        return fd
+    os.close(fd)
+    raise Refused(f"{where} isn't a plain file with one name ({stat.filemode(st.st_mode)}, {st.st_nlink} names): move it aside")
+
+
+def _open(where: Path, d: Path, mode: int, dir_fd: int | None = None) -> int:
+    """``where`` (by its name in ``dir_fd``, if given) read-write, never through a link nor stuck on a FIFO, and only a plain
+    file: ``d``'s owner gets it if root made it here and now; one that was there stays as it was."""
+    path = where.name if dir_fd is not None else where
+    flags = os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK
+    try:
+        try:
+            fd, made = os.open(path, flags | os.O_CREAT | os.O_EXCL, mode, dir_fd=dir_fd), True
+        except FileExistsError:
+            fd, made = os.open(path, flags, dir_fd=dir_fd), False
+    except OSError as e:
+        raise Refused(f"can't open {where} as a plain file ({e.strerror}): move it aside") from None
+    _plain(fd, where)
+    if made:
+        _owned(fd, d, mode)
+    return fd
 
 
 def pools(slots: Path) -> dict[str, int]:
@@ -544,9 +569,7 @@ def pools(slots: Path) -> dict[str, int]:
 
 
 def _try(d: Path, i: int) -> int | None:
-    path = d / f"lean-{POOL}-{i}.lock"
-    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o664)
-    _owned(path, d, 0o664, fd)
+    fd = _open(d / f"lean-{POOL}-{i}.lock", d, 0o664)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
@@ -555,41 +578,64 @@ def _try(d: Path, i: int) -> int | None:
     return fd
 
 
-def _join(d: Path, who: dict, ns: int) -> tuple[Path, int]:
-    """slot.py's `join`: a ticket in the pool's line, named by arrival and locked before it is visible."""
+def _join(d: Path, who: dict, ns: int) -> tuple[int, str, int]:
+    """slot.py's `join`: a ticket in the pool's line, named by arrival and locked before it is visible: (the line's
+    descriptor, the ticket's name in it, the ticket's descriptor)."""
     line = d / f"lean-line-{POOL}"
-    if not line.is_dir():
-        line.mkdir(exist_ok=True)
-        _owned(line, d, 0o775)
-    name = f"{ns:020d}-{os.getpid()}"
-    fd = os.open(line / f".{name}", os.O_RDWR | os.O_CREAT, 0o664)
-    _owned(line / f".{name}", d, 0o664, fd)
-    fcntl.flock(fd, fcntl.LOCK_EX)
-    os.write(fd, (json.dumps(who) + "\n").encode())
-    os.rename(line / f".{name}", line / name)
-    return line / name, fd
+    try:
+        os.mkdir(line, 0o775)
+        made = True
+    except FileExistsError:
+        made = False
+    try:
+        lfd = os.open(line, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError as e:
+        raise Refused(f"can't open {line} as a directory ({e.strerror}): move it aside") from None
+    try:
+        if made:
+            _owned(lfd, d, 0o775)
+        name = f"{ns:020d}-{os.getpid()}"
+        fd = _open(line / f".{name}", d, 0o664, dir_fd=lfd)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        os.write(fd, (json.dumps(who) + "\n").encode())
+        os.rename(f".{name}", name, src_dir_fd=lfd, dst_dir_fd=lfd)
+    except BaseException:
+        os.close(lfd)
+        raise
+    return lfd, name, fd
 
 
-def _ahead(ticket: Path) -> int:
-    """slot.py's `ahead`: the live waiters before ``ticket``; a dead waiter's ticket is removed."""
+def _ahead(line: int, ticket: str) -> int:
+    """slot.py's `ahead`: the live waiters before ``ticket`` in ``line``; a dead waiter's ticket is removed, and what isn't a
+    plain file is no waiter's."""
     n = 0
-    for p in sorted(ticket.parent.iterdir()):
-        if p.name >= ticket.name:
+    for p in sorted(os.listdir(line)):
+        if p >= ticket:
             break
-        if p.name.startswith("."):
+        if p.startswith("."):
             continue
         try:
-            fd = os.open(p, os.O_RDWR)
-        except FileNotFoundError:
+            fd = os.open(p, os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=line)
+        except OSError:
             continue
         try:
+            st = os.fstat(fd)
+            if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+                continue
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            p.unlink(missing_ok=True)
+            _unlink(p, line)
         except BlockingIOError:
             n += 1
         finally:
             os.close(fd)
     return n
+
+
+def _unlink(name: str, dir_fd: int) -> None:
+    try:
+        os.unlink(name, dir_fd=dir_fd)
+    except FileNotFoundError:
+        pass
 
 
 def take(slots: Path, who: dict, wait_s: float | None = None, now=lambda: datetime.now(timezone.utc),
@@ -599,7 +645,7 @@ def take(slots: Path, who: dict, wait_s: float | None = None, now=lambda: dateti
     d = slots.parent
     n = pools(slots)[POOL]
     start = now()
-    ticket, tfd = _join(d, who, int(start.timestamp() * 1e9))
+    line, ticket, tfd = _join(d, who, int(start.timestamp() * 1e9))
     told = None
     try:
         while True:
@@ -607,7 +653,7 @@ def take(slots: Path, who: dict, wait_s: float | None = None, now=lambda: dateti
                 n = pools(slots)[POOL]
             except (OSError, Refused):
                 pass                                            # mid-rewrite: the last N it read
-            ahead = _ahead(ticket)
+            ahead = _ahead(line, ticket)
             got = None if ahead else next(((i, fd) for i in range(n) if (fd := _try(d, i)) is not None), None)
             if got:
                 break
@@ -620,13 +666,22 @@ def take(slots: Path, who: dict, wait_s: float | None = None, now=lambda: dateti
                 told = why
             sleep(POLL_S)
     finally:
-        ticket.unlink(missing_ok=True)
+        _unlink(ticket, line)
         os.close(tfd)
+        os.close(line)
     i, fd = got
     path = d / f"lean-{POOL}-{i}.who"
     tmp = path.with_name(f".{path.name}.{os.getpid()}")
-    tmp.write_text(json.dumps({**who, "took": f"{now():%Y-%m-%dT%H:%MZ}"}) + "\n")
-    _owned(tmp, d, 0o664)
+    try:
+        wfd = _open(tmp, d, 0o664)
+    except Refused:
+        os.close(fd)
+        raise
+    try:
+        os.ftruncate(wfd, 0)
+        os.write(wfd, (json.dumps({**who, "took": f"{now():%Y-%m-%dT%H:%MZ}"}) + "\n").encode())
+    finally:
+        os.close(wfd)
     os.replace(tmp, path)
     log(f"{POOL} slot {i} of {n} ({slots})")
     return i, fd
@@ -639,9 +694,11 @@ def held(slots: Path, slot: str) -> None:
         raise Refused(f"--held-slot {slot!r}: {POOL}/I")
     path = slots.parent / f"lean-{pool}-{i}.lock"
     try:
-        fd = os.open(path, os.O_RDONLY)
+        fd = _plain(os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), path)
     except FileNotFoundError:
         raise Refused(f"--held-slot {slot}: no {path}") from None
+    except OSError as e:
+        raise Refused(f"--held-slot {slot}: can't open {path} as a plain file ({e.strerror})") from None
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
