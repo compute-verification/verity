@@ -21,12 +21,12 @@ its own (`contRecords_ofFn`), and a hit returned the right block within `(D, Q)`
    bounds by `π` the event that the memory and the non-hits fit in `β` bits. So `Pr[bad h] ≤ (β + 1)·π`.
 2. **Step (a)** (`per_answer`). Off `bad h`, at most `p₀(β, |m_h|) = 1 − ε + ε_proof` of the indices are hits
    (`good_le_p₀`).
-3. **Stopping** (`continuous_audit`). An accepting run has at most `f` non-hits, since every non-hit that is not
-   rejected is late or wrong. Take `q_h = max(ε_h − ε_proof, 0)` off `bad h` and `0` on it. Then `q_h` lower-bounds the
-   conditional miss probability at every setup and history, and the counting step (`pr_misses_gt_le`) bounds the misses
-   against `Σ q` by `βe` at each setup. Off the event that some visited history is bad, `Σ q` is
-   `Σ max(ε_j − ε_proof, 0)`. That event has probability at most `n·(β + 1)·π`, because the indices are independent of
-   the setup and so each round's history is bad with probability at most `(β + 1)·π`.
+3. **Stopping** (`continuous_audit`). An accepting run has at most `f` non-hits. Take `q_h = max(ε_h − ε_proof, 0)`
+   off `bad h` and `0` on it. Then `q_h` lower-bounds the conditional miss probability at every setup and history, and
+   the counting step (`pr_misses_gt_le`) bounds the misses against `Σ q` by `βe` at each setup. Off the event that some
+   visited history is bad, `Σ q` is `Σ max(ε_j − ε_proof, 0)`. That event has probability at most `n·(β + 1)·π`,
+   because the indices are independent of the setup and so each round's history is bad with probability at most
+   `(β + 1)·π`.
 -/
 
 namespace PousContinuous
@@ -57,10 +57,6 @@ theorem length_filter_ofFn {α : Type} {n : ℕ} (R : Fin n → α) (p : α → 
   rw [h, Finset.card_def, Finset.filter_val]
   rfl
 
-/-- A round that is neither a hit nor rejected is late or wrong: the verifier counts it. -/
-theorem miss_of_not_hit (v : ContVerdict) (h1 : v ≠ .hit) (h2 : v ≠ .reject) : v = .late ∨ v = .wrong := by
-  cases v <;> simp_all
-
 section
 
 variable (sch : Scheme M) (D Q D_late Q_late : ℕ) (W : Bits sch.n) (mach : ContMachine sch) (arr : ℕ → ℕ)
@@ -79,7 +75,8 @@ def hitAt (a : M.Ω × sch.Coins) (h : List (Fin sch.B)) (i : Fin sch.B) : Prop 
 def stopped (W : Bits sch.n) (pp : Bits sch.t) (h : List (Fin sch.B)) {s : ℕ} (τ : Bits s) (i : Fin sch.B) :
     Prog M (Bits sch.ℓ) :=
   progMap (fun r : Option (Bits sch.ℓ) × List Bool => r.1.getD fun _ => false)
-    (PousGraded.cut ((none, []) : Option (Bits sch.ℓ) × List Bool) D Q (mach.round W pp h D_late (List.ofFn τ) (some i)))
+    (PousGraded.cut ((none, []) : Option (Bits sch.ℓ) × List Bool) D Q
+      (mach.round W pp h D_late (List.ofFn τ) (some i)))
 
 theorem stopped_bounded (W : Bits sch.n) (pp : Bits sch.t) (h : List (Fin sch.B)) {s : ℕ} (τ : Bits s)
     (i : Fin sch.B) : (stopped sch D Q D_late mach W pp h τ i).Bounded D Q :=
@@ -206,13 +203,13 @@ theorem continuous_audit : Pous.Guarantees.ContinuousAudit := by
        let rs := contRecords mach D Q D_late Q_late W pp C x.1 arr .start (List.ofFn x.2.2)
        contAccepts f rs ∧ G < (rs.map fun r => max (contFreed sch r.held - epsProof sch β) 0).sum) →
       ev (x.1, x.2.1) x.2.2 := by
-    rintro ⟨ω, r, I⟩ ⟨⟨hrej, hcount⟩, hsum⟩
-    simp only [contRecords_ofFn] at hrej hcount hsum
+    rintro ⟨ω, r, I⟩ ⟨hcount, hsum⟩
+    simp only [contAccepts, contRecords_ofFn] at hcount hsum
     refine ⟨le_trans ?_ hcount, hsum.trans_eq ?_⟩
     · rw [length_filter_ofFn]
       refine Nat.cast_le.2 (Finset.card_le_card fun j => ?_)
       simp only [Finset.mem_filter, Finset.mem_univ, true_and]
-      exact fun hj => miss_of_not_hit _ hj (hrej _ (List.mem_ofFn.2 ⟨j, rfl⟩))
+      exact id
     · rw [List.map_ofFn, List.sum_ofFn]
       rfl
   have hre : pr (fun x : Outcome sch n => ev (x.1, x.2.1) x.2.2) =

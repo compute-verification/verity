@@ -849,9 +849,10 @@ def BandGradedMeetsFamily : Prop :=
 /-! ### The continuous audit (`Pous.Protocol.Model.Continuous`)
 
 Added on 3 Oct 2026. Statement reviewer: needed. Red team: needed. The verifier enforces the three timing rules: it
-reveals the next index only after the last round closed, rejects past the hard deadline, and counts every answer past
-`Δ`. Neither statement takes a hypothesis about them, and both hold at every hard deadline `(D_late, Q_late)` and every
-arrival schedule `arr` (`Pous/Protocol/Model/Continuous.lean`). -/
+reveals the next index only after the last round closed, rejects an answer past the hard deadline, and counts every
+answer past `Δ` as a miss, with every rejected or wrong one. Neither statement takes a hypothesis about them, and both
+hold at every hard deadline `(D_late, Q_late)` and every arrival schedule `arr` (`Pous/Protocol/Model/Continuous.lean`).
+-/
 
 /-- **The per-answer bound in the continuous audit.** From `TimedINC sch D Q β π`, for every machine, every arrival
 schedule, every hard deadline `(D_late, Q_late)` and every history `h` (the indices sent before): off a setup event of

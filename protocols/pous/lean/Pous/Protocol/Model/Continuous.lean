@@ -24,22 +24,33 @@ deadline `Δ_late` plus the round trip. The verifier's arrival times `arr j` are
   by any function of their answers. During a round the responder sees neither `C` nor `ω` whole and reaches the
   primitive only through queries.
 
-**The verifier.** For `j = 0, 1, …`:
+**The verifier.** For `j = 0, 1, …` (with the names of `verity_pous.continuous.ContinuousVerifier`, which enforces
+the same rules on `audit.TimedVerifier`):
 
-1. It sends index `i_j` at `max(arr j, c_{j−1})` (`contSend`), where `c_{j−1}` is the time round `j − 1` closed and
-   `c_{−1} = 0`. A challenge is never outstanding when the next is sent: `TimedVerifier.challenge()` refuses while one
-   is.
+1. It sends index `i_j` at `max(arr j, c_{j−1})` (`contSend`), where `arr j` is challenge `j`'s arrival
+   (`run_continuous`'s `wait(j)`), `c_{j−1}` is the time round `j − 1` closed and `c_{−1} = 0`. A challenge is never
+   outstanding when the next is sent: `TimedVerifier.challenge()` refuses while one is open within its hard deadline.
 2. It times the answer from its own send time. The answer's delay is the number of units the machine took, the depth
-   of the round's program (`contProg`), as `TimedVerifier.respond()` measures `stop − start` from `challenge()`.
+   of the round's program (`contProg`), as `TimedVerifier.respond()` measures `stop − start` from `challenge()`. A
+   round's answer is the answer to its own index, as `ContinuousVerifier.respond(j, …)` refuses an answer to any
+   challenge but the open one.
 3. It waits at most `D_late` units. The round closes at the answer, or after `D_late` units with no answer
    (`contNext`). A round with no answer by then, or whose answer took more than `Q_late` queries, is **rejected**
-   (`contVerdict`): past the hard deadline.
-4. Any other answer that took more than `D` units or `Q` queries is **late**, whatever its block: past `Δ`. An answer
-   within `(D, Q)` is a **hit** if it is the block `C i_j`, and **wrong** otherwise.
-5. With tolerance `f₀` it accepts iff no round is rejected and at most `f₀` rounds are late or wrong (`contAccepts`).
+   (`contVerdict`): past the hard deadline, its block never checked (`Answer.rejected`, past `Δ_late + RTT`, closed by
+   `respond()`, `expire()` or the next `challenge()`).
+4. Any other answer that took more than `D` units or `Q` queries is **late**, whatever its block: past `Δ`
+   (`Answer.on_time` is false past `Δ + RTT`). An answer within `(D, Q)` is a **hit** if it is the block `C i_j`
+   (`Answer.correct`), and **wrong** otherwise.
+5. With tolerance `f₀` it accepts iff at most `f₀` rounds are not hits: rejected, late or wrong (`contAccepts`), as
+   `ContinuousVerifier.accepted` compares `AuditResult.misses` with `max_misses`.
 
 `contRecords` runs rules 1–4 over the indices. Each round's record holds its verdict and the length of the responder's
 memory at the send time. The memory length is the game's measurement, which the verifier never sees.
+
+A verifier that closes a round later than rule 3, when a late answer finally arrives (`run_continuous`, whose
+`respond` waits for it), only sends the next index later. That gives the responder nothing `rest` lacks: `rest` may
+compute anything between rounds, so a machine whose `rest` returns the memory the responder would hold at the later
+send time has the same records.
 
 **The three requirements are theorems about this verifier.** `Pous/SecurityProofs/Continuous/Verifier.lean` proves
 each one for every machine:
@@ -54,7 +65,7 @@ each one for every machine:
 
 The continuous bound holds at every `(D_late, Q_late)`, so it does not need the hard deadline, which the verifier
 enforces anyway. A late answer is already a miss, and the memory is measured at each send time whatever the machine
-did before. No cap like the graded audit's `D_late ≤ 12` is a hypothesis here.
+did before. No cap like the graded audit's `D_late ≤ 12` (`audit.LATE_ROUNDS`) is a hypothesis here.
 
 **What is measured.** `ε_j = 1 − |m_j|/|C|` (`contFreed`), where `m_j` is the memory at challenge `j`'s send time
 (`contMem`). `ContinuousAudit` bounds `Σ_j max(ε_j − ε_proof, 0)`, with `ε_proof = 1 − (β − B)/|C|` (`epsProof`).
@@ -70,8 +81,8 @@ did before. No cap like the graded audit's `D_late ≤ 12` is a hypothesis here.
 * **Indices secret until sent** (`audit.challenge_key`), uniform and independent of the setup.
 * **Work is modeled.** The verifier sees only time. `(D, Q)` and `(D_late, Q_late)` are what the adversary completes
   within `Δ` and `Δ_late`, the sequential audit's convention.
-* **Wrong answers count as misses** rather than rejecting. A verifier that rejects a wrong answer accepts fewer runs,
-  so the bound covers it.
+* **Wrong and rejected answers count as misses** rather than rejecting the run, as `AuditResult.misses` counts them. A
+  verifier that rejects the run on either accepts fewer runs, so the bound covers it too.
 -/
 
 namespace Pous
@@ -110,7 +121,7 @@ inductive ContVerdict : Type
   | wrong
   /-- Within the hard deadline but past `(D, Q)`, whatever the block. -/
   | late
-  /-- No answer within `D_late` units, or more than `Q_late` queries: past the hard deadline. -/
+  /-- No answer within `D_late` units, or more than `Q_late` queries: past the hard deadline, the block unchecked. -/
   | reject
   deriving DecidableEq
 
@@ -181,10 +192,9 @@ def contRecords {sch : Scheme M} (mach : ContMachine sch) (D Q D_late Q_late : �
   | s, i :: is => contRecord mach D Q D_late Q_late W pp C ω arr s i ::
       contRecords mach D Q D_late Q_late W pp C ω arr (contNext mach D_late W pp C ω arr s i) is
 
-/-- Rule 5: with tolerance `f₀` the verifier accepts iff no round is rejected and at most `f₀` rounds are late or
-wrong. -/
+/-- Rule 5: with tolerance `f₀` the verifier accepts iff at most `f₀` rounds are not hits (rejected, late or wrong). -/
 def contAccepts (f₀ : ℝ) (rs : List ContRecord) : Prop :=
-  (∀ r ∈ rs, r.verdict ≠ .reject) ∧ ((rs.filter fun r => r.verdict = .late ∨ r.verdict = .wrong).length : ℝ) ≤ f₀
+  ((rs.filter fun r => r.verdict ≠ .hit).length : ℝ) ≤ f₀
 
 /-- The freed fraction of a memory of `held` bits: `ε = 1 − held/|C|`. -/
 noncomputable def contFreed (sch : Scheme M) (held : ℕ) : ℝ :=

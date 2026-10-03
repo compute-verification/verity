@@ -1286,7 +1286,7 @@
    ]
   },
   "Pous.Protocol.Model.Continuous": {
-   "digest": "0c5771e2822b7cf311495335e15c888f14c314a012615ac30895ee7a0af0174b",
+   "digest": "df4566b005a7b2774ebfe27ec303f06e675543153f74e90dc41832e028fa8b3b",
    "definitions": {
     "Pous.ContMachine": "9a907ff28d82726e840267446a89facd6681e919b1cfe24690dae77acb1d0699",
     "Pous.ContMachine.rest": "ceb165261e5fb94610b20a16686f5ee5cc69024f816c8eab5e8d076319623cae",
@@ -1305,7 +1305,7 @@
     "Pous.ContVerdict.late": "28c94c0497e2e43b92f94055d908dcd9181c06dd38245f67b2a7187bfead71a3",
     "Pous.ContVerdict.reject": "cb51f794ed670c6ca29384ae88cee6b902101e7f085414db9119b2a13a266018",
     "Pous.ContVerdict.wrong": "68c2fd7c9a2739f7c2bf710ad1d81264fcb1c497efb25b5e833164c6541405c3",
-    "Pous.contAccepts": "f7a1940b3b67990086a7f0585b553fe6353f34583678fc13e5a27e8c8b9847ea",
+    "Pous.contAccepts": "fee630458882f173a22d441828a5814833d4af2431aca687397a1d2b51293a21",
     "Pous.contAfter": "5d23328340a5ad7d3c60605870f713fb4bbf187f04eaf03ed29bf7e8ffaaf20e",
     "Pous.contFreed": "d40b9c98d192c789b415e37d20d8c93f836d32e4adc29df6f4bdc9da254fe133",
     "Pous.contMem": "a19961c93949384e413ac80df17333650706ea5089c8dcdd1f146b6317d712a0",
