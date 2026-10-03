@@ -4,7 +4,7 @@
 #     bash benchmarks/private_circuit/pod.sh CLS="16,16,8 64,64,32" N=64 CPUS=128-159
 # Builds C-Flock's circuit prover (CPU, 60-circuit.sh MODE=build: the proving build, `--zk` included) and the Lean verifier
 # (`lake build flock-verify`) once per FLOCK_WORK, each cached under a key of its sources, then runs universal.py per class.
-# env: CLS (space-separated G,N_IN,N_OUT)  N=64 (instances per class)  WARM=1 RUNS=3  SEED=0
+# env: CLS (space-separated G,N_IN,N_OUT)  N=64 (instances per class)  WARM=1 RUNS=3  SEED=0  WIRED (non-empty: universal.py --wired)
 #      CPUS (a taskset CPU list the whole job runs on; nproc, the build's -j and the prover's threads follow it)
 #      FLOCK_WORK=/workspace/jobs/pc-flock (builds, the Lean build directory, the venv; never the run dir)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -41,6 +41,7 @@ sha256sum $B $L | tee $O/binaries.sha256
 export RAYON_NUM_THREADS=$(nproc)
 export PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python:$REPO/integrations/vllm:$REPO/tools/circuit_check/src
 ARGS=(); for c in ${CLS:-16,16,8 64,64,32}; do ARGS+=(--cls "$c"); done
+[ -n "${WIRED:-}" ] && ARGS+=(--wired)
 $W/py/bin/python benchmarks/private_circuit/universal.py "${ARGS[@]}" --n ${N:-64} --warm ${WARM:-1} --runs ${RUNS:-3} --seed ${SEED:-0} \
   --bin $B --lean $L --out $O 2>&1 | tee $O/universal.log | cut -c1-3000
 exit ${PIPESTATUS[0]}

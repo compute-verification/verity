@@ -18,6 +18,14 @@
 * **The row.** `rows.jsonl`: the class, the unit's ANDs (traced, closed form and C-Flock's lowering), ANDs per hidden gate,
   the direct netlist's ANDs, the statement's size (k_log, instances per block), prover time, proof bytes, the live and the Lean
   verifier's times.
+* **`--wired`: several units, public topology.** A circuit of four units (`wired_topology`: layer 1 reads layer 0's outputs,
+  layer 2 layers 0 and 1, layer 3 layer 2, beside the circuit's input bits), a random hidden netlist per layer, on `n`
+  instances: a Program of one `batch` of the unit per layer (`wired_program`), whose wiring is the public layout's. Checked
+  against `interpret` composed along the topology and `verity.evaluation` of the Program; `Q_template_instance` makes every
+  member one unit, and the topology the partition derives (`derived_topology`) must be the one built. One class statement of
+  `4 n` instances, proved and Lean-verified with `--program` (the verifier derives the units); then the same for a cheating
+  prover whose layer 1 reads a made-up input in place of layer 0's outputs, every unit correct on what it is given, and the
+  row records whether the verifiers refuse it. Before it, the one-unit statement at `4 n` instances, the cost comparison.
 """
 from __future__ import annotations
 
@@ -48,8 +56,8 @@ from verity_flock import partition_units as PU
 SPEC = "q-template-instance"
 
 
-def _netlist(rng: random.Random, G: int, N_IN: int, N_OUT: int) -> U.Netlist:
-    g0, n0 = max(1, 3 * G // 4), max(1, 3 * N_IN // 4)
+def _netlist(rng: random.Random, G: int, N_IN: int, N_OUT: int, n_in: int | None = None) -> U.Netlist:
+    g0, n0 = max(1, 3 * G // 4), n_in or max(1, 3 * N_IN // 4)
     gates = tuple((rng.randrange(4), rng.randrange(n0 + g), rng.randrange(n0 + g)) for g in range(g0))
     return U.Netlist(n0, gates, tuple(rng.randrange(n0 + g0) for _ in range(N_OUT)))
 
@@ -98,14 +106,56 @@ def _sessions(d: Path) -> list[Path]:
     return sorted(p for p in d.iterdir() if p.is_dir() and (p / "session.json").exists()) if d.exists() else []
 
 
-def lean_verify(lean: str, circuit: Path, pub: Path, partition: Path, sessions: list[Path], zk: bool = True) -> tuple[list[dict], float, str]:
-    cmd = [lean, "verify", "--circuit", str(circuit), "--public", str(pub),
-           "--partition", str(partition), *(["--zk"] if zk else []), "--session", *map(str, sessions)]
+def lean_verify(lean: str, circuit: Path, pub: Path, partition: Path, sessions: list[Path], zk: bool = True,
+                program: Path | None = None) -> tuple[list[dict], float, str]:
+    """``flock-verify verify`` of the sessions; ``program``: the program's descriptor, so the verifier derives the units itself."""
+    cmd = [lean, "verify", "--circuit", str(circuit), "--public", str(pub), "--partition", str(partition),
+           *(["--program", str(program)] if program else []), *(["--zk"] if zk else []), "--session", *map(str, sessions)]
     t0 = time.monotonic()
     p = subprocess.run(cmd, capture_output=True, text=True, check=False)
     dt = time.monotonic() - t0
     v = [json.loads(ln.split(" ", 1)[1]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
     return v, dt, (p.stderr or "")[-600:]
+
+
+def live_session(a, stage: Path, n: int, d: Path, pin: str, warm: int, runs: int) -> tuple[dict, list[Path]]:
+    """``serve --zk`` on 127.0.0.1 and ``prove --zk`` against it, ``warm + runs`` sessions recorded under ``d/sessions``: the
+    median timed run's LIVE record, and the recorded session directories."""
+    sess = d / "sessions"
+    log = d / "serve.log"
+    srv = subprocess.Popen([a.bin, "serve", "--zk", "--listen", f"127.0.0.1:{a.port}", "--out", str(sess), "--instances",
+                            str(stage / f"pub-{n}.bin"), "--circuit", str(stage / "circuit.txt"), "--pin", pin, "--operator", "pc-flock",
+                            "--sessions", str(warm + runs)], stdout=open(log, "w"), stderr=subprocess.STDOUT)
+    try:
+        for _ in range(3000):
+            if "SERVING" in log.read_text() or srv.poll() is not None:
+                break
+            time.sleep(0.2)
+        with open(d / "prove.out", "w") as fo, open(d / "prove.err", "w") as fe:
+            timer = ["/usr/bin/time", "-f", "%M", "-o", str(d / "prove.maxrss")] if os.path.exists("/usr/bin/time") else []
+            pr = subprocess.run(timer + [a.bin, "prove", "--zk", "--verifier", f"127.0.0.1:{a.port}", "--instances", str(stage / f"inst-{n}.bin"),
+                                         "--circuit", str(stage / "circuit.txt"), "--warm", str(warm), "--runs", str(runs)],
+                                stdout=fo, stderr=fe, check=False)
+        srv.wait(timeout=600)
+    finally:
+        if srv.poll() is None:
+            srv.kill()
+            srv.wait()
+    live = [json.loads(ln[5:]) for ln in (d / "prove.out").read_text().splitlines() if ln.startswith("LIVE")]
+    timed = [x for x in live if not x.get("warm")] or live
+    med = sorted(timed, key=lambda x: x.get("prove_total_s") or 0)[len(timed) // 2] if timed else {}
+    rec = {"exit": pr.returncode, "sessions": len(live), "accepted": bool(live) and all(x.get("accepted") is True for x in live)
+           and pr.returncode == 0 and len(live) == warm + runs, "why": med.get("why"),
+           "prove_total_s": med.get("prove_total_s"), "prove_total_s_runs": [x.get("prove_total_s") for x in timed],
+           "e2e_s": med.get("e2e_s"), "witness_s": med.get("witness_s"), "proof_bytes": med.get("proof_bytes"),
+           "verify_s": (med.get("verdict") or {}).get("verify_s"), "k_log": med.get("k_log"), "prover": med.get("prover"),
+           "statement_digest": med.get("statement_digest"),
+           "prover_peak_gb": round(int((d / "prove.maxrss").read_text().split()[-1]) / 2**20, 3) if (d / "prove.maxrss").exists() else None}
+    if not live:
+        rec["stderr_tail"] = (d / "prove.err").read_text()[-800:]
+    recorded = _sessions(sess)
+    rec["recorded_sessions"] = len(recorded)
+    return rec, recorded
 
 
 def run_class(a, G: int, N_IN: int, N_OUT: int, out: Path) -> dict:
@@ -162,40 +212,7 @@ def run_class(a, G: int, N_IN: int, N_OUT: int, out: Path) -> dict:
     if a.stage_only:
         return row
 
-    sess = d / "sessions"
-    log = d / "serve.log"
-    srv = subprocess.Popen([a.bin, "serve", "--zk", "--listen", f"127.0.0.1:{a.port}", "--out", str(sess), "--instances",
-                            str(stage / f"pub-{n}.bin"), "--circuit", str(stage / "circuit.txt"), "--pin", pin, "--operator", "pc-flock",
-                            "--sessions", str(a.warm + a.runs)], stdout=open(log, "w"), stderr=subprocess.STDOUT)
-    try:
-        for _ in range(3000):
-            if "SERVING" in log.read_text() or srv.poll() is not None:
-                break
-            time.sleep(0.2)
-        with open(d / "prove.out", "w") as fo, open(d / "prove.err", "w") as fe:
-            timer = ["/usr/bin/time", "-f", "%M", "-o", str(d / "prove.maxrss")] if os.path.exists("/usr/bin/time") else []
-            pr = subprocess.run(timer + [a.bin, "prove", "--zk", "--verifier", f"127.0.0.1:{a.port}", "--instances", str(stage / f"inst-{n}.bin"),
-                                         "--circuit", str(stage / "circuit.txt"), "--warm", str(a.warm), "--runs", str(a.runs)],
-                                stdout=fo, stderr=fe, check=False)
-        srv.wait(timeout=600)
-    finally:
-        if srv.poll() is None:
-            srv.kill()
-            srv.wait()
-    live = [json.loads(ln[5:]) for ln in (d / "prove.out").read_text().splitlines() if ln.startswith("LIVE")]
-    timed = [x for x in live if not x.get("warm")] or live
-    med = sorted(timed, key=lambda x: x.get("prove_total_s") or 0)[len(timed) // 2] if timed else {}
-    row["live"] = {"exit": pr.returncode, "sessions": len(live), "accepted": bool(live) and all(x.get("accepted") is True for x in live)
-                   and pr.returncode == 0 and len(live) == a.warm + a.runs, "why": med.get("why"),
-                   "prove_total_s": med.get("prove_total_s"), "prove_total_s_runs": [x.get("prove_total_s") for x in timed],
-                   "e2e_s": med.get("e2e_s"), "witness_s": med.get("witness_s"), "proof_bytes": med.get("proof_bytes"),
-                   "verify_s": (med.get("verdict") or {}).get("verify_s"), "k_log": med.get("k_log"), "prover": med.get("prover"),
-                   "statement_digest": med.get("statement_digest"),
-                   "prover_peak_gb": round(int((d / "prove.maxrss").read_text().split()[-1]) / 2**20, 3) if (d / "prove.maxrss").exists() else None}
-    if not live:
-        row["live"]["stderr_tail"] = (d / "prove.err").read_text()[-800:]
-    recorded = _sessions(sess)
-    row["live"]["recorded_sessions"] = len(recorded)
+    row["live"], recorded = live_session(a, stage, n, d, pin, a.warm, a.runs)
     if a.lean and recorded:
         circ, pub = stage / "circuit.txt", stage / f"pub-{n}.bin"
         v, dt, err = lean_verify(a.lean, circ, pub, part, recorded)
@@ -235,6 +252,207 @@ def run_class(a, G: int, N_IN: int, N_OUT: int, out: Path) -> dict:
     return row
 
 
+def wired_topology(N_IN: int, N_OUT: int) -> tuple[int, tuple]:
+    """The circuit's input bits and four layers of the unit, each layer's x as its parts in order: ``("c", lo, hi)``, the circuit's
+    input bits, or ``("u", j, lo, hi)``, layer j's output bits. Layer 1 reads layer 0, layer 2 reads layers 0 and 1, layer 3 reads
+    layer 2; layer 3's outputs are the circuit's."""
+    if N_IN != 2 * N_OUT:
+        raise ValueError(f"the wired circuit needs N_IN = 2 N_OUT, not {N_IN}, {N_OUT}")
+    nc = N_IN + 2 * N_OUT
+    return nc, ((("c", 0, N_IN),), (("c", N_IN, N_IN + N_OUT), ("u", 0, 0, N_OUT)), (("u", 0, 0, N_OUT), ("u", 1, 0, N_OUT)),
+                (("u", 2, 0, N_OUT), ("c", N_IN + N_OUT, nc)))
+
+
+def _render(parts) -> str:
+    return " + ".join(f"c[{p[1]}:{p[2]}]" if p[0] == "c" else f"u{p[1]}[{p[2]}:{p[3]}]" for p in parts)
+
+
+def wired_program(fn, n: int, nc: int, topo):
+    """The wired circuit on ``n`` instances as a Program: per layer one ``batch`` of ``n`` members of the unit, its program (``op``,
+    ``src``, ``out``) one parameter shared by the members and its x per member, assembled from the circuit's input and earlier
+    layers' outputs (reference rearrangements, no gates). Returns (the composite, the Program)."""
+    from verity.ir.defs import CompositeDefinition
+    from verity.ir.program import Program
+    from verity.ir.refs import array_of, coll_concat
+
+    params, ret = fn.signature()
+    n_in = params[-1][1].leaves
+    sig = [("c", Array(n, Array(nc, U.BIT)))] + [(f"{nm}{i}", t) for i in range(len(topo)) for nm, t in params[:-1]]
+
+    def body(B, S, c, *ps):
+        us = []
+        for i, parts in enumerate(topo):
+            xs = array_of([coll_concat(Array(n_in, U.BIT), [c[t][p[1]:p[2]] if p[0] == "c" else us[p[1]][t][p[2]:p[3]] for p in parts])
+                           for t in range(n)])
+            us.append(B.batch(fn, *ps[3 * i:3 * i + 3], xs, axes=(None, None, None, 0), n=n))
+        return us[-1]
+
+    name = f"WiredUniversal{len(topo)}x{n}[{fn.id}]"
+    root = CompositeDefinition(name, 1, (), lambda S: (tuple(sig), Array(n, ret)), body, register=False)
+    return root, Program(root)
+
+
+def compose(nets, cs, topo, made_up=None):
+    """Every layer's x and outputs on every instance, run along the topology by `universal.interpret`. ``made_up``: {layer:
+    f(x) -> x}, the input a cheating prover gives that layer in place of its wired one; every layer is still run correctly on
+    what it is given, and later layers read its outputs."""
+    xs, ys = [[] for _ in topo], [[] for _ in topo]
+    for t, c in enumerate(cs):
+        for i, parts in enumerate(topo):
+            x = [b for p in parts for b in (c[p[1]:p[2]] if p[0] == "c" else ys[p[1]][t][p[2]:p[3]])]
+            if made_up and i in made_up:
+                x = made_up[i](x)
+            xs[i].append(x)
+            ys[i].append(U.interpret(nets[i], x))
+    return xs, ys
+
+
+def derived_topology(tp, n: int, n_in: int, nc: int, layers: int) -> dict:
+    """What the partition says each layer's x reads (`TemplatePartition.inputs`, the gates the verifier derives from the program),
+    as `_render`'s parts, and whether every member reads its own instance's bits; the program parameters, the units' other
+    inputs, must be the root's Input gates."""
+    owner = {g: (u // n, u % n, j) for u in range(tp.population) for j, g in enumerate(tp.outputs(u))}
+    per, own, params_input = [], True, True
+    for i in range(layers):
+        seen = set()
+        for t in range(n):
+            ins = tp.inputs(i * n + t)
+            params_input &= all(g not in owner for g in ins[:-n_in])
+            runs: list[list] = []
+            for g in ins[-n_in:]:
+                if g < n * nc:
+                    key, member, bit = ("c",), g // nc, g % nc
+                else:
+                    layer, member, bit = owner[g]
+                    key = ("u", layer)
+                own &= member == t
+                if runs and runs[-1][0] == key and runs[-1][2] == bit:
+                    runs[-1][2] = bit + 1
+                else:
+                    runs.append([key, bit, bit + 1])
+            seen.add(_render([(*k, lo, hi) for k, lo, hi in runs]))
+        per.append(sorted(seen))
+    return {"layers": [p[0] if len(p) == 1 else p for p in per], "every_member_reads_its_own_instance": own,
+            "program_parameters_are_inputs": params_input}
+
+
+def run_wired(a, G: int, N_IN: int, N_OUT: int, out: Path) -> dict:
+    """The wired circuit (`wired_topology`) on ``a.n`` instances, a random hidden netlist per layer, as one class statement of
+    ``4 a.n`` instances (Q_template_instance: every member of every layer one unit); the honest staging and a cheating one whose
+    layer 1 reads a made-up input in place of layer 0's outputs, every unit correct on the input it is given."""
+    rng = random.Random(f"pc-flock/wired/{a.seed}/{G}/{N_IN}/{N_OUT}")
+    fn = bind(U.UniversalUnit, G=G, N_IN=N_IN, N_OUT=N_OUT)
+    nc, topo = wired_topology(N_IN, N_OUT)
+    L = len(topo)
+    smalls = [_netlist(rng, G, N_IN, N_OUT, n_in=N_IN) for _ in topo]
+    nets = [U.pad(s, G, N_IN) for s in smalls]
+    cs = [[rng.randrange(2) for _ in range(nc)] for _ in range(a.n)]
+    root, program = wired_program(fn, a.n, nc, topo)
+    xs, ys = compose(nets, cs, topo)
+    want = [b for y in ys[-1] for b in y]
+    pargs = [p for net in nets for p in U.arguments(net, [0] * N_IN)[:3]]
+    flat_c = [b for c in cs for b in c]
+    t0 = time.monotonic()
+    ev = list(E.evaluate(root, flat_c, *pargs))
+    ev_s = time.monotonic() - t0
+    evb = np.asarray(E.evaluate_batch(root, np.array([flat_c], dtype=np.uint8), *(np.array([p], dtype=np.uint8) for p in pargs)))
+    agree = {"interpret_padded": compose(smalls, cs, topo)[1] == ys, "program_evaluate": ev == want,
+             "program_evaluate_batch": evb.reshape(-1).tolist() == want}
+
+    query = PO.template_instance_query(fn)
+    units = PU.PartitionUnits(program, query=query)
+    [(shape, cl)] = units.classes().items()
+    tp = PO.TemplatePartition(program, query)
+    derived = derived_topology(tp, a.n, N_IN, nc, L)
+    agree["topology_derived"] = derived["layers"] == [_render(p) for p in topo] and derived["every_member_reads_its_own_instance"] \
+        and derived["program_parameters_are_inputs"]
+
+    def staged_lanes(xs_, ys_):
+        ins = want_ = idents = None
+        for i in range(L):
+            li, lo, lid = lanes(units, cl, nets[i], xs_[i])
+            if [[lo[j][t] for j in range(N_OUT)] for t in range(a.n)] != ys_[i]:
+                raise AssertionError(f"layer {i}: the unit's transcript disagrees with interpret")
+            lid = [[(*ident, i) for ident in ids] for ids in lid]
+            ins, want_, idents = (li, lo, lid) if ins is None else ([p + q for p, q in zip(ins, li)], [p + q for p, q in zip(want_, lo)],
+                                                                   [p + q for p, q in zip(idents, lid)])
+        return ins, want_, idents
+
+    d = out / f"wired-G{G}-N{N_IN}-O{N_OUT}"
+    shutil.rmtree(d, ignore_errors=True)
+    stage = d / "stage"
+    salt_key = secrets.token_bytes(32)
+    t0 = time.monotonic()
+    st = CS.stage(units, SPEC, shape, cl, staged_lanes(xs, ys), stage, salt_key, packed=True)
+    stage_s = time.monotonic() - t0
+    n = st["n"]
+    if n != L * a.n:
+        raise AssertionError(f"staging capped the instances at {n}, not {L * a.n}")
+    part, desc = stage / "partition.json", stage / "program.desc"
+    part.write_text(json.dumps(PO.build(program, query), sort_keys=True))
+    from verity.ir.codec import canonical_json, encode_program
+    desc.write_bytes(canonical_json(encode_program(program)))
+    pin = FC.digest((stage / "circuit.txt").read_text())
+
+    # the cheat: layer 1's x has layer 0's output bits flipped, so its committed input row is not layer 0's committed output row
+    off = sum(p[2] - p[1] if p[0] == "c" else p[3] - p[2] for p in topo[1][:next(k for k, p in enumerate(topo[1]) if p[0] == "u")])
+    w0 = next(p[3] - p[2] for p in topo[1] if p[0] == "u")
+    flip = {1: lambda x: x[:off] + [1 - b for b in x[off:off + w0]] + x[off + w0:]}
+    bxs, bys = compose(nets, cs, topo, flip)
+    broken = sum(bxs[1][t][off:off + w0] != bys[0][t][:w0] for t in range(a.n))
+    wrong = sum(bys[-1][t] != ys[-1][t] for t in range(a.n))
+    bad = d / "made-up-input"
+    sb = CS.stage(units, SPEC, shape, cl, staged_lanes(bxs, bys), bad, salt_key, packed=True)
+    pa, pb = (stage / f"pub-{n}.bin").read_bytes(), (bad / f"pub-{n}.bin").read_bytes()
+
+    row = {"class": {"G": G, "N_IN": N_IN, "N_OUT": N_OUT, "W": N_IN + G, "K": U.index_bits(G, N_IN)}, "wired": True,
+           "circuit": {"layers": L, "instances": a.n, "input_bits": nc, "output_bits": N_OUT, "topology": [_render(p) for p in topo],
+                       "topology_derived": derived, "units": tp.population, "committed_gates": len(tp.committed()),
+                       "netlists": [{"gates": len(s.gates), "inputs": s.n_in, "ands": sum(1 for g in s.gates if g[0] & 1)} for s in smalls],
+                       "program_evaluate_s": round(ev_s, 3), "descriptor_bytes": desc.stat().st_size},
+           "unit": {"ands_lowered": st["ands"], "unit_rows": st["unit_rows"], "unit_nnz": st["unit_nnz"],
+                    "ands_per_hidden_gate": round(st["ands"] / G, 2)},
+           "statement": {k: st[k] for k in ("n", "k_log", "vus_per_block", "w_in", "w_out", "ports", "shared_rows", "circuit_sha512",
+                                            "class_sha512", "circuit_bytes")} | {"shape": shape, "stage_s": round(stage_s, 3)},
+           "agree_before_staging": agree, "seed": a.seed,
+           "made_up_input": {"layer": 1, "reads": _render(topo[1]), "flipped_bits": [off, off + w0], "instances_wire_broken": broken,
+                             "instances_circuit_output_wrong": wrong, "same_circuit": sb["circuit_sha512"] == st["circuit_sha512"],
+                             "pub_bytes": len(pa), "pub_bytes_differing": sum(x != y for x, y in zip(pa, pb)) + abs(len(pa) - len(pb))}}
+    if not all(agree.values()):
+        raise AssertionError(f"wired {G},{N_IN},{N_OUT}: the outputs disagree before staging: {agree}")
+    if a.stage_only:
+        return row
+
+    none = {"accepted": False, "why": "no verdict"}
+    for tag, sdir, warm, runs in (("honest", stage, a.warm, a.runs), ("made_up_input", bad, 0, a.runs)):
+        dd = d / f"{tag}-sessions"
+        dd.mkdir(parents=True, exist_ok=True)
+        live, recorded = live_session(a, sdir, n, dd, pin, warm, runs)
+        rec = {"live": live}
+        if a.lean and recorded:
+            v, dt, err = lean_verify(a.lean, sdir / "circuit.txt", sdir / f"pub-{n}.bin", part, recorded, program=desc)
+            rec["lean"] = {"accepted": len(v) == len(recorded) and all(x["accepted"] for x in v), "sessions": len(v),
+                           "why": sorted({x["why"] for x in v}), "wall_s": round(dt, 3), "wall_s_per_session": round(dt / max(1, len(v)), 3),
+                           "partition": (v[0].get("partition") if v else None), **({"stderr_tail": err} if not v else {})}
+            other = (stage if tag == "made_up_input" else bad) / f"pub-{n}.bin"
+            x = (lean_verify(a.lean, sdir / "circuit.txt", other, part, recorded[:1], program=desc)[0] or [none])[0]
+            rec["lean"]["against_the_other_public_file"] = {"refused": not x["accepted"], "why": x["why"][:160]}
+        if tag == "honest":
+            row["honest"] = rec
+        else:
+            row["made_up_input"] |= rec
+    mu = row["made_up_input"]
+    mu["refused_live"] = not mu["live"]["accepted"]
+    mu["refused_lean"] = not (mu.get("lean") or {}).get("accepted") if a.lean else None
+    mu["verdict"] = ("refused" if mu["refused_live"] and mu["refused_lean"] is not False else
+                     "ACCEPTED: a binding gap (the reader's committed input row is not the writer's committed output row, and nothing compares them)"
+                     if not mu["refused_live"] and mu["refused_lean"] is not True else "split: the live and the Lean verifier disagree")
+    if not a.keep_stage:
+        for f in [stage / "circuit.txt", bad / "circuit.txt", *stage.glob("inst-*.bin"), *bad.glob("inst-*.bin")]:
+            f.unlink(missing_ok=True)
+    return row
+
+
 def write_result(rows: list[dict], a) -> None:
     """``$RESEARCH_RUN_DIR/result.json`` (research/result/v0.1) when run under ``research run``."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
@@ -243,21 +461,28 @@ def write_result(rows: list[dict], a) -> None:
     ms = []
     for r in rows:
         c = r["class"]
-        tag = f"G{c['G']}_N{c['N_IN']}_O{c['N_OUT']}"
+        tag = f"{'wired4_' if r.get('wired') else ''}G{c['G']}_N{c['N_IN']}_O{c['N_OUT']}_n{(r.get('statement') or {}).get('n')}"
+        live, lean = ((r.get("honest") or {}).get("live"), (r.get("honest") or {}).get("lean")) if r.get("wired") else (r.get("live"), r.get("lean"))
+        mu = r.get("made_up_input") or {}
         for name, v, unit in (("ands", (r.get("unit") or {}).get("ands_lowered"), "count"),
                               ("ands_per_hidden_gate", (r.get("unit") or {}).get("ands_per_hidden_gate"), "count"),
-                              ("prove_total_s", (r.get("live") or {}).get("prove_total_s"), "s"),
-                              ("proof_bytes", sum((r.get("live") or {}).get("proof_bytes") or []) or None, "B"),
-                              ("live_verify_s", (r.get("live") or {}).get("verify_s"), "s"),
-                              ("lean_verify_s_per_session", (r.get("lean") or {}).get("wall_s_per_session"), "s")):
+                              ("k_log", (live or {}).get("k_log"), "count"),
+                              ("prove_total_s", (live or {}).get("prove_total_s"), "s"),
+                              ("proof_bytes", sum((live or {}).get("proof_bytes") or []) or None, "B"),
+                              ("live_verify_s", (live or {}).get("verify_s"), "s"),
+                              ("lean_verify_s_per_session", (lean or {}).get("wall_s_per_session"), "s"),
+                              ("made_up_input_accepted_live", None if "refused_live" not in mu else int(not mu["refused_live"]), "count"),
+                              ("made_up_input_accepted_lean", None if mu.get("refused_lean") is None else int(not mu["refused_lean"]), "count")):
             if v is not None:
                 ms.append({"name": f"{tag}/{name}", "value": v, "unit": unit})
     doc = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
            "workload_fingerprint": {"kind": "private-circuit/universal-e2e/v0", "statement": FC.STATEMENT, "zk": True,
-                                    "classes": a.cls, "n": a.n, "warm": a.warm, "runs": a.runs, "seed": a.seed},
+                                    "classes": a.cls, "n": a.n, "warm": a.warm, "runs": a.runs, "seed": a.seed, "wired": a.wired},
            "validation": {"status": "passed" if rows and all(r["pass"] for r in rows) else "failed",
                           "checker": "flock-circuit serve --zk (live) and Lean flock-verify verify --zk, outputs against verity.evaluation",
-                          "detail": f"{sum(r['pass'] for r in rows)} of {len(rows)} classes passed", "evidence": ["out/rows.jsonl"]},
+                          "detail": f"{sum(r['pass'] for r in rows)} of {len(rows)} rows passed" + "".join(
+                              f"; wired {r['class']['G']},{r['class']['N_IN']},{r['class']['N_OUT']} made-up input: "
+                              f"{(r.get('made_up_input') or {}).get('verdict')}" for r in rows if r.get("wired")), "evidence": ["out/rows.jsonl"]},
            "measurements": ms, "measurement_files": ["out/rows.jsonl"], "artifacts": []}
     Path(run_dir, "result.json").write_text(json.dumps(doc, sort_keys=True, indent=1))
 
@@ -275,19 +500,31 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--stage-only", action="store_true")
     ap.add_argument("--keep-stage", action="store_true", help="keep circuit.txt and the prover's inst-N.bin")
+    ap.add_argument("--wired", action="store_true", help="each class as the wired circuit of four units (run_wired), after the "
+                    "one-unit statement at the same instance count (4 n)")
     a = ap.parse_args(argv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     ok, rows = True, []
-    for c in a.cls:
+    jobs = [(c, kind) for c in a.cls for kind in (("one-unit", "wired") if a.wired else ("one-unit",))]
+    for c, kind in jobs:
         G, N_IN, N_OUT = (int(v) for v in c.split(","))
         try:
-            row = run_class(a, G, N_IN, N_OUT, out)
+            if kind == "wired":
+                row = run_wired(a, G, N_IN, N_OUT, out)
+            else:
+                row = run_class(argparse.Namespace(**{**vars(a), "n": 4 * a.n}) if a.wired else a, G, N_IN, N_OUT, out)
         except Exception as e:  # noqa: BLE001  (a class that breaks is a row, recorded with why)
-            row = {"class": {"G": G, "N_IN": N_IN, "N_OUT": N_OUT}, "broke": f"{type(e).__name__}: {e}"[:800]}
-        passed = "broke" not in row and (a.stage_only or (row["live"]["accepted"] and (not a.lean or (
-            row.get("lean", {}).get("accepted") and all(x["refused"] for x in row["lean"]["negatives"].values())
-            and row["lean"]["negatives"]["another_program"]["same_circuit"]))))
+            row = {"class": {"G": G, "N_IN": N_IN, "N_OUT": N_OUT}, "wired": kind == "wired", "broke": f"{type(e).__name__}: {e}"[:800]}
+        if kind == "wired":
+            h = row.get("honest") or {}
+            passed = "broke" not in row and (a.stage_only or (h["live"]["accepted"] and (not a.lean or (
+                h.get("lean", {}).get("accepted") and h["lean"]["against_the_other_public_file"]["refused"]
+                and row["made_up_input"]["same_circuit"]))))
+        else:
+            passed = "broke" not in row and (a.stage_only or (row["live"]["accepted"] and (not a.lean or (
+                row.get("lean", {}).get("accepted") and all(x["refused"] for x in row["lean"]["negatives"].values())
+                and row["lean"]["negatives"]["another_program"]["same_circuit"]))))
         row["pass"] = bool(passed)
         ok &= row["pass"]
         rows.append(row)

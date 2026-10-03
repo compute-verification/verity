@@ -13,4 +13,7 @@ research run --on vy-nebius-1 --cwd source --project verity --declared-output 'o
   bash benchmarks/private_circuit/pod.sh CLS="16,16,8 64,64,32" N=64 CPUS=128-159
 ~~~
 
+`WIRED=1` runs each class as the wired circuit of four units (`universal.py --wired`) after the one-unit statement at the
+same instance count.
+
 `check` runs nothing here.
