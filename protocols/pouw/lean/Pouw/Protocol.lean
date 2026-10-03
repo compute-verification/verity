@@ -56,6 +56,7 @@ import Pouw.Protocol.PearlC.Fp4Skip
 import Pouw.Protocol.PearlC.Fp4Vectors
 import Pouw.Protocol.PearlC.Game
 import Pouw.Protocol.PearlC.Hidden
+import Pouw.Protocol.PearlC.HiddenSystem
 import Pouw.Protocol.PearlC.HiddenTileGame
 import Pouw.Protocol.PearlC.Instance
 import Pouw.Protocol.PearlC.PeelExact
@@ -125,14 +126,15 @@ inputs. P1, freezing under promotion (`Freeze`), and P3, the forming credit (`Fo
 cheap-binding lane's game (`Game`), named protocol (`Instance`), named assumption TT_OUT (`TTOut`) and γ from it
 (`Gamma`). The hidden audit, the tile check as a proof over core's `Verity.Game` (`Hidden`), its open obligation that a
 drawn tile's proof is sound (`HiddenTile`), what a proof system gives per tile to meet it (`HiddenTileGame`, met in
-`SecurityProofs` through core's batch lemma) and the sampled audit's γ under it (`HiddenGamma`). The sampled audit's
+`SecurityProofs` through core's batch lemma), the hidden audit of tile checks sound against registered inputs, which
+meets it (`HiddenSystem`), and the sampled audit's γ under it (`HiddenGamma`). The sampled audit's
 completeness on a population of activations (`Completeness`), its one assumption, the honest tiles' measured cap rate
 (`HonestCap`, empirical), the proof that every honest word is an FP32 word's (`HonestWords`) and completeness from the
 two (`Completeness`).
 
 ## `Draft`: provisional text owned elsewhere
 
-The draft of sampled proofs' trusted text that PoUW's hidden audit reads (`SampledProofs`: a proof system's data, its
+The draft of sampled proofs' trusted text that `HiddenSystem` reads (`SampledProofs`: a proof system's data, its
 soundness against registered inputs and the honest prover's membership in its class), held until lean's sampled-proofs
 package lands, and a batch played one game after another (`BatchSeq`), core-only, held until it moves to core.
 

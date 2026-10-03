@@ -90,6 +90,7 @@ import Pouw.SecurityProofs.PearlC.FreezeP
 import Pouw.SecurityProofs.PearlC.FreezePPure
 import Pouw.SecurityProofs.PearlC.Gamma
 import Pouw.SecurityProofs.PearlC.HiddenGamma
+import Pouw.SecurityProofs.PearlC.HiddenSystem
 import Pouw.SecurityProofs.PearlC.HiddenTileGame
 import Pouw.SecurityProofs.PearlC.HonestWords
 import Pouw.SecurityProofs.PearlC.KernelWrefGamma
