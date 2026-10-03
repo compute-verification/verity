@@ -106,6 +106,7 @@ class Sampler:
         except Exception as e:  # noqa: BLE001 -- the sampler must not die on a reading
             self.err("cgroup", repr(e))
         # process tree
+        snapped = True
         try:
             rows, truncated, total, outsiders = snapshot_tree(self.a.root_pid, self.a.pgid, self.a.max_pids)
             cur = {r["pid"]: r["starttime_ticks"] for r in rows}
@@ -125,14 +126,15 @@ class Sampler:
             self.known_outsiders = {o["pid"]: (o["starttime_ticks"], o["comm"]) for o in outsiders}
         except Exception as e:  # noqa: BLE001
             self.err("process", repr(e))
-            rows = []
+            rows, snapped = [], False
         # PSS every pss_every s, plus a bounded extra round on topology change (at most one per 5 s); pss_every 0 turns it off
         if self.a.pss_every > 0 and (final or now - self.last_pss >= self.a.pss_every
                                      or (self.topology_changed_at and now - self.topology_changed_at < self.cadence and now - self.last_pss >= 5.0)):
             try:
                 out = [self._pss(r) for r in rows[: self.a.max_pids]]
-                live = {(r["pid"], r.get("starttime_ticks")) for r in rows}
-                self.pss_hold = {k: v for k, v in self.pss_hold.items() if k in live}
+                if snapped:                       # a failed snapshot says nothing about which processes are gone
+                    live = {(r["pid"], r.get("starttime_ticks")) for r in rows}
+                    self.pss_hold = {k: v for k, v in self.pss_hold.items() if k in live}
                 tot = sum(x["pss_bytes"] for x in out if x.get("pss_bytes") is not None)
                 rss_sum = sum(r.get("rss_bytes") or 0 for r in rows)
                 skipped = sum(1 for x in out if x.get("skipped"))

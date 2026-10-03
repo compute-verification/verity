@@ -917,3 +917,36 @@ def test_a_slow_read_holds_that_process_off_for_200_times_its_length(tmp_path, m
     assert held["skipped"] is True and held["pss_bytes"] is None and held["rss_bytes"] == 2 * GB and held["rss_file_bytes"] == GB // 2
     assert held["reason"] == ("skipped: its last smaps_rollup read took 0.500 s, so the next waits 200x that (95.0 s more): reads hold "
                               "its mmap lock at most 1/200 of its time")
+
+
+def test_a_failed_process_snapshot_keeps_the_holds(tmp_path, monkeypatch):
+    """A round whose process snapshot failed knows no process. Pruning the holds to it released every held process, so the next
+    round read them again at once; holds are pruned only to a snapshot that succeeded, which still drops the processes that exited."""
+    from research.telemetry import sample
+
+    clk = _Clock(1000.0)
+    monkeypatch.setattr(sample, "clock", clk)
+    opened = []
+
+    def read(pid):
+        opened.append(pid)
+        clk.t += 0.5 if pid == 11 else 0.001
+        return {"pid": pid, "pss_bytes": GB // 2}
+
+    def no_proc(root_pid, pgid, max_pids):
+        raise OSError("no /proc")
+
+    table = [_proc(11, 2 * GB), _proc(12, GB)]
+    s = _sampler(tmp_path, monkeypatch, table, read, "--pss-every", "5")
+    snapshot = sample.snapshot_tree
+    s.round()
+    monkeypatch.setattr(sample, "snapshot_tree", no_proc)
+    clk.t = 1005.0
+    s.round()
+    monkeypatch.setattr(sample, "snapshot_tree", snapshot)
+    table.pop()
+    clk.t = 1010.0
+    s.round()
+    assert s.errors["process"] == 1 and opened == [11, 12] and set(s.pss_hold) == {(11, 7)}
+    held = _records(tmp_path, "pss")[-1]["processes"]
+    assert [p["pid"] for p in held] == [11] and held[0]["skipped"] is True and "(90.0 s more)" in held[0]["reason"]
