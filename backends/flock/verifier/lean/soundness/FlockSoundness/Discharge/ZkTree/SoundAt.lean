@@ -99,7 +99,17 @@ theorem zk_session_sound_tree_at
                 k Rw M ρ t' (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) (τ.play (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (erD_liveTableC dg rl i0 i1 dr iS dl N) wr (vw x))))
                 (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) (τ.play (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (erD_liveTableC dg rl i0 i1 dr iS dl N) wr (vw x)))))) +
           ((nS * 2 ^ rl : ℕ) : ℝ≥0∞) * ENNReal.ofReal (1 / 2 ^ 256)) := by
-  sorry
+  obtain ⟨Mx, vw, hσ, hcl⟩ := treeAudit_le_play hE (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop)
+    (erD_liveTableC dg rl i0 i1 dr iS dl N) (distinct_liveTableC dg rl i0 i1 dr iS dl N hS0 hS1 h01) wr dig cs hcs H τ
+  have hcl' : ∀ E, prTree (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop)
+      (liveTableC dg rl i0 i1 dr iS dl N) wr dig cs H τ E ≤
+        Mx.pr (fun _ => E) + ((nS * 2 ^ rl : ℕ) : ℝ≥0∞) * ENNReal.ofReal (1 / 2 ^ 256) := fun E => by
+    have h := hcl E
+    rwa [Fintype.card_prod, Fintype.card_fin, Fintype.card_fin] at h
+  refine ⟨Mx, vw, hσ, hcl', fun hCR => (hcl' _).trans (add_le_add_left (Mix.pr_le_split Mx _ _ _ _ fun x => ?_) _)⟩
+  rw [hσ x]
+  exact prob_le_split _ _ _ K₀ ((zk_session_sound I ht dj y₀ wr dg N hc hU hpub hpt hscope σs ks hks St hS Kd
+    pop Lb src hA3 hDraw hTags hRec hk hRw hM hρ hr ht' K₀ _ (hCR (vw x))).trans_eq (add_assoc _ _ _))
 
 /-- **The record's header is invisible to flock-verify**: acceptance of what the writer `wrH` writes at any header
 `h` (the session's nonce, key and root) is acceptance of what the reference writer `wr` writes. -/
@@ -174,6 +184,11 @@ theorem zk_session_sound_real
                 k Rw M ρ t' (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) ((ρ'.toTree (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (erD_liveTableC dg rl i0 i1 dr iS dl N) rt op).play (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (erD_liveTableC dg rl i0 i1 dr iS dl N) wr (vw x))))
                 (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) ((ρ'.toTree (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (erD_liveTableC dg rl i0 i1 dr iS dl N) rt op).play (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (erD_liveTableC dg rl i0 i1 dr iS dl N) wr (vw x)))))) +
           ((nS * 2 ^ rl : ℕ) : ℝ≥0∞) * ENNReal.ofReal (1 / 2 ^ 256)) := by
-  sorry
+  obtain ⟨Mx, vw, hσ, -, hb⟩ := zk_session_sound_tree_at I ht dj y₀ wr dg N hc hU hpub hpt hscope σs ks hks St hS
+    Kd pop Lb src hA3 hDraw hTags hRec hk hRw hM hρ hr ht' K₀ hE rl iS i0 i1 hS0 hS1 h01 dl dr dig cs hcs H
+    (ρ'.toTree (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (erD_liveTableC dg rl i0 i1 dr iS dl N) rt op) (qF := qF) (qS := qS)
+  refine ⟨Mx, vw, hσ, fun hCR => ?_⟩
+  rw [prRealH_eq _ _ wrH wr _ _ _ _ _ _ _ fun h S R o => hBlind h S R o]
+  exact (realProver_le_tree _ _ wr dig cs H rt op ρ' _).trans (hb hCR)
 
 end FlockSoundness.Discharge.ZkTree
