@@ -294,7 +294,7 @@ noncomputable def bodyOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedBody Tz.S (m
   Hi := HiOf Tz
   VL := ByteArray
   Rest := RestOf Tz st
-  rest0 := ⟨fun _ _ => ⟨0, Nat.two_pow_pos _⟩, fun _ _ => 0, fun _ _ => 0, fun _ => 0, fun _ _ => 0, fun _ => 0,
+  rest0 := ⟨fun _ _ => 0, fun _ _ => ⟨0, Nat.two_pow_pos _⟩, fun _ _ => 0, fun _ _ => 0, fun _ => 0, fun _ _ => 0, fun _ => 0,
     fun _ => 0, fun _ _ => 0, fun _ => 0, fun _ _ _ => 0, fun _ _ => 0, fun _ _ => 0, fun _ _ => 0, fun _ => 0,
     fun _ _ => 0, fun _ _ => 0⟩
   sz := szOf Tz st
@@ -305,7 +305,7 @@ noncomputable def bodyOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedBody Tz.S (m
   T := fun c =>
     { tableOf Tz st c with
       ζ := fun r => fOf (c.rest.zeta r)
-      pubReg := pubRegOf st
+      pubReg := pubRegOf st c.rest.link
       rbar := fun r l => eqLane (c.rest.lane r) l.val
       rep := fun k => if k.val < 2 then 0 else 1
       ia := ⟨(Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).fa, Nat.lt_of_succ_lt (fa_lt Tz st)⟩

@@ -16,7 +16,7 @@ What `coinedOf` (`Composed/Defs.lean`) and `innerOf` (`Composed/Inner.lean`) bot
 * `pointsOf`: the rank check's claim points, from those coins (`abcClaims`; `point_parts`: a claim's point but its first
   coordinate), rep 0's `ab`, `c`, then rep 1's.
 * `hiCount`, `padLenOf`, `padNOf`, `HiOf`: the hidden salts and the pads layout's sizes.
-* `pubRegOf`: the statement's public region values.
+* `pubRegOf`: the region claims' public ring-switch messages at the link points.
 -/
 
 namespace FlockSoundness.Discharge.Composed
@@ -34,12 +34,14 @@ structure CoinsZK (Rest : Type) where
   rho : Fin 2 → F256 × F256
   rest : Rest
 
-/-- **A `--zk` table's other coins**, each rep's, in the order `verify --zk` draws them: `q₀` level-0 queries over `L₀`
+/-- **A `--zk` table's other coins**: the session's two link points (`mP` coordinates, shared by both reps,
+the region claims' points through `st.extra`), then each rep's, in the order `verify --zk` draws them: `q₀` level-0 queries over `L₀`
 positions; the zerocheck's skip coins, outer coins (rounds `7 … m−7`), `z` and the residual rounds' `ρ`; the lincheck's
 `α`, `β`, its `kLog − 6` rounds' coins and `r′`; the ring switch's 7 coins per claim and `γ` per claim (`nCl` claims);
 level 0's out-of-domain coins and lane challenges; the triple's sacrifice coin `ε`; the inner proof's constraints' `γ`
 (ten); its `Q` queries. -/
-structure RestZK (q0 L0 k0 m kLog nCl nOod : ℕ) where
+structure RestZK (q0 L0 k0 m kLog nCl nOod mP : ℕ) where
+  link : Fin 2 → Fin mP → F128
   q0s : Fin 2 → Fin q0 → Fin L0
   rSkip : Fin 2 → Fin 6 → F128
   rOuter : Fin 2 → Fin (m - 13) → F128
@@ -69,26 +71,27 @@ def padNOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : ℕ :=
 
 /-- **The draw's other coins**: `q₀ = t_pad / 2` level-0 queries (`Zk.schedule`) over `2^logLen` positions, the
 executable statement's `m` and `kLog`, a claim per region besides `ab` and `c`, and the layout's one out-of-domain
-coin. -/
+coin, and the statement's `mPts` link coordinates. -/
 abbrev RestOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : Type :=
   RestZK (Tz.t / 2) (2 ^ Tz.sch.level₀.logLen) Tz.sch.k0 st.m st.c.kLog (2 + st.regions.size)
-    (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).nOod0
+    (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).nOod0 st.mPts
 
 /-- The draw's hidden-salt type. -/
 abbrev HiOf (Tz : TabZK 𝔽 mPts) : Type := Fin (hiCount Tz) → ZkView.Salt
 
 /-- **Rep `r`'s claims** (`abcClaims`) at its coins: `ab` at the lincheck's point, `c` at the zerocheck's. -/
-def claimsOf {q0 L0 k0 m kLog nCl nOod : ℕ} (ρ : RestZK q0 L0 k0 m kLog nCl nOod) (r : Fin 2) : Array Claim :=
+def claimsOf {q0 L0 k0 m kLog nCl nOod mP : ℕ} (ρ : RestZK q0 L0 k0 m kLog nCl nOod mP) (r : Fin 2) : Array Claim :=
   abcClaims m kLog (⟨ρ.zc r, Array.ofFn (ρ.rho r), pinned ++ Array.ofFn (ρ.rOuter r), 0, 0, 0⟩ : ZcOut)
     (⟨0, ρ.rPrime r, (Array.ofFn (ρ.ts r)).reverse⟩ : LcOut)
 
 /-- **The rank check's claim points** (`claim_word_points`): rep 0's `ab`, `c`, then rep 1's, each its claim's point
 but the first coordinate (`point_parts`). -/
-def pointsOf {q0 L0 k0 m kLog nCl nOod : ℕ} (ρ : RestZK q0 L0 k0 m kLog nCl nOod) (k : Fin Zk.RANK_POINTS) :
+def pointsOf {q0 L0 k0 m kLog nCl nOod mP : ℕ} (ρ : RestZK q0 L0 k0 m kLog nCl nOod mP) (k : Fin Zk.RANK_POINTS) :
     List F128 :=
   ((claimsOf ρ (if k.val < 2 then 0 else 1))[k.val % 2]!).x.toList.drop 1
 
-/-- **The statement's public region values** (open: the registered regions' public words from `st.pub`). -/
-noncomputable def pubRegOf (st : Stmt) : Fin st.regions.size → Fin 128 → 𝔽 := sorry
+/-- **The region claims' public ring-switch messages** (open): each registered region's public words from `st.pub`, at
+its claim's point (`st.extra` at the link points `link`). -/
+noncomputable def pubRegOf (st : Stmt) (link : Fin 2 → Fin st.mPts → F128) : Fin st.regions.size → Fin 128 → 𝔽 := sorry
 
 end FlockSoundness.Discharge.Composed
