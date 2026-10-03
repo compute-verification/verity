@@ -42,8 +42,8 @@ JOB = """set -u
 out=$RESEARCH_RUN_DIR/out; mkdir -p "$out"
 s=$(mktemp -d /workspace/research/scratch/post-train.XXXXXX 2>/dev/null || mktemp -d); trap 'rm -rf "$s"' EXIT
 export TMPDIR=$s VERITY_REGRESSION_SCRATCH=$s BUILD_RAM_BUDGET_GB=32 VERITY_MANIFEST_JOBS=4
-uv run -q --locked --extra torch-cpu python -m research data fetch-fixtures --json integrations/vllm/tests/regression/expected \\
-  > "$out/fetch-fixtures.json" || exit 1
+uv run -q --locked --extra torch-cpu python -m research data fetch-fixtures --repo "$PWD" --json \\
+  integrations/vllm/tests/regression/expected > "$out/fetch-fixtures.json" || exit 1
 cd integrations/vllm
 VERITY_REGRESSION=1 VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1 VERITY_REGRESSION_RECORD_ACTUAL=$out/actual \\
   {pin}../../.venv/bin/python -m pytest tests/regression -m {marks} -n {workers} -rA --durations=0 \\
@@ -114,14 +114,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--workers", type=int, default=12, help="pytest-xdist workers: a row's rebuild each (default 12)")
     ap.add_argument("--project", default="verity")
     ap.add_argument("--force", action="store_true", help="run even when the attempt has its label")
+    ap.add_argument("--dry-run", action="store_true", help="run, and print the label instead of writing it (any commit: a branch's too)")
     a = ap.parse_args(argv)
     git("fetch", "-q", "origin", "main")
     sha = git("rev-parse", "--verify", f"{a.commit}^{{commit}}")
     attempt = check_attempt(sha)
-    if not attempt:
+    if not attempt and not a.dry_run:
         print(f"post-train: {sha[:12]} has no `Check:` trailer, so it is no landing of main", file=sys.stderr)
         return 2
-    if not a.force and (have := labelled(attempt)):
+    if attempt and not (a.force or a.dry_run) and (have := labelled(attempt)):
         print(f"post-train: {attempt} ({sha[:12]}) has note={have} already; --force runs it again")
         return 0
     tree = Path(tempfile.mkdtemp(prefix=f"post-train-{sha[:12]}-"))
@@ -140,6 +141,9 @@ def main(argv: list[str] | None = None) -> int:
         print((f.stdout + f.stderr).strip()[-1000:], flush=True)
         from research.runs import runs_root
         v = verdict(runs_root() / rid / "out" / "junit.xml", p.returncode)
+        if a.dry_run:
+            print(f"post-train: {sha[:12]}: --dry-run, so {attempt or 'no check attempt'} gets no note={v} (ref {rid})")
+            return 0 if v == f"{PREFIX}pass" else 1
         lab = research("data", "label", attempt, "note", v, "--by", BY, "--ref", rid)
         print((lab.stdout + lab.stderr).strip()[-1000:])
         print(f"post-train: {attempt} ({sha[:12]}): note={v} (ref {rid})")

@@ -59,6 +59,36 @@ def test_check_starts_it_after_each_landing():
     assert mod.CHECK.after_land[-1] == "tools/check/post_train.py" and (ROOT / mod.CHECK.after_land[-1]).is_file()
 
 
+def _fake_landing(tmp_path, monkeypatch, attempt):
+    runs = tmp_path / "runs"
+    calls: list[tuple[str, ...]] = []
+
+    def research(*args, cwd=None):
+        calls.append(args)
+        if args[0] == "run":
+            (runs / "r20261003-000000-abcd" / "out").mkdir(parents=True)
+            _junit(runs / "r20261003-000000-abcd" / "out", {"test_reproduces[T0-manifest_digest-r39]": "fail"})
+            return subprocess.CompletedProcess(args, 1, "research: run r20261003-000000-abcd launched\n", "")
+        return subprocess.CompletedProcess(args, 0, "[]" if args[:2] == ("data", "labels") else "", "")
+    monkeypatch.setattr(PT, "research", research)
+    monkeypatch.setattr(PT, "git", lambda *a, **k: "f" * 40 if a[0] == "rev-parse" else "")
+    monkeypatch.setattr(PT, "check_attempt", lambda sha, cwd=PT.ROOT: attempt)
+    import research.runs
+    monkeypatch.setattr(research.runs, "runs_root", lambda: runs)
+    return calls
+
+
+def test_a_landing_gets_its_label_and_a_dry_run_writes_none(tmp_path, monkeypatch):
+    calls = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806")
+    assert PT.main(["--cores", "96-127"]) == 1
+    assert ("data", "label", "r20261003-145201-e806", "note", "regression fail:r39", "--by", "regression",
+            "--ref", "r20261003-000000-abcd") in calls
+    calls = _fake_landing(tmp_path / "dry", monkeypatch, None)
+    assert PT.main(["HEAD", "--dry-run"]) == 1
+    assert [c[0] for c in calls] == ["run", "fetch"], "a dry run reads no label and writes none"
+    assert PT.main(["HEAD"]) == 2, "without --dry-run, a commit that is no landing has nothing to label"
+
+
 def test_the_job_pins_the_rebuilds_to_the_cores_it_is_given():
     pinned, free = PT.job("96-127", 12), PT.job("", 4)
     assert "taskset -c 96-127 ../../.venv/bin/python -m pytest" in pinned and "taskset" not in free
