@@ -31,6 +31,23 @@ open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
 
+/-- Acceptance splits at `K₀` wrong units. -/
+theorem prob_le_split {α : Type} {G : Game α} (s : Strategy G) (A : α → Prop) (W : α → ℕ) (K₀ : ℕ) {b : ℝ≥0∞}
+    (h : prob (fun o => A o ∧ K₀ ≤ W o) G s ≤ b) : prob A G s ≤ prob (fun o => A o ∧ W o < K₀) G s + b :=
+  (prob_mono (q := fun o => (A o ∧ W o < K₀) ∨ (A o ∧ K₀ ≤ W o))
+    (fun o hA => (lt_or_ge (W o) K₀).imp (⟨hA, ·⟩) (⟨hA, ·⟩)) G s).trans
+    ((prob_or_le _ _ G s).trans (add_le_add_right h _))
+
+/-- A bound at each prover of a mixture is a bound on the mixture, the constant term counted once. -/
+theorem Mix.pr_le_split {α Hl : Type} {G : Game α} (M : Mix G Hl) (A : α → Prop) (p b : M.Ρ → ℝ≥0∞) (c : ℝ≥0∞)
+    (h : ∀ x, prob A G (M.σ x) ≤ p x + (c + b x)) :
+    M.pr (fun _ => A) ≤ ∑ x, M.w x * p x + (c + ∑ x, M.w x * b x) := by
+  calc M.pr (fun _ => A) = ∑ x, M.w x * prob A G (M.σ x) := rfl
+    _ ≤ ∑ x, M.w x * (p x + (c + b x)) := Finset.sum_le_sum fun x _ => mul_le_mul_right (h x) _
+    _ = _ := by
+      simp only [mul_add, Finset.sum_add_distrib]
+      rw [← Finset.sum_mul, M.sum_w, one_mul]
+
 variable {mPts n : ℕ} {Reg : Type}
 
 /-- **One `--zk` sampled session on the coin tree is sound.** -/
@@ -93,6 +110,15 @@ theorem zk_session_sound_tree
                 k Rw M ρ t' (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) (Mx.σ x)))
                 (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) (Mx.σ x))))) +
           ((nS * 2 ^ rl : ℕ) : ℝ≥0∞) * ENNReal.ofReal (1 / 2 ^ 256)) := by
-  sorry
+  obtain ⟨Mx, hreg, hcl⟩ := treeAudit_le_model hE (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop)
+    (erD_liveTableC dg rl i0 i1 dr iS dl N) (distinct_liveTableC dg rl i0 i1 dr iS dl N hS0 hS1 h01) wr dig cs hcs H τ
+  have hcl' : ∀ E, prTree (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop)
+      (liveTableC dg rl i0 i1 dr iS dl N) wr dig cs H τ E ≤
+        Mx.pr (fun _ => E) + ((nS * 2 ^ rl : ℕ) : ℝ≥0∞) * ENNReal.ofReal (1 / 2 ^ 256) := fun E => by
+    have h := hcl E
+    rwa [Fintype.card_prod, Fintype.card_fin, Fintype.card_fin] at h
+  refine ⟨Mx, hreg, hcl', fun hCR => (hcl' _).trans (add_le_add_left (Mix.pr_le_split Mx _ _ _ _ fun x => ?_) _)⟩
+  exact prob_le_split (Mx.σ x) _ _ K₀ ((zk_session_sound I ht dj y₀ wr dg N hc hU hpub hpt hscope σs ks hks St hS Kd
+    pop Lb src hA3 hDraw hTags hRec hk hRw hM hρ hr ht' K₀ (Mx.σ x) (hCR x)).trans_eq (add_assoc _ _ _))
 
 end FlockSoundness.Discharge.ZkTree
