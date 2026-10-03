@@ -104,12 +104,13 @@ def queue(fill: Path, name: str, head: str) -> None:
     (fill / "queue" / name).write_text(f"#!/bin/bash\n# fill: {head}\n")
 
 
-TIMING = "owner=net gpus=1 timing=1 cpus=8 max_min=60 mem_gb=48 project=verity"
+TIMING = "owner=net gpus=1 timing=1 cpus=16 max_min=60 mem_gb=48 project=verity"
 
 
 def test_a_timing_job_gets_a_numa1_gpu_and_whole_cores_of_124_191_alone(node2, monkeypatch):
-    """Four chunks at most: one per NUMA 1 GPU, each on 4 SMT pairs of 124-191 no other job has, local to its GPU. A pous job
-    queued beside them takes a NUMA 0 GPU, which a chunk can't use, rather than the highest free one."""
+    """Four chunks at most: one per NUMA 1 GPU, each on 16 threads of 124-191, 8 whole SMT pairs no other job has, local to its
+    GPU; the fifth waits, since 188-191 hold only 4. A pous job queued beside them takes a NUMA 0 GPU, which a chunk can't use,
+    rather than the highest free one."""
     load, fill, _ = node2
     fr = load()
     queue(fill, "h.sh", "owner=net gpus=0 timing=1 cpus=7 max_min=90 project=verity")
@@ -131,16 +132,17 @@ def test_a_timing_job_gets_a_numa1_gpu_and_whole_cores_of_124_191_alone(node2, m
     chunks = started[1:]
     assert [(name, gpu) for name, gpu, _ in chunks] == [(f"nw-chunk-{k}.sh", g) for k, g in enumerate("7654")]
     sets = [cpus_of(c) for _, _, c in chunks]
-    assert all(len(s) == 8 and s <= set(range(124, 192)) and whole_cores(s) for s in sets), sets
-    assert len(set().union(*sets)) == 32                              # no CPU in two chunks
-    assert [c for _, _, c in chunks] == ["124-131", "132-139", "140-147", "148-155"]
+    assert all(len(s) == 16 and s <= set(range(124, 192)) and whole_cores(s) for s in sets), sets
+    assert len(set().union(*sets)) == 64                              # no CPU in two chunks
+    assert [c for _, _, c in chunks] == ["124-139", "140-155", "156-171", "172-187"]
     assert (fill / "queue" / "nw-chunk-4.sh").exists() and stopped == []
+    assert fr.timing_free([]) == {188, 189, 190, 191} and fr.carve({188, 189, 190, 191}, NUMA1, 16) is None
     status = (fill / "status.txt").read_text()
-    assert "running nw-chunk-0.sh owner=net gpus=1 since=- timing cpus=124-131" in status
+    assert "running nw-chunk-0.sh owner=net gpus=1 since=- timing cpus=124-139" in status
 
     fr.running.pop("nw-chunk-1.sh"), held.pop(6)                     # a chunk ends: the next takes its GPU and cores
     fr.tick(8)
-    assert started[-1] == ("nw-chunk-4.sh", "6", "132-139")
+    assert started[-1] == ("nw-chunk-4.sh", "6", "140-155")
 
 
 def test_fill_never_stops_a_timing_job_and_a_whole_node_window_waits_for_it(node2, monkeypatch):
@@ -150,7 +152,7 @@ def test_fill_never_stops_a_timing_job_and_a_whole_node_window_waits_for_it(node
     load, fill, _ = node2
     fr = load()
     held, want, started, stopped, run = fake_node(fr, monkeypatch, fill)
-    run("nw-chunk.sh", 7, {"owner": "net", "gpus": 1, "project": "verity", "timing": True, "timing_cpus": "124-131",
+    run("nw-chunk.sh", 7, {"owner": "net", "gpus": 1, "project": "verity", "timing": True, "timing_cpus": "124-139",
                            "max_min": 10**9})
     run("pous-a.sh", 0, {"owner": "pm", "gpus": 1, "project": "pous", "max_min": 10**9})
 
@@ -200,7 +202,7 @@ def test_fill_never_stops_a_timing_job_and_a_whole_node_window_waits_for_it(node
     assert all(name != "nw-next.sh" for name, _, _ in started)        # 60 min from 22:01Z reach the window
     monkeypatch.setattr(fr, "wall", lambda: t - 60 * 60)
     fr.tick(8)
-    assert started[-1] == ("nw-next.sh", "7", "124-131")
+    assert started[-1] == ("nw-next.sh", "7", "124-139")
 
 
 def test_a_new_fence_moves_other_fill_jobs_threads_but_never_a_timing_jobs(node2, monkeypatch):
@@ -233,21 +235,22 @@ def test_start_runs_a_timing_job_unpreemptible_at_nice_0_in_a_top_level_scope_an
     monkeypatch.setattr(fr.os, "killpg", lambda pid, sig: None)
     queue(fill, "nw-chunk.sh", TIMING)
     p = fill / "queue" / "nw-chunk.sh"
-    fr.start(p, {**fr.header(p), "on": "7", "timing_cpus": "124-131"})
+    fr.start(p, {**fr.header(p), "on": "7", "timing_cpus": "124-139"})
     (cmd, kw), = cmds
     lease, scope = cmd[:cmd.index("sudo")], cmd[cmd.index("sudo"):]
     assert lease == [fr.GPU_LEASE, "1", "--on", "7", "--max-min", "60", "--"] and "--preemptible" not in cmd
     unit = fr.running["nw-chunk.sh"]["unit"]
     assert unit.startswith("fill-timing-") and scope[:scope.index("--", 4)] == [
         "sudo", "-n", "--preserve-env", "env", f"PATH={os.environ.get('PATH', '')}", "systemd-run", "--quiet", "--scope",
-        "--collect", "--slice=vy-timing.slice", "--unit", unit, "--nice=0", "-p", "AllowedCPUs=124-131", "-p", "MemoryMax=48G",
+        "--collect", "--slice=vy-timing.slice", "--unit", unit, "--nice=0", "-p", "AllowedCPUs=124-139", "-p", "MemoryMax=48G",
         "-p", "MemorySwapMax=0", f"--uid={os.getuid()}", f"--gid={os.getgid()}"]
     workload = scope[scope.index("--", 4) + 1:]
-    assert workload[:3] == ["taskset", "-c", "124-131"] and "nice" not in cmd and kw["start_new_session"]
+    assert workload[:3] == ["taskset", "-c", "124-139"] and "nice" not in cmd and kw["start_new_session"]
     assert kw["env"]["GPU_LEASE_WHO"] == "fill:net" and kw["env"]["FILL_JOB"] == "nw-chunk.sh"
-    assert (fill / "running" / ".nw-chunk.sh.cpus").read_text() == "124-131\n"
+    assert kw["env"]["OMP_NUM_THREADS"] == "8"                        # one compute thread per core, as on node 1
+    assert (fill / "running" / ".nw-chunk.sh.cpus").read_text() == "124-139\n"
     assert (fill / "running" / ".nw-chunk.sh.unit").read_text() == f"{unit}\n"
-    assert any(a == ("start", "nw-chunk.sh") and k["timing_cpus"] == "124-131" for a, k in (c for c in calls if isinstance(c, tuple)))
+    assert any(a == ("start", "nw-chunk.sh") and k["timing_cpus"] == "124-139" for a, k in (c for c in calls if isinstance(c, tuple)))
     fr.stop("nw-chunk.sh", "max_min")
     assert ["sudo", "-n", "systemctl", "kill", "--signal=SIGTERM", f"{unit}.scope"] in calls
     assert not any(c[:2] == ["systemctl", "--user"] for c in calls if isinstance(c, list))
@@ -258,8 +261,8 @@ def test_start_runs_a_timing_job_unpreemptible_at_nice_0_in_a_top_level_scope_an
     monkeypatch.setattr(fr2, "event", lambda *a, **kw: None)
     fr2.adopt()
     j = fr2.running["nw-chunk.sh"]
-    assert (j["unit"], j["h"]["timing_cpus"]) == (unit, "124-131")
-    assert fr2.timing_free([]) == set(range(132, 192))
+    assert (j["unit"], j["h"]["timing_cpus"]) == (unit, "124-139")
+    assert fr2.timing_free([]) == set(range(140, 192))
     (fill / "running" / ".nw-chunk.sh.cpus").unlink()
     fr3 = load()
     monkeypatch.setattr(fr3, "event", lambda *a, **kw: None)
@@ -299,13 +302,13 @@ def test_a_fence_takes_no_core_a_running_timing_job_holds(node2, monkeypatch, tm
     monkeypatch.setenv("FILL_QUOTA_LOG", str(tmp_path / "quota-changes.log"))
     fr = load()
     monkeypatch.setattr(fr, "gpu_count", lambda: 8)
-    (fill / "running" / ".nw-chunk.sh.cpus").write_text("124-131\n")
+    (fill / "running" / ".nw-chunk.sh.cpus").write_text("124-139\n")
     t = fr.utc("2026-10-03T20:00Z")
     args = ["ma", "--gpu", "6", "--until", "2026-10-03T21:00Z", "--why", "honest latency"]
-    assert fr.fence([*args, "--cpus", "130,131"], t=t) == 2
-    assert "timing job nw-chunk.sh has cores 124-131" in capsys.readouterr().err
-    assert fr.fence([*args, "--cpus", "132,133"], t=t) == 0
-    assert fr.fences(t)[0]["cpus"] == "132-133"
+    assert fr.fence([*args, "--cpus", "138,139"], t=t) == 2
+    assert "timing job nw-chunk.sh has cores 124-139" in capsys.readouterr().err
+    assert fr.fence([*args, "--cpus", "140,141"], t=t) == 0
+    assert fr.fences(t)[0]["cpus"] == "140-141"
 
 
 def test_node_ops_quiet_never_pauses_a_timing_job_for_a_timed_window(tmp_path, monkeypatch):
