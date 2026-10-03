@@ -52,7 +52,9 @@ status instead, which is 32 bytes per link-window, or about 46 KB per link per d
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 
 The Program fixes each real frame's content, its **anchor** and its **logical index** λ. The anchor is the recorded
-bucket of the request it answers. λ is its position within its session, from the canonical gate order.
+bucket of the request it answers. λ is its position within its session, from the canonical gate order, so it is never
+negative: `LogicalFrame` rejects a negative index, as Lean's ℕ does. With one, a frame anchored in window 1 could be
+eligible in window 0, and window 0's grid would read window 1's sync.
 
 A window declares one clock-sync value `ClockSync(δ, ρ)`, from the protocol's set `SyncSet`: for example 16 offsets ×
 8 rates, which is 7 bits. δ is a whole number of buckets. ρ is a positive fraction of frames per bucket, below 1 for a
@@ -216,7 +218,8 @@ statements on examples and prove nothing. By name, they mirror 19 of the Lean pa
     tests above, for the shipped schedule;
   - `SecurityProofs.EncardAccSeqsLeConstantRateWindows`: runs accepted on their first m windows show at most
     `#Σ_sync^m` grid prefixes;
-  - `SecurityProofs.ExpectedRowCausal`: a window's grid is unchanged when later windows' syncs are drawn again;
+  - `SecurityProofs.ExpectedRowCausal`: a window's grid is unchanged when later windows' syncs are drawn again, and a
+    negative logical index, which would break it, is rejected;
 - **`test_network_warden_audit.py`:** record-and-reject and each violation, which no Lean statement names; one clock
   per spatial unit, the advice `SecurityProofs.EncardAccSeqsLeSync` counts; and the ingress links' status check, Lean's
   `StatusComplete`;

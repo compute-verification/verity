@@ -13,6 +13,7 @@ import itertools
 import math
 import random
 from fractions import Fraction
+from types import SimpleNamespace
 
 import pytest
 
@@ -126,6 +127,19 @@ def test_window_grid_reads_only_earlier_syncs():
         for w in range(windows):
             later = [ClockSync(rng.randrange(4), rng.choice(rhos)) for _ in range(windows - w - 1)]
             assert expected_grids(frames, syncs[: w + 1] + later, params)[w] == grids[w]
+
+
+def test_a_negative_logical_index_is_rejected():
+    """Lean's index is a ℕ, and SecurityProofs.ExpectedRowCausal needs it. A frame anchored in window 1 with λ = −2 is
+    eligible at T + δ − 2 at ρ = 1, so window 0's grid would read window 1's sync: here it holds the frame under δ = 0
+    and not under δ = 2. `LogicalFrame` rejects that index."""
+    with pytest.raises(ValueError, match="logical index is non-negative"):
+        LogicalFrame(b"x", P.buckets, -2)
+    unchecked = SimpleNamespace(payload=b"x", anchor=P.buckets, index=-2)
+    window0 = {tuple(expected_grids([unchecked], [ClockSync(0, 1), later], P)[0])
+               for later in (ClockSync(0, 1), ClockSync(2, 1))}
+    assert len(window0) == 2
+    assert LogicalFrame(b"x", P.buckets, 0).index == 0
 
 
 def test_fixed_clock_zero_capacity():
