@@ -1,6 +1,8 @@
 """The FP8 served table at a scheme's cap: per model, its served pass's per-input measurement (`served_debit.py --per-input`'s
 ``inputs.json``), the verdicts of its reference verify (`verify_run.py`'s ``verify.json``) where one was run, and the ε that
-`HonestTileCapRate`'s served citation takes: the largest of the m inputs' simultaneous 95% upper limits.
+`HonestTileCapRate`'s served citation takes: the largest of the model's inputs' upper limits, each recomputed at
+δ = 0.05/m with m every input the table measures (all its models, and a model's fresh trials beside its pass-salt
+measurement), so the limits are 95% simultaneous over the whole table.
 
   python benchmarks/pouw/pearl_c_vllm/served_table.py --model qwen3-8b INPUTS_JSON [VERIFY_JSON ...] \\
       --model llama-3.1-8b INPUTS_JSON [--fresh qwen3-8b FRESH_INPUTS_JSON] --out DIR
@@ -16,23 +18,36 @@ import json
 import sys
 from pathlib import Path
 
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
 
-def model_row(name: str, inputs: dict, verifies: list[dict], fresh: dict | None) -> dict:
+import served_debit as SD  # noqa: E402
+
+
+def _cite(rows: list[dict], m: int) -> tuple[list[tuple[float, str]], int]:
+    """Each row's upper limit at δ = 0.05/m (`served_debit.input_bound`) and the position of the largest."""
+    bounds = [SD.input_bound(r, 0.05 / m) for r in rows]
+    return bounds, max(range(len(rows)), key=lambda i: bounds[i][0])
+
+
+def model_row(name: str, inputs: dict, verifies: list[dict], fresh: dict | None, m: int) -> dict:
+    """A model's row, every input bounded at δ = 0.05/m with m the table's measured inputs over all its models."""
     rows = inputs["inputs"]
     runs = sorted({r["run"] for r in rows})
     if len(runs) != 1:
         raise ValueError(f"{name}: inputs from {runs}; a model's ε is over one served pass's inputs")
     if any(r["openings_failed"] for r in rows):
         raise ValueError(f"{name}: an input's openings failed; the measurement is not of the committed pass")
+    bounds, worst = _cite(rows, m)
     out = {"model": name, "run": runs[0], "passes": sorted({r["pass"] for r in rows}),
-           "manifests": sorted({f"{r['pass']}:{r['manifest_sha256']}" for r in rows}), "m": inputs["m"],
-           "delta_per_input": inputs["delta_per_input"], "tile_draws": sum(r["drawn"] for r in rows),
+           "manifests": sorted({f"{r['pass']}:{r['manifest_sha256']}" for r in rows}), "m_model": inputs["m"],
+           "delta_per_input": 0.05 / m, "tile_draws": sum(r["drawn"] for r in rows),
            "failures": sum(r["failures"] for r in rows), "inputs_with_failures": sum(r["failures"] > 0 for r in rows),
            "share_max": max((r["share_max"] for r in rows if r["share_max"] is not None), default=None),
-           "epsilon": inputs["cited_upper"], "epsilon_input": inputs["cited_input"],
-           "epsilon_method": max(rows, key=lambda r: r["upper"])["bound_method"],
-           "inputs": [{k: r[k] for k in ("pass", "matmul", "k", "n", "NT", "method", "drawn", "failures", "share_max", "upper")}
-                      for r in rows]}
+           "epsilon": bounds[worst][0], "epsilon_method": bounds[worst][1],
+           "epsilon_input": {k: rows[worst][k] for k in ("pass", "matmul", "weight", "m", "k", "n") if k in rows[worst]},
+           "inputs": [{k: r[k] for k in ("pass", "matmul", "k", "n", "NT", "method", "drawn", "failures", "share_max")}
+                      | {"upper": u} for r, (u, _) in zip(rows, bounds)]}
     for v in verifies:
         label = Path(v["manifest"]).parent.name
         want = not label.startswith("control")
@@ -46,9 +61,10 @@ def model_row(name: str, inputs: dict, verifies: list[dict], fresh: dict | None)
     if fresh is not None:
         if {r["run"] for r in fresh["inputs"]} != {runs[0]} or any(r["openings_failed"] for r in fresh["inputs"]):
             raise ValueError(f"{name}: the fresh trials are not of {runs[0]}'s committed pass")
-        out["fresh"] = {"draws": fresh["fresh_draws"], "source": fresh["fresh_source"], "m": fresh["m"],
+        fb, fw = _cite(fresh["inputs"], m)
+        out["fresh"] = {"draws": fresh["fresh_draws"], "source": fresh["fresh_source"], "m_model": fresh["m"],
                         "trials": sum(r["drawn"] for r in fresh["inputs"]), "failures": sum(r["failures"] for r in fresh["inputs"]),
-                        "epsilon": fresh["cited_upper"], "epsilon_input": fresh["cited_input"]}
+                        "epsilon": fb[fw][0], "epsilon_input": {k: fresh["inputs"][fw][k] for k in ("pass", "matmul")}}
     return out
 
 
@@ -62,10 +78,11 @@ def markdown(table: dict) -> str:
             continue
         fresh = f"{r['fresh']['epsilon']:.4f} ({r['fresh']['trials']} trials, {r['fresh']['failures']} failed)" if "fresh" in r else "—"
         verify = ", ".join(f"{v['pass']} {'ACCEPT' if v['accepted'] else 'REJECT'}" for v in r["verify"]) or "—"
-        lines.append(f"| {r['model']} | `{r['run']}` | {r['m']} | {r['tile_draws']} | {r['failures']} | "
+        lines.append(f"| {r['model']} | `{r['run']}` | {r['m_model']} | {r['tile_draws']} | {r['failures']} | "
                      f"{r['share_max']:.3g} | {r['epsilon']:.4f} | {r['epsilon_method']} | {fresh} | {verify} |")
-    lines += ["", "ε is the largest of the m inputs' upper limits on the input's honest tile-rejection rate at the cap, each at "
-              "δ = 0.05/m (served_debit.input_bound); an input is one matmul of the pass."]
+    lines += ["", f"ε is the largest of a model's inputs' upper limits on the input's honest tile-rejection rate at the cap, "
+              f"each at δ = 0.05/m with m = {table['m']}, every input the table measures over all its models and "
+              f"measurements (served_debit.input_bound); an input is one matmul of the pass."]
     return "\n".join(lines) + "\n"
 
 
@@ -80,15 +97,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", type=Path, required=True)
     a = p.parse_args(argv)
     fresh = {name: json.loads(Path(path).read_text()) for name, path in a.fresh}
-    models = []
-    for spec in a.model:
-        if len(spec) < 2:
-            p.error("--model NAME INPUTS_JSON [VERIFY_JSON ...]")
-        name, inputs, *verifies = spec
-        models.append(model_row(name, json.loads(Path(inputs).read_text()), [json.loads(Path(v).read_text()) for v in verifies],
-                                fresh.get(name)))
+    if any(len(spec) < 2 for spec in a.model):
+        p.error("--model NAME INPUTS_JSON [VERIFY_JSON ...]")
+    specs = [(name, json.loads(Path(inputs).read_text()), verifies) for name, inputs, *verifies in a.model]
+    m = sum(doc["m"] for _, doc, _ in specs) + sum(doc["m"] for doc in fresh.values())
+    models = [model_row(name, doc, [json.loads(Path(v).read_text()) for v in verifies], fresh.get(name), m)
+              for name, doc, verifies in specs]
     models += [{"model": name, "absent": reason} for name, reason in a.absent]
-    table = {"tool": "pouw_pearl_c_served_table", "cap": a.cap, "models": models}
+    table = {"tool": "pouw_pearl_c_served_table", "cap": a.cap, "m": m, "delta_per_input": 0.05 / m, "models": models}
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "table.json").write_text(json.dumps(table, indent=1) + "\n")
     (a.out / "table.md").write_text(markdown(table))

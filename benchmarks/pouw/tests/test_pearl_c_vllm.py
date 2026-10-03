@@ -593,19 +593,19 @@ ST = load("pearl_c_vllm_served_table", KERNEL.parent / "pearl_c_vllm" / "served_
 
 
 def test_the_served_table_cites_each_models_worst_input_and_refuses_what_it_cannot_cite(tmp_path):
-    row = lambda run, i, upper, fails=0: {"pass": "decode", "run": run, "manifest_sha256": "ab", "matmul": i, "k": 4096, "n": 4096,
-                                          "NT": 64, "method": "census", "drawn": 64, "openings_failed": 0, "failures": fails,
-                                          "share_max": 5e-5, "upper": upper, "bound_method": "census, rule of three (work-weighted)"}
-    doc = lambda run, uppers: {"m": len(uppers), "delta_per_input": 0.05 / len(uppers), "cited_upper": max(uppers),
-                               "cited_input": {"matmul": uppers.index(max(uppers))}, "inputs": [row(run, i, u) for i, u in enumerate(uppers)]}
+    """Every input is re-bounded at δ = 0.05/m, m every input the table measures: both models' and a model's fresh trials."""
+    row = lambda run, i, nt, fails=0: {"pass": "decode", "run": run, "manifest_sha256": "ab", "matmul": i, "k": 4096, "n": 4096,
+                                       "NT": nt, "W": nt * 4096, "w_max": 4096, "method": "census", "drawn": nt,
+                                       "openings_failed": 0, "failures": fails, "share_max": 5e-5}
+    doc = lambda run, nts: {"m": len(nts), "inputs": [row(run, i, nt) for i, nt in enumerate(nts)]}
     verify = lambda run, label, ok: {"manifest": f"/p/{run}/{label}/manifest.json", "accepted": ok, "transcript": f"{run}:/p sha256:00",
                                      "transcript_sha256": "00", "tiles": [1, 2], "line": f"{'ACCEPT' if ok else 'REJECT'} x", "replay": "batch",
                                      "cross_checked": [1]}
+    trial = lambda i, fails: row("rq", i, 1) | {"method": "fresh", "drawn": 320, "failures": fails}
     files = {}
-    for name, obj in {"q": doc("rq", [0.05, 0.09]), "l": doc("rl", [0.08]), "v1": verify("rq", "decode", True),
+    for name, obj in {"q": doc("rq", [64, 32]), "l": doc("rl", [48]), "v1": verify("rq", "decode", True),
                       "v2": verify("rq", "control", False), "bad": verify("rq", "control", True),
-                      "fresh": {"fresh_draws": 320, "fresh_source": "cd", "m": 2, "cited_upper": 0.018, "cited_input": {"matmul": 0},
-                                "inputs": [row("rq", 0, 0.018) | {"drawn": 320}, row("rq", 1, 0.017) | {"drawn": 320}]}}.items():
+                      "fresh": {"fresh_draws": 320, "fresh_source": "cd", "m": 2, "inputs": [trial(0, 0), trial(1, 1)]}}.items():
         files[name] = tmp_path / f"{name}.json"
         files[name].write_text(json.dumps(obj))
     out = tmp_path / "out"
@@ -613,17 +613,21 @@ def test_the_served_table_cites_each_models_worst_input_and_refuses_what_it_cann
                     "--fresh", "qwen", str(files["fresh"]), "--out", str(out)]) == 0
     table = json.loads((out / "table.json").read_text())
     q, l = table["models"]
-    assert (q["epsilon"], q["m"], q["failures"], l["epsilon"]) == (0.09, 2, 0, 0.08)
-    assert q["fresh"]["epsilon"] == 0.018 and q["fresh"]["trials"] == 640 and "fresh" not in l
+    assert table["m"] == 5 and q["delta_per_input"] == 0.01 and (q["m_model"], q["failures"]) == (2, 0)
+    assert q["epsilon"] == pytest.approx(math.log(100) / 32) and q["epsilon_input"]["matmul"] == 1
+    assert l["epsilon"] == pytest.approx(math.log(100) / 48)
+    assert q["fresh"]["epsilon"] == SD.clopper_pearson_upper(1, 320, 0.01) and q["fresh"]["trials"] == 640 and "fresh" not in l
     assert [v["accepted"] for v in q["verify"]] == [True, False] and "| qwen | `rq` | 2 |" in (out / "table.md").read_text()
-    assert q["tile_draws"] == 128
+    assert q["tile_draws"] == 96 and "m = 5" in (out / "table.md").read_text()
     assert ST.main(["--model", "qwen", str(files["q"]), "--absent", "llama", "its pass is gone", "--out", str(out)]) == 0
-    assert json.loads((out / "table.json").read_text())["models"][1] == {"model": "llama", "absent": "its pass is gone"}
+    table = json.loads((out / "table.json").read_text())
+    assert table["m"] == 2 and table["models"][0]["epsilon"] == pytest.approx(math.log(40) / 32)
+    assert table["models"][1] == {"model": "llama", "absent": "its pass is gone"}
     assert "| llama | — | — | — | — | — | none | its pass is gone |" in (out / "table.md").read_text()
     with pytest.raises(ValueError, match="control"):
         ST.main(["--model", "qwen", str(files["q"]), str(files["bad"]), "--out", str(out)])
     with pytest.raises(ValueError, match="one served pass"):
-        files["q"].write_text(json.dumps(doc("rq", [0.05]) | {"inputs": [row("rq", 0, 0.05), row("rl", 1, 0.05)]}))
+        files["q"].write_text(json.dumps(doc("rq", [64]) | {"inputs": [row("rq", 0, 64), row("rl", 1, 64)]}))
         ST.main(["--model", "qwen", str(files["q"]), "--out", str(out)])
 
 
