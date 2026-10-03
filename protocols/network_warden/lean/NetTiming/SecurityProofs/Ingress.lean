@@ -123,6 +123,60 @@ theorem eq_of_ingressCode {n : ℕ} (c : Fin L → List (List Bool)) {o o' : Lis
 
 /-! ### The bounds -/
 
+/-- **Content plus timing, from the records.** When each message's frames follow some content assignment in `Cs`, a
+decoder inside X that reads the records tells apart at most `#Cs · (∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
+theorem encard_ingress_obsDecodable_le_contents (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
+    (hW4 : Packed I.warden) (hr : Allocated I.warden r) (hJ : JitterBounded I.warden D)
+    (Cs : Set (Fin L → List (List Bool))) (Ms : Set Msg)
+    (hacc : ∀ m ∈ Ms, StatusComplete n (I.obsRun m n))
+    (hc : ∀ m ∈ Ms, ∃ c ∈ Cs, ∀ ℓ, linkFrames (I.obsRun m n) ℓ <+: c ℓ)
+    (dec : List (Obs L K S) → Msg) (hdec : ∀ m ∈ Ms, dec (I.obsRun m n) = m) :
+    Ms.encard ≤ Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞) := by
+  classical
+  have hpk : ∀ m, ∀ x ∈ I.obsRun m n, ∀ ℓ, RowLeftPacked fun s => (x.rows ℓ s).isSome := by
+    intro m x hx ℓ
+    obtain ⟨k, xs, as, rfl⟩ := I.mem_obsRun m n x hx
+    exact hW4 k xs as ℓ
+  let T : Finset ((Fin n → Fin L → ℕ) × (Fin n → ℕ)) :=
+    (Fintype.piFinset fun _ : Fin n => Fintype.piFinset fun ℓ => range (r ℓ + 1)) ×ˢ
+      Fintype.piFinset fun _ : Fin n => range D
+  have hT : ∀ m, (countCode (I.obsRun m n), jitterCode (I.obsRun m n)) ∈ T := by
+    intro m
+    refine mem_product.mpr ⟨?_, jitterCode_mem _ (I.length_obsRun m n) ?_⟩
+    · show countCode (I.obsRun m n) ∈ _
+      rw [Fintype.mem_piFinset]; intro t; rw [Fintype.mem_piFinset]; intro ℓ
+      have ht : (t : ℕ) < (I.obsRun m n).length := by rw [I.length_obsRun]; exact t.2
+      simp only [countCode, List.getElem?_eq_getElem ht, Option.map_some, Option.getD_some, mem_range]
+      obtain ⟨k, xs, as, hx⟩ := I.mem_obsRun m n _ (List.getElem_mem ht)
+      rw [hx]; exact Nat.lt_succ_of_le (hr k xs as ℓ)
+    · intro x hx
+      obtain ⟨k, xs, as, rfl⟩ := I.mem_obsRun m n x hx
+      exact hJ k xs as
+  have hcard : T.card = (∏ ℓ, (r ℓ + 1)) ^ n * D ^ n := by
+    rw [card_product, Fintype.card_piFinset, Fintype.card_piFinset]
+    simp only [Fintype.card_piFinset, card_range, prod_const, card_univ, Fintype.card_fin]
+  let cOf : Msg → Fin L → List (List Bool) := fun m => if h : m ∈ Ms then (hc m h).choose else fun _ => []
+  have hcOf : ∀ m ∈ Ms, cOf m ∈ Cs ∧ ∀ ℓ, linkFrames (I.obsRun m n) ℓ <+: cOf m ℓ := by
+    intro m hm; simp only [cOf, hm, ↓reduceDIte]; exact (hc m hm).choose_spec
+  let code : Msg → (Fin L → List (List Bool)) × (Fin n → Fin L → ℕ) × (Fin n → ℕ) := fun m =>
+    (cOf m, countCode (I.obsRun m n), jitterCode (I.obsRun m n))
+  have hinj : Set.InjOn code Ms := by
+    intro m hm m' hm' h
+    simp only [code, Prod.mk.injEq] at h
+    obtain ⟨hcm, hk, hj⟩ := h
+    have h1 := (hcOf m hm).2
+    rw [hcm] at h1
+    have ho := eq_of_ingressCode (cOf m') (I.length_obsRun m n) (I.length_obsRun m' n) (hpk m) (hpk m')
+      (hacc m hm) (hacc m' hm') h1 (hcOf m' hm').2 hk hj
+    rw [← hdec m hm, ← hdec m' hm', ho]
+  calc Ms.encard = (code '' Ms).encard := hinj.encard_image.symm
+    _ ≤ (Cs ×ˢ (T : Set ((Fin n → Fin L → ℕ) × (Fin n → ℕ)))).encard := by
+        apply Set.encard_le_encard
+        rintro _ ⟨m, hm, rfl⟩
+        exact Set.mk_mem_prod (hcOf m hm).1 (Finset.mem_coe.mpr (hT m))
+    _ = Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞) := by
+        rw [Set.encard_prod, Set.encard_coe_eq_coe_finsetCard, hcard]
+
 /-- **The ingress timing bound, from the records.** On runs whose statuses are complete up to `n` and whose frames on
 each link are a prefix of the prescribed content, a decoder inside X that reads the records tells apart at most
 `(∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
@@ -133,37 +187,9 @@ theorem encard_ingress_obsDecodable_le (I : Interaction L K S Msg In Act Wire) (
     (hc : ∀ m ∈ Ms, ∀ ℓ, linkFrames (I.obsRun m n) ℓ <+: c ℓ)
     (dec : List (Obs L K S) → Msg) (hdec : ∀ m ∈ Ms, dec (I.obsRun m n) = m) :
     Ms.encard ≤ (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞) := by
-  classical
-  have hpk : ∀ m, ∀ x ∈ I.obsRun m n, ∀ ℓ, RowLeftPacked fun s => (x.rows ℓ s).isSome := by
-    intro m x hx ℓ
-    obtain ⟨k, xs, as, rfl⟩ := I.mem_obsRun m n x hx
-    exact hW4 k xs as ℓ
-  let code : Msg → (Fin n → Fin L → ℕ) × (Fin n → ℕ) := fun m =>
-    (countCode (I.obsRun m n), jitterCode (I.obsRun m n))
-  have hinj : Set.InjOn code Ms := by
-    intro m hm m' hm' h
-    simp only [code, Prod.mk.injEq] at h
-    have ho := eq_of_ingressCode c (I.length_obsRun m n) (I.length_obsRun m' n) (hpk m) (hpk m')
-      (hacc m hm) (hacc m' hm') (hc m hm) (hc m' hm') h.1 h.2
-    rw [← hdec m hm, ← hdec m' hm', ho]
-  calc Ms.encard
-      ≤ (((Fintype.piFinset fun _ : Fin n => Fintype.piFinset fun ℓ => range (r ℓ + 1)) ×ˢ
-          Fintype.piFinset fun _ : Fin n => range D).card : ℕ∞) := by
-        apply encard_le_card_of_injOn code hinj
-        intro m _
-        refine mem_product.mpr ⟨?_, jitterCode_mem _ (I.length_obsRun m n) ?_⟩
-        · show countCode (I.obsRun m n) ∈ _
-          rw [Fintype.mem_piFinset]; intro t; rw [Fintype.mem_piFinset]; intro ℓ
-          have ht : (t : ℕ) < (I.obsRun m n).length := by rw [I.length_obsRun]; exact t.2
-          simp only [countCode, List.getElem?_eq_getElem ht, Option.map_some, Option.getD_some, mem_range]
-          obtain ⟨k, xs, as, hx⟩ := I.mem_obsRun m n _ (List.getElem_mem ht)
-          rw [hx]; exact Nat.lt_succ_of_le (hr k xs as ℓ)
-        · intro x hx
-          obtain ⟨k, xs, as, rfl⟩ := I.mem_obsRun m n x hx
-          exact hJ k xs as
-    _ = (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞) := by
-        rw [card_product, Fintype.card_piFinset, Fintype.card_piFinset]
-        simp only [Fintype.card_piFinset, card_range, prod_const, card_univ, Fintype.card_fin]
+  have := encard_ingress_obsDecodable_le_contents I n D r hW4 hr hJ {c} Ms hacc
+    (fun m hm => ⟨c, rfl, hc m hm⟩) dec hdec
+  rwa [Set.encard_singleton, one_mul] at this
 
 /-- **The ingress timing bound.** On runs whose statuses are complete up to `n` and whose frames on each link are a
 prefix of the prescribed content, a decoder inside X that reads the wire tells apart at most
@@ -179,17 +205,6 @@ theorem encard_ingress_decodable_le (I : Interaction L K S Msg In Act Wire) (n D
   encard_ingress_obsDecodable_le I n D r hW4 hr hJ c Ms hacc hc (fun o => dec (o.mapIdx view))
     (fun m hm => by rw [← I.wireRun_eq view hW2]; exact hdec m hm)
 
-/-- **Content plus timing, from the records.** When each message's frames follow some content assignment in `Cs`, a
-decoder inside X that reads the records tells apart at most `#Cs · (∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
-theorem encard_ingress_obsDecodable_le_contents (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
-    (hW4 : Packed I.warden) (hr : Allocated I.warden r) (hJ : JitterBounded I.warden D)
-    (Cs : Set (Fin L → List (List Bool))) (Ms : Set Msg)
-    (hacc : ∀ m ∈ Ms, StatusComplete n (I.obsRun m n))
-    (hc : ∀ m ∈ Ms, ∃ c ∈ Cs, ∀ ℓ, linkFrames (I.obsRun m n) ℓ <+: c ℓ)
-    (dec : List (Obs L K S) → Msg) (hdec : ∀ m ∈ Ms, dec (I.obsRun m n) = m) :
-    Ms.encard ≤ Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞) := by
-  sorry
-
 /-- **Content plus timing.** When each message's frames follow some content assignment in `Cs`, a decoder inside X
 that reads the wire tells apart at most `#Cs · (∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
 theorem encard_ingress_decodable_le_contents (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
@@ -199,7 +214,8 @@ theorem encard_ingress_decodable_le_contents (I : Interaction L K S Msg In Act W
     (hacc : ∀ m ∈ Ms, StatusComplete n (I.obsRun m n))
     (hc : ∀ m ∈ Ms, ∃ c ∈ Cs, ∀ ℓ, linkFrames (I.obsRun m n) ℓ <+: c ℓ)
     (dec : List Wire → Msg) (hdec : ∀ m ∈ Ms, dec (I.wireRun m n) = m) :
-    Ms.encard ≤ Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞) := by
-  sorry
+    Ms.encard ≤ Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞) :=
+  encard_ingress_obsDecodable_le_contents I n D r hW4 hr hJ Cs Ms hacc hc (fun o => dec (o.mapIdx view))
+    (fun m hm => by rw [← I.wireRun_eq view hW2]; exact hdec m hm)
 
 end NetTiming
