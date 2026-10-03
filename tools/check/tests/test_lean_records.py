@@ -7,6 +7,7 @@ import fcntl
 import importlib.util
 import json
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -152,6 +153,44 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
     assert LC.audit_records("p", tmp_path / "deps", tree) == 1
     res = result.check(run, "r1")
     assert res.valid and res.doc["kind"] == LC.FAST_KIND and res.validation_status == "failed", "a failure has the kind too"
+
+
+def test_the_copy_is_taken_from_hard_links_after_the_dependencies_lock_is_released(repo, tmp_path, monkeypatch):
+    """A copy of some 8 GB under `lean-deps/<k>.lock` held check's lean-audit, which moves the dependencies in under that lock,
+    for as long as it took (red team, #966). Under the lock only hard links are made; the copy is taken from them after, and
+    they are gone once it's done, or at the next run in that tree when one died mid-copy."""
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
+    k = LC.LA.deps_key(repo / "a")
+    kept = deps / k / "dep" / "Dep.olean"
+    kept.parent.mkdir(parents=True)
+    kept.write_text("olean")
+    snap = tree / "a" / ".lake" / "packages.snap"
+    (snap / "left-by-a-killed-run").mkdir(parents=True)
+    real, locked = shutil.copy2, []
+
+    def copy2(src, dst, **kw):
+        with open(deps / f"{k}.lock", "w") as f:
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                locked.append(False)
+            except BlockingIOError:
+                locked.append(True)
+        return real(src, dst, **kw)
+
+    monkeypatch.setattr(LC.shutil, "copy2", copy2)
+    assert LC.audit_records("a", deps, tree) == 0
+    copied = tree / "a" / ".lake" / "packages" / "dep" / "Dep.olean"
+    assert locked == [False] and copied.read_text() == "olean" and copied.stat().st_ino != kept.stat().st_ino
+    assert not snap.exists() and kept.stat().st_nlink == 1
+
+    def no_link(*_a, **_kw):
+        raise OSError(18, "Invalid cross-device link")
+
+    monkeypatch.setattr(LC.os, "link", no_link)                 # the dependencies on another filesystem: copied under the lock
+    locked.clear()
+    other = tree.with_name("other")
+    assert LC.audit_records("a", deps, other) == 0
+    assert locked == [True] and (other / "a" / ".lake" / "packages" / "dep" / "Dep.olean").read_text() == "olean"
 
 
 def test_without_the_audits_dependencies_the_tree_fetches_its_own_once(repo, tmp_path, capsys):

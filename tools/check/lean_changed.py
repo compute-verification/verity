@@ -118,7 +118,9 @@ def sync(pkgs: list[str], files: list[str], tree: Path) -> int:
 
 def link(pkg: str, tree: Path, deps: Path, links: dict[str, str], log=print, copy: bool = False) -> bool:
     """``tree/pkg/.lake/packages`` as hard links to the audit's kept dependencies for its manifest and toolchain (``copy``: a
-    copy of them); False when this machine keeps none (another run holds them, or none has passed here yet)."""
+    copy of them, taken after their lock is released from hard links made under it, `packages.snap` beside it, so that the
+    audit waits on the lock only as long as linking takes; where they can't be linked, the copy is taken under the lock);
+    False when this machine keeps none (another run holds them, or none has passed here yet)."""
     if (k := LA.deps_key(tree / pkg)) is None:
         return True
     dst = tree / pkg / ".lake" / "packages"
@@ -126,20 +128,32 @@ def link(pkg: str, tree: Path, deps: Path, links: dict[str, str], log=print, cop
         return True
     unlink(pkg, tree, links)
     verb, how = ("copy", "copied") if copy else ("link", "linked")
-    with LA.WarmDeps(deps)._lock(k):
-        src = deps / k
-        if not src.is_dir():
-            log(f"lean-changed: {pkg}: this machine keeps no dependencies for it ({k[:12]}) to {verb}")
-            return False
-        t0 = time.monotonic()
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            shutil.copytree(src, dst, symlinks=True, copy_function=shutil.copy2 if copy else os.link)
-        except (OSError, shutil.Error) as e:
-            shutil.rmtree(dst, ignore_errors=True)
-            log(f"lean-changed: {pkg}: the dependencies ({k[:12]}) could not be {how} ({e})"
-                + ("" if copy else "; a link needs one filesystem"))
-            return False
+    snap = dst.with_name("packages.snap")
+    shutil.rmtree(snap, ignore_errors=True)
+    try:
+        with LA.WarmDeps(deps)._lock(k):
+            src = deps / k
+            if not src.is_dir():
+                log(f"lean-changed: {pkg}: this machine keeps no dependencies for it ({k[:12]}) to {verb}")
+                return False
+            t0 = time.monotonic()
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                shutil.copytree(src, snap if copy else dst, symlinks=True, copy_function=os.link)
+            except (OSError, shutil.Error):
+                if not copy:
+                    raise
+                shutil.rmtree(snap, ignore_errors=True)
+                shutil.copytree(src, dst, symlinks=True, copy_function=shutil.copy2)
+        if snap.is_dir():
+            shutil.copytree(snap, dst, symlinks=True, copy_function=shutil.copy2)
+    except (OSError, shutil.Error) as e:
+        shutil.rmtree(dst, ignore_errors=True)
+        log(f"lean-changed: {pkg}: the dependencies ({k[:12]}) could not be {how} ({e})"
+            + ("" if copy else "; a link needs one filesystem"))
+        return False
+    finally:
+        shutil.rmtree(snap, ignore_errors=True)
     links[pkg] = k
     log(f"lean-changed: {pkg}: dependencies {how} ({k[:12]}) in {time.monotonic() - t0:.0f} s")
     return True
