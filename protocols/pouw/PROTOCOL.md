@@ -807,6 +807,14 @@ useful    U/(α_A·α_B), glue
     `PouwSqGe`) have Boolean versions, the same functions on bits (`circuit.boolean`, `_v2`, traced from `forms` builders;
     their AND counts are pinned in circuit-check's `pins.json`). C-Flock's lowering maps a primitive id to a piece of its own
     (`ir_lower.PIECES`), which has entries for core's `E4m3ToF32`, `F32ToE2m1Sat` and `BitAnd` but none for these six yet.
+  - So do the four Keccak words the hiding tile's digest calls (`PouwXor32`, `PouwChi32`, `PouwRotl64Lo`, `PouwRotl64Hi`,
+    on (lo, hi) half-lanes in `hashes`): xor is free, χ one AND a bit, and a rotation a barrel rotator (218 ANDs a half)
+    that a constant amount, every one `hashes` builds, folds to wiring, so a Keccak-p[1600, 12] is 19,200 ANDs, all χ's.
+    A lowering that keeps a call's outputs as XOR forms, as `ir_lower.lower_gates` keeps a piece's, lets χ's XOR terms
+    compound round over round: a 12-round TurboSHAKE128 then has AND operands of 3,518 bits on average (7,970 at most),
+    and lowering one permutation runs out of memory. So `PouwChi32_v2` commits its outputs (`forms.Circuit.commit`, a
+    row each and no gate), and a Keccak-p[1600, 12] lowered through the four is 38,400 rows, no AND operand over 12 bits.
+    C-Flock has no piece for these four either.
   - The draw is `plan.tile_layout` (beside `ncp-v2`'s `plan.layout`, which is unchanged): one stratum per template,
     each tile at the W_ref it is given, and a drawn tile proved with its closure, its TM `Pc4RowA` units, and with its
     TN `Pc4RowB` units in the weight's Program, each once per plan (`Plan.proved_b`). It opens nothing.
