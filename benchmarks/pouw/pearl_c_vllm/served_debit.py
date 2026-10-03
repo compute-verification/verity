@@ -20,7 +20,14 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
 **Per input** (``--per-input N`` instead of ``--tiles``), the form a completeness citation needs (lean's ruling on #923):
 N seeded inputs of each (k, n), an input being one matmul of the pass, each measured in full up to ``--census-max`` tiles
 and otherwise by ``--draws`` work-weighted draws, never pooled.  ``<out>/inputs.json`` holds each input's failures, ``W``,
-``w_max`` and its upper limit at 95% simultaneous over the m inputs (`input_bound`), and the cited maximum.
+``w_max`` and its upper limit at 95% simultaneous over the m inputs (`input_bound`), and the cited maximum.  With
+``--fresh-draws N`` the same inputs are measured instead by N trials each: a work-weighted tile under a salt of its own,
+derived from ``--fresh-source`` after the pass, so that the trials are independent draws of the input's rate itself
+(`HonestTileCapRate`'s oracle, salt and draw, the activations fixed) and Clopper–Pearson bounds it, near ln(1/δ)/N at no
+failure whatever the input's tile count (lines in ``<label>.fresh-tiles.jsonl``).
+
+A tile is replayed on `fast_tile`'s batch forms (``--scalar``: the scalar reference only), every ``--cross-check``-th tile
+id on both, and ``--resume`` reuses an earlier run's lines on the same pass.
 
 Writes ``<out>/<label>.tiles.jsonl`` (a line a tile, as each finishes; the label is the manifest's directory) and
 ``<out>/summary.json``.  Its gate is that every sampled tile's openings and checked values hold (`Verifier.check_tile`):
@@ -66,13 +73,17 @@ import fast_tile as FT  # noqa: E402
 import run_result  # noqa: E402
 import verify_run as VR  # noqa: E402
 from verity.commitments import Commitment  # noqa: E402
-from verity_pouw.audit import Epoch, Transcript, Verifier, Workload  # noqa: E402
+from verity.commitments import verify_opening  # noqa: E402
+from verity.randomness import derive  # noqa: E402
+from verity_pouw.audit import (ROW_SCHEMA, Epoch, Transcript, Verifier, Workload, activation_binding, commitment_hash,  # noqa: E402
+                               rows_domain, weight_binding)
 from verity_pouw.protocol import Context, Matmul, Shape  # noqa: E402
 from verity_pouw.schemes import pearl_c_work as PW  # noqa: E402
 from verity_vllm.protocol_options import pouw_pearl_c_device as PD  # noqa: E402
 
 CAPS = {"1/400": Fraction(1, 400), "1/600": Fraction(1, 600), "1/1000": Fraction(1, 1000)}
 SEED = 20261002
+FRESH = "verity/pouw/served-fresh-draws/v1"
 
 
 class _Kept(PW._TileRuleView):
@@ -175,16 +186,17 @@ def sample(job: dict, per_stratum: int, seed: int) -> tuple[dict, list[int]]:
 _JOB: dict = {}
 
 
-def one(tid: int) -> dict:
-    """One tile's line, on the batch forms when they are installed; every `cross_check`-th tile (by id) is replayed again on
-    the scalar reference, and any field that differs is recorded (``cross_check_failed``), which fails the run."""
-    out = _measure(tid)
+def one(item) -> dict:
+    """One tile's line (`item` a tile id, or a fresh trial's (tile id, matmul, draw, salt)), on the batch forms when they are
+    installed; every `cross_check`-th tile id (a fresh trial: draw) is replayed again on the scalar reference, and any field
+    that differs is recorded (``cross_check_failed``), which fails the run."""
+    out = _measure(item)
     every = _JOB.get("cross_check", 0)
-    if _JOB.get("undo") is not None and every and tid % every == 0:
+    if _JOB.get("undo") is not None and every and (item if isinstance(item, int) else item[2]) % every == 0:
         _JOB["undo"]()
         _IMPL["chain_debit"] = _CHAIN_DEBIT
         try:
-            ref = _measure(tid)
+            ref = _measure(item)
         finally:
             _JOB["undo"] = FT.install(_JOB["scheme"], debit=False)
             _IMPL["chain_debit"] = FT.chain_debit
@@ -195,10 +207,29 @@ def one(tid: int) -> dict:
     return out
 
 
-def _measure(tid: int) -> dict:
+def _openings_ok(job: dict, opened) -> bool:
+    """`Verifier.check_tile`'s A and B openings alone: the committed rows, without the tile's digest under the pass's salt."""
+    epoch, ref = job["epoch"], opened.ref
+    u = epoch.workload.matmuls[ref.matmul]
+    h = commitment_hash(job["scheme"])
+    da = rows_domain(activation_binding(epoch.salt, u.index), u.index, u.shape.m, h)
+    db = rows_domain(weight_binding(u.weight), -2, u.shape.n, h)
+    limits = job["verifier"].limits
+    return ([o.position for o in opened.a] == list(ref.tile.rows) and [o.position for o in opened.b] == list(ref.tile.cols)
+            and all(verify_opening(da, Commitment(job["transcript"].activation_roots[ref.matmul], u.shape.m), o, ROW_SCHEMA, limits)
+                    for o in opened.a)
+            and all(verify_opening(db, Commitment(epoch.weight_roots[u.weight], u.shape.n), o, ROW_SCHEMA, limits) for o in opened.b))
+
+
+def _measure(item) -> dict:
+    """A tile id: the tile as the audit checks it under the pass's salt.  A fresh trial (tile id, matmul, draw, salt): the
+    tile's committed rows (their openings held to the roots) under its own salt, as `HonestTileCapRate` draws one: the noise,
+    the encoding and the tile rule (admissibility is the work law's, `_TileRuleView`'s), with no digest (the prover committed
+    to none under this salt)."""
     j = _JOB
     scheme, view, epoch, transcript, verifier, records = (j[x] for x in ("scheme", "view", "epoch", "transcript", "verifier", "records"))
     t0 = time.perf_counter()
+    tid, fresh = (item, None) if isinstance(item, int) else (item[0], item[1:])
     ref = verifier.refs[tid]
     rec, u = records[ref.matmul], epoch.workload.matmuls[ref.matmul]
     s = u.shape
@@ -206,16 +237,28 @@ def _measure(tid: int) -> dict:
            "col0": ref.tile.cols[0], "cols": len(ref.tile.cols), "manifest_sha256": j["sha256"],
            "replay": "scalar" if j.get("undo") is None or _IMPL["chain_debit"] is _CHAIN_DEBIT else "batch"}
     opened = j["prover"].open(epoch, tid)
-    view.kept = None
-    v = verifier.check_tile(transcript, opened)
-    out["openings_ok"] = v.ok
-    if not v.ok:
-        out.update(ok=False, reason=v.reason, seconds=round(time.perf_counter() - t0, 1))
-        return out
-    ctx = Context(epoch.salt, u, transcript.activation_roots[ref.matmul], epoch.weight_roots[u.weight])
     a, b = [o.value for o in opened.a], [o.value for o in opened.b]
-    kept = view.kept
-    ops = kept[4] if kept is not None and kept[:4] == (ctx, tuple(a), tuple(b), ref.tile) else scheme.encode(ctx, scheme.noise(ctx), a, b, ref.tile)
+    if fresh is not None:
+        _, draw, salt = fresh
+        out.update(draw=draw, salt=salt.hex(), openings_ok=_openings_ok(j, opened))
+        if not out["openings_ok"]:
+            out.update(ok=False, reason="openings", seconds=round(time.perf_counter() - t0, 1))
+            return out
+        ctx = Context(salt, u, transcript.activation_roots[ref.matmul], epoch.weight_roots[u.weight])
+        ops = scheme.encode(ctx, scheme.noise(ctx), a, b, ref.tile)
+        if ops is None or not view.admissible(ctx, ops):
+            out.update(ok=False, reason="inadmissible inputs", seconds=round(time.perf_counter() - t0, 1))
+            return out
+    else:
+        view.kept = None
+        v = verifier.check_tile(transcript, opened)
+        out["openings_ok"] = v.ok
+        if not v.ok:
+            out.update(ok=False, reason=v.reason, seconds=round(time.perf_counter() - t0, 1))
+            return out
+        ctx = Context(epoch.salt, u, transcript.activation_roots[ref.matmul], epoch.weight_roots[u.weight])
+        kept = view.kept
+        ops = kept[4] if kept is not None and kept[:4] == (ctx, tuple(a), tuple(b), ref.tile) else scheme.encode(ctx, scheme.noise(ctx), a, b, ref.tile)
     _SEEN.clear()
     _CHAINS.clear()
     reason = PW.check_opened(scheme, rec, ref.tile, a, b, ops)
@@ -292,7 +335,16 @@ def measure(path: Path, per: int, seed: int, jobs: int, out_dir: Path, opts: dic
     return out
 
 
-def resumed(paths: list[str], sha256: str) -> dict[int, dict]:
+def line_key(t: dict):
+    """A line's key: its tile id, or a fresh trial's (matmul, draw)."""
+    return t["tile"] if "draw" not in t else (t["matmul"], t["draw"])
+
+
+def _item_key(item):
+    return item if isinstance(item, int) else (item[1], item[2])
+
+
+def resumed(paths: list[str], sha256: str) -> dict:
     """The tile lines of earlier runs on this pass, by tile id, from ``--resume FILE[=MANIFEST_SHA256]``: a line counts when it
     names this manifest (``manifest_sha256``), or names none and its file was given with this manifest's digest (lines
     written before tile lines named their pass), and its openings were checked.  A line whose cross-check failed is never
@@ -303,26 +355,31 @@ def resumed(paths: list[str], sha256: str) -> dict[int, dict]:
         for line in Path(name).read_text().splitlines():
             t = json.loads(line)
             if t.get("manifest_sha256", given) == sha256 and "openings_ok" in t and "cross_check_failed" not in t:
-                out[t["tile"]] = t | {"manifest_sha256": sha256, "resumed_from": t.get("resumed_from", name)}
+                out[line_key(t)] = t | {"manifest_sha256": sha256, "resumed_from": t.get("resumed_from", name)}
     return out
 
 
-def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) -> dict[int, dict]:
-    """Every picked tile's line, by id: a resumed one as recorded (its geometry held to this pass's enumeration), the others
-    measured over `jobs` forked workers, a matmul's tiles in runs of a few so that a worker's per-weight noise caches hit.
-    Every line is written to `path` as it is known.  Raises if a cross-checked tile's batch and scalar replays differ."""
+def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) -> dict:
+    """Every picked item's line (a tile id, or a fresh trial: `_measure`), by `line_key`: a resumed one as recorded (its
+    geometry held to this pass's enumeration, a fresh trial's salt to its own), the others measured over `jobs` forked
+    workers, a matmul's tiles in runs of a few so that a worker's per-weight noise caches hit.  Every line is written to
+    `path` as it is known.  Raises if a cross-checked tile's batch and scalar replays differ."""
     refs, records = job["verifier"].refs, job["records"]
     prior = resumed(opts.get("resume") or [], job["sha256"])
-    got: dict[int, dict] = {}
-    for tid in picks:
-        t = prior.get(tid)
+    tile_of = lambda item: item if isinstance(item, int) else item[0]
+    got: dict = {}
+    for item in picks:
+        t = prior.get(_item_key(item))
         if t is not None:
-            ref = refs[tid]
-            if (t["matmul"], t["row0"], t["rows"], t["col0"], t["cols"]) != (ref.matmul, ref.tile.rows[0], len(ref.tile.rows),
-                                                                             ref.tile.cols[0], len(ref.tile.cols)):
-                raise ValueError(f"{label}: resumed tile {tid} is not this pass's tile {tid}")
-            got[tid] = t
-    todo = sorted((t for t in picks if t not in got), key=lambda t: (-records[refs[t].matmul].matmul.shape.k, refs[t].matmul, t))
+            ref = refs[tile_of(item)]
+            if not isinstance(item, int) and t["salt"] != item[3].hex():
+                raise ValueError(f"{label}: resumed trial {line_key(t)} has another salt (another --fresh-source)")
+            if (t["tile"], t["matmul"], t["row0"], t["rows"], t["col0"], t["cols"]) != (
+                    ref.id, ref.matmul, ref.tile.rows[0], len(ref.tile.rows), ref.tile.cols[0], len(ref.tile.cols)):
+                raise ValueError(f"{label}: resumed line {line_key(t)} is not this pass's tile {ref.id}")
+            got[_item_key(item)] = t
+    todo = sorted((x for x in picks if _item_key(x) not in got),
+                  key=lambda x: (-records[refs[tile_of(x)].matmul].matmul.shape.k, refs[tile_of(x)].matmul, _item_key(x)))
     print(f"{label}: {len(got)} of {len(picks)} tiles resumed, {len(todo)} to measure "
           f"({'scalar' if opts.get('scalar') else 'batch'} replay, cross-check every {opts.get('cross_check') or 'no'} tile id)", flush=True)
     _JOB.clear()
@@ -342,11 +399,11 @@ def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) 
             if todo:
                 with multiprocessing.get_context("fork").Pool(max(1, min(jobs, len(todo)))) as pool:
                     for n, t in enumerate(pool.imap_unordered(one, todo, chunksize=max(1, min(4, len(todo) // max(1, jobs)))), 1):
-                        got[t["tile"]] = t
+                        got[line_key(t)] = t
                         fh.write(json.dumps(t) + "\n")
                         fh.flush()
                         if "cross_check_failed" in t:
-                            failed.append(t["tile"])
+                            failed.append(line_key(t))
                         if n % 32 == 0 or n == len(todo):
                             print(f"{label}: {n}/{len(todo)} measured, {sum(not x['ok'] for x in got.values())} rejected, "
                                   f"{sum(bool(x.get('cross_checked')) for x in got.values())} cross-checked, "
@@ -390,6 +447,38 @@ def pick_inputs(job: dict, per_linear: int, census_max: int, draws: int, seed: i
     return out
 
 
+def fresh_trials(job: dict, row: dict, draws: int, source: bytes) -> list[tuple[int, int, int, bytes]]:
+    """An input's fresh trials, (tile id, matmul, draw, salt): `draws` work-weighted draws of its tiles with replacement,
+    each under a salt of its own, both derived from `source` (drawn after the pass, so independent of its activations)."""
+    ctx = {"manifest": job["sha256"], "matmul": row["matmul"]}
+    ids = list(row["area"])
+    weights = np.array([row["area"][t] for t in ids], dtype=float)
+    rng = np.random.default_rng(int.from_bytes(derive(source, FRESH, ctx | {"use": "tiles"}).value, "big"))
+    picks = rng.choice(len(ids), size=draws, replace=True, p=weights / weights.sum())
+    return [(ids[int(i)], row["matmul"], d, derive(source, FRESH, ctx | {"use": "salt", "draw": d}).value) for d, i in enumerate(picks)]
+
+
+def clopper_pearson_upper(x: int, n: int, delta: float) -> float:
+    """The exact one-sided upper limit on a Bernoulli rate from x successes in n independent trials: the p at which
+    P[Bin(n, p) <= x] = δ (1 - δ^(1/n) at x = 0)."""
+    if x >= n:
+        return 1.0
+    if x == 0:
+        return -math.expm1(math.log(delta) / n)
+
+    def cdf(p: float) -> float:
+        logs = [math.lgamma(n + 1) - math.lgamma(i + 1) - math.lgamma(n - i + 1) + i * math.log(p) + (n - i) * math.log1p(-p)
+                for i in range(x + 1)]
+        top = max(logs)
+        return math.exp(top) * sum(math.exp(v - top) for v in logs)
+
+    lo, hi = x / n, 1.0
+    for _ in range(100):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if cdf(mid) > delta else (lo, mid)
+    return hi
+
+
 def _bernstein_upper(x: float, w_max: float, total: float, delta: float) -> float:
     """An upper limit on the mean work-weighted rate μ/W of independent tiles from their observed weighted failures x:
     Bernstein's lower tail, P[X <= μ - t] <= exp(-t² / (2·w_max·μ + 2·w_max·t/3)), solved for the largest μ it allows."""
@@ -410,7 +499,11 @@ def input_bound(row: dict, delta: float) -> tuple[float, str]:
     - n work-weighted draws with no failure: ln(1/δ)·a / (1 - exp(-n·a)) (E[(1 - X)^n] <= E[exp(-nX)] <= exp(-p(1 - exp(-n·a))/a));
       Clopper–Pearson on the draws would bound the realized X, not p;
     - a census with failures: Bernstein on the weighted sum;
-    - draws with failures: no bound here (1): such an input must be measured in full."""
+    - draws with failures: no bound here (1): such an input must be measured in full;
+    - fresh trials (``--fresh-draws``: each a work-weighted draw under a salt of its own, so independent Bernoulli trials of
+      p itself): Clopper–Pearson, with or without failures."""
+    if row["method"] == "fresh":
+        return clopper_pearson_upper(row["failures"], row["drawn"], delta), "fresh-salt draws, Clopper–Pearson"
     a = row["w_max"] / row["W"]
     if row["failures"] == 0:
         if row["method"] == "census":
@@ -429,24 +522,32 @@ def measure_inputs(path: Path, per_linear: int, census_max: int, draws: int, see
     label = label or path.parent.name
     job = load(path)
     inputs = pick_inputs(job, per_linear, census_max, draws, seed)
-    picks = sorted({t for row in inputs for t in row["drawn"]})
-    print(f"{label}: {job['man'].get('run')} {job['scheme'].name}: {len(inputs)} inputs, {len(picks)} tiles", flush=True)
-    got = _run_tiles(label, job, picks, jobs, out_dir / f"{label}.input-tiles.jsonl", opts)
+    fresh = opts.get("fresh_draws")
+    if fresh:
+        for row in inputs:
+            row["method"], row["drawn"] = "fresh", fresh_trials(job, row, fresh, opts["fresh_source"])
+        picks = [x for row in inputs for x in row["drawn"]]
+    else:
+        picks = sorted({t for row in inputs for t in row["drawn"]})
+    print(f"{label}: {job['man'].get('run')} {job['scheme'].name}: {len(inputs)} inputs, {len(picks)} "
+          f"{'fresh trials' if fresh else 'tiles'}", flush=True)
+    got = _run_tiles(label, job, picks, jobs, out_dir / f"{label}.{'fresh' if fresh else 'input'}-tiles.jsonl", opts)
     rows = []
     for row in inputs:
-        seen = [got[t] for t in row["drawn"]]
+        seen = [got[_item_key(x)] for x in row["drawn"]]
         fail = [t for t in seen if t["openings_ok"] and not t["ok"]]
         rows.append({k: v for k, v in row.items() if k not in ("area", "drawn")} | {
             "pass": label, "run": job["man"].get("run"), "manifest_sha256": job["sha256"], "drawn": len(row["drawn"]),
             "openings_failed": sum(not t["openings_ok"] for t in seen), "failures": len(fail),
-            "failures_weighted": sum(row["area"][t["tile"]] for t in {t["tile"]: t for t in fail}.values()),
+            "failures_weighted": sum(row["area"][t["tile"]] for t in (fail if fresh else {t["tile"]: t for t in fail}.values())),
             "share_max": max((t["share"] for t in seen if "share" in t), default=None),
             "reasons": sorted({t["reason"] for t in fail if t.get("reason")})})
     return rows
 
 
-def write_inputs(rows: list[dict], seed: int, census_max: int, draws: int, out_dir: Path) -> int:
-    """Each input's bound at δ = 0.05/m, the cited maximum and the run's result, into ``<out>/inputs.json``."""
+def write_inputs(rows: list[dict], seed: int, census_max: int, draws: int, out_dir: Path, fresh: dict | None = None) -> int:
+    """Each input's bound at δ = 0.05/m, the cited maximum and the run's result, into ``<out>/inputs.json``; `fresh`
+    (``fresh_draws``, ``fresh_source``) when its inputs were measured by fresh trials."""
     delta = 0.05 / len(rows)
     for r in rows:
         r["upper"], r["bound_method"] = input_bound(r, delta)
@@ -456,6 +557,10 @@ def write_inputs(rows: list[dict], seed: int, census_max: int, draws: int, out_d
            "cited_upper": worst["upper"], "cited_input": {k: worst[k] for k in ("pass", "matmul", "weight", "m", "k", "n")},
            "independence": "every bound assumes an input's tiles fail independently (each tile's noise is the oracle at "
                            "points of its own)", "inputs": rows}
+    if fresh:
+        doc |= fresh | {"independence": "each trial is a work-weighted draw of the input's tiles under a salt of its own, both "
+                                        "derived from fresh_source after the pass (verity.randomness.derive, " + FRESH + "): "
+                                        "independent Bernoulli trials of the input's rate, the activations fixed"}
     path = out_dir / "inputs.json"
     path.write_text(json.dumps(doc, indent=1) + "\n")
     ok = all(r["openings_failed"] == 0 for r in rows)
@@ -492,6 +597,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cross-check", type=int, default=64, metavar="N",
                    help="replay every tile whose id is a multiple of N on the scalar reference too, and fail on any difference "
                         "(0: none)")
+    p.add_argument("--fresh-draws", type=int, default=0, metavar="N",
+                   help="per-input mode: measure each input by N work-weighted draws, each under a fresh salt of its own "
+                        "(independent trials of its rate, bounded by Clopper–Pearson) instead of its census or draws")
+    p.add_argument("--fresh-source", default=None, metavar="HEX",
+                   help="the 32-byte source the fresh draws and salts derive from (default: os.urandom; give it to resume)")
     p.add_argument("--jobs", type=int, default=len(os.sched_getaffinity(0)))
     p.add_argument("--out", type=Path, default=None)
     a = p.parse_args(argv)
@@ -499,7 +609,8 @@ def main(argv: list[str] | None = None) -> int:
         doc = json.loads(a.rebound.read_text())
         out_dir = a.out or a.rebound.parent
         out_dir.mkdir(parents=True, exist_ok=True)
-        return write_inputs(doc["inputs"], doc["seed"], doc["census_max"], doc["draws"], out_dir)
+        return write_inputs(doc["inputs"], doc["seed"], doc["census_max"], doc["draws"], out_dir,
+                            {k: doc[k] for k in ("fresh_draws", "fresh_source") if k in doc} or None)
     if not a.manifests:
         p.error("give one or more manifests")
     if (a.tiles is None) == (a.per_input is None):
@@ -509,6 +620,16 @@ def main(argv: list[str] | None = None) -> int:
     out_dir = a.out or Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "out"
     out_dir.mkdir(parents=True, exist_ok=True)
     opts = {"resume": a.resume, "scalar": a.scalar, "cross_check": a.cross_check}
+    fresh = None
+    if a.fresh_draws:
+        if a.per_input is None:
+            p.error("--fresh-draws takes --per-input")
+        source = bytes.fromhex(a.fresh_source) if a.fresh_source else os.urandom(32)
+        if len(source) != 32:
+            p.error("--fresh-source is 32 bytes")
+        fresh = {"fresh_draws": a.fresh_draws, "fresh_source": source.hex()}
+        opts |= {"fresh_draws": a.fresh_draws, "fresh_source": source}
+        print(f"fresh draws: {a.fresh_draws} an input from source {source.hex()} (give --fresh-source to resume)", flush=True)
     labels = labels_of(a.manifests)
     if a.per_input is not None:
         PW._debit_cap, PW.D.chain_debit = _recorded, _chain_recorded
@@ -517,7 +638,7 @@ def main(argv: list[str] | None = None) -> int:
                     for r in measure_inputs(path, a.per_input, a.census_max, a.draws, a.seed, a.jobs, out_dir, opts, label)]
         finally:
             PW._debit_cap, PW.D.chain_debit = _DEBIT_CAP, _CHAIN_DEBIT
-        return write_inputs(rows, a.seed, a.census_max, a.draws, out_dir)
+        return write_inputs(rows, a.seed, a.census_max, a.draws, out_dir, fresh)
     PW._debit_cap, PW.D.chain_debit = _recorded, _chain_recorded
     try:
         passes = [measure(path, per, a.seed, a.jobs, out_dir, opts, label) for path, per, label in zip(a.manifests, a.tiles, labels)]

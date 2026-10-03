@@ -525,6 +525,50 @@ def test_served_debit_per_input_bounds_each_input_on_its_own(honest_pass, tmp_pa
     assert doc["cited_upper"] == max(r["upper"] for r in doc["inputs"])
 
 
+@pytest.mark.slow
+def test_served_debit_fresh_draws_measure_each_input_under_salts_of_its_own(honest_pass, tmp_path):
+    """`--fresh-draws`: the per-input mode's inputs, each by N work-weighted trials under a salt of its own derived from the
+    source, every trial the tile rule on the committed rows under that salt, bounded by Clopper–Pearson; a resume with the
+    same source measures nothing again, and another source's trials are refused."""
+    path, s, epoch, prover, tr, splits, records = honest_pass
+    out, src = tmp_path / "out", "ab" * 32
+    args = [str(path), "--per-input", "1", "--fresh-draws", "4", "--fresh-source", src, "--jobs", "1", "--cross-check", "2"]
+    assert SD.main([*args, "--out", str(out)]) == 0
+    doc = json.loads((out / "inputs.json").read_text())
+    assert doc["fresh_source"] == src and doc["fresh_draws"] == 4 and doc["m"] == 2
+    lines = [json.loads(x) for x in (out / f"{path.parent.name}.fresh-tiles.jsonl").read_text().splitlines()]
+    assert len(lines) == 8 and len({t["salt"] for t in lines}) == 8 and epoch.salt.hex() not in {t["salt"] for t in lines}
+    assert sum(bool(t.get("cross_checked")) for t in lines) == 4 and all(t["openings_ok"] and t["ok"] for t in lines)
+    for row in doc["inputs"]:
+        assert row["method"] == "fresh" and row["drawn"] == 4 and row["failures"] == 0
+        assert row["upper"] == SD.clopper_pearson_upper(0, 4, 0.025) and row["bound_method"].startswith("fresh")
+    t = lines[0]
+    ref = Verifier(PW._TileRuleView(s), epoch).refs[t["tile"]]
+    op = prover.open(epoch, ref.id)
+    a, b = [o.value for o in op.a], [o.value for o in op.b]
+    u = epoch.workload.matmuls[ref.matmul]
+    ctx = Context(bytes.fromhex(t["salt"]), u, tr.activation_roots[ref.matmul], epoch.weight_roots[u.weight])
+    ops = s.encode(ctx, s.noise(ctx), a, b, ref.tile)
+    rows, cols = records[ref.matmul].credited(ref.tile)
+    debit, cap = PW._debit_cap(s, records[ref.matmul], ref.tile, ops, rows, cols)
+    assert t["debit_exact"] == str(debit) and t["ratio"] == float(debit / cap)
+    again = tmp_path / "again"
+    resume = ["--resume", str(out / f"{path.parent.name}.fresh-tiles.jsonl")]
+    assert SD.main([*args, "--out", str(again), *resume]) == 0
+    assert json.loads((again / "inputs.json").read_text())["inputs"] == doc["inputs"]
+    with pytest.raises(ValueError, match="another salt"):
+        SD.main([*args[:6], "cd" * 32, *args[7:], "--out", str(tmp_path / "other"), *resume])
+
+
+def test_clopper_pearson_upper():
+    assert SD.clopper_pearson_upper(0, 320, 0.05 / 16) == pytest.approx(1 - (0.05 / 16) ** (1 / 320))
+    assert SD.clopper_pearson_upper(0, 320, 0.05 / 16) < 0.02 < math.log(20 * 16) / 64
+    up = SD.clopper_pearson_upper(3, 100, 0.05)
+    p_at = lambda p: sum(math.comb(100, i) * p ** i * (1 - p) ** (100 - i) for i in range(4))
+    assert p_at(up) == pytest.approx(0.05, abs=1e-9) and 0.03 < up < 0.1
+    assert SD.clopper_pearson_upper(5, 5, 0.05) == 1.0
+
+
 def test_served_debit_input_bounds():
     """The per-input limits (lean's rulings on #923): the work-weighted rule of three for a census and for n draws at no
     failure, Bernstein no tighter than the observed rate, and no bound for a sampled input with failures."""
