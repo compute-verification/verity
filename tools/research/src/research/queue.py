@@ -226,7 +226,7 @@ class Rules:
                 f"again")
             return {r.role for r in self.grants}
         mb = mbs[0]
-        changed = [p for p in _out(repo, "diff", "--name-only", "--ignore-submodules=none", mb, head).splitlines() if p]
+        changed = [p for p in _git(repo, "diff", "--name-only", "-z", "--ignore-submodules=none", mb, head).stdout.split("\0") if p]
         roles = {r.role for r in self.grants if r.paths and rule_touches(list(r.paths), changed)}
         audits = [p for p in changed if p == "lean-audit.json" or p.endswith("/lean-audit.json")]
         reports = None

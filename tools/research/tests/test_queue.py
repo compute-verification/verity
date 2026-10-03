@@ -769,3 +769,14 @@ def test_a_file_name_that_isnt_utf8_compares_byte_for_byte_and_prints_escaped(wo
     assert carry(world.dev, "origin/main", old, world.change({bad: "x\n"})) == (True, "restack; no lean-audit.json change")
     ok, why = carry(world.dev, "origin/main", old, world.change({bad: "y\n"}))
     assert (ok, why) == (False, "its change against origin/main differs (pkg/caf\\xe9.txt)") and why.encode("utf-8")
+
+
+def test_a_change_under_a_name_git_would_quote_needs_its_grants(world):
+    """Red team of #955: `git diff --name-only` quotes a name with bytes outside ASCII (`"pk\\303\\251/lean-audit.json"`), which
+    matched neither a rule's path nor `lean-audit.json`, so such a pin change or file needed no grant."""
+    audit = {"pins": {"T": "1"}, "reads": {}}
+    _move_main(world, {"pké/lean-audit.json": json.dumps(audit)})
+    rules = Rules.parse(RULES)
+    pin = world.change({"pké/lean-audit.json": json.dumps({**audit, "pins": {"T": "2"}})})
+    assert rules.needs(world.dev, "origin/main", pin) == {"statement-reviewer"}
+    assert rules.needs(world.dev, "origin/main", world.change({"integrations/vllm/café.py": "x\n"})) == {"vllm-coordinator"}
