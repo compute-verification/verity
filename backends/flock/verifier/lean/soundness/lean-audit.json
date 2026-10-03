@@ -16087,7 +16087,9 @@
    "assumptions": [],
    "type_hash": "9248cf3b5707a9b50c73a29b7de057cdfbf34ad1ceb9848559d3bf41954c3369"
   },
-  "FlockSoundness.Discharge.ZkReg.zk_session_soundR": {}
+  "FlockSoundness.Discharge.ZkReg.zk_session_soundR": {},
+  "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound_drawn": {},
+  "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound_real": {}
  },
  "reads": {
   "Flock.CircuitType": {
