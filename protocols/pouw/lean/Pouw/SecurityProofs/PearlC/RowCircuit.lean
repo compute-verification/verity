@@ -23,7 +23,11 @@ are `RowSem`'s formulas on the row's inputs:
 * on `pc4`'s shared runs, `α`, `β`, `a_E` (`pre4_alpha`) and the flag (`pre4_flag`, `flag4`), so RowA's `Ẽ` and RowB's
   `−Ẽ` (`row4A_et`, `row4B_net`) and both flags (`row4A_flag`, `row4B_flag`);
 * `pc8`'s flag: the sum of squares (`pre8_sq`, `sqSum`), `θ` (`pre8_theta`), the dead count (`pre8_dead`,
-  `deadCount`) and the flag (`pre8_flag`, `flag8`), so both rows' flags (`row8A_flag`, `row8B_flag`).
+  `deadCount`) and the flag (`pre8_flag`, `flag8`), so both rows' flags (`row8A_flag`, `row8B_flag`);
+* words read back as values: a step's word is `f32Word` of its value (`f32Word_wordVal`), and the cast of a word that
+  is neither NaN nor a signed zero is `e4m3` of its value (`e4m3_wordVal`), so a code is `e4m3` of its formed word's
+  value where the cast is `e4m3Word`'s (`code8W_e4m3`), and `pc8Form` at step words' values is `form8` at the words
+  (`pc8Form_value`).
 -/
 
 namespace Pouw.PearlC.RowCircuit
@@ -1288,5 +1292,89 @@ theorem row4B_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.
   rw [g, pre4_flag hK hpre, flag4_congr hK fun l hl => hin l (by simp only [rowIn]; omega)]
 
 end Rows4
+
+/-! ## Words read back as values -/
+
+section RoundTrip
+
+theorem wordQ_exp_ne {w : ℕ} {y : ℚ} (h : wordQ w = some y) : (w >>> 23) % 256 ≠ 255 := by
+  intro he
+  simp only [wordQ, fp32Value, he, ite_true] at h
+  split_ifs at h <;> simp [Value.finite?] at h
+
+theorem sign_mul_neg_iff (b : Prop) [Decidable b] {M : ℚ} (hM : 0 < M) :
+    (if b then (-1 : ℚ) else 1) * M < 0 ↔ b := by
+  by_cases hb : b
+  · simp only [hb, ↓reduceIte, iff_true]; linarith
+  · simp only [hb, ↓reduceIte, iff_false, not_lt]; linarith
+
+/-- A finite nonzero word's value is negative exactly when its sign bit is set. -/
+theorem wordQ_neg_iff {w : ℕ} {y : ℚ} (h : wordQ w = some y) (hy : y ≠ 0) : y < 0 ↔ (w >>> 31) % 2 = 1 := by
+  rw [PeelExactProofs.wordQ_fields (wordQ_exp_ne h)] at h
+  obtain rfl := Option.some.inj h
+  have hpos : (0 : ℚ) ≤ (((if (w >>> 23) % 256 = 0 then 0 else 2 ^ 23) + w % 2 ^ 23 : ℕ) : ℚ) *
+      (2 : ℚ) ^ (((max ((w >>> 23) % 256) 1 : ℕ) : ℤ) - 150) :=
+    mul_nonneg (Nat.cast_nonneg _) (zpow_nonneg (by norm_num) _)
+  have hne : (((if (w >>> 23) % 256 = 0 then 0 else 2 ^ 23) + w % 2 ^ 23 : ℕ) : ℚ) *
+      (2 : ℚ) ^ (((max ((w >>> 23) % 256) 1 : ℕ) : ℤ) - 150) ≠ 0 := by
+    intro h0; apply hy; rw [h0, mul_zero]
+  exact sign_mul_neg_iff _ (lt_of_le_of_ne hpos (Ne.symm hne))
+
+/-- **A step's word is `f32Word` of its value**: below `2^32`, finite and not `−0` (`StepWord`). -/
+theorem f32Word_wordVal {w : ℕ} (hw : AccumProofs.StepWord w) : f32Word (wordVal w) = w := by
+  have he := AccumProofs.finite?_exp hw.2.2
+  obtain ⟨y, hy⟩ : ∃ y, wordQ w = some y := ⟨_, PeelExactProofs.wordQ_fields he⟩
+  have hv : wordVal w = y := by simp [wordVal, hy]
+  rw [hv]
+  by_cases hy0 : y = 0
+  · subst hy0
+    rw [AccumProofs.wordQ_zero_word hw hy]
+    simp [f32Word]
+  · exact AccumProofs.f32Word_word hw.1 he hy hy0
+
+theorem e4m3Mag_480 : e4m3Mag 480 = 126 := by
+  unfold e4m3Mag; norm_num
+
+/-- **The cast of a word is `e4m3` of its value** unless the word is a NaN or a zero with its sign bit set. -/
+theorem e4m3_wordVal {w : ℕ} (hnan : (w >>> 23) % 256 = 255 → w % 2 ^ 23 = 0)
+    (hz : wordQ w = some 0 → (w >>> 31) % 2 = 0) : e4m3 (wordVal w) = e4m3Word w := by
+  unfold e4m3Word wordVal
+  rcases hq : wordQ w with _ | y
+  · have he : (w >>> 23) % 256 = 255 := by
+      by_contra he; rw [PeelExactProofs.wordQ_fields he] at hq; simp at hq
+    simp only [hnan he, ↓reduceIte]
+    split_ifs with hs
+    · ext; norm_num [e4m3, e4m3Mag_480]
+    · ext; norm_num [e4m3, e4m3Mag_480]
+  · ext
+    simp only [e4m3]
+    congr 2
+    by_cases hy : y = 0
+    · have := hz (hq ▸ congrArg some hy)
+      simp [hy, this]
+    · have := wordQ_neg_iff hq hy
+      by_cases hs : (w >>> 31) % 2 = 1
+      · simp [hs, this.2 hs]
+      · have : ¬ y < 0 := fun h => hs (this.1 h)
+        simp [hs, this]
+
+/-- **A code is `e4m3` of its formed word's value**, where the cast is `e4m3Word`'s and the formed word is neither a
+NaN nor a zero with its sign bit set. -/
+theorem code8W_e4m3 (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p : Pipeline) (α x : ℕ) (et f : ℕ → ℕ)
+    (hnan : (form8 ops p α x et f >>> 23) % 256 = 255 → form8 ops p α x et f % 2 ^ 23 = 0)
+    (hz : wordQ (form8 ops p α x et f) = some 0 → (form8 ops p α x et f >>> 31) % 2 = 0) :
+    code8W ops p α x et f = (e4m3 (wordVal (form8 ops p α x et f))).val := by
+  rw [e4m3_wordVal hnan hz]
+  simp only [code8W, Prim.eval, List.getD_cons_zero, hcast, Prim.w]
+  exact Nat.mod_eq_of_lt (e4m3Word _).isLt
+
+/-- **`pc8Form` at the values of step words** is the formed word `form8` at those words, read as a value. -/
+theorem pc8Form_value (p : Pipeline) {a x b : ℕ} (ha : AccumProofs.StepWord a) (hx : AccumProofs.StepWord x)
+    (hb : AccumProofs.StepWord b) (e f : Fin Params.pi.r → ℚ) :
+    (pc8Form ops p).value (wordVal a) (wordVal x) (wordVal b) e f =
+      wordVal (form8 ops p a x (fun l => eTilde8 ops b (encCodes e l)) (encCodes f)) := by
+  simp only [pc8Form, f32Word_wordVal ha, f32Word_wordVal hx, f32Word_wordVal hb]
+
+end RoundTrip
 
 end Pouw.PearlC.RowCircuit
