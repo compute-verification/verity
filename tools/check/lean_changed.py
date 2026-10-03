@@ -11,7 +11,7 @@ merges git combines cleanly that Lean doesn't) fails the run in minutes rather t
 node's Lean slots of pool `build` (`lean_slot.py`; refused when SLOTS lists neither `build` nor `any`), never one of the
 `audit` pool's, where hour-long audits hold every slot. Slot `build/I`'s tree is `lean-records/build-I` under the check cache,
 whoever holds that slot's lock owns it, and the slot is held until audit.py exits; with no SLOTS (a laptop) the tree is
-`lean-records/local`. The tree's fetched dependencies are its own copy of the audit's (taken once per manifest and toolchain,
+`lean-records/local`. `--tree` names another only under `lean-records/`. The tree's fetched dependencies are its own copy of the audit's (taken once per manifest and toolchain,
 else fetched cold), never links: where there is no sandbox its build writes as this user, and nothing it writes may reach what
 the audit keeps. A tree keeps one package's copy (about 170k inodes, 8 GB), so auditing another package that fetches
 dependencies there drops it first. `--update` writes the record back into this checkout, but not in a recorded run, whose
@@ -222,8 +222,13 @@ def write_result(run_dir: Path, run_id: str, pkg: str, rc: int, out: Path, updat
 def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool = False, moved: Path | None = None,
                   out: Path | None = None, log=print) -> int:
     """`--records`: `audit.py --build --no-replay --no-runs` on the package ``name`` names, in ``tree`` (default: the tree of the
-    `build` slot it takes); audit.py's exit status, or 2 when ``name`` matches no single package, the node's Lean slots refuse
-    it or another run holds the tree."""
+    `build` slot it takes; any other must be under `RECORDS`); audit.py's exit status, or 2 when ``tree`` is not under
+    `RECORDS`, ``name`` matches no single package, the node's Lean slots refuse it or another run holds the tree."""
+    base = (LA.COMMON.cache_dir() / RECORDS).resolve()
+    if tree is not None and base not in tree.resolve().parents:
+        log(f"lean-records: {tree} is not under {base}: the fast path builds only on its own trees, never on check's "
+            "(lean-changed), whose dependencies are links to the audit's")
+        return 2
     files = LA.COMMON.tracked_files(ROOT)
     if files is None:
         log("lean-records: the tree's files cannot be listed")
@@ -338,7 +343,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--cache", type=Path, default=LA.COMMON.cache_dir() / "lean-audit", help="the audit's kept passes")
     ap.add_argument("--deps", type=Path, default=LA.COMMON.cache_dir() / "lean-deps", help="the audit's kept dependencies")
     ap.add_argument("--tree", type=Path, help="the tree this step keeps built (default: lean-changed, or with --records "
-                    f"{RECORDS}/build-I, the Lean slot's, under the check cache)")
+                    f"{RECORDS}/build-I, the Lean slot's, under the check cache; with --records it must be under {RECORDS}/)")
     ap.add_argument("--records", metavar="PKG",
                     help=f"audit PKG's records without the kernel replay, on a tree kept per Lean slot of pool {FAST_POOL} "
                     f"(a {FAST_KIND} result, which no merge accepts)")

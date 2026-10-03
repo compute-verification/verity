@@ -85,7 +85,7 @@ def _argv(call: dict) -> list[str]:
 
 
 def test_the_audit_runs_without_the_replay_on_the_trees_own_copy_of_the_audits_dependencies(repo, tmp_path, monkeypatch, capsys):
-    tree, deps = tmp_path / "tree", tmp_path / "deps"
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     k = LC.LA.deps_key(repo / "a")
     (deps / k / "dep").mkdir(parents=True)
     (deps / k / "dep" / "Dep.olean").write_text("olean")
@@ -126,11 +126,11 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
     from research import result
     from research.merge import REFUSED_KINDS
 
-    run = tmp_path / "run"
+    run, tree = tmp_path / "run", tmp_path / "cache" / "lean-records" / "tree"
     run.mkdir()
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    assert LC.audit_records("p", tmp_path / "deps", tmp_path / "tree") == 0
+    assert LC.audit_records("p", tmp_path / "deps", tree) == 0
     assert _calls(tmp_path)[0]["argv"][3:5] == ["--out", str(run / "lean-audit")]
     doc = json.loads((run / "lean-audit" / "audit.json").read_text())
     assert doc["kind"] == LC.FAST_KIND == "lean-fast/v1" and [r["kind"] for r in doc["packages"]] == [LC.FAST_KIND]
@@ -139,16 +139,16 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
     assert res.valid and res.doc["kind"] == LC.FAST_KIND and res.validation_status == "passed"
     assert res.doc["artifacts"] == ["lean-audit"] and res.doc["workload_fingerprint"]["replay"] is False
     assert LC.FAST_KIND in REFUSED_KINDS
-    assert CHECK.lean_fast(run).startswith(f"refused: {tmp_path / 'tree' / 'p'}: a lean-fast/v1 result")
+    assert CHECK.lean_fast(run).startswith(f"refused: {tree / 'p'}: a lean-fast/v1 result")
 
     monkeypatch.setenv("AUDIT_RC", "1")
-    assert LC.audit_records("p", tmp_path / "deps", tmp_path / "tree") == 1
+    assert LC.audit_records("p", tmp_path / "deps", tree) == 1
     res = result.check(run, "r1")
     assert res.valid and res.doc["kind"] == LC.FAST_KIND and res.validation_status == "failed", "a failure has the kind too"
 
 
 def test_without_the_audits_dependencies_the_tree_fetches_its_own_once(repo, tmp_path, capsys):
-    tree, deps = tmp_path / "tree", tmp_path / "deps"
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     k = LC.LA.deps_key(repo / "a")
     assert LC.audit_records("a", deps, tree) == 0
     assert json.loads((tree / LC.LINKS).read_text()) == {"a": k}
@@ -163,7 +163,7 @@ def test_without_the_audits_dependencies_the_tree_fetches_its_own_once(repo, tmp
 
 
 def test_a_tree_keeps_one_packages_dependencies(repo, tmp_path):
-    tree, deps = tmp_path / "tree", tmp_path / "deps"
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     ka, kc = LC.LA.deps_key(repo / "a"), LC.LA.deps_key(repo / "c")
     assert ka != kc
     for k in (ka, kc):
@@ -209,7 +209,7 @@ def test_without_lean_slots_its_tree_is_local(repo, tmp_path):
 
 
 def test_it_names_one_package_and_one_run_holds_a_tree(repo, tmp_path, capsys):
-    tree, deps = tmp_path / "tree", tmp_path / "deps"
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     assert LC.audit_records("q", deps, tree) == 2
     assert "lean-records: 'q' matches 0 packages: a, c, p" in capsys.readouterr().out
     assert LC.audit_records("p/", deps, tree) == 0 and _calls(tmp_path)[0]["argv"][-1] == str(tree / "p")
@@ -217,6 +217,27 @@ def test_it_names_one_package_and_one_run_holds_a_tree(repo, tmp_path, capsys):
         fcntl.flock(held, fcntl.LOCK_EX)
         assert LC.audit_records("a", deps, tree) == 2
     assert f"lean-records: another run holds {tree}" in capsys.readouterr().out and _calls(tmp_path) == []
+
+
+def test_it_refuses_a_tree_outside_its_own(repo, tmp_path, capsys):
+    """`--tree` naming check's lean-changed tree, whose links.json says its dependencies are linked: the fast path kept those
+    hard links to check's lean-deps and built on them unsandboxed (red team, #966). Only a tree under lean-records/ is its own."""
+    deps, cache = tmp_path / "deps", tmp_path / "cache"
+    k = LC.LA.deps_key(repo / "a")
+    (deps / k / "dep").mkdir(parents=True)
+    (deps / k / "dep" / "Dep.olean").write_text("olean")
+    checks = cache / "lean-changed"
+    LC.sync(LC.closure("a"), LC.LA.COMMON.tracked_files(), checks)
+    links = {}
+    assert LC.link("a", checks, deps, links, print)
+    (checks / LC.LINKS).write_text(json.dumps(links))
+    (cache / "lean-records").mkdir()
+    (cache / "lean-records" / "elsewhere").symlink_to(checks)
+    for tree in (checks, cache / "lean-records", cache / "lean-records" / "elsewhere", tmp_path / "tree"):
+        assert LC.audit_records("a", deps, tree) == 2
+        assert f"lean-records: {tree} is not under {(cache / 'lean-records').resolve()}" in capsys.readouterr().out
+    assert _calls(tmp_path) == [] and LC.main(["--records", "a", "--tree", str(checks)]) == 2
+    assert LC.audit_records("a", deps, cache / "lean-records" / "mine") == 0
 
 
 def test_it_takes_no_check_slot(repo, tmp_path, monkeypatch):
