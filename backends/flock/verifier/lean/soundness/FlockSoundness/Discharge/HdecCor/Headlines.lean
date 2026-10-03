@@ -92,8 +92,9 @@ theorem flock_headline_exec_dec (ho : c.outNet = c.unitNet) (hT : TagsOk I)
         ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).linkBoundE
           (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (Integrate.planAt ht dj x₀) (Integrate.tabAt ht dj x₀)
           ((rsAt hU ht hc dj x₀ hpub hpt hscope (Reg := Reg)).binding
-            (rsAt_computes hU ht hc dj x₀ hpub hpt hscope)) k Rw M ρ t' := by
-  sorry
+            (rsAt_computes hU ht hc dj x₀ hpub hpt hscope)) k Rw M ρ t' :=
+  flock_headline_exec hU ht hc dj x₀ hpub hpt hscope σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr _ dg
+    _ _ _ _ N (decodesOn_exec ht hc ho dj x₀ _ wr wOP wLIG op_carries lig_carries hT hwr hdraw) τ hCR hKS
 
 end Public
 
@@ -158,8 +159,9 @@ theorem flock_headline_exec_hidden_dec (ho : c.outNet = c.unitNet) (hT : TagsOkH
         ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).linkBoundE
           (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (planAtH dj x₀) (tabAtH dj x₀)
           ((rsAtH ht hc hscope dj x₀ hU hpub hpt (Reg := Reg)).binding
-            (rsAtH_computes ht hc hscope dj x₀ hU hpub hpt)) k Rw M ρ t' := by
-  sorry
+            (rsAtH_computes ht hc hscope dj x₀ hU hpub hpt)) k Rw M ρ t' :=
+  flock_headline_exec_hidden ht hc hscope dj x₀ hU hpub hpt σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr
+    _ dg _ _ _ _ N (decodesOn_execH ht hc ho dj x₀ _ wr hT hwr hdraw) τ hCR hKS
 
 end Hidden
 
@@ -206,8 +208,9 @@ theorem headline_tables_subset_dec
       ((n - K).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
         StrictCR.ksAvgStrict (planJ ht T₀ dj) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         (p.partition outs).linkBoundE (L := Law.execOS (n := n) src (.subset kd) n)
-          (planJ ht T₀ dj) tab (rs.binding hHm) k Rw M ρ t' := by
-  sorry
+          (planJ ht T₀ dj) tab (rs.binding hHm) k Rw M ρ t' :=
+  headline_tables_subset p outs kd hkd Lb src hA3 (planJ ht T₀ dj) tab pp ones hConst zeros hZero lay rs hHm hk hRw hM
+    hρ hr ht' K hK I wr _ dg _ _ _ _ N (decodesOnJ_exec ht T₀ dj _ wr hT hwr hdraw) τ
 
 end Tables
 
