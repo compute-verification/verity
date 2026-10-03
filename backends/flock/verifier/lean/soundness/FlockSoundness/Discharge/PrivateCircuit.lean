@@ -10,6 +10,7 @@ import FlockSoundness.Discharge.PrivateCircuit.InstanceJoint
 import FlockSoundness.Discharge.PrivateCircuit.InstanceBridge
 import FlockSoundness.Discharge.PrivateCircuit.InstanceDrawn
 import FlockSoundness.Discharge.PrivateCircuit.InstanceReal
+import FlockSoundness.Discharge.PrivateCircuit.ForgedMissReal
 
 /-!
 # Protocol 2, the private circuit
