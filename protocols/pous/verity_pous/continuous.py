@@ -116,6 +116,8 @@ class ContinuousVerifier:
         return self.done and not self.exceeded
 
     def challenge(self) -> tuple[int, int]:
+        """Reveal the next challenge, `(j, index)`, by `TimedVerifier.challenge()`: an open challenge past its hard
+        deadline is closed first, and stays closed when the call then raises because it was the last."""
         i = self.timed.challenge()
         return self.timed.pending, i
 

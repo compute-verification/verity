@@ -273,6 +273,23 @@ def test_expire(world):
         v.expire()
 
 
+def test_challenge_past_the_last_hard_deadline_closes_it_then_refuses(world):
+    """`challenge()` with the last challenge open past its hard deadline closes it as rejected, then refuses to reveal
+    past `n`; the close stands.  Within the deadline it changes nothing."""
+    _, vk = world
+    clock = Clock()
+    v = _verifier(vk, 1, clock)
+    v.challenge()
+    clock.now = LATE
+    with pytest.raises(RuntimeError, match="the previous challenge is unanswered"):
+        v.challenge()
+    assert v.pending == 0 and v.answers == ()
+    clock.now = LATE + 1
+    with pytest.raises(RuntimeError, match="all 1 challenges are answered"):
+        v.challenge()
+    assert v.done and v.pending is None and v.answers[0].rejected and v.misses == 1
+
+
 def test_the_hard_deadline_is_capped(world):
     """`Δ_late + RTT` must fit at most `D_late = 12` calls of 241.5 µs (under 3,139,500 ns) and at most the band's `d`,
     and the continuous verifier does not run without one."""

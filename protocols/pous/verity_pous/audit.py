@@ -231,6 +231,10 @@ class TimedVerifier:
         return self.done and AuditResult(tuple(self.answers)).accepted
 
     def challenge(self) -> int:
+        """Reveal the next index and start its clock.  A challenge open within its hard deadline, or with none, is
+        refused.  One open past it is first closed as rejected, as by `expire()`, and that close stands even when the
+        call then raises because it was the last of the `k`.  `continuous.run_continuous` closes such a challenge with
+        `expire()` and calls this only with none open."""
         if self._open is not None and self._expire(self.clock()) is None:
             raise RuntimeError("the previous challenge is unanswered")
         if self.done:
