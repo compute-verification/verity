@@ -4,6 +4,7 @@ never on the device.  The collector installs launch proxies on the module's kern
 the step's S once per sampled row -- it never recomputes S from the batch.  Disagreeing launches bind nothing (-> coverage fails closed)."""
 from __future__ import annotations
 
+import json
 import sys
 import types
 
@@ -123,6 +124,35 @@ def test_a_step_vllm_skipped_top_p_on_binds_the_prescribed_s():
     assert S is None and "no per-row top_p" in why
     S, why, _ = TS.step_splits([], 8, splits_for_v1, lambda: [1.0] * 7, sm)
     assert S is None and "rows" in why
+
+
+def test_every_tp_rank_arms_the_prescribed_s_as_the_single_rank_commit_does(tmp_path):
+    """phi4-14b TP2 B8 top_p 1 on sm_120 (cov-gm358-r2, r20261002-220307-6e56): each rank left its 121 `runner.sampler/splits` unbound.
+    Only the single-rank `taps.attach` armed the prescribed S; a TP rank attaches through `taps.for_ranks` (None with no tap on) and
+    `attach_rank`, which did not.  Every rank arms it now, with or without taps, for a derived-S manifest only."""
+    from types import SimpleNamespace
+
+    np = pytest.importorskip("numpy")
+    from verity_vllm.acquire.sources import taps as T
+    from verity_vllm.commit.committer import topp_splits as TS
+    from verity_vllm.program.registry.topp_split import splits_for_v1
+    rows = [{"family": "sampler_splits", "op_path": "runner.sampler", "request_id": "r0", "step": 0, "rows": 1, "rank": r} for r in (0, 1)]
+    derived = {"populations": {"by_family": {"sampler_splits": 2}}, "identities": rows}
+    (tmp_path / "derived.json").write_text(json.dumps(derived))
+    (tmp_path / "constant.json").write_text(json.dumps({"populations": {"by_family": {"sampled_token_ids": 2}}, "identities": []}))
+    ones, sm = (lambda: np.ones(8, dtype=np.float32)), (lambda: 188)
+    for r in (0, 1):
+        com = SimpleNamespace(prescribe_idle_splits=None, name="rec")
+        assert T.for_ranks(T.TapSources())(com, None, str(tmp_path / "derived.json"), r) == {"prescribe_idle_splits": "SplitsFor_v1"}
+        assert com.prescribe_idle_splits is splits_for_v1
+        assert TS.step_splits([], 8, com.prescribe_idle_splits, ones, sm) == (16, None, "splits_prescribed_steps")
+        # greedy, or B1 whose S is a constant of the Program: nothing armed, nothing bound on an idle step
+        com = SimpleNamespace(prescribe_idle_splits=None, name="rec")
+        assert T.for_ranks(T.TapSources())(com, None, str(tmp_path / "constant.json"), r) == {}
+        assert com.prescribe_idle_splits is None and TS.step_splits([], 8, None, ones, sm) == (None, None, "")
+    assert T.for_ranks(T.TapSources())(SimpleNamespace(name="rec"), None, str(tmp_path / "derived.json"), 0) == {}, "a committer without it"
+    com = SimpleNamespace(prescribe_idle_splits=None, name="rec")
+    assert T.attach(com, derived, (), T.TapSources()) == () and com.prescribe_idle_splits is splits_for_v1
 
 
 def test_the_served_batch_top_p_is_read_from_the_sampling_states():
