@@ -469,7 +469,10 @@ round by round: from the first challenge to the last answer the server has no ou
 challenge arrives is its storage at rest. The worst row is `t = 3`, `k = 243` rounds. After a late answer the prover
 times the next arrival, so the certificate needs the whole window to be too short to re-encode `C` from `W`: under the
 cap it is at most `240·5 + 3·12 = 1,236` sequential `Π₂` calls, and re-encoding a segment takes
-`R(d) = Σ_{v<512} (min(v, d) + 1) ≥ R(5) = 3,057` (6,578 at `d = 12`).
+`R(d) = Σ_{v<512} (min(v, d) + 1) ≥ R(5) = 3,057` (6,578 at `d = 12`). That window counts only the per-round
+deadlines, so it assumes the verifier's gap between receiving an answer and sending the next challenge fits within the
+`RTT` that `D` and `D_late` already count; a graded verifier must send each next challenge within `RTT` of an answer,
+or count the gap into the window.
 
 No graded verifier exists yet: `audit.TimedVerifier` and `protocol.Verifier` accept only when every answer is correct
 and on time, the `t = 0` rule (`DISCREPANCIES.md` B5).
