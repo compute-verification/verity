@@ -8,6 +8,8 @@ import NetTiming.SecurityProofs.Advice
   and fail the status.
 * `witnessProgram` satisfies both dataflow conditions of Theorem 3, in the left-packed count form, and its timing
   advice really changes its rows: the conditions don't force the Program to ignore timing.
+* `ingress_witness` meets every hypothesis of the ingress bound at once (W4's allocation `Allocated` among them), with
+  27 decoded messages, and `ingress_witness_tight` shows the bound is 27: it is met exactly.
 * The toy of the September draft: `(2 + 1)^6 = 729` left-packed occupancies.
 -/
 
@@ -252,6 +254,46 @@ theorem joint_witness_bound :
   · rw [Set.encard_univ, ENat.card_eq_coe_fintype_card, Fintype.card_fun, Fintype.card_fin]; rfl
   · exact encard_decodable_le_blocks (U := fun _ : Fin 1 × Fin 3 => Fin (2 + 1)) (rI 3) (rP 3) 3 2 (fun _ o => o)
       hW2 hJ (fun c => (c.2 : ℕ)) (fun c => c.2) _ h1 h2 Set.univ (fun z _ => hacc z) rDec (fun z _ => hdec z)
+
+/-! ## A joint witness for the ingress bound
+
+Read inward (`NetTiming.Protocol.Ingress`): the outside's message is `z`, and its sender delivers `z k` frames `[true]`
+at step `k`; X's device is `rOp`, reacting to the last count it saw. The warden is the witness warden without jitter,
+so J holds with `D = 1`, and W4's allocation is the full two slots. Every hypothesis of
+`Guarantees.EncardIngressDecodableLe` holds at once, and all `27 = (2 + 1)^3` messages are decoded: the bound is met
+exactly. -/
+
+/-- The witness warden read inward, with no jitter. -/
+def iWarden : Warden 1 1 2 (Fin 3) WAct (Obs 1 1 2) where
+  obs k _ as := { witnessObs k [] as with jitter := 0 }
+  wire k _ as := { witnessObs k [] as with jitter := 0 }
+  fault a := a.fault = true
+
+/-- The outside delivers `z k` frames at step `k`; X's device reacts to the last count. -/
+def iI (n : ℕ) : Interaction 1 1 2 (Fin n → Fin 3) (Fin 3) WAct (Obs 1 1 2) where
+  warden := iWarden
+  op := rOp
+  snd z k _ := ⟨if h : k < n then z ⟨k, h⟩ else 0, 0, false⟩
+
+instance {L K S : ℕ} (k : ℕ) (o : List (Obs L K S)) : Decidable (StatusComplete k o) := by
+  unfold StatusComplete; infer_instance
+
+theorem ingress_witness :
+    Regenerates iWarden (fun _ o => o) ∧ Packed iWarden ∧ Allocated iWarden (fun _ => 2) ∧
+      JitterBounded iWarden 1 ∧ (∀ z, StatusComplete 3 ((iI 3).obsRun z 3)) ∧
+      (∀ z ℓ, linkFrames ((iI 3).obsRun z 3) ℓ <+: List.replicate 6 [true]) ∧
+      (∀ z, rDec ((iI 3).wireRun z 3) = z) := by
+  refine ⟨fun _ _ _ => rfl, fun k _ as ℓ => witnessWarden_assumptions.2.2.1 k [] as ℓ,
+    fun _ _ _ _ => Nat.lt_succ_iff.mp (rowCount _).2, fun _ _ _ => Nat.zero_lt_one, ?_, ?_, ?_⟩
+  · decide +kernel
+  · decide +kernel
+  · decide +kernel
+
+/-- The ingress bound is met exactly by the witness: 27 decoded messages, under a bound of
+`(∏_ℓ (2 + 1))^3 · 1^3 = 27`. -/
+theorem ingress_witness_tight :
+    (Set.univ : Set (Fin 3 → Fin 3)).encard = (((∏ _ℓ : Fin 1, (2 + 1)) ^ 3 * 1 ^ 3 : ℕ) : ℕ∞) := by
+  rw [Set.encard_univ, ENat.card_eq_coe_fintype_card, Fintype.card_fun, Fintype.card_fin]; rfl
 
 /-! ## The draft's toy -/
 

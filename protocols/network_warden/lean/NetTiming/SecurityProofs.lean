@@ -2,14 +2,15 @@ import NetTiming.Guarantees
 import NetTiming.SecurityProofs.Occupancy
 import NetTiming.SecurityProofs.Counting
 import NetTiming.SecurityProofs.Advice
+import NetTiming.SecurityProofs.Ingress
 import NetTiming.SecurityProofs.Sanity
 
 /-!
 # Proofs of the network warden's guarantees
 
 One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee, each the theorem of the same statement
-in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)) or `Advice` (Theorem 3), and every lemma behind them. `Sanity`
-shows every named assumption satisfiable.
+in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3) or `Ingress` (the ingress bound), and
+every lemma behind them. `Sanity` shows every named assumption satisfiable.
 -/
 
 namespace NetTiming.SecurityProofs
@@ -42,5 +43,10 @@ theorem EncardAccSeqsLeBlocksCounts : NetTiming.Guarantees.EncardAccSeqsLeBlocks
   @NetTiming.encard_accSeqs_le_blocks_counts
 theorem EncardDecodableLeBlocks : NetTiming.Guarantees.EncardDecodableLeBlocks :=
   @NetTiming.encard_decodable_le_blocks
+
+theorem EncardIngressObsDecodableLe : NetTiming.Guarantees.EncardIngressObsDecodableLe :=
+  @NetTiming.encard_ingress_obsDecodable_le
+theorem EncardIngressDecodableLe : NetTiming.Guarantees.EncardIngressDecodableLe :=
+  @NetTiming.encard_ingress_decodable_le
 
 end NetTiming.SecurityProofs
