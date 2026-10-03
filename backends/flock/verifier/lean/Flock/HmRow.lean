@@ -488,7 +488,7 @@ def rowPorts (mj : Json) (typed : Bool) : V (Array Port) := do
         | none => if seg then MAX_COMPS + 1 else serial)
       if want.2 > MAX_COMPS || (words, comps) != want then
         throw s!"port {name}: a row of {l} bits is {want.1} u16 leaves and {want.2} compressions, not META's {words} and {comps}"
-      pure ({ name, words, chunks := comps, nb := 0, bits := l, v2 := !seg, segs := segs.map (·.1) } : Port)
+      pure ({ name, words, chunks := comps, nb := 0, bits := l, v2 := true, segs := segs.map (·.1) } : Port)
   let listed ← J.arr mj "rows" ctx
   let bad := s!"META: a row's constants are not {if v2 then "sha512/row/v2 or sha512/row-seg/v1" else "sha512/row/v1"}'s"
   if listed.size != ports.size then throw bad

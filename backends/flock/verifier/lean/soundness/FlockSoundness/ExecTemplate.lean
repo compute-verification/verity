@@ -35,6 +35,8 @@ structure ParseFactsT (tags : Tags) (t : Typed.Template) (c : Circuit) : Prop wh
   leavesIn : c.leavesIn = #[#[]]
   wires : c.wires = HmRow.rowWires c.ports c.shaNet c.hmNet
   leafCuts : c.leafCuts = #[]
+  /-- a typed statement's rows are `sha512/row/v1` rows, none segmented -/
+  segs : tags.typed = true → ∀ p ∈ c.ports.toList, p.segs = none
 
 set_option maxHeartbeats 4000000 in
 theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {t : Typed.Template}
@@ -116,6 +118,14 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
   (have hh := except_bind_ok h; clear h; obtain ⟨dummyOutputs, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨outPorts, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpR at h)
+  obtain ⟨outRowPorts, h⟩ : ∃ r, jpR r = .ok c := by
+    split at h
+    · exact ⟨_, h⟩
+    · obtain ⟨_, -, h⟩ := except_bind_ok h
+      obtain ⟨r, -, h⟩ := except_bind_ok h
+      exact ⟨r, ite_throw_ok h⟩
+  simp (config := { zeta := false }) only [jpR] at h
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) perVu0 jpP at h
   obtain ⟨pv, h⟩ : ∃ pv, jpP () pv = .ok c := by
     split at h
@@ -294,7 +304,7 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     · obtain ⟨_, hx, -⟩ := except_bind_ok hs; cases hx
     · rename_i hk; cases hs; exact ⟨⟨_, rfl⟩, by simpa using hk⟩) hderived
   exact { pre := by obtain ⟨more, hm, hmore⟩ := hnets; exact ⟨more, hm, hmore⟩
-          portWords := rowPorts_words hrp, unitNet := findIdx?_lt hunit
+          portWords := rowPorts_words hrp, segs := rowPorts_segs hrp, unitNet := findIdx?_lt hunit
           root := by
             obtain ⟨more, hm, -⟩ := hnets
             obtain ⟨hlt, -, hmin⟩ := Array.findIdx?_eq_some_iff_getElem.1 hunit

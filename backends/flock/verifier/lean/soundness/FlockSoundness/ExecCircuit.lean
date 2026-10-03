@@ -170,6 +170,60 @@ theorem rowPorts_words {mj : Lean.Json} {typed : Bool} {ports : Array Port} (h :
     cases hf
     cases hv
 
+set_option maxHeartbeats 1000000 in
+/-- A typed statement's `HmRow.rowPorts` are `sha512/row/v1` ports, none segmented. -/
+theorem rowPorts_segs {mj : Lean.Json} {typed : Bool} {ports : Array Port} (h : HmRow.rowPorts mj typed = .ok ports)
+    (ht : typed = true) : ∀ p ∈ ports.toList, p.segs = none := by
+  subst ht
+  unfold HmRow.rowPorts at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) v2 one at h
+  obtain ⟨s, -, h⟩ := except_bind_ok h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h
+  replace h := ite_throw_ok h
+  simp (config := { zeta := false }) only [jp0] at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp1 at h
+  obtain ⟨hnt, h⟩ := ite_throw_ok' h
+  simp (config := { zeta := false }) only [jp1] at h
+  obtain ⟨listedPorts, -, h⟩ := except_bind_ok h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp2 at h
+  split at h
+  · rename_i hv
+    simp [hv] at hnt
+  obtain ⟨lengths, hlen, h⟩ := except_bind_ok h
+  cases hlen
+  simp (config := { zeta := false }) only [jp2] at h
+  obtain ⟨ports', hmap, h⟩ := except_bind_ok h
+  obtain ⟨listed, -, h⟩ := except_bind_ok h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) bad jp3 at h
+  replace h := ite_throw_ok h
+  simp (config := { zeta := false }) only [jp3] at h
+  obtain ⟨u, -, h⟩ := except_bind_ok h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp4 at h
+  replace h := ite_throw_ok h
+  simp (config := { zeta := false }) only [jp4] at h
+  cases h
+  intro p hp
+  obtain ⟨i, -, hf⟩ := array_mapM_ok hmap p hp
+  obtain ⟨a, -, hf⟩ := except_bind_ok hf
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpa at hf
+  replace hf := ite_throw_ok hf
+  simp (config := { zeta := false }) only [jpa] at hf
+  obtain ⟨name, -, hf⟩ := except_bind_ok hf
+  obtain ⟨words, -, hf⟩ := except_bind_ok hf
+  obtain ⟨comps, -, hf⟩ := except_bind_ok hf
+  split at hf
+  · extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpn at hf
+    obtain ⟨-, hf⟩ := ite_throw_ok' hf
+    simp (config := { zeta := false }) only [jpn] at hf
+    cases hf
+    rfl
+  · rename_i hl
+    by_cases hi : i < listedPorts.size
+    · rw [getElem!_pos _ i (by simpa using hi)] at hl
+      simp at hl
+    · rw [getElem!_neg _ i (by simpa using hi)] at hl
+      cases hl
+
 /-! ## What `HmRow.parse` accepted -/
 
 /-- **What `HmRow.parse` accepted.** -/
@@ -275,6 +329,14 @@ theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (Strin
   (have hh := except_bind_ok h; clear h; obtain ⟨dummyOutputs, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨outPorts, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpR at h)
+  obtain ⟨outRowPorts, h⟩ : ∃ r, jpR r = .ok c := by
+    split at h
+    · exact ⟨_, h⟩
+    · obtain ⟨_, -, h⟩ := except_bind_ok h
+      obtain ⟨r, -, h⟩ := except_bind_ok h
+      exact ⟨r, ite_throw_ok h⟩
+  simp (config := { zeta := false }) only [jpR] at h
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) perVu0 jpP at h)
   obtain ⟨pv, h⟩ : ∃ pv, jpP () pv = .ok c := by
     split at h

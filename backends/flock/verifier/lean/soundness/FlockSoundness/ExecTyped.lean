@@ -156,10 +156,17 @@ def TailQ (c : Circuit) (pin : ℕ) (tb : TypedBlock) (r : Array (ℕ × ℕ) ×
     r.1.toList = d.toList ++ Typed.tail c tb true ∧ r.2.toList = d.toList ++ Typed.tail c tb false
 
 /-- **A typed template's Δ** (#277): the flat statement's entries, then the typed tail, in Δ_A and in Δ_B. -/
-theorem delta_typed (c : Circuit) (pin : ℕ) {tb : TypedBlock} (ht : c.typed = some tb) :
+theorem delta_typed (c : Circuit) (pin : ℕ) {tb : TypedBlock} (ht : c.typed = some tb)
+    (hs : ∀ p ∈ c.ports.toList, p.segs = none) :
     TailQ c pin tb (HmRow.delta c pin) := by
+  have hb : ∀ p byte : ℕ, HmRow.byteAt c.ports[p]! byte = (byte / 128, byte % 128) := by
+    intro p byte
+    by_cases hp : p < c.ports.size
+    · rw [getElem!_pos c.ports p hp, HmRow.byteAt, hs _ (Array.getElem_mem_toList hp)]
+    · rw [getElem!_neg c.ports p hp]
+      rfl
   unfold HmRow.delta
-  simp only
+  simp only [hb]
   refine run_bind_pair (Q := TailQ c pin tb) (P := fun d => d.toList = constPairs c pin) ?_ ?_
   · rw [← Array.forIn_toList]
     refine (forIn_id_append (slotPairs c pin) _ (fun r _ d => ?_) #[]).trans ?_
@@ -187,19 +194,50 @@ theorem delta_typed (c : Circuit) (pin : ℕ) {tb : TypedBlock} (ht : c.typed = 
   have h0 : ExtL (constPairs c pin) (DeltaIn c) d := ⟨[], by simp [hd], by simp⟩
   -- the rows' constant bits
   refine run_bind_pair (Q := TailQ c pin tb) (forIn_id_inv_range _ (fun g _ hg d hd => ⟨_, rfl,
-    forIn_id_inv_range _ (fun p _ hp d hd => ⟨_, rfl, ?_⟩) hd⟩) h0) ?_
-  · refine forIn_id_inv_range _ (fun k _ hk d hd => ⟨_, rfl, forIn_id_inv_range _ (fun t _ ht d hd => ?_) hd⟩)
-      (forIn_id_inv_range _ (fun t _ ht d hd => ?_)
-        (forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2 ?_⟩) hd))
-    · split
-      · exact ⟨_, rfl, hd.push2 (Or.inl ⟨g, hg, p, hp, k, hk, 1, by omega, t, by omega, rfl⟩)⟩
-      · exact ⟨_, rfl, hd⟩
-    · split
-      · exact ⟨_, rfl, hd.push2 (Or.inr (Or.inl ⟨g, hg, p, hp, 1, by omega, t, by omega, rfl⟩))⟩
-      · exact ⟨_, rfl, hd⟩
-    · split
-      · exact Or.inl ⟨g, hg, p, hp, 0, by assumption, 0, by omega, t, by omega, rfl⟩
-      · exact Or.inr (Or.inl ⟨g, hg, p, hp, 0, by omega, t, by omega, rfl⟩)
+    forIn_id_inv_range _ (fun p _ hp d hd => ?_) hd⟩) h0) ?_
+  · split
+    · -- a segmented row: each chain start's midstate, then every constant or digest-copied message bit
+      refine ⟨_, rfl, forIn_id_inv_range _ (fun k _ hk d hd => ?_) hd⟩
+      split
+      · refine ⟨_, rfl, forIn_id_inv_range _ (fun t _ ht d hd => ?_)
+          (forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2 ?_⟩) hd)⟩
+        · split
+          · refine ⟨_, rfl, hd.push2 ?_⟩
+            split
+            · next hk' => exact Or.inl ⟨g, hg, p, hp, k, hk', 1, by omega, t, by omega, rfl⟩
+            · exact Or.inr (Or.inl ⟨g, hg, p, hp, 1, by omega, t, by omega, rfl⟩)
+          · refine ⟨_, rfl, hd.push2 ?_⟩
+            split
+            · next hk' => exact Or.inl ⟨g, hg, p, hp, k, hk', 1, by omega, t, by omega, rfl⟩
+            · exact Or.inr (Or.inl ⟨g, hg, p, hp, 1, by omega, t, by omega, rfl⟩)
+          · exact ⟨_, rfl, hd⟩
+        · split
+          · next hk' => exact Or.inl ⟨g, hg, p, hp, k, hk', 0, by omega, t, by omega, rfl⟩
+          · exact Or.inr (Or.inl ⟨g, hg, p, hp, 0, by omega, t, by omega, rfl⟩)
+      · refine ⟨_, rfl, forIn_id_inv_range _ (fun t _ ht d hd => ?_) hd⟩
+        split
+        · refine ⟨_, rfl, hd.push2 ?_⟩
+          split
+          · next hk' => exact Or.inl ⟨g, hg, p, hp, k, hk', 1, by omega, t, by omega, rfl⟩
+          · exact Or.inr (Or.inl ⟨g, hg, p, hp, 1, by omega, t, by omega, rfl⟩)
+        · refine ⟨_, rfl, hd.push2 ?_⟩
+          split
+          · next hk' => exact Or.inl ⟨g, hg, p, hp, k, hk', 1, by omega, t, by omega, rfl⟩
+          · exact Or.inr (Or.inl ⟨g, hg, p, hp, 1, by omega, t, by omega, rfl⟩)
+        · exact ⟨_, rfl, hd⟩
+    · refine ⟨_, rfl, ?_⟩
+      refine forIn_id_inv_range _ (fun k _ hk d hd => ⟨_, rfl, forIn_id_inv_range _ (fun t _ ht d hd => ?_) hd⟩)
+        (forIn_id_inv_range _ (fun t _ ht d hd => ?_)
+          (forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2 ?_⟩) hd))
+      · split
+        · exact ⟨_, rfl, hd.push2 (Or.inl ⟨g, hg, p, hp, k, hk, 1, by omega, t, by omega, rfl⟩)⟩
+        · exact ⟨_, rfl, hd⟩
+      · split
+        · exact ⟨_, rfl, hd.push2 (Or.inr (Or.inl ⟨g, hg, p, hp, 1, by omega, t, by omega, rfl⟩))⟩
+        · exact ⟨_, rfl, hd⟩
+      · split
+        · exact Or.inl ⟨g, hg, p, hp, 0, by assumption, 0, by omega, t, by omega, rfl⟩
+        · exact Or.inr (Or.inl ⟨g, hg, p, hp, 0, by omega, t, by omega, rfl⟩)
   intro d hd
   -- the units' leaf bits
   refine run_bind_pair (Q := TailQ c pin tb) (forIn_id_inv_range _ (fun k _ hk d hd => ⟨_, rfl,

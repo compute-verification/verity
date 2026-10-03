@@ -292,18 +292,29 @@ theorem rowWires_dst (ports : Array Port) (sha hm : ℕ) :
     rcases hw' with hw' | rfl
     · exact hout w hw'
     · exact Or.inl ⟨rfl, (hall _ hw (where_[p]!)[k]! (getElem_mem_toList' hk)).1⟩
-  by_cases h0 : 0 < (where_[p]!).size
+  have hinner : ∀ k, 1 ≤ k → k < (where_[p]!).size → ∀ out : Array Wire, (∀ w ∈ out.toList,
+      (w.dst.1 = sha ∧ w.dst.2.1 < nSha) ∨ (w.dst.1 = hm ∧ w.dst.2.1 < ports.size)) →
+      ∃ out', (if (HmRow.chainStart ports[p]! k).isNone = true then
+          ForInStep.yield (out.push ⟨(sha, (where_[p]!)[k]!.1, 2 * (where_[p]!)[k]!.2),
+            (sha, (where_[p]!)[k - 1]!.1, (where_[p]!)[k - 1]!.2)⟩)
+        else ForInStep.yield out) = ForInStep.yield out' ∧ ∀ w ∈ out'.toList,
+      (w.dst.1 = sha ∧ w.dst.2.1 < nSha) ∨ (w.dst.1 = hm ∧ w.dst.2.1 < ports.size) := by
+    intro k hk1 hk out hout
+    split
+    · exact ⟨_, rfl, hchain k hk1 hk out hout⟩
+    · exact ⟨_, rfl, hout⟩
+  by_cases h0 : (0 < (where_[p]!).size && (HmRow.chainStart ports[p]! (where_[p]!).size).isNone) = true
   · refine ⟨_, by simp only [h0, ↓reduceIte]; rfl, fun w hw' => ?_⟩
     simp only [Array.toList_push, List.mem_append, List.mem_singleton] at hw'
     rcases hw' with hw' | rfl
     · revert w hw'
       exact forIn_id_inv_range (P := fun out : Array Wire => ∀ w ∈ out.toList,
           (w.dst.1 = sha ∧ w.dst.2.1 < nSha) ∨ (w.dst.1 = hm ∧ w.dst.2.1 < ports.size))
-        (fun k hk1 hk out hout => ⟨_, rfl, hchain k hk1 hk out hout⟩) hout
+        (fun k hk1 hk out hout => hinner k hk1 hk out hout) hout
     · exact Or.inr ⟨rfl, by rw [← hsz]; exact hpl⟩
-  · exact ⟨_, by simp only [h0, ↓reduceIte]; rfl, forIn_id_inv_range (P := fun out : Array Wire => ∀ w ∈ out.toList,
+  · exact ⟨_, by simp only [h0, Bool.false_eq_true, ↓reduceIte]; rfl, forIn_id_inv_range (P := fun out : Array Wire => ∀ w ∈ out.toList,
         (w.dst.1 = sha ∧ w.dst.2.1 < nSha) ∨ (w.dst.1 = hm ∧ w.dst.2.1 < ports.size))
-      (fun k hk1 hk out hout => ⟨_, rfl, hchain k hk1 hk out hout⟩) hout⟩
+      (fun k hk1 hk out hout => hinner k hk1 hk out hout) hout⟩
 
 /-- **Δ's other flat rows, for a template, are input bits of the rows' circuits' slots**: no leaf map or cut, and the
 wires are the rows' own chains (`parse_facts_tmpl`). -/
@@ -746,7 +757,8 @@ theorem unit_inCols_size {types : String → Option CircuitType} {ls : Array Flo
 
 /-- **`TemplateLayout` for a template statement, from its parse and check.** For the circuit `parse` accepted for the
 template `t` that `templateOf` built from the class's derivation. -/
-theorem templateLayout_of {tags : Tags} {c : Circuit} (P : ParseFactsT tags t c) (C : CheckFactsT c (HmRow.blockOf t))
+theorem templateLayout_of {tags : Tags} {c : Circuit} (ht : tags.typed = true) (P : ParseFactsT tags t c)
+    (C : CheckFactsT c (HmRow.blockOf t))
     (htm : Typed.templateOf name done ls unit ty held = .ok t) {types : String → Option CircuitType}
     {info : String → Option TableInfo} (hd : deriveChecked types ls info (Typed.wordsIn held) unit = .ok done)
     (hheld : ∀ h ∈ held.toList, h.words = (Array.range (h.bytes.size / 4)).map fun i => rd32 h.bytes (4 * i))
@@ -838,7 +850,7 @@ theorem templateLayout_of {tags : Tags} {c : Circuit} (P : ParseFactsT tags t c)
     hmNet := ⟨P.hmNet, by rw [P.root]; omega⟩
     delta := by
       rw [hda, hdb]
-      exact delta_typed st.c st.pin P.typed
+      exact delta_typed st.c st.pin P.typed (P.segs ht)
     deltaIn := fun x hx => deltaIn_rows P C hsha hx
     pin := ⟨rp, hrp, ip, hkp, hcp, hpv, hcr (by omega)⟩
     kLog := by omega
@@ -873,12 +885,12 @@ theorem setupH_templateLayout (ht : tags.typed = true)
       rw [hc]
       exact ⟨P.pre, P.portWords, P.unitNet, P.root, P.shaNet, P.hmNet, P.kinds, ⟨ls', hcheck⟩,
         (by rw [← P.rowNets]; exact HmNets.check_congr rfl rfl rfl), P.typed, P.upv,
-        P.leavesIn, P.wires, P.leafCuts⟩
+        P.leavesIn, P.wires, P.leafCuts, P.segs⟩
     have C' : CheckFactsT st.c (HmRow.blockOf t) := by
       rw [hc]
       exact ⟨C.bound_slotLog, C.disj, C.unit_lookup, C.count, C.one_range, C.root_perVu, C.rangeLogs, C.root_zero,
         C.sha_in, C.hm_in, C.perVu_sha, C.perVu_hm, C.rows_after, C.ins⟩
-    exact templateLayout_of P' C' htm k.hd (read_held hr) rfl hpin hda hdb hm hk
+    exact templateLayout_of ht P' C' htm k.hd (read_held hr) rfl hpin hda hdb hm hk
   · cases hrn
 
 /-- **The unit's shape, from `deriveChecked`**: its constant row and order (#404's `unit_const_row`, `order_cols`), its
@@ -1186,7 +1198,7 @@ theorem setupH_copySrc_lt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tab
       rw [hc]
       exact ⟨P.pre, P.portWords, P.unitNet, P.root, P.shaNet, P.hmNet, P.kinds, ⟨ls', hcheck⟩,
         (by rw [← P.rowNets]; exact HmNets.check_congr rfl rfl rfl), P.typed, P.upv,
-        P.leavesIn, P.wires, P.leafCuts⟩
+        P.leavesIn, P.wires, P.leafCuts, P.segs⟩
     have C' : CheckFactsT st.c (HmRow.blockOf t) := by
       rw [hc]
       exact ⟨C.bound_slotLog, C.disj, C.unit_lookup, C.count, C.one_range, C.root_perVu, C.rangeLogs, C.root_zero,
