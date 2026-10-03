@@ -34,7 +34,7 @@
 //! template has no statement here.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     sync::{
         OnceLock,
         atomic::{AtomicU64, Ordering},
@@ -169,6 +169,28 @@ const ROLE_X: u8 = 1;
 const MAX_COMPS: usize = 1 << (IN_RANGE_K_LOG - 10);
 /// Free in-block coordinates per verifier point (`r[..PT_LOCAL]`); block coordinates follow.
 pub const PT_LOCAL: usize = 24;
+
+/// Words as aligned power-of-two blocks `(w, e)` (`w` a multiple of `2^e`), ascending: each maximal run of consecutive words
+/// cut from its start, every block the largest aligned one that fits in what is left of the run.
+pub fn aligned_blocks(words: &BTreeSet<usize>) -> Vec<(usize, usize)> {
+    let (mut out, mut it) = (Vec::new(), words.iter().copied().peekable());
+    while let Some(mut a) = it.next() {
+        let mut b = a + 1;
+        while it.next_if_eq(&b).is_some() {
+            b += 1;
+        }
+        while a < b {
+            let mut e = (usize::BITS - 1 - (b - a).leading_zeros()) as usize;
+            while a % (1 << e) != 0 {
+                e -= 1;
+            }
+            out.push((a, e));
+            a += 1 << e;
+        }
+    }
+    out
+}
+
 /// The leaf-commitment scheme this prover and verifier implement for the proof's own Merkle trees, as the composite circuit
 /// pins it (`verity_flock.circuit.LEAF_SCHEME`: today's id and the `hm96-sha256/v1` room it reserves).
 pub fn leaf_scheme() -> Value {
@@ -393,6 +415,11 @@ pub struct Composite {
     pub unit_net: usize,
     pub leaves_in: Vec<Vec<i64>>,
     pub leaves_out: Vec<Vec<usize>>,
+    /// the public input ports (META `public_inputs`, PROTOCOL.md §16.10), `(port, words)`: unit inputs that are no row but
+    /// public words the verifier recomputes from public data, each naming its recomputation (seed and derivation)
+    pub public_inputs: Vec<(String, usize)>,
+    /// each unit's leaf ports' public words (META `leaves_public`): the word's index among the public ports' words, or -1
+    pub leaves_public: Vec<Vec<i64>>,
     pub rows: Vec<RowConsts>,
     pub sha_net: usize,
     pub hm_net: usize,
@@ -819,6 +846,21 @@ impl Composite {
         } else {
             (ints(&meta["leaves_in"]), ints(&meta["leaves_out"]).into_iter().map(|u| u.into_iter().map(|x| x as usize).collect()).collect())
         };
+        let public_inputs: Vec<(String, usize)> = match meta.get("public_inputs") {
+            None => Vec::new(),
+            Some(v) => v.as_array().filter(|a| !a.is_empty()).ok_or("META: public_inputs is not a list of ports")?.iter().map(|p| {
+                let s = |k: &str| p[k].as_str().filter(|x| !x.is_empty());
+                let keys: Option<Vec<&str>> = p.as_object().map(|m| m.keys().map(|k| k.as_str()).collect());
+                match (keys.as_deref(), s("port"), p["words"].as_u64(), s("seed"), s("derivation")) {
+                    (Some(["derivation", "port", "seed", "words"]), Some(nm), Some(w), Some(_), Some(_)) if w > 0 => Ok((nm.to_string(), w as usize)),
+                    _ => Err("META: a public input names no port, words, or recomputation (a non-empty seed and derivation)".to_string()),
+                }
+            }).collect::<Result<_, _>>()?,
+        };
+        if public_inputs.is_empty() != meta.get("leaves_public").is_none() {
+            return Err("META: leaves_public without public_inputs, or public_inputs without leaves_public".into());
+        }
+        let leaves_public = if public_inputs.is_empty() { Vec::new() } else { ints(&meta["leaves_public"]) };
         let dummy_bc = meta["dummy"]["bc"].as_array().ok_or("META: dummy bc")?.iter()
             .map(|d| hexb(d.as_str().unwrap_or("")).and_then(|b| b.try_into().map_err(|_| "b || c length".to_string()))).collect::<Result<Vec<[u8; BC_BYTES]>, String>>()?;
         let dummy_outputs = meta["dummy"]["outputs"].as_array().ok_or("META: dummy outputs")?.iter().map(|x| x.as_u64().unwrap_or(u64::MAX) as u16).collect();
@@ -862,7 +904,7 @@ impl Composite {
         let c = Composite {
             name, sha512, class_sha512, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports, n_in,
             leaf_cuts_of: { let mut v = vec![Vec::new(); upv]; for &(u, j, l) in &leaf_cuts { if u < upv { v[u].push((j, l)); } } v },
-            out_words, out_row_ports, g, upv, unit_net, leaves_in, leaves_out, rows, sha_net, hm_net, out_net, out_ports, leaf_cuts, dummy_bc, dummy_outputs, per_vu, wires,
+            out_words, out_row_ports, g, upv, unit_net, leaves_in, leaves_out, public_inputs, leaves_public, rows, sha_net, hm_net, out_net, out_ports, leaf_cuts, dummy_bc, dummy_outputs, per_vu, wires,
             lookups: lookups_fast.into_iter().collect(), typed: None,
         };
         let typed = instance.map(|inst| {
@@ -956,6 +998,9 @@ impl Composite {
             }
         }
         if let Some(t) = &self.typed {
+            if !self.public_inputs.is_empty() {
+                return Err("public inputs: a typed statement's instance reads only rows".into());
+            }
             self.check_wiring()?;
             return self.check_typed(t);
         }
@@ -1017,7 +1062,86 @@ impl Composite {
         if self.leaf_scheme != leaf_scheme() {
             return Err(format!("leaf-commitment scheme {} is not the one this verifier implements", self.leaf_scheme));
         }
+        self.check_public_inputs()
+    }
+
+    /// The public input ports (§16.10): each named once, and no row's name; one public leaf map per unit, each public leaf a
+    /// zero leaf of `leaves_in`; the unit range unpacked, since the `in` regions read it; their words
+    /// ([`Self::public_leaf_words`]) inside the leaf group, each leaf in them a public or a zero leaf in every unit.
+    fn check_public_inputs(&self) -> Result<(), String> {
+        if self.public_inputs.is_empty() {
+            return Ok(());
+        }
+        let mut names: Vec<&str> = self.public_inputs.iter().map(|p| p.0.as_str()).chain(self.ports.iter().map(|p| p.name.as_str())).collect();
+        names.sort_unstable();
+        if names.windows(2).any(|w| w[0] == w[1]) {
+            return Err("public inputs: a port named twice, or both a row and a public input".into());
+        }
+        let n_pub = self.public_words() as i64;
+        if self.leaves_public.len() != self.upv || self.leaves_public.iter().zip(&self.leaves_in).any(|(lp, li)| {
+            lp.len() != li.len() || lp.iter().zip(li).any(|(&q, &x)| q < -1 || q >= n_pub || (q >= 0 && x != -1))
+        }) {
+            return Err("public inputs: the public leaf maps are not one per unit, each public leaf a public word and a zero leaf of leaves_in".into());
+        }
+        let ur = self.unit_range();
+        if ur.packed {
+            return Err("public inputs: a packed unit range (the in region reads it)".into());
+        }
+        if 7 + log2ceil(ur.count) > PT_LOCAL {
+            return Err(format!("public inputs: {} unit slots, too many for an in region of at most {PT_LOCAL} free bits", ur.count));
+        }
+        let words = self.public_leaf_words();
+        if words.is_empty() {
+            return Err("public inputs: no unit reads a public word".into());
+        }
+        let g0 = &self.unit().in_groups[0];
+        for (w, e) in aligned_blocks(&words) {
+            if w < g0.col || w + (1 << e) > g0.col + g0.words {
+                return Err(format!("public inputs: the in region's words {w}..{} leave the unit's leaf group", w + (1 << e)));
+            }
+        }
+        for (lp, li) in self.leaves_public.iter().zip(&self.leaves_in) {
+            if let Some(j) = (0..li.len()).find(|&j| words.contains(&(g0.col + j / 8)) && lp[j] < 0 && li[j] >= 0) {
+                return Err(format!("public inputs: leaf {j} reads a row word inside word {}, which holds a public word", g0.col + j / 8));
+            }
+        }
         Ok(())
+    }
+
+    /// The public input ports' words (one instance's).
+    pub fn public_words(&self) -> usize {
+        self.public_inputs.iter().map(|p| p.1).sum()
+    }
+
+    /// Whether block column `q` is a bit of a public leaf: in unit slot `k`'s leaf group (unit `k % units_per_vu`), leaf `j`'s
+    /// 16 bits from `col 128 + 16 j`, a public word.
+    pub fn is_public_col(&self, q: usize) -> bool {
+        let ur = self.unit_range();
+        let Some(o) = q.checked_sub(ur.start()) else { return false };
+        let (k, at) = (o >> ur.slot_log, o & ((1 << ur.slot_log) - 1));
+        let Some(x) = at.checked_sub(self.unit().in_groups[0].col * WORD) else { return false };
+        k < ur.count && self.leaves_public.get(k % self.upv).and_then(|l| l.get(x / 16)).is_some_and(|&p| p >= 0)
+    }
+
+    /// The 128-bit words of a unit slot holding some unit's public leaf (leaf `j` in word `col + j / 8` of the leaf group),
+    /// ascending.
+    pub fn public_leaf_words(&self) -> BTreeSet<usize> {
+        let Some(col) = self.unit().in_groups.first().map(|g| g.col) else { return BTreeSet::new() };
+        self.leaves_public.iter().flat_map(|l| l.iter().enumerate().filter(|x| *x.1 >= 0).map(move |(j, _)| col + j / 8)).collect()
+    }
+
+    /// The `in` regions (§16.10), as `(w, s)`: `2^s` words of every unit slot from word `w`. The public leaves' words
+    /// ([`Self::public_leaf_words`]) in aligned blocks of `2^e` words ([`aligned_blocks`]), each split into `2^(e - s)`
+    /// regions, `s = min(e, PT_LOCAL - 7 - log2ceil(units))` (`7 + s` free bits beside the slot bits).
+    pub fn in_regions(&self) -> Vec<(usize, usize)> {
+        let top = PT_LOCAL.saturating_sub(7 + log2ceil(self.unit_range().count));
+        aligned_blocks(&self.public_leaf_words())
+            .into_iter()
+            .flat_map(|(w, e)| {
+                let s = e.min(top);
+                (0..1usize << (e - s)).map(move |r| (w + (r << s), s))
+            })
+            .collect()
     }
 
     /// Every input port of every slot is wired exactly once: a unit's leaf ports by its leaf map, the rest by a wire. The
@@ -1395,6 +1519,11 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
             }
         }
     }
+    // a public leaf's bits are no copy but the in region's: every entry of their rows dropped
+    if !c.public_inputs.is_empty() {
+        da.retain(|e| !c.is_public_col(e.0 as usize));
+        db.retain(|e| !c.is_public_col(e.0 as usize));
+    }
     (da, db)
 }
 
@@ -1415,6 +1544,8 @@ pub struct Instances {
     pub population: Option<(usize, Vec<[u8; BC_BYTES]>)>,
     /// a shared-row file's row tables (header `shared_rows`); `None`: every instance carries its own rows
     pub tables: Option<RowTables>,
+    /// every instance's public input words (the file's last bytes, u16 LE), instance-major, the public ports in order
+    pub public: Vec<u16>,
 }
 
 /// Header `shared_rows: {port: R_p}`: row `p`'s frame-v3 tree is a table of `R_p` committed rows, and instance `i` reads its
@@ -1494,14 +1625,19 @@ impl Instances {
             Some(k) => (k.iter().zip(&c.ports).map(|(r, p)| r * 2 * p.words).sum(), k.iter().sum::<usize>() * SALT_BYTES, k.iter().sum(), 4 * n * np),
         };
         let (rows_len, salts_len) = if has_rows { (rows_len, salts_len) } else { (0, 0) };
-        if body.len() != rows_len + salts_len + BC_BYTES * n_bcs + refs_len {
+        if header.get("public_inputs") != c.meta.get("public_inputs") {
+            return Err("header: public_inputs is not the circuit's".into());
+        }
+        let public_len = 2 * n * c.public_words();
+        if body.len() != rows_len + salts_len + BC_BYTES * n_bcs + refs_len + public_len {
             return Err("instance file length".into());
         }
         let private = |a: usize, len: usize| has_rows.then(|| body[a..a + len].to_vec());
         let (rows, salts) = (private(0, rows_len), private(rows_len, salts_len));
         let pubs = &body[rows_len + salts_len..];
         let bcs = pubs[..BC_BYTES * n_bcs].chunks(BC_BYTES).map(|x| x.try_into().unwrap()).collect();
-        let tail = &pubs[BC_BYTES * n_bcs..];
+        let tail = &pubs[BC_BYTES * n_bcs..BC_BYTES * n_bcs + refs_len];
+        let public = pubs[pubs.len() - public_len..].chunks(2).map(|x| u16::from_le_bytes([x[0], x[1]])).collect();
         let (rows, salts, tables) = match counts {
             None => (rows, salts, None),
             Some(counts) => {
@@ -1525,7 +1661,7 @@ impl Instances {
         }
         header["rows"] = Value::Bool(false);
         let public_sha512 = Self::public_digest(&header, pubs);
-        Ok(Instances { header, n, rows, salts, bcs, public_sha512, population: None, tables })
+        Ok(Instances { header, n, rows, salts, bcs, public_sha512, population: None, tables, public })
     }
 
     /// SHA-512 of the header's compact key-sorted JSON and the public bytes. serde_json's maps are sorted (no `preserve_order`), so
@@ -1569,13 +1705,16 @@ impl Instances {
         if let Some(t) = &self.tables {
             pubs.extend(t.refs.iter().flat_map(|r| r.to_le_bytes()));
         }
+        pubs.extend(self.public.iter().flat_map(|w| w.to_le_bytes()));
         let public_sha512 = Self::public_digest(&header, &pubs);
         let population = Some((self.n, self.bcs.clone()));
+        let pw = c.public_words();
+        let public: Vec<u16> = units.iter().flat_map(|&u| self.public[u * pw..(u + 1) * pw].to_vec()).collect();
         if let Some(t) = &self.tables {
             // the tables stay the population's; the drawn instances keep their refs into them
             let refs = units.iter().flat_map(|&u| t.refs[u * np..(u + 1) * np].to_vec()).collect();
             return Ok(Instances { header, n: units.len(), rows: None, salts: None, bcs: self.bcs.clone(), public_sha512, population,
-                                  tables: Some(RowTables { refs, ..t.clone() }) });
+                                  tables: Some(RowTables { refs, ..t.clone() }), public });
         }
         Ok(Instances {
             header, n: units.len(),
@@ -1585,6 +1724,7 @@ impl Instances {
             public_sha512,
             population,
             tables: None,
+            public,
         })
     }
 
@@ -1605,20 +1745,24 @@ impl Instances {
         self.rows.is_some() || self.tables.as_ref().is_some_and(|t| t.rows.is_some())
     }
 
-    /// Every instance's input rows, instance-major, ports side by side (a shared-row file's gathered by its refs); `None`: the
-    /// verifier's file.
+    /// Every instance's input rows, instance-major, ports side by side (a shared-row file's gathered by its refs), then every
+    /// instance's public input words (u16 LE, as [`Stmt::unit_inputs`] reads them); `None`: the verifier's file.
     pub fn instance_rows(&self, c: &Composite) -> Option<Vec<u8>> {
-        let Some(t) = &self.tables else { return self.rows.clone() };
+        let public = self.public.iter().flat_map(|w| w.to_le_bytes());
+        let Some(t) = &self.tables else {
+            return self.rows.as_ref().map(|r| { let mut r = r.clone(); r.extend(public); r });
+        };
         let rows = t.rows.as_ref()?;
         let np = c.ports.len();
         let base: Vec<usize> = c.ports.iter().zip(&t.counts).scan(0, |a, (p, &r)| { let s = *a; *a += r * 2 * p.words; Some(s) }).collect();
-        let mut out = Vec::with_capacity(self.n * c.row_bytes());
+        let mut out = Vec::with_capacity(self.n * (c.row_bytes() + 2 * c.public_words()));
         for i in 0..self.n {
             for (p, port) in c.ports.iter().enumerate() {
                 let (w, r) = (2 * port.words, t.refs[i * np + p] as usize);
                 out.extend_from_slice(&rows[base[p] + r * w..base[p] + (r + 1) * w]);
             }
         }
+        out.extend(public);
         Some(out)
     }
 
@@ -1776,6 +1920,9 @@ pub fn frame_roots(c: &Composite, inst: &Instances) -> Result<Vec<(String, [u8; 
 pub enum Region {
     /// row `p`'s `b || c` of each VU (its hm96 slot's output)
     Digest(usize),
+    /// the public input words of every unit slot's leaf group ([`Composite::in_regions`]), `In(w, s)`: `2^s` words from
+    /// word `w`
+    In(usize, usize),
 }
 
 pub struct RegionShape {
@@ -2325,6 +2472,10 @@ impl Stmt {
         for p in 0..c.ports.len() {
             out.push(mk(Region::Digest(p), [bits(0, 10), bits(hr.slot_log + lp, lg)].concat(), hr.start() + (p << hr.slot_log) + bc0)?);
         }
+        let ur = c.unit_range();
+        for (w, s) in c.in_regions() {
+            out.push(mk(Region::In(w, s), [bits(0, 7 + s), bits(ur.slot_log, log2ceil(ur.count))].concat(), ur.start() + (w << 7))?);
+        }
         Ok(out)
     }
 
@@ -2467,9 +2618,11 @@ impl Stmt {
         let (Some(rows), Some(i)) = (rows, self.inst_of(b, g)) else { return w };
         let rb = c.row_bytes();
         let mut col = unit.in_groups[0].col * WORD;
+        // a public leaf: instance i's public word q, past every instance's rows (`Instances::instance_rows`)
+        let public_at = |q: i64| (q >= 0).then(|| self.n * rb + 2 * (i * c.public_words() + q as usize));
         for (j, &leaf) in c.leaves_in[u].iter().enumerate() {
-            if leaf >= 0 {
-                let at = i * rb + 2 * leaf as usize;
+            let at = if leaf >= 0 { Some(i * rb + 2 * leaf as usize) } else { c.leaves_public.get(u).and_then(|l| public_at(l[j])) };
+            if let Some(at) = at {
                 let v = u16::from_le_bytes([rows[at], rows[at + 1]]) as u64;
                 if col % WORD < 64 { w[col / WORD].lo |= v << (col % WORD) } else { w[col / WORD].hi |= v << (col % WORD - 64) }
             }
@@ -2779,6 +2932,22 @@ impl Stmt {
         let np = c.ports.len();
         match reg {
             Region::Digest(p) => (0..c.g).flat_map(|g| match self.inst_of(b, g) { Some(i) => inst.bc(i, *p, np), None => c.dummy_bc[*p] }).collect(),
+            // each unit slot's words, 16-bit leaves u16 LE: a public leaf its instance's public word, zero for a zero leaf, a
+            // padding instance or a slot past the units
+            &Region::In(w, s) => {
+                let (ur, np) = (c.unit_range(), c.public_words());
+                let j0 = 8 * (w - c.unit().in_groups[0].col);
+                let mut out = Vec::with_capacity(16 << (s + log2ceil(ur.count)));
+                for k in 0..1usize << log2ceil(ur.count) {
+                    let (g, u) = (k / c.upv, k % c.upv);
+                    let i = if k < ur.count { self.inst_of(b, g) } else { None };
+                    for j in j0..j0 + (8 << s) {
+                        let v = match (i, c.leaves_public[u].get(j)) { (Some(i), Some(&q)) if q >= 0 => inst.public[i * np + q as usize], _ => 0 };
+                        out.extend_from_slice(&v.to_le_bytes());
+                    }
+                }
+                out
+            }
         }
     }
 
@@ -2933,6 +3102,17 @@ mod tests {
         // a region's two bit ranges overlapping: bits 8 and 9 twice (as [bits(0, 10), bits(8, 4)] would be)
         let overlap = region([(0..10).collect::<Vec<_>>(), (8..12).collect()].concat());
         assert!(regions_in_range(&[region((0..14).collect()), overlap]).unwrap_err().contains("LinkLayout"));
+    }
+
+    /// §16.10: the in regions' words, run by run, in the largest aligned blocks (the vectors `test_circuit.py` gives Python's).
+    #[test]
+    fn public_words_are_cut_into_aligned_blocks() {
+        let blocks = |w: &[usize]| aligned_blocks(&w.iter().copied().collect());
+        assert_eq!(blocks(&(8..137).collect::<Vec<_>>()), [(8, 3), (16, 4), (32, 5), (64, 6), (128, 3), (136, 0)]);
+        assert_eq!(blocks(&[0, 1, 2, 3]), [(0, 2)]);
+        assert_eq!(blocks(&[3, 5]), [(3, 0), (5, 0)]);
+        assert_eq!(blocks(&[1, 2, 3, 4, 5]), [(1, 0), (2, 1), (4, 1)]);
+        assert!(blocks(&[]).is_empty());
     }
 
     #[test]
