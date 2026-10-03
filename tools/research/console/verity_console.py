@@ -901,10 +901,12 @@ def n1_minutes(start: float, end: float) -> list[tuple]:
     """(minute, GPU, held and busy, held and idle, free and busy, free and idle, holder), the four as shares of the minute.
 
     DCGM at 60 s gives one reading a minute, so each minute is wholly one of the four: busy = utilization > 0, held = a pod on the
-    GPU or >= 1 GiB used."""
+    GPU or >= 1 GiB used. Prometheus is read at each minute's 59th second, the minute's own scrape, so every pass reads a minute
+    alike."""
+    start = int(start) // 60 * 60 + 59
     util = prom_range("max by (gpu, pod, namespace) (DCGM_FI_DEV_GPU_UTIL)", start, end)
     fb = prom_range("max by (gpu) (DCGM_FI_DEV_FB_USED)", start, end)
-    mem = {(r["metric"].get("gpu"), int(float(t))): float(v) for r in fb for t, v in r["values"]}
+    mem = {(r["metric"].get("gpu"), int(float(t)) // 60 * 60): float(v) for r in fb for t, v in r["values"]}
     seen: dict[tuple, tuple] = {}
     for r in util:
         m = r["metric"]

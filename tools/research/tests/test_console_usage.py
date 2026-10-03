@@ -44,6 +44,26 @@ def test_node_2s_minutes_count_a_timed_windows_samples_unmeasured(tmp_path):
     assert json.loads(out) == [[H0, 0, 0.5, 0, 0, 0, "fill:bc-15ada664", 0.5], [H0, 1, 0, 0, 0, 0.5, "circuits-tp8", 0.5]]
 
 
+def test_node_1s_minutes_are_read_at_each_minutes_end_and_memory_holds_by_the_minute(monkeypatch):
+    # red team N: a pass's own seconds set the instants, so two passes read a minute from different scrapes
+    asked = []
+
+    def prom_range(query: str, start: float, end: float) -> list[dict]:
+        asked.append(start)
+        ts = range(int(start), int(end) + 1, 60)
+        if "FB_USED" in query:
+            return [{"metric": {"gpu": "0"}, "values": [[t, "2048"] for t in ts]}]
+        return [{"metric": {"gpu": "0"}, "values": [[t, "50"] for t in ts]},
+                {"metric": {"gpu": "1", "pod": "nd-vllm-epoch-run-0123456789-x", "namespace": "kueue"},
+                 "values": [[t, "0"] for t in ts]}]
+
+    monkeypatch.setattr(vc, "prom_range", prom_range)
+    rows = vc.n1_minutes(H0 + 37, H0 + 130)
+    assert asked == [H0 + 59, H0 + 59]
+    assert rows == [(H0, 0, 1.0, 0, 0, 0, vc.NO_POD), (H0, 1, 0, 1.0, 0, 0, "Kueue vllm-epoch-run"),
+                    (H0 + 60, 0, 1.0, 0, 0, 0, vc.NO_POD), (H0 + 60, 1, 0, 1.0, 0, 0, "Kueue vllm-epoch-run")]
+
+
 def test_lanes_and_kinds_of_each_nodes_holders():
     assert [(vc.lane_of("node 1", h), vc.kind_of("node 1", h)) for h in (
         "gpu-pool-circuits-1791-x", "gpu-pool-1791-y", "Kueue vllm-epoch-run", "SkyPilot m0-*", vc.NO_POD)] == [
