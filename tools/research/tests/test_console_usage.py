@@ -5,10 +5,13 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+import pytest
 
 _spec = importlib.util.spec_from_file_location("verity_console", Path(__file__).parents[1] / "console" / "verity_console.py")
 vc = importlib.util.module_from_spec(_spec)
@@ -80,6 +83,83 @@ def test_held_idle_lines_come_from_the_modules_rows():
 
 def test_a_node_whose_minutes_were_not_read_has_no_rows():
     assert vc.usage_rows({"node 1": None, "node 2": MINUTES["node 2"]}, SPANS) == vc.usage_rows({"node 2": MINUTES["node 2"]})
+
+
+def test_a_pools_leases_end_its_own_idle_before_each_shrink(tmp_path):
+    # red team Q: the circuits pool shrinks a GPU 30 s after it frees, the provers pool 120 s; one 120 for both cut 22.8 % of
+    # circuits' lease time on node 1 (2-3 Oct) and booked it to the pool, not leased
+    circuits, provers = tmp_path / "gpu-lease-circuits", tmp_path / "gpu-lease"
+    for d, g, shrink in ((circuits, 3, "08:01:40"), (provers, 5, "08:04:00")):
+        d.mkdir()
+        (d / "n1-lease.log").write_text(f'{{"t": "2026-10-03T08:00:00Z", "ev": "unfenced", "gpu": {g}}}\n'
+                                        f'{{"t": "2026-10-03T{shrink}Z", "ev": "shrink", "gpu": {g}}}\n')
+    with open(circuits / "n1-lease.log", "a") as f:
+        f.write('{"t": "2026-10-03T08:10:00Z", "ev": "unfenced", "gpu": 4}\n')
+    (circuits / "n1-lease.json").write_text(json.dumps({"t": "2026-10-03T08:20:00Z", "gpus": [{"index": 4, "lease": None}]}))
+    pools = {str(circuits): "circuits", str(provers): "proofs"}
+    spans = vc.n1_lease_spans(H0 + 3600, pools, {str(circuits): 30, str(provers): 120})
+    assert sorted(spans) == [(3, H0, H0 + 70, "circuits"), (4, H0 + 600, H0 + 1170, "circuits"), (5, H0, H0 + 120, "proofs")]
+    minutes = {"node 1": [(H0, 3, 1.0, 0, 0, 0, "gpu-pool-circuits-1791-x"), (H0 + 60, 3, 1.0, 0, 0, 0, "gpu-pool-circuits-1791-x")]}
+    rows = {(r["owner"], r["kind"]): r for r in vc.usage_rows(minutes, {"node 1": spans[:1]})}
+    assert (rows[("circuits", "gpu-lease")]["useful_s"], rows[("circuits", usage.POOL_UNLEASED)]["busy_s"]) == (70, 50)
+
+
+def fake_proc(tmp_path, procs: dict) -> Path:
+    """A /proc of `procs`, {pid: (argv, environ)}; an environ of None can't be read."""
+    proc = tmp_path / "proc"
+    (proc / "self").mkdir(parents=True)
+    for pid, (argv, env) in procs.items():
+        d = proc / str(pid)
+        d.mkdir()
+        (d / "cmdline").write_bytes(b"".join(a.encode() + b"\0" for a in argv))
+        if env is None:
+            (d / "environ").mkdir()
+        else:
+            (d / "environ").write_bytes(b"".join(f"{k}={v}".encode() + b"\0" for k, v in env.items()))
+    return proc
+
+
+LOOP = ["python3", "/workspace/verity-guest/bin/n1_lease.py", "loop", "--every", "5"]
+
+
+def test_each_pools_idle_is_its_running_loops_and_nothing_else_is_read(tmp_path):
+    proc = fake_proc(tmp_path, {
+        101: (LOOP, {"GPU_LEASE_DIR": "/run/gpu-lease-circuits", "VY_POOL_IDLE_S": "30", "HF_TOKEN": "dummy",
+                     "PEM": "-----BEGIN\nVY_POOL_IDLE_S=999"}),
+        102: (["/usr/bin/python3", "-u", *LOOP[1:]], {"PATH": "/usr/bin"}),               # n1_lease.py's defaults
+        103: (["bash", "-c", " ".join(LOOP)], {"GPU_LEASE_DIR": "/run/gpu-lease", "VY_POOL_IDLE_S": "7"}),  # its pane, not it
+        104: (["python3", LOOP[1], "status"], {"VY_POOL_IDLE_S": "7"}),
+        105: (LOOP, {})})                                                                 # exited after its cmdline was read
+    loops = vc.n1_pool_loops(proc)
+    assert loops == {"/run/gpu-lease-circuits": {("30", "")}, "/run/gpu-lease": {("120", "")}}
+    assert [vc.n1_pool_idle(d, loops) for d in vc.N1_LEASE_POOLS] == [30, 120]
+
+
+def test_a_pools_idle_that_isnt_one_known_number_raises_and_so_does_its_spans(tmp_path, monkeypatch):
+    circuits = {"GPU_LEASE_DIR": "/run/gpu-lease-circuits", "VY_POOL_IDLE_S": "30"}
+    for k, (procs, why) in enumerate((({}, "no n1_lease.py loop runs for /run/gpu-lease-circuits"),
+                                      ({1: (LOOP, circuits), 2: (LOOP, {**circuits, "VY_POOL_IDLE_S": "120"})}, "loops differ"),
+                                      ({1: (LOOP, {**circuits, "VY_LEASE_BRAIN": "ssh vy-cluster cluster grant"})}, "VY_LEASE_BRAIN"),
+                                      ({1: (LOOP, {**circuits, "VY_POOL_IDLE_S": "30s"})}, "whole number"))):
+        with pytest.raises(LookupError, match=why):
+            vc.n1_pool_idle("/run/gpu-lease-circuits", vc.n1_pool_loops(fake_proc(tmp_path / str(k), procs)))
+    with pytest.raises(LookupError, match="can't read the environment of n1_lease.py loop 1"):
+        vc.n1_pool_loops(fake_proc(tmp_path / "unreadable", {1: (LOOP, None)}))
+    pool = tmp_path / "pool"
+    pool.mkdir()
+    (pool / "n1-lease.log").write_text("")
+    monkeypatch.setattr(vc, "n1_pool_loops", lambda: {})
+    with pytest.raises(LookupError):
+        vc.n1_lease_spans(H0, {str(pool): "circuits"})
+    assert vc.n1_lease_spans(H0, {str(tmp_path / "no-log"): "circuits"}) == []
+
+
+def test_the_loop_defaults_are_n1_lease_pys():
+    src = (Path(__file__).parents[1] / "src" / "research" / "pods" / "nebius" / "n1_lease.py").read_text()
+    assert f'IDLE_S = int(os.environ.get("VY_POOL_IDLE_S", "{vc.N1_POOL_IDLE_S}"))' in src
+    assert f'DIR = Path(os.environ.get("GPU_LEASE_DIR", "{vc.N1_POOL_DIR}"))' in src
+    assert 'BRAIN = os.environ.get("VY_LEASE_BRAIN", "")' in src
+    assert set(re.findall(r'os\.environ\.get\("(GPU_LEASE_DIR|VY_POOL_IDLE_S|VY_LEASE_BRAIN)"', src)) == set(vc.N1_LOOP_ENV)
 
 
 def test_record_usage_writes_both_files_once_per_complete_hour(tmp_path):

@@ -535,7 +535,13 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
     except Exception as e:  # noqa: BLE001  the other panels still go out
         errors.append(f"node2-hours: {type(e).__name__}: {e}")
     try:
-        rows = usage_rows({"node 1": minutes["n1"], "node 2": minutes["n2"]}, {"node 1": n1_lease_spans(now.timestamp())})
+        read = {"node 1": minutes["n1"], "node 2": minutes["n2"]}
+        try:
+            spans = {"node 1": n1_lease_spans(now.timestamp())}
+        except Exception as e:  # noqa: BLE001  node 1's hours wait for a pass that knows its leases; node 2's go on
+            errors.append(f"held-idle node 1: {type(e).__name__}: {e}")
+            read["node 1"], spans = None, {}
+        rows = usage_rows(read, spans)
         readings = idle_readings(rows, now)
         try:
             add_phases(readings, now)
@@ -1035,7 +1041,9 @@ def kind_of(node: str, holder: str) -> str:
 
 
 N1_LEASE_POOLS = {"/run/gpu-lease-circuits": "circuits", "/run/gpu-lease": "proofs"}  # n1_lease.py's pools on node 1, by lane
-N1_POOL_IDLE_S = 120  # n1_lease.py's VY_POOL_IDLE_S: a pool GPU free this long, with nobody waiting, leaves the pool
+N1_POOL_DIR = "/run/gpu-lease"  # n1_lease.py's GPU_LEASE_DIR default
+N1_POOL_IDLE_S = 120  # n1_lease.py's VY_POOL_IDLE_S default: a pool GPU free this long, with nobody waiting, leaves the pool
+N1_LOOP_ENV = ("GPU_LEASE_DIR", "VY_POOL_IDLE_S", "VY_LEASE_BRAIN")  # the only variables read from a loop's environment
 POOL_HOLDER = re.compile(r"^gpu-pool-")
 NODE_NAMES = {"node 1": "vy-nebius-1", "node 2": "vy-nebius-2"}  # the held-idle file's names for the usage record's nodes
 USAGE_RECORD = Path("/workspace/usage/usage-hourly.jsonl")  # cluster.usage.RECORD: both nodes' rows, `cluster usage` reads it
@@ -1052,18 +1060,74 @@ def usage_module():
     return usage
 
 
-def n1_lease_spans(now: float, pools: dict = N1_LEASE_POOLS, idle_s: int = N1_POOL_IDLE_S) -> list[tuple]:
+def _n1_lease_loop(argv: list[bytes]) -> bool:
+    args = [a.decode(errors="replace") for a in argv]
+    return bool(args) and Path(args[0]).name.startswith("python") and any(
+        Path(a).name == "n1_lease.py" and args[i + 1:i + 2] == ["loop"] for i, a in enumerate(args))
+
+
+def n1_pool_loops(proc: Path = Path("/proc")) -> dict[str, set[tuple[str, str]]]:
+    """Per pool directory, the (VY_POOL_IDLE_S, VY_LEASE_BRAIN) of each `n1_lease.py loop` running for it, read from its
+    /proc cmdline and environment as n1_lease.py reads them, with its defaults. Only N1_LOOP_ENV's variables are read. A loop
+    whose environment can't be read could be any pool's, so it raises LookupError."""
+    loops: dict[str, set[tuple[str, str]]] = defaultdict(set)
+    for p in proc.glob("[0-9]*"):
+        try:
+            if not _n1_lease_loop((p / "cmdline").read_bytes().split(b"\0")):
+                continue
+            raw = (p / "environ").read_bytes()
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        except OSError as e:
+            raise LookupError(f"can't read the environment of n1_lease.py loop {p.name}: {type(e).__name__}") from None
+        if not raw:  # exited since its cmdline was read
+            continue
+        env = {}
+        for kv in raw.split(b"\0"):
+            k, sep, v = kv.partition(b"=")
+            if sep and k.decode(errors="replace") in N1_LOOP_ENV:
+                env[k.decode()] = v.decode(errors="replace")
+        loops[str(Path(env.get("GPU_LEASE_DIR", N1_POOL_DIR)))].add(
+            (env.get("VY_POOL_IDLE_S", str(N1_POOL_IDLE_S)), env.get("VY_LEASE_BRAIN", "")))
+    return loops
+
+
+def n1_pool_idle(pool: str, loops: dict[str, set[tuple[str, str]]]) -> int:
+    """The seconds `pool`'s loop waits with a GPU free before it shrinks, from n1_pool_loops; LookupError when that isn't one
+    known number: no loop runs for the pool, its loops disagree, or a brain decides its shrinks (they don't wait)."""
+    found = loops.get(str(Path(pool)), set())
+    if not found:
+        raise LookupError(f"no n1_lease.py loop runs for {pool}, so how long its GPUs sit free before a shrink is unknown")
+    if len(found) > 1:
+        raise LookupError(f"{pool}'s {len(found)} n1_lease.py loops differ in VY_POOL_IDLE_S or VY_LEASE_BRAIN")
+    [(idle, brain)] = found
+    if brain:
+        raise LookupError(f"{pool}'s loop runs with VY_LEASE_BRAIN, whose shrinks don't wait VY_POOL_IDLE_S")
+    try:
+        return int(idle)
+    except ValueError:
+        raise LookupError(f"{pool}'s loop has a VY_POOL_IDLE_S that isn't a whole number of seconds") from None
+
+
+def n1_lease_spans(now: float, pools: dict = N1_LEASE_POOLS, idle: dict | None = None) -> list[tuple]:
     """(GPU, start, end, lane) for each lease a node-1 pool granted, from n1_lease.py's log and state in each pool's directory.
 
     The log records pool membership, not leases: a GPU joins the pool (`unfenced`) for a waiting lease and leaves it (`shrink`)
-    once it has been free for idle_s with nobody waiting, so its lease ran from the unfence to the shrink less idle_s (to within
-    the pool's 5 s tick). `blocked-shrink` and `fenced` end it where they stand. A GPU still in the pool is leased until now if
-    n1-lease.json shows a lease on it, else until idle_s before the state's time."""
-    spans = []
+    once it has been free for the pool's idle seconds with nobody waiting, so its lease ran from the unfence to the shrink less
+    that idle (to within the pool's 5 s tick; a GPU leased again before it shrinks is one span, the gap in it). `blocked-shrink`
+    and `fenced` end it where they stand. A GPU still in the pool is leased until now if n1-lease.json shows a lease on it, else
+    until the idle before the state's time. `idle` maps each pool to its idle seconds; by default each pool's running loop
+    gives it (n1_pool_idle), and a pool with a log whose idle isn't known raises LookupError."""
+    spans, loops = [], None
     for d, lane in pools.items():
         log = Path(d) / "n1-lease.log"
         if not log.exists():
             continue
+        if idle is None:
+            loops = n1_pool_loops() if loops is None else loops
+            idle_s = n1_pool_idle(d, loops)
+        else:
+            idle_s = idle[d]
         start: dict[int, float] = {}
         for ln in log.read_text().splitlines():
             try:
