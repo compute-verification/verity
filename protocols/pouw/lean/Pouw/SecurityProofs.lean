@@ -87,6 +87,7 @@ import Pouw.SecurityProofs.PearlC.Freeze
 import Pouw.SecurityProofs.PearlC.FreezeP
 import Pouw.SecurityProofs.PearlC.FreezePPure
 import Pouw.SecurityProofs.PearlC.Gamma
+import Pouw.SecurityProofs.PearlC.HiddenGamma
 import Pouw.SecurityProofs.PearlC.KernelWrefGamma
 import Pouw.SecurityProofs.PearlC.Peel
 import Pouw.SecurityProofs.PearlC.PeelExactChecks
