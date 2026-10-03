@@ -379,6 +379,39 @@ _RESULT = ("import json, os; d = os.environ['RESEARCH_RUN_DIR']; json.dump({'sch
            "'measurements': [], 'steps': [{'step': 'agree', 'status': '%s'}]}, open(d + '/result.json', 'w'))")
 
 
+def test_merge_refuses_an_attempt_whose_result_is_the_lean_fast_paths_whatever_tool_recorded_it(tmp_path, monkeypatch, capsys):
+    """The coordinator's ruling: no merge accepts the Lean fast path's result (`lean_changed.py --records`, no kernel replay).
+    An attempt of `check` that passed on the exact commit is refused when its result is of a kind in `REFUSED_KINDS`, or can't
+    be read; the push guard reads the same `passing`. A `check/v1` result of the same commit merges."""
+    from research.merge import REFUSED_KINDS, unchecked_pushes
+    from research.store import ids
+    from research.store.local import LocalStore
+
+    main, feat, tip = _repos(tmp_path)
+    base = _git(main, "rev-parse", "HEAD")
+
+    def run(kind: str) -> int:
+        monkeypatch.chdir(feat)
+        return research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool",
+                              "mytools.decl_check:T", "--cwd", "source", "--", sys.executable, "-c",
+                              (_RESULT % "passed").replace("check/v1", kind)])
+
+    assert "lean-fast/v1" in REFUSED_KINDS and run("lean-fast/v1") == 0
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--dry-run"]) == 1
+    assert "refused: its result is a lean-fast/v1, which no merge accepts" in capsys.readouterr().err
+    assert unchecked_pushes(main, [f"refs/heads/main {tip} refs/heads/main {base}"], LocalStore()) == [tip]
+    assert run("check/v1") == 0
+    store = LocalStore()
+    results = [store.get_attempt(r[0])["outputs"]["result"] for r in store.index.sql("SELECT id FROM attempts WHERE tool = 'check'")]
+    art = next(a for a in results if store.get_manifest(a).kind == "check/v1")
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--dry-run"]) == 0
+    store.manifest_path(ids.hex_of(art)).unlink()
+    assert merge_main(["feat", "--dry-run"]) == 1
+    assert "refused: its result can't be read (NotFound" in capsys.readouterr().err
+
+
 def test_a_path_rule_requires_its_step_for_a_change_under_the_path(tmp_path, monkeypatch, capsys):
     """The target's declaration says `agree` must pass for a change under flock/: an attempt that skipped it admits a change
     elsewhere but not one under flock/; one where it passed admits both."""
