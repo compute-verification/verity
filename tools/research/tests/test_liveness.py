@@ -13,6 +13,7 @@ import pytest
 
 from research import liveness as L
 from research.liveness import JobTrees, Live, LivenessError, Unknown, live_pods, outside_commit
+from research.store.fixtures import fixture_id
 
 SHA = "ab" * 20
 
@@ -237,10 +238,14 @@ def git(cwd: Path, *args: str) -> str:
 
 
 def repo(tmp_path: Path, files: dict[str, str] | None = None) -> tuple[Path, str]:
-    """A committed checkout named by its commit (with .gitignore hiding results/ and .venv/), and that commit."""
+    """A committed checkout named by its commit (with .gitignore hiding results/ and .venv/, and fixtures/big registered as a
+    directory holding blob.bin `cache`), and that commit."""
+    big = tmp_path / "fetched"
+    big.mkdir()
+    (big / "blob.bin").write_text("cache")
     d = tmp_path / "checkout"
     d.mkdir()
-    files = {".gitignore": "results/\n.venv/\n", LA: "{}\n", "fixtures/artifacts.json": json.dumps({"art:" + "1" * 64: "fixtures/big"}),
+    files = {".gitignore": "results/\n.venv/\n", LA: "{}\n", "fixtures/artifacts.json": json.dumps({fixture_id(big): "fixtures/big"}),
              "README.md": "x\n", **(files or {})}
     for rel, text in files.items():
         (d / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -265,6 +270,10 @@ def test_a_checkout_holds_untracked_ignored_and_changed_files_but_never_caches_o
     (d / "results/run1/out.json").write_text("{}")
     (d / "notes.txt").write_text("mine")
     assert sorted(outside_commit(d, tmp_path / "absent.git")) == sorted([f"M {LA}", "results/run1/out.json", "notes.txt"])
+    (d / "fixtures/big/recaptured-on-gpu.json").write_text('{"new": 1}\n')
+    assert sorted(outside_commit(d, tmp_path / "absent.git")) == sorted(
+        [f"M {LA}", "results/run1/out.json", "notes.txt", "fixtures/big/blob.bin", "fixtures/big/recaptured-on-gpu.json"]), (
+        "a registered fixture whose bytes aren't its art id may hold a run's output")
 
 
 def test_a_tree_shipped_without_git_is_compared_with_the_bare_repos_commit_and_its_ready_time(tmp_path):

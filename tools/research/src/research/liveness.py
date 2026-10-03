@@ -19,7 +19,7 @@ LivenessError when it can't tell: kubectl fails, or a process's files can't be r
 never takes "nothing names it" from a scan that couldn't look. A process gone mid-scan names nothing.
 
 `outside_commit(tree, bare)`: the files a source tree holds besides its commit's files, build caches and registered fixtures
-(fixtures/artifacts.json), which may be a run's output. With .git: git status (untracked, ignored and changed files); without, the
+(fixtures/artifacts.json, each only while its bytes are its art id, as fetch-fixtures fetched it), which may be a run's output. With .git: git status (untracked, ignored and changed files); without, the
 bare repo's commit (`ls-tree`) and files changed after READY.json. git runs as the tree's owner, so root never runs a hook or
 filter its config names, and reads neither the system's nor a global config (no fsmonitor daemon). Unknown when it can't tell:
 git exits nonzero or says anything on stderr, or a path in the tree (.git and caches aside) is unreadable to the user git runs
@@ -337,12 +337,17 @@ def outside_commit(tree: Path | str, bare: Path | str, commit: str | None = None
     .git, work committed or stashed there: `HEAD at <sha>` when HEAD moved, `stash@{n}: ...`, and `commit <sha>` for each commit
     HEAD, a local branch or a reflog reaches that neither the shipped commit nor the clone's remote-tracking refs (the bare repo's
     branches) do; Unknown when it can't tell."""
+    from .store.fixtures import entries, fixture_id
+
     tree = Path(tree)
     commit = commit or tree.name
-    try:
-        reg = {v for k, v in _load(tree / "fixtures/artifacts.json").items() if k.startswith("art:") and isinstance(v, str)}
-    except AttributeError:
-        reg = set()
+    reg = set()
+    for art, rel in entries(_load(tree / "fixtures/artifacts.json")).items():
+        try:
+            if os.path.lexists(tree / rel) and fixture_id(tree / rel) == art:
+                reg.add(rel)
+        except (OSError, ValueError):
+            continue
 
     def keep(rel: str) -> bool:
         return not CACHE.search(rel) and not any(rel == r or rel.startswith(r.rstrip("/") + "/") for r in reg)
