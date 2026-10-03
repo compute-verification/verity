@@ -468,7 +468,10 @@ round by round: from the first challenge to the last answer the server has no ou
 challenge arrives is its storage at rest. The worst row is `t = 3`, `k = 243` rounds. After a late answer the prover
 times the next arrival, so the certificate needs the whole window to be too short to re-encode `C` from `W`: under the
 cap it is at most `240·5 + 3·12 = 1,236` sequential `Π₂` calls, and re-encoding a segment takes
-`R(d) = Σ_{v<512} (min(v, d) + 1) ≥ R(5) = 3,057` (6,578 at `d = 12`).
+`R(d) = Σ_{v<512} (min(v, d) + 1) ≥ R(5) = 3,057` (6,578 at `d = 12`). `Pous.SecurityProofs.BackgroundRebuildExcluded`
+proves both counts, and that programs which know `W` but hold no state about `Π₂`, each within a row's window and
+`2^128` queries, output every label of a segment with probability at most `2^-128` (`Pous/SecurityProofs/Rebuild/`).
+It does not bound recomputing a few blocks from held neighbours, at `min(v, d) + 1` calls per block.
 
 No graded verifier exists yet: `audit.TimedVerifier` and `protocol.Verifier` accept only when every answer is correct
 and on time, the `t = 0` rule (`DISCREPANCIES.md` B5).
@@ -536,6 +539,7 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 | `BandMultiMeetsFamilyD2`, `BandMultiMeetsFamilyD1`, `BandMultiMeetsFamilyD0`, `BandChainMeets64Rounds2`, `BandChainMeets64Rounds1` | the band at fewer rounds: every segment count from 1 to `2^64` at `D = 2`, `k = 97`, every `d ≥ 2`, at `D = 1`, `k = 93`, every `d ≥ 1`, and at `D = 0`, `k = 89`, every `d`; one segment (64 KiB) at `D = 2` and `D = 1` | proved |
 | `BandPubMeets64`, `BandPubMeets14`, `BandPubMeets14Global`, `BandPubMeetsFamily`, `BandPubMeetsFamilyD2`, `BandPubMeetsFamilyD1` | the same band rows with a public encoder and the exact setup check (`Pous/Protocol/Model/PubEncoder.lean`, `Pous/Protocol/Accounting/PubMeets.lean`) | proved |
 | `BandGradedMeetsFamily` | the band with up to `t` late answers (`Pous/Protocol/Model/Graded.lean`, `Pous/Protocol/Accounting/GradedMeets.lean`): every segment count from 1 to `2^64`, `d ≥ 5`, `D = 5`, `(t, k) = (0, 111), (1, 160), (2, 203), (3, 243)`, each late round within `(D_late, Q_late)` with `5 ≤ D_late ≤ d`, `D_late ≤ 12` | proved |
+| `BackgroundRebuildExcluded` | the graded window cannot re-encode a band segment (`Pous/Protocol/Accounting/Rebuild.lean`): every row's window is at most 1,236 calls at `D_late ≤ 12`, re-encoding costs `R(d) ≥ R(5) = 3,057`, and programs without state about `Π₂` re-encode a segment within a window with probability at most `2^-128` | proved |
 | `ChainDenseMeets64`, `ChainDenseMeets111` | the dense scheme over the overwrite chain: 64 KiB at `D = 5`, and the deployment point (`2^16` blocks of 1 KiB, `D = 64`), both at `k = 111` | proved |
 | `B5Stacked` | the one-way bound on Fisch's stacked graph | proved |
 | `DenseMeets64`, `SegMeets14`, `SegTagMeets14` | the dense scheme at 64 KB, `D = 5`, `k = 106`, in the ideal-hash model: one segment, 448 segments (14 GB), and the 448 segments keyed as the implementation keys them, for every salt | proved |
