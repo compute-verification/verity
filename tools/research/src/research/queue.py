@@ -12,7 +12,8 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, is marked ready at its head, and
 has every grant its change needs.  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that `research queue ready PR`
-writes, so a new push needs a new one, and only after the quick tier passes at that head: `suites.py --quick` on the suites the PR
+writes, so a new push needs a new one (a restack too: the tier ran on the old tree), and only after the quick tier passes at that
+head: `suites.py --quick` on the suites the PR
 changes, from a clean checkout (`QuickTier`); a failure refuses and names the tests.  Once the queue lands trains it replaces the
 merge request (until then `main` moves only by the coordinator's trains, so ask on Slack too).  Draft state is ignored: agents open PRs as drafts, and
 the ready label is what says one is done.  The hold label keeps a PR out whatever else holds.  The owner is the lane its body names
@@ -20,9 +21,14 @@ on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules f
 `main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs: a role for changed files
 under listed paths (`merge_requires`' syntax, `!` patterns included), or for a change to listed sections of any `lean-audit.json`
 (`pins`, `reads`), and who gives each (`by`, which `status` prints with the label command to a PR waiting on it).  A grant is a
-store label `grant = {role}` on the target `pr:{number}@{head sha}`, so a new push needs new grants.  A `lean-audit.json` change needs no grant when a `lean_review` label on the target names the audit.json of an
-`audit.py --update` (`--moved` for a move) that printed that whole change as the same statements (`reviewed`).  Grants and ready are read after pulling the target's labels from the store's remote; when that pull can't happen (no
-remote here, one that's unusable, a failed pull) the command fails with `STALE`, never answering from this machine's labels alone.
+store label `grant = {role}` on the target `pr:{number}@{head sha}`.  It carries to a new head of the PR that only restacks it or
+merges `main` into it: one whose change against `main` is the granted head's, every file from the same bytes to the same bytes, its
+`lean-audit.json` change included (`carry`, Daniel's ruling of 2 Oct); the queue prints the head each grant carried from, or why one
+didn't.  Any other push needs new grants, and so does a head whose history git can't compare.  A `lean-audit.json` change needs no
+grant when a `lean_review` label on the target, or carried to it the same way, names the audit.json of an `audit.py --update`
+(`--moved` for a move) that printed that whole change as the same statements (`reviewed`).  Grants and ready are read after
+pulling the target's labels (for a carry, every head's) from the store's remote; when that pull can't happen (no remote here, one
+that's unusable, a failed pull) the command fails with `STALE`, never answering from this machine's labels alone.
 
 `next`.  Its first-parent chain above `main` is the queue, and each merge commit's trailers name its PR, head and owner: git holds
 the queue's state.  A sync keeps the longest prefix of that chain which still matches the admitted PRs (same PR, same head, same
@@ -259,12 +265,61 @@ def grant_target(pr: int, head: str) -> str:
     return f"pr:{pr}@{head}"
 
 
+def _is_audit(path: str) -> bool:
+    return path == "lean-audit.json" or path.endswith("/lean-audit.json")
+
+
+def own_change(repo: Path, base: str, head: str) -> dict[str, tuple[str, ...]] | None:
+    """What ``head`` changes against its merge base with ``base``: {path: (old mode, new mode, old blob, new blob)}, a rename as a
+    deletion and an addition.  None when git can't say (``head`` isn't in ``repo``, or shares no history with ``base``)."""
+    mb = _git(repo, "merge-base", base, head, check=False)
+    if mb.returncode:
+        return None
+    r = _git(repo, "diff", "--raw", "--no-renames", "--no-abbrev", "-z", mb.stdout.strip(), head, check=False)
+    if r.returncode:
+        return None
+    fields = r.stdout.split("\0")
+    return {path: tuple(meta.lstrip(":").split()[:4]) for meta, path in zip(fields[0::2], fields[1::2])}
+
+
+def carry(repo: Path, base: str, old: str, new: str) -> tuple[bool, str]:
+    """Whether a grant or `lean_review` label on ``old``, another head of a PR, counts at its head ``new``, and why (Daniel's ruling,
+    2 Oct: one carries across a restack or a merge of `main` when the new head's `lean-audit.json` change against its base is
+    byte-identical to the one granted; any other `lean-audit.json` change needs a new grant).
+
+    The rule: against its merge base with ``base`` (the `main` the gate compares with now, so a parent that landed counts as
+    `main`), ``new`` changes exactly the paths ``old`` changes, each from the same bytes to the same bytes (`own_change`: mode and
+    blob, before and after).  That is what a rebase onto `main`, a restack after a parent landed, or a merge of `main` leaves when
+    `main`'s own changes didn't touch the PR's files, and every `lean-audit.json` the PR changes is among those paths.  So it
+    carries only to a head whose change is the one that was granted, whatever its history: a merge commit can hold edits of its
+    own and a rebase rewrites every commit, but neither can make two different changes compare equal.  Nothing else carries:
+    a head that changes any file more, less or differently (a `lean-audit.json` that `main` changed meanwhile included, since
+    then its base bytes differ), or one git can't compare (``old`` isn't in ``repo``, no merge base), needs new grants."""
+    for h in (old, new):
+        if _git(repo, "cat-file", "-e", f"{h}^{{commit}}", check=False).returncode:
+            return False, f"{h[:12]} isn't in {repo}, so its change can't be compared (fetch it)"
+    was, now = own_change(repo, base, old), own_change(repo, base, new)
+    base = base[:12] if re.fullmatch(r"[0-9a-f]{40}", base) else base
+    if was is None or now is None:
+        return False, f"{(old if was is None else new)[:12]} shares no history with {base}"
+    if differ := sorted(p for p in was.keys() | now.keys() if was.get(p) != now.get(p)):
+        if audits := [p for p in differ if _is_audit(p)]:
+            return False, f"its lean-audit.json change isn't byte-identical ({', '.join(audits)})"
+        more = f" and {len(differ) - 3} more" if len(differ) > 3 else ""
+        return False, f"its change against {base} differs ({', '.join(differ[:3])}{more})"
+    how = "merge of main" if _git(repo, "merge-base", "--is-ancestor", old, new, check=False).returncode == 0 else "restack"
+    return True, f"{how}; lean-audit.json change identical" if any(map(_is_audit, now)) else f"{how}; no lean-audit.json change"
+
+
 class StoreGrants:
     """Grants from the evidence store: `grant` labels on `pr:{n}@{head}`, pulled from the remote first.  Without that pull it raises:
-    a cloud VM's shell that lost its store secrets has no remote, and its local labels are whatever it last pulled."""
+    a cloud VM's shell that lost its store secrets has no remote, and its local labels are whatever it last pulled.  Given the
+    clone ``repo`` and the ``base`` its PRs merge onto, a grant or `lean_review` on another head of the PR counts where `carry`
+    says it does (`carried`), with a line naming the head it carried from."""
 
-    def __init__(self, store, log: Callable[[str], None] = print):
-        self.store, self.log = store, log
+    def __init__(self, store, log: Callable[[str], None] = print, repo: Path | None = None, base: str = "origin/main"):
+        self.store, self.log, self.repo, self.base = store, log, repo, base
+        self._pulled: set[int] = set()
 
     def __call__(self, pr: int, head: str) -> set[str]:
         return {str(lab.value) for lab in self._labels(pr, head, vocab.GRANT)}
@@ -272,17 +327,60 @@ class StoreGrants:
     def ready(self, pr: int, head: str) -> bool:
         return any(str(lab.value).lower() == "true" for lab in self._labels(pr, head, vocab.READY))
 
+    def carried(self, pr: int, head: str, roles: set[str]) -> set[str]:
+        """Which of ``roles`` a `grant` on another head of pull request ``pr`` gives ``head`` (`carry`)."""
+        return {str(lab.value) for _, lab in self._carried(pr, head, vocab.GRANT, roles)} if roles else set()
+
     def reviews(self, pr: int, head: str) -> list[dict]:
-        """The package reports in the audit.json that each `lean_review` label on `pr:{n}@{head}` names (Rules.needs); one that
-        can't be fetched or read covers nothing, with a line."""
+        """The package reports in the audit.json that each `lean_review` label on `pr:{n}@{head}`, or carried to it from another
+        head (`carry`), names (Rules.needs); one that can't be fetched or read covers nothing, with a line."""
         out = []
-        for lab in self._labels(pr, head, vocab.LEAN_REVIEW):
+        for at, lab in [(head, lab) for lab in self._labels(pr, head, vocab.LEAN_REVIEW)] + \
+                self._carried(pr, head, vocab.LEAN_REVIEW, None):
             try:
                 p = self.store.fetch(str(lab.value))
                 out += json.loads((p if p.is_file() else p / "audit.json").read_text())["packages"]
             except Exception as e:  # noqa: BLE001  (any unreadable report is one that covers nothing)
-                self.log(f"research queue: {lab.value}, the lean_review on {grant_target(pr, head)}, is unreadable "
+                self.log(f"research queue: {lab.value}, the lean_review on {grant_target(pr, at)}, is unreadable "
                          f"({type(e).__name__}: {e}); it covers nothing")
+        return out
+
+    def _carried(self, pr: int, head: str, key: str, values: set[str] | None) -> list[tuple]:
+        """(the head it's on, the label) for each ``key`` label (whose value is in ``values``, unless None) on another head of pull
+        request ``pr`` from which `carry` says it counts at ``head``; a line for each head with such labels, carried or not."""
+        if self.repo is None:
+            return []
+        out = []
+        for old, labs in self._other_heads(pr, head, key).items():
+            if not (labs := [lab for lab in labs if values is None or str(lab.value) in values]):
+                continue
+            what = ", ".join(sorted({f"{key} {lab.value}" for lab in labs}))
+            ok, why = carry(self.repo, self.base, old, head)
+            if ok:
+                self.log(f"research queue: {what} carried from {grant_target(pr, old)} to {head[:12]} ({why})")
+                out += [(old, lab) for lab in labs]
+            else:
+                self.log(f"research queue: {what} on {grant_target(pr, old)} doesn't carry to {head[:12]}: {why}")
+        return out
+
+    def _other_heads(self, pr: int, head: str, key: str) -> dict[str, list]:
+        """{head: its ``key`` labels} for each head of pull request ``pr`` but ``head`` that has some, after pulling every head's
+        labels from the store's remote (once per PR); without that pull it raises, as `_labels` does."""
+        from .store import labels_sync
+
+        prefix = grant_target(pr, "")
+        if pr not in self._pulled:
+            try:
+                labels_sync.pull_prefix(self.store, prefix)
+            except Exception as e:  # noqa: BLE001  (no pull, no carry: local labels alone may be stale)
+                raise QueueError(f"STALE: the labels of {prefix}* weren't pulled from the store's remote ({type(e).__name__}: {e}), "
+                                 f"so grants on #{pr}'s other heads here may be old; not carrying any") from None
+            self._pulled.add(pr)
+        out = {}
+        for d in sorted((Path(self.store.root) / "labels").glob(f"{ids.target_dirname(prefix)}*")):
+            old = d.name.rpartition("@")[2]
+            if old != head and ids.is_pr(grant_target(pr, old)) and (labs := self.store.labels(grant_target(pr, old), key=key)):
+                out[old] = labs
         return out
 
     def _labels(self, pr: int, head: str, key: str) -> list:
@@ -327,9 +425,10 @@ def _message(pr: PR) -> str:
 class Queue:
     def __init__(self, workdir: Path, *, remote: str, github, grants: Callable[[int, str], set[str]], ready: Callable[[int, str], bool],
                  store=None, shadow: bool = False, rules: Rules | None = None, notes: Path | None = None, log: Callable[[str], None] = print,
-                 reviews: Callable[[int, str], list[dict]] = lambda n, h: [], auth: tuple[str, ...] = ()):
+                 reviews: Callable[[int, str], list[dict]] = lambda n, h: [], auth: tuple[str, ...] = (),
+                 carry: Callable[[int, str, set[str]], set[str]] = lambda n, h, roles: set()):
         self.workdir, self.remote, self.github, self.grants, self.ready, self.store = Path(workdir), remote, github, grants, ready, store
-        self.reviews = reviews
+        self.reviews, self.carry = reviews, carry
         self.shadow, self.log, self._rules, self.auth = shadow, log, rules, auth
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.notes = Path(notes or os.environ.get("RESEARCH_NOTES") or Path.home() / ".research" / "notes")
@@ -423,8 +522,7 @@ class Queue:
                 e.state, e.why = "refused", f"ejected at {p.head[:8]}: {ejected['why']} (a new push re-admits it)"
             elif not self.ready(p.number, p.head):
                 e.state, e.why = "waiting", f"not marked ready at {p.head[:8]}: `research queue ready {p.number}`"
-            elif missing := rules.needs(self.workdir, "origin/main", p.head, lambda: self.reviews(p.number, p.head)) - \
-                    self.grants(p.number, p.head):
+            elif missing := self.missing(rules, p):
                 e.state, e.why = "waiting", (f"waiting for the {', '.join(sorted(missing))} grant at {p.head[:8]}: "
                                              f"{rules.asks(p.number, p.head, missing)}")
             below = _out(self.workdir, "rev-list", f"origin/main..{p.head}").split()
@@ -436,6 +534,12 @@ class Queue:
                 if e.state == "ready" and (blocking := [a for a in e.after if out[a].state != "ready"]):
                     e.state, e.why, changed = "waiting", f"contains #{blocking[0]}, which isn't admitted", True
         return out
+
+    def missing(self, rules: Rules, p: PR) -> set[str]:
+        """The roles ``p``'s change needs that no grant gives at its head, on it or carried to it from another (`carry`)."""
+        need = rules.needs(self.workdir, "origin/main", p.head, lambda: self.reviews(p.number, p.head))
+        missing = need - self.grants(p.number, p.head)
+        return missing - self.carry(p.number, p.head, missing) if missing else missing
 
     def order(self, chain: list[Member], entries: dict[int, Entry]) -> list[int]:
         """Members that keep their head keep their order; the rest follow by PR number, each after the PRs it contains."""
@@ -762,10 +866,10 @@ def main(argv: list[str]) -> int:
         store = LocalStore(a.store)
         if a.command == "ready":
             return ready(GitHub(repo), store, a.pr, a.by, QuickTier(Path(_out(Path.cwd(), "rev-parse", "--show-toplevel")), remote))
-        labels = StoreGrants(store)
+        labels = StoreGrants(store, log=lambda s: print(s, file=sys.stderr), repo=a.workdir)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), grants=labels, ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None, reviews=labels.reviews,
-                  auth=credential_args(Path.cwd(), remote))
+                  auth=credential_args(Path.cwd(), remote), carry=labels.carried)
         lock = _lock(a.workdir)  # noqa: F841
         if a.command == "status":
             entries = q.status()

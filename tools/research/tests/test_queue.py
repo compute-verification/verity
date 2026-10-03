@@ -587,3 +587,146 @@ def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that
     monkeypatch.setenv("FAKE_LAKE_FAIL", "1")
     assert tier(world.gh.prs[1]) == "`lake build` in backends/flock/verifier/lean exited 1 (its output is above)"
     assert (lean / ".lake" / "built").read_text() == "from the last PR\n" and not (lean / "stray.olean").exists()
+
+
+RED_TEAM = '\n[[grant]]\nrole = "red-team"\npaths = ["backends/flock/", "!README.md"]\n'
+
+
+def _move_main(world: World, files: dict[str, str]) -> str:
+    moved = world.change(files)
+    _git(world.dev, "push", "-q", "origin", f"{moved}:refs/heads/main")
+    return moved
+
+
+def _merge_main(world: World, head: str) -> str:
+    """``head`` with `main` merged into it, on the origin as a PR's head is."""
+    _git(world.dev, "fetch", "-q", "origin")
+    _git(world.dev, "checkout", "-q", "--detach", head)
+    _git(world.dev, "merge", "-q", "--no-ff", "--no-edit", "origin/main")
+    sha = _git(world.dev, "rev-parse", "HEAD")
+    _git(world.dev, "push", "-q", "origin", f"{sha}:refs/dev/{sha}")
+    return sha
+
+
+def _carrying(world: World, rules: str | None = None) -> Queue:
+    """A queue whose grants come from `world.store`'s remote, carried from a PR's other heads (`StoreGrants.carried`)."""
+    from research.queue import StoreGrants
+
+    world.with_store_remote()
+    workdir = world.tmp / "q" / "verity"
+    labels = StoreGrants(world.store, log=world.logs.append, repo=workdir)
+    return Queue(workdir, remote=str(world.origin), github=world.gh, grants=labels, ready=lambda n, h: (n, h) in world.gh.ready,
+                 store=world.store, notes=world.tmp / "notes", log=world.logs.append, reviews=labels.reviews, carry=labels.carried,
+                 rules=Rules.parse(rules) if rules else None)
+
+
+def _grant(world: World, pr: int, head: str, role: str) -> None:
+    """``role``'s grant on `pr:{pr}@{head}`, written in a reviewer's own store and pushed to the remote."""
+    reviewer = LocalStore(world.tmp / "reviewer", config_path=world.tmp / "store.toml")
+    reviewer.add_label(grant_target(pr, head), vocab.GRANT, role, "red-team-x", ts="2026-10-03T16:00:00Z")
+    assert labels_sync.push_targets(reviewer, [grant_target(pr, head)])["failed"] == []
+
+
+def test_a_grant_carries_to_a_restack_with_a_byte_identical_lean_audit_change_and_the_queue_names_the_head_it_came_from(world):
+    """Daniel's ruling (2 Oct): a statement review carries across a restack when the new head's `lean-audit.json` change is
+    byte-identical to the one granted.  The clone holds the old head from the sync that admitted it; the grant was written on
+    another machine and comes through the store's remote, pulled for every head of the PR at once."""
+    q = _carrying(world)
+    audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
+    pin = {"pkg/lean-audit.json": json.dumps({**audit, "pins": {"T": "2"}})}
+    world.gh.put(1, old := world.change(pin))
+    _grant(world, 1, old, "statement-reviewer")
+    assert [m.pr for m in q.sync()[0]] == [1]
+    _move_main(world, {"d.txt": "landed meanwhile\n"})
+    world.gh.put(1, new := world.change(pin))                   # the same change on the new `main`
+    members, _ = q.sync()
+    assert [(m.pr, m.head) for m in members] == [(1, new)]
+    assert (f"research queue: grant statement-reviewer carried from pr:1@{old} to {new[:12]} "
+            f"(restack; lean-audit.json change identical)") in world.logs
+
+
+def test_a_grant_carries_to_a_merge_of_main_and_not_to_any_other_lean_audit_change(world):
+    """A merge of `main` carries; a restated pin doesn't, and neither does the same pin change restacked onto a `main` that changed
+    the same `lean-audit.json` meanwhile, since its change now starts from other bytes (fail closed: a new grant, or a lean_review)."""
+    q = _carrying(world)
+    audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
+    world.gh.put(1, old := world.change({"pkg/lean-audit.json": json.dumps({**audit, "pins": {"T": "2"}})}))
+    _grant(world, 1, old, "statement-reviewer")
+    q.sync()
+    _move_main(world, {"d.txt": "landed meanwhile\n"})
+    world.gh.put(1, merged := _merge_main(world, old))
+    assert [m.head for m in q.sync()[0]] == [merged]
+    assert (f"research queue: grant statement-reviewer carried from pr:1@{old} to {merged[:12]} "
+            f"(merge of main; lean-audit.json change identical)") in world.logs
+
+    def refused(h: str) -> None:
+        world.gh.put(1, h)
+        members, entries = q.sync()
+        assert members == [] and entries[1].why.startswith(f"waiting for the statement-reviewer grant at {h[:8]}")
+        assert (f"research queue: grant statement-reviewer on pr:1@{old} doesn't carry to {h[:12]}: its lean-audit.json change "
+                f"isn't byte-identical (pkg/lean-audit.json)") in world.logs
+
+    refused(world.change({"pkg/lean-audit.json": json.dumps({**audit, "pins": {"T": "3"}})}))
+    _move_main(world, {"pkg/lean-audit.json": json.dumps({**audit, "pins": {"T": "1", "U": "1"}})})
+    refused(world.change({"pkg/lean-audit.json": json.dumps({**audit, "pins": {"T": "2", "U": "1"}})}))
+
+
+def test_a_red_team_grant_on_flock_follows_the_same_restack_rule(world):
+    """A path grant carries the same way: to a restack of the change it saw, never to one that changes another file too, a
+    `lean-audit.json` the granted head didn't change included."""
+    q = _carrying(world, RULES + RED_TEAM)
+    audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
+    flock = {"backends/flock/x.py": "x = 1\n"}
+    world.gh.put(1, old := world.change(flock))
+    _grant(world, 1, old, "red-team")
+    assert [m.pr for m in q.sync()[0]] == [1]
+    _move_main(world, {"d.txt": "landed meanwhile\n"})
+    world.gh.put(1, new := world.change(flock))
+    assert [m.head for m in q.sync()[0]] == [new]
+    assert f"research queue: grant red-team carried from pr:1@{old} to {new[:12]} (restack; no lean-audit.json change)" in world.logs
+    for extra, why in (({"backends/flock/y.py": "y = 1\n"}, "its change against origin/main differs (backends/flock/y.py)"),
+                       ({"a.txt": "a, too\n"}, "its change against origin/main differs (a.txt)"),
+                       ({"pkg/lean-audit.json": json.dumps({**audit, "dependencies": {"M": "2"}})},
+                        "its lean-audit.json change isn't byte-identical (pkg/lean-audit.json)")):
+        world.gh.put(1, h := world.change({**flock, **extra}))
+        members, entries = q.sync()
+        assert members == [] and entries[1].why.startswith(f"waiting for the red-team grant at {h[:8]}")
+        assert f"research queue: grant red-team on pr:1@{old} doesn't carry to {h[:12]}: {why}" in world.logs
+
+
+def test_a_grant_on_a_head_git_cannot_compare_carries_nothing(world):
+    """Fail closed: a head the clone never fetched, one that exists nowhere, and one with no history in common with `main` (same
+    tree, so only the missing merge base refuses it) give the new head nothing."""
+    from research.queue import carry
+
+    q = _carrying(world, RULES + RED_TEAM)
+    q.sync()                                                    # the clone first: a local clone hardlinks every object there is
+    flock = {"backends/flock/x.py": "x = 1\n"}
+    unseen = world.change(flock)                                # on the origin, but never a PR head the queue fetched
+    ghost = "0123456789abcdef" * 2 + "01234567"
+    for h in (unseen, ghost):
+        _grant(world, 1, h, "red-team")
+    _move_main(world, {"d.txt": "landed meanwhile\n"})
+    world.gh.put(1, new := world.change(flock))
+    members, entries = q.sync()
+    assert members == [] and entries[1].why.startswith(f"waiting for the red-team grant at {new[:8]}")
+    for h in (unseen, ghost):
+        assert (f"research queue: grant red-team on pr:1@{h} doesn't carry to {new[:12]}: {h[:12]} isn't in {q.workdir}, so its "
+                f"change can't be compared (fetch it)") in world.logs
+    orphan = _git(world.dev, "commit-tree", f"{new}^{{tree}}", "-m", "the same files, no history")
+    assert carry(world.dev, "origin/main", orphan, new) == (False, f"{orphan[:12]} shares no history with origin/main")
+    assert carry(world.dev, "origin/main", unseen, new) == (True, "restack; no lean-audit.json change")   # where git can compare
+
+
+def test_without_a_pull_of_every_head_of_the_pr_nothing_carries_and_the_queue_says_stale(tmp_path, monkeypatch):
+    from research.queue import StoreGrants
+
+    head = "0123456789abcdef0123456789abcdef01234567"
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    grants = StoreGrants(LocalStore(tmp_path / "queue", config_path=cfg), repo=tmp_path)
+    monkeypatch.setattr(LocalStore, "remote", property(lambda self: _Unreachable()))
+    assert grants.carried(12, head, set()) == set()             # nothing to carry, nothing pulled
+    with pytest.raises(QueueError, match=r"^STALE: the labels of pr:12@\* weren't pulled from the store's remote \(OSError: injected.*"
+                                         r"not carrying any$"):
+        grants.carried(12, head, {"red-team"})

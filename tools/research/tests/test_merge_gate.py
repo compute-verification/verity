@@ -374,6 +374,94 @@ def test_a_move_audit_py_prints_as_the_same_statements_needs_no_grant_and_a_chan
     assert "#23 needs the statement-reviewer grant" in capsys.readouterr().err
 
 
+def _main_moves(main: Path, origin: Path) -> None:
+    (main / "c.txt").write_text("main moves\n")
+    _git(main, "add", "c.txt")
+    _git(main, "commit", "-q", "-m", "main moves")
+    _git(main, "push", "-q", "origin", "main")
+
+
+def _main_merged_into(main: Path, branch: str) -> str:
+    _git(main, "checkout", "-q", "-b", f"{branch}-merged", branch)
+    _git(main, "merge", "-q", "--no-ff", "--no-edit", "main")
+    _git(main, "checkout", "-q", "main")
+    return _git(main, "rev-parse", f"{branch}-merged")
+
+
+def test_a_statement_review_carries_into_a_train_across_a_restack_or_a_merge_of_main_and_not_to_a_restated_pin(
+        tmp_path, monkeypatch, capsys):
+    """Daniel's ruling (2 Oct), at the train's gate: the grant on the head that was reviewed counts at a head that only restacks it
+    or merges `main` into it, and the train says which head it carried from; a head whose pin says something else needs a new one."""
+    from research.store.local import LocalStore
+
+    _store_remote(tmp_path, monkeypatch)
+    main, _feat, _tip = _repos(tmp_path)
+    audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
+    pinned = json.dumps({**audit, "pins": {"P.t": {"type_hash": "2"}}}, indent=1)
+    (main / "tools" / "check").mkdir(parents=True)
+    origin, heads = _origin_with(tmp_path, main, {
+        "tools/check/queue.toml": '[[grant]]\nrole = "statement-reviewer"\nlean_audit = ["pins", "reads"]\n',
+        "lean-audit.json": json.dumps(audit, indent=1)}, {20: {"lean-audit.json": pinned}})
+    old = heads[20]
+    LocalStore().add_label(f"pr:20@{old}", "grant", "statement-reviewer", "reviewer")
+    _main_moves(main, origin)
+    restacked = _files_branch(main, "pr20-restacked", {"lean-audit.json": pinned})
+    merged = _main_merged_into(main, "pr20")
+    restated = _files_branch(main, "pr20-restated", {"lean-audit.json": json.dumps({**audit, "pins": {"P.t": {"type_hash": "3"}}})})
+    monkeypatch.chdir(main)
+    for head, how in ((restacked, "restack"), (merged, "merge of main")):
+        _git(main, "push", "-q", "-f", "origin", f"{head}:refs/pull/20/head")
+        assert merge_main(["--train", "--prepare", f"train-prep/{how[0]}", f"20@{head[:9]}", "--lint", "true"]) == 0, capsys.readouterr()
+        assert (f"research merge: grant statement-reviewer carried from pr:20@{old} to {head[:12]} "
+                f"({how}; lean-audit.json change identical)") in capsys.readouterr().out
+    _git(main, "push", "-q", "-f", "origin", f"{restated}:refs/pull/20/head")
+    assert merge_main(["--train", "--prepare", "train-prep/x", f"20@{restated[:9]}", "--lint", "true"]) == 1
+    out, err = capsys.readouterr()
+    assert f"#20 needs the statement-reviewer grant at {restated[:12]}" in err and "nothing was built" in err
+    assert (f"research merge: grant statement-reviewer on pr:20@{old} doesn't carry to {restated[:12]}: its lean-audit.json change "
+            f"isn't byte-identical (lean-audit.json)") in out
+    assert _git(origin, "for-each-ref", "--format=%(refname)", "refs/heads/train-prep") == \
+        "refs/heads/train-prep/m\nrefs/heads/train-prep/r"
+
+
+def test_a_lean_review_carries_under_the_same_rule(tmp_path, monkeypatch, capsys):
+    """A `lean_review` on the head `audit.py --update --moved` ran on counts at a restack of it; at a head that also changes another
+    file it doesn't, though the report would still cover its lean-audit.json change: the restack rule binds before `reviewed`."""
+    from research.store.local import LocalStore
+
+    _store_remote(tmp_path, monkeypatch)
+    main, _feat, _tip = _repos(tmp_path)
+    base = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {"P.Defs": {"hash": "d"}}}
+    moved = {**base, "pins": {"Q.t": {"type_hash": "1q"}}, "reads": {"Q.Defs": {"hash": "dq"}}}
+    (main / "tools" / "check").mkdir(parents=True)
+    (main / "lean").mkdir()
+    origin, heads = _origin_with(tmp_path, main, {
+        "tools/check/queue.toml": '[[grant]]\nrole = "statement-reviewer"\nlean_audit = ["pins", "reads"]\n',
+        "lean/lean-audit.json": json.dumps(base, indent=1)}, {22: {"lean/lean-audit.json": json.dumps(moved, indent=1)}})
+    old, store = heads[22], LocalStore()
+    report = tmp_path / "audit.json"
+    report.write_text(json.dumps({"passed": True, "failed": [], "packages": [{
+        "package": "/w/verity/lean", "review": [], "statement_changes": False,
+        "before": {k: base[k] for k in ("pins", "reads")}, "pins": moved["pins"], "reads": moved["reads"]}]}))
+    art = store.put_artifact("lean-review/v1", {}, file=report)
+    store.add_label(f"pr:22@{old}", "lean_review", art, "lean")
+    _main_moves(main, origin)
+    restacked = _files_branch(main, "pr22-restacked", {"lean/lean-audit.json": json.dumps(moved, indent=1)})
+    more = _files_branch(main, "pr22-more", {"lean/lean-audit.json": json.dumps(moved, indent=1), "x.txt": "x\n"})
+    monkeypatch.chdir(main)
+    _git(main, "push", "-q", "-f", "origin", f"{restacked}:refs/pull/22/head")
+    assert merge_main(["--train", "--prepare", "train-prep/r", f"22@{restacked[:9]}", "--lint", "true"]) == 0, capsys.readouterr()
+    assert (f"research merge: lean_review {art} carried from pr:22@{old} to {restacked[:12]} (restack; lean-audit.json change "
+            f"identical)") in capsys.readouterr().out
+    _git(main, "push", "-q", "-f", "origin", f"{more}:refs/pull/22/head")
+    assert merge_main(["--train", "--prepare", "train-prep/x", f"22@{more[:9]}", "--lint", "true"]) == 1
+    out, err = capsys.readouterr()
+    assert f"#22 needs the statement-reviewer grant at {more[:12]}" in err
+    main_tip = _git(main, "rev-parse", "main")
+    assert (f"research merge: lean_review {art} on pr:22@{old} doesn't carry to {more[:12]}: its change against {main_tip[:12]} "
+            f"differs (x.txt)") in out
+
+
 _RESULT = ("import json, os; d = os.environ['RESEARCH_RUN_DIR']; json.dump({'schema': 'research/result/v0.1', 'kind': 'check/v1', "
            "'run_id': os.environ['RESEARCH_RUN_ID'], 'workload_fingerprint': {}, 'validation': {'status': 'passed', 'checker': 't'}, "
            "'measurements': [], 'steps': [{'step': 'agree', 'status': '%s'}]}, open(d + '/result.json', 'w'))")
