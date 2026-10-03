@@ -1,12 +1,14 @@
 """The recorder's trace writer on CPU: the open-loop schedule, chunk stamping on an injected clock, the conversion to the
-calibration tool's format with its exclusions, the merge, and the offline engine's loop on a fake engine. No GPU, no
-server, no clock."""
+calibration tool's format with its exclusions, the merge, and the offline engine's loop and a whole job on a fake
+engine, evicted or not. No GPU, no server, no clock."""
 
 from __future__ import annotations
 
 import gc
 import importlib.util
 import json
+import math
+import signal
 import sys
 import types
 from pathlib import Path
@@ -289,6 +291,93 @@ def test_the_offline_loop_admits_on_time_stamps_each_step_and_commits_one_run_pe
         rec.offline_replay(eng, com, [q | {"rid": "again." + q["rid"]} for q in reqs], t0, t0 + 200,
                            out.append, steps.append, commits.append)
     assert not any(isinstance(c, rec.Collections) for c in gc.callbacks)
+
+
+@pytest.mark.parametrize("evict", ["in the replay", "at startup", None])
+def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path, monkeypatch, evict) -> None:
+    """A whole offline `run` on the fake engine and the injected clock, with SIGTERM delivered 90 s after t0, while the
+    engine loads (seeds 62-69's eviction), or never."""
+    now, handlers, evict_at = [100.0], {}, [math.inf]
+
+    def clock():
+        now[0] += 0.001
+        return now[0]
+
+    class Event:
+        def __init__(self):
+            self.flag = False
+
+        def is_set(self):
+            return self.flag
+
+        def set(self):
+            self.flag = True
+
+        def wait(self, timeout):
+            if not self.flag:
+                now[0] += timeout
+
+    class Monitor:
+        """The spawned monitor: when joined, a quiet sample every SAMPLE_S since it started."""
+
+        def __init__(self, target, args, daemon):
+            self.path = args[0]
+
+        def start(self):
+            self.began = now[0]
+
+        def join(self, timeout):
+            lines, t = rec.JsonLines(self.path), self.began
+            while (t := t + rec.SAMPLE_S) <= now[0]:
+                lines({"mono": t, "dt_s": rec.SAMPLE_S, "hb_max_ms": 1.0, "loop_max_ms": 1.0, "foreign_pids": [],
+                       "others_busy": 0.05, "affinity_busy": 0.1, "load": [1.0, 1.0, 1.0], "own_cores": 0.5,
+                       "sm_mhz": 2400})
+            lines.close()
+
+    class Evicting(FakeEngine):
+        def step(self):
+            if now[0] >= evict_at[0]:
+                evict_at[0] = math.inf
+                handlers[signal.SIGTERM](signal.SIGTERM, None)
+            return super().step()
+
+    def offline_engine(args, commit, meta, mix):
+        if evict == "at startup":
+            handlers[signal.SIGTERM](signal.SIGTERM, None)
+        if evict == "in the replay":
+            evict_at[0] = now[0] + args.warmup_s + 90
+        return types.SimpleNamespace(llm=types.SimpleNamespace(llm_engine=Evicting(now))), None
+
+    monkeypatch.setattr(rec, "clock", clock)
+    monkeypatch.setattr(rec, "threading", types.SimpleNamespace(Event=Event))
+    monkeypatch.setattr(rec, "multiprocessing", types.SimpleNamespace(
+        get_context=lambda _: types.SimpleNamespace(Event=Event, Process=Monitor)))
+    monkeypatch.setattr(rec, "signal", types.SimpleNamespace(
+        SIGTERM=signal.SIGTERM, SIG_IGN=signal.SIG_IGN, signal=lambda sig, h: handlers.__setitem__(sig, h)))
+    monkeypatch.setattr(rec, "resource", types.SimpleNamespace(
+        RLIMIT_NOFILE=0, getrlimit=lambda _: (1024, 1024), setrlimit=lambda *_: None))
+    monkeypatch.setattr(rec, "identity", lambda: {"host": "h", "gpu": {"index": 0, "uuid": "GPU-0", "name": "fake"},
+                                                  "affinity": list(range(8)), "watched": [], "env": {}})
+    monkeypatch.setattr(rec, "local_model", lambda name, _: name)
+    monkeypatch.setattr(rec, "offline_engine", offline_engine)
+    monkeypatch.setattr(rec, "load_workload",  # 8 s per request: the last outlasts the last window, so it's monitored
+                        lambda _: [{"index": 0, "offset_s": 0.0, "prompt": [1, 2, 3], "max_tokens": 400}])
+    monkeypatch.setitem(sys.modules, "vllm", types.SimpleNamespace(SamplingParams=lambda **kw: kw))
+    monkeypatch.setitem(sys.modules, "verity_vllm.engine.engine_driver",
+                        types.SimpleNamespace(external_id=lambda s: s.rsplit("-", 1)[0]))
+    rc = rec.main(["run", "--out", str(tmp_path), "--model", "unsloth/Llama-3.2-1B", "--mode", "bi-eager",
+                   "--mix", "b4=5", "--minutes", "3.5", "--warmup-s", "10"])
+    meta = json.loads((tmp_path / "meta.json").read_text())
+    summary = json.loads((tmp_path / "summary.json").read_text())
+    assert rc == (143 if evict else 0) and meta["ended"]["evicted"] is bool(evict)
+    if evict == "at startup":
+        assert "t0_mono" not in meta and summary["error"] == "the job ended before t0"
+        return
+    assert meta["windows"] == 2 and summary["windows_planned"] == (1 if evict else 2)
+    assert summary["windows_kept"] == summary["windows_planned"]
+    assert len(json.loads((tmp_path / "trace.json").read_text())["configurations"]) == 1
+    if evict:
+        assert 90_000 <= meta["ended"]["stopped_ms"] < 96_000
 
 
 def test_collections_add_up_each_collection_and_take_resets(monkeypatch) -> None:

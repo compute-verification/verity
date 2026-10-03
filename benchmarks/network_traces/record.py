@@ -31,6 +31,10 @@ its GPU to the lease's end.
 - `server.log`, and at the end `trace.json` (the calibration format, `verity_network_warden.calibration`) and
   `summary.json`.
 
+**Exit status.** 0 when the chunk ran to its deadline. A SIGTERM (an eviction: the lease reclaimed the GPU) stops it;
+the job still converts what it recorded, sets `ended.evicted` in `meta.json`, and exits 143, so that a queue requeues
+the chunk rather than counting it done.
+
 **`convert`** rebuilds `trace.json` from those files, and drops what isn't honest timing of an idle GPU:
 - a chunk whose heartbeat or event loop stalled longer than `--freeze-ms` was frozen (SIGSTOP, a paused scope), and the
   whole chunk is void (with `--freeze-scope window`, only the windows the stall overlaps and the next);
@@ -614,7 +618,9 @@ def run(args: argparse.Namespace) -> int:
             ended = offline_replay(eng, com, reqs, t0, deadline - 20, requests, steps, commits)
         else:
             ended = asyncio.run(replay(port, served, reqs, t0, deadline - 20, requests, stall))
-    except SystemExit:
+    except SystemExit as e:
+        if e.code != 143:
+            raise
         ended["stopped_ms"] = ms(clock() - meta.get("t0_mono", clock()))
     finally:
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
@@ -626,10 +632,12 @@ def run(args: argparse.Namespace) -> int:
         for f in (requests, samples, steps, commits):
             if f is not None:
                 f.close()
+    # Only SIGTERM sets stopped_ms: before the replay (`evicted`), or in it, where it stops sending.
+    ended["evicted"] = ended["stopped_ms"] is not None
     meta["ended"] = ended
     (out / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
     convert(out)
-    return 0
+    return 143 if ended["evicted"] else 0
 
 
 def build_trace(records: Sequence[dict], samples: Sequence[dict], *, name: str, windows: int, labels: dict | None = None,
