@@ -42,6 +42,109 @@ theorem triple_rows_zero {F : Type} [Field F] [CharP F 2] {s : ℕ} (tr : Triple
     linear_combination (ε * h tr.fa * h tr.fb + h tr.tx * h tr.ty + h tr.fb * h tr.tx + ε * h tr.fa * h tr.ty +
       h tr.tx * h tr.ty) * h2
 
+section Setup
+
+open FlockSoundness.Refine
+
+set_option Elab.async false
+
+/-- `HmRow.check`'s mask range: unpacked, one slot of at least a word, inside the block. -/
+theorem hm_check_mask {c : Flock.Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.check c tags ls = .ok ()) :
+    ∀ r ∈ c.ranges.toList, r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ c.kLog := by
+  unfold HmRow.check at h
+  dsimp only at h
+  obtain ⟨_, hloop, -⟩ := ebind_ok h
+  clear h
+  rw [← Array.forIn_toList] at hloop
+  refine list_forIn_each _ (fun r => r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ c.kLog)
+    ?_ _ _ _ hloop
+  clear hloop
+  intro r s y hy
+  have hp : 1 ≤ nextPow2 r.count := Nat.one_le_two_pow
+  repeat' (first | (obtain ⟨_, hx, hy⟩ := ebind_ok hy; try (cases hx)) | (split at hy))
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at hy
+    subst hy
+    refine ⟨fun hk => ?_, _, rfl⟩
+    simp only [hk, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, not_or, not_lt, not_and] at *
+    first
+    | omega
+    | (constructor; omega; nlinarith [Nat.one_le_two_pow (n := r.slotLog)])
+    | simp_all
+
+set_option maxHeartbeats 2000000 in
+/-- **`Stmt.setupH`'s mask slot is a slot of at least a word inside the block** (`HmRow.check`). -/
+theorem setupH_mask {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
+    {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
+    (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) :
+    (∀ r ∈ st.c.ranges.toList, r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ st.c.kLog) ∧
+      st.m = st.c.kLog + st.nbl := by
+  unfold Stmt.setupH at h
+  dsimp only at h
+  simp only [throw_bind', pure_bind] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    obtain ⟨_, hc⟩ : ∃ ls, HmRow.check _ tags ls = .ok () := by
+      first | exact hm_parse_check (by assumption) | exact hm_parseTyped_check (by assumption)
+    exact ⟨hm_check_mask hc, rfl⟩
+
+end Setup
+
+/-- **The mask slot's words are distinct and inside the witness**, its slot at least a word and inside the block. -/
+theorem maskSlotWords_ok (st : Stmt) (hm : st.m = st.c.kLog + st.nbl)
+    (hmask : ∀ r ∈ st.c.ranges.toList, r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ st.c.kLog) :
+    (maskSlotWords st).Nodup ∧ ∀ x ∈ maskSlotWords st, x < 2 ^ (st.m - 7) := by
+  unfold maskSlotWords
+  split
+  · exact ⟨List.nodup_nil, fun _ h => absurd h List.not_mem_nil⟩
+  · rename_i r hr
+    have hmem := List.mem_of_find?_eq_some hr
+    have hk := List.find?_some hr
+    have hk : r.kind = Kind.mask := by
+      cases hkd : r.kind <;> rw [hkd] at hk
+      · exact absurd hk (by decide)
+      · exact absurd hk (by intro h; cases h)
+    obtain ⟨h7, hb⟩ := hmask r hmem hk
+    have hsk : r.slotLog ≤ st.c.kLog := by
+      by_contra hc
+      have : 2 ^ st.c.kLog < 2 ^ r.slotLog := Nat.pow_lt_pow_right (by norm_num) (by omega)
+      omega
+    have hJ : 2 ^ r.slotLog = 128 * 2 ^ (r.slotLog - 7) := by
+      rw [show (128 : ℕ) = 2 ^ 7 by norm_num, ← pow_add, Nat.add_sub_cancel' h7]
+    have hK : 2 ^ st.c.kLog = 128 * 2 ^ (st.c.kLog - 7) := by
+      rw [show (128 : ℕ) = 2 ^ 7 by norm_num, ← pow_add, Nat.add_sub_cancel' (by omega)]
+    have hoJ : r.start / 128 + 2 ^ (r.slotLog - 7) ≤ 2 ^ (st.c.kLog - 7) := by omega
+    have hM : 2 ^ (st.m - 7) = 2 ^ st.nbl * 2 ^ (st.c.kLog - 7) := by
+      rw [← pow_add]; congr 1; omega
+    set K := 2 ^ (st.c.kLog - 7)
+    set J := 2 ^ (r.slotLog - 7)
+    set o := r.start / 128
+    have hlt : ∀ b < 2 ^ st.nbl, ∀ j < J, b * K + o + j < (b + 1) * K := fun b _ j hj => by
+      rw [Nat.add_mul, one_mul]; omega
+    refine ⟨?_, ?_⟩
+    · rw [List.nodup_flatMap]
+      refine ⟨fun b _ => (List.nodup_range).map fun j j' h => by simpa using h, ?_⟩
+      refine List.Pairwise.imp_of_mem ?_ (List.pairwise_lt_range (n := 2 ^ st.nbl))
+      intro a b ha hb' hab
+      show List.Disjoint _ _
+      rw [List.disjoint_left]
+      intro x hxa hxb
+      simp only [List.mem_map, List.mem_range] at hxa hxb
+      obtain ⟨j, hj, rfl⟩ := hxa
+      obtain ⟨j', hj', hx⟩ := hxb
+      have h1 := hlt a (List.mem_range.1 ha) j hj
+      have h2 : (a + 1) * K ≤ b * K := Nat.mul_le_mul_right _ hab
+      have h3 : b * K ≤ b * K + o + j' := by omega
+      omega
+    · intro x hx
+      simp only [List.mem_flatMap, List.mem_map, List.mem_range] at hx
+      obtain ⟨b, hb2, j, hj, rfl⟩ := hx
+      have h1 := hlt b hb2 j hj
+      have h2 : (b + 1) * K ≤ 2 ^ st.nbl * K := Nat.mul_le_mul_right _ hb2
+      rw [hM]; omega
+
 section Glue
 
 open Flock Model ZkSession ZkView ZK Refine
@@ -461,6 +564,91 @@ theorem finalB_holds (m : ℕ) (hm : 6 ≤ m) (a b c : ℕ → 𝔽) (w : Model.
   rw [← h]
   exact (foldN_eq_sum _ _ _).symm
 
+theorem addr128_div {M : ℕ} (hm7 : 7 ≤ M) (y : Fin (2 ^ (M - 7))) (v : Fin 128) :
+    (addr128 hm7 y v).val / 128 = y.val := by
+  simp only [addr128]; omega
+
+theorem getD_mem_of_lt (l : List ℕ) {x : ℕ} (hx : x < l.length) : l.getD x 0 ∈ l := by
+  rw [List.getD_eq_getElem _ _ hx]; exact List.getElem_mem hx
+
+/-- Off the mask slot, `z = (w, u)` is the witness. -/
+theorem zWith_off (st : Stmt) {M nMask : ℕ} (hm7 : 7 ≤ M) (w : Witness M) (hn : nMask = (maskSlotWords st).length)
+    (u : Fin nMask → Fin 128 → ZMod 2) (y : Fin (2 ^ (M - 7))) (v : Fin 128) (hy : y.val ∉ maskSlotWords st) :
+    zWith st w u (addr128 hm7 y v) = w (addr128 hm7 y v) := by
+  unfold zWith
+  split
+  · rename_i x heq
+    have h := List.find?_some heq
+    rw [addr128_div, decide_eq_true_eq] at h
+    have hmem := getD_mem_of_lt (maskSlotWords st) (lt_of_lt_of_eq x.isLt hn)
+    rw [h] at hmem
+    exact absurd hmem hy
+  · rfl
+
+/-- On mask word `x`, `z = (w, u)` is `u x`, the mask slot's words distinct. -/
+theorem zWith_on (st : Stmt) {M nMask : ℕ} (hm7 : 7 ≤ M) (w : Witness M) (hn : nMask = (maskSlotWords st).length)
+    (u : Fin nMask → Fin 128 → ZMod 2) (hnd : (maskSlotWords st).Nodup) (x : Fin nMask) (y : Fin (2 ^ (M - 7)))
+    (v : Fin 128) (hy : (maskSlotWords st).getD x.val 0 = y.val) :
+    zWith st w u (addr128 hm7 y v) = u x v := by
+  unfold zWith
+  split
+  · rename_i x' heq
+    have h := List.find?_some heq
+    rw [addr128_div, decide_eq_true_eq, ← hy] at h
+    have hx' := lt_of_lt_of_eq x'.isLt hn
+    have hx := lt_of_lt_of_eq x.isLt hn
+    rw [List.getD_eq_getElem _ _ hx', List.getD_eq_getElem _ _ hx] at h
+    have he : x' = x := Fin.ext ((List.Nodup.getElem_inj_iff hnd).1 h)
+    subst he
+    exact congrArg (u x') (Fin.ext (by simp only [addr128]; omega))
+  · rename_i hnone
+    have := List.find?_eq_none.1 hnone x (List.mem_finRange x)
+    rw [addr128_div, ← hy] at this
+    exact absurd (decide_eq_true rfl) this
+
+theorem extract_one_toList {α : Type} (a : Array α) : (a.extract 1).toList = a.toList.drop 1 := by
+  simp only [Array.toList_extract, List.extract_eq_take_drop, List.drop_one, List.take_eq_self_iff,
+    List.length_tail, Array.length_toList, Std.le_refl]
+
+theorem rep_of_lt (r : Fin 2) (k : ℕ) (hk : k / 2 = r.val) : (if k < 2 then (0 : Fin 2) else 1) = r := by
+  have := r.isLt
+  split <;> (apply Fin.ext; simp only [Fin.val_zero, Fin.val_one]; omega)
+
+theorem castF_eq (b : ZMod 2) : ZK.Table.castF (F := 𝔽) b = ((b.val : ℕ) : 𝔽) := (ZMod.natCast_val b).symm
+
+/-- **The masked claims' `ŝ` is `shat` at `z = (w, u)`**: the non-mask words' part `ν` plus the mask words' part
+(`maskHom`) is the sum over every word of `z = (w, u)`, the mask slot's words distinct and inside the witness. -/
+theorem sHat_shat (st : Stmt) {M nMask : ℕ} (hm7 : 7 ≤ M) (w : Witness M) (hn : nMask = (maskSlotWords st).length)
+    (u : Fin nMask → Fin 128 → ZMod 2) (hnd : (maskSlotWords st).Nodup)
+    (hlt : ∀ x ∈ maskSlotWords st, x < 2 ^ (M - 7)) (e : ℕ → 𝔽) (v : Fin 128) :
+    (∑ x : Fin (2 ^ (M - 7)), if x.val ∈ maskSlotWords st then 0
+        else e x.val * ZK.Table.castF (F := 𝔽) (wordBit w x.val v.val)) +
+      ∑ x : Fin nMask, e ((maskSlotWords st).getD x.val 0) * ZK.Table.castF (F := 𝔽) (u x v) =
+    ∑ y : Fin (2 ^ (M - 7)), e y.val * ((zWith st w u (addr128 hm7 y v)).val : 𝔽) := by
+  have hsplit : ∀ y : Fin (2 ^ (M - 7)), e y.val * ((zWith st w u (addr128 hm7 y v)).val : 𝔽) =
+      (if y.val ∈ maskSlotWords st then 0 else e y.val * ZK.Table.castF (F := 𝔽) (wordBit w y.val v.val)) +
+      (if y.val ∈ maskSlotWords st then e y.val * ((zWith st w u (addr128 hm7 y v)).val : 𝔽) else 0) := by
+    intro y
+    by_cases hy : y.val ∈ maskSlotWords st
+    · rw [ite_eq_left hy, ite_eq_left hy, zero_add]
+    · rw [ite_eq_right hy, ite_eq_right hy, add_zero, zWith_off st hm7 w hn u y v hy, castF_eq, wordBit,
+        dite_eq_left (show 128 * y.val + v.val < 2 ^ M from (addr128 hm7 y v).isLt)]
+      rfl
+  rw [Finset.sum_congr rfl fun y _ => hsplit y, Finset.sum_add_distrib, ← Finset.sum_filter]
+  congr 1
+  refine Finset.sum_bij (fun x _ => ⟨(maskSlotWords st).getD x.val 0, hlt _ (getD_mem_of_lt _ (lt_of_lt_of_eq x.isLt hn))⟩)
+    (fun x _ => Finset.mem_filter.2 ⟨Finset.mem_univ _, getD_mem_of_lt _ (lt_of_lt_of_eq x.isLt hn)⟩) ?_ ?_ ?_
+  · intro a _ b _ hab
+    have h := congrArg Fin.val hab
+    simp only at h
+    rw [List.getD_eq_getElem _ _ (lt_of_lt_of_eq a.isLt hn), List.getD_eq_getElem _ _ (lt_of_lt_of_eq b.isLt hn)] at h
+    exact Fin.ext ((List.Nodup.getElem_inj_iff hnd).1 h)
+  · intro y hy
+    obtain ⟨i, hi, hiy⟩ := List.mem_iff_getElem.1 (Finset.mem_filter.1 hy).2
+    exact ⟨⟨i, hn ▸ hi⟩, Finset.mem_univ _, Fin.ext (by simp only; rw [List.getD_eq_getElem _ _ hi, hiy])⟩
+  · intro x _
+    rw [zWith_on st hm7 w hn u hnd x _ v rfl, castF_eq]
+
 end Glue
 
 variable {mPts n : ℕ} {Reg : Type}
@@ -527,13 +715,16 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
           (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).ty) := by
     rw [htw, htx, hty, comp_symm_tail _ 1 (by omega), comp_symm_tail _ 2 (by omega), comp_symm_tail _ 3 (by omega)]
     rfl
+  have hmS : y.x.st.m = (tablesAtZK dj y₀ S R).S.m := by rw [tablesAtZK_eq dj y₀ S R y]; rfl
+  have hkS : y.x.st.c.kLog = (tablesAtZK dj y₀ S R).S.kLog := by rw [tablesAtZK_eq dj y₀ S R y]; rfl
+  have hm7 : 7 ≤ (tablesAtZK dj y₀ S R).S.m := by have := (tablesAtZK dj y₀ S R).hm; omega
+  obtain ⟨hnd, hlt⟩ := maskSlotWords_ok y.x.st (setupH_mask y.x.h).2 (setupH_mask y.x.h).1
+  rw [hmS] at hlt
   rw [hv, hinner]
-  refine rows_honest (tablesAtZK dj y₀ S R) y.x.st c r (zWith y.x.st w ω.1) (ω.2.1.2.1 r) _ hE ?hm ?hk ?hw
+  refine rows_honest (tablesAtZK dj y₀ S R) y.x.st c r (zWith y.x.st w ω.1) (ω.2.1.2.1 r) _ hE hmS hkS ?hw
     (rF_ne_one _ _ c r (hc.2.2.2 r)) ?hA ?hB _ ?hs0 ?hs1 ?hk0 ?hL ?hT ((C.T c).tab.y1' w ω.1 ω.2.1.2.1 r)
     (fun _ => rfl) hab htw' k
   -- the executable statement's sizes are the table's, and the schedule's lane split
-  case hm => rw [tablesAtZK_eq dj y₀ S R y]; rfl
-  case hk => rw [tablesAtZK_eq dj y₀ S R y]; rfl
   case hk0 =>
     have := (tablesAtZK dj y₀ S R).hshape.2.2.1
     have := (tablesAtZK dj y₀ S R).hmsch
@@ -553,8 +744,50 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
   case hB =>
     exact finalB_holds _ (six_le _) _ _ _ _ (fun i => by rw [bT, dite_eq_left i.isLt]) _ _ _
   -- the masked claims' `ŝ` is the honest `shat` at the replay's claims, and the opening's target is `Σ_y f(y)·b(y)`
-  case hs0 => sorry
-  case hs1 => sorry
+  case hs0 =>
+    intro v
+    have h2r : 2 * r.val < Zk.RANK_POINTS := by have := r.isLt; simp only [Zk.RANK_POINTS]; omega
+    have hcl : Lincheck.lcAbClaim (tablesAtZK dj y₀ S R).S.m (tablesAtZK dj y₀ S R).S.kLog
+        (rhoF (tablesAtZK dj y₀ S R) y.x.st c r) (tsF (tablesAtZK dj y₀ S R) y.x.st c r) (c.rest.rPrime r) =
+        (claimsOf c.rest r)[0]! := by
+      rw [← hmS, ← hkS]; rfl
+    have hpt : pointsOf c.rest ⟨2 * r.val, h2r⟩ = ((claimsOf c.rest r)[0]!).x.toList.drop 1 := by
+      show ((claimsOf c.rest (if 2 * r.val < 2 then 0 else 1))[2 * r.val % 2]!).x.toList.drop 1 = _
+      rw [show 2 * r.val % 2 = 0 by omega, rep_of_lt r (2 * r.val) (by omega)]
+    have hx : (Lincheck.lcAbClaim (tablesAtZK dj y₀ S R).S.m (tablesAtZK dj y₀ S R).S.kLog
+        (rhoF (tablesAtZK dj y₀ S R) y.x.st c r) (tsF (tablesAtZK dj y₀ S R) y.x.st c r) (c.rest.rPrime r)).x.size =
+        (tablesAtZK dj y₀ S R).S.m - 6 := by
+      have := (tablesAtZK dj y₀ S R).S.hk
+      simp only [Lincheck.lcAbClaim, rhoF, tsF, Array.size_append, Array.size_reverse, Array.size_ofFn,
+        Array.size_extract]
+      omega
+    rw [RingSwitch.shat_eqWord _ _ hx, hcl, extract_one_toList, ← hpt]
+    refine Eq.trans ?_ (sHat_shat y.x.st hm7 w rfl ω.1 hnd hlt
+      (fun x => fOf (eqWord (pointsOf c.rest ⟨2 * r.val, h2r⟩) x)) v)
+    rw [shArr, getElem!_pos _ v.val (by simp), Array.getElem_ofFn]
+    unfold sHatAt
+    split
+    · rfl
+    · exact absurd h2r ‹_›
+  case hs1 =>
+    intro v
+    have h2r : 2 * r.val + 1 < Zk.RANK_POINTS := by have := r.isLt; simp only [Zk.RANK_POINTS]; omega
+    have hcl : cClaim (tablesAtZK dj y₀ S R) y.x.st c r = (claimsOf c.rest r)[1]! := rfl
+    have hpt : pointsOf c.rest ⟨2 * r.val + 1, h2r⟩ = ((claimsOf c.rest r)[1]!).x.toList.drop 1 := by
+      show ((claimsOf c.rest (if 2 * r.val + 1 < 2 then 0 else 1))[(2 * r.val + 1) % 2]!).x.toList.drop 1 = _
+      rw [show (2 * r.val + 1) % 2 = 1 by omega, rep_of_lt r (2 * r.val + 1) (by omega)]
+    have hx : (cClaim (tablesAtZK dj y₀ S R) y.x.st c r).x.size = (tablesAtZK dj y₀ S R).S.m - 6 := by
+      have := (tablesAtZK dj y₀ S R).hm
+      simp only [cClaim, rF, Array.size_append, FlockLevel3.pinned_size, Array.size_ofFn]
+      omega
+    rw [RingSwitch.shat_eqWord _ _ hx, hcl, extract_one_toList, ← hpt]
+    refine Eq.trans ?_ (sHat_shat y.x.st hm7 w rfl ω.1 hnd hlt
+      (fun x => fOf (eqWord (pointsOf c.rest ⟨2 * r.val + 1, h2r⟩) x)) v)
+    rw [shArr, getElem!_pos _ v.val (by simp), Array.getElem_ofFn]
+    unfold sHatAt
+    split
+    · rfl
+    · exact absurd h2r ‹_›
   case hT => sorry
 
 end FlockSoundness.Discharge.Composed
