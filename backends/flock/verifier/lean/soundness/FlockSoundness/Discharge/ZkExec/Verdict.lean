@@ -11,7 +11,7 @@ import FlockSoundness.Discharge.ZkExec.RunsSizes
   (`zk_verifyRep_ok`): both reps share the statement's extra claims, their proofs decode at one shape, their caps are
   the one `root_B` (`capOfRoot_eq`), `opnZ` reads each rep's rows, salts and inner openings off its own proof, and the
   results exist (`zk_rep_plays`).
-* `zk_rep_accepts`, `zk_inner_accepts`: open.
+* `zk_rep_accepts`: open. Its inner-proof half is `zk_inner_accepts` (`VerdictInner.lean`).
 -/
 
 namespace FlockSoundness.Discharge.ZkExec
@@ -19,9 +19,6 @@ namespace FlockSoundness.Discharge.ZkExec
 open Flock Refine Exec Game Model DecodeZL
 
 local notation "𝔽" => FlockLevel3.GF128
-
-theorem zk_inner_accepts : ZkInnerAccepts := by
-  sorry
 
 theorem zk_rep_accepts : ZkRepAccepts := by
   sorry
