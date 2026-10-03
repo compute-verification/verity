@@ -3,6 +3,8 @@ import Verity.Protocol.Partition
 import Verity.Protocol.Declaration
 import Verity.Protocol.Boolean
 import Verity.Protocol.Game
+import Verity.Protocol.Scalar
+import Verity.Protocol.Prims
 import Verity.Protocol.TC
 
 /-!
