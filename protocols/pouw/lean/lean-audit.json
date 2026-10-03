@@ -6799,6 +6799,26 @@
    "assumptions": [],
    "type_hash": "c0fcd6a53e7abc25275d899fba96f7ebdf2ef26b1a6700aad314a8a73b45195b"
   },
+  "Pouw.PearlC.tileProofSoundAll_of_tileGame": {
+   "signature": [
+    "Pouw.PearlC.tileProofSoundAll_of_tileGame {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]",
+    "  (P : Pouw.PearlC.Protocol Q R S) (TR : Pouw.PearlC.TileRules Q R S) (D : Pouw.PearlC.Layout → Prop)",
+    "  (HA : Pouw.PearlC.HiddenAudit Q R S)",
+    "  (Cls : Pouw.PearlC.Transcript → HA.Opening → (g : Verity.Game Bool) → g.Strategy → Nat → Prop) (ηzk : Nat → Real)",
+    "  (h0 : ∀ (q : Nat), Real.instLE.le 0 (ηzk q))",
+    "  (hB :",
+    "    ∀ (τ : Pouw.PearlC.Transcript) (o : HA.Opening) (G : Verity.Game (List Bool)) (σ : G.Strategy) (q : Nat),",
+    "      HA.Bounded τ o G σ q → Pouw.PearlC.BoundedByInduced Cls τ o G σ q)",
+    "  (tg :",
+    "    (U : Pouw.PearlC.Workload) →",
+    "      Pouw.PearlC.Workload.InDomain P D U →",
+    "        (τ : Pouw.PearlC.Transcript) →",
+    "          (o : HA.Opening) → (H : Q → R) → (s : S) → (g : Nat) → Pouw.PearlC.TileGame P TR HA Cls ηzk U τ o H s g) :",
+    "  Pouw.PearlC.Assumptions.TileProofSoundAll P TR D HA ηzk"
+   ],
+   "assumptions": [],
+   "type_hash": "6c0db4d1203319b86c01acaff898afe7b2ac74a1cb672fd1436c6d046549e5bc"
+  },
   "Pouw.PearlC.ttOutFp4ChainOnly_of_ttOut": {
    "signature": [
     "Pouw.PearlC.ttOutFp4ChainOnly_of_ttOut {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]",
@@ -9762,7 +9782,11 @@
     "Pouw.PearlC.Assumptions.TileProofSound": "639f98447f6c6c587e14a0d6086e06a990570d57a3bd22beac2ff989bf2f0040",
     "Pouw.PearlC.Assumptions.TileProofSoundAll": "68fa374e6e32105f7e0fb6ac933a3494270054495536d060d6015fc6a3e4a6d5"
    },
-   "pins": ["Pouw.PearlC.gammaHidden_of_sampled_all", "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192"]
+   "pins": [
+    "Pouw.PearlC.gammaHidden_of_sampled_all",
+    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.PearlC.tileProofSoundAll_of_tileGame"
+   ]
   },
   "Pouw.Assumptions.PearlC.RowSeedAssumptions": {
    "digest": "fca7ecffbd41d5b342c0f3ce0b8959b5028c22a6bf8c63eafc07fbec6c634836",
@@ -12348,6 +12372,7 @@
     "Pouw.PearlC.pearlCSampledUnpromotedChainCap1000_8192",
     "Pouw.PearlC.pearlCTilesDevRev1_total",
     "Pouw.PearlC.rowCap_agg",
+    "Pouw.PearlC.tileProofSoundAll_of_tileGame",
     "Pouw.PearlC.ttOutFp4ChainOnly_of_ttOut",
     "Pouw.PearlC.ttOutPearlCDevChainCap_of_cap",
     "Pouw.PearlC.ttOutPearlCDevChainCap_sm120v2_loop",
@@ -13151,6 +13176,7 @@
     "Pouw.PearlC.pearlCSampledUnpromotedChainCap1000_8192",
     "Pouw.PearlC.pearlCTilesDevRev1_total",
     "Pouw.PearlC.rowCap_agg",
+    "Pouw.PearlC.tileProofSoundAll_of_tileGame",
     "Pouw.PearlC.ttOutFp4ChainOnly_of_ttOut",
     "Pouw.PearlC.ttOutPearlCDevChainCap_of_cap",
     "Pouw.PearlC.ttOutPearlCDevChainCap_sm120v2_loop",
@@ -13762,6 +13788,7 @@
     "Pouw.PearlC.pearlCSampledUnpromotedChainCap1000Loop_8192",
     "Pouw.PearlC.pearlCSampledUnpromotedChainCap1000_16384",
     "Pouw.PearlC.pearlCSampledUnpromotedChainCap1000_8192",
+    "Pouw.PearlC.tileProofSoundAll_of_tileGame",
     "Pouw.Proofs.d1Complete",
     "Pouw.Proofs.freeModel_queries",
     "Pouw.Proofs.gameCanBeLost",
@@ -15102,6 +15129,7 @@
     "Pouw.PearlC.pearlCTilesDevRev1_total",
     "Pouw.PearlC.rowCap_agg",
     "Pouw.PearlC.rowDrawn_satisfiable",
+    "Pouw.PearlC.tileProofSoundAll_of_tileGame",
     "Pouw.PearlC.ttOutFp4ChainOnly_of_ttOut",
     "Pouw.PearlC.ttOutPearlCDevChainCap_of_cap",
     "Pouw.PearlC.ttOutPearlCDevChainCap_sm120v2_loop",
@@ -17393,6 +17421,7 @@
     "Pouw.PearlC.pearlCTilesDevRev1_total",
     "Pouw.PearlC.rowCap_agg",
     "Pouw.PearlC.rowDrawn_satisfiable",
+    "Pouw.PearlC.tileProofSoundAll_of_tileGame",
     "Pouw.PearlC.ttOutFp4ChainOnly_of_ttOut",
     "Pouw.PearlC.ttOutPearlCDevChainCap_of_cap",
     "Pouw.PearlC.ttOutPearlCDevChainCap_sm120v2_loop",
@@ -17450,7 +17479,19 @@
     "Pouw.PearlC.HiddenAudit.winProb": "8a8ed0ab1f45bdd02092e754fc112b6891b56f66f21eb7d250e4e5b7ad0132a9",
     "Pouw.PearlC.ex": "a91da7689685599e9ee24d99101cefdaf01d8b45d8d5ac5e8f65b22c16c10a3f"
    },
-   "pins": ["Pouw.PearlC.gammaHidden_of_sampled_all", "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192"]
+   "pins": [
+    "Pouw.PearlC.gammaHidden_of_sampled_all",
+    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.PearlC.tileProofSoundAll_of_tileGame"
+   ]
+  },
+  "Pouw.Protocol.PearlC.HiddenTileGame": {
+   "digest": "4a732348e74721292681606a415a0c2e61c13df409822f77795703595746a1c8",
+   "definitions": {
+    "Pouw.PearlC.BoundedByInduced": "acc65a495421e4974619395d20f727dede5be53d4a22a4358b07b221aa17e270",
+    "Pouw.PearlC.TileGame": "297e14c7f054dff64d5bf4b46b590a5c5609cc57ca5463e0b591ddb4dc85adbc"
+   },
+   "pins": ["Pouw.PearlC.tileProofSoundAll_of_tileGame"]
   },
   "Pouw.Protocol.PearlC.Instance": {
    "digest": "f472456267034df655cfd65a085495687549223e9aa0bc81b3f031740ea13c9b",
@@ -19645,6 +19686,7 @@
     "Pouw.PearlC.pearlCSampledUnpromotedChainCap1000_8192",
     "Pouw.PearlC.pearlCTilesDevRev1_total",
     "Pouw.PearlC.rowCap_agg",
+    "Pouw.PearlC.tileProofSoundAll_of_tileGame",
     "Pouw.PearlC.ttOutRowSeedCode_of_ttOut",
     "Pouw.PearlC.ttOutRowSeed_code",
     "Pouw.PearlC.ttOutRowSeed_of_ttOut",
@@ -19863,10 +19905,17 @@
    ]
   },
   "Verity.Protocol.Game": {
-   "digest": "177b3dec5b19ad628674d5e9ef72121843e86b1bbb75aa1a51350b3073974b21",
+   "digest": "7c02b2d9ac7d7618ed8c7a59dd12d507ca72a189d1bc81f853bfd46e1829647b",
    "definitions": {
     "Verity.Game": "34c713229a1259c2d5972e7184a6879ce0f3e67dbb8dc0fe4219cf7aad78bf16",
+    "Verity.Game.InducedAt": "0c3e058da3fbda23c861e5e706c916599bc4b893d399efbe4535390b4d0c448f",
+    "Verity.Game.InducedL": "2e988db571b2eca62bf3bc9f21d1946a714a461777ff82353bf47d90ea0d8375",
+    "Verity.Game.InducedR": "c2243672779ceb6e2c4a3275bd22bf9b9a1003f2d01d3efe2c98f097d61ad3e4",
+    "Verity.Game.InducedWithL": "1617ed74f91a304eeb40c85829416d3a2f77e738a4395f95e1f8b14062485ccc",
+    "Verity.Game.InducedWithR": "8c9816d39502ef1f763da132e2211aa59ae1de4a5042e579bea165391dc4a16c",
     "Verity.Game.Strategy": "adbb9d9cc6b114fa6a9ebfb3c8d43406b9c2272e136d74953736875e7054817b",
+    "Verity.Game.Strategy.ofMap": "6ea46533e626d971f430730846cec8e1f8c38af21feab3a98d39f5184155ee22",
+    "Verity.Game.Strategy.toMap": "e6463f7a6d4220a929cbda5a83873ac022964a292a6c70b6669819ac47e81e73",
     "Verity.Game.batch": "ab402840c5a36246c2bab7a131339b316ed204cbed98d862272ade83db9139cd",
     "Verity.Game.bind": "57f9bfd5a89f6841f4aa91aa534c194d08183e997fc3cf6e41d2459a37c717ce",
     "Verity.Game.brecOn.go": "b26b92002b61ca899c176b5358f3905100497203a1e6a329d813643c08759cd4",
@@ -19878,7 +19927,11 @@
     "Verity.Game.ret": "36d51e203dc27816f87118662a944dfd4726229a8d44c08551ba14dd7fc69649",
     "Verity.Game.send": "8d24c747132730510c15eb71bd4e887838687cee9b7d9e59f46a29a712c01efc"
    },
-   "pins": ["Pouw.PearlC.gammaHidden_of_sampled_all", "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192"]
+   "pins": [
+    "Pouw.PearlC.gammaHidden_of_sampled_all",
+    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.PearlC.tileProofSoundAll_of_tileGame"
+   ]
   }
  },
  "dependencies": {
@@ -19887,7 +19940,7 @@
   "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
   "batteries": "936e379f1cfb8605fe05b36d6a5b605dc1a0d31e8d52173adb0d5c39a4b50ab5",
   "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
-  "mathlib": "69952cbce2bdcd5eb375bf656ca5b526e293cfaf0195ce4948e9894ed12ba65f",
+  "mathlib": "3fb43c4c43fd67ff688d922ee23799d8e031fbe16e319cbfb1cd946c2956e909",
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "b8447e3c3284903832b19df647c0de94cae577066dd373fbc877ed2a52bbccc7"

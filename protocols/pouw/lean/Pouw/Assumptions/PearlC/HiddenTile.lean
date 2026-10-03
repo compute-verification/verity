@@ -9,9 +9,11 @@ probability at most `ηzk(q)` per draw. `HiddenGamma` turns it and `GγSampled` 
 
 It is an open obligation, not a hardness assumption, and lives here only because a `Prop` taken as a hypothesis goes in
 the assumptions module. It is to be discharged from C-Flock's soundness: its single-game theorem
-`flock_e2e_drawn_hm96_reads` through a batch lemma, the binding of hm96-SHA-512 commitments to `τ`'s rows under the
-opening, the tile-check Program computing the good-tile predicate (L3) and the pinned anchors (L8). What remains assumed
-under it is only C-Flock's per-finder `cr/sha-512` and `ecr/sha-512`, and the live coins.
+`flock_e2e_drawn_hm96_reads` through core's batch lemma (`Verity.Guarantees.ProbBatchInduced`), the binding of
+hm96-SHA-512 commitments to `τ`'s rows under the opening, the tile-check Program computing the good-tile predicate (L3)
+and the pinned anchors (L8). `tileProofSoundAll_of_tileGame` (`HiddenTileGame`) takes the batch lemma's part: it proves
+`TileProofSoundAll` from a `TileGame` per tile, so the rest is C-Flock's `TileGame`. What remains assumed under it is only
+C-Flock's per-finder `cr/sha-512` and `ecr/sha-512`, and the live coins.
 -/
 
 namespace Pouw.PearlC.Assumptions

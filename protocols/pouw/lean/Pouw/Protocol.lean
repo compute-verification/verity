@@ -53,6 +53,7 @@ import Pouw.Protocol.PearlC.Fp4Skip
 import Pouw.Protocol.PearlC.Fp4Vectors
 import Pouw.Protocol.PearlC.Game
 import Pouw.Protocol.PearlC.Hidden
+import Pouw.Protocol.PearlC.HiddenTileGame
 import Pouw.Protocol.PearlC.Instance
 import Pouw.Protocol.PearlC.PeelExact
 import Pouw.Protocol.PearlC.PeelExactP
@@ -119,8 +120,9 @@ the encoders, the conversion and the atom-mix chain (`EncVectors`, generated fro
 chain (`Peel`): U's cancellation identities, where the rounding is, and the clean-up terms' liveness at degenerate
 inputs. P1, freezing under promotion (`Freeze`), and P3, the forming credit (`Forming`), from their lanes. The
 cheap-binding lane's game (`Game`), named protocol (`Instance`), named assumption TT_OUT (`TTOut`) and γ from it
-(`Gamma`). The hidden audit, the tile check as a proof over core's `Verity.Game` (`Hidden`), the named assumption that a
-drawn tile's proof is sound (`HiddenTile`) and the sampled audit's γ under it (`HiddenGamma`).
+(`Gamma`). The hidden audit, the tile check as a proof over core's `Verity.Game` (`Hidden`), its open obligation that a
+drawn tile's proof is sound (`HiddenTile`), what a proof system gives per tile to meet it (`HiddenTileGame`, met in
+`SecurityProofs` through core's batch lemma) and the sampled audit's γ under it (`HiddenGamma`).
 
 ## `TileBound`: the FP4-tile model (`docs/pouw/fp4-tile-model.md`, bc-d9842080)
 
