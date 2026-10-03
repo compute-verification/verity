@@ -31,7 +31,7 @@ CheckAxioms.lean               one #print axioms line per pin, then the three pr
 lake exe cache get                                          # Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                                  # NetTiming (the default target)
 python3 ../../../tools/lean/audit.py .                      # Verity's Lean audit
-lake env lean CheckAxioms.lean                              # the axioms of the 35 pins and the 3 unpinned
+lake env lean CheckAxioms.lean                              # the axioms of the 39 pins and the 3 unpinned
 ~~~
 
 **Trusted without proof:** the statements in `NetTiming/Protocol/`, `NetTiming/Assumptions.lean` and
@@ -42,7 +42,7 @@ as `docs/…` and `internal/…` name the network-transparency project store, wh
 **The audit.** `tools/lean/audit.py` audits every declaration under `NetTiming`: allowed axioms (only `propext`,
 `Classical.choice` and `Quot.sound`), named assumptions, escapes, orphan files, the import layers (`NetTiming.Protocol`,
 `NetTiming.Assumptions` and `NetTiming.Guarantees` import only one another and Mathlib, never a proof), the dependency
-record, a kernel replay, and the 35 pins' records, whose meaning it follows through those three (`meaning`).
+record, a kernel replay, and the 39 pins' records, whose meaning it follows through those three (`meaning`).
 A changed record needs a named statement reviewer (Verity's `AGENTS.md`).
 
 ## The model
@@ -65,7 +65,9 @@ content and order are the Program's input, charged as reads; `Guarantees.EncardI
 their timing carries into X for a decoder reading the records, and `Guarantees.EncardIngressDecodableLe` for one
 reading the wire. Both are proved: on the runs counted, a record sequence is determined by each step's frame count on
 each link and its jitter class, since under W4 a row is its frames in slot order and the content fixes which frames
-come next.
+come next. `Guarantees.EncardIngressObsDecodableLeContents` and `Guarantees.EncardIngressDecodableLeContents` drop the
+one prescribed content: messages whose frames follow some content assignment in a set `Cs` number at most `#Cs` times
+the timing bound, so content plus timing is a theorem.
 
 ## The trusted layer (`NetTiming.Assumptions`)
 
@@ -89,10 +91,12 @@ For the ingress bound the same `Prop`s are read inward: `Regenerates` is W2 for 
 Program meets both conditions while its timing advice still changes its rows, `joint_witness` meets every hypothesis
 of `Guarantees.EncardDecodableLeBlocks` at once, with a reacting operator, and `ingress_witness` meets every hypothesis
 of `Guarantees.EncardIngressDecodableLe` at once, with a bound it meets exactly (`ingress_witness_tight`).
+`allocated_witness` meets them again with an allocation below the slot count (`r = 1 < S = 2`): its 8 messages meet
+that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `Allocated` has content.
 
 ## The pins
 
-The 35 records in `lean-audit.json`. The 24 guarantees are pinned as `NetTiming.SecurityProofs.G`, each proved by the
+The 39 records in `lean-audit.json`. The 26 guarantees are pinned as `NetTiming.SecurityProofs.G`, each proved by the
 lemma of the same statement whose name it spells in UpperCamelCase (`SecurityProofs.CardFree` by `card_free`):
 
 - **Proposition 2** (`NetTiming.SecurityProofs.Occupancy`): `CardFree`, `CardLeftPacked`, `FillInjective`,
@@ -102,12 +106,13 @@ lemma of the same statement whose name it spells in UpperCamelCase (`SecurityPro
   `EncardObsDecodableLe`, `EncardDecodableLe`, `NoFaultOfAccepted`.
 - **Theorem 3** (`NetTiming.SecurityProofs.Advice`): `RecordedRowEqFill`, `EncardAccSeqsLeAdvice`, `EncardAccSeqsLeSync`,
   `EncardAccSeqsLeFixedClock`, `EncardAccSeqsLeBlocks`, `EncardAccSeqsLeBlocksCounts`, `EncardDecodableLeBlocks`.
-- **The ingress bound** (`NetTiming.SecurityProofs.Ingress`): `EncardIngressObsDecodableLe`, `EncardIngressDecodableLe`.
+- **The ingress bound** (`NetTiming.SecurityProofs.Ingress`): `EncardIngressObsDecodableLe`, `EncardIngressDecodableLe`,
+  `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`.
 
-The 11 witnesses are pinned as lemmas, under their own names (`NetTiming.SecurityProofs.Sanity`):
+The 13 witnesses are pinned as lemmas, under their own names (`NetTiming.SecurityProofs.Sanity`):
 `witnessWarden_assumptions`, `witnessWarden_jitter_varies`, `witnessProgram_conditions`,
 `witnessProgram_timing_matters`, `joint_witness`, `joint_witness_bound`, `zP_accepts_one`, `zP_constOp_accepts_one`,
-`ingress_witness`, `ingress_witness_tight`, `toy_leftPacked`. Their witness definitions are outside `meaning`, so the audit records each witness's statement but
+`ingress_witness`, `ingress_witness_tight`, `allocated_witness`, `allocated_witness_tight`, `toy_leftPacked`. Their witness definitions are outside `meaning`, so the audit records each witness's statement but
 does not follow it into the definitions it constructs.
 
 **Proved and audited, not pinned:** `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid`
@@ -116,8 +121,8 @@ The audit checks them like every declaration, and they use only the three axioms
 `lean-audit.json`, so no citation may call them pinned. Pinning them needs a statement reviewer.
 
 The statements were frozen and reviewed by a red team before their proofs, and a second round's verdict was GO. The
-ingress bound's two statements were frozen before their proofs as well; their statement review is on the pull request
-that added them (danielreuter/verity#894). The
+ingress bound's statements were frozen before their proofs as well; the review of the first two is on the pull request
+that added them (danielreuter/verity#894), and the review of the content versions is on the one stacked on it. The
 reference implementation, `protocols/network_warden` (`verity_network_warden`), mirrors 15 of the pins and the three
 unpinned lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python
 counterpart.
@@ -147,8 +152,8 @@ The ingress bound adds these:
 9. **Conditioned on the content.** The messages counted are those whose frames on each link, in the order released, are
    a prefix of one prescribed list `c ℓ` (the Program's input, charged as reads; order is content, since the Program
    reads frames in order). How many frames have arrived by the horizon is timing, and is in the count. Messages that
-   also vary the content are bounded by partitioning them by their content record: at most (the number of content
-   records) × the bound, which is not stated.
+   also vary the content are bounded by partitioning them by their content: the `Contents` versions count those
+   following some assignment in `Cs`, at most `#Cs` × the bound.
 10. **Acceptance is the statuses only** (`StatusComplete`). The verifier also checks the egress rows against the
     Program, which only removes runs, so the bound covers every accepted run and more. W5 and W6 are not needed: W2
     and W4 hold for every action, faults included, and complete statuses carry nothing.
