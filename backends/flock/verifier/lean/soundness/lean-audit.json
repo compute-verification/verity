@@ -4523,6 +4523,7 @@
    "assumptions": [],
    "type_hash": "8be091f3d95f07de4c7cf133faf6b65a369b2a05104e15ff0d23d66aafcea58e"
   },
+  "FlockSoundness.Discharge.Composed.Lincheck.lincheck_complete": {},
   "FlockSoundness.Discharge.Composed.coinedOf_setup": {
    "signature": [
     "FlockSoundness.Discharge.Composed.coinedOf_setup {mPts n : Nat} {Reg : Type} (I : FlockSoundness.Discharge.Exec.Inputs)",
