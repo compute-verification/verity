@@ -108,6 +108,7 @@ import Pouw.SecurityProofs.PearlC.ServedRev1Gamma
 import Pouw.SecurityProofs.PearlC.Sm120Checks
 import Pouw.SecurityProofs.PearlC.TileCapRev1Gamma
 import Pouw.SecurityProofs.PearlC.TileCheck
+import Pouw.SecurityProofs.PearlC.TileCircuit
 import Pouw.SecurityProofs.PearlC.TileGamma
 import Pouw.SecurityProofs.PearlC.TileUOnlyGamma
 import Pouw.SecurityProofs.PearlC.UOnlyGamma
