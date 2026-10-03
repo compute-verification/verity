@@ -192,11 +192,17 @@ digest      = SHA-512( Q(ℓ) ‖ d_0 ‖ … ‖ d_(s−1) )
 - **Hiding.** `hm96-sha512/row-seg/v1` is the hiding leaf over this digest, under unchanged `hm96-sha512/v1`.
 - **Written by several ports (C-Flock).** A row one unit writes as several output ports and another reads as one input port
   (PoUW's A′ ‖ P_A) is one row on both sides. The writer's META `out_row_ports` lists each output row's run of consecutive
-  output ports (absent: one row per port, zero-padded to whole blocks); a run's row is a row-seg row of exactly their words
-  in port order (ℓ = 16 · their words), named after its first port, and its message bits are copies of those output words.
-  Its digest, `b ‖ c` and tree leaf are then the reader's for the same words and salt. Both verifiers refuse runs that do not
-  cover the output ports once in order, a run whose row is not row-seg of exactly their words, and a padded row of more
-  than one port. The pair vectors are `ROW_SEG_PAIRS` in `backends/flock/tests/test_lean_verifier.py`.
+  output ports (absent: one row per port); a run's row is a row-seg or `sha512/row/v2` row of exactly their words in port
+  order (ℓ = 16 · their words, its `row_schemas` entry), named after its first port, and its message bits are copies of those
+  output words. A lone port's row is either that, or under v2 the port's words zero-padded to whole blocks (ℓ = 16 · its
+  padded words). Its digest, `b ‖ c` and tree leaf are then the reader's for the same words and salt. Both verifiers refuse
+  runs that do not cover the output ports once in order, a row of any other length, a padded row of more than one port and
+  a v1 row that is not padded.
+- **When META names `out_row_ports`.** Exactly when some output row is row-seg or some run covers more than one port; a
+  statement whose output rows are all lone v2 ports omits it. Its presence is part of the circuit text, so of the statement's
+  identity, and a writer that computes it otherwise (PoUW's `leaves.statement_rows` follows this rule) gets another statement
+  digest. `OUT_ROW_PORTS_RULE` in `backends/flock/tests/test_lean_verifier.py` pins the rule with each case's circuit
+  SHA-512. The pair vectors are `ROW_SEG_PAIRS` and `ROW_V2_PAIRS` there.
 - **Reference and conformance.** `rowleaf.sha512_row_seg_segments`, `_prefix`, `_segment_prefix` and `_digest`, the last refusing a
   nonzero fill. `row_seg_leaves` in `vectors_sha512.json`: random rows at ℓ = 0, 1, 13, 8191, 8192, 8193, 24,581 and 65,536 and word rows (BF16 k = 4096 and 5, FP32 k = 4096), with every
   segment's prefix and digest, and the 65,536-bit row's hiding leaf. `test_rowleaf_seg.py` checks them and the cost above.
