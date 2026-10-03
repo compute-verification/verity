@@ -15,8 +15,8 @@ def test_the_steps_are_the_suites_then_circuit_check_then_the_lean_hook(tmp_path
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
     names = [(n, argv if isinstance(argv, str) else argv[1:4]) for n, argv, _cwd in CHECK.steps(tmp_path)]
     assert names[0] == ("pytest", [str(ROOT / "tools/check/suites.py"), "--json", str(tmp_path / "suites.json")])
-    assert names[1] == ("circuit-check", ["-m", "circuit_check", "--all"])
-    assert names[2] == ("flock-circuit-build", [str(ROOT / "backends" / "flock" / "check_build.sh")])
+    assert names[1] == ("flock-circuit-build", [str(ROOT / "backends" / "flock" / "check_build.sh")])
+    assert names[2] == ("circuit-check", ["-m", "circuit_check", "--all"])
     assert names[3] == ("flock-rust-tests", ["CARGO_BUILD_JOBS=1", "RUST_TEST_THREADS=1", "bash"])
     assert names[4] == ("lean", "skipped: backends/flock/verifier/lean is not on this tree")
 
@@ -317,7 +317,7 @@ def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
 
 def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
-    (pt,), (cc, build, rust), (lean,) = CHECK.groups(tmp_path, 16)
+    (pt,), (build, cc, rust), (lean,) = CHECK.groups(tmp_path, 16)
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("backends/flock/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
     assert pt[1][1].endswith("tools/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]
@@ -498,9 +498,33 @@ def test_a_lean_module_that_does_not_compile_stops_the_run_even_under_keep_going
     assert by["slow"]["status"] == "stopped" and by["slow"]["detail"] == "stopped: lean-changed failed"
 
 
+def test_a_rust_crate_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
+    """flock-circuit-build fails, with cargo's line, only once `slow` is running (the FIFO): under --keep-going `slow` stops."""
+    import os
+
+    gate = tmp_path / "gate"
+    os.mkfifo(gate)
+    slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
+    build = _py("import sys\nopen(sys.argv[1]).read()\nprint('error: could not compile `flock-circuit` (lib)')\nsys.exit(101)", gate)
+    _fake_run(monkeypatch, [[("slow", slow, tmp_path)], [("flock-circuit-build", build, tmp_path)]])
+    passed, done = CHECK.run(tmp_path, 2, keep_going=True)
+    by = {s["step"]: s for s in done}
+    assert not passed and by["flock-circuit-build"]["status"] == "failed" and by["flock-circuit-build"]["halts"]
+    assert by["slow"]["status"] == "stopped" and by["slow"]["detail"] == "stopped: flock-circuit-build failed"
+
+
+def test_a_build_that_fails_without_compiling_does_not_halt(tmp_path, monkeypatch):
+    """A failed clone or toolchain download: no `halts`, so (the Steps test below) the other groups keep their verdicts."""
+    build = _py("print('fatal: unable to access https://github.com/...')\nraise SystemExit(128)")
+    _fake_run(monkeypatch, [[("flock-circuit-build", build, tmp_path)]])
+    passed, (rec,) = CHECK.run(tmp_path, 1, keep_going=True)
+    assert not passed and rec["status"] == "failed" and "halts" not in rec
+
+
 def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_path):
     steps = CHECK.Steps(tmp_path, keep_going=True)
     steps.end({"step": "pytest", "status": "failed"})
+    steps.end({"step": "flock-circuit-build", "status": "failed"})
     assert not steps.stopping
     steps.end({"step": "lean-changed", "status": "failed"})
     assert steps.stopping and steps.halted == "lean-changed"
