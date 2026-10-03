@@ -5,8 +5,8 @@ import Pous.SecurityProofs.Chain.Flat
 # The rebuild cost and the graded window
 
 `R(d) = rebuildCalls (2^9) d` is `Σ_{v < 512} (min(v, d) + 1)`: `3,057` at `d = 5`, `6,578` at `d = 12`, and
-non-decreasing in `d`. Every row of `Pous.Guarantees.BandGradedMeetsFamily` lasts at most `240·5 + 3·12 = 1,236`
-sequential calls.
+non-decreasing in `d`. The rounds of every row of `Pous.Guarantees.BandGradedMeetsFamily` last under
+`240·6 + 3·13 = 1,479` call-times.
 -/
 
 namespace PousRebuild
@@ -50,11 +50,12 @@ theorem rebuildCalls_mono (B : ℕ) {d d' : ℕ} (h : d ≤ d') : rebuildCalls B
 theorem rebuildCalls_ge (d : ℕ) (hd : 5 ≤ d) : 3057 ≤ rebuildCalls (2 ^ 9) d :=
   rebuildCalls_512_5 ▸ rebuildCalls_mono _ hd
 
-/-- **Every graded row's window is at most `1,236` calls** when `D_late ≤ 12`; the worst row is `(3, 243)`. -/
-theorem gradedWindow_le (D_late : ℕ) (h : D_late ≤ 12) :
-    ∀ tk ∈ ([(0, 111), (1, 160), (2, 203), (3, 243)] : List (ℕ × ℕ)), gradedWindow 5 D_late tk.2 tk.1 ≤ 1236 := by
+/-- **Every graded row's rounds last under `1,479` call-times** when `D_late ≤ 12`; the worst row is `(3, 243)`. -/
+theorem gradedRoundSpan_le (D_late : ℕ) (h : D_late ≤ 12) :
+    ∀ tk ∈ ([(0, 111), (1, 160), (2, 203), (3, 243)] : List (ℕ × ℕ)),
+      gradedRoundSpan 5 D_late tk.2 tk.1 ≤ 1479 := by
   intro tk htk
   simp only [List.mem_cons, List.not_mem_nil, or_false] at htk
-  rcases htk with rfl | rfl | rfl | rfl <;> simp only [gradedWindow] <;> omega
+  rcases htk with rfl | rfl | rfl | rfl <;> simp only [gradedRoundSpan] <;> omega
 
 end PousRebuild

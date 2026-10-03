@@ -4,9 +4,10 @@ import Pous.Protocol.Model.BandChain
 /-!
 # The background-rebuild budget
 
-The two counts `Pous.Guarantees.BackgroundRebuildExcluded` compares, both in sequential `Π₂` calls: what re-encoding one
-band segment from its data costs, and how long a row of the graded audit lasts (`PROTOCOL.md`, "Isolation over the
-whole graded window"). Added on 3 Oct 2026, with that guarantee.
+The counts `Pous.Guarantees.BackgroundRebuildExcluded` reads, all in sequential `Π₂` calls of at least `call_ns` each:
+what re-encoding one band segment from its data costs, how long a row of the graded audit's rounds may last, and the cap
+on a graded audit's whole duration that the guarantee requires the verifier to enforce (`PROTOCOL.md`, "Isolation over
+the whole graded window"). Added on 3 Oct 2026, with that guarantee.
 -/
 
 namespace Pous.Rebuild
@@ -18,8 +19,16 @@ open Pous.Sponge Pous.BandChain
 (`Pous.BandChain.absorbedG`), so it costs `(parentsDesc (bandDAG B d) v).length + 1` calls. -/
 def rebuildCalls (B d : ℕ) : ℕ := ∑ v : Fin B, ((parentsDesc (bandDAG B d) v).length + 1)
 
-/-- **A graded row's window**: `k` rounds of which at most `t` are late, `k − t` within `D` sequential calls each and `t`
-within `D_late`. -/
-def gradedWindow (D D_late k t : ℕ) : ℕ := (k - t) * D + t * D_late
+/-- **How long a graded row's rounds may last, in call-times**: `k` rounds of which at most `t` are late. A round runs
+from its challenge's send to its answer's receipt, and `D = ⌊(Δ + RTT) / call_ns⌋` (`effective_rounds`) admits any
+span under `(D + 1)·call_ns`; a late round's is under `(D_late + 1)·call_ns`. The verifier's gaps between rounds are
+not counted. -/
+def gradedRoundSpan (D D_late k t : ℕ) : ℕ := (k - t) * (D + 1) + t * (D_late + 1)
+
+/-- **The cap on a graded audit's duration, in call-times**, which the guarantee requires the verifier to enforce: it
+aborts, without accepting, an audit that lasts more than `auditCap · call_ns` on its own clock, from its first
+challenge's send to its last answer's receipt. A rebuild running beside the audit, through its rounds and its gaps, then
+completes at most `auditCap` sequential calls. -/
+def auditCap : ℕ := 1505
 
 end Pous.Rebuild

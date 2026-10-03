@@ -6,7 +6,7 @@ import Pous.SecurityProofs.Rebuild.Window
 
 `Pous.Guarantees.BackgroundRebuildExcluded`. The counts are `Window.lean`'s. The bound is the ex post facto bound on any
 DAG (`PousSpongeChain.chainExPostFactoG_v6`) at the band with no preprocessor state (`m = 0`) and loss `s = 1`, where
-the band is `(1, D, 2^9)`-hard for every `D ≤ 1505` (`band_hard_one`) and so for every graded window. At `s = 1` the
+the band is `(1, D, 2^9)`-hard for every `D ≤ 1505` (`band_hard_one`), which is `auditCap`. At `s = 1` the
 freshness term is `2 · (nPos²·2^9·2)² / 2^524288` and the collision term `nPos² / 2^524800`, each at most `2^-129`
 for `Q ≤ 2^128`.
 -/
@@ -78,8 +78,8 @@ theorem rebuild_pr_le (d : ℕ) (hd : 5 ≤ d) (dom : ℕ → Bits 512)
 
 /-- **`BackgroundRebuildExcluded`, proved.** -/
 theorem background_rebuild_excluded : Pous.Guarantees.BackgroundRebuildExcluded := by
-  refine ⟨rebuildCalls_512_5, rebuildCalls_512_12, rebuildCalls_ge, gradedWindow_le, ?_⟩
-  intro d hd dom hdom W Q hQ D_late hD_late tk htk A hA
-  exact rebuild_pr_le d hd dom hdom W _ Q ((gradedWindow_le D_late hD_late tk htk).trans (by norm_num)) hQ A hA
+  refine ⟨rebuildCalls_512_5, rebuildCalls_512_12, rebuildCalls_ge, gradedRoundSpan_le, ?_⟩
+  intro d hd dom hdom W Q hQ T hT A hA
+  exact rebuild_pr_le d hd dom hdom W T Q hT hQ A hA
 
 end PousRebuild

@@ -29,7 +29,8 @@ Pous/Protocol/Model/Continuous.lean the continuous audit: an explicit timed veri
 Pous/Protocol/Accounting/{Params,LemmaA,PubMeets,GradedMeets,Rebuild}.lean
                                     ρ, δ, expansion, `Meets`; Lemma A's bound and A7′'s rows;
                                     `PubMeets`, the requirement with a public encoder; `GradedMeets`, with grace `t`;
-                                    a band segment's re-encode cost `R(d)` and a graded row's window
+                                    a band segment's re-encode cost `R(d)`, a graded row's round span and
+                                    the verifier's cap on an audit's duration
 Pous/Protocol/P2/Cost.lean          P2's cost model, the generic ring over `Z/p` with random odd labels
                                     and the junk label (`ringRO`), the bound `RingBounded D Q L` beside `Bounded`,
                                     `MeetsOn`, `MeetsWithSlack`, and P2 in it (`p2ring`)
@@ -58,9 +59,9 @@ Pous/SecurityProofs/Continuous/     proved: the continuous audit's counting step
 Pous/SecurityProofs/Graded/         proved: the tail rule (`Tail.lean`), Theorem 1(ii) for the graded audit
                                     (`Theorem.lean`) and the band with grace `t` at `D = 5` (`Band.lean`,
                                     `BandGradedMeetsFamily`)
-Pous/SecurityProofs/Rebuild/        proved: no graded window re-encodes a band segment from `W` (`Clock.lean`, the
-                                    cumulative chain clock; `Window.lean`, the counts; `Exclusion.lean`,
-                                    `BackgroundRebuildExcluded`)
+Pous/SecurityProofs/Rebuild/        proved: under the verifier's duration cap, no audit re-encodes a whole band
+                                    segment from `W` alone (`Clock.lean`, the cumulative chain clock;
+                                    `Window.lean`, the counts; `Exclusion.lean`, `BackgroundRebuildExcluded`)
 lean-audit.json                     the policy and pin records for tools/lean/audit.py
 CheckAxioms.lean                    one #print axioms line per headline theorem
 PousTargets.lean                    untrusted, not in the default build: the open statements as sorry targets

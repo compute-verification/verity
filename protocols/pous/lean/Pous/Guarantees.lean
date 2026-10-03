@@ -831,9 +831,11 @@ band `chainBandSeg N (2^9) d` at `D = 5`, `Q = 2^20`, `ε = 2^-128`, both with t
 
 The hypotheses on `D_late` are the deployment condition, necessary for the game's `S`-bit state to be a model of
 storage at rest: the audit's window must be too short to re-encode `C`. Re-encoding a segment from `W` takes
-`R(d) = Σ_{v < 2^9} (min(v, d) + 1) ≥ R(5) = 3,057` sequential `Π₂` calls, and every row's window, `k − t` rounds at
-`D = 5` and `t` at `D_late`, is at most `240·5 + 3·12 = 1,236`. `D_late ≤ d` is the band's cliff applied to
-`Δ_late`; at the deployed `d = 12` both caps are `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14 ms`. Proof:
+`R(d) = Σ_{v < 2^9} (min(v, d) + 1) ≥ R(5) = 3,057` sequential `Π₂` calls. Every row's rounds, `k − t` at `D = 5` and
+`t` at `D_late`, last under `240·6 + 3·13 = 1,479` call-times, and the verifier's gaps between them add to the window,
+so it is bounded by the verifier's limit on the audit's duration that `BackgroundRebuildExcluded` requires, `1,505`
+call-times. `D_late ≤ d` is the band's cliff applied to `Δ_late`; at the deployed `d = 12` both caps on `D_late` are
+`Δ_late + RTT < 13 × 241.5 µs ≈ 3.14 ms`. Proof:
 `PousGraded.band_graded_meets_family` (`Pous/SecurityProofs/Graded/Band.lean`); here
 `Pous.SecurityProofs.BandGradedMeetsFamily`. -/
 def BandGradedMeetsFamily : Prop :=
@@ -898,31 +900,42 @@ def ContinuousAudit : Prop :=
 
 Added on 3 Oct 2026. Statement reviewer: not yet named; a new pin, which also needs a red-team grant before merge. -/
 
-/-- **Unconditional: no graded window is long enough to re-encode a band segment from `W`**, the deployment condition
-of `BandGradedMeetsFamily` (`PROTOCOL.md`, "Isolation over the whole graded window"), as counts and as a bound.
-1. **The counts.** Re-encoding a segment of `chainBand (2^9) d` costs `R(d) = rebuildCalls (2^9) d` sequential `Π₂`
-   calls: `R(5) = 3,057`, `R(12) = 6,578`, and `R(d) ≥ 3,057` for every `d ≥ 5`. Each row `(t, k)` of
-   `BandGradedMeetsFamily` lasts at most `gradedWindow 5 D_late k t ≤ 240·5 + 3·12 = 1,236` calls when `D_late ≤ 12`.
+/-- **Under the verifier's cap on an audit's duration: no graded audit lasts long enough to re-encode a whole band
+segment from `W` alone**, with no state about `Π₂`. It is the deployment condition of `BandGradedMeetsFamily`
+(`PROTOCOL.md`, "Isolation over the whole graded window"), as counts and as a bound.
+1. **The counts.** Re-encoding a segment of `chainBand (2^9) d` from `W` costs `R(d) = rebuildCalls (2^9) d` sequential
+   `Π₂` calls: `R(5) = 3,057`, `R(12) = 6,578`, and `R(d) ≥ 3,057` for every `d ≥ 5`. The rounds of each row `(t, k)`
+   of `BandGradedMeetsFamily` last under `gradedRoundSpan 5 D_late k t ≤ 240·6 + 3·13 = 1,479` call-times when
+   `D_late ≤ 12`: a round answered at its deadline lasts just under `D + 1` call-times, not `D`.
 2. **The bound.** For every `d ≥ 5`, every domain map injective on the segment's `2^9` indices, every `W`, `Q ≤ 2^128`
-   and every row's window, programs that know `W` and the domains but nothing about `Π₂` beyond their own queries,
-   each within the window's rounds and `Q` queries, output all `2^9` labels of `chainBand (2^9) d 524288 512 dom`
-   with probability at most `2^-128` over `Π₂`. Segment `s` of the deployed store is such a segment, with domains
-   `dom tag_s` under the per-segment tags and `j ↦ dom salt (s·2^9 + j)` under one global salt
-   (`Pous.BandMulti.segFaithfulCode`, `Pous.BandMulti.segFaithful`).
+   and every `T ≤ auditCap = 1,505`, programs that know `W` and the domains but nothing about `Π₂` beyond their own
+   queries, each within `T` rounds and `Q` queries, output all `2^9` labels of `chainBand (2^9) d 524288 512 dom` with
+   probability at most `2^-128` over `Π₂`. Segment `s` of the deployed store is such a segment, with domains `dom tag_s`
+   under the per-segment tags and `j ↦ dom salt (s·2^9 + j)` under one global salt (`Pous.BandMulti.segFaithfulCode`,
+   `Pous.BandMulti.segFaithful`).
 
-It bounds re-encoding a whole segment from `W` with no state about `Π₂`. It does not bound recomputing a few blocks
-from held neighbours, which costs `min(v, d) + 1` calls per block. Proof: `PousRebuild.background_rebuild_excluded`
+**The precondition is the verifier's.** A rebuild runs beside the audit on the wall clock, through the rounds and the
+verifier's gaps between them, and no round deadline bounds the gaps. So the bound covers a graded audit only if the
+verifier aborts, without accepting, every audit that lasts more than `auditCap · call_ns` (≈ 363.5 ms at 241.5 µs per
+call) from its first challenge's send to its last answer's receipt. If every round of the worst row answers at its
+deadline, that leaves its 242 gaps `1,505 − 1,479 = 26` call-times (≈ 6.3 ms). The bound rests on the cap, which is the
+proof's reach, not on `R(d)`, which exceeds it.
+
+**What it does not exclude.** It excludes only re-encoding a whole segment from `W` with no state about `Π₂`. Within the
+cap, `W` alone rebuilds a segment's first 253 labels (49%) at `d = 5` and its first 121 (24%) at `d = 12`. `d`
+consecutive held labels restart the chain, so two held runs (10 labels, 2.0% of the segment) at `d = 5`, or four
+(48 labels, 9.4%) at `d = 12`, let a prover re-encode a whole segment within the cap. That gap between the storage held
+at rest and what is present when a challenge arrives is not bounded here. Proof: `PousRebuild.background_rebuild_excluded`
 (`Pous/SecurityProofs/Rebuild/`); here `Pous.SecurityProofs.BackgroundRebuildExcluded`. -/
 def BackgroundRebuildExcluded : Prop :=
   Pous.Rebuild.rebuildCalls (2 ^ 9) 5 = 3057 ∧ Pous.Rebuild.rebuildCalls (2 ^ 9) 12 = 6578 ∧
   (∀ d : ℕ, 5 ≤ d → 3057 ≤ Pous.Rebuild.rebuildCalls (2 ^ 9) d) ∧
   (∀ D_late : ℕ, D_late ≤ 12 → ∀ tk ∈ ([(0, 111), (1, 160), (2, 203), (3, 243)] : List (ℕ × ℕ)),
-    Pous.Rebuild.gradedWindow 5 D_late tk.2 tk.1 ≤ 1236) ∧
+    Pous.Rebuild.gradedRoundSpan 5 D_late tk.2 tk.1 ≤ 1479) ∧
   ∀ d : ℕ, 5 ≤ d → ∀ dom : ℕ → Bits 512, Function.Injective (fun i : Fin (2 ^ 9) => dom i) →
-    ∀ (W : Bits (2 ^ 9 * 524288)) (Q : ℕ), Q ≤ 2 ^ 128 →
-    ∀ D_late : ℕ, D_late ≤ 12 → ∀ tk ∈ ([(0, 111), (1, 160), (2, 203), (3, 243)] : List (ℕ × ℕ)),
+    ∀ (W : Bits (2 ^ 9 * 524288)) (Q : ℕ), Q ≤ 2 ^ 128 → ∀ T : ℕ, T ≤ Pous.Rebuild.auditCap →
     ∀ A : Fin (2 ^ 9) → Prog (Pous.Sponge.idealPerm (524288 + (524288 + 512))) (Bits 524288),
-      (∀ i, (A i).Bounded (Pous.Rebuild.gradedWindow 5 D_late tk.2 tk.1) Q) →
+      (∀ i, (A i).Bounded T Q) →
       pr (fun π : Equiv.Perm (Bits (524288 + (524288 + 512))) =>
           ∀ i, (A i).run ((Pous.Sponge.idealPerm (524288 + (524288 + 512))).answer π) =
             ((Pous.BandChain.chainBand (2 ^ 9) d 524288 512 dom).enc W π ()).2 i)
