@@ -1,32 +1,36 @@
 """Instantiate a checkpoint's vLLM model class on the meta device, without its weights or a GPU, and list its modules.
 
-What a capture map is checked against (`verity_vllm.correspondence.capture_map`): every module the pinned vLLM builds for a
+What a capture map is checked against (`verity_vllm.check.capture_map`): every module the pinned vLLM builds for a
 `config.json`, with its class, its parameters' and buffers' per-rank shapes and dtypes, and the attributes that select its
 kernels (`quant_method`, an attention layer's backend, a fused-MoE layer's router), at one tensor-parallel rank.
 
-No GPU is touched: `CUDA_VISIBLE_DEVICES` is emptied before torch loads, every tensor vLLM places on `cuda` is made on
-`meta`, and vLLM's platform is the CUDA platform reporting the `--capability` and `--device-name` of the target device (an
-H200 for a model our nodes cannot serve), so the model code takes the branches it takes there.  The tensor-parallel group
-is a stand-in of size `--tp` at `--rank`; no collective runs.  The same `inventory(model)` lists a live model's modules on a
-serving rank (the go/no-go check of a capture map on the target): `live_document(llm.collective_rpc(rank_inventory))`.
+No GPU is touched: no CUDA device is visible to the process (`engine.env.hide_devices`), every tensor vLLM places on `cuda`
+is made on `meta`, and vLLM's platform is the CUDA platform answering the declared `TargetProfile` (`--target`: compute
+capability, SM count, switches) and the target device's name and memory, so the model code takes the branches it takes on
+the target (an H200 for a model our nodes cannot serve).  Each rank's tensor-parallel group is the Build's stand-in
+(`export_ops.tp_group_override`); no collective runs.  The same `inventory(model)` lists a live model's modules on a serving
+rank (the go/no-go check of a capture map on the target): `live_document(llm.collective_rpc(rank_inventory))`.
 
-Run with the pinned vLLM's interpreter; stdlib, torch and vLLM only, so the file runs on its own:
-
-    python meta_inventory.py --repo zai-org/GLM-5.3 --revision <sha> --tp 8 --ranks 0 7 --capability 9.0 --out inv.json
+    verity-vllm meta-inventory --repo zai-org/GLM-5.3 --revision <sha> --tp 8 --ranks 0 1 2 3 4 5 6 7 \\
+        --target '{"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": false, "fp8_block_gemm": "cutlass"}' \\
+        --device-name "NVIDIA H200" --device-memory-gb 141 --out inv.json
 """
 from __future__ import annotations
 
-import argparse
 import hashlib
 import inspect
 import json
-import os
 import re
-import sys
 import tempfile
 import time
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+
+from verity_vllm.config import option
+from verity_vllm.engine import env as engine_env, hooks
 
 SCHEMA = "verity-vllm/meta-inventory/v1"
 
@@ -45,12 +49,6 @@ SCALAR_ATTRS = ("is_neox_style", "rotary_dim", "head_size", "max_position_embedd
                 "org_vocab_size", "_use_min_latency_gemm", "_index_rope_interleave", "_fp8_query", "dtype",
                 "supports_dense_mha_prefill", "_dense_mha_metadata_layer_name")
 _LAYER = re.compile(r"\.(\d+)(?=\.|$)")
-
-
-def _hide_gpus() -> None:
-    os.environ["CUDA_VISIBLE_DEVICES"] = ""
-    os.environ.setdefault("VLLM_LOGGING_LEVEL", "WARNING")
-    os.environ.setdefault("VLLM_CONFIGURE_LOGGING", "1")
 
 
 def _type_name(obj: Any) -> str:
@@ -166,158 +164,85 @@ def signature(inv: dict[str, Any]) -> str:
 
 
 def rank_inventory(worker: Any) -> dict[str, Any]:
-    """On a serving rank (`LLM.collective_rpc(rank_inventory)`): `inventory` of its loaded model, its tensor-parallel rank and the
-    switches `_selections` reads."""
+    """On a serving rank (`LLM.collective_rpc(rank_inventory)`): `inventory` of its loaded model, its tensor-parallel rank, the
+    device facts vLLM answers there (`applied`) and the switches `_selections` reads."""
     from vllm.distributed import get_tensor_model_parallel_rank
 
-    return {"rank": get_tensor_model_parallel_rank(), "selections": _selections(), **inventory(worker.get_model())}
+    from verity_vllm.program.frontend.export_compat import read_back_applied
+
+    return {"rank": get_tensor_model_parallel_rank(), "applied": read_back_applied(), "selections": _selections(),
+            **inventory(worker.get_model())}
 
 
 def live_document(per_rank: list[dict[str, Any]], **fields: Any) -> dict[str, Any]:
-    """`rank_inventory`'s records from every rank as one document in a meta build's layout (`capture_map check --inventory`)."""
-    return {"schema": SCHEMA, **fields, "selections": per_rank[0]["selections"],
-            "ranks": {str(r["rank"]): r for r in sorted(per_rank, key=lambda r: r["rank"])}}
+    """`rank_inventory`'s records from every rank as one document in a meta build's layout (`capture-map check --inventory`)."""
+    return {"schema": SCHEMA, **fields, "ranks": {str(r["rank"]): r for r in sorted(per_rank, key=lambda r: r["rank"])}}
 
 
 # ----------------------------------------------------------------------------------------------------- the meta instantiation
 
 
-def _target_platform(capability: tuple[int, int], name: str, memory_gb: int, world: int):
-    from vllm.platforms.cuda import CudaPlatform
-    from vllm.platforms.interface import DeviceCapability
+class _Stream:
+    """A stream or event a module makes while it is built (a shared expert's aux stream); never run."""
 
-    class Target(CudaPlatform):  # the CUDA platform of the target device, read from flags, not from this host's GPUs
-        @classmethod
-        def get_device_capability(cls, device_id: int = 0):
-            return DeviceCapability(major=capability[0], minor=capability[1])
+    def __init__(self, *a: Any, **k: Any) -> None:
+        pass
 
-        @classmethod
-        def get_device_name(cls, device_id: int = 0) -> str:
-            return name
-
-        @classmethod
-        def get_device_total_memory(cls, device_id: int = 0) -> int:
-            return memory_gb << 30
-
-        @classmethod
-        def device_count(cls) -> int:
-            return world
-
-        @classmethod
-        def is_fully_connected(cls, physical_device_ids) -> bool:
-            return True
-
-    Target.__name__ = Target.__qualname__ = f"{CudaPlatform.__name__}AsTarget"
-    return Target()
-
-
-class _Group:
-    """A stand-in for vLLM's GroupCoordinator: its size and this rank, for the code that reads them while building a model."""
-
-    def __init__(self, name: str, world: int, rank: int) -> None:
-        self.unique_name, self.world_size, self.rank_in_group, self.rank, self.local_rank = f"{name}:0", world, rank, rank, rank
-        self.ranks = list(range(world))
-        self.is_first_rank = rank == 0
-        self.is_last_rank = rank == world - 1
-        self.use_all2all = False
-        self.device_group = self.cpu_group = self
-        self.device_communicator = None
-
-    def size(self) -> int:
-        return self.world_size
-
-    def __getattr__(self, name: str):
-        raise AttributeError(f"stand-in {self.unique_name} group has no {name!r} (a collective or a communicator attribute)")
-
-
-def _fake_parallel(world: int, rank: int) -> None:
-    import vllm.distributed.parallel_state as ps
-
-    ps._WORLD = _Group("world", world, rank)
-    ps._TP = _Group("tp", world, rank)
-    ps._EP = _Group("ep", world, rank)
-    for g in ("_PP", "_DP", "_DCP", "_PCP"):
-        if hasattr(ps, g):
-            setattr(ps, g, _Group(g[1:].lower(), 1, 0))
-    if hasattr(ps, "_EPLB"):
-        ps._EPLB = None
-
-
-class _MetaDevices:
-    """Every tensor made on `cuda` is made on `meta`; host tensors are not pinned (no CUDA driver is loaded)."""
-
-    def __init__(self) -> None:
-        import torch
-        from torch.overrides import TorchFunctionMode
-
-        class Mode(TorchFunctionMode):
-            def __torch_function__(self, func, types, args=(), kwargs=None):
-                kwargs = dict(kwargs or {})
-                dev = kwargs.get("device")
-                if dev is not None and str(dev).startswith("cuda"):
-                    kwargs["device"] = torch.device("meta")
-                if kwargs.get("pin_memory"):
-                    kwargs["pin_memory"] = False
-                if func in (torch.Tensor.cuda,):
-                    return args[0]
-                if func in (torch.Tensor.to,) and len(args) > 1 and (isinstance(args[1], (str, torch.device)) and str(args[1]).startswith("cuda")):
-                    args = (args[0], torch.device("meta"), *args[2:])
-                if func is torch.Tensor.pin_memory:
-                    return args[0]
-                return func(*args, **kwargs)
-
-        class Stream:  # streams and events a module makes while it is built (a shared expert's aux stream); never run
-            def __init__(self, *a, **k) -> None:
-                pass
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *exc):
-                return False
-
-            def __getattr__(self, name):
-                return lambda *a, **k: None
-
-        class Props:
-            def __init__(self, name: str, cap: tuple[int, int], memory: int, sms: int) -> None:
-                self.name, (self.major, self.minor), self.total_memory, self.multi_processor_count = name, cap, memory, sms
-
-        cuda = torch.cuda
-        self.cuda_stubs = {"Stream": Stream, "Event": Stream, "current_stream": lambda *a, **k: Stream(),
-                           "default_stream": lambda *a, **k: Stream(), "set_stream": lambda *a, **k: None,
-                           "stream": lambda *a, **k: Stream(), "synchronize": lambda *a, **k: None,
-                           "is_current_stream_capturing": lambda: False, "current_device": lambda: 0,
-                           "set_device": lambda *a, **k: None}
-        self.props = Props
-        self.saved = {k: getattr(cuda, k) for k in self.cuda_stubs}
-        self.mode, self.meta = Mode(), torch.device("meta")
-
-    def target(self, name: str, capability: tuple[int, int], memory_gb: int, sms: int) -> "_MetaDevices":
-        p = self.props(name, capability, memory_gb << 30, sms)
-        self.cuda_stubs.update({"get_device_properties": lambda *a, **k: p, "get_device_name": lambda *a, **k: name,
-                                "get_device_capability": lambda *a, **k: capability})
-        import torch
-
-        self.saved.update({k: getattr(torch.cuda, k) for k in self.cuda_stubs if k not in self.saved})
+    def __enter__(self) -> "_Stream":
         return self
 
-    def __enter__(self):
-        import torch
+    def __exit__(self, *exc: Any) -> bool:
+        return False
 
-        for k, v in self.cuda_stubs.items():
-            setattr(torch.cuda, k, v)
-        self.meta.__enter__()
-        self.mode.__enter__()
-        return self
+    def __getattr__(self, name: str) -> Any:
+        return lambda *a, **k: None
 
-    def __exit__(self, *exc):
-        import torch
 
-        self.mode.__exit__(*exc)
-        self.meta.__exit__(*exc)
-        for k, v in self.saved.items():
-            setattr(torch.cuda, k, v)
+@contextmanager
+def target_device(target: Any, device_name: str, memory_gb: int):
+    """For the model's construction: every tensor vLLM makes on `cuda` is made on `meta`, host tensors are not pinned, and the
+    device queries of vLLM's platform and of `torch.cuda` answer the target device (`target`, a `TargetProfile`, and its name
+    and memory) without a CUDA driver.  Inside `export_compat.apply_target_profile(target)`, which answers the platform's
+    capability and SM count."""
+    import torch
+    from torch.overrides import TorchFunctionMode
+    from vllm.platforms import current_platform
+
+    meta = torch.device("meta")
+
+    class Mode(TorchFunctionMode):
+        def __torch_function__(self, func, types, args=(), kwargs=None):
+            kwargs = dict(kwargs or {})
+            dev = kwargs.get("device")
+            if dev is not None and str(dev).startswith("cuda"):
+                kwargs["device"] = meta
+            if kwargs.get("pin_memory"):
+                kwargs["pin_memory"] = False
+            if func is torch.Tensor.cuda or func is torch.Tensor.pin_memory:
+                return args[0]
+            if func is torch.Tensor.to and len(args) > 1 and isinstance(args[1], (str, torch.device)) \
+                    and str(args[1]).startswith("cuda"):
+                args = (args[0], meta, *args[2:])
+            return func(*args, **kwargs)
+
+    cap, memory = tuple(target.compute_capability), memory_gb << 30
+    props = SimpleNamespace(name=device_name, major=cap[0], minor=cap[1], total_memory=memory,
+                            multi_processor_count=target.num_sms)
+    cuda = {"Stream": _Stream, "Event": _Stream, "current_stream": lambda *a, **k: _Stream(),
+            "default_stream": lambda *a, **k: _Stream(), "set_stream": lambda *a, **k: None,
+            "stream": lambda *a, **k: _Stream(), "synchronize": lambda *a, **k: None,
+            "is_current_stream_capturing": lambda: False, "current_device": lambda: 0, "set_device": lambda *a, **k: None,
+            "get_device_properties": lambda *a, **k: props, "get_device_name": lambda *a, **k: device_name,
+            "get_device_capability": lambda *a, **k: cap}
+    with hooks.Hooks() as h:
+        for name, value in cuda.items():
+            h.patch(torch.cuda, name, value)
+        platform = type(current_platform)
+        h.patch(platform, "get_device_name", classmethod(lambda cls, device_id=0: device_name))
+        h.patch(platform, "get_device_total_memory", classmethod(lambda cls, device_id=0: memory))
+        h.patch(platform, "is_fully_connected", classmethod(lambda cls, physical_device_ids: True))
+        with meta, Mode():
+            yield
 
 
 def fetch_config(repo: str, revision: str, into: Path) -> Path:
@@ -328,35 +253,39 @@ def fetch_config(repo: str, revision: str, into: Path) -> Path:
     return p.parent
 
 
-def build(model_dir: Path, *, tp: int, rank: int, capability: tuple[int, int], device_name: str, memory_gb: int,
-          num_layers: int | None, max_model_len: int, kv_cache_dtype: str, attention_backend: str | None, env: dict[str, str]):
-    import torch
-    import vllm.platforms
+def build(model_dir: Path, target: Any, *, tp: int, rank: int, device_name: str, memory_gb: int, max_model_len: int,
+          kv_cache_dtype: str, num_layers: int | None = None) -> tuple[Any, Any, float]:
+    """Rank `rank` of `tp` of the model `model_dir/config.json` describes, on `meta` (no weights), with its vLLM config and
+    the seconds it took.  Call inside `export_compat.apply_target_profile(target)`, once `prepare` has run."""
+    from vllm.model_executor.model_loader.utils import initialize_model
+    from vllm.utils.torch_utils import set_default_torch_dtype
 
-    for k, v in env.items():
-        os.environ[k] = v
-    if not type(vllm.platforms.__dict__.get("current_platform")).__name__.endswith("AsTarget"):
-        vllm.platforms.current_platform = _target_platform(capability, device_name, memory_gb, tp)
-    from vllm.engine.arg_utils import EngineArgs
-    from vllm.model_executor.model_loader.utils import get_model_architecture, initialize_model
+    from verity_vllm.program.frontend import vllm_meta as vm
+    from verity_vllm.program.frontend.export_ops import CollectiveBus, tp_group_override
 
-    overrides: dict[str, Any] = {}
-    if num_layers is not None:
-        overrides["num_hidden_layers"] = num_layers
-    kw: dict[str, Any] = dict(model=str(model_dir), skip_tokenizer_init=True, tensor_parallel_size=tp, enforce_eager=True,
-                              max_model_len=max_model_len, load_format="dummy", kv_cache_dtype=kv_cache_dtype, seed=0,
-                              hf_overrides=overrides, generation_config="vllm")
-    if attention_backend:
-        kw["attention_backend"] = attention_backend
-    args = EngineArgs(**kw)
-    vcfg = args.create_engine_config()
-    _fake_parallel(tp, rank)
-    cls, arch = get_model_architecture(vcfg.model_config)
-    torch.set_default_dtype(vcfg.model_config.dtype)
-    t0 = time.time()
-    with _MetaDevices().target(device_name, capability, memory_gb, 132):
-        model = initialize_model(vcfg)
-    return model, cls, arch, vcfg, time.time() - t0
+    overrides = {} if num_layers is None else {"num_hidden_layers": num_layers}
+    cfg = vm.make_vllm_config(model=str(model_dir), revision=None, dtype="auto", max_model_len=max_model_len,
+                              tensor_parallel_size=tp, disable_custom_all_reduce=False, load_format="dummy",
+                              kv_cache_dtype=kv_cache_dtype, seed=0, hf_overrides=overrides, generation_config="vllm",
+                              **target.engine_args(execution=False))
+    vm.ensure_distributed(cfg, "gloo")
+    t0 = time.perf_counter()
+    # the loader's entry, not `vm.instantiate_meta`: it gives the quant config the model's packed-module mapping, which decides
+    # which fused linears a checkpoint's `modules_to_not_convert` leaves unquantized
+    with tp_group_override(rank, tp, CollectiveBus(rank=rank, world=tp)), set_default_torch_dtype(cfg.model_config.dtype), \
+            target_device(target, device_name, memory_gb):
+        model = initialize_model(cfg)
+    return model, cfg, time.perf_counter() - t0
+
+
+def prepare(target: Any, tp: int) -> str:
+    """The process before vLLM is imported: no CUDA device visible, the target's switches and the meta build's pins in the
+    environment, and vLLM's platform the CUDA platform of `tp` devices.  Returns the platform class vLLM resolved."""
+    engine_env.hide_devices()
+    engine_env.apply_target(target.env())
+    from verity_vllm.program.frontend.export_compat import select_cuda_platform
+
+    return select_cuda_platform(tp)
 
 
 def _selections() -> dict[str, Any]:
@@ -380,58 +309,60 @@ def _selections() -> dict[str, Any]:
     return out
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--repo", required=True)
-    ap.add_argument("--revision", required=True, help="the full commit sha of the checkpoint")
-    ap.add_argument("--config-dir", type=Path, default=None, help="a directory holding config.json (else it is fetched)")
-    ap.add_argument("--tp", type=int, default=1)
-    ap.add_argument("--ranks", type=int, nargs="+", default=[0])
-    ap.add_argument("--capability", default="9.0", help="the target's compute capability, e.g. 9.0 for an H200")
-    ap.add_argument("--device-name", default="NVIDIA H200")
-    ap.add_argument("--memory-gb", type=int, default=141)
-    ap.add_argument("--num-layers", type=int, default=None, help="override num_hidden_layers (default: the config's)")
-    ap.add_argument("--max-model-len", type=int, default=4096)
-    ap.add_argument("--kv-cache-dtype", default="auto")
-    ap.add_argument("--attention-backend", default=None)
-    ap.add_argument("--env", action="append", default=[], help="K=V set before vLLM reads its environment (e.g. VLLM_BATCH_INVARIANT=1)")
-    ap.add_argument("--out", type=Path, required=True)
-    a = ap.parse_args(argv)
-    _hide_gpus()
-    env = dict(kv.split("=", 1) for kv in a.env)
-    cap = tuple(int(x) for x in a.capability.split("."))
-    scratch = Path(tempfile.mkdtemp(prefix="meta-inventory-"))
-    model_dir = a.config_dir or fetch_config(a.repo, a.revision, scratch)
-    os.environ["HF_HUB_OFFLINE"] = "1"
-    cfg_bytes = (model_dir / "config.json").read_bytes()
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    "a checkpoint's modules, built on the meta device from its config.json alone, at each tensor-parallel rank"
+
+    repo: str = option("--repo")
+    revision: str = option("--revision", help="the checkpoint's full commit sha")
+    config_dir: str | None = option("--config-dir", default=None,
+                                    help="a directory holding the checkpoint's config.json (default: fetch config.json alone)")
+    target: str = option("--target", help="the target's TargetProfile: JSON overrides of the default profile, or a JSON file")
+    device_name: str = option("--device-name", help="the target device's name, as vLLM's platform reports it")
+    device_memory_gb: int = option("--device-memory-gb", type=int, help="the target device's memory (GiB)")
+    tp: int = option("--tp", type=int, default=1)
+    ranks: list[int] = option("--ranks", type=int, nargs="+", default=[0])
+    num_layers: int | None = option("--num-layers", type=int, default=None, help="num_hidden_layers (default: the config's)")
+    max_model_len: int = option("--max-model-len", type=int, default=4096)
+    kv_cache_dtype: str = option("--kv-cache-dtype", default="auto")
+    out: str = option("--out")
+
+
+def main(a: Options) -> int:
+    from verity_vllm.program.frontend.target_profile import TargetProfile, parse_target_arg
+
+    target = parse_target_arg(a.target, base=TargetProfile.default())
+    model_dir = Path(a.config_dir) if a.config_dir else fetch_config(a.repo, a.revision,
+                                                                     Path(tempfile.mkdtemp(prefix="meta-inventory-")))
+    platform = prepare(target, a.tp)
     import torch
     import vllm
+    from vllm.model_executor.model_loader.utils import get_model_architecture
+
+    from verity_vllm.program.frontend.export_compat import apply_target_profile, read_back_applied
 
     doc: dict[str, Any] = {"schema": SCHEMA, "repo": a.repo, "revision": a.revision,
-                           "config_sha256": hashlib.sha256(cfg_bytes).hexdigest(), "vllm": vllm.__version__,
-                           "torch": torch.__version__, "target": {"compute_capability": list(cap), "device_name": a.device_name,
-                                                                  "memory_gb": a.memory_gb},
-                           "tp": a.tp, "num_layers": a.num_layers, "max_model_len": a.max_model_len, "kv_cache_dtype": a.kv_cache_dtype,
-                           "attention_backend": a.attention_backend, "env": env, "ranks": {}}
-    for r in a.ranks:
-        model, cls, arch, vcfg, secs = build(model_dir, tp=a.tp, rank=r, capability=cap, device_name=a.device_name,
-                                             memory_gb=a.memory_gb, num_layers=a.num_layers, max_model_len=a.max_model_len,
-                                             kv_cache_dtype=a.kv_cache_dtype, attention_backend=a.attention_backend, env=env)
-        inv = inventory(model)
-        doc["architecture"] = arch
-        doc["model_class"] = f"{cls.__module__}.{cls.__qualname__}"
-        doc["quantization"] = vcfg.model_config.quantization
-        doc["cache_dtype"] = vcfg.cache_config.cache_dtype
-        doc["selections"] = _selections()
-        doc["ranks"][str(r)] = {"seconds": round(secs, 2), **inv}
-        print(f"[meta-inventory] rank {r}/{a.tp}: {cls.__qualname__} {inv['modules']} modules, {len(inv['module_types'])} types, "
-              f"{secs:.1f}s", flush=True)
-        del model
-    a.out.parent.mkdir(parents=True, exist_ok=True)
-    a.out.write_text(json.dumps(doc, indent=1, sort_keys=False))
-    print(f"[meta-inventory] wrote {a.out}", flush=True)
+                           "config_sha256": hashlib.sha256((model_dir / "config.json").read_bytes()).hexdigest(),
+                           "vllm": vllm.__version__, "torch": torch.__version__, "platform": platform,
+                           "target": target.to_json(), "device": {"name": a.device_name, "memory_gb": a.device_memory_gb},
+                           "env": target.env(), "tp": a.tp, "num_layers": a.num_layers, "max_model_len": a.max_model_len,
+                           "kv_cache_dtype": a.kv_cache_dtype, "ranks": {}}
+    with apply_target_profile(target):
+        for r in a.ranks:
+            model, cfg, secs = build(model_dir, target, tp=a.tp, rank=r, device_name=a.device_name,
+                                     memory_gb=a.device_memory_gb, max_model_len=a.max_model_len,
+                                     kv_cache_dtype=a.kv_cache_dtype, num_layers=a.num_layers)
+            cls, arch = get_model_architecture(cfg.model_config)
+            doc.update(architecture=arch, model_class=f"{cls.__module__}.{cls.__qualname__}",
+                       quantization=cfg.model_config.quantization, cache_dtype=cfg.cache_config.cache_dtype)
+            inv = inventory(model)
+            doc["ranks"][str(r)] = {"seconds": round(secs, 2), "applied": read_back_applied(), "selections": _selections(),
+                                    **inv}
+            print(f"[meta-inventory] rank {r}/{a.tp}: {cls.__qualname__} {inv['modules']} modules, "
+                  f"{len(inv['module_types'])} types, {secs:.1f}s", flush=True)
+            del model
+    out = Path(a.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(doc, indent=1, sort_keys=False))
+    print(f"[meta-inventory] wrote {out}", flush=True)
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
