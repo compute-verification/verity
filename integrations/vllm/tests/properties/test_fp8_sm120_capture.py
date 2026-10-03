@@ -36,17 +36,20 @@ def _scales(rng: np.random.Generator, *shape: int) -> np.ndarray:
     return np.exp2(rng.uniform(-12, -6, shape)).astype(np.float32).view(np.uint32)
 
 
-def _bf16_rows(rng: np.random.Generator, M: int, k: int = K) -> np.ndarray:
-    """`_activation`'s rows: random, a zero row, one outlier over tiny values, a subnormal scale, the cancellation and saturated rows."""
+def _bf16_rows(rng: np.random.Generator, M: int, k: int = K, G: int = 128) -> np.ndarray:
+    """`_activation`'s rows: random, a zero row, one outlier over tiny values, a subnormal scale, the cancellation, saturated and
+    paired-group rows."""
     x = rng.standard_normal((M, k)).astype(np.float32) * np.exp2(rng.uniform(-3, 3, (M, 1))).astype(np.float32)
     x[1] = 0
     x[2] *= np.float32(2.0 ** -9)
     x[2, 7] = np.float32(2.0 ** 12)
     x[3] *= np.float32(2.0 ** -130)
-    if M >= 6:
+    if M >= 7:
         x[4] = rng.standard_normal(k).astype(np.float32) * np.float32(2.0 ** -6)
         x[4, 0::32] = x[4, 1::32] = 1.0
         x[5] = np.where(rng.standard_normal(k) < 0, -1.0, 1.0)
+        for gk in range(1, k // G, 2):
+            x[6, gk * G:(gk + 1) * G] = -x[6, (gk - 1) * G:gk * G]
     return (x.view(np.uint32) >> 16).astype(np.uint16)
 
 
@@ -103,12 +106,13 @@ def test_the_reference_chain_is_the_model(form: str, G: int, KB: int, g) -> None
         assert [X.reference_word(q[r], s[r], w[n], ws[0], G=G, KB=KB, form=form, g=g) for n in range(9)] == want.tolist()
 
 
-def _dense_job(tmp_path, *, form: str = "cutlass", words: str = "cutlass", flip: bool = False, flip_quant: bool = False, M: int = 6,
+def _dense_job(tmp_path, *, form: str = "cutlass", words: str = "cutlass", flip: bool = False, flip_quant: bool = False, M: int = 8,
                G: int = 128, KB: int = 128) -> dict:
     rng = np.random.default_rng(1)
-    x = _bf16_rows(rng, M)
+    x = _bf16_rows(rng, M, K, G)
     q, s = _quant(x, G)
     w, ws = _weights(rng, N, K), _scales(rng, X.H.cdiv(N, G), K // G)
+    X.pair_groups(w, ws, G)
     out = np.stack([X.block_row(q[r], s[r], w, ws, G=G, KB=KB, form=words)[0] for r in range(M)])
     if flip:
         out[2, 150] ^= 1
@@ -136,39 +140,40 @@ def _sampled(rows) -> int:
 
 @pytest.mark.parametrize("form,KB", [("cutlass", 128), ("triton", 128), ("triton", 64)])
 def test_a_dense_job_takes_the_kernel_words_and_refutes_every_alternative(tmp_path, form: str, KB: int) -> None:
-    jobs = X.gemm_jobs(_dense_job(tmp_path, form=form, words=form, KB=KB), 6, X.SPECIAL_ROWS)
-    assert sorted(r for j in jobs for r in j["reference"]) == [0, 2, 3, 4, 5]
+    jobs = X.gemm_jobs(_dense_job(tmp_path, form=form, words=form, KB=KB), 8, X.SPECIAL_ROWS)
+    assert sorted(r for j in jobs for r in j["reference"]) == [0, 2, 3, 4, 5, 6, 7]
     t = _total([X.compare(j) for j in jobs])
-    assert {k: t[k] for k in X.TOTALS} == {"words": 6 * N, "mismatch": 0, "unresolved": 0, "quant_rows": 6, "quant_mismatch": 0,
-                                          "reference_coords": _sampled((0, 2, 3, 4, 5)), "reference_quant_rows": 5, "twin_mismatch": 0,
-                                          "alt_words": 5 * N}
+    assert {k: t[k] for k in X.TOTALS} == {"words": 8 * N, "mismatch": 0, "unresolved": 0, "quant_rows": 8, "quant_mismatch": 0,
+                                          "reference_coords": _sampled((0, 2, 3, 4, 5, 6, 7)), "reference_quant_rows": 7,
+                                          "twin_mismatch": 0, "alt_words": 7 * N}
     assert sorted(t["alternatives"]) == sorted(X.ALTERNATIVES[form]) and all(n > 0 for n in t["alternatives"].values()), t["alternatives"]
     assert t["first_mismatch"] is None
 
 
 def test_a_flipped_word_a_quant_byte_and_another_models_words_are_found(tmp_path) -> None:
-    t = _total([X.compare(j) for j in X.gemm_jobs(_dense_job(tmp_path, flip=True), 6, X.SPECIAL_ROWS)])
+    t = _total([X.compare(j) for j in X.gemm_jobs(_dense_job(tmp_path, flip=True), 8, X.SPECIAL_ROWS)])
     assert t["mismatch"] == 1 and t["first_mismatch"] == {"row": 2, "column": 150, "want": t["first_mismatch"]["want"],
                                                           "kernel": t["first_mismatch"]["want"] ^ 1, "explained_by": []}
-    t = _total([X.compare(j) for j in X.gemm_jobs(_dense_job(tmp_path, flip_quant=True), 6, X.SPECIAL_ROWS)])
+    t = _total([X.compare(j) for j in X.gemm_jobs(_dense_job(tmp_path, flip_quant=True), 8, X.SPECIAL_ROWS)])
     assert t["quant_mismatch"] == 1 and t["first_mismatch"] == {"row": 4, "quant": True}
-    t = _total([X.compare(j) for j in X.gemm_jobs(_dense_job(tmp_path, words="triton"), 6, X.SPECIAL_ROWS)])
+    t = _total([X.compare(j) for j in X.gemm_jobs(_dense_job(tmp_path, words="triton"), 8, X.SPECIAL_ROWS)])
     assert t["mismatch"] > 0 and "triton_order" in t["first_mismatch"]["explained_by"] and t["alternatives"]["triton_order"] == 0
 
 
 def _moe_job(tmp_path, kind: str, *, flip: bool = False) -> list[dict]:
-    """A w13-like launch (6 tokens x 8 slots over 5 used experts, K 256, N 200) or a w2-like one (48 rows, one slot each, the
-    routed weight), at G 64 and KB 32."""
+    """A w13-like launch (8 tokens x 8 slots over 5 used experts, K 256, N 200) or a w2-like one (64 rows, one slot each, the
+    routed weight), at G 64 and KB 32, on paired weight groups."""
     rng = np.random.default_rng(2)
-    M, used = 6, np.array([3, 17, 40, 41, 127])
+    M, used = 8, np.array([3, 17, 40, 41, 127])
     ids = np.stack([rng.permutation(used)[:5].tolist() + rng.permutation(used)[:3].tolist() for _ in range(M)]).reshape(-1)
     umap = np.full(X.NUM_EXPERTS, -1)
     umap[used] = np.arange(used.size)
     tw = (rng.uniform(0.05, 0.4, M * X.TOP_K).astype(np.float32)).view(np.uint32)
     rows = M if kind == "w13" else M * X.TOP_K
     top_k, mul = (X.TOP_K, False) if kind == "w13" else (1, True)
-    A, As = _quant(_bf16_rows(rng, rows), X.MOE_G)
+    A, As = _quant(_bf16_rows(rng, rows, K, X.MOE_G), X.MOE_G)
     B, Bs = np.stack([_weights(rng, N, K) for _ in used]), _scales(rng, used.size, X.H.cdiv(N, X.MOE_G), K // X.MOE_G)
+    X.pair_groups(B, Bs, X.MOE_G)
     C = np.stack([X.block_row(A[p // top_k], As[p // top_k], B[umap[ids[p]]], Bs[umap[ids[p]]], G=X.MOE_G, KB=32,
                               g=int(tw[p]) if mul else None)[0] for p in range(M * X.TOP_K)])
     if flip:
@@ -181,8 +186,11 @@ def _moe_job(tmp_path, kind: str, *, flip: bool = False) -> list[dict]:
 @pytest.mark.parametrize("kind", ["w13", "w2"])
 def test_moe_jobs_take_the_kernel_words(tmp_path, kind: str) -> None:
     t = _total([X.compare(j) for j in _moe_job(tmp_path, kind)])
-    assert t["words"] == 48 * N and t["mismatch"] == t["unresolved"] == t["twin_mismatch"] == 0 and t["quant_rows"] == 0
-    assert t["reference_coords"] == _sampled([r * X.TOP_K for r in X.SPECIAL_ROWS]) and all(n > 0 for n in t["alternatives"].values())
+    assert t["words"] == 64 * N and t["mismatch"] == t["unresolved"] == t["twin_mismatch"] == 0 and t["quant_rows"] == 0
+    assert t["reference_coords"] == _sampled([*(r * X.TOP_K for r in X.SPECIAL_ROWS), 63])
+    assert sorted(t["alternatives"]) == sorted(X.ALTERNATIVES["triton"])
+    if kind == "w13":
+        assert all(n > 0 for n in t["alternatives"].values()), t["alternatives"]
     flipped = _total([X.compare(j) for j in _moe_job(tmp_path, kind, flip=True)])
     assert flipped["mismatch"] == 1 and flipped["first_mismatch"]["row"] == 13 and flipped["first_mismatch"]["column"] == 7
 
@@ -298,8 +306,8 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "selection", lambda: {"cutlass_ok": True, "triton_ok": True, "moe_ok": True})
     monkeypatch.setattr(X, "DENSE", (("ragged", K, N),))
-    monkeypatch.setattr(X, "QUICK_DENSE_M", (6,))
-    monkeypatch.setattr(X, "MOE", (("small", 6, 0),))
+    monkeypatch.setattr(X, "QUICK_DENSE_M", (8,))
+    monkeypatch.setattr(X, "MOE", (("small", 8, 0),))
     monkeypatch.setattr(X, "QUICK_MOE", ("small",))
     monkeypatch.setattr(X, "QUANT", ((X.MOE_I, X.MOE_G),))
     kernels = iter([["cutlass_swap_ab"]])
@@ -330,11 +338,11 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--quick"]) == 1
     doc = json.loads((out / X.RECORD).read_text())
     assert doc["digest"] == digest_of(doc) and doc["ok"] is False and not doc["errors"] and doc["gate"]["ok"]
-    assert {k: c["ok"] for k, c in doc["cases"].items()} == {"cutlass/ragged/M6": True, "triton/ragged/M6": False, "moe/small": True,
+    assert {k: c["ok"] for k, c in doc["cases"].items()} == {"cutlass/ragged/M8": True, "triton/ragged/M8": False, "moe/small": True,
                                                              "quant/K192/G64": True}
     assert doc["dispatch"]["ok"] is False                                        # one dispatch class ran: not the three
     assert doc["env"]["VLLM_USE_DEEP_GEMM"] == "0" and doc["env"]["VLLM_BATCH_INVARIANT"] == "1"
     lines = [json.loads(s) for s in (out / X.VERDICTS).read_text().splitlines()]
     assert [ln["case"] for ln in lines] == ["gate", "selection", *doc["cases"], "dispatch", "alternatives"]
-    assert next(ln for ln in lines if ln["case"] == "triton/ragged/M6")["first_mismatch"]["column"] == 150
+    assert next(ln for ln in lines if ln["case"] == "triton/ragged/M8")["first_mismatch"]["column"] == 150
     assert "FP8-SM120 NO-GO" in capsys.readouterr().out

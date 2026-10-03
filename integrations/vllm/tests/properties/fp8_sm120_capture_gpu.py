@@ -33,8 +33,10 @@ chain of the registered primitives must give the same words (`reference_word`), 
 the capture could not tell it from the model.
 
 Operands are random e4m3 (every code but NaN) and adversarial: a zero row, one outlier over subnormal codes, a subnormal scale, and from
-M >= 6 a cancellation row (two +-448 products cancelling over small terms in every 32-group, against weight rows n % 8 == 1 built for
-it: the adder-width discriminator) and a saturated row (every activation byte +-448).  GO = every case GO (0 mismatches and 0 unresolved
+M >= 7 a cancellation row (two +-448 products cancelling over small terms in every 32-group, against weight rows n % 8 == 1 built for
+it: the adder-width discriminator), a saturated row (every activation byte +-448), and a row whose odd scale groups negate the even
+ones, against weight blocks whose odd groups copy the even ones under scales a few ulps apart (`pair_groups`: the scale-order and
+FFMA discriminator, which random operands rarely reach through the bf16 rounding).  GO = every case GO (0 mismatches and 0 unresolved
 words, the twins equal to the reference, deterministic reruns, the expected kernels, tiles and statics), the selections, the three
 CUTLASS kernels, every alternative refuted, and no error.  A case's verdict keeps its first mismatch (coordinates, words, and which
 alternative, if any, gives the kernel's word).
@@ -75,7 +77,7 @@ DENSE_M = (1, 2, 64, 65, 256, 257, 300)
 QUICK_DENSE_M = (1, 65, 257)
 NUM_EXPERTS, TOP_K, MOE_I, MOE_G = 128, 8, 1536 // 8, 64
 #: (name, tokens, hot experts: 0 routes each token to 8 of all 128); the row's decode is `decode`, its prefill `prefill`
-MOE = (("decode", 1, 0), ("small", 6, 0), ("block", 64, 0), ("prefill", 256, 16))
+MOE = (("decode", 1, 0), ("small", 8, 0), ("block", 64, 0), ("prefill", 256, 16))
 QUICK_MOE = ("decode", "small")
 #: (K, G) of the quant phase: the dense inputs at 128, the expert inputs (hidden, one rank's I) at 64
 QUANT = ((HIDDEN, 128), (8 * 128, 128), (HIDDEN, 64), (MOE_I, 64))
@@ -92,7 +94,7 @@ ALTERNATIVES: dict[str, dict[str, tuple[str, str]]] = {
 DISPATCH = (("swap_ab", 64), ("pingpong", 256), ("cooperative", None))
 TOTALS = ("words", "mismatch", "unresolved", "quant_rows", "quant_mismatch", "reference_coords", "reference_quant_rows", "twin_mismatch",
           "alt_words")
-SPECIAL_ROWS = (0, 2, 3, 4, 5)
+SPECIAL_ROWS = (0, 2, 3, 4, 5, 6)
 
 
 def dispatch_class(M: int) -> str:
@@ -300,19 +302,33 @@ def quant_jobs(job: dict[str, Any], n_rows: int) -> list[dict[str, Any]]:
 
 
 # ------------------------------------------------------------------------------------------------------------------- operands
-def _activation(gen, M: int, K: int):
+def _activation(gen, M: int, K: int, G: int):
     """`glm53_block_fp8_capture_gpu._activation`'s rows (row 1 zero, row 2 one outlier over subnormal codes, row 3 a subnormal scale),
-    and from M >= 6: row 4 small values with 1.0 at k % 32 in {0, 1} (two +448 codes in every 32-group), row 5 +-1.0 (every code
-    +-448)."""
+    and from M >= 7: row 4 small values with 1.0 at k % 32 in {0, 1} (two +448 codes in every 32-group), row 5 +-1.0 (every code
+    +-448), row 6 random with every odd group of G the negation of the group before it (`pair_groups`)."""
     import torch
 
     x = H._activation(gen, M, K).float()
-    if M >= 6:
+    if M >= 7:
         x[4] = torch.randn(K, generator=gen, device="cuda") * 2.0 ** -6
         x[4, 0::32] = 1.0
         x[4, 1::32] = 1.0
         x[5] = torch.where(torch.randn(K, generator=gen, device="cuda") < 0, -1.0, 1.0)
+        for gk in range(1, K // G, 2):
+            x[6, gk * G:(gk + 1) * G] = -x[6, (gk - 1) * G:gk * G]
     return x.to(torch.bfloat16).contiguous()
+
+
+def pair_groups(w, ws_bits, G: int) -> None:
+    """In place, on e4m3 bytes w (..., N, K) and f32 scale words ws_bits (..., cdiv(N, G), K/G), numpy or torch: in every odd block of
+    weight rows (nb % 2 == 1) each odd K group of G copies the group before it, with that group's scale plus 1 to 7 ulps.  Against
+    activation row 6 the two groups' terms cancel to a few ulps of either, so each scale form's rounding reaches the bf16 word: the
+    scale-order and FFMA discriminator."""
+    for nb in range(1, ws_bits.shape[-2], 2):
+        r0, r1 = nb * G, min(w.shape[-2], (nb + 1) * G)
+        for gk in range(1, w.shape[-1] // G, 2):
+            w[..., r0:r1, gk * G:(gk + 1) * G] = w[..., r0:r1, (gk - 1) * G:gk * G]
+            ws_bits[..., nb, gk] = ws_bits[..., nb, gk - 1] + 1 + (nb + gk) % 7
 
 
 def _weights(gen, shape: tuple[int, ...]):
@@ -439,11 +455,13 @@ def dense_launch(work: Path, phase: str, name: str, K: int, N: int, M: int, seed
         kernel = _linear_kernel(K, N)
         gen = torch.Generator(device="cuda").manual_seed(seed)
         layer = torch.nn.Module()
-        layer.weight = torch.nn.Parameter(_weights(gen, (N, K)), requires_grad=False)
-        layer.weight_scale_inv = torch.nn.Parameter(H._scales(gen, (H.cdiv(N, GROUP), K // GROUP), -12, -6), requires_grad=False)
+        w0, ws0 = _weights(gen, (N, K)), H._scales(gen, (H.cdiv(N, GROUP), K // GROUP), -12, -6)
+        pair_groups(w0.view(torch.uint8), ws0.view(torch.int32), GROUP)
+        layer.weight = torch.nn.Parameter(w0, requires_grad=False)
+        layer.weight_scale_inv = torch.nn.Parameter(ws0, requires_grad=False)
         layer.input_scale = None
         kernel.process_weights_after_loading(layer)
-        x = _activation(gen, M, K)
+        x = _activation(gen, M, K, GROUP)
         seen: list[dict[str, Any]] = []
         inner = kernel.apply_block_scaled_mm
 
@@ -485,7 +503,9 @@ def moe_launches(work: Path, name: str, M: int, hot: int, seed: int) -> tuple[li
     w1, w2 = _weights(gen, (E, 2 * I, HIDDEN)), _weights(gen, (E, HIDDEN, I))
     s1 = H._scales(gen, (E, 2 * I // Gm, HIDDEN // Gm), -12, -6)
     s2 = H._scales(gen, (E, HIDDEN // Gm, I // Gm), -12, -6)
-    x = _activation(gen, M, HIDDEN)
+    pair_groups(w1.view(torch.uint8), s1.view(torch.int32), Gm)
+    pair_groups(w2.view(torch.uint8), s2.view(torch.int32), Gm)
+    x = _activation(gen, M, HIDDEN, Gm)
     ids, tw = _routing(gen, M, hot)
     qc = fp8_w8a8_moe_quant_config(w1_scale=s1, w2_scale=s2, block_shape=[Gm, Gm])
     quants: list[dict[str, Any]] = []
@@ -556,7 +576,7 @@ def quant_launch(work: Path, K: int, Gq: int, seed: int) -> tuple[dict[str, Any]
     from vllm.model_executor.layers.quantization.utils.fp8_utils import per_token_group_quant_fp8
 
     gen = torch.Generator(device="cuda").manual_seed(seed)
-    x = _activation(gen, QUANT_M, K)
+    x = _activation(gen, QUANT_M, K, Gq)
     q1, s1 = per_token_group_quant_fp8(x, Gq, use_ue8m0=False)
     q2, s2 = per_token_group_quant_fp8(x, Gq, use_ue8m0=False)
     q3, s3 = per_token_group_quant_fp8(x, Gq, column_major_scales=True, use_ue8m0=False)
