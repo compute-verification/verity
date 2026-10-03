@@ -12,8 +12,9 @@ monitors and writes each incident once when it opens and once when it clears; th
 returns findings, and the action its owner takes. A finding's `key` is stable while the incident lasts: the runner opens an
 incident once a key has been found for `for_s`, and clears it once the key has been gone for `clear_s`. An `events` monitor's
 findings are posted once each and never cleared; its first pass only remembers what is already there. A check that raises
-`Skip` (node 2 in a timed window) changes nothing. One that fails otherwise keeps its incidents open, and once it has failed
-for `unread_s` it opens `<id>|unreadable` for infra.
+`Skip` (node 2 in a timed window) changes nothing; one refused by node 2 is unread meanwhile, so its next failure counts from
+its last read. One that fails otherwise keeps its incidents open, and once it has failed for `unread_s` it opens
+`<id>|unreadable` for infra.
 
 **Sinks.** Each open and clear is a line of `<alerts>/monitors.jsonl` (`research/monitors-event/v1`), and each open also a note
 in `<alerts>/outbox/` in alert_sink.py's format, so one relay posts these and Grafana's alike. A write there that fails opens or
@@ -27,7 +28,8 @@ events alone.
 runs first in it: unless node 2's fill status says `timed False, window waiting False` and is at most FILL_GO_S old on node 2's
 clock (not from the future), it prints the status and nothing else runs, and each node-2 check is a Skip. Past the guard, one
 python, bounded by `timeout` and niced there, reads every part the pass's due checks need, checking the status again before each.
-While a window booked in node 2's fill/windows runs (as the last session read it), a pass doesn't log in at all.
+While a window booked in node 2's fill/windows runs (as the last session read it), a pass doesn't log in at all. Refused for
+UNWATCHED_S past the end of any booked window, fill-status-n2 opens `unwatched`: a timed window that long is the incident.
 
 `relay` runs the relay-side monitors into a local alert dir, then posts every new event of node 1's alert dir (over ssh) and the
 local one to #agent-alerts as `vy-monitors`, tagging the owners; each clear is a reply in its alert's thread. An owner other
@@ -73,6 +75,7 @@ WINDOWS = "/workspace/pouw/fill/windows"
 QUIET = "timed False, window waiting False"      # what every node-2 guard on main requires (dispatch.n2_room, write_probe)
 FILL_GO_S = 60                                   # the guard's limit; fill_runner rewrites its status every 10 s (POLL_S)
 FILL_FRESH_S = 300                               # fill-status-n2's: older, the fill runner has stopped
+UNWATCHED_S = 2 * 3600                           # node 2 refusing that long past any booked window: fill-status-n2's `unwatched`
 # The status's first field must be a time, at most FILL_GO_S old on node 2's clock; a refusal prints `SKIPPED <node 2's now>
 # <age, or - without a time> <status>` and exits.
 N2_GUARD = (f'ok=0; s=$(head -n 1 {FILL_STATUS} 2>/dev/null); n=$(date +%s); t=${{s%% *}}; a=-; '
@@ -88,7 +91,12 @@ RETRY_KEEP_S = 86400
 
 
 class Skip(Exception):
-    """The check can't look now, by design (node 2 in a timed window): nothing opens or clears."""
+    """The check can't look now, by design (node 2 in a timed window): nothing opens or clears. `unread`: the skip isn't a read
+    (node 2 refused it), so the monitor's input stays as late as its last read."""
+
+    def __init__(self, why: str = "", *, unread: bool = False):
+        super().__init__(why)
+        self.unread = unread
 
 
 class Late(Skip):
@@ -99,7 +107,7 @@ class Refused(Skip):
     """Node 2's guard refused: its fill status `status`, `age` s old on node 2's clock `now` (None: it has no time)."""
 
     def __init__(self, status: str, now: float, age: float | None):
-        super().__init__(refusal(status, age))
+        super().__init__(refusal(status, age), unread=True)
         self.status, self.now, self.age = status, now, age
 
 
@@ -246,10 +254,10 @@ class Ctx:
         """The output of part `name` of this pass's node-2 session: a Skip when the session didn't get to run it."""
         r = self.node2(name)
         if r.refused:
-            raise Skip(str(r.refused))
+            raise r.refused
         got = r.parts.get(name)
         if got is None and r.stopped is not None:
-            raise Skip(f"node 2 stopped being quiet during the session: {r.stopped[:160]}")
+            raise Skip(f"node 2 stopped being quiet during the session: {r.stopped[:160]}", unread=True)
         if got is None:
             raise RuntimeError(f"node 2's session didn't read `{name}`: its monitor doesn't name it (Monitor.n2)")
         if "error" in got:
@@ -593,17 +601,28 @@ def idle_while_waiting_n2(ctx: Ctx) -> list[Finding]:
 
 def fill_status_n2(ctx: Ctx) -> list[Finding]:
     """Node 2's fill status (as this pass's session found it, refused or not, on node 2's clock) is over 5 minutes old: its fill
-    runner has stopped, and no other monitor reads node 2 meanwhile (the guard needs a quiet status at most a minute old)."""
+    runner has stopped, and no other monitor reads node 2 meanwhile (the guard needs a quiet status at most a minute old). Or
+    node 2 has refused every read for over 2 hours past the end of any window booked on it: a timed lease never released."""
     r = ctx.node2()
+    if r.refused is None:
+        ctx.memo.pop("refused_since", None)
+    since = ctx.memo.setdefault("refused_since", ctx.now) if r.refused else None
     line = r.status
     try:
         age = r.now - epoch(line.split()[0])
     except (IndexError, ValueError):
         raise RuntimeError(f"node 2's fill status doesn't start with its time: {line[:120]!r}") from None
-    if age <= FILL_FRESH_S:
+    if age > FILL_FRESH_S:
+        return [Finding("stale", f"*Node 2's fill status is {age / 60:.0f} minutes old* ({FILL_STATUS}: `{line[:160]}`), so the "
+                        "fill runner isn't ticking, and the node-2 monitors are skipped until it does.", for_s=300)]
+    ended = [end for _, end, _ in ctx.pass_.n2_state.get("windows") or [] if end <= ctx.now]
+    if since is None or ctx.now - max([since, *ended]) <= UNWATCHED_S:
         return []
-    return [Finding("stale", f"*Node 2's fill status is {age / 60:.0f} minutes old* ({FILL_STATUS}: `{line[:160]}`), so the fill "
-                    "runner isn't ticking, and the node-2 monitors are skipped until it does.", for_s=300)]
+    blind = ", ".join(m.id for m in MONITORS if m.n2)
+    return [Finding("unwatched", f"*Node 2 has refused every read since {iso(since)[11:16]}Z*, "
+                    f"{(ctx.now - since) / 3600:.1f} hours: {r.refused}. No window booked in {WINDOWS} covers the last "
+                    f"{UNWATCHED_S / 3600:.0f}, so {blind} see nothing; a timed window that long is itself the incident.",
+                    cleared="*Cleared:* node 2 lets the monitors read it again.")]
 
 
 # ---- a lease preempted within 60 s of its grant (gpu-lease's preempted.log; the cluster agent's evictions log the same) ----------
@@ -806,8 +825,9 @@ MONITORS: list[Monitor] = [
             "Read node 2's fill status and the wait files in /run/gpu-lease; while the cluster agent holds agent.lock, it "
             "grants: see its log. A waiter pinned (`on=`) to a busy GPU waits by design.", n2="waiters"),
     Monitor("fill-status-n2", "infra", "warn", "node", fill_status_n2,
-            "Restart node 2's fill runner (tmux `pouw-infra-fill`) after reading why it stopped. Until its status is fresh, no "
-            "monitor reads node 2."),
+            "Stale: restart node 2's fill runner (tmux `pouw-infra-fill`) after reading why it stopped; until its status is "
+            "fresh, no monitor reads node 2. Unwatched: find the lease holding `timed` (`/run/gpu-lease` on node 2) and the "
+            "window it belongs to; ask its owner to end it, or release it once it is dead."),
     Monitor("fast-preempt-n1", "infra", "warn", "node", fast_preempt_n1, FAST),
     Monitor("fast-preempt-n2", "infra", "warn", "node", fast_preempt_n2, FAST, n2="preempted"),
     Monitor("units-n1", "infra", "warn", "node", units("n1"), UNITS_ACTION, every_s=300),
@@ -1007,7 +1027,9 @@ def judge(m: Monitor, state: dict, shared: Pass, ctx_for: Callable[[dict], Ctx],
             st["last_run"] = ran
         return
     except Skip as e:
-        st.update(last_ok=now, skipped=str(e)[:300])
+        st["skipped"] = str(e)[:300]
+        if not e.unread:
+            st["last_ok"] = now
         return
     except Exception as e:  # noqa: BLE001  (an input that can't be read is the monitor's own finding, in time)
         st["error"] = f"{type(e).__name__}: {e}"[:500]

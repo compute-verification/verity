@@ -601,6 +601,26 @@ def test_node_2s_fill_status_is_stale_after_5_minutes_on_node_2s_clock_whether_t
     assert f.key == "stale" and "7 minutes old" in f.text
 
 
+def test_node_2_refusing_for_2_hours_past_its_booked_window_opens_one_unwatched_and_its_checks_read_nothing_meanwhile(tmp_path):
+    """A timed lease never released (a window that crashed, a stuck lease file): every pass finds a fresh `timed True`."""
+    state, opened = M.new_state(), []
+    good = dict(probe=json.dumps(reading()), waiters="[]", preempted="", units="")
+    n2_pass(state, session(windows=f"{iso(T0 + 600)[:16]}Z 60 # proofs timed run\n", **good), T0, tmp_path)
+    for i in range(1, 41):                                  # every 5 minutes: a refusal, the window (no login), then refusals
+        now = T0 + 300 * i
+        opened += [(now - T0, e["key"]) for e in n2_pass(state, refusing(status(timed=True, now=now), now=now), now, tmp_path)]
+    assert opened == [(4200 + 7200 + 300, "fill-status-n2|unwatched")]       # the window ends at T0 + 4200; 2 h on, the next pass
+    (f,) = [e for e in events(tmp_path) if e["key"] == "fill-status-n2|unwatched"]
+    assert "refused every read since 20:45Z*, 3.2 hours" in f["text"] and "units-n2" in f["text"]
+    assert state["monitors"]["disk-n2"]["last_ok"] == T0 + 3600 and state["monitors"]["units-n2"]["last_ok"] == T0 + 3900  # in the window
+    now = T0 + 300 * 42                                     # disk-n2, every 10 minutes, is due again
+    garbled = Run((has("vy-n2"), (0, "not json", "")))
+    assert {e["key"] for e in n2_pass(state, garbled, now, tmp_path)} == {
+        f"{m.id}|unreadable" for m in N2 if m.id != "fill-status-n2"}                      # unread since the window, not now
+    assert {e["key"] for e in n2_pass(state, session(now=now + 600, **good), now + 600, tmp_path) if e["event"] == "clear"} == {
+        "fill-status-n2|unwatched", *(f"{m.id}|unreadable" for m in N2 if m.id != "fill-status-n2")}
+
+
 # ---- a lease preempted within 60 s of its grant ----------------------------------------------------------------------------------
 
 def preempted(t, since, gpu=6, sig="SIGTERM", pid=41390):
