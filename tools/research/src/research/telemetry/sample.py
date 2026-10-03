@@ -179,7 +179,8 @@ class Sampler:
         that read's length ago: the read walks the whole address space under the process's mmap lock, which stalls a large process
         for seconds."""
         rss = row.get("rss_bytes", row.get("rss_bytes_stat"))
-        skipped = {"pid": row["pid"], "pss_bytes": None, "skipped": True, **{k: row.get(k) for k in STATUS_RSS}}
+        skipped = {"pid": row["pid"], "pss_bytes": None, "skipped": True, **{k: row.get(k) for k in STATUS_RSS},
+                   **({} if "rss_bytes" in row else {"rss_bytes_stat": row.get("rss_bytes_stat")})}
         if rss is not None and rss > self.a.pss_max_rss_gb * 1e9:
             return {**skipped, "reason": f"skipped: rss {rss / 1e9:.1f} GB over --pss-max-rss-gb {self.a.pss_max_rss_gb:g} "
                                          "(smaps_rollup holds the process's mmap lock for seconds)"}

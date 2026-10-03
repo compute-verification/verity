@@ -877,6 +877,20 @@ def test_a_process_over_pss_max_rss_gb_is_never_read_in_any_round(tmp_path, monk
     assert [len(r["processes"]) for r in recs] == [3, 4, 4]
 
 
+def test_a_process_whose_status_has_no_rss_is_judged_and_recorded_by_its_stat_rss(tmp_path, monkeypatch):
+    """/proc/<pid>/status without VmRSS (a process exiting between its stat and status reads): the threshold reads the RSS of
+    /proc/<pid>/stat, and the skipped record carries that figure, not only the status fields it lacks."""
+    opened = []
+    row = {"pid": 10, "starttime_ticks": 7, "comm": "w", "rss_bytes_stat": 9 * GB, "status_reason": "gone"}
+    s = _sampler(tmp_path, monkeypatch, [row, _proc(12, GB)], lambda pid: opened.append(pid) or {"pid": pid, "pss_bytes": GB // 2})
+    s.round()
+    [rec] = _records(tmp_path, "pss")
+    assert opened == [12] and rec["skipped"] == 1 and rec["denied"] == 0
+    p = rec["processes"][0]
+    assert p["skipped"] is True and p["rss_bytes"] is None and p["rss_bytes_stat"] == 9 * GB and p["reason"].startswith("skipped: rss 9.")
+    assert "rss_bytes_stat" not in rec["processes"][1]
+
+
 def test_research_run_passes_the_pss_flags_through_tele_run_to_the_sampler(tmp_path):
     from research import cli as rcli
     from research.telemetry import run as trun, sample
