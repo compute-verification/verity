@@ -88,7 +88,9 @@ def markdown(table: dict) -> str:
               f"each at δ = 0.05/m with m = {table['m']}, every input the table measures over all its models and "
               f"measurements (served_debit.input_bound); an input is one matmul of the pass. Every draw, pass-salt and fresh, "
               f"weighs an input's tiles by their area |rows|·|cols|, which within one input (one shape) is proportional to "
-              f"`TR.Wref` (`pearlCTilesDevRev1K`: `tileShare` on the tile's rows, not its passing rows)."]
+              f"`TR.Wref` (`pearlCTilesDevRev1K`: `tileShare` on the tile's rows, not its passing rows). So ε is a rate "
+              f"under Lean's draw, not under the deployed audit's, whose `tile_weight` counts credited cells only and so "
+              f"differs on tiles with filler, excluded or voluntary rows (PROTOCOL.md, \"Not here yet\", red team #1014)."]
     quality = [r for r in table["models"] if "quality" in r]
     if quality:
         lines += ["", "| model | quality run | mode | WikiText-2 perplexity | top-1 vs bf16 | greedy tokens vs bf16 |",
