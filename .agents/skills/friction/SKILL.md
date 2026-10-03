@@ -96,7 +96,11 @@ Newest first. Each is Daniel's.
 
 - 2026-10-03 (card `d9eb2f28`): PoUW may import sampled proofs, in Python (`EDGES` in
   `tests/test_protocol_boundaries.py`) as in Lean. Any other protocol → protocol import is still Daniel's call, and the
-  edges stay acyclic.
+  edges stay acyclic. The layout that follows (lean with compute-accounting): a protocol guarantee that needs a proof
+  system (PoUW's `TileProofSoundAll`) is stated over sampled proofs' statements of what a backend proves (its soundness on
+  registered inputs, and the honest prover's membership in the backend's class), which the backend's own package proves
+  for itself. No package requires both a protocol and a backend, there is no `bridges/` layer, and a citation names both
+  pins.
 - 2026-10-02 (10:27 PM PDT): a statement review or red-team grant on a PR carries across a restack or a merge of `main`
   when the restacked head's `lean-audit.json` change against its base is byte-identical to the one that was granted.
   Any other change to `lean-audit.json` needs a new grant.
