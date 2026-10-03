@@ -2,7 +2,8 @@
 
 What a recorded check (VERITY_STORE_REQUIRED=1) may skip: a check retired on the row, by its reason; never an input or contract that
 does not resolve, which fails.  The manifest rebuilds skip by name unless VERITY_REGRESSION_REBUILD=1 (the post-train job).  A query
-manifest's rows beyond v1 are its "promoted" facts whatever the engine is called (`v2-query`, `q-word` since S1).
+manifest's rows beyond v1 are its "promoted" facts whatever the engine is called (`v2-query`, `q-word` since S1).  A post-flip reference
+row (no `commit_summary.json`) is summarised from its own evidence.  A row's `manifest_flags` replaces POLICIES_OFF.
 """
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ import pytest
 from tests.regression import decisions as D
 from tests.regression import resolver
 from tests.regression import test_regression as TR
+from tests.regression.checks import commit_summary as CS
 from tests.regression.checks import manifest_digest as MD
 
 
@@ -95,3 +97,39 @@ def test_a_registered_fixture_is_found_by_its_path():
     art, rel = next(iter(reg.items()))
     assert resolver.registered(resolver.REGISTRY.parents[1] / rel) == art
     assert resolver.registered(resolver.EXPECTED_DIR / "no-such-row.json") is None
+
+
+def _post_flip_row(tmp_path, monkeypatch, *, rc: int | None):
+    d = tmp_path / "rows" / "k"
+    (d / "commit").mkdir(parents=True)
+    (d / "commit" / "summary.json").write_text(json.dumps({"committer": "native"}))
+    runs = [{"arm": "control", "wall_s": 1.0, "engine_steps": 3}, {"committer": "native", "tokens_equal": True, "engine_steps": 3}]
+    (d / "commit" / "runs.jsonl").write_text("".join(json.dumps(r) + "\n" for r in runs))
+    (d / "commit.log").write_text("$ commit --max-num-seqs 8 --pairs 1\n")
+    (d / "verdict.json").write_text(json.dumps({"outcome": "PASS", "compat": {} if rc is None else {"rc": rc}}))
+    monkeypatch.setenv(resolver.ROWS_ROOT_ENV, str(tmp_path / "rows"))
+    return resolver.Row("k", {"row": 9}, fixtures={})
+
+
+def test_a_post_flip_reference_row_is_summarised_from_its_own_evidence(tmp_path, monkeypatch):
+    row = _post_flip_row(tmp_path, monkeypatch, rc=None)
+    assert CS.applies(row) is None
+    exp, act = CS.expected(row), CS.actual(row)
+    assert act["source"] == "recomputed" and resolver.diff(exp, act) == []
+    assert act["rc"] == 0 and act["pass"] is True and act["engine_settings"]["max_num_seqs"] == 8 and act["n_treatment"] == 1
+
+
+def test_a_post_flip_rows_rc_is_its_verdicts(tmp_path, monkeypatch):
+    row = _post_flip_row(tmp_path, monkeypatch, rc=3)
+    assert CS.actual(row)["rc"] == 3 and CS.actual(row)["pass"] is False
+
+
+def test_a_row_without_a_summary_or_a_verdict_of_record_is_not_summarised(tmp_path, monkeypatch):
+    row = _post_flip_row(tmp_path, monkeypatch, rc=0)
+    (tmp_path / "rows" / "k" / "verdict.json").unlink()
+    assert CS.applies(row) is not None
+
+
+def test_a_rows_manifest_flags_replace_the_policies_off():
+    assert MD._flags(resolver.Row("k", {"row": 9}, fixtures={})) == MD.POLICIES_OFF
+    assert MD._flags(resolver.Row("k", {"row": 9, "manifest_flags": []}, fixtures={})) == []

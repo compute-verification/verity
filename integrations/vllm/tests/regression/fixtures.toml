@@ -11269,767 +11269,772 @@ tp = 1
 batch = 8
 oracle = "/vault/tmp/oracle/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
 programs_state = "uploaded"
+# the epoch record (run r20260928-121849-ff8b, Q_word v1 at 269829d8), which expected/ was re-baselined on (e2914bd4e, 8cdc47c22):
+# built with every policy on
+manifest_flags = []
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".local]
 
+# records: the epoch records tree art:da7b7474 (25 GB) less match/capture/values/**, commit/binding_map_p0.json,
+# match/{capture,control}/cos_sin_cache.npy and match/capture/snapshots.json (19 MB); programs: the epoch Build tree, as stored
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".artifacts]
-records = "art:1b095a95f751505055d184a1c9587c1700a8dda9e085b9b8aba0e7ccb4c19d0c"
-programs = "art:f94391548214af4edbea90da0bd676d46e853989454e0693e39499f8239e1289"
+records = "art:b25d4b29b446c8e610398fba3ca9ab94bb855a5045d59d52ddab033bca12dbb6"
+programs = "art:91fac396ce4189b8bbb84e85f0cf62d23f660596e882b73c936b4624292da31d"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."admission.json"]
 role = "record"
-bytes = 10126
-sha256 = "7fb507214877cdb33a936b625512a318a3ec27cc0c097b1ce198202b33f7acc3"
+bytes = 6024
+sha256 = "90a2cb95e094b719cfc02385037ba8bc4990d09c68777fe4413eaffddc667d9c"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request.log"]
 role = "record"
-bytes = 145872
-sha256 = "0f72cf95957cb1cfa1d183793d1128f900b8478b5104449bf45475c1b4e1cd16"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request.log.rc"]
-role = "record"
-bytes = 2
-sha256 = "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+bytes = 162369
+sha256 = "5d4519da8276bae18a7228569486e38fc5add9decd85ff12c6cd3f7d866af2e7"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request/artifact.json"]
 role = "record"
-bytes = 5138
-sha256 = "881e3ed9efab7b981f3c7f71fb9a1faacd9484c07e16f3cccca36869a8fc9920"
+bytes = 8447
+sha256 = "71ebfc2360d9c99fa6fc133c3af703f1d1ce7a0fc7fed8958d8174d5fbaff4cf"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request/construction_manifest.json"]
 role = "record"
-bytes = 230965
-sha256 = "87deadbc79668c878de0149afeb0caf38dfddc09fdf9b1f3c82bf76194746146"
+bytes = 252628
+sha256 = "ba3365123df79f4e40a868546638c90e14cbc192997ffb085d0f45ad00fedab3"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request/derive-report.json"]
+role = "record"
+bytes = 98991654
+sha256 = "f749006bbee0a6cdf8f4f3d2aa24c5a45bca8771d26a0e25cee45b8bf96eeddb"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request/descriptor.json.gz"]
 role = "record"
-bytes = 24851123
-sha256 = "5a1344a07e0fdedebd035928480e7e7f0b6abebebf6d3fb3dda2ea207c39c852"
+bytes = 53446720
+sha256 = "2ab819d517d291b9d3cb8e47a40710e22a947fa71246f5d05b3e859880eccaf4"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request/inputs.json"]
 role = "record"
-bytes = 32423
-sha256 = "b011db829d97a2782ac649bd7e32d36b0f836938b8a1731f4d64feb2189a5063"
+bytes = 33261
+sha256 = "0c1d75f4e741e67585e635f5af82c11ec5f72640ba8fa3fcb3d6943f01bf979d"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request/instances.json.gz"]
 role = "program"
-bytes = 118221248
-sha256 = "c9d52f18d8e42fd9604a7ff73edfe3df4872f80dd06384fff4cf8e348d756458"
-extracted = false
+bytes = 118547264
+sha256 = "cce7ff521622a8b157f3db9b373419e21ae0c094725f5bbaae1326c65fefaec7"
+extracted = true
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request/result.json"]
 role = "record"
-bytes = 243374
-sha256 = "f8318ff7f3a6990fa1ead65841e8d8c43aa381aea4da219be850624a72f594cb"
+bytes = 264202
+sha256 = "6bf97ce5cec7083368b21454e521fd1455304e78f9a845249749dd4a95dbbb53"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP1024_T16.log"]
 role = "record"
-bytes = 132065
-sha256 = "07bac53bf1d8be80445d50760124decfc9288973a192d2166216c65a4a5d1a05"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP1024_T16.log.rc"]
-role = "record"
-bytes = 2
-sha256 = "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+bytes = 147007
+sha256 = "20b0927980456c5d0fecd7e6383fc63c730f42c967a0acd5ae6e782ba6d11252"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP1024_T16/artifact.json"]
 role = "record"
-bytes = 5434
-sha256 = "0182df8b0a5efb829919b3b2e63573a7d1b2614372e8256da696eee77580befd"
+bytes = 8743
+sha256 = "97a6bb7cc945ab9d1b1d5afbd76b37f91669dc402476863047d691eda9d54064"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP1024_T16/construction_manifest.json"]
 role = "record"
-bytes = 212052
-sha256 = "b81e7137838ba765c0d62674317e401588faf9b1f67bcd3d2f511e7fcee15638"
+bytes = 237714
+sha256 = "4a291c0171e4f9e3795e2315c5620b7f330665459659820737b9ed2783d7bd94"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP1024_T16/derive-report.json"]
 role = "record"
-bytes = 13318301
-sha256 = "973a4c17b14523c1ffbcd76924551db6a23b074ae5e776b51ff2862b1a8a4568"
+bytes = 13361907
+sha256 = "d6d2e1ff6358974dc646612c7af2dcdb896bbfcb38d47c78708f32159f10b22c"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP1024_T16/descriptor.json.gz"]
 role = "record"
-bytes = 21249818
-sha256 = "425149bd51e6885c26f49be87a604254968772b43d92e98ad7be0a53e215606e"
+bytes = 47707994
+sha256 = "987285e0066c1f9230be4162f4cb9f04c8156be0008572d6dcae2499c612e809"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP1024_T16/inputs.json"]
 role = "record"
-bytes = 26949
-sha256 = "4fc5f407517e4a30deaec40069c44a585cce32080c2a584a707de3a19b6f1258"
+bytes = 33305
+sha256 = "7215e9a54756ea8fae7de0dbe1eb101c853b384a76d6075359f63a5e5a8f62ab"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP1024_T16/instances.json.gz"]
 role = "program"
-bytes = 89444822
-sha256 = "88ba0413c089cc9fa82153517f789bcf44ff6506c55badff9f4a58b75d6d0955"
-extracted = false
+bytes = 89704759
+sha256 = "5503c898641504fb53c0a165a0c17d62711366047d38591d2dbd7230a717a3ed"
+extracted = true
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP1024_T16/result.json"]
 role = "record"
-bytes = 229950
-sha256 = "74f736c546d209b7694f0cbf4d543c9ec10f2e2e31fd319068c52c4af8d67d01"
+bytes = 249222
+sha256 = "a9898de50c55441fc9d28e65513286098f75c63f12428ca6c01b874edf48a4c5"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP10_T8.log"]
 role = "record"
-bytes = 5322
-sha256 = "3e3d65224ee555108936dec24fb19ca1349d9424c169ce59fdf49f09ed79ae60"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP10_T8.log.rc"]
-role = "record"
-bytes = 2
-sha256 = "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+bytes = 5955
+sha256 = "541e42ede132ca9605f51228db4f278f05b3343b2adbde10a26193047406aa49"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP10_T8/artifact.json"]
 role = "record"
-bytes = 5331
-sha256 = "3f67b213f24fc01c56e8893ea96e006820a602bb5e7055049b4f390889532afb"
+bytes = 8640
+sha256 = "0e4daf8cee3d8beb398ca9bc6b722def0393c5bb6992498e3deab2256385b948"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP10_T8/construction_manifest.json"]
 role = "record"
-bytes = 84069
-sha256 = "657e47c50d3a217cdc934c18eb9e0046fc57f49c12d45adf375d224ec0409347"
+bytes = 95422
+sha256 = "37d4eb0233e5044652ea5186c98e04672e238bb4c24f48c3d9047669123e0842"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP10_T8/derive-report.json"]
 role = "record"
-bytes = 7136986
-sha256 = "ed918811ca4de2b6310421161658c1d991e594165c139e46b02237972dd57bd3"
+bytes = 7161294
+sha256 = "b1584c45bc47bf9ac6c37058008c4f5578c6822130e6d52a7a53f61fc288d5c5"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP10_T8/descriptor.json.gz"]
 role = "record"
-bytes = 603719
-sha256 = "5734099e4365e962e6319e66554e8c41accc1b6c4484c6214b113b2460d45840"
+bytes = 1021971
+sha256 = "16fab3ef88144130773f4f6677c6da65eb6c2127c6e6cabcabf9a9444e34b183"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP10_T8/inputs.json"]
 role = "record"
-bytes = 26937
-sha256 = "98f4a50b9448f3996fde571f37fe55e4e4b51b4d1c0732400db6d2e6e04bc7df"
+bytes = 33293
+sha256 = "4efc125e6dc8359ce3f935b1cab5e374312e151d5cce3125a2f1191e54af809c"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP10_T8/instances.json.gz"]
 role = "program"
-bytes = 483020
-sha256 = "ae730561b000eb383124872d9017f905839331165e8d496b45a4f9c80946bcdb"
+bytes = 483807
+sha256 = "5e49aad31375105a2750f967bbcae880e594a1652595f82df4dfd808b746b17c"
 extracted = true
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP10_T8/result.json"]
 role = "record"
-bytes = 101987
-sha256 = "ccc146d70b526ec189d6f1d5808cf7a4aab1f97dfdb58d90ccb06a4cfccd1df5"
+bytes = 106950
+sha256 = "3ea99db1b17a71c977b7ca9c2af80f0b7d8ebaa9837c5056f1904a5c1572e5a0"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP259_T127.log"]
 role = "record"
-bytes = 51147
-sha256 = "9daf644339b79cae7b77f32e49db92152f385de6124dbeb66e568d00f0faec8b"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP259_T127.log.rc"]
-role = "record"
-bytes = 2
-sha256 = "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+bytes = 56932
+sha256 = "938c239fb79003b37d88b20e6f33a035e2a23726fa1d5b574f8de2feb68d698a"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP259_T127/artifact.json"]
 role = "record"
-bytes = 6905
-sha256 = "6f6013130ae00dd703c828034f26438feea0a42cb6f46aa95d185ae9d169ca45"
+bytes = 10214
+sha256 = "dba29332361e50d319a85ed43a038ac1f53e45fce62ff09bad4516d72eb52c29"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP259_T127/construction_manifest.json"]
 role = "record"
-bytes = 133330
-sha256 = "e38e107c42e3b305e9e245c0c991603529acf2d57d4d1bf46e34e6740b2f0e3a"
+bytes = 149837
+sha256 = "22967f4399fc926949b5b9a5f9ea35cd008e855a3431eb38c0192538d24e39c8"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP259_T127/derive-report.json"]
+role = "record"
+bytes = 99027151
+sha256 = "78733dd0829c43bd9e27ad67242e368839f59882a43470a9641d066a8bc22311"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP259_T127/descriptor.json.gz"]
 role = "record"
-bytes = 9810445
-sha256 = "6f8215556947afb1009ae1827f94e9cba3552813b7179445e6d7e1770d21fab0"
+bytes = 18975551
+sha256 = "8204e979ab4183ed4d7ded582ddf3655ee329a4924b9be89a05e69b5513e2336"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP259_T127/inputs.json"]
 role = "record"
-bytes = 26949
-sha256 = "58ca407b4c96fd1197fb8b8c6bba53e0ed34f084d58b5259902f7a118056f7a3"
+bytes = 33305
+sha256 = "5f529455b2928302142c615ec128360c6360d705bad54001a333129cc7dd1ac9"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP259_T127/instances.json.gz"]
 role = "program"
-bytes = 17595396
-sha256 = "19c777f0517177bac5dc1a5095fb57cc04b40b579eeafe3450ae55645e1c3995"
+bytes = 17620334
+sha256 = "b085572ffc0b35c73b4fe09a591420251ac2e90f7c0f579fa062edbf4e8a7f0e"
 extracted = true
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP259_T127/result.json"]
 role = "record"
-bytes = 151117
-sha256 = "2d19ccc548b89651d289fdd570655d5efbafa7a7b10ea7c9c93028a7b80f4051"
+bytes = 161234
+sha256 = "0b1bf44e4200c6160e86f96506443d6db9ab66fa7796922cccd0288622efae34"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP321_T1.log"]
 role = "record"
-bytes = 42948
-sha256 = "4694f9426d59a4bbabc468fe7c903131a7eebbd2cd168fd99c4899cd0fd34302"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP321_T1.log.rc"]
-role = "record"
-bytes = 2
-sha256 = "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+bytes = 47836
+sha256 = "1a4cbfa8e17acd4e80ad1dc66e534cc01de10c23dc9f9b6727238cc23c432919"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP321_T1/artifact.json"]
 role = "record"
-bytes = 5247
-sha256 = "6520a83ee613caeb9abde97b66a26d8f42a1daf1bdbdb06498a13a48b1e2288f"
+bytes = 8556
+sha256 = "be4f11ce52e14533094b3adc96a4808f0170e77b5f4a3fa62b965489d342d455"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP321_T1/construction_manifest.json"]
 role = "record"
-bytes = 121826
-sha256 = "c76b854f4e9c606ac3719338bb0694a30fe8d3a218021d2ae5aa2916b68b452b"
+bytes = 137435
+sha256 = "2ac3da52a15f9a11320a49a405d774fcf15335896a27ed7f62a5928d9d856638"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP321_T1/derive-report.json"]
 role = "record"
-bytes = 1778362
-sha256 = "cb4937f49b774b5071d1573344b73479ddf47f8baecf53d3c3f255fe12287036"
+bytes = 1785786
+sha256 = "642571672a2e5158ef25d14633172e0513cf8fc6acb00761be4565b91e7a853e"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP321_T1/descriptor.json.gz"]
 role = "record"
-bytes = 6969006
-sha256 = "d24100c7c520531b92e358594ebdda0b56082845ed9f794a80e504c9eb9906a5"
+bytes = 15305719
+sha256 = "9ca5cb204176b45672e3f1f5e3bf7d4743a527891f06b6b12e3544b91c27b4e8"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP321_T1/inputs.json"]
 role = "record"
-bytes = 26941
-sha256 = "4c7f48b858586ad1378eccb3100286707a1df7157c208f3524dee896f6ffafa4"
+bytes = 33297
+sha256 = "40c4e117aee7cfe7080921474cd48e9cb6467c1137813bfccaf9a02ca27264a7"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP321_T1/instances.json.gz"]
 role = "program"
-bytes = 7827934
-sha256 = "2013cbbfc51a521d0b331cef213ca6e6fe6ed3edc36d3f6a9535acb23b1a1dde"
+bytes = 7826027
+sha256 = "50640b3ba7c3f1923f6637814221e92670c266d7bd28fdbaf6148bb0766a36db"
 extracted = true
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP321_T1/result.json"]
 role = "record"
-bytes = 139747
-sha256 = "a0d333eb77b59f61de7292b6d8e4992b9a011b88d2845fed70d0ddc484dfbbf0"
+bytes = 148966
+sha256 = "ffd974d4a616f93d231a80c66544031d87f2e5f315f928fdaf21aaabf2924032"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP45_T122.log"]
 role = "record"
-bytes = 23970
-sha256 = "5054c47a389b4a3a2313f3d8dbfefd724455d77fcf9fb6d2714833988b3202ae"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP45_T122.log.rc"]
-role = "record"
-bytes = 2
-sha256 = "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+bytes = 26690
+sha256 = "caa00bceb1db9af7b7ce9863e8115dc1f58250cd233662f6db14a63277917b46"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP45_T122/artifact.json"]
 role = "record"
-bytes = 6835
-sha256 = "1890991e99ef3d1ed8b35114fa8eb0e9056cde044dfd044563ba6ff418e6c485"
+bytes = 10144
+sha256 = "fe4f589d2230944576f0ac2d4db748f9b55653abc119bf7fb67fbdeb99d16148"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP45_T122/construction_manifest.json"]
 role = "record"
-bytes = 105797
-sha256 = "5254a3268f082352a72ba49614448c44c97dcafe54068ec804e17e7e84576fbc"
+bytes = 119237
+sha256 = "bdca7ed19ee1499eb985f28b932460f835bfa1467096d8942a84e942d50fccc1"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP45_T122/derive-report.json"]
+role = "record"
+bytes = 95145505
+sha256 = "37009556782ec4edc901584e5a47219dd8b9593fc4c7c9a9e250d985b71c3d37"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP45_T122/descriptor.json.gz"]
 role = "record"
-bytes = 5333786
-sha256 = "fe37f5a1ec4e653de11fbe1b970382352c8dbc2827cea4e107583af5d83b2986"
+bytes = 8847918
+sha256 = "c597cf933de918aef3d669d55e4bab46d55da2559625f78c95a2f83ba5f1c769"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP45_T122/inputs.json"]
 role = "record"
-bytes = 26945
-sha256 = "3dba2cee850ef00c3d377c6006b84c329fe01a747f8866b0fdeb354e7bf464c7"
+bytes = 33301
+sha256 = "1a90660e8e0aa8fc37435483cb81befa0eae519a4532947cf04805db42f44f73"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP45_T122/instances.json.gz"]
 role = "program"
-bytes = 7058791
-sha256 = "f063870744f3406c4873224f61d0c9c039c41465d968b64c58c2a72e9232c270"
+bytes = 7059333
+sha256 = "06c83b7050a55db6fad12c4b7b89a45e725ef7f570832642f69cb6be8843a44e"
 extracted = true
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP45_T122/result.json"]
 role = "record"
-bytes = 123593
-sha256 = "32b390ff8e7074e5e444b13025f065a8f5fca2a469fc13e382b98fc35c192fed"
+bytes = 130643
+sha256 = "0eeeeb6e285767220321f8b461818e7d6b004d0af427a2be3df20f07e605c8cf"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP643_T86.log"]
 role = "record"
-bytes = 93596
-sha256 = "7c4cf8687d184d5214776a3f1525a2d6ba31f2eeabbd6becda07e6ac8b458b93"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP643_T86.log.rc"]
-role = "record"
-bytes = 2
-sha256 = "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+bytes = 104185
+sha256 = "c69190ed6b1f3e48e5232684503411dd4a22394faf843d4a9023b7ba844379fe"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP643_T86/artifact.json"]
 role = "record"
-bytes = 6344
-sha256 = "074705793720c227d2ada78944a5ec6973d66164c219035843bccede4c8f1d75"
+bytes = 9653
+sha256 = "7a281ee7b47e3db5d704a0d715b36b489e0d631ab47c009768652d8b3b1c967e"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP643_T86/construction_manifest.json"]
 role = "record"
-bytes = 175035
-sha256 = "4072390c965f78601282427a3323f6951c43c6cd41b34fe9960f445a3283fbdc"
+bytes = 196344
+sha256 = "6d8f8b497c41e6c1437c58471c445849451b9031b4aacf6b7b7f7a41d90310fd"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP643_T86/derive-report.json"]
+role = "record"
+bytes = 67379573
+sha256 = "fce9829b84ae648db3eb212f775843c8279bed3d638211fed1e7900f4ec4bd8b"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP643_T86/descriptor.json.gz"]
 role = "record"
-bytes = 16032721
-sha256 = "01921c4f0f6f7d0e7bc545b35f04b04690713c3aaaf3d18a455ce35c2b9fedef"
+bytes = 34189241
+sha256 = "5494715b5f71f0a559f94f6fa419c8b694a2e3180474cafe0b1e6c2047d05eea"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP643_T86/inputs.json"]
 role = "record"
-bytes = 26945
-sha256 = "5fd0f70915dcde2a895ce2eae36eec49df2f341da49ea4cf938579f51fa69c21"
+bytes = 33301
+sha256 = "ce107c946cb1e4fc715427c29fe60f9d5afb6d00a2b0903dd04d08d8cc8478fa"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP643_T86/instances.json.gz"]
 role = "program"
-bytes = 33579886
-sha256 = "bd6ce2ea6d1c8d4455c8b4ee4df87f29ea1c15ac73b5b509482428269d4502d0"
+bytes = 33618447
+sha256 = "463a12a4739fd48bbc26dfb1b5d72824ee8c21bcc517d75c8658f4211fecd7ff"
 extracted = true
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP643_T86/result.json"]
 role = "record"
-bytes = 192867
-sha256 = "da21ff1855495f1603a7e03652a20c4c9697f1d6395ef3cd24fa5239cc106233"
+bytes = 207786
+sha256 = "1f118175cc53d570308c459320fcda5d328f57d9e6bafb652936b122875fadd6"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP833_T66.log"]
 role = "record"
-bytes = 114635
-sha256 = "c623194b0d9ae986a04d059f47082f682928294e1ebc25e9f85c92c02995e361"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP833_T66.log.rc"]
-role = "record"
-bytes = 2
-sha256 = "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+bytes = 127605
+sha256 = "04bfd45780ea8556c8c28847eb59558844801861f355f3cc2e1e5464c94bd7db"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP833_T66/artifact.json"]
 role = "record"
-bytes = 6084
-sha256 = "6c287566a6bd86b477f8d81245327f3d9d219969de2af456c32942352bbf068e"
+bytes = 9393
+sha256 = "c7ce57566518ae460baf9855f88c8c45ced938e20f811bc48de0951df792d3c1"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP833_T66/construction_manifest.json"]
 role = "record"
-bytes = 195741
-sha256 = "e419785ed372f9ad2b0de03f4ab5bd631a2a5d2f294a58e5ef650ded14936617"
+bytes = 219431
+sha256 = "b5d126fb4aed277b57057486135f628b96b0abd12be5463ec9ed32ea57e82b85"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP833_T66/derive-report.json"]
 role = "record"
-bytes = 51777966
-sha256 = "d72e1389d0930a5cbe1e8a5a09bb0d6b17c41da49fbceefa2c56f184a2ac215d"
+bytes = 51942173
+sha256 = "8a820127dfe114705cfa34ea4de83a41aeb2948704663a14d3960f03d90e5651"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP833_T66/descriptor.json.gz"]
 role = "record"
-bytes = 19081823
-sha256 = "56cb6f1f74fbcda8edd1abd51cc97830fa4bc86bef89fa9b2ab71b2625492c38"
+bytes = 41677764
+sha256 = "66e38187ed7b379591dc2d9277ff2cb34e3a5bd3353b57c12147691fa6b8c094"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP833_T66/inputs.json"]
 role = "record"
-bytes = 26945
-sha256 = "8570d67a6169a477a6a51a0c0333c4f41ca95014ecb6db305a21bf0e204a2155"
+bytes = 33301
+sha256 = "eb44735a44bc51e75b35f93c3ae23ed905be5483356341b73c66e9a7d005e7ad"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP833_T66/instances.json.gz"]
 role = "program"
-bytes = 62555087
-sha256 = "964b5d68bb23b89ccadd00447780c027a1fddb9e34131287e801efda44569805"
-extracted = false
+bytes = 62738560
+sha256 = "b8760764a97c86b46c4e656beffeef75452cebe75d93d90735ee9815c9a9de28"
+extracted = true
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP833_T66/result.json"]
 role = "record"
-bytes = 213593
-sha256 = "daf1be786b925fb637732f60f688b60c5d1b352286a34710668a14539f498bb4"
+bytes = 230893
+sha256 = "fca4ba00341d88c1e5ba5384416d7f2858f9c26387fd3e079042c14648f681fd"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP833_T66/weights_of_record.json"]
 role = "record"
-bytes = 193912
-sha256 = "ae1f89c17463935b5937287e1dc424fce18944050d8700a902530ed78c2898cb"
+bytes = 193880
+sha256 = "b55b2bcf5ed9a1b0b0e5644b3b324f147e33d46711f0a6012abc8c241b746bfd"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP95_T42.log"]
 role = "record"
-bytes = 20085
-sha256 = "dd6860728f54b8a0c6ee91520cc703812b5ebdcbbbca25e8deef5abc5a3b4115"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP95_T42.log.rc"]
-role = "record"
-bytes = 2
-sha256 = "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+bytes = 22385
+sha256 = "3b5bb62b31aca4721cb68077d13223117942c24178992afacb7d8f1db692a361"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP95_T42/artifact.json"]
 role = "record"
-bytes = 5772
-sha256 = "d9073efbbb402404d809b3a77168b63150e7c84f8826e1e6aa5046a7e5500eb2"
+bytes = 9081
+sha256 = "20a3dbd8c66952ef76953a7d77cbf4c67e872b92bc620ffc51aa5e22bdd0d36a"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP95_T42/construction_manifest.json"]
 role = "record"
-bytes = 99817
-sha256 = "ceb6ce7e6b80058f194d159932f7f73d06336e7dab6f9f8e238b344026b50397"
+bytes = 112836
+sha256 = "55267b1d1efc19a6d971ddcfba47209792088444394c831c583cd230dbcff307"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP95_T42/derive-report.json"]
 role = "record"
-bytes = 33308813
-sha256 = "047a9c87d68b598338390a416d01d6b8293b6784e385049bae2ce47ded14f0ad"
+bytes = 33415131
+sha256 = "66529e1d8bec4c92ed5538a7f4ea18a7353b574a1299d320a61b45cbc693a1d7"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP95_T42/descriptor.json.gz"]
 role = "record"
-bytes = 3785806
-sha256 = "67f9878341959ef777b85117a525ceb8a2d97f8830cc2ce2c7ec1d7e9f5fcebf"
+bytes = 7024618
+sha256 = "faaeca63a53c548cc39848600173ab49222394360ad9b6ea13323e60fe9ffdd1"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP95_T42/inputs.json"]
 role = "record"
-bytes = 26941
-sha256 = "c1acad9bd5935f919df9e8741259352f2ab51005ecf38188a009f593c6f18a3a"
+bytes = 33297
+sha256 = "5898286a2d544c91be409616784d461393fff929969064325f011d7ca2d196ad"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP95_T42/instances.json.gz"]
 role = "program"
-bytes = 4220880
-sha256 = "fd56f1b97e2073c9057bb6e9980b880ec777765cedd3026bf9213a11ec1e31be"
+bytes = 4221685
+sha256 = "ab4f3ac64b8c8797c333e2e65fe76de7fb1f2449689a9219b8a383f2a9b3c6b4"
 extracted = true
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_request_LP95_T42/result.json"]
 role = "record"
-bytes = 117697
-sha256 = "af13df4d23798d400d7f624ae22331e467746265e110e171c8f335f19fd71fdf"
+bytes = 124326
+sha256 = "563644fc9611516c7b23d78e845337823c35a39d177a8fbbed4c7631ad9af6a1"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_step.log"]
 role = "record"
-bytes = 4027
-sha256 = "dd15c8282668780a643d2d31529e061284ac68e7760104492d858e9a2283a31d"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_step.log.rc"]
-role = "record"
-bytes = 2
-sha256 = "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+bytes = 4519
+sha256 = "2a71e72e8234e264241032642cc509d667ec7280a9cf0bd877e5397b479ee578"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_step/artifact.json"]
 role = "record"
-bytes = 5138
-sha256 = "16c29d1f6012dfa24bb992394c3ca987eb18a6b1d1ecbdb3b8fb5faff10f8adf"
+bytes = 8447
+sha256 = "fcf63baa5d228fa1c63b1614fe91f7aaa43f5429cc6f183763460317e634bd08"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_step/construction_manifest.json"]
 role = "record"
-bytes = 84270
-sha256 = "e8384ea0caf5197114797acc87f5b29b483cae27619c4d135ac8abd7747db39f"
+bytes = 109564
+sha256 = "359d0de3c8eab66e2b53aedddaa2091dd961df79cf8ae8cf9e9159d484eb13ba"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_step/derive-report.json"]
 role = "record"
-bytes = 985813
-sha256 = "2d4a3862a28be39c3f88cc223e40eb7417d7d7f17bf31f8b59746390a22a5903"
+bytes = 990821
+sha256 = "ff0618c6fcc10d817a1c9e45342e45e7e499fd89e680940ddd05094b7a654289"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_step/descriptor.json.gz"]
 role = "record"
-bytes = 290901
-sha256 = "f6db884ce6ed7a1151be8a17e4063e26aae028f61f5c09c4ca626e7464d41ec7"
+bytes = 505813
+sha256 = "3955111c3979afbd641de29019dcee2091d5bdbfe8c49744fd48aea192ce3544"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_step/inputs.json"]
 role = "record"
-bytes = 28817
-sha256 = "270eddbf8a226c1c156c0cf480fe000711de0dd2f3b342fecab9bbdc905f32f0"
+bytes = 49167
+sha256 = "b8af4d980636cb09a4ef18724557298f885539a476f753dcb41c21d938b88718"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_step/instances.json.gz"]
 role = "record"
-bytes = 203863
-sha256 = "4246373e55cd4d1a7594afa4dad7549558b015f40e65cc13ae1aa31fe179fa1b"
+bytes = 204548
+sha256 = "8ecf34b0d730532ca38874f4dbca269f029160dd320c4963a27012a2c03afd56"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_step/result.json"]
 role = "record"
-bytes = 100310
-sha256 = "d7da6066765fa8d76cf2f18376508262ff8684220756075c244f325fc04762aa"
+bytes = 105134
+sha256 = "f3ff04cc9ca6388a90d8a395ec17c38ec9526f84ebc09e9141927e36cd0d6037"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_summary.json"]
 role = "record"
-bytes = 7615
-sha256 = "c7e90454be1ee021479f88b6b586d4a36fa388751a07f61f4a7c054a5a2509ae"
+bytes = 8589
+sha256 = "440e80efe37ad7e319d0c3647e639a60dcd13d37b6c83cf6b5bf8d420091640d"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_workload.log"]
 role = "record"
-bytes = 2125
-sha256 = "eb7298dbfae1b8978166cff29b52b2706a087bea1c5e3846ce1acf7662222c23"
+bytes = 2058
+sha256 = "aa1995cc77265ef767363fda92f63969afd3cd814b45db0fff8f99c73efd5733"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_workload/address_map.json"]
 role = "record"
-bytes = 746534
-sha256 = "96ed5d378832c9bc6ee1650bce679ebba7e71ab8bc084dc7e164d1c6c44d591b"
+bytes = 746318
+sha256 = "7ce0e11f11bd386702e9664fd768188395dce81072cd4f78b48556ecb4ce6382"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_workload/chronology.json"]
 role = "record"
 bytes = 111190
-sha256 = "1bb353e6faaa41db2891fda09eb414c63d98734a2bdbe771d126c3aecbc5fe25"
+sha256 = "ad0e6505c4dd68a9945936ceeb7702e6cdc5322546c09e048e94c4755cbddf1a"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_workload/descriptor.json.gz"]
 role = "record"
-bytes = 39990841
-sha256 = "a65b22014944853f68401f92c4021b8b5f6f158567cbb0b4458c71514e96e96c"
+bytes = 39996027
+sha256 = "3aa5ac8fef5ca3a912de63cfa4a51bddd85801c465b4f4166a434b3d6d6c6245"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."build_workload/workload_program.json"]
 role = "record"
-bytes = 1026675
-sha256 = "30967dff6bc4973403bde605f241d104a6fa09e44f3d333fd16be9fc3b1b96f4"
+bytes = 1026303
+sha256 = "880c8891e008c35ccdd293100db27b6c88b77467e63a510e591ccac249dab092"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit.log"]
 role = "record"
-bytes = 514400
-sha256 = "ff8ce6ccab7aa843ac96ede981e554b1a9b326cb3ea5a85facd447cc2713f248"
+bytes = 26377
+sha256 = "5d247a123db6b812e7e8d32f7c659914c2d372fb61d0eba11604708ee59be0fe"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/acquisition_engine.json"]
+role = "record"
+bytes = 66963
+sha256 = "1553dabf461a59793f99a3bf164ff060da6bd09713967d83deb175f11e596cfe"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/acquisition_plan.json"]
+role = "record"
+bytes = 1312591
+sha256 = "4c6100d77a1effa986d5d5187d5af2aad5cd2f9c56de1274ef6bd96b277ce8b6"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/admission_native_collect_v2b.json"]
 role = "record"
-bytes = 3348
-sha256 = "611176d1df4d7df2d62e1856a5b666d5b3510835f4cdd1149f9f0e74d8ed5165"
+bytes = 4005
+sha256 = "9bc2c35073a8fb581ffbe48a313746f8682216c3a4da61559e1409086c290a1a"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/admission_planner_native_collect_v2b.json"]
 role = "record"
-bytes = 9982
-sha256 = "cac7f0aa3c57a67f49171bb3281fc9e4d776aed4523e91b978d292574c9a0aa3"
+bytes = 7929
+sha256 = "f925867e86b19c5e787148b25d6d28613521fc87d27fe0ff10132d1258388f4f"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/arena_sizing_native_collect_v2b.json"]
 role = "record"
-bytes = 10873
-sha256 = "4e2e28f80e64944a18e6210e968266d894a7ba17f0f096897e7b8e8f646beef6"
+bytes = 1427
+sha256 = "fdc121097e6eb0bc80000e3396b6c89ff1a166605447a8df1522caaf5fc66455"
 
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/bounded_warmup_native_collect_v2b.json"]
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/declaration_native_collect_v2_auto_nw+hidden_m1_fa3+norm_scale+plan.json"]
 role = "record"
-bytes = 6882
-sha256 = "60e5d96af5b9b50dd60b2bfa92511653fa735ca88cf3623991ac0f3a935e3fa9"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/declaration_native_collect_v2_auto_nw+hidden_m1_fa3.json"]
-role = "record"
-bytes = 5631
-sha256 = "591296f8bfe69dc970562f67c85604202dc8faabe06742e49d63d36ae801fa0e"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/host_admission_native_collect_v2b.json"]
-role = "record"
-bytes = 6157
-sha256 = "787eca808b09371579de8c304ef5e9485b98705f8ad818afafa507f0d0151913"
+bytes = 6292
+sha256 = "fa39c1ee7b36fb40b684035bbc9356cc923587d681188606dc340c2a98374b23"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/layouts_pair0_instrumented.json.gz"]
 role = "record"
-bytes = 891289
-sha256 = "27b8cb6c126e0aa0856237b1f7467a04804fd07ff91fb2d22467cdcd5ba80bd6"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/layouts_pair1_instrumented.json.gz"]
-role = "record"
-bytes = 891289
-sha256 = "61213b03581a9b6b222d9056851ed1b4777f17bf47789f0181ff9d1a796380c2"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/layouts_pair2_instrumented.json.gz"]
-role = "record"
-bytes = 891289
-sha256 = "5ce333137c8b2bd9c275b926366b947ef8ea1b48b5054e9168013b8197c5270a"
+bytes = 1140373
+sha256 = "9890fb9455216f87a056ea0a7f0a4224b244e34f3c08e56dcf94814c32ab327d"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/manifest_verify.json"]
 role = "record"
-bytes = 10731
-sha256 = "082da5463e0e77847d03490c25181d0598c36fdf863703b00db8e55dcad0eef6"
+bytes = 1400
+sha256 = "270f5e1f9517dc6ae976320341370453d56a9a884a851a93d5d201638f6214f9"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/planner_calibration_native_collect_v2b.json"]
 role = "record"
-bytes = 1907
-sha256 = "0d8bda5c480f9ae528e191191b2da950519a63b9af0e6c2de2d778f7a4b16bac"
+bytes = 1498
+sha256 = "44842a345dca76b6b80da4861a832756c8084002aefe82a8c67e34bb3f5e9b76"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/runs.jsonl"]
 role = "record"
-bytes = 1503271
-sha256 = "ab67fcbcf35af0ecae662fba3f6be02be0b45076f8afcb558bbcff1a0e6ae384"
+bytes = 186584
+sha256 = "1d96475cd447ebd8fe4a1c5a6b1c63b26a9bdf2d9d0383761a662449cf70941e"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/runtime_tree.json"]
+role = "record"
+bytes = 59640
+sha256 = "9d22f5a6529aa3770a86461f1f6390f3505e0905b7dd6e4ab3f86dd10d4c8cfd"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/sampled_replay_p0.json"]
 role = "record"
-bytes = 3639618
-sha256 = "d0181fac3a36f1ea0db2eab9bcca6e6a51d10e72c609f682ee4489e76c124644"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/sampled_replay_p1.json"]
-role = "record"
-bytes = 3640728
-sha256 = "f2ac3351dae9eb1134ef7e2e7851dc8f0b0eb91ef6965b8de8c12f35b1e8a8fa"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/sampled_replay_p2.json"]
-role = "record"
-bytes = 3640728
-sha256 = "f2ac3351dae9eb1134ef7e2e7851dc8f0b0eb91ef6965b8de8c12f35b1e8a8fa"
+bytes = 3686648
+sha256 = "2138c1a5faf04ca519731f64dceedf5093d1786803ff3a9839813a8ddf957ab6"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/source_identity.gpu_ext_load.json"]
 role = "record"
-bytes = 5832
-sha256 = "57b361e24352967c562d071c3e7cc1ef53f7b29974b0737177ae65cd1e06f3e4"
+bytes = 4368
+sha256 = "910bf09715a33e8b2b474ac2b4e185fd3b4c344672b0538677a5e7a5cc8818ca"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/source_identity.json"]
 role = "record"
-bytes = 5446
-sha256 = "1d1cb0b5f29c1d0d060cd94f30f0a25f2bd1e5208def94a739c93493424e2655"
+bytes = 3974
+sha256 = "85f878926ee88c9612f5de4c83b2bb9d13b6b92789f45efd05c46918aaff47ab"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/steps.jsonl"]
 role = "record"
-bytes = 204171
-sha256 = "3fc9389fb8e578252933a2d2a2cf28b42b02f62eeb258443d721d6b65acc517b"
+bytes = 67809
+sha256 = "c513dcd5ce8f6e20b6c17cf7e74c14f28d61ba48f5ce00b822dc9b5c298c5c08"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/structure_p0.json"]
 role = "record"
 bytes = 49325
 sha256 = "b0df9d846a351717e18647c5c4b41c29b3fe9ccc30cd8c77fdd02ffdaad96b0f"
 
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/structure_p1.json"]
-role = "record"
-bytes = 49325
-sha256 = "b0df9d846a351717e18647c5c4b41c29b3fe9ccc30cd8c77fdd02ffdaad96b0f"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/structure_p2.json"]
-role = "record"
-bytes = 49325
-sha256 = "b0df9d846a351717e18647c5c4b41c29b3fe9ccc30cd8c77fdd02ffdaad96b0f"
-
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/summary.json"]
 role = "record"
-bytes = 24730
-sha256 = "31648bc82d3cdc41fb5d4b00910741ce160f71c51c3c6f576c065c70340ce432"
+bytes = 23400
+sha256 = "e9a8c6a573d18f31529b67308aae9c21ef81314009834abb5538bc16e5353420"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/summary.md"]
 role = "record"
-bytes = 3345
-sha256 = "fd6bbb48f8eff948380627f4ffb1d372c33d3c277d3f21f045b067c7d32948a5"
+bytes = 3337
+sha256 = "2bb6b2b868bcdde0dc653e623017b45b40242fe76a4594bf2399e454099f8e63"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/verdict.json"]
 role = "record"
-bytes = 20614
-sha256 = "a077bd7b375398fe6fc15ac922d8b01633deb1cd58566e227f0f3795c7ebac8c"
+bytes = 21062
+sha256 = "fb7446bbf22011ca26f58856b07e30f8afe8afd00df05abe2e4b3ed771a9c305"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/versions.json"]
 role = "record"
-bytes = 10063
-sha256 = "e2cf2a1cf1e5c0d8dfff011a94db6e7cc168fab2f4a751e4d1e67bfffd70e885"
+bytes = 8471
+sha256 = "8bc1a7c4cd335543da8d5c63443ee8d7a4f7ff3dff8210337fe2a77bd05ca0fb"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit/window_ring_native_collect_v2b.json"]
 role = "record"
-bytes = 589
-sha256 = "f9522f5459d93fa0ffcc1321032e1bf68c071cb89c2849b235cd73cc469c49b5"
-
-[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."commit_summary.json"]
-role = "record"
-bytes = 3618
-sha256 = "11598b8dafd84718e2abbb1ff669d4aa9665ec8af558e1abe4a87029eadad541"
+bytes = 582
+sha256 = "745754941c37fdcaffc78d11f55ecae28592d5c0f7f1561231a84f8203fe31d0"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."global_match.json"]
 role = "record"
-bytes = 80295
-sha256 = "050b45bc9d4b7f1a3632f8fadc07daad93476af54a2478f61363d74a1a041510"
+bytes = 80020
+sha256 = "c32c0988a091b06b1ff6279ce3d6547cbdd9fc4c605b09b09c1b99d24e197dba"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."global_match.log"]
 role = "record"
-bytes = 8355
-sha256 = "6108b3536996abecd32b5f0fa48b16bbd0d22845601532aa7bb548ac30e1865d"
+bytes = 8327
+sha256 = "576f4e54f8f5c00e91dbe1b950279586f9a217ec4cc75308304463d3ca8d7796"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."global_match_global_program.json"]
 role = "record"
-bytes = 168040
-sha256 = "a3eb2bc29027ed861cdab522334ce8779f54b06f76b84cb4a491590b54ad2448"
+bytes = 167616
+sha256 = "107d857f5ee90a84b9f3c2e39b35bbab19f5e606d6296e966a20658714345361"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."manifest.json"]
 role = "manifest"
-bytes = 108516656
-sha256 = "4da0fe9405186e0839fd891f8d049beebc4e15f3ba511d0fde382337b99c1951"
-extracted = false
+bytes = 156197501
+sha256 = "2d7ce6dcc37a9ddf9d6c059208fe83f55b21e1eb79902743b413e6beb4305947"
+extracted = true
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."manifest.log"]
 role = "record"
-bytes = 73456
-sha256 = "5d6cf30730ba56164eafe8ba902adb139f1a1b6fc227db3e8f5377dc46c06dbc"
+bytes = 3089
+sha256 = "721cff2066b0414c680277a01c6e27b1457a7956cfa755a19c097b0d28cf2464"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."manifest.pre-v2-20260928T172307Z.json"]
+role = "record"
+bytes = 156197501
+sha256 = "2d7ce6dcc37a9ddf9d6c059208fe83f55b21e1eb79902743b413e6beb4305947"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."manifest_verify.log"]
 role = "record"
-bytes = 10777
-sha256 = "bdbc4246d1019982622e769aec70b7f7da69485573aefe9b3f200a6bc462e9ca"
+bytes = 2747
+sha256 = "60828793e16c366c85e32046346c94173649f090c9468e47e4d2a276abbff9a4"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match.log"]
 role = "record"
-bytes = 5381
-sha256 = "12aa73c172a2bed89034e6d1b7e152a06d7674bd71387b4ba0ef4194b554cfe8"
+bytes = 5450
+sha256 = "2851234528140a8b66e0f444aa38a335d2d9d6b9ff7078a461bd8e92ae5e2303"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/CARD.md"]
 role = "record"
 bytes = 4299
-sha256 = "525df20eb93059a6a0cda6adbbacbaabfa8905f61465da0afb86bead9f8642d4"
+sha256 = "3e821c51b36914a07cdc79f9a380503a742bc9c4da24b56eb57b5cff44c120a6"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/capture/acquisition_observed.json"]
+role = "record"
+bytes = 252003
+sha256 = "502a550b2b2ffce9d505afcf7d4dd50ea9b9206a218d1695c87e42771c22adf9"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/capture/acquisition_plan.json"]
+role = "record"
+bytes = 1312570
+sha256 = "e68d281eff3cdf67eb7264019cac4c46b5b123957b4511d2899bfeef25af30b6"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/capture/cos_sin_cache.json"]
+role = "record"
+bytes = 192
+sha256 = "b2fc26be2b59a282c0c6442e611cca8ed28daa8088c06c6d1ce4761dc7df8c5f"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/capture/log.jsonl.gz"]
+role = "record"
+bytes = 6760463
+sha256 = "079a6912689e6c7c2c6b53b22030799998e519198404f601008a834299d60ce9"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/capture/runtime_tree.json"]
+role = "record"
+bytes = 59619
+sha256 = "4c2f90a7a94ec33e9210aff0fe1b1ec76f6eecfeeb533457ee9c607f77a8ff9b"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/capture/spec_tokens.json"]
+role = "record"
+bytes = 33569
+sha256 = "2698d64d4fb12477b25166cda0400adca2a58e3b41597ab911280568ae68caff"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/capture/stats.json"]
+role = "record"
+bytes = 29869
+sha256 = "12d3a4de3b81fd872fe8d5458efc9aed4ec21f3030a426f811fdff9f700fa325"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/capture/tokens.json"]
+role = "record"
+bytes = 80549
+sha256 = "1014791fe7fc15b91519c45ff67f4c61873de7fd97f4d123065fdef51ea651ac"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/capture/versions.json"]
+role = "record"
+bytes = 1242
+sha256 = "03b1ab5ac6dec3f3800020f4c34cc74048975452b228521af811e07850b16af2"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/card.json"]
 role = "record"
-bytes = 27189
-sha256 = "647a648072fa96f44d2862aeb61897b3409c58a074afa3f46b10a4cc97c02e77"
+bytes = 27696
+sha256 = "67dcbf41c7d770b1563e6976d5db28d4215f45af1dd31ef383d6db499da640ae"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/cards/QWEN3_4B-qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json"]
 role = "record"
-bytes = 27189
-sha256 = "647a648072fa96f44d2862aeb61897b3409c58a074afa3f46b10a4cc97c02e77"
+bytes = 27696
+sha256 = "67dcbf41c7d770b1563e6976d5db28d4215f45af1dd31ef383d6db499da640ae"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/control/acquisition_plan.json"]
+role = "record"
+bytes = 1312570
+sha256 = "e68d281eff3cdf67eb7264019cac4c46b5b123957b4511d2899bfeef25af30b6"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/control/cos_sin_cache.json"]
 role = "record"
 bytes = 192
 sha256 = "b2fc26be2b59a282c0c6442e611cca8ed28daa8088c06c6d1ce4761dc7df8c5f"
 
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/control/runtime_tree.json"]
+role = "record"
+bytes = 59619
+sha256 = "4c2f90a7a94ec33e9210aff0fe1b1ec76f6eecfeeb533457ee9c607f77a8ff9b"
+
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/control/spec_tokens.json"]
 role = "record"
 bytes = 33569
-sha256 = "29ab3e8c35d8641f1981f1fa9a85637178ac12ce5c93b2105b2ec1f13e057695"
+sha256 = "2698d64d4fb12477b25166cda0400adca2a58e3b41597ab911280568ae68caff"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/control/tokens.json"]
 role = "record"
-bytes = 74719
-sha256 = "1ff85bda0cb3e38518ae7c201d71e951eb46a145c62dffb5e2fcda4afaf8d258"
+bytes = 74717
+sha256 = "eb7f8eda42a8e2aa7395d9c61c96b9a12356df8cd4054323573a94576166ab2d"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/control/versions.json"]
 role = "record"
 bytes = 1242
-sha256 = "25e9b50e6ed8b7981919cb42b2b9066d37813bfe3be97a354f9b505d424f8fd8"
+sha256 = "4a5a113a354daf68d4585ac6722ac0f5895912b96e08681df04c4c5697dda1e2"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/experiment.json"]
 role = "record"
-bytes = 13328
-sha256 = "ae0ae77b14efb6f3e9df4332a25c06c8ef1ac2e612757e25d971e52386fc49bf"
+bytes = 12433
+sha256 = "c9f6273ef7952167055d722868cc6e71994cf21e1d09f05ced057ef5958afdc2"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/fold_summary.json"]
 role = "record"
-bytes = 807486
-sha256 = "5aa226673d72d171abbaa7ca76c44ae3b2787813164ea5b8a1d4e00e8ef8a459"
+bytes = 898115
+sha256 = "415c1d5f068af11cf3b20c4fcc0d9fab9c881400922ee9acd42584aca2572242"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/gates.json"]
 role = "record"
-bytes = 6517
-sha256 = "0a36a2e6788f4a4268b23393b27e293f15ab59ca077a7802ac2ffd1c7eb025a2"
+bytes = 7191
+sha256 = "149939497378312f62554a52e57b88d4f74abd117032a1c9c3e318f96a4d8903"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/gpu_done.json"]
 role = "record"
 bytes = 410
-sha256 = "a362dbb4f7988895fde814f566ca37e4b720d5ed4e066dea977d2c8bbbd2bc5f"
+sha256 = "c218f1ef426b7f3a23ffae8cfeb7ceae6133fc42814b02751f1f35ae3d9e51f5"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/logs/capture.log"]
 role = "record"
-bytes = 15269
-sha256 = "7cb20925129d2051360560f2f6282a05eed332a1f3b57a67b77938e02315ae6f"
+bytes = 15988
+sha256 = "adfc53ca4d423f07991b39090313f96f45250b2bad10b11a5f38e62a833b5441"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/logs/control.log"]
 role = "record"
-bytes = 14582
-sha256 = "f41d70fa52eef0a1977690d4004c966e49516c6a2e66cc75f7b7e00646186e77"
+bytes = 14964
+sha256 = "473e09f24f9ef110e985f3976e23cd61e7a5ba1235812d71034a2365882151b2"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/logs/fold.log"]
 role = "record"
-bytes = 754
-sha256 = "16a3ea766e22f09380260b0939765e323beec7ad1e5f18e7f4a6165a901bedc2"
+bytes = 727
+sha256 = "f9e0684c69066b7b4cd168f9adb0549e8f8af1d6118133cc7d4723669d1c4387"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/logs/resolve.log"]
 role = "record"
-bytes = 347
-sha256 = "48ac840220f95d9f23dabb563008e36e030fb72da2fd5482ff396f7bbeed4a0d"
+bytes = 339
+sha256 = "0efd213c4b577dad920e48e77c4c868dfd118636789d628bc21811993370ae60"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/resolution.json"]
 role = "record"
-bytes = 1110248
-sha256 = "26f979cc4418e625ba4d71e2e59ef3c642cc0cbe50ff10a641f4f131ad2797fe"
+bytes = 1271384
+sha256 = "5098b28c5635c6f7c729ac0f0b9cf86b955b84facb906a4eb523dc9f22f6296e"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/resolution.md"]
 role = "record"
-bytes = 156848
-sha256 = "566c570bc310a3f45d0133865f82de4c7f850d3c7ba1f42a3af786e3a106352b"
+bytes = 173200
+sha256 = "7d02b43515885eff7999bcb1e01a9ede74277b61b40b36b2a3b5b0d6f5ecae6e"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/run.json"]
 role = "record"
-bytes = 7693
-sha256 = "71b2b8b1586e8c604e7a18cc370739fad3d7b0ac420822d8e26291f8f482eb7a"
+bytes = 7885
+sha256 = "dda70bf3e28387af24665b2fe0f84b2981c33df51e0cdde25d373f8ef6df6d97"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/spec.json"]
 role = "record"
-bytes = 39509
-sha256 = "07f070f3886df8882e349eeeab3310ebf9197cbfab47e1849b1f5838e0d1a1b0"
+bytes = 39506
+sha256 = "5394951fd8b9dd36736db6c47d618497928805138e13196642114ec3498b67bd"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match/stages.json"]
 role = "record"
-bytes = 4994
-sha256 = "e6fa710178e71efb6dffaffb66be97ec3e1ee26c4cff6baf466ea22e8625d14c"
+bytes = 4925
+sha256 = "a771a59195868891e3836e98e0294758f5b235187124bada2ce2e166910339d8"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match_compare.log"]
 role = "record"
@@ -12038,68 +12043,73 @@ sha256 = "f9a31eec30d4e6fc609cc44dac064558ca330920f43315b34a873b6bb241292e"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match_decomp.json"]
 role = "record"
-bytes = 12702
-sha256 = "64ca63bf99cc1edc921b069bdbf3044a250c520668bb22f0e49d5e5c71c684ed"
+bytes = 12623
+sha256 = "e7a2ea5a53d177967e0d6c967510c41debc2b9c4873d5567d57de495f6825d81"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."match_summary.json"]
 role = "record"
-bytes = 5282
-sha256 = "c090679935b74231ea4e5df8bd9e00e4f622267f1374b87cc38d871c9cc754b4"
+bytes = 5369
+sha256 = "41e07d94ea81ef65f70b7de5b5c817a8207f9d4a66f10a5ca921223744b4ff3a"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."row.log"]
 role = "record"
-bytes = 4860
-sha256 = "9473031b65fd16fe54475072edd0808dbb61755a35d3e3fd8e76ea9abc841c58"
+bytes = 6793
+sha256 = "dc97220ef150b44a540bd719addef3409005b18fe58d98543caccacb691e1ef8"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."source_identity.json"]
 role = "record"
-bytes = 5449
-sha256 = "c2b3bd59d72968a7b5a6ccac697ab831292c982d49b6305ee698fe96c24b1172"
+bytes = 3977
+sha256 = "525e7eacedb22ff3c9be26d4c1d8e4230c0de3b13174373800f6ba9b56caf43b"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."source_identity.venv312.json"]
 role = "record"
-bytes = 5449
-sha256 = "c2b3bd59d72968a7b5a6ccac697ab831292c982d49b6305ee698fe96c24b1172"
+bytes = 3977
+sha256 = "525e7eacedb22ff3c9be26d4c1d8e4230c0de3b13174373800f6ba9b56caf43b"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."stages.txt"]
 role = "record"
-bytes = 1811
-sha256 = "d604090cb4fa182f5cbab94269d6c2aabbcf77051c717bab674f436f38f86dac"
+bytes = 2373
+sha256 = "eda887716c0ccbd4dc3df55a6b12437aa7c9941fc71dfcd2eb4fb1038d829dae"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."target_family.build.json"]
 role = "record"
-bytes = 405
-sha256 = "d5e127243e335699cee17b205ea833fbbbe90e40622f731bd9897ee3891ffb38"
+bytes = 382
+sha256 = "3bdffab0793eb6e742a9612017868b9b9647af6172171476e8e97107a50bec33"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."target_family.json"]
 role = "record"
-bytes = 414
-sha256 = "791209b880e3b30d8e2f75cd1bf2c85a7117d52f91b7b78408b4214fef7a8032"
+bytes = 403
+sha256 = "949cefd5f0212abe47a8cf8c5ece83ee2b84a703b6d6a8ad2357d909690a5b25"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."timeline.jsonl"]
 role = "record"
-bytes = 40042
-sha256 = "5f6a6c7f85e76195d6a67394691380efd3aae702bc699f8e451554187f249bd3"
+bytes = 27087
+sha256 = "904ea6b4dcab40c160391d63526af27a9a57195798b82e0b0bc1e5e5b499985c"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."timeline_report.json"]
 role = "record"
-bytes = 14933
-sha256 = "17e732afa1b9356fec72c3c2497f99522c5abf5edda05423a873b96f2c3e0bcf"
+bytes = 7121
+sha256 = "02c44df4e16562443aef54ded0c7a76215651176dcbaf8a64c904af0795bcd08"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."timeline_report.md"]
 role = "record"
-bytes = 1620
-sha256 = "efc7e7bc8fd3f94e7c61f7f313b46fe7b4b82da67dbbd0990d6f6abd0e21e8de"
+bytes = 1370
+sha256 = "bdec055840f40e5cd4c1f821a7276fce7de22530b1833f635861f35a01b67ddb"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."tree.json"]
 role = "record"
 bytes = 482
-sha256 = "a5fab5106ca728f4adf04c81f39f9950e9bd17d0777a23f638cb47f051fa494a"
+sha256 = "1b302f4bdc3fcc2db1efdc56a31c344aeb2adc99bee030e21c37b0100403c724"
+
+[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."verdict.json"]
+role = "record"
+bytes = 56985
+sha256 = "fabfffaf1ededfa9e4a141e86997ad54a14eb351f89c065b4168ea351af3f251"
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".files."weights_of_record.log"]
 role = "record"
-bytes = 301
-sha256 = "d6632d3ea7ca834a496111f0892b752efc7dcf46e25dc14029e30666d6af9f3c"
+bytes = 294
+sha256 = "eb31183f3982ebeb32ce603456b1d1f0ee6a027ee4ad0e5f298392adff556855"
 
 [rows."qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager"]
 row = 74

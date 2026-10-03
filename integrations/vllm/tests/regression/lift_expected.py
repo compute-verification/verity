@@ -157,7 +157,7 @@ def build_fixtures(index: dict, oracle: Path, keep_roles: set[str], decisions: d
     for key, spec in rows_out.items():
         q = _toml_str(key)
         lines.append(f"[rows.{q}]")
-        for k in ("row", "class", "selection", "tp", "batch", "oracle", "programs_state"):
+        for k in ("row", "class", "selection", "tp", "batch", "oracle", "programs_state", "manifest_flags"):
             if spec.get(k) is not None:
                 lines.append(f"{k} = {_toml_val(spec[k])}")
         lines.append("")

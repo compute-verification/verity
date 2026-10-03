@@ -135,6 +135,12 @@ BUILDER = "verity_vllm.pipeline.cli"         # Q_module_body_v1 over the Program
 POLICIES_OFF = ["--no-norm-scales", "--no-guarded-max", "--no-router-softmax", "--no-vocab-range"]    # the manifests of record predate them
 
 
+def _flags(row: resolver.Row) -> list[str]:
+    """The builder flags the row's manifest of record was built with: `manifest_flags` of its fixtures.toml table (#73's epoch record:
+    `[]`, every policy on), else POLICIES_OFF."""
+    return list(row.spec.get("manifest_flags", POLICIES_OFF))
+
+
 def _rebuild_argv(row: resolver.Row, programs_root: Path, out: Path) -> list[str]:
     wl = row.workload()
     fx = json.load(open(wl))
@@ -143,11 +149,11 @@ def _rebuild_argv(row: resolver.Row, programs_root: Path, out: Path) -> list[str
     if b > 1:
         bs = row.json("build_summary.json")
         wd = ((bs.get("workload") or {}).get("workload_digest")) or None
-        argv = base + ["build-global", "--fixture", str(wl), "--programs-root", str(programs_root), "--out", str(out), *POLICIES_OFF]
+        argv = base + ["build-global", "--fixture", str(wl), "--programs-root", str(programs_root), "--out", str(out), *_flags(row)]
         if wd:
             argv += ["--workload-digest", wd]
         return argv
-    return base + ["build", "--program", str(programs_root / "build_request"), "--workload", str(wl), "--out", str(out), *POLICIES_OFF]
+    return base + ["build", "--program", str(programs_root / "build_request"), "--workload", str(wl), "--out", str(out), *_flags(row)]
 
 
 def actual(row: resolver.Row) -> dict:
