@@ -390,6 +390,14 @@ def test_node_2_refuses_in_a_timed_window_and_when_its_status_cant_be_read(tmp_p
     assert research_main(["retention", "report", "--root", str(root), "--json"]) == 3
     assert json.loads(capsys.readouterr().out) == {"schema": R.REPORT_SCHEMA, "refused": json.loads(out.read_text())["refused"]}
     (fill / "status.txt").write_text("2031-01-01T00:00:00Z free GPUs 7/8, timed False, window waiting False\n")
+
+    def window_opens():
+        (fill / "status.txt").write_text("2031-01-01T00:00:00Z free GPUs 0/8, timed True, window waiting False\n")
+        return {}
+
+    plan = run_gc(root, live=Scripted(window_opens), apply=True)
+    assert plan["refused"].endswith("(it changed during this pass: nothing deleted)") and t.exists()
+    (fill / "status.txt").write_text("2031-01-01T00:00:00Z free GPUs 7/8, timed False, window waiting False\n")
     assert run_gc(root, live=fake_live(tmp_path, root), apply=True)["refused"] is None and not t.exists()
 
 

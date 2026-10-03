@@ -392,6 +392,8 @@ class Sweep:
                 why = (c.reason if c.rule == "audit-tree" else DELETES[c.rule])
                 self._add(Act(c.path, c.rule, "delete", why, c.files, c.bytes, self._age(c.stamp)))
             return self.acts
+        if going and (why := timed(self.places)):
+            raise Refused(f"{why} (it changed during this pass: nothing deleted)")
         for c in [c for c in going if c.rule == "trash"]:
             self._remove(c, c.path)
         moved = self._rename([c for c in going if c.rule in ("src-tree", "audit-tree", "lean-deps", "jobs-src")])
