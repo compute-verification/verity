@@ -163,3 +163,4 @@ import FlockSoundness.Discharge.DecodeZLJ
 import FlockSoundness.ZK.GK
 import FlockSoundness.Discharge.Hidden
 import FlockSoundness.Discharge.ZkCoins
+import FlockSoundness.Discharge.Composed
