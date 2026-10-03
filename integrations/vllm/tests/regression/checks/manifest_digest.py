@@ -40,6 +40,7 @@ from .. import resolver
 NAME = "manifest_digest"
 TIER = "T0"          # inputs: Programs 50-300 MB + workload; the rebuild itself is CPU-minutes (run it on a pod tonight)
 STRENGTH = "strong"
+REBUILD = True       # 94% of the T0 wall (2-26 min a row): skipped unless VERITY_REGRESSION_REBUILD=1, the post-train job's switch
 INPUTS = ("manifest.json", "commit/manifest_verify.json", "build_summary.json", "build_request*/instances.json.gz", "workloads/<row>.json")
 
 

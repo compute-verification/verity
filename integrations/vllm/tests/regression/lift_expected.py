@@ -78,6 +78,13 @@ def existing_decisions() -> dict[str, list[dict]]:
     return {k: v["decisions"] for k, v in (fx.get("rows") or {}).items() if v.get("decisions")}
 
 
+def existing_retired() -> dict[str, dict[str, dict]]:
+    """The `[rows.<row>.retired.<check>]` tables on disk (hand-written; carried over on regeneration), by row key."""
+    if not resolver.FIXTURES.is_file():
+        return {}
+    return {k: v["retired"] for k, v in (resolver.load_fixtures().get("rows") or {}).items() if v.get("retired")}
+
+
 def existing_rows() -> dict[str, dict]:
     """The `[rows.<row>]` tables of the fixtures.toml on disk (carried over when the index does not name them), by row key."""
     if not resolver.FIXTURES.is_file():
@@ -103,8 +110,10 @@ def role_of(rel: str) -> str:
 
 
 def build_fixtures(index: dict, oracle: Path, keep_roles: set[str], decisions: dict[str, list[dict]] | None = None,
-                   shared_artifacts: dict[str, str] | None = None, carried: dict[str, dict] | None = None) -> tuple[str, dict]:
+                   shared_artifacts: dict[str, str] | None = None, carried: dict[str, dict] | None = None,
+                   retired: dict[str, dict[str, dict]] | None = None) -> tuple[str, dict]:
     decisions = decisions or {}
+    retired = retired or {}
     rows_out: dict[str, dict] = {}
     for key, v in sorted(index["rows"].items(), key=lambda kv: kv[1]["row"]):
         n = int(v["row"])
@@ -138,7 +147,8 @@ def build_fixtures(index: dict, oracle: Path, keep_roles: set[str], decisions: d
              "# One entry per reference file: sha256 / bytes / role; per row: where the bytes live (oracle dir, live pod dirs, store artifacts).",
              "# Nothing large is in Git: this is an index.  `artifacts.*` are filled by stage_store.py once the trees are put.",
              "# `[[rows.<row>.decisions]]` blocks are hand-written labelled decisions (sanctioned differences from v1; test_regression.py",
-             "# LABELLED DECISIONS) and are carried over verbatim when this file is regenerated.", "",
+             "# LABELLED DECISIONS) and are carried over verbatim when this file is regenerated; so are the hand-written",
+             "# `[rows.<row>.retired.<check>]` tables (a check that cannot run on the row's record, test_regression.py HOW TO RUN).", "",
              "schema = \"verity-vllm/r19-reference-fixtures/v1\"", f"snapshot = {_toml_str(SNAPSHOT_NAME)}", "",
              "[reference]"] + [f"{k} = {_toml_str(v)}" for k, v in REFERENCE.items()] + [""]
     if shared_artifacts:
@@ -158,6 +168,10 @@ def build_fixtures(index: dict, oracle: Path, keep_roles: set[str], decisions: d
             for dk in list(DECISION_KEYS) + sorted(set(d) - set(DECISION_KEYS)):
                 if dk in d:
                     lines.append(f"{dk} = {_toml_val(d[dk])}")
+            lines.append("")
+        for check, r in sorted((retired.get(key) or {}).items()):
+            lines.append(f"[rows.{q}.retired.{check}]")
+            lines += [f"{rk} = {_toml_val(r[rk])}" for rk in list(resolver.RETIREMENT_FIELDS) + sorted(set(r) - set(resolver.RETIREMENT_FIELDS)) if rk in r]
             lines.append("")
         lines.append(f"[rows.{q}.local]")
         for mk, mv in sorted(spec["local"].items()):
@@ -220,7 +234,7 @@ def main(argv=None) -> int:
         print(f"[lift] appended {sorted(index['rows'])} to {resolver.FIXTURES}")
     elif not a.only_expected:
         text, _ = build_fixtures(index, oracle, set(a.roles.split(",")), decisions=existing_decisions(), shared_artifacts=existing_shared_artifacts(),
-                                 carried=existing_rows())
+                                 carried=existing_rows(), retired=existing_retired())
         resolver.FIXTURES.write_text(text)
         print(f"[lift] wrote {resolver.FIXTURES} ({len(text) / 1024:.0f} KB)")
     resolver.EXPECTED_DIR.mkdir(exist_ok=True)

@@ -14410,3 +14410,57 @@ sha256 = "5da9d75a367e03afc18e6b325f43d859bb44af82658d8b7c8cac3f8cd68eb7f6"
 role = "record"
 bytes = 314
 sha256 = "ec44604a2a2d5b447fc04f461f88abc81eb735408c20a0addfb4bdcb71ab8b71"
+
+
+# ---- retired checks (hand-written; test_regression.py HOW TO RUN): a check that cannot run on the row's record with the current code.
+# The test skips it by `reason`; under VERITY_STORE_REQUIRED=1 nothing else may skip for want of inputs.  `needs` is what brings it back.
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".retired.step_segmentation]
+reason = "its component descriptors (build_request*/descriptor.json.gz) were never staged in the store: the R2 records and programs trees omit them, and the vault extraction that held them is not reachable from a check; and every L40S record predates 74b7f51f1, which removed the AmpereBF16TcDot16_v1 registration their descriptors name (#101, the one L40S row whose descriptors are staged, fails on it: KeyError)"
+since = "74b7f51f1 (2026-09-28: vllm registry, AmpereBF16TcDot16_v2; \"recorded data naming v1 is re-recorded in the epoch, not edited\")"
+needs = "a re-record of the row on an L40S under the current registry (GPU), with its descriptors in the programs tree"
+
+[rows."llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager".retired.step_segmentation]
+reason = "its component descriptors (build_request*/descriptor.json.gz) were never staged in the store: the R2 records and programs trees omit them, and the vault extraction that held them is not reachable from a check; and every L40S record predates 74b7f51f1, which removed the AmpereBF16TcDot16_v1 registration their descriptors name (#101, the one L40S row whose descriptors are staged, fails on it: KeyError)"
+since = "74b7f51f1 (2026-09-28: vllm registry, AmpereBF16TcDot16_v2; \"recorded data naming v1 is re-recorded in the epoch, not edited\")"
+needs = "a re-record of the row on an L40S under the current registry (GPU), with its descriptors in the programs tree"
+
+[rows."qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".retired.step_segmentation]
+reason = "its component descriptors (build_request*/descriptor.json.gz) were never staged in the store: the R2 records and programs trees omit them, and the vault extraction that held them is not reachable from a check; and every L40S record predates 74b7f51f1, which removed the AmpereBF16TcDot16_v1 registration their descriptors name (#101, the one L40S row whose descriptors are staged, fails on it: KeyError)"
+since = "74b7f51f1 (2026-09-28: vllm registry, AmpereBF16TcDot16_v2; \"recorded data naming v1 is re-recorded in the epoch, not edited\")"
+needs = "a re-record of the row on an L40S under the current registry (GPU), with its descriptors in the programs tree"
+
+[rows."gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".retired.step_segmentation]
+reason = "its component descriptors (build_request*/descriptor.json.gz) were never staged in the store: the R2 records and programs trees omit them, and the vault extraction that held them is not reachable from a check; and every L40S record predates 74b7f51f1, which removed the AmpereBF16TcDot16_v1 registration their descriptors name (#101, the one L40S row whose descriptors are staged, fails on it: KeyError)"
+since = "74b7f51f1 (2026-09-28: vllm registry, AmpereBF16TcDot16_v2; \"recorded data naming v1 is re-recorded in the epoch, not edited\")"
+needs = "a re-record of the row on an L40S under the current registry (GPU), with its descriptors in the programs tree"
+
+[rows."mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".retired.step_segmentation]
+reason = "its component descriptors (build_request*/descriptor.json.gz) were never staged in the store: the R2 records and programs trees omit them, and the vault extraction that held them is not reachable from a check; and every L40S record predates 74b7f51f1, which removed the AmpereBF16TcDot16_v1 registration their descriptors name (#101, the one L40S row whose descriptors are staged, fails on it: KeyError)"
+since = "74b7f51f1 (2026-09-28: vllm registry, AmpereBF16TcDot16_v2; \"recorded data naming v1 is re-recorded in the epoch, not edited\")"
+needs = "a re-record of the row on an L40S under the current registry (GPU), with its descriptors in the programs tree"
+
+[rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".retired.step_segmentation]
+reason = "its component descriptors (build_request*/descriptor.json.gz) were never staged in the store: the R2 records and programs trees omit them, and the vault extraction that held them is not reachable from a check; and every L40S record predates 74b7f51f1, which removed the AmpereBF16TcDot16_v1 registration their descriptors name (#101, the one L40S row whose descriptors are staged, fails on it: KeyError)"
+since = "74b7f51f1 (2026-09-28: vllm registry, AmpereBF16TcDot16_v2; \"recorded data naming v1 is re-recorded in the epoch, not edited\")"
+needs = "a re-record of the row on an L40S under the current registry (GPU), with its descriptors in the programs tree"
+
+[rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager".retired.step_segmentation]
+reason = "its component descriptors (build_request*/descriptor.json.gz) were never staged in the store: the R2 records and programs trees omit them, and the vault extraction that held them is not reachable from a check; and every L40S record predates 74b7f51f1, which removed the AmpereBF16TcDot16_v1 registration their descriptors name (#101, the one L40S row whose descriptors are staged, fails on it: KeyError)"
+since = "74b7f51f1 (2026-09-28: vllm registry, AmpereBF16TcDot16_v2; \"recorded data naming v1 is re-recorded in the epoch, not edited\")"
+needs = "a re-record of the row on an L40S under the current registry (GPU), with its descriptors in the programs tree"
+
+[rows."qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".retired.step_segmentation]
+reason = "its component descriptors (build_request*/descriptor.json.gz) were never staged in the store: the R2 records and programs trees omit them, and the vault extraction that held them is not reachable from a check"
+since = "the R2 staging (stage_store.py): never run on this row"
+needs = "the re-record #74 needs for manifest_digest (H100, GPU), with its descriptors in the programs tree"
+
+[rows."qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".retired.manifest_digest]
+reason = "the build-global rebuild refuses #74 Programs: the strict Q_word v1 word check (the build default since S1) raises QueryRuleViolation on ScaledMmFp8Block_v1, cut at 17712 Calls under the gate_up / qkv / o / down projections; the row was recorded before the block-FP8 projections had a family the word rule classifies, and the epoch re-record of #74 (r20260928-160515-1b32) stopped after its Build"
+since = "348a4e2ae (S1, vllm query: Q_word v1 as the partition of record), landed in 269829d84 (2026-09-28)"
+needs = "a re-record of #74 on an H100 (GPU) whose Programs name ScaledMmFp8BlockSharedScale_v1, then a re-baseline of expected/ from it"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".retired.step_segmentation]
+reason = "request_component raises KeyError: AmpereBF16TcDot16_v1 over the staged descriptors: 74b7f51f1 removed the v1 registration (the step is core AmpereBF16TcDot16_v2, same values, new Definition id), and the epoch re-record of #101 (r20260928-194951-f7ed) was deferred at its Match (G4 FAIL)"
+since = "74b7f51f1 (2026-09-28: vllm registry, AmpereBF16TcDot16_v2)"
+needs = "a re-record of #101 on an L40S under the current registry (GPU), then a re-baseline of expected/ from it"

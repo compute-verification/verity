@@ -76,7 +76,12 @@ hand-written and carried over when lift_expected.py regenerates fixtures.toml.
 
 HOW TO RUN.  Skipped unless `VERITY_REGRESSION=1`.  Inputs resolve per `resolver.py`: a directory of row dirs (`VERITY_REGRESSION_ROWS_ROOT`),
 the recorded live paths (tp2), or the data store (`store_io.fetch` of the `fixture/v1` trees named in fixtures.toml; snapshot
-`r19-reference-v1`).  Self-check (the current code against its own records):
+`r19-reference-v1`).  A recorded `check` sets `VERITY_REGRESSION=1` and runs the T0 tier less the checks that rebuild a manifest
+(`REBUILD = True`: manifest_digest, and the #57 negative), which `tools/check/post_train.py` runs after each train on main with
+`VERITY_REGRESSION_REBUILD=1`.  Under `VERITY_STORE_REQUIRED=1` (both of them) an input fixtures.toml names that does not resolve, or
+an absent `expected/<row>.json`, FAILS: the only skips are a tier not asked for, a check that does not apply to the row, and a check
+retired on the row (`[rows.<row>.retired.<check>]`: `reason`, `since`, `needs`; `python -m tests.regression.decisions` lists them).
+Self-check (the current code against its own records):
 
     cd integrations/vllm && VERITY_REGRESSION=1 VERITY_REGRESSION_ROWS_ROOT=/workspace/regress/rows \\
         python -m pytest tests/regression -m regression -k "T0" -q
@@ -93,6 +98,7 @@ T0 byte-equal on every row where the inputs resolve + the #57 refusal reproduces
 from __future__ import annotations
 
 import os
+from typing import NoReturn
 
 import pytest
 
@@ -128,6 +134,28 @@ def store_state() -> dict:
     return {"reachable": store_io.reachable() if ENABLED else False, "candidate": os.environ.get(resolver.CANDIDATE_ENV)}
 
 
+def _unresolved(why: str) -> NoReturn:
+    """A reference input (or the expected contract) that no replica gives here: a skip, but a failure under VERITY_STORE_REQUIRED=1
+    (a recorded check, the post-train job), where only a check retired in fixtures.toml may skip for want of its inputs."""
+    if resolver.store_required():
+        pytest.fail(f"{why}\n  ({resolver.STORE_REQUIRED_ENV}=1: an input that does not resolve fails; a check that cannot run on a row's "
+                    "record is retired by `[rows.<row>.retired.<check>]` in fixtures.toml, with its reason)")
+    pytest.skip(why)
+
+
+def _skip_rebuild(what: str, candidate: str | None) -> None:
+    if not resolver.rebuilds() and not candidate:
+        pytest.skip(f"{what} rebuilds a manifest (CPU minutes to half an hour a row): it runs after each train on main "
+                    f"(`tools/check/post_train.py`), not in `check`; {resolver.REBUILD_ENV}=1 runs it here")
+
+
+def _skip_retired(row: resolver.Row, check_name: str, record_property) -> None:
+    ret = row.retired(check_name)
+    if ret:
+        record_property("retired", ret.get("reason") or "?")
+        pytest.skip(f"{check_name} is retired on #{row.number}: {ret.get('reason')} (since {ret.get('since')}; needs {ret.get('needs')})")
+
+
 @pytest.mark.parametrize("row_key,check_name", _params())
 def test_reproduces(row_key: str, check_name: str, store_state: dict, record_property) -> None:
     if not ENABLED:
@@ -135,24 +163,34 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict, record_pro
     chk = checks.load(check_name)
     if chk.TIER not in _tiers():
         pytest.skip(f"{check_name} is tier {chk.TIER}; set {TIER_ENV}={chk.TIER} to run it")
+    if getattr(chk, "REBUILD", False):
+        _skip_rebuild(check_name, store_state["candidate"])
     row = next(r for r in resolver.rows() if r.key == row_key)
     if not row._roots() and not (row.spec.get("artifacts") or {}) and not store_state["candidate"]:
         pytest.skip(f"{row.key}: no replica reachable (no rows root, no live dir, no store artifact ids)" + ("" if store_state["reachable"] else "; store not reachable"))
+    _skip_retired(row, check_name, record_property)
     why = chk.applies(row)
     if why:
         pytest.skip(f"{check_name} does not apply to #{row.number}: {why}")
-    exp = row.expected().get(check_name) if resolver.oracle() == "expected" else None
+    exp = None
+    if resolver.oracle() == "expected":
+        p = row.expected_path()
+        if not p.is_file():
+            art = resolver.registered(p)
+            _unresolved(f"expected/{row.key}.json, the contract, is not here" + (f": it is the registered fixture {art}; "
+                        "`research data fetch-fixtures` fetches it (suites.py does before the suite runs)" if art else " and is not registered"))
+        exp = row.expected().get(check_name)
     if exp is None:                                          # `--oracle frozen`, or a check expected/ never froze: lift from the R2 record
         try:
             exp = chk.expected(row)
         except resolver.NotResolvable as e:
-            pytest.skip(f"expected/{row.key}.json lacks {check_name} and it cannot be lifted here: {e}")
+            _unresolved(f"expected/{row.key}.json lacks {check_name} and it cannot be lifted here: {e}")
     try:
         act = chk.actual(row)
     except NotImplementedError as e:
         pytest.skip(f"stubbed: {e}")
     except resolver.NotResolvable as e:
-        pytest.skip(str(e))
+        _unresolved(str(e))
     problems = resolver.sanction(row, check_name, act, resolver.diff(exp, act))     # a labelled decision may sanction a difference from v1
     resolver.record_result(row.key, check_name, exp, act, problems)                  # $VERITY_REGRESSION_RECORD_ACTUAL: rebaseline.py's input
     record_property("oracle", resolver.oracle())
@@ -180,12 +218,18 @@ def test_negative_57_refusal_reproduces(record_property) -> None:
     F-r19-int-20: the promoted, complete manifest) -- anything else fails naming both."""
     if not ENABLED:
         pytest.skip("set VERITY_REGRESSION=1 to run the R19 reference regression")
+    _skip_rebuild("the #57 negative", os.environ.get(resolver.CANDIDATE_ENV))
     row = next((r for r in resolver.rows() if r.number == 57), None)
     if row is None:
         pytest.skip("#57 not in fixtures.toml")
-    if row.programs_root() is None and row.candidate_root() is None:
-        pytest.skip("#57: request Programs not reachable here")
     from .checks import manifest_digest
+    _skip_retired(row, manifest_digest.NAME, record_property)
+    try:
+        reachable = row.programs_root() is not None or row.candidate_root() is not None
+    except resolver.NotResolvable as e:
+        _unresolved(f"#57: {e}")
+    if not reachable:
+        _unresolved("#57: request Programs not reachable here")
     act = manifest_digest.actual(row)
     refused = act.get("rebuild_rc", 0) != 0 or act.get("complete") is False
     if refused:
@@ -212,7 +256,11 @@ def test_decisions_are_listed_and_well_formed(record_property) -> None:
     rows_ = D.listing()
     text = D.render(rows_)
     print("\n" + text)
+    retired = D.retirements()
+    print(D.render_retired(retired))
     record_property("decisions_n", str(len(rows_)))
     record_property("pending_n", str(sum(1 for d in rows_ if d["status"] == "pending_review")))
+    record_property("retired_n", str(len(retired)))
     bad = [f"#{d['row']} {d['check']} {d['finding']}: {d['problem']}" for d in rows_ if d["problem"]]
-    assert not bad, "malformed labelled decision(s) in fixtures.toml:\n  " + "\n  ".join(bad)
+    bad += [f"#{r['row']} {r['check']} retired: {r['problem']}" for r in retired if r["problem"]]
+    assert not bad, "malformed labelled decision(s) or retirement(s) in fixtures.toml:\n  " + "\n  ".join(bad)

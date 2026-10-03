@@ -52,6 +52,27 @@ ENGINE = "v2"                                  # the builder that recomputes `ac
 ORACLE_ENV = "VERITY_REGRESSION_ORACLE"        # `expected` (default: expected/<row>.json, re-baselined on v2) | `frozen` (lift from the R2 frozen v1 records)
 ORACLES = ("expected", "frozen")
 RECORD_ACTUAL_ENV = "VERITY_REGRESSION_RECORD_ACTUAL"   # a directory: test_reproduces writes every `actual` to <dir>/<row>/<check>.json (rebaseline.py input)
+REBUILD_ENV = "VERITY_REGRESSION_REBUILD"      # "1": run the checks that rebuild a manifest (`REBUILD = True`; CPU minutes to half an hour a row)
+STORE_REQUIRED_ENV = "VERITY_STORE_REQUIRED"   # "1" (a recorded check, the post-train job): an input that does not resolve fails, never skips
+REGISTRY = HERE.parents[3] / "fixtures" / "artifacts.json"   # the fixtures too large for git (`research data fetch-fixtures`)
+
+
+def store_required() -> bool:
+    return os.environ.get(STORE_REQUIRED_ENV) == "1"
+
+
+def rebuilds() -> bool:
+    return os.environ.get(REBUILD_ENV) == "1"
+
+
+def registered(p: Path) -> str | None:
+    """The `art:` id `fixtures/artifacts.json` registers for `p` (a fixture git does not track), else None."""
+    try:
+        reg = json.loads(REGISTRY.read_text())
+    except (OSError, ValueError):
+        return None
+    rel = str(p.resolve().relative_to(REGISTRY.parents[1]))
+    return next((art for art, path in reg.items() if path == rel), None)
 
 
 def oracle() -> str:
@@ -332,8 +353,11 @@ class Row:
         return [d for d in candidate_attempt_docs() if (d.get("params") or {}).get("row") == self.key]
 
     # ---- expected -------------------------------------------------------------------------------------------------------------
+    def expected_path(self) -> Path:
+        return EXPECTED_DIR / f"{self.key}.json"
+
     def expected(self) -> dict[str, Any]:
-        p = EXPECTED_DIR / f"{self.key}.json"
+        p = self.expected_path()
         if not p.is_file():
             return {}
         with open(p) as f:
@@ -343,6 +367,13 @@ class Row:
         """The labelled decisions on this row for `check` (`[[rows.<row>.decisions]]` in fixtures.toml, design rule Draft 3 §7: a
         difference from the v1 reference is sanctioned only by a recorded decision naming the finding or the changed policy)."""
         return [d for d in (self.spec.get("decisions") or []) if isinstance(d, dict) and d.get("check") == check]
+
+    def retired(self, check: str) -> dict[str, Any] | None:
+        """`[rows.<row>.retired.<check>]` of fixtures.toml: the check cannot run on this row's record with the current code, and why
+        (`reason`), since which change (`since`), and what would bring it back (`needs`).  The test skips it by that reason; nothing
+        else lets a check that does not resolve skip under VERITY_STORE_REQUIRED=1."""
+        r = (self.spec.get("retired") or {}).get(check)
+        return r if isinstance(r, dict) else None
 
 
 SCRATCH_ENV = "VERITY_REGRESSION_SCRATCH"
@@ -455,6 +486,8 @@ def diff(expected: Any, actual: Any, path: str = "$") -> list[str]:
 
 
 DECISION_FIELDS = ("check", "since", "finding", "reason", "expected")
+#: what `[rows.<row>.retired.<check>]` must state (`Row.retired`)
+RETIREMENT_FIELDS = ("reason", "since", "needs")
 #: `status` of a decision: `accepted` (the default when absent: Daniel confirmed it) or `pending_review` (labelled by a lane, not yet
 #: confirmed); both sanction.
 DECISION_STATUSES = ("accepted", "pending_review")
