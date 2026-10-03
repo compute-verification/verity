@@ -60,9 +60,9 @@ US_PER_KIB = 0.15
 Z99 = 2.3263478740408408
 
 #: ε_proof, the per-answer slack, by the adversary's effective call count D = d: lean's estimates at 64 KiB (from
-#: `PousProofs/Chain/Family.lean`'s certificate, not proved; D = 0 not estimated, taken as D = 1's)
+#: `PousProofs/Chain/Family.lean`'s certificate, not proved; D = 0 is the extracted single-segment value ≈ 0.21%)
 EPS_PROOF = (
-    {"D": 0, "eps_proof_fraction": 0.0040, "status": "estimate", "source": "lean, Slack 1790904948.520999; D = 1's, D = 0 not estimated"},
+    {"D": 0, "eps_proof_fraction": 0.0021, "status": "extracted", "source": "single-segment ε_proof(0) ≈ 0.21% from Chain/Family.lean's certificate (replaces the D = 1 placeholder 0.40%)"},
     {"D": 1, "eps_proof_fraction": 0.0040, "status": "estimate", "source": "lean, Slack 1790904948.520999 (k 93)"},
     {"D": 2, "eps_proof_fraction": 0.0060, "status": "estimate", "source": "lean, Slack 1790904948.520999 (k 97)"},
     {"D": 3, "eps_proof_fraction": 0.0081, "status": "estimate, upper", "source": "lean, Slack 1790904948.520999 (k 101)"},

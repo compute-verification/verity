@@ -120,11 +120,11 @@ def test_the_presets_reproduce_the_notes_first_cut(doc):
         got = [E.survival_at(s[mid]["t_us"], s[mid]["survival_fraction"], t) for t in (250, 500, 1000)]
         assert got == pytest.approx(list(want), rel=0.05), mid
     base = {"m": 1, "lambda_per_s": 100, "T_s": 600, "alpha": 0.01, "beta": 0.01}
-    first_cut = {(0, 65_536): ((0.41, 1), (0.46, 20), (0.48, 29), (18.4, None), (0.64, 110)),
+    first_cut = {(0, 65_536): ((0.22, 1), (0.27, 20), (0.29, 29), (18.25, None), (0.45, 110)),
                  (1, 65_536): ((0.41, 1), (0.44, 10), (0.44, 12), (1.32, 484), (0.52, 46)),
                  (2, 65_536): ((0.61, 0), (0.62, 3), (0.63, 5), (0.82, 99), (0.68, 29)),
-                 (0, 147_456): ((0.41, 1), (0.44, 10), (0.44, 11), (1.01, 311), (0.51, 41)),
-                 (0, 393_216): ((0.41, 0), (0.42, 2), (0.42, 2), (0.47, 26), (0.45, 15))}
+                 (0, 147_456): ((0.22, 1), (0.25, 10), (0.25, 11), (0.82, 311), (0.32, 41)),
+                 (0, 393_216): ((0.22, 0), (0.23, 2), (0.23, 2), (0.28, 26), (0.26, 15))}
     for (d, b), cells in first_cut.items():
         for mid, (bound_pct, f0) in zip(table, cells):
             out = E.evaluate(doc, {"model": mid, "d": d, "block_bytes": b, **base})
@@ -155,7 +155,7 @@ def test_the_file_is_the_contract(doc):
     assert doc["schema"] == "pous-explorer/v1"
     assert doc["block_sizes"] == [{"block_bytes": b, "call_ns": E.call_ns(b)} for b in E.BLOCK_BYTES]
     assert [e["D"] for e in doc["eps_proof"]] == list(range(6))
-    assert {e["eps_proof_fraction"] for e in doc["eps_proof"] if e["D"] in (0, 1)} == {0.004}
+    assert {e["D"]: e["eps_proof_fraction"] for e in doc["eps_proof"] if e["D"] in (0, 1)} == {0: 0.0021, 1: 0.004}
     sets = [w["id"] for w in doc["weight_sets"]]
     assert len(set(sets)) == len(sets)
     for s in doc["schemes"]:
