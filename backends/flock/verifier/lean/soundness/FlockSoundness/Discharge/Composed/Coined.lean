@@ -192,7 +192,7 @@ noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
     z := withMask B.sz (maskWordsOf st).length Tz.t
     maskWords := fun x => (maskWordsOf st).getD x.val 0
     T := fun c =>
-      let I := innerOf Tz st B.Hi B.VL (withMask B.sz (maskWordsOf st).length Tz.t) (CoinsZK B.Rest) c
+      let I := innerOf Tz st (withMask B.sz (maskWordsOf st).length Tz.t) c
       { embed := FlockLevel3.embed
         nu := fun w k v => ∑ x : Fin (2 ^ (Tz.S.m - 7)),
           if x.val ∈ maskWordsOf st then 0

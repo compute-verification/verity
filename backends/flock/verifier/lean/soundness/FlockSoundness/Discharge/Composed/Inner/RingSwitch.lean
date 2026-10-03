@@ -1,6 +1,7 @@
 import FlockSoundness.Discharge.ZkExec.PlaysRep
 import FlockSoundness.Discharge.ZkExec.VerdictInner
 import FlockSoundness.Discharge.Composed.Defs
+import FlockSoundness.Discharge.Composed.Base
 
 /-!
 # The ring switch is complete at the replay's claim points

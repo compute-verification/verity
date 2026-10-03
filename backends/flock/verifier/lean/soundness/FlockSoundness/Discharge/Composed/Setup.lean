@@ -120,6 +120,6 @@ theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : 
       GF256.of ⟨a, 0⟩ := fun _ => rfl
   obtain ⟨hrank, hW, hb⟩ := coin_facts _ c hc.1 hβ hρ hw he
   exact ⟨g4 c hc.1, ⟨hβ, hρ, hw, he⟩, hrank, fun _ _ => rfl, hW, bodyOf_padsOnto I dj y₀ S R y c hc.1, hb,
-    innerOf_holds I dj y₀ S R y c hc.1⟩
+    innerOf_holds I dj y₀ S R y c hc⟩
 
 end FlockSoundness.Discharge.Composed
