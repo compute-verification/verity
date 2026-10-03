@@ -109,6 +109,19 @@ def test_a_typed_statement_carries_no_unit_rows(rope):
     assert not r["ok"] and "carries no unit rows" in r["error"], r
 
 
+@pytest.mark.parametrize("name,what", [("sha512x3", "three SHA-512 compressions"), ("hm96", "hm96-sha512/row/v1 commit")])
+def test_a_typed_statement_with_other_row_nets_is_refused(rope, name, what):
+    """A typed file's `sha512x3` and `hm96` sections are read as the old statement's are, so one AND row changed in either
+    (its first row that is neither an input's self row nor empty) is refused: they must be the verifier's (`Flock.HmNets`)."""
+    lines = (rope / "typed.circuit").read_text().split("\n")
+    at = next(k for k, line in enumerate(lines) if line.startswith(f"CIRCUIT {name} ")) + 2
+    q = next(q for q, line in enumerate(lines[at:]) if line not in (f"1 {q} 1 {q}", "0 0"))
+    lines[at + q] = "1 0 1 1"
+    (rope / f"rows-{name}.circuit").write_text("\n".join(lines))
+    r = _expand(rope / f"rows-{name}.circuit")
+    assert not r["ok"] and f"circuit {name}: not the verifier's {what} (row {q} differs)" in r["error"], r
+
+
 #: a typed RoPE (`rope-head/d64/neox-bf16`, a flat class, 4 instances) staged by `typed_statement.stage`, and every CPU
 #: selftest case of its flock-circuit (seed-injection build, #273 at 8505c540), recorded
 RUST_SESSIONS = "art:48f286b4"

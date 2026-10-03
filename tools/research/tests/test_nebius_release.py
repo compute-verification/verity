@@ -134,6 +134,7 @@ def test_a_succeeded_commits_bundle_teaches_its_model(pacer):
     pacer.tick()
     assert pacer.estimate_gb(B8) == pytest.approx(96.0 / 4 * 1.25)
     assert json.loads(pacer.SIZES.read_text()) == {"phi3-mini": pytest.approx(96.0 / (32 * 1152))}
+    assert pacer.SHARED.read_text() == pacer.SIZES.read_text()      # mirrored where the pack pods read it (commit_pack.py)
 
 
 def test_a_failed_commits_partial_bundle_teaches_nothing(pacer):
@@ -183,6 +184,17 @@ def test_a_commit_of_a_model_with_no_size_admitted_on_arrival_holds_the_queue_fo
     pacer.cluster["jobs"]["job-cov-u0"]["status"] = {"failed": 1}   # a failed one teaches nothing: cov-u1 is the next to go
     pacer.tick()
     assert active(pacer) == ["cov-u1"] and pacer.cluster["policy"] == "None"
+
+
+def test_a_tp_commit_writes_no_bundle_so_its_model_needs_no_size_and_holds_nothing(pacer):
+    """3 Oct: cov-gm359, a TP2 qwen3-14b Commit, held the queue for 45 min as a model with no size while 5 of node 1's 8 GPUs
+    were free; a TP Commit replays in its own process and writes no replay bundle, so it never teaches one either."""
+    tp2 = "qwen3-14b__bf16__rtxpro6000__tp2__b8__i1024__o128__g"
+    commit(pacer, "cov-t", tp2, admitted=True)
+    commit(pacer, "cov-u", YI.format(0), active=False)
+    pacer.tick()
+    assert pacer.estimate_gb(tp2) == 0.0 and pacer.cluster["policy"] == "None" and active(pacer) == ["cov-t", "cov-u"]
+    assert not pacer.sized(tp2.replace("__tp2__", "__tp1__")), "its TP1 rows write bundles, and still teach the size first"
 
 
 def test_the_lease_pool_holders_go_to_their_own_local_queue_on_the_same_cluster_queue(monkeypatch):

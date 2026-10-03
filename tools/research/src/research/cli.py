@@ -1,7 +1,9 @@
 """`research` command line.
 
-  research run [--project P] [--stage S] [--timeout T] [--expect K=V ...] [--require-result] [--runs-dir D] [harness flags] -- CMD...
+  research run [--project P] [--stage S] [--timeout T] [--expect K=V ...] [--require-result] [--run-record] [--runs-dir D] [harness flags] -- CMD...
   research run [--tool NAME|module:NAME] [--scratch NAME ...] [--campaign C] [...] -- CMD...   # evidence store: derivation before, attempt after
+  research run --local-only REASON [...] -- CMD...   # where the store has no usable remote a local run refuses (exit 3): REASON says
+                                                 # what preserves its records instead (default $RESEARCH_LOCAL_ONLY; job.json records it)
   research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...
                                                  # the one queue (tools/cluster) places the job and runs it under its node's executor
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
@@ -42,6 +44,8 @@
   research pods guard [--budgets NOTES|FILE] [--dry-run] [--detach]   # the one budgets guard: every line of budgets.toml, re-read each poll
   research pods guard status|stop                # its state file / SIGTERM to exactly its recorded pid
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
+  research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...]   # what runs on the Nebius nodes
+                                                 # (pods/nebius/deploy.toml) against main, and installs from a pushed commit (research/deploy.py)
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
@@ -159,7 +163,7 @@ def cmd_run(argv: list[str]) -> int:
     q.add_argument("--class", dest="queue_class", default="work", metavar="P", help="its priority class (the description's [priorities]; default work)")
     q.add_argument("--gpus", type=int, default=None, metavar="N", help="default: its kind's (else 0)")
     q.add_argument("--gpu-model", default=None, metavar="M", help="e.g. rtx-pro-6000; a node with other GPUs is never chosen")
-    q.add_argument("--cpus", type=int, default=None, metavar="N", help="default: its kind's (else 1)")
+    q.add_argument("--cpus", type=int, default=None, metavar="N", help="default: its kind's (else 1); also the workload's OMP, OpenBLAS, MKL and NumExpr threads unless --env sets them")
     q.add_argument("--max-min", type=int, default=None, metavar="M",
                    help="its longest run in minutes, which the GPU lease enforces (default --timeout, else its kind's max_wall_min); "
                         "without --timeout, a GPU job's runner also allows GPU_WAIT_MIN for the lease to be granted")
@@ -188,6 +192,9 @@ def cmd_run(argv: list[str]) -> int:
                     help="with --on: no run custody on the remote; the records stay on the machine until `research fetch --all`")
     ap.add_argument("--custody-ttl", default=None, metavar="TTL", help="with --custody-r2: the minted key's lifetime (default 6h, at most 24h; it must outlast "
                                                                        "the run and its upload: a --timeout over 6h needs it)")
+    ap.add_argument("--run-record", action="store_true",
+                    help="a local run: the attempt also carries every run file (logs included; what custody keeps) as its run record, as an "
+                         "--on run's custody does: for a pod whose run dir nothing else preserves (store.custody)")
     ap.add_argument("--expect", action="append", default=[], metavar="K=V", help="expected workload fingerprint entry (recorded separately from what the workload observes)")
     ap.add_argument("--require-result", action="store_true", help="a zero exit without a valid result.json exits 65")
     ap.add_argument("--stage", default="run", help="stage name recorded in the job (default: run)")
@@ -198,11 +205,19 @@ def cmd_run(argv: list[str]) -> int:
                     help="tool cache dir under <store>/scratch/<reuse_key>/NAME (cold per commit, on purpose); `triton` exports TRITON_CACHE_DIR, "
                          "any other NAME exports RESEARCH_SCRATCH_<NAME>")
     ap.add_argument("--campaign", default=os.environ.get("RESEARCH_CAMPAIGN"), help="campaign recorded in the attempt's conditions (default $RESEARCH_CAMPAIGN)")
+    ap.add_argument("--local-only", default=os.environ.get("RESEARCH_LOCAL_ONLY") or None, metavar="REASON",
+                    help="a local run whose store has no usable remote refuses (exit 3): its records would stay on this disk and nothing "
+                         "would preserve them. REASON says what does instead; it is printed and recorded in job.json (default "
+                         "$RESEARCH_LOCAL_ONLY). A usable remote is pushed to either way; --on MACHINE gets custody on the remote instead")
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
     ns, harness_opts = ap.parse_known_args(opts)
     if ns.claimed:
         _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
+    if ns.run_record and (ns.on or ns.queue):
+        print("research run: --run-record is for a local run; --on MACHINE and --queue keep every run file through their custody "
+              "(--custody-r2, the default there)", file=sys.stderr)
+        return 2
     if ns.queue:
         try:
             harness_opts = _normalize_timeout(harness_opts)
@@ -254,6 +269,16 @@ def cmd_run(argv: list[str]) -> int:
     run_dir = root / run_id
     if ns.on:
         return _run_remote(ns, run_id, run_dir, harness_opts, command)
+    # a claimed run's custody was settled by its launcher (--custody-r2, or --no-custody-r2 and `research fetch --all`)
+    no_remote = None if ns.claimed else _no_usable_remote()
+    if no_remote and not ns.local_only:
+        print(f"research run: refused: this store has no usable remote ({no_remote}), so the run's records would stay on this disk "
+              f"and nothing would preserve them. Run it with --on MACHINE (custody on the store's remote), give this store a remote "
+              f"(~/.research/store.toml [remote], or R2_ENDPOINT, R2_BUCKET and AWS_* in the environment), or name what preserves "
+              f"it with --local-only REASON ($RESEARCH_LOCAL_ONLY)", file=sys.stderr)
+        return 3
+    if no_remote:
+        print(f"research run: no usable remote ({no_remote}); --local-only: {ns.local_only}", file=sys.stderr)
     env_map = _parse_env(ns.env)
     if env_map is None:
         return 2
@@ -275,6 +300,8 @@ def cmd_run(argv: list[str]) -> int:
     except (ImportError, LookupError, TypeError) as e:
         print(f"research run: --cwd {a.cwd} / --tool {ns.tool}: {e}", file=sys.stderr)
         return 2
+    if no_remote:
+        prep["section"]["local_only"] = {"reason": ns.local_only, "no_remote": no_remote}
     if a.cwd is None:
         # the workload runs in its own run dir, locally and on a machine (a relative `> result.json` used to land in the checkout, and
         # on a machine in <root>/src/<sha>/, which every run of that commit shares: concurrent runs raced on it)
@@ -334,7 +361,7 @@ def cmd_run(argv: list[str]) -> int:
 
             release(mem_reservation, run_id)
     if not ns.custody_dir:
-        _publish_attempt(run_dir, prep)
+        _publish_attempt(run_dir, prep, run_record=ns.run_record)
     s = R.summarize(run_dir)
     line = f"research: run {run_id} {s['state']} rc={s['rc']} class={s['class'] or '-'} result={s['result']}"
     if s["result"] == "absent":
@@ -558,14 +585,34 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
     return {"tool": tool, "conditions": conds, "section": section, "env": env_out}
 
 
-def _publish_attempt(run_dir: Path, prep: dict) -> None:
+def _no_usable_remote() -> str | None:
+    """Why the store a local run publishes into (`_publish_attempt`) has no remote it could push to, or None when it has one:
+    no `[remote]` and no R2 environment, or a configured remote that does not load here (credentials unset). A failure to tell
+    is a reason too: this guard refuses rather than lets an unpreserved run through."""
+    from .secret_hint import lost
+    from .store import remote as RM
+
+    try:
+        if RM.load_remote() is not None:
+            return None
+        p = RM.config_path()
+        if p.is_file():
+            return f"{p} has no [remote] table"
+        if "RESEARCH_STORE_CONFIG" in os.environ:
+            return f"$RESEARCH_STORE_CONFIG names {p}, which does not exist"
+        return lost("R2_ENDPOINT", "R2_BUCKET") or f"no {p}, and R2_ENDPOINT / R2_BUCKET are unset"
+    except Exception as e:  # noqa: BLE001
+        return f"{type(e).__name__}: {e}"
+
+
+def _publish_attempt(run_dir: Path, prep: dict, *, run_record: bool = False) -> None:
     from . import env as E
     from .store import attempt as A
 
     conds = prep.get("conditions")
     if conds is not None:
         conds["exec.load_end"] = E.load_now()
-    out = A.publish(run_dir, tool=prep.get("tool"), conditions=conds)
+    out = A.publish(run_dir, tool=prep.get("tool"), conditions=conds, run_record=run_record)
     if out.get("published"):
         if out.get("already"):
             pres = "  (already in the store)"
@@ -591,6 +638,9 @@ def _source_identity_hint(git_dir: Path) -> dict | None:
 
 
 GPU_WAIT_MIN = 120
+# a queued job's thread pools take its --cpus, as a pod's take its quota (pod_bootstrap.sh): left alone, BLAS and OpenMP start one
+# thread per host core inside a scope of a few CPUs. The job's own --env still decides.
+THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS")
 
 
 def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> int:
@@ -656,6 +706,9 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
             print(f"research run: --env wants K=V, got {kv!r}", file=sys.stderr)
             return 2
         env[k] = v
+    if queue:
+        cpus = str(int((queue.get("job") or {}).get("cpus") or 1))
+        env = {**dict.fromkeys(THREAD_POOL_VARS, cpus), **env}
     asked_cwd = remote.flag_value(harness_opts, "--cwd")
     if asked_cwd is not None and not os.path.isabs(asked_cwd) and not ns.source:
         print(f"research run --on {ns.on}: --cwd {asked_cwd} is relative to the shipped source tree, and there is none; pass --source GITDIR "
@@ -1002,6 +1055,9 @@ def main(argv: list[str] | None = None) -> int:
 
         print(__version__)
         return 0
+    from .secret_hint import recover
+
+    recover()
     cmd, rest = argv[0], argv[1:]
     if cmd == "run":
         return cmd_run(rest)
@@ -1047,6 +1103,10 @@ def main(argv: list[str] | None = None) -> int:
         from .pods.part import main as pods_main
 
         return pods_main(rest)
+    if cmd == "deploy":
+        from .deploy import main as deploy_main
+
+        return deploy_main(rest)
     if cmd == "notes":
         from .notes import main as notes_main
 
@@ -1075,8 +1135,36 @@ def main(argv: list[str] | None = None) -> int:
         from .slack import main as slack_main
 
         return slack_main(rest, prog=f"research {cmd}")
-    print(f"research: unknown command {cmd!r}\n\n{__doc__.strip()}", file=sys.stderr)
+    age = checkout_age()
+    print(f"research: unknown command {cmd!r}" + (f". {age} If {cmd!r} is newer than that, update the checkout "
+                                                  "(`git pull`) and retry." if age else "") + f"\n\n{__doc__.strip()}",
+          file=sys.stderr)
     return 2
+
+
+def checkout_age(repo: Path = Path(__file__).resolve().parent) -> str:
+    """Where this checkout's HEAD stands: its commit, and how far behind origin/main it is as of the last fetch (no network,
+    so a credential prompt can't hang it; no date, since merge trains pin theirs). Empty outside a git checkout."""
+    import subprocess
+
+    def git(*a: str) -> str:
+        p = subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True, timeout=20,
+                           env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+        return p.stdout.strip() if p.returncode == 0 else ""
+
+    try:
+        sha = git("rev-parse", "--short", "HEAD")
+        behind = git("rev-list", "--count", "HEAD..origin/main")
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    if not sha:
+        return ""
+    if not behind:
+        return f"This checkout is at {sha}."
+    n = int(behind)
+    return (f"This checkout is at {sha}, "
+            + (f"{n} commit{'s' if n != 1 else ''} behind origin/main as of its last fetch." if n else
+               "level with origin/main as of its last fetch."))
 
 
 if __name__ == "__main__":

@@ -220,6 +220,14 @@ fn identity(c: &Composite) -> Value {
         id["hashes"]["row_leaf_in_circuit"] = json!("hm96-sha512/row/v2 over sha512/row/v2");
         id["outputs"] = json!("hidden: each output port an hm96-sha512/row/v2 row hashed in the circuit; the public file has no output word");
     }
+    // only with a segmented row: a statement of v2 rows alone keeps its digest
+    if c.ports.iter().any(|p| p.segs.is_some()) {
+        id["hashes"]["row_leaf_in_circuit"] = json!(ROW_LEAF_SEG_IDENTITY);
+    }
+    // only with runs of output ports (META `out_row_ports`): a statement of one output row per port keeps its digest
+    if c.meta.get("out_row_ports").is_some() {
+        id["outputs"] = json!(OUT_ROWS_SEG_IDENTITY);
+    }
     id
 }
 
@@ -474,7 +482,7 @@ fn verify_zk_with<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
     let root: [u8; 64] = inner.root.clone().try_into().map_err(|_| "zk: the pads' root is not 64 bytes".to_string())?;
     catch_unwind(AssertUnwindSafe(|| -> Result<(), String> {
         let (cons, _) = zk_constraints(st, inst, commitment, proof, &root, points, rep, ch)?;
-        zkv::verify_inner(inner, &zk_layout(st), cons, ch)
+        zkv::verify_inner(inner, &zk_layout(st), proof.zerocheck.final_c_eval, cons, ch)
     }))
     .map_err(|_| "verifier panicked".to_string())?
     .map_err(|e| e.chars().take(200).collect::<String>())
@@ -867,6 +875,8 @@ struct ZkRep {
     points: Arc<Mutex<Vec<Vec<F128>>>>,
     /// a dishonest prover: absorb and send values masked with pads other than the committed ones
     pad_mismatch: bool,
+    /// a dishonest prover: re-solve `final_c'` after the inner proof's coins so that the batched constraint holds
+    final_c_solved: bool,
     /// seconds to draw the pads and build their commitment (counted in the rep's prove time)
     t_commit: f64,
     /// Ligerito level 0's hiding, drawn once per session (both reps open the one level-0 codeword), with this rep's pair
@@ -886,7 +896,7 @@ fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng
     let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
     let sb = salts.lock().unwrap_or_else(PoisonError::into_inner).expand(id, n);
     let ic = zkv::InnerCommit::new(&pads, sb);
-    ZkRep { lay, pads, ic, points: points.clone(), pad_mismatch: plan.zk_pad_mismatch, t_commit: tz0.elapsed().as_secs_f64(),
+    ZkRep { lay, pads, ic, points: points.clone(), pad_mismatch: plan.zk_pad_mismatch, final_c_solved: plan.zk_final_c_solved, t_commit: tz0.elapsed().as_secs_f64(),
             level0: Arc::new(flock_core::pcs::ligerito::zk::Level0Zk { rep: if plan.zk_shared_pair { 0 } else { rep }, ..level0.clone() }) }
 }
 
@@ -1050,7 +1060,7 @@ fn zk_finish<C: flock_transcript::challenger::Challenger>(st: &Stmt, zk: &ZkRep,
                                                            -> (Vec<u8>, Value) {
     let (mut inner_ch, coins, _coins_l0) = mch.finish();
     let tz = Instant::now();
-    let (zc, lc) = zkv::mask_proof(&proof.zerocheck, &proof.lincheck, &zk.lay, &sent.h);
+    let (mut zc, lc) = zkv::mask_proof(&proof.zerocheck, &proof.lincheck, &zk.lay, &sent.h);
     let rp = zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, &zk.lay, &zk.ic.root(), Some(&proof.lincheck.comb_partial), &mut zkv::Tape::new(&coins))
         .unwrap_or_else(|e| panic!("{e}"));
     let t_replay = tz.elapsed().as_secs_f64();
@@ -1068,8 +1078,12 @@ fn zk_finish<C: flock_transcript::challenger::Challenger>(st: &Stmt, zk: &ZkRep,
     let t_prime = proof.pcs_open.ligerito.zk_level0.as_ref().expect("level 0's hiding messages").t_prime;
     cons.extend(zkv::ligerito_constraints(&zk.lay, &rec, &zkv::ligerito_exposed(&proof.pcs_open.ligerito, &zk.lay), t_prime).unwrap_or_else(|e| panic!("{e}")));
     let fails = zkv::failing(&cons, &zk.pads.h);
+    let kept = zk.final_c_solved.then(|| cons.clone());
     let mut lch = zkv::Logging { inner: &mut inner_ch, coins: Vec::new() };
-    let inner = zkv::prove_inner(&zk.ic, &zk.pads, &zk.lay, cons, &mut lch).unwrap_or_else(|e| panic!("{e}"));
+    let inner = zkv::prove_inner(&zk.ic, &zk.pads, &zk.lay, zc.final_c_eval, cons, &mut lch).unwrap_or_else(|e| panic!("{e}"));
+    if let Some(cons) = kept {
+        zc.final_c_eval += final_c_shift(&zk.lay, &zk.pads.h, cons, &inner, &lch.coins);
+    }
     let t_zk = tz.elapsed().as_secs_f64();
     let masked = R1csProofLigerito { zerocheck: zc, lincheck: lc, pcs_open: proof.pcs_open };
     let o = bk.as_object_mut().expect("buckets");
@@ -1079,6 +1093,17 @@ fn zk_finish<C: flock_transcript::challenger::Challenger>(st: &Stmt, zk: &ZkRep,
         o.insert(k.into(), v);
     }
     (bincode::serialize(&(commitment, masked, inner)).unwrap(), bk)
+}
+
+/// The shift of `final_c'` that zeroes the inner proof's batched constraint on the committed pads, from its coins (`ε`, then
+/// the batching coins): `final_c'` is a constant of the c_eval and ring switch c rows.
+fn final_c_shift(lay: &Layout, h: &[F128], mut cons: Vec<(&'static str, zkv::Lin)>, inner: &InnerProof, coins: &[F128]) -> F128 {
+    cons.extend(zkv::triple_constraints(lay, coins[0], inner.rho, inner.sigma));
+    let g = &coins[1..1 + cons.len()];
+    let (c, t) = zkv::batch(&cons, g);
+    let sum = c.iter().zip(h).fold(t, |a, (x, y)| a + *x * *y);
+    let at = |name: &str| cons.iter().position(|r| r.0 == name).expect("a row of final_c'");
+    sum * (g[at("zerocheck c_eval")] + g[at("ring switch c")]).inv()
 }
 
 fn f128s_hex(v: &[F128]) -> Vec<String> {
@@ -1392,6 +1417,10 @@ fn parse_items(b: &[u8]) -> Result<Vec<Item>, String> {
     Ok(out)
 }
 
+/// The classes of the inner proof's observes, in the order it absorbs them (`zk_veil::prove_inner`): `final_c'`, `[ρ, σ]`,
+/// then `Y`.
+const INNER_CLASSES: [&str; 3] = ["masked: final_c' (its pad h_fc)", "masked: inner rho, sigma (a fresh triple)", "masked: inner Y (the dot-product mask)"];
+
 /// Every item one rep's stream sent, attributed to a class. Returns the tally, the masked values (algebraic phase, in order)
 /// and each claim's `s_hat_v` (in opening order).
 fn classify(items: &[Item]) -> (BTreeMap<&'static str, (usize, usize)>, Vec<F128>, Vec<Vec<F128>>) {
@@ -1453,7 +1482,7 @@ fn classify(items: &[Item]) -> (BTreeMap<&'static str, (usize, usize)>, Vec<F128
                     Ph::Lig1 => add("masked: ligerito levels 1+ (functions of the uniform level-1 table)", n),
                     Ph::Inner(k) => {
                         *k += 1;
-                        add(if *k == 1 { "masked: inner rho, sigma (a fresh triple)" } else { "masked: inner Y (the dot-product mask)" }, n)
+                        add(INNER_CLASSES[(*k as usize).min(3) - 1], n)
                     }
                     _ => add("UNATTRIBUTED", n),
                 }
@@ -1539,7 +1568,6 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         add("masked (proof): inner opened columns (rs with 192 uniform padding symbols)", 32 * inner.opened.len());
         add("commitment (proof): inner paths and salts (hm96-sha512)", 64 * inner.paths.iter().map(|p| p.len()).sum::<usize>() + 192 * inner.salts.len());
         add("masked (proof): inner tau (<c, mu>, mu uniform) and its commitment's salt", 16 + inner.tau_salt.len());
-        add("masked (proof): final_c' (never absorbed; its pad h_fc)", 16);
         let nonces_zero = pr.pcs_open.batching_nonces.iter().all(|x| *x == 0);
         add(if nonces_zero { "public (proof): the opening's batching nonces (live coins: always 0)" } else { "CLEAR (proof): nonzero batching nonces" },
             8 * pr.pcs_open.batching_nonces.len());
@@ -1558,6 +1586,38 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         "ligerito_values_differing_from_control": lig_differ.iter().map(|(k, (d, n))| (k.to_string(), json!({"differ": d, "of": n}))).collect::<serde_json::Map<_, _>>(),
         "attributed": all_differ && region_public && unattributed == 0 && clear.is_empty()});
     println!("ZKAUDIT\t{out}");
+}
+
+/// `zkaudit`'s inner-proof classes on one honest session: in each rep's stream, the observes after the inner proof's label are
+/// the masked zerocheck's `final_c'`, then the proof's `[ρ, σ]`, then its `Y`, and `classify` tallies each once, under
+/// [`INNER_CLASSES`] in that order.
+fn zk_audit_inner_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
+    let name = "zk_audit_attributes_the_inner_proof";
+    let s0 = Arc::new(Mutex::new(server(st, inst)));
+    let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
+    let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
+    let mut pass = v["accepted"] == true && proofs.len() == 2;
+    let mut reps = Vec::new();
+    for (rep, proof) in proofs.iter().enumerate() {
+        let stream = rep_stream(TABLE, rep);
+        let Some(s) = rec["streams"].as_array().and_then(|a| a.iter().find(|s| s["stream"] == stream)) else {
+            return json!({"case": name, "pass": false, "why": format!("no stream {stream}")});
+        };
+        let items: Vec<Item> = s["rounds"].as_array().unwrap().iter().flat_map(|r| parse_items(&hexb(r["msg"].as_str().unwrap_or("")).unwrap()).unwrap()).collect();
+        let at = items.iter().position(|it| matches!(it, Item::Label(l, _) if l.as_slice() == zkv::LABEL_INNER)).map_or(items.len(), |i| i + 1);
+        let obs: Vec<&Vec<F128>> = items[at..].iter().filter_map(|it| if let Item::Obs(o) = it { Some(o) } else { None }).collect();
+        let (_, pr, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(proof).unwrap();
+        let want = [vec![pr.zerocheck.final_c_eval], vec![inner.rho, inner.sigma], inner.y.clone()];
+        let (t, _, _) = classify(&items);
+        let tally: Vec<(usize, usize)> = INNER_CLASSES.iter().map(|c| t.get(c).copied().unwrap_or_default()).collect();
+        let values = obs.len() == want.len() && obs.iter().zip(&want).all(|(a, b)| *a == b);
+        let classes = tally.iter().zip(&want).all(|(&(n, b), w)| n == 1 && b == 16 * w.len());
+        pass &= values && classes;
+        reps.push(json!({"rep": rep, "observes_after_label": obs.iter().map(|o| o.len()).collect::<Vec<_>>(), "values_are_the_proofs": values,
+                         "classes": INNER_CLASSES.iter().zip(&tally).map(|(c, (n, b))| json!({"class": c, "items": n, "bytes": b})).collect::<Vec<_>>()}));
+    }
+    json!({"case": name, "expect": "the inner proof's observes are final_c', [rho, sigma] and Y, each tallied once under its class",
+           "accepted": v["accepted"], "reps": reps, "pass": pass})
 }
 
 /// M2's malicious verifiers V*: the honest coin server with its coins committed from a random tape, and a strategy that sees
@@ -2193,6 +2253,8 @@ struct Plan {
     substitute: Option<Vec<Vec<u8>>>,
     /// M1: mask the sent values with pads other than the committed ones
     zk_pad_mismatch: bool,
+    /// M1: `final_c'` re-solved after the inner proof's batching coins, cancelling the failing rows
+    zk_final_c_solved: bool,
     /// M1's control: zero pads and a zero mask slot (M0's values, in M1's format)
     zk_zero_pads: bool,
     /// M1: Ligerito level 0's hiding tampered (`Level0Zk::tamper`)
@@ -2781,6 +2843,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("output_row_committed_false", false, true),
     ("digest_claim_false", false, true),
     ("row_ref_claim_false", false, true),
+    ("public_input_claim_false", false, true),
     ("message_byte_differs_from_the_committed_row", false, true),
     ("unit_input_differs_from_its_message_bits", false, true),
     ("unit_internal_bit_flipped", false, true),
@@ -2823,6 +2886,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("native_sha_matches_eval64", true, false),
     ("region_word_shared_refused", false, false),
     ("zk_pads_not_the_committed_ones", false, true),
+    ("zk_final_c_solved_after_the_batching_coins", false, true),
     ("zk_level0_folds_another_extra_lane", false, true),
     ("zk_level0_blinded_claim_forged", false, true),
     ("zk_level0_ybar_forged", false, true),
@@ -2830,6 +2894,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_verifier_coin_off_its_commitment", false, false),
     ("zk_verifier_commits_beta_zero", false, false),
     ("zk_session_relations_vary_with_the_seed", true, false),
+    ("zk_audit_attributes_the_inner_proof", true, false),
     ("zk_dummy_witness_passes_the_region_claims", false, true),
     ("tables_two_in_one_session", true, false),
     ("tables_proofs_before_the_last_coin_detected", true, false),
@@ -2857,6 +2922,7 @@ fn skipped(st: &Stmt, name: &str) -> bool {
         || (!is_zk(st) && name.starts_with("zk_"))
         || (forged_same && ["tail_swapped", "tail_swapped_circuit_refused"].contains(&name))
         || (name == "tail_swapped" && st.c.typed.is_some() && forged_instance(st).is_none())
+        || (name == "public_input_claim_false" && st.c.public_inputs.is_empty())
 }
 
 fn plan_of(name: &str, gpu: bool) -> Plan {
@@ -2880,6 +2946,7 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
         "fast_profile_proofs" => Plan { fast: true, ..h },
         "opened_salt_altered" => Plan { salt_flip: true, ..h },
         "zk_pads_not_the_committed_ones" => Plan { zk_pad_mismatch: true, ..h },
+        "zk_final_c_solved_after_the_batching_coins" => Plan { zk_pad_mismatch: true, zk_final_c_solved: true, ..h },
         "zk_level0_folds_another_extra_lane" => Plan { zk_l0_tamper: 1, ..h },
         "zk_level0_blinded_claim_forged" => Plan { zk_l0_tamper: 2, ..h },
         "zk_level0_ybar_forged" => Plan { zk_l0_tamper: 3, ..h },
@@ -2933,6 +3000,10 @@ fn false_statement(st: &Stmt, what: &str) -> Instances {
             let k = v.bc_index(0, st.c.n_in, np);
             v.bcs[k][0] ^= 1
         }
+        "public" => {
+            let q = st.c.leaves_public.iter().flatten().copied().find(|&q| q >= 0).expect("a public leaf") as usize;
+            v.public[q] ^= 1;
+        }
         "ref" => {
             let t = v.tables.as_mut().expect("a shared-row file");
             let p = (0..st.c.n_in).find(|&p| t.counts[p] > 1).expect("an input table of two rows or more");
@@ -2955,6 +3026,7 @@ fn false_statement(st: &Stmt, what: &str) -> Instances {
             "output" => "output_claim_false",
             "ref" => "row_ref_claim_false",
             "row" => "output_row_committed_false",
+            "public" => "public_input_claim_false",
             _ => "digest_claim_false",
         };
         let mut bytes = serde_json::to_vec(&v.header).unwrap();
@@ -2966,6 +3038,9 @@ fn false_statement(st: &Stmt, what: &str) -> Instances {
             for r in &t.refs {
                 bytes.extend_from_slice(&r.to_le_bytes());
             }
+        }
+        for w in &v.public {
+            bytes.extend_from_slice(&w.to_le_bytes());
         }
         std::fs::create_dir_all(&dir).unwrap();
         let p = std::path::Path::new(&dir).join(format!("{case}.pub.bin"));
@@ -3007,6 +3082,9 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if name == "lincheck_modes_agree" {
         return lincheck_modes_case(st, inst, gpu);
+    }
+    if name == "zk_audit_attributes_the_inner_proof" {
+        return zk_audit_inner_case(st, inst, gpu);
     }
     if name == "gpu_proofs_match_cpu" {
         return gpu_cpu_case(st, inst);
@@ -3383,8 +3461,8 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         plan.substitute = Some(session(st, inst, shared(InProc(s0)), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os()).1);
     }
     let (pst, pinst, vinst) = match name {
-        "output_claim_false" | "digest_claim_false" | "row_ref_claim_false" => {
-            let what = match name { "output_claim_false" => "output", "row_ref_claim_false" => "ref", _ => "digest" };
+        "output_claim_false" | "digest_claim_false" | "row_ref_claim_false" | "public_input_claim_false" => {
+            let what = match name { "output_claim_false" => "output", "row_ref_claim_false" => "ref", "public_input_claim_false" => "public", _ => "digest" };
             let v = Arc::new(false_statement(st, what));
             let mut p = Instances::load(&arg("--instances", ""), &st.c).unwrap();
             p.public_sha512 = v.public_sha512;
@@ -3984,6 +4062,30 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
     });
 }
 
+/// `replay [--zk] [--session-tables J] --sessions DIR...`: the verifier's offline verdict on each recorded session
+/// (`DIR/session.json` and `DIR/<table>.rep<r>.bin`), `Server::from_record` then `finish` over the session's tables (its draw
+/// split into `J`), one `UPSTREAM` line per session: the reference the Lean verifier's agreement check
+/// (`backends/flock/verifier/agree.py`) reads. The record's coin tree is not re-checked (the live server draws the coins).
+fn replay(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) {
+    let a: Vec<String> = std::env::args().collect();
+    let dirs = &a[a.iter().position(|x| x == "--sessions").map_or(a.len(), |i| i + 1)..];
+    for d in dirs {
+        let v = (|| -> Result<Value, String> {
+            let rec: Value = serde_json::from_slice(&std::fs::read(format!("{d}/session.json")).map_err(|e| format!("session files: {e}"))?)
+                .map_err(|e| format!("session files: {e}"))?;
+            let tabs = session_tables(st, inst, rec.get("unit_draw").filter(|x| x.is_object()), count)?;
+            let proofs = tabs.names().into_iter()
+                .flat_map(|t| (0..2).map(move |r| (t.clone(), r)))
+                .map(|(t, r)| { let p = std::fs::read(format!("{d}/{t}.rep{r}.bin")).unwrap_or_default(); ((t, r), p) })
+                .collect::<BTreeMap<_, _>>();
+            let mut s = Server::from_record(config_of(&tabs), Box::new(CircuitVerifier::new(tabs)), &rec, proofs)?;
+            let v = s.finish();
+            Ok(json!({"accepted": v["accepted"], "why": v["why"]}))
+        })().unwrap_or_else(|e| json!({"accepted": false, "why": e}));
+        println!("UPSTREAM\t{}", json!({"session": d, "verdict": v}));
+    }
+}
+
 fn refuse(why: String) -> ! {
     println!("REFUSED\t{}", json!({"statement": STATEMENT, "why": why}));
     std::process::exit(2);
@@ -4054,6 +4156,7 @@ fn main() {
         "zkaudit" => zkaudit(&st, &inst),
         "zkrewind" => zkrewind(&st, &inst),
         "zkgk" => zkgk(&st, &inst),
+        "replay" => replay(&st, &inst, tables),
         "serve" => {
             let sv = serving(&st, &inst, tables);
             serve_loop(move || server_of(&sv, &st, &inst, tables))
@@ -4076,6 +4179,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement --instances FILE --circuit FILE [--pin SHA256] ..."),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ..."),
     }
 }

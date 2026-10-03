@@ -383,13 +383,13 @@
       "targets": []
     },
     {
-      "name": "a quiet post wakes no one",
+      "name": "a quiet reply wakes no one implicitly: not the root's poster",
       "msg": {
         "ts": "1700000018.000002",
         "thread_ts": "1700000018.000001",
         "bot_id": "B1",
         "username": "circuits",
-        "text": "@proofs thanks (quiet)"
+        "text": "thanks (quiet)"
       },
       "root": {
         "ts": "1700000018.000001",
@@ -458,13 +458,13 @@
       "targets": []
     },
     {
-      "name": "quiet is the literal (quiet) anywhere, even with the footer after it",
+      "name": "a quiet post still wakes the names it starts with (people write (quiet) for 'no reply needed'), and only them",
       "msg": {
         "ts": "1700000030.000002",
         "thread_ts": "1700000030.000001",
         "bot_id": "B1",
         "username": "circuits",
-        "text": "@proofs thanks (quiet)\n\n_posted by <https://cursor.com/agents/bc-x|@circuits's agent>_"
+        "text": "@proofs please start the train (quiet)\n\n_posted by <https://cursor.com/agents/bc-x|@circuits's agent>_"
       },
       "root": {
         "ts": "1700000030.000001",
@@ -472,7 +472,9 @@
         "username": "infra",
         "text": "@circuits please"
       },
-      "targets": []
+      "targets": [
+        "proofs"
+      ]
     },
     {
       "name": "the word quiet without parentheses is not the marker",

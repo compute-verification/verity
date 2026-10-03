@@ -120,7 +120,7 @@ LEAD_RE = re.compile(r"^\s*((?:(?:@[a-z0-9][a-z0-9._-]*|<!subteam\^[A-Z0-9]+(?:\
 BARE_LEAD_RE = re.compile(r"^\s*([a-z0-9][a-z0-9._-]*):\s")
 NAME_TOKEN_RE = re.compile(r"@([a-z0-9][a-z0-9._-]*)|<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
 AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-9a-f]{8}")
-QUIET = "(quiet)"                                                # in a post: ring no doorbell
+QUIET = "(quiet)"                                                # in a post: ring only the names it starts with
 CAP_PER_HOUR = 20                                                # doorbells into one inbox from one author in one thread
 DOORBELL_MAX = 600                                               # characters of the post a doorbell carries
 INBOX_HEAD = "Inbox for @"
@@ -295,6 +295,26 @@ def oidc_token(aud: str) -> str:
     return token
 
 
+class _Identity:
+    """This agent's OIDC token for one audience, fetched when first needed and again when the server rejects a cached one.
+    Cursor's tokens live 300 s, so a long-running client's (a relay, `ask-daniel --wait`) goes stale; a 401 means the server
+    refused before acting, so the one retry can't post or file anything twice."""
+
+    def __init__(self, aud: str):
+        self.aud, self.token = aud, None
+
+    def send(self, request: Callable[[str], Any]) -> Any:
+        cached = self.token is not None
+        self.token = self.token or oidc_token(self.aud)
+        try:
+            return request(self.token)
+        except urllib.error.HTTPError as e:
+            if e.code != 401 or not cached:
+                raise
+        self.token = oidc_token(self.aud)
+        return request(self.token)
+
+
 def via(token: str | None) -> str:
     """`direct` (the bot token, to Slack) or `broker`: the broker only without a token, or when RESEARCH_SLACK_VIA says so."""
     forced = os.environ.get("RESEARCH_SLACK_VIA", "")
@@ -335,7 +355,7 @@ class Slack:
     def __init__(self, token: str | None, *, base: str | None = None, dry_run: bool = False, log=None, transport=None):
         self.via = via(token)
         self.token = token if self.via == "direct" else None
-        self.dry_run, self.log, self.transport, self._oidc = dry_run, log, transport or post, None
+        self.dry_run, self.log, self.transport, self._oidc = dry_run, log, transport or post, _Identity(BROKER)
         self.base = (base or os.environ.get("SLACK_API_URL") or DEFAULT_API).rstrip("/") + "/"
         if not dry_run and self.via == "direct" and not token:
             raise SlackError("SLACK_BOT_TOKEN is not set (a Cursor secret; see the using-slack skill), or pass --dry-run")
@@ -371,8 +391,7 @@ class Slack:
         body = json.dumps({"method": method, "args": args}).encode()
         if len(body) > BROKER_MAX_BODY:
             raise SlackError(f"{method}: {len(body)} bytes is more than the broker takes ({BROKER_MAX_BODY}); put the content in a file and link it")
-        self._oidc = self._oidc or oidc_token(BROKER)
-        return self.transport(BROKER, body, {"Authorization": f"Bearer {self._oidc}", "Content-Type": "application/json"})
+        return self._oidc.send(lambda t: self.transport(BROKER, body, {"Authorization": f"Bearer {t}", "Content-Type": "application/json"}))
 
     def paged(self, method: str, key: str, limit: int | None = None, **params: Any) -> list[dict]:
         items: list[dict] = []
@@ -557,18 +576,20 @@ def header_names(text: str, reg: dict) -> list[str]:
 def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | frozenset = frozenset()) -> list[str]:
     """The names a post in #agent-coordination wakes, in order.  `msg` and `root` (its thread's root, None for a top-level
     post) are Slack messages; `inboxes` is every inbox thread's ts.  Nothing in an inbox thread routes; a status line wakes
-    only the root's poster; a quiet post wakes no one; otherwise the names at the start, an announcement's audience (every
-    handle when it names none), and on a reply that names no one the root's poster or, when the poster replies, the names
-    the root addressed.  The author is never a target."""
+    only the root's poster; otherwise the names at the start, an announcement's audience (every handle when it names
+    none), and on a reply that names no one the root's poster or, when the poster replies, the names the root addressed.
+    A quiet post wakes only the names at its start.  The author is never a target."""
     text, ts, thread = msg.get("text") or "", msg.get("ts"), msg.get("thread_ts")
     reply = bool(thread) and thread != ts
-    if (thread or ts) in inboxes or QUIET in text or text.startswith(INBOX_HEAD) or \
+    if (thread or ts) in inboxes or text.startswith(INBOX_HEAD) or \
             (reply and root and root.get("bot_id") and (root.get("text") or "").startswith(INBOX_HEAD)):
         return []
     author, by = poster(msg, reg), poster(root, reg) if reply else None
     if author is None:
         return []                                                    # only our bot and the named humans route
-    if reply and is_status(text):
+    if QUIET in text:
+        out = [] if is_status(text) else lead_names(text, reg)       # people write (quiet) for "no reply needed"
+    elif reply and is_status(text):
         out = [by]
     else:
         out = lead_names(text, reg)
@@ -964,13 +985,6 @@ def cmd_announce(ns: argparse.Namespace, reg: dict) -> int:
     return 0
 
 
-def _quiet_ok(ns: argparse.Namespace, reg: dict, body: str, to: list[dict] = ()) -> None:
-    """`--quiet` rings no doorbell, so on a post that names someone it would leave them unaware of it."""
-    names = [t["handle"] for t in to] + lead_names(body, reg)
-    if ns.quiet and names:
-        raise SlackError(f"--quiet rings no doorbell, so @{names[0]} would never see this: drop --quiet, or the names")
-
-
 def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     """The one way to post: top-level (a new thread) or into `--thread`.  The `--to` names lead it, which is what routes it;
     `--kind` rides in the footer, where subscriptions filter on it.  An announcement (`--kind announce`) gets its header,
@@ -983,7 +997,6 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     if any(t["handle"] == h["handle"] for t in to):
         raise SlackError("--to names someone else")
     body = _body(ns)
-    _quiet_ok(ns, reg, body, to)
     if kind == "announce":
         if ns.thread:
             raise SlackError("an announcement starts its own thread: drop --thread")
@@ -1068,9 +1081,7 @@ def cmd_subscribe(ns: argparse.Namespace, reg: dict) -> int:
 def cmd_reply(ns: argparse.Namespace, reg: dict) -> int:
     h = name_entry(ns, reg, ns.handle)
     ch = channel_id(ns, reg)
-    body = _body(ns)
-    _quiet_ok(ns, reg, body)
-    body += f" {QUIET}" if ns.quiet else ""
+    body = _body(ns) + (f" {QUIET}" if ns.quiet else "")
     _post(client(ns), ch, h["handle"], body, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
 
@@ -1172,6 +1183,10 @@ def cmd_verify_author(ns: argparse.Namespace, reg: dict) -> int:
 
 
 def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
+    if ns.thread and (ns.since or ns.handle):
+        raise SlackError("read: --thread reads one thread; it takes neither --since nor --as")
+    if not (ns.thread or ns.since or ns.handle):
+        raise SlackError("read: one of --thread TS, --since TS or --as NAME is required")
     if ns.handle:
         name = ns.handle.lstrip("@")
         r = routes_of(ns).get_route(name, fresh=name not in routes_of(ns).local)
@@ -1296,18 +1311,23 @@ def seen_path(name: str) -> Path:
     return Path(os.environ.get("RESEARCH_SLACK_SEEN") or Path.home() / ".research" / "slack-seen") / name
 
 
-def unread(api: Slack, r: dict) -> list[dict]:
+def unread(api: Slack, r: dict, since: str | None = None) -> list[dict]:
+    """The doorbells after `since`, else after the last one this machine marked read."""
     p = seen_path(r["name"])
-    seen = p.read_text().strip() if p.is_file() else "0"
+    seen = since or (p.read_text().strip() if p.is_file() else "0")
     msgs = api.paged("conversations.replies", "messages", channel=r.get("channel"), ts=r["inbox_ts"], oldest=seen)
     return [m for m in msgs if m.get("ts") not in (r["inbox_ts"], seen) and float(m["ts"]) > float(seen)]
 
 
 def mark_read(name: str, msgs: list[dict]) -> None:
+    """Only ever forward: a read from an older --since leaves the newer mark."""
     if msgs:
         p = seen_path(name)
+        new = max((m["ts"] for m in msgs), key=float)
+        if p.is_file() and float(p.read_text().strip() or 0) >= float(new):
+            return
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(max((m["ts"] for m in msgs), key=float) + "\n")
+        p.write_text(new + "\n")
 
 
 def render_unread(name: str, msgs: list[dict]) -> str:
@@ -1322,8 +1342,9 @@ def render_unread(name: str, msgs: list[dict]) -> str:
 def inbox_read(ns: argparse.Namespace, reg: dict, r: dict) -> int:
     r = {**r, "channel": r.get("channel") or channel_id(ns, reg, FRONT_DOOR)}
     api = client(ns)
-    msgs = unread(api, r)
-    dig = digest(api, reg, routes_of(ns), r) if any(s.get("deliver", "digest") == "digest" for s in r.get("subscriptions") or []) else None
+    since = getattr(ns, "since", None)
+    msgs = unread(api, r, since)
+    dig = digest(api, reg, routes_of(ns), r, since) if any(s.get("deliver", "digest") == "digest" for s in r.get("subscriptions") or []) else None
     if ns.json:
         print(json.dumps(msgs if dig is None else {"doorbells": msgs, "digest": dig}, indent=2, ensure_ascii=False))
     else:
@@ -1362,10 +1383,11 @@ DIGEST_FIRST_H = 24                                              # a first diges
 DIGEST_THREADS_D = 7                                             # replies count in threads started this recently
 
 
-def digest(api: Slack, reg: dict, routes: Routes, r: dict) -> list[dict]:
-    """The posts since `r`'s last digest that its `digest` subscriptions match (what's addressed to it came as doorbells)."""
+def digest(api: Slack, reg: dict, routes: Routes, r: dict, since_ts: str | None = None) -> list[dict]:
+    """The posts since `since_ts`, else since `r`'s last digest, that its `digest` subscriptions match (what's addressed to it
+    came as doorbells)."""
     p = seen_path(f"{r['name']}.digest")
-    since = float(p.read_text().strip()) if p.is_file() else _now().timestamp() - DIGEST_FIRST_H * 3600
+    since = float(since_ts) if since_ts else float(p.read_text().strip()) if p.is_file() else _now().timestamp() - DIGEST_FIRST_H * 3600
     ch, inboxes, book = r["channel"], routes.inboxes(), {r["name"]: r}
     picked = []
 
@@ -1402,10 +1424,11 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     api, ch, routes = client(ns), channel_id(ns, reg, FRONT_DOOR), routes_of(ns)
     now = time.time() if ns.now is None else float(ns.now)
     since = now - ns.hours * 3600
-    rows = []
-    for r in sorted(routes.all().values(), key=lambda r: r["name"]):
-        if not r.get("inbox_ts"):
-            continue
+    rows, counted = [], set()
+    for r in sorted(routes.all().values(), key=lambda r: (bool(r.get("closed")), r["name"])):
+        if not r.get("inbox_ts") or r["inbox_ts"] in counted:
+            continue                                                 # a renamed name forwards into its successor's inbox
+        counted.add(r["inbox_ts"])
         bells = [m for m in api.paged("conversations.replies", "messages", channel=r.get("channel") or ch, ts=r["inbox_ts"],
                                       oldest=f"{since:.6f}") if m.get("ts") != r["inbox_ts"]]
         hours: dict[int, int] = {}
@@ -1420,7 +1443,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         for n in lead_names(m.get("text") or "", reg):
             if not routes.get_route(n) and n not in handles:
                 dropped.append({"name": n, "ts": m["ts"], "by": poster(m, reg)})
-        is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m)
+        is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m) and QUIET not in (m.get("text") or "")
         answered = m.get("reply_count") or any(x.get("name") in ("eyes", "white_check_mark", "x") for x in m.get("reactions", []))
         if is_ask and not answered and now - float(m["ts"]) > ns.stale_h * 3600:
             stale.append({"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)})
@@ -1612,15 +1635,14 @@ class AskDaniel:
 
     def __init__(self):
         self.base = (os.environ.get("RESEARCH_ASK_DANIEL_URL") or ASK_DANIEL).rstrip("/")
-        self._oidc: str | None = None
+        self._oidc = _Identity(ASK_DANIEL)
 
     def call(self, method: str, path: str = "", body: dict | None = None) -> dict:
-        self._oidc = self._oidc or oidc_token(ASK_DANIEL)
         data = None if body is None else json.dumps(body).encode()
-        headers = {"Authorization": f"Bearer {self._oidc}", **({"Content-Type": "application/json"} if data else {})}
+        ctype = {"Content-Type": "application/json"} if data else {}
         what = f"{method} {ASK_DANIEL}{path}"
         try:
-            out = http_json(method, self.base + path, data, headers)
+            out = self._oidc.send(lambda t: http_json(method, self.base + path, data, {"Authorization": f"Bearer {t}", **ctype}))
         except urllib.error.HTTPError as e:
             raise RouteError(route_error(what, e), e.code) from None
         except (urllib.error.URLError, OSError, ValueError) as e:
@@ -1754,7 +1776,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                    help="a word the footer carries for subscriptions (ask, the default top-level with --to; announce; fyi; ...)")
     p.add_argument("--verify", default=None, metavar="CMD", help="announce: a required action, and the command that shows it took")
     p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="announce: code it runs, pinned")
-    p.add_argument("--quiet", action="store_true", help="wake no one (digests still get it); refused on a post that names someone")
+    p.add_argument("--quiet", action="store_true", help="wake only the names it starts with: no reply needed (digests still get it)")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT, and `read --as` lists them first")
     p = cmd("close", "close a thread you were asked in: a status line (done, or --declined WHY), and the root's reaction",
             as_=True, thread=True, url=True)
@@ -1780,7 +1802,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="code it runs, pinned")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
     p = cmd("reply", "a post in a thread; `@name` at its start also rings that name's doorbell", as_=True, thread=True, body=True, url=True)
-    p.add_argument("--quiet", action="store_true", help="ring no doorbell (an acknowledgment nobody must act on)")
+    p.add_argument("--quiet", action="store_true", help="ring only the names it starts with: no reply needed")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
     p = cmd("names", "the leads' names, each an inbox thread: open, read, close, list", url=True, aliases=("inbox",))
     p.add_argument("verb", choices=("open", "read", "close", "list"))
@@ -1816,11 +1838,10 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("verify-author", "exit 0 only when the post's author is in the registry")
     p.add_argument("--event", required=True, help="the message event as JSON, @PATH or - (stdin)")
     p.add_argument("--why", action="store_true", help="print the verdict on stderr")
-    p = cmd("read", "a thread, the channel since TS, or (--as) what reached NAME since it last read")
-    g = p.add_mutually_exclusive_group(required=True)
-    g.add_argument("--thread", default=None, metavar="TS")
-    g.add_argument("--since", default=None, metavar="TS")
-    g.add_argument("--as", dest="handle", default=None, metavar="NAME", help="NAME's unread doorbells, then its digest")
+    p = cmd("read", "a thread, the channel since TS, or (--as) what reached NAME since it last read (or since TS)")
+    p.add_argument("--thread", default=None, metavar="TS")
+    p.add_argument("--since", default=None, metavar="TS", help="the channel since TS; with --as, NAME's doorbells and digest since TS")
+    p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="NAME's unread doorbells, then its digest")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--peek", action="store_true", help="--as: don't mark them read")
     p.add_argument("--urgent", action="store_true", help="--as: exit 1 unless an unread doorbell is URGENT")

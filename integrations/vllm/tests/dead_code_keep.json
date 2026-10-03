@@ -14,8 +14,8 @@
   "verity_vllm.program.registry.quarantine.collective": "provisional TP AllReduce definitions; test_tp_collective.py",
   "verity_vllm.program.registry.quarantine.collective.allreduce": "see quarantine.collective",
   "verity_vllm.program.registry.quarantine.collective.allreduce_difftest": "see quarantine.collective",
-  "verity_vllm.program.registry.quarantine.act": "provisional SiluMul_v2 (silu_and_mul edge words), bound by no vocabulary until admitted; test_silu_mul_v2.py",
-  "verity_vllm.program.registry.quarantine.act.silu_mul": "see quarantine.act",
+  "verity_vllm.program.registry.quarantine.act": "re-exports registry.act's SiluMul_v2 / SiluMulBf16_v2 (promoted) for the properties-admission adapter",
+  "verity_vllm.program.registry.quarantine.act.silu_mul": "see quarantine.act; silu_mul_difftest.spec imports it",
   "verity_vllm.program.registry.quarantine.act.silu_mul_bf16": "see quarantine.act",
   "verity_vllm.program.registry.quarantine.act.silu_mul_difftest": "properties-admission adapter of SiluMul_v2, loaded by --adapter name",
   "verity_vllm.program.registry.quarantine.ln.layer_norm_aten_difftest": "properties-admission adapter of LayerNormAten_v1, loaded by --adapter name"

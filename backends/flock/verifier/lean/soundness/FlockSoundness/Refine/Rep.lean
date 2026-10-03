@@ -101,13 +101,15 @@ theorem ligerito_cap (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap 
 
 /-- **One rep refines the model's** (§9–§14). When the executable's `verifyRep` accepts table `i`'s rep `r`, on a statement whose
 `m`, `k_log`, circuit fold and extra claims are the model's `S` and `extra`, and on a schedule whose dimensions and
-levels are the model's, the record carries the rep's stream and the proof decodes. Then at the proof's openings `o`,
-the model's compiled rep, played with the proof's messages and the coins of every round of the stream, accepts. Its
-caps are the proof's, and its requests passed the executable's Merkle checks. -/
-theorem rep_refines {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h14 : 14 ≤ S.m)
+levels are the model's and whose levels' consistency coins are not one word, the record carries the rep's stream and
+the proof decodes. Then at the proof's openings `o`, the model's compiled rep, played with the proof's messages and the
+coins of every round of the stream, accepts. Its caps are the proof's, and its requests passed the executable's Merkle
+checks. -/
+theorem rep_refines {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h15 : 15 ≤ S.m)
     (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (extra : List (Model.Claim 𝔽 S.m)) (sess : Session) (hext : ExtraRealizes st S sess.points extra)
-    (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default)) (hschm : sch.m = S.m)
+    (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
+    (hα1 : ∀ i < sch.levels.size, ceilLog2 (sch.levels.getD i default).q ≠ 1) (hschm : sch.m = S.m)
     (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds) (i r : ℕ) (bytes cap : ByteArray)
     (h : verifyRep spec st sch sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (p : Proof),
@@ -164,7 +166,7 @@ theorem rep_refines {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.Stat
       obtain ⟨lc, t₂, h₂, hrun⟩ := bind_ok hrun
       obtain ⟨⟨T, sws⟩, t₃, h₃, h₄⟩ := bind_ok hrun
       rw [hmS] at h₁
-      obtain ⟨hr₁, hk₁, zc', hpl₁, hzc⟩ := zerocheck_refines S.m h14 _ _ _ _ _ zc hwf₀ h₁
+      obtain ⟨hr₁, hk₁, zc', hpl₁, hzc⟩ := zerocheck_refines S.m h15 _ _ _ _ _ zc hwf₀ h₁
       obtain ⟨hr₂, hk₂, ab, hpl₂, hab⟩ := lincheck_refines S st.fold hfold zc zc' hzc p.lincheck t₁ t₂ lc
         (hr₁ ▸ hwf₀) h₂
       rw [hmS, hkS] at h₃
@@ -185,10 +187,11 @@ theorem rep_refines {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.Stat
             simp only [hsz2, Nat.add_sub_cancel]
             rw [← getElem!_pos extras k (by omega)]
             exact hcx k hk')
-        (by simp [abcClaims]) p.ringSwitches t₂ t₃ T sws (hr₂ ▸ hr₁ ▸ hwf₀) h₃
+        (by simp [abcClaims]) (by rw [Array.size_append, show (abcClaims S.m S.kLog zc lc).size = 2 from rfl]; omega)
+        p.ringSwitches t₂ t₃ T sws (hr₂ ▸ hr₁ ▸ hwf₀) h₃
       rw [← hschm] at hop
       obtain ⟨pend, hr₄, hk₄, hpl₄, hcaps, hreqs, hver⟩ := ligerito_accepts_opening st.merkle sch T sws _ op hop p.cap
-        p.ligerito r capD o hdim hlv ho (hr₃ ▸ hr₂ ▸ hr₁ ▸ hwf₀) h₄
+        p.ligerito r capD o hdim hlv hα1 ho (hr₃ ▸ hr₂ ▸ hr₁ ▸ hwf₀) h₄
       refine ⟨pend, ?_, hcaps, hreqs, hver⟩
       have hcs : stream.rounds.toList.map (·.coins) =
           consumed stream.rounds 0 t₁.k ++ (consumed t₁.rounds t₁.k t₂.k ++ (consumed t₂.rounds t₂.k t₃.k ++

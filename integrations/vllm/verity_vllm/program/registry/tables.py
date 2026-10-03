@@ -12,16 +12,19 @@ A table of 2^IB entries of EW u16 words (an entry's low word first) is the regis
                            -> Value<16 EW>: the entry at the index's low IB bits, its words joined low first; total
 
 `GeluTanhMulBf16_v3` / `GeluTanhMul_v3{I}` are `GeluTanhMulBf16_v1` / `GeluTanhMul_v1{I}` with the activation read from the
-registered `gelu_tanh_bf16` rather than computed by the primitive's evaluator.  `tanh_rn` has no Definition reading it here:
-2^28 input words are more than `verity.evaluation.evaluate` and circuit-check's vectors take (each flattens every input leaf).
+registered `gelu_tanh_bf16` rather than computed by the primitive's evaluator.  `TanhF32Rn_v2` is `TanhF32Rn_v1` with |x| in
+[LO, HI) read from the registered `tanh_rn`, as C-Flock's piece computes it (`verity_flock.tail_pieces.tanh_rn`); its 2^28 words
+are read lazily (`verity.evaluation.RegisteredTable`, `tanh_rn_table`), never flattened.
 """
 from __future__ import annotations
 
 from functools import lru_cache
 
+from verity.evaluation import RegisteredTable
 from verity.ir.codec import register_lazy_family
 from verity.ir.defs import PrimitiveDefinition, composite
 from verity.ir.types import Array, Value
+from verity.ml import scalar as SC
 from verity.ml.prims import const
 from verity_vllm.program.registry import dense
 from verity_vllm.program.registry import prims as P
@@ -31,6 +34,9 @@ ROW_WORDS, WORD_BITS = 64, 16
 TABLES = {"gelu_tanh_bf16": (16, 1), "tanh_rn": (27, 2)}
 #: `tanh_rn`'s region: identity below LO, ±1 from HI (`verity_flock.tail_pieces.TANH_BOUNDS["tanh_rn"]`)
 TANH_RN_LO, TANH_RN_HI = 0x39B89BA3, 0x41102CB4
+#: `tanh_rn`'s entries by where their words come from: the words 0x40000000 | i below HI's index, none (0) up to LO's, then the
+#: words 0x38000000 | i
+TANH_RN_REGIONS = ((0, TANH_RN_HI & 0x7FFFFFF), (TANH_RN_HI & 0x7FFFFFF, TANH_RN_LO & 0x7FFFFFF), (TANH_RN_LO & 0x7FFFFFF, 1 << 27))
 
 
 def table_type(name: str) -> Array:
@@ -96,7 +102,14 @@ def table_words(name: str, entry=None):
     return [(entry(i) >> (16 * k)) & 0xFFFF for i in range(1 << ib) for k in range(ew)]
 
 
+def tanh_rn_table() -> RegisteredTable:
+    """The registered `tanh_rn` as `verity.evaluation.evaluate` reads it: leaf j is word j & 1 of `tanh_rn_entry(j >> 1)`, computed
+    when a gate reads it."""
+    return RegisteredTable("tanh_rn", lambda j: (tanh_rn_entry(j >> 1) >> (16 * (j & 1))) & 0xFFFF, 2 << 27, dense.TanhF32Rn)
+
+
 GELU_TABLE = table_type("gelu_tanh_bf16")
+TANH_RN_TABLE = table_type("tanh_rn")
 
 
 @composite("GeluTanhMulBf16", 3, [], lambda S: ((("g", BF16), ("u", BF16), ("gelu_tanh_bf16", GELU_TABLE)), BF16),
@@ -115,5 +128,21 @@ def GeluTanhMulV3(B, S, gu, gelu_tanh_bf16):
     return B.batch(GeluTanhMulBf16V3, gu[0:S.I], gu[S.I:2 * S.I], gelu_tanh_bf16, axes=(0, 0, None))
 
 
-__all__ = ["GELU_TABLE", "GeluTanhMulBf16V3", "GeluTanhMulV3", "ROW_WORDS", "TABLES", "TANH_RN_HI", "TANH_RN_LO", "WORD_BITS",
-           "gelu_tanh_bf16_words", "table_read", "table_type", "table_words", "tanh_rn_entry"]
+@composite("TanhF32Rn", 2, [], lambda S: ((("x", P.F32), ("tanh_rn", TANH_RN_TABLE)), P.F32),
+           conformance="exact-model-tested: TanhF32Rn_v1 with |x| in [LO, HI) read from the registered table")
+def TanhF32RnV2(B, S, x, tanh_rn):
+    """NaN -> 0x7FC00000, |x| >= HI -> ±1, |x| < LO -> x, else `tanh_rn[|x|'s low 27 bits]` with x's sign: `TanhF32Rn_v1`."""
+    def c(w):
+        return B.call(const(32, w))
+
+    a = B.call(SC.F32Fabs, x)
+    t = B.call(table_read(27, 2), x, tanh_rn)
+    neg = B.call(P.I32Le, x, c(0xFFFFFFFF))
+    r = B.call(P.SelectF32, B.call(P.I32Le, a, c(TANH_RN_LO - 1)), x, B.call(P.SelectF32, neg, B.call(SC.F32Neg, t), t))
+    r = B.call(P.SelectF32, B.call(P.I32Le, c(TANH_RN_HI), a), B.call(P.SelectF32, neg, c(0xBF800000), c(0x3F800000)), r)
+    return B.call(P.SelectF32, B.call(P.I32Le, c(0x7F800001), a), c(P.F32_NAN), r)
+
+
+__all__ = ["GELU_TABLE", "GeluTanhMulBf16V3", "GeluTanhMulV3", "ROW_WORDS", "TABLES", "TANH_RN_HI", "TANH_RN_LO", "TANH_RN_REGIONS",
+           "TANH_RN_TABLE", "TanhF32RnV2", "WORD_BITS", "gelu_tanh_bf16_words", "table_read", "table_type", "table_words",
+           "tanh_rn_entry", "tanh_rn_table"]

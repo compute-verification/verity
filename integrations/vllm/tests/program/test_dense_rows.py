@@ -1,8 +1,13 @@
 """`verity_vllm.program.kernels.dense_rows`: the dense chain's kernels equal the reference (`verity.evaluation`) on seeded, edge and
-exhaustive bf16 words, claiming every finite instance; the float64 k16 chain equals `derived_rows.dot_bf16` word for word on the
-coordinates it claims and on those it hands back (subnormal and overflowing steps, non-finite operands), for any thread count; and
-`Gemm_v1`'s row kernel is the same on either path and against the reference."""
+exhaustive bf16 words, claiming every finite instance; the k16 chain, by `cpp/k16_chain.cpp` and by `_chain` in numpy, equals
+`derived_rows.dot_bf16` word for word on the coordinates it claims and on those it hands back (subnormal and overflowing steps,
+non-finite operands), for any thread count; and `Gemm_v1`'s row kernel is the same on either path and against the reference."""
 from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import sys
 
 import numpy as np
 import pytest
@@ -115,9 +120,23 @@ def test_mean_triton_declines_an_overflowing_sum():
     assert sc.n == 2
 
 
-# ---- the float64 k16 chain --------------------------------------------------------------------------------------------------
+# ---- the k16 chain ----------------------------------------------------------------------------------------------------------
 
 K = 64
+IN_CHECK = bool(os.environ.get("VERITY_SUITE_ROOT"))
+CXX = shutil.which(os.environ.get("CXX", "g++")) is not None
+
+
+@pytest.fixture(params=["cpp", "numpy"])
+def chain_path(request, monkeypatch):
+    """The k16 chain's two paths: `cpp/k16_chain.cpp` where it builds, `_chain` in numpy where it cannot (`k16_lib` None)."""
+    if request.param == "numpy":
+        monkeypatch.setattr(DR, "k16_lib", lambda: None)
+    elif not CXX and not IN_CHECK:
+        pytest.skip("needs a C++ compiler")
+    else:
+        assert DR.k16_lib() is not None, "cpp/k16_chain.cpp does not build"
+    return request.param
 
 
 def _f32_values(w: np.ndarray) -> np.ndarray:
@@ -162,7 +181,7 @@ def _reference(x: np.ndarray, w: np.ndarray, dot_id: str = "AmpereBF16TcDot16_v2
 
 
 @pytest.mark.parametrize("dot_id", sorted(DR.STEPS))
-def test_float64_chain_equals_the_int64_chain_in_every_regime(dot_id):
+def test_k16_chain_equals_the_int64_chain_in_every_regime(dot_id, chain_path):
     rng = np.random.default_rng(5704)
     x = _x(rng)
     w, regime = _w(rng, x)
@@ -184,7 +203,7 @@ def test_float64_chain_equals_the_int64_chain_in_every_regime(dot_id):
 
 
 @pytest.mark.parametrize("dot_id", sorted(DR.STEPS))
-def test_float64_chain_hands_back_every_coordinate_of_a_non_finite_row(dot_id):
+def test_k16_chain_hands_back_every_coordinate_of_a_non_finite_row(dot_id, chain_path):
     rng = np.random.default_rng(5705)
     x = _x(rng)
     x[3] = 0x7F80
@@ -195,7 +214,7 @@ def test_float64_chain_hands_back_every_coordinate_of_a_non_finite_row(dot_id):
 
 
 @pytest.mark.parametrize("dot_id", sorted(DR.STEPS))
-def test_float64_chain_on_cancelling_steps_and_exact_zeros(dot_id):
+def test_k16_chain_on_cancelling_steps_and_exact_zeros(dot_id, chain_path):
     rng = np.random.default_rng(5706)
     x = _x(rng)
     w = np.repeat(_bf16(rng.standard_normal((16, K // 2))), 2, axis=1)
@@ -206,13 +225,14 @@ def test_float64_chain_on_cancelling_steps_and_exact_zeros(dot_id):
     assert np.array_equal(out, ref) and (ref == 0).all()
 
 
-def test_float64_chain_refuses_a_partial_k16_step():
+def test_k16_chain_refuses_a_partial_k16_step():
     x = _x(np.random.default_rng(5709))
     with pytest.raises(ValueError, match="multiple of 16"):
         DR.dot_ampere(x[:40], np.zeros((3, 40), dtype=np.uint16))
 
 
-def test_prepared_weights_are_keyed_by_their_buffer():
+def test_prepared_weights_are_keyed_by_their_buffer(monkeypatch):
+    monkeypatch.setattr(DR, "k16_lib", lambda: None)
     rng = np.random.default_rng(5707)
     x = _x(rng)
     w, _ = _w(rng, x)
@@ -224,7 +244,39 @@ def test_prepared_weights_are_keyed_by_their_buffer():
         assert np.array_equal(DR.dot_ampere(x, arr, 2)[0], _reference(x, arr)[0])
 
 
-def test_gemm_row_kernel_is_the_same_on_either_path(monkeypatch):
+@pytest.mark.parametrize("dot_id", sorted(DR.STEPS))
+def test_the_words_are_the_same_at_any_thread_count(dot_id, monkeypatch, chain_path):
+    """`VERITY_DENSE_THREADS` only splits the coordinates: at the default, 1, 16 and 64 threads the words are the int64 twin's; a value
+    that is not a positive integer leaves the default, and the process's CPUs bound the count."""
+    rng = np.random.default_rng(5710)
+    x = _x(rng)
+    w, _ = _w(rng, x)
+    ref, ref_nf = _reference(x, w, dot_id)
+    monkeypatch.setattr(DR, "_THREADS", [DR.MAX_THREADS])
+    monkeypatch.setattr(DR.os, "sched_getaffinity", lambda _pid: set(range(64)))
+    for env, n in (("", DR.MAX_THREADS), ("1", 1), ("16", 16), ("64", 64), ("0", DR.MAX_THREADS), ("many", DR.MAX_THREADS)):
+        DR.use_threads(env)
+        assert DR.threads() == n, env
+        out, nf = DR.dot_chain(x, w, dot_id)
+        assert np.array_equal(out, ref) and np.array_equal(nf, ref_nf), env
+    monkeypatch.setattr(DR.os, "sched_getaffinity", lambda _pid: {0, 1, 2})
+    DR.use_threads(16)
+    assert DR.threads() == 3
+
+
+@pytest.mark.parametrize(("env", "cap"), [("16", 16), ("many", DR.MAX_THREADS), (None, DR.MAX_THREADS)])
+def test_a_process_takes_the_cap_from_its_environment_at_import(env, cap):
+    """No caller passes `VERITY_DENSE_THREADS`: a process that imports the module, as every stage process of a row does, is capped
+    by its own environment under `use_threads`' rule."""
+    environ = {k: v for k, v in os.environ.items() if k != "VERITY_DENSE_THREADS"}
+    if env is not None:
+        environ["VERITY_DENSE_THREADS"] = env
+    out = subprocess.run([sys.executable, "-c", "from verity_vllm.program.kernels import dense_rows as DR; print(DR._THREADS[0])"],
+                         env=environ, capture_output=True, text=True, check=True).stdout
+    assert int(out) == cap
+
+
+def test_gemm_row_kernel_is_the_same_on_either_path(monkeypatch, chain_path):
     rng = np.random.default_rng(5708)
     x = _x(rng)
     w, _ = _w(rng, x)
@@ -240,8 +292,8 @@ def test_gemm_row_kernel_is_the_same_on_either_path(monkeypatch):
     assert sc.ok and sc.declined == 0, str(sc)
 
 
-def test_gemm_v2_row_kernel_takes_the_float64_chain_of_its_dot(monkeypatch):
-    """A `Gemm_v2` row past `FAST_GEMM_WORDS` (Gemma-2's lm_head under the Hopper DOT) takes the float64 chain of ITS step: the same
+def test_gemm_v2_row_kernel_takes_the_k16_chain_of_its_dot(monkeypatch, chain_path):
+    """A `Gemm_v2` row past `FAST_GEMM_WORDS` (Gemma-2's lm_head under the Hopper DOT) takes the k16 chain of ITS step: the same
     words as the int64 twin, and never the Ampere chain's."""
     rng = np.random.default_rng(5710)
     x = _x(rng)
@@ -252,7 +304,7 @@ def test_gemm_v2_row_kernel_takes_the_float64_chain_of_its_dot(monkeypatch):
     slow = rows.ROWS["Gemm_v2"].fn(statics, [x, w.reshape(-1)])["out"]
     monkeypatch.setattr(DR, "FAST_GEMM_WORDS", 1)
     calls = []
-    monkeypatch.setattr(DR, "_chain", lambda *a, _c=DR._chain: calls.append(a[-1]) or _c(*a))
+    monkeypatch.setattr(DR, "_claimed", lambda *a, _c=DR._claimed: calls.append(a[2]) or _c(*a))
     fast = rows.ROWS["Gemm_v2"].fn(statics, [x, w.reshape(-1)])["out"]
     assert calls and set(calls) == {DR.STEPS["HopperBF16WgmmaDot16_v1"]}
     assert np.array_equal(fast, slow)

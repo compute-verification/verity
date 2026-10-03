@@ -1,5 +1,6 @@
 """`cluster submit`, the queue's side of `research run --queue`: a declared job is placed and gets its node executor's wrapper."""
 import json
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 
@@ -32,16 +33,32 @@ def test_a_cpu_job_goes_home_in_a_capped_pinned_scope_with_cuda_hidden():
     assert w[:3] == ["env", "GPU_LEASE_WHO=lane-x", "RESEARCH_RUN_ID=r1"] and "CUDA_VISIBLE_DEVICES=" in w
     assert w[w.index("systemd-run"):][:7] == ["systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", "cluster-r1"]
     assert "MemoryMax=16G" in w and "MemorySwapMax=0" in w
+    assert "AllowedCPUs=96-127" in w and w[w.index("--"):][1:6] == ["sh", "-c", submit.CPUSET_CHECK, "cpuset-check", "96-127"], \
+        "the scope holds the pin, so a workload's own taskset can't leave it, and the wrapper checks that it does"
     assert w[-3:] == ["taskset", "-c", "96-127"], "the owner runs outside node 1's checks and provers pools, at its own priority"
     assert out["workload_wrap"] == []
     guest = submit.resolve(model.load(NEBIUS), _job(project="pous", cpus=4, memory_gib=16, node="vy-nebius-1"), "r1", T)
     assert guest["wrap"][-6:] == ["taskset", "-c", "96-127", "nice", "-n", "19"], "a guest's share narrows to the unpooled CPUs"
 
 
+def test_the_cpuset_check_starts_the_job_only_in_a_scope_whose_cpuset_is_the_pin():
+    def check(pin):
+        return subprocess.run(["sh", "-c", submit.CPUSET_CHECK, "cpuset-check", pin, "printf", "%s|", "a b", "c"],
+                              capture_output=True, text=True)
+    held = subprocess.run(["sh", "-c", 'cat "/sys/fs/cgroup$(cut -d: -f3 /proc/self/cgroup)/cpuset.cpus" 2>/dev/null'],
+                          capture_output=True, text=True).stdout.strip()
+    ok = check(held)
+    assert (ok.returncode, ok.stdout) == (0, "a b|c|"), ok.stderr
+    bad = check("0-99999")
+    assert bad.returncode == 70 and bad.stdout == "" and "does not hold CPUs 0-99999" in bad.stderr, \
+        "where systemd dropped AllowedCPUs= (cpuset not delegated), nothing starts"
+
+
 def test_a_guest_gpu_job_goes_to_node_2_its_runner_on_its_shares_cpus_and_its_workload_alone_in_gpu_lease():
     out = submit.resolve(model.load(NEBIUS), _job(gpus=1, cpus=4, memory_gib=64), "r1", T)
     assert out["node"] == "vy-nebius-2" and "pinned there" in out["why"]
     assert "systemd-run" in out["wrap"] and out["wrap"][-6:] == ["taskset", "-c", "48-95", "nice", "-n", "19"]
+    assert "AllowedCPUs=48-95" in out["wrap"], "the runner's scope holds the share's CPUs; the workload keeps taskset's pin in its lease"
     assert submit.GPU_LEASE not in out["wrap"], "custody runs in the CPU allocation, not under the GPU lease"
     assert out["workload_wrap"] == [submit.GPU_LEASE, "1", "--wait", "--max-min", "10", "--mem-gb", "64", "--preemptible", "--"]
     assert out["job"]["node"] == "vy-nebius-2" and out["job"]["max_s"] == 600

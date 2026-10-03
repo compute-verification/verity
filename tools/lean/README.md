@@ -14,7 +14,8 @@ code and runs outside it.
 ~~~text
 bash tools/lean/setup.sh PKG                      elan, PKG's lean-toolchain, Mathlib's cache when Mathlib is a dependency
 python tools/lean/audit.py [--build] PKG...       audit these packages (--build: setup.sh and lake build first)
-python tools/lean/audit.py --update PKG...        write the pins' records from the build; commit the diff
+python tools/lean/audit.py --update PKG...        write the pins' records from the build; commit the diff (a copy of
+                                                  each record goes beside its reports, which a recorded run publishes)
 python tools/lean/audit.py --all [--root DIR]     the controls, then every package under DIR with a lean-audit.json
 python tools/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
 python tools/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
@@ -151,11 +152,12 @@ namespaces, a statement restated as a `def G : Prop` that a theorem `t : G` prov
 old names to new ones, each a declaration or a namespace (the longest prefix applies), and run
 `audit.py --update --moved MOVES.json PKG` on the record as it was before the move. The record's pins are renamed, and
 `Facts.lean` writes each pin's statement and each definition it reads once more with the build's names mapped back to
-the old ones, a statement whose type is a `Prop` definition under `meaning` also with that definition unfolded. The review
-compares those texts with the records of the old names: a pin that says what its record says gets one line, "the same
-statement under its old names" (moved from its old name, or restated as `G`, which then needs no reading of its own), and the
-definitions the same under their old names are counted on one line; neither needs a reviewer. Everything else prints as
-without the map. A map whose new names nest differently from its old ones is refused, and so is one under which two
+the old ones, a statement whose type is a `Prop` definition under `meaning` also with that definition unfolded (and the
+proofs Lean abstracts out of a definition, its `G._proof_<n>` theorems, put back in place, as a theorem's type keeps them).
+The review compares those texts with the records of the old names: a pin that says what its record says gets one line, "the
+same statement under its old names" (moved from its old name, or restated as `G`, which then needs no reading of its own),
+and the definitions the same under their old names are counted on one line; neither needs a reviewer. Everything else
+prints as without the map. A map whose new names nest differently from its old ones is refused, and so is one under which two
 constants of those texts (or two pins) would have one old name, since the comparison could not tell them apart; an old
 theorem kept under its old name as the lemma behind a new pin is no conflict.
 
