@@ -233,18 +233,14 @@ def test_a_config_record_carries_the_replay_s_weights_attest(tmp_path):
 TP2 = "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager"
 
 
-def test_the_tp_path_runs_a_tp2_config_run_and_refuses_a_larger_world_by_name(tmp_path, monkeypatch):
-    from verity_vllm.config import UsageError
+@pytest.mark.parametrize("W", [2, 4, 8])
+def test_the_tp_path_runs_a_config_run_at_worlds_2_4_and_8(W, tmp_path, monkeypatch):
     from verity_vllm.pipeline import cli, row
     from verity_vllm.pipeline.row_tp import TpRow
     ran = []
     monkeypatch.setattr(TpRow, "run", lambda self: ran.append((self.W, self.config_run)) or 0)
-    o = cli.parse("row", ["run", TP2, "OLMOE", "r", "v", "--sweep-dir", str(tmp_path), "--config-run", "1"], {})
-    assert row.run_row(o, o.stages) == 0 and ran == [(2, True)]
-    o = cli.parse("row", ["run", TP2, "OLMOE", "r", "v", "--sweep-dir", str(tmp_path), "--config-run", "1", "--world", "4"], {})
-    with pytest.raises(UsageError, match="runs at world 4; the config run covers single-GPU and TP2 rows"):
-        row.run_row(o, o.stages)
-    assert ran == [(2, True)]
+    o = cli.parse("row", ["run", TP2, "OLMOE", "r", "v", "--sweep-dir", str(tmp_path), "--config-run", "1", "--world", str(W)], {})
+    assert row.run_row(o, o.stages) == 0 and ran == [(W, True)]
 
 
 def _tp(tmp_path, *argv):

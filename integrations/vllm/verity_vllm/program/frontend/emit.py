@@ -27,7 +27,8 @@ from verity_vllm.program.frontend.torch_frontend import flat_types
 from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA
 
 _ROW_RE = re.compile(r"\[(\d+)\]")
-_COLLECTIVE_KINDS = {"all_reduce2": "all_reduce", "all_gather2": "all_gather"}   # op name -> collective kind (operands in rank order)
+_COLLECTIVE_KINDS = {"all_reduce2": "all_reduce", "all_gather2": "all_gather",    # op name -> collective kind (operands in rank order);
+                     "all_reduce": "all_reduce", "all_gather": "all_gather"}      # the unsuffixed ops take the world's `parts` as one list
 MAX_RUNS = 1 << 16   # a reference sequence with more contiguous runs than this is not indexed (a leaf-strided view of a cache-sized
                      # tensor has one run per leaf); its slots stay unlocated and say so -- the emitter is O(runs), never O(leaves)
 
@@ -189,13 +190,29 @@ def _member_row(name: str | None, base: str, node_name: str) -> tuple[str | None
 
 
 def _rank_coordinate(rank: tuple[int, int] | None) -> dict[str, int] | None:
-    """The document's TP rank coordinate.  A world above 2 is refused: collective records exist only for the two-rank ops."""
+    """The document's TP rank coordinate."""
     if rank is None:
         return None
-    if int(rank[0]) > 2:
-        raise NotImplementedError(f"tensor-parallel world {int(rank[0])} refused: collective records exist only for the two-rank ops "
-                                  f"({', '.join('verity_tp::' + k for k in _COLLECTIVE_KINDS)}: two operands, the peer is the other one)")
     return {"world": int(rank[0]), "rank": int(rank[1])}
+
+
+def _collective_record(ctx, node, kind: str, occurrence: int) -> dict:
+    """The collective of `node` (`verity_tp::<op>`): its operands in rank order, the one this rank computed (`own_operand`: not a
+    Program input) and its peers' inputs.  The two-rank ops name one peer (`peer_operand` / `peer_input`); the world's `parts` list
+    names every peer in rank order (`peer_operands` / `peer_inputs`), and its `peer_operand` / `peer_input` are None."""
+    if isinstance(node.args[0], (list, tuple)):
+        operands = [a for a in node.args[0] if isinstance(a, torch.fx.Node)]
+    else:
+        operands = [a for a in node.args if isinstance(a, torch.fx.Node)][:2]
+    own = [i for i, a in enumerate(operands) if ctx.is_input_storage(a) is None]
+    own_i = own[0] if len(own) == 1 else None
+    rec = {"kind": kind, "occurrence": occurrence, "operand_ranks": list(range(len(operands))), "own_operand": own_i}
+    if not isinstance(node.args[0], (list, tuple)):
+        peer_i = (1 - own_i) if own_i is not None and len(operands) == 2 else None
+        return rec | {"peer_operand": peer_i, "peer_input": ctx.is_input_storage(operands[peer_i]) if peer_i is not None else None}
+    peers = [i for i in range(len(operands)) if i != own_i] if own_i is not None else []
+    return rec | {"peer_operand": None, "peer_input": None, "peer_operands": peers,
+                  "peer_inputs": [ctx.is_input_storage(operands[i]) for i in peers]}
 
 
 def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> dict:
@@ -326,13 +343,11 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
                     "rebound": node in ctx.written_allocs, "stale": node in ctx.stale}
         collective = None
         if isinstance(t, torch._ops.OpOverload) and t.namespace == "verity_tp" and t.__name__.split(".")[0] in _COLLECTIVE_KINDS:
-            operands = [a for a in node.args if isinstance(a, torch.fx.Node)][:2]
-            own = [i for i, a in enumerate(operands) if ctx.is_input_storage(a) is None]
-            own_i = own[0] if len(own) == 1 else None
-            peer_i = (1 - own_i) if own_i is not None and len(operands) == 2 else None
-            collective = {"kind": _COLLECTIVE_KINDS[t.__name__.split(".")[0]], "occurrence": collectives, "operand_ranks": list(range(len(operands))),
-                          "own_operand": own_i, "peer_operand": peer_i,
-                          "peer_input": ctx.is_input_storage(operands[peer_i]) if peer_i is not None else None}
+            nm = t.__name__.split(".")[0]
+            if nm.endswith("2") and rank is not None and int(rank[0]) != 2:
+                raise NotImplementedError(f"tensor-parallel world {int(rank[0])} refused: verity_tp::{nm} is the two-rank op "
+                                          f"(two operands, the peer is the other one); a world-N rank calls verity_tp::{nm[:-1]}")
+            collective = _collective_record(ctx, node, _COLLECTIVE_KINDS[nm], collectives)
             collectives += 1
         occ_index[node] = len(occurrences)
         occ = {"node": node.name, "module": module, "module_class": mcls, "op": op, "rule": rule_of.get(node.name),
