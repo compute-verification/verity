@@ -514,6 +514,28 @@ def test_a_head_with_two_merge_bases_carries_no_grant_and_needs_every_one(tmp_pa
     assert _git(origin, "for-each-ref", "refs/heads/train-prep") == ""
 
 
+def test_a_train_the_store_cant_answer_for_is_refused_as_stale_not_as_the_rules(tmp_path, monkeypatch, capsys):
+    from research.store import labels_sync
+
+    _store_remote(tmp_path, monkeypatch)
+    main, _feat, _tip = _repos(tmp_path)
+    audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
+    (main / "tools" / "check").mkdir(parents=True)
+    _origin, heads = _origin_with(tmp_path, main, {
+        "tools/check/queue.toml": '[[grant]]\nrole = "statement-reviewer"\nlean_audit = ["pins", "reads"]\n',
+        "lean-audit.json": json.dumps(audit, indent=1)}, {20: {"lean-audit.json": json.dumps({**audit, "pins": {"P.t": {"type_hash": "2"}}})}})
+
+    def unreachable(store, prefix):
+        raise OSError("injected")
+
+    monkeypatch.setattr(labels_sync, "pull_prefix", unreachable)
+    monkeypatch.chdir(main)
+    assert merge_main(["--train", "--prepare", "train-prep/s", f"20@{heads[20][:9]}", "--lint", "true"]) == 1
+    err = capsys.readouterr().err
+    assert "refused: STALE: the labels of pr:20@* weren't pulled from the store's remote (OSError: injected)" in err
+    assert "the queue's rules" not in err
+
+
 _RESULT = ("import json, os; d = os.environ['RESEARCH_RUN_DIR']; json.dump({'schema': 'research/result/v0.1', 'kind': 'check/v1', "
            "'run_id': os.environ['RESEARCH_RUN_ID'], 'workload_fingerprint': {}, 'validation': {'status': 'passed', 'checker': 't'}, "
            "'measurements': [], 'steps': [{'step': 'agree', 'status': '%s'}]}, open(d + '/result.json', 'w'))")

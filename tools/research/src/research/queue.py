@@ -342,7 +342,18 @@ def carry(repo: Path, base: str, old: str, new: str) -> tuple[bool, str]:
             return False, f"its lean-audit.json change isn't byte-identical ({', '.join(map(_shown, audits))})"
         more = f" and {len(differ) - 3} more" if len(differ) > 3 else ""
         return False, f"its change against {name} differs ({', '.join(map(_shown, differ[:3]))}{more})"
-    how = "merge of main" if _git(repo, "merge-base", "--is-ancestor", old, new, check=False).returncode == 0 else "restack"
+    def below(a: str, b: str) -> bool:
+        return _git(repo, "merge-base", "--is-ancestor", a, b, check=False).returncode == 0
+
+    if not below(old, new):
+        how = "restack"
+    elif below(base, new):
+        how = "merge of main"
+    elif (r := _git(repo, "rev-list", "--no-merges", "-n1", new, f"^{old}", f"^{base}", check=False)).returncode == 0 and \
+            not r.stdout.strip():
+        how = "merge of an ancestor of main"
+    else:
+        how = "commits on top of it that cancel out"
     return True, f"{how}; lean-audit.json change identical" if any(map(_is_audit, now)) else f"{how}; no lean-audit.json change"
 
 

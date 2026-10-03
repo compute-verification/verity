@@ -780,3 +780,21 @@ def test_a_change_under_a_name_git_would_quote_needs_its_grants(world):
     pin = world.change({"pké/lean-audit.json": json.dumps({**audit, "pins": {"T": "2"}})})
     assert rules.needs(world.dev, "origin/main", pin) == {"statement-reviewer"}
     assert rules.needs(world.dev, "origin/main", world.change({"integrations/vllm/café.py": "x\n"})) == {"vllm-coordinator"}
+
+
+def test_the_carry_says_what_the_new_head_merged(world):
+    """`main`'s tip, an earlier `main` (no longer called a merge of `main`), or commits that cancel out."""
+    from research.queue import carry
+
+    old = world.change({"x.txt": "x\n"})
+    earlier = _move_main(world, {"d.txt": "landed meanwhile\n"})
+    _move_main(world, {"e.txt": "landed after it\n"})
+    merged = _merge_main(world, old)
+    _git(world.dev, "checkout", "-q", "--detach", old)
+    _git(world.dev, "merge", "-q", "--no-ff", "--no-edit", earlier)
+    merged_earlier = _git(world.dev, "rev-parse", "HEAD")
+    _git(world.dev, "commit", "-q", "--allow-empty", "-m", "nothing")
+    on_top = _git(world.dev, "rev-parse", "HEAD")
+    for head, how in ((merged, "merge of main"), (merged_earlier, "merge of an ancestor of main"),
+                      (on_top, "commits on top of it that cancel out")):
+        assert carry(world.dev, "origin/main", old, head) == (True, f"{how}; no lean-audit.json change")

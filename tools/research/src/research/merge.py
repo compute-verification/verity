@@ -398,7 +398,10 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
     out = []
     try:
         rules = Rules.parse(r.stdout, path)
-        lean = {g.role for g in rules.grants if g.lean_audit}
+    except QueueError as e:
+        raise Refused(f"the queue's rules ({path}): {e}") from e
+    lean = {g.role for g in rules.grants if g.lean_audit}
+    try:
         for label, sha in pins:
             pr = int(label[1:]) if label.startswith("#") else None
             need = sorted(rules.needs(repo, base, sha, (lambda: grants.reviews(pr, sha)) if pr else list, log=say) & set(TRAIN_GRANTS))
@@ -415,8 +418,8 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
                             f". A change `audit.py --update` (`--moved MOVES.json` for a move) prints only as the same statements "
                             f"needs none: `research data put --kind lean-review/v1 --file OUT/audit.json`, then `research data "
                             f"label {target} lean_review ART --by LANE`" if g in lean else "") for g in missing]
-    except QueueError as e:
-        raise Refused(f"the queue's rules ({path}): {e}") from e
+    except QueueError as e:                             # a store or git that can't answer (STALE), not the rules
+        raise Refused(str(e)) from e
     return out
 
 
