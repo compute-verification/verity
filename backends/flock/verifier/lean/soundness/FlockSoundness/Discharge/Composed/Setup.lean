@@ -12,8 +12,8 @@ What is left reads `bodyOf`, the refinement, and is stated here as three named f
 
 * `bodyOf_geometry` (proved): M1's level-0 padding geometry from the table's `PadOK`, the opened positions distinct and
   in range by `padPos`.
-* `bodyOf_padsOnto`: each rep's pads code reaches every value at its opened positions (`padsOnto_pow` once `bodyOf`'s
-  `Cp` is the inner code's padding monomials at distinct nonzero opened points).
+* `bodyOf_padsOnto` (proved): each rep's pads code reaches every value at its opened positions (`padsOnto_pow` at
+  `coinedOf`'s `Cp`, the inner code's padding monomials at the distinct nonzero opened points).
 * `innerOf_holds` (`Composed/Inner/Holds.lean`, the inner lane's): the honest prover's pads satisfy the inner proof's constraint at every valid witness whose registered
   values are the public ones (`Table.InnerHolds`; `innerOf`'s `lam`, `theta`, `vals`, `lanes`, `lig`).
 -/
@@ -71,12 +71,38 @@ theorem bodyOf_geometry (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ :
     le_trans hp.ht (Nat.pow_le_pow_right (by norm_num) (Nat.le_succ _))
   exact ⟨le_trans hcl hp.hd, hp.ht, le_rfl, fun c _ => ⟨padPos_injective _ ht2, padPos_lt _ ht2⟩⟩
 
-/-- **The pads onto at the draw** (open, refinement). -/
+theorem pt_injective {a b : ℕ} (ha : a < 2 ^ 63) (hb : b < 2 ^ 63)
+    (h : fOf (⟨(a + 1).toUInt64, 0⟩ : F128) = fOf ⟨(b + 1).toUInt64, 0⟩) : a = b := by
+  have h1 : (a + 1).toUInt64 = (b + 1).toUInt64 := congrArg F128.lo h
+  have h2 := congrArg UInt64.toNat h1
+  norm_num at ha hb
+  simp [Nat.toUInt64_eq] at h2
+  rw [Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt (by omega)] at h2
+  omega
+
+theorem pt_ne_zero {a : ℕ} (ha : a < 2 ^ 63) : fOf (⟨(a + 1).toUInt64, 0⟩ : F128) ≠ 0 := by
+  intro h
+  have h1 : (a + 1).toUInt64 = 0 := congrArg F128.lo (h.trans GF128.zero_eq)
+  have h2 := congrArg UInt64.toNat h1
+  norm_num at ha
+  simp [Nat.toUInt64_eq] at h2
+  rw [Nat.mod_eq_of_lt (by omega)] at h2
+  omega
+
+/-- **The pads onto at the draw**: `padsOnto_pow` at the opened pads points `p + 1`, distinct and nonzero by `padPos`
+below `2^63`, `Q ≤ K_PAD`. -/
 theorem bodyOf_padsOnto (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)) :
     let C := coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
     ∀ c, C.Admits c → (C.T c).tab.PadsOnto := by
-  sorry
+  intro C c _ r
+  let B := bodyOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
+  have hQ : Zk.Q ≤ max (min B.padN (2 ^ 63)) Zk.Q := le_max_right _ _
+  have hL : max (min B.padN (2 ^ 63)) Zk.Q ≤ 2 ^ 63 := max_le (min_le_right _ _) (by decide)
+  have hlt := fun k => lt_of_lt_of_le (padPos_lt (B.padQueries r c.rest) hQ k) hL
+  exact padsOnto_pow (F := 𝔽) (nQ := Zk.Q) (nPad := Zk.K_PAD) B.padLen
+    (fun k => fOf ⟨(padPos (max (min B.padN (2 ^ 63)) Zk.Q) Zk.Q (B.padQueries r c.rest) k + 1).toUInt64, 0⟩)
+    (fun i j h => padPos_injective _ hQ (pt_injective (hlt i) (hlt j) h)) (fun k => pt_ne_zero (hlt k)) (by decide)
 
 theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) : CoinedOfSetup (Reg := Reg) I dj y₀ := by
