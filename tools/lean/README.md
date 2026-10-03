@@ -239,6 +239,10 @@ module docstring has the layout and the rules. In short:
   planted to the key uploads nothing.
 - Every write is conditional. A blob that already exists (a 412 or a 409) must have the same MD5, and blobs go up in one
   part so that their ETag is their MD5. Records go last.
+- On node 1, `run_daily.py` is the daily publish (`vy-lean-cache-daily.timer`, deployed with the `cache.py` beside it).
+  It builds a fresh clone of main at `/build/verity` per package in infra's sandbox (`vy-lean-sandbox`), with the
+  dependencies fetched outside as research and bound read-only. It runs `publish` and `prune` only after
+  `vy-lean-sandbox clean` passes. A probe that got through, a refused sandbox or an unclean tree publishes nothing.
 
 ## Using it from another repository
 

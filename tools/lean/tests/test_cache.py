@@ -557,3 +557,108 @@ def test_lake_restores_a_build_published_from_another_path(s3, tmp_path):
                          capture_output=True, text=True)
     assert out.returncode == 0, out.stdout + out.stderr
     assert "Unpacked" in out.stdout and "Built Control" not in out.stdout, out.stdout
+
+
+# ---------------------------------------------------------------- node 1's daily run (run_daily.py)
+
+_spec = importlib.util.spec_from_file_location("lean_run_daily", HERE.parent / "run_daily.py")
+D = sys.modules[_spec.name] = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(D)
+
+FAKE_SANDBOX = """import os, subprocess, sys
+a = sys.argv[1:]
+with open({log!r}, "a") as f:
+    f.write(" ".join(a) + "\\n")
+if a[0] == "checkout":
+    sha, repo, tree = a[1], a[a.index("--repo") + 1], a[a.index("--tree") + 1]
+    subprocess.run(["git", "clone", "-q", "--no-checkout", repo, tree], check=True)
+    subprocess.run(["git", "-C", tree, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", sha], check=True)
+elif a[0] == "run":
+    if {run_rc}:
+        sys.exit({run_rc})
+    sys.exit(subprocess.run(a[a.index("--") + 1:], env={{"PATH": {path!r}, "HOME": {home!r}}}).returncode)
+elif a[0] == "clean":
+    sys.exit({clean_rc})
+"""
+FAKE_BIN = {
+    "lean": 'print("Lean (version 4.34.0, x86_64-unknown-linux-gnu, commit 0, Release)")',
+    "lake": """import os, pathlib, sys
+a, cache = sys.argv[1:], pathlib.Path(os.environ["LAKE_CACHE_DIR"])
+if a[0] == "build":
+    pathlib.Path(a[a.index("-o") + 1]).write_text('"2026-03-17"\\n["aa","bb.ltar"]\\n')
+    cache.mkdir(parents=True)
+    (cache / "bb.ltar").write_bytes(b"module archive")
+elif a[:2] == ["cache", "stage"]:
+    pathlib.Path(a[3]).mkdir(parents=True)
+    (pathlib.Path(a[3]) / "outputs.jsonl").write_bytes(pathlib.Path(a[2]).read_bytes())
+    (pathlib.Path(a[3]) / "bb.ltar").write_bytes((cache / "bb.ltar").read_bytes())
+""",
+}
+
+
+def node(tmp: Path, url: str, run_rc: int = 0, clean_rc: int = 0) -> tuple["D.Node", Path, str]:
+    """GitHub's main (`pkg`, and a `setup.sh` that fetches a dependency), an empty bare repository, a sandbox that runs
+    the build as this user, and the key file; returns the node, the sandbox's log and main's commit."""
+    gh, sha = repo(tmp, "github")
+    (gh / "tools" / "lean").mkdir(parents=True)
+    (gh / "tools" / "lean" / "setup.sh").write_text('mkdir -p "$1/.lake/packages/dep"\n')
+    sh("git", "add", ".", cwd=gh)
+    sh("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "setup", cwd=gh)
+    sh("git", "init", "-q", "--bare", str(tmp / "bare.git"))
+    bin_ = tmp / "bin"
+    bin_.mkdir()
+    for name, src in FAKE_BIN.items():
+        (bin_ / name).write_text(f"#!{sys.executable}\n{src}")
+        (bin_ / name).chmod(0o755)
+    path = f"{bin_}{os.pathsep}{os.environ['PATH']}"
+    box = tmp / "sandbox.py"
+    box.write_text(FAKE_SANDBOX.format(log=str(tmp / "sandbox.log"), run_rc=run_rc, clean_rc=clean_rc, path=path,
+                                       home=str(tmp)))
+    key = tmp / "lean-cache.env"
+    key.write_text(f"AWS_ACCESS_KEY_ID={WRITE[0]}\nAWS_SECRET_ACCESS_KEY={WRITE[1]}\nR2_ENDPOINT={url}\n"
+                   f"R2_BUCKET=verity-lean-cache\n")
+    n = D.Node(bare=tmp / "bare.git", tree=tmp / "build" / "verity", out=tmp / "build" / "out", prep=tmp / "prep",
+               lock=tmp / "lock", url=str(gh), sandbox=[sys.executable, str(box)], research=["env", f"PATH={path}"],
+               builder=D.pwd.getpwuid(os.getuid()).pw_name, key_file=str(key), python=sys.executable)
+    return n, tmp / "sandbox.log", subprocess.run(["git", "-C", str(gh), "rev-parse", "HEAD"], capture_output=True,
+                                                  text=True).stdout.strip()
+
+
+def test_the_daily_run_builds_in_the_sandbox_and_publishes_only_after_clean(s3, tmp_path):
+    b, url = s3
+    n, log, sha = node(tmp_path, url)
+    lines = []
+    assert D.daily(n, lines.append) == 0, "\n".join(lines)
+    steps = log.read_text().splitlines()
+    assert [s.split()[0] for s in steps] == ["checkout", "run", "clean"]
+    assert f"--deps pkg={n.prep}/pkg/.lake/packages --rw {n.out}/pkg -E LAKE_ARTIFACT_CACHE=true" in steps[1]
+    rec = json.loads(b.objects[C.record_key(C.identity(n.tree, "pkg", PLAT), sha)][0])
+    assert rec["files"]["bb.ltar"]["sha256"] == hashlib.sha256(b"module archive").hexdigest()
+    assert not (n.out / "pkg" / "lake-cache").exists()
+    assert "1 of 1 packages built; publish exited 0, prune 0" in lines[-1]
+
+
+def test_the_daily_run_refuses_an_out_directory_another_user_could_replace(tmp_path):
+    out, leaf = tmp_path / "out", tmp_path / "out" / "a" / "pkg"
+    (tmp_path / "real").mkdir()
+    out.symlink_to(tmp_path / "real")
+    with pytest.raises(SystemExit, match="is not a directory only"):
+        D.owned_dirs(out, leaf)
+    out.unlink()
+    D.owned_dirs(out, leaf)
+    assert (out / "a").is_dir() and not leaf.exists()
+    (out / "a").chmod(0o777)
+    with pytest.raises(SystemExit, match="is not a directory only"):
+        D.owned_dirs(out, leaf)
+
+
+@pytest.mark.parametrize("run_rc, clean_rc, rc, why", [(3, 0, 3, "the sandbox exited 3"), (2, 0, 2, "the sandbox exited 2"),
+                                                     (0, 1, 1, "isn't clean"), (1, 0, 1, "nothing built")])
+def test_the_daily_run_publishes_nothing_after_a_probe_a_refusal_an_unclean_tree_or_no_build(s3, tmp_path, run_rc,
+                                                                                           clean_rc, rc, why):
+    b, url = s3
+    n, log, sha = node(tmp_path, url, run_rc, clean_rc)
+    lines = []
+    assert D.daily(n, lines.append) == rc
+    assert why in lines[-1] and "nothing published" in lines[-1], lines
+    assert not b.objects

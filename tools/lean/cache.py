@@ -248,6 +248,12 @@ def _elan_env(env=os.environ) -> dict[str, str]:
 _PLATFORMS: dict[str, str] = {}
 
 
+def parse_platform(version: str) -> str | None:
+    """The target triple in `lean --version`'s output."""
+    m = re.search(r"\(version [^,]+, ([A-Za-z0-9_.-]+),", version)
+    return m.group(1) if m else None
+
+
 def platform(pkg: Path, toolchain: str) -> str:
     """The target triple of ``toolchain``'s `lean`, as Lake keys its builds by it (e.g. `x86_64-unknown-linux-gnu`)."""
     if toolchain not in _PLATFORMS:
@@ -255,10 +261,9 @@ def platform(pkg: Path, toolchain: str) -> str:
             r = subprocess.run(["lean", "--version"], cwd=pkg, capture_output=True, text=True, timeout=300, env=_elan_env())
         except FileNotFoundError:
             raise CacheError(f"no `lean` here to name the platform (tools/lean/setup.sh {pkg} installs it)") from None
-        m = re.search(r"\(version [^,]+, ([A-Za-z0-9_.-]+),", r.stdout)
-        if r.returncode != 0 or not m:
+        if r.returncode != 0 or not (p := parse_platform(r.stdout)):
             raise CacheError(f"`lean --version` in {pkg} printed no platform")
-        _PLATFORMS[toolchain] = m.group(1)
+        _PLATFORMS[toolchain] = p
     return _PLATFORMS[toolchain]
 
 
@@ -460,15 +465,19 @@ def get(root: Path, pkgs: list[str], env=os.environ, log=print, now=time.time, f
 
 def build(pkg: Path, out: Path, lake: list[str] | None = None) -> int:
     """Inside the build's sandbox: `lake build` ``pkg`` with Lake's cache writable under ``out``, then `lake cache stage`
-    the root package's outputs into ``out/stage``."""
+    the root package's outputs into ``out/stage``. Lake's cache is deleted after: it holds copies of every dependency's
+    artifacts too (1.5 GB for core's package against Mathlib's 2 MB stage)."""
     out.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "LAKE_ARTIFACT_CACHE": "true", "LAKE_CACHE_DIR": str(out / "lake-cache"), "LEAN_CACHE": "off"}
     lake = lake or ["lake"]
-    r = subprocess.run([*lake, "build", "-o", str(out / MAPPING)], cwd=pkg, env=env)
-    if r.returncode != 0:
-        return r.returncode
-    shutil.rmtree(out / "stage", ignore_errors=True)
-    return subprocess.run([*lake, "cache", "stage", str(out / MAPPING), str(out / "stage")], cwd=pkg, env=env).returncode
+    try:
+        r = subprocess.run([*lake, "build", "-o", str(out / MAPPING)], cwd=pkg, env=env)
+        if r.returncode != 0:
+            return r.returncode
+        shutil.rmtree(out / "stage", ignore_errors=True)
+        return subprocess.run([*lake, "cache", "stage", str(out / MAPPING), str(out / "stage")], cwd=pkg, env=env).returncode
+    finally:
+        shutil.rmtree(out / "lake-cache", ignore_errors=True)
 
 
 def git(tree: Path, *args: str) -> str:
