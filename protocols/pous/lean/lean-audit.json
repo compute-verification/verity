@@ -269,6 +269,11 @@
    "assumptions": [],
    "type_hash": "dbade472967b66a53ada2360e678ce0be1f0f9b075e5a349029a3acd7281df67"
   },
+  "Pous.SecurityProofs.ContinuousComplete": {
+   "signature": ["Pous.SecurityProofs.ContinuousComplete : Pous.Guarantees.ContinuousComplete"],
+   "assumptions": [],
+   "type_hash": "2e146a0e87a322f9052e7fab9e11c8940175a1b15a301fbf1f915408244fdb99"
+  },
   "Pous.SecurityProofs.DenseMeets": {
    "signature": ["Pous.SecurityProofs.DenseMeets : Pous.Guarantees.DenseMeets"],
    "assumptions": [],
@@ -693,7 +698,7 @@
    "pins": ["PousP2Ring.not_meetsOn_b19_k88", "PousP2Ring.tight_p16448"]
   },
   "Pous.Guarantees": {
-   "digest": "fb950ee642bd8ee0d301339d6d62fc06f74f01084bbede79c5a928e5483e35a4",
+   "digest": "8b224a5d97dc4a8857464716ab205948949e7f487a34db844d616c8795535704",
    "definitions": {
     "Pous.Guarantees.A1CompressionCard": "4bdc9218360926b7313e50a5882d2d7c72bf905191984cb666c8cad07a435774",
     "Pous.Guarantees.A1CompressionPr": "45e347c38d963ece9d1f073c9efb190b752629dc1364ddeee128432ee1e5fd9d",
@@ -732,6 +737,7 @@
     "Pous.Guarantees.ChainDenseMeets111": "e2f80f784dab4073296ccf21dcfeeab4962dbaf9312237b0b4d404a185304e27",
     "Pous.Guarantees.ChainDenseMeets64": "2ef2d27764e6e2a07de8d53ad5468b24a51c0764f5f542ce9b6a8f6376761534",
     "Pous.Guarantees.ContinuousAudit": "71cace021c7854ed2833ebfd2491c305f170e916b850a4143bee6d1cb5be846b",
+    "Pous.Guarantees.ContinuousComplete": "47031e58fcefe48ef1c430dc35269ae0f9f59d98d6ea33579c62ab5a31682bb5",
     "Pous.Guarantees.DenseMeets": "ae410cc915f475fbfc894407bc5b37b4bcc5a21daa32d7be6658620435a92d1f",
     "Pous.Guarantees.DenseMeets64": "7ffbf0f40508684766b3598f3b667a315d29714e3c2d57451ad439adc5dd929d",
     "Pous.Guarantees.DomainSepEquiv": "4ed5b72fc608eace59a335839503dd1b63a2695afdfcba9952331c7e6adc1dbd",
@@ -800,6 +806,7 @@
     "Pous.SecurityProofs.ChainDenseMeets111",
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.ContinuousAudit",
+    "Pous.SecurityProofs.ContinuousComplete",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
     "Pous.SecurityProofs.DomainSepEquiv",
@@ -996,6 +1003,7 @@
     "Pous.SecurityProofs.ChainDenseMeets111",
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.ContinuousAudit",
+    "Pous.SecurityProofs.ContinuousComplete",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
     "Pous.SecurityProofs.FibreCount",
@@ -1085,6 +1093,7 @@
     "Pous.SecurityProofs.ChainDenseMeets111",
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.ContinuousAudit",
+    "Pous.SecurityProofs.ContinuousComplete",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
     "Pous.SecurityProofs.DomainSepEquiv",
@@ -1183,6 +1192,7 @@
     "Pous.SecurityProofs.ChainDenseMeets111",
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.ContinuousAudit",
+    "Pous.SecurityProofs.ContinuousComplete",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
@@ -1337,7 +1347,11 @@
     "Pous.epsProof": "af85bcecc85b52f739214a4f93e7fe38b5015bd280077c0bf4146b54b0867ab4",
     "Pous.instDecidableEqContVerdict": "f8797b24bc6254abd63282e2f6bdd91704a366d26e0aa0dbe937d0ddefe44e41"
    },
-   "pins": ["Pous.SecurityProofs.ContinuousAudit", "Pous.SecurityProofs.PerAnswer"]
+   "pins": [
+    "Pous.SecurityProofs.ContinuousAudit",
+    "Pous.SecurityProofs.ContinuousComplete",
+    "Pous.SecurityProofs.PerAnswer"
+   ]
   },
   "Pous.Protocol.Model.Dense": {
    "digest": "7324349bf03cf46d87bcdba6f3a6563da13b1f2dc90504cf04533b2de506d429",
@@ -1752,6 +1766,7 @@
     "Pous.SecurityProofs.ChainDenseMeets111",
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.ContinuousAudit",
+    "Pous.SecurityProofs.ContinuousComplete",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
     "Pous.SecurityProofs.FibreCount",

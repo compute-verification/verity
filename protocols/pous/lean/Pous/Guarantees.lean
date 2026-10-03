@@ -958,10 +958,11 @@ deadline `(D_late, Q_late)` and every tolerance `f₀`, over the setup and `n` u
 `q` is the honest responder's per-answer miss rate, a parameter and not an assumption, and the statement holds for
 every machine. A machine is deterministic, so a round's only randomness is its index, and `q` bounds the misses over
 it given the setup and the indices before. The model's honest responder, which keeps `C` and answers by lookup, hits
-every round: `q = 0` (`PousContinuous.honest_complete`). A real responder misses on its host's clock, outside the
-model: its measured per-challenge miss rate is a `q` here only if each challenge misses with probability at most `q`
-given the challenges before it. Above `q = 1` the bound is at least `1`. Proof: `PousContinuous.continuous_complete`;
-here `Pous.SecurityProofs.ContinuousComplete`. -/
+every round: `q = 0` (`PousContinuous.honest_complete`). A real responder's misses come from its host's clock, which
+the model leaves out, so reading a measured per-challenge miss rate as `q` needs each challenge to miss with
+probability at most `q` given the challenges before it. `1 − q` is truncated at `0`, so above `q = 1` the bound is
+`q^n ≥ 1` when `f₀ < n`, and `0` otherwise, where the verifier cannot reject. Proof:
+`PousContinuous.continuous_complete`; here `Pous.SecurityProofs.ContinuousComplete`. -/
 def ContinuousComplete : Prop :=
   ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late n : ℕ) (q : ℝ≥0∞) (W : Bits sch.n) (mach : ContMachine sch)
     (arr : ℕ → ℕ),
