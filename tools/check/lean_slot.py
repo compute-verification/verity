@@ -5,7 +5,8 @@ A Lean audit builds its packages against Mathlib on every core it gets, so a nod
 a cap of 4, kept by hand and overrun). The steward sets the cap in SLOTS (`/workspace/research/locks/lean-slots`; LEAN_SLOTS
 overrides), one pool per line, which it may rewrite at any time:
 
-    NAME N      # e.g. `check 2` (check's lean-audit step) and `audit 2` (`audit.py --build` run by hand)
+    NAME N      # e.g. `check 2` (check's lean-audit step), `audit 2` (`audit.py --build` run by hand) and `build 2`
+                # (`lean_changed.py --records`, the fast path)
 
 A request takes a slot of its pool (--pool, else LEAN_SLOT_POOL, else `audit`), or of pool `any` when SLOTS doesn't list its
 own; SLOTS listing neither refuses it, naming the fix. Slot I of pool P is a `flock` on `lean-P-I.lock` beside SLOTS, I < N.
