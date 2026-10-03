@@ -16,7 +16,9 @@ whatever the table's number. How the rate is measured and cited (lean's rulings 
   work-weighted failing fraction under the tiles' noise, which is the probability the assumption bounds. Each measured
   input is bounded on its own, and inputs are never pooled.
 - **An upper confidence limit, simultaneous over the `m` measured inputs.** Each input is bounded at `δ = 0.05/m`
-  (Bonferroni, 95% overall), and the cited `ε` is the maximum of the `m` limits, rounded up. With `a = w_max/W`, its
+  (Bonferroni, 95% overall), and the cited `ε` is the maximum of the `m` limits, rounded up. `m` counts every input
+  chosen in every pass the table measures, decode's and prefill's alike, including any not yet measured when a bound is
+  first computed (Qwen3-8B's untimed pass: 8 decode and 8 prefill inputs, `m = 16`). With `a = w_max/W`, its
   heaviest tile's share of its work:
   - every tile measured (a census), no failure: `ln(1/δ)·a = ln(20m)·a`, the rule of three for a work-weighted draw;
   - `n` work-weighted draws, no failure: `ln(1/δ)·a/(1 − e^(−n·a))`. Clopper–Pearson on the draws is not used: it bounds
