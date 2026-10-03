@@ -31,6 +31,7 @@ from verity.ml.boolean import trace as TR
 from verity.ml.prims import HopperE4m3QgmmaDot32 as DOT
 from verity_vllm.program import boolean as SW
 from verity_vllm.program.kernels import derived_rows as DR
+from verity_vllm.program.kernels import fp8_moe_rows as MR
 from verity_vllm.program.registry import boolean_fp8 as BF
 from verity_vllm.program.registry import boolean_fp8_moe as BM
 from verity_vllm.program.registry import fp8 as F
@@ -237,7 +238,7 @@ def test_statics_the_kernel_cannot_launch_are_refused() -> None:
         with pytest.raises(ValueError, match="fused_moe_kernel block FP8 needs"):
             _ = bind(M.MoeExpertFp8BlockCoordinate, K=K, G=G, KB=KB, SWAP=False).body
     with pytest.raises(ValueError, match="fused_moe_kernel block FP8 needs"):
-        DR.moe_expert_fp8_block_row(np.zeros(256, np.uint8), np.zeros(2, np.uint32), np.zeros((1, 256), np.uint8),
+        MR.moe_expert_fp8_block_row(np.zeros(256, np.uint8), np.zeros(2, np.uint32), np.zeros((1, 256), np.uint8),
                                     np.zeros((1, 2), np.uint32), KB=48)
 
 
@@ -266,7 +267,7 @@ def _twin_agrees(want: tuple, got: np.ndarray, nonfinite: np.ndarray) -> None:
 @pytest.mark.parametrize("KB,SWAP,W,wide", [(32, False, False, False), (32, True, True, False), (64, False, True, False),
                                              (128, True, False, False), (32, False, True, True), (32, True, False, True)])
 def test_the_moe_twin_is_the_gemm(KB: int, SWAP: bool, W: bool, wide: bool) -> None:
-    """`derived_rows.moe_expert_fp8_block_row` against `MoeExpertFp8BlockGemm(W)_v1` over a ragged N (200 = 128 + 72, or 6 * 32 + 8
+    """`fp8_moe_rows.moe_expert_fp8_block_row` against `MoeExpertFp8BlockGemm(W)_v1` over a ragged N (200 = 128 + 72, or 6 * 32 + 8
     for the wide scales)."""
     K, N, G = 256, 200, 32 if wide else 128
     rng = np.random.default_rng(KB + 2 * SWAP + 4 * W + 8 * wide)
@@ -274,7 +275,7 @@ def test_the_moe_twin_is_the_gemm(KB: int, SWAP: bool, W: bool, wide: bool) -> N
     g = int(np.float32(rng.uniform(0.01, 1.0)).view(np.uint32))
     fam = M.MoeExpertFp8BlockGemmW if W else M.MoeExpertFp8BlockGemm
     want = evaluate(bind(fam, K=K, N=N, G=G, KB=KB, SWAP=SWAP), *((x, sx, g) if W else (x, sx)), sum(w, []), sum(ws, []))
-    got, nonfinite = DR.moe_expert_fp8_block_row(np.array(x), np.array(sx), np.array(w), np.array(ws), G=G, KB=KB, swap=SWAP,
+    got, nonfinite = MR.moe_expert_fp8_block_row(np.array(x), np.array(sx), np.array(w), np.array(ws), G=G, KB=KB, swap=SWAP,
                                                  g=g if W else None)
     _twin_agrees(want, got, nonfinite)
     assert nonfinite.any() and not nonfinite.all() if wide else not nonfinite.any()
@@ -300,11 +301,11 @@ def test_the_twins_keep_the_promotions_apart() -> None:
     one = np.array([ONE], np.uint32)
     assert DR.scaled_mm_fp8_block_row(x, one, w[None], one[None], G=64)[0].tolist() == [0x3F80]
     for KB, want in ((32, 0x3F81), (64, 0x3F80)):
-        assert DR.moe_expert_fp8_block_row(x, one, w[None], one[None], G=64, KB=KB)[0].tolist() == [want]
+        assert MR.moe_expert_fp8_block_row(x, one, w[None], one[None], G=64, KB=KB)[0].tolist() == [want]
     x, w = (np.array(v, np.uint8) for v in _tie_then(0x03, 0x01))
     sx, sw = np.array([ONE, 0x3BAAAAAB], np.uint32), np.array([[ONE, ONE]], np.uint32)
     for swap, want in ((False, 0x3F80), (True, 0x3F81)):
-        assert DR.moe_expert_fp8_block_row(x, sx, w[None], sw, G=32, KB=32, swap=swap)[0].tolist() == [want]
+        assert MR.moe_expert_fp8_block_row(x, sx, w[None], sw, G=32, KB=32, swap=swap)[0].tolist() == [want]
 
 
 # --- on bits ---------------------------------------------------------------------------------------------------------------------

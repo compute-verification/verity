@@ -11,6 +11,7 @@ import torch
 
 from tests.properties import glm53_block_fp8_capture_gpu as X
 from verity_vllm.program.kernels import derived_rows as DR
+from verity_vllm.program.kernels import fp8_moe_rows as MR
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 K, N, GQ = 256, 200, X.GROUP
@@ -95,7 +96,7 @@ def _moe_job(tmp_path, kind: str, *, KB: int = 32, swap: bool = False, flip: boo
     x = _bf16_rows(rng, max(rows, 4))[:rows]
     A, As = _quant(x)
     B, Bs = _e4m3(rng, used.size, N, K), _scales(rng, used.size, X.cdiv(N, GQ), K // GQ)
-    C = np.stack([DR.moe_expert_fp8_block_row(A[p // top_k], As[p // top_k], B[umap[ids[p]]], Bs[umap[ids[p]]], G=GQ, KB=KB, swap=swap,
+    C = np.stack([MR.moe_expert_fp8_block_row(A[p // top_k], As[p // top_k], B[umap[ids[p]]], Bs[umap[ids[p]]], G=GQ, KB=KB, swap=swap,
                                               g=int(tw[p]) if mul else None)[0] for p in range(M * X.TOP_K)])
     if flip:
         C[13, 7] ^= 0x8000

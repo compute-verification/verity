@@ -67,8 +67,8 @@ from verity_vllm.program.registry.prims import BF16, F32
 BATCH_INVARIANT_KB = 32
 BATCH_INVARIANT_SWAP = False
 
-_CONF = ("model-untested: read from vLLM d9105ea80 fused_moe_kernel and Triton 3.7.1; the H200 capture "
-         "(tests/properties/glm53_block_fp8_capture_gpu.py) is its hardware check")
+_CONF = ("model-untested: read from vLLM d9105ea80 fused_moe_kernel and Triton 3.7.1; tests/properties/glm53_block_fp8_capture_gpu.py "
+         "is its hardware check")
 
 
 def check_statics(K: int, G: int, KB: int) -> None:

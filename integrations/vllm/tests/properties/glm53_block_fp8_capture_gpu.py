@@ -23,7 +23,7 @@ instead.  A phase that raises records its error and fails the verdict without st
              with uniform and hot routing: every `fused_moe_kernel` launch is intercepted (its operands, config, and BLOCK_SIZE_K and
              SWAP_AB as invoke_fused_moe_triton_kernel computes them, fused_moe.py:789-846), every (token, slot) row of the w13 launch
              against `MoeExpertFp8BlockGemm_v1{K=6144,N=2I,G=128,KB,SWAP}`, of the w2 launch against `MoeExpertFp8BlockGemmW_v1{K=I,
-             N=6144,...}` (twin `moe_expert_fp8_block_row`), and the w13 activation's quant against `Fp8GroupQuant_v1`.  TritonExperts's
+             N=6144,...}` (twin `fp8_moe_rows.moe_expert_fp8_block_row`), and the w13 activation's quant against `Fp8GroupQuant_v1`.  TritonExperts's
              own w2 input, `silu_and_mul_per_block_quant` of the w13 output (triton_moe.py:471-485), is launched as `served_w2`.
              Every launch's (token, slot) -> expert assignment is checked against the routing, and its tile against `wgmma_tile`.
   reference  on a sample of the coordinates and rows of every launch, the plain-integer reference (`verity.evaluation.evaluate`) of
@@ -505,6 +505,7 @@ def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
     from verity.evaluation import evaluate
     from verity.ir.defs import bind
     from verity_vllm.program.kernels import derived_rows as DR
+    from verity_vllm.program.kernels.fp8_moe_rows import moe_expert_fp8_block_row
     from verity_vllm.program.registry import fp8 as F
     from verity_vllm.program.registry import fp8_moe as MO
 
@@ -520,7 +521,7 @@ def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
     for p in range(p0, p1):
         t, u = p // top_k, int(a["umap"][int(a["ids"][p])])
         g = int(a["tw"][p]) if job["mul"] else None
-        want, nonfin = DR.moe_expert_fp8_block_row(a["A"][t], a["As"][t], a["B"][u], a["Bs"][u], G=GROUP, KB=KB, swap=SWAP, g=g)
+        want, nonfin = moe_expert_fp8_block_row(a["A"][t], a["As"][t], a["B"][u], a["Bs"][u], G=GROUP, KB=KB, swap=SWAP, g=g)
         got = np.asarray(a["C"][p])
         bad = np.flatnonzero((want != got) & ~nonfin)
         rec["words"] += N
