@@ -15,7 +15,8 @@ What `coinedOf` (`Composed/Defs.lean`) and `innerOf` (`Composed/Inner.lean`) bot
   constraints' `γ`, its queries).
 * `pointsOf`: the rank check's claim points, from those coins (`abcClaims`; `point_parts`: a claim's point but its first
   coordinate), rep 0's `ab`, `c`, then rep 1's.
-* `hiCount`, `padLenOf`, `padNOf`, `HiOf`: the hidden salts and the pads layout's sizes.
+* `hiCount`, `padLenOf`, `padNOf`, `HiOf`, `VLOf`: the hidden salts, the pads layout's sizes and the value lists.
+* `eqWord`, `maskWordsOf`: the rank check's weights and the mask slot's words.
 * `regionPtOf`, `pubRegOf`: the region claims' points and public ring-switch messages at the link points.
 -/
 
@@ -38,7 +39,7 @@ structure CoinsZK (Rest : Type) where
 the region claims' points through `st.extra`), then each rep's, in the order `verify --zk` draws them: `q₀` level-0 queries over `L₀`
 positions; the zerocheck's skip coins, outer coins (rounds `7 … m−7`), `z` and the residual rounds' `ρ`; the lincheck's
 `α`, `β`, its `kLog − 6` rounds' coins and `r′`; the ring switch's 7 coins per claim and `γ` per claim (`nCl` claims);
-level 0's out-of-domain coins and lane challenges; the triple's sacrifice coin `ε`; the inner proof's constraints' `γ`
+level 0's out-of-domain points (`z ← sampleVec (m − 7)`) and coins (`b`), and its lane challenges; the triple's sacrifice coin `ε`; the inner proof's constraints' `γ`
 (ten); its `Q` queries. -/
 structure RestZK (q0 L0 k0 m kLog nCl nOod mP : ℕ) where
   link : Fin 2 → Fin mP → F128
@@ -53,6 +54,7 @@ structure RestZK (q0 L0 k0 m kLog nCl nOod mP : ℕ) where
   rPrime : Fin 2 → F128
   rpp : Fin 2 → Fin nCl → Fin 7 → F128
   rsGamma : Fin 2 → Fin nCl → F128
+  oodPt : Fin 2 → Fin nOod → Fin (m - 7) → F128
   ood : Fin 2 → Fin nOod → F128
   lane : Fin 2 → Fin k0 → F256
   zeta : Fin 2 → F128
@@ -76,6 +78,10 @@ abbrev RestOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : Type :=
   RestZK (Tz.t / 2) (2 ^ Tz.sch.level₀.logLen) Tz.sch.k0 st.m st.c.kLog (2 + 2 * st.regions.size)
     (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).nOod0 st.mPts
 
+/-- **The draw's value lists** (`Table`'s `VL`): Ligerito's restart `T'` (a clear K message, `Level0Msgs.tPrime`) and levels
+≥ 1's bytes. -/
+abbrev VLOf : Type := FlockLevel3.GF256 × ByteArray
+
 /-- The draw's hidden-salt type. -/
 abbrev HiOf (Tz : TabZK 𝔽 mPts) : Type := Fin (hiCount Tz) → ZkView.Salt
 
@@ -98,6 +104,14 @@ def regionPtOf (st : Stmt) (link : Fin 2 → Fin st.mPts → F128) (j : Fin (2 *
 /-- `eq(p, x)` over the bits of word index `x`, least significant first (`zk_veil.rs`'s `eq_word`). -/
 def eqWord (p : List F128) (x : ℕ) : F128 :=
   (List.range p.length).foldl (fun acc i => acc * if x.testBit i then p[i]! else 1 + p[i]!) 1
+
+/-- **The mask slot's word indices in the packed witness** (`flock-circuit.rs`'s `mask_words`): every block's slot, block
+`b`'s words at `b·2^(k_log−7) + start/128 + j` for `j < 2^(slot_log−7)`. -/
+def maskWordsOf (st : Stmt) : List ℕ :=
+  match st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) with
+  | none => []
+  | some r => (List.range (2 ^ st.nbl)).flatMap fun b =>
+      (List.range (2 ^ (r.slotLog - 7))).map fun j => b * 2 ^ (st.c.kLog - 7) + r.start / 128 + j
 
 /-- **A region's public bit at witness index `idx`** (`regionValue`): bit `i` of the region's bytes at block `b`, `i` the
 index's free bits and `b` its block bits. Only its values inside the region's subcube matter: a region claim's `eq`

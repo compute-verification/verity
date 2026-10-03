@@ -156,14 +156,6 @@ def MaskRankOk {k M : ℕ} (pts : Fin k → List F128) (words : Fin M → ℕ) :
   Function.Surjective fun u : Fin M → ZMod 2 => fun j : Fin k =>
     ∑ x, fOf (eqWord (pts j) (words x)) * ZK.Table.castF (F := 𝔽) (u x)
 
-/-- **The mask slot's word indices in the packed witness** (`flock-circuit.rs`'s `mask_words`): every block's slot, block
-`b`'s words at `b·2^(k_log−7) + start/128 + j` for `j < 2^(slot_log−7)`. -/
-def maskWordsOf (st : Stmt) : List ℕ :=
-  match st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) with
-  | none => []
-  | some r => (List.range (2 ^ st.nbl)).flatMap fun b =>
-      (List.range (2 ^ (r.slotLog - 7))).map fun j => b * 2 ^ (st.c.kLog - 7) + r.start / 128 + j
-
 /-- **The positions below `L` nobody opens**, in increasing order, the `u`-th of them. -/
 def unPos {t : ℕ} (L : ℕ) (opened : Fin t → ℕ) (u : ℕ) : ℕ :=
   ((List.range L).filter (fun x => decide (x ∉ List.ofFn opened))).getD u 0
@@ -273,11 +265,11 @@ def szOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : ZkView.Sizes where
   nPU := padNOf Tz st - Zk.Q
   nPad := 0
 
-/-- A pad's index in the pads layout: the exposed ones first, then `h_ab` and the triple's `x, y, w` (`PadLayout.hab ..
-tw`, the layout's last four). -/
+/-- A pad's index in the pads layout: the exposed ones first, then the layout's last four `h_ab, h_x, h_y, h_w`
+(`PadLayout.hab .. tw`), which `PadIdx`'s `inr 0 .. 3` names `h_x, h_y, h_ab, h_w` (`Table.hFull`). -/
 def padIdx {nE : ℕ} : ZK.PadIdx nE → ℕ
   | .inl i => i.val
-  | .inr j => nE + j.val
+  | .inr j => nE + (![1, 2, 0, 3] : Fin 4 → ℕ) j
 
 theorem fa_lt (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).fb < (szOf Tz st).nE := by
@@ -285,14 +277,14 @@ theorem fa_lt (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     Zk.PadLayout.lc, Zk.PadLayout.fc, Zk.PadLayout.fb, Zk.PadLayout.fa]
   omega
 
-/-- **The draw's `--zk` table's refinement**: levels ≥ 1's salts, `ByteArray` value lists, `RestOf`'s coins (both reps'
+/-- **The draw's `--zk` table's refinement**: levels ≥ 1's salts, `VLOf` value lists, `RestOf`'s coins (both reps'
 level-0 queries, opened as `S = Q⁰ ∪ Q¹`, and the pads queries, as positions), the sizes and the pads layout's sizes. -/
 noncomputable def bodyOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedBody Tz.S (maskWordsOf st).length Tz.t where
   Hi := HiOf Tz
-  VL := ByteArray
+  VL := VLOf
   Rest := RestOf Tz st
   rest0 := ⟨fun _ _ => 0, fun _ _ => ⟨0, Nat.two_pow_pos _⟩, fun _ _ => 0, fun _ _ => 0, fun _ => 0, fun _ _ => 0, fun _ => 0,
-    fun _ => 0, fun _ _ => 0, fun _ => 0, fun _ _ _ => 0, fun _ _ => 0, fun _ _ => 0, fun _ _ => 0, fun _ => 0,
+    fun _ => 0, fun _ _ => 0, fun _ => 0, fun _ _ _ => 0, fun _ _ => 0, fun _ _ _ => 0, fun _ _ => 0, fun _ _ => 0, fun _ => 0,
     fun _ _ => 0, fun _ _ => 0⟩
   sz := szOf Tz st
   queries := fun ρ => (List.ofFn (ρ.q0s 0) ++ List.ofFn (ρ.q0s 1)).map Fin.val
