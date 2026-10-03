@@ -25,7 +25,9 @@
 # retried every round, except a remote that holds another attempt document (triage's `conflict`; an attempt key is write-once), which
 # is held after its one Job. A hold (STATE/held/RUN says why) fails the round, and lifts itself once triage no longer lists the run as
 # needing action (a label, a fetch, --reconcile); remove it by hand to have the next round try again.
-# No Job starts in node 1's daily hold, VY_CUSTODY_QUIET (UTC; dispatch.py's PACK_HOLD to the quiet hour's end).
+# No Job starts in node 1's daily hold, VY_CUSTODY_QUIET (UTC; dispatch.py's PACK_HOLD to the quiet hour's end), and none runs into
+# the quiet hour (QUIET_AT, 12:30Z, which measurements own): each Job's activeDeadlineSeconds ends it a minute before, and a Job that would
+# get less than JOB_MIN_S isn't started (as n2_custody.sh's).
 # Each store also gets `research data push --pending` in a Job of its own whenever none is left (a finished one stays
 # VY_CUSTODY_PENDING_S): the labels, and the artifacts no run names, that no run's custody pushes. It is the store-push template's
 # push on a schedule, for both stores.
@@ -44,6 +46,8 @@ PENDING_S=${VY_CUSTODY_PENDING_S:-3600}
 SRC=${VY_CUSTODY_SRC:-/workspace/jobs/custody}
 PY=${VY_CUSTODY_PY:-/workspace/jobs/cache/python/cpython-3.12-linux-x86_64-gnu/bin/python3}   # any uid runs it; uv's cache is ubuntu's
 QUIET=${VY_CUSTODY_QUIET-1210-1330}
+QUIET_AT=1230   # node 1's quiet hour, which no Job runs into
+JOB_MIN_S=300   # a Job left less time before it isn't started
 BOOT=${VY_CUSTODY_BOOT:-$(cat /proc/sys/kernel/random/boot_id)}
 usage() { echo "usage: n1_custody.sh [--dry-run] | --reconcile RUN --by WHO" >&2; exit 2; }
 DRY=0 REC= BY=
@@ -62,13 +66,24 @@ if ! flock -n 9; then
 fi
 log() { echo "$(date -u +%FT%TZ) $*" | tee -a "$STATE/log"; }
 kube() { KUBECONFIG=$HOME/.kube/config kubectl "$@"; }
-quiet() { now=$(date -u +%H%M); [ -n "$QUIET" ] && [ "$now" -ge "${QUIET%-*}" ] && [ "$now" -lt "${QUIET#*-}" ]; }
+# deadline MAX_S: the seconds a Job started now may run, at most MAX_S: to a minute before the quiet hour (QUIET_AT), to the minute,
+# so a minute less; 0 in the daily hold
+deadline() {
+  [ -n "$QUIET" ] || { echo "$1"; return; }
+  local t q0 q1 at s
+  t=$(date -u +%H%M)
+  t=$((10#${t:0:2} * 60 + 10#${t:2:2})) at=$((10#${QUIET_AT:0:2} * 60 + 10#${QUIET_AT:2:2}))
+  q0=$((10#${QUIET:0:2} * 60 + 10#${QUIET:2:2})) q1=$((10#${QUIET:5:2} * 60 + 10#${QUIET:7:2}))
+  if [ "$t" -ge "$q0" ] && [ "$t" -lt "$q1" ]; then s=0; else s=$(( (at - t + 1440) % 1440 * 60 - 60 )); fi
+  echo $(( s < $1 ? s : $1 ))
+}
+HOLD="node 1's daily hold ($QUIET UTC; no Job runs past ${QUIET_AT}Z, where its quiet hour starts)"
 human() { awk -v b="$1" 'BEGIN { split("B KiB MiB GiB TiB", u); i = 1; while (b >= 1024 && i < 5) { b /= 1024; i++ } printf "%.1f %s", b, u[i] }'; }
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-if quiet; then
-  [ -z "$REC" ] || { echo "n1_custody.sh: node 1's daily hold ($QUIET UTC): no Job starts; --reconcile after it" >&2; exit 3; }
-  echo "n1_custody.sh: node 1's daily hold ($QUIET UTC): no Job starts"
+if [ "$(deadline 1800)" -lt "$JOB_MIN_S" ]; then
+  [ -z "$REC" ] || { echo "n1_custody.sh: $HOLD: no Job starts; --reconcile after it" >&2; exit 3; }
+  echo "n1_custody.sh: $HOLD: no Job starts"
   exit 0
 fi
 if [ ! -f "$SRC/tools/research/src/research/store/custody.py" ] || [ ! -f "$SRC/tools/research/store.pod.toml" ]; then
@@ -110,10 +125,10 @@ wait_job() {
   return 1
 }
 
-custody_job() {  # custody_job RUN ROOT STORE UID CMD: 0 when the Job completed, else 1 with why=
+custody_job() {  # custody_job RUN ROOT STORE UID DEADLINE_S CMD: 0 when the Job completed, else 1 with why=
   local name=n1-custody-$(echo "$1" | tr -cd 'a-z0-9-' | tail -c 40)
   : > "$tmp/job.err"
-  if ! job "$name" "$4" "$3" "$2" 3600 1800 "$5" 2> "$tmp/job.err" || ! wait_job "$name"; then
+  if ! job "$name" "$4" "$3" "$2" 3600 "$5" "$6" 2> "$tmp/job.err" || ! wait_job "$name"; then
     why="Job $name: $(grep -v '^$' "$tmp/job.err" | tail -1)"
     return 1
   fi
@@ -140,8 +155,9 @@ if [ -n "$REC" ]; then
   for spec in "${specs[@]}" ${RELAY:+"$RELAY"}; do
     root=${spec%%=*}
     [ -d "$root/$REC" ] || continue
-    research="$PY -m research data"
-    if custody_job "$REC" "$root" "${STORE[$root]}" "${UID_OF[$root]}" \
+    research="$PY -m research data" dl=$(deadline 1800)
+    [ "$dl" -ge "$JOB_MIN_S" ] || { echo "n1_custody.sh: $HOLD: no Job starts; --reconcile after it" >&2; exit 3; }
+    if custody_job "$REC" "$root" "${STORE[$root]}" "${UID_OF[$root]}" "$dl" \
       "$research reconcile-attempts $REC --apply && $research custody $root/$REC --publish --keep-local"; then
       rm -f "$STATE/held/$REC" "$STATE/failures/$REC"
       boot=$(python3 -c 'import json, sys; print((json.load(open(sys.argv[1])).get("environment") or {}).get("boot_id") or "")' \
@@ -271,7 +287,8 @@ while IFS='|' read -r kind a b c camp status files bytes; do
       esac ;;
     job)
       root=$a r=$b gone=$c d=$a/$b force= seen=
-      if [ "$DRY" != 1 ] && { [ "$tried" -ge "$MAX_RUNS" ] || [ "$SECONDS" -ge "$PASS_S" ] || quiet; }; then
+      dl=$(deadline 1800)
+      if [ "$DRY" != 1 ] && { [ "$tried" -ge "$MAX_RUNS" ] || [ "$SECONDS" -ge "$PASS_S" ] || [ "$dl" -lt "$JOB_MIN_S" ]; }; then
         left=$((left + 1))
         continue
       fi
@@ -293,7 +310,7 @@ while IFS='|' read -r kind a b c camp status files bytes; do
       if [ "$DRY" = 1 ]; then echo "would publish $d ($camp, $status, $files files, $(human "$bytes"))${force:+ with $force ($seen)}"; continue; fi
       tried=$((tried + 1))
       why=
-      if custody_job "$r" "$root" "${STORE[$root]}" "${UID_OF[$root]}" "$PY -m research data custody $d --publish --keep-local $force"; then
+      if custody_job "$r" "$root" "${STORE[$root]}" "${UID_OF[$root]}" "$dl" "$PY -m research data custody $d --publish --keep-local $force"; then
         rm -f "$STATE/failures/$r"
         log "$d ($camp, $status, $files files, $(human "$bytes")): on R2 with its run record, .custody beside it"
       elif grep -qs "holds a DIFFERENT attempt document" "$tmp/job.err"; then
@@ -328,10 +345,10 @@ for spec in "${specs[@]}"; do
     esac
   elif [ "$DRY" = 1 ]; then
     echo "would start $store's pending push (Job $name)"
-  elif quiet; then
-    :
-  elif job "$name" "$uid" "$store" "$root" "$PENDING_S" 7200 "$PY -m research data push --pending --jobs 8"; then
-    echo "$store: pending push started (Job $name)"
+  elif dl=$(deadline 7200) && [ "$dl" -lt "$JOB_MIN_S" ]; then
+    echo "$store: no pending push: $HOLD"
+  elif job "$name" "$uid" "$store" "$root" "$PENDING_S" "$dl" "$PY -m research data push --pending --jobs 8"; then
+    echo "$store: pending push started (Job $name, ${dl}s at most)"
   else
     log "$store: the pending push did not start (Job $name)"
     failed=$((failed + 1))

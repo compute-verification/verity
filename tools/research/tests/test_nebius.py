@@ -1676,8 +1676,8 @@ N1_CUSTODY = pytest.mark.skipif(shutil.which("bash") is None or shutil.which("fl
 def _n1_custody(tmp_path: Path) -> types.SimpleNamespace:
     """Node 1 for n1_custody.sh: its runs roots `jobs` (store uid 1000) and `research` (1001), node 2's relay copies under jobs/runs-n2,
     and the Secret's R2 as the fs vault `vault`. `run` makes a run dir from the run_v0.2 fixture (a pod's, pod-RUN, unless `host`),
-    `round_` runs one round through FAKE_KUBECTL and a sudo that logs its argv, `created` lists the Jobs created so far, `job` reads
-    one back with its outcome, `command` its container's command, `held` the holds."""
+    `round_` runs one round through FAKE_KUBECTL and a sudo that logs its argv (at `clock`, when given, as _n2_custody's), `created`
+    lists the Jobs created so far, `job` reads one back with its outcome, `command` its container's command, `held` the holds."""
     src_root = Path(registry.__file__).resolve().parents[2]
     n = types.SimpleNamespace(jobs=tmp_path / "jobs", research=tmp_path / "research", state=tmp_path / "state", vault=tmp_path / "vault",
                               log=tmp_path / "calls.log", absent=tmp_path / "absent.toml", remote=tmp_path / "vault.toml")
@@ -1690,7 +1690,9 @@ def _n1_custody(tmp_path: Path) -> types.SimpleNamespace:
     (bin_ / "kubectl").write_text(f"#!{sys.executable}\n{FAKE_KUBECTL}")
     (bin_ / "sudo").write_text(f'#!/bin/sh\necho "sudo $*" >> {n.log}\n[ "$1 $2" = "-n -u" ] || exit 1\nshift 3\nexec "$@"\n')
     (bin_ / "python3").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
-    for f in bin_.iterdir():
+    (tmp_path / "datebin").mkdir()
+    (tmp_path / "datebin" / "date").write_text(_FAKE_DATE % (shutil.which("date"), shutil.which("date")))
+    for f in (*bin_.iterdir(), tmp_path / "datebin" / "date"):
         f.chmod(0o755)
 
     def run(root, rid, state, *, boot="boot-n1", host=None, t=N1_OLD, empty=False, extra=0, runs="runs", status=None,
@@ -1717,9 +1719,13 @@ def _n1_custody(tmp_path: Path) -> types.SimpleNamespace:
             os.utime(p, (t, t))
         return d
 
-    def round_(*args, **env):
+    def round_(*args, clock=None, **env):
+        if clock is not None:                                   # `date -u +FORMAT` reads FAKE_CLOCK
+            (tmp_path / "clock").write_text(str(clock))
+            env = {"FAKE_CLOCK": str(tmp_path / "clock"), **env}
+        path = f"{tmp_path / 'datebin'}:{bin_}" if clock is not None else str(bin_)
         return subprocess.run(["bash", str(NEBIUS / "n1_custody.sh"), *args], capture_output=True, text=True,
-                              env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "HOME": str(home), "KSTATE": str(kjobs),
+                              env={**os.environ, "PATH": f"{path}:{os.environ['PATH']}", "HOME": str(home), "KSTATE": str(kjobs),
                                    "KLOG": str(n.log), "KHOME": str(home), "KVAULT": str(n.remote), "RESEARCH_STORE_CONFIG": str(n.absent),
                                    "VY_CUSTODY_QUIET": "", "VY_CUSTODY_BOOT": "boot-n1", "VY_CUSTODY_PY": sys.executable,
                                    "VY_CUSTODY_STATE": str(n.state), "VY_CUSTODY_SRC": str(tmp_path / "src"),
@@ -1948,6 +1954,33 @@ def test_n1_custody_holds_as_never_ran_only_a_run_that_shows_no_sign_it_started(
     assert f"{node.jobs}/runs/{idle}: held: never ran its workload (r21-fixture, status admitted: no pid, start event" in out.stdout
     assert {f"n1-custody-{killed}", f"n1-custody-{spoke}"} <= set(node.created())
     assert node.command(f"n1-custody-{killed}")[5].endswith("--keep-local --force --runner-gone")
+
+
+@N1_CUSTODY
+def test_n1_custody_starts_no_job_that_could_run_into_node_1s_quiet_hour(tmp_path):
+    """#1004's red-team F4: the daily hold only kept Jobs from starting at 12:10Z, so a custody Job started at 12:09 could run to
+    12:39 (activeDeadlineSeconds 1800) and the pending push (7200; the research store's first one uploads 22.3 GiB) to 14:09, through
+    node 1's quiet hour (12:30-13:30Z), which measurements own. Every Job's deadline ends it a minute before 12:30Z, none starts
+    with under 5 min left, and a round in the daily hold starts nothing."""
+    at = lambda hhmm: N2_NOW + (int(hhmm[:2]) - 3) * 3600 + int(hhmm[2:]) * 60          # N2_NOW is 03:00Z
+    rid = "r20261003-200000-0e01"
+    deadlines = {}
+    for hhmm in ("1209", "1150", "1331"):
+        node = _n1_custody(tmp_path / hhmm)
+        node.run(node.jobs, rid, "done")
+        out = node.round_(clock=at(hhmm), VY_CUSTODY_QUIET="1210-1330")
+        assert out.returncode == 0, out.stdout + out.stderr
+        deadlines[hhmm] = [node.job(n)["job"]["spec"]["activeDeadlineSeconds"] for n in node.created()]
+        assert node.created() == [f"n1-custody-{rid}", "n1-store-push-jobs", "n1-store-push-research"], hhmm
+    assert deadlines == {"1209": [1200, 1200, 1200], "1150": [1800, 2340, 2340], "1331": [1800, 7200, 7200]}
+    node = _n1_custody(tmp_path / "held")
+    node.run(node.jobs, rid, "done")
+    for hhmm, quiet in (("1210", "1210-1330"), ("1329", "1210-1330"), ("1226", "1228-1330")):
+        out = node.round_(clock=at(hhmm), VY_CUSTODY_QUIET=quiet)
+        assert out.returncode == 0 and f"node 1's daily hold ({quiet} UTC; no Job runs past 1230Z" in out.stdout, hhmm
+        rec = node.round_("--reconcile", rid, "--by", "test", clock=at(hhmm), VY_CUSTODY_QUIET=quiet)
+        assert rec.returncode == 3 and "--reconcile after it" in rec.stderr
+    assert node.created() == [] and not node.log.exists()
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
