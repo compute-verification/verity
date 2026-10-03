@@ -186,8 +186,8 @@ end Universal
 open Universal in
 /-- **Padding computes the circuit, at the universal unit**: `PadCorrect` for `UniversalUnit_v1`'s interpreter, the
 padding of `universal.pad`, and the dummy unit, whose output `dummy c` is exactly `nOut` zeros; `nOut` is exact, since
-outputs are not padded. It is unit by unit: wiring between units is not modelled, so it does not say a session computed
-`C` end to end. `interp` is tested equal to `UniversalUnit_v1` (`test_lean_universal.py`, by program digest), not
+outputs are not padded. It is unit by unit; the wiring between units is the class's public topology, and `wired_eval`
+(`Wiring.lean`) composes the units along it into `C` end to end. `interp` is tested equal to `UniversalUnit_v1` (`test_lean_universal.py`, by program digest), not
 proved. -/
 theorem pad_correct :
     PadCorrect Universal.fits Universal.pad Universal.units Universal.size Universal.run Universal.eval Universal.dummy := by

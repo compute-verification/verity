@@ -24,7 +24,7 @@ developer's circuit into a program of the class, and the netlists that circuit i
 
 `interp` is tied to `UniversalUnit_v1` by a test, not a proof: `backends/flock/tests/test_lean_universal.py` holds its
 vectors equal to `verity.evaluation`'s run of the Definition, pinned by its program digest. Cite it as tested equal.
-Wiring between units is not modelled: each unit runs on its own claimed inputs.
+The wiring between units is the class's public topology, in `Wiring.lean`: here each unit runs on its own claimed inputs.
 -/
 
 namespace FlockSoundness.Discharge.PrivateCircuit.Universal

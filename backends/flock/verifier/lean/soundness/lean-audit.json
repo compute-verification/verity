@@ -9683,6 +9683,9 @@
    "assumptions": [],
    "type_hash": "f4a5ead15d67146f887cff5d8fe7bfc80c6db374faa08784a8ba159f5f549579"
   },
+  "FlockSoundness.Discharge.PrivateCircuit.wired_cone": {},
+  "FlockSoundness.Discharge.PrivateCircuit.wired_eval": {},
+  "FlockSoundness.Discharge.PrivateCircuit.wired_wrong": {},
   "FlockSoundness.Discharge.Tables.accepts_tables": {
    "signature": ["FlockSoundness.Discharge.Tables.accepts_tables : FlockSoundness.Discharge.Tables.AcceptsTables"],
    "assumptions": [],

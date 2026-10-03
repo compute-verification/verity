@@ -1,4 +1,5 @@
 import FlockSoundness.Discharge.PrivateCircuit.InterpPad
+import FlockSoundness.Discharge.PrivateCircuit.Wiring
 import FlockSoundness.Discharge.PrivateCircuit.Privacy
 import FlockSoundness.Discharge.PrivateCircuit.Soundness
 import FlockSoundness.Discharge.PrivateCircuit.InstanceCommit
@@ -19,5 +20,7 @@ program commitment's binding under `cr/sha-512`. The universal unit's semantics,
 the padding, are in `PrivateCircuit/Interp.lean`; `pad_correct` (`InterpPad.lean`) is `PadCorrect` at it, and `pad_wrong`
 reads "fewer than `K` wrong units" of the padded program as the same of the circuit. At the universal unit,
 `private_circuit_sound` (`InstanceSound.lean`) counts `C`'s own wrong units through `pad_wrong`, and `private_circuit`
-(`InstanceJoint.lean`) states soundness and privacy over one registration.
+(`InstanceJoint.lean`) states soundness and privacy over one registration. The wiring between units is a public topology
+of the class (`PrivateCircuit/Wiring.lean`): `wired_eval` composes correct units along it into `C` end to end, and
+`wired_wrong` reads an owed output off it as a wrong unit.
 -/
