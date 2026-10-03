@@ -2,6 +2,7 @@
 `research run --tool` in a throwaway repository."""
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -289,6 +290,37 @@ def test_a_json_file_git_merges_into_a_repeated_key_refuses_the_train(tmp_path, 
     assert merge_main(["--train", "--prepare", "train-prep/k", "11@" + heads[11][:9], "12@" + heads[12][:9], "--lint", "true"]) == 1
     assert "merging #12 onto the train leaves lean-audit.json unparseable as JSON" in capsys.readouterr().err
     assert _git(origin, "for-each-ref", "refs/heads/train-prep/k") == ""
+
+
+def test_a_pin_change_goes_into_a_train_only_with_the_statement_reviewer_grant_at_its_head(tmp_path, monkeypatch, capsys):
+    """old-circuits-and-proofs held #828 and #858-#866 out of trains by hand on 2 Oct: each changed a pinned record with no
+    statement reviewer named.  The queue's rule for it refuses such a ref before its train is built (`--prepare`) or checked
+    (`--train`), until the `grant` label is on the pull request's pinned head; a change to another section needs none."""
+    from research.store.local import LocalStore
+
+    main, _feat, _tip = _repos(tmp_path)
+    audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
+    (main / "tools" / "check").mkdir(parents=True)
+    _origin, heads = _origin_with(tmp_path, main, {
+        "tools/check/queue.toml": '[[grant]]\nrole = "statement-reviewer"\nlean_audit = ["pins", "reads"]\n',
+        "lean-audit.json": json.dumps(audit, indent=1)}, {
+        20: {"lean-audit.json": json.dumps({**audit, "pins": {"P.t": {"type_hash": "2"}}}, indent=1)},
+        21: {"lean-audit.json": json.dumps({**audit, "roots": ["P", "Q"]}, indent=1)}})
+    _git(main, "push", "-q", "origin", "pr20:refs/heads/side")
+    monkeypatch.chdir(main)
+    pins, lint = [f"20@{heads[20][:9]}", f"21@{heads[21][:9]}"], ["--lint", "true"]
+    assert merge_main(["--train", "--prepare", "train-prep/g", *pins, *lint]) == 1
+    err = capsys.readouterr().err
+    assert f"#20 needs the statement-reviewer grant at {heads[20][:12]} (tools/check/queue.toml: a named reviewer read" in err
+    assert f"`research data label pr:20@{heads[20]} grant statement-reviewer --by REVIEWER`" in err and "#21" not in err
+    assert merge_main(["--train", "--prepare", "train-prep/g", f"side@{heads[20][:9]}", *lint]) == 1
+    assert "side needs the statement-reviewer grant (tools/check/queue.toml), which only a pull request's pinned head can hold" \
+        in capsys.readouterr().err
+    assert merge_main(["--train", "pr20", "--tool", "mytools.decl_check:T", "--command", "true"]) == 1
+    out, err = capsys.readouterr()
+    assert "pr20 needs the statement-reviewer grant" in err and "nothing was checked" in err and "recorded as" not in out
+    LocalStore().add_label(f"pr:20@{heads[20]}", "grant", "statement-reviewer", "red-team")
+    assert merge_main(["--train", "--prepare", "train-prep/g", *pins, *lint]) == 0, capsys.readouterr().err
 
 
 _RESULT = ("import json, os; d = os.environ['RESEARCH_RUN_DIR']; json.dump({'schema': 'research/result/v0.1', 'kind': 'check/v1', "
