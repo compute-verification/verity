@@ -13,7 +13,10 @@ are `RowSem`'s formulas on the row's inputs:
   strong induction over its accumulator (`fmaRun_holds`), the butterfly round by round (`bfly_holds`);
 * `α`, `β` and the floor (`pre8_alpha`, `pre8_beta`, `pre8_floor`), the rescaled noise' codes (`pre8_eTilde`) and each
   position's code (`pre8_code`), so `row8A_code` and `row8B_code`: a transcript correct on RowA or RowB has on position
-  `t`'s output `code8W` at `alpha8`'s and `beta8`'s words of its row.
+  `t`'s output `code8W` at `alpha8`'s and `beta8`'s words of its row;
+* a row chain (`Chain8Holds`) is the tile check's chain on the codes it reads: each atom's word (`chain8_atom`,
+  `atom8_eval`), each window (`chain8_window`), the running sum (`chain8_add`), so its last word is `chainWordP? p 4`'s
+  (`chain8_word`), and RowA's `P_A` word `q` is that word cast to bf16 (`row8A_pa`).
 -/
 
 namespace Pouw.PearlC.RowCircuit
@@ -436,5 +439,225 @@ theorem row8B_code (p : Pipeline) {K : ℕ} (hK : 8 ≤ K) (X : ((row8B p K).spe
       rfl⟩))))
 
 end Rows8
+
+/-! ## The chains -/
+
+section Chain8
+
+open AccumProofs PeelExact PeelExactP
+
+variable {ops} (p : Pipeline) {V : ℕ → ℕ} {cd cl : ℕ → ℕ} {o n : ℕ}
+
+theorem atom8_eval (acc : ℕ) (a b : ℕ → ℕ) :
+    Prim.eval ops (.atom8 p) (acc :: ((List.range 32).map a ++ (List.range 32).map b)) =
+      p.step acc (List.ofFn fun l : Fin 32 => code (a l)) (List.ofFn fun l : Fin 32 => code (b l)) := by
+  unfold Prim.eval Prim.w
+  rw [Nat.mod_eq_of_lt (by unfold atomF; exact step_lt _ _ _ _)]
+  simp only [atomF, Bool.false_eq_true, ↓reduceIte, List.headD_cons, List.tail_cons]
+  congr 2 <;> funext l
+  · simp [List.getD_eq_getElem?_getD, List.getElem?_append_left, l.isLt]
+  · simp [List.getD_eq_getElem?_getD, List.getElem?_append_right]
+
+/-- Values meeting `n` windows of a chain from gate `o` (`chain8`), the codes at `cd t` and the other side at `cl t`. -/
+def Chain8Holds (V : ℕ → ℕ) (cd cl : ℕ → ℕ) (o n : ℕ) : Prop :=
+  ∀ r < 5 * n, V (o + r) =
+    (chain8 p cd cl (o + r) r).prim.eval ops ((chain8 p cd cl (o + r) r).args.map (Arg.eval ops V))
+
+theorem chain8_atom (h : Chain8Holds (ops := ops) p V cd cl o n) {q r : ℕ} (hq : q < n) (hr : r < 4) :
+    V (o + (5 * q + r)) = p.step (if r = 0 then 0 else V (o + (5 * q + r) - 1))
+      (List.ofFn fun l : Fin 32 => code (V (cd (32 * (4 * q + r) + l))))
+      (List.ofFn fun l : Fin 32 => code (V (cl (32 * (4 * q + r) + l)))) := by
+  have h5 : (5 * q + r) % 5 = r := by omega
+  have h5' : (5 * q + r) / 5 = q := by omega
+  rw [h (5 * q + r) (by omega)]
+  simp only [chain8, h5, h5', hr, ↓reduceIte, List.map_cons, List.map_append, List.map_map, List.cons_append]
+  have hc : Arg.eval ops V (if r = 0 then Arg.c 0 else .g (o + (5 * q + r) - 1)) =
+      if r = 0 then 0 else V (o + (5 * q + r) - 1) := by
+    split_ifs <;> rfl
+  rw [hc, atom8_eval]
+  rfl
+
+theorem chain8_add (h : Chain8Holds (ops := ops) p V cd cl o n) {q : ℕ} (hq : q < n) :
+    V (o + (5 * q + 4)) = f32Add (if q = 0 then 0 else V (o + (5 * q + 4) - 5)) (V (o + (5 * q + 4) - 1)) % 2 ^ 32 := by
+  have h5 : (5 * q + 4) % 5 = 4 := by omega
+  have h5' : (5 * q + 4) / 5 = q := by omega
+  rw [h (5 * q + 4) (by omega)]
+  simp only [chain8, h5, h5', show ¬ (4 < 4) by omega, ↓reduceIte, List.map_cons, List.map_nil]
+  have hc : Arg.eval ops V (if q = 0 then Arg.c 0 else .g (o + (5 * q + 4) - 5)) =
+      if q = 0 then 0 else V (o + (5 * q + 4) - 5) := by
+    split_ifs <;> rfl
+  rw [hc]
+  rfl
+
+theorem chain8_inputs (A B : Fin (128 * n) → Code) (hA : ∀ l : Fin (128 * n), V (cd l) = (A l).val)
+    (hB : ∀ l : Fin (128 * n), V (cl l) = (B l).val) {t : ℕ} (ht : t < (rowAtoms A B).length) :
+    (List.ofFn fun l : Fin 32 => code (V (cd (32 * t + l)))) = List.ofFn (rowAtoms A B)[t].1 ∧
+      (List.ofFn fun l : Fin 32 => code (V (cl (32 * t + l)))) = List.ofFn (rowAtoms A B)[t].2 := by
+  have hlen : (rowAtoms A B).length = 128 * n / 32 := List.length_ofFn
+  rw [hlen] at ht
+  simp only [rowAtoms, List.getElem_ofFn]
+  constructor <;> congr 1 <;> funext l
+  · rw [hA ⟨32 * t + l, by omega⟩, code_val]
+  · rw [hB ⟨32 * t + l, by omega⟩, code_val]
+
+/-- **A window's word** in a row's chain: its four atoms write the window's word, a step word. -/
+theorem chain8_window (h : Chain8Holds (ops := ops) p V cd cl o n) (A B : Fin (128 * n) → Code)
+    (hA : ∀ l : Fin (128 * n), V (cd l) = (A l).val) (hB : ∀ l : Fin (128 * n), V (cl l) = (B l).val) {q : ℕ}
+    (hq : q < n) {w : ℕ} (hw : windowWordP? p (((rowAtoms A B).drop (4 * q)).take 4) = some w) :
+    V (o + (5 * q + 3)) = w ∧ StepWord w := by
+  have hlen : (rowAtoms A B).length = 128 * n / 32 := List.length_ofFn
+  have h3 : 4 * q + 3 < (rowAtoms A B).length := by rw [hlen]; omega
+  rw [take_drop_four _ h3] at hw
+  simp only [windowWordP?, List.foldlM_cons, List.foldlM_nil] at hw
+  obtain ⟨w1, h1, hw⟩ := Option.bind_eq_some_iff.1 hw
+  obtain ⟨w2, h2, hw⟩ := Option.bind_eq_some_iff.1 hw
+  obtain ⟨w3, h3', hw⟩ := Option.bind_eq_some_iff.1 hw
+  obtain ⟨w4, h4, hw⟩ := Option.bind_eq_some_iff.1 hw
+  obtain rfl : w4 = w := Option.some.inj hw
+  have ai := fun t (ht : t < (rowAtoms A B).length) => chain8_inputs A B hA hB ht
+  obtain ⟨rfl, -⟩ := PeelExactProofs.finite?_eq_some h1
+  obtain ⟨rfl, -⟩ := PeelExactProofs.finite?_eq_some h2
+  obtain ⟨rfl, -⟩ := PeelExactProofs.finite?_eq_some h3'
+  obtain ⟨rfl, -⟩ := PeelExactProofs.finite?_eq_some h4
+  have e0 : V (o + (5 * q + 0)) = p.step 0 (List.ofFn (rowAtoms A B)[4 * q].1) (List.ofFn (rowAtoms A B)[4 * q].2) := by
+    rw [chain8_atom p h hq (by omega), ← (ai _ (by omega)).1, ← (ai _ (by omega)).2]; rfl
+  have e1 : V (o + (5 * q + 1)) = p.step (V (o + (5 * q + 0)))
+      (List.ofFn (rowAtoms A B)[4 * q + 1].1) (List.ofFn (rowAtoms A B)[4 * q + 1].2) := by
+    rw [chain8_atom p h hq (by omega), ← (ai _ (by omega)).1, ← (ai _ (by omega)).2]; rfl
+  have e2 : V (o + (5 * q + 2)) = p.step (V (o + (5 * q + 1)))
+      (List.ofFn (rowAtoms A B)[4 * q + 2].1) (List.ofFn (rowAtoms A B)[4 * q + 2].2) := by
+    rw [chain8_atom p h hq (by omega), ← (ai _ (by omega)).1, ← (ai _ (by omega)).2]; rfl
+  have e3 : V (o + (5 * q + 3)) = p.step (V (o + (5 * q + 2)))
+      (List.ofFn (rowAtoms A B)[4 * q + 3].1) (List.ofFn (rowAtoms A B)[4 * q + 3].2) := by
+    rw [chain8_atom p h hq (by omega), ← (ai _ (by omega)).1, ← (ai _ (by omega)).2]; rfl
+  refine ⟨by rw [e3, e2, e1, e0], step_lt _ _ _ _, step_ne_negZero _ _ _ _, h4⟩
+
+/-- **A row's chain**: its `n` windows' promotions write the chain's word over its codes `A` and the other side `B`
+(`chainWordP? p 4`, the pinned order), on its last promotion. -/
+theorem chain8_word (hn : 0 < n) (h : Chain8Holds (ops := ops) p V cd cl o n) (A B : Fin (128 * n) → Code)
+    (hA : ∀ l : Fin (128 * n), V (cd l) = (A l).val) (hB : ∀ l : Fin (128 * n), V (cl l) = (B l).val) {c : ℕ}
+    (hc : chainWordP? p 4 (rowAtoms A B) = some c) : V (o + (5 * (n - 1) + 4)) = c := by
+  have hlen : (rowAtoms A B).length = 4 * n := by
+    rw [show (rowAtoms A B).length = 128 * n / 32 from List.length_ofFn]; omega
+  set G : ℕ → ℕ → Option ℕ := fun t q => (windowWordP? p (((rowAtoms A B).drop (4 * q)).take 4)).bind
+    (promoteWord? t) with hG
+  have hch : chainWordP? p 4 (rowAtoms A B) = (List.range n).foldlM G 0 := by
+    rw [chainWordP?, Freeze.toChunks_eq (by norm_num), hlen, show (4 * n + 4 - 1) / 4 = n by omega,
+      List.foldlM_map]
+  have key : ∀ m ≤ n, ∀ c, (List.range m).foldlM G 0 = some c →
+      StepWord c ∧ (if m = 0 then 0 else V (o + (5 * (m - 1) + 4))) = c := by
+    intro m
+    induction m with
+    | zero =>
+      intro _ c h
+      simp only [List.range_zero, List.foldlM_nil, pure, Option.some.injEq] at h
+      subst h
+      exact ⟨⟨by norm_num, by decide, by decide⟩, rfl⟩
+    | succ m ih =>
+      intro hm c hf
+      rw [List.range_succ, List.foldlM_append] at hf
+      obtain ⟨t, ht, hf⟩ := Option.bind_eq_some_iff.1 hf
+      simp only [List.foldlM_cons, List.foldlM_nil, hG] at hf
+      obtain ⟨c', hc', hf⟩ := Option.bind_eq_some_iff.1 hf
+      obtain rfl : c' = c := Option.some.inj hf
+      obtain ⟨w, hw, hp⟩ := Option.bind_eq_some_iff.1 hc'
+      obtain ⟨hts, htv⟩ := ih (by omega) t ht
+      obtain ⟨hwv, -⟩ := chain8_window p h A B hA hB (by omega) hw
+      obtain ⟨hadd, hcs⟩ := promote_step hts hp
+      refine ⟨hcs, ?_⟩
+      rw [ite_eq_right (Nat.succ_ne_zero m), show m + 1 - 1 = m by omega, chain8_add p h (by omega),
+        show o + (5 * m + 4) - 1 = o + (5 * m + 3) by omega, hwv]
+      have hprev : (if m = 0 then 0 else V (o + (5 * m + 4) - 5)) = t := by
+        rcases Nat.eq_zero_or_pos m with rfl | hm0
+        · simpa using htv
+        · rw [ite_eq_right (by omega), show o + (5 * m + 4) - 5 = o + (5 * (m - 1) + 4) by omega]
+          rwa [ite_eq_right (by omega)] at htv
+      rw [hprev, f32Add_of_addWord hadd, Nat.mod_eq_of_lt hcs.1]
+  obtain ⟨-, hv⟩ := key n le_rfl c (hch ▸ hc)
+  rwa [ite_eq_right (by omega)] at hv
+
+/-- **RowA computes `P_A`'s words**: at depth `K = 128·nw`, a transcript correct on RowA whose code outputs hold `A′`'s
+codes `A` and whose chain basis' column `q` holds `B` has on `P_A`'s word `q` the BF16 cast of the chain's word over `A`
+and `B` (`chainWordP? p 4`, the pinned order). -/
+theorem row8A_pa {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8A p K).spec ops).toCircuit.Transcript)
+    (hX : ((row8A p K).spec ops).part.Correct X 0) (A B : Fin (128 * nw) → Code)
+    (hA : ∀ t : Fin (128 * nw), val X (code8 K (rowIn K false) t) = (A t).val) {q : ℕ} (hq : q < 32)
+    (hB : ∀ t : Fin (128 * nw), val X (33 * K + 32 + 32 * t + q) = (B t).val) {c : ℕ}
+    (hc : chainWordP? p 4 (rowAtoms A B) = some c) :
+    val X (post8At K (rowIn K false) + q * (5 * nw + 1) + 5 * nw) = Prim.eval ops .f2fpBf16 [c] := by
+  have hKn : K / 128 = nw := by omega
+  have hlen := pre8Runs_len p K (rowIn K false)
+  have hN : (row8A p K).N = post8At K (rowIn K false) + 32 * (5 * nw + 1) + 32 + 1 := by
+    show rowIn K false + runsLen (row8A p K).runs = _
+    simp only [row8A, runsLen_append, runsLen, af8Run, Run.rep, bew8Run, okwRun, Run.ofList, List.length_cons,
+      List.length_nil, hKn]
+    omega
+  have hout : ∀ g ∈ (row8A p K).outs,
+      val X g = val (((row8A p K).spec ops).toCircuit.eval X) g := fun g hg =>
+    Spec.out_eq ((row8A p K).spec ops) X hX (List.mem_toFinset.2 hg) (by
+      simp only [row8A, List.mem_append, List.mem_map, List.mem_range, List.mem_singleton] at hg
+      show g < (row8A p K).N
+      rw [hN]
+      rcases hg with ((⟨t, ht, rfl⟩ | ⟨l, hl, rfl⟩) | ⟨l, hl, rfl⟩) | rfl
+      · unfold code8; unfold post8At at hlen ⊢; omega
+      · rw [hKn]; omega
+      · rw [hKn]
+        have : l * (5 * nw + 1) + 5 * nw < 32 * (5 * nw + 1) := by nlinarith
+        omega
+      · rw [hKn]; omega)
+  have hmem : post8At K (rowIn K false) + q * (5 * nw + 1) + 5 * nw ∈ (row8A p K).outs := by
+    simp only [row8A, List.mem_append, List.mem_map, List.mem_range, hKn]
+    exact Or.inl (Or.inr ⟨q, hq, rfl⟩)
+  rw [hout _ hmem]
+  obtain ⟨V, hV⟩ : ∃ V, V = val (((row8A p K).spec ops).toCircuit.eval X) := ⟨_, rfl⟩
+  rw [← hV]
+  have hh := Rows.holds ops (row8A p K) X
+  rw [← hV] at hh
+  have hpost := (runsHold_append ops V hh).2
+  rw [show (row8A p K).nIn + runsLen (pre8Runs p K (rowIn K false)) = post8At K (rowIn K false) from hlen] at hpost
+  have haf : RunHolds ops V (af8Run p K (rowIn K false)) (post8At K (rowIn K false)) := hpost.1
+  have hgate : ∀ s < 5 * nw + 1, V (post8At K (rowIn K false) + q * (5 * nw + 1) + s) =
+      ((if s < 5 * nw then chain8 p (code8 K (rowIn K false)) (fun t => 33 * K + 32 + 32 * t + q)
+          (post8At K (rowIn K false) + q * (5 * nw + 1) + s) s
+        else ⟨.f2fpBf16, [.g (post8At K (rowIn K false) + q * (5 * nw + 1) + s - 1)]⟩ : RGate)).prim.eval ops
+        (((if s < 5 * nw then chain8 p (code8 K (rowIn K false)) (fun t => 33 * K + 32 + 32 * t + q)
+          (post8At K (rowIn K false) + q * (5 * nw + 1) + s) s
+        else ⟨.f2fpBf16, [.g (post8At K (rowIn K false) + q * (5 * nw + 1) + s - 1)]⟩ : RGate)).args.map
+          (Arg.eval ops V)) := by
+    intro s hs
+    have hr : q * (5 * nw + 1) + s < (af8Run p K (rowIn K false)).n := by
+      simp only [af8Run, Run.rep, hKn]
+      nlinarith
+    have := haf _ hr
+    have hd : (q * (5 * nw + 1) + s) / (5 * nw + 1) = q := by
+      rw [Nat.add_comm, Nat.add_mul_div_right _ _ (by omega), Nat.div_eq_of_lt hs, Nat.zero_add]
+    have hm : (q * (5 * nw + 1) + s) % (5 * nw + 1) = s := by
+      rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hs]
+    simp only [af8Run, Run.rep, hKn, hd, hm] at this
+    rw [← Nat.add_assoc] at this
+    exact this
+  have hch : Chain8Holds (ops := ops) p V (code8 K (rowIn K false)) (fun t => 33 * K + 32 + 32 * t + q)
+      (post8At K (rowIn K false) + q * (5 * nw + 1)) nw := by
+    intro r hr
+    have := hgate r (by omega)
+    simp only [hr, ↓reduceIte] at this
+    exact this
+  have hA' : ∀ t : Fin (128 * nw), V (code8 K (rowIn K false) t) = (A t).val := by
+    intro t
+    have ht : code8 K (rowIn K false) t ∈ (row8A p K).outs := by
+      simp only [row8A, List.mem_append, List.mem_map, List.mem_range]
+      exact Or.inl (Or.inl (Or.inl ⟨t, by omega, rfl⟩))
+    rw [hV, ← hout _ ht, hA t]
+  have hB' : ∀ t : Fin (128 * nw), V (33 * K + 32 + 32 * t + q) = (B t).val := by
+    intro t
+    rw [hV, Rows.val_input ops (row8A p K) X (by show _ < rowIn K false; simp only [rowIn]; omega), hB t]
+  have hw := chain8_word p hnw hch A B hA' hB' hc
+  have hl := hgate (5 * nw) (by omega)
+  simp only [show ¬ (5 * nw < 5 * nw) by omega, ↓reduceIte, List.map_cons, List.map_nil, Arg.eval,
+    Wire.eval_id] at hl
+  rw [hl, show post8At K (rowIn K false) + q * (5 * nw + 1) + 5 * nw - 1 =
+    post8At K (rowIn K false) + q * (5 * nw + 1) + (5 * (nw - 1) + 4) by omega, hw]
+
+end Chain8
 
 end Pouw.PearlC.RowCircuit
