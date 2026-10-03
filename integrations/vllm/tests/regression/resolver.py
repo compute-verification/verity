@@ -157,7 +157,8 @@ class Row:
         return self._fetch(art, role)
 
     def _fetch(self, art: str, label: str) -> Path:
-        if art not in self._fetched:
+        # the store's trees/ is a cache its eviction may clear under a running suite: a tree that went is fetched again
+        if art not in self._fetched or not self._fetched[art].is_dir():
             from . import store_io
             try:
                 self._fetched[art] = store_io.fetch(art)

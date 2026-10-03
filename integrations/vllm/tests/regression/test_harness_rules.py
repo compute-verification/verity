@@ -5,7 +5,7 @@ does not resolve, which fails.  The checks that recompute from a row's Programs 
 skip unless VERITY_REGRESSION_REBUILD=1 (the post-train job), which selects them by their `rebuild` mark.  A query
 manifest's rows beyond v1 are its "promoted" facts whatever the engine is called (`v2-query`, `q-word` since S1).  A post-flip reference
 row (no `commit_summary.json`) is summarised from its own evidence.  A row's `manifest_flags` replaces POLICIES_OFF.  A merged
-Programs view outlives the trees it was assembled from.
+Programs view outlives the trees it was assembled from, and a row's tree evicted under the suite is fetched again.
 """
 from __future__ import annotations
 
@@ -161,6 +161,25 @@ def test_a_merged_programs_view_outlives_the_trees_it_links_from(tmp_path, monke
     shutil.rmtree(records)
     assert gzip.decompress((view / "build_request/instances.json.gz").read_bytes()) == b"[]"
     assert (view / "build_request/result.json").read_bytes() == b"{}"
+
+
+def test_a_store_tree_evicted_under_the_suite_is_fetched_again(tmp_path, monkeypatch):
+    """#73's executed_prefix found its tokens.json in `applies` and not in `actual` when node 1's hourly eviction cleared trees/
+    between them (r20261003-174531-333b): a row's fetched tree is fetched again once it is gone."""
+    from tests.regression import store_io
+    fetches = []
+
+    def fetch(art):
+        fetches.append(art)
+        (tmp_path / art / "match").mkdir(parents=True, exist_ok=True)
+        (tmp_path / art / "match" / "tokens.json").write_text("{}")
+        return tmp_path / art
+    monkeypatch.setattr(store_io, "fetch", fetch)
+    row = resolver.Row("k", {"row": 9, "artifacts": {"record": "art:t"}}, fixtures={})
+    assert (row._store_root("record") / "match" / "tokens.json").is_file()
+    shutil.rmtree(tmp_path / "art:t")
+    assert (row._store_root("record") / "match" / "tokens.json").is_file() and fetches == ["art:t", "art:t"]
+    assert row._store_root("record") and fetches == ["art:t", "art:t"], "a tree still there is not fetched again"
 
 
 def test_a_rows_manifest_flags_replace_the_policies_off():
