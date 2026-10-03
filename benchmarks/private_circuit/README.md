@@ -1,0 +1,16 @@
+# Private-circuit runs
+
+Protocol 2 (the private circuit) end to end: a hidden netlist is a value of the public universal unit
+`UniversalUnit_v1{G, N_IN, N_OUT}` (`verity.ml.boolean.universal`), proved by C-Flock's circuit prover under `--zk` and
+verified by the Lean verifier.
+
+- `universal.py`: the driver; its docstring says what it builds, what it checks and what a row records.
+- `pod.sh`: the entry point on a CPU node. It builds `flock-circuit` and `flock-verify` once per `FLOCK_WORK`, from this
+  checkout:
+
+~~~sh
+research run --on vy-nebius-1 --cwd source --project verity --declared-output 'out/*' -- \
+  bash benchmarks/private_circuit/pod.sh CLS="16,16,8 64,64,32" N=64 CPUS=128-159
+~~~
+
+`check` runs nothing here.
