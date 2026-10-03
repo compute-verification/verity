@@ -45,8 +45,9 @@ def test_the_rust_tests_run_the_live_crates_unit_tests_and_every_test_of_the_cra
 
 
 def test_the_rust_tests_key_moves_with_the_script_patches_live_crate_and_toolchain_only(tmp_path, monkeypatch):
+    assert CHECK.rust_toolchain(), "check_build.sh pins its toolchain: an agent VM's default (1.83) can't build upstream"
     flock = tmp_path / "backends" / "flock"
-    files = {"backends/flock/check_build.sh": "x", "backends/flock/flock-sha512-b684b12.patch": "p",
+    files = {"backends/flock/check_build.sh": "set -e\n", "backends/flock/flock-sha512-b684b12.patch": "p",
              "backends/flock/live/src/lib.rs": "fn a() {}", "backends/flock/verifier/ci.py": "", "backends/flock/README.md": ""}
     for f, text in files.items():
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
@@ -57,11 +58,18 @@ def test_the_rust_tests_key_moves_with_the_script_patches_live_crate_and_toolcha
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     monkeypatch.setattr(CHECK, "tracked_files", lambda: list(files))
     e = {"HOME": str(home), "PATH": "/nonexistent"}
-    assert CHECK.rust_tests_key(e) is None, "no rustc yet: the script installs one, and that run stores nothing"
     rustc.parent.mkdir(parents=True)
-    rustc.write_text("#!/bin/sh\necho 'rustc 1.98.1'\n")
+    rustc.write_text('#!/bin/sh\n[ "$RUSTUP_TOOLCHAIN" = 1.98.1 ] || exit 1\necho "rustc $RUSTUP_TOOLCHAIN"\n')
     rustc.chmod(0o755)
+    assert CHECK.rust_tests_key(e) is None, "a script that pins no toolchain: what it runs is the machine's to decide"
+    (flock / "check_build.sh").write_text("set -e\nRUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.97.0}\n")
+    assert CHECK.rust_tests_key(e) is None, "the pin isn't installed yet: the script installs it, and that run stores nothing"
+    (flock / "check_build.sh").write_text("set -e\nRUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.98.1}\n")
+    rustc.rename(home / "rustc")
+    assert CHECK.rust_tests_key(e) is None, "no rustc yet: the script installs one, and that run stores nothing"
+    (home / "rustc").rename(rustc)
     key = CHECK.rust_tests_key(e)
+    assert key, "the key's rustc runs under the script's pin"
     (flock / "verifier" / "ci.py").write_text("changed")
     (flock / "README.md").write_text("changed")
     assert CHECK.rust_tests_key(e) == key
