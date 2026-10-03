@@ -20,6 +20,7 @@ from verity_vllm.commit import scheme
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.research_outputs import KEPT_APART
+from verity_vllm.pipeline.tp import c2 as C2
 from verity_vllm.pipeline.tp import commit as TC
 from verity_vllm.pipeline.tp import commit_replay as TPR
 from verity_vllm.pipeline.tp import rank_replay as RR
@@ -138,14 +139,14 @@ def test_a_deferred_ranks_verdict_after_its_fold_is_the_in_process_verdict(pre, 
     result, grade, mismatch = replay
     sr, lk = _sr(result, grade, rank=rank, qp_ok=qp_ok, mismatch=mismatch), _lk(linked, rank)
     here, there = {}, {}
-    ok_here, why_here = TC.c2_and_pin_gates(here, _fin(rank, copy.deepcopy(sr), copy.deepcopy(lk), pin), *pre, rank=rank, replay_on=True, required=True, bundle="b")
-    ok, why = TC.c2_and_pin_gates(there, _deferred_fin(rank, pin=pin), *pre, rank=rank, replay_on=True, required=True, bundle="b")
+    ok_here, why_here = C2.c2_and_pin_gates(here, _fin(rank, copy.deepcopy(sr), copy.deepcopy(lk), pin), *pre, rank=rank, replay_on=True, required=True, bundle="b")
+    ok, why = C2.c2_and_pin_gates(there, _deferred_fin(rank, pin=pin), *pre, rank=rank, replay_on=True, required=True, bundle="b")
     if ok is not None:
         assert ok is False and ok_here is False, "a rank decided before its replay fails in place too"
         assert pre[0] is False or pin is not True
         return
     assert (why, there["replay_deferred"]) == (RB.PENDING, {"pre": list(pre), "bundle": "b"}) and pre[0] and pin is True
-    got = TC.replay_gates(there, copy.deepcopy(sr), copy.deepcopy(lk), *there["replay_deferred"]["pre"], rank=rank, replay_on=True, required=True)
+    got = C2.replay_gates(there, copy.deepcopy(sr), copy.deepcopy(lk), *there["replay_deferred"]["pre"], rank=rank, replay_on=True, required=True)
     assert got == (ok_here, why_here)
     for k in ("sampled_replay", "boundary_linkage", "query_population", "weights_pin"):
         assert there[k] == here[k], k
@@ -153,7 +154,7 @@ def test_a_deferred_ranks_verdict_after_its_fold_is_the_in_process_verdict(pre, 
 
 def test_without_a_replay_of_record_the_gates_are_the_pin_alone():
     cb = {}
-    ok, why = TC.c2_and_pin_gates(cb, _fin(0, {}, {}, True), True, None, rank=0, replay_on=False, required=True, bundle="b")
+    ok, why = C2.c2_and_pin_gates(cb, _fin(0, {}, {}, True), True, None, rank=0, replay_on=False, required=True, bundle="b")
     assert (ok, why) == (True, None) and "query_population" not in cb and "replay_deferred" not in cb
 
 
@@ -175,16 +176,16 @@ def _in_process(fins):
     per_rank, reasons = {}, []
     for f in fins:
         cb = _cblock(f["rank"], "r", {"digest": "d"})
-        ok, why = TC.c2_and_pin_gates(cb, f, True, None, rank=f["rank"], replay_on=True, required=True, bundle="b")
+        ok, why = C2.c2_and_pin_gates(cb, f, True, None, rank=f["rank"], replay_on=True, required=True, bundle="b")
         cb["commit_pass"], cb["commit_fail_reason"] = ok, why
         per_rank[f["rank"]] = cb
         if ok is False:
             reasons.append(f"rank {f['rank']}: {why}")
     rows = [{"pair": 0, "arm": "instrumented", "tokens_equal_ref": True, "commit": {"per_rank": per_rank, "commit_pass": not reasons,
                                                                                   "commit_fail_reason": "PASS" if not reasons else "; ".join(reasons)}}]
-    sr_comp, lk_comp = TC._sampled_replay_components(rows, VERSIONS)
-    return json.loads(json.dumps({"row": rows[0]["commit"], "sampled_replay": {k: sr_comp.get(k) for k in TC.SR_SUMMARY_KEYS}, "boundary_linkage": lk_comp,
-                                  "query_population": TC._query_population_component(rows, True)}, default=str))
+    sr_comp, lk_comp = C2.sampled_replay_components(rows, VERSIONS)
+    return json.loads(json.dumps({"row": rows[0]["commit"], "sampled_replay": {k: sr_comp.get(k) for k in C2.SR_SUMMARY_KEYS}, "boundary_linkage": lk_comp,
+                                  "query_population": C2.query_population_component(rows, True)}, default=str))
 
 
 @pytest.fixture
@@ -211,7 +212,7 @@ def deferred(tmp_path):
         (part / "binding_map.json").write_text(json.dumps(bmap))
         f = _deferred_fin(r, out)
         cb = _cblock(r, root, bmap)
-        ok, why = TC.c2_and_pin_gates(cb, f, True, None, rank=r, replay_on=True, required=True, bundle=RB.path(out, 0, rank=r).name)
+        ok, why = C2.c2_and_pin_gates(cb, f, True, None, rank=r, replay_on=True, required=True, bundle=RB.path(out, 0, rank=r).name)
         cb["commit_pass"], cb["commit_fail_reason"] = ok, why
         per_rank[r], bundles_of[0][r] = cb, {"partial": str(part), "hashed": {}, "engine_of_record": {"vllm": "test"}, "programs": {}}
         fins.append({k: v for k, v in f.items()})
@@ -219,15 +220,15 @@ def deferred(tmp_path):
     rows = [{"pair": 0, "arm": "instrumented", "tokens_equal_ref": True, "wall_s": 1.0,
              "commit": {"tp_run_root": TC.tp_run_root(WORLD, vec).hex(), "world": WORLD, "per_rank": per_rank,
                         "commitment_vector": [{"rank": r, "run_root": root} for r in range(WORLD)], "commit_pass": None, "commit_fail_reason": RB.PENDING}}]
-    sr_comp, lk_comp = TC._sampled_replay_components(rows, VERSIONS)
-    qp_comp = TC._query_population_component(rows, True)
+    sr_comp, lk_comp = C2.sampled_replay_components(rows, VERSIONS)
+    qp_comp = C2.query_population_component(rows, True)
     comps = {"weights_pin": {"result": True}, "cross_rank_collectives": {"result": True}, "fold_match_binding": {"result": None, "why": "no --match-dir"}}
-    vc = TC.annotate_value_correspondence(None, sr_comp, lk_comp, qp_comp, comps["weights_pin"], comps["cross_rank_collectives"], comps["fold_match_binding"], replay_on=True)
+    vc = C2.annotate_value_correspondence(None, sr_comp, lk_comp, qp_comp, comps["weights_pin"], comps["cross_rank_collectives"], comps["fold_match_binding"], replay_on=True)
     assert sr_comp["result"] is None and qp_comp["result"] is None and vc["result"] is None and vc["c2_of_record"]["result"] is None
-    summ = {"label": "t", "tp": WORLD, "pairs": 1, "commit_pass": [None], "sampled_replay": {k: sr_comp.get(k) for k in TC.SR_SUMMARY_KEYS},
+    summ = {"label": "t", "tp": WORLD, "pairs": 1, "commit_pass": [None], "sampled_replay": {k: sr_comp.get(k) for k in C2.SR_SUMMARY_KEYS},
             "boundary_linkage": lk_comp, "query_population": qp_comp, "pass": True, "only_arm": "instrumented", "runs": 1}
     summ.update(commit_pass=False)          # `only_arm_summary` over a None row
-    TPR.seal(out, summ, rows, bundles_of, replay_cfg=REPLAY_CFG, required_manifest=str(man), world=WORLD, versions={"git_head": "c0de"},
+    C2.seal(out, summ, rows, bundles_of, replay_cfg=REPLAY_CFG, required_manifest=str(man), world=WORLD, versions={"git_head": "c0de"},
              all_pass=True, vc_base=None, comps=comps, xrank_pairs=[{"result": True, "by_family": {}}], xrank_families=[], label="t")
     assert summ["pass"] is None and summ["commit_pass"] is None and len(summ["replay_deferred"]["bundles"]) == WORLD
     (out / "runs.jsonl").write_text("".join(json.dumps(r, default=str) + "\n" for r in rows))
@@ -237,7 +238,7 @@ def deferred(tmp_path):
     (out / "coverage.json").write_text(json.dumps({"verdict": "PASS", "identity_coverage": True, "reason": None, "replay_pending_ranks": [0, 1],
                                                    "value_correspondence": vc}))
     (out / "sampled_replay.json").write_text(json.dumps({"sampled_replay": sr_comp, "boundary_linkage": lk_comp}, default=str))
-    return types.SimpleNamespace(out=out, rc=rc, man=man, dd=json.loads((out / TPR.DEFERRED).read_text()))
+    return types.SimpleNamespace(out=out, rc=rc, man=man, dd=json.loads((out / C2.DEFERRED).read_text()))
 
 
 def _replayed(d, rank, sr, lk):
@@ -258,9 +259,9 @@ def test_seal_names_every_ranks_bundle_by_its_manifest_and_a_decided_commit_seal
     out2 = tmp_path / "decided"
     RB.partial(out2, 0, rank=0).mkdir(parents=True)
     summ = {"pass": False}
-    TPR.seal(out2, summ, [{"pair": 0, "arm": "instrumented", "commit": {"commit_pass": False, "per_rank": {}}}], {0: {0: {}}}, replay_cfg=REPLAY_CFG,
+    C2.seal(out2, summ, [{"pair": 0, "arm": "instrumented", "commit": {"commit_pass": False, "per_rank": {}}}], {0: {0: {}}}, replay_cfg=REPLAY_CFG,
              required_manifest=None, world=WORLD, versions={}, all_pass=False, vc_base=None, comps={}, xrank_pairs=[], xrank_families=[], label=None)
-    assert summ == {"pass": False} and not (out2 / TPR.DEFERRED).exists() and not RB.partial(out2, 0, rank=0).exists()
+    assert summ == {"pass": False} and not (out2 / C2.DEFERRED).exists() and not RB.partial(out2, 0, rank=0).exists()
 
 
 @pytest.mark.parametrize("bad_rank", [None, 1])
@@ -292,7 +293,7 @@ def test_the_fold_decides_the_commit_as_the_ranks_processes_would_have(deferred,
         assert row["commit_fail_reason"].startswith("rank 1: sampled replay (C2 of record, rank 1): mismatch") and cov["reason"] == row["commit_fail_reason"]
     fin = json.loads((d.out / "finalize_pair0.json").read_text())
     assert [f["sampled_replay"]["sampled_replay"]["grade"] for f in fin] == [sr[0]["grade"], sr[1]["grade"]]
-    dd = json.loads((d.out / TPR.DEFERRED).read_text())
+    dd = json.loads((d.out / C2.DEFERRED).read_text())
     assert dd["decided"]["pass"] is (bad_rank is None) and dd["pending_pairs"] == [] and len(dd["replayed"]) == WORLD
     assert TPR.main(TPR.Options(commit_out=str(d.out), checkpoint_dir="/ck")) == (0 if bad_rank is None else 3), "a decided record is never replayed again"
 
@@ -388,7 +389,7 @@ def _worker(tmp_path, cfg, bmap):
     from verity_vllm.engine import rank_worker as W
 
     class Stub:
-        _tp2_defer_replay = W.TP2CaptureWorkerExtension._tp2_defer_replay
+        _deferred_replay = W.TP2CaptureWorkerExtension._deferred_replay
 
     s = Stub()
     s._tp2_commit = {"rank": 1, "world": WORLD, "replay": cfg, "bmap": bmap, "com": object()}
@@ -419,7 +420,7 @@ def test_a_rank_defers_its_replay_into_a_partial_bundle(tmp_path, monkeypatch):
 
     monkeypatch.setattr(RB, "write_store", write_store)
     bmap = {"entries": [], "digest": "m"}
-    r = _worker(tmp_path, _program(tmp_path, "c" * 64), bmap)._tp2_defer_replay(types.SimpleNamespace(run_root=b"\x01" * 32), {"out": str(out), "pair": 0})
+    r = _worker(tmp_path, _program(tmp_path, "c" * 64), bmap)._deferred_replay(types.SimpleNamespace(run_root=b"\x01" * 32), {"out": str(out), "pair": 0})
     sr, b = r["sampled_replay"], r["bundle"]
     assert (sr["grade"], sr["result"], sr["rank"], r["boundary_linkage"]["rank"]) == ("deferred", None, 1, 1) and "replay_bundle_p0_rank1" in sr["why"]
     assert b["partial"] == str(RB.partial(out, 0, rank=1)) and b["hashed"] == {"store/store.json": "ee" * 32} and b["programs"]["r0"]["program_digest"] == "c" * 64
@@ -429,15 +430,15 @@ def test_a_rank_defers_its_replay_into_a_partial_bundle(tmp_path, monkeypatch):
 def test_a_rank_whose_program_is_not_of_record_fails_in_place_and_leaves_no_bundle(tmp_path, monkeypatch):
     out = tmp_path / "out"
     RB.partial(out, 0, rank=1).mkdir(parents=True)
-    r = _worker(tmp_path, _program(tmp_path, "d" * 64), {"entries": [], "digest": "m"})._tp2_defer_replay(types.SimpleNamespace(run_root=b"\x01" * 32), {"out": str(out), "pair": 0})
+    r = _worker(tmp_path, _program(tmp_path, "d" * 64), {"entries": [], "digest": "m"})._deferred_replay(types.SimpleNamespace(run_root=b"\x01" * 32), {"out": str(out), "pair": 0})
     assert r["bundle"] is None and r["sampled_replay"]["grade"] == "not-evaluated" and "REFUSED (not the Program of record)" in r["sampled_replay"]["why"]
     assert not RB.partial(out, 0, rank=1).exists()
-    ok, why = TC.c2_and_pin_gates({}, {"sampled_replay": r, "weights_pin": {"result": True}}, True, None, rank=1, replay_on=True, required=True, bundle="b")
+    ok, why = C2.c2_and_pin_gates({}, {"sampled_replay": r, "weights_pin": {"result": True}}, True, None, rank=1, replay_on=True, required=True, bundle="b")
     assert ok is False and "not-evaluated" in why
 
 
 def test_a_rank_without_a_binding_map_defers_nothing(tmp_path):
-    r = _worker(tmp_path, {}, None)._tp2_defer_replay(types.SimpleNamespace(run_root=b"\x01" * 32), {"out": str(tmp_path), "pair": 0})
+    r = _worker(tmp_path, {}, None)._deferred_replay(types.SimpleNamespace(run_root=b"\x01" * 32), {"out": str(tmp_path), "pair": 0})
     assert r["sampled_replay"]["grade"] == "not-evaluated" and "bundle" not in r
 
 
@@ -475,7 +476,7 @@ def test_a_pending_tp_commit_waits_for_the_replay_stage_which_decides_it(tmp_pat
     bundles = [{"pair": 0, "rank": r, "path": f"{t.d}/commit/replay_bundle_p0_rank{r}", "manifest_sha256": "ab" * 32} for r in range(WORLD)]
     (Path(t.d) / "commit" / "summary.json").write_text(json.dumps({"only_arm": "instrumented", "commit_pass": None, "pass": None,
                                                                     "replay_deferred": {"bundles": bundles}}))
-    (Path(t.d) / "commit" / TPR.DEFERRED).write_text("{}")
+    (Path(t.d) / "commit" / C2.DEFERRED).write_text("{}")
     monkeypatch.setattr(R_, "tp_rank_workload_digest", lambda bdir, r: f"wd{r}")
     monkeypatch.setattr(R_, "tp_manifest_complete", lambda d: True)
     monkeypatch.setattr(R_, "applicable_taps", lambda man, ck: [])

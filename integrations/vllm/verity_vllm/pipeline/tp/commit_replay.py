@@ -17,7 +17,7 @@ checkpoint (`weights_of_record.compose` at the rank's (world, rank)) and opened 
 (`cpu_replay.open_weights`).  Then the same C2 as the rank's process runs in place (`rank_replay.evaluate`, the same seed), and its
 records go to `sampled_replay_p<pair>_rank<r>.json`, so a rank replayed is never replayed again and the ranks may replay on
 different hosts.  Once every rank's record is there, `fold` decides the Commit as the in-process Commit would have: each rank's
-gates after its pre-replay verdict (`commit.replay_gates`), the row's verdict, `finalize_pair<k>.json`, coverage, `sampled_replay.json`,
+gates after its pre-replay verdict (`c2.replay_gates`), the row's verdict, `finalize_pair<k>.json`, coverage, `sampled_replay.json`,
 `summary.json` and `runs.jsonl`.  Exit 0 PASS, 3 FAIL, 4 ranks remain, 2 refused (a bundle that is not this record's, a pick too
 large for this host's memory).
 """
@@ -36,9 +36,8 @@ from typing import Any
 
 from verity_vllm.config import option
 from verity_vllm.pipeline import replay_bundle as RB
+from verity_vllm.pipeline.tp import c2 as C2
 
-DEFERRED = "replay_deferred.json"
-SCHEMA = "verity-vllm/tp-replay-deferred/v1"
 RESULT_SCHEMA = "verity-vllm/tp-rank-replay/v1"
 
 
@@ -65,65 +64,12 @@ class Refused(Exception):
     """A bundle that is not the Commit record's, or a record with nothing deferred."""
 
 
-def _sha256(p: Path) -> str:
-    return hashlib.sha256(p.read_bytes()).hexdigest()
-
-
-def _write(p: Path, text: str) -> None:
-    tmp = p.with_name(p.name + ".tmp")
-    tmp.write_text(text)
-    os.replace(tmp, p)
-
-
 def _rows(out: Path) -> list[dict[str, Any]]:
     return [json.loads(ln) for ln in (out / "runs.jsonl").read_text().splitlines() if ln.strip()]
 
 
 def result_path(out: str | os.PathLike, pair: int, rank: int) -> Path:
     return Path(out) / f"sampled_replay_p{pair}_rank{rank}.json"
-
-
-# ------------------------------------------------------------------------------------------------ the Commit's side
-
-def seal(out: Path, summ: dict[str, Any], rows: list[dict[str, Any]], bundles_of: dict[int, dict[int, dict | None]], *, replay_cfg: dict | None,
-         required_manifest: str | None, world: int, versions: dict[str, Any], all_pass: bool, vc_base: dict | None, comps: dict[str, dict],
-         xrank_pairs: list[dict], xrank_families: list[str], label: str | None) -> None:
-    """At the end of a deferred TP Commit: when every check it ran passed and its instrumented runs await their ranks' replay, seals
-    every rank's bundle, writes `replay_deferred.json` and makes ``summ`` PENDING; otherwise the Commit is decided and every partial
-    bundle goes."""
-    trt = [r for r in rows if r["arm"] != "control"]
-    pending = [r["pair"] for r in trt if (r.get("commit") or {}).get("commit_pass") is None]
-    if not (pending and summ.get("pass") is True and replay_cfg is not None):
-        for p, ranks in bundles_of.items():
-            for rk in ranks:
-                RB.discard(out, p, rank=rk)
-        if pending:
-            print(f"[tp2commit] REPLAY BUNDLES discarded: the Commit is decided (pass {summ.get('pass')}) with pairs {pending} awaiting a replay", flush=True)
-        return
-    man_sha = _sha256(Path(required_manifest)) if required_manifest else None
-    bundles = []
-    for row in trt:
-        pair = int(row["pair"])
-        for rk, c in sorted(row["commit"]["per_rank"].items()):
-            b = bundles_of[pair][int(rk)]
-            ctx = {"tp": {"world": world, "rank": int(rk)}, "pair": pair, "label": label, "code": versions.get("git_head"),
-                   "run_root": c["run_root"], "tp_run_root": row["commit"]["tp_run_root"], "weight_registration": c.get("weight_registration"),
-                   "replay": replay_cfg, "required_manifest": required_manifest, "required_manifest_sha256": man_sha,
-                   "engine_of_record": b["engine_of_record"], "programs": b["programs"]}
-            t0 = time.perf_counter()
-            m = RB.seal(out, pair, ctx, None, hashed=b["hashed"], rank=int(rk))
-            bundles.append({"pair": pair, "rank": int(rk), "path": m["path"], "manifest_sha256": m["sha256"], "bytes": m["bytes"], "files": len(m["files"])})
-            print(f"[tp2commit] REPLAY BUNDLE (pair {pair}, rank {rk}): {m['path']} sealed in {time.perf_counter() - t0:.1f} s, {len(m['files'])} files, "
-                  f"{m['bytes'] >> 20} MiB, manifest sha256 {m['sha256'][:16]}", flush=True)
-    xr_of = {str(r["pair"]): {"result": xr.get("result"), "by_family": xr.get("by_family")} for r, xr in zip(trt, xrank_pairs)}
-    doc = {"schema": SCHEMA, "world": world, "pending_pairs": pending, "bundles": bundles, "all_pass": all_pass, "vc_base": vc_base,
-           "components": comps, "xrank": xr_of, "xrank_families": xrank_families, "required_manifest": required_manifest,
-           "sealed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "replayed": []}
-    _write(out / DEFERRED, json.dumps(doc, indent=1, default=str) + "\n")
-    summ["pass"] = None
-    if summ.get("only_arm"):
-        summ["commit_pass"] = None
-    summ["replay_deferred"] = {"record": DEFERRED, "pending_pairs": pending, "bundles": bundles}
 
 
 # ------------------------------------------------------------------------------------------------ one rank, on CPU
@@ -136,7 +82,7 @@ def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank
     ctx, bdir = b["context"], Path(b["path"])
     ent = next((x for x in dd.get("bundles") or [] if (int(x["pair"]), int(x["rank"])) == (pair, rank)), None)
     if ent is None or ent.get("manifest_sha256") != b["manifest_sha256"]:
-        raise Refused(f"{DEFERRED} names no bundle of pair {pair} rank {rank} with manifest sha256 {b['manifest_sha256'][:16]}")
+        raise Refused(f"{C2.DEFERRED} names no bundle of pair {pair} rank {rank} with manifest sha256 {b['manifest_sha256'][:16]}")
     if (int(ctx["pair"]), int(ctx["tp"]["rank"]), int(ctx["tp"]["world"])) != (pair, rank, int(dd["world"])):
         raise Refused(f"{bdir}: its context is pair {ctx['pair']} tp {ctx['tp']}, not pair {pair} rank {rank} of world {dd['world']}")
     row = next((r for r in _rows(out) if r["pair"] == pair and r["arm"] != "control"), None)
@@ -166,7 +112,7 @@ def _manifest(o: Options, ctx: dict[str, Any]) -> dict | None:
     if not want:
         return None
     p = o.required_manifest or ctx.get("required_manifest")
-    if not p or not os.path.isfile(p) or _sha256(Path(p)) != want:
+    if not p or not os.path.isfile(p) or C2.sha256_file(Path(p)) != want:
         raise Refused(f"{p} is not the Commit's required manifest (sha256 {want[:16]})")
     return json.loads(Path(p).read_text())
 
@@ -223,7 +169,7 @@ def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int)
     doc = {"schema": RESULT_SCHEMA, "pair": pair, "rank": rank, "bundle": b["path"], "manifest_sha256": b["manifest_sha256"], "where": "cpu",
            "host": socket.gethostname(), "sampled_replay": sr, "boundary_linkage": lk, "weights_check": wc, "weights_attest": attest,
            "wall_s": round(time.perf_counter() - t0, 3), "peak_rss_bytes": _peak_rss(), "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-    _write(result_path(out, pair, rank), json.dumps(doc, indent=1, default=str) + "\n")
+    C2.write_atomic(result_path(out, pair, rank), json.dumps(doc, indent=1, default=str) + "\n")
     smp = sr.get("sample") or {}
     print(f"[tp-replay] SAMPLED REPLAY (pair {pair}, rank {rank}): result {sr.get('result')} grade {sr.get('grade')} picked {smp.get('picked')} "
           f"evaluated {smp.get('evaluated')} equal {smp.get('equal')} mismatch {smp.get('mismatch_n')}; boundary linkage {lk.get('result')} "
@@ -237,10 +183,8 @@ def fold(out: Path) -> bool | None:
     """The Commit decided from every rank's replay on the record (None, nothing written, while a rank's is missing): each rank's
     gates after its pre-replay verdict, then everything the in-process Commit derives from them."""
     from verity_vllm.pipeline.tp import config_run as TPC
-    from verity_vllm.pipeline.tp.commit import (SR_SUMMARY_KEYS, _query_population_component, _sampled_replay_components,
-                                                annotate_unreplayable, annotate_value_correspondence, replay_gates)
 
-    dd = json.loads((out / DEFERRED).read_text())
+    dd = json.loads((out / C2.DEFERRED).read_text())
     results: dict[tuple[int, int], dict] = {}
     for b in dd["bundles"]:
         rp = result_path(out, b["pair"], b["rank"])
@@ -265,9 +209,9 @@ def fold(out: Path) -> bool | None:
             if c.get("commit_pass") is None and "replay_deferred" in c:
                 res = results[(pair, int(rk))]
                 sr, lk = res["sampled_replay"], res["boundary_linkage"]
-                annotate_unreplayable([sr], xr, pair, set(dd["xrank_families"]))
+                C2.annotate_unreplayable([sr], xr, pair, set(dd["xrank_families"]))
                 ok, why = c["replay_deferred"]["pre"]
-                ok, why = replay_gates(c, sr, lk, ok, why, rank=int(rk), replay_on=True, required=required)
+                ok, why = C2.replay_gates(c, sr, lk, ok, why, rank=int(rk), replay_on=True, required=required)
                 c["commit_pass"], c["commit_fail_reason"] = ok, why
                 c["replay_deferred"]["replayed"] = {k: res.get(k) for k in ("where", "host", "manifest_sha256", "wall_s", "peak_rss_bytes", "utc", "weights_attest")}
                 f_ = next(x for x in fin if int(x["rank"]) == int(rk))
@@ -276,7 +220,7 @@ def fold(out: Path) -> bool | None:
                 reasons.append(f"rank {rk}: {c.get('commit_fail_reason')}")
         row["commit"]["commit_pass"] = not reasons
         row["commit"]["commit_fail_reason"] = "PASS" if not reasons else "; ".join(reasons)
-        _write(finp, json.dumps(fin, indent=1, default=str) + "\n")
+        C2.write_atomic(finp, json.dumps(fin, indent=1, default=str) + "\n")
         covp = out / ("coverage.json" if pair == 0 else f"coverage_pair{pair}.json")
         if (reasons or pair == 0) and covp.is_file():
             cj = json.loads(covp.read_text())
@@ -285,29 +229,29 @@ def fold(out: Path) -> bool | None:
                 cj["verdict"] = cj["verdict"] if cj.get("verdict") == "NOT_RUN" else "FAIL"
                 cj["identity_coverage"] = None if cj.get("identity_coverage") is None else False
                 cj["reason"] = "; ".join(reasons)
-            _write(covp, json.dumps(cj, indent=1, default=str) + "\n")
+            C2.write_atomic(covp, json.dumps(cj, indent=1, default=str) + "\n")
         elif pair > 0:
             covp.unlink(missing_ok=True)
         if reasons:
             print(f"[tp2commit] COMMIT FAIL (pair {pair}): {row['commit']['commit_fail_reason']}", flush=True)
-    sr_comp, lk_comp = _sampled_replay_components(rows, versions)
-    qp_comp = _query_population_component(rows, True)
+    sr_comp, lk_comp = C2.sampled_replay_components(rows, versions)
+    qp_comp = C2.query_population_component(rows, True)
     covp = out / "coverage.json"
     if covp.is_file():
         cj = json.loads(covp.read_text())
         cm = dd["components"]
-        cj["value_correspondence"] = annotate_value_correspondence(json.loads(json.dumps(dd.get("vc_base"))), sr_comp, lk_comp, qp_comp, cm["weights_pin"],
+        cj["value_correspondence"] = C2.annotate_value_correspondence(json.loads(json.dumps(dd.get("vc_base"))), sr_comp, lk_comp, qp_comp, cm["weights_pin"],
                                                                    cm["cross_rank_collectives"], cm["fold_match_binding"], replay_on=True)
-        _write(covp, json.dumps(cj, indent=1, default=str) + "\n")
+        C2.write_atomic(covp, json.dumps(cj, indent=1, default=str) + "\n")
     srp = out / "sampled_replay.json"
     if srp.is_file():
         sj = json.loads(srp.read_text())
         sj["sampled_replay"], sj["boundary_linkage"] = sr_comp, lk_comp
-        _write(srp, json.dumps(sj, indent=1, default=str) + "\n")
+        C2.write_atomic(srp, json.dumps(sj, indent=1, default=str) + "\n")
     trt = [r for r in rows if r["arm"] != "control"]
     summ = json.loads((out / "summary.json").read_text())
     summ["commit_pass"] = [(r.get("commit") or {}).get("commit_pass") for r in trt]
-    summ["sampled_replay"] = {k: sr_comp.get(k) for k in SR_SUMMARY_KEYS}
+    summ["sampled_replay"] = {k: sr_comp.get(k) for k in C2.SR_SUMMARY_KEYS}
     summ["boundary_linkage"], summ["query_population"] = lk_comp, qp_comp
     all_pass = bool(dd["all_pass"]) and all(c is True for c in summ["commit_pass"]) and qp_comp.get("result") is not False
     summ["pass"] = all_pass and all(r["tokens_equal_ref"] for r in rows)
@@ -316,10 +260,10 @@ def fold(out: Path) -> bool | None:
     replayed = [{k: res.get(k) for k in ("pair", "rank", "bundle", "manifest_sha256", "where", "host", "wall_s", "peak_rss_bytes", "utc")}
                 for _k, res in sorted(results.items())]
     summ.setdefault("replay_deferred", {}).update(pending_pairs=[], replayed=replayed)
-    _write(out / "runs.jsonl", "".join(json.dumps(r, default=str) + "\n" for r in rows))
-    _write(out / "summary.json", json.dumps(summ, indent=1, default=str) + "\n")
+    C2.write_atomic(out / "runs.jsonl", "".join(json.dumps(r, default=str) + "\n" for r in rows))
+    C2.write_atomic(out / "summary.json", json.dumps(summ, indent=1, default=str) + "\n")
     dd.update(pending_pairs=[], replayed=replayed, decided={"pass": summ["pass"], "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
-    _write(out / DEFERRED, json.dumps(dd, indent=1, default=str) + "\n")
+    C2.write_atomic(out / C2.DEFERRED, json.dumps(dd, indent=1, default=str) + "\n")
     print(f"[tp2commit] {'PASS' if summ['pass'] else 'FAIL'} (decided on CPU from {len(results)} rank replays): sampled replay {sr_comp.get('result')}, "
           f"boundary linkage {lk_comp.get('result')}, C2 population {qp_comp.get('result')}; {sr_comp.get('why') or ''}", flush=True)
     return summ["pass"]
@@ -331,9 +275,9 @@ def main(o: Options) -> int:
 
     out = Path(o.commit_out)
     try:
-        if not (out / DEFERRED).is_file():
-            raise Refused(f"{out / DEFERRED}: not a deferred TP Commit (tp-commit --replay-deferred) or decided in the Commit")
-        dd = json.loads((out / DEFERRED).read_text())
+        if not (out / C2.DEFERRED).is_file():
+            raise Refused(f"{out / C2.DEFERRED}: not a deferred TP Commit (tp-commit --replay-deferred) or decided in the Commit")
+        dd = json.loads((out / C2.DEFERRED).read_text())
         if dd.get("decided"):
             print(f"[tp-replay] already decided: pass {dd['decided'].get('pass')} ({dd['decided'].get('utc')})", flush=True)
             return 0 if dd["decided"].get("pass") else 3
