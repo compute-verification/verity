@@ -476,9 +476,9 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             # READ BACK what vLLM saw during instantiation (never a literal); declared != applied -> refuse
             applied = read_back_applied()
             applied["attention_backend"] = res["target"]["consulted"].get("attention_backend_knob")
-            # [R15 fp8] the block-scaled FP8 GEMM kernel vLLM selected for the model's FP8 linears (declared by `fp8_block_gemm`)
-            from verity_vllm.program.frontend.target_profile import fp8_block_gemm_kernel_of
-            applied["fp8_block_gemm_kernel"] = fp8_block_gemm_kernel_of(model)
+            # [R15 fp8] the kernels vLLM selected: the FP8 linears' (declared by `fp8_block_gemm`), the fused-MoE experts' (by `moe_backend`)
+            from verity_vllm.program.frontend.target_profile import applied_kernels
+            applied.update(applied_kernels(target, model))
             # derived (observed) selection fields: the instantiated layers' attention impl; the fused-norm dispatch (after export)
             res["attention_impls_observed"] = vm.attention_impls(model)
             # [R13 hopper] READ BACK the FA version the selector gave the layers (one value over all layers, else None = mismatch): the
@@ -516,8 +516,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             applied_export["attention_backend"] = applied["attention_backend"]
             if "flash_attn_version" in applied:                  # absent when no layer is a FlashAttention impl (judged by the attention rule)
                 applied_export["flash_attn_version"] = applied["flash_attn_version"]
-            # [R15 fp8] the layers' FP8 kernel objects, read back AGAIN after the export (a kernel swapped around the export would show here)
-            applied_export["fp8_block_gemm_kernel"] = fp8_block_gemm_kernel_of(model)
+            # [R15 fp8] the layers' kernel objects, read back AGAIN after the export (a kernel swapped around the export would show here)
+            applied_export.update(applied_kernels(target, model))
             res["target"]["applied_after_export"] = applied_export
             bad = profile_mismatches(target, applied_export)
             if bad:
