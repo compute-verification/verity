@@ -209,20 +209,20 @@ theorem push_get0 {a : Array OodCtx} {o x : OodCtx} (h : a[0]? = some o) : (a.pu
     · exact h0
   rw [Array.getElem?_push, ite_eq_right (by omega), h]
 
-theorem lforIn_inv' {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (I : LState → Prop) (B : ℕ)
-    (hb : ∀ i s st t b st' t', i < B → I st → body i s st t = .ok ((b, st'), t') → I st') :
+theorem lforIn_inv' {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (I : LState → Flock.Transcript → Prop) (B : ℕ)
+    (hb : ∀ i s st t b st' t', i < B → I st t → body i s st t = .ok ((b, st'), t') → I st' t') :
     ∀ (n a : ℕ) (s : σ) (st : LState) (t : Flock.Transcript) (s' : σ) (st' : LState) (t' : Flock.Transcript),
-      a + n ≤ B → I st → (forIn (List.range' a n) s body : LM σ) st t = .ok ((s', st'), t') → I st'
+      a + n ≤ B → I st t → (forIn (List.range' a n) s body : LM σ) st t = .ok ((s', st'), t') → I st' t'
   | 0, a, s, st, t, s', st', t', _, hI, h => by
       simp only [List.range'_zero, List.forIn_nil] at h
-      obtain ⟨-, rfl, -⟩ := lpure_ok h
+      obtain ⟨-, rfl, rfl⟩ := lpure_ok h
       exact hI
   | n + 1, a, s, st, t, s', st', t', hB, hI, h => by
       rw [List.range'_succ, List.forIn_cons] at h
       obtain ⟨r, st₁, t₁, h₁, h₂⟩ := lbind_ok h
       have hI₁ := hb a s st t r st₁ t₁ (by omega) hI h₁
       cases r with
-      | done b => obtain ⟨-, rfl, -⟩ := lpure_ok h₂; exact hI₁
+      | done b => obtain ⟨-, rfl, rfl⟩ := lpure_ok h₂; exact hI₁
       | yield b => exact lforIn_inv' body I B hb n (a + 1) b st₁ t₁ s' st' t' (by omega) hI₁ h₂
 
 set_option maxHeartbeats 4000000 in
@@ -235,7 +235,8 @@ theorem zk_ligerito_rec (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (c
     rec.target = T ∧ rec.ood.size = 1 ∧ rec.ood[0]!.1 = (t.rounds[t.k + 1]!).coins.getD 0 0 ∧
       rec.challenges.size = sch.k0 ∧
       (∀ j < sch.k0, rec.challenges[j]! = coinK (t.rounds[t.k + 2 + j]!).coins) ∧
-      rec.rho = (coinK (t.rounds[t.k + 2 + sch.k0]!).coins, coinK (t.rounds[t.k + 3 + sch.k0]!).coins) := by
+      rec.rho = (coinK (t.rounds[t.k + 2 + sch.k0]!).coins, coinK (t.rounds[t.k + 3 + sch.k0]!).coins) ∧
+      t'.rounds = t.rounds ∧ t.k + 4 + sch.k0 ≤ t'.k := by
   obtain ⟨hn7, h2, hl0, hc0, hl4, hcols, hext⟩ := hdim
   have hc01 := hcols 0 (by omega)
   have hn3 : 3 ≤ sch.n := by omega
@@ -314,24 +315,30 @@ theorem zk_ligerito_rec (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (c
     rw [ho₁₀]; rfl
   try dsimp only at h₄
   obtain ⟨_, t₁₁, h₁₁, h₄⟩ := lift_bind h₄
-  obtain ⟨-, -, yA, mA, t₁₂, -, -, -, -, h₄⟩ := oodIntro_bind (show sch.n - sch.k0 + 1 ≠ 0 by omega) h₄
-  obtain ⟨-, -, yB, mB, t₁₃, -, -, -, -, h₄⟩ := oodIntro_bind (show sch.n - sch.k0 + 1 ≠ 0 by omega) h₄
+  have k₁₁ := absorbBytes_ok h₁₁
+  obtain ⟨-, -, yA, mA, t₁₂, -, -, hr₁₂, hk₁₂, h₄⟩ :=
+    oodIntro_bind (show sch.n - sch.k0 + 1 ≠ 0 by omega) h₄
+  obtain ⟨-, -, yB, mB, t₁₃, -, -, hr₁₃, hk₁₃, h₄⟩ :=
+    oodIntro_bind (show sch.n - sch.k0 + 1 ≠ 0 by omega) h₄
   have hlv0 := hlv 0 (by omega)
-  obtain ⟨-, -, ⟨pos0, al0, e0⟩, t₁₄, -, -, h₄⟩ := queryLevel0_bind hlv0.q_ne_zero h₄
+  obtain ⟨-, -, ⟨pos0, al0, e0⟩, t₁₄, hr₁₄, hk₁₄, h₄⟩ := queryLevel0_bind hlv0.q_ne_zero h₄
   dsimp only at h₄
   obtain ⟨extra, stX, tX, hX, h₄'⟩ := lbind_ok h₄
   clear h₄
   rw [lforIn_range_eq, List.forIn_pure_yield_eq_foldl] at hX
   obtain ⟨rfl, rfl, rfl⟩ := lpure_ok hX
-  obtain ⟨mq, t₁₅, -, -, h₄⟩ := nextMsg_bind h₄'
-  obtain ⟨t₁₆, -, h₄⟩ := claimPow_bind h₄
+  obtain ⟨mq, t₁₅, -, k₁₅, h₄⟩ := nextMsg_bind h₄'
+  obtain ⟨t₁₆, k₁₆, h₄⟩ := claimPow_bind h₄
   obtain ⟨bq, t₁₇, h₁₇, h₄⟩ := lift_bind h₄
+  obtain ⟨-, -, -, hr₁₇, hk₁₇⟩ := sample_ok h₁₇
   have h₄ := lmodify_bind h₄
   obtain ⟨out, st₁₈, t₁₈, hloop, hcont⟩ := lbind_ok h₄
   rw [lforIn_range_eq] at hloop
-  have hI₁₈ := lforIn_inv' _ (fun st => st.oods[0]? =
-      some ⟨(t₃'.rounds[t₃'.k]!).coins, (t₇.rounds[t₇.k]!).coins.getD 0 0, none⟩) (sch.levels.size - 1) (by
+  obtain ⟨hI₁₈, hr₁₈, hk₁₈⟩ := lforIn_inv' _ (fun st tE => st.oods[0]? =
+      some ⟨(t₃'.rounds[t₃'.k]!).coins, (t₇.rounds[t₇.k]!).coins.getD 0 0, none⟩ ∧ tE.rounds = t₁₇.rounds ∧
+      t₁₇.k ≤ tE.k) (sch.levels.size - 1) (by
       intro i v stE tE bv stE' tE' hi hI hb
+      obtain ⟨hI, hrE, hkE⟩ := hI
       try dsimp only at hb
       by_cases c4 : v.1 < 4
       · rw [ite_eq_left c4] at hb
@@ -340,22 +347,27 @@ theorem zk_ligerito_rec (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (c
       obtain ⟨chs, st₁, t₁, hf, hb⟩ := lbind_ok hb
       rw [lforIn_range_eq] at hf
       have ho₁ := chs_oods p _ _ _ _ _ _ _ hf
+      obtain ⟨hr₁, hk₁, -⟩ := fold_coins p 4 0 #[] chs stE st₁ tE t₁ hf
       by_cases hi' : i + 1 < sch.levels.size - 1
       · rw [ite_eq_left hi'] at hb
         obtain ⟨_, t₂, h₂, hb⟩ := lift_bind hb
-        obtain ⟨-, -, yA, mA, t₃, -, -, -, -, hb⟩ := oodIntro_bind (show v.1 - 4 + 1 ≠ 0 by omega) hb
-        obtain ⟨-, -, yB, mB, t₄, -, -, -, -, hb⟩ := oodIntro_bind (show v.1 - 4 + 1 ≠ 0 by omega) hb
-        obtain ⟨-, -, -, t₅, -, -, hb⟩ := queryLevel_bind (hlv (i + 1) (by omega)).q_ne_zero hb
-        obtain ⟨mq, t₆, -, -, hb⟩ := nextMsg_bind hb
-        obtain ⟨t₇, -, hb⟩ := claimPow_bind hb
+        have k₂ := absorbBytes_ok h₂
+        obtain ⟨-, -, yA, mA, t₃, -, -, hr₃, hk₃, hb⟩ := oodIntro_bind (show v.1 - 4 + 1 ≠ 0 by omega) hb
+        obtain ⟨-, -, yB, mB, t₄, -, -, hr₄, hk₄, hb⟩ := oodIntro_bind (show v.1 - 4 + 1 ≠ 0 by omega) hb
+        obtain ⟨-, -, -, t₅, hr₅, hk₅, hb⟩ := queryLevel_bind (hlv (i + 1) (by omega)).q_ne_zero hb
+        obtain ⟨mq, t₆, -, k₆, hb⟩ := nextMsg_bind hb
+        obtain ⟨t₇, k₇, hb⟩ := claimPow_bind hb
         obtain ⟨bq, t₈, h₈, hb⟩ := lift_bind hb
+        obtain ⟨-, -, -, hr₈, hk₈⟩ := sample_ok h₈
         have hb := lmodify_bind hb
         by_cases c5 : v.1 - 4 + 1 < 4
         · rw [ite_eq_left c5] at hb
           cases hb
         rw [ite_eq_right c5] at hb
-        obtain ⟨-, rfl, -⟩ := lpure_ok hb
-        exact push_get0 (push_get0 (ho₁ ▸ hI))
+        obtain ⟨-, rfl, rfl⟩ := lpure_ok hb
+        refine ⟨push_get0 (push_get0 (ho₁ ▸ hI)), ?_, ?_⟩
+        · rw [hr₈, k₇.2, k₆.2, hr₅, hr₄, hr₃, k₂.2, hr₁, hrE]
+        · rw [hk₈, k₇.1, k₆.1, hk₅, hk₄, hk₃, k₂.1, hk₁]; omega
       · rw [ite_eq_right hi'] at hb
         have hb := lget_bind hb
         by_cases hmc₀ : (st₁.msg != p.messages.size) = true
@@ -371,22 +383,31 @@ theorem zk_ligerito_rec (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (c
         obtain ⟨_, st₂, t₂, h₂, hb₂⟩ := lbind_ok hb
         clear hb
         rw [← Array.forIn_toList] at h₂
-        obtain ⟨rfl, -⟩ := forIn_absorbF_keeps _ h₂
-        obtain ⟨-, -, -, t₃, -, -, hb⟩ :=
+        obtain ⟨rfl, k₂⟩ := forIn_absorbF_keeps _ h₂
+        obtain ⟨-, -, -, t₃, hr₃, hk₃, hb⟩ :=
           queryLevel_bind (hlv (sch.levels.size - 1) (by omega)).q_ne_zero hb₂
-        obtain ⟨t₄, -, hb⟩ := claimPow_bind hb
+        obtain ⟨t₄, k₄, hb⟩ := claimPow_bind hb
         obtain ⟨bq, t₅, h₅, hb⟩ := lift_bind hb
+        obtain ⟨-, -, -, hr₅, hk₅⟩ := sample_ok h₅
         have hb := lmodify_bind hb
-        obtain ⟨-, rfl, -⟩ := lpure_ok hb
-        exact ho₁ ▸ hI)
-    (sch.levels.size - 1) 0 _ _ t₁₇ _ _ t₁₈ (by omega) (push_get0 (push_get0 hI₁₀)) hloop
+        obtain ⟨-, rfl, rfl⟩ := lpure_ok hb
+        refine ⟨ho₁ ▸ hI, ?_, ?_⟩
+        · rw [hr₅, k₄.2, hr₃, k₂.2, hr₁, hrE]
+        · rw [hk₅, k₄.1, hk₃, k₂.1, hk₁]; omega)
+    (sch.levels.size - 1) 0 _ _ t₁₇ _ _ t₁₈ (by omega) ⟨push_get0 (push_get0 hI₁₀), rfl, le_rfl⟩ hloop
+  have hfin := finalProgZ_ok hcont
   have hrec := finalProgZ_rec hcont
   subst hrec
   have er₇ : t₇.rounds = t.rounds := by rw [k₇.2, k₆.2, hr₅, k₃'.2, k₃.2, k₂.2, k₁.2]
   have ek₇ : t₇.k = t.k + 1 := by rw [k₇.1, k₆.1, hk₅, k₃'.1, k₃.1, k₂.1, k₁.1]
   have er₉ : t₉.rounds = t.rounds := by rw [k₉.2, hr₈, er₇]
   have ek₉ : t₉.k = t.k + 2 := by rw [k₉.1, hk₈, ek₇]
-  refine ⟨rfl, rfl, ?_, by simpa using hsz₁₀, fun j hj => ?_, ?_⟩
+  have er₁₇ : t₁₇.rounds = t.rounds := by
+    rw [hr₁₇, k₁₆.2, k₁₅.2, hr₁₄, hr₁₃, hr₁₂, k₁₁.2, hr₁₀, er₉]
+  have ek₁₇ : t₁₇.k = t.k + 2 + sch.k0 + 9 := by
+    rw [hk₁₇, k₁₆.1, k₁₅.1, hk₁₄, hk₁₃, hk₁₂, k₁₁.1, hk₁₀, ek₉]
+  refine ⟨rfl, rfl, ?_, by simpa using hsz₁₀, fun j hj => ?_, ?_, by rw [hfin, hr₁₈, er₁₇], by
+    rw [hfin]; omega⟩
   · show (st₁₈.oods[0]!).beta = _
     rw [getElem!_of_getElem? hI₁₈, er₇, ek₇]
   · have := hch₁₀ j hj
@@ -457,5 +478,92 @@ theorem foldZK_rel {e : ℕ} (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len e
         (List.append_nil _).symm) rfl rfl) rfl rfl, ?_⟩
       rw [List.range'_succ, List.foldl_cons]
       exact hrel
+
+theorem plays_drawK (c : Array F128) (hc : c.size = 2) :
+    Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := by
+  unfold Model.drawK
+  exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c hc (by omega)) (Plays.pure _) (by simp) (by simp)
+
+theorem rel2_neg {np : ℕ} {a : ZkSession.LinK 𝕂 np} {x : Zk.Lin2} (ha : Rel2 a x) : Rel2 (-a) x := by
+  have e : -a = a := Prod.ext (funext fun i => CharTwo.neg_eq (a.1 i)) (CharTwo.neg_eq a.2)
+  rw [e]; exact ha
+
+/-- Level 0's out-of-domain claim `T + β·(y + h_ood)` on forms. -/
+theorem claim0_rel (lay : Zk.PadLayout) (i : Fin lay.len) (hi : i.val = lay.lgOod 0) (T y β : F128) :
+    Rel2 (ZkSession.cK (FlockLevel3.embed (fOf T)) + FlockLevel3.embed (fOf β) •
+        (ZkSession.cK (FlockLevel3.embed (fOf y)) + ZkSession.padF i))
+      ((Zk.Lin.konst T lay.len).add ((Zk.Lin.masked y (lay.lgOod 0) lay.len).scale β), Zk.Lin.konst 0 lay.len) := by
+  have h := rel2_lift (rel_add (rel_konst (np := lay.len) T) (rel_scale (rel_masked y i hi) β))
+  convert h using 1
+  refine Prod.ext (funext fun j => ?_) ?_
+  · simp only [liftK, ZkSession.cK, ZkSession.padF, ZkSession.cF, ZkSession.mskF, ZkSession.pF, Prod.fst_add,
+      Prod.smul_fst, Pi.add_apply, Pi.smul_apply, Pi.zero_apply, smul_eq_mul, zero_add, map_mul]
+    by_cases hj : j = i
+    · subst hj; simp
+    · simp [Pi.single_eq_of_ne hj]
+  · simp only [liftK, ZkSession.cK, ZkSession.padF, ZkSession.cF, ZkSession.mskF, ZkSession.pF, Prod.snd_add,
+      Prod.smul_snd, smul_eq_mul, add_zero, map_add, map_mul]
+
+set_option maxHeartbeats 1000000 in
+/-- **Every run of the compiled masked level 0 returns the lane phase's row** (`laneLhs`), at the record whose
+target, out-of-domain coin, lane coins and pair coins the run's coins are. -/
+theorem ligeritoPadZC_row (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len 2) (S : Accounting.Schedule)
+    (sch : Flock.Schedule) (tp : ℕ) (c₀ : 𝔽) (r : ℕ) (Tm : 𝔽) (b : ℕ → 𝔽) (lg : LigeritoProof)
+    (zl : Zk.Level0Msgs) (rec : Zk.L0Rec) (lv₀ : Accounting.Level) (rest : List Accounting.Level)
+    (hlv : S.levels = lv₀ :: rest) (hk : S.k0 = lay.k0) (hk' : sch.k0 = lay.k0) (hk1 : 1 ≤ lay.k0)
+    (hood : P.ood.val = lay.lgOod 0) (hmsg : ∀ j < lay.k0, ∀ t : Fin 4, (P.msg j t).val = lay.lgMsg j t.val)
+    (hev : ∀ (i : Fin 2) (c : Fin 2), (P.ev i c).val = lay.lgE i.val c.val) (hT : Tm = fOf rec.target)
+    (zc bc c₁ c₂ : Array F128) (lanes rc : List (Array F128)) (hzc : zc.size = S.m - 7) (hm : S.m - 7 ≠ 1)
+    (hbc : bc.size = 1) (hβ : rec.ood[0]!.1 = bc.getD 0 0) (hl : lanes.length = lay.k0)
+    (hlanes : ∀ i < lay.k0, (lanes[i]!).size = 2 ∧ coinK lanes[i]! = rec.challenges[i]!)
+    (hc₁ : c₁.size = 2) (hc₂ : c₂.size = 2) (hρ : rec.rho = (coinK c₁, coinK c₂))
+    {out : ZkSession.LinK 𝕂 lay.len × PendL 𝔽 Dig}
+    (h : Plays fOf (ZkLink.ligeritoPadZC (D := Dig) execArith P S tp c₀ r Tm b) (ligMsgsZ lg capDig sch tp zl)
+      (zc :: bc :: (lanes ++ (c₁ :: c₂ :: rc))) out) :
+    Rel2 out.1 (laneLhs lay rec lg zl) := by
+  obtain ⟨R, hR⟩ : ∃ R, ligMsgsZ lg capDig sch tp zl = fMsg lg.oodValues[0]! :: kMsg lg.messages[0]! ::
+      (kMsgs lg 1 (lay.k0 - 1) ++ (evMsg zl :: tMsg zl :: ybarMsg tp zl :: R)) :=
+    ⟨_, by simp only [ligMsgsZ, hk', List.append_assoc, List.cons_append, List.nil_append]; rfl⟩
+  rw [hR] at h
+  unfold ZkLink.ligeritoPadZC at h
+  rw [hlv] at h
+  dsimp only at h
+  have h := plays_bind_split (ms₁ := []) (cs₁ := [zc]) h (Plays.drawVec zc hzc hm)
+  have h := plays_bind_split (ms₁ := [fMsg lg.oodValues[0]!]) (cs₁ := []) h (Plays.recv _ _)
+  have h := plays_bind_split (ms₁ := []) (cs₁ := [bc]) h (Plays.drawOne bc hbc)
+  have h := plays_bind_split (ms₁ := [kMsg lg.messages[0]!]) (cs₁ := []) h (Plays.recv _ _)
+  obtain ⟨⟨ini, sF⟩, hfold, hrel⟩ := foldZK_rel lay P lg rec.challenges lay.k0 hmsg lay.k0 0
+    (ZkSession.cK (FlockLevel3.embed Tm) + FlockLevel3.embed (fOf bc[0]!) •
+      (ZkSession.cK (FlockLevel3.embed (fOf lg.oodValues[0]!)) + ZkSession.padF P.ood))
+    ((Zk.Lin.konst rec.target lay.len).add ((Zk.Lin.masked lg.oodValues[0]! (lay.lgOod 0) lay.len).scale rec.ood[0]!.1),
+      Zk.Lin.konst 0 lay.len) lanes (by omega) (by omega)
+    (by rw [hT, getElem!_eq_getD, ← hβ]; exact claim0_rel lay P.ood hood rec.target lg.oodValues[0]! rec.ood[0]!.1)
+    hl (fun i hi => by simpa using hlanes i hi)
+  rw [hk] at h
+  have h := plays_bind_split (ms₁ := kMsgs lg (0 + 1) (lay.k0 - 1)) (cs₁ := lanes) h hfold
+  dsimp only at h
+  have h := plays_bind_split (ms₁ := [evMsg zl]) (cs₁ := []) h (Plays.recv _ _)
+  have hρs : Plays fOf (Model.drawKs execArith 2) [] [c₁, c₂]
+      (Fin.cons (execArith.ofLimbs (fOf c₁[0]!) (fOf c₁[1]!))
+        (Fin.cons (execArith.ofLimbs (fOf c₂[0]!) (fOf c₂[1]!)) Fin.elim0)) := by
+    simp only [Model.drawKs]
+    exact Plays.bind' (plays_drawK c₁ hc₁) (Plays.bind' (Plays.bind' (plays_drawK c₂ hc₂)
+      (Plays.bind' (Plays.pure _) (Plays.pure _) rfl rfl) rfl rfl) (Plays.pure _) rfl rfl) rfl rfl
+  have h := plays_bind_split (ms₁ := []) (cs₁ := [c₁, c₂]) h hρs
+  have h := plays_bind_split (ms₁ := [tMsg zl]) (cs₁ := []) h (Plays.recv _ _)
+  have h := plays_bind_split (ms₁ := [ybarMsg tp zl]) (cs₁ := []) h (Plays.recv _ _)
+  obtain ⟨ms₁, ms₂, cs₁, cs₂, pend, hms, hcs, htail, hret⟩ := plays_bind_inv _ h
+  obtain ⟨-, -, rfl⟩ := plays_ret_inv hret
+  clear htail hret hms hcs h hR
+  have hE0 := rel2_masked zl.e0 (P.ev 0 0) (P.ev 0 1) (hev 0 0) (hev 0 1) (by simp [Zk.PadLayout.lgE])
+  have hE1 := rel2_masked zl.e1 (P.ev 1 0) (P.ev 1 1) (hev 1 0) (hev 1 1) (by simp [Zk.PadLayout.lgE])
+  have hfin := rel2_add (rel2_add hrel (rel2_scale hE0 rec.rho.1))
+    (rel2_add (rel2_scale hE1 rec.rho.2) (rel2_neg (rel2_konst (np := lay.len) zl.tPrime)))
+  convert hfin using 1
+  · rw [Fin.sum_univ_two, hρ, coinK_limbs, coinK_limbs]
+    simp only [Fin.cons_zero, Fin.cons_one, Matrix.cons_val_zero, Matrix.cons_val_one, Matrix.head_cons]
+    rw [sub_eq_add_neg]
+    abel
+  · rfl
 
 end FlockSoundness.Discharge.ZkExec
