@@ -44,7 +44,88 @@ theorem unitWrong_universal {c : Flock.Circuit} (hU : Built c.unit) (cls : Unive
     (L : UIns cls (FlockSoundness.Rows.ofNet hU).nIn) (hcomp : UniversalComputes c hU cls L) :
     UnitWrongOn ((keyProg c hU (Universal.units cls)).partition (Layout.outsOf c hU (Universal.units cls)))
       (fun v => v Layout.oneG = true) (uProg L) (uX L) (uY cls) := by
-  sorry
+  intro v hv i
+  have eR : (keyProg c hU (Universal.units cls)).rows i = (FlockSoundness.Rows.ofNet hU).stack 1 := by
+    rw [show (1 : ℕ) = c.upv from hupv.symm]
+    exact rows_circuitProg c hU _ (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU)) i
+  have eN : ((keyProg c hU (Universal.units cls)).rows i).nIn = (FlockSoundness.Rows.ofNet hU).nIn := by
+    rw [congrArg FlockSoundness.Rows.nIn eR]; show 1 * _ = _; omega
+  have eC : ((keyProg c hU (Universal.units cls)).rows i).nComp = (FlockSoundness.Rows.ofNet hU).nComp + 1 := by
+    rw [congrArg FlockSoundness.Rows.nComp eR]; show 1 * _ = _; omega
+  have hsize : outBits c = 16 * (c.leavesOut.getD 0 #[]).size := rfl
+  have key := mem_wrong_iff_stack1
+    (Const.Prog.instC (keyProg c hU (Universal.units cls)) (Layout.outsOf c hU (Universal.units cls)) i) eR v
+    (uIn v i)
+    (fun j x hx => by
+      rw [Const.Prog.instC_wire_input _ _ _ x (by rw [eN, hx]; exact j.isLt)]
+      simp only [uIn, hx])
+    (fun x hx => by
+      have e : x = ((keyProg c hU (Universal.units cls)).rows i).one := Fin.ext (by simp only [FlockSoundness.Rows.one]; exact hx)
+      rw [e, Const.Prog.instC_wire_one]
+      have h0 : (Const.Prog.oneAt (keyProg c hU (Universal.units cls)) i).val =
+          (Placed.oneGate (Universal.units cls) (Layout.keyB c hU)).val :=
+        Layout.oneAt_uniform_val (k := Placed.inGates (Universal.units cls) (Layout.keyB c hU))
+          (R := Placed.circuitRows c hU)
+          (ins := Placed.insOf (Universal.units cls) (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU)))
+          (one := Placed.oneGate (Universal.units cls) (Layout.keyB c hU))
+          (hone := Placed.insOf_ne_one (Universal.units cls) (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU)))
+          (Universal.units cls) i
+      have e1 : Const.Prog.oneAt (keyProg c hU (Universal.units cls)) i = Layout.oneG := Fin.ext h0
+      rw [e1]
+      exact hv)
+    (colGate c hU (Universal.units cls) i) (fun x h => by simp only [colGate, h, ↓reduceDIte])
+    (outBits c) (fun k => Layout.outCol c (k / 16) (k % 16)) (outStack c hU) hcomp.out_comp
+    (fun k _ => by simp only [outStack, hupv])
+    (fun i' => by
+      constructor
+      · intro hmem
+        have hio : (Const.Prog.instC (keyProg c hU (Universal.units cls)) (Layout.outsOf c hU (Universal.units cls))
+            i).wire (((keyProg c hU (Universal.units cls)).rows i).comp i') ∈
+            ((keyProg c hU (Universal.units cls)).partition (Layout.outsOf c hU (Universal.units cls))).io i :=
+          Finset.mem_filter.2 ⟨hmem, Or.inl ((Const.Prog.instC _ _ i).mem i')⟩
+        obtain ⟨u', j, t, hu', hj, ht, h1, h2, hxv⟩ :=
+          Layout.outsOut_outsOf c hU (Universal.units cls) i _ hio ((Const.Prog.instC _ _ i).mem i') _ rfl
+        have hu0 : u' = 0 := by omega
+        subst hu0
+        refine ⟨16 * j + t, by rw [hsize]; omega, ?_⟩
+        have hd : (16 * j + t) / 16 = j := by omega
+        have hm : (16 * j + t) % 16 = t := by omega
+        simp only [outStack, hd, hm]
+        exact hxv
+      · rintro ⟨k, hk, hik⟩
+        obtain ⟨h1, h2⟩ := hcomp.out_comp k hk
+        have hmem : (Const.Prog.instC (keyProg c hU (Universal.units cls)) (Layout.outsOf c hU (Universal.units cls))
+            i).wire (((keyProg c hU (Universal.units cls)).rows i).comp i') ∈ Layout.outsOf c hU (Universal.units cls) :=
+          (@Finset.mem_filter _ _ (Classical.decPred _) _ _).2 ⟨Finset.mem_univ _, i,
+            ((keyProg c hU (Universal.units cls)).rows i).comp i', rfl, 0, k / 16, k % 16,
+            by rw [hupv]; omega, by rw [hsize] at hk; omega, Nat.mod_lt _ (by omega), h1, h2, hik.trans rfl⟩
+        exact Audit.Partition.mem_committed_of_output _ hmem)
+  rw [key]
+  have hi : i.val < cls.N := i.isLt
+  have hdata : (fun j : Fin cls.nIn => uX L v i j.val) = L.data (uIn v i) :=
+    funext fun j => by simp only [uX, i.isLt, j.isLt, ↓reduceDIte]
+  simp only [Universal.run, uY, hi, i.isLt, ↓reduceDIte, Fin.eta, hdata]
+  change _ ↔ List.ofFn (Universal.interp (L.prog (uIn v i)) (L.data (uIn v i))) ≠ _
+  rw [ne_claim_iff _ _ cls.nOut (by simp) (by simp only [uRet, List.length_ofFn]; exact hcomp.out_le)]
+  have hrhs : ∀ k (hk : k < outBits c), rowsEvalN (FlockSoundness.Rows.ofNet hU) (uIn v i) true
+      (Layout.outCol c (k / 16) (k % 16)) =
+      if h : k < cls.nOut then Universal.interp (L.prog (uIn v i)) (L.data (uIn v i)) ⟨k, h⟩ else false := by
+    intro k hk
+    have hw : Layout.outCol c (k / 16) (k % 16) < (FlockSoundness.Rows.ofNet hU).w := by
+      have := (hcomp.out_comp k hk).2; simp only [FlockSoundness.Rows.w]; omega
+    unfold rowsEvalN
+    simp only [hw, ↓reduceDIte]
+    exact hcomp.computes _ k hk
+  simp only [uRet, List.length_ofFn, List.getElem_ofFn]
+  constructor
+  · rintro ⟨k, hk, hne⟩
+    refine ⟨k, hk, ?_⟩
+    rw [hrhs k hk] at hne
+    convert hne using 1
+  · rintro ⟨k, hk, hne⟩
+    refine ⟨k, hk, ?_⟩
+    rw [hrhs k hk]
+    convert hne using 1
 
 variable {mPts : ℕ} {Reg : Type}
 
@@ -101,6 +182,29 @@ theorem private_circuit_sound_universal {cls : Universal.Cls}
       prob (fun o => LiveAcceptsZKR I own o ∧
           K₀ + K₁ ≤ wrong (Universal.eval C) (Universal.size C) (uX L (s.vals τ o)) (uY cls (s.vals τ o))) s.G τ
         ≤ s.Lm.miss K₀ + s.Lm.miss K₁ + s.εks τ + s.δlink τ + ENNReal.ofReal (q ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  intro s
+  classical
+  obtain ⟨yT, hyT⟩ := unitWrong_trivial
+    ((keyProg c hU (Universal.units cls)).partition (Layout.outsOf c hU (Universal.units cls))) (uProg L) (uX L)
+  have hunit : UnitWrong ((keyProg c hU (Universal.units cls)).partition (Layout.outsOf c hU (Universal.units cls)))
+      (uProg L) (uX L) (fun w => if w Layout.oneG = true then uY cls w else yT w) := by
+    intro w i
+    by_cases hw : w Layout.oneG = true
+    · simp only [hw, ↓reduceIte]
+      exact unitWrong_universal hU cls hupv L hcomp w hw i
+    · simp only [hw]
+      exact hyT w i
+  have h := private_circuit_sound_real I ht own dj y₀ wr dg N hc hU hpub hscope σs ks hks St hS Kd pop Lb src hA3 hA6
+    hk hRw hM hρ hr ht' C hC (uProg L) (uX L) _ hunit rd ps row hreg τ hCR valPair hstep K₀ cost q hcost hBind
+  have hy : ∀ o, LiveAcceptsZKR I own o →
+      (if s.vals τ o Layout.oneG = true then uY cls (s.vals τ o) else yT (s.vals τ o)) = uY cls (s.vals τ o) :=
+    fun o ho => by
+      split_ifs with h
+      · rfl
+      · exact absurd (hone o ho) h
+  refine ⟨le_of_eq_of_le (congrArg (fun E => prob E s.G τ)
+    (funext fun o => propext (and_congr_right fun ho => by rw [hy o ho]))) h.1, fun K₁ hF => ?_⟩
+  exact le_of_eq_of_le (congrArg (fun E => prob E s.G τ)
+    (funext fun o => propext (and_congr_right fun ho => by rw [hy o ho]))) (h.2 K₁ hF)
 
 end FlockSoundness.Discharge.PrivateCircuit
