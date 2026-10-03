@@ -1,7 +1,8 @@
 """[GLM-5.3 fp8] The block-scaled FP8 expert GEMMs of vLLM's fused MoE on Hopper: `fused_moe_kernel` (Triton) with `block_shape`
 [128, 128], as the H200 runs GLM-5.3-FP8 (`quant_method` fp8, `fmt` e4m3, `weight_block_size` [128, 128], `activation_scheme`
-dynamic, no `scale_fmt`) at TP without EP, eager, `VLLM_BATCH_INVARIANT=1`, `VLLM_USE_DEEP_GEMM=0`.  Pinned vLLM 0.28.1rc1.dev472
-(d9105ea80), Triton 3.7.1; line numbers are at that commit.
+dynamic, no `scale_fmt`) at TP without EP, eager, `VLLM_USE_DEEP_GEMM=0`; GLM-5.3's engine refuses `VLLM_BATCH_INVARIANT` on sm_90
+(no sparse-MLA backend supports it), so its experts launch the tuned configs.  Pinned vLLM 0.28.1rc1.dev472 (d9105ea80), Triton
+3.7.1; line numbers are at that commit.
 
 The path, read from the source:
 
@@ -12,9 +13,14 @@ The path, read from the source:
    `use_ue8m0` = `is_deep_gemm_e8m0_used()`, False with DeepGEMM off): the kernel `fp8.Fp8GroupQuant_v1` already states.
 3. `invoke_fused_moe_triton_kernel` (fused_moe/fused_moe.py:763-910) launches `fused_moe_kernel` (fused_moe.py:299-610) twice, w13
    (`mul_routed_weight` False) then w2 (`not apply_router_weight_on_input`, top_k 1; triton_moe.py:505-527), with the config of
-   `try_get_optimal_moe_config`.  Under `VLLM_BATCH_INVARIANT` that is `get_default_config`'s fixed tile BLOCK_SIZE_M 64, N 64, K 32
-   (fused_moe.py:1308-1315; Triton's default 4 warps, 3 stages), `BLOCK_SIZE_K = min(32, 128) = 32` (fused_moe.py:844-846), and
-   `SWAP_AB = enable_swap_ab(64, 64)` = False (cc 9.0 and BLOCK_SIZE_M < 64 is required; fused_moe/utils.py:628-633).
+   `try_get_optimal_moe_config` (fused_moe.py:1422-1451), `BLOCK_SIZE_K = min(BLOCK_SIZE_K, 128)` (fused_moe.py:844-846) and
+   `SWAP_AB = enable_swap_ab(BLOCK_SIZE_M, BLOCK_SIZE_N)` (cc 9.0, BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64; fused_moe/utils.py:628-633).
+   Without batch invariance the config is the tuned H200 file's entry at the nearest batch size (for the TP8 shard, `E=256,N=256,
+   device_name=NVIDIA_H200,dtype=fp8_w8a8,block_shape=[128,128].json`: BLOCK_SIZE_K 128, and BLOCK_SIZE_M 8 or 16 under SWAP_AB from
+   M = 4 to 512), or `get_default_config`'s block-FP8 tile where no file exists (whole experts: BLOCK_SIZE_K 128, BLOCK_SIZE_M 16
+   under SWAP_AB up to M = 64); the Definitions take KB and SWAP as statics.  Under `VLLM_BATCH_INVARIANT` it is `get_default_config`'s
+   fixed tile BLOCK_SIZE_M 64, N 64, K 32 (fused_moe.py:1308-1315): KB 32, SWAP_AB False.  The tuned file's M <= 3 entries,
+   BLOCK_SIZE_M 8 x BLOCK_SIZE_N 32, are no wgmma tile (SWAP_AB needs BLOCK_SIZE_N >= 64), and no Definition here models their dot.
 4. Between them, `ops.silu_and_mul_per_block_quant(group_size=128)` (triton_moe.py:471-485; csrc fused_silu_mul_block_quant.cu): its
    own Definition, not this module's.
 

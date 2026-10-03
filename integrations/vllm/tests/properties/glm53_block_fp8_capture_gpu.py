@@ -3,38 +3,49 @@
 `fused_moe_kernel`) and `fp8.Fp8GroupQuant_v1` (`_C.per_token_group_fp8_quant`) at GLM-5.3's shapes.
 
 One GPU process writes `<out>/glm53_block_fp8_capture.json`, the property record `glm53_block_fp8_capture` (`properties.record`), and
-prints `GLM53-BLOCK-FP8 GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and nothing else runs when it fails
-(exit 3).  vLLM runs as the TargetProfile `fp8_block_gemm="cutlass"` engine does: `VLLM_USE_DEEP_GEMM=0` (target_profile.py), batch
-invariant (`VLLM_BATCH_INVARIANT=1`; `--no-batch-invariant` drops it, the experts then launch with the H200's tuned configs and each
-launch's Program is bound at the statics it used), custom ops on (the eager engine's `QuantFP8.forward_cuda`).  A phase that raises
-records its error and fails the verdict without stopping the others.
+prints one line per case and then `GLM53-BLOCK-FP8 GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and
+nothing else runs when it fails (exit 3).  vLLM runs as GLM-5.3's engine does on sm_90: `VLLM_USE_DEEP_GEMM=0` (TargetProfile
+`fp8_block_gemm="cutlass"`, target_profile.py), custom ops on (the eager engine's `QuantFP8.forward_cuda`), and not batch invariant (the
+engine refuses `VLLM_BATCH_INVARIANT` on sm_90: no sparse-MLA backend supports it), so the experts launch with vLLM's tuned H200
+configs and each launch's Program is bound at the statics it used; `--batch-invariant` runs the fixed tile of `get_default_config`
+instead.  A phase that raises records its error and fails the verdict without stopping the others.
 
   gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
   selection  `init_fp8_linear_kernel` with Fp8LinearMethod's keys for 128x128 blocks (fp8.py:281-288) selects CutlassFp8BlockScaledMMKernel
              at every dense shape, its QuantFP8 dispatching forward_cuda; `select_fp8_moe_backend` (TP, no EP) selects TRITON /
              TritonExperts (oracle/fp8.py:113-123).
-  dense      every GLM-5.3 FP8 linear one TP8 rank runs (`DENSE`) at M in `DENSE_M` (M % 4 != 0 takes CUTLASS's swap-AB kernel,
-             scaled_mm_blockwise_sm90_fp8_dispatch.cuh:210): the selected kernel's `apply_weights`, twice, on a layer of random e4m3
-             weights and served-range scales after its `process_weights_after_loading`.  The operands `apply_block_scaled_mm` received:
-             the activation's quant against `Fp8GroupQuant_v1{K,128}` (twin `derived_rows.fp8_group_quant_row`) and every output word
-             against `ScaledMmFp8Block_v1{K,N,128}` (twin `scaled_mm_fp8_block_row`).
+  dense      GLM-5.3's nine FP8 linears as one TP8 rank runs them (`DENSE`) at M in `DENSE_M` (M % 4 != 0 takes CUTLASS's swap-AB
+             kernel, scaled_mm_blockwise_sm90_fp8_dispatch.cuh:210): the selected kernel's `apply_weights`, twice, on a layer of random
+             e4m3 weights and served-range scales after its `process_weights_after_loading`.  The operands `apply_block_scaled_mm`
+             received: the activation's quant against `Fp8GroupQuant_v1{K,128}` (twin `derived_rows.fp8_group_quant_row`) and every
+             output word against `ScaledMmFp8Block_v1{K,N,128}` (twin `scaled_mm_fp8_block_row`).
   moe        `fused_experts` (E = 256, top_k 8, hidden 6144), twice, at one TP8 rank's shard (I = 256) and at whole experts (I = 2048),
              with uniform and hot routing: every `fused_moe_kernel` launch is intercepted (its operands, config, and BLOCK_SIZE_K and
              SWAP_AB as invoke_fused_moe_triton_kernel computes them, fused_moe.py:789-846), every (token, slot) row of the w13 launch
              against `MoeExpertFp8BlockGemm_v1{K=6144,N=2I,G=128,KB,SWAP}`, of the w2 launch against `MoeExpertFp8BlockGemmW_v1{K=I,
              N=6144,...}` (twin `moe_expert_fp8_block_row`), and the w13 activation's quant against `Fp8GroupQuant_v1`.  TritonExperts's
              own w2 input, `silu_and_mul_per_block_quant` of the w13 output (triton_moe.py:471-485), is launched as `served_w2`.
-             Every launch's (token, slot) -> expert assignment is checked against the routing.
+             Every launch's (token, slot) -> expert assignment is checked against the routing, and its tile against `wgmma_tile`.
   reference  on a sample of the coordinates and rows of every launch, the plain-integer reference (`verity.evaluation.evaluate`) of
              `ScaledMmFp8BlockCoordinate_v1`, `MoeExpertFp8BlockCoordinate(W)_v1` and `Fp8GroupQuant_v1`, which the twins must equal.
-  ptx        the `fused_moe_kernel` PTX in the run's Triton cache: every wgmma is `.m64nNk32.f32.e4m3.e4m3`.
+  ptx        every `fused_moe_kernel` compiled in the run's Triton cache: its dot is wgmma, every wgmma `.m64nNk32.f32.e4m3.e4m3`, and
+             no `mma.sync`.
   bind       the Programs bind at every shape (`ScaledMmFp8Block_v1{6144,2624,128}` reads cdiv(2624, 128) = 21 weight-scale rows).
 
+The Programs model the k32 wgmma step only.  vLLM's tuned H200 config for GLM-5.3's TP8 expert shard (fused_moe/configs/`E=256,N=256,
+device_name=NVIDIA_H200,dtype=fp8_w8a8,block_shape=[128,128].json`, looked up at the nearest batch size, fused_moe.py:1442-1447)
+gives M <= 3 (every decode step of a batch of one) BLOCK_SIZE_M 8 x BLOCK_SIZE_N 32, which SWAP_AB does not take (BLOCK_SIZE_N < 64)
+and wgmma cannot run (the dot's M is not a multiple of 64): that launch fails `wgmma_tile` and the PTX scan.  `--wgmma-configs` writes those
+configs with every such entry widened to BLOCK_SIZE_N 64, the shape the same file gives M = 4 (`widen_for_wgmma`), to
+`<out>/moe_configs/`, and runs with `VLLM_TUNED_CONFIG_FOLDER` pointing there; an engine served with the same folder launches the
+same tiles.
+
 GO needs 0 mismatches and 0 unresolved words (a twin flags a word it cannot claim: a non-finite accumulator; these operands are finite
-and none should occur), deterministic reruns, and in batch-invariant mode every expert launch at BLOCK_SIZE_K 32 without SWAP_AB.
+and none should occur), deterministic reruns, every expert launch on a wgmma tile, and with `--batch-invariant` every expert launch at
+BLOCK_SIZE_K 32 without SWAP_AB.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
-    $PY tests/properties/glm53_block_fp8_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--no-batch-invariant]
+    $PY tests/properties/glm53_block_fp8_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--wgmma-configs] [--batch-invariant]
 """
 from __future__ import annotations
 
@@ -62,23 +73,29 @@ SCHEMA = "verity-vllm/glm53-block-fp8-capture/v1"
 RECORD = "glm53_block_fp8_capture.json"
 GROUP = 128
 HIDDEN = 6144
-#: GLM-5.3's FP8 linears as one TP8 rank runs them, (name, K, N); kv_b_proj and the indexer's weights_proj are BF16
-DENSE = (("fused_qkv_a_proj", 6144, 2048 + 576), ("q_b_proj", 2048, 2048), ("o_proj", 2048, 6144), ("indexer.wq_b", 2048, 4096),
-         ("mlp.gate_up_proj", 6144, 3072), ("mlp.down_proj", 1536, 6144), ("shared_experts.gate_up_proj", 6144, 512),
-         ("shared_experts.down_proj", 256, 6144))
-DENSE_M = (1, 3, 4, 16, 128, 255)
+#: GLM-5.3's nine FP8 linears as one TP8 rank runs them, (name, K, N) (the capture map's `fp8-block-linear` taps): 64 heads, 8 per rank;
+#: q_lora 2048, kv_lora 512, qk nope 192 + rope 64, v 256; the indexer's wq_b 32 x 128, replicated; dense intermediate 12288 and one
+#: shared expert of 2048, column- then row-parallel.  kv_b_proj runs on the dense-MHA prefill route (its absorbed decode forms are
+#: bf16), and the indexer's wk + weights_proj is bf16.
+DENSE = (("fused_qkv_a_proj", 6144, 2048 + 512 + 64), ("q_b_proj", 2048, 8 * (192 + 64)), ("kv_b_proj", 512, 8 * (192 + 256)),
+         ("o_proj", 8 * 256, 6144), ("indexer.wq_b", 2048, 32 * 128), ("mlp.gate_up_proj", 6144, 2 * 12288 // 8),
+         ("mlp.down_proj", 12288 // 8, 6144), ("shared_experts.gate_up_proj", 6144, 2 * 2048 // 8), ("shared_experts.down_proj", 2048 // 8, 6144))
+#: the B1 row's decode (1) and prefill (256) among them
+DENSE_M = (1, 3, 4, 16, 128, 255, 256)
 NUM_EXPERTS, TOP_K = 256, 8
-#: (name, intermediate size I, tokens, hot experts: 0 routes each token to 8 of all 256)
-MOE = (("tp8_decode", 256, 1, 0), ("tp8_small", 256, 5, 0), ("tp8_block", 256, 64, 0), ("tp8_hot", 256, 200, 16),
+#: (name, intermediate size I, tokens, hot experts: 0 routes each token to 8 of all 256); the B1 row's decode is tp8_decode, its
+#: prefill tp8_prefill
+MOE = (("tp8_decode", 256, 1, 0), ("tp8_small", 256, 5, 0), ("tp8_block", 256, 64, 0), ("tp8_prefill", 256, 256, 16),
        ("whole_decode", 2048, 1, 0), ("whole_hot", 2048, 16, 12))
 QUICK_DENSE_M = (1, 4)
-QUICK_MOE = ("tp8_small", "whole_decode")
+QUICK_MOE = ("tp8_decode", "tp8_small", "whole_decode")
 #: batch-invariant `get_default_config` (fused_moe.py:1310-1316)
 BATCH_INVARIANT_CONFIG = {"BLOCK_SIZE_M": 64, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 32, "GROUP_SIZE_M": 8, "SPLIT_K": 1}
 #: lane-steps (output words x K/32) per comparison job
 JOB_LANE_STEPS = 4_000_000
 WGMMA = re.compile(r"wgmma\.mma_async\.sync\.aligned\.m\d+n\d+k\d+\.\w+\.\w+\.\w+")
 WGMMA_OK = re.compile(r"wgmma\.mma_async\.sync\.aligned\.m64n\d+k32\.f32\.e4m3\.e4m3")
+MMA_SYNC = re.compile(r"(?<![\w.])mma\.sync\.aligned\.m\d+n\d+k\d+[\w.]*")
 
 
 def cdiv(a: int, b: int) -> int:
@@ -96,6 +113,49 @@ def environment(batch_invariant: bool, triton_cache: Path) -> dict[str, str]:
     env["VLLM_BATCH_INVARIANT"] = "1" if batch_invariant else "0"
     os.environ.update(env)
     return env
+
+
+def wgmma_tile(config: dict[str, Any], swap: bool) -> bool:
+    """Whether Triton can lower a `fused_moe_kernel` launch's `tl.dot` to wgmma (MMAv3), the one FP8 dot the Programs model: the
+    dot's M (BLOCK_SIZE_N under SWAP_AB, else BLOCK_SIZE_M) a multiple of 64 over a multiple of 4 warps and its N a multiple of 8.  A
+    smaller tile takes `mma.sync` or FMA, which no Program models; the PTX scan checks the compiled kernels either way."""
+    m, n = (config["BLOCK_SIZE_N"], config["BLOCK_SIZE_M"]) if swap else (config["BLOCK_SIZE_M"], config["BLOCK_SIZE_N"])
+    return config.get("num_warps", 4) % 4 == 0 and m % 64 == 0 and n % 8 == 0
+
+
+def widen_for_wgmma(configs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, list]]:
+    """A tuned-config file (batch size -> config) with every entry `wgmma_tile` refuses widened to BLOCK_SIZE_N 64, so SWAP_AB
+    (`enable_swap_ab` on cc 9.0: BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64, fused_moe/utils.py:628-633) makes it the dot's M; the
+    changed entries, (before, after)."""
+    out, changed = dict(configs), {}
+    for m, c in configs.items():
+        if not isinstance(c, dict) or wgmma_tile(c, c["BLOCK_SIZE_M"] < 64 and c["BLOCK_SIZE_N"] >= 64):
+            continue
+        wide = {**c, "BLOCK_SIZE_N": max(64, c["BLOCK_SIZE_N"])}
+        if wide["BLOCK_SIZE_M"] < 64 and wgmma_tile(wide, True):
+            out[m] = wide
+            changed[m] = [c, wide]
+    return out, changed
+
+
+def write_wgmma_configs(folder: Path) -> dict[str, Any]:
+    """vLLM's tuned fused-MoE configs on this GPU for GLM-5.3's expert shapes, through `widen_for_wgmma`, written to `folder` for
+    `VLLM_TUNED_CONFIG_FOLDER` (which `get_moe_configs` reads before its own configs, fused_moe.py:1138-1163); a shape without a
+    tuned file takes `get_default_config`, whose block-FP8 tiles are wgmma tiles already."""
+    from vllm.model_executor.layers.fused_moe import fused_moe as FM
+
+    folder.mkdir(parents=True, exist_ok=True)
+    rec: dict[str, Any] = {"folder": str(folder), "files": {}}
+    for inter in sorted({c[1] for c in MOE}):
+        name = FM.get_config_file_name(NUM_EXPERTS, inter, "fp8_w8a8", [GROUP, GROUP])
+        src = Path(FM.__file__).parent / "configs" / name
+        if not src.exists():
+            rec["files"][name] = None
+            continue
+        wide, changed = widen_for_wgmma(json.loads(src.read_text()))
+        (folder / name).write_text(json.dumps(wide, indent=1) + "\n")
+        rec["files"][name] = {"changed": changed}
+    return rec
 
 
 # ------------------------------------------------------------------------------------------------------------------ operands
@@ -414,7 +474,7 @@ def moe_launches(work: Path, name: str, inter: int, M: int, hot: int, seed: int,
                "config": L["config"], "KB": L["KB"], "SWAP": L["SWAP"], "block_shape": L["block_shape"], "flags": L["flags"], "bias": L["bias"],
                "mul_routed_weight": L["mul_routed_weight"], "top_k": L["top_k"], "experts_used": int(used.size),
                "deterministic": True if twin is None else bool(torch.equal(L["C"], twin["C"])),
-               "assignment_ok": _assignment_ok(L, ids_flat)}
+               "assignment_ok": _assignment_ok(L, ids_flat), "wgmma_tile": wgmma_tile(L["config"], L["SWAP"])}
         rec["statics_ok"] = (statics_known and L["block_shape"] == [GROUP, GROUP] and L["flags"] == [True, False, False, False, False]
                              and not L["bias"] and L["mul_routed_weight"] == (kind != "w13") and L["top_k"] == (TOP_K if kind == "w13" else 1)
                              and n_pairs == M * TOP_K and (not batch_invariant or (L["KB"] == 32 and not L["SWAP"]
@@ -498,9 +558,15 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 
 # --------------------------------------------------------------------------------------------------------------- ptx and bind
 def ptx(triton_cache: Path) -> dict[str, Any]:
-    files = sorted(glob.glob(str(triton_cache / "**" / "fused_moe_kernel*.ptx"), recursive=True))
-    found = Counter(m for f in files for m in WGMMA.findall(Path(f).read_text(errors="replace")))
-    return {"files": len(files), "wgmma": dict(found), "ok": bool(files) and bool(found) and all(WGMMA_OK.fullmatch(k) for k in found)}
+    """Every `fused_moe_kernel` the run compiled (one Triton cache entry per specialization): its wgmma and mma.sync instructions;
+    ok when each has a wgmma, every wgmma k32 e4m3, and none an mma.sync (a kernel with neither runs its dot on FMAs)."""
+    kernels = {}
+    for f in sorted(glob.glob(str(triton_cache / "**" / "fused_moe_kernel*.ptx"), recursive=True)):
+        text = Path(f).read_text(errors="replace")
+        kernels[str(Path(f).relative_to(triton_cache))] = {"wgmma": dict(Counter(WGMMA.findall(text))),
+                                                           "mma_sync": dict(Counter(MMA_SYNC.findall(text)))}
+    ok = bool(kernels) and all(k["wgmma"] and not k["mma_sync"] and all(WGMMA_OK.fullmatch(w) for w in k["wgmma"]) for k in kernels.values())
+    return {"files": len(kernels), "kernels": kernels, "ok": ok}
 
 
 def bind_check(statics: set[tuple[int, bool]]) -> dict[str, Any]:
@@ -528,19 +594,55 @@ def bind_check(statics: set[tuple[int, bool]]) -> dict[str, Any]:
 TOTALS = ("words", "mismatch", "unresolved", "quant_rows", "quant_mismatch", "reference_coords", "reference_quant_rows", "twin_mismatch")
 
 
-def _verdict(doc: dict[str, Any]) -> bool:
-    t, launches = doc["totals"], doc["launches"]
-    return (doc["gate"]["ok"] and not doc["errors"] and doc["selection"].get("dense_ok") is True and doc["selection"].get("moe_ok") is True
-            and doc["ptx"].get("ok") is True and doc["bind"].get("ok") is True
-            and {x["phase"] for x in launches} == {"dense", "moe"}
-            and all(x["deterministic"] and x.get("operands_ok", True) and x.get("statics_ok", True) and x.get("assignment_ok") is not False
-                    for x in launches)
-            and t["words"] > 0 and t["mismatch"] == 0 and t["unresolved"] == 0 and t["quant_rows"] > 0 and t["quant_mismatch"] == 0
+def _launch_ok(x: dict[str, Any]) -> bool:
+    return bool(x["deterministic"] and x.get("operands_ok", True) and x.get("statics_ok", True) and x.get("assignment_ok") is not False
+                and x.get("wgmma_tile", True))
+
+
+def _words_ok(t: dict[str, Any]) -> bool:
+    return (t["words"] > 0 and t["mismatch"] == 0 and t["unresolved"] == 0 and t["quant_rows"] > 0 and t["quant_mismatch"] == 0
             and t["reference_coords"] > 0 and t["reference_quant_rows"] > 0 and t["twin_mismatch"] == 0)
 
 
+def _case(x: dict[str, Any]) -> str:
+    return f"dense/{x['case']}/M{x['M']}" if x["phase"] == "dense" else f"moe/{x['case']}"
+
+
+def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Each case's own verdict (a dense linear at one M, or one MoE case with its three launches): its launches' checks and its words,
+    and the expert tiles, so a NO-GO names what failed."""
+    out: dict[str, dict[str, Any]] = {}
+    for x in doc["launches"]:
+        c = out.setdefault(_case(x), {"launches_ok": True, "totals": {k: 0 for k in TOTALS}, "tiles": []})
+        c["launches_ok"] = c["launches_ok"] and _launch_ok(x)
+        if x["phase"] == "moe":
+            cfg = x["config"]
+            c["tiles"].append(f"{x['launch']}:{cfg['BLOCK_SIZE_M']}x{cfg['BLOCK_SIZE_N']}x{x['KB']}{'/swap' if x['SWAP'] else ''}"
+                              f"{'' if x['wgmma_tile'] else '/no-wgmma'}")
+    for e in doc["errors"]:
+        if e.split("/")[0] in ("dense", "moe") and e not in out:
+            out[e] = {"launches_ok": False, "totals": {k: 0 for k in TOTALS}, "tiles": []}
+    for r in doc.get("comparisons", []):
+        c = out.get(_case(r))
+        if c is not None:
+            for k in TOTALS:
+                c["totals"][k] += r[k]
+    for key, c in out.items():
+        phase, name = key.split("/")[:2]
+        errors = [e for e in doc["errors"] if e.startswith(key) or e.startswith(f"compare/{phase}/{name}/")]
+        c["ok"] = c["launches_ok"] and _words_ok(c["totals"]) and not errors
+    return out
+
+
+def _verdict(doc: dict[str, Any]) -> bool:
+    launches = doc["launches"]
+    return (doc["gate"]["ok"] and not doc["errors"] and doc["selection"].get("dense_ok") is True and doc["selection"].get("moe_ok") is True
+            and doc["ptx"].get("ok") is True and doc["bind"].get("ok") is True
+            and {x["phase"] for x in launches} == {"dense", "moe"} and all(_launch_ok(x) for x in launches) and _words_ok(doc["totals"]))
+
+
 def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: int, workers: int, quick: bool, batch_invariant: bool,
-        only: set[str]) -> dict[str, Any]:
+        only: set[str], wgmma_configs: bool = False) -> dict[str, Any]:
     outdir = Path(out)
     outdir.mkdir(parents=True, exist_ok=True)
     tmp = tempfile.TemporaryDirectory(dir=scratch)
@@ -556,6 +658,14 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
         (outdir / RECORD).write_text(json.dumps(seal_record(doc, False), indent=1) + "\n")
         print("GLM53-BLOCK-FP8 GATE-FAIL", flush=True)
         raise SystemExit(3)
+    if wgmma_configs:
+        # before the first MoE launch: get_moe_configs is lru_cached
+        try:
+            doc["moe_configs"] = write_wgmma_configs(outdir / "moe_configs")
+            env["VLLM_TUNED_CONFIG_FOLDER"] = os.environ["VLLM_TUNED_CONFIG_FOLDER"] = doc["moe_configs"]["folder"]
+        except Exception as e:  # noqa: BLE001
+            doc["errors"]["moe_configs"] = _error(e)
+        print(f"[glm53-block-fp8] moe configs {json.dumps(doc.get('moe_configs'))[:1500]}", flush=True)
     doc["selection"], doc["launches"], jobs = {}, [], []
     with set_current_vllm_config(VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))):
         try:
@@ -583,7 +693,7 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
                     for x in launches:
                         print(f"[glm53-block-fp8] moe {name:13s} {x['launch']:9s} K={x['K']:5d} N={x['N']:5d} pairs={x['pairs']:5d} "
                               f"KB={x['KB']} SWAP={x['SWAP']} config={x['config']} det={x['deterministic']} statics={x['statics_ok']} "
-                              f"assignment={x['assignment_ok']}", flush=True)
+                              f"assignment={x['assignment_ok']} wgmma_tile={x['wgmma_tile']}", flush=True)
                 except Exception as e:  # noqa: BLE001
                     doc["errors"][f"moe/{name}"] = _error(e)
                     print(f"[glm53-block-fp8] moe {name} ERROR {doc['errors'][f'moe/{name}'][:400]}", flush=True)
@@ -613,11 +723,17 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
               f"!={r['mismatch']} unresolved={r['unresolved']} quant={r['quant_rows']}!={r['quant_mismatch']} "
               f"ref={r['reference_coords']}+{r['reference_quant_rows']} twin!={r['twin_mismatch']}", flush=True)
     doc["totals"] = {k: sum(r[k] for r in doc["comparisons"]) for k in TOTALS}
+    doc["cases"] = cases(doc)
+    for key, c in doc["cases"].items():
+        t = c["totals"]
+        print(f"[glm53-block-fp8] case {key:40s} {'GO' if c['ok'] else 'NO-GO':5s} launches_ok={c['launches_ok']} words={t['words']} "
+              f"!={t['mismatch']} unresolved={t['unresolved']} quant!={t['quant_mismatch']} twin!={t['twin_mismatch']} "
+              f"{' '.join(c['tiles'])}", flush=True)
     doc = seal_record(doc, _verdict(doc))
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     tmp.cleanup()
     print(f"GLM53-BLOCK-FP8 {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} totals={json.dumps(doc['totals'])} "
-          f"errors={sorted(doc['errors'])}", flush=True)
+          f"no-go cases={[k for k, c in doc['cases'].items() if not c['ok']]} errors={sorted(doc['errors'])}", flush=True)
     return doc
 
 
@@ -630,11 +746,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--want-sms", type=int, default=132)
     ap.add_argument("--workers", type=int, default=C.cpu_workers())
     ap.add_argument("--quick", action="store_true", help=f"dense M in {QUICK_DENSE_M}, MoE cases {QUICK_MOE}: a first signal in minutes")
-    ap.add_argument("--no-batch-invariant", action="store_true", help="the experts launch with vLLM's tuned configs")
+    ap.add_argument("--batch-invariant", action="store_true",
+                    help="VLLM_BATCH_INVARIANT=1: the experts launch get_default_config's fixed tile (GLM-5.3's engine refuses it on sm_90)")
+    ap.add_argument("--wgmma-configs", action="store_true",
+                    help="write vLLM's tuned MoE configs with every tile wgmma can't run widened (<out>/moe_configs/) and run with them")
     ap.add_argument("--only", default="dense,moe", help="comma list of phases: dense, moe")
     a = ap.parse_args(argv)
-    doc = run(a.out, a.scratch, a.min_driver, a.want_cc, a.want_sms, a.workers, a.quick, not a.no_batch_invariant,
-              set(a.only.split(",")))
+    doc = run(a.out, a.scratch, a.min_driver, a.want_cc, a.want_sms, a.workers, a.quick, a.batch_invariant, set(a.only.split(",")),
+              a.wgmma_configs)
     return 0 if doc["ok"] else 1
 
 
