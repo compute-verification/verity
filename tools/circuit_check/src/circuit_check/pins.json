@@ -552,8 +552,14 @@
   "ScaledMmFp8BlockCoordinateGivenScale_v2{K=64,G=32}": {
    "and": 21175
   },
+  "ScaledMmFp8BlockCoordinateGivenScale_v4{K=64,G=32,DOT=BlackwellE4m3QmmaDot32_v2}": {
+   "and": 25779
+  },
   "ScaledMmFp8BlockCoordinate_v2{K=32,G=32}": {
    "and": 12566
+  },
+  "ScaledMmFp8BlockCoordinate_v4{K=32,G=32,DOT=BlackwellE4m3QmmaDot32_v2}": {
+   "and": 14868
   },
   "ScaledMmFp8Coordinate_v2{K=32,BIAS=False}": {
    "and": 11514
