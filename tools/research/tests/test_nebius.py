@@ -1437,6 +1437,28 @@ def test_n2_custody_holds_what_no_retry_can_mend_each_with_its_reason(tmp_path):
 
 
 @N2_CUSTODY
+def test_n2_custody_leaves_a_run_to_its_runners_own_custody_until_the_runners_key_expires(tmp_path):
+    """A `research run --custody-r2` runner writes nothing into the run dir between the workload's end and its .custody (one took
+    11 min, past the settle time), so a round raced it. While the runner holds its key (<root>/../requests/RUN/custody/cred.json,
+    which forget_credential removes) the run is its runner's; a key a dead runner left counts until it expires, one that doesn't
+    read for 24 h from when it was written."""
+    n2 = _n2_custody(tmp_path)
+    mine, left, garbled, old = (n2.run(f"r20261003-10000{i}-000{i}", {"state": "done"}) for i in range(1, 5))
+    keys = {d: tmp_path / "requests" / d.name / "custody" / "cred.json" for d in (mine, left, garbled, old)}
+    for d, cred in ((mine, '{"expires_utc": "2100-01-01T00:00:00Z"}'), (left, '{"expires_utc": "2001-09-09T01:46:40Z"}'),
+                    (garbled, "{"), (old, "{")):
+        keys[d].parent.mkdir(parents=True)
+        keys[d].write_text(cred)
+    os.utime(keys[old], (SETTLED, SETTLED))
+    dry = n2.round_("--dry-run")
+    assert f"would push {left}" in dry.stdout and f"would push {old}" in dry.stdout
+    assert mine.name not in dry.stdout and garbled.name not in dry.stdout
+    assert n2.round_().returncode == 0 and n2.names("pushed") == [left.name, old.name]
+    keys[mine].unlink()
+    assert n2.round_().returncode == 0 and n2.names("pushed") == [mine.name, left.name, old.name]
+
+
+@N2_CUSTODY
 def test_n2_custody_takes_node_1s_marker_home_only_over_the_files_node_1_verified(tmp_path):
     """Node 1's .custody vouches for the copy the rsync left there, on node 1's clock. A line appended on node 2 after the rsync and
     before the Job's verify is in no run record, yet the marker listed the file and was dated after the append, so node 2's triage

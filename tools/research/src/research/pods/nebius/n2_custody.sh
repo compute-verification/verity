@@ -12,7 +12,9 @@
 #
 # A run has ended when its status says so or its process is gone: a runner killed before it recorded an end (an OOM kill of its
 # scope) is published with --force and keeps the state it last wrote. A run its own custody preserved (.custody "preserved": true)
-# is only marked; any other waits VY_CUSTODY_SETTLE_S after any file in it last changed, so a runner's own custody finishes first.
+# is only marked; any other waits VY_CUSTODY_SETTLE_S after any file in it last changed, and while its runner holds its custody
+# key, until the key expires (a runner's custody writes nothing into the run dir until its .custody: 11 min once), so a runner's
+# own custody finishes first.
 # A run is marked in STATE/pushed/ once node 1's Job verified it on R2 and its .custody is back, which it is only while every file
 # here is the one node 1's copy had. A failure is logged with its reason
 # and retried every round, never given up, and the round exits 1, which systemd records (`systemctl --user status n2-custody`).
@@ -54,11 +56,12 @@ if [ "$DRY" = 0 ] && pids=$(pgrep -f -- "^[^ ]*bash $LOOP( |\$)"); then
   exit 3
 fi
 
-# "CAMPAIGN STATE AGE_S FILES BYTES": STATE is the status's, or dead for a run still marked running whose process is gone; AGE_S since
+# "CAMPAIGN STATE AGE_S FILES BYTES": STATE is the status's, dead for a run still marked running whose process is gone, or custody
+# while its runner holds its custody key (<root>/../requests/RUN/custody/cred.json) and the key hasn't expired; AGE_S since
 # any file of the run dir last changed; FILES and BYTES of the run dir; all three counted no further than MAX_FILES + 1 files
 info() {
   python3 - "$1" "$MAX_FILES" << 'EOF'
-import json, os, re, sys, time
+import calendar, json, os, re, sys, time
 d, cap = sys.argv[1], int(sys.argv[2])
 try:
     m = re.search(r'"campaign": ?"([^"]*)"', open(f"{d}/job.json").read())
@@ -83,6 +86,16 @@ if state == "running":
         alive = True
     state = "running" if alive else "dead"
 now = time.time()
+# a `research run --custody-r2` runner writes nothing into the run dir until its .custody, and forgets its key after it
+key = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(d))), "requests", os.path.basename(d), "custody", "cred.json")
+try:
+    exp = calendar.timegm(time.strptime(json.load(open(key))["expires_utc"], "%Y-%m-%dT%H:%M:%SZ"))
+except FileNotFoundError:
+    exp = 0
+except Exception:               # a key that doesn't read: no custody key outlives 24 h
+    exp = os.path.getmtime(key) + 86400
+if state != "running" and now < exp:
+    state = "custody"
 mt, n, size = now, 0, 0
 if state != "running":
     mt = 0
@@ -216,7 +229,7 @@ for c in "${fresh[@]}" "${retry[@]}"; do
     continue
   fi
   read -r camp state age files bytes < <(info "$d")
-  [ "$state" = running ] && continue
+  case $state in running|custody|"") continue ;; esac
   if grep -qs '"preserved": true' "$d/.custody"; then
     [ "$DRY" = 1 ] || touch "$STATE/pushed/$r"
     continue
