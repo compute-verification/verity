@@ -17,5 +17,7 @@ in `PrivateCircuit/Statements.lean`: circuit privacy (`circuit_private`, `circui
 knowledge and the registration's hiding, and soundness (`ran_registered`) from protocol 1's soundness of `U cls` and the
 program commitment's binding under `cr/sha-512`. The universal unit's semantics, `UniversalUnit_v1`'s interpreter and
 the padding, are in `PrivateCircuit/Interp.lean`; `pad_correct` (`InterpPad.lean`) is `PadCorrect` at it, and `pad_wrong`
-reads "fewer than `K` wrong units" of the padded program as the same of the circuit.
+reads "fewer than `K` wrong units" of the padded program as the same of the circuit. At the universal unit,
+`private_circuit_sound` (`InstanceSound.lean`) counts `C`'s own wrong units through `pad_wrong`, and `private_circuit`
+(`InstanceJoint.lean`) states soundness and privacy over one registration.
 -/
