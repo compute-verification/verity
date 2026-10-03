@@ -12,10 +12,12 @@ The GEMM's Definition is the record target's `fp8_scale_construction`: `ScaledMm
 block's scale products once), `ScaledMmFp8Block_v1` under `per-coordinate`; one function, one signature.
 
 Both registered Definitions (`verity_vllm.program.registry.fp8`) are pinned bit for bit on the H100 against these kernels (the module's
-`_QUANT_CONF` / `_BLOCK_CONF` conformance notes; out/gen/sweep/evidence/fp8/).  The GEMM Definition is the sm90 blockwise CUTLASS
-kernel's arithmetic (QGMMA k32 steps, `s = FMUL(sfa, sfb)`, FFMA promotion per K-tile in ascending order): a record whose target is not
-Hopper (cc 9.x) is refused here fail-closed -- another GPU runs another kernel (Marlin / torch._scaled_mm on Ada, DeepGEMM), which has no
-registered Definition; nothing is approximated by a looser comparison (COORD 6).
+`_QUANT_CONF` / `_BLOCK_CONF` conformance notes; out/gen/sweep/evidence/fp8/).  The GEMM Definition is the blockwise CUTLASS kernel's
+arithmetic (k32 steps, `s = FMUL(sfa, sfb)`, FFMA promotion per K-tile in ascending order) over the record target's e4m3 step
+(`registry.targets.scaled_mm_fp8_block_spec`: the v1 forms on hopper, the version 3 forms over `GemmTarget.fp8_block_dot` elsewhere).
+A record whose GEMM target has no blockwise step is refused here fail-closed -- another GPU runs another kernel (Marlin /
+torch._scaled_mm on Ada, DeepGEMM, its own blockwise CUTLASS kernel), which has no registered Definition; nothing is approximated by a
+looser comparison (COORD 6).
 
 Everything the kernels take as a knob that changes VALUES is pinned (`group_size == G`, `eps == 1e-10`, `fp8_min/max == -+448`,
 `scale_ue8m0 == False`, no bias); the layout knobs (`column_major_scales`, `tma_aligned`) only change the scale tensor's strides,
@@ -34,7 +36,7 @@ from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_weight_view, is_row_major
 from verity_vllm.observe.fold.patterns.ops import as_float, bound_args, first, op_name
 from verity_vllm.observe.fold.patterns.resolutions import _fmt, attribution_for, hint_of, unsupported
-from verity_vllm.observe.fold.patterns.target import target_of
+from verity_vllm.observe.fold.patterns.target import _targets, target_of
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext
 from verity_vllm.observe.fold.tree import TreeNode
 
@@ -128,9 +130,11 @@ class CutlassScaledMmFp8Block:
         if bias is not None:
             return unsupported(node, "bias epilogue: ScaledMmFp8Block_v1 has none", bias=repr(bias) if isinstance(bias, ViewDesc) else bias)
         tp, _recorded = target_of(ctx)
-        if int(tp.compute_capability[0]) != 9:
-            return unsupported(node, "ScaledMmFp8Block_v1 is the sm90 blockwise CUTLASS kernel's arithmetic; this target runs another "
-                                     "FP8 GEMM with no registered Definition", compute_capability=list(tp.compute_capability))
+        T = _targets()
+        try:
+            T.fp8_block_dot(tp)
+        except T.UnregisteredTarget as e:
+            return unsupported(node, f"target has no registered blockwise FP8 binding: {e}", compute_capability=list(tp.compute_capability))
         # the record must ATTEST the kernel class its FP8 linears carried (`RunHeader.profile.backends.fp8_block_gemm_kernel`, read back
         # from `Fp8LinearMethod.fp8_linear` by the capture engine): `_C.cutlass_scaled_mm` is also reachable from other kernel classes'
         # fallbacks, and a header without the read-back (a pre-R15 capture) does not say which kernel ran -- refused, never assumed
@@ -159,8 +163,6 @@ class CutlassScaledMmFp8Block:
         if not any(r.role == "weight" for r in wroots) or not any(r.role == "weight" for r in sroots):
             return unsupported(node, "b / b_scales are not checkpoint parameters (weight Roots)", b=repr(w), b_scales=repr(ws))
         wname, sname = wroots[0].name, sroots[0].name
-        shared = tp.effective_fp8_scale_construction() == "shared-per-block"
-        defn = fp8.SHARED_SCALE[fp8.ScaledMmFp8Block.id] if shared else fp8.ScaledMmFp8Block
-        return Compute(bind(defn, K=K, N=N, G=G), M, (PerRow(xq), PerRow(xs), Shared(w), Shared(ws)), (PerRow(out),),
+        return Compute(T.scaled_mm_fp8_block_spec(tp, K, N, G), M, (PerRow(xq), PerRow(xs), Shared(w), Shared(ws)), (PerRow(out),),
                        (node.id,), hint=hint_of(node, wname), kernels=("cutlass_3x_gemm_fp8_blockwise", "sm90_fp8_blockwise"),
                        attribution=attribution_for(ctx, M, node.phase), pattern=self.name, roots=(None, None, wname, sname))
