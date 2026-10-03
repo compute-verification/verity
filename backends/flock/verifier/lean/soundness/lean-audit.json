@@ -4537,6 +4537,11 @@
   "FlockSoundness.Discharge.Composed.Zerocheck.c_eval": {},
   "FlockSoundness.Discharge.Composed.Zerocheck.claim_honest": {},
   "FlockSoundness.Discharge.Composed.Zerocheck.final_ab": {},
+  "FlockSoundness.Discharge.Composed.ZerocheckMasked.c_eval_eval": {},
+  "FlockSoundness.Discharge.Composed.ZerocheckMasked.c_eval_zero": {},
+  "FlockSoundness.Discharge.Composed.ZerocheckMasked.final_eval": {},
+  "FlockSoundness.Discharge.Composed.ZerocheckMasked.final_zero": {},
+  "FlockSoundness.Discharge.Composed.ZerocheckMasked.running_eval": {},
   "FlockSoundness.Discharge.Composed.coinedOf_setup": {
    "signature": [
     "FlockSoundness.Discharge.Composed.coinedOf_setup {mPts n : Nat} {Reg : Type} (I : FlockSoundness.Discharge.Exec.Inputs)",
