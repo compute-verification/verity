@@ -321,6 +321,13 @@ def test_custody_flags_need_on(capsys):
     assert "--no-custody-r2 mints none" in capsys.readouterr().err
 
 
+def test_run_record_is_refused_where_custody_keeps_the_run_files(capsys):
+    """Neither an --on run nor a queued one reads --run-record: with --no-custody-r2 it would have kept no record, silently."""
+    for where in (["--on", "m", "--no-custody-r2"], ["--queue", "--source", "."]):
+        assert cli.main(["run", *where, "--project", "p", "--run-record", "--", "true"]) == 2
+        assert "--run-record is for a local run" in capsys.readouterr().err
+
+
 def test_custody_is_the_default_with_on_and_opting_out_is_explicit(tmp_path, monkeypatch, capsys):
     seen: list = []
 

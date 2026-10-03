@@ -214,6 +214,10 @@ def cmd_run(argv: list[str]) -> int:
     if ns.claimed:
         _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
+    if ns.run_record and (ns.on or ns.queue):
+        print("research run: --run-record is for a local run; --on MACHINE and --queue keep every run file through their custody "
+              "(--custody-r2, the default there)", file=sys.stderr)
+        return 2
     if ns.queue:
         try:
             harness_opts = _normalize_timeout(harness_opts)
