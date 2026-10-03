@@ -17,7 +17,8 @@ only load the engine. The trace starts at t0 and keeps whole windows.
 as the Commit stage builds it (batch-invariant, eager), with `native_host`, the reference committer, hashing every Call
 output of every step; each window is one commitment run, finalized at the window's end. `bi-eager` is that engine without
 the committer. Both stamp the tokens each engine step adds when the step returns, and add `steps.jsonl` (each step's end
-and duration) and, for `commit`, `commits.jsonl` (each run's finalization stall).
+and duration) and, for `commit`, `commits.jsonl` (each run's finalization stall). A step or a finalization that takes
+`STALL_S` is hung: every thread's stack goes to stderr and the job exits, rather than holding its GPU to the lease's end.
 
 **What a job writes** to `--out`:
 - `requests.jsonl`, one line per request as it finishes, so an evicted job keeps what it finished;
