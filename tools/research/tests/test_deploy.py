@@ -1,13 +1,15 @@
 """`research deploy`: each node's installed files against `main` (ok, stale, ahead, unknown, missing, held, restart, strays), and
 an install only from a pushed commit, atomic, keeping owner and mode, with the old file kept and a record line, restarting the
-units it names. The node is this machine: a runner that runs the probe and the installer locally, over files under a temporary
-directory."""
+units it names; and the checked-in manifest's own rules (units only, an owner each, units' files installed beside them). The node
+is this machine: a runner that runs the probe and the installer locally, over files under a temporary directory."""
 from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -316,7 +318,65 @@ def test_the_manifest_loads_and_every_source_is_a_file_of_the_repository():
         for e in node.entries:
             if e.src:
                 assert (deploy.REPO / e.src).is_dir() if e.tree else (deploy.REPO / e.src).is_file(), e.src
-            assert e.path.startswith("/") and all(r.split(":", 1)[0] in ("tmux", "systemd", "user-systemd") for r in e.run)
+            assert e.path.startswith("/") and all(r.split(":", 1)[0] in ("systemd", "user-systemd") for r in e.run)
+
+
+def test_the_manifest_runs_nothing_in_tmux_and_each_entry_has_an_owner_handle():
+    """A tmux session is restarted by hand, typed into, and gone after a reboot: what deploy.toml installs runs under a unit."""
+    m = tomllib.loads(deploy.MANIFEST.read_text())
+    entries = m["file"] + m["tree"]
+    assert not [(e["path"], r) for e in entries for r in e.get("run", []) if not r.startswith(("systemd:", "user-systemd:"))]
+    registry = json.loads((deploy.REPO / ".agents/skills/using-slack/registry.json").read_text())
+    handles = {h["handle"] for h in registry["handles"]}
+    assert not [(e["path"], e.get("owner")) for e in entries if e.get("owner") not in handles]
+
+
+PODS = deploy.MANIFEST.parent
+ROOT_UNITS = {"vy-write-probe@.service": "reads every thread's /proc/PID/task/TID/io, as its tmux pane did under sudo -n"}
+
+
+def _keys(path: Path) -> list[str]:
+    return [ln.split("=", 1)[0] for ln in path.read_text().splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+
+
+def test_each_unit_is_installed_with_the_environment_files_and_scripts_it_names_on_its_nodes():
+    nodes = deploy.load()
+    srcs = {e.src for n in nodes.values() for e in n.entries if e.src}
+    files = sorted(p.relative_to(deploy.REPO).as_posix() for d in ("units", "env") for p in (PODS / d).iterdir())
+    assert files and not [f for f in files if f not in srcs]
+    seen = 0
+    for node in nodes.values():
+        paths = {e.path for e in node.entries if not e.tree}
+        trees = [e.path.rstrip("/") + "/" for e in node.entries if e.tree]
+        for e in node.entries:
+            if not (e.src or "").startswith(f"{PODS.relative_to(deploy.REPO).as_posix()}/units/"):
+                continue
+            text, base = (deploy.REPO / e.src).read_text(), Path(e.path).name
+            assert "Restart=on-failure" in text and (base in ROOT_UNITS or "User=research" in text or
+                                                     e.path.startswith(deploy.USER_UNITS)), e.path
+            units = [deploy.unit_name(r) for r in e.run]
+            assert units and all(u and deploy.unit_file(u) == e.path for u in units), (e.path, e.run)
+            for u in units:
+                name = u.split(":", 1)[1].rsplit(".", 1)[0]
+                inst = name.partition("@")[2]
+                resolve = lambda s: s.replace("%N", name).replace("%i", inst)
+                envs = [resolve(ln.split("=", 1)[1].lstrip("-")) for ln in text.splitlines() if ln.startswith("EnvironmentFile=")]
+                scripts = [resolve(s) for ln in text.splitlines() if ln.startswith(("ExecStart=", "ExecStartPre="))
+                           for s in re.findall(r"/workspace/[\w./@-]+\.(?:py|sh)\b", ln)]
+                assert scripts, u
+                for f in [x for x in envs if x != "/etc/environment"] + scripts:
+                    assert f in paths or f.startswith(tuple(trees)), f"{node.name}: {u} reads {f}, which deploy.toml doesn't install there"
+                seen += 1
+    assert seen >= 12
+
+
+def test_environment_files_hold_settings_never_credentials_nor_what_dispatch_env_sets():
+    for f in sorted((PODS / "env").iterdir()):
+        for k in _keys(f):
+            assert re.fullmatch(r"[A-Z_][A-Z0-9_]*", k), (f.name, k)
+            assert not re.search(r"TOKEN|SECRET|PASS|CRED|AUTH|(^|_)KEY($|_)", k), (f.name, k)
+    assert _keys(PODS / "dispatch-n1.env")
+    assert not set(_keys(PODS / "env" / "vy-node1-dispatch.env")) & set(_keys(PODS / "dispatch-n1.env"))
 
 
 FAKE_CGROUP = """import builtins, io

@@ -1,0 +1,30 @@
+# Node 1's GPU lease pools (n1_lease.py), one instance per pool: vy-n1-lease@provers (/run/gpu-lease, the provers queue) and
+# vy-n1-lease@circuits (/run/gpu-lease-circuits, deployments-gpu). Each pool's settings are /etc/vy/env/vy-n1-lease@POOL.env.
+[Unit]
+Description=node 1's %i GPU lease pool (n1_lease.py loop)
+After=network-online.target k3s.service
+Wants=network-online.target
+RequiresMountsFor=/workspace
+StartLimitIntervalSec=1h
+StartLimitBurst=10
+
+[Service]
+User=research
+Group=research
+WorkingDirectory=/home/research
+EnvironmentFile=/etc/environment
+EnvironmentFile=/etc/vy/env/research.env
+EnvironmentFile=/etc/vy/env/%N.env
+ExecStart=/usr/bin/python3 /workspace/verity-guest/bin/n1_lease.py loop --every 5
+# A fence (a detached flock per GPU) must outlive the controller, so a stop or a crash fails closed and the next start adopts
+# the fences it finds in /proc; the default, killing the whole cgroup, would unfence every GPU.
+KillMode=process
+Restart=on-failure
+RestartSec=15
+Nice=0
+IOSchedulingClass=best-effort
+StandardOutput=append:/workspace/verity-guest/n1-lease-%i.log
+StandardError=inherit
+
+[Install]
+WantedBy=multi-user.target

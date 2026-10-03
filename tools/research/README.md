@@ -200,14 +200,19 @@ cache from `weights.tsv`, and its lease is `sh/lease.sh` with `LEASE_MACHINE_ID`
 Its runs share its GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: one flock per GPU, `CUDA_VISIBLE_DEVICES` set).
 
 What runs on the Nebius nodes outside a run (infra's loops, timers and services, and the files they read) is listed in
-`pods/nebius/deploy.toml`, each with the repository file it comes from, and goes there only through `research deploy install
-NODE --by WHO [PATH ...]` from a commit an origin branch holds (`main`, or a PR's head for a hotfix that can't wait for its
-train). `research deploy drift` reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
+`pods/nebius/deploy.toml`, each with the repository file it comes from and its owner (a Slack handle), and goes there only
+through `research deploy install NODE --by WHO [PATH ...] --apply` (without `--apply`, what it would do) from a commit an origin
+branch holds (`main`, or a PR's head for a hotfix that can't wait for its train). Each loop is a systemd unit
+(`pods/nebius/units/`), never a tmux session, with its settings in an environment file from git (`pods/nebius/env/`, installed
+to `/etc/vy/env/`): `install` reloads systemd after a unit changes, and restarts a running service when its unit or
+environment file changed or its process still runs a replaced file, once the node's `quiet` test passes, each restart a line
+of the node's record. An entry with a `hold` (node 2's ops loops, until compute accounting's yes) is reported, never installed.
+`research deploy drift` reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
 `missing`), every process still running a file installed after it started (`restart`), and every file in a managed directory
 that no entry lists (`stray`); the hourly preflight probe posts its findings whenever they change (`research/deploy.py`). A new
 loop or script goes into the repository and the manifest before it runs; a backup of a replaced file is
 `.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ...
---by WHO` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
+--by WHO --apply` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
 
 An unlisted or foreign machine is refused before anything is contacted. The
 tool ships as a content-addressed source snapshot under `<root>/tool/` and
