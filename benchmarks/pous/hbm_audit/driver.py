@@ -269,7 +269,9 @@ def host_resident_mask(torch, n_blocks: int, f: float, seed: int):
 
 def measure_cheater_async(torch, C_dev, host_pin, idx, host_hit, g):
     """Best overlapped cheater time: copy the host-resident challenged blocks H2D on one stream while the HBM-resident
-    ones are digested on another, then digest the staged blocks. `host_hit` is a bool mask over `idx`.
+    ones are digested on another, then digest the staged blocks. `host_hit` is a bool mask over `idx`; `host_pin` is a
+    pinned host buffer of at least `R_host` rows (its contents are irrelevant — only the transfer size and the overlap
+    matter for timing).
 
     The host blocks are copied as one contiguous `R_host * 64 KiB` transfer (the cheater's best case: pre-arranged, peak
     PCIe), which is optimistic for the cheater and so conservative for the audit.
@@ -307,21 +309,22 @@ def measure_cheater_async(torch, C_dev, host_pin, idx, host_hit, g):
         torch.cuda.synchronize()
         return start.elapsed_time(end)
 
-    for _ in range(3):
+    for _ in range(2):
         once()
     torch.cuda.synchronize()
-    ms = [once() for _ in range(40)]
+    ms = [once() for _ in range(20)]
     return ms, rh
 
 
 def measure_cheater_zerocopy(torch, C_dev, host_pin, idx, host_hit, g):
     """The other honest way to touch host-resident blocks: the digest kernel reads them straight out of pinned host
     memory over PCIe (UVA zero-copy), with no staging copy, while the HBM-resident blocks are digested from device
-    memory on another stream. `host_pin` is a full host copy of `C`, so a host-resident challenged block sits at the same
-    row there as in `C_dev`."""
+    memory on another stream. `host_pin` is a pinned host buffer of `R` rows; the host-resident challenged blocks are
+    read at their scattered positions within it (a realistic, non-coalesced access pattern), overlapped with the device
+    digest of the HBM-resident rest."""
     idx_dev = idx[~host_hit]
-    idx_host = idx[host_hit]
-    rh = int(idx_host.numel())
+    idx_host_local = torch.nonzero(host_hit, as_tuple=True)[0]  # scattered rows in [0, R) that live in host DRAM
+    rh = int(idx_host_local.numel())
     s_zc = torch.cuda.Stream()
     s_cmp = torch.cuda.Stream()
     out_dev = torch.empty(max(idx_dev.numel(), 1), dtype=torch.int64, device="cuda")
@@ -340,7 +343,7 @@ def measure_cheater_zerocopy(torch, C_dev, host_pin, idx, host_hit, g):
         s_cmp.wait_stream(cur)
         if rh:
             with torch.cuda.stream(s_zc):
-                kern[(rh,)](host_pin, idx_host, combine, out_host, gp, D.MOD, D.INTERLEAVE, D.N_STEPS)
+                kern[(rh,)](host_pin, idx_host_local, combine, out_host, gp, D.MOD, D.INTERLEAVE, D.N_STEPS)
         if idx_dev.numel():
             with torch.cuda.stream(s_cmp):
                 kern[(idx_dev.numel(),)](C_dev, idx_dev, combine, out_dev, gp, D.MOD, D.INTERLEAVE, D.N_STEPS)
@@ -350,10 +353,10 @@ def measure_cheater_zerocopy(torch, C_dev, host_pin, idx, host_hit, g):
         torch.cuda.synchronize()
         return start.elapsed_time(end)
 
-    for _ in range(3):
+    for _ in range(2):
         once()
     torch.cuda.synchronize()
-    ms = [once() for _ in range(40)]
+    ms = [once() for _ in range(20)]
     return ms, rh
 
 
@@ -367,16 +370,16 @@ def cmd_cheater(args, torch, meta):
     done = {(p["R"], p["f"]) for p in out["points"]}
     zc_ok = not out.get("zerocopy_error")  # once zero-copy fails (e.g. UVA unsupported), stop retrying it
     if not all((r, f) in done for r in rs for f in fs):
-        C = make_C(torch, n, seed=cg)
-        host_pin = torch.empty((n, D.WORDS), dtype=torch.int32, pin_memory=True)
-        host_pin.copy_(C)  # the cheater's host copy of C; challenged host blocks are read contiguously from here
+        C = make_C(torch, n, seed=cg)  # C in HBM (8 GiB); the device-resident challenged blocks are digested from here
         for r in rs:
             idx = None
+            host_pin = None  # a pinned host buffer sized to this R, allocated lazily so a short lease window fits
             for f in fs:
                 if (r, f) in done:
                     continue
                 if idx is None:
                     idx = random_idx(torch, n, r, seed=0x2000 + r)
+                    host_pin = torch.empty((r, D.WORDS), dtype=torch.int32, pin_memory=True)
                 mask = host_resident_mask(torch, n, f, seed=0x3000 + int(f * 1000))
                 host_hit = mask[idx]
                 ms, rh = measure_cheater_async(torch, C, host_pin, idx, host_hit, g)
@@ -401,7 +404,9 @@ def cmd_cheater(args, torch, meta):
                 write(args, "cheater.json", out)  # incremental: a later crash keeps the points already measured
                 zp = f"{dz['ms_p50']:.3f}" if dz else "n/a"
                 print(f"cheater C={cg}GiB R={r} f={f}: Rh={rh} async p50 {d['ms_p50']:.3f} ms zerocopy p50 {zp} ms")
-        del C, host_pin
+            del host_pin, idx
+            torch.cuda.empty_cache()
+        del C
         torch.cuda.empty_cache()
     have = {(p["R"], p["f"]) for p in out["points"]}
     out["complete"] = all((r, f) in have for r in rs for f in fs)
