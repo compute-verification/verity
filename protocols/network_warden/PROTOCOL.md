@@ -126,9 +126,11 @@ about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bound
 | Envelope, with no clock | `T·log2(r + 1)` bits per link-window | Proposition 2 |
 | Accepted runs, with clock-sync advice | `A_c + W·log2 #Σ_sync + n·log2 D` bits | `SecurityProofs.EncardAccSeqsLeSync`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRate` |
 | The shipped schedule, over the first m windows | `A_c + min(W, m)·log2 #Σ_sync + n·log2 D` bits, for n ≤ min(W, m)·T steps | `SecurityProofs.EncardAccSeqsLeConstantRateWindows`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRate` |
+| The shipped schedule, per window | `A_c` once, then `log2 #Σ_sync + T·log2 D` bits per window over m whole windows (n = m·T ≤ W·T): 7 bits per window at 16 × 8 sync values under J | `SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerWindow` |
 | A fixed clock, under J (D = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock` |
 | Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
 | Ingress, content plus timing | `log2 #Cs` bits plus the ingress timing | `SecurityProofs.EncardIngressDecodableLeContents`, `SecurityProofs.EncardIngressObsDecodableLeContents` |
+| Ingress, per link-window (the K charge's unit) | `T·log2(r_in + 1)` bits per link-window over m whole windows, plus `T·log2 D` of jitter per window, statuses complete | `SecurityProofs.EncardIngressObsDecodableLePerWindow`; content plus timing, `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow` |
 
 The inference-only policy charges an isolation unit the ingress covert capacity from the last wipe before it starts,
 plus what survived that wipe. `capacity.k_share` expresses bits as a share of `K = 9.12e7` bits.
@@ -149,6 +151,10 @@ link-window (times `D^T` for jitter, 1 under J), given the frames' content, on r
 (`StatusComplete`). The reference audits ingress statuses (see above), so an accepted verdict on every link of ∂X
 establishes `StatusComplete` for the windows audited. That is the acceptance hypothesis of all four ingress guarantees:
 `SecurityProofs.EncardIngressObsDecodableLe`, `SecurityProofs.EncardIngressDecodableLe` and their `Contents` versions.
+Over a temporal unit of m whole windows (n = m·T) the count factors per link-window: `(r_ℓ + 1)^T` on each link in
+each window, `T·log2(r_in + 1)` bits, which is the K charge's unit
+(`SecurityProofs.EncardIngressObsDecodableLePerWindow`, and `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow`
+for the `Contents` version).
 
 The `Contents` versions drop the one given content: messages whose frames follow some content assignment in a set `Cs`
 number at most `#Cs` times that count. So Lean proves, for the set `Ms` of messages counted, `log2 #Ms ≤ log2 #Cs` plus
@@ -196,7 +202,7 @@ shaping delay (hand time minus ready time, over every frame), the capacity per d
 ## Tests
 
 `uv run tools/check/suites.py verity-network-warden`. The tests enumerate small horizons, so they check the Lean
-statements on examples and prove nothing. By name, they mirror 19 of the Lean package's 47 pins, each a guarantee
+statements on examples and prove nothing. By name, they mirror 19 of the Lean package's 51 pins, each a guarantee
 `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, and its three proved but unpinned lemmas:
 - **`test_network_warden_grid.py`:**
   - Proposition 2's ten pins, by enumeration: `SecurityProofs.CardFree`, `SecurityProofs.CardLeftPacked`,
@@ -231,6 +237,8 @@ No test mirrors the other eight pins of Theorems 1(b) and 3 (`SecurityProofs.Enc
 `SecurityProofs.EncardAccSeqsLeAdvice`, `SecurityProofs.EncardAccSeqsLeBlocksCounts`,
 `SecurityProofs.EncardDecodableLeBlocks`, `SecurityProofs.EncardDecodableLeConstantRate`), nor the ingress bound's four
 (`SecurityProofs.EncardIngressObsDecodableLe`, `SecurityProofs.EncardIngressDecodableLe`,
-`SecurityProofs.EncardIngressObsDecodableLeContents`, `SecurityProofs.EncardIngressDecodableLeContents`), and the
-sixteen witnesses (thirteen in `NetTiming.SecurityProofs.Sanity`, three in `NetTiming.SecurityProofs.Schedule`) have no
+`SecurityProofs.EncardIngressObsDecodableLeContents`, `SecurityProofs.EncardIngressDecodableLeContents`), nor the four
+per-window forms (`SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`,
+`SecurityProofs.EncardDecodableLeConstantRatePerWindow`, `SecurityProofs.EncardIngressObsDecodableLePerWindow`,
+`SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow`), and the sixteen witnesses (thirteen in `NetTiming.SecurityProofs.Sanity`, three in `NetTiming.SecurityProofs.Schedule`) have no
 Python counterpart.

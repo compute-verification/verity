@@ -151,8 +151,7 @@ ingress bound's statements were frozen before their proofs as well; the review o
 that added them (danielreuter/verity#894), and the review of the content versions is on the one stacked on it. The
 constant-rate Program's five statements and the definitions they read were frozen on `sorry` stubs and pinned before
 their proofs. Their statement review, on danielreuter/verity#949, gave GO with one change: the four counts take
-`n ≤ W·T`. The four per-window statements are frozen on `sorry` stubs and pinned, awaiting their statement review;
-the other 47 pins are proved. The reference
+`n ≤ W·T`. All 51 pins are proved. The reference
 implementation, `protocols/network_warden` (`verity_network_warden`), mirrors 19 of the pins and the three unpinned
 lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
 
