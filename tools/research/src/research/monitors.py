@@ -32,9 +32,11 @@ While a window booked in node 2's fill/windows runs (as the last session read it
 UNWATCHED_S past the end of any booked window, fill-status-n2 opens `unwatched`: a timed window that long is the incident.
 
 `relay` runs the relay-side monitors into a local alert dir, then posts every new event of node 1's alert dir (over ssh) and the
-local one to #agent-alerts as `vy-monitors`, tagging the owners; each clear is a reply in its alert's thread. An owner other
-than infra also gets a pointer in #agent-coordination, where its doorbell rings (#agent-alerts rings only infra). Grafana's
-notes in node 1's outbox are posted too. On its first pass over an alert dir it posts only the incidents still open.
+local one to #agent-alerts as `vy-monitors`, tagging the owners; each clear is a reply in its alert's thread (a post of its
+own when that thread is gone). An owner other than infra also gets a pointer in #agent-coordination, where its doorbell rings
+(#agent-alerts rings only infra). Grafana's notes in node 1's outbox are posted too. On its first pass over an alert dir it
+posts only the incidents still open. A post that fails stops only its own source, until the next pass; one Slack refuses for
+good, or that has failed for RELAY_GIVE_UP_S, is dropped with a log line.
 
 Exit codes: 0 `check` found nothing, or `run` finished its pass (what is open is in the state and the alert dir); 1 `check` found
 something or a check failed, or `run` couldn't write the alert dir (a crash is 1 too: vy-monitors.service fails on both); 2
@@ -1158,27 +1160,54 @@ def _event(line: str) -> dict:
     return ev if isinstance(ev, dict) else {}
 
 
-def relay_pass(rstate: dict, sources: list[Source], post: Callable[[dict, dict | None], dict], now: float) -> int:
-    """Post each source's new events and Grafana's new notes; returns how many. The cursor moves past each event once it is
-    posted, so a post that raises is the next pass's first."""
+RELAY_GIVE_UP_S = 3600
+# Slack's errors that no retry fixes: the relay drops the post (and logs it)
+FINAL = re.compile(r"thread_not_found|message_not_found|channel_not_found|is_archived|msg_too_long|not_in_channel|no_text|"
+                   r"invalid_auth|account_inactive")
+
+
+def relay_pass(rstate: dict, sources: list[Source], post: Callable[[dict, dict | None], dict], now: float, *,
+               log: Callable[[str], None] = print, checkpoint: Callable[[], None] | None = None) -> int:
+    """Post each source's new events and Grafana's new notes; returns how many. An open's thread (a dict `post` fills in as it
+    goes) is kept from its first attempt, so a pointer that fails doesn't post its alert again. A post that fails is logged:
+    Slack refusing it for good (FINAL), or its failing for RELAY_GIVE_UP_S, drops it; otherwise its source stops there until
+    the next pass, which tries it first. A source that can't be read is logged too, and the others go on. `checkpoint()`
+    after each post and each source."""
     posted = 0
-    threads = rstate.setdefault("threads", {})
+    threads, failing = rstate.setdefault("threads", {}), rstate.setdefault("failing", {})
 
-    def one(src: Source, ev: dict) -> None:
+    def one(src: Source, ev: dict) -> bool:
+        """Post `ev` once; False when it failed and is its source's first next pass."""
         nonlocal posted
-        tkey = f"{src.name}|{ev.get('key')}"
-        if not ev.get("event") or ev.get("webhook") or (ev["event"] == "open" and tkey in threads) or (
-                ev["event"] == "clear" and tkey not in threads):
-            return
-        got = post(ev, threads.get(tkey))
-        posted += 1
-        if ev["event"] == "open":
-            threads[tkey] = {**got, "t": now}
-        elif ev["event"] == "clear":
+        kind, tkey = ev.get("event"), f"{src.name}|{ev.get('key')}"
+        th = threads.get(tkey)
+        if not kind or ev.get("webhook") or (kind == "open" and (th or {}).get("done")) or (kind == "clear" and th is None):
+            return True
+        if kind == "open":
+            th = threads.setdefault(tkey, {"t": now})
+        ident = f"{src.name}|{kind}|{ev.get('key')}|{ev.get('t', '')}"
+        try:
+            got = post(ev, th if kind in ("open", "clear") else None)
+        except Exception as e:  # noqa: BLE001  (each post fails alone)
+            since = failing.setdefault(ident, now)
+            why = f"{type(e).__name__}: {e}"[:300]
+            if not FINAL.search(str(e)) and now - since < RELAY_GIVE_UP_S:
+                log(f"{ident} not posted, {src.name} stops here until the next pass: {why}")
+                return False
+            log(f"dropped {ident}: {why}")
+            got = None
+        else:
+            posted += 1
+        failing.pop(ident, None)
+        if kind == "open" and (got is not None or th.get("ts")):
+            th.update(got or {}, done=True)
+        elif kind in ("open", "clear"):
             del threads[tkey]
+        if checkpoint:
+            checkpoint()
+        return True
 
-    for src in sources:
-        s = rstate.setdefault("sources", {}).setdefault(src.name, {})
+    def read(src: Source, s: dict) -> None:
         first = "lines" not in s
         got = src.lines(0 if first else s["lines"])
         if got is not None:
@@ -1186,33 +1215,43 @@ def relay_pass(rstate: dict, sources: list[Source], post: Callable[[dict, dict |
             if total < s.get("lines", 0):
                 s["lines"] = 0                          # a new file: read from its start next pass
             elif first:
-                for ev in still_open([_event(ln) for ln in lines[:total]]):
-                    one(src, ev)
-                s["lines"] = total
+                if all(one(src, ev) for ev in still_open([_event(ln) for ln in lines[:total]])):
+                    s["lines"] = total
             else:
                 for ln in lines[:total - s["lines"]]:
-                    one(src, _event(ln))
+                    if not one(src, _event(ln)):
+                        break
                     s["lines"] += 1
         names = src.notes()
         if "notes" not in s:
             s["notes"] = names
-            continue
+            return
         seen = set(s["notes"]) & set(names)
         for n in names:
             if n in seen:
                 continue
             text = src.head(n)
             fm = front_matter(text)
-            if "monitor" not in fm:
-                post({"event": "note", "monitor": "grafana", "key": n, "owners": [fm.get("lane", "infra")], "severity": "warn",
-                      "text": text.split("\n---\n", 1)[-1].strip()[:2500], "action": f"read `{n}` in node 1's alert outbox",
-                      "by": fm.get("origin", "grafana")}, None)
-                posted += 1
+            if "monitor" not in fm and not one(src, {
+                    "event": "note", "monitor": "grafana", "key": n, "owners": [fm.get("lane", "infra")], "severity": "warn",
+                    "text": text.split("\n---\n", 1)[-1].strip()[:2500], "action": f"read `{n}` in node 1's alert outbox",
+                    "by": fm.get("origin", "grafana")}):
+                break
             seen.add(n)
             s["notes"] = sorted(seen)
         s["notes"] = sorted(seen)
+
+    for src in sources:
+        try:
+            read(src, rstate.setdefault("sources", {}).setdefault(src.name, {}))
+        except Exception as e:  # noqa: BLE001  (read again next pass)
+            log(f"{src.name} unread: {type(e).__name__}: {e}"[:400])
+        if checkpoint:
+            checkpoint()
     for k in [k for k, v in threads.items() if now - v.get("t", now) > EVENTS_KEEP_S]:
         del threads[k]
+    for k in [k for k, t in failing.items() if now - t > EVENTS_KEEP_S]:
+        del failing[k]
     return posted
 
 
@@ -1229,19 +1268,35 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
         except slack.SlackError:
             return "@" + h
 
+    def reply(ch: str, text: str, ts: str) -> None:
+        try:
+            slack._post(api, ch, POSTER, text, ts)
+        except slack.SlackError as e:
+            if not re.search(r"thread_not_found|message_not_found", str(e)):
+                raise
+            print(f"{ch} {ts}: its thread is gone ({e}), so this reply is a post of its own", flush=True)
+            slack._post(api, ch, POSTER, text)
+
     def post(ev: dict, thread: dict | None) -> dict:
+        """Post `ev`, recording each message in `thread` as soon as Slack has it, so a retry posts only what is still missing."""
+        th = {} if thread is None else thread
         if ev["event"] == "clear":
+            done = th.setdefault("cleared", [])
             for k, ch in (("ts", alerts), ("pointer", front)):
-                if (thread or {}).get(k):
-                    slack._post(api, ch, POSTER, message(ev), thread[k])
-            return {}
-        ts = slack._post(api, alerts, POSTER, message(ev, tag))
-        out = {"ts": ts}
-        if others := [o for o in ev["owners"] if o != "infra"]:
-            link = api.call("chat.getPermalink", channel=alerts, message_ts=ts).get("permalink") or "#agent-alerts"
-            out["pointer"] = slack._post(api, front, POSTER, f"{' '.join(tag(o) for o in others)} {title(ev['text'])} (alert: {link})",
-                                         route=(reg, routes), tags=("alert",))
-        return out
+                if th.get(k) and k not in done:
+                    reply(ch, message(ev), th[k])
+                    done.append(k)
+            return th
+        if not th.get("ts"):
+            th["ts"] = slack._post(api, alerts, POSTER, message(ev, tag))
+        if (others := [o for o in ev["owners"] if o != "infra"]) and not th.get("pointer"):
+            try:
+                link = api.call("chat.getPermalink", channel=alerts, message_ts=th["ts"]).get("permalink") or "#agent-alerts"
+            except slack.SlackError:
+                link = "#agent-alerts"
+            th["pointer"] = slack._post(api, front, POSTER, f"{' '.join(tag(o) for o in others)} {title(ev['text'])} (alert: {link})",
+                                        route=(reg, routes), tags=("alert",))
+        return th
     return post
 
 
@@ -1345,13 +1400,14 @@ def cmd_relay(ns: argparse.Namespace) -> int:
         stamp = iso(now)[11:]
         if run_once(ns, "relay", Path(ns.state), Path(ns.alerts), now) is None:
             print(f"{stamp} relay-side monitors skipped: another runner holds {ns.state}.lock", flush=True)
+        checkpoint = None if ns.dry_run else (lambda: save(posts, rstate))
         try:
-            n = relay_pass(rstate, sources, post, now)
+            n = relay_pass(rstate, sources, post, now, log=lambda s: print(f"{stamp} {s}", flush=True), checkpoint=checkpoint)
             print(f"{stamp} posted {n}", flush=True)
-        except Exception as e:  # noqa: BLE001  (a source or post that failed is read again next pass)
+        except Exception as e:  # noqa: BLE001  (relay_pass catches each source and post; this is a bug, logged, not a stop)
             print(f"{stamp} relay failed: {type(e).__name__}: {e}", flush=True)
-        if not ns.dry_run:
-            save(posts, rstate)
+        if checkpoint:
+            checkpoint()
         if ns.once:
             return 0
         time.sleep(ns.every)

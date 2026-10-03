@@ -742,21 +742,122 @@ def test_the_relay_posts_what_is_still_open_first_then_each_new_event_once_with_
     assert M.relay_pass(rstate, [src], post, T0) == 0 and rstate["sources"]["node1"]["lines"] == 8
 
 
-def test_a_post_that_fails_is_the_relays_first_next_pass():
-    src, rstate, fail = FakeSource("node1"), {}, [True]
-    M.relay_pass(rstate, [src], lambda e, t: {}, T0)
-    src.all += [ev("open", "m|a"), ev("open", "m|b")]
+def test_a_post_that_fails_is_its_sources_first_next_pass_and_the_other_sources_go_on():
+    node1, relay, rstate, fail, logged = FakeSource("node1"), FakeSource("relay"), {}, [True], []
+    M.relay_pass(rstate, [node1, relay], lambda e, t: {}, T0)
+    node1.all += [ev("open", "m|a"), ev("open", "m|b"), ev("open", "m|c")]
+    relay.all += [ev("open", "node-heartbeat|stale", severity="page")]
 
     def post(e, thread):
         if e["key"] == "m|b" and fail[0]:
-            raise RuntimeError("slack down")
+            raise RuntimeError("chat.postMessage: HTTP 503")
         return {"ts": e["key"]}
 
-    with pytest.raises(RuntimeError):
-        M.relay_pass(rstate, [src], post, T0)
-    assert rstate["sources"]["node1"]["lines"] == 1
+    assert M.relay_pass(rstate, [node1, relay], post, T0, log=logged.append) == 2
+    assert rstate["sources"]["node1"]["lines"] == 1 and rstate["sources"]["relay"]["lines"] == 1
+    assert logged == ["node1|open|m|b| not posted, node1 stops here until the next pass: RuntimeError: chat.postMessage: HTTP 503"]
     fail[0] = False
-    assert M.relay_pass(rstate, [src], post, T0) == 1
+    assert M.relay_pass(rstate, [node1, relay], post, T0 + 60) == 2 and rstate["failing"] == {}
+
+
+def test_a_post_slack_refuses_for_good_or_that_fails_for_an_hour_is_dropped_with_a_log_line():
+    src, rstate, logged = FakeSource("node1"), {}, []
+    M.relay_pass(rstate, [src], lambda e, t: {"ts": "1"}, T0)
+    src.all += [ev("open", "m|a"), ev("open", "m|b")]
+    M.relay_pass(rstate, [src], lambda e, t: {"ts": e["key"]}, T0)
+    src.all += [ev("clear", "m|a"), ev("event", "m|e"), ev("clear", "m|b")]
+    posted = []
+
+    def post(e, thread):
+        if e["key"] == "m|a":
+            raise RuntimeError("conversations.replies: thread_not_found")         # its alert was deleted in #agent-alerts
+        if e["key"] == "m|e":
+            raise RuntimeError("chat.postMessage: HTTP 500")
+        posted.append((e["event"], e["key"]))
+        return {}
+
+    for t in (T0 + 60, T0 + 120, T0 + 60 + M.RELAY_GIVE_UP_S):
+        M.relay_pass(rstate, [src], post, t, log=logged.append)
+    assert posted == [("clear", "m|b")] and rstate["threads"] == {} and rstate["failing"] == {}
+    assert [ln.split(":")[0] for ln in logged] == ["dropped node1|clear|m|a|", "node1|event|m|e| not posted, node1 stops here until the next pass",
+                                                  "node1|event|m|e| not posted, node1 stops here until the next pass",
+                                                  "dropped node1|event|m|e|"]
+
+
+def test_a_source_that_cant_be_read_is_logged_and_the_next_source_still_posts():
+    class Down(FakeSource):
+        def lines(self, after):
+            raise RuntimeError("node1: exited 255: ssh: connect to host n1 port 22: Connection timed out")
+
+    relay, rstate, logged, posted = FakeSource("relay"), {}, [], []
+    M.relay_pass(rstate, [Down("node1"), relay], lambda e, t: {}, T0, log=logged.append)
+    relay.all.append(ev("open", "node-heartbeat|stale", severity="page"))
+    M.relay_pass(rstate, [Down("node1"), relay], lambda e, t: posted.append(e["key"]) or {}, T0 + 60, log=logged.append)
+    assert posted == ["node-heartbeat|stale"] and len(logged) == 2 and logged[0].startswith("node1 unread: RuntimeError: node1: exited 255")
+
+
+def fake_slack(monkeypatch, fail=lambda ch, thread: None, permalink=None) -> list:
+    """slack_post's Slack: `_post` records (channel, the text's first line, thread) unless `fail(channel, thread)` returns an
+    error to raise; chat.getPermalink raises `permalink` when given."""
+    from research import slack as S
+    posts = []
+
+    class Api:
+        dry_run = False
+
+        def __init__(self, *a, **kw):
+            pass
+
+        def call(self, method, **kw):
+            if permalink:
+                raise permalink
+            return {"ok": True, "permalink": "https://slack.example/p"}
+
+    def _post(api, ch, handle, text, thread=None, **kw):
+        if e := fail(ch, thread):
+            raise e
+        posts.append((ch, text.splitlines()[0], thread))
+        return f"ts{len(posts)}"
+
+    monkeypatch.setattr(S, "registry_path", lambda *a: Path("registry.json"))
+    monkeypatch.setattr(S, "load_registry", lambda p: {"handles": [], "channels": {}})
+    monkeypatch.setattr(S, "channel_id_for", lambda reg, key: {"agent-alerts": "CALERTS", S.FRONT_DOOR: "CFRONT"}[key])
+    monkeypatch.setattr(S, "Routes", lambda *a, **kw: None)
+    monkeypatch.setattr(S, "Slack", Api)
+    monkeypatch.setattr(S, "_post", _post)
+    monkeypatch.setattr(S, "entry", lambda reg, h: {"handle": h})
+    return posts
+
+
+def test_an_alert_whose_pointer_fails_is_posted_once_and_its_pointer_once_slack_takes_it(monkeypatch):
+    from research import slack as S
+    left = [2]
+
+    def fail(ch, thread):
+        if ch == "CFRONT" and left[0]:
+            left[0] -= 1
+            return S.SlackError("chat.postMessage: HTTP 429 (rate limited; retry after 1 s)")
+
+    posts = fake_slack(monkeypatch, fail, permalink=S.SlackError("chat.getPermalink: HTTP 429"))
+    src, rstate = FakeSource("node1"), {}
+    M.relay_pass(rstate, [src], M.slack_post(False), T0)
+    src.all.append(ev("open", "stalls-n1|blocked", owners=["proofs"]))
+    for i in range(1, 4):
+        M.relay_pass(rstate, [src], M.slack_post(False), T0 + 60 * i, log=lambda s: None)
+    assert [(ch, thread) for ch, _, thread in posts] == [("CALERTS", None), ("CFRONT", None)]
+    assert posts[1][1] == "@proofs open stalls-n1|blocked (alert: #agent-alerts)"
+    assert rstate["threads"]["node1|stalls-n1|blocked"] == {"t": T0 + 60, "ts": "ts1", "pointer": "ts2", "done": True}
+
+
+def test_a_clear_into_a_deleted_thread_is_a_post_of_its_own(monkeypatch, capsys):
+    from research import slack as S
+    posts = fake_slack(monkeypatch, lambda ch, thread: thread and S.SlackError("conversations.replies: thread_not_found"))
+    src, rstate = FakeSource("node1"), {}
+    M.relay_pass(rstate, [src], M.slack_post(False), T0)
+    src.all += [ev("open", "units-n1|system:x"), ev("clear", "units-n1|system:x", text="*Cleared:* x")]
+    M.relay_pass(rstate, [src], M.slack_post(False), T0 + 60)
+    assert posts == [("CALERTS", "@infra open units-n1|system:x", None), ("CALERTS", "*Cleared:* x", None)]
+    assert "its thread is gone" in capsys.readouterr().out and rstate["threads"] == {}
 
 
 def test_the_relay_posts_grafanas_new_notes_but_not_the_monitors_own():
