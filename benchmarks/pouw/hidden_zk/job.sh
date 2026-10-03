@@ -24,7 +24,7 @@
 #      HZ_CASES (selftest cases)  HZ_CACHE (build and stage cache dir)  FLOCK_PROVE / FLOCK_SELFTEST / FLOCK_VERIFY / HZ_PYTHON
 #      (prebuilt)  HZ_STAGE (stage.py's: fast, the default, or library)  HZ_STAGE_ONLY=1 (stage and keep, nothing else)
 #      HZ_LEAN (the Lean checks to run, as globs over their tags or <config>/<tag>: "st-* tile-k4096/honest-own"; default
-#      every one)
+#      every one)  HZ_PROVE_ONLY=1 (the proving build and the --zk session only: no selftest build, controls or Lean)
 set -uo pipefail
 SRC=$(pwd)
 J=$SRC/benchmarks/pouw/hidden_zk
@@ -65,8 +65,10 @@ build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/floc
   mkdir -p "$D.tmp"
   CARGO_TARGET_DIR=$W/target cargo build -q --release -p flock-live --features sha512,glue --bin flock-circuit -j "$TH" \
     && cp "$W/target/release/flock-circuit" "$D.tmp/flock-circuit-prove" || return 1
-  CARGO_TARGET_DIR=$W/target cargo build -q --release -p flock-live --features sha512,glue,seed-injection --bin flock-circuit \
-    -j "$TH" && cp "$W/target/release/flock-circuit" "$D.tmp/flock-circuit-selftest" || return 1
+  if [ "${HZ_PROVE_ONLY:-0}" != 1 ]; then
+    CARGO_TARGET_DIR=$W/target cargo build -q --release -p flock-live --features sha512,glue,seed-injection --bin flock-circuit \
+      -j "$TH" && cp "$W/target/release/flock-circuit" "$D.tmp/flock-circuit-selftest" || return 1
+  fi
   rm -rf "$D" && mv "$D.tmp" "$D"
 }
 build_lean() {      # build_lean DEST: DEST/.lake/build/bin/flock-verify
@@ -95,19 +97,22 @@ setup() {
   { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "threads $TH"; grep -E 'MemTotal|MemAvailable' /proc/meminfo; cat /proc/self/cgroup
     taskset -pc $$; df -h "${HZ_CACHE:-$W}" "$W"; } > "$OUT/host.txt" 2>&1
   local fail=0 p
-  [ -n "${FLOCK_PROVE:-}" ] || cached flock "$(tree_key backends/flock/live backends/flock/*.patch)" build_circuit > "$W/flock.dir" &
+  local only=${HZ_PROVE_ONLY:-0} flock=flock
+  [ "$only" = 1 ] && { flock=flock-prove; FLOCK_SELFTEST=${FLOCK_SELFTEST:-none}; FLOCK_VERIFY=${FLOCK_VERIFY:-none}; }
+  [ -n "${FLOCK_PROVE:-}" ] || cached $flock "$(tree_key backends/flock/live backends/flock/*.patch)" build_circuit > "$W/flock.dir" &
   [ -n "${FLOCK_VERIFY:-}" ] || cached lean "$(tree_key backends/flock/verifier/lean)" build_lean > "$W/lean.dir" &
   [ -n "${HZ_PYTHON:-}" ] || cached venv numpy2.5.3-blake3-1.0.9 build_python > "$W/venv.dir" &
   wait
-  [ -n "${FLOCK_PROVE:-}" ] || { FLOCK_PROVE=$(cat "$W/flock.dir")/flock-circuit-prove; FLOCK_SELFTEST=$(cat "$W/flock.dir")/flock-circuit-selftest; }
+  [ -n "${FLOCK_PROVE:-}" ] || { FLOCK_PROVE=$(cat "$W/flock.dir")/flock-circuit-prove; FLOCK_SELFTEST=${FLOCK_SELFTEST:-$(cat "$W/flock.dir")/flock-circuit-selftest}; }
   [ -n "${FLOCK_VERIFY:-}" ] || FLOCK_VERIFY=$(cat "$W/lean.dir")/.lake/build/bin/flock-verify
   [ -n "${HZ_PYTHON:-}" ] || HZ_PYTHON=$(cat "$W/venv.dir")/bin/python
   BIN=$FLOCK_PROVE SBIN=${FLOCK_SELFTEST:?} LEAN=$FLOCK_VERIFY PY=$HZ_PYTHON
-  for p in "$BIN" "$SBIN" "$LEAN" "$PY"; do [ -x "$p" ] || { log "missing: $p"; fail=1; }; done
+  local need=("$BIN" "$PY"); [ "$only" = 1 ] || need+=("$SBIN" "$LEAN")
+  for p in "${need[@]}"; do [ -x "$p" ] || { log "missing: $p"; fail=1; }; done
   if [ $fail = 1 ]; then
     log "build FAILED"; for f in "$OUT"/build-*.log; do echo "== $f"; tail -20 "$f"; done | tee -a "$OUT/job.log"; exit 1
   fi
-  sha256sum "$BIN" "$SBIN" "$LEAN" | tee "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
+  sha256sum "$BIN" $([ "$only" = 1 ] || echo "$SBIN $LEAN") | tee "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
   "$PY" -c "import numpy, blake3, verity_pouw, verity_flock; print('python', numpy.__version__, blake3.__version__)" | tee -a "$OUT/job.log"
   TIME="$PY $J/timed.py"
   log "built"
@@ -241,10 +246,13 @@ run_configs() {
     if [ "${HZ_STAGE_ONLY:-0}" = 1 ]; then "$PY" "$J/summarize.py" "$OUT" > /dev/null; rm -rf "$D"; continue; fi
     log "$tag: --zk session ($WARM warm + $RUNS timed)"
     session "$D" "$O" || log "$tag: --zk session FAILED: $(tail -2 "$O/prove.err")"
-    controls "$D" "$O" "$role"
-    lean_jobs "$D" "$O" "$role"
+    if [ "${HZ_PROVE_ONLY:-0}" != 1 ]; then
+      controls "$D" "$O" "$role"
+      lean_jobs "$D" "$O" "$role"
+    fi
     "$PY" "$J/summarize.py" "$OUT" > /dev/null
     rm -rf "$D"
+    [ -n "${HZ_CACHE:-}" ] || rm -rf "$W/cache/stage"   # without a kept cache, a config's staged files go with it
   done
   "$PY" "$J/summarize.py" "$OUT" | tee -a "$OUT/job.log"
   log "hidden-zk: done"

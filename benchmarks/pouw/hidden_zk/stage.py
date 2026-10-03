@@ -6,6 +6,18 @@ PoUW's rows (`leaves.statement_rows`) and, for a row unit, its anchors as public
     tile   Pc4Tile_v1{K,TM=1,TN=1}: an A row and a B row (nvfp4-p) -> C~ and U (one v2 run); no public input
     tileTMxTN   the same over TM A rows and TN B rows
     hidden[TMxTN]   Pc4TileHidden_v1{K,TM,TN}: the same rows -> the tile digest (its tile row)
+    pc8tile[TMxTN]  Pearl-C's Pc8Tile_v1{K,TM,TN,DEV='sm120'}: TM A rows and TN B rows (fp8-p) -> C~ and U (one v2 run)
+    cap[TMxTN]      Pc8TileCap_v1{K,TM,TN,N=TN,RHO=1000,DEV='sm120'} (`verity_pouw.circuit.cap`): the same rows, each A row's
+                    ok row and an 'adv' row (sd, cert) -> C~, U and the cap's verdict (one v2 run)
+    capword         Pc8CapWord_v1{K,DEV='sm120'}: a word's A' and B~ codes (one v2 row each) and an 'adv' row (cert) -> C~, its
+                    flags, its later +0 promotions and good (one v2 run)
+
+A Pearl-C row's codes are finite E4M3 (the atom has no NaN operand) and its P words BF16 below 2^-15 in magnitude, seeded;
+the certificates are the prover's (`cap.certificates`), and sd a seeded salt-dead count per block.  THE 'adv' ROW IS A
+TIMING STAND-IN: in the design sd is RowA's committed port and cert the tile unit's private advice, neither a row of the
+tile's; here they are one committed v2 row (public input ports must fill whole 128-bit words, which they don't), so the
+unit's ANDs include that row's hashing.  The cap's roles lower BitAnd_v1 through `core3_scratch` and are labelled
+'core3 scratch'.
 
 x is a seeded N(0, 1) row in BF16; a tile's rows are `pouw_rows_vectors`' seeded nvfp4-p rows. The anchors are the
 verifier's own (`TileAnchors.of` the scheme's seeds). Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under
@@ -135,8 +147,57 @@ def main() -> None:
             sr = {"out_row_ports": [2]}
         rows = {name: np.array([V.words("nvfp4-p", V.inputs(f"hidden-zk-{K}-{name}-{i}", "nvfp4-p", K)) for i in range(N)],
                                dtype=np.uint16) for name, *_ in in_rows}
+    elif ROLE.startswith(("pc8tile", "cap")):
+        from verity_pouw.circuit import cap, pc8
+        sys.path.insert(0, str(HERE))
+        import core3_scratch as K3
+        IL.PIECES.update(K3.PIECES)
+        rec["binding"] = "core3 scratch"
+        rng = np.random.default_rng(20261003 + K)
+        finite = np.array([c for c in range(256) if c not in (0x7F, 0xFF)])
+        code_rows = lambda: [list(map(int, rng.choice(finite, K))) for _ in range(N)]  # noqa: E731
+        p_rows = lambda: [list(map(int, rng.integers(0, 0x3FFF, pc8.PEEL))) for _ in range(N)]  # noqa: E731
+        u16 = lambda ws: np.array(ws, dtype=np.uint16)  # noqa: E731
+        f32_words = lambda vs: [h for v in vs for h in (v & 0xFFFF, v >> 16)]  # noqa: E731
+        v2 = SCHEMA_HM96_SHA512_ROW_V2
+        rec["advice_stand_in"] = "sd and cert as one committed v2 row 'adv' (timing only; module docstring)"
+        if ROLE == "capword":
+            d = cap.templates(K, "sm120")["word"]
+            a, b = code_rows(), code_rows()
+            in_rows = [("a", v2, 8 * K, ["a"]), ("b", v2, 8 * K, ["b"])]
+            rows = {"a": u16([[x | y << 8 for x, y in zip(r[::2], r[1::2])] for r in a]),
+                    "b": u16([[x | y << 8 for x, y in zip(r[::2], r[1::2])] for r in b])}
+            cert = [cap.certificates(a[i], b[i], "sm120") for i in range(N)]
+            in_rows.append(("adv", v2, 32 * len(cert[0]), ["cert"]))
+            rows["adv"] = u16([f32_words(c) for c in cert])
+            ports = {}
+            outs_, sr = [[v2, None]], {"out_row_ports": [4]}
+        else:
+            capped = ROLE.startswith("cap")
+            spec = ROLE.removeprefix("cap" if capped else "pc8tile")
+            tm, tn = map(int, spec.split("x")) if spec else (1, 1)
+            rec["tile"] = [tm, tn]
+            d = (cap.templates(K, "sm120", (tm, tn)) if capped else pc8.templates(K, (tm, tn), "sm120"))["tile"]
+            bits = 16 * L.ROW_WORDS["fp8-p"](K)
+            ac, bc = [code_rows() for _ in range(tm)], [code_rows() for _ in range(tn)]
+            pa, pb = [p_rows() for _ in range(tm)], [p_rows() for _ in range(tn)]
+            in_rows = [(f"a{r}", L.ROW_SCHEMA["fp8-p", ROLE_X], bits, [f"ac[{r}]", f"pa[{r}]"]) for r in range(tm)]
+            in_rows += [(f"b{r}", L.ROW_SCHEMA["fp8-p", ROLE_W], bits, [f"bc[{r}]", f"pb[{r}]"]) for r in range(tn)]
+            rows = {f"a{r}": u16([L.words_fp8_p(ac[r][i], pa[r][i]) for i in range(N)]) for r in range(tm)}
+            rows |= {f"b{r}": u16([L.words_fp8_p(bc[r][i], pb[r][i]) for i in range(N)]) for r in range(tn)}
+            ports = {}
+            if capped:
+                in_rows += [(f"ok{r}", L.ROW_SCHEMA["ok", ROLE_X], 16 * L.ROW_WORDS["ok"](K), [f"oka[{r}]"]) for r in range(tm)]
+                rows |= {f"ok{r}": u16([L.words_ok(1) for _ in range(N)]) for r in range(tm)}
+                sd = [[int(x) for x in rng.choice([0] * 30 + [1, 32], tm * (K // 32))] for _ in range(N)]
+                cert = [[w for r in range(tm) for j in range(tn) for w in cap.certificates(ac[r][i], bc[j][i], "sm120")]
+                        for i in range(N)]
+                in_rows.append(("adv", v2, 32 * (len(sd[0]) + len(cert[0])), ["sd", "cert"]))
+                rows["adv"] = u16([f32_words(sd[i] + cert[i]) for i in range(N)])
+            outs_, sr = [[v2, None]], {"out_row_ports": [3 if capped else 2]}
     else:
-        raise SystemExit(f"stage.py: ROLE is row_a, row_b, tile[TMxTN] or hidden[TMxTN], not {ROLE!r}")
+        raise SystemExit(f"stage.py: ROLE is row_a, row_b, tile[TMxTN], hidden[TMxTN], pc8tile[TMxTN], cap[TMxTN] or capword, "
+                         f"not {ROLE!r}")
     runs = sr.get("out_row_ports") or [1] * len(outs_)
     out_rows, at = [], 0
     for (s, _b), r in zip(outs_, runs):
@@ -150,7 +211,7 @@ def main() -> None:
     meta = got["meta"]
     pin = FC.digest(text)
     (OUT / "pin.txt").write_text(pin)
-    if ports:
+    if ports and ROLE in FLIP:
         own = ta.public_inputs(ROLE, range(N))
         ta.check_public_inputs(ROLE, range(N), own)
         (OUT / "public-inputs.bin").write_bytes(own)
