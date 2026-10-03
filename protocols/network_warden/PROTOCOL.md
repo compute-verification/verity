@@ -69,25 +69,33 @@ steps:
 An egress link-window (`Audit.check_link`) is accepted if:
 - its status is complete;
 - every slot equals the Program's grid (for a committed record: its digest equals the Program grid's digest);
-- its declared clock sync is in the set;
+- its declared clock sync is in the set, and is the spatial unit's sync for the window;
 - it has exactly one record, present by the verdict deadline.
 
 Anything else is a violation, and the first that applies names it:
 - `no-verdict`: no record by the deadline;
 - `duplicate`: more than one record for the link-window, whatever they say (the audit never picks one);
 - `status:<reason>`: the status is not complete;
-- `advice`: the declared clock sync is outside Σ_sync;
+- `advice`: the declared clock sync is outside Σ_sync, or differs from the unit's for the window;
 - `mismatch`: a slot differs from the Program's grid (for a committed record, the digest differs).
 
 A violation is **recorded, and the run is rejected**, as a policy signal. There is no halt: later windows are still
 checked.
 
-A declared sync outside Σ_sync is an `advice` violation in its own window only. The Program's grids are computed from
-the syncs as declared, out-of-set values included (any δ ≥ 0 and ρ > 0 gives a schedule), and every other window is
-checked against them. A window's grid reads only the syncs of its own and earlier windows: a frame is eligible no
-earlier than its anchor, hand times only rise in canonical order, and the queue carries forward. So a window before the
-out-of-set one gets the same verdict whatever that window declared, and a later one is checked against the grid the
-declared advice gives it.
+**One clock per spatial unit.** Every egress link of the unit reads the same sync in a window. The audit keeps each
+window's sync (`Audit.syncs`), set by the first egress link checked for that window. A link that declares a different
+sync for the window is an `advice` violation in that window, even if its sync is in Σ_sync. The reason is the bound:
+the accepted-runs bound charges one sync per window for all links. The advice of `SecurityProofs.EncardAccSeqsLeSync`
+is `Ac × (Fin W → Sync)`, so its 7 bits per window at 16 × 8 are `#Σ_sync^W` values over W windows. A sync per link
+would be advice of `#Σ_sync^(L·W)` over L egress links, L times the bits, and an audit that took each link's syncs on
+their own would accept it.
+
+A declared sync outside Σ_sync, or other than the unit's, is an `advice` violation in its own window only. The
+Program's grids are computed from each link's syncs as declared, out-of-set values included (any δ ≥ 0 and ρ > 0 gives
+a schedule), and every other window is checked against them. A window's grid reads only the syncs of its own and
+earlier windows: a frame is eligible no earlier than its anchor, hand times only rise in canonical order, and the queue
+carries forward. So a window before the violating one gets the same verdict whatever that window declared, and a later
+one is checked against the grid the declared advice gives it.
 
 **Ingress links are audited on their statuses** (`Audit.check_ingress_link(link, records, windows)`). Lean's acceptance
 needs every boundary link's status to be complete, ingress links included, since an ingress status is itself an egress
@@ -189,8 +197,9 @@ statements on examples and prove nothing. By name, they mirror 15 of the Lean pa
   - `SecurityProofs.EncardAccSeqsLeFixedClock`: the fixed clock's single accepted grid;
   - `SecurityProofs.EncardObsDecodableLe`: under a fixed clock, accepted secrets all show one grid sequence;
   - `SecurityProofs.EncardAccSeqsLeBlocks`: the block bound on random Programs;
-- **`test_network_warden_audit.py`:** record-and-reject and each violation, which no Lean statement names, and the
-  ingress links' status check, Lean's `StatusComplete`;
+- **`test_network_warden_audit.py`:** record-and-reject and each violation, which no Lean statement names; one clock
+  per spatial unit, the advice `SecurityProofs.EncardAccSeqsLeSync` counts; and the ingress links' status check, Lean's
+  `StatusComplete`;
 - **`test_network_warden_commitment.py`:**
   - the elided digest is injective on left-packed grids, by enumeration;
   - it binds the link, window, status and parameters;
