@@ -870,7 +870,7 @@ def main_diff(description: str | Path, which: str, as_json: bool, key: Path | No
         try:
             lv = live(node, raw, now)
             rows = diff(effective(keys, lv.overrides, now, node), node, lv, now)
-        except (ValueError, KeyError, TypeError, IndexError) as e:
+        except Exception as e:  # noqa: BLE001  (output of any unexpected shape is unknown, exit 3, never drift's 1)
             rows = diff(keys, node, Live({}, {node: f"its live policy couldn't be parsed: {type(e).__name__}: {e}"}, {}), now)
         reports.append({"node": node, "keys": rows})
     found = [r for rep in reports for r in rep["keys"] if r["status"] != "ok"]

@@ -314,6 +314,17 @@ def test_an_unread_command_makes_its_keys_unknown_and_exit_3(capsys, over, prefi
     assert mine and {r["status"] for r in mine} == {"unknown"}
 
 
+@pytest.mark.parametrize("kueue, error", [
+    ({"items": [{"metadata": {"name": "provers"}, "spec": "x"}]}, "AttributeError"),
+    ({"items": [{"metadata": {"name": "provers"}, "spec": {"resourceGroups": [{"flavors": [{"resources": [7]}]}]}}]},
+     "TypeError"),
+])
+def test_live_output_of_an_unexpected_shape_makes_the_node_unknown_and_exit_3_never_drift(capsys, kueue, error):
+    rc, rows = diff(capsys, "nebius-1", kueue=json.dumps(kueue))
+    assert rc == 3 and rows and {r["status"] for r in rows.values()} == {"unknown"}
+    assert all(r["why"].startswith(f"its live policy couldn't be parsed: {error}") for r in rows.values())
+
+
 def test_node_2_refusing_to_be_read_runs_one_command_and_every_key_is_unknown(capsys):
     ran: list = []
     refused = ("refused a timed window is on or waiting: 2026-10-03T19:20:01Z free GPUs 0/8, kept free -, waiters -, "
