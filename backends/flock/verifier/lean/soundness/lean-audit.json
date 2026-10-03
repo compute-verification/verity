@@ -10306,14 +10306,6 @@
    "assumptions": [],
    "type_hash": "bc4b463b9ade9979d302f6070502273e34a6b3ef6c125350773cf0a7e34e87a8"
   },
-  "FlockSoundness.Discharge.ZkExec.zk_table_verdict_of": {
-   "signature": [
-    "FlockSoundness.Discharge.ZkExec.zk_table_verdict_of (hrep : FlockSoundness.Discharge.ZkExec.ZkRepAccepts) :",
-    "  FlockSoundness.Discharge.ZkExec.ZkTableVerdict"
-   ],
-   "assumptions": [],
-   "type_hash": "c47db57b27e4aa7123b7b2ddd94a0b01f35d0b06d468489030d95d3915f6ab48"
-  },
   "FlockSoundness.Discharge.ZkExec.zk_verifyRep_ok": {
    "signature": ["FlockSoundness.Discharge.ZkExec.zk_verifyRep_ok : FlockSoundness.Discharge.ZkExec.ZkRepOk"],
    "assumptions": [],
