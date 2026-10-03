@@ -16,7 +16,7 @@ One lane gives per-block almost-universality `~2^-17`; a deployment runs `HL` in
 `~2^-17*HL` (the prototype measures `HL = 1` and `2` to show the digest stays HBM-bound either way). The field fits every
 intermediate product in `int64` (`acc, g < 2^31`, so `acc*g < 2^62`), which is why the GPU kernel needs no 128-bit
 arithmetic and runs at memory speed. The constants here are the audit's wire format, mirrored by the Triton kernel in
-`device_digest` and the numpy reference in `reference_block_hash`; `tests/test_pous_hbm_audit.py` pins them.
+`device_digest` and the numpy reference in `reference_block_hash`; `tests/test_digest_reference.py` pins them.
 """
 
 from __future__ import annotations
