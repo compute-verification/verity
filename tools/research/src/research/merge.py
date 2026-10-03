@@ -12,7 +12,8 @@ ancestor of REF) unless merging REF leaves REF's own tree (`tree_identical`: wha
 train checked on the train ahead of it lands after that one), since otherwise the merged tree is not the one that was checked;
 merge the target into the branch and check the new tip.  The steps a change requires are read from the target's declaration and
 the diff from its tip either way.  The merge commit carries a `Check: <attempt id>` trailer.  Exit 0 merged (or would, with
---dry-run), 1 refused, 2 usage.
+--dry-run), 1 a failure past the gate (git's merge, the push, the sweep, a train's offending ref), 2 usage, 3 refused
+(`research.gates.refuse`: the gate, the push guard, a train or its build).
 
 After a history rewrite (`commitmap`: an accepted `commit-map/v1` in the store), an attempt of an old commit counts for its image when
 the rewrite kept the tree, and REF is refused when it holds a commit the rewrite replaced: merging old history would bring it back.
@@ -45,13 +46,17 @@ import tempfile
 import time
 from pathlib import Path
 
+from .gates import FINDING, OK, REFUSED, git_env, refuse
+
+PROG = "research merge"
+
 
 class Refused(Exception):
     pass
 
 
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-    r = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True)
+    r = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, env=git_env())
     if check and r.returncode:
         raise Refused(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()}")
     return r
@@ -610,7 +615,7 @@ def _push_and_sweep(repo: Path, into: str, remote: str, push: bool) -> int:
 
 
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(prog="research merge", description=__doc__.split("\n\n")[1])
+    ap = argparse.ArgumentParser(prog=PROG, description=__doc__.split("\n\n")[1])
     ap.add_argument("ref", nargs="*", help="the commit to merge (a branch, tag or sha); with --train, several, in merge order")
     ap.add_argument("--sweep", action="store_true", help="merge nothing: close the open pull requests on the remote's --into and "
                     "retarget the ones based on a branch that is (with --dry-run: say what it would do)")
@@ -644,9 +649,9 @@ def main(argv: list[str]) -> int:
     if a.guard_push:
         bad = unchecked_pushes(repo, sys.stdin.read().splitlines(), LocalStore(a.store), a.into, a.tool)
         for c in bad:
-            print(f"research merge: refused push: {c[:12]} would reach {a.into} with no passing `{a.tool}` attempt of its tree; "
-                  "land it with `research merge` (the hook fails closed: `git push --no-verify` only with root's yes)", file=sys.stderr)
-        return 1 if bad else 0
+            refuse(PROG, f"the push: {c[:12]} would reach {a.into} with no passing `{a.tool}` attempt of its tree; land it with "
+                         "`research merge` (the hook fails closed: `git push --no-verify` only with root's yes)")
+        return REFUSED if bad else OK
     if not a.sweep and not a.dry_run and (hook := install_push_guard(repo, a.into, a.tool)):
         print(f"research merge: installed the push guard {hook}", file=sys.stderr)
     if a.sweep:
@@ -668,8 +673,7 @@ def main(argv: list[str]) -> int:
         try:
             tip, tree = prepare(repo, a.ref, a.prepare, onto, a.remote, lint, LocalStore(a.store))
         except Refused as e:
-            print(f"research merge: refused: {e}", file=sys.stderr)
-            return 1
+            return refuse(PROG, str(e))
         print(f"research merge: train {' '.join(a.ref)} on {onto}: pushed {a.remote}/{a.prepare} = {tip[:12]} (tree {tree[:12]}); "
               f"check it with `tools/check/train.sh {tip[:12]} MACHINE`, land it with `research merge {a.prepare}`")
         return 0
@@ -682,20 +686,18 @@ def main(argv: list[str]) -> int:
             land, bad = train(repo, a.ref, a.into, LocalStore(a.store), decl.name, command, a.on, a.project, spec=a.tool, sends=a.send,
                               remote=a.remote)
         except Refused as e:
-            print(f"research merge: refused: {e}", file=sys.stderr)
-            return 1
+            return refuse(PROG, str(e))
         moved = f"{a.into} fast-forwarded to {land[:12]}" if land else f"{a.into} unchanged"
         print(f"research merge: train {' '.join(a.ref)}: " + (f"`{decl.name}` passed; {moved}" if bad is None else f"{bad} breaks it; {moved}"))
         pushed = _push_and_sweep(repo, a.into, a.remote, a.push) if land else 0
-        return 0 if bad is None and not pushed else 1
+        return OK if bad is None and not pushed else FINDING
     if len(a.ref) != 1:
         ap.error("several refs need --train")
     a.ref = a.ref[0]
     try:
         commit, attempt = gate(repo, a.ref, a.into, LocalStore(a.store), a.tool)
     except Refused as e:
-        print(f"research merge: refused: {e}", file=sys.stderr)
-        return 1
+        return refuse(PROG, str(e))
     if a.dry_run:
         print(f"research merge: {a.ref} ({commit[:12]}) may be merged into {a.into}: `{a.tool}` passed in {attempt}")
         return 0

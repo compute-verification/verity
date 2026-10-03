@@ -51,15 +51,15 @@ def _record(tmp_path: Path, checkout: Path, monkeypatch, command: str) -> int:
 def test_merge_needs_a_passing_check_of_the_exact_commit(tmp_path, monkeypatch, capsys):
     main, feat, tip = _repos(tmp_path)
     monkeypatch.chdir(main)
-    assert merge_main(["feat", "--dry-run"]) == 1 and "no passing `check` attempt" in capsys.readouterr().err
+    assert merge_main(["feat", "--dry-run"]) == 3 and "no passing `check` attempt" in capsys.readouterr().err
     assert _record(tmp_path, feat, monkeypatch, "false") == 1                     # a failed check is an attempt, never a pass
     monkeypatch.chdir(main)
-    assert merge_main(["feat"]) == 1 and "failed rc=1" in capsys.readouterr().err
+    assert merge_main(["feat"]) == 3 and "failed rc=1" in capsys.readouterr().err
     (feat / "a.txt").write_text("dirty\n")
     assert _record(tmp_path, feat, monkeypatch, "true") == 0                      # passed, but on an uncommitted tree
     _git(feat, "checkout", "--", "a.txt")
     monkeypatch.chdir(main)
-    assert merge_main(["feat"]) == 1 and "dirty" in capsys.readouterr().err
+    assert merge_main(["feat"]) == 3 and "dirty" in capsys.readouterr().err
     assert _record(tmp_path, feat, monkeypatch, "true") == 0
     monkeypatch.chdir(main)
     assert merge_main(["feat"]) == 0
@@ -89,9 +89,9 @@ def test_merge_refuses_a_commit_the_target_has_moved_past(tmp_path, monkeypatch,
     _git(main, "add", "c.txt")
     _git(main, "commit", "-q", "-m", "main moves")
     monkeypatch.chdir(main)
-    assert merge_main(["feat"]) == 1 and "main has moved past" in capsys.readouterr().err
+    assert merge_main(["feat"]) == 3 and "main has moved past" in capsys.readouterr().err
     _git(main, "checkout", "-q", "-b", "other")
-    assert merge_main(["feat", "--dry-run"]) == 1 and "not main" in capsys.readouterr().err
+    assert merge_main(["feat", "--dry-run"]) == 3 and "not main" in capsys.readouterr().err
 
 
 def test_a_train_checked_on_the_one_ahead_lands_after_it_without_a_recheck(tmp_path, monkeypatch, capsys):
@@ -115,7 +115,7 @@ def test_a_train_checked_on_the_one_ahead_lands_after_it_without_a_recheck(tmp_p
     (main / "c.txt").write_text("c\n")
     _git(main, "add", "c.txt")
     _git(main, "commit", "-q", "-m", "main moves on its own")
-    assert merge_main(["B"]) == 1 and "main has moved past" in capsys.readouterr().err
+    assert merge_main(["B"]) == 3 and "main has moved past" in capsys.readouterr().err
 
 
 def _branch(main: Path, name: str, path: str) -> None:
@@ -209,16 +209,16 @@ def test_prepare_refuses_a_moved_head_a_conflict_and_a_failing_lint_and_pushes_n
     _git(main, "checkout", "-q", "main")
     monkeypatch.chdir(main)
     lint = ["--lint", "sh -c 'test ! -e BAD'"]
-    assert merge_main(["--train", "--prepare", "train-prep/x", f"#7@{a[:9]}", *lint]) == 1
+    assert merge_main(["--train", "--prepare", "train-prep/x", f"#7@{a[:9]}", *lint]) == 3
     assert "#7 has moved: its head on origin is" in capsys.readouterr().err
-    assert merge_main(["--train", "--prepare", "train-prep/x", f"BAD@{_git(main, 'rev-parse', 'BAD')}", *lint]) == 1
+    assert merge_main(["--train", "--prepare", "train-prep/x", f"BAD@{_git(main, 'rev-parse', 'BAD')}", *lint]) == 3
     assert "failed on the train" in capsys.readouterr().err
     _git(main, "checkout", "-q", "-b", "C", "main")
     (main / "b.txt").write_text("C's b\n")
     _git(main, "add", "b.txt")
     _git(main, "commit", "-q", "-m", "C")
     _git(main, "checkout", "-q", "main")
-    assert merge_main(["--train", "--prepare", "train-prep/x", "B", "C", *lint]) == 1
+    assert merge_main(["--train", "--prepare", "train-prep/x", "B", "C", *lint]) == 3
     assert "C does not merge onto the train so far" in capsys.readouterr().err
     assert _git(origin, "for-each-ref", "refs/heads/train-prep") == "" and "research-train" not in _git(main, "worktree", "list")
 
@@ -273,7 +273,7 @@ def test_a_conflict_only_on_import_lines_keeps_both_sides_and_any_other_line_ref
     assert _git(origin, "log", "-1", "--format=%B", "train-prep/i").endswith("Imports: Root.lean")
     assert "Imports:" not in _git(origin, "log", "-1", "--format=%B", "train-prep/i^1"), "#8 merged cleanly"
     capsys.readouterr()
-    assert merge_main(["--train", "--prepare", "train-prep/j", *pins, "--lint", "true"]) == 1
+    assert merge_main(["--train", "--prepare", "train-prep/j", *pins, "--lint", "true"]) == 3
     assert "#10 does not merge onto the train so far (a conflict in Root.lean holds more than import lines)" in capsys.readouterr().err
     assert _git(origin, "for-each-ref", "refs/heads/train-prep/j") == "" and "research-train" not in _git(main, "worktree", "list")
 
@@ -287,7 +287,7 @@ def test_a_json_file_git_merges_into_a_repeated_key_refuses_the_train(tmp_path, 
         11: {"lean-audit.json": audit.replace('"a": 1,\n', '"a": 1,\n    "b": 2,\n')},
         12: {"lean-audit.json": audit.replace('"m": 5,\n', '"m": 5,\n    "b": 3,\n')}})
     monkeypatch.chdir(main)
-    assert merge_main(["--train", "--prepare", "train-prep/k", "11@" + heads[11][:9], "12@" + heads[12][:9], "--lint", "true"]) == 1
+    assert merge_main(["--train", "--prepare", "train-prep/k", "11@" + heads[11][:9], "12@" + heads[12][:9], "--lint", "true"]) == 3
     assert "merging #12 onto the train leaves lean-audit.json unparseable as JSON" in capsys.readouterr().err
     assert _git(origin, "for-each-ref", "refs/heads/train-prep/k") == ""
 
@@ -317,14 +317,14 @@ def test_a_pin_change_goes_into_a_train_only_with_the_statement_reviewer_grant_a
     _git(main, "push", "-q", "origin", "pr20:refs/heads/side")
     monkeypatch.chdir(main)
     pins, lint = [f"20@{heads[20][:9]}", f"21@{heads[21][:9]}"], ["--lint", "true"]
-    assert merge_main(["--train", "--prepare", "train-prep/g", *pins, *lint]) == 1
+    assert merge_main(["--train", "--prepare", "train-prep/g", *pins, *lint]) == 3
     err = capsys.readouterr().err
     assert f"#20 needs the statement-reviewer grant at {heads[20][:12]} (tools/check/queue.toml: a named reviewer read" in err
     assert f"`research data label pr:20@{heads[20]} grant statement-reviewer --by REVIEWER`" in err and "#21" not in err
-    assert merge_main(["--train", "--prepare", "train-prep/g", f"side@{heads[20][:9]}", *lint]) == 1
+    assert merge_main(["--train", "--prepare", "train-prep/g", f"side@{heads[20][:9]}", *lint]) == 3
     assert "side needs the statement-reviewer grant (tools/check/queue.toml), which only a pull request's pinned head can hold" \
         in capsys.readouterr().err
-    assert merge_main(["--train", "pr20", "--tool", "mytools.decl_check:T", "--command", "true"]) == 1
+    assert merge_main(["--train", "pr20", "--tool", "mytools.decl_check:T", "--command", "true"]) == 3
     out, err = capsys.readouterr()
     assert "pr20 needs the statement-reviewer grant" in err and "nothing was checked" in err and "recorded as" not in out
     LocalStore().add_label(f"pr:20@{heads[20]}", "grant", "statement-reviewer", "red-team")
@@ -365,13 +365,28 @@ def test_a_move_audit_py_prints_as_the_same_statements_needs_no_grant_and_a_chan
     review(22, moved, False)
     assert merge_main(["--train", "--prepare", "train-prep/m", f"22@{heads[22][:9]}", *lint]) == 0, capsys.readouterr().err
     review(23, restated, True)                       # it printed `pin Q.t: changed (moved from P.t)` for a reviewer
-    assert merge_main(["--train", "--prepare", "train-prep/n", f"23@{heads[23][:9]}", *lint]) == 1
+    assert merge_main(["--train", "--prepare", "train-prep/n", f"23@{heads[23][:9]}", *lint]) == 3
     err = capsys.readouterr().err
     assert f"#23 needs the statement-reviewer grant at {heads[23][:12]}" in err
     assert f"`research data label pr:23@{heads[23]} lean_review ART --by LANE`" in err
     review(23, moved, False)                         # the move's own report: it never saw the record #23's head holds
-    assert merge_main(["--train", "--prepare", "train-prep/n", f"23@{heads[23][:9]}", *lint]) == 1
+    assert merge_main(["--train", "--prepare", "train-prep/n", f"23@{heads[23][:9]}", *lint]) == 3
     assert "#23 needs the statement-reviewer grant" in capsys.readouterr().err
+
+
+def test_the_gate_reads_its_own_checkout_whatever_git_environment_it_inherits(tmp_path, monkeypatch, capsys):
+    """Run from a hook or under another checkout's scratch index, git reads GIT_DIR, GIT_WORK_TREE and GIT_INDEX_FILE before the
+    cwd: the gate would judge another repository's refs and status.  Its git calls drop them (`research.gates.git_env`)."""
+    main, feat, tip = _repos(tmp_path)
+    assert _record(tmp_path, feat, monkeypatch, "true") == 0
+    other = tmp_path / "other"
+    _git(tmp_path, "init", "-q", "-b", "main", str(other))
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(other))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(tmp_path / "scratch-index"))
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--dry-run"]) == 0, capsys.readouterr().err
+    assert f"({tip[:12]}) may be merged into main" in capsys.readouterr().out
 
 
 _RESULT = ("import json, os; d = os.environ['RESEARCH_RUN_DIR']; json.dump({'schema': 'research/result/v0.1', 'kind': 'check/v1', "
@@ -403,7 +418,7 @@ def test_a_path_rule_requires_its_step_for_a_change_under_the_path(tmp_path, mon
     _git(feat, "commit", "-q", "-m", "flock change")
     assert run("skipped") == 0
     monkeypatch.chdir(main)
-    assert merge_main(["feat", "--dry-run"]) == 1
+    assert merge_main(["feat", "--dry-run"]) == 3
     assert "changes flock/, where `check` must have run agree" in capsys.readouterr().err
     assert run("passed") == 0
     monkeypatch.chdir(main)
@@ -443,7 +458,7 @@ def test_a_stacked_train_meets_the_steps_the_declaration_main_gained_from_the_tr
     assert merge_main(["C", "--dry-run"]) == 0                  # main's own declaration has no rule yet
     _git(main, "merge", "-q", "--no-ff", "-m", "A lands", "A")
     assert subprocess.run(["git", "merge-base", "--is-ancestor", "HEAD", c], cwd=main).returncode == 1    # main moved past C's base
-    assert merge_main(["C", "--dry-run"]) == 1
+    assert merge_main(["C", "--dry-run"]) == 3
     assert "changes flock/, where `check` must have run agree" in capsys.readouterr().err
     assert run("passed") == 0
     monkeypatch.chdir(main)
@@ -487,7 +502,7 @@ def test_the_push_guard_refuses_a_main_commit_no_check_passed_and_allows_a_check
     assert unchecked_pushes(main, [f"refs/heads/main {stray} refs/heads/main {base}"], store) == [stray]
     assert unchecked_pushes(main, [f"refs/heads/other {stray} refs/heads/other {ZERO}"], store) == []   # only main is guarded
     monkeypatch.setattr("sys.stdin", io.StringIO(f"refs/heads/main {stray} refs/heads/main {base}\n"))
-    assert merge_main(["--guard-push"]) == 1 and "refused push" in capsys.readouterr().err
+    assert merge_main(["--guard-push"]) == 3 and "refused: the push" in capsys.readouterr().err
 
 
 def test_the_push_guard_allows_a_train_fast_forward_and_its_hook_ignores_other_branches(tmp_path, monkeypatch):
@@ -516,4 +531,4 @@ def test_the_push_guard_allows_a_train_fast_forward_and_its_hook_ignores_other_b
     stray = _git(main, "rev-parse", "HEAD")
     pushed = subprocess.run([str(hook)], input=f"refs/heads/main {stray} refs/heads/main {base}\n", text=True, cwd=main,
                             env=env, capture_output=True)
-    assert pushed.returncode == 1 and "refused push" in pushed.stderr
+    assert pushed.returncode == 3 and "refused: the push" in pushed.stderr
