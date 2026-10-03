@@ -122,6 +122,14 @@ def test_a_window_scoped_stall_drops_the_windows_it_overlaps_and_the_next() -> N
     assert [c["name"] for c in configs] == ["t/w3-4"]
 
 
+def test_the_windows_after_the_monitor_stopped_are_dropped() -> None:
+    records = [request(c, w * WINDOW_MS + 50.0, [[w * WINDOW_MS + 150.0, 1]]) for w, c in enumerate("abc")]
+    died = [s for s in samples(3) if s["t_ms"] <= WINDOW_MS + 30_000]
+    configs, summary = rec.build_trace(records, died, name="t", windows=3)
+    assert summary["windows_dropped"] == {"1": "unmonitored", "2": "unmonitored"}
+    assert [c["name"] for c in configs] == ["t/w0-1"]
+
+
 def test_a_late_sample_while_the_heartbeat_ran_drops_only_its_windows() -> None:
     records = [request("a", 50.0, [[120.0, 1]]), request("b", WINDOW_MS + 50.0, [[WINDOW_MS + 150.0, 1]])]
     late = {f"t{WINDOW_MS + 30_000}": {"dt_s": 5.0}}

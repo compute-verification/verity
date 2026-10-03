@@ -34,7 +34,7 @@ and duration) and, for `commit`, `commits.jsonl` (each run's finalization stall)
   whole chunk is void (with `--freeze-scope window`, only the windows the stall overlaps and the next);
 - a window is dropped when another process computed on our GPU, when the rest of the NUMA node kept more than
   `--max-others-busy` of its CPUs busy or co-tenants more than `--max-affinity-busy` of the job's own, when a sample
-  came over `--freeze-ms` late, or when one of its requests failed;
+  came over `--freeze-ms` late or none came after it, or when one of its requests failed;
 - the chunk is cut at dropped windows into contiguous segments, one configuration each.
 
 **`merge`** joins chunks' traces into one for the calibration tool.
@@ -53,6 +53,7 @@ import json
 import math
 import os
 import random
+import resource
 import signal
 import socket
 import subprocess
@@ -390,28 +391,33 @@ class Monitor(threading.Thread):
         prev_t, (prev_busy, prev_total, prev_abusy, prev_atotal) = clock(), numa()
         own_cpu_s()
         while not self.halt.wait(SAMPLE_S):
-            t, (busy, total, abusy, atotal), own = clock(), numa(), own_cpu_s()
-            span = max(1e-9, total - prev_total)
-            ncpu = len(self.cpus)
-            others = max(0.0, (busy - prev_busy) - own) / span
-            pids = {p.pid: p.usedGpuMemory for p in pynvml.nvmlDeviceGetComputeRunningProcesses(mine)}
-            ours = own_pids()
-            util = pynvml.nvmlDeviceGetUtilizationRates(mine)
-            self.sink({
-                "mono": t, "dt_s": round(t - prev_t, 3), "load": list(os.getloadavg()),
-                "numa_busy": round((busy - prev_busy) / span, 4), "others_busy": round(others, 4),
-                "own_cores": round(own / max(1e-9, t - prev_t), 3), "cpus": ncpu,
-                "affinity_busy": round((abusy - prev_abusy) / max(1e-9, atotal - prev_atotal), 4),
-                "gpu_util": util.gpu, "gpu_mem_util": util.memory,
-                "sm_mhz": pynvml.nvmlDeviceGetClockInfo(mine, pynvml.NVML_CLOCK_SM),
-                "mem_mhz": pynvml.nvmlDeviceGetClockInfo(mine, pynvml.NVML_CLOCK_MEM),
-                "temp_c": pynvml.nvmlDeviceGetTemperature(mine, pynvml.NVML_TEMPERATURE_GPU),
-                "power_w": round(pynvml.nvmlDeviceGetPowerUsage(mine) / 1000, 1),
-                "throttle": pynvml.nvmlDeviceGetCurrentClocksThrottleReasons(mine),
-                "foreign_pids": sorted(p for p in pids if p not in ours),
-                "gpus_util": [pynvml.nvmlDeviceGetUtilizationRates(h).gpu for h in handles],
-                "hb_max_ms": ms(self.stall["hb"]), "loop_max_ms": ms(self.stall["loop"]),
-            })
+            try:
+                t, (busy, total, abusy, atotal), own = clock(), numa(), own_cpu_s()
+                span = max(1e-9, total - prev_total)
+                ncpu = len(self.cpus)
+                others = max(0.0, (busy - prev_busy) - own) / span
+                pids = {p.pid: p.usedGpuMemory for p in pynvml.nvmlDeviceGetComputeRunningProcesses(mine)}
+                ours = own_pids()
+                util = pynvml.nvmlDeviceGetUtilizationRates(mine)
+                sample = {
+                    "mono": t, "dt_s": round(t - prev_t, 3), "load": list(os.getloadavg()),
+                    "numa_busy": round((busy - prev_busy) / span, 4), "others_busy": round(others, 4),
+                    "own_cores": round(own / max(1e-9, t - prev_t), 3), "cpus": ncpu,
+                    "affinity_busy": round((abusy - prev_abusy) / max(1e-9, atotal - prev_atotal), 4),
+                    "gpu_util": util.gpu, "gpu_mem_util": util.memory,
+                    "sm_mhz": pynvml.nvmlDeviceGetClockInfo(mine, pynvml.NVML_CLOCK_SM),
+                    "mem_mhz": pynvml.nvmlDeviceGetClockInfo(mine, pynvml.NVML_CLOCK_MEM),
+                    "temp_c": pynvml.nvmlDeviceGetTemperature(mine, pynvml.NVML_TEMPERATURE_GPU),
+                    "power_w": round(pynvml.nvmlDeviceGetPowerUsage(mine) / 1000, 1),
+                    "throttle": pynvml.nvmlDeviceGetCurrentClocksThrottleReasons(mine),
+                    "foreign_pids": sorted(p for p in pids if p not in ours),
+                    "gpus_util": [pynvml.nvmlDeviceGetUtilizationRates(h).gpu for h in handles],
+                    "hb_max_ms": ms(self.stall["hb"]), "loop_max_ms": ms(self.stall["loop"]),
+                }
+            except Exception as e:  # noqa: BLE001  (a failed sample is a gap the trace drops; a dead monitor would blind it)
+                print(f"monitor: a sample failed: {e!r}", file=sys.stderr, flush=True)
+                continue
+            self.sink(sample)
             self.stall["hb"] = self.stall["loop"] = 0.0
             prev_t, prev_busy, prev_total, prev_abusy, prev_atotal = t, busy, total, abusy, atotal
 
@@ -533,6 +539,8 @@ def run(args: argparse.Namespace) -> int:
     monitor = Monitor(samples, meta["gpu"], meta["watched"], stall)
     monitor.start()
     signal.signal(signal.SIGTERM, evicted)
+    _, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))  # a connection per in-flight request, and a backlog has thousands
     if not offline:
         with open(out / "server.log", "wb") as log:
             server = subprocess.Popen(server_argv, stdout=log, stderr=subprocess.STDOUT)
@@ -592,8 +600,9 @@ def build_trace(records: Sequence[dict], samples: Sequence[dict], *, name: str, 
     a stall drops only the windows it overlaps and the one after, while the backlog it left drains. A window is dropped
     when a sample overlapping it saw a foreign process on the GPU, the watched CPUs' other users busier than
     `max_others_busy`, the job's own CPUs busier than `max_affinity_busy` (co-tenants on its cpuset), or came over
-    `freeze_ms` late while the heartbeat ran (the host stalled the monitor), or when a request sent in it failed; each
-    run of kept windows is one configuration, its times rebased to its first window."""
+    `freeze_ms` late while the heartbeat ran (the host stalled the monitor), when it ends after the last sample (the
+    monitor stopped), or when a request sent in it failed; each run of kept windows is one configuration, its times
+    rebased to its first window."""
     window_ms = WINDOW_BUCKETS * BUCKET_MS
     if stopped_ms is not None:
         windows = min(windows, max(0, int(stopped_ms // window_ms)))
@@ -614,6 +623,8 @@ def build_trace(records: Sequence[dict], samples: Sequence[dict], *, name: str, 
             last = int(hi // window_ms) + (why == "stalled")
             for w in range(max(0, int(lo // window_ms)), min(windows - 1, last) + 1):
                 dropped.setdefault(w, why)
+    for w in range(int(max((s["t_ms"] for s in measured), default=0.0) // window_ms), windows):
+        dropped.setdefault(w, "unmonitored")
     kept = [r for r in records if 0 <= r["send_ms"] < end_ms]
     for r in kept:
         if not r["ok"]:
