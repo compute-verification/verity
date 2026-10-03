@@ -19,6 +19,7 @@ if [ ! -e .lake/packages ] && [ -n "$root" ] && [ -f "$root/tools/check/lean_aud
   (cd "$root" && uv run --quiet python tools/check/lean_audit.py --restore "$(realpath --relative-to="$root" .)") \
     || echo "setup.sh: the pinned dependency bundle didn't restore; lake fetches the dependencies"
 fi
+lake env true
 # `cache get` opens its downloads in parallel; under a soft limit of 1024 (some pods) part of them fail with EMFILE, and
 # `lake build` then compiles those Mathlib modules, which the audit's `dependencies` check refuses.
 ulimit -n "$(ulimit -Hn)" 2>/dev/null || true

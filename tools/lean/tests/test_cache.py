@@ -354,6 +354,14 @@ def test_a_package_whose_dependencies_arent_fetched_is_skipped(s3, tmp_path, lak
     assert not C.restore(r, "pkg", client(url, READ), [rev], [], lines.append, env(url, tmp_path), PLAT, lake[0])
     assert "dependencies aren't fetched" in lines[-1]
 
+def test_without_lean_the_client_says_to_run_setup_not_that_the_cache_is_unreachable(s3, tmp_path, monkeypatch):
+    b, url = s3
+    r, rev = repo(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    lines = []
+    assert C.get(r, ["pkg"], env(url, tmp_path, PATH=""), lines.append, fetch_state=lambda u: ON) == 0
+    assert "no Lean toolchain here (bash tools/lean/setup.sh pkg installs" in lines[-1], lines
+
 
 # ---------------------------------------------------------------- the publisher's refusals
 

@@ -250,7 +250,10 @@ _PLATFORMS: dict[str, str] = {}
 def platform(pkg: Path, toolchain: str) -> str:
     """The target triple of ``toolchain``'s `lean`, as Lake keys its builds by it (e.g. `x86_64-unknown-linux-gnu`)."""
     if toolchain not in _PLATFORMS:
-        r = subprocess.run(["lean", "--version"], cwd=pkg, capture_output=True, text=True, timeout=300, env=_elan_env())
+        try:
+            r = subprocess.run(["lean", "--version"], cwd=pkg, capture_output=True, text=True, timeout=300, env=_elan_env())
+        except FileNotFoundError:
+            raise CacheError(f"no `lean` here to name the platform (tools/lean/setup.sh {pkg} installs it)") from None
         m = re.search(r"\(version [^,]+, ([A-Za-z0-9_.-]+),", r.stdout)
         if r.returncode != 0 or not m:
             raise CacheError(f"`lean --version` in {pkg} printed no platform")
@@ -375,6 +378,10 @@ def restore(root: Path, pkg: str, s3: S3, revs: list[str], q: list[str], log=pri
             lake: list[str] | None = None) -> bool:
     """Main's newest cached build of ``pkg`` among ``revs`` into Lake's local cache, every file checked first. False when
     there is nothing to restore; CacheError when a check fails."""
+    if plat is None and shutil.which("lean", path=_elan_env(env)["PATH"]) is None:
+        log(f"lean-cache: {pkg}: no Lean toolchain here (bash tools/lean/setup.sh {pkg} installs elan, the pinned "
+            f"toolchain and the dependencies); building from source")
+        return False
     ident = identity(root, pkg, plat)
     sc = scope(ident)
     if quarantined(sc, q):
