@@ -3,6 +3,17 @@ inputs changed since a pass kept on this machine), on a tree this machine keeps 
 merges git combines cleanly that Lean doesn't) fails the run in minutes rather than when the audit's cold build reaches it.
 
     python tools/check/lean_changed.py --cache DIR --deps DIR --tree DIR
+    python tools/check/lean_changed.py --records PKG [--update [--moved FILE]] [--out DIR]   a lane's records, on a kept tree
+
+`--records` is a lane's fast path to the records in PKG's `lean-audit.json` (PKG: its path, or a unique part of one):
+`tools/lean/audit.py --build --no-replay --no-runs` on PKG in a tree kept per check slot (`lean-records/SLOT` under the check
+cache), which prints what the audit prints, `--update`'s review included, after a build of only what changed since that
+slot's last run. On a machine with check slots it first takes one through `slot.py`, pinned to its cores behind the line, and
+the slot's tree is whoever holds its lock. The tree's fetched dependencies are its own copy of the audit's (taken once per
+manifest and toolchain, else fetched cold), never links: where there is no sandbox its build writes as this user, and nothing
+it writes may reach what the audit keeps. It vouches for nothing (no kernel replay, no tests): check's audit decides.
+`--update` writes the record back into this checkout, but not in a recorded run, whose source tree the commit's other runs
+share: there it is in the run's `lean-audit/audit-*/`.
 
 The tree (`--tree`) holds each such package's tracked files, and those of the packages it requires by path, at their paths in
 this repository, with each package's own `.lake`: Lake rebuilds only the modules that changed since its last build there and
@@ -95,30 +106,32 @@ def sync(pkgs: list[str], files: list[str], tree: Path) -> int:
     return n
 
 
-def link(pkg: str, tree: Path, deps: Path, links: dict[str, str], log=print) -> bool:
-    """``tree/pkg/.lake/packages`` as hard links to the audit's kept dependencies for its manifest and toolchain; False when this
-    machine keeps none (another run holds them, or none has passed here yet)."""
+def link(pkg: str, tree: Path, deps: Path, links: dict[str, str], log=print, copy: bool = False) -> bool:
+    """``tree/pkg/.lake/packages`` as hard links to the audit's kept dependencies for its manifest and toolchain (``copy``: a
+    copy of them); False when this machine keeps none (another run holds them, or none has passed here yet)."""
     if (k := LA.deps_key(tree / pkg)) is None:
         return True
     dst = tree / pkg / ".lake" / "packages"
     if links.get(pkg) == k and dst.is_dir():
         return True
     unlink(pkg, tree, links)
+    verb, how = ("copy", "copied") if copy else ("link", "linked")
     with LA.WarmDeps(deps)._lock(k):
         src = deps / k
         if not src.is_dir():
-            log(f"lean-changed: {pkg}: this machine keeps no dependencies for it ({k[:12]}) to link")
+            log(f"lean-changed: {pkg}: this machine keeps no dependencies for it ({k[:12]}) to {verb}")
             return False
         t0 = time.monotonic()
         dst.parent.mkdir(parents=True, exist_ok=True)
         try:
-            shutil.copytree(src, dst, symlinks=True, copy_function=os.link)
+            shutil.copytree(src, dst, symlinks=True, copy_function=shutil.copy2 if copy else os.link)
         except (OSError, shutil.Error) as e:
             shutil.rmtree(dst, ignore_errors=True)
-            log(f"lean-changed: {pkg}: the dependencies ({k[:12]}) could not be linked ({e}); a link needs one filesystem")
+            log(f"lean-changed: {pkg}: the dependencies ({k[:12]}) could not be {how} ({e})"
+                + ("" if copy else "; a link needs one filesystem"))
             return False
     links[pkg] = k
-    log(f"lean-changed: {pkg}: dependencies linked ({k[:12]}) in {time.monotonic() - t0:.0f} s")
+    log(f"lean-changed: {pkg}: dependencies {how} ({k[:12]}) in {time.monotonic() - t0:.0f} s")
     return True
 
 
@@ -154,6 +167,57 @@ def sandboxed() -> bool:
         return subprocess.run([*UNSHARE, "--", "true"], capture_output=True, timeout=60).returncode == 0
     except (OSError, subprocess.TimeoutExpired):
         return False
+
+
+#: `--records`: its trees, one per check slot (`slot.py` names it in CHECK_SLOT; `local` outside one), under the check cache
+RECORDS = "lean-records"
+AUDIT_PY = ROOT / "tools" / "lean" / "audit.py"
+SLOT = _module(ROOT / "tools" / "check" / "slot.py", "slot_for_lean_changed")
+
+
+def records_tree() -> Path:
+    return LA.COMMON.cache_dir() / RECORDS / (os.environ.get("CHECK_SLOT") or "local")
+
+
+def audit_records(name: str, deps: Path, tree: Path, update: bool = False, moved: Path | None = None, out: Path | None = None,
+                  log=print) -> int:
+    """`--records`: `audit.py --build --no-replay --no-runs` on the package ``name`` names, in ``tree``; audit.py's exit status,
+    or 2 when ``name`` matches no single package or another run holds the tree."""
+    files = LA.COMMON.tracked_files(ROOT)
+    if files is None:
+        log("lean-records: the tree's files cannot be listed")
+        return 2
+    pkgs = LA.packages(files)
+    match = [p for p in pkgs if p == name.rstrip("/")] or [p for p in pkgs if name in p]
+    if len(match) != 1:
+        log(f"lean-records: {name!r} matches {len(match)} packages: {', '.join(match or pkgs)}")
+        return 2
+    pkg = match[0]
+    tree.mkdir(parents=True, exist_ok=True)
+    with open(tree / ".lock", "w") as held:
+        try:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            log(f"lean-records: another run holds {tree}")
+            return 2
+        t0 = time.monotonic()
+        links = json.loads((tree / LINKS).read_text()) if (tree / LINKS).is_file() else {}
+        n = sync(closure(pkg), files, tree)
+        if not link(pkg, tree, deps, links, log, copy=True) and (k := LA.deps_key(tree / pkg)):
+            links[pkg] = k
+            log(f"lean-records: {pkg}: its dependencies are fetched cold, once for this tree")
+        (tree / LINKS).write_text(json.dumps(links, indent=1, sort_keys=True) + "\n")
+        argv = [sys.executable, str(AUDIT_PY), "--build", "--no-replay", "--no-runs", *(["--update"] if update else []),
+                *(["--moved", str(moved.resolve())] if moved else []), *(["--out", str(out.resolve())] if out else []),
+                str(tree / pkg)]
+        rc = subprocess.run(argv, cwd=tree, env={**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())}).returncode
+        log(f"lean-records: {pkg}: audit.py exit {rc} in {time.monotonic() - t0:.0f} s on {tree} ({n} files changed there), "
+            "without the kernel replay or the tests: it vouches for nothing, check's audit decides")
+        record, mine = tree / pkg / "lean-audit.json", ROOT / pkg / "lean-audit.json"
+        if update and not os.environ.get("RESEARCH_RUN_DIR") and record.read_bytes() != mine.read_bytes():
+            shutil.copyfile(record, mine)
+            log(f"lean-records: wrote {mine}")
+    return rc
 
 
 def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
@@ -214,9 +278,23 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="lean_changed.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("--cache", type=Path, default=LA.COMMON.cache_dir() / "lean-audit", help="the audit's kept passes")
     ap.add_argument("--deps", type=Path, default=LA.COMMON.cache_dir() / "lean-deps", help="the audit's kept dependencies")
-    ap.add_argument("--tree", type=Path, default=LA.COMMON.cache_dir() / "lean-changed", help="the tree this step keeps built")
+    ap.add_argument("--tree", type=Path, help="the tree this step keeps built (default: lean-changed, or with --records "
+                    f"{RECORDS}/SLOT, under the check cache)")
+    ap.add_argument("--records", metavar="PKG", help="audit PKG's records without the kernel replay, on a tree kept per check slot")
+    ap.add_argument("--update", action="store_true", help="with --records: audit.py --update")
+    ap.add_argument("--moved", type=Path, metavar="FILE", help="with --records --update: audit.py --moved FILE")
+    ap.add_argument("--out", type=Path, help="with --records: audit.py --out DIR")
     a = ap.parse_args(argv)
-    return run(a.cache, a.deps, a.tree, log=lambda s: print(s, flush=True))
+    if not a.records:
+        if a.update or a.moved or a.out:
+            ap.error("--update, --moved and --out go with --records")
+        return run(a.cache, a.deps, a.tree or LA.COMMON.cache_dir() / "lean-changed", log=lambda s: print(s, flush=True))
+    if not os.environ.get("CHECK_SLOT") and SLOT.SLOTS.is_file():
+        by = os.environ.get("RESEARCH_LANE")
+        os.execv(sys.executable, [sys.executable, SLOT.__file__, *(["--by", by] if by else []), "--", sys.executable,
+                                  str(Path(__file__).resolve()), *argv])
+    return audit_records(a.records, a.deps, a.tree or records_tree(), a.update, a.moved, a.out,
+                         log=lambda s: print(s, flush=True))
 
 
 if __name__ == "__main__":
