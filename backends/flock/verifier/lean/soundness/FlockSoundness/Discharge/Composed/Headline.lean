@@ -36,15 +36,15 @@ theorem zkViewAt_of_ok (C : CoinedSetup FlockLevel3.GF256) (hC : CoinedOK execAr
     (hPad : Assumptions.Zk.PadNonvanishing40) :
     ZkViewAt C ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
   obtain ⟨hL, ht, hS, hpos, hlt, hT⟩ := hC
-  intro c Out enc w w0 hreg E
-  obtain ⟨hrank, hGp, hW, hpads, hβ, hinner⟩ := hT c
+  intro c hc Out enc w w0 hv hreg E
+  obtain ⟨hrank, hGp, hW, hpads, hβ, hinner⟩ := hT c hc
   have hpad : (C.T c).tab.PadOnto :=
     FlockSoundness.ZK.padOnto_M1 (C.T c).tab execArith execArith_correct C.cols hL ht hS (fOf Zk.PAD_C) C.pos hpos
       hlt hGp (hPad _ hL)
   simp only [ZkView.Coined.viewExe_eq, ZkView.Coined.simExe_eq]
   exact FlockSoundness.ZK.Session.session_shvzk_hm96 (fun _ => (C.T c).tab) (fun _ => (C.T c).hm96)
     (fun _ => hKey) (fun _ => hrank) (fun _ => hpad) (fun _ => hW) (fun _ => hpads) (fun _ => hβ) w hreg
-    (fun j => hinner (w j) (hreg j)) w0 fun v => E (enc v)
+    (fun j => hinner (w j) (hv j) (hreg j)) w0 fun v => E (enc v)
 
 variable {mPts n : ℕ} {Reg : Type}
 
