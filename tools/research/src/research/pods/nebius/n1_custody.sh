@@ -43,8 +43,11 @@ PASS_S=${VY_CUSTODY_PASS_S:-1200}
 MAX_FILES=${VY_CUSTODY_MAX_FILES:-20000}
 MAX_GB=${VY_CUSTODY_MAX_GB:-50}
 PENDING_S=${VY_CUSTODY_PENDING_S:-3600}
-SRC=${VY_CUSTODY_SRC:-/workspace/jobs/custody}
-PY=${VY_CUSTODY_PY:-/workspace/jobs/cache/python/cpython-3.12-linux-x86_64-gnu/bin/python3}   # any uid runs it; uv's cache is ubuntu's
+# the research and the Python the round runs on the host and its Jobs run with the Secret: root's (deploy.toml installs SRC; PYHOME
+# is `uv python install --install-dir PYHOME --no-bin 3.12.14` as root), never under the world-writable /workspace/jobs
+SRC=${VY_CUSTODY_SRC:-/workspace/custody}
+PYHOME=${VY_CUSTODY_PYHOME:-/workspace/custody/python}
+PY=${VY_CUSTODY_PY:-$PYHOME/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12}
 QUIET=${VY_CUSTODY_QUIET-1210-1330}
 QUIET_AT=1230   # node 1's quiet hour, which no Job runs into
 JOB_MIN_S=300   # a Job left less time before it isn't started
@@ -57,6 +60,7 @@ case "${1:-}" in
   --reconcile) [ $# = 4 ] && [ "$3" = --by ] && [ -n "$4" ] && [[ $2 =~ ^r[0-9a-z-]+$ ]] || usage; REC=$2 BY=$4 ;;
   *) usage ;;
 esac
+cd / || exit 3   # `python3 -` and `-m` put the working directory first on sys.path
 mkdir -p "$STATE/failures" "$STATE/held"
 exec 9> "$STATE/.lock"
 if ! flock -n 9; then
@@ -89,6 +93,34 @@ fi
 if [ ! -f "$SRC/tools/research/src/research/store/custody.py" ] || [ ! -f "$SRC/tools/research/store.pod.toml" ]; then
   log "refused: no research tree at $SRC (deploy.toml installs it: research deploy install vy-nebius-1 --by WHO" \
     "$SRC/tools/research/src/research $SRC/tools/research/store.pod.toml)"
+  exit 3
+fi
+# untrusted PATH...: the first of each PATH (resolved), a file under it, or a directory above it or above the path it resolves to
+# that a uid other than root and this round's could change (owned by another, or writable by group or others; a sticky directory
+# above aside), or nothing. uv's empty .lock is 0666.
+untrusted() {
+  local p q d o m bad lock
+  lock=$(realpath -m "$PYHOME")/.lock
+  for p; do
+    q=$(realpath -e "$p" 2> /dev/null) || { echo "$p (missing)"; return; }
+    for d in "$p" "$q"; do
+      while [ "$d" != / ]; do
+        d=$(dirname "$d")
+        read -r o m <<< "$(stat -c '%u %a' "$d")"
+        if { [ "$o" != 0 ] && [ "$o" != "$EUID" ]; } || (( (8#$m & 8#022) && !(8#$m & 8#1000) )); then echo "$d"; return; fi
+      done
+    done
+    bad=$(find "$q" -path "$lock" -prune -o \( \( ! -uid 0 ! -uid "$EUID" \) -o \( -perm /022 ! -type l \) \) -print -quit 2>&1)
+    [ -z "$bad" ] || { echo "$bad"; return; }
+  done
+}
+case $(realpath -e "$PY" 2> /dev/null) in
+  "$(realpath -e "$PYHOME" 2> /dev/null)"/*) ;;
+  *) log "refused: $PY is no interpreter under $PYHOME (as root: uv python install --install-dir $PYHOME --no-bin 3.12.14)"; exit 3 ;;
+esac
+if bad=$(untrusted "$SRC/tools/research" "$PYHOME") && [ -n "$bad" ]; then
+  log "refused: $bad could be changed by a uid other than root and $(id -un): the round runs $SRC's research and $PY on this host" \
+    "and in Jobs with the Secret research-r2, so every file of them, and each directory above, is root's and writable by root alone"
   exit 3
 fi
 

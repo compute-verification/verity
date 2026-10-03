@@ -1264,6 +1264,9 @@ with open(env["FAKE_LOG"], "a") as f:
 if env.get("UNREACHABLE"):
     sys.exit(255)
 if "test -f" in cmd:
+    if env.get("UNTRUSTED"):
+        print(env["UNTRUSTED"])
+        sys.exit(4)
     sys.exit(1 if env.get("NO_SRC") else 0)
 if "{.metadata.name}" in cmd:
     name = re.search(r"get job (\S+)", cmd).group(1)
@@ -1413,6 +1416,10 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     assert not n2.calls()
     no_src = n2.round_(NO_SRC="1")
     assert no_src.returncode == 3 and "no research tree at n1.invalid:/n1/src/abc" in no_src.stdout and "rsync" not in n2.calls()
+    writable = n2.round_(UNTRUSTED="/n1/src/abc/tools/research/src/research/store")
+    assert writable.returncode == 3 and "rsync" not in n2.calls()
+    assert "refused: n1.invalid:/n1/src/abc/tools/research/src/research/store could be changed by a uid other than root" in writable.stdout
+    assert "find /n1/src/abc/tools/research /workspace/custody/python -path /workspace/custody/python/.lock -prune" in n2.calls()
     unreached = n2.round_(UNREACHABLE="1")
     assert unreached.returncode == 3 and "refused: node 1 not reached (`ssh n1.invalid` exited 255)" in unreached.stdout
 
@@ -1434,6 +1441,8 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     assert f"data custody /n1/runs/{R['dead']} --publish --keep-local --force --runner-gone" in calls
     assert f'data custody /n1/runs/{R["done"]} --publish --keep-local "]' in calls
     assert "PYTHONPATH=/n1/src/abc/tools/research/src" in calls and R["preserved"] not in calls and R["big"] not in calls
+    assert ('"bash", "-c", "cd / && HOME=/tmp PYTHONDONTWRITEBYTECODE=1 ' in calls and "uv run" not in calls
+            and " /workspace/custody/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12 -m research data custody " in calls)
     assert "touch pwned" not in calls and rogue.name not in n2.names("pushed") + n2.names("held")
     keepalive = "ssh -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "
     assert all(x.startswith(keepalive) for x in calls.splitlines() if x.startswith("ssh ")), "a dropped link ends every call"
@@ -1682,10 +1691,16 @@ def _n1_custody(tmp_path: Path) -> types.SimpleNamespace:
     n = types.SimpleNamespace(jobs=tmp_path / "jobs", research=tmp_path / "research", state=tmp_path / "state", vault=tmp_path / "vault",
                               log=tmp_path / "calls.log", absent=tmp_path / "absent.toml", remote=tmp_path / "vault.toml")
     bin_, kjobs, home = tmp_path / "bin", tmp_path / "k8s", tmp_path / "home"
-    for d in (n.jobs / "runs", n.research / "runs", bin_, kjobs, n.vault, home, tmp_path / "src" / "tools" / "research"):
+    for d in (n.jobs / "runs", n.research / "runs", bin_, kjobs, n.vault, home, tmp_path / "py" / "bin"):
         d.mkdir(parents=True)
-    (tmp_path / "src" / "tools" / "research" / "src").symlink_to(src_root)
-    (tmp_path / "src" / "tools" / "research" / "store.pod.toml").symlink_to(src_root.parent / "store.pod.toml")
+    # the round runs only a tree and a Python that no other uid can change: copies, not links into the checkout
+    shutil.copytree(src_root, tmp_path / "src" / "tools" / "research" / "src", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copy(src_root.parent / "store.pod.toml", tmp_path / "src" / "tools" / "research" / "store.pod.toml")
+    (tmp_path / "py" / "bin" / "python3").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
+    (tmp_path / "py" / "bin" / "python3").chmod(0o755)
+    for p in (tmp_path / "src", *(tmp_path / "src").rglob("*"), tmp_path / "py", *(tmp_path / "py").rglob("*")):
+        p.chmod(p.stat().st_mode & ~0o022)
+    n.src, n.py = tmp_path / "src", tmp_path / "py" / "bin" / "python3"
     n.remote.write_text(f'[remote]\ntype = "fs"\npath = "{n.vault}"\n')
     (bin_ / "kubectl").write_text(f"#!{sys.executable}\n{FAKE_KUBECTL}")
     (bin_ / "sudo").write_text(f'#!/bin/sh\necho "sudo $*" >> {n.log}\n[ "$1 $2" = "-n -u" ] || exit 1\nshift 3\nexec "$@"\n')
@@ -1727,8 +1742,8 @@ def _n1_custody(tmp_path: Path) -> types.SimpleNamespace:
         return subprocess.run(["bash", str(NEBIUS / "n1_custody.sh"), *args], capture_output=True, text=True,
                               env={**os.environ, "PATH": f"{path}:{os.environ['PATH']}", "HOME": str(home), "KSTATE": str(kjobs),
                                    "KLOG": str(n.log), "KHOME": str(home), "KVAULT": str(n.remote), "RESEARCH_STORE_CONFIG": str(n.absent),
-                                   "VY_CUSTODY_QUIET": "", "VY_CUSTODY_BOOT": "boot-n1", "VY_CUSTODY_PY": sys.executable,
-                                   "VY_CUSTODY_STATE": str(n.state), "VY_CUSTODY_SRC": str(tmp_path / "src"),
+                                   "VY_CUSTODY_QUIET": "", "VY_CUSTODY_BOOT": "boot-n1", "VY_CUSTODY_PY": str(n.py),
+                                   "VY_CUSTODY_PYHOME": str(tmp_path / "py"), "VY_CUSTODY_STATE": str(n.state), "VY_CUSTODY_SRC": str(n.src),
                                    "VY_CUSTODY_ROOTS": f"{n.jobs}/runs={n.jobs}/store=1000,{n.research}/runs={n.research}/store=1001",
                                    "VY_CUSTODY_RELAY": f"{n.jobs}/runs-n2={n.jobs}/store=1000", "VY_CUSTODY_MAX_FILES": "10", **env})
 
@@ -1828,7 +1843,7 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     assert (spec["backoffLimit"], spec["activeDeadlineSeconds"], pod["nodeSelector"]) == (0, 1800, {"verity.dev/server": "vy-nebius-1"})
     assert pod["securityContext"]["runAsUser"] == 1000 and pod["containers"][0]["envFrom"] == [{"secretRef": {"name": "research-r2"}}]
     assert command(n1["done"])[:5] == ["taskset", "-c", "96-127", "bash", "-c"] and f"RESEARCH_STORE={jobs}/store " in command(n1["done"])[5]
-    assert command(n1["done"])[5].endswith(f"{sys.executable} -m research data custody {J['done']} --publish --keep-local ")
+    assert command(n1["done"])[5].endswith(f"{node.py} -m research data custody {J['done']} --publish --keep-local ")
     assert (state / "boots").read_text() == "boot-n1\n"
 
     first = round_(FAIL_RUN=R["fails"])
@@ -1981,6 +1996,37 @@ def test_n1_custody_starts_no_job_that_could_run_into_node_1s_quiet_hour(tmp_pat
         rec = node.round_("--reconcile", rid, "--by", "test", clock=at(hhmm), VY_CUSTODY_QUIET=quiet)
         assert rec.returncode == 3 and "--reconcile after it" in rec.stderr
     assert node.created() == [] and not node.log.exists()
+
+
+@N1_CUSTODY
+def test_n1_custody_runs_only_a_tree_and_a_python_no_other_uid_can_change(tmp_path):
+    """#1004's red-team F5: the round runs its research tree on the host as research (sudo ALL) and in Jobs with the Secret
+    research-r2, from /workspace/jobs/custody, which /workspace/jobs (1777) let any uid-1000 workload create first and deploy.py
+    then installs into keeping that owner, with ubuntu's Python under /workspace/jobs/cache. The tree and the Python are root's under
+    /workspace/custody; a round refuses when a file of either, or a directory above, could be changed by a uid other than root and
+    its own (another owner, or writable by group or others; a sticky directory such as /tmp above, or uv's empty .lock, aside), and
+    when its Python isn't under PYHOME."""
+    node = _n1_custody(tmp_path)
+    rid = "r20261003-200000-0f01"
+    node.run(node.jobs, rid, "done")
+    tree, custody_py = node.src / "tools" / "research", node.src / "tools" / "research" / "src" / "research" / "store" / "custody.py"
+    (tmp_path / "py" / ".lock").write_text("")
+    (tmp_path / "py" / ".lock").chmod(0o666)
+    said = []
+    for p, mode in ((tree, 0o777), (custody_py, 0o664), (node.src, 0o775), (node.py, 0o757)):
+        was = p.stat().st_mode
+        p.chmod(mode)
+        out = node.round_()
+        rec = node.round_("--reconcile", rid, "--by", "test")
+        p.chmod(was)
+        assert out.returncode == 3 and rec.returncode == 3 and f"refused: {p} could be changed by a uid other than root and " in out.stdout, p
+        said.append(out.stdout)
+    assert "on this host and in Jobs with the Secret research-r2" in said[0]
+    elsewhere = node.round_(VY_CUSTODY_PY=sys.executable)
+    assert elsewhere.returncode == 3 and f"refused: {sys.executable} is no interpreter under {tmp_path / 'py'}" in elsewhere.stdout
+    assert node.created() == [] and "sudo" not in (node.log.read_text() if node.log.exists() else ""), "a refused round runs nothing"
+    ok = node.round_()
+    assert ok.returncode == 0 and node.created()[0] == f"n1-custody-{rid}", ok.stdout + ok.stderr
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")

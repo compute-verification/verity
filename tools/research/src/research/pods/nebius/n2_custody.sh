@@ -41,7 +41,10 @@ MAX_RUNS=${VY_CUSTODY_MAX_RUNS:-20}
 PASS_S=${VY_CUSTODY_PASS_S:-1200}
 MAX_FILES=${VY_CUSTODY_MAX_FILES:-20000}
 MAX_GB=${VY_CUSTODY_MAX_GB:-50}
-SRC=${VY_CUSTODY_SRC:-/workspace/jobs/custody}
+# on node 1, root's alone (as n1_custody.sh's): the research deploy.toml installs and the Python the Jobs run with the Secret
+SRC=${VY_CUSTODY_SRC:-/workspace/custody}
+PYHOME=${VY_CUSTODY_PYHOME:-/workspace/custody/python}
+PY=${VY_CUSTODY_PY:-$PYHOME/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12}
 LOOP=${VY_CUSTODY_LOOP:-$STATE/push.sh}
 FILL=${VY_CUSTODY_FILL:-/workspace/pouw/fill}
 PUSH_S=3600     # the most one push takes: rsync 20 min, the Job's wait 35 min, the calls around them
@@ -266,7 +269,7 @@ push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 he
   "securityContext": {"runAsUser": 1000, "runAsGroup": 1000},
   "containers": [{"name": "main", "image": "${VY_DISPATCH_IMAGE:-us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216}",
    "imagePullPolicy": "IfNotPresent",
-   "command": ["taskset", "-c", "96-127", "bash", "-c", "cd /workspace/jobs && HOME=/tmp UV_NO_CONFIG=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$SRC/tools/research/src RESEARCH_STORE=/workspace/jobs/store RESEARCH_RUNS=$dst UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data custody $dst/$r --publish --keep-local $force"],
+   "command": ["taskset", "-c", "96-127", "bash", "-c", "cd / && HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$SRC/tools/research/src RESEARCH_STORE=/workspace/jobs/store RESEARCH_RUNS=$dst $PY -m research data custody $dst/$r --publish --keep-local $force"],
    "envFrom": [{"secretRef": {"name": "research-r2"}}],
    "resources": {"requests": {"cpu": "1", "memory": "2Gi"}},
    "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}]}],
@@ -351,9 +354,13 @@ for c in "${fresh[@]}" "${retry[@]}"; do
     continue
   fi
   if [ -z "$src_ok" ]; then
-    timeout 60 "${SSH[@]}" -n "$N1" "test -f $SRC/tools/research/src/research/store/custody.py && test -f $SRC/tools/research/store.pod.toml"
+    # python -m puts the working directory first on sys.path, so the Job runs from /, never the world-writable /workspace/jobs
+    bad=$(timeout 60 "${SSH[@]}" -n "$N1" "test -f $SRC/tools/research/src/research/store/custody.py && test -f $SRC/tools/research/store.pod.toml && test -x $PY || exit 1
+      bad=\$(find $SRC/tools/research $PYHOME -path $PYHOME/.lock -prune -o \\( \\( ! -uid 0 ! -uid \$(id -u) \\) -o \\( -perm /022 ! -type l \\) \\) -print -quit 2>&1)
+      [ -z \"\$bad\" ] || { echo \"\$bad\"; exit 4; }")
     rc=$?
-    [ "$rc" = 1 ] && { log "refused: no research tree at $N1:$SRC (deploy.toml installs it: research deploy install vy-nebius-1 --by WHO $SRC/tools/research/src/research $SRC/tools/research/store.pod.toml)"; exit 3; }
+    [ "$rc" = 1 ] && { log "refused: no research tree at $N1:$SRC, or no $PY (deploy.toml installs the tree: research deploy install vy-nebius-1 --by WHO $SRC/tools/research/src/research $SRC/tools/research/store.pod.toml; the Python: n1_custody.sh)"; exit 3; }
+    [ "$rc" = 4 ] && { log "refused: $N1:$bad could be changed by a uid other than root: the Jobs run $SRC's research and $PY with the Secret research-r2"; exit 3; }
     [ "$rc" = 0 ] || { log "refused: node 1 not reached (\`ssh $N1\` exited $rc)"; exit 3; }
     src_ok=1
   fi
