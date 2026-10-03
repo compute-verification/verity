@@ -9683,9 +9683,67 @@
    "assumptions": [],
    "type_hash": "f4a5ead15d67146f887cff5d8fe7bfc80c6db374faa08784a8ba159f5f549579"
   },
-  "FlockSoundness.Discharge.PrivateCircuit.wired_cone": {},
-  "FlockSoundness.Discharge.PrivateCircuit.wired_eval": {},
-  "FlockSoundness.Discharge.PrivateCircuit.wired_wrong": {},
+  "FlockSoundness.Discharge.PrivateCircuit.wired_cone": {
+   "signature": [
+    "FlockSoundness.Discharge.PrivateCircuit.wired_cone (T : FlockSoundness.Discharge.PrivateCircuit.Universal.Topo)",
+    "  (C : FlockSoundness.Discharge.PrivateCircuit.Universal.Circ)",
+    "  (c : FlockSoundness.Discharge.PrivateCircuit.Universal.Cls)",
+    "  (hC : FlockSoundness.Discharge.PrivateCircuit.Universal.fits C c) (xOf : Nat → Nat → Bool) (yOf : Nat → List Bool)",
+    "  (x : Nat → Bool) (hw : FlockSoundness.Discharge.PrivateCircuit.Universal.Wired T c xOf yOf x) (i : Nat)",
+    "  (hi : instLTNat.lt i (FlockSoundness.Discharge.PrivateCircuit.Universal.size C))",
+    "  (hcone :",
+    "    ∀ (j : Nat),",
+    "      FlockSoundness.Discharge.PrivateCircuit.Universal.Reaches T c j i →",
+    "        Eq",
+    "          (FlockSoundness.Discharge.PrivateCircuit.Universal.run c",
+    "            (FlockSoundness.Discharge.PrivateCircuit.Universal.pad C c) j (xOf j))",
+    "          (yOf j)) :",
+    "  Eq (yOf i) (FlockSoundness.Discharge.PrivateCircuit.Universal.evalT T C x i)"
+   ],
+   "assumptions": [],
+   "type_hash": "4473649ea6cc077f5914ade3d3fd61ed9f8d762c759ca0963ec290f78848522e"
+  },
+  "FlockSoundness.Discharge.PrivateCircuit.wired_eval": {
+   "signature": [
+    "FlockSoundness.Discharge.PrivateCircuit.wired_eval (T : FlockSoundness.Discharge.PrivateCircuit.Universal.Topo)",
+    "  (C : FlockSoundness.Discharge.PrivateCircuit.Universal.Circ)",
+    "  (c : FlockSoundness.Discharge.PrivateCircuit.Universal.Cls)",
+    "  (hC : FlockSoundness.Discharge.PrivateCircuit.Universal.fits C c) (xOf : Nat → Nat → Bool) (yOf : Nat → List Bool)",
+    "  (x : Nat → Bool) (hw : FlockSoundness.Discharge.PrivateCircuit.Universal.Wired T c xOf yOf x)",
+    "  (hu :",
+    "    ∀ (i : Nat),",
+    "      instLTNat.lt i (FlockSoundness.Discharge.PrivateCircuit.Universal.units c) →",
+    "        Eq",
+    "          (FlockSoundness.Discharge.PrivateCircuit.Universal.run c",
+    "            (FlockSoundness.Discharge.PrivateCircuit.Universal.pad C c) i (xOf i))",
+    "          (yOf i))",
+    "  (i : Nat) :",
+    "  instLTNat.lt i (FlockSoundness.Discharge.PrivateCircuit.Universal.size C) →",
+    "    Eq (yOf i) (FlockSoundness.Discharge.PrivateCircuit.Universal.evalT T C x i)"
+   ],
+   "assumptions": [],
+   "type_hash": "69a42c359b2e8304ce03bfb9dd25243d181c3c0d803a7f798e304a9de4405fab"
+  },
+  "FlockSoundness.Discharge.PrivateCircuit.wired_wrong": {
+   "signature": [
+    "FlockSoundness.Discharge.PrivateCircuit.wired_wrong (T : FlockSoundness.Discharge.PrivateCircuit.Universal.Topo)",
+    "  (C : FlockSoundness.Discharge.PrivateCircuit.Universal.Circ)",
+    "  (c : FlockSoundness.Discharge.PrivateCircuit.Universal.Cls)",
+    "  (hC : FlockSoundness.Discharge.PrivateCircuit.Universal.fits C c) (xOf : Nat → Nat → Bool) (yOf : Nat → List Bool)",
+    "  (x : Nat → Bool) (hw : FlockSoundness.Discharge.PrivateCircuit.Universal.Wired T c xOf yOf x)",
+    "  (h :",
+    "    Exists fun i =>",
+    "      And (instLTNat.lt i (FlockSoundness.Discharge.PrivateCircuit.Universal.size C))",
+    "        (Ne (yOf i) (FlockSoundness.Discharge.PrivateCircuit.Universal.evalT T C x i))) :",
+    "  instLENat.le 1",
+    "    (FlockSoundness.Discharge.PrivateCircuit.wrong",
+    "      (FlockSoundness.Discharge.PrivateCircuit.Universal.run c",
+    "        (FlockSoundness.Discharge.PrivateCircuit.Universal.pad C c))",
+    "      (FlockSoundness.Discharge.PrivateCircuit.Universal.units c) xOf yOf)"
+   ],
+   "assumptions": [],
+   "type_hash": "2ee4191e1e6455b058e9348d60e0149fb1830eeca6caf4a966fb10ff3a9885e9"
+  },
   "FlockSoundness.Discharge.Tables.accepts_tables": {
    "signature": ["FlockSoundness.Discharge.Tables.accepts_tables : FlockSoundness.Discharge.Tables.AcceptsTables"],
    "assumptions": [],
@@ -29975,7 +30033,8 @@
     "FlockSoundness.Discharge.PrivateCircuit.private_circuit",
     "FlockSoundness.Discharge.PrivateCircuit.private_circuit_private",
     "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound",
-    "FlockSoundness.Discharge.PrivateCircuit.ran_registered"
+    "FlockSoundness.Discharge.PrivateCircuit.ran_registered",
+    "FlockSoundness.Discharge.PrivateCircuit.wired_wrong"
    ]
   },
   "FlockSoundness.Discharge.PrivateCircuit.InstanceDefs": {
@@ -30102,7 +30161,10 @@
    "pins": [
     "FlockSoundness.Discharge.PrivateCircuit.pad_correct",
     "FlockSoundness.Discharge.PrivateCircuit.private_circuit",
-    "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound"
+    "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound",
+    "FlockSoundness.Discharge.PrivateCircuit.wired_cone",
+    "FlockSoundness.Discharge.PrivateCircuit.wired_eval",
+    "FlockSoundness.Discharge.PrivateCircuit.wired_wrong"
    ]
   },
   "FlockSoundness.Discharge.PrivateCircuit.Statements": {
@@ -30118,6 +30180,27 @@
     "FlockSoundness.Discharge.PrivateCircuit.circuit_private",
     "FlockSoundness.Discharge.PrivateCircuit.pad_wrong",
     "FlockSoundness.Discharge.PrivateCircuit.ran_registered"
+   ]
+  },
+  "FlockSoundness.Discharge.PrivateCircuit.Wiring": {
+   "digest": "86ea3fdc349537db7cfb8d5eb6c366bb300249923de3a56301ff8b4dfb69f500",
+   "definitions": {
+    "FlockSoundness.Discharge.PrivateCircuit.Universal.Reaches": "f360031db2c14a0a0a21d0bf97d909e7f62a7f90febfad2a48999e52e014ed00",
+    "FlockSoundness.Discharge.PrivateCircuit.Universal.Reaches.refl": "694c4f087f6708700d6878adeef09de99e90d8844ab86ab6ac04de88ee18c576",
+    "FlockSoundness.Discharge.PrivateCircuit.Universal.Reaches.step": "853643178bdc26203d36dfca223243ef6c40a9db57631631d4863f98e1a779d2",
+    "FlockSoundness.Discharge.PrivateCircuit.Universal.Src": "80167eb02e03283f9367b09044609cb7d96864988a4c9d3402a1dfa1053e8e5b",
+    "FlockSoundness.Discharge.PrivateCircuit.Universal.Src.input": "e105bf16aa79c7be7392d9fbf21482f898becd086a7a7ab4f123f075451ac7d3",
+    "FlockSoundness.Discharge.PrivateCircuit.Universal.Src.unit": "9eb6f03597cf2b4eae2469a22c079a31069cdcaf6b26bf32daa360ab0b8632b4",
+    "FlockSoundness.Discharge.PrivateCircuit.Universal.Topo": "b6ede90632c2cea70932174d837487ae35689532d8c4a37ab2804b576631118e",
+    "FlockSoundness.Discharge.PrivateCircuit.Universal.Topo.src": "c32691bf9414b6991ed1d5a39d054103e9206ada398d71f0fedf97a76a963d60",
+    "FlockSoundness.Discharge.PrivateCircuit.Universal.Wired": "8c971e11176a2b2d18181e852a687f630bbd59e9c597af44c22e0977d30206bc",
+    "FlockSoundness.Discharge.PrivateCircuit.Universal.evalT": "ae3c6b6e4f04434302c13d750ea20a4011e0657c921fd75e2f9ee0759201d4dc",
+    "FlockSoundness.Discharge.PrivateCircuit.Universal.route": "8eb0e67d0400c3c218a813047f4f3899bd6fa45a3b20eada59985e0d9d0b5356"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.PrivateCircuit.wired_cone",
+    "FlockSoundness.Discharge.PrivateCircuit.wired_eval",
+    "FlockSoundness.Discharge.PrivateCircuit.wired_wrong"
    ]
   },
   "FlockSoundness.Discharge.Tables.Session": {
