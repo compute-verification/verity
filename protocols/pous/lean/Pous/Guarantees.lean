@@ -5,6 +5,7 @@ import Pous.Protocol.Accounting.LemmaA
 import Pous.Protocol.Accounting.Params
 import Pous.Protocol.Accounting.PubMeets
 import Pous.Protocol.Accounting.GradedMeets
+import Pous.Protocol.Accounting.Rebuild
 import Pous.Assumptions
 import Pous.Protocol.Model.HashChain
 import Pous.Protocol.Model.Dense
@@ -892,6 +893,40 @@ def ContinuousAudit : Prop :=
             (⨅ θ : Set.Ioi (0 : ℝ), ((θ : ℝ) * f + Real.log (1 / βe)) / (1 - Real.exp (-(θ : ℝ)))) <
               (rs.map fun r => max (contFreed sch r.held - epsProof sch β) 0).sum)
         ≤ ENNReal.ofReal βe + n * (β + 1) * π
+
+/-! ### The background-rebuild exclusion (`Pous.Protocol.Accounting.Rebuild`)
+
+Added on 3 Oct 2026. Statement reviewer: not yet named; a new pin, which also needs a red-team grant before merge. -/
+
+/-- **Unconditional: no graded window is long enough to re-encode a band segment from `W`**, the deployment condition
+of `BandGradedMeetsFamily` (`PROTOCOL.md`, "Isolation over the whole graded window"), as counts and as a bound.
+1. **The counts.** Re-encoding a segment of `chainBand (2^9) d` costs `R(d) = rebuildCalls (2^9) d` sequential `Π₂`
+   calls: `R(5) = 3,057`, `R(12) = 6,578`, and `R(d) ≥ 3,057` for every `d ≥ 5`. Each row `(t, k)` of
+   `BandGradedMeetsFamily` lasts at most `gradedWindow 5 D_late k t ≤ 240·5 + 3·12 = 1,236` calls when `D_late ≤ 12`.
+2. **The bound.** For every `d ≥ 5`, every domain map injective on the segment's `2^9` indices, every `W`, `Q ≤ 2^128`
+   and every row's window, programs that know `W` and the domains but nothing about `Π₂` beyond their own queries,
+   each within the window's rounds and `Q` queries, output all `2^9` labels of `chainBand (2^9) d 524288 512 dom`
+   with probability at most `2^-128` over `Π₂`. Segment `s` of the deployed store is such a segment, with domains
+   `dom tag_s` under the per-segment tags and `j ↦ dom salt (s·2^9 + j)` under one global salt
+   (`Pous.BandMulti.segFaithfulCode`, `Pous.BandMulti.segFaithful`).
+
+It bounds re-encoding a whole segment from `W` with no state about `Π₂`. It does not bound recomputing a few blocks
+from held neighbours, which costs `min(v, d) + 1` calls per block. Proof: `PousRebuild.background_rebuild_excluded`
+(`Pous/SecurityProofs/Rebuild/`); here `Pous.SecurityProofs.BackgroundRebuildExcluded`. -/
+def BackgroundRebuildExcluded : Prop :=
+  Pous.Rebuild.rebuildCalls (2 ^ 9) 5 = 3057 ∧ Pous.Rebuild.rebuildCalls (2 ^ 9) 12 = 6578 ∧
+  (∀ d : ℕ, 5 ≤ d → 3057 ≤ Pous.Rebuild.rebuildCalls (2 ^ 9) d) ∧
+  (∀ D_late : ℕ, D_late ≤ 12 → ∀ tk ∈ ([(0, 111), (1, 160), (2, 203), (3, 243)] : List (ℕ × ℕ)),
+    Pous.Rebuild.gradedWindow 5 D_late tk.2 tk.1 ≤ 1236) ∧
+  ∀ d : ℕ, 5 ≤ d → ∀ dom : ℕ → Bits 512, Function.Injective (fun i : Fin (2 ^ 9) => dom i) →
+    ∀ (W : Bits (2 ^ 9 * 524288)) (Q : ℕ), Q ≤ 2 ^ 128 →
+    ∀ D_late : ℕ, D_late ≤ 12 → ∀ tk ∈ ([(0, 111), (1, 160), (2, 203), (3, 243)] : List (ℕ × ℕ)),
+    ∀ A : Fin (2 ^ 9) → Prog (Pous.Sponge.idealPerm (524288 + (524288 + 512))) (Bits 524288),
+      (∀ i, (A i).Bounded (Pous.Rebuild.gradedWindow 5 D_late tk.2 tk.1) Q) →
+      pr (fun π : Equiv.Perm (Bits (524288 + (524288 + 512))) =>
+          ∀ i, (A i).run ((Pous.Sponge.idealPerm (524288 + (524288 + 512))).answer π) =
+            ((Pous.BandChain.chainBand (2 ^ 9) d 524288 512 dom).enc W π ()).2 i)
+        ≤ (2⁻¹ : ℝ≥0∞) ^ 128
 
 /-! ### Proved results cited outside the package
 
