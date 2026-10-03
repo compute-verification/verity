@@ -32,17 +32,47 @@ def witOf {T' T : Statement} (e : T' = T) (z : Witness T'.m) : Witness T.m := fu
 
 theorem sat_witOf {T' T : Statement} (e : T' = T) {z : Witness T'.m} (hz : T'.Satisfies z) :
     T.Satisfies (witOf e z) := by
-  sorry
+  subst e
+  exact hz
 
 theorem block_witOf {T' T : Statement} (e : T' = T) (z : Witness T'.m) (o : Fin (2 ^ T'.nbl)) (c : Fin (2 ^ T'.kLog))
     (o' : Fin (2 ^ T.nbl)) (c' : Fin (2 ^ T.kLog)) (ho : o.val = o'.val) (hc : c.val = c'.val) :
     T'.block z o c = T.block (witOf e z) o' c' := by
-  sorry
+  subst e
+  obtain rfl : o = o' := Fin.ext ho
+  obtain rfl : c = c' := Fin.ext hc
+  rfl
 
 /-- **Every witness of a `fast100` table's statement is one a message packs.** -/
 theorem wit_surj {mPts : ℕ} (T : TabSpec mPts) (z : Witness T.S.m) :
     ∃ M : Message 𝔽 T.sch.k0 T.sch.level₀.logCols, witnessOf execArith T.S.m T.sch.k0 T.sch.level₀.logCols M = z := by
-  sorry
+  obtain ⟨-, -, hcols, -⟩ := fast100_shape _ _ T.hsch
+  have hmS := fast100_m _ _ T.hsch
+  have hm := T.hm
+  simp only [TabSpec.sch, Schedule.level₀] at hcols hmS ⊢
+  set k := T.k0
+  set L := ((T.l₀ :: T.l₁ :: T.rest).headD default).logCols
+  have hpow : 2 ^ T.S.m = 2 ^ L * 2 ^ k * 128 := by
+    rw [show (128 : ℕ) = 2 ^ 7 by norm_num, ← pow_add, ← pow_add]; congr 1; omega
+  refine ⟨fun ℓ c => execArith.pack fun v => z ⟨(c.val * 2 ^ k + ℓ.val) * 128 + v.val, ?_⟩, ?_⟩
+  · have := c.isLt; have := ℓ.isLt; have := v.isLt
+    rw [hpow]
+    calc (c.val * 2 ^ k + ℓ.val) * 128 + v.val < (c.val * 2 ^ k + ℓ.val + 1) * 128 := by nlinarith
+      _ ≤ (c.val * 2 ^ k + 2 ^ k) * 128 := Nat.mul_le_mul_right 128 (by have := ℓ.isLt; omega)
+      _ = (c.val + 1) * 2 ^ k * 128 := by ring
+      _ ≤ 2 ^ L * 2 ^ k * 128 :=
+        Nat.mul_le_mul_right 128 (Nat.mul_le_mul_right _ (by have := c.isLt; omega))
+  · funext a
+    have ha : a.val < 2 ^ L * 2 ^ k * 128 := hpow ▸ a.isLt
+    have hc : a.val / 128 / 2 ^ k < 2 ^ L := by
+      rw [Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _), Nat.div_lt_iff_lt_mul (by norm_num)]
+      linarith
+    simp only [witnessOf]
+    rw [dite_eq_left_of_eq_true (eq_true hc), execArith_correct.unpack_pack]
+    congr 1
+    apply Fin.ext
+    simp only
+    rw [Nat.div_add_mod' (a.val / 128) (2 ^ k), Nat.div_add_mod']
 
 /-! ## The `--zk` layout of a public one -/
 
@@ -68,7 +98,12 @@ theorem shadow_msg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M' : MsgZ planZ t
     ∃ M : Binding.Msg planS tabS S R u,
       Binding.wit planS tabS S R u M = witOf (e S R u) (witZ execArith planZ tab S R u M') ∧
         Binding.Sat planS tabS S R u M := by
-  sorry
+  obtain ⟨M, hM⟩ := wit_surj (Partition.tabOf planS tabS S R u) (witOf (e S R u) (witZ execArith planZ tab S R u M'))
+  refine ⟨M, hM, ?_⟩
+  unfold Binding.Sat
+  simp only [Binding.wit]
+  rw [hM]
+  exact sat_witOf (e S R u) hM'
 
 variable (lay : Binding.Layout P planS tabS decS) (hdec : DecAgree e (decZ := decZ) (decS := decS) (P := P))
 
@@ -77,7 +112,10 @@ theorem ofShadow_decode_row :
     ∀ S R u, u ∈ S → ∀ M, SatZ execArith planZ tab S R u M → ∀ g ∈ P.io u,
       decZ S R u M g = lay.bit (lay.rowOf (lay.pos g) (bitsAt (witZ execArith planZ tab S R u M)
         (fun i => adrOf (e S R u) (lay.rowAt S R u (lay.pos g) i)))) g := by
-  sorry
+  intro S R u hu M' hM' g hg
+  obtain ⟨M, hM, hS⟩ := shadow_msg e S R u M' hM'
+  rw [hdec S R u hu M' M hM hM' g hg, lay.decode_row S R u hu M hS g hg, hM]
+  rfl
 
 /-- **The `--zk` layout of a public layout at the same statements.** -/
 noncomputable def LayoutZ.ofShadow : LayoutZ execArith P planZ tab decZ where
@@ -97,7 +135,8 @@ theorem row_ofShadow (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M' : MsgZ planZ
     (hM : Binding.wit planS tabS S R u M = witOf (e S R u) (witZ execArith planZ tab S R u M')) (p : lay.Pos) :
     (LayoutZ.ofShadow e lay hdec).row S R u M' p = lay.row S R u M p ∧
       (LayoutZ.ofShadow e lay hdec).salt S R u M' p = lay.salt S R u M p := by
-  sorry
+  simp only [LayoutZ.row, LayoutZ.salt, Binding.Layout.row, Binding.Layout.salt, hM]
+  exact ⟨rfl, rfl⟩
 
 variable {lay} (rs : Binding.HmRows lay)
 
@@ -105,13 +144,21 @@ theorem ofShadow_bc_registered :
     ∀ S R u, u ∈ S → ∀ M, SatZ execArith planZ tab S R u M → ∀ g ∈ P.io u, rs.isRow (lay.pos g) →
       H512 (K512.leafPrefix ++ bytesAt (witZ execArith planZ tab S R u M)
         (fun j t => adrOf (e S R u) (rs.bcAt S R u (lay.pos g) j t))) = lay.regLeaf R (lay.pos g) := by
-  sorry
+  intro S R u hu M' hM' g hg hrow
+  obtain ⟨M, hM, hS⟩ := shadow_msg e S R u M' hM'
+  have h := rs.bc_registered S R u hu M hS g hg hrow
+  rw [hM] at h
+  exact h
 
 theorem ofShadow_other_registered :
     ∀ S R u, u ∈ S → ∀ M, SatZ execArith planZ tab S R u M → ∀ g ∈ P.io u, ¬ rs.isRow (lay.pos g) →
       (rs.other (lay.pos g)).leaf ((LayoutZ.ofShadow e lay hdec).row S R u M (lay.pos g))
         ((LayoutZ.ofShadow e lay hdec).salt S R u M (lay.pos g)) = lay.regLeaf R (lay.pos g) := by
-  sorry
+  intro S R u hu M' hM' g hg hrow
+  obtain ⟨M, hM, hS⟩ := shadow_msg e S R u M' hM'
+  obtain ⟨hr, hs⟩ := row_ofShadow e lay hdec S R u M' M hM (lay.pos g)
+  rw [hr, hs]
+  exact rs.other_registered S R u hu M hS g hg hrow
 
 /-- **The `--zk` rows of a public layout's rows.** -/
 noncomputable def HmRowsZ.ofShadow : HmRowsZ (LayoutZ.ofShadow e lay hdec) where
@@ -126,7 +173,13 @@ noncomputable def HmRowsZ.ofShadow : HmRowsZ (LayoutZ.ofShadow e lay hdec) where
 
 /-- **`HmRowComputes` moves along**: the public rows' `HmRowComputes` gives the `--zk` rows'. -/
 theorem HmRowsZ.ofShadow_computes (hHm : rs.Computes) : (HmRowsZ.ofShadow e hdec rs).Computes := by
-  sorry
+  rintro ⟨S, R, u, M', g⟩ ⟨hu, hM', hg, hrow⟩
+  obtain ⟨M, hM, hS⟩ := shadow_msg e S R u M' hM'
+  obtain ⟨hr, hs⟩ := row_ofShadow e lay hdec S R u M' M hM (lay.pos g)
+  have h := hHm ⟨S, R, u, M, g⟩ ⟨hu, hS, hg, hrow⟩
+  simp only at h
+  rw [← hr, ← hs, hM] at h
+  exact h
 
 end Shadow
 
