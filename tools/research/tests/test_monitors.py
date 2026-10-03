@@ -876,6 +876,15 @@ def test_the_relay_posts_grafanas_new_notes_but_not_the_monitors_own():
     assert [(p["monitor"], p["owners"], p["text"].splitlines()[0]) for p in posts] == [("grafana", ["infra"], "# GpuStall: 1 firing")]
 
 
+def test_a_notes_name_reaches_the_shell_quoted(tmp_path):
+    name = "x;touch pwned;.md"
+    (tmp_path / "a b" / "outbox").mkdir(parents=True)
+    (tmp_path / "a b" / "outbox" / name).write_text("---\nid: x\n---\n")
+    src = M.Source("relay", str(tmp_path / "a b"), run=lambda argv, **kw: subprocess.run(argv, cwd=tmp_path, **kw))
+    assert src.head(name) == "---\nid: x\n---\n" and src.lines(0) is None
+    assert not (tmp_path / "pwned").exists()
+
+
 def test_a_relay_post_tags_its_owners_and_says_what_to_do():
     e = json.loads(ev("open", "m|a", owners=["circuits", "infra"], severity="page"))
     text = M.message(e, lambda h: f"<{h}>")

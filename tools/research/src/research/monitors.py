@@ -1146,17 +1146,17 @@ class Source:
         return r.stdout
 
     def lines(self, after: int) -> tuple[int, list[str]] | None:
-        f = f"{self.path}/monitors.jsonl"
-        out = self._sh(f"[ -f {f} ] || {{ echo missing; exit 0; }}; wc -l < {f}; tail -n +{after + 1} {f}").splitlines()
+        f = f"{shlex.quote(self.path)}/monitors.jsonl"
+        out = self._sh(f"[ -f {f} ] || {{ echo missing; exit 0; }}; wc -l < {f}; tail -n +{int(after) + 1} {f}").splitlines()
         if not out or out[0].strip() == "missing":
             return None
         return int(out[0].strip() or 0), out[1:]
 
     def notes(self) -> list[str]:
-        return sorted(n for n in self._sh(f"ls -1 {self.path}/outbox 2>/dev/null || true").split() if n.endswith(".md"))
+        return sorted(n for n in self._sh(f"ls -1 {shlex.quote(self.path)}/outbox 2>/dev/null || true").split() if n.endswith(".md"))
 
     def head(self, name: str) -> str:
-        return self._sh(f"head -c 4000 {self.path}/outbox/{name}")
+        return self._sh(f"head -c 4000 {shlex.quote(self.path)}/outbox/{shlex.quote(name)}")
 
 
 def _event(line: str) -> dict:
