@@ -137,6 +137,7 @@ theorem BandPubMeets64 : Pous.Guarantees.BandPubMeets64 := PousPub.band_pub_meet
 theorem BandPubMeets14 : Pous.Guarantees.BandPubMeets14 := PousPub.band_pub_meets_14_final
 theorem BandPubMeets14Global : Pous.Guarantees.BandPubMeets14Global := PousPub.band_pub_meets_14_global_final
 theorem ChainDenseMeets111 : Pous.Guarantees.ChainDenseMeets111 := PousSpongeChain.chainDenseMeets111_final
+theorem BandGradedMeetsFamily : Pous.Guarantees.BandGradedMeetsFamily := PousGraded.band_graded_meets_family
 
 theorem P2MeetsM1pB19Uncond : Pous.Guarantees.P2MeetsM1pB19Uncond := PousP2p.p2_meets_m1p_b19
 theorem P2MeetsM1pFamilyUncond : Pous.Guarantees.P2MeetsM1pFamilyUncond := PousP2p.family

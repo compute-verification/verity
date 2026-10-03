@@ -159,6 +159,11 @@
    "assumptions": [],
    "type_hash": "2b2cf7ae3e39ca92ae4d607253f72a45d97f5a0b32a614705ed69bab54aa818e"
   },
+  "Pous.SecurityProofs.BandGradedMeetsFamily": {
+   "signature": ["Pous.SecurityProofs.BandGradedMeetsFamily : Pous.Guarantees.BandGradedMeetsFamily"],
+   "assumptions": [],
+   "type_hash": "73c0b7242a746835f2cd5af1ec4cfd49cca4fc778002d98856a49b399fee60b4"
+  },
   "Pous.SecurityProofs.BandMultiMeets14": {
    "signature": ["Pous.SecurityProofs.BandMultiMeets14 : Pous.Guarantees.BandMultiMeets14"],
    "assumptions": [],
@@ -590,7 +595,7 @@
    "pins": ["PousP2Ring.not_meetsOn_b19_k88", "PousP2Ring.tight_p16448"]
   },
   "Pous.Guarantees": {
-   "digest": "18fea7447129c623daf565e9f9985a06384a6a0483676b1c09ccd89596363fd0",
+   "digest": "190733acd12748d78c424fd5f483feb85d692bb83785c33f08aaa978cc4afacf",
    "definitions": {
     "Pous.Guarantees.A1CompressionCard": "4bdc9218360926b7313e50a5882d2d7c72bf905191984cb666c8cad07a435774",
     "Pous.Guarantees.A1CompressionPr": "45e347c38d963ece9d1f073c9efb190b752629dc1364ddeee128432ee1e5fd9d",
@@ -607,6 +612,7 @@
     "Pous.Guarantees.BandChainMeets64": "22dd0d516e4f3f192d3f6606dcc4408cd1ebcfa5e1a3410cb644207c5af7cd1b",
     "Pous.Guarantees.BandChainMeets64D12": "ae12298add53e78c3e077ad1db74dcc464d943a7d1af1704cde9291692772373",
     "Pous.Guarantees.BandChainMeets64D5": "0d4eb049d79e6c42fe35dadf0746b0d8634782cd9b2fd9f4a55c1fdbd59f10ae",
+    "Pous.Guarantees.BandGradedMeetsFamily": "d7e4a45aa7c5c286613454e568c0fd92b2a9bbf4b4df2fcc59f61ae2a24efa4b",
     "Pous.Guarantees.BandMultiMeets14": "ee4d8b855ec67b97b91433094ddcb5b0075cb8373125dce1327e0ad58c7d4b01",
     "Pous.Guarantees.BandMultiMeets14K106": "e6d4bc050a0ab8957694ca111b89f29bebb0d215c24e6e6c189021772b08eb75",
     "Pous.Guarantees.BandMultiMeetsFamily": "38acde34b71bbb04a7d19f031fb26b8c3586f95d76e7ede42c36742d4861336f",
@@ -663,6 +669,7 @@
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
@@ -722,6 +729,13 @@
     "Pous.SecurityProofs.P2SlackFamilyUncond"
    ]
   },
+  "Pous.Protocol.Accounting.GradedMeets": {
+   "digest": "4af4e7e25629ec16f9bfab71b839349841691b42f7e8ac3a56849edb1457d745",
+   "definitions": {
+    "Pous.GradedMeets": "fdb468a799a9fc714a7e6ebdcfc84c4a90acc841cfa57058180d847ea18bf74d"
+   },
+   "pins": ["Pous.SecurityProofs.BandGradedMeetsFamily"]
+  },
   "Pous.Protocol.Accounting.Params": {
    "digest": "3ae4cf02f914e89aef86f7a97df55e5b99671478c007e62ca89576f23a655e1c",
    "definitions": {
@@ -737,6 +751,7 @@
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
@@ -821,6 +836,7 @@
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
@@ -897,6 +913,7 @@
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
@@ -981,6 +998,7 @@
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
@@ -1058,6 +1076,7 @@
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
@@ -1119,6 +1138,7 @@
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
@@ -1135,6 +1155,17 @@
     "Pous.SecurityProofs.SegTagMeets14",
     "Pous.SecurityProofs.TagInjective14"
    ]
+  },
+  "Pous.Protocol.Model.Graded": {
+   "digest": "38e7bf0cb50ea843538dcb97e0c7ed9a3d4f43824e0b765dddb537b6ea4414f2",
+   "definitions": {
+    "Pous.GradedAuditSecure": "2a76d3b258416e9d0b410f416b88be4507564674ec347088bb8330d91e78ab50",
+    "Pous.GradedResponder": "214a52b79b852e9e49abeaa3642001bfdb6e94be7b5f5f98bc37d1584b7c797d",
+    "Pous.GradedResponder.step": "ac0c03d207d07eafbc30ed34e7f18097da0dc295c8d106e4517b103b0de54188",
+    "Pous.gradedAccepts": "154be4d3e811c2651677a6bff608ea0cacf1bf80b8d4025957574b521399995e",
+    "Pous.gradedAnswers": "e67977dc61ba7c5af9c002908ae633b59e78e6e3dc3586ffabaf2b0ee14f7198"
+   },
+   "pins": ["Pous.SecurityProofs.BandGradedMeetsFamily"]
   },
   "Pous.Protocol.Model.HashChain": {
    "digest": "e5a856998d00a7c438418f62831a53ccbaf75e94ea767358fe03814aaca2f858",
@@ -1215,6 +1246,7 @@
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
@@ -1250,6 +1282,7 @@
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
@@ -1349,6 +1382,7 @@
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
@@ -1437,6 +1471,7 @@
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",

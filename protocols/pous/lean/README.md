@@ -23,15 +23,16 @@ Pous/Protocol/Model/{P3Chain,BandChain,PubEncoder}.lean
 Pous/Protocol/Model/{BandGraph,SegLift}.lean
                                     the band graph the column game's band certificates are stated over; a
                                     segment's parents at their global positions, which the tagged transfer reads
-Pous/Protocol/Accounting/{Params,LemmaA,PubMeets}.lean
+Pous/Protocol/Model/Graded.lean     the graded audit: up to `t` late rounds, each within a hard `(D_late, Q_late)`
+Pous/Protocol/Accounting/{Params,LemmaA,PubMeets,GradedMeets}.lean
                                     ρ, δ, expansion, `Meets`; Lemma A's bound and A7′'s rows;
-                                    `PubMeets`, the requirement with a public encoder
+                                    `PubMeets`, the requirement with a public encoder; `GradedMeets`, with grace `t`
 Pous/Protocol/P2/Cost.lean          P2's cost model, the generic ring over `Z/p` with random odd labels
                                     and the junk label (`ringRO`), the bound `RingBounded D Q L` beside `Bounded`,
                                     `MeetsOn`, `MeetsWithSlack`, and P2 in it (`p2ring`)
 Pous/Assumptions.lean               trusted, the Assumptions layer: named hypotheses (Lemma A, Conjecture B1′)
 Pous/Assumptions/P2.lean            P2's named open step `PrimeP16448`, the primality of its modulus
-Pous/Guarantees.lean                trusted, the Guarantees layer: 48 statements, the 47 grade.sh grades against
+Pous/Guarantees.lean                trusted, the Guarantees layer: 49 statements, the 48 grade.sh grades against
                                     and `InvExPostFactoTwoLayer`, which `N10Refuted` negates
 Pous/Guarantees/P2.lean             six statements about the abstract model `m1p` at P2's parameters,
                                     which grade.sh also grades against; none is about the concrete P2
@@ -46,9 +47,9 @@ Pous/SecurityProofs/P2/             proved: the `m1p` pins (Count, Rows, Domain,
                                     bits breaks `k = 88` from `L = 2^30`)
 Pous/SecurityProofs/Chain/Flat.lean proved, generated: P3 with a concrete `H`, the band, the dense chain scheme and
                                     the public encoder over the overwrite chain (the graded lanes, flattened)
-Pous/SecurityProofs/Graded/         DRAFT, not reviewed, not pinned: the audit with up to `t` late rounds (`Game.lean`,
-                                    new trusted surface), its Theorem 1(ii) and the band at `D = 5`; nothing in it
-                                    is a guarantee until its statements move to the trusted layer and are pinned
+Pous/SecurityProofs/Graded/         proved: the tail rule (`Tail.lean`), Theorem 1(ii) for the graded audit
+                                    (`Theorem.lean`) and the band with grace `t` at `D = 5` (`Band.lean`,
+                                    `BandGradedMeetsFamily`)
 lean-audit.json                     the policy and pin records for tools/lean/audit.py
 CheckAxioms.lean                    one #print axioms line per headline theorem
 PousTargets.lean                    untrusted, not in the default build: the open statements as sorry targets

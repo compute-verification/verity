@@ -47,6 +47,7 @@ def pinnedTargets : List Name := [
   `Pous.Guarantees.BandPubMeets14,
   `Pous.Guarantees.BandPubMeets14Global,
   `Pous.Guarantees.ChainDenseMeets111,
+  `Pous.Guarantees.BandGradedMeetsFamily,
   `Pous.Guarantees.P2MeetsM1pB19Uncond,
   `Pous.Guarantees.P2MeetsM1pFamilyUncond,
   `Pous.Guarantees.P2MeetsM1pW8192Uncond,
