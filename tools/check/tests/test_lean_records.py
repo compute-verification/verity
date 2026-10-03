@@ -5,6 +5,7 @@ from __future__ import annotations
 import fcntl
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -19,7 +20,8 @@ spec.loader.exec_module(LC)
 FAKE_AUDIT = """\
 import json, os, sys
 with open(os.environ["AUDIT_LOG"], "a") as f:
-    f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(), "threads": os.environ.get("LEAN_NUM_THREADS")}) + "\\n")
+    f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(), "threads": os.environ.get("LEAN_NUM_THREADS"),
+                        **({"lean_slot": os.environ["LEAN_SLOT"]} if "LEAN_SLOT" in os.environ else {})}) + "\\n")
 if "--update" in sys.argv:
     with open(os.path.join(sys.argv[-1], "lean-audit.json"), "w") as f:
         f.write('{"pins": {"A.t": {}}}')
@@ -57,6 +59,9 @@ def repo(tmp_path, monkeypatch) -> Path:
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache"))
     monkeypatch.delenv("CHECK_SLOT", raising=False)
     monkeypatch.setattr(LC.SLOT, "SLOTS", tmp_path / "no-slots")
+    for k in (LC.LEAN_SLOT.HELD, "LEAN_SLOT_POOL", "RESEARCH_LANE"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", tmp_path / "no-lean-slots")
     return root
 
 
@@ -130,6 +135,22 @@ def test_a_tree_keeps_one_packages_dependencies(repo, tmp_path):
     assert json.loads((tree / LC.LINKS).read_text()) == {"c": kc}
     assert not (tree / "a" / ".lake" / "packages").exists(), "each copy costs inodes the node is short of"
     assert (tree / "c" / ".lake" / "packages" / "dep").is_dir() and (deps / ka / "dep").is_dir()
+
+
+def test_the_audit_holds_one_of_the_nodes_lean_audit_slots(repo, tmp_path, monkeypatch, capsys):
+    tree, deps, slots = tmp_path / "tree", tmp_path / "deps", tmp_path / "locks" / "lean-slots"
+    slots.parent.mkdir()
+    slots.write_text("check 1\naudit 1\n")
+    monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", slots)
+    assert LC.audit_records("p", deps, tree) == 0
+    assert _calls(tmp_path)[0]["lean_slot"] == "audit/0" and LC.LEAN_SLOT.HELD not in os.environ
+    fd = os.open(slots.parent / "lean-audit-0.lock", os.O_RDWR)
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    os.close(fd)
+
+    slots.write_text("check 1\n")
+    assert LC.audit_records("p", deps, tree) == 2 and _calls(tmp_path) == []
+    assert "lists neither pool 'audit' nor 'any'" in capsys.readouterr().out, "a guard never fails open"
 
 
 def test_it_names_one_package_and_one_run_holds_a_tree(repo, tmp_path, capsys):

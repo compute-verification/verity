@@ -9,12 +9,13 @@ merges git combines cleanly that Lean doesn't) fails the run in minutes rather t
 `tools/lean/audit.py --build --no-replay --no-runs` on PKG in a tree kept per check slot (`lean-records/SLOT` under the check
 cache), which prints what the audit prints, `--update`'s review included, after a build of only what changed since that
 slot's last run. On a machine with check slots it first takes one through `slot.py`, pinned to its cores behind the line, and
-the slot's tree is whoever holds its lock. The tree's fetched dependencies are its own copy of the audit's (taken once per
-manifest and toolchain, else fetched cold), never links: where there is no sandbox its build writes as this user, and nothing
-it writes may reach what the audit keeps. A tree keeps one package's copy (about 170k inodes, 8 GB), so auditing another
-package that fetches dependencies there drops it first. It vouches for nothing (no kernel replay, no tests): check's audit
-decides. `--update` writes the record back into this checkout, but not in a recorded run, whose source tree the commit's other
-runs share: there it is in the run's `lean-audit/audit-*/`.
+the slot's tree is whoever holds its lock; then, in check's order, one of the node's Lean audit slots (`lean_slot.py`, pool
+`audit` unless LEAN_SLOT_POOL names another), held until audit.py exits. The tree's fetched dependencies are its own copy of
+the audit's (taken once per manifest and toolchain, else fetched cold), never links: where there is no sandbox its build writes
+as this user, and nothing it writes may reach what the audit keeps. A tree keeps one package's copy (about 170k inodes, 8 GB),
+so auditing another package that fetches dependencies there drops it first. It vouches for nothing (no kernel replay, no
+tests): check's audit decides. `--update` writes the record back into this checkout, but not in a recorded run, whose source
+tree the commit's other runs share: there it is in the run's `lean-audit/audit-*/`.
 
 The tree (`--tree`) holds each such package's tracked files, and those of the packages it requires by path, at their paths in
 this repository, with each package's own `.lake`: Lake rebuilds only the modules that changed since its last build there and
@@ -174,6 +175,7 @@ def sandboxed() -> bool:
 RECORDS = "lean-records"
 AUDIT_PY = ROOT / "tools" / "lean" / "audit.py"
 SLOT = _module(ROOT / "tools" / "check" / "slot.py", "slot_for_lean_changed")
+LEAN_SLOT = _module(ROOT / "tools" / "check" / "lean_slot.py", "lean_slot_for_lean_changed")
 
 
 def records_tree() -> Path:
@@ -183,7 +185,7 @@ def records_tree() -> Path:
 def audit_records(name: str, deps: Path, tree: Path, update: bool = False, moved: Path | None = None, out: Path | None = None,
                   log=print) -> int:
     """`--records`: `audit.py --build --no-replay --no-runs` on the package ``name`` names, in ``tree``; audit.py's exit status,
-    or 2 when ``name`` matches no single package or another run holds the tree."""
+    or 2 when ``name`` matches no single package, another run holds the tree or the node's Lean audit slots refuse it."""
     files = LA.COMMON.tracked_files(ROOT)
     if files is None:
         log("lean-records: the tree's files cannot be listed")
@@ -201,6 +203,11 @@ def audit_records(name: str, deps: Path, tree: Path, update: bool = False, moved
         except BlockingIOError:
             log(f"lean-records: another run holds {tree}")
             return 2
+        try:
+            slot = LEAN_SLOT.hold()
+        except LEAN_SLOT.Refused as e:
+            log(f"lean-records: {e}")
+            return 2
         t0 = time.monotonic()
         links = json.loads((tree / LINKS).read_text()) if (tree / LINKS).is_file() else {}
         n = sync(closure(pkg), files, tree)
@@ -214,6 +221,9 @@ def audit_records(name: str, deps: Path, tree: Path, update: bool = False, moved
                 *(["--moved", str(moved.resolve())] if moved else []), *(["--out", str(out.resolve())] if out else []),
                 str(tree / pkg)]
         rc = subprocess.run(argv, cwd=tree, env={**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())}).returncode
+        if slot is not None:
+            os.close(slot)
+            os.environ.pop(LEAN_SLOT.HELD)
         log(f"lean-records: {pkg}: audit.py exit {rc} in {time.monotonic() - t0:.0f} s on {tree} ({n} files changed there), "
             "without the kernel replay or the tests: it vouches for nothing, check's audit decides")
         record, mine = tree / pkg / "lean-audit.json", ROOT / pkg / "lean-audit.json"
