@@ -16,7 +16,7 @@ What `coinedOf` (`Composed/Defs.lean`) and `innerOf` (`Composed/Inner.lean`) bot
 * `pointsOf`: the rank check's claim points, from those coins (`abcClaims`; `point_parts`: a claim's point but its first
   coordinate), rep 0's `ab`, `c`, then rep 1's.
 * `hiCount`, `padLenOf`, `padNOf`, `HiOf`: the hidden salts and the pads layout's sizes.
-* `pubRegOf`: the region claims' public ring-switch messages at the link points.
+* `regionPtOf`, `pubRegOf`: the region claims' points and public ring-switch messages at the link points.
 -/
 
 namespace FlockSoundness.Discharge.Composed
@@ -70,10 +70,10 @@ def padNOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : ℕ :=
   (padLenOf Tz st + Zk.K_PAD).nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE
 
 /-- **The draw's other coins**: `q₀ = t_pad / 2` level-0 queries (`Zk.schedule`) over `2^logLen` positions, the
-executable statement's `m` and `kLog`, a claim per region besides `ab` and `c`, and the layout's one out-of-domain
+executable statement's `m` and `kLog`, a claim per region and link point besides `ab` and `c` (`extraClaims`), and the layout's one out-of-domain
 coin, and the statement's `mPts` link coordinates. -/
 abbrev RestOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : Type :=
-  RestZK (Tz.t / 2) (2 ^ Tz.sch.level₀.logLen) Tz.sch.k0 st.m st.c.kLog (2 + st.regions.size)
+  RestZK (Tz.t / 2) (2 ^ Tz.sch.level₀.logLen) Tz.sch.k0 st.m st.c.kLog (2 + 2 * st.regions.size)
     (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).nOod0 st.mPts
 
 /-- The draw's hidden-salt type. -/
@@ -90,8 +90,14 @@ def pointsOf {q0 L0 k0 m kLog nCl nOod mP : ℕ} (ρ : RestZK q0 L0 k0 m kLog nC
     List F128 :=
   ((claimsOf ρ (if k.val < 2 then 0 else 1))[k.val % 2]!).x.toList.drop 1
 
+/-- **Region claim `j`'s point** (`extraClaims`: region `j / 2` at link point `j % 2`), but its first seven coordinates
+(the six skip coordinates and `x₀`, as `point_parts` drops). -/
+def regionPtOf (st : Stmt) (link : Fin 2 → Fin st.mPts → F128) (j : Fin (2 * st.regions.size)) : List F128 :=
+  (st.regionPoint st.regions[j.val / 2]! (Array.ofFn (link (if j.val % 2 = 0 then 0 else 1)))).toList.drop 7
+
 /-- **The region claims' public ring-switch messages** (open): each registered region's public words from `st.pub`, at
-its claim's point (`st.extra` at the link points `link`). -/
-noncomputable def pubRegOf (st : Stmt) (link : Fin 2 → Fin st.mPts → F128) : Fin st.regions.size → Fin 128 → 𝔽 := sorry
+its claim's point (`regionPtOf`). -/
+noncomputable def pubRegOf (st : Stmt) (link : Fin 2 → Fin st.mPts → F128) :
+    Fin (2 * st.regions.size) → Fin 128 → 𝔽 := sorry
 
 end FlockSoundness.Discharge.Composed
