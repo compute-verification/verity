@@ -18,7 +18,9 @@ count is a collision of `H` (`opRZ_conflict_collision`, `opPadsZ_conflict_collis
 * `zk_flock_countC_execOS_ks` and `zk_flock_countC_execOS_strict`: the compiled count curve at the live draw with
   `JointZC` discharged (`jointZC_ksBound`), and with `ε_ks` in closed form under A1;
 * `zk_flock_countC_execOS_cr`: the same with each unit read at its place, so `ε_ks`, `δ_link` and `δ_tree` rest on A1,
-  A2 and A3 alone.
+  A2 and A3 alone;
+* `zk_flock_countC_execOS_m1_cr`: the same with every table at M1's parameters, each table's bound at most `2^-203`
+  (`ksAvgStrictZ_le_m1`).
 
 The budgets are the hypotheses' to state: the prover is a strategy, and Lean counts no evaluations.
 -/
@@ -209,6 +211,48 @@ theorem ksAvgZC_le_strict {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg
 
 end Batch
 
+/-! ## At M1's parameters -/
+
+/-- **A `--zk` table's knowledge bound at M1's parameters**: `ksStrictZ` with the table's `bound` replaced by `2^-203`
+(`TabZK.bound_le_m1`). -/
+noncomputable def ksStrictZm1 (ts : List (TabZK F mPts)) (j : Fin ts.length) (k : ℕ) (qF qS : ℝ) : ℝ :=
+  2 ^ (-(203 : ℝ)) +
+    ∑ _r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 (ts.get j).sch.levels.length,
+      Real.sqrt (2 ^ (lvOf (ts.get j).sch ℓ).logLen * (lvOf (ts.get j).sch ℓ).queries * (qF ^ 2 / 2 ^ (513 : ℝ))) +
+    ∑ _r ∈ Finset.range 2, Real.sqrt ((ts.get j).N * (ts.get j).N * (qF ^ 2 / 2 ^ (513 : ℝ))) +
+    ∑ _r ∈ Finset.range 2, Real.sqrt (qF ^ 2 / 2 ^ (513 : ℝ)) +
+    qS ^ 2 / 2 ^ (513 : ℝ) + Real.sqrt (k * (qF ^ 2 / 2 ^ (513 : ℝ)))
+
+/-- **The compiled `--zk` knowledge term at M1's parameters in closed form**: `ksAvgStrictZ` at `ksStrictZm1`. -/
+noncomputable def ksAvgStrictZm1 {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
+    (L : Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) : ℝ≥0∞ :=
+  avg fun ω : L.Ω => ⨆ j : Fin (planZ (L.draw ω) R).length,
+    ENNReal.ofReal (ksStrictZm1 (planZ (L.draw ω) R) j k qF qS / (1 - rateZ (planZ (L.draw ω) R) j k))
+
+theorem ksStrictZ_nonneg (ts : List (TabZK F mPts)) (j : Fin ts.length) (k : ℕ) (qF qS : ℝ) :
+    0 ≤ ksStrictZ ts j k qF qS := by
+  unfold ksStrictZ
+  positivity
+
+theorem ksStrictZ_le_m1 (hF : Fintype.card F = 2 ^ 128) (ts : List (TabZK F mPts)) (j : Fin ts.length)
+    (hT : (ts.get j).M1) (k : ℕ) (qF qS : ℝ) : ksStrictZ ts j k qF qS ≤ ksStrictZm1 ts j k qF qS := by
+  unfold ksStrictZ ksStrictZm1
+  gcongr
+  exact ENNReal.toReal_le_of_le_ofReal (by positivity) ((ts.get j).bound_le_m1 hF hT)
+
+/-- **The compiled knowledge term's closed form at M1's parameters**: with every table of the plan at M1's parameters,
+`ksAvgStrictZ` is at most `ksAvgStrictZm1`. -/
+theorem ksAvgStrictZ_le_m1 (hF : Fintype.card F = 2 ^ 128) {n : ℕ} {Reg : Type}
+    (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
+    (hM1 : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1) (L : Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) :
+    ksAvgStrictZ planZ L k qF qS R ≤ ksAvgStrictZm1 planZ L k qF qS R := by
+  refine avg_mono fun ω => iSup_mono fun j => ?_
+  rcases le_or_gt (1 - rateZ (planZ (L.draw ω) R) j k) 0 with h0 | h0
+  · exact (le_of_eq (ENNReal.ofReal_of_nonpos
+      (div_nonpos_of_nonneg_of_nonpos (ksStrictZ_nonneg _ j k qF qS) h0))).trans zero_le
+  · exact ENNReal.ofReal_le_ofReal
+      (div_le_div_of_nonneg_right (ksStrictZ_le_m1 hF _ j (hM1 _ R j) k qF qS) h0.le)
+
 /-! ## The count curve -/
 
 section Count
@@ -285,7 +329,8 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Circuit} {n : ℕ} (P : Parti
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
 /-- **The compiled `--zk` count curve at the live draw, every term on the accepted assumptions**
-(`zk_flock_count_execOS_m1_cr`'s compiled counterpart). Each drawn unit is read from its table at its place (`place`),
+(`zk_flock_count_execOS_m1_cr`'s compiled counterpart at any table parameters; `zk_flock_countC_execOS_m1_cr` is the one
+at M1's). Each drawn unit is read from its table at its place (`place`),
 and the committed transcript is the plurality value layer of a binding of wires to registered commit strings (`vb`).
 Then `Pr[execAccept ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link + δ_tree`, with `miss(K)` `Law.stratified`'s
 count curve on bytes A3 makes uniform (`hA3`), `ε_ks = ksAvgStrictZ` under A1 for every table's finders after each draw
@@ -317,6 +362,39 @@ theorem zk_flock_countC_execOS_cr (hA : A.Correct)
         linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) + ENNReal.ofReal (tr.bound qT) :=
   zk_flock_countC_execOS_strict A Hs P planZ tab vb hA (loweringSoundZK_of_place A P planZ tab place) σs ks hks St hS
     Kd pop Lb src hA3 hk hRw hM hρ hr ht K σ hCR tr hT
+
+/-- **The compiled `--zk` count curve at the live draw, every table at M1's parameters, every term on the accepted
+assumptions**: `zk_flock_countC_execOS_cr` with each table's bound at most `2^-203` (`hM1`), so `ε_ks = ksAvgStrictZm1`,
+as `zk_flock_count_execOS_m1_cr` has `2^-203` at the interactive-oracle layer. -/
+theorem zk_flock_countC_execOS_m1_cr (hA : A.Correct)
+    (hM1 : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
+    (hA3 : Assumptions.UniformRandomBytes Lb src)
+    (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
+    {Dh : Type} {Hc : List UInt8 → Dh}
+    (vb : ValueBindingZ A P planZ tab (decodeOfPlace A P planZ tab place) Hc)
+    {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
+    (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t') (K : ℕ)
+    (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+      (batchedSessionZC A Hs planZ)))
+    {qF qS : ℝ}
+    (hCR : ∀ ω j, TableCRZ A Hs (planZ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ))
+      j (zcStrat A Hs planZ (cont σ ω)) qF qS)
+    {execAccept : Bool × Finset (Fin n) → Prop}
+    (tr : StrictCR.TreeRewind Hs.H (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+      (batchedSessionZC A Hs planZ)) σ fun o => execAccept o ∧ o.1 = false)
+    {qT : ℝ} (hT : tr.finder.CR Hs.H qT) :
+    prob (fun o => execAccept o ∧ K ≤ (P.wrong (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
+        (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZC A Hs planZ)) σ ≤
+      (Law.stratified σs ks hks).miss K +
+        ksAvgStrictZm1 planZ (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
+        linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) + ENNReal.ofReal (tr.bound qT) :=
+  (zk_flock_countC_execOS_cr A Hs P planZ tab hA σs ks hks St hS Kd pop Lb src hA3 place vb hk hRw hM hρ hr ht K σ hCR
+    tr hT).trans
+    (add_le_add (add_le_add (add_le_add le_rfl (ksAvgStrictZ_le_m1 hA.card_F planZ hM1 _ k qF qS (reg σ))) le_rfl)
+      le_rfl)
 
 end CountPlace
 
