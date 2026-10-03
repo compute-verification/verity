@@ -657,7 +657,8 @@ class Machine:
 
 
 def _remote_tier(world, monkeypatch, machine: Machine, **kw):
-    """A `RemoteQuickTier` on machine `vy-test` for `world`, its slot.py the fake one; and the sleeps its wait took."""
+    """A `RemoteQuickTier` on machine `vy-test` for `world`, its slot.py the fake one and its clock the time its sleeps took; and
+    those sleeps."""
     from research import queue as Q
 
     world.with_store_remote()
@@ -667,7 +668,8 @@ def _remote_tier(world, monkeypatch, machine: Machine, **kw):
     monkeypatch.setenv("FAKE_SLOT_SEEN", str(world.tmp / "slot-seen.json"))
     sleeps: list[float] = []
     return Q.RemoteQuickTier(world.dev, str(world.origin), "vy-test", by="lane-1", root=world.tmp / "ready", sleep=sleeps.append,
-                             **{"slot": slot, "launch": machine.launch, "fetch": machine.fetch, **kw}), sleeps
+                             **{"clock": lambda: sum(sleeps), "slot": slot, "launch": machine.launch, "fetch": machine.fetch,
+                                **kw}), sleeps
 
 
 def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_as_the_local_one_is(world, monkeypatch, capsys):
@@ -787,6 +789,30 @@ def test_a_remote_quick_tier_that_cannot_launch_or_is_never_seen_to_end_fails_af
     tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp), slot=world.tmp / "no-slot.py")
     assert tier(pr).endswith("no-slot.py isn't there to take a check slot on vy-test with (run it from a checkout of the repository)")
     assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False
+
+
+def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_takes(tmp_path):
+    """The wait counted polls as if a fetch took no time, and `remote.fetch` may take its ssh's 900 s each poll: against a machine
+    that takes the ssh and then hangs, the caller waited 180 polls of 930 s, about two days, not the run's timeout and the grace
+    (red team, #989).  Simulated time only."""
+    from research import queue as Q
+
+    clock = [0.0]
+
+    def advance(s: float) -> None:
+        clock[0] += s
+
+    def hung_fetch(d: Path) -> dict:
+        clock[0] += 900
+        return {}
+
+    tier = Q.RemoteQuickTier(tmp_path, "origin", "vy-test", timeout_s=3600, poll_s=30, fetch=hung_fetch, sleep=advance,
+                             clock=lambda: clock[0])
+    (d := tmp_path / "runs" / "r1").mkdir(parents=True)
+    _, why = tier._wait(d)
+    bound = 3600 + Q.REMOTE_GRACE_S
+    assert why == f"run r1 on vy-test didn't end within {bound:g} s (last seen without a status): `research inspect r1`"
+    assert bound <= clock[0] <= bound + 30 + 900, "it ends with the poll under way at the deadline"
 
 
 def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does(world, monkeypatch):

@@ -59,7 +59,6 @@ import contextlib
 import fcntl
 import hashlib
 import json
-import math
 import os
 import re
 import shlex
@@ -720,16 +719,17 @@ class RemoteQuickTier(QuickTier):
     `check.py --record --on` takes one) and runs `quick_tier.py` (sent too) in the shipped tree.  The caller polls the run's records
     (`research fetch`) until it ends and judges the facts in its result.json as the local tier's are judged; a run that ends without
     them, with facts from another run or head, or other than `done` with exit 0, is a failure.  The run itself is bounded on the
-    machine (`--timeout`), and the caller's wait by that plus REMOTE_GRACE_S."""
+    machine (`--timeout`), and the caller's wait by that plus REMOTE_GRACE_S of ``clock`` time (a fetch can take its ssh's own
+    timeout, so polls are not counted), past which it ends with the poll under way."""
 
     def __init__(self, repo: Path, remote: str, on: str, *, by: str = "", project: str = "verity", root: Path | None = None,
                  slot: Path | None = None, timeout_s: float = REMOTE_TIMEOUT_S, poll_s: float = REMOTE_POLL_S,
                  launch: Callable[[list[str], Path], subprocess.CompletedProcess] = _launch, fetch: Callable[[Path], dict] | None = None,
-                 sleep: Callable[[float], None] = time.sleep):
+                 sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic):
         super().__init__(repo, remote, root)
         self.on, self.by, self.project, self.timeout_s, self.poll_s = on, by, project, timeout_s, poll_s
         self.slot = Path(slot or self.repo / "tools" / "check" / "slot.py")
-        self.launch, self.fetch, self.sleep = launch, fetch, sleep
+        self.launch, self.fetch, self.sleep, self.clock = launch, fetch, sleep, clock
 
     def __call__(self, pr: PR) -> str | None:
         from . import runs as R
@@ -756,13 +756,15 @@ class RemoteQuickTier(QuickTier):
         return why or self._judge(d, rid, pr.head, status)
 
     def _wait(self, d: Path) -> tuple[dict, str | None]:
-        """The run's status.json once it says the run ended, from its records fetched every `poll_s`; or why the wait gave up."""
+        """The run's status.json once it says the run ended, from its records fetched every `poll_s` until the wait's deadline; or why
+        the wait gave up."""
         from . import remote
         from . import runs as R
 
         fetch = self.fetch or remote.fetch
         status: dict = {}
-        for _ in range(math.ceil((self.timeout_s + REMOTE_GRACE_S) / self.poll_s)):
+        deadline = self.clock() + self.timeout_s + REMOTE_GRACE_S
+        while self.clock() < deadline:
             self.sleep(self.poll_s)
             try:
                 rec = fetch(d)
