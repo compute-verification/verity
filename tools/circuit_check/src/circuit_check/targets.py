@@ -312,9 +312,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.ir.defs import bind
     from verity.ml.boolean import gemm as BG
     from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64
-    from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling, serve3, spec
+    from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, fp8_moe, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling
+    from verity_vllm.program.registry import serve3, spec
     from verity_vllm.program.registry import value_inputs as VI
-    from verity_vllm.program.registry import boolean_attention, boolean_fp8, tables
+    from verity_vllm.program.registry import boolean_attention, boolean_fp8, boolean_fp8_moe, tables
 
     long = {**TINY, "MAX_POS": 16}
     tp2 = {**TINY_NOBIAS, "BIAS": True, "TP": 2}
@@ -368,6 +369,23 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("ScaledMmFp8BlockSharedScale_v2", lambda: bind(boolean_fp8.ScaledMmFp8BlockSharedScaleV2, K=64, N=32, G=32)),
         ("ScaledMmFp8NoSwap_v2", lambda: bind(boolean_fp8.ScaledMmFp8NoSwapV2, K=64, N=2, BIAS=True,
                                               DOT=BG.BlackwellE4m3QmmaDot32)),
+        # a partial last weight block (GLM-5.3's fused_qkv_a_proj, N = 2624 over 21 scale rows)
+        ("ScaledMmFp8Block_v1/ragged", lambda: bind(fp8.ScaledMmFp8Block, K=256, N=192, G=128)),
+        ("ScaledMmFp8BlockSharedScale_v1/ragged", lambda: bind(fp8.ScaledMmFp8BlockSharedScale, K=256, N=192, G=128)),
+        # fused_moe_kernel's block FP8 expert GEMMs: GLM-5.3's served coordinates (w13 K = 6144, w2 K = 256 at TP8), and small ones
+        # that reach two tiles per scale block, two dot steps per tile, SWAP_AB and a partial last weight block
+        ("MoeExpertFp8BlockCoordinate_v1", lambda: bind(fp8_moe.MoeExpertFp8BlockCoordinate, K=6144, G=128, KB=32, SWAP=False)),
+        ("MoeExpertFp8BlockCoordinateW_v1", lambda: bind(fp8_moe.MoeExpertFp8BlockCoordinateW, K=256, G=128, KB=32, SWAP=False)),
+        ("MoeExpertFp8BlockGemm_v1", lambda: bind(fp8_moe.MoeExpertFp8BlockGemm, K=128, N=80, G=64, KB=32, SWAP=False)),
+        ("MoeExpertFp8BlockGemmW_v1", lambda: bind(fp8_moe.MoeExpertFp8BlockGemmW, K=64, N=48, G=32, KB=32, SWAP=True)),
+        ("MoeExpertFp8BlockCoordinate_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateV2, K=64, G=32, KB=32, SWAP=False)),
+        ("MoeExpertFp8BlockCoordinate_v2/swap", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateV2, K=64, G=64, KB=32,
+                                                             SWAP=True)),
+        ("MoeExpertFp8BlockCoordinate_v2/kb64", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateV2, K=64, G=64, KB=64,
+                                                             SWAP=False)),
+        ("MoeExpertFp8BlockCoordinateW_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateWV2, K=64, G=32, KB=32, SWAP=True)),
+        ("MoeExpertFp8BlockGemm_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockGemmV2, K=32, N=40, G=32, KB=32, SWAP=False)),
+        ("MoeExpertFp8BlockGemmW_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockGemmWV2, K=32, N=40, G=32, KB=32, SWAP=True)),
         ("LServe_v2", lambda: lifted.lserve(TINY, 3, 2, (7,), lag=0)),
         ("ServeSpec_v1", lambda: bind(spec.ServeSpec, C=long, CD={**TINY_NOBIAS, "MAX_POS": 16}, LP=3, K=2, A=(2, 2))),
         ("ServeDraft_v1", lambda: bind(spec.ServeDraft, C=long, LP=3, STEPS=2)),
