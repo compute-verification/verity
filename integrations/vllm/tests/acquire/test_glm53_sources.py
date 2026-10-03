@@ -264,3 +264,235 @@ def test_the_bf16_path_keeps_six_tensors_and_a_switch_mid_run_is_an_error(monkey
 def test_grouped_topk_args_reads_positional_and_keyword_calls():
     a = MS.grouped_topk_args(("h", "g", 8, True), {"scoring_func": "sigmoid", "e_score_correction_bias": "b"})
     assert (a["gating_output"], a["topk"], a["num_expert_group"], a["scoring_func"], a["e_score_correction_bias"]) == ("g", 8, 0, "sigmoid", "b")
+
+
+# ---------------------------------------------------------------- fused_allreduce_rms_norm, as DeepseekV32DecoderLayer calls it
+
+MODEL_MODULE = "vllm.models.deepseek_v32.nvidia.model"
+FLASHINFER_MAX_TOKENS = 42
+
+
+def fake_far(monkeypatch, world: int = TP) -> types.SimpleNamespace:
+    """The pinned `fused_allreduce_rms_norm` and the model module that imports it: FlashInfer's fused path (a fresh norm_out, the new
+    residual written into hidden_states, `norm` never called) when M <= 42, else the all-reduce then `norm(reduced, residual)`."""
+    calls: list[str] = []
+
+    def fused_allreduce_rms_norm(hidden_states, residual, norm):
+        if world == 1:
+            return norm(hidden_states, residual)
+        if hidden_states.shape[0] <= FLASHINFER_MAX_TOKENS:
+            calls.append("flashinfer")
+            return T(*hidden_states.shape), hidden_states
+        calls.append("all_reduce")
+        return norm(T(*hidden_states.shape), residual)
+
+    for name in ("vllm", "vllm.models", "vllm.models.common", "vllm.models.common.ops", "vllm.models.deepseek_v32",
+                 "vllm.models.deepseek_v32.nvidia"):
+        monkeypatch.setitem(sys.modules, name, sys.modules.get(name) or types.ModuleType(name))
+    home = types.ModuleType("vllm.models.common.ops.fused_allreduce_rms_norm")
+    home.fused_allreduce_rms_norm = fused_allreduce_rms_norm
+    user = types.ModuleType(MODEL_MODULE)
+    user.fused_allreduce_rms_norm = fused_allreduce_rms_norm
+    monkeypatch.setitem(sys.modules, home.__name__, home)
+    monkeypatch.setitem(sys.modules, MODEL_MODULE, user)
+    return types.SimpleNamespace(home=home, user=user, calls=calls)
+
+
+class Norm(torch.nn.Module):
+    """RMSNorm as the pinned vLLM builds it: a weight and variance_epsilon; with a residual it returns (out, residual)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.weight = torch.nn.Parameter(torch.empty(H, dtype=torch.bfloat16), requires_grad=False)
+        self.variance_epsilon = 1e-5
+
+    def forward(self, x, residual=None):
+        return T(*x.shape) if residual is None else (T(*x.shape), residual)
+
+
+class DecoderLayer(torch.nn.Module):
+    """DeepseekV32DecoderLayer.forward without sequence parallelism: layer 0 normalizes the embedding directly; every later
+    input_layernorm and every post_attention_layernorm goes through the model module's `fused_allreduce_rms_norm` global."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.input_layernorm, self.post_attention_layernorm = Norm(), Norm()
+
+    def forward(self, hidden_states, residual):
+        far = sys.modules[MODEL_MODULE].fused_allreduce_rms_norm
+        if residual is None:
+            residual, hidden_states = hidden_states, self.input_layernorm(hidden_states)
+        else:
+            hidden_states, residual = far(hidden_states, residual, self.input_layernorm)
+        hidden_states = T(*hidden_states.shape)                       # o_proj's partial (reduce_results=False)
+        hidden_states, residual = far(hidden_states, residual, self.post_attention_layernorm)
+        return T(*hidden_states.shape), residual                      # the MLP's or MoE's partial
+
+
+class Model(torch.nn.Module):
+    def __init__(self, n_layers: int) -> None:
+        super().__init__()
+        self.layers = torch.nn.ModuleList(DecoderLayer() for _ in range(n_layers))
+        self.norm = Norm()
+
+    def forward(self, M: int):
+        hidden_states, residual = T(M, H), None
+        for layer in self.layers:
+            hidden_states, residual = layer(hidden_states, residual)
+        hidden_states, _ = sys.modules[MODEL_MODULE].fused_allreduce_rms_norm(hidden_states, residual, self.norm)
+        return hidden_states
+
+
+for _cls in (DecoderLayer, Model):
+    _cls.__module__ = MODEL_MODULE
+
+
+class Root(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.model = Model(ENV["L"])
+
+
+class LoggingNC(NC):
+    def __init__(self, log: list) -> None:
+        super().__init__()
+        self.log = log
+
+    def flush(self) -> None:
+        super().flush()
+        self.log.append(("flush", "nc"))
+
+
+def far_committer() -> Committer:
+    c = Committer()
+    c._nc = LoggingNC(c.log)
+    return c
+
+
+def module_hooks(model: torch.nn.Module, c: Committer) -> list:
+    """The committer's module hook on every norm (native_host `_make_hook`): `<module>` for a tensor, `<module>/<k>` for a tuple."""
+    def hook(name):
+        def h(mod, args, out):
+            for k, o in (enumerate(out) if isinstance(out, tuple) else [(None, out)]):
+                c._acquire(name if k is None else f"{name}/{k}", o, c._cur)
+        return h
+    return [m.register_forward_hook(hook(n)) for n, m in model.named_modules() if isinstance(m, Norm)]
+
+
+class FarRun:
+    """One rank's TP partial source on the model above, with the committer's module hooks on every norm; `step` runs one forward."""
+
+    def __init__(self, monkeypatch, *, rank: int = 3) -> None:
+        from verity_vllm.acquire.sources.partial_source import TPPartialSource
+
+        self.v = fake_far(monkeypatch)
+        self.orig = self.v.home.fused_allreduce_rms_norm
+        self.c = far_committer()
+        self.root = Root()
+        self.src = TPPartialSource(self.c, self.root, rank=rank, world=TP)
+        self.steps: list[list[str]] = []
+
+    def step(self, M: int) -> list[str]:
+        c, src = self.c, self.src
+        c._cur = types.SimpleNamespace(step=len(self.steps))
+        handles = module_hooks(self.root, c)
+        src.install()
+        assert self.v.user.fused_allreduce_rms_norm is not self.orig and self.v.home.fused_allreduce_rms_norm is not self.orig
+        n0 = len(c.log)
+        try:
+            src.on_step_begin()
+            self.root.model(M)
+            src.on_step_end(c._cur)
+        finally:
+            src.uninstall()
+            for h in handles:
+                h.remove()
+        assert self.v.user.fused_allreduce_rms_norm is self.orig and self.v.home.fused_allreduce_rms_norm is self.orig
+        assert not src.far._hooked
+        self.steps.append([n for kind, n in c.log[n0:] if kind == "acquire"])
+        return self.steps[-1]
+
+    def identity_check(self) -> dict[str, Any]:
+        """The committer's X-03 identity check over the steps run, with this source attached and the norms as its modules."""
+        from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta
+
+        com = NativeHostCommitter(None, run_id="glm53-far", gpu_tree=True)
+        com._modules = [(n, m) for n, m in self.root.named_modules() if isinstance(m, Norm)]
+        com.sources = [self.src]
+        for k, names in enumerate(self.steps):
+            com._layouts[k] = [TensorMeta(i, n, "bfloat16", (4, 8), 64, GPU_CHUNK_BYTES, i, 1) for i, n in enumerate(names)]
+            for i, m in enumerate(com._layouts[k]):
+                m.dev_off = m.stream_off = 64 * i
+        return com.identity_check()
+
+
+@pytest.mark.parametrize("M,path", [(4, "F"), (256, "N")])
+def test_the_allreduce_norm_wrap_binds_the_maps_names_on_either_path(monkeypatch, M, path):
+    run = FarRun(monkeypatch)
+    c, src = run.c, run.src
+    names = run.step(M)
+    route = ("dense-mha",)
+    got = CM.bind_names(CMAP, ENV, names, profile="0123456789ab", request="r0", t=0, phase="prefill", routes=route, rank=3,
+                        binders=("allreduce_norm",))
+    # layer 0's input_layernorm is the module hook's own tap (no residual: a tensor), every other name is the map's
+    assert got["unknown"] == ["model.layers.0.input_layernorm"] and got["missing"] == [] and len(names) == len(set(names))
+    assert got["ids"] == sorted(CM.identities(CMAP, ENV, profile="0123456789ab", request="r0", t=0, phase="prefill", routes=route,
+                                              rank=3, binders=("allreduce_norm",)))
+    assert run.v.calls == [{"F": "flashinfer", "N": "all_reduce"}[path]] * (2 * ENV["L"])
+    sites = src.far.site_names()
+    assert len(sites) == 2 * ENV["L"] and "model.layers.0.input_layernorm" not in sites and "model.norm" in sites
+    assert src.site_counts() == dict.fromkeys(sites, 1) and set(src.site_names()) == set(sites)
+    assert src.far.paths == [(0, path * (2 * ENV["L"]))] and src.far.stats[path] == 2 * ENV["L"] and c.errors == []
+    # the partial is copied before the call runs (the fused path then writes the new residual into it); the fused path's returns at once
+    i = c.log.index(("acquire", "model.layers.1.input_layernorm/part_rank3"))
+    assert c.log[i + 1] == ("flush", "nc")
+    if path == "F":
+        assert c.log[i + 2:i + 5] == [("acquire", "model.layers.1.input_layernorm/0"), ("acquire", "model.layers.1.input_layernorm/1"),
+                                      ("flush", "nc")]
+    r = run.identity_check()
+    assert r["ok"] is True and r["manifest"]["tp_sites"] == 2 * ENV["L"], r["violations"]
+
+
+def test_the_allreduce_norm_partial_is_the_calls_hidden_states_and_the_returns_its_outputs(monkeypatch):
+    seen: dict[str, Any] = {}
+    run = FarRun(monkeypatch, rank=0)
+    orig = run.orig
+
+    def spy(hidden_states, residual, norm):
+        out = orig(hidden_states, residual, norm)
+        seen.setdefault("call", (hidden_states, out))
+        return out
+
+    run.v.home.fused_allreduce_rms_norm = run.v.user.fused_allreduce_rms_norm = run.orig = spy
+    run.step(4)
+    hs, (normed, residual) = seen["call"]                                  # the first call: layer 0's post_attention_layernorm
+    site = "model.layers.0.post_attention_layernorm"
+    assert run.c.acquired[f"{site}/part_rank0"] is hs and residual is hs
+    assert run.c.acquired[f"{site}/0"] is normed and run.c.acquired[f"{site}/1"] is hs
+
+
+def test_a_model_that_calls_it_and_makes_no_call_declares_a_site_no_step_binds(monkeypatch):
+    from verity_vllm.acquire.sources.allreduce_norm import NO_CALL_SITE
+    from verity_vllm.acquire.sources.partial_source import TPPartialSource
+
+    fake_far(monkeypatch)
+    src = TPPartialSource(far_committer(), Root(), rank=0, world=TP)
+    assert src.far.used and src.far.site_names() == [NO_CALL_SITE] and src.site_counts()[NO_CALL_SITE] == 1
+    assert len(src.far.candidates) == 2 * ENV["L"] + 1 and src.extra_step_bytes({}, None)["tensors_per_step"] == 2 * ENV["L"] + 1
+    assert TPPartialSource(far_committer(), Root(), rank=0, world=1).far.site_names() == []
+
+
+def test_steps_on_different_paths_commit_the_same_names_and_a_step_missing_a_call_fails_identity_check(monkeypatch):
+    run = FarRun(monkeypatch)
+    run.step(256)
+    run.step(4)
+    assert run.steps[0] == run.steps[1]                                  # the same names in the same order: the module hook fires inside
+    assert [p for _s, p in run.src.far.paths] == ["N" * (2 * ENV["L"]), "F" * (2 * ENV["L"])]
+    assert run.identity_check()["ok"] is True
+    run.root.model.layers[5].forward = lambda hs, res: (T(*hs.shape), res)
+    run.step(4)
+    r = run.identity_check()
+    bad = r["violations"][0]
+    assert r["ok"] is False and bad["step"] == 2
+    assert bad["tp_sites_bad"] == {"model.layers.5.input_layernorm": 0, "model.layers.5.post_attention_layernorm": 0}
+    assert bad["missing_modules"] == ["model.layers.5.input_layernorm", "model.layers.5.post_attention_layernorm"]

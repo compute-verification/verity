@@ -182,11 +182,11 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        40, 29, {"exists": 16, "tonight": 4, "port": 6, "copy": 2, "committed-only": 20})
+        40, 29, {"exists": 16, "tonight": 4, "port": 6, "copy": 2, "committed-only": 23})
     assert brief(CM.counts(CMAP, ENV, ("dense-mha",))) == (
-        40, 2050, {"exists": 699, "tonight": 300, "port": 391, "copy": 79, "committed-only": 581}, 21)
+        43, 2206, {"exists": 699, "tonight": 300, "port": 391, "copy": 79, "committed-only": 737}, 21)
     assert brief(CM.counts(CMAP, ENV, ("sparse-mqa",))) == (
-        46, 2233, {"exists": 642, "tonight": 300, "port": 313, "copy": 79, "committed-only": 899}, 183)
+        49, 2389, {"exists": 642, "tonight": 300, "port": 313, "copy": 79, "committed-only": 1055}, 183)
 
 
 def test_the_bound_tap_counts():
@@ -195,8 +195,8 @@ def test_the_bound_tap_counts():
         c = CM.counts(CMAP, ENV, routes)
         return c["bound_taps_per_step"], c["bound_taps_per_step_by_binder"]
 
-    assert bound(("dense-mha",)) == (1174, {"module_hook": 646, "moe": 525, "sampler": 1, "tp_partial": 2})
-    assert bound(("sparse-mqa",)) == (1117, {"module_hook": 589, "moe": 525, "sampler": 1, "tp_partial": 2})
+    assert bound(("dense-mha",)) == (1642, {"allreduce_norm": 468, "module_hook": 646, "moe": 525, "sampler": 1, "tp_partial": 2})
+    assert bound(("sparse-mqa",)) == (1585, {"allreduce_norm": 468, "module_hook": 589, "moe": 525, "sampler": 1, "tp_partial": 2})
 
 
 @pytest.mark.parametrize("route", ["dense-mha", "sparse-mqa"])
@@ -210,7 +210,7 @@ def test_every_bound_tap_has_one_committer_name_and_it_maps_back_to_its_id(route
     want = CM.identities(CMAP, ENV, profile="0123456789ab", request="r0", t=0, phase="prefill", routes=(route,), rank=3,
                          binders=tuple(CMAP["binders"]))
     assert got["ids"] == sorted(want) and bound
-    assert "logits_processor/shard_rank3" in names and "model.embed_tokens/part_rank3" in names
+    assert "logits_processor/shard_rank3" in names and "model.embed_tokens/part_rank3" in names and "model.norm/part_rank3" in names
     dropped = CM.bind_names(CMAP, ENV, list(names)[1:], profile="0123456789ab", request="r0", t=0, phase="prefill", routes=(route,), rank=3)
     assert dropped["missing"] == [next(iter(names))]
 
