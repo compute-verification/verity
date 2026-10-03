@@ -894,6 +894,34 @@ def test_the_schedule_alternates_the_baseline_rep_by_rep_or_in_abab_blocks():
     assert sum(b.count("fp8") for b in blocks) == 3 and sum(b.count("pearlc") for b in blocks) == 3
 
 
+def test_a_wikitext_window_starts_with_the_configs_bos_when_the_tokenizer_names_none(monkeypatch):
+    """Qwen3-8B's tokenizer has no BOS (vLLM refused its windows' None id); its config's `bos_token_id` stands in."""
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+
+    class Tok:
+        def __init__(self, bos):
+            self.bos_token_id = bos
+
+        def __call__(self, text, add_special_tokens):
+            return {"input_ids": list(range(100, 100 + 2 * E2E.WINDOW))}
+
+    configs = {"qwen": 151643, "llama": 128000, "none": None}
+    transformers = types.SimpleNamespace(
+        AutoTokenizer=types.SimpleNamespace(from_pretrained=lambda m: Tok(128000 if m == "llama" else None)),
+        AutoConfig=types.SimpleNamespace(from_pretrained=lambda m: types.SimpleNamespace(bos_token_id=configs[m])))
+    table = types.SimpleNamespace(column=lambda c: types.SimpleNamespace(to_pylist=lambda: ["a", "b"]))
+    monkeypatch.setitem(sys.modules, "transformers", transformers)
+    monkeypatch.setitem(sys.modules, "huggingface_hub", types.SimpleNamespace(hf_hub_download=lambda *a, **k: "x"))
+    parquet = types.SimpleNamespace(read_table=lambda p: table)
+    monkeypatch.setitem(sys.modules, "pyarrow", types.SimpleNamespace(parquet=parquet))
+    monkeypatch.setitem(sys.modules, "pyarrow.parquet", parquet)
+    qwen = E2E.wikitext_windows("qwen", None)
+    assert [w[0] for w in qwen] == [151643, 151643] and all(len(w) == E2E.WINDOW for w in qwen)
+    assert [w[0] for w in E2E.wikitext_windows("llama", 1)] == [128000]
+    with pytest.raises(ValueError, match="BOS"):
+        E2E.wikitext_windows("none", None)
+
+
 def test_the_controller_runs_each_rep_on_the_same_prompt_and_warms_each_engine_once():
     E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
     E2E.clocks = lambda: {"sm_mhz": 2090}
