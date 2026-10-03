@@ -18,7 +18,9 @@ under plain TP; any other condition, such as OLMoE's `if self.tp_size > 1:`, is 
 identity_check requires exactly that many partials per site per step, the manifest one identity per site in Program order
 (`required_manifest.collective_site` / `collective_site_aliases`).  A class whose source cannot be read is NOT a site (fail closed by
 omission: the collective would then be recorded unattributed / missing, both named verdicts); a count the run contradicts is named by
-identity_check, never relabelled.
+identity_check, never relabelled.  Each ruled-out call is listed with its flag, the truth its branch wants and the instance's value
+(`mid_module_site_census` "ruled_out": the Match recorder's `coll_meta`, the Commit's identity report), and the observers keep its
+python module patched, so a ruled-out call that runs anyway is recorded unattributed (or over its site's count) and named.
 """
 from __future__ import annotations
 
@@ -89,14 +91,14 @@ def _guarded_calls(src: str) -> list[tuple[str, tuple[tuple[str, bool], ...]]]:
     return out
 
 
-def _ruled_out(instance: Any, guards: tuple[tuple[str, bool], ...]) -> bool:
-    """True when the instance's value of some guard flag (a bool, int or None attribute) contradicts the branch; a flag the instance
-    lacks, or holds as any other type, does not rule a call out."""
+def _ruling(instance: Any, guards: tuple[tuple[str, bool], ...]) -> tuple[str, bool, Any] | None:
+    """(flag, required truth, the instance's value) of the first guard flag (a bool, int or None attribute) whose value contradicts the
+    branch; None when none does.  A flag the instance lacks, or holds as any other type, does not rule a call out."""
     for flag, want in guards:
         v = getattr(instance, flag, ...)
         if (v is None or isinstance(v, (bool, int))) and bool(v) != want:
-            return True
-    return False
+            return flag, want, v
+    return None
 
 
 def _class_calls(cls: type, model_prefix: str | None) -> list[tuple[str, tuple[tuple[str, bool], ...]]]:
@@ -111,19 +113,24 @@ def _class_calls(cls: type, model_prefix: str | None) -> list[tuple[str, tuple[t
         return []
 
 
-def _count(calls: list[tuple[str, tuple[tuple[str, bool], ...]]], instance: Any) -> dict[str, int]:
+def _count(calls: list[tuple[str, tuple[tuple[str, bool], ...]]], instance: Any) -> tuple[dict[str, int], list[dict[str, Any]]]:
+    """({kind: n} of the calls the instance's flags allow, [{"kind", "flag", "want", "value"}] of those they rule out)."""
     out: dict[str, int] = {}
+    ruled: list[dict[str, Any]] = []
     for kind, guards in calls:
-        if instance is None or not _ruled_out(instance, guards):
+        r = None if instance is None else _ruling(instance, guards)
+        if r is None:
             out[kind] = out.get(kind, 0) + 1
-    return out
+        else:
+            ruled.append({"kind": kind, "flag": r[0], "want": r[1], "value": r[2]})
+    return out, ruled
 
 
 def class_collective_calls(cls: type, *, model_prefix: str | None = None, instance: Any = None) -> dict[str, int]:
     """{kind: call count} of the collective names called in `cls`'s own source; {} for a class outside the model modules or one
     whose source cannot be read.  Inherited methods are not searched (a vLLM layer base class is not a model class).  With `instance`,
     a call under an `if self.<flag>:` branch the instance's flag rules out is not counted."""
-    return _count(_class_calls(cls, model_prefix), instance)
+    return _count(_class_calls(cls, model_prefix), instance)[0]
 
 
 def _under_tp(m: Any, world: int) -> bool:
@@ -131,12 +138,15 @@ def _under_tp(m: Any, world: int) -> bool:
     return int(tp if tp is not None else world) > 1
 
 
-def mid_module_sites(model: Any, world: int, *, model_prefix: str | None = None) -> list[dict[str, Any]]:
-    """[{"name", "cls", "py_module", "calls": {kind: n}, "per_step": n_total}] for every module of `model` whose class calls a TP collective
-    directly, in `named_modules()` order.  Empty for a dense vLLM model (its collectives are the layer modules')."""
+def mid_module_site_census(model: Any, world: int, *, model_prefix: str | None = None) -> dict[str, list[dict[str, Any]]]:
+    """{"sites": [{"name", "cls", "py_module", "calls": {kind: n}, "per_step": n_total}], "ruled_out": [{"name", "cls", "py_module",
+    "site_dropped", "calls": [{"kind", "flag", "want", "value"}]}]}: every module of `model` whose class calls a TP collective directly,
+    in `named_modules()` order, with the calls its instance's flags allow; a module with a call they rule out is listed in "ruled_out"
+    ("site_dropped": no call is left, so the module is no site)."""
     if int(world) <= 1:
-        return []
-    out: list[dict[str, Any]] = []
+        return {"sites": [], "ruled_out": []}
+    sites: list[dict[str, Any]] = []
+    ruled_out: list[dict[str, Any]] = []
     cache: dict[type, list[tuple[str, tuple[tuple[str, bool], ...]]]] = {}
     for name, m in model.named_modules():
         cls = type(m)
@@ -144,16 +154,24 @@ def mid_module_sites(model: Any, world: int, *, model_prefix: str | None = None)
             cache[cls] = _class_calls(cls, model_prefix)
         if not cache[cls] or not _under_tp(m, world):
             continue
-        calls = _count(cache[cls], m)
-        if not calls:
-            continue
-        out.append({"name": name, "cls": cls.__name__, "py_module": cls.__module__, "calls": dict(calls), "per_step": sum(calls.values())})
-    return out
+        calls, ruled = _count(cache[cls], m)
+        where = {"name": name, "cls": cls.__name__, "py_module": cls.__module__}
+        if ruled:
+            ruled_out.append({**where, "site_dropped": not calls, "calls": ruled})
+        if calls:
+            sites.append({**where, "calls": dict(calls), "per_step": sum(calls.values())})
+    return {"sites": sites, "ruled_out": ruled_out}
+
+
+def mid_module_sites(model: Any, world: int, *, model_prefix: str | None = None) -> list[dict[str, Any]]:
+    """The "sites" of `mid_module_site_census`.  Empty for a dense vLLM model (its collectives are the layer modules')."""
+    return mid_module_site_census(model, world, model_prefix=model_prefix)["sites"]
 
 
 def patch_targets(sites: list[dict[str, Any]]) -> list[tuple[Any, str, str]]:
     """The (python module, attribute, kind) triples the observers wrap for `sites`: each site class's module x each collective name it
-    binds (deduplicated, in site order).  A module that does not bind a name is skipped (the class called it through another path)."""
+    binds (deduplicated, in site order).  A module that does not bind a name is skipped (the class called it through another path).
+    The observers pass the census's "ruled_out" entries too, so a ruled-out call that runs anyway is still seen."""
     seen: set[tuple[str, str]] = set()
     out: list[tuple[Any, str, str]] = []
     for s in sites:
