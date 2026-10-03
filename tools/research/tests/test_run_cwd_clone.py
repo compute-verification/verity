@@ -206,11 +206,20 @@ def test_the_callers_git_dir_does_not_point_the_clone_at_the_source(tmp_path, re
     assert _clones(tmp_path) == []
 
 
-def test_a_clone_that_cannot_be_removed_is_reported_and_the_run_keeps_its_status(tmp_path, repo, monkeypatch, capsys):
-    monkeypatch.setattr(clone, "remove", lambda path: "OSError: [Errno 16] Device or resource busy")
-    assert _run(tmp_path / "runs", "clone") == 0
+def test_a_clone_that_cannot_be_removed_is_reported_and_the_run_keeps_its_status(tmp_path, repo, capsys):
+    """The workload replaces the clone's directory with a symlink to a directory of the test's: removing it must neither follow
+    the link nor fail the run."""
+    victim = tmp_path / "victim"
+    (victim / "keep").mkdir(parents=True)
+    wl = (f"import os, shutil; home = os.path.dirname(os.getcwd()); os.chdir('/'); shutil.rmtree(home); "
+          f"os.symlink({str(victim)!r}, home)")
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--no-sampler", "--cwd", "clone", "--", PY, "-c", wl]) == 0
     [left] = _clones(tmp_path)
-    assert f"could not remove {left} (OSError: [Errno 16] Device or resource busy); remove it by hand" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert f"could not remove {left} (OSError: Cannot call rmtree on a symbolic link); remove it by hand" in err
+    assert left.is_symlink() and (victim / "keep").is_dir()
+    [run_dir] = (tmp_path / "runs").iterdir()
+    assert R.summarize(run_dir)["state"] == "done"
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root removes a read-only directory's entries anyway")
