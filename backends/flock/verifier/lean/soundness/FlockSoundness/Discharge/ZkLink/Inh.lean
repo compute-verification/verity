@@ -140,8 +140,8 @@ theorem allInh_repMaskedZC (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA 
     (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (extra : List (Claim F S.m)) :
     AllInh (repMaskedZC (D := D) A P₀ PA tr S sch hm t c₀ r extra) := by
   unfold repMaskedZC
-  refine AllInh.bind (fun _ => AllInh.map _ (AllInh.bind (fun _ => AllInh.map _ ?_) (allInh_lincheckZK A S PA _)))
-    (allInh_zerocheckZK A S.m PA tr)
+  refine AllInh.map _ (AllInh.bind (fun _ => AllInh.map _ (AllInh.bind (fun _ => AllInh.map _ ?_)
+    (allInh_lincheckZK A S PA _))) (allInh_zerocheckZK A S.m PA tr))
   unfold restZC
   refine AllInh.bind' (allInh_openingZK A _ _ _ _) fun _ => ?_
   repeat' (first
