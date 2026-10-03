@@ -1,9 +1,11 @@
 import FlockSoundness.Discharge.ZkLink.DrawOk
+import FlockSoundness.Discharge.Composed.DefsJ
 
 /-!
-# The `--zk` session's custody assumption
+# The `--zk` session's assumptions
 
-The record's custody (`RecordCustodyZK`, `live-verifier`) that `--zk`'s soundness takes.
+The record's custody (`live-verifier`) that `--zk`'s soundness takes: `RecordCustodyZK` at one table, `RecordCustodyZKJ`
+at `J`.
 -/
 
 namespace FlockSoundness.Assumptions.Zk
@@ -27,5 +29,16 @@ def RecordCustodyZK {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj 
     (wr : Finset (Fin n) → Reg → Refine.LiveOut mPts → Discharge.Exec.Transcript) (law : Flock.Draw.Law) (pop : ℕ) :
     Prop :=
   Discharge.ZkLink.RecordsLiveZK I dj wr ∧ Discharge.ZkLink.DrawFileZK dj law pop
+
+/-- **The record is the live session's, at `J` tables** (`live-verifier`, as `RecordCustodyZK`): the record
+`verify --zk --session-tables J` reads is the one the verifier's coin server wrote for the live session
+(`RecordsLiveZKJ`: its draw, proofs and link points, and each table's root and rounds, are the live outcome's), and its
+draw file the one `flock-verify draw` printed for the verifier's own draw under the subset law, the one law flock-verify
+takes at more than one table (`DrawFileZK` at `subset kd` over the `n` units). -/
+def RecordCustodyZKJ {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
+    (Jf : Finset (Fin n) → Reg → ℕ)
+    (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript)
+    (kd : ℕ) : Prop :=
+  Discharge.Composed.RecordsLiveZKJ I dj Jf wr ∧ Discharge.ZkLink.DrawFileZK dj (.subset kd) n
 
 end FlockSoundness.Assumptions.Zk

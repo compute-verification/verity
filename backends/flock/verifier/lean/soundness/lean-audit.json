@@ -160,6 +160,11 @@
     "about": "Assumptions.Zk.RecordCustodyZK (live-verifier): the record flock-verify verify --zk reads is the one the verifier's coin server wrote for the live session, and its draw file the one flock-verify draw printed for the verifier's own draw (PROTOCOL.md §17.2: nothing in the record authenticates its writer)",
     "mentions": ["IO.FS.readFile", "IO.FS.writeFile"],
     "ack": []
+   },
+   "live-verifier-custody-tables": {
+    "about": "Assumptions.Zk.RecordCustodyZKJ (live-verifier): RecordCustodyZK at J tables, the record flock-verify verify --zk --session-tables J reads is the one the verifier's coin server wrote for the live session, and its draw file the one flock-verify draw printed for the verifier's own subset draw (PROTOCOL.md §17.2: nothing in the record authenticates its writer)",
+    "mentions": ["IO.FS.readFile", "IO.FS.writeFile"],
+    "ack": []
    }
   }
  },
@@ -4528,6 +4533,7 @@
    "assumptions": [],
    "type_hash": "8be091f3d95f07de4c7cf133faf6b65a369b2a05104e15ff0d23d66aafcea58e"
   },
+  "FlockSoundness.Discharge.Composed.drawOkZKJ_of_file": {},
   "FlockSoundness.Discharge.Composed.tagsOk_circuit967b8d06": {
    "signature": [
     "FlockSoundness.Discharge.Composed.tagsOk_circuit967b8d06 (I : FlockSoundness.Discharge.Exec.Inputs)",
@@ -4753,6 +4759,8 @@
    "assumptions": [],
    "type_hash": "32858bd5b389445c9b2b678842d71b75211cc0074f65e3039e94d6b20c76639f"
   },
+  "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody": {},
+  "FlockSoundness.Discharge.Composed.zk_session_sound_custody": {},
   "FlockSoundness.Discharge.Const.Prog.instC_wire_input": {
    "signature": [
     "FlockSoundness.Discharge.Const.Prog.instC_wire_input {N n : Nat} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N))",
@@ -11479,6 +11487,25 @@
    "assumptions": [],
    "type_hash": "f7e115cd41fd17353112e2538f83cb14c8306506584e66399c19b404d0a998f5"
   },
+  "FlockSoundness.Discharge.ZkLink.drawFileZK_of_toJson": {},
+  "FlockSoundness.Discharge.ZkLink.drawOkZK_of_exec": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkLink.drawOkZK_of_exec {n : Nat} (I : FlockSoundness.Discharge.Exec.Inputs)",
+    "  (ht : Eq I.tags.typed Bool.false) {c : Flock.Circuit}",
+    "  (hc : Eq (Flock.HmRow.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok c))",
+    "  {m : Nat} (σs : Fin n → Fin m) (ks : Fin m → Nat)",
+    "  (hks : ∀ (s : Fin m), instLENat.le (ks s) (FlockSoundness.Audit.Law.stratum σs s).card)",
+    "  (St : Fin m → Flock.Draw.Stratum) (hS : FlockSoundness.Audit.Law.ExecStrata σs ks St) (Kd pop : Nat) {Ω : Type}",
+    "  [Fintype Ω] [Nonempty Ω] (Lb : Fin m → Nat) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)",
+    "  (dj : Finset (Fin n) → Lean.Json)",
+    "  (hdj : FlockSoundness.Discharge.ZkLink.DrawFileZK dj (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :",
+    "  FlockSoundness.Discharge.ZkLink.DrawOkZK I dj",
+    "    (FlockSoundness.Discharge.Exec.mPtsOf c.g (Finset.univ.sum fun s => ks s))",
+    "    ((FlockSoundness.Audit.Law.execOS src (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop).draw ω)"
+   ],
+   "assumptions": [],
+   "type_hash": "b5134539e446715277f30f6b8573f3721c8f7f18cd865a587726dc8b37e81149"
+  },
   "FlockSoundness.Discharge.ZkLink.jointZC_ksBound": {
    "signature": [
     "FlockSoundness.Discharge.ZkLink.jointZC_ksBound {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
@@ -11539,6 +11566,7 @@
    "assumptions": [],
    "type_hash": "8741ae24f76428a1dfdd78830ab4f2440beae013b9862f540bbce0ffeaa98aeb"
   },
+  "FlockSoundness.Discharge.ZkLink.ofJson_toJson_drawOf": {},
   "FlockSoundness.Discharge.ZkLink.sessionZC_eq": {
    "signature": [
     "FlockSoundness.Discharge.ZkLink.sessionZC_eq {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
@@ -35163,7 +35191,8 @@
    },
    "pins": [
     "FlockSoundness.Discharge.ZkHidden.drawOkZKH_of_exec",
-    "FlockSoundness.Discharge.ZkHidden.zk_session_soundH_custody"
+    "FlockSoundness.Discharge.ZkHidden.zk_session_soundH_custody",
+    "FlockSoundness.Discharge.ZkLink.drawOkZK_of_exec"
    ]
   },
   "FlockSoundness.Discharge.ZkLink.Link": {
