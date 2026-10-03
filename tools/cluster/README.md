@@ -102,4 +102,5 @@ A change that should end on its own is an override: `cluster policy override`, r
 why and until when in that node's hash-chained log (`/workspace/research/policy/overrides.jsonl`; a dry run without
 `--apply`), and `show` and `diff` use it until then. Nothing applies an override yet but `n1_lease.py`, which takes its pool's
 `max`, `borrow` and `borrow-until` from `cluster policy show --key vy-nebius-1.lease-pool.<pool> --json` when
-`$VY_POOL_POLICY` names that command.
+`$VY_POOL_POLICY` names that command; it writes the three in force to `n1-lease.limits` in its lease directory, and `diff`
+reads them there for such a loop, not from its environment.

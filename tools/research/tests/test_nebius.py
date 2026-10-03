@@ -1827,6 +1827,8 @@ def test_n1_lease_takes_its_pool_limits_from_the_policy_command_and_the_environm
         assert len([a for a, _ in calls if a[0] == "create"]) == want, (at - t, want)
         if error:
             assert len(events) == 1 and error in events[0]["error"] and events[0]["limits"]["max"] == 1
+        assert (tmp_path / "gl" / "n1-lease.limits").read_text() == \
+            f"max={want} borrow=0 borrow-until= from={'environment' if error else 'policy'}\n"
     os.close(fd)
 
 

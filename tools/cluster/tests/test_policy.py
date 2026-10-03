@@ -126,7 +126,9 @@ def test_the_nebius_policy_loads_with_an_owner_and_a_source_per_key():
     assert keys[f"{N1}.pools.checks"].value == "8-95,128-159" and keys[f"{N1}.pools.provers"].value == "160-191"
     assert {k.owner for k in keys.values()} == {"infra"}
     assert all(policy.source(k) for k in keys)
-    assert policy.source(f"{N1}.lease-pool.provers.max") == "tmux n1-lease: n1_lease.py loop's VY_POOL_MAX"
+    assert policy.source(f"{N1}.lease-pool.provers.max") == \
+        "tmux n1-lease: n1_lease.py loop's VY_POOL_MAX, or its n1-lease.limits under VY_POOL_POLICY"
+    assert policy.source(f"{N1}.lease-pool.provers.idle-s") == "tmux n1-lease: n1_lease.py loop's VY_POOL_IDLE_S"
     assert policy.source(f"{N2}.fill.cpu-sets.x") == "/workspace/pouw/fill/cpu-sets"
 
 
@@ -258,6 +260,29 @@ def test_two_loops_with_one_setting_are_one_pool(capsys):
                           "loop n1-lease 814\nVY_POOL_MAX=8\nVY_POOL_BORROW=4\nVY_POOL_BORROW_UNTIL=2026-10-04T10:30:00Z\n"
                           "session n1-lease-circuits\n")
     assert diff(capsys, "nebius-1", lease=twice)[0] == 0
+
+
+def _under_policy(limits: str) -> str:
+    return LEASE.replace("VY_POOL_BORROW_UNTIL=2026-10-04T10:30:00Z\n", "VY_POOL_BORROW_UNTIL=2026-10-04T10:30:00Z\n"
+                         "VY_POOL_POLICY=cd /workspace/verity-guest/cluster-src && python3 -m cluster policy show --json\n"
+                         f"{limits}\n").replace("VY_POOL_MAX=8\n", "VY_POOL_MAX=6\n", 1)
+
+
+@pytest.mark.parametrize("limits, rc, status, why", [
+    ("limits max=8 borrow=4 borrow-until=2026-10-04T10:30:00Z from=policy", 0, "ok", None),
+    ("limits max=6 borrow=4 borrow-until=2026-10-04T10:30:00Z from=environment", 1, "drift",
+     "n1_lease.py can't read $VY_POOL_POLICY, so its environment's values are in force"),
+    ("limits", 3, "unknown", "n1_lease.py runs under $VY_POOL_POLICY and its n1-lease.limits can't be read"),
+    ("limits max=8 borrow=4", 3, "unknown",
+     "n1_lease.py runs under $VY_POOL_POLICY and its n1-lease.limits lacks borrow-until, from"),
+])
+def test_a_loop_under_the_policy_is_read_from_its_limits_file_not_its_environment(capsys, limits, rc, status, why):
+    got, rows = diff(capsys, "nebius-1", lease=_under_policy(limits))
+    assert got == rc and not any("VY_POOL" in k for k in rows)
+    assert (rows[f"{N1}.lease-pool.provers.max"]["status"], rows[f"{N1}.lease-pool.provers.max"].get("why")) == (status, why)
+    assert rows[f"{N1}.lease-pool.circuits.max"]["status"] == "ok"
+    got, rows = diff(capsys, "nebius-1", lease=_under_policy("limits max=8 borrow=4 borrow-until= from=policy"))
+    assert got == 1 and rows[f"{N1}.lease-pool.provers.borrow-until"]["why"] == "absent live"
 
 
 def _two_flavors() -> str:
@@ -491,6 +516,25 @@ def test_the_lease_command_reads_only_the_loop_process_and_its_pool_variables(tm
         f.chmod(0o755)
     out = _sh(policy.COMMANDS["lease"], tmp_path, str(bin_))
     assert out == "session n1-lease\nloop n1-lease 101\nVY_POOL_MAX=8\nGPU_LEASE_DIR=/run/gpu-lease\nVY_POOL_BORROW=4\n"
+
+
+def test_the_lease_command_reads_the_limits_file_of_a_loop_under_the_policy(tmp_path):
+    bin_ = tmp_path / "bin"
+    _put(tmp_path, {"bin/tmux": "#!/bin/sh\necho 'n1-lease 100'\n", "bin/ps": '#!/bin/sh\n[ "$2" = 100 ] && echo " 101"\nexit 0\n',
+                    "/proc/101/cmdline": "python3\0n1_lease.py\0loop\0",
+                    "/proc/101/environ": f"VY_POOL_MAX=6\0GPU_LEASE_DIR={tmp_path}/gl\0VY_POOL_POLICY=python3 -m cluster\0"})
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    head = "session n1-lease\nloop n1-lease 101\nVY_POOL_MAX=6\nGPU_LEASE_DIR=/gl\nVY_POOL_POLICY=python3 -m cluster\n"
+    assert _sh(policy.COMMANDS["lease"], tmp_path, str(bin_)) == head + "limits\n"
+    _put(tmp_path, {"gl/n1-lease.limits": "max=8 borrow=4 borrow-until= from=policy\n"})
+    out = _sh(policy.COMMANDS["lease"], tmp_path, str(bin_))
+    assert out == head + "limits max=8 borrow=4 borrow-until= from=policy\n"
+    lv = policy.Live({}, {}, {})
+    policy._read_lease(N1, out, lv)
+    assert {k: v for k, v in lv.values.items() if ".provers." in k} == {
+        f"{N1}.lease-pool.provers.max": "8", f"{N1}.lease-pool.provers.borrow": "4",
+        f"{N1}.lease-pool.provers.dir": "/gl"}
 
 
 def test_the_files_commands_mark_absent_files_and_read_one_line_of_the_dispatch_env(tmp_path):

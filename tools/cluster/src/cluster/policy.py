@@ -62,6 +62,11 @@ SESSIONS = {"provers": "n1-lease", "circuits": "n1-lease-circuits"}
 ENV = {"name": "VY_POOL_NAME", "dir": "GPU_LEASE_DIR", "queue": "VY_POOL_QUEUE", "local-queue": "VY_POOL_LOCAL_QUEUE",
        "priority": "VY_POOL_PRIORITY", "max": "VY_POOL_MAX", "idle-s": "VY_POOL_IDLE_S", "borrow": "VY_POOL_BORROW",
        "borrow-until": "VY_POOL_BORROW_UNTIL", "grace-s": "VY_LEASE_EXPIRY_GRACE_S"}
+#: with this set, n1_lease.py takes these keys from the policy in force and writes the values it uses to LIMITS in its lease
+#: directory, so that file, not its environment, is their live value
+POLICY_VAR = "VY_POOL_POLICY"
+POLICY_FIELDS = ("max", "borrow", "borrow-until")
+LIMITS = "n1-lease.limits"
 KUEUE_RESOURCES = {"gpu": "nvidia.com/gpu", "cpu": "cpu", "memory": "memory"}
 KUEUE_FIELDS = {"nominal": "nominalQuota", "borrowing": "borrowingLimit", "lending": "lendingLimit"}
 #: each node's surfaces, and the command each is read with
@@ -262,7 +267,9 @@ def source(key: str) -> str:
     parts = key.split(".")
     s, rest = parts[1], parts[2:]
     if s == "lease-pool":
-        return f"tmux {SESSIONS[rest[0]]}: n1_lease.py loop's {ENV[rest[1]]}" if rest[1] in ENV else f"tmux {SESSIONS[rest[0]]}"
+        return (f"tmux {SESSIONS[rest[0]]}: n1_lease.py loop's {ENV[rest[1]]}"
+                + (f", or its {LIMITS} under {POLICY_VAR}" if rest[1] in POLICY_FIELDS else "")) if rest[1] in ENV \
+            else f"tmux {SESSIONS[rest[0]]}"
     if s == "kueue":
         return (f"ClusterQueue {rest[0]} spec.stopPolicy" if rest[1] == "stop-policy"
                 else f"ClusterQueue {rest[0]} {KUEUE_RESOURCES.get(rest[1], rest[1])} {KUEUE_FIELDS.get(rest[2], rest[2])}")
@@ -376,6 +383,9 @@ _LEASE = (
     f"    if ! e=$(tr '\\0' '\\n' < /proc/$c/environ); then echo \"unreadable $s $c\"; continue; fi\n"
     '    echo "loop $s $c"\n'
     f"    printf '%s\\n' \"$e\" | grep -E '{_ENV_RE}' || true\n"
+    f"    printf '%s\\n' \"$e\" | grep -q '^{POLICY_VAR}=' || continue\n"
+    "    d=$(printf '%s\\n' \"$e\" | grep '^GPU_LEASE_DIR=' | cut -d= -f2-)\n"
+    f'    if l=$(cat "${{d:-/run/gpu-lease}}/{LIMITS}" 2>/dev/null); then echo "limits $l"; else echo "limits"; fi\n'
     "  done\n"
     "done\n")
 # only VY_PROVER_CPUS of the dispatcher's env file; grep's 1 is no such line, anything above an error
@@ -476,6 +486,8 @@ def _read_lease(node: str, text: str, live: Live) -> None:
         elif f[:1] == ["loop"] and len(f) == 3:
             cur = {}
             loops.setdefault(f[1], []).append(cur)
+        elif f[:1] == ["limits"] and cur is not None:
+            cur[f"@{LIMITS}"] = line[len("limits"):].strip()
         elif cur is not None and "=" in line:
             k, _, val = line.partition("=")
             cur[k] = val
@@ -492,8 +504,31 @@ def _read_lease(node: str, text: str, live: Live) -> None:
         elif any(e != envs[0] for e in envs):
             live.unknown[prefix] = f"{len(envs)} n1_lease.py loops in tmux session {sess}, with different settings"
         else:
-            for var, val in envs[0].items():
+            env = dict(envs[0])
+            limits = env.pop(f"@{LIMITS}", None)
+            if POLICY_VAR in env:
+                for var in (POLICY_VAR, *(ENV[f] for f in POLICY_FIELDS)):
+                    env.pop(var, None)
+                _read_limits(prefix, limits, live)
+            for var, val in env.items():
                 live.values[f"{prefix}.{var_key.get(var, var)}"] = val
+
+
+def _read_limits(prefix: str, text: str | None, live: Live) -> None:
+    """A loop under $VY_POOL_POLICY: the max, borrow and borrow-until it last wrote to its LIMITS file, those in force. An
+    empty borrow-until is none, as in its environment."""
+    got = dict(w.partition("=")[::2] for w in (text or "").split())
+    missing = [f for f in (*POLICY_FIELDS, "from") if f not in got]
+    for f in POLICY_FIELDS:
+        key = f"{prefix}.{f}"
+        if missing:
+            live.unknown[key] = (f"n1_lease.py runs under ${POLICY_VAR} and its {LIMITS} "
+                                 + (f"lacks {', '.join(missing)}" if text else "can't be read"))
+            continue
+        if got[f]:
+            live.values[key] = got[f]
+        if got["from"] == "environment":
+            live.notes[key] = f"n1_lease.py can't read ${POLICY_VAR}, so its environment's values are in force"
 
 
 def _read_kueue(node: str, raw: str | Exception, holds: str | Exception, live: Live) -> None:

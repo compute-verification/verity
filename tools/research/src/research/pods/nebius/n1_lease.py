@@ -26,7 +26,8 @@ Each tick, with the brain absent (local rules):
 With `$VY_POOL_POLICY` set (a command printing this pool's keys of the cluster policy in force, `cluster/policy/v1` JSON:
 `python3 -m cluster policy show --key vy-nebius-1.lease-pool.provers --json` from tools/cluster), the pool's `max`, `borrow` and
 `borrow-until` come from it instead, read again every `POLICY_EVERY_S`, so an override (`cluster policy override`) takes effect
-without a restart. A key it lacks, and all three while it fails, keep the environment's values; each change is logged (`policy`).
+without a restart. A key it lacks, and all three while it fails, keep the environment's values; each change is logged (`policy`),
+and the three in force are written to `$GPU_LEASE_DIR/n1-lease.limits` at each read (`cluster policy diff` reads them there).
 **Heartbeat and expiry.** Each tick reads every lease (lock holders from /proc/locks, the owner line, the pod from the holder's
 cgroup) into `n1-lease.json`; that record is the lease's heartbeat. A lease held `$VY_LEASE_EXPIRY_GRACE_S` past its `until=` (a
 hung job gpu-lease's own timeout didn't end) has its pod deleted. A lease on a GPU outside the pool (its holder was deleted by
@@ -287,8 +288,10 @@ class Controller:
                 got[f] = str(v) if f == "borrow-until" else int(v)
         except (subprocess.SubprocessError, OSError, ValueError, KeyError, TypeError, AttributeError) as e:
             got, err = env, f"{type(e).__name__}: {e}"[:200]
-        if (got != self.limits or err != self.policy_error) and not dry:
-            self.log(t, "policy", limits=got, **({"error": err, "fallback": "environment"} if err else {}))
+        if not dry:
+            if got != self.limits or err != self.policy_error:
+                self.log(t, "policy", limits=got, **({"error": err, "fallback": "environment"} if err else {}))
+            write(DIR / "n1-lease.limits", " ".join(f"{k}={v}" for k, v in got.items()) + f" from={'environment' if err else 'policy'}\n")
         self.limits, self.policy_error = got, err
         return got
 
