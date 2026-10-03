@@ -941,6 +941,44 @@ def BackgroundRebuildExcluded : Prop :=
             ((Pous.BandChain.chainBand (2 ^ 9) d 524288 512 dom).enc W π ()).2 i)
         ≤ (2⁻¹ : ℝ≥0∞) ^ 128
 
+/-! ### Completeness of the continuous audit
+
+Added on 3 Oct 2026. Statement reviewer: needed. Red team: needed. `ContinuousAudit` bounds what the verifier of
+`Pous/Protocol/Model/Continuous.lean` accepts; `ContinuousComplete` bounds what the same verifier rejects, for a
+responder whose rounds miss at a bounded rate. It takes no named assumption: the miss rate `q` is a parameter.
+-/
+
+/-- **Completeness of the continuous audit.** Take a machine whose rounds miss at rate at most `q`: at every setup and
+after every history `h` of fewer than `n` indices, the round after `h` is not a hit (it is rejected, late or wrong) for
+at most a `q` fraction of its uniform index. Then for every arrival schedule `arr`, every deadline `(D, Q)`, every hard
+deadline `(D_late, Q_late)` and every tolerance `f₀`, over the setup and `n` uniform indices, the verifier rejects
+(more than `f₀` rounds are not hits) with probability at most the binomial upper tail
+`α = P[Bin(n, q) > f₀] = Σ_{f₀ < m ≤ n} C(n, m)·q^m·(1 − q)^(n − m)`.
+
+`q` is the honest responder's per-answer miss rate, a parameter and not an assumption, and the statement holds for
+every machine. A machine is deterministic, so a round's only randomness is its index, and `q` bounds the misses over
+it given the setup and the indices before. The model's honest responder, which keeps `C` and answers by lookup, hits
+every round: `q = 0` (`PousContinuous.honest_complete`). A real responder misses on its host's clock, outside the
+model: its measured per-challenge miss rate is a `q` here only if each challenge misses with probability at most `q`
+given the challenges before it. Above `q = 1` the bound is at least `1`. Proof: `PousContinuous.continuous_complete`;
+here `Pous.SecurityProofs.ContinuousComplete`. -/
+def ContinuousComplete : Prop :=
+  ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late n : ℕ) (q : ℝ≥0∞) (W : Bits sch.n) (mach : ContMachine sch)
+    (arr : ℕ → ℕ),
+    (∀ (a : M.Ω × sch.Coins) (h : List (Fin sch.B)), h.length < n →
+      let pp := (sch.enc W a.1 a.2).1
+      let C := (sch.enc W a.1 a.2).2
+      pr (fun i =>
+          (contRecord mach D Q D_late Q_late W pp C a.1 arr (contAfter mach D_late W pp C a.1 arr h) i).verdict ≠ .hit)
+        ≤ q) →
+    ∀ f₀ : ℝ,
+      pr (fun x : Outcome sch n =>
+          let pp := (sch.enc W x.1 x.2.1).1
+          let C := (sch.enc W x.1 x.2.1).2
+          ¬ contAccepts f₀ (contRecords mach D Q D_late Q_late W pp C x.1 arr .start (List.ofFn x.2.2)))
+        ≤ ∑ m ∈ (Finset.range (n + 1)).filter (fun m : ℕ => f₀ < m),
+            (n.choose m : ℝ≥0∞) * q ^ m * (1 - q) ^ (n - m)
+
 /-! ### Proved results cited outside the package
 
 The types of ten theorems that the protocol's documents and code cite, written out so that each citation names a
