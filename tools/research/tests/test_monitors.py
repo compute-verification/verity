@@ -242,6 +242,37 @@ def test_run_refuses_while_another_runner_holds_the_lock(tmp_path, monkeypatch, 
     os.close(fd)
 
 
+def test_run_exits_1_while_its_alert_dir_takes_no_writes_and_node_1s_heartbeat_pages_on_it(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv(M.WEBHOOK_ENV, raising=False)
+    monkeypatch.setattr(M, "HELD_IDLE", str(tmp_path / "none.jsonl"))       # held-idle-stale finds `stale`
+    (tmp_path / "alerts").write_text("not a directory")
+
+    def run(state, alerts):
+        return M.main(["run", "--by", "test", "--state", str(state), "--alerts", str(alerts), "--only", "held-idle-stale"])
+
+    assert run(tmp_path / "state.json", tmp_path / "alerts") == 1 and "takes no writes" in capsys.readouterr().err
+    saved = json.loads((tmp_path / "state.json").read_text())
+    out = f"{saved['last_pass']}\n{json.dumps(saved['sink_error'])}\n"
+    (f,) = M.node_heartbeat(M.Ctx(now=saved["last_pass"] + 60, run=Run((has("n1"), (0, out, "")))))
+    assert f.key == "sink" and "can't write their alert dir" in f.text and saved["sink_error"] in f.text
+    assert run(tmp_path / "fresh.json", tmp_path / "a") == 0
+    assert list(json.loads((tmp_path / "fresh.json").read_text())["open"]) == ["held-idle-stale|stale"]
+
+
+def test_a_runner_that_crashes_fails_its_unit():
+    """vy-monitors.service counts SuccessExitStatus as a pass: only 3 (the lock refused) may be there, never 1, a traceback's."""
+    ok = re.search(r"^SuccessExitStatus=(.*)$", UNIT.read_text(), re.M)[1].split()
+    assert ok == ["3"]
+
+
+def test_a_traceback_exits_1(tmp_path):
+    (tmp_path / "state.json").write_text("{not json")
+    r = subprocess.run([sys.executable, "-m", "research.monitors", "run", "--by", "test", "--state", str(tmp_path / "state.json"),
+                        "--alerts", str(tmp_path / "a"), "--only", "held-idle-stale"], capture_output=True, text=True,
+                       env={**os.environ, "PYTHONPATH": str(SRC)})
+    assert r.returncode == 1 and "Traceback" in r.stderr
+
+
 def test_the_command_line_lists_and_rejects_unknown_ids(capsys):
     assert M.main(["list", "--json"]) == 0
     doc = json.loads(capsys.readouterr().out)

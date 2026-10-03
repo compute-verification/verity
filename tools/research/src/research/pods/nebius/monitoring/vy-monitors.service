@@ -8,9 +8,10 @@ User=research
 Group=research
 Nice=10
 IOSchedulingClass=idle
+# a pass ends by its own deadline (monitors.PASS_S), well inside this
 TimeoutStartSec=240
-# exit 1 is "incidents open", a pass that worked; 3 is another runner holding the state's lock
-SuccessExitStatus=1 3
+# 3 is another runner holding the state's lock; 1 (the alert dir takes no writes, or a crash) fails the unit
+SuccessExitStatus=3
 Environment=PYTHONPATH=/usr/local/lib/vy-monitoring
 Environment=PYTHONDONTWRITEBYTECODE=1
 # VY_MONITORS_SLACK_WEBHOOK, when Slack's incoming webhook is chosen (root-only file; its value is never logged)

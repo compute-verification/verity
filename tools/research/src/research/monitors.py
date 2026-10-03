@@ -34,8 +34,9 @@ local one to #agent-alerts as `vy-monitors`, tagging the owners; each clear is a
 than infra also gets a pointer in #agent-coordination, where its doorbell rings (#agent-alerts rings only infra). Grafana's
 notes in node 1's outbox are posted too. On its first pass over an alert dir it posts only the incidents still open.
 
-Exit codes: 0 nothing open (`check`: nothing found), 1 incidents open (`check`: a finding or a failed check), 2 usage, 3 refused
-(another runner holds the state's lock).
+Exit codes: 0 `check` found nothing, or `run` finished its pass (what is open is in the state and the alert dir); 1 `check` found
+something or a check failed, or `run` couldn't write the alert dir (a crash is 1 too: vy-monitors.service fails on both); 2
+usage; 3 refused (another runner holds the state's lock).
 """
 from __future__ import annotations
 
@@ -760,15 +761,22 @@ def asks(ctx: Ctx) -> list[Finding]:
 
 
 def node_heartbeat(ctx: Ctx) -> list[Finding]:
-    """Node 1's monitor service hasn't finished a pass for 10 minutes (its state's `last_pass`), so no node-side monitor runs."""
+    """Node 1's monitor service hasn't finished a pass for 10 minutes (its state's `last_pass`), so no node-side monitor runs; or
+    it can't write its alert dir (the state's `sink_error`), so nothing it finds reaches the relay."""
     out = ctx.sh([*SSH, ctx.node1, f"python3 -c \"import json, os; p = '{ctx.node_state}'; "
-                  "print(json.load(open(p)).get('last_pass', 0) if os.path.exists(p) else 'missing')\""]).strip()
-    age = None if out == "missing" else ctx.now - float(out or 0)
-    if age is not None and age <= 600:
-        return []
-    when = "have never finished a pass" if age is None else f"haven't run for {age / 60:.0f} minutes"
-    return [Finding("stale", f"*Node 1's monitors {when}* (`{ctx.node_state}`), so nothing watches node 1's or node 2's "
-                    "invariants.", cleared="*Cleared:* node 1's monitors run again.")]
+                  "s = json.load(open(p)) if os.path.exists(p) else None; print('missing' if s is None else s.get('last_pass', 0)); "
+                  "print(json.dumps((s or {}).get('sink_error')))\""]).splitlines()
+    last, sink = (out[0].strip() if out else ""), (json.loads(out[1]) if len(out) > 1 else None)
+    found = []
+    age = None if last == "missing" else ctx.now - float(last or 0)
+    if age is None or age > 600:
+        when = "have never finished a pass" if age is None else f"haven't run for {age / 60:.0f} minutes"
+        found.append(Finding("stale", f"*Node 1's monitors {when}* (`{ctx.node_state}`), so nothing watches node 1's or node 2's "
+                             "invariants.", cleared="*Cleared:* node 1's monitors run again."))
+    if sink:
+        found.append(Finding("sink", f"*Node 1's monitors can't write their alert dir*, so nothing they find reaches Slack: {sink}",
+                             cleared="*Cleared:* node 1's monitors write their alert dir again."))
+    return found
 
 
 # ---- the registry ---------------------------------------------------------------------------------------------------------------
@@ -820,7 +828,8 @@ MONITORS: list[Monitor] = [
             "Pick the ask up (👀), answer it, or decline it with a reason: `research slack pickup|done|decline --thread TS`.",
             every_s=900, unread_s=3 * 3600),
     Monitor("node-heartbeat", "infra", "page", "relay", node_heartbeat,
-            "`ssh n1 systemctl status vy-monitors.timer vy-monitors.service` and `ssh n1 journalctl -u vy-monitors -n 50`.",
+            "`ssh n1 systemctl status vy-monitors.timer vy-monitors.service` and `ssh n1 journalctl -u vy-monitors -n 50`; for "
+            "an alert dir that takes no writes, its disk and owner (`df` and `ls -ld` on node 1).",
             every_s=120, unread_s=600),
 ]
 BY_ID = {m.id: m for m in MONITORS}
@@ -1288,12 +1297,16 @@ def cmd_run(ns: argparse.Namespace) -> int:
     state, evs = got
     if ns.json:
         print(json.dumps({"schema": SCHEMA.format("run"), "t": iso(now), "by": ns.by, "events": evs, "open": sorted(state["open"]),
-                          "errors": {k: v["error"] for k, v in state["monitors"].items() if v.get("error")}}, indent=1))
+                          "errors": {k: v["error"] for k, v in state["monitors"].items() if v.get("error")},
+                          "sink_error": state.get("sink_error")}, indent=1))
     else:
         for ev in evs:
             print(f"{ev['event']} {ev['key']}: {title(ev['text'])}")
         print(f"{iso(now)} open: {', '.join(sorted(state['open'])) or 'none'}")
-    return 1 if state["open"] else 0
+    if state.get("sink_error"):
+        print(f"monitors: the alert dir {ns.alerts} takes no writes: {state['sink_error']}", file=sys.stderr)
+        return 1
+    return 0
 
 
 def cmd_relay(ns: argparse.Namespace) -> int:
