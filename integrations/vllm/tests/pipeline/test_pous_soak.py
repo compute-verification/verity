@@ -3,11 +3,13 @@ reads, the vLLM state join, and the native responder, both verifier loops, the r
 against host memory (the library built with `SOAK_FAKE_CUDA`)."""
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import hashlib
 import json
 import shutil
 import socket
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -383,8 +385,6 @@ def _starving_proxy(upstream_port, *budgets):
     """A relay to the responder for one connection per budget, in turn: each forwards the first ``budget`` bytes of its answers
     (all of them for None) and drops the rest, as a receive window that stays shut does; a connection ends when its client
     closes."""
-    import threading
-
     lst = socket.create_server(("127.0.0.1", 0))
     done = threading.Event()
 
@@ -442,10 +442,40 @@ def test_a_stalled_answer_ends_the_cell_and_the_responder_serves_the_next(fake, 
     assert int(ping[15]) == S.MAGIC and int(ping[0]) == 0
 
 
+@contextlib.contextmanager
+def _drained(ring):
+    """``ring`` with its tail kept at its head (the checker's progress, without its checks) by a thread."""
+    stop = threading.Event()
+
+    def run():
+        while not stop.is_set():
+            ring.ctl[S.Ring.TAIL] = ring.ctl[S.Ring.HEAD]
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    try:
+        yield ring
+    finally:
+        stop.set()
+        t.join()
+
+
+def test_a_tuned_loop_behind_its_schedule_drains_its_tx_timestamps(fake, monkeypatch):
+    # Undrained, the TX timestamps' error queue fills the receive buffer and shuts the window (about 7,000 requests here).
+    monkeypatch.setattr(S, "STALL_S", 1.0)
+    n = 15_000
+    rec = np.zeros((n, len(S.REC)), np.int64)
+    c = S.Client(fake.lib, fake.resp.port, True, True)
+    with _drained(S.Ring(nslots=64)) as ring:
+        done = S.run_tuned(fake.lib, c, ring, np.zeros(n, np.int64), np.zeros(n, np.int64), np.full(n, S.OP_PING, np.int64),
+                           S.BLOCK, rec, 2**62, 0)
+    c.close()
+    assert done == (n, 0) and int(ring.ctl[S.Ring.HEAD]) == n
+    assert np.all(rec[:, S.COL["c_ktx"]] > 0)
+
+
 @pytest.mark.parametrize("tuned", [True, False])
 def test_a_cell_goes_on_over_a_new_connection_after_a_stall(fake, tuned, monkeypatch, tmp_path):
-    import threading
-
     monkeypatch.setattr(S, "STALL_S", 0.2)
     monkeypatch.setattr(S, "SETTLE_S", 0.0)
     nbytes = 144 * 1024
@@ -453,21 +483,9 @@ def test_a_cell_goes_on_over_a_new_connection_after_a_stall(fake, tuned, monkeyp
     port, done = _starving_proxy(fake.resp.port, S.HEADER_BYTES + 30 * want + want // 2, None)
     soak = S.Soak(SimpleNamespace(job=tmp_path, state=tmp_path, setup=tmp_path, loads="idle", configs="baseline,tuned", cell_s=2.0))
     soak.mode = "idle"
-    ring = S.Ring(nslots=32)
-    stop = threading.Event()
-
-    def checker():  # the checker's tail, without the checks (the loops' tests run them)
-        while not stop.is_set():
-            ring.ctl[S.Ring.TAIL] = ring.ctl[S.Ring.HEAD]
-
-    t = threading.Thread(target=checker, daemon=True)
-    t.start()
     cell = {"id": 3, "load": "idle", "rate": 100, "kib": 144, "config": "tuned" if tuned else "baseline"}
-    try:
+    with _drained(S.Ring(nslots=32)) as ring:
         run = soak.cell(fake.lib, ring, {"port": port, "blocks": fake.blocks}, cell, 0, 0, 2**62)
-    finally:
-        stop.set()
-        t.join()
     done.wait()
     first, second = soak.runs
     assert (first["segment"], first["status"], first["done"]) == (0, "stalled", 30)

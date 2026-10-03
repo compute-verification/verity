@@ -668,6 +668,9 @@ int64_t soak_client_run(int fd, int64_t n, const int64_t* t_sched, const int64_t
     std::memcpy(r + R_HEAD, resp, HEADER_BYTES);
     __atomic_store_n(&ctl[0], seq + 1, __ATOMIC_RELEASE);
     if (tuned) ::setsockopt(fd, IPPROTO_TCP, TCP_QUICKACK, &one, sizeof(one));
+    // TX timestamps queue on the error queue, which is charged to the receive buffer: a cell behind its schedule never waits
+    // above, and undrained they shut the receive window (about 7,000 requests on a 6 MB buffer).
+    if (ts) drain();
   }
   if (ts) drain();
   return i;
