@@ -1255,6 +1255,8 @@ at = args.index(env["VY_N1"])
 cmd, spec = " ".join(args[at + 1:]), "" if "-n" in args[:at] else sys.stdin.read()
 with open(env["FAKE_LOG"], "a") as f:
     f.write(f"ssh {' '.join(args)} {spec}\n")
+if env.get("UNREACHABLE"):
+    sys.exit(255)
 if "test -f" in cmd:
     sys.exit(1 if env.get("NO_SRC") else 0)
 if m := re.search(r"sudo -n cat (\S+)", cmd):
@@ -1369,6 +1371,8 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     assert refused.returncode == 3 and "refused: the stopgap loop" in refused.stdout and not n2.calls()
     no_src = n2.round_(NO_SRC="1")
     assert no_src.returncode == 3 and "no research tree at n1.invalid:/n1/src/abc" in no_src.stdout and "rsync" not in n2.calls()
+    unreached = n2.round_(UNREACHABLE="1")
+    assert unreached.returncode == 3 and "refused: node 1 not reached (`ssh n1.invalid` exited 255)" in unreached.stdout
 
     assert n2.round_(VY_CUSTODY_PASS_S="0").returncode == 0 and "rsync" not in n2.calls()
     bounded = n2.round_(VY_CUSTODY_MAX_RUNS="1")
@@ -1389,6 +1393,9 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     assert f'data custody /n1/runs/{R["done"]} --publish --keep-local "]' in calls
     assert "PYTHONPATH=/n1/src/abc/tools/research/src" in calls and R["preserved"] not in calls and R["big"] not in calls
     assert "touch pwned" not in calls and rogue.name not in n2.names("pushed") + n2.names("held")
+    keepalive = "ssh -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "
+    assert all(x.startswith(keepalive) for x in calls.splitlines() if x.startswith("ssh ")), "a dropped link ends every call"
+    assert "kubectl --request-timeout=30s create -f -" in calls and "kubectl --request-timeout=30s get job" in calls
 
     n2.run(R["new"], {"state": "done"})
     n2.job_err({})

@@ -44,7 +44,9 @@ case "${1:-}" in
   --dry-run) DRY=1 ;;
   *) echo "usage: n2_custody.sh [--dry-run]" >&2; exit 2 ;;
 esac
-KUBE="KUBECONFIG=\$HOME/.kube/config kubectl"
+KUBE="KUBECONFIG=\$HOME/.kube/config kubectl --request-timeout=30s"
+# a dropped link ends the call within a minute; a short call has `timeout` around it too
+SSH=(ssh -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
 mkdir -p "$STATE/pushed" "$STATE/failures" "$STATE/held"
 exec 9> "$STATE/.lock"
 flock -n 9 || { echo "n2_custody.sh: another round holds $STATE/.lock"; exit 0; }
@@ -156,7 +158,8 @@ push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 he
     || { why="rsync to $N1 failed ($?)"; return 1; }
   name=n2-custody-$(echo "$r" | tr -cd 'a-z0-9-' | tail -c 40)
   # a failed Job never completes: wait for either condition, then name the failure from its log
-  if ! ssh "$N1" "$KUBE delete job $name --ignore-not-found > /dev/null && $KUBE create -f - > /dev/null && for _ in \$(seq 360); do
+  if ! timeout 2100 "${SSH[@]}" "$N1" "$KUBE delete job $name --ignore-not-found > /dev/null && $KUBE create -f - > /dev/null &&
+    end=\$((\$(date +%s) + 1800)) && while [ \$(date +%s) -lt \$end ]; do
     c=\$($KUBE get job $name -o jsonpath='{range .status.conditions[*]}{.type}={.status} {end}'); case \$c in
     *Complete=True*) exit 0 ;; *Failed=True*) $KUBE logs job/$name --tail=3 >&2; exit 1 ;; esac; sleep 5; done
     echo 'Job not done in 30 min' >&2; exit 1" 2> "$STATE/.job.err" << EOF; then
@@ -193,7 +196,7 @@ EOF
     return 4
   fi
   # verify wrote it only with the attempt and its run record verified on R2, over node 1's copy as the rsync left it
-  if ! ssh -n "$N1" "sudo -n cat $dst/$r/.custody" > "$root/$r/.custody.tmp"; then
+  if ! timeout 60 "${SSH[@]}" -n "$N1" "sudo -n cat $dst/$r/.custody" > "$root/$r/.custody.tmp"; then
     rm -f "$root/$r/.custody.tmp"
     why="no .custody at $N1:$dst/$r"
     return 1
@@ -250,8 +253,10 @@ for c in "${fresh[@]}" "${retry[@]}"; do
     continue
   fi
   if [ -z "$src_ok" ]; then
-    ssh -n "$N1" "test -f $SRC/tools/research/src/research/store/custody.py && test -f $SRC/tools/research/store.pod.toml" \
-      || { log "refused: no research tree at $N1:$SRC (deploy.toml installs it: research deploy install vy-nebius-1 --by WHO $SRC/tools/research/src/research $SRC/tools/research/store.pod.toml)"; exit 3; }
+    timeout 60 "${SSH[@]}" -n "$N1" "test -f $SRC/tools/research/src/research/store/custody.py && test -f $SRC/tools/research/store.pod.toml"
+    rc=$?
+    [ "$rc" = 1 ] && { log "refused: no research tree at $N1:$SRC (deploy.toml installs it: research deploy install vy-nebius-1 --by WHO $SRC/tools/research/src/research $SRC/tools/research/store.pod.toml)"; exit 3; }
+    [ "$rc" = 0 ] || { log "refused: node 1 not reached (\`ssh $N1\` exited $rc)"; exit 3; }
     src_ok=1
   fi
   tried=$((tried + 1))
