@@ -757,3 +757,15 @@ def test_a_submodule_pinned_elsewhere_is_another_change_whatever_git_is_told_to_
     assert carry(world.dev, "origin/main", old, new) == (False, "its change against origin/main differs (backends/flock/vendored)")
     assert carry(world.dev, "origin/main", old, restacked) == (True, "restack; no lean-audit.json change")
     assert Rules.parse(RULES + RED_TEAM).needs(world.dev, "origin/main", new) == {"red-team"}
+
+
+def test_a_file_name_that_isnt_utf8_compares_byte_for_byte_and_prints_escaped(world):
+    """Red team of #955: decoding git's `-z` output as strict UTF-8 raised on such a name, which stopped the whole queue."""
+    from research.queue import carry
+
+    bad = os.fsdecode(b"pkg/caf\xe9.txt")                       # Latin-1, not UTF-8
+    old = world.change({bad: "x\n"})
+    _move_main(world, {"d.txt": "landed meanwhile\n"})
+    assert carry(world.dev, "origin/main", old, world.change({bad: "x\n"})) == (True, "restack; no lean-audit.json change")
+    ok, why = carry(world.dev, "origin/main", old, world.change({bad: "y\n"}))
+    assert (ok, why) == (False, "its change against origin/main differs (pkg/caf\\xe9.txt)") and why.encode("utf-8")

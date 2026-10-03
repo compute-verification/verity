@@ -94,7 +94,7 @@ class QueueError(Exception):
 
 def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
     r = subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=repo, capture_output=True, text=True,
-                       env={**os.environ, "GIT_TERMINAL_PROMPT": "0", **(env or {})})
+                       errors="surrogateescape", env={**os.environ, "GIT_TERMINAL_PROMPT": "0", **(env or {})})
     if check and r.returncode:
         raise QueueError(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()[-400:]}")
     return r
@@ -291,6 +291,11 @@ def _named(base: str) -> str:
     return base[:12] if re.fullmatch(r"[0-9a-f]{40}", base) else base
 
 
+def _shown(path: str) -> str:
+    """``path`` as text that prints: the bytes of a name that isn't UTF-8 (kept as surrogates by `_git`) as backslash escapes."""
+    return path.encode("utf-8", "surrogateescape").decode("utf-8", "backslashreplace")
+
+
 def own_change(repo: Path, base: str, head: str) -> dict[str, tuple[str, ...]] | None:
     """What ``head`` changes against its merge base with ``base``: {path: (old mode, new mode, old blob, new blob)}, a rename as a
     deletion and an addition, a submodule as the commit it pins (whatever `diff.ignoreSubmodules` or a `.gitmodules` says to
@@ -334,9 +339,9 @@ def carry(repo: Path, base: str, old: str, new: str) -> tuple[bool, str]:
         return False, f"git can't diff {(old if was is None else new)[:12]} against its merge base with {name}"
     if differ := sorted(p for p in was.keys() | now.keys() if was.get(p) != now.get(p)):
         if audits := [p for p in differ if _is_audit(p)]:
-            return False, f"its lean-audit.json change isn't byte-identical ({', '.join(audits)})"
+            return False, f"its lean-audit.json change isn't byte-identical ({', '.join(map(_shown, audits))})"
         more = f" and {len(differ) - 3} more" if len(differ) > 3 else ""
-        return False, f"its change against {name} differs ({', '.join(differ[:3])}{more})"
+        return False, f"its change against {name} differs ({', '.join(map(_shown, differ[:3]))}{more})"
     how = "merge of main" if _git(repo, "merge-base", "--is-ancestor", old, new, check=False).returncode == 0 else "restack"
     return True, f"{how}; lean-audit.json change identical" if any(map(_is_audit, now)) else f"{how}; no lean-audit.json change"
 
