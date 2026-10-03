@@ -70,6 +70,14 @@ theorem private_circuit
         ≤ simPr (hm96Scheme fits pad L enc J zs U) c o p₀ w₀ encV E + (2 * L c * δ₁ + viewGap (zs c) δ₁) ∧
       simPr (hm96Scheme fits pad L enc J zs U) c o p₀ w₀ encV E
         ≤ realPr (hm96Scheme fits pad L enc J zs U) c o (pad C c) w encV E + (2 * L c * δ₁ + viewGap (zs c) δ₁) := by
-  sorry
+  have hS' := private_circuit_sound fits pad run eval hpad UP c C hC rd ps row hreg s hS hA3 hA6 path hchk τ hCR K₀
+    cost q hcost hBind
+  refine ⟨opens_view pins _, le_trans (prob_mono (fun b ⟨ha, hq⟩ => ⟨ha, hq.imp id fun ⟨i, hi⟩ => ⟨i, fun he => hi ?_⟩⟩)
+    s.G τ) hS'.1, hS'.2, private_circuit_private fits pad L enc J zs U δ₁ hKey c o C w hView p₀ w₀ encV E⟩
+  calc (lay.regLeaf (s.regOf b) (ps.site i)).1
+      = ((ExplicitLeaf.hm96 rs.enc rs.enc_inj).leaf (row (pad C c) i) (saltBytes (r i)).data.toList).1 := by
+        rw [he, hsalt]
+    _ = leafH (rowBits (rs.enc (row (pad C c) i)) + My (r i), saltHash (r i)) := hm96_leaf_view _ _ _ _
+    _ = leafH (regView (enc c) (pad C c) r i) := by rw [regView, hm96Reg, henc]
 
 end FlockSoundness.Discharge.PrivateCircuit
