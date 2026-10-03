@@ -219,4 +219,194 @@ theorem rows7 {np : ℕ} {β : Type} (row row' A B C D E : ZkSession.Lin 𝔽 np
   fin_cases i
   exacts [h0, h1, h2, h3, h4, h5, h6]
 
+/-! ## The rep's inner check -/
+
+set_option maxHeartbeats 1000000 in
+/-- **`repProg`'s run has an inner check that holds** (`zk_rep_plays` with its inner check): the run of the compiled
+rep that `zk_rep_plays` builds, at a table whose pads and inner code are the executable's and whose statement's fold
+the setup's circuit fold realizes, on a decoded proof, has an inner check that holds on the proof's inner openings. -/
+theorem zk_inner_rows {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup)
+    (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (bytes : ByteArray) (zp : Zk.ZkProof)
+    (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
+    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad) (htab : ZkTabLay T st sch)
+    (hfold : FoldRealizes st.fold T.S)
+    (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
+    (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
+      ClaimRel T.S.m extras[j]! (Model.extraClaims T.S T.ptLocal mPts pts)[j])
+    (hdec : Zk.decode (shapeZK st sch extras) bytes = .ok zp) (hwf : RoundsWF rounds)
+    (hrun : (repProg st sch tPad r.val extras zp).run (Flock.Transcript.init rounds dom) = .ok ((), tr))
+    (hk : tr.k = rounds.size) :
+    ∃ pend : ZkLink.PendZ 𝔽 Dig (List UInt8),
+      Plays fOf (ZkLink.repZCAt execArith hs512 T pts r) (repMsgsZ st sch (2 + extras.size) tPad zp)
+        (rounds.toList.map (·.coins)) pend ∧
+      pend.inner (innerOpensOf zp.inner) := by
+  obtain ⟨h25, -, -, hk0, -, hdim, hlv, hα1, -⟩ := zk_schedule_seams _ _ _ hsch
+  have hTm : T.S.m = st.m := hseam.hm
+  have h7 : 7 ≤ T.S.m := by omega
+  obtain ⟨b1, b2, b3, b4, b5, b6, b7, b8, b9, d1, d2, d3⟩ := lay_lt (layZ st sch)
+  obtain ⟨efa, efb, eab, -, -, -⟩ := tr_pos htab
+  unfold repProg at hrun
+  rw [StateT.run] at hrun
+  try dsimp only at hrun
+  obtain ⟨rp, t₁, h₁, hrun⟩ := bind_ok hrun
+  try dsimp only at hrun
+  obtain ⟨⟨Tb, sws⟩, t₂, h₂, hrun⟩ := bind_ok hrun
+  obtain ⟨rc, t₃, h₃, hrun⟩ := bind_ok hrun
+  cases hv : Zk.ligeritoConstraints (Zk.PadLayout.new st.m st.kLog sch.k0) rc zp.proof.ligerito zp.level0 with
+  | error e =>
+    rw [hv] at hrun
+    try dsimp only at hrun
+    obtain ⟨_, _, h₄, _⟩ := bind_ok hrun
+    cases h₄
+  | ok lg =>
+  rw [hv] at hrun
+  try dsimp only at hrun
+  obtain ⟨lg', t₄, h₄, h₅⟩ := bind_ok hrun
+  clear hrun
+  obtain ⟨hlg, ht₄⟩ := pure_ok h₄
+  rw [hlg, ht₄] at h₅
+  have hwf₀ : RoundsWF (Flock.Transcript.init rounds dom).rounds := hwf
+  obtain ⟨hr₁, hk₁, k₁, zc, row, abM, row', hk₁a, hk₁b, hpz, hpl, hc0, hc1, hcs3, hR0, hR1, hR2, hAB, hCV⟩ :=
+    zk_replay_rows st (layZ st sch) zp.proof zp.inner.root _ t₁ rp T.S hTm.symm hseam.hk.symm (by omega) hwf₀ hfold
+      h₁ T.padsA T.tr hseam.hnp.symm
+      (fun i => by rw [htab.hr1ab, Nat.mod_eq_of_lt (b1 _ i.isLt)])
+      (fun i => by rw [htab.hr1c, Nat.mod_eq_of_lt (b2 _ i.isLt)])
+      (fun j hj c => by rw [htab.hml, Nat.mod_eq_of_lt (b3 _ (by show j < st.m - 6; omega) _ c.isLt)])
+      (by rw [htab.hfc, Nat.mod_eq_of_lt b4])
+      (fun j hj c => by
+        rw [htab.hlc, Nat.mod_eq_of_lt (b5 _ (by show j < st.kLog - 6; rw [← hseam.hk]; omega) _ c.isLt)])
+      (fun i => by rw [htab.hzp, Nat.mod_eq_of_lt (b6 _ i.isLt)]) efa efb eab d1 d2 d3
+  rw [← hTm] at h₂
+  obtain ⟨g₀, g₁, g₂⟩ := two_append_get! ({ rp.claims[0]! with value := Zk.claimCheck rp.claims[0]! zp.proof.ringSwitches[0]! } : Flock.Claim)
+    ({ rp.claims[1]! with value := Zk.claimCheck rp.claims[1]! zp.proof.ringSwitches[1]! } : Flock.Claim) extras
+  obtain ⟨hr₂, hk₂, op, hop, hopR⟩ := opening_refines T.S.m h7 _
+    (⟨fOf (Zk.claimCheck rp.claims[0]! zp.proof.ringSwitches[0]!), abM.skip, abM.x⟩ ::
+      ⟨fOf (Zk.claimCheck rp.claims[1]! zp.proof.ringSwitches[1]!), execArith.lagS zc.z, zc.r⟩ ::
+        Model.extraClaims T.S T.ptLocal mPts pts)
+    (by rw [size_two_append]; simp; omega)
+    (fun k hk => by
+      rcases k with _ | _ | k
+      · rw [g₀]; exact hc0 _
+      · rw [g₁]; exact hc1 _
+      · have hk' : k < (Model.extraClaims T.S T.ptLocal mPts pts).length := by simp at hk; omega
+        rw [g₂ k (by omega)]
+        exact hext k hk')
+    (by rw [size_two_append]; omega) (by rw [size_two_append]; omega) _ t₁ t₂ Tb sws (hr₁ ▸ hwf₀) h₂
+  rw [size_two_append] at hop
+  obtain ⟨xo, hxo, hxo1, hxo2⟩ := openingZK_plays' h7 _ _ abM.pub ⟨0, execArith.lagS zc.z, zc.r⟩ _ hop
+  obtain ⟨xo1, xo2⟩ := xo
+  obtain rfl : xo1 = some op := hxo1
+  obtain rfl : xo2 = _ := hxo2
+  have hwf₂ : RoundsWF t₂.rounds := hr₂ ▸ hr₁ ▸ hwf₀
+  obtain ⟨hr₃, hk₃, -⟩ := zk_ligerito_plays st.merkle sch Tb zp.proof.cap zp.proof.ligerito _ ⟨tPad, r.val, zp.level0⟩
+    t₂ t₃ rc hdim hlv hα1 hk0 hwf₂ h₃
+  have hlig : ∃ out : ZkSession.LinK 𝕂 T.np × PendL 𝔽 Dig,
+      Plays fOf (ZkLink.ligeritoPadZC (D := Dig) execArith T.pads T.sch T.t T.c₀ r.val op.T op.b)
+        (ligMsgsZ zp.proof.ligerito capDig sch tPad zp.level0) (consumed t₂.rounds t₂.k t₃.k) out ∧
+      Rel2 out.1 (laneLhs (layZ st sch) rc zp.proof.ligerito zp.level0) := by
+    rw [hseam.hsch, hseam.ht]
+    exact zk_lig_row st.merkle sch Tb zp.proof.cap zp.proof.ligerito _ ⟨tPad, r.val, zp.level0⟩ t₂ t₃ rc hdim hlv hα1
+      hk0 hwf₂ h₃ (layZ st sch) rfl T.pads hseam.hnp hseam.he (by rw [htab.hood, Nat.mod_eq_of_lt b7])
+      (fun j hj t => by rw [htab.hmsg, Nat.mod_eq_of_lt (b8 _ hj _ t.isLt)])
+      (fun i c => by
+        rw [htab.hev, Nat.mod_eq_of_lt (b9 _ (by have := i.isLt; have := hseam.he; omega) _ c.isLt)])
+      T.c₀ r.val op.T op.b hopR.T
+  have hwf₃ : RoundsWF t₃.rounds := hr₃ ▸ hwf₂
+  have hlg2 := ligeritoConstraints_size hv
+  have hcons7 : (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]! zp.proof.ringSwitches[0]!)),
+      ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]! zp.proof.ringSwitches[1]!))] ++ lg).size = 7 := by
+    rw [Array.size_append, Array.size_append, hcs3, hlg2]; rfl
+  obtain ⟨hr₅, hk₅, hIP⟩ := zk_inner_plays _ zp.inner zp.proof.zerocheck.finalC _ t₃ tr hcons7 hwf₃ h₅
+  obtain ⟨-, hl0, hl1⟩ := ligeritoConstraints_eq hv rfl
+  obtain ⟨c0, c1, c2, c3, c4, c5, c6⟩ := cons7_get rp.cons lg
+    ("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]! zp.proof.ringSwitches[0]!))
+    ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]! zp.proof.ringSwitches[1]!)) hcs3 hlg2
+  have hM : ∃ o, Plays fOf (ZkLink.repMaskedZC (D := Dig) execArith T.pads T.padsA T.tr T.S T.sch T.hm T.t T.c₀ r.val
+        (Model.extraClaims T.S T.ptLocal mPts pts))
+      (zcMsgs T.S.m zp.proof.zerocheck ++ (lcMsgs T.S.kLog zp.proof.lincheck ++
+        (opMsgs (2 + extras.size) zp.proof.ringSwitches ++
+          (ligMsgsZ zp.proof.ligerito capDig sch tPad zp.level0 ++ [fMsg zp.proof.zerocheck.finalC]))))
+      (consumed (Flock.Transcript.init rounds dom).rounds (Flock.Transcript.init rounds dom).k k₁ ++
+        (consumed (Flock.Transcript.init rounds dom).rounds k₁ t₁.k ++
+          (consumed t₁.rounds t₁.k t₂.k ++ consumed t₂.rounds t₂.k t₃.k))) o ∧
+      ∀ i : Fin 7, LinRel (o.1 i) (rp.cons ++ #[("ring switch ab", rp.abValue.addConst
+          (Zk.claimCheck rp.claims[0]! zp.proof.ringSwitches[0]!)), ("ring switch c", rp.cValue.addConst
+          (Zk.claimCheck rp.claims[1]! zp.proof.ringSwitches[1]!))] ++ lg)[i.val]!.2 := by
+    unfold ZkLink.repMaskedZC
+    refine pq_map ?_
+    refine pq_bind hpz ?_ rfl rfl
+    refine pq_map ?_
+    refine pq_bind hpl ?_ rfl rfl
+    refine pq_map ?_
+    unfold ZkLink.restZC
+    refine pq_bind hxo ?_ rfl rfl
+    obtain ⟨out, hout, hrow⟩ := hlig
+    refine pq_bind hout ?_ rfl (List.append_nil _).symm
+    refine ⟨_, Plays.bind' (Plays.recv _ (fOf zp.proof.zerocheck.finalC)) (Plays.pure _) rfl rfl, ?_⟩
+    obtain ⟨hlr0, hlr1⟩ := limbRows_rel hrow
+    refine rows7 _ _ _ _ _ _ _ _ _ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+    · rw [c0]; exact hR0
+    · rw [c1]; exact hR1
+    · rw [c2]; exact hR2
+    · rw [c3]; exact rel_addConst hAB _
+    · rw [c4, hCV]
+      refine rel_addConst ?_ _
+      rw [show (layZ st sch).len = T.np from hseam.hnp.symm]
+      exact rel_masked _ T.padsA.fc (by rw [htab.hfc, Nat.mod_eq_of_lt b4])
+    · rw [c5, hl0]; exact hlr0
+    · rw [c6, hl1]; exact hlr1
+  have hmsgs : restMsgsZ st sch (2 + extras.size) tPad zp =
+      (zcMsgs T.S.m zp.proof.zerocheck ++ (lcMsgs T.S.kLog zp.proof.lincheck ++
+        (opMsgs (2 + extras.size) zp.proof.ringSwitches ++
+          (ligMsgsZ zp.proof.ligerito capDig sch tPad zp.level0 ++ [fMsg zp.proof.zerocheck.finalC])))) ++
+      [⟨𝔽 × 𝔽, (fOf zp.inner.rho, fOf zp.inner.sigma)⟩, ⟨Dig, toDig zp.inner.tauCommit⟩,
+        ⟨Fin (T.np + T.nP) → 𝔽, vecOf (T.np + T.nP) zp.inner.y⟩] := by
+    rw [hTm, hseam.hk, hseam.hnp, hseam.hnP]
+    simp [restMsgsZ, innerMsgs]
+  have hcoins : rounds.toList.map (·.coins) =
+      (consumed (Flock.Transcript.init rounds dom).rounds (Flock.Transcript.init rounds dom).k k₁ ++
+        (consumed (Flock.Transcript.init rounds dom).rounds k₁ t₁.k ++
+          (consumed t₁.rounds t₁.k t₂.k ++ consumed t₂.rounds t₂.k t₃.k))) ++ consumed t₃.rounds t₃.k tr.k := by
+    rw [hr₃, hr₂, hr₁]
+    simp only [List.append_assoc]
+    rw [← consumed_append _ hk₃ hk₅, ← consumed_append _ hk₂ (hk₃.trans hk₅),
+      ← consumed_append _ hk₁b (hk₂.trans (hk₃.trans hk₅)),
+      ← consumed_append _ hk₁a (hk₁b.trans (hk₂.trans (hk₃.trans hk₅))), hk]
+    exact (consumed_all _).symm
+  unfold ZkLink.repZCAt ZkLink.repZC
+  rw [hseam.hq]
+  refine exQ_recv (toDig zp.inner.root) ?_
+  refine pq_bindQ hM (fun o ho => ?_) hmsgs hcoins
+  obtain ⟨v, hv⟩ := hIP hs512 T.dom T.np T.nP T.pos o.1 T.tr (toDig zp.inner.root)
+  exact ⟨⟨o.2, v⟩, Plays.bind' hv (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm,
+    zk_inner_accepts _ zp.inner _ _ t₃ tr T st sch tPad o.1 rfl hseam htab hcons7 ho (zk_decode_paths hdec) hwf₃ h₅
+      v (by rw [hseam.hq]; exact hv)⟩
+
+/-- **A `--zk` rep's inner check holds on its inner openings** (`ZkRepAccepts`'s second conclusion, at its
+hypotheses): every result of the compiled rep, played with the rep's messages and the rounds' coins, has an inner check
+that holds at openings whose rep-`r` inner openings are the proof's. -/
+theorem zk_inner_of_rep {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2)
+    (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (bytes : ByteArray) (zp : Zk.ZkProof)
+    (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript) (cap₀ : Cap Dig)
+    (os : ZkLink.OpensZ 𝔽 Dig (List UInt8))
+    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (_hms : st.merkle = MerkleScheme.hm96Sha512)
+    (hseam : ZkTabSeam T st sch tPad) (htab : ZkTabLay T st sch) (hfold : FoldRealizes st.fold T.S)
+    (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
+    (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
+      ClaimRel T.S.m extras[j]! (Model.extraClaims T.S T.ptLocal mPts pts)[j])
+    (hdec : Zk.decode (shapeZK st sch extras) bytes = .ok zp) (hwf : RoundsWF rounds)
+    (hrun : (repProg st sch tPad r.val extras zp).run (Flock.Transcript.init rounds dom) = .ok ((), tr))
+    (hk : tr.k = rounds.size) (_hcap : cap₀ = capDig zp.proof.cap)
+    (_ho : ∀ ℓ j, os.rows r.val ℓ j = openRow zp.proof.ligerito sch ℓ j)
+    (_hs : ∀ ℓ j, os.salts r.val ℓ j = saltRow zp.proof.ligerito sch ℓ j) (hinner : os.inner r.val = innerOpensOf zp.inner)
+    (pend : ZkLink.PendZ 𝔽 Dig (List UInt8))
+    (hp : Plays fOf (ZkLink.repZCAt execArith hs512 T pts r) (repMsgsZ st sch (2 + extras.size) tPad zp)
+      (rounds.toList.map (·.coins)) pend) :
+    pend.inner (os.inner r.val) := by
+  obtain ⟨pend', hp', hin⟩ :=
+    zk_inner_rows T pts r st sch tPad extras bytes zp rounds dom tr hsch hseam htab hfold hlen hext hdec hwf hrun hk
+  obtain rfl := plays_det hp hp'
+  rw [hinner]
+  exact hin
+
 end FlockSoundness.Discharge.ZkExec

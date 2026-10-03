@@ -241,7 +241,7 @@ theorem lforIn_inv' {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (I : L
 
 set_option maxHeartbeats 4000000 in
 /-- **`Zk.ligerito`'s record**: the target, level 0's out-of-domain coin, the lane rounds' coins and the pair's coins,
-at the rounds the run consumed. -/
+at the rounds the run consumed, and those rounds' coin counts. -/
 theorem zk_ligerito_rec (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0) (t t' : Flock.Transcript)
     (rec : Zk.L0Rec) (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))

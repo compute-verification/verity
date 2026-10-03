@@ -27,5 +27,6 @@ import FlockSoundness.Discharge.ZkExec.VerdictStatements
 import FlockSoundness.Discharge.ZkExec.Verdict
 import FlockSoundness.Discharge.ZkExec.VerdictInner
 import FlockSoundness.Discharge.ZkExec.VerdictOpens
+import FlockSoundness.Discharge.ZkExec.VerdictRows
 import FlockSoundness.Discharge.ZkExec.LiveStatements
 import FlockSoundness.Discharge.ZkExec.RunsLive
