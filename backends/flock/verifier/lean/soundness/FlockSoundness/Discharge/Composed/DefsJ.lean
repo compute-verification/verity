@@ -332,6 +332,21 @@ noncomputable def simSessZJ (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : Lis
     (simSession (outJ Hs ts) (fun _ o => o.accepted = true) dfltOutZC pL opn dg dec one fin capOf N (repJ A Hs ts)
       (fun j pts r => allInh_repZCAt A Hs (ts.get j) pts r) hdec).strategy Pr
 
+/-- **The transfer at `J` compiled `--zk` tables** (`live_le_sessionBLJ` at `--zk`). -/
+theorem live_le_sessionZJ (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
+    (pL : LiveOutJ ts.length mPts → Prop) (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl)
+    (dg : ByteArray → ByteArray) (dec : Fin ts.length → ℕ → ByteArray → List Msg) (one : Fin ts.length → ℕ → Bool)
+    (fin : Fin ts.length → Fin 2 → Array ByteArray → List Msg) (capOf : Array ByteArray → Fin ts.length → Cap D)
+    (N : ℕ)
+    (hdec : ∀ j, DecodesTable (outJ Hs ts) (fun _ o => o.accepted = true) pL opn dec one fin capOf (repJ A Hs ts) j)
+    (Pr : Strategy (liveSession dg ts.length mPts N)) :
+    prob pL (liveSession dg ts.length mPts N) Pr ≤
+      prob (acceptedZC ts) (ZkLink.sessionZC A Hs ts)
+        (simSessZJ A Hs ts pL opn dg dec one fin capOf N hdec Pr) := by
+  unfold simSessZJ
+  rw [Exec.prob_cast]
+  exact live_le_session _ _ _ pL opn dg dec one fin capOf N _ _ hdec Pr
+
 /-- **The live audit's session at a draw**: `liveSession` over the plan's `J` tables, written out by `wr`. -/
 def liveOfZJ (dg : ByteArray → ByteArray) (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts)) (N : ℕ)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts → Exec.Transcript)
@@ -374,7 +389,26 @@ theorem execRefinesZK_tables (hdec : DecodesOnZKJ A Hs planZ I wr opn dec one fi
     (τ : Strategy (auditLive L Reg (liveOfZJ dg planZ N wr))) :
     ExecRefines (auditLive L Reg (liveOfZJ dg planZ N wr)) τ (LiveAcceptsZK I) (fun _ => False)
       (audit L Reg (batchedSessionZC A Hs planZ)) (simZJ A Hs planZ I wr opn dg dec one fin capOf N hdec τ) := by
-  sorry
+  have h0 : prob (fun _ => False) (auditLive L Reg (liveOfZJ dg planZ N wr)) τ = 0 :=
+    prob_eq_zero_of_out (fun _ _ h => h) τ
+  unfold ExecRefines
+  rw [h0, add_zero]
+  show ∑ ω : L.Ω, (Fintype.card L.Ω : ℝ≥0∞)⁻¹ *
+      prob (LiveAcceptsZK I) ((liveOfZJ dg planZ N wr (L.draw ω) τ.1).map fun t => (τ.1, L.draw ω, t)) (τ.2 ω) ≤
+    ∑ ω : L.Ω, (Fintype.card L.Ω : ℝ≥0∞)⁻¹ *
+      prob (fun o => o.1 = true) ((batchedSessionZC A Hs planZ (L.draw ω) τ.1).map
+        fun ok => (ok, L.draw ω)) ((simZJ A Hs planZ I wr opn dg dec one fin capOf N hdec τ).2 ω)
+  refine Finset.sum_le_sum fun ω _ => mul_le_mul_right ?_ _
+  unfold simZJ batchedSessionZC
+  rw [prob_strategy_map, prob_strategy_map, prob_map]
+  unfold liveOfZJ
+  rw [prob_map]
+  refine (live_le_sessionZJ A Hs (planZ (L.draw ω) τ.1) _ (opn (L.draw ω) τ.1) dg (dec (L.draw ω) τ.1)
+    (one (L.draw ω) τ.1) (fin (L.draw ω) τ.1) (capOf (L.draw ω) τ.1) N (hdec ω τ.1) _).trans_eq ?_
+  congr 1
+  funext outs
+  classical
+  exact propext decide_eq_true_iff.symm
 
 /-- **The `--zk` headline at flock-verify's acceptance, for sessions of `J` tables**: a bound on the compiled batched
 audit's acceptance with any event `Q` at `simZJ … τ` bounds flock-verify `--zk`'s acceptance with `Q`. -/

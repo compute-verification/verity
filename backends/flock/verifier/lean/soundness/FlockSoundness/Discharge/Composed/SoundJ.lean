@@ -70,6 +70,16 @@ theorem zk_session_soundJ
         linkBoundZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
           ((rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope))
           k Rw M ρ t' (reg σ) (cont σ) := by
-  sorry
+  intro σ hCR
+  refine zk_headline_exec_tables execArith hs512 (planZJ dj y₀) I wr (opnAtZJ (planZJ dj y₀) I dj) dg
+    (decAtZJ (planZJ dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+    (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _ (runsZCJ_live I ht dj y₀ wr _ hTags hRec hDraw)) τ
+    _ _ ?_
+  refine (zk_flock_countC execArith hs512 _ (planZJ dj y₀) (tabZJ dj y₀) _
+    (loweringSoundZK_of_place execArith _ (planZJ dj y₀) (tabZJ dj y₀)
+      ((sitesZJ dj y₀ ht).placeKey hU (sitesZJ_parse dj y₀ ht hc) (Layout.outsOf c hU n)))
+    hRw hM hρ hr (jointZC_ksBound execArith execArith_correct hs512 (planZJ dj y₀) hk) ht' K₀ σ).trans ?_
+  exact add_le_add (add_le_add (Tables.execOS_subset_miss_le kd hkd Lb src hA3 K₀)
+    (ksAvgZC_le_strict execArith hs512 (planZJ dj y₀) k (reg σ) (cont σ) hCR)) le_rfl
 
 end FlockSoundness.Discharge.Composed
