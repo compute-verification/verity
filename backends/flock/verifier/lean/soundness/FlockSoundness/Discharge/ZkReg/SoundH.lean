@@ -1,6 +1,6 @@
 import FlockSoundness.Discharge.ZkHidden.Sound
 import FlockSoundness.Discharge.ZkReg.BindH
-import FlockSoundness.Discharge.ZkReg.DefsH
+import FlockSoundness.Discharge.ZkReg.CheckedH
 
 /-!
 # One hidden-output `--zk` sampled session with registered reads
@@ -74,6 +74,16 @@ theorem zk_session_soundHR
       ∀ rd : FlockSoundness.Registered.Reads (layShH (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
           (rsShHS dj y₀ ht hc hscope hU hpub),
         OwnReadsH own c pub o.2.2 rd.isRead rd.port rd.readAt → rd.Checked o.1 (regPathsH c pub o.2.2 rd.port) := by
-  sorry
+  refine ⟨?_, fun o hacc rd hown => checked_of_acceptsH I ht own dj y₀ hc hU hpub hscope hTags o hacc rd hown⟩
+  have hdec := decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
+    (runsZC_liveH I ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hRec hDraw)
+  have hnever : ∀ o : Bool × Finset (Fin n), ¬ (o.1 = true ∧ o.1 = false) := fun o h => by
+    rw [h.1] at h; exact Bool.noConfusion h.2
+  have hc' := zk_flock_countC_execOS_atHS dj y₀ ht hc hscope hU hpub hs512 σs ks hks St hS Kd pop Lb src hA3 hk
+    hRw hM hρ hr ht' K₀ (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ) hCR (execAccept := fun o => o.1 = true)
+    (StrictCR.TreeRewind.ofNever hnever) (ofNever_finderCR hs512.H hnever 0)
+  rw [StrictCR.TreeRewind.ofNever_bound, ENNReal.ofReal_zero, add_zero] at hc'
+  exact le_trans (prob_mono (fun o h => ⟨acceptsZK_of_R h.1, h.2⟩) _ _)
+    (zk_headline_exec_on execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ _ _ hc')
 
 end FlockSoundness.Discharge.ZkReg
