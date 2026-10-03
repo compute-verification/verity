@@ -380,7 +380,8 @@ def _files(text: str) -> dict[str, str | None]:
 
 
 _ENV_RE = "^(" + "|".join(sorted({v for v in ENV.values() if not v.startswith("VY_POOL_")} | {"VY_POOL_[A-Z0-9_]+"})) + ")="
-# the loop is the python process itself, not the pane's `bash -c` whose command line names it too
+# the loop is the python process itself, not the pane's `bash -c` whose command line names it too; its environment is matched
+# a variable at a time (`grep -z`) and each one's newlines printed as spaces, so no part of another variable's value can pass
 _LEASE = (
     "set -f\n"
     'kids() { for c in $(ps --ppid "$1" -o pid=); do echo "$c"; kids "$c"; done; }\n'
@@ -391,11 +392,12 @@ _LEASE = (
     '  for c in $p $(kids "$p"); do\n'
     '    set -- $(tr "\\0" " " < /proc/$c/cmdline 2>/dev/null)\n'
     '    case "${1##*/} ${2##*/} ${3:-}" in python*" n1_lease.py loop") ;; *) continue ;; esac\n'
-    f"    if ! e=$(tr '\\0' '\\n' < /proc/$c/environ); then echo \"unreadable $s $c\"; continue; fi\n"
+    "    e=/proc/$c/environ\n"
+    '    grep -zq "" "$e" 2>/dev/null; [ $? -le 1 ] || { echo "unreadable $s $c"; continue; }\n'
     '    echo "loop $s $c"\n'
-    f"    printf '%s\\n' \"$e\" | grep -E '{_ENV_RE}' || true\n"
-    f"    printf '%s\\n' \"$e\" | grep -q '^{POLICY_VAR}=' || continue\n"
-    "    d=$(printf '%s\\n' \"$e\" | grep '^GPU_LEASE_DIR=' | cut -d= -f2-)\n"
+    f"    grep -zE '{_ENV_RE}' \"$e\" | tr '\\n\\0' ' \\n'\n"
+    f"    grep -zq '^{POLICY_VAR}=' \"$e\" || continue\n"
+    "    d=$(grep -z '^GPU_LEASE_DIR=' \"$e\" | tr '\\n\\0' ' \\n' | cut -d= -f2-)\n"
     f'    if l=$(cat "${{d:-/run/gpu-lease}}/{LIMITS}" 2>/dev/null); then echo "limits $l"; else echo "limits"; fi\n'
     "  done\n"
     "done\n")

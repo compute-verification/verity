@@ -517,17 +517,21 @@ def _put(root: Path, files: dict[str, str]) -> None:
 
 def test_the_lease_command_reads_only_the_loop_process_and_its_pool_variables(tmp_path):
     bin_ = tmp_path / "bin"
-    _put(tmp_path, {"bin/tmux": "#!/bin/sh\nprintf 'n1-lease 100\\nn1-other 300\\n'\n",
+    _put(tmp_path, {"bin/tmux": "#!/bin/sh\nprintf 'n1-lease 100\\nn1-other 300\\nn1-lease-circuits 200\\n'\n",
                     "bin/ps": '#!/bin/sh\n[ "$2" = 100 ] && echo " 101"\nexit 0\n',
                     "/proc/100/cmdline": "bash\0-c\0cd /workspace && python3 tools/n1_lease.py loop\0",
                     "/proc/100/environ": "VY_POOL_MAX=99\0",
                     "/proc/101/cmdline": "/usr/bin/python3\0/workspace/infra/n1_lease.py\0loop\0",
-                    "/proc/101/environ": "VY_POOL_MAX=8\0HF_TOKEN=dummy\0GPU_LEASE_DIR=/run/gpu-lease\0VY_POOL_BORROW=4\0",
+                    "/proc/101/environ": "VY_POOL_MAX=8\0HF_TOKEN=dummy\0GPU_LEASE_DIR=/run/gpu-lease\0VY_POOL_BORROW=4\0"
+                                         "MOTD=dummy\nVY_POOL_IDLE_S=1\nGPU_LEASE_DIR=/x\n\0VY_POOL_NAME=a\nb\0",
+                    "/proc/200/cmdline": "python3\0n1_lease.py\0loop\0",
                     "/proc/300/cmdline": "python3\0n1_lease.py\0loop\0", "/proc/300/environ": "VY_POOL_MAX=1\0"})
+    (tmp_path / "proc/200/environ").mkdir()
     for f in bin_.iterdir():
         f.chmod(0o755)
     out = _sh(policy.COMMANDS["lease"], tmp_path, str(bin_))
-    assert out == "session n1-lease\nloop n1-lease 101\nVY_POOL_MAX=8\nGPU_LEASE_DIR=/run/gpu-lease\nVY_POOL_BORROW=4\n"
+    assert out == ("session n1-lease\nloop n1-lease 101\nVY_POOL_MAX=8\nGPU_LEASE_DIR=/run/gpu-lease\nVY_POOL_BORROW=4\n"
+                   "VY_POOL_NAME=a b\nsession n1-lease-circuits\nunreadable n1-lease-circuits 200\n")
 
 
 def test_the_lease_command_reads_the_limits_file_of_a_loop_under_the_policy(tmp_path):
