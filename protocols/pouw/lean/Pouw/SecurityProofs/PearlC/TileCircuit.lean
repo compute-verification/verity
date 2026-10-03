@@ -465,6 +465,25 @@ theorem tile_words {nw : ℕ} (hnw : 0 < nw) (a : (tileSpec p (128 * nw)).toCirc
   have hC := tileVal_chain p hnw a A B hA hB hc
   exact ⟨hC, fun u hu => tileVal_U p (128 * nw) a pa pb hpa hpb hC hu⟩
 
+/-- A transcript whose one unit is correct holds the circuit's values on `C̃`'s and `U`'s gates (core's
+`Verity.Partition.compose`). -/
+theorem tile_out {K : ℕ} (X : (tileSpec p K).toCircuit.Transcript) (hX : (tileSpec p K).part.Correct X 0) :
+    ∀ g ∈ ({cGate K, uGate K} : Finset ℕ), val X g = tileVal p K X g := by
+  have hw : (tileSpec p K).part.wrong X = ∅ := by
+    ext u
+    simp only [Verity.Partition.mem_wrong, Finset.notMem_empty, iff_false, not_not]
+    rwa [Subsingleton.elim u 0]
+  intro g hg
+  have hlt : g < (tileSpec p K).toCircuit.N := by
+    show g < tileN K
+    simp only [Finset.mem_insert, Finset.mem_singleton] at hg
+    rcases hg with rfl | rfl
+    · unfold cGate tileN; omega
+    · unfold uGate tileN; omega
+  have hg' : (⟨g, hlt⟩ : Fin (tileSpec p K).toCircuit.N) ∈ (tileSpec p K).part.committed :=
+    Verity.Partition.mem_committed_of_output _ (Finset.mem_filter.2 ⟨Finset.mem_univ _, hg⟩)
+  rw [tileVal, val_of_lt _ hlt, val_of_lt _ hlt, (tileSpec p K).part.compose X X (fun _ _ => rfl) hw _ hg']
+
 /-- **The tile unit, correct**: a transcript whose one unit is correct carries `C̃_ij` and `U_ij` on its outputs. -/
 theorem tile_correct {nw : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * nw)).toCircuit.Transcript)
     (hX : (tileSpec p (128 * nw)).part.Correct X 0)
@@ -474,25 +493,9 @@ theorem tile_correct {nw : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * nw)).toCi
     (hpb : ∀ i < 64, val X (2 * (128 * nw) + 64 + i) = pb.getD i 0) {c : ℕ}
     (hc : chainWordP? p 4 (rowAtoms A B) = some c) :
     val X (cGate (128 * nw)) = c ∧ ∀ u, uWord? c pa pb = some u → val X (uGate (128 * nw)) = u := by
-  have hw : (tileSpec p (128 * nw)).part.wrong X = ∅ := by
-    ext u
-    simp only [Verity.Partition.mem_wrong, Finset.notMem_empty, iff_false, not_not]
-    rwa [Subsingleton.elim u 0]
-  have hout : ∀ g : ℕ, g ∈ ({cGate (128 * nw), uGate (128 * nw)} : Finset ℕ) → val X g =
-      tileVal p (128 * nw) X g := by
-    intro g hg
-    have hlt : g < (tileSpec p (128 * nw)).toCircuit.N := by
-      show g < tileN (128 * nw)
-      simp only [Finset.mem_insert, Finset.mem_singleton] at hg
-      rcases hg with rfl | rfl
-      · unfold cGate tileN; omega
-      · unfold uGate tileN; omega
-    have hg' : (⟨g, hlt⟩ : Fin (tileSpec p (128 * nw)).toCircuit.N) ∈ (tileSpec p (128 * nw)).part.committed :=
-      Verity.Partition.mem_committed_of_output _ (Finset.mem_filter.2 ⟨Finset.mem_univ _, hg⟩)
-    rw [tileVal, val_of_lt _ hlt, val_of_lt _ hlt,
-      (tileSpec p (128 * nw)).part.compose X X (fun _ _ => rfl) hw _ hg']
   obtain ⟨h1, h2⟩ := tile_words p hnw X A B pa pb hA hB hpa hpb hc
-  refine ⟨(hout _ (by simp)).trans h1, fun u hu => (hout _ (by simp)).trans (h2 u hu)⟩
+  have hout := tile_out p X hX
+  exact ⟨(hout _ (by simp)).trans h1, fun u hu => (hout _ (by simp)).trans (h2 u hu)⟩
 
 end Chain
 
