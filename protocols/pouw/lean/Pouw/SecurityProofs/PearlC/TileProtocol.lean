@@ -1,5 +1,6 @@
 import Pouw.SecurityProofs.PearlC.TileValues
 import Pouw.SecurityProofs.PearlC.Tile4Circuit
+import Pouw.Protocol.PearlC.DeviceChainOnly
 
 /-!
 # The tile units compute the protocol's words (proofs)
@@ -8,7 +9,9 @@ import Pouw.SecurityProofs.PearlC.Tile4Circuit
 its inputs hold. Here those operands are the unit's own, so the outputs are the protocol's words:
 
 * at Pearl-C's `pearlCProtocolDev (devAt p 4 pr) sem ρ`, `pearl-c-sm120` v1's among them, on row `i` of `A′` and row `j`
-  of `B̃` from `PearlCSem.unitChain` and the bases and noise rows `PearlCSem.unitUsefulDev` reads (`tile_protocol`);
+  of `B̃` from `PearlCSem.unitChain` and the bases and noise rows `PearlCSem.unitUsefulDev` reads (`tile_protocol`).
+  The rev1 protocols and their kernel-`W_ref` and chain-only readings have its ticket and useful value
+  (`pearlCProtocolDevRev1K_words`, `pearlCProtocolDevRev1KChainOnly_words`);
 * at Pearl-C4's `pearlCProtocolFp4 devFp4Sm120 sem ρ`, on the rows `Fp4Sem.unitForm` forms and the bases and `Ẽ` rows
   `Fp4Sem.unitUseful` reads (`tile4_protocol`). A formed row's length is the unit's depth wherever its factor rows
   exist (`peelRows4_length`), so the depth is not a hypothesis.
@@ -109,6 +112,16 @@ theorem tile_words_good (pr : Prices) (sem : PearlCSem Q R S) (ρ : ℚ) (H : Q 
       wordQ (cm.useful i j) = (pearlCProtocolDev (devAt p 4 pr) sem ρ).useful H s U u cm.act i j := by
   rw [hct, hcu]
   exact tile_protocol p pr sem ρ H s U u cm.act hnw hk X hX i j hti htj hA hB FA FB beA beB hU hr hpa hpb
+
+theorem pearlCProtocolDevRev1K_words (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) :
+    (pearlCProtocolDevRev1K d sem ρ c).ticket = (pearlCProtocolDev d sem ρ).ticket ∧
+      (pearlCProtocolDevRev1K d sem ρ c).useful = (pearlCProtocolDev d sem ρ).useful :=
+  ⟨rfl, rfl⟩
+
+theorem pearlCProtocolDevRev1KChainOnly_words (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) :
+    (pearlCProtocolDevRev1KChainOnly d sem ρ c).ticket = (pearlCProtocolDev d sem ρ).ticket ∧
+      (pearlCProtocolDevRev1KChainOnly d sem ρ c).useful = (pearlCProtocolDev d sem ρ).useful :=
+  ⟨rfl, rfl⟩
 
 end PearlC
 
