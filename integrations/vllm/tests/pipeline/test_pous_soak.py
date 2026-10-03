@@ -494,38 +494,45 @@ def test_verify_drives_a_server_on_another_host_through_its_control_port(fake, t
 
 @pytest.mark.slow
 def test_a_stub_server_answers_a_remote_verifier_and_reports_the_network_term(fake, tmp_path):
-    """`stub` and `verify --server` as two processes, nine cells (about 25 s): the stub writes the vk the
-    verifier reads only once connected, takes the idle load, ends when the verifier stops it, and each chunk carries the
-    transport, its probe at open and close, and the per-cell network term.  Catches the stub's wiring, which only the
-    cross-node measurement would otherwise exercise."""
+    """`stub` and `verify --server` as two processes, nine cells (about 30 s): the verifier starts first and outlasts a
+    listener that accepts and closes (a tunnel's, before the server is up), the stub writes the vk the verifier reads only once
+    connected, takes the idle load, ends when the verifier stops it, and each chunk carries the transport, its probe at open
+    and close, and the per-cell network term.  Catches the stub's wiring and the tunnel's early accept, which only the
+    cross-node run would otherwise exercise."""
     import os
     import subprocess
     import sys
 
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        port = s.getsockname()[1]
     env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
     cpu = str(min(os.sched_getaffinity(0)))
     setup, job, state, srv = (tmp_path / n for n in ("setup", "job", "state", "srv"))
     for d in (job, state):
         d.mkdir()
-    stub = subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.pous_soak", "stub", "--job", str(srv), "--setup-out",
-                             str(setup), "--native", str(fake.path), "--segments", "1", "--control-port", str(port)],
-                            env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    # The verifier starts first, against a listener that accepts and closes, as an ssh tunnel's does before the server is up.
+    early = socket.create_server(("127.0.0.1", 0))
+    port = early.getsockname()[1]
+    verify = subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.pous_soak", "verify", "--server", f"127.0.0.1:{port}",
+                               "--transport", "loopback (test)", "--transport-probe", "echo probed",
+                               "--setup", str(setup), "--job", str(job), "--state", str(state), "--native", str(fake.path),
+                               "--until", "4000000000", "--loads", "idle", "--configs", "tuned", "--passes", "1", "--twins", "0",
+                               "--cell-s", "0.3", "--cpu", cpu, "--checker-cpu", cpu, "--sampler-cpu", cpu, "--sample-cpus", cpu],
+                              env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    stub = None
     try:
-        p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.pous_soak", "verify", "--server", f"127.0.0.1:{port}",
-                            "--transport", "loopback (test)", "--transport-probe", "echo probed",
-                            "--setup", str(setup), "--job", str(job), "--state", str(state), "--native", str(fake.path),
-                            "--until", "4000000000", "--loads", "idle", "--configs", "tuned", "--passes", "1", "--twins", "0",
-                            "--cell-s", "0.3", "--cpu", cpu, "--checker-cpu", cpu, "--sampler-cpu", cpu, "--sample-cpus", cpu],
-                           env=env, capture_output=True, text=True, check=False)
-        assert p.returncode == 0, p.stderr[-2000:]
+        conn, _ = early.accept()
+        conn.close()
+        early.close()
+        stub = subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.pous_soak", "stub", "--job", str(srv), "--setup-out",
+                                 str(setup), "--native", str(fake.path), "--segments", "1", "--control-port", str(port)],
+                                env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        _, verr = verify.communicate()
+        assert verify.returncode == 0, verr[-2000:]
         _, err = stub.communicate()
     finally:
-        if stub.poll() is None:
-            stub.kill()
-            stub.communicate()
+        for p in (verify, stub):
+            if p is not None and p.poll() is None:
+                p.kill()
+                p.communicate()
     assert stub.returncode == 0, err[-2000:]
     served = json.loads((srv / "serve.json").read_text())
     assert served["idle_exit"] is None and served["responder"]["answered"] > 0

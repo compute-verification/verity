@@ -1733,15 +1733,20 @@ def cmd_verify(a) -> int:
     lib.soak_install_sigterm()
     if a.server:
         host, port = a.server.rsplit(":", 1)
+        # A tunnel's listener accepts before the server listens and then closes: the server is up once it answers ready.
         while soak.ctl is None:
+            ctl = None
             try:
-                soak.ctl = ControlClient(host, int(port))
+                ctl = ControlClient(host, int(port))
+                ready = ctl.call("ready")[0]
+                soak.ctl = ctl
             except OSError:
+                if ctl is not None:
+                    ctl.close(stop=False)
                 if soak.stopped[0] or time.time() > a.until:
                     return 99 if soak.stopped[0] else 0
                 time.sleep(5.0)
         soak.host = host
-        ready = soak.ctl.call("ready")[0]
         _write(job / "ready.json", ready)
     else:
         ready_path = job / "ready.json"
