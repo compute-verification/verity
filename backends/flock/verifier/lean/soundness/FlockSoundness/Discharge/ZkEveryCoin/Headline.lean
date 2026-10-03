@@ -132,12 +132,73 @@ theorem zkViewAll_of_ok (C : CoinedSetup) [Fintype (CoinsZK C.Rest)]
     gcongr
     exact avg_const_le _
 
+/-- **A coordinate that can be overwritten in place is uniform**: if `upd c x` puts `x` at `f`'s coordinate and nowhere
+else, `f` of a uniform `c` hits any value with probability at most `1/|Val|`. -/
+theorem prCoin_coord_le {Ω Val : Type} [Fintype Ω] [Fintype Val] [DecidableEq Val] (f : Ω → Val) (upd : Ω → Val → Ω)
+    (h1 : ∀ c x, f (upd c x) = x) (h2 : ∀ c x y, upd (upd c x) y = upd c y) (h3 : ∀ c, upd c (f c) = c) (x : Val) :
+    prCoin (fun c => f c = x) ≤ (Fintype.card Val : ℝ≥0∞)⁻¹ := by
+  classical
+  rcases isEmpty_or_nonempty Ω with hC | ⟨⟨c₀⟩⟩
+  · simp [prCoin, avg]
+  let e : Ω ≃ Val × {c // f c = x} :=
+    { toFun := fun c => (f c, ⟨upd c x, h1 c x⟩)
+      invFun := fun p => upd p.2.1 p.1
+      left_inv := fun c => by simp only [h2, h3]
+      right_inv := fun p => by
+        obtain ⟨y, d, hd⟩ := p
+        refine Prod.ext (h1 d y) (Subtype.ext ?_)
+        change upd (upd d y) x = d
+        rw [h2, ← hd, h3] }
+  have : Nonempty {c // f c = x} := ⟨⟨upd c₀ x, h1 c₀ x⟩⟩
+  have h := ZK.prCoin_congr_equiv e (fun p => p.1 = x)
+  rw [show (fun c => f c = x) = fun c => (e c).1 = x from rfl, h,
+    ZK.prCoin_fst (E := {c // f c = x}) (fun y : Val => y = x), prCoin_eq_card]
+  simp [Finset.filter_eq']
+
+theorem card_f128 : Fintype.card F128 = 2 ^ 128 := by
+  rw [Fintype.card_congr f128Equiv, Fintype.card_prod, Fintype.card_fin, ← pow_add]
+
+/-- Rep `r`'s `j`-th zerocheck outer coin of a draw's coins, overwritten with `x`. -/
+noncomputable def setOuter {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (r : Fin 2) (j : Fin (st.m - 13))
+    (c : CoinsZK (coinedOf Tz st).Rest) (x : F128) : CoinsZK (coinedOf Tz st).Rest :=
+  { c with rest := { c.rest with rOuter := Function.update c.rest.rOuter r (Function.update (c.rest.rOuter r) j x) } }
+
+/-- **Each zerocheck outer coin is uniform over F128**: it is `1` with probability at most `2^-128`. -/
+theorem prCoin_outer_one {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (r : Fin 2) (j : Fin (st.m - 13)) :
+    prCoin (fun c : CoinsZK (coinedOf Tz st).Rest => c.rest.rOuter r j = 1) ≤ (2 : ℝ≥0∞) ^ (-128 : ℤ) := by
+  classical
+  refine (prCoin_coord_le (fun c : CoinsZK (coinedOf Tz st).Rest => c.rest.rOuter r j) (setOuter Tz st r j)
+    (fun c x => ?_) (fun c x y => ?_) (fun c => ?_) 1).trans (le_of_eq ?_)
+  · simp [setOuter]
+  · simp [setOuter]
+  · simp only [setOuter, Function.update_eq_self]
+    rfl
+  · rw [card_f128, ENNReal.zpow_neg, Nat.cast_pow, Nat.cast_ofNat]
+    norm_cast
+
 /-- **The coins zero knowledge doesn't cover, but the prover doesn't refuse**, at a draw's tables: a zerocheck outer coin
 `1` in some rep, each of the `m − 13` outer coins of each of the two reps uniform over F128. -/
 theorem uncovered_le {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     prCoin (fun c : CoinsZK (coinedOf Tz st).Rest => (coinedOf Tz st).Admits c ∧ ¬ (coinedOf Tz st).Covered c)
       ≤ 2 * (st.m - 13 : ℕ) * (2 : ℝ≥0∞) ^ (-128 : ℤ) := by
-  sorry
+  classical
+  have hsub : ∀ c : CoinsZK (coinedOf Tz st).Rest, (coinedOf Tz st).Admits c ∧ ¬ (coinedOf Tz st).Covered c →
+      ∃ i ∈ (Finset.univ : Finset (Fin 2 × Fin (st.m - 13))), c.rest.rOuter i.1 i.2 = 1 := by
+    intro c ⟨hA, hcov⟩
+    have : ¬ ∀ r, ∀ x ∈ List.ofFn (c.rest.rOuter r), x ≠ 1 := fun h => hcov ⟨hA, h⟩
+    push Not at this
+    obtain ⟨r, x, hx, h1⟩ := this
+    obtain ⟨j, hj⟩ := List.mem_ofFn.1 hx
+    exact ⟨(r, j), Finset.mem_univ _, hj.trans h1⟩
+  have hm := prCoin_mono hsub
+  have he := prCoin_exists_le (C := CoinsZK (coinedOf Tz st).Rest) (Finset.univ : Finset (Fin 2 × Fin (st.m - 13)))
+    (fun i c => c.rest.rOuter i.1 i.2 = 1)
+  have hs : ∑ i : Fin 2 × Fin (st.m - 13), prCoin (fun c : CoinsZK (coinedOf Tz st).Rest => c.rest.rOuter i.1 i.2 = 1)
+      ≤ ∑ _i : Fin 2 × Fin (st.m - 13), (2 : ℝ≥0∞) ^ (-128 : ℤ) :=
+    Finset.sum_le_sum fun i _ => prCoin_outer_one Tz st i.1 i.2
+  refine hm.trans (he.trans (hs.trans (le_of_eq ?_)))
+  rw [Finset.sum_const, Finset.card_univ, Fintype.card_prod, Fintype.card_fin, Fintype.card_fin, nsmul_eq_mul,
+    Nat.cast_mul, Nat.cast_ofNat]
 
 variable {mPts n : ℕ} {Reg : Type}
 
@@ -156,7 +217,8 @@ theorem zk_session_view_all (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S�
       prCoin (fun c : CoinsZK (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).Rest =>
           (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).Admits c ∧
             ¬ (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).Covered c)
-        ≤ 2 * (y.x.st.m - 13 : ℕ) * (2 : ℝ≥0∞) ^ (-128 : ℤ) := by
-  sorry
+        ≤ 2 * (y.x.st.m - 13 : ℕ) * (2 : ℝ≥0∞) ^ (-128 : ℤ) :=
+  fun S R y => ⟨zkViewAll_of_ok _ (coinedOf_setup (Reg := Reg) I dj y₀ S R y).2.2.2.2.2 hKey hPad,
+    uncovered_le _ _⟩
 
 end FlockSoundness.Discharge.ZkEveryCoin
