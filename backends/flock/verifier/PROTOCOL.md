@@ -1476,8 +1476,9 @@ expectation):
   refuses a row that does not open its registered root.
 - **D6:** a `--zk` record's `coin_tree` (§7.4); upstream ignores it.
 - **D7:** the `sha512x3` and `hm96` nets are the verifier's (`Flock.HmNets`); upstream checks only their port widths.
-- **D8:** at least one unit per VU (§16.10). Upstream's pinned builds accept `units_per_vu = 0` when a tail returns the
-  outputs; the spec refuses it, as `backends/flock/live`'s `Composite::check` does.
+- **D8:** at least one unit per VU (§16.10). Upstream's `Composite::check` in the pinned builds that have tails (`25519ba1`,
+  `967b8d06`) lets `units_per_vu = 0` through when a tail returns the outputs; the spec refuses it, as
+  `backends/flock/live`'s now does. No vector exercises it.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).
