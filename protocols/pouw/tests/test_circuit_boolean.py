@@ -19,6 +19,11 @@ F32_EDGES = [0, 1, 2, 3, 0x7FFFFF, 0x800000, 0x800001, 0xFFFFFF, 0x3F7FFFFF, 0x3
 F32_EDGES += [w | 0x80000000 for w in F32_EDGES]
 #: each exponent field's smallest, next and largest mantissa, both signs
 F32_BINADES = [s | e << 23 | m for s in (0, 1 << 31) for e in range(256) for m in (0, 1, 0x7FFFFF)]
+#: the hiding tile's Keccak words (`hashes`), each with its word primitive
+KECCAK = ((B.PouwXor32, W.PouwXor32), (B.PouwChi32, W.PouwChi32), (B.PouwRotl64Lo, W.PouwRotl64Lo),
+          (B.PouwRotl64Hi, W.PouwRotl64Hi))
+#: half-lanes whose bits take both values at every position: 0, all ones, alternating bits, each half, the end bits
+U32_EDGES = [0, M32, 0x55555555, 0xAAAAAAAA, 0x0000FFFF, 0xFFFF0000, 1, 1 << 31, M32 ^ 1, M32 ^ 1 << 31]
 
 
 def _words(d, ref, *cols):
@@ -48,19 +53,20 @@ def test_each_names_its_word_primitive_and_is_boolean():
     from verity.ml.boolean.trace import word_of
 
     for d, w in ((B.PouwF32SqrtRn, W.PouwF32SqrtRn), (B.PouwETilde, W.PouwETilde), (B.PouwBf16Neg, W.PouwBf16Neg),
-                 (B.PouwSqAcc, W.PouwSqAcc), (B.PouwSqCeil, W.PouwSqCeil), (B.PouwSqGe, W.PouwSqGe)):
+                 (B.PouwSqAcc, W.PouwSqAcc), (B.PouwSqCeil, W.PouwSqCeil), (B.PouwSqGe, W.PouwSqGe)) + KECCAK:
         assert word_of(d) is w and d.id == w.id.replace("_v1", "_v2")
         assert d is B.PouwSqCeil or is_boolean(d.bind())
 
 
 def test_building_a_tile_check_registers_them():
     """C-Flock's lowering finds a primitive's Boolean Definition only in core's registry, so importing `pc4` (and `pc8`,
-    which imports it) must register all six, in a fresh interpreter where nothing else imported `boolean`."""
+    which imports it) must register all ten (the hiding tile's digest calls the four Keccak words), in a fresh
+    interpreter where nothing else imported `boolean`."""
     import subprocess
     import sys
 
     ids = [w.id.replace("_v1", "_v2") for w in (W.PouwF32SqrtRn, W.PouwETilde, W.PouwBf16Neg, W.PouwSqAcc, W.PouwSqCeil,
-                                                W.PouwSqGe)]
+                                                W.PouwSqGe) + tuple(w for _d, w in KECCAK)]
     code = ("import sys, verity_pouw.circuit.pc8\nfrom verity.ir.defs import REGISTRY\n"
             f"missing = [i for i in {ids!r} if i not in REGISTRY]\nsys.exit(','.join(missing) if missing else 0)")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
@@ -131,3 +137,90 @@ def test_sq_ceil_at_its_rounding_boundaries():
 
     assert is_boolean(B.PouwSqCeil.bind())
     _wide(B.PouwSqCeil, W.PouwSqCeil, [ts, ns], [576, 32])
+
+
+def test_xor_and_chi_on_every_edge_triple_and_random_words():
+    """a xor b and Keccak's χ, a xor (not b and c), on every pair and triple of edge half-lanes (so every bit position takes
+    each of χ's eight cases) and on 2^14 random triples."""
+    rng = np.random.default_rng(20261007)
+    e = np.array(U32_EDGES, dtype=np.uint64)
+    a, b, c = (np.concatenate([g.ravel(), rng.integers(0, 1 << 32, 1 << 14, dtype=np.uint64)])
+               for g in np.meshgrid(e, e, e, indexing="ij"))
+    assert _words(B.PouwXor32, W.PouwXor32, a, b) == _words(B.PouwChi32, W.PouwChi32, a, b, c) == len(e) ** 3 + (1 << 14)
+
+
+def test_rotations_by_every_amount():
+    """Both halves of hi:lo rotated left by c mod 64: every c below 128 (the amount wraps at 64) and c with bits above its
+    low six set, on every single-bit word (so each bit lands where the rotation sends it), edge pairs and random pairs."""
+    R = random.Random(20261008)
+    pairs = [((1 << j) & M32, (1 << j) >> 32) for j in range(64)]
+    pairs += [(x, y) for x in U32_EDGES[:4] for y in U32_EDGES[:4]] + [(R.getrandbits(32), R.getrandbits(32)) for _ in range(32)]
+    amounts = list(range(128)) + [R.getrandbits(32) for _ in range(16)] + [M32, 1 << 31 | 5]
+    lo, hi, c = zip(*[(x, y, s) for x, y in pairs for s in amounts])
+    for d, w in KECCAK[2:]:
+        assert _words(d, w, lo, hi, c) == len(pairs) * len(amounts)
+
+
+def test_a_constant_rotation_is_wiring():
+    """Every rotation `hashes` builds has a constant amount, and on one the rotator folds to wiring: no AND is built, and each
+    output bit is the input bit the rotation moves there."""
+    from verity.ml.boolean.forms import Circuit, const_bits
+
+    for s in list(range(64)) + [64, 65, M32]:
+        C = Circuit(cse=True)
+        lo, hi = C.input("lo", 32), C.input("hi", 32)
+        x = lo + hi
+        out = B.rotl64(C, lo, hi, const_bits(s, 32))
+        assert "and" not in C.kind
+        assert [w.key() for w in out] == [x[(i - s) % 64].key() for i in range(64)]
+
+
+def test_the_keccak_words_compose_to_turboshake128(monkeypatch):
+    """The four builders in place of their word primitives wherever `hashes` calls them (θ's rotations by 1, ρ's offsets,
+    χ, ι's constants) compute core's TurboSHAKE128 on a message of input lanes, and every AND they build is χ's: 32 per
+    half-lane per round.  χ's outputs are committed here, as a lowering that commits a call's outputs does; without that,
+    its XOR terms compound round over round, and the 12 rounds' AND operands grow to thousands of bits each."""
+    from verity.commitments.turboshake import turboshake128
+    from verity.ml.boolean.forms import ONE, Circuit, const_bits
+
+    from verity_pouw.circuit import hashes as H
+
+    build = {w.id: d.build for d, w in KECCAK}
+
+    class OnForms(H.Emit):
+        """`hashes.Emit` on core's forms: a half-lane is 32 forms, a word primitive its Boolean Definition's builder, and the
+        permutation `hashes`' own body on this emitter."""
+
+        def __init__(self, C):
+            super().__init__(None)
+            self.B, self.C = self, C
+
+        def c(self, v):
+            return const_bits(v & M32, 32)
+
+        def call(self, fn, *args):
+            if fn is H.KeccakP1600R12:
+                return H._keccak_body(self, None, args[0], 12)
+            if all(isinstance(a, int) for a in args):
+                return fn.evaluate(*args)
+            out = build[fn.id](self.C, *(self.g(a) for a in args))
+            # a committed copy of each bit (C-Flock's `sha512_circuit.commit`)
+            return [self.C._new("and", (w, ONE)) for w in out] if fn is W.PouwChi32 else out
+
+        def array(self, halves):
+            return [self.g(h) for h in halves]
+
+    monkeypatch.setattr(H, "Emit", lambda e: e)
+    C, n, T = Circuit(cse=True), 20, 8
+    lanes = [(C.input(f"lo{i}", 32), C.input(f"hi{i}", 32)) for i in range(n)]
+    digest = H.turboshake128(OnForms(C), lanes, 32, 0x1F)
+    assert sum(1 for k, d in zip(C.kind, C.data) if k == "and" and d[1] is not ONE) == 12 * 25 * 2 * 32
+    R = random.Random(20261009)
+    msgs = [R.randbytes(8 * n) for _ in range(T)]
+    vals = {f"{part}{i}": [sum((int.from_bytes(m[8 * i:8 * i + 8], "little") >> (32 * h + j) & 1) << t
+                                for t, m in enumerate(msgs)) for j in range(32)]
+            for i in range(n) for h, part in enumerate(("lo", "hi"))}
+    _val, ev = C.values(vals, T)
+    for t, m in enumerate(msgs):
+        got = b"".join(sum((ev(b) >> t & 1) << j for j, b in enumerate(half)).to_bytes(4, "little") for half in digest)
+        assert got == turboshake128(m, 0x1F, 32)
