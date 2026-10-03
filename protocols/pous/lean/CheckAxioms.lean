@@ -102,6 +102,7 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 #print axioms Pous.SecurityProofs.BandGradedMeetsFamily
 #print axioms Pous.SecurityProofs.PerAnswer
 #print axioms Pous.SecurityProofs.ContinuousAudit
+#print axioms Pous.SecurityProofs.BackgroundRebuildExcluded
 -- the abstract model `m1p` at P2's parameters, no hypothesis: the Meets rows, the slack rows and the error split
 #print axioms Pous.SecurityProofs.P2MeetsM1pB19Uncond
 #print axioms Pous.SecurityProofs.P2MeetsM1pFamilyUncond

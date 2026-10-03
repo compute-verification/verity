@@ -144,6 +144,11 @@
    "assumptions": [],
    "type_hash": "cfc192feb8ba73093a1788a0b447b6b47c3e6d430fabef628c45cc3fb5239a22"
   },
+  "Pous.SecurityProofs.BackgroundRebuildExcluded": {
+   "signature": ["Pous.SecurityProofs.BackgroundRebuildExcluded : Pous.Guarantees.BackgroundRebuildExcluded"],
+   "assumptions": [],
+   "type_hash": "cb606e12135f72a634d3a3845fc15be3d585d81826040f8b89a9cb92b293e4ee"
+  },
   "Pous.SecurityProofs.BandChainMeets64": {
    "signature": ["Pous.SecurityProofs.BandChainMeets64 : Pous.Guarantees.BandChainMeets64"],
    "assumptions": [],
@@ -688,7 +693,7 @@
    "pins": ["PousP2Ring.not_meetsOn_b19_k88", "PousP2Ring.tight_p16448"]
   },
   "Pous.Guarantees": {
-   "digest": "0de038349c83a8018abb2b54ecb8a20aeb955121c88b74f6e247b2d2e248118d",
+   "digest": "fffd1f5e6bc0dd4cf8d135d320169d39336b57522cad16ab991457bd16eb24fe",
    "definitions": {
     "Pous.Guarantees.A1CompressionCard": "4bdc9218360926b7313e50a5882d2d7c72bf905191984cb666c8cad07a435774",
     "Pous.Guarantees.A1CompressionPr": "45e347c38d963ece9d1f073c9efb190b752629dc1364ddeee128432ee1e5fd9d",
@@ -702,6 +707,7 @@
     "Pous.Guarantees.B5ExPostFacto": "e9a75ccddae46f863761961efe2c43564b677fdbfdfa459cd58097894100194c",
     "Pous.Guarantees.B5ExPostFactoBounded": "d60858c44b67e58af3923289797c49a64c004852fe44013b7ebbe4cc911643cf",
     "Pous.Guarantees.B5Stacked": "47bfc91aefce91c241e90b9bd81adaea04b287a8b971b700cc4dc7357791a9ad",
+    "Pous.Guarantees.BackgroundRebuildExcluded": "2df5843afcf41f71d8950fab0a9ebe2e6ac5e78f03d72262024c43a9d6ca1e81",
     "Pous.Guarantees.BandChainMeets64": "22dd0d516e4f3f192d3f6606dcc4408cd1ebcfa5e1a3410cb644207c5af7cd1b",
     "Pous.Guarantees.BandChainMeets64D12": "ae12298add53e78c3e077ad1db74dcc464d943a7d1af1704cde9291692772373",
     "Pous.Guarantees.BandChainMeets64D5": "0d4eb049d79e6c42fe35dadf0746b0d8634782cd9b2fd9f4a55c1fdbd59f10ae",
@@ -769,6 +775,7 @@
     "Pous.SecurityProofs.B5ExPostFacto",
     "Pous.SecurityProofs.B5ExPostFactoBounded",
     "Pous.SecurityProofs.B5Stacked",
+    "Pous.SecurityProofs.BackgroundRebuildExcluded",
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
@@ -927,6 +934,14 @@
     "Pous.SecurityProofs.BandPubMeetsFamilyD2"
    ]
   },
+  "Pous.Protocol.Accounting.Rebuild": {
+   "digest": "b14c3104bae12cd2a318f17d51573381e967a00e99b50d459817c187fe6dcbd6",
+   "definitions": {
+    "Pous.Rebuild.gradedWindow": "05636c5189ccd8c31f875504b42445ab89184cfe835125e936351a102541372a",
+    "Pous.Rebuild.rebuildCalls": "ac875c4993032c122cbfd259d74a84c8e1e92365dd3a217a1afbf71f8c504ca2"
+   },
+   "pins": ["Pous.SecurityProofs.BackgroundRebuildExcluded"]
+  },
   "Pous.Protocol.Game.Oracle": {
    "digest": "3d3028385cd2a63e503b4bbce467b1f191203e9fbe059b8dbaffd10c8af7646d",
    "definitions": {
@@ -958,6 +973,7 @@
     "Pous.SecurityProofs.B5ExPostFacto",
     "Pous.SecurityProofs.B5ExPostFactoBounded",
     "Pous.SecurityProofs.B5Stacked",
+    "Pous.SecurityProofs.BackgroundRebuildExcluded",
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
@@ -1046,6 +1062,7 @@
     "Pous.SecurityProofs.B5ExPostFacto",
     "Pous.SecurityProofs.B5ExPostFactoBounded",
     "Pous.SecurityProofs.B5Stacked",
+    "Pous.SecurityProofs.BackgroundRebuildExcluded",
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
@@ -1232,6 +1249,7 @@
     "Pous.Sponge.parentsNF": "51d3bef2ec734d993123fef15fb08b38752fd81f2371023def33918aed8590e9"
    },
    "pins": [
+    "Pous.SecurityProofs.BackgroundRebuildExcluded",
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
@@ -1337,6 +1355,7 @@
     "Pous.Dense.u64": "f087af4cdf02fed056eab22fed4abd149af1284835f2ee7d90996b77649d71d8"
    },
    "pins": [
+    "Pous.SecurityProofs.BackgroundRebuildExcluded",
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
@@ -1455,6 +1474,7 @@
     "Pous.SecurityProofs.B5ExPostFacto",
     "Pous.SecurityProofs.B5ExPostFactoBounded",
     "Pous.SecurityProofs.B5Stacked",
+    "Pous.SecurityProofs.BackgroundRebuildExcluded",
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
@@ -1499,6 +1519,7 @@
     "Pous.codeEquiv": "5431e034e408a3add1b4c547c4a73d431438e40ba35a2b2f767ced58e1f174ab"
    },
    "pins": [
+    "Pous.SecurityProofs.BackgroundRebuildExcluded",
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
@@ -1607,6 +1628,7 @@
     "Pous.Sponge.topLabelC": "54d4a1ff4b10263de1e6301967dddc8cd6af6187582485dcc71538541fa7d1e8"
    },
    "pins": [
+    "Pous.SecurityProofs.BackgroundRebuildExcluded",
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
@@ -1707,6 +1729,7 @@
     "Pous.SecurityProofs.A3PrimeLam",
     "Pous.SecurityProofs.A6RederiveTimed",
     "Pous.SecurityProofs.A6RederiveUntimed",
+    "Pous.SecurityProofs.BackgroundRebuildExcluded",
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
