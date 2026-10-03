@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Lean for a Lake package on a Linux machine: elan at the package's `lean-toolchain`, its dependencies (the pinned bundle
-# from the store when the repository pins one, else `lake-manifest.json` through lake), Mathlib's prebuilt oleans
-# (`lake exe cache get`) when Mathlib is among them, and main's cached build of the package itself (`cache.py get`, every
-# file checked against its sha256). Idempotent. `LEAN_CACHE=off` skips the build cache, as the audit does.
+# Lean for a Lake package on a Linux machine: elan at the package's `lean-toolchain` (elan's default too, on a machine
+# that has none), its dependencies (the pinned bundle from the store when the repository pins one, else
+# `lake-manifest.json` through lake), Mathlib's prebuilt oleans (`lake exe cache get`) when Mathlib is among them, and
+# main's cached build of the package itself (`cache.py get`, every file checked against its sha256). Idempotent.
+# `LEAN_CACHE=off` skips the build cache, as the audit does.
 #   bash tools/lean/setup.sh PACKAGE_DIR
 set -euo pipefail
 pkg=${1:?usage: setup.sh PACKAGE_DIR}
@@ -12,7 +13,10 @@ if ! command -v elan >/dev/null 2>&1 && [ ! -x "$HOME/.elan/bin/elan" ]; then
 fi
 export PATH="$HOME/.elan/bin:$PATH"
 cd "$pkg"
-elan toolchain install "$(tr -d '[:space:]' < lean-toolchain)"
+toolchain=$(tr -d '[:space:]' < lean-toolchain)
+elan toolchain install "$toolchain"
+# Without a default (`--default-toolchain none` above), `lean` fails outside a package; a default already chosen stays.
+(cd / && lean --version >/dev/null 2>&1) || elan default "$toolchain"
 lake --version
 root=$(git rev-parse --show-toplevel 2>/dev/null || true)
 if [ ! -e .lake/packages ] && [ -n "$root" ] && [ -f "$root/tools/check/lean_audit.py" ] && command -v uv >/dev/null 2>&1; then
