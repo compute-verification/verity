@@ -70,6 +70,7 @@ import Pouw.SecurityProofs.PearlC.DeviceChainCapGamma
 import Pouw.SecurityProofs.PearlC.DeviceFp4Gamma
 import Pouw.SecurityProofs.PearlC.DeviceGamma
 import Pouw.SecurityProofs.PearlC.DeviceRev1Gamma
+import Pouw.SecurityProofs.PearlC.DeviceSm120CapRev1Gamma
 import Pouw.SecurityProofs.PearlC.DeviceSm120Gamma
 import Pouw.SecurityProofs.PearlC.DeviceSm120KernelGamma
 import Pouw.SecurityProofs.PearlC.DeviceSm120LoopGamma

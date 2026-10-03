@@ -11,10 +11,13 @@ function (v1-hot, v2-hot, Pearl-C4 v1 and v2). Its key is
   reading     forming-credited, chain-only or chain-cap
   kind        unit (Gγ), tile (GγSampled) or value (the γ function's value, which both read)
   shape       8192 or 16384 (the cube it is stated at); ``sizing`` a hot start's rule (publicConst64 is the ruled one)
+  cap         FP8 v1 and v2's debit cap ρ, read off the protocol the statement is about (``Rev1`` is v1 at 1/400, ``Cap1000``
+              and ``Rev1Cap1000`` are 1/1,000); a lookup reads the statement's cap (`CAPS`), and the others are history
 
 Rounded twins (a record's own cast under the loop price, an upper bound) and U-only messages have no priced path and are
 left out. Each twin keeps its pin's name, type hash and source, and is ``pinned`` when the Lean store's lean-audit.json
-holds that pin with that type hash, ``staged`` otherwise.
+or the repository's own (`REPO_AUDIT`, read after the store's files) holds that pin with that type hash, ``staged``
+otherwise.
 
   python price_twins.py STORE_ROOT [--out price_twins.json]   regenerate the table from the POUS Project store's pins
 
@@ -38,6 +41,9 @@ FADD_PRICES = (Fraction(8), Fraction(1047, 125))
 #: the POUS Project store's pin files, relative to its root: the Lean store's audit first (what is pinned), then what is
 #: staged with a red-team GO (price-twins-lean/README.md)
 LEAN_STORE = "lean/submissions/pouw/lean-audit.json"
+#: the repository's PoUW Lean audit, where pins land now; read after the store's files, so a pin they hold keeps its row
+REPO_AUDIT = HERE.parents[2] / "protocols" / "pouw" / "lean" / "lean-audit.json"
+REPO_SOURCE = "protocols/pouw/lean/lean-audit.json"
 STAGED = ("internal/pouw/price-twins-lean/proposed-pins.json", "internal/pouw/price-twins-lean/v2-hot/v2-hot-pins.json",
           "internal/pouw/price-twins-lean/v1-hot/v1-hot-pins.json", "internal/pouw/price-twins-lean/fp4-delta/fp4-delta-pins.json")
 CASTS = {"8": "cast-8", "8p72": "cast-8.72", "16": "cast-16", "32": "cast-32", "32p06": "cast-32.06"}
@@ -45,10 +51,15 @@ CAST_VALUES = {"cast-8": Fraction(8), "cast-8.72": Fraction(218, 25), "cast-16":
                "cast-32.06": Fraction(1603, 50)}
 READINGS = {None: "forming-credited", "ChainOnly": "chain-only", "Chain": "chain-cap"}
 RULED_SIZING = "publicConst64"
+#: each FP8 statement's debit cap ρ: v1's moved from 1/400 to 1/1,000 (Daniel, 9:43 AM PDT on 2 Oct), v2's was 1/1,000
+CAPS = {"pearl-c-sm120/v1": Fraction(1, 1000), "pearl-c-sm120/v2": Fraction(1, 1000)}
+NAME_CAPS = {"Rev1": Fraction(1, 400), "Cap1000": Fraction(1, 1000), "Rev1Cap1000": Fraction(1, 1000)}
 
 _RAT = r"(\d+)(?: / (\d+))?"
 _FP8 = re.compile(r"pearlC(?P<kind>Gamma|Sampled)Sm120(?P<ver>v1|v2)(?P<loop>Loop)?(?:Cast(?P<cast>8p72|32p06|16|32|8))?"
-                  r"(?P<read>ChainOnly|Chain)?(?:Rev1|Cap1000)_(?P<shape>8192|16384)")
+                  r"(?P<read>ChainOnly|Chain)?(?P<cap>Rev1Cap1000|Rev1|Cap1000)_(?P<shape>8192|16384)")
+_CAP_ARG = re.compile(r"Pouw\.PearlC\.pearlCProtocolDev\w* \(Pouw\.PearlC\.devSm120v[12] Pouw\.PearlC\.Prices\.\w+\) "
+                      r"\w+ \(" + _RAT + r"\)")
 _HOT = re.compile(r"gammaHot(?P<rev>Rev1)?(?P<read>ChainOnly)?_sm120(?P<ver>v1|v2)Hot(?P<loop>Loop)?Cast(?P<cast>8p72|32p06|16|32|8)"
                   r"_(?P<sizing>[A-Za-z0-9]+)_(?P<shape>8192|16384)")
 _FP4 = re.compile(r"gammaFp4(?P<hot>Hot)?(?P<read>ChainOnly)?_sm120(?P<price>Issue|Loop)_(?P<path>lut256|rcpApprox)"
@@ -86,9 +97,12 @@ def parse(name: str, pin: dict) -> dict | None:
         lit = _GAMMA_LITERAL.search(sig)
         if lit is None:
             return None
+        rho = _CAP_ARG.search(sig)
+        if rho is None or _q(rho[1], rho[2]) != NAME_CAPS[m["cap"]]:
+            raise TwinError(f"{name}: its signature's protocol isn't at its name's cap {NAME_CAPS[m['cap']]}")
         row = {"statement": f"pearl-c-sm120/{m['ver']}", "path": path, "fadd": Fraction(1047, 125) if loop else Fraction(8),
                "reading": READINGS[m["read"]], "kind": "unit" if m["kind"] == "Gamma" else "tile",
-               "shape": int(m["shape"]), "sizing": None, "gamma": _q(lit[1], lit[2])}
+               "shape": int(m["shape"]), "sizing": None, "cap": NAME_CAPS[m["cap"]], "gamma": _q(lit[1], lit[2])}
     elif m := _HOT.fullmatch(short):
         loop = bool(m["loop"])
         prices = re.search(r"Eq d\.prices Pouw\.PearlC\.Prices\.(sm120Loop|sm120)\b", sig)
@@ -102,7 +116,7 @@ def parse(name: str, pin: dict) -> dict | None:
         if lit is None:
             return None
         row = {"statement": f"pearl-c-sm120/{m['ver']}-hot", "path": path, "fadd": Fraction(1047, 125) if loop else Fraction(8),
-               "reading": READINGS[m["read"]], "kind": "value", "shape": int(m["shape"]), "sizing": m["sizing"],
+               "reading": READINGS[m["read"]], "kind": "value", "shape": int(m["shape"]), "sizing": m["sizing"], "cap": None,
                "gamma": _q(lit[1], lit[2])}
     elif m := _FP4.fullmatch(short):
         fadd = Fraction(1047, 125) if m["price"] == "Loop" else Fraction(8)
@@ -113,7 +127,7 @@ def parse(name: str, pin: dict) -> dict | None:
         if lit is None:
             return None
         row = {"statement": f"pearl-c-fp4/{'v2' if m['hot'] else 'v1'}", "path": m["path"], "fadd": fadd,
-               "reading": READINGS[m["read"]], "kind": "value", "shape": int(m["shape"]), "sizing": None,
+               "reading": READINGS[m["read"]], "kind": "value", "shape": int(m["shape"]), "sizing": None, "cap": None,
                "gamma": _q(lit[1], lit[2])}
     else:
         return None
@@ -136,20 +150,23 @@ def _jsonable(row: dict) -> dict:
     return {k: (str(v) if isinstance(v, Fraction) else v) for k, v in row.items()}
 
 
-def build(root: Path) -> dict:
-    """The table from the POUS Project store at `root`: every twin, one per pin (the Lean store's copy of a pin first)."""
-    audit = json.loads((root / LEAN_STORE).read_text())
-    pinned = {k: v.get("type_hash") for k, v in audit["pins"].items()}
+def build(root: Path, repo_audit: Path = REPO_AUDIT) -> dict:
+    """The table from the POUS Project store at `root` and the repository's audit: every twin, one per pin (the Lean
+    store's copy of a pin first, the repository's last)."""
+    files = {rel: root / rel for rel in (LEAN_STORE, *STAGED)} | {REPO_SOURCE: repo_audit}
+    pinned: dict[str, str] = {}
+    for rel in (REPO_SOURCE, LEAN_STORE):
+        pinned |= {k: v.get("type_hash") for k, v in json.loads(files[rel].read_text())["pins"].items()}
     sources, twins, seen = [], [], set()
-    for rel in (LEAN_STORE, *STAGED):
-        raw = (root / rel).read_bytes()
+    for rel, path in files.items():
+        raw = path.read_bytes()
         rows = extract(json.loads(raw)["pins"], rel, pinned)
         sources.append({"path": rel, "sha256": hashlib.sha256(raw).hexdigest(), "twins": len(rows)})
         for r in rows:
             if r["pin"] not in seen:
                 seen.add(r["pin"])
                 twins.append(_jsonable(r))
-    keys = [(t["statement"], t["path"], t["fadd"], t["reading"], t["kind"], t["shape"], t["sizing"]) for t in twins]
+    keys = [(t["statement"], t["path"], t["fadd"], t["reading"], t["kind"], t["shape"], t["sizing"], t["cap"]) for t in twins]
     dup = sorted({k for k in keys if keys.count(k) > 1})
     if dup:
         raise TwinError(f"two pins state the same twin: {dup[:3]}")
@@ -171,11 +188,12 @@ def statement(line: str | None, version: str | None) -> str | None:
 
 
 def lookup(twins: list[dict], statement_: str | None, path: str | None, n: int | None, k: int | None,
-           reading: str = "forming-credited") -> dict:
-    """γ at both FP32 prices for one attempt: the twins of its statement, priced path and cube, the larger published.
-    ``missing`` says what kept it from publishing."""
-    out: dict = {"statement": statement_, "path": path, "reading": reading, "by_price": {}, "published": None,
-                 "published_at": None, "missing": []}
+           reading: str = "forming-credited", cap: Fraction | None = None) -> dict:
+    """γ at both FP32 prices for one attempt: the twins of its statement, priced path and cube, at the statement's cap
+    (`CAPS`; ``cap`` reads another, as history), the larger published.  ``missing`` says what kept it from publishing."""
+    cap = CAPS.get(statement_ or "") if cap is None else Fraction(cap)
+    out: dict = {"statement": statement_, "path": path, "reading": reading, "cap": None if cap is None else str(cap),
+                 "by_price": {}, "published": None, "published_at": None, "missing": []}
     if statement_ is None:
         out["missing"].append("the panel line and version (the statement γ is for)")
     if path is None:
@@ -189,9 +207,11 @@ def lookup(twins: list[dict], statement_: str | None, path: str | None, n: int |
     for fadd in FADD_PRICES:
         hits = [t for t in twins if t["statement"] == statement_ and t["path"] == path and t["shape"] == shape
                 and t["reading"] == reading and t["kind"] in ("unit", "value") and Fraction(t["fadd"]) == fadd
-                and t["sizing"] in (None, RULED_SIZING)]
+                and t["sizing"] in (None, RULED_SIZING)
+                and (cap is None if t.get("cap") is None else Fraction(t["cap"]) == cap)]
         if not hits:
-            out["missing"].append(f"a {reading} twin of {statement_} on {path} at {shape}³, FADD {fadd}")
+            out["missing"].append(f"a {reading} twin of {statement_} on {path} at {shape}³, FADD {fadd}"
+                                  + ("" if cap is None else f", cap {cap}"))
             continue
         t = hits[0]
         out["by_price"][str(fadd)] = {"gamma": t["gamma"], "pin": t["pin"], "type_hash": t["type_hash"], "status": t["status"],
