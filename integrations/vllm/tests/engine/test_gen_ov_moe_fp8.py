@@ -15,6 +15,7 @@ import math
 
 import pytest
 
+from verity_vllm.engine.profiles import generic
 from verity_vllm.engine.profiles.gen_ov_moe_patterns import (FUSED_MOE_PINS, MOE_FP8_CONSTRUCTION_PATTERNS, TRITON_EXPERTS, MoEFusedExperts,
                                                              MoEFusedExpertsFp8, MoEFusedExpertsFp8Ordered)
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
@@ -244,3 +245,26 @@ def test_the_block_fp8_constructions_are_the_pairwise_ones():
     assert MOE_FP8_CONSTRUCTION_PATTERNS == {"indexed-read": MoEFusedExpertsFp8, "indexed-read-ordered": MoEFusedExpertsFp8Ordered}
     res, _ = _resolve(2, naive=True, ctx_kw={"profile": fp8_profile(MoEFusedExpertsFp8)})
     assert isinstance(res[0], Group) and [p.spec.name for p in res[0].parts if isinstance(p, Compute)][0] == "MoeRouterTopKNorm"
+
+
+@pytest.mark.parametrize("world,construction,cls,g", [(1, None, MoEFusedExpertsFp8Ordered, 128), (2, "indexed-read", MoEFusedExpertsFp8, 128),
+                                                      (4, "indexed-read-ordered", MoEFusedExpertsFp8Ordered, 64)])
+def test_a_block_fp8_moe_profile_folds_with_the_fp8_scope_on_the_rank_s_scale_grid(world, construction, cls, g):
+    """`profiles.generic` gives Qwen3-30B-A3B-FP8 the block-FP8 scope of its declared construction, its group the rank's scale grid
+    (`model.fp8_moe_block`: the TP4 rank's 192 expert columns refine 128 to 64), and pins the launch's FP8 arguments in its notes."""
+    prof = generic.build_profile("QWEN3_30B_A3B_FP8", world, moe_construction=construction)
+    moe = [p for p in prof.patterns if isinstance(p, MoEFusedExperts)]
+    assert [type(p) for p in moe] == [cls] and moe[0].group == g and moe[0].name == "moe.fused_experts.pairwise.fp8"
+    Ir, Hr = prof.config["I"], prof.config["H"]
+    assert {"use_fp8_w8a8": True, "group_n": g, "group_k": g}.items() <= prof.notes["moe"]["pins"]["fused_moe_kernel"].items()
+    defs = prof.notes["moe"]["definitions"]
+    assert f"Fp8GroupQuant_v1{{K={Hr},G={g}}}" in defs and f"Fp8GroupQuant_v1{{K={Ir},G={g}}}" in defs
+    assert any(d.startswith(f"MoeExpertFp8GemmW_v1{{E=128,K={Ir},N={Hr},G={g},KB=32,") for d in defs)
+
+
+def test_a_block_fp8_moe_profile_refuses_the_padded_construction_and_a_bf16_one_keeps_the_bf16_scope():
+    with pytest.raises(ValueError, match=r"'padded' is not one of \['indexed-read', 'indexed-read-ordered'\] \(block-FP8 experts\)"):
+        generic.build_profile("QWEN3_30B_A3B_FP8", 1, moe_construction="padded")
+    bf16 = generic.build_profile("QWEN3_30B_A3B", 1)
+    assert [type(p).__name__ for p in bf16.patterns if isinstance(p, MoEFusedExperts)] == ["MoEFusedExpertsOrdered"]
+    assert bf16.notes["moe"]["pins"]["fused_moe_kernel"]["use_fp8_w8a8"] is False
