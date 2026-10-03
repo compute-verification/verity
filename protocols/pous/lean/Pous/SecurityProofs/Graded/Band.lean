@@ -11,7 +11,7 @@ team. Their proof, `band_graded_meets_family`, is checked here and assumes nothi
 
 **The point.** `BandMultiMeetsFamily`'s band: `N` segments (`1 ≤ N ≤ 2^64`) of `2^9` blocks of 64 KiB, in-degree
 `d ≥ 5`, capacity 512, both salt layouts, `D = 5`, `Q = 2^20`, `ε = 2^-128`, `δ = 1%`, with up to `t` late rounds, each
-within a hard bound `(D_late, Q_late)` with `5 ≤ D_late ≤ d`, `D_late < 2^9` and `Q_late ≥ 2^20`:
+within a hard bound `(D_late, Q_late)` with `5 ≤ D_late ≤ d`, `D_late ≤ 12` and `Q_late ≥ 2^20`:
 
 | `t` | `k` | `P[Bin(k, 0.95923) ≥ k − t]` |
 |-----|-----|------------------------------|
@@ -35,8 +35,8 @@ Lowering `β` by at most `22,029` bits (`N ≥ 2`) and `2,829` bits (`N = 1`) ke
 `gradedMeets_zero_iff` (`D = 5 ≤ D_late`, `Q = 2^20 ≤ Q_late`).
 
 **The deployment condition: the window is too short to re-encode `C`.** The certificate holds at every
-`(D_late, Q_late)` (`band_graded_fam_dom`); the conditions on `D_late` are what makes the game's `S`-bit state a model
-of storage at rest (`Graded/Game.lean`), so `BandGradedMeetsFamily` carries them as hypotheses. Block `v` of a segment
+`(D_late, Q_late)` (`band_graded_fam_dom`); the conditions on `D_late` are necessary for the game's `S`-bit state to
+be a model of storage at rest (`Graded/Game.lean`), so `BandGradedMeetsFamily` carries them as hypotheses. Block `v` of a segment
 absorbs its `min(v mod 2^9, d)` newest parents, newest first, then the pad, so it takes `min(v mod 2^9, d) + 1`
 sequential `Π₂` calls even with every parent held, and block `v + 1`'s chain starts from `C_v`. Re-encoding a segment
 from `W` therefore takes `R(d) = Σ_{v < 2^9} (min(v, d) + 1)` sequential calls, at least `R(5) = 3,057`.
@@ -44,10 +44,12 @@ from `W` therefore takes `R(d) = Σ_{v < 2^9} (min(v, d) + 1)` sequential calls,
   `D_late = d + 1` the gap attack rebuilds, within one late round, every dropped block whose parents are held. With
   `D_late ≤ d` a late round, like an on-time one, rebuilds no block at a segment position `≥ d`. At the deployed
   `d = 12` it is `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14 ms`, the bound `band.check_deployment` already puts on `Δ`.
-- `D_late < 2^9` bounds the late rounds when `d ≥ 2^9 − 1`, where the band is the complete DAG and `D_late ≤ d` alone
-  would let one late round re-encode a whole segment (`R = 2^9·(2^9 + 1)/2 = 131,328` calls).
+- `D_late ≤ 12` caps a late round at the deployed in-degree whatever `d` is, so grace adds at most `3·12 = 36`
+  sequential calls to any window. Without it, `D_late ≤ d` alone would let one late round re-encode a whole segment
+  when `d ≥ 2^9 − 1`, where the band is the complete DAG (`R = 2^9·(2^9 + 1)/2 = 131,328` calls). A deployment that
+  wants a larger `D_late` re-pins with its own number.
 - With both, the window of every row of the table, `k − t` rounds of `D = 5` and `t` of `D_late`, is at most
-  `240·5 + 3·511 = 2,733 < 3,057 ≤ R(d)` sequential calls, for every `d ≥ 5`: too short to re-encode a segment from
+  `240·5 + 3·12 = 1,236 < 3,057 ≤ R(d)` sequential calls, for every `d ≥ 5`: too short to re-encode a segment from
   `W`.
 - `Q_late` is any work bound at least `Q`: re-encoding is limited by its depth, not its width.
 -/
@@ -73,11 +75,11 @@ def ChainBandGradedMeetsSegGlobal (N : ℕ) [NeZero N] (d D_late Q_late k t : �
       ((2⁻¹ : ℝ≥0∞) ^ 128)
 
 /-- DRAFT. **The band with grace `t`**: for every `1 ≤ N ≤ 2^64`, `d ≥ 5`, hard bound `(D_late, Q_late)` with
-`5 ≤ D_late ≤ d`, `D_late < 2^9` and `2^20 ≤ Q_late`, and `(t, k)` in the table, both layouts. The conditions on
+`5 ≤ D_late ≤ d`, `D_late ≤ 12` and `2^20 ≤ Q_late`, and `(t, k)` in the table, both layouts. The conditions on
 `D_late` are the deployment condition (the module docstring): the audit's window is too short to re-encode `C`. -/
 def BandGradedMeetsFamily : Prop :=
   ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 5 ≤ d →
-    ∀ D_late Q_late : ℕ, 5 ≤ D_late → D_late ≤ d → D_late < 2 ^ 9 → 2 ^ 20 ≤ Q_late →
+    ∀ D_late Q_late : ℕ, 5 ≤ D_late → D_late ≤ d → D_late ≤ 12 → 2 ^ 20 ≤ Q_late →
     ∀ tk ∈ ([(0, 111), (1, 160), (2, 203), (3, 243)] : List (ℕ × ℕ)),
       ChainBandGradedMeetsSeg N d D_late Q_late tk.2 tk.1 ∧ ChainBandGradedMeetsSegGlobal N d D_late Q_late tk.2 tk.1
 
