@@ -10,8 +10,10 @@ verdict and never the tile's codes.
 
 **The word** (`Pc8CapWord`) is `pearl_c_debit.word_flags` and rev1's `laterZeroPromos` on the chain the tile already
 computes, so C̃ is `pc8`'s word for word:
-  - per group of G atoms the 2^G masked words from +0 (bit j: atom j passes its word through), the unmasked one the
-    chain's own, so 2^G − 1 − G atom steps more per group (11 on G = 4);
+  - per group of G = 4 atoms the 2^G masked words from +0 (bit j: atom j passes its word through), the unmasked one the
+    chain's own: one window primitive per group (`words.PouwBlackwellE4m3Window`, `PouwHopperE4m3Window`), whose bit form
+    builds each atom's products once for all the words it steps, and a constant read of each word (`PouwWindowWord`);
+    every word but +0 is some atom's output, so all 15 finite is every atom output finite;
   - each nonzero mask's word promoted into the total before the group (no add for the group of +0 total or the word +0);
   - **Freeze's certificates in place of the bisection** (`Freeze.lean`'s `certChain`, `keepsFast`): the prover supplies,
     per word and group g < k/(32·G) − 1, the totals [lo_g, hi_g] after group g that the later promotions carry to C̃,
@@ -59,7 +61,9 @@ from ..protocol import DomainError, Shape
 from ..schemes import pearl_c as C
 from ..schemes import pearl_c_debit as D
 from ..schemes.pearl_c_device import DEVICES
+from . import boolean as _boolean  # noqa: F401  registers the windows' _v2 Definitions C-Flock's lowering falls back to
 from . import pc4, pc8
+from . import words as W
 
 F32, BIT, I32, OK = pc8.F32, Value(1), Value(32), pc8.OK
 SLICE = C.SLICE
@@ -172,10 +176,14 @@ def _finite(e: pc4._Emit, ok, x):
     return _and(e, ok, e.call(F32IsFinite, x))
 
 
+#: each core atom's window of masked words (`words.WINDOW`: G = 4)
+WINDOWS = {"blackwell_sm120_e4m3_m16n8k32": W.PouwBlackwellE4m3Window, "hopper_e4m3_wgmma_k32": W.PouwHopperE4m3Window}
+
+
 def _promoted(dev: str, k: int):
     d = DEVICES[dev]
-    if d.g is None or d.atom.name not in pc8.ATOMS:
-        raise DomainError(f"Pearl-C's cap circuit needs a promoted device record with a core atom: not {dev!r}")
+    if d.g != W.WINDOW // SLICE or d.atom.name not in WINDOWS:
+        raise DomainError(f"Pearl-C's cap circuit needs a device record promoted every 4 core atoms: not {dev!r}")
     if k % d.window or k // d.window < 2:
         raise DomainError(f"Pearl-C's cap circuit needs at least two whole promotion windows of {d.window}: k = {k}")
     return d, k // d.window
@@ -193,21 +201,18 @@ def _word_sig(S_):
 def _word_body(B, S_, a, b, cert):
     e, k = pc4._Emit(B), S_.K
     d, ng = _promoted(S_.DEV, k)
-    atom, g_ = pc8.ATOMS[d.atom.name], d.g
+    window, g_ = WINDOWS[d.atom.name], d.g
     full = (1 << g_) - 1
     cmp = _Cmp(e)
     good = 1
     groups, totals = [], [0]
     for g in range(ng):
-        words = {0: 0}
-        for j in range(g_):
-            s = g * d.window + j * SLICE
-            nxt = {}
-            for mask, w in words.items():
-                out = e.call(atom, w, a[s:s + SLICE], b[s:s + SLICE])
-                good = _finite(e, good, out)
-                nxt[mask], nxt[mask | 1 << j] = out, w
-            words = nxt
+        s = g * d.window
+        masked = e.call(window, a[s:s + d.window], b[s:s + d.window])
+        words = {m: e.call(W.PouwWindowWord, masked, m) for m in range(full)}
+        for w in words.values():
+            good = _finite(e, good, w)
+        words[full] = 0
         groups.append(words)
         totals.append(e.call(F32AddV2, totals[-1], words[0]))
         good = _finite(e, good, totals[-1])
