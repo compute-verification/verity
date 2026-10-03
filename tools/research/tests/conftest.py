@@ -26,6 +26,9 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     # ... and never the developer's ~/.research/store.toml remote (an S3 config without credentials in the test env would otherwise
     # be what every test sees).  Tests that want a remote point RESEARCH_STORE_CONFIG at their own file.
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path_factory.mktemp("cfg") / "absent-store.toml"))
+    # ... so a local `research run` would refuse for want of a remote, unless told what preserves its records: a test's run goes
+    # with its tmp dir. The tests of that refusal unset this.
+    monkeypatch.setenv("RESEARCH_LOCAL_ONLY", "a test's run: its store is a tmp dir")
     monkeypatch.setenv("RESEARCH_MACHINES_D", "none")      # the pod registry (pods/registry.py) is each test's explicit choice
     # ... nor the public export: an empty URL is no public source (unset, as the clear above leaves it, would mean fetchset.PUBLIC_URL)
     monkeypatch.setenv("RESEARCH_PUBLIC_URL", "")
