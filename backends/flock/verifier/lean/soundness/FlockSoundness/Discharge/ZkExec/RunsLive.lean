@@ -76,6 +76,8 @@ theorem zk_rep_run_plays {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig S
   · rw [hσ]
     exact hcut
 
+/-- **`RunsZC` at the live `--zk` tables, at the law's draws** (`RunsZCLive`): `TablesAtZKLive` at the draw, the two
+reps' `verifyRep` successes, `zk_rep_run_plays` for each rep, and `zk_table_verdict` at the two results. -/
 theorem runsZC_live : RunsZCLive := by
   intro n mPts Reg I ht dj S₀ y₀ wr L hTab hT hRec hDraw ω R o hacc
   obtain ⟨hh, hrr, hl, hc1⟩ := hT
