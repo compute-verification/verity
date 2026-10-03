@@ -86,7 +86,9 @@ def markdown(table: dict) -> str:
                      f"{r['share_max']:.3g} | {r['epsilon']:.4f} | {r['epsilon_method']} | {fresh} | {verify} |")
     lines += ["", f"ε is the largest of a model's inputs' upper limits on the input's honest tile-rejection rate at the cap, "
               f"each at δ = 0.05/m with m = {table['m']}, every input the table measures over all its models and "
-              f"measurements (served_debit.input_bound); an input is one matmul of the pass."]
+              f"measurements (served_debit.input_bound); an input is one matmul of the pass. Every draw, pass-salt and fresh, "
+              f"weighs an input's tiles by their area |rows|·|cols|, which within one input (one shape) is proportional to "
+              f"`TR.Wref` (`pearlCTilesDevRev1K`: `tileShare` on the tile's rows, not its passing rows)."]
     for r in table["models"]:
         if "forming" in r:
             f = r["forming"]
