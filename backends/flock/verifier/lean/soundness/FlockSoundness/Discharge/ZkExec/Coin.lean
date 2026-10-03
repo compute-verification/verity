@@ -14,6 +14,8 @@ such result (`accZ_lig`).
 * `RunsZC`: the message half, named. On every live outcome flock-verify `--zk` accepts, each rep has a `RepRun` on its
   rounds along `repShapeZ`, with `fin`'s messages as the tail, and the compiled table accepts at the two runs' ends.
 * `decodesZK_of_runsZC`: `RunsZC` gives `DecodesZK` at the compiled table.
+* `RunsOnZC`, `decodes_of_runsOnZC`: the same at the law's draws only, for a decoder that is right only where the
+  coin server's draws are (`DrawOkZK` at `L.draw ω`).
 * `zk_headline_exec_zc_runs`: `zk_headline_exec_zc_execOS` with `RunsZC` in place of `hdec`.
 -/
 
@@ -71,6 +73,32 @@ theorem decodesZK_of_runsZC (h : RunsZC A Hs T I wr opn dec fin capOf) :
   obtain ⟨hl₀, hl₁⟩ := accZ_lig Hs T hacc
   exact ⟨pend, _, _, repZCAt_spineAt A Hs (T S R) o.pts 0 hl₀, h₀, repZCAt_spineAt A Hs (T S R) o.pts 1 hl₁, h₁,
     hacc⟩
+
+/-- **`RunsZC` at the law's draws**: `RunsZC`'s conclusion at the draws `L.draw ω` only, on every live outcome whose
+session directory flock-verify `--zk` accepts there. -/
+def RunsOnZC (L : Law n) : Prop :=
+  ∀ ω R (o : LiveOut mPts), AcceptsZK I (wr (L.draw ω) R o) →
+    ∃ pend : ZkLink.PendZ 𝔽 D Sl × ZkLink.PendZ 𝔽 D Sl,
+      PlaysCoin.RepRun (repZ A Hs T (L.draw ω) R o.pts 0) (shapeZ (K := K) (D := D) T (L.draw ω) R o.pts)
+        (dec (L.draw ω) R) o.rep0 (fin (L.draw ω) R 0 o.proofs) pend.1 ∧
+      PlaysCoin.RepRun (repZ A Hs T (L.draw ω) R o.pts 1) (shapeZ (K := K) (D := D) T (L.draw ω) R o.pts)
+        (dec (L.draw ω) R) o.rep1 (fin (L.draw ω) R 1 o.proofs) pend.2 ∧
+      accZ T (L.draw ω) R
+        (outZ Hs T (L.draw ω) R (capOf (L.draw ω) R o.rootB) pend (opn (L.draw ω) R o.proofs)) = true
+
+omit [Fintype K] in
+/-- **`Decodes` at the law's draws from `RunsOnZC`** (`decodesZK_of_runsZC` at `L.draw ω`), with
+`one := fun _ _ _ => true`. -/
+theorem decodes_of_runsOnZC {L : Law n} (h : RunsOnZC A Hs T I wr opn dec fin capOf L) (ω : L.Ω) (R : Reg) :
+    Decodes (outZ Hs T (L.draw ω) R) (fun o => AcceptsZK I (wr (L.draw ω) R o))
+      (fun x => accZ T (L.draw ω) R x = true) (opn (L.draw ω) R) (dec (L.draw ω) R) (fun _ => true)
+      (fin (L.draw ω) R) (capOf (L.draw ω) R) (repZ A Hs T (L.draw ω) R) := by
+  refine PlaysCoin.decodesOfRunsAt (outZ Hs T (L.draw ω) R) _ _ (opn (L.draw ω) R) (dec (L.draw ω) R)
+    (fin (L.draw ω) R) (capOf (L.draw ω) R) (repZ A Hs T (L.draw ω) R) fun o ho => ?_
+  obtain ⟨pend, h₀, h₁, hacc⟩ := h ω R o ho
+  obtain ⟨hl₀, hl₁⟩ := accZ_lig Hs T hacc
+  exact ⟨pend, _, _, repZCAt_spineAt A Hs (T (L.draw ω) R) o.pts 0 hl₀, h₀,
+    repZCAt_spineAt A Hs (T (L.draw ω) R) o.pts 1 hl₁, h₁, hacc⟩
 
 variable {C : Circuit} (P : Partition C n) (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planOne T S R).length)
   {decode : DecoderZK (C := C) (planOne T) tab} {Dh : Type} {Hc : List UInt8 → Dh}

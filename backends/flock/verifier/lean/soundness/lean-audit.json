@@ -9973,6 +9973,7 @@
    "assumptions": [],
    "type_hash": "f81fede492dc1910b940fffff885ae0cec210c7af1c3646fbca41902e77a8279"
   },
+  "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC": {},
   "FlockSoundness.Discharge.ZkExec.execRefinesZK_one": {
    "signature": [
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one {n : Nat} {Reg : Type} {mPts : Nat}",
@@ -10031,11 +10032,7 @@
    "assumptions": [],
    "type_hash": "fbea58a87bb102044e7cb39c360ae1368240183655f5f1b51167c2edec35dae0"
   },
-  "FlockSoundness.Discharge.ZkExec.runsZC_live": {
-   "signature": ["FlockSoundness.Discharge.ZkExec.runsZC_live : FlockSoundness.Discharge.ZkExec.RunsZCLive"],
-   "assumptions": [],
-   "type_hash": "79f1a5496c22ecb8952c92e9466415b4ac17b9ff6a3c2b1b58486fb2f391f311"
-  },
+  "FlockSoundness.Discharge.ZkExec.runsZC_live": {},
   "FlockSoundness.Discharge.ZkExec.verifyInner_ok": {
    "signature": ["FlockSoundness.Discharge.ZkExec.verifyInner_ok : FlockSoundness.Discharge.ZkExec.ZkInnerOk"],
    "assumptions": [],
