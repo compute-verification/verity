@@ -430,15 +430,15 @@ def test_install_restarts_each_running_service_whose_unit_or_environment_changed
     assert {d["unit"]: d["state"] for d in dry["restarts"]} == {"systemd:s.service": "would restart",
                                                                "systemd:t.service": "not running",
                                                                "user-systemd:u.service": "would restart"}
-    assert not [c for c in calls if "is-active" not in c] and not (node / "units" / "s.service").exists()
+    assert not [c for c in calls if "is-active" not in c or "sudo" in c] and not (node / "units" / "s.service").exists()
 
     calls.clear()
     assert deploy.main(["install", "n", "--by", "lane-x", "--apply", "--no-fetch"], run=run, manifest=world["manifest"],
                        repo=repo) == 0
     assert calls == [["sudo", "-n", "systemctl", "daemon-reload"], ["systemctl", "--user", "daemon-reload"],
-                     ["sudo", "-n", "systemctl", "is-active", "--quiet", "s.service"],
+                     ["systemctl", "is-active", "--quiet", "s.service"],
                      ["sudo", "-n", "systemctl", "try-restart", "s.service"],
-                     ["sudo", "-n", "systemctl", "is-active", "--quiet", "t.service"],
+                     ["systemctl", "is-active", "--quiet", "t.service"],
                      ["systemctl", "--user", "is-active", "--quiet", "u.service"],
                      ["systemctl", "--user", "try-restart", "u.service"]]               # never s.timer, g.service, nor t's start
     out = capsys.readouterr().out

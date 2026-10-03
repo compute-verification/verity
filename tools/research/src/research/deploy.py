@@ -470,8 +470,11 @@ def restarts(node: Node, changed: dict[str, Entry], old: dict[str, list]) -> dic
 
 
 def systemctl(unit: str, *args: str) -> list[str]:
+    """`systemctl` on a unit: research's own manager for a user unit, else the system's, as root only to change it."""
     kind, _, name = unit.partition(":")
-    return ["systemctl", "--user", *args, name] if kind == "user-systemd" else ["sudo", "-n", "systemctl", *args, name]
+    if kind == "user-systemd":
+        return ["systemctl", "--user", *args, name]
+    return ["systemctl", *args, name] if args[0] == "is-active" else ["sudo", "-n", "systemctl", *args, name]
 
 
 def restart(node: Node, plan: dict[str, list[str]], run: Runner, apply: bool) -> list[dict]:
