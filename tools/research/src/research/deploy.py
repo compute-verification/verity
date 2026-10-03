@@ -610,7 +610,12 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
     a.add_argument("--apply", action="store_true", help="move them (else only say what would move)")
     for p in (d, i, a):
         p.add_argument("--no-fetch", action="store_true", help="don't `git fetch origin main` first")
-    ns = ap.parse_args(argv)
+    # argparse leaves a positional that follows an option unmatched, and subparsers rule out parse_intermixed_args
+    ns, rest = ap.parse_known_args(argv)
+    if rest and (ns.cmd == "drift" or any(r.startswith("-") for r in rest)):
+        ap.error(f"unrecognized arguments: {' '.join(rest)}")
+    if rest:
+        ns.paths += rest
     if not ns.no_fetch:
         subprocess.run(["git", "-C", str(repo), "fetch", "-q", "origin", "main"], capture_output=True)
     nodes = load(manifest, manifest_at(ns.ref, repo) if manifest == MANIFEST else None)

@@ -168,7 +168,7 @@ def test_install_refuses_an_unpushed_commit_and_installs_a_pushed_one_atomically
     assert c["state"] == "ahead" and "by lane-x from origin/fix" in c["detail"]
 
     assert all(f["changed"] is False for f in deploy.install(n, "origin/fix", "lane-x", [], local, apply=True, repo=repo)["files"])
-    assert deploy.main(["install", "n", str(node / "bin" / "c.py"), "--ref", "origin/main", "--by", "lane-x", "--apply",
+    assert deploy.main(["install", "n", "--ref", "origin/main", "--by", "lane-x", str(node / "bin" / "c.py"), "--apply",
                         "--no-fetch"], run=local, manifest=world["manifest"], repo=repo) == 0
     assert "installed     " in capsys.readouterr().out and (node / "bin" / "c.py").read_text() == "c1\n"
     with pytest.raises(deploy.Refused, match="not in deploy.toml for n: nope"):
@@ -264,7 +264,10 @@ def test_attic_moves_only_strays_none_a_process_runs_and_records_where_each_went
     assert deploy.main(["attic", "n", str(bak.with_name("nope")), "--by", "lane-x", "--no-fetch"], run=local,
                        manifest=world["manifest"], repo=world["repo"]) == 3
 
-    assert deploy.main(["attic", "n", str(one_off), "--backups", "--by", "lane-x", "--apply", "--no-fetch"], run=local,
+    with pytest.raises(SystemExit):
+        deploy.main(["attic", "n", "--by", "lane-x", str(one_off), "--bogus", "--no-fetch"], run=local, manifest=world["manifest"],
+                    repo=world["repo"])
+    assert deploy.main(["attic", "n", "--backups", "--by", "lane-x", str(one_off), "--apply", "--no-fetch"], run=local,
                        manifest=world["manifest"], repo=world["repo"]) == 0
     assert "restore one with `sudo mv DEST PATH`" in capsys.readouterr().out
     assert not bak.exists() and not one_off.exists() and not old_tree.exists() and (node / "tree").is_dir()
