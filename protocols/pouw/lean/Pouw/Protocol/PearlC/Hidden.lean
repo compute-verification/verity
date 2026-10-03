@@ -31,7 +31,13 @@ every collision finder its theorems build from `σ` (`TableCR`, `LinkCR`, and th
 `flock_e2e_drawn_hm96_reads`, the last from the registrant's rows, salts and paths, here `τ`'s under `o`) meets
 `SHA512CRStrict` (`cr/sha-512`) or `SHA512CRExpected` (`ecr/sha-512`) at budget `q`. A bare count of SHA-512 evaluations
 would not do: some strategy has a SHA-512 collision built in and opens a commitment two ways after no evaluations, and
-no soundness bound holds for it (`SHA512CRExpected`'s docstring). -/
+no soundness bound holds for it (`SHA512CRExpected`'s docstring).
+
+An empty class, or any `Bounded` that excludes the honest prover, makes `TileProofSoundAll` and `GγHidden` vacuous:
+the first then holds at any `ηzk ≥ 0` and says nothing about the proof system, so the second follows from `GγSampled`
+alone. So a γ under the hidden audit is cited
+only beside its instance's pinned theorem that the honest prover, at its stated `q` (the batch's whole work), satisfies
+`ProverBounded`. -/
 structure HiddenAudit (Q R S : Type) where
   Root : Type
   Opening : Type
