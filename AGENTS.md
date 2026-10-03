@@ -248,6 +248,10 @@ nothing that bounds spend or preserves results may depend on one: pods bound
 themselves (`research pods create --max-hours`, under a line of the notes repo's
 `budgets.toml`), and runs preserve their results from the pod.
 
+Never print a secret's value. List environment variable names with `compgen -e` (or `env -0 | cut -z -d= -f1 | tr '\0' '\n'`),
+never `env | cut`, `env | grep` or `printenv | …`: a multi-line value's later lines print as if they were names. A secret
+is stored as one line (a key as base64, `NAME_B64`), and `tools/agent-guard/install.sh` puts a redacting `env` on the VM.
+
 Architectural rationale and human-facing reports belong in Notion;
 experimental evidence belongs in artifact storage. Temporary working notes
 need not become permanent documentation. Remove obsolete rules and machinery
