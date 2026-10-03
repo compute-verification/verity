@@ -46,6 +46,9 @@ Pous/SecurityProofs/P2/             proved: the `m1p` pins (Count, Rows, Domain,
                                     bits breaks `k = 88` from `L = 2^30`)
 Pous/SecurityProofs/Chain/Flat.lean proved, generated: P3 with a concrete `H`, the band, the dense chain scheme and
                                     the public encoder over the overwrite chain (the graded lanes, flattened)
+Pous/SecurityProofs/Graded/         DRAFT, not reviewed, not pinned: the audit with up to `t` late rounds (`Game.lean`,
+                                    new trusted surface), its Theorem 1(ii) and the band at `D = 5`; nothing in it
+                                    is a guarantee until its statements move to the trusted layer and are pinned
 lean-audit.json                     the policy and pin records for tools/lean/audit.py
 CheckAxioms.lean                    one #print axioms line per headline theorem
 PousTargets.lean                    untrusted, not in the default build: the open statements as sorry targets
