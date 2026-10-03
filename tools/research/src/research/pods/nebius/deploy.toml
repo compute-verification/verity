@@ -93,6 +93,11 @@ nodes = ["vy-nebius-2"]
 run = ["systemd:vy-retention-gc@vy-nebius-2.timer", "systemd:vy-retention-dry-run@vy-nebius-2.timer"]
 
 [[file]]
+path = "/usr/local/lib/vy-research/store.pod.toml"
+src = "tools/research/store.pod.toml"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+
+[[file]]
 path = "/etc/systemd/system/vy-retention-gc@.service"
 src = "tools/research/src/research/pods/nebius/vy-retention-gc@.service"
 nodes = ["vy-nebius-1", "vy-nebius-2"]
