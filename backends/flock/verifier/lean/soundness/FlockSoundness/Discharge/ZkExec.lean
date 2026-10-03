@@ -16,3 +16,9 @@ import FlockSoundness.Discharge.ZkExec.RunsFrames
 import FlockSoundness.Discharge.ZkExec.RunsSizes
 import FlockSoundness.Discharge.ZkExec.RunsCarries
 import FlockSoundness.Discharge.ZkExec.RunsCut
+import FlockSoundness.Discharge.ZkExec.PlaysStatements
+import FlockSoundness.Discharge.ZkExec.PlaysReplay
+import FlockSoundness.Discharge.ZkExec.PlaysLig
+import FlockSoundness.Discharge.ZkExec.PlaysInner
+import FlockSoundness.Discharge.ZkExec.PlaysRep
+import FlockSoundness.Discharge.ZkExec.PlaysRun
