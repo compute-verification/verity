@@ -9,8 +9,9 @@ they must admit, in scratch stores (`canary`).
 Run in the checkout of the target branch.  It merges the commit REF names (`git merge --no-ff`) only if the evidence store holds
 a passing attempt of the tool (default `check`) for that exact commit: `state` done, rc 0, source commit REF's, tree clean, as
 the attempt's own record says (the index only finds it), and a result of a kind the target's declaration of the tool produces
-(`Tool.produces`: `check/v1` for check; an attempt with no result, or whose record or result can't be read, passes no gate).
-With a usable remote the catalog's attempts are refreshed first, so an attempt recorded on another machine counts.  Refused as well: a
+(`Tool.produces`: `check/v1` for check; an attempt with no result, or whose record or result can't be read, passes no gate)
+and not in `REFUSED_KINDS` (the Lean fast path's `lean-fast/v1`, which skips the kernel replay).  With a usable remote the
+catalog's attempts are refreshed first, so an attempt recorded on another machine counts.  Refused as well: a
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
 ancestor of REF) unless merging REF leaves REF's own tree (`tree_identical`: what the target gained is in REF already, as when a
 train checked on the train ahead of it lands after that one), since otherwise the merged tree is not the one that was checked;
@@ -66,6 +67,12 @@ def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProc
     return r
 
 
+#: result kinds that pass no merge gate, whatever `--tool` recorded them and whatever its declaration says it produces:
+#: `lean-fast/v1` is the Lean fast path's (`tools/check/lean_changed.py --records`), an audit without the kernel replay,
+#: which every merge check keeps
+REFUSED_KINDS = frozenset({"lean-fast/v1"})
+
+
 def declaration(repo: Path, tool: str):
     """The target's own declaration of ``tool``, read from the checkout (not from the commit being merged), or None when the
     checkout has none."""
@@ -86,8 +93,8 @@ def produced(repo: Path, tool: str) -> frozenset[str]:
 
 def refused(store, run_id: str, kinds: frozenset[str], tool: str | None = None, commit: str | None = None) -> str | None:
     """Why the attempt can't pass the gate whatever the index says of it, or None: its record can't be read, or doesn't say
-    what the index row did (a passing ``tool`` attempt of the clean ``commit``), or its result can't be read or is not of a kind
-    in ``kinds`` (the tool's `produced`; an attempt that published no result has none)."""
+    what the index row did (a passing ``tool`` attempt of the clean ``commit``), or its result can't be read, is in
+    `REFUSED_KINDS`, or is not of a kind in ``kinds`` (the tool's `produced`; an attempt that published no result has none)."""
     try:
         doc = store.get_attempt(run_id)
     except Exception as e:  # noqa: BLE001  (a guard never fails open)
@@ -105,6 +112,8 @@ def refused(store, run_id: str, kinds: frozenset[str], tool: str | None = None, 
         kind = store.get_manifest(art).kind if art else None
     except Exception as e:  # noqa: BLE001  (a guard never fails open)
         return f"its result can't be read ({type(e).__name__}: {e})"
+    if kind in REFUSED_KINDS:
+        return f"its result is a {kind}, which no merge accepts"
     if kind not in kinds:
         return ((f"its result is a {kind}" if kind else f"its result {art} has no kind" if art else "it published no result") +
                 f", and the target's declaration of the tool produces {', '.join(sorted(kinds)) or 'nothing'}")

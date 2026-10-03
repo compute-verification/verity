@@ -68,7 +68,9 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     and its toolchain and manifest are unchanged; a miss is audited on a scratch tree holding only those, so a
                     read outside them fails there; fetched dependencies stay warm on the machine under manifest + toolchain,
                     and a machine without them restores the bundle `lean-deps.json` pins from the store, not from GitHub; a
-                    step that audits any package first waits for one of the node's Lean audit slots (`lean_slot.py`)
+                    step that audits any package first waits for one of the node's Lean audit slots (`lean_slot.py`). The
+                    step fails on a fast-path result in its `audit.json`, cached or not (`lean_fast`): no merge check
+                    accepts an audit without the kernel replay
     lean-changed    not a verdict: its tree under `lean-changed/` keeps each package's last build there, so Lake rebuilds only
                     what changed and what imports it, and its fetched dependencies are hard links to lean-audit's, read-only
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: backends/flock/verifier/'s
@@ -230,6 +232,26 @@ def lean_audit_misses(cache: bool = True) -> bool:
     if not cache or files is None:
         return True
     return any(not (cache_dir() / "lean-audit" / f"{la.key(p, files, la.FLAGS)}.json").is_file() for p in la.packages(files))
+
+
+def lean_fast(out: Path) -> str | None:
+    """Why the lean-audit step's pass is refused, or None: its `audit.json` can't be read, or holds a fast-path result
+    (`lean_changed.py --records`) for a package, a report of kind `lean_changed.FAST_KIND` or a pass without the kernel replay."""
+    p = out / "lean-audit" / "audit.json"
+    try:
+        doc = json.loads(p.read_text())
+    except (OSError, ValueError) as e:
+        return f"refused: no readable {p} ({type(e).__name__}) shows that every package had the full audit"
+    reports = doc.get("packages", []) if isinstance(doc, dict) else None
+    if not isinstance(reports, list) or not all(isinstance(r, dict) for r in reports):
+        return f"refused: {p} is not an audit's report (an object whose packages are a list of objects)"
+    kind = _load("lean_changed").FAST_KIND
+    replayed = [isinstance(r.get("seconds"), dict) and "replay" in r["seconds"] for r in reports]
+    fast = [str(r.get("package")) for r, rep in zip(reports, replayed) if r.get("kind") == kind or (not r.get("failures") and not rep)]
+    if fast or doc.get("kind") == kind:
+        return (f"refused: {', '.join(fast) or p}: a {kind} result (the fast path: no kernel replay, no tests), which no merge "
+                "check accepts")
+    return None
 
 
 def lean_slot(cmd: list[str]) -> list[str]:
@@ -775,11 +797,14 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
             rc = p.wait() if p is not None else None
         if rc is None:
             rec = {"step": name, "status": "stopped", "detail": f"not started: {steps.halted} failed"}
+        elif rc == 0 and name == "lean-audit" and (why := lean_fast(out)):
+            print(f"check: {name}: {why}", flush=True)
+            rec = {"step": name, "status": "failed", "rc": rc, "log": log.name, "detail": why}
         else:
             rec = {"step": name, "status": "passed" if rc == 0 else "failed", "rc": rc, "log": log.name}
             if rc and name in HALTS_ON and HALTS_ON[name] in log.read_text(errors="replace"):
                 rec["halts"] = True
-        if rc == 0 and key:
+        if rec["status"] == "passed" and key:
             entry.parent.mkdir(parents=True, exist_ok=True)
             entry.write_text(json.dumps({"key": key, "argv": argv, "passed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}))
             rec["cache"] = {"stored": key}

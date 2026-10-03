@@ -389,10 +389,45 @@ def test_a_move_audit_py_prints_as_the_same_statements_needs_no_grant_and_a_chan
     assert "#23 needs the statement-reviewer grant" in capsys.readouterr().err
 
 
+def test_merge_refuses_an_attempt_whose_result_is_the_lean_fast_paths_whatever_tool_recorded_it(tmp_path, monkeypatch, capsys):
+    """The coordinator's ruling: no merge accepts the Lean fast path's result (`lean_changed.py --records`, no kernel replay).
+    An attempt of `check` that passed on the exact commit is refused when its result is of a kind in `REFUSED_KINDS`, or can't
+    be read; the push guard reads the same `passing`. A `check/v1` result of the same commit merges."""
+    from research.merge import REFUSED_KINDS, unchecked_pushes
+    from research.store import ids
+    from research.store.local import LocalStore
+
+    main, feat, tip = _repos(tmp_path)
+    base = _git(main, "rev-parse", "HEAD")
+
+    def run(kind: str) -> int:
+        monkeypatch.chdir(feat)
+        return research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool",
+                              "mytools.decl_check:T", "--cwd", "source", "--", sys.executable, "-c",
+                              (_RESULT % "passed").replace("check/v1", kind)])
+
+    assert "lean-fast/v1" in REFUSED_KINDS and run("lean-fast/v1") == 0
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--dry-run"]) == 3
+    assert "refused: its result is a lean-fast/v1, which no merge accepts" in capsys.readouterr().err
+    assert unchecked_pushes(main, [f"refs/heads/main {tip} refs/heads/main {base}"], LocalStore()) == [tip]
+    assert run("check/v1") == 0
+    store = LocalStore()
+    results = [store.get_attempt(r[0])["outputs"]["result"] for r in store.index.sql("SELECT id FROM attempts WHERE tool = 'check'")]
+    art = next(a for a in results if store.get_manifest(a).kind == "check/v1")
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--dry-run"]) == 0
+    store.manifest_path(ids.hex_of(art)).unlink()
+    assert merge_main(["feat", "--dry-run"]) == 3
+    assert "refused: its result can't be read (NotFound" in capsys.readouterr().err
+
+
 def test_merge_admits_only_a_result_of_a_kind_the_targets_declaration_produces(tmp_path, monkeypatch, capsys):
-    """A `check` attempt that passed on the exact commit but published no result (`research run --tool check -- true`) merged,
-    and so did one whose result is of another kind (red team, #966).  The gate admits only a kind the target's own declaration
-    produces (`check/v1` for check), and nothing when the target declares none."""
+    """Refusing the kinds it knew to refuse let through a `check` attempt with no result (`research run --tool check -- python3
+    tools/lean/audit.py --no-replay PKG` writes none) and a result of any other kind (red team, #966).  The gate admits only a
+    kind the target's own declaration produces (`check/v1` for check), and nothing when the target declares none."""
+    from research.merge import produced
+
     main, feat, _tip = _repos(tmp_path)
     assert _record(tmp_path, feat, monkeypatch, "true") == 0
     assert _record(tmp_path, feat, monkeypatch, sys.executable, "-c", (_RESULT % "passed").replace("check/v1", "bench-result/v1")) == 0
@@ -408,6 +443,7 @@ def test_merge_admits_only_a_result_of_a_kind_the_targets_declaration_produces(t
     monkeypatch.chdir(main)
     assert merge_main(["feat", "--dry-run"]) == 3
     assert "refused: its result is a check/v1, and the target's declaration of the tool produces nothing" in capsys.readouterr().err
+    assert produced(tmp_path, "check") == frozenset(), "no declaration at all"
 
 
 def test_merge_refuses_an_attempt_whose_record_cant_be_read_or_disagrees_with_the_index(tmp_path, monkeypatch, capsys):
