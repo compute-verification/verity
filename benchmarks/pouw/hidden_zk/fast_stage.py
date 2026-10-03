@@ -12,7 +12,8 @@ the circuit back.
       returns stands for that text with the file in the newlines' place: its digests (`circuit.digest`,
       `circuit.class_digest`) and circuit.txt are streamed from the parts, both digests in the pass that writes the file
     - any other text's SHA-512 / SHA-256 goes in pieces of 64 Mi characters, each computed once
-    - `ir_lower.evaluate_layout` XORs a row's columns with `functools.reduce`: the same values
+    - the unit's layout (`ands_layout`) sorts each form's columns in one call, and `ir_lower.evaluate_layout` XORs a row's
+      columns with `functools.reduce`: the same rows and values
 
 stage.py runs the library unpatched under `HZ_STAGE=library`; both write the same bytes."""
 from __future__ import annotations
@@ -166,6 +167,84 @@ def _lowering_sha256(self) -> str:
     return d
 
 
+def ands_layout(C, in_names, out_names, in_split=None, out_split=None):
+    """`ir_lower.layout` of a circuit of inputs and ANDs only: the same rows, each form's columns sorted in one call (every
+    form's bits are distinct and laid out, so the library's parity pass keeps them all) and the constant column, the last,
+    appended."""
+    W = IL.WORD
+    live = C.live()
+    col = [-1] * len(C.kind)
+    rows_a: list = []
+    rows_b: list = []
+
+    def aligned(n: int, nbits: int) -> tuple[int, int]:
+        words = IL.ceil_pow2(max(1, -(-nbits // W)))
+        return -(-n // (W * words)) * (W * words), words
+
+    def pad(to: int) -> None:
+        rows_a.extend([] for _ in range(to - len(rows_a)))
+        rows_b.extend([] for _ in range(to - len(rows_b)))
+
+    in_groups = []
+    for g in IL._groups(in_names, in_split):
+        bits = [len(C.inputs[nm]) for nm in g]
+        at, words = aligned(len(rows_a), sum(bits))
+        pad(at)
+        for nm in g:
+            for w in C.inputs[nm]:
+                (v,) = tuple(w.s)
+                col[v] = i = len(rows_a)
+                rows_a.append([i])
+                rows_b.append([i])
+        pad(at + words * W)
+        in_groups.append((at // W, words, bits))
+    ands = [v for v, kind in enumerate(C.kind) if kind == "and" and v in live]
+    first = len(rows_a)
+    for i, v in enumerate(ands, first):
+        col[v] = i
+    n = first + len(ands) + len(C.asserts)
+    out_at = []
+    for g in IL._groups(out_names, out_split):
+        bits = [len(C.outputs[nm]) for nm in g]
+        at, words = aligned(n, sum(bits))
+        out_at.append((g, at, words, bits))
+        n = at + words * W
+    const = n
+    get = col.__getitem__
+
+    def form(Lf) -> list:
+        r = sorted(map(get, Lf.s))
+        if Lf.c & 1:
+            r.append(const)
+        return r
+
+    data = C.data
+    for v in ands:
+        a, b = data[v]
+        rows_a.append(form(a))
+        rows_b.append(form(b))
+    for _, Lf in C.asserts:
+        rows_a.append(sorted(form(Lf) + [len(rows_a)]))
+        rows_b.append([const])
+    out_groups = []
+    for g, at, words, bits in out_at:
+        pad(at)
+        for nm in g:
+            for w in C.outputs[nm]:
+                rows_a.append(form(w))
+                rows_b.append([const])
+        pad(at + words * W)
+        out_groups.append((at // W, words, bits))
+    assert len(rows_a) == const
+    rows_a.append([const])
+    rows_b.append([const])
+    lay = IL.Layout(rows_a, rows_b, const, in_groups, out_groups, {})
+    lay.counts = {"ands": len(ands), "asserts": len(C.asserts), "rows": len(rows_a), "in_words": lay.in_words,
+                  "out_words": lay.out_words, "nnz_a": sum(map(len, rows_a)), "nnz_b": sum(map(len, rows_b)), "reads": 0,
+                  "read_rows": 0, "read_nnz_a": 0}
+    return lay
+
+
 def evaluate_layout(lay, ports, T, flip=None):
     """`ir_lower.evaluate_layout`."""
     mask = (1 << T) - 1
@@ -222,8 +301,9 @@ def install(scratch: Path) -> None:
             _lowering.pop()
 
     def layout_(C, *a, **k):
-        lay = layout(C, *a, **k)
-        if getattr(C, "_compact", False):
+        compact = getattr(C, "_compact", False)
+        lay = (ands_layout if compact and set(C.kind) <= {"in", "and"} else layout)(C, *a, **k)
+        if compact:
             C.data = [None if kind == "and" else d for kind, d in zip(C.kind, C.data)]
         return lay
 
