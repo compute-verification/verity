@@ -1825,7 +1825,7 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     assert "no Job: 1 not run by this machine, 1 settling (triage lists them)" in dry.stdout
     assert R["n2copy"] not in dry.stdout and R["fresh"] not in dry.stdout and R["live"] not in dry.stdout
     assert f"would start {jobs}/store's pending push (Job n1-store-push-jobs)" in dry.stdout
-    assert f"1 record-less attempt(s) held ({state}/record-less-*)" in dry.stdout and not list(state.glob("record-less-*"))
+    assert "1 record-less attempt(s) held (triage's attempt-unpreserved)" in dry.stdout
     assert "sudo -n -u #1000 env" in log.read_text() and "sudo -n -u #1001 env" in log.read_text()
 
     unbounded = round_(VY_CUSTODY_PASS_S="0")
@@ -1833,12 +1833,11 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     assert "round bounded (0 Job(s) in" in unbounded.stdout and "5 run(s) left" in unbounded.stdout
     assert held() == [R["empty"], R["big"]] and "2 run(s) held" in unbounded.stdout
     assert f"research data label {R['empty']} custody never-ran --by WHO) and the hold lifts itself" in unbounded.stdout
-    assert (state / "record-less-jobs").read_text() == f"{R['legacy']}\n" and (state / "record-less-research").read_text() == ""
     push = job("n1-store-push-research")["job"]
     assert push["spec"]["template"]["spec"]["securityContext"] == {"runAsUser": 1001, "runAsGroup": 1001}
     assert push["spec"]["ttlSecondsAfterFinished"] == 3600 and "research data push --pending --jobs 8" in command("n1-store-push-research")[5]
     assert command("n1-store-push-research")[6:] == ["n1-custody", str(node.src), str(node.py), f"{research}/store", f"{research}/runs",
-                                                     "--except-attempts", f"{state}/record-less-research"]
+                                                     "--skip-record-less"]
 
     bounded = round_(VY_CUSTODY_MAX_RUNS="1")
     assert bounded.returncode == 1 and created()[2:] == [n1["done"]] and "4 run(s) left" in bounded.stdout, bounded.stdout
@@ -1901,7 +1900,7 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     assert data_main(["push", R["legacy"], "--store", str(jobs / "store")]) == 0       # a person's ruling: on R2 as it is
     done = round_(VY_CUSTODY_MAX_FILES="20")
     assert done.returncode == 0 and created()[-1] == n1["big"] and preserved(J["big"]), done.stdout
-    assert "record-less" not in done.stdout and "1 attempt-no-record" in done.stdout and (state / "record-less-jobs").read_text() == ""
+    assert "record-less" not in done.stdout and "1 attempt-no-record" in done.stdout
     assert round_().returncode == 0 and created()[-1] == n1["big"], "nothing left: no Job"
     pending = round_(FAIL_PENDING="1")
     assert pending.returncode == 1 and f"{jobs}/store: the pending push failed (Job n1-store-push-jobs" in pending.stdout
@@ -2099,35 +2098,39 @@ def test_n1_custody_pushes_no_record_less_attempt_that_never_left_node_1(tmp_pat
     """#1004's red-team F7: a local attempt published without its run record that R2 lacks is `attempt-unpreserved`, so a round ran
     `custody --publish` on it, and each store's pending push takes every attempt R2 lacks: R2's write-once key would keep it without
     its logs for good (28 under node 1's /workspace/jobs/runs on 3 Oct). Until a person rules, a round holds them record-less: no
-    Job, one line counting them, a failed round, nothing superseded, and STATE/record-less-STORE, which the pending push's own
-    command leaves out. Once one is on R2 (pushed by hand, as it is) triage calls it attempt-no-record, and it is no longer held."""
+    Job, one line counting them, a failed round and nothing superseded; the pending push's own command skips every attempt without a
+    run record. Once one is on R2 (pushed by hand, as it is) triage calls it attempt-no-record, and it is no longer held."""
     from research.store import attempt as A
     from research.store.cli import main as data_main
     from research.store.local import LocalStore, attempt_key
 
     node = _n1_custody(tmp_path)
-    rid, ok = "r20261003-200000-1101", "r20261003-200000-1102"
+    rid, ok, gone = "r20261003-200000-1101", "r20261003-200000-1102", "r20261003-200000-1103"
     d = node.run(node.jobs, rid, "done")
     node.run(node.jobs, ok, "done")
-    assert A.publish(d, store=LocalStore(node.jobs / "store", config_path=node.absent), remote_push=False, run_record=False)["published"]
+    for r in (rid, gone):                                   # `gone`'s run dir was removed: no triage lists it, the push still skips it
+        assert A.publish(node.run(node.jobs, r, "done") if r == gone else d, store=LocalStore(node.jobs / "store", config_path=node.absent),
+                         remote_push=False, run_record=False)["published"]
+    shutil.rmtree(node.jobs / "runs" / gone)
     for p in d.rglob("*"):
         os.utime(p, (N1_OLD, N1_OLD))
     out = node.round_()
     assert out.returncode == 1 and node.created() == [f"n1-custody-{ok}", "n1-store-push-jobs", "n1-store-push-research"], out.stdout + out.stderr
-    assert f"1 record-less attempt(s) held ({node.state}/record-less-*)" in out.stdout and not node.held()
-    assert (node.state / "record-less-jobs").read_text() == f"{rid}\n" and (node.state / "record-less-research").read_text() == ""
+    assert "1 record-less attempt(s) held (triage's attempt-unpreserved)" in out.stdout and not node.held()
     push = node.command("n1-store-push-jobs")
-    assert push[-2:] == ["--except-attempts", f"{node.state}/record-less-jobs"]
+    assert push[-1] == "--skip-record-less"
     pushed = subprocess.run(["bash", "-c", push[5].replace("HOME=/tmp", f"HOME={tmp_path / 'home'}"), *push[6:]], capture_output=True,
                             text=True, env={**os.environ, "RESEARCH_STORE_CONFIG": str(node.remote)})
-    assert f"1 attempt(s) left out ({node.state}/record-less-jobs)" in pushed.stderr, pushed.stdout + pushed.stderr
-    assert not (node.vault / attempt_key(rid)).exists() and not (node.jobs / "store" / "attempts" / ".superseded").exists()
+    assert pushed.returncode == 0, pushed.stdout + pushed.stderr
+    assert f"2 attempt(s) without a run record not pushed (--skip-record-less): {rid} {gone}" in pushed.stderr, pushed.stderr
+    assert not (node.vault / attempt_key(rid)).exists() and not (node.vault / attempt_key(gone)).exists()
+    assert not (node.jobs / "store" / "attempts" / ".superseded").exists()
 
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(node.remote))
     assert data_main(["push", rid, "--store", str(node.jobs / "store")]) == 0
     after = node.round_()
     assert after.returncode == 0 and "record-less" not in after.stdout and "1 attempt-no-record" in after.stdout, after.stdout
-    assert (node.state / "record-less-jobs").read_text() == "" and len(node.created()) == 3
+    assert len(node.created()) == 3
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")

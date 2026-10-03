@@ -21,8 +21,8 @@
 # a `custody never-ran` label lifts it; any other is evidence, a killed run a failed attempt. `attempt-no-record` (an attempt
 # published without its run record, which it can never gain) gets no Job: triage lists it until a person waives its logs. A local
 # attempt published without its run record that never reached R2 (`attempt-unpreserved`) is held record-less: no Job, and each
-# store's pending push leaves out the ones STATE/record-less-STORE lists, since R2's write-once key would keep it without its logs;
-# one line counts them, and they fail the round until a person rules on them.
+# store's pending push skips every attempt without a run record (--skip-record-less), since R2's write-once key would keep it without
+# its logs; one line counts them, and they fail the round until a person rules on them.
 # Bounds as n2_custody.sh's: at most VY_CUSTODY_MAX_RUNS Jobs, none started after VY_CUSTODY_PASS_S, runs that failed before going
 # last; a run dir over VY_CUSTODY_MAX_FILES files or VY_CUSTODY_MAX_GB GiB is held. A failed Job is logged with its last line and
 # retried every round, except a remote that holds another attempt document (triage's `conflict`; an attempt key is write-once), which
@@ -128,7 +128,7 @@ if bad=$(untrusted "$SRC/tools/research" "$PYHOME") && [ -n "$bad" ]; then
 fi
 
 # job NAME UID TTL DEADLINE_S STORE ROOT KIND ARG...: a one-off Job on this node as UID with the Secret research-r2 that runs KIND's
-# fixed script (custody RUN_DIR [--force --runner-gone], reconcile RUN RUN_DIR, push [--except-attempts FILE]): research from SRC
+# fixed script (custody RUN_DIR [--force --runner-gone], reconcile RUN RUN_DIR, push --skip-record-less): research from SRC
 # with PY, RESEARCH_STORE=STORE and RESEARCH_RUNS=ROOT. A run dir's data reach it only as the script's arguments, never as shell
 # text or JSON written by hand.
 job() {
@@ -142,8 +142,8 @@ run = 'cd / && export HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$1/tools/r
 run += {"custody": 'exec "$2" -m research data custody "$5" --publish --keep-local "${@:6}"',
         "reconcile": '"$2" -m research data reconcile-attempts "$5" --apply && exec "$2" -m research data custody "$6" --publish --keep-local',
         "push": 'exec "$2" -m research data push --pending --jobs 8 "${@:5}"'}[kind]
-# each kind's arguments, where _ is a run, a run dir or a file, never an option
-shapes = {"custody": [["_"], ["_", "--force", "--runner-gone"]], "reconcile": [["_", "_"]], "push": [[], ["--except-attempts", "_"]]}[kind]
+# each kind's arguments, where _ is a run or a run dir, never an option
+shapes = {"custody": [["_"], ["_", "--force", "--runner-gone"]], "reconcile": [["_", "_"]], "push": [["--skip-record-less"]]}[kind]
 fits = any(len(s) == len(args) and all(a == w or (w == "_" and a[:1] not in ("", "-")) for a, w in zip(args, s)) for s in shapes)
 if not re.fullmatch(r"n1-[a-z0-9-]{1,60}[a-z0-9]", name) or int(deadline) <= 0 or not fits:
     sys.exit(f"n1_custody.sh: no Job {name!r} with deadline {deadline!r} and {kind} {args!r}")
@@ -330,18 +330,12 @@ for r in sorted(held - seen):
 print("note|" + ", ".join(f"{n} {k}" for k, n in sorted(skipped.items())))
 EOF
 
-key() { basename "$(dirname "$1")" | tr -cd 'a-z0-9-'; }   # key STORE: its pending push's name, and its record-less list's
-for spec in "${specs[@]}"; do
-  IFS='=' read -r root store uid <<< "$spec"
-  : > "$tmp/record-less.$(key "$store")"
-done
 failed=0 tried=0 left=0 waiting=0 recordless=0
 while IFS='|' read -r kind a b c camp status files bytes; do
   case $kind in
     note)
       [ -z "$a" ] || echo "no Job: $a (triage lists them)" ;;
     recordless)
-      echo "$b" >> "$tmp/record-less.$(key "${STORE[$a]}")"
       recordless=$((recordless + 1)) ;;
     lift)
       if [ "$DRY" = 1 ]; then echo "would lift the hold on $a: triage no longer lists it as needing action"; continue; fi
@@ -410,13 +404,8 @@ for spec in "${specs[@]}"; do
   IFS='=' read -r root store uid <<< "$spec"
   [ -z "${done_store[$store]:-}" ] || continue
   done_store[$store]=1
-  k=$(key "$store")
-  name=n1-store-push-$k
-  # written whole, before any push Job of this round reads it
-  if [ "$DRY" != 1 ] && ! { cp "$tmp/record-less.$k" "$STATE/.record-less-$k" && mv -f "$STATE/.record-less-$k" "$STATE/record-less-$k"; }; then
-    log "$store: no pending push: its record-less list not written to $STATE/record-less-$k"
-    failed=$((failed + 1))
-  elif c=$(kube get job "$name" -o jsonpath='{range .status.conditions[*]}{.type}={.status} {end}' 2> /dev/null); then
+  name=n1-store-push-$(basename "$(dirname "$store")" | tr -cd 'a-z0-9-')
+  if c=$(kube get job "$name" -o jsonpath='{range .status.conditions[*]}{.type}={.status} {end}' 2> /dev/null); then
     case $c in
       *Failed=True*) log "$store: the pending push failed (Job $name: $(kube logs "job/$name" --tail=1 2>&1)); the next starts once its ttl ends"
         failed=$((failed + 1)) ;;
@@ -425,7 +414,7 @@ for spec in "${specs[@]}"; do
     echo "would start $store's pending push (Job $name)"
   elif dl=$(deadline 7200) && [ "$dl" -lt "$JOB_MIN_S" ]; then
     echo "$store: no pending push: $HOLD"
-  elif job "$name" "$uid" "$PENDING_S" "$dl" "$store" "$root" push --except-attempts "$STATE/record-less-$k"; then
+  elif job "$name" "$uid" "$PENDING_S" "$dl" "$store" "$root" push --skip-record-less; then
     echo "$store: pending push started (Job $name, ${dl}s at most)"
   else
     log "$store: the pending push did not start (Job $name)"
@@ -436,8 +425,8 @@ done
 [ "$left" = 0 ] || log "round bounded ($tried Job(s) in ${SECONDS}s, at most $MAX_RUNS or ${PASS_S}s): $left run(s) left for the next round"
 held=$(ls "$STATE/held" | wc -l)
 [ "$held" = 0 ] || echo "$held run(s) held ($STATE/held/)"
-[ "$recordless" = 0 ] || echo "$recordless record-less attempt(s) held ($STATE/record-less-*): published here without a run record and never" \
-  "pushed, so R2's write-once key would keep each without its logs; no Job or pending push sends them, and nothing replaces them, until" \
-  "a person rules (pushed as they are, or each replaced here by an attempt that names its run record)"
+[ "$recordless" = 0 ] || echo "$recordless record-less attempt(s) held (triage's attempt-unpreserved): published here without a run record" \
+  "and never pushed, so R2's write-once key would keep each without its logs; no Job or pending push (--skip-record-less) sends them," \
+  "and nothing replaces them, until a person rules (pushed as they are, or each replaced here by an attempt that names its run record)"
 [ "$failed" = 0 ] || log "$failed run(s) not yet on R2"
 [ "$failed" = 0 ] && [ "$held" = 0 ] && { [ "$recordless" = 0 ] || [ "$DRY" = 1 ]; }
