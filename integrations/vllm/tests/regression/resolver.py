@@ -385,9 +385,10 @@ SCRATCH_ENV = "VERITY_REGRESSION_SCRATCH"
 
 
 def scratch(row: Row) -> Path:
-    """`$VERITY_REGRESSION_SCRATCH/r19-regress/<row>` (default: the system temp dir): rebuilt manifests, their logs, the merged Programs view."""
+    """`$VERITY_REGRESSION_SCRATCH/r19-regress/<row>/<pid>` (default: the system temp dir): rebuilt manifests, their logs, the merged
+    Programs view.  One per process: xdist workers rebuilding one row (#57's manifest and its refusal) never share a file."""
     import tempfile
-    p = Path(os.environ.get(SCRATCH_ENV) or tempfile.gettempdir()) / "r19-regress" / row.key
+    p = Path(os.environ.get(SCRATCH_ENV) or tempfile.gettempdir()) / "r19-regress" / row.key / str(os.getpid())
     p.mkdir(parents=True, exist_ok=True)
     return p
 
