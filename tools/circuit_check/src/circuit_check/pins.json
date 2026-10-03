@@ -456,6 +456,9 @@
   "PouwSqGe_v2": {
    "and": 1036
   },
+  "PouwWindowWord_v2": {
+   "and": 503
+  },
   "RMSNormArgCuda_v1{N=16,EPS=1e-05,NW=1}": {
    "and": 1673
   },

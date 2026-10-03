@@ -1,11 +1,11 @@
 """PoUW's IR primitives: the word operations `ncp-v2`'s circuit is built from, the three Pearl-C4's tile check (`pc4`)
-adds to core's FP32, cast and tensor-core primitives, and the three exact sums of squares Pearl-C's (`pc8`) liveness
-reads.
+adds to core's FP32, cast and tensor-core primitives, the three exact sums of squares Pearl-C's (`pc8`) liveness
+reads, and the masked words of a promotion window that the prototype of Pearl-C's cap (`cap`) reads.
 
-Every primitive but `PouwSqAcc` (576 bits) and `PouwSqCeil` (64) returns one value of at most 32 bits, so every unit of any
-`Q_word` cut of these Definitions meets the width rule, and a 64-bit hash word is carried as two 32-bit halves: SHA-512's
-words as (hi, lo), Keccak's lanes as (lo, hi).  The two wide values stay inside one `pc8` row unit, whose partition is
-`Q_template_instances`.
+Every primitive but `PouwSqAcc` (576 bits), `PouwSqCeil` (64) and the two windows (480) returns one value of at most 32
+bits, so every unit of any `Q_word` cut of these Definitions meets the width rule, and a 64-bit hash word is carried as two
+32-bit halves: SHA-512's words as (hi, lo), Keccak's lanes as (lo, hi).  The two wide sums stay inside one `pc8` row unit,
+whose partition is `Q_template_instances`, and a window inside its cap word.
 Encodings: `U32` = `Value<32>`; `I7` = `Value<7>`, a two's-complement int7 (A's and B's entries: the type is the int7 domain
 check); `U8` = `Value<8>`, a byte read as u8 (X + β) or s8 (the noise, Y) as each primitive says; `F32`, `BF16` and `E2M1`
 the float encodings.  Every evaluator is total on encodings.
@@ -16,6 +16,7 @@ import struct
 
 from verity.ir.defs import primitive
 from verity.ir.types import Array, Value
+from verity.ml import prims as _prims
 from verity.ml.tc import cast as _cast
 from verity.ml.tc import fp32 as _fp32
 
@@ -294,5 +295,49 @@ def PouwSqGe(x: int, th: int) -> int:
     return 1 if up48(sq300(x & M32)) >= th else 0
 
 
-__all__ = ["A16", "BETA", "BF16", "E2M1", "F32", "I7", "M32", "U32", "U8", "sx", "i32_to_f32_rn",
-           *sorted(n for n in list(globals()) if n.startswith("Pouw"))]
+# ---- Pearl-C's cap (`cap`): a promotion window's masked words ------------------------------------------------------------
+
+#: a promotion window of G = 4 atoms of k = 32, and its masked words (`pearl_c_debit._masked`): mask m's word from +0, atom j
+#: passing its word through when bit j of m is set, at bits 32m to 32m + 31 for m = 0 to 14 (mask 15 passes every atom: +0)
+WINDOW, MASKS, MASKED = 128, 15, Value(480)
+
+
+def masked_words(atom, ab) -> list[int]:
+    """The masked words of the window ``ab`` (its A codes, then its B codes) under the atom primitive ``atom``, by mask."""
+    a, b = ab[:WINDOW], ab[WINDOW:]
+    words = {0: 0}
+    for j in range(4):
+        s = slice(32 * j, 32 * j + 32)
+        nxt = {}
+        for mask, w in words.items():
+            nxt[mask], nxt[mask | 1 << j] = atom.evaluate(w, *a[s], *b[s]), w
+        words = nxt
+    return [words[m] for m in range(MASKS + 1)]
+
+
+def _packed(words: list[int]) -> int:
+    return sum((w & M32) << 32 * m for m, w in enumerate(words[:MASKS]))
+
+
+@primitive("PouwBlackwellE4m3Window", 1, [("a", Array(WINDOW, U8)), ("b", Array(WINDOW, U8))], MASKED,
+           conformance="protocol-defined")
+def PouwBlackwellE4m3Window(*ab: int) -> int:
+    """A promotion window's masked words under sm_120's atom `BlackwellE4m3QmmaDot32_v1`, packed as `MASKED` says."""
+    return _packed(masked_words(_prims.BlackwellE4m3QmmaDot32, ab))
+
+
+@primitive("PouwHopperE4m3Window", 1, [("a", Array(WINDOW, U8)), ("b", Array(WINDOW, U8))], MASKED,
+           conformance="protocol-defined")
+def PouwHopperE4m3Window(*ab: int) -> int:
+    """A promotion window's masked words under the H100's atom `HopperE4m3QgmmaDot32_v1`, packed as `MASKED` says."""
+    return _packed(masked_words(_prims.HopperE4m3QgmmaDot32, ab))
+
+
+@primitive("PouwWindowWord", 1, [("x", MASKED), ("m", Value(4))], F32, conformance="protocol-defined")
+def PouwWindowWord(x: int, m: int) -> int:
+    """Mask m's word of a window's masked words (+0 for m = 15)."""
+    return (x >> 32 * m) & M32 if m < MASKS else 0
+
+
+__all__ = ["A16", "BETA", "BF16", "E2M1", "F32", "I7", "M32", "MASKED", "MASKS", "U32", "U8", "WINDOW", "sx", "i32_to_f32_rn",
+           "masked_words", *sorted(n for n in list(globals()) if n.startswith("Pouw"))]

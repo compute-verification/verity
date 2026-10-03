@@ -61,6 +61,18 @@ def test_the_word_is_the_debits_replay(dev, k):
     assert flagged and zeroed
 
 
+@pytest.mark.parametrize("dev", ["sm120", "h100"])
+def test_the_window_is_the_debits_masked_words(dev):
+    """Each device's window primitive packs `pearl_c_debit._masked`'s words of masks 0 to 14 (mask 15 passes every atom: +0)
+    on the adversarial words' first windows."""
+    d = DEVICES[dev]
+    window = cap.WINDOWS[d.atom.name]
+    for name, (a, b) in _words(256, random.Random(f"cap-window-{dev}")).items():
+        a, b = a[:128], b[:128]
+        masked = D._masked([(a[s:s + 32], b[s:s + 32]) for s in range(0, 128, 32)], d)
+        assert masked[15] == 0 and window.evaluate(*a, *b) == sum(masked[m] << 32 * m for m in range(15)), name
+
+
 def _keyed(w: int, dk: int) -> int:
     return D._word(D._key(w) + dk)
 
