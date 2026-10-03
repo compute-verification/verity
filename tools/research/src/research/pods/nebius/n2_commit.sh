@@ -314,6 +314,9 @@ EOF
 )"
   eval "ITEM_ARGS=($(submit_args "$1"))"
   research=(/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research)
+  # node 2's store has no remote, so `research run` refuses without this (an environment variable: older job trees' research has
+  # no --local-only); home() is the fast path
+  export RESEARCH_LOCAL_ONLY="node 2's n2-custody timer (n2_custody.sh) takes every ended run under /workspace/jobs/runs to node 1's store and R2"
   mkdir -p /workspace/jobs/hot /workspace/jobs/dm /workspace/jobs/cache/unit-rules
   [ -x /workspace/jobs/bin/py312 ] || printf '#!/bin/sh\nexec /workspace/jobs/bin/uv run --no-project --python 3.12 python "$@"\n' > /workspace/jobs/bin/py312
 }
