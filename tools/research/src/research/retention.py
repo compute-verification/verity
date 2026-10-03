@@ -6,6 +6,7 @@
     research retention report [--root R] [--depth N] [--node NAME] [--ask-gib G] [--json] [--out FILE]
     research retention gc [--root R] [--policy default] [--high-pct 80] [--low-pct 75] [--force] [--jobs-dir D]... [--store S]
                           [--node NAME] [--json] [--out FILE] [--apply --by WHO [--log FILE]]
+    research retention names PATTERN... | - [--root R] [--node NAME] [--json] [--out FILE]
 
 A record is a sidecar: `<dir>/.retention.json` for a directory, `<file>.retention.json` beside a file, so it travels with its data
 and `cat` reads it. A directory its owner made read-only has its record beside it, `<dir>.retention.json`; one with both is invalid. It covers everything beneath its path: the walk never descends into a recorded path. Its fields are FIELDS:
@@ -32,6 +33,10 @@ fill status isn't fresh and quiet, or fill/windows books now or the next 15 min;
 before every deletion), what live work names can't be established, or a lock is held; report refuses the first too, before its
 walk and after it. Report lists every unowned area of
 --ask-gib or more with the owner to ask (ASK, the policy's "Ask the owner first"), and exits 1 when there is one.
+
+`names` prints what this node's own live work names of the patterns (commit shas or paths; `-` reads them from stdin), as
+{pattern: [ref, ...]} (`research/retention-names/v1`); exit 1 when something is named, 3 when it can't tell or node 2's guard
+refuses. Node 1's gc asks node 2 with it over ssh (RR.PEERS) before deleting a tree node 2 may run.
 """
 from __future__ import annotations
 
@@ -50,7 +55,7 @@ from typing import Any, Callable, Sequence
 
 from . import retention_rules as RR
 from .disk import HOLD_PCT, RELEASE_PCT
-from .liveness import Live
+from .liveness import Live, LivenessError
 from .store import custody as CU
 from .store import ids
 from .telemetry.job import write_json_atomic
@@ -67,6 +72,7 @@ POLICY = "default/v1"
 POLICIES = ("default",)
 REPORT_SCHEMA = "research/retention-report/v1"
 GC_SCHEMA = "research/retention-gc/v1"
+NAMES_SCHEMA = "research/retention-names/v1"
 LOG = Path("research/retention/deletions.jsonl")
 ASK_GIB = 10.0
 WEIGHTS = ("@circuits", "@proofs", "@compute-accounting")
@@ -747,7 +753,7 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
                             "rules": [], "acting": False, "actions": [], "freed_bytes": 0, "errors": []}
     plan["refused"] = RR.timed(places, node, t)
     if plan["refused"] is None:
-        sweep = RR.Sweep(places, node, now, live or Live(research=places.research, fill=places.fill), apply=apply,
+        sweep = RR.Sweep(places, node, now, live or Live(research=places.research, fill=places.fill, peers=RR.peers(node)), apply=apply,
                          covered=covering(root), save=save or RR.store_saver(store_root, node, by), log=log)
         try:
             sweep.run()
@@ -1077,8 +1083,37 @@ def main(argv: list[str]) -> int:
         for e in plan["errors"]:
             print(f"error: {e}", file=sys.stderr)
         return rc
-    print(f"research retention: unknown subcommand {sub!r} (have: report, gc)", file=sys.stderr)
+    if sub == "names":
+        return _names_main(rest)
+    print(f"research retention: unknown subcommand {sub!r} (have: report, gc, names)", file=sys.stderr)
     return 2
+
+
+def _names_main(argv: list[str]) -> int:
+    prog = "research retention names"
+    ap = argparse.ArgumentParser(prog=prog, description="what this node's live work names (research.liveness.Live, its own only): "
+                                 "another node's gc asks it over ssh before deleting a tree it may run (RR.PEERS)")
+    ap.add_argument("patterns", nargs="+", metavar="PATTERN", help="a commit sha, or a path; `-` reads them one per line from stdin")
+    ap.add_argument("--root", default=str(DEFAULT_ROOT))
+    ap.add_argument("--node", default=None, metavar="NAME", help="this node's name (default the hostname): vy-nebius-2's timed guard")
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--out", default=None, metavar="FILE", help="also write the JSON document to FILE")
+    ns = ap.parse_args(argv)
+    pats = [p for a in ns.patterns for p in (sys.stdin.read().splitlines() if a == "-" else [a]) if p]
+    places, node, t = RR.Places.of(ns.root), ns.node or socket.gethostname(), utc_now()
+    if why := RR.timed(places, node, t):
+        return _refused(prog, NAMES_SCHEMA, why, ns)
+    try:
+        names = Live(research=places.research, fill=places.fill).names(pats)
+    except LivenessError as e:
+        return _refused(prog, NAMES_SCHEMA, f"can't establish what live work names ({e})", ns)
+    doc = {"schema": NAMES_SCHEMA, "node": node, "now": fmt_utc(t), "patterns": len(pats), "names": names}
+    _emit(doc, ns)
+    if not ns.json:
+        for p, refs in names.items():
+            print(f"{p}: named by {', '.join(refs)}")
+        print(f"{prog}: {len(names)} of {len(pats)} pattern(s) named on {node}")
+    return 1 if names else 0
 
 
 __all__ = ["ASK", "DEFAULT_JOBS_DIRS", "FIELDS", "GC_SCHEMA", "JobScripts", "KIND", "LOG", "POLICY", "PRIORITIES", "REPORT_SCHEMA",

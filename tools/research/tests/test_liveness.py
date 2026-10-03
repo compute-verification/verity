@@ -35,7 +35,8 @@ def proc(base: Path, pid: int, *, cwd: str = "/", fds: tuple[str, ...] = (), cmd
 
 def live(tmp_path: Path, **kw) -> Live:
     (tmp_path / "proc").mkdir(exist_ok=True)
-    return Live(**{"research": tmp_path / "research", "fill": tmp_path / "fill", "proc": tmp_path / "proc", "kube": None, **kw})
+    return Live(**{"research": tmp_path / "research", "fill": tmp_path / "fill", "proc": tmp_path / "proc", "kube": None, "units": (),
+                   **kw})
 
 
 def test_a_process_names_a_path_through_its_cwd_files_maps_argv_or_environment_and_never_a_longer_name(tmp_path):
@@ -84,6 +85,117 @@ def test_unfinished_pods_and_workloads_and_queued_or_running_fill_jobs_name_what
     assert live_pods(lambda kind: objs[kind]) == {"p1"}
 
 
+def test_installed_units_and_held_fill_jobs_name_their_trees_while_nothing_runs_from_them(tmp_path):
+    """node 2's vy-cluster-agent.service names its tree while stopped (its STOP file, exit 2, the start limit); a held fill job is
+    moved back to queue/ by hand. A unit file, a drop-in and a link, in the system's and users' unit dirs; finished jobs name nothing."""
+    system, user = tmp_path / "etc/systemd/system", tmp_path / "home/research/.config/systemd/user"
+    (system / "vy-cluster-agent.service.d").mkdir(parents=True)
+    (system / "vy-cluster-agent.service").write_text(f"[Service]\nWorkingDirectory=/w/src/{SHA}\n")
+    (system / "vy-cluster-agent.service.d/env.conf").write_text("[Service]\nEnvironment=PYTHONPATH=/w/b/src\n")
+    (user / "default.target.wants").mkdir(parents=True)
+    os.symlink("/w/c/infra-pool-publish.service", user / "default.target.wants/infra-pool-publish.service")
+    (tmp_path / "fill/held-overnight").mkdir(parents=True)
+    (tmp_path / "fill/held-overnight/proofs-pn2g.sh").write_text("cd /w/d && python -m bench\n")
+    for d in L.FILL_ENDED:
+        (tmp_path / "fill" / d).mkdir()
+        (tmp_path / "fill" / d / "old.sh").write_text("cd /w/e\n")
+    p = live(tmp_path, units=(system, tmp_path / "home/*/.config/systemd/user", tmp_path / "run/systemd/transient"))
+    assert p.names([SHA, "/w/b", "/w/c", "/w/d", "/w/e"]) == {
+        SHA: [f"unit:{system}/vy-cluster-agent.service"], "/w/b": [f"unit:{system}/vy-cluster-agent.service.d/env.conf"],
+        "/w/c": [f"unit:{user}/default.target.wants/infra-pool-publish.service"], "/w/d": ["fill:held-overnight/proofs-pn2g.sh"]}
+
+
+def test_a_process_names_what_the_script_its_arguments_name_defaults_to(tmp_path):
+    """node 2's custody push loop (`bash push.sh` in tmux) runs node 1's tree from CUSTODY_SRC_N1, else push.sh's SRC_N1 default,
+    which only the script's text carries. A file over SCRIPT_MAX, or that isn't regular, is no script."""
+    other, big = "cd" * 20, "ef" * 20
+    push = tmp_path / "custody-push"
+    push.mkdir()
+    (push / "push.sh").write_text(f'SRC_N1="${{CUSTODY_SRC_N1:-/workspace/research/src/{SHA}}}"\n')
+    (tmp_path / "big.bin").write_bytes(b"x" * L.SCRIPT_MAX + big.encode())
+    p = live(tmp_path)
+    proc(p.proc, 20, cwd=str(push), cmdline="/bin/bash ./push.sh")
+    proc(p.proc, 21, cmdline=f"/bin/bash {push}/push.sh", environ=f"CUSTODY_SRC_N1=/workspace/research/src/{other}")
+    proc(p.proc, 22, cwd=str(tmp_path), cmdline="python big.bin custody-push missing.sh")
+    assert p.names([SHA, other, big]) == {SHA: ["proc:20(/bin/bash)", "proc:21(/bin/bash)"], other: ["proc:21(/bin/bash)"]}
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads every file")
+def test_a_unit_or_a_script_it_cant_read_raises(tmp_path):
+    units = tmp_path / "units"
+    units.mkdir()
+    (units / "a.service").write_text("")
+    (tmp_path / "run.sh").write_text("")
+    (tmp_path / "s").mkdir()
+    for path, scan, why in ((units / "a.service", live(tmp_path, units=(units,)), "gc reads every unit file: run it as root"),
+                            (units, live(tmp_path, units=(units,)), "gc reads every unit file: run it as root"),
+                            (tmp_path / "run.sh", live(tmp_path / "s"), "which a process's arguments name")):
+        if path.name == "run.sh":
+            proc(scan.proc, 30, cwd=str(tmp_path), cmdline="bash run.sh")
+        os.chmod(path, 0)
+        try:
+            with pytest.raises(LivenessError, match=f"can't read {re.escape(str(path))}.*{why}"):
+                scan.names(["/w"])
+        finally:
+            os.chmod(path, 0o755)
+
+
+SSH = """import json, os, sys
+d = os.environ["FAKE_SSH"]
+name = os.path.basename(sys.argv[0])
+with open(os.path.join(d, name + ".json"), "w") as f:
+    json.dump({"argv": sys.argv[1:], "stdin": "" if name == "runuser" else sys.stdin.read()}, f)
+if name == "runuser":
+    os.execvp(sys.argv[4], sys.argv[4:])
+rc, out, err = json.load(open(os.path.join(d, "answer.json")))
+sys.stdout.write(out)
+sys.stderr.write(err)
+sys.exit(rc)
+"""
+
+
+def test_a_peer_is_asked_over_ssh_and_an_answer_it_cant_give_raises(tmp_path, monkeypatch):
+    """SshPeer runs `research retention names` on the other node, as research when this is root; fake ssh and runuser on PATH."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    for name in ("ssh", "runuser"):
+        (bin_ / name).write_text(f"#!{sys.executable}\n{SSH}")
+        os.chmod(bin_ / name, 0o755)
+    monkeypatch.setenv("PATH", f"{bin_}:{os.environ['PATH']}")
+    monkeypatch.setenv("FAKE_SSH", str(tmp_path))
+    remote = ("sudo", "-n", "research", "retention", "names", "--json", "-")
+    peer = L.SshPeer("vy-nebius-2", "vy-n2", remote)
+
+    def answer(rc: int, out, err: str = "") -> None:
+        (tmp_path / "answer.json").write_text(json.dumps([rc, out if isinstance(out, str) else json.dumps(out), err]))
+
+    def asked(name: str = "ssh") -> dict:
+        return json.loads((tmp_path / f"{name}.json").read_text())
+
+    monkeypatch.setattr(L.os, "geteuid", lambda: 1000)
+    answer(1, {"schema": "research/retention-names/v1", "names": {SHA: ["proc:7(bash)"], "/x": ["fill:queue/j"], "/unasked": ["x"]}})
+    assert peer([SHA, "/x", "/y", SHA, "a\nb"]) == {SHA: ["vy-nebius-2:proc:7(bash)"], "/x": ["vy-nebius-2:fill:queue/j"]}
+    ssh = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "vy-n2", *remote]
+    assert asked() == {"argv": ssh, "stdin": f"{SHA}\n/x\n/y\n"} and not (tmp_path / "runuser.json").exists()
+    os.unlink(tmp_path / "ssh.json")
+    assert peer(["a\nb"]) == {} and not (tmp_path / "ssh.json").exists(), "nothing to ask"
+
+    monkeypatch.setattr(L.os, "geteuid", lambda: 0)
+    answer(0, {"names": {}})
+    assert peer([SHA]) == {} and asked("runuser")["argv"] == ["-u", "research", "--", "ssh", *ssh]
+    for rc, out, err, why in ((3, {"schema": "research/retention-names/v1", "refused": "status.txt does not say it"}, "", "status.txt does not say it"),
+                              (255, "", "ssh: connect to host vy-n2 port 22: Connection refused\n", "Connection refused"),
+                              (0, "not JSON", "", "exit 0, no answer"), (2, {"names": {}}, "usage: research retention names", "usage")):
+        answer(rc, out, err)
+        with pytest.raises(LivenessError, match=rf"can't ask vy-nebius-2 what it names \(vy-n2: .*{why}"):
+            peer([SHA])
+
+    answer(1, {"names": {SHA: ["unit:/etc/systemd/system/vy-cluster-agent.service"]}})
+    p = live(tmp_path, peers=[peer])
+    proc(p.proc, 3, cwd=f"/w/src/{SHA}")
+    assert p.names([SHA, "/z"]) == {SHA: ["proc:3(python)", "vy-nebius-2:unit:/etc/systemd/system/vy-cluster-agent.service"]}
+
+
 def test_a_scan_that_cannot_look_raises_and_a_process_gone_mid_scan_names_nothing(tmp_path):
     def failing(kind):
         raise LivenessError("kubectl get pods exited 1: connection refused")
@@ -104,7 +216,7 @@ def test_a_real_process_whose_cwd_is_in_a_tree_names_it(tmp_path):
     tree = tmp_path / "src" / SHA
     tree.mkdir(parents=True)
     child = subprocess.Popen([sys.executable, "-c", "import sys; sys.stdin.read()"], cwd=tree, stdin=subprocess.PIPE)
-    scan = Live(research=tmp_path, fill=tmp_path, kube=None, pids=[child.pid])
+    scan = Live(research=tmp_path, fill=tmp_path, kube=None, pids=[child.pid], units=())
     try:
         named = scan.names([SHA, str(tmp_path / "src"), str(tmp_path / "elsewhere")])
     finally:

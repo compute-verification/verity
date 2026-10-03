@@ -4,6 +4,7 @@ liveness for the checks after a rename, and a clock in 2031, so every file a tes
 from __future__ import annotations
 
 import fcntl
+import io
 import itertools
 import json
 import os
@@ -40,12 +41,15 @@ def git(cwd: Path, *args: str) -> str:
     return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
 
 
-def tree(root: Path, lake: bool = False) -> Path:
+def tree(root: Path, lake: bool = False, attempt: bool = False) -> Path:
     """A shipped source tree: a checkout at research/src/<its commit> (results/ ignored), with the verifier's three Lake packages'
-    .lake/packages when `lake`."""
+    .lake/packages when `lake`, and the store's attempt.py (a complete tree, RR.NEWEST) when `attempt`."""
     d = root.parent / f"checkout{next(_n)}"
     (d / LA).parent.mkdir(parents=True)
     (d / LA).write_text("{}\n")
+    if attempt:
+        (d / RR.ATTEMPT).parent.mkdir(parents=True)
+        (d / RR.ATTEMPT).write_text("")
     (d / "README.md").write_text(f"{d.name}\n")
     (d / ".gitignore").write_text("results/\n.lake/\n")
     git(d, "init", "-q")
@@ -77,9 +81,9 @@ def pods(*running: str):
     return lambda kind: objs if kind == "pods" else []
 
 
-def fake_live(tmp_path: Path, root: Path, kube=None) -> Live:
+def fake_live(tmp_path: Path, root: Path, kube=None, **kw) -> Live:
     (tmp_path / "proc").mkdir(parents=True, exist_ok=True)
-    return Live(research=root / "research", fill=root / "pouw/fill", proc=tmp_path / "proc", kube=kube)
+    return Live(**{"research": root / "research", "fill": root / "pouw/fill", "proc": tmp_path / "proc", "kube": kube, "units": (), **kw})
 
 
 class Scripted:
@@ -160,11 +164,96 @@ def test_a_real_process_working_in_a_tree_keeps_it(tmp_path):
     t = tree(root)
     child = subprocess.Popen(["python3", "-c", "import sys; sys.stdin.read()"], cwd=t, stdin=subprocess.PIPE)
     try:
-        plan = run_gc(root, live=Live(research=root / "research", fill=root / "pouw/fill", kube=None, pids=[child.pid]), apply=True)
+        plan = run_gc(root, live=Live(research=root / "research", fill=root / "pouw/fill", kube=None, pids=[child.pid], units=()), apply=True)
     finally:
         child.stdin.close()
         child.wait()
     assert t.exists() and acts(plan, root)[f"research/src/{t.name}"]["reason"].startswith(f"named by proc:{child.pid}(")
+
+
+def test_a_tree_an_installed_unit_or_a_held_fill_job_names_stays_while_nothing_runs_from_it(tmp_path):
+    """node 2's vy-cluster-agent.service runs from research/src/1253f09e... and is often stopped (its STOP file, exit 2, the start
+    limit, 15 s between restarts), when no process names the tree; deleting it then keeps the agent from starting again."""
+    root = tmp_path / "ws"
+    agent, held, done = tree(root), tree(root), tree(root)
+    units = tmp_path / "etc/systemd/system"
+    units.mkdir(parents=True)
+    (units / "vy-cluster-agent.service").write_text(
+        f"[Service]\nUser=research\nWorkingDirectory={agent}\nEnvironment=PYTHONPATH={agent}/tools/cluster/src PYTHONDONTWRITEBYTECODE=1\n"
+        f"ExecStartPre=/usr/bin/test -f {agent}/READY.json\nExecStart=/usr/bin/python3 -m cluster agent --mode live\n")
+    fill = status(root)
+    for d, t in (("held-overnight", held), ("done", done)):
+        (fill / d).mkdir()
+        (fill / d / "proofs-pn2g.sh").write_text(f"#!/bin/bash\ncd {t} && python -m bench\n")
+    for node in (N2, N1):
+        a = acts(run_gc(root, live=fake_live(tmp_path, root, units=(units,)), apply=True, node=node), root)
+        assert agent.exists() and a[f"research/src/{agent.name}"]["reason"] == f"named by unit:{units}/vy-cluster-agent.service"
+        assert held.exists() and a[f"research/src/{held.name}"]["reason"] == "named by fill:held-overnight/proofs-pn2g.sh"
+        assert not done.exists(), "a finished job names nothing"
+
+
+def test_node_1_keeps_a_tree_node_2_names_and_refuses_when_node_2_cant_say(tmp_path, monkeypatch):
+    """node 2's custody push loop runs node 1's research/src/<sha> over ssh (CUSTODY_SRC_N1, else push.sh's SRC_N1 default), so
+    only node 2 sees what pins it; gc's own Live on node 1 asks node 2 (RR.peers: `research retention names` there, as root)."""
+    root = tmp_path / "ws"
+    pushed, gone = tree(root), tree(root)
+    asked = []
+
+    def node_2(patterns):
+        asked.append(set(patterns))
+        return {pushed.name: [f"{N2}:proc:4242(bash)"]}
+
+    plan = run_gc(root, node=N1, live=fake_live(tmp_path, root, peers=[node_2]), apply=True)
+    assert pushed.exists() and not gone.exists() and len(asked) == 2 and {pushed.name, gone.name} <= asked[0]
+    assert acts(plan, root)[f"research/src/{pushed.name}"]["reason"] == f"named by {N2}:proc:4242(bash)"
+
+    def unreachable(patterns):
+        raise LivenessError(f"can't ask {N2} what it names (vy-n2: ssh: connect to host vy-n2 port 22: Connection refused)")
+
+    plan = run_gc(root, node=N1, live=fake_live(tmp_path, root, peers=[unreachable]), apply=True)
+    assert pushed.exists() and plan["refused"].startswith(f"can't establish what live work names (can't ask {N2} what it names")
+
+    [peer] = RR.peers(N1)
+    assert (peer.node, peer.host, peer.remote[:2], peer.remote[-6:]) == (N2, "vy-n2", ("sudo", "-n"),
+                                                                         ("retention", "names", "--json", "--node", N2, "-"))
+    assert RR.peers(N2) == ()
+    seen = []
+    monkeypatch.setattr(R, "Live", lambda **kw: seen.append(kw) or fake_live(tmp_path, root))
+    run_gc(root, node=N1)
+    assert seen[0]["peers"] == RR.peers(N1)
+
+
+def test_node_1_keeps_its_newest_complete_tree_which_node_2_publishes_with(tmp_path):
+    """n2_custody.sh takes node 1's newest tree holding the store's attempt.py anew each round, in a shell variable no scan sees."""
+    root = tmp_path / "ws"
+    older, newest, partial = tree(root, attempt=True), tree(root, attempt=True), tree(root)
+    for t, h in ((older, 30), (newest, 20), (partial, 10)):
+        ago(t, h)
+    plan = run_gc(root, node=N1, live=fake_live(tmp_path, root), apply=True)
+    assert newest.exists() and not older.exists() and not partial.exists()
+    assert acts(plan, root)[f"research/src/{newest.name}"] == {**acts(plan, root)[f"research/src/{newest.name}"], "action": "keep",
+                                                               "rule": "src-tree", "reason": RR.NEWEST}
+    run_gc(root, live=fake_live(tmp_path, root), apply=True)
+    assert not newest.exists(), "node 2 publishes with node 1's tree, not its own"
+
+
+def test_names_answers_what_this_nodes_live_work_names_and_refuses_when_it_cant_tell(tmp_path, monkeypatch, capsys):
+    root, sha = tmp_path / "ws", "ab" * 20
+    root.mkdir()
+    scan = Scripted({sha: ["proc:7(bash)"]}, {}, LivenessError("can't read /proc/9: Permission denied"))
+    monkeypatch.setattr(R, "utc_now", clock)
+    monkeypatch.setattr(R, "Live", lambda **kw: scan)
+    monkeypatch.setattr("sys.stdin", io.StringIO(f"/w/x\n\n{sha}\n"))
+    assert research_main(["retention", "names", "--root", str(root), "--node", N1, "--json", "-", "/w/y"]) == 1
+    assert json.loads(capsys.readouterr().out) == {"schema": "research/retention-names/v1", "node": N1, "now": "2031-01-01T00:00:00Z",
+                                                   "patterns": 3, "names": {sha: ["proc:7(bash)"]}}
+    assert scan.asked == [sorted(["/w/x", sha, "/w/y"])]
+    assert research_main(["retention", "names", "--root", str(root), "--node", N1, sha]) == 0
+    assert f"0 of 1 pattern(s) named on {N1}" in capsys.readouterr().out
+    assert research_main(["retention", "names", "--root", str(root), "--node", N1, "--json", sha]) == 3
+    assert json.loads(capsys.readouterr().out)["refused"] == "can't establish what live work names (can't read /proc/9: Permission denied)"
+    assert research_main(["retention", "names", "--root", str(root), "--node", N2, "--json", sha]) == 3
+    assert json.loads(capsys.readouterr().out)["refused"].startswith(f"{root}/pouw/fill is missing on {N2}")
 
 
 def test_a_tree_named_after_its_rename_is_put_back_and_one_that_cant_be_is_stuck_until_the_next_pass(tmp_path):

@@ -3,7 +3,8 @@ note:20260930T2205Z-report-resource-steward), as implicit records, each with a r
 
     rule           owner    age   nodes        what
     src-tree       @infra   6 h   every        research/src/<sha>, aged from its mtime (when it was shipped), that holds nothing
-                                               outside its commit (liveness.outside_commit); `research run` ships it again
+                                               outside its commit (liveness.outside_commit); `research run` ships it again. Never
+                                               node 1's newest complete one (NEWEST), which node 2's n2_custody.sh picks
     audit-tree     @proofs  6 h   vy-nebius-1  a source tree whose only change is the soundness lean-audit.json (LA, proofs' audit
                                                trees): the pass saves every such file in one evidence/v1 artifact, pushed
                                                preserved, before any of those trees goes
@@ -15,7 +16,8 @@ note:20260930T2205Z-report-resource-steward), as implicit records, each with a r
     trash          @infra   any   every        what an interrupted pass renamed aside (src/.trash, jobs/src/.trash,
                                                .lake/packages.rs-trash-*)
 
-Nothing live may name a path a rule deletes (liveness.Live: a source tree by its sha, anything else by its path). A source tree, a
+Nothing live may name a path a rule deletes (liveness.Live: a source tree by its sha, anything else by its path), here or on the
+node's PEERS (node 1 asks node 2, and refuses when it can't). A source tree, a
 job tree or a .lake/packages is renamed aside first (one rename, so nothing sees it half deleted); then every renamed path is checked
 once more, put back if anything names it now (`stuck` when it can't be), and only then deleted. Scratch and trash are deleted where
 they are. A rule never deletes PROTECTED paths (pouw/gpu3-fp8, check's verdict caches lean-deps and circuit-check), a path a record
@@ -37,7 +39,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import IO, Any, Callable, Iterable, Sequence
 
-from .liveness import JobTrees, Live, LivenessError, Unknown, live_pods, outside_commit
+from .liveness import JobTrees, Live, LivenessError, SshPeer, Unknown, live_pods, outside_commit
 
 HOUR = timedelta(hours=1)
 NODE1 = frozenset({"vy-nebius-1"})
@@ -56,6 +58,13 @@ STAMP = re.compile(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) ")
 FRESH = timedelta(seconds=60)
 SKEW_S = 2                               # a status written while `now` was read
 LEAD = timedelta(minutes=15)
+#: the nodes a node's gc asks what they name (Live.peers), as (node, its ssh host in research's config): node 2 runs node 1's
+#: research over ssh (its custody loops, n2_commit.sh, n2_build.sh), from a tree it names there or node 1's newest (NEWEST)
+PEERS = {"vy-nebius-1": (("vy-nebius-2", "vy-n2"),)}
+PEER_REMOTE = ("sudo", "-n", "env", "PYTHONPATH=/usr/local/lib/vy-research", "PYTHONDONTWRITEBYTECODE=1", "/usr/bin/python3", "-m",
+               "research", "retention", "names", "--json")
+ATTEMPT = "tools/research/src/research/store/attempt.py"
+NEWEST = "node 1's newest complete source tree (one holding the store's attempt.py): n2_custody.sh on node 2 publishes with it"
 
 
 class Refused(RuntimeError):
@@ -171,6 +180,11 @@ def timed(places: Places, node: str, now: datetime) -> str | None:
             return (f"{places.fill / 'windows'} books {line!r}: nothing runs on this node from {LEAD.total_seconds() / 60:.0f} min "
                     "before a booking until it ends")
     return None
+
+
+def peers(node: str) -> tuple[SshPeer, ...]:
+    """What `node`'s gc asks besides its own live work (PEERS)."""
+    return tuple(SshPeer(n, host, (*PEER_REMOTE, "--node", n, "-")) for n, host in PEERS.get(node, ()))
 
 
 def booked(path: Path) -> list[tuple[float | None, float, str]]:
@@ -416,8 +430,11 @@ class Sweep:
             if c := self._vet(p, rule, os.lstat(p).st_mtime, named.get(str(p), [])):
                 going.append(c)
         audit: list[_Cand] = []
+        complete = {t: os.lstat(t).st_mtime_ns for t in trees if (t / ATTEMPT).is_file()} if self.node in NODE1 else {}
         for t in old:
-            if c := self._vet(t, "src-tree", os.lstat(t).st_mtime, named.get(t.name, []), (t.name,), tree=True):
+            if complete and complete.get(t) == max(complete.values()):
+                self._add(Act(t, "src-tree", "keep", NEWEST, age_h=self._age(os.lstat(t).st_mtime)))
+            elif c := self._vet(t, "src-tree", os.lstat(t).st_mtime, named.get(t.name, []), (t.name,), tree=True):
                 (audit if c.rule == "audit-tree" else going).append(c)
         if audit and self.apply:
             audit = self._save(audit)
