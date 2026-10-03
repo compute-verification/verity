@@ -1055,6 +1055,9 @@ def main(argv: list[str] | None = None) -> int:
 
         print(__version__)
         return 0
+    from .secret_hint import recover
+
+    recover()
     cmd, rest = argv[0], argv[1:]
     if cmd == "run":
         return cmd_run(rest)
