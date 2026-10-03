@@ -70,7 +70,20 @@ def toC {I Blk Salt Op α : Type} [Inhabited Op] (op : OpenView I Blk Salt Op) :
 theorem prR_le_pr_toC {I Blk Salt Op α : Type} [Inhabited Op] (p : α → Prop) (op : OpenView I Blk Salt Op) :
     ∀ {g : TGame I Blk α} {G : Game α} (h : ErD g G) (s : OStrat Op G) (z : I → Blk × Salt),
       prR p op h s z ≤ TGame.pr p g (toC op h s) z := by
-  sorry
+  have hcast : ∀ {g g' : TGame I Blk α} (e : g = g') (hc : TGame.CStrat Salt g = TGame.CStrat Salt g')
+      (c : TGame.CStrat Salt g) (z : I → Blk × Salt), TGame.pr p g' (cast hc c) z = TGame.pr p g c z := by
+    intro g g' e hc c z
+    subst e
+    rfl
+  intro g G h
+  induction h with
+  | ret a => intro s z; exact le_rfl
+  | send M f ih => intro s z; exact ih s.1 s.2 z
+  | coin i d f ih =>
+      intro s z
+      refine (ih (d.e.symm (z i).1).1 (d.e.symm (z i).1).2 _ z).trans_eq ?_
+      exact (hcast (congrArg _ (d.e.apply_symm_apply (z i).1)) _ _ z).symm
+  | fresh C f ih => intro s z; exact (zero_le : (0 : ℝ≥0∞) ≤ _)
 
 section Run
 
@@ -110,8 +123,8 @@ theorem realProver_le_tree [Inhabited Op] (L : Audit.Law n) {g : TGame I Blk β}
     (H : Nonce → Key E₂ → (Fin 512 → E₂) × Cs → D) (rt : Nonce → Key E₂ → (I → D) → Root)
     (op : Nonce → Key E₂ → (I → D) → OpenView I Blk (Salt E₂) Op) (ρ : RealProver L Reg Nonce E₂ Root Op G)
     (E : Reg × Finset (Fin n) × γ → Prop) :
-    prReal L hgG out dig cs H rt op ρ E ≤ prTree L g out dig cs H (ρ.toTree L hgG rt op) E := by
-  sorry
+    prReal L hgG out dig cs H rt op ρ E ≤ prTree L g out dig cs H (ρ.toTree L hgG rt op) E :=
+  avg_mono fun _ => avg_mono fun _ => avg_mono fun z => prR_le_pr_toC _ _ hgG _ z
 
 /-- **The live coin-tree run, its outcome written with the session's header**: `prReal` with the outcome written by
 `outH (ν, κ, root)`, as the coin server's record carries `coin_tree = {key, nonce, root, spec}` and the prover's
@@ -135,7 +148,7 @@ theorem prRealH_eq (L : Audit.Law n) {g : TGame I Blk β} {G : Game β} (hgG : E
     (ρ : RealProver L Reg Nonce E₂ Root Op G) (E : Reg × Finset (Fin n) × γ → Prop)
     (hE : ∀ h S R o, E (R, S, outH h S R o) ↔ E (R, S, out S R o)) :
     prRealH L hgG outH dig cs H rt op ρ E = prReal L hgG out dig cs H rt op ρ E := by
-  sorry
+  simp only [prRealH, prReal, hE]
 
 end Run
 
