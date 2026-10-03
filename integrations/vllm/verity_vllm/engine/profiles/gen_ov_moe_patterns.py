@@ -217,12 +217,9 @@ class MoEFusedExperts:
                                counts={"topk_softmax": len(routers), "align": len(aligns), "fused_moe_kernel": len(launches),
                                        "silu_and_mul": len(silus), "moe_sum": len(sums)}, census=moe_subtree_census(node))
         router, up, down, silu, msum = routers[0], launches[0], launches[1], silus[0], sums[0]
-        # [Qwen3-MoE on vLLM d9105ea80] `Qwen3MoeSparseMoeBlock` hands `FusedMoE` its `gate` and passes `router_logits=hidden_states`,
-        # so the router's gate GEMM launches inside the scope, ahead of topk_softmax (OLMoE computes the logits before the call)
-        gates = find_descendants(node, lambda n: n.is_triton and triton_name(n) == K_GATE)
-        if len(gates) > 1:
-            return unsupported(node, f"MoE scope has more than one {K_GATE} launch (at most the router's gate GEMM)",
-                               launches=[g.id for g in gates], census=moe_subtree_census(node))
+        gates = self._gate_launches(node)
+        if isinstance(gates, Unsupported):
+            return gates
         keep = {router.id, up.id, down.id, silu.id, msum.id} | {a.id for a in aligns} | {g.id for g in gates}
         keep |= set().union(*(set(n.ids()) for n in (router, up, down, silu, msum, *aligns, *gates)))
         # [R19 qwen3, TP] descendants the scope patterns own (the in-scope all-reduce of a rank): resolved here, kept out of the glue walk
@@ -269,12 +266,9 @@ class MoEFusedExperts:
             return unsupported(node, "no pinned router reduction geometry (VPT) for this expert count", E=E, pinned=self.router_vpt)
         router_c = Compute(bind(router_def, E=E, TOPK=TOPK, VPT=vpt), M, (PerRow(logits),), (PerRow(weights), PerRow(ids)), (router.id,),
                            hint=f"{hint}/router", kernels=(K_ROUTER,), attribution=tuple(ctx.start.rows), pattern=self.name)
-        gate_c: list[Compute] = []
-        if gates:
-            g = self._gate(node, gates[0], router, logits, ctx)
-            if isinstance(g, Unsupported):
-                return g
-            gate_c.append(g)
+        gate_c = [self._gate(node, gates[0], router, logits, ctx)] if gates else []
+        if gate_c and isinstance(gate_c[0], Unsupported):
+            return gate_c[0]
         parts: list[Compute | Transparent] = list(before) + gate_c + [router_c]
 
         # 2. alignment: a schedule, no numerical effect ----------------------------------------------------------
@@ -341,6 +335,15 @@ class MoEFusedExperts:
         # 7. [TP] the in-scope collective(s) the scope patterns resolved (log order): the all-reduce of the routed sum, after MoeSum
         parts.extend(sorted(extra, key=lambda c: min(c.consumed)))
         return Group(tuple(parts), tuple(sorted(node.ids())), hint=hint, pattern=self.name)
+
+    def _gate_launches(self, node: TreeNode) -> list[TreeNode] | Unsupported:
+        """[Qwen3-MoE on vLLM d9105ea80] `Qwen3MoeSparseMoeBlock` hands `FusedMoE` its `gate` and passes `router_logits=hidden_states`,
+        so the router's gate GEMM launches inside the scope, ahead of topk_softmax (OLMoE computes the logits before the call)."""
+        gates = find_descendants(node, lambda n: n.is_triton and triton_name(n) == K_GATE)
+        if len(gates) > 1:
+            return unsupported(node, f"MoE scope has more than one {K_GATE} launch (at most the router's gate GEMM)",
+                               launches=[g.id for g in gates], census=moe_subtree_census(node))
+        return gates
 
     def _gate(self, node: TreeNode, gate: TreeNode, router: TreeNode, logits: ViewDesc, ctx: StepContext) -> Compute | Unsupported:
         """The in-scope router gate GEMM, resolved by the profile's own patterns exactly as the first-match resolver would resolve it
