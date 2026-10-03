@@ -149,6 +149,10 @@ def pearlCDomainDev (d : PearlCDevice) (L : Layout) : Prop :=
 def pearlCDomainDevAt (d : PearlCDevice) (s : Shape) (L : Layout) : Prop :=
   pearlCDomainDev d L ∧ ∀ u < L.N, L.shape u = s
 
+/-- The domain restricted to one linear, `n` and `k` fixed and `m` free: its units at any mix of batch sizes. -/
+def pearlCDomainDevNK (d : PearlCDevice) (n k : ℕ) (L : Layout) : Prop :=
+  pearlCDomainDev d L ∧ ∀ u < L.N, (L.shape u).n = n ∧ (L.shape u).k = k
+
 open Classical in
 /-- A tile's replayed debit at a device, as `PearlCSem.tileDebit` with the device's flags, salt-dead predicate and prices.
 The forming part is P3's per-tile rule (`internal/pouw-fp8/pearl-c-forming.md`, "The per-tile cap"). -/
