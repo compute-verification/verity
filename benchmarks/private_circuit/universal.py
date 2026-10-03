@@ -9,9 +9,9 @@
   one run of the netlist on its own random `x`. The unit's class is a `verity/flock-circuit` statement (`class_statement.stage`,
   words packed), one row per source: `op`, `src` and `out` are committed once and opened by every instance (the registered
   program), `x` once per instance; the outputs are hidden rows.
-* **The checks.** Before staging, every instance's outputs agree four ways: the netlist interpreted (`universal.interpret`),
-  the hidden program as its own Boolean Definition (`direct`) under `verity.evaluation.evaluate`, the unit under
-  `verity.evaluation.evaluate`, and the flat Definition's transcript that staging lays out (which `class_statement.stage`
+* **The checks.** Before staging, every instance's outputs agree four ways:   the netlist interpreted (`universal.interpret`),
+  the hidden program as its own Boolean Definition (`direct`) and the unit, each under `verity.evaluation` (`evaluate` on the
+  first instance, `evaluate_batch` on all), and the flat Definition's transcript that staging lays out (which `class_statement.stage`
   checks against the lowered circuit). The live `serve --zk` / `prove --zk` session must be accepted, then each recorded session
   is replayed by Lean's `flock-verify verify --zk`, which must accept it, and must refuse it without `--zk` and with a proof byte
   flipped.
@@ -31,6 +31,8 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+
+import numpy as np
 
 from verity import evaluation as E
 from verity.evaluation import bits as BS
@@ -96,8 +98,8 @@ def _sessions(d: Path) -> list[Path]:
     return sorted(p for p in d.iterdir() if p.is_dir() and (p / "session.json").exists()) if d.exists() else []
 
 
-def lean_verify(lean: str, stage: Path, n: int, partition: Path, sessions: list[Path], zk: bool = True) -> tuple[list[dict], float, str]:
-    cmd = [lean, "verify", "--circuit", str(stage / "circuit.txt"), "--public", str(stage / f"pub-{n}.bin"),
+def lean_verify(lean: str, circuit: Path, pub: Path, partition: Path, sessions: list[Path], zk: bool = True) -> tuple[list[dict], float, str]:
+    cmd = [lean, "verify", "--circuit", str(circuit), "--public", str(pub),
            "--partition", str(partition), *(["--zk"] if zk else []), "--session", *map(str, sessions)]
     t0 = time.monotonic()
     p = subprocess.run(cmd, capture_output=True, text=True, check=False)
@@ -115,9 +117,14 @@ def run_class(a, G: int, N_IN: int, N_OUT: int, out: Path) -> dict:
     xs_small = [[rng.randrange(2) for _ in range(small.n_in)] for _ in range(a.n)]
     xs = [x + [rng.randrange(2) for _ in range(N_IN - small.n_in)] for x in xs_small]
     want = [U.interpret(small, x) for x in xs_small]
+    args = [U.arguments(net, x) for x in xs]
+    cols = [np.array([r[i] for r in args], dtype=np.uint8) for i in range(4)]
+    # the plain-integer reference on the first instance, the bit-sliced evaluator on all of them
     agree = {"interpret_padded": all(U.interpret(net, x) == w for x, w in zip(xs, want)),
-             "direct_evaluate": all(list(E.evaluate(hidden, x)) == w for x, w in zip(xs_small, want)),
-             "unit_evaluate": all(list(E.evaluate(fn, *U.arguments(net, x))) == w for x, w in zip(xs, want))}
+             "direct_evaluate": list(E.evaluate(hidden, xs_small[0])) == want[0] and np.asarray(E.evaluate_batch(
+                 hidden, np.array(xs_small, dtype=np.uint8))).reshape(a.n, N_OUT).tolist() == want,
+             "unit_evaluate": list(E.evaluate(fn, *args[0])) == want[0] and np.asarray(E.evaluate_batch(
+                 fn, *cols)).reshape(a.n, N_OUT).tolist() == want}
 
     program = PU.one_call(fn)
     query = PO.template_instance_query(fn)
@@ -132,7 +139,8 @@ def run_class(a, G: int, N_IN: int, N_OUT: int, out: Path) -> dict:
     stage = d / "stage"
     shutil.rmtree(d, ignore_errors=True)
     t0 = time.monotonic()
-    st = CS.stage(units, SPEC, shape, cl, (ins, outs, idents), stage, secrets.token_bytes(32), packed=True)
+    salt_key = secrets.token_bytes(32)
+    st = CS.stage(units, SPEC, shape, cl, (ins, outs, idents), stage, salt_key, packed=True)
     stage_s = time.monotonic() - t0
     n = st["n"]
     if n != a.n:
@@ -189,24 +197,39 @@ def run_class(a, G: int, N_IN: int, N_OUT: int, out: Path) -> dict:
     recorded = _sessions(sess)
     row["live"]["recorded_sessions"] = len(recorded)
     if a.lean and recorded:
-        v, dt, err = lean_verify(a.lean, stage, n, part, recorded)
+        circ, pub = stage / "circuit.txt", stage / f"pub-{n}.bin"
+        v, dt, err = lean_verify(a.lean, circ, pub, part, recorded)
         row["lean"] = {"accepted": len(v) == len(recorded) and all(x["accepted"] for x in v), "sessions": len(v),
                        "why": sorted({x["why"] for x in v}), "wall_s": round(dt, 3), "wall_s_per_session": round(dt / max(1, len(v)), 3),
                        **({"stderr_tail": err} if not v else {})}
         none = {"accepted": False, "why": "no verdict"}
-        nz = (lean_verify(a.lean, stage, n, part, recorded[:1], zk=False)[0] or [none])[0]
+        neg = {}
+        nz = (lean_verify(a.lean, circ, pub, part, recorded[:1], zk=False)[0] or [none])[0]
+        neg["without_zk"] = {"refused": not nz["accepted"], "why": nz["why"][:160]}
         bad = d / "tampered" / recorded[0].name
         shutil.copytree(recorded[0], bad)
         proof = max(bad.glob("*.bin"), key=lambda p: p.stat().st_size)
         b = bytearray(proof.read_bytes())
         b[len(b) // 2] ^= 1
         proof.write_bytes(bytes(b))
-        fl = (lean_verify(a.lean, stage, n, part, [bad])[0] or [none])[0]
-        row["lean"]["negatives"] = {"without_zk": {"refused": not nz["accepted"], "why": nz["why"][:160]},
-                                    "proof_byte_flipped": {"refused": not fl["accepted"], "why": fl["why"][:160], "file": proof.name}}
+        fl = (lean_verify(a.lean, circ, pub, part, [bad])[0] or [none])[0]
+        neg["proof_byte_flipped"] = {"refused": not fl["accepted"], "why": fl["why"][:160], "file": proof.name}
+        # another hidden program of the class on the same x and salts: the same circuit byte for byte, and a public file that
+        # differs only where the rows differ (the program's and the outputs'), against which the honest session must fail
+        other = U.pad(_netlist(random.Random(f"pc-flock/other/{a.seed}/{G}/{N_IN}/{N_OUT}"), G, N_IN, N_OUT), G, N_IN)
+        so = CS.stage(units, SPEC, shape, cl, lanes(units, cl, other, xs), d / "other-program", salt_key, packed=True)
+        opub = d / "other-program" / f"pub-{n}.bin"
+        op = (lean_verify(a.lean, circ, opub, part, recorded[:1])[0] or [none])[0]
+        pa, pb = pub.read_bytes(), opub.read_bytes()
+        neg["another_program"] = {"refused": not op["accepted"], "why": op["why"][:160],
+                                  "same_circuit": so["circuit_sha512"] == st["circuit_sha512"],
+                                  "pub_bytes_differing": sum(x != y for x, y in zip(pa, pb)) + abs(len(pa) - len(pb)), "pub_bytes": len(pa)}
+        row["lean"]["negatives"] = neg
     if not a.keep_stage:
         # the circuit is restaged byte for byte from the code; the prover's file holds the rows and salts
         for f in [stage / "circuit.txt", *stage.glob("inst-*.bin")]:
+            f.unlink(missing_ok=True)
+        for f in [d / "other-program" / "circuit.txt", *d.glob("other-program/inst-*.bin")]:
             f.unlink(missing_ok=True)
         shutil.rmtree(d / "tampered", ignore_errors=True)
     return row
@@ -263,7 +286,8 @@ def main(argv=None) -> int:
         except Exception as e:  # noqa: BLE001  (a class that breaks is a row, recorded with why)
             row = {"class": {"G": G, "N_IN": N_IN, "N_OUT": N_OUT}, "broke": f"{type(e).__name__}: {e}"[:800]}
         passed = "broke" not in row and (a.stage_only or (row["live"]["accepted"] and (not a.lean or (
-            row.get("lean", {}).get("accepted") and all(x["refused"] for x in row["lean"]["negatives"].values())))))
+            row.get("lean", {}).get("accepted") and all(x["refused"] for x in row["lean"]["negatives"].values())
+            and row["lean"]["negatives"]["another_program"]["same_circuit"]))))
         row["pass"] = bool(passed)
         ok &= row["pass"]
         rows.append(row)
