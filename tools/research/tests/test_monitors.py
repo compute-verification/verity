@@ -456,6 +456,9 @@ def reading(*, root_free_gb=150.0, ws_pct=70.0, iused=7_000_000, t=T0, errors=()
 def test_the_watermarks_key_breaches_as_the_stewards_tick_did_and_hard_ones_page():
     assert M.norm("root free 52 GB < 60 GB") == "root free # GB < # GB"
     assert M.norm("GPU 3 holds 40 GiB at 0% for 15 min") == "GPU<3> holds # GiB at #% for # min"
+    backlog = "11 finished runs older than 1 h lack custody (oldest {})"
+    assert {M.norm(backlog.format("r20261002-044616-9ba7, r20261002-052646-06e1")),
+            M.norm(backlog.format("r20261002-052646-06e1, r20261002-054607-7b26"))} == {"# finished runs older than # h lack custody"}
     run = Run((has("--reading"), (0, json.dumps(reading(root_free_gb=40, errors=["idle_gpus: URLError: down"])), "")))
     ctx = M.Ctx(now=T0, run=run)
     got = {f.key: f for f in M.watermarks("n1")(ctx)}

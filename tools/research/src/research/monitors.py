@@ -391,7 +391,9 @@ def _probe():
 
 
 def norm(line: str) -> str:
-    """The resource steward's dedupe key for a breach line (its tick.sh): numbers become `#`, a GPU's index stays."""
+    """The resource steward's dedupe key for a breach line (its tick.sh): numbers become `#`, a GPU's index stays, and the
+    custody backlog's `(oldest <run ids>)` goes, so the backlog keeps its key while its oldest runs change."""
+    line = re.sub(r"\s*\(oldest [^)]*\)$", "", line)
     return re.sub(r"(^|[^<0-9])[0-9][0-9.,]*", r"\1#", re.sub(r"GPU ([0-9]+)", r"GPU<\1>", line))
 
 
