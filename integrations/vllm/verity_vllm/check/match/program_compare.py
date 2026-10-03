@@ -157,8 +157,29 @@ class Prog:
         base, k = flds[j]
         end = flds[j + 1][0] if j + 1 < len(flds) else None
         if end is not None and hi > end:
-            return ("PEER?", idx, lo, hi)      # a read spanning two collectives' fields is not a peer operand of either
+            return ("PEER?", idx, lo, hi)      # canon splits a read at field boundaries first (`_split_peer`); unreachable from it
         return ("PEER", k, lo - base, hi - base)
+
+    def _split_peer(self, run) -> list[tuple]:
+        """A run reading several adjacent fields of one peers Input node as one run per field, in leaf order (the same leaves).  At
+        WORLD > 2 the fold reads a collective's peers as ONE run over the request's homogeneous peers Record (fields at increasing
+        offsets) where the rank Program reads one `peers_<k>` Input per peer: split, each part is one field's ("PEER", k, ..) on both
+        sides, and the compare still checks the ordinals in order.  Any other run unchanged."""
+        space, idx, lo, hi = run
+        flds = getattr(self, "peer_fields", {}).get(idx) if space == "n" else None
+        if not flds or len(flds) < 2:
+            return [run]
+        import bisect
+        j = bisect.bisect_right(flds, (lo, float("inf"))) - 1
+        if j < 0 or j + 1 >= len(flds) or hi <= flds[j + 1][0]:
+            return [run]
+        parts, a = [], lo
+        while j + 1 < len(flds) and hi > flds[j + 1][0]:
+            b = flds[j + 1][0]
+            parts.append((space, idx, a, b))
+            a, j = b, j + 1
+        parts.append((space, idx, a, hi))
+        return parts
 
     def _bind_splits(self) -> None:
         """[R16 stoch/global, COORD M-0169 (4)] Bind the derived split count S of every top-p TokenSelect (its operand SPLITS_OPERAND).
@@ -289,7 +310,7 @@ class Prog:
                 e = self.i2step[i][0]
                 out.append([("SPLITS", e, e + 1)])
                 continue
-            out.append([self._src(run, unfold) for run in a])
+            out.append([self._src(r, unfold) for run in a for r in self._split_peer(run)])
         return out
 
     def _srcP(self, p: tuple, unfold: bool) -> list[tuple]:
@@ -377,9 +398,9 @@ class Prog:
         return self._per_run(p, unfold)
 
     def _per_run(self, p: tuple, unfold: bool) -> list[tuple]:
-        """The record's `_src` on every run of a progression, each as a one-run progression."""
+        """The record's `_src` on every run of a progression (a peers read split as the record splits it), each as a one-run progression."""
         from verity_vllm.program.compact import expand
-        return [_asP(self._src(run, unfold)) for run in expand([p])]
+        return [_asP(self._src(r, unfold)) for run in expand([p]) for r in self._split_peer(run)]
 
     def _src(self, run, unfold: bool):
         space, idx, lo, hi = run
