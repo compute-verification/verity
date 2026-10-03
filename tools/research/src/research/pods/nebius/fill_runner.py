@@ -49,7 +49,8 @@ Every POLL_S seconds the runner:
     each scoped CPU job's peak memory (mem_peak_gb) when it exits;
   - keeps fill off each fence in FILL_DIR/fences (`<owner> <gpu> <cpus> <until UTC> [<job glob> <minutes>]  # why`, read each
     tick, a line past its until ignored), which `fill_runner.py fence` writes and logs, one per owner, at most 1 GPU, FENCE_MAX_CPUS
-    cores on that GPU's NUMA node and FENCE_MAX_H hours: it stops any other fill job on the GPU, moves running fill jobs' threads
+    cores on that GPU's NUMA node and FENCE_MAX_H hours, none a running timing job holds: it stops any other fill job on the GPU,
+    moves running fill jobs' threads
     off the cores, keeps the GPU as if in keep-free and starts no job on the cores; a job the glob names runs on that GPU alone,
     pinned to those cores, with max_min up to the minutes (still stopped, like any fill job, for a window or a waiter);
   - starts a timing job only on a GPU whose NUMA node holds `cpus` free CPUs of TIMING_CPU_SET in whole cores (SMT siblings),
@@ -980,6 +981,13 @@ def fence(argv: list[str], t: float | None = None) -> int:
                 if f["gpu"] == a.gpu or cpus & theirs:
                     return refuse(f"{f['owner']} has GPU {f['gpu']} and cores {f['cpus']} until "
                                   f"{datetime.fromtimestamp(f['until'], timezone.utc):%H:%MZ}")
+            for p in (FILL / "running").glob(".*.cpus"):
+                try:
+                    theirs = gpu_set(p.read_text().strip(), 1 << 16) or set()
+                except OSError:
+                    continue
+                if cpus & theirs:
+                    return refuse(f"timing job {p.name[1:-len('.cpus')]} has cores {cpu_list(theirs)} until its max_min")
             if a.jobs is not None and (not re.fullmatch(r"[^\s#]+", a.jobs) or not 1 <= a.max_min <= 60 * FENCE_MAX_H):
                 return refuse(f"--jobs is one glob without #, --max-min 1 to {60 * FENCE_MAX_H}")
             end = datetime.fromtimestamp(until, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

@@ -294,6 +294,20 @@ def test_timing_cpus_leave_out_every_cpu_another_cgroup_or_a_fence_may_use_and_f
     assert fr.timing_free([]) == set()
 
 
+def test_a_fence_takes_no_core_a_running_timing_job_holds(node2, monkeypatch, tmp_path, capsys):
+    load, fill, _ = node2
+    monkeypatch.setenv("FILL_QUOTA_LOG", str(tmp_path / "quota-changes.log"))
+    fr = load()
+    monkeypatch.setattr(fr, "gpu_count", lambda: 8)
+    (fill / "running" / ".nw-chunk.sh.cpus").write_text("124-131\n")
+    t = fr.utc("2026-10-03T20:00Z")
+    args = ["ma", "--gpu", "6", "--until", "2026-10-03T21:00Z", "--why", "honest latency"]
+    assert fr.fence([*args, "--cpus", "130,131"], t=t) == 2
+    assert "timing job nw-chunk.sh has cores 124-131" in capsys.readouterr().err
+    assert fr.fence([*args, "--cpus", "132,133"], t=t) == 0
+    assert fr.fences(t)[0]["cpus"] == "132-133"
+
+
 def test_node_ops_quiet_never_pauses_a_timing_job_for_a_timed_window(tmp_path, monkeypatch):
     """A stall over 1 s voids a whole chunk (benchmarks/network_traces' record.py), so while a timed window holds GPUs, Quiet
     pauses another CPU-heavy group but leaves one in the timing slice running."""
