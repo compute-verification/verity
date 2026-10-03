@@ -76,9 +76,9 @@ hand-written and carried over when lift_expected.py regenerates fixtures.toml.
 
 HOW TO RUN.  Skipped unless `VERITY_REGRESSION=1`.  Inputs resolve per `resolver.py`: a directory of row dirs (`VERITY_REGRESSION_ROWS_ROOT`),
 the recorded live paths (tp2), or the data store (`store_io.fetch` of the `fixture/v1` trees named in fixtures.toml; snapshot
-`r19-reference-v1`).  A recorded `check` sets `VERITY_REGRESSION=1` and runs the T0 tier less the checks that rebuild a manifest
-(`REBUILD = True`: manifest_digest, and the #57 negative), which `tools/check/post_train.py` runs after each train on main with
-`VERITY_REGRESSION_REBUILD=1`.  Under `VERITY_STORE_REQUIRED=1` (both of them) an input fixtures.toml names that does not resolve, or
+`r19-reference-v1`).  A recorded `check` sets `VERITY_REGRESSION=1` and runs the T0 tier less the checks that recompute from a
+row's Programs (`REBUILD = True`, marked `rebuild`: manifest_digest, step_segmentation and the #57 negative), which
+`tools/check/post_train.py` runs after each train on main with `VERITY_REGRESSION_REBUILD=1` (`-m "regression and rebuild"`).  Under `VERITY_STORE_REQUIRED=1` (both of them) an input fixtures.toml names that does not resolve, or
 an absent `expected/<row>.json`, FAILS: the only skips are a tier not asked for, a check that does not apply to the row, and a check
 retired on the row (`[rows.<row>.retired.<check>]`: `reason`, `since`, `needs`; `python -m tests.regression.decisions` lists them).
 Self-check (the current code against its own records):
@@ -125,6 +125,8 @@ def _params():
                 marks.append(pytest.mark.pod)
             if chk.STRENGTH == "weak":
                 marks.append(pytest.mark.weak)
+            if getattr(chk, "REBUILD", False):
+                marks.append(pytest.mark.rebuild)
             out.append(pytest.param(row.key, chk.NAME, marks=marks, id=f"{chk.TIER}-{chk.NAME}-r{row.number}"))
     return out
 
@@ -145,8 +147,8 @@ def _unresolved(why: str) -> NoReturn:
 
 def _skip_rebuild(what: str, candidate: str | None) -> None:
     if not resolver.rebuilds() and not candidate:
-        pytest.skip(f"{what} rebuilds a manifest (CPU minutes to half an hour a row): it runs after each train on main "
-                    f"(`tools/check/post_train.py`), not in `check`; {resolver.REBUILD_ENV}=1 runs it here")
+        pytest.skip(f"{what} recomputes from the row's Programs (CPU minutes to half an hour a row): it runs after each train on "
+                    f"main (`tools/check/post_train.py`), not in `check`; {resolver.REBUILD_ENV}=1 runs it here")
 
 
 def _skip_retired(row: resolver.Row, check_name: str, record_property) -> None:
@@ -211,6 +213,7 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict, record_pro
                           f"(source={act.get('source')}):\n  " + "\n  ".join(problems[:40]) + f"\n  actual: {resolver.canonical(act)[:1500]}")
 
 
+@pytest.mark.rebuild
 def test_negative_57_refusal_reproduces(record_property) -> None:
     """#57 gemma2-2b: the v1 Commit REFUSED to build the manifest (unmodelled `Bf16MulScalarTensor_v1` unnamed crossing) -- the negative
     case.  The current code, rebuilding from #57's Programs, must refuse the same way (no complete manifest; the unmodelled family named)

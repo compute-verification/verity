@@ -62,5 +62,5 @@ def test_check_starts_it_after_each_landing():
 def test_the_job_pins_the_rebuilds_to_the_cores_it_is_given():
     pinned, free = PT.job("96-127", 12), PT.job("", 4)
     assert "taskset -c 96-127 ../../.venv/bin/python -m pytest" in pinned and "taskset" not in free
-    assert "-k 'manifest_digest or negative_57' -n 12" in pinned and "-n 4" in free
+    assert "-m 'regression and rebuild' -n 12" in pinned and "-n 4" in free
     assert "VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1" in pinned and "fetch-fixtures" in pinned

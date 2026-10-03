@@ -52,7 +52,7 @@ ENGINE = "v2"                                  # the builder that recomputes `ac
 ORACLE_ENV = "VERITY_REGRESSION_ORACLE"        # `expected` (default: expected/<row>.json, re-baselined on v2) | `frozen` (lift from the R2 frozen v1 records)
 ORACLES = ("expected", "frozen")
 RECORD_ACTUAL_ENV = "VERITY_REGRESSION_RECORD_ACTUAL"   # a directory: test_reproduces writes every `actual` to <dir>/<row>/<check>.json (rebaseline.py input)
-REBUILD_ENV = "VERITY_REGRESSION_REBUILD"      # "1": run the checks that rebuild a manifest (`REBUILD = True`; CPU minutes to half an hour a row)
+REBUILD_ENV = "VERITY_REGRESSION_REBUILD"      # "1": run the checks that recompute from a row's Programs (`REBUILD = True`: a manifest rebuild, step_segmentation's decode; CPU minutes to half an hour a row)
 STORE_REQUIRED_ENV = "VERITY_STORE_REQUIRED"   # "1" (a recorded check, the post-train job): an input that does not resolve fails, never skips
 REGISTRY = HERE.parents[3] / "fixtures" / "artifacts.json"   # the fixtures too large for git (`research data fetch-fixtures`)
 

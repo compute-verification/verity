@@ -2,8 +2,9 @@
 """`tools/check/post_train.py [COMMIT] [--on MACHINE] [--cores LIST] [--workers N] [--force]`: the vLLM reference regression's
 manifest rebuilds on a landing of main.
 
-`check` blocks on the regression's cheap T0 tier; its manifest rebuilds (`manifest_digest` on every row it applies to and the #57
-refusal, about an hour of CPU in one process) run here instead, once per landing (Daniel, 3 Oct).  `research merge --push` starts
+`check` blocks on the regression's cheap T0 tier; the checks that recompute from a row's Programs (marked `rebuild`: the manifest
+rebuilds, `manifest_digest` on every row it applies to and the #57 refusal, and `step_segmentation`'s decode of every component;
+about an hour of CPU in one process) run here instead, once per landing (Daniel, 3 Oct).  `research merge --push` starts
 this, detached, after each push it lands (`after_land` in `tool.py`); run it by hand for a landing pushed another way, or to redo one.
 
 COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in.  Its tree is checked
@@ -32,7 +33,7 @@ MACHINE = "vy-nebius-1"
 CORES = "96-127"
 BY = "regression"
 PREFIX = "regression "
-TESTS = "manifest_digest or negative_57"
+MARKS = "regression and rebuild"
 RUN_RE = re.compile(r"\brun (r20\d{6}-\d{6}-[0-9a-f]{4}) launched\b")
 CHECK_RE = re.compile(r"^Check: (r20\d{6}-\d{6}-[0-9a-f]{4})$", re.M)
 ROW_RE = re.compile(r"-(r\d+)\]$")
@@ -45,7 +46,7 @@ uv run -q --locked --extra torch-cpu python -m research data fetch-fixtures --js
   > "$out/fetch-fixtures.json" || exit 1
 cd integrations/vllm
 VERITY_REGRESSION=1 VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1 VERITY_REGRESSION_RECORD_ACTUAL=$out/actual \\
-  {pin}../../.venv/bin/python -m pytest tests/regression -m regression -k {tests} -n {workers} -rA --durations=0 \\
+  {pin}../../.venv/bin/python -m pytest tests/regression -m {marks} -n {workers} -rA --durations=0 \\
   --junitxml "$out/junit.xml" > "$out/pytest.log" 2>&1
 rc=$?
 tail -n 40 "$out/pytest.log"
@@ -102,7 +103,7 @@ def labelled(attempt: str) -> str | None:
 
 
 def job(cores: str, workers: int) -> str:
-    return JOB.format(pin=f"taskset -c {cores} " if cores else "", tests=shlex.quote(TESTS), workers=workers)
+    return JOB.format(pin=f"taskset -c {cores} " if cores else "", marks=shlex.quote(MARKS), workers=workers)
 
 
 def main(argv: list[str] | None = None) -> int:

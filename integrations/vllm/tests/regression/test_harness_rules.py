@@ -1,7 +1,8 @@
 """The harness's own rules, on synthetic rows (laptop-safe: no store, no VERITY_REGRESSION).
 
 What a recorded check (VERITY_STORE_REQUIRED=1) may skip: a check retired on the row, by its reason; never an input or contract that
-does not resolve, which fails.  The manifest rebuilds skip by name unless VERITY_REGRESSION_REBUILD=1 (the post-train job).  A query
+does not resolve, which fails.  The checks that recompute from a row's Programs (manifest_digest, step_segmentation, the #57 negative)
+skip unless VERITY_REGRESSION_REBUILD=1 (the post-train job), which selects them by their `rebuild` mark.  A query
 manifest's rows beyond v1 are its "promoted" facts whatever the engine is called (`v2-query`, `q-word` since S1).  A post-flip reference
 row (no `commit_summary.json`) is summarised from its own evidence.  A row's `manifest_flags` replaces POLICIES_OFF.
 """
@@ -67,6 +68,15 @@ def test_the_rebuilds_skip_unless_asked_for_or_a_candidate_states_the_manifest(m
     TR._skip_rebuild("manifest_digest", "/some/candidate")
     monkeypatch.setenv(resolver.REBUILD_ENV, "1")
     TR._skip_rebuild("manifest_digest", None)
+
+
+def test_the_post_train_job_selects_exactly_the_checks_that_skip_in_check():
+    """post_train.py runs `-m "regression and rebuild"`: every `REBUILD` check carries the mark and nothing else does, so what
+    `check` skips is what the job runs."""
+    from tests.regression import checks
+    marked = {p.id.split("-")[1] for p in TR._params() if any(m.name == "rebuild" for m in p.marks)}
+    assert marked == {c.NAME for c in checks.all_checks() if getattr(c, "REBUILD", False)} >= {"manifest_digest", "step_segmentation"}
+    assert any(m.name == "rebuild" for m in TR.test_negative_57_refusal_reproduces.pytestmark)
 
 
 def test_a_retired_check_skips_by_its_reason_and_only_that_check():
