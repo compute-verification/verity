@@ -77,6 +77,41 @@ path = "/etc/systemd/system/vy-clocks.service"
 by = "tools/research/src/research/pods/nebius/vm_setup.sh"
 nodes = ["vy-nebius-1", "vy-nebius-2"]
 
+# ---- both nodes: `research retention gc`, the one deleter, as root from this tree (stdlib only). After installing a unit:
+# `systemctl daemon-reload`; enable each node's own instances (vy-retention-gc@vy-nebius-N.timer, vy-retention-dry-run@...).
+
+[[tree]]
+path = "/usr/local/lib/vy-research/research"
+src = "tools/research/src/research"
+nodes = ["vy-nebius-1"]
+run = ["systemd:vy-retention-gc@vy-nebius-1.timer", "systemd:vy-retention-dry-run@vy-nebius-1.timer"]
+
+[[tree]]
+path = "/usr/local/lib/vy-research/research"
+src = "tools/research/src/research"
+nodes = ["vy-nebius-2"]
+run = ["systemd:vy-retention-gc@vy-nebius-2.timer", "systemd:vy-retention-dry-run@vy-nebius-2.timer"]
+
+[[file]]
+path = "/etc/systemd/system/vy-retention-gc@.service"
+src = "tools/research/src/research/pods/nebius/vy-retention-gc@.service"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+
+[[file]]
+path = "/etc/systemd/system/vy-retention-gc@.timer"
+src = "tools/research/src/research/pods/nebius/vy-retention-gc@.timer"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+
+[[file]]
+path = "/etc/systemd/system/vy-retention-dry-run@.service"
+src = "tools/research/src/research/pods/nebius/vy-retention-dry-run@.service"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+
+[[file]]
+path = "/etc/systemd/system/vy-retention-dry-run@.timer"
+src = "tools/research/src/research/pods/nebius/vy-retention-dry-run@.timer"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+
 [[file]]
 path = "/workspace/verity-guest/bin/write_probe.py"
 src = "tools/research/src/research/pods/nebius/write_probe.py"

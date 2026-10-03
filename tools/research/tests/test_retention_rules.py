@@ -384,7 +384,7 @@ def test_node_2_refuses_in_a_timed_window_and_when_its_status_cant_be_read(tmp_p
     with pytest.raises(RR.Refused, match="does not say timed False"):
         R.report(root, now=clock, usage=lambda _p: (100, 10, 90), node=N2)
     monkeypatch.setattr(R, "DEFAULT_JOBS_DIRS", ())
-    out = tmp_path / "dry-run.json"
+    out = tmp_path / "retention/dry-run.json"
     assert research_main(["retention", "gc", "--root", str(root), "--node", N2, "--out", str(out)]) == 3
     assert "refused: " in capsys.readouterr().err and json.loads(out.read_text())["refused"].startswith(f"{fill}/status.txt does not")
     assert research_main(["retention", "report", "--root", str(root), "--json"]) == 3

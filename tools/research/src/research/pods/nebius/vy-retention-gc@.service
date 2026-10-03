@@ -1,0 +1,23 @@
+# `research retention gc --apply` on the node the instance names (vy-nebius-1 or vy-nebius-2): the default rules
+# (research/retention_rules.py), then what a record allows over the watermark. Runs as root from the research package that
+# deploy.toml installs under /usr/local/lib/vy-research (stdlib only). Every decision goes to
+# /workspace/research/retention/deletions.jsonl, the plan to gc.json beside it.
+# Where /workspace/pouw/fill exists (node 2) it starts only when its status says `timed False`, as the steward's sweep did.
+# Exit 3 (refused: what live work names can't be established, a lock is held, a timed window opened during the pass) is retried
+# in 20 min; 1 (a deletion failed or a path is stuck) and 2 (usage) are not: the log and the journal name the path.
+[Unit]
+Description=research retention gc --apply on %i (vy-retention-gc@%i.timer, every 6 h)
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+Nice=19
+IOSchedulingClass=idle
+CPUQuota=50%
+TimeoutStartSec=3h
+Environment=PYTHONPATH=/usr/local/lib/vy-research PYTHONDONTWRITEBYTECODE=1
+ExecCondition=/bin/sh -c 'test ! -d /workspace/pouw/fill || grep -qs "timed False" /workspace/pouw/fill/status.txt'
+ExecStart=/usr/bin/python3 -m research retention gc --node %i --apply --by vy-retention-gc@%i --out /workspace/research/retention/gc.json
+Restart=on-failure
+RestartSec=20min
+RestartPreventExitStatus=1 2

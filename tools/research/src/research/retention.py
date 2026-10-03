@@ -931,6 +931,7 @@ def _show(argv: list[str]) -> int:
 
 def _emit(doc: dict[str, Any], ns: argparse.Namespace) -> None:
     if ns.out:
+        Path(ns.out).parent.mkdir(parents=True, exist_ok=True)
         write_json_atomic(Path(ns.out), doc)
     if ns.json:
         print(json.dumps(doc, indent=2))

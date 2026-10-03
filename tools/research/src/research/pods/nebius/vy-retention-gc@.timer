@@ -1,0 +1,10 @@
+[Unit]
+Description=research retention gc --apply on %i every 6 h (vy-retention-gc@%i.service)
+
+[Timer]
+OnCalendar=*-*-* 00/6:30:00
+AccuracySec=30s
+Persistent=false
+
+[Install]
+WantedBy=timers.target
