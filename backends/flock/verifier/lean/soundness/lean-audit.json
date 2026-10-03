@@ -14,14 +14,6 @@
   "Flock.Registered"
  ],
  "compile_time": {
-  "FlockSoundness.Discharge.ZkBind.HmRowsZ.ofShadow_computes": {},
-  "FlockSoundness.Discharge.ZkBind.decAgreeAt": {},
-  "FlockSoundness.Discharge.ZkBind.rsZAt_computes": {},
-  "FlockSoundness.Discharge.ZkBind.sitesZAt_at": {},
-  "FlockSoundness.Discharge.ZkBind.sitesZAt_parse": {},
-  "FlockSoundness.Discharge.ZkBind.tableAtZK_S": {},
-  "FlockSoundness.Discharge.ZkBind.wit_surj": {},
-  "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at": {},
   "FlockSoundness.Refine.Walk": {
    "why": "walk_step, the tactic that steps through a successful computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
    "digest": "c86a84bed584d07dde045f113c2e8937b7d5887fb9cda37aebe771db55960a14"
@@ -9262,6 +9254,7 @@
    "assumptions": [],
    "type_hash": "36906b103677801e37a225289f88f2fb1a17ccfca99fd53128defa577409b6d2"
   },
+  "FlockSoundness.Discharge.ZkBind.HmRowsZ.ofShadow_computes": {},
   "FlockSoundness.Discharge.ZkBind.HmRowsZ.registered": {
    "signature": [
     "FlockSoundness.Discharge.ZkBind.HmRowsZ.registered {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
@@ -9436,6 +9429,13 @@
    "assumptions": [],
    "type_hash": "195a82020fcbb471fdbb6a6fb87ae6a2bdaa0dc53d56e3469d7c28a3b1523430"
   },
+  "FlockSoundness.Discharge.ZkBind.decAgreeAt": {},
+  "FlockSoundness.Discharge.ZkBind.rsZAt_computes": {},
+  "FlockSoundness.Discharge.ZkBind.sitesZAt_at": {},
+  "FlockSoundness.Discharge.ZkBind.sitesZAt_parse": {},
+  "FlockSoundness.Discharge.ZkBind.tableAtZK_S": {},
+  "FlockSoundness.Discharge.ZkBind.wit_surj": {},
+  "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at": {},
   "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg": {
    "signature": [
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg {F K : Type} [Field F] [Fintype F] [DecidableEq F]",
