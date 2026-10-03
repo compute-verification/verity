@@ -9254,6 +9254,14 @@
    "assumptions": [],
    "type_hash": "36906b103677801e37a225289f88f2fb1a17ccfca99fd53128defa577409b6d2"
   },
+  "FlockSoundness.Discharge.ZkBind.acceptsZK_accepted": {},
+  "FlockSoundness.Discharge.ZkBind.SitesZ.rowsOf_keyProg": {},
+  "FlockSoundness.Discharge.ZkBind.SitesZ.placed_keyProg": {},
+  "FlockSoundness.Discharge.ZkBind.SitesZ.aliased_keyProg": {},
+  "FlockSoundness.Discharge.ZkBind.SitesZ.placeKey_spec": {},
+  "FlockSoundness.Discharge.ZkBind.HmRowsZ.registered": {},
+  "FlockSoundness.Discharge.ZkBind.bindingZ_bit": {},
+  "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg": {},
   "FlockSoundness.Discharge.ZkCoins.committed_le": {
    "signature": ["FlockSoundness.Discharge.ZkCoins.committed_le : FlockSoundness.Discharge.ZkCoins.CommittedLe"],
    "assumptions": [],
