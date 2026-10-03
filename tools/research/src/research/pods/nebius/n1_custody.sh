@@ -13,10 +13,12 @@
 # Which runs: `research data custody --triage --older-min` over each runs root, run as its store's owner (VY_CUSTODY_ROOTS:
 # runs=store=uid; the root's Jobs run as that uid too), the rows that need action and have settled, of runs this machine's kernel ran
 # (job.json's boot id is one in STATE/boots): node 2's relay copies sit in /workspace/jobs/runs too, and n2_custody.sh owns those.
-# A status that never became terminal (a pod preempted before its runner recorded an end: triage's dead, or stale after 24 h) is
-# published with --force and keeps the state it last wrote, unless the run never ran its workload (empty stdout and stderr, no file
-# but the runner's bookkeeping): that is held, never published as evidence. `attempt-no-record` (an attempt published without its run
-# record, which it can never gain) gets no Job: triage lists it until a person waives its logs.
+# A status that never became terminal (a pod preempted before its runner recorded an end) is published with --force --runner-gone,
+# keeping the state it last wrote, only once its runner is seen gone: a host run's pid gone (force_refusal, here), a pod's
+# `kubectl get pod POD` (job.json's hostname) NotFound, as backfill_attempts.sh asks. A pod Kubernetes still lists waits, however long
+# its records have been quiet. A run that never ran its workload (empty stdout and stderr, no file but the runner's bookkeeping) is
+# held, never published as evidence. `attempt-no-record` (an attempt published without its run record, which it can never gain) gets
+# no Job: triage lists it until a person waives its logs.
 # Bounds as n2_custody.sh's: at most VY_CUSTODY_MAX_RUNS Jobs, none started after VY_CUSTODY_PASS_S, runs that failed before going
 # last; a run dir over VY_CUSTODY_MAX_FILES files or VY_CUSTODY_MAX_GB GiB is held. A failed Job is logged with its last line and
 # retried every round, except a remote that holds another attempt document (triage's `conflict`; an attempt key is write-once), which
@@ -116,6 +118,16 @@ custody_job() {  # custody_job RUN ROOT STORE UID CMD: 0 when the Job completed,
   fi
 }
 
+# pod_gone POD: 0 when Kubernetes says the run's pod is NotFound (dispatch's pods are in default), else 1 with seen= what it said
+pod_gone() {
+  seen=$(kube get pod "$1" --namespace=default --output=name --request-timeout=30s 2>&1)
+  case $?:$seen in
+    0:*) seen="its pod $1 still runs"; return 1 ;;
+    *NotFound*) return 0 ;;
+    *) seen="\`kubectl get pod $1\` failed: $(echo "$seen" | grep -v '^$' | tail -1)"; return 1 ;;
+  esac
+}
+
 declare -A STORE UID_OF
 IFS=, read -ra specs <<< "$ROOTS"
 for spec in "${specs[@]}" ${RELAY:+"$RELAY"}; do
@@ -163,21 +175,23 @@ for spec in "${specs[@]}"; do
   fi
 done
 
-# What to do with each run that needs action, one line each: "job|ROOT|RUN|FORCE|CAMPAIGN|STATUS|FILES|BYTES" (runs that never failed
-# first), "hold|ROOT|RUN|WHY" (a hold to write), "lift|RUN|STATE" (a hold to remove), and one "note|..." summary
+# What to do with each run that needs action, one line each: "job|ROOT|RUN|GONE|CAMPAIGN|STATUS|FILES|BYTES" (runs that never failed
+# first; GONE, for a status that isn't terminal: `host` when this host saw its runner gone, else its pod's name to ask Kubernetes),
+# "hold|ROOT|RUN|WHY" (a hold to write), "lift|RUN|STATE" (a hold to remove), and one "note|..." summary
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$SRC/tools/research/src" python3 - "$tmp" "$STATE" "$BOOT" "$MAX_FILES" "$MAX_GB" "$ROOTS" > "$tmp/plan" << 'EOF' || { log "refused: no plan"; exit 3; }
-import json, re, sys
+import json, re, socket, sys
 from collections import Counter
 from pathlib import Path
 
 from research.store.attempt import TERMINAL
-from research.store.custody import NEEDS_ACTION, run_files
+from research.store.custody import NEEDS_ACTION, force_refusal, run_files
 
 tmp, state, boot, max_files, max_bytes = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], int(sys.argv[4]), int(sys.argv[5]) << 30
 boots = {boot, *((state / "boots").read_text().split() if (state / "boots").exists() else [])}
 BOOKKEEPING = {"job.json", "status.json", "stdout.log", "stderr.log", "launcher.log", "sampler.log", "sampler.json", "resources.jsonl",
                "events.jsonl", "launch.json"}
 held = {p.name for p in (state / "held").iterdir()}
+here = socket.gethostname()
 
 
 def read(p):
@@ -220,7 +234,17 @@ for i, root in enumerate(s.split("=")[0] for s in sys.argv[6].split(",")):
         if row["files"] > max_files or row["bytes"] > max_bytes:
             holds.append(f"hold|{root}|{r}|over " + (f"{max_files} files" if row["files"] > max_files else f"{max_bytes >> 30} GiB"))
             continue
-        line = f"job|{root}|{r}|{'--force' if status not in TERMINAL else ''}|{field(camp)}|{status}|{row['files']}|{row['bytes']}"
+        gone, host = "", (job.get("environment") or {}).get("hostname") or ""
+        if status not in TERMINAL:
+            # a hostname of 63 characters may be a longer pod name cut short, which Kubernetes would call NotFound
+            if force_refusal(d) is None:
+                gone = "host"
+            elif host != here and len(host) < 63 and re.fullmatch(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?", host):
+                gone = host
+            else:
+                skipped["its runner not seen gone"] += 1
+                continue
+        line = f"job|{root}|{r}|{gone}|{field(camp)}|{status}|{row['files']}|{row['bytes']}"
         (retry if (state / "failures" / r).exists() else fresh).append(line)
 for line in [*fresh, *retry, *holds]:
     print(line)
@@ -229,7 +253,7 @@ for r in sorted(held - seen):
 print("note|" + ", ".join(f"{n} {k}" for k, n in sorted(skipped.items())))
 EOF
 
-failed=0 tried=0 left=0
+failed=0 tried=0 left=0 waiting=0
 while IFS='|' read -r kind a b c camp status files bytes; do
   case $kind in
     note)
@@ -248,12 +272,27 @@ while IFS='|' read -r kind a b c camp status files bytes; do
         *) log "$root/$r: held, $why: no round publishes it; move the bulk out of the run dir (or declare it elsewhere), then rm $STATE/held/$r" ;;
       esac ;;
     job)
-      root=$a r=$b force=$c d=$a/$b
-      if [ "$DRY" = 1 ]; then echo "would publish $d ($camp, $status, $files files, $(human "$bytes"))${force:+ with --force}"; continue; fi
-      if [ "$tried" -ge "$MAX_RUNS" ] || [ "$SECONDS" -ge "$PASS_S" ] || quiet; then
+      root=$a r=$b gone=$c d=$a/$b force= seen=
+      if [ "$DRY" != 1 ] && { [ "$tried" -ge "$MAX_RUNS" ] || [ "$SECONDS" -ge "$PASS_S" ] || quiet; }; then
         left=$((left + 1))
         continue
       fi
+      if [ -n "$gone" ]; then
+        if [ "$gone" = host ]; then
+          seen="its runner's pid is gone"
+        elif pod_gone "$gone"; then
+          seen="its pod $gone is NotFound"
+        else
+          if [ "$DRY" = 1 ]; then echo "would leave $d ($camp, $status): $seen"; continue; fi
+          case $seen in
+            "its pod "*) waiting=$((waiting + 1)) ;;
+            *) log "$d ($camp, $status): not published: $seen; the next round asks again"; failed=$((failed + 1)) ;;
+          esac
+          continue
+        fi
+        force="--force --runner-gone"
+      fi
+      if [ "$DRY" = 1 ]; then echo "would publish $d ($camp, $status, $files files, $(human "$bytes"))${force:+ with $force ($seen)}"; continue; fi
       tried=$((tried + 1))
       why=
       if custody_job "$r" "$root" "${STORE[$root]}" "${UID_OF[$root]}" "$PY -m research data custody $d --publish --keep-local $force"; then
@@ -300,6 +339,7 @@ for spec in "${specs[@]}"; do
     failed=$((failed + 1))
   fi
 done
+[ "$waiting" = 0 ] || echo "$waiting run(s) wait on their pod, which Kubernetes still lists: a status that isn't terminal is its end only once the pod is gone"
 [ "$left" = 0 ] || log "round bounded ($tried Job(s) in ${SECONDS}s, at most $MAX_RUNS or ${PASS_S}s): $left run(s) left for the next round"
 held=$(ls "$STATE/held" | wc -l)
 [ "$held" = 0 ] || echo "$held run(s) held ($STATE/held/)"

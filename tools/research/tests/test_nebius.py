@@ -1627,14 +1627,21 @@ def test_n2_custody_starts_no_job_that_could_run_into_node_1s_quiet_hour(tmp_pat
     assert n2.round_(clock=at("1215"), VY_CUSTODY_QUIET="").returncode == 0, "VY_CUSTODY_QUIET='' turns the hold off"
 
 
-# a stand-in kubectl: a created n1-custody Job runs its command at once, against the fs vault KVAULT names (the Secret's R2)
+# a stand-in kubectl: a created n1-custody Job runs its command at once, against the fs vault KVAULT names (the Secret's R2); `get pod`
+# finds the pods LIVE_PODS lists, or can't reach the API server under POD_ERR
 FAKE_KUBECTL = '''
 import json, os, subprocess, sys
 from pathlib import Path
 jobs, log, a = Path(os.environ["KSTATE"]), Path(os.environ["KLOG"]), sys.argv[1:]
 with log.open("a") as f:
     f.write("kubectl " + " ".join(a) + "\\n")
-if a[:2] == ["delete", "job"]:
+if a[:2] == ["get", "pod"]:
+    if os.environ.get("POD_ERR"):
+        sys.exit("Unable to connect to the server: dial tcp 10.0.0.1:6443: i/o timeout")
+    if a[2] not in os.environ.get("LIVE_PODS", "").split(","):
+        sys.exit(f'Error from server (NotFound): pods "{a[2]}" not found')
+    print(f"pod/{a[2]}")
+elif a[:2] == ["delete", "job"]:
     (jobs / a[2]).unlink(missing_ok=True)
 elif a[:3] == ["create", "-f", "-"]:
     job = json.load(sys.stdin)
@@ -1661,37 +1668,33 @@ elif a[0] == "logs":
 '''
 
 
-@pytest.mark.skipif(shutil.which("bash") is None or shutil.which("flock") is None or not Path("/proc/self/stat").exists(),
-                    reason="n1_custody.sh is bash, and takes a flock")
-def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_bounded_rounds(tmp_path, monkeypatch):
-    """3 Oct: ~326 runs under node 1's runs roots had ended, a pod preempted before its runner recorded an end among them, and sat
-    there without custody. A round takes each run this machine ran, once it has settled, through a Job as its store's owner, with
-    the Secret's R2: `research data custody --publish --keep-local`, --force for a status that never became terminal. A run that never
-    ran its workload is held (never published as evidence) until a label lifts it, and so is one over the bounds and one whose
-    remote holds another attempt document (after its one Job), until `--reconcile`. Node 2's relay copies, live runs, settling
-    runs and an attempt published without its run record get no Job. A round runs at most VY_CUSTODY_MAX_RUNS Jobs within
-    VY_CUSTODY_PASS_S, runs that failed before going last, none in node 1's daily hold, and starts each store's pending push."""
-    from research.store import attempt as A
-    from research.store.cli import main as data_main
-    from research.store.local import LocalStore, attempt_key
+N1_OLD, N1_FUTURE = 1_000_000_000, 4_102_444_800     # a run's records last changed in 2001 (settled, and stale for a pod), or in 2100
+N1_CUSTODY = pytest.mark.skipif(shutil.which("bash") is None or shutil.which("flock") is None or not Path("/proc/self/stat").exists(),
+                                reason="n1_custody.sh is bash, and takes a flock")
 
+
+def _n1_custody(tmp_path: Path) -> types.SimpleNamespace:
+    """Node 1 for n1_custody.sh: its runs roots `jobs` (store uid 1000) and `research` (1001), node 2's relay copies under jobs/runs-n2,
+    and the Secret's R2 as the fs vault `vault`. `run` makes a run dir from the run_v0.2 fixture (a pod's, pod-RUN, unless `host`),
+    `round_` runs one round through FAKE_KUBECTL and a sudo that logs its argv, `created` lists the Jobs created so far, `job` reads
+    one back with its outcome, `command` its container's command, `held` the holds."""
     src_root = Path(registry.__file__).resolve().parents[2]
-    jobs, research, state, bin_, kjobs = (tmp_path / "jobs", tmp_path / "research", tmp_path / "state", tmp_path / "bin",
-                                          tmp_path / "k8s")
-    log, vault, home, absent = tmp_path / "calls.log", tmp_path / "vault", tmp_path / "home", tmp_path / "absent.toml"
-    for d in (jobs / "runs", research / "runs", bin_, kjobs, vault, home, tmp_path / "src" / "tools" / "research"):
+    n = types.SimpleNamespace(jobs=tmp_path / "jobs", research=tmp_path / "research", state=tmp_path / "state", vault=tmp_path / "vault",
+                              log=tmp_path / "calls.log", absent=tmp_path / "absent.toml", remote=tmp_path / "vault.toml")
+    bin_, kjobs, home = tmp_path / "bin", tmp_path / "k8s", tmp_path / "home"
+    for d in (n.jobs / "runs", n.research / "runs", bin_, kjobs, n.vault, home, tmp_path / "src" / "tools" / "research"):
         d.mkdir(parents=True)
     (tmp_path / "src" / "tools" / "research" / "src").symlink_to(src_root)
     (tmp_path / "src" / "tools" / "research" / "store.pod.toml").symlink_to(src_root.parent / "store.pod.toml")
-    (tmp_path / "vault.toml").write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
+    n.remote.write_text(f'[remote]\ntype = "fs"\npath = "{n.vault}"\n')
     (bin_ / "kubectl").write_text(f"#!{sys.executable}\n{FAKE_KUBECTL}")
-    (bin_ / "sudo").write_text(f'#!/bin/sh\necho "sudo $*" >> {log}\n[ "$1 $2" = "-n -u" ] || exit 1\nshift 3\nexec "$@"\n')
+    (bin_ / "sudo").write_text(f'#!/bin/sh\necho "sudo $*" >> {n.log}\n[ "$1 $2" = "-n -u" ] || exit 1\nshift 3\nexec "$@"\n')
     (bin_ / "python3").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
     for f in bin_.iterdir():
         f.chmod(0o755)
-    old, future = 1_000_000_000, 4_102_444_800     # records last changed in 2001 (settled, and stale for a pod), or in 2100
 
-    def run(root, rid, state_, *, boot="boot-n1", t=old, empty=False, extra=0, runs="runs"):
+    def run(root, rid, state, *, boot="boot-n1", host=None, t=N1_OLD, empty=False, extra=0, runs="runs", status=None,
+            stdout="the workload's stdout\n", files=None):
         d = root / runs / rid
         if empty:
             d.mkdir()
@@ -1701,16 +1704,57 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
         else:
             shutil.copytree(Path(__file__).parent / "fixtures" / "run_v0.2", d)
             (d / "state.json").unlink()
-            (d / "stdout.log").write_text("the workload's stdout\n")
+            (d / "stdout.log").write_text(stdout)
             job = json.loads((d / "job.json").read_text())
-        job["run"]["id"], job["environment"]["boot_id"], job["environment"]["hostname"] = rid, boot, f"pod-{rid}"
+        job["run"]["id"], job["environment"]["boot_id"], job["environment"]["hostname"] = rid, boot, host or f"pod-{rid}"
         (d / "job.json").write_text(json.dumps(job))
-        (d / "status.json").write_text(json.dumps({"state": state_, "transitions": [{"state": state_, "pid": 4243}]}))
+        (d / "status.json").write_text(json.dumps(status or {"state": state, "transitions": [{"state": state, "pid": 4243}]}))
         for i in range(extra):
             (d / f"row{i}.jsonl").write_text("{}\n")
+        for rel, text in (files or {}).items():
+            (d / rel).write_text(text)
         for p in d.rglob("*"):
             os.utime(p, (t, t))
         return d
+
+    def round_(*args, **env):
+        return subprocess.run(["bash", str(NEBIUS / "n1_custody.sh"), *args], capture_output=True, text=True,
+                              env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "HOME": str(home), "KSTATE": str(kjobs),
+                                   "KLOG": str(n.log), "KHOME": str(home), "KVAULT": str(n.remote), "RESEARCH_STORE_CONFIG": str(n.absent),
+                                   "VY_CUSTODY_QUIET": "", "VY_CUSTODY_BOOT": "boot-n1", "VY_CUSTODY_PY": sys.executable,
+                                   "VY_CUSTODY_STATE": str(n.state), "VY_CUSTODY_SRC": str(tmp_path / "src"),
+                                   "VY_CUSTODY_ROOTS": f"{n.jobs}/runs={n.jobs}/store=1000,{n.research}/runs={n.research}/store=1001",
+                                   "VY_CUSTODY_RELAY": f"{n.jobs}/runs-n2={n.jobs}/store=1000", "VY_CUSTODY_MAX_FILES": "10", **env})
+
+    n.run, n.round_ = run, round_
+    n.created = lambda: [ln.split()[1] for ln in n.log.read_text().splitlines() if ln.startswith("created ")] if n.log.exists() else []
+    n.job = lambda name: json.loads((kjobs / name).read_text())
+    n.command = lambda name: n.job(name)["job"]["spec"]["template"]["spec"]["containers"][0]["command"]
+    n.held = lambda: sorted(p.name for p in (n.state / "held").iterdir())
+    return n
+
+
+@N1_CUSTODY
+def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_bounded_rounds(tmp_path, monkeypatch):
+    """3 Oct: ~326 runs under node 1's runs roots had ended, a pod preempted before its runner recorded an end among them, and sat
+    there without custody. A round takes each run this machine ran, once it has settled, through a Job as its store's owner, with
+    the Secret's R2: `research data custody --publish --keep-local`, --force --runner-gone for a status that never became terminal
+    once Kubernetes says its pod is gone. A run that never ran its workload is held (never published as evidence) until a label
+    lifts it, and so is one over the bounds and one whose remote holds another attempt document (after its one Job), until
+    `--reconcile`. Node 2's relay copies, live runs, settling runs and an attempt published without its run record get no Job. A
+    round runs at most VY_CUSTODY_MAX_RUNS Jobs within VY_CUSTODY_PASS_S, runs that failed before going last, none in node 1's daily
+    hold, and starts each store's pending push."""
+    from research.store import attempt as A
+    from research.store.cli import main as data_main
+    from research.store.local import LocalStore, attempt_key
+
+    node = _n1_custody(tmp_path)
+    jobs, research, state, log, vault, absent = node.jobs, node.research, node.state, node.log, node.vault, node.absent
+    run, round_, created, job, command, held = node.run, node.round_, node.created, node.job, node.command, node.held
+    old, future = N1_OLD, N1_FUTURE
+
+    def preserved(d):
+        return json.loads((d / ".custody").read_text())["preserved"] is True
 
     R = {k: f"r20261003-0000{n:02d}-00{n:02d}" for n, k in enumerate(
         ("done", "dead", "empty", "n2copy", "fresh", "fails", "big", "legacy", "conflict", "live", "new", "research", "relay"), 1)}
@@ -1719,7 +1763,7 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     J["relay"] = jobs / "runs-n2" / R["relay"]
     run(jobs, R["done"], "done")
     run(jobs, R["dead"], "running")                       # a preempted pod: no record changed for 24 h
-    run(jobs, R["empty"], "running", empty=True)
+    run(jobs, R["empty"], "submitted", empty=True, status={"state": "submitted"})      # its runner never spawned the workload
     run(jobs, R["n2copy"], "done", boot="boot-n2")        # node 2's relay copy: n2_custody.sh's
     run(jobs, R["fresh"], "failed", t=future)
     run(jobs, R["fails"], "failed")
@@ -1741,30 +1785,6 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
         for p in d.rglob("*"):
             os.utime(p, (old, old))
 
-    def round_(*args, **env):
-        return subprocess.run(["bash", str(NEBIUS / "n1_custody.sh"), *args], capture_output=True, text=True,
-                              env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "HOME": str(home), "KSTATE": str(kjobs),
-                                   "KLOG": str(log), "KHOME": str(home), "KVAULT": str(tmp_path / "vault.toml"),
-                                   "RESEARCH_STORE_CONFIG": str(absent), "VY_CUSTODY_QUIET": "", "VY_CUSTODY_BOOT": "boot-n1",
-                                   "VY_CUSTODY_PY": sys.executable, "VY_CUSTODY_STATE": str(state), "VY_CUSTODY_SRC": str(tmp_path / "src"),
-                                   "VY_CUSTODY_ROOTS": f"{jobs}/runs={jobs}/store=1000,{research}/runs={research}/store=1001",
-                                   "VY_CUSTODY_RELAY": f"{jobs}/runs-n2={jobs}/store=1000", "VY_CUSTODY_MAX_FILES": "10", **env})
-
-    def created():
-        return [ln.split()[1] for ln in log.read_text().splitlines() if ln.startswith("created ")] if log.exists() else []
-
-    def job(name):
-        return json.loads((kjobs / name).read_text())
-
-    def held():
-        return sorted(p.name for p in (state / "held").iterdir())
-
-    def preserved(d):
-        return json.loads((d / ".custody").read_text())["preserved"] is True
-
-    def command(name):
-        return job(name)["job"]["spec"]["template"]["spec"]["containers"][0]["command"]
-
     assert round_("--now").returncode == 2 and round_("--reconcile", R["done"], "--by").returncode == 2
     assert round_("--reconcile", f"../{R['done']}", "--by", "x").returncode == 2
     no_src = round_(VY_CUSTODY_SRC=str(tmp_path / "nowhere"))
@@ -1776,8 +1796,9 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     dry = round_("--dry-run")
     assert dry.returncode == 0 and created() == [] and not held() and not (state / "boots").exists(), dry.stdout + dry.stderr
     assert f"would publish {J['done']} (r21-fixture, done, 8 files" in dry.stdout
-    assert f"would publish {J['dead']} (r21-fixture, running, 8 files, 5.9 KiB) with --force" in dry.stdout
-    assert f"would hold {J['empty']}: never ran its workload (r21-fixture, status running" in dry.stdout
+    assert (f"would publish {J['dead']} (r21-fixture, running, 8 files, 5.9 KiB) with --force --runner-gone (its pod pod-{R['dead']} "
+            "is NotFound)") in dry.stdout
+    assert f"would hold {J['empty']}: never ran its workload (r21-fixture, status submitted" in dry.stdout
     assert f"would hold {J['big']}: over 10 files" in dry.stdout and f"would publish {research}/runs/{R['research']}" in dry.stdout
     assert "no Job: 1 not run by this machine, 1 settling (triage lists them)" in dry.stdout
     assert R["n2copy"] not in dry.stdout and R["fresh"] not in dry.stdout and R["live"] not in dry.stdout
@@ -1807,7 +1828,8 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     first = round_(FAIL_RUN=R["fails"])
     assert first.returncode == 1, first.stdout + first.stderr
     assert created()[3:] == [n1["dead"], n1["fails"], n1["legacy"], n1["conflict"], n1["research"]]
-    assert command(n1["dead"])[5].endswith("--keep-local --force")
+    assert command(n1["dead"])[5].endswith("--keep-local --force --runner-gone")
+    assert f"kubectl get pod pod-{R['dead']} --namespace=default --output=name --request-timeout=30s" in log.read_text()
     assert preserved(J["dead"]) and preserved(research / "runs" / R["research"])
     assert job(n1["research"])["job"]["spec"]["template"]["spec"]["securityContext"]["runAsUser"] == 1001
     assert LocalStore(research / "store", config_path=tmp_path / "vault.toml").get_attempt(R["research"])
@@ -1853,6 +1875,55 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     assert round_().returncode == 0 and created()[-1] == n1["big"], "nothing left: no Job"
     pending = round_(FAIL_PENDING="1")
     assert pending.returncode == 1 and f"{jobs}/store: the pending push failed (Job n1-store-push-jobs" in pending.stdout
+
+
+@N1_CUSTODY
+def test_n1_custody_forces_a_status_that_never_ended_only_once_its_runner_is_seen_gone(tmp_path):
+    """#1004's red-team F1 and F2: a round published a run --force as dead while it ran, and an attempt is write-once, so its real
+    end never reached R2. A host run's runner is gone when its pid is (a pid-less `tele set-timeout` transition is no end); a pod's
+    when `kubectl get pod` says NotFound, however long its records have been quiet, as backfill_attempts.sh asks. A pod Kubernetes
+    still lists waits without failing the round; a kubectl that doesn't answer publishes nothing and fails it; a hostname of 63
+    characters may be a longer pod name cut short, so its NotFound proves nothing."""
+    import socket
+
+    node = _n1_custody(tmp_path)
+    boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    me = int(Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19])
+    R = {k: f"r20261003-2000{n:02d}-0a{n:02d}" for n, k in enumerate(("retimed", "dead", "alive", "sampling", "gone", "long"), 1)}
+    J = {k: node.jobs / "runs" / r for k, r in R.items()}
+    host = socket.gethostname()
+    node.run(node.research, R["retimed"], "running", boot=boot, host=host, status={
+        "state": "running", "pid": os.getpid(), "starttime_ticks": me,
+        "transitions": [{"state": "running", "pid": os.getpid(), "starttime_ticks": me},
+                        {"state": "running", "timeout_s": 7200, "timeout_changed_utc": "2026-10-03T20:00:00.000Z"}]})
+    node.run(node.research, R["dead"], "running", boot=boot, host=host,
+             status={"state": "running", "transitions": [{"state": "running", "pid": 2**22 + 7, "starttime_ticks": 1}]})
+    node.run(node.jobs, R["alive"], "running", boot=boot)
+    d = node.run(node.jobs, R["sampling"], "running", boot=boot, files={"resources.jsonl": '{"kind": "sample"}\n'})
+    os.utime(d / "resources.jsonl", (N1_FUTURE, N1_FUTURE))
+    node.run(node.jobs, R["gone"], "running", boot=boot)
+    node.run(node.jobs, R["long"], "running", boot=boot, host="p" * 63)
+    live = {"LIVE_PODS": f"pod-{R['alive']},pod-{R['sampling']}", "VY_CUSTODY_BOOT": boot}
+
+    dry = node.round_("--dry-run", **live)
+    assert dry.returncode == 0 and node.created() == [], dry.stdout + dry.stderr
+    assert f"would leave {J['alive']} (r21-fixture, running): its pod pod-{R['alive']} still runs" in dry.stdout
+    assert f"would publish {J['gone']} (r21-fixture, running, 8 files, 5.9 KiB) with --force --runner-gone (its pod" in dry.stdout
+    assert f"with --force --runner-gone (its runner's pid is gone)" in dry.stdout and "1 its runner not seen gone" in dry.stdout
+    assert not [k for k in ("retimed", "sampling", "long") if R[k] in dry.stdout], dry.stdout
+
+    unreached = node.round_(POD_ERR="1", **live)
+    assert unreached.returncode == 1 and node.created() == [f"n1-custody-{R['dead']}", "n1-store-push-jobs", "n1-store-push-research"]
+    assert (f"{J['gone']} (r21-fixture, running): not published: `kubectl get pod pod-{R['gone']}` failed: Unable to connect to the "
+            "server: dial tcp 10.0.0.1:6443: i/o timeout; the next round asks again") in unreached.stdout
+    assert node.command(f"n1-custody-{R['dead']}")[5].endswith(f"custody {node.research}/runs/{R['dead']} --publish --keep-local --force --runner-gone")
+
+    first = node.round_(**live)
+    assert first.returncode == 0 and node.created()[3:] == [f"n1-custody-{R['gone']}"], first.stdout + first.stderr
+    assert node.command(f"n1-custody-{R['gone']}")[5].endswith("--keep-local --force --runner-gone")
+    assert "1 run(s) wait on their pod, which Kubernetes still lists" in first.stdout
+    assert not [k for k in ("retimed", "alive", "sampling", "long") if f"n1-custody-{R[k]}" in node.created()]
+    assert node.round_(VY_CUSTODY_BOOT=boot).returncode == 0 and node.created()[-1] == f"n1-custody-{R['alive']}", "its pod ended"
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
