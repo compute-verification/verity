@@ -8,7 +8,8 @@ import Pouw.Protocol.PearlC.Device
 L3's step 5 for the tile template: the words `TileCircuit.tile_correct` puts on the tile unit's outputs read back as
 the values Pearl-C's protocol names at the record `devAt p 4` (`tile_values`, `tile_devAt`). Given row `i` of `A′`,
 row `j` of `B̃` and the factor rows U's pinned order forms from them (`PeelExactProofsP.peelRowsP`), `C̃_ij`'s word has
-the ticket's value `Accum.chainAt p 4` and `U_ij`'s the useful value `peelExactValP p 4`.
+the ticket's value `Accum.chainAt p 4` and `U_ij`'s the useful value `peelExactValP p 4`, at every entry of every tile.
+`C̃_ij`'s needs only the chain to be finite (`tile_ticket`).
 
 * **The chain** (`chainWordP_value`): `chainWordP? p G`'s word reads back as `Accum.chainP p G`, for every step `p` and
   period `G`. A window's word is its group's (`windowWord_group`), and a promotion on words is `rnAdd` on values
@@ -283,6 +284,20 @@ section Tile
 
 variable (p : Pipeline)
 
+/-- **The ticket**: a transcript whose one unit is correct, holding at entry `(ti, tj)`'s inputs row `i` of `A′` and row
+`j` of `B̃`, has `C̃`'s word of value `Accum.chainAt p 4` at `(i, j)` wherever the pinned order's chain is finite, whether
+or not U's factor rows exist. -/
+theorem tile_ticket {nw m n TM TN : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * nw) TM TN).toCircuit.Transcript)
+    (hX : (tileSpec p (128 * nw) TM TN).part.Correct X 0)
+    (Aq : Matrix (Fin m) (Fin (128 * nw)) Code) (Bq : Matrix (Fin n) (Fin (128 * nw)) Code) (i : Fin m) (j : Fin n)
+    {ti tj : ℕ} (hti : ti < TM) (htj : tj < TN)
+    (hA : ∀ l : Fin (128 * nw), val X (ti * (128 * nw) + l) = (Aq i l).val)
+    (hB : ∀ l : Fin (128 * nw), val X (TM * (128 * nw) + tj * (128 * nw) + l) = (Bq j l).val) {c : ℕ}
+    (hc : chainWordP? p 4 (rowAtoms (Aq i) (Bq j)) = some c) :
+    wordQ (val X (cGate (128 * nw) TM TN ti tj)) = Accum.chainAt p 4 Aq Bq i j := by
+  rw [tile_out p TM TN X hX _ (cGate_mem p TM TN _ hti htj), tileVal_chain p TM TN hnw X _ _ hti htj hA hB hc]
+  exact (chainWordP_value p 4 _ hc).symm
+
 /-- **The tile unit computes the ticket and the useful value** (L3's steps 4 and 5 for the tile template): a transcript
 whose one unit is correct, holding at entry `(ti, tj)`'s inputs row `i` of `A′`, row `j` of `B̃` and the factor rows
 `P_A,i`, `P_B,j` that U's pinned order forms from them (`peelRowsP`), has on entry `(ti, tj)`'s outputs `C̃`'s word of
@@ -301,12 +316,10 @@ theorem tile_values {nw m n TM TN : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * 
     wordQ (val X (cGate (128 * nw) TM TN ti tj)) = Accum.chainAt p 4 Aq Bq i j ∧
       wordQ (val X (uGate (128 * nw) TM TN ti tj)) = peelExactValP p 4 Aq Bq FA FB beA beB i j := by
   obtain ⟨-, -, -, hc, -⟩ := PeelExactProofsP.peelRowsP_spec hr
-  obtain ⟨hC, hU⟩ := tile_correct p TM TN hnw X hX (Aq i) (Bq j) pa pb hti htj hA hB hpa hpb hc
-  refine ⟨?_, ?_⟩
-  · rw [hC]
-    exact (chainWordP_value p 4 _ hc).symm
-  · rw [hU, wordQ_uFold]
-    simp only [peelExactValP, PeelExactProofsP.peelExactP_eq_rows, hr, Option.bind_some]
+  obtain ⟨-, hU⟩ := tile_correct p TM TN hnw X hX (Aq i) (Bq j) pa pb hti htj hA hB hpa hpb hc
+  refine ⟨tile_ticket p hnw X hX Aq Bq i j hti htj hA hB hc, ?_⟩
+  rw [hU, wordQ_uFold]
+  simp only [peelExactValP, PeelExactProofsP.peelExactP_eq_rows, hr, Option.bind_some]
 
 /-- `tile_values` at a device record `devAt p 4 pr`: its ticket and useful value, `pearl-c-sm120` v1's
 (`devSm120v1 pr = devAt sm120E4m3 4 pr`) among them. -/
