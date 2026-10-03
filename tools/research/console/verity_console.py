@@ -1115,19 +1115,42 @@ LEASE_PHASES = ("engine.build", "prep.warmup_instrumented", "validate.weights_of
 LEASE_OPEN_MAX_S = 4 * 3600
 
 
-def _lease(spans: dict, a: float, b: float) -> tuple[float, float, list[tuple[str, float, float]]]:
+def _lease(spans: dict, a: float, b: float) -> tuple[float, float, list[tuple[str, float, float]], int]:
     return (a, b, [("work" if s.startswith("work.") else s, x, y) for s, xs in spans.items() for x, y in xs
-                   if s in LEASE_PHASES or s.startswith("work.")])
+                   if s in LEASE_PHASES or s.startswith("work.")], 1)
 
 
-def commit_leases(paths, now: float) -> list[tuple[float, float, list[tuple[str, float, float]]]]:
-    """(start, end, [(phase, a, b)...]) for every Commit's GPU lease in these timelines.
+def tp_lease(row: Path, w0: float, w1: float | None, now: float) -> tuple[float, float, list, int] | None:
+    """The lease of a Commit window whose timeline has no `gpu_lease.*` span (a TP Commit writes only `commit.tp_commit`), from
+    the files gpu-lease writes in the row as it goes: `gpu_lease.started` to `gpu_lease.released`'s `t`, on one GPU per rank it
+    released (gm357: 145 s on 2 GPUs). A lease still open runs to the window's end, or to `now` up to LEASE_OPEN_MAX_S, on the
+    row's `__tpN__` GPUs. Files an earlier attempt left in the row start before the window and don't count."""
+    try:
+        a = datetime.strptime((row / "gpu_lease.started").read_text().strip(), "%Y-%m-%dT%H:%M:%SZ")
+    except (OSError, ValueError):
+        return None
+    a = a.replace(tzinfo=timezone.utc).timestamp()
+    if a < w0 or (w1 is not None and a > w1):
+        return None
+    try:
+        rel = json.loads((row / "gpu_lease.released").read_text())
+    except (OSError, ValueError):
+        rel = None
+    if isinstance(rel, dict) and isinstance(rel.get("t"), (int, float)) and rel["t"] >= a:
+        return (a, rel["t"] if w1 is None else min(rel["t"], w1), [], max(1, len(rel.get("ranks") or [])))
+    tp = re.search(r"__tp(\d+)__", row.name)
+    return (a, w1 if w1 is not None else max(a, min(now, a + LEASE_OPEN_MAX_S)), [], int(tp.group(1)) if tp else 1)
+
+
+def commit_leases(paths, now: float) -> list[tuple[float, float, list[tuple[str, float, float]], int]]:
+    """(start, end, [(phase, a, b)...], GPUs) for every Commit's GPU lease in these timelines.
 
     circuits' definition (`/workspace/research/circuits-held-idle/hi-lease.py`): inside a `stage.commit` window the lease runs
-    from the end of `gpu_lease.wait` to the end of `gpu_lease.release`, and its phases are LEASE_PHASES plus `work` (every
-    `work.*` span). Every Commit attempt in a timeline counts, not only its last.  An hour's line is written once, as the hour
-    ends, so a lease still open at `now` runs to `now` (up to LEASE_OPEN_MAX_S), its open phases with it: a Commit writes nothing
-    while a work phase runs (gm176's took 2,077 s)."""
+    from the end of `gpu_lease.wait` to the end of `gpu_lease.release`, on one GPU, and its phases are LEASE_PHASES plus `work`
+    (every `work.*` span). A window with no `gpu_lease.*` span is a TP Commit's, whose lease `tp_lease` reads from the row. Every
+    Commit attempt in a timeline counts, not only its last.  An hour's line is written once, as the hour ends, so a lease still
+    open at `now` runs to `now` (up to LEASE_OPEN_MAX_S), its open phases with it: a Commit writes nothing while a work phase
+    runs (gm176's took 2,077 s)."""
     out = []
     for p in paths:
         try:
@@ -1137,12 +1160,20 @@ def commit_leases(paths, now: float) -> list[tuple[float, float, list[tuple[str,
         opened: dict = {}
         spans: dict = {}
         inside = released = False
+        w0 = None
+
+        def tp(w1: float | None) -> None:
+            if isinstance(w0, (int, float)) and not any(s.startswith("gpu_lease.") for s in (*spans, *(s for _, s in opened))):
+                out.extend(x for x in [tp_lease(Path(p).parent, w0, w1, now)] if x)
+
         for e in evs:
             stage, ev, t = e.get("stage"), e.get("ev"), e.get("t")
             if stage == "stage.commit":
+                if inside and ev == "end" and isinstance(t, (int, float)):
+                    tp(t)
                 inside, opened, released = ev == "start", {}, False
                 if inside:
-                    spans = {}
+                    spans, w0 = {}, t
                 continue
             if not inside or not isinstance(t, (int, float)):
                 continue
@@ -1160,14 +1191,16 @@ def commit_leases(paths, now: float) -> list[tuple[float, float, list[tuple[str,
             for (_, s), x in opened.items():
                 live.setdefault(s, []).append((x, b))
             out.append(_lease(live, a, b))
+        elif inside:
+            tp(None)
     return out
 
 
 def phases_by_hour(leases: list) -> dict[str, dict]:
-    """Per UTC hour, the GPU-hours of the Commit leases in it by phase, each span clipped to its lease and the hour; `other` is
-    the leased time no phase covers, `leases` how many leases the hour touches (one GPU each)."""
+    """Per UTC hour, the GPU-hours of the Commit leases in it by phase, each span clipped to its lease and the hour and counted
+    on each of its lease's GPUs; `other` is the leased time no phase covers, `leases` how many leases the hour touches."""
     out: dict[str, dict] = {}
-    for a, b, phases in leases:
+    for a, b, phases, gpus in leases:
         h = int(a) // 3600 * 3600
         while h < b:
             lo, hi = max(a, h), min(b, h + 3600)
@@ -1177,9 +1210,9 @@ def phases_by_hour(leases: list) -> dict[str, dict]:
                 covered = 0.0
                 for s, x, y in phases:
                     c = max(0.0, min(y, hi) - max(x, lo))
-                    d[s] += c / 3600
+                    d[s] += c * gpus / 3600
                     covered += c
-                d["other"] += max(0.0, hi - lo - covered) / 3600
+                d["other"] += max(0.0, hi - lo - covered) * gpus / 3600
             h += 3600
     return {k: {s: (round(v, 3) if s != "leases" else v) for s, v in d.items()} for k, d in out.items()}
 
