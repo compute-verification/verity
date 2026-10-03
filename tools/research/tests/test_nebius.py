@@ -1663,7 +1663,7 @@ elif a[:3] == ["create", "-f", "-"]:
         if os.environ.get("FAIL_RUN") and os.environ["FAIL_RUN"] in name:
             rc, out = 1, "Error: boom\\n"
         else:
-            p = subprocess.run(["bash", "-c", cmd[5].replace("HOME=/tmp", "HOME=" + os.environ["KHOME"])], capture_output=True,
+            p = subprocess.run(["bash", "-c", cmd[5].replace("HOME=/tmp", "HOME=" + os.environ["KHOME"]), *cmd[6:]], capture_output=True,
                                text=True, stdin=subprocess.DEVNULL, env={**os.environ, "RESEARCH_STORE_CONFIG": os.environ["KVAULT"]})
             rc, out = p.returncode, p.stdout + p.stderr
     (jobs / name).write_text(json.dumps({"job": job, "rc": rc, "out": out}))
@@ -1833,7 +1833,8 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     assert f"research data label {R['empty']} custody never-ran --by WHO) and the hold lifts itself" in unbounded.stdout
     push = job("n1-store-push-research")["job"]
     assert push["spec"]["template"]["spec"]["securityContext"] == {"runAsUser": 1001, "runAsGroup": 1001}
-    assert push["spec"]["ttlSecondsAfterFinished"] == 3600 and "research data push --pending" in command("n1-store-push-research")[5]
+    assert push["spec"]["ttlSecondsAfterFinished"] == 3600 and "research data push --pending --jobs 8" in command("n1-store-push-research")[5]
+    assert command("n1-store-push-research")[6:] == ["n1-custody", str(node.src), str(node.py), f"{research}/store", f"{research}/runs"]
 
     bounded = round_(VY_CUSTODY_MAX_RUNS="1")
     assert bounded.returncode == 1 and created()[2:] == [n1["done"]] and "5 run(s) left" in bounded.stdout, bounded.stdout
@@ -1842,14 +1843,15 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     pod = spec["template"]["spec"]
     assert (spec["backoffLimit"], spec["activeDeadlineSeconds"], pod["nodeSelector"]) == (0, 1800, {"verity.dev/server": "vy-nebius-1"})
     assert pod["securityContext"]["runAsUser"] == 1000 and pod["containers"][0]["envFrom"] == [{"secretRef": {"name": "research-r2"}}]
-    assert command(n1["done"])[:5] == ["taskset", "-c", "96-127", "bash", "-c"] and f"RESEARCH_STORE={jobs}/store " in command(n1["done"])[5]
-    assert command(n1["done"])[5].endswith(f"{node.py} -m research data custody {J['done']} --publish --keep-local ")
+    assert command(n1["done"])[:5] == ["taskset", "-c", "96-127", "bash", "-c"]
+    assert command(n1["done"])[5].endswith('exec "$2" -m research data custody "$5" --publish --keep-local "${@:6}"')
+    assert command(n1["done"])[6:] == ["n1-custody", str(node.src), str(node.py), f"{jobs}/store", f"{jobs}/runs", str(J["done"])]
     assert (state / "boots").read_text() == "boot-n1\n"
 
     first = round_(FAIL_RUN=R["fails"])
     assert first.returncode == 1, first.stdout + first.stderr
     assert created()[3:] == [n1["dead"], n1["fails"], n1["legacy"], n1["conflict"], n1["research"]]
-    assert command(n1["dead"])[5].endswith("--keep-local --force --runner-gone")
+    assert command(n1["dead"])[-3:] == [str(J["dead"]), "--force", "--runner-gone"]
     assert f"kubectl get pod pod-{R['dead']} --namespace=default --output=name --request-timeout=30s" in log.read_text()
     assert preserved(J["dead"]) and preserved(research / "runs" / R["research"])
     assert job(n1["research"])["job"]["spec"]["template"]["spec"]["securityContext"]["runAsUser"] == 1001
@@ -1883,7 +1885,7 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     rec = round_("--reconcile", R["conflict"], "--by", "test")
     assert rec.returncode == 0 and f"{R['conflict']}: reconciled by test" in rec.stdout, rec.stdout + rec.stderr
     assert "node 2's copy" not in rec.stdout
-    assert f"reconcile-attempts {R['conflict']} --apply &&" in command(n1["conflict"])[5]
+    assert 'reconcile-attempts "$5" --apply &&' in command(n1["conflict"])[5] and command(n1["conflict"])[-2:] == [R["conflict"], str(J["conflict"])]
     assert preserved(J["conflict"]) and list((jobs / "store" / "attempts" / ".superseded").iterdir())
     assert held() == [R["big"]]
     assert R["relay"] not in "".join(created()) and not (J["relay"] / ".custody").exists(), "node 2's copies are n2_custody.sh's"
@@ -1937,11 +1939,11 @@ def test_n1_custody_forces_a_status_that_never_ended_only_once_its_runner_is_see
     assert unreached.returncode == 1 and node.created() == [f"n1-custody-{R['dead']}", "n1-store-push-jobs", "n1-store-push-research"]
     assert (f"{J['gone']} (r21-fixture, running): not published: `kubectl get pod pod-{R['gone']}` failed: Unable to connect to the "
             "server: dial tcp 10.0.0.1:6443: i/o timeout; the next round asks again") in unreached.stdout
-    assert node.command(f"n1-custody-{R['dead']}")[5].endswith(f"custody {node.research}/runs/{R['dead']} --publish --keep-local --force --runner-gone")
+    assert node.command(f"n1-custody-{R['dead']}")[-3:] == [f"{node.research}/runs/{R['dead']}", "--force", "--runner-gone"]
 
     first = node.round_(**live)
     assert first.returncode == 0 and node.created()[3:] == [f"n1-custody-{R['gone']}"], first.stdout + first.stderr
-    assert node.command(f"n1-custody-{R['gone']}")[5].endswith("--keep-local --force --runner-gone")
+    assert node.command(f"n1-custody-{R['gone']}")[-3:] == [str(J["gone"]), "--force", "--runner-gone"]
     assert "1 run(s) wait on their pod, which Kubernetes still lists" in first.stdout
     assert not [k for k in ("retimed", "alive", "sampling", "long") if f"n1-custody-{R[k]}" in node.created()]
     assert node.round_(VY_CUSTODY_BOOT=boot).returncode == 0 and node.created()[-1] == f"n1-custody-{R['alive']}", "its pod ended"
@@ -1968,7 +1970,7 @@ def test_n1_custody_holds_as_never_ran_only_a_run_that_shows_no_sign_it_started(
     assert out.returncode == 1 and node.held() == [idle], out.stdout + out.stderr
     assert f"{node.jobs}/runs/{idle}: held: never ran its workload (r21-fixture, status admitted: no pid, start event" in out.stdout
     assert {f"n1-custody-{killed}", f"n1-custody-{spoke}"} <= set(node.created())
-    assert node.command(f"n1-custody-{killed}")[5].endswith("--keep-local --force --runner-gone")
+    assert node.command(f"n1-custody-{killed}")[-2:] == ["--force", "--runner-gone"]
 
 
 @N1_CUSTODY
@@ -2027,6 +2029,31 @@ def test_n1_custody_runs_only_a_tree_and_a_python_no_other_uid_can_change(tmp_pa
     assert node.created() == [] and "sudo" not in (node.log.read_text() if node.log.exists() else ""), "a refused round runs nothing"
     ok = node.round_()
     assert ok.returncode == 0 and node.created()[0] == f"n1-custody-{rid}", ok.stdout + ok.stderr
+
+
+@N1_CUSTODY
+def test_n1_custody_takes_a_run_dirs_text_as_data_never_as_a_plan_line_or_a_shells(tmp_path):
+    """#1004's red-team F6: status.json's state went into the plan's `|`-lines as written, and the force list into the Job's bash -c
+    unquoted, so a run dir's writer (uid 1000: any workload) could add a Job line and run a command as uid 1001 with the Secret
+    research-r2. A state the runner never writes holds the run, unechoed; a campaign shows anything but [A-Za-z0-9._:@+/-] as `?`;
+    a Job's script is fixed, with the run dir and the force flags as its arguments, and its JSON is written by json."""
+    node = _n1_custody(tmp_path)
+    pwned = tmp_path / "PWNED"
+    evil, other, odd = (f"r20261003-200000-10{i:02d}" for i in (1, 2, 3))
+    node.run(node.jobs, evil, "running", status={"state": f'running\njob|{node.research}/runs|{other}|;touch {pwned};|c|s|1|1"',
+                                                  "transitions": [{"state": "running", "pid": 7}]})
+    d = node.run(node.jobs, odd, "done")
+    job = json.loads((d / "job.json").read_text())
+    job["store"]["campaign"] = "x$(id)|y\nz"
+    (d / "job.json").write_text(json.dumps(job))
+    os.utime(d / "job.json", (N1_OLD, N1_OLD))
+    dry = node.round_("--dry-run")
+    assert f"would hold {node.jobs}/runs/{evil}: its status.json says a state the runner never writes (r21-fixture)" in dry.stdout
+    assert f"would publish {d} (x??id??y?z, done, " in dry.stdout and other not in dry.stdout, dry.stdout
+    out = node.round_()
+    assert out.returncode == 1 and not pwned.exists() and node.held() == [evil], out.stdout + out.stderr
+    assert "touch" not in out.stdout and node.created() == [f"n1-custody-{odd}", "n1-store-push-jobs", "n1-store-push-research"]
+    assert node.command(f"n1-custody-{odd}")[6:] == ["n1-custody", str(node.src), str(node.py), f"{node.jobs}/store", f"{node.jobs}/runs", str(d)]
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")

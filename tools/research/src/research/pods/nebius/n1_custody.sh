@@ -124,21 +124,39 @@ if bad=$(untrusted "$SRC/tools/research" "$PYHOME") && [ -n "$bad" ]; then
   exit 3
 fi
 
-# job NAME UID STORE ROOT TTL DEADLINE_S CMD: a one-off Job on this node as UID with the Secret research-r2, research from SRC
+# job NAME UID TTL DEADLINE_S STORE ROOT KIND ARG...: a one-off Job on this node as UID with the Secret research-r2 that runs KIND's
+# fixed script (custody RUN_DIR [--force --runner-gone], reconcile RUN RUN_DIR, push [--except-attempts FILE]): research from SRC
+# with PY, RESEARCH_STORE=STORE and RESEARCH_RUNS=ROOT. A run dir's data reach it only as the script's arguments, never as shell
+# text or JSON written by hand.
 job() {
-  kube delete job "$1" --ignore-not-found > /dev/null && kube create -f - > /dev/null << EOF
-{"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": "$1", "labels": {"verity.dev/lane": "n1-custody", "verity.dev/kind": "custody"}},
- "spec": {"backoffLimit": 0, "activeDeadlineSeconds": $6, "ttlSecondsAfterFinished": $5, "template": {"metadata": {"labels": {"verity.dev/lane": "n1-custody"}}, "spec": {
-  "restartPolicy": "Never", "nodeSelector": {"verity.dev/server": "vy-nebius-1"},
-  "tolerations": [{"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}],
-  "securityContext": {"runAsUser": $2, "runAsGroup": $2},
-  "containers": [{"name": "main", "image": "${VY_DISPATCH_IMAGE:-us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216}",
-   "imagePullPolicy": "IfNotPresent",
-   "command": ["taskset", "-c", "96-127", "bash", "-c", "cd / && export HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$SRC/tools/research/src RESEARCH_STORE=$3 RESEARCH_RUNS=$4 && $7"],
-   "envFrom": [{"secretRef": {"name": "research-r2"}}],
-   "resources": {"requests": {"cpu": "1", "memory": "2Gi"}},
-   "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}]}],
-  "volumes": [{"name": "workspace", "hostPath": {"path": "/workspace", "type": "Directory"}}]}}}}
+  kube delete job "$1" --ignore-not-found > /dev/null || return 1
+  PYTHONDONTWRITEBYTECODE=1 python3 - "${VY_DISPATCH_IMAGE:-us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216}" \
+    "$SRC" "$PY" "$@" << 'EOF' | kube create -f - > /dev/null
+import json, re, sys
+
+image, src, py, name, uid, ttl, deadline, store, root, kind, *args = sys.argv[1:]
+run = 'cd / && export HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$1/tools/research/src" RESEARCH_STORE="$3" RESEARCH_RUNS="$4" && '
+run += {"custody": 'exec "$2" -m research data custody "$5" --publish --keep-local "${@:6}"',
+        "reconcile": '"$2" -m research data reconcile-attempts "$5" --apply && exec "$2" -m research data custody "$6" --publish --keep-local',
+        "push": 'exec "$2" -m research data push --pending --jobs 8 "${@:5}"'}[kind]
+# each kind's arguments, where _ is a run, a run dir or a file, never an option
+shapes = {"custody": [["_"], ["_", "--force", "--runner-gone"]], "reconcile": [["_", "_"]], "push": [[], ["--except-attempts", "_"]]}[kind]
+fits = any(len(s) == len(args) and all(a == w or (w == "_" and a[:1] not in ("", "-")) for a, w in zip(args, s)) for s in shapes)
+if not re.fullmatch(r"n1-[a-z0-9-]{1,60}[a-z0-9]", name) or int(deadline) <= 0 or not fits:
+    sys.exit(f"n1_custody.sh: no Job {name!r} with deadline {deadline!r} and {kind} {args!r}")
+labels = {"verity.dev/lane": "n1-custody"}
+json.dump({"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": name, "labels": {**labels, "verity.dev/kind": "custody"}},
+           "spec": {"backoffLimit": 0, "activeDeadlineSeconds": int(deadline), "ttlSecondsAfterFinished": int(ttl), "template": {
+               "metadata": {"labels": labels}, "spec": {
+                   "restartPolicy": "Never", "nodeSelector": {"verity.dev/server": "vy-nebius-1"},
+                   "tolerations": [{"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}],
+                   "securityContext": {"runAsUser": int(uid), "runAsGroup": int(uid)},
+                   "containers": [{"name": "main", "image": image, "imagePullPolicy": "IfNotPresent",
+                                   "command": ["taskset", "-c", "96-127", "bash", "-c", run, "n1-custody", src, py, store, root, *args],
+                                   "envFrom": [{"secretRef": {"name": "research-r2"}}],
+                                   "resources": {"requests": {"cpu": "1", "memory": "2Gi"}},
+                                   "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}]}],
+                   "volumes": [{"name": "workspace", "hostPath": {"path": "/workspace", "type": "Directory"}}]}}}}, sys.stdout)
 EOF
 }
 
@@ -157,10 +175,10 @@ wait_job() {
   return 1
 }
 
-custody_job() {  # custody_job RUN ROOT STORE UID DEADLINE_S CMD: 0 when the Job completed, else 1 with why=
+custody_job() {  # custody_job RUN ROOT STORE UID DEADLINE_S KIND ARG...: 0 when the Job completed, else 1 with why=
   local name=n1-custody-$(echo "$1" | tr -cd 'a-z0-9-' | tail -c 40)
   : > "$tmp/job.err"
-  if ! job "$name" "$4" "$3" "$2" 3600 "$5" "$6" 2> "$tmp/job.err" || ! wait_job "$name"; then
+  if ! job "$name" "$4" 3600 "$5" "$3" "$2" "${@:6}" 2> "$tmp/job.err" || ! wait_job "$name"; then
     why="Job $name: $(grep -v '^$' "$tmp/job.err" | tail -1)"
     return 1
   fi
@@ -187,10 +205,9 @@ if [ -n "$REC" ]; then
   for spec in "${specs[@]}" ${RELAY:+"$RELAY"}; do
     root=${spec%%=*}
     [ -d "$root/$REC" ] || continue
-    research="$PY -m research data" dl=$(deadline 1800)
+    dl=$(deadline 1800)
     [ "$dl" -ge "$JOB_MIN_S" ] || { echo "n1_custody.sh: $HOLD: no Job starts; --reconcile after it" >&2; exit 3; }
-    if custody_job "$REC" "$root" "${STORE[$root]}" "${UID_OF[$root]}" "$dl" \
-      "$research reconcile-attempts $REC --apply && $research custody $root/$REC --publish --keep-local"; then
+    if custody_job "$REC" "$root" "${STORE[$root]}" "${UID_OF[$root]}" "$dl" reconcile "$REC" "$root/$REC"; then
       rm -f "$STATE/held/$REC" "$STATE/failures/$REC"
       boot=$(python3 -c 'import json, sys; print((json.load(open(sys.argv[1])).get("environment") or {}).get("boot_id") or "")' \
         "$root/$REC/job.json" 2> /dev/null)
@@ -234,6 +251,7 @@ from pathlib import Path
 
 from research.store.attempt import TERMINAL
 from research.store.custody import NEEDS_ACTION, force_refusal, ran_evidence
+from research.telemetry import STATES
 
 tmp, state, boot, max_files, max_bytes = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], int(sys.argv[4]), int(sys.argv[5]) << 30
 boots = {boot, *((state / "boots").read_text().split() if (state / "boots").exists() else [])}
@@ -249,8 +267,8 @@ def read(p):
     return d if isinstance(d, dict) else {}
 
 
-def field(s):
-    return str(s).replace("|", "/").replace("\n", " ")
+def field(s):  # a run dir's text, for a plan line and the log: its writer is any workload
+    return re.sub(r"[^A-Za-z0-9._:@+/-]", "?", str(s))[:80] or "?"
 
 
 fresh, retry, holds, seen, skipped = [], [], [], set(), Counter()
@@ -262,7 +280,7 @@ for i, root in enumerate(s.split("=")[0] for s in sys.argv[6].split(",")):
         seen.add(r)
         d = Path(root) / r
         job = read(d / "job.json")
-        if (job.get("environment") or {}).get("boot_id") not in boots or not re.fullmatch(r"r[0-9a-z-]+", r):
+        if (job.get("environment") or {}).get("boot_id") not in boots or not re.fullmatch(r"r[0-9a-z-]{1,63}", r):
             skipped["not run by this machine"] += 1
             continue
         if row["settling"] or r in held:
@@ -273,6 +291,9 @@ for i, root in enumerate(s.split("=")[0] for s in sys.argv[6].split(",")):
             continue
         status = read(d / "status.json").get("state") or "no status"
         camp = ((job.get("store") or {}).get("campaign")) or "-"
+        if status not in (*STATES, "no status"):
+            holds.append(f"hold|{root}|{r}|its status.json says a state the runner never writes ({field(camp)})")
+            continue
         # `running` is what the runner writes once it spawned the workload: a run killed after that is a failed attempt, and evidence
         if status in ("no status", "submitted", "admitted") and ran_evidence(d) is None:
             holds.append(f"hold|{root}|{r}|never ran its workload ({field(camp)}, status {status}: no pid, start event, sampler reading or output)")
@@ -290,7 +311,7 @@ for i, root in enumerate(s.split("=")[0] for s in sys.argv[6].split(",")):
             else:
                 skipped["its runner not seen gone"] += 1
                 continue
-        line = f"job|{root}|{r}|{gone}|{field(camp)}|{status}|{row['files']}|{row['bytes']}"
+        line = f"job|{root}|{r}|{gone}|{field(camp)}|{status}|{int(row['files'])}|{int(row['bytes'])}"
         (retry if (state / "failures" / r).exists() else fresh).append(line)
 for line in [*fresh, *retry, *holds]:
     print(line)
@@ -315,10 +336,12 @@ while IFS='|' read -r kind a b c camp status files bytes; do
       case $why in
         never*) log "$root/$r: held: $why: not published as evidence; label it (as uid ${UID_OF[$root]}, RESEARCH_STORE=${STORE[$root]}:" \
           "research data label $r custody never-ran --by WHO) and the hold lifts itself" ;;
+        its*) log "$root/$r: held: $why: no round publishes it; a person reads the run dir (any workload may write it), then" \
+          "rm $STATE/held/$r" ;;
         *) log "$root/$r: held, $why: no round publishes it; move the bulk out of the run dir (or declare it elsewhere), then rm $STATE/held/$r" ;;
       esac ;;
     job)
-      root=$a r=$b gone=$c d=$a/$b force= seen=
+      root=$a r=$b gone=$c d=$a/$b force=() seen=
       dl=$(deadline 1800)
       if [ "$DRY" != 1 ] && { [ "$tried" -ge "$MAX_RUNS" ] || [ "$SECONDS" -ge "$PASS_S" ] || [ "$dl" -lt "$JOB_MIN_S" ]; }; then
         left=$((left + 1))
@@ -337,12 +360,12 @@ while IFS='|' read -r kind a b c camp status files bytes; do
           esac
           continue
         fi
-        force="--force --runner-gone"
+        force=(--force --runner-gone)
       fi
-      if [ "$DRY" = 1 ]; then echo "would publish $d ($camp, $status, $files files, $(human "$bytes"))${force:+ with $force ($seen)}"; continue; fi
+      if [ "$DRY" = 1 ]; then echo "would publish $d ($camp, $status, $files files, $(human "$bytes"))${force:+ with ${force[*]} ($seen)}"; continue; fi
       tried=$((tried + 1))
       why=
-      if custody_job "$r" "$root" "${STORE[$root]}" "${UID_OF[$root]}" "$dl" "$PY -m research data custody $d --publish --keep-local $force"; then
+      if custody_job "$r" "$root" "${STORE[$root]}" "${UID_OF[$root]}" "$dl" custody "$d" "${force[@]}"; then
         rm -f "$STATE/failures/$r"
         log "$d ($camp, $status, $files files, $(human "$bytes")): on R2 with its run record, .custody beside it"
       elif grep -qs "holds a DIFFERENT attempt document" "$tmp/job.err"; then
@@ -379,7 +402,7 @@ for spec in "${specs[@]}"; do
     echo "would start $store's pending push (Job $name)"
   elif dl=$(deadline 7200) && [ "$dl" -lt "$JOB_MIN_S" ]; then
     echo "$store: no pending push: $HOLD"
-  elif job "$name" "$uid" "$store" "$root" "$PENDING_S" "$dl" "$PY -m research data push --pending --jobs 8"; then
+  elif job "$name" "$uid" "$PENDING_S" "$dl" "$store" "$root" push; then
     echo "$store: pending push started (Job $name, ${dl}s at most)"
   else
     log "$store: the pending push did not start (Job $name)"
