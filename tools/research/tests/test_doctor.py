@@ -26,7 +26,7 @@ LANE = [n for alts in doctor.needs("lane") for n in alts]
 
 @pytest.fixture(autouse=True)
 def clean(monkeypatch, tmp_path):
-    for n in ALL_NAMES:
+    for n in [*ALL_NAMES, "JOBS_TOKEN"]:    # JOBS_TOKEN: these tests' name that only the VM injects, set on a real VM
         monkeypatch.delenv(n, raising=False)
     monkeypatch.setattr(secret_hint, "RECOVERED", [])
     monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "absent-machines.toml"))
