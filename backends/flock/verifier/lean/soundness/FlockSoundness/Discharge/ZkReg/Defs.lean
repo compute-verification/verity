@@ -30,11 +30,7 @@ open FlockSoundness.Discharge.ZkExec (zkInputs)
 
 /-- An hm96 statement's registered reads: `Main.checkRegistered`, which the executable's root module defines and no
 library exports. -/
-def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit := do
-  if st.tags.hiddenOutputs then
-    let outRows := (st.c.ports.extract (HmOut.nIn st.c) st.c.ports.size).map (·.name)
-    if let some reg := (registered.getD #[]).find? (outRows.contains ·.name) then
-      throw s!"registered reads: {reg.name} is an output row, its instance's own, never a registered value's"
+def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
   Registered.check st.c st.pub registered (Registered.derived st.partition)
 
 /-- **flock-verify `--zk --registered F` accepts the transcript**, `own` F's ports: the session's statements set up from
