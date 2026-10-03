@@ -201,7 +201,8 @@ async def replay(port: int, model: str, requests: list[dict], t0: float, drain_u
     url = f"http://127.0.0.1:{port}/v1/completions"
     ended = {"stopped_ms": None}
     timeout = aiohttp.ClientTimeout(total=None, sock_read=300)
-    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=0), timeout=timeout) as session:
+    # A fresh connection per request: a reused keep-alive connection the server has just closed fails the request.
+    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=0, force_close=True), timeout=timeout) as session:
         tasks = []
         for q in requests:
             if (delay := t0 + q["at_s"] - clock()) > 0:
