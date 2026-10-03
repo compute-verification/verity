@@ -1,7 +1,8 @@
 """summarize.py OUT: each config's numbers (OUT/<role>-k<K>/summary.json) and all of them (OUT/summary.json), from what job.sh
 leaves there: stage.json and the *.time files, the prover's LIVE lines, the selftests' NEG lines and the Lean verifier's
-VERDICT lines, each Lean check judged against the verdict it must give."""
+VERDICT lines, each Lean check judged against the verdict it must give, and the HZ_LEAN globs that picked the checks run."""
 import json
+import os
 import statistics
 import sys
 from pathlib import Path
@@ -91,7 +92,7 @@ def one(d: Path) -> dict:
                                            "circuit_bytes", "circuit_sha512", "public_inputs", "own_bytes", "own_sha256",
                                            "flipped", "inst_bytes", "pub_bytes", "seconds")},
                    stage_maxrss_gb=gb(t), stage_wall_s=(t or {}).get("wall_s"))
-    rec.update(zk=session(d), controls=selftests(d), lean=lean(d))
+    rec.update(zk=session(d), controls=selftests(d), lean=lean(d), lean_checks=os.environ.get("HZ_LEAN") or "*")
     rec["all_pass"] = bool(rec["zk"] and rec["zk"].get("accepted") and rec["lean"]
                            and all(v["pass"] for v in rec["lean"].values()) and all(v["pass"] for v in rec["controls"].values()))
     (d / "summary.json").write_text(json.dumps(rec, indent=1))
@@ -103,7 +104,7 @@ rows = [one(d) for d in sorted(p for p in OUT.iterdir() if p.is_dir() and (p / "
 for r in rows:
     z = r.get("zk") or {}
     print(json.dumps({k: r.get(k) for k in ("tag", "binding", "staging", "ands", "k_log", "circuit_sha512", "stage_maxrss_gb",
-                                            "stage_wall_s", "stage_error", "all_pass")}
+                                            "stage_wall_s", "stage_error", "lean_checks", "all_pass")}
                      | {"zk": {k: z.get(k) for k in ("accepted", "k_log", "proof_bytes_total", "prove_total_s_median",
                                                       "rust_verify_s_median", "prover_maxrss_gb", "error")},
                         "controls": {c: v.get("pass") for c, v in r["controls"].items()},

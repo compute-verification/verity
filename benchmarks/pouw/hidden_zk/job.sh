@@ -23,7 +23,8 @@
 # env: HZ_CONFIGS="row_a:256 row_b:256 tile:256"  HZ_N=16  HZ_MEM_GB (the job's --mem-gb)  HZ_RUNS=2  HZ_WARM=1
 #      HZ_CASES (selftest cases)  HZ_CACHE (build and stage cache dir)  FLOCK_PROVE / FLOCK_SELFTEST / FLOCK_VERIFY / HZ_PYTHON
 #      (prebuilt)  HZ_STAGE (stage.py's: fast, the default, or library)  HZ_STAGE_ONLY=1 (stage and keep, nothing else)
-#      HZ_LEAN (the Lean checks to run, as globs over their tags: "st-*"; default every one)
+#      HZ_LEAN (the Lean checks to run, as globs over their tags or <config>/<tag>: "st-* tile-k4096/honest-own"; default
+#      every one)
 set -uo pipefail
 SRC=$(pwd)
 J=$SRC/benchmarks/pouw/hidden_zk
@@ -175,11 +176,12 @@ open(sys.argv[3], 'wb').write(h + b'\n' + p[len(p) - len(b):])" "$D/public-input
     fi
     cmds+=("st-$case|$base --statement verity/flock-circuit+seed-injection --public $pub ${own:+--public-inputs $own} --session $s")
   done
-  local keep=() globs g
+  local keep=() globs g cfg
+  cfg=$(basename "$D")
   read -ra globs <<< "$LEAN_ONLY"
   for c in "${cmds[@]}"; do
     tag=${c%%|*}
-    for g in "${globs[@]}"; do [[ $tag == $g ]] && { keep+=("$c"); break; }; done
+    for g in "${globs[@]}"; do [[ $tag == $g || $cfg/$tag == $g ]] && { keep+=("$c"); break; }; done
   done
   cmds=("${keep[@]}")
   log "  lean: ${#cmds[@]} checks ($LEAN_ONLY), $par at a time, cap $cap GB each"
