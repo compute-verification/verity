@@ -20,7 +20,8 @@ import FlockSoundness.Discharge.Hidden.Wide.Theorems
 * `Binding`: the row commitment's extractor (`commitPair_spec'`) and `OutputsBinding` from `OutputsCommitted`;
 * `Public`: what the statement takes from the public file (`public_exposes'`);
 * `Delta`: Δ as `HmRow.delta`'s, then `outPairs` (`hidden_delta'`);
-* `Rows`: an output row's message bytes are its compressions' (`out_chunks`: `HmRow.rowPorts`' v2 rows, `HmOut.checkRows`);
+* `Rows`: an output row's message bytes are in its compressions (`out_bytes`: `HmRow.rowPorts`' bit rows, `HmOut.checkRows`),
+  and `sha512/row/v1` output rows are one per output port (`out_rows_v1`);
 * `Layout`: an untyped statement's layout (`hidden_layout'`), `layout_of`'s with `outPairs` past its Δ;
 * `Flat`: the flat twin (`HmRow.delta`'s Δ alone), which a satisfying witness also satisfies (`sat_flat`), and an output
   row's message bits as copies of `outSrc` (`msg_copy`);
@@ -39,6 +40,8 @@ import FlockSoundness.Discharge.Hidden.Wide.Theorems
   (`outputs_committed_wide'`, `outputs_binding_wide_of`);
 * `Wide.Upv`: a unit per VU from acceptance (`check_upv_pos`, `setupHidden_upv_pos`), since `HmRow.check` refuses
   `units_per_vu = 0`;
+* `Wide.Block`: a VU per block from acceptance (`check_g_pos`, `setupH_g_pos`), since `HmRow.check` refuses
+  `vus_per_block = 0`;
 * `Wide.Checked`: the six widened statements without `0 < st.c.upv` (`…Checked`), proved in `Wide.Theorems`
   (`…_checked`).
 -/

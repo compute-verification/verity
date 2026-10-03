@@ -152,6 +152,8 @@ import FlockSoundness.Discharge.Placed
 import FlockSoundness.Discharge.Exec
 import FlockSoundness.Discharge.Integrate
 import FlockSoundness.Discharge.ZkSession
+import FlockSoundness.Discharge.ZkLink
+import FlockSoundness.Discharge.ZkBind
 import FlockSoundness.Discharge.DecodeZL
 import FlockSoundness.Discharge.ZkView
 import FlockSoundness.Discharge.DrawWords
@@ -164,4 +166,6 @@ import FlockSoundness.Discharge.HiddenExec
 import FlockSoundness.Discharge.HiddenDec
 import FlockSoundness.Discharge.Hidden
 import FlockSoundness.Discharge.ZkCoins
+import FlockSoundness.Discharge.Composed
 import FlockSoundness.Discharge.PrivateCircuit
+import FlockSoundness.Discharge.ZkReg
