@@ -11591,6 +11591,12 @@
    "assumptions": [],
    "type_hash": "49bc8ef5b1e2715f04313f36bf9ab90599d203127e6e66ea0924fcd3fdd1542a"
   },
+  "FlockSoundness.Discharge.ZkReg.exec_le_of_refines_drawn": {},
+  "FlockSoundness.Discharge.ZkReg.zk_flock_drawnC_cr": {},
+  "FlockSoundness.Discharge.ZkReg.zk_flock_regValsC_cr": {},
+  "FlockSoundness.Discharge.ZkReg.zk_headline_exec_drawn": {},
+  "FlockSoundness.Discharge.ZkReg.zk_session_drawnR": {},
+  "FlockSoundness.Discharge.ZkReg.zk_session_regValsR": {},
   "FlockSoundness.Discharge.ZkReg.zk_session_soundR": {
    "signature": [
     "FlockSoundness.Discharge.ZkReg.zk_session_soundR {mPts n : Nat} {Reg : Type} (I : FlockSoundness.Discharge.Exec.Inputs)",
