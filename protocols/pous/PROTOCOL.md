@@ -276,6 +276,35 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   and `vk` root. `VERITY_POUS_SLOW=1` also encodes a whole band12 segment through the interface against
   `band/64kb/segment`.
 
+## The continuous audit's verifier (`continuous`)
+
+`continuous.ContinuousVerifier(vk, key, n, late_deadline_ns=Δ_late, max_misses=f₀)` verifies the continuous game
+(`lean/Pous/SecurityProofs/Continuous/`, a draft, not pinned): `n` challenges over time, drawn as the timed audit's
+indices, accepted when at most `f₀` answers miss. A miss is an answer that is wrong or later than `Δ + RTT`. `n` is
+fixed before the stream, so the stream is never stopped or extended on misses, though it may reject early
+(`exceeded`). The verifier is one `audit.TimedVerifier` over the stream with a hard deadline, and it enforces the
+game's three requirements on the protocol:
+
+1. **No pipelining.** `challenge()` reveals index `j + 1` only once answer `j` is in or `Δ_late + RTT` has passed since
+   index `j` was revealed, and in that case it first closes challenge `j` as rejected. Each deadline runs from the
+   verifier's own clock reading at the reveal; a latency the responder reports (`Answer.report`) is never read. An
+   answer names its challenge (`respond(j, block)`), and an answer to any challenge but the open one is refused,
+   whether that challenge is closed or not yet revealed. So a stale answer is never credited to the next challenge,
+   even when both ask for the same block.
+2. **A hard deadline.** An answer past `Δ_late + RTT` is rejected without its block being checked (`Answer.rejected`).
+   So is a challenge still unanswered by then, closed by `expire()` or by the next `challenge()`. `TimedVerifier`
+   refuses a `Δ_late` below `Δ`, and one whose `D_late` exceeds `audit.LATE_ROUNDS = 12` or the band's `d`, where
+   `D_late` is the number of 241.5 µs calls that fit in `Δ_late + RTT`; at `d = 12`, `Δ_late + RTT` must be under
+   3,139,500 ns. `ContinuousVerifier` refuses to run without a hard deadline.
+3. **Every late answer counted.** Every challenge closes with exactly one `Answer`, whether it was answered, rejected
+   or expired. `AuditResult.misses` counts every wrong or late answer, and `AuditResult.late` every answer past
+   `Δ + RTT`, rejected ones included.
+
+`run_continuous(verifier, respond, wait=...)` drives the stream, and `wait(j)` returns at arrival `j`. The caller chooses
+the arrival times and `n`, and nothing here draws or checks them. The game needs both to be the verifier's own
+randomness, independent of the setup, the indices and the answers. Without `late_deadline_ns`, `TimedVerifier` is
+unchanged, the single audit's verifier. `tests/test_pous_continuous.py` tests each requirement.
+
 ## API
 
 | Module | What it holds |
