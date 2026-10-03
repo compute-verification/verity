@@ -373,13 +373,14 @@ def _chain(tree: Path, pins: list[tuple[str, str]], stamp: str) -> list[str]:
 #: the grants of `research queue`'s rules (role: what it attests) a train's pull request must hold at its pinned head before its
 #: check is spent; the lander applies the rules' other grants by hand
 TRAIN_GRANTS = {"statement-reviewer": "a named reviewer read what `tools/lean/audit.py --update` prints for its changed pins and "
-                                      "the definitions they read, a move under --moved included (lane contract §5)"}
+                                      "the definitions they read (lane contract §5)"}
 
 
 def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=print) -> list[str]:
     """Why each train ref whose change from ``base`` needs a TRAIN_GRANTS grant under the queue's rules (as ``base`` has them;
-    none when it has no rules file) can't go in: pull request N lacks the `grant` label on `pr:N@SHA` at its pinned head, or the
-    ref isn't a pinned pull request, which is all a grant can be on."""
+    none when it has no rules file) can't go in: pull request N lacks the `grant` label on `pr:N@SHA` at its pinned head (and,
+    for a lean-audit.json change, a `lean_review` that printed it whole as the same statements: `research.queue.reviewed`), or
+    the ref isn't a pinned pull request, which is all a grant can be on."""
     from .queue import RULES, RULES_BEFORE_MOVE, QueueError, Rules, StoreGrants, grant_target
 
     for path in (RULES, RULES_BEFORE_MOVE):
@@ -392,15 +393,20 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
     out = []
     try:
         rules = Rules.parse(r.stdout, path)
+        lean = {g.role for g in rules.grants if g.lean_audit}
         for label, sha in pins:
-            need = sorted(rules.needs(repo, base, sha) & set(TRAIN_GRANTS))
-            if need and not label.startswith("#"):
+            pr = int(label[1:]) if label.startswith("#") else None
+            need = sorted(rules.needs(repo, base, sha, (lambda: grants.reviews(pr, sha)) if pr else list) & set(TRAIN_GRANTS))
+            if need and pr is None:
                 out.append(f"{label} needs the {', '.join(need)} grant ({path}), which only a pull request's pinned head can hold: "
                            f"name it as N@SHA")
-            elif missing := [g for g in need if g not in grants(int(label[1:]), sha)]:
+            elif missing := [g for g in need if g not in grants(pr, sha)]:
+                target = grant_target(pr, sha)
                 out += [f"{label} needs the {g} grant at {sha[:12]} ({path}: {TRAIN_GRANTS[g]}); once it has it, "
-                        f"`research data label {grant_target(int(label[1:]), sha)} grant {g} --by REVIEWER` (a new push needs a new "
-                        f"one)" for g in missing]
+                        f"`research data label {target} grant {g} --by REVIEWER` (a new push needs a new one)" + (
+                            f". A change `audit.py --update` (`--moved MOVES.json` for a move) prints only as the same statements "
+                            f"needs none: `research data put --kind lean-review/v1 --file OUT/audit.json`, then `research data "
+                            f"label {target} lean_review ART --by LANE`" if g in lean else "") for g in missing]
     except QueueError as e:
         raise Refused(f"the queue's rules ({path}): {e}") from e
     return out

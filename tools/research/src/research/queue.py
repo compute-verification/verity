@@ -20,7 +20,8 @@ on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules f
 `main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs: a role for changed files
 under listed paths (`merge_requires`' syntax, `!` patterns included), or for a change to listed sections of any `lean-audit.json`
 (`pins`, `reads`).  A grant is a store label `grant = {role}` on the target `pr:{number}@{head sha}`, so a new push needs new
-grants.  Grants and ready are read after pulling the target's labels from the store's remote; when that pull fails the local
+grants.  A `lean-audit.json` change needs no grant when a `lean_review` label on the target names the audit.json of an
+`audit.py --update` (`--moved` for a move) that printed that whole change as the same statements (`reviewed`).  Grants and ready are read after pulling the target's labels from the store's remote; when that pull fails the local
 labels decide, so a grant only the remote has keeps the PR waiting.
 
 `next`.  Its first-parent chain above `main` is the queue, and each merge commit's trailers name its PR, head and owner: git holds
@@ -174,18 +175,46 @@ class Rules:
             rules.append(Rule(g["role"], tuple(g.get("paths", ())), tuple(g.get("lean_audit", ()))))
         return cls(tuple(rules), doc.get("hold_label", "hold"))
 
-    def needs(self, repo: Path, base: str, head: str) -> set[str]:
-        """The roles whose grants the change `base`...`head` (from their merge base) needs."""
+    def needs(self, repo: Path, base: str, head: str, reviews: Callable[[], list[dict]] = list) -> set[str]:
+        """The roles whose grants the change `base`...`head` (from their merge base) needs.  A `lean_audit` role isn't needed for a
+        lean-audit.json whose change one of the `audit.py --update` reports from `reviews()` printed whole as the same statements
+        (`reviewed`): Daniel's ruling (AGENTS.md "Lean") that a guarantee that only moved needs no statement reviewer."""
         from .merge import rule_touches
 
         mb = _out(repo, "merge-base", base, head)
         changed = [p for p in _out(repo, "diff", "--name-only", mb, head).splitlines() if p]
         roles = {r.role for r in self.grants if r.paths and rule_touches(list(r.paths), changed)}
         audits = [p for p in changed if p == "lean-audit.json" or p.endswith("/lean-audit.json")]
+        reports = None
         for r in (r for r in self.grants if r.lean_audit and r.role not in roles):
-            if any(_section(repo, mb, p, s) != _section(repo, head, p, s) for p in audits for s in r.lean_audit):
-                roles.add(r.role)
+            for p in audits:
+                old, new = ({s: _section(repo, rev, p, s) for s in r.lean_audit} for rev in (mb, head))
+                if old == new:
+                    continue
+                reports = reviews() if reports is None else reports
+                if not any(reviewed(p, old, new, rep) for rep in reports):
+                    roles.add(r.role)
+                    break
         return roles
+
+
+def reviewed(path: str, old: dict, new: dict, rep: dict) -> bool:
+    """Whether `rep`, an `audit.py --update` report on `path`'s package, covers the change `old` -> `new` of its sections
+    ({section: value}): it printed nothing a statement reviewer must read (`statement_changes` false: moved under --moved,
+    printed differently, rehashed), and each entry that changed was the report's `before` and is now the one it wrote. So a
+    change it never saw (an earlier update's, or one made after it ran) still needs the grant."""
+    where = str(rep.get("package", "")).rstrip("/")
+    pkg = path.rpartition("/")[0]
+    if rep.get("statement_changes") is not False or not isinstance(rep.get("before"), dict) or not pkg or \
+            not (where == pkg or where.endswith("/" + pkg)):
+        return False
+    for s in old:
+        a, b, was, now = ({} if x is None else x for x in (old[s], new[s], rep["before"].get(s), rep.get(s)))
+        if not all(isinstance(x, dict) for x in (a, b, was, now)):
+            return False
+        if any(was.get(k) != a.get(k) or now.get(k) != b.get(k) for k in set(a) | set(b) if a.get(k) != b.get(k)):
+            return False
+    return True
 
 
 def _section(repo: Path, rev: str, path: str, section: str):
@@ -215,6 +244,19 @@ class StoreGrants:
 
     def ready(self, pr: int, head: str) -> bool:
         return any(str(lab.value).lower() == "true" for lab in self._labels(pr, head, vocab.READY))
+
+    def reviews(self, pr: int, head: str) -> list[dict]:
+        """The package reports in the audit.json that each `lean_review` label on `pr:{n}@{head}` names (Rules.needs); one that
+        can't be fetched or read covers nothing, with a line."""
+        out = []
+        for lab in self._labels(pr, head, vocab.LEAN_REVIEW):
+            try:
+                p = self.store.fetch(str(lab.value))
+                out += json.loads((p if p.is_file() else p / "audit.json").read_text())["packages"]
+            except Exception as e:  # noqa: BLE001  (any unreadable report is one that covers nothing)
+                self.log(f"research queue: {lab.value}, the lean_review on {grant_target(pr, head)}, is unreadable "
+                         f"({type(e).__name__}: {e}); it covers nothing")
+        return out
 
     def _labels(self, pr: int, head: str, key: str) -> list:
         from .store import labels_sync
@@ -256,8 +298,10 @@ def _message(pr: PR) -> str:
 
 class Queue:
     def __init__(self, workdir: Path, *, remote: str, github, grants: Callable[[int, str], set[str]], ready: Callable[[int, str], bool],
-                 store=None, shadow: bool = False, rules: Rules | None = None, notes: Path | None = None, log: Callable[[str], None] = print):
+                 store=None, shadow: bool = False, rules: Rules | None = None, notes: Path | None = None, log: Callable[[str], None] = print,
+                 reviews: Callable[[int, str], list[dict]] = lambda n, h: []):
         self.workdir, self.remote, self.github, self.grants, self.ready, self.store = Path(workdir), remote, github, grants, ready, store
+        self.reviews = reviews
         self.shadow, self.log, self._rules = shadow, log, rules
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.notes = Path(notes or os.environ.get("RESEARCH_NOTES") or Path.home() / ".research" / "notes")
@@ -340,7 +384,8 @@ class Queue:
                 e.state, e.why = "refused", f"ejected at {p.head[:8]}: {ejected['why']} (a new push re-admits it)"
             elif not self.ready(p.number, p.head):
                 e.state, e.why = "waiting", f"not marked ready at {p.head[:8]}: `research queue ready {p.number}`"
-            elif missing := rules.needs(self.workdir, "origin/main", p.head) - self.grants(p.number, p.head):
+            elif missing := rules.needs(self.workdir, "origin/main", p.head, lambda: self.reviews(p.number, p.head)) - \
+                    self.grants(p.number, p.head):
                 e.state, e.why = "waiting", f"waiting for the {', '.join(sorted(missing))} grant at {p.head[:8]}"
             below = _out(self.workdir, "rev-list", f"origin/main..{p.head}").split()
             e.after = tuple(sorted(heads[h] for h in below if h in heads and heads[h] != p.number))
@@ -670,7 +715,7 @@ def main(argv: list[str]) -> int:
             return ready(GitHub(repo), store, a.pr, a.by, QuickTier(Path(_out(Path.cwd(), "rev-parse", "--show-toplevel")), remote))
         labels = StoreGrants(store)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), grants=labels, ready=labels.ready, store=store, shadow=a.shadow,
-                  rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None)
+                  rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None, reviews=labels.reviews)
         lock = _lock(a.workdir)  # noqa: F841
         if a.command == "status":
             entries = q.status()

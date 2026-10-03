@@ -323,6 +323,48 @@ def test_a_pin_change_goes_into_a_train_only_with_the_statement_reviewer_grant_a
     assert merge_main(["--train", "--prepare", "train-prep/g", *pins, *lint]) == 0, capsys.readouterr().err
 
 
+def test_a_move_audit_py_prints_as_the_same_statements_needs_no_grant_and_a_changed_statement_still_does(tmp_path, monkeypatch, capsys):
+    """Daniel's ruling (#736, AGENTS.md "Lean"): a guarantee that only moved needs no statement reviewer when `audit.py --update
+    --moved` prints it as the same statement under its old names, though the record's hashes change with the names.  The train
+    takes that verdict from the run's audit.json, which a `lean_review` label on the pinned head names: a move it printed whole as
+    the same statements goes in without the grant; a moved record whose statement also changed refuses, and so does the move's
+    report on a head whose record changed after it ran."""
+    from research.store.local import LocalStore
+
+    main, _feat, _tip = _repos(tmp_path)
+    base = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {"P.Defs": {"hash": "d"}}}
+    moved = {**base, "pins": {"Q.t": {"type_hash": "1q"}}, "reads": {"Q.Defs": {"hash": "dq"}}}
+    restated = {**moved, "pins": {"Q.t": {"type_hash": "2q"}}}
+    (main / "tools" / "check").mkdir(parents=True)
+    (main / "lean").mkdir()
+    _origin, heads = _origin_with(tmp_path, main, {
+        "tools/check/queue.toml": '[[grant]]\nrole = "statement-reviewer"\nlean_audit = ["pins", "reads"]\n',
+        "lean/lean-audit.json": json.dumps(base, indent=1)}, {
+        22: {"lean/lean-audit.json": json.dumps(moved, indent=1)},
+        23: {"lean/lean-audit.json": json.dumps(restated, indent=1)}})
+    store = LocalStore()
+
+    def review(n: int, after: dict, changes: bool) -> None:
+        f = tmp_path / f"audit-{n}-{changes}.json"
+        f.write_text(json.dumps({"passed": True, "failed": [], "packages": [{
+            "package": "/w/verity/lean", "review": [], "statement_changes": changes,
+            "before": {k: base[k] for k in ("pins", "reads")}, "pins": after["pins"], "reads": after["reads"]}]}))
+        store.add_label(f"pr:{n}@{heads[n]}", "lean_review", store.put_artifact("lean-review/v1", {}, file=f), "lean")
+
+    monkeypatch.chdir(main)
+    lint = ["--lint", "true"]
+    review(22, moved, False)
+    assert merge_main(["--train", "--prepare", "train-prep/m", f"22@{heads[22][:9]}", *lint]) == 0, capsys.readouterr().err
+    review(23, restated, True)                       # it printed `pin Q.t: changed (moved from P.t)` for a reviewer
+    assert merge_main(["--train", "--prepare", "train-prep/n", f"23@{heads[23][:9]}", *lint]) == 1
+    err = capsys.readouterr().err
+    assert f"#23 needs the statement-reviewer grant at {heads[23][:12]}" in err
+    assert f"`research data label pr:23@{heads[23]} lean_review ART --by LANE`" in err
+    review(23, moved, False)                         # the move's own report: it never saw the record #23's head holds
+    assert merge_main(["--train", "--prepare", "train-prep/n", f"23@{heads[23][:9]}", *lint]) == 1
+    assert "#23 needs the statement-reviewer grant" in capsys.readouterr().err
+
+
 _RESULT = ("import json, os; d = os.environ['RESEARCH_RUN_DIR']; json.dump({'schema': 'research/result/v0.1', 'kind': 'check/v1', "
            "'run_id': os.environ['RESEARCH_RUN_ID'], 'workload_fingerprint': {}, 'validation': {'status': 'passed', 'checker': 't'}, "
            "'measurements': [], 'steps': [{'step': 'agree', 'status': '%s'}]}, open(d + '/result.json', 'w'))")
