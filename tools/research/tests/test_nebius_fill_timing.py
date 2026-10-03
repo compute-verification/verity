@@ -1,11 +1,14 @@
 """Node 2's fill runner gives network accounting's timing chunks (`timing=1`) a GPU on NUMA 1 and whole cores of 124-191 of their
-own, at nice 0, in a top-level slice, and never stops them.  Their chunks kept 0 of 353 windows on the shared 48-95 at nice 19
-(art:88c665c3).  The node's sysfs and cgroups are files under tmp_path, laid out as node 2's."""
+own, at nice 0, in a top-level slice, and never stops them; node_ops' Quiet never pauses them.  Their chunks kept 0 of 353 windows
+on the shared 48-95 at nice 19 (art:88c665c3).  The node's sysfs and cgroups are files under tmp_path, laid out as node 2's."""
 from __future__ import annotations
 
 import importlib.util
 import os
+import re
+import signal
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -13,7 +16,7 @@ import pytest
 from research.pods import registry
 
 NEBIUS = Path(registry.__file__).resolve().parent / "nebius"
-FILL_RUNNER = NEBIUS / "fill_runner.py"
+FILL_RUNNER, NODE_OPS = NEBIUS / "fill_runner.py", NEBIUS / "node_ops.py"
 NUMA1 = set(range(96, 192))
 
 
@@ -289,3 +292,35 @@ def test_timing_cpus_leave_out_every_cpu_another_cgroup_or_a_fence_may_use_and_f
     (cg / "user.slice" / "cpuset.cpus.effective").write_text("0-123\n")
     (cg / "system.slice" / "cgroup.events").unlink()
     assert fr.timing_free([]) == set()
+
+
+def test_node_ops_quiet_never_pauses_a_timing_job_for_a_timed_window(tmp_path, monkeypatch):
+    """A stall over 1 s voids a whole chunk (benchmarks/network_traces' record.py), so while a timed window holds GPUs, Quiet
+    pauses another CPU-heavy group but leaves one in the timing slice running."""
+    monkeypatch.setenv("OPS_DIR", str(tmp_path))
+    monkeypatch.delenv("QUIET_MATCH", raising=False)
+    (tmp_path / "logs").mkdir()
+    spec = importlib.util.spec_from_file_location("node_ops_timing", NODE_OPS)
+    ops = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ops)
+    token = f"quiet-timing-test-{os.getpid()}"                         # Quiet touches no other process of this user
+    monkeypatch.setattr(ops, "QUIET_MATCH", re.compile(re.escape(token)))
+    busy = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()", "-m", "research.telemetry", "sample",
+            token]
+    procs = [subprocess.Popen(busy, stdout=subprocess.PIPE, text=True, start_new_session=True) for _ in range(2)]
+    try:
+        for p in procs:
+            assert p.stdout.readline().strip() == "ready"
+        chunk, other = procs
+        monkeypatch.setattr(ops, "in_timing_slice", lambda pid: pid == chunk.pid)
+        monkeypatch.setattr(ops.Quiet, "window", lambda self: 1 << 22)
+        q = ops.Quiet()
+        q.tick()
+        assert set(q.paused) == {other.pid}
+        assert os.WIFSTOPPED(os.waitpid(other.pid, os.WUNTRACED)[1])
+        assert Path(f"/proc/{chunk.pid}/stat").read_text().rsplit(")", 1)[1].split()[0] == "S"
+    finally:
+        for p in procs:
+            os.killpg(p.pid, signal.SIGCONT)
+            os.killpg(p.pid, signal.SIGTERM)
+            p.wait()

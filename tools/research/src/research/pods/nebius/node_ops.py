@@ -71,6 +71,17 @@ def in_verity_scope(pid: int) -> bool:
         return False
 
 
+TIMING_SLICE = os.environ.get("FILL_TIMING_SLICE", "vy-timing.slice")
+
+
+def in_timing_slice(pid: int) -> bool:
+    """Fill's timing jobs run in scopes of FILL_TIMING_SLICE (fill_runner.py), on cores of their own."""
+    try:
+        return f"/{TIMING_SLICE}/" in Path(f"/proc/{pid}/cgroup").read_text()
+    except OSError:
+        return False
+
+
 def oom_kills() -> int:
     for line in Path("/proc/vmstat").read_text().splitlines():
         if line.startswith("oom_kill "):
@@ -159,7 +170,8 @@ class Quiet:
     """While a timed window holds GPUs (a lease tagged timed=1, or every GPU held by one holder), stop this user's CPU-heavy
     process groups other than the window's own, and continue them once it ends.  CPU-heavy: at least one core busy over the last
     tick, or a build, Lean or cargo process in the group.  Left running: the window's process tree, research runners, fill jobs
-    (their runner pauses them), anything under GNU `timeout` (it would lose the paused time), and PROTECT's daemons.  Measured
+    (their runner pauses them), fill's timing jobs (a pause voids their chunk, and nothing stops them before their max_min),
+    anything under GNU `timeout` (it would lose the paused time), and PROTECT's daemons.  Measured
     reason: CPU load on the other NUMA node slows decode-shape GEMM timing by 0.3-1.4% (run r20260930-075259-37cc)."""
 
     STATE = OUT / "logs" / "quiet-paused.json"
@@ -266,7 +278,7 @@ class Quiet:
             text = " | ".join(g["cmds"])
             if PROTECT.search(text) or QUIET_EXEMPT.search(text) or (QUIET_MATCH and not QUIET_MATCH.search(text)):
                 continue
-            if g["rate"] >= 1.0 or g["comms"] & BUILD or SAMPLER.search(text):
+            if (g["rate"] >= 1.0 or g["comms"] & BUILD or SAMPLER.search(text)) and not any(map(in_timing_slice, g["pids"])):
                 try:
                     os.killpg(pgid, signal.SIGSTOP)
                 except (ProcessLookupError, PermissionError):
