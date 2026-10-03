@@ -81,8 +81,8 @@ def OutputsBindingTail : Prop :=
 /-! ## `sha512/row/v2` rows -/
 
 /-- **`OutputsCommittedV2`**: `OutputsCommittedTail` for `sha512/row/v1` or `sha512/row/v2` rows, the row prefix
-the row's own (`HmRow.prefixOf`: `sha512/row/v1`'s for its words, or a bit row's `P(bits)`). For a population file
-without shared rows and a draw whose proved units are in the population. -/
+the row's own (`HmRow.prefixOf`: `sha512/row/v1`'s for its words, or a bit row's `P(bits)`). For unsegmented rows
+(no `segs`: one output port per output row), a population file without shared rows and a draw whose proved units are in the population. -/
 def OutputsCommittedV2 : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
@@ -90,6 +90,7 @@ def OutputsCommittedV2 : Prop :=
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
     ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     0 < st.c.upv →
+    (∀ p ∈ st.c.ports.toList, p.segs = none) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
     ∀ {z : Model.Witness (L.model regs).m}, (L.model regs).Satisfies z →
@@ -112,6 +113,7 @@ def OutputsBindingV2 : Prop :=
     ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     Draw.UnitDraw.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
     0 < st.c.upv →
+    (∀ p ∈ st.c.ports.toList, p.segs = none) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
     ∀ (L' : Layout st') (regs' : List (Model.Region st'.c.kLog (st'.m - st'.c.kLog))),
@@ -143,6 +145,7 @@ def OutputsCommittedWide : Prop :=
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop →
     ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     0 < st.c.upv →
+    (∀ p ∈ st.c.ports.toList, p.segs = none) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
     ∀ {z : Model.Witness (L.model regs).m}, (L.model regs).Satisfies z →
@@ -164,6 +167,7 @@ def OutputsBindingWide : Prop :=
     ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     Draw.UnitDraw.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
     0 < st.c.upv →
+    (∀ p ∈ st.c.ports.toList, p.segs = none) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
     ∀ (L' : Layout st') (regs' : List (Model.Region st'.c.kLog (st'.m - st'.c.kLog))),
