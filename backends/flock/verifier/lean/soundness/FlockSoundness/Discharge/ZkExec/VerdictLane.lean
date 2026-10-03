@@ -394,4 +394,68 @@ theorem zk_ligerito_rec (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (c
     rw [this, er₉, ek₉]
   · rw [hρ₁₀, er₉, ek₉, show t.k + 2 + sch.k0 + 1 = t.k + 3 + sch.k0 by omega]
 
+/-! ## The model's lane rounds -/
+
+theorem coinK_limbs (c : Array F128) : execArith.ofLimbs (fOf c[0]!) (fOf c[1]!) = gOf (coinK c) :=
+  ofLimbs_coin c
+
+/-- One lane round on forms is `laneStepE`. -/
+theorem laneStep_rel {e : ℕ} (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len e) (lg : LigeritoProof)
+    (ch : Array F256) (j : ℕ) (hP : ∀ t : Fin 4, (P.msg j t).val = lay.lgMsg j t.val)
+    {s : ZkSession.LinK 𝕂 lay.len} {x : Zk.Lin2} (hs : Rel2 s x) (c : Array F128) (hc : coinK c = ch[j]!) :
+    Rel2 ((ZkSession.fromMsgL (ZkSession.unmask execArith P j (gOf lg.messages[j]!.1, gOf lg.messages[j]!.2))
+        s).eval (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!))) (laneStepE lay lg ch x j) := by
+  have h1 := rel2_masked lg.messages[j]!.1 (P.msg j 0) (P.msg j 1) (hP 0) (hP 1)
+    (by simp [Zk.PadLayout.lgMsg])
+  have h2 := rel2_masked lg.messages[j]!.2 (P.msg j 2) (P.msg j 3) (hP 2) (hP 3)
+    (by simp [Zk.PadLayout.lgMsg])
+  have h := rel2_add (rel2_add h1 (rel2_scale (rel2_add hs h2) ch[j]!)) (rel2_scale h2 (ch[j]! * ch[j]!))
+  rw [coinK_limbs, hc]
+  convert h using 1
+  · simp only [ZkSession.QuadL.eval, ZkSession.fromMsgL, ZkSession.unmask, gOf_mul, pow_two]
+  · rfl
+
+/-- **The model's lane rounds fold the claim as the executable does.** -/
+theorem foldZK_rel {e : ℕ} (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len e) (lg : LigeritoProof)
+    (ch : Array F256) (K : ℕ) (hP : ∀ j < K, ∀ t : Fin 4, (P.msg j t).val = lay.lgMsg j t.val) :
+    ∀ (k j : ℕ) (s : ZkSession.LinK 𝕂 lay.len) (x : Zk.Lin2) (cs : List (Array F128)), j + k ≤ K → 0 < k →
+      Rel2 s x → cs.length = k → (∀ i < k, (cs[i]!).size = 2 ∧ coinK cs[i]! = ch[j + i]!) →
+      ∃ out, Plays fOf (ZkSession.foldRoundsZK execArith P k j s
+          (ZkSession.fromMsgL (ZkSession.unmask execArith P j (gOf lg.messages[j]!.1, gOf lg.messages[j]!.2)) s))
+        (kMsgs lg (j + 1) (k - 1)) cs out ∧ Rel2 out.2 ((List.range' j k).foldl (laneStepE lay lg ch) x)
+  | 0, _, _, _, _, _, h0, _, _, _ => absurd h0 (lt_irrefl 0)
+  | 1, j, s, x, cs, hK, _, hs, hl, hc => by
+      obtain ⟨c, rfl⟩ : ∃ c, cs = [c] := by
+        match cs, hl with
+        | [c], _ => exact ⟨c, rfl⟩
+      obtain ⟨hc2, hck⟩ := hc 0 (by omega)
+      simp only [List.getElem!_cons_zero, Nat.add_zero] at hc2 hck
+      rw [ZkSession.foldRoundsZK, show kMsgs lg (j + 1) (1 - 1) = [] by simp [kMsgs]]
+      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := by
+        unfold Model.drawK
+        exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c hc2 (by omega)) (Plays.pure _) (by simp) (by simp)
+      refine ⟨_, Plays.bind' (ms₂ := []) (cs₂ := []) hk (Plays.pure _) rfl rfl, ?_⟩
+      · simp only [List.range'_one, List.foldl_cons, List.foldl_nil]
+        exact laneStep_rel lay P lg ch j (hP j (by omega)) hs c hck
+  | k + 2, j, s, x, cs, hK, _, hs, hl, hc => by
+      obtain ⟨c, cs, rfl⟩ : ∃ c cs', cs = c :: cs' := by
+        match cs, hl with
+        | c :: cs', _ => exact ⟨c, cs', rfl⟩
+      obtain ⟨hc2, hck⟩ := hc 0 (by omega)
+      simp only [List.getElem!_cons_zero, Nat.add_zero] at hc2 hck
+      have hstep := laneStep_rel lay P lg ch j (hP j (by omega)) hs c hck
+      obtain ⟨out, hpl, hrel⟩ := foldZK_rel lay P lg ch K hP (k + 1) (j + 1) _ _ cs (by omega) (by omega) hstep
+        (by simpa using hl) (fun i hi => by
+          have := hc (i + 1) (by omega)
+          simpa [show j + (i + 1) = j + 1 + i by omega] using this)
+      rw [ZkSession.foldRoundsZK, show kMsgs lg (j + 1) (k + 2 - 1) =
+          kMsg lg.messages[j + 1]! :: kMsgs lg (j + 1 + 1) (k + 1 - 1) by simp [kMsgs, List.range'_succ]]
+      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := by
+        unfold Model.drawK
+        exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c hc2 (by omega)) (Plays.pure _) (by simp) (by simp)
+      refine ⟨_, Plays.bind' hk (Plays.bind' (Plays.recv _ _) (Plays.bind' hpl (Plays.pure _) (List.append_nil _).symm
+        (List.append_nil _).symm) rfl rfl) rfl rfl, ?_⟩
+      rw [List.range'_succ, List.foldl_cons]
+      exact hrel
+
 end FlockSoundness.Discharge.ZkExec
