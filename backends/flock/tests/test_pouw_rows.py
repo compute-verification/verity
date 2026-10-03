@@ -186,8 +186,8 @@ def test_a_units_v2_output_row_is_written_as_its_reader_commits_it(vid, tmp_path
     exact-v2 pair: the unit's output ports for the row are the pair's, the writer's output row is `statement_rows`' [v2,
     bits] entry for it, and so is the reader's input row (for a registered row, the tile's B row).  On each instance PoUW's
     commit string of the row's words under the writer's salt is the writer's ``b || c`` and the reader's, and instance 0's
-    row digest and tree leaf are the pair's pinned ones.  The pair's ok word is not an admission value (bits 1-15 set), so
-    PoUW's `commit` refuses it and its leaf is the v2 row's of the word under ok's schema and length."""
+    row digest and tree leaf are the pair's pinned ones; the pair's ok word is an admission value (0 or 1), so it goes through
+    PoUW's `commit` too."""
     row, role, k, m, unit = V2_PAIRS[vid]
     out_words, want = ROW_V2_PAIRS[vid]
     templates, mod = UNITS[m][0], MODS[m]
@@ -208,24 +208,14 @@ def test_a_units_v2_output_row_is_written_as_its_reader_commits_it(vid, tmp_path
     assert meta["row_schemas"][1] == entry == rmeta["row_schemas"][0]
     bw, br = _public_bcs(dw / "pub.bin", 2), _public_bcs(dr / "pub.bin", 2)
 
-    def commit(words, salt):
-        if row != "ok":
-            return L.commit(row, role, words, salt)
-        if words[0] not in (0, 1):
-            with pytest.raises(ValueError, match="an ok row is one word"):
-                L.commit(row, role, words, salt)
-        return L.INST.commit_string(L.KEY, sha512_row_v2_digest(row_bytes(words, 16), entry[1]), salt)
-
     for i in range(len(got)):
         words = [int(v) for v in got[i]]
         if row in ("nvfp4-p", "fp8-p"):
             assert _elements(row, k, words) == words, (vid, i)
-        assert bw[i][1] == br[i][0] == commit(words, salts[i]), (vid, i)
+        assert bw[i][1] == br[i][0] == L.commit(row, role, words, salts[i]), (vid, i)
     words0 = [int(v) for v in got[0]]
-    assert sha512_row_v2_digest(row_bytes(words0, 16), entry[1]).hex() == want["x"]
-    if row != "ok":
-        assert L.row_digest(row, role, words0).hex() == want["x"]
-    assert L.tree_leaf(commit(words0, salts[0])).hex() == want["tree_leaf"]
+    assert sha512_row_v2_digest(row_bytes(words0, 16), entry[1]).hex() == want["x"] == L.row_digest(row, role, words0).hex()
+    assert L.tree_leaf(L.commit(row, role, words0, salts[0])).hex() == want["tree_leaf"]
 
 
 def _unit_toy(m: str, role: str, d: Path, n: int = 2) -> tuple[dict, dict, list, dict]:
@@ -371,3 +361,60 @@ def test_the_lean_verifiers_row_constants_give_the_pinned_leaves(tmp_path):
     p = subprocess.run(["lake", "env", "lean", str(f)], cwd=LEAN, capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
     assert p.stdout.splitlines() == [f'"{c["bc"]} {c["tree_leaf"]}"' for c in cases]
+
+
+#: each check's plain tile unit at a 1 × 1 tile and its small depth, staged by `class_statement.stage_unit`: its rows, the
+#: circuit's SHA-512 and its statement digests (`flock-circuit statement`'s, seeded and under `FC_COINS=os`)
+STAGED_TILES = {
+    "pc4": (lambda: pc4.templates(64, (1, 1))["tile"], 64, "nvfp4-p", {
+        "circuit_sha512": "df4f96d368d0d36ce45e5bd0933e95fca5f45344df3c46299e2e6dcf70cf1fbb2eb68bb2d063a5e5044f080f15dff8dcbd41468e14e305a1aa354014e17725c3",
+        "seed": "99ea84ad281094660f79c7aeff270f58387c02c87c275a19db72ed9a2f6478b6cd57eea860ad9dd9ce509f09a30261c8efaa3c0e9384cbdabaad047a613b6a0b",
+        "os": "ae24e68e7452d944e34d760629c262287117113ba821b600f8228bd9724006adf932d6b79a8f7260962400aa1af62076dd9aa4d273873e63aa7234d582fb4364"}),
+    "pc8": (lambda: pc8.templates(128, (1, 1), "sm120")["tile"], 128, "fp8-p", {
+        "circuit_sha512": "5e2efcbee8e73a59239dbc4707c8161696bfdeafc46eb0ae3716051c09530cfc881961d7700c1ea9163563c9e0b9bdf96e07070d6177e9f9ff7ef6955560f82b",
+        "seed": "5702de2bbec037e1a3829e248a30bbf8de4d3fe2c4ed217e9202c872366994eed2edacac47e78da79be2ef85769e7da2cfa47654eed8d2b2e1ab25f655069875",
+        "os": "dcf0a1b85b5341cbec5b2939bb99a80a4e68d746357f6c6364069a5fb61acd54921051275dd22831401f61334211010fe3ee327009029f1df86a12891f648c08"}),
+}
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+@pytest.mark.parametrize("m", list(STAGED_TILES))
+def test_a_real_pouw_unit_is_staged_and_composed_on_its_rows(m, tmp_path):
+    """A real PoUW unit's gates (the check's tile unit, its tensor-core chain over a 1 × 1 tile, lowered by C-Flock) are staged
+    end to end by `class_statement.stage_unit`: its input rows are the rows a tile reads, row 0 of each of A's and of B's
+    parameters as one PoUW row (`statement_rows`' [schema, bits]: A's row-seg, role X; B's v2, role W), its two output ports
+    one exact v2 run (META ``out_row_ports``), its outputs the IR reference's on every instance, its salts
+    `circuit.stage_salts`'.  Every input row's ``b || c`` in the public file is PoUW's commit string of its words
+    (`leaves.commit`), the output run's is the v2 row's of its words, and the Lean verifier's statement digest is the pinned
+    one of `flock-circuit statement`, seeded and under `FC_COINS=os`.  The row units and the hiding tile wait on pieces C-Flock
+    lacks (PoUW's FP32 square root, E4M3 and E2M1 casts and exact sums of squares) and on the tile digest's Keccak lowering."""
+    from verity_flock import class_statement as CS
+
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    template, k, row, want = STAGED_TILES[m]
+    d = template()
+    names = [p for p, _t in d.signature()[0]]
+    a_ps = [f"{p}[0]" for p in names if p in ("ac", "as", "pa")]
+    b_ps = [f"{p}[0]" for p in names if p in ("bc", "bs", "pb")]
+    bits = 16 * L.ROW_WORDS[row](k)
+    in_rows = [("a", L.ROW_SCHEMA[row, ROLE_X], bits, a_ps), ("b", L.ROW_SCHEMA[row, ROLE_W], bits, b_ps)]
+    assert [[s, b] for _r, s, b, _ps in in_rows] == L.statement_rows(MODS[m].PORTS["tile"], k)["row_schemas"][:2]
+    n = 4
+    rows = {r: np.array([V.words(row, V.inputs(f"stage-unit-{m}-{r}-{i}", row, k)) for i in range(n)], dtype=np.uint16) for r in ("a", "b")}
+    got = CS.stage_unit(d, f"unit/pouw-{m}-tile", in_rows, [(SCHEMA_HM96_SHA512_ROW_V2, (0, 1))], rows, tmp_path, b"k" * 32)
+    meta = got["meta"]
+    assert meta["row_schemas"][2] == [SCHEMA_HM96_SHA512_ROW_V2, 64] and meta["out_row_ports"] == [2]
+    assert got["circuit_sha512"] == want["circuit_sha512"]
+    bcs = _public_bcs(tmp_path / "pub.bin", 3)
+    for i in range(n):
+        for p, (r, role) in enumerate((("a", ROLE_X), ("b", ROLE_W))):
+            assert bcs[i][p] == L.commit(row, role, [int(v) for v in rows[r][i]], got["salts"][r][i]), (m, i, r)
+        out = [int(v) for v in np.concatenate([got["outs"]["o0"][i], got["outs"]["o1"][i]])]
+        x = sha512_row_v2_digest(row_bytes(out, 16), 64)
+        assert bcs[i][2] == L.INST.commit_string(L.KEY, x, got["salts"]["o0"][i]), (m, i)
+    for coins in ("seed", "os"):
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit", "--circuit",
+                            str(tmp_path / "circuit.txt"), "--public", str(tmp_path / "pub.bin"), "--coins", coins], capture_output=True, text=True)
+        assert p.returncode == 0, p.stdout + p.stderr
+        assert json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"] == want[coins], (m, coins)
