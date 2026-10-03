@@ -13,6 +13,9 @@ OUT, and for a row unit the verifier's own file public-inputs.bin (`TileAnchors.
 public-inputs-wrong.bin (one anchor bit flipped, the verifier's file wrong) and pub-chosen.bin (the same bit flipped in the
 public file's tail, an anchor the prover chose).
 
+`HZ_STAGE` (``fast``, the default, or ``library``): whether `fast_stage` patches the library first, for the same bytes in
+less time and memory; stage.json records which.
+
 DEVELOPMENT BINDING: core's BitAnd_v1, E4m3ToF32_v1 and F32ToE2m1Sat_v1 have no C-Flock piece on this branch, so the row
 units lower them through `core3_scratch`'s pieces; every result of a row unit staged here is labelled 'core3 scratch'. The
 PoUW word primitives Keccak-f is written in have none either, so the hiding tile lowers them through `hash_scratch`'s
@@ -22,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import resource
 import sys
 import time
@@ -43,6 +47,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 ROLE, K, N, OUT = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), Path(sys.argv[4])
 FLIP = {"row_a": "fa", "row_b": "g"}      # the anchor whose word 0, instance 0, bit 0 the controls flip
+STAGE = os.environ.get("HZ_STAGE", "fast")
 
 
 def _load(name: str, path: Path):
@@ -77,8 +82,14 @@ def flip_at(data: bytes, ports: list[dict], port: str, tail: bool) -> int:
 
 def main() -> None:
     t0 = time.time()
+    if STAGE not in ("fast", "library"):
+        raise SystemExit(f"stage.py: HZ_STAGE is fast or library, not {STAGE!r}")
+    if STAGE == "fast":
+        sys.path.insert(0, str(HERE))
+        import fast_stage
+        fast_stage.install(OUT)
     salt_key = hashlib.sha256(b"verity/pouw/hidden-zk/salts\0" + str(K).encode()).digest()
-    rec: dict = {"role": ROLE, "k": K, "n": N}
+    rec: dict = {"role": ROLE, "k": K, "n": N, "staging": STAGE}
     if ROLE in ("row_a", "row_b"):
         sys.path.insert(0, str(HERE))
         import core3_scratch as K3
@@ -135,7 +146,7 @@ def main() -> None:
                public_inputs=ports)
     got = CS.stage_unit(d, f"unit/pouw-pc4-{ROLE}", in_rows, out_rows, rows, OUT, salt_key, public_inputs=ports or None)
     t_stage = time.time() - t0
-    text = (OUT / "circuit.txt").read_text()
+    text = fast_stage.composed() if STAGE == "fast" else (OUT / "circuit.txt").read_text()
     meta = got["meta"]
     pin = FC.digest(text)
     (OUT / "pin.txt").write_text(pin)
@@ -155,10 +166,14 @@ def main() -> None:
         rec.update(own_bytes=len(own), own_sha256=hashlib.sha256(own).hexdigest(), flipped={"port": FLIP[ROLE], "word": 0,
                    "instance": 0, "bit": 0})
     rec.update(ands=got["ands"], k_log=meta["k_log"], vus_per_block=meta.get("vus_per_block"),
-               row_schemas=meta["row_schemas"], out_row_ports=meta.get("out_row_ports"), circuit_bytes=len(text),
+               row_schemas=meta["row_schemas"], out_row_ports=meta.get("out_row_ports"),
+               circuit_bytes=fast_stage.size(text) if STAGE == "fast" else len(text),
                circuit_sha512=pin, class_sha512=FC.class_digest(text),
                inst_bytes=(OUT / "inst.bin").stat().st_size, pub_bytes=(OUT / "pub.bin").stat().st_size,
                seconds={"stage": round(t_stage, 1), "total": round(time.time() - t0, 1)}, maxrss_gb=gb())
+    if STAGE == "fast":
+        del text
+        fast_stage.release()
     (OUT / "stage.json").write_text(json.dumps(rec, indent=1))
     print(json.dumps(rec), flush=True)
 
