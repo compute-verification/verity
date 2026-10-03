@@ -542,6 +542,11 @@ def test_the_lean_audit_step_refuses_a_fast_path_result(tmp_path):
     assert rec["status"] == "failed" and f"a {kind} result" in rec["detail"]
     rec = step(None)
     assert rec["status"] == "failed" and rec["detail"].startswith("refused: no readable")
+    for bad in ([], {"packages": {"a": full}}, {"packages": ["a"]}):     # JSON, not an audit's report: it crashed check (#966)
+        rec = step(bad)
+        assert rec["status"] == "failed" and "is not an audit's report" in rec["detail"], rec
+    rec = step({"passed": True, "failed": [], "packages": [{**full, "seconds": ["replay"]}]})
+    assert rec["status"] == "failed" and rec["detail"].startswith(f"refused: a: a {kind} result"), rec
 
 
 def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_path, monkeypatch):

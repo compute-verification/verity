@@ -234,9 +234,12 @@ def lean_fast(out: Path) -> str | None:
         doc = json.loads(p.read_text())
     except (OSError, ValueError) as e:
         return f"refused: no readable {p} ({type(e).__name__}) shows that every package had the full audit"
+    reports = doc.get("packages", []) if isinstance(doc, dict) else None
+    if not isinstance(reports, list) or not all(isinstance(r, dict) for r in reports):
+        return f"refused: {p} is not an audit's report (an object whose packages are a list of objects)"
     kind = _load("lean_changed").FAST_KIND
-    fast = [str(r.get("package")) for r in doc.get("packages", [])
-            if r.get("kind") == kind or (not r.get("failures") and "replay" not in (r.get("seconds") or {}))]
+    replayed = [isinstance(r.get("seconds"), dict) and "replay" in r["seconds"] for r in reports]
+    fast = [str(r.get("package")) for r, rep in zip(reports, replayed) if r.get("kind") == kind or (not r.get("failures") and not rep)]
     if fast or doc.get("kind") == kind:
         return (f"refused: {', '.join(fast) or p}: a {kind} result (the fast path: no kernel replay, no tests), which no merge "
                 "check accepts")
