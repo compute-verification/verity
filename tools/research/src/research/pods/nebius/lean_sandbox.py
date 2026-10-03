@@ -528,7 +528,7 @@ def pools(slots: Path) -> dict[str, int]:
             raise Refused(f"{slots}: {ln.strip()!r} is not `POOL N`")
         out[f[0]] = int(f[1])
     if POOL not in out:
-        raise Refused(f"{slots} lists no pool {POOL!r}, the only one a sandboxed build takes; the steward adds `{POOL} 2`")
+        raise Refused(f"{slots} lists no pool {POOL!r}, the only one a sandboxed build takes; the steward adds `{POOL} N`")
     return out
 
 
