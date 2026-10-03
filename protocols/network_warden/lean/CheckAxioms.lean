@@ -1,7 +1,7 @@
 import NetTiming
 open NetTiming
 
--- The 34 pins (`lean-audit.json`'s `pins`): the 23 guarantees' proofs, then the 11 witnesses.
+-- The 35 pins (`lean-audit.json`'s `pins`): the 24 guarantees' proofs, then the 11 witnesses.
 #print axioms SecurityProofs.CardFree
 #print axioms SecurityProofs.CardLeftPacked
 #print axioms SecurityProofs.FillInjective
@@ -24,6 +24,7 @@ open NetTiming
 #print axioms SecurityProofs.EncardAccSeqsLeBlocks
 #print axioms SecurityProofs.EncardAccSeqsLeBlocksCounts
 #print axioms SecurityProofs.EncardDecodableLeBlocks
+#print axioms SecurityProofs.EncardIngressObsDecodableLe
 #print axioms SecurityProofs.EncardIngressDecodableLe
 #print axioms witnessWarden_assumptions
 #print axioms witnessWarden_jitter_varies

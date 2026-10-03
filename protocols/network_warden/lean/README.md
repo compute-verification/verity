@@ -31,7 +31,7 @@ CheckAxioms.lean               one #print axioms line per pin, then the three pr
 lake exe cache get                                          # Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                                  # NetTiming (the default target)
 python3 ../../../tools/lean/audit.py .                      # Verity's Lean audit
-lake env lean CheckAxioms.lean                              # the axioms of the 34 pins and the 3 unpinned
+lake env lean CheckAxioms.lean                              # the axioms of the 35 pins and the 3 unpinned
 ~~~
 
 **Trusted without proof:** the statements in `NetTiming/Protocol/`, `NetTiming/Assumptions.lean` and
@@ -42,7 +42,7 @@ as `docs/…` and `internal/…` name the network-transparency project store, wh
 **The audit.** `tools/lean/audit.py` audits every declaration under `NetTiming`: allowed axioms (only `propext`,
 `Classical.choice` and `Quot.sound`), named assumptions, escapes, orphan files, the import layers (`NetTiming.Protocol`,
 `NetTiming.Assumptions` and `NetTiming.Guarantees` import only one another and Mathlib, never a proof), the dependency
-record, a kernel replay, and the 34 pins' records, whose meaning it follows through those three (`meaning`).
+record, a kernel replay, and the 35 pins' records, whose meaning it follows through those three (`meaning`).
 A changed record needs a named statement reviewer (Verity's `AGENTS.md`).
 
 ## The model
@@ -61,8 +61,9 @@ runs, and no violation policy is modelled.
 outside's message `m`, held by `snd m` (the operator and colluding endpoints, choosing when ingress frames arrive); `op`
 is X's devices; the record's rows are what the ingress links release into X; the wire is everything that enters X. The
 outside sees every record and can recompute X's moves from them, so it reacts to X's egress. The ingress frames'
-content and order are the Program's input, charged as reads; `Guarantees.EncardIngressDecodableLe` bounds what their
-timing carries into X.
+content and order are the Program's input, charged as reads; `Guarantees.EncardIngressObsDecodableLe` bounds what
+their timing carries into X for a decoder reading the records, and `Guarantees.EncardIngressDecodableLe` for one
+reading the wire.
 
 ## The trusted layer (`NetTiming.Assumptions`)
 
@@ -89,7 +90,7 @@ of `Guarantees.EncardIngressDecodableLe` at once, with a bound it meets exactly 
 
 ## The pins
 
-The 34 records in `lean-audit.json`. The 23 guarantees are pinned as `NetTiming.SecurityProofs.G`, each proved by the
+The 35 records in `lean-audit.json`. The 24 guarantees are pinned as `NetTiming.SecurityProofs.G`, each proved by the
 lemma of the same statement whose name it spells in UpperCamelCase (`SecurityProofs.CardFree` by `card_free`):
 
 - **Proposition 2** (`NetTiming.SecurityProofs.Occupancy`): `CardFree`, `CardLeftPacked`, `FillInjective`,
@@ -99,7 +100,7 @@ lemma of the same statement whose name it spells in UpperCamelCase (`SecurityPro
   `EncardObsDecodableLe`, `EncardDecodableLe`, `NoFaultOfAccepted`.
 - **Theorem 3** (`NetTiming.SecurityProofs.Advice`): `RecordedRowEqFill`, `EncardAccSeqsLeAdvice`, `EncardAccSeqsLeSync`,
   `EncardAccSeqsLeFixedClock`, `EncardAccSeqsLeBlocks`, `EncardAccSeqsLeBlocksCounts`, `EncardDecodableLeBlocks`.
-- **The ingress bound** (`NetTiming.SecurityProofs.Ingress`): `EncardIngressDecodableLe`.
+- **The ingress bound** (`NetTiming.SecurityProofs.Ingress`): `EncardIngressObsDecodableLe`, `EncardIngressDecodableLe`.
 
 The 11 witnesses are pinned as lemmas, under their own names (`NetTiming.SecurityProofs.Sanity`):
 `witnessWarden_assumptions`, `witnessWarden_jitter_varies`, `witnessProgram_conditions`,
@@ -133,8 +134,9 @@ counterpart.
 The ingress bound adds these:
 
 8. **Ingress reuses the interaction, read inward.** The outside's party is `snd`, X's devices are `op`, and both see
-   every record. That gives X's devices the whole record rather than only the wire, and the outside every move of X's
-   (recomputed from the records) rather than only the egress wire: both are at least as strong as the real parties.
+   every record. The outside gets every move of X's (recomputed from the records) rather than only the egress wire,
+   which is at least as strong as the real outside. A decoder inside X may read what X's devices read: the record
+   version covers it, and the wire version follows under W2.
 9. **Conditioned on the content.** The messages counted are those whose frames on each link, in the order released, are
    a prefix of one prescribed list `c ℓ` (the Program's input, charged as reads; order is content, since the Program
    reads frames in order). How many frames have arrived by the horizon is timing, and is in the count. Messages that

@@ -214,6 +214,19 @@ def EncardDecodableLeBlocks : Prop :=
 
 /-! ## The ingress bound: what the outside can deliver into X through timing -/
 
+/-- **The ingress timing bound, from the records.** As `EncardIngressDecodableLe` below, but the decoder inside X reads
+the records of the first `n` steps, everything X's devices (`op`) read, rather than the wire. This needs no W2, and the
+wire version follows from it. -/
+def EncardIngressObsDecodableLe : Prop :=
+  ∀ {L K S : ℕ} {Msg In Act Wire : Type}
+    (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
+    (hW4 : Packed I.warden) (hr : Allocated I.warden r) (hJ : JitterBounded I.warden D)
+    (c : Fin L → List (List Bool)) (Ms : Set Msg)
+    (hacc : ∀ m ∈ Ms, StatusComplete n (I.obsRun m n))
+    (hc : ∀ m ∈ Ms, ∀ ℓ, linkFrames (I.obsRun m n) ℓ <+: c ℓ)
+    (dec : List (Obs L K S) → Msg) (hdec : ∀ m ∈ Ms, dec (I.obsRun m n) = m),
+    Ms.encard ≤ (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞)
+
 /-- **The ingress timing bound.** Read the interaction inward (`NetTiming.Protocol.Ingress`): the secret `m` is the
 outside's message, `snd m` chooses when ingress frames arrive and reacts to every record (and so to X's egress), `op`
 is X's devices, the record's `rows` are what the `L` ingress links release into X, and `wire` is everything that enters

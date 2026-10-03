@@ -44,6 +44,8 @@ theorem EncardAccSeqsLeBlocksCounts : NetTiming.Guarantees.EncardAccSeqsLeBlocks
 theorem EncardDecodableLeBlocks : NetTiming.Guarantees.EncardDecodableLeBlocks :=
   @NetTiming.encard_decodable_le_blocks
 
+theorem EncardIngressObsDecodableLe : NetTiming.Guarantees.EncardIngressObsDecodableLe :=
+  @NetTiming.encard_ingress_obsDecodable_le
 theorem EncardIngressDecodableLe : NetTiming.Guarantees.EncardIngressDecodableLe :=
   @NetTiming.encard_ingress_decodable_le
 

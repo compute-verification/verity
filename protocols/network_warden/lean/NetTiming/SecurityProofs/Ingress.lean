@@ -15,6 +15,18 @@ open Finset
 
 variable {L K S : ℕ} {Msg In Act Wire : Type}
 
+/-- **The ingress timing bound, from the records.** On runs whose statuses are complete up to `n` and whose frames on
+each link are a prefix of the prescribed content, a decoder inside X that reads the records tells apart at most
+`(∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
+theorem encard_ingress_obsDecodable_le (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
+    (hW4 : Packed I.warden) (hr : Allocated I.warden r) (hJ : JitterBounded I.warden D)
+    (c : Fin L → List (List Bool)) (Ms : Set Msg)
+    (hacc : ∀ m ∈ Ms, StatusComplete n (I.obsRun m n))
+    (hc : ∀ m ∈ Ms, ∀ ℓ, linkFrames (I.obsRun m n) ℓ <+: c ℓ)
+    (dec : List (Obs L K S) → Msg) (hdec : ∀ m ∈ Ms, dec (I.obsRun m n) = m) :
+    Ms.encard ≤ (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞) := by
+  sorry
+
 /-- **The ingress timing bound.** On runs whose statuses are complete up to `n` and whose frames on each link are a
 prefix of the prescribed content, a decoder inside X that reads the wire tells apart at most
 `(∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
