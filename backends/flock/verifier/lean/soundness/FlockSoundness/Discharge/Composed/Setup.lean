@@ -10,9 +10,8 @@ import FlockSoundness.Discharge.Composed.Inner.Holds
 coin ties and padding columns by definition, and `coin_facts` gives the rank check, `W^r` and `β ≠ 0` from `Admits`.
 What is left reads `bodyOf`, the refinement, and is stated here as three named facts, the third in its own file at every draw:
 
-* `bodyOf_geometry`: M1's level-0 padding geometry, the opened positions at each coin vector distinct and in range
-  (`geometry_of_padOK` from the table's `PadOK` once `bodyOf` takes `cols` and `t_pad` from its level 0 and pads the
-  queries to distinct positions).
+* `bodyOf_geometry` (proved): M1's level-0 padding geometry from the table's `PadOK`, the opened positions distinct and
+  in range by `padPos`.
 * `bodyOf_padsOnto`: each rep's pads code reaches every value at its opened positions (`padsOnto_pow` once `bodyOf`'s
   `Cp` is the inner code's padding monomials at distinct nonzero opened points).
 * `innerOf_holds` (`Composed/Inner/Holds.lean`, the inner lane's): the honest prover's pads satisfy the inner proof's constraint at every valid witness whose registered
@@ -27,13 +26,50 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {mPts n : ℕ} {Reg : Type}
 
-/-- **M1's level-0 padding geometry at the draw** (open, refinement). -/
+theorem padPos_list (L : ℕ) (qs : List ℕ) :
+    let l := (List.range L).filter (fun x => decide (x ∈ qs)) ++ (List.range L).filter (fun x => decide (x ∉ qs))
+    l.Nodup ∧ l.length = L ∧ ∀ x ∈ l, x < L := by
+  intro l
+  refine ⟨?_, ?_, ?_⟩
+  · refine List.Nodup.append ((List.nodup_range).filter _) ((List.nodup_range).filter _) ?_
+    intro x hx hy
+    simp only [List.mem_filter, decide_eq_true_eq] at hx hy
+    exact hy.2 hx.2
+  · simp only [l, List.length_append]
+    have := List.length_eq_length_filter_add (l := List.range L) (fun x => decide (x ∈ qs))
+    simpa [decide_not] using this.symm
+  · intro x hx
+    simp only [l, List.mem_append, List.mem_filter, List.mem_range] at hx
+    rcases hx with h | h <;> exact h.1
+
+theorem padPos_injective {L t : ℕ} (qs : List ℕ) (h : t ≤ L) : Function.Injective (padPos L t qs) := by
+  obtain ⟨hn, hl, -⟩ := padPos_list L qs
+  intro i j hij
+  simp only [padPos] at hij
+  rw [List.getD_eq_getElem _ _ (by omega), List.getD_eq_getElem _ _ (by omega)] at hij
+  exact Fin.ext ((hn.getElem_inj_iff).mp hij)
+
+theorem padPos_lt {L t : ℕ} (qs : List ℕ) (h : t ≤ L) (i : Fin t) : padPos L t qs i < L := by
+  obtain ⟨-, hl, hlt⟩ := padPos_list L qs
+  simp only [padPos]
+  rw [List.getD_eq_getElem _ _ (by omega)]
+  exact hlt _ (List.getElem_mem _)
+
+/-- **M1's level-0 padding geometry at the draw**: from the table's `PadOK` (`cols ≤ logLen ≤ 40`, `t ≤ 2^cols`) and
+`padPos`. -/
 theorem bodyOf_geometry (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)) :
     let C := coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
     C.cols ≤ 40 ∧ C.z.tpad ≤ 2 ^ C.cols ∧ C.z.nS ≤ C.z.tpad ∧
       ∀ c, C.Admits c → Function.Injective (C.pos c) ∧ ∀ q, C.pos c q < 2 ^ (C.cols + 1) := by
-  sorry
+  intro C
+  have hp := (tablesAtZK (Reg := Reg) dj y₀ S R).hpad
+  have hcl : (tablesAtZK (Reg := Reg) dj y₀ S R).sch.level₀.logCols ≤
+      (tablesAtZK (Reg := Reg) dj y₀ S R).sch.level₀.logLen :=
+    (Nat.pow_le_pow_iff_right (by norm_num : 1 < 2)).mp (le_trans (Nat.le_add_right _ _) hp.hk)
+  have ht2 : (tablesAtZK (Reg := Reg) dj y₀ S R).t ≤ 2 ^ ((tablesAtZK (Reg := Reg) dj y₀ S R).sch.level₀.logCols + 1) :=
+    le_trans hp.ht (Nat.pow_le_pow_right (by norm_num) (Nat.le_succ _))
+  exact ⟨le_trans hcl hp.hd, hp.ht, le_rfl, fun c _ => ⟨padPos_injective _ ht2, padPos_lt _ ht2⟩⟩
 
 /-- **The pads onto at the draw** (open, refinement). -/
 theorem bodyOf_padsOnto (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}

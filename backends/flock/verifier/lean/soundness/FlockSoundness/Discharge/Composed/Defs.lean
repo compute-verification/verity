@@ -206,15 +206,21 @@ def CoinedSetup.Admits (C : CoinedSetup) (c : CoinsZK C.z.nC C.Rest) : Prop :=
 pin, and the public regions' values). -/
 def CoinedSetup.Valid (C : CoinedSetup) (w : Witness C.S.m) : Prop := C.S.Satisfies w
 
-/-- A `--zk` table's sizes with the rank check's `RANK_POINTS` claim points over `nMask` mask words. -/
-def withMask (z : ZkView.Sizes) (nMask : ℕ) : ZkView.Sizes := { z with nC := Zk.RANK_POINTS, nMask }
+/-- A `--zk` table's sizes with the rank check's `RANK_POINTS` claim points over `nMask` mask words, and `t` level-0
+padding columns and as many opened positions (the opened set padded to `t_pad`, `Sizes`). -/
+def withMask (z : ZkView.Sizes) (nMask t : ℕ) : ZkView.Sizes := { z with nC := Zk.RANK_POINTS, nMask, tpad := t, nS := t }
+
+/-- **The opened positions from the queried ones**: the positions below `L` that are queried, in increasing order, then
+the others; the first `t` of them. Distinct and below `L` by construction (`padPos_injective`, `padPos_lt`), and the
+queried positions below `L` come first, so where at most `t` distinct positions are queried they are all opened. -/
+def padPos (L t : ℕ) (qs : List ℕ) (i : Fin t) : ℕ :=
+  ((List.range L).filter (fun x => decide (x ∈ qs)) ++ (List.range L).filter (fun x => decide (x ∉ qs))).getD i.val 0
 
 /-- **The refinement of a `--zk` table that its coins do not fix**: the hidden-value and value-list types, the type of
 the coins other than `β`, `ρ` and the claim points (the query coins among them), one such coin, the other sizes,
-M1's level-0 `cols` and at each coin vector the opened positions `pos` (the executable's level-0 queries, padded to
-`nS` with distinct unqueried positions where they collide), and each coin vector's `Coined` table, whose `embed`, `β`, `ρ`, `eqw` and
+the level-0 positions each such coin queries (`coinedOf` opens them, padded by `padPos` to `t_pad` distinct positions), and each coin vector's `Coined` table, whose `embed`, `β`, `ρ`, `eqw` and
 `Gp` `coinedOf` replaces by what the coins and M1's code fix. -/
-structure CoinedBody (S : Statement) (nMask : ℕ) where
+structure CoinedBody (S : Statement) (nMask t : ℕ) where
   Hi : Type
   VL : Type
   [addHi : AddCommGroup Hi]
@@ -223,32 +229,34 @@ structure CoinedBody (S : Statement) (nMask : ℕ) where
   Rest : Type
   rest0 : Rest
   sz : ZkView.Sizes
-  cols : ℕ
-  pos : CoinsZK Zk.RANK_POINTS Rest → Fin sz.nS → ℕ
-  T : CoinsZK Zk.RANK_POINTS Rest → ZkView.Coined FlockLevel3.GF256 (Witness S.m) Hi VL (withMask sz nMask)
+  queries : Rest → List ℕ
+  T : CoinsZK Zk.RANK_POINTS Rest → ZkView.Coined FlockLevel3.GF256 (Witness S.m) Hi VL (withMask sz nMask t)
 
 /-- **The draw's `--zk` table's refinement** (open: the new item's to write, from what `verify --zk` sets up at the draw:
 its statement `Tz.S`, schedule, pads layout, inner code and the honest prover's level-0 code, at the mask slot of the
 draw's executable statement `st`). -/
-noncomputable def bodyOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedBody Tz.S (maskWordsOf st).length := sorry
+noncomputable def bodyOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedBody Tz.S (maskWordsOf st).length Tz.t := sorry
 
 /-- **The draw's `--zk` table as `Coined` tables**: `bodyOf`'s tables over `Tz.S`, with `RANK_POINTS` claim points over
 the mask slot's words (`maskWordsOf st`), with `innerOf`'s inner-proof fields, reading their coins (`β`, `ρ`, the rank check's weights `eq(p_k, x)`, `embed`
-the inclusion of F128 in F256) and M1's padding columns at the opened positions, `κ·X̂_i + X̂_{2^cols + i}` at
+the inclusion of F128 in F256), level 0's `cols` and `t_pad` from the table's level 0, the opened positions `padPos` of
+each coin's queries below `2^(cols+1)`, and M1's padding columns there, `κ·X̂_i + X̂_{2^cols + i}` at
 `κ = PAD_C`. -/
 noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
   let B := bodyOf Tz st
   letI := B.addHi
   letI := B.finHi
   letI := B.decHi
+  let cols := Tz.sch.level₀.logCols
+  let pos := fun c : CoinsZK Zk.RANK_POINTS B.Rest => padPos (2 ^ (cols + 1)) Tz.t (B.queries c.rest)
   { S := Tz.S
     Hi := B.Hi
     VL := B.VL
     Rest := B.Rest
-    z := withMask B.sz (maskWordsOf st).length
+    z := withMask B.sz (maskWordsOf st).length Tz.t
     maskWords := fun x => (maskWordsOf st).getD x.val 0
     T := fun c =>
-      let I := innerOf Tz st B.Hi B.VL (withMask B.sz (maskWordsOf st).length) (CoinsZK Zk.RANK_POINTS B.Rest) c
+      let I := innerOf Tz st B.Hi B.VL (withMask B.sz (maskWordsOf st).length Tz.t) (CoinsZK Zk.RANK_POINTS B.Rest) c
       { B.T c with
         lanes := I.lanes
         vals := I.vals
@@ -259,10 +267,10 @@ noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
         β := fun r => fOf (c.beta r)
         ρ := fun r i => if i = 0 then FlockLevel3.GF256.of (c.rho r).1 else FlockLevel3.GF256.of (c.rho r).2
         eqw := fun k x => fOf (eqWord (c.points k) ((maskWordsOf st).getD x.val 0))
-        Gp := fun q i => fOf Zk.PAD_C * execArith.Xhat i.val (B.cols + 1) (execArith.omega (B.pos c q))
-          + execArith.Xhat (2 ^ B.cols + i.val) (B.cols + 1) (execArith.omega (B.pos c q)) }
-    cols := B.cols
-    pos := B.pos }
+        Gp := fun q i => fOf Zk.PAD_C * execArith.Xhat i.val (cols + 1) (execArith.omega (pos c q))
+          + execArith.Xhat (2 ^ cols + i.val) (cols + 1) (execArith.omega (pos c q)) }
+    cols := cols
+    pos := pos }
 
 /-- **The structural facts Lemma B reads**, of a `CoinedSetup` at the arithmetic `A` and M1's padding constant `κ`: M1's
 level-0 padding geometry (`cols ≤ 40`, `t_pad ≤ 2^cols`, at most `t_pad` opened positions), and at every coin vector
