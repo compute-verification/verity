@@ -170,6 +170,8 @@
   }
  },
  "pins": {
+  "FlockSoundness.Discharge.ZkLink.ksAvgStrictZ_le_m1": {},
+  "FlockSoundness.Discharge.ZkLink.zk_flock_countC_execOS_m1_cr": {},
   "FlockSoundness.Audit.InfluenceWitness.A.accepts": {
    "signature": [
     "FlockSoundness.Audit.InfluenceWitness.A.accepts",
