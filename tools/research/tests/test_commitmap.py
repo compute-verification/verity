@@ -12,7 +12,7 @@ from research import commitmap as CM
 from research.cli import main as research_main
 from research.merge import main as merge_main
 from research.store.local import LocalStore
-from test_merge_gate import CHECKED, DECL
+from test_merge_gate import CHECK_FILES, CHECKED
 
 ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
        "GIT_AUTHOR_DATE": "2026-09-29T00:00:00Z", "GIT_COMMITTER_DATE": "2026-09-29T00:00:00Z"}
@@ -58,7 +58,8 @@ def _gate_repo(tmp_path: Path) -> tuple[Path, Path, str]:
     (main / "mytools").mkdir(parents=True)
     (main / "mytools" / "decl_check.py").write_text("from research.store.tool import Tool\nT = Tool(name='check', version='1')\n")
     (main / "tools" / "check").mkdir(parents=True)
-    (main / "tools" / "check" / "tool.py").write_text(DECL.format(""))
+    for rel, text in CHECK_FILES.items():
+        (main / rel).write_text(text)
     (main / ".gitignore").write_text("__pycache__/\n")
     (main / "a.txt").write_text("a\n")
     _git(main, "init", "-q", "-b", "main")

@@ -110,16 +110,19 @@ map's payload from the two mirrors.
 `research merge` is how `main` receives a merge: in the target's checkout it runs `git merge --no-ff REF` only when the store
 (refreshed from the remote first, when one is usable) holds an attempt of the tool, default `check`, with `state` done, rc 0,
 and a clean source at REF's exact commit, and when the target's tip is an ancestor of REF, so the merged tree is the checked one.
-The attempt's own record must agree, and its result be of a kind the target's declaration produces (`check/v1`): no result, or an
-unreadable record or result, passes no gate. The merge commit carries a `Check: <attempt id>` trailer. The tool is the
-repository's (`tools/check`); `research` only reads its attempts. A refusal exits 3. `--canary` checks, in scratch stores, that the
-gate and the push guard refuse an attempt with no result, one of another kind and one with an unreadable record, and admit a good one.
+The attempt's own record must agree, its command be the one the target's declaration names (`Tool.command`, in a check slot or
+not, followed by nothing but check.py's own flags), and its own result be of a kind that declaration produces (`check/v1`) and
+not the Lean fast path's `lean-fast/v1`, with the verdict passed and no step listed twice: no result, or an unreadable record or
+result, passes no gate. The merge commit carries a `Check: <attempt id>` trailer. The tool is the repository's (`tools/check`);
+`research` only reads its attempts. A refusal exits 3. `--canary` checks, in scratch stores, that the gate, the push guard and the
+train gate refuse each bad attempt `CANARY` lists (no result, another or a refused kind, a record that can't be read or disagrees,
+another command, a failed verdict, a step listed twice) and admit a good one.
 
 `research merge --train A B C` merges the refs in order onto the target's tip in a scratch worktree (one `--no-ff` merge each,
 so the chain's commits are the train's prefixes), records the tool on the last (`research run --tool`, `--on` a machine and
 polled there), and fast-forwards the target to it when it passes: the exact tree checked is the one that lands. When it fails,
 the prefixes are bisected (each checked the same way) to the first ref whose merge breaks it, and the target fast-forwards to
-the longest prefix that passed.
+the longest prefix that passed. A `--command` the gate would refuse (not the declared one) is refused before anything is checked.
 
 `research merge --train --prepare BRANCH [--onto BASE] N@SHA ...` is the lander's train build: the same chain of merges, onto
 the remote's `--into` or the prep branch of a train ahead (`--onto`), in a scratch worktree, so the checkout it runs from is never
