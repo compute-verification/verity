@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Verity's vLLM Commits (config-run task 1) on vy-nebius-2's idle GPUs, as `gpus=1` (a TP2 row: `gpus=2`) `project=verity` fill
-# guests with max_min VY_N2_COMMIT_MAX_MIN (40: node 2's gaps between booked windows run 5-60 min and its Commits took at most 20, so
-# a 90 never fit one; 90 for a longer row): node 2's fill runner starts them ahead of its other GPU fill, never into a booked
+# guests with max_min VY_N2_COMMIT_MAX_MIN (40: node 2's gaps between booked windows run 5-60 min; commit_max_min gives a long row
+# more): node 2's fill runner starts them ahead of its other GPU fill, never into a booked
 # window, and stops them for a waiter or a timed window (requeued, rerun from the top). The Build stays where it ran; the CPU
 # replay runs on node 2's Verity CPUs (48-95) as a `gpus=0` guest.
 #
@@ -12,6 +12,7 @@
 #                                                                 VY_N2_FIRST=0: only while deployments-gpu has no free GPU)
 #   on node 1:  n2_commit.sh n1-free                              (the GPUs deployments-gpu could still admit)
 #   on node 1:  n2_commit.sh place KIND KEY GPUS MAX_MIN QUESTION (the queue's placement on node 2, as submit records it; a dry run)
+#   on node 1:  n2_commit.sh max-min ROW                          (the max_min submit gives ROW's guest)
 #   on node 1:  n2_commit.sh plan-keyed JOB_TREE ROW_DIR          (whether the row's plans are keyed to the code JOB_TREE runs)
 #   on node 2:  n2_commit.sh run KEY | replay KEY                 (the fill jobs' bodies; submit and run write them)
 #   on node 2:  n2_commit.sh fetch-manifests ART...              (the manifests of ART... that node 2's store lacks, from node 1's)
@@ -87,6 +88,16 @@ check_item() {  # check_item KEY ITEM.json: exit 2 unless KEY is a key and ITEM 
 }
 
 tp_of() { [[ $1 =~ __tp([12])__ ]] && echo "${BASH_REMATCH[1]}"; }
+
+# A row with 1024 input tokens or batch 32+ ran 20-120 min on node 1 by 3 Oct (gemma2-9b B8 67-76, qwen3-30b-a3b 44-54, qwen3-14b
+# TP2 B8 ~45), and a stop at max_min reruns it from the top, so VY_N2_COMMIT_MAX_MIN (25 for node 2's 30-min gaps on 1 Oct) killed
+# cov-gm359 twice. Such a row gets VY_N2_COMMIT_LONG_MAX_MIN (the fill runner's cap for a Commit guest, FILL_COMMIT_MAX_MIN), which
+# it starts only where no booked window is that close.
+commit_max_min() {  # commit_max_min ROW
+  local b=0
+  [[ $1 =~ __b([0-9]+)__ ]] && b=${BASH_REMATCH[1]}
+  if [[ $1 == *__i1024__* ]] || [ "$b" -ge 32 ]; then echo "${VY_N2_COMMIT_LONG_MAX_MIN:-120}"; else echo "${VY_N2_COMMIT_MAX_MIN:-40}"; fi
+}
 
 item() { ssh "$N1" "$KUBE get job $1 -o jsonpath='{.metadata.annotations.verity\.dev/item-json}'"; echo; }
 
@@ -195,7 +206,7 @@ submit() {
     || { echo "checkpoint $repo@$rev isn't staged on node 2 (n2_build.sh stage REPO REV); not queued" >&2; exit 3; }
   local question placed
   question=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("question") or "")' "$item")
-  placed=$(place commit "$key" "$(tp_of "$row")" "${VY_N2_COMMIT_MAX_MIN:-40}" "${question:-$(n2_question "$row")}") \
+  placed=$(place commit "$key" "$(tp_of "$row")" "$(commit_max_min "$row")" "${question:-$(n2_question "$row")}") \
     || { echo "not queued" >&2; exit 3; }
   local build_run build_art
   # the Commit keeps node 1's dispatcher key, so its replay and records chain on under it
@@ -228,7 +239,7 @@ d["n2"]={"key":sys.argv[2],"src":sys.argv[3],"build_run":sys.argv[4],"build_art"
     | ssh "$N2" "mkdir -p $GUEST/items && cat > $GUEST/items/commit-$key.json"
   ssh "$N2" "f=/workspace/pouw/fill/queue/verity-commit-$key.sh; cat > \$f.tmp && chmod +x \$f.tmp && mv \$f.tmp \$f" <<EOF
 #!/usr/bin/env bash
-# fill: owner=$OWNER gpus=$(tp_of "$row") max_min=${VY_N2_COMMIT_MAX_MIN:-40} cpus=8 project=verity prio=$PRIO
+# fill: owner=$OWNER gpus=$(tp_of "$row") max_min=$(commit_max_min "$row") cpus=8 project=verity prio=$PRIO
 # Verity vLLM Commit $row (node 1 key $key): n2_commit.sh on infra/nebius; its replay runs on node 1.
 exec bash $GUEST/bin/n2_commit.sh run $key
 EOF
@@ -645,7 +656,8 @@ case "$cmd" in
   n1-free) n1_free ;;
   check) check_item "$@" ;;
   place) place "$@" ;;
+  max-min) commit_max_min "$@" ;;
   plan-keyed) plan_keyed "$@" ;;
   fetch-manifests) fetch_manifests "$@" ;;
-  *) sed -n '7,17p' "$0" >&2; exit 2 ;;
+  *) sed -n '7,18p' "$0" >&2; exit 2 ;;
 esac

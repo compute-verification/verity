@@ -76,3 +76,25 @@ def test_it_gives_the_provers_sessions_their_verdicts(store, form, name, tmp_pat
     assert {c: v["accepted"] for c, v in got.items()} == CASES, {c: v["why"] for c, v in got.items()}
     # each false statement is refused by the proof against its own public file, not by the session parameters
     assert all(not v["why"].startswith("S2") for c, v in got.items() if c != "honest"), {c: v["why"] for c, v in got.items()}
+
+
+def test_a_tail_with_no_unit_is_refused(store, tmp_path):
+    """`units_per_vu = 0` is refused as the circuit is read (PROTOCOL.md §16.10, D8; the Rust side is `circuit.rs`'s
+    `a_tail_with_no_unit_is_refused`). Flat GEMM's tail returns the outputs, so its unit count need not be a power of two;
+    the rest is kept consistent: no unit or stage slot, no leaf map or cut, no wire but the rows'."""
+    d = store / "flat" / "gemm-coordinate" / "stage"
+    head, meta, rest = (d / "circuit.txt").read_text().split("\n", 2)
+    m = json.loads(meta[len("META "):])
+    stages = [n for n in m["per_vu"] if n.startswith("stage")]
+    assert m["units_per_vu"] > 0 and m["out_net"] in stages
+    m["units_per_vu"] = 0
+    for r in m["ranges"]:
+        if r["net"] in ["unit", *stages]:
+            r["count"] = 0
+    m["per_vu"].update(dict.fromkeys(["unit", *stages], 0))
+    m.update(leaves_in=[], leaves_out=[], leaf_cuts=[], wires=[w for w in m["wires"] if w[0] in ("sha512x3", "hm96")])
+    bad = tmp_path / "circuit.txt"
+    bad.write_text(head + "\nMETA " + json.dumps(m, sort_keys=True, separators=(",", ":")) + "\n" + rest)
+    p = subprocess.run([str(BIN), "statement", "--statement", SETS["flat", "gemm-coordinate"], "--circuit", str(bad),
+                        "--public", str(d / "pub-4.bin")], capture_output=True, text=True)
+    assert p.returncode == 1 and "units_per_vu is 0: a VU of no unit" in p.stdout, (p.stdout, p.stderr)

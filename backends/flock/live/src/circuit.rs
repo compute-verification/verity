@@ -845,6 +845,10 @@ impl Composite {
         if unit.useful >= 1 << unit.unit_log {
             return Err("the unit fills its slot: no forced-zero row for a zero leaf".into());
         }
+        // a tail that returns the outputs has no power-of-two count, which alone refuses zero units otherwise
+        if self.upv == 0 {
+            return Err("units_per_vu is 0: a VU of no unit".into());
+        }
         if self.dummy_bc.len() != self.ports.len() || self.dummy_outputs.len() != n_out {
             return Err("the pinned dummy values are not one per port and output leaf".into());
         }
@@ -2821,6 +2825,26 @@ mod tests {
         assert_eq!(cv.iter().flat_map(|w| w.to_be_bytes()).collect::<Vec<u8>>(), h.finalize().to_vec());
     }
 
+    /// A circuit with these port groups (bits per port) and no rows but the constant.
+    fn section(name: &str, ins: &[usize], in_words: usize, outs: &[usize], out_words: usize) -> String {
+        let n = (in_words + out_words) * WORD + 1;
+        let head = [format!("flock-ir-unit/v2 {name} {n} {} 1 0 {in_words} {}", n - 1, ins.len())].into_iter()
+            .chain(ins.iter().map(usize::to_string)).chain([format!("1 {in_words} {out_words} {}", outs.len())])
+            .chain(outs.iter().map(usize::to_string)).collect::<Vec<_>>().join(" ");
+        let rows: String = (0..n).map(|i| if i == n - 1 { format!("1 {i} 1 {i}\n") } else { "0 0\n".into() }).collect();
+        format!("CIRCUIT {name} {}\n{head}\n{rows}", n + 1)
+    }
+
+    /// META `rows` entry of a `sha512/row/v1` row of 64 words.
+    fn row64() -> Value {
+        let prefix = row_prefix(64);
+        let mut mid = SHA512_IV;
+        compress(&mut mid, &prefix);
+        let pad = words_be::<16>(&pad_block(256));
+        json!({"prefix": crate::hex(&prefix), "midstate": mid.iter().map(|w| format!("{w:016x}")).collect::<Vec<_>>(),
+               "pad": crate::hex(&pad.iter().flat_map(|w| w.to_be_bytes()).collect::<Vec<u8>>())})
+    }
+
     /// A typed template statement small enough to build here: one row port of 64 words, a unit type calling a flat type
     /// twice (placed in two slots of its layout) with an exported, a bound and a constant-form argument, an AND reading
     /// both parts' outputs, and row circuits that have their ports' shapes but no rows.
@@ -2838,13 +2862,8 @@ mod tests {
         let l0 = with_digest(json!({"type": c, "range_log": 9, "in_split": [], "out_split": [], "own": {"derive": "v2"}, "calls": [], "reads": []}));
         let l1 = with_digest(json!({"type": r, "in_split": [], "out_split": [], "own": {"derive": "v2"}, "reads": [],
                                     "calls": [{"item": 0, "layout": 0, "offset": 0}, {"item": 1, "layout": 0, "offset": 1}]}));
-        let prefix = row_prefix(64);
-        let mut mid = SHA512_IV;
-        compress(&mut mid, &prefix);
-        let pad = words_be::<16>(&pad_block(256));
         let zeros = "0".repeat(128);
-        let row = json!({"prefix": crate::hex(&prefix), "midstate": mid.iter().map(|w| format!("{w:016x}")).collect::<Vec<_>>(),
-                         "pad": crate::hex(&pad.iter().flat_map(|w| w.to_be_bytes()).collect::<Vec<u8>>())});
+        let row = row64();
         // the input row x, then y's output row (its one word zero-padded to a block): one hm96 slot per row
         let meta = json!({"format": crate::typed::FORMAT, "statement": crate::typed::STATEMENT, "program_sha512": zeros,
             "partition": {"rule": PARTITION_V1, "digest": zeros}, "scheme": SCHEME, "row_schema": ROW_SCHEMA,
@@ -2859,15 +2878,6 @@ mod tests {
             "dummy": {"bc": [crate::hex(&[0u8; BC_BYTES]), crate::hex(&[0u8; BC_BYTES])], "outputs": [0]}, "out_ports": [["y", 1]],
             "leaf_scheme": leaf_scheme(),
             "policy": "calls/v1", "unit_in": [], "types": {r.clone(): root, c: callee}, "layouts": [l0, l1], "unit_layout": 1, "unit_type": r});
-        // a row circuit: its port groups (bits per port), no rows but the constant
-        let section = |name: &str, ins: &[usize], in_words: usize, outs: &[usize], out_words: usize| {
-            let n = (in_words + out_words) * WORD + 1;
-            let head = [format!("flock-ir-unit/v2 {name} {n} {} 1 0 {in_words} {}", n - 1, ins.len())].into_iter()
-                .chain(ins.iter().map(usize::to_string)).chain([format!("1 {in_words} {out_words} {}", outs.len())])
-                .chain(outs.iter().map(usize::to_string)).collect::<Vec<_>>().join(" ");
-            let rows: String = (0..n).map(|i| if i == n - 1 { format!("1 {i} 1 {i}\n") } else { "0 0\n".into() }).collect();
-            format!("CIRCUIT {name} {}\n{head}\n{rows}", n + 1)
-        };
         format!("{} t\nMETA {}\n{}{}", crate::typed::FORMAT, serde_json::to_string(&meta).unwrap(),
                 section(SHA_NET, &[512, 1024, 512, 1024, 512, 1024], 64, &[512, 512, 512], 16),
                 section(HM_NET, &[512, 1024, 8 * SALT_BYTES], 32, &[8 * BC_BYTES], 8))
@@ -3005,6 +3015,56 @@ mod tests {
         }).contains("not a power of two"), "three roots");
         assert!(meta_of(&|m| m["wires"] = json!([])).contains("never stated"));
         assert!(Composite::parse(&text, None).is_ok());
+    }
+
+    /// A flat statement whose tail returns the outputs: an input row x and y's output row (one word), a unit reading one
+    /// leaf of x, and a stage reading the unit's output and returning y's word, with circuits of their ports' shapes only.
+    fn flat_tail_statement() -> String {
+        let zeros = "0".repeat(128);
+        let ports = [Port { name: "x".into(), words: 64, comps: 1, bits: 1024, v2: false },
+                     Port { name: "y".into(), words: 64, comps: 1, bits: 1024, v2: false }];
+        let name = |n: usize| ["unit", "stage0", SHA_NET, HM_NET][n];
+        let mut wires: Vec<Value> = row_wires(&ports, 2, 3).iter()
+            .map(|w| json!([name(w.dst.0), w.dst.1, w.dst.2, name(w.src.0), w.src.1, w.src.2])).collect();
+        wires.push(json!(["stage0", 0, 0, "unit", 0, 0]));
+        let meta = json!({"format": FORMAT, "statement": STATEMENT, "program_sha512": zeros,
+            "partition": {"rule": PARTITION_V1, "digest": zeros}, "scheme": SCHEME, "row_schema": ROW_SCHEMA,
+            "ports": [["x", 64, 1], ["y", 64, 1]], "input_ports": 1, "rows": [row64(), row64()],
+            "row_key_sha512": crate::hex(&Sha512::digest(hm96_sha512_default_key())), "vus_per_block": 2, "k_log": 17,
+            "units_per_vu": 1, "leaves_in": [[0]], "leaves_out": [[]], "leaf_cuts": [], "wires": wires,
+            "out_net": "stage0", "out_net_ports": [0],
+            "ranges": [{"type": "unit", "net": SHA_NET, "slot_log": 14, "pos0": 0, "count": 2, "packed": true},
+                       {"type": "unit", "net": HM_NET, "slot_log": 13, "pos0": 4, "count": 4},
+                       {"type": "unit", "net": "unit", "slot_log": 9, "pos0": 128, "count": 2},
+                       {"type": "unit", "net": "stage0", "slot_log": 9, "pos0": 130, "count": 2},
+                       {"type": "mask", "net": "mask", "slot_log": 10, "pos0": 66, "count": 1}],
+            "per_vu": {SHA_NET: 1, HM_NET: 2, "stage0": 1},
+            "dummy": {"bc": [crate::hex(&[0u8; BC_BYTES]), crate::hex(&[0u8; BC_BYTES])], "outputs": [0]}, "out_ports": [["y", 1]],
+            "leaf_scheme": leaf_scheme()});
+        format!("{FORMAT} t\nMETA {}\n{}{}{}{}", serde_json::to_string(&meta).unwrap(),
+                section("unit", &[16], 1, &[16], 1), section("stage0", &[16], 1, &[16], 1),
+                section(SHA_NET, &[512, 1024, 512, 1024, 512, 1024], 64, &[512, 512, 512], 16),
+                section(HM_NET, &[512, 1024, 8 * SALT_BYTES], 32, &[8 * BC_BYTES], 8))
+    }
+
+    /// No unit in a VU is refused (PROTOCOL.md §16.10, D8), with the tail that returns the outputs, whose unit count need not
+    /// be a power of two, kept consistent: no unit or stage slot, no leaf map and no wire but the rows'.
+    #[test]
+    fn a_tail_with_no_unit_is_refused() {
+        let text = flat_tail_statement();
+        assert!(Composite::parse(&text, None).is_ok(), "{:?}", Composite::parse(&text, None).err());
+        let mut lines: Vec<String> = text.split('\n').map(str::to_string).collect();
+        let mut m: Value = serde_json::from_str(&lines[1][5..]).unwrap();
+        m["units_per_vu"] = json!(0);
+        m["ranges"][2]["count"] = json!(0);
+        m["ranges"][3]["count"] = json!(0);
+        m["per_vu"]["stage0"] = json!(0);
+        m["leaves_in"] = json!([]);
+        m["leaves_out"] = json!([]);
+        m["wires"] = json!(m["wires"].as_array().unwrap()[..2]);
+        lines[1] = format!("META {}", serde_json::to_string(&m).unwrap());
+        let err = Composite::parse(&lines.join("\n"), None).err().unwrap_or_default();
+        assert!(err.contains("units_per_vu is 0"), "{err}");
     }
 
     #[test]
