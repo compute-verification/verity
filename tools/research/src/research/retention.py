@@ -27,8 +27,10 @@ Before that, on every run whatever the disk, gc applies the default rules (reten
 trees, check scratch, and what an interrupted pass left), whose paths have an implicit record each (source `rule`, low, the rule's
 owner, expiring the rule's age after its stamp); a sidecar or a custody record wins over a rule. `--apply` takes LOCKS and appends
 every decision to the node's deletion log. A node is named by `--node` (the units pass vy-nebius-N) or its hostname, and a record
-made under either name counts as this node's. Exit 3 (refused, nothing more done): node 2's fill status doesn't say `timed False`,
-what live work names can't be established, or a lock is held; report refuses the first too. Report lists every unowned area of
+made under either name counts as this node's. Exit 3 (refused, nothing more done): node 2 may be in a timed window (RR.timed: its
+fill status isn't fresh and quiet, or fill/windows books now or the next 15 min; read at the start, before the records pass and
+before every deletion), what live work names can't be established, or a lock is held; report refuses the first too, before its
+walk and after it. Report lists every unowned area of
 --ask-gib or more with the owner to ask (ASK, the policy's "Ask the owner first"), and exits 1 when there is one.
 """
 from __future__ import annotations
@@ -519,16 +521,18 @@ def report(root: Path | str = DEFAULT_ROOT, depth: int = 2, *, now: Callable[[],
            ask_gib: float = ASK_GIB) -> dict[str, Any]:
     """`research retention report --json`: unowned (and invalid) areas first, then expired paths, then the rest, each by size, with
     the rules' paths (those outside the root, such as /tmp's check scratch, by absolute path), and the `asks` (module docstring).
-    RR.Refused in a timed window (RR.timed). `places` None is RR.Places.of(root)."""
+    RR.Refused in a timed window (RR.timed), before the walk or after it. `places` None is RR.Places.of(root)."""
     places = places or RR.Places.of(root)
-    if why := RR.timed(places):
-        raise RR.Refused(why)
     t, node = now(), node or socket.gethostname()
+    if why := RR.timed(places, node, t):
+        raise RR.Refused(why)
     rules = RR.RuleSet(places, node)
     sc = scan(root, depth, rules)
     for p, rule in rules.outside():
         b, n, nested = measure(p, sc.errors)
         sc.rows.append(Row(str(p), b, n, rule_record(rules, rule, p, str(p)), "rule", nested=[str(x) for x in nested], rule=rule))
+    if why := RR.timed(places, node, now()):
+        raise RR.Refused(f"{why} (seen after the walk)")
     docs = sorted((r.doc(t) for r in sc.rows), key=lambda d: (ORDER[d["state"]], -d["bytes"], d["path"]))
     totals: dict[str, dict[str, int]] = {s: {"paths": 0, "bytes": 0} for s in ("unowned", "invalid", "expired", "recorded", "collectable")}
     for d in docs:
@@ -741,7 +745,7 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
     plan: dict[str, Any] = {"schema": GC_SCHEMA, "policy": POLICY, "root": str(root), "node": node, "now": fmt_utc(t), "apply": apply,
                             "by": by, "force": force, "high_pct": high_pct, "low_pct": low_pct, "pct_before": round(pct, 2), "refused": None,
                             "rules": [], "acting": False, "actions": [], "freed_bytes": 0, "errors": []}
-    plan["refused"] = RR.timed(places)
+    plan["refused"] = RR.timed(places, node, t)
     if plan["refused"] is None:
         sweep = RR.Sweep(places, node, now, live or Live(research=places.research, fill=places.fill), apply=apply,
                          covered=covering(root), save=save or RR.store_saver(store_root, node, by), log=log)
@@ -754,6 +758,8 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
         total, used, _ = usage(root)
         pct = 100 * used / total if total else 100.0
     plan["acting"] = plan["refused"] is None and (force or pct > high_pct)
+    if plan["acting"] and (why := RR.timed(places, node, now())):
+        plan["acting"], plan["refused"] = False, f"{why} (seen before the records pass)"
     if not plan["acting"]:
         plan["pct_after"] = round(pct, 2)
         return plan
@@ -800,6 +806,9 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
             acts.append(Action(row, "delete", "would delete: " + _why_deletable(row.record, False), round(pct, 2)))
             plan["freed_bytes"] += row.bytes
             continue
+        if why := RR.timed(places, node, now()):
+            plan["refused"] = f"{why} (seen during the records pass: nothing more is deleted)"
+            break
         err = _delete(root, p)
         total, used, _ = usage(root)
         pct = 100 * used / total if total else 100.0

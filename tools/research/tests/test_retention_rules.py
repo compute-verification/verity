@@ -7,6 +7,7 @@ import fcntl
 import itertools
 import json
 import os
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -96,7 +97,23 @@ class Scripted:
         return {p: r for p, r in a.items() if p in patterns}
 
 
+QUIET = "2031-01-01T00:00:00Z free GPUs 7/8, kept free -, waiters -, timed False, window waiting False, backfill False\n"
+UNITS = Path(RR.__file__).parent / "pods/nebius"
+
+
+def status(root: Path, line: str = QUIET, age_s: float = 0) -> Path:
+    """Node 2's fill dir, its runner's status.txt written `age_s` before NOW."""
+    fill = root / "pouw/fill"
+    fill.mkdir(parents=True, exist_ok=True)
+    (fill / "status.txt").write_text(line)
+    os.utime(fill / "status.txt", (T - age_s, T - age_s))
+    return fill
+
+
 def run_gc(root: Path, **kw) -> dict:
+    """R.gc on node 2 by default, whose fill runner is quiet (a fresh status) unless the test made pouw/fill or chose the node."""
+    if "node" not in kw and not (root / "pouw/fill").exists():
+        status(root)
     kw = {"now": clock, "usage": lambda _p: (100, 10, 90), "remote_check": lambda _a, _p: None, "in_use": lambda _p: None, "node": N2,
           "places": RR.Places(root), **kw}
     return R.gc(root, **kw)
@@ -182,8 +199,7 @@ def test_a_check_after_the_renames_that_fails_puts_everything_back_and_refuses(t
     plan = run_gc(root, live=Scripted({}, LivenessError("kubectl get pods exited 1: refused")), apply=True)
     assert a.exists() and b.exists() and os.listdir(root / "research/src/.trash") == []
     assert plan["refused"].startswith("can't establish what live work names after the renames (kubectl get pods exited 1: refused)")
-    assert {x["reason"] for x in plan["rules"]} == {"named after the rename: the check after the rename failed: kubectl get pods exited 1: "
-                                                   "refused"}
+    assert {x["reason"] for x in plan["rules"]} == {f"put back undecided: {plan['refused']}"}
 
 
 def test_liveness_it_cant_establish_refuses_before_any_deletion(tmp_path, monkeypatch, capsys):
@@ -258,7 +274,7 @@ def test_proofs_audit_trees_go_on_node_1_only_once_their_lean_audit_json_is_save
     plan = run_gc(root, node=N1, live=fake_live(tmp_path, root), save=no_remote, apply=True)
     assert c.exists() and acts(plan, root)[f"research/src/{c.name}"]["reason"] == (
         "its lean-audit.json is not saved, so it stays: no store remote is configured here")
-    plan = run_gc(root, node=N2, live=fake_live(tmp_path, root), save=save, apply=True)
+    plan = run_gc(root, live=fake_live(tmp_path, root), save=save, apply=True)
     assert c.exists() and acts(plan, root)[f"research/src/{c.name}"]["reason"].startswith(f"1 file(s) outside its commit, e.g. M {LA}")
 
 
@@ -295,7 +311,7 @@ def test_lean_dependencies_go_at_any_age_from_a_tree_that_stays_unless_something
     a = acts(plan, root)
     assert {a[f"research/src/{young.name}/{k}/.lake/packages"]["rule"] for k in RR.LAKE} == {"lean-deps"}
     assert a[f"research/src/{named.name}/{RR.LAKE[0]}/.lake/packages"]["reason"] == "named by proc:30(python)"
-    plan = run_gc(root, node=N2, live=fake_live(tmp_path, root), apply=True)
+    plan = run_gc(root, live=fake_live(tmp_path, root), apply=True)
     assert all((named / k / ".lake/packages").exists() for k in RR.LAKE), "node 1's rule only"
 
 
@@ -372,33 +388,124 @@ def test_a_record_wins_over_a_rule(tmp_path):
 
 # ---- refusals ---------------------------------------------------------------------------------------------------------------------------
 
-def test_node_2_refuses_in_a_timed_window_and_when_its_status_cant_be_read(tmp_path, monkeypatch, capsys):
+def test_node_2_runs_only_on_a_fresh_status_whose_first_line_is_quiet(tmp_path, monkeypatch, capsys):
     root = tmp_path / "ws"
     t = tree(root)
     fill = root / "pouw/fill"
+    unsure = "so a timed window can't be ruled out"
+
+    def refused(**kw) -> str:
+        plan = run_gc(root, live=fake_live(tmp_path, root), apply=True, node=N2, **kw)
+        assert plan["rules"] == [] and t.exists(), plan["rules"]
+        return plan["refused"]
+
+    assert refused().startswith(f"{fill} is missing on {N2}, {unsure}")
+    assert run_gc(root, live=fake_live(tmp_path, root), node=N1)["refused"] is None, "node 1 runs no timed windows"
     fill.mkdir(parents=True)
-    plan = run_gc(root, live=fake_live(tmp_path, root), apply=True)
-    assert plan["refused"].startswith(f"{fill}/status.txt can't be read") and plan["rules"] == [] and t.exists()
-    (fill / "status.txt").write_text("2031-01-01T00:00:00Z free GPUs 0/8, timed True, window waiting False\n")
-    assert run_gc(root, live=fake_live(tmp_path, root), apply=True)["refused"].startswith(f"{fill}/status.txt does not say timed False")
-    with pytest.raises(RR.Refused, match="does not say timed False"):
+    assert refused().startswith(f"{fill}/status.txt can't be read")
+    for line, age_s in ((QUIET, 61), (QUIET.replace("00:00:00Z", "23:58:59Z").replace("2031-01-01", "2030-12-31"), 0),
+                        (QUIET.replace("00:00:00Z", "00:00:05Z"), 0), (QUIET, -5)):
+        status(root, line, age_s)
+        why = refused()
+        assert "not both within the last 60 s" in why and unsure in why, (line, age_s)
+    status(root, "free GPUs 7/8, timed False, window waiting False\n")
+    assert refused().startswith(f"{fill}/status.txt's first line carries no time")
+    for line in (QUIET.replace("timed False", "timed True"), QUIET.replace("waiting False", "waiting True"),
+                 "2031-01-01T00:00:00Z free GPUs 7/8\nwas timed False, window waiting False\n"):
+        status(root, line)
+        assert refused().startswith(f"{fill}/status.txt does not say `timed False, window waiting False`"), line
+    with pytest.raises(RR.Refused, match="does not say `timed False"):
         R.report(root, now=clock, usage=lambda _p: (100, 10, 90), node=N2)
     monkeypatch.setattr(R, "DEFAULT_JOBS_DIRS", ())
     out = tmp_path / "retention/dry-run.json"
     assert research_main(["retention", "gc", "--root", str(root), "--node", N2, "--out", str(out)]) == 3
-    assert "refused: " in capsys.readouterr().err and json.loads(out.read_text())["refused"].startswith(f"{fill}/status.txt does not")
-    assert research_main(["retention", "report", "--root", str(root), "--json"]) == 3
-    assert json.loads(capsys.readouterr().out) == {"schema": R.REPORT_SCHEMA, "refused": json.loads(out.read_text())["refused"]}
-    (fill / "status.txt").write_text("2031-01-01T00:00:00Z free GPUs 7/8, timed False, window waiting False\n")
+    assert "refused: " in capsys.readouterr().err and "status.txt" in json.loads(out.read_text())["refused"]
+    assert research_main(["retention", "report", "--root", str(root), "--node", N2, "--json"]) == 3
+    assert json.loads(capsys.readouterr().out)["refused"].startswith(f"{fill}/status.txt")
+    status(root, QUIET, 59)
+    assert run_gc(root, live=fake_live(tmp_path, root), apply=True)["refused"] is None and not t.exists()
+
+
+def test_node_2_refuses_from_15_min_before_a_booked_window_until_it_ends(tmp_path):
+    """fill/windows books windows without a GPU lease (node 2's merge checks), which the status never shows; the gc timer's
+    06:30 can be a window's first second."""
+    root = tmp_path / "ws"
+    t = tree(root)
+    fill = status(root)
+    for booking in ("2030-12-31T23:55Z 10 # merge checks off node 2 until 00:05Z: no GPU booking",
+                    "2031-01-01T00:00:00Z # 30 min by default", "2031-01-01T00:15Z 190 # circuits TP8, all 8 GPUs",
+                    "2031-01-01T00:00:00+00:00 1", "2031-01-01T00:00 5 # no zone: UTC", "tomorrow 30 # can't parse"):
+        (fill / "windows").write_text(f"# old\n\n2030-12-30T06:30Z 190\n{booking}\n")
+        why = run_gc(root, live=fake_live(tmp_path, root), apply=True)["refused"]
+        assert t.exists() and why and ("has a line gc can't read" in why and "tomorrow 30" in why if "tomorrow" in booking else
+                                       f"books {booking.strip()!r}: nothing runs on this node from 15 min before" in why), why
+    (fill / "windows").write_text("2030-12-31T23:50Z 10\n2031-01-01T00:16Z 60\n")
+    assert run_gc(root, live=fake_live(tmp_path, root), apply=True)["refused"] is None and not t.exists()
+
+
+@pytest.mark.parametrize("unit", ["vy-retention-gc@.service", "vy-retention-dry-run@.service"])
+def test_the_units_start_on_node_2_only_on_a_fresh_status_whose_first_line_is_quiet(tmp_path, unit):
+    """The ExecCondition, run by /bin/sh with node 2's fill dir moved to tmp: no `$` (systemd would expand it), and a status
+    dated 2100 stands for a fresh one, since `find -mmin -1` takes a future mtime and the test reads no clock."""
+    [cond] = re.findall(r"^ExecCondition=/bin/sh -c '(.*)'$", (UNITS / unit).read_text(), re.M)
+    fill = tmp_path / "fill"
+    assert "$" not in cond
+
+    def starts(node: str) -> bool:
+        return subprocess.run(["/bin/sh", "-c", cond.replace("/workspace/pouw/fill", str(fill)).replace("%i", node)]).returncode == 0
+
+    assert not starts(N2) and starts(N1)
+    fill.mkdir()
+    for line, mtime, ok in ((QUIET, 0, False), (QUIET.replace("timed False", "timed True"), 4102444800, False),
+                            ("t\n" + QUIET, 4102444800, False), (QUIET, 4102444800, True)):
+        (fill / "status.txt").write_text(line)
+        os.utime(fill / "status.txt", (mtime, mtime))
+        assert starts(N2) is ok and starts(N1), (line, mtime)
+
+
+def test_a_window_seen_mid_pass_stops_the_next_deletion_and_puts_back_what_is_aside(tmp_path, monkeypatch):
+    """The guard is read again after report's walk, before the records pass and before every deletion: the rules', the
+    trash's, and the records'."""
+    root = tmp_path / "ws"
+    a, b = tree(root), tree(root)
+    (root / "research/src/.trash/old-1").mkdir(parents=True)
+    fill = status(root)
+    log = RR.Log(tmp_path / "deletions.jsonl", N2, "t", clock)
 
     def window_opens():
-        (fill / "status.txt").write_text("2031-01-01T00:00:00Z free GPUs 0/8, timed True, window waiting False\n")
+        status(root, QUIET.replace("timed False", "timed True"))
         return {}
 
-    plan = run_gc(root, live=Scripted(window_opens), apply=True)
-    assert plan["refused"].endswith("(it changed during this pass: nothing deleted)") and t.exists()
-    (fill / "status.txt").write_text("2031-01-01T00:00:00Z free GPUs 7/8, timed False, window waiting False\n")
-    assert run_gc(root, live=fake_live(tmp_path, root), apply=True)["refused"] is None and not t.exists()
+    plan = run_gc(root, live=Scripted({}, window_opens), apply=True, log=log)
+    assert a.exists() and b.exists() and os.listdir(root / "research/src/.trash") == [], "deleted nothing more, put both back"
+    assert plan["refused"].endswith("(seen during the pass: what is renamed aside goes back, and nothing more is deleted)")
+    assert [(x["action"], x["reason"].split(":")[0]) for x in lines(log.path)] == [
+        ("deleted", "an interrupted pass left it, and nothing live names it"), ("kept", "put back undecided"),
+        ("kept", "put back undecided")]
+
+    status(root)
+    rec = root / "data/old"
+    rec.mkdir(parents=True)
+    R.keep(rec, root=root, owner="@infra", expires="2030-01-01T00:00:00Z", priority="low", regenerate="make it", now=clock, node=N2)
+
+    def in_use(_p):
+        status(root, QUIET, 61)
+        return None
+
+    plan = run_gc(root, live=Scripted({}, {}), apply=True, force=True, low_pct=0, in_use=in_use)
+    assert rec.exists() and plan["refused"].endswith("(seen during the records pass: nothing more is deleted)")
+    assert not a.exists() and not b.exists(), "the rules ran first"
+
+    orig = R.scan
+
+    def scan(*args, **kw):
+        status(root, QUIET.replace("waiting False", "waiting True"))
+        return orig(*args, **kw)
+
+    status(root)
+    monkeypatch.setattr(R, "scan", scan)
+    with pytest.raises(RR.Refused, match=r"window waiting False`.*\(seen after the walk\)$"):
+        R.report(root, now=clock, usage=lambda _p: (100, 10, 90), node=N2)
 
 
 def test_apply_needs_the_locks_and_refuses_while_another_pass_holds_one(tmp_path, monkeypatch, capsys):

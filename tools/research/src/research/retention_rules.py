@@ -20,8 +20,8 @@ job tree or a .lake/packages is renamed aside first (one rename, so nothing sees
 once more, put back if anything names it now (`stuck` when it can't be), and only then deleted. Scratch and trash are deleted where
 they are. A rule never deletes PROTECTED paths (pouw/gpu3-fp8, check's verdict caches lean-deps and circuit-check), a path a record
 covers (an explicit `research keep` wins), or one holding a record or a mount. `Sweep.run` raises Refused when what live work names
-can't be established, after putting back whatever it renamed. Every decision about a path old enough for its rule goes to the
-deletion log (`Log`).
+can't be established, or when node 2's guard (`timed`, read again before every deletion) says a timed window may run, after
+putting back whatever is still renamed aside. Every decision about a path old enough for its rule goes to the deletion log (`Log`).
 """
 from __future__ import annotations
 
@@ -50,6 +50,12 @@ LA = "backends/flock/verifier/lean/soundness/lean-audit.json"
 LOG_SCHEMA = "research/retention-log/v1"
 LOCKS = (Path("/run/lock/vy-retention-gc.lock"), Path("/run/lock/resource-steward-sweep.lock"))
 TS = "%Y-%m-%dT%H:%M:%SZ"
+TIMED_NODES = frozenset({"vy-nebius-2"})
+QUIET = "timed False, window waiting False"
+STAMP = re.compile(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) ")
+FRESH = timedelta(seconds=60)
+SKEW_S = 2                               # a status written while `now` was read
+LEAD = timedelta(minutes=15)
 
 
 class Refused(RuntimeError):
@@ -129,18 +135,62 @@ class Places:
                    protected + (cache / "lean-deps", cache / "circuit-check"))
 
 
-def timed(places: Places) -> str | None:
-    """Why nothing may run here now, else None: where pouw/fill exists (node 2), its status.txt must say `timed False`."""
+def timed(places: Places, node: str, now: datetime) -> str | None:
+    """Why nothing may run on `node` now, else None. On node 2 (TIMED_NODES) the fill runner's pouw/fill/status.txt must exist,
+    be written less than FRESH ago and stamped no later than now (the runner rewrites it every 10 s, so an older one is a stopped
+    runner's), and say QUIET on its first line, as dispatch.py's n2_room reads it; and no booking in pouw/fill/windows may run now
+    or start within LEAD (a booking without a GPU lease never shows in the status)."""
+    if node not in TIMED_NODES:
+        return None
+    st, t = places.fill / "status.txt", now.timestamp()
+    unsure = "so a timed window can't be ruled out: nothing runs on this node until the fill runner writes a fresh status"
     if not places.fill.is_dir():
-        return None
-    st = places.fill / "status.txt"
+        return f"{places.fill} is missing on {node}, {unsure}"
     try:
-        text = st.read_text(errors="replace")
+        written = os.stat(st).st_mtime
+        with open(st, errors="replace") as f:
+            first = f.readline().strip()
     except OSError as e:
-        return f"{st} can't be read ({e.strerror or e}), so a timed window can't be ruled out: run again once it says timed False"
-    if "timed False" in text:
-        return None
-    return f"{st} does not say timed False (a timed window or a cutover): nothing runs on this node until it does"
+        return f"{st} can't be read ({e.strerror or e}), {unsure}"
+    if not (m := STAMP.match(first)):
+        return f"{st}'s first line carries no time, {unsure}"
+    fresh = FRESH.total_seconds()
+    if not all(-SKEW_S <= t - x < fresh for x in (written, datetime.strptime(m[1], TS).replace(tzinfo=timezone.utc).timestamp())):
+        return (f"{st} was written at {_fmt(datetime.fromtimestamp(written, timezone.utc))} and stamped {m[1]}, and it is "
+                f"{_fmt(now)}: not both within the last {fresh:.0f} s, {unsure}")
+    if QUIET not in first:
+        return f"{st} does not say `{QUIET}` (a timed window runs or waits, or a cutover): nothing runs on this node until it does"
+    try:
+        bookings = booked(places.fill / "windows")
+    except OSError as e:
+        return f"{places.fill / 'windows'} can't be read ({e.strerror or e}), so a booking can't be ruled out"
+    for start, end, line in bookings:
+        if start is None:
+            return f"{places.fill / 'windows'} has a line gc can't read ({line!r}), so a booking can't be ruled out: fix or remove it"
+        if start - LEAD.total_seconds() <= t < end:
+            return (f"{places.fill / 'windows'} books {line!r}: nothing runs on this node from {LEAD.total_seconds() / 60:.0f} min "
+                    "before a booking until it ends")
+    return None
+
+
+def booked(path: Path) -> list[tuple[float | None, float, str]]:
+    """(start, end, line) of each booking in a fill windows file, read as fill_runner.windows() reads it (a time without a zone is
+    UTC; 30 min when no length is given); start None for a line that doesn't parse. OSError other than a missing file passes."""
+    try:
+        lines = path.read_text().splitlines()
+    except FileNotFoundError:
+        return []
+    out: list[tuple[float | None, float, str]] = []
+    for line in lines:
+        if not (f := line.split("#")[0].split()):
+            continue
+        try:
+            start = datetime.fromisoformat(f[0])
+            start = (start if start.tzinfo else start.replace(tzinfo=timezone.utc)).timestamp()
+            out.append((start, start + 60 * float(f[1] if len(f) > 1 else 30), line.strip()))
+        except ValueError:
+            out.append((None, 0.0, line.strip()))
+    return out
 
 
 def lock(paths: Sequence[Path] = LOCKS) -> list[IO[str]]:
@@ -392,13 +442,17 @@ class Sweep:
                 why = (c.reason if c.rule == "audit-tree" else DELETES[c.rule])
                 self._add(Act(c.path, c.rule, "delete", why, c.files, c.bytes, self._age(c.stamp)))
             return self.acts
-        if going and (why := timed(self.places)):
-            raise Refused(f"{why} (it changed during this pass: nothing deleted)")
-        for c in [c for c in going if c.rule == "trash"]:
-            self._remove(c, c.path)
-        moved = self._rename([c for c in going if c.rule in ("src-tree", "audit-tree", "lean-deps", "jobs-src")])
-        scratch_c = [c for c in going if c.rule == "check-scratch"]
-        self._recheck(moved, scratch_c, jt is not None)
+        self._pending: list[_Cand] = []
+        try:
+            for c in [c for c in going if c.rule == "trash"]:
+                self._quiet()
+                self._remove(c, c.path)
+            self._quiet()
+            self._rename([c for c in going if c.rule in ("src-tree", "audit-tree", "lean-deps", "jobs-src")])
+            self._recheck([c for c in going if c.rule == "check-scratch"], jt is not None)
+        except Refused as e:
+            self._undo(f"put back undecided: {e}")
+            raise
         return self.acts
 
     # ---- the steps --------------------------------------------------------------------------------------------------------------------
@@ -481,30 +535,32 @@ class Sweep:
             c.reason = f"its lean-audit.json is saved as {art}, and nothing live names its commit"
         return audit
 
-    def _rename(self, cands: list[_Cand]) -> list[_Cand]:
-        pl, stamp, moved = self.places, int(self.now().timestamp()), []
+    def _quiet(self) -> None:
+        if why := timed(self.places, self.node, self.now()):
+            raise Refused(f"{why} (seen during the pass: what is renamed aside goes back, and nothing more is deleted)")
+
+    def _rename(self, cands: list[_Cand]) -> None:
+        pl, stamp = self.places, int(self.now().timestamp())
         self.renamed_at = float(stamp)
         for c in cands:
             c.trash = (c.path.with_name(f"packages.rs-trash-{stamp}") if c.rule == "lean-deps" else
                        pl.jobs / ".trash" / c.path.name if c.rule == "jobs-src" else pl.src / ".trash" / f"{c.path.name}-{stamp}")
+            self._pending.append(c)
             try:
                 c.trash.parent.mkdir(exist_ok=True)
                 os.rename(c.path, c.trash)
             except OSError as e:
+                self._pending.remove(c)
                 self._add(Act(c.path, c.rule, "keep", f"the rename aside failed: {e.strerror or e}", age_h=self._age(c.stamp)))
-                continue
-            moved.append(c)
-        return moved
 
-    def _recheck(self, moved: list[_Cand], scratch: list[_Cand], jobs: bool) -> None:
+    def _recheck(self, scratch: list[_Cand], jobs: bool) -> None:
+        moved = list(self._pending)
         if not moved and not scratch:
             return
         try:
             named = self.live.names([p for c in moved for p in c.patterns] + [str(c.path) for c in scratch])
             jt = JobTrees(self.places.jobs, live_pods(self.live.kube)) if jobs and any(c.rule == "jobs-src" for c in moved) else None
         except LivenessError as e:
-            for c in moved:
-                self._put_back(c, f"the check after the rename failed: {e}")
             raise Refused(f"can't establish what live work names after the renames ({e}): what was renamed is put back, and "
                           "nothing else deleted") from None
         for c in moved:
@@ -512,27 +568,40 @@ class Sweep:
             if c.rule == "jobs-src" and jt is not None and (held := jt.held(c.path.name, since=self.renamed_at)):
                 refs.append(held)
             if refs:
-                self._put_back(c, _refs(refs))
+                self._put_back(c, f"named after the rename: {_refs(refs)}")
             else:
+                self._quiet()
                 self._remove(c, c.trash)
         for c in scratch:
             if refs := named.get(str(c.path), []):
                 self._add(Act(c.path, c.rule, "keep", f"named by {_refs(refs)}", age_h=self._age(c.stamp)))
             else:
+                self._quiet()
                 self._remove(c, c.path)
 
+    def _undo(self, why: str) -> None:
+        """Put back every candidate still renamed aside (one appended just before its rename may not be)."""
+        for c in list(self._pending):
+            if c.trash is not None and os.path.lexists(c.trash):
+                self._put_back(c, why)
+            else:
+                self._pending.remove(c)
+
     def _put_back(self, c: _Cand, why: str) -> None:
+        self._pending.remove(c)
         try:
             if os.path.lexists(c.path):
                 raise FileExistsError(f"a new {c.path} is there")
             os.rename(c.trash, c.path)
         except OSError as e:
-            self._add(Act(c.path, c.rule, "stuck", f"named after the rename ({why}), and it can't be put back from {c.trash}: {e}",
-                          c.files, c.bytes, self._age(c.stamp)))
+            self._add(Act(c.path, c.rule, "stuck", f"{why}, and it can't be put back from {c.trash}: {e}", c.files, c.bytes,
+                          self._age(c.stamp)))
             return
-        self._add(Act(c.path, c.rule, "keep", f"named after the rename: {why}", age_h=self._age(c.stamp)))
+        self._add(Act(c.path, c.rule, "keep", why, age_h=self._age(c.stamp)))
 
     def _remove(self, c: _Cand, where: Path) -> None:
+        if c in self._pending:
+            self._pending.remove(c)
         try:
             shutil.rmtree(where)
             err = None
@@ -579,5 +648,5 @@ def store_saver(store_root: str | None, node: str, by: str | None) -> Callable[[
     return save
 
 
-__all__ = ["Act", "LA", "LAKE", "LOCKS", "LOG_SCHEMA", "Log", "NODE1", "Places", "RULES", "Refused", "Rule", "RuleSet", "SaveError",
-           "Sweep", "inventory", "lock", "newest", "store_saver", "timed"]
+__all__ = ["Act", "FRESH", "LA", "LAKE", "LEAD", "LOCKS", "LOG_SCHEMA", "Log", "NODE1", "Places", "QUIET", "RULES", "Refused", "Rule",
+           "RuleSet", "SaveError", "Sweep", "TIMED_NODES", "booked", "inventory", "lock", "newest", "store_saver", "timed"]

@@ -5,7 +5,9 @@
 # The store's remote is store.pod.toml's (installed beside the package), from the variables it names, which the optional
 # /etc/vy-research/store.env holds (root 0600: R2_ENDPOINT, R2_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY). Without
 # them an audit tree's lean-audit.json can't be preserved, so the tree stays, and no preserved path re-verifies.
-# Where /workspace/pouw/fill exists (node 2) it starts only when its status says `timed False`, as the steward's sweep did.
+# On vy-nebius-2 it starts only when the fill runner wrote its status.txt in the last minute and the first line says
+# `timed False, window waiting False` (as dispatch.py's n2_room reads it); gc itself also refuses from 15 min before a
+# booking in fill/windows until it ends, and checks all of it again before each deletion.
 # Exit 3 (refused: what live work names can't be established, a lock is held, a timed window opened during the pass) is retried
 # in 20 min; 1 (a deletion failed or a path is stuck) and 2 (usage) are not: the log and the journal name the path.
 [Unit]
@@ -21,7 +23,7 @@ TimeoutStartSec=3h
 Environment=PYTHONPATH=/usr/local/lib/vy-research PYTHONDONTWRITEBYTECODE=1
 Environment=RESEARCH_STORE_CONFIG=/usr/local/lib/vy-research/store.pod.toml
 EnvironmentFile=-/etc/vy-research/store.env
-ExecCondition=/bin/sh -c 'test ! -d /workspace/pouw/fill || grep -qs "timed False" /workspace/pouw/fill/status.txt'
+ExecCondition=/bin/sh -c 'test %i != vy-nebius-2 || { find /workspace/pouw/fill/status.txt -mmin -1 | grep -q . && head -n 1 /workspace/pouw/fill/status.txt | grep -q "timed False, window waiting False"; }'
 ExecStart=/usr/bin/python3 -m research retention gc --node %i --apply --by vy-retention-gc@%i --out /workspace/research/retention/gc.json
 Restart=on-failure
 RestartSec=20min
