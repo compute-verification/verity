@@ -560,6 +560,8 @@ class Sweep:
                 return keep(f"can't tell what it holds besides its commit: {e}")
             if extra == [f"M {LA}"] and self.rules.applies("audit-tree"):
                 rule, reason = "audit-tree", "would save its lean-audit.json to the store, then delete it"
+            elif made := [x for x in extra if x.startswith(("HEAD at ", "commit ", "stash@{"))]:
+                return keep(f"work committed or stashed in it, e.g. {', '.join(made[:3])}: its owner decides")
             elif extra:
                 return keep(f"{len(extra)} file(s) outside its commit, e.g. {', '.join(extra[:3])}: they may be a run's output, so "
                             "its owner decides")

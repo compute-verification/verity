@@ -331,10 +331,14 @@ def unreadable(tree: Path) -> str | None:
     return None
 
 
-def outside_commit(tree: Path | str, bare: Path | str) -> list[str]:
-    """What `tree` holds besides its commit's files (module docstring): [] when nothing, each extra as a path, a changed tracked file
-    as `<git status code> <path>` (with .git) or `changed <path>` (without); Unknown when it can't tell."""
+def outside_commit(tree: Path | str, bare: Path | str, commit: str | None = None) -> list[str]:
+    """What `tree`, a checkout of `commit` (default its name), holds besides that commit's files (module docstring): [] when nothing,
+    each extra as a path, a changed tracked file as `<git status code> <path>` (with .git) or `changed <path>` (without), and with
+    .git, work committed or stashed there: `HEAD at <sha>` when HEAD moved, `stash@{n}: ...`, and `commit <sha>` for each commit
+    HEAD, a local branch or a reflog reaches that neither the shipped commit nor the clone's remote-tracking refs (the bare repo's
+    branches) do; Unknown when it can't tell."""
     tree = Path(tree)
+    commit = commit or tree.name
     try:
         reg = {v for k, v in _load(tree / "fixtures/artifacts.json").items() if k.startswith("art:") and isinstance(v, str)}
     except AttributeError:
@@ -361,7 +365,13 @@ def outside_commit(tree: Path | str, bare: Path | str) -> list[str]:
         raise Unknown(f"can't walk it: {e.strerror or e}") from None
     extra: list[str] = []
     if (tree / ".git").is_dir():
-        out = _git_ok(["-C", str(tree), "status", "--porcelain", "--ignored", "-z", "--untracked-files=normal"], tree, "git status")
+        g = ["-C", str(tree)]
+        if (head := _git_ok([*g, "rev-parse", "HEAD"], tree, "git rev-parse HEAD").decode().strip()) != commit:
+            extra.append(f"HEAD at {head}")
+        extra += _git_ok([*g, "stash", "list"], tree, "git stash list").decode(errors="replace").splitlines()
+        made = _git_ok([*g, "rev-list", "HEAD", "--branches", "--reflog", "--not", "--remotes", commit, "--"], tree, "git rev-list")
+        extra += [f"commit {c}" for c in made.decode().split()]
+        out = _git_ok([*g, "status", "--porcelain", "--ignored", "-z", "--untracked-files=normal"], tree, "git status")
         entries = iter(out.split(b"\0"))
         for e in entries:
             if not e:
@@ -376,7 +386,7 @@ def outside_commit(tree: Path | str, bare: Path | str) -> list[str]:
                 extra.append(f"{code.strip()} {rel}")
         return extra
     try:
-        ls = _git_ok(["--git-dir", str(bare), "ls-tree", "-r", "--name-only", "-z", tree.name], tree, "git ls-tree")
+        ls = _git_ok(["--git-dir", str(bare), "ls-tree", "-r", "--name-only", "-z", commit], tree, "git ls-tree")
     except Unknown as e:
         raise Unknown(f"no .git, and the bare repo can't list the commit ({e})") from None
     tracked = {x.decode(errors="replace") for x in ls.split(b"\0") if x}

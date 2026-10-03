@@ -237,7 +237,7 @@ def git(cwd: Path, *args: str) -> str:
 
 
 def repo(tmp_path: Path, files: dict[str, str] | None = None) -> tuple[Path, str]:
-    """A committed checkout (with .gitignore hiding results/ and .venv/), and its commit."""
+    """A committed checkout named by its commit (with .gitignore hiding results/ and .venv/), and that commit."""
     d = tmp_path / "checkout"
     d.mkdir()
     files = {".gitignore": "results/\n.venv/\n", LA: "{}\n", "fixtures/artifacts.json": json.dumps({"art:" + "1" * 64: "fixtures/big"}),
@@ -248,7 +248,8 @@ def repo(tmp_path: Path, files: dict[str, str] | None = None) -> tuple[Path, str
     git(d, "init", "-q")
     git(d, "add", "-A")
     git(d, "commit", "-qm", "c")
-    return d, git(d, "rev-parse", "HEAD")
+    sha = git(d, "rev-parse", "HEAD")
+    return d.rename(tmp_path / sha), sha
 
 
 def test_a_checkout_holds_untracked_ignored_and_changed_files_but_never_caches_or_registered_fixtures(tmp_path):
@@ -288,6 +289,34 @@ def test_a_tree_shipped_without_git_is_compared_with_the_bare_repos_commit_and_i
         outside_commit(tree.rename(tmp_path / "src" / ("0" * 40)), bare)
 
 
+def test_work_committed_or_stashed_in_a_checkout_is_outside_its_commit_and_the_bare_repos_branches_are_not(tmp_path):
+    """A git-shipped tree is a `clone --shared` of the bare repo detached at its commit (remote._git_ship_script), so the bare
+    repo's branches arrive as remote-tracking refs. An agent's commit there leaves the tree clean against HEAD; a stash too."""
+    d, sha = repo(tmp_path)
+    git(d, "checkout", "-qb", "other")
+    (d / "new.md").write_text("x\n")
+    git(d, "add", "new.md")
+    git(d, "commit", "-qm", "other")
+    bare = tmp_path / "verity.git"
+    git(tmp_path, "clone", "-q", "--bare", str(d), str(bare))
+    tree = tmp_path / "src" / sha
+    git(tmp_path, "clone", "-q", "--shared", "--no-checkout", str(bare), str(tree))
+    git(tree, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", sha)
+    git(tree, "branch", "mine", "origin/other")
+    assert outside_commit(tree, bare) == [], "the bare repo has every commit its branches reach"
+    (tree / "notes.md").write_text("an agent's work\n")
+    git(tree, "add", "notes.md")
+    git(tree, "commit", "-qm", "work")
+    work = git(tree, "rev-parse", "HEAD")
+    assert outside_commit(tree, bare) == [f"HEAD at {work}", f"commit {work}"]
+    git(tree, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", sha)
+    assert outside_commit(tree, bare) == [f"commit {work}"], "left behind, but in HEAD's reflog"
+    (tree / "README.md").write_text("edited\n")
+    git(tree, "stash", "-q")
+    out = outside_commit(tree, bare)
+    assert out[0].startswith("stash@{0}: WIP on") and f"commit {work}" in out and all(x.startswith("commit ") for x in out[1:])
+
+
 @pytest.mark.skipif(os.geteuid() == 0, reason="root reads every directory")
 def test_what_git_cant_read_as_the_owner_or_warns_about_is_unknown_never_nothing(tmp_path, monkeypatch):
     """As root, gc runs git as the tree's owner: about a directory only root can read, git warns `could not open directory`,
@@ -316,7 +345,7 @@ def test_what_git_cant_read_as_the_owner_or_warns_about_is_unknown_never_nothing
     finally:
         os.chmod(d / ".venv", 0o755)
     monkeypatch.setattr(L, "_git", lambda args, _owner: subprocess.CompletedProcess(args, 128, b"", b""))
-    with pytest.raises(Unknown, match="^git status exited 128$"):
+    with pytest.raises(Unknown, match="^git rev-parse HEAD exited 128$"):
         outside_commit(d, tmp_path / "absent.git")
 
 

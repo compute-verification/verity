@@ -431,6 +431,22 @@ def test_a_tree_holding_a_runs_output_waits_for_its_owner_and_an_unpreserved_run
     assert not any(a["path"].startswith("research/src") for a in plan["actions"]), "the rules decide source trees, not the records"
 
 
+def test_a_tree_with_work_committed_or_stashed_in_it_waits_for_its_owner(tmp_path):
+    root = tmp_path / "ws"
+    committed, stashed = tree(root), tree(root)
+    (committed / "notes.md").write_text("an agent's work\n")
+    git(committed, "add", "notes.md")
+    git(committed, "commit", "-qm", "work")
+    (stashed / "README.md").write_text("edited\n")
+    git(stashed, "stash", "-q")
+    a = acts(run_gc(root, node=N1, live=Scripted({}), apply=True), root)
+    assert committed.exists() and stashed.exists()
+    head = git(committed, "rev-parse", "HEAD")
+    assert a[f"research/src/{committed.name}"]["reason"] == f"work committed or stashed in it, e.g. HEAD at {head}, commit {head}: its owner decides"
+    assert re.fullmatch(r"work committed or stashed in it, e\.g\. stash@\{0\}: WIP on .*: its owner decides",
+                        a[f"research/src/{stashed.name}"]["reason"])
+
+
 @pytest.mark.skipif(os.geteuid() == 0, reason="root reads every directory")
 def test_a_tree_git_cant_fully_read_is_kept_and_the_log_says_why(tmp_path):
     root = tmp_path / "ws"
