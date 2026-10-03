@@ -422,6 +422,30 @@ def test_the_tp_commit_takes_its_lease_before_the_device_and_gives_it_back_only_
     assert 'self.run_gpu("commit.tp_commit", to_k' in Path(TPL.__file__).parents[1].joinpath("row_tp.py").read_text()
 
 
+@pytest.mark.parametrize("item,leased,mode", [(None, False, "device"), (None, True, "device"), ("host", False, "host"),
+                                              ("device-checked", True, "device-checked")])
+def test_a_tp_commit_hashes_its_weights_on_the_device_unless_the_item_says_otherwise(tmp_path, monkeypatch, item, leased, mode):
+    from verity_vllm.pipeline import row_records as R
+    t = _tp_row(tmp_path, TP_DENSE)
+    os.makedirs(f"{t.d}/commit")
+    Path(f"{t.d}/commit/summary.json").write_text('{"pass": true}')
+    t.hidden_so = str(tmp_path / "hidden.so")
+    Path(t.hidden_so).touch()
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("GPU_LEASE", "VERITY_LEASE", GL.WEIGHTS_HASH))}
+    env.update({GL.WEIGHTS_HASH: item} if item else {})
+    env.update({"GPU_LEASE": "/l/gpu-lease"} if leased else {})
+    t.child_env = env
+    for name, value in (("tp_rank_workload_digest", lambda bdir, r: f"wd{r}"), ("tp_manifest_complete", lambda d: True),
+                        ("applicable_taps", lambda man, ck: [])):
+        monkeypatch.setattr(R, name, value)
+    seen: list[dict] = []
+    monkeypatch.setattr(t, "manifest_global", lambda *a: 0)
+    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.append(dict(t.child_env)) or 0)
+    t.commit()
+    assert [e.get(GL.WEIGHTS_HASH) for e in seen] == [mode] and (GL.STARTED in seen[0]) == leased
+    assert f"weights hash {mode}" in Path(f"{t.d}/row.log").read_text() and "commit PASS" in Path(f"{t.d}/stages.txt").read_text()
+
+
 #: Every Match leg's stand-in, run as ``leg.py <command> ARGS...`` from the dir of the lease tool's stand-in: it notes what it saw
 #: (its devices, its lease, the lease locks it holds, whether each was free) in ``legs.jsonl`` and writes what the row reads after it.
 #: A capture or control ends as its exit would end its lease (every lock and the holder's stdin closed, the holder gone) before it

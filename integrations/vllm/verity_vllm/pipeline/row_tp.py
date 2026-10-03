@@ -13,8 +13,9 @@
 * **Commit**: the manifest over the W ranks, complete, then ``tp-commit`` with the windowed staging in its environment
   (``VERITY_WINDOW_MB`` / ``VERITY_WINDOW_SLOTS`` / ``VERITY_RETAIN``, and a config run's ``VERITY_STAGING_BOUNDED``: flags it does not have) and ``--require-fold-match``
   when a fold Match is on disk.  The ranks run the guarded-max FA2 tap build and every tap the manifest names the family of
-  (``row_records.applicable_taps``), as the single-GPU row does.  A leased item's ``tp-commit`` holds the task's GPUs from right
-  before its engine to its last run's finalize (``Row.run_gpu``, `pipeline.tp.lease`).
+  (``row_records.applicable_taps``), as the single-GPU row does.  Each rank's weights registration hashes on its GPU
+  (``VERITY_WEIGHTS_HASH=device`` unless the item sets ``host`` or ``device-checked``).  A leased item's ``tp-commit`` holds the task's
+  GPUs from right before its engine to its last run's finalize (``Row.run_gpu``, `pipeline.tp.lease`).
 
 A **config run** (``--config-run 1``, world 2 only: ``row.run_row`` refuses a larger one): the Build, the strict word check of its
 manifest over the W ranks' components, ONE instrumented ``tp-commit`` (``--pairs 1 --warmup 1 --only-arm instrumented --replay-k K``:
@@ -35,6 +36,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
+from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, stage_on
@@ -371,7 +373,9 @@ class TpRow(Row):
         self.child_env["VERITY_RETAIN"] = ck.retain
         if self.config_run:
             self.child_env["VERITY_STAGING_BOUNDED"] = "1"
-        self.log(f"commit staging: window_mb={ck.window_mb} slots={ck.window_slots} retain={ck.retain}{' bounded' if self.config_run else ''}")
+        self.child_env.setdefault(GL.WEIGHTS_HASH, "device")
+        self.log(f"commit staging: window_mb={ck.window_mb} slots={ck.window_slots} retain={ck.retain}{' bounded' if self.config_run else ''}; "
+                 f"weights hash {self.child_env[GL.WEIGHTS_HASH]}")
         rc_k = self.run_gpu("commit.tp_commit", to_k, f"{d}/commit.log", self.commit_cmd(taps))
         keys = ("PASS", "FAIL", "sampled replay", "match oracle", "weights pin", "cross-rank collectives", "fold-Match", "C2 population", "coverage")
         tagged = _grep(f"{d}/commit.log", lambda s: s.startswith("[tp2commit] ") and s[12:].lstrip(" ").startswith(keys))
