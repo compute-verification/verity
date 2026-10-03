@@ -194,6 +194,23 @@ def test_fill_runner_counts_a_queued_waiter_but_not_a_lease_that_holds_its_gpus_
                 stop_group(p)
 
 
+def test_fill_runner_runs_only_bare_and_one_per_node(tmp_path):
+    """`fill_runner.py --help` fell through to the runner and started a second one on node 2 (memory accounting's soak worker,
+    3 Oct 05:37Z): it adopted the running series job and launched the next on GPU 7. Only a bare `fill_runner.py` runs the
+    runner, and only while no other runner holds FILL_DIR/.runner.lock."""
+    fill = tmp_path / "fill"
+    env = {**os.environ, "FILL_DIR": str(fill), "GPU_LEASE_DIR": str(tmp_path / "gl")}
+    for argv, rc in ((["--help"], 0), (["-h"], 0), (["--once"], 1), (["status"], 1)):
+        r = subprocess.run([sys.executable, str(FILL_RUNNER), *argv], env=env, capture_output=True, text=True)
+        assert r.returncode == rc and "usage: fill_runner.py" in r.stdout + r.stderr, (argv, r)
+    assert not fill.exists()
+    fill.mkdir()
+    with open(fill / ".runner.lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        r = subprocess.run([sys.executable, str(FILL_RUNNER)], env=env, capture_output=True, text=True)
+    assert r.returncode == 1 and "another runner holds" in r.stderr and not (fill / "queue").exists(), r
+
+
 def stop_group(p: subprocess.Popen) -> None:
     """SIGTERM a process started with start_new_session and everything in its group. Terminating only the bash leaves the
     `sleep` it waits on (GPU_LEASE_POLL_S=3600) or the leased command orphaned for the length of that sleep."""
