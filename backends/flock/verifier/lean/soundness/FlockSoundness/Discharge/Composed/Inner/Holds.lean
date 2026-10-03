@@ -90,6 +90,17 @@ theorem setupH_mask {tags : Tags} {circuitFile publicFile : ByteArray} {coins : 
       first | exact hm_parse_check (by assumption) | exact hm_parseTyped_check (by assumption)
     exact ⟨hm_check_mask hc, rfl⟩
 
+
+/-- **The regions avoid the mask slot** (open, the setup's): at every link point, a region claim's `eq` weight vanishes on
+every mask-slot word. A region's subcube lies in the hm96 or output range whose slots it reads, and `HmRow.check` keeps
+that range's span apart from the mask range's word-aligned span. -/
+theorem setupH_regions_off_mask {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
+    {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
+    (_h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st)
+    (link : Fin 2 → Fin st.mPts → F128) (j : Fin (2 * st.regions.size)) (x : ℕ) (_hx : x ∈ maskSlotWords st) :
+    eqWord (regionPtOf st link j) x = 0 := by
+  sorry
+
 end Setup
 
 /-- **The mask slot's words are distinct and inside the witness**, its slot at least a word and inside the block. -/
@@ -649,6 +660,94 @@ theorem sHat_shat (st : Stmt) {M nMask : ℕ} (hm7 : 7 ≤ M) (w : Witness M) (h
   · intro x _
     rw [zWith_on st hm7 w hn u hnd x _ v rfl, castF_eq]
 
+theorem wordOf_bits {M : ℕ} (hm7 : 7 ≤ M) (zw : Witness M) (y : Fin (2 ^ (M - 7))) (v : Fin 128) :
+    zw (addr128 hm7 y v) = execArith.unpack (wordOf zw y.val) v := by
+  rw [wordOf, execArith_correct.unpack_pack]
+  show _ = dite _ _ _
+  rw [dite_eq_left (show 128 * y.val + v.val < 2 ^ M from (addr128 hm7 y v).isLt)]
+  rfl
+
+theorem recombine_sum {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
+    (A : Arith F K) (hA : A.Correct) {M : ℕ} (hm7 : 7 ≤ M) (z : Witness M) (f : Fin (2 ^ (M - 7)) → F)
+    (hz : ∀ y v, z (addr128 hm7 y v) = A.unpack (f y) v) (e : ℕ → F) (s : Fin 128 → F)
+    (hs : ∀ v, s v = ∑ y : Fin (2 ^ (M - 7)), e y.val * ((z (addr128 hm7 y v)).val : F)) (r : Fin 7 → F) :
+    recombine A s r = ∑ y : Fin (2 ^ (M - 7)), f y * Model.phi A r (e y.val) := by
+  classical
+  have hbits : ∀ u : Fin 128, (fun v => A.unpack (s v) u) =
+      ∑ y : Fin (2 ^ (M - 7)), A.unpack (e y.val) u • A.unpack (f y) := by
+    intro u
+    funext v
+    rw [hs v, ← unpackHom_apply A hA, map_sum]
+    simp only [unpackHom_apply, unpack_mul_bit A hA, hz, Finset.sum_apply, Pi.smul_apply, smul_eq_mul]
+    exact Finset.sum_congr rfl fun y _ => mul_comm _ _
+  have hpack : ∀ u : Fin 128, A.pack (fun v => A.unpack (s v) u) =
+      ∑ y : Fin (2 ^ (M - 7)), ((A.unpack (e y.val) u).val : F) * f y := by
+    intro u
+    rw [hbits u, ← packHom_apply A hA, map_sum]
+    simp only [packHom_apply, pack_smul_bit A hA, hA.pack_unpack]
+  unfold recombine Model.phi
+  simp only [hpack, Finset.mul_sum]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun y _ => Finset.sum_congr rfl fun u _ => by ring
+
+theorem sum_swap_mul {R : Type} [CommRing R] {n N : ℕ} (γ : Fin n → R) (f : ℕ → R) (φ : Fin n → ℕ → R) :
+    ∑ k, γ k * ∑ y : Fin N, f y.val * φ k y.val = ∑ y ∈ Finset.range N, f y * ∑ k, γ k * φ k y := by
+  rw [← Fin.sum_univ_eq_sum_range (fun y => f y * ∑ k, γ k * φ k y)]
+  simp only [Finset.mul_sum]
+  rw [Finset.sum_comm]
+  exact Finset.sum_congr rfl fun y _ => Finset.sum_congr rfl fun k _ => by ring
+
+section Tails
+
+variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2)
+
+theorem abTail (hm : st.m = Tz.S.m) (hk : st.c.kLog = Tz.S.kLog) (i : ℕ) (hi : i < Tz.S.m - 6) :
+    fOf (Lincheck.lcAbClaim Tz.S.m Tz.S.kLog (rhoF Tz st c r) (tsF Tz st c r) (c.rest.rPrime r)).x[i]! =
+      abX Tz st c r i := by
+  rw [← hm] at hi
+  rw [← hm, ← hk]
+  have hkm := Tz.S.hk
+  rw [← hm, ← hk] at hkm
+  unfold Lincheck.lcAbClaim abX lcT zcRho seqOf rhoF tsF
+  by_cases hlt : i < st.c.kLog - 6
+  · rw [ite_eq_left hlt, getElem!_pos _ i (by simp; omega), Array.getElem_append_left (by simp; omega),
+      Array.getElem_reverse, Array.getElem_ofFn, dif_pos (by omega)]
+    simp only [Array.size_ofFn]
+  · rw [ite_eq_right hlt, getElem!_pos _ i (by simp; omega), Array.getElem_append_right (by simp; omega),
+      Array.getElem_extract, Array.getElem_ofFn, dif_pos hi]
+    simp only [Array.size_reverse, Array.size_ofFn]
+    congr 2
+    apply Fin.ext
+    simp only
+    omega
+
+theorem cTail (hm : st.m = Tz.S.m) (i : ℕ) (hi : i < Tz.S.m - 6) :
+    fOf (rF Tz st c r)[i]! = zcReq Tz st c r i := by
+  rw [← hm] at hi
+  have h13 := Tz.hm
+  rw [← hm] at h13
+  unfold rF zcReq seqOf
+  by_cases hlt : i < 7
+  · rw [dite_eq_left hlt, getElem!_pos _ i (by simp [FlockLevel3.pinned_size]; omega),
+      Array.getElem_append_left (by simp [FlockLevel3.pinned_size]; omega)]
+    show _ = FlockLevel3.pinnedF ⟨i, hlt⟩
+    rw [FlockLevel3.pinnedF, getElem!_pos _ i (by simp [FlockLevel3.pinned_size]; omega)]
+  · rw [dite_eq_right hlt, getElem!_pos _ i (by simp [FlockLevel3.pinned_size]; omega),
+      Array.getElem_append_right (by simp [FlockLevel3.pinned_size]; omega), Array.getElem_ofFn, dif_pos (by omega)]
+    simp only [FlockLevel3.pinned_size]
+
+theorem claimX_region (k : ℕ) (hk2 : 2 ≤ k) (h : k - 2 < 2 * st.regions.size) (hm : st.m = Tz.S.m) (y : ℕ) :
+    Model.eqAt (claimX Tz st c r k) y = fOf (eqWord (regionPtOf st c.rest.link ⟨k - 2, h⟩) y) := by
+  have hlen : (regionPtOf st c.rest.link ⟨k - 2, h⟩).length = Tz.S.m - 7 := by
+    simp only [regionPtOf, List.length_drop, Array.length_toList, Refine.regionPoint_size, hm]
+  rw [RingSwitch.fOf_eqWord, hlen]
+  refine RingSwitch.eqAt_range _ (fun i => fOf (regionPtOf st c.rest.link ⟨k - 2, h⟩)[i]!) (fun j => ?_) y
+  rw [claimX, if_neg (by omega), if_neg (by omega), dif_pos h]
+  simp only [List.getD_eq_getElem?_getD, getElem!_def]
+  rfl
+
+end Tails
+
 end Glue
 
 variable {mPts n : ℕ} {Reg : Type}
@@ -720,31 +819,9 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
   have hm7 : 7 ≤ (tablesAtZK dj y₀ S R).S.m := by have := (tablesAtZK dj y₀ S R).hm; omega
   obtain ⟨hnd, hlt⟩ := maskSlotWords_ok y.x.st (setupH_mask y.x.h).2 (setupH_mask y.x.h).1
   rw [hmS] at hlt
-  rw [hv, hinner]
-  refine rows_honest (tablesAtZK dj y₀ S R) y.x.st c r (zWith y.x.st w ω.1) (ω.2.1.2.1 r) _ hE hmS hkS ?hw
-    (rF_ne_one _ _ c r (hc.2.2.2 r)) ?hA ?hB _ ?hs0 ?hs1 ?hk0 ?hL ?hT ((C.T c).tab.y1' w ω.1 ω.2.1.2.1 r)
-    (fun _ => rfl) hab htw' k
-  -- the executable statement's sizes are the table's, and the schedule's lane split
-  case hk0 =>
-    have := (tablesAtZK dj y₀ S R).hshape.2.2.1
-    have := (tablesAtZK dj y₀ S R).hmsch
-    omega
-  case hL =>
-    show 2 ^ (tablesAtZK dj y₀ S R).sch.level₀.logCols = _
-    have := (tablesAtZK dj y₀ S R).hshape.2.2.1
-    have := (tablesAtZK dj y₀ S R).hmsch
-    rw [Accounting.Schedule.level₀]
-    congr 1
-    omega
-  -- the prover's table `z = (w, u)` satisfies the statement
-  case hw => sorry
-  -- the clear `final_a`, `final_b` are the `a`, `b` claims at the zerocheck's coins
-  case hA =>
-    exact finalA_holds _ (six_le _) _ _ _ _ (fun i => by rw [aT, dite_eq_left i.isLt]) _ _ _
-  case hB =>
-    exact finalB_holds _ (six_le _) _ _ _ _ (fun i => by rw [bT, dite_eq_left i.isLt]) _ _ _
-  -- the masked claims' `ŝ` is the honest `shat` at the replay's claims, and the opening's target is `Σ_y f(y)·b(y)`
-  case hs0 =>
+  have hs0 : ∀ v : Fin 128, fOf (shArr (ZK.Table.View.pre (C.T c).tab ((C.T c).tab.view w ω)).1 (2 * r.val))[v.val]! = shat hm7
+      (RingSwitch.claimOf (tablesAtZK dj y₀ S R).S.m (Lincheck.lcAbClaim (tablesAtZK dj y₀ S R).S.m (tablesAtZK dj y₀ S R).S.kLog
+        (rhoF (tablesAtZK dj y₀ S R) y.x.st c r) (tsF (tablesAtZK dj y₀ S R) y.x.st c r) (c.rest.rPrime r))) (zWith y.x.st w ω.1) v := by
     intro v
     have h2r : 2 * r.val < Zk.RANK_POINTS := by have := r.isLt; simp only [Zk.RANK_POINTS]; omega
     have hcl : Lincheck.lcAbClaim (tablesAtZK dj y₀ S R).S.m (tablesAtZK dj y₀ S R).S.kLog
@@ -769,7 +846,8 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
     split
     · rfl
     · exact absurd h2r ‹_›
-  case hs1 =>
+  have hs1 : ∀ v : Fin 128, fOf (shArr (ZK.Table.View.pre (C.T c).tab ((C.T c).tab.view w ω)).1 (2 * r.val + 1))[v.val]! = shat hm7
+      (RingSwitch.claimOf (tablesAtZK dj y₀ S R).S.m (cClaim (tablesAtZK dj y₀ S R) y.x.st c r)) (zWith y.x.st w ω.1) v := by
     intro v
     have h2r : 2 * r.val + 1 < Zk.RANK_POINTS := by have := r.isLt; simp only [Zk.RANK_POINTS]; omega
     have hcl : cClaim (tablesAtZK dj y₀ S R) y.x.st c r = (claimsOf c.rest r)[1]! := rfl
@@ -788,6 +866,88 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
     split
     · rfl
     · exact absurd h2r ‹_›
-  case hT => sorry
+  rw [hv, hinner]
+  refine rows_honest (tablesAtZK dj y₀ S R) y.x.st c r (zWith y.x.st w ω.1) (ω.2.1.2.1 r) _ hE hmS hkS ?hw
+    (rF_ne_one _ _ c r (hc.2.2.2 r)) ?hA ?hB _ hs0 hs1 ?hk0 ?hL ?hT ((C.T c).tab.y1' w ω.1 ω.2.1.2.1 r)
+    (fun _ => rfl) hab htw' k
+  -- the executable statement's sizes are the table's, and the schedule's lane split
+  case hk0 =>
+    have := (tablesAtZK dj y₀ S R).hshape.2.2.1
+    have := (tablesAtZK dj y₀ S R).hmsch
+    omega
+  case hL =>
+    show 2 ^ (tablesAtZK dj y₀ S R).sch.level₀.logCols = _
+    have := (tablesAtZK dj y₀ S R).hshape.2.2.1
+    have := (tablesAtZK dj y₀ S R).hmsch
+    rw [Accounting.Schedule.level₀]
+    congr 1
+    omega
+  -- the prover's table `z = (w, u)` satisfies the statement
+  case hw => sorry
+  -- the clear `final_a`, `final_b` are the `a`, `b` claims at the zerocheck's coins
+  case hA =>
+    exact finalA_holds _ (six_le _) _ _ _ _ (fun i => by rw [aT, dite_eq_left i.isLt]) _ _ _
+  case hB =>
+    exact finalB_holds _ (six_le _) _ _ _ _ (fun i => by rw [bT, dite_eq_left i.isLt]) _ _ _
+  -- the masked claims' `ŝ` is the honest `shat` at the replay's claims, and the opening's target is `Σ_y f(y)·b(y)`
+  -- the opening's target is `Σ_y f(y)·b(y)`: ring switching claim by claim (`recombine_sum`)
+  case hT =>
+    have hrec : ∀ k : Fin (2 + 2 * y.x.st.regions.size),
+        recombine execArith (swAt (tablesAtZK dj y₀ S R) y.x.st c r (ZK.Table.View.pre (C.T c).tab ((C.T c).tab.view w ω)).1 k.val) (fun i => fOf (c.rest.rpp r k i)) =
+        ∑ y' : Fin (2 ^ ((tablesAtZK dj y₀ S R).S.m - 7)), wordOf (zWith y.x.st w ω.1) y'.val *
+          Model.phi execArith (fun i => fOf (c.rest.rpp r k i)) (Model.eqAt (claimX (tablesAtZK dj y₀ S R) y.x.st c r k.val) y'.val) := by
+      intro k
+      refine recombine_sum execArith execArith_correct hm7 _ _ (wordOf_bits hm7 (zWith y.x.st w ω.1)) _ _
+        (fun v => ?_) _
+      rcases k with ⟨k, hk⟩
+      by_cases h0 : k = 0
+      · subst h0
+        have h := hs0 v
+        rw [shArr, getElem!_pos _ v.val (by simp), Array.getElem_ofFn] at h
+        unfold swAt
+        rw [ite_eq_left rfl]
+        refine h.trans (Finset.sum_congr rfl fun y' _ => ?_)
+        congr 2
+        funext j
+        unfold claimX
+        rw [ite_eq_left rfl]
+        exact abTail _ _ c r hmS hkS (j.val + 1) (by omega)
+      by_cases h1 : k = 1
+      · subst h1
+        have h := hs1 v
+        rw [shArr, getElem!_pos _ v.val (by simp), Array.getElem_ofFn] at h
+        unfold swAt
+        rw [ite_eq_right h0, ite_eq_left rfl]
+        refine h.trans (Finset.sum_congr rfl fun y' _ => ?_)
+        congr 2
+        funext j
+        unfold claimX
+        rw [ite_eq_right h0, ite_eq_left rfl]
+        exact cTail _ _ c r hmS (j.val + 1) (by omega)
+      have h2 : k - 2 < 2 * y.x.st.regions.size := by omega
+      unfold swAt
+      rw [ite_eq_right h0, ite_eq_right h1]
+      show dite _ _ _ = _
+      rw [dite_eq_left h2]
+      refine (congrFun (congrFun hreg ⟨k - 2, h2⟩) v).symm.trans ?_
+      show (∑ x : Fin (2 ^ ((tablesAtZK dj y₀ S R).S.m - 7)), _) = _
+      refine Finset.sum_congr rfl fun x _ => ?_
+      rw [claimX_region _ _ c r k (by omega) h2 hmS]
+      by_cases hx : x.val ∈ maskSlotWords y.x.st
+      · have h0 := setupH_regions_off_mask y.x.h c.rest.link ⟨k - 2, h2⟩ x.val hx
+        rw [h0, fOf_zero, zero_mul]
+        show fOf (eqWord (regionPtOf y.x.st c.rest.link ⟨k - 2, h2⟩) x.val) * _ = 0
+        rw [h0, fOf_zero, zero_mul]
+      · refine congrArg (fOf (eqWord (regionPtOf y.x.st c.rest.link ⟨k - 2, h2⟩) x.val) * ·) ?_
+        have hz := zWith_off y.x.st hm7 w rfl ω.1 x v hx
+        rw [castF_eq]
+        unfold wordBit
+        rw [dite_eq_left (show 128 * x.val + v.val < 2 ^ _ from (addr128 hm7 x v).isLt)]
+        exact congrArg (fun b : ZMod 2 => ((b.val : ℕ) : FlockLevel3.GF128)) hz.symm
+    unfold openT
+    refine (Finset.sum_congr rfl fun k _ => congrArg (fOf (c.rest.rsGamma r k) * ·) (hrec k)).trans ?_
+    exact sum_swap_mul (fun k => fOf (c.rest.rsGamma r k)) (wordOf (zWith y.x.st w ω.1))
+      (fun k y' => Model.phi execArith (fun i => fOf (c.rest.rpp r k i))
+        (Model.eqAt (claimX (tablesAtZK dj y₀ S R) y.x.st c r k.val) y'))
 
 end FlockSoundness.Discharge.Composed
