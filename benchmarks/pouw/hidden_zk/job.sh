@@ -130,7 +130,7 @@ controls() {  # controls D O ROLE: the selftest build's cases, recorded for the 
   local D=$1 O=$2 role=$3 c rc
   mkdir -p "$D/rec"
   for c in $CASES; do
-    [ "$role" = tile ] && [ "$c" = public_input_claim_false ] && continue
+    [[ $role == tile* || $role == hidden* ]] && [ "$c" = public_input_claim_false ] && continue
     $TIME "$O/selftest-$c.time" bash -c "$(vlimit $PROVE_GB) exec $SBIN selftest --zk --instances $D/inst.bin \
       --circuit $D/circuit.txt --only $c --record-dir $D/rec" > "$O/selftest-$c.out" 2> "$O/selftest-$c.err"
     rc=$?
@@ -148,7 +148,7 @@ lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at
   local cmds=()
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tail -1)
   if [ -n "$s" ]; then
-    if [ "$role" = tile ]; then
+    if [[ $role == tile* || $role == hidden* ]]; then
       cmds+=("honest-own|$base --statement verity/flock-circuit --public $D/pub.bin --session $s")
     else
       cmds+=("honest-own|$base --statement verity/flock-circuit --public $D/pub.bin --public-inputs $D/public-inputs.bin --session $s"
@@ -160,7 +160,7 @@ lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at
     [ -d "$s" ] || continue
     case=$(basename "$s"); pub=$D/pub.bin own=$D/public-inputs.bin
     [ -e "$s/pub.bin" ] && pub=$s/pub.bin
-    if [ "$role" = tile ]; then own=""
+    if [[ $role == tile* || $role == hidden* ]]; then own=""
     elif [ "$case" = public_input_claim_false ]; then   # the verifier's file agreeing with the false claim
       own=$s/own.bin
       "$PY" -c "import sys; o = open(sys.argv[1], 'rb').read(); h, b = o.split(b'\n', 1); p = open(sys.argv[2], 'rb').read(); \

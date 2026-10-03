@@ -4,6 +4,8 @@ PoUW's rows (`leaves.statement_rows`) and, for a row unit, its anchors as public
     row_a  Pc4RowA_v1{K}: x (bf16, row-seg) -> A'_i's codes, scales, P_A,i (nvfp4-p, v2) and ok; public e, fa, fb
     row_b  Pc4RowB_v1{K}: x (bf16, v2) -> B~_j's codes, scales, P_B,j and ok; public e, fb, fa, g
     tile   Pc4Tile_v1{K,TM=1,TN=1}: an A row and a B row (nvfp4-p) -> C~ and U (one v2 run); no public input
+    tileTMxTN   the same over TM A rows and TN B rows
+    hidden[TMxTN]   Pc4TileHidden_v1{K,TM,TN}: the same rows -> the tile digest (its tile row)
 
 x is a seeded N(0, 1) row in BF16; a tile's rows are `pouw_rows_vectors`' seeded nvfp4-p rows. The anchors are the
 verifier's own (`TileAnchors.of` the scheme's seeds). Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under
@@ -93,20 +95,28 @@ def main() -> None:
         regs = [ta.regions(ROLE, i) for i in range(N)]
         for p in ports:
             rows[p] = np.array([r[p] for r in regs], dtype=np.uint16)
-    elif ROLE == "tile":
+    elif ROLE.startswith(("tile", "hidden")):
         V = _load("pouw_rows_vectors", ROOT / "protocols" / "pouw" / "tests" / "pouw_rows_vectors.py")
-        d = pc4.templates(K, (1, 1))["tile"]
+        hidden = ROLE.startswith("hidden")
+        tm, tn = map(int, ROLE.removeprefix("hidden" if hidden else "tile").split("x")) if "x" in ROLE else (1, 1)
+        rec["tile"] = [tm, tn]
+        d = pc4.templates(K, (tm, tn), hidden=hidden)["tile"]
         ports = {}
-        names = [p for p, _t in d.signature()[0]]
         bits = 16 * L.ROW_WORDS["nvfp4-p"](K)
-        in_rows = [("a", L.ROW_SCHEMA["nvfp4-p", ROLE_X], bits, [f"{p}[0]" for p in names if p in ("ac", "as", "pa")]),
-                   ("b", L.ROW_SCHEMA["nvfp4-p", ROLE_W], bits, [f"{p}[0]" for p in names if p in ("bc", "bs", "pb")])]
-        outs_ = [[SCHEMA_HM96_SHA512_ROW_V2, None]]
-        sr = {"out_row_ports": [2]}
-        rows = {r: np.array([V.words("nvfp4-p", V.inputs(f"hidden-zk-{K}-{r}-{i}", "nvfp4-p", K)) for i in range(N)],
-                            dtype=np.uint16) for r in ("a", "b")}
+        in_rows = [(f"{s}{r}", L.ROW_SCHEMA["nvfp4-p", role], bits, [f"{p}[{r}]" for p in ps])
+                   for s, role, ps, t in (("a", ROLE_X, ("ac", "as", "pa"), tm), ("b", ROLE_W, ("bc", "bs", "pb"), tn))
+                   for r in range(t)]
+        if hidden:
+            sr = L.statement_rows(pc4.PORTS["tile"], K, {p: t for ps, t in ((("ac", "as", "pa"), tm), (("bc", "bs", "pb"), tn))
+                                                          for p in ps})
+            outs_ = sr["row_schemas"][tm + tn:]
+        else:
+            outs_ = [[SCHEMA_HM96_SHA512_ROW_V2, None]]
+            sr = {"out_row_ports": [2]}
+        rows = {name: np.array([V.words("nvfp4-p", V.inputs(f"hidden-zk-{K}-{name}-{i}", "nvfp4-p", K)) for i in range(N)],
+                               dtype=np.uint16) for name, *_ in in_rows}
     else:
-        raise SystemExit(f"stage.py: ROLE is row_a, row_b or tile, not {ROLE!r}")
+        raise SystemExit(f"stage.py: ROLE is row_a, row_b, tile[TMxTN] or hidden[TMxTN], not {ROLE!r}")
     runs = sr.get("out_row_ports") or [1] * len(outs_)
     out_rows, at = [], 0
     for (s, _b), r in zip(outs_, runs):
