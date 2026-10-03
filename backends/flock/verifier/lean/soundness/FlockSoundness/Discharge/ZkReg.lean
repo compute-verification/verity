@@ -6,6 +6,7 @@ import FlockSoundness.Discharge.ZkReg.DefsH
 import FlockSoundness.Discharge.ZkReg.BindH
 import FlockSoundness.Discharge.ZkReg.CheckedH
 import FlockSoundness.Discharge.ZkReg.SoundH
+import FlockSoundness.Discharge.ZkReg.SoundHCustody
 
 /-!
 # One `--zk` sampled session with registered reads
@@ -16,5 +17,6 @@ check at an accepted outcome (`checked_of_accepts`). `Sound`: `zk_session_soundR
 
 At hidden outputs (`Stmt.setupHidden`): `DefsH`, the registered reads at setupHidden's drawn statement (`OwnReadsH`,
 `regPathsH`); `BindH`, the hidden-output `--zk` rows without `pub.tables = none` (`rsZHS`); `CheckedH`,
-`checked_of_acceptsH`; `SoundH`: `zk_session_soundHR`.
+`checked_of_acceptsH`; `SoundH`: `zk_session_soundHR`; `SoundHCustody`: `zk_session_soundHR_custody`, under
+`live-verifier`.
 -/
