@@ -16,8 +16,9 @@ piece is its own read of uniform bytes, so they are independent and uniform, and
 as `Rules::mask` writes its 64 bytes.
 
 A round of `n ≤ block` coins is the block's first `n` words (`CoinTree::open`), the rest of the block the `block - n` it
-does not open: `drLive block n`, through `blockDec`. The session's link points are round 0 of the session stream's first
-`2·m` words, point `k` the `k`-th run of `m` (`self.points = c.chunks(m)`): `dlLive block m`. Past `block` coins `open`
+does not open: `drLive block n`, through `blockDec` and its equivalence `blockEquiv`. The session's link points are
+round 0 of the session stream's first `2·m` words, point `k` the `k`-th run of `m` (`self.points = c.chunks(m)`):
+`dlLive block m`, through `ptsEquiv`. Past `block` coins `open`
 refuses, and the decoders are `none`: the round's coins are fresh in `liveTableC`, and the real run refuses there
 (`ZkTree.prR`).
 
@@ -34,11 +35,20 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- A block of the live coin tree: `block` coins. -/
 abbrev LiveBlk (block : ℕ) : Type := Fin block → 𝔽
 
+/-- A round's first `n` coins of a block of `block` and the rest, as the block. -/
+def blockEquiv {block n : ℕ} (h : n ≤ block) : (Fin n → 𝔽) × (Fin (block - n) → 𝔽) ≃ LiveBlk block :=
+  (Equiv.sumArrowEquivProdArrow (Fin n) (Fin (block - n)) 𝔽).symm.trans
+    (Equiv.arrowCongr (finSumFinEquiv.trans (finCongr (Nat.add_sub_cancel' h))) (Equiv.refl 𝔽))
+
+/-- The link points of `m` coordinates and the rest, as the block: point `k`'s coordinate `t` is word `k·m + t`. -/
+def ptsEquiv {block m : ℕ} (h : 2 * m ≤ block) : (Fin 2 → Fin m → 𝔽) × (Fin (block - 2 * m) → 𝔽) ≃ LiveBlk block :=
+  (Equiv.prodCongr ((Equiv.curry (Fin 2) (Fin m) 𝔽).symm.trans (Equiv.arrowCongr finProdFinEquiv (Equiv.refl 𝔽)))
+    (Equiv.refl _)).trans (blockEquiv h)
+
 /-- **A round's first `n` coins of a block of `block`, and the rest.** -/
 def blockDec {block n : ℕ} (h : n ≤ block) : Dec (LiveBlk block) (Fin n → 𝔽) where
   Rest := Fin (block - n) → 𝔽
-  e := (Equiv.sumArrowEquivProdArrow (Fin n) (Fin (block - n)) 𝔽).symm.trans
-    (Equiv.arrowCongr (finSumFinEquiv.trans (finCongr (Nat.add_sub_cancel' h))) (Equiv.refl 𝔽))
+  e := blockEquiv h
 
 /-- **A round's `n` coins on the live coin tree**: the block's first `n`, when `n ≤ block`. -/
 def drLive (block n : ℕ) : Option (Dec (LiveBlk block) (Fin n → 𝔽)) :=
@@ -47,15 +57,11 @@ def drLive (block n : ℕ) : Option (Dec (LiveBlk block) (Fin n → 𝔽)) :=
 /-- **The link points on the live coin tree**: `2·m` coins of the session stream's round 0, point `k`'s coordinate `t`
 the block's word `k·m + t`, when `2·m ≤ block`. -/
 def dlLive (block m : ℕ) : Option (Dec (LiveBlk block) (Fin 2 → Fin m → 𝔽)) :=
-  if h : 2 * m ≤ block then
-    some { Rest := (blockDec h).Rest
-           e := (Equiv.prodCongr ((Equiv.curry (Fin 2) (Fin m) 𝔽).symm.trans
-             (Equiv.arrowCongr finProdFinEquiv (Equiv.refl 𝔽))) (Equiv.refl _)).trans (blockDec h).e }
-  else none
+  if h : 2 * m ≤ block then some { Rest := Fin (block - 2 * m) → 𝔽, e := ptsEquiv h } else none
 
 theorem blockDec_coin {block n : ℕ} (h : n ≤ block) (b : LiveBlk block) (i : Fin n) :
     ((blockDec h).e.symm b).1 i = b (Fin.castLE h i) := by
-  simp [blockDec, Equiv.sumArrowEquivProdArrow, Equiv.arrowCongr]
+  simp [blockDec, blockEquiv, Equiv.sumArrowEquivProdArrow, Equiv.arrowCongr]
   rfl
 
 theorem drLive_coin {block n : ℕ} (h : n ≤ block) (b : LiveBlk block) (i : Fin n) :
