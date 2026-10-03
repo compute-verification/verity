@@ -5,6 +5,7 @@ import FlockSoundness.Discharge.ZkTree.Audit
 import FlockSoundness.Discharge.ZkTree.Sound
 import FlockSoundness.Discharge.ZkTree.Real
 import FlockSoundness.Discharge.ZkTree.Play
+import FlockSoundness.Discharge.ZkTree.Layout
 
 /-!
 # The tree-coin hybrid (A6 under `--zk`, `coin-tree/hm96-sha512/v2`)
