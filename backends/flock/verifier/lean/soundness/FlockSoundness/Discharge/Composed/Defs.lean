@@ -2,6 +2,7 @@ import FlockSoundness.Discharge.ZkLink
 import FlockSoundness.Discharge.ZkExec
 import FlockSoundness.Discharge.ZkView
 import FlockSoundness.Discharge.ZkBind
+import FlockSoundness.Discharge.Composed.Inner
 
 /-!
 # One `--zk` sampled session: the pieces the composed headline reads
@@ -232,7 +233,7 @@ draw's executable statement `st`). -/
 noncomputable def bodyOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedBody Tz.S (maskWordsOf st).length := sorry
 
 /-- **The draw's `--zk` table as `Coined` tables**: `bodyOf`'s tables over `Tz.S`, with `RANK_POINTS` claim points over
-the mask slot's words (`maskWordsOf st`), reading their coins (`β`, `ρ`, the rank check's weights `eq(p_k, x)`, `embed`
+the mask slot's words (`maskWordsOf st`), with `innerOf`'s inner-proof fields, reading their coins (`β`, `ρ`, the rank check's weights `eq(p_k, x)`, `embed`
 the inclusion of F128 in F256) and M1's padding columns at the opened positions, `κ·X̂_i + X̂_{2^cols + i}` at
 `κ = PAD_C`. -/
 noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
@@ -247,7 +248,13 @@ noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
     z := withMask B.sz (maskWordsOf st).length
     maskWords := fun x => (maskWordsOf st).getD x.val 0
     T := fun c =>
+      let I := innerOf Tz st B.Hi B.VL (withMask B.sz (maskWordsOf st).length) (CoinsZK Zk.RANK_POINTS B.Rest) c
       { B.T c with
+        lanes := I.lanes
+        vals := I.vals
+        lig := I.lig
+        lam := I.lam
+        theta := I.theta
         embed := FlockLevel3.embed
         β := fun r => fOf (c.beta r)
         ρ := fun r i => if i = 0 then FlockLevel3.GF256.of (c.rho r).1 else FlockLevel3.GF256.of (c.rho r).2
