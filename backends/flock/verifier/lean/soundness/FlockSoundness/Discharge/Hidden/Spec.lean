@@ -74,16 +74,15 @@ theorem setupHidden_spec' (h : Stmt.setupHidden tags cf pf coins tables draw par
     have he := checkOwn_none ‹HmIn.checkOwn _ _ none = _›
     have := loadPublic_noPorts he ‹HmIn.loadPublic _ _ _ _ = _›
     obtain rfl := regions_noPorts he ‹HmIn.regions _ _ _ = _›
-    simp only [drawn_noPorts he, delta_noPorts he, Array.append_empty] at *
     exact {
       tagsEq := rfl
       leaf := rfl
       parse := by assumption
       merkle := by assumption
       pub := by
-        refine ⟨_, ‹HmOut.loadPublic _ _ _ = _›, fun hd => ?_, fun d' hd => ?_⟩
+        refine ⟨_, this, fun hd => ?_, fun d' hd => ?_⟩
         · first | exact absurd hd (Option.some_ne_none _) | rfl
-        · first | exact absurd hd.symm (Option.some_ne_none _) | (cases hd; assumption)
+        · first | exact absurd hd.symm (Option.some_ne_none _) | (cases hd; rw [← drawn_noPorts he]; assumption)
       checkPublic := by assumption
       n := rfl
       blocksReal := rfl
@@ -93,9 +92,9 @@ theorem setupHidden_spec' (h : Stmt.setupHidden tags cf pf coins tables draw par
       m35 := hk.2
       mPts := rfl
       pin := by assumption
-      da := rfl
-      db := rfl
-      regions := by assumption
+      da := congrArg Prod.fst (delta_noPorts he)
+      db := congrArg Prod.snd (delta_noPorts he)
+      regions := by rw [Array.append_empty]; assumption
       regionWords := by assumption
       inRange := by assumption
       sigma := rfl
