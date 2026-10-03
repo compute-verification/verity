@@ -51,9 +51,11 @@ python tools/lean/audit.py PKG                once, before pushing (seconds; lev
 Build on a CPU machine; the three packages take about nine minutes from scratch on four cores. Never `lake update`, and
 never change a `require`, a revision or `lean-toolchain` in a feature PR.
 
-To regenerate a record on a pod, run `research run --on POD --project verity --source . --cwd source -- python
+To regenerate a record on a pod, run `research run --on POD --project verity --source . --cwd clone -- python
 tools/lean/audit.py --build --update PKG` with no wrapper around it. It exits 0 when the audit passes, whether or not the
-record changed, and the record is among the run's outputs, at `lean-audit/audit-TAG/lean-audit.json`.
+record changed, and the record is among the run's outputs, at `lean-audit/audit-TAG/lean-audit.json`. `--cwd clone` builds
+in the run's own clone of the shipped tree, removed when the run ends; with `--cwd source` every run of the commit builds in
+the one shared tree, and a cancelled duplicate there deleted `PKG/.lake/packages` under a live audit.
 
 While proving, check one file at a time, and leave the whole package and the audit for the end:
 

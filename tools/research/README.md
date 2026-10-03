@@ -151,7 +151,8 @@ conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `
 
 The workload receives `RESEARCH_RUN_ID` and `RESEARCH_RUN_DIR` and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
-workload runs in its run directory unless `--cwd` says otherwise (`--cwd source` = the invoking directory), so a relative
+workload runs in its run directory unless `--cwd` says otherwise (`--cwd source` = the invoking directory, `--cwd clone` = a
+clone of it at HEAD in a temporary directory, removed afterwards), so a relative
 `result.json` lands there and never in the checkout; `--env K=V` is set for the
 workload only and recorded as the attempt's `params.env` (values of
 secret-named keys redacted). Four facts
@@ -245,7 +246,17 @@ stream. The shipped tree is the runner's source root, not
 the workload's cwd: the workload runs in its own run directory, as locally,
 because every run of one commit shares `<root>/src/<sha>/` and relative outputs
 used to race there. `--cwd source` (or `source/SUB`) is the explicit opt-in to
-run inside the tree; job.json records `run.cwd` and `run.cwd_basis`. The
+run inside the tree; job.json records `run.cwd` and `run.cwd_basis`. A workload
+that writes into the tree (a build, a Lean `.lake`) takes `--cwd clone` (or
+`clone/SUB`) instead: the runner makes it a `git clone --shared` of the shipped
+tree at `<root>/scratch/<run-id>/tree` (about a second; the objects are
+borrowed), checks that it is a clean checkout of the shipped commit, and removes
+it once the workload exits, however it ends, so a cancel or an EXIT trap in one
+run never reaches another's files (`research/clone.py`; job.json
+`run.cwd_clone`). A tree the archive stream shipped has no `.git`, so the
+launcher, and the runner after it, refuse `--cwd clone` there and name
+`--cwd source`; so does a launch whose shipped research package predates it.
+Locally `--cwd clone` needs a clean checkout's top level. The
 runner and the workload get the tree's `PYTHONPATH` derived from its root
 `pyproject.toml` workspace members and each member's build config
 (`src/`, `python/`, flat), with a user `--env PYTHONPATH` appended; job.json
