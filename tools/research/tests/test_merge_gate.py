@@ -517,3 +517,23 @@ def test_the_push_guard_allows_a_train_fast_forward_and_its_hook_ignores_other_b
     pushed = subprocess.run([str(hook)], input=f"refs/heads/main {stray} refs/heads/main {base}\n", text=True, cwd=main,
                             env=env, capture_output=True)
     assert pushed.returncode == 1 and "refused push" in pushed.stderr
+
+
+def test_a_flock_file_whose_name_git_quotes_still_requires_the_agreement(tmp_path):
+    """`git diff --name-only` quotes a name with bytes outside ASCII (`"backends/flock/\\303\\251.py"`), which no prefix of a
+    `merge_requires` rule matched, so a train changing such a file required no `lean-agreement`."""
+    from research.merge import required_steps
+
+    repo = tmp_path / "repo"
+    (repo / "mytools").mkdir(parents=True)
+    (repo / "mytools" / "agree.py").write_text("from research.store.tool import Tool\nT = Tool(name='check', version='1', "
+                                               "merge_requires={'lean-agreement': ['backends/flock/', '!README.md']})\n")
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "base")
+    base = _git(repo, "rev-parse", "HEAD")
+    (repo / "backends" / "flock").mkdir(parents=True)
+    (repo / "backends" / "flock" / "é.py").write_text("x = 1\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "é")
+    assert required_steps(repo, base, _git(repo, "rev-parse", "HEAD"), "mytools.agree:T") == {"lean-agreement": ["backends/flock/"]}

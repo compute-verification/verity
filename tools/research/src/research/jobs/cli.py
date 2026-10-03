@@ -67,7 +67,7 @@ def main_tip(repo: str) -> str:
 
 
 def _git(*args: str, cwd: Path | None = None) -> str:
-    r = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+    r = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, errors="surrogateescape")
     if r.returncode:
         raise SystemExit(f"research jobs: git {' '.join(args[:3])}: {r.stderr.strip()}")
     return r.stdout
@@ -140,7 +140,7 @@ def needs_avx512(commit: str, base: str, cwd: Path | None = None) -> bool:
     rule = (_literal(_show(commit, "tools/check/tool.py", cwd), "merge_requires") or {}).get("lean-agreement")
     from ..merge import rule_touches
 
-    changed = _git("diff", "--name-only", base, commit, cwd=cwd).split()
+    changed = [p for p in _git("diff", "--name-only", "-z", base, commit, cwd=cwd).split("\0") if p]
     return bool(rule and rule_touches(rule, changed))
 
 

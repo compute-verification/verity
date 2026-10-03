@@ -51,7 +51,7 @@ class Refused(Exception):
 
 
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-    r = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True)
+    r = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, errors="surrogateescape")
     if check and r.returncode:
         raise Refused(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()}")
     return r
@@ -181,7 +181,7 @@ def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, l
         return {}
     if not rules:
         return {}
-    changed = [p for p in _git(repo, "diff", "--name-only", base, commit).stdout.splitlines() if p]
+    changed = [p for p in _git(repo, "diff", "--name-only", "-z", base, commit).stdout.split("\0") if p]
     out = {}
     for step, rule in rules.items():
         if hit := rule_touches(rule, changed):
