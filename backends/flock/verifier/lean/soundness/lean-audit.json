@@ -6319,7 +6319,11 @@
    "assumptions": [],
    "type_hash": "8196be5fb7e2f8fb6184ec5f389ffcd2d1ce2da7a65959dd12907179c064f88c"
   },
-  "FlockSoundness.Discharge.HiddenDec.decodesOn_execH": {},
+  "FlockSoundness.Discharge.HiddenDec.decodesOn_execH": {
+   "signature": ["FlockSoundness.Discharge.HiddenDec.decodesOn_execH : FlockSoundness.Discharge.HiddenDec.DecodesOnExecH"],
+   "assumptions": [],
+   "type_hash": "7aefa13d4f25eca2248f5c9d564f2cfebe2cd086a883fab28e2981d569d876e0"
+  },
   "FlockSoundness.Discharge.HiddenExec.accepts_allRetainedAny": {
    "signature": [
     "FlockSoundness.Discharge.HiddenExec.accepts_allRetainedAny : FlockSoundness.Discharge.HiddenExec.AcceptsAllRetainedAny"
@@ -14763,6 +14767,7 @@
     "FlockSoundness.Discharge.Exec.subset_spec",
     "FlockSoundness.Discharge.Hidden.outputs_binding",
     "FlockSoundness.Discharge.Hidden.outputs_committed",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_exec_hidden",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_hidden",
     "FlockSoundness.Discharge.HiddenExec.hConstH",
@@ -15016,6 +15021,7 @@
     "FlockSoundness.Discharge.Exec.live_le_sessionBL",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -15150,6 +15156,7 @@
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -15249,6 +15256,7 @@
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
     "FlockSoundness.Discharge.Hidden.outputs_binding",
     "FlockSoundness.Discharge.Hidden.outputs_committed",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -15388,6 +15396,7 @@
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -15533,6 +15542,7 @@
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
     "FlockSoundness.Discharge.Hidden.commitPair_spec",
     "FlockSoundness.Discharge.Hidden.outputs_committed",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -15686,6 +15696,7 @@
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -15826,6 +15837,7 @@
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -15955,6 +15967,7 @@
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -16084,6 +16097,7 @@
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -16307,6 +16321,7 @@
     "FlockSoundness.Discharge.Exec.live_le_sessionBL",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -16466,6 +16481,7 @@
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -16701,6 +16717,7 @@
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -17837,6 +17854,7 @@
     "FlockSoundness.Discharge.Exec.setupH_mPts_execOS",
     "FlockSoundness.Discharge.Exec.setupH_mPts_execOS_or",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_exec_hidden",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_hidden",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
@@ -19116,14 +19134,14 @@
     "FlockSoundness.Discharge.DecodeZL.wLev": "34615fbf1d9437e8edc00f193d6b4a66a0a5ca88c5f2ebd7e1ee79dc0367eb54",
     "FlockSoundness.Discharge.DecodeZL.wMid": "a10467e4576de872572766132148aaaef8a943e493bf94fae4e52ab8b0283f6f"
    },
-   "pins": ["FlockSoundness.Discharge.DecodeZL.lig_carries"]
+   "pins": ["FlockSoundness.Discharge.DecodeZL.lig_carries", "FlockSoundness.Discharge.HiddenDec.decodesOn_execH"]
   },
   "FlockSoundness.Discharge.DecodeZL.OP": {
    "digest": "9018e2d637cf66590bbc2608db4d121e4fc3132f1155b237c75da7463a5e8019",
    "definitions": {
     "FlockSoundness.Discharge.DecodeZL.wOP": "fc88e5df91481d2c4eeec5021441e42abf6c64be5f7c5ea26a70643eab92ab5d"
    },
-   "pins": ["FlockSoundness.Discharge.DecodeZL.op_carries"]
+   "pins": ["FlockSoundness.Discharge.DecodeZL.op_carries", "FlockSoundness.Discharge.HiddenDec.decodesOn_execH"]
   },
   "FlockSoundness.Discharge.DecodeZL.Statements": {
    "digest": "e6e4f0ef0f5876b1fbe3ca12ec310432cc7d510a9f08b9750d31182c6eae74db",
@@ -19146,7 +19164,8 @@
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
     "FlockSoundness.Discharge.DecodeZL.op_carries",
-    "FlockSoundness.Discharge.DecodeZL.zl_carries"
+    "FlockSoundness.Discharge.DecodeZL.zl_carries",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH"
    ]
   },
   "FlockSoundness.Discharge.DecodeZL.Wire": {
@@ -19180,7 +19199,8 @@
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
     "FlockSoundness.Discharge.DecodeZL.op_carries",
-    "FlockSoundness.Discharge.DecodeZL.zl_carries"
+    "FlockSoundness.Discharge.DecodeZL.zl_carries",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH"
    ]
   },
   "FlockSoundness.Discharge.DrawWords.Statements": {
@@ -19262,6 +19282,7 @@
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
     "FlockSoundness.Game.Plays.toT"
    ]
@@ -19330,6 +19351,7 @@
     "FlockSoundness.Discharge.Exec.execRefines_on",
     "FlockSoundness.Discharge.Exec.execRefines_one",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_allRetainedAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_oneAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_rep_roundsAny",
@@ -19498,6 +19520,7 @@
     "FlockSoundness.Discharge.Exec.live_le_sessionBL",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_exec_hidden",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_hidden",
@@ -19520,6 +19543,7 @@
     "FlockSoundness.Discharge.Exec.decodesOn_of_all",
     "FlockSoundness.Discharge.Exec.execRefines_on",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_exec_hidden",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_hidden",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
@@ -19746,6 +19770,7 @@
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
     "FlockSoundness.Discharge.Exec.opnOf_pair",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any"
    ]
   },
@@ -19802,6 +19827,16 @@
     "FlockSoundness.Discharge.HiddenExec.sitesAtH_bcSite",
     "FlockSoundness.Discharge.HiddenExec.sitesAtH_parse"
    ]
+  },
+  "FlockSoundness.Discharge.HiddenDec.Statements": {
+   "digest": "4ff849a6c8906f81abfac7ad9a2c2dea8fb61745b32c9b82370fe75e78a14f34",
+   "definitions": {
+    "FlockSoundness.Discharge.HiddenDec.DecodesOnExecH": "c9f690a4b45d6a8701cee201e583c6f5bb2dafd0bfb7f0912537dbfa6487d55e",
+    "FlockSoundness.Discharge.HiddenDec.DrawOkH": "1d8aebd5e8871eb496a9c46c684ec80a55bb52d7debb21e793c3353fabf52d77",
+    "FlockSoundness.Discharge.HiddenDec.TagsOkH": "a3635f8640e66608f639887c2467d6a79dba2c4d749be1a27e455147f851a345",
+    "FlockSoundness.Discharge.HiddenDec.opnAtH": "8c553b4968597d2b5d1dbe82f08b9ab83acdf6d72eb0ea7fd64482b459facea1"
+   },
+   "pins": ["FlockSoundness.Discharge.HiddenDec.decodesOn_execH"]
   },
   "FlockSoundness.Discharge.HiddenExec.Defs": {
    "digest": "76814589f029930cfef613a54cc932f97837dea49c4f22b916b4f64285d474a2",
@@ -20011,6 +20046,7 @@
     "FlockSoundness.Discharge.HiddenExec.tablesAtH": "67aa68ee29ea6a78507dc0f93fe0af00c9fd9fc7559553c124f366c7b90addd7"
    },
    "pins": [
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_exec_hidden",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_hidden",
     "FlockSoundness.Discharge.HiddenExec.hConstH",
@@ -20238,6 +20274,7 @@
    },
    "pins": [
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_exec_hidden",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_hidden",
     "FlockSoundness.Discharge.HiddenExec.hConstH",
@@ -22115,6 +22152,7 @@
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Exec.zerocheck_exact",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -22897,6 +22935,7 @@
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -23179,6 +23218,7 @@
     "FlockSoundness.Discharge.Exec.session_knowledge_soundL",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_exec_hidden",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_hidden",
     "FlockSoundness.Discharge.HiddenExec.hConstH",
@@ -23569,6 +23609,7 @@
     "FlockSoundness.Discharge.Hidden.commitPair_spec",
     "FlockSoundness.Discharge.Hidden.outputs_binding",
     "FlockSoundness.Discharge.Hidden.outputs_committed",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -23731,6 +23772,7 @@
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_hm96",
     "FlockSoundness.Discharge.Exec.zerocheck_exact",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -23946,6 +23988,7 @@
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -24094,6 +24137,7 @@
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -24275,6 +24319,7 @@
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Exec.zerocheck_exact",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -24401,6 +24446,7 @@
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -24569,6 +24615,7 @@
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
     "FlockSoundness.Discharge.Hidden.outputs_binding",
     "FlockSoundness.Discharge.Hidden.outputs_committed",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -24822,6 +24869,7 @@
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
     "FlockSoundness.Refine.basis_eq",
     "FlockSoundness.Refine.final_refines",
@@ -24877,6 +24925,7 @@
     "FlockSoundness.Discharge.Exec.rep_rounds_retained",
     "FlockSoundness.Discharge.Exec.ringSwitch_emitted",
     "FlockSoundness.Discharge.Exec.zerocheck_emitted",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_allRetainedAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_rep_roundsAny",
     "FlockSoundness.Refine.encs_inj",
@@ -24928,6 +24977,7 @@
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
     "FlockSoundness.Discharge.Exec.opnOf_pair",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -24985,6 +25035,7 @@
     "FlockSoundness.Discharge.Exec.execRefines_one",
     "FlockSoundness.Discharge.Exec.live_le_sessionBL",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_exec_hidden",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_hidden",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
@@ -25061,6 +25112,7 @@
     "FlockSoundness.Discharge.Exec.repC_kinds",
     "FlockSoundness.Discharge.Exec.repC_tape",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_exec_hidden",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_hidden",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
@@ -25133,6 +25185,7 @@
     "FlockSoundness.Discharge.Hidden.commitPair_spec",
     "FlockSoundness.Discharge.Hidden.outputs_binding",
     "FlockSoundness.Discharge.Hidden.outputs_committed",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_rep_roundsAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
@@ -25217,6 +25270,7 @@
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
     "FlockSoundness.Discharge.Hidden.outputs_binding",
     "FlockSoundness.Discharge.Hidden.outputs_committed",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -25286,6 +25340,7 @@
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_rep_roundsAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
@@ -25333,6 +25388,7 @@
     "FlockSoundness.Discharge.Exec.repC_tape",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -25401,6 +25457,7 @@
     "FlockSoundness.Discharge.Hidden.commitPair_spec",
     "FlockSoundness.Discharge.Hidden.outputs_binding",
     "FlockSoundness.Discharge.Hidden.outputs_committed",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -25500,6 +25557,7 @@
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -25536,6 +25594,7 @@
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
     "FlockSoundness.Discharge.Exec.opnOf_pair",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -25579,6 +25638,7 @@
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any",
@@ -26008,6 +26068,7 @@
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
     "FlockSoundness.Discharge.Exec.live_le_sessionBL",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
+    "FlockSoundness.Discharge.HiddenDec.decodesOn_execH",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_exec_hidden",
     "FlockSoundness.Discharge.HiddenExec.flock_headline_hidden",
     "FlockSoundness.Discharge.HiddenExec.hConstH",
