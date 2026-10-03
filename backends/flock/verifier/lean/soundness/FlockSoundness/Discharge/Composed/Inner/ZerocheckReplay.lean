@@ -58,6 +58,70 @@ theorem replay_zerocheck (st : Setup) (lay : PadLayout) (p : Proof) (root : Byte
           (prodL lay p.zerocheck)) ∧
       rp.claims[1]! = { value := 0, skip := skipWeights (zAt t), x := pinned ++ rOuterAt t } ∧
       rp.cValue = fcL lay p.zerocheck := by
-  sorry
+  unfold Zk.replay at h
+  dsimp only at h
+  obtain ⟨t₁, k₁, h⟩ := label_bind h
+  obtain ⟨t₂, k₂, h⟩ := absorbBytes_bind h
+  obtain ⟨t₃, k₃, h⟩ := absorbBytes_bind h
+  obtain ⟨-, h⟩ := check_bind h
+  obtain ⟨t₄, k₄, h⟩ := label_bind h
+  obtain ⟨t₅, k₅, h⟩ := label_bind h
+  obtain ⟨t₆, k₆, h⟩ := absorbBytes_bind h
+  obtain ⟨-, -, t₇, r₇, kk₇, h⟩ := sampleVec_bind (by decide) h
+  obtain ⟨-, -, t₈, r₈, kk₈, h⟩ := sampleVec_bind (by omega) h
+  obtain ⟨t₉, k₉, h⟩ := absorbSlice_bind h
+  obtain ⟨t₁₀, k₁₀, h⟩ := absorbSlice_bind h
+  obtain ⟨-, -, t₁₁, r₁₁, kk₁₁, h⟩ := sample_bind h
+  obtain ⟨s, t₁₂, hloop, h⟩ := bind_ok h
+  obtain ⟨t₁₃, -, h⟩ := absorbF_bind h
+  obtain ⟨t₁₄, -, h⟩ := absorbF_bind h
+  obtain ⟨t₁₅, -, h⟩ := label_bind h
+  obtain ⟨-, -, t₁₆, -, -, h⟩ := sample_bind h
+  obtain ⟨-, -, t₁₇, -, -, h⟩ := sample_bind h
+  obtain ⟨s', t₁₈, -, h⟩ := bind_ok h
+  rcases hf : st.fold.folded ((t₁₅.rounds[t₁₅.k]!).coins.getD 0 0) ((t₁₆.rounds[t₁₆.k]!).coins.getD 0 0)
+      (skipWeights ((t₁₀.rounds[t₁₀.k]!).coins.getD 0 0)) (s.2.extract 0 (st.kLog - 6)) s'.2 with err | v
+  · rw [hf] at h
+    obtain ⟨_, _, h₀, _⟩ := bind_ok h
+    cases h₀
+  rw [hf] at h
+  simp only [pure_bind] at h
+  obtain ⟨-, h⟩ := check_bind h
+  obtain ⟨t₂₀, -, h⟩ := absorbSlice_bind h
+  obtain ⟨-, -, t₂₁, -, -, h⟩ := sample_bind h
+  obtain ⟨hrp, -⟩ := pure_ok h
+  subst hrp
+  have hr₆ : t₆.rounds = t.rounds := by rw [k₆.2, k₅.2, k₄.2, k₃.2, k₂.2, k₁.2]
+  have hk₆ : t₆.k = t.k := by rw [k₆.1, k₅.1, k₄.1, k₃.1, k₂.1, k₁.1]
+  have hr₇ : t₇.rounds = t.rounds := by rw [r₇, hr₆]
+  have hk₇ : t₇.k = t.k + 1 := by rw [kk₇, hk₆]
+  have hr₁₀ : t₁₀.rounds = t.rounds := by rw [k₁₀.2, k₉.2, r₈, hr₇]
+  have hk₁₀ : t₁₀.k = t.k + 2 := by rw [k₁₀.1, k₉.1, kk₈, hk₇]
+  have hr₁₁ : t₁₁.rounds = t.rounds := by rw [r₁₁, hr₁₀]
+  have hk₁₁ : t₁₁.k = t.k + 3 := by rw [kk₁₁, hk₁₀]
+  have hO : (t₇.rounds[t₇.k]!).coins = rOuterAt t := by rw [hr₇, hk₇]; rfl
+  have hZ : (t₁₀.rounds[t₁₀.k]!).coins.getD 0 0 = zAt t := by rw [hr₁₀, hk₁₀]; rfl
+  rw [hO, hZ] at hloop ⊢
+  rw [forIn_range_eq] at hloop
+  obtain ⟨-, -, -, hs⟩ := forIn_rounds _
+    (fun i (x : Lin × Array F128) cs => (roundAt lay p.zerocheck (pinned ++ rOuterAt t) i (cs.getD 0 0) x.1,
+      x.2.push (cs.getD 0 0))) 1 (fun i x tt b tt' hb => by
+        obtain ⟨tt₁, kk₁, hb⟩ := absorbF_bind hb
+        obtain ⟨tt₂, kk₂, hb⟩ := absorbF_bind hb
+        obtain ⟨-, nn, tt₃, rr₃, kk₃, hb⟩ := sample_bind hb
+        obtain ⟨rfl, rfl⟩ := pure_ok hb
+        have e1 : tt₂.rounds = tt.rounds := by rw [kk₂.2, kk₁.2]
+        have e2 : tt₂.k = tt.k := by rw [kk₂.1, kk₁.1]
+        refine ⟨by rw [← e1, ← e2]; exact nn, by rw [rr₃, e1], by rw [kk₃, e2], ?_⟩
+        rw [← e1, ← e2]
+        rfl) (st.m - 6) 0 t₁₁.k _ t₁₁ t₁₂ s rfl hloop
+  have hrho : ∀ i < st.m - 6, (rhoAt t (st.m - 6))[i]! =
+      (fun i => (t₁₁.rounds[t₁₁.k + i]!).coins.getD 0 0) i := fun i hi => by
+    rw [getElem!_pos _ i (by simp [rhoAt]; omega), hr₁₁, hk₁₁]
+    simp [rhoAt]
+  have hs' := hs.trans
+    (fold_rounds lay p.zerocheck (pinned ++ rOuterAt t) (zAt t) _ (rhoAt t (st.m - 6)) (st.m - 6) hrho _ le_rfl)
+  subst hs'
+  refine ⟨rfl, rfl, rfl, rfl⟩
 
 end FlockSoundness.Discharge.Composed.ZerocheckMasked
