@@ -91,7 +91,6 @@ noncomputable def simZ (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
   cast (congrArg (fun g => Strategy (audit L Reg g)) (sessionZC_planOf A Hs T))
     (simAuditZKOn A Hs T I wr opn dg dec one fin capOf N hdec τ)
 
-omit [Fintype K] in
 /-- **R11 at `--zk` from the decoder at the law's draws** (`execRefinesZK_one`'s proof, reading `hdec` only there). -/
 theorem execRefinesZK_on (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) :
@@ -117,7 +116,6 @@ theorem execRefinesZK_on (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L
     (dec (L.draw ω) τ.1) (one (L.draw ω) τ.1) (fin (L.draw ω) τ.1) (capOf (L.draw ω) τ.1) N (Gz A Hs T (L.draw ω) τ.1)
     (fun pts r => allInh_repZCAt A Hs (T (L.draw ω) τ.1) pts r) (hdec ω τ.1) _
 
-omit [Fintype K] in
 /-- **The `--zk` headline at flock-verify's acceptance, from the decoder at the law's draws**: a bound on the compiled
 batched audit's acceptance with any event `Q` at `simZ … τ` bounds flock-verify `--zk`'s acceptance with `Q`. -/
 theorem zk_headline_exec_on (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
