@@ -1147,7 +1147,8 @@ def commit_leases(paths, now: float) -> list[tuple[float, float, list[tuple[str,
 
     circuits' definition (`/workspace/research/circuits-held-idle/hi-lease.py`): inside a `stage.commit` window the lease runs
     from the end of `gpu_lease.wait` to the end of `gpu_lease.release`, on one GPU, and its phases are LEASE_PHASES plus `work`
-    (every `work.*` span). A window with no `gpu_lease.*` span is a TP Commit's, whose lease `tp_lease` reads from the row. Every
+    (every `work.*` span). A window with no `gpu_lease.*` span is a TP Commit's, whose lease `tp_lease` reads from the row; its
+    phases are the window's spans, as for one GPU, and `phases_by_hour` counts them on each of the lease's GPUs. Every
     Commit attempt in a timeline counts, not only its last.  An hour's line is written once, as the hour ends, so a lease still
     open at `now` runs to `now` (up to LEASE_OPEN_MAX_S), its open phases with it: a Commit writes nothing while a work phase
     runs (gm176's took 2,077 s)."""
@@ -1164,7 +1165,13 @@ def commit_leases(paths, now: float) -> list[tuple[float, float, list[tuple[str,
 
         def tp(w1: float | None) -> None:
             if isinstance(w0, (int, float)) and not any(s.startswith("gpu_lease.") for s in (*spans, *(s for _, s in opened))):
-                out.extend(x for x in [tp_lease(Path(p).parent, w0, w1, now)] if x)
+                lease = tp_lease(Path(p).parent, w0, w1, now)
+                if lease:
+                    a, b, _, gpus = lease
+                    live = {s: list(xs) for s, xs in spans.items()}
+                    for (_, s), x in opened.items():
+                        live.setdefault(s, []).append((x, b))
+                    out.append((*_lease(live, a, b)[:3], gpus))
 
         for e in evs:
             stage, ev, t = e.get("stage"), e.get("ev"), e.get("t")

@@ -27,13 +27,13 @@ theorem bytes_of_bits {p : Port} (hb : p.bits = 16 * p.words) : p.bytes = 2 * p.
   split <;> omega
 
 /-- `Hm.constBit_v1` for any row of `2 · words` bytes: its constant bits past its `n` blocks are the padding block's. -/
-theorem constBit_row {p : Port} {n t : ℕ} (hby : p.bytes = 2 * p.words) (hb : p.bits = 16 * p.words)
+theorem constBit_row {p : Port} {n t : ℕ} (hs : p.segs = none) (hby : p.bytes = 2 * p.words) (hb : p.bits = 16 * p.words)
     (hw : 2 * p.words = 128 * n) (ht : t < 1024) :
     HmRow.constBit p (HmRow.tailOf p) n t = some (wordsBit (HmRow.padWords p.words) t) := by
   have hj : (HmRow.blockBit t).1 = 8 * (t / 64) + 7 - t % 64 / 8 := rfl
   have hb8 : (HmRow.blockBit t).2 = t % 8 := rfl
   unfold HmRow.constBit HmRow.tailOf
-  simp only [hby, hb]
+  simp only [hby, hb, hs]
   rw [ite_eq_right (fun h => absurd h (by rw [hj, hb8]; omega)), padTail_eq (by omega), HmRow.padWords,
     wordsBit_eq _ (n := 16) (by omega), decide_eq_true (by omega), Bool.true_and,
     show 128 * n + (HmRow.blockBit t).1 - 2 * p.words = 8 * (t / 64) + 7 - t % 64 / 8 by rw [hj]; omega, hb8, wbit,
@@ -155,7 +155,7 @@ theorem flatAll_count (hrw : RowWires st.c) {n s off x : ℕ} (hn : n = st.c.sha
 /-- **An input bit of a row net's slot holds its one copy**, in the untyped statement and for any rows. At a self row
 `x` of a `sha512x3` or `hm96` slot below the net's input rows, where the rows' copies and wires write exactly one
 `(x, src)`, every block of a satisfying witness holds at `x` what it holds at `src`. -/
-theorem inBit_copyAll (hda : st.da = (HmRow.delta st.c st.pin).1) (hrw : RowWires st.c)
+theorem inBit_copyAll (hda : st.da = (HmRow.delta st.c st.pin).1) (hrw : RowWires st.c) (hu : ∀ p ∈ st.c.ports.toList, p.segs = none)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {n s off x src : ℕ}
     (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hat : AtSlot st.c n s off x) {l : Flock.HmNets.Laid} {name : String}
@@ -174,7 +174,7 @@ theorem inBit_copyAll (hda : st.da = (HmRow.delta st.c st.pin).1) (hrw : RowWire
   have hδ : ∀ j, deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) ∧
       deltaEntry st.db x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) := by
     intro j
-    rw [L.delta_b, deltaEntry_eq_count, hda, delta_flat_all _ _ F.parse.typed, hF]
+    rw [L.delta_b, deltaEntry_eq_count, hda, delta_flat_all _ _ F.parse.typed hu, hF]
     exact ⟨rfl, rfl⟩
   have hx : x < 2 ^ (L.model regs).kLog := hat.lt R.bound (R.range (R.rowNet_lt hn)).1
   exact block_of_rows hz o hx fun j => inBit_rows R hn hat hl hself hx hδ j
@@ -184,6 +184,7 @@ compression or more, in every block of a satisfying witness of the untyped state
 the row prefix's midstate (`HmRow.prefixOf`), each later compression's `cv` the previous one's output, the `hm96`
 slot's `cv` the last compression's output, and its `pad` the padding block. -/
 theorem row_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
+    (hu : ∀ p ∈ st.c.ports.toList, p.segs = none)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (hb : st.c.ports[p]!.bits = 16 * st.c.ports[p]!.words)
@@ -204,40 +205,41 @@ theorem row_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < s
   have hzero := zero_bit L F hupv (by omega) hz o
   refine ⟨fun t ht => ?_, fun k hk t ht => ?_, fun t ht => ?_, fun t ht => ?_⟩
   · have hs : shaSub st.c p 0 < 3 := (rowSlot_lt hp h0).2
-    rw [shaIn_pos R hp h0]
-    have hf := cv0_filterAll R (pin := st.pin) hg hp h0 ht
-    rw [inBit_copyAll L F hda hrw hz o (Or.inl rfl) (shaPos_at R hg hp h0 (off := t) (by omega))
+    rw [shaIn_pos R hu hp h0]
+    have hf := cv0_filterAll R hu (pin := st.pin) hg hp h0 ht
+    rw [inBit_copyAll L F hda hrw hu hz o (Or.inl rfl) (shaPos_at R hu hg hp h0 (off := t) (by omega))
       (shaNet_ofRows R.rowNets) (by rw [shaNet_inRows R.rowNets]; omega) (shaLaid_self (by omega)) hf]
     exact blockBit_constSrc _ _ hpin hzero
   · have hs : shaSub st.c p (k + 1) < 3 := (rowSlot_lt hp hk).2
-    have hf := chain_filterAll R (pin := st.pin) (k := k + 1) hg hp (by omega) hk ht
+    have hf := chain_filterAll R hu (pin := st.pin) (k := k + 1) hg hp (by omega) hk ht
     rw [chainDst_eq R.rowNets hs] at hf
-    rw [inBit_copyAll L F hda hrw hz o (Or.inl rfl) (R.shaIn_at hg hp hk ht) (shaNet_ofRows R.rowNets)
+    rw [inBit_copyAll L F hda hrw hu hz o (Or.inl rfl) (R.shaIn_at hg hp hk ht) (shaNet_ofRows R.rowNets)
       (by rw [shaNet_inRows R.rowNets]; omega) (shaLaid_self (by omega)) hf]
     rfl
   · rw [(hmIn_eq R.rowNets).1, Nat.add_zero]
-    have hf := hmcv_filterAll R (pin := st.pin) hg hp h0 ht
+    have hf := hmcv_filterAll R hu (pin := st.pin) hg hp h0 ht
     have hx : Flat.wireDst st.c g (hmWire st.c.ports st.c.shaNet st.c.hmNet p) = st.c.slotCol st.c.hmNet g p :=
       hmWireDst_eq R.rowNets g p
     rw [hx] at hf
-    rw [inBit_copyAll L F hda hrw hz o (Or.inr rfl) (R.hmIn_at hg hp (off := t) (by omega)) (hmNet_ofRows R.rowNets)
+    rw [inBit_copyAll L F hda hrw hu hz o (Or.inr rfl) (R.hmIn_at hg hp (off := t) (by omega)) (hmNet_ofRows R.rowNets)
       (by rw [hmNet_inRows R.rowNets]; omega) (hmLaid_self (by omega)) hf]
     unfold Flat.wireSrc hmWire shaBase shaOut shaSub
     simp only [rowSlots_size hp]
   · rw [(hmIn_eq R.rowNets).2.1, Nat.add_assoc]
-    have hf := pad_filterAll R (pin := st.pin) hg hp ht
-    rw [rowSlots_size hp, constBit_row (bytes_of_bits hb) hb hw ht] at hf
+    have hf := pad_filterAll R hu (pin := st.pin) hg hp ht
+    rw [rowSlots_size hp, constBit_row (hu _ (getElem_mem_toList' hp)) (bytes_of_bits hb) hb hw ht] at hf
     have hx : padCol st.c g p + t = st.c.slotCol st.c.hmNet g p + (512 + t) := by
       rw [padCol_eq R.rowNets, Nat.add_assoc]
     rw [hx] at hf
     simp only [bitCopy] at hf
-    rw [inBit_copyAll L F hda hrw hz o (Or.inr rfl) (R.hmIn_at hg hp (off := 512 + t) (by omega))
+    rw [inBit_copyAll L F hda hrw hu hz o (Or.inr rfl) (R.hmIn_at hg hp (off := 512 + t) (by omega))
       (hmNet_ofRows R.rowNets) (by rw [hmNet_inRows R.rowNets]; omega) (hmLaid_self (by omega)) hf]
     exact blockBit_constSrc _ _ hpin hzero
 
 /-- **The two copies into VU `g`'s row `p` of no compression**, in every block of a satisfying witness of the untyped
 statement: the `hm96` slot's `cv` is the row prefix's midstate, and its `pad` the padding block. -/
 theorem row_copies_tgt0 (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
+    (hu : ∀ p ∈ st.c.ports.toList, p.segs = none)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (hb : st.c.ports[p]!.bits = 16 * st.c.ports[p]!.words)
@@ -252,18 +254,18 @@ theorem row_copies_tgt0 (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < 
   have hzero := zero_bit L F hupv (by omega) hz o
   refine ⟨fun t ht => ?_, fun t ht => ?_⟩
   · rw [(hmIn_eq R.rowNets).1, Nat.add_zero]
-    have hf := hmcv0_filterAll R (pin := st.pin) hg hp h0 ht
-    rw [inBit_copyAll L F hda hrw hz o (Or.inr rfl) (R.hmIn_at hg hp (off := t) (by omega)) (hmNet_ofRows R.rowNets)
+    have hf := hmcv0_filterAll R hu (pin := st.pin) hg hp h0 ht
+    rw [inBit_copyAll L F hda hrw hu hz o (Or.inr rfl) (R.hmIn_at hg hp (off := t) (by omega)) (hmNet_ofRows R.rowNets)
       (by rw [hmNet_inRows R.rowNets]; omega) (hmLaid_self (by omega)) hf]
     exact blockBit_constSrc _ _ hpin hzero
   · rw [(hmIn_eq R.rowNets).2.1, Nat.add_assoc]
-    have hf := pad_filterAll R (pin := st.pin) hg hp ht
-    rw [rowSlots_size hp, constBit_row (bytes_of_bits hb) hb hw ht] at hf
+    have hf := pad_filterAll R hu (pin := st.pin) hg hp ht
+    rw [rowSlots_size hp, constBit_row (hu _ (getElem_mem_toList' hp)) (bytes_of_bits hb) hb hw ht] at hf
     have hx : padCol st.c g p + t = st.c.slotCol st.c.hmNet g p + (512 + t) := by
       rw [padCol_eq R.rowNets, Nat.add_assoc]
     rw [hx] at hf
     simp only [bitCopy] at hf
-    rw [inBit_copyAll L F hda hrw hz o (Or.inr rfl) (R.hmIn_at hg hp (off := 512 + t) (by omega))
+    rw [inBit_copyAll L F hda hrw hu hz o (Or.inr rfl) (R.hmIn_at hg hp (off := 512 + t) (by omega))
       (hmNet_ofRows R.rowNets) (by rw [hmNet_inRows R.rowNets]; omega) (hmLaid_self (by omega)) hf]
     exact blockBit_constSrc _ _ hpin hzero
 
@@ -275,7 +277,7 @@ theorem row_bc_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (hb : st.c.ports[p]!.bits = 16 * st.c.ports[p]!.words)
-    (hw : 2 * st.c.ports[p]!.words = 128 * st.c.ports[p]!.chunks) :
+    (hw : 2 * st.c.ports[p]!.words = 128 * st.c.ports[p]!.chunks) (hu : ∀ p ∈ st.c.ports.toList, p.segs = none) :
     bytesOf (blockBit (L.model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
       ((HmRow.prefixOf st.c.ports[p]!).data.toList ++
         bytesOf (blockBit (L.model regs) z o) (2 * st.c.ports[p]!.words) (Typed.msgCol st.c g p))
@@ -283,12 +285,12 @@ theorem row_bc_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.
   have R := RowRanges.ofL L F.parse F.check
   have hhm := hmSlot_flat L F hz o hg (by rw [R.perVu_hm]; exact lt_of_lt_of_le hp (le_nextPow2 _))
   rcases Nat.eq_zero_or_pos st.c.ports[p]!.chunks with h0 | h0
-  · obtain ⟨hcvh, hpad⟩ := row_copies_tgt0 L F hda hupv hz o hg hp hb hw h0
+  · obtain ⟨hcvh, hpad⟩ := row_copies_tgt0 L F hda hupv hu hz o hg hp hb hw h0
     have hw0 : st.c.ports[p]!.words = 0 := by omega
     rw [hw0] at hpad ⊢
     exact port_commit_rows0 st.c _ g p (size_prefixOf _) R.rowNets hhm hcvh hpad
-  · obtain ⟨hcv0, hchain, hcvh, hpad⟩ := row_copies_tgt L F hda hupv hz o hg hp hb hw h0
-    exact port_commit_rowsP st.c _ g p (size_prefixOf _) h0 hw (rowSlots_size hp).ge R.rowNets
+  · obtain ⟨hcv0, hchain, hcvh, hpad⟩ := row_copies_tgt L F hda hupv hu hz o hg hp hb hw h0
+    exact port_commit_rowsP st.c _ g p (size_prefixOf _) (hu _ (getElem_mem_toList' hp)) h0 hw (rowSlots_size hp).ge R.rowNets
       (fun k hk => (rowSlot_lt hp hk).2)
       (fun k hk => shaSlot_flat L F hz o hg (by rw [R.perVu_sha]; exact (rowSlot_lt hp hk).1)) hhm hcv0 hchain hcvh
       hpad

@@ -105,6 +105,9 @@
   "Bf16ToF32_v2": {
    "and": 0
   },
+  "BitAnd_v2": {
+   "and": 1
+  },
   "BlackwellE4m3QmmaDot32_v2": {
    "and": 9128
   },
@@ -140,6 +143,9 @@
   },
   "DotE4m3_v4{K=64,DOT=BlackwellE4m3QmmaDot32_v2}": {
    "and": 17984
+  },
+  "E4m3ToF32_v2": {
+   "and": 15
   },
   "Embedding_v2{V=1100,H=2}": {
    "and": 36032
@@ -242,6 +248,9 @@
   },
   "F32SubFtz_v3": {
    "and": 952
+  },
+  "F32ToE2m1Sat_v2": {
+   "and": 60
   },
   "F32ToE4m3Sat_v2": {
    "and": 231
@@ -635,6 +644,9 @@
   "Bf16ToF32_v1": {
    "and": 0
   },
+  "BitAnd_v1": {
+   "and": 1
+  },
   "BitAtx16_v1": {
    "and": 43
   },
@@ -670,6 +682,9 @@
   },
   "DivFullScaleA_v2": {
    "and": 1542
+  },
+  "E4m3ToF32_v1": {
+   "and": 15
   },
   "F2fpBf16_v1": {
    "and": 77
@@ -772,6 +787,9 @@
   },
   "F32ToBf16Rn_v1": {
    "and": 77
+  },
+  "F32ToE2m1Sat_v1": {
+   "and": 60
   },
   "F32ToE4m3Sat_v1": {
    "and": 238

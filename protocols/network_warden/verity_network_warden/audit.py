@@ -1,6 +1,6 @@
 """The verifier's check: exact, slot by slot, with record-and-reject.
 
-A link-window is **accepted** if three things hold:
+An egress link-window (`check_link`) is **accepted** if three things hold:
 - its status is complete;
 - every slot of its grid equals the Program's grid;
 - the window's declared clock sync is in the protocol's set.
@@ -18,8 +18,10 @@ windows (`schedule.expected_grids`), so an out-of-set sync never changes an earl
 A record may come raw or committed (`commitment`: its digest, with padding elided). A committed record's grid check
 compares its digest with the digest of the Program's grid, which is exact up to a SHA-256 collision.
 
-Only egress links are checked: ingress links' statuses, which Lean's `Accepted` also requires complete, are not audited
-yet (PROTOCOL.md).
+An ingress link's rows are the Program's input, which it reads rather than predicts, so `check_ingress_link` checks only
+its statuses: a link-window is accepted if it has exactly one record and its status is complete (Lean `StatusComplete`).
+On a committed record it reads the status in the clear, which the digest binds. With no Program grid to recompute the
+digest from, it can't catch a published status that disagrees with the digest, as the egress check does.
 """
 
 from __future__ import annotations
@@ -60,31 +62,32 @@ class Audit:
         sync_set: SyncSet,
         params: GridParams,
     ) -> list[Verdict]:
-        """Check one link's records for windows 0 … len(syncs) − 1 against the Program's grids under the declared
-        syncs."""
+        """Check one egress link's records for windows 0 … len(syncs) − 1 against the Program's grids under the
+        declared syncs."""
         expected = expected_grids(frames, syncs, params)
-        by_window: dict[int, list[Record | CommittedRecord]] = defaultdict(list)
-        for r in records:
-            if r.link == link:
-                by_window[r.window].append(r)
+        by_window = _by_window(link, records)
         out = []
         for w, sync in enumerate(syncs):
             found = by_window.get(w, [])
-            if not found:
-                violation = "no-verdict"
-            elif len(found) > 1:
-                violation = "duplicate"
-            elif not (record := found[0]).status.complete:
-                violation = f"status:{record.status.reason.value}"
-            elif sync not in sync_set:
-                violation = "advice"
-            elif isinstance(record, CommittedRecord):
-                violation = None if record.digest == record_digest(link, w, expected[w], COMPLETE, params) else "mismatch"
-            elif record.grid != expected[w]:
-                violation = "mismatch"
-            else:
-                violation = None
+            violation = _status_violation(found)
+            if violation is None:
+                record = found[0]
+                if sync not in sync_set:
+                    violation = "advice"
+                elif isinstance(record, CommittedRecord):
+                    if record.digest != record_digest(link, w, expected[w], COMPLETE, params):
+                        violation = "mismatch"
+                elif record.grid != expected[w]:
+                    violation = "mismatch"
             out.append(Verdict(link, w, violation))
+        self.verdicts.extend(out)
+        return out
+
+    def check_ingress_link(self, link: str, records: Sequence[Record | CommittedRecord], windows: int) -> list[Verdict]:
+        """Check one ingress link's records for windows 0 … windows − 1: one record each, with a complete status. No
+        grid is compared."""
+        by_window = _by_window(link, records)
+        out = [Verdict(link, w, _status_violation(by_window.get(w, []))) for w in range(windows)]
         self.verdicts.extend(out)
         return out
 
@@ -95,3 +98,22 @@ class Audit:
     @property
     def violations(self) -> list[Verdict]:
         return [v for v in self.verdicts if not v.accepted]
+
+
+def _by_window(link: str, records: Sequence[Record | CommittedRecord]) -> dict[int, list[Record | CommittedRecord]]:
+    by_window: dict[int, list[Record | CommittedRecord]] = defaultdict(list)
+    for r in records:
+        if r.link == link:
+            by_window[r.window].append(r)
+    return by_window
+
+
+def _status_violation(found: Sequence[Record | CommittedRecord]) -> str | None:
+    """The violations every link-window can have, in order: no record, more than one, or an incomplete status."""
+    if not found:
+        return "no-verdict"
+    if len(found) > 1:
+        return "duplicate"
+    if not found[0].status.complete:
+        return f"status:{found[0].status.reason.value}"
+    return None
