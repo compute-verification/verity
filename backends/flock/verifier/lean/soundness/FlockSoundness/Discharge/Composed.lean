@@ -10,6 +10,7 @@ import FlockSoundness.Discharge.Composed.Inner.ZerocheckMasked
 import FlockSoundness.Discharge.Composed.Inner.ZerocheckReplay
 import FlockSoundness.Discharge.Composed.Inner.Lincheck
 import FlockSoundness.Discharge.Composed.Inner.RingSwitch
+import FlockSoundness.Discharge.Composed.Inner.ZerocheckGlue
 import FlockSoundness.Discharge.Composed.Setup
 
 /-!
