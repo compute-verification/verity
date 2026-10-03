@@ -711,7 +711,7 @@ def test_launch_refuses_to_spend_without_yes_and_a_lease():
     assert r.returncode == 1 and "NEBIUS_SA_ID is not set" in r.stderr
 
 
-def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_still_takes_the_multi_line_secret(tmp_path):
+def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_refuses_the_multi_line_secret(tmp_path):
     fake = tmp_path / "nebius"
     fake.write_text('#!/bin/bash\nwhile [ $# -gt 0 ]; do [ "$1" = --private-key-file-path ] && cp "$2" "$OUT"; shift; done\n')
     fake.chmod(0o755)
@@ -727,7 +727,10 @@ def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_still_takes_the_m
 
     r, key = auth(NEBIUS_SA_PRIVATE_KEY_B64=base64.b64encode(body.encode()).decode())
     assert r.returncode == 0 and key == body and r.stdout == r.stderr == ""
-    r, key = auth(NEBIUS_SA_PRIVATE_KEY=body.rstrip("\n"))
+    r, key = auth(NEBIUS_SA_PRIVATE_KEY=body.rstrip("\n"))    # a multi-line secret leaks through `env | cut -d= -f1`
+    assert r.returncode == 1 and key == "" and "NEBIUS_SA_PRIVATE_KEY (the multi-line key) is no longer read" in r.stderr
+    assert "dummy line" not in r.stderr
+    r, key = auth(NEBIUS_SA_PRIVATE_KEY=body, NEBIUS_SA_PRIVATE_KEY_B64=base64.b64encode(body.encode()).decode())
     assert r.returncode == 0 and key == body
     r, _ = auth(NEBIUS_SA_PRIVATE_KEY_B64="not base64!")
     assert r.returncode == 1 and "NEBIUS_SA_PRIVATE_KEY_B64 is not base64" in r.stderr
