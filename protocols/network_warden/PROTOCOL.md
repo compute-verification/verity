@@ -191,13 +191,20 @@ docstring) and sizes:
     windows. A configuration's windows are the windows its egress frames span, 1 + its largest anchor // T, and the
     high end is the least median rate t such that the configurations with a median rate at most t span at least
     ⌈W/2⌉ of all W windows. So a run cut into more configurations, at a dropped window say, keeps its high end.
-- **The honest prover's choice:** per window, the met value with the least total hand time over the window's frames
-  (their total shaping delay). Taking the least δ first would pick a slow ρ to save one bucket, and hold every later
-  frame for seconds. Frames are in the Program's canonical order, which is step-major for a batching engine, so a long
-  session interleaves with later windows' frames.
+- **The honest prover's choice:** one clock per spatial unit, so per window one value for every egress link of the
+  configuration: the value met on all of them with the least total hand time over the window's frames on every link
+  (their total shaping delay), with ties to the smaller δ, then the larger ρ. Taking the least δ first would pick a
+  slow ρ to save one bucket, and hold every later frame for seconds. Each link's frames are in the Program's canonical
+  order, which is step-major for a batching engine, so a long session interleaves with later windows' frames.
   While a window is chosen, later windows take their most eager value; that only lowers hand times, so a window found
   met stays met.
-- **The honest miss rate:** a window that no value meets is a miss, which is a violation. The target is 1e-4.
+- **The honest miss rate:** a window that no value meets on every egress link is a miss, which is a violation. A
+  larger δ or a smaller ρ only raises hand times, so a window misses exactly when the most lenient value misses on some
+  link. A window is the configuration's, so the rate is the configurations' missed windows over their windows
+  (1 + largest anchor // T each), and a link's `honest_windows` and `honest_misses` are those of its configurations.
+  One clock can miss where a choice per link would not: the value met on every link can hand one link's frames earlier
+  than that link's own choice, and a later window whose frames were met only behind them then misses. The target is
+  1e-4.
 - **The egress allocation r:** the least r at or above twice the p99.9 of per-bucket demand whose FIFO replay has no
   overflow and a p99 queueing delay of at most one bucket. Both improve monotonically in r, so the search doubles and
   then bisects. If one bucket's demand exceeds Q, every r overflows: the tool exits with an error naming the demand and
@@ -245,7 +252,8 @@ statements on examples and prove nothing. By name, they mirror 19 of the Lean pa
   - the elided digest is injective on left-packed grids, by enumeration;
   - it binds the link, window, status and parameters;
   - the committed audit's verdicts equal the raw audit's;
-- **`test_network_warden_calibration.py`:** the calibration tool.
+- **`test_network_warden_calibration.py`:** the calibration tool, and the honest prover's choice against its rule by
+  brute force, on one link and on several under one clock;
 
 No test mirrors the other eight pins of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
 `SecurityProofs.EncardDecodableLe`, `SecurityProofs.NoFaultOfAccepted`, `SecurityProofs.RecordedRowEqFill`,
