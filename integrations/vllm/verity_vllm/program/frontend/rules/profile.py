@@ -299,7 +299,8 @@ class FusedAddRmsNormRule(InPlaceRule):
         rr, _ = rows_of(ctx.coll(res))
         wc = ctx.coll(w)
         N = xr[0].type.n
-        fn, extra = norm_kind(ctx, "rmsnorm_fused", node, N, eps)
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # noqa: PLC0415  (vllm_bindings imports this module)
+        fn, extra = norm_kind(ctx, "rmsnorm_fused", node, N, eps, TARGET=active_target_profile())
         ns, rs = [], []
         for i, (a, b) in enumerate(zip(xr, rr)):
             o = ctx.call(fn, a, b, wc, *extra, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]")

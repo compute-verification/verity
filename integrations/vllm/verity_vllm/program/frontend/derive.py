@@ -335,8 +335,14 @@ class Ctx:
     # -- emitting ----------------------------------------------------------------------------------------
     def kind(self, role: str, node=None, **statics):
         """The mode's registered definition for a semantic role, bound to `statics`; `numerics_unregistered`
-        if the vocabulary has no kind for it."""
-        fn = self.vocab.kind(role, **statics)
+        if the vocabulary has no kind for it, or the declared target has none (`registry.targets.UnregisteredTarget`)."""
+        from verity_vllm.program.registry.targets import UnregisteredTarget  # noqa: PLC0415
+        try:
+            fn = self.vocab.kind(role, **statics)
+        except UnregisteredTarget as e:
+            refuse("numerics_unregistered", node or self.current, self.module_path(node or self.current),
+                   f"the {self.mode} vocabulary {self.vocab.name!r} binds role {role!r} by the declared target, which has no registered "
+                   f"kind: {e}")
         if fn is None:
             refuse("numerics_unregistered", node or self.current, self.module_path(node or self.current),
                    f"the {self.mode} vocabulary {self.vocab.name!r} has no registered kind for role {role!r} with {statics}; "
