@@ -34,7 +34,9 @@ rule keep working. Once lanes declare their outputs it drops to 0, and undeclare
 
 1. **Run from a directory you chose.** Use `--cwd source` (or `source/SUB`) for a command that reads the checkout, `--cwd clone`
    (or `clone/SUB`) for one that writes into it (a build, a Lean `.lake`): on a machine every run of the commit shares the
-   source tree, and a clone is the run's own, removed when it ends. Or pass an absolute `--cwd`. A relative path in the command
+   source tree, and a clone is the run's own, removed when it ends; the workload imports the tree's Python from it too. Locally
+   only the cwd moves: an editable install still imports from, and writes beside `__file__` in, the invoking checkout. Or pass
+   an absolute `--cwd`. A relative path in the command
    that resolves against the run dir is the failure above.
 2. **Put results in one directory and declare it.** The workload finds its run dir in `$RESEARCH_RUN_DIR` whatever its cwd
    is. For example, it writes to `$RESEARCH_RUN_DIR/out/` and the launch passes `--declared-output 'out/*'`. Quote the glob so

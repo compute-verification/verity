@@ -253,10 +253,15 @@ tree at `<root>/scratch/<run-id>/tree` (about a second; the objects are
 borrowed), checks that it is a clean checkout of the shipped commit, and removes
 it once the workload exits, however it ends, so a cancel or an EXIT trap in one
 run never reaches another's files (`research/clone.py`; job.json
-`run.cwd_clone`). A tree the archive stream shipped has no `.git`, so the
+`run.cwd_clone`). The workload imports the tree's Python from the clone too: each
+`PYTHONPATH` entry under the shipped tree is moved to the same directory in the
+clone (`run.remote.pythonpath` says so), and bytecode goes beside the clone, so a
+module that writes beside its `__file__` writes into the clone. A tree the archive stream shipped has no `.git`, so the
 launcher, and the runner after it, refuse `--cwd clone` there and name
 `--cwd source`; so does a launch whose shipped research package predates it.
-Locally `--cwd clone` needs a clean checkout's top level. The
+Locally `--cwd clone` needs a clean checkout's top level, and only the cwd moves:
+an editable install still points at the invoking checkout, so the workload
+imports, and writes beside `__file__`, there. The
 runner and the workload get the tree's `PYTHONPATH` derived from its root
 `pyproject.toml` workspace members and each member's build config
 (`src/`, `python/`, flat), with a user `--env PYTHONPATH` appended; job.json

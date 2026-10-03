@@ -15,20 +15,36 @@ import pytest
 from research import clone, remote
 from research import runs as R
 from research.cli import main
+from research.store import attempt as A
 from waits import wait_runner
 
 PY = sys.executable
 SRC = str(Path(remote.__file__).resolve().parents[1])
-# leaves a build tree in its cwd, says where it ran and at which commit, then ends as argv[1] says: an exit status, or `term`, the
-# SIGTERM to its process group that `research cancel` sends
-PROBE = ("import json, os, signal, subprocess, sys; os.makedirs('.lake/packages/dep'); "
+# leaves a build tree in its cwd, says where it ran, at which commit and where it imported the workspace module `leaky` from (when
+# the tree has one, `_workspace`), then ends as argv[1] says: an exit status, or `term`, the SIGTERM to its process group that
+# `research cancel` sends
+PROBE = ("import importlib.util, json, os, signal, subprocess, sys; os.makedirs('.lake/packages/dep'); "
          "head = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip(); "
-         "json.dump({'cwd': os.getcwd(), 'head': head}, open(os.path.join(os.environ['RESEARCH_RUN_DIR'], 'seen.json'), 'w')); "
+         "mod = importlib.util.find_spec('leaky') and __import__('leaky'); "
+         "json.dump({'cwd': os.getcwd(), 'head': head, 'module': mod and mod.__file__, 'wrote': mod and str(mod.OUT), "
+         "'mark': getattr(mod, 'MARK', None)}, open(os.path.join(os.environ['RESEARCH_RUN_DIR'], 'seen.json'), 'w')); "
          "end = sys.argv[1] if len(sys.argv) > 1 else '0'; os.killpg(0, signal.SIGTERM) if end == 'term' else sys.exit(int(end))")
 
 
 def _git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+
+def _workspace(repo: Path) -> None:
+    """A workspace member whose module writes beside its own __file__ when imported, as a plotting module writes its figures."""
+    (repo / "pyproject.toml").write_text('[project]\nname = "root"\nversion = "0"\n[tool.uv.workspace]\nmembers = ["m"]\n')
+    (repo / "m" / "src" / "leaky").mkdir(parents=True)
+    (repo / "m" / "pyproject.toml").write_text('[project]\nname = "m"\nversion = "0"\n')
+    (repo / "m" / "src" / "leaky" / "__init__.py").write_text(
+        "from pathlib import Path\nOUT = Path(__file__).resolve().parents[2] / 'reports' / 'plot.txt'\nOUT.parent.mkdir()\n"
+        "OUT.write_text('figure')\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "a workspace member")
 
 
 @pytest.fixture
@@ -138,6 +154,7 @@ def test_remove_says_why_it_could_not(tmp_path):
 
 
 def test_on_a_machine_the_clone_is_the_shipped_commit_beside_src_and_the_shared_tree_is_untouched(tmp_path, repo, machine, capsys):
+    _workspace(repo)
     assert _on(tmp_path, repo, "clone/pkg", "term") == 0
     assert "workload cwd: --cwd clone/pkg (the run's own clone of the shipped tree" in capsys.readouterr().err
     [rid] = [p.name for p in (tmp_path / "runs").iterdir()]
@@ -145,13 +162,39 @@ def test_on_a_machine_the_clone_is_the_shipped_commit_beside_src_and_the_shared_
     wait_runner(run_dir)
     sha = _git(repo, "rev-parse", "HEAD")
     shared = (machine / "src" / sha).resolve()
+    tree = (machine / "scratch" / rid / "tree").resolve()
     seen = _seen(run_dir)
-    assert Path(seen["cwd"]) == (machine / "scratch" / rid / "tree" / "pkg").resolve() and seen["head"] == sha
+    assert Path(seen["cwd"]) == tree / "pkg" and seen["head"] == sha
+    assert Path(seen["module"]) == tree / "m" / "src" / "leaky" / "__init__.py", "the workspace's code is imported from the clone"
+    assert Path(seen["wrote"]) == tree / "m" / "reports" / "plot.txt", "so a write beside its __file__ lands in the clone"
     assert not (machine / "scratch" / rid).exists(), "removed after the SIGTERM `research cancel` sends to the workload's group"
     assert not (shared / "pkg" / ".lake").exists(), "the shared tree's build trees are not this run's"
+    assert not (shared / "m" / "reports").exists() and not list(shared.rglob("__pycache__")), "nor its module's writes or bytecode"
     job = json.loads((run_dir / "job.json").read_text())["run"]
     assert job["cwd_basis"] == "clone" and job["cwd_clone"]["commit"] == sha and job["cwd_clone"]["of"] == str(shared)
+    assert str(tree / "m" / "src") in job["remote"]["pythonpath"] and not [p for p in job["remote"]["pythonpath"] if str(shared) in p]
+    assert A.build(run_dir)["execution"]["cwd_clone"] == job["cwd_clone"]
     assert R.summarize(run_dir)["state"] == "failed"
+
+
+def test_on_a_machine_a_clone_run_executes_the_shipped_code_not_the_shared_trees_current_files(tmp_path, repo, machine):
+    """Another run of the commit may have changed the shared tree's files (a `--cwd source` codegen); the clone run's record says it
+    ran a clean checkout of the commit, so that is the code it imports."""
+    _workspace(repo)
+    sha = _git(repo, "rev-parse", "HEAD")
+
+    def go(n: int) -> dict:
+        runs = tmp_path / f"runs{n}"
+        assert main(["run", "--runs-dir", str(runs), "--on", "m", "--project", "p", "--source", str(repo), "--no-custody-r2",
+                     "--no-sampler", "--cwd", "clone", "--", PY, "-c", PROBE]) == 0
+        [rid] = [p.name for p in runs.iterdir()]
+        wait_runner(machine / "runs" / rid)
+        return _seen(machine / "runs" / rid)
+
+    assert go(0)["mark"] is None
+    mod = machine / "src" / sha / "m" / "src" / "leaky" / "__init__.py"
+    mod.write_text(mod.read_text() + "MARK = 'changed in the shared tree'\n")
+    assert go(1)["mark"] is None
 
 
 def test_the_launcher_refuses_a_tree_shipped_without_git(tmp_path, repo, machine, monkeypatch, capsys):

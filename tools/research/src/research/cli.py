@@ -293,9 +293,10 @@ def cmd_run(argv: list[str]) -> int:
     cwd_basis = _resolve_cwd(a)
     remote_info = json.loads(ns.remote_json) if ns.remote_json else None
     clone_home = clone_rec = None
+    clone_env: dict[str, str] = {}
     if cwd_basis == "clone":
         try:
-            clone_home, clone_rec = _make_clone(a, ns, root, run_id, remote_info)
+            clone_home, clone_rec, clone_env = _make_clone(a, ns, root, run_id, remote_info)
         except clone.Refused as e:
             return _refuse(ns, run_dir, run_id, f"--cwd {a.cwd}: {e}", "CloneRefused", mem_reservation)
     try:
@@ -338,6 +339,7 @@ def cmd_run(argv: list[str]) -> int:
     # --env is the workload's: set for the harness (which spawns it with this environment), then restored so the store publish below
     # runs with the caller's environment (a workload-only AWS_* must not become the push credentials)
     apply_env = {k: v for k, v in env_map.items() if not (ns.claimed and k == "PYTHONPATH")}   # launch_request composed it: tool, tree roots, then this
+    apply_env = {**clone_env, **apply_env}
     saved_env = {k: os.environ.get(k) for k in apply_env}
     os.environ.update(apply_env)
     print(f"research: run {run_id} -> {run_dir}" + (f"  cwd={a.cwd}" if a.cwd else ""), file=sys.stderr)
@@ -469,10 +471,12 @@ def _resolve_cwd(a: argparse.Namespace) -> str:
     return "source"
 
 
-def _make_clone(a: argparse.Namespace, ns: argparse.Namespace, runs_root: Path, run_id: str, remote_info: dict | None) -> tuple[Path, dict]:
+def _make_clone(a: argparse.Namespace, ns: argparse.Namespace, runs_root: Path, run_id: str,
+                remote_info: dict | None) -> tuple[Path, dict, dict[str, str]]:
     """`--cwd clone[/SUB]`: clone the source root (this process's cwd, as for `--cwd source`) for this run alone (research.clone) and
     point `a.cwd` at it, or at SUB in it.  On a machine the clone must be the shipped commit; locally the checkout must be clean.
-    Returns the directory to remove once the workload has exited, and job.json's run.cwd_clone; clone.Refused when it cannot."""
+    Returns the directory to remove once the workload has exited, job.json's run.cwd_clone, and the workload's environment
+    (`_clone_imports`); clone.Refused when it cannot."""
     sub = clone.sub(a.cwd) or ""
     source_root = Path(os.getcwd())
     shipped = (remote_info or {}).get("source_sha") if ns.claimed else None
@@ -489,7 +493,27 @@ def _make_clone(a: argparse.Namespace, ns: argparse.Namespace, runs_root: Path, 
         clone.remove(home)
         raise
     a.cwd = str(tree / sub) if sub else str(tree)
-    return home, {"root": str(tree), "of": str(source_root), "commit": commit}
+    env = _clone_imports(source_root, tree, home, remote_info) if ns.claimed else {}
+    return home, {"root": str(tree), "of": str(source_root), "commit": commit}, env
+
+
+def _clone_imports(of: Path, tree: Path, home: Path, remote_info: dict | None) -> dict[str, str]:
+    """A machine's runner has the shipped tree's import roots on PYTHONPATH (launch_request), so the workload would import its code
+    from the shared tree: a write beside a module's __file__ would land there, and the run would execute that tree's files, whatever
+    another run left in them, while the record describes the clean clone.  Each entry under `of` is moved to the same directory in
+    the clone (run.remote.pythonpath too), and bytecode goes beside the clone: under <root>/cache/pycache every clone path would add
+    its own copies, never removed.  Locally the workload imports from whatever its interpreter has installed (an editable install
+    points at the invoking checkout); nothing is moved."""
+    base = os.path.realpath(of)
+
+    def move(p: str) -> str:
+        real = os.path.realpath(p)
+        return str(tree / os.path.relpath(real, base)) if real == base or real.startswith(base + os.sep) else p
+
+    if remote_info is not None and remote_info.get("pythonpath"):
+        remote_info["pythonpath"] = [move(p) for p in remote_info["pythonpath"]]
+    entries = [move(p) for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
+    return {"PYTHONPATH": os.pathsep.join(entries), "PYTHONPYCACHEPREFIX": str(home / "pycache")}
 
 
 def _drop_clone(home: Path | None) -> None:
