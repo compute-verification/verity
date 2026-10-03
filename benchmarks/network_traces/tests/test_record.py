@@ -127,3 +127,16 @@ def test_lines_cut_by_a_kill_are_dropped_and_merge_checks_the_grid(tmp_path: Pat
     assert rec.merge([tmp_path, tmp_path / "trace.json"])["configurations"] == one["configurations"] * 2
     with pytest.raises(ValueError, match="grid"):
         rec.merge([tmp_path / "other.json"])
+
+
+def test_a_repo_id_resolves_to_its_snapshot_with_or_without_refs(tmp_path: Path) -> None:
+    repo = tmp_path / "hub" / "models--org--m"
+    (repo / "snapshots" / "abc").mkdir(parents=True)
+    assert rec.local_model("org/m", tmp_path) == str(repo / "snapshots" / "abc")
+    (repo / "snapshots" / "def").mkdir()
+    with pytest.raises(RuntimeError, match="2 snapshots"):
+        rec.local_model("org/m", tmp_path)
+    (repo / "refs").mkdir()
+    (repo / "refs" / "main").write_text("def\n")
+    assert rec.local_model("org/m", tmp_path) == str(repo / "snapshots" / "def")
+    assert rec.local_model(str(repo), tmp_path) == str(repo)

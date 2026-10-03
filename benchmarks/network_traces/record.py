@@ -368,6 +368,19 @@ def evicted(*_) -> None:
     raise SystemExit(143)
 
 
+def local_model(name: str, hf_home: Path) -> str:
+    """A directory as given, or a repo id's snapshot in the Hugging Face cache: `refs/main`'s, else the only one (a
+    copied cache can lack `refs`, which an offline vLLM then can't resolve)."""
+    if Path(name).is_dir():
+        return name
+    repo = hf_home / "hub" / ("models--" + name.replace("/", "--"))
+    ref = repo / "refs" / "main"
+    snaps = [ref.read_text().strip()] if ref.exists() else sorted(p.name for p in (repo / "snapshots").glob("*"))
+    if len(snaps) != 1:
+        raise RuntimeError(f"{name}: {len(snaps)} snapshots in {repo}, and no refs/main")
+    return str(repo / "snapshots" / snaps[0])
+
+
 def run(args: argparse.Namespace) -> int:
     start = clock()
     deadline = start + 60 * args.minutes
@@ -380,7 +393,8 @@ def run(args: argparse.Namespace) -> int:
                                                              "frame_bytes": FRAME_BYTES}}
     port = free_port()
     served = "served"
-    server_argv = [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", args.model,
+    model = local_model(args.model, Path(os.environ.get("HF_HOME", Path.home() / ".cache/huggingface")))
+    server_argv = [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", model,
                    "--served-model-name", served, "--host", "127.0.0.1", "--port", str(port), "--seed", "0",
                    "--max-model-len", str(args.max_model_len), "--disable-uvicorn-access-log", *args.server_arg]
     meta["server_argv"] = server_argv[1:]
