@@ -81,7 +81,24 @@
  },
  "step_routes": {
   "prefill": "dense-mha when the step's longest prefill sequence <= TOPK, else sparse-mqa",
-  "decode": "sparse-mqa"
+  "decode": "sparse-mqa",
+  "mixed": "a step with prefill and decode tokens takes both routes when its prefill takes dense-mha (forward_impl runs forward_mha for the prefill tokens and the MQA path for the decode tokens, and the indexer scores), else sparse-mqa",
+  "recorded": "per layer and step from route_site (acquire.sources.route_source); a tap with a route is captured only on a step that takes it"
+ },
+ "route_site": {
+  "module": "model.layers.{i}.self_attn",
+  "method": "_use_sparse_mha",
+  "target": "vllm/model_executor/layers/attention/mla_attention.py:MLAAttention._use_sparse_mha",
+  "true": [
+   "dense-mha"
+  ],
+  "false": [
+   "sparse-mqa"
+  ],
+  "decode_tokens": [
+   "sparse-mqa"
+  ],
+  "detail": "called with the layer's attention metadata once per layer and step in _sparse_indexer_and_attn before it attends (again in forward_impl when the step has prefill tokens): True sends the prefill tokens to forward_mha, False sends every token to forward_mqa; a step's decode tokens (attn_metadata.num_decode_tokens > 0) take the MQA path on either answer"
  },
  "symbols": {
   "H": "hidden_size",
@@ -946,7 +963,6 @@
    "rank_identical": false,
    "target_only": false,
    "manifest_family": "instance_outputs",
-   "route": "sparse-mqa",
    "weights": [
     {
      "param": "model.layers.{i}.self_attn.W_UK_T",
@@ -1185,7 +1201,6 @@
    "rank_identical": true,
    "target_only": false,
    "manifest_family": "instance_outputs",
-   "route": "sparse-mqa",
    "weights": [
     {
      "param": "model.layers.{i}.self_attn.indexer.wq_b.weight",
@@ -1193,7 +1208,7 @@
      "rows": "=IH * ID"
     }
    ],
-   "note": "computed on both routes; only the sparse route scores with it",
+   "note": "computed on both routes (DeepseekV32Attention.forward calls it before the route is decided); only the sparse route scores with it",
    "commit": {
     "name": "model.layers.{i}.self_attn.indexer.wq_b/0",
     "binder": "module_hook"
@@ -1222,7 +1237,7 @@
    "rank_identical": true,
    "target_only": true,
    "manifest_family": "instance_outputs",
-   "route": "sparse-mqa"
+   "note": "computed on both routes; only the sparse route scores with it"
   },
   {
    "id": "indexer.weights",
@@ -1246,7 +1261,7 @@
    "rank_identical": true,
    "target_only": true,
    "manifest_family": "instance_outputs",
-   "route": "sparse-mqa"
+   "note": "computed on both routes; only the sparse route scores with it"
   },
   {
    "id": "indexer.k_cache",

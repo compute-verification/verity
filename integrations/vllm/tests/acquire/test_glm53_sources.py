@@ -14,7 +14,7 @@ import pytest
 import torch
 
 from verity_vllm.acquire.sources import moe_source as MS
-from verity_vllm.check import capture_map as CM
+from verity_vllm.commit import capture_map as CM
 
 ROOT = Path(__file__).parents[2]
 CMAP = CM.load(ROOT / "manifests" / "capture-maps" / "glm-moe-dsa-eager-hopper-tp8-v0.json")

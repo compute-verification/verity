@@ -15,7 +15,8 @@ import torch
 
 from verity_vllm.acquire.sources import moe_source
 from verity_vllm.commit import identity as ID
-from verity_vllm.check import capture_map as CM
+from verity_vllm.check.capture_map import check, check_target
+from verity_vllm.commit import capture_map as CM
 from verity_vllm.engine import meta_inventory as MI
 from verity_vllm.pipeline import cli
 from verity_vllm.program.registry import catalog
@@ -42,7 +43,7 @@ def registry():
 
 
 def _check(cmap=CMAP, inv=RANK0, registry=None) -> list[str]:
-    return CM.check(cmap, inv, CONFIG, TP, registry)
+    return check(cmap, inv, CONFIG, TP, registry)
 
 
 def test_the_map_the_fixture_and_the_config_are_one_checkpoint():
@@ -60,7 +61,7 @@ def test_the_map_the_fixture_and_the_config_are_one_checkpoint():
 
 def test_the_map_covers_the_inventory_with_no_problems(registry):
     assert _check(registry=registry) == []
-    assert all(CM.check_target(CMAP, rec) == [] for rec in DOC["ranks"].values())
+    assert all(check_target(CMAP, rec) == [] for rec in DOC["ranks"].values())
 
 
 def test_every_module_type_the_inventory_lists_is_in_the_map():
@@ -134,12 +135,12 @@ def test_a_different_kernel_fails_an_expectation():
 def test_a_different_switch_or_device_fails():
     rec = copy.deepcopy(RANK0)
     rec["selections"]["VLLM_USE_DEEP_GEMM"] = True
-    assert CM.check_target(CMAP, rec) == ["switch VLLM_USE_DEEP_GEMM = False, the inventory has True"]
+    assert check_target(CMAP, rec) == ["switch VLLM_USE_DEEP_GEMM = False, the inventory has True"]
     rec = copy.deepcopy(RANK0)
     rec["applied"]["compute_capability"] = [12, 0]
-    assert CM.check_target(CMAP, rec) == ["compute_capability = [9, 0], the inventory has [12, 0]"]
+    assert check_target(CMAP, rec) == ["compute_capability = [9, 0], the inventory has [12, 0]"]
     del rec["applied"]
-    assert CM.check_target(CMAP, rec) == ["compute_capability = [9, 0], the inventory has None", "num_sms = 132, the inventory has None"]
+    assert check_target(CMAP, rec) == ["compute_capability = [9, 0], the inventory has None", "num_sms = 132, the inventory has None"]
 
 
 def test_an_unregistered_definition_fails(registry):
@@ -184,7 +185,7 @@ def test_the_runbook_counts():
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
         40, 29, {"exists": 16, "tonight": 4, "port": 6, "copy": 2, "committed-only": 23})
     assert brief(CM.counts(CMAP, ENV, ("dense-mha",))) == (
-        43, 2206, {"exists": 699, "tonight": 300, "port": 391, "copy": 79, "committed-only": 737}, 21)
+        47, 2347, {"exists": 720, "tonight": 300, "port": 391, "copy": 79, "committed-only": 857}, 63)
     assert brief(CM.counts(CMAP, ENV, ("sparse-mqa",))) == (
         49, 2389, {"exists": 642, "tonight": 300, "port": 313, "copy": 79, "committed-only": 1055}, 183)
 
@@ -195,7 +196,8 @@ def test_the_bound_tap_counts():
         c = CM.counts(CMAP, ENV, routes)
         return c["bound_taps_per_step"], c["bound_taps_per_step_by_binder"]
 
-    assert bound(("dense-mha",)) == (1642, {"allreduce_norm": 468, "module_hook": 646, "moe": 525, "sampler": 1, "tp_partial": 2})
+    assert bound(("dense-mha",)) == (1663, {"allreduce_norm": 468, "module_hook": 667, "moe": 525, "sampler": 1, "tp_partial": 2})
+    assert bound(("dense-mha", "sparse-mqa")) == bound(("dense-mha",)), "a mixed step binds what a dense-mha step does"
     assert bound(("sparse-mqa",)) == (1585, {"allreduce_norm": 468, "module_hook": 589, "moe": 525, "sampler": 1, "tp_partial": 2})
 
 
