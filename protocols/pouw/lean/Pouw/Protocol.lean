@@ -34,6 +34,7 @@ import Pouw.Protocol.NCP.RouteU
 import Pouw.Protocol.NCP.Witness
 import Pouw.Protocol.NCP.Word
 import Pouw.Protocol.PearlC.Accum
+import Pouw.Protocol.PearlC.Completeness
 import Pouw.Protocol.PearlC.Defs
 import Pouw.Protocol.PearlC.Device
 import Pouw.Protocol.PearlC.DeviceChainOnly
@@ -122,7 +123,10 @@ inputs. P1, freezing under promotion (`Freeze`), and P3, the forming credit (`Fo
 cheap-binding lane's game (`Game`), named protocol (`Instance`), named assumption TT_OUT (`TTOut`) and γ from it
 (`Gamma`). The hidden audit, the tile check as a proof over core's `Verity.Game` (`Hidden`), its open obligation that a
 drawn tile's proof is sound (`HiddenTile`), what a proof system gives per tile to meet it (`HiddenTileGame`, met in
-`SecurityProofs` through core's batch lemma) and the sampled audit's γ under it (`HiddenGamma`).
+`SecurityProofs` through core's batch lemma) and the sampled audit's γ under it (`HiddenGamma`). The sampled audit's
+completeness on a population of activations (`Completeness`), its one assumption, the honest tiles' measured cap rate
+(`HonestCap`, empirical), the proof that every honest word is an FP32 word's (`HonestWords`) and completeness from the
+two (`Completeness`).
 
 ## `TileBound`: the FP4-tile model (`docs/pouw/fp4-tile-model.md`, bc-d9842080)
 

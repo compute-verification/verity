@@ -64,6 +64,7 @@ import Pouw.SecurityProofs.PearlC.CapLoopGamma
 import Pouw.SecurityProofs.PearlC.ChainCapKernelGamma
 import Pouw.SecurityProofs.PearlC.ChainCapLoopGamma
 import Pouw.SecurityProofs.PearlC.ChainOnlyGamma
+import Pouw.SecurityProofs.PearlC.Completeness
 import Pouw.SecurityProofs.PearlC.DeviceCapGamma
 import Pouw.SecurityProofs.PearlC.DeviceCapRev1Gamma
 import Pouw.SecurityProofs.PearlC.DeviceChainCapGamma
@@ -89,6 +90,7 @@ import Pouw.SecurityProofs.PearlC.FreezePPure
 import Pouw.SecurityProofs.PearlC.Gamma
 import Pouw.SecurityProofs.PearlC.HiddenGamma
 import Pouw.SecurityProofs.PearlC.HiddenTileGame
+import Pouw.SecurityProofs.PearlC.HonestWords
 import Pouw.SecurityProofs.PearlC.KernelWrefGamma
 import Pouw.SecurityProofs.PearlC.Peel
 import Pouw.SecurityProofs.PearlC.PeelExactChecks
