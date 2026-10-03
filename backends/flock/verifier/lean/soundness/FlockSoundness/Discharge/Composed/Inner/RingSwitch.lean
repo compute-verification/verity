@@ -271,6 +271,20 @@ theorem ringSwitch_holds (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : B
     show fOf h[lay.fc]! = fOf p.zerocheck.finalC + _
     rw [hfc, add_comm, ← add_assoc, CharTwo.add_self_eq_zero, zero_add]
 
+/-- `dot` is a sum over the second array's entries; the first array's missing entries read as zero. -/
+theorem fOf_dot_right (a b : Array F128) (n : ℕ) (hb : b.size = n) :
+    fOf (dot a b) = ∑ i : Fin n, fOf a[i.val]! * fOf b[i.val]! := by
+  rw [dot_eq_foldl, fOf_foldl_dot, fOf_zero, zero_add, Fin.sum_univ_eq_sum_range (fun i => fOf a[i]! * fOf b[i]!) n,
+    hb]
+  by_cases ha : n ≤ a.size
+  · rw [min_eq_right ha]
+  · rw [min_eq_left (by omega)]
+    refine Finset.sum_subset (Finset.range_mono (by omega)) fun i hi hni => ?_
+    simp only [Finset.mem_range, not_lt] at hi hni
+    rw [getElem!_neg a i (by omega)]
+    show fOf 0 * fOf b[i]! = 0
+    rw [fOf_zero, zero_mul]
+
 /-- **The batched target of honest ring switches** (completeness of §12.3–§12.5, GF128's claims to Ligerito's target).
 On a run of `ringSwitch` on well-formed rounds (each round's coins as many as it issued), if every claim's message is the honest `ŝ` and `f` is the packed witness (bit `v` of `f y` is
 `z[128y + v]`), the batched value `T` is `Σ_y f(y)·b(y)` for the batched basis `b(y) = Σ_k γ_k·Φ_{r''_k}(eq(z_k, y))`
@@ -284,7 +298,67 @@ theorem ringSwitch_target (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim) 
         (sws[k]!).rpp.size = 7) ∧
       fOf T = ∑ y : Fin (2 ^ (m - 7)), f y * ∑ k : Fin claims.size, fOf (sws[k.val]!).gamma *
         phi execArith (vecOf 7 (sws[k.val]!).rpp) (eqAt (vecOf (m - 7) (sws[k.val]!).z) y.val) := by
-  sorry
+  unfold ringSwitch at hrun
+  obtain ⟨t₁, k₁, h⟩ := label_bind hrun
+  obtain ⟨-, h⟩ := check_bind h
+  obtain ⟨s, t₂, hloop, h⟩ := bind_ok h
+  obtain ⟨cγ, t₃, -, h⟩ := bind_ok h
+  obtain ⟨hTs, -⟩ := pure_ok h
+  rw [forIn_range_eq] at hloop
+  obtain ⟨-, -, hQ, hs'⟩ := forIn_roundsQ _ (oStep claims rs) 7 (RsCheck m claims rs) (by
+      intro k st tt b tt' hb
+      obtain ⟨hshape, hb⟩ := check_bind hb
+      obtain ⟨tt₁, kk₁, hb⟩ := label_bind hb
+      obtain ⟨tt₂, kk₂, hb⟩ := absorbSlice_bind hb
+      obtain ⟨hval, hb⟩ := check_bind hb
+      obtain ⟨-, nn, tt₃, rr₃, kk₃, hb⟩ := sampleVec_bind (by omega) hb
+      obtain ⟨rfl, rfl⟩ := pure_ok hb
+      have e1 : tt₂.rounds = tt.rounds := by rw [kk₂.2, kk₁.2]
+      have e2 : tt₂.k = tt.k := by rw [kk₂.1, kk₁.1]
+      refine ⟨by rw [← e1, ← e2]; exact nn, by rw [rr₃, e1], by rw [kk₃, e2], ?_, hshape, hval⟩
+      rw [← e1, ← e2]
+      rfl) claims.size 0 t₁.k _ t₁ t₂ s (by omega) hloop
+  obtain ⟨hT, hsws⟩ := Prod.mk.inj hTs
+  set C : ℕ → Array F128 := fun i => (t₁.rounds[t₁.k + i]!).coins with hC
+  have hwf₁ : RoundsWF t₁.rounds := k₁.2 ▸ hwf
+  have hQk : ∀ k < claims.size, RsCheck m claims rs k := fun k hk => (hQ k (by simp; omega)).2
+  have hC7 : ∀ k < claims.size, (C k).size = 7 := fun k hk => by
+    rw [hC]; simp only; rw [RoundsWF.get hwf₁, (hQ k (by simp; omega)).1]
+  have hx : ∀ k < claims.size, claims[k]!.x.size = m - 6 := fun k hk => by
+    have := (hQk k hk).1
+    simp only [Bool.and_eq_true, beq_iff_eq] at this
+    exact this.2
+  obtain ⟨hs1, hs2⟩ := oStep_fold claims rs C (List.range' 0 claims.size) (#[], #[])
+  rw [← hs'] at hs1 hs2
+  have hs1size : s.1.size = claims.size := by rw [hs1]; simp
+  have hs1k : ∀ k < claims.size, s.1[k]! = dot (eqTable (C k)) (tOf rs[k]!) := fun k hk => by
+    rw [hs1, getElem!_pos _ k (by simp [hk])]; simp
+  have hs2k : ∀ k < claims.size, s.2[k]! = (C k, claims[k]!.x.extract 1) := fun k hk => by
+    rw [hs2, getElem!_pos _ k (by simp [hk])]; simp
+  have hsw : ∀ k < claims.size, sws[k]! = { gamma := cγ[k]!, rpp := C k, z := claims[k]!.x.extract 1 } := by
+    intro k hk
+    rw [hsws, getElem!_pos _ k (by simp [hk]), Array.getElem_map, Array.getElem_range, hs2k k hk]
+  refine ⟨by rw [hsws]; simp, fun k hk => ?_, ?_⟩
+  · rw [hsw k hk]
+    refine ⟨rfl, ?_, hC7 k hk⟩
+    have := hx k hk
+    simp; omega
+  · have hk : ∀ k : Fin claims.size, fOf cγ[k.val]! * fOf s.1[k.val]! = ∑ y : Fin (2 ^ (m - 7)),
+        f y * (fOf (sws[k.val]!).gamma *
+          phi execArith (vecOf 7 (sws[k.val]!).rpp) (eqAt (vecOf (m - 7) (sws[k.val]!).z) y.val)) := fun k => by
+      rw [hsw k.val k.isLt, hs1k k.val k.isLt, recombine_eq _ _ (hC7 k.val k.isLt)]
+      have hsv : vecOf 128 rs[k.val]! = shat hm (claimOf m claims[k.val]!) z :=
+        funext fun v => hs k.val k.isLt v
+      have htail : (claimOf m claims[k.val]!).tail hm = vecOf (m - 7) (claims[k.val]!.x.extract 1) := by
+        funext j
+        have := hx k.val k.isLt
+        simp only [Model.Claim.tail, claimOf, vecOf]
+        rw [FlockLevel3.extract_get! _ 1 _ j (by omega) le_rfl, Nat.add_comm]
+      rw [hsv, recombine_shat execArith execArith_correct hm _ z f hz, htail]
+      refine (Finset.mul_sum _ _ _).trans (Finset.sum_congr rfl fun y _ => ?_)
+      ring
+    rw [hT, fOf_dot_right cγ s.1 claims.size hs1size, Finset.sum_congr rfl fun k _ => hk k, Finset.sum_comm]
+    exact Finset.sum_congr rfl fun y _ => (Finset.mul_sum _ _ _).symm
 
 /-- **The rank check's weights are the ring switch's** (`eqWord`, `coinedOf`'s `eqw`): at a point given as a list,
 `eqWord p y` is `eqAt` of its entries at `y`, the weight `shat` gives word `y` at a claim whose point beyond the packed
