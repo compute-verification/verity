@@ -16,6 +16,7 @@ import functools
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -164,11 +165,12 @@ REMOVE_ATTEMPTS = 3
 
 
 def remove(path: Path, attempts: int = REMOVE_ATTEMPTS) -> str | None:
-    """Remove a run's clone directory: None once it is gone, else why not (the caller reports it; it never fails a run)."""
+    """Remove a run's clone directory: None once it is gone, else why not (the caller reports it; it never fails a run).  A
+    directory the workload left read-only is made writable first (`_Unprotect`); a symlink is never followed."""
     why = None
     for _ in range(attempts):
         try:
-            shutil.rmtree(path)
+            _rmtree(path, _Unprotect(path))
         except FileNotFoundError:
             pass
         except OSError as e:
@@ -178,3 +180,36 @@ def remove(path: Path, attempts: int = REMOVE_ATTEMPTS) -> str | None:
         if not os.path.lexists(path):
             return None
     return f"{why or 'it kept filling'} after {attempts} attempts"
+
+
+def _rmtree(path: Path | str, hook: _Unprotect) -> None:
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=hook)
+    else:
+        shutil.rmtree(path, onerror=lambda func, p, exc_info: hook(func, p, exc_info[1]))
+
+
+class _Unprotect:
+    """rmtree's error hook for a tree whose workload left directories read-only (a 0555 build output, a module cache, an
+    unreadable 0000 directory): on a PermissionError it adds u+rwx to the entry's directory and to the entry itself when that is a
+    directory, inside the tree only and never through a symlink, then removes the entry again.  An entry already gone is fine;
+    any other error, or a second PermissionError on one path, is raised."""
+
+    def __init__(self, root: Path | str):
+        self.root = os.path.abspath(root)
+        self.seen: set[str] = set()
+
+    def __call__(self, func: object, path: str | os.PathLike[str], exc: BaseException) -> None:
+        path = os.path.abspath(path)
+        if isinstance(exc, FileNotFoundError):
+            return
+        if not isinstance(exc, PermissionError) or path in self.seen:
+            raise exc
+        self.seen.add(path)
+        for d in (os.path.dirname(path), path):
+            if (d == self.root or d.startswith(self.root + os.sep)) and not os.path.islink(d) and os.path.isdir(d):
+                os.chmod(d, stat.S_IMODE(os.lstat(d).st_mode) | stat.S_IRWXU)
+        if os.path.isdir(path) and not os.path.islink(path):
+            _rmtree(path, self)
+        else:
+            os.unlink(path)

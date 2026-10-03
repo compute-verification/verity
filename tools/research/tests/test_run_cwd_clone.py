@@ -213,6 +213,28 @@ def test_a_clone_that_cannot_be_removed_is_reported_and_the_run_keeps_its_status
     assert f"could not remove {left} (OSError: [Errno 16] Device or resource busy); remove it by hand" in capsys.readouterr().err
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root removes a read-only directory's entries anyway")
+def test_a_clone_the_workload_left_read_only_is_removed(tmp_path, repo, capsys):
+    wl = ("import os; os.makedirs('ro/x'); open('ro/x/f', 'w').close(); os.chmod('ro/x', 0o555); os.chmod('ro', 0o555); "
+          "os.makedirs('nr/y'); open('nr/y/f', 'w').close(); os.chmod('nr', 0o000); "
+          "os.makedirs('nx'); open('nx/f', 'w').close(); os.chmod('nx', 0o600); os.chmod('.', 0o555)")
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--no-sampler", "--cwd", "clone", "--", PY, "-c", wl]) == 0
+    assert "could not remove" not in capsys.readouterr().err and _clones(tmp_path) == []
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root removes a read-only directory's entries anyway")
+@pytest.mark.filterwarnings("ignore:onerror argument is deprecated:DeprecationWarning")
+@pytest.mark.parametrize("python", ["this", "3.11"])
+def test_remove_makes_an_unreadable_clone_directory_writable(tmp_path, monkeypatch, python):
+    if python == "3.11":
+        monkeypatch.setattr(clone, "sys", type("Sys", (), {"version_info": (3, 11)}))   # rmtree's onerror, before onexc
+    (tmp_path / "d" / "ro").mkdir(parents=True)
+    (tmp_path / "d" / "ro" / "f").write_text("")
+    (tmp_path / "d" / "ro").chmod(0o555)
+    (tmp_path / "d").chmod(0o000)
+    assert clone.remove(tmp_path / "d") is None and not (tmp_path / "d").exists()
+
+
 def test_an_unexpected_error_before_the_workload_still_removes_the_clone(tmp_path, repo, monkeypatch):
     import research.cli as C
 
