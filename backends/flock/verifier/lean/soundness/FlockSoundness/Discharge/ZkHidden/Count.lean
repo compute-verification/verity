@@ -52,7 +52,8 @@ theorem zk_flock_countC_execOS_crH (hA : A.Correct)
         ksAvgStrictZ (planAtZKH dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg σ) +
         linkBoundZC A Hs P (planAtZKH dj y₀) (tabAtZKH dj y₀) vb k Rw M ρ t' (reg σ) (cont σ) +
-        ENNReal.ofReal (tr.bound qT) := by
-  sorry
+        ENNReal.ofReal (tr.bound qT) :=
+  zk_flock_countC_execOS_cr A Hs P (planAtZKH dj y₀) (tabAtZKH dj y₀) hA σs ks hks St hS Kd pop Lb src hA3 place vb
+    hk hRw hM hρ hr ht K σ hCR tr hT
 
 end FlockSoundness.Discharge.ZkHidden
