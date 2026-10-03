@@ -3405,7 +3405,8 @@ mod tests {
         assert!(c.ranges.iter().any(|r| r.kind == Kind::Mask) && c.nets.iter().any(|n| n.1.a.iter().filter(|x| !x.is_empty()).count() > 1));
     }
 
-    /// A typed template's refusals at parse: a non-power-of-two count of roots, and the flat block's wiring stated.
+    /// A typed template's refusals at parse: a non-power-of-two count of roots (three, and none), and the flat block's
+    /// wiring stated.
     #[test]
     fn typed_template_refusals() {
         let text = typed_statement();
@@ -3427,6 +3428,13 @@ mod tests {
                                  {"type": "unit", "net": part, "slot_log": 9, "pos0": 272, "count": 6, "packed": true},
                                  {"type": "mask", "net": "mask", "slot_log": 10, "pos0": 139, "count": 1}]);
         }).contains("not a power of two"), "three roots");
+        // no VU a block, every unit range of no slot
+        assert!(meta_of(&|m| {
+            m["vus_per_block"] = json!(0);
+            for r in m["ranges"].as_array_mut().unwrap().iter_mut().filter(|r| r["type"] == "unit") {
+                r["count"] = json!(0);
+            }
+        }).contains("the instance's roots (vus_per_block) are not a power of two"), "no root");
         assert!(meta_of(&|m| m["wires"] = json!([])).contains("never stated"));
         assert!(Composite::parse(&text, None).is_ok());
     }

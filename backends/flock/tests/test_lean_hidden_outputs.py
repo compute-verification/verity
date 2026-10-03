@@ -117,3 +117,28 @@ def test_a_block_with_no_vu_is_refused(store, tmp_path):
     p = subprocess.run([str(BIN), "statement", "--statement", SETS["flat", "gemm-coordinate"], "--circuit", str(bad),
                         "--public", str(d / "pub-4.bin")], capture_output=True, text=True)
     assert p.returncode == 1 and "vus_per_block is 0: a block of no VU" in p.stdout, (p.stdout, p.stderr)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("g", [3, 0])
+def test_a_template_whose_roots_are_not_a_power_of_two_is_refused(store, tmp_path, g):
+    """A template's roots, one per VU, are a power of two (`check_typed`; the Rust side is `circuit.rs`'s
+    `typed_template_refusals`), so 0 too. Typed GEMM's ranges are kept consistent: each net's count is per VU, and three VUs
+    get ranges laid out for them (aligned, disjoint) in 2^23 bits."""
+    d = store / "typed" / "gemm-coordinate" / "stage"
+    head, meta, rest = (d / "circuit.txt").read_text().split("\n", 2)
+    m = json.loads(meta[len("META "):])
+    assert m["vus_per_block"] == 2 and m["k_log"] == 22 and m["per_vu"]["root"] == 1
+    m["vus_per_block"] = g
+    for r in m["ranges"]:
+        if r["type"] == "unit":
+            r["count"] = g * m["per_vu"][r["net"]]
+    if g == 3:
+        m["k_log"] = 23
+        for r in m["ranges"]:
+            r["pos0"] = {"hm96": 0, "sha512x3": 16, "mask": 304, "root": 4880}.get(r["net"], 320)
+    bad = tmp_path / "circuit.txt"
+    bad.write_text(head + "\nMETA " + json.dumps(m, sort_keys=True, separators=(",", ":")) + "\n" + rest)
+    p = subprocess.run([str(BIN), "statement", "--statement", SETS["typed", "gemm-coordinate"], "--circuit", str(bad),
+                        "--public", str(d / "pub-4.bin")], capture_output=True, text=True)
+    assert p.returncode == 1 and "the instance's roots (vus_per_block) are not a power of two" in p.stdout, (p.stdout, p.stderr)
