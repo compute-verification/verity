@@ -12,7 +12,7 @@ envf=$(mktemp "${TMPDIR:-/tmp}/hidden-zk-env.XXXXXX")      # mode 600; read and 
 export -p > "$envf"
 echo "scope.sh: $unit.scope, CPUs $cpus, MemoryMax $mem, as $(id -un)"
 sudo -n systemd-run --scope --quiet --unit="$unit" --slice=vy-lend.slice -p AllowedCPUs="$cpus" -p MemoryMax="$mem" \
-  -p MemorySwapMax=0 --uid="$(id -u)" --gid="$(id -g)" -- \
+  -p MemorySwapMax=0 -- setpriv --reuid="$(id -u)" --regid="$(id -g)" --init-groups \
   bash -c 'source "$1"; rm -f "$1"; cd "$2" && exec taskset -c "$3" bash benchmarks/pouw/hidden_zk/job.sh' _ "$envf" "$PWD" "$cpus" &
 pid=$!
 trap 'echo "scope.sh: stopping $unit.scope"; sudo -n systemctl stop "$unit.scope"' TERM INT HUP
