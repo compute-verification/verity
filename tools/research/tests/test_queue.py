@@ -509,7 +509,9 @@ from pathlib import Path
 a = sys.argv[1:]
 Path(os.environ["FAKE_SEEN"]).write_text(json.dumps({"argv": a, "files": sorted(p.name for p in Path.cwd().iterdir()),
                                                      "pythonpath": os.environ.get("PYTHONPATH"),
-                                                     "built": Path("backends/flock/verifier/lean/.lake/built").is_file()}))
+                                                     "built": Path("backends/flock/verifier/lean/.lake/built").is_file(),
+                                                     "env": {k: os.environ.get(k) for k in ("VERITY_STORE_REQUIRED",
+                                                             "CHECK_STORE_CUSTODY", "RESEARCH_RUN_ID", "GIT_AUTHOR_EMAIL")}}))
 fail = os.environ.get("FAKE_FAIL")
 Path(a[a.index("--json") + 1]).write_text(json.dumps([{"name": "pkg", "suite": "pkg", "status": "failed" if fail else "passed",
                                                        "failed_tests": [fail] if fail else None}]))
@@ -606,10 +608,13 @@ class Machine:
     """`research run --on` and `research fetch` against a directory, as a machine serves them: the launch ships the `--source`
     checkout's HEAD (a shared clone of its repository, detached there; a dirty checkout is refused), puts each `--send` file in the
     run's inputs and runs the command in the shipped tree with RESEARCH_RUN_DIR and RESEARCH_RUN_ID, then writes status.json; a
-    fetch copies the records into the local run dir.  ``outcome(run_dir, run_id, head)``, when given, stands in for the command."""
+    fetch copies the records into the local run dir.  ``outcome(run_dir, run_id, head)``, when given, stands in for the command.
+    With ``custody_r2``, the launch stages the run's custody key under `<root>/requests/<run id>/custody/` first, as `--custody-r2`
+    (the default with --on) does."""
 
-    def __init__(self, tmp: Path, outcome=None, fetched: dict | None = None, reachable: bool = True):
+    def __init__(self, tmp: Path, outcome=None, fetched: dict | None = None, reachable: bool = True, custody_r2: bool = False):
         self.root, self.outcome, self.fetched, self.reachable = tmp / "machine", outcome, fetched or {}, reachable
+        self.custody_r2 = custody_r2
         self.launched: list[list[str]] = []
 
     def launch(self, argv: list[str], cwd: Path) -> subprocess.CompletedProcess:
@@ -628,6 +633,10 @@ class Machine:
         for i, x in enumerate(flags):
             if x == "--send":
                 shutil.copy(flags[i + 1], run / "inputs")
+        if self.custody_r2:
+            (key := self.root / "requests" / rid / "custody").mkdir(parents=True)
+            (key / "store.toml").write_text('[remote]\nkind = "s3"\n')
+            (key / "cred.json").write_text("{}\n")
         (Path(os.environ["RESEARCH_RUNS"]) / rid).mkdir(parents=True)
         if self.outcome is not None:
             self.outcome(run, rid, head)
@@ -777,6 +786,35 @@ def test_a_remote_quick_tier_that_cannot_launch_or_is_never_seen_to_end_fails_af
     tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp), slot=world.tmp / "no-slot.py")
     assert tier(pr).endswith("no-slot.py isn't there to take a check slot on vy-test with (run it from a checkout of the repository)")
     assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False
+
+
+def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does(world, monkeypatch):
+    """On the machine the workload's environment holds no store credential, so `check.py` hands its steps the run's custody key
+    (CHECK_STORE_CUSTODY) and VERITY_STORE_REQUIRED=1.  The tier handed neither: C-Flock's store-backed tests skipped as "the
+    evidence store is not reachable", and the skip passed (red team, #989).  It hands both as check.py does, never the caller's,
+    and nothing of the recording run's own; with no key staged, the store is still required."""
+    from research import queue as Q
+
+    main = world.change({"tools/check/suites.py": FAKE_SUITES})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setenv("FAKE_SEEN", str(seen := world.tmp / "seen.json"))
+    monkeypatch.setenv("CHECK_STORE_CUSTODY", str(world.tmp / "the-callers-custody"))
+    monkeypatch.delenv("VERITY_STORE_REQUIRED", raising=False)
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+    machine = Machine(world.tmp, custody_r2=True)
+    tier, _ = _remote_tier(world, monkeypatch, machine)
+    assert tier(world.gh.prs[1]) is None
+    flags = machine.launched[-1]
+    key = machine.root / "requests" / flags[flags.index("--id") + 1] / "custody"
+    env = json.loads(seen.read_text())["env"]
+    assert env["VERITY_STORE_REQUIRED"] == "1" and env["CHECK_STORE_CUSTODY"] == str(key.resolve())
+    assert env["RESEARCH_RUN_ID"] is None and env["GIT_AUTHOR_EMAIL"]
+    machine.custody_r2 = False
+    assert tier(world.gh.prs[1]) is None
+    env = json.loads(seen.read_text())["env"]
+    assert env["VERITY_STORE_REQUIRED"] == "1" and env["CHECK_STORE_CUSTODY"] is None
 
 
 def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, capsys):

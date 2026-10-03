@@ -4,10 +4,11 @@ prints, or None for a pass, the same way wherever the tier ran.
 
     python3 quick_tier.py --head SHA --base SHA [--lean DIR ...] -- CMD...
 
-runs it in the working directory inside a `research run` and writes the facts to `$RESEARCH_RUN_DIR/result.json` (kind
-`quick-tier/v1`, under `tier`), with the suites' report and logs under `$RESEARCH_RUN_DIR/out/`.  `research queue ready --on MACHINE`
-sends this file with the run, so the machine runs the caller's version whatever the PR's tree holds.  Stdlib only and no import from
-`research`: it runs from the run's inputs under the machine's `python3`.
+runs it in the working directory inside a `research run`, in the environment check.py gives its steps there (`run_env`: the store
+required, through the run's custody key), and writes the facts to `$RESEARCH_RUN_DIR/result.json` (kind `quick-tier/v1`, under
+`tier`), with the suites' report and logs under `$RESEARCH_RUN_DIR/out/`.  `research queue ready --on MACHINE` sends this file with
+the run, so the machine runs the caller's version whatever the PR's tree holds.  Stdlib only and no import from `research`: it runs
+from the run's inputs under the machine's `python3`.
 """
 from __future__ import annotations
 
@@ -23,10 +24,30 @@ SUITES = "tools/check/suites.py"
 #: variables that would point the tier's Python at the caller's tree or environment instead of the checkout's own
 CALLER_ENV = ("PYTHONPATH", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT")
 ROW_KEYS = ("name", "suite", "status", "failed_tests", "log")
+#: what check.py sets for its steps inside a recorded run (its CUSTODY_ENV and STORE_REQUIRED_ENV), never inherited
+CUSTODY_ENV, STORE_REQUIRED_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED"
 
 
 def _git(tree: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], cwd=tree, capture_output=True, text=True)
+
+
+def run_env(environ, run_dir: str, run_id: str) -> dict:
+    """What the tier's builds and suites see inside a recorded run, as check.py's `env()` gives its steps: nothing of the recording
+    run's own (`RESEARCH_*`: the tests start runs of their own, which would inherit them); the evidence store required (a
+    store-backed test that can't reach it fails instead of skipping) and reached through the run's custody dir, `<root>/requests/<run
+    id>/custody/` beside `<root>/runs/<run id>/`, when it holds the key (on a machine the workload's environment holds no store
+    credential); and a git identity for the tests that commit in throwaway repositories."""
+    out = {k: v for k, v in environ.items() if not k.startswith("RESEARCH_") and k not in (CUSTODY_ENV, STORE_REQUIRED_ENV)}
+    out[STORE_REQUIRED_ENV] = "1"
+    custody = Path(run_dir).resolve().parent.parent / "requests" / run_id / "custody"
+    if (custody / "store.toml").is_file() and (custody / "cred.json").is_file():
+        out[CUSTODY_ENV] = str(custody)
+    for k in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"):
+        out.setdefault(k, "check")
+    for k in ("GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
+        out.setdefault(k, "check@localhost")
+    return out
 
 
 def tier(tree: Path, out: Path, head: str, base: str, command: list[str], lean=(), env: dict | None = None) -> dict:
@@ -124,7 +145,7 @@ def main(argv: list[str]) -> int:
         return 2
     lean = [v for k, v in pairs if k == "--lean"]
     d = Path(run_dir)
-    doc = tier(Path.cwd(), d / "out", head, base, command, lean)
+    doc = tier(Path.cwd(), d / "out", head, base, command, lean, run_env(os.environ, run_dir, rid))
     why = judge(doc, head, "its output is in this run's log")
     result = {"schema": "research/result/v0.1", "kind": KIND, "run_id": rid,
               "workload_fingerprint": {"head": doc["head"], "base": base, "command": command, "lean": lean},
