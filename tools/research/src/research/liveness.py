@@ -1,0 +1,317 @@
+"""What live work names, and what a source tree holds besides its commit: the checks the resource steward's node-sweep.sh made
+before deleting (its REFS_PY, EXTRA_PY and JOBS_PY), so `research retention gc` deletes nothing live work may still read.
+
+`Live.names(patterns)` -> {pattern: [ref, ...]} for each pattern something live names:
+  - a request under <research>/requests/r2* not finished or refused whose runner is alive or not yet launched: its request files,
+    launch.json and job.json (`request:<id>`; a refused request never runs, and a dead runner's request holds nothing);
+  - a Kueue pod or workload not finished, where k3s is installed: its spec (`pods:<name>`, `workloads:<name>`);
+  - a fill job queued or running: its script (`fill:queue/<name>`);
+  - every process: its cwd, root, open files, maps, argv and environment (`proc:<pid>(<comm>)`), this one's included.
+A pattern starting with `/` names that path or anything beneath it: it matches where no name character follows (`pytest-1` is not
+`pytest-12`, while a quote, a colon or `=` after it counts). Any other pattern, a commit sha, names any text that carries it.
+LivenessError when it can't tell: kubectl fails, or a process's files can't be read (only root reads every process), so a caller
+never takes "nothing names it" from a scan that couldn't look. A process gone mid-scan names nothing.
+
+`outside_commit(tree, bare)`: the files a source tree holds besides its commit's files, build caches and registered fixtures
+(fixtures/artifacts.json), which may be a run's output. With .git: git status (untracked, ignored and changed files); without, the
+bare repo's commit (`ls-tree`) and files changed after READY.json. git runs as the tree's owner, so root never runs a hook or
+filter its config names, and reads neither the system's nor a global config (no fsmonitor daemon). Unknown when it can't tell.
+
+`JobTrees`: node 1's /workspace/jobs/src copies (job_tree.sh) and which of them a live pod still reads.
+"""
+from __future__ import annotations
+
+import json
+import os
+import pwd
+import re
+import shutil
+import subprocess
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Callable, Iterable, Sequence
+
+TERMINAL = frozenset({"done", "failed", "cancelled", "exited", "timeout", "timed_out", "refused"})
+NAME_TAIL = r"(?![\w.-])"
+CACHE = re.compile(r"(^|/)(\.venv|\.lake|__pycache__|\.pytest_cache|\.ruff_cache|\.mypy_cache|\.hypothesis|node_modules|target|[^/]*\.egg-info)"
+                   r"(/|$)|\.pyc$|^READY\.json$|^integrations/vllm/verity_vllm/program/kernels/cpp/build(/|$)")
+GONE = (FileNotFoundError, ProcessLookupError)
+
+Kube = Callable[[str], list[dict]]
+
+
+class LivenessError(RuntimeError):
+    """What live work names can't be established; the message says what failed."""
+
+
+class Unknown(RuntimeError):
+    """Whether a tree holds files outside its commit can't be told; the message says why."""
+
+
+def k3s_kubectl(kind: str) -> list[dict]:
+    try:
+        out = subprocess.run(["k3s", "kubectl", "get", kind, "-A", "-o", "json"], capture_output=True, text=True, timeout=300)
+    except (OSError, subprocess.SubprocessError) as e:
+        raise LivenessError(f"kubectl get {kind}: {e}") from None
+    if out.returncode:
+        raise LivenessError(f"kubectl get {kind} exited {out.returncode}: {out.stderr.strip()[:200]}")
+    try:
+        return json.loads(out.stdout).get("items", [])
+    except ValueError as e:
+        raise LivenessError(f"kubectl get {kind}: not JSON ({e})") from None
+
+
+def default_kube() -> Kube | None:
+    """`k3s kubectl` where k3s is installed (node 1), else None: a node without Kubernetes has no pods to name anything."""
+    return k3s_kubectl if shutil.which("k3s") else None
+
+
+def finished(obj: dict) -> bool:
+    st = obj.get("status") or {}
+    return st.get("phase") in ("Succeeded", "Failed") or any(c.get("type") == "Finished" and c.get("status") == "True"
+                                                              for c in st.get("conditions") or [])
+
+
+def matcher(patterns: Iterable[str]) -> Callable[[str], list[str]]:
+    pats = list(dict.fromkeys(patterns))
+    rx = {p: re.compile(re.escape(p) + NAME_TAIL) for p in pats if p.startswith("/")}
+    return lambda text: [p for p in pats if (rx[p].search(text) if p in rx else p in text)]
+
+
+def _read(path: str | Path) -> str:
+    try:
+        with open(path, "rb") as f:
+            return f.read().decode(errors="replace")
+    except OSError:
+        return ""
+
+
+def _load(path: Path) -> dict:
+    try:
+        d = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return {}
+    return d if isinstance(d, dict) else {}
+
+
+@dataclass
+class Live:
+    """The live work on this machine (module docstring). `pids` limits the process scan (a test's own children)."""
+    research: Path = Path("/workspace/research")
+    fill: Path = Path("/workspace/pouw/fill")
+    proc: Path = Path("/proc")
+    kube: Kube | None = field(default_factory=default_kube)
+    pids: Sequence[int] | None = None
+
+    def names(self, patterns: Iterable[str]) -> dict[str, list[str]]:
+        hits = matcher(patterns)
+        out: dict[str, list[str]] = {}
+        for ref, text in self._texts():
+            for p in hits(text):
+                out.setdefault(p, []).append(ref)
+        return out
+
+    def _texts(self) -> Iterable[tuple[str, str]]:
+        yield from self._requests()
+        if self.kube is not None:
+            for kind in ("pods", "workloads.kueue.x-k8s.io"):
+                for o in self.kube(kind):
+                    if not finished(o):
+                        yield f"{kind.split('.')[0]}:{(o.get('metadata') or {}).get('name')}", json.dumps(o.get("spec") or {})
+        for sub in ("queue", "running"):
+            d = self.fill / sub
+            for f in sorted(d.iterdir()) if d.is_dir() else []:
+                if f.is_file():
+                    yield f"fill:{sub}/{f.name}", _read(f)
+        yield from self._processes()
+
+    def _requests(self) -> Iterable[tuple[str, str]]:
+        req = self.research / "requests"
+        for q in sorted(req.glob("r2*")) if req.is_dir() else []:
+            run = self.research / "runs" / q.name
+            if _load(run / "status.json").get("state", "") in TERMINAL or (run / "refused.json").exists():
+                continue
+            if (run / "launch.json").exists():
+                pid = str(_load(run / "launch.json").get("runner_pid") or "")
+                if not pid or not (self.proc / pid).exists():
+                    continue
+            files = [f for f in sorted(q.iterdir()) if f.is_file()] if q.is_dir() else []
+            yield f"request:{q.name}", "".join(_read(f) for f in [*files, run / "launch.json", run / "job.json"])
+
+    def _processes(self) -> Iterable[tuple[str, str]]:
+        pids = [str(p) for p in self.pids] if self.pids is not None else [p for p in os.listdir(self.proc) if p.isdigit()]
+        for pid in pids:
+            d = self.proc / pid
+            try:
+                parts = self._process(d)
+            except GONE:
+                continue
+            except OSError as e:
+                raise LivenessError(f"can't read {d}: {e.strerror or e} (gc reads every process: run it as root)") from None
+            yield f"proc:{pid}({_read(d / 'comm').strip()})", "\n".join(parts)
+
+    @staticmethod
+    def _process(d: Path) -> list[str]:
+        parts = []
+        for link in ("cwd", "root"):
+            try:
+                parts.append(os.readlink(d / link))
+            except GONE:
+                pass
+        for fd in os.listdir(d / "fd"):
+            try:
+                parts.append(os.readlink(d / "fd" / fd))
+            except GONE:
+                pass
+        for f in ("maps", "cmdline", "environ"):
+            with open(d / f, "rb") as fh:
+                parts.append(fh.read().decode(errors="replace").replace("\0", " "))
+        return parts
+
+
+# ---- what a source tree holds besides its commit ----------------------------------------------------------------------------------------
+
+def _git(args: list[str], owner_of: Path) -> subprocess.CompletedProcess:
+    st = os.stat(owner_of)
+    try:
+        home = pwd.getpwuid(st.st_uid).pw_dir
+    except KeyError:
+        home = "/nonexistent"
+    as_owner = {"user": st.st_uid, "group": st.st_gid, "extra_groups": []} if os.geteuid() == 0 and st.st_uid != 0 else {}
+    env = {"PATH": os.environ.get("PATH") or "/usr/bin:/bin", "HOME": home, "GIT_OPTIONAL_LOCKS": "0", "LC_ALL": "C",
+           "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull}
+    try:
+        return subprocess.run(["git", *args], capture_output=True, cwd="/", env=env, timeout=1800, **as_owner)
+    except (OSError, subprocess.SubprocessError) as e:
+        raise Unknown(f"git {args[0]}: {e}") from None
+
+
+def outside_commit(tree: Path | str, bare: Path | str) -> list[str]:
+    """What `tree` holds besides its commit's files (module docstring): [] when nothing, each extra as a path, a changed tracked file
+    as `<git status code> <path>` (with .git) or `changed <path>` (without); Unknown when it can't tell."""
+    tree = Path(tree)
+    try:
+        reg = {v for k, v in _load(tree / "fixtures/artifacts.json").items() if k.startswith("art:") and isinstance(v, str)}
+    except AttributeError:
+        reg = set()
+
+    def keep(rel: str) -> bool:
+        return not CACHE.search(rel) and not any(rel == r or rel.startswith(r.rstrip("/") + "/") for r in reg)
+
+    def files(rel: str) -> Iterable[str]:
+        p = tree / rel
+        if not p.is_dir() or p.is_symlink():
+            yield os.path.normpath(rel)
+            return
+        for dp, dns, fns in os.walk(p):
+            r = os.path.relpath(dp, tree)
+            dns[:] = sorted(d for d in dns if not CACHE.search(os.path.normpath(os.path.join(r, d)) + "/"))
+            yield from (os.path.normpath(os.path.join(r, f)) for f in sorted(fns))
+
+    extra: list[str] = []
+    if (tree / ".git").is_dir():
+        st = _git(["-C", str(tree), "status", "--porcelain", "--ignored", "-z", "--untracked-files=normal"], tree)
+        if st.returncode:
+            raise Unknown(f"git status failed: {st.stderr.decode(errors='replace').strip()[:200]}")
+        entries = iter(st.stdout.split(b"\0"))
+        for e in entries:
+            if not e:
+                continue
+            code, rel = e[:2].decode(), os.path.normpath(e[3:].decode(errors="replace"))
+            if code[0] in "RC":
+                next(entries, None)
+            if code in ("??", "!!"):
+                if not CACHE.search(rel + "/"):
+                    extra += [f for f in files(rel) if keep(f)]
+            else:
+                extra.append(f"{code.strip()} {rel}")
+        return extra
+    ls = _git(["--git-dir", str(bare), "ls-tree", "-r", "--name-only", "-z", tree.name], tree)
+    if ls.returncode:
+        raise Unknown("no .git, and the bare repo lacks the commit")
+    tracked = {x.decode(errors="replace") for x in ls.stdout.split(b"\0") if x}
+    try:
+        shipped = os.stat(tree / "READY.json").st_mtime + 60
+    except OSError:
+        raise Unknown("no .git and no READY.json") from None
+    for f in files("."):
+        if f in tracked:
+            if os.lstat(tree / f).st_mtime > shipped:
+                extra.append(f"changed {f}")
+        elif keep(f):
+            extra.append(f)
+    return extra
+
+
+# ---- node 1's job trees -----------------------------------------------------------------------------------------------------------------
+
+CONTENT = re.compile(r"[0-9a-f]{16}")
+
+
+def live_pods(kube: Kube) -> set[str]:
+    return {(o.get("metadata") or {}).get("name") for o in kube("pods") if (o.get("status") or {}).get("phase") not in ("Succeeded", "Failed")}
+
+
+def _mtime(p: Path) -> float:
+    """A copy's age stamp: `cp -a` gives it its source's mtime and a fresh ctime."""
+    try:
+        st = os.stat(p)
+    except OSError:
+        return 0.0
+    return max(st.st_mtime, st.st_ctime)
+
+
+@dataclass
+class JobTrees:
+    """/workspace/jobs/src (job_tree.sh): a per-pod copy (`<hostname>`, `pod-<hostname>`, made at pod start, read by nothing once its
+    pod ends) and a content copy (`<id16>`, shared by every job of that content, aged by the newest by-pod/<pod> file naming it,
+    since a reused copy keeps its mtime). A content copy without `.copied` is job_tree.sh's to remake, so it is never a candidate.
+    `pods`: the live pods (`live_pods`); the ages alone need none."""
+    root: Path
+    pods: set[str] = field(default_factory=set)
+
+    def __post_init__(self):
+        self.newest: dict[str, float] = {}
+        self.by_pod: dict[str, list[tuple[str, float]]] = {}
+        bp = self.root / "by-pod"
+        for f in sorted(bp.iterdir()) if bp.is_dir() else []:
+            try:
+                path, mt = f.read_text().strip(), f.stat().st_mtime
+            except OSError:
+                continue
+            if os.path.dirname(path) != str(self.root):
+                continue
+            e = os.path.basename(path)
+            self.newest[e] = max(self.newest.get(e, 0.0), mt)
+            self.by_pod.setdefault(e, []).append((f.name, mt))
+
+    def age_stamp(self, e: str) -> float:
+        p = self.root / e
+        t = _mtime(p)
+        return max(t, _mtime(p / ".copied"), self.newest.get(e, 0.0)) if CONTENT.fullmatch(e) else t
+
+    def held(self, e: str, since: float | None = None) -> str:
+        """Why a live pod still reads copy `e` ('' when none does); `since`: a by-pod file written after it also holds a content copy."""
+        if CONTENT.fullmatch(e):
+            if live := [pod for pod, _ in self.by_pod.get(e, []) if pod in self.pods]:
+                return f"by-pod of live pod {live[0]}"
+            if since is not None and (new := [pod for pod, mt in self.by_pod.get(e, []) if mt >= since]):
+                return f"by-pod written since the rename: {new[0]}"
+            return ""
+        host = e[4:] if e.startswith("pod-") else e
+        return f"live pod {host}" if host in self.pods or e in self.pods else ""
+
+    def copies(self) -> Iterable[tuple[str, str | None]]:
+        """(name, why it is never a candidate, else None) of every copy."""
+        for e in sorted(os.listdir(self.root)):
+            p = self.root / e
+            if e == "by-pod" or e.startswith(".") or ".partial." in e or p.is_symlink() or not p.is_dir():
+                continue
+            if CONTENT.fullmatch(e) and not (p / ".copied").exists():
+                yield e, "no .copied, so job_tree.sh may be remaking it"
+            else:
+                yield e, None
+
+
+__all__ = ["CACHE", "JobTrees", "Live", "LivenessError", "TERMINAL", "Unknown", "default_kube", "finished", "k3s_kubectl", "live_pods",
+           "matcher", "outside_commit"]
