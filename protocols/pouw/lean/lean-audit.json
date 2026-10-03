@@ -9615,10 +9615,10 @@
    ]
   },
   "Pouw.Assumptions.PearlC.HiddenTile": {
-   "digest": "9e5bcd78c17910ce15a90286f47abdf415a2f36051b93749a49e6f57b52e94e4",
+   "digest": "c66056a9ef33bbc697c848f1efead8cebf524d00db6510edc77f0eecd633f5fc",
    "definitions": {
-    "Pouw.PearlC.Assumptions.TileProofSound": "d00e52f39d65ec29d48235decfd6758f19aafe81f1000b243b162f7e46244872",
-    "Pouw.PearlC.Assumptions.TileProofSoundAll": "7a15c4a25cb9f6e554c9729bccfab09a0b182322c41a81d12aabbd9906fa57dc"
+    "Pouw.PearlC.Assumptions.TileProofSound": "639f98447f6c6c587e14a0d6086e06a990570d57a3bd22beac2ff989bf2f0040",
+    "Pouw.PearlC.Assumptions.TileProofSoundAll": "68fa374e6e32105f7e0fb6ac933a3494270054495536d060d6015fc6a3e4a6d5"
    },
    "pins": ["Pouw.PearlC.gammaHidden_of_sampled_all", "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192"]
   },
@@ -17166,18 +17166,19 @@
    ]
   },
   "Pouw.Protocol.PearlC.Hidden": {
-   "digest": "4f82d5a2f808ac866d0eb539bc29ac6ed1e8ddc8dfbd0aa94334d0bf6560c196",
+   "digest": "5489a5fb78b73772516f0a6c351eb091c441ec93fa73734ea82d0b928249a260",
    "definitions": {
-    "Pouw.PearlC.GγHidden": "183f335eeb58d379f248dd6a5e6b20290b55ef7825298e372afa34c194e99009",
-    "Pouw.PearlC.HiddenAudit": "a999e986c781fa2761fe479e66b1e4e97726fde8f670b309892e94a939d697df",
-    "Pouw.PearlC.HiddenAudit.Bounded": "4cb139d8260b5f407415c7df5c2c723371adec51c2b90f409092bb9a510d0acb",
-    "Pouw.PearlC.HiddenAudit.Prover": "bfc60df4cf106f41e8a25f5ee0d41388f2f2e6432e9e9794c215802333f1eb17",
-    "Pouw.PearlC.HiddenAudit.ProverBounded": "1a340f43c7c67cbc4c55a5fd8b50a229e4076f018bfce22d0d907beba92d726a",
+    "Pouw.PearlC.GγHidden": "748703f9f1082ef3c6056657657198f2f2e48bca4f2d7222ae6978266264aa55",
+    "Pouw.PearlC.HiddenAudit": "4644e9aa08d46d127146c9bea9d5c1804986c235583758d7f2632941fe3b599a",
+    "Pouw.PearlC.HiddenAudit.Bounded": "40becb17b2e249c9c4ad2f49cc167fdbd488eb69e589d88a952801e97bbbcd4b",
+    "Pouw.PearlC.HiddenAudit.Opening": "3ddd074e79e154257f89bccae3a428d2895bf06d452586ca62bd9318daa392bf",
+    "Pouw.PearlC.HiddenAudit.Prover": "c30c80c1ab0a75296d98c06e0d4aca678741a9d0b061b25d42a334b1c14c8a42",
+    "Pouw.PearlC.HiddenAudit.ProverBounded": "1bbb2f517195f5184e0645318d4127f392d6de4329d0afefd1dfbf94f72f9dfc",
     "Pouw.PearlC.HiddenAudit.Root": "bbe6bdc01a68c80beb96977ab8c6ceb6c3d4552ffe1edb803db6d530db6bed11",
     "Pouw.PearlC.HiddenAudit.batch": "ef06a02067e26a1c528d833ff7669b4126360832f198544ee23d59b92b9a6556",
-    "Pouw.PearlC.HiddenAudit.game": "8870b9712f2be2d7bc87cec254cecb815a125441c7f40c9a9663cc39be72096d",
-    "Pouw.PearlC.HiddenAudit.root": "ff04ae6afdaea082ce22e96851707b3fd53069dd64cf8ba3582db351c6ce83d0",
-    "Pouw.PearlC.HiddenAudit.winProb": "2ce0a071a9d2ed65682cab92bf8039a90e6a8a5435720e620bbcc9c6a0eaa29f",
+    "Pouw.PearlC.HiddenAudit.game": "4837361751d6cc7457f80c514111ed11068ccc5c10650ae53b0fb723af915b3f",
+    "Pouw.PearlC.HiddenAudit.root": "b2b4ff4ec8c19810cb008a5093af9ee3cce2fd9f5b45807d266b48d157d29757",
+    "Pouw.PearlC.HiddenAudit.winProb": "8a8ed0ab1f45bdd02092e754fc112b6891b56f66f21eb7d250e4e5b7ad0132a9",
     "Pouw.PearlC.ex": "a91da7689685599e9ee24d99101cefdaf01d8b45d8d5ac5e8f65b22c16c10a3f"
    },
    "pins": ["Pouw.PearlC.gammaHidden_of_sampled_all", "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192"]
