@@ -208,14 +208,17 @@ class TileAnchors:
         draws its E line; a tile unit has no region."""
         return {port: self._region(role, port, index) for port in self.shape.ports[role]["regions"]}
 
-    def _region(self, role: str, port: str, index: int | None) -> list[int]:
+    def _values(self, role: str, port: str, index: int | None) -> tuple[list[int], int]:
         anchor = self.shape.ports[role]["regions"][port]
         d, ids = self.shape.derivations[anchor], self._ids(anchor)
         if d.per_row:
             if not (type(index) is int and 0 <= index < len(ids)):
                 raise DomainError(f"a {role} unit's row is one of the block's {len(ids)}, not {index!r}")
             ids = (ids[index],)
-        return region_words(self._derive(anchor, ids), d.bits)
+        return self._derive(anchor, ids), d.bits
+
+    def _region(self, role: str, port: str, index: int | None) -> list[int]:
+        return region_words(*self._values(role, port, index))
 
     def public_inputs(self, role: str, indexes: Sequence[int]) -> bytes:
         """The verifier's own `--public-inputs` file for the statement whose instances are ``role``'s units at ``indexes``
@@ -259,6 +262,52 @@ class TileAnchors:
                 raise DomainError(f"public input {p['port']}: word {off} of instance {instance} is not the verifier's own "
                                   f"recomputation (seed {p['seed']}, derivation {p['derivation']})")
             off -= p["words"]
+
+    def anchor_rows(self, role: str, index: int | None = None) -> dict[str, bytes]:
+        """Each anchored input of ``role``'s unit at ``index`` as the bit row a C-Flock unit statement commits it in (a
+        `sha512/row/v2` row, its values' bits concatenated low first in the unit's leaf order), by region port."""
+        out = {}
+        for port in self.shape.ports[role]["regions"]:
+            vals, bits = self._values(role, port, index)
+            out[port] = sum(v << (bits * i) for i, v in enumerate(vals)).to_bytes(-(-bits * len(vals) // 8), "little")
+        return out
+
+    def check_anchor_rows(self, role: str, indexes: Sequence[int], meta: dict, public: bytes) -> None:
+        """Refuse a C-Flock unit statement (``meta``, its circuit's META object; ``public``, the verifier's public file) whose
+        anchor rows are not the verifier's: each region port of ``role`` must be an input row of that name, a
+        `hm96-sha512/row/v2` row of its anchor's bits, and its ``b ‖ c`` in every instance (``indexes``' units, in order) the
+        zero-salt commit of the row `anchor_rows` derives from the seeds (``b = x``, ``c`` the zero salt's: the rule
+        C-Flock's verifier pins its padding rows by, ``HmRow.rowBcZeroSalt``)."""
+        from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
+
+        from .leaves import INST, KEY
+
+        names = [p[0] for p in meta["ports"]]
+        head, sep, body = public.partition(b"\n")
+        try:
+            header = json.loads(head) if sep else None
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            header = None
+        if not isinstance(header, dict) or header.get("instances") != len(indexes) or "shared_rows" in header:
+            raise DomainError(f"public file: not a per-instance file of the {len(indexes)} units")
+        if len(body) < BC_BYTES * len(indexes) * len(names):
+            raise DomainError("public file: length")
+        zero = bytes(SALT_BYTES)
+        for i, index in enumerate(indexes):
+            for port, row in self.anchor_rows(role, index).items():
+                if port not in names[:meta["input_ports"]]:
+                    raise DomainError(f"anchor {port}: no input row of the statement")
+                p = names.index(port)
+                if meta["row_schemas"][p] != [SCHEMA_HM96_SHA512_ROW_V2, 8 * len(row)]:
+                    raise DomainError(f"anchor {port}: its row is {meta['row_schemas'][p]}, not a v2 row of {8 * len(row)} bits")
+                at = BC_BYTES * (i * len(names) + p)
+                if body[at:at + BC_BYTES] != INST.commit_string(KEY, sha512_row_v2_digest(row, 8 * len(row)), zero):
+                    raise DomainError(f"anchor {port}: instance {i}'s b || c is not the zero-salt commit of the verifier's "
+                                      f"own row (seed {self.shape.derivations[self.shape.ports[role]['regions'][port]].seed})")
+
+
+#: C-Flock's hm96-sha512 commit string and salt, in bytes (b ‖ c, y)
+BC_BYTES, SALT_BYTES = 128, 192
 
 
 def _check(fn, args, want: dict[str, list[int]]) -> None:

@@ -143,3 +143,40 @@ def test_a_window_refuses_a_repeated_call_index():
     ledger.admit(Anchors(call.salt, call.forward + 1, call.layer, call.site, call.weight, tuple(call.rowids), tuple(call.colids)), SHAPE)
     with pytest.raises(DomainError):
         ledger.admit(_anchors(call), SHAPE)
+
+
+def test_anchor_rows_are_checked_against_their_zero_salt_commits():
+    """`TileAnchors.check_anchor_rows` takes a public file whose anchor rows' ``b || c`` are ``x ‖ SHA-512(salt_prefix ‖
+    0^192)`` (``x`` the v2 digest of the row of the seeds' values) and refuses one under another salt, of another value, or
+    whose META does not hold the anchor as a v2 row of its bits."""
+    import hashlib
+
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
+    from verity_pouw.circuit import leaves as L
+
+    t, indexes = RV.anchors("pc4-64", "pc4", 64, None), (1, 0)
+    rows = [t.anchor_rows("row_a", i) for i in indexes]
+    for i, r in zip(indexes, rows):
+        vals = [w & 15 for w in t.regions("row_a", i)["e"]]
+        assert r["e"] == bytes(vals[j] | vals[j + 1] << 4 for j in range(0, len(vals), 2))
+    names = ["x", "e", "fa", "fb", "o0"]
+    meta = {"ports": [[p, 1, 0] for p in names], "input_ports": 4,
+            "row_schemas": [[SCHEMA_HM96_SHA512_ROW_V2, 16]] + [[SCHEMA_HM96_SHA512_ROW_V2, 8 * len(rows[0][p])] for p in names[1:4]] + [["x", 16]]}
+    c0 = hashlib.sha512(L.INST.salt_prefix + bytes(192)).digest()
+
+    def public(bc):
+        body = b"".join(bc(i, p) for i in range(len(indexes)) for p in names)
+        return json.dumps({"instances": len(indexes)}).encode() + b"\n" + body
+
+    def honest(i, p):
+        return sha512_row_v2_digest(rows[i][p], 8 * len(rows[i][p])) + c0 if p in rows[i] else bytes([7]) * 128
+
+    t.check_anchor_rows("row_a", indexes, meta, public(honest))
+    salted = lambda i, p: L.INST.commit_string(L.KEY, honest(i, p)[:64], b"\1" * 192) if p == "fb" else honest(i, p)  # noqa: E731
+    with pytest.raises(DomainError, match="anchor fb: instance 0"):
+        t.check_anchor_rows("row_a", indexes, meta, public(salted))
+    with pytest.raises(DomainError, match="anchor e: instance 0"):
+        t.check_anchor_rows("row_a", (0, 1), meta, public(honest))         # another row's E line
+    other = dict(meta, row_schemas=[[SCHEMA_HM96_SHA512_ROW_V2, 8]] * 5)
+    with pytest.raises(DomainError, match="not a v2 row"):
+        t.check_anchor_rows("row_a", indexes, other, public(honest))

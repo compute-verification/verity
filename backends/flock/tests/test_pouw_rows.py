@@ -418,3 +418,53 @@ def test_a_real_pouw_unit_is_staged_and_composed_on_its_rows(m, tmp_path):
                             str(tmp_path / "circuit.txt"), "--public", str(tmp_path / "pub.bin"), "--coins", coins], capture_output=True, text=True)
         assert p.returncode == 0, p.stdout + p.stderr
         assert json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"] == want[coins], (m, coins)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_anchor_rows_staged_under_a_zero_salt_pass_pouws_check_and_nothing_else_does(tmp_path):
+    """PoUW's anchors (`e`, `fa`, `fb`: verifier randomness from the scheme's public seeds) staged by `stage_unit` as
+    committed v2 rows under a zero salt, every other row under its private salt: the statement is the Lean verifier's as
+    ever, and `TileAnchors.check_anchor_rows` recomputes each anchor row's ``b || c`` from the seeds and accepts it.  An
+    anchor row staged under a nonzero salt, or holding another anchor value, is refused.  A stand-in unit with Pc4RowA's
+    anchor parameters (it copies ``x``) keeps the test off PoUW's pieces; the real unit's run is the lane's record."""
+    from verity.ir.defs import CompositeDefinition, bind
+    from verity.ir.types import Array, Value
+    from verity_flock import class_statement as CS
+    from verity_pouw.protocol import DomainError
+
+    spec = importlib.util.spec_from_file_location("pouw_regions_vectors", POUW_TESTS / "pouw_regions_vectors.py")
+    RV = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(RV)
+    t = RV.anchors("pc4-64", "pc4", 64, None)
+    _ps, _ret = pc4.templates(64)["row_a"].signature()
+    types = dict(_ps)
+    X = Array(8, Value(16))
+    d = bind(CompositeDefinition("PouwAnchorStandIn", 1, (), lambda S: ((("x", X), ("e", types["e"]), ("fa", types["fa"]), ("fb", types["fb"])), X),
+                                 lambda B, S, x, e, fa, fb: x, register=False))
+    indexes = (0, 1)
+    words = lambda b: np.frombuffer(b, dtype="<u2").astype(np.uint16)  # noqa: E731
+    anchor = [t.anchor_rows("row_a", i) for i in indexes]
+    rows = {"x": np.arange(16, dtype=np.uint16).reshape(2, 8), **{p: np.stack([words(a[p]) for a in anchor]) for p in ("e", "fa", "fb")}}
+    in_rows = [("x", SCHEMA_HM96_SHA512_ROW_V2, 128, ["x"])] + [(p, SCHEMA_HM96_SHA512_ROW_V2, 8 * len(anchor[0][p]), [p]) for p in ("e", "fa", "fb")]
+
+    def stage(sub, rows, **kw):
+        got = CS.stage_unit(d, "unit/pouw-anchor-stand-in", in_rows, [(SCHEMA_HM96_SHA512_ROW_V2, (0,))], rows, tmp_path / sub, b"k" * 32, **kw)
+        return got, (tmp_path / sub / "pub.bin").read_bytes()
+
+    got, pub = stage("honest", rows, zero_salt_rows=("e", "fa", "fb"))
+    assert got["salts"]["x"][0] != bytes(FC.SALT_BYTES) and got["salts"]["fa"] == [bytes(FC.SALT_BYTES)] * 2
+    t.check_anchor_rows("row_a", indexes, got["meta"], pub)
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit", "--circuit",
+                        str(tmp_path / "honest" / "circuit.txt"), "--public", str(tmp_path / "honest" / "pub.bin"), "--coins", "seed"],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+
+    got, pub = stage("salted", rows, zero_salt_rows=("e", "fb"))
+    with pytest.raises(DomainError, match="anchor fa: instance 0"):
+        t.check_anchor_rows("row_a", indexes, got["meta"], pub)
+    wrong = dict(rows, e=rows["e"] ^ np.uint16(1))
+    got, pub = stage("wrong", wrong, zero_salt_rows=("e", "fa", "fb"))
+    with pytest.raises(DomainError, match="anchor e: instance 0"):
+        t.check_anchor_rows("row_a", indexes, got["meta"], pub)
