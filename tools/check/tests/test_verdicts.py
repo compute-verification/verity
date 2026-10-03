@@ -45,6 +45,8 @@ def _fill(r: dict[str, Path]) -> None:
     _write(r["check"] / "lean-audit" / "k2.json", '{"package": "p"}')
     _write(r["check"] / "lean-agreement" / "k3.json", '{"key": "k3"}')
     _write(r["check"] / "lean-deps" / "m" / "manifest.json", "{}")           # fetched dependencies
+    _write(r["check"] / "lean-audit-scratch-x1" / "p" / "lake-manifest.json", "{}")  # an audit's scratch tree
+    _write(r["check"] / "lean-changed" / "p" / "lean-audit.json", "{}")      # lean_changed.py's built tree
 
 
 VERDICTS = ["check/circuit-check/v1/d/e1.json", "check/lean-agreement/k3.json", "check/lean-audit/k2.json", "tests/k1.json"]
@@ -86,8 +88,23 @@ def test_since_a_snapshot_a_pack_holds_only_what_the_run_stored(tmp_path, monkey
         assert sorted(tar.getnames()) == ["check/lean-audit/k2.json", "tests/k4.json"]
 
 
+def test_an_entry_that_goes_away_while_it_is_read_is_left_out(tmp_path, monkeypatch):
+    """Another slot's suites prune a module's older passes, or its audit removes its scratch tree, after this one lists them."""
+    r = _machine(tmp_path, monkeypatch, "a")
+    _fill(r)
+    listed = V.entries()
+    (r["tests"] / "k1.json").unlink()
+    monkeypatch.setattr(V, "entries", lambda: listed)
+    assert sorted(V.snapshot()) == VERDICTS[:-1]
+    pack = tmp_path / "pack.tar.gz"
+    assert V.export(pack) == 3
+    with tarfile.open(pack) as tar:
+        assert sorted(tar.getnames()) == VERDICTS[:-1]
+
+
 @pytest.mark.parametrize("member", ["../escape.json", "/abs.json", "other/x.json", "check/lean-deps/m.json", "tests/logs/a.json",
-                                    "tests/durations.json", "check/.hidden.json", "tests/k.txt", "link"])
+                                    "tests/durations.json", "check/.hidden.json", "tests/k.txt", "link",
+                                    "check/lean-audit-scratch-x1/p/lake-manifest.json", "check/lean-changed/p/lean-audit.json"])
 def test_a_pack_holding_anything_but_verdict_entries_is_refused_whole(tmp_path, monkeypatch, member):
     r = _machine(tmp_path, monkeypatch, "b")
     pack = tmp_path / "bad.tar.gz"
