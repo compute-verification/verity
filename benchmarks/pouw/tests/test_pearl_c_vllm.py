@@ -667,6 +667,16 @@ def test_forming_headroom_on_a_recorded_line(tmp_path):
     assert ST.main(["--model", "qwen", str(inputs), "--forming", "qwen", str(out), "--out", str(tmp_path / "t")]) == 0
     assert json.loads((tmp_path / "t" / "table.json").read_text())["models"][0]["forming"]["tiles"] == 2
     assert "flips only if at least" in (tmp_path / "t" / "table.md").read_text()
+    quality = {"run": "rp", "model": "/m/q", "dataset": {}, "windows": 2, "window_tokens": 9, "gates": {"fp8": True, "v1": True},
+               "summary": {"bf16": {"perplexity": 7.5, "top1_agreement_vs_bf16": 1.0, "greedy_token_agreement_vs_bf16": 1.0},
+                           "pearlc-v1": {"perplexity": 7.75, "top1_agreement_vs_bf16": 0.9, "greedy_token_agreement_vs_bf16": 0.6}}}
+    qpath = tmp_path / "quality.json"
+    qpath.write_text(json.dumps(quality))
+    assert ST.main(["--model", "qwen", str(inputs), "--quality", "qwen", str(qpath), "--out", str(tmp_path / "t")]) == 0
+    assert "| qwen | `rp` | pearlc-v1 | 7.7500 | 0.9000 | 0.6000 |" in (tmp_path / "t" / "table.md").read_text()
+    qpath.write_text(json.dumps(quality | {"gates": {"fp8": True, "v1": False}}))
+    with pytest.raises(ValueError, match="gates"):
+        ST.main(["--model", "qwen", str(inputs), "--quality", "qwen", str(qpath), "--out", str(tmp_path / "t")])
     flagged = line | {"atoms": 200, "debit_exact": "6800"}
     assert FH.dead_to_flip(flagged) < want - Fraction(32 * 3, 32 * 12288)
     path.write_text(json.dumps(line | {"debit_exact": "477"}) + "\n")

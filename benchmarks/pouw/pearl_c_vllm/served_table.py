@@ -89,6 +89,15 @@ def markdown(table: dict) -> str:
               f"measurements (served_debit.input_bound); an input is one matmul of the pass. Every draw, pass-salt and fresh, "
               f"weighs an input's tiles by their area |rows|·|cols|, which within one input (one shape) is proportional to "
               f"`TR.Wref` (`pearlCTilesDevRev1K`: `tileShare` on the tile's rows, not its passing rows)."]
+    quality = [r for r in table["models"] if "quality" in r]
+    if quality:
+        lines += ["", "| model | quality run | mode | WikiText-2 perplexity | top-1 vs bf16 | greedy tokens vs bf16 |",
+                  "|---|---|---|---:|---:|---:|"]
+        for r in quality:
+            for mode, q in r["quality"]["summary"].items():
+                lines.append(f"| {r['model']} | `{r['quality']['run']}` | {mode} | {q['perplexity']:.4f} | "
+                             f"{q.get('top1_agreement_vs_bf16', float('nan')):.4f} | "
+                             f"{q.get('greedy_token_agreement_vs_bf16', float('nan')):.4f} |")
     for r in table["models"]:
         if "forming" in r:
             f = r["forming"]
@@ -114,6 +123,8 @@ def main(argv: list[str] | None = None) -> int:
                         "when they land")
     p.add_argument("--forming", nargs=2, action="append", default=[], metavar=("NAME", "HEADROOM_JSON"),
                    help="a model's forming_headroom.py report over its recorded tiles")
+    p.add_argument("--quality", nargs=2, action="append", default=[], metavar=("NAME", "QUALITY_JSON"),
+                   help="a model's window.sh MODE=perplexity quality.json (every group's gate must have passed)")
     p.add_argument("--cap", default="1/1000")
     p.add_argument("--out", type=Path, required=True)
     a = p.parse_args(argv)
@@ -135,6 +146,14 @@ def main(argv: list[str] | None = None) -> int:
         if row is None:
             p.error(f"--forming {name}: no such --model")
         row["forming"] = {k: doc[k] for k in ("tiles", "dead_to_flip_min", "worst", "unit_rows_covered_by_rho_D", "rho_D")}
+    for name, path in a.quality:
+        doc = json.loads(Path(path).read_text())
+        row = next((r for r in models if r["model"] == name), None)
+        if row is None:
+            p.error(f"--quality {name}: no such --model")
+        if not all(doc["gates"].values()):
+            raise ValueError(f"{name}: the quality run's gates {doc['gates']} did not all pass")
+        row["quality"] = {k: doc[k] for k in ("run", "model", "dataset", "windows", "window_tokens", "summary")}
     models += [{"model": name, "absent": reason} for name, reason in a.absent]
     table = {"tool": "pouw_pearl_c_served_table", "cap": a.cap, "m": m, "delta_per_input": 0.05 / m, "models": models}
     a.out.mkdir(parents=True, exist_ok=True)
