@@ -697,3 +697,27 @@ def test_a_parallel_suite_starts_the_test_its_kept_pass_says_is_longest(tmp_path
         worker, node = line.split(" ", 1)
         first.setdefault(worker, node)
     assert "tests/test_z.py::test_zz" in first.values(), log.read_text()
+
+
+def test_a_change_under_a_name_git_quotes_selects_the_suite_that_owns_it(tmp_path, monkeypatch):
+    """`git diff --name-only` quotes a name with bytes outside ASCII (`"a/\\303\\251.py"`), which is under no suite's inputs, so
+    `--changed` (the quick tier `research queue ready` runs) skipped the suite owning such a file."""
+    _workspace(tmp_path)
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "a" / "é.py").write_text("x = 1\n")
+    assert [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())] == ["a"]
+
+
+def test_a_package_under_a_name_git_quotes_is_a_suite(tmp_path, monkeypatch):
+    """`git ls-files` quotes a name with bytes outside ASCII (`"pk\\303\\251/pyproject.toml"`), a path to no file, so the package
+    there was no suite and its tests never ran."""
+    (tmp_path / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pké"]\n')
+    (tmp_path / "pké" / "tests").mkdir(parents=True)
+    (tmp_path / "pké" / "pyproject.toml").write_text('[project]\nname = "pke"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    assert S.metadata() == ["pké/pyproject.toml", "pyproject.toml", "uv.lock"]
+    assert [s.path for s in S.discover()] == ["pké"]

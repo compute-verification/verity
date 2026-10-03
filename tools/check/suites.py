@@ -145,7 +145,8 @@ def default_jobs(meminfo: Path = Path("/proc/meminfo")) -> int:
 
 
 def _git(*args: str, env: dict | None = None, stdin: str | None = None) -> str:
-    return subprocess.run(["git", *args], cwd=ROOT, env=env, input=stdin, capture_output=True, text=True, check=True).stdout
+    return subprocess.run(["git", *args], cwd=ROOT, env=env, input=stdin, capture_output=True, text=True, errors="surrogateescape",
+                          check=True).stdout
 
 
 def in_git() -> bool:
@@ -188,7 +189,8 @@ def members() -> dict[str, str]:
 def metadata() -> list[str]:
     """The workspace's metadata: every pyproject.toml, and the lockfile. A suite's key holds what it resolves to (`resolved`);
     the tests may read the files themselves, which the guard records."""
-    listed = _git("ls-files", "--cached", "--others", "--exclude-standard", "--", "pyproject.toml", "*/pyproject.toml").split()
+    listed = [p for p in _git("ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "pyproject.toml",
+                              "*/pyproject.toml").split("\0") if p]
     return sorted(set(listed)) + ["uv.lock"]
 
 
@@ -333,7 +335,7 @@ def touched(suites: list[Suite], pkgs: dict[str, str], rev: str, tree: str, lock
     """The suites whose key the change from ``rev`` to ``tree`` moves by path: a changed file under their inputs (the repository's
     own suite keys on all of them) or in the runner, or a changed resolution in `uv.lock`. What their tests read beside the key
     (`used`) is left out, so a suite this skips can still miss its cached pass."""
-    files = _git("diff", "--name-only", rev, tree).split()
+    files = [f for f in _git("diff", "--name-only", "-z", rev, tree).split("\0") if f]
     if any(f in RUNNER for f in files):
         return list(suites)
     before = lock
