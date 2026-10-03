@@ -51,13 +51,40 @@ noncomputable def forged (C : Universal.Circ) (c : Universal.Cls) (p : c.Prog) :
 theorem wrongAgree_le (C : Universal.Circ) (c : Universal.Cls) (hC : Universal.fits C c) (p : c.Prog)
     (x : ℕ → ℕ → Bool) (y : ℕ → List Bool) :
     wrongAgree C c p x y ≤ wrong (Universal.run c p) (Universal.units c) x y := by
-  sorry
+  have hpc := pad_correct C c hC
+  unfold wrongAgree wrong
+  apply Finset.card_le_card
+  intro i hi
+  simp only [Finset.mem_filter, Finset.mem_range] at hi ⊢
+  obtain ⟨hi, hne, hag⟩ := hi
+  have hiN : i < c.N := lt_of_lt_of_le hi hpc.1
+  refine ⟨hiN, ?_⟩
+  have hrun : Universal.run c p i (x i) = Universal.run c (Universal.pad C c) i (x i) := by
+    rw [Universal.run, Universal.run, dite_eq_left_of_eq_true (eq_true hiN), dite_eq_left_of_eq_true (eq_true hiN), hag hiN]
+  rw [hrun, hpc.2.1 i hi]
+  exact hne
 
 /-- **Every wrong unit of `C` is one where the program is `pad C c`'s, or a forged unit.** -/
-theorem wrong_le_wrongAgree_add (C : Universal.Circ) (c : Universal.Cls) (hC : Universal.fits C c) (p : c.Prog)
+theorem wrong_le_wrongAgree_add (C : Universal.Circ) (c : Universal.Cls) (p : c.Prog)
     (x : ℕ → ℕ → Bool) (y : ℕ → List Bool) :
     wrong (Universal.eval C) (Universal.size C) x y ≤ wrongAgree C c p x y + (forged C c p).card := by
-  sorry
+  classical
+  unfold wrong wrongAgree
+  have h1 : (Finset.range (Universal.size C)).filter (fun i => Universal.eval C i (x i) ≠ y i) ⊆
+      (Finset.range (Universal.size C)).filter
+        (fun i => Universal.eval C i (x i) ≠ y i ∧ agreesAt p (Universal.pad C c) i) ∪
+      (forged C c p).map Fin.valEmbedding := by
+    intro i hi
+    simp only [Finset.mem_filter, Finset.mem_range] at hi
+    by_cases hag : agreesAt p (Universal.pad C c) i
+    · exact Finset.mem_union_left _ (Finset.mem_filter.2 ⟨Finset.mem_range.2 hi.1, hi.2, hag⟩)
+    · apply Finset.mem_union_right
+      simp only [agreesAt, not_forall] at hag
+      obtain ⟨h, hne⟩ := hag
+      exact Finset.mem_map.2 ⟨⟨i, h⟩, by unfold forged; exact Finset.mem_filter.2 ⟨Finset.mem_univ _, hne⟩, rfl⟩
+  calc _ ≤ _ := Finset.card_le_card h1
+    _ ≤ _ := Finset.card_union_le _ _
+    _ = _ := by rw [Finset.card_map]
 
 /-! ## The registered check at some reads -/
 
@@ -88,6 +115,22 @@ noncomputable def openingOn (ps : ProgSites rd rt L) (A : lay.Pos → Prop) (R :
     ProgOpening L :=
   ⟨rt, fun i => if A (ps.site i) then ps.leaves R i else ps.regLeaves i,
     fun i => if A (ps.site i) then path (ps.site i) else rd.wpath (ps.site i)⟩
+
+/-- Where the registered check holds at `A`, `openingOn` opens the registered root. -/
+theorem opens_on (ps : ProgSites rd rt L) {A : lay.Pos → Prop} {R : Reg} {path : lay.Pos → ByteArray}
+    (hc : (readsOn rd A).Checked R path) :
+    (progCommit L).Opens rt (openingOn ps A R path).leaf (openingOn ps A R path) := by
+  refine ⟨rfl, rfl, fun i => ?_⟩
+  by_cases hA : A (ps.site i)
+  · have h := hc _ ⟨ps.isRead i, hA⟩
+    change Flock.Registered.opensLeaf (rd.port (ps.site i)) _ (rd.readAt (ps.site i)) _ = true at h
+    rw [ps.port i, ps.readAt i] at h
+    simp only [openingOn, hA, ↓reduceIte]
+    exact h
+  · have h := rd.committed _ (ps.isRead i)
+    rw [ps.port i, ps.readAt i] at h
+    simp only [openingOn, hA, ↓reduceIte]
+    exact h
 
 /-- **The step to the program at the drawn units**: on every accepted outcome `o` of the session `s` against `τ` whose
 leaves at the program's sites in `A o` are the registrant's, the program the committed values hold at the registered
@@ -160,6 +203,64 @@ theorem private_circuit_sound_drawn
       prob (fun o => s.Accepts o ∧
           K₀ + K₁ ≤ wrong (Universal.eval C) (Universal.size C) (xOf (s.vals τ o)) (yOf (s.vals τ o))) s.G τ
         ≤ s.Lm.miss K₀ + s.Lm.miss K₁ + s.εks τ + s.δlink τ + ENNReal.ofReal (q ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  classical
+  have hcoll : ∀ o, s.Accepts o → ((∃ i, A o (ps.site i) ∧ ps.leaves (s.regOf o) i ≠ ps.regLeaves i) ∨
+      ∃ u ∈ drawn o, progOf (s.vals τ o) u ≠ Universal.pad C c u) →
+      Binding.Collides (progPairOn ps s A path valPair o) := by
+    intro o ho h
+    by_cases hl : ∀ i, A o (ps.site i) → ps.leaves (s.regOf o) i = ps.regLeaves i
+    · rw [progPairOn, ite_eq_left_of_eq_true _ _ (eq_true hl)]
+      rcases h with ⟨i, hi, hne⟩ | ⟨u, hu, hne⟩
+      · exact absurd (hl i hi) hne
+      · exact (hstep o ho hl).resolve_left fun h' => hne (h' u hu)
+    · rw [progPairOn, ite_eq_right_of_eq_false _ _ (eq_false hl)]
+      refine progCommit_binding L rt _ _ _ _ (opens_on ps (hchk o ho)) ps.opens_reg fun heq => hl fun i hi => ?_
+      have h' := congrFun heq i
+      simp only [openingOn, hi, ↓reduceIte] at h'
+      exact h'
+  have hc : ∀ o, Binding.Collides (progPairOn ps s A path valPair o) →
+      ∃ x y, some (progPairOn ps s A path valPair o) = some (x, y) ∧ x ≠ y ∧ H512 x = H512 y :=
+    fun o h => ⟨_, _, congrArg some Prod.mk.eta.symm, h.1, h.2⟩
+  have hfin : prob (fun o => ∃ x y, some (progPairOn ps s A path valPair o) = some (x, y) ∧ x ≠ y ∧
+      H512 x = H512 y) s.G τ ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _)
+  have hCRb := (ENNReal.le_ofReal_iff_toReal_le hfin (by positivity)).2 (hBind hcost)
+  have hW : ∀ o, wrongAgree C c (progOf (s.vals τ o)) (xOf (s.vals τ o)) (yOf (s.vals τ o)) ≤
+      (P.wrong (s.vals τ o)).card := fun o => (wrongAgree_le C c hC _ _ _).trans (hunit.card _).symm.le
+  have hmain : prob (fun o => s.Accepts o ∧
+        (K₀ ≤ wrongAgree C c (progOf (s.vals τ o)) (xOf (s.vals τ o)) (yOf (s.vals τ o)) ∨
+          (∃ u ∈ drawn o, progOf (s.vals τ o) u ≠ Universal.pad C c u) ∨
+          ∃ i, A o (ps.site i) ∧ lay.regLeaf (s.regOf o) (ps.site i) ≠
+            (ExplicitLeaf.hm96 rs.enc rs.enc_inj).leaf (row (Universal.pad C c) i) (rd.ws (ps.site i)))) s.G τ
+      ≤ s.Lm.miss K₀ + s.εks τ + s.δlink τ + ENNReal.ofReal (q ^ 2 / 2 ^ (513 : ℝ)) := by
+    calc _ ≤ prob (fun o => (s.Accepts o ∧ K₀ ≤ (P.wrong (s.vals τ o)).card) ∨
+          ∃ x y, some (progPairOn ps s A path valPair o) = some (x, y) ∧ x ≠ y ∧ H512 x = H512 y) s.G τ := by
+          refine prob_mono (fun o ⟨ha, hq⟩ => ?_) s.G τ
+          rcases hq with hw | hu | ⟨i, hi, hne⟩
+          · exact Or.inl ⟨ha, hw.trans (hW o)⟩
+          · exact Or.inr (hc o (hcoll o ha (Or.inr hu)))
+          · refine Or.inr (hc o (hcoll o ha (Or.inl ⟨i, hi, fun hl => hne ?_⟩)))
+            simp only [ProgSites.leaves, ProgSites.regLeaves, Reads.leaf, hreg] at hl
+            exact hl
+      _ ≤ _ := prob_or_le _ _ s.G τ
+      _ ≤ _ := add_le_add (hS hA3 hA6 τ hCR K₀) hCRb
+  refine ⟨hmain, fun K₁ hF => ?_⟩
+  calc _ ≤ prob (fun o => (s.Accepts o ∧
+        (K₀ ≤ wrongAgree C c (progOf (s.vals τ o)) (xOf (s.vals τ o)) (yOf (s.vals τ o)) ∨
+          (∃ u ∈ drawn o, progOf (s.vals τ o) u ≠ Universal.pad C c u) ∨
+          ∃ i, A o (ps.site i) ∧ lay.regLeaf (s.regOf o) (ps.site i) ≠
+            (ExplicitLeaf.hm96 rs.enc rs.enc_inj).leaf (row (Universal.pad C c) i) (rd.ws (ps.site i)))) ∨
+        (s.Accepts o ∧ (∀ u ∈ drawn o, u ∉ forged C c (progOf (s.vals τ o))) ∧
+          K₁ ≤ (forged C c (progOf (s.vals τ o))).card)) s.G τ := by
+        refine prob_mono (fun o ⟨ha, hw⟩ => ?_) s.G τ
+        by_cases hd : ∃ u ∈ drawn o, progOf (s.vals τ o) u ≠ Universal.pad C c u
+        · exact Or.inl ⟨ha, Or.inr (Or.inl hd)⟩
+        by_cases hK : K₀ ≤ wrongAgree C c (progOf (s.vals τ o)) (xOf (s.vals τ o)) (yOf (s.vals τ o))
+        · exact Or.inl ⟨ha, Or.inl hK⟩
+        refine Or.inr ⟨ha, fun u hu hmem => hd ⟨u, hu, by simpa [forged] using hmem⟩, ?_⟩
+        have := wrong_le_wrongAgree_add C c (progOf (s.vals τ o)) (xOf (s.vals τ o)) (yOf (s.vals τ o))
+        omega
+    _ ≤ _ := prob_or_le _ _ s.G τ
+    _ ≤ _ := add_le_add hmain hF
+    _ = _ := by ring
 
 end FlockSoundness.Discharge.PrivateCircuit

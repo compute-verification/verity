@@ -79,7 +79,11 @@ curve's side conditions. -/
 theorem zkSessionSound_realR (hS : Law.ExecStrata σs ks St) (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZAt (Reg := Reg) dj y₀ S R) j k ≤ ρ) (ht' : 0 ≤ t') :
     ZkSessionSound (realSessionR I ht own dj y₀ wr dg N hc hU hpub hscope σs ks hks St Kd pop Lb src k Rw M ρ t' qF qS) := by
-  sorry
+  intro hA3 hA6 τ hCR K₀
+  have hA6' : A6Z I dj wr St Kd pop Lb src := hA6
+  simp only [realSessionR, hA6', ↓reduceDIte] at hCR ⊢
+  exact (zk_session_soundR I ht own dj y₀ wr dg N hc hU hpub hscope σs ks hks St hS Kd pop Lb src hA3 hA6'.2.2
+    hA6'.1 hA6'.2.1 hk hRw hM hρ hr ht' K₀ τ hCR).1
 
 end Session
 
@@ -150,6 +154,13 @@ theorem private_circuit_sound_real {cls : Universal.Cls}
       prob (fun o => LiveAcceptsZKR I own o ∧
           K₀ + K₁ ≤ wrong (Universal.eval C) (Universal.size C) (xOf (s.vals τ o)) (yOf (s.vals τ o))) s.G τ
         ≤ s.Lm.miss K₀ + s.Lm.miss K₁ + s.εks τ + s.δlink τ + ENNReal.ofReal (q ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  intro s
+  exact private_circuit_sound_drawn _ C hC progOf xOf yOf hunit rd ps row hreg s
+    (zkSessionSound_realR I ht own dj y₀ wr dg N hc hU hpub hscope σs ks hks St Kd pop Lb src k Rw M ρ t' qF qS hS hk hRw
+      hM hρ hr ht')
+    hA3 hA6 (fun o => ownAt own c pub o.2.2 rd.port rd.readAt) (fun o => regPaths c pub o.2.2 rd.port)
+    (fun o ho => checked_of_accepts I ht own dj y₀ hc hU hpub hscope hA6.1 o ho
+      (readsOn rd (ownAt own c pub o.2.2 rd.port rd.readAt)) fun p hp => hp.2 p rfl)
+    τ hCR (fun o => o.2.1) valPair hstep K₀ cost q hcost hBind
 
 end FlockSoundness.Discharge.PrivateCircuit
