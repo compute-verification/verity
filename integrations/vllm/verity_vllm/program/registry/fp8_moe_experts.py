@@ -60,51 +60,64 @@ def gather_f32(vocab: int) -> PrimitiveDefinition:
     return _gather("GatherF32", vocab, F32, F32_NAN_FILL)
 
 
-def _columns(slab: Coll, E: int, K: int, word) -> Coll:
-    """`cols[k][e] = slab[e][k]`: a reference rearrangement, no gates."""
-    return Coll(Array(K, Array(E, word)), strided_view(slab, 0, E, 1, K, K * E))
+def columns(slab: Coll, E: int, K: int, word) -> Coll:
+    """`cols[k][e] = slab[e][k]` of a row-major [E][K] slab of `word`s (one leaf, or a word of bits): no gates."""
+    L = word.leaves
+    if L == 1:
+        return Coll(Array(K, Array(E, word)), strided_view(slab, 0, E, 1, K, K * E))
+    return Coll(Array(K, Array(E, word)), concat([strided_view(slab, L * k, L, L * K, 1, L * E) for k in range(K)]))
 
 
-@composite("MoeExpertFp8Row", 1, ["E", "K"], lambda S: ((("e", I32), ("slab", Array(S.E, Array(S.K, E4M3)))), Array(S.K, E4M3)),
-           conformance="exact-model-tested")
+def row_sig(word, i32=I32):
+    return lambda S: ((("e", i32), ("slab", Array(S.E, Array(S.K, word)))), Array(S.K, word))
+
+
+@composite("MoeExpertFp8Row", 1, ["E", "K"], row_sig(E4M3), conformance="exact-model-tested")
 def MoeExpertFp8Row(B, S, e, slab):
     """`wrow[k] = slab[e][k]`: one `GatherE4m3x{E}_v1` per k over the E experts' words (`moe.MoeExpertRow_v1`'s construction)."""
-    return B.batch(gather_e4m3(S.E), e, _columns(slab, S.E, S.K, E4M3), axes=(None, 0))
+    return B.batch(gather_e4m3(S.E), e, columns(slab, S.E, S.K, E4M3), axes=(None, 0))
 
 
-@composite("MoeExpertFp8ScaleRow", 1, ["E", "K"], lambda S: ((("e", I32), ("slab", Array(S.E, Array(S.K, F32)))), Array(S.K, F32)),
-           conformance="exact-model-tested")
+@composite("MoeExpertFp8ScaleRow", 1, ["E", "K"], row_sig(F32), conformance="exact-model-tested")
 def MoeExpertFp8ScaleRow(B, S, e, slab):
     """`sw[k] = slab[e][k]`: one `GatherF32x{E}_v1` per k, a weight block's K/G scales of expert e."""
-    return B.batch(gather_f32(S.E), e, _columns(slab, S.E, S.K, F32), axes=(None, 0))
+    return B.batch(gather_f32(S.E), e, columns(slab, S.E, S.K, F32), axes=(None, 0))
 
 
-_STATICS = ["E", "K", "G", "KB", "SWAP", "DOT"]
+STATICS = ["E", "K", "G", "KB", "SWAP", "DOT"]
+GEMM_STATICS = ["E", "K", "N", "G", "KB", "SWAP", "DOT"]
 
 
-def _block(S) -> dict:
+def block(S) -> dict:
     return {"K": S.K, "G": S.G, "KB": S.KB, "SWAP": S.SWAP, "DOT": S.DOT}
 
 
-@composite("MoeExpertFp8Coordinate", 1, _STATICS,
-           lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("e", I32), ("slab", Array(S.E, Array(S.K, E4M3))),
-                       ("sw", Array(S.K // S.G, F32))), BF16),
-           conformance=FM._DOT_CONF)
+def coordinate_sig(routed: bool, e4m3=E4M3, f32=F32, i32=I32, bf16=BF16):
+    g = (("g", f32),) if routed else ()
+    return lambda S: ((("xq", Array(S.K, e4m3)), ("sx", Array(S.K // S.G, f32)), ("e", i32)) + g
+                      + (("slab", Array(S.E, Array(S.K, e4m3))), ("sw", Array(S.K // S.G, f32))), bf16)
+
+
+def gemm_sig(routed: bool, e4m3=E4M3, f32=F32, i32=I32, bf16=BF16):
+    g = (("g", f32),) if routed else ()
+    return lambda S: ((("xq", Array(S.K, e4m3)), ("sx", Array(S.K // S.G, f32)), ("e", i32)) + g
+                      + (("w", Array(S.E, Array(S.N, Array(S.K, e4m3)))),
+                         ("ws", Array(S.E, Array(weight_blocks(S.N, S.G), Array(S.K // S.G, f32))))), Array(S.N, bf16))
+
+
+@composite("MoeExpertFp8Coordinate", 1, STATICS, coordinate_sig(False), conformance=FM.DOT_CONF)
 def MoeExpertFp8Coordinate(B, S, xq, sx, e, slab, sw):
     """One output word of the w13 launch of pair (t, k): `MoeExpertFp8BlockCoordinate_v3`(xq, sx, slab[e], sw), `slab` the column's
     weight rows of every expert and `sw` its weight block's scales of expert e."""
     wrow = B.call(bind(MoeExpertFp8Row, E=S.E, K=S.K), e, slab)
-    return B.call(bind(FM.MoeExpertFp8BlockCoordinateV3, **_block(S)), xq, sx, wrow, sw)
+    return B.call(bind(FM.MoeExpertFp8BlockCoordinateV3, **block(S)), xq, sx, wrow, sw)
 
 
-@composite("MoeExpertFp8CoordinateW", 1, _STATICS,
-           lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("e", I32), ("g", F32),
-                       ("slab", Array(S.E, Array(S.K, E4M3))), ("sw", Array(S.K // S.G, F32))), BF16),
-           conformance=FM._DOT_CONF)
+@composite("MoeExpertFp8CoordinateW", 1, STATICS, coordinate_sig(True), conformance=FM.DOT_CONF)
 def MoeExpertFp8CoordinateW(B, S, xq, sx, e, g, slab, sw):
     """One output word of the w2 launch of pair (t, k): `MoeExpertFp8BlockCoordinateW_v3`(xq, sx, g, slab[e], sw)."""
     wrow = B.call(bind(MoeExpertFp8Row, E=S.E, K=S.K), e, slab)
-    return B.call(bind(FM.MoeExpertFp8BlockCoordinateWV3, **_block(S)), xq, sx, g, wrow, sw)
+    return B.call(bind(FM.MoeExpertFp8BlockCoordinateWV3, **block(S)), xq, sx, g, wrow, sw)
 
 
 def pair_rows(B, S, coord, srow, lead: tuple, e: Coll, w: Coll, ws: Coll, word=BF16, f32=F32, e4m3=E4M3) -> Coll:
@@ -112,33 +125,27 @@ def pair_rows(B, S, coord, srow, lead: tuple, e: Coll, w: Coll, ws: Coll, word=B
     block's columns, column n reading `lead` (e among them) whole, the [E][K] slab `w[:, n, :]` and that scale row."""
     E, K, N, G = S.E, S.K, S.N, S.G
     NB, KG = weight_blocks(N, G), K // G
+    Lw, Ls = e4m3.leaves, f32.leaves
     parts = []
     for nb in range(NB):
-        sw = B.call(srow, e, Coll(Array(E, Array(KG, f32)), strided_view(ws, nb * KG, KG, NB * KG, 1, E * KG)))
+        sw = B.call(srow, e, Coll(Array(E, Array(KG, f32)), strided_view(ws, Ls * nb * KG, Ls * KG, Ls * NB * KG, 1, Ls * E * KG)))
         n0, n1 = nb * G, min((nb + 1) * G, N)
-        slabs = Coll(Array(n1 - n0, Array(E, Array(K, e4m3))), concat([strided_view(w, n * K, K, N * K, 1, E * K) for n in range(n0, n1)]))
+        slabs = Coll(Array(n1 - n0, Array(E, Array(K, e4m3))),
+                     concat([strided_view(w, Lw * n * K, Lw * K, Lw * N * K, 1, Lw * E * K) for n in range(n0, n1)]))
         parts.append(B.batch(coord, *lead, slabs, sw, axes=(None,) * len(lead) + (0, None)))
     return Coll(Array(N, word), concat([p.refs for p in parts]))
 
 
-def _gemm_params(S, routed: bool) -> tuple:
-    g = (("g", F32),) if routed else ()
-    return ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("e", I32)) + g
-            + (("w", Array(S.E, Array(S.N, Array(S.K, E4M3)))), ("ws", Array(S.E, Array(weight_blocks(S.N, S.G), Array(S.K // S.G, F32))))))
-
-
-@composite("MoeExpertFp8Gemm", 1, ["E", "K", "N", "G", "KB", "SWAP", "DOT"], lambda S: (_gemm_params(S, False), Array(S.N, BF16)),
-           conformance=FM._DOT_CONF)
+@composite("MoeExpertFp8Gemm", 1, GEMM_STATICS, gemm_sig(False), conformance=FM.DOT_CONF)
 def MoeExpertFp8Gemm(B, S, xq, sx, e, w, ws):
     """`fused_moe_kernel`'s block-FP8 w13 launch (MUL_ROUTED_WEIGHT False) on one (token, slot) pair routed to expert e:
     `MoeExpertFp8BlockGemm_v3`(xq, sx, w[e], ws[e]), the rows of expert e gathered inside."""
-    coord = bind(MoeExpertFp8Coordinate, E=S.E, **_block(S))
+    coord = bind(MoeExpertFp8Coordinate, E=S.E, **block(S))
     return pair_rows(B, S, coord, bind(MoeExpertFp8ScaleRow, E=S.E, K=S.K // S.G), (xq, sx, e), e, w, ws)
 
 
-@composite("MoeExpertFp8GemmW", 1, ["E", "K", "N", "G", "KB", "SWAP", "DOT"], lambda S: (_gemm_params(S, True), Array(S.N, BF16)),
-           conformance=FM._DOT_CONF)
+@composite("MoeExpertFp8GemmW", 1, GEMM_STATICS, gemm_sig(True), conformance=FM.DOT_CONF)
 def MoeExpertFp8GemmW(B, S, xq, sx, e, g, w, ws):
     """The block-FP8 w2 launch (MUL_ROUTED_WEIGHT True) on one pair: `MoeExpertFp8BlockGemmW_v3`(xq, sx, g, w[e], ws[e])."""
-    coord = bind(MoeExpertFp8CoordinateW, E=S.E, **_block(S))
+    coord = bind(MoeExpertFp8CoordinateW, E=S.E, **block(S))
     return pair_rows(B, S, coord, bind(MoeExpertFp8ScaleRow, E=S.E, K=S.K // S.G), (xq, sx, e, g), e, w, ws)

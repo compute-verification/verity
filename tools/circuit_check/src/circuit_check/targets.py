@@ -312,7 +312,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.ir.defs import bind
     from verity.ml.boolean import gemm as BG
     from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64
-    from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, fp8_moe, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling
+    from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, fp8_moe, fp8_moe_experts, hopper, lifted, moe_pad, nvfp4
+    from verity_vllm.program.registry import ref_prims, sampling
     from verity_vllm.program.registry import serve3, spec
     from verity_vllm.program.registry import value_inputs as VI
     from verity_vllm.program.registry import boolean_attention, boolean_fp8, boolean_fp8_moe, tables
@@ -386,6 +387,36 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("MoeExpertFp8BlockCoordinateW_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateWV2, K=64, G=32, KB=32, SWAP=True)),
         ("MoeExpertFp8BlockGemm_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockGemmV2, K=32, N=40, G=32, KB=32, SWAP=False)),
         ("MoeExpertFp8BlockGemmW_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockGemmWV2, K=32, N=40, G=32, KB=32, SWAP=True)),
+        # the same with the e4m3 step as a static (cc 12.0's): Qwen3-235B-A22B-FP8's served coordinates at TP8 (w13 K = 4096, w2 K = 192,
+        # G = 64), and on bits two tiles per scale block over a whole and a partial weight block
+        ("MoeExpertFp8BlockCoordinate_v3", lambda: bind(fp8_moe.MoeExpertFp8BlockCoordinateV3, K=4096, G=64, KB=32, SWAP=False,
+                                                        DOT=BlackwellE4m3QmmaDot32)),
+        ("MoeExpertFp8BlockCoordinateW_v3", lambda: bind(fp8_moe.MoeExpertFp8BlockCoordinateWV3, K=192, G=64, KB=32, SWAP=False,
+                                                         DOT=BlackwellE4m3QmmaDot32)),
+        ("MoeExpertFp8BlockGemm_v3", lambda: bind(fp8_moe.MoeExpertFp8BlockGemmV3, K=128, N=80, G=64, KB=32, SWAP=False,
+                                                  DOT=BlackwellE4m3QmmaDot32)),
+        ("MoeExpertFp8BlockGemmW_v3", lambda: bind(fp8_moe.MoeExpertFp8BlockGemmWV3, K=192, N=72, G=64, KB=32, SWAP=False,
+                                                   DOT=BlackwellE4m3QmmaDot32)),
+        ("MoeExpertFp8BlockCoordinate_v4", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateV4, K=128, G=64, KB=32, SWAP=False,
+                                                        DOT=BG.BlackwellE4m3QmmaDot32)),
+        ("MoeExpertFp8BlockCoordinateW_v4", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateWV4, K=128, G=64, KB=32, SWAP=False,
+                                                         DOT=BG.BlackwellE4m3QmmaDot32)),
+        ("MoeExpertFp8BlockGemm_v4", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockGemmV4, K=32, N=40, G=32, KB=32, SWAP=False,
+                                                  DOT=BG.BlackwellE4m3QmmaDot32)),
+        ("MoeExpertFp8BlockGemmW_v4", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockGemmWV4, K=32, N=40, G=32, KB=32, SWAP=False,
+                                                   DOT=BG.BlackwellE4m3QmmaDot32)),
+        # the expert-indexed pair forms the derive rule and the fold bind: Qwen3-235B-A22B's 128 experts at the served w2 coordinate,
+        # and pairs over a whole and a partial weight block; on bits over 3 experts
+        ("MoeExpertFp8CoordinateW_v1", lambda: bind(fp8_moe_experts.MoeExpertFp8CoordinateW, E=128, K=192, G=64, KB=32, SWAP=False,
+                                                    DOT=BlackwellE4m3QmmaDot32)),
+        ("MoeExpertFp8Gemm_v1", lambda: bind(fp8_moe_experts.MoeExpertFp8Gemm, E=4, K=128, N=80, G=64, KB=32, SWAP=False,
+                                             DOT=BlackwellE4m3QmmaDot32)),
+        ("MoeExpertFp8GemmW_v1", lambda: bind(fp8_moe_experts.MoeExpertFp8GemmW, E=4, K=64, N=48, G=32, KB=32, SWAP=False,
+                                              DOT=BlackwellE4m3QmmaDot32)),
+        ("MoeExpertFp8Gemm_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8GemmV2, E=3, K=32, N=40, G=32, KB=32, SWAP=False,
+                                             DOT=BG.BlackwellE4m3QmmaDot32)),
+        ("MoeExpertFp8GemmW_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8GemmWV2, E=3, K=32, N=40, G=32, KB=32, SWAP=False,
+                                              DOT=BG.BlackwellE4m3QmmaDot32)),
         # silu_and_mul_per_block_quant between the expert launches: one element, GLM-5.3's served group (G = 128), and rows of
         # two groups; on bits at G = 4 (each element about 19.6k ANDs)
         ("SiluMulFp8BlockQuantResult_v1", lambda: bind(fp8_moe.SiluMulFp8BlockQuantResult)),

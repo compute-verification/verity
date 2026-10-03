@@ -6,6 +6,8 @@ expert-indexed pair forms (`fp8_moe_experts` `MoeExpertFp8Gemm(W)_v1{E,K,N,G,KB,
 * one 32-wide tile the two steps sum differently, which the w13 word shows at BLOCK_SIZE_K 32, the sm_120 launch's;
 * `fp8_moe_rows`'s twin with `dot="blackwell"` is the `_v3{DOT=BlackwellE4m3QmmaDot32_v1}` GEMM, special and subnormal words included;
 * the pair forms at expert e are the `_v3` GEMMs over that expert's rows and scales, and an id outside [0, E) selects NaN words;
+* their Boolean versions (`boolean_fp8_moe`: `_v4` of the `_v3` forms, `_v2` of the pair forms and gathers) agree with their word
+  views, routed ids in range and out of it, and the switch maps each word view to them;
 * cc 12.0 binds them with `BlackwellE4m3QmmaDot32_v1`, and the targets that record no e4m3 step refuse by name.
 """
 from __future__ import annotations
@@ -13,15 +15,23 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from verity import evaluation as E
+from verity.evaluation import bits as BS
 from verity.evaluation import evaluate
+from verity.ir import boolean as BL
 from verity.ir.defs import bind
+from verity.ml.boolean import gemm as BG
+from verity.ml.boolean import trace as TR
 from verity.ml.prims import BlackwellE4m3QmmaDot32 as BW
 from verity.ml.prims import HopperE4m3QgmmaDot32 as HP
+from verity_vllm.program import boolean as SW
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels import fp8_moe_rows as MR
+from verity_vllm.program.registry import boolean_fp8_moe as BM
 from verity_vllm.program.registry import fp8_moe as M
 from verity_vllm.program.registry import fp8_moe_experts as X
 from verity_vllm.program.registry import targets as T
+from tests.program.test_boolean_fp8 import _flat, _inputs
 from tests.program.test_fp8_moe import ONE, _bf16, _ffma, _fmul, _operands, _twin_agrees, _wide
 
 PAIRS = [(M.MoeExpertFp8BlockCoordinate, M.MoeExpertFp8BlockCoordinateV3), (M.MoeExpertFp8BlockCoordinateW, M.MoeExpertFp8BlockCoordinateWV3),
@@ -134,6 +144,54 @@ def test_the_gathers_are_column_reads() -> None:
         assert X.gather_f32(3).evaluate(e, *col32) == col32[e]
     assert (X.gather_e4m3(3).evaluate(3, *col8), X.gather_f32(3).evaluate((1 << 32) - 1, *col32)) == (0x7F, 0x7FFFFFFF)
     assert X.gather_e4m3(3).id == "GatherE4m3x3_v1" and X.gather_f32(128).id == "GatherF32x128_v1"
+
+
+#: on bits: two tiles over two scale blocks (the step sm_120's or Hopper's), the GEMMs over a whole and a partial weight block, the
+#: gathers, and the pair forms over 3 experts
+BOOLEAN = [bind(BM.MoeExpertFp8BlockCoordinateV4, K=64, G=32, KB=32, SWAP=False, DOT=BG.BlackwellE4m3QmmaDot32),
+           bind(BM.MoeExpertFp8BlockCoordinateV4, K=64, G=64, KB=32, SWAP=True, DOT=BG.HopperE4m3QgmmaDot32),
+           bind(BM.MoeExpertFp8BlockCoordinateWV4, K=64, G=32, KB=32, SWAP=False, DOT=BG.BlackwellE4m3QmmaDot32),
+           bind(BM.MoeExpertFp8BlockGemmV4, K=32, N=40, G=32, KB=32, SWAP=False, DOT=BG.BlackwellE4m3QmmaDot32),
+           bind(BM.MoeExpertFp8BlockGemmWV4, K=32, N=40, G=32, KB=32, SWAP=False, DOT=BG.BlackwellE4m3QmmaDot32),
+           bind(BM.MoeExpertFp8RowV2, E=3, K=4), bind(BM.MoeExpertFp8ScaleRowV2, E=3, K=2),
+           bind(BM.MoeExpertFp8CoordinateWV2, E=3, K=64, G=32, KB=32, SWAP=False, DOT=BG.BlackwellE4m3QmmaDot32),
+           bind(BM.MoeExpertFp8GemmV2, E=3, K=32, N=40, G=32, KB=32, SWAP=False, DOT=BG.BlackwellE4m3QmmaDot32),
+           bind(BM.MoeExpertFp8GemmWV2, E=3, K=32, N=40, G=32, KB=32, SWAP=False, DOT=BG.BlackwellE4m3QmmaDot32)]
+
+
+def _routed(word, inputs: list, E: int) -> list:
+    """`inputs` with the expert id operand drawn from [0, E) on all but every eighth instance (random ids are out of range)."""
+    names = [n for n, _ in word.signature()[0]]
+    if "e" not in names:
+        return inputs
+    i = names.index("e")
+    ids = np.asarray(inputs[i]).copy()
+    flat = ids.reshape(-1)
+    flat[np.arange(flat.size) % 8 != 0] = np.arange(flat.size)[np.arange(flat.size) % 8 != 0] % E
+    return inputs[:i] + [ids] + inputs[i + 1:]
+
+
+@pytest.mark.parametrize("target", BOOLEAN, ids=lambda t: t.id)
+def test_on_bits_agrees_with_its_word_view(target) -> None:
+    word = TR.word_of(target)
+    assert BL.is_boolean(target) and word.defn.name == target.defn.name
+    assert SW.boolean_version(word).id == target.id
+    inputs = _routed(word, _inputs(word, 64, sum(map(ord, target.id))), target.bindings.get("E", 1))
+    got, ref = _flat(BS.evaluate_words(target, *inputs)), _flat(E.evaluate_batch(word, *inputs))
+    assert len(got) == len(ref)
+    for g, r in zip(got, ref):
+        bad = np.flatnonzero((g != r).any(axis=1))
+        assert not bad.size, f"{target.id}: {bad.size} of {len(r)} instances differ from {word.id}, first {bad[:5]}"
+
+
+def test_the_v2_forms_keep_their_word_views() -> None:
+    """The switch maps `_v1` to `_v2` and `_v3{DOT}` to `_v4{DOT on bits}`: a DOT form never stands for the Hopper-pinned `_v1`."""
+    v1 = bind(M.MoeExpertFp8BlockCoordinate, K=64, G=32, KB=32, SWAP=False)
+    v3 = bind(M.MoeExpertFp8BlockCoordinateV3, K=64, G=32, KB=32, SWAP=False, DOT=HP)
+    assert SW.boolean_version(v1).id == "MoeExpertFp8BlockCoordinate_v2{K=64,G=32,KB=32,SWAP=False}"
+    assert SW.boolean_version(v3).id == "MoeExpertFp8BlockCoordinate_v4{K=64,G=32,KB=32,SWAP=False,DOT=HopperE4m3QgmmaDot32_v2}"
+    with pytest.raises(ValueError, match="from 1 to 1024 experts"):
+        BM.gather_e4m3(1025)
 
 
 def _tp(cc):
