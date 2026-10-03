@@ -94,6 +94,7 @@ research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
 research merge --train --prepare BRANCH [--onto BASE] N@SHA ...      # build a train, lint it, push it for train.sh
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
+research merge --mirror [SHA]                                           # main (or SHA) to node 1's bare repository, as --push does
 research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research slack ask|announce|reply|pickup|done|decline|roster|match|verify-author|read|handles|subscriptions|groups sync [--dry-run]   # Slack (slack.py, below)
@@ -131,7 +132,10 @@ the commit it landed in, and retargets onto the target every open pull request w
 the stacked pull requests GitHub never closes because their base isn't the target. The remote's branch is the truth, not the
 checkout. With `--push`, a merge that lands is pushed (never forced) and then swept, and a refused push sweeps nothing and exits
 1; without it the sweep runs before anyone pushes and closes nothing the merge landed, so after `git push`, run `research merge
---sweep`. Whoever lands a train passes `--push` (Daniel, 1 Oct). The sweep also deletes each closed pull request's head branch
+--sweep`. Whoever lands a train passes `--push` (Daniel, 1 Oct). Once origin has `main`, the same commit goes to node 1's bare
+repository (`vy-lean-sandbox checkout` builds from its `main`) over the ssh `research run --on vy-nebius-1` uses, a plain push
+cut off after 120 s; one that fails logs a line naming the failure and the `research merge --mirror SHA` that reruns it, and the
+merge still exits 0 (`RESEARCH_MERGE_MIRROR` names another machine; empty skips it). The sweep also deletes each closed pull request's head branch
 unless an open pull request still uses it. It is idempotent, and `--dry-run` prints what it would close and retarget. Without the remote the sweep is skipped, and a
 failure (no `gh`, no network) is reported without changing the merge's exit code.
 
