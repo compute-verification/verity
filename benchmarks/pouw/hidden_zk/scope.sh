@@ -7,6 +7,7 @@
 set -euo pipefail
 cpus=${1:?CPUS} mem=${2:?MEM}
 unit=hidden-zk-${RESEARCH_RUN_ID:-$$}
+mkdir -p "${TMPDIR:-/tmp}"
 envf=$(mktemp "${TMPDIR:-/tmp}/hidden-zk-env.XXXXXX")      # mode 600; read and removed inside the scope
 export -p > "$envf"
 echo "scope.sh: $unit.scope, CPUs $cpus, MemoryMax $mem, as $(id -un)"
