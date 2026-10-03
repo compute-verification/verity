@@ -69,7 +69,7 @@ theorem drawSetupZKH_of_accepts (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs}
   rw [setupOne_hidden ((zkTags_hiddenOutputs I).trans hh), hd] at hst
   obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, cap, hz, -⟩ := hall 0 (by simp)
-  have hz' : Flock.Zk.schedule st.m = .ok (schs[0].1, schs[0].2) := by simp only [Array.getElem_map] at hz; exact hz
+  have hz' : Flock.Zk.schedule st.m = .ok (schs[0].1, schs[0].2) := by simp only [List.getElem_toArray] at hz; exact hz
   obtain ⟨sch, hf⟩ := fast100_of_schedule hz'
   obtain ⟨pop, -, hdr⟩ := setupHidden_drawn hst
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { st.c with outPorts := #[] }) hdr
@@ -80,9 +80,9 @@ theorem drawSetupZKH_of_accepts (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs}
 
 theorem tablesAtZKH_live_of (hsched : ZkSchedOK) {n mPts : ℕ} {Reg : Type} :
     TablesAtZKHLive (n := n) (mPts := mPts) (Reg := Reg) := by
-  intro I ht c hc ho dj S₀ y₀ wr hh hc1 hrec hok S R o h
+  intro I ht c hc ho dj S₀ y₀ wr hh hc1 hrec S R o hok h
   obtain ⟨hd, -, -⟩ := hrec S R o h
-  have hne := drawSetupZKH_of_accepts hsched ht hc ho hh hc1 h hd (hok S)
+  have hne := drawSetupZKH_of_accepts hsched ht hc ho hh hc1 h hd hok
   refine ⟨(Classical.choice hne).x.st, (Classical.choice hne).sch, (Classical.choice hne).tPad,
     (Classical.choice hne).x.wf.1, (Classical.choice hne).x.wf.2, (Classical.choice hne).x.h,
     (Classical.choice hne).hz, Classical.choice hne, rfl, rfl, rfl, ?_, fun points hpts hsz => ?_⟩

@@ -92,8 +92,8 @@ variable {n : ℕ} {mPts : ℕ} {Reg : Type}
 /-- **Wherever flock-verify accepts a hidden-output session, the `--zk` table is the executable's**
 (`TablesAtZKLive` under `hh = true`). On hidden-output one-table inputs whose `--statement` tags are untyped and whose
 circuit file `HmOut.parse` accepts (at the `--zk` tags) as a circuit whose unit returns the outputs, with `wr` the coin
-server's record (`RecordsLiveZK`) and its draws `DrawOkZKH`: whenever `verify --zk` accepts what `wr` writes for `o` at
-draw `S`, setupHidden's statement `st` at `dj S` under the `--zk` tags is well formed, `Zk.schedule st.m` is
+server's record (`RecordsLiveZK`): whenever the draw `S` is `DrawOkZKH` and `verify --zk` accepts what `wr` writes for
+`o` at it, setupHidden's statement `st` at `dj S` under the `--zk` tags is well formed, `Zk.schedule st.m` is
 `(sch, t_pad)`, the draw has a `DrawSetupZKH` at `st`, `sch` and `t_pad` whose table is `tablesAtZKH … S R`, and at the
 record's link points `Setup.ofCircuit st`'s extra claims are that table's. -/
 def TablesAtZKHLive : Prop :=
@@ -101,8 +101,8 @@ def TablesAtZKHLive : Prop :=
     (_hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (_ho : c.outNet = c.unitNet)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript),
-    I.tags.hiddenOutputs = true → I.count ≤ 1 → RecordsLiveZK I dj wr → (∀ S, DrawOkZKH I dj mPts S) →
-    ∀ S R o, AcceptsZK I (wr S R o) →
+    I.tags.hiddenOutputs = true → I.count ≤ 1 → RecordsLiveZK I dj wr →
+    ∀ S R o, DrawOkZKH I dj mPts S → AcceptsZK I (wr S R o) →
       ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
         Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition
           I.program = .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
