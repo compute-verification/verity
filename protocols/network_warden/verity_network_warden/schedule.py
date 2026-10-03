@@ -70,11 +70,18 @@ class SyncSet:
 
 @dataclass(frozen=True, slots=True)
 class LogicalFrame:
-    """A real frame as the Program fixes it: its content, its anchor and its logical index."""
+    """A real frame as the Program fixes it: its content, its anchor and its logical index.
+
+    The index is non-negative, as Lean's ℕ is: a negative λ can make a frame eligible before its anchor, in an earlier
+    window, whose grid would then read the later window's sync."""
 
     payload: bytes
     anchor: int
     index: int
+
+    def __post_init__(self) -> None:
+        if self.index < 0:
+            raise ValueError("a logical index is non-negative")
 
 
 def eligible(frame: LogicalFrame, sync: ClockSync) -> int:
