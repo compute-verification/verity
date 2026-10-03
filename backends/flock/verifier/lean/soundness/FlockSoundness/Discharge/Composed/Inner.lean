@@ -23,9 +23,8 @@ the level-0 lanes, the clear values, Ligerito's value lists and the verifier's r
 * **The lanes** (`lanesOf`): packed word `y = l + 2^k₀·c` of `z` is lane `l`'s column `c`.
 * **Levels ≥ 1** (`ligOf`): the restart `T' = Σ_c y₁'(c)·b̄(c)` and levels ≥ 1's bytes.
 
-**Open inputs** (each a named definition, until the coin vector or the table carries it): level 0's out-of-domain point
-(`oodPoint`), the region claims' points (`extraPoint`), and levels ≥ 1's bytes (`ligBytes`, which need Ligerito's level
-≥ 1 coins). `InnerHolds` reads none of `ligBytes`.
+**Open inputs** (each a named definition, until the coin vector carries it): level 0's out-of-domain point
+(`oodPoint`) and levels ≥ 1's bytes (`ligBytes`, which need Ligerito's level ≥ 1 coins). `InnerHolds` reads none of `ligBytes`.
 -/
 
 namespace FlockSoundness.Discharge.Composed
@@ -199,12 +198,12 @@ def rowRsC {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) : LinF 𝔽 (nE + 4) :=
 def swAt {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) (k : ℕ) : Fin 128 → 𝔽 :=
   if k = 0 then sHatAt sh (2 * r.val)
   else if k = 1 then sHatAt sh (2 * r.val + 1)
-  else fun w => if h : k - 2 < st.regions.size then pubRegOf st ⟨k - 2, h⟩ w else 0
+  else fun w => if h : k - 2 < 2 * st.regions.size then pubRegOf st c.rest.link ⟨k - 2, h⟩ w else 0
 
 /-- **The opening's target** `T = Σ_k γ_k·β_k`, `β_k = recombine(ŝ_k, r''_k)` (`Opening.ringSwitch`). -/
 def openT {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) : 𝔽 :=
-  ∑ k : Fin (2 + st.regions.size), fOf (c.rest.rsGamma r k) *
-    recombine execArith (swAt st r sh k.val) fun i => fOf (c.rest.rpp r k i)
+  ∑ k : Fin (2 + 2 * st.regions.size), fOf (c.rest.rsGamma r k) *
+    recombine execArith (swAt Tz st c r sh k.val) fun i => fOf (c.rest.rpp r k i)
 
 /-- A masked `K` message at layout indices `i₀, i₁` (its coordinates), unmasked by their pads (`l2masked`). -/
 def mkK (i₀ i₁ : ℕ) : LinK 𝕂 (nE + 4) :=
@@ -272,10 +271,6 @@ theorem six_le {mPts : ℕ} (Tz : TabZK 𝔽 mPts) : 6 ≤ Tz.S.m := by have := 
 def oodPoint {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (_c : CoinsZK (RestOf Tz st)) (_r : Fin 2) (_i : ℕ) :
     Fin (Tz.S.m - 7) → 𝔽 := sorry
 
-/-- **Region claim `k`'s point** (open: the session's link points, which `Tz`, `st` and the coins do not carry;
-`Stmt.extraClaims`). -/
-def extraPoint {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (_st : Stmt) (_k : ℕ) : Fin (Tz.S.m - 6) → 𝔽 := sorry
-
 /-- **Levels ≥ 1's bytes** after `T'` (open: they read Ligerito's level ≥ 1 coins, which `RestZK` does not carry). -/
 def ligBytes {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (_c : CoinsZK (RestOf Tz st)) (_r : Fin 2) {L : ℕ}
     (_y : Fin L → 𝕂) (_hi : HiOf Tz) : ByteArray := sorry
@@ -323,17 +318,18 @@ def lcV : ℕ → ℕ → 𝔽
 def lcQ (j : ℕ) : Polynomial 𝔽 :=
   roundPoly (2 ^ (Tz.S.kLog - j - 1)) (lcU Tz st c r j) (lcV Tz st c r zw j)
 
-/-- Claim `k`'s point in rep `r`'s opening: `ab`, `c`, then the extras. -/
-def claimX (k : ℕ) : Fin (Tz.S.m - 6) → 𝔽 :=
-  if k = 0 then fun j => abX Tz st c r j.val
-  else if k = 1 then fun j => zcReq Tz st c r j.val
-  else extraPoint Tz st (k - 2)
+/-- Claim `k`'s word point in rep `r`'s opening, its point but the skip coordinates and `x₀`: `ab`, `c`, then the region
+claims (`regionPtOf`). -/
+def claimX (k : ℕ) : Fin (Tz.S.m - 7) → 𝔽 :=
+  if k = 0 then fun j => abX Tz st c r (j.val + 1)
+  else if k = 1 then fun j => zcReq Tz st c r (j.val + 1)
+  else fun j => if h : k - 2 < 2 * st.regions.size then
+    fOf ((regionPtOf st c.rest.link ⟨k - 2, h⟩).getD j.val 0) else 0
 
 /-- **The opening's batched basis** `b(y) = Σ_k γ_k·Φ_k(eq(x_k[1 …], y))` (`Model.opening`). -/
 def openB (y : ℕ) : 𝔽 :=
-  ∑ k : Fin (2 + st.regions.size), fOf (c.rest.rsGamma r k) *
-    phi execArith (fun i => fOf (c.rest.rpp r k i)) (eqAt (fun j : Fin (Tz.S.m - 7) => claimX Tz st c r k.val
-      ⟨j.val + 1, by have := j.isLt; omega⟩) y)
+  ∑ k : Fin (2 + 2 * st.regions.size), fOf (c.rest.rsGamma r k) *
+    phi execArith (fun i => fOf (c.rest.rpp r k i)) (eqAt (claimX Tz st c r k.val) y)
 
 /-- Level 0's basis `B(y) = b(y) + Σ_i β_i·eq(z_i, y)`, over `K`. -/
 def laneB0 (y : ℕ) : 𝕂 :=
