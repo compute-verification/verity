@@ -212,8 +212,8 @@ def own_pids() -> set[int]:
 
 
 class Monitor(threading.Thread):
-    """Every SAMPLE_S: load, the CPU use of `cpus` (ours and the rest's), the GPU's state and compute processes, and the
-    longest heartbeat and event-loop stalls since the last sample."""
+    """Every SAMPLE_S: load, the CPU use of `cpus` (ours and the rest's) and of the job's own CPUs, the GPU's state and
+    compute processes, and the longest heartbeat and event-loop stalls since the last sample."""
 
     def __init__(self, sink, gpu: dict, cpus: list[int], stall: dict):
         super().__init__(daemon=True)
@@ -234,36 +234,48 @@ class Monitor(threading.Thread):
         mine = pynvml.nvmlDeviceGetHandleByUUID(self.gpu["uuid"])
         threading.Thread(target=self.heartbeat, daemon=True).start()
         procs: dict[int, psutil.Process] = {}
+        last: dict[int, float] = {}
 
         def own_cpu_s() -> float:
-            total = 0.0
+            """CPU seconds our processes used since the last call, summed per process: one that exits takes its
+            unread time with it, one that starts counts from zero."""
+            seen, total = {}, 0.0
             for pid in own_pids():
                 try:
-                    p = procs.setdefault(pid, psutil.Process(pid))
-                    c = p.cpu_times()
-                    total += c.user + c.system
+                    c = procs.setdefault(pid, psutil.Process(pid)).cpu_times()
                 except psutil.Error:
                     procs.pop(pid, None)
+                    continue
+                seen[pid] = c.user + c.system
+                total += seen[pid] - last.get(pid, 0.0)
+            last.clear()
+            last.update(seen)
             return total
 
-        def numa() -> tuple[float, float]:
-            per = psutil.cpu_times(percpu=True)
-            busy = sum(per[i].user + per[i].nice + per[i].system + per[i].irq + per[i].softirq + per[i].steal for i in self.cpus)
-            return busy, sum(sum(per[i]) - per[i].guest - per[i].guest_nice for i in self.cpus)
+        aff = sorted(os.sched_getaffinity(0))
 
-        prev_t, (prev_busy, prev_total), prev_own = clock(), numa(), own_cpu_s()
+        def numa() -> tuple[float, float, float, float]:
+            per = psutil.cpu_times(percpu=True)
+            busy = [c.user + c.nice + c.system + c.irq + c.softirq + c.steal for c in per]
+            total = [sum(c) - c.guest - c.guest_nice for c in per]
+            return (sum(busy[i] for i in self.cpus), sum(total[i] for i in self.cpus),
+                    sum(busy[i] for i in aff), sum(total[i] for i in aff))
+
+        prev_t, (prev_busy, prev_total, prev_abusy, prev_atotal) = clock(), numa()
+        own_cpu_s()
         while not self.halt.wait(SAMPLE_S):
-            t, (busy, total), own = clock(), numa(), own_cpu_s()
+            t, (busy, total, abusy, atotal), own = clock(), numa(), own_cpu_s()
             span = max(1e-9, total - prev_total)
             ncpu = len(self.cpus)
-            others = max(0.0, (busy - prev_busy) - (own - prev_own)) / span
+            others = max(0.0, (busy - prev_busy) - own) / span
             pids = {p.pid: p.usedGpuMemory for p in pynvml.nvmlDeviceGetComputeRunningProcesses(mine)}
             ours = own_pids()
             util = pynvml.nvmlDeviceGetUtilizationRates(mine)
             self.sink({
                 "mono": t, "dt_s": round(t - prev_t, 3), "load": list(os.getloadavg()),
                 "numa_busy": round((busy - prev_busy) / span, 4), "others_busy": round(others, 4),
-                "own_cores": round((own - prev_own) / max(1e-9, t - prev_t), 3), "cpus": ncpu,
+                "own_cores": round(own / max(1e-9, t - prev_t), 3), "cpus": ncpu,
+                "affinity_busy": round((abusy - prev_abusy) / max(1e-9, atotal - prev_atotal), 4),
                 "gpu_util": util.gpu, "gpu_mem_util": util.memory,
                 "sm_mhz": pynvml.nvmlDeviceGetClockInfo(mine, pynvml.NVML_CLOCK_SM),
                 "mem_mhz": pynvml.nvmlDeviceGetClockInfo(mine, pynvml.NVML_CLOCK_MEM),
@@ -275,7 +287,7 @@ class Monitor(threading.Thread):
                 "hb_max_ms": ms(self.stall["hb"]), "loop_max_ms": ms(self.stall["loop"]),
             })
             self.stall["hb"] = self.stall["loop"] = 0.0
-            prev_t, prev_busy, prev_total, prev_own = t, busy, total, own
+            prev_t, prev_busy, prev_total, prev_abusy, prev_atotal = t, busy, total, abusy, atotal
 
 
 def cpulist(text: str) -> list[int]:
@@ -488,8 +500,10 @@ def build_trace(records: Sequence[dict], samples: Sequence[dict], *, name: str, 
         "frames": sum(len(c["egress"][0]["frames"]) for c in configs),
         "ttft_ms": percentiles(ttft), "inter_chunk_ms": percentiles(itl),
         "tokens_per_chunk_max": max((n for r in kept for _, n in r["chunks"]), default=0),
-        "stall_ms_max": max(stalls, default=0.0), "sample_gap_ms_max": max(gaps, default=0.0),
+        "stall_ms": percentiles(stalls, (50, 99)), "stall_ms_max": max(stalls, default=0.0),
+        "sample_gap_ms_max": max(gaps, default=0.0),
         "others_busy": percentiles([s["others_busy"] for s in measured], (50, 99)),
+        "affinity_busy": percentiles([s.get("affinity_busy", 0.0) for s in measured], (50, 99)),
         "load1": percentiles([s["load"][0] for s in measured], (50, 99)),
         "own_cores": percentiles([s["own_cores"] for s in measured], (50, 99)),
         "sm_mhz": percentiles([s["sm_mhz"] for s in measured], (1, 50)),
