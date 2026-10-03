@@ -204,18 +204,25 @@ def pull_targets(store: LocalStore, targets: list[str]) -> dict:
     return rep
 
 
-def read_through(store: LocalStore, targets: list[str], warn: Callable[[str], None]) -> dict | None:
+def read_through(store: LocalStore, targets: list[str], warn: Callable[[str], None], strict: bool = False) -> dict | None:
     """Before an answer from the local labels of `targets` (`research data labels`, the merge queue's grants): `pull_targets` from
     the remote.  The report, or None with a warning when the pull failed or the configured remote is unusable here, and None with
-    no remote configured.  A failed pull never adds anything, so a gate deciding on what is local stays exactly as strict."""
+    no remote configured.  `strict` (the merge queue): no pull raises `StoreError` saying why, since the local labels alone may
+    be stale."""
+    from .local import StoreError
+
     r = store.remote
     if r is None:
+        if strict:
+            store._require_remote()  # noqa: SLF001  (raises why there is no remote here)
         if why := getattr(store, "remote_error", None):
             warn(f"labels of {', '.join(targets)}: the remote is unusable here ({why}); answering from the local labels")
         return None
     try:
         rep = pull_targets(store, targets)
     except Exception as e:  # noqa: BLE001  (an unreachable remote: the local labels still answer)
+        if strict:
+            raise StoreError(f"pulling from {r.describe()} failed ({type(e).__name__}: {e})") from e
         warn(f"labels of {', '.join(targets)}: pulling from {r.describe()} failed ({type(e).__name__}: {e}); answering from the local labels")
         return None
     for bad in rep["bad"]:

@@ -162,6 +162,8 @@ import FlockSoundness.Discharge.ZkExec
 import FlockSoundness.Discharge.Tables
 import FlockSoundness.Discharge.DecodeZLJ
 import FlockSoundness.ZK.GK
+import FlockSoundness.Discharge.HiddenExec
+import FlockSoundness.Discharge.HiddenDec
 import FlockSoundness.Discharge.Hidden
 import FlockSoundness.Discharge.ZkCoins
 import FlockSoundness.Discharge.Composed

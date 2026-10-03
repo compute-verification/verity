@@ -1221,6 +1221,11 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   aligned to its power-of-two span. Every range's slots are at least a word, as on the BLAKE3 path, and at most the block
   (`7 ≤ slot_log ≤ k_log`): a slot below 64 bits makes the fold no `αA₀ᵀe + B₀ᵀe` of any matrices, and a packed range of
   no slots would escape the block bound.
+- **Units.** `units_per_vu ≥ 1` (D8, §17.1). The unit range's `vus_per_block × units_per_vu` slots are a power of two only
+  when the unit returns the outputs, so a tail that returns them would otherwise pass with no unit in a VU.
+- **Blocks.** `vus_per_block ≥ 1` (D9, §17.1). Every range's count is `vus_per_block` times its per-VU count, and the
+  unit range's power-of-two bound binds only when the unit returns the outputs, so a tail that returns them would otherwise
+  pass with no VU in a block.
 - **Wires.** META `wires` begins with the row wires, which the verifier derives and compares: compression `k`'s `cv` from
   compression `k − 1`'s `out`, and hm96 slot `p`'s `cv` from the row's last compression. No other wire touches a row slot.
 - **The pin** is the constant column of the first slot of the first range that is not the mask (`HmRow.pin`). That range
@@ -1474,6 +1479,11 @@ expectation):
   refuses a row that does not open its registered root.
 - **D6:** a `--zk` record's `coin_tree` (§7.4); upstream ignores it.
 - **D7:** the `sha512x3` and `hm96` nets are the verifier's (`Flock.HmNets`); upstream checks only their port widths.
+- **D8:** at least one unit per VU (§16.10). Upstream's `Composite::check` in the pinned builds that have tails (`25519ba1`,
+  `967b8d06`) lets `units_per_vu = 0` through when a tail returns the outputs; the spec refuses it, as
+  `backends/flock/live`'s now does. No vector exercises it.
+- **D9:** at least one VU per block (§16.10). Upstream's `Composite::check` in the same builds lets `vus_per_block = 0`
+  through when a tail returns the outputs; the spec refuses it, as `backends/flock/live`'s now does. No vector exercises it.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).

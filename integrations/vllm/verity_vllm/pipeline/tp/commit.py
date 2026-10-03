@@ -32,6 +32,7 @@ from pathlib import Path
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.config import group, option
 from verity_vllm.pipeline.tp import config_run as TPC
+from verity_vllm.pipeline.tp import warmup as WU
 from verity_vllm.pipeline.tp.import_path import write_import_path_runtime
 
 TP_ROOT_TAG = b"verity/tp-run-root/v1"
@@ -363,7 +364,7 @@ class Options:
 def main(args: Options) -> int:
     from verity_vllm.engine import engine_profile as prof
     prof.apply_env()
-    import torch
+    from verity_vllm.pipeline.tp import lease as TPL
     from vllm import LLM
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline.commit import git_head, run_workload
@@ -391,9 +392,9 @@ def main(args: Options) -> int:
     if args.tp > 1 and args.required_classes is None and "tp_rank_partials" not in required_classes:
         required_classes = required_classes + ("tp_rank_partials",)       # [R14 TP-03] the rank-local collective inputs are required per rank
 
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
+    (out := Path(args.out)).mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(args.workload, None)
+    TPL.acquire()             # a leased Commit's GPUs, all at once, to its last run's finalize (pipeline.tp.lease); the target reads the device
     PO.commit_guard(va.target_of_workload(wl), world=args.tp, installs=False)      # exit 3 when the target declares protocols
     case = va.case_of(wl, args.case)
     env_flags = prof.apply_env()
@@ -529,7 +530,7 @@ def main(args: Options) -> int:
             of_record[str(r)] = sorted(digs)
         replay_cfg = {"programs": {str(r): str(builds[r]) for r in range(world) if builds.get(r)}, "of_record": of_record,
                       "requests": [{"request_id": request_ids[str(r.get("request_id"))], "arrive_step": int(r.get("arrive_step") or 0), "prompt_len": len(r["prompt_token_ids"]),
-                                    "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1), "prompt_token_ids": [int(t) for t in r["prompt_token_ids"]]} for r in reqs],
+                                    "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1), "prompt_token_ids": [int(t) for t in r["prompt_token_ids"]], "seed": int(r["seed"]) if r.get("seed") is not None else (int(sampling["seed"]) if sampling.get("seed") is not None else None)} for r in reqs],
                       "per_stratum": int(args.replay_per_stratum), "max_evaluate": int(args.replay_max), "seed": args.replay_seed, "workers": args.replay_workers,
                       "challenge": args.replay_challenge, "targets": list(args.replay_target or []), "ring_slots": (int(os.environ["VERITY_WINDOW_SLOTS"]) if os.environ.get("VERITY_WINDOW_SLOTS") and os.environ.get("VERITY_WINDOW_MB") else None)}
         versions["sampled_replay"] = {"of_record": of_record, "per_stratum": replay_cfg["per_stratum"], "max_evaluate": replay_cfg["max_evaluate"], "seed": args.replay_seed,
@@ -601,13 +602,7 @@ def main(args: Options) -> int:
               + (f"; tp partials {m.get('tp_partial_source')}" if (m.get("tp_partial_source") or {}).get("relabel_rank") is not None else ""), flush=True)
         if rm and rm.get("program_digest_matches") is False:
             raise SystemExit(f"fail-closed: rank {m['rank']}: manifest Program digest != this rank's Program digest")
-    # warm-up instrumented
-    llm.collective_rpc("tp2_commit_install", timeout=args.rpc_timeout)
-    r = run_workload(eng, va.throwaway_requests(eng, reqs, seed=200), sampling)
-    fin = llm.collective_rpc("tp2_commit_finalize", timeout=args.rpc_timeout)
-    (out / "finalize_warmup.json").write_text(json.dumps(fin, indent=1, default=str) + "\n")
-    print(f"[tp2commit] warm-up instrumented: {r['wall_s']:.3f}s; ranks {[(f['rank'], f['leaves'], f['errors_n'], f['errors'][:2]) for f in fin]}", flush=True)
-    llm.collective_rpc("tp2_commit_reset", timeout=args.rpc_timeout)
+    WU.run(llm, lambda: run_workload(eng, va.throwaway_requests(eng, reqs, seed=200), sampling), out, args.committer, args.rpc_timeout)
 
     rows: list[dict] = []
     tokens_ref = None
@@ -635,7 +630,7 @@ def main(args: Options) -> int:
             row["tokens_equal_ref"] = r["tokens"] == tokens_ref
             if arm != "control":
                 t_f = time.perf_counter()
-                fin = llm.collective_rpc("tp2_commit_finalize", timeout=args.rpc_timeout)
+                fin = TPL.finalize(llm, args.rpc_timeout, f"work.pair{pair}.{arm}", last=pair == args.pairs - 1 and k == len(order) - 1 and not args.value_check)
                 t_ready = time.perf_counter() - t_f
                 if match_capture_dir is not None:
                     print("[tp2commit] match oracle (tp partials vs capture): " + "; ".join(
@@ -693,7 +688,7 @@ def main(args: Options) -> int:
                         cblock = {"run_root": f["run_root"], "steps": f["steps"], "leaves": f["leaves"], "bytes_bound": f["bytes_bound"], "tensors": f["tensors"],
                                   "root_ready_delay_s": f["root_ready_delay_s"], "finalize_s": f["finalize_s"], "spans_total_s": f["spans_total_s"],
                                   "extra": {"expected_tensors": f["expected_tensors"], "committed_tensors": f["committed_tensors"], "errors_n": f["errors_n"], "errors": f["errors"],
-                                            "identity_check": f.get("identity_check"), "expected_manifest": f.get("expected_manifest")},
+                                            "identity_check": f.get("identity_check"), "expected_manifest": f.get("expected_manifest"), "bounded_staging": f.get("bounded_staging")},
                                   "openings": {k2: op_r.get(k2) for k2 in ("n", "verified", "generate_s", "verify_s", "bytes_mean", "error")},
                                   "classes": f["classes"], "weight_registration": f["weight_registration"],
                                   "persistent_bytes": f["persistent_bytes"], "temporary_bytes_peak": f["temporary_bytes_peak"]}
@@ -903,7 +898,7 @@ def main(args: Options) -> int:
                     if reasons:
                         all_pass = False
                         print(f"[tp2commit] COMMIT FAIL (pair {pair}): {row['commit']['commit_fail_reason']}", flush=True)
-                llm.collective_rpc("tp2_commit_reset", timeout=args.rpc_timeout)
+                TPL.reset(llm, args.rpc_timeout)
             rows.append(row)
             with (out / "runs.jsonl").open("a") as f:
                 f.write(json.dumps(row, default=str) + "\n")

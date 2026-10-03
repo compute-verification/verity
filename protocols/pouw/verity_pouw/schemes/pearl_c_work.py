@@ -19,7 +19,8 @@ red team F1, F2 and F5–F8, research store ``internal/pouw/red-team-pearl-c-vll
 * **Credit.**
   - A cell's draw weight is its row's share of `wref` at |K|: Lean's `wrefOf`, with no weight side (F2), so padding to
     `k_unit` and filler earn nothing.
-  - An accepted unit is credited (1 − ρ)·`creditOf` over its credited cells.
+  - An accepted unit is credited (1 − ρ)·`creditOf` over its credited cells, at the scheme's cap ρ (`scheme.cap`: Pearl-C's
+    is its device record's, 1/400 on the H100 and 1/1,000 on sm_120; Pearl-C4's is its own 1/400).
 * **The tile rule (`check_opened`)**, beside `verity_pouw.audit.Verifier.check_tile`'s openings and digest:
   - filler rows are zero;
   - every opened row is zero past |K| (F7);
@@ -45,7 +46,8 @@ red team F1, F2 and F5–F8, research store ``internal/pouw/red-team-pearl-c-vll
     commitment.
   - `audit_replay` keeps the unverified draw for replays whose draws are Fiat–Shamir on the commitment.
 * **Other row formats.** A scheme with its own row encoding, per-row rules and debit (`pearl_c4`) brings
-  `parse_row(row, k)`, `row_passes(words)` and `tile_cap(record, ops, rows, cols)`; Pearl-C v1's are this module's.
+  `parse_row(row, k)`, `row_passes(words)` and `tile_cap(record, ops, rows, cols)`; Pearl-C v1's are this module's. Every
+  scheme brings its `cap`.
 """
 
 from __future__ import annotations
@@ -202,7 +204,7 @@ def work(scheme: C.PearlC, records: Sequence[UnitRecord]) -> tuple[Fraction, Fra
     """(W, credit): the credited cells' `wref`, and (1 − ρ)·`creditOf` over them."""
     cells = [(r, len(rows) * len(cols)) for r in records for rows, cols in (r.credited(t) for t in scheme.tiles(r.matmul.shape))]
     return (sum((cell_wref(scheme, r) * c for r, c in cells), Fraction(0)),
-            (1 - D.CAP) * sum((cell_credit(scheme, r) * c for r, c in cells), Fraction(0)))
+            (1 - scheme.cap) * sum((cell_credit(scheme, r) * c for r, c in cells), Fraction(0)))
 
 
 def job_costs(scheme: C.PearlC, records: Sequence[UnitRecord]) -> int:
@@ -227,7 +229,7 @@ def tile_cap(scheme: C.PearlC, record: UnitRecord, a_codes: Sequence[Sequence[in
     |cols|/n share in each tile, not whole in every tile."""
     d = scheme.device
     debit = D.debit_units(D.chain_atoms(a_codes, b_codes, d), D.forming_elements(a_codes, b_codes), scheme.prices, d)
-    return debit, D.CAP * cell_credit(scheme, record) * len(a_codes) * len(b_codes)
+    return debit, scheme.cap * cell_credit(scheme, record) * len(a_codes) * len(b_codes)
 
 
 def _rules(scheme) -> tuple[Callable[[bytes, int], list[int]], Callable[[Sequence[int]], bool]]:
