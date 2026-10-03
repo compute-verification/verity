@@ -6,19 +6,20 @@ import Verity.SecurityProofs.Circuit
 /-!
 # The tile unit computes `C̃` and `U` (proofs)
 
-`TileCircuit.tileSpec p K`, the tile template at `TM = TN = 1`, evaluates to the pinned order's words: on inputs holding
-the codes of `A′_i` and `B̃_j` and the factor rows `P_A,i` and `P_B,j`, its two outputs are `chainWordP? p 4` over the
-row's atoms and `uWord?` from it (`tile_words`), at every depth `K = 128·nw` (sm_120's `K = 8192` among them). A
-transcript whose one unit is correct carries them (`tile_correct`, by core's `Verity.Partition.compose`). This is L3's
-step 4 for the tile template.
+`TileCircuit.tileSpec p K TM TN`, the tile template at tile `TM × TN`, evaluates to the pinned order's words: for each
+entry `(i, j)`, on inputs holding the codes of `A′_i` and `B̃_j` and the factor rows `P_A,i` and `P_B,j`, its two outputs
+are `chainWordP? p 4` over the row's atoms and U's four K16 steps from it (`tile_words`), at every depth `K = 128·nw`
+(sm_120's `K = 8192` among them) and every tile (the deployed `64 × 64` among them). A transcript whose one unit is
+correct carries them (`tile_correct`, by core's `Verity.Partition.compose`). This is L3's step 4 for the tile template.
 
-* **Per gate** (`tileVal_atom`, `tileVal_add`, `tileVal_peel`, `tileVal_input`): each gate's value from the gates it reads.
+* **Per gate** (`gate_entry`, `tileVal_atom`, `tileVal_add`, `tileVal_peel`, `tileVal_input`): entry `(i, j)`'s block is
+  `entryGate` at its rows, and each gate's value is read from the gates it reads.
 * **A window** (`tileVal_window`): its four atoms write the window's word, a step word (`AccumProofs.StepWord`).
 * **The promotions** (`tileVal_chain`): the template adds each window's word into the total by `F32Add_v2`, which does
   not read `−0` as `+0` as `promoteWord?` does. They agree because a sum of two step words is never `−0`
   (`addWord_step`): FP32 values lie on the grid `2^−149`, so a nonzero sum is at least the least subnormal, which
   `f32Word` writes as a nonzero word (`f32Word_ne_negZero`), and an exact zero sum is `−0` only for `(−0) + (−0)`.
-* **U** (`tileVal_U`): the four K16 steps from `C̃`'s word.
+* **U** (`tileVal_uFold`): the four K16 steps from `C̃`'s word (`uFold`), on any words.
 -/
 
 namespace Pouw.PearlC.TileCircuit
@@ -51,114 +52,148 @@ end Spec
 
 section Gates
 
-variable (p : Pipeline) (K : ℕ)
+variable (p : Pipeline) (K TM TN : ℕ)
 
-theorem gate_input {g : ℕ} (hg : g < 2 * K + 128) : (tileGate p K g).input = true := by
+theorem gate_input {g : ℕ} (hg : g < tileIn K TM TN) : (tileGate p K TM TN g).input = true := by
   unfold tileGate
   split_ifs <;> first | omega | rfl
 
-theorem gate_atom {q r : ℕ} (hq : q < K / 128) (hr : r < 4) :
-    tileGate p K (2 * K + 128 + (5 * q + r)) =
-      ⟨32, false, (if r = 0 then [] else [2 * K + 128 + (5 * q + r) - 1]) ++
-          (List.range 32).map (32 * (4 * q + r) + ·) ++ (List.range 32).map (K + 32 * (4 * q + r) + ·),
-        atomF p (r == 0)⟩ := by
-  have hj : 2 * K + 128 + (5 * q + r) - (2 * K + 128) = 5 * q + r := by omega
+/-- Entry `(i, j)`'s block: `entryGate` at the rows `A′_i`, `B̃_j`, `P_A,i` and `P_B,j`. -/
+theorem gate_entry {i j r : ℕ} (hj : j < TN) (hr : r < blockLen K) :
+    tileGate p K TM TN (entryBase K TM TN i j + r) =
+      entryGate p K (i * K) (TM * K + j * K) ((TM + TN) * K + 64 * i) ((TM + TN) * K + 64 * TM + 64 * j)
+        (entryBase K TM TN i j + r) r := by
+  have hL := blockLen_pos K
+  have hTN : 0 < TN := by omega
+  have h1 : entryBase K TM TN i j + r - tileIn K TM TN = r + (i * TN + j) * blockLen K := by
+    unfold entryBase; omega
+  have h2 : (r + (i * TN + j) * blockLen K) / blockLen K = i * TN + j := by
+    rw [Nat.add_mul_div_right _ _ hL, Nat.div_eq_of_lt hr, Nat.zero_add]
+  have h3 : (r + (i * TN + j) * blockLen K) % blockLen K = r := by
+    rw [Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hr]
+  have h4 : (i * TN + j) / TN = i := by
+    rw [Nat.add_comm, Nat.add_mul_div_right _ _ hTN, Nat.div_eq_of_lt hj, Nat.zero_add]
+  have h5 : (i * TN + j) % TN = j := by
+    rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hj]
+  have hin : tileIn K TM TN ≤ entryBase K TM TN i j + r := by unfold entryBase; omega
+  have hk : (TM + TN) * K ≤ tileIn K TM TN := by unfold tileIn; omega
+  unfold tileGate
+  rw [ite_eq_right (by omega), ite_eq_right (by omega)]
+  dsimp only
+  rw [h1, h2, h3, h4, h5]
+
+theorem entry_atom (a b pa pb g : ℕ) {q r : ℕ} (hq : q < K / 128) (hr : r < 4) :
+    entryGate p K a b pa pb g (5 * q + r) =
+      ⟨32, false, (if r = 0 then [] else [g - 1]) ++ (List.range 32).map (a + 32 * (4 * q + r) + ·) ++
+          (List.range 32).map (b + 32 * (4 * q + r) + ·), atomF p (r == 0)⟩ := by
   have h5 : (5 * q + r) % 5 = r := by omega
   have h5' : (5 * q + r) / 5 = q := by omega
-  unfold tileGate
-  rw [ite_eq_right (by omega), ite_eq_right (by omega), hj, ite_eq_left (by omega), h5, ite_eq_left hr, h5']
+  unfold entryGate
+  rw [ite_eq_left (by omega), h5, ite_eq_left hr, h5']
 
-theorem gate_add {q : ℕ} (hq : q < K / 128) :
-    tileGate p K (2 * K + 128 + (5 * q + 4)) =
-      ⟨32, false, (if q = 0 then [] else [2 * K + 128 + (5 * q + 4) - 5]) ++ [2 * K + 128 + (5 * q + 4) - 1],
-        addF (q == 0)⟩ := by
-  have hj : 2 * K + 128 + (5 * q + 4) - (2 * K + 128) = 5 * q + 4 := by omega
+theorem entry_add (a b pa pb g : ℕ) {q : ℕ} (hq : q < K / 128) :
+    entryGate p K a b pa pb g (5 * q + 4) = ⟨32, false, (if q = 0 then [] else [g - 5]) ++ [g - 1], addF (q == 0)⟩ := by
   have h5 : (5 * q + 4) % 5 = 4 := by omega
   have h5' : (5 * q + 4) / 5 = q := by omega
-  unfold tileGate
-  rw [ite_eq_right (by omega), ite_eq_right (by omega), hj, ite_eq_left (by omega), h5, ite_eq_right (by omega), h5']
+  unfold entryGate
+  rw [ite_eq_left (by omega), h5, ite_eq_right (by omega), h5']
 
-theorem gate_peel {s : ℕ} :
-    tileGate p K (2 * K + 128 + 5 * (K / 128) + s) =
-      ⟨32, false, [2 * K + 128 + 5 * (K / 128) + s - 1] ++ (List.range 16).map (2 * K + 16 * s + ·) ++
-          (List.range 16).map (2 * K + 64 + 16 * s + ·), peelF⟩ := by
-  have hj : 2 * K + 128 + 5 * (K / 128) + s - (2 * K + 128) - 5 * (K / 128) = s := by omega
-  unfold tileGate
-  rw [ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega), hj]
+theorem entry_peel (a b pa pb g s : ℕ) :
+    entryGate p K a b pa pb g (5 * (K / 128) + s) =
+      ⟨32, false, [g - 1] ++ (List.range 16).map (pa + 16 * s + ·) ++ (List.range 16).map (pb + 16 * s + ·), peelF⟩ := by
+  unfold entryGate
+  rw [ite_eq_right (by omega), show 5 * (K / 128) + s - 5 * (K / 128) = s by omega]
 
 theorem getD_pair {n : ℕ} (f h V : ℕ → ℕ) {i : ℕ} (hi : i < n) :
     (((List.range n).map f ++ (List.range n).map h).map V).getD i 0 = V (f i) ∧
       (((List.range n).map f ++ (List.range n).map h).map V).getD (n + i) 0 = V (h i) := by
   simp [List.getD_eq_getElem?_getD, List.getElem?_append_left, hi]
 
-/-- The circuit's values. -/
-abbrev tileVal (a : (tileSpec p K).toCircuit.Transcript) : ℕ → ℕ := val ((tileSpec p K).toCircuit.eval a)
+theorem entry_lt {i j : ℕ} (hi : i < TM) (hj : j < TN) : entryBase K TM TN i j + blockLen K ≤ tileN K TM TN := by
+  have h1 : i * TN + TN ≤ TM * TN := by rw [← Nat.succ_mul]; exact Nat.mul_le_mul_right TN hi
+  have h2 : (i * TN + j + 1) * blockLen K ≤ TM * TN * blockLen K := Nat.mul_le_mul_right _ (by omega)
+  rw [Nat.add_mul, Nat.one_mul] at h2
+  unfold entryBase tileN
+  omega
 
-theorem tileVal_atom (a : (tileSpec p K).toCircuit.Transcript) {q r : ℕ} (hq : q < K / 128) (hr : r < 4) :
-    tileVal p K a (2 * K + 128 + (5 * q + r)) =
-      p.step (if r = 0 then 0 else tileVal p K a (2 * K + 128 + (5 * q + r) - 1))
-        (List.ofFn fun i : Fin 32 => code (tileVal p K a (32 * (4 * q + r) + i)))
-        (List.ofFn fun i : Fin 32 => code (tileVal p K a (K + 32 * (4 * q + r) + i))) := by
-  have hN : 2 * K + 128 + (5 * q + r) < (tileSpec p K).N := by
-    show _ < tileN K
-    unfold tileN; omega
-  have hin : ((tileSpec p K).gate (2 * K + 128 + (5 * q + r))).input = false := by
-    show (tileGate p K _).input = false
-    rw [gate_atom p K hq hr]
+/-- The circuit's values. -/
+abbrev tileVal (a : (tileSpec p K TM TN).toCircuit.Transcript) : ℕ → ℕ := val ((tileSpec p K TM TN).toCircuit.eval a)
+
+theorem tileVal_atom (a : (tileSpec p K TM TN).toCircuit.Transcript) {i j q r : ℕ} (hi : i < TM) (hj : j < TN)
+    (hq : q < K / 128) (hr : r < 4) :
+    tileVal p K TM TN a (entryBase K TM TN i j + (5 * q + r)) =
+      p.step (if r = 0 then 0 else tileVal p K TM TN a (entryBase K TM TN i j + (5 * q + r) - 1))
+        (List.ofFn fun l : Fin 32 => code (tileVal p K TM TN a (i * K + 32 * (4 * q + r) + l)))
+        (List.ofFn fun l : Fin 32 => code (tileVal p K TM TN a (TM * K + j * K + 32 * (4 * q + r) + l))) := by
+  have hr5 : 5 * q + r < blockLen K := by unfold blockLen; omega
+  have hN : entryBase K TM TN i j + (5 * q + r) < (tileSpec p K TM TN).N := by
+    have := entry_lt K TM TN hi hj; show _ < tileN K TM TN; omega
+  have hg := gate_entry p K TM TN (i := i) hj hr5
+  rw [entry_atom p K _ _ _ _ _ hq hr] at hg
+  have hin : ((tileSpec p K TM TN).gate (entryBase K TM TN i j + (5 * q + r))).input = false := by
+    show (tileGate p K TM TN _).input = false
+    rw [hg]
   rw [tileVal, Spec.val_gate _ a hN hin]
-  show (tileGate p K _).f ((tileGate p K _).rd.map _) % 2 ^ (tileGate p K _).w = _
-  rw [gate_atom p K hq hr]
+  show (tileGate p K TM TN _).f ((tileGate p K TM TN _).rd.map _) % 2 ^ (tileGate p K TM TN _).w = _
+  rw [hg]
   dsimp only
   rw [Nat.mod_eq_of_lt (by unfold atomF; exact AccumProofs.step_lt _ _ _ _)]
   rcases Nat.eq_zero_or_pos r with rfl | h0
   · simp only [atomF, beq_self_eq_true, ↓reduceIte, List.nil_append]
-    congr 2 <;> funext i
-    · rw [(getD_pair _ _ _ i.isLt).1]
-    · rw [(getD_pair _ _ _ i.isLt).2]
+    congr 2 <;> funext l
+    · rw [(getD_pair _ _ _ l.isLt).1]
+    · rw [(getD_pair _ _ _ l.isLt).2]
   · have hb : (r == 0) = false := by simp; omega
     simp only [atomF, hb, Bool.false_eq_true, ↓reduceIte, ite_eq_right (show r ≠ 0 by omega),
       List.cons_append, List.nil_append, List.map_cons, List.headD_cons, List.tail_cons]
-    congr 2 <;> funext i
-    · rw [(getD_pair _ _ _ i.isLt).1]
-    · rw [(getD_pair _ _ _ i.isLt).2]
+    congr 2 <;> funext l
+    · rw [(getD_pair _ _ _ l.isLt).1]
+    · rw [(getD_pair _ _ _ l.isLt).2]
 
-theorem tileVal_input (a : (tileSpec p K).toCircuit.Transcript) {g : ℕ} (hg : g < 2 * K + 128) :
-    tileVal p K a g = val a g := by
-  have hN : g < (tileSpec p K).N := by show g < tileN K; unfold tileN; omega
-  rw [tileVal, Spec.val_input _ a hN (gate_input p K hg), val_of_lt _ hN]
+theorem tileVal_input (a : (tileSpec p K TM TN).toCircuit.Transcript) {g : ℕ} (hg : g < tileIn K TM TN) :
+    tileVal p K TM TN a g = val a g := by
+  have hN : g < (tileSpec p K TM TN).N := by show g < tileN K TM TN; unfold tileN; omega
+  rw [tileVal, Spec.val_input _ a hN (gate_input p K TM TN hg), val_of_lt _ hN]
 
-theorem tileVal_add (a : (tileSpec p K).toCircuit.Transcript) {q : ℕ} (hq : q < K / 128) :
-    tileVal p K a (2 * K + 128 + (5 * q + 4)) =
-      f32Add (if q = 0 then 0 else tileVal p K a (2 * K + 128 + (5 * q + 4) - 5)) (tileVal p K a (2 * K + 128 + (5 * q + 4) - 1)) %
-        2 ^ 32 := by
-  have hN : 2 * K + 128 + (5 * q + 4) < (tileSpec p K).N := by
-    show _ < tileN K
-    unfold tileN; omega
-  have hin : ((tileSpec p K).gate (2 * K + 128 + (5 * q + 4))).input = false := by
-    show (tileGate p K _).input = false
-    rw [gate_add p K hq]
+theorem tileVal_add (a : (tileSpec p K TM TN).toCircuit.Transcript) {i j q : ℕ} (hi : i < TM) (hj : j < TN)
+    (hq : q < K / 128) :
+    tileVal p K TM TN a (entryBase K TM TN i j + (5 * q + 4)) =
+      f32Add (if q = 0 then 0 else tileVal p K TM TN a (entryBase K TM TN i j + (5 * q + 4) - 5))
+        (tileVal p K TM TN a (entryBase K TM TN i j + (5 * q + 4) - 1)) % 2 ^ 32 := by
+  have hr5 : 5 * q + 4 < blockLen K := by unfold blockLen; omega
+  have hN : entryBase K TM TN i j + (5 * q + 4) < (tileSpec p K TM TN).N := by
+    have := entry_lt K TM TN hi hj; show _ < tileN K TM TN; omega
+  have hg := gate_entry p K TM TN (i := i) hj hr5
+  rw [entry_add p K _ _ _ _ _ hq] at hg
+  have hin : ((tileSpec p K TM TN).gate (entryBase K TM TN i j + (5 * q + 4))).input = false := by
+    show (tileGate p K TM TN _).input = false
+    rw [hg]
   rw [tileVal, Spec.val_gate _ a hN hin]
-  show (tileGate p K _).f ((tileGate p K _).rd.map _) % 2 ^ (tileGate p K _).w = _
-  rw [gate_add p K hq]
+  show (tileGate p K TM TN _).f ((tileGate p K TM TN _).rd.map _) % 2 ^ (tileGate p K TM TN _).w = _
+  rw [hg]
   dsimp only
   rcases Nat.eq_zero_or_pos q with rfl | h0
   · simp [addF]
   · have hb : (q == 0) = false := by simp; omega
     simp [addF, hb, ite_eq_right (show q ≠ 0 by omega)]
 
-theorem tileVal_peel (a : (tileSpec p K).toCircuit.Transcript) {s : ℕ} (hs : s < 4) :
-    tileVal p K a (2 * K + 128 + 5 * (K / 128) + s) =
-      k16Step (tileVal p K a (2 * K + 128 + 5 * (K / 128) + s - 1)) (fun l => tileVal p K a (2 * K + 16 * s + l))
-        (fun l => tileVal p K a (2 * K + 64 + 16 * s + l)) := by
-  have hN : 2 * K + 128 + 5 * (K / 128) + s < (tileSpec p K).N := by
-    show _ < tileN K
-    unfold tileN; omega
-  have hin : ((tileSpec p K).gate (2 * K + 128 + 5 * (K / 128) + s)).input = false := by
-    show (tileGate p K _).input = false
-    rw [gate_peel p K]
+theorem tileVal_peel (a : (tileSpec p K TM TN).toCircuit.Transcript) {i j s : ℕ} (hi : i < TM) (hj : j < TN)
+    (hs : s < 4) :
+    tileVal p K TM TN a (entryBase K TM TN i j + (5 * (K / 128) + s)) =
+      k16Step (tileVal p K TM TN a (entryBase K TM TN i j + (5 * (K / 128) + s) - 1))
+        (fun l => tileVal p K TM TN a ((TM + TN) * K + 64 * i + 16 * s + l))
+        (fun l => tileVal p K TM TN a ((TM + TN) * K + 64 * TM + 64 * j + 16 * s + l)) := by
+  have hr5 : 5 * (K / 128) + s < blockLen K := by unfold blockLen; omega
+  have hN : entryBase K TM TN i j + (5 * (K / 128) + s) < (tileSpec p K TM TN).N := by
+    have := entry_lt K TM TN hi hj; show _ < tileN K TM TN; omega
+  have hg := gate_entry p K TM TN (i := i) hj hr5
+  rw [entry_peel p K] at hg
+  have hin : ((tileSpec p K TM TN).gate (entryBase K TM TN i j + (5 * (K / 128) + s))).input = false := by
+    show (tileGate p K TM TN _).input = false
+    rw [hg]
   rw [tileVal, Spec.val_gate _ a hN hin]
-  show (tileGate p K _).f ((tileGate p K _).rd.map _) % 2 ^ (tileGate p K _).w = _
-  rw [gate_peel p K]
+  show (tileGate p K TM TN _).f ((tileGate p K TM TN _).rd.map _) % 2 ^ (tileGate p K TM TN _).w = _
+  rw [hg]
   dsimp only
   rw [Nat.mod_eq_of_lt (by unfold peelF k16Step; exact AccumProofs.packValue_lt _)]
   simp only [peelF, List.cons_append, List.nil_append, List.map_cons, List.headD_cons]
@@ -168,19 +203,24 @@ theorem tileVal_peel (a : (tileSpec p K).toCircuit.Transcript) {s : ℕ} (hs : s
 
 theorem code_val (c : Code) : code c.val = c := Fin.ext (Nat.mod_eq_of_lt c.isLt)
 
-/-- The atoms' inputs: atom `t`'s codes are positions `32t, …` of the two rows. -/
-theorem atom_inputs (a : (tileSpec p K).toCircuit.Transcript) (A B : Fin K → Code)
-    (hA : ∀ i : Fin K, val a i = (A i).val) (hB : ∀ i : Fin K, val a (K + i) = (B i).val) {t : ℕ}
-    (ht : t < (rowAtoms A B).length) :
-    (List.ofFn fun i : Fin 32 => code (tileVal p K a (32 * t + i))) = List.ofFn (rowAtoms A B)[t].1 ∧
-      (List.ofFn fun i : Fin 32 => code (tileVal p K a (K + 32 * t + i))) = List.ofFn (rowAtoms A B)[t].2 := by
+/-- The atoms' inputs: entry `(i, j)`'s atom `t` reads positions `32t, …` of rows `A′_i` and `B̃_j`. -/
+theorem atom_inputs (a : (tileSpec p K TM TN).toCircuit.Transcript) (A B : Fin K → Code) {i j : ℕ} (hi : i < TM)
+    (hj : j < TN) (hA : ∀ l : Fin K, val a (i * K + l) = (A l).val)
+    (hB : ∀ l : Fin K, val a (TM * K + j * K + l) = (B l).val) {t : ℕ} (ht : t < (rowAtoms A B).length) :
+    (List.ofFn fun l : Fin 32 => code (tileVal p K TM TN a (i * K + 32 * t + l))) = List.ofFn (rowAtoms A B)[t].1 ∧
+      (List.ofFn fun l : Fin 32 => code (tileVal p K TM TN a (TM * K + j * K + 32 * t + l))) =
+        List.ofFn (rowAtoms A B)[t].2 := by
   have hlen : (rowAtoms A B).length = K / 32 := List.length_ofFn
   rw [hlen] at ht
   have hk : 32 * t + 32 ≤ K := by have := Nat.mul_div_le K 32; omega
+  have hA' : i * K + K ≤ TM * K := by rw [← Nat.succ_mul]; exact Nat.mul_le_mul_right K hi
+  have hB' : j * K + K ≤ TN * K := by rw [← Nat.succ_mul]; exact Nat.mul_le_mul_right K hj
+  have hIn : (TM + TN) * K ≤ tileIn K TM TN := by unfold tileIn; omega
+  have hs : (TM + TN) * K = TM * K + TN * K := Nat.add_mul _ _ _
   simp only [rowAtoms, List.getElem_ofFn]
-  constructor <;> congr 1 <;> funext i
-  · rw [tileVal_input p K a (by omega), hA ⟨32 * t + i, by omega⟩, code_val]
-  · rw [tileVal_input p K a (by omega), Nat.add_assoc, hB ⟨32 * t + i, by omega⟩, code_val]
+  constructor <;> congr 1 <;> funext l
+  · rw [tileVal_input p K TM TN a (by omega), Nat.add_assoc, hA ⟨32 * t + l, by omega⟩, code_val]
+  · rw [tileVal_input p K TM TN a (by omega), Nat.add_assoc, hB ⟨32 * t + l, by omega⟩, code_val]
 
 theorem take_drop_four {α : Type} (l : List α) {n : ℕ} (h : n + 3 < l.length) :
     (l.drop n).take 4 = [l[n], l[n + 1], l[n + 2], l[n + 3]] := by
@@ -191,11 +231,12 @@ theorem take_drop_four {α : Type} (l : List α) {n : ℕ} (h : n + 3 < l.length
     List.drop_eq_getElem_cons h]
   rfl
 
-/-- **A window's word**: its four atoms' gates write the window's word, a step word. -/
-theorem tileVal_window (a : (tileSpec p K).toCircuit.Transcript) (A B : Fin K → Code)
-    (hA : ∀ i : Fin K, val a i = (A i).val) (hB : ∀ i : Fin K, val a (K + i) = (B i).val) {q : ℕ}
-    (hq : q < K / 128) {w : ℕ} (hw : windowWordP? p (((rowAtoms A B).drop (4 * q)).take 4) = some w) :
-    tileVal p K a (2 * K + 128 + (5 * q + 3)) = w ∧ AccumProofs.StepWord w := by
+/-- **A window's word**: entry `(i, j)`'s four atoms of window `q` write the window's word, a step word. -/
+theorem tileVal_window (a : (tileSpec p K TM TN).toCircuit.Transcript) (A B : Fin K → Code) {i j : ℕ} (hi : i < TM)
+    (hj : j < TN) (hA : ∀ l : Fin K, val a (i * K + l) = (A l).val)
+    (hB : ∀ l : Fin K, val a (TM * K + j * K + l) = (B l).val) {q : ℕ} (hq : q < K / 128) {w : ℕ}
+    (hw : windowWordP? p (((rowAtoms A B).drop (4 * q)).take 4) = some w) :
+    tileVal p K TM TN a (entryBase K TM TN i j + (5 * q + 3)) = w ∧ AccumProofs.StepWord w := by
   have hlen : (rowAtoms A B).length = K / 32 := List.length_ofFn
   have h3 : 4 * q + 3 < (rowAtoms A B).length := by rw [hlen]; omega
   rw [take_drop_four _ h3] at hw
@@ -205,57 +246,73 @@ theorem tileVal_window (a : (tileSpec p K).toCircuit.Transcript) (A B : Fin K �
   obtain ⟨w3, h3', hw⟩ := Option.bind_eq_some_iff.1 hw
   obtain ⟨w4, h4, hw⟩ := Option.bind_eq_some_iff.1 hw
   obtain rfl : w4 = w := Option.some.inj hw
-  have ai := fun t (ht : t < (rowAtoms A B).length) => atom_inputs p K a A B hA hB ht
+  have ai := fun t (ht : t < (rowAtoms A B).length) => atom_inputs p K TM TN a A B hi hj hA hB ht
   obtain ⟨rfl, -⟩ := PeelExactProofs.finite?_eq_some h1
   obtain ⟨rfl, -⟩ := PeelExactProofs.finite?_eq_some h2
   obtain ⟨rfl, -⟩ := PeelExactProofs.finite?_eq_some h3'
   obtain ⟨rfl, -⟩ := PeelExactProofs.finite?_eq_some h4
-  have e0 : tileVal p K a (2 * K + 128 + (5 * q + 0)) = p.step 0 (List.ofFn (rowAtoms A B)[4 * q].1)
+  have e0 : tileVal p K TM TN a (entryBase K TM TN i j + (5 * q + 0)) = p.step 0 (List.ofFn (rowAtoms A B)[4 * q].1)
       (List.ofFn (rowAtoms A B)[4 * q].2) := by
-    rw [tileVal_atom p K a hq (by omega), ← (ai _ (by omega)).1, ← (ai _ (by omega)).2]; rfl
-  have e1 : tileVal p K a (2 * K + 128 + (5 * q + 1)) = p.step (tileVal p K a (2 * K + 128 + (5 * q + 0)))
-      (List.ofFn (rowAtoms A B)[4 * q + 1].1) (List.ofFn (rowAtoms A B)[4 * q + 1].2) := by
-    rw [tileVal_atom p K a hq (by omega), ← (ai _ (by omega)).1, ← (ai _ (by omega)).2]; rfl
-  have e2 : tileVal p K a (2 * K + 128 + (5 * q + 2)) = p.step (tileVal p K a (2 * K + 128 + (5 * q + 1)))
-      (List.ofFn (rowAtoms A B)[4 * q + 2].1) (List.ofFn (rowAtoms A B)[4 * q + 2].2) := by
-    rw [tileVal_atom p K a hq (by omega), ← (ai _ (by omega)).1, ← (ai _ (by omega)).2]; rfl
-  have e3 : tileVal p K a (2 * K + 128 + (5 * q + 3)) = p.step (tileVal p K a (2 * K + 128 + (5 * q + 2)))
-      (List.ofFn (rowAtoms A B)[4 * q + 3].1) (List.ofFn (rowAtoms A B)[4 * q + 3].2) := by
-    rw [tileVal_atom p K a hq (by omega), ← (ai _ (by omega)).1, ← (ai _ (by omega)).2]; rfl
+    rw [tileVal_atom p K TM TN a hi hj hq (by omega), ← (ai _ (by omega)).1, ← (ai _ (by omega)).2]; rfl
+  have e1 : tileVal p K TM TN a (entryBase K TM TN i j + (5 * q + 1)) =
+      p.step (tileVal p K TM TN a (entryBase K TM TN i j + (5 * q + 0)))
+        (List.ofFn (rowAtoms A B)[4 * q + 1].1) (List.ofFn (rowAtoms A B)[4 * q + 1].2) := by
+    rw [tileVal_atom p K TM TN a hi hj hq (by omega), ← (ai _ (by omega)).1, ← (ai _ (by omega)).2]; rfl
+  have e2 : tileVal p K TM TN a (entryBase K TM TN i j + (5 * q + 2)) =
+      p.step (tileVal p K TM TN a (entryBase K TM TN i j + (5 * q + 1)))
+        (List.ofFn (rowAtoms A B)[4 * q + 2].1) (List.ofFn (rowAtoms A B)[4 * q + 2].2) := by
+    rw [tileVal_atom p K TM TN a hi hj hq (by omega), ← (ai _ (by omega)).1, ← (ai _ (by omega)).2]; rfl
+  have e3 : tileVal p K TM TN a (entryBase K TM TN i j + (5 * q + 3)) =
+      p.step (tileVal p K TM TN a (entryBase K TM TN i j + (5 * q + 2)))
+        (List.ofFn (rowAtoms A B)[4 * q + 3].1) (List.ofFn (rowAtoms A B)[4 * q + 3].2) := by
+    rw [tileVal_atom p K TM TN a hi hj hq (by omega), ← (ai _ (by omega)).1, ← (ai _ (by omega)).2]; rfl
   refine ⟨by rw [e3, e2, e1, e0], AccumProofs.step_lt _ _ _ _, AccumProofs.step_ne_negZero _ _ _ _, h4⟩
 
-/-- **U's gate**: from `C̃`'s word `c` on `C̃`'s gate, the four K16 steps over the factor rows write `uWord? c pa pb`. -/
-theorem tileVal_U (a : (tileSpec p K).toCircuit.Transcript) (pa pb : List ℕ)
-    (hpa : ∀ i < 64, val a (2 * K + i) = pa.getD i 0) (hpb : ∀ i < 64, val a (2 * K + 64 + i) = pb.getD i 0)
-    {c u : ℕ} (hc : tileVal p K a (cGate K) = c) (hu : uWord? c pa pb = some u) : tileVal p K a (uGate K) = u := by
-  have sl : ∀ s < 4, (fun l : Fin 16 => tileVal p K a (2 * K + 16 * s + l)) = slice16 pa s ∧
-      (fun l : Fin 16 => tileVal p K a (2 * K + 64 + 16 * s + l)) = slice16 pb s := fun s hs => by
-    constructor <;> funext l
-    · rw [tileVal_input p K a (by omega), Nat.add_assoc, hpa _ (by omega)]; rfl
-    · rw [tileVal_input p K a (by omega), Nat.add_assoc, hpb _ (by omega)]; rfl
-  rw [uWord?, show List.range 4 = [0, 1, 2, 3] from rfl] at hu
-  simp only [List.foldlM_cons, List.foldlM_nil] at hu
-  obtain ⟨u1, h1, hu⟩ := Option.bind_eq_some_iff.1 hu
-  obtain ⟨u2, h2, hu⟩ := Option.bind_eq_some_iff.1 hu
-  obtain ⟨u3, h3, hu⟩ := Option.bind_eq_some_iff.1 hu
-  obtain ⟨u4, h4, hu⟩ := Option.bind_eq_some_iff.1 hu
-  obtain rfl : u4 = u := Option.some.inj hu
-  obtain ⟨rfl, -⟩ := PeelExactProofs.finite?_eq_some h1
-  obtain ⟨rfl, -⟩ := PeelExactProofs.finite?_eq_some h2
-  obtain ⟨rfl, -⟩ := PeelExactProofs.finite?_eq_some h3
-  obtain ⟨rfl, -⟩ := PeelExactProofs.finite?_eq_some h4
-  have e : ∀ s < 4, tileVal p K a (2 * K + 128 + 5 * (K / 128) + s) =
-      k16Step (tileVal p K a (2 * K + 128 + 5 * (K / 128) + s - 1)) (slice16 pa s) (slice16 pb s) := fun s hs => by
-    rw [tileVal_peel p K a hs, (sl s hs).1, (sl s hs).2]
+/-- U's four K16 steps from `c` over the factor rows, on any words: what the template writes. -/
+def uFold (pa pb : List ℕ) (c : ℕ) : ℕ :=
+  (List.range 4).foldl (fun acc s => k16Step acc (slice16 pa s) (slice16 pb s)) c
+
+theorem foldl_of_foldlM (pa pb : List ℕ) : ∀ (l : List ℕ) (c u : ℕ), l.foldlM (uStep? pa pb) c = some u →
+    l.foldl (fun acc s => k16Step acc (slice16 pa s) (slice16 pb s)) c = u
+  | [], c, u, h => by simpa using h
+  | s :: l, c, u, h => by
+    simp only [List.foldlM_cons, List.foldl_cons] at h ⊢
+    obtain ⟨c', h1, h⟩ := Option.bind_eq_some_iff.1 h
+    obtain ⟨rfl, -⟩ := PeelExactProofs.finite?_eq_some h1
+    exact foldl_of_foldlM pa pb l _ u h
+
+/-- Where every step is finite, the fold is `uWord?`'s word. -/
+theorem uFold_of_uWord {c u : ℕ} {pa pb : List ℕ} (h : uWord? c pa pb = some u) : uFold pa pb c = u :=
+  foldl_of_foldlM pa pb _ c u h
+
+/-- **U's gate**: entry `(i, j)`'s four K16 steps from its `C̃` gate over the factor rows `P_A,i` and `P_B,j`. -/
+theorem tileVal_uFold (a : (tileSpec p K TM TN).toCircuit.Transcript) {i j : ℕ} (hi : i < TM) (hj : j < TN)
+    (pa pb : List ℕ) (hpa : ∀ q < 64, val a ((TM + TN) * K + 64 * i + q) = pa.getD q 0)
+    (hpb : ∀ q < 64, val a ((TM + TN) * K + 64 * TM + 64 * j + q) = pb.getD q 0) :
+    tileVal p K TM TN a (uGate K TM TN i j) = uFold pa pb (tileVal p K TM TN a (cGate K TM TN i j)) := by
+  have h64i : 64 * i + 64 ≤ 64 * TM := by omega
+  have h64j : 64 * j + 64 ≤ 64 * TN := by omega
+  have hIn : tileIn K TM TN = (TM + TN) * K + 64 * TM + 64 * TN := by unfold tileIn; omega
+  have sl : ∀ s < 4, (fun l : Fin 16 => tileVal p K TM TN a ((TM + TN) * K + 64 * i + 16 * s + l)) = slice16 pa s ∧
+      (fun l : Fin 16 => tileVal p K TM TN a ((TM + TN) * K + 64 * TM + 64 * j + 16 * s + l)) = slice16 pb s :=
+    fun s hs => by
+      constructor <;> funext l
+      · rw [tileVal_input p K TM TN a (by omega), Nat.add_assoc, hpa _ (by omega)]; rfl
+      · rw [tileVal_input p K TM TN a (by omega), Nat.add_assoc, hpb _ (by omega)]; rfl
+  set E := entryBase K TM TN i j with hE
+  have e : ∀ s < 4, tileVal p K TM TN a (E + (5 * (K / 128) + s)) =
+      k16Step (tileVal p K TM TN a (E + (5 * (K / 128) + s) - 1)) (slice16 pa s) (slice16 pb s) := fun s hs => by
+    rw [tileVal_peel p K TM TN a hi hj hs, (sl s hs).1, (sl s hs).2]
   have e0 := e 0 (by omega)
   have e1 := e 1 (by omega)
   have e2 := e 2 (by omega)
   have e3 := e 3 (by omega)
-  rw [show 2 * K + 128 + 5 * (K / 128) + 0 - 1 = cGate K by unfold cGate; omega, hc] at e0
-  rw [show 2 * K + 128 + 5 * (K / 128) + 1 - 1 = 2 * K + 128 + 5 * (K / 128) + 0 by omega, e0] at e1
-  rw [show 2 * K + 128 + 5 * (K / 128) + 2 - 1 = 2 * K + 128 + 5 * (K / 128) + 1 by omega, e1] at e2
-  rw [show 2 * K + 128 + 5 * (K / 128) + 3 - 1 = 2 * K + 128 + 5 * (K / 128) + 2 by omega, e2] at e3
-  rw [show uGate K = 2 * K + 128 + 5 * (K / 128) + 3 by unfold uGate tileN; omega, e3]
+  rw [show E + (5 * (K / 128) + 0) - 1 = cGate K TM TN i j by unfold cGate; omega] at e0
+  rw [show E + (5 * (K / 128) + 1) - 1 = E + (5 * (K / 128) + 0) by omega, e0] at e1
+  rw [show E + (5 * (K / 128) + 2) - 1 = E + (5 * (K / 128) + 1) by omega, e1] at e2
+  rw [show E + (5 * (K / 128) + 3) - 1 = E + (5 * (K / 128) + 2) by omega, e2] at e3
+  rw [show uGate K TM TN i j = E + (5 * (K / 128) + 3) by unfold uGate blockLen; omega, e3]
+  rfl
 
 end Gates
 
@@ -403,13 +460,15 @@ section Chain
 
 open AccumProofs
 
-variable (p : Pipeline)
+variable (p : Pipeline) (TM TN : ℕ)
 
-/-- **`C̃`'s gate** at depth `128·nw`: the windows' promotions write the chain's word. -/
-theorem tileVal_chain {nw : ℕ} (hnw : 0 < nw) (a : (tileSpec p (128 * nw)).toCircuit.Transcript)
-    (A B : Fin (128 * nw) → Code) (hA : ∀ i : Fin (128 * nw), val a i = (A i).val)
-    (hB : ∀ i : Fin (128 * nw), val a (128 * nw + i) = (B i).val) {c : ℕ}
-    (hc : chainWordP? p 4 (rowAtoms A B) = some c) : tileVal p (128 * nw) a (cGate (128 * nw)) = c := by
+/-- **`C̃_ij`'s gate** at depth `128·nw`: entry `(i, j)`'s promotions write the chain's word over rows `A′_i`, `B̃_j`. -/
+theorem tileVal_chain {nw : ℕ} (hnw : 0 < nw) (a : (tileSpec p (128 * nw) TM TN).toCircuit.Transcript)
+    (A B : Fin (128 * nw) → Code) {i j : ℕ} (hi : i < TM) (hj : j < TN)
+    (hA : ∀ l : Fin (128 * nw), val a (i * (128 * nw) + l) = (A l).val)
+    (hB : ∀ l : Fin (128 * nw), val a (TM * (128 * nw) + j * (128 * nw) + l) = (B l).val) {c : ℕ}
+    (hc : chainWordP? p 4 (rowAtoms A B) = some c) :
+    tileVal p (128 * nw) TM TN a (cGate (128 * nw) TM TN i j) = c := by
   have hK : 128 * nw / 128 = nw := by omega
   have hlen : (rowAtoms A B).length = 4 * nw := by
     rw [show (rowAtoms A B).length = 128 * nw / 32 from List.length_ofFn]; omega
@@ -419,7 +478,8 @@ theorem tileVal_chain {nw : ℕ} (hnw : 0 < nw) (a : (tileSpec p (128 * nw)).toC
     rw [chainWordP?, Freeze.toChunks_eq (by norm_num), hlen, show (4 * nw + 4 - 1) / 4 = nw by omega,
       List.foldlM_map]
   have key : ∀ n ≤ nw, ∀ c, (List.range n).foldlM G 0 = some c →
-      StepWord c ∧ (if n = 0 then 0 else tileVal p (128 * nw) a (2 * (128 * nw) + 128 + (5 * (n - 1) + 4))) = c := by
+      StepWord c ∧ (if n = 0 then 0 else
+        tileVal p (128 * nw) TM TN a (entryBase (128 * nw) TM TN i j + (5 * (n - 1) + 4))) = c := by
     intro n
     induction n with
     | zero =>
@@ -436,66 +496,83 @@ theorem tileVal_chain {nw : ℕ} (hnw : 0 < nw) (a : (tileSpec p (128 * nw)).toC
       obtain rfl : c' = c := Option.some.inj h
       obtain ⟨w, hw, hp⟩ := Option.bind_eq_some_iff.1 hc'
       obtain ⟨hts, htv⟩ := ih (by omega) t ht
-      obtain ⟨hwv, -⟩ := tileVal_window p (128 * nw) a A B hA hB (by omega) hw
+      obtain ⟨hwv, -⟩ := tileVal_window p (128 * nw) TM TN a A B hi hj hA hB (by omega) hw
       obtain ⟨hadd, hcs⟩ := promote_step hts hp
       refine ⟨hcs, ?_⟩
-      rw [ite_eq_right (Nat.succ_ne_zero n), show n + 1 - 1 = n by omega, tileVal_add p (128 * nw) a (by omega),
-        show 2 * (128 * nw) + 128 + (5 * n + 4) - 1 = 2 * (128 * nw) + 128 + (5 * n + 3) by omega, hwv]
-      have hprev : (if n = 0 then 0 else tileVal p (128 * nw) a (2 * (128 * nw) + 128 + (5 * n + 4) - 5)) = t := by
+      rw [ite_eq_right (Nat.succ_ne_zero n), show n + 1 - 1 = n by omega,
+        tileVal_add p (128 * nw) TM TN a hi hj (by omega),
+        show entryBase (128 * nw) TM TN i j + (5 * n + 4) - 1 = entryBase (128 * nw) TM TN i j + (5 * n + 3) by omega,
+        hwv]
+      have hprev : (if n = 0 then 0 else
+          tileVal p (128 * nw) TM TN a (entryBase (128 * nw) TM TN i j + (5 * n + 4) - 5)) = t := by
         rcases Nat.eq_zero_or_pos n with rfl | hn0
         · simpa using htv
-        · rw [ite_eq_right (by omega), show 2 * (128 * nw) + 128 + (5 * n + 4) - 5 =
-            2 * (128 * nw) + 128 + (5 * (n - 1) + 4) by omega]
+        · rw [ite_eq_right (by omega), show entryBase (128 * nw) TM TN i j + (5 * n + 4) - 5 =
+            entryBase (128 * nw) TM TN i j + (5 * (n - 1) + 4) by omega]
           rwa [ite_eq_right (by omega)] at htv
       rw [hprev, f32Add_of_addWord hadd, Nat.mod_eq_of_lt hcs.1]
   obtain ⟨-, hv⟩ := key nw le_rfl c (hch ▸ hc)
   rw [ite_eq_right (by omega)] at hv
-  rw [show cGate (128 * nw) = 2 * (128 * nw) + 128 + (5 * (nw - 1) + 4) by unfold cGate; omega, hv]
+  rw [show cGate (128 * nw) TM TN i j = entryBase (128 * nw) TM TN i j + (5 * (nw - 1) + 4) by unfold cGate; omega, hv]
 
 /-- **The tile unit's words** at depth `128·nw`: on inputs holding the codes of `A′_i` and `B̃_j` and the factor rows
-`P_A,i` and `P_B,j`, its two outputs are `C̃_ij` and `U_ij` under the pinned order (`chainWordP? p 4`, `uWord?`). -/
-theorem tile_words {nw : ℕ} (hnw : 0 < nw) (a : (tileSpec p (128 * nw)).toCircuit.Transcript)
-    (A B : Fin (128 * nw) → Code) (pa pb : List ℕ) (hA : ∀ i : Fin (128 * nw), val a i = (A i).val)
-    (hB : ∀ i : Fin (128 * nw), val a (128 * nw + i) = (B i).val)
-    (hpa : ∀ i < 64, val a (2 * (128 * nw) + i) = pa.getD i 0)
-    (hpb : ∀ i < 64, val a (2 * (128 * nw) + 64 + i) = pb.getD i 0) {c : ℕ}
+`P_A,i` and `P_B,j`, entry `(i, j)`'s two outputs are `C̃_ij` under the pinned order (`chainWordP? p 4`) and U's four
+K16 steps from it (`uFold`). -/
+theorem tile_words {nw : ℕ} (hnw : 0 < nw) (a : (tileSpec p (128 * nw) TM TN).toCircuit.Transcript)
+    (A B : Fin (128 * nw) → Code) (pa pb : List ℕ) {i j : ℕ} (hi : i < TM) (hj : j < TN)
+    (hA : ∀ l : Fin (128 * nw), val a (i * (128 * nw) + l) = (A l).val)
+    (hB : ∀ l : Fin (128 * nw), val a (TM * (128 * nw) + j * (128 * nw) + l) = (B l).val)
+    (hpa : ∀ q < 64, val a ((TM + TN) * (128 * nw) + 64 * i + q) = pa.getD q 0)
+    (hpb : ∀ q < 64, val a ((TM + TN) * (128 * nw) + 64 * TM + 64 * j + q) = pb.getD q 0) {c : ℕ}
     (hc : chainWordP? p 4 (rowAtoms A B) = some c) :
-    tileVal p (128 * nw) a (cGate (128 * nw)) = c ∧
-      ∀ u, uWord? c pa pb = some u → tileVal p (128 * nw) a (uGate (128 * nw)) = u := by
-  have hC := tileVal_chain p hnw a A B hA hB hc
-  exact ⟨hC, fun u hu => tileVal_U p (128 * nw) a pa pb hpa hpb hC hu⟩
+    tileVal p (128 * nw) TM TN a (cGate (128 * nw) TM TN i j) = c ∧
+      tileVal p (128 * nw) TM TN a (uGate (128 * nw) TM TN i j) = uFold pa pb c := by
+  have hC := tileVal_chain p TM TN hnw a A B hi hj hA hB hc
+  exact ⟨hC, by rw [tileVal_uFold p _ TM TN a hi hj pa pb hpa hpb, hC]⟩
 
-/-- A transcript whose one unit is correct holds the circuit's values on `C̃`'s and `U`'s gates (core's
+theorem cGate_mem (K : ℕ) {i j : ℕ} (hi : i < TM) (hj : j < TN) : cGate K TM TN i j ∈ (tileSpec p K TM TN).outs :=
+  Finset.mem_union_left _ (Finset.mem_image.2 ⟨(i, j), Finset.mem_product.2 ⟨Finset.mem_range.2 hi,
+    Finset.mem_range.2 hj⟩, rfl⟩)
+
+theorem uGate_mem (K : ℕ) {i j : ℕ} (hi : i < TM) (hj : j < TN) : uGate K TM TN i j ∈ (tileSpec p K TM TN).outs :=
+  Finset.mem_union_right _ (Finset.mem_image.2 ⟨(i, j), Finset.mem_product.2 ⟨Finset.mem_range.2 hi,
+    Finset.mem_range.2 hj⟩, rfl⟩)
+
+/-- A transcript whose one unit is correct holds the circuit's values on every output (core's
 `Verity.Partition.compose`). -/
-theorem tile_out {K : ℕ} (X : (tileSpec p K).toCircuit.Transcript) (hX : (tileSpec p K).part.Correct X 0) :
-    ∀ g ∈ ({cGate K, uGate K} : Finset ℕ), val X g = tileVal p K X g := by
-  have hw : (tileSpec p K).part.wrong X = ∅ := by
+theorem tile_out {K : ℕ} (X : (tileSpec p K TM TN).toCircuit.Transcript)
+    (hX : (tileSpec p K TM TN).part.Correct X 0) :
+    ∀ g ∈ (tileSpec p K TM TN).outs, val X g = tileVal p K TM TN X g := by
+  have hw : (tileSpec p K TM TN).part.wrong X = ∅ := by
     ext u
     simp only [Verity.Partition.mem_wrong, Finset.notMem_empty, iff_false, not_not]
     rwa [Subsingleton.elim u 0]
   intro g hg
-  have hlt : g < (tileSpec p K).toCircuit.N := by
-    show g < tileN K
-    simp only [Finset.mem_insert, Finset.mem_singleton] at hg
-    rcases hg with rfl | rfl
-    · unfold cGate tileN; omega
-    · unfold uGate tileN; omega
-  have hg' : (⟨g, hlt⟩ : Fin (tileSpec p K).toCircuit.N) ∈ (tileSpec p K).part.committed :=
+  have hlt : g < (tileSpec p K TM TN).toCircuit.N := by
+    show g < tileN K TM TN
+    simp only [tileSpec, Finset.mem_union, Finset.mem_image, Finset.mem_product, Finset.mem_range,
+      Prod.exists] at hg
+    rcases hg with ⟨i, j, ⟨hi, hj⟩, rfl⟩ | ⟨i, j, ⟨hi, hj⟩, rfl⟩
+    · have := entry_lt K TM TN hi hj; unfold cGate; unfold blockLen at this; omega
+    · have := entry_lt K TM TN hi hj; have := blockLen_pos K; unfold uGate; omega
+  have hg' : (⟨g, hlt⟩ : Fin (tileSpec p K TM TN).toCircuit.N) ∈ (tileSpec p K TM TN).part.committed :=
     Verity.Partition.mem_committed_of_output _ (Finset.mem_filter.2 ⟨Finset.mem_univ _, hg⟩)
-  rw [tileVal, val_of_lt _ hlt, val_of_lt _ hlt, (tileSpec p K).part.compose X X (fun _ _ => rfl) hw _ hg']
+  rw [tileVal, val_of_lt _ hlt, val_of_lt _ hlt, (tileSpec p K TM TN).part.compose X X (fun _ _ => rfl) hw _ hg']
 
-/-- **The tile unit, correct**: a transcript whose one unit is correct carries `C̃_ij` and `U_ij` on its outputs. -/
-theorem tile_correct {nw : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * nw)).toCircuit.Transcript)
-    (hX : (tileSpec p (128 * nw)).part.Correct X 0)
-    (A B : Fin (128 * nw) → Code) (pa pb : List ℕ) (hA : ∀ i : Fin (128 * nw), val X i = (A i).val)
-    (hB : ∀ i : Fin (128 * nw), val X (128 * nw + i) = (B i).val)
-    (hpa : ∀ i < 64, val X (2 * (128 * nw) + i) = pa.getD i 0)
-    (hpb : ∀ i < 64, val X (2 * (128 * nw) + 64 + i) = pb.getD i 0) {c : ℕ}
+/-- **The tile unit, correct**: a transcript whose one unit is correct carries `C̃_ij` and `U_ij` on entry `(i, j)`'s
+outputs. -/
+theorem tile_correct {nw : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * nw) TM TN).toCircuit.Transcript)
+    (hX : (tileSpec p (128 * nw) TM TN).part.Correct X 0)
+    (A B : Fin (128 * nw) → Code) (pa pb : List ℕ) {i j : ℕ} (hi : i < TM) (hj : j < TN)
+    (hA : ∀ l : Fin (128 * nw), val X (i * (128 * nw) + l) = (A l).val)
+    (hB : ∀ l : Fin (128 * nw), val X (TM * (128 * nw) + j * (128 * nw) + l) = (B l).val)
+    (hpa : ∀ q < 64, val X ((TM + TN) * (128 * nw) + 64 * i + q) = pa.getD q 0)
+    (hpb : ∀ q < 64, val X ((TM + TN) * (128 * nw) + 64 * TM + 64 * j + q) = pb.getD q 0) {c : ℕ}
     (hc : chainWordP? p 4 (rowAtoms A B) = some c) :
-    val X (cGate (128 * nw)) = c ∧ ∀ u, uWord? c pa pb = some u → val X (uGate (128 * nw)) = u := by
-  obtain ⟨h1, h2⟩ := tile_words p hnw X A B pa pb hA hB hpa hpb hc
-  have hout := tile_out p X hX
-  exact ⟨(hout _ (by simp)).trans h1, fun u hu => (hout _ (by simp)).trans (h2 u hu)⟩
+    val X (cGate (128 * nw) TM TN i j) = c ∧ val X (uGate (128 * nw) TM TN i j) = uFold pa pb c := by
+  obtain ⟨h1, h2⟩ := tile_words p TM TN hnw X A B pa pb hi hj hA hB hpa hpb hc
+  have hout := tile_out p TM TN X hX
+  exact ⟨(hout _ (cGate_mem p TM TN _ hi hj)).trans h1, (hout _ (uGate_mem p TM TN _ hi hj)).trans h2⟩
 
 end Chain
 

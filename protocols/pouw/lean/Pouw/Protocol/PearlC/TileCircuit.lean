@@ -4,18 +4,20 @@ import Pouw.Protocol.PearlC.PeelExact
 /-!
 # The tile unit as a core circuit (definitions only)
 
-`pc8`'s tile template `Pc8Tile_v1{K, TM = 1, TN = 1, DEV}` (`verity_pouw.circuit.pc8`, its `_tile_body` and `_chain`) as
-a `Verity.Circuit`, written as a gate table (`Spec`): for each gate its width, whether it is an input, the earlier gates
+`pc8`'s tile template `Pc8Tile_v1{K, TM, TN, DEV}` (`verity_pouw.circuit.pc8`, its `_tile_body` and `_chain`) as a
+`Verity.Circuit`, written as a gate table (`Spec`): for each gate its width, whether it is an input, the earlier gates
 it reads in order, and its value from theirs. No evaluator for IR Programs: the table is the template's computing graph
 (`verity.ir.cut.CallGraph`), with each IR primitive's semantics a Lean function on words.
 
-* **Inputs**, in the template's parameter-leaf order: the E4M3 codes of `A′_i` (gates `0, …, K − 1`, 8 bits) and of
-  `B̃_j` (`K, …, 2K − 1`), and the 64 BF16 words of `P_A,i` (`2K, …, 2K + 63`, 16 bits) and of `P_B,j` (`2K + 64, …`).
-* **The chain** on the step `p` (`BlackwellE4m3QmmaDot32_v1` on sm_120, `p = sm120E4m3`): per window of 4 atoms, four
-  atoms from `+0` (`atomF`) and one `F32Add_v2` (`addF`, the total `f32Add`) promoting the window's word into the total.
-  The last promotion is `C̃_ij` (`cGate`).
-* **U**: four `HopperBF16WgmmaDot16_v1` steps (`peelF`, `PeelExact.k16Step`) from `C̃_ij` over the slices of `P_A,i` and
-  `P_B,j`. The last is `U_ij` (`uGate`).
+* **Inputs**, in the template's parameter-leaf order: the E4M3 codes of `A′`'s `TM` rows (row `i` at gates
+  `i·K, …, i·K + K − 1`, 8 bits) and of `B̃`'s `TN` rows (row `j` from `TM·K + j·K`), then the 64 BF16 words of each
+  `P_A` row (row `i` from `(TM + TN)·K + 64·i`, 16 bits) and each `P_B` row (row `j` from `(TM + TN)·K + 64·TM + 64·j`).
+* **Entry `(i, j)`'s block** (`entryGate`), the entries in row-major order:
+  * **the chain** on the step `p` (`BlackwellE4m3QmmaDot32_v1` on sm_120, `p = sm120E4m3`): per window of 4 atoms, four
+    atoms from `+0` (`atomF`) and one `F32Add_v2` (`addF`, the total `f32Add`) promoting the window's word into the
+    total. The last promotion is `C̃_ij` (`cGate`);
+  * **U**: four `HopperBF16WgmmaDot16_v1` steps (`peelF`, `PeelExact.k16Step`) from `C̃_ij` over the slices of `P_A,i`
+    and `P_B,j`. The last is `U_ij` (`uGate`).
 * **One proof unit** (`Spec.part`) holds every computed gate.
 
 Which gate reads which, the widths and the outputs are checked against the template's `CallGraph`, with the checked
@@ -112,58 +114,103 @@ def addF (first : Bool) (l : List ℕ) : ℕ := if first then f32Add 0 (l.headD 
 /-- One K16 step of U: the accumulator and 16 BF16 word pairs. -/
 def peelF (l : List ℕ) : ℕ := k16Step (l.headD 0) (fun i => l.getD (1 + i) 0) (fun i => l.getD (17 + i) 0)
 
-/-- `Pc8Tile_v1{K, TM = 1, TN = 1}`'s gates, the chain on the step `p` in windows of 4 atoms: the codes of `A′_i`
-(gates `0, …, K − 1`) and `B̃_j` (`K, …, 2K − 1`), the 64 BF16 words of `P_A,i` (`2K, …`) and `P_B,j` (`2K + 64, …`),
-then per window four atoms and one promotion, then U's four K16 steps. -/
-def tileGate (p : Pipeline) (K g : ℕ) : Gate :=
-  if g < 2 * K then ⟨8, true, [], fun _ => 0⟩
-  else if g < 2 * K + 128 then ⟨16, true, [], fun _ => 0⟩
-  else if g - (2 * K + 128) < 5 * (K / 128) then
-    if (g - (2 * K + 128)) % 5 < 4 then
-      ⟨32, false, (if (g - (2 * K + 128)) % 5 = 0 then [] else [g - 1]) ++
-          (List.range 32).map (32 * (4 * ((g - (2 * K + 128)) / 5) + (g - (2 * K + 128)) % 5) + ·) ++
-          (List.range 32).map (K + 32 * (4 * ((g - (2 * K + 128)) / 5) + (g - (2 * K + 128)) % 5) + ·),
-        atomF p ((g - (2 * K + 128)) % 5 == 0)⟩
-    else ⟨32, false, (if (g - (2 * K + 128)) / 5 = 0 then [] else [g - 5]) ++ [g - 1],
-      addF ((g - (2 * K + 128)) / 5 == 0)⟩
+/-- One gate of an entry's block, at position `r` of the block and gate `g`: the chain on the step `p` in windows of 4
+atoms over `A′_i`'s codes from gate `a` and `B̃_j`'s from gate `b` (per window four atoms and one promotion), then U's
+four K16 steps over the 64 BF16 words of `P_A,i` from gate `pa` and of `P_B,j` from gate `pb`. -/
+def entryGate (p : Pipeline) (K a b pa pb g r : ℕ) : Gate :=
+  if r < 5 * (K / 128) then
+    if r % 5 < 4 then
+      ⟨32, false, (if r % 5 = 0 then [] else [g - 1]) ++ (List.range 32).map (a + 32 * (4 * (r / 5) + r % 5) + ·) ++
+          (List.range 32).map (b + 32 * (4 * (r / 5) + r % 5) + ·), atomF p (r % 5 == 0)⟩
+    else ⟨32, false, (if r / 5 = 0 then [] else [g - 5]) ++ [g - 1], addF (r / 5 == 0)⟩
   else
-    ⟨32, false, [g - 1] ++ (List.range 16).map (2 * K + 16 * (g - (2 * K + 128) - 5 * (K / 128)) + ·) ++
-        (List.range 16).map (2 * K + 64 + 16 * (g - (2 * K + 128) - 5 * (K / 128)) + ·), peelF⟩
+    ⟨32, false, [g - 1] ++ (List.range 16).map (pa + 16 * (r - 5 * (K / 128)) + ·) ++
+        (List.range 16).map (pb + 16 * (r - 5 * (K / 128)) + ·), peelF⟩
 
-/-- The gate count: the inputs, five gates per window, four K16 steps. -/
-def tileN (K : ℕ) : ℕ := 2 * K + 128 + 5 * (K / 128) + 4
+/-- An entry's block: five gates per window, then U's four K16 steps. -/
+def blockLen (K : ℕ) : ℕ := 5 * (K / 128) + 4
 
-/-- `C̃`'s gate: the last promotion. -/
-def cGate (K : ℕ) : ℕ := 2 * K + 128 + 5 * (K / 128) - 1
+/-- The input gates: the codes of `A′`'s `TM` rows and of `B̃`'s `TN` rows, then the 64 BF16 words of each `P_A` row and
+each `P_B` row. -/
+def tileIn (K TM TN : ℕ) : ℕ := (TM + TN) * K + 64 * (TM + TN)
 
-/-- `U`'s gate: the last K16 step. -/
-def uGate (K : ℕ) : ℕ := tileN K - 1
+/-- The first gate of entry `(i, j)`'s block; the blocks follow the inputs in row-major order. -/
+def entryBase (K TM TN i j : ℕ) : ℕ := tileIn K TM TN + (i * TN + j) * blockLen K
 
-/-- **The tile unit as a word circuit** at depth `K` on the step `p`. -/
-def tileSpec (p : Pipeline) (K : ℕ) : Spec where
-  N := tileN K
-  gate := tileGate p K
-  outs := {cGate K, uGate K}
+/-- `Pc8Tile_v1{K, TM, TN}`'s gates on the step `p`: the codes of `A′_i` (gates `i·K, …`) and `B̃_j` (`TM·K + j·K, …`),
+the BF16 words of `P_A,i` (`(TM + TN)·K + 64·i, …`) and `P_B,j` (`(TM + TN)·K + 64·TM + 64·j, …`), then entry
+`(i, j)`'s block (`entryGate`) for each entry in row-major order. -/
+def tileGate (p : Pipeline) (K TM TN g : ℕ) : Gate :=
+  if g < (TM + TN) * K then ⟨8, true, [], fun _ => 0⟩
+  else if g < tileIn K TM TN then ⟨16, true, [], fun _ => 0⟩
+  else
+    let e := (g - tileIn K TM TN) / blockLen K
+    entryGate p K (e / TN * K) (TM * K + e % TN * K) ((TM + TN) * K + 64 * (e / TN))
+      ((TM + TN) * K + 64 * TM + 64 * (e % TN)) g ((g - tileIn K TM TN) % blockLen K)
+
+/-- The gate count: the inputs and one block per entry. -/
+def tileN (K TM TN : ℕ) : ℕ := tileIn K TM TN + TM * TN * blockLen K
+
+/-- `C̃_ij`'s gate: the last promotion of entry `(i, j)`'s block. -/
+def cGate (K TM TN i j : ℕ) : ℕ := entryBase K TM TN i j + 5 * (K / 128) - 1
+
+/-- `U_ij`'s gate: the last K16 step of entry `(i, j)`'s block. -/
+def uGate (K TM TN i j : ℕ) : ℕ := entryBase K TM TN i j + blockLen K - 1
+
+theorem blockLen_pos (K : ℕ) : 0 < blockLen K := by unfold blockLen; omega
+
+/-- Gate `g` past the inputs lies in entry `e`'s block at position `r`, with `e < TM·TN` below the gate count. -/
+theorem tile_block {K TM TN g : ℕ} (hg : g < tileN K TM TN) (h : tileIn K TM TN ≤ g) :
+    g = tileIn K TM TN + (g - tileIn K TM TN) / blockLen K * blockLen K + (g - tileIn K TM TN) % blockLen K ∧
+      (g - tileIn K TM TN) / blockLen K / TN < TM ∧ (g - tileIn K TM TN) / blockLen K % TN < TN ∧
+      (g - tileIn K TM TN) % blockLen K < blockLen K := by
+  have hL := blockLen_pos K
+  have he : (g - tileIn K TM TN) / blockLen K < TM * TN := by
+    rw [Nat.div_lt_iff_lt_mul hL]; unfold tileN at hg; omega
+  have hTN : 0 < TN := Nat.pos_of_ne_zero (by rintro rfl; simp at he)
+  refine ⟨?_, (Nat.div_lt_iff_lt_mul hTN).2 he, Nat.mod_lt _ hTN, Nat.mod_lt _ hL⟩
+  have := Nat.div_add_mod' (g - tileIn K TM TN) (blockLen K)
+  omega
+
+/-- **The tile unit as a word circuit** at depth `K` and tile `TM × TN` on the step `p`; its outputs are every entry's
+`C̃` and `U`. -/
+def tileSpec (p : Pipeline) (K TM TN : ℕ) : Spec where
+  N := tileN K TM TN
+  gate := tileGate p K TM TN
+  outs := (Finset.range TM ×ˢ Finset.range TN).image (fun e => cGate K TM TN e.1 e.2) ∪
+    (Finset.range TM ×ˢ Finset.range TN).image (fun e => uGate K TM TN e.1 e.2)
   rd_lt g hg a ha := by
-    unfold tileN at hg
     unfold tileGate at ha
+    split_ifs at ha with h1 h2
+    · simp at ha
+    · simp at ha
+    obtain ⟨hgb, hi, hj, hr⟩ := tile_block hg (not_lt.1 h2)
+    generalize (g - tileIn K TM TN) / blockLen K = e at ha hgb hi hj hr
+    generalize (g - tileIn K TM TN) % blockLen K = r at ha hgb hr
+    have hA : e / TN * K + K ≤ TM * K := by rw [← Nat.succ_mul]; exact Nat.mul_le_mul_right K hi
+    have hB : e % TN * K + K ≤ TN * K := by rw [← Nat.succ_mul]; exact Nat.mul_le_mul_right K hj
+    have hIn : (TM + TN) * K + 64 * (TM + TN) = tileIn K TM TN := rfl
+    have hsplit : (TM + TN) * K = TM * K + TN * K := Nat.add_mul _ _ _
     have h128 : 128 * (K / 128) ≤ K := Nat.mul_div_le K 128
-    split_ifs at ha with h1 h2 h3 h4 h5 h6
-    · simp at ha
-    · simp at ha
+    unfold blockLen at hr
+    unfold entryGate at ha
+    split_ifs at ha with h3 h4 h5 h6
     · simp only [List.append_assoc, List.mem_append, List.mem_nil_iff, false_or, List.mem_map, List.mem_range] at ha
-      rcases ha with ⟨i, hi, rfl⟩ | ⟨i, hi, rfl⟩ <;> omega
+      rcases ha with ⟨l, hl, rfl⟩ | ⟨l, hl, rfl⟩ <;> omega
     · simp only [List.append_assoc, List.mem_append, List.mem_cons, List.mem_nil_iff, or_false, List.mem_map,
         List.mem_range] at ha
-      rcases ha with rfl | ⟨i, hi, rfl⟩ | ⟨i, hi, rfl⟩ <;> omega
+      rcases ha with rfl | ⟨l, hl, rfl⟩ | ⟨l, hl, rfl⟩ <;> omega
     · simp only [List.nil_append, List.mem_cons, List.mem_nil_iff, or_false] at ha
       omega
     · simp only [List.mem_append, List.mem_cons, List.mem_nil_iff, or_false] at ha
       omega
     · simp only [List.mem_append, List.mem_cons, List.mem_map, List.mem_range, List.singleton_append] at ha
-      rcases ha with (rfl | ⟨i, hi, rfl⟩) | ⟨i, hi, rfl⟩ <;> omega
+      rcases ha with (rfl | ⟨l, hl, rfl⟩) | ⟨l, hl, rfl⟩ <;> omega
   input_rd g _ hi := by
     unfold tileGate at hi ⊢
-    split_ifs at hi ⊢ <;> simp_all
+    split_ifs at hi ⊢
+    · rfl
+    · rfl
+    · unfold entryGate at hi; split_ifs at hi
 
 end Pouw.PearlC.TileCircuit

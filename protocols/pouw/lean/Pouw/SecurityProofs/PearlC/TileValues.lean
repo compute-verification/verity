@@ -251,10 +251,6 @@ theorem k16Step_nonfin {acc : ℕ} (x y : Fin 16 → ℕ) (h : (acc >>> 23) % 25
     cases s <;> simp [Value.isNaN, Value.isInf] at ht <;> split_ifs at ht
   · exact fp32Value_nonfin h t' hv
 
-/-- U's four K16 steps from `c`, on any words: what the template writes. -/
-def uFold (pa pb : List ℕ) (c : ℕ) : ℕ :=
-  (List.range 4).foldl (fun acc s => k16Step acc (slice16 pa s) (slice16 pb s)) c
-
 theorem foldl_nonfin (pa pb : List ℕ) : ∀ (l : List ℕ) (c : ℕ), (c >>> 23) % 256 = 255 →
     (l.foldl (fun acc s => k16Step acc (slice16 pa s) (slice16 pb s)) c >>> 23) % 256 = 255
   | [], _, h => h
@@ -287,67 +283,46 @@ section Tile
 
 variable (p : Pipeline)
 
-/-- **U's gate** on any words: the four K16 steps from `C̃`'s gate over the factor rows. -/
-theorem tileVal_uFold (K : ℕ) (a : (tileSpec p K).toCircuit.Transcript) (pa pb : List ℕ)
-    (hpa : ∀ i < 64, val a (2 * K + i) = pa.getD i 0) (hpb : ∀ i < 64, val a (2 * K + 64 + i) = pb.getD i 0) :
-    tileVal p K a (uGate K) = uFold pa pb (tileVal p K a (cGate K)) := by
-  have sl : ∀ s < 4, (fun l : Fin 16 => tileVal p K a (2 * K + 16 * s + l)) = slice16 pa s ∧
-      (fun l : Fin 16 => tileVal p K a (2 * K + 64 + 16 * s + l)) = slice16 pb s := fun s hs => by
-    constructor <;> funext l
-    · rw [tileVal_input p K a (by omega), Nat.add_assoc, hpa _ (by omega)]; rfl
-    · rw [tileVal_input p K a (by omega), Nat.add_assoc, hpb _ (by omega)]; rfl
-  have e : ∀ s < 4, tileVal p K a (2 * K + 128 + 5 * (K / 128) + s) =
-      k16Step (tileVal p K a (2 * K + 128 + 5 * (K / 128) + s - 1)) (slice16 pa s) (slice16 pb s) := fun s hs => by
-    rw [tileVal_peel p K a hs, (sl s hs).1, (sl s hs).2]
-  have e0 := e 0 (by omega)
-  have e1 := e 1 (by omega)
-  have e2 := e 2 (by omega)
-  have e3 := e 3 (by omega)
-  rw [show 2 * K + 128 + 5 * (K / 128) + 0 - 1 = cGate K by unfold cGate; omega] at e0
-  rw [show 2 * K + 128 + 5 * (K / 128) + 1 - 1 = 2 * K + 128 + 5 * (K / 128) + 0 by omega, e0] at e1
-  rw [show 2 * K + 128 + 5 * (K / 128) + 2 - 1 = 2 * K + 128 + 5 * (K / 128) + 1 by omega, e1] at e2
-  rw [show 2 * K + 128 + 5 * (K / 128) + 3 - 1 = 2 * K + 128 + 5 * (K / 128) + 2 by omega, e2] at e3
-  rw [show uGate K = 2 * K + 128 + 5 * (K / 128) + 3 by unfold uGate tileN; omega, e3]
-  rfl
-
 /-- **The tile unit computes the ticket and the useful value** (L3's steps 4 and 5 for the tile template): a transcript
-whose one unit is correct, holding on its inputs row `i` of `A′`, row `j` of `B̃` and the factor rows `P_A,i`, `P_B,j`
-that U's pinned order forms from them (`peelRowsP`), has `C̃`'s word of value `Accum.chainAt p 4` and `U`'s of value
-`peelExactValP p 4`, at entry `(i, j)`: the record `devAt p 4`'s ticket and useful value (`tile_devAt`). -/
-theorem tile_values {nw m n : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * nw)).toCircuit.Transcript)
-    (hX : (tileSpec p (128 * nw)).part.Correct X 0)
+whose one unit is correct, holding at entry `(ti, tj)`'s inputs row `i` of `A′`, row `j` of `B̃` and the factor rows
+`P_A,i`, `P_B,j` that U's pinned order forms from them (`peelRowsP`), has on entry `(ti, tj)`'s outputs `C̃`'s word of
+value `Accum.chainAt p 4` and `U`'s of value `peelExactValP p 4` at `(i, j)`: the record `devAt p 4`'s ticket and
+useful value (`tile_devAt`). -/
+theorem tile_values {nw m n TM TN : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * nw) TM TN).toCircuit.Transcript)
+    (hX : (tileSpec p (128 * nw) TM TN).part.Correct X 0)
     (Aq : Matrix (Fin m) (Fin (128 * nw)) Code) (Bq : Matrix (Fin n) (Fin (128 * nw)) Code)
     (FA FB : Matrix (Fin (128 * nw)) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) ℕ)
-    (beB : Matrix (Fin n) (Fin 32) ℕ) (i : Fin m) (j : Fin n)
-    (hA : ∀ l : Fin (128 * nw), val X l = (Aq i l).val) (hB : ∀ l : Fin (128 * nw), val X (128 * nw + l) = (Bq j l).val)
+    (beB : Matrix (Fin n) (Fin 32) ℕ) (i : Fin m) (j : Fin n) {ti tj : ℕ} (hti : ti < TM) (htj : tj < TN)
+    (hA : ∀ l : Fin (128 * nw), val X (ti * (128 * nw) + l) = (Aq i l).val)
+    (hB : ∀ l : Fin (128 * nw), val X (TM * (128 * nw) + tj * (128 * nw) + l) = (Bq j l).val)
     {c : ℕ} {pa pb : List ℕ} (hr : PeelExactProofsP.peelRowsP p 4 Aq Bq FA FB beA beB i j = some (c, pa, pb))
-    (hpa : ∀ q < 64, val X (2 * (128 * nw) + q) = pa.getD q 0)
-    (hpb : ∀ q < 64, val X (2 * (128 * nw) + 64 + q) = pb.getD q 0) :
-    wordQ (val X (cGate (128 * nw))) = Accum.chainAt p 4 Aq Bq i j ∧
-      wordQ (val X (uGate (128 * nw))) = peelExactValP p 4 Aq Bq FA FB beA beB i j := by
+    (hpa : ∀ q < 64, val X ((TM + TN) * (128 * nw) + 64 * ti + q) = pa.getD q 0)
+    (hpb : ∀ q < 64, val X ((TM + TN) * (128 * nw) + 64 * TM + 64 * tj + q) = pb.getD q 0) :
+    wordQ (val X (cGate (128 * nw) TM TN ti tj)) = Accum.chainAt p 4 Aq Bq i j ∧
+      wordQ (val X (uGate (128 * nw) TM TN ti tj)) = peelExactValP p 4 Aq Bq FA FB beA beB i j := by
   obtain ⟨-, -, -, hc, -⟩ := PeelExactProofsP.peelRowsP_spec hr
-  have hC := tileVal_chain p hnw X (Aq i) (Bq j) hA hB hc
-  have ho := tile_out p X hX
+  obtain ⟨hC, hU⟩ := tile_correct p TM TN hnw X hX (Aq i) (Bq j) pa pb hti htj hA hB hpa hpb hc
   refine ⟨?_, ?_⟩
-  · rw [ho _ (by simp), hC]
+  · rw [hC]
     exact (chainWordP_value p 4 _ hc).symm
-  · rw [ho _ (by simp), tileVal_uFold p _ X pa pb hpa hpb, hC, wordQ_uFold]
+  · rw [hU, wordQ_uFold]
     simp only [peelExactValP, PeelExactProofsP.peelExactP_eq_rows, hr, Option.bind_some]
 
 /-- `tile_values` at a device record `devAt p 4 pr`: its ticket and useful value, `pearl-c-sm120` v1's
 (`devSm120v1 pr = devAt sm120E4m3 4 pr`) among them. -/
-theorem tile_devAt (pr : Prices) {nw m n : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * nw)).toCircuit.Transcript)
-    (hX : (tileSpec p (128 * nw)).part.Correct X 0)
+theorem tile_devAt (pr : Prices) {nw m n TM TN : ℕ} (hnw : 0 < nw)
+    (X : (tileSpec p (128 * nw) TM TN).toCircuit.Transcript) (hX : (tileSpec p (128 * nw) TM TN).part.Correct X 0)
     (Aq : Matrix (Fin m) (Fin (128 * nw)) Code) (Bq : Matrix (Fin n) (Fin (128 * nw)) Code)
     (FA FB : Matrix (Fin (128 * nw)) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) ℕ)
-    (beB : Matrix (Fin n) (Fin 32) ℕ) (i : Fin m) (j : Fin n)
-    (hA : ∀ l : Fin (128 * nw), val X l = (Aq i l).val) (hB : ∀ l : Fin (128 * nw), val X (128 * nw + l) = (Bq j l).val)
+    (beB : Matrix (Fin n) (Fin 32) ℕ) (i : Fin m) (j : Fin n) {ti tj : ℕ} (hti : ti < TM) (htj : tj < TN)
+    (hA : ∀ l : Fin (128 * nw), val X (ti * (128 * nw) + l) = (Aq i l).val)
+    (hB : ∀ l : Fin (128 * nw), val X (TM * (128 * nw) + tj * (128 * nw) + l) = (Bq j l).val)
     {c : ℕ} {pa pb : List ℕ} (hr : PeelExactProofsP.peelRowsP p 4 Aq Bq FA FB beA beB i j = some (c, pa, pb))
-    (hpa : ∀ q < 64, val X (2 * (128 * nw) + q) = pa.getD q 0)
-    (hpb : ∀ q < 64, val X (2 * (128 * nw) + 64 + q) = pb.getD q 0) :
-    wordQ (val X (cGate (128 * nw))) = (devAt p 4 pr).ticket Aq Bq i j ∧
-      wordQ (val X (uGate (128 * nw))) = (devAt p 4 pr).useful Aq Bq FA FB beA beB i j :=
-  tile_values p hnw X hX Aq Bq FA FB beA beB i j hA hB hr hpa hpb
+    (hpa : ∀ q < 64, val X ((TM + TN) * (128 * nw) + 64 * ti + q) = pa.getD q 0)
+    (hpb : ∀ q < 64, val X ((TM + TN) * (128 * nw) + 64 * TM + 64 * tj + q) = pb.getD q 0) :
+    wordQ (val X (cGate (128 * nw) TM TN ti tj)) = (devAt p 4 pr).ticket Aq Bq i j ∧
+      wordQ (val X (uGate (128 * nw) TM TN ti tj)) = (devAt p 4 pr).useful Aq Bq FA FB beA beB i j :=
+  tile_values p hnw X hX Aq Bq FA FB beA beB i j hti htj hA hB hr hpa hpb
 
 end Tile
 
