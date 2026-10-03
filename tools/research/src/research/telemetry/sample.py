@@ -116,8 +116,9 @@ class Sampler:
         except Exception as e:  # noqa: BLE001
             self.err("process", repr(e))
             rows = []
-        # PSS every pss_every s, plus a bounded extra round on topology change (at most one per 5 s)
-        if final or now - self.last_pss >= self.a.pss_every or (self.topology_changed_at and now - self.topology_changed_at < self.cadence and now - self.last_pss >= 5.0):
+        # PSS every pss_every s, plus a bounded extra round on topology change (at most one per 5 s); pss_every 0 turns it off
+        if self.a.pss_every > 0 and (final or now - self.last_pss >= self.a.pss_every
+                                     or (self.topology_changed_at and now - self.topology_changed_at < self.cadence and now - self.last_pss >= 5.0)):
             try:
                 out = [pss(r["pid"]) for r in rows[: self.a.max_pids]]
                 tot = sum(x["pss_bytes"] for x in out if x.get("pss_bytes") is not None)
@@ -226,7 +227,7 @@ def add_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--cadence", type=float, default=1.0, help="seconds between cheap rounds (default 1.0)")
     ap.add_argument("--root-pid", type=int, default=None, help="workload root; the tree = its descendants; exit after --linger once it is gone")
     ap.add_argument("--pgid", type=int, default=None, help="alternatively: every process of this process group")
-    ap.add_argument("--pss-every", type=float, default=5.0)
+    ap.add_argument("--pss-every", type=float, default=5.0, help="seconds between PSS rounds (smaps_rollup reads; default 5); 0 turns PSS off")
     ap.add_argument("--gpu-every", type=float, default=5.0)
     ap.add_argument("--gpu-timeout", type=float, default=3.0)
     ap.add_argument("--storage-every", type=float, default=5.0)

@@ -786,3 +786,47 @@ def test_v1_kill_counter_that_did_not_move_vetoes_the_failcnt_fallback(tmp_path,
     doc = classify(d)
     assert doc["class"] == "UNKNOWN_EXIT" and doc["incidents"] == []
     assert "log.killed" in [e["kind"] for e in doc["evidence"]]
+
+
+# ---- the sampler's PSS rounds (network accounting's friction note, 3 Oct: a 100 GB process's smaps_rollup read slowed its engine) ------------
+
+GB = 10 ** 9
+
+
+def _proc(pid, rss):
+    return {"pid": pid, "starttime_ticks": 7, "comm": "w", "rss_bytes": rss, "rss_anon_bytes": rss - rss // 4, "rss_file_bytes": rss // 4,
+            "rss_shmem_bytes": 0}
+
+
+def _sampler(tmp_path, monkeypatch, table, read, *flags):
+    """A Sampler over the process table `table` (re-read every round, so a test may change it), whose smaps_rollup reads are `read`."""
+    import argparse
+    from research.telemetry import sample
+
+    monkeypatch.delenv("TELEMETRY_STREAM_SUFFIX", raising=False)
+    monkeypatch.setattr(sample, "snapshot_tree", lambda root_pid, pgid, max_pids: (list(table), False, len(table), []))
+    monkeypatch.setattr(sample, "pss", read)
+    monkeypatch.setattr(sample, "gpu_sample", lambda timeout: {"available": False, "reason": "no GPU in this test"})
+    ap = argparse.ArgumentParser()
+    sample.add_args(ap)
+    return sample.Sampler(ap.parse_args(["--attempt-dir", str(tmp_path), *flags]))
+
+
+def _records(d, kind):
+    return [r for r in map(json.loads, (d / "resources.jsonl").read_text().splitlines()) if r["kind"] == kind]
+
+
+def test_pss_every_0_turns_pss_off(tmp_path, monkeypatch):
+    """`--pss-every 0` used to mean a PSS round every round; it is off: no read, no pss record, and pss is not an instrument."""
+    from research import cli as rcli
+
+    opened = []
+    s = _sampler(tmp_path, monkeypatch, [_proc(10, GB)], lambda pid: opened.append(pid) or {"pid": pid, "pss_bytes": GB}, "--pss-every", "0")
+    for _ in range(3):
+        s.round()
+    s.round(final=True)
+    assert opened == [] and _records(tmp_path, "pss") == [] and len(_records(tmp_path, "process")) == 4
+    for every, has in (("0", False), ("5", True)):
+        a = rcli._harness_parser("research run").parse_args(["--attempt-dir", str(tmp_path), "--stage", "s", "--pss-every", every])
+        instruments = rcli.build_job_from(a, ["true"])["telemetry"]["instruments"]
+        assert ("pss" in instruments) is has and "process" in instruments, (every, instruments)
