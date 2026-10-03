@@ -177,7 +177,7 @@ structure CoinsZK (nC : ℕ) (Rest : Type) where
 /-- **A `--zk` table as `ZkView`'s tables**: the statement (its witnesses `Witness S.m` are the tables' witnesses), the
 hidden-value and value-list types, the type of the other coins, the sizes, the mask slot's word indices, the `Coined`
 table at each coin vector (its leaves the executable's: `Coined.tab`), and M1's level-0 padding data (the level-0
-message's `cols` and the opened positions `pos`) that `padOnto_M1` reads. -/
+message's `cols` and, at each coin vector, the opened positions `pos`) that `padOnto_M1` reads. -/
 structure CoinedSetup where
   S : Statement
   Hi : Type
@@ -190,7 +190,7 @@ structure CoinedSetup where
   maskWords : Fin z.nMask → ℕ
   T : CoinsZK z.nC Rest → ZkView.Coined FlockLevel3.GF256 (Witness S.m) Hi VL z
   cols : ℕ
-  pos : Fin z.nS → ℕ
+  pos : CoinsZK z.nC Rest → Fin z.nS → ℕ
 
 attribute [instance] CoinedSetup.addHi CoinedSetup.finHi CoinedSetup.decHi
 
@@ -209,8 +209,9 @@ def CoinedSetup.Valid (C : CoinedSetup) (w : Witness C.S.m) : Prop := C.S.Satisf
 def withMask (z : ZkView.Sizes) (nMask : ℕ) : ZkView.Sizes := { z with nC := Zk.RANK_POINTS, nMask }
 
 /-- **The refinement of a `--zk` table that its coins do not fix**: the hidden-value and value-list types, the type of
-the coins other than `β`, `ρ` and the claim points (the opened positions among them), one such coin, the other sizes,
-M1's level-0 `cols` and opened positions `pos`, and each coin vector's `Coined` table, whose `embed`, `β`, `ρ`, `eqw` and
+the coins other than `β`, `ρ` and the claim points (the query coins among them), one such coin, the other sizes,
+M1's level-0 `cols` and at each coin vector the opened positions `pos` (the executable's level-0 queries, padded to
+`nS` with distinct unqueried positions where they collide), and each coin vector's `Coined` table, whose `embed`, `β`, `ρ`, `eqw` and
 `Gp` `coinedOf` replaces by what the coins and M1's code fix. -/
 structure CoinedBody (S : Statement) (nMask : ℕ) where
   Hi : Type
@@ -222,7 +223,7 @@ structure CoinedBody (S : Statement) (nMask : ℕ) where
   rest0 : Rest
   sz : ZkView.Sizes
   cols : ℕ
-  pos : Fin sz.nS → ℕ
+  pos : CoinsZK Zk.RANK_POINTS Rest → Fin sz.nS → ℕ
   T : CoinsZK Zk.RANK_POINTS Rest → ZkView.Coined FlockLevel3.GF256 (Witness S.m) Hi VL (withMask sz nMask)
 
 /-- **The draw's `--zk` table's refinement** (open: the new item's to write, from what `verify --zk` sets up at the draw:
@@ -251,28 +252,28 @@ noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
         β := fun r => fOf (c.beta r)
         ρ := fun r i => if i = 0 then FlockLevel3.GF256.of (c.rho r).1 else FlockLevel3.GF256.of (c.rho r).2
         eqw := fun k x => fOf (eqWord (c.points k) ((maskWordsOf st).getD x.val 0))
-        Gp := fun q i => fOf Zk.PAD_C * execArith.Xhat i.val (B.cols + 1) (execArith.omega (B.pos q))
-          + execArith.Xhat (2 ^ B.cols + i.val) (B.cols + 1) (execArith.omega (B.pos q)) }
+        Gp := fun q i => fOf Zk.PAD_C * execArith.Xhat i.val (B.cols + 1) (execArith.omega (B.pos c q))
+          + execArith.Xhat (2 ^ B.cols + i.val) (B.cols + 1) (execArith.omega (B.pos c q)) }
     cols := B.cols
     pos := B.pos }
 
 /-- **The structural facts Lemma B reads**, of a `CoinedSetup` at the arithmetic `A` and M1's padding constant `κ`: M1's
-level-0 padding geometry (`cols ≤ 40`, `t_pad ≤ 2^cols`, at most `t_pad` distinct opened positions inside
-`2^(cols+1)`), and at every coin vector the honest prover doesn't refuse: the table reads its coins (`β`, `ρ`, the rank check's
+level-0 padding geometry (`cols ≤ 40`, `t_pad ≤ 2^cols`, at most `t_pad` opened positions), and at every coin vector
+the honest prover doesn't refuse: the opened positions distinct and inside `2^(cols+1)`, the table reads its coins (`β`, `ρ`, the rank check's
 weights `eq(p_k, x)` and `embed` the inclusion of F128 in F256), the rank check, M1's padding columns `Gp`, each rep's
 `W^r` bijective, the pads onto, `β ≠ 0`, and the inner relation at every valid witness whose registered values are the
 public ones. -/
 def CoinedOK (A : Arith 𝔽 FlockLevel3.GF256) (κ : 𝔽) (C : CoinedSetup) : Prop :=
-  C.cols ≤ 40 ∧ C.z.tpad ≤ 2 ^ C.cols ∧ C.z.nS ≤ C.z.tpad ∧ Function.Injective C.pos ∧
-    (∀ q, C.pos q < 2 ^ (C.cols + 1)) ∧
+  C.cols ≤ 40 ∧ C.z.tpad ≤ 2 ^ C.cols ∧ C.z.nS ≤ C.z.tpad ∧
     ∀ c : CoinsZK C.z.nC C.Rest, C.Admits c →
+      (Function.Injective (C.pos c) ∧ ∀ q, C.pos c q < 2 ^ (C.cols + 1)) ∧
       ((∀ r, (C.T c).β r = fOf (c.beta r)) ∧
         (∀ r, (C.T c).ρ r 0 = FlockLevel3.GF256.of (c.rho r).1 ∧ (C.T c).ρ r 1 = FlockLevel3.GF256.of (c.rho r).2) ∧
         (∀ k x, (C.T c).eqw k x = fOf (eqWord (c.points k) (C.maskWords x))) ∧
         ∀ a : F128, (C.T c).embed (fOf a) = FlockLevel3.GF256.of ⟨a, 0⟩) ∧
       (C.T c).tab.Rank ∧
-      (∀ q i, (C.T c).tab.Gp q i = κ * A.Xhat i.val (C.cols + 1) (A.omega (C.pos q))
-        + A.Xhat (2 ^ C.cols + i.val) (C.cols + 1) (A.omega (C.pos q))) ∧
+      (∀ q i, (C.T c).tab.Gp q i = κ * A.Xhat i.val (C.cols + 1) (A.omega (C.pos c q))
+        + A.Xhat (2 ^ C.cols + i.val) (C.cols + 1) (A.omega (C.pos c q))) ∧
       (∀ r, Function.Bijective fun p : 𝔽 × 𝔽 => (C.T c).tab.Wr r p.1 p.2) ∧ (C.T c).tab.PadsOnto ∧
       (∀ r, (C.T c).tab.β r ≠ 0) ∧
       ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w
