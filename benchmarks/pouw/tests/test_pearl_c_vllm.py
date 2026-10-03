@@ -6,6 +6,7 @@ from __future__ import annotations
 import ctypes
 import importlib.util
 import json
+import math
 import shutil
 import sys
 import types
@@ -496,6 +497,36 @@ def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_
         assert (t["atoms"], t["later_zero_promotions"]) == PW.D.chain_debit(a_codes, b_codes, s.device)
         assert t["ok"] == (PW.check_opened(s, rec, ref.tile, a, b, ops) is None)
     assert got["later_zero_promotions"] == sum(t.get("later_zero_promotions", 0) for t in tiles)
+
+
+@pytest.mark.slow
+def test_served_debit_per_input_bounds_each_input_on_its_own(honest_pass, tmp_path):
+    """Per-input mode (lean's ruling on #923): each chosen input is one matmul of the pass, measured in full or by
+    work-weighted draws, with its own failures, `W`, `w_max` and a simultaneous upper limit; nothing is pooled."""
+    path, s, epoch, prover, tr, splits, records = honest_pass
+    out = tmp_path / "out"
+    assert SD.main([str(path), "--per-input", "1", "--census-max", "4", "--draws", "3", "--jobs", "1", "--out", str(out)]) == 0
+    doc = json.loads((out / "inputs.json").read_text())
+    refs = Verifier(PW._TileRuleView(s), epoch).refs
+    assert doc["m"] == len(doc["inputs"]) == 2 and doc["delta_per_input"] == 0.05 / 2
+    for row in doc["inputs"]:
+        ids = [r.id for r in refs if r.matmul == row["matmul"]]
+        area = [len(refs[t].tile.rows) * len(refs[t].tile.cols) for t in ids]
+        assert (row["NT"], row["W"], row["w_max"]) == (len(ids), sum(area), max(area))
+        assert row["drawn"] == (len(ids) if row["method"] == "census" else 3) and row["openings_failed"] == 0
+        assert 0 < row["upper"] <= 1 and (row["k"], row["n"]) == (records[row["matmul"]].matmul.shape.k, records[row["matmul"]].matmul.shape.n)
+    assert doc["cited_upper"] == max(r["upper"] for r in doc["inputs"])
+
+
+def test_served_debit_input_bounds():
+    """The per-input limits: the work-weighted rule of three at no failure, Clopper–Pearson at its textbook values, and
+    Bernstein no tighter than the observed rate."""
+    row = {"method": "census", "failures": 0, "failures_weighted": 0, "W": 64 * 4096, "w_max": 4096}
+    assert SD.input_bound(row, 0.05)[0] == pytest.approx(math.log(20) / 64)
+    assert SD._clopper_pearson_upper(0, 100, 0.05) == pytest.approx(1 - 0.05 ** (1 / 100), rel=1e-9)
+    assert SD._clopper_pearson_upper(1, 10, 0.025) == pytest.approx(0.4450, abs=1e-4)
+    up = SD._bernstein_upper(3 * 4096, 4096, 64 * 4096, 0.05)
+    assert 3 / 64 < up < 1
 
 
 def test_served_debits_share_is_the_tile_rules_debit_over_its_rev1_credit():
