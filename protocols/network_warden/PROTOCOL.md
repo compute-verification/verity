@@ -66,7 +66,7 @@ steps:
 
 ## The audit (`audit`)
 
-A link-window is accepted if:
+An egress link-window (`Audit.check_link`) is accepted if:
 - its status is complete;
 - every slot equals the Program's grid (for a committed record: its digest equals the Program grid's digest);
 - its declared clock sync is in the set;
@@ -89,10 +89,16 @@ earlier than its anchor, hand times only rise in canonical order, and the queue 
 out-of-set one gets the same verdict whatever that window declared, and a later one is checked against the grid the
 declared advice gives it.
 
-**Ingress statuses are not audited yet.** Lean's `Accepted` needs every boundary link's status to be complete, ingress
-links included, since an ingress status is itself an egress channel (`lean/README.md`, modelling choice 6). This
-reference checks a link against the Program's egress frames only, so it has no check of an ingress link's status, and
-an accepted verdict here says nothing about one.
+**Ingress links are audited on their statuses** (`Audit.check_ingress_link(link, records, windows)`). Lean's acceptance
+needs every boundary link's status to be complete, ingress links included, since an ingress status is itself an egress
+channel (`lean/README.md`, modelling choice 6). An ingress link's rows are the Program's input, which it reads rather
+than predicts, so no grid is compared. An ingress link-window is accepted if it has exactly one record, present by the
+deadline, and its status is complete; otherwise it is a `no-verdict`, `duplicate` or `status:<reason>` violation, as on
+egress. A committed record's status is read in the clear, and the digest binds it. The verifier has no Program grid to
+recompute an ingress digest from, though, so unlike on egress it can't catch a published status that disagrees with
+the digest: that rests on the warden publishing its own status (W5). A run is accepted only if every link-window of
+every link the audit checks is, so an accepted verdict on every link of ∂X, with `check_link` on egress and
+`check_ingress_link` on ingress, means every boundary link's status was complete in every window audited.
 
 Every capacity bound holds on accepted runs only. A rejected window may already have carried up to its unbound capacity,
 about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bounds also assume `cr/sha-256`.
@@ -116,10 +122,18 @@ plus what survived that wipe. `capacity.k_share` expresses bits as a share of `K
 
 The ingress bound is proved in Lean, for a decoder in X that reads the wire (`SecurityProofs.EncardIngressDecodableLe`)
 or the records (`SecurityProofs.EncardIngressObsDecodableLe`). It counts `(r_in + 1)^T` occupancies per ingress
-link-window (times `D^T` for jitter, 1 under J), given the frames' content, on runs whose statuses are all complete. This reference doesn't audit ingress statuses (see
-above), so its accepted verdict alone doesn't meet that hypothesis. The `Contents` versions drop the one given content:
-messages whose frames follow some content assignment in a set `Cs` number at most `#Cs` times that count, so the K
-charge's sum of content bits and timing bits is a theorem.
+link-window (times `D^T` for jitter, 1 under J), given the frames' content, on runs whose statuses are all complete
+(`StatusComplete`). The reference audits ingress statuses (see above), so an accepted verdict on every link of ∂X
+establishes `StatusComplete` for the windows audited. That is the acceptance hypothesis of all four ingress guarantees:
+`SecurityProofs.EncardIngressObsDecodableLe`, `SecurityProofs.EncardIngressDecodableLe` and their `Contents` versions.
+
+The `Contents` versions drop the one given content: messages whose frames follow some content assignment in a set `Cs`
+number at most `#Cs` times that count. So Lean proves, for the set `Ms` of messages counted, `log2 #Ms ≤ log2 #Cs` plus
+the timing bits (`SecurityProofs.EncardIngressObsDecodableLeContents`, and
+`SecurityProofs.EncardIngressDecodableLeContents` for the wire). The K charge adds content bits, charged as reads, to
+timing bits. Taking `log2 #Cs` to be those content bits is an accounting step, not part of the theorem. It is exact
+under fixed-length frames (W3): N frames of B bytes have `2^(8·B·N)` contents, so for `Cs` all of them, `log2 #Cs` is
+the `8·B·N` bits read.
 
 ## Calibration (`calibration`)
 
@@ -172,7 +186,8 @@ statements on examples and prove nothing. By name, they mirror 15 of the Lean pa
   - `SecurityProofs.EncardAccSeqsLeFixedClock`: the fixed clock's single accepted grid;
   - `SecurityProofs.EncardObsDecodableLe`: under a fixed clock, accepted secrets all show one grid sequence;
   - `SecurityProofs.EncardAccSeqsLeBlocks`: the block bound on random Programs;
-- **`test_network_warden_audit.py`:** record-and-reject and each violation, which no Lean statement names;
+- **`test_network_warden_audit.py`:** record-and-reject and each violation, which no Lean statement names, and the
+  ingress links' status check, Lean's `StatusComplete`;
 - **`test_network_warden_commitment.py`:**
   - the elided digest is injective on left-packed grids, by enumeration;
   - it binds the link, window, status and parameters;

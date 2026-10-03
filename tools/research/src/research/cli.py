@@ -2,6 +2,8 @@
 
   research run [--project P] [--stage S] [--timeout T] [--expect K=V ...] [--require-result] [--run-record] [--runs-dir D] [harness flags] -- CMD...
   research run [--tool NAME|module:NAME] [--scratch NAME ...] [--campaign C] [...] -- CMD...   # evidence store: derivation before, attempt after
+  research run --local-only REASON [...] -- CMD...   # where the store has no usable remote a local run refuses (exit 3): REASON says
+                                                 # what preserves its records instead (default $RESEARCH_LOCAL_ONLY; job.json records it)
   research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...
                                                  # the one queue (tools/cluster) places the job and runs it under its node's executor
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
@@ -203,6 +205,10 @@ def cmd_run(argv: list[str]) -> int:
                     help="tool cache dir under <store>/scratch/<reuse_key>/NAME (cold per commit, on purpose); `triton` exports TRITON_CACHE_DIR, "
                          "any other NAME exports RESEARCH_SCRATCH_<NAME>")
     ap.add_argument("--campaign", default=os.environ.get("RESEARCH_CAMPAIGN"), help="campaign recorded in the attempt's conditions (default $RESEARCH_CAMPAIGN)")
+    ap.add_argument("--local-only", default=os.environ.get("RESEARCH_LOCAL_ONLY") or None, metavar="REASON",
+                    help="a local run whose store has no usable remote refuses (exit 3): its records would stay on this disk and nothing "
+                         "would preserve them. REASON says what does instead; it is printed and recorded in job.json (default "
+                         "$RESEARCH_LOCAL_ONLY). A usable remote is pushed to either way; --on MACHINE gets custody on the remote instead")
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
     ns, harness_opts = ap.parse_known_args(opts)
     if ns.claimed:
@@ -259,6 +265,16 @@ def cmd_run(argv: list[str]) -> int:
     run_dir = root / run_id
     if ns.on:
         return _run_remote(ns, run_id, run_dir, harness_opts, command)
+    # a claimed run's custody was settled by its launcher (--custody-r2, or --no-custody-r2 and `research fetch --all`)
+    no_remote = None if ns.claimed else _no_usable_remote()
+    if no_remote and not ns.local_only:
+        print(f"research run: refused: this store has no usable remote ({no_remote}), so the run's records would stay on this disk "
+              f"and nothing would preserve them. Run it with --on MACHINE (custody on the store's remote), give this store a remote "
+              f"(~/.research/store.toml [remote], or R2_ENDPOINT, R2_BUCKET and AWS_* in the environment), or name what preserves "
+              f"it with --local-only REASON ($RESEARCH_LOCAL_ONLY)", file=sys.stderr)
+        return 3
+    if no_remote:
+        print(f"research run: no usable remote ({no_remote}); --local-only: {ns.local_only}", file=sys.stderr)
     env_map = _parse_env(ns.env)
     if env_map is None:
         return 2
@@ -280,6 +296,8 @@ def cmd_run(argv: list[str]) -> int:
     except (ImportError, LookupError, TypeError) as e:
         print(f"research run: --cwd {a.cwd} / --tool {ns.tool}: {e}", file=sys.stderr)
         return 2
+    if no_remote:
+        prep["section"]["local_only"] = {"reason": ns.local_only, "no_remote": no_remote}
     if a.cwd is None:
         # the workload runs in its own run dir, locally and on a machine (a relative `> result.json` used to land in the checkout, and
         # on a machine in <root>/src/<sha>/, which every run of that commit shares: concurrent runs raced on it)
@@ -561,6 +579,26 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
                    "campaign": ns.campaign}
         print(f"research run: store preparation failed ({section['error']}); running anyway, the attempt will be published from the records", file=sys.stderr)
     return {"tool": tool, "conditions": conds, "section": section, "env": env_out}
+
+
+def _no_usable_remote() -> str | None:
+    """Why the store a local run publishes into (`_publish_attempt`) has no remote it could push to, or None when it has one:
+    no `[remote]` and no R2 environment, or a configured remote that does not load here (credentials unset). A failure to tell
+    is a reason too: this guard refuses rather than lets an unpreserved run through."""
+    from .secret_hint import lost
+    from .store import remote as RM
+
+    try:
+        if RM.load_remote() is not None:
+            return None
+        p = RM.config_path()
+        if p.is_file():
+            return f"{p} has no [remote] table"
+        if "RESEARCH_STORE_CONFIG" in os.environ:
+            return f"$RESEARCH_STORE_CONFIG names {p}, which does not exist"
+        return lost("R2_ENDPOINT", "R2_BUCKET") or f"no {p}, and R2_ENDPOINT / R2_BUCKET are unset"
+    except Exception as e:  # noqa: BLE001
+        return f"{type(e).__name__}: {e}"
 
 
 def _publish_attempt(run_dir: Path, prep: dict, *, run_record: bool = False) -> None:
