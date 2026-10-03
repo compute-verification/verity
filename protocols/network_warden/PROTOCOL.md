@@ -108,10 +108,14 @@ about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bound
 | Envelope, with no clock | `T·log2(r + 1)` bits per link-window | Proposition 2 |
 | Accepted runs, with clock-sync advice | `A_c + W·log2 #Σ_sync + n·log2 D` bits | `SecurityProofs.EncardAccSeqsLeSync` |
 | A fixed clock, under J (D = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock` |
-| Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link | not stated in Lean (`SecurityProofs.CardLeftPacked`'s count) |
+| Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link | `SecurityProofs.EncardIngressDecodableLe` |
 
 The inference-only policy charges an isolation unit the ingress covert capacity from the last wipe before it starts,
 plus what survived that wipe. `capacity.k_share` expresses bits as a share of `K = 9.12e7` bits.
+
+The Lean ingress bound counts `(r_in + 1)^T` occupancies per ingress link-window (times `D^T` for jitter, 1 under J),
+given the frames' content, on runs whose statuses are all complete. This reference doesn't audit ingress statuses (see
+above), so its accepted verdict alone doesn't meet that hypothesis.
 
 ## Calibration (`calibration`)
 
