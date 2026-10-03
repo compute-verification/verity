@@ -58,6 +58,7 @@ def emit(e: Emit, out: str, pre: dict, session, *, shards: Callable[[int], list[
     `pre` (its `res` before its own writer ran) at rank r: `tp.rank`, `model_pin.rank` and `tp.embedding_shards` (`shards(r)`)."""
     from verity_vllm.program.frontend.relabel import RelabelRefused, rank_report, shard_map
     for r in e.ranks:
+        rep = None                                           # the previous rank's report: freed before this rank's is built
         t0, dst = time.time(), e.dir_of(out, r)
         tmp = tmp_of(dst)
         rec: dict[str, Any] = {"rank": r, "dir": dst, "ok": False, "error": None}

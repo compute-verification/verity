@@ -112,6 +112,15 @@ def test_every_relabeled_rank_writes_the_bytes_its_full_derive_writes(W, tmp_pat
     assert not [n for n in os.listdir(f"{tmp_path}/rel/rank{others[0]}") if n.startswith(".")], "no .relabel-tmp left"
 
 
+def test_emit_ranks_takes_other_ranks_of_the_world_and_a_root():
+    e = emit_ranks.parse_ranks("0,2,3", 4, 1, "/b")
+    assert e.ranks == (0, 2, 3) and e.dir_of("/x/rank1/build_step/", 2) == "/b/rank2/build_step"
+    for arg, world, rank, root in (("1", 4, 1, "/b"), ("4", 4, 1, "/b"), ("0,0", 4, 1, "/b"), ("0", 4, 1, None), ("1", 1, 0, "/b"), ("", 4, 1, "/b")):
+        with pytest.raises(ValueError, match="--emit-ranks"):
+            emit_ranks.parse_ranks(arg, world, rank, root)
+    assert emit_ranks.read_report("/nonexistent/build_step") == {"schema": emit_ranks.SCHEMA, "ranks": [], "missing": True}
+
+
 def test_a_relabel_leaves_the_template_derivation_as_it_was(tmp_path):
     W, t = 4, 1
     sess: list = []
