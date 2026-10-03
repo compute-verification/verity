@@ -138,13 +138,72 @@ theorem padAt_eq (p cols tPad : ℕ) (ybar : Array F256) (hy : ybar.size = tPad)
     (execArith.omega p) + execArith.Xhat (2 ^ cols + j) (cols + 1) (execArith.omega p))) tPad]
   refine (Finset.sum_mul (Finset.range tPad) (fun k => gOf ybar[k]! * embed (execArith.Xhat k cols (execArith.omega p)))
     (embed (fOf Zk.PAD_C + What cols (omega p)))).trans (Finset.sum_congr rfl fun j hj => ?_)
-
   rw [Finset.mem_range] at hj
   rw [Xhat_succ_low execArith cols j (by omega), Xhat_succ_high execArith cols j (by omega), mul_assoc]
   show _ * (embed _ * embed _) = _ * embed _
   rw [← map_mul]
   congr 2
   show _ = _ * _ + FlockLevel3.What cols (FlockLevel3.omega p) * _
+  ring
+
+/-! ## Level 0's consistency value -/
+
+/-- Level 0's consistency value as `Zk.queryLevel0` folds it: query `j`'s row, its first `W` entries folded by
+`eq_K(fold)`, weighted by `eq(α)[j]`. -/
+def consE0 (rows : Array (Array F128)) (q W : ℕ) (alpha : Array F128) (fold : Array F256) : F256 :=
+  (List.range q).foldl (fun e j =>
+    e + F256.smul ((List.range W).foldl
+      (fun acc l => acc + F256.smul (eqTableK fold)[l]! (rows[j]!)[l]!) 0) (eqTable alpha)[j]!) 0
+
+/-- The extra terms `Zk.ligerito` adds to level 0's consistency value: query `j`'s rep-`r` pair weighted by `ρ` and
+the padding's codeword at its position, weighted by `eq(α)[j]`. -/
+def extraE (rows : Array (Array F128)) (pos : Array ℕ) (W rep cols : ℕ) (rho : F256 × F256) (alpha : Array F128)
+    (ybar : Array F256) : F256 :=
+  (List.range pos.size).foldl (fun extra j => extra +
+    (rho.1.smul (rows[j]!)[W + 2 * rep]! + rho.2.smul (rows[j]!)[W + 2 * rep + 1]! +
+      Zk.padAt (whats (svTable (cols + 1)) pos[j]! (cols + 1)) cols ybar).smul (eqTable alpha)[j]!) 0
+
+/-- **Level 0's padded consistency value** (live PROTOCOL.md §7): the model's batched padded column, at openings
+whose rows are the proof's (`hR`, rows `2^k₀ + 4` wide), is the executable's fold of the first `2^k₀` entries plus its
+extra terms, at `ρ` the executable's pair, `c₀ = PAD_C` and a level of `2^(cols + 1)` positions. -/
+theorem consPad_eq (rows : Array (Array F128)) (R : ℕ → List 𝔽) (pos : Array ℕ) (alpha : Array F128)
+    (fold : Array F256) (k0 rep cols tPad : ℕ) (rho : F256 × F256) (ρ : Fin 2 → 𝕂) (ybar : Array F256)
+    (hk : fold.size = k0) (hrows : ∀ j < pos.size, rows[j]!.size = 2 ^ k0 + 4)
+    (hR : ∀ j < pos.size, R j = rows[j]!.toList.map fOf) (halpha : pos.size ≤ 2 ^ alpha.size) (hrep : rep < 2)
+    (hρ0 : ρ 0 = gOf rho.1) (hρ1 : ρ 1 = gOf rho.2) (hy : ybar.size = tPad) (ht : tPad ≤ 2 ^ cols) :
+    ((pos.toList.zipIdx).map fun pj => execArith.embed (eqList (alpha.toList.map fOf) pj.2) *
+        ZkLink.padColumnO execArith (cols + 1) cols tPad (fOf Zk.PAD_C) (fold.toList.map gOf) ρ
+          (extraLane k0 2 rep) (fun i => gOf ybar[i.val]!) (R pj.2) pj.1).sum =
+      gOf (consE0 rows pos.size (2 ^ k0) alpha fold + extraE rows pos (2 ^ k0) rep cols rho alpha ybar) := by
+  have hz : (pos.toList.zipIdx).map (fun pj => execArith.embed (eqList (alpha.toList.map fOf) pj.2) *
+      ZkLink.padColumnO execArith (cols + 1) cols tPad (fOf Zk.PAD_C) (fold.toList.map gOf) ρ
+        (extraLane k0 2 rep) (fun i => gOf ybar[i.val]!) (R pj.2) pj.1) =
+      (List.range pos.size).map fun j => execArith.embed (eqList (alpha.toList.map fOf) j) *
+        ZkLink.padColumnO execArith (cols + 1) cols tPad (fOf Zk.PAD_C) (fold.toList.map gOf) ρ
+          (extraLane k0 2 rep) (fun i => gOf ybar[i.val]!) (R j) pos[j]! := by
+    refine List.ext_getElem (by simp) fun i h₁ h₂ => ?_
+    simp only [List.getElem_map, List.getElem_zipIdx, List.getElem_range, Nat.zero_add, Array.getElem_toList]
+    rw [getElem!_pos pos i (by simpa using h₂)]
+  unfold consE0 extraE
+  rw [hz, FlockLevel3.list_sum_range, gOf_add, gOf_foldl_cons, gOf_foldl_cons, gOf_zero, zero_add, zero_add,
+    ← Finset.sum_add_distrib]
+  refine Finset.sum_congr rfl fun j hj => ?_
+  rw [Finset.mem_range] at hj
+  have hsz := hrows j hj
+  rw [hR j hj, ← eqTable_eqList alpha j (by omega), gOf_foldl_row, gOf_zero, zero_add, gOf_add, gOf_add, gOf_smul,
+    gOf_smul, padAt_eq pos[j]! cols tPad ybar hy ht]
+  unfold ZkLink.padColumnO foldColumn
+  rw [Fin.sum_univ_two, hρ0, hρ1, List.length_map, Array.length_toList, hk]
+  have hl : ∀ l ∈ Finset.range (2 ^ k0), eqList (fold.toList.map gOf) l *
+      execArith.embed ((rows[j]!.toList.map fOf).getD l 0) =
+      gOf (eqTableK fold)[l]! * execArith.embed (fOf (rows[j]!)[l]!) := fun l hl' => by
+    rw [Finset.mem_range] at hl'
+    rw [eqTableK_eqList fold l (by rw [hk]; exact hl'), getD_map_fOf _ l (by omega)]
+  rw [Finset.sum_congr rfl hl]
+  have e0 : (extraLane k0 2 rep 0) = 2 ^ k0 + 2 * rep := rfl
+  have e1 : (extraLane k0 2 rep 1) = 2 ^ k0 + 2 * rep + 1 := rfl
+  rw [e0, e1, getD_map_fOf _ _ (by omega), getD_map_fOf _ _ (by omega)]
+  simp only [show ∀ x, FlockLevel3.embed x = execArith.embed x from fun _ => rfl]
   ring
 
 end FlockSoundness.Discharge.ZkExec
