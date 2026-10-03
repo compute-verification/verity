@@ -42,6 +42,7 @@ def repo(tmp_path, monkeypatch) -> Path:
                                                          {"name": "p", "type": "path", "dir": "../p"}]}),
         "p/lakefile.toml": "", "p/lean-toolchain": "v1\n", "p/lean-audit.json": "{}", "p/Pp.lean": "def p := 1\n",
         "c/lakefile.toml": "", "c/lean-toolchain": "v1\n", "c/lean-audit.json": "{}", "c/C.lean": "def c := 1\n",
+        "c/lake-manifest.json": json.dumps({"packages": [{"name": "dep", "type": "git", "rev": "def"}]}),
     }
     for f, text in files.items():
         (root / f).parent.mkdir(parents=True, exist_ok=True)
@@ -116,6 +117,19 @@ def test_without_the_audits_dependencies_the_tree_fetches_its_own_once(repo, tmp
     assert "fetched cold" not in out and "copied" not in out, "the tree keeps what it fetched"
     assert LC.audit_records("p", deps, tree) == 0 and json.loads((tree / LC.LINKS).read_text()) == {"a": k}, \
         "a package that fetches nothing needs none"
+
+
+def test_a_tree_keeps_one_packages_dependencies(repo, tmp_path):
+    tree, deps = tmp_path / "tree", tmp_path / "deps"
+    ka, kc = LC.LA.deps_key(repo / "a"), LC.LA.deps_key(repo / "c")
+    assert ka != kc
+    for k in (ka, kc):
+        (deps / k / "dep").mkdir(parents=True)
+    assert LC.audit_records("a", deps, tree) == 0 and (tree / "a" / ".lake" / "packages" / "dep").is_dir()
+    assert LC.audit_records("c", deps, tree) == 0
+    assert json.loads((tree / LC.LINKS).read_text()) == {"c": kc}
+    assert not (tree / "a" / ".lake" / "packages").exists(), "each copy costs inodes the node is short of"
+    assert (tree / "c" / ".lake" / "packages" / "dep").is_dir() and (deps / ka / "dep").is_dir()
 
 
 def test_it_names_one_package_and_one_run_holds_a_tree(repo, tmp_path, capsys):

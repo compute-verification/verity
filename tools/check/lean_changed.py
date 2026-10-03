@@ -11,9 +11,10 @@ cache), which prints what the audit prints, `--update`'s review included, after 
 slot's last run. On a machine with check slots it first takes one through `slot.py`, pinned to its cores behind the line, and
 the slot's tree is whoever holds its lock. The tree's fetched dependencies are its own copy of the audit's (taken once per
 manifest and toolchain, else fetched cold), never links: where there is no sandbox its build writes as this user, and nothing
-it writes may reach what the audit keeps. It vouches for nothing (no kernel replay, no tests): check's audit decides.
-`--update` writes the record back into this checkout, but not in a recorded run, whose source tree the commit's other runs
-share: there it is in the run's `lean-audit/audit-*/`.
+it writes may reach what the audit keeps. A tree keeps one package's copy (about 170k inodes, 8 GB), so auditing another
+package that fetches dependencies there drops it first. It vouches for nothing (no kernel replay, no tests): check's audit
+decides. `--update` writes the record back into this checkout, but not in a recorded run, whose source tree the commit's other
+runs share: there it is in the run's `lean-audit/audit-*/`.
 
 The tree (`--tree`) holds each such package's tracked files, and those of the packages it requires by path, at their paths in
 this repository, with each package's own `.lake`: Lake rebuilds only the modules that changed since its last build there and
@@ -203,6 +204,8 @@ def audit_records(name: str, deps: Path, tree: Path, update: bool = False, moved
         t0 = time.monotonic()
         links = json.loads((tree / LINKS).read_text()) if (tree / LINKS).is_file() else {}
         n = sync(closure(pkg), files, tree)
+        for other in [p for p in links if p != pkg and LA.deps_key(tree / pkg)]:
+            unlink(other, tree, links)
         if not link(pkg, tree, deps, links, log, copy=True) and (k := LA.deps_key(tree / pkg)):
             links[pkg] = k
             log(f"lean-records: {pkg}: its dependencies are fetched cold, once for this tree")
@@ -280,7 +283,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--deps", type=Path, default=LA.COMMON.cache_dir() / "lean-deps", help="the audit's kept dependencies")
     ap.add_argument("--tree", type=Path, help="the tree this step keeps built (default: lean-changed, or with --records "
                     f"{RECORDS}/SLOT, under the check cache)")
-    ap.add_argument("--records", metavar="PKG", help="audit PKG's records without the kernel replay, on a tree kept per check slot")
+    ap.add_argument("--records", metavar="PKG",
+                    help="audit PKG's records without the kernel replay, on a tree kept per check slot")
     ap.add_argument("--update", action="store_true", help="with --records: audit.py --update")
     ap.add_argument("--moved", type=Path, metavar="FILE", help="with --records --update: audit.py --moved FILE")
     ap.add_argument("--out", type=Path, help="with --records: audit.py --out DIR")
