@@ -212,14 +212,14 @@ def cmd_honest(args, torch, meta):
             combine1 = D.combine_table(g1, "cuda")
             gp0, gp1 = pow(g, D.INTERLEAVE, D.MOD), pow(g1, D.INTERLEAVE, D.MOD)
             zp = D.z_powers_dev(z, r, "cuda")
-            out = torch.empty(r, dtype=torch.int64, device="cuda")
-            out1 = torch.empty(r, dtype=torch.int64, device="cuda")
+            hbuf = torch.empty(r, dtype=torch.int64, device="cuda")
+            hbuf1 = torch.empty(r, dtype=torch.int64, device="cuda")
             # kernel-only (the HBM read + fold of one lane), many trials for the distribution
-            k_ms = time_events(torch, lambda: D.block_hashes_pre(C, idx, combine0, gp0, out), iters=args.trials)
+            k_ms = time_events(torch, lambda: D.block_hashes_pre(C, idx, combine0, gp0, hbuf), iters=args.trials)
             # full one-lane digest (audit answer latency = read + fold), and the two-lane digest (one read)
-            f_ms = time_events(torch, lambda: D.fold_pre(D.block_hashes_pre(C, idx, combine0, gp0, out), zp),
+            f_ms = time_events(torch, lambda: D.fold_pre(D.block_hashes_pre(C, idx, combine0, gp0, hbuf), zp),
                                iters=max(30, args.trials // 4))
-            two_ms = time_events(torch, lambda: D.block_hashes2_pre(C, idx, combine0, combine1, gp0, gp1, out, out1),
+            two_ms = time_events(torch, lambda: D.block_hashes2_pre(C, idx, combine0, combine1, gp0, gp1, hbuf, hbuf1),
                                  iters=max(30, args.trials // 4))
             out["points"].append({
                 "c_gib": cg, "n_blocks": n, "R": r,
