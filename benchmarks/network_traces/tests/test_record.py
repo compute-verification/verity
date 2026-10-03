@@ -332,11 +332,19 @@ def test_the_offline_loop_admits_on_time_stamps_each_step_and_commits_one_run_pe
     assert not any(isinstance(c, rec.Collections) for c in gc.callbacks)
 
 
+@pytest.fixture
+def thaw():
+    """An offline `run` freezes this process's heap: unfreeze it after the test, so later tests' garbage is collected."""
+    yield
+    gc.unfreeze()
+
+
 @pytest.mark.parametrize("evict", ["in the replay", "at startup", None])
-def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path, monkeypatch, evict) -> None:
+def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path, monkeypatch, thaw, evict) -> None:
     """A whole offline `run` on the fake engine and the injected clock, with SIGTERM delivered 90 s after t0, while the
-    engine loads (seeds 62-69's eviction), or never."""
-    now, handlers, evict_at = [100.0], {}, [math.inf]
+    engine loads (seeds 62-69's eviction), or never. The schedule is frozen out of the collector's reach before the
+    first request is admitted, and `meta.json` records the freeze."""
+    now, handlers, evict_at, first = [100.0], {}, [math.inf], []
 
     def clock():
         now[0] += 0.001
@@ -374,6 +382,11 @@ def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path
             lines.close()
 
     class Evicting(FakeEngine):
+        def add_request(self, rid, prompt, params):
+            if not first:
+                first.append((gc.get_freeze_count(), any(o is prompt["prompt_token_ids"] for o in gc.get_objects())))
+            super().add_request(rid, prompt, params)
+
         def step(self):
             if now[0] >= evict_at[0]:
                 evict_at[0] = math.inf
@@ -411,7 +424,9 @@ def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path
     assert rc == (143 if evict else 0) and meta["ended"]["evicted"] is bool(evict)
     if evict == "at startup":
         assert "t0_mono" not in meta and summary["error"] == "the job ended before t0"
+        assert "gc" not in meta and first == []
         return
+    assert meta["gc"]["frozen_before_t0"] > 0 and first == [(meta["gc"]["frozen_before_t0"], False)]
     assert meta["windows"] == 2 and summary["windows_planned"] == (1 if evict else 2)
     assert summary["windows_kept"] == summary["windows_planned"]
     assert len(json.loads((tmp_path / "trace.json").read_text())["configurations"]) == 1
