@@ -1,7 +1,7 @@
 import FlockSoundness.Discharge.Composed.Base
 import FlockSoundness.Instance
-import FlockSoundness.ZerocheckPhase
-import FlockSoundness.LincheckPhase
+import FlockSoundness.Discharge.Composed.Inner.ZerocheckMasked
+import FlockSoundness.Discharge.Composed.Inner.Lincheck
 
 /-!
 # The inner proof's fields of a draw's `--zk` table
@@ -13,13 +13,14 @@ the level-0 lanes, the clear values, Ligerito's value lists and the verifier's r
 * **The pads by layout index** (`padEquiv`, `padNat`): a rep's pads are `Zk.PadLayout`'s `len = nE + 4` slots, the
   exposed values first and then `hab, tx, ty, tw`; `PadIdx`'s tail is `h_tx, h_ty, h_ab, h_tw` (`Table.hFull`).
 * **The replay** (`rowsOf`, `lamOf`, `thetaOf`): `Zk.verifyRep`'s ten constraints in its order, each an affine form in the
-  pads (`LinF`, `ZkSession`'s forms): zerocheck c_eval, zerocheck final a·b and lincheck final (`Zk.replay`), ring switch
-  ab and c (the claim checks on `ŝ`), level 0's lane phase c0 and c1 (`Zk.ligeritoConstraints`, on the restart `T'` that
-  `lig` carries), and the triple's three (`Zk.triple`); `λ`, `θ` are their batch at the coins `γ` (`Zk.verifyInner`:
-  `⟨l.a, h⟩ = l.c`). Every coefficient is `execArith`'s, the model's arithmetic of the executable.
-* **The honest prover's clear values** (`honestAt`, by layout index): the zerocheck's round-1 values on `Λ`
-  (`PabT`, `PcT`), its residual rounds `(G(1), G(∞))` (`resPoly`), the finals; the lincheck's rounds (`roundPoly`) and
-  `z_partial`; level 0's out-of-domain value, lane rounds and the extra lanes' sums `e_i`, on `z = (w, u)` (`zWith`).
+  pads: zerocheck c_eval, zerocheck final a·b and lincheck final (`Zk.replay`'s forms on the masked proof, restated in
+  `ZerocheckMasked` and `Lincheck`, at the drawn coins), ring switch ab and c (their values plus `Zk.claimCheck` on `ŝ`),
+  read in the field (`ofZk`); level 0's lane phase c0 and c1 (`Zk.ligeritoConstraints`, on the restart `T'` that `lig`
+  carries, `execArith`'s forms); and the triple's three (`Zk.triple`). `λ`, `θ` are their batch at the coins `γ`
+  (`Zk.verifyInner`: `⟨l.a, h⟩ = l.c`). The lincheck's circuit fold is the statement's (`modelFold`).
+* **The honest prover's clear values** (`honestAt`, by layout index): the clear zerocheck `Zerocheck.honest` on the A-side,
+  B-side and witness bits (`zcH`), the lincheck's rounds `Lincheck.lcMsg` and `z_partial` (`lcH`, `zpH`); level 0's
+  out-of-domain value, lane rounds and the extra lanes' sums `e_i`, on `z = (w, u)` (`zWith`).
 * **The lanes** (`lanesOf`): packed word `y = l + 2^k₀·c` of `z` is lane `l`'s column `c`.
 * **Levels ≥ 1** (`ligOf`): the restart `T' = Σ_c y₁'(c)·b̄(c)` and levels ≥ 1's bytes.
 
@@ -98,20 +99,14 @@ section Coins
 
 variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2)
 
-/-- The zerocheck's `z`. -/
-def zcZ : 𝔽 := fOf (c.rest.zc r)
-
 /-- The zerocheck's eq point `r = pinned ‖ r_outer` (`zcVector`), by index. -/
 def zcReq (j : ℕ) : 𝔽 := if h : j < 7 then execArith.pinned ⟨j, h⟩ else fOf (seqOf (c.rest.rOuter r) (j - 7))
 
 /-- The residual rounds' coins `ρ_j`. -/
 def zcRho (j : ℕ) : 𝔽 := fOf (seqOf (c.rest.rho r) j)
 
-/-- The lincheck's `α`, `β`, round coins `t_j` and `r′`. -/
-def lcAlpha : 𝔽 := fOf (c.rest.lcAlpha r)
-def lcBeta : 𝔽 := fOf (c.rest.lcBeta r)
+/-- The lincheck's round coins `t_j`. -/
 def lcT (j : ℕ) : 𝔽 := fOf (seqOf (c.rest.ts r) j)
-def lcR : 𝔽 := fOf (c.rest.rPrime r)
 
 /-- The `ab` claim's point `r_in' ‖ ρ[k_log − 6 …]`, `r_in'` the lincheck's coins reversed (`abcClaims`). -/
 def abX (j : ℕ) : 𝔽 :=
@@ -125,7 +120,40 @@ def rhoK (i : Fin 2) : 𝕂 := if i = 0 then FlockLevel3.GF256.of (c.rho r).1 el
 def innerEps : 𝔽 := fOf (c.rest.zeta r)
 def innerGamma (k : Fin (7 + 3)) : 𝔽 := fOf (c.rest.gammas r k)
 
+/-- The executable's coin arrays: the zerocheck vector `pinned ‖ r_outer`, the residual coins `ρ`, the lincheck's
+round coins and `z`. -/
+def rF : Array F128 := pinned ++ Array.ofFn (c.rest.rOuter r)
+def rhoF : Array F128 := Array.ofFn (c.rest.rho r)
+def tsF : Array F128 := Array.ofFn (c.rest.ts r)
+def zcF : F128 := c.rest.zc r
+
 end Coins
+
+/-- **The statement's circuit fold, in the model** (`FoldRealizes` by construction): column `col` of
+`α·A₀ᵀe + B₀ᵀe`, `e_i = lw[i mod 64]·eq(ρ, ⌊i/64⌋)`; `folded` adds `β` at the pin and halves at `ts`. -/
+def modelFold (S : Statement) : CircuitFold where
+  kLog := S.kLog
+  pin := S.pin.val
+  fold α lw ρ := .ok ((Array.range (2 ^ S.kLog)).map fun col => if hc : col < 2 ^ S.kLog then
+    (∑ i : Fin (2 ^ S.kLog), fOf lw[i.val % 64]! * eqAt (vecOf (S.kLog - 6) ρ) (i.val / 64) *
+      (fOf α * ((S.A₀ i ⟨col, hc⟩).val : 𝔽) + ((S.B₀ i ⟨col, hc⟩).val : 𝔽))).val else 0)
+  folded α β lw ρ ts := .ok (ts.foldl (fun acc t => halve t acc)
+    (((Array.range (2 ^ S.kLog)).map fun col => if hc : col < 2 ^ S.kLog then
+      (∑ i : Fin (2 ^ S.kLog), fOf lw[i.val % 64]! * eqAt (vecOf (S.kLog - 6) ρ) (i.val / 64) *
+        (fOf α * ((S.A₀ i ⟨col, hc⟩).val : 𝔽) + ((S.B₀ i ⟨col, hc⟩).val : 𝔽))).val else 0).modify S.pin.val (· + β)))
+
+section Coins'
+
+variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2)
+
+/-- The circuit's 64 folded entries at the lincheck's coins (`modelFold`'s `folded`, the `combv` the replay reads). -/
+def combvOf : Array F128 :=
+  match (modelFold Tz.S).folded (c.rest.lcAlpha r) (c.rest.lcBeta r) (skipWeights (zcF Tz st c r))
+    ((rhoF Tz st c r).extract 0 (st.c.kLog - 6)) (tsF Tz st c r) with
+  | .ok v => v
+  | .error _ => #[]
+
+end Coins'
 
 /-! ## The replay -/
 
@@ -134,65 +162,58 @@ section Replay
 variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2) {nE : ℕ}
   (v : Fin nE → 𝔽)
 
-/-- `P_c(z)` on the masked round 1 (`computedC`). -/
-def pcL : LinF 𝔽 (nE + 4) :=
-  ∑ i : Fin 64, execArith.lagΛ (zcZ Tz st c r) i • mk v ((layOf Tz st).r1c i)
+/-- An executable affine form (`Zk.Lin`) in the field, on the rep's pads (`Lincheck.linVal`). -/
+def ofZk (l : Zk.Lin) : ZkSession.Lin 𝔽 (nE + 4) := ⟨fun i => fOf l.a[i.val]!, fOf l.c⟩
 
-/-- The zerocheck's running claim after `j` residual rounds (`residualStepL` on the masked `G(1)`, `G(∞)`). -/
-def zcRun : ℕ → LinF 𝔽 (nE + 4)
-  | 0 => ∑ i : Fin 64, execArith.combW (zcZ Tz st c r) i •
-      (mk v ((layOf Tz st).r1ab i) + mk v ((layOf Tz st).r1c i)) + pcL Tz st c r v
-  | j + 1 => residualStepL (zcReq Tz st c r j) (zcRho Tz st c r j) (zcRun j) (mk v ((layOf Tz st).ml j 0))
-      (mk v ((layOf Tz st).ml j 1))
+/-- **The masked zerocheck proof** the replay reads, from the masked values by layout index. -/
+def zcOf : ZerocheckProof where
+  round1ab := (Array.range 64).map fun i => (msgAt v ((layOf Tz st).r1ab i)).val
+  round1c := (Array.range 64).map fun i => (msgAt v ((layOf Tz st).r1c i)).val
+  rounds := (Array.range (st.m - 6)).map fun j =>
+    ((msgAt v ((layOf Tz st).ml j 0)).val, (msgAt v ((layOf Tz st).ml j 1)).val)
+  finalA := (msgAt v (layOf Tz st).fa).val
+  finalB := (msgAt v (layOf Tz st).fb).val
+  finalC := (msgAt v (layOf Tz st).fc).val
 
-/-- **zerocheck c_eval**: `P_c(z) + final_c`. -/
-def rowCEval : LinF 𝔽 (nE + 4) := pcL Tz st c r v + mk v (layOf Tz st).fc
+/-- The masked lincheck rounds and `z_partial`. -/
+def lcRoundsOf : Array (F128 × F128) := (Array.range (st.c.kLog - 6)).map fun j =>
+  ((msgAt v ((layOf Tz st).lc j 0)).val, (msgAt v ((layOf Tz st).lc j 1)).val)
+def zPartialOf : Array F128 := (Array.range 64).map fun i => (msgAt v ((layOf Tz st).zp i)).val
 
-/-- **zerocheck final a·b**: the running claim plus `a·b = a'b' + a'·h_fb + b'·h_fa + h_ab`. -/
-def rowAB : LinF 𝔽 (nE + 4) :=
-  let lay := layOf Tz st
-  let a := msgAt v lay.fa
-  let b := msgAt v lay.fb
-  zcRun Tz st c r v (st.m - 6) + (cF (a * b) + a • pF (ix nE lay.fb) + b • pF (ix nE lay.fa) + pF (ix nE lay.hab))
+/-- **zerocheck c_eval**: `computedC + fc` (`ZerocheckMasked`, `Zk.replay`'s first constraint). -/
+def rowCEval : ZkSession.Lin 𝔽 (nE + 4) :=
+  ofZk ((ZerocheckMasked.computedC (layOf Tz st) (zcOf Tz st v) (zcF Tz st c r)).add
+    (ZerocheckMasked.fcL (layOf Tz st) (zcOf Tz st v)))
 
-/-- The lincheck's running claim after `j` rounds, from `α·a + b + β`. -/
-def lcRun : ℕ → LinF 𝔽 (nE + 4)
-  | 0 => lcAlpha Tz st c r • mk v (layOf Tz st).fa + mk v (layOf Tz st).fb + cF (lcBeta Tz st c r)
-  | j + 1 =>
-      let q₁ := mk v ((layOf Tz st).lc j 0)
-      let q₂ := mk v ((layOf Tz st).lc j 1)
-      let e₀ := lcRun j + q₁
-      (lcT Tz st c r j ^ 2) • q₂ + lcT Tz st c r j • (e₀ + q₁ + q₂) + e₀
+/-- **zerocheck final a·b**: the running form after the `m − 6` residual rounds plus `prodL`. -/
+def rowAB : ZkSession.Lin 𝔽 (nE + 4) :=
+  ofZk ((ZerocheckMasked.running (layOf Tz st) (zcOf Tz st v) (rF Tz st c r) (rhoF Tz st c r) (zcF Tz st c r)
+    (st.m - 6)).add (ZerocheckMasked.prodL (layOf Tz st) (zcOf Tz st v)))
 
-/-- The circuit's folded columns at the lincheck's coins (`comb`, folded by `foldAll`). -/
-def lcFolded : ℕ → 𝔽 :=
-  foldAll (List.ofFn fun j : Fin (st.c.kLog - 6) => lcT Tz st c r j) (2 ^ Tz.S.kLog)
-    (comb execArith Tz.S (zcZ Tz st c r) (lcAlpha Tz st c r) (lcBeta Tz st c r) fun j => zcRho Tz st c r j)
-
-/-- **lincheck final**: the running claim plus `Σ_s folded_s·z_partial_s`. -/
-def rowLC : LinF 𝔽 (nE + 4) :=
-  lcRun Tz st c r v (st.c.kLog - 6) + ∑ s : Fin 64, lcFolded Tz st c r s • mk v ((layOf Tz st).zp s)
-
-/-- A claim check's weight on the 128 packed positions (`Zk.claimCheck`): `skip[v mod 64]·eq(x₀, ⌊v/64⌋)`. -/
-def ccWeight (skip : Fin 64 → 𝔽) (x0 : 𝔽) (v : Fin 128) : 𝔽 :=
-  skip ⟨v.val % 64, Nat.mod_lt _ (by norm_num)⟩ * if v.val / 64 = 1 then x0 else 1 + x0
+/-- **lincheck final** (`Lincheck.lcFinal`) on the circuit's folded entries `combvOf`. -/
+def rowLC : ZkSession.Lin 𝔽 (nE + 4) :=
+  ofZk (Lincheck.lcFinal (layOf Tz st) (zcOf Tz st v).finalA (zcOf Tz st v).finalB (c.rest.lcAlpha r)
+    (c.rest.lcBeta r) (lcRoundsOf Tz st v) (zPartialOf Tz st v) (tsF Tz st c r) (st.c.kLog - 6) (combvOf Tz st c r))
 
 /-- Masked claim `k`'s ring-switch message in `ŝ` (`0` past the claims). -/
 def sHatAt {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) (k : ℕ) : Fin 128 → 𝔽 := if h : k < nC then sh ⟨k, h⟩ else 0
 
-/-- The `ab` and `c` claim checks on rep `r`'s `ŝ` (claims `2r`, `2r + 1`). -/
-def ccAb {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) : 𝔽 :=
-  ∑ w, ccWeight (execArith.lagS (lcR Tz st c r)) (abX Tz st c r 0) w * sHatAt sh (2 * r.val) w
-def ccC {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) : 𝔽 :=
-  ∑ w, ccWeight (execArith.lagS (zcZ Tz st c r)) (zcReq Tz st c r 0) w * sHatAt sh (2 * r.val + 1) w
+/-- `ŝ_k` as the executable's array. -/
+def shArr {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) (k : ℕ) : Array F128 := Array.ofFn fun w => (sHatAt sh k w).val
 
-/-- **ring switch ab**: the `ab` claim's value `Σ_s L_s(r′)·z_partial_s` plus its claim check. -/
-def rowRsAb {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) : LinF 𝔽 (nE + 4) :=
-  ∑ s : Fin 64, execArith.lagS (lcR Tz st c r) s • mk v ((layOf Tz st).zp s) + cF (ccAb Tz st c r sh)
+/-- The `ab` and `c` claims the replay hands the opening (`abcClaims`, values unread). -/
+def abClaim : Flock.Claim := Lincheck.lcAbClaim st.m st.c.kLog (rhoF Tz st c r) (tsF Tz st c r) (c.rest.rPrime r)
+def cClaim : Flock.Claim := { value := 0, skip := skipWeights (zcF Tz st c r), x := rF Tz st c r }
 
-/-- **ring switch c**: `final_c` plus the `c` claim's check. -/
-def rowRsC {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) : LinF 𝔽 (nE + 4) :=
-  mk v (layOf Tz st).fc + cF (ccC Tz st c r sh)
+/-- **ring switch ab**: the `ab` claim's value (`lcAbValue`) plus its claim check on `ŝ_{2r}`. -/
+def rowRsAb {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) : ZkSession.Lin 𝔽 (nE + 4) :=
+  ofZk ((Lincheck.lcAbValue (layOf Tz st) (zPartialOf Tz st v) (c.rest.rPrime r)).addConst
+    (Zk.claimCheck (abClaim Tz st c r) (shArr sh (2 * r.val))))
+
+/-- **ring switch c**: the masked `final_c` plus the `c` claim's check on `ŝ_{2r+1}`. -/
+def rowRsC {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) : ZkSession.Lin 𝔽 (nE + 4) :=
+  ofZk ((Zk.Lin.masked (zcOf Tz st v).finalC (layOf Tz st).fc (layOf Tz st).len).addConst
+    (Zk.claimCheck (cClaim Tz st c r) (shArr sh (2 * r.val + 1))))
 
 /-- Claim `k`'s ring-switch message in rep `r`'s opening: the masked `ab`, `c`, then the extras' public values. -/
 def swAt {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) (k : ℕ) : Fin 128 → 𝔽 :=
@@ -227,8 +248,7 @@ def laneRow {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) (T' : 𝕂) : LinK �
 `T'` and the triple's `(ρ, σ)`. -/
 def rowsOf {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) (T' : 𝕂) (ρσ : 𝔽 × 𝔽) : Fin (7 + 3) → ZkSession.Lin 𝔽 (nE + 4) :=
   Fin.append
-    ![(rowCEval Tz st c r v).toLin, (rowAB Tz st c r v).toLin, (rowLC Tz st c r v).toLin,
-      (rowRsAb Tz st c r v sh).toLin, (rowRsC Tz st c r v sh).toLin,
+    ![rowCEval Tz st c r v, rowAB Tz st c r v, rowLC Tz st c r v, rowRsAb Tz st c r v sh, rowRsC Tz st c r v sh,
       limbRows execArith (laneRow Tz st c r v sh T') 0, limbRows execArith (laneRow Tz st c r v sh T') 1]
     (tripleRows (trOf nE (layOf Tz st)) (innerEps Tz st c r) ρσ.1 ρσ.2)
 
@@ -280,43 +300,22 @@ section Honest
 variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2)
   (zw : Witness Tz.S.m)
 
-/-- The zerocheck's eq point at the model statement's size. -/
-def reqS (j : Fin (Tz.S.m - 6)) : 𝔽 := zcReq Tz st c r j.val
+/-- The zerocheck's tables at address `i`: the A-side, B-side and witness bits (`aVec`, `bVec`, `z`), `0` past `2^m`. -/
+def aT (i : ℕ) : 𝔽 := if h : i < 2 ^ Tz.S.m then ((aVec Tz.S zw ⟨i, h⟩).val : 𝔽) else 0
+def bT (i : ℕ) : 𝔽 := if h : i < 2 ^ Tz.S.m then ((bVec Tz.S zw ⟨i, h⟩).val : 𝔽) else 0
+def cT (i : ℕ) : 𝔽 := if h : i < 2 ^ Tz.S.m then ((zw ⟨i, h⟩).val : 𝔽) else 0
 
-/-- Round 1's clear values on `Λ`: `P_ab(φ₈(64 + i))`, `P_c(φ₈(64 + i))`. -/
-def r1abH (i : ℕ) : 𝔽 :=
-  seqOf (fun i : Fin 64 => (PabT execArith execArith_correct Tz.S (six_le Tz) zw (reqS Tz st c r)).eval
-    (nodeΛ execArith execArith_correct i)) i
-def r1cH (i : ℕ) : 𝔽 :=
-  seqOf (fun i : Fin 64 => (PcT execArith execArith_correct (six_le Tz) zw (reqS Tz st c r)).eval
-    (nodeΛ execArith execArith_correct i)) i
+/-- **The honest clear zerocheck** (`Zerocheck.honest` on the tables, at the drawn coins). -/
+def zcH : ZerocheckProof :=
+  Zerocheck.honest (Tz.S.m - 6) (aT Tz zw) (bT Tz zw) (cT Tz zw) (rF Tz st c r) (rhoF Tz st c r) (zcF Tz st c r)
 
-/-- The residual rounds' tables `Â_x(z)`, `B̂_x(z)` over `x`, folded by the first `j` coins (`foldLo`). -/
-def resU : ℕ → ℕ → 𝔽
-  | 0 => fun x => if h : x < 2 ^ (Tz.S.m - 6) then
-      (hatP execArith execArith_correct (six_le Tz) (aVec Tz.S zw) ⟨x, h⟩).eval (zcZ Tz st c r) else 0
-  | j + 1 => foldLo (zcRho Tz st c r j) (resU j)
-def resV : ℕ → ℕ → 𝔽
-  | 0 => fun x => if h : x < 2 ^ (Tz.S.m - 6) then
-      (hatP execArith execArith_correct (six_le Tz) (bVec Tz.S zw) ⟨x, h⟩).eval (zcZ Tz st c r) else 0
-  | j + 1 => foldLo (zcRho Tz st c r j) (resV j)
+/-- **The honest lincheck's round messages** (`Lincheck.lcMsg` on the circuit's and the witness's columns). -/
+def lcH (j : ℕ) : 𝔽 × 𝔽 :=
+  Lincheck.lcMsg (2 ^ Tz.S.kLog) (Lincheck.lcU Tz.S (zcF Tz st c r) (c.rest.lcAlpha r) (c.rest.lcBeta r) (rhoF Tz st c r))
+    (Lincheck.lcV Tz.S (rhoF Tz st c r) zw) ((tsF Tz st c r).toList.map fOf) j
 
-/-- Residual round `j`'s quadratic `G_j` (`resPoly` at the eq point's coordinates `j …`). -/
-def resG (j : ℕ) : Polynomial 𝔽 :=
-  resPoly (n := Tz.S.m - 7 - j) (fun i => zcReq Tz st c r (j + i.val)) (resU Tz st c r zw j) (resV Tz st c r zw j)
-
-/-- The lincheck's tables: the circuit's folded columns and the witness's block-folded columns (`hcol`), folded by the
-first `j` round coins (`foldTop`, top bit first). -/
-def lcU : ℕ → ℕ → 𝔽
-  | 0 => comb execArith Tz.S (zcZ Tz st c r) (lcAlpha Tz st c r) (lcBeta Tz st c r) fun j => zcRho Tz st c r j
-  | j + 1 => foldTop (lcT Tz st c r j) (2 ^ (Tz.S.kLog - j - 1)) (lcU j)
-def lcV : ℕ → ℕ → 𝔽
-  | 0 => hcol Tz.S (ρOutOf Tz.S fun j => zcRho Tz st c r j) zw
-  | j + 1 => foldTop (lcT Tz st c r j) (2 ^ (Tz.S.kLog - j - 1)) (lcV j)
-
-/-- Lincheck round `j`'s quadratic (`roundPoly`). -/
-def lcQ (j : ℕ) : Polynomial 𝔽 :=
-  roundPoly (2 ^ (Tz.S.kLog - j - 1)) (lcU Tz st c r j) (lcV Tz st c r zw j)
+/-- **The honest `z_partial`**: the witness's columns folded at the round coins. -/
+def zpH (i : ℕ) : 𝔽 := foldAll ((tsF Tz st c r).toList.map fOf) (2 ^ Tz.S.kLog) (Lincheck.lcV Tz.S (rhoF Tz st c r) zw) i
 
 /-- Claim `k`'s word point in rep `r`'s opening, its point but the skip coordinates and `x₀`: `ab`, `c`, then the region
 claims (`regionPtOf`). -/
@@ -359,18 +358,18 @@ def bFold (col : ℕ) : 𝕂 := laneB Tz st c r Tz.sch.k0 col
 `R` (`e_i = Σ_c R_i(c)·b̄(c)`). -/
 def honestAt {L : ℕ} (R : Fin 2 → Fin L → 𝔽) (k : ℕ) : 𝔽 :=
   let lay := layOf Tz st
-  if k < 64 then r1abH Tz st c r zw k
-  else if k < 128 then r1cH Tz st c r zw (k - 64)
+  let zc := zcH Tz st c r zw
+  if k < 64 then fOf zc.round1ab[k]!
+  else if k < 128 then fOf zc.round1c[k - 64]!
   else if k < lay.fa then
-    (if (k - 128) % 2 = 0 then (resG Tz st c r zw ((k - 128) / 2)).eval 1
-      else (resG Tz st c r zw ((k - 128) / 2)).coeff 2)
-  else if k = lay.fa then resU Tz st c r zw (Tz.S.m - 6) 0
-  else if k = lay.fb then resV Tz st c r zw (Tz.S.m - 6) 0
-  else if k = lay.fc then (PcT execArith execArith_correct (six_le Tz) zw (reqS Tz st c r)).eval (zcZ Tz st c r)
+    (if (k - 128) % 2 = 0 then fOf zc.rounds[(k - 128) / 2]!.1 else fOf zc.rounds[(k - 128) / 2]!.2)
+  else if k = lay.fa then fOf zc.finalA
+  else if k = lay.fb then fOf zc.finalB
+  else if k = lay.fc then fOf zc.finalC
   else if k < lay.zp 0 then
-    (if (k - lay.fc - 1) % 2 = 0 then (lcQ Tz st c r zw ((k - lay.fc - 1) / 2)).eval 1
-      else (lcQ Tz st c r zw ((k - lay.fc - 1) / 2)).coeff 2)
-  else if k < lay.zp 64 then lcV Tz st c r zw (Tz.S.kLog - 6) (k - lay.zp 0)
+    (if (k - lay.fc - 1) % 2 = 0 then (lcH Tz st c r zw ((k - lay.fc - 1) / 2)).1
+      else (lcH Tz st c r zw ((k - lay.fc - 1) / 2)).2)
+  else if k < lay.zp 64 then zpH Tz st c r zw (k - lay.zp 0)
   else if k < lay.lgMsg 0 0 then
     ∑ y ∈ Finset.range (2 ^ (Tz.S.m - 7)), eqAt (oodPoint Tz st c r (k - lay.lgOod 0)) y * wordOf zw y
   else if k < lay.lgE 0 0 then
