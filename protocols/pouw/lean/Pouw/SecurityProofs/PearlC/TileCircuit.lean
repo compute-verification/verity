@@ -100,7 +100,8 @@ theorem entry_add (a b pa pb g : ℕ) {q : ℕ} (hq : q < K / 128) :
 
 theorem entry_peel (a b pa pb g s : ℕ) :
     entryGate p K a b pa pb g (5 * (K / 128) + s) =
-      ⟨32, false, [g - 1] ++ (List.range 16).map (pa + 16 * s + ·) ++ (List.range 16).map (pb + 16 * s + ·), peelF⟩ := by
+      ⟨32, false, [g - 1] ++ (List.range 16).map (pa + 16 * s + ·) ++ (List.range 16).map (pb + 16 * s + ·),
+        peelF⟩ := by
   unfold entryGate
   rw [ite_eq_right (by omega), show 5 * (K / 128) + s - 5 * (K / 128) = s by omega]
 
