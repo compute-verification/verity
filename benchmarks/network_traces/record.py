@@ -183,6 +183,58 @@ class Collections:
         return s
 
 
+class Census:
+    """Diagnostic for #985's residual pauses: after a step whose collections included a full one, at most every
+    `every_s`, what the collector's heap holds (types by count, the largest containers, element totals), to
+    `gc_census.jsonl`. Every full collection's own record (`collected`, duration) goes there too."""
+
+    CONTAINERS = (list, dict, set, frozenset, tuple)
+
+    def __init__(self, path: Path, every_s: float) -> None:
+        self.out, self.every_s, self.next, self.full, self.pending, self.began = JsonLines(path), every_s, 0.0, 0, False, 0.0
+
+    def __call__(self, phase: str, info: dict) -> None:
+        if info.get("generation") != 2:
+            return
+        if phase == "start":
+            self.began = clock()
+            return
+        self.full += 1
+        self.pending = True
+        self.out({"kind": "full", "t": clock(), "n": self.full, "ms": round(1000 * (clock() - self.began), 1),
+                  "collected": info.get("collected"), "uncollectable": info.get("uncollectable")})
+
+    def maybe(self, t_ms: float) -> None:
+        if not self.pending or clock() < self.next:
+            return
+        self.pending, began = False, clock()
+        self.next = began + self.every_s
+        objs = gc.get_objects()
+        by_type: dict[str, list[int]] = {}
+        sizes = []
+        for o in objs:
+            t = type(o)
+            k = f"{t.__module__}.{t.__qualname__}"
+            row = by_type.setdefault(k, [0, 0])
+            row[0] += 1
+            if isinstance(o, self.CONTAINERS):
+                row[1] += len(o)
+                sizes.append((len(o), k, id(o)))
+        sizes.sort(reverse=True)
+        biggest, o = [], None
+        for n, k, oid in sizes[:6]:
+            o = next(x for x in objs if id(x) == oid)
+            refs = [f"{type(r).__module__}.{type(r).__qualname__}" for r in gc.get_referrers(o) if r is not objs][:4]
+            first = next(iter(o.values() if isinstance(o, dict) else o), None) if n else None
+            biggest.append({"len": n, "type": k, "referrers": refs, "first": type(first).__qualname__})
+        del o
+        top = sorted(by_type.items(), key=lambda kv: -kv[1][0])[:40]
+        self.out({"kind": "census", "t_ms": t_ms, "full": self.full, "tracked": len(objs), "frozen": gc.get_freeze_count(),
+                  "elements": sum(r[1] for r in by_type.values()), "top": top, "biggest": biggest,
+                  "census_ms": round(1000 * (clock() - began), 1)})
+        del objs
+
+
 def request_body(model: str, q: dict) -> bytes:
     return json.dumps({"model": model, "prompt": q["prompt"], "max_tokens": q["max_tokens"], "temperature": 0.0,
                        "ignore_eos": True, "stream": True, "return_token_ids": True}).encode()
@@ -304,6 +356,9 @@ def offline_replay(eng, com, requests: list[dict], t0: float, drain_until: float
         com.install()
     paused = Collections()
     gc.callbacks.append(paused)
+    census = Census(Path(os.environ["CENSUS_OUT"]), float(os.environ.get("CENSUS_EVERY_S", "120"))) if os.environ.get("CENSUS_OUT") else None
+    if census is not None:
+        gc.callbacks.append(census)
     try:
         while (now := clock()) < drain_until and (pending or live):
             if stop.is_set():
@@ -351,8 +406,12 @@ def offline_replay(eng, com, requests: list[dict], t0: float, drain_until: float
                     rec["ok"] = rec["n_tokens"] == rec["max_tokens"]
                     sink(live.pop(rec["rid"]))
             steps({"t_ms": ms(t - t0), "dur_ms": ms(t - now), "running": len(live), "tokens": n, "gc_ms": ms(paused.take())})
+            if census is not None:
+                census.maybe(ms(t - t0))
     finally:
         gc.callbacks.remove(paused)
+        if census is not None:
+            gc.callbacks.remove(census)
     ended["unfinished"] = len(live)
     if com is not None:
         com.uninstall()

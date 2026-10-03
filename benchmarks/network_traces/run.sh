@@ -8,6 +8,7 @@
 set -euo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run}/out}
 mkdir -p "$OUT"
+if [ -n "${CENSUS_EVERY_S:-}" ]; then export CENSUS_OUT=$OUT/gc_census.jsonl; fi
 VENV=${VENV:-/workspace/jobs/venv312}
 export PATH=$VENV/bin:$PATH HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 export CUDA_DEVICE_ORDER=PCI_BUS_ID FLASHINFER_CUDA_ARCH_LIST=${FLASHINFER_CUDA_ARCH_LIST:-12.0f}
