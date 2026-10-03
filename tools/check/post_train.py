@@ -19,7 +19,10 @@ is left alone unless --force.
 Jobs started here run one at a time (a lock in the temp directory: the cores are one slot), so a landing waits for the one before
 it.  When that one is labelled and the change between them touches none of the `verity-vllm` suite's inputs (`suites.py
 --changed`), its verdict is carried: the same value, with the same run as `--ref`, and no rebuild.  About three trains in four
-touch them (130 of 171 between 27 Sep and 3 Oct).
+touch them (130 of 171 between 27 Sep and 3 Oct: 19 a day, 32 on the busiest), and a job takes about an hour, so on a busy day
+jobs queue: one that waited, and finds main at a later landing, is labelled `note=regression superseded:<that landing's
+attempt>` and runs nothing, since the later landing's job tests its change too.  A sweep reads `pass` and `fail:` and skips
+`superseded`.
 """
 from __future__ import annotations
 
@@ -42,6 +45,8 @@ CORES = "96-127"
 BY = "regression"
 PREFIX = "regression "
 PASS = f"{PREFIX}pass"
+FAIL = f"{PREFIX}fail:"
+SUPERSEDED = f"{PREFIX}superseded:"
 MARKS = "regression and rebuild"
 SUITE = "verity-vllm"
 LOCK = Path(tempfile.gettempdir()) / "verity-post-train.lock"
@@ -91,7 +96,7 @@ def verdict(junit: Path, rc: int | None = None) -> str:
     """`regression pass`, or `regression fail:<rows>`: the rows whose test failed (`r39`; `negative_57` for the refusal), or why
     there is nothing to read.  A skip (a check `fixtures.toml` retires on a row) is neither."""
     if not junit.is_file():
-        return f"{PREFIX}fail:no junit (run rc={rc})"
+        return f"{FAIL}no junit (run rc={rc})"
     failed, passed = [], 0
     for case in ET.parse(junit).iter("testcase"):
         if case.find("failure") is None and case.find("error") is None:
@@ -101,8 +106,8 @@ def verdict(junit: Path, rc: int | None = None) -> str:
         m = ROW_RE.search(name)
         failed.append(m.group(1) if m else name.removeprefix("test_").removesuffix("_refusal_reproduces"))
     if failed:
-        return f"{PREFIX}fail:" + ",".join(sorted(set(failed), key=_order))
-    return PASS if passed else f"{PREFIX}fail:nothing ran (run rc={rc})"
+        return FAIL + ",".join(sorted(set(failed), key=_order))
+    return PASS if passed else f"{FAIL}nothing ran (run rc={rc})"
 
 
 def research(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess:
@@ -130,12 +135,23 @@ def untouched(tree: Path, rev: str) -> bool:
 def carried(sha: str, tree: Path) -> dict | None:
     """The verdict of the landing before ``sha`` (its first parent), with that landing's attempt as `from`, when the change since
     touches none of the suite's inputs: the rebuilds would read what they read there.  None, and the job runs, when the parent is
-    no landing, has no verdict yet, or its verdict came from no junit (a run that failed before its tests)."""
+    no landing, has no verdict yet (none, or `superseded`), or its verdict came from no junit (a run that failed before its tests)."""
     prev = check_attempt(f"{sha}^1", cwd=tree)
     lab = labelled(prev) if prev else None
-    if not lab or not lab.get("ref") or "(run rc=" in str(lab["value"]) or not untouched(tree, f"{sha}^1"):
+    value = str(lab["value"]) if lab else ""
+    if (not lab or not lab.get("ref") or not (value == PASS or value.startswith(FAIL)) or "(run rc=" in value
+            or not untouched(tree, f"{sha}^1")):
         return None
     return {**lab, "from": prev}
+
+
+def later_landing(sha: str, cwd: Path = ROOT) -> str | None:
+    """The attempt of origin/main's tip when that tip is a landing after ``sha``, else None."""
+    git("fetch", "-q", "origin", "main", cwd=cwd)
+    tip = git("rev-parse", "origin/main", cwd=cwd)
+    if tip == sha or subprocess.run(["git", "merge-base", "--is-ancestor", sha, tip], cwd=cwd, capture_output=True).returncode:
+        return None
+    return check_attempt(tip, cwd=cwd)
 
 
 def _status(p: Path) -> dict:
@@ -173,6 +189,12 @@ def main(argv: list[str] | None = None) -> int:
         except BlockingIOError:
             print(f"post-train: {sha[:12]} waits for the job before it ({LOCK})", flush=True)
             fcntl.flock(lock, fcntl.LOCK_EX)
+            if attempt and not (a.force or a.dry_run or a.run) and (later := later_landing(sha)):
+                lab = research("data", "label", attempt, "note", f"{SUPERSEDED}{later}", "--by", BY, "--ref", later)
+                print((lab.stdout + lab.stderr).strip()[-1000:])
+                print(f"post-train: {attempt} ({sha[:12]}): note={SUPERSEDED}{later}: main landed {later} while this waited, and "
+                      "its job tests this change too")
+                return 0 if lab.returncode == 0 else 1
         return _land(a, sha, attempt)
 
 

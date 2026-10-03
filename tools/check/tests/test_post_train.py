@@ -170,6 +170,62 @@ def test_a_run_that_never_shows_its_end_gets_no_label(tmp_path, monkeypatch):
     assert len(sleeps) == 3 and not any(c[:2] == ("data", "label") for c in calls)
 
 
+def _queued(monkeypatch):
+    """The lock held by the job before this one, until this one blocks on it."""
+    real = fcntl.flock
+
+    def flock(f, op):
+        if op & fcntl.LOCK_NB:
+            raise BlockingIOError
+        return real(f, op)
+    monkeypatch.setattr(PT.fcntl, "flock", flock)
+
+
+def test_a_job_that_queued_behind_another_is_superseded_by_a_later_landing(tmp_path, monkeypatch):
+    calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806")
+    monkeypatch.setattr(PT, "later_landing", lambda sha: "r20261003-160000-0002")
+    _queued(monkeypatch)
+    assert PT.main([]) == 0
+    assert calls[-1] == ("data", "label", "r20261003-145201-e806", "note", "regression superseded:r20261003-160000-0002", "--by",
+                         "regression", "--ref", "r20261003-160000-0002")
+    assert not any(c[0] == "run" for c in calls)
+    calls, _ = _fake_landing(tmp_path / "tip", monkeypatch, "r20261003-145201-e806")
+    monkeypatch.setattr(PT, "later_landing", lambda sha: None)
+    assert PT.main([]) == 1 and any(c[0] == "run" for c in calls), "the tip's own job runs after its wait"
+
+
+def test_a_job_that_did_not_queue_runs_whatever_landed_since(tmp_path, monkeypatch):
+    calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806")
+    monkeypatch.setattr(PT, "later_landing", lambda sha: pytest.fail("a job that had the lock at once asks for no later landing"))
+    assert PT.main([]) == 1 and any(c[0] == "run" for c in calls)
+
+
+def test_a_later_landing_is_main_s_tip_when_it_is_a_landing_after_the_commit(tmp_path):
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+
+    def land(msg: str) -> str:
+        _git(repo, "commit", "-q", "--allow-empty", "-m", msg)
+        _git(repo, "push", "-q", "origin", "HEAD:main")
+        return _git(repo, "rev-parse", "HEAD")
+    first = land("Merge #1 (a)\n\nCheck: r20261003-140000-0001")
+    assert PT.later_landing(first, cwd=repo) is None, "main's tip itself"
+    land("a lane's commit pushed another way")
+    assert PT.later_landing(first, cwd=repo) is None, "a tip that is no landing"
+    land("Merge #2 (b)\n\nCheck: r20261003-150000-0002")
+    assert PT.later_landing(first, cwd=repo) == "r20261003-150000-0002"
+    _git(repo, "checkout", "-q", "--detach", first)
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Merge #3 (c)\n\nCheck: r20261003-150500-0003")
+    assert PT.later_landing(_git(repo, "rev-parse", "HEAD"), cwd=repo) is None, "a commit main doesn't contain"
+
+
+def test_superseded_is_no_verdict_to_carry(tmp_path, monkeypatch):
+    prev = {"key": "note", "value": "regression superseded:r20261003-160000-0002", "by": "regression", "ref": "r20261003-160000-0002"}
+    calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806", prev, untouched=True)
+    assert PT.main([]) == 1 and any(c[0] == "run" for c in calls)
+
+
 def test_untouched_is_suites_saying_the_change_touches_none(monkeypatch):
     def fake(out: str, rc: int = 0):
         monkeypatch.setattr(PT.subprocess, "run", lambda argv, **_k: subprocess.CompletedProcess(argv, rc, out, ""))
