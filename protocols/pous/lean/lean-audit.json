@@ -472,6 +472,15 @@
    "assumptions": [],
    "type_hash": "3c76052ab3f9ea6abd575006dd2fc06826be9f42a0d5ff62d7c0f1c5eea4d1d1"
   },
+  "PousGraded.gradedMeets_zero_iff": {
+   "signature": [
+    "PousGraded.gradedMeets_zero_iff {M : Pous.IdealModel} (sch : Pous.Scheme M) (D Q D_late Q_late k : Nat)",
+    "  (hD : instLENat.le D D_late) (hQ : instLENat.le Q Q_late) (ε : ENNReal) :",
+    "  Iff (Pous.GradedMeets sch D Q D_late Q_late k 0 ε) (Pous.Meets sch Pous.Reveal.sequential D Q k ε)"
+   ],
+   "assumptions": [],
+   "type_hash": "11392f762574c259f3c79e12ce1bea680fbf124e3c8fd4efa327246e648cef43"
+  },
   "PousMargin.raw_b19_128": {
    "signature": [
     "PousMargin.raw_b19_128 (p b D Q k : Nat) (hk : instLENat.le k 100) (ε : ENNReal) :",
@@ -734,7 +743,7 @@
    "definitions": {
     "Pous.GradedMeets": "fdb468a799a9fc714a7e6ebdcfc84c4a90acc841cfa57058180d847ea18bf74d"
    },
-   "pins": ["Pous.SecurityProofs.BandGradedMeetsFamily"]
+   "pins": ["Pous.SecurityProofs.BandGradedMeetsFamily", "PousGraded.gradedMeets_zero_iff"]
   },
   "Pous.Protocol.Accounting.Params": {
    "digest": "3ae4cf02f914e89aef86f7a97df55e5b99671478c007e62ca89576f23a655e1c",
@@ -779,6 +788,7 @@
     "Pous.k_ge_86",
     "Pous.not_meets_eps_one",
     "Pous.not_meets_of_lt_eps",
+    "PousGraded.gradedMeets_zero_iff",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
@@ -882,6 +892,7 @@
     "Pous.plain_short_coins_insecure",
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
+    "PousGraded.gradedMeets_zero_iff",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
@@ -962,6 +973,7 @@
     "Pous.plain_short_coins_insecure",
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
+    "PousGraded.gradedMeets_zero_iff",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
@@ -1040,6 +1052,7 @@
     "Pous.plain_short_coins_insecure",
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
+    "PousGraded.gradedMeets_zero_iff",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
@@ -1165,7 +1178,7 @@
     "Pous.gradedAccepts": "154be4d3e811c2651677a6bff608ea0cacf1bf80b8d4025957574b521399995e",
     "Pous.gradedAnswers": "e67977dc61ba7c5af9c002908ae633b59e78e6e3dc3586ffabaf2b0ee14f7198"
    },
-   "pins": ["Pous.SecurityProofs.BandGradedMeetsFamily"]
+   "pins": ["Pous.SecurityProofs.BandGradedMeetsFamily", "PousGraded.gradedMeets_zero_iff"]
   },
   "Pous.Protocol.Model.HashChain": {
    "digest": "e5a856998d00a7c438418f62831a53ccbaf75e94ea767358fe03814aaca2f858",
@@ -1514,6 +1527,7 @@
     "Pous.plain_short_coins_insecure",
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
+    "PousGraded.gradedMeets_zero_iff",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
