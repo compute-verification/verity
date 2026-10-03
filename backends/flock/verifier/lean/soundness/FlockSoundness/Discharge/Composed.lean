@@ -4,6 +4,7 @@ import FlockSoundness.Discharge.Composed.Geometry
 import FlockSoundness.Discharge.Composed.Pads
 import FlockSoundness.Discharge.Composed.Inner
 import FlockSoundness.Discharge.Composed.Inner.Holds
+import FlockSoundness.Discharge.Composed.Inner.Zerocheck
 import FlockSoundness.Discharge.Composed.Setup
 
 /-!
