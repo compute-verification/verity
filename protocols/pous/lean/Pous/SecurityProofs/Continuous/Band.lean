@@ -33,16 +33,16 @@ theorem band64_epsProof (d : ℕ) (salt : Bits 256) : epsProof (band64 d salt) 2
 
 open Classical in
 /-- **Draft: the continuous audit on the 64 KiB band at `D = 5`.** For every `f` and `βe > 0`, over `n` challenges:
-the misses are at most `f` and `Σ_j (ε_j − ε_proof)` exceeds `G(f)` with probability at most `βe + n·2^-1098`, where
-`ε_proof = epsProof (band64 d salt) 265253616 = 3182352/2^28` (`band64_epsProof`). -/
+the misses are at most `f` and `Σ_j max(ε_j − ε_proof, 0)` exceeds `G(f)` with probability at most `βe + n·2^-1098`,
+where `ε_proof = epsProof (band64 d salt) 265253616 = 3182352/2^28` (`band64_epsProof`). -/
 theorem band64_continuous (d : ℕ) (hd : 5 ≤ d) (salt : Bits 256) (n : ℕ) (W : Bits (band64 d salt).n)
     (A₁ : VarPreprocessor (band64 d salt)) (R : VarResponder (band64 d salt) 5 (2 ^ 20)) (f βe : ℝ) (hβe : 0 < βe) :
     pr (fun x : Outcome (band64 d salt) n =>
         ((Finset.univ.filter fun j : Fin n =>
             ¬ hit (band64 d salt) W A₁ R (x.1, x.2.1) ((List.ofFn x.2.2).take j) (x.2.2 j)).card : ℝ) ≤ f ∧
           (⨅ θ : Set.Ioi (0 : ℝ), ((θ : ℝ) * f + Real.log (1 / βe)) / (1 - Real.exp (-(θ : ℝ)))) <
-            ∑ j : Fin n, (freed (band64 d salt) W A₁ R (x.1, x.2.1) ((List.ofFn x.2.2).take j) -
-              epsProof (band64 d salt) 265253616))
+            ∑ j : Fin n, max (freed (band64 d salt) W A₁ R (x.1, x.2.1) ((List.ofFn x.2.2).take j) -
+              epsProof (band64 d salt) 265253616) 0)
       ≤ ENNReal.ofReal βe + n * (2⁻¹ : ℝ≥0∞) ^ 1098 := by
   have hinc := band_timedINC chainExPostFactoG_v6 (2 ^ 9) d 524288 512 5 (2 ^ 20) 265253616 (Pous.Sponge.dom salt)
     hd (by norm_num) (dom_inj salt (by norm_num))

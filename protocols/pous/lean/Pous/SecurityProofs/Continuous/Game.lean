@@ -19,11 +19,11 @@ is the freed fraction at challenge `j`, and the verifier accepts iff the misses 
 What it leaves out:
 
 * **The arrival times.** Conditioning on them fixes `n` and lets the responder know every arrival time in advance,
-  which only helps it. `ContinuousAudit`'s event, `Σ_j (ε_j − ε_proof) > G(f)`, doesn't mention `n`, so with the
+  which only helps it. `ContinuousAudit`'s event, `Σ_j max(ε_j − ε_proof, 0) > G(f)`, doesn't mention `n`, so with the
   number of challenges `N` drawn independently of the indices (Poisson arrivals) the bound holds unconditionally, with
-  `E[N]·(β + 1)·π` in place of `n·(β + 1)·π`. The explorer's `ε̄ > ε_proof + g(f₀)` with `g = G/(λT)` is this event
-  when `ε̄` is the sum over the challenges divided by `λT`. With `ε̄` the average over the `N` challenges, `g` must be
-  `G/N`: dividing by `λT` when `N < λT` claims more than this proves.
+  `E[N]·(β + 1)·π` in place of `n·(β + 1)·π`. The explorer's `ε̄ > g(f₀)` with `g = G/(λT)` is this event when `ε̄`
+  is `Σ_j max(ε_j − ε_proof, 0)` divided by `λT`. With `ε̄` the average over the `N` challenges, `g` must be `G/N`:
+  dividing by `λT` when `N < λT` claims more than this proves.
 * **Overlapping challenges.** Index `j + 1` is revealed only after answer `j`. If the verifier sends challenge `j + 1`
   while answer `j` is still within its deadline, the responder may use `i_{j+1}` for answer `j`, which this game
   doesn't model.
@@ -90,8 +90,11 @@ def PerAnswer : Prop :=
 open Classical in
 /-- **Draft: the continuous audit's guarantee** (the explorer note, §1), conditional on `n` arrivals. From
 `TimedINC sch D Q β π`, for every `f` and every `βe > 0` (the explorer's `β`): the misses are at most `f` and
-`Σ_j (ε_j − ε_proof)` exceeds `G(f) = inf_{θ > 0} (θ·f + ln(1/βe)) / (1 − e^−θ)` with probability at most
-`βe + n·(β + 1)·π`. Dividing by `n`: `Pr[F ≤ f₀ ∧ ε̄ > ε_proof + g(f₀)] ≤ βe + n·(β + 1)·π`, `g = G/n`. -/
+`Σ_j max(ε_j − ε_proof, 0)` exceeds `G(f) = inf_{θ > 0} (θ·f + ln(1/βe)) / (1 − e^−θ)` with probability at most
+`βe + n·(β + 1)·π`. The positive part keeps storage above `|C|` at one challenge (`ε_j < 0`) from offsetting a
+shortfall at another. Dividing by `n`: `Pr[F ≤ f₀ ∧ ε̄ > g(f₀)] ≤ βe + n·(β + 1)·π` with
+`ε̄ = (1/n)·Σ_j max(ε_j − ε_proof, 0)` and `g = G/n`; since `max(ε_j − ε_proof, 0) ≥ max(ε_j, 0) − ε_proof`, this
+implies the same bound for the average of `max(ε_j, 0)` exceeding `ε_proof + g(f₀)`. -/
 def ContinuousAudit : Prop :=
   ∀ {M : IdealModel} (sch : Scheme M) (D Q β n : ℕ) (π : ℝ≥0∞), TimedINC sch D Q β π →
     ∀ (W : Bits sch.n) (A₁ : VarPreprocessor sch) (R : VarResponder sch D Q) (f βe : ℝ), 0 < βe →
@@ -99,7 +102,7 @@ def ContinuousAudit : Prop :=
           ((Finset.univ.filter fun j : Fin n =>
               ¬ hit sch W A₁ R (x.1, x.2.1) ((List.ofFn x.2.2).take j) (x.2.2 j)).card : ℝ) ≤ f ∧
             (⨅ θ : Set.Ioi (0 : ℝ), ((θ : ℝ) * f + Real.log (1 / βe)) / (1 - Real.exp (-(θ : ℝ)))) <
-              ∑ j : Fin n, (freed sch W A₁ R (x.1, x.2.1) ((List.ofFn x.2.2).take j) - epsProof sch β))
+              ∑ j : Fin n, max (freed sch W A₁ R (x.1, x.2.1) ((List.ofFn x.2.2).take j) - epsProof sch β) 0)
         ≤ ENNReal.ofReal βe + n * (β + 1) * π
 
 end PousContinuous

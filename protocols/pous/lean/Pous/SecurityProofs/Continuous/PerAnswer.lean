@@ -14,10 +14,10 @@ Not pinned: the statements are drafts (`Continuous/Game.lean`).
    patch compressor (`pr_fits_le`) bounds `|σ_h| = s ∧ bad h` by `π`, so `Pr[bad h] ≤ (β + 1)·π`.
 2. **Step (a)** (`per_answer`). Off `bad h`, at most `p₀(β, |σ_h|) = 1 − ε + ε_proof` of the blocks are answered
    correctly (`good_le_p₀`).
-3. **Stopping** (`continuous_audit`). Take `q_h = ε_h − ε_proof` off `bad h` and `0` on it. Then `q_h` lower-bounds
-   the conditional miss probability at every setup and history, so the counting step (`pr_misses_gt_le`) bounds the
-   misses against `Σ q` by `βe` at each setup. Off the event that some visited history is bad, `Σ q` is
-   `Σ (ε_j − ε_proof)`. That event has probability at most `n·(β + 1)·π`: the indices are independent of the setup,
+3. **Stopping** (`continuous_audit`). Take `q_h = max(ε_h − ε_proof, 0)` off `bad h` and `0` on it. Then `q_h`
+   lower-bounds the conditional miss probability at every setup and history, so the counting step (`pr_misses_gt_le`)
+   bounds the misses against `Σ q` by `βe` at each setup. Off the event that some visited history is bad, `Σ q` is
+   `Σ max(ε_j − ε_proof, 0)`. That event has probability at most `n·(β + 1)·π`: the indices are independent of the setup,
    so each round's history is bad with probability at most `(β + 1)·π`. The union runs over the `n` histories the
    audit visits, not over all `Σ_{j<n} B^j` of them as in `theorem1_ii_seq`.
 -/
@@ -133,9 +133,9 @@ theorem continuous_audit : ContinuousAudit := by
   let hist : (Fin n → Fin sch.B) → Fin n → List (Fin sch.B) := fun I j => (List.ofFn I).take j
   let ev : M.Ω × sch.Coins → (Fin n → Fin sch.B) → Prop := fun a I =>
     ((Finset.univ.filter fun j : Fin n => ¬ hit sch W A₁ R a (hist I j) (I j)).card : ℝ) ≤ f ∧
-      G < ∑ j : Fin n, (freed sch W A₁ R a (hist I j) - epsProof sch β)
+      G < ∑ j : Fin n, max (freed sch W A₁ R a (hist I j) - epsProof sch β) 0
   let q : M.Ω × sch.Coins → List (Fin sch.B) → ℝ := fun a h =>
-    if bad sch W A₁ R β a h then 0 else freed sch W A₁ R a h - epsProof sch β
+    if bad sch W A₁ R β a h then 0 else max (freed sch W A₁ R a h - epsProof sch β) 0
   let ev' : M.Ω × sch.Coins → (Fin n → Fin sch.B) → Prop := fun a I =>
     ((Finset.univ.filter fun j : Fin n => ¬ hit sch W A₁ R a (hist I j) (I j)).card : ℝ) ≤ f ∧
       G < ∑ j : Fin n, q a (hist I j)
@@ -144,7 +144,7 @@ theorem continuous_audit : ContinuousAudit := by
   have hre : pr (fun x : Outcome sch n =>
       ((Finset.univ.filter fun j : Fin n =>
           ¬ hit sch W A₁ R (x.1, x.2.1) ((List.ofFn x.2.2).take j) (x.2.2 j)).card : ℝ) ≤ f ∧
-        G < ∑ j : Fin n, (freed sch W A₁ R (x.1, x.2.1) ((List.ofFn x.2.2).take j) - epsProof sch β)) =
+        G < ∑ j : Fin n, max (freed sch W A₁ R (x.1, x.2.1) ((List.ofFn x.2.2).take j) - epsProof sch β) 0) =
       pr (fun y : (M.Ω × sch.Coins) × (Fin n → Fin sch.B) => ev y.1 y.2) :=
     pr_equiv (Equiv.prodAssoc _ _ _).symm (fun y : (M.Ω × sch.Coins) × (Fin n → Fin sch.B) => ev y.1 y.2)
   rw [hre]
@@ -175,7 +175,7 @@ theorem continuous_audit : ContinuousAudit := by
       · simp only [q, hb, ↓reduceIte]
         exact ENNReal.toReal_nonneg
       · simp only [q, hb, ↓reduceIte]
-        exact miss_ge sch W A₁ R β a h hb
+        exact max_le (miss_ge sch W A₁ R β a h hb) ENNReal.toReal_nonneg
     convert pr_misses_gt_le n (fun h i => ¬ hit sch W A₁ R a h i) (q a) hq f βe hβe
   calc pr (fun y : (M.Ω × sch.Coins) × (Fin n → Fin sch.B) => ev y.1 y.2)
       ≤ pr (fun y : (M.Ω × sch.Coins) × (Fin n → Fin sch.B) => stop y.1 y.2 ∨ ev' y.1 y.2) := pr_mono hsplit
