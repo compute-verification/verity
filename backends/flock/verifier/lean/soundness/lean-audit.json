@@ -4540,6 +4540,8 @@
   "FlockSoundness.Discharge.Composed.ZerocheckMasked.c_eval_eval": {},
   "FlockSoundness.Discharge.Composed.ZerocheckMasked.c_eval_zero": {},
   "FlockSoundness.Discharge.Composed.ZerocheckMasked.final_eval": {},
+  "FlockSoundness.Discharge.Composed.ZerocheckMasked.finalC_eq_eval": {},
+  "FlockSoundness.Discharge.Composed.ZerocheckMasked.finalC_masked_eval": {},
   "FlockSoundness.Discharge.Composed.ZerocheckMasked.final_zero": {},
   "FlockSoundness.Discharge.Composed.ZerocheckMasked.running_eval": {},
   "FlockSoundness.Discharge.Composed.ZerocheckMasked.replay_zerocheck": {},
