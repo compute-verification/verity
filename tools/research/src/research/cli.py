@@ -211,6 +211,9 @@ def cmd_run(argv: list[str]) -> int:
     if ns.claimed:
         _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
+    if (ns.on or ns.queue) and (why := remote.pss_bound_problem(harness_opts, Path(ns.source).expanduser() if ns.source else None)):
+        print(f"research run: refused: {why}", file=sys.stderr)
+        return 3
     if ns.queue:
         try:
             harness_opts = _normalize_timeout(harness_opts)
