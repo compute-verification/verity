@@ -163,6 +163,35 @@
    "assumptions": [],
    "type_hash": "f16a2e8bdc945ffd0434cf7c774b95e5547888e1bfb4854fcdb47113f3ed4287"
   },
+  "NetTiming.allocated_witness": {
+   "signature": [
+    "NetTiming.allocated_witness :",
+    "  And (NetTiming.Regenerates NetTiming.aWarden fun x o => o)",
+    "    (And (NetTiming.Packed NetTiming.aWarden)",
+    "      (And (NetTiming.Allocated NetTiming.aWarden fun x => 1)",
+    "        (And (NetTiming.JitterBounded NetTiming.aWarden 1)",
+    "          (And (∀ (z : Fin 3 → Fin 2), NetTiming.StatusComplete 3 ((NetTiming.aI 3).obsRun z 3))",
+    "            (And",
+    "              (∀ (z : Fin 3 → Fin 2) (ℓ : Fin 1),",
+    "                (NetTiming.linkFrames ((NetTiming.aI 3).obsRun z 3) ℓ).IsPrefix",
+    "                  (List.replicate 3 (List.cons Bool.true List.nil)))",
+    "              (∀ (z : Fin 3 → Fin 2), Eq (NetTiming.aDec ((NetTiming.aI 3).wireRun z 3)) z))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "c7b92f3c441e1a1c0e7ca0fc99a4ead1277ce69b543c3147adf652cf9ce200b5"
+  },
+  "NetTiming.allocated_witness_tight": {
+   "signature": [
+    "NetTiming.allocated_witness_tight :",
+    "  And",
+    "    (Eq Set.univ.encard",
+    "      (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 3) (instHPow.hPow 1 3)).cast)",
+    "    (instLTNat.lt (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 3) (instHPow.hPow 1 3))",
+    "      (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 2 1) 3) (instHPow.hPow 1 3)))"
+   ],
+   "assumptions": [],
+   "type_hash": "16ef675c77312a82d790394b3ff53cb5eb300fb3feaece762ff3a002fd1b59ac"
+  },
   "NetTiming.ingress_witness": {
    "signature": [
     "NetTiming.ingress_witness :",
@@ -315,6 +344,7 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
     "NetTiming.SecurityProofs.NoFaultOfAccepted",
     "NetTiming.SecurityProofs.RecordedRowEqFill",
+    "NetTiming.allocated_witness",
     "NetTiming.ingress_witness",
     "NetTiming.joint_witness",
     "NetTiming.witnessProgram_conditions",
@@ -420,6 +450,7 @@
     "NetTiming.SecurityProofs.RecordedRowEqFill",
     "NetTiming.SecurityProofs.ReleasedSelf",
     "NetTiming.SecurityProofs.SumReleasedLe",
+    "NetTiming.allocated_witness",
     "NetTiming.ingress_witness",
     "NetTiming.joint_witness",
     "NetTiming.toy_leftPacked",
@@ -443,6 +474,7 @@
     "NetTiming.SecurityProofs.EncardIngressDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
+    "NetTiming.allocated_witness",
     "NetTiming.ingress_witness"
    ]
   },
@@ -498,6 +530,7 @@
     "NetTiming.SecurityProofs.EncardObsDecodableLe",
     "NetTiming.SecurityProofs.NoFaultOfAccepted",
     "NetTiming.SecurityProofs.RecordedRowEqFill",
+    "NetTiming.allocated_witness",
     "NetTiming.ingress_witness",
     "NetTiming.joint_witness",
     "NetTiming.witnessProgram_conditions",
