@@ -58,7 +58,8 @@ identical, and is never reused. Each pass keeps its key's components beside it (
 outputs, the resolved dependencies, the environment, the pytest arguments), and `--explain SUITE` diffs a miss against the nearest
 pass kept here, naming a changed directory's files from git's trees, and says per test module what it reaches that moved.
 
-`--jobs` is how many test processes run at once. A suite that declares `[tool.verity.tests] parallel = true` spreads its tests
+`--jobs` is how many test processes run at once, by default the CPUs this process may use but at most one per
+`TEST_PROCESS_GB` of available memory. A suite that declares `[tool.verity.tests] parallel = true` spreads its tests
 over all of them with pytest-xdist, whose workers load the guard too; each worker's share starts with one of the tests whose
 kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. Parallel suites run first, one
 at a time, then the others side by side, longest first. Without pytest-xdist installed, a parallel suite runs in one process.
@@ -127,6 +128,22 @@ def cpus() -> int:
     return n
 
 
+#: what one test process may hold at its peak, its children included: `test_flock_rows.py` on the rmsnorm-triton 4096 layout peaks at
+#: 8.8 GB (the lowering in the test's Python and `flock-rows` at once), and two at once on a 15 GB machine were OOM-killed
+TEST_PROCESS_GB = 9
+
+
+def default_jobs(meminfo: Path = Path("/proc/meminfo")) -> int:
+    """The default `--jobs`: the CPUs this process may use (`cpus`), or fewer where the memory available holds fewer test
+    processes at `TEST_PROCESS_GB` each."""
+    n = cpus()
+    try:
+        kb = next(int(ln.split()[1]) for ln in meminfo.read_text().splitlines() if ln.startswith("MemAvailable:"))
+    except (OSError, StopIteration, ValueError, IndexError):
+        return n
+    return min(n, max(1, kb // (TEST_PROCESS_GB << 20)))
+
+
 def _git(*args: str, env: dict | None = None, stdin: str | None = None) -> str:
     return subprocess.run(["git", *args], cwd=ROOT, env=env, input=stdin, capture_output=True, text=True, check=True).stdout
 
@@ -166,6 +183,32 @@ def members() -> dict[str, str]:
     for path in _pyproject(".").get("tool", {}).get("uv", {}).get("workspace", {}).get("members", []):
         out[_norm(_pyproject(path)["project"]["name"])] = path
     return out
+
+
+def tests_pythonpath() -> str:
+    """The tests' PYTHONPATH: the tracer's directory (`CHILD`), then the caller's entries inside this tree. An entry naming another
+    checkout, such as an `export PYTHONPATH=...` left in a shell, would run this tree's tests against that checkout's code."""
+    return os.pathsep.join([str(CHILD), *(p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep)
+                                          if p and Path(p).resolve().is_relative_to(ROOT))])
+
+
+#: prints where each top-level module named on its command line would be imported from, without importing any of them
+_ORIGINS = ("import importlib.util as u, json, sys; "
+            "print(json.dumps({n: getattr(u.find_spec(n), 'origin', None) for n in sys.argv[1:]}))")
+
+
+def foreign(pkgs: dict[str, str], env: dict[str, str], python: str = sys.executable) -> str | None:
+    """The members' `verity*` packages that `python` under `env` would import from outside this tree, each with where from, or
+    None. A virtualenv installed from another checkout runs this tree's tests against that checkout's code."""
+    names = sorted({p.parent.name for d in pkgs.values() for g in ("verity*/__init__.py", "*/verity*/__init__.py")
+                    for p in (ROOT / d).glob(g)})
+    if not names:
+        return None
+    r = subprocess.run([python, "-c", _ORIGINS, *names], env=env, capture_output=True, text=True)
+    if r.returncode:
+        return f"{python} can't say where it imports them from: {r.stderr.strip()[-300:]}"
+    away = {n: o for n, o in json.loads(r.stdout.splitlines()[-1]).items() if o and not Path(o).resolve().is_relative_to(ROOT)}
+    return ", ".join(f"{n} from {o}" for n, o in sorted(away.items())) or None
 
 
 def metadata() -> list[str]:
@@ -948,8 +991,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     (logs / f"{slug}.reuse.json").unlink(missing_ok=True)
     reads_log = logs / f"{slug}.reads"
     reads_log.unlink(missing_ok=True)
-    env.update(VERITY_SUITE_READS=str(reads_log), VERITY_SUITE_DIR=str(ROOT / suite.path),
-               PYTHONPATH=os.pathsep.join([str(CHILD), *([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else [])]))
+    env.update(VERITY_SUITE_READS=str(reads_log), VERITY_SUITE_DIR=str(ROOT / suite.path), PYTHONPATH=tests_pythonpath())
     if reuse:
         (logs / f"{slug}.reuse.json").write_text(json.dumps(sorted(reuse)))
         env["VERITY_SUITE_REUSE"] = str(logs / f"{slug}.reuse.json")
@@ -1043,8 +1085,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fresh", action="store_true", help="run even where a pass is cached")
     ap.add_argument("--list", action="store_true", help="list the suites, their inputs, and whether a pass is cached")
     ap.add_argument("--skip", action="append", default=[], metavar="SUITE", help="leave this suite out (repeatable)")
-    ap.add_argument("--jobs", "-j", type=int, default=cpus(),
-                    help="test processes at once, a parallel suite's xdist workers included (default: the CPUs this process may use)")
+    ap.add_argument("--jobs", "-j", type=int, default=default_jobs(),
+                    help="test processes at once, a parallel suite's xdist workers included (default: the CPUs this process may use, "
+                         f"at most one per {TEST_PROCESS_GB} GB of available memory)")
     ap.add_argument("--logs", type=Path, help="write each suite's log and report here (default: under the cache)")
     ap.add_argument("--json", type=Path, help="write the outcome of every selected suite here")
     ap.add_argument("--per-test-min-s", type=float, default=None, metavar="S",
@@ -1060,6 +1103,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     pkgs, suites = members(), discover()
+    if not (a.list or a.explain) and (away := foreign(pkgs, dict(os.environ, PYTHONPATH=tests_pythonpath()))):
+        print(f"suites: {sys.executable} would run this tree's tests against another checkout's code ({away}); run them with "
+              f"{ROOT}'s own environment: `uv run tools/check/suites.py` there", file=sys.stderr)
+        return 2
     skipped = select(suites, a.skip) if a.skip else []
     chosen = [s for s in select(suites, [a.explain] if a.explain else a.suites) if s not in skipped]
     args = (QUICK if a.quick else []) + extra

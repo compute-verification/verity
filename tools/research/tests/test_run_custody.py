@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from research import cli, notes, remote
+from research import runs as R
 from research.pods import drain as DR
 from research.store import credentials as C
 from research.store import custody as CU
@@ -248,6 +249,25 @@ def test_an_attempt_published_without_a_run_record_is_not_run_custody(tmp_path, 
     assert not rep["preserved"] and "names no run record" in rep["error"] and not (d / CU.MARKER).exists()
 
 
+def test_a_local_run_with_run_record_preserves_the_files_its_workload_left_in_the_run_dir(tmp_path, monkeypatch):
+    """A pod's `research run` (sky/jobs/port-capture.yaml): without --run-record a capture's out/ stayed on the host's disk."""
+    vault = tmp_path / "vault"
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    work = "import os, pathlib; p = pathlib.Path(os.environ['RESEARCH_RUN_DIR'], 'out'); p.mkdir(); (p / 'capture.json').write_text('{}')"
+    ids = {}
+    for name, flags in (("plain", []), ("recorded", ["--run-record"])):
+        runs = tmp_path / name
+        assert cli.main(["run", "--runs-dir", str(runs), "--project", "t", "--no-sampler", *flags, "--", PY, "-c", work]) == 0
+        ids[name] = R.list_runs(runs)[0]["id"]
+    st2 = _other_machine(tmp_path, vault, monkeypatch)
+    assert "run_record" not in st2.get_attempt(ids["plain"])["outputs"]
+    m = st2.get_manifest(st2.get_attempt(ids["recorded"])["outputs"]["run_record"])
+    assert m.kind == CU.KIND and {"out/capture.json", "stdout.log", "job.json"} <= {f.path for f in m.payload.files}
+    assert P.check(st2, [ids["recorded"]], mode="head")["preserved"]
+
+
 # ---- the launcher -------------------------------------------------------------------------------------------------------------------------
 
 PARENT = {"R2_ENDPOINT": "https://" + "0" * 32 + ".r2.cloudflarestorage.com", "R2_BUCKET": "bucket", "AWS_ACCESS_KEY_ID": "parent-id",
@@ -299,6 +319,13 @@ def test_custody_flags_need_on(capsys):
     assert "--custody-r2 / --custody-ttl are for --on" in capsys.readouterr().err
     assert cli.main(["run", "--on", "m", "--project", "p", "--no-custody-r2", "--custody-ttl", "8h", "--", "true"]) == 2
     assert "--no-custody-r2 mints none" in capsys.readouterr().err
+
+
+def test_run_record_is_refused_where_custody_keeps_the_run_files(capsys):
+    """Neither an --on run nor a queued one reads --run-record: with --no-custody-r2 it would have kept no record, silently."""
+    for where in (["--on", "m", "--no-custody-r2"], ["--queue", "--source", "."]):
+        assert cli.main(["run", *where, "--project", "p", "--run-record", "--", "true"]) == 2
+        assert "--run-record is for a local run" in capsys.readouterr().err
 
 
 def test_custody_is_the_default_with_on_and_opting_out_is_explicit(tmp_path, monkeypatch, capsys):

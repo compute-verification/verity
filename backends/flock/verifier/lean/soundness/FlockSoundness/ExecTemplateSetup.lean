@@ -292,18 +292,29 @@ theorem rowWires_dst (ports : Array Port) (sha hm : ℕ) :
     rcases hw' with hw' | rfl
     · exact hout w hw'
     · exact Or.inl ⟨rfl, (hall _ hw (where_[p]!)[k]! (getElem_mem_toList' hk)).1⟩
-  by_cases h0 : 0 < (where_[p]!).size
+  have hinner : ∀ k, 1 ≤ k → k < (where_[p]!).size → ∀ out : Array Wire, (∀ w ∈ out.toList,
+      (w.dst.1 = sha ∧ w.dst.2.1 < nSha) ∨ (w.dst.1 = hm ∧ w.dst.2.1 < ports.size)) →
+      ∃ out', (if (HmRow.chainStart ports[p]! k).isNone = true then
+          ForInStep.yield (out.push ⟨(sha, (where_[p]!)[k]!.1, 2 * (where_[p]!)[k]!.2),
+            (sha, (where_[p]!)[k - 1]!.1, (where_[p]!)[k - 1]!.2)⟩)
+        else ForInStep.yield out) = ForInStep.yield out' ∧ ∀ w ∈ out'.toList,
+      (w.dst.1 = sha ∧ w.dst.2.1 < nSha) ∨ (w.dst.1 = hm ∧ w.dst.2.1 < ports.size) := by
+    intro k hk1 hk out hout
+    split
+    · exact ⟨_, rfl, hchain k hk1 hk out hout⟩
+    · exact ⟨_, rfl, hout⟩
+  by_cases h0 : (0 < (where_[p]!).size && (HmRow.chainStart ports[p]! (where_[p]!).size).isNone) = true
   · refine ⟨_, by simp only [h0, ↓reduceIte]; rfl, fun w hw' => ?_⟩
     simp only [Array.toList_push, List.mem_append, List.mem_singleton] at hw'
     rcases hw' with hw' | rfl
     · revert w hw'
       exact forIn_id_inv_range (P := fun out : Array Wire => ∀ w ∈ out.toList,
           (w.dst.1 = sha ∧ w.dst.2.1 < nSha) ∨ (w.dst.1 = hm ∧ w.dst.2.1 < ports.size))
-        (fun k hk1 hk out hout => ⟨_, rfl, hchain k hk1 hk out hout⟩) hout
+        (fun k hk1 hk out hout => hinner k hk1 hk out hout) hout
     · exact Or.inr ⟨rfl, by rw [← hsz]; exact hpl⟩
-  · exact ⟨_, by simp only [h0, ↓reduceIte]; rfl, forIn_id_inv_range (P := fun out : Array Wire => ∀ w ∈ out.toList,
+  · exact ⟨_, by simp only [h0, Bool.false_eq_true, ↓reduceIte]; rfl, forIn_id_inv_range (P := fun out : Array Wire => ∀ w ∈ out.toList,
         (w.dst.1 = sha ∧ w.dst.2.1 < nSha) ∨ (w.dst.1 = hm ∧ w.dst.2.1 < ports.size))
-      (fun k hk1 hk out hout => ⟨_, rfl, hchain k hk1 hk out hout⟩) hout⟩
+      (fun k hk1 hk out hout => hinner k hk1 hk out hout) hout⟩
 
 /-- **Δ's other flat rows, for a template, are input bits of the rows' circuits' slots**: no leaf map or cut, and the
 wires are the rows' own chains (`parse_facts_tmpl`). -/
@@ -717,12 +728,15 @@ theorem msgCol_lt {tags : Tags} {t : Typed.Template} {c : Circuit} (P : ParseFac
     exact hat.lt (fun r hr => (C.bound_slotLog r hr).1) hm
   have hpv := C.perVu_sha
   unfold Typed.msgCol
+  rw [show HmRow.byteAt c.ports[p]! byte = ((HmRow.byteAt c.ports[p]! byte).1, byte % 128) from
+    Prod.ext rfl (Typed.byteAt_snd _ _)]
+  generalize (HmRow.byteAt c.ports[p]! byte).1 = kk
   generalize hrs : HmRow.rowSlots c.ports = rs at hall hws hpv
   obtain ⟨nSha, where_⟩ := rs
   simp only at hall hws hpv ⊢
   split
   · rename_i hk
-    generalize hE : (where_[p]!)[byte / 128]! = e
+    generalize hE : (where_[p]!)[kk]! = e
     obtain ⟨slot, sub⟩ := e
     have hent := hall _ (getElem_mem_toList' (by rw [hws]; exact hp)) (slot, sub)
       (by rw [← hE]; exact getElem_mem_toList' hk)
@@ -871,7 +885,8 @@ theorem setupH_templateLayout (ht : tags.typed = true)
     refine ⟨by rw [hc], by rw [hc]; exact P.typed, ?_⟩
     have P' : ParseFactsT tags t st.c := by
       rw [hc]
-      exact ⟨P.pre, P.unitNet, P.root, P.shaNet, P.hmNet, P.kinds, ⟨ls', hcheck⟩, P.typed, P.upv,
+      exact ⟨P.pre, P.portWords, P.v1Segs, P.unitNet, P.root, P.shaNet, P.hmNet, P.kinds, ⟨ls', hcheck⟩,
+        (by rw [← P.rowNets]; exact HmNets.check_congr rfl rfl rfl), P.typed, P.upv,
         P.leavesIn, P.wires, P.leafCuts⟩
     have C' : CheckFactsT st.c (HmRow.blockOf t) := by
       rw [hc]
@@ -1183,7 +1198,8 @@ theorem setupH_copySrc_lt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tab
     have C := check_facts_typed P.typed hcheck
     have P' : ParseFactsT tags t st.c := by
       rw [hc]
-      exact ⟨P.pre, P.unitNet, P.root, P.shaNet, P.hmNet, P.kinds, ⟨ls', hcheck⟩, P.typed, P.upv,
+      exact ⟨P.pre, P.portWords, P.v1Segs, P.unitNet, P.root, P.shaNet, P.hmNet, P.kinds, ⟨ls', hcheck⟩,
+        (by rw [← P.rowNets]; exact HmNets.check_congr rfl rfl rfl), P.typed, P.upv,
         P.leavesIn, P.wires, P.leafCuts⟩
     have C' : CheckFactsT st.c (HmRow.blockOf t) := by
       rw [hc]

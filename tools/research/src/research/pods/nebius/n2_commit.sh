@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Verity's vLLM Commits (config-run task 1) on vy-nebius-2's idle GPUs, as `gpus=1` (a TP2 row: `gpus=2`) `project=verity` fill
-# guests with max_min VY_N2_COMMIT_MAX_MIN (40: node 2's gaps between booked windows run 5-60 min and its Commits took at most 20, so
-# a 90 never fit one; 90 for a longer row): node 2's fill runner starts them ahead of its other GPU fill, never into a booked
+# guests with max_min VY_N2_COMMIT_MAX_MIN (40: node 2's gaps between booked windows run 5-60 min; commit_max_min gives a long row
+# more): node 2's fill runner starts them ahead of its other GPU fill, never into a booked
 # window, and stops them for a waiter or a timed window (requeued, rerun from the top). The Build stays where it ran; the CPU
 # replay runs on node 2's Verity CPUs (48-95) as a `gpus=0` guest.
 #
@@ -12,19 +12,23 @@
 #                                                                 VY_N2_FIRST=0: only while deployments-gpu has no free GPU)
 #   on node 1:  n2_commit.sh n1-free                              (the GPUs deployments-gpu could still admit)
 #   on node 1:  n2_commit.sh place KIND KEY GPUS MAX_MIN QUESTION (the queue's placement on node 2, as submit records it; a dry run)
+#   on node 1:  n2_commit.sh max-min ROW                          (the max_min submit gives ROW's guest)
+#   on node 1:  n2_commit.sh plan-keyed JOB_TREE ROW_DIR          (whether the row's plans are keyed to the code JOB_TREE runs)
 #   on node 2:  n2_commit.sh run KEY | replay KEY                 (the fill jobs' bodies; submit and run write them)
 #   on node 2:  n2_commit.sh fetch-manifests ART...              (the manifests of ART... that node 2's store lacks, from node 1's)
 # Installed at /workspace/verity-guest/bin/n2_commit.sh on both nodes; n2_build.sh's sibling.
 #
 # submit (as research on node 1) refuses a row that isn't TP1 or TP2, whose Build hasn't passed on node 1 (no manifest.json or Build run),
-# or whose checkpoint REPO@REVISION isn't staged on node 2 as plain files (/workspace/jobs/hf, or PoUW's /workspace/hf, which is only
-# read: its snapshot is copied into /workspace/jobs/hf). It stages the job tree, the Build row (Programs, manifest), the bootstrap
-# stamps and the tree's Triton/vLLM caches on node 2 at node 1's paths, never while node 2 has a timed window running or waiting,
-# resolves the Build's artifact in node 1's store, copies that artifact's store manifest into node 2's store (which has no remote,
-# and the Commit's precheck reads it), and writes the fill job. Before any of that it asks the queue (`cluster submit`, from
-# VY_QUEUE_SRC's tools/cluster) to place the Commit on node 2 with its research question: a refusal keeps the row on node 1, and
-# once the fill job is written the placement is appended to node 1's $GUEST/placed.jsonl. Node 2's fill queue stays the executor,
-# so these count apart from `research run --queue` (top-level 5:14 AM PDT). A queue that gives no answer doesn't hold the row back.
+# whose plans are keyed to other code than the job tree its Commit would run (plan_keyed: that Commit would derive them with node
+# 2's GPU held), or whose checkpoint REPO@REVISION isn't staged on node 2 as plain files (/workspace/jobs/hf, or PoUW's
+# /workspace/hf, which is only read: its snapshot is copied into /workspace/jobs/hf). It stages the job tree, the Build row
+# (Programs, manifest), the bootstrap stamps and the tree's Triton/vLLM caches on node 2 at node 1's paths, never while node 2 has
+# a timed window running or waiting, resolves the Build's artifact in node 1's store, copies that artifact's store manifest into
+# node 2's store (which has no remote, and the Commit's precheck reads it), and writes the fill job. Before any of that it asks the
+# queue (`cluster submit`, from VY_QUEUE_SRC's tools/cluster) to place the Commit on node 2 with its research question: a refusal
+# keeps the row on node 1, and once the fill job is written the placement is appended to node 1's $GUEST/placed.jsonl. Node 2's
+# fill queue stays the executor, so these count apart from `research run --queue` (top-level 5:14 AM PDT). A queue that gives no
+# answer doesn't hold the row back.
 # run (as research on node 2, inside the fill job) runs config-run.yaml's gpu task with REPLAY_DEFERRED=1, records the GPU's
 # driver, clocks and vLLM version in the row (n2_gpu_env.json), then sends the row (without the replay bundle) and the run dir back
 # to node 1, publishes the Attempt into node 1's store, preserves it in R2 (from node 2 when node 2 has the R2 environment and the
@@ -85,6 +89,16 @@ check_item() {  # check_item KEY ITEM.json: exit 2 unless KEY is a key and ITEM 
 
 tp_of() { [[ $1 =~ __tp([12])__ ]] && echo "${BASH_REMATCH[1]}"; }
 
+# A row with 1024 input tokens or batch 32+ ran 20-120 min on node 1 by 3 Oct (gemma2-9b B8 67-76, qwen3-30b-a3b 44-54, qwen3-14b
+# TP2 B8 ~45), and a stop at max_min reruns it from the top, so VY_N2_COMMIT_MAX_MIN (25 for node 2's 30-min gaps on 1 Oct) killed
+# cov-gm359 twice. Such a row gets VY_N2_COMMIT_LONG_MAX_MIN (the fill runner's cap for a Commit guest, FILL_COMMIT_MAX_MIN), which
+# it starts only where no booked window is that close.
+commit_max_min() {  # commit_max_min ROW
+  local b=0
+  [[ $1 =~ __b([0-9]+)__ ]] && b=${BASH_REMATCH[1]}
+  if [[ $1 == *__i1024__* ]] || [ "$b" -ge 32 ]; then echo "${VY_N2_COMMIT_LONG_MAX_MIN:-120}"; else echo "${VY_N2_COMMIT_MAX_MIN:-40}"; fi
+}
+
 item() { ssh "$N1" "$KUBE get job $1 -o jsonpath='{.metadata.annotations.verity\.dev/item-json}'"; echo; }
 
 # node 2's store has no remote, so a stage's precheck reads the manifests it cites (the Build's; the replay's Commit) from node 2's
@@ -138,6 +152,34 @@ print(json.dumps({"t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind
 EOF
 }
 
+# A row's plans (plan/commit_plan.json, call_boundary_plan.json) carry the code identity of the job tree its Build ran
+# (commit_plan.key). A Commit from a job tree of other code derives both again, which node 1's leased Commit does before it takes a
+# GPU and a node 2 guest does with its GPU held: 5.0 of node 2's 9.2 idle Commit GPU-h in the 24 h to 2 Oct 16:30Z, every time
+# for that reason alone (cov-gm176 held GPU 6 for two 25-min leases at 0%, built before the 14:17Z redeploy). The key's other
+# fields are the row's own files, which go to node 2 unchanged; the code identity covers the workloads and the plans' schemas.
+plan_keyed() {  # plan_keyed JOB_TREE ROW_DIR: exit 0 when each plan in ROW_DIR is keyed to JOB_TREE's code, else 1 with the reason
+  PYTHONPATH=$1/integrations/vllm:$1/tools/research/src "${VY_JOB_PY:-/workspace/jobs/venv312/bin/python}" - "$1" "$2" << 'EOF'
+import json, os, sys
+tree, row = sys.argv[1:]
+try:
+    from verity_vllm.pipeline import source_identity as SI
+    if os.path.realpath(SI.TREE) != os.path.realpath(tree):
+        sys.exit(f"source_identity came from {SI.TREE}, not the job tree {tree}")
+    code = SI.code_identity(SI.TREE)["sha256"]
+except Exception as e:
+    sys.exit(f"the job tree's code identity isn't computable ({type(e).__name__}: {e})"[:300])
+for name in ("plan/commit_plan.json", "call_boundary_plan.json"):
+    if not os.path.exists(f"{row}/{name}"):
+        continue
+    try:
+        have = (json.load(open(f"{row}/{name}")).get("key") or {}).get("code")
+    except (OSError, ValueError, AttributeError) as e:
+        sys.exit(f"{name} is unreadable ({type(e).__name__})")
+    if have != code:
+        sys.exit(f"{name} is keyed to code {str(have)[:16]}, the Commit's job tree is {code[:16]}")
+EOF
+}
+
 submit() {
   local key=$1 item=$2 job=${3:-}
   if [ "$item" = - ]; then
@@ -150,6 +192,11 @@ submit() {
   local row_dir=$sweep/$row model=models--${repo//\//--}
   [ -s "$row_dir/manifest.json" ] && [ -s "$row_dir/two-task-build-run" ] \
     || { echo "no passed Build in $row_dir on node 1 (manifest.json, two-task-build-run); not queued" >&2; exit 3; }
+  local src why
+  # VY_N2_SRC: an existing job tree instead of the item tree's current one (a proof reruns a Commit from the tree it ran from)
+  src=${VY_N2_SRC:-$(sudo -n -u '#1000' bash "$tree/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$tree")}
+  why=$(plan_keyed "$src" "$row_dir" 2>&1) \
+    || { echo "$why; not queued (node 1's leased Commit derives its plans before it takes a GPU)" >&2; exit 3; }
   # staged means plain files on node 2; PoUW's /workspace/hf is read, never written
   ssh -n "$N2" "d=/workspace/jobs/hf/hub/$model/snapshots/$rev; p=/workspace/hf/hub/$model/snapshots/$rev
     if ! { [ -f \$d/config.json ] && [ -z \"\$(find \$d -type l -print -quit)\" ]; } && [ -f \$p/config.json ]; then
@@ -159,13 +206,11 @@ submit() {
     || { echo "checkpoint $repo@$rev isn't staged on node 2 (n2_build.sh stage REPO REV); not queued" >&2; exit 3; }
   local question placed
   question=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("question") or "")' "$item")
-  placed=$(place commit "$key" "$(tp_of "$row")" "${VY_N2_COMMIT_MAX_MIN:-40}" "${question:-$(n2_question "$row")}") \
+  placed=$(place commit "$key" "$(tp_of "$row")" "$(commit_max_min "$row")" "${question:-$(n2_question "$row")}") \
     || { echo "not queued" >&2; exit 3; }
-  local src build_run build_art
+  local build_run build_art
   # the Commit keeps node 1's dispatcher key, so its replay and records chain on under it
   [ -z "$job" ] || [ -n "${VY_COMMIT_KEY:-}" ] || VY_COMMIT_KEY=$(ssh -n "$N1" "$KUBE get job $job -o jsonpath='{.metadata.annotations.verity\\.dev/item}'")
-  # VY_N2_SRC: an existing job tree instead of the item tree's current one (a proof reruns a Commit from the tree it ran from)
-  src=${VY_N2_SRC:-$(sudo -n -u '#1000' bash "$tree/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$tree")}
   build_run=$(cat "$row_dir/two-task-build-run")
   build_art=$(cd /workspace/jobs && sudo -n -u '#1000' env UV_NO_CONFIG=1 RESEARCH_STORE=/workspace/jobs/store RESEARCH_RUNS=/workspace/jobs/runs \
     PYTHONPATH="$src/tools/research/src" UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python \
@@ -194,7 +239,7 @@ d["n2"]={"key":sys.argv[2],"src":sys.argv[3],"build_run":sys.argv[4],"build_art"
     | ssh "$N2" "mkdir -p $GUEST/items && cat > $GUEST/items/commit-$key.json"
   ssh "$N2" "f=/workspace/pouw/fill/queue/verity-commit-$key.sh; cat > \$f.tmp && chmod +x \$f.tmp && mv \$f.tmp \$f" <<EOF
 #!/usr/bin/env bash
-# fill: owner=$OWNER gpus=$(tp_of "$row") max_min=${VY_N2_COMMIT_MAX_MIN:-40} cpus=8 project=verity prio=$PRIO
+# fill: owner=$OWNER gpus=$(tp_of "$row") max_min=$(commit_max_min "$row") cpus=8 project=verity prio=$PRIO
 # Verity vLLM Commit $row (node 1 key $key): n2_commit.sh on infra/nebius; its replay runs on node 1.
 exec bash $GUEST/bin/n2_commit.sh run $key
 EOF
@@ -269,6 +314,9 @@ EOF
 )"
   eval "ITEM_ARGS=($(submit_args "$1"))"
   research=(/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research)
+  # node 2's store has no remote, so `research run` refuses without this (an environment variable: older job trees' research has
+  # no --local-only); home() is the fast path
+  export RESEARCH_LOCAL_ONLY="node 2's n2-custody timer (n2_custody.sh) takes every ended run under /workspace/jobs/runs to node 1's store and R2"
   mkdir -p /workspace/jobs/hot /workspace/jobs/dm /workspace/jobs/cache/unit-rules
   [ -x /workspace/jobs/bin/py312 ] || printf '#!/bin/sh\nexec /workspace/jobs/bin/uv run --no-project --python 3.12 python "$@"\n' > /workspace/jobs/bin/py312
 }
@@ -611,6 +659,8 @@ case "$cmd" in
   n1-free) n1_free ;;
   check) check_item "$@" ;;
   place) place "$@" ;;
+  max-min) commit_max_min "$@" ;;
+  plan-keyed) plan_keyed "$@" ;;
   fetch-manifests) fetch_manifests "$@" ;;
-  *) sed -n '7,15p' "$0" >&2; exit 2 ;;
+  *) sed -n '7,18p' "$0" >&2; exit 2 ;;
 esac

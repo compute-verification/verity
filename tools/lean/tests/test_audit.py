@@ -177,6 +177,11 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     build()
     assert audit()["failures"] == []
     before = (pkg / A.POLICY).read_text()
+    record = tmp_path / "out" / "audit-control" / A.POLICY
+    assert record.read_text() == before, "the record beside the reports, where a recorded run publishes it"
+    record.unlink()
+    assert audit()["failures"] == [] and (pkg / A.POLICY).read_text() == before
+    assert record.read_text() == before, "an update that changes nothing writes it all the same"
     moved = {"Control.a": "Control.SecurityProofs.a", "Control.b": "Control.SecurityProofs.b",
              "Control.c": "Control.SecurityProofs.c", "Control.f": "Control.Protocol.f", "Control.g": "Control.Protocol.g"}
     after = ("def Control.Protocol.f (n : Nat) : Nat := n + 0\ndef Control.Protocol.g (n : Nat) : Nat := 0 + n\n"
@@ -190,6 +195,7 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     build()
     rep = audit(moved=moved)
     assert rep["failures"] == []
+    assert rep["before"] == {k: json.loads(before)[k] for k in ("pins", "reads")} and rep["pins"] == A.load(pkg)["pins"]
     must = A.statement_changes(rep["review"])
     assert set(rep["review"]) - set(must) == {
         f"pin Control.SecurityProofs.a: moved from Control.a, restated as Control.Guarantees.A: {A.MOVED}",

@@ -51,7 +51,7 @@ REPORT_GENRE = re.compile(r"handoff|report|urgent|draft|triage|status|^results?_
 SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".lock"})
 
 MD_SIZE_CAP = 48 * 1024
-PROTOCOL_SIZE_CAP = 128 * 1024
+PROTOCOL_SIZE_CAP = 256 * 1024
 BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code (CODE_SUFFIXES), ALLOWLIST and audit records
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
 CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
@@ -71,8 +71,9 @@ ALLOWLIST = {
 }
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
-#: what a statement reviewer reads; it grows 3-5 KiB per pin, so this leaves a package room for several hundred more.
-AUDIT_RECORD_LIMIT = 2 * 1024 * 1024
+#: what a statement reviewer reads; it grows 3-5 KiB per pin and with every definition under `meaning` (following the whole
+#: executable verifier, `Flock`, took soundness's record past 2 MiB).
+AUDIT_RECORD_LIMIT = 4 * 1024 * 1024
 #: Tracked data (everything but CODE_SUFFIXES) in the whole tree, so that many small files cannot
 #: add up to what one large one may not be.
 DATA_BUDGET = 40 * 1024 * 1024

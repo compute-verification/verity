@@ -1,6 +1,7 @@
-"""C-Flock lowers the Boolean BF16 Definitions (`verity.ml.boolean.gemm`) gate by gate, with no piece substituted for them: each
-step and the cast lower to exactly the circuit of the piece their word primitive lowers to (the same ANDs and the same nonzeros
-of the AND rows), and the coordinate evaluates to `GemmCoordinate_v2`'s words.
+"""C-Flock lowers the Boolean BF16 Definitions (`verity.ml.boolean.gemm`) and NVFP4 quantization's casts and the bit AND
+(`verity.ml.boolean.scalar`) gate by gate, with no piece substituted for them: each step and cast and the AND lower to exactly
+the circuit of the piece their word primitive lowers to (the same ANDs and the same nonzeros of the AND rows), and the
+coordinate evaluates to `GemmCoordinate_v2`'s words.
 
 The coordinate costs a few ANDs more than `GemmCoordinate_v2`'s lowering: there the first step's piece runs on the zero
 accumulator's constant forms, and the builder's own branches on constants (`fp`, `tc_step`) drop ANDs that a gate-level circuit,
@@ -16,7 +17,9 @@ from verity.ir.defs import bind
 from verity.ml import gemm as G
 from verity.ml import kernels as K
 from verity.ml import prims as P
+from verity.ml import scalar as S
 from verity.ml.boolean import gemm as BG
+from verity.ml.boolean import scalar as BSC
 from verity_flock import ir_lower as IL
 from verity_flock.gf2 import Circuit
 
@@ -33,7 +36,10 @@ def _lower(target, widths):
     (BG.F2fpBf16, P.F2fpBf16, [32]),
     (BG.AmpereBF16TcDot16, P.AmpereBF16TcDot16, [32] + [16] * 32),
     (BG.HopperBF16WgmmaDot16, P.HopperBF16WgmmaDot16, [32] + [16] * 32),
-], ids=["f2fp", "ampere", "hopper"])
+    (BSC.E4m3ToF32, P.E4m3ToF32, [8]),
+    (BSC.F32ToE2m1Sat, P.F32ToE2m1Sat, [32]),
+    (BSC.BitAnd, S.BitAnd, [1, 1]),
+], ids=["f2fp", "ampere", "hopper", "e4m3-to-f32", "f32-to-e2m1", "bit-and"])
 def test_a_traced_definition_lowers_to_its_pieces_circuit(boolean, word, widths) -> None:
     Cw, _ = _lower(word, widths)
     Cb, _ = _lower(bind(boolean), [1] * sum(widths))

@@ -32,6 +32,8 @@ from pathlib import Path
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.config import group, option
 from verity_vllm.pipeline.tp import config_run as TPC
+from verity_vllm.pipeline.tp import phases as PH
+from verity_vllm.pipeline.tp import warmup as WU
 from verity_vllm.pipeline.tp.import_path import write_import_path_runtime
 
 TP_ROOT_TAG = b"verity/tp-run-root/v1"
@@ -363,7 +365,7 @@ class Options:
 def main(args: Options) -> int:
     from verity_vllm.engine import engine_profile as prof
     prof.apply_env()
-    import torch
+    from verity_vllm.pipeline.tp import lease as TPL
     from vllm import LLM
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline.commit import git_head, run_workload
@@ -391,9 +393,9 @@ def main(args: Options) -> int:
     if args.tp > 1 and args.required_classes is None and "tp_rank_partials" not in required_classes:
         required_classes = required_classes + ("tp_rank_partials",)       # [R14 TP-03] the rank-local collective inputs are required per rank
 
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
+    (out := Path(args.out)).mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(args.workload, None)
+    TPL.acquire()             # a leased Commit's GPUs, all at once, to its last run's finalize (pipeline.tp.lease); the target reads the device
     PO.commit_guard(va.target_of_workload(wl), world=args.tp, installs=False)      # exit 3 when the target declares protocols
     case = va.case_of(wl, args.case)
     env_flags = prof.apply_env()
@@ -405,14 +407,9 @@ def main(args: Options) -> int:
     kw.update(parse_engine_args(args.engine_arg))
     kw["worker_extension_cls"] = EXTENSION
     print(f"[tp2commit] tp={args.tp} case={case} committer={args.committer} kwargs={ {k: v for k, v in kw.items() if k not in ('model', 'tokenizer')} }", flush=True)
-    t0 = time.perf_counter()
-    llm = LLM(**kw)
-    build_s = time.perf_counter() - t0
+    llm, build_s, topo = PH.engine(lambda: LLM(**kw), args.tp, args.rpc_timeout, model=cp["repo"], enforce_eager=kw.get("enforce_eager"), case=case, max_num_seqs=args.max_num_seqs)
     eng = va.Engine(llm=llm, runner=None, model=None, cp=cp, kwargs=kw, env_flags=env_flags, build_s=build_s, case=case)
-    topo = llm.collective_rpc("tp2_probe", timeout=args.rpc_timeout)
     world = len(topo)
-    if world != args.tp:
-        raise SystemExit(f"fail-closed: {world} ranks answered the probe, tp={args.tp}")
     versions = {"schema": SCHEMA, "git_head": git_head(), "tree": tree_of_record(), "argv": sys.argv, "tp": args.tp, "build_s": round(build_s, 1),
                 "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")},
                 "env": {k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS", "NATIVE_COLLECT", "HIDDEN_GPU"))},
@@ -427,9 +424,7 @@ def main(args: Options) -> int:
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
     reqs, sampling = wl["requests"], wl["sampling"]
 
-    for i in range(args.warmup):
-        r = run_workload(eng, va.throwaway_requests(eng, reqs, seed=100 + i), sampling)
-        print(f"[tp2commit] warm-up control {i}: {r['wall_s']:.3f}s {r['iterations']} it", flush=True)
+    PH.warmups(args.warmup, lambda i: run_workload(eng, va.throwaway_requests(eng, reqs, seed=100 + i), sampling))
     envelope = {"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt_token_ids"]) for r in reqs),
                 "max_new": max(int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for r in reqs),
                 "max_num_batched_tokens": kw.get("max_num_batched_tokens"), "max_model_len": kw.get("max_model_len")}
@@ -529,7 +524,7 @@ def main(args: Options) -> int:
             of_record[str(r)] = sorted(digs)
         replay_cfg = {"programs": {str(r): str(builds[r]) for r in range(world) if builds.get(r)}, "of_record": of_record,
                       "requests": [{"request_id": request_ids[str(r.get("request_id"))], "arrive_step": int(r.get("arrive_step") or 0), "prompt_len": len(r["prompt_token_ids"]),
-                                    "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1), "prompt_token_ids": [int(t) for t in r["prompt_token_ids"]]} for r in reqs],
+                                    "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1), "prompt_token_ids": [int(t) for t in r["prompt_token_ids"]], "seed": int(r["seed"]) if r.get("seed") is not None else (int(sampling["seed"]) if sampling.get("seed") is not None else None)} for r in reqs],
                       "per_stratum": int(args.replay_per_stratum), "max_evaluate": int(args.replay_max), "seed": args.replay_seed, "workers": args.replay_workers,
                       "challenge": args.replay_challenge, "targets": list(args.replay_target or []), "ring_slots": (int(os.environ["VERITY_WINDOW_SLOTS"]) if os.environ.get("VERITY_WINDOW_SLOTS") and os.environ.get("VERITY_WINDOW_MB") else None)}
         versions["sampled_replay"] = {"of_record": of_record, "per_stratum": replay_cfg["per_stratum"], "max_evaluate": replay_cfg["max_evaluate"], "seed": args.replay_seed,
@@ -559,17 +554,18 @@ def main(args: Options) -> int:
             raise SystemExit("--serve-shard-from needs --checkpoint-dir (the other rank's shard is composed from the pinned checkpoint)")
         versions["negatives"]["serve_shard_from"] = serve_shard_from
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
-    made = llm.collective_rpc("tp2_commit_make", timeout=args.rpc_timeout,
-                              kwargs={"kind": args.committer, "run_id": Path(args.workload).stem, "cp": cp, "case": case, "hidden_so": args.hidden_so,
-                                      "hidden_ns": args.hidden_ns, "envelope": envelope, "arena_mb": args.arena_mb, "tp_partials": not args.no_tp_partials,
-                                      "program_digest": {str(k): v for k, v in pds.items()}, "n_requests": len(reqs),
-                                      "required_manifest": args.required_manifest, "request_order": request_order, "request_ids": request_ids, "arrivals": arrivals, "caps": caps,
-                                      "tp_relabel": relabel, "tp_partials_omit_rank": args.omit_rank_partials,
-                                      "match_tokens": match_tokens, "tp_swap_requests": swap_requests, "match_capture_dir": match_capture_dir, "replay": replay_cfg,
-                                      "weights_pin": weights_pin_cfg, "flip_weight": flip_weight, "serve_shard_from": serve_shard_from, "tap_sources": TAPS.for_ranks(args.tap_sources),
-                                         "tp_partials_flip_site": ({args.flip_partial.split(":", 1)[0]: args.flip_partial.split(":", 1)[1]} if args.flip_partial else None),
-                                      "tp_partials_omit_site": ({args.omit_partial_site.split(":", 1)[0]: args.omit_partial_site.split(":", 1)[1]} if args.omit_partial_site else None),
-                                      "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer", "worker_extension_cls")}})
+    with PH.TL.span("prep.committer_setup", kind=args.committer):
+        made = llm.collective_rpc("tp2_commit_make", timeout=args.rpc_timeout,
+                                  kwargs={"kind": args.committer, "run_id": Path(args.workload).stem, "cp": cp, "case": case, "hidden_so": args.hidden_so,
+                                          "hidden_ns": args.hidden_ns, "envelope": envelope, "arena_mb": args.arena_mb, "tp_partials": not args.no_tp_partials,
+                                          "program_digest": {str(k): v for k, v in pds.items()}, "n_requests": len(reqs),
+                                          "required_manifest": args.required_manifest, "request_order": request_order, "request_ids": request_ids, "arrivals": arrivals, "caps": caps,
+                                          "tp_relabel": relabel, "tp_partials_omit_rank": args.omit_rank_partials,
+                                          "match_tokens": match_tokens, "tp_swap_requests": swap_requests, "match_capture_dir": match_capture_dir, "replay": replay_cfg,
+                                          "weights_pin": weights_pin_cfg, "flip_weight": flip_weight, "serve_shard_from": serve_shard_from, "tap_sources": TAPS.for_ranks(args.tap_sources),
+                                          "tp_partials_flip_site": ({args.flip_partial.split(":", 1)[0]: args.flip_partial.split(":", 1)[1]} if args.flip_partial else None),
+                                          "tp_partials_omit_site": ({args.omit_partial_site.split(":", 1)[0]: args.omit_partial_site.split(":", 1)[1]} if args.omit_partial_site else None),
+                                          "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer", "worker_extension_cls")}})
     if len(made) != world:
         raise SystemExit(f"fail-closed: committer constructed on {len(made)}/{world} ranks")
     (out / "committer_make.json").write_text(json.dumps(made, indent=1, default=str) + "\n")
@@ -601,13 +597,8 @@ def main(args: Options) -> int:
               + (f"; tp partials {m.get('tp_partial_source')}" if (m.get("tp_partial_source") or {}).get("relabel_rank") is not None else ""), flush=True)
         if rm and rm.get("program_digest_matches") is False:
             raise SystemExit(f"fail-closed: rank {m['rank']}: manifest Program digest != this rank's Program digest")
-    # warm-up instrumented
-    llm.collective_rpc("tp2_commit_install", timeout=args.rpc_timeout)
-    r = run_workload(eng, va.throwaway_requests(eng, reqs, seed=200), sampling)
-    fin = llm.collective_rpc("tp2_commit_finalize", timeout=args.rpc_timeout)
-    (out / "finalize_warmup.json").write_text(json.dumps(fin, indent=1, default=str) + "\n")
-    print(f"[tp2commit] warm-up instrumented: {r['wall_s']:.3f}s; ranks {[(f['rank'], f['leaves'], f['errors_n'], f['errors'][:2]) for f in fin]}", flush=True)
-    llm.collective_rpc("tp2_commit_reset", timeout=args.rpc_timeout)
+    with PH.TL.span("prep.warmup_instrumented", kind=args.committer) as warm:
+        warm["wall_s"] = round(WU.run(llm, lambda: run_workload(eng, va.throwaway_requests(eng, reqs, seed=200), sampling), out, args.committer, args.rpc_timeout)["wall_s"], 3)
 
     rows: list[dict] = []
     tokens_ref = None
@@ -619,24 +610,27 @@ def main(args: Options) -> int:
         order = [a for a in (["control", "instrumented"] if pair % 2 == 0 else ["instrumented", "control"]) if args.only_arm in (None, a)]
         for k, arm in enumerate(order):
             gc.collect()
+            with PH.TL.span(f"work.pair{pair}.{arm}", pair=pair, arm=arm) as ran:
+                if arm != "control":
+                    inst = llm.collective_rpc("tp2_commit_install", timeout=args.rpc_timeout)
+                    if len(inst) != world:
+                        raise SystemExit("fail-closed: install did not reach every rank")
+                r = run_workload(eng, reqs, sampling)
+                ran.update(wall_s=round(r["wall_s"], 4), steps=len(r["step_wall_s"]))
+                row = {"schema": SCHEMA, "label": args.label, "workload": args.workload, "workload_sha256": wl.get("sha256"), "case": case, "model": cp["repo"],
+                       "tp": args.tp, "pair": pair, "order_in_pair": k, "arm": arm, "committer": None if arm == "control" else args.committer,
+                       "wall_s": r["wall_s"], "iterations": r["iterations"], "engine_steps": len(r["step_wall_s"]), "generated_tokens": r["generated_tokens"],
+                       "prompt_tokens": r["prompt_tokens"], "generated_tokens_per_s": r["generated_tokens"] / r["wall_s"],
+                       "step_wall_prefill_s": r["step_wall_s"][0], "step_wall_decode_mean_s": statistics.fmean(r["step_wall_s"][1:]) if len(r["step_wall_s"]) > 1 else None,
+                       "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+                if tokens_ref is None:
+                    tokens_ref = r["tokens"]
+                row["tokens_equal_ref"] = r["tokens"] == tokens_ref
+                if arm != "control":
+                    t_f = time.perf_counter()
+                    fin = TPL.finalize(llm, args.rpc_timeout, f"work.pair{pair}.{arm}", last=pair == args.pairs - 1 and k == len(order) - 1 and not args.value_check)
+                    t_ready = time.perf_counter() - t_f
             if arm != "control":
-                inst = llm.collective_rpc("tp2_commit_install", timeout=args.rpc_timeout)
-                if len(inst) != world:
-                    raise SystemExit("fail-closed: install did not reach every rank")
-            r = run_workload(eng, reqs, sampling)
-            row = {"schema": SCHEMA, "label": args.label, "workload": args.workload, "workload_sha256": wl.get("sha256"), "case": case, "model": cp["repo"],
-                   "tp": args.tp, "pair": pair, "order_in_pair": k, "arm": arm, "committer": None if arm == "control" else args.committer,
-                   "wall_s": r["wall_s"], "iterations": r["iterations"], "engine_steps": len(r["step_wall_s"]), "generated_tokens": r["generated_tokens"],
-                   "prompt_tokens": r["prompt_tokens"], "generated_tokens_per_s": r["generated_tokens"] / r["wall_s"],
-                   "step_wall_prefill_s": r["step_wall_s"][0], "step_wall_decode_mean_s": statistics.fmean(r["step_wall_s"][1:]) if len(r["step_wall_s"]) > 1 else None,
-                   "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-            if tokens_ref is None:
-                tokens_ref = r["tokens"]
-            row["tokens_equal_ref"] = r["tokens"] == tokens_ref
-            if arm != "control":
-                t_f = time.perf_counter()
-                fin = llm.collective_rpc("tp2_commit_finalize", timeout=args.rpc_timeout)
-                t_ready = time.perf_counter() - t_f
                 if match_capture_dir is not None:
                     print("[tp2commit] match oracle (tp partials vs capture): " + "; ".join(
                         f"rank {f['rank']} {(f.get('match_oracle') or {}).get('verdict')} steps {(f.get('match_oracle') or {}).get('steps_compared')} tensors {(f.get('match_oracle') or {}).get('tensors')} "
@@ -693,7 +687,7 @@ def main(args: Options) -> int:
                         cblock = {"run_root": f["run_root"], "steps": f["steps"], "leaves": f["leaves"], "bytes_bound": f["bytes_bound"], "tensors": f["tensors"],
                                   "root_ready_delay_s": f["root_ready_delay_s"], "finalize_s": f["finalize_s"], "spans_total_s": f["spans_total_s"],
                                   "extra": {"expected_tensors": f["expected_tensors"], "committed_tensors": f["committed_tensors"], "errors_n": f["errors_n"], "errors": f["errors"],
-                                            "identity_check": f.get("identity_check"), "expected_manifest": f.get("expected_manifest")},
+                                            "identity_check": f.get("identity_check"), "expected_manifest": f.get("expected_manifest"), "bounded_staging": f.get("bounded_staging")},
                                   "openings": {k2: op_r.get(k2) for k2 in ("n", "verified", "generate_s", "verify_s", "bytes_mean", "error")},
                                   "classes": f["classes"], "weight_registration": f["weight_registration"],
                                   "persistent_bytes": f["persistent_bytes"], "temporary_bytes_peak": f["temporary_bytes_peak"]}
@@ -903,7 +897,7 @@ def main(args: Options) -> int:
                     if reasons:
                         all_pass = False
                         print(f"[tp2commit] COMMIT FAIL (pair {pair}): {row['commit']['commit_fail_reason']}", flush=True)
-                llm.collective_rpc("tp2_commit_reset", timeout=args.rpc_timeout)
+                TPL.reset(llm, args.rpc_timeout)
             rows.append(row)
             with (out / "runs.jsonl").open("a") as f:
                 f.write(json.dumps(row, default=str) + "\n")
@@ -915,11 +909,12 @@ def main(args: Options) -> int:
     if args.value_check:
         # [R15 TP-04 C2] one extra instrumented run per rank (untimed): committed bytes vs hook-time reference clones + re-execution
         gc.collect()
-        inst = llm.collective_rpc("tp2_commit_value_check_install", timeout=args.rpc_timeout)
-        if len(inst) != world:
-            raise SystemExit("fail-closed: value-check install did not reach every rank")
-        r = run_workload(eng, reqs, sampling)
-        vres = llm.collective_rpc("tp2_commit_value_check", timeout=args.rpc_timeout)
+        with PH.TL.span("validate.value_check"):
+            inst = llm.collective_rpc("tp2_commit_value_check_install", timeout=args.rpc_timeout)
+            if len(inst) != world:
+                raise SystemExit("fail-closed: value-check install did not reach every rank")
+            r = run_workload(eng, reqs, sampling)
+            vres = llm.collective_rpc("tp2_commit_value_check", timeout=args.rpc_timeout)
         vcheck = {"schema": "verity/commit-integ/value-check-tp/v1", "label": "measured", "tp": args.tp, "tokens_equal_ref": r["tokens"] == tokens_ref,
                   "per_rank": {int(v["rank"]): v for v in vres}, "ranks_answered": sorted(int(v["rank"]) for v in vres),
                   "verdict": ("PASS" if len(vres) == world and all(v.get("verdict") == "PASS" for v in vres) and r["tokens"] == tokens_ref else "FAIL"),

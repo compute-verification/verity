@@ -3,7 +3,7 @@
 `NativeRangeOpenings` is a mixin of `commit.committer.native_host.NativeHostCommitter`: a run of leaves of a step is opened from the retained copy
 with the boundary siblings of its tree (`open_range`) and verified against the run commitment (`verify_range`); `leaf_span` maps a tensor's
 bytes to the leaves that hold them.  `fault_retained_flip` is the negative test of that path.  `open_levels` is one leaf's path from level
-tensors.
+tensors; `level_sizes` is the number of nodes on each level.
 """
 from __future__ import annotations
 
@@ -58,6 +58,16 @@ def open_range_levels(levels: list, lo: int, hi: int) -> tuple:
     rows = torch.stack(parts).cpu().numpy().astype("uint32") if parts else None
     got = {di: rows[k].tobytes() for k, di in enumerate(idx)}
     return tuple((None if l is None else got[(d, l)], None if r is None else got[(d, r)]) for d, (l, r) in enumerate(need))
+
+
+def level_sizes(leaf_count: int, levels: int) -> list[int]:
+    """Nodes per level of a step tree over `leaf_count` leaves, leaves first: ceil(n / 2^L) for L = 0..min(levels, height) (an odd
+    trailing node is lifted).  A windowed step keeps these levels on host below its window level (`levels` = the window's)."""
+    height, m = 0, leaf_count
+    while m > 1:
+        m = (m + 1) // 2
+        height += 1
+    return [-(-leaf_count // (1 << L)) for L in range(min(levels, height) + 1)]
 
 
 class NativeRangeOpenings:

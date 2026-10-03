@@ -54,6 +54,16 @@ def test_claim_starts_detached_runner_and_redelivery_is_idempotent(tmp_path):
     assert launch["argv"][launch["argv"].index("--") + 1] == PY, "argv travels as a list; no shell string"
 
 
+def test_a_claimed_run_needs_no_remote_of_its_own(tmp_path, monkeypatch):
+    """Its launcher settled custody (--custody-r2, or --no-custody-r2 and `research fetch --all`): no local-only refusal here."""
+    monkeypatch.delenv("RESEARCH_LOCAL_ONLY")
+    req, runs_root = _request(tmp_path, "r0", [PY, "-c", "print('ran')"])
+    assert remote.launch_request(req)["started"]
+    s = _wait_terminal(runs_root / "r0")
+    assert s["state"] == "done" and (runs_root / "r0" / "stdout.log").read_text() == "ran\n"
+    assert "local_only" not in json.loads((runs_root / "r0" / "job.json").read_text())["store"]
+
+
 def test_env_and_spaces_reach_the_workload(tmp_path):
     req, runs_root = _request(tmp_path, "r2", [PY, "-c", "import os, sys; print(os.environ['FOO'], '|', sys.argv[1])", "two  words"], env={"FOO": "bar baz"})
     assert remote.launch_request(req)["started"]
