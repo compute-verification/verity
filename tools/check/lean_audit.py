@@ -2,6 +2,7 @@
 
     python tools/check/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR]
     python tools/check/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
+    python tools/check/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
     python tools/check/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
 
 A package's verdict is reused while everything its audit reads is unchanged. Its key hashes:
@@ -488,12 +489,45 @@ def pin(run_id: str) -> int:
     return 0
 
 
+def restore_into(pkg: str, log=print) -> int:
+    """`--restore PKG` (`tools/lean/setup.sh`): PKG's pinned bundle from the store as its `.lake/packages`, when it has none.
+    0 also when there is nothing to restore (no pin for its manifest and toolchain, or no store remote here): `lake` then
+    fetches them itself."""
+    from research.store.local import object_key
+    from research.store.remote import ConfigError, load_remote
+
+    d = (ROOT / pkg).resolve()
+    if (k := deps_key(d)) is None or (d / ".lake" / "packages").exists():
+        return 0
+    if (p := pins().get(k)) is None:
+        log(f"lean-audit: {pkg}: no bundle is pinned for its manifest and toolchain ({k[:12]}); lake fetches them")
+        return 0
+    try:
+        r = load_remote()
+    except ConfigError:
+        r = None
+    if not hasattr(r, "presign"):
+        log(f"lean-audit: {pkg}: no store remote here to fetch its pinned bundle from; lake fetches them")
+        return 0
+    (d / ".lake").mkdir(exist_ok=True)
+    store = Path(tempfile.mkdtemp(prefix="deps-", dir=d / ".lake"))
+    try:
+        if not restore(store, k, r.presign(object_key(p["sha256"]), 3600), p, pkg, log):
+            return 1
+        os.replace(store / k, d / ".lake" / "packages")
+    finally:
+        shutil.rmtree(store, ignore_errors=True)
+    return 0
+
+
 def main(argv: list[str]) -> int:
     # a manual stop or a runner's timeout sends SIGTERM to check.py's whole process group: as SIGINT, it runs `_audit`'s finally,
     # which removes the scratch tree (about 60 GB on a node, left behind by every stopped check otherwise)
     signal.signal(signal.SIGTERM, signal.default_int_handler)
     if argv[:1] == ["--pin"] and len(argv) == 2:
         return pin(argv[1])
+    if argv[:1] == ["--restore"] and len(argv) == 2:
+        return restore_into(argv[1])
     if argv[:1] == ["--explain"] and len(argv) in (2, 4):
         cache = Path(argv[3]) if len(argv) == 4 and argv[2] == "--cache" else COMMON.cache_dir() / "lean-audit"
         rc, lines = explain(argv[1], cache)
