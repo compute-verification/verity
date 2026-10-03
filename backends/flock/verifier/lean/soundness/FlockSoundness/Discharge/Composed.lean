@@ -5,6 +5,7 @@ import FlockSoundness.Discharge.Composed.Pads
 import FlockSoundness.Discharge.Composed.Inner
 import FlockSoundness.Discharge.Composed.Inner.Holds
 import FlockSoundness.Discharge.Composed.Inner.Lincheck
+import FlockSoundness.Discharge.Composed.Inner.LincheckReplay
 import FlockSoundness.Discharge.Composed.Setup
 
 /-!
