@@ -89,14 +89,14 @@ theorem padTail_eq {total : ℕ} (h : total % 128 = 0) : HmRow.padTail total = H
 
 /-- A `sha512/row/v1` row's (`2 · words = 128 n` row bytes, of 16 bits each) constant bits past its `n` blocks are the
 padding block's. -/
-theorem constBit_v1 {p : Port} {n t : ℕ} (hv : p.v2 = false) (hb : p.bits = 16 * p.words)
+theorem constBit_v1 {p : Port} {n t : ℕ} (hv : p.v2 = false) (hs : p.segs = none) (hb : p.bits = 16 * p.words)
     (hw : 2 * p.words = 128 * n) (ht : t < 1024) :
     HmRow.constBit p (HmRow.tailOf p) n t = some (wordsBit (HmRow.padWords p.words) t) := by
   have hby : p.bytes = 2 * p.words := by simp [Port.bytes, hv]
   have hj : (HmRow.blockBit t).1 = 8 * (t / 64) + 7 - t % 64 / 8 := rfl
   have hb8 : (HmRow.blockBit t).2 = t % 8 := rfl
   unfold HmRow.constBit HmRow.tailOf
-  simp only [hby, hb]
+  simp only [hby, hb, hs]
   rw [if_neg (by rw [hj, hb8]; omega), padTail_eq (by omega), HmRow.padWords,
     wordsBit_eq _ (n := 16) (by omega), decide_eq_true (by omega), Bool.true_and,
     show 128 * n + (HmRow.blockBit t).1 - 2 * p.words = 8 * (t / 64) + 7 - t % 64 / 8 by rw [hj]; omega, hb8, wbit,
@@ -112,6 +112,7 @@ theorem constBit_v1 {p : Port} {n t : ℕ} (hv : p.v2 = false) (hb : p.bits = 16
 /-- **A `sha512/row/v1` row's constant bits**: with `2 · words = 128 · chunks` 16-bit row bytes in `chunks > 0`
 compressions, Δ's pairs at its constant bits are its first `cv`'s midstate and its `pad`'s padding block. -/
 theorem rowPairsOf_v1 (c : Circuit) (pin g : ℕ) {p : ℕ} (hp : p < c.ports.size) (hv : c.ports[p]!.v2 = false)
+    (hs : c.ports[p]!.segs = none)
     (hb : c.ports[p]!.bits = 16 * c.ports[p]!.words) (hn : 0 < c.ports[p]!.chunks)
     (hw : 2 * c.ports[p]!.words = 128 * c.ports[p]!.chunks) :
     rowPairsOf c pin g p = (List.range 512).flatMap (fun t => [(cvCol c g p + t, cvCol c g p + t),
@@ -121,16 +122,18 @@ theorem rowPairsOf_v1 (c : Circuit) (pin g : ℕ) {p : ℕ} (hp : p < c.ports.si
   have hsz := rowSlots_size hp
   have hcv : cvColOf c g p = cvCol c g p := by rw [cvColOf, hsz, if_pos hn]
   have hms : HmRow.midstateOf c.ports[p]! = HmRow.midstate c.ports[p]!.words := by
-    simp only [HmRow.midstateOf, HmRow.prefixOf, hv, Bool.false_eq_true, ite_false, HmRow.midstate]
+    simp only [HmRow.midstateOf, HmRow.prefixOf, hv, hs, Option.isSome_none, Bool.false_eq_true, ite_false,
+      HmRow.midstate]
   have hk : c.ports[p]!.bits / 1024 = c.ports[p]!.chunks := by omega
   unfold rowPairsOf
   simp only [hcv, hms, hsz, hk, Nat.sub_self, List.range'_zero, List.flatMap_nil, List.append_nil]
   rw [List.append_right_inj]
-  exact flatMap_congr' fun t ht => by simp only [constBit_v1 hv hb hw (List.mem_range.1 ht), bitPairs, constSrc]
+  exact flatMap_congr' fun t ht => by simp only [constBit_v1 hv hs hb hw (List.mem_range.1 ht), bitPairs, constSrc]
 
 theorem rowPairsAll_v1 (c : Circuit) (pin : ℕ)
     (hv1 : ∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
-    (hw : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks) :
+    (hw : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks)
+    (hs : ∀ p ∈ c.ports.toList, p.v2 = false → p.segs = none) :
     rowPairsAll c pin = rowPairs c pin := by
   have hS : (HmRow.rowSlots c.ports).2.size = c.ports.size := by
     rw [← Array.length_toList, rowSlots_eq, List.length_map, List.length_range]
@@ -139,7 +142,16 @@ theorem rowPairsAll_v1 (c : Circuit) (pin : ℕ)
   have hp' : p < c.ports.size := hS ▸ List.mem_range.1 hp
   have hm := getElem_mem_toList' hp'
   obtain ⟨hv, hb, hn⟩ := hv1 _ hm
-  exact rowPairsOf_v1 c pin g hp' hv hb hn (hw _ hm hv)
+  exact rowPairsOf_v1 c pin g hp' hv (hs _ hm hv) hb hn (hw _ hm hv)
+
+/-- A row of a statement of `sha512/row/v1` rows is not segmented. -/
+theorem segs_none_of_v1 {c : Circuit} (hv1 : ∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
+    (hs : ∀ p ∈ c.ports.toList, p.v2 = false → p.segs = none) {p : ℕ} (hp : p < (HmRow.rowSlots c.ports).2.size) :
+    c.ports[p]!.segs = none := by
+  have hS : (HmRow.rowSlots c.ports).2.size = c.ports.size := by
+    rw [← Array.length_toList, rowSlots_eq, List.length_map, List.length_range]
+  have hm := getElem_mem_toList' (hS ▸ hp)
+  exact hs _ hm (hv1 _ hm).1
 
 /-- Δ's pairs, before the typed tail. -/
 def flatPairs (c : Circuit) (pin : ℕ) : List (ℕ × ℕ) :=
@@ -147,7 +159,8 @@ def flatPairs (c : Circuit) (pin : ℕ) : List (ℕ × ℕ) :=
 
 theorem delta_rows (c : Circuit) (pin : ℕ) {tb : TypedBlock} (ht : c.typed = some tb)
     (hv1 : ∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
-    (hw : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks) :
+    (hw : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks)
+    (hs : ∀ p ∈ c.ports.toList, p.v2 = false → p.segs = none) :
     (HmRow.delta c pin).1.toList = flatPairs c pin ++ Typed.tail c tb true ∧
       (HmRow.delta c pin).2.toList = flatPairs c pin ++ Typed.tail c tb false := by
   unfold HmRow.delta
@@ -181,9 +194,11 @@ theorem delta_rows (c : Circuit) (pin : ℕ) {tb : TypedBlock} (ht : c.typed = s
   refine FlockSoundness.run_bind_pair (Q := fun r => r.1.toList = flatPairs c pin ++ Typed.tail c tb true ∧
       r.2.toList = flatPairs c pin ++ Typed.tail c tb false) (P := fun d' => d'.toList = d.toList ++ rowPairs c pin)
     ?_ ?_
-  · rw [← rowPairsAll_v1 c pin hv1 hw]
+  · rw [← rowPairsAll_v1 c pin hv1 hw hs]
     refine forIn_range_append _ _ (fun g _ d => ⟨_, rfl, ?_⟩) d
-    refine forIn_range_append _ _ (fun p _ d => ⟨_, rfl, ?_⟩) d
+    refine forIn_range_append _ _ (fun p hp d => ?_) d
+    rw [segs_none_of_v1 hv1 hs hp]
+    refine ⟨_, rfl, ?_⟩
     rw [rowPairsOf, ← List.append_assoc, ← List.append_assoc]
     refine Eq.trans (forIn_range'_append (fun k => (List.range 1024).flatMap fun t => bitPairs c pin
         (msgColOf c g p k + t) (HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) k t)) _ _
