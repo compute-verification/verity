@@ -100,6 +100,7 @@ import Pouw.SecurityProofs.PearlC.RowSeedFragment
 import Pouw.SecurityProofs.PearlC.RowSeedGamma
 import Pouw.SecurityProofs.PearlC.RowSeedSkip
 import Pouw.SecurityProofs.PearlC.Sm120Checks
+import Pouw.SecurityProofs.PearlC.TileCapRev1Gamma
 import Pouw.SecurityProofs.PearlC.TileGamma
 import Pouw.SecurityProofs.PearlC.TileUOnlyGamma
 import Pouw.SecurityProofs.PearlC.UOnlyGamma
