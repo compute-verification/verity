@@ -356,7 +356,7 @@ class MoEFusedExperts:
                 continue
             if type(r) is not Compute:
                 return unsupported(node, f"{getattr(pt, 'name', type(pt).__name__)} refused the router's gate GEMM inside {op_name(node.op)}",
-                                   child_id=gate.id, reason=getattr(r, "reason", None), child_detail=getattr(r, "detail", None))
+                                   child_id=gate.id, child_reason=getattr(r, "reason", None), child_detail=getattr(r, "detail", None))
             return r
         return unsupported(node, f"no profile pattern resolves the router's gate GEMM inside {op_name(node.op)}", child_id=gate.id)
 
