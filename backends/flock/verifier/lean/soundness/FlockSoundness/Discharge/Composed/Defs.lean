@@ -147,42 +147,76 @@ end On
 
 /-! ## The session's tables at the executable's leaves (new item, open) -/
 
-/-- **A `--zk` table as `ZkView`'s tables**: the witness, hidden-value and value-list types, the coin vectors, the sizes,
-the `Coined` table at each coin vector (its leaves the executable's: `Coined.tab`), and M1's level-0 padding data (the
-level-0 message's `cols` and the opened positions `pos`) that `padOnto_M1` reads. -/
-structure CoinedSetup (K : Type) [Field K] where
-  W : Type
+/-- `eq(p, x)` over the bits of word index `x`, least significant first (`zk_veil.rs`'s `eq_word`). -/
+def eqWord (p : List F128) (x : ℕ) : F128 :=
+  (List.range p.length).foldl (fun acc i => acc * if x.testBit i then p[i]! else 1 + p[i]!) 1
+
+/-- **The mask slot's weights span** (`zk_veil.rs`'s `mask_rank_ok`, rank `= 128·k`): the vectors
+`(eq(p_1, x), …, eq(p_k, x))` over the mask words `x` span `GF(2)^{128k}`, i.e. every value of the claims' masked sums is
+reached by some mask bits. -/
+def MaskRankOk {k M : ℕ} (pts : Fin k → List F128) (words : Fin M → ℕ) : Prop :=
+  Function.Surjective fun u : Fin M → ZMod 2 => fun j : Fin k =>
+    ∑ x, fOf (eqWord (pts j) (words x)) * ZK.castF (F := 𝔽) (u x)
+
+/-- **A table's coin vector**, the coins `refused_coins` reads named: each rep's inner-proof `β`
+(`Zk.verifyInner`) and Ligerito's `ρ` (`ZkLigerito`), each claim's rank-check point, and the table's other coins. -/
+structure CoinsZK (nC : ℕ) (Rest : Type) where
+  beta : Fin 2 → F128
+  rho : Fin 2 → F256 × F256
+  points : Fin nC → List F128
+  rest : Rest
+
+/-- **A `--zk` table as `ZkView`'s tables**: the statement (its witnesses `Witness S.m` are the tables' witnesses), the
+hidden-value and value-list types, the type of the other coins, the sizes, the mask slot's word indices, the `Coined`
+table at each coin vector (its leaves the executable's: `Coined.tab`), and M1's level-0 padding data (the level-0
+message's `cols` and the opened positions `pos`) that `padOnto_M1` reads. -/
+structure CoinedSetup where
+  S : Statement
   Hi : Type
   VL : Type
   [addHi : AddCommGroup Hi]
   [finHi : Fintype Hi]
   [decHi : DecidableEq Hi]
-  Coins : Type
+  Rest : Type
   z : ZkView.Sizes
-  T : Coins → ZkView.Coined K W Hi VL z
+  maskWords : Fin z.nMask → ℕ
+  T : CoinsZK z.nC Rest → ZkView.Coined FlockLevel3.GF256 (Witness S.m) Hi VL z
   cols : ℕ
   pos : Fin z.nS → ℕ
-  /-- The coin vectors `verify --zk` does not refuse (`refused_coins`: `β = 0`, mask-slot weights of rank `< 128·k`,
-  `ρ₀, ρ₁` dependent over F128). -/
-  Admits : Coins → Prop
-  /-- The witnesses that satisfy the session's circuit. -/
-  Valid : W → Prop
 
 attribute [instance] CoinedSetup.addHi CoinedSetup.finHi CoinedSetup.decHi
 
+/-- **The coin vectors `verify --zk` does not refuse** (`refused_coins`): `β ≠ 0` in both reps (`Zk.verifyInner`'s
+`beta.isZero` check), the mask slot's weights at the claim points of rank `128·k` (the honest prover's `mask_rank_ok`;
+the verifier does not check it, the prover and the simulator refuse it), and `ρ₀, ρ₁` independent over F128 in both
+reps (`ZkLigerito.rhoIndependent`). -/
+def CoinedSetup.Admits (C : CoinedSetup) (c : CoinsZK C.z.nC C.Rest) : Prop :=
+  (∀ r, (c.beta r).isZero = false) ∧ MaskRankOk c.points C.maskWords ∧ ∀ r, rhoIndependent (c.rho r) = true
+
+/-- **The valid witnesses**: those satisfying the table's statement (`Statement.Satisfies`: the R1CS in every block, the
+pin, and the public regions' values). -/
+def CoinedSetup.Valid (C : CoinedSetup) (w : Witness C.S.m) : Prop := C.S.Satisfies w
+
 /-- **The draw's `--zk` table as `Coined` tables** (open: the definition is the new item's to write, from what
-`verify --zk` sets up at the draw: its schedule, pads layout, inner code and the honest prover's level-0 code). -/
-noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) : CoinedSetup FlockLevel3.GF256 := sorry
+`verify --zk` sets up at the draw: its statement `Tz.S`, schedule, pads layout, inner code and the honest prover's
+level-0 code). -/
+noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) : CoinedSetup := sorry
 
 /-- **The structural facts Lemma B reads**, of a `CoinedSetup` at the arithmetic `A` and M1's padding constant `κ`: M1's
 level-0 padding geometry (`cols ≤ 40`, `t_pad ≤ 2^cols`, at most `t_pad` distinct opened positions inside
-`2^(cols+1)`), and at every coin vector the rank check, M1's padding columns `Gp`, each rep's `W^r` bijective, the pads
-onto, `β ≠ 0`, and the inner relation at every valid witness whose registered values are the public ones, at every coin
-vector the executable admits (at a refused one, `verify --zk` stops). -/
-def CoinedOK (A : Arith 𝔽 K) (κ : 𝔽) (C : CoinedSetup K) : Prop :=
+`2^(cols+1)`), and at every coin vector the executable admits: the table reads its coins (`β`, `ρ`, the rank check's
+weights `eq(p_k, x)` and `embed` the inclusion of F128 in F256), the rank check, M1's padding columns `Gp`, each rep's
+`W^r` bijective, the pads onto, `β ≠ 0`, and the inner relation at every valid witness whose registered values are the
+public ones. -/
+def CoinedOK (A : Arith 𝔽 FlockLevel3.GF256) (κ : 𝔽) (C : CoinedSetup) : Prop :=
   C.cols ≤ 40 ∧ C.z.tpad ≤ 2 ^ C.cols ∧ C.z.nS ≤ C.z.tpad ∧ Function.Injective C.pos ∧
     (∀ q, C.pos q < 2 ^ (C.cols + 1)) ∧
-    ∀ c : C.Coins, C.Admits c → (C.T c).tab.Rank ∧
+    ∀ c : CoinsZK C.z.nC C.Rest, C.Admits c →
+      ((∀ r, (C.T c).β r = fOf (c.beta r)) ∧
+        (∀ r, (C.T c).ρ r 0 = FlockLevel3.GF256.of (c.rho r).1 ∧ (C.T c).ρ r 1 = FlockLevel3.GF256.of (c.rho r).2) ∧
+        (∀ k x, (C.T c).eqw k x = fOf (eqWord (c.points k) (C.maskWords x))) ∧
+        ∀ a : F128, (C.T c).embed (fOf a) = FlockLevel3.GF256.of ⟨a, 0⟩) ∧
+      (C.T c).tab.Rank ∧
       (∀ q i, (C.T c).tab.Gp q i = κ * A.Xhat i.val (C.cols + 1) (A.omega (C.pos q))
         + A.Xhat (2 ^ C.cols + i.val) (C.cols + 1) (A.omega (C.pos q))) ∧
       (∀ r, Function.Bijective fun p : 𝔽 × 𝔽 => (C.T c).tab.Wr r p.1 p.2) ∧ (C.T c).tab.PadsOnto ∧
@@ -190,11 +224,12 @@ def CoinedOK (A : Arith 𝔽 K) (κ : 𝔽) (C : CoinedSetup K) : Prop :=
       ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w
 
 /-- **The session's tables satisfy Lemma B's facts** (new item, open): at every draw `verify --zk` sets up, the
-`Coined` tables of the draw's `--zk` table (`coinedOf (tablesAtZK dj y₀ S R)`) are `CoinedOK` at `execArith` and
-`PAD_C`. -/
+`Coined` tables of the draw's `--zk` table (`coinedOf (tablesAtZK dj y₀ S R)`) are over the table's statement and are
+`CoinedOK` at `execArith` and `PAD_C`. -/
 def CoinedOfSetup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) : Prop :=
   ∀ (S : Finset (Fin n)) (R : Reg), Nonempty (DrawSetupZK I mPts S (dj S)) →
+    (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R)).S = (tablesAtZK (Reg := Reg) dj y₀ S R).S ∧
     CoinedOK execArith (fOf Zk.PAD_C) (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R))
 
 theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
@@ -202,11 +237,13 @@ theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : 
   sorry
 
 /-- **Zero knowledge at a `CoinedSetup`, at `δ₁` per hidden leaf** (Lemma B, `ZkWireFixed`'s form at one table): at any
-coin vector the executable admits, for any encoding `enc` of the view (the proof files) and any event `E`, the real view at any valid witness `w`
-whose registered values are the public ones and `S_shvzk`'s at any `w0` are within `2·|Hid|·δ₁`, both ways. -/
-def ZkViewAt (C : CoinedSetup K) (δ₁ : ℝ≥0∞) : Prop :=
-  ∀ (c : C.Coins), C.Admits c → ∀ {Out : Type} (enc : (∀ _ : Fin 1, (C.T c).tab.View) → Out)
-    (w w0 : Fin 1 → C.W), (∀ j, C.Valid (w j)) → ∀ (_hreg : ∀ j, (C.T c).tab.sReg (w j) = (C.T c).tab.pubReg) (E : Out → Prop),
+coin vector the executable admits, for any encoding `enc` of the view (the proof files) and any event `E`, the real view
+at any valid witness `w` whose registered values are the public ones and `S_shvzk`'s at any `w0` are within
+`2·|Hid|·δ₁`, both ways. -/
+def ZkViewAt (C : CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=
+  ∀ (c : CoinsZK C.z.nC C.Rest), C.Admits c → ∀ {Out : Type} (enc : (∀ _ : Fin 1, (C.T c).tab.View) → Out)
+    (w w0 : Fin 1 → Witness C.S.m), (∀ j, C.Valid (w j)) → ∀ (_hreg : ∀ j, (C.T c).tab.sReg (w j) = (C.T c).tab.pubReg)
+    (E : Out → Prop),
     Game.prCoin (fun p : ∀ _ : Fin 1, (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) =>
         E (enc fun j => (C.T c).viewExe (w j) (p j).1 (p j).2))
         ≤ Game.prCoin (fun p : ∀ _ : Fin 1, (C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt) =>
