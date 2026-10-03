@@ -9743,6 +9743,7 @@
    "assumptions": [],
    "type_hash": "830470269c8de370eacabc9cbd381362d0f6e1c00295c377166dad976546ce73"
   },
+  "FlockSoundness.Discharge.PrivateCircuit.hreg_call": {},
   "FlockSoundness.Discharge.PrivateCircuit.pad_correct": {
    "signature": [
     "FlockSoundness.Discharge.PrivateCircuit.pad_correct :",
@@ -9987,6 +9988,8 @@
    "assumptions": [],
    "type_hash": "a1c3086500082644ead7b812898022551eaea6b62c7893e475fd2280b0fa670d"
   },
+  "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound_cone": {},
+  "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound_coneH": {},
   "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound_drawn": {
    "signature": [
     "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound_drawn {UCc : FlockSoundness.Audit.Circuit}",
@@ -10217,6 +10220,9 @@
    "assumptions": [],
    "type_hash": "11bb8c02dcae42ed889cedfdeec561afaa39ec8b2f6d86aaa61af2cc956218d7"
   },
+  "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound_realH": {},
+  "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound_wired": {},
+  "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound_wiredH": {},
   "FlockSoundness.Discharge.PrivateCircuit.ran_registered": {
    "signature": [
     "FlockSoundness.Discharge.PrivateCircuit.ran_registered : FlockSoundness.Discharge.PrivateCircuit.RanRegistered"
@@ -10244,6 +10250,7 @@
    "assumptions": [],
    "type_hash": "4473649ea6cc077f5914ade3d3fd61ed9f8d762c759ca0963ec290f78848522e"
   },
+  "FlockSoundness.Discharge.PrivateCircuit.wired_cone_unit": {},
   "FlockSoundness.Discharge.PrivateCircuit.wired_eval": {
    "signature": [
     "FlockSoundness.Discharge.PrivateCircuit.wired_eval (T : FlockSoundness.Discharge.PrivateCircuit.Universal.Topo)",
@@ -10285,6 +10292,7 @@
    "assumptions": [],
    "type_hash": "2ee4191e1e6455b058e9348d60e0149fb1830eeca6caf4a966fb10ff3a9885e9"
   },
+  "FlockSoundness.Discharge.PrivateCircuit.wired_wrong_unit": {},
   "FlockSoundness.Discharge.Tables.accepts_tables": {
    "signature": ["FlockSoundness.Discharge.Tables.accepts_tables : FlockSoundness.Discharge.Tables.AcceptsTables"],
    "assumptions": [],
