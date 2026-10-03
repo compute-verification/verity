@@ -5854,11 +5854,13 @@
    "assumptions": [],
    "type_hash": "4e862017fe3ab371b55213f642d8658153d082c0b51ef786706edb13de5b5729"
   },
+  "FlockSoundness.Discharge.Hidden.outputs_binding_tail_checked": {},
   "FlockSoundness.Discharge.Hidden.outputs_binding_v2": {
    "signature": ["FlockSoundness.Discharge.Hidden.outputs_binding_v2 : FlockSoundness.Discharge.Hidden.OutputsBindingV2"],
    "assumptions": [],
    "type_hash": "aa74fb31a5c22248441213b66bb8bc2f4efbb851171fae1c169e9e86ff0c603c"
   },
+  "FlockSoundness.Discharge.Hidden.outputs_binding_v2_checked": {},
   "FlockSoundness.Discharge.Hidden.outputs_binding_wide": {
    "signature": [
     "FlockSoundness.Discharge.Hidden.outputs_binding_wide : FlockSoundness.Discharge.Hidden.OutputsBindingWide"
@@ -5866,6 +5868,7 @@
    "assumptions": [],
    "type_hash": "022582248c79b78c646052c5d46f6c8e8a1fcf322b8b2feb90a135e773daaea1"
   },
+  "FlockSoundness.Discharge.Hidden.outputs_binding_wide_checked": {},
   "FlockSoundness.Discharge.Hidden.outputs_committed": {
    "signature": ["FlockSoundness.Discharge.Hidden.outputs_committed : FlockSoundness.Discharge.Hidden.OutputsCommitted"],
    "assumptions": [],
@@ -5878,6 +5881,7 @@
    "assumptions": [],
    "type_hash": "b776401e8eff87938fbc961a4ea5e52216eb62289dedbdecb4f0e55daa6e623c"
   },
+  "FlockSoundness.Discharge.Hidden.outputs_committed_tail_checked": {},
   "FlockSoundness.Discharge.Hidden.outputs_committed_v2": {
    "signature": [
     "FlockSoundness.Discharge.Hidden.outputs_committed_v2 : FlockSoundness.Discharge.Hidden.OutputsCommittedV2"
@@ -5885,6 +5889,7 @@
    "assumptions": [],
    "type_hash": "109a0df5aa246456b7e5069c04753586bd823e537ab2d3cfc4ff4db6c6335e2a"
   },
+  "FlockSoundness.Discharge.Hidden.outputs_committed_v2_checked": {},
   "FlockSoundness.Discharge.Hidden.outputs_committed_wide": {
    "signature": [
     "FlockSoundness.Discharge.Hidden.outputs_committed_wide : FlockSoundness.Discharge.Hidden.OutputsCommittedWide"
@@ -5892,6 +5897,7 @@
    "assumptions": [],
    "type_hash": "b84bf89353e091e679f8efb0ca12f948b4b074af6cb01675a3029946150ef153"
   },
+  "FlockSoundness.Discharge.Hidden.outputs_committed_wide_checked": {},
   "FlockSoundness.Discharge.Hidden.public_exposes": {
    "signature": ["FlockSoundness.Discharge.Hidden.public_exposes : FlockSoundness.Discharge.Hidden.PublicExposes"],
    "assumptions": [],
@@ -5902,6 +5908,7 @@
    "assumptions": [],
    "type_hash": "8196be5fb7e2f8fb6184ec5f389ffcd2d1ce2da7a65959dd12907179c064f88c"
   },
+  "FlockSoundness.Discharge.Hidden.setupHidden_upv_pos": {},
   "FlockSoundness.Discharge.Hm.bc_site_col": {
    "signature": [
     "FlockSoundness.Discharge.Hm.bc_site_col {T : FlockSoundness.Model.Statement}",
