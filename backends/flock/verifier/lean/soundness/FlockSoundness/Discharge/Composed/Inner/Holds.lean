@@ -421,9 +421,57 @@ theorem lay_triple {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) {nE : ℕ} (h
   subst hE
   exact ⟨by lay_omega, by lay_omega, rfl, rfl, rfl⟩
 
+/-- The residual fold is `foldLoL` at the coins, lowest first. -/
+theorem foldN_eq_foldLoL (ρ : ℕ → 𝔽) : ∀ (n : ℕ) (u : ℕ → 𝔽),
+    Zerocheck.foldN ρ n u = foldLoL (List.ofFn fun j : Fin n => ρ j.val) u
+  | 0, _ => rfl
+  | n + 1, u => by
+      rw [List.ofFn_succ_last, foldLoL_append_single]
+      exact congrArg (foldLo (ρ n)) (foldN_eq_foldLoL ρ n u)
+
+/-- **The residual fold at `0` is the `eq`-weighted sum** over the folded variables. -/
+theorem foldN_eq_sum (ρ : ℕ → 𝔽) (n : ℕ) (u : ℕ → 𝔽) :
+    Zerocheck.foldN ρ n u 0 = ∑ x ∈ Finset.range (2 ^ n), Zerocheck.eqR ρ 0 n x * u x := by
+  rw [foldN_eq_foldLoL, foldLoL_eq_sum, List.length_ofFn]
+  refine Finset.sum_congr rfl fun x _ => ?_
+  rw [eqList_ofFn, mul_zero, add_zero]
+  congr 1
+  unfold Zerocheck.eqR Model.eqAt
+  rw [← Fin.prod_univ_eq_prod_range (fun j => if x.testBit j then ρ (0 + j) else 1 + ρ (0 + j)) n]
+  simp only [zero_add]
+
+/-- **The honest `final_a` (any of the honest zerocheck's folded tables) is the claim's value** at the skip coin and
+the residual coins: `Σ_x eq(ρ, x)·â(z, x)` is the model's evaluation of the claim `(·, L_s(z), ρ)` (`finalC_eq_eval` at
+the table `a` and the point `ρ`). -/
+theorem finalA_holds (m : ℕ) (hm : 6 ≤ m) (a b c : ℕ → 𝔽) (w : Model.Witness m)
+    (ha : ∀ i : Fin (2 ^ m), a i.val = ((w i).val : 𝔽)) (r rho : Array F128) (z : F128) :
+    (⟨fOf (Zerocheck.honest (m - 6) a b c r rho z).finalA, execArith.lagS (fOf z), vecOf (m - 6) rho⟩ :
+      Model.Claim 𝔽 m).Holds w := by
+  have h := ZerocheckMasked.finalC_eq_eval m hm a a a w ha rho rho z
+  show Model.Claim.eval ⟨fOf 0, vecOf 64 (skipWeights z), vecOf (m - 6) rho⟩ w = _
+  rw [← h]
+  exact (foldN_eq_sum _ _ _).symm
+
+theorem finalB_holds (m : ℕ) (hm : 6 ≤ m) (a b c : ℕ → 𝔽) (w : Model.Witness m)
+    (hb : ∀ i : Fin (2 ^ m), b i.val = ((w i).val : 𝔽)) (r rho : Array F128) (z : F128) :
+    (⟨fOf (Zerocheck.honest (m - 6) a b c r rho z).finalB, execArith.lagS (fOf z), vecOf (m - 6) rho⟩ :
+      Model.Claim 𝔽 m).Holds w := by
+  have h := ZerocheckMasked.finalC_eq_eval m hm b b b w hb rho rho z
+  show Model.Claim.eval ⟨fOf 0, vecOf 64 (skipWeights z), vecOf (m - 6) rho⟩ w = _
+  rw [← h]
+  exact (foldN_eq_sum _ _ _).symm
+
 end Glue
 
 variable {mPts n : ℕ} {Reg : Type}
+
+/-- The `--zk` tables at a draw `verify --zk` sets up are its table. -/
+theorem tablesAtZK_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
+    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)) :
+    tablesAtZK (Reg := Reg) dj y₀ S R = y.table := by
+  show tableAtZK dj y₀ S = _
+  rw [tableAtZK, dif_pos ⟨y⟩]
+  exact tableZK_eq _ _
 
 /-- **The inner relation at the draw** (open, inner lane): at every coin vector the honest prover doesn't refuse, every
 valid witness whose registered values are the public ones satisfies `Table.InnerHolds` (§2.4 line 16's ten
@@ -484,15 +532,26 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
     (rF_ne_one _ _ c r (hc.2.2.2 r)) ?hA ?hB _ ?hs0 ?hs1 ?hk0 ?hL ?hT ((C.T c).tab.y1' w ω.1 ω.2.1.2.1 r)
     (fun _ => rfl) hab htw' k
   -- the executable statement's sizes are the table's, and the schedule's lane split
-  case hm => sorry
-  case hk => sorry
-  case hk0 => sorry
-  case hL => sorry
+  case hm => rw [tablesAtZK_eq dj y₀ S R y]; rfl
+  case hk => rw [tablesAtZK_eq dj y₀ S R y]; rfl
+  case hk0 =>
+    have := (tablesAtZK dj y₀ S R).hshape.2.2.1
+    have := (tablesAtZK dj y₀ S R).hmsch
+    omega
+  case hL =>
+    show 2 ^ (tablesAtZK dj y₀ S R).sch.level₀.logCols = _
+    have := (tablesAtZK dj y₀ S R).hshape.2.2.1
+    have := (tablesAtZK dj y₀ S R).hmsch
+    rw [Accounting.Schedule.level₀]
+    congr 1
+    omega
   -- the prover's table `z = (w, u)` satisfies the statement
   case hw => sorry
   -- the clear `final_a`, `final_b` are the `a`, `b` claims at the zerocheck's coins
-  case hA => sorry
-  case hB => sorry
+  case hA =>
+    exact finalA_holds _ (six_le _) _ _ _ _ (fun i => by rw [aT, dite_eq_left i.isLt]) _ _ _
+  case hB =>
+    exact finalB_holds _ (six_le _) _ _ _ _ (fun i => by rw [bT, dite_eq_left i.isLt]) _ _ _
   -- the masked claims' `ŝ` is the honest `shat` at the replay's claims, and the opening's target is `Σ_y f(y)·b(y)`
   case hs0 => sorry
   case hs1 => sorry
