@@ -1,6 +1,8 @@
 """The universal unit's Lean interpreter (`verifier/lean/soundness/FlockSoundness/Discharge/PrivateCircuit/Interp.lean`, which
 `pad_correct` reads) against `verity.ml.boolean.universal.UniversalUnit_v1` run by `verity.evaluation`, through vectors the
-interpreter generates (`fixtures/universal_lean.json`, `lean/universal.sh`)."""
+interpreter generates (`fixtures/universal_lean.json`, `lean/universal.sh`). This is a test, not a proof: `interp` is tested
+equal to the Definition whose standalone program has the digest `DIGESTS` pins, so a change to `UniversalUnit_v1` fails
+here until the vectors and the pin are renewed."""
 
 from __future__ import annotations
 
@@ -11,12 +13,19 @@ from pathlib import Path
 import numpy as np
 
 from verity import evaluation as E
+from verity.evaluation.reference import standalone_call
+from verity.ir import codec
 from verity.ir.defs import bind
 from verity.ml.boolean import universal as U
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "universal_lean.json").read_text())
 ARGS = ("op", "src", "out", "x")
+#: (G, N_IN, N_OUT) -> the program digest of `UniversalUnit_v1{G, N_IN, N_OUT}`'s standalone call, the Definition checked
+DIGESTS = {
+    (16, 16, 8): "0038131f58f2fa2d9d0422ffa9a069ee9e9d9569cf32f3bacdcd4122ac1ae9f3",
+    (20, 13, 5): "0e5dfd3b15cd3cafc2b5353273d21a1de7c39c68ffa92fc3fe59769c3c140e94",
+}
 
 
 def _bits(s: str) -> list[int]:
@@ -24,13 +33,14 @@ def _bits(s: str) -> list[int]:
 
 
 def _agree(vectors: list[dict]) -> None:
-    """Every vector's outputs are the Definition's on its arguments: the bit-sliced evaluator on all of them, the
-    plain-integer reference on the first two of each class."""
+    """Every vector's outputs are the Definition's on its arguments, the Definition pinned by digest: the bit-sliced
+    evaluator on all of them, the plain-integer reference on the first two of each class."""
     by_cls: dict[tuple, list[dict]] = {}
     for v in vectors:
         by_cls.setdefault(tuple(v["cls"]), []).append(v)
     for (G, N_IN, N_OUT), vs in by_cls.items():
         unit = bind(U.UniversalUnit, G=G, N_IN=N_IN, N_OUT=N_OUT)
+        assert codec.program_digest(codec.encode_program(standalone_call(unit)[0])) == DIGESTS[G, N_IN, N_OUT]
         cols = [np.array([_bits(v[a]) for v in vs], dtype=np.uint8) for a in ARGS]
         got = np.asarray(E.evaluate_batch(unit, *cols)).reshape(len(vs), N_OUT)
         assert got.tolist() == [_bits(v["y"]) for v in vs]

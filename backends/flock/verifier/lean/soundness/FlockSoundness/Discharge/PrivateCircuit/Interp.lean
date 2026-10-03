@@ -17,10 +17,14 @@ developer's circuit into a program of the class, and the netlists that circuit i
   them) and no-op gates `(XOR, 0, 0)` after its gates; `dummyUnit`: `G` no-op gates and every output wire `nIn`, a no-op
   gate's, so it outputs `0` on every input; `pad C c`: `C`'s units padded, then dummies up to `N`.
 * `fits C c`: `C` has at most `N` units, `G ≥ 1`, and each unit has at most `G` gates and `nIn` inputs, exactly `nOut`
-  outputs, and every index in range (a source below its gate's own wire, an output below its wires), `pad`'s
+  outputs (`nOut` is exact: outputs are not padded), and every index in range (a source below its gate's own wire, an output below its wires), `pad`'s
   precondition.
 * `run c p i x`: unit `i` of program `p` run by `U c` on unit inputs `x` (bits, the first `nIn` read); `eval C i x`: unit
-  `i` of `C`; `dummy c`: the dummy's outputs, `nOut` zeros.
+  `i` of `C`; `dummy c`: the dummy's outputs, exactly `nOut` zeros (`List.replicate nOut false`).
+
+`interp` is tied to `UniversalUnit_v1` by a test, not a proof: `backends/flock/tests/test_lean_universal.py` holds its
+vectors equal to `verity.evaluation`'s run of the Definition, pinned by its program digest. Cite it as tested equal.
+Wiring between units is not modelled: each unit runs on its own claimed inputs.
 -/
 
 namespace FlockSoundness.Discharge.PrivateCircuit.Universal
@@ -128,7 +132,8 @@ def Netlist.InRange (u : Netlist) : Prop :=
   (∀ g (h : g < u.gates.length), u.gates[g].a < u.nIn + g ∧ u.gates[g].b < u.nIn + g) ∧
     ∀ o ∈ u.outputs, o < u.nIn + u.gates.length
 
-/-- **A unit fits the class**: at most `G` gates and `nIn` inputs, exactly `nOut` outputs, every index in range. -/
+/-- **A unit fits the class**: at most `G` gates and `nIn` inputs, exactly `nOut` outputs (outputs are not padded),
+every index in range. -/
 def Netlist.Fits (u : Netlist) (c : Cls) : Prop :=
   u.gates.length ≤ c.G ∧ u.nIn ≤ c.nIn ∧ u.outputs.length = c.nOut ∧ u.InRange
 
@@ -151,7 +156,7 @@ def eval (C : Circ) (i : Nat) (x : Nat → Bool) : List Bool :=
   | some u => interpret u x
   | none => []
 
-/-- **The dummy's outputs**: `nOut` zeros. -/
+/-- **The dummy's outputs**: exactly `nOut` zeros. -/
 def dummy (c : Cls) : List Bool := List.replicate c.nOut false
 
 end FlockSoundness.Discharge.PrivateCircuit.Universal
