@@ -1,6 +1,7 @@
 import FlockSoundness.Discharge.Composed.Defs
 import FlockSoundness.Discharge.DecodeZLJ
 import FlockSoundness.Discharge.Tables
+import FlockSoundness.Discharge.Composed.TagsJ
 
 /-!
 # One `--zk` sampled session of `J` tables: the pieces `zk_session_soundJ` reads
@@ -67,25 +68,6 @@ def partS (I : Inputs) (d : Lean.Json) (S : Finset (Fin n)) (j : Fin (nTab I)) :
 theorem mem_partS {I : Inputs} {d : Lean.Json} {S : Finset (Fin n)} {u : Fin n} (h : u ∈ S) :
     u ∈ partS I d S (partOf I d u.val) :=
   Finset.mem_filter.2 ⟨h, rfl⟩
-
-/-! ## Table `j`'s tags: the identity alone differs, which the circuit and public parses do not read -/
-
-theorem parse_identity (tags : Tags) (x : Lean.Json) (b : ByteArray) (t : List (String × ByteArray)) :
-    HmRow.parse { tags with identity := x } b t = HmRow.parse tags b t := by
-  have hc : ∀ c l, HmRow.check c { tags with identity := x } l = HmRow.check c tags l := fun _ _ => rfl
-  simp only [HmRow.parse, hc]
-
-theorem parse_tagsAt (tags : Tags) (count j : ℕ) (b : ByteArray) (t : List (String × ByteArray)) :
-    HmRow.parse (tagsAt tags count j) b t = HmRow.parse tags b t := by
-  unfold tagsAt
-  split_ifs
-  · rfl
-  · exact parse_identity _ _ _ _
-
-theorem loadPublic_tagsAt (tags : Tags) (count j : ℕ) (c : Flock.Circuit) (b : ByteArray) :
-    HmRow.loadPublic (tagsAt tags count j) c b = HmRow.loadPublic tags c b := by
-  unfold tagsAt
-  split_ifs <;> rfl
 
 /-- **A table `verify --zk` sets up**, on table `j`'s inputs `I'` (`inputsJ I j`): `DrawSetupZK`'s fields at a
 `DrawSetup` of `I'`. -/
