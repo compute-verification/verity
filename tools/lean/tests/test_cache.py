@@ -651,6 +651,20 @@ def test_the_daily_run_builds_in_the_sandbox_and_publishes_only_after_clean(s3, 
     assert "1 of 1 packages built; publish exited 0, prune 0" in lines[-1]
 
 
+def test_the_daily_run_keeps_dependencies_unpacked_into_prep_before_its_first_clone(s3, tmp_path):
+    b, url = s3
+    n, log, sha = node(tmp_path, url)
+    staged = n.prep / "pkg" / ".lake" / "packages" / "arklib" / "A.olean"
+    staged.parent.mkdir(parents=True)
+    staged.write_bytes(b"bundle")
+    for _ in range(2):
+        lines = []
+        assert D.daily(n, lines.append) == 0, "\n".join(lines)
+        assert staged.read_bytes() == b"bundle"
+    assert (n.deps / D.deps_key(n.prep / "pkg") / "arklib" / "A.olean").read_bytes() == b"bundle"
+    assert not n.prep.with_name("prep.clone").exists()
+
+
 def test_the_daily_run_refuses_an_out_directory_another_user_could_replace(tmp_path):
     out, leaf = tmp_path / "out", tmp_path / "out" / "a" / "pkg"
     (tmp_path / "real").mkdir()

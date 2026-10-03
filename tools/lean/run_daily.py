@@ -6,7 +6,8 @@
 2. `vy-lean-sandbox checkout` makes `/build/verity` a fresh clone of it, its sources root's.
 3. As research, in a checkout of the commit kept at PREP, `tools/lean/setup.sh` fetches each package's dependencies: the
    pinned bundle, then Lake, then Mathlib's cache. Root copies them to DEPS/<deps_key>, readable by all, and the build
-   gets that copy read-only, with no network.
+   gets that copy read-only, with no network. PREP's `.lake` directories are kept across runs (only the checkout moves),
+   including bundles unpacked there before the first run.
 4. Per package, `vy-lean-sandbox run` builds it as `lean-build` with `cache.py build`. The build writes only the tree's
    `.lake` directories and `/build/out/<package>`, the one directory below `/build/out` root doesn't own.
 5. `vy-lean-sandbox clean` must find the tree still the commit's, with no build left running. Only then does root read the
@@ -106,9 +107,15 @@ def readable_copy(src: Path, dst: Path) -> None:
 def prepare(n: Node, sha: str, pkgs: list[str], log) -> dict[str, Path]:
     """Each package's dependencies, fetched as research in PREP at ``sha`` and copied to DEPS/<deps_key>: {package: copy}.
     Copies of keys this run doesn't use are deleted."""
-    if not (n.prep / ".git").exists() and \
-            _run([*n.research, "git", "clone", "-q", "--shared", "--no-checkout", n.bare, n.prep], log) != 0:
-        return {}
+    if not (n.prep / ".git").exists():
+        # PREP may already hold dependencies infra unpacked, and git won't clone into a non-empty directory.
+        tmp = n.prep.with_name(n.prep.name + ".clone")
+        shutil.rmtree(tmp, ignore_errors=True)
+        if _run([*n.research, "git", "clone", "-q", "--shared", "--no-checkout", n.bare, tmp], log) != 0 or \
+                _run([*n.research, "mkdir", "-p", n.prep], log) != 0 or \
+                _run([*n.research, "mv", tmp / ".git", n.prep / ".git"], log) != 0:
+            return {}
+        _run([*n.research, "rmdir", tmp], log)
     if _run([*n.research, "git", "-C", n.prep, "-c", "advice.detachedHead=false", "checkout", "-q", "-f", "--detach", sha],
             log) != 0:
         return {}
