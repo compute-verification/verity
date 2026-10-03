@@ -172,17 +172,18 @@ def _kernel2():
 
 
 def block_hashes2(C, idx, g0: int, g1: int):
-    """Two lanes' per-block hashes from one read of each challenged block."""
+    """Two lanes' per-block hashes from one read of each challenged block. Outputs live on `idx`'s device (the CUDA
+    device), so `C` may be a pinned host tensor read over PCIe (UVA zero-copy)."""
     import torch
 
     kernel = _kernel2()
     r = idx.numel()
-    out0 = torch.empty(r, dtype=torch.int64, device=C.device)
-    out1 = torch.empty(r, dtype=torch.int64, device=C.device)
+    out0 = torch.empty(r, dtype=torch.int64, device=idx.device)
+    out1 = torch.empty(r, dtype=torch.int64, device=idx.device)
 
     def combine(g):
         return torch.tensor([pow(int(g), INTERLEAVE - 1 - lane, MOD) for lane in range(INTERLEAVE)],
-                            dtype=torch.int64, device=C.device)
+                            dtype=torch.int64, device=idx.device)
 
     kernel[(r,)](C, idx, combine(g0), combine(g1), out0, out1,
                  pow(int(g0), INTERLEAVE, MOD), pow(int(g1), INTERLEAVE, MOD), MOD, INTERLEAVE, N_STEPS)
@@ -190,18 +191,19 @@ def block_hashes2(C, idx, g0: int, g1: int):
 
 
 def block_hashes(C, idx, g: int, out=None):
-    """Run the kernel: per-block hashes `P_g(C[idx[r]])` as an `int64 [R]` device tensor. `C` is `int32 [N, WORDS]`."""
+    """Run the kernel: per-block hashes `P_g(C[idx[r]])` as an `int64 [R]` device tensor. `C` is `int32 [N, WORDS]`; it
+    may be a pinned host tensor (UVA zero-copy) since the outputs are keyed off `idx`'s (CUDA) device."""
     import torch
 
     kernel = _kernel()
     r = idx.numel()
     if out is None:
-        out = torch.empty(r, dtype=torch.int64, device=C.device)
+        out = torch.empty(r, dtype=torch.int64, device=idx.device)
     gp = pow(int(g), INTERLEAVE, MOD)
     combine = torch.tensor(
         [pow(int(g), INTERLEAVE - 1 - lane, MOD) for lane in range(INTERLEAVE)],
         dtype=torch.int64,
-        device=C.device,
+        device=idx.device,
     )
     kernel[(r,)](C, idx, combine, out, gp, MOD, INTERLEAVE, N_STEPS)
     return out

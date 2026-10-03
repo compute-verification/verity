@@ -196,8 +196,7 @@ def raw_bandwidth(args, torch):
 def cmd_honest(args, torch, meta):
     sizes = [int(x) for x in args.c_gib.split(",")]
     rs = [1 << e for e in range(args.r_lo, args.r_hi + 1)]
-    out = {"meta": meta, "kind": "honest", "l2_mib": 128, "points": []}
-    out["raw"] = raw_bandwidth(args, torch)
+    out = {"meta": meta, "kind": "honest", "l2_mib": 128, "raw": {}, "points": []}
     for cg in sizes:
         n = (cg * GIB) // D.BLOCK_BYTES
         C = make_C(torch, n, seed=cg)
@@ -223,6 +222,11 @@ def cmd_honest(args, torch, meta):
                   f"{dist(k_ms, nbytes)['gbps_at_p50']:.0f} GB/s")
         del C
         torch.cuda.empty_cache()
+    write(args, "honest.json", out)  # the device-resident result is on disk before the riskier reference rates
+    try:
+        out["raw"] = raw_bandwidth(args, torch)
+    except Exception as e:  # a reference-rate hiccup must not cost the sweep
+        out["raw"] = {"error": repr(e)}
     write(args, "honest.json", out)
 
 
@@ -336,6 +340,7 @@ def cmd_cheater(args, torch, meta):
     rs = [1 << e for e in range(args.r_lo, args.r_hi + 1)]
     fs = [float(x) for x in args.fracs.split(",")]
     out = {"meta": meta, "kind": "cheater", "c_gib": cg, "n_blocks": n, "points": []}
+    zc_ok = True  # once zero-copy fails (e.g. UVA unsupported), stop retrying it but keep the async sweep
     for r in rs:
         idx = random_idx(torch, n, r, seed=0x2000 + r)
         for f in fs:
@@ -349,13 +354,20 @@ def cmd_cheater(args, torch, meta):
             d["R_host"] = rh
             d["host_bytes"] = host_bytes
             d["pcie_gbps_at_p50"] = (host_bytes / (d["ms_p50"] / 1e3) / 1e9) if rh else 0.0
-            zc_ms, _ = measure_cheater_zerocopy(torch, C, host_pin, idx, host_hit, g)
-            dz = dist(zc_ms, nbytes)
-            dz["pcie_gbps_at_p50"] = (host_bytes / (dz["ms_p50"] / 1e3) / 1e9) if rh else 0.0
+            dz = None
+            if zc_ok:
+                try:
+                    zc_ms, _ = measure_cheater_zerocopy(torch, C, host_pin, idx, host_hit, g)
+                    dz = dist(zc_ms, nbytes)
+                    dz["pcie_gbps_at_p50"] = (host_bytes / (dz["ms_p50"] / 1e3) / 1e9) if rh else 0.0
+                except Exception as e:
+                    zc_ok = False
+                    out["zerocopy_error"] = repr(e)
             out["points"].append({"R": r, "f": f, "async": d, "zerocopy": dz,
                                   "R_host": rh, "host_bytes": host_bytes})
-            print(f"cheater C={cg}GiB R={r} f={f}: Rh={rh} async p50 {d['ms_p50']:.3f} ms "
-                  f"zerocopy p50 {dz['ms_p50']:.3f} ms")
+            write(args, "cheater.json", out)  # incremental: a later crash keeps the points already measured
+            zp = f"{dz['ms_p50']:.3f}" if dz else "n/a"
+            print(f"cheater C={cg}GiB R={r} f={f}: Rh={rh} async p50 {d['ms_p50']:.3f} ms zerocopy p50 {zp} ms")
     write(args, "cheater.json", out)
     del C, host_pin
     torch.cuda.empty_cache()

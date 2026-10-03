@@ -48,8 +48,11 @@ def cheater_best_by_rf(cheater: dict) -> dict:
     out = {}
     for pt in cheater["points"]:
         r, f = pt["R"], pt["f"]
-        a, z = pt.get("async", {}), pt.get("zerocopy", {})
-        best = min((a, z), key=lambda d: d.get("ms_p50", float("inf")))
+        a, z = pt.get("async") or {}, pt.get("zerocopy") or {}
+        cands = [d for d in (a, z) if d.get("ms_p50") is not None]
+        if not cands:
+            continue
+        best = min(cands, key=lambda d: d["ms_p50"])
         method = "async" if best is a else "zerocopy"
         out[(r, f)] = {"method": method, "ms_p50": best["ms_p50"], "ms_min": best["ms_min"],
                        "ms_p99": best.get("ms_p99", best["ms_p50"]), "R_host": pt.get("R_host", 0),
