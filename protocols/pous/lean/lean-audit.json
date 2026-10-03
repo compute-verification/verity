@@ -527,6 +527,27 @@
    "assumptions": [],
    "type_hash": "3c76052ab3f9ea6abd575006dd2fc06826be9f42a0d5ff62d7c0f1c5eea4d1d1"
   },
+  "PousBandwidth.honest_accepts_iff": {
+   "signature": [
+    "PousBandwidth.honest_accepts_iff {N R W : Nat} {F : Type} [Field F] [Fintype F] (host : Finset (Fin N))",
+    "  (b BWpcie T : NNReal) (hBW : Ne BWpcie 0) (S : Fin R → Fin N) (C : Pous.Bandwidth.Store N W F)",
+    "  (k : Pous.Bandwidth.Key F) :",
+    "  Iff (Pous.Bandwidth.Accepts (PousBandwidth.honest host b BWpcie) T S C k)",
+    "    (NNReal.instPartialOrder.le (instHMul.hMul b (Finset.instInter.inter (Finset.image S Finset.univ) host).card.cast)",
+    "      (instHMul.hMul BWpcie T))"
+   ],
+   "assumptions": [],
+   "type_hash": "df85830c7f7d09382c927a2dc7c9cd4c7e77d94875e412e9e8575994ab16f91d"
+  },
+  "PousBandwidth.honest_twoTierBandwidth": {
+   "signature": [
+    "PousBandwidth.honest_twoTierBandwidth {N R W : Nat} {F : Type} [Field F] [Fintype F] (host : Finset (Fin N))",
+    "  (b BWpcie : NNReal) (hBW : Ne BWpcie 0) :",
+    "  Pous.Assumptions.TwoTierBandwidth host b BWpcie (PousBandwidth.honest host b BWpcie)"
+   ],
+   "assumptions": [],
+   "type_hash": "604ad06b915def6bb6fc21dc1d7c30ce410379e200f5a11ff22d11fa03337ae3"
+  },
   "PousContinuous.pr_misses_gt_le": {
    "signature": [
     "PousContinuous.pr_misses_gt_le {α : Type} [Fintype α] [Nonempty α] (n : Nat) (X : List α → α → Prop) (q : List α → Real)",
@@ -690,7 +711,11 @@
    "definitions": {
     "Pous.Assumptions.TwoTierBandwidth": "1b6e1d30ed440a10114b1dd3770b561c6ba8f133da4a8cd69e26743024bd0af2"
    },
-   "pins": ["Pous.SecurityProofs.HbmPlacement", "Pous.SecurityProofs.HbmPlacementFStar"]
+   "pins": [
+    "Pous.SecurityProofs.HbmPlacement",
+    "Pous.SecurityProofs.HbmPlacementFStar",
+    "PousBandwidth.honest_twoTierBandwidth"
+   ]
   },
   "Pous.Assumptions.P2": {
    "digest": "2f4bb409e3a24391702c966699a2c6945839431dcd705dc402474016e9bcbd26",
@@ -1038,6 +1063,8 @@
     "Pous.plain_short_coins_insecure",
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
+    "PousBandwidth.honest_accepts_iff",
+    "PousBandwidth.honest_twoTierBandwidth",
     "PousGraded.gradedMeets_zero_iff",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
@@ -1305,7 +1332,9 @@
    "pins": [
     "Pous.SecurityProofs.DigestAU",
     "Pous.SecurityProofs.HbmPlacement",
-    "Pous.SecurityProofs.HbmPlacementFStar"
+    "Pous.SecurityProofs.HbmPlacementFStar",
+    "PousBandwidth.honest_accepts_iff",
+    "PousBandwidth.honest_twoTierBandwidth"
    ]
   },
   "Pous.Protocol.Model.ColumnGame": {
