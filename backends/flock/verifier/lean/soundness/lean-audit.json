@@ -14,14 +14,6 @@
   "Flock.Registered"
  ],
  "compile_time": {
-  "FlockSoundness.Discharge.ZkBind.HmRowsZ.ofShadow_computes": {},
-  "FlockSoundness.Discharge.ZkBind.decAgreeAt": {},
-  "FlockSoundness.Discharge.ZkBind.rsZAt_computes": {},
-  "FlockSoundness.Discharge.ZkBind.sitesZAt_at": {},
-  "FlockSoundness.Discharge.ZkBind.sitesZAt_parse": {},
-  "FlockSoundness.Discharge.ZkBind.tableAtZK_S": {},
-  "FlockSoundness.Discharge.ZkBind.wit_surj": {},
-  "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at": {},
   "FlockSoundness.Refine.Walk": {
    "why": "walk_step, the tactic that steps through a successful computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
    "digest": "c86a84bed584d07dde045f113c2e8937b7d5887fb9cda37aebe771db55960a14"
@@ -4542,61 +4534,57 @@
    "assumptions": [],
    "type_hash": "8be091f3d95f07de4c7cf133faf6b65a369b2a05104e15ff0d23d66aafcea58e"
   },
-  "FlockSoundness.Discharge.Composed.coinedOf_setup": {},
+  "FlockSoundness.Discharge.Composed.coinedOf_setup": {
+   "signature": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup {mPts n : Nat} {Reg : Type} (I : FlockSoundness.Discharge.Exec.Inputs)",
+    "  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
+    "  (y₀ : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S₀ (dj S₀)) :",
+    "  FlockSoundness.Discharge.Composed.CoinedOfSetup I dj y₀"
+   ],
+   "assumptions": [],
+   "type_hash": "cb2c25eb538028181a2897d471f460fd07e9f5de8130a580ac6daf0b6d955690"
+  },
   "FlockSoundness.Discharge.Composed.zk_session_composed": {
    "signature": [
-    "FlockSoundness.Discharge.Composed.zk_session_composed {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K]",
-    "  [Inhabited D] [Inhabited Sl] {mPts n : Nat} {Reg : Type} (A : FlockSoundness.Model.Arith FlockLevel3.GF128 K)",
-    "  (Hs : FlockSoundness.Discharge.ZkLink.Hashes FlockLevel3.GF128 D Sl) {C : FlockSoundness.Audit.Circuit}",
-    "  (P : FlockSoundness.Audit.Partition C n) (I : FlockSoundness.Discharge.Exec.Inputs) (ht : Eq I.tags.typed Bool.false)",
-    "  (hh : Eq I.tags.hiddenOutputs Bool.false) (h1 : instLENat.le I.count 1) (dj : Finset (Fin n) → Lean.Json)",
-    "  {S₀ : Finset (Fin n)} (y₀ : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S₀ (dj S₀))",
+    "FlockSoundness.Discharge.Composed.zk_session_composed {mPts n : Nat} {Reg : Type}",
+    "  (Hs : FlockSoundness.Discharge.ZkLink.Hashes FlockLevel3.GF128 FlockSoundness.Refine.Dig (List UInt8))",
+    "  (I : FlockSoundness.Discharge.Exec.Inputs) (ht : Eq I.tags.typed Bool.false) (hh : Eq I.tags.hiddenOutputs Bool.false)",
+    "  (h1 : instLENat.le I.count 1) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
+    "  (y₀ : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S₀ (dj S₀))",
     "  (wr : Finset (Fin n) → Reg → FlockSoundness.Refine.LiveOut mPts → FlockSoundness.Discharge.Exec.Transcript)",
-    "  (opn : Finset (Fin n) → Reg → Array ByteArray → FlockSoundness.Discharge.ZkLink.OpensZ FlockLevel3.GF128 D Sl)",
+    "  (opn :",
+    "    Finset (Fin n) →",
+    "      Reg →",
+    "        Array ByteArray →",
+    "          FlockSoundness.Discharge.ZkLink.OpensZ FlockLevel3.GF128 FlockSoundness.Refine.Dig (List UInt8))",
     "  (dg : ByteArray → ByteArray) (dec : Finset (Fin n) → Reg → Nat → ByteArray → List FlockSoundness.Game.Msg)",
     "  (one : Finset (Fin n) → Reg → Nat → Bool)",
     "  (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List FlockSoundness.Game.Msg)",
-    "  (capOf : Finset (Fin n) → Reg → ByteArray → Fin 1 → FlockSoundness.Model.Cap D) (N : Nat)",
-    "  (hRec : FlockSoundness.Discharge.ZkLink.RecordsLiveZK I dj wr)",
-    "  (hDraw : ∀ (S : Finset (Fin n)), FlockSoundness.Discharge.ZkLink.DrawOkZK I dj mPts S)",
-    "  (hTab : FlockSoundness.Discharge.ZkLink.TablesAtZKLive)",
-    "  (hRuns : FlockSoundness.Discharge.Composed.RunsZCAssembly A Hs I dj y₀ wr opn dec one fin capOf)",
-    "  (place :",
-    "    (S : Finset (Fin n)) →",
-    "      (R : Reg) →",
-    "        (u : Fin n) →",
-    "          SetLike.instMembership.mem S u →",
-    "            FlockSoundness.UnitPlace P",
-    "              (FlockSoundness.Discharge.ZkSession.tabOfZ",
-    "                  (FlockSoundness.Discharge.Composed.planOf (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀))",
-    "                  (FlockSoundness.Discharge.Composed.tabOne (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀)) S R u).S",
-    "              u)",
-    "  (_hPlace : FlockSoundness.Discharge.Composed.PlacementZK P (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) place)",
-    "  {Dh : Type} {Hc : List UInt8 → Dh}",
-    "  (vb :",
-    "    FlockSoundness.Discharge.ZkLink.ValueBindingZ A P",
-    "      (FlockSoundness.Discharge.Composed.planOf (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀))",
-    "      (FlockSoundness.Discharge.Composed.tabOne (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀))",
-    "      (FlockSoundness.Discharge.ZkSession.decodeOfPlace A P",
-    "        (FlockSoundness.Discharge.Composed.planOf (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀))",
-    "        (FlockSoundness.Discharge.Composed.tabOne (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀)) place)",
-    "      Hc)",
-    "  (_hBind :",
-    "    FlockSoundness.Discharge.Composed.ValueBindingZKLive A P (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) vb)",
-    "  (hA : A.Correct) {m : Nat} (σs : Fin n → Fin m) (ks : Fin m → Nat)",
+    "  (capOf : Finset (Fin n) → Reg → ByteArray → Fin 1 → FlockSoundness.Model.Cap FlockSoundness.Refine.Dig) (N : Nat)",
+    "  {c : Flock.Circuit}",
+    "  (hc : Eq (Flock.HmRow.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok c))",
+    "  (hU : FlockSoundness.Built c.unit) {pub : Flock.Public}",
+    "  (hpub : Eq (Flock.HmRow.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) c I.publicFile) (Except.ok pub))",
+    "  (hpt : Eq pub.tables Option.none) (hscope : Eq (FlockSoundness.Discharge.Layout.scopeOk c) Bool.true) {m : Nat}",
+    "  (σs : Fin n → Fin m) (ks : Fin m → Nat)",
     "  (hks : ∀ (s : Fin m), instLENat.le (ks s) (FlockSoundness.Audit.Law.stratum σs s).card)",
     "  (St : Fin m → Flock.Draw.Stratum) (hS : FlockSoundness.Audit.Law.ExecStrata σs ks St) (Kd pop : Nat) {Ω : Type}",
     "  [Fintype Ω] [Nonempty Ω] (Lb : Fin m → Nat) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)",
-    "  (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src) {k Rw M : Nat} (hk : instLENat.le 1 k)",
+    "  (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src)",
+    "  (hRec : FlockSoundness.Discharge.ZkLink.RecordsLiveZK I dj wr)",
+    "  (hDraw :",
+    "    ∀ (ω : (FlockSoundness.Audit.Law.execOS src (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop).Ω),",
+    "      FlockSoundness.Discharge.ZkLink.DrawOkZK I dj mPts",
+    "        ((FlockSoundness.Audit.Law.execOS src (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop).draw ω))",
+    "  (hTab : FlockSoundness.Discharge.ZkLink.TablesAtZKLive)",
+    "  (hRuns :",
+    "    FlockSoundness.Discharge.Composed.RunsZCAssembly FlockSoundness.execArith Hs I dj y₀ wr opn dec one fin capOf",
+    "      (FlockSoundness.Audit.Law.execOS src (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop))",
+    "  (hCoined : FlockSoundness.Discharge.Composed.CoinedOfSetup I dj y₀) {k Rw M : Nat} (hk : instLENat.le 1 k)",
     "  (hRw : instLENat.le 1 Rw) (hM : instLENat.le 1 M) {ρ : Real} (hρ : Real.instLT.lt ρ 1)",
     "  (hr :",
-    "    ∀ (S : Finset (Fin n)) (R : Reg)",
-    "      (j :",
-    "        Fin (FlockSoundness.Discharge.Composed.planOf (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) S R).length),",
-    "      Real.instLE.le",
-    "        (FlockSoundness.Discharge.ZkLink.rateZ",
-    "          (FlockSoundness.Discharge.Composed.planOf (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) S R) j k)",
-    "        ρ)",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkBind.planZAt dj y₀ S R).length),",
+    "      Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkBind.planZAt dj y₀ S R) j k) ρ)",
     "  {t' : Real} (ht' : Real.instLE.le 0 t') (K₀ : Nat)",
     "  (τ :",
     "    (FlockSoundness.Discharge.Exec.auditLive",
@@ -4607,125 +4595,75 @@
     "    ∀ (ω : (FlockSoundness.Audit.Law.execOS src (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop).Ω)",
     "      (j :",
     "        Fin",
-    "          (FlockSoundness.Discharge.Composed.planOf (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀)",
+    "          (FlockSoundness.Discharge.ZkBind.planZAt dj y₀",
     "              ((FlockSoundness.Audit.Law.execOS src (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop).draw ω)",
     "              (FlockSoundness.Audit.reg",
-    "                (FlockSoundness.Discharge.Composed.simZ A Hs (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) I wr opn",
-    "                  dg dec one fin capOf N ⋯ τ))).length),",
-    "      FlockSoundness.Discharge.ZkLink.TableCRZ A Hs",
-    "        (FlockSoundness.Discharge.Composed.planOf (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀)",
+    "                (FlockSoundness.Discharge.Composed.simZ FlockSoundness.execArith Hs",
+    "                  (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) I wr opn dg dec one fin capOf N ⋯ τ))).length),",
+    "      FlockSoundness.Discharge.ZkLink.TableCRZ FlockSoundness.execArith Hs",
+    "        (FlockSoundness.Discharge.ZkBind.planZAt dj y₀",
     "          ((FlockSoundness.Audit.Law.execOS src (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop).draw ω)",
     "          (FlockSoundness.Audit.reg",
-    "            (FlockSoundness.Discharge.Composed.simZ A Hs (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) I wr opn dg",
-    "              dec one fin capOf N ⋯ τ)))",
+    "            (FlockSoundness.Discharge.Composed.simZ FlockSoundness.execArith Hs",
+    "              (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) I wr opn dg dec one fin capOf N ⋯ τ)))",
     "        j",
-    "        (FlockSoundness.Discharge.ZkLink.zcStrat A Hs",
-    "          (FlockSoundness.Discharge.Composed.planOf (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀))",
+    "        (FlockSoundness.Discharge.ZkLink.zcStrat FlockSoundness.execArith Hs",
+    "          (FlockSoundness.Discharge.ZkBind.planZAt dj y₀)",
     "          (FlockSoundness.Audit.cont",
-    "            (FlockSoundness.Discharge.Composed.simZ A Hs (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) I wr opn dg",
-    "              dec one fin capOf N ⋯ τ)",
+    "            (FlockSoundness.Discharge.Composed.simZ FlockSoundness.execArith Hs",
+    "              (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) I wr opn dg dec one fin capOf N ⋯ τ)",
     "            ω))",
     "        qF qS)",
-    "  (tr :",
-    "    FlockSoundness.StrictCR.TreeRewind Hs.H",
-    "      (FlockSoundness.Audit.audit",
-    "        (FlockSoundness.Audit.Law.execOS src (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop) Reg",
-    "        (FlockSoundness.Discharge.ZkLink.batchedSessionZC A Hs",
-    "          (FlockSoundness.Discharge.Composed.planOf (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀))))",
-    "      (FlockSoundness.Discharge.Composed.simZ A Hs (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) I wr opn dg dec",
-    "        one fin capOf N ⋯ τ)",
-    "      fun o => And (Eq o.fst Bool.true) (Eq o.fst Bool.false))",
-    "  {qT : Real} (hT : FlockSoundness.StrictCR.Finder.CR Hs.H tr.finder qT) {δ₁ : Real}",
-    "  (hKey : FlockSoundness.Discharge.Composed.HashDerivedKey δ₁) (κ : FlockLevel3.GF128)",
-    "  (hPad : ∀ (cols : Nat), instLENat.le cols 40 → FlockSoundness.Assumptions.PadNonvanishing A cols κ) :",
+    "  (hKey : FlockSoundness.Assumptions.Zk.SaltHiding) (hPad : FlockSoundness.Assumptions.Zk.PadNonvanishing40) :",
     "  And",
     "    (ENNReal.instLE.le",
     "      (FlockSoundness.Game.prob",
     "        (fun o =>",
     "          And (FlockSoundness.Discharge.ZkExec.LiveAcceptsZK I o)",
     "            (instLENat.le K₀",
-    "              (P.wrong",
-    "                  (FlockSoundness.Discharge.ZkLink.XplurZC A Hs P",
-    "                    (FlockSoundness.Discharge.Composed.planOf (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀))",
-    "                    (FlockSoundness.Discharge.Composed.tabOne (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀)) vb",
+    "              (((FlockSoundness.Discharge.Placed.keyProg c hU n).partition",
+    "                      (FlockSoundness.Discharge.Layout.outsOf c hU n)).wrong",
+    "                  (FlockSoundness.Discharge.ZkLink.XplurZC FlockSoundness.execArith Hs",
+    "                    ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition",
+    "                      (FlockSoundness.Discharge.Layout.outsOf c hU n))",
+    "                    (FlockSoundness.Discharge.ZkBind.planZAt dj y₀) (FlockSoundness.Discharge.ZkBind.tabZAt dj y₀)",
+    "                    ((FlockSoundness.Discharge.ZkBind.rsZAt ht dj y₀ hc hU hpub hpt hscope).bindingZ ⋯)",
     "                    (FlockSoundness.Audit.reg",
-    "                      (FlockSoundness.Discharge.Composed.simZ A Hs (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) I",
-    "                        wr opn dg dec one fin capOf N ⋯ τ))",
+    "                      (FlockSoundness.Discharge.Composed.simZ FlockSoundness.execArith Hs",
+    "                        (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) I wr opn dg dec one fin capOf N ⋯ τ))",
     "                    (FlockSoundness.Audit.cont",
-    "                      (FlockSoundness.Discharge.Composed.simZ A Hs (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) I",
-    "                        wr opn dg dec one fin capOf N ⋯ τ))",
+    "                      (FlockSoundness.Discharge.Composed.simZ FlockSoundness.execArith Hs",
+    "                        (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) I wr opn dg dec one fin capOf N ⋯ τ))",
     "                    k Rw)).card))",
     "        (FlockSoundness.Discharge.Exec.auditLive",
     "          (FlockSoundness.Audit.Law.execOS src (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop) Reg",
     "          (FlockSoundness.Discharge.Exec.liveOf dg mPts N wr))",
     "        τ)",
     "      (instHAdd.hAdd",
-    "        (instHAdd.hAdd",
-    "          (instHAdd.hAdd ((FlockSoundness.Audit.Law.stratified σs ks hks).miss K₀)",
-    "            (FlockSoundness.Discharge.ZkLink.ksAvgStrictZ",
-    "              (FlockSoundness.Discharge.Composed.planOf (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀))",
-    "              (FlockSoundness.Audit.Law.execOS src (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop) k qF qS",
-    "              (FlockSoundness.Audit.reg",
-    "                (FlockSoundness.Discharge.Composed.simZ A Hs (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) I wr opn",
-    "                  dg dec one fin capOf N ⋯ τ))))",
-    "          (FlockSoundness.Discharge.ZkLink.linkBoundZC A Hs P",
-    "            (FlockSoundness.Discharge.Composed.planOf (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀))",
-    "            (FlockSoundness.Discharge.Composed.tabOne (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀)) vb k Rw M ρ t'",
+    "        (instHAdd.hAdd ((FlockSoundness.Audit.Law.stratified σs ks hks).miss K₀)",
+    "          (FlockSoundness.Discharge.ZkLink.ksAvgStrictZ (FlockSoundness.Discharge.ZkBind.planZAt dj y₀)",
+    "            (FlockSoundness.Audit.Law.execOS src (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop) k qF qS",
     "            (FlockSoundness.Audit.reg",
-    "              (FlockSoundness.Discharge.Composed.simZ A Hs (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) I wr opn",
-    "                dg dec one fin capOf N ⋯ τ))",
-    "            (FlockSoundness.Audit.cont",
-    "              (FlockSoundness.Discharge.Composed.simZ A Hs (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) I wr opn",
-    "                dg dec one fin capOf N ⋯ τ))))",
-    "        (ENNReal.ofReal (tr.bound qT))))",
-    "    (∀ {W Hi VL : Type} [AddCommGroup Hi] [inst : Fintype Hi] [DecidableEq Hi] {J : Nat}",
-    "      (zs : Fin J → FlockSoundness.Discharge.ZkView.Sizes)",
-    "      (T : (j : Fin J) → FlockSoundness.Discharge.ZkView.Coined K W Hi VL (zs j)) {Out : Type}",
-    "      (enc : ((j : Fin J) → (T j).tab.View) → Out),",
-    "      (∀ (j : Fin J), (T j).tab.Rank) →",
-    "        ∀ (cols : Fin J → Nat),",
-    "          (∀ (j : Fin J), instLENat.le (cols j) 40) →",
-    "            (∀ (j : Fin J), instLENat.le (T j).tab.tpad (instHPow.hPow 2 (cols j))) →",
-    "              (∀ (j : Fin J), instLENat.le (T j).tab.nS (T j).tab.tpad) →",
-    "                ∀ (pos : (j : Fin J) → Fin (T j).tab.nS → Nat),",
-    "                  (∀ (j : Fin J), Function.Injective (pos j)) →",
-    "                    (∀ (j : Fin J) (q : Fin (T j).tab.nS),",
-    "                        instLTNat.lt (pos j q) (instHPow.hPow 2 (instHAdd.hAdd (cols j) 1))) →",
-    "                      (∀ (j : Fin J) (q : Fin (T j).tab.nS) (i : Fin (T j).tab.tpad),",
-    "                          Eq ((T j).tab.Gp q i)",
-    "                            (instHAdd.hAdd",
-    "                              (instHMul.hMul κ (A.Xhat i.val (instHAdd.hAdd (cols j) 1) (A.omega (pos j q))))",
-    "                              (A.Xhat (instHAdd.hAdd (instHPow.hPow 2 (cols j)) i.val) (instHAdd.hAdd (cols j) 1)",
-    "                                (A.omega (pos j q))))) →",
-    "                        (∀ (j : Fin J) (r : Fin 2), Function.Bijective fun p => (T j).tab.Wr r p.fst p.snd) →",
-    "                          (∀ (j : Fin J), (T j).tab.PadsOnto) →",
-    "                            (∀ (j : Fin J) (r : Fin 2), Ne ((T j).tab.β r) 0) →",
-    "                              ∀ (w : Fin J → W),",
-    "                                (∀ (j : Fin J), Eq ((T j).tab.sReg (w j)) (T j).tab.pubReg) →",
-    "                                  (∀ (j : Fin J), (T j).tab.InnerHolds (w j)) →",
-    "                                    ∀ (w0 : Fin J → W) (E : Out → Prop),",
-    "                                      And",
-    "                                        (ENNReal.instLE.le",
-    "                                          (FlockSoundness.Game.prCoin fun p =>",
-    "                                            E (enc fun j => (T j).viewExe (w j) (p j).fst (p j).snd))",
-    "                                          (instHAdd.hAdd",
-    "                                            (FlockSoundness.Game.prCoin fun p =>",
-    "                                              E (enc fun j => (T j).simExe (w0 j) (p j).fst (p j).snd))",
-    "                                            (Finset.univ.sum fun j =>",
-    "                                              instHMul.hMul (instHMul.hMul 2 (Fintype.card (T j).tab.Hid).cast)",
-    "                                                (ENNReal.ofReal δ₁))))",
-    "                                        (ENNReal.instLE.le",
-    "                                          (FlockSoundness.Game.prCoin fun p =>",
-    "                                            E (enc fun j => (T j).simExe (w0 j) (p j).fst (p j).snd))",
-    "                                          (instHAdd.hAdd",
-    "                                            (FlockSoundness.Game.prCoin fun p =>",
-    "                                              E (enc fun j => (T j).viewExe (w j) (p j).fst (p j).snd))",
-    "                                            (Finset.univ.sum fun j =>",
-    "                                              instHMul.hMul (instHMul.hMul 2 (Fintype.card (T j).tab.Hid).cast)",
-    "                                                (ENNReal.ofReal δ₁)))))"
+    "              (FlockSoundness.Discharge.Composed.simZ FlockSoundness.execArith Hs",
+    "                (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) I wr opn dg dec one fin capOf N ⋯ τ))))",
+    "        (FlockSoundness.Discharge.ZkLink.linkBoundZC FlockSoundness.execArith Hs",
+    "          ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition (FlockSoundness.Discharge.Layout.outsOf c hU n))",
+    "          (FlockSoundness.Discharge.ZkBind.planZAt dj y₀) (FlockSoundness.Discharge.ZkBind.tabZAt dj y₀)",
+    "          ((FlockSoundness.Discharge.ZkBind.rsZAt ht dj y₀ hc hU hpub hpt hscope).bindingZ ⋯) k Rw M ρ t'",
+    "          (FlockSoundness.Audit.reg",
+    "            (FlockSoundness.Discharge.Composed.simZ FlockSoundness.execArith Hs",
+    "              (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) I wr opn dg dec one fin capOf N ⋯ τ))",
+    "          (FlockSoundness.Audit.cont",
+    "            (FlockSoundness.Discharge.Composed.simZ FlockSoundness.execArith Hs",
+    "              (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀) I wr opn dg dec one fin capOf N ⋯ τ)))))",
+    "    (∀ (S : Finset (Fin n)) (R : Reg),",
+    "      Nonempty (FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S (dj S)) →",
+    "        FlockSoundness.Discharge.Composed.ZkViewAt",
+    "          (FlockSoundness.Discharge.Composed.coinedOf (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀ S R))",
+    "          (instHPow.hPow 2 (-193)))"
    ],
-   "assumptions": [],
-   "type_hash": "959293459070eb0ba55a6ad230d3ccb25445eec6ee9e96c3765374815f4c7e75"
+   "assumptions": ["FlockSoundness.Assumptions.Zk.PadNonvanishing40", "FlockSoundness.Assumptions.Zk.SaltHiding"],
+   "type_hash": "bb3afe7e454f04877dfbe2ea67364a55079cd16c85f6bda7784a56f9c336491a"
   },
   "FlockSoundness.Discharge.Const.Prog.instC_wire_input": {
    "signature": [
@@ -15451,6 +15389,7 @@
     "FlockSoundness.CROnly.flock_e2e_drawn_exec",
     "FlockSoundness.CROnly.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.CROnly.flock_headline",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZLJ.decodesOnJ_exec",
@@ -15711,6 +15650,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZLJ.decodesOnJ_exec",
@@ -15845,6 +15785,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZLJ.decodesOnJ_exec",
@@ -15956,6 +15897,7 @@
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
     "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
     "FlockSoundness.Discharge.Aliased.zeroPos_block",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Const.constCols_keyProg",
@@ -16078,6 +16020,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZLJ.decodesOnJ_exec",
@@ -16220,6 +16163,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
@@ -16385,6 +16329,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZLJ.decodesOnJ_exec",
@@ -16530,6 +16475,8 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
     "FlockSoundness.Discharge.DecodeZLJ.decodesOnJ_exec",
@@ -16652,6 +16599,8 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZLJ.decodesOnJ_exec",
     "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
@@ -16773,6 +16722,8 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZLJ.decodesOnJ_exec",
     "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
@@ -16872,6 +16823,7 @@
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
     "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
     "FlockSoundness.Discharge.Aliased.zeroPos_block",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Const.constCols_keyProg",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
@@ -16983,6 +16935,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZLJ.decodesOnJ_exec",
@@ -17134,6 +17087,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
@@ -17265,6 +17219,7 @@
    },
    "pins": [
     "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Exec.session_knowledge_soundL",
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
@@ -17338,6 +17293,7 @@
     "FlockSoundness.Accounting.padRepError": "4f4a4fdca77d6a089e1d51810b1206ea8ea24c612a05babeb3cfbd44aa4ef50a"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.ZkBind.HmRowsZ.registered",
     "FlockSoundness.Discharge.ZkBind.SitesZ.aliased_keyProg",
@@ -17457,6 +17413,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_classes",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
@@ -17636,8 +17593,9 @@
    ]
   },
   "FlockSoundness.Assumptions": {
-   "digest": "748e3430f9a50c5f4d4bc175f9acc3d10ed72d8c40e873be99aa91cd33b2f177",
+   "digest": "6d1f593e874b972cf3e07b402f1582b1e650c66247a2e394e1901fe0e5d970ca",
    "definitions": {
+    "FlockSoundness.Assumptions.HashDerivedKey": "10b377712f6ad0a85f088a3d07b4c2a5f2ef4e1622cf7b1e4413c1feded5a5c0",
     "FlockSoundness.Assumptions.Hm96Hiding": "f5897a66b00fd47ffb0e33815f8dbfc8bb1b5a85b643491e8b7466e8a33765b9",
     "FlockSoundness.Assumptions.HmRowComputes": "0b64a2e9af86b5a7be94d3229fdcb5b8fe890a71414e0ec3d840ad7b6134ebae",
     "FlockSoundness.Assumptions.KeyedStreamsUniform": "210fb5b853611d99b9092c0f3c4dd6baafc81c2eb6b09c716e7fd6c274020393",
@@ -17768,6 +17726,14 @@
     "FlockSoundness.ZK.ideal_leaves_swap",
     "FlockSoundness.ZK.padOnto_M1"
    ]
+  },
+  "FlockSoundness.Assumptions.Zk": {
+   "digest": "657b794f25b0ae92c046332f57e687094706e2ad729278f061723afe9cba950b",
+   "definitions": {
+    "FlockSoundness.Assumptions.Zk.PadNonvanishing40": "3a74633e7163cec1681002b169cb474d27ddd1dd20e11646bb56311bbc4b35f6",
+    "FlockSoundness.Assumptions.Zk.SaltHiding": "049d01fd42f8cb32d5ed4dccca1ae0f28bf96cbbecf7b6563f8a1aaa85afbf26"
+   },
+   "pins": ["FlockSoundness.Discharge.Composed.zk_session_composed"]
   },
   "FlockSoundness.Audit.Circuit": {
    "digest": "6ff5d938f4c9e28edeff46c36d582bbf0d7bcac43cbbd8de82390724b13cca83",
@@ -18092,6 +18058,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_classes",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Const.UProg.constCols_toRows",
@@ -18324,6 +18291,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
@@ -18387,6 +18355,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_classes",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Const.UProg.constCols_toRows",
@@ -19196,6 +19165,7 @@
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96",
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96_reads",
     "FlockSoundness.CROnly.flock_headline",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Hidden.outputs_binding",
@@ -19281,6 +19251,7 @@
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96",
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96_reads",
     "FlockSoundness.CROnly.flock_headline",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Hidden.commitPair_spec",
@@ -19351,6 +19322,7 @@
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96",
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96_reads",
     "FlockSoundness.CROnly.flock_headline",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
@@ -19775,6 +19747,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
@@ -19930,6 +19903,7 @@
     "FlockSoundness.Discharge.Aliased.keyIdx_eq_none",
     "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
     "FlockSoundness.Discharge.Aliased.srcKey_leaf",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.constCols_keyProg",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
@@ -19966,20 +19940,35 @@
    ]
   },
   "FlockSoundness.Discharge.Composed.Defs": {
-   "digest": "2377ec48472fbe81d88319164c7d6ae4368496f20132ec669a33fe628d1b4736",
+   "digest": "3da42016c0cefcf06a8bb579208f98382aa41324b2b68dbe5f6a73f028d8a933",
    "definitions": {
+    "FlockSoundness.Discharge.Composed.CoinedOK": "92cb09447b8d512a1cc85447e9971c030f056224f9e09baff8868ce7ad8aec9f",
+    "FlockSoundness.Discharge.Composed.CoinedOfSetup": "5c321f6e8f7ce0f5301b1b389bb54d632d2711ef290d3fabc678e7c88b521818",
+    "FlockSoundness.Discharge.Composed.CoinedSetup": "252fa280906a4b0293b2ad65c2360efb14e7f93bfac7ea93190c812852330516",
+    "FlockSoundness.Discharge.Composed.CoinedSetup.Coins": "e3cffab07a60982ed851c50789b0ab0795f487591a6e15ecbaece488c46347d8",
+    "FlockSoundness.Discharge.Composed.CoinedSetup.Hi": "43378ef1643ab2a35e175960aa4b4068ab3de231bc97f8fe304ff7090890392e",
+    "FlockSoundness.Discharge.Composed.CoinedSetup.T": "cc49f0c992d3bd0b1309311990fd8cb72925dd7fabe42eb5a99157090cee5fba",
+    "FlockSoundness.Discharge.Composed.CoinedSetup.VL": "82afb87d742501946959fc00b782cb40008aec50078cadcb1a17e4df3a837a19",
+    "FlockSoundness.Discharge.Composed.CoinedSetup.W": "809f644471ed4ff1c37844e3c460c5b8207c3955fa021e574fe26405b0a1ca14",
+    "FlockSoundness.Discharge.Composed.CoinedSetup.cols": "dcd9ef20b68b2a1fe3209ed8c47ddcbbf182e7f80cde7da28b23f09ca3d1237f",
+    "FlockSoundness.Discharge.Composed.CoinedSetup.finHi": "20d455abdde70385dfe1ec236111536de7d993da3bd05e667b7cca7324b29eb2",
+    "FlockSoundness.Discharge.Composed.CoinedSetup.pos": "8e8931b71a7b9e67a82deb713899d4db2a5329ff5de47dfabdd8f792bcf557fc",
+    "FlockSoundness.Discharge.Composed.CoinedSetup.z": "b4e5a6293e81202c7c7a804f1f030b2cd66d693657261fa8972296202189781f",
+    "FlockSoundness.Discharge.Composed.DecodesOnZK": "a9e3925e72a84351a26f3d1aed97b4d97a91800402921f05e5887cc328e4ed53",
     "FlockSoundness.Discharge.Composed.Gz": "647738b0c51f749d42c93dc5a55ef46940fb61c2ad72b539aee8b928f5eeb41b",
-    "FlockSoundness.Discharge.Composed.HashDerivedKey": "322a390d777c02304ca35e063698a4371389c2d20e952b71d9535766b38c2913",
-    "FlockSoundness.Discharge.Composed.PlacementZK": "3e696b4316fccf9c3a4f44e6797153f010c66eff39a53de9b9163cf48ff57f0b",
-    "FlockSoundness.Discharge.Composed.RunsZCAssembly": "8b590ec3bcb5d50b036155f25adb68cbd350634f0a372528498144e2ea702657",
-    "FlockSoundness.Discharge.Composed.ValueBindingZKLive": "0a04a2e6333511bcad66303ca40b8e036b3f187da7c42748e24977dd897e7f77",
+    "FlockSoundness.Discharge.Composed.RunsZCAssembly": "c52f397764aad6cba6e4a54a72ccba292184e55bb20d7eace691c05f8e4b75bb",
+    "FlockSoundness.Discharge.Composed.ZkViewAt": "c0cac74ff9d115da149812dbf09b908b2b223fba6a89a63fbe9cddf67c4d44e0",
     "FlockSoundness.Discharge.Composed.accz": "a5f991b1e7441e6d15086640d4084b1d1022bcc2192d7e704c51ec8982acb88e",
+    "FlockSoundness.Discharge.Composed.coinedOf": "8cf55d55dac129c1f0d6b7068b0b446c41e233da206367dcac05281a4074c5a5",
     "FlockSoundness.Discharge.Composed.outz": "8ed7b99fa4f4a9e3394ea64ad0dcb494557614e7eff46b649ceeb872076b24e2",
     "FlockSoundness.Discharge.Composed.planOf": "bff557c071ba522f6f7c3e2c7e8afaf68ff8d4a0f7f496fde5c27d8f9774e5f6",
-    "FlockSoundness.Discharge.Composed.simZ": "9045150cddae1f59bf8a7af3b278251e2ff7ae64f83cef78dfdc0d31cc520bb4",
-    "FlockSoundness.Discharge.Composed.tabOne": "b7ceaf58233eb14e45e998a31ac0eba059900ff3003de10c1c81c1bfd6f17c2b"
+    "FlockSoundness.Discharge.Composed.simAuditZKOn": "3dd89c8e02b4617e8b444bbfd31cbae4e76768c750d3f9f94aab26341086db5f",
+    "FlockSoundness.Discharge.Composed.simZ": "47916f9ac9ee9f457c5fb828930d4d8307d9b6035491802a7de24dce98b28aef"
    },
-   "pins": ["FlockSoundness.Discharge.Composed.zk_session_composed"]
+   "pins": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
+    "FlockSoundness.Discharge.Composed.zk_session_composed"
+   ]
   },
   "FlockSoundness.Discharge.Const.Inst": {
    "digest": "e8ab7faea21f3b315dc33919fdabf6fab8683b732b98cd81b6bfe4a1d40d7114",
@@ -19992,6 +19981,7 @@
     "FlockSoundness.Discharge.Const.Prog.rowsWireC": "9dbb5b0dddc8b50ee642561ebe6cce113b441334e422181a03da11367d707d7a"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.Prog.instC_wire_input",
     "FlockSoundness.Discharge.Const.Prog.instC_wire_one",
     "FlockSoundness.Discharge.Const.UProg.constCols_toRows",
@@ -20267,6 +20257,7 @@
     "FlockSoundness.Discharge.Exec.setupOf": "6b11c85acc68985be288516410f3d21a9343a691f56e8470457cfbc9b483c6fd"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZLJ.decodesOnJ_exec",
@@ -20814,6 +20805,7 @@
     "FlockSoundness.Discharge.Hm.shaSub": "2afcef0118bebb5e3615c6b27e21173b09037525779000c3061e84883b6ee745"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Hidden.outputs_binding",
     "FlockSoundness.Discharge.Hidden.outputs_committed",
     "FlockSoundness.Discharge.Hm.bc_site_col",
@@ -20935,6 +20927,7 @@
     "FlockSoundness.Discharge.Integrate.tableAt": "140e6a4921ac8bcbce985f756708f24cd28680293b857a37bcde8ae87070c293"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.Integrate.DrawSetup.table_site_inj",
@@ -20964,6 +20957,7 @@
     "FlockSoundness.Discharge.Layout.inBlockOr": "796471326c0a4141ed0f649e5afb4ca16a24dc7bcb66847bc483bde39b7eddfe"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Hidden.public_exposes",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
@@ -21006,6 +21000,7 @@
     "FlockSoundness.Discharge.Layout.zeroG": "45cb2aadfda5f30a87d0b37e244c49f2c310b13a1bc529bc667b0d18188fd3ca"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Discharge.Integrate.rsAt_computes",
@@ -21033,6 +21028,7 @@
     "FlockSoundness.Discharge.Layout.keyedRowsOuts": "1311a3f006b626315f3f49ce8235dadd6f752de90331e7b152415a875c7af460"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Discharge.Integrate.rsAt_computes",
@@ -21046,6 +21042,7 @@
     "FlockSoundness.Discharge.Layout.portRowW": "4f8a74c9adb179b0de17326bbadd0b3b7524eba8e73d3bfd9109f2761306405b"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Discharge.Integrate.rsAt_computes",
@@ -21062,6 +21059,7 @@
     "FlockSoundness.Discharge.Layout.gateAt": "cb3d642d67063a0ae2733f072b5fbb176d830c7cdabe4ef6f25e487db3d55402"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Discharge.Integrate.rsAt_computes",
@@ -21092,6 +21090,7 @@
     "FlockSoundness.Discharge.Layout.outDecode": "c4dbee414c1a0ca04e2c535b37da890ca4cc21dba1ef3eeddb8ed2c731249d38"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Discharge.Integrate.rsAt_computes",
@@ -21139,6 +21138,7 @@
     "FlockSoundness.Discharge.Layout.outsOf": "a02cb0e26ff57e1a4ef33847605dee6eadf1e5c8aba2f01cf2ea063314801bd4"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Discharge.Integrate.rsAt_computes",
@@ -21173,6 +21173,7 @@
     "FlockSoundness.Discharge.Layout.Readers.valAt": "1ccb6ab4492f06c3c630c085a3f68ad864c0699801eb2a913097740318c7cc9e"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Discharge.Integrate.rsAt_computes",
@@ -21197,6 +21198,7 @@
     "FlockSoundness.Discharge.Layout.widthOf": "2712eb32e748df7b6f2b34b611f330edb0312cce2be7f932b390639f6237c0c1"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Discharge.Integrate.rsAt_computes",
@@ -21226,6 +21228,7 @@
     "FlockSoundness.Discharge.Layout.rowEnc": "fb3bf83523887d88c2b52811e95b722cd80034e5cd142c09f9bc27a49bd56834"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Discharge.Integrate.rsAt_computes",
@@ -21244,6 +21247,7 @@
     "FlockSoundness.Discharge.Layout.v1Ports": "419f84805405ff9c528ff08704dd885ad8d8fcd0cbab869cbbd47a4e2d00d074"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Discharge.Integrate.rsAt_computes",
     "FlockSoundness.Discharge.Layout.portReads_of_portReadsB",
@@ -21258,6 +21262,7 @@
     "FlockSoundness.Discharge.Layout.siteAddr": "4290c174965ee8752263d3675e390943c8ce9ad06bac0b995664a418462b262a"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
@@ -21285,6 +21290,7 @@
     "FlockSoundness.Discharge.Placed.keyProg": "1e6d14ae0da7d8d09e033f920a397f218ddd7f54737886b5a69417791312a18f"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.constCols_keyProg",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
@@ -21342,6 +21348,7 @@
     "FlockSoundness.Discharge.Placed.uniform": "65281c0d07e03bc97cfeb4962d95824fd69807a0d84420348f1c8283f4bb3eaa"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.constCols_keyProg",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.Hm.bc_site_col",
@@ -21443,6 +21450,7 @@
     "FlockSoundness.Discharge.Placed.zeroGate": "2470ebd857a4c6e4738c56913eb4e8b62dba2dfa558a218702dd87ab05a1c05e"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.constCols_keyProg",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
@@ -21660,6 +21668,22 @@
     "FlockSoundness.Discharge.Zero.zeroCols_uniform"
    ]
   },
+  "FlockSoundness.Discharge.ZkBind.At": {
+   "digest": "bf0c84316729e71383d7d5042abf7c46344829a834e39ba8bdbbe78d36ba87c5",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkBind.layZAt": "054c5c45d32fb4da6287111b2b9b1c3c56137d171b54338271c76cafbf5bba9b",
+    "FlockSoundness.Discharge.ZkBind.planSh": "bb85dda4bde842a566155f0972a03d8a6bc209c19cf275eed1905e6df94dd574",
+    "FlockSoundness.Discharge.ZkBind.planZAt": "cc2a583493d1400f41dc6a91dcb0d72e63799e3f9f040ed2fcc4707cb4512662",
+    "FlockSoundness.Discharge.ZkBind.recastAcc": "140ceadfb7c6b7c5270b111e399fe1590752d4036d22a0082b165395963cd7ac",
+    "FlockSoundness.Discharge.ZkBind.rsZAt": "67228a70c134b783854ef849a58b54830cf0151164c53ce83a4210a1a2db9f94",
+    "FlockSoundness.Discharge.ZkBind.sitesSh": "ce1eff35679a4bae0deb080ccabf48e876df04d7567eb4e8cb9414a6e801cf64",
+    "FlockSoundness.Discharge.ZkBind.sitesZAt": "c1708754d95ab554b83edc4764bf3dc7a64f96ebba95166b8059f21c806ba796",
+    "FlockSoundness.Discharge.ZkBind.tabSh": "4ac497051a3850a13e54e951359792186ff94dd6ba662daf39f86765b60746fb",
+    "FlockSoundness.Discharge.ZkBind.tabZAt": "29922a12e82b45299aed557e4bb00fcd487cfe958ea82aad3abc2be3f2676901",
+    "FlockSoundness.Discharge.ZkBind.tableSh": "2296b859094e2bba3f60518b8f289e898b40fb550a970898ee6883c196da28ef"
+   },
+   "pins": ["FlockSoundness.Discharge.Composed.zk_session_composed"]
+  },
   "FlockSoundness.Discharge.ZkBind.Bind": {
    "digest": "d966d95042172781342955da8410d09907cbb635ffb360ef4e3f7c856507f8b6",
    "definitions": {
@@ -21703,6 +21727,7 @@
     "FlockSoundness.Discharge.ZkBind.witZ": "7a2a732d4a526f3e87d610e14743558c41ab3b0602a011d3ea4e034ff0989323"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.ZkBind.HmRowsZ.registered",
     "FlockSoundness.Discharge.ZkBind.bindingZ_bit",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg"
@@ -21719,12 +21744,24 @@
     "FlockSoundness.Discharge.ZkBind.SitesZ.vu": "45744bcaa2fe9339d993cb63c25fc3fc57a01f2bbfe38e1f28937e62c1bcf2ce"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.ZkBind.SitesZ.aliased_keyProg",
     "FlockSoundness.Discharge.ZkBind.SitesZ.placeKey_spec",
     "FlockSoundness.Discharge.ZkBind.SitesZ.placed_keyProg",
     "FlockSoundness.Discharge.ZkBind.SitesZ.rowsOf_keyProg",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg"
    ]
+  },
+  "FlockSoundness.Discharge.ZkBind.Shadow": {
+   "digest": "ee5adee0dd56f8b611a96e5157b00e0df5ef8de2d93a33a36203646a7c4c0d9f",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkBind.DecAgree": "befeeb6a6b87068810838a0b1c6a0ab2e5f7b288943d9654ead9b22e2eb1ff4b",
+    "FlockSoundness.Discharge.ZkBind.HmRowsZ.ofShadow": "ecd8fd9df2b9dd63b68ae51a59ca560c4b2f7137f639924697a15f86f636d028",
+    "FlockSoundness.Discharge.ZkBind.LayoutZ.ofShadow": "c3f1eb643dde570b94a05551839e42570a54ba4c44ea2f3b4aeab7e141b4bc20",
+    "FlockSoundness.Discharge.ZkBind.adrOf": "1d93fb39106be6d3b64d5df3069429999259b31af2e8780523aecdf6ed919120",
+    "FlockSoundness.Discharge.ZkBind.witOf": "08940d38ba5f567dd74d691ac4950931755a1fbd1e139e5880408e5d8bb46e61"
+   },
+   "pins": ["FlockSoundness.Discharge.Composed.zk_session_composed"]
   },
   "FlockSoundness.Discharge.ZkCoins.Basic": {
    "digest": "f90e7bbd8cb60808d6a3652c111de5e1bd8fe3ab8612773fe7c06a8838483c1b",
@@ -21798,6 +21835,7 @@
     "FlockSoundness.Discharge.ZkExec.zkTags": "52b991cd340260bb9563ca78fbec6a9a4318ff1fee04560d8dcbfedbfdb053cf"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.ZkBind.acceptsZK_accepted",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
@@ -21838,6 +21876,7 @@
     "FlockSoundness.Discharge.ZkExec.shapeZK": "bad8fdd7105deeea695a8bec6eeb8a3d764f616b7fe9dd22d4704561e322aefe"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
@@ -22258,6 +22297,7 @@
     "FlockSoundness.Discharge.ZkLink.tripleOfLay": "01f448f1b124afcfc3c9572e92e604b0ef79afd0cfd0fb1f2e906046cc7d9970"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.ZkLink.tablesAtZK_live"
    ]
@@ -22305,6 +22345,7 @@
     "FlockSoundness.Discharge.ZkSession.zerocheckZK": "9ac4ef32f695cb7b12b36171e1dcf1ef0d575a2db63ca12e8d3ffd841660559a"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.ZkBind.HmRowsZ.registered",
     "FlockSoundness.Discharge.ZkBind.SitesZ.aliased_keyProg",
@@ -22404,6 +22445,7 @@
     "FlockSoundness.Discharge.ZkSession.εInner": "40e880dca06dbfc14b036690e78a6a002f521b1ed12eac7089f141e0a17d7e37"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.ZkBind.HmRowsZ.registered",
     "FlockSoundness.Discharge.ZkBind.SitesZ.aliased_keyProg",
@@ -22477,6 +22519,7 @@
     "FlockSoundness.Discharge.ZkSession.unmask": "c357b03dc113e26534236d04ec77e175578e392cd33cee37f6ffbda77e6438ab"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.ZkBind.HmRowsZ.registered",
     "FlockSoundness.Discharge.ZkBind.SitesZ.aliased_keyProg",
@@ -22575,6 +22618,7 @@
     "FlockSoundness.Discharge.ZkSession.zkStrat": "610d8cab02af9f0e0289d16c76db51746a522a82092e237be84a9b3532b5df22"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.ZkBind.HmRowsZ.registered",
     "FlockSoundness.Discharge.ZkBind.SitesZ.aliased_keyProg",
@@ -22720,6 +22764,7 @@
     "FlockSoundness.Discharge.ZkView.κ₀": "10423c5791e22861f69c16e6633a27b13654e8b8c4fb3cbc943aa6583a4059d2"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.ZkView.honest_msg",
     "FlockSoundness.Discharge.ZkView.leafSplit",
@@ -22807,6 +22852,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_classes",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Const.UProg.constCols_toRows",
@@ -23052,6 +23098,7 @@
     "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
     "FlockSoundness.Discharge.Aliased.srcKey_leaf",
     "FlockSoundness.Discharge.Aliased.zeroPos_block",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Const.constCols_keyProg",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
@@ -23124,6 +23171,7 @@
     "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
     "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
     "FlockSoundness.Discharge.Aliased.zeroPos_block",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Const.constCols_keyProg",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
@@ -23216,6 +23264,7 @@
     "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
     "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
     "FlockSoundness.Discharge.Aliased.zeroPos_block",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Const.constCols_keyProg",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
@@ -23369,6 +23418,7 @@
     "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
     "FlockSoundness.Discharge.Aliased.srcKey_leaf",
     "FlockSoundness.Discharge.Aliased.zeroPos_block",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Const.constCols_keyProg",
     "FlockSoundness.Discharge.Hm.bc_site_col",
@@ -23719,6 +23769,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZLJ.decodesOnJ_exec",
@@ -24611,6 +24662,7 @@
    },
    "pins": [
     "FlockSoundness.CROnly.flock_headline",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Discharge.Tables.headline_tables",
@@ -24666,6 +24718,8 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZLJ.decodesOnJ_exec",
     "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
@@ -24825,6 +24879,7 @@
     "FlockSoundness.levelsChained": "d17168c6830ac2f8f5ff353882993e380bb0a18555b1ce9dceb0ee77fd8400d5"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Exec.session_knowledge_soundL",
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
@@ -24993,6 +25048,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_classes",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
@@ -25583,6 +25639,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZLJ.decodesOnJ_exec",
@@ -26541,6 +26598,7 @@
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
     "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
     "FlockSoundness.Discharge.Aliased.zeroPos_block",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_classes",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
@@ -27190,6 +27248,7 @@
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96",
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96_reads",
     "FlockSoundness.CROnly.flock_headline",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
     "FlockSoundness.Discharge.DecodeZL.op_carries",
@@ -27288,6 +27347,7 @@
     "FlockSoundness.Refine.regionsOf": "64a77bb4527c2fa7b43f0591444fc7f6078ac344e7fe2e7f6b50972318acd3ae"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZLJ.decodesOnJ_exec",
@@ -27459,6 +27519,7 @@
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96",
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96_reads",
     "FlockSoundness.CROnly.flock_headline",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZLJ.decodesOnJ_exec",
     "FlockSoundness.Discharge.DrawWords.headline_card",
@@ -27518,6 +27579,7 @@
     "FlockSoundness.Refine.schedOf": "42ccc94c62f4e76f64ce302754198a1bf0069d2181af3fefed823c4d9aae5cce"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
@@ -27562,6 +27624,7 @@
     "FlockSoundness.Refine.stmtOf": "e9b850a1a4865c1694dbcf82b840df952e4810c9570f20f74d63a3d8bd2a2f2c"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
@@ -27614,6 +27677,7 @@
     "FlockSoundness.Refine.zcMsgs": "d7884c90d76b30350c724cc7375916f69628fa5fae1eda3d1d22819f9869263b"
    },
    "pins": [
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
@@ -28057,6 +28121,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_classes",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Const.UProg.constCols_toRows",
@@ -28996,6 +29061,7 @@
     "FlockSoundness.CROnly.adaptive_prefinal_le",
     "FlockSoundness.CROnly.session_shvzk_gap",
     "FlockSoundness.CROnly.session_shvzk_le",
+    "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.ZkView.honest_msg",
     "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
