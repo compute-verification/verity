@@ -508,8 +508,11 @@ def _alive(pid: Any, ticks: Any) -> bool | None:
 
 def _runner(d: Path, status: dict[str, Any], now: float, host: tuple[str, str | None]) -> tuple[bool, str]:
     """(ended, how) for a run dir without a launcher's remote.json, i.e. on the machine that ran it, whose status isn't terminal:
-    its runner's pid with the same start time when job.json says it ran on this host since this boot; else STALE_S."""
+    its runner's pid with the same start time when job.json says it ran on this host since this boot, dead when it ran on this host
+    before a reboot; else STALE_S."""
     env = (_read(d / "job.json") or {}).get("environment") or {}
+    if status and env.get("hostname") == host[0] and host[1] and env.get("boot_id") and env["boot_id"] != host[1]:
+        return True, f"dead: this host rebooted since its runner started (boot {env['boot_id']}, now {host[1]})"
     local = bool(status) and (env.get("hostname"), env.get("boot_id")) == host and bool(host[1])
     pid, ticks = _runner_pid(status)
     alive = _alive(pid, ticks) if local else None

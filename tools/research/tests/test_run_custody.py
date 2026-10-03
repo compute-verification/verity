@@ -459,8 +459,9 @@ def _on_host(d: Path, host: tuple[str, str], state: str | None, t: float, **tran
 @pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="a runner's liveness is read from /proc")
 def test_triage_on_the_machine_tells_a_live_runner_from_a_dead_one_and_a_pods_run_from_a_stale_one(tmp_path):
     """Node 2 runs `research run` as host processes, node 1 in Kubernetes pods. A run still marked running has ended when its runner's
-    pid (same start time) is gone from the host that ran it, or, when that runner is in another pid namespace, when none of its
-    records changed for 24 h: node 1 had 326 such runs on 3 Oct, preempted before they recorded an end, that nothing published."""
+    pid (same start time) is gone from the host that ran it or that host rebooted since, or, when that runner is in another pid
+    namespace, when none of its records changed for 24 h: node 1 had 326 such runs on 3 Oct, preempted before they recorded an end,
+    that nothing published."""
     runs, st = tmp_path / "runs", LocalStore(tmp_path / "s", config_path=tmp_path / "absent.toml")
     me = int(Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19])
     live, dead, pod, stale, starting = (_fixture_run(runs, f"r20260925-01000{i}-aaaa") for i in range(5))
@@ -475,8 +476,10 @@ def test_triage_on_the_machine_tells_a_live_runner_from_a_dead_one_and_a_pods_ru
     assert rows[dead.name]["why"].startswith("dead: its runner (pid 4194311)") and "--publish --force" in rows[dead.name]["next"]
     assert rows[stale.name]["why"].startswith("stale: status running") and rows[pod.name]["why"].startswith("running elsewhere")
     assert rows[dead.name]["age_min"] == 120.0 and rows[dead.name]["bytes"] > 0 and rows[live.name]["bytes"] is None
-    other_boot = {r["run"]: r["state"] for r in CU.triage(st, runs, now=NOW, host=(HOST[0], "boot-2"))}
-    assert other_boot[live.name] == "running", "after a reboot the pid means nothing: the 24 h rule decides"
+    other_boot = {r["run"]: r for r in CU.triage(st, runs, now=NOW, host=(HOST[0], "boot-2"))}
+    assert other_boot[live.name]["state"] == "no-custody", "a reboot of the host that ran it ended every runner"
+    assert other_boot[live.name]["why"].startswith("dead: this host rebooted since its runner started (boot boot-1, now boot-2)")
+    assert other_boot[pod.name]["state"] == "running" and other_boot[starting.name]["state"] == "running"
 
 
 @pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="a runner's liveness is read from /proc")
