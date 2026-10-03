@@ -78,7 +78,7 @@ def _compare_file(name: str, a: str, b: str) -> dict | None:
     d = _first_byte(a, b)
     if d is None:
         return None
-    if name.endswith((".json", ".json.gz")) and max(os.path.getsize(a), os.path.getsize(b)) <= PARSE_MAX_BYTES:
+    if name.endswith((".json", ".json.gz")) and max(_size(a), _size(b)) <= PARSE_MAX_BYTES:
         x, y = (json.load(_open(p)) for p in (a, b))
         return _path_diff(x, y) if x != y else {**d, "path": "(same values, other bytes: key order or spacing)"}
     return d
@@ -86,6 +86,15 @@ def _compare_file(name: str, a: str, b: str) -> dict | None:
 
 def _open(path: str):
     return gzip.open(path, "rb") if path.endswith(".gz") else open(path, "rb")
+
+
+def _size(path: str) -> int:
+    """The bytes a parse reads: a `.gz` file's decompressed size (its trailer's ISIZE, exact below 4 GiB)."""
+    if not path.endswith(".gz"):
+        return os.path.getsize(path)
+    with open(path, "rb") as f:
+        f.seek(-4, os.SEEK_END)
+        return int.from_bytes(f.read(4), "little")
 
 
 def _first_byte(a: str, b: str) -> dict | None:

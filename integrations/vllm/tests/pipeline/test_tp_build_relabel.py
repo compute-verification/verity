@@ -307,7 +307,7 @@ def test_a_relabel_that_raises_leaves_its_rank_to_a_full_derive(tmp_path):
     assert _relabeled(row) == [] and all(os.path.isfile(f"{row.rank(r)}/{REQ}/result.json") for r in range(W))
 
 
-def test_compare_dirs_names_the_first_difference(tmp_path):
+def test_compare_dirs_names_the_first_difference(tmp_path, monkeypatch):
     a, b = tmp_path / "a", tmp_path / "b"
     for d in (a, b):
         d.mkdir()
@@ -327,6 +327,9 @@ def test_compare_dirs_names_the_first_difference(tmp_path):
     assert RB.compare_dirs(str(a), str(b)) == {"file": "descriptor.json.gz", "path": "/k/2", "real": "3", "relabel": "4",
                                                "files": ["descriptor.json.gz", "tp_links.json", "result.json"]}, \
         "the content files first, then the summaries (result.json's /tp/rank)"
+    monkeypatch.setattr(RB, "PARSE_MAX_BYTES", 15)     # the descriptor is 16 bytes decompressed (and more compressed)
+    assert {k: v for k, v in RB.compare_dirs(str(a), str(b)).items() if k != "files"} == \
+           {"file": "descriptor.json.gz", "offset": 13, "real": '{"k": [1, 2, 3]}', "relabel": '{"k": [1, 2, 4]}'}, "too large to parse"
 
 
 # ------------------------------------------------------------------------------------------------ flag off: the Build it was
