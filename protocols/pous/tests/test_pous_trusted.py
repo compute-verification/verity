@@ -28,15 +28,24 @@ def command(pkg: Path) -> tuple[str, list[str], list[str]]:
     return m.group(1), m.group(2).split(), m.group(3).split()
 
 
-def stale(pkg: Path) -> list[str]:
-    """Why ``pkg``'s `TRUSTED.sha256` is not what the command writes there, one line per file at fault; empty when it is."""
+def trusted(pkg: Path) -> list[str]:
+    """The files the command hashes, in its order: those it names, then the trees' `.lean` files as `LC_ALL=C sort` orders them."""
     _, named, trees = command(pkg)
     found = (p.relative_to(pkg).as_posix() for t in trees for p in (pkg / t).rglob("*.lean") if p.is_file())
-    want = named + sorted(found, key=str.encode)
+    return named + sorted(found, key=str.encode)
+
+
+def regenerated(pkg: Path, files: list[str]) -> str:
+    return "".join(f"{sha256(pkg / f)}  {f}\n" for f in files)
+
+
+def stale(pkg: Path) -> list[str]:
+    """Why ``pkg``'s `TRUSTED.sha256` is not what the command writes there, one line per file at fault; empty when it is."""
+    want = trusted(pkg)
     if missing := [f for f in want if not (pkg / f).is_file()]:
         return [f"{f} is named by the command but missing" for f in missing]
     have = (pkg / "TRUSTED.sha256").read_text()
-    if have == "".join(f"{sha256(pkg / f)}  {f}\n" for f in want):
+    if have == regenerated(pkg, want):
         return []
     lines = have.splitlines()
     listed = {m.group(2): m.group(1) for line in lines if (m := LINE.fullmatch(line))}
@@ -57,11 +66,13 @@ def test_trusted_hashes_are_current():
 
 
 def copy(tmp: Path) -> Path:
-    """The files `stale` reads, copied from `lean/` into ``tmp``."""
+    """The files `stale` reads, copied from `lean/` into ``tmp``, with `TRUSTED.sha256` regenerated there: the regressions
+    start clean even when `lean/` is stale."""
     _, named, trees = command(LEAN)
-    for rel in ["README.md", "TRUSTED.sha256", *named, *trees]:
+    for rel in ["README.md", *named, *trees]:
         (tmp / rel).parent.mkdir(parents=True, exist_ok=True)
         (shutil.copytree if (LEAN / rel).is_dir() else shutil.copy2)(LEAN / rel, tmp / rel)
+    (tmp / "TRUSTED.sha256").write_text(regenerated(tmp, trusted(tmp)))
     return tmp
 
 
