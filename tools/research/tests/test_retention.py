@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from research import retention as R
+from research import retention_rules as RR
 from research.cli import main as research_main
 from research.store import custody as CU
 from research.store.local import LocalStore
@@ -491,10 +492,17 @@ def test_keep_preserve_then_show_then_gc_through_research(tmp_path, vault_store,
     assert by_path(plan)["pouw/gpu3-fp8/bitsets"]["action"] == "delete" and d.exists(), "a dry run by default"
     real = R.store_check
     monkeypatch.setattr(R, "store_check", lambda store: lambda art, p: "unreachable" if p.name == "r1" else real(store)(art, p))
-    assert research_main(["retention", "gc", "--root", str(root), "--store", str(vault_store), "--apply"]) == 0
+    monkeypatch.setattr(RR, "LOCKS", (tmp_path / "gc.lock", tmp_path / "steward.lock"))
+    gc_apply = ["retention", "gc", "--root", str(root), "--store", str(vault_store), "--apply"]
+    assert research_main(gc_apply) == 2
+    assert "--apply needs --by WHO" in capsys.readouterr().err
+    assert research_main([*gc_apply, "--by", "vy-retention-gc@vy-test"]) == 0
     out = capsys.readouterr().out
     assert not d.exists() and (root / "research/runs/r1").exists()
     assert "DELETE" in out and "pouw/gpu3-fp8/bitsets" in out and "is not verified on the remote: unreachable" in out
+    [line] = [json.loads(x) for x in (root / R.LOG).read_text().splitlines()]
+    assert line == {**line, "schema": RR.LOG_SCHEMA, "action": "deleted", "path": str(d), "rule": None, "owner": "@fp8-security",
+                    "by": "vy-retention-gc@vy-test", "node": socket.gethostname(), "t": "2026-10-01T19:30:00Z"}
 
 
 def test_keep_refuses_a_bad_owner_and_a_bad_expiry_and_report_prints_a_table(tmp_path, monkeypatch, capsys):

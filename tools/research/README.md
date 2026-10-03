@@ -426,15 +426,27 @@ is written for it, and a sidecar wins.
 ~~~text
 research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regenerate CMD] [--art ART | --preserve] [--why T] [--by URL]
 research keep show PATH                      # the record covering PATH, explicit or implicit, as JSON
-research retention report [--root /workspace] [--depth 2] [--json]
-research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--apply]
+research retention report [--root /workspace] [--depth 2] [--node NAME] [--ask-gib 10] [--json] [--out FILE]
+research retention gc [--root /workspace] [--node NAME] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--out FILE]
+                      [--apply --by WHO [--log FILE]]
 ~~~
 
 `--preserve` puts the path in the store as `node-data/v1` and pushes it PRESERVED (the store README's §7) before recording its id;
 a failed push records nothing. The report walks with `os.scandir` and `lstat`, never into a recorded path. It lists every recorded
 path and every area in the top `--depth` levels with no record beneath it (`unowned`): unowned and expired first, then totals.
 
-Policy `default` (`default/v0`) acts only over `--high-pct` (vy-disk-guard's 80%) or with `--force`. It deletes the lowest priority,
+First, whatever the disk, gc applies the default rules (`src/research/retention_rules.py`, the resource steward's "delete without
+asking" list): source trees under `research/src` 6 h old, Lean dependencies of trees going nowhere (node 1), job trees no live pod
+reads (node 1), check scratch untouched 2 h, and what an interrupted pass left. Each path a rule matches has an implicit record
+(owner, rule, age); a sidecar or custody record covering it wins. Nothing goes that live work names: a process (cwd, root, open
+files, maps, argv, environment), an open request, a live pod or Kueue workload, or a fill job. Each one is renamed aside, checked
+again, then deleted, or put back. When that can't be established (a process gc can't read, a failing `k3s kubectl`) gc deletes
+nothing and exits 3, as it does while node 2's fill status doesn't say `timed False`. `--apply` takes `/run/lock/vy-retention-gc.lock`
+(and the steward's sweep lock) and appends every decision to `<root>/research/retention/deletions.jsonl`
+(`research/retention-log/v1`). The report also lists each unowned area of `--ask-gib` or more with the owner to ask, and exits 1
+when there is one. The units `vy-retention-gc@.timer` (apply, every 6 h) and `vy-retention-dry-run@.timer` (daily) run it on each node.
+
+Policy `default` (`default/v1`) then acts only over `--high-pct` (vy-disk-guard's 80%) or with `--force`. It deletes the lowest priority,
 then the oldest expiry, until the filesystem is under `--low-pct` (75%). A path qualifies only when its record is valid, of this node,
 expired, `low` or `normal`, and preserved or regenerable, it holds no nested record, and no file in `/workspace/pouw/fill/queue`,
 `/workspace/pouw/fill/running` or a `--jobs-dir` names it. Just before `--apply` deletes a path, its record and the job scripts are

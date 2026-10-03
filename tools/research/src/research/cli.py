@@ -21,9 +21,11 @@
   research data <store subcommand...>            # the evidence store: put show where fetch verify select snapshot labels label reindex sql
   research keep PATH --owner @LANE --expires DATE|never --priority low|normal|high|keep [--regenerate CMD] [--art ART | --preserve] [--why T]
   research keep show PATH                        # a node path's retention record (research/retention/v0, a sidecar), explicit or implicit
-  research retention report [--root R] [--depth N] [--json]   # every recorded path and every unowned area, unowned and expired first
-  research retention gc [--root R] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--apply]
-                                                 # policy default: delete only what a record allows; a dry run unless --apply (research/retention.py)
+  research retention report [--root R] [--depth N] [--node NAME] [--ask-gib 10] [--json] [--out FILE]
+                                                 # every recorded path, every unowned area and, for a big one, the owner to ask (exit 1)
+  research retention gc [--root R] [--node NAME] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--out FILE]
+                        [--apply --by WHO [--log FILE]]   # the default rules (research/retention_rules.py), then what a record
+                                                 # allows; a dry run unless --apply; exit 3 while timed or when liveness is unknown
   research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate: `git merge --no-ff REF` only with a passing
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward

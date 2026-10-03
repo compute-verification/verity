@@ -3,9 +3,9 @@
     research keep PATH --owner @LANE --expires DATE|never --priority low|normal|high|keep [--regenerate CMD] [--art ART | --preserve]
                        [--why TEXT] [--by URL] [--root R] [--store S]
     research keep show PATH [--root R]
-    research retention report [--root R] [--depth N] [--json]
-    research retention gc [--root R] [--policy default] [--high-pct 80] [--low-pct 75] [--force] [--jobs-dir D]... [--store S] [--json]
-                          [--apply]
+    research retention report [--root R] [--depth N] [--node NAME] [--ask-gib G] [--json] [--out FILE]
+    research retention gc [--root R] [--policy default] [--high-pct 80] [--low-pct 75] [--force] [--jobs-dir D]... [--store S]
+                          [--node NAME] [--json] [--out FILE] [--apply --by WHO [--log FILE]]
 
 A record is a sidecar: `<dir>/.retention.json` for a directory, `<file>.retention.json` beside a file, so it travels with its data
 and `cat` reads it. A directory its owner made read-only has its record beside it, `<dir>.retention.json`; one with both is invalid. It covers everything beneath its path: the walk never descends into a recorded path. Its fields are FIELDS:
@@ -22,6 +22,14 @@ this node that is expired, `low` or `normal`, and preserved or regenerable; a pr
 file now under it at its size, and the artifact PRESERVED on the remote, checked just before the deletion (`store_check`); and no
 file in the job-script directories may name it (`JobScripts`). An implicit record also needs its marker to still vouch for the run
 dir (`custody.marker_problem`). A path holding a nested record is left whole. A dry run (the default) reads no remote.
+
+Before that, on every run whatever the disk, gc applies the default rules (retention_rules: source trees, Lean dependencies, job
+trees, check scratch, and what an interrupted pass left), whose paths have an implicit record each (source `rule`, low, the rule's
+owner, expiring the rule's age after its stamp); a sidecar or a custody record wins over a rule. `--apply` takes LOCKS and appends
+every decision to the node's deletion log. A node is named by `--node` (the units pass vy-nebius-N) or its hostname, and a record
+made under either name counts as this node's. Exit 3 (refused, nothing more done): node 2's fill status doesn't say `timed False`,
+what live work names can't be established, or a lock is held; report refuses the first too. Report lists every unowned area of
+--ask-gib or more with the owner to ask (ASK, the policy's "Ask the owner first"), and exits 1 when there is one.
 """
 from __future__ import annotations
 
@@ -38,7 +46,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
+from . import retention_rules as RR
 from .disk import HOLD_PCT, RELEASE_PCT
+from .liveness import Live
 from .store import custody as CU
 from .store import ids
 from .telemetry.job import write_json_atomic
@@ -51,8 +61,19 @@ COLLECTABLE = ("low", "normal")
 RUN_EXPIRY = timedelta(hours=48)
 DEFAULT_ROOT = Path("/workspace")
 DEFAULT_JOBS_DIRS = (Path("/workspace/pouw/fill/queue"), Path("/workspace/pouw/fill/running"))
-POLICY = "default/v0"
+POLICY = "default/v1"
 POLICIES = ("default",)
+REPORT_SCHEMA = "research/retention-report/v1"
+GC_SCHEMA = "research/retention-gc/v1"
+LOG = Path("research/retention/deletions.jsonl")
+ASK_GIB = 10.0
+WEIGHTS = ("@circuits", "@proofs", "@compute-accounting")
+#: the policy's "Ask the owner first": (an area under the root, its owners, what it holds); no owners: each run dir's lane
+ASK = (("hf", WEIGHTS, "weights"), ("jobs/hf", WEIGHTS, "weights"),
+       ("jobs/cov", ("@circuits",), "replay bundles, sealed or .partial"), ("jobs/probe-jit", ("@circuits",), "replay bundles, sealed or .partial"),
+       ("pouw", ("@compute-accounting",), "PoUW's data"),
+       ("research/runs", (), "run dirs"), ("jobs/runs", (), "run dirs"), ("jobs/runs-n2", (), "run dirs"))
+ASK_ELSE = (("@infra",), "not in the policy: infra finds its owner")
 KIND = "node-data/v1"
 OWNER_RE = re.compile(r"^@[A-Za-z0-9][A-Za-z0-9._-]*$")
 TS = "%Y-%m-%dT%H:%M:%SZ"
@@ -229,12 +250,22 @@ def implicit(run_dir: Path, rel: str) -> dict | None:
 class Found:
     path: Path
     record: dict | None
-    source: str                  # "sidecar" | "custody"
+    source: str                  # "sidecar" | "custody" | "rule"
     error: str | None = None     # an invalid sidecar's problems
+    rule: str | None = None
 
 
-def record_at(path: Path, rel: str) -> Found | None:
-    """The record of exactly `path` (its sidecar, else a directory's implicit one), or None."""
+def rule_record(rules: RR.RuleSet, rule: str, path: Path, rel: str) -> dict:
+    """The implicit record a rule gives `path` (module docstring)."""
+    r, stamp = RR.RULES[rule], rules.stamp(rule, path)
+    born = datetime.fromtimestamp(stamp, timezone.utc) if stamp < 253370764800 else None     # unreadable (newest: inf): never
+    return {"schema": SCHEMA, "path": rel, "node": rules.node, "owner": r.owner, "by": None, "created": born and fmt_utc(born),
+            "expires": born and fmt_utc(born + r.age), "priority": "low", "preserved": None, "regenerate": r.regenerate,
+            "why": f"rule {rule}: {r.why}"}
+
+
+def record_at(path: Path, rel: str, rules: RR.RuleSet | None = None) -> Found | None:
+    """The record of exactly `path` (its sidecar, else a directory's implicit one: custody's, then a rule's), or None."""
     p = Path(path)
     try:
         doc = load(p)
@@ -244,6 +275,8 @@ def record_at(path: Path, rel: str) -> Found | None:
         return Found(p, doc, "sidecar")
     if p.is_dir() and not p.is_symlink() and (doc := implicit(p, rel)) is not None:
         return Found(p, doc, "custody")
+    if rules is not None and (rule := rules.match(p)):
+        return Found(p, rule_record(rules, rule, p, rel), "rule", rule=rule)
     return None
 
 
@@ -263,7 +296,7 @@ def relative(path: Path | str, root: Path | str) -> str:
 
 
 def find(path: Path | str, root: Path | str = DEFAULT_ROOT) -> Found | None:
-    """The record covering `path`: its own, else the nearest ancestor's below the root."""
+    """The explicit or custody record covering `path`: its own, else the nearest ancestor's below the root."""
     rel = relative(path, root)
     parts = rel.split("/")
     for n in range(len(parts), 0, -1):
@@ -271,6 +304,22 @@ def find(path: Path | str, root: Path | str = DEFAULT_ROOT) -> Found | None:
         if found := record_at(Path(root) / sub, sub):
             return found
     return None
+
+
+def covering(root: Path) -> Callable[[Path], str | None]:
+    """The rules' `covered`: why a record keeps `path` (its own or an ancestor's below the root, beside it outside the root)."""
+    def covered(p: Path) -> str | None:
+        try:
+            found = find(p, root) if root in Path(os.path.abspath(p)).parents else record_at(p, str(p))
+        except RecordError as e:
+            return f"its record can't be read, so it stays: {e}"
+        if found is None:
+            return None
+        if found.error:
+            return f"{found.path} has an invalid record, so it stays: {found.error}"
+        return f"covered by {found.path}'s record (owner {found.record['owner']}), which decides"
+
+    return covered
 
 
 def target(path: Path | str, root: Path | str) -> str:
@@ -311,10 +360,11 @@ class Row:
     bytes: int = 0
     files: int = 0
     record: dict | None = None
-    source: str | None = None            # "sidecar" | "custody"; None: no record
+    source: str | None = None            # "sidecar" | "custody" | "rule"; None: no record
     error: str | None = None
     nested: list[str] = field(default_factory=list)
     rest: bool = False                   # an unowned row for the unrecorded rest of a partly recorded area
+    rule: str | None = None
 
     def state(self, now: datetime) -> str:
         if self.error:
@@ -326,7 +376,7 @@ class Row:
     def doc(self, now: datetime) -> dict[str, Any]:
         r = self.record or {}
         return {"path": self.path, "state": self.state(now), "bytes": self.bytes, "files": self.files, "source": self.source,
-                "owner": r.get("owner"), "expires": r.get("expires"), "priority": r.get("priority"), "preserved": r.get("preserved"),
+                "rule": self.rule, "owner": r.get("owner"), "expires": r.get("expires"), "priority": r.get("priority"), "preserved": r.get("preserved"),
                 "regenerable": bool((r.get("regenerate") or "").strip()), "expired": bool(self.record) and expired(self.record, now),
                 "rest": self.rest, "nested": self.nested, "error": self.error, "record": self.record}
 
@@ -374,10 +424,10 @@ class Scan:
     errors: list[str]
 
 
-def scan(root: Path | str = DEFAULT_ROOT, depth: int = 2) -> Scan:
-    """Every recorded path under `root` (never descending into one), and the areas in its top `depth` levels with no record
-    beneath them (`unowned`). The unrecorded bytes of a partly recorded area are one `rest` row: the loose files of one in the
-    top levels, everything unrecorded beneath one at `depth`."""
+def scan(root: Path | str = DEFAULT_ROOT, depth: int = 2, rules: RR.RuleSet | None = None) -> Scan:
+    """Every recorded path under `root` (never descending into one; with `rules`, a rule's paths are recorded too), and the areas
+    in its top `depth` levels with no record beneath them (`unowned`). The unrecorded bytes of a partly recorded area are one
+    `rest` row: the loose files of one in the top levels, everything unrecorded beneath one at `depth`."""
     root = Path(root)
     rows: list[Row] = []
     errors: list[str] = []
@@ -403,10 +453,10 @@ def scan(root: Path | str = DEFAULT_ROOT, depth: int = 2) -> Scan:
                     continue
                 else:
                     errors.append(f"{e.path} records {e.name[: -len(SIDECAR)]}, which is gone")
-            found = record_at(Path(e.path), r) if is_dir or e.name + SIDECAR in names else None
+            found = record_at(Path(e.path), r, rules) if is_dir or e.name + SIDECAR in names else None
             if found:
                 b, n, nested = measure(Path(e.path), errors)
-                rows.append(Row(r, b, n, found.record, found.source, found.error, [relative(x, root) for x in nested]))
+                rows.append(Row(r, b, n, found.record, found.source, found.error, [relative(x, root) for x in nested], rule=found.rule))
                 has = True
             elif is_dir:
                 b, n, sub = walk(Path(e.path), r, level + 1)
@@ -435,23 +485,62 @@ def scan(root: Path | str = DEFAULT_ROOT, depth: int = 2) -> Scan:
 ORDER = {"invalid": 0, "unowned": 0, "expired": 1, "recorded": 2}
 
 
+def run_lanes(d: Path, root: Path) -> list[str]:
+    """The lanes of the unrecorded run dirs at `d` (a run dir, or a directory of them): job.json's lane, else its campaign, else
+    @infra."""
+    try:
+        dirs = [d] if (d / "job.json").is_file() else sorted(c for c in d.iterdir() if c.is_dir() and not c.is_symlink())
+    except OSError:
+        return ["@infra"]
+    lanes = set()
+    for c in dirs:
+        if record_at(c, relative(c, root)) is not None:
+            continue
+        job = _read_json(c / "job.json") or {}
+        lane = (job.get("ownership") or {}).get("lane") or (job.get("store") or {}).get("campaign")
+        lanes.add(("" if lane.startswith("@") else "@") + lane if isinstance(lane, str) and lane else "@infra")
+    return sorted(lanes) or ["@infra"]
+
+
+def asks(root: Path, rows: list[dict[str, Any]], gib: float) -> list[dict[str, Any]]:
+    """Each unowned area of `gib` GiB or more, with the owners to ask (ASK, its longest match) and what it holds."""
+    out = []
+    for d in rows:
+        if d["state"] != "unowned" or d["bytes"] < gib * (1 << 30):
+            continue
+        hit = max((a for a in ASK if d["path"] == a[0] or d["path"].startswith(a[0] + "/")), key=lambda a: len(a[0]), default=None)
+        owners, what = (hit[1] or run_lanes(root / d["path"], root), hit[2]) if hit else ASK_ELSE
+        out.append({"path": d["path"], "bytes": d["bytes"], "files": d["files"], "rest": d["rest"], "owners": list(owners), "what": what})
+    return out
+
+
 def report(root: Path | str = DEFAULT_ROOT, depth: int = 2, *, now: Callable[[], datetime] = utc_now,
-           usage: Callable[[Path], Any] = shutil.disk_usage, node: str | None = None) -> dict[str, Any]:
-    """`research retention report --json`: unowned (and invalid) areas first, then expired paths, then the rest, each by size."""
-    t = now()
-    sc = scan(root, depth)
+           usage: Callable[[Path], Any] = shutil.disk_usage, node: str | None = None, places: RR.Places | None = None,
+           ask_gib: float = ASK_GIB) -> dict[str, Any]:
+    """`research retention report --json`: unowned (and invalid) areas first, then expired paths, then the rest, each by size, with
+    the rules' paths (those outside the root, such as /tmp's check scratch, by absolute path), and the `asks` (module docstring).
+    RR.Refused in a timed window (RR.timed). `places` None is RR.Places.of(root)."""
+    places = places or RR.Places.of(root)
+    if why := RR.timed(places):
+        raise RR.Refused(why)
+    t, node = now(), node or socket.gethostname()
+    rules = RR.RuleSet(places, node)
+    sc = scan(root, depth, rules)
+    for p, rule in rules.outside():
+        b, n, nested = measure(p, sc.errors)
+        sc.rows.append(Row(str(p), b, n, rule_record(rules, rule, p, str(p)), "rule", nested=[str(x) for x in nested], rule=rule))
     docs = sorted((r.doc(t) for r in sc.rows), key=lambda d: (ORDER[d["state"]], -d["bytes"], d["path"]))
     totals: dict[str, dict[str, int]] = {s: {"paths": 0, "bytes": 0} for s in ("unowned", "invalid", "expired", "recorded", "collectable")}
     for d in docs:
         totals[d["state"]]["paths"] += 1
         totals[d["state"]]["bytes"] += d["bytes"]
-        if d["state"] == "expired" and d["priority"] in COLLECTABLE and (d["preserved"] or d["regenerable"]):
+        if d["state"] == "expired" and d["source"] != "rule" and d["priority"] in COLLECTABLE and (d["preserved"] or d["regenerable"]):
             totals["collectable"]["paths"] += 1
             totals["collectable"]["bytes"] += d["bytes"]
     total, used, _ = usage(Path(root))
-    return {"schema": "research/retention-report/v0", "root": str(root), "node": node or socket.gethostname(), "now": fmt_utc(t),
-            "depth": depth, "filesystem": {"total": total, "used": used, "pct": round(100 * used / total, 2) if total else None},
-            "rows": docs, "totals": totals, "errors": sc.errors}
+    return {"schema": REPORT_SCHEMA, "root": str(root), "node": node, "now": fmt_utc(t), "depth": depth,
+            "filesystem": {"total": total, "used": used, "pct": round(100 * used / total, 2) if total else None},
+            "rows": docs, "totals": totals, "asks": asks(Path(root), docs, ask_gib), "ask_gib": ask_gib, "errors": sc.errors}
 
 
 # ---- gc -----------------------------------------------------------------------------------------------------------------------------------
@@ -573,8 +662,9 @@ class Action:
         return {**self.row.doc(now), "action": self.action, "reason": self.reason, "pct_after": self.pct_after, "error": self.error}
 
 
-def ineligible(row: Row, now: datetime, node: str) -> str | None:
-    """Why the policy never deletes `row`'s path, from its record alone; None when it may."""
+def ineligible(row: Row, now: datetime, node: str, aliases: Sequence[str] = ()) -> str | None:
+    """Why the policy never deletes `row`'s path, from its record alone; None when it may. A record made on `node` or under one
+    of its `aliases` (its hostname) is this node's."""
     rec = row.record
     if row.error:
         return f"invalid record: {row.error}"
@@ -588,7 +678,7 @@ def ineligible(row: Row, now: datetime, node: str) -> str | None:
         return f"not expired: expires {rec['expires']}"
     if not rec.get("preserved") and not (rec.get("regenerate") or "").strip():
         return "neither preserved nor regenerable: nothing would bring it back"
-    if rec.get("node") and rec["node"] != node:
+    if rec.get("node") and rec["node"] != node and rec["node"] not in aliases:
         return f"recorded on {rec['node']}, and this is {node}: `research keep` it here"
     if row.nested:
         return f"holds {len(row.nested)} nested record(s), e.g. {row.nested[0]}: a record covers everything beneath it, so remove those first"
@@ -632,32 +722,52 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
        force: bool = False, apply: bool = False, jobs_dirs: Sequence[Path | str] | None = None, depth: int = 2,
        now: Callable[[], datetime] = utc_now, usage: Callable[[Path], Any] = shutil.disk_usage,
        remote_check: Callable[[str, Path], str | None] | None = None, in_use: Callable[[Path], str | None] | None = None,
-       node: str | None = None, store_root: str | None = None) -> dict[str, Any]:
-    """The policy (module docstring) over `root`: the plan, and with `apply` its deletions. `jobs_dirs` None means the
-    DEFAULT_JOBS_DIRS that exist; `remote_check` None is `store_check(store_root)`; `in_use` None is `JobScripts(jobs_dirs)`."""
+       node: str | None = None, store_root: str | None = None, places: RR.Places | None = None, live: Live | None = None,
+       save: Callable[[list[Path]], str] | None = None, log: RR.Log | None = None, by: str | None = None) -> dict[str, Any]:
+    """The rules, then the policy (module docstring) over `root`: the plan, and with `apply` its deletions. `jobs_dirs` None means
+    the DEFAULT_JOBS_DIRS that exist; `remote_check` None is `store_check(store_root)`; `in_use` None is `JobScripts(jobs_dirs)`;
+    `places` None is RR.Places.of(root); `live` None is this machine's (liveness.Live); `save` None is RR.store_saver(store_root);
+    `log` gets an --apply's decisions. plan["refused"] says why gc stopped (exit 3), else None."""
     if policy not in POLICIES:
         raise ValueError(f"unknown policy {policy!r} (have: {', '.join(POLICIES)})")
     if low_pct > high_pct:
         raise ValueError(f"--low-pct {low_pct:g} is over --high-pct {high_pct:g}")
     root = Path(os.path.abspath(root))
     t, node = now(), node or socket.gethostname()
+    aliases = [socket.gethostname()]
+    places = places or RR.Places.of(root)
     total, used, _ = usage(root)
     pct = 100 * used / total if total else 100.0
-    plan: dict[str, Any] = {"schema": "research/retention-gc/v0", "policy": POLICY, "root": str(root), "node": node, "now": fmt_utc(t),
-                            "apply": apply, "force": force, "high_pct": high_pct, "low_pct": low_pct, "pct_before": round(pct, 2),
-                            "acting": force or pct > high_pct, "actions": [], "freed_bytes": 0, "errors": []}
+    plan: dict[str, Any] = {"schema": GC_SCHEMA, "policy": POLICY, "root": str(root), "node": node, "now": fmt_utc(t), "apply": apply,
+                            "by": by, "force": force, "high_pct": high_pct, "low_pct": low_pct, "pct_before": round(pct, 2), "refused": None,
+                            "rules": [], "acting": False, "actions": [], "freed_bytes": 0, "errors": []}
+    plan["refused"] = RR.timed(places)
+    if plan["refused"] is None:
+        sweep = RR.Sweep(places, node, now, live or Live(research=places.research, fill=places.fill), apply=apply,
+                         covered=covering(root), save=save or RR.store_saver(store_root, node, by), log=log)
+        try:
+            sweep.run()
+        except RR.Refused as e:
+            plan["refused"] = str(e)
+        plan["rules"] = [a.doc() for a in sweep.acts]
+        plan["freed_bytes"] = sum(a.bytes or 0 for a in sweep.acts if a.action == "delete" and not a.error)
+        total, used, _ = usage(root)
+        pct = 100 * used / total if total else 100.0
+    plan["acting"] = plan["refused"] is None and (force or pct > high_pct)
     if not plan["acting"]:
-        plan["pct_after"] = plan["pct_before"]
+        plan["pct_after"] = round(pct, 2)
         return plan
     if jobs_dirs is None:
         jobs_dirs = [d for d in DEFAULT_JOBS_DIRS if d.is_dir()]
     in_use = in_use or JobScripts(jobs_dirs, root)
     remote_check = remote_check or store_check(store_root)
-    sc = scan(root, depth)
+    sc = scan(root, depth, RR.RuleSet(places, node))
     plan["errors"] = sc.errors
     candidates, skips = [], []
     for row in sorted(sc.rows, key=lambda r: (-r.bytes, r.path)):
-        why = ineligible(row, t, node)
+        if row.source == "rule":
+            continue
+        why = ineligible(row, t, node, aliases)
         if why is None and row.source == "custody" and (problem := CU.marker_problem(root / row.path)):
             why = f"its custody marker no longer vouches for it: {problem}"
         if why is None and (u := in_use(root / row.path)):
@@ -693,7 +803,11 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
         err = _delete(root, p)
         total, used, _ = usage(root)
         pct = 100 * used / total if total else 100.0
-        acts.append(Action(row, "delete", "deleted: " + _why_deletable(row.record, bool(row.record.get("preserved"))), round(pct, 2), err))
+        why = _why_deletable(row.record, bool(row.record.get("preserved")))
+        acts.append(Action(row, "delete", "deleted: " + why, round(pct, 2), err))
+        if log is not None:
+            log("failed" if err else "deleted", p, rule=None, owner=row.record["owner"], files=row.files, bytes=row.bytes,
+                reason=why + (f" ({err})" if err else ""))
         if not err:
             plan["freed_bytes"] += row.bytes
     plan["actions"] = [a.doc(t) for a in acts + skips]
@@ -721,7 +835,8 @@ def _row_line(d: dict[str, Any]) -> str:
         return f"{d['state'].upper():<9} {_size(d['bytes']):>10}  {'-':<22} {'-':<20} {'-':<8} {'-':<16} {'-':<5}  {path}{tail}"
     return (f"{'EXPIRED' if d['expired'] else 'recorded':<9} {_size(d['bytes']):>10}  {str(d['owner'])[:22]:<22} "
             f"{str(d['expires'] or 'never'):<20} {d['priority']:<8} {_short(d['preserved']):<16} {'yes' if d['regenerable'] else 'no':<5}  "
-            f"{path}" + (" (implicit: .custody)" if d["source"] == "custody" else "") + (f"  [{len(d['nested'])} nested]" if d["nested"] else ""))
+            f"{path}" + (" (implicit: .custody)" if d["source"] == "custody" else f" (rule {d['rule']})" if d["source"] == "rule" else "")
+            + (f"  [{len(d['nested'])} nested]" if d["nested"] else ""))
 
 
 def keep_main(argv: list[str]) -> int:
@@ -814,26 +929,56 @@ def _show(argv: list[str]) -> int:
     return 0
 
 
+def _emit(doc: dict[str, Any], ns: argparse.Namespace) -> None:
+    if ns.out:
+        write_json_atomic(Path(ns.out), doc)
+    if ns.json:
+        print(json.dumps(doc, indent=2))
+
+
+def _refused(prog: str, schema: str, why: str, ns: argparse.Namespace) -> int:
+    print(f"{prog}: refused: {why}", file=sys.stderr)
+    _emit({"schema": schema, "refused": why}, ns)
+    return 3
+
+
+def _rule_line(a: dict[str, Any], apply: bool) -> str:
+    verb = {"keep": "keep", "stuck": "STUCK"}.get(a["action"]) or ("FAILED" if a["error"] else "DELETE" if apply else "would delete")
+    size = _size(a["bytes"]) if a["bytes"] is not None else "-"
+    age = f", {a['age_h']} h" if a["age_h"] is not None else ""
+    return (f"{verb:<12} {size:>10}  {a['path']}  [{a['rule']} {a['owner']}{age}]  {a['reason']}"
+            + (f"  ERROR {a['error']}" if a["error"] else ""))
+
+
 def main(argv: list[str]) -> int:
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__.strip())
         return 0
     sub, rest = argv[0], argv[1:]
     if sub == "report":
-        ap = argparse.ArgumentParser(prog="research retention report")
+        prog = "research retention report"
+        ap = argparse.ArgumentParser(prog=prog)
         ap.add_argument("--root", default=str(DEFAULT_ROOT))
         ap.add_argument("--depth", type=int, default=2, metavar="N", help="list unowned areas in the top N levels (default 2)")
+        ap.add_argument("--node", default=None, metavar="NAME", help="this node's name in the rules (default the hostname)")
+        ap.add_argument("--ask-gib", type=float, default=ASK_GIB, metavar="G", help="name the owner to ask for each unowned area of "
+                        "G GiB or more (default %(default)s); any makes the exit 1")
         ap.add_argument("--json", action="store_true")
+        ap.add_argument("--out", default=None, metavar="FILE", help="also write the JSON document to FILE")
         ns = ap.parse_args(rest)
         if not Path(ns.root).is_dir():
-            print(f"research retention report: --root {ns.root} is not a directory", file=sys.stderr)
+            print(f"{prog}: --root {ns.root} is not a directory", file=sys.stderr)
             return 2
-        rep = report(ns.root, ns.depth, now=utc_now, usage=disk_usage)
+        try:
+            rep = report(ns.root, ns.depth, now=utc_now, usage=disk_usage, node=ns.node, ask_gib=ns.ask_gib)
+        except RR.Refused as e:
+            return _refused(prog, REPORT_SCHEMA, str(e), ns)
+        rc = 1 if rep["asks"] else 0
+        _emit(rep, ns)
         if ns.json:
-            print(json.dumps(rep, indent=2))
-            return 0
+            return rc
         fs = rep["filesystem"]
-        print(f"research retention report: {rep['root']} on {rep['node']} at {rep['now']}; filesystem {_size(fs['used'])} of "
+        print(f"{prog}: {rep['root']} on {rep['node']} at {rep['now']}; filesystem {_size(fs['used'])} of "
               f"{_size(fs['total'])} used ({fs['pct']}%)")
         print(f"{'state':<9} {'size':>10}  {'owner':<22} {'expires':<20} {'priority':<8} {'preserved':<16} {'regen':<5}  path")
         for d in rep["rows"]:
@@ -842,58 +987,91 @@ def main(argv: list[str]) -> int:
         print("totals: " + ", ".join(f"{k} {_size(v['bytes'])} in {v['paths']}" for k, v in tt.items() if k != "collectable" and v["paths"])
               + f"; collectable when the disk is full (expired, low or normal, preserved or regenerable): {_size(tt['collectable']['bytes'])} "
                 f"in {tt['collectable']['paths']}")
+        for a in rep["asks"]:
+            path = f"{a['path']}/* (unrecorded rest)" if a["rest"] else a["path"]
+            print(f"ASK {' '.join(a['owners'])}: {path}, {_size(a['bytes'])} unowned ({a['what']})")
         for e in rep["errors"]:
             print(f"error: {e}", file=sys.stderr)
-        return 0
+        return rc
     if sub == "gc":
-        ap = argparse.ArgumentParser(prog="research retention gc", description="policy default: a dry run unless --apply")
+        prog = "research retention gc"
+        ap = argparse.ArgumentParser(prog=prog, description="the default rules, then policy default: a dry run unless --apply")
         ap.add_argument("--root", default=str(DEFAULT_ROOT))
         ap.add_argument("--policy", default="default", choices=POLICIES)
-        ap.add_argument("--high-pct", type=float, default=HOLD_PCT, help="act only over this %% used (default %(default)s)")
+        ap.add_argument("--high-pct", type=float, default=HOLD_PCT, help="collect records only over this %% used (default %(default)s)")
         ap.add_argument("--low-pct", type=float, default=RELEASE_PCT, help="delete until under this %% (default %(default)s; 0 takes "
                                                                             "every qualifying path)")
-        ap.add_argument("--force", action="store_true", help="act under --high-pct too")
+        ap.add_argument("--force", action="store_true", help="collect records under --high-pct too")
         ap.add_argument("--jobs-dir", action="append", default=[], metavar="D", help="more job-script directories (beside "
                         + " and ".join(map(str, DEFAULT_JOBS_DIRS)) + " when they exist): a path a file there names is in use")
-        ap.add_argument("--store", default=None, metavar="ROOT", help="the evidence store whose remote re-verifies preserved paths")
+        ap.add_argument("--store", default=None, metavar="ROOT", help="the evidence store whose remote re-verifies preserved paths and "
+                                                                       "keeps audit trees' lean-audit.json")
+        ap.add_argument("--node", default=None, metavar="NAME", help="this node's name in the rules and the log (default the hostname; "
+                                                                      "the units pass vy-nebius-N)")
         ap.add_argument("--json", action="store_true")
+        ap.add_argument("--out", default=None, metavar="FILE", help="also write the JSON document to FILE")
         ap.add_argument("--apply", action="store_true", help="delete; without it nothing is deleted and no remote is read")
+        ap.add_argument("--by", default=None, metavar="WHO", help="who deletes, for the log: required with --apply")
+        ap.add_argument("--log", default=None, metavar="FILE", help=f"--apply's deletion log (default <root>/{LOG})")
         ns = ap.parse_args(rest)
         if missing := [d for d in [ns.root, *ns.jobs_dir] if not Path(d).is_dir()]:
-            print(f"research retention gc: {missing[0]} is not a directory", file=sys.stderr)
+            print(f"{prog}: {missing[0]} is not a directory", file=sys.stderr)
+            return 2
+        if ns.apply and not ns.by:
+            print(f"{prog}: --apply needs --by WHO (who deletes, for the deletion log)", file=sys.stderr)
             return 2
         jobs = [d for d in DEFAULT_JOBS_DIRS if d.is_dir()] + [Path(d) for d in ns.jobs_dir]
+        node = ns.node or socket.gethostname()
+        log = RR.Log(Path(ns.log) if ns.log else Path(ns.root) / LOG, node, ns.by, utc_now) if ns.apply else None
+        held: list[Any] = []
         try:
+            if log is not None:
+                held = RR.lock(RR.LOCKS)
+                log.check()
             plan = gc(ns.root, policy=ns.policy, high_pct=ns.high_pct, low_pct=ns.low_pct, force=ns.force, apply=ns.apply,
-                      now=utc_now, usage=disk_usage, remote_check=store_check(ns.store), in_use=JobScripts(jobs, ns.root))
+                      now=utc_now, usage=disk_usage, remote_check=store_check(ns.store), in_use=JobScripts(jobs, ns.root), node=node,
+                      store_root=ns.store, log=log, by=ns.by)
+        except RR.Refused as e:
+            return _refused(prog, GC_SCHEMA, str(e), ns)
         except ValueError as e:
-            print(f"research retention gc: {e}", file=sys.stderr)
+            print(f"{prog}: {e}", file=sys.stderr)
             return 2
-        failed = [a for a in plan["actions"] if a["error"]]
+        finally:
+            for f in held:
+                f.close()
+        failed = [a for a in plan["actions"] if a["error"]] + [a for a in plan["rules"] if a["error"] or a["action"] == "stuck"]
+        rc = 3 if plan["refused"] else 1 if failed else 0
+        _emit(plan, ns)
         if ns.json:
-            print(json.dumps(plan, indent=2))
-            return 1 if failed else 0
+            return rc
         mode = "applying" if ns.apply else "dry run (--apply deletes)"
-        head = f"research retention gc: policy {plan['policy']}, {mode}: {plan['root']} at {plan['pct_before']}%"
+        print(f"{prog}: the default rules, {mode}: {len(plan['rules'])} decision(s)")
+        for a in plan["rules"]:
+            print(_rule_line(a, ns.apply))
+        if plan["refused"]:
+            print(f"{prog}: refused: {plan['refused']}", file=sys.stderr)
+            return rc
+        head = f"{prog}: policy {plan['policy']}, {mode}: {plan['root']} at {plan['pct_before']}%"
         if not plan["acting"]:
-            print(f"{head}, not over {ns.high_pct:g}%: nothing to do (--force acts anyway)")
-            return 0
-        print(f"{head} (acts over {ns.high_pct:g}%{', forced' if ns.force else ''}; deletes until under {ns.low_pct:g}%)")
-        for a in plan["actions"]:
-            verb = "DELETE" if a["action"] == "delete" and not a["error"] else "FAILED" if a["error"] else "skip"
-            tail = f"  -> {a['pct_after']}%" if a["pct_after"] is not None else ""
-            path = f"{a['path']}/* (unrecorded rest)" if a["rest"] else a["path"]
-            print(f"{verb:<7} {_size(a['bytes']):>10}  {path}  {a['reason']}{tail}" + (f"  ERROR {a['error']}" if a["error"] else ""))
-        n = sum(1 for a in plan["actions"] if a["action"] == "delete" and not a["error"])
+            print(f"{head}, not over {ns.high_pct:g}%: no record is collected (--force collects anyway)")
+        else:
+            print(f"{head} (acts over {ns.high_pct:g}%{', forced' if ns.force else ''}; deletes until under {ns.low_pct:g}%)")
+            for a in plan["actions"]:
+                verb = "DELETE" if a["action"] == "delete" and not a["error"] else "FAILED" if a["error"] else "skip"
+                tail = f"  -> {a['pct_after']}%" if a["pct_after"] is not None else ""
+                path = f"{a['path']}/* (unrecorded rest)" if a["rest"] else a["path"]
+                print(f"{verb:<7} {_size(a['bytes']):>10}  {path}  {a['reason']}{tail}" + (f"  ERROR {a['error']}" if a["error"] else ""))
+        n = sum(1 for a in plan["actions"] + plan["rules"] if a["action"] == "delete" and not a["error"])
         print(f"{'deleted' if ns.apply else 'would delete'} {n} path(s), {_size(plan['freed_bytes'])}: {plan['pct_before']}% -> "
-              f"{plan['pct_after']}%" + ("" if ns.apply else "; nothing was deleted") + (f"; {len(failed)} deletion(s) failed" if failed else ""))
+              f"{plan['pct_after']}%" + ("" if ns.apply else "; nothing was deleted") + (f"; {len(failed)} failed or stuck" if failed else ""))
         for e in plan["errors"]:
             print(f"error: {e}", file=sys.stderr)
-        return 1 if failed else 0
+        return rc
     print(f"research retention: unknown subcommand {sub!r} (have: report, gc)", file=sys.stderr)
     return 2
 
 
-__all__ = ["DEFAULT_JOBS_DIRS", "FIELDS", "JobScripts", "KIND", "POLICY", "PRIORITIES", "RUN_EXPIRY", "SCHEMA", "SIDECAR", "RecordError",
-           "beside", "check", "covers", "find", "gc", "implicit", "keep", "keep_main", "load", "main", "problems", "record_at", "report", "scan",
-           "sidecar", "store_check", "target", "write"]
+__all__ = ["ASK", "DEFAULT_JOBS_DIRS", "FIELDS", "GC_SCHEMA", "JobScripts", "KIND", "LOG", "POLICY", "PRIORITIES", "REPORT_SCHEMA",
+           "RUN_EXPIRY", "SCHEMA", "SIDECAR", "RecordError", "asks", "beside", "check", "covering", "covers", "find", "gc", "implicit", "keep",
+           "keep_main", "load", "main", "problems", "record_at", "report", "rule_record", "run_lanes", "scan", "sidecar", "store_check",
+           "target", "write"]
