@@ -560,6 +560,40 @@ def test_served_debit_fresh_draws_measure_each_input_under_salts_of_its_own(hone
         SD.main([*args[:6], "cd" * 32, *args[7:], "--out", str(tmp_path / "other"), *resume])
 
 
+ST = load("pearl_c_vllm_served_table", KERNEL.parent / "pearl_c_vllm" / "served_table.py")
+
+
+def test_the_served_table_cites_each_models_worst_input_and_refuses_what_it_cannot_cite(tmp_path):
+    row = lambda run, i, upper, fails=0: {"pass": "decode", "run": run, "manifest_sha256": "ab", "matmul": i, "k": 4096, "n": 4096,
+                                          "NT": 64, "method": "census", "drawn": 64, "openings_failed": 0, "failures": fails,
+                                          "share_max": 5e-5, "upper": upper, "bound_method": "census, rule of three (work-weighted)"}
+    doc = lambda run, uppers: {"m": len(uppers), "delta_per_input": 0.05 / len(uppers), "cited_upper": max(uppers),
+                               "cited_input": {"matmul": uppers.index(max(uppers))}, "inputs": [row(run, i, u) for i, u in enumerate(uppers)]}
+    verify = lambda run, label, ok: {"manifest": f"/p/{run}/{label}/manifest.json", "accepted": ok, "transcript": f"{run}:/p sha256:00",
+                                     "transcript_sha256": "00", "tiles": [1, 2], "line": f"{'ACCEPT' if ok else 'REJECT'} x", "replay": "batch",
+                                     "cross_checked": [1]}
+    files = {}
+    for name, obj in {"q": doc("rq", [0.05, 0.09]), "l": doc("rl", [0.08]), "v1": verify("rq", "decode", True),
+                      "v2": verify("rq", "control", False), "bad": verify("rq", "control", True),
+                      "fresh": {"fresh_draws": 320, "fresh_source": "cd", "m": 2, "cited_upper": 0.018, "cited_input": {"matmul": 0},
+                                "inputs": [row("rq", 0, 0.018) | {"drawn": 320}, row("rq", 1, 0.017) | {"drawn": 320}]}}.items():
+        files[name] = tmp_path / f"{name}.json"
+        files[name].write_text(json.dumps(obj))
+    out = tmp_path / "out"
+    assert ST.main(["--model", "qwen", str(files["q"]), str(files["v1"]), str(files["v2"]), "--model", "llama", str(files["l"]),
+                    "--fresh", "qwen", str(files["fresh"]), "--out", str(out)]) == 0
+    table = json.loads((out / "table.json").read_text())
+    q, l = table["models"]
+    assert (q["epsilon"], q["m"], q["failures"], l["epsilon"]) == (0.09, 2, 0, 0.08)
+    assert q["fresh"]["epsilon"] == 0.018 and q["fresh"]["trials"] == 640 and "fresh" not in l
+    assert [v["accepted"] for v in q["verify"]] == [True, False] and "| qwen | `rq` | 2 |" in (out / "table.md").read_text()
+    with pytest.raises(ValueError, match="control"):
+        ST.main(["--model", "qwen", str(files["q"]), str(files["bad"]), "--out", str(out)])
+    with pytest.raises(ValueError, match="one served pass"):
+        files["q"].write_text(json.dumps(doc("rq", [0.05]) | {"inputs": [row("rq", 0, 0.05), row("rl", 1, 0.05)]}))
+        ST.main(["--model", "qwen", str(files["q"]), "--out", str(out)])
+
+
 def test_clopper_pearson_upper():
     assert SD.clopper_pearson_upper(0, 320, 0.05 / 16) == pytest.approx(1 - (0.05 / 16) ** (1 / 320))
     assert SD.clopper_pearson_upper(0, 320, 0.05 / 16) < 0.02 < math.log(20 * 16) / 64
