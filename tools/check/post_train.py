@@ -14,10 +14,16 @@ VERITY_REGRESSION_REBUILD=1 and VERITY_STORE_REQUIRED=1.  When the run ends, tha
 no such label is one whose job didn't finish here (the caller's VM suspended, the machine refused the run): run this again.  The
 run is preserved from the machine either way; only the label needs this process to live.  An attempt that has its label already
 is left alone unless --force.
+
+Jobs started here run one at a time (a lock in the temp directory: the cores are one slot), so a landing waits for the one before
+it.  When that one is labelled and the change between them touches none of the `verity-vllm` suite's inputs (`suites.py
+--changed`), its verdict is carried: the same value, with the same run as `--ref`, and no rebuild.  About three trains in four
+touch them (130 of 171 between 27 Sep and 3 Oct).
 """
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import re
 import shlex
@@ -33,7 +39,10 @@ MACHINE = "vy-nebius-1"
 CORES = "96-127"
 BY = "regression"
 PREFIX = "regression "
+PASS = f"{PREFIX}pass"
 MARKS = "regression and rebuild"
+SUITE = "verity-vllm"
+LOCK = Path(tempfile.gettempdir()) / "verity-post-train.lock"
 RUN_RE = re.compile(r"\brun (r20\d{6}-\d{6}-[0-9a-f]{4}) launched\b")
 CHECK_RE = re.compile(r"^Check: (r20\d{6}-\d{6}-[0-9a-f]{4})$", re.M)
 ROW_RE = re.compile(r"-(r\d+)\]$")
@@ -84,22 +93,40 @@ def verdict(junit: Path, rc: int | None = None) -> str:
         failed.append(m.group(1) if m else name.removeprefix("test_").removesuffix("_refusal_reproduces"))
     if failed:
         return f"{PREFIX}fail:" + ",".join(sorted(set(failed), key=_order))
-    return f"{PREFIX}pass" if passed else f"{PREFIX}fail:nothing ran (run rc={rc})"
+    return PASS if passed else f"{PREFIX}fail:nothing ran (run rc={rc})"
 
 
 def research(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, "-m", "research", *args], cwd=cwd, capture_output=True, text=True)
 
 
-def labelled(attempt: str) -> str | None:
-    """The attempt's latest `note` by `regression`, when it is a verdict of this job."""
+def labelled(attempt: str) -> dict | None:
+    """The attempt's latest `note` by `regression` (its `value` and `ref`), when it is a verdict of this job."""
     p = research("data", "labels", attempt, "--key", "note", "--by", BY, "--json")
     try:
         labs = json.loads(p.stdout or "[]")
     except json.JSONDecodeError:
         return None
-    vals = [str(x.get("value")) for x in labs if str(x.get("value", "")).startswith(PREFIX)]
-    return vals[-1] if vals else None
+    labs = [x for x in labs if str(x.get("value", "")).startswith(PREFIX)]
+    return labs[-1] if labs else None
+
+
+def untouched(tree: Path, rev: str) -> bool:
+    """Whether the change from ``rev`` to ``tree`` touches none of the suite's inputs, as ``tree``'s own `suites.py` reads them."""
+    p = subprocess.run([sys.executable, "tools/check/suites.py", SUITE, "--changed", rev, "--list"], cwd=tree,
+                       capture_output=True, text=True)
+    return p.returncode == 0 and re.search(r"^suites: the change from \S+ touches 0: none$", p.stdout, re.M) is not None
+
+
+def carried(sha: str, tree: Path) -> dict | None:
+    """The verdict of the landing before ``sha`` (its first parent), with that landing's attempt as `from`, when the change since
+    touches none of the suite's inputs: the rebuilds would read what they read there.  None, and the job runs, when the parent is
+    no landing, has no verdict yet, or its verdict came from no junit (a run that failed before its tests)."""
+    prev = check_attempt(f"{sha}^1", cwd=tree)
+    lab = labelled(prev) if prev else None
+    if not lab or not lab.get("ref") or "(run rc=" in str(lab["value"]) or not untouched(tree, f"{sha}^1"):
+        return None
+    return {**lab, "from": prev}
 
 
 def job(cores: str, workers: int) -> str:
@@ -113,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cores", default=CORES, metavar="LIST", help=f"`taskset -c LIST` for them (default {CORES}; '' for none)")
     ap.add_argument("--workers", type=int, default=12, help="pytest-xdist workers: a row's rebuild each (default 12)")
     ap.add_argument("--project", default="verity")
-    ap.add_argument("--force", action="store_true", help="run even when the attempt has its label")
+    ap.add_argument("--force", action="store_true", help="run even when the attempt has its label, or could carry the one before's")
     ap.add_argument("--dry-run", action="store_true", help="run, and print the label instead of writing it (any commit: a branch's too)")
     a = ap.parse_args(argv)
     git("fetch", "-q", "origin", "main")
@@ -122,12 +149,29 @@ def main(argv: list[str] | None = None) -> int:
     if not attempt and not a.dry_run:
         print(f"post-train: {sha[:12]} has no `Check:` trailer, so it is no landing of main", file=sys.stderr)
         return 2
-    if attempt and not (a.force or a.dry_run) and (have := labelled(attempt)):
-        print(f"post-train: {attempt} ({sha[:12]}) has note={have} already; --force runs it again")
+    with open(LOCK, "a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print(f"post-train: {sha[:12]} waits for the job before it ({LOCK})", flush=True)
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        return _land(a, sha, attempt)
+
+
+def _land(a: argparse.Namespace, sha: str, attempt: str | None) -> int:
+    fresh = not (a.force or a.dry_run)
+    if attempt and fresh and (have := labelled(attempt)):
+        print(f"post-train: {attempt} ({sha[:12]}) has note={have['value']} already; --force runs it again")
         return 0
     tree = Path(tempfile.mkdtemp(prefix=f"post-train-{sha[:12]}-"))
     git("worktree", "add", "-q", "--detach", str(tree), sha)
     try:
+        if attempt and fresh and (c := carried(sha, tree)):
+            lab = research("data", "label", attempt, "note", c["value"], "--by", BY, "--ref", c["ref"])
+            print((lab.stdout + lab.stderr).strip()[-1000:])
+            print(f"post-train: {attempt} ({sha[:12]}): note={c['value']} (ref {c['ref']}), carried from {c['from']}: the change from "
+                  f"{sha[:12]}^1 touches none of {SUITE}'s inputs")
+            return 0 if lab.returncode == 0 and c["value"] == PASS else 1
         print(f"post-train: {sha[:12]} (check {attempt}) on {a.on}, cores {a.cores or 'any'}", flush=True)
         p = research("run", "--on", a.on, "--project", a.project, "--stage", "post-train-regression", "--source", str(tree),
                      "--cwd", "source", "--declared-output", "out/*", "--", "bash", "-c", job(a.cores, a.workers), cwd=tree)
@@ -143,11 +187,11 @@ def main(argv: list[str] | None = None) -> int:
         v = verdict(runs_root() / rid / "out" / "junit.xml", p.returncode)
         if a.dry_run:
             print(f"post-train: {sha[:12]}: --dry-run, so {attempt or 'no check attempt'} gets no note={v} (ref {rid})")
-            return 0 if v == f"{PREFIX}pass" else 1
+            return 0 if v == PASS else 1
         lab = research("data", "label", attempt, "note", v, "--by", BY, "--ref", rid)
         print((lab.stdout + lab.stderr).strip()[-1000:])
         print(f"post-train: {attempt} ({sha[:12]}): note={v} (ref {rid})")
-        return 0 if lab.returncode == 0 and v == f"{PREFIX}pass" else 1
+        return 0 if lab.returncode == 0 and v == PASS else 1
     finally:
         git("worktree", "remove", "--force", str(tree), check=False)
 
