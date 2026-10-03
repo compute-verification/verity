@@ -1316,6 +1316,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   registered row at `positions[i]`. Each table row's `hm96-sha512/row/v1` leaf must climb its path to the root at its
   position, each instance's ref name its unit's read position in the verifier's program (units `derived`). A port on
   one side only refuses; verdicts report `registered`.
+- **Identifier.** The header may carry `identifier`, a JSON object C-Flock does not read (an application's name for what the
+  statement is about, such as PoUW's). The public digest covers the header, so Σ binds it. The verifier needs its own
+  `--identifier F` (a JSON object, by path or archive digest), and the header's must equal `F`'s in RFC 8785 form: both are
+  `canon`'s on core's RFC 8785 domain (`Program.domainError`, `verity.ir.codec.jcs_domain_error`: strings and keys ASCII
+  without DEL, integers of magnitude at most 2^53 − 1), and anything outside it refuses. A header identifier that is not an object, one with no
+  `F`, and an `F` with a header that names none refuse. Verdicts and `statement` report `identifier`. The prover writes it
+  with `circuit.write(..., identifier=)`.
 - **Public input ports** (`Flock.HmIn`, §16.13's statements). META may name `public_inputs` (`[{port, words, seed,
   derivation}]`) and `leaves_public` (per unit, each leaf's public word or −1): unit inputs the verifier recomputes from
   public data, not rows. The words of an unpacked unit range's leaf group holding them hold no row leaf; each run of
@@ -1484,6 +1491,9 @@ expectation):
   `backends/flock/live`'s now does. No vector exercises it.
 - **D9:** at least one VU per block (§16.10). Upstream's `Composite::check` in the same builds lets `vus_per_block = 0`
   through when a tail returns the outputs; the spec refuses it, as `backends/flock/live`'s now does. No vector exercises it.
+- **D10:** the header's `identifier` (§16.10). Upstream ignores it (the public digest binds it); the spec refuses one that
+  is not the verifier's own `--identifier F`. No vector exercises it; `backends/flock/tests/test_lean_identifier.py` runs
+  it on the Lean verifier.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).
