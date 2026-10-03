@@ -159,7 +159,7 @@ def consE0 (rows : Array (Array F128)) (q W : ℕ) (alpha : Array F128) (fold : 
 the padding's codeword at its position, weighted by `eq(α)[j]`. -/
 def extraE (rows : Array (Array F128)) (pos : Array ℕ) (W rep cols : ℕ) (rho : F256 × F256) (alpha : Array F128)
     (ybar : Array F256) : F256 :=
-  (List.range pos.size).foldl (fun extra j => extra +
+  (List.range' 0 pos.size).foldl (fun extra j => extra +
     (rho.1.smul (rows[j]!)[W + 2 * rep]! + rho.2.smul (rows[j]!)[W + 2 * rep + 1]! +
       Zk.padAt (whats (svTable (cols + 1)) pos[j]! (cols + 1)) cols ybar).smul (eqTable alpha)[j]!) 0
 
@@ -185,7 +185,7 @@ theorem consPad_eq (rows : Array (Array F128)) (R : ℕ → List 𝔽) (pos : Ar
     simp only [List.getElem_map, List.getElem_zipIdx, List.getElem_range, Nat.zero_add, Array.getElem_toList]
     rw [getElem!_pos pos i (by simpa using h₂)]
   unfold consE0 extraE
-  rw [hz, FlockLevel3.list_sum_range, gOf_add, gOf_foldl_cons, gOf_foldl_cons, gOf_zero, zero_add, zero_add,
+  rw [← List.range_eq_range', hz, FlockLevel3.list_sum_range, gOf_add, gOf_foldl_cons, gOf_foldl_cons, gOf_zero, zero_add, zero_add,
     ← Finset.sum_add_distrib]
   refine Finset.sum_congr rfl fun j hj => ?_
   rw [Finset.mem_range] at hj
