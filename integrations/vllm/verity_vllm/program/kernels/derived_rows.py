@@ -562,7 +562,9 @@ def dot_bf16_for(dot_prim_id: str):
 # floor -139; pinned on an H100 2026-09-08, 144,543,744 words, 0 mismatches) and the two block-scaled FP8 linear
 # families of the Qwen3-4B-FP8 Program (`verity_vllm/program/registry/fp8.py`: Fp8GroupQuant_v1{K,G}, ScaledMmFp8Block_v1{K,N,G}).
 # The scalar Definitions are the reference; these twins are checked word-for-word against them and against the saved
-# H100 kernel words (`tests/program/data/fp8_block_operands.npz`) in tests/program/test_derived_rows_fp8.py.
+# H100 kernel words (`tests/program/data/fp8_block_operands.npz`) in tests/program/test_derived_rows_fp8.py.  The fused-MoE
+# expert GEMM's twin (`fp8_moe.py`: MoeExpertFp8BlockCoordinate(W)_v1) is checked against its Definitions in
+# tests/program/test_fp8_moe.py.
 # ---------------------------------------------------------------------------------------------------------
 
 _FP8_TC_WIDTH = 14
@@ -633,18 +635,20 @@ def tc_dot32_e4m3(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.nda
 def scaled_mm_fp8_block_row(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: np.ndarray, *, G: int = 128,
                             chunk: int = 4096) -> tuple[np.ndarray, np.ndarray]:
     """`ScaledMmFp8Block_v1{K,N,G}` on ONE token row (`_C.cutlass_scaled_mm` blockwise, CutlassFp8BlockScaledMMKernel): xq (K,) e4m3
-    bytes, sx (K/G,) f32 words, w (N, K) e4m3 bytes, ws (N/G, K/G) f32 words -> (N bf16 words, nonfinite mask).  Per output column n
-    (`ScaledMmFp8BlockCoordinate`): for kb ascending, `temp` = G/32 `tc_dot32_e4m3` steps from +0 over the tile's bytes, `s` =
+    bytes, sx (K/G,) f32 words, w (N, K) e4m3 bytes, ws (cdiv(N, G), K/G) f32 words -> (N bf16 words, nonfinite mask).  Per output
+    column n (`ScaledMmFp8BlockCoordinate`): for kb ascending, `temp` = G/32 `tc_dot32_e4m3` steps from +0 over the tile's bytes, `s` =
     FMUL(sx[kb], ws[n // G][kb]), `acc` = FFMA(temp, s, acc) from +0 (the f32 promotion pinned by the adversarial operands: FFMA, not
-    mul+add; ascending k), then `cvt.rn.bf16.f32`.  Vectorised over <= `chunk` columns at a time (bounds the int64 temporaries)."""
+    mul+add; ascending k), then `cvt.rn.bf16.f32`.  N need not be a multiple of G (`fp8.weight_blocks`: the last weight block may
+    be partial).  Vectorised over <= `chunk` columns at a time (bounds the int64 temporaries)."""
+    from verity_vllm.program.registry.fp8 import weight_blocks
     xq = np.asarray(xq, dtype=np.uint8).reshape(-1)
     K = xq.size
     w = np.asarray(w, dtype=np.uint8).reshape(-1, K)
     N = w.shape[0]
-    if K % G or N % G or G % 32:
-        raise ValueError(f"ScaledMmFp8Block: K={K} N={N} must be multiples of G={G} (G a multiple of 32)")
+    if K % G or G % 32:
+        raise ValueError(f"ScaledMmFp8Block: K={K} must be a multiple of G={G} (G a multiple of 32)")
     sx = np.asarray(sx, dtype=np.uint32).reshape(K // G)
-    ws = np.asarray(ws, dtype=np.uint32).reshape(N // G, K // G)
+    ws = np.asarray(ws, dtype=np.uint32).reshape(weight_blocks(N, G), K // G)
     out = np.empty(N, dtype=np.uint16)
     nonfin = np.zeros(N, dtype=bool)
     for n0 in range(0, N, chunk):
@@ -661,6 +665,47 @@ def scaled_mm_fp8_block_row(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: n
                 nf |= f
             s = mul_rn(np.broadcast_to(sx[kb], (n1 - n0,)), ws[rows, kb])
             acc = fma_rn(temp, s, acc)
+        out[n0:n1] = f2fp_bf16(acc)
+        nonfin[n0:n1] = nf | ((acc & 0x7F800000) == 0x7F800000)
+    return out, nonfin
+
+
+def moe_expert_fp8_block_row(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: np.ndarray, *, G: int = 128, KB: int = 32,
+                             swap: bool = False, g: int | None = None, chunk: int = 4096) -> tuple[np.ndarray, np.ndarray]:
+    """`MoeExpertFp8BlockCoordinate_v1{K,G,KB,SWAP}` (g None) or `MoeExpertFp8BlockCoordinateW_v1` (g the pair's f32 topk weight
+    word) on ONE (token, expert) pair of `fused_moe_kernel`: xq (K,) e4m3 bytes, sx (K/G,) f32 words, w (N, K) the expert's e4m3
+    bytes, ws (cdiv(N, G), K/G) f32 words -> (N bf16 words, nonfinite mask).  Per output column n (`fp8_moe.triton_block_acc`):
+    for each K tile k ascending, `d` = KB/32 `tc_dot32_e4m3` steps from +0, then `acc` = FFMA(FMUL(d, sx[kb]), ws[n // G][kb], acc)
+    from +0 (the two scales swapped under `swap`), kb = k*KB // G; then FMUL(acc, g) when g is given, and `cvt.rn.bf16.f32`."""
+    from verity_vllm.program.registry.fp8 import weight_blocks
+    from verity_vllm.program.registry.fp8_moe import check_statics
+    xq = np.asarray(xq, dtype=np.uint8).reshape(-1)
+    K = xq.size
+    check_statics(K, G, KB)
+    w = np.asarray(w, dtype=np.uint8).reshape(-1, K)
+    N = w.shape[0]
+    sx = np.asarray(sx, dtype=np.uint32).reshape(K // G)
+    ws = np.asarray(ws, dtype=np.uint32).reshape(weight_blocks(N, G), K // G)
+    out = np.empty(N, dtype=np.uint16)
+    nonfin = np.zeros(N, dtype=bool)
+    for n0 in range(0, N, chunk):
+        n1 = min(N, n0 + chunk)
+        wc = w[n0:n1]
+        rows = np.arange(n0, n1) // G
+        acc = np.zeros(n1 - n0, dtype=np.uint32)
+        nf = np.zeros(n1 - n0, dtype=bool)
+        for k in range(K // KB):
+            d = np.zeros(n1 - n0, dtype=np.uint32)
+            for st in range(KB // 32):
+                lo = k * KB + 32 * st
+                d, f = tc_dot32_e4m3(d, np.broadcast_to(xq[lo:lo + 32], (n1 - n0, 32)), wc[:, lo:lo + 32])
+                nf |= f
+            kb = k * KB // G
+            a, b = np.broadcast_to(sx[kb], (n1 - n0,)), ws[rows, kb]
+            first, second = (b, a) if swap else (a, b)
+            acc = fma_rn(mul_rn(d, first), second, acc)
+        if g is not None:
+            acc = mul_rn(acc, np.broadcast_to(np.uint32(g), (n1 - n0,)))
         out[n0:n1] = f2fp_bf16(acc)
         nonfin[n0:n1] = nf | ((acc & 0x7F800000) == 0x7F800000)
     return out, nonfin

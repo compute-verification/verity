@@ -7,6 +7,7 @@ BLOCK_SIZE_K 32) and its Boolean versions (`boolean_fp8_moe`), and `fp8`'s block
 * the step's pinned vectors (`fixtures/tc/vectors/fp8-hopper-wgmma-k{32,1536}.json`, model replays) through both GEMMs'
   coordinates;
 * operands on which the per-tile promotion, SWAP_AB and CUTLASS's per-block promotion give different words;
+* the numpy twins in `derived_rows` that the H200 capture compares the kernels with, against the Definitions;
 * the Boolean versions against their word views on random and special words, the switch, and pinned counts and digests.
 """
 from __future__ import annotations
@@ -29,6 +30,7 @@ from verity.ir.defs import bind
 from verity.ml.boolean import trace as TR
 from verity.ml.prims import HopperE4m3QgmmaDot32 as DOT
 from verity_vllm.program import boolean as SW
+from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.registry import boolean_fp8 as BF
 from verity_vllm.program.registry import boolean_fp8_moe as BM
 from verity_vllm.program.registry import fp8 as F
@@ -234,6 +236,75 @@ def test_statics_the_kernel_cannot_launch_are_refused() -> None:
     for K, G, KB in ((256, 128, 48), (256, 64, 128), (192, 128, 32)):
         with pytest.raises(ValueError, match="fused_moe_kernel block FP8 needs"):
             _ = bind(M.MoeExpertFp8BlockCoordinate, K=K, G=G, KB=KB, SWAP=False).body
+    with pytest.raises(ValueError, match="fused_moe_kernel block FP8 needs"):
+        DR.moe_expert_fp8_block_row(np.zeros(256, np.uint8), np.zeros(2, np.uint32), np.zeros((1, 256), np.uint8),
+                                    np.zeros((1, 2), np.uint32), KB=48)
+
+
+# --- the vectorized twins the H200 capture compares with -------------------------------------------------------------------------
+
+def _wide(rng: np.random.Generator, K: int, G: int, N: int):
+    """`_operands` with a subnormal activation scale and weight-scale rows near 2^-146 .. 2^126 (finite): columns whose words are
+    subnormal, and columns that overflow (sooner under SWAP_AB, whose FMUL takes the weight scale)."""
+    x, _, w, _ = _operands(rng, K, G, N)
+    R = -(-N // G)
+    sx = np.exp2(rng.uniform(-12, -4, K // G))
+    sx[1] = 2.0 ** -140
+    ws = np.exp2(np.array([-146, -136, -128, 0, 100, 116, 126])[np.arange(R) % 7, None] + rng.uniform(-1, 1, (R, K // G)))
+    return x, sx.astype(np.float32).view(np.uint32).tolist(), w, ws.astype(np.float32).view(np.uint32).tolist()
+
+
+def _twin_agrees(want: tuple, got: np.ndarray, nonfinite: np.ndarray) -> None:
+    """The twin's words are the Definition's on every lane it does not flag, and it flags only lanes whose word is not finite."""
+    got = got.tolist()
+    for n, (a, b) in enumerate(zip(want, got)):
+        assert nonfinite[n] or a == b, (n, hex(a), hex(b))
+        assert not nonfinite[n] or (a & 0x7F80) == 0x7F80, (n, hex(a))
+    assert len(want) == len(got)
+
+
+@pytest.mark.parametrize("KB,SWAP,W,wide", [(32, False, False, False), (32, True, True, False), (64, False, True, False),
+                                             (128, True, False, False), (32, False, True, True), (32, True, False, True)])
+def test_the_moe_twin_is_the_gemm(KB: int, SWAP: bool, W: bool, wide: bool) -> None:
+    """`derived_rows.moe_expert_fp8_block_row` against `MoeExpertFp8BlockGemm(W)_v1` over a ragged N (200 = 128 + 72, or 6 * 32 + 8
+    for the wide scales)."""
+    K, N, G = 256, 200, 32 if wide else 128
+    rng = np.random.default_rng(KB + 2 * SWAP + 4 * W + 8 * wide)
+    x, sx, w, ws = (_wide if wide else _operands)(rng, K, G, N)
+    g = int(np.float32(rng.uniform(0.01, 1.0)).view(np.uint32))
+    fam = M.MoeExpertFp8BlockGemmW if W else M.MoeExpertFp8BlockGemm
+    want = evaluate(bind(fam, K=K, N=N, G=G, KB=KB, SWAP=SWAP), *((x, sx, g) if W else (x, sx)), sum(w, []), sum(ws, []))
+    got, nonfinite = DR.moe_expert_fp8_block_row(np.array(x), np.array(sx), np.array(w), np.array(ws), G=G, KB=KB, swap=SWAP,
+                                                 g=g if W else None)
+    _twin_agrees(want, got, nonfinite)
+    assert nonfinite.any() and not nonfinite.all() if wide else not nonfinite.any()
+    assert not wide or any(0 < v & 0x7FFF < 0x80 for v in want)
+
+
+@pytest.mark.parametrize("N,wide", [(200, False), (72, False), (200, True)])
+def test_the_cutlass_twin_is_the_gemm_over_a_ragged_n(N: int, wide: bool) -> None:
+    """`derived_rows.scaled_mm_fp8_block_row` against `ScaledMmFp8Block_v1` with cdiv(N, G) weight-scale rows."""
+    K, G = 256, 32 if wide else 128
+    rng = np.random.default_rng(N + wide)
+    x, sx, w, ws = (_wide if wide else _operands)(rng, K, G, N)
+    want = evaluate(bind(F.ScaledMmFp8Block, K=K, N=N, G=G), x, sx, sum(w, []), sum(ws, []))
+    got, nonfinite = DR.scaled_mm_fp8_block_row(np.array(x), np.array(sx), np.array(w), np.array(ws), G=G)
+    _twin_agrees(want, got, nonfinite)
+    assert nonfinite.any() and not nonfinite.all() if wide else not nonfinite.any()
+    assert not wide or any(0 < v & 0x7FFF < 0x80 for v in want)
+
+
+def test_the_twins_keep_the_promotions_apart() -> None:
+    """The twins on the operands that tell the promotions apart give the Definitions' words."""
+    x, w = (np.array(v, np.uint8) for v in _tie_then(0x01, 0x01))
+    one = np.array([ONE], np.uint32)
+    assert DR.scaled_mm_fp8_block_row(x, one, w[None], one[None], G=64)[0].tolist() == [0x3F80]
+    for KB, want in ((32, 0x3F81), (64, 0x3F80)):
+        assert DR.moe_expert_fp8_block_row(x, one, w[None], one[None], G=64, KB=KB)[0].tolist() == [want]
+    x, w = (np.array(v, np.uint8) for v in _tie_then(0x03, 0x01))
+    sx, sw = np.array([ONE, 0x3BAAAAAB], np.uint32), np.array([[ONE, ONE]], np.uint32)
+    for swap, want in ((False, 0x3F80), (True, 0x3F81)):
+        assert DR.moe_expert_fp8_block_row(x, sx, w[None], sw, G=32, KB=32, swap=swap)[0].tolist() == [want]
 
 
 # --- on bits ---------------------------------------------------------------------------------------------------------------------
