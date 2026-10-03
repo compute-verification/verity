@@ -468,11 +468,27 @@ def RouterArgmaxOkStep(B, S, carry, ok, x):
     """Greedy argmax step over (found, best, best_index, i) among the entries with ok set: take (x, i) iff ok and (nothing found
     yet or x > best; strict, so the lowest index wins ties), then i += 1."""
     found, best, best_i, i = carry[0], carry[1], carry[2], carry[3]
-    take = B.call(BitAnd, ok, B.call(BitOr, B.call(BitNot, found), B.call(F32GtStrict, x, best)))
+    take = _ok_take(B, found, best, ok, x)
     nf = B.call(BitOr, found, ok)
     nb = B.call(P.SelectF32, take, x, best)
     ni = B.call(P.SelectI32, take, i, best_i)
     return tuple_of(tuple_of(nf, nb, ni, B.call(P.I32Add, i, B.call(b1.const(32, 1)))), ni)
+
+
+def _ok_take(B, found: Coll, best: Coll, ok: Coll, x: Coll) -> Coll:
+    return B.call(BitAnd, ok, B.call(BitOr, B.call(BitNot, found), B.call(F32GtStrict, x, best)))
+
+
+def _first_max(B, s: list[Coll]) -> Coll:
+    """`MoeRouterFirst_v1(s)`: `RouterArgmaxStep_v1`'s scan over s[1 .. E-2], then the last expert's step for its index alone (a
+    scan's last step would also compute a best value and an i + 1 nothing reads)."""
+    c0, c1 = B.call(b1.const(32, 0)), B.call(b1.const(32, 1))
+    if len(s) == 1:
+        return c0
+    carry = tuple_of(s[0], c0, c1)
+    if len(s) > 2:
+        carry = B.scan(RouterArgmaxStep, carry, xs=(_array(s[1:-1]),))[0]
+    return B.call(P.SelectI32, B.call(F32GtStrict, s[-1], carry[0]), carry[2], carry[1])
 
 
 @composite("MoeRouterBiasNext", 1, ["E"], lambda S: ((("s", Array(S.E, F32)), ("w", F32), ("e", I32)), I32),
@@ -481,7 +497,10 @@ def MoeRouterBiasNext(B, S, s, w, e):
     """Slot k of the kernel's top-k from slot k-1's (w = s[e], e): the first maximum among the experts after it in the order of
     the kernel's 64-bit keys `(TwiddleIn(s) << 32) | (65535 - i)` (value descending, then lower expert first): `s_i < w`, or
     `s_i == w` and `i > e`.  The selection scores are never NaN or -0, and -inf (`InvalidScore`) ranks by index like any value,
-    so the experts not after (w, e) are left out by a flag, not a masking value; each round's operands are its own (`q_i`)."""
+    so the experts not after (w, e) are left out by a flag, not a masking value; each round's operands are its own (`q_i`).
+    `RouterArgmaxOkStep_v1`'s scan runs over experts 1 .. E-2 and the last expert's step gives the index alone."""
+    if S.E < 2:
+        raise ValueError("E must be at least 2 (a slot after the first)")
     neg_inf = B.call(b1.NEG_INF32)
     ok, q = [], []
     for i in range(S.E):
@@ -489,8 +508,10 @@ def MoeRouterBiasNext(B, S, s, w, e):
         after = B.call(BitOr, B.call(F32GtStrict, w, s[i]), B.call(BitAnd, B.call(F32Eq, s[i], w), B.call(BitNot, B.call(P.I32Le, ci, e))))
         ok.append(after)
         q.append(B.call(P.SelectF32, after, s[i], neg_inf))
-    init = tuple_of(ok[0], q[0], B.call(b1.const(32, 0)), B.call(b1.const(32, 1)))
-    return B.scan(RouterArgmaxOkStep, init, xs=(_array(ok[1:]), _array(q[1:])))[0][2]
+    carry = tuple_of(ok[0], q[0], B.call(b1.const(32, 0)), B.call(b1.const(32, 1)))
+    if S.E > 2:
+        carry = B.scan(RouterArgmaxOkStep, carry, xs=(_array(ok[1:-1]), _array(q[1:-1])))[0]
+    return B.call(P.SelectI32, _ok_take(B, carry[0], carry[1], ok[-1], q[-1]), carry[3], carry[2])
 
 
 @composite("MoeRouterPickPair", 1, ["E"], lambda S: ((("s", Array(S.E, F32)), ("v", Array(S.E, F32)), ("e", I32)), Tuple(F32, F32)),
@@ -566,8 +587,9 @@ def MoeRouterSigmoidBias(B, S, logits, bias):
     """`_moe_C.grouped_topk(scores, n_group=1, topk_group=1, TOPK, renormalize=True, SCALE, bias, scoring_func=SIGMOID)` for one
     token row of f32 router logits (`GateLinear`'s f32 output) and the f32 `e_score_correction_bias`: per expert the sigmoid
     and the selection score (`MoeRouterSigmoidScore_v1`); the TOPK largest selection scores in the kernel's key order,
-    value descending then lower expert first (`MoeRouterFirst_v1`, then `MoeRouterBiasNext_v1`, each slot's score and second value
-    read by `MoeRouterPickPair_v1`); then `MoeRouterSigmoidNorm_v1`.  Returns (topk_weights, topk_ids) as the kernel writes them.
+    value descending then lower expert first (`MoeRouterFirst_v1`'s first maximum, then `MoeRouterBiasNext_v1`, each slot's score
+    and second value read by `MoeRouterPickPair_v1`); then `MoeRouterSigmoidNorm_v1`.  Returns (topk_weights, topk_ids) as the
+    kernel writes them.
 
     `KERNEL` is the launch: `single_group_topk_block_kernel` (`"block"`; at E = 256 for num_tokens <= 1024) reads the unbiased
     score back from shared memory, `single_group_topk_warp_kernel` (`"warp"`, more tokens) recovers it as score - bias.  Both
@@ -579,7 +601,7 @@ def MoeRouterSigmoidBias(B, S, logits, bias):
     scores = B.batch(MoeRouterSigmoidScore, logits, bias, axes=(0, 0))
     sig, s = _array([scores[e][0] for e in range(S.E)]), _array([scores[e][1] for e in range(S.E)])
     v = sig if kernel == "block" else bias
-    ids = [B.call(bind(MoeRouterFirst, E=S.E), s)]
+    ids = [_first_max(B, [s[e] for e in range(S.E)])]
     pairs = [B.call(bind(MoeRouterPickPair, E=S.E), s, v, ids[0])]
     for _ in range(1, S.TOPK):
         ids.append(B.call(bind(MoeRouterBiasNext, E=S.E), s, pairs[-1][0], ids[-1]))
