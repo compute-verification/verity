@@ -25,7 +25,7 @@ the level-0 lanes, the clear values, Ligerito's value lists and the verifier's r
 * **Levels ≥ 1** (`ligOf`): the restart `T' = Σ_c y₁'(c)·b̄(c)` and levels ≥ 1's bytes.
 
 **Open inputs** (each a named definition, until the coin vector carries it): level 0's out-of-domain point
-(`oodPoint`) and levels ≥ 1's bytes (`ligBytes`, which need Ligerito's level ≥ 1 coins). `InnerHolds` reads none of `ligBytes`.
+(`oodPoint`, the drawn coin `RestZK.oodPt`) and levels ≥ 1's bytes (`ligBytes`). `InnerHolds` reads none of `ligBytes`.
 -/
 
 namespace FlockSoundness.Discharge.Composed
@@ -275,10 +275,20 @@ def wordOf {M : ℕ} (zw : Witness M) (y : ℕ) : 𝔽 :=
 
 theorem six_le {mPts : ℕ} (Tz : TabZK 𝔽 mPts) : 6 ≤ Tz.S.m := by have := Tz.hm; omega
 
-/-- **Level 0's out-of-domain point** (open: `RestZK` does not carry it yet; `ZkLigerito.ligerito`'s
-`z ← sampleVec n`). -/
-def oodPoint {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (_c : CoinsZK (RestOf Tz st)) (_r : Fin 2) (_i : ℕ) :
-    Fin (Tz.S.m - 7) → 𝔽 := sorry
+/-- **Level 0's out-of-domain point** `i`, read in the model's field: `ZkLigerito.ligerito`'s first `z ← sampleVec n`
+(`n = m − 7`), the coin `RestZK.oodPt` (`0` past the layout's `nOod0` samples or the point's dimension). -/
+def oodPoint {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2) (i : ℕ) :
+    Fin (Tz.S.m - 7) → 𝔽 := fun j =>
+  if h : i < (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).nOod0 ∧ j.val < st.m - 7 then
+    fOf (c.rest.oodPt r ⟨i, h.1⟩ ⟨j.val, h.2⟩)
+  else 0
+
+/-- **`oodPoint` is the drawn point**: coordinate `j` of out-of-domain sample `i` is the coin `z ← sampleVec (m − 7)`
+that `ZkLigerito.ligerito` draws, embedded by `fOf` (the refinement `Refine.vecOf` reads every executable point by). -/
+theorem oodPoint_eq {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2)
+    (i : Fin (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).nOod0) (j : Fin (Tz.S.m - 7)) (hj : j.val < st.m - 7) :
+    oodPoint Tz st c r i.val j = fOf (c.rest.oodPt r i ⟨j.val, hj⟩) := by
+  simp only [oodPoint, dif_pos (And.intro i.isLt hj)]
 
 /-- **Levels ≥ 1's bytes** after `T'` (open: they read Ligerito's level ≥ 1 coins, which `RestZK` does not carry). -/
 def ligBytes {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (_c : CoinsZK (RestOf Tz st)) (_r : Fin 2) {L : ℕ}
