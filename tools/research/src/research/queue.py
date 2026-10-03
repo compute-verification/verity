@@ -226,7 +226,7 @@ class Rules:
                 f"again")
             return {r.role for r in self.grants}
         mb = mbs[0]
-        changed = [p for p in _out(repo, "diff", "--name-only", mb, head).splitlines() if p]
+        changed = [p for p in _out(repo, "diff", "--name-only", "--ignore-submodules=none", mb, head).splitlines() if p]
         roles = {r.role for r in self.grants if r.paths and rule_touches(list(r.paths), changed)}
         audits = [p for p in changed if p == "lean-audit.json" or p.endswith("/lean-audit.json")]
         reports = None
@@ -293,12 +293,12 @@ def _named(base: str) -> str:
 
 def own_change(repo: Path, base: str, head: str) -> dict[str, tuple[str, ...]] | None:
     """What ``head`` changes against its merge base with ``base``: {path: (old mode, new mode, old blob, new blob)}, a rename as a
-    deletion and an addition.  None when git can't say (``head`` isn't in ``repo``, or hasn't exactly one merge base with ``base``:
-    `merge_bases`)."""
+    deletion and an addition, a submodule as the commit it pins (whatever `diff.ignoreSubmodules` or a `.gitmodules` says to
+    ignore).  None when git can't say (``head`` isn't in ``repo``, or hasn't exactly one merge base with ``base``: `merge_bases`)."""
     mbs = merge_bases(repo, base, head)
     if len(mbs) != 1:
         return None
-    r = _git(repo, "diff", "--raw", "--no-renames", "--no-abbrev", "-z", mbs[0], head, check=False)
+    r = _git(repo, "diff", "--raw", "--no-renames", "--no-abbrev", "--ignore-submodules=none", "-z", mbs[0], head, check=False)
     if r.returncode:
         return None
     fields = r.stdout.split("\0")

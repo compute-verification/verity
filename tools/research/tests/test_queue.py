@@ -730,3 +730,30 @@ def test_without_a_pull_of_every_head_of_the_pr_nothing_carries_and_the_queue_sa
     with pytest.raises(QueueError, match=r"^STALE: the labels of pr:12@\* weren't pulled from the store's remote \(OSError: injected.*"
                                          r"not carrying any$"):
         grants.carried(12, head, {"red-team"})
+
+
+def _gitlink(world: World, path: str, commit: str) -> str:
+    """A commit on origin/main pinning ``commit`` as a submodule at ``path``, made with git's plumbing: `add` drops a gitlink with
+    no checkout behind it."""
+    _git(world.dev, "fetch", "-q", "origin")
+    _git(world.dev, "read-tree", "origin/main")
+    _git(world.dev, "update-index", "--add", "--cacheinfo", f"160000,{commit},{path}")
+    sha = _git(world.dev, "commit-tree", _git(world.dev, "write-tree"), "-p", "origin/main", "-m", f"pin {path} at {commit[:8]}")
+    _git(world.dev, "read-tree", "HEAD")
+    return sha
+
+
+def test_a_submodule_pinned_elsewhere_is_another_change_whatever_git_is_told_to_ignore(world):
+    """Red team of #955: under `diff.ignoreSubmodules = all` (or a `.gitmodules` entry saying `ignore = all`), `git diff` leaves
+    gitlinks out, so two heads pinning a submodule at different commits compared equal and a grant carried from one to the other,
+    and a gitlink under a gated path needed no grant."""
+    from research.queue import carry
+
+    _git(world.dev, "config", "diff.ignoreSubmodules", "all")
+    a, b = (_git(world.dev, "commit-tree", "origin/main^{tree}", "-m", m) for m in ("a", "b"))
+    old = _gitlink(world, "backends/flock/vendored", a)
+    _move_main(world, {"d.txt": "landed meanwhile\n"})
+    new, restacked = _gitlink(world, "backends/flock/vendored", b), _gitlink(world, "backends/flock/vendored", a)
+    assert carry(world.dev, "origin/main", old, new) == (False, "its change against origin/main differs (backends/flock/vendored)")
+    assert carry(world.dev, "origin/main", old, restacked) == (True, "restack; no lean-audit.json change")
+    assert Rules.parse(RULES + RED_TEAM).needs(world.dev, "origin/main", new) == {"red-team"}
