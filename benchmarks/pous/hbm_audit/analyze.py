@@ -90,8 +90,17 @@ def analyze(honest: dict, cheater: dict, margin: float):
         sep_fs = [f for f, v in row["fracs"].items() if v["separated"]]
         row["min_separated_f"] = min(sep_fs) if sep_fs else None
     rec = pick_recommendation(rows, margin)
+    # the overlap threshold f* = BW_pcie / BW_dev: below it a cheater hides the PCIe copy under the device digest, so the
+    # audit cannot separate; above it the copy dominates and the digest runs long. Estimated from the measured rates.
+    raw = honest.get("raw", {})
+    pcie = raw.get("pcie_h2d_contig_1024MiB", {}).get("gbps_at_p50") or \
+        raw.get("pcie_h2d_contig_256MiB", {}).get("gbps_at_p50")
+    best_dev = max((r["honest_gbps_p50"] for r in rows), default=0.0)
+    f_star = (pcie / best_dev) if (pcie and best_dev) else None
+    for row in rows:
+        row["f_star_overlap"] = (pcie / row["honest_gbps_p50"]) if (pcie and row["honest_gbps_p50"]) else None
     return {"c_gib": c_gib, "margin": margin, "fracs": fracs, "rows": rows, "recommendation": rec,
-            "raw": honest.get("raw", {})}
+            "f_star_overlap": f_star, "bw_dev_gbps": best_dev, "bw_pcie_gbps": pcie, "raw": raw}
 
 
 def pick_recommendation(rows: list[dict], margin: float):
@@ -149,6 +158,11 @@ def to_markdown(a: dict) -> str:
             if isinstance(v, dict) and "gbps_at_p50" in v:
                 lines.append(f"- {k}: {v['gbps_at_p50']:.0f} GB/s (p50 {v['ms_p50']:.3f} ms)")
         lines.append("")
+    if a.get("f_star_overlap"):
+        lines += [f"**Overlap threshold** f\\* = BW_pcie / BW_dev = {a['bw_pcie_gbps']:.0f} / {a['bw_dev_gbps']:.0f} "
+                  f"GB/s = {a['f_star_overlap']*100:.1f}%: an overlapping cheater hides the PCIe copy under the device "
+                  f"digest below this host fraction, so a bulk read cannot separate f < f\\*; above it the copy dominates. "
+                  f"To separate f >= 5% the digest must reach BW_dev >= 20*BW_pcie.", ""]
     return "\n".join(lines)
 
 
