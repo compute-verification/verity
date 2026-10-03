@@ -31,8 +31,9 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
+from verity_vllm.program.registry import targets as TG
+
 from verity_vllm.observe.fold.patterns import FA2_OP_NAMES, AttentionScope, ComputeGroup, as_float, bound_args, find_descendants, op_name, unsupported
-from verity_vllm.observe.fold.patterns.target import _targets
 from verity_vllm.engine.profiles.gen_dense2_patterns import AttentionScopeInertWindow, _annotate, _replace_descendant, _rewrite_args
 from verity_vllm.observe.fold.resolver import Compute, Resolution, StepContext, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
@@ -73,7 +74,7 @@ class AttentionScopeSoftcap(AttentionScopeInertWindow):
             return _annotate(r, {"softcap": cap})
         try:
             return self._rebind(r, cap)
-        except _targets().UnregisteredTarget as e:
+        except TG.UnregisteredTarget as e:
             return unsupported(node, f"target has no registered softcapped attention binding: {e}", softcap=cap)
 
     def _rebind(self, r: Resolution, cap: float) -> Resolution:
@@ -84,7 +85,7 @@ class AttentionScopeSoftcap(AttentionScopeInertWindow):
         def one(c: Resolution) -> Resolution:
             if not isinstance(c, Compute) or getattr(c.spec, "name", None) != "Attention":
                 return c
-            return dataclasses.replace(c, spec=_targets().softcapped(c.spec, cap), pattern=self.name)
+            return dataclasses.replace(c, spec=TG.softcapped(c.spec, cap), pattern=self.name)
         if isinstance(r, ComputeGroup):
             primary = one(r)
             return dataclasses.replace(primary, also=tuple(one(x) for x in r.also))
