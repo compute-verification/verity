@@ -213,3 +213,34 @@ def test_a_tool_package_that_predates_the_queue_is_told_apart(tmp_path):
     (pkg / "remote.py").write_text("def tool_identity(): pass\n")
     assert remote.knows_queue(None) and remote.knows_queue(Path(remote.__file__).parent)
     assert not remote.knows_queue(pkg) and not remote.knows_queue(tmp_path / "nope")
+
+
+def test_an_unknown_command_says_how_old_the_checkout_is(tmp_path, capsys, monkeypatch):
+    import subprocess
+
+    from research.cli import checkout_age
+
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+    git = lambda *a: subprocess.run(["git", "-C", str(tmp_path), *a], check=True, capture_output=True, text=True, env=env).stdout
+    git("init", "-q")
+    for i in range(3):
+        git("commit", "-q", "--allow-empty", "-m", str(i))
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    sha = git("rev-parse", "--short", "HEAD~2").strip()
+    git("checkout", "-q", "HEAD~2")
+    assert checkout_age(tmp_path) == f"This checkout is at {sha}, 2 commits behind origin/main as of its last fetch."
+    git("checkout", "-q", "origin/main")
+    assert checkout_age(tmp_path).endswith("level with origin/main as of its last fetch.")
+    git("update-ref", "-d", "refs/remotes/origin/main")
+    assert checkout_age(tmp_path) == f"This checkout is at {git('rev-parse', '--short', 'HEAD').strip()}."
+    assert checkout_age(tmp_path / "nope") == ""
+
+    monkeypatch.setattr("research.cli.checkout_age", lambda: f"This checkout is at {sha}.")
+    assert main(["no-such-command"]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith(f"research: unknown command 'no-such-command'. This checkout is at {sha}. If 'no-such-command' is "
+                          "newer than that, update the checkout (`git pull`) and retry.\n\n`research` command line.")
+    monkeypatch.setattr("research.cli.checkout_age", lambda: "")
+    assert main(["no-such-command"]) == 2
+    assert capsys.readouterr().err.startswith("research: unknown command 'no-such-command'\n\n`research` command line.")

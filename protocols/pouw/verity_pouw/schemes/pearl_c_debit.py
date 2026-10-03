@@ -17,8 +17,9 @@
   own by default), `debitOf` at
   `Params.pi`, `Costs.adopted` on the H100: per flagged atom-word its 32 MACs and a quarter of a promotion add (40 on
   the H100, 34 on sm_120), and fs per debited element (64 and 40).
-* `CAP` = ρ = 1/400: a tile whose debit exceeds ρ times its credited cells' credit, their share of the unit's `creditOf`
-  (`pearl_c_work.tile_cap`), is rejected (`capOK`, per tile: `Tile.lean`'s `tileShare`).
+* The cap ρ is the device record's (`Device.cap`; `CAP` is the H100's 1/400, sm_120's is 1/1,000): a tile whose debit
+  exceeds ρ times its credited cells' credit, their share of the unit's `creditOf` (`pearl_c_work.tile_cap`), is rejected
+  (`capOK`, per tile: `Tile.lean`'s `tileShare`).
 
 Each takes the scheme's device (`pearl_c_device`, the H100 by default): its atom, G and prices.  The module constants are
 the H100's.
@@ -36,7 +37,7 @@ from .pearl_c_device import H100, Device, Prices
 
 G = H100.g                             # atoms per promotion group (`Params.pi.G`)
 ATOM = H100.atom.k
-CAP = Fraction(1, 400)
+CAP = H100.cap
 ATOM_UNITS = ATOM + Fraction(H100.prices.fadd, G)  # `debitOf`: 32 MACs and 1/G of a promotion add per flagged atom-word
 ELEMENT_UNITS = H100.prices.forming_credited       # `Costs.adopted`'s fs per debited forming element
 
