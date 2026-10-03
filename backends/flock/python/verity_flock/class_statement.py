@@ -656,16 +656,13 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
 
 
 def stage_unit(definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]], out_rows: Sequence[tuple[str, Sequence[int]]],
-               rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None,
-               zero_salt_rows: Sequence[str] = ()) -> dict:
+               rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None) -> dict:
     """One unit Definition (a PoUW unit: several output ports, rows a tile reads) as a bit-row statement: ``in_rows`` its input
     rows ``(row, schema, bits, params)`` (`unit_lowering`; ``schema`` ``hm96-sha512/row/v2`` or ``…/row-seg/v1``, ``bits`` its
     META length), ``out_rows`` each output row ``(schema, output ports)``, a run of consecutive output ports of exactly their
     words (`circuit.compose`'s ``seg_out_rows`` / ``v2_out_rows``), ``rows`` each input row's words per instance ``(n, words)``
     u16. The outputs are the lowering's, checked against the IR reference (`verity.evaluation.evaluate`) on every instance;
-    the salts are ``salts``' where given, zero for each input row in ``zero_salt_rows`` (a row the verifier recomputes from
-    public data, such as PoUW's anchors, whose ``b || c`` it then checks: `HmRow.rowBcZeroSalt`'s rule), else
-    `circuit.stage_salts`'. Writes ``circuit.txt``, ``inst.bin`` and ``pub.bin``;
+    the salts are ``salts``' where given, else `circuit.stage_salts`'. Writes ``circuit.txt``, ``inst.bin`` and ``pub.bin``;
     returns META, the outputs per port and every row's salts."""
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
     from verity.evaluation import evaluate
@@ -720,10 +717,7 @@ def stage_unit(definition, name: str, in_rows: Sequence[tuple[str, str, int, Seq
         if have != want:
             raise AssertionError(f"{name}: instance {i}'s outputs are not the IR reference's")
     meta = json.loads(text.split("\n", 2)[1][5:])
-    if not set(zero_salt_rows) <= {r for r, *_ in in_rows}:
-        raise ValueError(f"{name}: the zero-salt rows {list(zero_salt_rows)} are not input rows")
-    salts = {**FC.stage_salts(iset, 0, n, FC._meta_ports(meta), salt_key), **{r: [bytes(FC.SALT_BYTES)] * n for r in zero_salt_rows},
-             **(salts or {})}
+    salts = {**FC.stage_salts(iset, 0, n, FC._meta_ports(meta), salt_key), **(salts or {})}
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "circuit.txt").write_text(text)
     FC.write(text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key, rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in in_rows},
