@@ -624,6 +624,14 @@ def test_the_served_table_cites_each_models_worst_input_and_refuses_what_it_cann
     assert table["m"] == 2 and table["models"][0]["epsilon"] == pytest.approx(math.log(40) / 32)
     assert table["models"][1] == {"model": "llama", "absent": "its pass is gone"}
     assert "| llama | — | — | — | — | — | none | its pass is gone |" in (out / "table.md").read_text()
+    assert ST.main(["--model", "qwen", str(files["q"]), "--model", "llama", str(files["l"]), "--pending", "llama", "1", "rp",
+                    "--fresh", "qwen", str(files["fresh"]), "--out", str(out)]) == 0
+    table = json.loads((out / "table.json").read_text())
+    assert table["m"] == 6 and table["models"][1]["fresh_pending"] == {"m_model": 1, "run": "rp"}
+    assert table["models"][1]["epsilon"] == pytest.approx(math.log(120) / 48) and "pending (`rp`)" in (out / "table.md").read_text()
+    with pytest.raises(SystemExit):
+        ST.main(["--model", "qwen", str(files["q"]), "--pending", "qwen", "2", "rp", "--fresh", "qwen", str(files["fresh"]),
+                 "--out", str(out)])
     with pytest.raises(ValueError, match="committed list"):
         files["fresh"].write_text(json.dumps({"fresh_draws": 320, "fresh_source": "cd", "m": 1, "inputs": [trial(0, 0)]}))
         ST.main(["--model", "qwen", str(files["q"]), "--fresh", "qwen", str(files["fresh"]), "--out", str(out)])

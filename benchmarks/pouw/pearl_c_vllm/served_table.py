@@ -9,7 +9,8 @@ measurement), so the limits are 95% simultaneous over the whole table.
 
 Writes ``<out>/table.json`` and ``<out>/table.md``.  A model's row is refused when its inputs name more than one run, when an
 input's openings failed, or when a verify given for it did not accept its pass (a negative control's, ``control*``, must
-reject).  ``--fresh`` adds a model's ε from fresh-salt trials (``--fresh-draws``) beside the pass-salt one.
+reject).  ``--fresh`` adds a model's ε from fresh-salt trials (``--fresh-draws``) beside the pass-salt one; ``--pending``
+counts trials still running in m, so a table published before them states the limits the finished table will.
 """
 from __future__ import annotations
 
@@ -78,7 +79,8 @@ def markdown(table: dict) -> str:
         if "absent" in r:
             lines.append(f"| {r['model']} | — | — | — | — | — | none | {r['absent']} | — | — |")
             continue
-        fresh = f"{r['fresh']['epsilon']:.4f} ({r['fresh']['trials']} trials, {r['fresh']['failures']} failed)" if "fresh" in r else "—"
+        fresh = (f"{r['fresh']['epsilon']:.4f} ({r['fresh']['trials']} trials, {r['fresh']['failures']} failed)" if "fresh" in r
+                 else f"pending (`{r['fresh_pending']['run']}`)" if "fresh_pending" in r else "—")
         verify = ", ".join(f"{v['pass']} {'ACCEPT' if v['accepted'] else 'REJECT'}" for v in r["verify"]) or "—"
         lines.append(f"| {r['model']} | `{r['run']}` | {r['m_model']} | {r['tile_draws']} | {r['failures']} | "
                      f"{r['share_max']:.3g} | {r['epsilon']:.4f} | {r['epsilon_method']} | {fresh} | {verify} |")
@@ -95,15 +97,23 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--fresh", nargs=2, action="append", default=[], metavar=("NAME", "INPUTS_JSON"))
     p.add_argument("--absent", nargs=2, action="append", default=[], metavar=("NAME", "REASON"),
                    help="a model the table is for but cannot cite, and why")
+    p.add_argument("--pending", nargs=3, action="append", default=[], metavar=("NAME", "M", "RUN"),
+                   help="a model's fresh trials still running in RUN: their M bounds count in m now, so that no limit moves "
+                        "when they land")
     p.add_argument("--cap", default="1/1000")
     p.add_argument("--out", type=Path, required=True)
     a = p.parse_args(argv)
     fresh = {name: json.loads(Path(path).read_text()) for name, path in a.fresh}
+    pending = {name: (int(m), run) for name, m, run in a.pending}
     if any(len(spec) < 2 for spec in a.model):
         p.error("--model NAME INPUTS_JSON [VERIFY_JSON ...]")
+    if set(pending) & set(fresh) or set(pending) - {spec[0] for spec in a.model}:
+        p.error("--pending names a model given by --model and without --fresh")
     specs = [(name, json.loads(Path(inputs).read_text()), verifies) for name, inputs, *verifies in a.model]
-    m = sum(doc["m"] for _, doc, _ in specs) + sum(doc["m"] for doc in fresh.values())
+    m = (sum(doc["m"] for _, doc, _ in specs) + sum(doc["m"] for doc in fresh.values())
+         + sum(n for n, _ in pending.values()))
     models = [model_row(name, doc, [json.loads(Path(v).read_text()) for v in verifies], fresh.get(name), m)
+              | ({"fresh_pending": {"m_model": pending[name][0], "run": pending[name][1]}} if name in pending else {})
               for name, doc, verifies in specs]
     models += [{"model": name, "absent": reason} for name, reason in a.absent]
     table = {"tool": "pouw_pearl_c_served_table", "cap": a.cap, "m": m, "delta_per_input": 0.05 / m, "models": models}
