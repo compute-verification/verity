@@ -18,6 +18,11 @@ every round that is not a hit: wrong, late or rejected.  Three requirements are 
 3. **Every late answer counted.** Every answer past `Δ + RTT`, rejected or not, is a miss, and so is every wrong one
    (`AuditResult.misses`).  Every challenge closes with an `Answer` recorded, whether answered, rejected or expired.
 
+A graded audit's window also needs a cap on its whole duration (`Pous.SecurityProofs.BackgroundRebuildExcluded`):
+with `audit_cap=audit.AUDIT_CAP` (1,505 calls of `call_ns`, ≈ 363.5 ms at 241.5 µs), a receipt past it rejects the
+stream, which then reveals no other index, never accepts and is never retried.  The cap is off by default, because
+the continuous audit's guarantee does not need it and its arrivals may spread past it.
+
 `n` is fixed before the stream (the realized number of arrivals, from the verifier's own randomness), so the stream is
 never stopped or extended on misses, though it may reject early once they pass `max_misses` (`exceeded`).  When each
 challenge arrives is the caller's (`run_continuous`'s `wait`): the arrival times must be the verifier's own randomness,
@@ -54,6 +59,13 @@ class ContinuousVerifier:
     one; `expire()` closes the open challenge as rejected once its hard deadline has passed (`overdue`).  The stream
     accepts when all `n` are closed with at most `max_misses` misses.
 
+    With `audit_cap` (`audit.AUDIT_CAP` for a graded audit's window), it accepts only within `audit_cap` calls of
+    `call_ns` from the first send to the last receipt.  Past them it is `aborted`: rejected whatever its misses,
+    and never retried with fresh challenges.  `Pous.SecurityProofs.BackgroundRebuildExcluded` requires that cap of a
+    graded audit's window.  A stream whose arrivals are spread out runs without it:
+    `Pous.SecurityProofs.ContinuousAudit` measures the memory at each send time and needs no cap, and its model's
+    verifier has none.
+
     The continuous audit runs only on this class, never on a bare `TimedVerifier` with a hard deadline.  That one's
     `respond(block)` names no challenge, so once a challenge expires, an answer to it still in flight is credited to
     the next one, a hit when both ask for the same block.  That block was on the wire, not in the memory the model
@@ -62,13 +74,13 @@ class ContinuousVerifier:
     def __init__(self, vk: VerifierKey, key: Key, n: int, *, late_deadline_ns: int, max_misses: int = 0,
                  deadline_ns: int = DEADLINE_NS, rtt_allowance_ns: int = RTT_ALLOWANCE_NS,
                  clock: Callable[[], int] = time.perf_counter_ns, on_answer: Callable[[Answer], None] | None = None,
-                 root_only: bool = False) -> None:
+                 root_only: bool = False, audit_cap: int | None = None) -> None:
         if late_deadline_ns is None:
             raise ValueError("the continuous audit needs a hard deadline")
         if n < 1 or max_misses < 0:
             raise ValueError("a stream has at least one challenge, and a nonnegative miss allowance")
         self.timed = TimedVerifier(vk, key, n, deadline_ns, rtt_allowance_ns, clock, on_answer, root_only,
-                                   late_deadline_ns=late_deadline_ns)
+                                   late_deadline_ns=late_deadline_ns, audit_cap=audit_cap)
         self.max_misses = max_misses
 
     @property
@@ -95,11 +107,20 @@ class ContinuousVerifier:
         return self.timed.pending
 
     @property
+    def ends_at(self) -> int | None:
+        """The first challenge's send time plus `audit_cap` calls: on the verifier's clock past it, the stream is
+        aborted.  None without a cap, or before the first challenge."""
+        return self.timed.ends_at
+
+    @property
     def closes_at(self) -> int | None:
-        """The open challenge's send time plus `Δ_late + RTT`: on the verifier's clock past it, the challenge is
-        rejected.  None with no challenge open."""
+        """The open challenge's send time plus `Δ_late + RTT`, or `ends_at` if sooner: on the verifier's clock past
+        it, the challenge is rejected.  None with no challenge open."""
         sent = self.timed.sent_ns
-        return None if sent is None else sent + self.late_limit_ns
+        if sent is None:
+            return None
+        ends = self.ends_at
+        return sent + self.late_limit_ns if ends is None else min(sent + self.late_limit_ns, ends)
 
     @property
     def overdue(self) -> bool:
@@ -112,7 +133,13 @@ class ContinuousVerifier:
 
     @property
     def done(self) -> bool:
+        """All `n` challenges are closed, or the stream is aborted."""
         return self.timed.done
+
+    @property
+    def aborted(self) -> bool:
+        """The stream lasted past its cap: it rejects, and reveals no other index."""
+        return self.timed.aborted
 
     @property
     def exceeded(self) -> bool:
@@ -121,7 +148,7 @@ class ContinuousVerifier:
 
     @property
     def accepted(self) -> bool:
-        return self.done and not self.exceeded
+        return self.done and not self.aborted and not self.exceeded
 
     def challenge(self) -> tuple[int, int]:
         """Reveal the next challenge, `(j, index)`, by `TimedVerifier.challenge()`: an open challenge past its hard
@@ -152,7 +179,8 @@ def run_continuous(verifier: ContinuousVerifier, send: Callable[[int, int], None
     A reply naming the open challenge answers it; any other is dropped, its own challenge closed and counted already
     or not yet revealed.  Once the hard deadline has passed the driver closes the open challenge with `expire()`, the
     last one too, so a silent or slow responder never holds the stream open.  A transport that returns None before
-    then fails closed: `expire()` refuses, and the audit stops with the challenge open."""
+    then fails closed: `expire()` refuses, and the audit stops with the challenge open.  With an `audit_cap`,
+    `closes_at` is never past `ends_at`, and the driver stops once a challenge closed past it aborts the stream."""
     while not verifier.done:
         if wait is not None:
             wait(len(verifier.answers))

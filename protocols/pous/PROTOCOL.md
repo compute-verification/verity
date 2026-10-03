@@ -308,6 +308,22 @@ Run the continuous audit only on `ContinuousVerifier`, never on a bare `TimedVer
 `j + 1`, a hit when both ask for the same block. That block was on the wire, not in the memory the model measures at
 the send time, so the audit would credit storage the responder does not hold (#954's red team).
 
+**The audit's duration cap.** `audit.AUDIT_CAP = 1,505` (`Pous.Rebuild.auditCap`) is the cap on a graded audit's
+window that `Pous.SecurityProofs.BackgroundRebuildExcluded` requires the verifier to enforce (#953).
+`TimedVerifier(..., audit_cap=...)` and `ContinuousVerifier(..., audit_cap=...)` enforce it on the verifier's clock,
+counted in calls of the parameters' `call_ns` as `D` and `D_late` are, so the limit is 1,505 × 241.5 µs ≈ 363.5 ms.
+- An answer received more than `audit_cap · call_ns` after the first challenge's send is rejected unchecked and aborts
+  the audit (`ends_at`). So does a challenge closed after that time by `expire()` or the next `challenge()`.
+- `closes_at` is never past `ends_at`, so `run_continuous` closes the open challenge there.
+- An aborted audit (`aborted`, `AuditResult.aborted`) never accepts, whatever its misses, and reveals no other index.
+  It is rejected and never retried with fresh challenges, since a retry would let a prover that stalls near its
+  deadlines escape a failing audit.
+- A cap from 1 to 1,505 is accepted.
+
+The cap is off by default. The continuous audit's guarantee measures the memory at each send time and needs no cap,
+and its model's verifier has none. Under the cap, a stream whose arrivals spread over more than 363.5 ms always
+aborts.
+
 `run_continuous(verifier, send, receive, wait=...)` drives the stream over a transport. `wait(j)` returns at arrival
 `j`, `send(j, i)` sends challenge `j`, and `receive(until)` returns the next `Reply(j, block, path, report)`, or None
 once the verifier's clock is past `until`, the open challenge's `closes_at` (its send time plus `Δ_late + RTT`). A

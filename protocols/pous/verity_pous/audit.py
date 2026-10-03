@@ -59,6 +59,12 @@ LATE_ROUNDS = 12
 """The most sequential calls a late answer may take, `D_late ≤ 12` (`Pous.SecurityProofs.BandGradedMeetsFamily`, with
 `D_late ≤ d`): at 241.5 µs per call the hard deadline needs `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14` ms."""
 
+AUDIT_CAP = 1505
+"""The most call-times a graded audit may last, from its first challenge's send to its last answer's receipt
+(`Pous.Rebuild.auditCap`, which `Pous.SecurityProofs.BackgroundRebuildExcluded` requires the verifier to enforce): at
+241.5 µs per call, `1,505 × 241.5 µs ≈ 363.5` ms.  Past it the verifier aborts the audit without accepting, as for a
+missed hard deadline, and never retries it with fresh challenges."""
+
 
 def _challenges(vk: VerifierKey) -> int:
     return getattr(vk.params, "challenges", CHALLENGES)
@@ -112,11 +118,15 @@ class Answer:
 
 @dataclass(frozen=True, slots=True)
 class AuditResult:
+    """The answers recorded, and whether the audit was `aborted` past its duration cap, which rejects it whatever its
+    answers."""
+
     answers: tuple[Answer, ...]
+    aborted: bool = False
 
     @property
     def accepted(self) -> bool:
-        return all(a.correct and a.on_time for a in self.answers)
+        return not self.aborted and all(a.correct and a.on_time for a in self.answers)
 
     @property
     def late(self) -> int:
@@ -179,19 +189,27 @@ class TimedVerifier:
     as rejected, and so does the next `challenge()` before it reveals another index.  Without it, the verifier waits for
     each answer however late it is.  The continuous audit runs on `continuous.ContinuousVerifier`, never on this class
     alone: `respond(block)` names no challenge, so a stale answer to an expired challenge would answer the next one.
+
+    `audit_cap` (at most `AUDIT_CAP`) caps the whole audit's duration at `audit_cap` calls of `call_ns`, from the first
+    challenge's send to the last answer's receipt (`ends_at`).  An answer received past it is rejected unchecked and
+    aborts the audit, and so does a challenge closed past it by `expire()` or the next `challenge()`; one sent past it
+    can be closed at once.  An aborted audit reveals no other index and never accepts, whatever its answers: it is
+    rejected, never retried.
     """
 
     def __init__(self, vk: VerifierKey, key: Key, k: int | None = None, deadline_ns: int = DEADLINE_NS,
                  rtt_allowance_ns: int = RTT_ALLOWANCE_NS, clock: Callable[[], int] = time.perf_counter_ns,
                  on_answer: Callable[[Answer], None] | None = None, root_only: bool = False,
-                 late_deadline_ns: int | None = None) -> None:
+                 late_deadline_ns: int | None = None, audit_cap: int | None = None) -> None:
         if deadline_ns < 0 or rtt_allowance_ns < 0:
             raise ValueError("deadlines and allowances are nonnegative")
         check_deployment(vk.params, deadline_ns, rtt_allowance_ns)
+        call_ns = getattr(vk.params, "call_ns", CALL_NS)
+        if audit_cap is not None and not 1 <= audit_cap <= AUDIT_CAP:
+            raise ValueError(f"an audit's cap is from 1 to {AUDIT_CAP} calls, not {audit_cap}")
         if late_deadline_ns is not None:
             if late_deadline_ns < deadline_ns:
                 raise ValueError("the hard deadline is at least the deadline")
-            call_ns = getattr(vk.params, "call_ns", CALL_NS)
             late = deadline_rounds(late_deadline_ns, rtt_allowance_ns, call_ns)
             if late > LATE_ROUNDS:
                 raise ValueError(f"Δ_late + RTT = {late_deadline_ns + rtt_allowance_ns} ns fits D_late = {late} "
@@ -199,9 +217,11 @@ class TimedVerifier:
             check_deployment(vk.params, late_deadline_ns, rtt_allowance_ns)
         self.vk, self.key, self.k, self.root_only = vk, key, _challenges(vk) if k is None else k, root_only
         self.deadline_ns, self.rtt_allowance_ns, self.late_deadline_ns = deadline_ns, rtt_allowance_ns, late_deadline_ns
-        self.clock, self.on_answer = clock, on_answer
+        self.clock, self.on_answer, self.call_ns, self.audit_cap = clock, on_answer, call_ns, audit_cap
         self.answers: list[Answer] = []
+        self.aborted = False
         self._open: tuple[int, int] | None = None
+        self._first: int | None = None
 
     @property
     def limit_ns(self) -> int:
@@ -224,24 +244,40 @@ class TimedVerifier:
         return None if self._open is None else self._open[1]
 
     @property
+    def cap_ns(self) -> int | None:
+        """`audit_cap` calls of `call_ns`, or None without a cap."""
+        return None if self.audit_cap is None else self.audit_cap * self.call_ns
+
+    @property
+    def ends_at(self) -> int | None:
+        """The first challenge's send time plus `cap_ns`: on the verifier's clock past it, the audit is aborted.  None
+        without a cap, or before the first challenge."""
+        return None if self.cap_ns is None or self._first is None else self._first + self.cap_ns
+
+    @property
     def done(self) -> bool:
-        return len(self.answers) == self.k
+        """All `k` challenges are closed, or the audit is aborted."""
+        return len(self.answers) == self.k or self.aborted
 
     @property
     def accepted(self) -> bool:
-        return self.done and AuditResult(tuple(self.answers)).accepted
+        return self.done and self.result().accepted
 
     def challenge(self) -> int:
-        """Reveal the next index and start its clock.  A challenge open within its hard deadline, or with none, is
-        refused.  One open past it is first closed as rejected, as by `expire()`, and that close stands even when the
-        call then raises because it was the last of the `k`.  `continuous.run_continuous` closes such a challenge with
-        `expire()` and calls this only with none open."""
+        """Reveal the next index and start its clock.  A challenge open within its hard deadline and the audit's cap,
+        or with neither, is refused.  One open past either is first closed as rejected, as by `expire()`, and that
+        close stands even when the call then raises because it was the last of the `k` or aborted the audit.
+        `continuous.run_continuous` closes such a challenge with `expire()` and calls this only with none open."""
         if self._open is not None and self._expire(self.clock()) is None:
             raise RuntimeError("the previous challenge is unanswered")
+        if self.aborted:
+            raise RuntimeError(f"the audit is aborted: it lasted past its cap of {self.audit_cap} calls")
         if self.done:
             raise RuntimeError(f"all {self.k} challenges are answered")
         i = self.key.uniform(self.vk.params.blocks, len(self.answers))
         self._open = (i, self.clock())
+        if self._first is None:
+            self._first = self._open[1]
         return i
 
     def respond(self, block: bytes, path: tuple[bytes, ...] | None = None, report: object = None) -> Answer:
@@ -251,7 +287,9 @@ class TimedVerifier:
         i, start = self._open
         self._open = None
         elapsed = stop - start
-        if self.late_limit_ns is not None and elapsed > self.late_limit_ns:
+        if self._past_cap(stop):
+            self.aborted = True
+        if self.aborted or (self.late_limit_ns is not None and elapsed > self.late_limit_ns):
             return self._record(Answer(len(self.answers), i, False, False, elapsed_ns=elapsed, report=report,
                                        rejected=True))
         correct = self.vk.check_path(i, block, path or ()) if self.root_only else self.vk.check(i, block)
@@ -259,19 +297,26 @@ class TimedVerifier:
                                    report=report))
 
     def expire(self) -> Answer:
-        """Close the open challenge unanswered, once its hard deadline has passed: rejected."""
+        """Close the open challenge unanswered, once its hard deadline or the audit's cap has passed: rejected, and
+        past the cap the audit is aborted."""
         if self._open is None:
             raise RuntimeError("no challenge is open")
-        if self.late_limit_ns is None:
+        if self.late_limit_ns is None and self.cap_ns is None:
             raise RuntimeError("no hard deadline: the verifier waits for the answer")
         a = self._expire(self.clock())
         if a is None:
-            raise RuntimeError("the open challenge is within its hard deadline")
+            cap = "" if self.cap_ns is None else " and the audit's cap"
+            raise RuntimeError(f"the open challenge is within its hard deadline{cap}")
         return a
+
+    def _past_cap(self, now: int) -> bool:
+        return self.ends_at is not None and now > self.ends_at
 
     def _expire(self, now: int) -> Answer | None:
         i, start = self._open
-        if self.late_limit_ns is None or now - start <= self.late_limit_ns:
+        if self._past_cap(now):
+            self.aborted = True
+        elif self.late_limit_ns is None or now - start <= self.late_limit_ns:
             return None
         self._open = None
         return self._record(Answer(len(self.answers), i, False, False, elapsed_ns=now - start, rejected=True))
@@ -283,7 +328,7 @@ class TimedVerifier:
         return a
 
     def result(self) -> AuditResult:
-        return AuditResult(tuple(self.answers))
+        return AuditResult(tuple(self.answers), self.aborted)
 
 
 def run_timed(verifier: TimedVerifier, respond: Callable[[int], bytes | tuple[bytes, object]],

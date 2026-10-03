@@ -10,7 +10,7 @@ import random
 import pytest
 
 from verity_pous import band, dense
-from verity_pous.audit import DEADLINE_NS, LATE_ROUNDS, TimedVerifier, challenge_key
+from verity_pous.audit import AUDIT_CAP, DEADLINE_NS, LATE_ROUNDS, TimedVerifier, challenge_key, run_timed
 from verity_pous.codec import encode_segments
 from verity_pous.continuous import ContinuousVerifier, Reply, run_continuous
 from verity_pous.verifier import MerkleTree, VerifierKey
@@ -423,3 +423,167 @@ def test_the_miss_count_is_every_wrong_or_late_answer(world):
     assert r.misses == sum(not (c and t) for c, t, _ in expected) > 0
     assert r.late == sum(not t for _, t, _ in expected) > 0
     assert v.done and v.accepted
+
+
+# 4. The audit's duration cap.
+
+CAP_NS = AUDIT_CAP * PARAMS.call_ns
+"""1,505 calls of 241.5 µs: 363,457,500 ns."""
+
+
+def _answers(blocks, latency):
+    """A responder answering every challenge right, `latency(j)` after its send."""
+    return lambda j, i: [(latency(j), Reply(j, blocks[i]))]
+
+
+def test_the_cap_is_1505_calls_of_call_ns(world):
+    """`AUDIT_CAP` is Lean's `auditCap = 1505`, counted in the parameters' `call_ns` as `D` and `D_late` are; a cap
+    from 1 to it is accepted, and the cap is off unless given."""
+    _, vk = world
+    key = challenge_key(b"audit", vk)
+    assert AUDIT_CAP == 1505 and PARAMS.call_ns == 241_500 and CAP_NS == 363_457_500
+    flat = dataclasses.replace(vk, params=dense.DenseParams(16, 64, 2))
+    for target in (vk, flat):
+        v = ContinuousVerifier(target, key, 1, late_deadline_ns=LATE, audit_cap=AUDIT_CAP)
+        assert v.timed.cap_ns == AUDIT_CAP * target.params.call_ns and v.ends_at is None
+    assert TimedVerifier(vk, key, audit_cap=1).cap_ns == PARAMS.call_ns
+    for cap in (0, AUDIT_CAP + 1):
+        with pytest.raises(ValueError, match="an audit's cap is from 1 to 1505 calls"):
+            ContinuousVerifier(vk, key, 1, late_deadline_ns=LATE, audit_cap=cap)
+    assert ContinuousVerifier(vk, key, 1, late_deadline_ns=LATE).timed.cap_ns is None
+    assert TimedVerifier(vk, key).cap_ns is None
+
+
+def test_an_honest_audit_under_the_cap_accepts(world):
+    """243 back-to-back challenges, the graded audit's longest row, each answered within Δ: accepted with the cap,
+    which runs from the first send and leaves every challenge its full hard deadline."""
+    blocks, vk = world
+    clock = Clock()
+    clock.now = 10**9
+    v = _verifier(vk, 243, clock, audit_cap=AUDIT_CAP)
+    result, wire = _run(v, clock, _answers(blocks, lambda j: DEADLINE_NS))
+    assert v.accepted and result.accepted and not result.aborted and result.misses == 0
+    assert v.ends_at == 10**9 + CAP_NS and clock.now - 10**9 == 243 * DEADLINE_NS < CAP_NS
+    assert len(wire.sent) == 243
+
+
+@pytest.mark.parametrize("over", [0, 1])
+def test_the_cap_holds_from_the_first_send_to_the_last_receipt(world, over):
+    """The last answer received exactly `1,505 · call_ns` after the first send is within the cap.  One nanosecond
+    later the driver closes its challenge at the cap, rejected, and the audit is aborted, though the answer on its way
+    is right and on time."""
+    blocks, vk = world
+    clock = Clock()
+    v = _verifier(vk, 2, clock, audit_cap=AUDIT_CAP)
+    result, _ = _run(v, clock, _answers(blocks, lambda j: DEADLINE_NS),
+                     wait=lambda j: setattr(clock, "now", j * (CAP_NS + over - DEADLINE_NS)))
+    last = result.answers[-1]
+    assert clock.now == CAP_NS + over and v.done and len(result.answers) == 2
+    assert (last.correct, last.on_time, last.rejected, v.aborted, v.accepted) == (
+        (True, True, False, False, True) if over == 0 else (False, False, True, True, False))
+
+
+def test_a_stalling_prover_is_rejected_not_retried(world):
+    """Every answer right and within its hard deadline, but each one late: with `max_misses` allowing them all the
+    stream accepts without the cap, and with it the cap closes challenge 181 before its hard deadline, rejected, and
+    aborts the audit.  No other challenge is sent, and none can be."""
+    blocks, vk = world
+    n, slow = 243, _answers(blocks, lambda j: LATE)
+    clock = Clock()
+    free = _verifier(vk, n, clock, max_misses=n)
+    assert _run(free, clock, slow)[0].misses == n and free.accepted and not free.aborted
+    clock = Clock()
+    v = _verifier(vk, n, clock, max_misses=n, audit_cap=AUDIT_CAP)
+    result, wire = _run(v, clock, slow)
+    assert len(wire.sent) == len(result.answers) == 182 and CAP_NS // LATE == 181
+    assert all(a.correct and not a.on_time for a in result.answers[:-1])
+    cut = result.answers[-1]
+    assert cut.rejected and cut.elapsed_ns == CAP_NS + 1 - 181 * LATE < LATE and clock.now == CAP_NS + 1
+    assert v.aborted and v.done and result.aborted and not v.accepted and not result.accepted and not v.exceeded
+    with pytest.raises(RuntimeError, match="the audit is aborted: it lasted past its cap of 1505 calls"):
+        v.challenge()
+    with pytest.raises(RuntimeError, match="no challenge is open"):
+        v.expire()
+
+
+def test_the_gaps_between_challenges_count_toward_the_cap(world):
+    """Answers on time, but the verifier's own gaps reach past the cap: the challenge sent past it closes at once,
+    rejected, and the audit is aborted."""
+    blocks, vk = world
+    clock = Clock()
+    v = _verifier(vk, 3, clock, audit_cap=AUDIT_CAP)
+    result, wire = _run(v, clock, _answers(blocks, lambda j: DEADLINE_NS),
+                        wait=lambda j: setattr(clock, "now", j * 200_000_000))
+    assert [(a.on_time, a.rejected, a.elapsed_ns) for a in result.answers] == [
+        (True, False, DEADLINE_NS), (True, False, DEADLINE_NS), (False, True, 0)]
+    assert v.aborted and not v.accepted and [t for _, _, t in wire.sent] == [0, 200_000_000, 400_000_000]
+
+
+def test_an_answer_past_the_cap_is_rejected_unchecked(world, monkeypatch):
+    """Within its hard deadline but received past the cap: rejected without its block checked, the audit aborted; and
+    `expire()` closes a challenge at the cap even with no hard deadline."""
+    blocks, vk = world
+    clock = Clock()
+    v = _verifier(vk, 3, clock, audit_cap=10)
+    j, i = v.challenge()
+    clock.now = DEADLINE_NS
+    v.respond(j, blocks[i])
+    j, i = v.challenge()
+    assert v.closes_at == v.ends_at == 10 * PARAMS.call_ns < DEADLINE_NS + LATE
+    clock.now = v.ends_at + 1
+    with monkeypatch.context() as m:
+        m.setattr(VerifierKey, "check", lambda *_: pytest.fail("an answer past the cap was checked"))
+        a = v.respond(j, blocks[i])
+    assert a.rejected and a.elapsed_ns < LATE and v.aborted and len(v.answers) == 2
+    bare = TimedVerifier(vk, challenge_key(b"audit", vk), k=2, clock=clock, audit_cap=10)
+    clock.now = 0
+    bare.challenge()
+    clock.now = bare.ends_at
+    with pytest.raises(RuntimeError, match="within its hard deadline"):
+        bare.expire()
+    clock.now += 1
+    assert bare.expire().rejected and bare.aborted and bare.done and not bare.accepted
+
+
+def test_the_timed_verifier_caps_a_graded_audit(world):
+    """`run_timed` over a `TimedVerifier` with a hard deadline and the cap, the graded audit's verifier: answers late
+    but within the hard deadline end at the cap, rejected."""
+    blocks, vk = world
+    clock = Clock()
+
+    def respond(i):
+        clock.now += LATE
+        return blocks[i]
+
+    v = TimedVerifier(vk, challenge_key(b"audit", vk), k=243, clock=clock, late_deadline_ns=LATE, audit_cap=AUDIT_CAP)
+    result = run_timed(v, respond)
+    assert result.aborted and not v.accepted and len(result.answers) == 182 and result.answers[-1].rejected
+
+
+def test_the_cap_composes_with_the_miss_count(world):
+    """Wrong, late and silent answers count as misses under the cap as without it, and the challenge the cap closes is
+    one more, rejected and late; `exceeded` and `aborted` are separate verdicts, and the stream accepts only with
+    neither."""
+    blocks, vk = world
+    script = [(DEADLINE_NS, True), (DEADLINE_NS + 1, True), (0, False), (None, True), (DEADLINE_NS, True)]
+
+    def stream(gap, cap):
+        clock, seen = Clock(), []
+        v = _verifier(vk, len(script), clock, max_misses=4, audit_cap=cap, on_answer=seen.append)
+
+        def replies(j, i):
+            latency, right = script[j]
+            return [] if latency is None else [(latency, Reply(j, blocks[i] if right else _wrong(blocks, i)))]
+
+        result, _ = _run(v, clock, replies, wait=lambda j: setattr(clock, "now", max(clock.now, j * gap)))
+        assert seen == list(result.answers)
+        return v, result
+
+    v, r = stream(10**6, AUDIT_CAP)
+    assert (r.misses, r.late, v.exceeded, v.aborted, v.accepted) == (3, 2, False, False, True)
+    v, r = stream(CAP_NS // 4, AUDIT_CAP)
+    assert [(a.correct, a.on_time, a.rejected) for a in r.answers] == [
+        (True, True, False), (True, False, False), (False, True, False), (False, False, True), (False, False, True)]
+    assert (r.misses, r.late, v.exceeded, v.aborted, v.accepted) == (4, 3, False, True, False)
+    v, r = stream(CAP_NS // 4, None)
+    assert (r.misses, r.late, v.exceeded, v.aborted, v.accepted) == (3, 2, False, False, True)
