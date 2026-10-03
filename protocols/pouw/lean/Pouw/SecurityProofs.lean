@@ -99,6 +99,7 @@ import Pouw.SecurityProofs.PearlC.PeelExactProofsP
 import Pouw.SecurityProofs.PearlC.PeelFp4Checks
 import Pouw.SecurityProofs.PearlC.PeelFp4Proofs
 import Pouw.SecurityProofs.PearlC.Rev1Witness
+import Pouw.SecurityProofs.PearlC.RowCircuit
 import Pouw.SecurityProofs.PearlC.RowPrimChecks
 import Pouw.SecurityProofs.PearlC.RowSeedCode
 import Pouw.SecurityProofs.PearlC.RowSeedFragment
