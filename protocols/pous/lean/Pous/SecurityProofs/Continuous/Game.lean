@@ -16,18 +16,22 @@ challenges it replaces its state by any function of `(W, pp, j, σ_j, i)` and th
 arrivals is unbounded, and `C` is gone after preprocessing. Answer `j` misses if it is wrong. `ε_j = 1 − |σ_j|/|C|`
 is the freed fraction at challenge `j`, and the verifier accepts iff the misses are at most `f₀`.
 
-What it leaves out:
+**Requirements on the protocol.** The game assumes each of these, and the bound says nothing about a protocol that
+breaks one. When the definitions move to `Pous/Protocol/Model/` and the statements to `Pous/Guarantees/`, the
+continuous-audit section of `PROTOCOL.md` must state them as requirements.
 
-* **The arrival times.** Conditioning on them fixes `n` and lets the responder know every arrival time in advance,
-  which only helps it. `ContinuousAudit`'s event, `Σ_j max(ε_j − ε_proof, 0) > G(f)`, doesn't mention `n`, so with the
-  number of challenges `N` drawn independently of the indices (Poisson arrivals) the bound holds unconditionally, with
-  `E[N]·(β + 1)·π` in place of `n·(β + 1)·π`. The explorer's `ε̄ > g(f₀)` with `g = G/(λT)` is this event when `ε̄`
-  is `Σ_j max(ε_j − ε_proof, 0)` divided by `λT`. With `ε̄` the average over the `N` challenges, `g` must be `G/N`:
-  dividing by `λT` when `N < λT` claims more than this proves.
-* **Overlapping challenges.** Index `j + 1` is revealed only after answer `j`. If the verifier sends challenge `j + 1`
-  while answer `j` is still within its deadline, the responder may use `i_{j+1}` for answer `j`, which this game
-  doesn't model.
-* **The time average.** `ε_j` is sampled at the challenges, not averaged over `[0, T]`.
+1. **No overlapping challenges.** The verifier never sends challenge `j + 1` before answer `j`'s deadline. The game
+   reveals index `i_{j+1}` only after answer `j`; a responder that sees `i_{j+1}` while answer `j` is still within its
+   deadline may use it for answer `j`, which the game doesn't model.
+2. **Storage at arrivals, not a time average.** `ε_j` is the freed fraction at challenge `j`'s arrival, so the bound
+   is on the storage held at the arrival times. It says nothing about the time average of storage over `[0, T]`.
+3. **Normalize by the realized `N`, never by `λT`.** The game conditions on the arrivals: `n` is fixed, and the
+   responder may know every arrival time in advance, which only helps it. `ContinuousAudit`'s event,
+   `Σ_j max(ε_j − ε_proof, 0) > G(f)`, doesn't mention `n`, so with the number of challenges `N` drawn independently of
+   the indices (Poisson arrivals) the bound holds unconditionally, with `E[N]·(β + 1)·π` in place of `n·(β + 1)·π`.
+   Per challenge, divide by the realized `N`: `ε̄ = (1/N)·Σ_j max(ε_j − ε_proof, 0)` against `g = G/N`. Dividing by
+   `λT` instead claims more than this proves whenever `N < λT`; a per-time statement needs a lower tail on `N`
+   (`N ≥ (1 − η)·λT` except with a probability added to the bound, then `g = G/((1 − η)·λT)`).
 -/
 
 namespace PousContinuous
@@ -94,7 +98,9 @@ open Classical in
 `βe + n·(β + 1)·π`. The positive part keeps storage above `|C|` at one challenge (`ε_j < 0`) from offsetting a
 shortfall at another. Dividing by `n`: `Pr[F ≤ f₀ ∧ ε̄ > g(f₀)] ≤ βe + n·(β + 1)·π` with
 `ε̄ = (1/n)·Σ_j max(ε_j − ε_proof, 0)` and `g = G/n`; since `max(ε_j − ε_proof, 0) ≥ max(ε_j, 0) − ε_proof`, this
-implies the same bound for the average of `max(ε_j, 0)` exceeding `ε_proof + g(f₀)`. -/
+implies the same bound for the average of `max(ε_j, 0)` exceeding `ε_proof + g(f₀)`. It holds only under the module
+docstring's requirements: no overlapping challenges, storage at arrivals, and `g` normalized by the realized number of
+challenges, never by `λT`. -/
 def ContinuousAudit : Prop :=
   ∀ {M : IdealModel} (sch : Scheme M) (D Q β n : ℕ) (π : ℝ≥0∞), TimedINC sch D Q β π →
     ∀ (W : Bits sch.n) (A₁ : VarPreprocessor sch) (R : VarResponder sch D Q) (f βe : ℝ), 0 < βe →

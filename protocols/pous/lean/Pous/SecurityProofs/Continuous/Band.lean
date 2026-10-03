@@ -9,6 +9,8 @@ import Pous.SecurityProofs.Continuous.PerAnswer
 `BandChainMeets64` uses, `TimedINC` at `β = 265253616` from the unconditional `chainExPostFactoG_v6`, and its `π` is at
 most `2·2^-1128` (`chainPiSeg_fam_le`, as `seg_union_term_one` uses it). So `ε_proof = 1 − (β − B)/|C|`
 `= 3182352/2^28 ≈ 1.1855%` (`band64_epsProof`), and the stopped union costs `n·(β + 1)·π ≤ n·2^-1098`.
+The instance carries the game's requirements on the protocol (`Continuous/Game.lean`): no overlapping challenges,
+storage at arrivals rather than a time average, and `g` normalized by the realized number of challenges, never `λT`.
 -/
 
 namespace PousContinuous
