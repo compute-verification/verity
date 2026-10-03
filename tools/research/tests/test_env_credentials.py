@@ -6,6 +6,7 @@ import base64
 import hashlib
 import re
 import subprocess
+import threading
 import tomllib
 from pathlib import Path
 
@@ -67,6 +68,31 @@ def test_ssh_key_from_env_is_written_once_mode_600_and_the_laptop_file_wins(rp, 
     argv = runpod.ssh_command("1.2.3.4", 2222)
     assert argv[argv.index("-i") + 1] == str(runpod.SSH_KEY)
     assert f"UserKnownHostsFile={runpod.KNOWN_HOSTS}" in argv and runpod.public_key() == "ssh-ed25519 LAPTOP"
+
+
+def test_threads_writing_the_key_at_once_each_get_the_whole_file(rp, tmp_path, monkeypatch):
+    # `research doctor` resolves ssh argv in several probe threads at once: with one temp name per process, on a fresh state dir
+    # two threads failed 481 of 500 times (FileNotFoundError from os.replace) and three read zero-length keys
+    priv = b"-----BEGIN OPENSSH PRIVATE KEY-----\n" + b"k" * 400 + b"\n-----END OPENSSH PRIVATE KEY-----\n"
+    monkeypatch.setenv("RUNPOD_SSH_KEY_B64", base64.b64encode(priv).decode())
+    for i in range(20):
+        monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / f"state-{i}"))
+        start, got, failed = threading.Barrier(4), [], []
+
+        def resolve():
+            start.wait()
+            try:
+                k = runpod.ssh_key()
+                got.append((k, k.read_bytes()))
+            except OSError as e:
+                failed.append(e)
+        threads = [threading.Thread(target=resolve) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert failed == [] and len({k for k, _ in got}) == 1 and all(b == priv for _, b in got)
+        assert [p.name for p in got[0][0].parent.iterdir()] == [got[0][0].name]       # no temp file left behind
 
 
 def test_a_malformed_key_secret_is_refused_without_echoing_it(rp, monkeypatch):
