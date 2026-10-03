@@ -1245,8 +1245,9 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     with its run record, a runner killed before it recorded an end with --force, and comes back with the .custody that Job's verify
     wrote; a live one, one still settling and one its own custody preserved don't. A round pushes at most VY_CUSTODY_MAX_RUNS within
     VY_CUSTODY_PASS_S, runs that failed before going last; a run dir over the file bound is held, never mirrored, and so is one whose
-    attempt node 1 holds without a run record; a failed push is never given up and fails the round until it succeeds. While the
-    stopgap loop runs, or node 1 lacks the research tree, a round refuses."""
+    attempt node 1 holds without a run record, and one whose remote holds another attempt document (r20261003-174723-7ea5's Job
+    failed every round); a failed push is never given up and fails the round until it succeeds. While the stopgap loop runs, or node
+    1 lacks the research tree, a round refuses."""
     root, state, bin_, log = tmp_path / "runs", tmp_path / "state", tmp_path / "bin", tmp_path / "calls.log"
     bin_.mkdir()
     (bin_ / "rsync").write_text(f'#!/bin/sh\necho "rsync $*" >> {log}\n')
@@ -1259,6 +1260,8 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
         'esac\n'
         'if [ -n "$FAIL_RUN" ]; then case "$spec" in *"$FAIL_RUN"*) echo "Error: boom" >&2; exit 1 ;; esac; fi\n'
         'case "$spec" in *r8-legacy*) echo "r8-legacy: NO custody on the remote: the attempt names no run record" >&2; exit 1 ;; esac\n'
+        'case "$spec" in *r8b-conflict*) echo "r8b-conflict: NO custody on the remote: not preserved on the remote: attempts/r8b: the'
+        ' remote holds a DIFFERENT attempt document for this run id" >&2; exit 1 ;; esac\n'
         'exit 0\n')
     for f in bin_.iterdir():
         f.chmod(0o755)
@@ -1286,6 +1289,7 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     run("r6-fails", {"state": "failed"})
     run("r7-big", {"state": "done"}, extra=3)
     run("r8-legacy", {"state": "done"})
+    run("r8b-conflict", {"state": "done"})
 
     def round_(*args, **env):
         return subprocess.run(["bash", str(NEBIUS / "n2_custody.sh"), *args], capture_output=True, text=True,
@@ -1313,15 +1317,17 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
 
     assert round_(VY_CUSTODY_PASS_S="0").returncode == 0 and "rsync" not in log.read_text()
     bounded = round_(VY_CUSTODY_MAX_RUNS="1")
-    assert bounded.returncode == 0 and "round bounded (1 push(es)" in bounded.stdout and "7 run dir(s) left" in bounded.stdout
+    assert bounded.returncode == 0 and "round bounded (1 push(es)" in bounded.stdout and "8 run dir(s) left" in bounded.stdout
     assert sorted(p.name for p in (state / "pushed").iterdir()) == ["r1-done"]
     assert json.loads((root / "r1-done" / ".custody").read_text())["preserved"] is True
 
     first = round_(FAIL_RUN="r6-fails")
     assert first.returncode == 1 and "r6-fails (c1, failed): push failed (1 so far): node 1's Job: Error: boom" in first.stdout
     assert sorted(p.name for p in (state / "pushed").iterdir()) == ["r1-done", "r2-dead", "r5-preserved"]
-    assert sorted(p.name for p in (state / "held").iterdir()) == ["r7-big", "r8-legacy"] and "2 run(s) held" in first.stdout
+    assert sorted(p.name for p in (state / "held").iterdir()) == ["r7-big", "r8-legacy", "r8b-conflict"] and "3 run(s) held" in first.stdout
     assert "held: node 1's store holds its attempt without a run record" in first.stdout
+    assert "r8b-conflict (c1, done): held: R2 holds another attempt document" in first.stdout
+    assert "n1_custody.sh --reconcile r8b-conflict --by WHO" in first.stdout and not (state / "failures" / "r8b-conflict").exists()
     calls = log.read_text()
     assert f"{root}/r1-done/ n1.invalid:/n1/runs/r1-done/" in calls and "r3-live" not in calls and "r4-fresh" not in calls
     assert "data custody /n1/runs/r2-dead --publish --keep-local --force" in calls
@@ -1335,6 +1341,7 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     second = round_(FAIL_RUN="")
     assert second.returncode == 1 and "r6-fails (c1, failed" in second.stdout and not (state / "failures" / "r6-fails").exists()
     assert (state / "pushed" / "r6-fails").exists() and log.read_text().count("r1-done/ n1.invalid") == 1, "a pushed run is done"
+    assert log.read_text().count("r8b-conflict/ n1.invalid") == 1, "a conflict gets its one Job, then waits for --reconcile"
     for p in (state / "held").iterdir():
         p.rename(state / "pushed" / p.name)
     assert round_().returncode == 0
@@ -1404,8 +1411,8 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
         f.chmod(0o755)
     old, future = 1_000_000_000, 4_102_444_800     # records last changed in 2001 (settled, and stale for a pod), or in 2100
 
-    def run(root, rid, state_, *, boot="boot-n1", t=old, empty=False, extra=0):
-        d = root / "runs" / rid
+    def run(root, rid, state_, *, boot="boot-n1", t=old, empty=False, extra=0, runs="runs"):
+        d = root / runs / rid
         if empty:
             d.mkdir()
             (d / "stdout.log").write_text("")
@@ -1426,9 +1433,10 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
         return d
 
     R = {k: f"r20261003-0000{n:02d}-00{n:02d}" for n, k in enumerate(
-        ("done", "dead", "empty", "n2copy", "fresh", "fails", "big", "legacy", "conflict", "live", "new", "research"), 1)}
+        ("done", "dead", "empty", "n2copy", "fresh", "fails", "big", "legacy", "conflict", "live", "new", "research", "relay"), 1)}
     n1 = {k: f"n1-custody-{r}" for k, r in R.items()}
     J = {k: jobs / "runs" / r for k, r in R.items()}
+    J["relay"] = jobs / "runs-n2" / R["relay"]
     run(jobs, R["done"], "done")
     run(jobs, R["dead"], "running")                       # a preempted pod: no record changed for 24 h
     run(jobs, R["empty"], "running", empty=True)
@@ -1440,14 +1448,16 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     run(jobs, R["conflict"], "done")
     run(jobs, R["live"], "running", t=future)
     run(research, R["research"], "done")
+    run(jobs, R["relay"], "done", boot="boot-n2", runs="runs-n2")
     offline = LocalStore(jobs / "store", config_path=absent)
     assert A.publish(J["legacy"], store=offline, remote_push=False, run_record=False)["published"]
-    assert A.publish(J["conflict"], store=offline, remote_push=False, run_record=True)["published"]
-    other = json.loads(offline.attempt_path(R["conflict"]).read_bytes())
-    other["status"]["rc"] = 99
-    (vault / attempt_key(R["conflict"])).parent.mkdir(parents=True)
-    (vault / attempt_key(R["conflict"])).write_text(json.dumps(other, sort_keys=True, separators=(",", ":")))
-    for d in (J["legacy"], J["conflict"]):
+    for k in ("conflict", "relay"):
+        assert A.publish(J[k], store=offline, remote_push=False, run_record=True)["published"]
+        other = json.loads(offline.attempt_path(R[k]).read_bytes())
+        other["status"]["rc"] = 99
+        (vault / attempt_key(R[k])).parent.mkdir(parents=True, exist_ok=True)
+        (vault / attempt_key(R[k])).write_text(json.dumps(other, sort_keys=True, separators=(",", ":")))
+    for d in (J["legacy"], J["conflict"], J["relay"]):
         for p in d.rglob("*"):
             os.utime(p, (old, old))
 
@@ -1458,7 +1468,7 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
                                    "RESEARCH_STORE_CONFIG": str(absent), "VY_CUSTODY_QUIET": "", "VY_CUSTODY_BOOT": "boot-n1",
                                    "VY_CUSTODY_PY": sys.executable, "VY_CUSTODY_STATE": str(state), "VY_CUSTODY_SRC": str(tmp_path / "src"),
                                    "VY_CUSTODY_ROOTS": f"{jobs}/runs={jobs}/store=1000,{research}/runs={research}/store=1001",
-                                   "VY_CUSTODY_MAX_FILES": "10", **env})
+                                   "VY_CUSTODY_RELAY": f"{jobs}/runs-n2={jobs}/store=1000", "VY_CUSTODY_MAX_FILES": "10", **env})
 
     def created():
         return [ln.split()[1] for ln in log.read_text().splitlines() if ln.startswith("created ")] if log.exists() else []
@@ -1552,6 +1562,9 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     assert f"reconcile-attempts {R['conflict']} --apply &&" in command(n1["conflict"])[5]
     assert preserved(J["conflict"]) and list((jobs / "store" / "attempts" / ".superseded").iterdir())
     assert held() == [R["big"]]
+    assert R["relay"] not in "".join(created()) and not (J["relay"] / ".custody").exists(), "node 2's copies are n2_custody.sh's"
+    relay = round_("--reconcile", R["relay"], "--by", "test")
+    assert relay.returncode == 0 and "(node 2's copy: remove n2_custody.sh's hold on node 2" in relay.stdout and preserved(J["relay"])
 
     (state / "held" / R["big"]).unlink()
     done = round_(VY_CUSTODY_MAX_FILES="20")

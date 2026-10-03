@@ -7,6 +7,7 @@
 #
 #   on node 1:  n1_custody.sh [--dry-run]                one round (vy-custody.timer, every 10 min, as research); --dry-run lists it
 #               n1_custody.sh --reconcile RUN --by WHO   a held conflict: the remote's attempt replaces node 1's, then the run publishes
+#                                                        (node 2's copy too, VY_CUSTODY_RELAY, when n2_custody.sh holds the conflict)
 #
 # Which runs: `research data custody --triage --older-min` over each runs root, run as its store's owner (VY_CUSTODY_ROOTS:
 # runs=store=uid; the root's Jobs run as that uid too), the rows that need action and have settled, of runs this machine's kernel ran
@@ -27,6 +28,8 @@
 # Exit 0 ok, 1 a run not yet on R2 or held, 2 usage, 3 refused.
 set -u
 ROOTS=${VY_CUSTODY_ROOTS:-/workspace/jobs/runs=/workspace/jobs/store=1000,/workspace/research/runs=/workspace/research/store=1001}
+# node 2's copies, which n2_custody.sh's Jobs publish: never in a round, but --reconcile repairs a conflict there too
+RELAY=${VY_CUSTODY_RELAY-/workspace/jobs/runs-n2=/workspace/jobs/store=1000}
 STATE=${VY_CUSTODY_STATE:-/workspace/research/custody-n1}
 SETTLE_S=${VY_CUSTODY_SETTLE_S:-900}
 MAX_RUNS=${VY_CUSTODY_MAX_RUNS:-20}
@@ -114,20 +117,21 @@ custody_job() {  # custody_job RUN ROOT STORE UID CMD: 0 when the Job completed,
 
 declare -A STORE UID_OF
 IFS=, read -ra specs <<< "$ROOTS"
-for spec in "${specs[@]}"; do
+for spec in "${specs[@]}" ${RELAY:+"$RELAY"}; do
   IFS='=' read -r root store uid <<< "$spec"
   STORE[$root]=$store UID_OF[$root]=$uid
 done
 
 if [ -n "$REC" ]; then
-  for spec in "${specs[@]}"; do
+  for spec in "${specs[@]}" ${RELAY:+"$RELAY"}; do
     root=${spec%%=*}
     [ -d "$root/$REC" ] || continue
     research="$PY -m research data"
     if custody_job "$REC" "$root" "${STORE[$root]}" "${UID_OF[$root]}" \
       "$research reconcile-attempts $REC --apply && $research custody $root/$REC --publish --keep-local"; then
       rm -f "$STATE/held/$REC" "$STATE/failures/$REC"
-      log "$root/$REC: reconciled by $BY: the remote's attempt replaced node 1's (kept under attempts/.superseded/); on R2 with its run record"
+      log "$root/$REC: reconciled by $BY: the remote's attempt replaced node 1's (kept under attempts/.superseded/); on R2 with its run record" \
+        "$( [ "$spec" = "$RELAY" ] && echo "(node 2's copy: remove n2_custody.sh's hold on node 2, and its next round brings the .custody home)")"
       exit 0
     fi
     if grep -qs "names no run record" "$tmp/job.err"; then
