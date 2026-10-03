@@ -547,10 +547,13 @@ from its record. A failure whose key had expired says so in the marker's `error`
 
 - The pod guard accepts a valid `.custody` like a valid `.fetched`: every file listed, none changed at or after `verified_from`.
 - `research data custody RUN [--publish]` checks the same predicate from any machine (and rewrites the marker); `--publish` puts a
-  local run dir on the remote first (`--force`: a run whose runner died before it recorded an end). `research data custody --triage
+  local run dir on the remote first (`--force`: a run whose runner died before it recorded an end), and when that fails leaves the
+  failed verdict in `.custody` (unless a valid one still vouches for the dir). `research data custody --triage
   [--verify] [--older-min N] [--runs-dir D ...]` sorts runs roots into `fetched`, `r2`, `attempt-no-record`, `attempt-unpreserved`,
-  `no-custody`, `running`, `never-ran`, `waived`; a waiver or never-ran verdict is a label: `research data label RUN custody
-  waived|never-ran --by WHO`. On the machine that ran them, a run still marked running has ended when its runner's pid is gone
+  `conflict`, `no-custody`, `running`, `never-ran`, `waived`; a waiver or never-ran verdict is a label: `research data label RUN custody
+  waived|never-ran --by WHO`. `conflict` is a run whose remote holds a different attempt document (write-once, so no push repairs
+  it: `research data reconcile-attempts RUN --apply`, then `--publish`), as `--verify` sees it or, without it, as the last
+  `--publish` left in `.custody`. On the machine that ran them, a run still marked running has ended when its runner's pid is gone
   (same host and boot), or, when the runner isn't visible there (a Kubernetes pod), when none of its records changed for 24 h; a
   valid `.custody` counts as `r2` where the catalog can't say (node 2's runs are published on node 1). `--older-min N` leaves runs
   that ended under N minutes ago out of the count (`settling`), so `needs_action` (`research/custody-triage/v1`, exit 1) is the

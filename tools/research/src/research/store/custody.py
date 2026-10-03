@@ -10,7 +10,8 @@ published on the machine that ran it with a minted key, so custody no longer dep
         runner (`runner_publish`, after the workload exits): publishes the attempt with its run record, pushes and verifies it
         (`preserved.check`, head mode; up to PUSH_TRIES), deletes the key, and writes <run>/.custody.
     research data custody RUN [--publish] [--runs-dir D] [--json]        verify a run's custody on the remote and (re)write .custody;
-                                                                          --publish first publishes it with a run record and pushes
+                                                                          --publish first publishes it with a run record and pushes,
+                                                                          and leaves a failed verdict in .custody when nothing vouches
     research data custody --triage [--runs-dir D ...] [--verify] [--older-min N] [--json]
                                                                           every run under the runs roots by custody state (F2); with
                                                                           --older-min, the ended runs not on the remote after N minutes
@@ -63,7 +64,7 @@ ACTIONS = ("HeadObject", "GetObject", "GetBucketLocation", "ListObjectsV1", "Lis
            "PutObject", "CreateMultipartUpload", "UploadPart", "CompleteMultipartUpload", "AbortMultipartUpload")
 PUSH_TRIES = 3
 PUSH_RETRY_S = 20.0
-TRIAGE_STATES = ("fetched", "r2", "attempt-no-record", "attempt-unpreserved", "no-custody", "running", "never-ran", "waived")
+TRIAGE_STATES = ("fetched", "r2", "attempt-no-record", "attempt-unpreserved", "conflict", "no-custody", "running", "never-ran", "waived")
 
 
 # ---- the run dir ------------------------------------------------------------------------------------------------------------------------
@@ -298,6 +299,13 @@ def verify(st: Any, run_dir: Path, run_id: str | None = None, *, mark: bool = Tr
     return rep
 
 
+def mark_failed(run_dir: Path, rep: dict[str, Any]) -> None:
+    """Leave a failed verdict in .custody (as `runner_publish` does), for triage and whoever looks next: `preserved` false, `error`."""
+    rep.setdefault("verified_utc", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+    rep.setdefault("host", os.uname().nodename)
+    write_json_atomic(Path(run_dir) / MARKER, rep)
+
+
 # ---- the launcher: a minted, delete-free key for the machine ---------------------------------------------------------------------------
 
 def mint_for_machine(ttl: str | int = DEFAULT_TTL, *, environ: dict[str, str] | None = None) -> tuple[dict[str, Any], list[tuple[str, bytes]]]:
@@ -434,8 +442,7 @@ def runner_publish(run_dir: Path, custody_dir: Path, *, tool: Any = None, condit
     if rep.get("preserved"):
         write_json_atomic(d / MARKER, rep)                  # verified_from precedes it; nothing below writes into the run dir
     else:
-        rep.setdefault("verified_utc", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
-        write_json_atomic(d / MARKER, rep)
+        mark_failed(d, rep)
         print(f"research: custody NOT on the remote: {rep['error']}  (`research data custody {d.name} --publish` with credentials, or "
               f"`research fetch --all {d.name}` from the launcher)", file=sys.stderr)
     return rep
@@ -452,7 +459,7 @@ def _label_verdict(st: Any, run_id: str) -> str | None:
 
 
 TRIAGE_SCHEMA = "research/custody-triage/v1"
-NEEDS_ACTION = ("no-custody", "attempt-unpreserved", "attempt-no-record")
+NEEDS_ACTION = ("no-custody", "attempt-unpreserved", "attempt-no-record", "conflict")
 #: A run whose runner this machine can't see (it ran in another pid namespace: a Kubernetes pod on node 1) has ended once none of
 #: its records changed for this long: a pod preempted or killed before its runner recorded an end leaves its status `running`.
 STALE_S = 24 * 3600
@@ -505,7 +512,7 @@ def triage_row(st: Any, run_dir: Path, *, verify_remote: bool = False, now: floa
     rid = d.name
     now = time.time() if now is None else now
     changed = _changed(d)
-    row: dict[str, Any] = {"run": rid, "state": None, "why": None, "next": None, "bytes": None,
+    row: dict[str, Any] = {"run": rid, "state": None, "why": None, "next": None, "files": None, "bytes": None,
                            "ended_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(changed)) if changed else None,
                            "age_min": round((now - changed) / 60, 1) if changed else None}
     rec = _read(d / "remote.json") or {}
@@ -544,14 +551,21 @@ def triage_row(st: Any, run_dir: Path, *, verify_remote: bool = False, now: floa
     else:
         rr = (doc.get("outputs") or {}).get("run_record")
         chk = preserved.check(st, [rid], mode="head" if verify_remote else "recorded", head_fallback=verify_remote)
+        why = [e for x in chk["not_preserved"] for e in x.get("errors") or []] or [chk.get("reason") or "?"]
         if not chk["preserved"]:
-            why = [e for x in chk["not_preserved"] for e in x.get("errors") or []] or [chk.get("reason") or "?"]
             row.update(state="attempt-unpreserved", why=f"attempt not preserved: {why[0]}", next=f"research data push {rid}")
         elif not rr:
             row.update(state="attempt-no-record", why="attempt preserved, but its logs are only here (published without a run record)",
                        next=f"research fetch --all {rid} (pod alive), else keep the local dir or label custody waived")
         else:
             row.update(state="r2", why="attempt and run record preserved on the remote")
+        # only a head-mode check sees the attempt document itself: --verify's own, else the last `custody --publish`'s verdict in .custody
+        m = {} if verify_remote else _read(d / MARKER) or {}
+        seen = why if verify_remote else [str(m.get("error") or "")] if m.get("preserved") is False else []
+        if differs := next((e for e in seen if preserved.DIFFERS in e), None):
+            row.update(state="conflict", why=differs if verify_remote else f"{differs} (.custody, {m.get('verified_utc') or '?'})",
+                       next=f"research data reconcile-attempts {rid} --apply (the remote's attempt is the first one ever pushed, and "
+                            f"canonical), then research data custody {rid} --publish; or label custody waived")
     # the marker is written only after a head-mode check of the remote, on whichever machine published the run (node 2's runs are
     # published on node 1); --verify trusts only what it asks the remote itself
     if row["state"] in ("no-custody", "attempt-unpreserved") and not (verify_remote and doc is not None) and marker_problem(d) is None:
@@ -560,7 +574,8 @@ def triage_row(st: Any, run_dir: Path, *, verify_remote: bool = False, now: floa
     if ended and row["state"] != "r2":
         row["why"] = f"{ended}; {row['why']}"
     if row["state"] in NEEDS_ACTION:
-        row["bytes"] = sum((d / r).stat().st_size for r in run_files(d))
+        rels = run_files(d)
+        row.update(files=len(rels), bytes=sum((d / r).stat().st_size for r in rels))
     return row
 
 
@@ -601,5 +616,6 @@ def triage_report(st: Any, roots: list[Path], *, older_min: float | None = None,
             "rows": rows, "needs_action": len(todo), "settling": sum(1 for r in rows if r["settling"])}
 
 
-__all__ = ["ACTIONS", "EXCLUDED", "KIND", "MARKER", "PUBLISH_LOG", "SCHEMA", "custody_env", "divert_output", "has_custody", "marker_problem",
-           "mint_for_machine", "push_run", "put_run_record", "run_files", "runner_publish", "trimmed_of", "triage", "triage_row", "verify"]
+__all__ = ["ACTIONS", "EXCLUDED", "KIND", "MARKER", "PUBLISH_LOG", "SCHEMA", "custody_env", "divert_output", "has_custody", "mark_failed",
+           "marker_problem", "mint_for_machine", "push_run", "put_run_record", "run_files", "runner_publish", "trimmed_of", "triage", "triage_row",
+           "verify"]

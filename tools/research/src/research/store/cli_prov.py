@@ -484,6 +484,8 @@ def cmd_custody(argv: list[str]) -> int:
     rep = CU.verify(st, d)
     if pushed:
         rep["push_errors"] = pushed
+    if ns.publish and not rep["preserved"] and CU.marker_problem(d) is not None:
+        CU.mark_failed(d, rep)
     if ns.publish and rep["preserved"] and not ns.keep_local:
         from .evict import evict_custody
 
