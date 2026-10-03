@@ -185,6 +185,16 @@ def test_a_source_root_that_cannot_be_cloned_is_refused_naming_cwd_source(tmp_pa
     assert not list((tmp_path / "runs").glob("r*")) and _clones(tmp_path) == [], "refused before a run dir; no clone left"
 
 
+def test_the_callers_git_dir_does_not_point_the_clone_at_the_source(tmp_path, repo, monkeypatch):
+    """GIT_DIR in the caller's environment (a git hook, a wrapper) made the clone's `checkout --detach` act on the source."""
+    branch = _git(repo, "symbolic-ref", "-q", "HEAD")
+    monkeypatch.setenv("GIT_DIR", str(repo / ".git"))
+    assert _run(tmp_path / "runs", "clone") == 0
+    monkeypatch.delenv("GIT_DIR")
+    assert _git(repo, "symbolic-ref", "-q", "HEAD") == branch and _git(repo, "status", "--porcelain") == ""
+    assert _clones(tmp_path) == []
+
+
 def test_a_clone_that_cannot_be_removed_is_reported_and_the_run_keeps_its_status(tmp_path, repo, monkeypatch, capsys):
     monkeypatch.setattr(clone, "remove", lambda path: "OSError: [Errno 16] Device or resource busy")
     assert _run(tmp_path / "runs", "clone") == 0

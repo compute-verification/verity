@@ -12,6 +12,7 @@ is refused, never guessed at.
 from __future__ import annotations
 
 import errno
+import functools
 import json
 import os
 import shutil
@@ -100,9 +101,18 @@ def _over(run_dir: Path) -> bool:
         return False
 
 
+@functools.lru_cache(maxsize=1)
+def _repo_env_vars() -> frozenset[str]:
+    """The variables that point git at a repository (GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, ...): inherited from the caller, they
+    would make the clone's commands act on that repository instead (a `checkout --detach` detached the source's HEAD)."""
+    clean = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    return frozenset(subprocess.run(["git", "rev-parse", "--local-env-vars"], capture_output=True, text=True, env=clean).stdout.split())
+
+
 def _git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
     try:
-        return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+        env = {k: v for k, v in os.environ.items() if k not in _repo_env_vars()}
+        return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, env=env)
     except OSError as e:
         raise Refused(f"could not run git {args[0]} in {cwd or os.getcwd()} ({type(e).__name__}: {e})") from None
 
