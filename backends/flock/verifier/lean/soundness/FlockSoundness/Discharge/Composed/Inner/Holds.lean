@@ -400,6 +400,27 @@ theorem rows_honest (hE : (layOf Tz st).hab = nE) (hm : st.m = Tz.S.m) (hk : st.
 
 end Rows
 
+/-- The pads at a layout index below `nE` are the exposed ones. -/
+theorem comp_symm_lt {nE : ℕ} (hf : PadIdx nE → 𝔽) (k : ℕ) (hk : k < nE) :
+    (hf ∘ (padEquiv nE).symm) (ix nE k) = hf (.inl ⟨k, hk⟩) := by
+  rw [Function.comp_apply]
+  refine congrArg hf ((Equiv.symm_apply_eq _).2 (Fin.ext ?_))
+  simp [padEquiv, ix, Nat.mod_eq_of_lt (by omega : k < nE + 4)]
+
+/-- The pads at the layout's last four indices are `PadIdx`'s tail, in `tailPerm`'s order. -/
+theorem comp_symm_tail {nE : ℕ} (hf : PadIdx nE → 𝔽) (j : ℕ) (hj : j < 4) :
+    (hf ∘ (padEquiv nE).symm) (ix nE (nE + j)) = hf (.inr (tailPerm.symm ⟨j, hj⟩)) := by
+  rw [Function.comp_apply]
+  refine congrArg hf ((Equiv.symm_apply_eq _).2 (Fin.ext ?_))
+  simp [padEquiv, ix, Nat.mod_eq_of_lt (by omega : nE + j < nE + 4)]
+
+/-- The layout's triple indices at `hab = nE`. -/
+theorem lay_triple {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) {nE : ℕ} (hE : (layOf Tz st).hab = nE) :
+    (layOf Tz st).fa < nE ∧ (layOf Tz st).fb < nE ∧ (layOf Tz st).tx = nE + 1 ∧ (layOf Tz st).ty = nE + 2 ∧
+      (layOf Tz st).tw = nE + 3 := by
+  subst hE
+  exact ⟨by lay_omega, by lay_omega, rfl, rfl, rfl⟩
+
 end Glue
 
 variable {mPts n : ℕ} {Reg : Type}
@@ -414,6 +435,67 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
   intro C c hc w hw hreg ω r
   apply batch_of_rows
   intro k
-  sorry
+  have hE : (layOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).hab = (C.T c).tab.nE := by
+    show _ = padLenOf _ _ - 4
+    simp only [padLenOf, layOf, Zk.PadLayout.len, Zk.PadLayout.tw]
+    omega
+  obtain ⟨hfa, hfb, htx, hty, htw⟩ := lay_triple _ _ hE
+  have hv : (ZK.Table.View.pre (C.T c).tab ((C.T c).tab.view w ω)).2.1 r =
+      honestMasked (tablesAtZK dj y₀ S R) y.x.st c r (zWith y.x.st w ω.1) (ω.2.1.2.1 r)
+        ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm) := funext fun i => by
+    show _ + _ = _ + _
+    refine congrArg (_ + ·) ?_
+    rw [Function.comp_apply, show (padEquiv (C.T c).tab.nE).symm (Fin.castAdd 4 i) = .inl i from
+      (Equiv.symm_apply_eq _).2 (Fin.ext (by simp [padEquiv]))]
+    rfl
+  have hinner : (ZK.Table.View.pre (C.T c).tab ((C.T c).tab.view w ω)).2.2.2.2.1 r =
+      (innerEps (tablesAtZK dj y₀ S R) y.x.st c r *
+          ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
+            (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).fa) +
+        ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
+          (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).tx),
+       ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
+          (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).fb) +
+        ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
+          (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).ty)) := by
+    rw [comp_symm_lt _ _ hfa, comp_symm_lt _ _ hfb, htx, hty, comp_symm_tail _ 1 (by omega),
+      comp_symm_tail _ 2 (by omega)]
+    rfl
+  have hab : ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
+        (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).hab) =
+      ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
+          (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).fa) *
+        ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
+          (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).fb) := by
+    rw [comp_symm_lt _ _ hfa, comp_symm_lt _ _ hfb,
+      show ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).hab = ix (C.T c).tab.nE ((C.T c).tab.nE + 0) from
+        congrArg _ hE, comp_symm_tail _ 0 (by omega)]
+    rfl
+  have htw' : ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
+        (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).tw) =
+      ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
+          (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).tx) *
+        ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
+          (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).ty) := by
+    rw [htw, htx, hty, comp_symm_tail _ 1 (by omega), comp_symm_tail _ 2 (by omega), comp_symm_tail _ 3 (by omega)]
+    rfl
+  rw [hv, hinner]
+  refine rows_honest (tablesAtZK dj y₀ S R) y.x.st c r (zWith y.x.st w ω.1) (ω.2.1.2.1 r) _ hE ?hm ?hk ?hw
+    (rF_ne_one _ _ c r (hc.2.2.2 r)) ?hA ?hB _ ?hs0 ?hs1 ?hk0 ?hL ?hT ((C.T c).tab.y1' w ω.1 ω.2.1.2.1 r)
+    (fun _ => rfl) hab htw' k
+  -- the executable statement's sizes are the table's, and the schedule's lane split
+  case hm => sorry
+  case hk => sorry
+  case hk0 => sorry
+  case hL => sorry
+  -- the prover's table `z = (w, u)` satisfies the statement
+  case hw => sorry
+  -- the clear `final_a`, `final_b` are the `a`, `b` claims at the zerocheck's coins
+  case hA => sorry
+  case hB => sorry
+  -- the masked claims' `ŝ` is the honest `shat` at the replay's claims, and the opening's target is `Σ_y f(y)·b(y)`
+  case hs0 => sorry
+  case hs1 => sorry
+  case hT => sorry
 
 end FlockSoundness.Discharge.Composed
