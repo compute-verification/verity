@@ -62,14 +62,11 @@ LABELLED DECISIONS (design rule, Draft 3 §7: a difference from a reference mani
 the finding or the changed policy).  `[[rows.<row>.decisions]]` in fixtures.toml: `check`, `since` (release / commit), `finding`,
 `reason`, `expected` (values the check's `actual` must state).  A check whose result differs from v1 consults them (`resolver.sanction`):
 ALL of one decision's `expected` reproduced -> PASS with `sanctioned_by=<finding>` in the check's canonical JSON (junit property too);
-neither v1 nor a decision reproduced -> FAIL naming both.  Malformed / `expected`-less decisions sanction nothing.  Today one decision:
-#57 `manifest_digest` since r19-int-22 (F-r19-int-20: `Bf16MulScalarTensor_v1`, classified interior BY NAME by v1, is a module-body
-output read by layer 0; promotion adds exactly its 432 identities -> 163484, complete) -- `test_negative_57` accepts the refusal OR it.
+neither v1 nor a decision reproduced -> FAIL naming both.  Malformed / `expected`-less decisions sanction nothing.  #57's
+`manifest_digest` decisions are what `test_negative_57` accepts in place of the refusal.
 A decision's `status` is `accepted` (absent = accepted: Daniel confirmed it) or `pending_review` (labelled by a lane, awaiting Daniel);
-both sanction, and which side reproduced is recorded as junit property `matched`.  Today three pending: #67 / #68
-`manifest_digest` (F-r19-int-24: `MoeSum_v1`, FusedMoE.forward's returned tensor, read by the next layer's fused add+norm -> boundary
-under Q_module_body_v1; v1 classed it interior by name) and #57 `coverage` (MAN-02: the incomplete v1 manifest is refused, every
-identity counted missing where v1 recorded missing_n = 0).  A decision may also own an INPUT pin (`pins."manifest.json" = { bytes,
+both sanction, and which side reproduced is recorded as junit property `matched`; `python -m tests.regression.decisions --pending`
+lists the pending ones.  A decision may also own an INPUT pin (`pins."manifest.json" = { bytes,
 sha256 }`: F-r19-int-20's r19-int-22 manifest) -- `resolver.Row._checked` accepts it where the frozen v1 pin fails, junit property
 `pinned_by`.  `python -m tests.regression.decisions` (or `-k decisions -s`) lists them all with their status.  Decisions are
 hand-written and carried over when lift_expected.py regenerates fixtures.toml.
@@ -217,8 +214,8 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict, record_pro
 def test_negative_57_refusal_reproduces(record_property) -> None:
     """#57 gemma2-2b: the v1 Commit REFUSED to build the manifest (unmodelled `Bf16MulScalarTensor_v1` unnamed crossing) -- the negative
     case.  The current code, rebuilding from #57's Programs, must refuse the same way (no complete manifest; the unmodelled family named)
-    OR state exactly what a labelled decision on the fixture sanctions (`[[rows.<row>.decisions]]`, check `manifest_digest`; today
-    F-r19-int-20: the promoted, complete manifest) -- anything else fails naming both."""
+    OR state exactly what a labelled decision on the fixture sanctions (`[[rows.<row>.decisions]]`, check `manifest_digest`:
+    F-r19-int-20's promoted, complete manifest; S1's Q_word manifest of record) -- anything else fails naming both."""
     if not ENABLED:
         pytest.skip("set VERITY_REGRESSION=1 to run the R19 reference regression")
     _skip_rebuild("the #57 negative", os.environ.get(resolver.CANDIDATE_ENV))
