@@ -105,7 +105,9 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
                          "verity_vllm/program/boolean.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
-                         "verity_vllm/engine/env.py")
+                         "verity_vllm/engine/env.py",
+                         # the derive's report (`DeriveReport`, `DeriveSession`)
+                         "verity_vllm/program/frontend/report.py")
 
 
 def construction_version(rules, root: str | None = None) -> dict:

@@ -47,7 +47,7 @@
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1125},
     {"file": "verity_vllm/pipeline/tp/fold_match.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 151},
     {"file": "verity_vllm/pipeline/tp/match.py", "kind": "function", "symbol": "_check_main", "detail": "lines", "count": 208},
-    {"file": "verity_vllm/program/frontend/derive.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 982},
+    {"file": "verity_vllm/program/frontend/derive.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 972},
     {"file": "verity_vllm/program/frontend/emit.py", "kind": "function", "symbol": "emit_correspondence", "detail": "lines", "count": 215},
     {"file": "verity_vllm/program/frontend/rules/family.py", "kind": "function", "symbol": "match_program", "detail": "lines", "count": 197},
     {"file": "verity_vllm/program/frontend/rules/reference.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 879},
