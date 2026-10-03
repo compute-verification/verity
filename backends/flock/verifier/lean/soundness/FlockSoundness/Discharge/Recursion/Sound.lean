@@ -56,6 +56,46 @@ theorem recursive_sound [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos]
     prob (fun o => Acc o.1 o.2.1 o.2.2.1 o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1)) (recGame L Reg I Cm outer) σ ≤
       εo + εP + ∑ k ∈ Finset.range I.r,
         (expAt σ (εtr k σ.1) + (∑ pos, κ k pos) * ENNReal.ofReal (Real.sqrt (q k ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
-  sorry
+  classical
+  have hst : ∀ k, k < I.r → ∀ ω, ∃ refv : List (Cm × I.Coin) → Cm → Pos → V,
+      leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
+        (fun t s => prob (fun b => Acc σ.1 ω t b ∧
+            (wmsg (dec σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)))[k]? ≠
+              (t[k]?).map fun e => msg (refv (t.take k) e.1))
+          (outer σ.1 ω t) (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω) ≤
+        leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
+          (fun t s => εtr k σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω) +
+        (∑ pos, κ k pos) * ENNReal.ofReal (Real.sqrt (q k ^ 2 / 2 ^ (513 : ℝ))) := fun k hk ω =>
+    stage_bind ob cmt msg hk _ (fun t s => T k σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s))
+      (σ.2 ω)
+      (fun t s m => prob (fun b => Acc σ.1 ω t b ∧
+          (wmsg (dec σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)))[k]? ≠ m)
+        (outer σ.1 ω t) (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s))
+      (fun t s => εtr k σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (κ k) (htr k hk ω)
+      fun pos => hCR k hk ω pos
+  let refAll : ℕ → L.Ω → List (Cm × I.Coin) → Cm → Pos → V := fun k ω =>
+    if hk : k < I.r then (hst k hk ω).choose else fun _ _ _ => Classical.arbitrary V
+  have hrefAll : ∀ k (hk : k < I.r) ω, refAll k ω = (hst k hk ω).choose := fun k hk ω => dite_eq_left hk
+  refine commit_and_prove σ Acc x dec wstmt wmsg (fun ω p c => msg (refAll p.length ω p c)) _ hout hP
+    (fun k hk => ?_) hin
+  unfold probAt expAt
+  calc avg (fun ω => leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
+        (fun t s => prob (fun b => Acc σ.1 ω t b ∧
+            (wmsg (dec σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)))[k]? ≠
+              (t[k]?).map fun e => msg (refAll (t.take k).length ω (t.take k) e.1))
+          (outer σ.1 ω t) (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω))
+      = avg (fun ω => leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
+        (fun t s => prob (fun b => Acc σ.1 ω t b ∧
+            (wmsg (dec σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)))[k]? ≠
+              (t[k]?).map fun e => msg ((hst k hk ω).choose (t.take k) e.1))
+          (outer σ.1 ω t) (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω)) := by
+        refine congrArg avg (funext fun ω => leafAvg_congr_len (fun t s ht => ?_) _)
+        have hlen : (t.take k).length = k := by rw [List.length_take, ht]; exact min_eq_left hk.le
+        rw [hlen, hrefAll k hk ω]
+    _ ≤ avg fun ω => leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
+          (fun t s => εtr k σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω) +
+        (∑ pos, κ k pos) * ENNReal.ofReal (Real.sqrt (q k ^ 2 / 2 ^ (513 : ℝ))) :=
+        avg_mono fun ω => (hst k hk ω).choose_spec
+    _ = _ := by rw [avg_add, avg_const]
 
 end FlockSoundness.Discharge.Recursion
