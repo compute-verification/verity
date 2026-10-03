@@ -277,10 +277,10 @@ theorem band_meets_64_d1 (d : ℕ) (hd : 1 ≤ d) (salt : Bits 256) :
 /-! ## Proposal, not approved and not pinned: `D = 0`, `k = 89`
 
 At `D = 0` the responder makes no `Π₂` call and answers from its state alone, so the band needs no bound on its
-in-degree (every `d ≥ 0`). The same recipe gives `k = 89`, which `N = 1` (`p₀ ≤ 0.949459`) and `N ≥ 2` (`p₀ ≤ 0.949106`
-at `N = 2`) both need, with `r = 9495/10000` (`r^89 ≈ 0.00993`). `ProposedBandMultiMeetsFamilyD0` is
-`BandMultiMeetsFamily` with `D = 0`, `k = 89` and no bound on `d`. It is not a guarantee: it is not in `Pous.Guarantees`,
-not pinned, and cited by nothing. -/
+in-degree (every `d ≥ 0`). The same recipe gives `k = 89`, which `N = 1` (`p₀ ≤ 0.949459`) and `N ≥ 2`
+(`p₀ ≤ 0.949106` at `N = 2`) both need, with `r = 9495/10000` (`r^89 ≈ 0.00993`). `ProposedBandMultiMeetsFamilyD0` is
+`BandMultiMeetsFamily` with `D = 0`, `k = 89` and no bound on `d`. It is not a guarantee: it is not in
+`Pous.Guarantees`, not pinned, and cited by nothing. -/
 
 /-- **Proposed, not approved: the band store at `D = 0` rounds and `k = 89`**, every `1 ≤ N ≤ 2^64` and every `d`,
 both domain layouts. -/
