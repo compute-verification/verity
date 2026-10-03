@@ -50,7 +50,7 @@ def case_vector(case: str, circuit: str, k: int, dev: str | None) -> dict:
         for port, words in t.regions(role, index).items():
             anchor = t.shape.ports[role]["regions"][port]
             d = t.shape.derivations[anchor]
-            r = {"port": port, "anchor": anchor, "seed": d.seed, "derive": d.name, "bits": d.bits, "n_words": len(words),
+            r = {"port": port, "anchor": anchor, "seed": d.seed, "derive": d.rule, "bits": d.bits, "n_words": len(words),
                  "bytes_sha256": hashlib.sha256(region_bytes(words)).hexdigest()}
             if d.per_row:
                 r["bytes"] = region_bytes(words).hex()

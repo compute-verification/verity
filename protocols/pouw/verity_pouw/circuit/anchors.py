@@ -18,10 +18,11 @@ The tile checks' (`pc4`, `pc8`) anchored inputs are derived values, not ids: the
 G = F_Bᵀ·F_A, which the verifier derives from the scheme's seeds (`TileAnchors`, from `noise(ctx)`: seed_A reads the salt,
 A's root, B's registered root and the matmul index, seed_B the salt and B's root).  The call's Program and the weight's both
 read F_A and F_B; E_A is the call's alone, E_B and G the weight's.  In a unit's proof each is a C-Flock public input region
-(an ``In`` region): the unit's ports (`pc4.PORTS`, `pc8.PORTS`) name it, with its recomputation (`Derivation`: the seed, the
-domain and the derivation function, `Shape.derivations`; as C-Flock's circuit names it, `public_ports`), and the verifier
-values it from its own `--public-inputs` file (`TileAnchors.public_inputs`), whose content for one unit is
-`TileAnchors.regions`: each region's u16 words (`region_words`), every value unpacked, the region whole 128-bit words.
+(an ``In`` region): the unit's ports (`pc4.PORTS`, `pc8.PORTS`) name it, with its recomputation (`Derivation`: the rule, the
+seed, the domain and the derivation function, `Shape.derivations`; as C-Flock's circuit names it, `public_ports`: the seed's
+label and the rule's versioned id), and the verifier values it from its own `--public-inputs` file
+(`TileAnchors.public_inputs`), whose content for one unit is `TileAnchors.regions`: each region's u16 words
+(`region_words`), every value unpacked, the region whole 128-bit words.
 
 A window's `Receipt` lists every call of the window, each with its anchors, shape and commitment, complete and immutable
 before any key exists. `Ledger.open` derives the window's key from it alone, a fresh source under the receipt's digest,
@@ -33,6 +34,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import re
 import secrets
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
@@ -104,23 +106,28 @@ ANCHORED = ("ea", "eb", "fa", "fb", "g")
 WORD_BITS, REGION_WORD_BITS = 16, 128
 
 
+#: an anchor's rule id: the scheme, the anchor and the rule's version, never a workload's values or a Python name
+ANCHOR_RULE = re.compile(r"verity/pouw/anchor/[a-z0-9-]+/[a-z0-9]+/v(0|[1-9][0-9]*)")
+
+
 @dataclass(frozen=True)
 class Derivation:
-    """How the verifier recomputes one anchor, which its public input region names: the seed it reads (``seed``: the
-    scheme's ``noise(ctx).seed_a`` or ``.seed_b``), the scheme's domain separation of it (``domain``), the function that
-    derives it (``fn(shape, seed, index)``: one line for global row ``index`` when ``per_row``, else the whole anchor, flat in
-    its parameter's leaf order) and each value's width in bits."""
+    """How the verifier recomputes one anchor, which its public input region names: its rule (``rule``, `ANCHOR_RULE`'s
+    form: the id C-Flock's circuit pins, so a new rule is a new version), the seed it reads (``seed``: the scheme's
+    ``noise(ctx).seed_a`` or ``.seed_b``), the scheme's domain separation of it (``domain``), the function that derives it
+    (``fn(shape, seed, index)``: one line for global row ``index`` when ``per_row``, else the whole anchor, flat in its
+    parameter's leaf order) and each value's width in bits."""
 
+    rule: str
     seed: str
     domain: str
     fn: Callable[[Any, bytes, int | None], Sequence[int]]
     bits: int
     per_row: bool = False
 
-    @property
-    def name(self) -> str:
-        """The derivation function, by qualified name."""
-        return f"{self.fn.__module__}.{self.fn.__qualname__}"
+    def __post_init__(self) -> None:
+        if not (isinstance(self.rule, str) and ANCHOR_RULE.fullmatch(self.rule)):
+            raise ValueError(f"an anchor's rule is a versioned id, verity/pouw/anchor/<scheme>/<anchor>/v<n>: {self.rule!r}")
 
 
 def region_words(values: Sequence[int], bits: int) -> list[int]:
@@ -147,11 +154,11 @@ PUBLIC_INPUTS_FORMAT = "verity/flock-public-inputs/v1"
 def public_ports(shape, role: str) -> dict[str, dict[str, str]]:
     """``role``'s public input ports as C-Flock's circuit names them (``compose``'s ``public_inputs``, META's
     ``public_inputs``), in the unit's parameter order: each region's seed by the scheme's label for it (``shape.seeds``) and
-    its derivation function (`Derivation.name`)."""
+    its derivation by its rule id (`Derivation.rule`)."""
     out = {}
     for port, anchor in shape.ports[role]["regions"].items():
         d = shape.derivations[anchor]
-        out[port] = {"seed": shape.seeds[d.seed], "derivation": d.name}
+        out[port] = {"seed": shape.seeds[d.seed], "derivation": d.rule}
     return out
 
 
@@ -440,5 +447,5 @@ def replay_key(record: dict[str, str]):
     return derive(bytes.fromhex(record["source"]), DRAW_DOMAIN, {"receipt": bytes.fromhex(record["receipt"])})
 
 
-__all__ = ["ANCHORED", "Anchors", "Derivation", "Ledger", "PUBLIC_INPUTS_FORMAT", "REGION_WORD_BITS", "Receipt", "TileAnchors",
-           "WORD_BITS", "public_ports", "region_bytes", "region_words", "replay_key"]
+__all__ = ["ANCHORED", "ANCHOR_RULE", "Anchors", "Derivation", "Ledger", "PUBLIC_INPUTS_FORMAT", "REGION_WORD_BITS", "Receipt",
+           "TileAnchors", "WORD_BITS", "public_ports", "region_bytes", "region_words", "replay_key"]

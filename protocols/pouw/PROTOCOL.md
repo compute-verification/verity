@@ -735,9 +735,10 @@ useful    U/(α_A·α_B), glue
     is a function of them. `check_inputs` refuses any other. Both Programs read F_A and F_B; E_A is the call's, E_B and
     G the weight's.
   - In a unit's proof each anchored input is a C-Flock public input region (`In`), costing no gate: `pc4.PORTS` names
-    each row unit's regions, and each region names its recomputation (`pc4.DERIVATIONS`: the seed, the domain and the
-    derivation function; as C-Flock's circuit names them, `anchors.public_ports`: the seed by the scheme's label,
-    `pc4.SEEDS`, and the function by name). The verifier values them from its own `--public-inputs` file
+    each row unit's regions, and each region names its recomputation (`pc4.DERIVATIONS`: the rule, the seed, the domain
+    and the derivation function; as C-Flock's circuit names them, `anchors.public_ports`: the seed by the scheme's label,
+    `pc4.SEEDS`, and the rule by its versioned id, `verity/pouw/anchor/pearl-c4/<anchor>/v1`, never the function's
+    Python name, since both strings are in C-Flock's circuit pin). The verifier values them from its own `--public-inputs` file
     (`TileAnchors.public_inputs`, C-Flock's `verity/flock-public-inputs/v1`: a header line naming the ports, then each
     instance's regions), whose content for one unit is `TileAnchors.regions`: every value unpacked into u16 words (one
     per E2M1 code, two per FP32 word of G, low half first), each region whole 128-bit words, its bytes the words
