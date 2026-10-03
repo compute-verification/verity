@@ -1913,6 +1913,24 @@ def test_fill_runner_runs_an_owner_in_cpu_sets_on_its_own_cpus_beside_the_shared
     assert fr.mem_peak_gb(os.getpid()) == 12.34 and fr.mem_peak_gb(2**22 + 7) is None
 
 
+def test_slot_d_runs_through_a_window_only_on_a_slot_d_runs_clause(tmp_path):
+    """Node 2, 3 Oct 2:22 PM UTC: circuits' 14:30Z window said "no merge checks on node 2 through it (no slot-d=runs)", and the
+    words alone let slot d run into it. A window that starts in 2000 and lasts 190 years is open whatever the time."""
+    src = (NEBIUS / "check_slot_d.sh").read_text()
+    program = src[src.index("\n", src.index("<< 'EOF'")) + 1:src.index("\nEOF\n")]
+    windows = tmp_path / "windows"
+
+    def refuses(comment: str) -> bool:
+        windows.write_text(f"# slot-d=runs in a header line\n2000-01-01T00:00Z 99999999 # {comment}\n")
+        return subprocess.run([sys.executable, "-", str(windows), "30"], input=program, text=True,
+                              capture_output=True).returncode != 0
+
+    assert refuses("circuits TP8; no merge checks on node 2 through it (no slot-d=runs)")
+    assert refuses("circuits TP8 (slot-d=runs only for the 8:00 run)")
+    assert not refuses("pouw-ncp, bc-2f661c92 (fallback 13:35Z); slot-d=runs (its host threads stay off 0-47)")
+    assert not refuses("slot-d=runs: Pearl-C4 re-time")
+
+
 def test_fill_runner_pauses_cpu_sets_jobs_on_slot_d_while_a_train_check_holds_its_lock(tmp_path, monkeypatch):
     """Compute accounting (1 Oct 8:58 AM PDT): GPU 0's verifies go back on 0-47 yielding to slot d's train checks. A check runs in
     a login session's cgroup, where nice 19 can't reach, so the runner starts none and pauses its running ones while the check
