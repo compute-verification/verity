@@ -3,10 +3,11 @@
   research data put  --kind K [--meta JSON|@file] [--ref name=art:...]... [--file PATH | --tree DIR] [--preserve]   -> art id
   research data show ART|ATTEMPT|DRV [--json]      manifest / attempt / attempts with that derivation
   research data where ART [--json]                 replicas: local / repo / remote (+ verified_utc)
-  research data push [ART|RUN ...] [--pending] [--no-labels] [--jobs N] [--verify head|readback]
+  research data push [ART|RUN ...] [--pending] [--except-attempts FILE] [--no-labels] [--jobs N] [--verify head|readback]
                                                    preserve on the remote: blobs uploaded concurrently and verified, then the manifest (PRESERVED);
                                                    a run pushes its attempt + outputs + the assertions about them (attempt, derivation, outputs);
-                                                   --pending pushes everything local the remote lacks, assertions included
+                                                   --pending pushes everything local the remote lacks, assertions included;
+                                                   --except-attempts pushes none of the attempts FILE lists
   research data labels-sync [--push-only|--pull-only|--from-backup ART|--from-dir DIR] [--jobs N] [--json]
                                                    union labels/ with the remote's labels/<target>/<content sha256>.json (nothing overwritten, ever);
                                                    --from-backup unions a labels-backup/v1 tarball, --from-dir another store's labels/
@@ -788,10 +789,12 @@ def cmd_push(argv: list[str]) -> int:
     ap.add_argument("--verify", choices=["head", "readback"], default="head",
                     help="per-object check: head = Content-Length + single-part ETag == MD5 (default); readback = download + sha256")
     ap.add_argument("--no-labels", action="store_true", help="do not push assertions (a run's: about it, its derivation and its outputs; --pending: all local ones)")
+    ap.add_argument("--except-attempts", metavar="FILE", help="push none of the attempts FILE lists (run ids, whitespace-separated)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     if ns.jobs < 1:
         raise ValueError("--jobs must be >= 1")
+    held = set(Path(ns.except_attempts).read_text().split()) if ns.except_attempts else set()
     st = LocalStore(ns.store)
     from .local import attempt_key  # noqa: PLC0415
 
@@ -804,6 +807,9 @@ def cmd_push(argv: list[str]) -> int:
         queue = st.pending()
         arts += queue["artifacts"]
         runs += queue["attempts"]
+    if held & set(runs):
+        print(f"research data push: {len(held & set(runs))} attempt(s) left out ({ns.except_attempts})", file=sys.stderr)
+        runs = [x for x in runs if x not in held]
     reports: list[dict] = []
     label_targets: dict[str, list[str]] = {}                       # report id -> the label targets its durability covers
     from . import labels_sync as LS  # noqa: PLC0415

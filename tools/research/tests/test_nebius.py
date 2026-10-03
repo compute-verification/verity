@@ -1762,7 +1762,8 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     the Secret's R2: `research data custody --publish --keep-local`, --force --runner-gone for a status that never became terminal
     once Kubernetes says its pod is gone. A run that never ran its workload is held (never published as evidence) until a label
     lifts it, and so is one over the bounds and one whose remote holds another attempt document (after its one Job), until
-    `--reconcile`. Node 2's relay copies, live runs, settling runs and an attempt published without its run record get no Job. A
+    `--reconcile`. Node 2's relay copies, live runs, settling runs and an attempt published without its run record get no Job (one
+    R2 lacks is held record-less, and the pending push leaves it out, until a person rules). A
     round runs at most VY_CUSTODY_MAX_RUNS Jobs within VY_CUSTODY_PASS_S, runs that failed before going last, none in node 1's daily
     hold, and starts each store's pending push."""
     from research.store import attempt as A
@@ -1824,20 +1825,23 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     assert "no Job: 1 not run by this machine, 1 settling (triage lists them)" in dry.stdout
     assert R["n2copy"] not in dry.stdout and R["fresh"] not in dry.stdout and R["live"] not in dry.stdout
     assert f"would start {jobs}/store's pending push (Job n1-store-push-jobs)" in dry.stdout
+    assert f"1 record-less attempt(s) held ({state}/record-less-*)" in dry.stdout and not list(state.glob("record-less-*"))
     assert "sudo -n -u #1000 env" in log.read_text() and "sudo -n -u #1001 env" in log.read_text()
 
     unbounded = round_(VY_CUSTODY_PASS_S="0")
     assert unbounded.returncode == 1 and created() == ["n1-store-push-jobs", "n1-store-push-research"], unbounded.stdout
-    assert "round bounded (0 Job(s) in" in unbounded.stdout and "6 run(s) left" in unbounded.stdout
+    assert "round bounded (0 Job(s) in" in unbounded.stdout and "5 run(s) left" in unbounded.stdout
     assert held() == [R["empty"], R["big"]] and "2 run(s) held" in unbounded.stdout
     assert f"research data label {R['empty']} custody never-ran --by WHO) and the hold lifts itself" in unbounded.stdout
+    assert (state / "record-less-jobs").read_text() == f"{R['legacy']}\n" and (state / "record-less-research").read_text() == ""
     push = job("n1-store-push-research")["job"]
     assert push["spec"]["template"]["spec"]["securityContext"] == {"runAsUser": 1001, "runAsGroup": 1001}
     assert push["spec"]["ttlSecondsAfterFinished"] == 3600 and "research data push --pending --jobs 8" in command("n1-store-push-research")[5]
-    assert command("n1-store-push-research")[6:] == ["n1-custody", str(node.src), str(node.py), f"{research}/store", f"{research}/runs"]
+    assert command("n1-store-push-research")[6:] == ["n1-custody", str(node.src), str(node.py), f"{research}/store", f"{research}/runs",
+                                                     "--except-attempts", f"{state}/record-less-research"]
 
     bounded = round_(VY_CUSTODY_MAX_RUNS="1")
-    assert bounded.returncode == 1 and created()[2:] == [n1["done"]] and "5 run(s) left" in bounded.stdout, bounded.stdout
+    assert bounded.returncode == 1 and created()[2:] == [n1["done"]] and "4 run(s) left" in bounded.stdout, bounded.stdout
     assert preserved(J["done"]) and LocalStore(jobs / "store", config_path=tmp_path / "vault.toml").get_attempt(R["done"])
     spec = job(n1["done"])["job"]["spec"]
     pod = spec["template"]["spec"]
@@ -1850,14 +1854,14 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
 
     first = round_(FAIL_RUN=R["fails"])
     assert first.returncode == 1, first.stdout + first.stderr
-    assert created()[3:] == [n1["dead"], n1["fails"], n1["legacy"], n1["conflict"], n1["research"]]
+    assert created()[3:] == [n1["dead"], n1["fails"], n1["conflict"], n1["research"]]
     assert command(n1["dead"])[-3:] == [str(J["dead"]), "--force", "--runner-gone"]
     assert f"kubectl get pod pod-{R['dead']} --namespace=default --output=name --request-timeout=30s" in log.read_text()
     assert preserved(J["dead"]) and preserved(research / "runs" / R["research"])
     assert job(n1["research"])["job"]["spec"]["template"]["spec"]["securityContext"]["runAsUser"] == 1001
     assert LocalStore(research / "store", config_path=tmp_path / "vault.toml").get_attempt(R["research"])
     assert f"{R['fails']} (r21-fixture, failed): Job failed (1 so far): Job {n1['fails']}: Error: boom; the next round" in first.stdout
-    assert f"{R['legacy']} (r21-fixture, done): its attempt is on R2 without a run record" in first.stdout
+    assert "1 record-less attempt(s) held" in first.stdout and not (vault / attempt_key(R["legacy"])).exists()
     assert f"{R['conflict']} (r21-fixture, done): held: R2 holds another attempt document" in first.stdout
     assert f"vy-custody --reconcile {R['conflict']} --by WHO" in first.stdout
     assert held() == [R["empty"], R["big"], R["conflict"]] and (state / "failures" / R["fails"]).read_text() == "1\n"
@@ -1865,22 +1869,22 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
 
     run(jobs, R["new"], "done")
     newer = round_(VY_CUSTODY_MAX_RUNS="1")
-    assert created()[8:] == [n1["new"]], "a run that failed before goes last"
-    assert newer.returncode == 1 and "1 run(s) left" in newer.stdout and "1 attempt-no-record" in newer.stdout, newer.stdout
+    assert created()[7:] == [n1["new"]], "a run that failed before goes last"
+    assert newer.returncode == 1 and "1 run(s) left" in newer.stdout, newer.stdout
     second = round_()
-    assert created()[9:] == [n1["fails"]] and preserved(J["fails"]) and not list((state / "failures").iterdir())
+    assert created()[8:] == [n1["fails"]] and preserved(J["fails"]) and not list((state / "failures").iterdir())
     assert second.returncode == 1 and "3 run(s) held" in second.stdout
 
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(absent))
     assert data_main(["label", R["empty"], "custody", "never-ran", "--by", "test", "--store", str(jobs / "store")]) == 0
     lifted = round_()
-    assert f"{R['empty']}: hold lifted" in lifted.stdout and held() == [R["big"], R["conflict"]] and len(created()) == 10, lifted.stdout
+    assert f"{R['empty']}: hold lifted" in lifted.stdout and held() == [R["big"], R["conflict"]] and len(created()) == 9, lifted.stdout
 
     with (state / ".lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         busy = round_("--reconcile", R["conflict"], "--by", "test")
         assert busy.returncode == 3 and "--reconcile after it" in busy.stderr
-        assert round_().returncode == 0 and len(created()) == 10, "a round never waits on another"
+        assert round_().returncode == 0 and len(created()) == 9, "a round never waits on another"
     assert round_("--reconcile", "r20261003-000099-0099", "--by", "test").returncode == 2
     rec = round_("--reconcile", R["conflict"], "--by", "test")
     assert rec.returncode == 0 and f"{R['conflict']}: reconciled by test" in rec.stdout, rec.stdout + rec.stderr
@@ -1893,8 +1897,11 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     assert relay.returncode == 0 and "(node 2's copy: remove n2_custody.sh's hold on node 2" in relay.stdout and preserved(J["relay"])
 
     (state / "held" / R["big"]).unlink()
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(node.remote))
+    assert data_main(["push", R["legacy"], "--store", str(jobs / "store")]) == 0       # a person's ruling: on R2 as it is
     done = round_(VY_CUSTODY_MAX_FILES="20")
     assert done.returncode == 0 and created()[-1] == n1["big"] and preserved(J["big"]), done.stdout
+    assert "record-less" not in done.stdout and "1 attempt-no-record" in done.stdout and (state / "record-less-jobs").read_text() == ""
     assert round_().returncode == 0 and created()[-1] == n1["big"], "nothing left: no Job"
     pending = round_(FAIL_PENDING="1")
     assert pending.returncode == 1 and f"{jobs}/store: the pending push failed (Job n1-store-push-jobs" in pending.stdout
@@ -2054,6 +2061,42 @@ def test_n1_custody_takes_a_run_dirs_text_as_data_never_as_a_plan_line_or_a_shel
     assert out.returncode == 1 and not pwned.exists() and node.held() == [evil], out.stdout + out.stderr
     assert "touch" not in out.stdout and node.created() == [f"n1-custody-{odd}", "n1-store-push-jobs", "n1-store-push-research"]
     assert node.command(f"n1-custody-{odd}")[6:] == ["n1-custody", str(node.src), str(node.py), f"{node.jobs}/store", f"{node.jobs}/runs", str(d)]
+
+
+@N1_CUSTODY
+def test_n1_custody_pushes_no_record_less_attempt_that_never_left_node_1(tmp_path, monkeypatch):
+    """#1004's red-team F7: a local attempt published without its run record that R2 lacks is `attempt-unpreserved`, so a round ran
+    `custody --publish` on it, and each store's pending push takes every attempt R2 lacks: R2's write-once key would keep it without
+    its logs for good (28 under node 1's /workspace/jobs/runs on 3 Oct). Until a person rules, a round holds them record-less: no
+    Job, one line counting them, a failed round, nothing superseded, and STATE/record-less-STORE, which the pending push's own
+    command leaves out. Once one is on R2 (pushed by hand, as it is) triage calls it attempt-no-record, and it is no longer held."""
+    from research.store import attempt as A
+    from research.store.cli import main as data_main
+    from research.store.local import LocalStore, attempt_key
+
+    node = _n1_custody(tmp_path)
+    rid, ok = "r20261003-200000-1101", "r20261003-200000-1102"
+    d = node.run(node.jobs, rid, "done")
+    node.run(node.jobs, ok, "done")
+    assert A.publish(d, store=LocalStore(node.jobs / "store", config_path=node.absent), remote_push=False, run_record=False)["published"]
+    for p in d.rglob("*"):
+        os.utime(p, (N1_OLD, N1_OLD))
+    out = node.round_()
+    assert out.returncode == 1 and node.created() == [f"n1-custody-{ok}", "n1-store-push-jobs", "n1-store-push-research"], out.stdout + out.stderr
+    assert f"1 record-less attempt(s) held ({node.state}/record-less-*)" in out.stdout and not node.held()
+    assert (node.state / "record-less-jobs").read_text() == f"{rid}\n" and (node.state / "record-less-research").read_text() == ""
+    push = node.command("n1-store-push-jobs")
+    assert push[-2:] == ["--except-attempts", f"{node.state}/record-less-jobs"]
+    pushed = subprocess.run(["bash", "-c", push[5].replace("HOME=/tmp", f"HOME={tmp_path / 'home'}"), *push[6:]], capture_output=True,
+                            text=True, env={**os.environ, "RESEARCH_STORE_CONFIG": str(node.remote)})
+    assert f"1 attempt(s) left out ({node.state}/record-less-jobs)" in pushed.stderr, pushed.stdout + pushed.stderr
+    assert not (node.vault / attempt_key(rid)).exists() and not (node.jobs / "store" / "attempts" / ".superseded").exists()
+
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(node.remote))
+    assert data_main(["push", rid, "--store", str(node.jobs / "store")]) == 0
+    after = node.round_()
+    assert after.returncode == 0 and "record-less" not in after.stdout and "1 attempt-no-record" in after.stdout, after.stdout
+    assert (node.state / "record-less-jobs").read_text() == "" and len(node.created()) == 3
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")

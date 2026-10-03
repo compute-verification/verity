@@ -19,7 +19,10 @@
 # its records have been quiet. A run that never ran its workload (a status before `running`, and none of ran_evidence's signs of a
 # start: a pid, a started, span_start or sampler_start event, a sampler reading, output) is held, never published as evidence, until
 # a `custody never-ran` label lifts it; any other is evidence, a killed run a failed attempt. `attempt-no-record` (an attempt
-# published without its run record, which it can never gain) gets no Job: triage lists it until a person waives its logs.
+# published without its run record, which it can never gain) gets no Job: triage lists it until a person waives its logs. A local
+# attempt published without its run record that never reached R2 (`attempt-unpreserved`) is held record-less: no Job, and each
+# store's pending push leaves out the ones STATE/record-less-STORE lists, since R2's write-once key would keep it without its logs;
+# one line counts them, and they fail the round until a person rules on them.
 # Bounds as n2_custody.sh's: at most VY_CUSTODY_MAX_RUNS Jobs, none started after VY_CUSTODY_PASS_S, runs that failed before going
 # last; a run dir over VY_CUSTODY_MAX_FILES files or VY_CUSTODY_MAX_GB GiB is held. A failed Job is logged with its last line and
 # retried every round, except a remote that holds another attempt document (triage's `conflict`; an attempt key is write-once), which
@@ -243,7 +246,8 @@ done
 
 # What to do with each run that needs action, one line each: "job|ROOT|RUN|GONE|CAMPAIGN|STATUS|FILES|BYTES" (runs that never failed
 # first; GONE, for a status that isn't terminal: `host` when this host saw its runner gone, else its pod's name to ask Kubernetes),
-# "hold|ROOT|RUN|WHY" (a hold to write), "lift|RUN|STATE" (a hold to remove), and one "note|..." summary
+# "hold|ROOT|RUN|WHY" (a hold to write), "recordless|ROOT|RUN" (a record-less attempt to leave unpushed), "lift|RUN" (a hold to
+# remove), and one "note|..." summary
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$SRC/tools/research/src" python3 - "$tmp" "$STATE" "$BOOT" "$MAX_FILES" "$MAX_GB" "$ROOTS" > "$tmp/plan" << 'EOF' || { log "refused: no plan"; exit 3; }
 import json, re, socket, sys
 from collections import Counter
@@ -271,14 +275,19 @@ def field(s):  # a run dir's text, for a plan line and the log: its writer is an
     return re.sub(r"[^A-Za-z0-9._:@+/-]", "?", str(s))[:80] or "?"
 
 
-fresh, retry, holds, seen, skipped = [], [], [], set(), Counter()
-for i, root in enumerate(s.split("=")[0] for s in sys.argv[6].split(",")):
+fresh, retry, holds, recordless, seen, skipped = [], [], [], [], set(), Counter()
+for i, (root, store) in enumerate(s.split("=")[:2] for s in sys.argv[6].split(",")):
     for row in json.loads((tmp / f"triage.{i + 1}").read_text())["rows"]:
         r, st = row["run"], row["state"]
         if st not in NEEDS_ACTION:
             continue
         seen.add(r)
         d = Path(root) / r
+        # an attempt published without a run record that never reached R2: pushed, its write-once key would hold no logs for good
+        if st == "attempt-unpreserved" and re.fullmatch(r"r[0-9a-z-]{1,63}", r) and not (
+                (read(Path(store) / "attempts" / f"{r}.json").get("outputs") or {}).get("run_record")):
+            recordless.append(f"recordless|{root}|{r}")
+            continue
         job = read(d / "job.json")
         if (job.get("environment") or {}).get("boot_id") not in boots or not re.fullmatch(r"r[0-9a-z-]{1,63}", r):
             skipped["not run by this machine"] += 1
@@ -313,18 +322,26 @@ for i, root in enumerate(s.split("=")[0] for s in sys.argv[6].split(",")):
                 continue
         line = f"job|{root}|{r}|{gone}|{field(camp)}|{status}|{int(row['files'])}|{int(row['bytes'])}"
         (retry if (state / "failures" / r).exists() else fresh).append(line)
-for line in [*fresh, *retry, *holds]:
+for line in [*fresh, *retry, *holds, *recordless]:
     print(line)
 for r in sorted(held - seen):
     print(f"lift|{r}")
 print("note|" + ", ".join(f"{n} {k}" for k, n in sorted(skipped.items())))
 EOF
 
-failed=0 tried=0 left=0 waiting=0
+key() { basename "$(dirname "$1")" | tr -cd 'a-z0-9-'; }   # key STORE: its pending push's name, and its record-less list's
+for spec in "${specs[@]}"; do
+  IFS='=' read -r root store uid <<< "$spec"
+  : > "$tmp/record-less.$(key "$store")"
+done
+failed=0 tried=0 left=0 waiting=0 recordless=0
 while IFS='|' read -r kind a b c camp status files bytes; do
   case $kind in
     note)
       [ -z "$a" ] || echo "no Job: $a (triage lists them)" ;;
+    recordless)
+      echo "$b" >> "$tmp/record-less.$(key "${STORE[$a]}")"
+      recordless=$((recordless + 1)) ;;
     lift)
       if [ "$DRY" = 1 ]; then echo "would lift the hold on $a: triage no longer lists it as needing action"; continue; fi
       rm -f "$STATE/held/$a" "$STATE/failures/$a"
@@ -392,8 +409,13 @@ for spec in "${specs[@]}"; do
   IFS='=' read -r root store uid <<< "$spec"
   [ -z "${done_store[$store]:-}" ] || continue
   done_store[$store]=1
-  name=n1-store-push-$(basename "$(dirname "$store")" | tr -cd 'a-z0-9-')
-  if c=$(kube get job "$name" -o jsonpath='{range .status.conditions[*]}{.type}={.status} {end}' 2> /dev/null); then
+  k=$(key "$store")
+  name=n1-store-push-$k
+  # written whole, before any push Job of this round reads it
+  if [ "$DRY" != 1 ] && ! { cp "$tmp/record-less.$k" "$STATE/.record-less-$k" && mv -f "$STATE/.record-less-$k" "$STATE/record-less-$k"; }; then
+    log "$store: no pending push: its record-less list not written to $STATE/record-less-$k"
+    failed=$((failed + 1))
+  elif c=$(kube get job "$name" -o jsonpath='{range .status.conditions[*]}{.type}={.status} {end}' 2> /dev/null); then
     case $c in
       *Failed=True*) log "$store: the pending push failed (Job $name: $(kube logs "job/$name" --tail=1 2>&1)); the next starts once its ttl ends"
         failed=$((failed + 1)) ;;
@@ -402,7 +424,7 @@ for spec in "${specs[@]}"; do
     echo "would start $store's pending push (Job $name)"
   elif dl=$(deadline 7200) && [ "$dl" -lt "$JOB_MIN_S" ]; then
     echo "$store: no pending push: $HOLD"
-  elif job "$name" "$uid" "$PENDING_S" "$dl" "$store" "$root" push; then
+  elif job "$name" "$uid" "$PENDING_S" "$dl" "$store" "$root" push --except-attempts "$STATE/record-less-$k"; then
     echo "$store: pending push started (Job $name, ${dl}s at most)"
   else
     log "$store: the pending push did not start (Job $name)"
@@ -413,5 +435,8 @@ done
 [ "$left" = 0 ] || log "round bounded ($tried Job(s) in ${SECONDS}s, at most $MAX_RUNS or ${PASS_S}s): $left run(s) left for the next round"
 held=$(ls "$STATE/held" | wc -l)
 [ "$held" = 0 ] || echo "$held run(s) held ($STATE/held/)"
+[ "$recordless" = 0 ] || echo "$recordless record-less attempt(s) held ($STATE/record-less-*): published here without a run record and never" \
+  "pushed, so R2's write-once key would keep each without its logs; no Job or pending push sends them, and nothing replaces them, until" \
+  "a person rules (pushed as they are, or each replaced here by an attempt that names its run record)"
 [ "$failed" = 0 ] || log "$failed run(s) not yet on R2"
-[ "$failed" = 0 ] && [ "$held" = 0 ]
+[ "$failed" = 0 ] && [ "$held" = 0 ] && { [ "$recordless" = 0 ] || [ "$DRY" = 1 ]; }
