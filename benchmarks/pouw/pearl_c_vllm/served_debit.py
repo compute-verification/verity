@@ -11,7 +11,9 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
   64 of its matmuls 1 each.
 - **Per tile:** the verdict at the scheme's cap; the debit and the cap of its credited cells and their ratio (over 1 is a
   rejection); the debit's share of the cells' credit, the cap over ρ (`tile_numbers`), which is already rev1's
-  (`creditDevRev1`, the first promotion add of every word out).
+  (`creditDevRev1`, the first promotion add of every word out); and the debit's two counts, its flagged atoms and its
+  later promotions into a +0 total (``atoms`` and ``later_zero_promotions``: `pearl_c_debit.chain_debit`, rev1's
+  `laterZeroPromos`), whose adds the debit already holds.
 - **The estimates** weight each stratum by its share of the pass's tiles and of its credited MACs (credited rows × credited
   columns × kept k, from the records), with the share over each cap within the stratum taken from its sample.
 
@@ -85,6 +87,16 @@ _DEBIT_CAP = PW._debit_cap
 def _recorded(*args, **kwargs):
     out = _DEBIT_CAP(*args, **kwargs)
     _SEEN.append(out)
+    return out
+
+
+_CHAINS: list = []
+_CHAIN_DEBIT = PW.D.chain_debit
+
+
+def _chain_recorded(*args, **kwargs):
+    out = _CHAIN_DEBIT(*args, **kwargs)
+    _CHAINS.append(out)
     return out
 
 
@@ -175,11 +187,14 @@ def one(tid: int) -> dict:
     kept = view.kept
     ops = kept[4] if kept is not None and kept[:4] == (ctx, tuple(a), tuple(b), ref.tile) else scheme.encode(ctx, scheme.noise(ctx), a, b, ref.tile)
     _SEEN.clear()
+    _CHAINS.clear()
     reason = PW.check_opened(scheme, rec, ref.tile, a, b, ops)
     rows, cols = rec.credited(ref.tile)
     out.update(ok=reason is None, reason=reason, credited_rows=len(rows), credited_cols=len(cols), macs=len(rows) * len(cols) * rec.k_kept)
     if rows and cols:
         out.update(tile_numbers(scheme, *(_SEEN[-1] if _SEEN else _DEBIT_CAP(scheme, rec, ref.tile, ops, rows, cols))))
+        if _CHAINS:
+            out["atoms"], out["later_zero_promotions"] = _CHAINS[-1]
     out["seconds"] = round(time.perf_counter() - t0, 1)
     return out
 
@@ -227,6 +242,8 @@ def summarize(label: str, job: dict, strata: dict, tiles: list[dict]) -> dict:
             "upper95_if_none_over": 1 - 0.05 ** (1 / n) if n else None,
             "share_max": worst["share"] if worst else None, "ratio_max": worst["ratio"] if worst else None,
             "worst": {k: worst[k] for k in ("tile", "matmul", "m", "k", "n", "row0", "col0", "share", "ratio")} if worst else None,
+            "later_zero_promotions": sum(t.get("later_zero_promotions", 0) for t in measured),
+            "tiles_with_later_zero_promotions": sum(t.get("later_zero_promotions", 0) > 0 for t in measured),
             "share_median": statistics.median(t["share"] for t in measured) if measured else None,
             "share_p99": float(np.quantile([t["share"] for t in measured], 0.99)) if measured else None,
             "cpu_seconds": round(sum(t["seconds"] for t in tiles), 1), "strata": out_strata}
@@ -276,11 +293,11 @@ def main(argv: list[str] | None = None) -> int:
         p.error("one --tiles per manifest")
     out_dir = a.out or Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "out"
     out_dir.mkdir(parents=True, exist_ok=True)
-    PW._debit_cap = _recorded
+    PW._debit_cap, PW.D.chain_debit = _recorded, _chain_recorded
     try:
         passes = [measure(path, per, a.seed, a.jobs, out_dir) for path, per in zip(a.manifests, a.tiles)]
     finally:
-        PW._debit_cap = _DEBIT_CAP
+        PW._debit_cap, PW.D.chain_debit = _DEBIT_CAP, _CHAIN_DEBIT
     summary = {"tool": "pouw_pearl_c_served_debit", "seed": a.seed, "caps": {c: str(r) for c, r in CAPS.items()}, "passes": passes}
     path = out_dir / "summary.json"
     path.write_text(json.dumps(summary, indent=1) + "\n")

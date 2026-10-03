@@ -471,7 +471,7 @@ def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_
     path, s, epoch, prover, tr, splits, records = honest_pass
     out = tmp_path / "out"
     assert SD.main([str(path), "--tiles", "3", "--jobs", "1", "--out", str(out)]) == 0
-    assert PW._debit_cap is SD._DEBIT_CAP
+    assert PW._debit_cap is SD._DEBIT_CAP and PW.D.chain_debit is SD._CHAIN_DEBIT
     (got,) = json.loads((out / "summary.json").read_text())["passes"]
     assert got["scheme"] == s.name and got["cap"] == str(s.cap) and got["openings_failed"] == 0
     assert set(got["strata"]) == {"m32-k128-n16", "m16-k128-n32"} and got["tiles_total"] == tr.commitment.count
@@ -491,7 +491,11 @@ def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_
         credit = PW.cell_credit(s, rec) * len(rows) * len(cols)
         assert (t["debit_exact"], t["ratio"], t["credit_exact"]) == (str(debit), float(debit / cap), str(credit))
         assert {key: t[key] for key in t if key.startswith("share")} == {"share": float(debit / credit)}
+        pos_a, pos_b = {i: p for p, i in enumerate(ref.tile.rows)}, {j: p for p, j in enumerate(ref.tile.cols)}
+        a_codes, b_codes = [ops.a.codes[pos_a[i]] for i in rows], [ops.b.codes[pos_b[j]] for j in cols]
+        assert (t["atoms"], t["later_zero_promotions"]) == PW.D.chain_debit(a_codes, b_codes, s.device)
         assert t["ok"] == (PW.check_opened(s, rec, ref.tile, a, b, ops) is None)
+    assert got["later_zero_promotions"] == sum(t.get("later_zero_promotions", 0) for t in tiles)
 
 
 def test_served_debits_share_is_the_tile_rules_debit_over_its_rev1_credit():
