@@ -1466,23 +1466,23 @@
     "      D L →",
     "        Pouw.PearlC.pearlCDomainDev",
     "          (Pouw.PearlC.devAt { groups := List.cons 32 List.nil, width := w, zeroExp := z } G pr) L)",
-    "  (Served : Pouw.PearlC.Workload → (Nat → Pouw.PearlC.Codes) → Prop) (count sample : Nat)",
+    "  (Served : Pouw.PearlC.Workload → (Nat → Pouw.PearlC.Codes) → Prop) (ε : Real)",
     "  (hR :",
     "    Pouw.PearlC.Assumptions.HonestTileCapRate",
     "      (Pouw.PearlC.pearlCProtocolDevRev1K",
     "        (Pouw.PearlC.devAt { groups := List.cons 32 List.nil, width := w, zeroExp := z } G pr) sem ρ c)",
     "      (Pouw.PearlC.pearlCTilesDevRev1K",
     "        (Pouw.PearlC.devAt { groups := List.cons 32 List.nil, width := w, zeroExp := z } G pr) sem ρ c)",
-    "      D Served count sample) :",
+    "      D Served ε) :",
     "  Pouw.PearlC.CompleteSampled",
     "    (Pouw.PearlC.pearlCProtocolDevRev1K",
     "      (Pouw.PearlC.devAt { groups := List.cons 32 List.nil, width := w, zeroExp := z } G pr) sem ρ c)",
     "    (Pouw.PearlC.pearlCTilesDevRev1K",
     "      (Pouw.PearlC.devAt { groups := List.cons 32 List.nil, width := w, zeroExp := z } G pr) sem ρ c)",
-    "    D Served (instHDiv.hDiv count.cast sample.cast)"
+    "    D Served ε"
    ],
    "assumptions": [],
-   "type_hash": "00e4517464b92674ec43f961c031acec1ccfcc67248dbeca1d3460ff1db5cfc8"
+   "type_hash": "e1d5426018099b4e391d7302f62beba46202fb9fdf3599e1999dafd34eea6a78"
   },
   "Pouw.PearlC.creditDevRev1_h100": {
    "signature": [
@@ -2047,7 +2047,7 @@
    "signature": [
     "Pouw.PearlC.pearlCCompleteSm120v1LoopCast8p72Rev1Cap1000_llama31_8b {Q R S : Type} [Fintype Q] [DecidableEq Q]",
     "  [Fintype R] [Fintype S] (sem : Pouw.PearlC.PearlCSem Q R S)",
-    "  (Served : Pouw.PearlC.Workload → (Nat → Pouw.PearlC.Codes) → Prop) (count sample : Nat)",
+    "  (Served : Pouw.PearlC.Workload → (Nat → Pouw.PearlC.Codes) → Prop) (ε : Real)",
     "  (hR :",
     "    Pouw.PearlC.Assumptions.HonestTileCapRate",
     "      (Pouw.PearlC.pearlCProtocolDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000)",
@@ -2056,7 +2056,7 @@
     "        (instHSub.hSub (218 / 25) (8953 / 1000)))",
     "      (Pouw.PearlC.pearlCDomainDevShapes (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop)",
     "        Pouw.PearlC.llama31_8bLinears)",
-    "      Served count sample) :",
+    "      Served ε) :",
     "  Pouw.PearlC.CompleteSampled",
     "    (Pouw.PearlC.pearlCProtocolDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000)",
     "      (instHSub.hSub (218 / 25) (8953 / 1000)))",
@@ -2064,16 +2064,16 @@
     "      (instHSub.hSub (218 / 25) (8953 / 1000)))",
     "    (Pouw.PearlC.pearlCDomainDevShapes (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop)",
     "      Pouw.PearlC.llama31_8bLinears)",
-    "    Served (instHDiv.hDiv count.cast sample.cast)"
+    "    Served ε"
    ],
    "assumptions": [],
-   "type_hash": "de8bd1d17cc3c6126ab64db587f656e110f71527d2cd9d138d681f5ee379856c"
+   "type_hash": "40c425ea3daa180e6fbde3637f8f8725c2d05988d6a516c595df47b89506e04a"
   },
   "Pouw.PearlC.pearlCCompleteSm120v1LoopCast8p72Rev1Cap1000_qwen3_8b": {
    "signature": [
     "Pouw.PearlC.pearlCCompleteSm120v1LoopCast8p72Rev1Cap1000_qwen3_8b {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R]",
     "  [Fintype S] (sem : Pouw.PearlC.PearlCSem Q R S) (Served : Pouw.PearlC.Workload → (Nat → Pouw.PearlC.Codes) → Prop)",
-    "  (count sample : Nat)",
+    "  (ε : Real)",
     "  (hR :",
     "    Pouw.PearlC.Assumptions.HonestTileCapRate",
     "      (Pouw.PearlC.pearlCProtocolDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000)",
@@ -2082,7 +2082,7 @@
     "        (instHSub.hSub (218 / 25) (8953 / 1000)))",
     "      (Pouw.PearlC.pearlCDomainDevShapes (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop)",
     "        Pouw.PearlC.qwen3_8bLinears)",
-    "      Served count sample) :",
+    "      Served ε) :",
     "  Pouw.PearlC.CompleteSampled",
     "    (Pouw.PearlC.pearlCProtocolDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000)",
     "      (instHSub.hSub (218 / 25) (8953 / 1000)))",
@@ -2090,10 +2090,10 @@
     "      (instHSub.hSub (218 / 25) (8953 / 1000)))",
     "    (Pouw.PearlC.pearlCDomainDevShapes (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop)",
     "      Pouw.PearlC.qwen3_8bLinears)",
-    "    Served (instHDiv.hDiv count.cast sample.cast)"
+    "    Served ε"
    ],
    "assumptions": [],
-   "type_hash": "cf2cee54976f5117a73dac0d956dd58739c17dfe6c4f6c41dcedc029e27d4576"
+   "type_hash": "2df091be324291c1520859df59956344eca6a2c579e304781877fe8368af1cc0"
   },
   "Pouw.PearlC.pearlCDomainDev_split": {
    "signature": [
@@ -9870,9 +9870,9 @@
    ]
   },
   "Pouw.Assumptions.PearlC.HonestCap": {
-   "digest": "abd7ced58cc869b5de23a3e9de655c1ad97a5d8abfffaad102632ce9c1136e44",
+   "digest": "9d49adf42cf695a8ee159d23e4f7317f20f5fe60fd85db54dcfb66682c674dcf",
    "definitions": {
-    "Pouw.PearlC.Assumptions.HonestTileCapRate": "3b29cb3105ed9830e9fe6c6836e17a5c7591b4c82e53c7ac3e7dab85647fc245"
+    "Pouw.PearlC.Assumptions.HonestTileCapRate": "cc40b5d910a6fbc1c45a1064daa4fd019ce6b37cccbf32de412027b4a294a191"
    },
    "pins": [
     "Pouw.PearlC.completeSampledDevRev1K",
