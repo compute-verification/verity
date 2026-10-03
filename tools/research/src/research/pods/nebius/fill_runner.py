@@ -1022,13 +1022,17 @@ def adopt() -> None:
             h["lent"] = True
         if unit and unit.startswith("fill-cpuset-"):
             h["cpuset"] = cpu_sets().get(h["owner"], {}).get("cpus") or "adopted"
-        if h["timing"]:
-            # CPUs it may hold that no record names are all taken, so no later job shares them
+        if h["timing"] or unit and unit.startswith("fill-timing-"):
+            # its unit says what it is, whatever its header or FILL_DIR/timing-owners says now
+            h["timing"], h["gpus"] = True, 1
+            # CPUs it may hold that no record names are all taken, so no later job, nor a fence, shares them
+            cpus = FILL / "running" / f".{p.name}.cpus"
             try:
-                h["timing_cpus"] = (FILL / "running" / f".{p.name}.cpus").read_text().strip() or TIMING_CPU_SET
+                h["timing_cpus"] = cpus.read_text().strip() or TIMING_CPU_SET
             except OSError:
                 h["timing_cpus"] = TIMING_CPU_SET
-        if h["gpus"] and not unit:
+            cpus.write_text(f"{h['timing_cpus']}\n")
+        if h["gpus"] and not unit and not h["timing"]:
             unit = f"gpu-lease-{pgid}"
         running[p.name] = {"pid": pgid, "proc": None, "h": h, "t0": time.monotonic(), "started": now(),
                            "paused": stopped, "paused_at": time.monotonic(), "unit": unit}

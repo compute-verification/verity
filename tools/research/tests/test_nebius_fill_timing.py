@@ -327,7 +327,8 @@ def test_start_runs_a_timing_job_unpreemptible_at_nice_0_in_a_top_level_scope_an
     """The command: vy-provers' form (`sudo -n systemd-run --scope --slice=...`) with the scope's AllowedCPUs, nice 0 and memory
     cap, then this user with this user's groups (setpriv), then gpu-lease without --preemptible or a scope of its own, inside
     the system scope, and taskset on the same CPUs; no `nice -n 19`. A stop kills the system scope through sudo. A restarted
-    runner adopts the chunk with its cores, or with all of 124-191 when no record names them."""
+    runner adopts the chunk with its cores, or with all of 124-191 (recorded for `fence`) when no record names them, and as a
+    timing job by its unit, whatever its header or FILL_DIR/timing-owners says by then."""
     load, fill, cg = node2
     fr = load()
     cmds, calls = [], []
@@ -376,6 +377,14 @@ def test_start_runs_a_timing_job_unpreemptible_at_nice_0_in_a_top_level_scope_an
     monkeypatch.setattr(fr3, "event", lambda *a, **kw: None)
     fr3.adopt()
     assert fr3.running["nw-chunk.sh"]["h"]["timing_cpus"] == "124-191" and fr3.timing_free([]) == set()
+    assert (fill / "running" / ".nw-chunk.sh.cpus").read_text() == "124-191\n"      # which `fence` reads
+    (fill / "timing-owners").unlink()                                 # nor does a later edit make it preemptible
+    (fill / "running" / "nw-chunk.sh").write_text("#!/bin/bash\n# fill: owner=net gpus=1 max_min=60 project=verity\n")
+    fr4 = load()
+    monkeypatch.setattr(fr4, "event", lambda *a, **kw: None)
+    fr4.adopt()
+    j = fr4.running["nw-chunk.sh"]
+    assert (j["h"]["timing"], j["h"]["gpus"], j["h"]["timing_cpus"], j["unit"]) == (True, 1, "124-191", unit)
 
 
 needs_lease = pytest.mark.skipif(not all(map(shutil.which, ("bash", "flock", "setsid", "timeout"))) or
