@@ -94,6 +94,8 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's.
 
+- 2026-10-02 (10:27 PM PDT): the lander starts every merge check (`check --record`, `research merge`). The PR captain
+  (`ci`) trial-merges, preflights and hands over train tips, but never starts a merge check itself.
 - 2026-10-02 (7:23 AM PDT): an overhead reported to Daniel is the `--zk` prover's only (no M0 number and no `--zk`/M0
   ratio), normalized to the chip's peak: prover seconds over the time the computation's FLOPs take at the census's dense
   datasheet peak for its dtype, never over a measured runtime such as a vLLM run's, written to one significant digit
