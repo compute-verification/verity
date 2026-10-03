@@ -750,6 +750,133 @@ end Tails
 
 end Glue
 
+section Mask
+
+open Model Refine
+
+/-- In-block column `i` is in the mask slot: its word is one of the slot's words in block 0. -/
+def MaskCol (st : Stmt) (i : ℕ) : Prop :=
+  match st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) with
+  | none => False
+  | some r => r.start / 128 ≤ i / 128 ∧ i / 128 < r.start / 128 + 2 ^ (r.slotLog - 7)
+
+/-- **The mask slot is isolated** in a statement: its rows of `A₀`, `B₀` are identity rows, no other row reads a mask-slot
+column, and neither the pin nor a region bit is in it. -/
+structure MaskIsolated (st : Stmt) (S : Statement) : Prop where
+  row : ∀ i c : Fin (2 ^ S.kLog), MaskCol st i.val →
+    S.A₀ i c = (if i = c then 1 else 0) ∧ S.B₀ i c = (if i = c then 1 else 0)
+  col : ∀ i c : Fin (2 ^ S.kLog), ¬ MaskCol st i.val → MaskCol st c.val → S.A₀ i c = 0 ∧ S.B₀ i c = 0
+  pin : ¬ MaskCol st S.pin.val
+  regions : ∀ R ∈ S.regions, ∀ i < 2 ^ R.free.length, ¬ MaskCol st (R.inBlock i)
+
+theorem div_unique {K o b a c : ℕ} (ha : a < K) (hc : c < K) (h : o * K + a = b * K + c) : o = b ∧ a = c := by
+  have hK : 0 < K := by omega
+  have h1 := congrArg (· / K) h
+  have h2 := congrArg (· % K) h
+  simp only [Nat.mul_comm _ K, Nat.mul_add_div hK, Nat.div_eq_of_lt ha, Nat.div_eq_of_lt hc, add_zero,
+    Nat.mul_add_mod, Nat.mod_eq_of_lt ha, Nat.mod_eq_of_lt hc] at h1 h2
+  exact ⟨h1, h2⟩
+
+/-- Block `o`'s word of in-block column `i` is a mask-slot word exactly when `i` is a mask-slot column. -/
+theorem mem_maskSlotWords (st : Stmt)
+    (hmask : ∀ r ∈ st.c.ranges.toList, r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ st.c.kLog)
+    (o : ℕ) (ho : o < 2 ^ st.nbl) (i : ℕ) (hi : i < 2 ^ st.c.kLog) :
+    (o * 2 ^ st.c.kLog + i) / 128 ∈ maskSlotWords st ↔ MaskCol st i := by
+  unfold maskSlotWords MaskCol
+  cases hr : st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) with
+  | none => simp
+  | some r =>
+    dsimp only
+    have hmem := List.mem_of_find?_eq_some hr
+    have hk := List.find?_some hr
+    have hk : r.kind = Kind.mask := by
+      cases hkd : r.kind <;> rw [hkd] at hk
+      · exact absurd hk (by decide)
+      · exact absurd hk (by intro h; cases h)
+    obtain ⟨h7, hb⟩ := hmask r hmem hk
+    have hsk : r.slotLog ≤ st.c.kLog := by
+      by_contra hc
+      have : 2 ^ st.c.kLog < 2 ^ r.slotLog := Nat.pow_lt_pow_right (by norm_num) (by omega)
+      omega
+    have hJ : 2 ^ r.slotLog = 128 * 2 ^ (r.slotLog - 7) := by
+      rw [show (128 : ℕ) = 2 ^ 7 by norm_num, ← pow_add, Nat.add_sub_cancel' h7]
+    have hK : 2 ^ st.c.kLog = 128 * 2 ^ (st.c.kLog - 7) := by
+      rw [show (128 : ℕ) = 2 ^ 7 by norm_num, ← pow_add, Nat.add_sub_cancel' (by omega)]
+    have hoJ : r.start / 128 + 2 ^ (r.slotLog - 7) ≤ 2 ^ (st.c.kLog - 7) := by omega
+    set K := 2 ^ (st.c.kLog - 7)
+    set J := 2 ^ (r.slotLog - 7)
+    set s := r.start / 128
+    have hdiv : (o * 2 ^ st.c.kLog + i) / 128 = o * K + i / 128 := by
+      rw [hK, show o * (128 * K) + i = 128 * (o * K) + i by ring, Nat.mul_add_div (by norm_num)]
+    have hiK : i / 128 < K := by omega
+    rw [hdiv]
+    simp only [List.mem_flatMap, List.mem_map, List.mem_range]
+    constructor
+    · rintro ⟨b, hb2, j, hj, he⟩
+      have := div_unique (o := o) (b := b) hiK (by omega : s + j < K) (by rw [← he]; ring)
+      omega
+    · rintro ⟨h1, h2⟩
+      exact ⟨o, ho, i / 128 - s, by omega, by omega⟩
+
+theorem zmod2_mul_self (x : ZMod 2) : x * x = x := by
+  fin_cases x <;> rfl
+
+/-- **`z = (w, u)` satisfies the statement where `w` does**, the mask slot isolated: its rows hold for any bits
+(`z_i·z_i = z_i`), and every other row, the pin and the regions read only columns where `z` is `w`. -/
+theorem satisfies_zWith (st : Stmt) (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
+    (hm : st.m = st.c.kLog + st.nbl)
+    (hmask : ∀ r ∈ st.c.ranges.toList, r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ st.c.kLog)
+    (hI : MaskIsolated st (stmtOf st hwf regs)) (w : Witness st.m) (hw : (stmtOf st hwf regs).Satisfies w)
+    {nMask : ℕ} (u : Fin nMask → Fin 128 → ZMod 2) (hn : nMask = (maskSlotWords st).length) :
+    (stmtOf st hwf regs).Satisfies (zWith st w u) := by
+  set S := stmtOf st hwf regs with hS
+  have hnbl : S.nbl = st.nbl := by show st.m - st.c.kLog = st.nbl; omega
+  have hblk : ∀ o i, ¬ MaskCol st i.val → S.block (zWith st w u) o i = S.block w o i := by
+    intro o i hi
+    show zWith st w u (S.addr o i) = w (S.addr o i)
+    unfold zWith
+    split
+    · rename_i x heq
+      have h := List.find?_some heq
+      rw [decide_eq_true_eq] at h
+      have hmem := getD_mem_of_lt (maskSlotWords st) (lt_of_lt_of_eq x.isLt hn)
+      rw [h] at hmem
+      exact absurd ((mem_maskSlotWords st hmask o.val (hnbl ▸ o.isLt) i.val i.isLt).1 hmem) hi
+    · rfl
+  obtain ⟨hr1, hpin, hreg⟩ := hw
+  refine ⟨fun o i => ?_, fun o => ?_, fun R hR o i hi h => ?_⟩
+  · by_cases hi : MaskCol st i.val
+    · have hA : (S.A₀.mulVec (S.block (zWith st w u) o)) i = S.block (zWith st w u) o i := by
+        simp only [Matrix.mulVec, dotProduct, fun c => (hI.row i c hi).1, ite_mul, one_mul, zero_mul,
+          Finset.sum_ite_eq, Finset.mem_univ, ite_true]
+      have hB : (S.B₀.mulVec (S.block (zWith st w u) o)) i = S.block (zWith st w u) o i := by
+        simp only [Matrix.mulVec, dotProduct, fun c => (hI.row i c hi).2, ite_mul, one_mul, zero_mul,
+          Finset.sum_ite_eq, Finset.mem_univ, ite_true]
+      rw [hA, hB, zmod2_mul_self]
+    · have hv : ∀ M : Matrix (Fin (2 ^ S.kLog)) (Fin (2 ^ S.kLog)) (ZMod 2),
+          (∀ c, MaskCol st c.val → M i c = 0) →
+          (M.mulVec (S.block (zWith st w u) o)) i = (M.mulVec (S.block w o)) i := fun M hM => by
+        simp only [Matrix.mulVec, dotProduct]
+        refine Finset.sum_congr rfl fun c _ => ?_
+        by_cases hc : MaskCol st c.val
+        · rw [hM c hc, zero_mul, zero_mul]
+        · rw [hblk o c hc]
+      rw [hv _ fun c hc => (hI.col i c hi hc).1, hv _ fun c hc => (hI.col i c hi hc).2, hblk o i hi]
+      exact hr1 o i
+  · rw [hblk o _ hI.pin]; exact hpin o
+  · rw [hblk o _ (hI.regions R hR i hi)]; exact hreg R hR o i hi h
+
+/-- **The setup's statements isolate the mask slot** (open, the setup's): `HmRow.check`'s ranges are aligned and pairwise
+apart, so the mask range's rows of `A₀`, `B₀` are its own identity rows and no other range's row reads its columns; Δ's
+pairs lie in net slots; the pin is a net slot's constant row; the regions lie in the hm96 and output ranges. -/
+theorem setupH_mask_isolated {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
+    {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
+    (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) :
+    MaskIsolated st (stmtOf st (setupH_wf h).1 (regionsOf st)) := by
+  sorry
+
+end Mask
+
 variable {mPts n : ℕ} {Reg : Type}
 
 /-- The `--zk` tables at a draw `verify --zk` sets up are its table. -/
@@ -883,7 +1010,14 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
     congr 1
     omega
   -- the prover's table `z = (w, u)` satisfies the statement
-  case hw => sorry
+  case hw =>
+    have key : ∀ (T : TabZK FlockLevel3.GF128 mPts) (_ : T = y.table) (w : Witness T.S.m), T.S.Satisfies w →
+        T.S.Satisfies (zWith y.x.st w ω.1) := by
+      intro T hT w hw
+      subst hT
+      exact satisfies_zWith y.x.st y.x.wf.1 (regionsOf y.x.st) (setupH_mask y.x.h).2 (setupH_mask y.x.h).1
+        (setupH_mask_isolated y.x.h) w hw ω.1 rfl
+    exact key _ (tablesAtZK_eq dj y₀ S R y) w hw
   -- the clear `final_a`, `final_b` are the `a`, `b` claims at the zerocheck's coins
   case hA =>
     exact finalA_holds _ (six_le _) _ _ _ _ (fun i => by rw [aT, dite_eq_left i.isLt]) _ _ _
