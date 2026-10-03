@@ -39,6 +39,8 @@ import FlockSoundness.Discharge.Hidden.Wide.Theorems
   (`outputs_committed_wide'`, `outputs_binding_wide_of`);
 * `Wide.Upv`: a unit per VU from acceptance (`check_upv_pos`, `setupHidden_upv_pos`), since `HmRow.check` refuses
   `units_per_vu = 0`;
+* `Wide.Block`: a VU per block from acceptance (`check_g_pos`, `setupH_g_pos`), since `HmRow.check` refuses
+  `vus_per_block = 0`;
 * `Wide.Checked`: the six widened statements without `0 < st.c.upv` (`…Checked`), proved in `Wide.Theorems`
   (`…_checked`).
 -/

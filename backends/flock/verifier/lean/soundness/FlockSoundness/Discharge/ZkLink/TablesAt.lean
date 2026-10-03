@@ -2,6 +2,10 @@ import FlockSoundness.Discharge.Integrate.Bridge
 import FlockSoundness.Discharge.DecodeZL.Statements
 import FlockSoundness.Discharge.ZkExec.Statements
 import FlockSoundness.Discharge.ZkSession.Session
+import FlockSoundness.Discharge.ZkExec.Setup
+import FlockSoundness.Discharge.ZkExec.Verify
+import FlockSoundness.Discharge.Hidden.Wide.Block
+import FlockSoundness.Discharge.ZkLink.Sched
 
 /-!
 # The `--zk` table at each draw, from flock-verify's setup (statements)
@@ -24,6 +28,9 @@ satisfies (as `tableAt`'s `refused`).
 * `TablesAtZKLive`: wherever flock-verify accepts what `wr` writes, the draw's `--zk` table is the executable's: its
   statement is `stmtOf` of setupH's, its dimensions and inner code are `Zk.verify`'s, and its extra claims at the
   record's link points are the executable's (`ExtraRealizes`, as `ofCircuit_extra`).
+* `tablesAtZK_live`: its proof, with `0 < g` from setupH (`setupH_g_pos`, D9), the schedule's shape and padding from
+  the m check (`schedule_zk`), the inner code's length (`innerN_pow`) and its query positions' uniformity
+  (`prCoin_innerPos_le`), and the table the same at every `DrawSetupZK` of a draw (`tableZK_eq`).
 -/
 
 namespace FlockSoundness.Discharge.ZkLink
@@ -59,6 +66,88 @@ def innerPt (j : ℕ) : 𝔽 := fOf ⟨(j + 1).toUInt64, 0⟩
 
 /-- `verifyInner`'s query position of a coin word: `w.lo mod N`. -/
 def innerPos (N : ℕ) (hN : 0 < N) (w : 𝔽) : Fin N := ⟨(GF128.val w).lo.toNat % N, Nat.mod_lt _ hN⟩
+
+/-! ## The inner code's facts -/
+
+/-- Residues mod `N` of `Fin (K · N)`: each class has `K` members. -/
+theorem card_mod_mem (K N : ℕ) (hN : 0 < N) (D : Finset (Fin N)) :
+    (Finset.univ.filter fun a : Fin (K * N) => (⟨a.val % N, Nat.mod_lt _ hN⟩ : Fin N) ∈ D).card = K * D.card := by
+  classical
+  have e : (Finset.univ.filter fun a : Fin (K * N) => (⟨a.val % N, Nat.mod_lt _ hN⟩ : Fin N) ∈ D) =
+      (Finset.univ ×ˢ D).map finProdFinEquiv.toEmbedding := by
+    ext a
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_map_equiv, Finset.mem_product]
+    have : (⟨a.val % N, Nat.mod_lt _ hN⟩ : Fin N) = (finProdFinEquiv.symm a).2 := by
+      ext; simp [finProdFinEquiv_symm_apply, Fin.modNat]
+    rw [this]
+  rw [e, Finset.card_map, Finset.card_product, Finset.card_univ, Fintype.card_fin]
+
+set_option linter.constructorNameAsVariable false in
+/-- **`verifyInner`'s query position is uniform** when `N` divides `2^64`: `w.lo mod N` lands in `D` with probability
+`|D| / N`. -/
+theorem prCoin_innerPos_le (N : ℕ) (hN : 0 < N) (hd : N ∣ 2 ^ 64) (D : Finset (Fin N)) :
+    prCoin (fun w : 𝔽 => innerPos N hN w ∈ D) ≤ (D.card : ℝ≥0∞) / N := by
+  classical
+  obtain ⟨K, hK⟩ := hd
+  have hK' : 2 ^ 64 = K * N := by rw [hK, Nat.mul_comm]
+  let E : 𝔽 ≃ Fin (K * N) × Fin (2 ^ 64) :=
+    FlockLevel3.f128Equiv.trans (Equiv.prodCongr (finCongr hK') (Equiv.refl _))
+  have hE : ∀ w : 𝔽, (innerPos N hN w).val = (E w).1.val % N := fun w => rfl
+  rw [prCoin_eq_card]
+  have hc : (Finset.univ.filter fun w : 𝔽 => innerPos N hN w ∈ D).card = (2 ^ 64 * K) * D.card := by
+    have hb : (Finset.univ.filter fun w : 𝔽 => innerPos N hN w ∈ D).card =
+        ((Finset.univ.filter fun a : Fin (K * N) => (⟨a.val % N, Nat.mod_lt _ hN⟩ : Fin N) ∈ D) ×ˢ
+          (Finset.univ : Finset (Fin (2 ^ 64)))).card := by
+      refine Finset.card_bij (fun w _ => ((E w).1, (E w).2)) ?_ ?_ ?_
+      · intro w hw
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hw
+        simp only [Finset.mem_product, Finset.mem_filter, Finset.mem_univ, true_and, and_true]
+        convert hw using 1
+        exact Fin.ext (hE w).symm
+      · intro a _ b _ h
+        exact E.injective (Prod.ext (Prod.ext_iff.1 h).1 (Prod.ext_iff.1 h).2)
+      · intro x hx
+        refine ⟨E.symm x, ?_, by simp⟩
+        simp only [Finset.mem_product, Finset.mem_filter, Finset.mem_univ, true_and, and_true] at hx
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+        convert hx using 1
+        exact Fin.ext (by rw [hE]; simp)
+    rw [hb, Finset.card_product, card_mod_mem K N hN D, Finset.card_univ, Fintype.card_fin]
+    ring
+  have hF : Fintype.card 𝔽 = (2 ^ 64 * K) * N := by
+    rw [Fintype.card_congr E, Fintype.card_prod, Fintype.card_fin, Fintype.card_fin]
+    ring
+  have hK0 : 2 ^ 64 * K ≠ 0 := by
+    rintro h
+    rcases Nat.mul_eq_zero.1 h with h | h
+    · exact absurd h (by positivity)
+    · rw [h, Nat.zero_mul] at hK'; exact absurd hK' (by positivity)
+  rw [hc, hF]
+  generalize 2 ^ 64 * K = c at hK0
+  rw [Nat.cast_mul, Nat.cast_mul, ENNReal.mul_div_mul_left _ _ (by exact_mod_cast hK0) (ENNReal.natCast_ne_top _)]
+
+
+/-- The pads layout's length at `m ≤ 35`, `k_log ≤ 27` and `k0 ≤ 35`. -/
+theorem layLen_le {m kLog k0 : ℕ} (hm : m ≤ 35) (hk : kLog ≤ 27) (h0 : k0 ≤ 35) :
+    (Zk.PadLayout.new m kLog k0).len ≤ 444 := by
+  simp only [Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.hab, Zk.PadLayout.zp, Zk.PadLayout.lc, Zk.PadLayout.fc,
+    Zk.PadLayout.fa, Zk.PadLayout.new]
+  omega
+
+/-- The inner code's length holds the pads message. -/
+theorem innerN_ge (lay : Zk.PadLayout) : lay.len + Zk.K_PAD ≤ ZkExec.innerN lay :=
+  (Nat.le_nextPowerOfTwo _).trans (Nat.le_mul_of_pos_right _ (by positivity))
+
+/-- The inner code's length is a power of two, at most `2^13` for a short layout. -/
+theorem innerN_pow (lay : Zk.PadLayout) (h : lay.len ≤ 444) :
+    ∃ k, ZkExec.innerN lay = 2 ^ k ∧ k ≤ 13 := by
+  obtain ⟨k, hk⟩ := Nat.isPowerOfTwo_nextPowerOfTwo (lay.len + Zk.K_PAD)
+  have hle : (lay.len + Zk.K_PAD).nextPowerOfTwo ≤ 2 ^ 10 :=
+    Nat.nextPowerOfTwo_le (by simp only [Zk.K_PAD]; omega) ⟨10, rfl⟩
+  rw [hk] at hle
+  refine ⟨k + 3, by rw [ZkExec.innerN, hk, Zk.INNER_LOG_INV_RATE, pow_add], ?_⟩
+  have := (Nat.pow_le_pow_iff_right (by norm_num : 1 < 2)).1 hle
+  omega
 
 /-! ## A draw `verify --zk` sets up -/
 
@@ -146,6 +235,62 @@ noncomputable def refused : TabZK 𝔽 mPts :=
 
 end DrawSetupZK
 
+section
+
+variable {S : Finset (Fin n)} {d : Lean.Json}
+
+/-- `drawSetup_of_setupH` without the unit's returning the outputs: `0 < st.c.g` from setupH (`setupH_g_pos`). -/
+theorem drawSetup_of_setupH_g (ht : I.tags.typed = false) {st : Flock.Stmt}
+    (h : Stmt.setupH I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program = .ok st)
+    {sch : Flock.Schedule} (hf : Flock.fast100 st.m = some sch) {D : Draw.UnitDraw}
+    (hD : Draw.UnitDraw.ofJson d = .ok D) (hS : ∀ u ∈ S, u.val ∈ D.proved) (hmPts : st.mPts = mPts) :
+    ∃ x : Integrate.DrawSetup I mPts S d, x.st = st := by
+  have hg : 0 < st.c.g := Hidden.setupH_g_pos ht h
+  obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn h
+  obtain ⟨D', hD', -, hn, -⟩ := Layout.drawn_spec hdr
+  rw [hD] at hD'
+  cases hD'
+  obtain ⟨hn', hnbl⟩ := Integrate.setupH_n h
+  have hblk : D.proved.size ≤ st.c.g * 2 ^ st.nbl := by
+    rw [hnbl, ← hn, ← hn']
+    exact Integrate.fits_blocks hg
+  obtain ⟨k0, l₀, l₁, rest, ext, hsch⟩ := Integrate.model_sched hf
+  exact ⟨⟨st, h, D, hD, hS, hg, hblk, st.m, k0, l₀, l₁, rest, ext, hsch,
+    by have := exec_fast100_ge hf; omega, hmPts⟩, rfl⟩
+
+/-- A `DrawSetup` at `zkInputs I` with `Zk.schedule`'s schedule at its `m` is a `DrawSetupZK`. -/
+theorem drawSetupZK_of (ht : I.tags.typed = false) (x : Integrate.DrawSetup (ZkExec.zkInputs I) mPts S d)
+    {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule x.st.m = .ok (sch, tPad)) :
+    ∃ y : DrawSetupZK I mPts S d, y.x = x ∧ y.sch = sch ∧ y.tPad = tPad := by
+  obtain ⟨hshape, hmsch, hpad⟩ := schedule_zk hz
+  obtain ⟨-, hm35, -⟩ := schedule_spec hz
+  have ht' : (ZkExec.zkInputs I).tags.typed = false := (ZkExec.zkTags_typed I).trans ht
+  have hk := (setupH_spec ht' x.h).2.2.2.2.2
+  have h0 : sch.k0 ≤ 35 := by
+    have := hshape.2.2.1
+    simp only [schedOf] at this hmsch
+    omega
+  have hlen := layLen_le hm35 hk h0
+  obtain ⟨k, hk', hk13⟩ := innerN_pow _ hlen
+  have hN : ZkExec.innerN (layOf x.st sch) < 2 ^ 64 := by
+    rw [layOf, hk']
+    exact Nat.pow_lt_pow_right (by norm_num) (by omega)
+  have hd : ZkExec.innerN (layOf x.st sch) ∣ 2 ^ 64 := by
+    rw [layOf, hk']
+    exact Nat.pow_dvd_pow 2 (by omega)
+  exact ⟨⟨x, sch, tPad, hz, hshape, hmsch, hpad, hN, innerN_ge _,
+    fun D => prCoin_innerPos_le _ _ hd D⟩, rfl, rfl, rfl⟩
+
+/-- A draw's `--zk` table is the same at every `DrawSetupZK` of it: setupH and `Zk.schedule` are functions. -/
+theorem tableZK_eq (y₁ y₂ : DrawSetupZK I mPts S d) : y₁.table = y₂.table := by
+  obtain ⟨⟨st₁, h₁, D₁, hD₁, hS₁, hg₁, hb₁, m₁, k₁, a₁, b₁, r₁, e₁, hs₁, hm₁, hp₁⟩, sch₁, t₁, hz₁, _, _, _, _, _, _⟩ := y₁
+  obtain ⟨⟨st₂, h₂, D₂, hD₂, hS₂, hg₂, hb₂, m₂, k₂, a₂, b₂, r₂, e₂, hs₂, hm₂, hp₂⟩, sch₂, t₂, hz₂, _, _, _, _, _, _⟩ := y₂
+  obtain rfl : st₁ = st₂ := Except.ok.inj (h₁.symm.trans h₂)
+  obtain ⟨rfl, rfl⟩ := Prod.ext_iff.1 (Except.ok.inj (hz₁.symm.trans hz₂))
+  rfl
+
+end
+
 variable (ht : I.tags.typed = false) {Reg : Type} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
   (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
 
@@ -185,17 +330,19 @@ def DrawOkZK (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : 
 /-! ## The statement -/
 
 /-- **Wherever flock-verify accepts, the `--zk` table is the executable's.** On public-output one-table inputs whose
-`--statement` tags are untyped, with `wr` the coin server's record (`RecordsLiveZK`) and its draws `DrawOkZK`: whenever
-`verify --zk` accepts what `wr` writes for `o` at draw `S`, setupH's statement `st` at `dj S` under the `--zk` tags is
+`--statement` tags are untyped, with `wr` the coin server's record (`RecordsLiveZK`): whenever the draw `S` is `DrawOkZK`
+(pointwise: link points depend on `|S|`, so no `mPts` holds at every draw) and `verify --zk` accepts what `wr` writes
+for `o` at it, setupH's statement `st` at `dj S` under the `--zk` tags is
 well formed (`StmtWF`, `RegionsWF`), `Zk.schedule st.m` is `(sch, t_pad)`, the draw has a `DrawSetupZK` at `st`, `sch`
 and `t_pad` whose table (`stmtOf st` at `st`'s regions, `Zk.verify`'s dimensions, pads and inner code) is
 `tablesAtZK … S R`, and at the record's link points `Setup.ofCircuit st`'s extra claims are that table's
-(`ExtraRealizes`, as `ofCircuit_extra`). -/
+(`ExtraRealizes`, as `ofCircuit_extra`). The reference setup `y₀` (a refused draw's table) is data, so no hypothesis is
+taken at its draw `S₀`. -/
 def TablesAtZKLive : Prop :=
   ∀ (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript),
-    I.tags.hiddenOutputs = false → I.count ≤ 1 → RecordsLiveZK I dj wr → (∀ S, DrawOkZK I dj mPts S) →
-    ∀ S R o, AcceptsZK I (wr S R o) →
+    I.tags.hiddenOutputs = false → I.count ≤ 1 → RecordsLiveZK I dj wr →
+    ∀ S R o, DrawOkZK I dj mPts S → AcceptsZK I (wr S R o) →
       ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
         Stmt.setupH (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition I.program =
           .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
@@ -206,6 +353,33 @@ def TablesAtZKLive : Prop :=
               (Model.extraClaims y.table.S y.table.ptLocal mPts (ptsOf mPts points))
 
 theorem tablesAtZK_live : TablesAtZKLive (n := n) (mPts := mPts) (Reg := Reg) := by
-  sorry
+  intro I ht dj S₀ y₀ wr hh hc1 hrec S R o hdraw hacc
+  obtain ⟨st, hst, -, hv⟩ := ZkExec.acceptsZK_one I _ hh hc1 hacc
+  rw [(hrec S R o hacc).1] at hst
+  obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := ZkExec.zk_verify_ok _ _ _ _ hv
+  obtain ⟨hs, c, hz, -⟩ := hall 0 (by simp)
+  have hz' : Zk.schedule st.m = .ok (schs[0].1, schs[0].2) := hz
+  generalize schs[0].1 = sch at hz'
+  generalize schs[0].2 = tPad at hz'
+  obtain ⟨-, -, sch₀, hf⟩ := schedule_spec hz'
+  have ht' : (ZkExec.zkInputs I).tags.typed = false := (ZkExec.zkTags_typed I).trans ht
+  obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst
+  obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
+  obtain ⟨x, rfl⟩ := drawSetup_of_setupH_g (I := ZkExec.zkInputs I) (S := S) ht' hst hf hD (hdraw.1 D hD)
+    (hdraw.2 _ hst)
+  obtain ⟨y, rfl, rfl, rfl⟩ := drawSetupZK_of ht x hz'
+  have hwf := setupH_wf hst
+  refine ⟨y.x.st, y.sch, y.tPad, hwf.1, hwf.2, hst, hz', y, rfl, rfl, rfl, ?_, ?_⟩
+  · show tableAtZK dj y₀ S = y.table
+    unfold tableAtZK
+    split
+    · exact tableZK_eq _ _
+    · rename_i h
+      exact absurd ⟨y⟩ h
+  · intro points hp hsz
+    have hm := y.x.hmPts
+    have := ofCircuit_extra y.x.st hwf.1 hwf.2 points hp (by rw [hm]; exact hsz)
+    rw [hm] at this
+    exact this
 
 end FlockSoundness.Discharge.ZkLink
