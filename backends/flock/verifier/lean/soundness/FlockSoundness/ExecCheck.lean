@@ -46,6 +46,8 @@ structure CheckFacts (c : Circuit) : Prop where
       (c.leafCuts.toList.filter fun e => (c.unitNet, e.1, e.2.1) = (n, i, p)).length = 1
   /-- the unit leaves a forced-zero row in its slot -/
   unit_zero : c.unit.useful < 2 ^ c.unit.unitLog
+  /-- a unit that returns the outputs has a power of two of slots -/
+  unit_pow2 : c.outNet = c.unitNet → isPow2 (c.ranges.filter (·.kind == Kind.net c.unitNet))[0]!.count = true
 
 /-! ## Steps of an accepted check -/
 
@@ -405,7 +407,8 @@ theorem check_facts {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed =
       have := wiredOnce n (Nat.zero_le _) hn h1 h2 i hi p hp1 hp2
       rw [hc2, wcount_foldl, hw2, wcount_foldl, wcount_empty, Nat.zero_add] at this
       exact this
-    unit_zero := Nat.lt_of_not_le hzero }
+    unit_zero := Nat.lt_of_not_le hzero
+    unit_pow2 := fun ho => by simpa [ho] using hur.2 }
 
 
 /-- **What `HmRow.check` accepted, for a typed template** (`c.typed = some tb`, #277): the ranges' common facts, one range
