@@ -21,8 +21,11 @@ clears nothing, so the next pass tries again. With `$VY_MONITORS_SLACK_WEBHOOK` 
 logged), the runner also posts each event there, retrying on later passes until Slack takes it, and the relay leaves those
 events alone.
 
-**Node 2** is read from node 1 over ssh (`$VY_N2`, default `vy-n2`: the vy-cluster key), each command behind a guard in the same
-ssh call: anything but a fill status under 5 minutes old saying `timed False` is a Skip, and the command doesn't run.
+**Node 2** is read from node 1 over ssh (`$VY_N2`, default `vy-n2`: the vy-cluster key), in one login per pass, and the guard
+runs first in it: unless node 2's fill status says `timed False, window waiting False` and is at most FILL_GO_S old on node 2's
+clock (not from the future), it prints the status and nothing else runs, and each node-2 check is a Skip. Past the guard, one
+python, bounded by `timeout` and niced there, reads every part the pass's due checks need, checking the status again before each.
+While a window booked in node 2's fill/windows runs (as the last session read it), a pass doesn't log in at all.
 
 `relay` runs the relay-side monitors into a local alert dir, then posts every new event of node 1's alert dir (over ssh) and the
 local one to #agent-alerts as `vy-monitors`, tagging the owners; each clear is a reply in its alert's thread. An owner other
@@ -41,12 +44,14 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -61,10 +66,18 @@ SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
 NICE = ["nice", "-n", "19", "ionice", "-c3"]
 SKIPPED = "vy-monitors: skipped:"
 FILL_STATUS = "/workspace/pouw/fill/status.txt"
-FILL_FRESH_S = 300
-N2_GUARD = (f's=$(head -n 1 {FILL_STATUS} 2>/dev/null); a=$(( $(date +%s) - $(date -d "${{s%% *}}" +%s 2>/dev/null || echo 0) )); '
-            f'case "$s" in *"timed False"*) [ "$a" -lt {FILL_FRESH_S} ] || {{ echo "{SKIPPED} fill status ${{a}} s old"; exit 0; }};; '
-            f'*) echo "{SKIPPED} ${{s:-no fill status}}"; exit 0;; esac; ')
+WINDOWS = "/workspace/pouw/fill/windows"
+QUIET = "timed False, window waiting False"      # what every node-2 guard on main requires (dispatch.n2_room, write_probe)
+FILL_GO_S = 60                                   # the guard's limit; fill_runner rewrites its status every 10 s (POLL_S)
+FILL_FRESH_S = 300                               # fill-status-n2's: older, the fill runner has stopped
+# The status's first field must be a time, at most FILL_GO_S old on node 2's clock; a refusal prints `SKIPPED <node 2's now>
+# <age, or - without a time> <status>` and exits.
+N2_GUARD = (f'ok=0; s=$(head -n 1 {FILL_STATUS} 2>/dev/null); n=$(date +%s); t=${{s%% *}}; a=-; '
+            'case "$t" in 20[0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9]Z) '
+            'a=$(( n - $(date -d "$t" +%s 2>/dev/null || echo 0) ));; esac; '
+            f'case "$a" in -*) ;; *) case "$s" in *"{QUIET}"*) [ "$a" -gt {FILL_GO_S} ] || ok=1;; esac;; esac; '
+            f'[ "$ok" = 1 ] || {{ printf "%s %s %s %s\\n" "{SKIPPED}" "$n" "$a" "$s"; exit 0; }}; ')
+N2_S = 90                                        # node 2's one session per pass, local; node 2's `timeout` ends it 10 s sooner
 HANDLES = ("infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console")
 EVENTS_KEEP_S = 14 * 86400
 RETRY_KEEP_S = 86400
@@ -72,6 +85,24 @@ RETRY_KEEP_S = 86400
 
 class Skip(Exception):
     """The check can't look now, by design (node 2 in a timed window): nothing opens or clears."""
+
+
+class Refused(Skip):
+    """Node 2's guard refused: its fill status `status`, `age` s old on node 2's clock `now` (None: it has no time)."""
+
+    def __init__(self, status: str, now: float, age: float | None):
+        super().__init__(refusal(status, age))
+        self.status, self.now, self.age = status, now, age
+
+
+def refusal(status: str, age: float | None) -> str:
+    if not status:
+        return "node 2 has no fill status"
+    if QUIET not in status:
+        return f"node 2 isn't quiet: {status[:160]}"
+    if age is None:
+        return f"node 2's fill status has no time: {status[:160]}"
+    return f"node 2's fill status is {-age:.0f} s ahead of its clock" if age < 0 else f"node 2's fill status is {age:.0f} s old"
 
 
 @dataclass(frozen=True)
@@ -97,6 +128,7 @@ class Monitor:
     clear_s: float = 0
     events: bool = False
     unread_s: float = 1800
+    n2: str | None = None               # the part of node 2's session it reads (n2_parts)
 
     @property
     def doc(self) -> str:
@@ -104,8 +136,29 @@ class Monitor:
 
 
 @dataclass
+class N2Read:
+    """A pass's session on node 2: the fill status it found, node 2's clock, and each part's result (`rc`, `out`, `err`, or
+    `error`). `refused`: the guard refused, and nothing ran; `stopped`: the status a part found instead of a quiet one."""
+    status: str
+    now: float
+    parts: dict = field(default_factory=dict)
+    refused: Refused | None = None
+    stopped: str | None = None
+
+
+@dataclass
+class Pass:
+    """What one pass's checks share: the node-2 parts its due checks read, node 2's state kept between passes (`read_t`, the
+    booked `windows`), and its one session on node 2 (an N2Read, or what opening it raised)."""
+    n2_parts: frozenset[str] = frozenset()
+    n2_state: dict = field(default_factory=dict)
+    n2: N2Read | Exception | None = None
+
+
+@dataclass
 class Ctx:
-    """What a check reads through: the clock, its own memo (kept in the state between passes), commands, and files under `root`."""
+    """What a check reads through: the clock, its own memo (kept in the state between passes), what its pass shares, commands,
+    and files under `root`."""
     now: float
     memo: dict = field(default_factory=dict)
     run: Callable[..., subprocess.CompletedProcess] = subprocess.run
@@ -115,6 +168,7 @@ class Ctx:
     node_state: str = STATE
     machines: tuple[str, ...] = ("vy-nebius-1", "vy-nebius-2")
     research: tuple[str, ...] = (sys.executable, "-m", "research")
+    pass_: Pass = field(default_factory=Pass)
 
     def path(self, p: str) -> Path:
         return self.root / p.lstrip("/")
@@ -126,11 +180,137 @@ class Ctx:
             raise RuntimeError(f"`{what[-120:]}` exited {r.returncode}: {(r.stderr or r.stdout or '').strip()[-300:]}")
         return r.stdout
 
-    def n2(self, script: str, *, input: str | None = None, timeout: float = 120) -> str:
-        out = self.sh([*SSH, self.n2_host, N2_GUARD + script], input=input, timeout=timeout)
+    def n2(self, script: str, *, input: str | None = None, timeout: float = N2_S) -> str:
+        """`script` on node 2 behind N2_GUARD in the same ssh call, under `timeout` and niced there too; Refused when the guard
+        refuses."""
+        bound = f"timeout -k 5 {max(5, int(timeout) - 10)} {' '.join(NICE)} sh -c {shlex.quote(script)}"
+        out = self.sh([*SSH, self.n2_host, N2_GUARD + bound], input=input, timeout=timeout)
         if out.startswith(SKIPPED):
-            raise Skip(out.strip())
+            raise refused(out, self.now)
         return out
+
+    def node2(self, *want: str) -> N2Read:
+        """This pass's one session on node 2. The first check that asks opens it, reading every part the pass's due checks
+        need (and `want`); the others reuse it. A Skip, and no login, while a window booked on node 2 runs."""
+        p = self.pass_
+        if p.n2 is None:
+            try:
+                p.n2 = self._session(p.n2_parts | set(want))
+            except Exception as e:  # noqa: BLE001  (each node-2 check gets it)
+                p.n2 = e
+        if isinstance(p.n2, Exception):
+            raise p.n2
+        return p.n2
+
+    def _session(self, names: set[str]) -> N2Read:
+        st = self.pass_.n2_state
+        for start, end, who in st.get("windows") or []:
+            if start <= self.now < end:
+                raise Skip(f"node 2 is in a booked window until {iso(end)[11:16]}Z ({who or 'no name'}): no login until it ends")
+        try:
+            out = self.n2("python3 -", input=n2_driver(n2_parts(names), N2_S - 25))
+        except Refused as e:
+            return N2Read(e.status, e.now, refused=e)
+        try:
+            r = json.loads(out)
+        except ValueError:
+            raise RuntimeError(f"node 2's session printed no reading: {out.strip()[-200:]!r}") from None
+        st.update(read_t=self.now, windows=[w for w in booked(r.get("windows") or "") if w[1] > self.now])
+        return N2Read(r.get("status") or "", float(r.get("now") or self.now), r.get("parts") or {}, stopped=r.get("stopped"))
+
+    def n2_part(self, name: str) -> str:
+        """The output of part `name` of this pass's node-2 session: a Skip when the session didn't get to run it."""
+        r = self.node2(name)
+        if r.refused:
+            raise Skip(str(r.refused))
+        got = r.parts.get(name)
+        if got is None and r.stopped is not None:
+            raise Skip(f"node 2 stopped being quiet during the session: {r.stopped[:160]}")
+        if got is None:
+            raise RuntimeError(f"node 2's session didn't read `{name}`: its monitor doesn't name it (Monitor.n2)")
+        if "error" in got:
+            raise RuntimeError(f"node 2's {name}: {got['error']}")
+        if got.get("rc"):
+            raise RuntimeError(f"node 2's {name} exited {got['rc']}: {(got.get('err') or got.get('out') or '').strip()[-300:]}")
+        return got.get("out") or ""
+
+
+def refused(out: str, now: float) -> Refused:
+    """N2_GUARD's refusal line (`now` and the age from the status's own time, when the line doesn't carry node 2's)."""
+    line = out.strip().splitlines()[0]
+    if m := re.match(rf"{re.escape(SKIPPED)} (\d+) (-?\d+|-) ?(.*)", line):
+        return Refused(m[3], float(m[1]), None if m[2] == "-" else float(m[2]))
+    status = line[len(SKIPPED):].strip()
+    try:
+        return Refused(status, now, now - epoch(status.split()[0]))
+    except (IndexError, ValueError):
+        return Refused(status, now, None)
+
+
+def booked(text: str) -> list[list]:
+    """The windows booked in node 2's fill/windows (`2026-10-01T10:00Z 30 # who`, read as dispatch.booked does): [start, end,
+    who], epoch seconds."""
+    out = []
+    for line in text.splitlines():
+        body, _, who = line.partition("#")
+        f = body.split()
+        try:
+            s = datetime.fromisoformat(f[0])
+            s = (s if s.tzinfo else s.replace(tzinfo=timezone.utc)).timestamp()
+            out.append([s, s + 60 * float(f[1] if len(f) > 1 else 30), who.strip()[:80]])
+        except (IndexError, ValueError):
+            continue
+    return out
+
+
+# Node 2's session, after the guard: `python3 -` runs this, with __ARGS__ the parts to read ({name: [argv, stdin]}) and its limits.
+N2_DRIVER = r'''
+import calendar, json, subprocess, time
+A = json.loads(__ARGS__)
+END = time.time() + A["budget"]
+
+
+def quiet():
+    """The fill status, and whether it still lets a read run (the guard's rule, again before each part)."""
+    try:
+        with open(A["status"], errors="replace") as f:
+            s = f.readline().strip()
+    except OSError:
+        return "", False
+    try:
+        age = time.time() - calendar.timegm(time.strptime(s.split()[0], "%Y-%m-%dT%H:%M:%SZ"))
+    except (IndexError, ValueError):
+        return s, False
+    return s, A["quiet"] in s and 0 <= age <= A["go_s"]
+
+
+out = {"status": quiet()[0], "now": time.time(), "parts": {}}
+try:
+    with open(A["windows"], errors="replace") as f:
+        out["windows"] = f.read()[-16384:]
+except OSError:
+    out["windows"] = None
+for name, (argv, stdin) in A["parts"].items():
+    s, ok = quiet()
+    if not ok:
+        out["stopped"] = s
+        break
+    left = END - time.time()
+    if left < 1:
+        out["parts"][name] = {"error": "the session ran out of time first"}
+        continue
+    try:
+        r = subprocess.run(argv, input=stdin, capture_output=True, text=True, timeout=left)
+        out["parts"][name] = {"rc": r.returncode, "out": r.stdout, "err": r.stderr[-300:]}
+    except subprocess.TimeoutExpired:
+        out["parts"][name] = {"error": "timed out after %.0f s" % left}
+print(json.dumps(out))
+'''
+
+
+def n2_driver(parts: dict, budget: float, *, status: str = FILL_STATUS, windows: str = WINDOWS, go_s: float = FILL_GO_S) -> str:
+    args = {"parts": parts, "budget": budget, "status": status, "windows": windows, "quiet": QUIET, "go_s": go_s}
+    return N2_DRIVER.replace("__ARGS__", repr(json.dumps(args)))
 
 
 def iso(t: float) -> str:
@@ -189,7 +369,7 @@ def watermarks(node: str) -> Callable[[Ctx], list[Finding]]:
         if node == "n1":
             out = ctx.sh([*NICE, sys.executable, rp.__file__, "--node", "n1", "--reading"], timeout=150)
         else:
-            out = ctx.n2(f"{' '.join(NICE)} python3 - --node n2 --reading", input=Path(rp.__file__).read_text(), timeout=180)
+            out = ctx.n2_part("probe")
         r = json.loads(out)
         lim = {**rp.COMMON, **rp.LIMITS[node]}
         base = ctx.memo.get("rate_base")
@@ -348,7 +528,7 @@ def idle_while_waiting_n1(ctx: Ctx) -> list[Finding]:
 
 N2_WAITERS = r'''
 import fcntl, glob, json, os
-out = {"status": open("/workspace/pouw/fill/status.txt", errors="replace").readline().strip(), "waiters": []}
+out = []
 for f in sorted(glob.glob("/run/gpu-lease/wait.*")):
     try:
         fd = os.open(f, os.O_RDONLY)
@@ -360,7 +540,7 @@ for f in sorted(glob.glob("/run/gpu-lease/wait.*")):
             continue
         except BlockingIOError:
             pass
-        out["waiters"].append(os.read(fd, 4096).decode(errors="replace").strip())
+        out.append(os.read(fd, 4096).decode(errors="replace").strip())
     finally:
         os.close(fd)
 print(json.dumps(out))
@@ -368,19 +548,16 @@ print(json.dumps(out))
 
 
 def idle_while_waiting_n2(ctx: Ctx) -> list[Finding]:
-    """A gpu-lease waiter on node 2 waits while at least as many GPUs as it asks for are free (the fill runner's free count;
-    a dead waiter's file, which nobody holds locked, isn't a waiter). Opens after 5 minutes of that; never while a timed window
-    runs or waits. A waiter pinned to some GPUs (`on=`) counts only when every GPU is free: the status says how many are free,
+    """A gpu-lease waiter on node 2 waits while at least as many GPUs as it asks for are free (the fill runner's free count, in
+    the quiet status the session ran under; a dead waiter's file, which nobody holds locked, isn't a waiter). Opens after 5
+    minutes of that. A waiter pinned to some GPUs (`on=`) counts only when every GPU is free: the status says how many are free,
     not which."""
-    snap = json.loads(ctx.n2("python3 -", input=N2_WAITERS))
-    st = snap["status"]
+    waiters = [fields(w) for w in json.loads(ctx.n2_part("waiters"))]
+    st = ctx.node2().status
     m = re.search(r"free GPUs (\d+)/(\d+)", st)
     if not m:
         raise RuntimeError(f"node 2's fill status has no free count: {st[:160]}")
-    if "window waiting True" in st:
-        return []
     free, n = int(m[1]), int(m[2])
-    waiters = [fields(w) for w in snap.get("waiters") or []]
     hit = held_back(waiters, lambda w: free if not w.get("on") or free == n else 0, ctx.now)
     if not hit:
         return []
@@ -391,11 +568,12 @@ def idle_while_waiting_n2(ctx: Ctx) -> list[Finding]:
 
 
 def fill_status_n2(ctx: Ctx) -> list[Finding]:
-    """Node 2's fill status is over 5 minutes old: its fill runner has stopped, and no other monitor reads node 2 meanwhile (their
-    guard needs a fresh `timed False`)."""
-    line = ctx.sh([*SSH, ctx.n2_host, f"head -n 1 {FILL_STATUS}"]).strip()
+    """Node 2's fill status (as this pass's session found it, refused or not, on node 2's clock) is over 5 minutes old: its fill
+    runner has stopped, and no other monitor reads node 2 meanwhile (the guard needs a quiet status at most a minute old)."""
+    r = ctx.node2()
+    line = r.status
     try:
-        age = ctx.now - epoch(line.split()[0])
+        age = r.now - epoch(line.split()[0])
     except (IndexError, ValueError):
         raise RuntimeError(f"node 2's fill status doesn't start with its time: {line[:120]!r}") from None
     if age <= FILL_FRESH_S:
@@ -452,7 +630,7 @@ def fast_preempt_n1(ctx: Ctx) -> list[Finding]:
 
 def fast_preempt_n2(ctx: Ctx) -> list[Finding]:
     """A lease on node 2 preempted within 60 s of its grant, in the last 30 minutes (/run/gpu-lease/preempted.log)."""
-    fast = fast_preemptions(ctx.n2("tail -c 65536 /run/gpu-lease/preempted.log 2>/dev/null || true").splitlines()[1:], ctx.now)
+    fast = fast_preemptions(ctx.n2_part("preempted").splitlines()[1:], ctx.now)
     return [_fast_finding("/run/gpu-lease", "Node 2", fast)] if fast else []
 
 
@@ -480,7 +658,7 @@ def units(node: str) -> Callable[[Ctx], list[Finding]]:
 
     def check(ctx: Ctx) -> list[Finding]:
         if node == "n2":
-            text = ctx.n2(UNITS)
+            text = ctx.n2_part("units")
         else:
             text = ctx.sh(["systemctl", "--failed", "--no-legend", "--plain"])
             env = {**os.environ, "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
@@ -495,6 +673,16 @@ def units(node: str) -> Callable[[Ctx], list[Finding]]:
     check.__doc__ = (f"A failed systemd unit on {name.lower()}, system or research's user manager (`systemctl --failed`), less "
                      "EXPECTED_FAILED: units that fail on this hardware by design, each with its reason.")
     return check
+
+
+def n2_parts(names: set[str] | frozenset[str]) -> dict[str, list]:
+    """What node 2's session runs for each part a node-2 check reads (Monitor.n2): {name: [argv, stdin]}."""
+    every: dict[str, Callable[[], list]] = {
+        "probe": lambda: [["python3", "-", "--node", "n2", "--reading"], Path(_probe().__file__).read_text()],
+        "waiters": lambda: [["python3", "-"], N2_WAITERS],
+        "preempted": lambda: [["sh", "-c", "tail -c 65536 /run/gpu-lease/preempted.log 2>/dev/null || true"], None],
+        "units": lambda: [["sh", "-c", UNITS], None]}
+    return {n: every[n]() for n in sorted(names)}
 
 
 # ---- relay-side: GitHub, the evidence store, Slack, and node 1 itself -------------------------------------------------------------
@@ -573,7 +761,7 @@ UNITS_ACTION = ("`systemctl status UNIT` and `journalctl -u UNIT -n 50` on the n
 
 MONITORS: list[Monitor] = [
     Monitor("disk-n1", "infra", "warn", "node", watermarks("n1"), RETENTION, every_s=600, clear_s=1800),
-    Monitor("disk-n2", "infra", "warn", "node", watermarks("n2"), RETENTION, every_s=600, clear_s=1800),
+    Monitor("disk-n2", "infra", "warn", "node", watermarks("n2"), RETENTION, every_s=600, clear_s=1800, n2="probe"),
     Monitor("stalls-n1", "infra", "page", "node", stalls_n1,
             "A blocked pool: stop the process its `blocked` file names (or have its owner stop it), then remove the file. A "
             "dispatcher that fails or doesn't tick: read its pane and loop.log, fix the cause, restart it in tmux "
@@ -585,14 +773,14 @@ MONITORS: list[Monitor] = [
             "waiters."),
     Monitor("idle-while-waiting-n2", "infra", "warn", "node", idle_while_waiting_n2,
             "Read node 2's fill status and the wait files in /run/gpu-lease; while the cluster agent holds agent.lock, it "
-            "grants: see its log. A waiter pinned (`on=`) to a busy GPU waits by design."),
+            "grants: see its log. A waiter pinned (`on=`) to a busy GPU waits by design.", n2="waiters"),
     Monitor("fill-status-n2", "infra", "warn", "node", fill_status_n2,
             "Restart node 2's fill runner (tmux `pouw-infra-fill`) after reading why it stopped. Until its status is fresh, no "
             "monitor reads node 2."),
     Monitor("fast-preempt-n1", "infra", "warn", "node", fast_preempt_n1, FAST),
-    Monitor("fast-preempt-n2", "infra", "warn", "node", fast_preempt_n2, FAST),
+    Monitor("fast-preempt-n2", "infra", "warn", "node", fast_preempt_n2, FAST, n2="preempted"),
     Monitor("units-n1", "infra", "warn", "node", units("n1"), UNITS_ACTION, every_s=300),
-    Monitor("units-n2", "infra", "warn", "node", units("n2"), UNITS_ACTION, every_s=300),
+    Monitor("units-n2", "infra", "warn", "node", units("n2"), UNITS_ACTION, every_s=300, n2="units"),
     Monitor("held-idle", "infra", "warn", "node", held_idle,
             "Your held GPUs sat idle above your target: release GPUs between phases, or lease for less. The `held-idle-hourly` "
             "panel on the live console says where the time went.", every_s=300, events=True),
@@ -675,7 +863,7 @@ def _why(e: Exception) -> str:
 # ---- the runner -----------------------------------------------------------------------------------------------------------------
 
 def new_state() -> dict:
-    return {"schema": SCHEMA.format("state"), "open": {}, "pending": {}, "events": {}, "monitors": {}, "retry": []}
+    return {"schema": SCHEMA.format("state"), "open": {}, "pending": {}, "events": {}, "monitors": {}, "retry": [], "node2": {}}
 
 
 def step(state: dict, monitors: list[Monitor], ctx_for: Callable[[dict], Ctx], now: float, sink: AlertDir, *, by: str,
@@ -704,13 +892,15 @@ def step(state: dict, monitors: list[Monitor], ctx_for: Callable[[dict], Ctx], n
         emitted.append(ev)
         return True
 
-    for m in monitors:
+    due = [m for m in monitors if force or now - state["monitors"].get(m.id, {}).get("last_run", 0) >= m.every_s - 5]
+    shared = Pass(n2_parts=frozenset(m.n2 for m in due if m.n2), n2_state=state["node2"])
+    for m in due:
         st = state["monitors"].setdefault(m.id, {"since": now})
-        if not force and now - st.get("last_run", 0) < m.every_s - 5:
-            continue
         st["last_run"] = now
         try:
-            found: dict[str, Finding | None] = {f.key: f for f in m.check(ctx_for(st.setdefault("memo", {})))}
+            ctx = ctx_for(st.setdefault("memo", {}))
+            ctx.pass_ = shared
+            found: dict[str, Finding | None] = {f.key: f for f in m.check(ctx)}
             st.update(last_ok=now, error=None, skipped=None)
             ok = True
         except Skip as e:
@@ -970,11 +1160,15 @@ def cmd_list(ns: argparse.Namespace) -> int:
 def cmd_check(ns: argparse.Namespace) -> int:
     now = time.time()
     rows, bad = [], False
-    for m in select(ns.where, ns.ids):
+    ms = select(ns.where, ns.ids)
+    shared = Pass(n2_parts=frozenset(m.n2 for m in ms if m.n2))
+    for m in ms:
         row: dict[str, Any] = {"id": m.id, "findings": [], "error": None, "skipped": None}
         try:
+            ctx = _ctx_for(ns, now)({})
+            ctx.pass_ = shared
             row["findings"] = [{"key": f.key, "text": f.text, "owners": list(f.owners or (m.owner,)),
-                                "severity": f.severity or m.severity} for f in m.check(_ctx_for(ns, now)({}))]
+                                "severity": f.severity or m.severity} for f in m.check(ctx)]
         except Skip as e:
             row["skipped"] = str(e)
         except Exception as e:  # noqa: BLE001

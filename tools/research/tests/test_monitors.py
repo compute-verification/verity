@@ -1,10 +1,12 @@
 """The monitors (`research/monitors.py`): the runner opens each incident once and clears it once, through the alert dir and an
-optional webhook; each check reads its source the way the node writes it; node 2 is read only behind its fill-status guard;
-the relay posts every new event once; and the files deploy.toml installs on node 1 run every node-side check."""
+optional webhook; each check reads its source the way the node writes it; node 2 is read in one session per pass, behind a
+guard that fails closed; the relay posts every new event once; and the files deploy.toml installs on node 1 run every
+node-side check."""
 from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -195,28 +197,135 @@ def test_every_monitor_names_an_owner_a_severity_an_action_and_what_it_checks():
         assert m.action and m.doc and m.every_s >= 60, m.id
 
 
-# ---- node 2's guard -----------------------------------------------------------------------------------------------------------
+# ---- node 2: one session per pass, behind its guard ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("status, runs", [
-    ("2099-01-01T00:00:00Z free GPUs 7/8, kept free -, waiters -, timed False, window waiting False", True),
-    ("2099-01-01T00:00:00Z free GPUs 0/8, kept free -, waiters -, timed True, window waiting False", False),
-    ("2000-01-01T00:00:00Z free GPUs 7/8, kept free -, waiters -, timed False, window waiting False", False),
-    (None, False),
+def status(age=5, *, timed=False, window=False, free=2, n=8, now=T0):
+    return (f"{iso(now - age)} free GPUs {free}/{n}, kept free -, waiters -, timed {timed}, window waiting {window}, "
+            "backfill False, queued 0 (gpu 0, cpu 0)")
+
+
+def guard(tmp_path, line, now=T0) -> str:
+    """What N2_GUARD prints under sh, then `echo ran`, with `line` as node 2's fill status and `date +%s` saying `now`."""
+    f, bin_ = tmp_path / "status.txt", tmp_path / "bin"
+    if line is not None:
+        f.write_text(line + "\n  running x\n")
+    bin_.mkdir(exist_ok=True)
+    (bin_ / "date").write_text(f'#!/bin/sh\nif [ "$1" = "+%s" ]; then echo {int(now)}; else exec {shutil.which("date")} "$@"; fi\n')
+    (bin_ / "date").chmod(0o755)
+    return subprocess.run(["sh", "-c", M.N2_GUARD.replace(M.FILL_STATUS, str(f)) + "echo ran"], capture_output=True, text=True,
+                          env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"}).stdout
+
+
+@pytest.mark.parametrize("line, why", [
+    (status(5), None),
+    (status(60), None),
+    (status(61), "61 s old"),                       # fill_runner rewrites it every 10 s: a minute without, it has stopped
+    (status(-3600), "3600 s ahead of its clock"),
+    (status(5, timed=True), "isn't quiet"),
+    (status(5, window=True), "isn't quiet"),        # the drain just before a timed run
+    ("free GPUs 2/8, kept free -, timed False, window waiting False", "has no time"),
+    (None, "has no fill status"),
 ])
-def test_node_2_runs_a_command_only_behind_a_fresh_timed_false(tmp_path, status, runs):
-    f = tmp_path / "status.txt"
-    if status:
-        f.write_text(status + "\n  running x\n")
-    guard = M.N2_GUARD.replace(M.FILL_STATUS, str(f))
-    out = subprocess.run(["sh", "-c", guard + "echo ran"], capture_output=True, text=True).stdout
-    assert (out == "ran\n") if runs else out.startswith(M.SKIPPED)
+def test_node_2s_guard_lets_a_read_run_only_under_a_quiet_status_at_most_a_minute_old(tmp_path, line, why):
+    out = guard(tmp_path, line)
+    if why is None:
+        assert out == "ran\n"
+    else:
+        assert out.startswith(M.SKIPPED) and not out.endswith("ran\n") and why in str(M.refused(out, T0)), out
 
 
-def test_a_skipped_node_2_read_is_a_skip_and_the_command_rides_behind_the_guard():
-    run = Run((has("vy-n2"), (0, M.SKIPPED + " 2026-10-03T20:00:00Z free GPUs 0/8, ... timed True\n", "")))
-    with pytest.raises(M.Skip):
-        M.Ctx(now=T0, run=run).n2("systemctl --failed")
-    assert run.calls[0][0][:5] == M.SSH and run.calls[0][0][-1].startswith(M.N2_GUARD)
+def test_a_refused_read_is_a_skip_and_what_runs_on_node_2_is_bounded_and_niced_there():
+    run = Run((has("vy-n2"), (0, f"{M.SKIPPED} {int(T0)} 5 {status(timed=True)}\n", "")))
+    with pytest.raises(M.Refused, match="isn't quiet") as e:
+        M.Ctx(now=T0, run=run).n2("systemctl --failed; echo ---")
+    assert (e.value.status, e.value.now, e.value.age) == (status(timed=True), T0, 5)
+    argv = run.calls[0][0]
+    assert argv[:len(M.SSH) + 1] == [*M.SSH, "vy-n2"] and argv[-1].startswith(M.N2_GUARD)
+    assert argv[-1][len(M.N2_GUARD):] == "timeout -k 5 80 nice -n 19 ionice -c3 sh -c 'systemctl --failed; echo ---'"
+
+
+def session(line=None, *, now=T0, windows=None, **parts):
+    """Node 2 over ssh, its guard letting the session through: each part's output, and what it read of fill/windows."""
+    doc = {"status": line or status(), "now": now, "windows": windows,
+           "parts": {k: {"rc": 0, "out": v, "err": ""} for k, v in parts.items()}}
+    return Run((has("vy-n2"), (0, json.dumps(doc), "")))
+
+
+def refusing(line, *, now=T0, age=5):
+    return Run((has("vy-n2"), (0, f"{M.SKIPPED} {int(now)} {age} {line}\n", "")))
+
+
+N2 = [m for m in M.MONITORS if m.id.endswith("-n2")]
+
+
+def n2_pass(state, run, now, alerts):
+    return M.step(state, N2, lambda memo: M.Ctx(now=now, memo=memo, run=run), now, M.AlertDir(alerts), by="test")
+
+
+def test_a_pass_logs_into_node_2_once_reading_every_part_its_due_checks_need(tmp_path):
+    state, run = M.new_state(), session(probe=json.dumps(reading()), waiters="[]", preempted="", units="")
+    n2_pass(state, run, T0, tmp_path)
+    (argv, driver), = run.calls
+    assert argv[-1].startswith(M.N2_GUARD) and argv[-1].endswith("sh -c 'python3 -'")
+    assert "def evaluate(" in driver and M.UNITS in driver and "/run/gpu-lease/wait." in driver and "preempted.log" in driver
+    assert all(st["error"] is None and st["skipped"] is None for st in state["monitors"].values()) and state["node2"]["read_t"] == T0
+    n2_pass(state, run, T0 + 65, tmp_path)                                  # disk-n2 and units-n2 aren't due
+    (argv, driver), = run.calls[1:]
+    assert "def evaluate(" not in driver and M.UNITS not in driver and "/run/gpu-lease/wait." in driver
+
+
+def test_while_node_2_isnt_quiet_each_pass_logs_in_once_runs_nothing_there_and_every_node_2_check_skips(tmp_path):
+    state = M.new_state()
+    for i in range(3):
+        now = T0 + 65 * i
+        run = refusing(status(timed=True, now=now), now=now)
+        n2_pass(state, run, now, tmp_path)
+        assert len(run.calls) == 1
+    sts = state["monitors"]
+    assert all("isn't quiet" in sts[m.id]["skipped"] for m in N2 if m.id != "fill-status-n2")
+    assert sts["fill-status-n2"]["skipped"] is None and sts["fill-status-n2"]["error"] is None
+
+
+def test_no_pass_logs_into_node_2_while_a_window_the_last_session_read_as_booked_runs(tmp_path):
+    state = M.new_state()
+    windows = f"# when, minutes, who\n{iso(T0 + 600)[:16]}Z 30 # circuits timed run\nnot a window\n2026-10-01T10:00Z 30\n"
+    n2_pass(state, session(windows=windows, probe=json.dumps(reading()), waiters="[]", preempted="", units=""), T0, tmp_path)
+    assert state["node2"]["windows"] == [[T0 + 600, T0 + 2400, "circuits timed run"]]
+    run = Run()
+    n2_pass(state, run, T0 + 900, tmp_path)
+    assert run.calls == [] and all("booked window until 21:20Z (circuits timed run)" in st["skipped"]
+                                   for st in state["monitors"].values())
+    run = session(waiters="[]", preempted="")
+    n2_pass(state, run, T0 + 2400, tmp_path)
+    assert len(run.calls) == 1
+
+
+def test_node_2s_session_reads_each_part_and_stops_once_the_status_isnt_quiet(tmp_path):
+    f, w = tmp_path / "status.txt", tmp_path / "windows"
+    f.write_text("2000-01-01T00:00:00Z free GPUs 8/8, timed False, window waiting False\n")
+    w.write_text("2026-10-04T10:00Z 30 # x\n")
+    parts = {"a": [["cat"], "from stdin"],
+             "b": [["sh", "-c", f"echo B; echo '2000-01-01T00:00:00Z free GPUs 0/8, timed True, window waiting False' > {f}"], None],
+             "c": [["sh", "-c", "echo C"], None]}
+    driver = M.n2_driver(parts, 30, status=str(f), windows=str(w), go_s=1e12)      # a status from 2000 counts as fresh
+    doc = json.loads(subprocess.run([sys.executable, "-"], input=driver, capture_output=True, text=True).stdout)
+    assert doc["parts"]["a"]["out"] == "from stdin" and doc["parts"]["b"]["out"] == "B\n" and "c" not in doc["parts"]
+    assert doc["status"].endswith("timed False, window waiting False") and doc["stopped"].endswith("timed True, window waiting False")
+    assert doc["windows"] == "2026-10-04T10:00Z 30 # x\n"
+
+
+def test_a_part_that_fails_is_its_own_checks_error_and_one_the_session_didnt_reach_is_a_skip():
+    doc = {"status": status(), "now": T0, "windows": None, "stopped": status(timed=True),
+           "parts": {"units": {"rc": 1, "out": "", "err": "Failed to connect to bus"}, "preempted": {"error": "timed out after 3 s"}}}
+    run = Run((has("vy-n2"), (0, json.dumps(doc), "")))
+    ctx = M.Ctx(now=T0, run=run, pass_=M.Pass(n2_parts=frozenset({"units", "preempted", "waiters"})))
+    with pytest.raises(RuntimeError, match="units exited 1: Failed to connect to bus"):
+        ctx.n2_part("units")
+    with pytest.raises(RuntimeError, match="timed out after 3 s"):
+        ctx.n2_part("preempted")
+    with pytest.raises(M.Skip, match="stopped being quiet"):
+        ctx.n2_part("waiters")
+    assert len(run.calls) == 1
 
 
 # ---- the watermarks -------------------------------------------------------------------------------------------------------------
@@ -253,12 +362,11 @@ def test_the_inode_rate_compares_with_the_base_reading_the_memo_keeps():
     assert any("inodes/h" in k for k in keys) and memo["rate_base"]["t"] == T0
 
 
-def test_node_2s_probe_is_shipped_on_stdin_behind_the_guard():
-    run = Run((has("vy-n2"), (0, json.dumps(reading()), "")))
-    M.watermarks("n2")(M.Ctx(now=T0, run=run))
-    (argv, stdin), = run.calls
-    assert argv[-1].startswith(M.N2_GUARD) and argv[-1].endswith("python3 - --node n2 --reading")
-    assert "def evaluate(" in stdin
+def test_node_2s_probe_runs_in_its_session_and_its_reading_is_judged_on_node_1():
+    run = session(probe=json.dumps(reading(root_free_gb=40)))
+    keys = [f.key for f in M.watermarks("n2")(M.Ctx(now=T0, run=run))]
+    (argv, driver), = run.calls
+    assert "HARD root free # GB < # GB: no new check starts" in keys and "def evaluate(" in driver and "--reading" in driver
 
 
 def test_the_probes_reading_flag_prints_a_reading_and_writes_nothing(tmp_path, monkeypatch, capsys):
@@ -359,28 +467,27 @@ def test_idle_while_waiting_skips_a_blocked_pool_and_the_kueue_hold_and_flags_a_
     assert f.key == "circuits:stale" and "10 minutes" in f.text
 
 
-def n2_snap(free, n=8, waiters=(), window=False, timed=False):
-    st = f"{iso(T0)} free GPUs {free}/{n}, kept free -, waiters -, timed {timed}, window waiting {window}, backfill False"
-    return Run((has("vy-n2"), (0, json.dumps({"status": st, "waiters": list(waiters)}), "")))
-
-
-def test_a_node_2_waiter_with_enough_free_gpus_is_held_back_unless_a_window_waits_or_its_gpu_is_unknown():
+def test_a_node_2_waiter_with_enough_free_gpus_is_held_back_unless_its_gpu_is_unknown():
     w = f"pid=7 n=2 run=- who=circuits-tp8 since={iso(T0 - 400)}"
-    (f,) = M.idle_while_waiting_n2(M.Ctx(now=T0, run=n2_snap(3, waiters=[w])))
+
+    def check(free, *ws):
+        return M.idle_while_waiting_n2(M.Ctx(now=T0, run=session(status(free=free), waiters=json.dumps(ws))))
+
+    (f,) = check(3, w)
     assert f.key == "idle" and "3 of 8 GPUs free" in f.text and "circuits-tp8" in f.text
-    assert M.idle_while_waiting_n2(M.Ctx(now=T0, run=n2_snap(1, waiters=[w]))) == []
-    assert M.idle_while_waiting_n2(M.Ctx(now=T0, run=n2_snap(3, waiters=[w], window=True))) == []
+    assert check(1, w) == []
     pinned = f"pid=7 n=1 on=5 run=- who=x since={iso(T0 - 400)}"
-    assert M.idle_while_waiting_n2(M.Ctx(now=T0, run=n2_snap(3, waiters=[pinned]))) == []
-    assert M.idle_while_waiting_n2(M.Ctx(now=T0, run=n2_snap(8, waiters=[pinned])))[0].key == "idle"
+    assert check(3, pinned) == [] and check(8, pinned)[0].key == "idle"
     compile(M.N2_WAITERS, "n2-waiters", "exec")
 
 
-def test_node_2s_fill_status_is_stale_after_5_minutes():
-    def ctx(age):
-        return M.Ctx(now=T0, run=Run((has("vy-n2"), (0, f"{iso(T0 - age)} free GPUs 8/8, timed False\n", ""))))
-    assert M.fill_status_n2(ctx(299)) == []
-    assert "6 minutes old" in M.fill_status_n2(ctx(360))[0].text
+def test_node_2s_fill_status_is_stale_after_5_minutes_on_node_2s_clock_whether_the_guard_refused_or_not():
+    def check(age):                                          # node 1's clock an hour ahead of node 2's
+        return M.fill_status_n2(M.Ctx(now=T0 + 3600, run=session(status(age), now=T0)))
+    assert check(299) == []
+    assert "6 minutes old" in check(360)[0].text
+    (f,) = M.fill_status_n2(M.Ctx(now=T0, run=refusing(status(400), age=400)))
+    assert f.key == "stale" and "7 minutes old" in f.text
 
 
 # ---- a lease preempted within 60 s of its grant ----------------------------------------------------------------------------------
@@ -403,7 +510,7 @@ def test_fast_preempt_reads_each_node_1_pool_and_node_2_behind_its_guard(tmp_pat
     p.write_text(preempted(T0 - 60, T0 - 70) + "\n")
     (f,) = M.fast_preempt_n1(M.Ctx(now=T0, root=tmp_path))
     assert f.key == "/run/gpu-lease-circuits" and "1 lease preempted within 60 s of its grant" in f.text and "10 s after" in f.text
-    run = Run((has("vy-n2"), (0, "partial line\n" + preempted(T0 - 60, T0 - 70) + "\n", "")))
+    run = session(preempted="partial line\n" + preempted(T0 - 60, T0 - 70) + "\n")
     assert M.fast_preempt_n2(M.Ctx(now=T0, run=run))[0].key == "/run/gpu-lease"
 
 
@@ -423,8 +530,8 @@ def test_units_on_node_1_tolerate_a_user_manager_that_isnt_there_and_node_2_read
     run = Run((lambda a, _: a[:2] == ["systemctl", "--user"], (1, "", "Failed to connect to bus: No medium found")),
               (lambda a, _: a[0] == "systemctl", (0, FAILED, "")))
     assert [f.key for f in M.units("n1")(M.Ctx(now=T0, run=run))] == ["system:systemd-ask-password-console.path"]
-    run = Run((has("vy-n2"), (0, FAILED.splitlines()[0] + "\n---\n", "")))
-    assert M.units("n2")(M.Ctx(now=T0, run=run)) == [] and M.UNITS in run.calls[0][0][-1]
+    run = session(units=FAILED.splitlines()[0] + "\n---\n")
+    assert M.units("n2")(M.Ctx(now=T0, run=run)) == [] and M.UNITS in run.calls[0][1]
 
 
 # ---- relay-side ----------------------------------------------------------------------------------------------------------------
