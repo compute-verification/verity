@@ -60,9 +60,9 @@ at every coin vector, through `ZK.Session.session_prefinal_indep_cut` (Lemma A c
 theorem zk_session_view (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
     (hKey : Assumptions.Zk.HashDerivedKeyHm96) (hPad : Assumptions.Zk.PadNonvanishing40) :
-    ∀ (S : Finset (Fin n)) (R : Reg), Nonempty (DrawSetupZK I mPts S (dj S)) →
-      ZkViewAt (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R)) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
-  fun S R hS' => zkViewAt_of_ok _ (coinedOf_setup (Reg := Reg) I dj y₀ S R hS').2 hKey hPad
+    ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)),
+      ZkViewAt (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
+  fun S R y => zkViewAt_of_ok _ (coinedOf_setup (Reg := Reg) I dj y₀ S R y).2.2.2.2.2 hKey hPad
 
 /-- **One `--zk` sampled session, sound and zero knowledge.** -/
 theorem zk_session_composed
@@ -111,8 +111,8 @@ theorem zk_session_composed
           ((rsZAt ht dj y₀ hc hU hpub hpt hscope).bindingZ (rsZAt_computes ht dj y₀ hc hU hpub hpt hscope))
           k Rw M ρ t' (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ))
           (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ)) ∧
-    ∀ (S : Finset (Fin n)) (R : Reg), Nonempty (DrawSetupZK I mPts S (dj S)) →
-      ZkViewAt (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R)) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
+    ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)),
+      ZkViewAt (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
   refine ⟨?_, zk_session_view I dj y₀ hKey hPad⟩
   have hdec := decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)
   have hnever : ∀ o : Bool × Finset (Fin n), ¬ (o.1 = true ∧ o.1 = false) := fun o h => by

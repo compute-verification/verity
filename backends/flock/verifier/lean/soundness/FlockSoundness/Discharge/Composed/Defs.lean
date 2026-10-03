@@ -158,6 +158,14 @@ def MaskRankOk {k M : ℕ} (pts : Fin k → List F128) (words : Fin M → ℕ) :
   Function.Surjective fun u : Fin M → ZMod 2 => fun j : Fin k =>
     ∑ x, fOf (eqWord (pts j) (words x)) * ZK.Table.castF (F := 𝔽) (u x)
 
+/-- **The mask slot's word indices in the packed witness** (`flock-circuit.rs`'s `mask_words`): every block's slot, block
+`b`'s words at `b·2^(k_log−7) + start/128 + j` for `j < 2^(slot_log−7)`. -/
+def maskWordsOf (st : Stmt) : List ℕ :=
+  match st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) with
+  | none => []
+  | some r => (List.range (2 ^ st.nbl)).flatMap fun b =>
+      (List.range (2 ^ (r.slotLog - 7))).map fun j => b * 2 ^ (st.c.kLog - 7) + r.start / 128 + j
+
 /-- **A table's coin vector**, the coins `refused_coins` reads named: each rep's inner-proof `β`
 (`Zk.verifyInner`) and Ligerito's `ρ` (`ZkLigerito`), each claim's rank-check point, and the table's other coins. -/
 structure CoinsZK (nC : ℕ) (Rest : Type) where
@@ -199,8 +207,8 @@ def CoinedSetup.Valid (C : CoinedSetup) (w : Witness C.S.m) : Prop := C.S.Satisf
 
 /-- **The draw's `--zk` table as `Coined` tables** (open: the definition is the new item's to write, from what
 `verify --zk` sets up at the draw: its statement `Tz.S`, schedule, pads layout, inner code and the honest prover's
-level-0 code). -/
-noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) : CoinedSetup := sorry
+level-0 code; the mask slot from the draw's executable statement `st`). -/
+noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup := sorry
 
 /-- **The structural facts Lemma B reads**, of a `CoinedSetup` at the arithmetic `A` and M1's padding constant `κ`: M1's
 level-0 padding geometry (`cols ≤ 40`, `t_pad ≤ 2^cols`, at most `t_pad` distinct opened positions inside
@@ -223,14 +231,19 @@ def CoinedOK (A : Arith 𝔽 FlockLevel3.GF256) (κ : 𝔽) (C : CoinedSetup) : 
       (∀ r, (C.T c).tab.β r ≠ 0) ∧
       ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w
 
-/-- **The session's tables satisfy Lemma B's facts** (new item, open): at every draw `verify --zk` sets up, the
-`Coined` tables of the draw's `--zk` table (`coinedOf (tablesAtZK dj y₀ S R)`) are over the table's statement and are
-`CoinedOK` at `execArith` and `PAD_C`. -/
+/-- **The session's tables satisfy Lemma B's facts** (new item, open): at every draw `verify --zk` sets up (`y`), the
+`Coined` tables of the draw's `--zk` table at its executable statement (`coinedOf (tablesAtZK dj y₀ S R) y.x.st`) are over
+the table's statement, check rank over the `RANK_POINTS` claim points at the statement's mask words (`maskWordsOf`), have
+other coins, and are `CoinedOK` at `execArith` and `PAD_C`. -/
 def CoinedOfSetup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) : Prop :=
-  ∀ (S : Finset (Fin n)) (R : Reg), Nonempty (DrawSetupZK I mPts S (dj S)) →
-    (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R)).S = (tablesAtZK (Reg := Reg) dj y₀ S R).S ∧
-    CoinedOK execArith (fOf Zk.PAD_C) (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R))
+  ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)),
+    (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).S = (tablesAtZK (Reg := Reg) dj y₀ S R).S ∧
+    (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).z.nC = Zk.RANK_POINTS ∧
+    (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).z.nMask = (maskWordsOf y.x.st).length ∧
+    (∀ x, (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).maskWords x = (maskWordsOf y.x.st).getD x 0) ∧
+    Nonempty (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).Rest ∧
+    CoinedOK execArith (fOf Zk.PAD_C) (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st)
 
 theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) : CoinedOfSetup (Reg := Reg) I dj y₀ := by
