@@ -9,6 +9,7 @@ import itertools
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -618,6 +619,54 @@ def test_check_scratch_untouched_for_2_h_goes_unless_something_names_it_or_it_is
     assert a == {"pytest-1": ("delete", RR.DELETES["check-scratch"]), "lean-audit-scratch-a": ("delete", RR.DELETES["check-scratch"]),
                  "pytest-2": ("keep", "named by proc:40(python)"), "pytest-3": ("keep", "protected: no rule deletes it"),
                  "pytest-5": ("keep", f"{pt}/pytest-5/kept.retention.json is a record, and it decides what beneath it goes")}
+
+
+def test_a_mount_beneath_a_path_keeps_it_though_it_is_a_bind_mount_of_the_same_filesystem(tmp_path, monkeypatch):
+    """inventory's st_dev can't tell a bind mount of the same filesystem, and rmtree would empty its source: the pass reads the
+    mount table once, and refuses when it can't."""
+    root, pt = tmp_path / "ws", tmp_path / "pytest-of-research"
+    for d in ("pytest-1/mnt x", "pytest-2/sub"):
+        (pt / d).mkdir(parents=True)
+    root.mkdir()
+    info = tmp_path / "mountinfo"
+    info.write_text(f"22 1 259:1 / / rw,relatime shared:1 - ext4 /dev/root rw\n36 22 259:1 /data {pt}/pytest-1/mnt\\040x rw - ext4 /dev/root rw\n")
+    monkeypatch.setattr(RR, "MOUNTINFO", info)
+    places = RR.Places(root, ((pt, "pytest-[0-9]*"),))
+    plan = run_gc(root, places=places, live=Scripted({}, {}), apply=True)
+    assert (pt / "pytest-1/mnt x").exists() and not (pt / "pytest-2").exists()
+    assert {Path(a["path"]).name: a["reason"] for a in plan["rules"]}["pytest-1"] == f"{pt}/pytest-1/mnt x is a mount point"
+    monkeypatch.setattr(RR, "MOUNTINFO", tmp_path / "absent")
+    (pt / "pytest-3").mkdir()
+    plan = run_gc(root, places=places, live=Scripted({}, {}), apply=True)
+    assert plan["refused"].startswith(f"can't read {tmp_path}/absent") and (pt / "pytest-3").exists()
+
+
+BIND = """import sys
+sys.path.insert(0, sys.argv[2])
+from pathlib import Path
+import test_retention_rules as H
+
+base, root = Path(sys.argv[1]) / "pytest-of-research", Path(sys.argv[1]) / "ws"
+plan = H.run_gc(root, places=H.RR.Places(root, ((base, "pytest-[0-9]*"),)), live=H.Scripted({}, {}), apply=True, node=H.N1)
+print({Path(a["path"]).name: a["reason"] for a in plan["rules"]})
+"""
+
+
+@pytest.mark.skipif(not shutil.which("unshare"), reason="needs unshare")
+def test_a_real_bind_mount_beneath_scratch_keeps_it(tmp_path):
+    """A bind mount of tmp's own filesystem in a user and mount namespace (`unshare -rm`), where gc runs as the namespace's root."""
+    data, mnt = tmp_path / "precious", tmp_path / "pytest-of-research/pytest-7/mnt"
+    data.mkdir()
+    (data / "result.json").write_text("{}")
+    mnt.mkdir(parents=True)
+    (tmp_path / "ws").mkdir()
+    (tmp_path / "bind.py").write_text(BIND)
+    r = subprocess.run(["unshare", "-rm", "sh", "-c", 'mount --bind "$1" "$2" && exec "$3" "$4" "$5" "$6"', "sh", str(data), str(mnt),
+                        sys.executable, str(tmp_path / "bind.py"), str(tmp_path), str(Path(__file__).parent)], capture_output=True, text=True)
+    if r.returncode and "Operation not permitted" in r.stderr:
+        pytest.skip(f"no user namespaces here: {r.stderr.strip()}")
+    assert r.returncode == 0, r.stderr[-1000:]
+    assert (data / "result.json").exists() and f"'pytest-7': '{mnt} is a mount point'" in r.stdout, r.stdout
 
 
 def test_a_record_wins_over_a_rule(tmp_path):

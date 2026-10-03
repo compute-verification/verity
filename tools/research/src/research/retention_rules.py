@@ -24,7 +24,7 @@ job tree or a .lake/packages is renamed aside first (one rename, so nothing sees
 once more, put back if anything names it now or, a source tree, it holds anything outside its commit now (`stuck` when it can't
 be), and only then deleted. Scratch and trash are deleted where
 they are. A rule never deletes PROTECTED paths (pouw/gpu3-fp8, check's verdict caches lean-deps and circuit-check), a path a record
-covers (an explicit `research keep` wins), or one holding a record or a mount. `Sweep.run` raises Refused when what live work names
+covers (an explicit `research keep` wins), or one holding a record or a mount (a bind mount too: MOUNTINFO, read once a pass). `Sweep.run` raises Refused when what live work names
 can't be established, or when node 2's guard (`timed`, read again before every deletion) says a timed window may run, after
 putting back whatever is still renamed aside; so does any other failure, and SIGTERM (`Terminated`), before it propagates. Every
 decision about a path old enough for its rule goes to the deletion log (`Log`), and each rename aside goes there first
@@ -55,6 +55,7 @@ CHECK_CACHE = Path("/home/research/.cache/verity-check")
 PYTEST_TMP = Path("/tmp/pytest-of-research")
 SHA = re.compile(r"[0-9a-f]{40}")
 ASIDE = re.compile(r"([0-9a-f]{40})-\d+")    # a source tree renamed aside: src/.trash/<sha>-<when>
+MOUNTINFO = Path("/proc/self/mountinfo")
 LAKE = ("backends/flock/verifier/lean", "backends/flock/verifier/lean/level3", "backends/flock/verifier/lean/soundness")
 LA = "backends/flock/verifier/lean/soundness/lean-audit.json"
 LOG_SCHEMA = "research/retention-log/v1"
@@ -304,6 +305,16 @@ def inventory(path: Path) -> tuple[int, int, str | None]:
     return files, size, None
 
 
+def mount_points(path: Path | None = None) -> list[str]:
+    """Every mount point in this mount namespace (MOUNTINFO's fifth field, unescaped), a bind mount of the same filesystem among
+    them, which inventory's st_dev can't tell apart; OSError when it can't be read."""
+    out = []
+    for line in Path(path or MOUNTINFO).read_text().splitlines():
+        if len(f := line.split(" ")) > 4:
+            out.append(re.sub(r"\\([0-7]{3})", lambda m: chr(int(m[1], 8)), f[4]))
+    return out
+
+
 def newest(path: Path) -> float:
     """The newest mtime of `path` and of everything beneath it on its filesystem; infinity when any of it can't be read."""
     try:
@@ -446,6 +457,10 @@ class Sweep:
                     + [str(pl.jobs / e) for e, _ in jobs])
         if not patterns:
             return self.acts
+        try:
+            self._mounts = mount_points()
+        except OSError as e:
+            raise Refused(f"can't read {MOUNTINFO} ({e.strerror or e}), so a bind mount beneath a path can't be seen: nothing deleted") from None
         named = self._names(patterns)
 
         going: list[_Cand] = []
@@ -566,6 +581,9 @@ class Sweep:
             elif extra:
                 return keep(f"{len(extra)} file(s) outside its commit, e.g. {', '.join(extra[:3])}: they may be a run's output, so "
                             "its owner decides")
+        for q in dict.fromkeys((str(p), os.path.realpath(p))):
+            if m := next((m for m in self._mounts if m == q or m.startswith(q.rstrip("/") + "/")), None):
+                return keep(f"{m} is a mount point")
         try:
             files, size, why = inventory(p)
         except OSError as e:
@@ -722,6 +740,6 @@ def store_saver(store_root: str | None, node: str, by: str | None) -> Callable[[
     return save
 
 
-__all__ = ["ATTEMPT", "Act", "FRESH", "LA", "LAKE", "LEAD", "LOCKS", "LOG_SCHEMA", "Log", "NEWEST", "NODE1", "PEERS", "Places", "QUIET",
-           "RULES", "Refused", "Rule", "RuleSet", "SaveError", "Sweep", "TIMED_NODES", "Terminated", "booked", "inventory", "lock", "newest",
-           "peers", "store_saver", "timed"]
+__all__ = ["ATTEMPT", "Act", "FRESH", "LA", "LAKE", "LEAD", "LOCKS", "LOG_SCHEMA", "Log", "MOUNTINFO", "NEWEST", "NODE1", "PEERS", "Places",
+           "QUIET", "RULES", "Refused", "Rule", "RuleSet", "SaveError", "Sweep", "TIMED_NODES", "Terminated", "booked", "inventory", "lock",
+           "mount_points", "newest", "peers", "store_saver", "timed"]
