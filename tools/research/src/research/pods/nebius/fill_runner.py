@@ -63,7 +63,10 @@ Every POLL_S seconds the runner:
     system.slice, where every other fill job, slot d and the Verity pool run, are confined below them); never a CPU a fence, a
     running timing job or any populated top-level cgroup but PID 1's may use.  Its lease isn't --preemptible and nothing here
     stops it before its max_min, for a waiter, a window, a Commit or a fence, nor moves its threads (booked windows still bound
-    its start).  While one is queued, other 1-GPU jobs take GPUs off TIMING_CPU_SET's NUMA nodes first.
+    its start).  While one is queued, other 1-GPU jobs take GPUs off TIMING_CPU_SET's NUMA nodes first.  The lease is taken
+    inside the scope (`sudo -n systemd-run --scope ... -- setpriv ... -- gpu-lease 1 --on G --max-min M --mem-gb 0 -- taskset
+    ...`), where a keeper holds it until nothing else is left there: the job is over once its scope is empty, what outlives it
+    by a tick is stopped, and a kill of the scope that fails while it is populated is logged (`scope-kill-failed`).
 Status: FILL_DIR/status.txt; every start, stop and exit: FILL_DIR/events.jsonl.
 A bare `fill_runner.py` is the runner, which exits at once while another holds FILL_DIR/.runner.lock; any argument but `fence`
 prints the usage.
@@ -76,6 +79,7 @@ import fnmatch
 import functools
 import json
 import os
+import pwd
 import re
 import shutil
 import signal
@@ -137,6 +141,13 @@ HELD = "held-unknown-exit"
 # runs `bash JOB` and writes its exit status to RC; the trap (a handler, so the job doesn't inherit an ignored signal) keeps the
 # wrapper alive through a stop until the job itself exits
 RC_WRAP = 'trap : TERM INT HUP; bash "$2"; c=$?; echo "$c" > "$1"; exit "$c"'
+# a timing job's lease keeper (`fill-keep CGROUP_ROOT`): it inherits gpu-lease's lock descriptors and holds them while anything
+# else is left in its scope, since `research run` starts its workload in a session of its own that outlives the job and
+# gpu-lease.  In a session of its own, ignoring TERM, so neither gpu-lease's --max-min nor a stop's SIGTERM ends it before the
+# workload; a scope it can't read it holds on to, until fill kills the scope.
+KEEP = ('trap "" TERM INT HUP; read -r cg < /proc/$$/cgroup; procs="$1${cg#0::}/cgroup.procs"; '
+        'while ! mapfile -t ps < "$procs" || [ "${#ps[@]}" -gt 1 ]; do sleep 1; done')
+TIMING_WRAP = 'setsid bash -c "$3" fill-keep "$4" < /dev/null > /dev/null 2>&1 & ' + RC_WRAP
 
 running: dict[str, dict] = {}
 backoff_until = 0.0
@@ -385,6 +396,24 @@ def scope(j: dict, *args: str) -> bool:
     return bool(unit) and subprocess.run([*systemctl, *args, f"{unit}.scope"], capture_output=True).returncode == 0
 
 
+def scope_populated(j: dict) -> bool:
+    """Whether a timing job's scope still holds a process (its cgroup.events); one that can't be read counts as holding one."""
+    try:
+        return "populated 1" in (Path(CGROUP_ROOT) / TIMING_SLICE / f"{j['unit']}.scope" / "cgroup.events").read_text()
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+
+
+def kill(name: str, j: dict, sig: str) -> None:
+    """Signal everything in the job's scope.  Only root's systemctl reaches a timing job's, and what it misses keeps the GPU's
+    lease (KEEP), so a kill that fails while that scope is populated is logged, once a job (`scope-kill-failed`)."""
+    if not scope(j, "kill", f"--signal={sig}") and j["h"].get("timing") and scope_populated(j) and not j.get("kill_failed"):
+        j["kill_failed"] = True
+        event("scope-kill-failed", name, unit=j["unit"], signal=sig)
+
+
 def stop(name: str, why: str, requeue: bool = True) -> None:
     j = running[name]
     if j.get("stopping"):
@@ -395,7 +424,7 @@ def stop(name: str, why: str, requeue: bool = True) -> None:
         os.killpg(j["pid"], signal.SIGTERM)
     except ProcessLookupError:
         pass
-    scope(j, "kill", "--signal=SIGTERM")
+    kill(name, j, "SIGTERM")
     j["stopping"], j["stop_at"], j["requeue"], j["why"] = True, time.monotonic(), requeue, why
     event("stop", name, why=why)
 
@@ -426,17 +455,23 @@ def start(p: Path, h: dict, backfill: bool = False) -> None:
         cmd = ["numactl", f"--membind={CPU_MEMBIND}", *cmd]
     timing = h.get("timing_cpus")
     if timing:
-        # vy-provers' form: root's systemd-run makes the scope in a top-level slice and sets nice 0, then runs CMD as this user
+        # root's systemd-run makes the scope in a top-level slice at nice 0 and runs gpu-lease in it as this user, with this user's
+        # groups (setpriv; sudo leaves USER and LOGNAME root's): the lease's locks are taken inside the scope, and KEEP holds
+        # them there until nothing else is left in it.  --mem-gb 0: the scope's MemoryMax is the cap, and a user scope of
+        # gpu-lease's own would take the job out of this one.
         unit_name = f"fill-timing-{int(time.time() * 1000)}"
         # one compute thread per core in each pool `research run --queue --cpus 8` set for the chunks on node 1; the SMT siblings
         # are headroom
         cores = str(len({siblings(c) for c in gpu_set(timing, 1 << 16) or ()}) or h["cpus"])
         env.update(dict.fromkeys(("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"), cores))
-        cmd = [GPU_LEASE, "1", "--on", str(h["on"]), "--max-min", str(h["max_min"]), "--",
-               "sudo", "-n", "--preserve-env", "env", f"PATH={env.get('PATH', '')}", "systemd-run", "--quiet", "--scope",
-               "--collect", f"--slice={TIMING_SLICE}", "--unit", unit_name, "--nice=0", "-p", f"AllowedCPUs={timing}",
-               "-p", f"MemoryMax={h.get('mem_gb', CPU_MEM_GB)}G", "-p", "MemorySwapMax=0", f"--uid={os.getuid()}",
-               f"--gid={os.getgid()}", "--", "taskset", "-c", timing, "bash", "-c", RC_WRAP, "fill-rc", str(rc_file), str(run)]
+        me = pwd.getpwuid(os.getuid())
+        cmd = ["sudo", "-n", "--preserve-env", "env", f"PATH={env.get('PATH', '')}", f"HOME={me.pw_dir}", f"USER={me.pw_name}",
+               f"LOGNAME={me.pw_name}", "systemd-run", "--quiet", "--scope", "--collect", f"--slice={TIMING_SLICE}",
+               "--unit", unit_name, "--nice=0", "-p", f"AllowedCPUs={timing}", "-p", f"MemoryMax={h.get('mem_gb', CPU_MEM_GB)}G",
+               "-p", "MemorySwapMax=0", "--",
+               "setpriv", f"--reuid={me.pw_uid}", f"--regid={os.getgid()}", "--init-groups", "--",
+               GPU_LEASE, "1", "--on", str(h["on"]), "--max-min", str(h["max_min"]), "--mem-gb", "0", "--",
+               "taskset", "-c", timing, "bash", "-c", TIMING_WRAP, "fill-rc", str(rc_file), str(run), KEEP, CGROUP_ROOT]
     elif h["gpus"]:
         pin = ["--on", str(h["on"])] if h.get("on") is not None else []
         cmd = [GPU_LEASE, str(h["gpus"]), *pin, "--preemptible", "--max-min", str(h["max_min"]), "--", *cmd]
@@ -665,6 +700,13 @@ def reap() -> None:
                 rc = "unknown" if rc is None else rc
         else:
             rc = j["proc"].poll()
+        if rc is not None and j["h"].get("timing") and scope_populated(j):
+            # KEEP holds the GPU's lease while anything is left in the scope, so the job isn't over until it's empty; what is
+            # still there a tick after the job ended is stopped
+            rc = None
+            j["left_ticks"] = j.get("left_ticks", 0) + 1
+            if j["left_ticks"] >= 2:
+                stop(name, "a process outlived its job", requeue=False)
         if rc is None and j.get("unit") and not j["h"]["gpus"]:
             peak = mem_peak_gb(j["pid"])
             if peak is not None:
@@ -675,7 +717,7 @@ def reap() -> None:
                     os.killpg(j["pid"], signal.SIGKILL)
                 except ProcessLookupError:
                     pass
-                scope(j, "kill", "--signal=SIGKILL")
+                kill(name, j, "SIGKILL")
             continue
         if scope(j, "kill", "--signal=SIGKILL"):
             event("scope-residue", name, unit=j["unit"])

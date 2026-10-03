@@ -385,6 +385,18 @@ def stop_at() -> datetime | None:
     return datetime.fromtimestamp(min(ends), timezone.utc) if ends else None
 
 
+def fill_alerts() -> None:
+    """The fill runner's last 50 events that need a person: a failed job, and a timing job's scope that root's systemctl couldn't
+    kill (its processes keep the GPU's lease until someone does)."""
+    for line in (FILL / "events.jsonl").read_text().splitlines()[-50:] if (FILL / "events.jsonl").exists() else []:
+        e = json.loads(line)
+        if e.get("event") == "failed":
+            alert("fill-failed", e["job"], f"fill job {e['job']} (owner {e.get('owner')}) failed rc={e.get('rc')}")
+        elif e.get("event") == "scope-kill-failed":
+            alert("fill-scope-kill-failed", e["job"], f"fill couldn't {e.get('signal')} {e.get('unit')}.scope (job {e['job']}): "
+                  f"what is left in it holds its GPU's lease; `sudo systemctl kill --signal=SIGKILL {e.get('unit')}.scope`")
+
+
 def page() -> str:
     t = now()
     stop = stop_at()
@@ -397,10 +409,7 @@ def page() -> str:
     fill = (FILL / "status.txt").read_text().strip().splitlines() if (FILL / "status.txt").exists() else ["(no fill runner)"]
     if (FILL / "status.txt").exists() and time.time() - (FILL / "status.txt").stat().st_mtime > 180:
         alert("stale", "fill", "the fill runner's status is over 3 min old")
-    for line in (FILL / "events.jsonl").read_text().splitlines()[-50:] if (FILL / "events.jsonl").exists() else []:
-        e = json.loads(line)
-        if e.get("event") == "failed":
-            alert("fill-failed", e["job"], f"fill job {e['job']} (owner {e.get('owner')}) failed rc={e.get('rc')}")
+    fill_alerts()
     live, failed = runs()
     m = meminfo()
     L = [f"# vy-nebius-2 at {iso(t)}", "",

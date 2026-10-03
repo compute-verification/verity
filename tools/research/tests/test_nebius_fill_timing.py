@@ -3,9 +3,13 @@ own, at nice 0, in a top-level slice, and never stops them; node_ops' Quiet neve
 on the shared 48-95 at nice 19 (art:88c665c3).  The node's sysfs and cgroups are files under tmp_path, laid out as node 2's."""
 from __future__ import annotations
 
+import fcntl
 import importlib.util
+import json
 import os
+import pwd
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -17,6 +21,7 @@ from research.pods import registry
 
 NEBIUS = Path(registry.__file__).resolve().parent / "nebius"
 FILL_RUNNER, NODE_OPS = NEBIUS / "fill_runner.py", NEBIUS / "node_ops.py"
+GPU_LEASE = Path(registry.__file__).resolve().parent / "sh" / "gpu_lease.sh"
 NUMA1 = set(range(96, 192))
 
 
@@ -296,10 +301,11 @@ def test_a_new_fence_moves_other_fill_jobs_threads_but_never_a_timing_jobs(node2
 
 
 def test_start_runs_a_timing_job_unpreemptible_at_nice_0_in_a_top_level_scope_and_a_restart_keeps_its_cores(node2, monkeypatch):
-    """The command: gpu-lease without --preemptible, then vy-provers' form (`sudo -n systemd-run --scope --slice=...` as this user),
-    with the scope's AllowedCPUs, nice 0 and memory cap, and taskset on the same CPUs; no `nice -n 19`. A stop kills the system
-    scope through sudo. A restarted runner adopts the chunk with its cores, or with all of 124-191 when no record names them."""
-    load, fill, _ = node2
+    """The command: vy-provers' form (`sudo -n systemd-run --scope --slice=...`) with the scope's AllowedCPUs, nice 0 and memory
+    cap, then this user with this user's groups (setpriv), then gpu-lease without --preemptible or a scope of its own, inside
+    the system scope, and taskset on the same CPUs; no `nice -n 19`. A stop kills the system scope through sudo. A restarted
+    runner adopts the chunk with its cores, or with all of 124-191 when no record names them."""
+    load, fill, cg = node2
     fr = load()
     cmds, calls = [], []
     monkeypatch.setattr(fr.subprocess, "Popen", lambda cmd, **kw: cmds.append((cmd, kw)) or type("P", (), {"pid": 4242})())
@@ -310,15 +316,20 @@ def test_start_runs_a_timing_job_unpreemptible_at_nice_0_in_a_top_level_scope_an
     p = fill / "queue" / "nw-chunk.sh"
     fr.start(p, {**fr.header(p), "on": "7", "timing_cpus": "124-139"})
     (cmd, kw), = cmds
-    lease, scope = cmd[:cmd.index("sudo")], cmd[cmd.index("sudo"):]
-    assert lease == [fr.GPU_LEASE, "1", "--on", "7", "--max-min", "60", "--"] and "--preemptible" not in cmd
+    me = pwd.getpwuid(os.getuid())
     unit = fr.running["nw-chunk.sh"]["unit"]
-    assert unit.startswith("fill-timing-") and scope[:scope.index("--", 4)] == [
-        "sudo", "-n", "--preserve-env", "env", f"PATH={os.environ.get('PATH', '')}", "systemd-run", "--quiet", "--scope",
-        "--collect", "--slice=vy-timing.slice", "--unit", unit, "--nice=0", "-p", "AllowedCPUs=124-139", "-p", "MemoryMax=48G",
-        "-p", "MemorySwapMax=0", f"--uid={os.getuid()}", f"--gid={os.getgid()}"]
-    workload = scope[scope.index("--", 4) + 1:]
-    assert workload[:3] == ["taskset", "-c", "124-139"] and "nice" not in cmd and kw["start_new_session"]
+    root, user = cmd[:cmd.index("setpriv")], cmd[cmd.index("setpriv"):]
+    assert unit.startswith("fill-timing-") and root == [
+        "sudo", "-n", "--preserve-env", "env", f"PATH={os.environ.get('PATH', '')}", f"HOME={me.pw_dir}", f"USER={me.pw_name}",
+        f"LOGNAME={me.pw_name}", "systemd-run", "--quiet", "--scope", "--collect", "--slice=vy-timing.slice", "--unit", unit,
+        "--nice=0", "-p", "AllowedCPUs=124-139", "-p", "MemoryMax=48G", "-p", "MemorySwapMax=0", "--"]
+    assert user[:user.index("--")] == ["setpriv", f"--reuid={os.getuid()}", f"--regid={os.getgid()}", "--init-groups"]
+    lease = user[user.index("--") + 1:]
+    assert lease[:lease.index("--")] == [fr.GPU_LEASE, "1", "--on", "7", "--max-min", "60", "--mem-gb", "0"]
+    workload = lease[lease.index("--") + 1:]
+    assert workload == ["taskset", "-c", "124-139", "bash", "-c", fr.TIMING_WRAP, "fill-rc", str(fill / "running" / ".nw-chunk.sh.rc"),
+                        str(fill / "running" / "nw-chunk.sh"), fr.KEEP, str(cg)]
+    assert "--preemptible" not in cmd and "nice" not in cmd and kw["start_new_session"]
     assert kw["env"]["GPU_LEASE_WHO"] == "fill:net" and kw["env"]["FILL_JOB"] == "nw-chunk.sh"
     pools = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS")
     assert {kw["env"][v] for v in pools} == {"8"}                    # one compute thread per core, as on node 1
@@ -342,6 +353,111 @@ def test_start_runs_a_timing_job_unpreemptible_at_nice_0_in_a_top_level_scope_an
     monkeypatch.setattr(fr3, "event", lambda *a, **kw: None)
     fr3.adopt()
     assert fr3.running["nw-chunk.sh"]["h"]["timing_cpus"] == "124-191" and fr3.timing_free([]) == set()
+
+
+needs_lease = pytest.mark.skipif(not all(map(shutil.which, ("bash", "flock", "setsid", "timeout"))) or
+                                 not Path("/proc/self/cgroup").read_text().startswith("0::"),
+                                 reason="gpu-lease and the keeper need bash, flock, setsid, timeout and cgroup v2")
+
+
+@needs_lease
+def test_the_keeper_holds_a_timing_jobs_lease_until_nothing_else_is_left_in_its_scope(node2, tmp_path):
+    """gpu-lease drops its locks once its CMD exits, and `research run` starts its workload with none of them (Popen's
+    close_fds), in a session of its own: the workload of a chunk that ended, or that gpu-lease's --max-min stopped, kept running
+    on a GPU whose lease was gone. The keeper TIMING_WRAP leaves in the scope holds the locks until it is alone there. A file
+    stands for the scope's cgroup.procs (under the root the keeper is given, at this process's cgroup): two lines while the
+    workload lives, one once it is gone."""
+    load, _, _ = node2
+    fr = load()
+    gl, root = tmp_path / "gl", tmp_path / "cgroot"
+    procs = root / Path("/proc/self/cgroup").read_text().splitlines()[0].split("::", 1)[1].lstrip("/") / "cgroup.procs"
+    procs.parent.mkdir(parents=True)
+    procs.write_text("1\n2\n")
+    job, rc = tmp_path / "job.sh", tmp_path / "rc"
+    job.write_text("#!/bin/bash\nexit 0\n")
+    env = {**{k: v for k, v in os.environ.items() if k != "RESEARCH_RUN_DIR"}, "GPU_LEASE_DIR": str(gl), "GPU_LEASE_COUNT": "1",
+           "GPU_LEASE_UUID_TABLE": "GPU-a0", "GPU_LEASE_WHO": "fill:net", "GPU_LEASE_USAGE_LOG": str(tmp_path / "usage.jsonl"),
+           "GPU_LEASE_UTIL_LOG": str(tmp_path / "util-*.jsonl")}
+
+    def lease(*wrap: str) -> bool:
+        """Run a chunk under gpu-lease as fill does; whether GPU 0's lease is still held once gpu-lease has exited."""
+        with open(tmp_path / "lease.log", "w") as log:
+            subprocess.run(["bash", str(GPU_LEASE), "1", "--on", "0", "--max-min", "5", "--mem-gb", "0", "--", "bash", "-c", wrap[0],
+                            "fill-rc", str(rc), str(job), *wrap[1:]], env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
+        assert rc.read_text() == "0\n"
+        with open(gl / "0.lock") as f:
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return False
+            except BlockingIOError:
+                return True
+
+    assert lease(fr.RC_WRAP) is False                                   # the lease ended with the job, its workload still there
+    try:
+        assert lease(fr.TIMING_WRAP, fr.KEEP, str(root)) is True
+        procs.write_text("1\n")                                         # the workload is gone: the keeper lets the lease go
+        with open(gl / "0.lock") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+    finally:
+        procs.write_text("1\n")
+
+
+def test_a_timing_job_ends_only_once_its_scope_is_empty_and_a_failed_kill_is_logged(node2, monkeypatch):
+    """KEEP holds a timing job's lease while anything is left in its scope, so the job isn't filed, nor its cores freed, while
+    the scope reads `populated 1` (it was as soon as gpu-lease exited): a tick later what's left is stopped (SIGTERM, then
+    SIGKILL), and a kill root's systemctl refuses while the scope is populated is logged, once. A scope fill can't read counts
+    as populated."""
+    load, fill, cg = node2
+    fr = load()
+    events, calls, ok = [], [], [True]
+    monkeypatch.setattr(fr, "event", lambda kind, job, **kw: events.append((kind, job, kw)))
+    monkeypatch.setattr(fr.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0 if ok[0] else 1))
+
+    def gone(pid, sig):
+        raise ProcessLookupError
+
+    monkeypatch.setattr(fr.os, "killpg", gone)
+    cgroup(cg, "vy-timing.slice", "0-191", True, "124-191")
+    cgroup(cg / "vy-timing.slice", "fill-timing-1.scope", "124-139", True, "124-139")
+    queue(fill, "nw-chunk.sh", TIMING)
+    p = fill / "queue" / "nw-chunk.sh"
+    h = {**fr.header(p), "on": "7", "timing_cpus": "124-139"}
+    shutil.move(str(p), fill / "running" / "nw-chunk.sh")
+    (fill / "running" / ".nw-chunk.sh.cpus").write_text("124-139\n")
+    fr.running["nw-chunk.sh"] = j = {"pid": 4242, "proc": type("P", (), {"poll": lambda self: 0})(), "h": h, "t0": 0.0,
+                                     "started": "-", "paused": False, "unit": "fill-timing-1"}
+    fr.reap()
+    assert "nw-chunk.sh" in fr.running and events == [] and calls == []
+    fr.reap()
+    assert events == [("stop", "nw-chunk.sh", {"why": "a process outlived its job"})] and j["requeue"] is False
+    assert ["sudo", "-n", "systemctl", "kill", "--signal=SIGTERM", "fill-timing-1.scope"] in calls
+    ok[0], j["stop_at"] = False, -1e9                                    # 20 s on, and root's systemctl refuses
+    fr.reap()
+    fr.reap()
+    assert events[1:] == [("scope-kill-failed", "nw-chunk.sh", {"unit": "fill-timing-1", "signal": "SIGKILL"})]
+    assert calls[-1] == ["sudo", "-n", "systemctl", "kill", "--signal=SIGKILL", "fill-timing-1.scope"]
+    assert "nw-chunk.sh" in fr.running and (fill / "running" / ".nw-chunk.sh.cpus").exists()
+    (cg / "vy-timing.slice" / "fill-timing-1.scope" / "cgroup.events").write_text("populated 0\n")
+    fr.reap()
+    assert "nw-chunk.sh" not in fr.running and (fill / "done" / "nw-chunk.sh").exists()
+    assert events[-1][0] == "done" and not (fill / "running" / ".nw-chunk.sh.cpus").exists()
+    assert fr.scope_populated({"unit": "fill-timing-2"}) is False
+    (cg / "vy-timing.slice" / "fill-timing-2.scope" / "cgroup.events").mkdir(parents=True)
+    assert fr.scope_populated({"unit": "fill-timing-2"}) is True
+
+
+def test_node_ops_alerts_on_a_timing_scope_fill_could_not_kill(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPS_DIR", str(tmp_path))
+    monkeypatch.setenv("FILL_DIR", str(tmp_path))
+    spec = importlib.util.spec_from_file_location("node_ops_kill_failed", NODE_OPS)
+    ops = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ops)
+    (tmp_path / "events.jsonl").write_text(
+        '{"t": "-", "event": "scope-kill-failed", "job": "nw-chunk.sh", "unit": "fill-timing-1", "signal": "SIGKILL"}\n'
+        '{"t": "-", "event": "stop", "job": "pous-a.sh", "why": "max_min"}\n')
+    ops.fill_alerts()
+    a, = [json.loads(l) for l in (tmp_path / "alerts.jsonl").read_text().splitlines()]
+    assert (a["kind"], a["key"]) == ("fill-scope-kill-failed", "nw-chunk.sh") and "fill-timing-1.scope" in a["msg"]
 
 
 def test_timing_cpus_leave_out_every_cpu_another_cgroup_or_a_fence_may_use_and_fail_closed(node2):
