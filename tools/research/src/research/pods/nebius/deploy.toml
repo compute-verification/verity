@@ -199,6 +199,13 @@ path = "/workspace/research/console/util_collect.py"
 src = "tools/research/console/util_collect.py"
 nodes = ["vy-nebius-1"]
 
+# the console imports cluster.usage from beside itself: node 1's python3 has no cluster package
+[[tree]]
+path = "/workspace/research/console/cluster"
+src = "tools/cluster/src/cluster"
+nodes = ["vy-nebius-1"]
+run = ["systemd:verity-console.timer"]
+
 [[file]]
 path = "/etc/systemd/system/verity-console.service"
 src = "infra/nebius/verity-console.service"
