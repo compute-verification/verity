@@ -584,3 +584,51 @@ def test_a_contradicted_cached_pass_is_named_in_the_result(tmp_path, monkeypatch
     r = RES.check(tmp_path, "r20260929-010000-abcd")
     assert r.valid, r.errors
     assert r.doc["cache_contradictions"] == bad and r.doc["nondeterministic"] == flaky
+
+
+def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_path, monkeypatch, capsys):
+    """`git diff --name-only` quotes a name with bytes outside ASCII (`"backends/flock/\\303\\251.py"`), which no prefix of the
+    agreement's rule matched, so `--record` checked such a change without sending the agreement's pinned build."""
+    import shutil
+    import subprocess
+    import sys
+    import tempfile
+
+    from research.store import local
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=tmp_path,
+                       check=True, capture_output=True)
+
+    (tmp_path / "tools" / "check").mkdir(parents=True)
+    shutil.copy(ROOT / "tools" / "check" / "tool.py", tmp_path / "tools" / "check" / "tool.py")
+    git("init", "-q", "-b", "main")
+    git("add", "-A")
+    git("commit", "-q", "-m", "base")
+    (tmp_path / "backends" / "flock").mkdir(parents=True)
+    (tmp_path / "backends" / "flock" / "é.py").write_text("x = 1\n")
+    git("checkout", "-q", "-b", "pr")
+    git("add", "-A")
+    git("commit", "-q", "-m", "é")
+
+    class Store:
+        def fetch(self, art: str) -> Path:
+            return tmp_path / art.replace(":", "_")
+
+    real, launched = subprocess.run, []
+
+    def run(cmd, *a, **k):
+        if cmd[:4] == [sys.executable, "-m", "research", "run"]:
+            launched.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0)
+        return real(cmd, *a, **k)
+
+    monkeypatch.setattr(CHECK, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(local, "LocalStore", Store)
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(subprocess, "run", run)
+    assert CHECK.record(["--base", "main"]) == 0
+    assert "check: changes under backends/flock/ against main: sending the pinned upstream build and inputs" in capsys.readouterr().out
+    [cmd] = launched
+    assert any(x.startswith("flock_upstream=art:") for x in cmd)

@@ -434,7 +434,8 @@ def record(argv: list[str]) -> int:
     if not landable(base):
         print(f"check: this commit can't land as is; the train's check is the merge check (merging it into {base} gives a tree "
               f"other than its own, so `research merge` won't take this check)")
-    changed = subprocess.run(["git", "diff", "--name-only", base, "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
+    changed = [p for p in subprocess.run(["git", "diff", "--name-only", "-z", base, "HEAD"], cwd=ROOT, capture_output=True, text=True,
+                                         errors="surrogateescape", check=True).stdout.split("\0") if p]
     from research.merge import rule_touches
 
     need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)] + ["lean-agreement"] * agreement
