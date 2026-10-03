@@ -106,7 +106,7 @@ import hashlib, json, os, sys
 from pathlib import Path
 case, manifest = sys.argv[1], sys.argv[2]
 doc = json.load(open(manifest))
-cases = {"B0": "HuggingFaceTB/SmolLM2-135M", "B1": "Qwen/Qwen2.5-1.5B"}   # every other case is a `role` in checkpoints.json
+cases = {"B0": "HuggingFaceTB/SmolLM2-135M", "B1": "Qwen/Qwen2.5-1.5B", "B7": "Qwen/Qwen2.5-7B"}   # every other case is a `role` in checkpoints.json
 ent = next((c for c in doc["checkpoints"] if c.get("role") == case or (case in cases and c["repo"] == cases[case] and c.get("local_path"))), None)
 if ent is None:
     sys.exit(f"no checkpoints.json entry for case {case}")
