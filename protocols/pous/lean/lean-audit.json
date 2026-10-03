@@ -209,6 +209,11 @@
    "assumptions": [],
    "type_hash": "99d05166c08d953c29cb6dd7051f0e470b15b7423a24fcc738dd2d5684949edb"
   },
+  "Pous.SecurityProofs.BandPubMeetsFamily": {
+   "signature": ["Pous.SecurityProofs.BandPubMeetsFamily : Pous.Guarantees.BandPubMeetsFamily"],
+   "assumptions": [],
+   "type_hash": "47a39c89bcca4b872efbaa1b2ab0b9cc886df59a07d48c94287c06b5664a51e7"
+  },
   "Pous.SecurityProofs.BandTwoWay220_12": {
    "signature": ["Pous.SecurityProofs.BandTwoWay220_12 : Pous.Guarantees.BandTwoWay220_12"],
    "assumptions": [],
@@ -610,7 +615,7 @@
    "pins": ["PousP2Ring.not_meetsOn_b19_k88", "PousP2Ring.tight_p16448"]
   },
   "Pous.Guarantees": {
-   "digest": "9971aa159cae6880460adca04b40d03216f03602c5b4fe0419c63cffbb234c4f",
+   "digest": "b7eccbcc173c553d46dcdcc6ff1de9f5ced117825a64cabce9de0b4ae73c23af",
    "definitions": {
     "Pous.Guarantees.A1CompressionCard": "4bdc9218360926b7313e50a5882d2d7c72bf905191984cb666c8cad07a435774",
     "Pous.Guarantees.A1CompressionPr": "45e347c38d963ece9d1f073c9efb190b752629dc1364ddeee128432ee1e5fd9d",
@@ -637,6 +642,7 @@
     "Pous.Guarantees.BandPubMeets14": "d986825aeeed19e9422df88ca8bcd2d01b95fe4147cceca5412279d90f9321fa",
     "Pous.Guarantees.BandPubMeets14Global": "a279ff8ba14f46c38b8e8751adc9ca4e0f781fc132a6b10837492eaf97b1074a",
     "Pous.Guarantees.BandPubMeets64": "9118584bd9722ad14a6f6325b7e9acef17410397a4917fbc59cf874a98688305",
+    "Pous.Guarantees.BandPubMeetsFamily": "0182a7a59af7843082e12be9a7e19d3dc43eed50f7f4e49a13de84547434b1ee",
     "Pous.Guarantees.BandTwoWay220_12": "b7723d24831829dc11c0e0341550982a8312331ebde778df91b12660fec0a268",
     "Pous.Guarantees.BandTwoWay220_12D11": "1f422bedf14d7b6f18bb8bfee213aa92cb4267370b99beef08ffe5afc3ef7714",
     "Pous.Guarantees.BandTwoWay220_16": "128958f4a8fd31803c1531184bc74723e90d0035c1a712c588ac9a0f78682d41",
@@ -697,6 +703,7 @@
     "Pous.SecurityProofs.BandPubMeets14",
     "Pous.SecurityProofs.BandPubMeets14Global",
     "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.BandPubMeetsFamily",
     "Pous.SecurityProofs.BandTwoWay220_12",
     "Pous.SecurityProofs.BandTwoWay220_12D11",
     "Pous.SecurityProofs.BandTwoWay220_16",
@@ -775,6 +782,7 @@
     "Pous.SecurityProofs.BandPubMeets14",
     "Pous.SecurityProofs.BandPubMeets14Global",
     "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.BandPubMeetsFamily",
     "Pous.SecurityProofs.ChainDenseMeets111",
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.DenseMeets",
@@ -816,7 +824,8 @@
    "pins": [
     "Pous.SecurityProofs.BandPubMeets14",
     "Pous.SecurityProofs.BandPubMeets14Global",
-    "Pous.SecurityProofs.BandPubMeets64"
+    "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.BandPubMeetsFamily"
    ]
   },
   "Pous.Protocol.Game.Oracle": {
@@ -863,6 +872,7 @@
     "Pous.SecurityProofs.BandPubMeets14",
     "Pous.SecurityProofs.BandPubMeets14Global",
     "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.BandPubMeetsFamily",
     "Pous.SecurityProofs.ChainDenseMeets111",
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.DenseMeets",
@@ -943,6 +953,7 @@
     "Pous.SecurityProofs.BandPubMeets14",
     "Pous.SecurityProofs.BandPubMeets14Global",
     "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.BandPubMeetsFamily",
     "Pous.SecurityProofs.ChainDenseMeets111",
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.DenseMeets",
@@ -1031,6 +1042,7 @@
     "Pous.SecurityProofs.BandPubMeets14",
     "Pous.SecurityProofs.BandPubMeets14Global",
     "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.BandPubMeetsFamily",
     "Pous.SecurityProofs.ChainDenseMeets111",
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.DenseMeets",
@@ -1112,6 +1124,7 @@
     "Pous.SecurityProofs.BandPubMeets14",
     "Pous.SecurityProofs.BandPubMeets14Global",
     "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.BandPubMeetsFamily",
     "Pous.SecurityProofs.ChainDenseMeets111",
     "Pous.SecurityProofs.ChainDenseMeets64"
    ]
@@ -1177,6 +1190,7 @@
     "Pous.SecurityProofs.BandPubMeets14",
     "Pous.SecurityProofs.BandPubMeets14Global",
     "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.BandPubMeetsFamily",
     "Pous.SecurityProofs.ChainDenseMeets111",
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.DenseMeets",
@@ -1277,6 +1291,7 @@
     "Pous.SecurityProofs.BandPubMeets14",
     "Pous.SecurityProofs.BandPubMeets14Global",
     "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.BandPubMeetsFamily",
     "Pous.SecurityProofs.BandTwoWay220_12",
     "Pous.SecurityProofs.BandTwoWay220_12D11",
     "Pous.SecurityProofs.BandTwoWay220_16",
@@ -1316,6 +1331,7 @@
     "Pous.SecurityProofs.BandPubMeets14",
     "Pous.SecurityProofs.BandPubMeets14Global",
     "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.BandPubMeetsFamily",
     "Pous.SecurityProofs.ChainDenseMeets111",
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.DenseMeets",
@@ -1419,6 +1435,7 @@
     "Pous.SecurityProofs.BandPubMeets14",
     "Pous.SecurityProofs.BandPubMeets14Global",
     "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.BandPubMeetsFamily",
     "Pous.SecurityProofs.ChainDenseMeets111",
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.P3ConcreteMeets14GB",
@@ -1466,7 +1483,8 @@
    "pins": [
     "Pous.SecurityProofs.BandPubMeets14",
     "Pous.SecurityProofs.BandPubMeets14Global",
-    "Pous.SecurityProofs.BandPubMeets64"
+    "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.BandPubMeetsFamily"
    ]
   },
   "Pous.Protocol.Model.SampledAudit": {
@@ -1511,6 +1529,7 @@
     "Pous.SecurityProofs.BandPubMeets14",
     "Pous.SecurityProofs.BandPubMeets14Global",
     "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.BandPubMeetsFamily",
     "Pous.SecurityProofs.ChainDenseMeets111",
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.DenseMeets",
