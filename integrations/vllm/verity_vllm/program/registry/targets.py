@@ -157,6 +157,25 @@ def moe_expert_gemm_spec(profile, E: int, K: int, N: int, *, routed: bool):
     return bind(M.MoeExpertGemmWV2 if routed else M.MoeExpertGemmV2, E=int(E), K=int(K), N=int(N), DOT=dot)
 
 
+def moe_expert_fp8_dot(profile):
+    """The e4m3 k32 step of the block-FP8 fused-MoE expert GEMMs on the declared target: the GEMM target's `fp8_dot` (one step for the
+    dense FP8 GEMMs and `tl.dot`), refused by name where the target records none (cc 9.0: GLM-5.3's experts bind `_v1` through their
+    capture map)."""
+    gt = gemm_target(profile)
+    dot = FP8_DOTS.get(gt.fp8_dot) if gt.fp8_dot else None
+    if dot is None:
+        raise UnregisteredTarget(f"block-FP8 fused-MoE experts on {gt.key} ({profile.capability_str}): no registered e4m3 step")
+    return dot
+
+
+def moe_expert_fp8_gemm_spec(profile, E: int, K: int, N: int, G: int, KB: int, SWAP: bool, *, routed: bool):
+    """The registered Definition of one (token, slot) pair of a block-FP8 `fused_moe_kernel` launch on the declared target:
+    `MoeExpertFp8Gemm(W)_v1{E,K,N,G,KB,SWAP,DOT}`, the w13 launch (`routed` False) or the w2 launch with the routed weight."""
+    from verity_vllm.program.registry import fp8_moe_experts as X
+    return bind(X.MoeExpertFp8GemmW if routed else X.MoeExpertFp8Gemm, E=int(E), K=int(K), N=int(N), G=int(G), KB=int(KB),
+                SWAP=bool(SWAP), DOT=moe_expert_fp8_dot(profile))
+
+
 def tuned_gemm_table(profile) -> dict[tuple[int, int], dict[str, Any]]:
     """vLLM's tuned batch-invariant GEMM table of the declared target (`GemmTarget.tuned_table`; empty = default tiling for every shape)."""
     return dict(gemm_target(profile).tuned_table)
@@ -431,7 +450,7 @@ def describe(profile) -> dict[str, Any]:
 
 
 __all__ = ["TARGETS", "DOTS", "FP8_DOTS", "FP4_DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
-           "moe_expert_dot", "moe_expert_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
+           "moe_expert_dot", "moe_expert_gemm_spec", "moe_expert_fp8_dot", "moe_expert_fp8_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
            "scaled_mm_fp8_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]
