@@ -292,12 +292,20 @@ def test_a_json_file_git_merges_into_a_repeated_key_refuses_the_train(tmp_path, 
     assert _git(origin, "for-each-ref", "refs/heads/train-prep/k") == ""
 
 
+def _store_remote(tmp_path: Path, monkeypatch) -> None:
+    """A store remote (a directory): the gate reads grants and reviews only after pulling the target's labels from one."""
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+
+
 def test_a_pin_change_goes_into_a_train_only_with_the_statement_reviewer_grant_at_its_head(tmp_path, monkeypatch, capsys):
     """old-circuits-and-proofs held #828 and #858-#866 out of trains by hand on 2 Oct: each changed a pinned record with no
     statement reviewer named.  The queue's rule for it refuses such a ref before its train is built (`--prepare`) or checked
     (`--train`), until the `grant` label is on the pull request's pinned head; a change to another section needs none."""
     from research.store.local import LocalStore
 
+    _store_remote(tmp_path, monkeypatch)
     main, _feat, _tip = _repos(tmp_path)
     audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
     (main / "tools" / "check").mkdir(parents=True)
@@ -331,6 +339,7 @@ def test_a_move_audit_py_prints_as_the_same_statements_needs_no_grant_and_a_chan
     report on a head whose record changed after it ran."""
     from research.store.local import LocalStore
 
+    _store_remote(tmp_path, monkeypatch)
     main, _feat, _tip = _repos(tmp_path)
     base = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {"P.Defs": {"hash": "d"}}}
     moved = {**base, "pins": {"Q.t": {"type_hash": "1q"}}, "reads": {"Q.Defs": {"hash": "dq"}}}
