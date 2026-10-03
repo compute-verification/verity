@@ -114,6 +114,8 @@ REF = HIDDEN_X_LAYERS["phi3-mini"]          # unknown models are estimated as Ph
 
 SIZES = ROOT / "bundle-sizes.json"    # learned: per model, the largest succeeded Commit's bundle in GB per (batch x tokens)
 TRACK = ROOT / "bundle-track.json"    # per Commit in flight: the most its bundle has held, and its Job
+# SIZES' mirror under /workspace, which the pack pods mount (their home isn't research's): commit_pack.py reads it
+SHARED = Path(os.environ.get("VY_BUNDLE_SIZES", "/workspace/jobs/dispatch/bundle-sizes.json"))
 LEARN_MARGIN = 1.25
 _learned: dict[str, float] | None = None
 
@@ -162,17 +164,49 @@ def learn(flying, written, jobs):
         TRACK.write_text(json.dumps(track, indent=1, sort_keys=True) + "\n")
         if changed:
             SIZES.write_text(json.dumps(table, indent=1, sort_keys=True) + "\n")
+        share(table)
+
+
+_share_failed = False
+
+
+def share(table):
+    """Mirror the learned table to SHARED when it differs, so the pack pods (commit_pack.py) estimate as the pacer does; written to
+    a temporary name and renamed, so a pod never reads half of it."""
+    global _share_failed
+    text = json.dumps(table, indent=1, sort_keys=True) + "\n"
+    try:
+        if SHARED.exists() and SHARED.read_text() == text:
+            return
+        SHARED.parent.mkdir(parents=True, exist_ok=True)
+        tmp = SHARED.with_name(SHARED.name + ".tmp")
+        tmp.write_text(text)
+        tmp.replace(SHARED)
+        _share_failed = False
+    except OSError as e:
+        if not _share_failed:
+            log(f"could not mirror the learned bundle sizes to {SHARED}: {e}")
+        _share_failed = True
+
+
+def tp(row):
+    m = re.search(r"__tp(\d+)__", row)
+    return int(m.group(1)) if m else 1
 
 
 def sized(row):
     """Whether the pacer has a size for `row`'s model it trusts: a rate learned from a succeeded Commit, or the formula's own
-    row (HIDDEN_X_LAYERS). Any other model is estimated as Phi-3-mini, a guess."""
-    return model(row) in learned() or any(row.startswith(k + "__") for k in HIDDEN_X_LAYERS)
+    row (HIDDEN_X_LAYERS), or a TP row's, which has no bundle (estimate_gb). Any other model is estimated as Phi-3-mini, a guess."""
+    return tp(row) > 1 or model(row) in learned() or any(row.startswith(k + "__") for k in HIDDEN_X_LAYERS)
 
 
 def estimate_gb(row):
-    """A Commit's bundle, GB: from the largest bundle of its model a succeeded Commit wrote (learn()) with LEARN_MARGIN, else
-    infra's formula scaled from Phi-3-mini, which runs 4-9x over the grid's small models (Oct 1: 51 and 107 GB against 480)."""
+    """A Commit's bundle, GB: none for a TP row, whose Commit replays in its own process and writes no replay bundle (none of
+    node 1's 72 TP2 rows had one on Oct 3, and cov-gm359's qwen3-14b held the queue as a model with no size); else from the
+    largest bundle of its model a succeeded Commit wrote (learn()) with LEARN_MARGIN, else infra's formula scaled from
+    Phi-3-mini, which runs 4-9x over the grid's small models (Oct 1: 51 and 107 GB against 480)."""
+    if tp(row) > 1:
+        return 0.0
     rate = learned().get(model(row))
     if rate:
         return max(10.0, rate * max(batch(row), 1) * tokens(row) * LEARN_MARGIN)

@@ -21,7 +21,11 @@ import Flock.RowLeaf
 import Flock.Blake3Row
 import Flock.Statement
 import Flock.Verify
+import Flock.ZkProof
+import Flock.ZkLigerito
+import Flock.Zk
 import Flock.Partition
+import Flock.HmNets
 import Flock.HmRow
 import Flock.Registered
 import Flock.TemplateQuery

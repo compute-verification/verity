@@ -55,10 +55,13 @@ No value is ever printed. `research data mint-credential` already read the
 same variables.
 
 On a cloud VM a long-lived shell can lose the injected secrets that a fresh
-tmux login shell still has. When a secret named in
-`$CLOUD_AGENT_INJECTED_SECRET_NAMES` is missing from the shell, the store,
-`research queue ready`, node ssh and the Nebius scripts fail and say `rerun
-from a fresh tmux login shell` (`secret_hint.py`).
+tmux login shell still has. Every `research` command first sets each secret
+named in `$CLOUD_AGENT_INJECTED_SECRET_NAMES` and missing from the shell from
+the tmux server's global environment, where that login shell gets them
+(`secret_hint.recover`); one run under a test doesn't, so a secret the test
+unset stays unset. If one is still missing, the store, `research queue
+ready`, node ssh and the Nebius scripts fail and say `rerun from a fresh tmux
+login shell` (`secret_hint.py`).
 
 ## Commands
 
@@ -195,6 +198,16 @@ reaches it. The one such machine is the Nebius server `vy-nebius-1` (`pods/nebiu
 needs no credentials), `teardown.sh` stops or deletes it, `check.py` is its bootstrap check, `prefetch.py` fills its weight
 cache from `weights.tsv`, and its lease is `sh/lease.sh` with `LEASE_MACHINE_ID` and a stop command in place of RunPod's key.
 Its runs share its GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: one flock per GPU, `CUDA_VISIBLE_DEVICES` set).
+
+What runs on the Nebius nodes outside a run (infra's loops, timers and services, and the files they read) is listed in
+`pods/nebius/deploy.toml`, each with the repository file it comes from, and goes there only through `research deploy install
+NODE --by WHO [PATH ...]` from a commit an origin branch holds (`main`, or a PR's head for a hotfix that can't wait for its
+train). `research deploy drift` reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
+`missing`), every process still running a file installed after it started (`restart`), and every file in a managed directory
+that no entry lists (`stray`); the hourly preflight probe posts its findings whenever they change (`research/deploy.py`). A new
+loop or script goes into the repository and the manifest before it runs; a backup of a replaced file is
+`.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ...
+--by WHO` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
 
 An unlisted or foreign machine is refused before anything is contacted. The
 tool ships as a content-addressed source snapshot under `<root>/tool/` and

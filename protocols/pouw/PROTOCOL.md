@@ -111,7 +111,7 @@ wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves pr
   (a) to (c), not the rule's other clauses or λ₃ ≥ 16: the rule (Lean `Admissible`) is checked at every k, and
   `tests/test_pouw_word_p.py` certifies all of them exactly at the k the MVP uses (1,088, 2,048, 11,008).
   `ncp-v1-shift24` uses the shift by 24 instead, admissible with independent checkpoints for every k ≥ 1,024 with
-  16 ∣ k (Lean `shiftBy24_admissible`, `Pouw.SecurityProofs.NCP.IndependentWitness`).
+  16 ∣ k (Lean `Pouw.SecurityProofs.NCP.ShiftBy24Admissible`, `Pouw.SecurityProofs.NCP.IndependentWitness`).
 - **Lean** (the certificate's pins, all approved by the red team, Phase 13):
   - the reduction: `Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1` (β = 128, f = 24, n₀ ≤ n), from the named assumption
     `Pouw.NCP.Assumptions.TTNCP_U`, with `Pouw.SecurityProofs.NCP.TTNCPUIff` (it is TT_NCP over the route-U checked
@@ -384,8 +384,10 @@ useful    U/(α_A·α_B), glue
     partial sums, α and β_row's FP32 steps, and the 2^−32 floor that keeps an all-zero row finite.
     - Only ρ depends on A alone. The model adopts s, ρ and α as its own FP8 quantizer, so W_ref counts 68 units per
       element of forming, 64 of them credited (the lane's `Costs.adopted`).
-    - `wref` is Lean's `wrefOf` and `credit_of` its `creditOf`, pinned on a grid of shapes. The weight side (B's forming,
-      B̃·F_A, G, P_B) is `job_cost`, once per weight and epoch, in neither.
+    - `wref` is Lean's `wrefOfRev1` and `credit_of` its `creditOfRev1` (rev1, `DeviceRev1.lean`; `wrefDevRev1` and
+      `creditDevRev1` at another device's prices), pinned on a grid of shapes: `wrefOf` and `creditOf` less the first
+      promotion add of every word (`first_adds`, m·n adds), which adds into +0 and so returns its group's word. The
+      weight side (B's forming, B̃·F_A, G, P_B) is `job_cost`, once per weight and epoch, in neither.
     - Every W1 price is a device's (`Prices`, the device statement's): `H100_PRICES` for sm_90 (FADD 32, a BF16 MAC 2,
       forming 64 + 4) and `SM120_PRICES` for sm_120 (8, 2, 40 + 1: each step at its cheapest bit-exact form, as measured
       on the card). `wref`, `credit_of`, `job_cost` and the debit read the scheme's record; the registered schemes are the
@@ -420,8 +422,10 @@ useful    U/(α_A·α_B), glue
   - It equals P1's Lean-checked word vectors: all 552 when they were cut, and the 448 kept in
     `tests/vectors/pearl_c_skip_vectors*.txt.gz` under the 256 KiB blob limit (every word with k ≤ 512, and §5's
     aligned-spike words at k = 2,048 and 8,192).
-  - A tile's chain debit is 40 units per flagged atom-word, summed over its words. The forming debit's per-tile rule
-    is pending from P3's owner, so `forming_elements` is a stub that returns 0.
+  - A tile's chain debit is 40 units per flagged atom-word and, under rev1 (`tileDebitRev1`), an add (32 units) per
+    later promotion into a +0 total, the g ≥ 1 whose total after g groups is ±0 (`word_debit`, rev1's
+    `laterZeroPromos`), each summed over its words. The forming debit's per-tile rule is pending from P3's owner, so
+    `forming_elements` is a stub that returns 0.
   - The census's aligned-spike tile at R = 300 passes the domain with 74.6% of its atom-words flagged, about 15 times the
     cap.
 - **The work law** (`schemes/pearl_c_work.py`) is what the verifier credits, draws and checks.
@@ -442,17 +446,17 @@ useful    U/(α_A·α_B), glue
     - The tile cap and R1 read the credited rows only. Past the count caps the audit rejects.
     - `volunteer` is an honest prover's remedy for a tile over the cap: it gives up the rows whose removal brings each
       tile under, before the beacon.
-  - A cell's draw weight is its row's share of `wrefOf` at the kept width. An accepted unit is credited
-    (1 − ρ)·`creditOf` over its credited cells.
+  - A cell's draw weight is its row's share of `wref` at the kept width. An accepted unit is credited
+    (1 − ρ)·`credit_of` over its credited cells.
   - **The sampling guarantee is per credited cell.** A drawn tile's uncredited cells (filler, excluded or voluntary)
     never count as coverage. Volunteering a tile's other rows only lowers that tile's draw weight to its credited cells,
     which is exactly the bound claimed.
   - On an opened tile the verifier checks that filler rows are zero, that every row is zero past the kept width, that
     credited rows pass the per-row rules and excluded rows fail them, and that the replayed debit over the credited words
-    is at most ρ times those cells' credit, with ρ = 1/400.
-  - That credit is the cells' share of the unit's `creditOf` at the kept width, |rows|·|cols|/(m·n) (the per-tile
+    is at most ρ times those cells' credit. ρ is the device record's cap (`Device.cap`): 1/400 on the H100.
+  - That credit is the cells' share of the unit's `credit_of` at the kept width, |rows|·|cols|/(m·n) (the per-tile
     statement's `tileShare`). A row's forming and A′·F_B are so charged once across its row band, a |cols|/n share in
-    each tile. `creditOf` of the tile's own shape would charge them whole in every tile: at 8,192³ that cap is 2.17×
+    each tile. `credit_of` of the tile's own shape would charge them whole in every tile: at 8,192³ that cap is 2.17×
     the cells' share.
   - The draws are keyed by a beacon round published after the verifier recorded the commitment (the transcript root and
     the records root), through `derive`.
@@ -476,6 +480,20 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
 - **The atom is the card's captured step**, `BLACKWELL_SM120_E4M3_M16N8K32`: `mma.sync` `kind::f8f6f4` m16n8k32 E4M3 as one
   group of all 32 products and the accumulator in a 26-bit adder (Lean's `Pipeline ⟨[32], 26, −133⟩`), where the H100's
   and Ada's FP8 adders are 14 bits wide.
+- **The cap is ρ = 1/1,000** (Daniel, 9:43 AM PDT on 2 Oct), the record's `cap`; the H100's stays 1/400.
+  - The verifier rejects a drawn tile whose replayed debit passes 1/1,000 of its credited cells' credit, and an accepted
+    unit is credited (1 − 1/1,000)·`credit_of`. `volunteer` reads the same cap. The certificate states TT_OUT(1/1000) and
+    names the cap among its parameters.
+  - γ at the headline record (FP32 at 8.376, the packed cast at 8.72, rev1's credit) is 0.36949% at 8,192³ and 0.35973%
+    at 16,384³, per unit and per audit tile (Lean `pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192`, `_16384` and their
+    `pearlCSampled…` twins). Per unit it follows from rev1 at 1/400 alone (`…Cap1000_8192_of_cap400`); per tile, TT_OUT
+    at 1/1,000 is the assumption. At the issue-bound FP32 add (8.00) it is 0.36901% and 0.35949%
+    (`pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192`, `_16384` and their `pearlCSampled…` twins, from TT_OUT at 1/1,000);
+    the ledger publishes the larger of the two prices, the in-loop add's.
+  - The verifier's credit, cap and debit are rev1's, the rule these γ are proved for: `credit_of` is `creditDevRev1`,
+    `wref` is `wrefDevRev1` (`wrefDevRev1K` at the cast's offset), and the tile rule is `tileDebitRev1` against
+    ρ·`creditDevRev1`·`tileShare`. Python's γ, credit and tile cap equal the Lean's exactly on every pinned price twin
+    and on the H100's rev1 pins (`benchmarks/pouw/tests/test_price_twins_accounting.py`).
 - **Every other field of `SM120` is a stand-in**, and `standins` names each one; the certificate lists them as hypotheses.
   - The peel is `HOPPER_BF16_M16N8K16`, which matched the RTX 5090's `mma.sync` m16n8k16 BF16.
   - G = 4, the H100's W1 prices and k ≤ 2^16 are the H100's. They are statement parameters, changed through the

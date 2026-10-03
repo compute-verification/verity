@@ -78,7 +78,7 @@ class BandParams:
 
     @property
     def challenges(self) -> int:
-        """`k = 111` for 1%: `Pous.Pinned.BandMultiMeetsFamily` at every `d ≥ 5`, with no hypothesis."""
+        """`k = 111` for 1%: `Pous.SecurityProofs.BandMultiMeetsFamily` at every `d ≥ 5`, with no hypothesis."""
         return 111
 
     @property
@@ -108,7 +108,7 @@ class BandParams:
 
 SECURE_FIRST = BandParams(512, 524_288, 12)
 """The secure-first point (POUS `docs/band-vs-dense.md`): `B(512, 12)`, 65,536 B blocks (32 MiB segments), audited at
-`D = 5` calls of at least 241.5 µs with `k = 111` (`Pous.Pinned.BandChainMeets64D12`, with no hypothesis), so
+`D = 5` calls of at least 241.5 µs with `k = 111` (`Pous.SecurityProofs.BandChainMeets64D12`, with no hypothesis), so
 `Δ + RTT < 1.449` ms.  The cliff is at an effective `D` of 13: 13 call-times, 3.1395 ms, must exceed `Δ + RTT`."""
 
 

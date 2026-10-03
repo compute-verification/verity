@@ -4,7 +4,9 @@ one-stage audit reads (``verity_sampled_proofs.one_stage``).  Off by default: ``
 touching any root of record, until the re-baseline switches the record.
 
 A population is a sequence of members (:class:`Member`), one per template in the partition's order, each with its row ports and
-output ports in M0's order.  Per row (``tests/commit/test_serving_rows.py`` pins it to core and to M0's vector):
+output ports in M0's order.  Each output port is a row too, after the member's input rows: its words zero-padded to whole SHA-512
+blocks, committed under its own salt like an input row (an output is a value: no output word is ever public).  Per row
+(``tests/commit/test_serving_rows.py`` pins it to core and to M0's vector):
 
   row     the words, u16 little-endian
   inner   ``x = SHA-512(sha512_row_prefix(role 1, 16, n) || row)``                              (``sha512/row/v1``)
@@ -13,7 +15,6 @@ output ports in M0's order.  Per row (``tests/commit/test_serving_rows.py`` pins
           salts are expanded.  The salts are kept only in the prover's files and never logged
   string  ``b || c = hm96.SHA512.commit_string(default_key, x, y)``                               (public, 128 bytes)
   leaf    the ``frame-v3-sha512`` row leaf, schema ``hm96-sha512/row/v1``, over ``hm96.SHA512.tree_leaf(default_key, b || c)``
-  out     one ``u16`` word leaf per output word, instance-major: ``H("leaf", [domain, r, r, "u16", be16(v)])``
 
 Each port ``<descriptor id>/<port>`` is one tree under ``CommitmentDomain(binding, -1, [0, leaves), "sha512")``, with the domain
 rule agreed with the one-stage lane: ``binding = identity_digest(DOMAIN_TAG, {program, partition, port, schema, leaves, run})``,
@@ -203,6 +204,16 @@ class Member:
     base: int = 0
     tables: tuple[tuple[str, int], ...] = ()     # a shared-row member: each row port's table size (rows are referenced by refs)
 
+    @property
+    def out_rows(self) -> tuple[tuple[str, int], ...]:
+        """Each output port's row: its words zero-padded to whole SHA-512 blocks (64 words each), as M0's ``out_row``."""
+        return tuple((p, -(-w // 64) * 64) for p, w in self.outs)
+
+    @property
+    def all_rows(self) -> tuple[tuple[str, int], ...]:
+        """M0's rows: the input rows, then one output row per output port."""
+        return self.rows + self.out_rows
+
     def port(self, name: str) -> str:
         """The name a root, its domain and the registration use: ``<descriptor id>/<port>``."""
         return f"{self.template}/{name}"
@@ -238,40 +249,37 @@ class Committed:
     domains: dict[str, CommitmentDomain]
     bc: dict[str, bytes]               # per row port: every row's b || c, concatenated
     salts: dict[str, bytes]            # per row port: every row's salt (private)
-    rows: dict[str, np.ndarray]        # per row port: (n, words) u16 (private)
-    outs: dict[str, np.ndarray]        # per output port: (n, words) u16
+    rows: dict[str, np.ndarray]        # per row port, the output rows included: (n, words) u16 (private)
     seconds: dict[str, Any]
-    refs: dict[int, np.ndarray] = field(default_factory=dict)   # per shared-row member k: (n, row ports) table refs
+    refs: dict[int, np.ndarray] = field(default_factory=dict)   # per shared-row member k: (n, rows) table refs, output rows' own
 
     def public_body(self, k: int) -> bytes:
-        """Member ``k``'s public body, as M0's ``write()`` lays it out: every instance's ``b || c`` (ports in order), then its
-        output words (output ports in order), instance-major."""
+        """Member ``k``'s public body, as M0's ``write()`` lays it out: every instance's ``b || c`` (its input rows, then its
+        output rows), instance-major; nothing else."""
         m = self.window.members[k]
-        outs = np.ascontiguousarray(np.concatenate([self.outs[m.port(p)] for p, _ in m.outs], axis=1)).astype("<u2").tobytes()
         if m.tables:                     # M0's shared-row body: every table row's b || c (port-major), refs (u32, instance-major)
-            return b"".join(self.bc[m.port(p)] for p, _ in m.rows) + np.ascontiguousarray(self.refs[k]).astype("<u4").tobytes() + outs
-        bc = np.concatenate([np.frombuffer(self.bc[m.port(p)], dtype=np.uint8).reshape(m.n, BC_BYTES) for p, _ in m.rows], axis=1)
-        return bc.tobytes() + outs
+            return b"".join(self.bc[m.port(p)] for p, _ in m.all_rows) + np.ascontiguousarray(self.refs[k]).astype("<u4").tobytes()
+        bc = np.concatenate([np.frombuffer(self.bc[m.port(p)], dtype=np.uint8).reshape(m.n, BC_BYTES) for p, _ in m.all_rows], axis=1)
+        return bc.tobytes()
 
     def private_body(self, k: int) -> bytes:
         """Member ``k``'s prover body: every instance's rows (ports in order), then every salt (instance-major, ports in order)."""
         m = self.window.members[k]
         if m.tables:                     # the tables' rows, then their salts, port-major
-            return b"".join(np.ascontiguousarray(self.rows[m.port(p)]).astype("<u2").tobytes() for p, _ in m.rows) + \
-                b"".join(self.salts[m.port(p)] for p, _ in m.rows)
-        rows = np.concatenate([self.rows[m.port(p)] for p, _ in m.rows], axis=1).astype("<u2").tobytes()
-        ys = np.concatenate([np.frombuffer(self.salts[m.port(p)], dtype=np.uint8).reshape(m.n, SALT_BYTES) for p, _ in m.rows], axis=1)
+            return b"".join(np.ascontiguousarray(self.rows[m.port(p)]).astype("<u2").tobytes() for p, _ in m.all_rows) + \
+                b"".join(self.salts[m.port(p)] for p, _ in m.all_rows)
+        rows = np.concatenate([self.rows[m.port(p)] for p, _ in m.all_rows], axis=1).astype("<u2").tobytes()
+        ys = np.concatenate([np.frombuffer(self.salts[m.port(p)], dtype=np.uint8).reshape(m.n, SALT_BYTES) for p, _ in m.all_rows], axis=1)
         return rows + ys.tobytes()
 
     def frame_entry(self, k: int) -> dict[str, Any]:
         """M0's header ``frame_v3`` entry for member ``k``: its bare port names, as M0's statement reads them."""
         m = self.window.members[k]
-        names = [p for p, _ in m.rows] + [p for p, _ in m.outs]
+        names = [p for p, _ in m.all_rows]
         return {"frame": "frame-v3-sha512", "roots": {p: self.roots[m.port(p)].hex() for p in names},
                 "domain_ids": {p: self.domains[m.port(p)].domain_id.hex() for p in names},
                 "bindings": {p: self.domains[m.port(p)].binding.hex() for p in names}, "owner": OWNER,
-                "schemas": {**{p: ROW_SCHEMA for p, _ in m.rows}, **{p: WORD_SCHEMA for p, _ in m.outs}},
-                "row_key_sha512": hashlib.sha512(INST.default_key).hexdigest()}
+                "schemas": {p: ROW_SCHEMA for p in names}, "row_key_sha512": hashlib.sha512(INST.default_key).hexdigest()}
 
 
 def commit_ports(domains: dict[str, CommitmentDomain], rows: dict[str, np.ndarray], words: dict[str, np.ndarray], ys: dict[str, bytes], *,
@@ -314,17 +322,18 @@ def commit_ports(domains: dict[str, CommitmentDomain], rows: dict[str, np.ndarra
 
 def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, salt_key: bytes | None = None, workers: int = 1,
            chunk: int = CHUNK) -> Committed:
-    """Commit every member's rows (``data[k]["rows"][port]``: (n, words) u16) and output words (``data[k]["outs"][port]``).
+    """Commit every member's rows (``data[k]["rows"][port]``: (n, words) u16) and output words (``data[k]["outs"][port]``, each
+    port's committed as its output row).
 
     ``salt_key``: tests only; serving draws 32 fresh OS bytes."""
     t0 = time.perf_counter()
     ms = window.members
     if len(data) != len(ms) or sum(m.n for m in ms) != window.population:
         raise ValueError(f"{sum(m.n for m in ms)} units in {len(ms)} members; the registered population is {window.population}")
-    rows, outs, refs = {}, {}, {}
+    rows, refs = {}, {}
     for k, (m, dk) in enumerate(zip(ms, data, strict=True)):
         count = dict(m.tables)
-        for kind, ports, into in (("rows", m.rows, rows), ("outs", m.outs, outs)):
+        for kind, ports in (("rows", m.rows), ("outs", m.outs)):
             if set(dk[kind]) != {p for p, _ in ports}:
                 raise ValueError(f"{m.template}: {kind} {sorted(dk[kind])} are not {[p for p, _ in ports]}")
             for p, words in ports:
@@ -332,23 +341,27 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
                 want = (count.get(p, m.n) if kind == "rows" else m.n, words)
                 if a.shape != want or (kind == "rows" and (2 * words) % 128):
                     raise ValueError(f"{m.port(p)}: {a.shape} is not {want[0]} x {words}" + (" words of whole SHA-512 blocks" if kind == "rows" else ""))
-                into[m.port(p)] = a
+                rows[m.port(p)] = a
+        for (p, w), (_, padded) in zip(m.outs, m.out_rows, strict=True):
+            row = np.zeros((m.n, padded), dtype=np.uint16)
+            row[:, :w] = rows[m.port(p)]
+            rows[m.port(p)] = row
         if m.tables:
             r = np.asarray(dk["refs"], dtype=np.int64)
             bound = np.array([count[p] for p, _ in m.rows])
             if r.shape != (m.n, len(m.rows)) or (r < 0).any() or (r >= bound).any():
                 raise ValueError(f"{m.template}: refs {r.shape} are not {m.n} x {len(m.rows)} rows inside tables {dict(m.tables)}")
-            refs[k] = r.astype(np.uint32)
+            own = np.repeat(np.arange(m.n, dtype=np.int64)[:, None], len(m.outs), axis=1)
+            refs[k] = np.concatenate([r, own], axis=1).astype(np.uint32)
     key = os.urandom(32) if salt_key is None else bytes(salt_key)
     ys = {p: salts(key, k, len(rows[p])) for k, p in enumerate(rows)}
     del key
     t_salt = time.perf_counter()
     domains = {p: window.domain(p, ROW_SCHEMA, len(a)) for p, a in rows.items()}
-    domains.update({p: window.domain(p, WORD_SCHEMA, a.size) for p, a in outs.items()})
-    roots, bc = commit_ports(domains, rows, outs, ys, workers=workers, chunk=chunk)
+    roots, bc = commit_ports(domains, rows, {}, ys, workers=workers, chunk=chunk)
     t1 = time.perf_counter()
-    return Committed(window, roots, domains, bc, ys, rows, outs, {"salts_s": round(t_salt - t0, 3), "commit_s": round(t1 - t_salt, 3),
-                                                                   "total_s": round(t1 - t0, 3), "workers": workers}, refs)
+    return Committed(window, roots, domains, bc, ys, rows, {"salts_s": round(t_salt - t0, 3), "commit_s": round(t1 - t_salt, 3),
+                                                            "total_s": round(t1 - t0, 3), "workers": workers}, refs)
 
 
 # --- the files ----------------------------------------------------------------------------------------------------------
@@ -395,9 +408,10 @@ def write(c: Committed, out_dir: str | Path, source: dict[str, Any], index: dict
         fd = os.open(d / f"m{k}-private.bin", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "wb") as f:
             f.write(c.private_body(k))
-        members.append({"k": k, "template": m.template, "n": m.n, "base": m.base, "ports": [list(p) for p in m.rows],
-                        "out_ports": [list(p) for p in m.outs], "frame_v3": c.frame_entry(k), "public_sha512": hashlib.sha512(pub).hexdigest(),
-                        **({"shared_rows": dict(m.tables)} if m.tables else {})})
+        members.append({"k": k, "template": m.template, "n": m.n, "base": m.base, "ports": [list(p) for p in m.all_rows],
+                        "input_ports": len(m.rows), "out_ports": [list(p) for p in m.outs], "frame_v3": c.frame_entry(k),
+                        "public_sha512": hashlib.sha512(pub).hexdigest(),
+                        **({"shared_rows": {**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}} if m.tables else {})})
     win = {"schema": "verity-vllm/serving-rows/v1", "scheme": SCHEME, "population": c.window.population, "members": members,
            "domain_tag": DOMAIN_TAG, "registration_sha512": registration_digest(rec), "index_sha512": hashlib.sha512(ib).hexdigest(),
            "salt_rule": "chacha20 (rfc 8439), a fresh 32-byte os key per window, nonce = the row port's index over all members "
@@ -416,8 +430,10 @@ def flock_input_files(window_dir: str | Path, k: int, circuit_text: str, out_dir
     mem = win["members"][k]
     head_line, meta_line, rest = circuit_text.split("\n", 2)
     meta = json.loads(meta_line[5:])
-    if [list(p[:2]) for p in meta["ports"]] != mem["ports"] or [list(p) for p in meta["out_ports"]] != mem["out_ports"]:
-        raise ValueError(f"the circuit's ports {meta['ports']} / {meta['out_ports']} are not member {k}'s {mem['ports']} / {mem['out_ports']}")
+    if ([list(p[:2]) for p in meta["ports"]] != mem["ports"] or [list(p) for p in meta["out_ports"]] != mem["out_ports"]
+            or meta.get("input_ports") != mem["input_ports"]):
+        raise ValueError(f"the circuit's ports {meta['ports']} / {meta['out_ports']} ({meta.get('input_ports')} input rows) are not "
+                         f"member {k}'s {mem['ports']} / {mem['out_ports']} ({mem['input_ports']} input rows)")
     if meta.get("scheme") != SCHEME:
         raise ValueError(f"the circuit commits under {meta.get('scheme')!r}, the window under {SCHEME!r}")
     cls_meta = {x: v for x, v in meta.items() if x not in M0_BINDING_KEYS}
@@ -427,7 +443,7 @@ def flock_input_files(window_dir: str | Path, k: int, circuit_text: str, out_dir
     units = {"vus_per_block": G, "units_per_vu": meta["units_per_vu"], "indices": idx, "blocks": [idx[b:b + G] for b in range(0, n, G)],
              "classes": [cls] * n}
     head = {"format": M0_FORMAT, "statement": M0_STATEMENT, "scheme": SCHEME, "set": f"served/{rec['commitment']['source']['run']}/m{k}",
-            "subcircuit": subcircuit, "content_digest": win["index_sha512"], "range": [0, n], "instances": n,
+            "subcircuit": subcircuit, "range": [0, n], "instances": n,
             "circuit_sha512": hashlib.sha512(circuit_text.encode()).hexdigest(), "units": units, "frame_v3": mem["frame_v3"], "rows": True}
     if mem.get("shared_rows"):
         head["shared_rows"] = mem["shared_rows"]

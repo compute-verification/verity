@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import sys
 from pathlib import Path
 
 import pytest
@@ -103,9 +102,10 @@ def test_stage_flags_that_change_outputs_are_key_with_explicit_defaults():
         _drv(r, _argv("replay"), inputs={"build": build_art, "commit": "art:" + "3" * 64}), "the replayed Commit is part of the derivation"
 
 
-def test_parse_accepts_the_module_form_row_run_and_the_earlier_runner_argvs():
-    if str(REPO) not in sys.path:
-        sys.path.insert(0, str(REPO))         # the declaration module by dotted path (tools_registry falls back to loading it by file)
+def test_parse_accepts_the_module_form_row_run_and_the_earlier_runner_argvs(monkeypatch):
+    # Only for this test: left on sys.path, the repo root makes a later test's `--tool check` import the repo's own
+    # tools/check/tool.py instead of its fixture's, outside the suite's inputs.
+    monkeypatch.syspath_prepend(str(REPO))
     from integrations.vllm.verity_vllm.pipeline import research_tools as RT
 
     m = RT.parse(["/workspace/venv312/bin/python", "-m", "verity_vllm.pipeline.cli", "row", "stage", "commit", ROW, "R", "repo", "rev",

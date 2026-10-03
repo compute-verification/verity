@@ -109,6 +109,19 @@ def test_a_typed_statement_carries_no_unit_rows(rope):
     assert not r["ok"] and "carries no unit rows" in r["error"], r
 
 
+@pytest.mark.parametrize("name,what", [("sha512x3", "three SHA-512 compressions"), ("hm96", "hm96-sha512/row/v1 commit")])
+def test_a_typed_statement_with_other_row_nets_is_refused(rope, name, what):
+    """A typed file's `sha512x3` and `hm96` sections are read as the old statement's are, so one AND row changed in either
+    (its first row that is neither an input's self row nor empty) is refused: they must be the verifier's (`Flock.HmNets`)."""
+    lines = (rope / "typed.circuit").read_text().split("\n")
+    at = next(k for k, line in enumerate(lines) if line.startswith(f"CIRCUIT {name} ")) + 2
+    q = next(q for q, line in enumerate(lines[at:]) if line not in (f"1 {q} 1 {q}", "0 0"))
+    lines[at + q] = "1 0 1 1"
+    (rope / f"rows-{name}.circuit").write_text("\n".join(lines))
+    r = _expand(rope / f"rows-{name}.circuit")
+    assert not r["ok"] and f"circuit {name}: not the verifier's {what} (row {q} differs)" in r["error"], r
+
+
 #: a typed RoPE (`rope-head/d64/neox-bf16`, a flat class, 4 instances) staged by `typed_statement.stage`, and every CPU
 #: selftest case of its flock-circuit (seed-injection build, #273 at 8505c540), recorded
 RUST_SESSIONS = "art:48f286b4"
@@ -130,7 +143,7 @@ def test_it_gives_the_rust_provers_sessions_their_verdicts(tmp_path):
     subprocess.run([sys.executable, str(LEAN.parent / "selftest_records.py"), str(root / "records"), str(tmp_path / "s")],
                    check=True, capture_output=True)
     sessions = sorted(p for p in (tmp_path / "s").iterdir() if (p / "case.json").exists())
-    p = subprocess.run([str(BIN), "verify", "--statement", "verity/flock-circuit/types+seed-injection",
+    p = subprocess.run([str(BIN), "verify", "--statement", "verity/flock-circuit/types@210d32e1+seed-injection",
                         "--circuit", str(root / "stage" / "circuit.txt"), "--public", str(root / "stage" / "pub-4.bin"),
                         "--session", *map(str, sessions)], capture_output=True, text=True)
     got = {Path(v["session"]).name: v for v in (json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT "))}

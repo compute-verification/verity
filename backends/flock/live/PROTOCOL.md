@@ -54,13 +54,13 @@ Ligerito level 0    label flock-ligerito-basis-f256-split-v0 · scalar target ·
   M1                label verity-flock-zk-l0-close-v0                     (level 0's masking ends)
   M1                slice T' (2) · slice ybar (2 t_pad)
                     code-switch message · cap_1 · ... levels 1+, unchanged ...
-M1 inner proof      label verity-flock-zk-inner-v0 · squeeze ε · slice [ρ, σ] · squeeze γ (10)
+M1 inner proof      label verity-flock-zk-inner-v0 · scalar final_c' · squeeze ε · slice [ρ, σ] · squeeze γ (10)
   M2                bytes τ's commitment (64) · squeeze β · slice Y (s+192) · squeeze queries (168)
 proof bytes         bincode (Commitment, R1csProofLigerito with the masked fields, InnerProof)
 ~~~
 
-`final_c'` is sent only in the proof: upstream never absorbs it. The claim order in the opening is ab, then c, then the
-region claims (region-major, then the two link points).
+Upstream never absorbs `final_c'`; M1 absorbs it first in the inner proof (§5). The claim order in the opening is ab, then
+c, then the region claims (region-major, then the two link points).
 
 ## 2. The pads
 
@@ -87,8 +87,8 @@ RoPE at `m = 25`: 298. `Layout` in `zk_veil.rs` is normative.
 | `tx, ty, tw = hab + {1,2,3}` | the sacrificed triple `x, y, w = x · y` | 3 |
 
 The first `hab` pads mask sent values, and the last four are committed auxiliaries. The absorption order is
-`Layout::absorbed()`: the rows above in order, minus `fc`. The algebraic phase is masked between the zerocheck label and
-the opening's label. Level 0 is masked between `verity-flock-zk-l0-open-v0` and `-close-v0`.
+`Layout::absorbed()`: the rows above in order, minus `fc` (the inner proof's, §5). The algebraic phase is masked between
+the zerocheck label and the opening's label. Level 0 is masked between `verity-flock-zk-l0-open-v0` and `-close-v0`.
 
 **Randomness.** Everything comes from `ProverRng`, which is ChaCha20 keyed by the session's `ProverSeed` (a fresh
 `getrandom` draw). `f128s(stream, index, n)` reads `16n` bytes from byte offset `32·index` of the stream. With
@@ -154,7 +154,8 @@ Ligerito verifier's lane-round arithmetic, which starts again from `T'`. The tri
 
 It proves `⟨c, h⟩ = t` for the batched constraint, where `(c, t)` comes from `batch(cons, γ)` over the 10 rows:
 
-1. `ε` ← V. P sends `ρ = ε h_fa + h_tx` and `σ = h_fb + h_ty`.
+1. P sends `final_c'`, a constant of the c_eval and ring switch c rows: sent after `γ`, it could be solved to cancel any
+   failing row. `ε` ← V. P sends `ρ = ε h_fa + h_tx` and `σ = h_fb + h_ty`.
 2. `γ` (10) ← V. Both sides form `(c, t)`. P computes `τ = ⟨c, mu⟩` and sends its commitment
    `hm96::leaf(SHA-512("verity/flock-zk/tau/v1\0" ‖ τ), salt)` with a fresh 192-byte salt (`tau_commitment`, M2).
 3. `β` ← V. P refuses `β = 0`. P sends `Y = (h + β mu ‖ pad_h + β pad_mu)`.
@@ -168,8 +169,9 @@ before the last coin; §9's extraction run needs every message before the last c
 
 **Soundness terms, for review.** Batching costs `1/|F|`, the sacrifice `1/|F|`, and `β` `1/|F|`. RS proximity is at
 rate `L_h/N ≈ 0.12` with 168 queries: `(1 − δ)^168` at the unique-decoding `δ ≈ 0.44` is about `2^-140`, plus BCIKS20's
-`N/|F|`. The pads bind before the first exposed value, because the root is absorbed before `r_skip`. The base protocol's
-soundness then carries over as in VEIL Lemma 4.3: `v' − h` is a prover strategy for the unmasked protocol.
+`N/|F|`. The pads bind before the first exposed value, because the root is absorbed before `r_skip`, and `final_c'`
+before the batching coins. The base protocol's soundness then carries over as in VEIL Lemma 4.3: `v' − h` is a prover
+strategy for the unmasked protocol.
 
 ## 6. The mask slot hides the masked claims' `s_hat_v`
 
@@ -341,8 +343,9 @@ Results for RoPE at `m = 25`, 64 sessions (128 transcripts) per kind:
 
 Evidence: `lanes/flock-zk/evidence/`.
 
-**The audit** (`zkaudit --zk`). Every byte the verifier keeps, and the proofs' opened data (with `final_c'`, the opening's
-batching nonces and the commitment's parameters), is attributed to a class:
+**The audit** (`zkaudit --zk`). Every byte the verifier keeps, and the proofs' opened data (with the opening's batching
+nonces and the commitment's parameters), is attributed to a class. The inner proof's round values are `final_c'`, `[ρ, σ]`
+and `Y`, in that order (selftest `zk_audit_attributes_the_inner_proof`). The audit checks that:
 - masked values differ from the control's;
 - region `s_hat_v` equal their public recomputation;
 - every Ligerito value differs from the control's;
@@ -397,7 +400,7 @@ and a Goldreich–Kahan simulator rewinds once, to just after that commitment.
 **The simulator** (`gk_simulate` in `flock-circuit.rs`), for every verifier V* as a black box on its random tape
 (rewinding V* is a fresh instance on the same tape, replayed to the same point):
 1. **Extraction.** The honest prover on a dummy witness against V*: every private word zero, the public region words
-   written in (`Stmt::write_regions`: `b ‖ c` and the declared outputs), the mask slot uniform, fresh masks. Every message
+   written in (`Stmt::write_regions`: every row's `b ‖ c`, the output rows' included), the mask slot uniform, fresh masks. Every message
    before the proofs is masked, committed or public (§7, §5), and the region claims' `s_hat_v` are the public ones, so this
    run is distributed as a real one until the proofs, which follow the last coin. If it stops before the proofs (V*
    aborted or cheated, or the prover refused a degenerate coin), its view is the output.

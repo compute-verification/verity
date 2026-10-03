@@ -1,0 +1,88 @@
+# Evidence-store artifacts onto node 1 for a reader with no store remote there (console, 2 Oct): `research data fetch` of each
+# full art id in ARTS (whitespace-separated `art:<64 hex>`), with PATHS (globs, `--path`) selecting a tree's files, into
+# $OUT/<NAME, else a UTC stamp>/<hex>/, laid out as the artifact is (a file artifact lands under its name). Beside them,
+# fetched.tsv has a line per file (art id, path, sha256), and `<art id> - not fetched` for an id whose fetch failed or wrote no
+# file; the job then exits 1, naming those ids. It fetches from the
+# remote through a scratch store it then removes, so nothing lands in node 1's job store, and it only reads the remote: the R2
+# credentials stay in the pod's Secret `research-r2`. The pod runs as uid 1000, ubuntu: the copies are world-readable, and each
+# run removes the directories under $OUT older than KEEP_DAYS. `research` comes from the item's tree. A ready file:
+#   {"template": "store-fetch", "tree": "/workspace/research/src/<sha>", "env": {"ARTS": "art:<hex> art:<hex>", "NAME": "<id>"}}
+name: store-fetch
+
+resources:
+  infra: ssh/vy-nebius
+  cpus: 2            # downloads are network-bound
+  memory: 8
+  labels:
+    budget-line: nebius-config-run
+
+envs:
+  OMP_NUM_THREADS: "2"
+  RESEARCH_RUNS: /workspace/jobs/runs
+  RESEARCH_STORE: /workspace/jobs/store
+  PYTHONDONTWRITEBYTECODE: "1"   # it only reads the tree, which uid 1000 can't write: no job tree of its own
+  ARTS: null
+  PATHS: ""
+  NAME: ""
+  KEEP_DAYS: "2"
+  OUT: /workspace/jobs/store-fetch
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+run: |
+  set -euo pipefail
+  export PATH=/workspace/jobs/venv312/bin:$PATH
+  export PYTHONPATH=$SRC/tools/research/src
+  research() { /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research "$@"; }
+  read -ra arts <<< "$ARTS"
+  read -ra globs <<< "$PATHS"
+  [ "${#arts[@]}" -gt 0 ] || { echo "store-fetch: ARTS names no art id" >&2; exit 2; }
+  for a in "${arts[@]}"; do
+    [[ $a =~ ^art:[0-9a-f]{64}$ ]] || { echo "store-fetch: $a is not a full art id (art:<64 hex>)" >&2; exit 2; }
+  done
+  [[ -z $NAME || $NAME =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { echo "store-fetch: NAME $NAME is not a plain directory name" >&2; exit 2; }
+  mkdir -p "$OUT"
+  find "$OUT" -mindepth 1 -maxdepth 1 -type d -mtime +"$KEEP_DAYS" -exec rm -rf {} +
+  dest=$OUT/${NAME:-$(date -u +%Y%m%dT%H%M%SZ)}
+  export RESEARCH_STORE=$dest/.store   # not the job store: what it fetched would stay there, on the remote but never verified, so never evicted
+  trap 'rm -rf "$RESEARCH_STORE"' EXIT
+  sel=()
+  for g in ${globs[@]+"${globs[@]}"}; do sel+=(--path "$g"); done
+  mkdir -p "$dest"
+  : > "$dest/fetched.tsv"
+  failed=()
+  for a in "${arts[@]}"; do
+    to=$dest/${a#art:}
+    rm -rf "$to"
+    if research data fetch "$a" --to "$to" ${sel[@]+"${sel[@]}"} && [ -n "$(find "$to" -type f -print -quit 2>/dev/null)" ]; then
+      find "$to" -type f -exec sha256sum {} + | while read -r sha path; do printf '%s\t%s\t%s\n' "$a" "$path" "$sha"; done \
+        | tee -a "$dest/fetched.tsv"
+    else
+      failed+=("$a")
+      printf '%s\t-\tnot fetched\n' "$a" | tee -a "$dest/fetched.tsv"
+    fi
+  done
+  rm -rf "$RESEARCH_STORE"
+  echo "store-fetch: $((${#arts[@]} - ${#failed[@]})) of ${#arts[@]} artifact(s), $(find "$dest" -type f ! -name fetched.tsv | wc -l) file(s)," \
+       "$(du -sh "$dest" | cut -f1) in $dest; each file's path and sha256 in $dest/fetched.tsv"
+  [ "${#failed[@]}" -eq 0 ] || { echo "store-fetch: could not fetch ${failed[*]}" >&2; exit 1; }
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: backfill      # the dispatcher tops up only VY_DISPATCH_DEPTH's queues; it borrows idle quota
+          kueue.x-k8s.io/priority-class: backfill
+      spec:
+        terminationGracePeriodSeconds: 300
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}

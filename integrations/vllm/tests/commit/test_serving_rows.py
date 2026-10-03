@@ -1,6 +1,6 @@
 """The opt-in serving rows (`commit.serving_rows`): M0's serving row leaf vector byte for byte, core's frame-v3-sha512 / hm96-sha512
 reference on the batch and parallel paths for a two-member population, ChaCha20 salts, the agreed domain rule, the registration
-shape and M0's per-member file layout.  `serving_row_leaf_vector.json` is flock-netlist's vector (notes-asset
+shape and M0's per-member file layout, every output a hidden row (no output word in a public body).  `serving_row_leaf_vector.json` is flock-netlist's vector (notes-asset
 flock-netlist/serving-row-leaf-vector.json, sha256 92aa7f77...)."""
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from verity.commitments import hm96
-from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
+from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf
 from verity.commitments.identity import identity_digest
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
@@ -43,7 +43,8 @@ def data(w: SR.Window, seed: int = 3) -> list[dict[str, dict[str, np.ndarray]]]:
 
 
 def reference(c: SR.Committed) -> dict[str, bytes]:
-    """Core's slow path: row_leaf over hm96.SHA512.tree_leaf(commit_string(...)), word leaves, FrameV3.root."""
+    """Core's slow path: row_leaf over hm96.SHA512.tree_leaf(commit_string(...)) for every row, the output rows included, and
+    FrameV3.root."""
     inst, key = hm96.SHA512, hm96.SHA512.default_key
     roots = {}
     for p, rows in c.rows.items():
@@ -53,9 +54,6 @@ def reference(c: SR.Committed) -> dict[str, bytes]:
         bcs = [inst.commit_string(key, lay.digest(rows[i].astype("<u2").tobytes()), c.salts[p][i * 192:(i + 1) * 192]) for i in range(len(rows))]
         assert b"".join(bcs) == c.bc[p]
         roots[p] = fv.root(p, [row_leaf(c.domains[p], i, inst.tree_leaf(key, bcs[i]), SR.ROW_SCHEMA) for i in range(len(rows))])
-    for p, outs in c.outs.items():
-        fv = FrameV3({p: Port(c.domains[p], WordLeaf("u16", 2))})
-        roots[p] = fv.root(p, [fv.tree_leaf(p, r, fv.leaf_layout(p, r).digest(int(v).to_bytes(2, "big"))) for r, v in enumerate(outs.reshape(-1).tolist())])
     return roots
 
 
@@ -88,17 +86,22 @@ def test_core_reference_on_the_batch_and_parallel_paths(n0, n1, workers, chunk):
     c = SR.commit(w, data(w), salt_key=bytes(32), workers=workers, chunk=chunk)
     assert set(c.roots) == {f"{m.template}/{p}" for m in w.members for p, _ in m.rows + m.outs}
     assert c.roots == reference(c)
+    d = data(w)
+    for m, dk in zip(w.members, d):
+        for (p, k), (_, padded) in zip(m.outs, m.out_rows):
+            assert padded % 64 == 0 and padded >= k
+            assert (c.rows[m.port(p)][:, :k] == dk["outs"][p]).all() and not c.rows[m.port(p)][:, k:].any()
 
 
 def test_salts_are_fresh_and_the_key_fixes_them():
     w = window(5, 2)
     d = data(w)
     a = SR.commit(w, d, salt_key=b"k" * 32)
-    ports = [m.port(p) for m in w.members for p, _ in m.rows]
+    ports = [m.port(p) for m in w.members for p, _ in m.all_rows]
     assert [a.salts[p] for p in ports] == [SR.salts(b"k" * 32, i, len(a.rows[p])) for i, p in enumerate(ports)]
     b, c = SR.commit(w, d), SR.commit(w, d)
     out = w.members[0].port("out")
-    assert b.salts != c.salts and b.roots[ports[0]] != c.roots[ports[0]] and b.roots[out] == c.roots[out]
+    assert b.salts != c.salts and b.roots[ports[0]] != c.roots[ports[0]] and b.roots[out] != c.roots[out]
 
 
 def test_population_is_fixed_before_serving():
@@ -121,14 +124,14 @@ def test_domains_follow_the_agreed_rule_from_registration_fields(tmp_path):
     assert rec["commitment"]["source"]["kind"] == "served" and rec["population"] == 13
     assert rec["commitment"]["source"]["index"] == hashlib.sha512((tmp_path / "index.json").read_bytes()).hexdigest()
     for p, leaves in rec["leaves"].items():
-        schema = SR.WORD_SCHEMA if p.split("/", 1)[1].startswith("out") else SR.ROW_SCHEMA
+        schema = SR.ROW_SCHEMA
         binding = identity_digest("verity/one-stage/served-domain/v0", {"program": rec["partition"]["program"], "partition": rec["partition_digest"],
                                                                          "port": p, "schema": schema, "leaves": leaves,
                                                                          "run": rec["commitment"]["source"]["run"]})
         dom = CommitmentDomain(bytes.fromhex(binding), -1, RangeIndexedDomain(0, leaves), hash="sha512")
         assert dom.domain_id.hex() == rec["domains"][p]
-    assert rec["leaves"] == {"RoPEHead_v1{D=64}/x": 9, "RoPEHead_v1{D=64}/cs": 9, "RoPEHead_v1{D=64}/out": 9 * 64,
-                             "Norm_v1{N=128}/in0": 4, "Norm_v1{N=128}/in1": 4, "Norm_v1{N=128}/out.0": 4 * 128, "Norm_v1{N=128}/out.1": 4 * 3}
+    assert rec["leaves"] == {"RoPEHead_v1{D=64}/x": 9, "RoPEHead_v1{D=64}/cs": 9, "RoPEHead_v1{D=64}/out": 9,
+                             "Norm_v1{N=128}/in0": 4, "Norm_v1{N=128}/in1": 4, "Norm_v1{N=128}/out.0": 4, "Norm_v1{N=128}/out.1": 4}
     other = SR.commit(window(9, 4, "r-other"), data(w), salt_key=bytes(32))
     assert all(other.domains[p].domain_id != c.domains[p].domain_id for p in c.domains)
 
@@ -138,8 +141,8 @@ def test_flock_input_files_wrap_each_members_bodies(tmp_path):
     d = data(w)
     c = SR.commit(w, d, salt_key=bytes(32))
     SR.write(c, tmp_path / "w", {"row": 101, "run": "r-m0"}, SR.index_doc(w.members, [[], []], "r-m0"))
-    meta = {"scheme": SR.SCHEME, "ports": [["in0", 128, 1], ["in1", 64, 1]], "out_ports": [["out.0", 128], ["out.1", 3]], "vus_per_block": 2,
-            "units_per_vu": 8, "partition": {"rule": "verity/partition/v1", "digest": "cd" * 64}, "program_sha512": "ab" * 64, "program_digests": {}}
+    meta = {"scheme": SR.SCHEME, "ports": [["in0", 128, 1], ["in1", 64, 1], ["out.0", 128, 1], ["out.1", 64, 1]], "input_ports": 2,
+            "out_ports": [["out.0", 128], ["out.1", 3]], "vus_per_block": 2, "units_per_vu": 8, "partition": {"rule": "verity/partition/v1", "digest": "cd" * 64}, "program_sha512": "ab" * 64, "program_digests": {}}
     text = "flock-circuit v2\nMETA " + json.dumps(meta) + "\nCIRCUIT unit\n..."
     got = SR.flock_input_files(tmp_path / "w", 1, text, tmp_path / "m0", "norm/n128")
     assert got["pub"].endswith("m1-pub-3.bin") and got["inst"].endswith("m1-inst-3.bin")
@@ -150,14 +153,20 @@ def test_flock_input_files_wrap_each_members_bodies(tmp_path):
     assert ph["rows"] is False and ih["rows"] is True and dict(ph, rows=True) == ih
     assert pbody == c.public_body(1) and ibody == c.private_body(1) + c.public_body(1)
     m = w.members[1]
-    want_pub = np.concatenate([np.frombuffer(c.bc[m.port(p)], np.uint8).reshape(3, 128) for p in ("in0", "in1")], axis=1).tobytes() + \
-        np.concatenate([d[1]["outs"]["out.0"], d[1]["outs"]["out.1"]], axis=1).astype("<u2").tobytes()
+    want_pub = np.concatenate([np.frombuffer(c.bc[m.port(p)], np.uint8).reshape(3, 128) for p in ("in0", "in1", "out.0", "out.1")], axis=1).tobytes()
     assert pbody == want_pub
+    assert "content_digest" not in ph and set(ph["frame_v3"]["schemas"].values()) == {SR.ROW_SCHEMA}
+    for p in ("out.0", "out.1"):
+        assert d[1]["outs"][p].astype("<u2").tobytes()[:16] not in pbody
     assert ph["frame_v3"]["domain_ids"] == {p: c.domains[m.port(p)].domain_id.hex() for p in ("in0", "in1", "out.0", "out.1")}
     assert ph["units"]["indices"] == [4, 5, 6] and ph["units"]["blocks"] == [[4, 5], [6]]
     assert ph["circuit_sha512"] == hashlib.sha512(text.encode()).hexdigest()
     with pytest.raises(ValueError, match="ports"):
         SR.flock_input_files(tmp_path / "w", 0, text, tmp_path / "m1", "rope-head/d64")
+    public_outputs = dict(meta, ports=meta["ports"][:2])
+    del public_outputs["input_ports"]
+    with pytest.raises(ValueError, match="ports"):
+        SR.flock_input_files(tmp_path / "w", 1, "flock-circuit v2\nMETA " + json.dumps(public_outputs) + "\n", tmp_path / "m2", "norm/n128")
 
 
 def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(tmp_path):
@@ -173,12 +182,17 @@ def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(t
     assert c.domains[m.port("x")].count == 3 and c.domains[m.port("w")].count == 5 and c.domains[m.port("y")].count == 15
     assert c.roots == reference(c)
     assert c.bc[m.port("x")][:128] != c.bc[m.port("x")][256:]       # fresh salt per table row
-    assert c.public_body(0) == c.bc[m.port("x")] + c.bc[m.port("w")] + refs.astype("<u4").tobytes() + y.astype("<u2").tobytes()
-    assert c.private_body(0) == tables["x"].astype("<u2").tobytes() + tables["w"].astype("<u2").tobytes() + c.salts[m.port("x")] + c.salts[m.port("w")]
+    own = np.concatenate([refs, np.arange(15)[:, None]], axis=1)       # an output row is its instance's own
+    yrow = np.zeros((15, 64), dtype=np.uint16)
+    yrow[:, :1] = y
+    assert c.public_body(0) == c.bc[m.port("x")] + c.bc[m.port("w")] + c.bc[m.port("y")] + own.astype("<u4").tobytes()
+    assert c.private_body(0) == tables["x"].astype("<u2").tobytes() + tables["w"].astype("<u2").tobytes() + yrow.astype("<u2").tobytes() \
+        + c.salts[m.port("x")] + c.salts[m.port("w")] + c.salts[m.port("y")]
     with pytest.raises(ValueError, match="refs"):
         SR.commit(w, [{"rows": tables, "outs": {"y": y}, "refs": refs + [0, 5]}])
     SR.write(c, tmp_path / "w", {"row": 101, "run": "r-g"}, SR.index_doc((m,), [[]], "r-g"))
-    meta = {"scheme": SR.SCHEME, "ports": [["x", 64, 1], ["w", 64, 1]], "out_ports": [["y", 1]], "vus_per_block": 4, "units_per_vu": 1}
+    meta = {"scheme": SR.SCHEME, "ports": [["x", 64, 1], ["w", 64, 1], ["y", 64, 1]], "input_ports": 2, "out_ports": [["y", 1]],
+            "vus_per_block": 4, "units_per_vu": 1}
     got = SR.flock_input_files(tmp_path / "w", 0, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "m0", "gemm/k64")
     head = json.loads(Path(got["pub"]).read_bytes().split(b"\n", 1)[0])
-    assert head["shared_rows"] == {"x": 3, "w": 5} and head["instances"] == 15
+    assert head["shared_rows"] == {"x": 3, "w": 5, "y": 15} and head["instances"] == 15

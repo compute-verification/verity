@@ -17,7 +17,7 @@ import pytest
 LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
 VERIFIER = LEAN.parent
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-STATEMENT = "verity/flock-circuit/types+seed-injection"
+STATEMENT = "verity/flock-circuit/types@210d32e1+seed-injection"
 #: the typed GEMM (gemm-coordinate/k64/sm80-mma-bf16, 4 instances) staged at #273, and every CPU selftest case of its
 #: flock-circuit (seed-injection build, #273 at 8505c540: the typed id's own tags), recorded
 FIXTURE = "art:e9c0209d"
@@ -51,6 +51,21 @@ def test_the_verifier_reads_a_typed_template(gemm):
     st = json.loads(_statement(circuit, root / "stage" / "pub-4.bin"))
     assert st["statement"] == "verity/flock-circuit/types"
     assert st["circuit_sha512"] == hashlib.sha512(circuit.read_bytes()).hexdigest() and st["regions"] == 3
+
+
+def test_typed_expand_reads_the_public_output_form(gemm):
+    """`typed-expand --statement` parses a `types@210d32e1` file as `verify` does; the default, `verity/flock-circuit/types`
+    with hidden outputs (PROTOCOL.md §16.13), refuses it."""
+    root, _ = gemm
+    circuit = root / "stage" / "circuit.txt"
+
+    def expand(*statement: str) -> dict:
+        p = subprocess.run([str(BIN), "typed-expand", str(circuit), *statement], capture_output=True, text=True)
+        return json.loads(next(ln for ln in p.stdout.splitlines() if ln.startswith("TYPED ")).split(" ", 1)[1])
+
+    old = expand("--statement", STATEMENT)
+    assert old["ok"] and old["sha512"] == hashlib.sha512(circuit.read_bytes()).hexdigest(), old
+    assert not expand()["ok"]
 
 
 def test_it_gives_the_rust_provers_sessions_their_verdicts(gemm, tmp_path):
