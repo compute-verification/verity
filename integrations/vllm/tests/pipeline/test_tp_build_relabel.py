@@ -332,6 +332,26 @@ def test_compare_dirs_names_the_first_difference(tmp_path, monkeypatch):
            {"file": "descriptor.json.gz", "offset": 13, "real": '{"k": [1, 2, 3]}', "relabel": '{"k": [1, 2, 4]}'}, "too large to parse"
 
 
+def test_compare_dirs_names_a_file_it_cannot_read_as_a_difference(tmp_path):
+    a, b = tmp_path / "a", tmp_path / "b"
+    for d in (a, b):
+        d.mkdir()
+    (a / "report.json").write_text('{"rank": 1}')
+    (b / "report.json").write_text('{"rank": 1')
+    assert {k: v for k, v in RB.compare_dirs(str(a), str(b)).items() if k != "files"} == \
+           {"file": "report.json", "offset": 10, "real": '{"rank": 1}', "relabel": '{"rank": 1'}, "not JSON: the byte offset"
+    (b / "report.json").write_text('{"rank": 1}')
+    with gzip.open(a / "descriptor.json.gz", "wb") as f:
+        f.write(b'{"k": [1, 2, 3]}' * 64)
+    (b / "descriptor.json.gz").write_bytes((a / "descriptor.json.gz").read_bytes()[:-12])
+    d = RB.compare_dirs(str(a), str(b))
+    assert d["file"] == "descriptor.json.gz" and d["unreadable"].startswith("EOFError") and RB._where(d) == d["unreadable"]
+    (b / "result.json").write_text("{")
+    (a / "result.json").write_text("{}")
+    assert RB.compare_dirs(str(a), str(b))["files"] == ["descriptor.json.gz", "result.json"], "a summary that is not JSON too"
+    assert RB._where({"file": "x", "only_in": "real"}) == "only in the real directory"
+
+
 # ------------------------------------------------------------------------------------------------ flag off: the Build it was
 def _tp_build(tmp_path, monkeypatch, *argv) -> tuple[list, list]:
     from tests.pipeline.test_row import TP_DENSE, _tp_row
