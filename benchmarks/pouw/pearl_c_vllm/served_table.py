@@ -93,13 +93,17 @@ def markdown(table: dict) -> str:
               f"differs on tiles with filler, excluded or voluntary rows (PROTOCOL.md, \"Not here yet\", red team #1014)."]
     quality = [r for r in table["models"] if "quality" in r]
     if quality:
-        lines += ["", "| model | quality run | mode | WikiText-2 perplexity | top-1 vs bf16 | greedy tokens vs bf16 |",
-                  "|---|---|---|---:|---:|---:|"]
+        lines += ["", "| model | quality run | mode | scheme | WikiText-2 perplexity | top-1 vs bf16 | greedy tokens vs bf16 |",
+                  "|---|---|---|---|---:|---:|---:|"]
         for r in quality:
             for mode, q in r["quality"]["summary"].items():
-                lines.append(f"| {r['model']} | `{r['quality']['run']}` | {mode} | {q['perplexity']:.4f} | "
-                             f"{q.get('top1_agreement_vs_bf16', float('nan')):.4f} | "
+                lines.append(f"| {r['model']} | `{r['quality']['run']}` | {mode} | {q.get('scheme') or '—'} | "
+                             f"{q['perplexity']:.4f} | {q.get('top1_agreement_vs_bf16', float('nan')):.4f} | "
                              f"{q.get('greedy_token_agreement_vs_bf16', float('nan')):.4f} |")
+        lines += ["", "The quality runs' pearlc-v1 is `pearl-c-sm120-v1-h1` (window.sh MODE=perplexity pins it), not the "
+                  "served `-h2`: the two differ only in their Merkle trees (`frame-b3` against `frame-b3s`). The noise seeds "
+                  "hash A's and B's roots, so an -h1 run draws other noise than an -h2 run, as another salt does; the "
+                  "forming, the chain and the peel are the same."]
     for r in table["models"]:
         if "forming" in r:
             f = r["forming"]
