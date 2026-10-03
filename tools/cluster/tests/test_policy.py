@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from cluster import cli, policy
+from cluster import cli, ledger, policy
 from cluster.ledger import epoch
 
 NEBIUS = Path(__file__).parents[1] / "descriptions" / "nebius.toml"
@@ -81,7 +81,7 @@ def kueue(qs: dict | None = None, stops: dict[str, str] | None = None) -> str:
 
 def outputs(**over) -> dict[str, str | Exception]:
     out = {"lease": LEASE, "kueue": kueue(), "holds": dump({QUIET: None, DISK: None}), "files": dump(FILES),
-           "n2": f"status {STATUS}\n" + dump(N2_FILES)}
+           "overrides": dump({policy.OVERRIDES: None}), "n2": f"status {STATUS}\n" + dump(N2_FILES)}
     out.update(over)
     return out
 
@@ -109,7 +109,7 @@ def _clock(monkeypatch):
 def diff(capsys, which: str = "all", description: Path = NEBIUS, ran: list | None = None, **over) -> tuple[int, dict]:
     rc = policy.main_diff(description, which, True, runner=fake(outputs(**over), ran))
     out = json.loads(capsys.readouterr().out)
-    assert out["schema"] == "cluster/policy-diff/v1" and out["t"] == T
+    assert out["schema"] == "cluster/policy-diff/v1" and out["t"] == policy.clock()
     return rc, {r["key"]: r for rep in out["nodes"] for r in rep["keys"]}
 
 
@@ -313,24 +313,135 @@ def test_node_2_windows_that_ended_are_left_out_and_a_new_booking_is_undeclared(
 
 
 def test_show_prints_each_key_with_its_owner_and_source(capsys):
-    assert policy.main_show(NEBIUS, "nebius-2", True) == 0
+    assert policy.main_show(NEBIUS, "nebius-2", True, log=None) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["schema"] == "cluster/policy/v1" and {r["key"].split(".")[0] for r in out["keys"]} == {N2}
+    assert out["overrides"] is None
     assert {"key": f"{N2}.user-cpuset.delegate", "value": "cpu cpuset memory pids", "owner": "infra",
             "source": f"{policy.USER_CPUSET} Delegate="} in out["keys"]
-    assert policy.main_show(NEBIUS, "all", False) == 0
+    assert policy.main_show(NEBIUS, "all", False, log=None) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].split() == ["KEY", "VALUE", "OWNER", "SOURCE"] and len(lines) == 1 + len(policy.load(NEBIUS))
 
 
+def test_show_key_prints_one_key_or_those_under_it_and_refuses_a_key_naming_none(capsys):
+    assert policy.main_show(NEBIUS, "all", True, f"{N1}.lease-pool.provers", log=None) == 0
+    rows = json.loads(capsys.readouterr().out)["keys"]
+    assert {r["key"]: r["value"] for r in rows} == {f"{N1}.lease-pool.provers.max": 8, f"{N1}.lease-pool.provers.borrow": 4,
+                                                    f"{N1}.lease-pool.provers.borrow-until": "2026-10-04T10:30:00Z"}
+    assert policy.main_show(NEBIUS, "all", True, f"{N1}.lease-pool.prover", log=None) == 2
+    assert "no key vy-nebius-1.lease-pool.prover, nor any under it" in capsys.readouterr().out
+
+
 def test_the_cli_reads_the_default_description_and_refuses_a_bad_one(capsys, tmp_path):
-    assert cli.main(["policy", "show", "--node", "nebius-1", "--json"]) == 0
+    assert cli.main(["policy", "show", "--node", "nebius-1", "--json", "--log", str(tmp_path / "none.jsonl")]) == 0
     assert json.loads(capsys.readouterr().out)["description"] == str(NEBIUS)
     bad = described(tmp_path, '[policy.vy-nebius-1]\ndirect-gpus = "none"\n')
     assert cli.main(["policy", "diff", "--description", str(bad)]) == 2
     with pytest.raises(SystemExit) as e:
         cli.main(["policy", "diff", "--node", "nebius-3"])
     assert e.value.code == 2
+    with pytest.raises(SystemExit) as e:
+        cli.main(["policy", "override", f"{N1}.lease-pool.provers.max", "6", "--until", "2026-10-04T10:30:00Z"])
+    assert e.value.code == 2
+
+
+GPU = f"{N1}.kueue.provers.gpu.nominal"
+UNTIL = "2026-10-04T10:30:00Z"
+
+
+def override(capsys, log: Path, key: str = GPU, value: str = "6", until: str = UNTIL, by: str = "infra",
+             reason: str = "the 15:07Z shift", apply: bool = True) -> tuple[int, str]:
+    rc = cli.main(["policy", "override", key, value, "--until", until, "--by", by, "--reason", reason, "--log", str(log),
+                   *(["--apply"] if apply else [])])
+    return rc, capsys.readouterr().out
+
+
+def test_an_override_is_a_dry_run_until_applied_and_show_merges_it_with_who_why_and_until(capsys, tmp_path):
+    log = tmp_path / "policy" / "overrides.jsonl"
+    rc, out = override(capsys, log, apply=False)
+    assert rc == 0 and not log.exists()
+    assert out.startswith(f"would override {GPU}: 2 -> 6 until {UNTIL}, by infra: the 15:07Z shift (in {log}; --apply")
+    rc, out = override(capsys, log)
+    assert rc == 0 and out.startswith(f"overrode {GPU}: 2 -> 6 until {UNTIL}")
+    [r] = ledger.read(log)
+    assert ledger.verify([r]) == [] and (r["kind"], r["t"], r["key"], r["value"], r["until"], r["by"]) == \
+        ("override", T, GPU, 6, UNTIL, "infra")
+    assert policy.main_show(NEBIUS, "nebius-1", True, GPU, log) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["overrides"] == str(log) and out["keys"] == [
+        {"key": GPU, "value": 6, "owner": "infra", "source": "ClusterQueue provers nvidia.com/gpu nominalQuota",
+         "override": {"by": "infra", "reason": "the 15:07Z shift", "until": UNTIL, "was": 2}}]
+    assert policy.main_show(NEBIUS, "nebius-1", False, GPU, log) == 0
+    assert f"(override by infra until {UNTIL}, was 2: the 15:07Z shift)" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("args, why", [
+    ({"until": "2026-10-04T10:30Z"}, "an absolute UTC time, %Y-%m-%dT%H:%M:%SZ"),
+    ({"until": "2026-10-03T19:40:30Z"}, "--until 2026-10-03T19:40:30Z has passed"),
+    ({"by": " "}, "--by: the handle who decided it"),
+    ({"reason": ""}, "--reason: why"),
+    ({"key": f"{N1}.pools.provers", "value": "128-191"}, "change them there"),
+    ({"key": f"{N1}.lease-pool.builders.max"}, "a lease pool key is lease-pool.POOL.FIELD"),
+    ({"key": f"{N2}.kueue.provers.gpu.nominal"}, "no reader for 'kueue' on vy-nebius-2"),
+    ({"key": f"{N1}.lease-pool.provers.borrow-until", "value": "tomorrow"}, "n1_lease.py reads only"),
+    ({"key": f"{N1}.check-slots.d", "value": "128-15x"}, "bad CPU list item"),
+])
+def test_an_override_is_refused_naming_each_problem(capsys, tmp_path, args, why):
+    log = tmp_path / "o.jsonl"
+    rc, out = override(capsys, log, **args)
+    assert rc == 2 and why in out and not log.exists()
+
+
+def test_an_override_may_add_a_key_and_a_later_one_replaces_it_until_its_own_until(capsys, tmp_path):
+    log = tmp_path / "o.jsonl"
+    window = f"{N2}.fill.window.2026-10-04T06:30Z"
+    assert override(capsys, log, key=window, value="190", until="2026-10-04T09:40:00Z", reason="circuits' 235B")[0] == 0
+    assert override(capsys, log, key=window, value="150", until="2026-10-03T20:00:00Z", reason="shortened")[0] == 0
+    keys = policy.load(NEBIUS)
+    eff = policy.effective(keys, policy.overrides(log), T)
+    assert (eff[window].value, eff[window].owner, eff[window].override["was"]) == (150, "infra", None)
+    assert window not in policy.effective(keys, policy.overrides(log), epoch("2026-10-03T20:00:00Z"))
+    assert policy.effective(keys, policy.overrides(log), T, N1) == keys
+
+
+def test_a_log_that_doesnt_verify_is_refused_never_read_as_no_override(capsys, tmp_path):
+    log = tmp_path / "o.jsonl"
+    assert override(capsys, log)[0] == 0
+    log.write_text(log.read_text().replace('"value":6', '"value":8'))
+    assert policy.main_show(NEBIUS, "all", False, log=log) == 3
+    assert "hash does not match its content" in capsys.readouterr().out
+    rc, out = override(capsys, log)
+    assert rc == 3 and "the log doesn't verify" in out
+    rc, rows = diff(capsys, "nebius-1", overrides=dump({policy.OVERRIDES: log.read_text()}))
+    assert rc == 3 and rows[GPU]["status"] == "unknown" and "its override log doesn't verify" in rows[GPU]["why"]
+    rc, rows = diff(capsys, "nebius-1", overrides=RuntimeError("cat: Permission denied"))
+    assert rc == 3 and {r["status"] for r in rows.values()} == {"unknown"}
+
+
+def test_diff_compares_live_with_the_override_in_force_on_each_node(capsys, tmp_path, monkeypatch):
+    n1, n2 = tmp_path / "n1.jsonl", tmp_path / "n2.jsonl"
+    assert override(capsys, n1)[0] == 0
+    assert override(capsys, n1, key=f"{N1}.kueue.deployments-gpu.gpu.nominal", value="2")[0] == 0
+    assert override(capsys, n1, key=f"{N1}.lean-slots.audit", value="3", until="2026-10-03T19:40:31Z")[0] == 0
+    assert override(capsys, n2, key=f"{N2}.fill.window.2026-10-04T06:30Z", value="190", until="2026-10-04T09:40:00Z")[0] == 0
+    assert override(capsys, n2, key=f"{N1}.lean-slots.check", value="1")[0] == 0   # node 1's key in node 2's log: no effect
+    monkeypatch.setattr(policy, "clock", lambda: T + 10)                          # lean-slots.audit's has ended
+    shifted = kueue(queues(provers__gpu__nominal="6", **{"deployments-gpu__gpu__nominal": "2"}))
+    n2_out = f"status {STATUS}\n" + dump({**N2_FILES, policy.OVERRIDES: n2.read_text()})
+    rc, rows = diff(capsys, kueue=shifted, overrides=dump({policy.OVERRIDES: n1.read_text()}), n2=n2_out)
+    window = f"{N2}.fill.window.2026-10-04T06:30Z"
+    assert rc == 1
+    assert {k: r["status"] for k, r in rows.items() if r["status"] != "ok" or "override" in r} == {
+        GPU: "ok", f"{N1}.kueue.deployments-gpu.gpu.nominal": "ok", window: "drift"}
+    assert rows[GPU]["declared"] == 6 and rows[GPU]["override"]["was"] == 2
+    assert rows[f"{N1}.lean-slots.audit"]["declared"] == 2 and rows[f"{N1}.lean-slots.check"]["declared"] == 2
+    assert rows[window]["why"] == "absent live"
+    policy.main_diff(NEBIUS, "nebius-1", False, runner=fake(outputs(kueue=shifted, overrides=dump({policy.OVERRIDES: n1.read_text()}))))
+    out = capsys.readouterr().out.splitlines()
+    assert out[0] == f"{N1}: 50 as declared, 0 drift, 0 undeclared, 0 unknown; 2 under an override"
+    assert f"  ok         {GPU}  declared 6  live 6  (override by infra until {UNTIL}, was 2: the 15:07Z shift; owner infra;" \
+        in "\n".join(out)
 
 
 @pytest.mark.parametrize("name", sorted(policy.COMMANDS))

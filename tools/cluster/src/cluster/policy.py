@@ -19,22 +19,31 @@ Values are compared in one spelling per surface (`canon`): Kubernetes quantities
 lists by their CPUs, a window by its start and minutes. A window that has ended is not compared. A ClusterQueue held
 (`stopPolicy: Hold`) by a declared writer (`HOLDERS`: the quiet hour, the disk guard), each of which lists the queues it holds
 in its state file, is as declared; held by anyone else, it is drift.
+
+An override (`override`) replaces one key's value until an absolute UTC time, or until a later override of the same key, and
+records who and why. Each node keeps its own keys' overrides in its own log (`OVERRIDES`), hash-chained as the allocation
+ledger is (`ledger.Ledger`). `show` merges the overrides in force from a local log; `diff` reads each node's log along with
+its live values and compares live with the policy in force, the description's value with any override applied. A log that
+doesn't verify is refused (exit 3): the policy in force can't be told from it. Recording an override changes nothing on a
+node: n1_lease.py takes its pool's `max`, `borrow` and `borrow-until` from `show` when `$VY_POOL_POLICY` names the command,
+and every other value is still set by hand.
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import re
 import shlex
 import time
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable
 
-from . import cpuset, model, nebius1, nebius2, status
+from . import cpuset, ledger, model, nebius1, nebius2, status
 
 DESCRIPTION = Path(__file__).parents[2] / "descriptions" / "nebius.toml"
 NODES = status.NODES
@@ -61,6 +70,8 @@ SURFACES = {nebius1.NODE: {"lease-pool": "lease", "kueue": "kueue", "lean-slots"
             nebius2.NODE: {"fill": "n2", "check-slots": "n2", "direct-gpus": "n2", "direct-cpus": "n2", "user-cpuset": "n2"}}
 POOL_SOURCES = {"provers": f"{DISPATCH_ENV} VY_PROVER_CPUS", "checks": f"{CHECK_SLOTS}: every slot's CPUs"}
 UNTIL_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+#: on each node, the overrides of that node's keys
+OVERRIDES = "/workspace/research/policy/overrides.jsonl"
 
 
 class PolicyError(ValueError):
@@ -69,9 +80,12 @@ class PolicyError(ValueError):
 
 @dataclass(frozen=True)
 class Key:
+    """A policy key and its value in force; `override` (by, reason, until, and `was`, the description's value) while an
+    override replaces it."""
     key: str
     value: Any
     owner: str
+    override: dict[str, Any] | None = None
 
     @property
     def node(self) -> str:
@@ -103,6 +117,10 @@ def _owner_of(key: str, owners: dict[str, str]) -> str | None:
 
 def load(path: str | Path = DESCRIPTION) -> dict[str, Key]:
     """The description's policy keys, the node tables' pools among them, checked (`problems`)."""
+    return _load(path)[1]
+
+
+def _load(path: str | Path) -> tuple[model.Cluster, dict[str, Key]]:
     d = tomllib.loads(Path(path).read_text())
     cluster = model.from_dict(d)
     flat: dict[str, tuple[Any, str | None]] = {}
@@ -121,7 +139,7 @@ def load(path: str | Path = DESCRIPTION) -> dict[str, Key]:
     errs = problems(cluster, keys)
     if errs:
         raise PolicyError("; ".join(errs))
-    return keys
+    return cluster, keys
 
 
 def problems(cluster: model.Cluster, keys: dict[str, Key]) -> list[str]:
@@ -255,6 +273,68 @@ def source(key: str) -> str:
             "fill": f"{FILL}/{'windows' if rest[:1] == ['window'] else 'cpu-sets'}"}.get(s, "")
 
 
+def read_overrides(text: str, where: str) -> list[dict[str, Any]]:
+    """An override log's records, the whole chain verified; PolicyError on a break."""
+    try:
+        records = [json.loads(line) for line in text.splitlines() if line.strip()]
+    except ValueError as e:
+        raise PolicyError(f"{where}: a record isn't JSON ({e})") from None
+    errs = ledger.verify(records)
+    if errs:
+        raise PolicyError(f"{where}: {errs[0]}")
+    return records
+
+
+def overrides(path: str | Path | None) -> list[dict[str, Any]]:
+    """The records of the override log at `path`; none when there is no log."""
+    p = Path(path) if path else None
+    return read_overrides(p.read_text(), str(p)) if p is not None and p.exists() else []
+
+
+def effective(keys: dict[str, Key], records: list[dict[str, Any]], now: int, node: str | None = None) -> dict[str, Key]:
+    """`keys` with every override in force at `now` applied (of `node`'s keys alone, when given): each key's latest override,
+    until its `until`. An override may add a key the description lacks (a window booked ahead)."""
+    latest = {r["key"]: r for r in records if r.get("kind") == "override" and (node is None or r["key"].split(".")[0] == node)}
+    out = dict(keys)
+    for k, r in latest.items():
+        try:
+            ended = ledger.epoch(r["until"]) <= now
+        except (KeyError, ValueError):
+            raise PolicyError(f"override record {r.get('seq')} of {k}: until {r.get('until')!r} isn't {UNTIL_FORMAT}") from None
+        if ended:
+            continue
+        d = keys.get(k)
+        out[k] = Key(k, r["value"], d.owner if d else _owner_guess(k, keys),
+                     {"by": r.get("by"), "reason": r.get("reason"), "until": r["until"], "was": d.value if d else None})
+    return dict(sorted(out.items()))
+
+
+def override_problems(cluster: model.Cluster, keys: dict[str, Key], key: str, value: Any, until: str, by: str, reason: str,
+                      now: int) -> list[str]:
+    """Why an override can't be recorded: a key no node's reader knows or a value of the wrong shape (an override may differ
+    from a workstream's quota: that is what it is for), a node pool (the planner reads those from the description), an
+    `until` that isn't an absolute UTC time still to come, or no `by` or `reason`."""
+    out = []
+    if key.split(".")[1:2] == ["pools"]:
+        out.append(f"{key}: a node's pools are its own `pools`, which the planner reads from the description: change them there")
+    owner = keys[key].owner if key in keys else _owner_guess(key, keys) or "?"
+    out += problems(replace(cluster, workstreams=()), {key: Key(key, value, owner)})
+    try:
+        if ledger.epoch(until) <= now:
+            out.append(f"--until {until} has passed")
+    except ValueError:
+        out.append(f"--until {until!r}: an absolute UTC time, {UNTIL_FORMAT} (2026-10-04T10:30:00Z)")
+    if not by.strip():
+        out.append("--by: the handle who decided it")
+    if not reason.strip():
+        out.append("--reason: why")
+    return out
+
+
+def _value(v: str) -> int | str:
+    return int(v) if v.isdigit() else v
+
+
 FILE_MARK = "@@policy-file "
 ABSENT_MARK = "@@policy-absent "
 
@@ -307,13 +387,14 @@ COMMANDS = {
     "kueue": shlex.join([*nebius1.KUBECTL, "get", "clusterqueues", "-o", "json"]),
     "holds": _dump(sorted(HOLDERS.values())),
     "files": _dump([LEAN_SLOTS, CHECK_SLOTS, *DIRECT.values(), USER_CPUSET]) + " && " + _DISPATCH,
+    "overrides": _dump([OVERRIDES]),
     # node 2 in one command: while a timed window is on it reads nothing but status.txt
     "n2": (f"s=$(head -1 {FILL}/status.txt) || exit 1\n"
            'case "$s" in *"timed True"*) printf "timed %s\\n" "$s"; exit 0 ;; esac\n'
            'printf "status %s\\n" "$s"\n'
-           + _dump([f"{FILL}/windows", f"{FILL}/cpu-sets", CHECK_SLOTS, *DIRECT.values(), USER_CPUSET])),
+           + _dump([f"{FILL}/windows", f"{FILL}/cpu-sets", CHECK_SLOTS, *DIRECT.values(), USER_CPUSET, OVERRIDES])),
 }
-READS = {nebius1.NODE: ("lease", "kueue", "holds", "files"), nebius2.NODE: ("n2",)}
+READS = {nebius1.NODE: ("lease", "kueue", "holds", "files", "overrides"), nebius2.NODE: ("n2",)}
 
 
 def read(node: str, run: Callable[[str], str]) -> dict[str, str | Exception]:
@@ -329,10 +410,19 @@ def read(node: str, run: Callable[[str], str]) -> dict[str, str | Exception]:
 
 @dataclass
 class Live:
-    """A node's live policy: each key's value as read, the prefixes that couldn't be read (with why), and notes on keys."""
+    """A node's live policy: each key's value as read, the prefixes that couldn't be read (with why), notes on keys, and the
+    records of the node's override log."""
     values: dict[str, str]
     unknown: dict[str, str]
     notes: dict[str, str]
+    overrides: list[dict[str, Any]] = field(default_factory=list)
+
+
+def _read_overrides(node: str, files: dict[str, str | None], live: Live) -> None:
+    try:
+        live.overrides = read_overrides(files.get(OVERRIDES) or "", f"{node}:{OVERRIDES}")
+    except PolicyError as e:
+        live.unknown[node] = f"its override log doesn't verify, so the policy in force can't be told: {e}"
 
 
 def _slots(text: str) -> list[list[str]]:
@@ -475,6 +565,7 @@ def _read_n2(node: str, raw: str, now: int, live: Live) -> None:
         if len(f) >= 3 and re.fullmatch(r"[\d,-]+", f[1]) and f[2].isdigit() and (len(f) < 4 or f[3].isdigit()):
             live.values[f"{node}.fill.cpu-sets.{f[0]}"] = " ".join(f[1:4])
     _read_files(node, files, live, pools=False)
+    _read_overrides(node, files, live)
 
 
 def live(node: str, raw: dict[str, str | Exception], now: int) -> Live:
@@ -497,6 +588,10 @@ def live(node: str, raw: dict[str, str | Exception], now: int) -> Live:
                 out.unknown[f"{node}.{s}"] = f"the policy files couldn't be read: {raw['files']}"
     else:
         _read_files(node, _files(raw["files"]), out, pools=True)
+    if isinstance(raw["overrides"], Exception):
+        out.unknown[node] = f"its override log couldn't be read, so the policy in force can't be told: {raw['overrides']}"
+    else:
+        _read_overrides(node, _files(raw["overrides"]), out)
     return out
 
 
@@ -511,7 +606,8 @@ def diff(keys: dict[str, Key], node: str, lv: Live, now: int) -> list[dict[str, 
     rows = []
     mine = {k: v for k, v in keys.items() if v.node == node}
     for k, d in mine.items():
-        row = {"key": k, "owner": d.owner, "declared": d.value, "live": lv.values.get(k), "source": source(k)}
+        row = {"key": k, "owner": d.owner, "declared": d.value, "live": lv.values.get(k), "source": source(k),
+               **({"override": d.override} if d.override else {})}
         why = _unknown(k, lv.unknown)
         ends = window_ends(k, d.value)
         if ends is not None and ends <= now and k not in lv.values:
@@ -567,14 +663,16 @@ def _nodes(which: str) -> list[str]:
     return list(NODES.values()) if which == "all" else [NODES[which]]
 
 
-def show(keys: dict[str, Key], nodes: list[str], now: int) -> list[dict[str, Any]]:
+def show(keys: dict[str, Key], nodes: list[str], now: int, prefix: str | None = None) -> list[dict[str, Any]]:
+    """The keys of `nodes` (only `prefix` and the keys under it, when given) with their owners and sources."""
     rows = []
     for k in keys.values():
-        if k.node not in nodes:
+        if k.node not in nodes or prefix is not None and not (k.key == prefix or k.key.startswith(prefix + ".")):
             continue
         ends = window_ends(k.key, k.value)
         rows.append({"key": k.key, "value": k.value, "owner": k.owner, "source": source(k.key),
-                     **({"ended": True} if ends is not None and ends <= now else {})})
+                     **({"ended": True} if ends is not None and ends <= now else {}),
+                     **({"override": k.override} if k.override else {})})
     return rows
 
 
@@ -582,9 +680,14 @@ def _fmt(v: Any) -> str:
     return "-" if v is None else str(v)
 
 
+def _overridden(o: dict[str, Any]) -> str:
+    return f"override by {o['by']} until {o['until']}, was {_fmt(o['was'])}: {o['reason']}"
+
+
 def render_show(rows: list[dict[str, Any]]) -> str:
     cells = [("KEY", "VALUE", "OWNER", "SOURCE")] + [
-        (r["key"], _fmt(r["value"]) + (" (ended)" if r.get("ended") else ""), r["owner"], r["source"]) for r in rows]
+        (r["key"], _fmt(r["value"]) + (" (ended)" if r.get("ended") else ""), r["owner"],
+         r["source"] + (f"  ({_overridden(r['override'])})" if r.get("override") else "")) for r in rows]
     w = [max(len(c[i]) for c in cells) for i in range(3)]
     return "".join("  ".join(c[i].ljust(w[i]) for i in range(3)) + "  " + c[3] + "\n" for c in cells)
 
@@ -593,31 +696,93 @@ def render_diff(reports: list[dict[str, Any]]) -> str:
     out = []
     for rep in reports:
         n = {s: sum(1 for r in rep["keys"] if r["status"] == s) for s in ("ok", "drift", "undeclared", "unknown")}
-        out.append(f"{rep['node']}: {n['ok']} as declared, {n['drift']} drift, {n['undeclared']} undeclared, {n['unknown']} unknown")
+        o = sum(1 for r in rep["keys"] if r.get("override"))
+        out.append(f"{rep['node']}: {n['ok']} as declared, {n['drift']} drift, {n['undeclared']} undeclared, {n['unknown']} unknown"
+                   + (f"; {o} under an override" if o else ""))
         for r in rep["keys"]:
-            if r["status"] == "ok":
+            if r["status"] == "ok" and not r.get("override"):
                 continue
+            why = "; ".join(x for x in (r.get("why"), r.get("override") and _overridden(r["override"])) if x)
             out.append(f"  {r['status']:<10} {r['key']}  declared {_fmt(r['declared'])}  live {_fmt(r['live'])}"
-                       f"  ({r['why']}; owner {r['owner'] or '?'}{'; ' + r['source'] if r['source'] else ''})")
+                       f"  ({why + '; ' if why else ''}owner {r['owner'] or '?'}{'; ' + r['source'] if r['source'] else ''})")
     return "\n".join(out) + "\n"
 
 
 clock = time.time
 
 
-def main_show(description: str | Path, which: str, as_json: bool) -> int:
+def _described(description: str | Path) -> tuple[model.Cluster, dict[str, Key]] | None:
     try:
-        keys = load(description)
+        return _load(description)
     except (PolicyError, model.ModelError, OSError, tomllib.TOMLDecodeError) as e:
         print(f"cluster policy: {description}: {e}")
+        return None
+
+
+def main_show(description: str | Path, which: str, as_json: bool, prefix: str | None = None,
+              log: str | Path | None = OVERRIDES) -> int:
+    """Print the policy in force: the description's keys with the overrides in force from the local `log`. 2 for an unusable
+    description or a `prefix` naming no key, 3 for a log that doesn't verify."""
+    d = _described(description)
+    if d is None:
         return 2
     now = int(clock())
-    rows = show(keys, _nodes(which), now)
+    try:
+        records = overrides(log)
+    except (PolicyError, OSError) as e:
+        print(f"cluster policy show: refused, the policy in force can't be told: {e}")
+        return 3
+    rows = show(effective(d[1], records, now), _nodes(which), now, prefix)
+    if prefix is not None and not rows:
+        print(f"cluster policy show: no key {prefix}, nor any under it, on {which}")
+        return 2
     if as_json:
-        print(json.dumps({"schema": "cluster/policy/v1", "t": now, "description": str(description), "keys": rows},
-                         indent=1, sort_keys=True))
+        print(json.dumps({"schema": "cluster/policy/v1", "t": now, "description": str(description),
+                          "overrides": str(log) if log and Path(log).exists() else None, "keys": rows}, indent=1, sort_keys=True))
     else:
         print(render_show(rows), end="")
+    return 0
+
+
+def main_override(description: str | Path, key: str, value: str, until: str, by: str, reason: str, log: str | Path,
+                  apply: bool, as_json: bool) -> int:
+    """Record that `key` is `value` until `until` (`--apply`; else print what would be recorded) in the override log `log`,
+    which must be the key's node's own. 2 for a refused override, 3 for a log that doesn't verify."""
+    d = _described(description)
+    if d is None:
+        return 2
+    cluster, keys = d
+    now = int(clock())
+    v = _value(value)
+    errs = override_problems(cluster, keys, key, v, until, by, reason, now)
+    if errs:
+        print("cluster policy override: refused:\n" + "".join(f"  {e}\n" for e in errs), end="")
+        return 2
+    path = Path(log)
+    try:
+        before = effective(keys, overrides(path), now).get(key)
+    except (PolicyError, OSError) as e:
+        print(f"cluster policy override: refused, the log doesn't verify: {e}")
+        return 3
+    record: dict[str, Any] = {"key": key, "value": v, "until": until, "by": by, "reason": reason}
+    if apply:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path.with_name(path.name + ".lock"), "a") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                record = ledger.Ledger(path).append(now, "override", **record)
+        except (ValueError, OSError) as e:
+            print(f"cluster policy override: refused: {e}")
+            return 3
+    was = _fmt(before.value if before else None) + (f" (override by {before.override['by']})" if before and before.override else "")
+    if as_json:
+        print(json.dumps({"schema": "cluster/policy-override/v1", "t": now, "log": str(path), "applied": apply,
+                          "before": before.value if before else None, "record": record}, indent=1, sort_keys=True))
+    else:
+        print(f"{'overrode' if apply else 'would override'} {key}: {was} -> {v} until {until}, by {by}: {reason}"
+              f"{'' if apply else f' (in {path}; --apply records it)'}\n"
+              "Nothing carries it to the node but n1_lease.py, for its pool's max, borrow and borrow-until while $VY_POOL_POLICY "
+              "is set: set any other value yourself. `cluster policy diff` compares the live value with it.")
     return 0
 
 
@@ -625,11 +790,10 @@ def main_diff(description: str | Path, which: str, as_json: bool, key: Path | No
               runner: Callable[[str], Callable[[str], str]] | None = None) -> int:
     """Read `which` nodes' live policy at once and print every key where it differs: 0 none, 1 drift (or undeclared), 3 a
     value couldn't be read (whatever else was found), 2 an unusable description."""
-    try:
-        keys = load(description)
-    except (PolicyError, model.ModelError, OSError, tomllib.TOMLDecodeError) as e:
-        print(f"cluster policy: {description}: {e}")
+    d = _described(description)
+    if d is None:
         return 2
+    keys = d[1]
     now = int(clock())
     runner = runner or (lambda node: status.ssh(HOSTS[node], key))
     nodes = _nodes(which)
@@ -638,7 +802,8 @@ def main_diff(description: str | Path, which: str, as_json: bool, key: Path | No
     reports = []
     for node, raw in zip(nodes, raws):
         try:
-            rows = diff(keys, node, live(node, raw, now), now)
+            lv = live(node, raw, now)
+            rows = diff(effective(keys, lv.overrides, now, node), node, lv, now)
         except (ValueError, KeyError, TypeError, IndexError) as e:
             rows = diff(keys, node, Live({}, {node: f"its live policy couldn't be parsed: {type(e).__name__}: {e}"}, {}), now)
         reports.append({"node": node, "keys": rows})
@@ -653,6 +818,6 @@ def main_diff(description: str | Path, which: str, as_json: bool, key: Path | No
     return 1 if found else 0
 
 
-__all__ = ["DESCRIPTION", "COMMANDS", "READS", "SESSIONS", "ENV", "HOLDERS", "Key", "Live", "PolicyError", "load", "problems",
-           "canon", "source", "window_ends", "read", "live", "diff", "show", "render_show", "render_diff", "main_show",
-           "main_diff"]
+__all__ = ["DESCRIPTION", "OVERRIDES", "COMMANDS", "READS", "SESSIONS", "ENV", "HOLDERS", "Key", "Live", "PolicyError", "load",
+           "problems", "canon", "source", "window_ends", "read_overrides", "overrides", "effective", "override_problems", "read",
+           "live", "diff", "show", "render_show", "render_diff", "main_show", "main_diff", "main_override"]

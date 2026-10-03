@@ -88,8 +88,9 @@ uv run cluster ledger verify|quiet|failures LEDGER.jsonl ...
 uv run cluster shadow replay tools/cluster/descriptions/nebius.toml --sampler UTIL.jsonl.gz --preempted preempted.log --out DIR
 uv run cluster shadow evaluate DIR --quiet-log quiet.jsonl
 uv run cluster status [--node nebius-1|nebius-2|all] [--owner OWNER] [--json]   # over SSH with ~/.ssh/research_key
-uv run cluster policy show [--node nebius-1|nebius-2|all] [--json]   # the declared policy: each key, its owner and source
+uv run cluster policy show [--node nebius-1|nebius-2|all] [--key K] [--json]   # the policy in force: key, owner, source
 uv run cluster policy diff [--node nebius-1|nebius-2|all] [--json]   # over SSH: exit 1 drift, 3 a value unread
+uv run cluster policy override KEY VALUE --until 2026-10-04T10:30:00Z --by WHO --reason R [--apply]   # on KEY's node
 ~~~
 
 Policy is what node services read from outside git: node 1's lease pools (the `n1-lease` panes' environment), Kueue's
@@ -97,3 +98,8 @@ ClusterQueue quotas and stop policies, the check and Lean slot files, `gpu-lease
 and node 2's booked windows and CPU sets. `[policy]` in the description declares each, with the handle who decides a
 change; `cluster policy diff` names every key whose live value differs or that the description lacks, and calls a key it
 couldn't read unknown, never as declared (node 2's are all unknown while a timed window is on: it reads nothing else then).
+A change that should end on its own is an override: `cluster policy override`, run on the key's node, records the value, who,
+why and until when in that node's hash-chained log (`/workspace/research/policy/overrides.jsonl`; a dry run without
+`--apply`), and `show` and `diff` use it until then. Nothing applies an override yet but `n1_lease.py`, which takes its pool's
+`max`, `borrow` and `borrow-until` from `cluster policy show --key vy-nebius-1.lease-pool.<pool> --json` when
+`$VY_POOL_POLICY` names that command.

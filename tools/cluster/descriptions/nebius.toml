@@ -90,7 +90,8 @@ until = "2026-10-07T12:00:00Z"
 # Policy: the values node services read from outside git today (a tmux pane's environment, Kueue's objects, slot and CPU-map
 # files), as agreed on 3 Oct 2026, each under the handle who decides a change (`owner`, which covers every key below it).
 # `cluster policy show` prints them, each with where it is read; `cluster policy diff` reads each from its node, read-only,
-# and names every key where the live value differs (policy.py). `vy-nebius-1.pools.*` are the node's `pools` above.
+# and names every key where the live value differs (policy.py). `vy-nebius-1.pools.*` are the node's `pools` above. A change
+# that should end on its own is an override (`cluster policy override ... --until T`), recorded on the key's node, not here.
 [policy.vy-nebius-1]
 owner = "infra"
 direct-gpus = "none"            # /etc/vy/direct-gpus: gpu-lease's direct runs get no GPU (the 30 Sep cutover)
