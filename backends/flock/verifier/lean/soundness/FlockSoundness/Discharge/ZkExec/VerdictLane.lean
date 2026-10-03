@@ -102,34 +102,40 @@ theorem lane_rec (body : ℕ → Array F256 × F256 × F256 → LM (ForInStep (A
     (hbody : ∀ i s st t b st' t', i < K → body i s st t = .ok ((b, st'), t') →
       b = .yield (s.1.push (coinK (t.rounds[t.k]!).coins),
         if i + 1 = K then (coinK (t.rounds[t.k + 1]!).coins, coinK (t.rounds[t.k + 2]!).coins) else s.2) ∧
-      t'.rounds = t.rounds ∧ t'.k = t.k + 1 + (if i + 1 = K then 2 else 0) ∧ st'.oods = st.oods) :
+      t'.rounds = t.rounds ∧ t'.k = t.k + 1 + (if i + 1 = K then 2 else 0) ∧ st'.oods = st.oods ∧
+      (t.rounds[t.k]!).n = 2 ∧ (i + 1 = K → (t.rounds[t.k + 1]!).n = 2 ∧ (t.rounds[t.k + 2]!).n = 2)) :
     ∀ n a s st t s' st' t', a + n = K → 0 < n → forIn (List.range' a n) s body st t = .ok ((s', st'), t') →
       t'.rounds = t.rounds ∧ t'.k = t.k + n + 2 ∧ st'.oods = st.oods ∧ s'.1.size = s.1.size + n ∧
       (∀ j < s.1.size, s'.1[j]! = s.1[j]!) ∧ (∀ j < n, s'.1[s.1.size + j]! = coinK (t.rounds[t.k + j]!).coins) ∧
-      s'.2 = (coinK (t.rounds[t.k + n]!).coins, coinK (t.rounds[t.k + n + 1]!).coins)
+      s'.2 = (coinK (t.rounds[t.k + n]!).coins, coinK (t.rounds[t.k + n + 1]!).coins) ∧
+      (∀ j < n, (t.rounds[t.k + j]!).n = 2) ∧ (t.rounds[t.k + n]!).n = 2 ∧ (t.rounds[t.k + n + 1]!).n = 2
   | 0, _, _, _, _, _, _, _, _, h0, _ => absurd h0 (lt_irrefl 0)
   | 1, a, s, st, t, s', st', t', hK, _, h => by
       rw [List.range'_succ, List.forIn_cons] at h
       obtain ⟨b, st₁, t₁, h₁, h₂⟩ := lbind_ok h
-      obtain ⟨rfl, hr, hk, ho⟩ := hbody a s st t b st₁ t₁ (by omega) h₁
+      obtain ⟨rfl, hr, hk, ho, hn0, hnρ⟩ := hbody a s st t b st₁ t₁ (by omega) h₁
+      obtain ⟨hnρ₀, hnρ₁⟩ := hnρ (by omega)
       simp only [List.range'_zero, List.forIn_nil] at h₂
       obtain ⟨rfl, rfl, rfl⟩ := lpure_ok h₂
       rw [ite_eq_left (show a + 1 = K by omega)] at hk ⊢
-      refine ⟨hr, by omega, ho, by simp, fun j hj => ?_, fun j hj => ?_, rfl⟩
+      refine ⟨hr, by omega, ho, by simp, fun j hj => ?_, fun j hj => ?_, rfl, fun j hj => ?_, hnρ₀, hnρ₁⟩
       · exact push_get_lt _ _ hj
       · obtain rfl : j = 0 := by omega
         exact push_get_size _ _
+      · obtain rfl : j = 0 := by omega
+        exact hn0
   | n + 2, a, s, st, t, s', st', t', hK, _, h => by
       rw [List.range'_succ, List.forIn_cons] at h
       obtain ⟨b, st₁, t₁, h₁, h₂⟩ := lbind_ok h
-      obtain ⟨rfl, hr, hk, ho⟩ := hbody a s st t b st₁ t₁ (by omega) h₁
+      obtain ⟨rfl, hr, hk, ho, hn0, -⟩ := hbody a s st t b st₁ t₁ (by omega) h₁
       rw [ite_eq_right (show ¬ a + 1 = K by omega)] at hk
       simp only at h₂
       rw [ite_eq_right (show ¬ a + 1 = K by omega)] at h₂
-      obtain ⟨hr', hk', ho', hsz, hpre, hnew, hρ⟩ :=
+      obtain ⟨hr', hk', ho', hsz, hpre, hnew, hρ, hnl, hnρ₀, hnρ₁⟩ :=
         lane_rec body K hbody (n + 1) (a + 1) _ st₁ t₁ s' st' t' (by omega) (by omega) h₂
       simp only [Array.size_push] at hsz hpre hnew
-      refine ⟨hr'.trans hr, by omega, ho'.trans ho, by omega, fun j hj => ?_, fun j hj => ?_, ?_⟩
+      refine ⟨hr'.trans hr, by omega, ho'.trans ho, by omega, fun j hj => ?_, fun j hj => ?_, ?_, fun j hj => ?_,
+        ?_, ?_⟩
       · rw [hpre j (by omega)]
         exact push_get_lt _ _ hj
       · rcases j with _ | j
@@ -138,6 +144,14 @@ theorem lane_rec (body : ℕ → Array F256 × F256 × F256 → LM (ForInStep (A
         · rw [show s.1.size + (j + 1) = s.1.size + 1 + j by omega, hnew j (by omega), hr,
             show t₁.k + j = t.k + (j + 1) by omega]
       · rw [hρ, hr, show t₁.k + (n + 1) = t.k + (n + 2) by omega]
+      · rcases j with _ | j
+        · exact hn0
+        · rw [← hr, show t.k + (j + 1) = t₁.k + j by omega]
+          exact hnl j (by omega)
+      · rw [← hr, show t.k + (n + 2) = t₁.k + (n + 1) by omega]
+        exact hnρ₀
+      · rw [← hr, show t.k + (n + 2) + 1 = t₁.k + (n + 1) + 1 by omega]
+        exact hnρ₁
 
 /-- `finalProgZ`'s record: the target, level 0's out-of-domain coin and value, the lane rounds' and pair's coins. -/
 theorem finalProgZ_rec {p : LigeritoProof} {basisAt : Array F256 → ℕ → Array F256} {n : ℕ} {T : F128}
@@ -236,7 +250,9 @@ theorem zk_ligerito_rec (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (c
       rec.challenges.size = sch.k0 ∧
       (∀ j < sch.k0, rec.challenges[j]! = coinK (t.rounds[t.k + 2 + j]!).coins) ∧
       rec.rho = (coinK (t.rounds[t.k + 2 + sch.k0]!).coins, coinK (t.rounds[t.k + 3 + sch.k0]!).coins) ∧
-      t'.rounds = t.rounds ∧ t.k + 4 + sch.k0 ≤ t'.k := by
+      t'.rounds = t.rounds ∧ t.k + 4 + sch.k0 ≤ t'.k ∧
+      (t.rounds[t.k]!).n = sch.n ∧ (t.rounds[t.k + 1]!).n = 1 ∧ (∀ j < sch.k0, (t.rounds[t.k + 2 + j]!).n = 2) ∧
+      (t.rounds[t.k + 2 + sch.k0]!).n = 2 ∧ (t.rounds[t.k + 3 + sch.k0]!).n = 2 := by
   obtain ⟨hn7, h2, hl0, hc0, hl4, hcols, hext⟩ := hdim
   have hc01 := hcols 0 (by omega)
   have hn3 : 3 ≤ sch.n := by omega
@@ -264,7 +280,7 @@ theorem zk_ligerito_rec (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (c
   have h₄ := lmodify_bind h₄
   obtain ⟨lane, st₁₀, t₁₀, h₁₀, h₄⟩ := lbind_ok h₄
   rw [lforIn_range_eq] at h₁₀
-  obtain ⟨hr₁₀, hk₁₀, ho₁₀, hsz₁₀, -, hch₁₀, hρ₁₀⟩ := lane_rec _ sch.k0 (by
+  obtain ⟨hr₁₀, hk₁₀, ho₁₀, hsz₁₀, -, hch₁₀, hρ₁₀, hnl₁₀, hnρ₀, hnρ₁⟩ := lane_rec _ sch.k0 (by
       intro i v st tE bv st' tE' hiB hb
       obtain ⟨r, tR, hR', hb⟩ := lift_bind hb
       obtain ⟨-, hnR, rfl, hrR, hkR⟩ := sampleK_ok hR'
@@ -297,17 +313,22 @@ theorem zk_ligerito_rec (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (c
         obtain ⟨m, t₉, -, ⟨f₉k, f₉r⟩, hb⟩ := nextMsg_bind hb
         have hb := lmodify_bind hb
         obtain ⟨rfl, rfl, rfl⟩ := lpure_ok hb
-        refine ⟨?_, by rw [f₉r, f₈r, f₇r, f₆r, hr₅, hr₄, f₃r, f₂r, hrR], by rw [ite_eq_left hj]; omega, rfl⟩
-        subst eρ₀ eρ₁
-        rw [ite_eq_left hj, show tE.k + 1 = t₃.k by omega, show tE.k + 2 = t₄.k by omega,
-          show tE.rounds = t₃.rounds by rw [f₃r, f₂r, hrR], show t₄.rounds = t₃.rounds from hr₄]
-        rfl
+        refine ⟨?_, by rw [f₉r, f₈r, f₇r, f₆r, hr₅, hr₄, f₃r, f₂r, hrR], by rw [ite_eq_left hj]; omega, rfl, hnR,
+          fun _ => ⟨?_, ?_⟩⟩
+        · subst eρ₀ eρ₁
+          rw [ite_eq_left hj, show tE.k + 1 = t₃.k by omega, show tE.k + 2 = t₄.k by omega,
+            show tE.rounds = t₃.rounds by rw [f₃r, f₂r, hrR], show t₄.rounds = t₃.rounds from hr₄]
+          rfl
+        · rw [show tE.k + 1 = t₃.k by omega, show tE.rounds = t₃.rounds by rw [f₃r, f₂r, hrR]]
+          exact hn₄
+        · rw [show tE.k + 2 = t₄.k by omega, show tE.rounds = t₄.rounds by rw [hr₄, f₃r, f₂r, hrR]]
+          exact hn₅
       · rw [ite_eq_right (show ¬ (i + 1 == sch.k0) = true by simp [hj])] at hb
         try simp only [pure_bind] at hb
         obtain ⟨m, t₉, -, ⟨f₉k, f₉r⟩, hb⟩ := nextMsg_bind hb
         have hb := lmodify_bind hb
         obtain ⟨rfl, rfl, rfl⟩ := lpure_ok hb
-        refine ⟨?_, by rw [f₉r, hrR], by rw [ite_eq_right hj]; omega, rfl⟩
+        refine ⟨?_, by rw [f₉r, hrR], by rw [ite_eq_right hj]; omega, rfl, hnR, fun h => absurd h hj⟩
         rw [ite_eq_right hj]
         rfl)
     sch.k0 0 _ _ t₉ _ _ t₁₀ (by omega) (by omega) h₁₀
@@ -407,13 +428,23 @@ theorem zk_ligerito_rec (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (c
   have ek₁₇ : t₁₇.k = t.k + 2 + sch.k0 + 9 := by
     rw [hk₁₇, k₁₆.1, k₁₅.1, hk₁₄, hk₁₃, hk₁₂, k₁₁.1, hk₁₀, ek₉]
   refine ⟨rfl, rfl, ?_, by simpa using hsz₁₀, fun j hj => ?_, ?_, by rw [hfin, hr₁₈, er₁₇], by
-    rw [hfin]; omega⟩
+    rw [hfin]; omega, ?_, ?_, fun j hj => ?_, ?_, ?_⟩
   · show (st₁₈.oods[0]!).beta = _
     rw [getElem!_of_getElem? hI₁₈, er₇, ek₇]
   · have := hch₁₀ j hj
     simp only [Array.size_empty, Nat.zero_add] at this
     rw [this, er₉, ek₉]
   · rw [hρ₁₀, er₉, ek₉, show t.k + 2 + sch.k0 + 1 = t.k + 3 + sch.k0 by omega]
+  · rw [show t.rounds = t₃'.rounds by rw [k₃'.2, k₃.2, k₂.2, k₁.2], show t.k = t₃'.k by rw [k₃'.1, k₃.1, k₂.1, k₁.1]]
+    exact hn₅
+  · rw [← er₇, ← ek₇]
+    exact hn₈
+  · rw [← er₉, ← ek₉]
+    exact hnl₁₀ j hj
+  · rw [← er₉, ← ek₉]
+    exact hnρ₀
+  · rw [← er₉, show t.k + 3 + sch.k0 = t₉.k + sch.k0 + 1 by omega]
+    exact hnρ₁
 
 /-! ## The model's lane rounds -/
 
@@ -561,7 +592,7 @@ theorem ligeritoPadZC_row (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len 2) (
     (rel2_add (rel2_scale hE1 rec.rho.2) (rel2_neg (rel2_konst (np := lay.len) zl.tPrime)))
   convert hfin using 1
   · rw [Fin.sum_univ_two, hρ, coinK_limbs, coinK_limbs]
-    simp only [Fin.cons_zero, Fin.cons_one, Matrix.cons_val_zero, Matrix.cons_val_one, Matrix.head_cons]
+    simp only [Fin.cons_zero, Fin.cons_one, Matrix.cons_val_zero, Matrix.cons_val_one]
     rw [sub_eq_add_neg]
     abel
   · rfl
