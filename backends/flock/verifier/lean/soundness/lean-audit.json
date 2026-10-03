@@ -9510,6 +9510,7 @@
    "assumptions": [],
    "type_hash": "8089af4bd1e273f7e888cec9f2cbc17734f4ceb8da96c085d2586a56b6cb38d8"
   },
+  "FlockSoundness.Discharge.ZkLink.tablesAtZK_live": {},
   "FlockSoundness.Discharge.ZkLink.zc_knowledgeSound": {
    "signature": [
     "FlockSoundness.Discharge.ZkLink.zc_knowledgeSound {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
