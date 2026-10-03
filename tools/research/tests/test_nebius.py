@@ -1841,6 +1841,31 @@ def test_n1_lease_takes_its_pool_limits_from_the_policy_command_and_keeps_the_la
 
 
 @needs_flock
+def test_n1_lease_kills_everything_a_policy_command_that_overruns_started(monkeypatch, tmp_path, reap):
+    started, alive, block = tmp_path / "started", tmp_path / "alive", tmp_path / "block"
+    for f in (started, alive, block):
+        os.mkfifo(f)
+    # the shell's child holds `alive` open for writing until it dies, so its read end's EOF is that death (a kill that misses it
+    # leaves the read blocked)
+    hung = f"sh -c 'exec 3>{alive}; echo $$ > {started}; cat {block}'; true"
+    m, calls, fd, _, _ = _policy_lease(monkeypatch, tmp_path, 3, policy=hung)
+    r = os.open(alive, os.O_RDONLY | os.O_NONBLOCK)
+    os.set_blocking(r, True)
+    child: list[int] = []
+
+    def overrun(p, timeout):
+        child.append(int(started.read_text()))
+        raise subprocess.TimeoutExpired(p.args, timeout)
+    monkeypatch.setattr(m, "communicate", overrun)
+    events = [e for e in m.Controller().tick(1_800_000_000.0)["events"] if e["ev"] == "policy"]
+    os.close(fd)
+    assert os.read(r, 1) == b"" and child
+    os.close(r)
+    assert len(events) == 1 and events[0]["error"].startswith("TimeoutExpired") and events[0]["fallback"] == "environment"
+    assert len([a for a, _ in calls if a[0] == "create"]) == 3
+
+
+@needs_flock
 @pytest.mark.parametrize("value", ["-1", -1, 1.5, float("inf"), "8x", 5, True, None])
 def test_n1_lease_refuses_a_policy_max_that_isnt_a_whole_number_of_its_gpus_and_goes_on(monkeypatch, tmp_path, reap, value):
     m, calls, fd, _, keys = _policy_lease(monkeypatch, tmp_path, 3)

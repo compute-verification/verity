@@ -26,7 +26,7 @@ Each tick, with the brain absent (local rules):
 With `$VY_POOL_POLICY` set (a command printing this pool's keys of the cluster policy in force, `cluster/policy/v1` JSON:
 `python3 -m cluster policy show --key vy-nebius-1.lease-pool.provers --json` from tools/cluster), the pool's `max`, `borrow` and
 `borrow-until` come from it instead, read again every `POLICY_EVERY_S`, so an override (`cluster policy override`) takes effect
-without a restart. A key it lacks keeps the environment's value; while it fails or answers a `max` or `borrow` that isn't a
+without a restart (a read that takes longer than `POLICY_TIMEOUT_S` fails, and everything it started is killed). A key it lacks keeps the environment's value; while it fails or answers a `max` or `borrow` that isn't a
 whole number of the node's GPUs, the three it last answered stay (the environment's, before it ever has). Each change is logged
 (`policy`), and the three in force are written to `$GPU_LEASE_DIR/n1-lease.limits` at each read with where they came from,
 `from=policy`, `last-policy` or `environment` (`cluster policy diff` reads them there).
@@ -75,6 +75,7 @@ BORROW = int(os.environ.get("VY_POOL_BORROW", "0"))
 BORROW_UNTIL = os.environ.get("VY_POOL_BORROW_UNTIL", "")
 POLICY = os.environ.get("VY_POOL_POLICY", "")
 POLICY_EVERY_S = 60
+POLICY_TIMEOUT_S = 5
 KILL_AFTER_S = 30
 BRAIN = os.environ.get("VY_LEASE_BRAIN", "")
 BRAIN_MISSES = 2
@@ -105,6 +106,28 @@ def gpu_count(field: str, v, cap: int) -> int:
     if type(v) is not int or not 0 <= v <= cap:
         raise ValueError(f"{field} {v!r} isn't a whole number of GPUs from 0 to {cap}")
     return v
+
+
+def communicate(p: subprocess.Popen, timeout: float) -> tuple[str, str]:
+    return p.communicate(timeout=timeout)
+
+
+def policy_output(cmd: str) -> str:
+    """`cmd`'s stdout, run by a shell in a session of its own whose whole process group is killed after `POLICY_TIMEOUT_S`, so
+    nothing it started (an ssh, a python3 under `cd ... &&`) outlives it; CalledProcessError on a nonzero exit."""
+    with subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                          start_new_session=True) as p:
+        try:
+            out, err = communicate(p, POLICY_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(p.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            raise
+    if p.returncode:
+        raise subprocess.CalledProcessError(p.returncode, cmd, out, err)
+    return out
 
 
 def kubectl(*args: str, stdin: str | None = None) -> str:
@@ -287,7 +310,7 @@ class Controller:
         env = {"max": POOL_MAX, "borrow": BORROW, "borrow-until": BORROW_UNTIL}
         got, err = dict(env), None
         try:
-            doc = json.loads(subprocess.run(POLICY, shell=True, capture_output=True, text=True, timeout=20, check=True).stdout)
+            doc = json.loads(policy_output(POLICY))
             if doc.get("schema") != "cluster/policy/v1":
                 raise ValueError(f"schema {doc.get('schema')!r}, not cluster/policy/v1")
             seen: dict = {}
