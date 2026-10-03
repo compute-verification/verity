@@ -106,6 +106,7 @@ import Pouw.SecurityProofs.PearlC.RowSeedSkip
 import Pouw.SecurityProofs.PearlC.ServedMixedRev1Gamma
 import Pouw.SecurityProofs.PearlC.ServedRev1Gamma
 import Pouw.SecurityProofs.PearlC.Sm120Checks
+import Pouw.SecurityProofs.PearlC.Tile4Circuit
 import Pouw.SecurityProofs.PearlC.TileCapRev1Gamma
 import Pouw.SecurityProofs.PearlC.TileCheck
 import Pouw.SecurityProofs.PearlC.TileCircuit
