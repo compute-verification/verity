@@ -453,6 +453,14 @@ def MoeRouterBiasScore(B, S, x, sig, b):
     return B.call(P.SelectF32, ok, sel, B.call(b1.NEG_INF32))
 
 
+@composite("MoeRouterSigmoidScore", 1, [], lambda S: ((("x", F32), ("b", F32)), Tuple(F32, F32)), conformance="not-yet-established")
+def MoeRouterSigmoidScore(B, S, x, b):
+    """One expert's `preprocess_score<float, float, SIGMOID>`: (its sigmoid `NvSigmoid_v1(x)`, its selection score
+    `MoeRouterBiasScore_v1(x, sig, b)`)."""
+    sig = B.call(NvSigmoid, x)
+    return tuple_of(sig, B.call(MoeRouterBiasScore, x, sig, b))
+
+
 @composite("RouterArgmaxOkStep", 1, [],
            lambda S: ((("carry", Tuple(BIT, F32, I32, I32)), ("ok", BIT), ("x", F32)), Tuple(Tuple(BIT, F32, I32, I32), I32)),
            conformance="model-untested")
@@ -557,7 +565,7 @@ def MoeRouterSigmoidNorm(B, S, w, v):
 def MoeRouterSigmoidBias(B, S, logits, bias):
     """`_moe_C.grouped_topk(scores, n_group=1, topk_group=1, TOPK, renormalize=True, SCALE, bias, scoring_func=SIGMOID)` for one
     token row of f32 router logits (`GateLinear`'s f32 output) and the f32 `e_score_correction_bias`: per expert the sigmoid
-    (`NvSigmoid_v1`) and the selection score (`MoeRouterBiasScore_v1`); the TOPK largest selection scores in the kernel's key order,
+    and the selection score (`MoeRouterSigmoidScore_v1`); the TOPK largest selection scores in the kernel's key order,
     value descending then lower expert first (`MoeRouterFirst_v1`, then `MoeRouterBiasNext_v1`, each slot's score and second value
     read by `MoeRouterPickPair_v1`); then `MoeRouterSigmoidNorm_v1`.  Returns (topk_weights, topk_ids) as the kernel writes them.
 
@@ -568,8 +576,8 @@ def MoeRouterSigmoidBias(B, S, logits, bias):
     kernel = _router_kernel(S)
     if S.TOPK > S.E:
         raise ValueError("TOPK must not exceed E")
-    sig = B.batch(NvSigmoid, logits, axes=(0,))
-    s = B.batch(MoeRouterBiasScore, logits, sig, bias, axes=(0, 0, 0))
+    scores = B.batch(MoeRouterSigmoidScore, logits, bias, axes=(0, 0))
+    sig, s = _array([scores[e][0] for e in range(S.E)]), _array([scores[e][1] for e in range(S.E)])
     v = sig if kernel == "block" else bias
     ids = [B.call(bind(MoeRouterFirst, E=S.E), s)]
     pairs = [B.call(bind(MoeRouterPickPair, E=S.E), s, v, ids[0])]
@@ -707,6 +715,6 @@ def MoeSum(B, S, y):
 
 ALL = [F32Sat, F32FmaRm, F32Neg, F32BitsShl23, NvExpf, F32IsFinite, RouterArgmaxStep, MoeRouterTopK, MoeRouterTopKNorm, MoeRouterProbs,
        MoeRouterFirst, MoeRouterNext, MoeRouterPick, MoeRouterTopKOrdered, MoeRouterTopKOrderedNorm, NvSigmoid, MoeRouterBiasScore,
-       RouterArgmaxOkStep, MoeRouterBiasNext, MoeRouterPickPair, MoeRouterSigmoidNorm, MoeRouterSigmoidBias, MoeExpertRow,
+       MoeRouterSigmoidScore, RouterArgmaxOkStep, MoeRouterBiasNext, MoeRouterPickPair, MoeRouterSigmoidNorm, MoeRouterSigmoidBias, MoeExpertRow,
        MoeExpertCoordinate, MoeExpertGemm, MoeExpertCoordinateW, MoeExpertGemmW, MoeExpertCoordinateV2, MoeExpertGemmV2,
        MoeExpertCoordinateWV2, MoeExpertGemmWV2, MoeSumCoordinate, MoeSum]
