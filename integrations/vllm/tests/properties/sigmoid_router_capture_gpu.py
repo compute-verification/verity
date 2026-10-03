@@ -502,7 +502,7 @@ def run(out: str, seed: int, n: int, min_driver: int, want_cc: str, want_sms: in
     moe_so = sorted(Path(vllm.__file__).parent.glob("_moe_C*.so"))
     doc["binary"] = C._archs(str(moe_so[0])) if moe_so else {"error": "no vllm/_moe_C*.so"}
     print(f"[sigmoid-router] {_utc()} binary _moe_C sass={doc['binary'].get('sass_archs')} ptx={doc['binary'].get('ptx_archs')}", flush=True)
-    with tempfile.TemporaryDirectory(dir=outdir) as work:
+    with tempfile.TemporaryDirectory() as work:
         doc["mufu"] = C.mufu(Path(work), f"sm_{p.major}{p.minor}")
     for k, b in doc["mufu"]["builds"].items():
         b.pop("tables_kept", None)
