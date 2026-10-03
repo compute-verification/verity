@@ -33,7 +33,7 @@ the same rules on `audit.TimedVerifier`):
 2. It times the answer from its own send time. The answer's delay is the number of units the machine took, the depth
    of the round's program (`contProg`), as `TimedVerifier.respond()` measures `stop − start` from `challenge()`. A
    round's answer is the answer to its own index, as `ContinuousVerifier.respond(j, …)` refuses an answer to any
-   challenge but the open one.
+   challenge but the open one and `run_continuous` drops a reply naming any other.
 3. It waits at most `D_late` units. The round closes at the answer, or after `D_late` units with no answer
    (`contNext`). A round with no answer by then, or whose answer took more than `Q_late` queries, is **rejected**
    (`contVerdict`): past the hard deadline, its block never checked (`Answer.rejected`, past `Δ_late + RTT`, closed by
@@ -47,10 +47,10 @@ the same rules on `audit.TimedVerifier`):
 `contRecords` runs rules 1–4 over the indices. Each round's record holds its verdict and the length of the responder's
 memory at the send time. The memory length is the game's measurement, which the verifier never sees.
 
-A verifier that closes a round later than rule 3, when a late answer finally arrives (`run_continuous`, whose
-`respond` waits for it), only sends the next index later. That gives the responder nothing `rest` lacks: `rest` may
-compute anything between rounds, so a machine whose `rest` returns the memory the responder would hold at the later
-send time has the same records.
+A verifier that closes a round later than rule 3 (`run_continuous` closes a silent round with `expire()` once its
+transport reports nothing by the hard deadline, which may be a little after it) only sends the next index later. That
+gives the responder nothing `rest` lacks: `rest` may compute anything between rounds, so a machine whose `rest` returns
+the memory the responder would hold at the later send time has the same records.
 
 **The three requirements are theorems about this verifier.** `Pous/SecurityProofs/Continuous/Verifier.lean` proves
 each one for every machine:
@@ -75,14 +75,21 @@ did before. No cap like the graded audit's `D_late ≤ 12` (`audit.LATE_ROUNDS`)
 * **The arrival process is the verifier's own randomness.** It must be independent of the setup, the indices and the
   answers (a Poisson process from its own `verity.randomness` domain, say). The number of challenges `N` must not
   adapt to the misses, though rejecting early is fine. The statements hold for every fixed schedule `arr`, so they
-  hold conditional on the arrivals. Per challenge, normalize by the realized `N`, never by `λT`.
-* **Storage at send times, not a time average.** `ε_j` is read at the send times, and a machine may hold more
-  between them.
+  hold conditional on the arrivals. Per challenge, normalize by the realized `N`, never by `λT`. The responder may
+  know every arrival time in advance, and a queued challenge is sent when the last round closes, which the responder
+  controls. Both only help it, and the statements hold for every machine.
+* **Storage at send times, not a time average.** `ε_j` is read at the send times. Between them a machine may hold
+  less, down to nothing, and rebuild before the next send (`rest` sees `C` and `ω`), so the bound says nothing about
+  the time average.
+* **No messages in flight.** A round's answer is computed from the memory at the send time and the round's queries.
+  Data the responder keeps outside its memory, on the wire say, and reads back during a round is outside help, which
+  the deployment must exclude from each send to its close.
 * **Indices secret until sent** (`audit.challenge_key`), uniform and independent of the setup.
 * **Work is modeled.** The verifier sees only time. `(D, Q)` and `(D_late, Q_late)` are what the adversary completes
   within `Δ` and `Δ_late`, the sequential audit's convention.
 * **Wrong and rejected answers count as misses** rather than rejecting the run, as `AuditResult.misses` counts them. A
-  verifier that rejects the run on either accepts fewer runs, so the bound covers it too.
+  verifier that rejects the run on either, or past a cap on the audit's duration (`audit_cap`), accepts fewer runs, so
+  the bound covers it too.
 -/
 
 namespace Pous
