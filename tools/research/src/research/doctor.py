@@ -7,29 +7,36 @@ Each check is `ok`, `skip` (it does not apply here) or a `finding`, which says w
   secrets     every name the role needs (`SECRETS`) and every name this VM injects ($CLOUD_AGENT_INJECTED_SECRET_NAMES) is set;
               a name `research` took back from the tmux server (`secret_hint.recover`) counts, and is named
   github      `gh auth status` exits 0
-  git-push    `git push --dry-run` of HEAD to a branch nobody has (`PROBE_REF`) on the checkout's origin: GitHub accepts the
-              credential git pushes with
+  git-push    `git push --dry-run --no-verify` of HEAD to a branch nobody has (`PROBE_REF`) on the checkout's origin: GitHub
+              accepts the credential git pushes with
   notes-push  the same for the notes clone, through `notes_sync.remote_target` (RESEARCH_NOTES_TOKEN's helper when it is set)
-  store       the evidence store's remote answers a HEAD of an absent key; a 403 is a refused credential
+  store       the evidence store's remote answers a HEAD of an absent key with "absent"; a 400, 401 or 403 is a refused credential
   slack       `auth.test` is ok, with the bot token or through the broker (coordinator and infra: a lane asks its coordinator)
   ssh:NAME    `ssh -o BatchMode=yes ... true`, as `research run --on` reaches NAME, for each machine whose entry names an ssh host
+              (machines.toml, and the registry where the notes clone already is: the doctor never clones it); a changed host
+              key reads as ok, since `research`'s ssh does not check host keys (runpod.ssh_command)
   venv        `uv sync --locked --check --offline` of the checkout's lock against the venv this runs in (else the checkout's
               .venv), workspace members aside: a worktree's come from PYTHONPATH
   disk        free space on the filesystems of the runs root, the store, the checkout and $TMPDIR, against the floor `research
               run` refuses under ($RESEARCH_DISK_FLOOR_GB)
   clock       this clock against the Date header of CLOCK_URL (Cloudflare's, as R2 is), within CLOCK_SKEW_MAX_S
 
-The probes run at once, each bounded by DEADLINE_S, and what they print is discarded: a finding names an exit code, an HTTP
+The probes run at once under DEADLINE_S, and what they print is discarded: a finding names an exit code, an HTTP
 status or a class of error, and its fix says how to see the tool's own message. Exit 0 when nothing is a finding, 1 when
 something is, 2 on a usage error; `--json` prints `research/doctor/v1`.
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
 import email.utils
 import json
+import math
 import os
 import re
+import shlex
+import signal
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -62,6 +69,8 @@ SECRETS: dict[str, tuple[str | tuple[str, ...], ...]] = {
 SLACK_ROLES = ("coordinator", "infra")
 DEADLINE_S = 25.0
 PROBE_TIMEOUT_S = 15.0
+KILL_MARGIN_S = 3.0             # a probe's subprocesses are killed this long before the deadline leaves the probe behind
+LOCAL_TIMEOUT_S = 10.0          # a local git command (rev-parse, config)
 SSH_CONNECT_S = 8
 CLOCK_URL = "https://cloudflare.com/cdn-cgi/trace"      # uncached: github.com's CDN answers with Dates up to 10 s old
 CLOCK_SKEW_MAX_S = 30.0         # R2 refuses a request 15 min off; notes refuse a stamp 5 min ahead; NTP keeps a VM within ms
@@ -73,6 +82,7 @@ DASHBOARD = "the Cursor Dashboard (Cloud Agents > Secrets)"
 OK, FINDING, SKIP = "ok", "finding", "skip"
 
 clock = time.time
+_probe = threading.local()      # .end: the monotonic time by which this probe thread's subprocesses are killed (`gather`)
 
 
 @dataclass
@@ -83,17 +93,28 @@ class Check:
     fix: str | None = None
 
 
+def _left(timeout: float) -> float:
+    """`timeout`, cut to what is left of this probe thread's time."""
+    return max(0.0, min(timeout, getattr(_probe, "end", math.inf) - time.monotonic()))
+
+
 def run(argv: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None) -> tuple[int | None, str]:
-    """(exit code, output) of `argv`, stdin closed: None when it gave no answer within PROBE_TIMEOUT_S, 127 when it could not
-    start. The output is for telling one failure from another, never for printing."""
+    """(exit code, output) of `argv`, stdin closed, in a session of its own: None when it gave no answer within PROBE_TIMEOUT_S
+    (or what is left of its probe's time), its whole process group killed, git's remote helpers and ssh's with it; 127 when it
+    could not start. The output is for telling one failure from another, never for printing."""
     try:
-        p = subprocess.run(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                           text=True, errors="replace", timeout=PROBE_TIMEOUT_S, check=False)
-    except subprocess.TimeoutExpired:
-        return None, ""
+        p = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             text=True, errors="replace", start_new_session=True)
     except OSError:
         return 127, ""
-    return p.returncode, p.stdout
+    with p:
+        try:
+            out, _ = p.communicate(timeout=_left(PROBE_TIMEOUT_S))
+        except subprocess.TimeoutExpired:
+            os.killpg(p.pid, signal.SIGKILL)        # a session leader cannot leave its group, and is not reaped yet
+            p.wait()
+            return None, ""
+    return p.returncode, out
 
 
 def _alts(need: str | tuple[str, ...]) -> tuple[str, ...]:
@@ -157,12 +178,13 @@ PUSH_FAILURES = (
 
 
 def push_probe(name: str, root: Path, opts: list[str], where: str, credential_fix: str) -> Check:
-    """`git push --dry-run` of HEAD to PROBE_REF: GitHub asks for the push credential before it answers, and nothing is sent."""
-    rc, out = run(["git", "-C", str(root), *opts, "push", "--dry-run", "--quiet", where, f"HEAD:{PROBE_REF}"],
-                  env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+    """`git push --dry-run` of HEAD to PROBE_REF: GitHub asks for the push credential before it answers, nothing is sent, and no
+    pre-push hook runs."""
+    argv = ["git", "-C", str(root), *opts, "push", "--dry-run", "--no-verify", "--quiet", where, f"HEAD:{PROBE_REF}"]
+    rc, out = run(argv, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     if rc == 0:
         return Check(name, OK, f"origin of {root} accepts a push (dry run)")
-    see = f"`git -C {root} push --dry-run origin HEAD:{PROBE_REF}` shows git's message"
+    see = f"`{shlex.join(a for a in argv if a != '--quiet')}` shows git's message"
     if rc is None:
         return Check(name, FINDING, f"`git push --dry-run` from {root} gave no answer within {PROBE_TIMEOUT_S:g} s", f"retry; {see}")
     what, credential = next(((w, c) for pat, w, c in PUSH_FAILURES if pat.search(out)), (f"git exits {rc}", False))
@@ -171,7 +193,8 @@ def push_probe(name: str, root: Path, opts: list[str], where: str, credential_fi
 
 def _git_root(where: Path) -> Path | None:
     try:
-        p = subprocess.run(["git", "-C", str(where), "rev-parse", "--show-toplevel"], capture_output=True, text=True, timeout=10, check=False)
+        p = subprocess.run(["git", "-C", str(where), "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+                           timeout=_left(LOCAL_TIMEOUT_S), check=False)
     except (OSError, subprocess.SubprocessError):
         return None
     return Path(p.stdout.strip()) if p.returncode == 0 and p.stdout.strip() else None
@@ -183,14 +206,16 @@ def checkout() -> Path | None:
 
 
 def _has_origin(root: Path) -> bool:
-    return subprocess.run(["git", "-C", str(root), "config", "--get", "remote.origin.url"], capture_output=True, check=False).returncode == 0
+    return subprocess.run(["git", "-C", str(root), "config", "--get", "remote.origin.url"], capture_output=True,
+                          timeout=_left(LOCAL_TIMEOUT_S), check=False).returncode == 0
 
 
 def check_git_push(root: Path | None) -> Check:
     if root is None:
         return Check("git-push", SKIP, "not in a git checkout")
     if not _has_origin(root):
-        return Check("git-push", SKIP, f"{root} has no origin")
+        return Check("git-push", SKIP, f"{root} has no origin, so nothing to push to: a checkout may be local on purpose "
+                                       "(a notes clone may not)")
     return push_probe("git-push", root, [], "origin",
                       "the credential git pushes to github.com with is missing or expired: on a Cursor VM it comes from Verity's GitHub "
                       "broker (.git/verity-auth) or Cursor's App token in ~/.gitconfig, which a new agent VM renews")
@@ -202,7 +227,9 @@ def check_notes_push() -> Check:
         return Check("notes-push", FINDING, f"{root} is not a git clone: notes written here reach nobody",
                      "with RESEARCH_NOTES_TOKEN set, any `research notes` command clones it (kb/cloud-lane-setup.md, section 1)")
     if not _has_origin(root):
-        return Check("notes-push", FINDING, f"the notes clone {root} has no origin", f"`git -C {root} remote add origin {notes_sync.NOTES_URL}`")
+        return Check("notes-push", FINDING, f"the notes clone {root} has no origin: notes committed here reach nobody (a checkout "
+                                            "may be local on purpose, a notes clone may not)",
+                     f"`git -C {root} remote add origin {notes_sync.NOTES_URL}`")
     opts, where = notes_sync.remote_target(root)
     fix = (f"{notes_sync.TOKEN_ENV} was refused (expired or rotated): a new one goes in {DASHBOARD}" if os.environ.get(notes_sync.TOKEN_ENV)
            else f"set {notes_sync.TOKEN_ENV} (a Cursor secret): without it git pushes as the VM's GitHub App, which the notes repo "
@@ -219,15 +246,23 @@ def check_store() -> Check:
         return Check("store", FINDING, "no store remote: a run here is preserved nowhere, and `research run` refuses without --local-only",
                      f"set R2_ENDPOINT, R2_BUCKET, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in {DASHBOARD}, or write ~/.research/store.toml")
     kind = type(r).__name__
+    see = "`research data preserved RUN` on any run shows the remote's own error"
     try:
-        r.head(STORE_PROBE_KEY)
+        got = r.head(STORE_PROBE_KEY)
     except urllib.error.HTTPError as e:
-        return Check("store", FINDING, f"the store's remote ({kind}) refused a HEAD: HTTP {e.code}",
-                     "the key pair (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) was revoked or rotated, or a temporary credential "
-                     f"(AWS_SESSION_TOKEN) expired: a new pair goes in {DASHBOARD}; `research data mint-credential` mints a temporary one")
+        if e.code in (400, 401, 403):           # S3's refusals of a signature, a key or an expired session token
+            return Check("store", FINDING, f"the store's remote ({kind}) refused a HEAD: HTTP {e.code}",
+                         "the key pair (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) was revoked or rotated, or a temporary credential "
+                         f"(AWS_SESSION_TOKEN) expired: a new pair goes in {DASHBOARD}; `research data mint-credential` mints a "
+                         "temporary one")
+        why = "it is rate limiting" if e.code == 429 else "it is failing" if e.code >= 500 else "no answer a HEAD of an absent key gets"
+        return Check("store", FINDING, f"the store's remote ({kind}) answered a HEAD with HTTP {e.code}: {why}", f"retry later; {see}")
     except Exception as e:  # noqa: BLE001  (a transport's errors are many; only the class is shown)
-        return Check("store", FINDING, f"the store's remote ({kind}) gave no answer: {type(e).__name__}",
-                     "retry; `research data preserved RUN` on any run shows the remote's own error")
+        return Check("store", FINDING, f"the store's remote ({kind}) gave no answer: {type(e).__name__}", f"retry; {see}")
+    if got is not None:
+        return Check("store", FINDING, f"the store's remote ({kind}) answered for {STORE_PROBE_KEY}, a key that can't exist",
+                     "its endpoint (R2_ENDPOINT, or store.toml's [remote]) is something that answers every request, not the store; "
+                     "or someone stored that key, which can go")
     return Check("store", OK, f"the store's remote ({kind}) answers")
 
 
@@ -240,18 +275,26 @@ def check_slack() -> Check:
     return Check("slack", OK, f"auth.test is ok ({api.via})")
 
 
-#: (what ssh says, what it means), the first that matches
+#: (what ssh says, what it means), the first that matches. No host-key failure: `research`'s ssh sets StrictHostKeyChecking=no
+#: (runpod.ssh_command), so ssh warns of a changed key and still connects with the research key.
 SSH_FAILURES = (
     (re.compile(r"Permission denied|Too many authentication failures", re.I), "refused the key"),
-    (re.compile(r"Host key verification failed|IDENTIFICATION HAS CHANGED", re.I), "its host key changed"),
     (re.compile(r"Could not resolve|timed out|Connection refused|No route to host|Network is unreachable|closed by remote|reset by peer",
                 re.I), "unreachable"),
 )
 
 
+def registry_unread() -> bool:
+    """Whether reading the registry would clone the notes repo first (`registry.merged`): synchronously, for up to 15 minutes,
+    before any deadline. The doctor reads machines.toml alone then; notes-push names the missing clone."""
+    return registry.REGISTRY_ENV not in os.environ and not remote.machines_path().exists() and not registry.notes_root().exists()
+
+
 def ssh_machines() -> dict[str, dict]:
-    """The machines `research run --on` knows (machines.toml and the registry) whose entries name an ssh host."""
-    return {n: m for n, m in sorted(remote.load_machines().items()) if m.get("provider") == "ssh"}
+    """The machines `research run --on` knows (machines.toml, and the registry unless `registry_unread`) whose entries name an
+    ssh host."""
+    ms = remote.load_machines(remote.machines_path()) if registry_unread() else remote.load_machines()
+    return {n: m for n, m in sorted(ms.items()) if isinstance(m, dict) and m.get("provider") == "ssh"}
 
 
 def check_ssh(name: str, machine: dict) -> Check:
@@ -346,6 +389,10 @@ def check_clock() -> Check:
     try:
         server = server_date() + 0.5            # a Date header truncates to the second
     except (OSError, ValueError, TypeError) as e:
+        if isinstance(getattr(e, "reason", e), ssl.SSLCertVerificationError):
+            return Check("clock", FINDING, f"no Date from {host} to compare with: its certificate did not verify",
+                         "a clock far off makes every certificate look expired or not yet valid: `timedatectl` shows whether this one "
+                         f"syncs; else something here intercepts TLS (`curl -sI {CLOCK_URL}` shows what)")
         return Check("clock", FINDING, f"no Date from {host} to compare with: {type(e).__name__}",
                      f"check the network: `curl -sI {CLOCK_URL}` shows whether {host} answers")
     skew = (before + clock()) / 2 - server
@@ -365,21 +412,30 @@ def checks(role: str, root: Path | None) -> list[Probe]:
         out.append(("slack", check_slack))
     try:
         machines = ssh_machines()
-    except (OSError, ValueError) as e:          # tomllib.TOMLDecodeError is a ValueError
+    except Exception as e:  # noqa: BLE001  (a TOML error, or a table of the wrong shape: only the class is shown)
         out.append(("ssh", lambda e=e: Check("ssh", FINDING, f"the machines config is unreadable: {type(e).__name__}",
-                                             "`research pods registry` names the file")))
+                                             f"{remote.machines_path()} holds one `[machines.NAME]` table per machine; "
+                                             "`research pods registry` reads it as `research run --on` does")))
     else:
+        if machines:
+            with contextlib.suppress(runpod.PodError, OSError):
+                runpod.ssh_key()                # written here, once: the ssh probes run at once and only read it
+        where = "machines.toml (the registry is in the notes clone, which is not here)" if registry_unread() else \
+            "machines.toml or the registry"
         out += [(f"ssh:{n}", lambda n=n, m=m: check_ssh(n, m)) for n, m in machines.items()] or \
-               [("ssh", lambda: Check("ssh", SKIP, "no machine in machines.toml or the registry names an ssh host"))]
+               [("ssh", lambda: Check("ssh", SKIP, f"no machine in {where} names an ssh host"))]
     out += [("venv", lambda: check_venv(root)), ("disk", lambda: check_disk(root)), ("clock", check_clock)]
     return out
 
 
 def gather(probes: list[Probe], deadline_s: float = DEADLINE_S) -> list[Check]:
-    """Every probe at once, in daemon threads: one still running at the deadline is a finding, and is left behind."""
+    """Every probe at once, in daemon threads: what a probe runs (`run`) is killed KILL_MARGIN_S before the deadline, so the
+    command leaves no git or ssh behind, and a probe still running at the deadline is a finding, and is left behind."""
     done: dict[str, Check] = {}
+    end = time.monotonic() + deadline_s
 
     def one(name: str, probe: Callable[[], Check]) -> None:
+        _probe.end = end - KILL_MARGIN_S
         try:
             done[name] = probe()
         except Exception as e:  # noqa: BLE001  (a probe's own failure is a finding; its message might quote what it read)
@@ -388,7 +444,6 @@ def gather(probes: list[Probe], deadline_s: float = DEADLINE_S) -> list[Check]:
     threads = [threading.Thread(target=one, args=p, daemon=True) for p in probes]
     for t in threads:
         t.start()
-    end = time.monotonic() + deadline_s
     for t in threads:
         t.join(max(0.0, end - time.monotonic()))
     got = dict(done)

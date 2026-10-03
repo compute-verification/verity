@@ -72,7 +72,7 @@ coordinator and infra roles, ssh to each machine with an ssh host), the venv
 against `uv.lock` (`uv sync --check`, which changes nothing), the disk floor
 and the clock. Each check is ok or a finding with its fix; exit 1 on a
 finding. It prints names and verdicts only: no value, no response body, no
-remote URL.
+remote URL but the notes repository's (`notes_sync.NOTES_URL`).
 
 ## Commands
 

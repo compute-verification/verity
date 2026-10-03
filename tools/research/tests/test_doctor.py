@@ -1,7 +1,13 @@
 """`research doctor`: each check against fakes of what it probes (no network), and no value of any secret in what it prints."""
 from __future__ import annotations
 
+import base64
 import json
+import math
+import os
+import select
+import shlex
+import ssl
 import subprocess
 import threading
 import urllib.error
@@ -9,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from research import cli, doctor, runs, secret_hint, slack
+from research import cli, doctor, notes_sync, runs, secret_hint, slack
 from research.doctor import FINDING, OK, SKIP, Check
 from research.pods import runpod
 from research.store import remote as store_remote
@@ -168,12 +174,17 @@ def test_gh_auth_status_s_exit_code_is_the_github_check(monkeypatch):
     assert doctor.check_github().detail == "gh is not on PATH"
 
 
-def test_a_dry_run_push_to_a_reachable_origin_is_ok_and_sends_nothing(tmp_path):
+def test_a_dry_run_push_to_a_reachable_origin_is_ok_and_sends_nothing_and_runs_no_hook(tmp_path):
     clone = _clone(tmp_path)
+    hook = clone / ".git" / "hooks" / "pre-push"
+    hook.write_text(f"#!/bin/sh\ntouch {tmp_path / 'hook-ran'}\nexit 1\n")
+    hook.chmod(0o755)
     assert doctor.check_git_push(clone) == Check("git-push", OK, f"origin of {clone} accepts a push (dry run)")
+    assert not (tmp_path / "hook-ran").exists()
     assert subprocess.run(["git", "-C", str(tmp_path / "origin.git"), "for-each-ref"], capture_output=True, text=True).stdout == ""
     _git("remote", "remove", "origin", cwd=clone)
-    assert doctor.check_git_push(clone).status == SKIP
+    c = doctor.check_git_push(clone)
+    assert c.status == SKIP and "a checkout may be local on purpose (a notes clone may not)" in c.detail
     assert doctor.check_git_push(None).status == SKIP
 
 
@@ -189,9 +200,12 @@ def test_git_s_refusals_are_named_and_only_a_credential_s_fix_names_the_credenti
     runs_ = Runs(monkeypatch, git=(128, said))
     c = doctor.push_probe("git-push", tmp_path, [], "origin", "THE-CREDENTIAL-FIX")
     assert c.status == FINDING and what in c.detail and said not in c.detail + c.fix
-    assert ("THE-CREDENTIAL-FIX" in c.fix) is credential and "shows git's message" in c.fix
+    assert ("THE-CREDENTIAL-FIX" in c.fix) is credential
+    shown = shlex.join(["git", "-C", str(tmp_path), "push", "--dry-run", "--no-verify", "origin", f"HEAD:{doctor.PROBE_REF}"])
+    assert c.fix.endswith(f"`{shown}` shows git's message")
     argv, _, env = runs_.calls[0]
-    assert argv[-2:] == ["origin", f"HEAD:{doctor.PROBE_REF}"] and "--dry-run" in argv and env["GIT_TERMINAL_PROMPT"] == "0"
+    assert argv[-2:] == ["origin", f"HEAD:{doctor.PROBE_REF}"] and env["GIT_TERMINAL_PROMPT"] == "0"
+    assert "--dry-run" in argv and "--no-verify" in argv
     runs_.answers["git"] = (None, "")
     assert "gave no answer" in doctor.push_probe("git-push", tmp_path, [], "origin", "x").detail
 
@@ -211,21 +225,26 @@ def test_notes_push_needs_a_clone_and_pushes_through_the_token_s_helper(monkeypa
     argv = runs_.calls[-1][0]
     assert argv[-2] == "https://x-access-token@github.com/danielreuter/research-notes.git" and "credential.helper=" in argv
     assert not any("not-to-be-printed" in a for a in argv)                         # the helper reads it from the environment
+    assert "push --dry-run --no-verify https://x-access-token@github.com/danielreuter/research-notes.git HEAD:" in c.fix
+    assert "credential.helper=" in c.fix and "not-to-be-printed" not in c.fix      # the hint is the command the probe ran
     runs_.answers["git"] = (0, "")
     assert doctor.check_notes_push().status == OK
+    _git("remote", "remove", "origin", cwd=clone)
+    c = doctor.check_notes_push()
+    assert c.status == FINDING and c.detail.startswith(f"the notes clone {clone} has no origin: notes committed here reach nobody")
 
 
 # ---- store, slack ---------------------------------------------------------------------------------------------------------------
 
 class _Remote:
-    def __init__(self, error=None):
-        self.error = error
+    def __init__(self, error=None, answer=None):
+        self.error, self.answer = error, answer
 
     def head(self, key):
         if self.error:
             raise self.error
         assert key == doctor.STORE_PROBE_KEY
-        return None
+        return self.answer
 
 
 def test_the_store_check_reads_the_remote_s_answer_to_a_head(monkeypatch, tmp_path):
@@ -235,11 +254,21 @@ def test_the_store_check_reads_the_remote_s_answer_to_a_head(monkeypatch, tmp_pa
     cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "remote"}"\n')
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
     assert doctor.check_store() == Check("store", OK, "the store's remote (FsRemote) answers")
-    monkeypatch.setattr(store_remote, "load_remote", lambda: _Remote(urllib.error.HTTPError("u", 403, "Forbidden", {}, None)))
-    c = doctor.check_store()
-    assert c.detail == "the store's remote (_Remote) refused a HEAD: HTTP 403" and "AWS_SESSION_TOKEN" in c.fix
+    for code in (400, 401, 403):
+        monkeypatch.setattr(store_remote, "load_remote", lambda code=code: _Remote(urllib.error.HTTPError("u", code, "x", {}, None)))
+        c = doctor.check_store()
+        assert c.detail == f"the store's remote (_Remote) refused a HEAD: HTTP {code}" and "AWS_SESSION_TOKEN" in c.fix
+    for code, why in ((503, "it is failing"), (429, "it is rate limiting"), (418, "no answer a HEAD of an absent key gets")):
+        monkeypatch.setattr(store_remote, "load_remote", lambda code=code: _Remote(urllib.error.HTTPError("u", code, "x", {}, None)))
+        c = doctor.check_store()
+        assert c.detail == f"the store's remote (_Remote) answered a HEAD with HTTP {code}: {why}"
+        assert c.fix.startswith("retry later") and "AWS_" not in c.fix                # not the credential's fault
     monkeypatch.setattr(store_remote, "load_remote", lambda: _Remote(TimeoutError("not shown")))
     assert doctor.check_store().detail == "the store's remote (_Remote) gave no answer: TimeoutError"
+    monkeypatch.setattr(store_remote, "load_remote", lambda: _Remote(answer={"bytes": 0, "etag": None}))
+    c = doctor.check_store()
+    assert c == Check("store", FINDING, f"the store's remote (_Remote) answered for {doctor.STORE_PROBE_KEY}, a key that can't exist", c.fix)
+    assert "answers every request" in c.fix
 
     def bad():
         raise store_remote.ConfigError("x.toml: [remote] type s3 needs bucket")
@@ -265,6 +294,29 @@ def test_slack_is_checked_for_handle_holders_only_with_auth_test(monkeypatch):
     assert (c.status, c.detail) == (FINDING, "auth.test: invalid_auth") and "using-slack" in c.fix
 
 
+def test_slack_without_a_token_asks_the_broker_with_this_agent_s_identity(monkeypatch):
+    c = doctor.check_slack()                                                      # conftest: no Cursor identity socket here
+    assert c.status == FINDING and c.detail.startswith("the Cursor identity socket the Slack broker needs is unavailable")
+    seen = []
+    monkeypatch.setattr(slack, "oidc_token", lambda aud: seen.append(aud) or "dummy-identity")
+
+    def post(url, data, headers, timeout=None):
+        seen.append((url, json.loads(data)["method"], headers["Authorization"], timeout))
+        if refuse:
+            raise urllib.error.HTTPError(url, refuse, "x", {}, None)
+        return {"ok": True}
+    monkeypatch.setattr(slack, "post", post)
+    refuse = None
+    assert doctor.check_slack() == Check("slack", OK, "auth.test is ok (broker)")
+    assert seen == [slack.BROKER, (slack.BROKER, "auth.test", "Bearer dummy-identity", doctor.PROBE_TIMEOUT_S)]
+    refuse = 401
+    c = doctor.check_slack()
+    assert (c.status, c.detail) == (FINDING, "auth.test: the Slack broker rejected this agent's Cursor identity (HTTP 401); set "
+                                             "SLACK_BOT_TOKEN or ask @infra")
+    refuse = 503
+    assert "the Slack broker is down or switched off (HTTP 503)" in doctor.check_slack().detail
+
+
 # ---- ssh ------------------------------------------------------------------------------------------------------------------------
 
 def test_ssh_probes_each_machine_with_an_ssh_host_as_research_run_reaches_it(monkeypatch, tmp_path):
@@ -288,6 +340,56 @@ def test_ssh_probes_each_machine_with_an_ssh_host_as_research_run_reaches_it(mon
     assert c.detail == "research@192.0.2.10:22: refused the key" and "ask @infra to add its public key" in c.fix
     runs_.answers["ssh"] = (255, "ssh: connect to host 192.0.2.10 port 22: Connection timed out")
     assert doctor.check_ssh("node-a", m).detail == "research@192.0.2.10:22: unreachable"
+
+
+def test_two_ssh_machines_on_a_fresh_state_dir_both_get_the_whole_key(monkeypatch, tmp_path):
+    # the probes resolved the key from RUNPOD_SSH_KEY_B64 in their threads at once: 481 of 500 runs failed, some reading it empty
+    key = b"-----BEGIN OPENSSH PRIVATE KEY-----\n" + b"k" * 400 + b"\n-----END OPENSSH PRIVATE KEY-----\n"
+    monkeypatch.setenv("RUNPOD_SSH_KEY_B64", base64.b64encode(key).decode())
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "fresh-state"))
+    monkeypatch.setattr(runpod, "SSH_KEY", tmp_path / "absent-key")
+    monkeypatch.setattr(runpod, "KNOWN_HOSTS", tmp_path / "absent" / "known_hosts")
+    (tmp_path / "machines.toml").write_text("".join(f'[machines.node-{c}]\nprovider = "ssh"\nhost = "192.0.2.{i}"\nuser = "research"\n'
+                                                    for i, c in enumerate("ab", 10)))
+    monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
+    read = []
+
+    def ssh(argv, *, cwd=None, env=None):
+        read.append(Path(argv[argv.index("-i") + 1]).read_bytes())
+        return 0, ""
+    monkeypatch.setattr(doctor, "run", ssh)
+    probes = [p for p in doctor.checks("lane", None) if p[0].startswith("ssh:")]
+    assert [c.status for c in doctor.gather(probes)] == [OK, OK] and read == [key, key]
+
+
+def test_on_a_fresh_vm_the_doctor_reads_no_registry_rather_than_clone_the_notes(monkeypatch, tmp_path):
+    # no machines.toml, no RESEARCH_MACHINES_D, no notes clone, RESEARCH_NOTES_TOKEN set: the registry's read cloned the notes repo
+    # first, for up to 900 s before the deadline started, and wrote ~/.research/notes
+    monkeypatch.delenv("RESEARCH_MACHINES_D")
+    monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "dummy")
+    clones = []
+    monkeypatch.setattr(notes_sync, "ensure_clone", lambda root: clones.append(root))
+    (name, probe), = [p for p in doctor.checks("lane", None) if p[0].startswith("ssh")]
+    assert clones == [] and not (tmp_path / "absent-notes").exists()
+    assert probe() == Check("ssh", SKIP, "no machine in machines.toml (the registry is in the notes clone, which is not here) names "
+                                         "an ssh host")
+    notes = tmp_path / "notes"                                                    # a clone already here: its registry is read
+    (notes / "machines.d").mkdir(parents=True)
+    (notes / "machines.d" / "node-c.toml").write_text('provider = "ssh"\nhost = "192.0.2.12"\nproject = "verity"\n')
+    monkeypatch.setenv("RESEARCH_NOTES", str(notes))
+    assert list(doctor.ssh_machines()) == ["node-c"]
+
+
+def test_a_machines_entry_of_the_wrong_shape_is_passed_over_or_a_finding_never_a_crash(monkeypatch, tmp_path):
+    # `[machines]\nx = 1` crashed the command with AttributeError and exit 1, which reads as "a finding"
+    (tmp_path / "machines.toml").write_text('[machines]\nx = 1\n[machines.node-a]\nprovider = "ssh"\nhost = "192.0.2.10"\n')
+    monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
+    assert list(doctor.ssh_machines()) == ["node-a"]
+    (tmp_path / "machines.toml").write_text("machines = 1\n")
+    (name, probe), = [p for p in doctor.checks("lane", None) if p[0].startswith("ssh")]
+    c = probe()
+    assert (name, c.status, c.detail) == ("ssh", FINDING, "the machines config is unreadable: AttributeError")
+    assert str(tmp_path / "machines.toml") in c.fix
 
 
 def test_ssh_in_a_shell_that_lost_the_key_says_so(monkeypatch, tmp_path):
@@ -359,6 +461,12 @@ def test_the_clock_is_compared_with_a_date_header(monkeypatch):
     monkeypatch.setattr(doctor, "server_date", unreachable)
     assert doctor.check_clock().detail == "no Date from cloudflare.com to compare with: URLError"
 
+    def unverified():
+        raise urllib.error.URLError(ssl.SSLCertVerificationError(1, "certificate is not yet valid"))
+    monkeypatch.setattr(doctor, "server_date", unverified)
+    c = doctor.check_clock()
+    assert c.detail == "no Date from cloudflare.com to compare with: its certificate did not verify" and "a clock far off" in c.fix
+
 
 def test_server_date_reads_the_date_header(monkeypatch):
     class Answer:
@@ -384,6 +492,29 @@ def test_a_probe_that_raises_or_hangs_is_a_finding_and_never_shows_its_message()
     (c,) = doctor.gather([("b", lambda: released.wait() and Check("b", OK, "late"))], deadline_s=0)
     released.set()
     assert (c.status, c.detail) == (FINDING, "no answer within 0 s")
+
+
+def test_what_a_probe_runs_is_killed_before_the_deadline_with_everything_it_started(monkeypatch, tmp_path):
+    """A timeout killed only the child: git's remote helpers and ssh's lived on, and a probe of two steps could last the whole
+    deadline (notes-push: 10 s of rev-parse, then 15 s of push)."""
+    (c,) = doctor.gather([("a", lambda: Check("a", OK, str(doctor._left(math.inf))))], deadline_s=60)
+    assert 0 <= float(c.detail) <= 60 - doctor.KILL_MARGIN_S
+    fifo = tmp_path / "fifo"
+    os.mkfifo(fifo)
+    started = []
+
+    class TimesOutOnceStarted(subprocess.Popen):
+        def communicate(self, input=None, timeout=None):
+            started.append(int(self.stdout.readline()))             # the grandchild is running: now the time is up
+            raise subprocess.TimeoutExpired(self.args, timeout)
+    monkeypatch.setattr(doctor.subprocess, "Popen", TimesOutOnceStarted)
+    assert doctor.run(["sh", "-c", f"cat {fifo} & echo $!; wait"]) == (None, "")
+    try:
+        pidfd = os.pidfd_open(started[0])
+    except ProcessLookupError:                                       # gone already
+        return
+    select.select([pidfd], [], [])                                   # the grandchild (blocked on the fifo for good) has exited
+    os.close(pidfd)
 
 
 def test_research_doctor_exits_0_ok_1_on_a_finding_2_on_usage(monkeypatch, capsys):
