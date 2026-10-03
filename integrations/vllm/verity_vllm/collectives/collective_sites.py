@@ -12,23 +12,27 @@ name is bound in the model's module.  R17 row #70 (OLMoE TP2 B8): the recorder s
 A mid-module site is (module path, class) of a model module whose CLASS source contains a call of one of the collective names (static:
 `inspect.getsource`), when the module runs under TP (`tp_size > 1` where the module declares one, else the world).  The observers hook
 these modules for attribution and patch the collective names of the classes' python modules.  The per-step count of calls is the static
-call count (OlmoeAttention: 2 all_gather); the committer's identity_check requires exactly that many partials per site per step, the
-manifest requires one identity per site in Program order (`required_manifest.collective_site` / `collective_site_aliases`).  A class
-whose source cannot be read is NOT a site (fail closed by omission: the collective would then be recorded unattributed / missing, both
-named verdicts); a count the run contradicts is named by identity_check, never relabelled.
+call count (OlmoeAttention: 2 all_gather), less the calls under an `if self.<flag>:` / `if not self.<flag>:` branch (or a flag conjunct
+of an `and`) that the module instance's flag rules out (Qwen3MoeSparseMoeBlock all-gathers only `if self.is_sequence_parallel:`, off
+under plain TP; any other condition, such as OLMoE's `if self.tp_size > 1:`, is not evaluated and its calls count).  The committer's
+identity_check requires exactly that many partials per site per step, the manifest one identity per site in Program order
+(`required_manifest.collective_site` / `collective_site_aliases`).  A class whose source cannot be read is NOT a site (fail closed by
+omission: the collective would then be recorded unattributed / missing, both named verdicts); a count the run contradicts is named by
+identity_check, never relabelled.
 """
 from __future__ import annotations
 
+import ast
 import importlib
 import inspect
-import re
+import textwrap
 from typing import Any
 
 #: (module-level name a model class may import, collective kind)
 COLLECTIVE_NAMES = (("tensor_model_parallel_all_reduce", "all_reduce"), ("tensor_model_parallel_all_gather", "all_gather"))
+_KIND_OF = dict(COLLECTIVE_NAMES)
 #: the python-module prefix of vLLM's model implementations (the classes whose direct collective calls are sites)
 MODEL_MODULE_PREFIX = "vllm.model_executor.models."
-_CALL_RE = re.compile(r"\btensor_model_parallel_(all_reduce|all_gather)\s*\(")
 #: the module classes that issue the fused-MoE block's final all-reduce from inside their forward; both observers hook them, and a
 #: wrapper holding a runner submodule is the site (the nested runner is not hooked)
 MOE_COLLECTIVE_CLASSES = ("MoERunner", "FusedMoE", "SharedFusedMoE")
@@ -38,22 +42,88 @@ MOE_COLLECTIVE_MODULES = ("vllm.model_executor.layers.fused_moe.runner.moe_runne
                           "vllm.model_executor.layers.fused_moe.shared_fused_moe")
 
 
-def class_collective_calls(cls: type, *, model_prefix: str | None = None) -> dict[str, int]:
-    """{kind: static call count} of the collective names called in `cls`'s own source; {} for a class outside the model modules or one
-    whose source cannot be read.  Inherited methods are not searched (a vLLM layer base class is not a model class)."""
+def _flag_guard(test: ast.expr) -> tuple[str, bool] | None:
+    """`self.X` -> ("X", True), `not self.X` -> ("X", False); None for any other condition (not evaluated)."""
+    want = True
+    while isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
+        test, want = test.operand, not want
+    if isinstance(test, ast.Attribute) and isinstance(test.value, ast.Name) and test.value.id == "self":
+        return test.attr, want
+    return None
+
+
+def _branch_guards(test: ast.expr) -> tuple[tuple[tuple[str, bool], ...], tuple[tuple[str, bool], ...]]:
+    """(guards of the `if` body, guards of its `else`): a bare flag guards both ways; every flag conjunct of an `and` guards the body
+    (`if self.is_sequence_parallel and not already_sequence_parallel:`), and nothing is concluded for that `else`."""
+    g = _flag_guard(test)
+    if g is not None:
+        return (g,), ((g[0], not g[1]),)
+    if isinstance(test, ast.BoolOp) and isinstance(test.op, ast.And):
+        return tuple(x for x in map(_flag_guard, test.values) if x is not None), ()
+    return (), ()
+
+
+def _guarded_calls(src: str) -> list[tuple[str, tuple[tuple[str, bool], ...]]]:
+    """[(kind, guards)] for every call of a collective name in `src`, in source order; `guards` are the (flag, required truth) pairs the
+    enclosing `if` branches require (`_branch_guards`)."""
+    out: list[tuple[str, tuple[tuple[str, bool], ...]]] = []
+
+    def visit(node: ast.AST, guards: tuple[tuple[str, bool], ...]) -> None:
+        if isinstance(node, ast.If):
+            body, orelse = _branch_guards(node.test)
+            visit(node.test, guards)
+            for n in node.body:
+                visit(n, guards + body)
+            for n in node.orelse:
+                visit(n, guards + orelse)
+            return
+        if isinstance(node, ast.Call):
+            f = node.func
+            kind = _KIND_OF.get(f.id if isinstance(f, ast.Name) else f.attr if isinstance(f, ast.Attribute) else "")
+            if kind is not None:
+                out.append((kind, guards))
+        for child in ast.iter_child_nodes(node):
+            visit(child, guards)
+
+    visit(ast.parse(textwrap.dedent(src)), ())
+    return out
+
+
+def _ruled_out(instance: Any, guards: tuple[tuple[str, bool], ...]) -> bool:
+    """True when the instance's value of some guard flag (a bool, int or None attribute) contradicts the branch; a flag the instance
+    lacks, or holds as any other type, does not rule a call out."""
+    for flag, want in guards:
+        v = getattr(instance, flag, ...)
+        if (v is None or isinstance(v, (bool, int))) and bool(v) != want:
+            return True
+    return False
+
+
+def _class_calls(cls: type, model_prefix: str | None) -> list[tuple[str, tuple[tuple[str, bool], ...]]]:
     mod = getattr(cls, "__module__", "") or ""
     if model_prefix is None:
         model_prefix = MODEL_MODULE_PREFIX
     if model_prefix and not mod.startswith(model_prefix):
-        return {}
+        return []
     try:
-        src = inspect.getsource(cls)
-    except (OSError, TypeError):
-        return {}
+        return _guarded_calls(inspect.getsource(cls))
+    except (OSError, TypeError, SyntaxError):
+        return []
+
+
+def _count(calls: list[tuple[str, tuple[tuple[str, bool], ...]]], instance: Any) -> dict[str, int]:
     out: dict[str, int] = {}
-    for m in _CALL_RE.finditer(src):
-        out[m.group(1)] = out.get(m.group(1), 0) + 1
+    for kind, guards in calls:
+        if instance is None or not _ruled_out(instance, guards):
+            out[kind] = out.get(kind, 0) + 1
     return out
+
+
+def class_collective_calls(cls: type, *, model_prefix: str | None = None, instance: Any = None) -> dict[str, int]:
+    """{kind: call count} of the collective names called in `cls`'s own source; {} for a class outside the model modules or one
+    whose source cannot be read.  Inherited methods are not searched (a vLLM layer base class is not a model class).  With `instance`,
+    a call under an `if self.<flag>:` branch the instance's flag rules out is not counted."""
+    return _count(_class_calls(cls, model_prefix), instance)
 
 
 def _under_tp(m: Any, world: int) -> bool:
@@ -67,13 +137,15 @@ def mid_module_sites(model: Any, world: int, *, model_prefix: str | None = None)
     if int(world) <= 1:
         return []
     out: list[dict[str, Any]] = []
-    cache: dict[type, dict[str, int]] = {}
+    cache: dict[type, list[tuple[str, tuple[tuple[str, bool], ...]]]] = {}
     for name, m in model.named_modules():
         cls = type(m)
         if cls not in cache:
-            cache[cls] = class_collective_calls(cls, model_prefix=model_prefix)
-        calls = cache[cls]
-        if not calls or not _under_tp(m, world):
+            cache[cls] = _class_calls(cls, model_prefix)
+        if not cache[cls] or not _under_tp(m, world):
+            continue
+        calls = _count(cache[cls], m)
+        if not calls:
             continue
         out.append({"name": name, "cls": cls.__name__, "py_module": cls.__module__, "calls": dict(calls), "per_step": sum(calls.values())})
     return out
