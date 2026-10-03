@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -508,6 +509,18 @@ def test_eager_attention_head_ref_vs_torch(DT, scale_op):
                  gate_check={"shape": {"T": T, "D": D}, "gates": n_gates, "twin_equals_gates": True},
                  notes="Two torch matmuls (blocked accumulation) and a softmax (Sleef exp, vectorised sum) vs sequential fma "
                        "chains and the correctly rounded exp.")
+
+
+def test_the_torch_oracles_bf16_matmuls_run_off_amx():
+    """The suite's conftest keeps oneDNN off AMX, where a preempted bf16 matmul now and then returns wrong rows: a child with
+    this process's environment runs its bf16 matmul on another ISA."""
+    code = "import torch; torch.matmul(torch.ones(4, 1, 130, dtype=torch.bfloat16), torch.ones(4, 130, 64, dtype=torch.bfloat16))"
+    r = subprocess.run([sys.executable, "-c", code], env={**os.environ, "ONEDNN_VERBOSE": "1"}, capture_output=True, text=True,
+                       check=True)
+    ran = [line for line in r.stdout.splitlines() if ",exec,cpu,matmul," in line]
+    if not ran:
+        pytest.skip("torch ran this bf16 matmul outside oneDNN")
+    assert not any("amx" in line for line in ran), ran
 
 
 @pytest.mark.parametrize("DT", DTS)

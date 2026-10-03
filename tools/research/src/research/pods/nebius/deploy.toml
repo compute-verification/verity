@@ -35,6 +35,11 @@ path = "/usr/local/sbin/vy-nebius-stop"
 src = "tools/research/src/research/pods/nebius/vm_stop.sh"
 nodes = ["vy-nebius-1", "vy-nebius-2"]
 
+[[file]]  # after installing it, `systemctl --user daemon-reexec` as research (the file says why)
+path = "/etc/systemd/system/user@.service.d/vy-cpuset.conf"
+src = "tools/research/src/research/pods/nebius/user-cpuset.conf"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+
 [[file]]
 path = "/home/research/.research/lease.sh"
 src = "tools/research/src/research/pods/sh/lease.sh"

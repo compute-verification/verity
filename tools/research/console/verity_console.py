@@ -537,6 +537,10 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
     try:
         readings = idle_readings({"node 1": minutes["n1"], "node 2": minutes["n2"]}, now,
                                  {"node 1": n1_lease_spans(now.timestamp())})
+        try:
+            add_phases(readings, now)
+        except Exception as e:  # noqa: BLE001  the readings still go out, without phases
+            errors.append(f"held-idle phases: {type(e).__name__}: {e}")
         if ns.key.exists():
             record_readings(readings)
         out.append(idle_panel(readings, now))
@@ -1105,6 +1109,135 @@ def idle_readings(minutes: dict, now: datetime, spans: dict | None = None) -> li
     return out
 
 
+COV_TIMELINES = Path("/workspace/jobs/cov")  # <key>/<row>/timeline.jsonl: circuits' rows on node 1 (verity-sweep/timeline/v1)
+LEASE_PHASES = ("engine.build", "prep.warmup_instrumented", "validate.weights_of_record_digests")
+#: a lease open longer than this is a Commit that died holding it, and counts no further
+LEASE_OPEN_MAX_S = 4 * 3600
+
+
+def _lease(spans: dict, a: float, b: float) -> tuple[float, float, list[tuple[str, float, float]], int]:
+    return (a, b, [("work" if s.startswith("work.") else s, x, y) for s, xs in spans.items() for x, y in xs
+                   if s in LEASE_PHASES or s.startswith("work.")], 1)
+
+
+def tp_lease(row: Path, w0: float, w1: float | None, now: float) -> tuple[float, float, list, int] | None:
+    """The lease of a Commit window whose timeline has no `gpu_lease.*` span (a TP Commit writes only `commit.tp_commit`), from
+    the files gpu-lease writes in the row as it goes: `gpu_lease.started` to `gpu_lease.released`'s `t`, on one GPU per rank it
+    released (gm357: 145 s on 2 GPUs). A lease still open runs to the window's end, or to `now` up to LEASE_OPEN_MAX_S, on the
+    row's `__tpN__` GPUs. Files an earlier attempt left in the row start before the window and don't count."""
+    try:
+        a = datetime.strptime((row / "gpu_lease.started").read_text().strip(), "%Y-%m-%dT%H:%M:%SZ")
+    except (OSError, ValueError):
+        return None
+    a = a.replace(tzinfo=timezone.utc).timestamp()
+    if a < w0 or (w1 is not None and a > w1):
+        return None
+    try:
+        rel = json.loads((row / "gpu_lease.released").read_text())
+    except (OSError, ValueError):
+        rel = None
+    if isinstance(rel, dict) and isinstance(rel.get("t"), (int, float)) and rel["t"] >= a:
+        return (a, rel["t"] if w1 is None else min(rel["t"], w1), [], max(1, len(rel.get("ranks") or [])))
+    tp = re.search(r"__tp(\d+)__", row.name)
+    return (a, w1 if w1 is not None else max(a, min(now, a + LEASE_OPEN_MAX_S)), [], int(tp.group(1)) if tp else 1)
+
+
+def commit_leases(paths, now: float) -> list[tuple[float, float, list[tuple[str, float, float]], int]]:
+    """(start, end, [(phase, a, b)...], GPUs) for every Commit's GPU lease in these timelines.
+
+    circuits' definition (`/workspace/research/circuits-held-idle/hi-lease.py`): inside a `stage.commit` window the lease runs
+    from the end of `gpu_lease.wait` to the end of `gpu_lease.release`, on one GPU, and its phases are LEASE_PHASES plus `work`
+    (every `work.*` span). A window with no `gpu_lease.*` span is a TP Commit's, whose lease `tp_lease` reads from the row. Every
+    Commit attempt in a timeline counts, not only its last.  An hour's line is written once, as the hour ends, so a lease still
+    open at `now` runs to `now` (up to LEASE_OPEN_MAX_S), its open phases with it: a Commit writes nothing while a work phase
+    runs (gm176's took 2,077 s)."""
+    out = []
+    for p in paths:
+        try:
+            evs = [json.loads(ln) for ln in Path(p).read_text().splitlines() if ln.strip()]
+        except (OSError, ValueError):
+            continue
+        opened: dict = {}
+        spans: dict = {}
+        inside = released = False
+        w0 = None
+
+        def tp(w1: float | None) -> None:
+            if isinstance(w0, (int, float)) and not any(s.startswith("gpu_lease.") for s in (*spans, *(s for _, s in opened))):
+                out.extend(x for x in [tp_lease(Path(p).parent, w0, w1, now)] if x)
+
+        for e in evs:
+            stage, ev, t = e.get("stage"), e.get("ev"), e.get("t")
+            if stage == "stage.commit":
+                if inside and ev == "end" and isinstance(t, (int, float)):
+                    tp(t)
+                inside, opened, released = ev == "start", {}, False
+                if inside:
+                    spans, w0 = {}, t
+                continue
+            if not inside or not isinstance(t, (int, float)):
+                continue
+            if ev == "start":
+                opened[(e.get("pid"), stage)] = t
+            elif ev == "end" and (e.get("pid"), stage) in opened:
+                spans.setdefault(stage, []).append((opened.pop((e.get("pid"), stage)), t))
+                if stage == "gpu_lease.release" and "gpu_lease.wait" in spans and not released:
+                    out.append(_lease(spans, spans["gpu_lease.wait"][0][1], t))
+                    released = True
+        if inside and not released and "gpu_lease.wait" in spans:
+            a = spans["gpu_lease.wait"][0][1]
+            b = max(a, min(now, a + LEASE_OPEN_MAX_S))
+            live = {s: list(xs) for s, xs in spans.items()}
+            for (_, s), x in opened.items():
+                live.setdefault(s, []).append((x, b))
+            out.append(_lease(live, a, b))
+        elif inside:
+            tp(None)
+    return out
+
+
+def phases_by_hour(leases: list) -> dict[str, dict]:
+    """Per UTC hour, the GPU-hours of the Commit leases in it by phase, each span clipped to its lease and the hour and counted
+    on each of its lease's GPUs; `other` is the leased time no phase covers, `leases` how many leases the hour touches."""
+    out: dict[str, dict] = {}
+    for a, b, phases, gpus in leases:
+        h = int(a) // 3600 * 3600
+        while h < b:
+            lo, hi = max(a, h), min(b, h + 3600)
+            if hi > lo:
+                d = out.setdefault(uc_hour(h), {"leases": 0, **{s: 0.0 for s in (*LEASE_PHASES, "work", "other")}})
+                d["leases"] += 1
+                covered = 0.0
+                for s, x, y in phases:
+                    c = max(0.0, min(y, hi) - max(x, lo))
+                    d[s] += c * gpus / 3600
+                    covered += c
+                d["other"] += max(0.0, hi - lo - covered) * gpus / 3600
+            h += 3600
+    return {k: {s: (round(v, 3) if s != "leases" else v) for s, v in d.items()} for k, d in out.items()}
+
+
+def add_phases(readings: list[dict], now: datetime, root: Path = COV_TIMELINES, hours: int = MINUTES_H) -> None:
+    """Node 1 circuits' readings get `phases_gpu_h` from the Commit timelines written in the readings' window, and with it
+    `outside_leases`: the lane's held GPU-hours no Commit lease covers (a whole-GPU pod, a job that isn't a Commit)."""
+    since = now.timestamp() - (hours + 1) * 3600
+    paths = [p for p in root.glob("*/*/timeline.jsonl") if p.stat().st_mtime >= since]
+    by_hour = phases_by_hour(commit_leases(paths, now.timestamp()))
+    for r in readings:
+        if r["node"] == "node 1" and r["lane"] == "circuits":
+            p = dict(by_hour.get(r["hour"]) or {"leases": 0, **{s: 0.0 for s in (*LEASE_PHASES, "work", "other")}})
+            leased = sum(v for s, v in p.items() if s != "leases")
+            r["phases_gpu_h"] = {**p, "outside_leases": round(max(0.0, r["held_gpu_h"] - leased), 3)}
+
+
+def phases_text(p: dict | None) -> str | None:
+    if not p:
+        return None
+    names = {"engine.build": "build", "prep.warmup_instrumented": "warm-up", "validate.weights_of_record_digests": "digests"}
+    return (", ".join(f"{names.get(s, s)} {sig(p[s], 2)}" for s in (*LEASE_PHASES, "work", "other")) + f" ({p['leases']} leases)"
+            + f"; outside Commit leases {sig(p.get('outside_leases'), 2)}")
+
+
 def record_readings(readings: list[dict], path: Path = IDLE_READINGS) -> int:
     """Append each completed hour's readings not yet in the file; returns how many lines it wrote."""
     have = set()
@@ -1125,20 +1258,20 @@ def record_readings(readings: list[dict], path: Path = IDLE_READINGS) -> int:
 def idle_panel(readings: list[dict], now: datetime) -> dict:
     rows = [[r["hour"] + ("" if r["complete"] else " (so far)"), r["node"], r["lane"], sig(r["held_gpu_h"], 3),
              sig(r["held_idle_gpu_h"], 3), sig(r["held_idle_pct"], 3), sig(r.get("unmeasured_gpu_h"), 3), r["target_pct"],
-             r["change_pts"]]
+             r["change_pts"], phases_text(r.get("phases_gpu_h"))]
             for r in sorted(sorted(readings, key=lambda r: (r["lane"] != "(all holders)", -r["held_gpu_h"])),
                             key=lambda r: (r["hour"], r["node"]), reverse=True)
             if r["held_gpu_h"] >= 0.05 or (r.get("unmeasured_gpu_h") or 0) >= 0.05 or r["lane"] == "(all holders)"]
     return fit(panel("held-idle-hourly", "Held but idle, per hour, node and lane", "table",
                      ["Hour (UTC)", "Node", "Lane", "Held GPU-h", "Held idle GPU-h", "Held idle %", "Unmeasured GPU-h", "Target %",
-                      "Change (pts)"],
+                      "Change (pts)", "Commit leases by phase (GPU-h)"],
                      rows[:1000], updated_at=iso(now),
                      source="vy-nebius-1's DCGM (per minute) and n1_lease.py's pool logs, vy-nebius-2's POUS sampler (10 s)",
                      note="Held idle %: a lane's held GPU-hours with utilization 0. Node 1: lanes by job name; a GPU leased from "
                           "a lease pool is held for the lease's time, busy by that GPU's DCGM reading, unmeasured (never idle) "
                           "without one; the pool holder outside a lease is 'lease pool, not leased'. Node 2: by coordinator id. "
                           "Change: points against the hour before; infra alerts a lane above target that improves by under 5 "
-                          "points. Newest first."))
+                          "points. Phases: node 1 circuits' Commit leases, from their timelines. Newest first."))
 
 
 # ---------------------------------------------------------------------------------------------------------------- pool (infra/*)

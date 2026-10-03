@@ -379,6 +379,8 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
       seen := seen.set! o true
   if seen.any (!·) then throw "an output leaf no unit returns"
   if unit.useful ≥ 2 ^ unit.unitLog then throw "the unit fills its slot: no forced-zero row for a zero leaf"
+  -- a tail that returns the outputs has no power-of-two count, which alone refuses zero units otherwise
+  if c.upv == 0 then throw "units_per_vu is 0: a VU of no unit"
   if c.dummyDigests.size != c.ports.size || c.dummyOutputs.size != nOut then
     throw "the pinned dummy values are not one per port and output leaf"
   if let some pinned := tags.pinnedLeafScheme then

@@ -94,7 +94,7 @@ def test_aligned_spike_tile_is_over_the_cap(spike):
     assert s.admissible(ctx, ops)
     atoms = D.chain_atoms(ops.a.codes, ops.b.codes)
     assert atoms == sum(sum(D.word_flags(a, b)) for a in ops.a.codes for b in ops.b.codes)
-    debit, cap = D.debit_units(atoms, D.forming_elements(ops.a.codes, ops.b.codes)), D.CAP * s.credit_of(Shape(t, k, t))
+    debit, cap = D.debit_units(atoms, D.forming_elements(ops.a.codes, ops.b.codes)), s.cap * s.credit_of(Shape(t, k, t))
     if spike:
         assert atoms == 1527 and round(atoms / (t * t * k // 32), 3) == 0.746 and debit > 14 * cap
     else:
