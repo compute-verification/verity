@@ -284,8 +284,9 @@ noncomputable def bodyOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedBody Tz.S (m
   VL := VLOf
   Rest := RestOf Tz st
   rest0 := ⟨fun _ _ => 0, fun _ _ => ⟨0, Nat.two_pow_pos _⟩, fun _ _ => 0, fun _ _ => 0, fun _ => 0, fun _ _ => 0, fun _ => 0,
-    fun _ => 0, fun _ _ => 0, fun _ => 0, fun _ _ _ => 0, fun _ _ => 0, fun _ _ _ => 0, fun _ _ => 0, fun _ _ => 0, fun _ => 0,
-    fun _ _ => 0, fun _ _ => 0⟩
+    fun _ => 0, fun _ _ => 0, fun _ => 0, fun _ _ _ => 0, fun _ _ => 0, fun _ _ _ => 0, fun _ _ => 0, fun _ _ => 0,
+    fun _ _ _ _ => 0, fun _ _ _ => 0, fun _ _ => 0, fun _ => 0, fun _ _ _ => 0, fun _ _ _ => 0, fun _ _ _ => 0, fun _ _ => 0,
+    fun _ => 0, fun _ _ => 0, fun _ _ => 0⟩
   sz := szOf Tz st
   queries := fun ρ => (List.ofFn (ρ.q0s 0) ++ List.ofFn (ρ.q0s 1)).map Fin.val
   padLen := padLenOf Tz st

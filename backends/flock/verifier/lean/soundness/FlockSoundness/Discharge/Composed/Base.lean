@@ -11,7 +11,7 @@ What `coinedOf` (`Composed/Defs.lean`) and `innerOf` (`Composed/Inner.lean`) bot
 * `CoinsZK`: a table's coin vector, the coins `refused_coins` reads (`β`, `ρ`) and the others (`rest`).
 * `RestZK`, `RestOf`: the other coins at a draw, every coin `verify --zk` draws for a rep, in its order: level 0's queries,
   the zerocheck's (`rSkip`, `rOuter`, `z`, the residual rounds' `ρ`), the lincheck's (`α`, `β`, its rounds', `r′`), the ring
-  switch's (`rpp` per claim, `γ` per claim), level 0's out-of-domain and lane coins, and the inner proof's (`ε`, its
+  switch's (`rpp` per claim, `γ` per claim), level 0's out-of-domain and lane coins, Ligerito's coins after `T'`, and the inner proof's (`ε`, its
   constraints' `γ`, its queries).
 * `pointsOf`: the rank check's claim points, from those coins (`abcClaims`; `point_parts`: a claim's point but its first
   coordinate), rep 0's `ab`, `c`, then rep 1's.
@@ -39,9 +39,17 @@ structure CoinsZK (Rest : Type) where
 the region claims' points through `st.extra`), then each rep's, in the order `verify --zk` draws them: `q₀` level-0 queries over `L₀`
 positions; the zerocheck's skip coins, outer coins (rounds `7 … m−7`), `z` and the residual rounds' `ρ`; the lincheck's
 `α`, `β`, its `kLog − 6` rounds' coins and `r′`; the ring switch's 7 coins per claim and `γ` per claim (`nCl` claims);
-level 0's out-of-domain points (`z ← sampleVec (m − 7)`) and coins (`b`), and its lane challenges; the triple's sacrifice coin `ε`; the inner proof's constraints' `γ`
-(ten); its `Q` queries. -/
-structure RestZK (q0 L0 k0 m kLog nCl nOod mP : ℕ) where
+level 0's out-of-domain points (`z ← sampleVec (m − 7)`) and coins (`b`), and its lane challenges; then, after the restart
+`T'` (and `CoinsZK.rho`), every coin `ZkLigerito.ligerito` draws from there on (`ligZ` … `ligB`, below); the triple's
+sacrifice coin `ε`; the inner proof's constraints' `γ` (ten); its `Q` queries.
+
+Ligerito's coins after `T'`, for `R + 1` levels with `qs j` queries at level `j`, in draw order: at each split `j < R` (level
+0's after the lane phase, then level `j`'s inside fold round `j − 1`), two out-of-domain samples (`oodIntro`: a point
+`z ← sampleVec (m − 6 − k0 − 3j)` and its coin `b`); level 0's consistency coins `α` (`queryLevel0`; its query coins are
+`q0s`, as positions) and its batching coin `b₀`; then per fold round `i < R` its four challenges (F256) and, at level `i + 1`,
+the query coins (`sampleVec q`), the consistency coins `α` (`log2 (q − 1) + 1` of them) and the batching coin. Fold round `i`'s
+split, for `i + 1 < R`, comes after its challenges and before its queries. -/
+structure RestZK (q0 L0 k0 m kLog nCl nOod mP R : ℕ) (qs : ℕ → ℕ) where
   link : Fin 2 → Fin mP → F128
   q0s : Fin 2 → Fin q0 → Fin L0
   rSkip : Fin 2 → Fin 6 → F128
@@ -57,6 +65,14 @@ structure RestZK (q0 L0 k0 m kLog nCl nOod mP : ℕ) where
   oodPt : Fin 2 → Fin nOod → Fin (m - 7) → F128
   ood : Fin 2 → Fin nOod → F128
   lane : Fin 2 → Fin k0 → F256
+  ligZ : Fin 2 → (j : Fin R) → Fin 2 → Fin (m - 6 - k0 - 3 * j.val) → F128
+  ligZB : Fin 2 → Fin R → Fin 2 → F128
+  ligAlpha0 : Fin 2 → Fin (Nat.log2 (qs 0 - 1) + 1) → F128
+  ligB0 : Fin 2 → F128
+  ligFold : Fin 2 → Fin R → Fin 4 → F256
+  ligQ : Fin 2 → (i : Fin R) → Fin (qs (i.val + 1)) → F128
+  ligAlpha : Fin 2 → (i : Fin R) → Fin (Nat.log2 (qs (i.val + 1) - 1) + 1) → F128
+  ligB : Fin 2 → Fin R → F128
   zeta : Fin 2 → F128
   gammas : Fin 2 → Fin 10 → F128
   qP : Fin 2 → Fin Zk.Q → F128
@@ -73,10 +89,11 @@ def padNOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : ℕ :=
 
 /-- **The draw's other coins**: `q₀ = t_pad / 2` level-0 queries (`Zk.schedule`) over `2^logLen` positions, the
 executable statement's `m` and `kLog`, a claim per region and link point besides `ab` and `c` (`extraClaims`), and the layout's one out-of-domain
-coin, and the statement's `mPts` link coordinates. -/
+coin, the statement's `mPts` link coordinates, and Ligerito's `R = |levels| − 1` fold rounds with each level's query count. -/
 abbrev RestOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : Type :=
   RestZK (Tz.t / 2) (2 ^ Tz.sch.level₀.logLen) Tz.sch.k0 st.m st.c.kLog (2 + 2 * st.regions.size)
-    (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).nOod0 st.mPts
+    (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).nOod0 st.mPts (Tz.sch.levels.length - 1)
+    (fun j => (Tz.sch.levels.getD j default).queries)
 
 /-- **The draw's value lists** (`Table`'s `VL`): Ligerito's restart `T'` (a clear K message, `Level0Msgs.tPrime`) and levels
 ≥ 1's bytes. -/
@@ -86,13 +103,13 @@ abbrev VLOf : Type := FlockLevel3.GF256 × ByteArray
 abbrev HiOf (Tz : TabZK 𝔽 mPts) : Type := Fin (hiCount Tz) → ZkView.Salt
 
 /-- **Rep `r`'s claims** (`abcClaims`) at its coins: `ab` at the lincheck's point, `c` at the zerocheck's. -/
-def claimsOf {q0 L0 k0 m kLog nCl nOod mP : ℕ} (ρ : RestZK q0 L0 k0 m kLog nCl nOod mP) (r : Fin 2) : Array Claim :=
+def claimsOf {q0 L0 k0 m kLog nCl nOod mP R : ℕ} {qs : ℕ → ℕ} (ρ : RestZK q0 L0 k0 m kLog nCl nOod mP R qs) (r : Fin 2) : Array Claim :=
   abcClaims m kLog (⟨ρ.zc r, Array.ofFn (ρ.rho r), pinned ++ Array.ofFn (ρ.rOuter r), 0, 0, 0⟩ : ZcOut)
     (⟨0, ρ.rPrime r, (Array.ofFn (ρ.ts r)).reverse⟩ : LcOut)
 
 /-- **The rank check's claim points** (`claim_word_points`): rep 0's `ab`, `c`, then rep 1's, each its claim's point
 but the first coordinate (`point_parts`). -/
-def pointsOf {q0 L0 k0 m kLog nCl nOod mP : ℕ} (ρ : RestZK q0 L0 k0 m kLog nCl nOod mP) (k : Fin Zk.RANK_POINTS) :
+def pointsOf {q0 L0 k0 m kLog nCl nOod mP R : ℕ} {qs : ℕ → ℕ} (ρ : RestZK q0 L0 k0 m kLog nCl nOod mP R qs) (k : Fin Zk.RANK_POINTS) :
     List F128 :=
   ((claimsOf ρ (if k.val < 2 then 0 else 1))[k.val % 2]!).x.toList.drop 1
 
