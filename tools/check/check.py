@@ -62,7 +62,8 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
     lean-audit      per package (`lean_audit.py`): a pass is reused while the package, its path dependencies, `tools/lean/`
                     and its toolchain and manifest are unchanged; a miss is audited on a scratch tree holding only those, so a
                     read outside them fails there; fetched dependencies stay warm on the machine under manifest + toolchain,
-                    and a machine without them restores the bundle `lean-deps.json` pins from the store, not from GitHub
+                    and a machine without them restores the bundle `lean-deps.json` pins from the store, not from GitHub; a
+                    step that audits any package first waits for one of the node's Lean audit slots (`lean_slot.py`)
     lean-changed    not a verdict: its tree under `lean-changed/` keeps each package's last build there, so Lake rebuilds only
                     what changed and what imports it, and its fetched dependencies are hard links to lean-audit's, read-only
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: backends/flock/verifier/'s
@@ -197,12 +198,36 @@ def take_lean_deps_urls(out: Path) -> Path | None:
     return Path(tmp)
 
 
-def lean_deps_url_file(dest: Path) -> Path | None:
-    """`lean-deps-urls.json` for this tree's pinned Lean dependency bundles, signed by this machine's store remote."""
+def _lean_audit():
     spec = importlib.util.spec_from_file_location("check_lean_audit_urls", ROOT / "tools" / "check" / "lean_audit.py")
     la = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(la)
-    return la.url_file(dest)
+    return la
+
+
+def lean_deps_url_file(dest: Path) -> Path | None:
+    """`lean-deps-urls.json` for this tree's pinned Lean dependency bundles, signed by this machine's store remote."""
+    return _lean_audit().url_file(dest)
+
+
+#: the lean-audit step's wrapper when it audits anything: one of the node's Lean audit slots, from pool `check` (lean_slot.py)
+LEAN_SLOT_WRAP = [sys.executable, str(ROOT / "tools" / "check" / "lean_slot.py"), "--pool", "check", "--"]
+
+
+def lean_audit_misses(cache: bool = True) -> bool:
+    """Whether the lean-audit step will audit a package: one whose pass isn't kept here under its key (`lean_audit.run`'s
+    test)."""
+    la = _lean_audit()
+    files = tracked_files(ROOT)
+    if not cache or files is None:
+        return True
+    return any(not (cache_dir() / "lean-audit" / f"{la.key(p, files, la.FLAGS)}.json").is_file() for p in la.packages(files))
+
+
+def lean_slot(cmd: list[str]) -> list[str]:
+    """`--lean-slot CMD...`, the lean-audit step: CMD in one of the node's Lean audit slots when it will audit a package, as it
+    is when it only reuses passes, which would otherwise wait behind an hour-long audit for seconds of work."""
+    return [*LEAN_SLOT_WRAP, *cmd] if lean_audit_misses("--fresh" not in cmd) else cmd
 
 
 def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[tuple[str, list[str] | str, Path]]:
@@ -226,7 +251,8 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
     return [("lean-build", ["bash", "-c", ELAN + "lake build"], lean),
             ("lean-unit-cut", [sys.executable, str(FLOCK_VERIFIER / "unit_cut_agree.py"), "--lean", str(verify),
                                "--out", str(out / "lean-unit-cut")], ROOT),
-            ("lean-audit", [sys.executable, str(ROOT / "tools" / "check" / "lean_audit.py"), "--out", str(out / "lean-audit"),
+            ("lean-audit", [sys.executable, str(Path(__file__).resolve()), "--lean-slot",
+                            sys.executable, str(ROOT / "tools" / "check" / "lean_audit.py"), "--out", str(out / "lean-audit"),
                             "--cache", str(cache_dir() / "lean-audit"), "--deps", str(cache_dir() / "lean-deps"),
                             *([] if cache else ["--fresh"]), *(["--urls", str(urls)] if urls else [])], ROOT),
             ("lean-agreement", agreement, ROOT)]
@@ -839,6 +865,9 @@ def main(argv: list[str]) -> int:
         return 0
     if argv[:1] == ["--lean-agreement"] and len(argv) == 4:
         return lean_agreement(*map(Path, argv[1:]))
+    if argv[:1] == ["--lean-slot"] and len(argv) > 1:
+        cmd = lean_slot(argv[1:])
+        os.execv(cmd[0], cmd)
     if argv == ["--preflight"]:
         return preflight_only()
     if "--record" in argv:
