@@ -376,12 +376,16 @@ def test_the_launcher_refuses_a_shipped_research_package_that_predates_clone(tmp
     assert remote.workload_cwd(["--cwd", "source"], None) == "--cwd source"
 
 
-def _request(root: Path, src: Path, sha: str, run_id: str) -> Path:
+def _request(root: Path, src: Path, sha: str, run_id: str, *, custody: bool = False) -> Path:
+    """A launch request for a `--cwd clone` run of `src`; `custody`: with a staged (dummy) --custody-r2 key."""
     (src / remote.READY_FILE).write_text(json.dumps({"schema": remote.READY_SCHEMA, "identity": sha, "commit": sha}))
     (root / "requests" / run_id).mkdir(parents=True)
     req = {"schema": remote.REQUEST_SCHEMA, "run_id": run_id, "runs_root": str(root / "runs"), "tool": SRC, "python": PY, "cwd": str(src),
            "env": {}, "harness_args": ["--stage", "t", "--no-sampler", "--cwd", "clone"], "command": [PY, "-c", PROBE], "exclusive": False,
-           "remote": {"machine": "m", "root": str(root), "source_sha": sha, "source_dir": str(src)}}
+           "remote": {"machine": "m", "root": str(root), "source_sha": sha, "source_dir": str(src)}, "custody": custody}
+    if custody:
+        (root / "requests" / run_id / remote.CUSTODY_DIR).mkdir()
+        (root / "requests" / run_id / remote.CUSTODY_DIR / "cred.json").write_text(json.dumps({"access_key_id": "dummy"}))
     p = root / "requests" / run_id / "request.json"
     p.write_text(json.dumps(req))
     return p
@@ -396,10 +400,11 @@ def test_the_machine_refuses_a_tree_it_cannot_clone_as_the_shipped_commit(tmp_pa
     (root / "src" / plain).mkdir(parents=True)
     for sha, why in ((moved, f"is at {head}, not {moved}, the commit the run was shipped for"),
                      (plain, "is not the top level of a git checkout")):
-        assert remote.launch_request(_request(root, root / "src" / sha, sha, f"r-{sha[0]}"))["started"]
+        assert remote.launch_request(_request(root, root / "src" / sha, sha, f"r-{sha[0]}", custody=True))["started"]
         run_dir = root / "runs" / f"r-{sha[0]}"
         wait_runner(run_dir)
         refused = json.loads((run_dir / "refused.json").read_text())
         assert refused["fault"] == "CloneRefused" and why in refused["reason"], refused
         assert R.summarize(run_dir)["state"] == "refused" and not (run_dir / "job.json").exists()
         assert not (root / "scratch" / f"r-{sha[0]}").exists()
+        assert not (root / "requests" / f"r-{sha[0]}" / remote.CUSTODY_DIR / "cred.json").exists(), "nothing will publish: the key goes now"

@@ -568,15 +568,19 @@ def _end_group(run_dir: Path) -> None:
 
 
 def _refuse(ns: argparse.Namespace, run_dir: Path, run_id: str, reason: str, fault: str, mem_reservation: str | None) -> int:
-    """Refuse the run before its workload (exit 3).  A claimed run records refused.json and gives back its exclusive lock and
-    memory reservation; a local one has nothing to record yet."""
+    """Refuse the run before its workload (exit 3).  A claimed run records refused.json, deletes its custody key (nothing will
+    publish, so it goes now and not at its expiry, as launch_request's refusals do) and gives back its exclusive lock and memory
+    reservation; a local one has nothing to record yet."""
     print(f"research run: refused: {reason}", file=sys.stderr)
     if not ns.claimed:
         return 3
+    from .store.custody import CRED_FILE
     from .telemetry.events import utc_now_ms
     from .telemetry.job import write_json_atomic
 
     write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": reason, "fault": fault, "at_utc": utc_now_ms()})
+    if ns.custody_dir:
+        (Path(ns.custody_dir) / CRED_FILE).unlink(missing_ok=True)
     if ns.exclusive_lock:
         remote.release_exclusive(Path(ns.exclusive_lock).parent, run_id)
     if mem_reservation:
