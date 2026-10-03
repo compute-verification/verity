@@ -1677,7 +1677,8 @@ end HmIn
 /-! PROTOCOL.md §16.13 Linking: under a template query, with the verifier's own program, every cut wire between two units of
 the statement is a check on the public file. A reader whose parameter leaves are another unit's outputs commits them in a link
 row (META `links`): an input row encoded as the one output row is, under the writer's salt, so that its `b ‖ c` is the
-writer's output row's. -/
+writer's output row's. This binds a public topology; it does not hide the topology: the wiring is read from the verifier's own
+program, so in this model the topology is public, a known leak that later work removes. -/
 namespace HmLinks
 
 open HmRow

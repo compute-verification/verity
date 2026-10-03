@@ -1903,7 +1903,7 @@ pub const LINKS_FORMAT: &str = "verity/flock-links/v1";
 /// `verity/flock-links/v1`, derived from its program and query: `verity_flock.class_statement.links_file`) is for this
 /// circuit, its partition and META `links`' ports, and every `(reader, port, writer)` it lists has the reader's link row's
 /// `b || c` equal to the writer's output row's. A circuit with META `links` needs the file; one without takes none. The links
-/// checked.
+/// checked. This binds a public topology; it does not hide the topology (the links file is the verifier's view of the circuit).
 pub fn check_links(c: &Composite, inst: &Instances, file: Option<&Value>) -> Result<usize, String> {
     let ports: Vec<String> = match c.meta.get("links") {
         None => {

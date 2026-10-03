@@ -30,7 +30,8 @@
   layer 0's outputs, every unit correct on what it is given, and one whose link rows hold the right values under salts of
   their own. Each must be refused by the live verifier with its links before serving, and by Lean with its program on the
   sessions a live verifier given an empty links list records. Before it, the one-unit statement at `4 n` instances, the
-  cost comparison.
+  cost comparison. Linking binds a public topology; it does not hide the topology: the Program is the verifiers', so the
+  wiring and the descriptor are public, a leak beyond the size class.
 """
 from __future__ import annotations
 

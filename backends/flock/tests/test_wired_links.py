@@ -5,7 +5,8 @@ of its own, stage the same circuit with link rows that differ. The Lean verifier
 toolchain is present) accepts the honest statement and refuses both cheats and a linked statement without its program; a
 one-layer statement, with no cut wire, is accepted with its units derived when staged with `Wiring`, and as before when
 staged without. When ``FLOCK_CIRCUIT`` names a build of ``flock-circuit``, the
-live verifier gives the same verdicts with its own links file."""
+live verifier gives the same verdicts with its own links file. Linking binds a public topology; it does not hide the
+topology."""
 from __future__ import annotations
 
 import hashlib

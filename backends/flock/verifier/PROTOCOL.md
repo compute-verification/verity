@@ -1430,7 +1430,9 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
   instance's (`dummy.outputs`) under zero salts, each row's `dummy.bc` checked.
 - **Identity** adds `outputs`: `"hidden: each output port an hm96-sha512/row/v1 row hashed in the circuit; the public file
   has no output word"` (`v2` under `row_schemas`).
-- **Linking** is a check (`Flock.HmLinks`). An output row is committed as an input row of the same words, so a reader
+- **Linking** is a check (`Flock.HmLinks`). It binds a public topology; it does not hide the topology: both verifiers
+  read the wiring from their own program (the descriptor, the links file), which is the circuit's, so publishing it is a
+  known leak beyond the size class that later work removes. An output row is committed as an input row of the same words, so a reader
   committing it under the producer's salt has the producer's `b ‖ c` as its input leaf. META `links`
   (`[{port, leaves: [lo, hi]}]`, at least one) names the link rows: each an input row (by name) that holds template parameter
   leaves `[lo, hi)` as the one output row holds outputs, a `hm96-sha512/row/v1` row of that row's words, at most that many
@@ -1451,7 +1453,8 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
   `links` needs the file and one without refuses it. Not checked: a link across statements (refused), that the class
   circuit reads leaf `lo + k` from word `k` of the link row (the class lowering's claim, like the Definition it lowers), and
   public-output statements' links (their outputs are words, not rows). A salt commits one row value: reused for another
-  row value, it reveals `b₁ ⊕ b₂ = x₁ ⊕ x₂`; a link row holds its writer's value, so reuse reveals nothing. A link is as good
+  row value, it reveals `b₁ ⊕ b₂ = x₁ ⊕ x₂`; a link row holds its writer's value, so the shared salt reveals `b₁ = b₂`,
+  that the two rows are equal: the wire itself, which a hidden topology would have to hide too. A link is as good
   as both proofs (under a draw, an undrawn writer's output is unproven: the check binds the reader's input to the writer's
   committed output, not to a correct one).
 - **Registered reads** are §16.10's, of `v1` rows. A registered port is an input row: an output row is its instance's own.

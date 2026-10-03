@@ -180,8 +180,10 @@ class Wiring:
     units may read other units' outputs (PROTOCOL.md §16.13, Linking): the program, the query, and each staged instance's unit
     (ascending). Each such read is a link port: the reader's row of exactly the writer's output row's words (`link_ports`),
     committed under the writer's output row's salt, so the two rows' ``b || c`` are equal and the verifiers compare them
-    (`link_triples`). ``strict`` False and ``writer_salts`` False stage what a cheating prover may commit instead (the
-    negatives): a linked row that is not its writer's output row, or one under a salt of its own."""
+    (`link_triples`). This binds a public topology; it does not hide the topology: the verifiers derive the wiring from
+    their own program, which is part of the circuit. ``strict`` False and ``writer_salts`` False stage what a cheating
+    prover may commit instead (the negatives): a linked row that is not its writer's output row, or one under a salt of its
+    own."""
     program: Any
     query: dict
     indices: Sequence[int]

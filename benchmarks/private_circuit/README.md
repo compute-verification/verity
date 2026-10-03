@@ -15,5 +15,7 @@ research run --on vy-nebius-1 --cwd source --project verity --declared-output 'o
 
 `WIRED=1` runs each class as the wired circuit of four units (`universal.py --wired`) after the one-unit statement at the
 same instance count, with its cut wires linked (PROTOCOL.md §16.13) and two cheating provers both verifiers must refuse.
+Linking binds a public topology; it does not hide the topology: the program descriptor is public in this run, which leaks
+the circuit's wiring beyond the size class.
 
 `check` runs nothing here.
