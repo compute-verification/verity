@@ -570,6 +570,94 @@ noncomputable def opnAtZJ (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 m
     | .error _ => default
   | .error _ => default
 
+/-! ## Table `j` where `verify --zk` sets it up -/
+
+section Live
+
+variable {I' : Inputs} {S : Finset (Fin n)} {d : Lean.Json}
+
+/-- A `DrawSetup` with `Zk.schedule`'s schedule at its `m` is a `DrawSetupZJ` (`drawSetupZK_of`). -/
+theorem drawSetupZJ_of (ht' : I'.tags.typed = false) (x : DrawSetup I' mPts S d) {sch : Flock.Schedule} {tPad : ℕ}
+    (hz : Zk.schedule x.st.m = .ok (sch, tPad)) :
+    ∃ y : DrawSetupZJ I' mPts S d, y.x = x ∧ y.sch = sch ∧ y.tPad = tPad := by
+  obtain ⟨hshape, hmsch, hpad⟩ := schedule_zk hz
+  obtain ⟨-, hm35, -⟩ := schedule_spec hz
+  have hk := (setupH_spec ht' x.h).2.2.2.2.2
+  have h0 : sch.k0 ≤ 35 := by
+    have := hshape.2.2.1
+    simp only [schedOf] at this hmsch
+    omega
+  have hlen := layLen_le hm35 hk h0
+  obtain ⟨k, hk', hk13⟩ := innerN_pow _ hlen
+  have hN : ZkExec.innerN (layOf x.st sch) < 2 ^ 64 := by
+    rw [layOf, hk']
+    exact Nat.pow_lt_pow_right (by norm_num) (by omega)
+  have hd : ZkExec.innerN (layOf x.st sch) ∣ 2 ^ 64 := by
+    rw [layOf, hk']
+    exact Nat.pow_dvd_pow 2 (by omega)
+  exact ⟨⟨x, sch, tPad, hz, hshape, hmsch, hpad, hN, innerN_ge _,
+    fun D => prCoin_innerPos_le _ _ hd D⟩, rfl, rfl, rfl⟩
+
+/-- A table's `--zk` table is the same at every `DrawSetupZJ` of it (`tableZK_eq`). -/
+theorem DrawSetupZJ.table_eq (y₁ y₂ : DrawSetupZJ I' mPts S d) : y₁.table = y₂.table := by
+  obtain ⟨⟨st₁, h₁, D₁, hD₁, hS₁, hg₁, hb₁, m₁, k₁, a₁, b₁, r₁, e₁, hs₁, hm₁, hp₁⟩, sch₁, t₁, hz₁, _, _, _, _, _, _⟩ := y₁
+  obtain ⟨⟨st₂, h₂, D₂, hD₂, hS₂, hg₂, hb₂, m₂, k₂, a₂, b₂, r₂, e₂, hs₂, hm₂, hp₂⟩, sch₂, t₂, hz₂, _, _, _, _, _, _⟩ := y₂
+  obtain rfl : st₁ = st₂ := Except.ok.inj (h₁.symm.trans h₂)
+  obtain ⟨rfl, rfl⟩ := Prod.ext_iff.1 (Except.ok.inj (hz₁.symm.trans hz₂))
+  rfl
+
+theorem DrawSetupZJ.table_seam (y : DrawSetupZJ I' mPts S d) :
+    ZkTabSeam y.table (Setup.ofCircuit y.x.st) y.sch y.tPad :=
+  ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+
+theorem DrawSetupZJ.table_lay (y : DrawSetupZJ I' mPts S d) : ZkTabLay y.table (Setup.ofCircuit y.x.st) y.sch := by
+  constructor <;> intros <;> rfl
+
+end Live
+
+/-- **`verify --zk` sets table `j` up under its tags at its draw**: at the record's draw `d`, `setupTables` at
+`zkInputs I` has `nTab I` tables, table `j` setupH's statement under `tagsAt` at `drawJ` (`setupTables_ok` at one table,
+`setupTables_parts` at several). -/
+theorem setupOf_tableJ {I : Inputs} {record : String} {d : Lean.Json} {spec : SessionSpec} {sts : Array Flock.Stmt}
+    (hh : I.tags.hiddenOutputs = false) (hd : recordDraw record = some d)
+    (hs : setupOf (zkInputs I) record = .ok (spec, sts)) :
+    sts.size = nTab I ∧ ∀ (j : ℕ) (hj : j < sts.size),
+      Stmt.setupH (tagsAt (zkTags I) I.count j) I.circuitFile I.publicFile (zkCoins I) I.tables
+        (some (drawJ I d j)) I.partition I.program = .ok sts[j] := by
+  have hh' : (zkTags I).hiddenOutputs = false := (zkTags_hiddenOutputs I).trans hh
+  by_cases hc : I.count ≤ 1
+  · rcases setupTables_ok hh' hs with ⟨-, st, hst, -, rfl⟩ | ⟨hc', -⟩
+    · refine ⟨by simp [nTab, hc], fun j hj => ?_⟩
+      have : j = 0 := by simpa using hj
+      subst this
+      have e1 : tagsAt (zkTags I) I.count 0 = zkTags I := by simp [tagsAt, hc]
+      have e2 : drawJ I d 0 = d := by simp [drawJ, hc]
+      rw [e1, e2, ← hd]
+      exact hst
+    · exact absurd hc' (by change ¬ 1 < I.count; omega)
+  · have hc1 : 1 < I.count := by omega
+    obtain ⟨-, -, population, units, hD1, -, -, -, hsz, hall⟩ := Tables.setupTables_parts hh' hc1 hs
+    obtain ⟨u, hu, -, hpop, hun⟩ := hD1 _ hd
+    refine ⟨by simp only [nTab, hc, ite_false]; exact hsz, fun j hj => ?_⟩
+    have hpart : drawJ I d j = Tables.partDraw population units I.count j := by
+      simp only [drawJ, hc, ite_false]
+      unfold partJson
+      rw [hu]
+      dsimp only
+      rw [hpop, hun]
+    have e1 : tagsAt (zkTags I) I.count j = { zkTags I with identity := (zkTags I).tableIdentity I.count j } := by
+      simp [tagsAt, hc]
+    rw [e1, hpart]
+    exact hall j hj
+
+open Classical in
+theorem outZC_of_accZ {D Sl : Type} [Inhabited D] [Inhabited Sl]
+    {Hs : Hashes 𝔽 D Sl} {T : Finset (Fin n) → Reg → TabZK 𝔽 mPts} {S : Finset (Fin n)} {R : Reg}
+    {caps : Fin 1 → Cap D} {pend : PendZ 𝔽 D Sl × PendZ 𝔽 D Sl} {os : OpensZ 𝔽 D Sl}
+    (h : accZ T S R (ZkExec.outZ Hs T S R caps pend os) = true) : (outZC Hs (T S R) (caps 0) pend os).accepted = true := by
+  unfold accZ ZkExec.outZ at h
+  exact (of_decide_eq_true h) ⟨0, by simp⟩
+
 /-- **`RunsZC` at the live `--zk` tables of a session of `J` tables, at the law's draws** (`runsZC_live` at `J`
 tables): on untyped inputs under the tags `TagsOkZJ` fixes, with `wr` the coin server's record of the live session and
 each of the law's draws setting each table up at `mPts` link points, `RunsOnZCJ` holds at the tables `planZJ` under
@@ -581,6 +669,122 @@ theorem runsZCJ_live (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin
     (hDraw : ∀ ω, DrawOkZKJ I dj mPts (L.draw ω)) :
     RunsOnZCJ (K := 𝕂) execArith hs512 (planZJ dj y₀) I wr (opnAtZJ (planZJ dj y₀) I dj) (decAtZJ (planZJ dj y₀))
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L := by
-  sorry
+  intro ω R o hacc j
+  obtain ⟨hh, hrr, hl⟩ := hT
+  obtain ⟨hd, hprf, hrec⟩ := hRec _ R o hacc
+  obtain ⟨spec, sts, hs, -, hv⟩ := hacc
+  have hh' : (zkTags I).hiddenOutputs = false := (zkTags_hiddenOutputs I).trans hh
+  have hpts2 := setupTables_points hh' hs
+  have hsr : spec.retainRounds = true := ((setupTables_retain hh' hs).trans (zkTags_retainRounds I)).trans hrr
+  obtain ⟨hsz, hstJ⟩ := setupOf_tableJ hh hd hs
+  have hjn : j.val < nTab I := planZJ_length dj y₀ (L.draw ω) R ▸ j.isLt
+  have hj : j.val < sts.size := hsz ▸ hjn
+  have hst := hstJ j.val hj
+  obtain ⟨-, sess, schs, hdecS, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
+  obtain ⟨hs0, c, hz0, hv0, hv1⟩ := hall j.val (by simpa using hj)
+  simp only [Array.getElem_map] at hz0 hv0 hv1
+  have hz' : Zk.schedule sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
+  obtain ⟨-, -, sch₀, hf⟩ := schedule_spec hz'
+  have ht' : (inputsJ I j.val).tags.typed = false := typedJ _ht j.val
+  obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst
+  obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
+  obtain ⟨x, hx⟩ := drawSetup_of_setupH_g (I := inputsJ I j.val)
+    (S := partS I (dj (L.draw ω)) (L.draw ω) ⟨j.val, hjn⟩) (mPts := mPts) ht' hst hf hD
+    ((hDraw ω ⟨j.val, hjn⟩).1 D hD) ((hDraw ω ⟨j.val, hjn⟩).2 _ hst)
+  obtain ⟨y, hyx, hysch, hytp⟩ := drawSetupZJ_of ht' x (sch := schs[j.val].1) (tPad := schs[j.val].2)
+    (by rw [hx]; exact hz')
+  have hyst : y.x.st = sts[j.val] := by rw [hyx]; exact hx
+  have hTy : (planZJ (Reg := Reg) dj y₀ (L.draw ω) R).get j = y.table := by
+    have hget : (planZJ (Reg := Reg) dj y₀ (L.draw ω) R).get j = tableZJ dj y₀ (L.draw ω) ⟨j.val, hjn⟩ := by
+      exact List.get_ofFn _ j
+    rw [hget]
+    unfold tableZJ
+    rw [dite_eq_left_of_eq_true (eq_true ⟨y⟩)]
+    exact DrawSetupZJ.table_eq _ _
+  rw [← hysch, ← hytp, ← hyst] at hv0 hv1
+  rw [← hyst] at hst
+  obtain ⟨hpts, hrj⟩ := hrec spec sts sess hs hdecS
+  obtain ⟨hroot, hstreams⟩ := hrj j
+  obtain ⟨hp2, hmp⟩ := hpts2
+  have hpd := decode_points hdecS
+  have hmP : sts[j.val].mPts = mPts := by rw [← hyst]; exact y.x.hmPts
+  have hsz' : ∀ p ∈ sess.points.toList, p.size = mPts := fun p hp =>
+    (hpd.2 p hp).trans ((hmp j.val hj).symm.trans hmP)
+  have hwf := setupH_wf y.x.h
+  have hExt : ExtraRealizes (Setup.ofCircuit y.x.st) y.table.S sess.points
+      (Model.extraClaims y.table.S y.table.ptLocal mPts o.pts) := by
+    have := ofCircuit_extra y.x.st hwf.1 hwf.2 sess.points (hpd.1.trans hp2) (by rw [y.x.hmPts]; exact hsz')
+    rw [y.x.hmPts, hpts] at this
+    exact this
+  have hms : (Setup.ofCircuit y.x.st).merkle = MerkleScheme.hm96Sha512 :=
+    setupH_tagsAt_hm96 ((zkTags_merkleLeaf I).trans hl) hst
+  have hdl : (Setup.ofCircuit y.x.st).merkle.digestLen = 64 := by rw [hms]; rfl
+  have hseam := y.table_seam
+  have hlay := y.table_lay
+  have hfold : FoldRealizes (Setup.ofCircuit y.x.st).fold y.table.S :=
+    ofCircuit_fold y.x.st y.x.wf.1 (regionsOf y.x.st)
+  have hwfA := decode_roundsWF hdecS
+  have hretA := decode_allRetained hsr hdecS
+  obtain ⟨s₀, ex₀, zp₀, tr₀, hf₀, hex₀, hdz₀, -, hrt₀, hrun₀, hk₀, -, -⟩ := zk_verifyRep_ok _ _ _ _ _ _ _ _ _ hv0
+  obtain ⟨s₁, ex₁, zp₁, tr₁, hf₁, hex₁, hdz₁, -, hrt₁, hrun₁, hk₁, -, -⟩ := zk_verifyRep_ok _ _ _ _ _ _ _ _ _ hv1
+  have e₁ : ex₁ = ex₀ := Except.ok.inj (hex₁.symm.trans hex₀)
+  subst ex₁
+  obtain ⟨hlen₀, hcr₀⟩ := hExt ex₀ hex₀
+  have hm₀ : s₀ ∈ sess.streams.toList := Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hf₀)
+  have hm₁ : s₁ ∈ sess.streams.toList := Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hf₁)
+  obtain ⟨p₀, hpl₀, hrr₀⟩ := zk_rep_run_plays hs512 y.table o.pts 0 (Setup.ofCircuit y.x.st) y.sch y.tPad ex₀ _ zp₀
+    s₀.rounds _ tr₀ y.hz hdl hseam hlen₀ hcr₀ hdz₀ hrt₀ (hwfA s₀ hm₀) (hretA s₀ hm₀) hrun₀ hk₀
+  obtain ⟨p₁, hpl₁, hrr₁⟩ := zk_rep_run_plays hs512 y.table o.pts 1 (Setup.ofCircuit y.x.st) y.sch y.tPad ex₀ _ zp₁
+    s₁.rounds _ tr₁ y.hz hdl hseam hlen₀ hcr₀ hdz₁ hrt₁ (hwfA s₁ hm₁) (hretA s₁ hm₁) hrun₁ hk₁
+  obtain ⟨s₀', s₁', zp₀', zp₁', hf₀', hf₁', hd₀', hd₁', -, hall'⟩ :=
+    zk_table_verdict (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec (Setup.ofCircuit y.x.st)
+      y.sch y.tPad sess j.val _ _ c y.hz hms hseam hlay hfold hExt hwfA hv0 hv1
+  have e₂ : s₀' = s₀ := Option.some.inj (hf₀'.symm.trans hf₀)
+  subst s₀'
+  have e₃ : s₁' = s₁ := Option.some.inj (hf₁'.symm.trans hf₁)
+  subst s₁'
+  have hshp : shapeZK (Setup.ofCircuit y.x.st) y.sch ex₀ =
+      shapeZKn (Setup.ofCircuit y.x.st) y.sch (Model.extraClaims y.table.S y.table.ptLocal mPts o.pts).length := by
+    rw [← hlen₀]
+    rfl
+  rw [hshp] at hdz₀ hdz₁
+  have e₄ : zp₀' = zp₀ := Except.ok.inj (hd₀'.symm.trans hdz₀)
+  subst zp₀'
+  have e₅ : zp₁' = zp₁ := Except.ok.inj (hd₁'.symm.trans hdz₁)
+  subst zp₁'
+  rw [hlen₀] at hpl₀ hpl₁
+  have hacc' := hall' (p₀, p₁) hpl₀ hpl₁
+  have hnX : nXZJ y.table = ex₀.size := by
+    unfold nXZJ
+    rw [hlen₀, DecodeZL.extraClaims_length, DecodeZL.extraClaims_length]
+  have hdecEq : decAtZJ (planZJ (Reg := Reg) dj y₀) (L.draw ω) R j =
+      decZ (wRestZ (Setup.ofCircuit y.x.st).m (Setup.ofCircuit y.x.st).kLog (2 + ex₀.size) (schedOf y.sch) y.tPad
+        (layZ (Setup.ofCircuit y.x.st) y.sch).len) := by
+    unfold decAtZJ
+    rw [hTy, hseam.hm, hseam.hk, hseam.hsch, hseam.ht, hseam.hnp, hnX]
+  obtain ⟨e₀, he₀, hr₀⟩ := hstreams 0
+  obtain ⟨e₁, he₁, hr₁⟩ := hstreams 1
+  have e₆ : e₀ = s₀ := Option.some.inj (he₀.symm.trans hf₀)
+  subst e₀
+  have e₇ : e₁ = s₁ := Option.some.inj (he₁.symm.trans hf₁)
+  subst e₁
+  have hopn : opnAtZJ (planZJ (Reg := Reg) dj y₀) I dj (L.draw ω) R o.proofs j =
+      opnZ (Setup.ofCircuit y.x.st) y.sch (Model.extraClaims y.table.S y.table.ptLocal mPts o.pts).length
+        #[(wr (L.draw ω) R o).proofs[2 * j.val]!, (wr (L.draw ω) R o).proofs[2 * j.val + 1]!] := by
+    rw [hprf]
+    unfold opnAtZJ
+    rw [hst]
+    dsimp only
+    rw [y.hz]
+    dsimp only
+    rw [hTy, hnX, hlen₀]
+  refine ⟨(p₀, p₁), ?_, ?_, ?_⟩
+  · rw [hTy, hdecEq, ← hr₀]
+    exact hrr₀
+  · rw [hTy, hdecEq, ← hr₁]
+    exact hrr₁
+  · dsimp only
+    rw [hTy, hopn, ← hroot]
+    exact outZC_of_accZ hacc'
 
 end FlockSoundness.Discharge.Composed
