@@ -21,7 +21,7 @@ What `coinedOf` (`Composed/Defs.lean`) and `innerOf` (`Composed/Inner.lean`) bot
 
 namespace FlockSoundness.Discharge.Composed
 
-open Flock Model ZkSession
+open Flock Model ZkSession Refine
 
 local notation "𝔽" => FlockLevel3.GF128
 
@@ -95,9 +95,23 @@ def pointsOf {q0 L0 k0 m kLog nCl nOod mP : ℕ} (ρ : RestZK q0 L0 k0 m kLog nC
 def regionPtOf (st : Stmt) (link : Fin 2 → Fin st.mPts → F128) (j : Fin (2 * st.regions.size)) : List F128 :=
   (st.regionPoint st.regions[j.val / 2]! (Array.ofFn (link (if j.val % 2 = 0 then 0 else 1)))).toList.drop 7
 
-/-- **The region claims' public ring-switch messages** (open): each registered region's public words from `st.pub`, at
-its claim's point (`regionPtOf`). -/
+/-- `eq(p, x)` over the bits of word index `x`, least significant first (`zk_veil.rs`'s `eq_word`). -/
+def eqWord (p : List F128) (x : ℕ) : F128 :=
+  (List.range p.length).foldl (fun acc i => acc * if x.testBit i then p[i]! else 1 + p[i]!) 1
+
+/-- **A region's public bit at witness index `idx`** (`regionValue`): bit `i` of the region's bytes at block `b`, `i` the
+index's free bits and `b` its block bits. Only its values inside the region's subcube matter: a region claim's `eq`
+weight vanishes off it (`regionPoint` fixes the other coordinates). -/
+def regionBit (st : Stmt) (reg : Region) (idx : ℕ) : ZMod 2 :=
+  let i := (List.range reg.free.size).foldl (fun a t => a + if idx.testBit reg.free[t]! then 2 ^ t else 0) 0
+  let b := (List.range st.nbl).foldl (fun a k => a + if idx.testBit (st.c.kLog + k) then 2 ^ k else 0) 0
+  if ((reg.bytes b).get! (i / 8) >>> (i % 8).toUInt8) % 2 == 1 then 1 else 0
+
+/-- **The region claims' public ring-switch messages**: region claim `j`'s message `Σ_x eq(p_j, x)·bit_v(word x)` with
+the region's public bits (`regionBit`) for the witness's. -/
 noncomputable def pubRegOf (st : Stmt) (link : Fin 2 → Fin st.mPts → F128) :
-    Fin (2 * st.regions.size) → Fin 128 → 𝔽 := sorry
+    Fin (2 * st.regions.size) → Fin 128 → 𝔽 := fun j v =>
+  ∑ x : Fin (2 ^ (st.m - 7)), fOf (eqWord (regionPtOf st link j) x.val) *
+    ZK.Table.castF (F := 𝔽) (regionBit st st.regions[j.val / 2]! (128 * x.val + v.val))
 
 end FlockSoundness.Discharge.Composed

@@ -149,10 +149,6 @@ end On
 
 /-! ## The session's tables at the executable's leaves (new item, open) -/
 
-/-- `eq(p, x)` over the bits of word index `x`, least significant first (`zk_veil.rs`'s `eq_word`). -/
-def eqWord (p : List F128) (x : ℕ) : F128 :=
-  (List.range p.length).foldl (fun acc i => acc * if x.testBit i then p[i]! else 1 + p[i]!) 1
-
 /-- **The mask slot's weights span** (`zk_veil.rs`'s `mask_rank_ok`, rank `= 128·k`): the vectors
 `(eq(p_1, x), …, eq(p_k, x))` over the mask words `x` span `GF(2)^{128k}`, i.e. every value of the claims' masked sums is
 reached by some mask bits. -/
