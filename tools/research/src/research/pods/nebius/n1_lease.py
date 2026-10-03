@@ -23,6 +23,10 @@ Each tick, with the brain absent (local rules):
     holder, and the lease on it is then outside the pool and stopped. A holder's GPU is unfenced once its pod runs and names its UUID;
   - shrink: fence a pool GPU that has been free for `$VY_POOL_IDLE_S` with nobody waiting for it, then delete its holder;
     delete pending holders nobody waits for.
+With `$VY_POOL_POLICY` set (a command printing this pool's keys of the cluster policy in force, `cluster/policy/v1` JSON:
+`python3 -m cluster policy show --key vy-nebius-1.lease-pool.provers --json` from tools/cluster), the pool's `max`, `borrow` and
+`borrow-until` come from it instead, read again every `POLICY_EVERY_S`, so an override (`cluster policy override`) takes effect
+without a restart. A key it lacks, and all three while it fails, keep the environment's values; each change is logged (`policy`).
 **Heartbeat and expiry.** Each tick reads every lease (lock holders from /proc/locks, the owner line, the pod from the holder's
 cgroup) into `n1-lease.json`; that record is the lease's heartbeat. A lease held `$VY_LEASE_EXPIRY_GRACE_S` past its `until=` (a
 hung job gpu-lease's own timeout didn't end) has its pod deleted. A lease on a GPU outside the pool (its holder was deleted by
@@ -66,6 +70,8 @@ IDLE_S = int(os.environ.get("VY_POOL_IDLE_S", "120"))
 GRACE_S = int(os.environ.get("VY_LEASE_EXPIRY_GRACE_S", "120"))
 BORROW = int(os.environ.get("VY_POOL_BORROW", "0"))
 BORROW_UNTIL = os.environ.get("VY_POOL_BORROW_UNTIL", "")
+POLICY = os.environ.get("VY_POOL_POLICY", "")
+POLICY_EVERY_S = 60
 KILL_AFTER_S = 30
 BRAIN = os.environ.get("VY_LEASE_BRAIN", "")
 BRAIN_MISSES = 2
@@ -253,6 +259,38 @@ class Controller:
         self.brain_misses = BRAIN_MISSES
         self.agent_fd: int | None = None
         self.events: list[dict] = []
+        self.limits: dict = {"max": POOL_MAX, "borrow": BORROW, "borrow-until": BORROW_UNTIL}
+        self.policy_at: float | None = None
+        self.policy_error: str | None = None
+
+    def pool_limits(self, t: float, dry: bool = False) -> dict:
+        """The pool's max, borrow and borrow-until: `$VY_POOL_POLICY`'s while it answers, else the environment's."""
+        if not POLICY or (self.policy_at is not None and t - self.policy_at < POLICY_EVERY_S):
+            return self.limits
+        self.policy_at = t
+        env = {"max": POOL_MAX, "borrow": BORROW, "borrow-until": BORROW_UNTIL}
+        got, err = dict(env), None
+        try:
+            doc = json.loads(subprocess.run(POLICY, shell=True, capture_output=True, text=True, timeout=20, check=True).stdout)
+            if doc.get("schema") != "cluster/policy/v1":
+                raise ValueError(f"schema {doc.get('schema')!r}, not cluster/policy/v1")
+            seen: dict = {}
+            for k in doc["keys"]:
+                f = k["key"].rsplit(".", 1)[-1]
+                if f in env and f in seen:
+                    raise ValueError(f"two keys give {f}: name one pool")
+                if f in env:
+                    seen[f] = k["value"]
+            for f, v in seen.items():
+                if f == "borrow-until" and epoch(str(v)) is None:
+                    raise ValueError(f"borrow-until {v!r} isn't %Y-%m-%dT%H:%M:%SZ")
+                got[f] = str(v) if f == "borrow-until" else int(v)
+        except (subprocess.SubprocessError, OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+            got, err = env, f"{type(e).__name__}: {e}"[:200]
+        if (got != self.limits or err != self.policy_error) and not dry:
+            self.log(t, "policy", limits=got, **({"error": err, "fallback": "environment"} if err else {}))
+        self.limits, self.policy_error = got, err
+        return got
 
     def log(self, t: float, ev: str, **kw) -> None:
         rec = {"t": iso(t), "ev": ev, **kw}
@@ -291,6 +329,7 @@ class Controller:
 
     def tick(self, t: float, obs: dict | None = None, dry: bool = False) -> dict:
         self.events = []
+        lim = self.pool_limits(t, dry)
         obs = obs or self.observe()
         if not self.table:
             self.table = gpu_table()
@@ -395,8 +434,9 @@ class Controller:
             target = len(pool) - len(free) + wanted
         self.stopping = {p: s for p, s in self.stopping.items() if Path(f"/proc/{p}").exists()}
         cap = unborrowed(obs, {j["metadata"]["name"] for j in obs["jobs"]})
-        borrow = BORROW if want and all(w.get("preempt") == "1" for w in want) and t < (epoch(BORROW_UNTIL) or float("inf")) else 0
-        limit = min(POOL_MAX, cap + borrow) if cap is not None else len(pool) + len(pending)
+        borrow = lim["borrow"] if want and all(w.get("preempt") == "1" for w in want) and \
+            t < (epoch(lim["borrow-until"]) or float("inf")) else 0
+        limit = min(lim["max"], cap + borrow) if cap is not None else len(pool) + len(pending)
         target = max(0, min(limit, int(target)))
         if blocked:
             target = len(pool) + len(pending)
@@ -432,7 +472,8 @@ class Controller:
         return state
 
     def ask_brain(self, t: float, gpus: list[dict], want: list[dict], pending: list[str]) -> dict | None:
-        req = {"t": iso(t), "node": SERVER, "gpus": gpus, "waiting": want, "pending_holders": pending, "pool_max": POOL_MAX}
+        req = {"t": iso(t), "node": SERVER, "gpus": gpus, "waiting": want, "pending_holders": pending,
+               "pool_max": self.limits["max"]}
         try:
             out = subprocess.run(BRAIN, shell=True, input=json.dumps(req), capture_output=True, text=True, timeout=20,
                                  check=True).stdout

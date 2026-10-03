@@ -1800,6 +1800,37 @@ def test_n1_lease_borrows_only_for_preemptible_waiters_before_its_deadline_and_s
 
 
 @needs_flock
+def test_n1_lease_takes_its_pool_limits_from_the_policy_command_and_the_environments_while_it_fails(monkeypatch, tmp_path, reap):
+    import fcntl
+    t = 1_800_000_000.0
+    doc = tmp_path / "policy.json"
+    m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_MAX=1, VY_POOL_POLICY=f"cat {doc}")
+    w = tmp_path / "gl" / "wait.1.4242"
+    w.write_text("pid=4242 n=3 who=adhoc:me since=x\n")
+    fd = os.open(w, os.O_RDONLY)
+    fcntl.flock(fd, fcntl.LOCK_SH)
+
+    def keys(pools=("provers",), **kv):
+        doc.write_text(json.dumps({"schema": "cluster/policy/v1", "keys": [
+            {"key": f"vy-nebius-1.lease-pool.{p}.{k.replace('_', '-')}", "value": v} for p in pools for k, v in kv.items()]}))
+    c = m.Controller()
+    steps = [(lambda: keys(max=3, borrow=0, idle_s=600), t, 3, None),            # 3 wanted, 3 nominal, max 3 by policy
+             (lambda: keys(max=2), t + 1, 3, None),                                # read again only after POLICY_EVERY_S
+             (lambda: None, t + m.POLICY_EVERY_S, 2, None),
+             (lambda: doc.write_text("Traceback"), t + 2 * m.POLICY_EVERY_S, 1, "JSONDecodeError"),   # the environment's 1
+             (lambda: keys(max=3, borrow_until="tomorrow"), t + 3 * m.POLICY_EVERY_S, 1, "borrow-until 'tomorrow'"),
+             (lambda: keys(("provers", "circuits"), max=3), t + 4 * m.POLICY_EVERY_S, 1, "two keys give max")]
+    for change, at, want, error in steps:
+        change()
+        calls.clear()
+        events = [e for e in c.tick(at)["events"] if e["ev"] == "policy"]
+        assert len([a for a, _ in calls if a[0] == "create"]) == want, (at - t, want)
+        if error:
+            assert len(events) == 1 and error in events[0]["error"] and events[0]["limits"]["max"] == 1
+    os.close(fd)
+
+
+@needs_flock
 def test_n1_lease_holds_agent_lock_while_the_brain_answers_and_falls_back_when_it_stops(monkeypatch, tmp_path, reap):
     import fcntl
     brain = tmp_path / "brain.sh"
