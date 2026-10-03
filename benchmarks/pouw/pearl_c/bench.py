@@ -41,13 +41,15 @@ GAMMA0 = RHO_CAP = Fraction(1, 400)
 FORMING_CREDITED, FORMING_A_ONLY = 64, 4      # the noise atom and the cast; ρ
 RANK, PEEL_UNITS = 32, 2 * 64                 # A′·F_B's fused columns; the peel, 2 units per BF16 MAC over depth 64
 FADD_PER_MAC = Fraction(32, 128)              # one 32-unit FP32 add per 128 products
+WINDOW = 128                                  # products per promotion add
 
 
 def gamma(n: int, k: int) -> dict[str, Fraction]:
-    """γ of one unit of width n and depth k, per element of A: the credit is the chain n(1 + 1/4), A′·F_B's 32 columns, the
-    peel 128n/k and the credited forming; W_ref adds ρ.  `cap` is the worst case under the debit cap ρ = 1/400, `floor` a
+    """γ of one unit of width n and depth k, per element of A, under rev1 (`DeviceRev1.lean`): the credit is the chain
+    n(1 + 1/4) less the first promotion add of each word (it adds into +0, so 32n/k), A′·F_B's 32 columns, the peel
+    128n/k and the credited forming; W_ref adds ρ.  `cap` is the worst case under the debit cap ρ = 1/400, `floor` a
     zero debit, and `*_chain_only` the reading where TT_OUT credits no forming.  It reads neither m nor B's per-job work."""
-    credit = n + n * FADD_PER_MAC + RANK + Fraction(PEEL_UNITS * n, k) + FORMING_CREDITED
+    credit = n + n * FADD_PER_MAC * (1 - Fraction(WINDOW, k)) + RANK + Fraction(PEEL_UNITS * n, k) + FORMING_CREDITED
     wref = credit + FORMING_A_ONLY
     return {"cap": 1 - (1 - GAMMA0) * (1 - RHO_CAP) * credit / wref,
             "cap_chain_only": 1 - (1 - GAMMA0) * (credit - FORMING_CREDITED - RHO_CAP * credit) / wref,

@@ -133,8 +133,9 @@ class OperandSet:
 @dataclass(frozen=True)
 class Work:
     """Per call: tensor-core MACs by precision key (the baselines' keys, e.g. ``{"fp8-e4m3": m*k*n}``), W_ref and the
-    credited work as exact strings in `unit` (Lean's `wrefOf` and `creditOf`), and the bytes absorbed by each hash. Per
-    (weight, epoch): the weight side's hashed bytes. `gamma` is the arm's statement (Derived, from its certificate)."""
+    credited work as exact strings in `unit` (the scheme's `wref` and `credit_of`), and the bytes absorbed by each hash.
+    Per (weight, epoch): the weight side's hashed bytes. `gamma` is the arm's statement (Derived, from its
+    certificate)."""
 
     tensor_macs: dict[str, int]
     w_ref: str
