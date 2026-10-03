@@ -209,6 +209,14 @@ loop or script goes into the repository and the manifest before it runs; a backu
 `.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ...
 --by WHO` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
 
+What should wake someone is a monitor in `research/monitors.py`: an id, an owner handle, a severity, a check whose findings
+carry stable keys, and the action to take. `research monitors list` names them, `check [ID ...]` runs them once and prints
+what they find, and `run --by WHO` keeps a state file and writes one alert note (alert_sink's format) when an incident opens
+and one line when it clears, never once per pass. Node 1's `vy-monitors.timer` runs the node-side monitors (both nodes'
+watermarks, stalls, idle GPUs with a waiter, fast preemptions, failed units); node 2 is read over ssh only while its fill
+status says `timed False`. `research monitors relay` runs the relay-side ones (deploy drift, unpreserved runs, unanswered
+asks, the node's heartbeat) and posts every open and clear in `#agent-alerts`, tagging the owner.
+
 An unlisted or foreign machine is refused before anything is contacted. The
 tool ships as a content-addressed source snapshot under `<root>/tool/` and
 runs via `PYTHONPATH`; no pip, no credentials on the machine. The machine
