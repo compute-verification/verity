@@ -24,7 +24,7 @@ open Game Audit Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL FlockLe
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {mPts n : ℕ} {Reg : Type}
+variable {mPts n : ℕ} {Reg : Type} (P : LigProver)
 
 theorem padPos_list (L : ℕ) (qs : List ℕ) :
     let l := (List.range L).filter (fun x => decide (x ∈ qs)) ++ (List.range L).filter (fun x => decide (x ∉ qs))
@@ -59,7 +59,7 @@ theorem padPos_lt {L t : ℕ} (qs : List ℕ) (h : t ≤ L) (i : Fin t) : padPos
 `padPos`. -/
 theorem bodyOf_geometry (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)) :
-    let C := coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
+    let C := coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
     C.cols ≤ 40 ∧ C.z.tpad ≤ 2 ^ C.cols ∧ C.z.nS ≤ C.z.tpad ∧
       ∀ c, C.Admits c → Function.Injective (C.pos c) ∧ ∀ q, C.pos c q < 2 ^ (C.cols + 1) := by
   intro C
@@ -93,7 +93,7 @@ theorem pt_ne_zero {a : ℕ} (ha : a < 2 ^ 63) : fOf (⟨(a + 1).toUInt64, 0⟩ 
 below `2^63`, `Q ≤ K_PAD`. -/
 theorem bodyOf_padsOnto (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)) :
-    let C := coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
+    let C := coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
     ∀ c, C.Admits c → (C.T c).tab.PadsOnto := by
   intro C c _ r
   let B := bodyOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
@@ -105,21 +105,21 @@ theorem bodyOf_padsOnto (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ :
     (fun i j h => padPos_injective _ hQ (pt_injective (hlt i) (hlt j) h)) (fun k => pt_ne_zero (hlt k)) (by decide)
 
 theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) : CoinedOfSetup (Reg := Reg) I dj y₀ := by
+    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) : CoinedOfSetup (Reg := Reg) P I dj y₀ := by
   intro S R y
-  obtain ⟨g1, g2, g3, g4⟩ := bodyOf_geometry (Reg := Reg) I dj y₀ S R y
+  obtain ⟨g1, g2, g3, g4⟩ := bodyOf_geometry (Reg := Reg) P I dj y₀ S R y
   refine ⟨rfl, rfl, rfl, fun _ => rfl, ⟨(bodyOf _ _).rest0⟩, g1, g2, g3, fun c hc => ?_⟩
-  have hβ : ∀ r, ((coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).β r = fOf (c.beta r) := fun _ => rfl
-  have hρ : ∀ r, ((coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).ρ r 0 = GF256.of (c.rho r).1 ∧
-      ((coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).ρ r 1 = GF256.of (c.rho r).2 :=
+  have hβ : ∀ r, ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).β r = fOf (c.beta r) := fun _ => rfl
+  have hρ : ∀ r, ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).ρ r 0 = GF256.of (c.rho r).1 ∧
+      ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).ρ r 1 = GF256.of (c.rho r).2 :=
     fun _ => ⟨rfl, rfl⟩
-  have hw : ∀ k x, ((coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).eqw k x =
-      fOf (eqWord ((coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).points c k) ((coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).maskWords x)) :=
+  have hw : ∀ k x, ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).eqw k x =
+      fOf (eqWord ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).points c k) ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).maskWords x)) :=
     fun _ _ => rfl
-  have he : ∀ a : F128, ((coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).embed (fOf a) =
+  have he : ∀ a : F128, ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).embed (fOf a) =
       GF256.of ⟨a, 0⟩ := fun _ => rfl
   obtain ⟨hrank, hW, hb⟩ := coin_facts _ c hc.1 hβ hρ hw he
-  exact ⟨g4 c hc.1, ⟨hβ, hρ, hw, he⟩, hrank, fun _ _ => rfl, hW, bodyOf_padsOnto I dj y₀ S R y c hc.1, hb,
-    innerOf_holds I dj y₀ S R y c hc⟩
+  exact ⟨g4 c hc.1, ⟨hβ, hρ, hw, he⟩, hrank, fun _ _ => rfl, hW, bodyOf_padsOnto P I dj y₀ S R y c hc.1, hb,
+    innerOf_holds P I dj y₀ S R y c hc⟩
 
 end FlockSoundness.Discharge.Composed

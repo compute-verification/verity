@@ -17,7 +17,7 @@ open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {mPts n : ℕ} {Reg : Type}
+variable {mPts n : ℕ} {Reg : Type} (P : LigProver)
 
 /-! ## The session's tables at the executable's leaves (new item, open) -/
 
@@ -192,7 +192,7 @@ noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
     z := withMask B.sz (maskWordsOf st).length Tz.t
     maskWords := fun x => (maskWordsOf st).getD x.val 0
     T := fun c =>
-      let I := innerOf Tz st (withMask B.sz (maskWordsOf st).length Tz.t) c
+      let I := innerOf P Tz st (withMask B.sz (maskWordsOf st).length Tz.t) c
       { embed := FlockLevel3.embed
         nu := fun w k v => ∑ x : Fin (2 ^ (Tz.S.m - 7)),
           if x.val ∈ maskWordsOf st then 0
@@ -255,18 +255,18 @@ def CoinedOK (A : Arith 𝔽 FlockLevel3.GF256) (κ : 𝔽) (C : CoinedSetup) : 
       ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w
 
 /-- **The session's tables satisfy Lemma B's facts** (new item, open): at every draw `verify --zk` sets up (`y`), the
-`Coined` tables of the draw's `--zk` table at its executable statement (`coinedOf (tablesAtZK dj y₀ S R) y.x.st`) are over
+`Coined` tables of the draw's `--zk` table at its executable statement (`coinedOf P (tablesAtZK dj y₀ S R) y.x.st`) are over
 the table's statement, check rank over the `RANK_POINTS` claim points at the statement's mask words (`maskWordsOf`), have
 other coins, and are `CoinedOK` at `execArith` and `PAD_C`. -/
 def CoinedOfSetup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) : Prop :=
   ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)),
-    (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).S = (tablesAtZK (Reg := Reg) dj y₀ S R).S ∧
-    (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).z.nC = Zk.RANK_POINTS ∧
-    (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).z.nMask = (maskWordsOf y.x.st).length ∧
-    (∀ x, (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).maskWords x = (maskWordsOf y.x.st).getD x 0) ∧
-    Nonempty (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).Rest ∧
-    CoinedOK execArith (fOf Zk.PAD_C) (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st)
+    (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).S = (tablesAtZK (Reg := Reg) dj y₀ S R).S ∧
+    (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).z.nC = Zk.RANK_POINTS ∧
+    (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).z.nMask = (maskWordsOf y.x.st).length ∧
+    (∀ x, (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).maskWords x = (maskWordsOf y.x.st).getD x 0) ∧
+    Nonempty (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).Rest ∧
+    CoinedOK execArith (fOf Zk.PAD_C) (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st)
 
 /-- **Zero knowledge at a `CoinedSetup`, at `δ₁` per hidden leaf** (Lemma B, `ZkWireFixed`'s form at one table): at any
 covered coin vector (`Covered`), for any encoding `enc` of the view (the proof files) and any event `E`, the real view

@@ -25,7 +25,7 @@ the level-0 lanes, the clear values, Ligerito's value lists and the verifier's r
 * **Levels ≥ 1** (`ligOf`): the restart `T' = Σ_c y₁'(c)·b̄(c)` and levels ≥ 1's bytes.
 
 **Open inputs** (each a named definition, until the coin vector carries it): level 0's out-of-domain point
-(`oodPoint`, the drawn coin `RestZK.oodPt`) and levels ≥ 1's bytes (`ligBytes`). `InnerHolds` reads none of `ligBytes`.
+(`oodPoint`, the drawn coin `RestZK.oodPt`) and levels ≥ 1's bytes (a `LigProver`'s). `InnerHolds` reads none of them.
 -/
 
 namespace FlockSoundness.Discharge.Composed
@@ -290,9 +290,16 @@ theorem oodPoint_eq {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK
     oodPoint Tz st c r i.val j = fOf (c.rest.oodPt r i ⟨j.val, hj⟩) := by
   simp only [oodPoint, dif_pos (And.intro i.isLt hj)]
 
-/-- **Levels ≥ 1's bytes** after `T'` (open: they read Ligerito's level ≥ 1 coins, which `RestZK` does not carry). -/
-def ligBytes {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (_c : CoinsZK (RestOf Tz st)) (_r : Fin 2) {L : ℕ}
-    (_y : Fin L → 𝕂) (_hi : HiOf Tz) : ByteArray := sorry
+/-- **A prover of Ligerito's levels ≥ 1**: rep `r`'s bytes after `T'`, as a function of what the simulator holds (the
+draw's table and statement, the public coin vector `c`, whose level ≥ 1 coins `RestZK.ligZ`…`ligB` its sumcheck and
+query messages read, and the restart `y₁'`) and the fresh prover coins `Hi`, the salts of levels ≥ 1's salted Merkle
+trees, drawn independently of everything else. The zero-knowledge statements quantify over every such function.
+
+Modelling claim (a trusted component, not proved here): the honest Ligerito prover's level-≥ 1 bytes are such a
+function. -/
+def LigProver : Type :=
+  ∀ {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt), CoinsZK (RestOf Tz st) → Fin 2 → (L : ℕ) → (Fin L → 𝕂) → HiOf Tz →
+    ByteArray
 
 section Honest
 
@@ -387,11 +394,11 @@ end Honest
 
 /-- **The draw's inner-proof fields** at the coin vector `c`: the lanes of `z = (w, u)`, the clear values by layout
 index, levels ≥ 1 from the restart `T' = Σ_c y₁'(c)·b̄(c)`, and the replay's batch. -/
-def innerOf {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (z : Sizes) (c : CoinsZK (RestOf Tz st)) :
+def innerOf (P : LigProver) {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (z : Sizes) (c : CoinsZK (RestOf Tz st)) :
     InnerFields (Witness Tz.S.m) (HiOf Tz) VLOf z where
   lanes w u l col := wordOf (zWith st w u) (l.val + z.nL * col.val)
   vals r w u R i := honestAt Tz st c r (zWith st w u) (R r) i.val
-  lig r y hi := (∑ col : Fin z.L, y col * bFold Tz st c r col.val, ligBytes Tz st c r y hi)
+  lig r y hi := (∑ col : Fin z.L, y col * bFold Tz st c r col.val, P Tz st c r z.L y hi)
   lam := lamOf Tz st z c
   theta := thetaOf Tz st z c
 

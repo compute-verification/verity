@@ -959,7 +959,7 @@ theorem setupH_mask_isolated {tags : Tags} {circuitFile publicFile : ByteArray} 
 
 end Mask
 
-variable {mPts n : ℕ} {Reg : Type}
+variable {mPts n : ℕ} {Reg : Type} (P : LigProver)
 
 /-- The `--zk` tables at a draw `verify --zk` sets up are its table. -/
 theorem tablesAtZK_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
@@ -974,7 +974,7 @@ valid witness whose registered values are the public ones satisfies `Table.Inner
 constraints). -/
 theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)) :
-    let C := coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
+    let C := coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
     ∀ c, C.Covered c → ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w := by
   intro C c hc w hw hreg ω r
   apply batch_of_rows
