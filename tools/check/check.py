@@ -576,7 +576,9 @@ def rust_tests_key(e: dict[str, str]) -> str | None:
     rustc = shutil.which("rustc", path=path)
     if files is None or toolchain is None or rustc is None:
         return None
-    r = subprocess.run([rustc, "-vV"], env={**e, "PATH": path, "RUSTUP_TOOLCHAIN": toolchain}, capture_output=True, text=True)
+    # rustup >= 1.28.1 would install a missing pin here, outside the script's lock
+    r = subprocess.run([rustc, "-vV"], env={**e, "PATH": path, "RUSTUP_TOOLCHAIN": toolchain, "RUSTUP_AUTO_INSTALL": "0"},
+                       capture_output=True, text=True)
     if r.returncode:
         return None
     h = hashlib.sha256(json.dumps([r.stdout, platform.platform(), _env_key(e)]).encode())
