@@ -19,7 +19,9 @@ are `RowSem`'s formulas on the row's inputs:
   (`chain8_word`), and RowA's `P_A` word `q` is that word cast to bf16 (`row8A_pa`);
 * RowB's `P_B` word `q` is the BF16 cast of `Σ_s ẽ_s·g_{s,q}` (`pbAcc`, the FMAs from `+0` of the rescaled noise' FP32
   words, `pre8_ew`) plus its chain's word negated (`row8B_pb`), and the rescaled noise' BF16 words, `P_A`'s head and
-  `P_B`'s tail negated, are `row8A_be` and `row8B_nbe`.
+  `P_B`'s tail negated, are `row8A_be` and `row8B_nbe`;
+* on `pc4`'s shared runs, `α`, `β`, `a_E` (`pre4_alpha`) and the flag (`pre4_flag`, `flag4`), so RowA's `Ẽ` and RowB's
+  `−Ẽ` (`row4A_et`, `row4B_net`) and both flags (`row4A_flag`, `row4B_flag`).
 -/
 
 namespace Pouw.PearlC.RowCircuit
@@ -898,5 +900,193 @@ theorem row8B_nbe {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8B p
     hin _ (by simp only [rowIn]; omega), beta8_congr h8 fun l hl => hin l (by simp only [rowIn]; omega)]
 
 end Mid8
+
+/-! ## `pc4`'s row units -/
+
+/-- `pc4`'s row flag as its table computes it: `s` finite, and `β` at least `2⁻⁷·15/8` and finite. -/
+def flag4 (x : ℕ → ℕ) (K : ℕ) : ℕ :=
+  Prim.eval ops .band [Prim.eval ops .le [rowMax ops .bf16Fabs x (K - 1), 0x7F7FFFFF],
+    Prim.eval ops .band [Prim.eval ops .le [0x3C700000, beta4 ops x K], Prim.eval ops .le [beta4 ops x K, 0x7F7FFFFF]]]
+
+section Rows4
+
+variable {ops}
+
+theorem alpha4_congr {x y : ℕ → ℕ} {K : ℕ} (hK : 8 ≤ K) (h : ∀ l < K, x l = y l) :
+    alpha4 ops x K = alpha4 ops y K := by
+  unfold alpha4 drho4
+  rw [rowRho_congr hK h, rowMax_congr (K - 1) fun l hl => h l (by omega)]
+
+theorem beta4_congr {x y : ℕ → ℕ} {K : ℕ} (hK : 8 ≤ K) (h : ∀ l < K, x l = y l) :
+    beta4 ops x K = beta4 ops y K := by
+  unfold beta4 drho4
+  rw [rowRho_congr hK h, alpha4_congr hK h]
+
+theorem flag4_congr {x y : ℕ → ℕ} {K : ℕ} (hK : 8 ≤ K) (h : ∀ l < K, x l = y l) :
+    flag4 ops x K = flag4 ops y K := by
+  unfold flag4
+  rw [rowMax_congr (K - 1) fun l hl => h l (by omega), beta4_congr hK h]
+
+/-- **`α`, `β` and `a_E`** on values meeting `pc4`'s shared runs: `alpha4` and `beta4` of the values of `x`'s gates,
+and `β`'s E4M3 cast. -/
+theorem pre4_alpha {V : ℕ → ℕ} {K b : ℕ} (hK : 8 ≤ K) (h : RunsHold ops V (pre4Runs K b) b) :
+    V (a4At K b + 4) = alpha4 ops V K ∧ V (a4At K b + 6) = beta4 ops V K ∧
+      V (a4At K b + 7) = Prim.eval ops .toE4m3 [beta4 ops V K] := by
+  obtain ⟨hs, hr⟩ := runsHold_append ops V h
+  rw [statsRuns_len] at hr
+  have ha : RunHolds ops V (alpha4Run K b) (a4At K b) := hr.1
+  obtain ⟨hsm, hrho⟩ := stats_holds hK hs
+  have g0 := ha 0 (by simp [alpha4Run, Run.ofList])
+  have g1 := ha 1 (by simp [alpha4Run, Run.ofList])
+  have g2 := ha 2 (by simp [alpha4Run, Run.ofList])
+  have g3 := ha 3 (by simp [alpha4Run, Run.ofList])
+  have g4 := ha 4 (by simp [alpha4Run, Run.ofList])
+  have g5 := ha 5 (by simp [alpha4Run, Run.ofList])
+  have g6 := ha 6 (by simp [alpha4Run, Run.ofList])
+  have g7 := ha 7 (by simp [alpha4Run, Run.ofList])
+  simp only [alpha4Run, Run.ofList, List.getD_cons_zero, List.getD_cons_succ, List.map_cons, List.map_nil, Arg.eval,
+    Wire.eval_id, Nat.add_zero] at g0 g1 g2 g3 g4 g5 g6 g7
+  have hd : V (a4At K b) = drho4 ops V K := by rw [g0, hrho]; rfl
+  have hα : V (a4At K b + 4) = alpha4 ops V K := by rw [g4, g3, g2, g1, hd, hsm]; rfl
+  have hβ : V (a4At K b + 6) = beta4 ops V K := by rw [g6, g5, hd, hα]; rfl
+  exact ⟨hα, hβ, by rw [g7, hβ]⟩
+
+/-- **The flag** on values meeting `pc4`'s shared runs: `flag4` of the values of `x`'s gates. -/
+theorem pre4_flag {V : ℕ → ℕ} {K b : ℕ} (hK : 8 ≤ K) (h : RunsHold ops V (pre4Runs K b) b) :
+    V (a4At K b + 12) = flag4 ops V K := by
+  obtain ⟨hs, hr⟩ := runsHold_append ops V h
+  rw [statsRuns_len] at hr
+  have ha : RunHolds ops V (alpha4Run K b) (a4At K b) := hr.1
+  obtain ⟨hsm, -⟩ := stats_holds hK hs
+  have g8 := ha 8 (by simp [alpha4Run, Run.ofList])
+  have g9 := ha 9 (by simp [alpha4Run, Run.ofList])
+  have g10 := ha 10 (by simp [alpha4Run, Run.ofList])
+  have g11 := ha 11 (by simp [alpha4Run, Run.ofList])
+  have g12 := ha 12 (by simp [alpha4Run, Run.ofList])
+  simp only [alpha4Run, Run.ofList, List.getD_cons_zero, List.getD_cons_succ, List.map_cons, List.map_nil, Arg.eval,
+    Wire.eval_id] at g8 g9 g10 g11 g12
+  rw [g12, g11, g10, g9, g8, (pre4_alpha hK h).2.1, hsm]
+  rfl
+
+/-- **RowA writes the noise' `Ẽ`**: word `l` is `PouwETilde_v1` of `e`'s code `l` at `a_E`, `β`'s E4M3 cast. -/
+theorem row4A_et {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.Transcript)
+    (hX : ((row4A K).spec ops).part.Correct X 0) {l : ℕ} (hl : l < 32) :
+    val X (post4At K (rowIn K false) + 32 * (K / 64 + 1) + l) =
+      Prim.eval ops .eTilde [val X (K + l), Prim.eval ops .toE4m3 [beta4 ops (val X) K]] := by
+  have hlen := pre4Runs_len K (rowIn K false)
+  have hmem : post4At K (rowIn K false) + 32 * (K / 64 + 1) + l ∈ (row4A K).outs := by
+    simp only [row4A, List.mem_append, List.mem_map, List.mem_range]
+    exact Or.inl (Or.inl (Or.inr ⟨l, hl, rfl⟩))
+  have hlt : post4At K (rowIn K false) + 32 * (K / 64 + 1) + l < ((row4A K).spec ops).N := by
+    show _ < rowIn K false + runsLen (row4A K).runs
+    simp only [row4A, runsLen_append, runsLen, af4Run, Run.rep, et4Run, okwRun, Run.ofList, List.length_cons,
+      List.length_nil]
+    omega
+  rw [Spec.out_eq _ X hX (List.mem_toFinset.2 hmem) hlt]
+  obtain ⟨V, hV⟩ : ∃ V, V = val (((row4A K).spec ops).toCircuit.eval X) := ⟨_, rfl⟩
+  rw [← hV]
+  have hh := Rows.holds ops (row4A K) X
+  rw [← hV] at hh
+  have hsplit := runsHold_append ops V hh
+  have hpre : RunsHold ops V (pre4Runs K (rowIn K false)) (rowIn K false) := hsplit.1
+  have hpost := hsplit.2
+  rw [show (row4A K).nIn + runsLen (pre4Runs K (rowIn K false)) = post4At K (rowIn K false) from hlen] at hpost
+  have hin : ∀ l < rowIn K false, V l = val X l := fun l hl => by
+    rw [hV]; exact Rows.val_input ops (row4A K) X hl
+  have g := hpost.2.1 l (by simp [et4Run]; omega)
+  simp only [et4Run, List.map_cons, List.map_nil, Arg.eval, Wire.eval_id, af4Run, Run.rep] at g
+  rw [g, (pre4_alpha hK hpre).2.2, hin _ (by simp only [rowIn]; omega),
+    beta4_congr hK fun l hl => hin l (by simp only [rowIn]; omega)]
+
+/-- **RowA writes its flag**: the BF16 select of `flag4` to `1` or `0`. -/
+theorem row4A_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.Transcript)
+    (hX : ((row4A K).spec ops).part.Correct X 0) :
+    val X (post4At K (rowIn K false) + 32 * (K / 64 + 1) + 32) =
+      Prim.eval ops .selBf16 [flag4 ops (val X) K, 1, 0] := by
+  have hlen := pre4Runs_len K (rowIn K false)
+  have hmem : post4At K (rowIn K false) + 32 * (K / 64 + 1) + 32 ∈ (row4A K).outs :=
+    List.mem_append_right _ (List.mem_singleton_self _)
+  have hlt : post4At K (rowIn K false) + 32 * (K / 64 + 1) + 32 < ((row4A K).spec ops).N := by
+    show _ < rowIn K false + runsLen (row4A K).runs
+    simp only [row4A, runsLen_append, runsLen, af4Run, Run.rep, et4Run, okwRun, Run.ofList, List.length_cons,
+      List.length_nil]
+    omega
+  rw [Spec.out_eq _ X hX (List.mem_toFinset.2 hmem) hlt]
+  obtain ⟨V, hV⟩ : ∃ V, V = val (((row4A K).spec ops).toCircuit.eval X) := ⟨_, rfl⟩
+  rw [← hV]
+  have hh := Rows.holds ops (row4A K) X
+  rw [← hV] at hh
+  have hsplit := runsHold_append ops V hh
+  have hpre : RunsHold ops V (pre4Runs K (rowIn K false)) (rowIn K false) := hsplit.1
+  have hpost := hsplit.2
+  rw [show (row4A K).nIn + runsLen (pre4Runs K (rowIn K false)) = post4At K (rowIn K false) from hlen] at hpost
+  have hin : ∀ l < rowIn K false, V l = val X l := fun l hl => by
+    rw [hV]; exact Rows.val_input ops (row4A K) X hl
+  have g := hpost.2.2.1 0 (by simp [okwRun, Run.ofList])
+  simp only [okwRun, Run.ofList, List.getD_cons_zero, List.map_cons, List.map_nil, Arg.eval, Wire.eval_id, af4Run,
+    Run.rep, et4Run, Nat.add_zero] at g
+  rw [g, pre4_flag hK hpre, flag4_congr hK fun l hl => hin l (by simp only [rowIn]; omega)]
+
+/-- **RowB writes the noise' `−Ẽ`**: word `l` is `PouwBf16Neg_v1` of `PouwETilde_v1` of `e`'s code `l` at `a_E`. -/
+theorem row4B_net {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.Transcript)
+    (hX : ((row4B K).spec ops).part.Correct X 0) {l : ℕ} (hl : l < 32) :
+    val X (post4At K (rowIn K true) + 32 + 32 * (K / 64 + 35) + l) = Prim.eval ops .bf16Neg
+      [Prim.eval ops .eTilde [val X (K + l), Prim.eval ops .toE4m3 [beta4 ops (val X) K]]] := by
+  have hlen := pre4Runs_len K (rowIn K true)
+  have hmem : post4At K (rowIn K true) + 32 + 32 * (K / 64 + 35) + l ∈ (row4B K).outs := by
+    simp only [row4B, List.mem_append, List.mem_map, List.mem_range]
+    exact Or.inl (Or.inr ⟨l, hl, rfl⟩)
+  have hlt : post4At K (rowIn K true) + 32 + 32 * (K / 64 + 35) + l < ((row4B K).spec ops).N := by
+    show _ < rowIn K true + runsLen (row4B K).runs
+    simp only [row4B, runsLen_append, runsLen, et4Run, mid4Run, Run.rep, nb4Run, okwRun, Run.ofList,
+      List.length_cons, List.length_nil]
+    omega
+  rw [Spec.out_eq _ X hX (List.mem_toFinset.2 hmem) hlt]
+  obtain ⟨V, hV⟩ : ∃ V, V = val (((row4B K).spec ops).toCircuit.eval X) := ⟨_, rfl⟩
+  rw [← hV]
+  have hh := Rows.holds ops (row4B K) X
+  rw [← hV] at hh
+  have hsplit := runsHold_append ops V hh
+  have hpre : RunsHold ops V (pre4Runs K (rowIn K true)) (rowIn K true) := hsplit.1
+  have hpost := hsplit.2
+  rw [show (row4B K).nIn + runsLen (pre4Runs K (rowIn K true)) = post4At K (rowIn K true) from hlen] at hpost
+  have hin : ∀ l < rowIn K true, V l = val X l := fun l hl => by
+    rw [hV]; exact Rows.val_input ops (row4B K) X hl
+  have g0 := hpost.1 l (by simp [et4Run]; omega)
+  have g1 := hpost.2.2.1 l (by simp [nb4Run]; omega)
+  simp only [et4Run, nb4Run, mid4Run, Run.rep, List.map_cons, List.map_nil, Arg.eval, Wire.eval_id] at g0 g1
+  rw [g1, g0, (pre4_alpha hK hpre).2.2, hin _ (by simp only [rowIn]; omega),
+    beta4_congr hK fun l hl => hin l (by simp only [rowIn]; omega)]
+
+/-- **RowB writes its flag**: the BF16 select of `flag4` to `1` or `0`. -/
+theorem row4B_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.Transcript)
+    (hX : ((row4B K).spec ops).part.Correct X 0) :
+    val X (post4At K (rowIn K true) + 32 + 32 * (K / 64 + 35) + 32) =
+      Prim.eval ops .selBf16 [flag4 ops (val X) K, 1, 0] := by
+  have hlen := pre4Runs_len K (rowIn K true)
+  have hmem : post4At K (rowIn K true) + 32 + 32 * (K / 64 + 35) + 32 ∈ (row4B K).outs :=
+    List.mem_append_right _ (List.mem_singleton_self _)
+  have hlt : post4At K (rowIn K true) + 32 + 32 * (K / 64 + 35) + 32 < ((row4B K).spec ops).N := by
+    show _ < rowIn K true + runsLen (row4B K).runs
+    simp only [row4B, runsLen_append, runsLen, et4Run, mid4Run, Run.rep, nb4Run, okwRun, Run.ofList,
+      List.length_cons, List.length_nil]
+    omega
+  rw [Spec.out_eq _ X hX (List.mem_toFinset.2 hmem) hlt]
+  obtain ⟨V, hV⟩ : ∃ V, V = val (((row4B K).spec ops).toCircuit.eval X) := ⟨_, rfl⟩
+  rw [← hV]
+  have hh := Rows.holds ops (row4B K) X
+  rw [← hV] at hh
+  have hsplit := runsHold_append ops V hh
+  have hpre : RunsHold ops V (pre4Runs K (rowIn K true)) (rowIn K true) := hsplit.1
+  have hpost := hsplit.2
+  rw [show (row4B K).nIn + runsLen (pre4Runs K (rowIn K true)) = post4At K (rowIn K true) from hlen] at hpost
+  have hin : ∀ l < rowIn K true, V l = val X l := fun l hl => by
+    rw [hV]; exact Rows.val_input ops (row4B K) X hl
+  have g := hpost.2.2.2.1 0 (by simp [okwRun, Run.ofList])
+  simp only [okwRun, Run.ofList, List.getD_cons_zero, List.map_cons, List.map_nil, Arg.eval, Wire.eval_id, et4Run,
+    mid4Run, Run.rep, nb4Run, Nat.add_zero] at g
+  rw [g, pre4_flag hK hpre, flag4_congr hK fun l hl => hin l (by simp only [rowIn]; omega)]
+
+end Rows4
 
 end Pouw.PearlC.RowCircuit
