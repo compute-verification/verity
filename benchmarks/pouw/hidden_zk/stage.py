@@ -14,7 +14,9 @@ public-inputs-wrong.bin (one anchor bit flipped, the verifier's file wrong) and 
 public file's tail, an anchor the prover chose).
 
 DEVELOPMENT BINDING: core's BitAnd_v1, E4m3ToF32_v1 and F32ToE2m1Sat_v1 have no C-Flock piece on this branch, so the row
-units lower them through `core3_scratch`'s pieces; every result of a row unit staged here is labelled 'core3 scratch'."""
+units lower them through `core3_scratch`'s pieces; every result of a row unit staged here is labelled 'core3 scratch'. The
+PoUW word primitives Keccak-f is written in have none either, so the hiding tile lowers them through `hash_scratch`'s
+pieces, checked against their primitives first; its results are labelled 'hash scratch'."""
 from __future__ import annotations
 
 import hashlib
@@ -98,6 +100,13 @@ def main() -> None:
     elif ROLE.startswith(("tile", "hidden")):
         V = _load("pouw_rows_vectors", ROOT / "protocols" / "pouw" / "tests" / "pouw_rows_vectors.py")
         hidden = ROLE.startswith("hidden")
+        if hidden:
+            sys.path.insert(0, str(HERE))
+            import hash_scratch as H
+            bad = H.check()
+            assert not any(bad.values()), f"hash_scratch's pieces disagree with their primitives: {bad}"
+            IL.PIECES.update(H.PIECES)
+            rec["binding"] = "hash scratch"
         tm, tn = map(int, ROLE.removeprefix("hidden" if hidden else "tile").split("x")) if "x" in ROLE else (1, 1)
         rec["tile"] = [tm, tn]
         d = pc4.templates(K, (tm, tn), hidden=hidden)["tile"]
