@@ -26,6 +26,40 @@ def test_only_a_name_the_vm_injects_and_this_shell_lacks_is_lost(monkeypatch):
     assert secret_hint.lost("R2_ENDPOINT", "R2_BUCKET") == f"R2_BUCKET not in this shell though this VM injects it: {HINT}"
 
 
+def test_research_takes_a_lost_secret_from_the_tmux_server_and_leaves_the_rest(tmp_path, monkeypatch):
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "tmux").write_text('#!/bin/sh\necho "$@" >> "$0.calls"\ncase "$3" in\n'
+                               '  R2_BUCKET) echo R2_BUCKET=bucket ;;\n'
+                               '  NEBIUS_SA_ID) printf "%s\\n" "NEBIUS_SA_ID=line one" "line two" ;;\n'
+                               '  RUNPOD_SSH_KEY_B64) echo -RUNPOD_SSH_KEY_B64 ;;\n'
+                               '  *) echo "unknown variable: $3" >&2; exit 1 ;;\nesac\n')
+    (bin_ / "tmux").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
+    for n in INJECTED.split(","):
+        monkeypatch.setenv(n, "")
+    assert secret_hint.recover() == [] and not (bin_ / "tmux.calls").exists()       # no injected list: tmux is never asked
+    monkeypatch.setenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", INJECTED)
+    monkeypatch.setenv("R2_ENDPOINT", "https://r2.invalid")
+    assert secret_hint.recover() == ["R2_BUCKET", "NEBIUS_SA_ID"]
+    assert os.environ["R2_BUCKET"] == "bucket" and os.environ["NEBIUS_SA_ID"] == "line one\nline two"
+    assert os.environ["R2_ENDPOINT"] == "https://r2.invalid" and os.environ["RUNPOD_SSH_KEY_B64"] == ""     # set here; removed in tmux
+    assert "R2_ENDPOINT" not in (bin_ / "tmux.calls").read_text()
+    assert secret_hint.lost("R2_BUCKET", "RUNPOD_SSH_KEY_B64") == f"RUNPOD_SSH_KEY_B64 not in this shell though this VM injects it: {HINT}"
+    monkeypatch.setenv("PATH", str(tmp_path / "no-tmux"))
+    assert secret_hint.recover() == []                                                # no tmux at all
+
+
+def test_every_research_command_recovers_lost_secrets_first(monkeypatch):
+    from research import cli
+
+    seen = []
+    monkeypatch.setattr(secret_hint, "recover", lambda: seen.append(True) or [])
+    with pytest.raises(SystemExit):
+        cli.main(["status", "--help"])
+    assert seen == [True]
+
+
 def test_a_label_or_put_in_a_shell_that_lost_the_store_secrets_fails_with_the_hint(tmp_path, monkeypatch, capsys):
     f = tmp_path / "a.bin"
     f.write_bytes(b"a")

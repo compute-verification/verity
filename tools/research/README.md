@@ -55,10 +55,12 @@ No value is ever printed. `research data mint-credential` already read the
 same variables.
 
 On a cloud VM a long-lived shell can lose the injected secrets that a fresh
-tmux login shell still has. When a secret named in
-`$CLOUD_AGENT_INJECTED_SECRET_NAMES` is missing from the shell, the store,
-`research queue ready`, node ssh and the Nebius scripts fail and say `rerun
-from a fresh tmux login shell` (`secret_hint.py`).
+tmux login shell still has. Every `research` command first sets each secret
+named in `$CLOUD_AGENT_INJECTED_SECRET_NAMES` and missing from the shell from
+the tmux server's global environment, where that login shell gets them
+(`secret_hint.recover`). If one is still missing, the store, `research queue
+ready`, node ssh and the Nebius scripts fail and say `rerun from a fresh tmux
+login shell` (`secret_hint.py`).
 
 ## Commands
 
