@@ -879,6 +879,23 @@ def test_a_relay_post_tags_its_owners_and_says_what_to_do():
     assert text.startswith("<circuits> <infra> [page] open m|a\n_What to do:_ a")
 
 
+def test_what_a_finding_quotes_cant_mention_anyone_in_slack(monkeypatch):
+    line = (f"{iso(T0 - 60)} SIGTERM GPU 7 for pid 2 (n=1, who=<!channel>): pid=1 run=r1 who=<!channel> uuid=GPU-x "
+            f"since={iso(T0 - 65)} until={iso(T0 + 3600)} mem=48G preempt=1 scope=gpu-lease-1 cmd=a&b")
+    f = M._fast_finding("/run/gpu-lease", "Node 1", M.fast_preemptions([line], T0))
+    e = {"event": "open", "owners": ["proofs"], "severity": "warn", "text": f.text, "action": M.FAST, "monitor": "fast-preempt-n1",
+         "by": "<!here>"}
+    text = M.message(e, lambda h: f"<!subteam^S1|@{h}>")
+    assert text.startswith("<!subteam^S1|@proofs> *Node 1:") and "<!" not in text[len("<!subteam^S1|@proofs>"):]
+    assert "(&lt;!channel&gt;, run r1)" in text and text.endswith(", &lt;!here&gt;_")
+    assert M.message({**e, "event": "clear", "text": "*Cleared:* <!channel> & co"}) == "*Cleared:* &lt;!channel&gt; &amp; co"
+    posts = fake_slack(monkeypatch)
+    M.relay_pass(rstate := {}, [src := FakeSource("node1")], M.slack_post(False), T0)
+    src.all.append(json.dumps({**e, "key": "fast-preempt-n1|/run/gpu-lease", "text": "*a <!channel> & b*"}))
+    M.relay_pass(rstate, [src], M.slack_post(False), T0 + 60)
+    assert posts[1][1] == "@proofs a !channel &amp; b (alert: https://slack.example/p)"
+
+
 # ---- what node 1 runs ---------------------------------------------------------------------------------------------------------
 
 def test_the_files_deploy_toml_installs_on_node_1_run_every_node_side_check(tmp_path):

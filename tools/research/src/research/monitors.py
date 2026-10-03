@@ -864,7 +864,12 @@ def _slug(s: str) -> str:
 
 
 def title(text: str) -> str:
-    return re.sub(r"[*_`]", "", text.splitlines()[0] if text else "")[:160]
+    return re.sub(r"[*_`<>]", "", text.splitlines()[0] if text else "")[:160]
+
+
+def esc(text: str) -> str:
+    """`text` for Slack: what a finding quotes (a lease's `who=<!channel>`) can't mention anyone or make a link."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def note(ev: dict, now: float) -> tuple[str, str]:
@@ -921,12 +926,12 @@ class AlertDir:
 
 
 def message(ev: dict, tag: Callable[[str], str] = lambda h: "@" + h) -> str:
-    """An event as one Slack post: the owners tagged, the alert, what to do."""
+    """An event as one Slack post: the owners tagged, the alert, what to do (all but the tags escaped)."""
     if ev["event"] == "clear":
-        return ev["text"]
+        return esc(ev["text"])
     sev = "[page] " if ev["severity"] == "page" else ""
-    return (f"{' '.join(tag(o) for o in ev['owners'])} {sev}{ev['text']}\n_What to do:_ {ev['action']}\n"
-            f"_monitor `{ev['monitor']}`, {ev['by']}_")
+    return (f"{' '.join(tag(o) for o in ev['owners'])} {sev}{esc(ev['text'])}\n_What to do:_ {esc(ev['action'])}\n"
+            f"_monitor `{esc(ev['monitor'])}`, {esc(ev['by'])}_")
 
 
 def webhook_post(url: str, text: str) -> None:
@@ -1294,8 +1299,8 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
                 link = api.call("chat.getPermalink", channel=alerts, message_ts=th["ts"]).get("permalink") or "#agent-alerts"
             except slack.SlackError:
                 link = "#agent-alerts"
-            th["pointer"] = slack._post(api, front, POSTER, f"{' '.join(tag(o) for o in others)} {title(ev['text'])} (alert: {link})",
-                                        route=(reg, routes), tags=("alert",))
+            th["pointer"] = slack._post(api, front, POSTER, f"{' '.join(tag(o) for o in others)} {esc(title(ev['text']))} "
+                                        f"(alert: {link})", route=(reg, routes), tags=("alert",))
         return th
     return post
 
