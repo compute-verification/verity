@@ -18,8 +18,6 @@
 #   3. summarize.py: out/<role>-k<K>/summary.json and out/summary.json
 # A staged config is kept under $HZ_CACHE/stage, keyed by its role, K, N, HZ_STAGE, the venv and every source stage.py
 # reads; a later run with the same key proves the kept files (stage-cache.json says which, stage.json their own staging).
-# The row units lower BitAnd_v1, E4m3ToF32_v1 and F32ToE2m1Sat_v1 through core3_scratch.py, a development binding: their
-# results are labelled 'core3 scratch'.
 # env: HZ_CONFIGS="row_a:256 row_b:256 tile:256"  HZ_N=16  HZ_MEM_GB (the job's --mem-gb)  HZ_RUNS=2  HZ_WARM=1
 #      HZ_CASES (selftest cases)  HZ_CACHE (build and stage cache dir)  FLOCK_PROVE / FLOCK_SELFTEST / FLOCK_VERIFY / HZ_PYTHON
 #      (prebuilt)  HZ_STAGE (stage.py's: fast, the default, or library)  HZ_STAGE_ONLY=1 (stage and keep, nothing else)
@@ -204,7 +202,7 @@ $(tail -1 "$O/lean-$tag.err" | cut -c1-160)"
 
 stage_config() {   # stage_config ROLE K TAG D O: D holds the config's staged files, from the stage cache or staged now
   local role=$1 k=$2 tag=$3 D=$4 O=$5 key S rc=0
-  key=$(tree_key benchmarks/pouw/hidden_zk/stage.py benchmarks/pouw/hidden_zk/fast_stage.py benchmarks/pouw/hidden_zk/core3_scratch.py \
+  key=$(tree_key benchmarks/pouw/hidden_zk/stage.py benchmarks/pouw/hidden_zk/fast_stage.py \
     benchmarks/pouw/hidden_zk/hash_scratch.py backends/flock/python packages/verity/src protocols/pouw/verity_pouw \
     protocols/pouw/tests/pouw_rows_vectors.py)
   S=${HZ_CACHE:-$W/cache}/stage/$tag-n$N-$HZ_STAGE-$(basename "$(dirname "$(dirname "$PY")")")-$key

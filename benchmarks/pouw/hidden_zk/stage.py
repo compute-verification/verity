@@ -16,10 +16,9 @@ public file's tail, an anchor the prover chose).
 `HZ_STAGE` (``fast``, the default, or ``library``): whether `fast_stage` patches the library first, for the same bytes in
 less time and memory; stage.json records which.
 
-DEVELOPMENT BINDING: core's BitAnd_v1, E4m3ToF32_v1 and F32ToE2m1Sat_v1 have no C-Flock piece on this branch, so the row
-units lower them through `core3_scratch`'s pieces; every result of a row unit staged here is labelled 'core3 scratch'. The
-PoUW word primitives Keccak-f is written in have none either, so the hiding tile lowers them through `hash_scratch`'s
-pieces, checked against their primitives first; its results are labelled 'hash scratch'."""
+DEVELOPMENT BINDING: the PoUW word primitives Keccak-f is written in have no C-Flock piece on this branch, so the hiding
+tile lowers them through `hash_scratch`'s pieces, checked against their primitives first; its results are labelled 'hash
+scratch'."""
 from __future__ import annotations
 
 import hashlib
@@ -91,10 +90,6 @@ def main() -> None:
     salt_key = hashlib.sha256(b"verity/pouw/hidden-zk/salts\0" + str(K).encode()).digest()
     rec: dict = {"role": ROLE, "k": K, "n": N, "staging": STAGE}
     if ROLE in ("row_a", "row_b"):
-        sys.path.insert(0, str(HERE))
-        import core3_scratch as K3
-        IL.PIECES.update(K3.PIECES)
-        rec["binding"] = "core3 scratch"
         shape = pc4.Shape(N, K, 1, tile=(1, 1)) if ROLE == "row_a" else pc4.Shape(1, K, N, tile=(1, 1))
         ctx = Context(part("salt"), Matmul(3, Shape(shape.m, shape.k, shape.n), 9), part("root_a"), part("root_b"))
         ta = TileAnchors.of(F.PearlC4("nvfp4"), ctx, shape)
