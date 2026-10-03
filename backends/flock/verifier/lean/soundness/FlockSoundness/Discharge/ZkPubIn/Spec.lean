@@ -56,10 +56,64 @@ theorem checkOwn_some {pi : HmIn.Ports} {pop : Public} {own : ByteArray}
           simpa using hx'
   · simp [he] at h
 
+private theorem getD_eq_getElem! {α : Type} [Inhabited α] (a : Array α) (i : ℕ) (d : α) (h : i < a.size) :
+    a.getD i d = a[i]! := by
+  simp [Array.getD, h, getElem!_pos]
+
+set_option maxHeartbeats 4000000 in
 /-- **`HmIn.parse`'s checks on a circuit with public input ports.** -/
 theorem parse_leavesPublic {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi)
     (he : pi.ports.isEmpty = false) : LeavesPublic c pi := by
-  sorry
+  unfold HmIn.parse at h
+  dsimp only at h
+  simp only [throw_bind'] at h
+  repeat' (first | walk_step | exact absurd ‹(throw _ : V _) = Except.ok _› (throw_ne_ok _ _))
+  · rename_i s _ _ _ _ _ _ w3 _ _ _ lv _ _ _ _ hmap hpk hsl hws _ hblk _ _ hrow
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    simp only [Bool.or_eq_true, Bool.and_eq_true, bne_iff_ne, ne_eq, decide_eq_true_eq, List.any_eq_true,
+      List.mem_range, not_or, not_exists, not_and, not_not, not_lt, not_le, ge_iff_le] at hmap
+    obtain ⟨hsz, hall⟩ := hmap
+    refine ⟨hsz, ?_, by simpa using hpk, by omega, by simpa using hws, ?_, ?_⟩
+    · intro u hu
+      obtain ⟨hs, hj⟩ := hall u hu
+      rw [getD_eq_getElem! _ _ _ (hsz ▸ hu)]
+      refine ⟨hs, fun j hjl => ?_⟩
+      obtain ⟨⟨h1, h2⟩, h3⟩ := hj j hjl
+      rw [getD_eq_getElem! _ _ _ hjl]
+      refine ⟨h1, h2, fun h0 => ?_⟩
+      rw [getD_eq_getElem! _ _ _ (hs ▸ hjl)]
+      exact h3 h0
+    · rw [← Array.forIn_toList] at hblk
+      refine list_forIn_each _ (fun b => _ ∧ _) (fun a s y hy => ?_) _ _ _ hblk
+      split at hy
+      · exact absurd hy (throw_ne_ok _ _)
+      · rename_i hc
+        simp only [pure, Except.pure, Except.ok.injEq] at hy
+        simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, not_lt, gt_iff_lt] at hc
+        exact ⟨⟨hc.1, hc.2⟩, _, hy.symm⟩
+    · intro u hu j hj hin hlp
+      rw [Std.Legacy.Range.forIn_eq_forIn_range'] at hrow
+      have hP := list_forIn_each _ (fun u => ∀ j < (c.leavesIn.getD u #[]).size,
+          (HmIn.words c ⟨s, w3, lv⟩).binSearchContains ((c.unit.inGroups.getD 0 default).col + j / 8) (· < ·) = true →
+            (lv[u]!)[j]! < 0 → (c.leavesIn.getD u #[])[j]! < 0) (fun a s y hy => ?_) _ _ _ hrow u
+        (by simpa [Std.Legacy.Range.size, List.mem_range'_1] using hu)
+      · have hl : j < (lv[u]!).size := (hall u hu).1 ▸ hj
+        dsimp only at hlp
+        rw [getD_eq_getElem! lv u _ (by omega), getD_eq_getElem! _ _ _ hl] at hlp
+        rw [getD_eq_getElem! _ _ _ hj]
+        exact hP j hj hin hlp
+      · split at hy
+        · exact absurd hy (throw_ne_ok _ _)
+        · rename_i _ hx
+          simp only [pure, Except.pure, Except.ok.injEq] at hy
+          refine ⟨fun j hj hin hlp => ?_, _, hy.symm⟩
+          have := List.find?_eq_none.1 (Option.eq_none_iff_forall_ne_some.2 hx) j (List.mem_range.2 hj)
+          simp only [Bool.and_eq_true, decide_eq_true_eq, not_and, ge_iff_le, not_le] at this
+          exact this ⟨hin, hlp⟩
+  · simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact absurd he (by decide)
 
 set_option maxHeartbeats 4000000 in
 /-- **What `Stmt.setupHidden` accepts with the verifier's public inputs**: a statement it returns on the verifier's own
