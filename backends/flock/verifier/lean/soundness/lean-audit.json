@@ -160,6 +160,11 @@
     "about": "Assumptions.Zk.RecordCustodyZK (live-verifier): the record flock-verify verify --zk reads is the one the verifier's coin server wrote for the live session, and its draw file the one flock-verify draw printed for the verifier's own draw (PROTOCOL.md §17.2: nothing in the record authenticates its writer)",
     "mentions": ["IO.FS.readFile", "IO.FS.writeFile"],
     "ack": []
+   },
+   "live-verifier-custody-tables": {
+    "about": "Assumptions.Zk.RecordCustodyZKJ (live-verifier): RecordCustodyZK at J tables, the record flock-verify verify --zk --session-tables J reads is the one the verifier's coin server wrote for the live session, and its draw file the one flock-verify draw printed for the verifier's own subset draw (PROTOCOL.md §17.2: nothing in the record authenticates its writer)",
+    "mentions": ["IO.FS.readFile", "IO.FS.writeFile"],
+    "ack": []
    }
   }
  },
@@ -4528,6 +4533,7 @@
    "assumptions": [],
    "type_hash": "8be091f3d95f07de4c7cf133faf6b65a369b2a05104e15ff0d23d66aafcea58e"
   },
+  "FlockSoundness.Discharge.Composed.drawOkZKJ_of_file": {},
   "FlockSoundness.Discharge.Composed.tagsOk_circuit967b8d06": {
    "signature": [
     "FlockSoundness.Discharge.Composed.tagsOk_circuit967b8d06 (I : FlockSoundness.Discharge.Exec.Inputs)",
@@ -4753,6 +4759,7 @@
    "assumptions": [],
    "type_hash": "32858bd5b389445c9b2b678842d71b75211cc0074f65e3039e94d6b20c76639f"
   },
+  "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody": {},
   "FlockSoundness.Discharge.Composed.zk_session_sound_custody": {},
   "FlockSoundness.Discharge.Const.Prog.instC_wire_input": {
    "signature": [
@@ -11045,7 +11052,6 @@
    "type_hash": "f7e115cd41fd17353112e2538f83cb14c8306506584e66399c19b404d0a998f5"
   },
   "FlockSoundness.Discharge.ZkLink.drawFileZK_of_toJson": {},
-  "FlockSoundness.Discharge.ZkLink.ofJson_toJson_drawOf": {},
   "FlockSoundness.Discharge.ZkLink.drawOkZK_of_exec": {
    "signature": [
     "FlockSoundness.Discharge.ZkLink.drawOkZK_of_exec {n : Nat} (I : FlockSoundness.Discharge.Exec.Inputs)",
@@ -11124,6 +11130,7 @@
    "assumptions": [],
    "type_hash": "8741ae24f76428a1dfdd78830ab4f2440beae013b9862f540bbce0ffeaa98aeb"
   },
+  "FlockSoundness.Discharge.ZkLink.ofJson_toJson_drawOf": {},
   "FlockSoundness.Discharge.ZkLink.sessionZC_eq": {
    "signature": [
     "FlockSoundness.Discharge.ZkLink.sessionZC_eq {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
