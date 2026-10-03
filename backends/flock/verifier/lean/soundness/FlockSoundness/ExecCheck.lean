@@ -530,6 +530,9 @@ theorem check_facts_typed {c : Circuit} {tags : Tags} {ls : Lean.Json} {tb : Typ
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) root nOut jp1 at h)
   obtain ⟨hpv1, h⟩ := ite_throw_ok' h
   simp (config := { zeta := false }) only [jp1] at h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpg at h)
+  obtain ⟨-, h⟩ := ite_throw_ok' h
+  simp (config := { zeta := false }) only [jpg] at h
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp2 at h)
   obtain ⟨hio, h⟩ := ite_throw_ok' h
   simp (config := { zeta := false }) only [jp2] at h

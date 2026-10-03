@@ -1356,8 +1356,8 @@ digest's leading tag is the statement id, `verity/flock-circuit/types`, as the p
     naming a layout the file lacks is refused.
   - **Derived, never stated:** `units_per_vu` (1), the leaf maps (none), the output circuit (the root) and the wires (the
     rows' chains). META stating any of them, or `lookups`, `leaf_cuts` or `unit_log`, is refused.
-  - **Checks** (`check_typed`'s): the root's ports are the rows' words and the output words, 16 bits each, in one
-    output group. Each placed layout has one slot per part, of its range's size. The root's slot has a forced-zero row.
+  - **Checks** (`check_typed`'s): the roots (`vus_per_block`, one root per VU) are a power of two, so not 0. The root's
+    ports are the rows' words and the output words, 16 bits each, in one output group. Each placed layout has one slot per part, of its range's size. The root's slot has a forced-zero row.
     The rows' circuits (`sha512x3`, `hm96`, found by name) come after the root and the placed layouts, so no part is
     one of them.
   - **Δ:** first the flat statement's entries. Then, per VU:

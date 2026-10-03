@@ -249,15 +249,17 @@ private def ctx := "circuit META"
 private def intLists (j : Json) (k : String) : V (Array (Array Int)) := do
   (← J.arr j k ctx).mapM fun u => do (← J.asArr u s!"{ctx}.{k}").mapM fun x => J.asInt x s!"{ctx}.{k}"
 
-/-- #273's `check_typed`: the instance's root one slot per VU, its ports the rows' words and the output words (16 bits each,
-one output group); each placed layout's circuit one slot of its range per part; a forced-zero row in the root's slot; the
-pinned dummy values and leaf scheme. -/
+/-- #273's `check_typed`: the instance's root one slot per VU, a power of two of them (`vus_per_block`); its ports the
+rows' words and the output words (16 bits each, one output group); each placed layout's circuit one slot of its range per
+part; a forced-zero row in the root's slot; the pinned dummy values and leaf scheme. -/
 def checkTyped (c : Circuit) (t : TypedBlock) (tags : Tags) (leafScheme : Json) : V Unit := do
   -- the rows' circuits are found by name, and the placed layouts are named by digest: no part may be one of them
   if c.shaNet ≤ t.rangeLogs.size || c.hmNet ≤ t.rangeLogs.size then throw "the rows' circuits are among the template's"
   let root := c.unit
   let nOut := c.outWords
   if c.perVu.getD c.unitNet 0 != 1 then throw "the instance's root is not one slot per VU"
+  if !isPow2 (c.ranges.filter (·.kind == Kind.net c.unitNet))[0]!.count then
+    throw "the instance's roots (vus_per_block) are not a power of two"
   if t.ins != c.ports.map (fun p => (p.words, 16)) || t.outs != c.outPorts.map (fun p => (p.2, 16)) then
     throw "the instance type's ports are not the rows' words and the output words"
   if root.outGroups.size != 1 || (root.outGroups.getD 0 default).bits.foldl (· + ·) 0 != 16 * nOut || !isPow2 (16 * nOut) then
