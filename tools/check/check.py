@@ -49,8 +49,10 @@ use):
                     and pinned by hash (`backends/flock/verifier/upstream.json`), when the run has it; skipped by name without
                     it.  `research merge` requires it for a change under backends/flock/ (`tool.py`)
     lean-changed    at once with the lean group: `lake build` of each Lake package whose audit misses, on a tree this machine
-                    keeps built (`lean_changed.py`), so a module that no longer compiles ends the run in minutes, not when the
-                    audit's cold build reaches it; it skips what it can't build here and vouches for nothing: the audit decides
+                    keeps built (`lean_changed.py`), then the audit's judgment of its pins on that build without the kernel
+                    replay, so a module that no longer compiles or a pinned record a merge left stale ends the run in minutes,
+                    not when the audit's cold build reaches it; it skips what it can't build or read here and vouches for
+                    nothing: the audit decides
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run), each a hit only on identical inputs:
 
