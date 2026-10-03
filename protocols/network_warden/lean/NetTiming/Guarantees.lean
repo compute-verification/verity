@@ -272,12 +272,14 @@ def EncardDecodableLeConstantRate : Prop :=
     (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z n) = z),
     Zs.encard ≤ ((Fintype.card Ac * ss.size ^ min W m * D ^ n : ℕ) : ℕ∞)
 
-/-- **Seven bits per window, over a temporal unit.** Take `m` whole windows of `T` buckets within the `W` windows with
-advice (`hn` is `EncardAccSeqsLeConstantRateWindows`'s `n ≤ W·T` at the horizon `n = m·T`). The constant-rate
-Program's accepted sequences of length `m·T` with jitter below `D` number at most `#Ac · (#Σ_sync · D^T)^m`: the
-content advice's `A_c` once, then `log2 #Σ_sync + T·log2 D` bits per window, which is 7 bits at 16 × 8 sync values under
-J (`D = 1`). The factor is the bound's, not a count per window: content advice and an earlier window's sync can first
-show in a later window, so one window may continue a given prefix in more than `#Σ_sync · D^T` ways. -/
+/-- **Seven bits per window, over the run's first `m` windows.** Take the run's first `m` whole windows of `T` buckets
+within the `W` windows with advice (`hn` is `EncardAccSeqsLeConstantRateWindows`'s `n ≤ W·T` at the horizon `n = m·T`).
+The constant-rate Program's accepted sequences of length `m·T` with jitter below `D` number at most
+`#Ac · (#Σ_sync · D^T)^m`: the content advice's `A_c` once, then `log2 #Σ_sync + T·log2 D` bits per window, which is 7
+bits at 16 × 8 sync values under J (`D = 1`). The factor is the bound's, not a count per window: content advice and an
+earlier window's sync can first show in a later window, so one window may continue a given prefix in more than
+`#Σ_sync · D^T` ways. So the bound is cumulative from the run's first window: a temporal unit that starts later is not
+bounded by its own windows. -/
 def EncardAccSeqsLeConstantRatePerWindow : Prop :=
   ∀ {L K S : ℕ} {In Ac : Type} [Fintype Ac] (T W : ℕ) (ss : SyncSet)
     (frames : List In → Ac → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In) (m D : ℕ)
@@ -286,7 +288,7 @@ def EncardAccSeqsLeConstantRatePerWindow : Prop :=
       ((Fintype.card Ac * (ss.size * D ^ T) ^ m : ℕ) : ℕ∞)
 
 /-- **Seven bits per window, through the wire (W2 and J).** `EncardDecodableLeConstantRate` at the horizon of `m` whole
-windows, `n = m·T`: a decoder of the wire recovers at most `#Ac · (#Σ_sync · D^T)^m` secrets, so over a temporal unit of
+windows, `n = m·T`: a decoder of the wire recovers at most `#Ac · (#Σ_sync · D^T)^m` secrets, so over the run's first
 `m` windows a covert sender inside X moves at most `A_c + m·(log2 #Σ_sync + T·log2 D)` bits through egress timing. -/
 def EncardDecodableLeConstantRatePerWindow : Prop :=
   ∀ {L K S : ℕ} {Z In Act Wire Ac : Type} [Fintype Ac]
@@ -358,8 +360,8 @@ def EncardIngressDecodableLeContents : Prop :=
     (dec : List Wire → Msg) (hdec : ∀ m ∈ Ms, dec (I.wireRun m n) = m),
     Ms.encard ≤ Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞)
 
-/-- **The K charge's unit: `T·log2(r ℓ + 1)` bits per ingress link-window.** `EncardIngressObsDecodableLe` over a
-temporal unit of `m` whole windows of `T` buckets, the horizon `n = m·T`: for one content assignment `c`, at most
+/-- **The K charge's unit: `T·log2(r ℓ + 1)` bits per ingress link-window.** `EncardIngressObsDecodableLe` over the
+first `m` whole windows of `T` buckets, the horizon `n = m·T`: for one content assignment `c`, at most
 `(∏_ℓ (r ℓ + 1)^T · D^T)^m` messages. Each link-window contributes the factor `(r ℓ + 1)^T`, its `T·log2(r ℓ + 1)` bits,
 and each window `D^T` of jitter, 1 under J. -/
 def EncardIngressObsDecodableLePerWindow : Prop :=
@@ -372,9 +374,9 @@ def EncardIngressObsDecodableLePerWindow : Prop :=
     (dec : List (Obs L K S) → Msg) (hdec : ∀ msg ∈ Ms, dec (I.obsRun msg (m * T)) = msg),
     Ms.encard ≤ ((((∏ ℓ, (r ℓ + 1) ^ T) * D ^ T) ^ m : ℕ) : ℕ∞)
 
-/-- **Content plus timing, per link-window.** `EncardIngressObsDecodableLeContents` over `m` whole windows of `T`
-buckets: at most `#Cs · (∏_ℓ (r ℓ + 1)^T · D^T)^m` messages, `log2 #Cs` bits of content plus `T·Σ_ℓ log2(r ℓ + 1)` bits
-of timing and `T·log2 D` of jitter per window. -/
+/-- **Content plus timing, per link-window.** `EncardIngressObsDecodableLeContents` over the first `m` whole windows of
+`T` buckets: at most `#Cs · (∏_ℓ (r ℓ + 1)^T · D^T)^m` messages, `log2 #Cs` bits of content plus
+`T·Σ_ℓ log2(r ℓ + 1)` bits of timing and `T·log2 D` of jitter per window. -/
 def EncardIngressObsDecodableLeContentsPerWindow : Prop :=
   ∀ {L K S : ℕ} {Msg In Act Wire : Type}
     (I : Interaction L K S Msg In Act Wire) (T m D : ℕ) (r : Fin L → ℕ)

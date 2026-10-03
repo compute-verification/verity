@@ -26,7 +26,8 @@ NetTiming/SecurityProofs/Advice.lean     Theorem 3 (the 2^A cap, one clock-sync 
 NetTiming/SecurityProofs/Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap, causality, seven bits
                                          per window opened, the composed statement) and its witnesses
 NetTiming/SecurityProofs/Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from inside X)
-NetTiming/SecurityProofs/PerWindow.lean  the last two over `m` whole windows: the factor per window and per link-window
+NetTiming/SecurityProofs/PerWindow.lean  the last two over the run's first `m` whole windows: the factor per window and
+                                         per link-window
 NetTiming/SecurityProofs/Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 lean-audit.json                the policy and pin records for tools/lean/audit.py
@@ -158,12 +159,15 @@ lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The wit
 ## Modelling choices a statement reviewer checks
 
 1. **Steps are buckets across all of ∂X.** The note states its bounds per link-window. The guarantees count steps, and
-   the per-window ones read the horizon of `m` whole windows of `T` buckets, `n = m·T`, each with its parent's
-   hypotheses at that horizon and no other: the shipped schedule's bound is `#Ac · (#Σ_sync · D^T)^m`
-   (`EncardAccSeqsLeConstantRatePerWindow`, `EncardDecodableLeConstantRatePerWindow`), and the ingress bound
-   `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment (`EncardIngressObsDecodableLePerWindow`, and its `Contents`
-   version). The factor per window is the bound's, not a count per window: content advice and an earlier window's sync
-   can first show in a later window, so one window may continue a given prefix in more than `#Σ_sync · D^T` ways.
+   Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read the horizon of the run's first `m` whole
+   windows of `T` buckets, `n = m·T`, each with its parent's hypotheses at that horizon and no other: the shipped
+   schedule's bound is `#Ac · (#Σ_sync · D^T)^m` (`EncardAccSeqsLeConstantRatePerWindow`,
+   `EncardDecodableLeConstantRatePerWindow`), and the ingress bound `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment
+   (`EncardIngressObsDecodableLePerWindow`, and its `Contents` version). The egress factor per window is the bound's,
+   not a count per window: content advice and an earlier window's sync can first show in a later window, so one window
+   may continue a given prefix in more than `#Σ_sync · D^T` ways. So the egress bound is cumulative from the run's
+   first window, and a temporal unit that starts later is not bounded by its own windows. Ingress is not affected:
+   `Packed`, `Allocated` and `JitterBounded` bound every step's branching whatever came before.
 2. **The Program reads ingress up to and including step t.** The note's W1 lag allows only ingress before t. This is
    more permissive, so the bounds cover more Programs.
 3. **Theorem 3 counts all accepted sequences,** not only those a run produces, which makes it stronger and needs no
@@ -193,7 +197,8 @@ The ingress bound adds these:
     and W4 hold for every action, faults included, and complete statuses carry nothing.
 11. **One allocation per link, one bucket width.** Link `ℓ` has allocation `r ℓ` (`Allocated`) within the shared slot
     count `S`, and every link shares the step, a bucket of ∂X. Ingress links with different bucket widths are not
-    modelled. Over `m` whole windows each link-window contributes `(r ℓ + 1)^T` (`EncardIngressObsDecodableLePerWindow`).
+    modelled. Over the first `m` whole windows each link-window contributes `(r ℓ + 1)^T`
+    (`EncardIngressObsDecodableLePerWindow`).
 12. **No Program, no clock.** The bound reads no Program and no advice: the outside sender chooses when frames arrive,
     so no clock pins ingress timing. Jitter on the inward release adds `D^n` (J, `D = 1` when tested ideal). W3's frame
     length and the FIFO rule are not used; the FIFO warden attains the bound (`EncardFifoGrids`, read for the ingress
