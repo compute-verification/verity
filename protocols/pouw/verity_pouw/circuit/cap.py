@@ -147,9 +147,12 @@ class _Cmp:
     def le(self, x, y):
         e = self.e
         both, other, zz = self._pair(x, y)
-        le_xy = self._once(("le", self._key(x), self._key(y)), lambda: e.call(I32Le, x, y))
-        le_yx = self._once(("le", self._key(y), self._key(x)), lambda: e.call(I32Le, y, x))
-        return _or(e, _and(e, both, le_yx), _and(e, other, _or(e, le_xy, zz)))
+
+        def under(when, u, v, then):
+            if isinstance(when, int) and not when:
+                return 0
+            return _and(e, when, then(self._once(("le", self._key(u), self._key(v)), lambda: e.call(I32Le, u, v))))
+        return _or(e, under(both, y, x, lambda c: c), under(other, x, y, lambda c: _or(e, c, zz)))
 
     def zero(self, x):
         return self.facts(x)[1]
