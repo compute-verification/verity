@@ -418,3 +418,59 @@ def test_a_real_pouw_unit_is_staged_and_composed_on_its_rows(m, tmp_path):
                             str(tmp_path / "circuit.txt"), "--public", str(tmp_path / "pub.bin"), "--coins", coins], capture_output=True, text=True)
         assert p.returncode == 0, p.stdout + p.stderr
         assert json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"] == want[coins], (m, coins)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_pouw_anchors_are_public_input_ports_held_to_the_verifiers_recomputation(tmp_path):
+    """PoUW's anchors (`e`, `fa`, `fb`: verifier randomness from the scheme's public seeds) staged by `stage_unit` as public
+    input ports (META ``public_inputs`` named by `anchors.public_ports`, each value in its own u16 word as
+    `TileAnchors.regions` lays it out), not rows: the Lean verifier builds the statement with PoUW's own `--public-inputs`
+    file (`TileAnchors.public_inputs`), and refuses that file with a wrong anchor, and a public file whose anchor the prover
+    chose.  A stand-in unit with Pc4RowA's anchor parameters (it copies ``x``) keeps the test off PoUW's pieces; the real
+    unit's run is the lane's record."""
+    from verity.ir.defs import CompositeDefinition, bind
+    from verity.ir.types import Array, Value
+    from verity_flock import class_statement as CS
+    from verity_pouw.circuit.anchors import public_ports
+
+    spec = importlib.util.spec_from_file_location("pouw_regions_vectors", POUW_TESTS / "pouw_regions_vectors.py")
+    RV = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(RV)
+    t = RV.anchors("pc4-64", "pc4", 64, None)
+    types = dict(pc4.templates(64)["row_a"].signature()[0])
+    X = Array(128, Value(16))
+    d = bind(CompositeDefinition("PouwAnchorStandIn", 1, (), lambda S: ((("x", X), ("e", types["e"]), ("fa", types["fa"]), ("fb", types["fb"])), X),
+                                 lambda B, S, x, e, fa, fb: x, register=False))
+    indexes = (1, 0)
+    regions = [t.regions("row_a", i) for i in indexes]
+    rows = {"x": np.arange(256, dtype=np.uint16).reshape(2, 128), **{p: np.array([r[p] for r in regions], dtype=np.uint16) for p in ("e", "fa", "fb")}}
+    in_rows = [("x", SCHEMA_HM96_SHA512_ROW_V2, 2048, ["x"])]
+    own = tmp_path / "public-inputs.bin"
+    own.write_bytes(t.public_inputs("row_a", indexes))
+
+    def stage(sub, rows):
+        CS.stage_unit(d, "unit/pouw-anchor-stand-in", in_rows, [(SCHEMA_HM96_SHA512_ROW_V2, (0,))], rows, tmp_path / sub, b"k" * 32,
+                      public_inputs=public_ports(t.shape, "row_a"))
+        return tmp_path / sub
+
+    def statement(d, own):
+        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit", "--circuit",
+                               str(d / "circuit.txt"), "--public", str(d / "pub.bin"), "--public-inputs", str(own)], capture_output=True, text=True)
+
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    honest = stage("honest", rows)
+    meta = json.loads((honest / "circuit.txt").read_text().split("\n", 2)[1][5:])
+    assert [p["port"] for p in meta["public_inputs"]] == ["e", "fa", "fb"] and [p[0] for p in meta["ports"]] == ["x", "o0"]
+    p = statement(honest, own)
+    assert p.returncode == 0, p.stdout + p.stderr
+
+    wrong = bytearray(own.read_bytes())
+    wrong[-1] ^= 1
+    (tmp_path / "wrong.bin").write_bytes(bytes(wrong))
+    p = statement(honest, tmp_path / "wrong.bin")
+    assert p.returncode != 0 and "public input fb: word" in p.stdout + p.stderr and "not the verifier's own recomputation" in p.stdout + p.stderr
+
+    chosen = stage("chosen", dict(rows, e=rows["e"] ^ np.uint16(1)))
+    p = statement(chosen, own)
+    assert p.returncode != 0 and "public input e: word 0 of instance 0 is not the verifier's own recomputation" in p.stdout + p.stderr
