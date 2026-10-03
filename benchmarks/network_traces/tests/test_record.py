@@ -4,6 +4,7 @@ server, no clock."""
 
 from __future__ import annotations
 
+import gc
 import importlib.util
 import json
 import sys
@@ -245,9 +246,22 @@ def test_the_offline_loop_admits_on_time_stamps_each_step_and_commits_one_run_pe
     assert [n for _, n in r["chunks"]] == [1, 1, 1] and r["chunks"][0][0] > r["admit_ms"]
     assert [c["t_ms"] // 60_000 for c in commits] == [0, 1, 2] and commits[0]["steps"] == 2
     assert com.calls[:6] == ["reset", "install", "finalize", "uninstall", "reset", "install"]
-    assert sum(s["tokens"] for s in steps) == 270
+    assert sum(s["tokens"] for s in steps) == 270 and all(s["gc_ms"] >= 0 for s in steps + commits)
     com.errors.append("worker step 7: ImportError('no research')")
     t0 = now[0] + 5
     with pytest.raises(RuntimeError, match="no research"):
         rec.offline_replay(eng, com, [q | {"rid": "again." + q["rid"]} for q in reqs], t0, t0 + 200,
                            out.append, steps.append, commits.append)
+    assert not any(isinstance(c, rec.Collections) for c in gc.callbacks)
+
+
+def test_collections_add_up_each_collection_and_take_resets(monkeypatch) -> None:
+    times = iter([1.0, 1.25, 2.0, 2.5])
+    monkeypatch.setattr(rec, "clock", lambda: next(times))
+    c = rec.Collections()
+    c("start", {"generation": 2})
+    c("stop", {"generation": 2})
+    c("start", {"generation": 0})
+    assert c.take() == 0.25
+    c("stop", {"generation": 0})
+    assert c.take() == 0.5 and c.take() == 0.0

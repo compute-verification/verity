@@ -15,16 +15,18 @@ only load the engine. The trace starts at t0 and keeps whole windows.
 
 **Modes.** `plaintext` is vLLM's stock server. `commit` serves the same load from vLLM's engine inside the recorder, built
 as the Commit stage builds it (batch-invariant, eager), with `native_collect`, the served committer, hashing every Call
-output of every step on the GPU; each window is one commitment run, finalized at the window's end. `bi-eager` is that engine without
-the committer. Both stamp the tokens each engine step adds when the step returns, and add `steps.jsonl` (each step's end
-and duration) and, for `commit`, `commits.jsonl` (each run's finalization stall). A step or a finalization that takes
-`STALL_S` is hung: every thread's stack goes to stderr and the job exits, rather than holding its GPU to the lease's end.
+output of every step on the GPU; each window is one commitment run, finalized at the window's end. `bi-eager` is that
+engine without the committer. Both stamp the tokens each engine step adds when the step returns, and add `steps.jsonl`
+(each step's end, duration and time in garbage collection) and, for `commit`, `commits.jsonl` (each run's finalization
+stall). Their monitor runs in a child process, so that the engine's own pauses stay in the trace. A step or a
+finalization that takes `STALL_S` is hung: every thread's stack goes to stderr and the job exits, rather than holding
+its GPU to the lease's end.
 
 **What a job writes** to `--out`:
 - `requests.jsonl`, one line per request as it finishes, so an evicted job keeps what it finished;
 - `samples.jsonl`, every 2 s: the host's load average, the CPU use (ours and everyone else's) of the NUMA nodes of the
   GPU and of the job's CPUs, the GPU's utilisation, clocks and compute processes, and the longest stall of a 10 ms
-  heartbeat thread and of the client's event loop;
+  heartbeat thread and of the client's event loop (the monitor's own, in the offline modes);
 - `meta.json`: host, GPU, CPUs, versions, model, server arguments, the mix and t0;
 - `server.log`, and at the end `trace.json` (the calibration format, `verity_network_warden.calibration`) and
   `summary.json`.
@@ -49,8 +51,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import faulthandler
+import gc
 import json
 import math
+import multiprocessing
 import os
 import random
 import resource
@@ -159,6 +163,24 @@ class JsonLines:
 
     def close(self) -> None:
         self.fh.close()
+
+
+class Collections:
+    """A `gc.callbacks` entry that adds up the time this interpreter spends collecting garbage; `take()` returns the
+    time since the last take. One collection runs at a time, under the GIL, so starts and stops pair."""
+
+    def __init__(self) -> None:
+        self.s = self.began = 0.0
+
+    def __call__(self, phase: str, info: dict) -> None:
+        if phase == "start":
+            self.began = clock()
+        else:
+            self.s += clock() - self.began
+
+    def take(self) -> float:
+        s, self.s = self.s, 0.0
+        return s
 
 
 def request_body(model: str, q: dict) -> bytes:
@@ -279,72 +301,79 @@ def offline_replay(eng, com, requests: list[dict], t0: float, drain_until: float
     if com is not None:
         com.reset()
         com.install()
-    while (now := clock()) < drain_until and (pending or live):
-        if stop.is_set():
-            ended["stopped_ms"] = ms(now - t0)
-            break
-        while pending and t0 + pending[-1]["at_s"] <= now:
-            q = pending.pop()
-            live[q["rid"]] = request_record(q, request_body("served", q)) | {
-                "send_ms": ms(q["at_s"]), "admit_ms": ms(now - t0), "chunks": [], "n_tokens": 0}
-            core.add_request(q["rid"], {"prompt_token_ids": q["prompt"]},
-                             SamplingParams(max_tokens=q["max_tokens"], temperature=0.0, ignore_eos=True))
-        if now >= next_run:
-            faulthandler.dump_traceback_later(STALL_S, exit=True)
-            rc = com.finalize()
-            faulthandler.cancel_dump_traceback_later()
-            done = clock()
-            com.uninstall()
-            com.reset()
-            com.install()
-            commits({"t_ms": ms(now - t0), "finalize_ms": ms(done - now), "restart_ms": ms(clock() - done),
-                     "steps": len(rc.steps), "bytes": sum(s.n_bytes for s in rc.steps),
-                     "root_ready_delay_ms": ms(rc.root_ready_delay_s), "run_root": rc.run_root.hex(),
-                     "errors": rc.extra.get("errors_n")})
-            next_run += window_s
-            continue
-        if not core.has_unfinished_requests():
-            stop.wait(max(0.0, min(t0 + pending[-1]["at_s"] if pending else drain_until, next_run) - clock()))
-            continue
-        faulthandler.dump_traceback_later(STALL_S, exit=True)
-        outs = core.step()
-        faulthandler.cancel_dump_traceback_later()
-        t = clock()
-        if com is not None and com.errors:
-            raise RuntimeError(f"the committer failed a step, keeping its staging block: {com.errors[0]}")
-        n = 0
-        for o in outs:
-            rec = live.get(external_id(o.request_id))
-            if rec is None:
+    paused = Collections()
+    gc.callbacks.append(paused)
+    try:
+        while (now := clock()) < drain_until and (pending or live):
+            if stop.is_set():
+                ended["stopped_ms"] = ms(now - t0)
+                break
+            while pending and t0 + pending[-1]["at_s"] <= now:
+                q = pending.pop()
+                live[q["rid"]] = request_record(q, request_body("served", q)) | {
+                    "send_ms": ms(q["at_s"]), "admit_ms": ms(now - t0), "chunks": [], "n_tokens": 0}
+                core.add_request(q["rid"], {"prompt_token_ids": q["prompt"]},
+                                 SamplingParams(max_tokens=q["max_tokens"], temperature=0.0, ignore_eos=True))
+            if now >= next_run:
+                faulthandler.dump_traceback_later(STALL_S, exit=True)
+                rc = com.finalize()
+                faulthandler.cancel_dump_traceback_later()
+                done = clock()
+                com.uninstall()
+                com.reset()
+                com.install()
+                commits({"t_ms": ms(now - t0), "finalize_ms": ms(done - now), "restart_ms": ms(clock() - done),
+                         "steps": len(rc.steps), "bytes": sum(s.n_bytes for s in rc.steps),
+                         "root_ready_delay_ms": ms(rc.root_ready_delay_s), "run_root": rc.run_root.hex(),
+                         "errors": rc.extra.get("errors_n"), "gc_ms": ms(paused.take())})
+                next_run += window_s
                 continue
-            if (k := len(o.outputs[0].token_ids) - rec["n_tokens"]) > 0:
-                rec["chunks"].append([ms(t - t0), k])
-                rec["n_tokens"] += k
-                n += k
-            if o.finished:
-                rec["ok"] = rec["n_tokens"] == rec["max_tokens"]
-                sink(live.pop(rec["rid"]))
-        steps({"t_ms": ms(t - t0), "dur_ms": ms(t - now), "running": len(live), "tokens": n})
+            if not core.has_unfinished_requests():
+                stop.wait(max(0.0, min(t0 + pending[-1]["at_s"] if pending else drain_until, next_run) - clock()))
+                continue
+            faulthandler.dump_traceback_later(STALL_S, exit=True)
+            outs = core.step()
+            faulthandler.cancel_dump_traceback_later()
+            t = clock()
+            if com is not None and com.errors:
+                raise RuntimeError(f"the committer failed a step, keeping its staging block: {com.errors[0]}")
+            n = 0
+            for o in outs:
+                rec = live.get(external_id(o.request_id))
+                if rec is None:
+                    continue
+                if (k := len(o.outputs[0].token_ids) - rec["n_tokens"]) > 0:
+                    rec["chunks"].append([ms(t - t0), k])
+                    rec["n_tokens"] += k
+                    n += k
+                if o.finished:
+                    rec["ok"] = rec["n_tokens"] == rec["max_tokens"]
+                    sink(live.pop(rec["rid"]))
+            steps({"t_ms": ms(t - t0), "dur_ms": ms(t - now), "running": len(live), "tokens": n, "gc_ms": ms(paused.take())})
+    finally:
+        gc.callbacks.remove(paused)
     ended["unfinished"] = len(live)
     if com is not None:
         com.uninstall()
     return ended
 
 
-def own_pids() -> set[int]:
+def own_pids(root: int | None = None) -> set[int]:
     import psutil
 
-    me = psutil.Process()
+    me = psutil.Process(root)
     return {me.pid, *(c.pid for c in me.children(recursive=True))}
 
 
 class Monitor(threading.Thread):
     """Every SAMPLE_S: load, the CPU use of `cpus` (ours and the rest's) and of the job's own CPUs, the GPU's state and
-    compute processes, and the longest heartbeat and event-loop stalls since the last sample."""
+    compute processes, and the longest heartbeat and event-loop stalls since the last sample. In a child process
+    (`watch`), `root` is the recorder's pid: the job's processes are its tree, and the monitor stops when it exits."""
 
-    def __init__(self, sink, gpu: dict, cpus: list[int], stall: dict):
+    def __init__(self, sink, gpu: dict, cpus: list[int], stall: dict, root: int | None = None, halt=None):
         super().__init__(daemon=True)
-        self.sink, self.gpu, self.cpus, self.stall, self.halt = sink, gpu, cpus, stall, threading.Event()
+        self.sink, self.gpu, self.cpus, self.stall, self.root = sink, gpu, cpus, stall, root
+        self.halt = halt if halt is not None else threading.Event()
 
     def heartbeat(self) -> None:
         while not self.halt.is_set():
@@ -367,7 +396,7 @@ class Monitor(threading.Thread):
             """CPU seconds our processes used since the last call, summed per process: one that exits takes its
             unread time with it, one that starts counts from zero."""
             seen, total = {}, 0.0
-            for pid in own_pids():
+            for pid in own_pids(self.root):
                 try:
                     c = procs.setdefault(pid, psutil.Process(pid)).cpu_times()
                 except psutil.Error:
@@ -390,14 +419,14 @@ class Monitor(threading.Thread):
 
         prev_t, (prev_busy, prev_total, prev_abusy, prev_atotal) = clock(), numa()
         own_cpu_s()
-        while not self.halt.wait(SAMPLE_S):
+        while not self.halt.wait(SAMPLE_S) and (self.root is None or os.getppid() == self.root):
             try:
                 t, (busy, total, abusy, atotal), own = clock(), numa(), own_cpu_s()
                 span = max(1e-9, total - prev_total)
                 ncpu = len(self.cpus)
                 others = max(0.0, (busy - prev_busy) - own) / span
                 pids = {p.pid: p.usedGpuMemory for p in pynvml.nvmlDeviceGetComputeRunningProcesses(mine)}
-                ours = own_pids()
+                ours = own_pids(self.root)
                 util = pynvml.nvmlDeviceGetUtilizationRates(mine)
                 sample = {
                     "mono": t, "dt_s": round(t - prev_t, 3), "load": list(os.getloadavg()),
@@ -420,6 +449,17 @@ class Monitor(threading.Thread):
             self.sink(sample)
             self.stall["hb"] = self.stall["loop"] = 0.0
             prev_t, prev_busy, prev_total, prev_abusy, prev_atotal = t, busy, total, abusy, atotal
+
+
+def watch(path: Path, gpu: dict, cpus: list[int], root: int, halt) -> None:
+    """The offline modes' monitor, in a child process: their engine shares the recorder's interpreter, and its own
+    pauses (a garbage collection, a step holding the GIL) are the served system's timing, which a heartbeat in that
+    interpreter would take for a frozen host. A stopped scope stops this process too."""
+    samples = JsonLines(path)
+    try:
+        Monitor(samples, gpu, cpus, {"hb": 0.0, "loop": 0.0}, root=root, halt=halt).run()
+    finally:
+        samples.close()
 
 
 def cpulist(text: str) -> list[int]:
@@ -534,9 +574,16 @@ def run(args: argparse.Namespace) -> int:
         meta["server_argv"] = server_argv[1:]
     (out / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
     stall = {"hb": 0.0, "loop": 0.0}
-    samples, requests = JsonLines(out / "samples.jsonl"), JsonLines(out / "requests.jsonl")
+    requests = JsonLines(out / "requests.jsonl")
     steps, commits = (JsonLines(out / "steps.jsonl"), JsonLines(out / "commits.jsonl")) if offline else (None, None)
-    monitor = Monitor(samples, meta["gpu"], meta["watched"], stall)
+    if offline:
+        spawn = multiprocessing.get_context("spawn")
+        samples, halt = None, spawn.Event()
+        monitor = spawn.Process(target=watch, args=(out / "samples.jsonl", meta["gpu"], meta["watched"], os.getpid(), halt),
+                                daemon=True)
+    else:
+        samples, halt = JsonLines(out / "samples.jsonl"), threading.Event()
+        monitor = Monitor(samples, meta["gpu"], meta["watched"], stall, halt=halt)
     monitor.start()
     signal.signal(signal.SIGTERM, evicted)
     _, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
@@ -568,9 +615,11 @@ def run(args: argparse.Namespace) -> int:
         ended["stopped_ms"] = ms(clock() - meta.get("t0_mono", clock()))
     finally:
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
-        monitor.halt.set()
+        halt.set()
         if server is not None:
             stop_server(server)
+        if offline:
+            monitor.join(SAMPLE_S + 30)
         for f in (requests, samples, steps, commits):
             if f is not None:
                 f.close()
