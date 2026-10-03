@@ -1340,6 +1340,227 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     assert round_().returncode == 0
 
 
+# a stand-in kubectl: a created n1-custody Job runs its command at once, against the fs vault KVAULT names (the Secret's R2)
+FAKE_KUBECTL = '''
+import json, os, subprocess, sys
+from pathlib import Path
+jobs, log, a = Path(os.environ["KSTATE"]), Path(os.environ["KLOG"]), sys.argv[1:]
+with log.open("a") as f:
+    f.write("kubectl " + " ".join(a) + "\\n")
+if a[:2] == ["delete", "job"]:
+    (jobs / a[2]).unlink(missing_ok=True)
+elif a[:3] == ["create", "-f", "-"]:
+    job = json.load(sys.stdin)
+    name, spec = job["metadata"]["name"], job["spec"]["template"]["spec"]
+    with log.open("a") as f:
+        f.write(f"created {name}\\n")
+    rc, out = 0, ""
+    if name.startswith("n1-custody-"):
+        cmd = spec["containers"][0]["command"]
+        if os.environ.get("FAIL_RUN") and os.environ["FAIL_RUN"] in name:
+            rc, out = 1, "Error: boom\\n"
+        else:
+            p = subprocess.run(["bash", "-c", cmd[5].replace("HOME=/tmp", "HOME=" + os.environ["KHOME"])], capture_output=True,
+                               text=True, stdin=subprocess.DEVNULL, env={**os.environ, "RESEARCH_STORE_CONFIG": os.environ["KVAULT"]})
+            rc, out = p.returncode, p.stdout + p.stderr
+    (jobs / name).write_text(json.dumps({"job": job, "rc": rc, "out": out}))
+elif a[:2] == ["get", "job"]:
+    if not (jobs / a[2]).exists():
+        sys.exit(f'Error from server (NotFound): jobs.batch "{a[2]}" not found')
+    failed = json.loads((jobs / a[2]).read_text())["rc"] or (os.environ.get("FAIL_PENDING") and a[2].startswith("n1-store-push-"))
+    print("Failed=True " if failed else "Complete=True ", end="")
+elif a[0] == "logs":
+    print("\\n".join(json.loads((jobs / a[1].split("/", 1)[1]).read_text())["out"].splitlines()[-int(a[2].split("=")[1]):]))
+'''
+
+
+@pytest.mark.skipif(shutil.which("bash") is None or shutil.which("flock") is None or not Path("/proc/self/stat").exists(),
+                    reason="n1_custody.sh is bash, and takes a flock")
+def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_bounded_rounds(tmp_path, monkeypatch):
+    """3 Oct: ~326 runs under node 1's runs roots had ended, a pod preempted before its runner recorded an end among them, and sat
+    there without custody. A round takes each run this machine ran, once it has settled, through a Job as its store's owner, with
+    the Secret's R2: `research data custody --publish --keep-local`, --force for a status that never became terminal. A run that never
+    ran its workload is held (never published as evidence) until a label lifts it, and so is one over the bounds and one whose
+    remote holds another attempt document (after its one Job), until `--reconcile`. Node 2's relay copies, live runs, settling
+    runs and an attempt published without its run record get no Job. A round runs at most VY_CUSTODY_MAX_RUNS Jobs within
+    VY_CUSTODY_PASS_S, runs that failed before going last, none in node 1's daily hold, and starts each store's pending push."""
+    from research.store import attempt as A
+    from research.store.cli import main as data_main
+    from research.store.local import LocalStore, attempt_key
+
+    src_root = Path(registry.__file__).resolve().parents[2]
+    jobs, research, state, bin_, kjobs = (tmp_path / "jobs", tmp_path / "research", tmp_path / "state", tmp_path / "bin",
+                                          tmp_path / "k8s")
+    log, vault, home, absent = tmp_path / "calls.log", tmp_path / "vault", tmp_path / "home", tmp_path / "absent.toml"
+    for d in (jobs / "runs", research / "runs", bin_, kjobs, vault, home, tmp_path / "src" / "tools" / "research"):
+        d.mkdir(parents=True)
+    (tmp_path / "src" / "tools" / "research" / "src").symlink_to(src_root)
+    (tmp_path / "src" / "tools" / "research" / "store.pod.toml").symlink_to(src_root.parent / "store.pod.toml")
+    (tmp_path / "vault.toml").write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
+    (bin_ / "kubectl").write_text(f"#!{sys.executable}\n{FAKE_KUBECTL}")
+    (bin_ / "sudo").write_text(f'#!/bin/sh\necho "sudo $*" >> {log}\n[ "$1 $2" = "-n -u" ] || exit 1\nshift 3\nexec "$@"\n')
+    (bin_ / "python3").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    old, future = 1_000_000_000, 4_102_444_800     # records last changed in 2001 (settled, and stale for a pod), or in 2100
+
+    def run(root, rid, state_, *, boot="boot-n1", t=old, empty=False, extra=0):
+        d = root / "runs" / rid
+        if empty:
+            d.mkdir()
+            (d / "stdout.log").write_text("")
+            (d / "stderr.log").write_text("")
+            job = json.loads((Path(__file__).parent / "fixtures" / "run_v0.2" / "job.json").read_text())
+        else:
+            shutil.copytree(Path(__file__).parent / "fixtures" / "run_v0.2", d)
+            (d / "state.json").unlink()
+            (d / "stdout.log").write_text("the workload's stdout\n")
+            job = json.loads((d / "job.json").read_text())
+        job["run"]["id"], job["environment"]["boot_id"], job["environment"]["hostname"] = rid, boot, f"pod-{rid}"
+        (d / "job.json").write_text(json.dumps(job))
+        (d / "status.json").write_text(json.dumps({"state": state_, "transitions": [{"state": state_, "pid": 4243}]}))
+        for i in range(extra):
+            (d / f"row{i}.jsonl").write_text("{}\n")
+        for p in d.rglob("*"):
+            os.utime(p, (t, t))
+        return d
+
+    R = {k: f"r20261003-0000{n:02d}-00{n:02d}" for n, k in enumerate(
+        ("done", "dead", "empty", "n2copy", "fresh", "fails", "big", "legacy", "conflict", "live", "new", "research"), 1)}
+    n1 = {k: f"n1-custody-{r}" for k, r in R.items()}
+    J = {k: jobs / "runs" / r for k, r in R.items()}
+    run(jobs, R["done"], "done")
+    run(jobs, R["dead"], "running")                       # a preempted pod: no record changed for 24 h
+    run(jobs, R["empty"], "running", empty=True)
+    run(jobs, R["n2copy"], "done", boot="boot-n2")        # node 2's relay copy: n2_custody.sh's
+    run(jobs, R["fresh"], "failed", t=future)
+    run(jobs, R["fails"], "failed")
+    run(jobs, R["big"], "done", extra=4)
+    run(jobs, R["legacy"], "done")
+    run(jobs, R["conflict"], "done")
+    run(jobs, R["live"], "running", t=future)
+    run(research, R["research"], "done")
+    offline = LocalStore(jobs / "store", config_path=absent)
+    assert A.publish(J["legacy"], store=offline, remote_push=False, run_record=False)["published"]
+    assert A.publish(J["conflict"], store=offline, remote_push=False, run_record=True)["published"]
+    other = json.loads(offline.attempt_path(R["conflict"]).read_bytes())
+    other["status"]["rc"] = 99
+    (vault / attempt_key(R["conflict"])).parent.mkdir(parents=True)
+    (vault / attempt_key(R["conflict"])).write_text(json.dumps(other, sort_keys=True, separators=(",", ":")))
+    for d in (J["legacy"], J["conflict"]):
+        for p in d.rglob("*"):
+            os.utime(p, (old, old))
+
+    def round_(*args, **env):
+        return subprocess.run(["bash", str(NEBIUS / "n1_custody.sh"), *args], capture_output=True, text=True,
+                              env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "HOME": str(home), "KSTATE": str(kjobs),
+                                   "KLOG": str(log), "KHOME": str(home), "KVAULT": str(tmp_path / "vault.toml"),
+                                   "RESEARCH_STORE_CONFIG": str(absent), "VY_CUSTODY_QUIET": "", "VY_CUSTODY_BOOT": "boot-n1",
+                                   "VY_CUSTODY_PY": sys.executable, "VY_CUSTODY_STATE": str(state), "VY_CUSTODY_SRC": str(tmp_path / "src"),
+                                   "VY_CUSTODY_ROOTS": f"{jobs}/runs={jobs}/store=1000,{research}/runs={research}/store=1001",
+                                   "VY_CUSTODY_MAX_FILES": "10", **env})
+
+    def created():
+        return [ln.split()[1] for ln in log.read_text().splitlines() if ln.startswith("created ")] if log.exists() else []
+
+    def job(name):
+        return json.loads((kjobs / name).read_text())
+
+    def held():
+        return sorted(p.name for p in (state / "held").iterdir())
+
+    def preserved(d):
+        return json.loads((d / ".custody").read_text())["preserved"] is True
+
+    def command(name):
+        return job(name)["job"]["spec"]["template"]["spec"]["containers"][0]["command"]
+
+    assert round_("--now").returncode == 2 and round_("--reconcile", R["done"], "--by").returncode == 2
+    assert round_("--reconcile", f"../{R['done']}", "--by", "x").returncode == 2
+    no_src = round_(VY_CUSTODY_SRC=str(tmp_path / "nowhere"))
+    assert no_src.returncode == 3 and f"refused: no research tree at {tmp_path}/nowhere" in no_src.stdout
+    quiet = round_(VY_CUSTODY_QUIET="0000-2400")
+    assert quiet.returncode == 0 and "node 1's daily hold" in quiet.stdout and not log.exists()
+    assert round_("--reconcile", R["conflict"], "--by", "x", VY_CUSTODY_QUIET="0000-2400").returncode == 3
+
+    dry = round_("--dry-run")
+    assert dry.returncode == 0 and created() == [] and not held() and not (state / "boots").exists(), dry.stdout + dry.stderr
+    assert f"would publish {J['done']} (r21-fixture, done, 8 files" in dry.stdout
+    assert f"would publish {J['dead']} (r21-fixture, running, 8 files, 5.9 KiB) with --force" in dry.stdout
+    assert f"would hold {J['empty']}: never ran its workload (r21-fixture, status running" in dry.stdout
+    assert f"would hold {J['big']}: over 10 files" in dry.stdout and f"would publish {research}/runs/{R['research']}" in dry.stdout
+    assert "no Job: 1 not run by this machine, 1 settling (triage lists them)" in dry.stdout
+    assert R["n2copy"] not in dry.stdout and R["fresh"] not in dry.stdout and R["live"] not in dry.stdout
+    assert f"would start {jobs}/store's pending push (Job n1-store-push-jobs)" in dry.stdout
+    assert "sudo -n -u #1000 env" in log.read_text() and "sudo -n -u #1001 env" in log.read_text()
+
+    unbounded = round_(VY_CUSTODY_PASS_S="0")
+    assert unbounded.returncode == 1 and created() == ["n1-store-push-jobs", "n1-store-push-research"], unbounded.stdout
+    assert "round bounded (0 Job(s) in" in unbounded.stdout and "6 run(s) left" in unbounded.stdout
+    assert held() == [R["empty"], R["big"]] and "2 run(s) held" in unbounded.stdout
+    assert f"research data label {R['empty']} custody never-ran --by WHO) and the hold lifts itself" in unbounded.stdout
+    push = job("n1-store-push-research")["job"]
+    assert push["spec"]["template"]["spec"]["securityContext"] == {"runAsUser": 1001, "runAsGroup": 1001}
+    assert push["spec"]["ttlSecondsAfterFinished"] == 3600 and "research data push --pending" in command("n1-store-push-research")[5]
+
+    bounded = round_(VY_CUSTODY_MAX_RUNS="1")
+    assert bounded.returncode == 1 and created()[2:] == [n1["done"]] and "5 run(s) left" in bounded.stdout, bounded.stdout
+    assert preserved(J["done"]) and LocalStore(jobs / "store", config_path=tmp_path / "vault.toml").get_attempt(R["done"])
+    spec = job(n1["done"])["job"]["spec"]
+    pod = spec["template"]["spec"]
+    assert (spec["backoffLimit"], spec["activeDeadlineSeconds"], pod["nodeSelector"]) == (0, 1800, {"verity.dev/server": "vy-nebius-1"})
+    assert pod["securityContext"]["runAsUser"] == 1000 and pod["containers"][0]["envFrom"] == [{"secretRef": {"name": "research-r2"}}]
+    assert command(n1["done"])[:5] == ["taskset", "-c", "96-127", "bash", "-c"] and f"RESEARCH_STORE={jobs}/store " in command(n1["done"])[5]
+    assert command(n1["done"])[5].endswith(f"{sys.executable} -m research data custody {J['done']} --publish --keep-local ")
+    assert (state / "boots").read_text() == "boot-n1\n"
+
+    first = round_(FAIL_RUN=R["fails"])
+    assert first.returncode == 1, first.stdout + first.stderr
+    assert created()[3:] == [n1["dead"], n1["fails"], n1["legacy"], n1["conflict"], n1["research"]]
+    assert command(n1["dead"])[5].endswith("--keep-local --force")
+    assert preserved(J["dead"]) and preserved(research / "runs" / R["research"])
+    assert job(n1["research"])["job"]["spec"]["template"]["spec"]["securityContext"]["runAsUser"] == 1001
+    assert LocalStore(research / "store", config_path=tmp_path / "vault.toml").get_attempt(R["research"])
+    assert f"{R['fails']} (r21-fixture, failed): Job failed (1 so far): Job {n1['fails']}: Error: boom; the next round" in first.stdout
+    assert f"{R['legacy']} (r21-fixture, done): its attempt is on R2 without a run record" in first.stdout
+    assert f"{R['conflict']} (r21-fixture, done): held: R2 holds another attempt document" in first.stdout
+    assert f"n1_custody.sh --reconcile {R['conflict']} --by WHO" in first.stdout
+    assert held() == [R["empty"], R["big"], R["conflict"]] and (state / "failures" / R["fails"]).read_text() == "1\n"
+    assert not (state / "failures" / R["legacy"]).exists() and not (state / "failures" / R["conflict"]).exists()
+
+    run(jobs, R["new"], "done")
+    newer = round_(VY_CUSTODY_MAX_RUNS="1")
+    assert created()[8:] == [n1["new"]], "a run that failed before goes last"
+    assert newer.returncode == 1 and "1 run(s) left" in newer.stdout and "1 attempt-no-record" in newer.stdout, newer.stdout
+    second = round_()
+    assert created()[9:] == [n1["fails"]] and preserved(J["fails"]) and not list((state / "failures").iterdir())
+    assert second.returncode == 1 and "3 run(s) held" in second.stdout
+
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(absent))
+    assert data_main(["label", R["empty"], "custody", "never-ran", "--by", "test", "--store", str(jobs / "store")]) == 0
+    lifted = round_()
+    assert f"{R['empty']}: hold lifted" in lifted.stdout and held() == [R["big"], R["conflict"]] and len(created()) == 10, lifted.stdout
+
+    with (state / ".lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        busy = round_("--reconcile", R["conflict"], "--by", "test")
+        assert busy.returncode == 3 and "--reconcile after it" in busy.stderr
+        assert round_().returncode == 0 and len(created()) == 10, "a round never waits on another"
+    assert round_("--reconcile", "r20261003-000099-0099", "--by", "test").returncode == 2
+    rec = round_("--reconcile", R["conflict"], "--by", "test")
+    assert rec.returncode == 0 and f"{R['conflict']}: reconciled by test" in rec.stdout, rec.stdout + rec.stderr
+    assert f"reconcile-attempts {R['conflict']} --apply &&" in command(n1["conflict"])[5]
+    assert preserved(J["conflict"]) and list((jobs / "store" / "attempts" / ".superseded").iterdir())
+    assert held() == [R["big"]]
+
+    (state / "held" / R["big"]).unlink()
+    done = round_(VY_CUSTODY_MAX_FILES="20")
+    assert done.returncode == 0 and created()[-1] == n1["big"] and preserved(J["big"]), done.stdout
+    assert round_().returncode == 0 and created()[-1] == n1["big"], "nothing left: no Job"
+    pending = round_(FAIL_PENDING="1")
+    assert pending.returncode == 1 and f"{jobs}/store: the pending push failed (Job n1-store-push-jobs" in pending.stdout
+
+
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
 def test_n2_commit_fetches_only_missing_manifests_that_hash_to_their_id(tmp_path):
     """Node 2's store has no remote, so a cited Build's manifest missing there failed cov-g217's precheck after a 19-min bootstrap:
