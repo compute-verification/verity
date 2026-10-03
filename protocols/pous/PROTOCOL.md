@@ -177,7 +177,10 @@ about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 item 
    server-chosen or predictable salt would break the model's "`W` before coins" order.
 4. **Serve.** `layout.decode_tensor` decodes one tensor from the segments it overlaps.
 5. **Audit.** The verifier reveals `k` indices one at a time (`audit.TimedVerifier`, uniform with replacement, keyed
-   by `audit.challenge_key` and bound to `vk`'s root). Each block must arrive within `Δ = 0.5 ms` plus
+   by `audit.challenge_key` and bound to `vk`'s root). The challenge key is the verifier's own secret, kept secret
+   until the audit starts (never a public beacon): a public key makes every challenged index computable in advance, so
+   a prover holding little of `C` could rebuild only the challenged blocks within the deadline and pass. Each block
+   must arrive within `Δ = 0.5 ms` plus
    `rtt_allowance_ns`, and must match `vk`. The audit accepts only if every answer is correct and on time. At 300 µs
    about 1.5% of honest 132-answer audits fail on the host clock (POUS `docs/p3-gpu-measurements.md`). The network
    allowance defaults to 0 until the verifier's RTT is measured.
