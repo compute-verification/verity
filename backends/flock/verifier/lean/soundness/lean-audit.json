@@ -6686,6 +6686,16 @@
    "assumptions": [],
    "type_hash": "7b099b9cb3ad2e10ac594f2361acad091b14100e72ba778fc557546a91e943c9"
   },
+  "FlockSoundness.Discharge.Hidden.setupH_g_pos": {
+   "signature": [
+    "FlockSoundness.Discharge.Hidden.setupH_g_pos {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins}",
+    "  {tables : List (Prod String ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}",
+    "  {st : Flock.Stmt} (ht : Eq tags.typed Bool.false)",
+    "  (h : Eq (Flock.Stmt.setupH tags cf pf coins tables draw partition program) (Except.ok st)) : instLTNat.lt 0 st.c.g"
+   ],
+   "assumptions": [],
+   "type_hash": "ab8c2996f86075cb0c9483de07a597e723a66f783d6e5fea0bbfe8d62415681f"
+  },
   "FlockSoundness.Discharge.Hidden.setupHidden_spec": {
    "signature": ["FlockSoundness.Discharge.Hidden.setupHidden_spec : FlockSoundness.Discharge.Hidden.SetupHiddenSpec"],
    "assumptions": [],
@@ -10761,6 +10771,26 @@
    "assumptions": [],
    "type_hash": "36906b103677801e37a225289f88f2fb1a17ccfca99fd53128defa577409b6d2"
   },
+  "FlockSoundness.Discharge.ZkBind.HmRowsZ.ofShadow_computes": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkBind.HmRowsZ.ofShadow_computes {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : Nat}",
+    "  {planZ : Finset (Fin n) → Reg → List (FlockSoundness.Discharge.ZkSession.TabZK FlockLevel3.GF128 mPts)}",
+    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length}",
+    "  {planS : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tabS : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planS S R).length}",
+    "  (e :",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n),",
+    "      Eq (FlockSoundness.Discharge.ZkSession.tabOfZ planZ tab S R u).S",
+    "        (FlockSoundness.Audit.Partition.tabOf planS tabS S R u).S)",
+    "  {decZ : FlockSoundness.Discharge.ZkSession.DecoderZK planZ tab}",
+    "  {decS : FlockSoundness.Audit.Partition.DecoderB planS tabS} {lay : FlockSoundness.Binding.Layout P planS tabS decS}",
+    "  (hdec : FlockSoundness.Discharge.ZkBind.DecAgree e) (rs : FlockSoundness.Binding.HmRows lay) (hHm : rs.Computes) :",
+    "  (FlockSoundness.Discharge.ZkBind.HmRowsZ.ofShadow e hdec rs).Computes"
+   ],
+   "assumptions": [],
+   "type_hash": "672bcc718fb7695062a3f44639af71497ef9a08b9e3b72cc210eec8852118213"
+  },
   "FlockSoundness.Discharge.ZkBind.HmRowsZ.registered": {
    "signature": [
     "FlockSoundness.Discharge.ZkBind.HmRowsZ.registered {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
@@ -10934,6 +10964,82 @@
    ],
    "assumptions": [],
    "type_hash": "195a82020fcbb471fdbb6a6fb87ae6a2bdaa0dc53d56e3469d7c28a3b1523430"
+  },
+  "FlockSoundness.Discharge.ZkBind.decAgreeAt": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkBind.decAgreeAt {n : Nat} {I : FlockSoundness.Discharge.Exec.Inputs}",
+    "  (ht : Eq I.tags.typed Bool.false) {mPts : Nat} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
+    "  (y₀ : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S₀ (dj S₀)) {Reg : Type} {c : Flock.Circuit}",
+    "  (hc : Eq (Flock.HmRow.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok c))",
+    "  (hU : FlockSoundness.Built c.unit) : FlockSoundness.Discharge.ZkBind.DecAgree ⋯"
+   ],
+   "assumptions": [],
+   "type_hash": "c675aaa7a2f92fef388868cfed3fd4f618c8049c82be20f82ee54611595f0f3b"
+  },
+  "FlockSoundness.Discharge.ZkBind.rsZAt_computes": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkBind.rsZAt_computes {n : Nat} {I : FlockSoundness.Discharge.Exec.Inputs}",
+    "  (ht : Eq I.tags.typed Bool.false) {mPts : Nat} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
+    "  (y₀ : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S₀ (dj S₀)) {Reg : Type} {c : Flock.Circuit}",
+    "  (hc : Eq (Flock.HmRow.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok c))",
+    "  (hU : FlockSoundness.Built c.unit) {pub : Flock.Public}",
+    "  (hpub : Eq (Flock.HmRow.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) c I.publicFile) (Except.ok pub))",
+    "  (hpt : Eq pub.tables Option.none) (hscope : Eq (FlockSoundness.Discharge.Layout.scopeOk c) Bool.true) :",
+    "  (FlockSoundness.Discharge.ZkBind.rsZAt ht dj y₀ hc hU hpub hpt hscope).Computes"
+   ],
+   "assumptions": [],
+   "type_hash": "1037ff1ca56809d73f2db0fb56a2fbf223ce75f997b9258fa8542aa6da7bb891"
+  },
+  "FlockSoundness.Discharge.ZkBind.sitesZAt_at": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkBind.sitesZAt_at {n : Nat} {I : FlockSoundness.Discharge.Exec.Inputs}",
+    "  (ht : Eq I.tags.typed Bool.false) {mPts : Nat} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
+    "  (y₀ : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S₀ (dj S₀)) {Reg : Type} {S : Finset (Fin n)}",
+    "  (y : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S (dj S)) (R : Reg) (u : Fin n)",
+    "  (h : SetLike.instMembership.mem S u) :",
+    "  And (Eq ((FlockSoundness.Discharge.ZkBind.sitesZAt ht dj y₀).acc S R u h).st y.x.st)",
+    "    (And (Eq ((FlockSoundness.Discharge.ZkBind.sitesZAt ht dj y₀).acc S R u h).draw (Option.some (dj S)))",
+    "      (And (Eq ((FlockSoundness.Discharge.ZkBind.sitesZAt ht dj y₀).vu S R u h) (instHMod.hMod (y.x.rank u) y.x.st.c.g))",
+    "        (Eq ((FlockSoundness.Discharge.ZkBind.sitesZAt ht dj y₀).o S R u h).val",
+    "          (instHDiv.hDiv (y.x.rank u) y.x.st.c.g))))"
+   ],
+   "assumptions": [],
+   "type_hash": "0edc65bfb5839d71e16f0cbfe7ec32f5152928a47817b349f46ef2c58b0fc47d"
+  },
+  "FlockSoundness.Discharge.ZkBind.sitesZAt_parse": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkBind.sitesZAt_parse {n : Nat} {I : FlockSoundness.Discharge.Exec.Inputs}",
+    "  (ht : Eq I.tags.typed Bool.false) {mPts : Nat} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
+    "  (y₀ : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S₀ (dj S₀)) {Reg : Type} {c : Flock.Circuit}",
+    "  (hc : Eq (Flock.HmRow.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok c))",
+    "  (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : SetLike.instMembership.mem S u) :",
+    "  Eq",
+    "    (Flock.HmRow.parse ((FlockSoundness.Discharge.ZkBind.sitesZAt ht dj y₀).acc S R u h).tags",
+    "      ((FlockSoundness.Discharge.ZkBind.sitesZAt ht dj y₀).acc S R u h).cf",
+    "      ((FlockSoundness.Discharge.ZkBind.sitesZAt ht dj y₀).acc S R u h).tables)",
+    "    (Except.ok c)"
+   ],
+   "assumptions": [],
+   "type_hash": "425e8aa09dccc3712642351ff354feab791182b9016b63caff2a7e2001b0b0a4"
+  },
+  "FlockSoundness.Discharge.ZkBind.tableAtZK_S": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkBind.tableAtZK_S {n : Nat} {I : FlockSoundness.Discharge.Exec.Inputs}",
+    "  (ht : Eq I.tags.typed Bool.false) {mPts : Nat} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
+    "  (y₀ : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) :",
+    "  Eq (FlockSoundness.Discharge.ZkLink.tableAtZK dj y₀ S).S (FlockSoundness.Discharge.ZkBind.tableSh ht dj y₀ S).T.S"
+   ],
+   "assumptions": [],
+   "type_hash": "81f61c87318ffb5c532804074b0327d8bf9004638568566588acbd0efea5b9f5"
+  },
+  "FlockSoundness.Discharge.ZkBind.wit_surj": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkBind.wit_surj {mPts : Nat} (T : FlockSoundness.TabSpec mPts)",
+    "  (z : FlockSoundness.Model.Witness T.S.m) :",
+    "  Exists fun M => Eq (FlockSoundness.Model.witnessOf FlockSoundness.execArith T.S.m T.sch.k0 T.sch.level₀.logCols M) z"
+   ],
+   "assumptions": [],
+   "type_hash": "d733b5910201b4a677fd8df361453568652ab023cf6ebe26990d33a1b5d83dfb"
   },
   "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at": {
    "signature": [
@@ -11140,6 +11246,26 @@
    "assumptions": [],
    "type_hash": "f10a01b0e3f897bfad55f8a1f56bc2e0a72a9808ef9ef23183efec92cebcd8fa"
   },
+  "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC {K D Sl : Type} [Field K] [DecidableEq K] [Inhabited D]",
+    "  [Inhabited Sl] {mPts n : Nat} {Reg : Type} (A : FlockSoundness.Model.Arith FlockLevel3.GF128 K)",
+    "  (Hs : FlockSoundness.Discharge.ZkLink.Hashes FlockLevel3.GF128 D Sl)",
+    "  (T : Finset (Fin n) → Reg → FlockSoundness.Discharge.ZkSession.TabZK FlockLevel3.GF128 mPts)",
+    "  (I : FlockSoundness.Discharge.Exec.Inputs)",
+    "  (wr : Finset (Fin n) → Reg → FlockSoundness.Refine.LiveOut mPts → FlockSoundness.Discharge.Exec.Transcript)",
+    "  (opn : Finset (Fin n) → Reg → Array ByteArray → FlockSoundness.Discharge.ZkLink.OpensZ FlockLevel3.GF128 D Sl)",
+    "  (dec : Finset (Fin n) → Reg → Nat → ByteArray → List FlockSoundness.Game.Msg)",
+    "  (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List FlockSoundness.Game.Msg)",
+    "  (capOf : Finset (Fin n) → Reg → ByteArray → Fin 1 → FlockSoundness.Model.Cap D)",
+    "  (h : FlockSoundness.Discharge.ZkExec.RunsZC A Hs T I wr opn dec fin capOf) :",
+    "  FlockSoundness.Discharge.ZkExec.DecodesZK (FlockSoundness.Discharge.ZkExec.repZ A Hs T)",
+    "    (FlockSoundness.Discharge.ZkExec.outZ Hs T) (FlockSoundness.Discharge.ZkExec.accZ T) I wr opn dec",
+    "    (fun x x_1 x_2 => Bool.true) fin capOf"
+   ],
+   "assumptions": [],
+   "type_hash": "f81fede492dc1910b940fffff885ae0cec210c7af1c3646fbca41902e77a8279"
+  },
   "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC": {
    "signature": [
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC {K D Sl : Type} [Field K] [DecidableEq K] [Inhabited D]",
@@ -11181,6 +11307,45 @@
    "assumptions": [],
    "type_hash": "f1e9329e27d785e454b30a80a0450af5d9731d60b96a76deb8a50b8c4e70bf09"
   },
+  "FlockSoundness.Discharge.ZkExec.plays_det": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkExec.plays_det {W F : Type} [Inhabited W] {ι : W → F} [Finite F] [Nontrivial F] {α : Type}",
+    "  {g : FlockSoundness.Game α} {ms : List FlockSoundness.Game.Msg} {cs : List (Array W)} {a b : α}",
+    "  (h₁ : FlockSoundness.Game.Plays ι g ms cs a) (h₂ : FlockSoundness.Game.Plays ι g ms cs b) : Eq a b"
+   ],
+   "assumptions": [],
+   "type_hash": "802c2f6df3699c4bddff5a2c5ff1c2e1254b9ae010a2a0e2f12b3a16bcdca53a"
+  },
+  "FlockSoundness.Discharge.ZkExec.repZCAt_kinds": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkExec.repZCAt_kinds {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
+    "  [DecidableEq K] {D Sl : Type} {mPts : Nat} (A : FlockSoundness.Model.Arith F K)",
+    "  (Hs : FlockSoundness.Discharge.ZkLink.Hashes F D Sl) (T : FlockSoundness.Discharge.ZkSession.TabZK F mPts)",
+    "  (pts : Fin 2 → Fin mPts → F) (r : Fin 2) {ts : List FlockSoundness.Game.Step}",
+    "  {p : FlockSoundness.Discharge.ZkLink.PendZ F D Sl}",
+    "  (h : (FlockSoundness.Discharge.ZkLink.repZCAt A Hs T pts r).PlaysT ts p)",
+    "  (hp : Ne p.lig FlockSoundness.Model.PendL.reject) :",
+    "  Eq (List.map FlockSoundness.Discharge.Exec.kindOf ts)",
+    "    (FlockSoundness.Discharge.ZkExec.repShapeZ F K D T (FlockSoundness.Model.extraClaims T.S T.ptLocal mPts pts).length)"
+   ],
+   "assumptions": [],
+   "type_hash": "64ad5ac29986f90dddeb76327a0d240089165fdc32db2f296110713a27fb2759"
+  },
+  "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
+    "  [DecidableEq K] {D Sl : Type} {mPts : Nat} (A : FlockSoundness.Model.Arith F K)",
+    "  (Hs : FlockSoundness.Discharge.ZkLink.Hashes F D Sl) (T : FlockSoundness.Discharge.ZkSession.TabZK F mPts)",
+    "  (pts : Fin 2 → Fin mPts → F) (r : Fin 2) {p : FlockSoundness.Discharge.ZkLink.PendZ F D Sl}",
+    "  (hp : Ne p.lig FlockSoundness.Model.PendL.reject) (ts : List FlockSoundness.Game.Step) :",
+    "  (FlockSoundness.Discharge.ZkLink.repZCAt A Hs T pts r).PlaysT ts p →",
+    "    (List.map FlockSoundness.Discharge.Exec.kindOf ts).IsPrefix",
+    "      (FlockSoundness.Discharge.ZkExec.repShapeZ F K D T",
+    "        (FlockSoundness.Model.extraClaims T.S T.ptLocal mPts pts).length)"
+   ],
+   "assumptions": [],
+   "type_hash": "fbea58a87bb102044e7cb39c360ae1368240183655f5f1b51167c2edec35dae0"
+  },
   "FlockSoundness.Discharge.ZkExec.runsZC_live": {
    "signature": ["FlockSoundness.Discharge.ZkExec.runsZC_live : FlockSoundness.Discharge.ZkExec.RunsZCLive"],
    "assumptions": [],
@@ -11190,6 +11355,21 @@
    "signature": ["FlockSoundness.Discharge.ZkExec.verifyInner_ok : FlockSoundness.Discharge.ZkExec.ZkInnerOk"],
    "assumptions": [],
    "type_hash": "db6fdd1eba767082a7a25c88e3dc9fe07082b795f9aedf4893a4b4d564650155"
+  },
+  "FlockSoundness.Discharge.ZkExec.zk_carries": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_carries : FlockSoundness.Discharge.ZkExec.ZkCarries"],
+   "assumptions": [],
+   "type_hash": "34bdb7ce18f3be8417d7cf4de685cd805721dcd057c0f5da346c4e6ac64d2b84"
+  },
+  "FlockSoundness.Discharge.ZkExec.zk_cut": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_cut : FlockSoundness.Discharge.ZkExec.ZkCut"],
+   "assumptions": [],
+   "type_hash": "affaa3e82e9726a8255ba9947edd0606d840d21a9948ef3744546e7e1d866cc6"
+  },
+  "FlockSoundness.Discharge.ZkExec.zk_decode_sizes": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_decode_sizes : FlockSoundness.Discharge.ZkExec.ZkDecodeSizes"],
+   "assumptions": [],
+   "type_hash": "edab3e5c72a949a00305bd4226834f31a8bc24bc5aaf4954a35dcafe623927d4"
   },
   "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one": {
    "signature": [
@@ -11210,10 +11390,241 @@
    "assumptions": [],
    "type_hash": "a6717aeb976e7dba1cbda3f330a0b584d491fed3653ff67336be5d5a7ecd91df"
   },
+  "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]",
+    "  [Inhabited Sl] {mPts n : Nat} {Reg : Type} (A : FlockSoundness.Model.Arith FlockLevel3.GF128 K)",
+    "  (Hs : FlockSoundness.Discharge.ZkLink.Hashes FlockLevel3.GF128 D Sl)",
+    "  (T : Finset (Fin n) → Reg → FlockSoundness.Discharge.ZkSession.TabZK FlockLevel3.GF128 mPts)",
+    "  (I : FlockSoundness.Discharge.Exec.Inputs)",
+    "  (wr : Finset (Fin n) → Reg → FlockSoundness.Refine.LiveOut mPts → FlockSoundness.Discharge.Exec.Transcript)",
+    "  (opn : Finset (Fin n) → Reg → Array ByteArray → FlockSoundness.Discharge.ZkLink.OpensZ FlockLevel3.GF128 D Sl)",
+    "  (dg : ByteArray → ByteArray) (dec : Finset (Fin n) → Reg → Nat → ByteArray → List FlockSoundness.Game.Msg)",
+    "  (one : Finset (Fin n) → Reg → Nat → Bool)",
+    "  (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List FlockSoundness.Game.Msg)",
+    "  (capOf : Finset (Fin n) → Reg → ByteArray → Fin 1 → FlockSoundness.Model.Cap D) (N : Nat)",
+    "  {L : FlockSoundness.Audit.Law n} {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n)",
+    "  (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (FlockSoundness.Discharge.ZkExec.planOne T S R).length)",
+    "  {decode : FlockSoundness.Discharge.ZkSession.DecoderZK (FlockSoundness.Discharge.ZkExec.planOne T) tab} {Dh : Type}",
+    "  {Hc : List UInt8 → Dh}",
+    "  (vb : FlockSoundness.Discharge.ZkLink.ValueBindingZ A P (FlockSoundness.Discharge.ZkExec.planOne T) tab decode Hc)",
+    "  (hlow : FlockSoundness.Discharge.ZkSession.LoweringSoundZK A P (FlockSoundness.Discharge.ZkExec.planOne T) tab decode)",
+    "  {k Rw M : Nat} (hRw : instLENat.le 1 Rw) (hM : instLENat.le 1 M) {ρ : Real} (hρ : Real.instLT.lt ρ 1)",
+    "  (hr :",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkExec.planOne T S R).length),",
+    "      Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkExec.planOne T S R) j k) ρ)",
+    "  {a :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (FlockSoundness.Discharge.ZkLink.sessionZC A Hs (FlockSoundness.Discharge.ZkExec.planOne T S R)).Strategy →",
+    "          Fin (FlockSoundness.Discharge.ZkExec.planOne T S R).length → Real}",
+    "  (hj : FlockSoundness.Discharge.ZkLink.JointZC A Hs (FlockSoundness.Discharge.ZkExec.planOne T) k a) {t' : Real}",
+    "  (ht : Real.instLE.le 0 t') (K✝ : Nat)",
+    "  (hdec :",
+    "    FlockSoundness.Discharge.ZkExec.DecodesZK (FlockSoundness.Discharge.ZkExec.repZ A Hs T)",
+    "      (FlockSoundness.Discharge.ZkExec.outZ Hs T) (FlockSoundness.Discharge.ZkExec.accZ T) I wr opn dec one fin capOf)",
+    "  (τ : (FlockSoundness.Discharge.Exec.auditLive L Reg (FlockSoundness.Discharge.Exec.liveOf dg mPts N wr)).Strategy) :",
+    "  have σ := FlockSoundness.Discharge.ZkExec.simAuditZC A Hs T I wr opn dg dec one fin capOf N hdec τ;",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (FlockSoundness.Discharge.ZkExec.LiveAcceptsZK I o)",
+    "          (instLENat.le K✝",
+    "            (P.wrong",
+    "                (FlockSoundness.Discharge.ZkLink.XplurZC A Hs P (FlockSoundness.Discharge.ZkExec.planOne T) tab vb",
+    "                  (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ) k Rw)).card))",
+    "      (FlockSoundness.Discharge.Exec.auditLive L Reg (FlockSoundness.Discharge.Exec.liveOf dg mPts N wr)) τ)",
+    "    (instHAdd.hAdd",
+    "      (instHAdd.hAdd (L.miss K✝)",
+    "        (FlockSoundness.Discharge.ZkLink.ksAvgZC A Hs (FlockSoundness.Discharge.ZkExec.planOne T) k a",
+    "          (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ)))",
+    "      (FlockSoundness.Discharge.ZkLink.linkBoundZC A Hs P (FlockSoundness.Discharge.ZkExec.planOne T) tab vb k Rw M ρ t'",
+    "        (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ)))"
+   ],
+   "assumptions": [],
+   "type_hash": "19b148f0bd68aa5411d166a40dc2e80d71c7a50359d3e64f17aca754b075bbdf"
+  },
+  "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_execOS": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_execOS {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K]",
+    "  [Inhabited D] [Inhabited Sl] {mPts n : Nat} {Reg : Type} (A : FlockSoundness.Model.Arith FlockLevel3.GF128 K)",
+    "  (Hs : FlockSoundness.Discharge.ZkLink.Hashes FlockLevel3.GF128 D Sl)",
+    "  (T : Finset (Fin n) → Reg → FlockSoundness.Discharge.ZkSession.TabZK FlockLevel3.GF128 mPts)",
+    "  (I : FlockSoundness.Discharge.Exec.Inputs)",
+    "  (wr : Finset (Fin n) → Reg → FlockSoundness.Refine.LiveOut mPts → FlockSoundness.Discharge.Exec.Transcript)",
+    "  (opn : Finset (Fin n) → Reg → Array ByteArray → FlockSoundness.Discharge.ZkLink.OpensZ FlockLevel3.GF128 D Sl)",
+    "  (dg : ByteArray → ByteArray) (dec : Finset (Fin n) → Reg → Nat → ByteArray → List FlockSoundness.Game.Msg)",
+    "  (one : Finset (Fin n) → Reg → Nat → Bool)",
+    "  (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List FlockSoundness.Game.Msg)",
+    "  (capOf : Finset (Fin n) → Reg → ByteArray → Fin 1 → FlockSoundness.Model.Cap D) (N : Nat)",
+    "  {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n)",
+    "  (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (FlockSoundness.Discharge.ZkExec.planOne T S R).length)",
+    "  {decode : FlockSoundness.Discharge.ZkSession.DecoderZK (FlockSoundness.Discharge.ZkExec.planOne T) tab} {Dh : Type}",
+    "  {Hc : List UInt8 → Dh}",
+    "  (vb : FlockSoundness.Discharge.ZkLink.ValueBindingZ A P (FlockSoundness.Discharge.ZkExec.planOne T) tab decode Hc)",
+    "  (hlow : FlockSoundness.Discharge.ZkSession.LoweringSoundZK A P (FlockSoundness.Discharge.ZkExec.planOne T) tab decode)",
+    "  {m : Nat} (σs : Fin n → Fin m) (ks : Fin m → Nat)",
+    "  (hks : ∀ (s : Fin m), instLENat.le (ks s) (FlockSoundness.Audit.Law.stratum σs s).card)",
+    "  (St : Fin m → Flock.Draw.Stratum) (hS : FlockSoundness.Audit.Law.ExecStrata σs ks St) (Kd pop : Nat) {Ω : Type}",
+    "  [Fintype Ω] [Nonempty Ω] (Lb : Fin m → Nat) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)",
+    "  (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src) {k Rw M : Nat} (hRw : instLENat.le 1 Rw)",
+    "  (hM : instLENat.le 1 M) {ρ : Real} (hρ : Real.instLT.lt ρ 1)",
+    "  (hr :",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkExec.planOne T S R).length),",
+    "      Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkExec.planOne T S R) j k) ρ)",
+    "  {a :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (FlockSoundness.Discharge.ZkLink.sessionZC A Hs (FlockSoundness.Discharge.ZkExec.planOne T S R)).Strategy →",
+    "          Fin (FlockSoundness.Discharge.ZkExec.planOne T S R).length → Real}",
+    "  (hj : FlockSoundness.Discharge.ZkLink.JointZC A Hs (FlockSoundness.Discharge.ZkExec.planOne T) k a) {t' : Real}",
+    "  (ht : Real.instLE.le 0 t') (K✝ : Nat)",
+    "  (hdec :",
+    "    FlockSoundness.Discharge.ZkExec.DecodesZK (FlockSoundness.Discharge.ZkExec.repZ A Hs T)",
+    "      (FlockSoundness.Discharge.ZkExec.outZ Hs T) (FlockSoundness.Discharge.ZkExec.accZ T) I wr opn dec one fin capOf)",
+    "  (τ :",
+    "    (FlockSoundness.Discharge.Exec.auditLive",
+    "        (FlockSoundness.Audit.Law.execOS src (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop) Reg",
+    "        (FlockSoundness.Discharge.Exec.liveOf dg mPts N wr)).Strategy) :",
+    "  have σ := FlockSoundness.Discharge.ZkExec.simAuditZC A Hs T I wr opn dg dec one fin capOf N hdec τ;",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (FlockSoundness.Discharge.ZkExec.LiveAcceptsZK I o)",
+    "          (instLENat.le K✝",
+    "            (P.wrong",
+    "                (FlockSoundness.Discharge.ZkLink.XplurZC A Hs P (FlockSoundness.Discharge.ZkExec.planOne T) tab vb",
+    "                  (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ) k Rw)).card))",
+    "      (FlockSoundness.Discharge.Exec.auditLive",
+    "        (FlockSoundness.Audit.Law.execOS src (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop) Reg",
+    "        (FlockSoundness.Discharge.Exec.liveOf dg mPts N wr))",
+    "      τ)",
+    "    (instHAdd.hAdd",
+    "      (instHAdd.hAdd ((FlockSoundness.Audit.Law.stratified σs ks hks).miss K✝)",
+    "        (FlockSoundness.Discharge.ZkLink.ksAvgZC A Hs (FlockSoundness.Discharge.ZkExec.planOne T) k a",
+    "          (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ)))",
+    "      (FlockSoundness.Discharge.ZkLink.linkBoundZC A Hs P (FlockSoundness.Discharge.ZkExec.planOne T) tab vb k Rw M ρ t'",
+    "        (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ)))"
+   ],
+   "assumptions": [],
+   "type_hash": "37eef9a9c1e3192a1ae71fc87640375aa47996af524abf0e62258ab6f7cf3a23"
+  },
+  "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_runs": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_runs {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K]",
+    "  [Inhabited D] [Inhabited Sl] {mPts n : Nat} {Reg : Type} (A : FlockSoundness.Model.Arith FlockLevel3.GF128 K)",
+    "  (Hs : FlockSoundness.Discharge.ZkLink.Hashes FlockLevel3.GF128 D Sl)",
+    "  (T : Finset (Fin n) → Reg → FlockSoundness.Discharge.ZkSession.TabZK FlockLevel3.GF128 mPts)",
+    "  (I : FlockSoundness.Discharge.Exec.Inputs)",
+    "  (wr : Finset (Fin n) → Reg → FlockSoundness.Refine.LiveOut mPts → FlockSoundness.Discharge.Exec.Transcript)",
+    "  (opn : Finset (Fin n) → Reg → Array ByteArray → FlockSoundness.Discharge.ZkLink.OpensZ FlockLevel3.GF128 D Sl)",
+    "  (dg : ByteArray → ByteArray) (dec : Finset (Fin n) → Reg → Nat → ByteArray → List FlockSoundness.Game.Msg)",
+    "  (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List FlockSoundness.Game.Msg)",
+    "  (capOf : Finset (Fin n) → Reg → ByteArray → Fin 1 → FlockSoundness.Model.Cap D) (N : Nat)",
+    "  {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n)",
+    "  (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (FlockSoundness.Discharge.ZkExec.planOne T S R).length)",
+    "  {decode : FlockSoundness.Discharge.ZkSession.DecoderZK (FlockSoundness.Discharge.ZkExec.planOne T) tab} {Dh : Type}",
+    "  {Hc : List UInt8 → Dh}",
+    "  (vb : FlockSoundness.Discharge.ZkLink.ValueBindingZ A P (FlockSoundness.Discharge.ZkExec.planOne T) tab decode Hc)",
+    "  (hlow : FlockSoundness.Discharge.ZkSession.LoweringSoundZK A P (FlockSoundness.Discharge.ZkExec.planOne T) tab decode)",
+    "  {m : Nat} (σs : Fin n → Fin m) (ks : Fin m → Nat)",
+    "  (hks : ∀ (s : Fin m), instLENat.le (ks s) (FlockSoundness.Audit.Law.stratum σs s).card)",
+    "  (St : Fin m → Flock.Draw.Stratum) (hS : FlockSoundness.Audit.Law.ExecStrata σs ks St) (Kd pop : Nat) {Ω : Type}",
+    "  [Fintype Ω] [Nonempty Ω] (Lb : Fin m → Nat) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)",
+    "  (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src) {k Rw M : Nat} (hRw : instLENat.le 1 Rw)",
+    "  (hM : instLENat.le 1 M) {ρ : Real} (hρ : Real.instLT.lt ρ 1)",
+    "  (hr :",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkExec.planOne T S R).length),",
+    "      Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkExec.planOne T S R) j k) ρ)",
+    "  {a :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (FlockSoundness.Discharge.ZkLink.sessionZC A Hs (FlockSoundness.Discharge.ZkExec.planOne T S R)).Strategy →",
+    "          Fin (FlockSoundness.Discharge.ZkExec.planOne T S R).length → Real}",
+    "  (hj : FlockSoundness.Discharge.ZkLink.JointZC A Hs (FlockSoundness.Discharge.ZkExec.planOne T) k a) {t' : Real}",
+    "  (ht : Real.instLE.le 0 t') (K✝ : Nat) (hrun : FlockSoundness.Discharge.ZkExec.RunsZC A Hs T I wr opn dec fin capOf)",
+    "  (τ :",
+    "    (FlockSoundness.Discharge.Exec.auditLive",
+    "        (FlockSoundness.Audit.Law.execOS src (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop) Reg",
+    "        (FlockSoundness.Discharge.Exec.liveOf dg mPts N wr)).Strategy) :",
+    "  have σ :=",
+    "    FlockSoundness.Discharge.ZkExec.simAuditZC A Hs T I wr opn dg dec (fun x x_1 x_2 => Bool.true) fin capOf N ⋯ τ;",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (FlockSoundness.Discharge.ZkExec.LiveAcceptsZK I o)",
+    "          (instLENat.le K✝",
+    "            (P.wrong",
+    "                (FlockSoundness.Discharge.ZkLink.XplurZC A Hs P (FlockSoundness.Discharge.ZkExec.planOne T) tab vb",
+    "                  (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ) k Rw)).card))",
+    "      (FlockSoundness.Discharge.Exec.auditLive",
+    "        (FlockSoundness.Audit.Law.execOS src (Flock.Draw.Law.stratified Kd (Array.ofFn St)) pop) Reg",
+    "        (FlockSoundness.Discharge.Exec.liveOf dg mPts N wr))",
+    "      τ)",
+    "    (instHAdd.hAdd",
+    "      (instHAdd.hAdd ((FlockSoundness.Audit.Law.stratified σs ks hks).miss K✝)",
+    "        (FlockSoundness.Discharge.ZkLink.ksAvgZC A Hs (FlockSoundness.Discharge.ZkExec.planOne T) k a",
+    "          (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ)))",
+    "      (FlockSoundness.Discharge.ZkLink.linkBoundZC A Hs P (FlockSoundness.Discharge.ZkExec.planOne T) tab vb k Rw M ρ t'",
+    "        (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ)))"
+   ],
+   "assumptions": [],
+   "type_hash": "1337a082823da1e49cad959d2e3d6900396132cd9e96ccd67d65fdab51ebb83e"
+  },
+  "FlockSoundness.Discharge.ZkExec.zk_inner_accepts": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_inner_accepts : FlockSoundness.Discharge.ZkExec.ZkInnerAccepts"],
+   "assumptions": [],
+   "type_hash": "42bd16db681ba6c19ca3625634f4121f2c3aa3e3ec19959a2e57b68104c67af7"
+  },
+  "FlockSoundness.Discharge.ZkExec.zk_inner_plays": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_inner_plays : FlockSoundness.Discharge.ZkExec.ZkInnerPlays"],
+   "assumptions": [],
+   "type_hash": "8f61a754f7e4ddd9a1dfc32dee9b73905810dc6e6f5df6f4359befebe72c198d"
+  },
   "FlockSoundness.Discharge.ZkExec.zk_lig_accepts": {
    "signature": ["FlockSoundness.Discharge.ZkExec.zk_lig_accepts : FlockSoundness.Discharge.ZkExec.ZkLigAccepts"],
    "assumptions": [],
    "type_hash": "9248cf3b5707a9b50c73a29b7de057cdfbf34ad1ceb9848559d3bf41954c3369"
+  },
+  "FlockSoundness.Discharge.ZkExec.zk_ligerito_plays": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_ligerito_plays : FlockSoundness.Discharge.ZkExec.ZkLigeritoPlays"],
+   "assumptions": [],
+   "type_hash": "20ce9f55f17946ff711e4cb0b2d1140dd765d29bbc194230e9200ab466dbec18"
+  },
+  "FlockSoundness.Discharge.ZkExec.zk_rep_accepts": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_rep_accepts : FlockSoundness.Discharge.ZkExec.ZkRepAccepts"],
+   "assumptions": [],
+   "type_hash": "46bb611ba5a1f1d9ff07198bb33b93db83a757cff844ce8c3d733d9c32df88bd"
+  },
+  "FlockSoundness.Discharge.ZkExec.zk_rep_frames": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_rep_frames : FlockSoundness.Discharge.ZkExec.ZkRepFrames"],
+   "assumptions": [],
+   "type_hash": "9a4d3c261b738718948201a02caf579c0f7193b2c0b0979bf0f709bcd5b44042"
+  },
+  "FlockSoundness.Discharge.ZkExec.zk_rep_plays": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_rep_plays : FlockSoundness.Discharge.ZkExec.ZkRepPlays"],
+   "assumptions": [],
+   "type_hash": "8bfa2f3594077260cc202cc0130b52019d3e43cc38ac87b1f671f1ad4b3f2322"
+  },
+  "FlockSoundness.Discharge.ZkExec.zk_rep_run": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_rep_run : FlockSoundness.Discharge.ZkExec.ZkRepRun"],
+   "assumptions": [],
+   "type_hash": "83e47aaf92d99835aeab9c12e0c2ebec0bdca813c2fdc6b2456e8ee430db69f6"
+  },
+  "FlockSoundness.Discharge.ZkExec.zk_replay_plays": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_replay_plays : FlockSoundness.Discharge.ZkExec.ZkReplayPlays"],
+   "assumptions": [],
+   "type_hash": "ece9579992c0c92b905dd9857a8c5bba32b67d4ffb11e35b81df028330771789"
+  },
+  "FlockSoundness.Discharge.ZkExec.zk_schedule_seams": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_schedule_seams : FlockSoundness.Discharge.ZkExec.ZkScheduleSeams"],
+   "assumptions": [],
+   "type_hash": "d97ab2252c4b6e0b63e5a9bc59438adb3b6159c297aee1ece450dd27ea650367"
+  },
+  "FlockSoundness.Discharge.ZkExec.zk_table_verdict": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_table_verdict : FlockSoundness.Discharge.ZkExec.ZkTableVerdict"],
+   "assumptions": [],
+   "type_hash": "bc4b463b9ade9979d302f6070502273e34a6b3ef6c125350773cf0a7e34e87a8"
   },
   "FlockSoundness.Discharge.ZkExec.zk_verifyRep_ok": {
    "signature": ["FlockSoundness.Discharge.ZkExec.zk_verifyRep_ok : FlockSoundness.Discharge.ZkExec.ZkRepOk"],
