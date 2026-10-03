@@ -21,7 +21,9 @@ are `RowSem`'s formulas on the row's inputs:
   words, `pre8_ew`) plus its chain's word negated (`row8B_pb`), and the rescaled noise' BF16 words, `P_A`'s head and
   `P_B`'s tail negated, are `row8A_be` and `row8B_nbe`;
 * on `pc4`'s shared runs, `α`, `β`, `a_E` (`pre4_alpha`) and the flag (`pre4_flag`, `flag4`), so RowA's `Ẽ` and RowB's
-  `−Ẽ` (`row4A_et`, `row4B_net`) and both flags (`row4A_flag`, `row4B_flag`).
+  `−Ẽ` (`row4A_et`, `row4B_net`) and both flags (`row4A_flag`, `row4B_flag`);
+* `pc8`'s flag: the sum of squares (`pre8_sq`, `sqSum`), `θ` (`pre8_theta`), the dead count (`pre8_dead`,
+  `deadCount`) and the flag (`pre8_flag`, `flag8`), so both rows' flags (`row8A_flag`, `row8B_flag`).
 -/
 
 namespace Pouw.PearlC.RowCircuit
@@ -900,6 +902,204 @@ theorem row8B_nbe {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8B p
     hin _ (by simp only [rowIn]; omega), beta8_congr h8 fun l hl => hin l (by simp only [rowIn]; omega)]
 
 end Mid8
+
+/-! ## `pc8`'s flag -/
+
+/-- `Σ x_{8i}²`, scaled, as the flag's exact accumulators sum it from `0`: the accumulator after position `8i`. -/
+def sqSum (x : ℕ → ℕ) : ℕ → ℕ
+  | 0 => Prim.eval ops .sqAcc [0, x 0]
+  | i + 1 => Prim.eval ops .sqAcc [sqSum x i, x (8 * (i + 1))]
+
+/-- The dead positions' count through position `t`: each `x_t²`'s comparison with `θ`, selected to `1` or `0`, summed
+from `0`. -/
+def deadCount (x : ℕ → ℕ) (θ : ℕ) : ℕ → ℕ
+  | 0 => Prim.eval ops .iadd [0, Prim.eval ops .selI32 [Prim.eval ops .sqGe [x 0, θ], 1, 0]]
+  | t + 1 => Prim.eval ops .iadd [deadCount x θ t, Prim.eval ops .selI32 [Prim.eval ops .sqGe [x (t + 1), θ], 1, 0]]
+
+/-- `pc8`'s row flag as its table computes it: `s` and `ρ` finite, the floor `φ ≥ 0`, and at most `K/64` positions
+dead against `θ`, the ceiling of the sum over every 8th position. -/
+def flag8 (x : ℕ → ℕ) (K : ℕ) : ℕ :=
+  Prim.eval ops .band
+    [Prim.eval ops .band [Prim.eval ops .le [rowMax ops .fabs x (K - 1), 0x7F7FFFFF],
+      Prim.eval ops .le [rowRho ops .id x K, 0x7F7FFFFF]],
+    Prim.eval ops .band [Prim.eval ops .le [0, floor8 ops x K],
+      Prim.eval ops .le [deadCount ops x (Prim.eval ops .sqCeil [sqSum ops x (K / 8 - 1), K / 8]) (K - 1), K / 64]]]
+
+section Flag8
+
+variable {ops} {V : ℕ → ℕ} {p : Pipeline} {K b : ℕ}
+
+theorem sqSum_congr {x y : ℕ → ℕ} : ∀ i, (∀ l ≤ 8 * i, x l = y l) → sqSum ops x i = sqSum ops y i
+  | 0, h => by simp only [sqSum, h 0 (by omega)]
+  | i + 1, h => by simp only [sqSum, h (8 * (i + 1)) le_rfl, sqSum_congr i fun l hl => h l (by omega)]
+
+theorem deadCount_congr {x y : ℕ → ℕ} {θ : ℕ} : ∀ t, (∀ l ≤ t, x l = y l) →
+    deadCount ops x θ t = deadCount ops y θ t
+  | 0, h => by simp only [deadCount, h 0 le_rfl]
+  | t + 1, h => by simp only [deadCount, h (t + 1) le_rfl, deadCount_congr t fun l hl => h l (by omega)]
+
+theorem flag8_congr {x y : ℕ → ℕ} (hK : 8 ≤ K) (h : ∀ l < K, x l = y l) : flag8 ops x K = flag8 ops y K := by
+  unfold flag8
+  rw [rowMax_congr (K - 1) fun l hl => h l (by omega), rowRho_congr hK h, floor8_congr hK h,
+    sqSum_congr (K / 8 - 1) fun l hl => h l (by omega), deadCount_congr (K - 1) fun l hl => h l (by omega)]
+
+/-- **The sum of squares**: the flag's accumulators are `sqSum`'s. -/
+theorem pre8_sq (h : RunsHold ops V (pre8Runs p K b) b) : ∀ i, i < K / 8 → V (sq8At K b + i) = sqSum ops V i := by
+  obtain ⟨-, hr⟩ := runsHold_append ops V h
+  rw [statsRuns_len] at hr
+  obtain ⟨-, hs, -⟩ := hr
+  have hs' : RunHolds ops V (sq8Run K b) (sq8At K b) := hs
+  intro i
+  induction i with
+  | zero =>
+    intro hi
+    have g := hs' 0 hi
+    simp only [sq8Run, ↓reduceIte, List.map_cons, List.map_nil, Arg.eval, Wire.eval_id] at g
+    rw [g]
+    rfl
+  | succ i ih =>
+    intro hi
+    have g := hs' (i + 1) hi
+    simp only [sq8Run, Nat.add_one_ne_zero, ↓reduceIte, List.map_cons, List.map_nil, Arg.eval, Wire.eval_id] at g
+    rw [g, show sq8At K b + (i + 1) - 1 = sq8At K b + i by omega, ih (by omega)]
+    rfl
+
+/-- **The threshold**: `θ` is the ceiling of `sqSum`'s last accumulator over the `K/8` positions. -/
+theorem pre8_theta (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) :
+    V (th8At K b) = Prim.eval ops .sqCeil [sqSum ops V (K / 8 - 1), K / 8] := by
+  obtain ⟨-, hr⟩ := runsHold_append ops V h
+  rw [statsRuns_len] at hr
+  obtain ⟨-, -, hth, -⟩ := hr
+  have hth' : RunHolds ops V (th8Run K b) (th8At K b) := hth
+  have g := hth' 0 (by simp [th8Run, Run.ofList])
+  simp only [th8Run, Run.ofList, List.getD_cons_zero, List.map_cons, List.map_nil, Arg.eval, Wire.eval_id,
+    Nat.add_zero] at g
+  rw [g, show th8At K b - 1 = sq8At K b + (K / 8 - 1) by unfold th8At; omega, pre8_sq h _ (by omega)]
+
+/-- **The dead count**: through position `t`, `deadCount` against `θ`. -/
+theorem pre8_dead (h : RunsHold ops V (pre8Runs p K b) b) :
+    ∀ t, t < K → V (dead8At K b + 3 * t + 2) = deadCount ops V (V (th8At K b)) t := by
+  obtain ⟨-, hr⟩ := runsHold_append ops V h
+  rw [statsRuns_len] at hr
+  obtain ⟨-, -, -, hd, -⟩ := hr
+  have hd' : RunHolds ops V (dead8Run K b) (dead8At K b) := hd
+  have gate : ∀ t < K, V (dead8At K b + 3 * t + 1) =
+      Prim.eval ops .selI32 [Prim.eval ops .sqGe [V t, V (th8At K b)], 1, 0] := by
+    intro t ht
+    have g0 := hd' (3 * t) (by simp [dead8Run]; omega)
+    have g1 := hd' (3 * t + 1) (by simp [dead8Run]; omega)
+    have e0 : 3 * t % 3 = 0 := by omega
+    have e1 : (3 * t + 1) % 3 = 1 := by omega
+    have d0 : 3 * t / 3 = t := by omega
+    simp only [dead8Run, e0, e1, d0, ↓reduceIte, show (1 : ℕ) ≠ 0 by omega, List.map_cons, List.map_nil,
+      Arg.eval, Wire.eval_id] at g0 g1
+    rw [show dead8At K b + 3 * t + 1 = dead8At K b + (3 * t + 1) by omega, g1,
+      show dead8At K b + (3 * t + 1) - 1 = dead8At K b + 3 * t by omega, g0]
+  intro t
+  induction t with
+  | zero =>
+    intro ht
+    have g := hd' 2 (by simp [dead8Run]; omega)
+    simp only [dead8Run, show (2 : ℕ) % 3 = 2 from rfl, show (2 : ℕ) ≠ 0 by omega, show (2 : ℕ) ≠ 1 by omega,
+      ↓reduceIte, List.map_cons, List.map_nil, Arg.eval, Wire.eval_id] at g
+    rw [show dead8At K b + 3 * 0 + 2 = dead8At K b + 2 by omega, g,
+      show dead8At K b + 2 - 1 = dead8At K b + 3 * 0 + 1 by omega, gate 0 ht]
+    rfl
+  | succ t ih =>
+    intro ht
+    have g := hd' (3 * (t + 1) + 2) (by simp [dead8Run]; omega)
+    have c0 : ¬ ((3 * (t + 1) + 2) % 3 = 0) := by omega
+    have c1 : ¬ ((3 * (t + 1) + 2) % 3 = 1) := by omega
+    have c2 : ¬ (3 * (t + 1) + 2 = 2) := by omega
+    simp only [dead8Run, c0, c1, c2, ↓reduceIte, List.map_cons, List.map_nil, Arg.eval, Wire.eval_id] at g
+    rw [show dead8At K b + 3 * (t + 1) + 2 = dead8At K b + (3 * (t + 1) + 2) by omega, g,
+      show dead8At K b + (3 * (t + 1) + 2) - 3 = dead8At K b + 3 * t + 2 by omega, ih (by omega),
+      show dead8At K b + (3 * (t + 1) + 2) - 1 = dead8At K b + 3 * (t + 1) + 1 by omega, gate (t + 1) ht]
+    rfl
+
+/-- **The flag** on values meeting `pc8`'s shared runs: `flag8` of the values of `x`'s gates. -/
+theorem pre8_flag (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) : V (ok8At K b + 7) = flag8 ops V K := by
+  obtain ⟨hs, -, ho, -⟩ := pre8_runs h
+  obtain ⟨hsm, hrho⟩ := stats_holds hK hs
+  have g1 := ho 1 (by simp [ok8Run, Run.ofList])
+  have g2 := ho 2 (by simp [ok8Run, Run.ofList])
+  have g3 := ho 3 (by simp [ok8Run, Run.ofList])
+  have g4 := ho 4 (by simp [ok8Run, Run.ofList])
+  have g5 := ho 5 (by simp [ok8Run, Run.ofList])
+  have g6 := ho 6 (by simp [ok8Run, Run.ofList])
+  have g7 := ho 7 (by simp [ok8Run, Run.ofList])
+  simp only [ok8Run, Run.ofList, List.getD_cons_zero, List.getD_cons_succ, List.map_cons, List.map_nil, Arg.eval,
+    Wire.eval_id] at g1 g2 g3 g4 g5 g6 g7
+  rw [g7, g4, g3, g2, g6, g1, g5, pre8_floor hK h, hsm, hrho,
+    show ok8At K b - 1 = dead8At K b + 3 * (K - 1) + 2 by unfold ok8At; omega, pre8_dead h (K - 1) (by omega),
+    pre8_theta hK h]
+  rfl
+
+end Flag8
+
+section Flags8
+
+variable {ops} (p : Pipeline)
+
+/-- **RowA writes its flag**: the BF16 select of `flag8` to `1` or `0`. -/
+theorem row8A_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row8A p K).spec ops).toCircuit.Transcript)
+    (hX : ((row8A p K).spec ops).part.Correct X 0) :
+    val X (post8At K (rowIn K false) + 32 * (5 * (K / 128) + 1) + 32) =
+      Prim.eval ops .selBf16 [flag8 ops (val X) K, 1, 0] := by
+  have hlen := pre8Runs_len p K (rowIn K false)
+  have hmem : post8At K (rowIn K false) + 32 * (5 * (K / 128) + 1) + 32 ∈ (row8A p K).outs :=
+    List.mem_append_right _ (List.mem_singleton_self _)
+  have hlt : post8At K (rowIn K false) + 32 * (5 * (K / 128) + 1) + 32 < ((row8A p K).spec ops).N := by
+    show _ < rowIn K false + runsLen (row8A p K).runs
+    simp only [row8A, runsLen_append, runsLen, af8Run, Run.rep, bew8Run, okwRun, Run.ofList, List.length_cons,
+      List.length_nil]
+    omega
+  rw [Spec.out_eq _ X hX (List.mem_toFinset.2 hmem) hlt]
+  obtain ⟨V, hV⟩ : ∃ V, V = val (((row8A p K).spec ops).toCircuit.eval X) := ⟨_, rfl⟩
+  rw [← hV]
+  have hh := Rows.holds ops (row8A p K) X
+  rw [← hV] at hh
+  have hsplit := runsHold_append ops V hh
+  have hpre : RunsHold ops V (pre8Runs p K (rowIn K false)) (rowIn K false) := hsplit.1
+  have hpost := hsplit.2
+  rw [show (row8A p K).nIn + runsLen (pre8Runs p K (rowIn K false)) = post8At K (rowIn K false) from hlen] at hpost
+  have hin : ∀ l < rowIn K false, V l = val X l := fun l hl => by
+    rw [hV]; exact Rows.val_input ops (row8A p K) X hl
+  have g := hpost.2.2.1 0 (by simp [okwRun, Run.ofList])
+  simp only [okwRun, Run.ofList, List.getD_cons_zero, List.map_cons, List.map_nil, Arg.eval, Wire.eval_id, af8Run,
+    Run.rep, bew8Run, Nat.add_zero] at g
+  rw [g, pre8_flag hK hpre, flag8_congr hK fun l hl => hin l (by simp only [rowIn]; omega)]
+
+/-- **RowB writes its flag**: the BF16 select of `flag8` to `1` or `0`. -/
+theorem row8B_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row8B p K).spec ops).toCircuit.Transcript)
+    (hX : ((row8B p K).spec ops).part.Correct X 0) :
+    val X (post8At K (rowIn K true) + 32 * (5 * (K / 128) + 35) + 64) =
+      Prim.eval ops .selBf16 [flag8 ops (val X) K, 1, 0] := by
+  have hlen := pre8Runs_len p K (rowIn K true)
+  have hmem : post8At K (rowIn K true) + 32 * (5 * (K / 128) + 35) + 64 ∈ (row8B p K).outs :=
+    List.mem_append_right _ (List.mem_singleton_self _)
+  have hlt : post8At K (rowIn K true) + 32 * (5 * (K / 128) + 35) + 64 < ((row8B p K).spec ops).N := by
+    show _ < rowIn K true + runsLen (row8B p K).runs
+    simp only [row8B, runsLen_append, runsLen, mid8Run, Run.rep, nb8Run, okwRun, Run.ofList, List.length_cons,
+      List.length_nil]
+    omega
+  rw [Spec.out_eq _ X hX (List.mem_toFinset.2 hmem) hlt]
+  obtain ⟨V, hV⟩ : ∃ V, V = val (((row8B p K).spec ops).toCircuit.eval X) := ⟨_, rfl⟩
+  rw [← hV]
+  have hh := Rows.holds ops (row8B p K) X
+  rw [← hV] at hh
+  have hsplit := runsHold_append ops V hh
+  have hpre : RunsHold ops V (pre8Runs p K (rowIn K true)) (rowIn K true) := hsplit.1
+  have hpost := hsplit.2
+  rw [show (row8B p K).nIn + runsLen (pre8Runs p K (rowIn K true)) = post8At K (rowIn K true) from hlen] at hpost
+  have hin : ∀ l < rowIn K true, V l = val X l := fun l hl => by
+    rw [hV]; exact Rows.val_input ops (row8B p K) X hl
+  have g := hpost.2.2.1 0 (by simp [okwRun, Run.ofList])
+  simp only [okwRun, Run.ofList, List.getD_cons_zero, List.map_cons, List.map_nil, Arg.eval, Wire.eval_id, mid8Run,
+    Run.rep, nb8Run, Nat.add_zero] at g
+  rw [g, pre8_flag hK hpre, flag8_congr hK fun l hl => hin l (by simp only [rowIn]; omega)]
+
+end Flags8
 
 /-! ## `pc4`'s row units -/
 
