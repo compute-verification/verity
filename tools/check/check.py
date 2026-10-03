@@ -136,6 +136,7 @@ def custody_dir() -> Path | None:
 def _load(name: str):
     spec = importlib.util.spec_from_file_location(f"check_{name}", Path(__file__).resolve().parent / f"{name}.py")
     m = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = m                       # dataclasses resolve their module by name
     spec.loader.exec_module(m)
     return m
 
@@ -144,6 +145,8 @@ def _load(name: str):
 VERDICTS = _load("verdicts")
 #: the helpers `lean_audit.py` shares (`common.py`), kept out of this file so that its audit key doesn't cover this file
 COMMON = _load("common")
+#: the test runner (`suites.py`), for where the steps' Python imports this tree's packages from
+SUITES = _load("suites")
 cache_dir = COMMON.cache_dir
 cores = COMMON.cores
 _sha256 = COMMON.sha256
@@ -904,6 +907,10 @@ def main(argv: list[str]) -> int:
         n, rest = int(rest[1]), []
     if rest:
         print(__doc__.strip(), file=sys.stderr)
+        return 2
+    if away := SUITES.foreign(SUITES.members(), env()):
+        print(f"check: {sys.executable} would run this tree's steps against another checkout's code ({away}); run check with "
+              f"{ROOT}'s own environment: `uv run --extra torch-cpu python tools/check/check.py` there", file=sys.stderr)
         return 2
     run_dir = Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None
     out = run_dir or Path(tempfile.mkdtemp(prefix="check-"))

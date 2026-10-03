@@ -5,6 +5,8 @@ import importlib.util
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location("repo_check", ROOT / "tools" / "check" / "check.py")
 CHECK = importlib.util.module_from_spec(spec)
@@ -317,6 +319,17 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
         out = capsys.readouterr().out
         assert ("check: this commit can't land as is; the train's check is the merge check" in out) is said
         launched.clear()
+
+
+def test_check_refuses_a_python_that_imports_the_trees_packages_from_elsewhere(monkeypatch, capsys):
+    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+    monkeypatch.setenv("PYTHONPATH", f"/tmp/s1350/packages/verity/src:{ROOT / 'tools/research/src'}")
+    probed = []
+    monkeypatch.setattr(CHECK.SUITES, "foreign", lambda pkgs, env: probed.append(env.get("PYTHONPATH")) or "verity from /tmp/s1350/x.py")
+    monkeypatch.setattr(CHECK, "run", lambda *a: pytest.fail("a step ran"))
+    assert CHECK.main([]) == 2
+    assert "against another checkout's code (verity from /tmp/s1350/x.py)" in capsys.readouterr().err
+    assert probed == [str(ROOT / "tools/research/src")]
 
 
 def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
