@@ -40,7 +40,8 @@ Lowering `β` by at most `22,029` bits (`N ≥ 2`) and `2,829` bits (`N = 1`) ke
 be a model of storage at rest (`Pous/Protocol/Model/Graded.lean`), so `BandGradedMeetsFamily` carries them as
 hypotheses. Block `v` of a segment absorbs its `min(v mod 2^9, d)` newest parents, newest first, then the pad, so it
 takes `min(v mod 2^9, d) + 1` sequential `Π₂` calls even with every parent held, and block `v + 1`'s chain starts from
-`C_v`. Re-encoding a segment from `W` therefore takes `R(d) = Σ_{v < 2^9} (min(v, d) + 1)` sequential calls, at least `R(5) = 3,057`.
+`C_v`. Re-encoding a segment from `W` therefore takes `R(d) = Σ_{v < 2^9} (min(v, d) + 1)` sequential calls, at least
+`R(5) = 3,057`.
 - `D_late ≤ d` is the band's cliff (`PROTOCOL.md`, "Deployment condition, the cliff") applied to `Δ_late`: at
   `D_late = d + 1` the gap attack rebuilds, within one late round, every dropped block whose parents are held. With
   `D_late ≤ d` a late round, like an on-time one, rebuilds no block at a segment position `≥ d`. At the deployed
