@@ -14,11 +14,7 @@ public-inputs-wrong.bin (one anchor bit flipped, the verifier's file wrong) and 
 public file's tail, an anchor the prover chose).
 
 `HZ_STAGE` (``fast``, the default, or ``library``): whether `fast_stage` patches the library first, for the same bytes in
-less time and memory; stage.json records which.
-
-DEVELOPMENT BINDING: the PoUW word primitives Keccak-f is written in have no C-Flock piece on this branch, so the hiding
-tile lowers them through `hash_scratch`'s pieces, checked against their primitives first; its results are labelled 'hash
-scratch'."""
+less time and memory; stage.json records which."""
 from __future__ import annotations
 
 import hashlib
@@ -35,7 +31,6 @@ import numpy as np
 from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
-from verity_flock import ir_lower as IL
 from verity_pouw.circuit import leaves as L
 from verity_pouw.circuit import pc4
 from verity_pouw.circuit.anchors import TileAnchors, public_ports
@@ -106,13 +101,6 @@ def main() -> None:
     elif ROLE.startswith(("tile", "hidden")):
         V = _load("pouw_rows_vectors", ROOT / "protocols" / "pouw" / "tests" / "pouw_rows_vectors.py")
         hidden = ROLE.startswith("hidden")
-        if hidden:
-            sys.path.insert(0, str(HERE))
-            import hash_scratch as H
-            bad = H.check()
-            assert not any(bad.values()), f"hash_scratch's pieces disagree with their primitives: {bad}"
-            IL.PIECES.update(H.PIECES)
-            rec["binding"] = "hash scratch"
         tm, tn = map(int, ROLE.removeprefix("hidden" if hidden else "tile").split("x")) if "x" in ROLE else (1, 1)
         rec["tile"] = [tm, tn]
         d = pc4.templates(K, (tm, tn), hidden=hidden)["tile"]
