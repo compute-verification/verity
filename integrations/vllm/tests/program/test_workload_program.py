@@ -291,6 +291,46 @@ def test_tp_rank_components_share_weights_at_shifting_positions_and_tp1_digests_
                                          manifest_digest="m" * 8, lag=0).digest
 
 
+def _toy_stochastic_rank_request(LP: int, T: int):
+    """A stochastic TP rank Program's shape (`vllm_meta.SplitsWithPeers`): `(prompt, seed, splits, peers_0..peers_T, weights)`."""
+    def sig(S):
+        peers = tuple((f"peers_{k}", Array(1, Value(16))) for k in range(S.T + 1))
+        return ((("prompt", Array(S.LP, Value(16))), ("seed", Array(1, Value(64))), ("splits", Array(S.T + 1, Value(32))))
+                + peers + (("weights", Array(4, Value(16))),), Array(S.T + 1, Value(16)))
+
+    def body(B, S, prompt, seed, splits, *rest):
+        peers, weights = rest[:-1], rest[-1]
+        outs, acc = [], prompt[0]
+        for s in range(S.T + 1):
+            acc = B.call(_ADD, B.call(_ADD, acc, weights[s % 4]), peers[s][0])
+            outs.append(acc)
+        return coll_concat(Array(S.T + 1, Value(16)), outs)
+
+    d = REGISTRY["ToyStochRankReq_v1"] if "ToyStochRankReq_v1" in REGISTRY else CompositeDefinition("ToyStochRankReq", 1, ("LP", "T"), sig, body)
+    return d.bind(LP=LP, T=T)
+
+
+def _WP_stochastic_rank(LP, T):
+    return ([("prompt", f"Array<{LP},Value<16>>"), ("seed", "Array<1,Value<64>>"), ("splits", f"Array<{T + 1},Value<32>>")]
+            + [(f"peers_{k}", "Array<1,Value<16>>") for k in range(T + 1)] + [("weights", "Array<4,Value<16>>")])
+
+
+def test_stochastic_tp_rank_components_keep_their_seed_and_splits_as_request_inputs():
+    """A stochastic rank Program's `seed` and `splits` are its request's own, like the prompt and the peers: B8 rank components of
+    different T compose with the weights once at shifting positions, each request's seed and splits its own inputs."""
+    ca = W.request_component(encode_program(Program(_toy_stochastic_rank_request(3, 2))), REGISTRY, _WP_stochastic_rank(3, 2))   # weights at 6
+    cb = W.request_component(encode_program(Program(_toy_stochastic_rank_request(5, 0))), REGISTRY, _WP_stochastic_rank(5, 0))  # weights at 4
+    wl = W.WorkloadProgram([W.WorkloadRequest("r0", 0, 3, 3, 0, ca, T=2), W.WorkloadRequest("r1", 1, 5, 1, 0, cb, T=0)], lag=0)
+    assert wl.shared_by_request == ((6,), (4,)) and wl.shared_positions_uniform is False
+    params, _ = wl.fn.signature()
+    assert [p for p, _ in params] == ["shared.weights", "request[r0].prompt", "request[r0].seed", "request[r0].splits", "request[r0].peers_0",
+                                      "request[r0].peers_1", "request[r0].peers_2", "request[r1].prompt", "request[r1].seed", "request[r1].splits",
+                                      "request[r1].peers_0"]
+    am = wl.address_map()
+    assert am["requests"][0]["inputs"][1]["global"] == "request[r0].seed" and am["requests"][1]["inputs"][2]["global"] == "request[r1].splits"
+    assert program_digest(encode_program(wl.program)) == wl.digest
+
+
 def test_chronology_is_declared_and_bounded():
     wl = _wl([(3, 2), (5, 0), (2, 3)], arrivals=[0, 1, 3])
     ch = wl.chronology()
