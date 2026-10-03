@@ -5,40 +5,62 @@
  "config_sha256": "3ac72612095574542f7fff847ada8e59d9199dd8af44bdf625d7e02615572e69",
  "vllm": "0.28.1rc1.dev472+gd9105ea80",
  "torch": "2.13.0+cu129",
+ "platform": "NvmlCudaPlatform",
  "target": {
   "compute_capability": [
    9,
    0
   ],
-  "device_name": "NVIDIA H200",
+  "num_sms": 132,
+  "batch_invariant": false,
+  "attention_backend": null,
+  "vllm_revision": "d9105ea80",
+  "numerics_profile": "b1-eager-v3",
+  "flash_attn_version": null,
+  "fp8_block_gemm": "cutlass"
+ },
+ "device": {
+  "name": "NVIDIA H200",
   "memory_gb": 141
+ },
+ "env": {
+  "VLLM_BATCH_INVARIANT": "0",
+  "VLLM_USE_DEEP_GEMM": "0"
  },
  "tp": 8,
  "num_layers": null,
  "max_model_len": 4096,
  "kv_cache_dtype": "auto",
- "attention_backend": null,
- "env": {
-  "VLLM_USE_DEEP_GEMM": "0"
- },
  "architecture": "GlmMoeDsaForCausalLM",
  "model_class": "vllm.models.deepseek_v32.nvidia.model.DeepseekV32ForCausalLM",
  "quantization": "fp8",
  "cache_dtype": "auto",
- "selections": {
-  "deep_gemm_supported": false,
-  "deep_gemm_e8m0": false,
-  "VLLM_BATCH_INVARIANT": false,
-  "VLLM_USE_DEEP_GEMM": false,
-  "VLLM_MOE_USE_DEEP_GEMM": true,
-  "VLLM_USE_DEEP_GEMM_E8M0": true,
-  "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
-  "VLLM_ALLREDUCE_USE_FLASHINFER": true,
-  "VLLM_ALLREDUCE_USE_SYMM_MEM": true
- },
- "run": "r20261003-064155-38c6",
+ "run": "r20261003-072626-b966",
  "ranks": {
   "0": {
+   "applied": {
+    "compute_capability": [
+     9,
+     0
+    ],
+    "num_sms": 132,
+    "batch_invariant": false,
+    "vllm_version": "0.28.1rc1.dev472+gd9105ea80",
+    "torch_version": "2.13.0+cu129",
+    "triton_version": "3.7.1",
+    "tuned_gemm_arch_family": "hopper"
+   },
+   "selections": {
+    "deep_gemm_supported": false,
+    "deep_gemm_e8m0": false,
+    "VLLM_BATCH_INVARIANT": false,
+    "VLLM_USE_DEEP_GEMM": false,
+    "VLLM_MOE_USE_DEEP_GEMM": true,
+    "VLLM_USE_DEEP_GEMM_E8M0": true,
+    "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
+    "VLLM_ALLREDUCE_USE_FLASHINFER": true,
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": true
+   },
    "modules": 1758,
    "module_types": {
     "ApplyRotaryEmb": 1,
@@ -5686,30 +5708,191 @@
    "signature": "92b97a3a48036d4716e911f405e22ad2d338d108a6f026cbc348f0afa09fdfe0"
   },
   "1": {
+   "applied": {
+    "compute_capability": [
+     9,
+     0
+    ],
+    "num_sms": 132,
+    "batch_invariant": false,
+    "vllm_version": "0.28.1rc1.dev472+gd9105ea80",
+    "torch_version": "2.13.0+cu129",
+    "triton_version": "3.7.1",
+    "tuned_gemm_arch_family": "hopper"
+   },
+   "selections": {
+    "deep_gemm_supported": false,
+    "deep_gemm_e8m0": false,
+    "VLLM_BATCH_INVARIANT": false,
+    "VLLM_USE_DEEP_GEMM": false,
+    "VLLM_MOE_USE_DEEP_GEMM": true,
+    "VLLM_USE_DEEP_GEMM_E8M0": true,
+    "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
+    "VLLM_ALLREDUCE_USE_FLASHINFER": true,
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": true
+   },
    "modules": 1758,
    "signature": "92b97a3a48036d4716e911f405e22ad2d338d108a6f026cbc348f0afa09fdfe0"
   },
   "2": {
+   "applied": {
+    "compute_capability": [
+     9,
+     0
+    ],
+    "num_sms": 132,
+    "batch_invariant": false,
+    "vllm_version": "0.28.1rc1.dev472+gd9105ea80",
+    "torch_version": "2.13.0+cu129",
+    "triton_version": "3.7.1",
+    "tuned_gemm_arch_family": "hopper"
+   },
+   "selections": {
+    "deep_gemm_supported": false,
+    "deep_gemm_e8m0": false,
+    "VLLM_BATCH_INVARIANT": false,
+    "VLLM_USE_DEEP_GEMM": false,
+    "VLLM_MOE_USE_DEEP_GEMM": true,
+    "VLLM_USE_DEEP_GEMM_E8M0": true,
+    "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
+    "VLLM_ALLREDUCE_USE_FLASHINFER": true,
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": true
+   },
    "modules": 1758,
    "signature": "92b97a3a48036d4716e911f405e22ad2d338d108a6f026cbc348f0afa09fdfe0"
   },
   "3": {
+   "applied": {
+    "compute_capability": [
+     9,
+     0
+    ],
+    "num_sms": 132,
+    "batch_invariant": false,
+    "vllm_version": "0.28.1rc1.dev472+gd9105ea80",
+    "torch_version": "2.13.0+cu129",
+    "triton_version": "3.7.1",
+    "tuned_gemm_arch_family": "hopper"
+   },
+   "selections": {
+    "deep_gemm_supported": false,
+    "deep_gemm_e8m0": false,
+    "VLLM_BATCH_INVARIANT": false,
+    "VLLM_USE_DEEP_GEMM": false,
+    "VLLM_MOE_USE_DEEP_GEMM": true,
+    "VLLM_USE_DEEP_GEMM_E8M0": true,
+    "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
+    "VLLM_ALLREDUCE_USE_FLASHINFER": true,
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": true
+   },
    "modules": 1758,
    "signature": "92b97a3a48036d4716e911f405e22ad2d338d108a6f026cbc348f0afa09fdfe0"
   },
   "4": {
+   "applied": {
+    "compute_capability": [
+     9,
+     0
+    ],
+    "num_sms": 132,
+    "batch_invariant": false,
+    "vllm_version": "0.28.1rc1.dev472+gd9105ea80",
+    "torch_version": "2.13.0+cu129",
+    "triton_version": "3.7.1",
+    "tuned_gemm_arch_family": "hopper"
+   },
+   "selections": {
+    "deep_gemm_supported": false,
+    "deep_gemm_e8m0": false,
+    "VLLM_BATCH_INVARIANT": false,
+    "VLLM_USE_DEEP_GEMM": false,
+    "VLLM_MOE_USE_DEEP_GEMM": true,
+    "VLLM_USE_DEEP_GEMM_E8M0": true,
+    "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
+    "VLLM_ALLREDUCE_USE_FLASHINFER": true,
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": true
+   },
    "modules": 1758,
    "signature": "92b97a3a48036d4716e911f405e22ad2d338d108a6f026cbc348f0afa09fdfe0"
   },
   "5": {
+   "applied": {
+    "compute_capability": [
+     9,
+     0
+    ],
+    "num_sms": 132,
+    "batch_invariant": false,
+    "vllm_version": "0.28.1rc1.dev472+gd9105ea80",
+    "torch_version": "2.13.0+cu129",
+    "triton_version": "3.7.1",
+    "tuned_gemm_arch_family": "hopper"
+   },
+   "selections": {
+    "deep_gemm_supported": false,
+    "deep_gemm_e8m0": false,
+    "VLLM_BATCH_INVARIANT": false,
+    "VLLM_USE_DEEP_GEMM": false,
+    "VLLM_MOE_USE_DEEP_GEMM": true,
+    "VLLM_USE_DEEP_GEMM_E8M0": true,
+    "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
+    "VLLM_ALLREDUCE_USE_FLASHINFER": true,
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": true
+   },
    "modules": 1758,
    "signature": "92b97a3a48036d4716e911f405e22ad2d338d108a6f026cbc348f0afa09fdfe0"
   },
   "6": {
+   "applied": {
+    "compute_capability": [
+     9,
+     0
+    ],
+    "num_sms": 132,
+    "batch_invariant": false,
+    "vllm_version": "0.28.1rc1.dev472+gd9105ea80",
+    "torch_version": "2.13.0+cu129",
+    "triton_version": "3.7.1",
+    "tuned_gemm_arch_family": "hopper"
+   },
+   "selections": {
+    "deep_gemm_supported": false,
+    "deep_gemm_e8m0": false,
+    "VLLM_BATCH_INVARIANT": false,
+    "VLLM_USE_DEEP_GEMM": false,
+    "VLLM_MOE_USE_DEEP_GEMM": true,
+    "VLLM_USE_DEEP_GEMM_E8M0": true,
+    "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
+    "VLLM_ALLREDUCE_USE_FLASHINFER": true,
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": true
+   },
    "modules": 1758,
    "signature": "92b97a3a48036d4716e911f405e22ad2d338d108a6f026cbc348f0afa09fdfe0"
   },
   "7": {
+   "applied": {
+    "compute_capability": [
+     9,
+     0
+    ],
+    "num_sms": 132,
+    "batch_invariant": false,
+    "vllm_version": "0.28.1rc1.dev472+gd9105ea80",
+    "torch_version": "2.13.0+cu129",
+    "triton_version": "3.7.1",
+    "tuned_gemm_arch_family": "hopper"
+   },
+   "selections": {
+    "deep_gemm_supported": false,
+    "deep_gemm_e8m0": false,
+    "VLLM_BATCH_INVARIANT": false,
+    "VLLM_USE_DEEP_GEMM": false,
+    "VLLM_MOE_USE_DEEP_GEMM": true,
+    "VLLM_USE_DEEP_GEMM_E8M0": true,
+    "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
+    "VLLM_ALLREDUCE_USE_FLASHINFER": true,
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": true
+   },
    "modules": 1758,
    "signature": "92b97a3a48036d4716e911f405e22ad2d338d108a6f026cbc348f0afa09fdfe0"
   }

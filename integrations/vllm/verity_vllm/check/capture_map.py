@@ -11,23 +11,26 @@ symbols, which name `config.json` keys and the tensor-parallel size, so nothing 
 `inventory(model)` of a live serving rank): every (path pattern, class) the inventory lists has exactly one module entry and
 every entry is listed, each entry's layers are the inventory's, each tap names an inventory module and reads tensors of the
 shape the inventory gives that rank, every kernel expectation (`expect`) holds, and every Definition a Program cites is
-registered.  `identities` expands the taps of one step into canonical value ids (`verity_vllm.commit.identity`), and `counts`
-totals them by Program status.
+registered.  `check_target` holds the device and the process-wide switches the inventory was built under against the map's
+target.  `identities` expands the taps of one step into canonical value ids (`verity_vllm.commit.identity`), and `counts`
+totals them by Program status.  A tap marked `target_only` runs only on the map's target device (its kernels have no build
+for the devices the inventory and the tests run on).
 
-    python -m verity_vllm.correspondence.capture_map check --map M.json --config config.json --inventory inv.json [--rank R]
-    python -m verity_vllm.correspondence.capture_map ids --map M.json --config config.json --t 0 --phase prefill --rank 0
+    verity-vllm capture-map check --map M.json --config config.json --inventory inv.json [--rank R]
+    verity-vllm capture-map counts --map M.json --config config.json
+    verity-vllm capture-map ids --map M.json --config config.json --t 0 --phase prefill --rank 0
 """
 from __future__ import annotations
 
-import argparse
 import ast
 import json
 import operator
-import sys
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from verity_vllm.commit.identity import NAMED_LAYERS, format_id, value_id
+from verity_vllm.config import option
 
 SCHEMA = "verity-vllm/capture-map/v0"
 #: a tap's Program today: registered and conformance-tested; being built (on a named branch); a registered family whose kernel
@@ -301,12 +304,15 @@ def check(cmap: dict[str, Any], inventory: dict[str, Any], config: dict[str, Any
     return problems
 
 
-def check_switches(cmap: dict[str, Any], doc: dict[str, Any]) -> list[str]:
-    """The process-wide switches the map's target pins (`target.switches`) against an inventory document's `selections`
-    (`meta_inventory`: values read from vLLM after the model is built)."""
-    got = doc.get("selections", {})
-    return [f"switch {k} = {v!r}, the inventory has {got.get(k)!r}" for k, v in cmap["target"].get("switches", {}).items()
-            if got.get(k) != v]
+def check_target(cmap: dict[str, Any], doc: dict[str, Any]) -> list[str]:
+    """The map's target against one inventory record (`meta_inventory`: values read back from vLLM once the model is built):
+    the compute capability and SM count vLLM answered (`applied`) and the process-wide switches (`target.switches` against
+    `selections`).  A record that lacks one of them disagrees."""
+    target, applied, got = cmap["target"], doc.get("applied", {}), doc.get("selections", {})
+    out = [f"{k} = {target[k]!r}, the inventory has {applied.get(k)!r}" for k in ("compute_capability", "num_sms")
+           if applied.get(k) != target[k]]
+    return out + [f"switch {k} = {v!r}, the inventory has {got.get(k)!r}" for k, v in target.get("switches", {}).items()
+                  if got.get(k) != v]
 
 
 def identities(cmap: dict[str, Any], env: dict[str, int], *, profile: str, request: str, t: int, phase: str,
@@ -331,7 +337,7 @@ def counts(cmap: dict[str, Any], env: dict[str, int], routes: tuple[str, ...] | 
     status = {pid: p["status"] for pid, p in cmap["programs"].items()}
     per_status = dict.fromkeys(STATUSES, 0)
     templates = dict.fromkeys(STATUSES, 0)
-    h200 = 0
+    target_only = 0
     for tap in cmap["taps"]:
         if tap.get("route") is not None and routes is not None and tap["route"] not in routes:
             continue
@@ -339,33 +345,72 @@ def counts(cmap: dict[str, Any], env: dict[str, int], routes: tuple[str, ...] | 
         n = 1 if layers is None else len(layers)
         per_status[status[tap["program"]]] += n
         templates[status[tap["program"]]] += 1
-        h200 += n if tap.get("h200_only") else 0
+        target_only += n if tap.get("target_only") else 0
     return {"module_entries": len(cmap["modules"]), "module_types": len({m["type"] for m in cmap["modules"]}),
             "tap_templates": sum(templates.values()), "tap_templates_by_status": templates,
-            "taps_per_step": sum(per_status.values()), "taps_per_step_by_status": per_status, "h200_only_taps_per_step": h200}
+            "taps_per_step": sum(per_status.values()), "taps_per_step_by_status": per_status,
+            "target_only_taps_per_step": target_only}
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="capture_map", description=__doc__.split("\n\n")[0])
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("check", "counts", "ids"):
-        s = sub.add_parser(name)
-        s.add_argument("--map", type=Path, required=True)
-        s.add_argument("--config", type=Path, required=True, help="the checkpoint's config.json")
-        s.add_argument("--tp", type=int, default=None, help="tensor-parallel size (default: the map's target)")
-        if name == "check":
-            s.add_argument("--inventory", type=Path, required=True, help="a meta_inventory JSON (meta build or live rank)")
-            s.add_argument("--rank", default=None, help="which rank of the inventory (default: every rank it holds)")
-        if name == "ids":
-            s.add_argument("--profile", default="000000000000")
-            s.add_argument("--request", default="r0")
-            s.add_argument("--t", type=int, default=0)
-            s.add_argument("--phase", default="prefill")
-            s.add_argument("--route", action="append", default=None)
-            s.add_argument("--rank", type=int, default=None)
-    a = ap.parse_args(argv)
+def check_document(cmap: dict[str, Any], doc: dict[str, Any], config: dict[str, Any], tp: int, registry: Any = None,
+                   rank: str | None = None) -> dict[str, list[str]]:
+    """Every problem of an inventory document (`meta_inventory`'s, or `live_document` of a serving engine's ranks), by where:
+    each rank's `check_target`, its `check` (`rank`: that rank alone; else every rank that carries its modules), and the
+    ranks' disagreement on the inventory signature (under `ranks`)."""
+    ranks = doc["ranks"]
+    out: dict[str, list[str]] = {}
+    sigs = {r: rec.get("signature") for r, rec in ranks.items()}
+    if len(set(sigs.values())) > 1:
+        out["ranks"] = [f"the ranks disagree on the inventory signature: {sigs}"]
+    for r in ([rank] if rank is not None else [r for r in ranks if "groups" in ranks[r]]):
+        out[f"rank {r}"] = check_target(cmap, ranks[r]) + check(cmap, ranks[r], config, tp, registry)
+    return out
+
+
+@dataclass(frozen=True, kw_only=True)
+class CheckOptions:
+    "a capture map against a module inventory (a meta-device build, or a serving engine's ranks)"
+
+    map: str = option("--map")
+    config: str = option("--config", help="the checkpoint's config.json")
+    inventory: str = option("--inventory", help="a meta-inventory document (`verity-vllm meta-inventory`, or a live one)")
+    rank: str | None = option("--rank", default=None, help="one rank of the inventory (default: every rank it holds)")
+    tp: int | None = option("--tp", type=int, default=None, help="tensor-parallel size (default: the map's target)")
+    cmd: str = field(default="check", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class CountsOptions:
+    "module entries, module types, tap templates and taps per step and rank, by Program status and by route"
+
+    map: str = option("--map")
+    config: str = option("--config", help="the checkpoint's config.json")
+    tp: int | None = option("--tp", type=int, default=None, help="tensor-parallel size (default: the map's target)")
+    cmd: str = field(default="counts", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class IdsOptions:
+    "the canonical value ids of one step's taps on one rank"
+
+    map: str = option("--map")
+    config: str = option("--config", help="the checkpoint's config.json")
+    tp: int | None = option("--tp", type=int, default=None, help="tensor-parallel size (default: the map's target)")
+    profile: str = option("--profile", default="000000000000", help="the capture profile id (12 hex)")
+    request: str = option("--request", default="r0")
+    t: int = option("--t", type=int, default=0, help="the step's first position")
+    phase: str = option("--phase", default="prefill", choices=("prefill", "decode"))
+    route: list[str] | None = option("--route", action="append", default=None, help="the step's routes (default: all)")
+    rank: int | None = option("--rank", type=int, default=None, help="the tensor-parallel rank (`s=`; default: none)")
+    cmd: str = field(default="ids", init=False)
+
+
+COMMANDS = {"check": CheckOptions, "counts": CountsOptions, "ids": IdsOptions}
+
+
+def main(a: CheckOptions | CountsOptions | IdsOptions) -> int:
     cmap = load(a.map)
-    config = json.loads(a.config.read_text())
+    config = json.loads(Path(a.config).read_text())
     tp = a.tp or cmap["target"]["tensor_parallel_size"]
     env = symbols(cmap, config, tp)
     if a.cmd == "ids":
@@ -379,28 +424,16 @@ def main(argv: list[str] | None = None) -> int:
     from verity_vllm.program.registry import catalog
 
     registry, errors = catalog.load()
-    inv = json.loads(a.inventory.read_text())
-    ranks = inv["ranks"] if "ranks" in inv else {"live": inv}
-    chosen = [a.rank] if a.rank is not None else [r for r in ranks if "groups" in ranks[r]]
-    bad = 0
-    switch_docs = {f"rank {r}": rec for r, rec in ranks.items() if "selections" in rec} or {"inventory": inv}
-    for where, d in switch_docs.items():
-        for p in check_switches(cmap, d):
-            print(f"FAIL {where}: {p}")
-            bad += 1
-    sigs = {r: ranks[r].get("signature") for r in ranks}
-    if len(set(sigs.values())) > 1:
-        print(f"FAIL ranks disagree on the inventory signature: {sigs}")
-        bad += 1
-    for r in chosen:
-        problems = errors + check(cmap, ranks[r], config, tp, registry.defs)
+    doc = json.loads(Path(a.inventory).read_text())
+    found = check_document(cmap, doc, config, tp, registry.defs, a.rank)
+    if errors:
+        found["registry"] = list(errors)
+    for where, problems in found.items():
         for p in problems:
-            print(f"FAIL rank {r}: {p}")
-        bad += len(problems)
-        print(f"rank {r}: {len(problems)} problems, signature {sigs.get(r)}")
+            print(f"FAIL {where}: {p}")
+    sigs = {r: rec.get("signature") for r, rec in doc["ranks"].items()}
+    for where, problems in found.items():
+        if where.startswith("rank "):
+            print(f"{where}: {len(problems)} problems, signature {sigs.get(where[5:])}")
     print(json.dumps(counts(cmap, env), indent=1))
-    return 1 if bad else 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+    return 1 if any(found.values()) else 0

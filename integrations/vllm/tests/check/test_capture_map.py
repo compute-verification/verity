@@ -1,7 +1,8 @@
 """The GLM-5.3 capture map (`manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json`) against the meta-device inventory of
-the same `config.json` at TP8 on an H200 (`verity_vllm.engine.meta_inventory`, run r20261003-064155-38c6, VLLM_USE_DEEP_GEMM=0):
+the same `config.json` at TP8 for the map's target (`verity-vllm meta-inventory`, run r20261003-072626-b966, ranks 0-7):
 every module the pinned vLLM builds has exactly one entry, so a module the map misses fails here; every tap reads tensors of
-the shape the inventory gives a rank; and the counts the H200 runbook cites are pinned."""
+the shape the inventory gives a rank; each rank built for the target's profile and switches; and the counts the H200 runbook
+cites are pinned."""
 from __future__ import annotations
 
 import copy
@@ -14,8 +15,9 @@ import torch
 
 from verity_vllm.acquire.sources import moe_source
 from verity_vllm.commit import identity as ID
-from verity_vllm.correspondence import capture_map as CM
+from verity_vllm.check import capture_map as CM
 from verity_vllm.engine import meta_inventory as MI
+from verity_vllm.pipeline import cli
 from verity_vllm.program.registry import catalog
 
 HERE = Path(__file__).parent
@@ -29,7 +31,7 @@ DOC = json.loads((FIX / "inventory-tp8-rank0.json").read_text())
 RANK0 = DOC["ranks"]["0"]
 TP = CMAP["target"]["tensor_parallel_size"]
 ENV = CM.symbols(CMAP, CONFIG, TP)
-H200_ONLY = {"attn", "indexer.q_fp8", "indexer.weights", "indexer.k_cache", "indexer.logits", "indexer.topk"}
+TARGET_ONLY = {"attn", "indexer.q_fp8", "indexer.weights", "indexer.k_cache", "indexer.logits", "indexer.topk"}
 
 
 @pytest.fixture(scope="module")
@@ -49,14 +51,16 @@ def test_the_map_the_fixture_and_the_config_are_one_checkpoint():
     assert (DOC["repo"], DOC["revision"]) == (pins["repo"], pins["revision"])
     assert DOC["architecture"] in CMAP["architectures"] and DOC["model_class"] == CMAP["model_class"]
     assert (DOC["vllm"], DOC["torch"]) == (CMAP["pins"]["vllm"], CMAP["pins"]["torch"])
-    assert DOC["tp"] == TP and DOC["target"]["compute_capability"] == CMAP["target"]["compute_capability"]
-    assert DOC["env"].items() <= CMAP["target"]["env"].items() and DOC["kv_cache_dtype"] == CMAP["target"]["kv_cache_dtype"]
+    target = CMAP["target"]
+    assert DOC["tp"] == TP and {k: DOC["target"][k] for k in target["profile"]} == target["profile"]
+    assert DOC["env"] == target["env"] and DOC["kv_cache_dtype"] == target["kv_cache_dtype"]
+    assert DOC["device"] == {"name": target["device"], "memory_gb": target["device_memory_gb"]}
     assert DOC["run"] in CMAP["pins"]["inventory_runs"]["VLLM_USE_DEEP_GEMM=0"]
 
 
 def test_the_map_covers_the_inventory_with_no_problems(registry):
     assert _check(registry=registry) == []
-    assert CM.check_switches(CMAP, DOC) == []
+    assert all(CM.check_target(CMAP, rec) == [] for rec in DOC["ranks"].values())
 
 
 def test_every_module_type_the_inventory_lists_is_in_the_map():
@@ -127,10 +131,15 @@ def test_a_different_kernel_fails_an_expectation():
     assert len(problems) == 1 and problems[0].startswith("expect model.layers.{i}.self_attn.o_proj kernels.quant_method.fp8_linear.type")
 
 
-def test_a_different_switch_fails():
-    doc = copy.deepcopy(DOC)
-    doc["selections"]["VLLM_USE_DEEP_GEMM"] = True
-    assert CM.check_switches(CMAP, doc) == ["switch VLLM_USE_DEEP_GEMM = False, the inventory has True"]
+def test_a_different_switch_or_device_fails():
+    rec = copy.deepcopy(RANK0)
+    rec["selections"]["VLLM_USE_DEEP_GEMM"] = True
+    assert CM.check_target(CMAP, rec) == ["switch VLLM_USE_DEEP_GEMM = False, the inventory has True"]
+    rec = copy.deepcopy(RANK0)
+    rec["applied"]["compute_capability"] = [12, 0]
+    assert CM.check_target(CMAP, rec) == ["compute_capability = [9, 0], the inventory has [12, 0]"]
+    del rec["applied"]
+    assert CM.check_target(CMAP, rec) == ["compute_capability = [9, 0], the inventory has None", "num_sms = 132, the inventory has None"]
 
 
 def test_an_unregistered_definition_fails(registry):
@@ -147,10 +156,10 @@ def test_every_tap_names_a_program_of_a_known_status():
         assert p["status"] != "tonight" or p["branch"].startswith("cursor/")
 
 
-def test_the_h200_only_taps_are_the_indexer_and_the_sparse_attention_and_have_no_program():
+def test_the_target_only_taps_are_the_indexer_and_the_sparse_attention_and_have_no_program():
     taps = {t["id"]: t for t in CMAP["taps"]}
-    assert {tid for tid, t in taps.items() if t["h200_only"]} == H200_ONLY
-    assert {CMAP["programs"][taps[tid]["program"]]["status"] for tid in H200_ONLY} == {"committed-only"}
+    assert {tid for tid, t in taps.items() if t["target_only"]} == TARGET_ONLY
+    assert {CMAP["programs"][taps[tid]["program"]]["status"] for tid in TARGET_ONLY} == {"committed-only"}
 
 
 @pytest.mark.parametrize("phase,route", [("prefill", "dense-mha"), ("decode", "sparse-mqa")])
@@ -169,7 +178,7 @@ def test_one_steps_identities_parse_and_are_distinct_on_every_rank(phase, route)
 
 def test_the_runbook_counts():
     def brief(c):
-        return c["tap_templates"], c["taps_per_step"], c["taps_per_step_by_status"], c["h200_only_taps_per_step"]
+        return c["tap_templates"], c["taps_per_step"], c["taps_per_step_by_status"], c["target_only_taps_per_step"]
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
@@ -190,23 +199,31 @@ def test_moe_source_binds_its_six_tensors_on_every_moe_layer():
 
 
 def _cli_check(inventory: Path, capsys) -> tuple[int, str]:
-    code = CM.main(["check", "--map", str(MAP), "--config", str(FIX / "config.json"), "--inventory", str(inventory)])
+    code = cli.main(["capture-map", "check", "--map", str(MAP), "--config", str(FIX / "config.json"), "--inventory", str(inventory)])
     return code, capsys.readouterr().out
 
 
 def test_the_check_command_passes_the_meta_build_and_a_live_document(tmp_path, capsys):
     code, out = _cli_check(FIX / "inventory-tp8-rank0.json", capsys)
     assert code == 0 and "FAIL" not in out and f"rank 0: 0 problems, signature {RANK0['signature']}" in out
-    per_rank = [{"rank": r, "selections": DOC["selections"], **copy.deepcopy(RANK0)} for r in reversed(range(TP))]
+    per_rank = [{"rank": r, **copy.deepcopy(RANK0)} for r in reversed(range(TP))]
     live = MI.live_document(per_rank, repo=DOC["repo"], revision=DOC["revision"])
-    assert list(live["ranks"]) == [str(r) for r in range(TP)] and live["selections"] == DOC["selections"]
+    assert list(live["ranks"]) == [str(r) for r in range(TP)] and live["repo"] == DOC["repo"]
     (tmp_path / "live.json").write_text(json.dumps(live))
     code, out = _cli_check(tmp_path / "live.json", capsys)
     assert code == 0 and out.count(": 0 problems") == TP
-    per_rank[2]["selections"] = {**DOC["selections"], "VLLM_USE_DEEP_GEMM": True}
+    per_rank[2]["selections"] = {**RANK0["selections"], "VLLM_USE_DEEP_GEMM": True}
     (tmp_path / "live.json").write_text(json.dumps(MI.live_document(per_rank)))
     code, out = _cli_check(tmp_path / "live.json", capsys)
     assert code == 1 and out.count("FAIL") == 1 and "FAIL rank 5: switch VLLM_USE_DEEP_GEMM" in out
+
+
+def test_ranks_that_build_different_modules_fail_the_check(tmp_path, capsys):
+    per_rank = [{"rank": r, **copy.deepcopy(RANK0)} for r in range(TP)]
+    per_rank[3]["signature"] = "0" * 64
+    (tmp_path / "live.json").write_text(json.dumps(MI.live_document(per_rank)))
+    code, out = _cli_check(tmp_path / "live.json", capsys)
+    assert code == 1 and out.count("FAIL") == 1 and "FAIL ranks: the ranks disagree on the inventory signature" in out
 
 
 def test_the_expression_grammar_refuses_anything_else():

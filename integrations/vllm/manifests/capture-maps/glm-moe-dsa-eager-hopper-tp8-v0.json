@@ -1,7 +1,7 @@
 {
  "schema": "verity-vllm/capture-map/v0",
  "id": "glm-moe-dsa-eager-hopper-tp8-v0",
- "purpose": "The capture half of a semantic profile for a GlmMoeDsaForCausalLM checkpoint served eager at TP8 on Hopper (sm_90, the 8xH200 run): every module the pinned vLLM builds for the checkpoint's config.json, what each one computes on the forward path, and the taps the committer attaches to -- each tap's tensor, dtype, shape on one TP rank, where it is captured, and whether a Program checks it today (exists), tonight (tonight), after a kernel is pinned to an existing family (port), or not at all (committed-only: bound by the Commit, reported as an unverified unit, never folded into delta). The module list is checked against the meta-device inventory of the same config (verity_vllm.engine.meta_inventory; tests/correspondence/test_capture_map.py), so a module the map misses fails a test.",
+ "purpose": "The capture half of a semantic profile for a GlmMoeDsaForCausalLM checkpoint served eager at TP8 on Hopper (sm_90, the 8xH200 run): every module the pinned vLLM builds for the checkpoint's config.json, what each one computes on the forward path, and the taps the committer attaches to -- each tap's tensor, dtype, shape on one TP rank, where it is captured, and whether a Program checks it today (exists), tonight (tonight), after a kernel is pinned to an existing family (port), or not at all (committed-only: bound by the Commit, reported as an unverified unit, never folded into delta). The module list is checked against the meta-device inventory of the same config (verity_vllm.engine.meta_inventory; tests/check/test_capture_map.py), so a module the map misses fails a test. A tap marked target_only runs only on the target device (an H200): its kernels have no build for the nodes the inventory and the tests run on.",
  "architectures": [
   "GlmMoeDsaForCausalLM"
  ],
@@ -17,8 +17,8 @@
    "config_sha256": "3ac72612095574542f7fff847ada8e59d9199dd8af44bdf625d7e02615572e69"
   },
   "inventory_runs": {
-   "VLLM_USE_DEEP_GEMM=0": "r20261003-064155-38c6 (inv-tp8-nodg.json, ranks 0-7; tests/correspondence/fixtures/glm_moe_dsa)",
-   "default": "r20261003-064155-38c6 (inv-tp8-default.json, rank 0: DeepGemmFp8BlockScaledMMKernel); r20261003-062327-45fd (ranks 0-7)",
+   "VLLM_USE_DEEP_GEMM=0": "r20261003-072626-b966 (inv-tp8-cutlass.json, ranks 0-7, the target profile; tests/check/fixtures/glm_moe_dsa)",
+   "default": "r20261003-072626-b966 (inv-tp8-default.json, rank 0: DeepGemmFp8BlockScaledMMKernel; check-default.txt: 11 problems, 2 switches and 9 kernel expectations); r20261003-062327-45fd (ranks 0-7)",
    "VLLM_BATCH_INVARIANT=1": "r20261003-062327-45fd (log-bi.txt: refused, no sparse MLA backend supports batch invariance)"
   }
  },
@@ -27,13 +27,24 @@
    9,
    0
   ],
+  "num_sms": 132,
   "device": "NVIDIA H200",
+  "device_memory_gb": 141,
   "tensor_parallel_size": 8,
   "pipeline_parallel_size": 1,
   "enforce_eager": true,
   "kv_cache_dtype": "auto",
   "dtype": "bfloat16",
   "quantization": "fp8",
+  "profile": {
+   "compute_capability": [
+    9,
+    0
+   ],
+   "num_sms": 132,
+   "batch_invariant": false,
+   "fp8_block_gemm": "cutlass"
+  },
   "env": {
    "VLLM_USE_DEEP_GEMM": "0",
    "VLLM_BATCH_INVARIANT": "0"
@@ -278,7 +289,7 @@
    "program": "tp-allreduce",
    "tp": "reduced",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "note": "VocabParallelEmbedding.forward: the all-reduce of the 8 masked shard gathers; equal to the owning rank's partial word for word except that a -0.0 row word reduces to +0.0"
   },
@@ -301,7 +312,7 @@
    "program": "embedding-shard",
    "tp": "partial",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "tp_rank_partials",
    "weights": [
     {
@@ -331,7 +342,7 @@
    "program": "fused-allreduce-rmsnorm",
    "tp": "reduced",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "weights": [
     {
@@ -359,7 +370,7 @@
    "program": "cublas-bf16-gemm",
    "tp": "vocab-shard",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "tp_rank_partials",
    "weights": [
     {
@@ -388,7 +399,7 @@
    "program": "all-gather",
    "tp": "gathered",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "note": "the all-gather of the 8 lm_head shards: word-equal to their concatenation"
   },
@@ -410,7 +421,7 @@
    "program": "token-select",
    "tp": "replicated",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "sampled_token_ids"
   },
   {
@@ -432,7 +443,7 @@
    "program": "rmsnorm-cuda",
    "tp": "reduced",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "weights": [
     {
@@ -462,7 +473,7 @@
    "program": "fused-allreduce-rmsnorm",
    "tp": "reduced",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "weights": [
     {
@@ -490,7 +501,7 @@
    "program": "fused-allreduce-rmsnorm",
    "tp": "reduced",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs"
   },
   {
@@ -513,7 +524,7 @@
    "program": "fused-allreduce-rmsnorm",
    "tp": "reduced",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "weights": [
     {
@@ -541,7 +552,7 @@
    "program": "fused-allreduce-rmsnorm",
    "tp": "reduced",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs"
   },
   {
@@ -563,7 +574,7 @@
    "program": "fp8-block-linear",
    "tp": "replicated",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "weights": [
     {
@@ -593,7 +604,7 @@
    "program": "fused-rmsnorm-triton",
    "tp": "replicated",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "weights": [
     {
@@ -621,7 +632,7 @@
    "program": "fused-rmsnorm-triton",
    "tp": "replicated",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "weights": [
     {
@@ -649,7 +660,7 @@
    "program": "fused-rope-triton",
    "tp": "replicated",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "weights": [
     {
@@ -678,7 +689,7 @@
    "program": "copy-equality",
    "tp": "replicated",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "note": "what the attention core of every later step reads; word-equal to the two fused_norm_rope outputs it copies"
   },
@@ -701,7 +712,7 @@
    "program": "fp8-block-linear",
    "tp": "column",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "weights": [
     {
@@ -732,7 +743,7 @@
    "program": "cublas-bf16-gemm",
    "tp": "column",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "route": "sparse-mqa",
    "weights": [
@@ -763,7 +774,7 @@
    "program": "fp8-block-linear",
    "tp": "column",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "route": "dense-mha",
    "weights": [
@@ -795,7 +806,7 @@
    "program": "fa3-prefill-attention",
    "tp": "column",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "route": "dense-mha"
   },
@@ -820,7 +831,7 @@
    "program": "fused-rope-triton",
    "tp": "column",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs"
   },
   {
@@ -844,7 +855,7 @@
    "program": "mla-sparse-attention",
    "tp": "column",
    "rank_identical": false,
-   "h200_only": true,
+   "target_only": true,
    "manifest_family": "instance_outputs",
    "route": "sparse-mqa",
    "note": "layers in 'shared_topk' read the indices the most recent 'indexer' layer wrote (IndexShare); see topk_source"
@@ -869,7 +880,7 @@
    "program": "cublas-bf16-gemm",
    "tp": "column",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "route": "sparse-mqa",
    "weights": [
@@ -899,7 +910,7 @@
    "program": "fp8-block-linear",
    "tp": "partial",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "tp_rank_partials",
    "weights": [
     {
@@ -929,7 +940,7 @@
    "program": "cublas-bf16-gemm",
    "tp": "replicated",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "weights": [
     {
@@ -959,7 +970,7 @@
    "program": "fp8-block-linear",
    "tp": "replicated",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "route": "sparse-mqa",
    "weights": [
@@ -992,7 +1003,7 @@
    "program": "dsa-indexer",
    "tp": "replicated",
    "rank_identical": true,
-   "h200_only": true,
+   "target_only": true,
    "manifest_family": "instance_outputs",
    "route": "sparse-mqa"
   },
@@ -1016,7 +1027,7 @@
    "program": "dsa-indexer",
    "tp": "replicated",
    "rank_identical": true,
-   "h200_only": true,
+   "target_only": true,
    "manifest_family": "instance_outputs",
    "route": "sparse-mqa"
   },
@@ -1039,7 +1050,7 @@
    "program": "dsa-indexer",
    "tp": "replicated",
    "rank_identical": true,
-   "h200_only": true,
+   "target_only": true,
    "manifest_family": "instance_outputs",
    "weights": [
     {
@@ -1071,7 +1082,7 @@
    "program": "dsa-indexer",
    "tp": "replicated",
    "rank_identical": true,
-   "h200_only": true,
+   "target_only": true,
    "manifest_family": "instance_outputs",
    "route": "sparse-mqa"
   },
@@ -1094,7 +1105,7 @@
    "program": "dsa-indexer",
    "tp": "replicated",
    "rank_identical": true,
-   "h200_only": true,
+   "target_only": true,
    "manifest_family": "instance_outputs",
    "route": "sparse-mqa",
    "note": "the dense-mha route leaves the buffer untouched; record which route each step took"
@@ -1118,7 +1129,7 @@
    "program": "fp8-block-linear",
    "tp": "column",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "weights": [
     {
@@ -1147,7 +1158,7 @@
    "program": "silu-mul",
    "tp": "column",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs"
   },
   {
@@ -1169,7 +1180,7 @@
    "program": "fp8-block-linear",
    "tp": "partial",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "tp_rank_partials",
    "weights": [
     {
@@ -1198,7 +1209,7 @@
    "program": "router-gemm",
    "tp": "replicated",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "weights": [
     {
@@ -1227,7 +1238,7 @@
    "program": "sigmoid-router",
    "tp": "replicated",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "moe_block_stream",
    "weights": [
     {
@@ -1256,7 +1267,7 @@
    "program": "sigmoid-router",
    "tp": "replicated",
    "rank_identical": true,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "moe_block_stream",
    "source": "moe/L{i}/router_ids"
   },
@@ -1280,7 +1291,7 @@
    "program": "fp8-moe-triton",
    "tp": "column",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "moe_block_stream",
    "weights": [
     {
@@ -1311,7 +1322,7 @@
    "program": "silu-mul",
    "tp": "column",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "moe_block_stream",
    "source": "moe/L{i}/act",
    "note": "not A of the w2 launch, which moe_source binds as act today: with block FP8 that A is qintermediate_cache2, the e4m3 words of this tensor with a2q_scale, which fp8-moe-triton recomputes (Fp8GroupQuant). Likewise the w13 launch reads qhidden_states, the group quant of post_attention_layernorm's output"
@@ -1336,7 +1347,7 @@
    "program": "fp8-moe-triton",
    "tp": "partial",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "moe_block_stream",
    "weights": [
     {
@@ -1366,7 +1377,7 @@
    "program": "moe-sum",
    "tp": "partial",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "moe_block_stream",
    "source": "moe/L{i}/sum",
    "note": "each rank holds all 256 experts with a 256-wide slice of each expert's intermediate: the sum is a partial"
@@ -1390,7 +1401,7 @@
    "program": "fp8-block-linear",
    "tp": "column",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs",
    "weights": [
     {
@@ -1419,7 +1430,7 @@
    "program": "silu-mul",
    "tp": "column",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "instance_outputs"
   },
   {
@@ -1441,7 +1452,7 @@
    "program": "fp8-block-linear",
    "tp": "partial",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "tp_rank_partials",
    "weights": [
     {
@@ -1470,7 +1481,7 @@
    "program": "bf16-add",
    "tp": "partial",
    "rank_identical": false,
-   "h200_only": false,
+   "target_only": false,
    "manifest_family": "tp_rank_partials",
    "note": "MoERunner.forward: shared_output + fused_output (routed scale already in the router weights; reduce_results=False)"
   }
