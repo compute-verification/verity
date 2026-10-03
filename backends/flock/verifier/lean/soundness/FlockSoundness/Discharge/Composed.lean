@@ -1,6 +1,7 @@
 import FlockSoundness.Discharge.Composed.Headline
 import FlockSoundness.Discharge.Composed.Coins
 import FlockSoundness.Discharge.Composed.Geometry
+import FlockSoundness.Discharge.Composed.Pads
 
 /-!
 # One `--zk` sampled session: soundness and zero knowledge composed
