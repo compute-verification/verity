@@ -128,6 +128,7 @@ def live_session(a, stage: Path, n: int, d: Path, pin: str, warm: int, runs: int
     """``serve --zk`` on 127.0.0.1 (``links``: the verifier's ``--links`` file) and ``prove --zk`` against it, ``warm + runs``
     sessions recorded under ``d/sessions``: the median timed run's LIVE record, and the recorded session directories. A verifier
     that refuses the statement before serving is the record's ``why`` (its REFUSED line), with no session."""
+    d.mkdir(parents=True, exist_ok=True)
     sess = d / "sessions"
     log = d / "serve.log"
     srv = subprocess.Popen([a.bin, "serve", "--zk", "--listen", f"127.0.0.1:{a.port}", "--out", str(sess), "--instances",
