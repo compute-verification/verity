@@ -642,6 +642,38 @@ def test_the_served_table_cites_each_models_worst_input_and_refuses_what_it_cann
         ST.main(["--model", "qwen", str(files["q"]), "--out", str(out)])
 
 
+FH = load("pearl_c_vllm_forming_headroom", KERNEL.parent / "pearl_c_vllm" / "forming_headroom.py")
+
+
+def test_forming_headroom_on_a_recorded_line(tmp_path):
+    """A real decode line (Qwen3-8B's down projection, pass r20261003-210254-47a3) recomputes at Prices.sm120, and at the
+    cited Prices.sm120Loop its verdict flips only past 11.0% salt-dead elements, by hand."""
+    line = {"tile": 1769828, "matmul": 7179, "m": 32, "k": 12288, "n": 4096, "credited_rows": 32, "credited_cols": 64,
+            "ok": True, "atoms": 14, "later_zero_promotions": 0, "debit_exact": "476", "cap": 27426.816}
+    path = tmp_path / "q" / "decode.input-tiles.jsonl"
+    path.parent.mkdir()
+    path.write_text(json.dumps(line) + "\n" + json.dumps(line | {"tile": 1, "atoms": 200, "debit_exact": "6800"}) + "\n")
+    cell = 12288 + Fraction(12288 * 1047, 125 * 128) + 96 + 128 + 120 - Fraction(1047, 125)
+    want = ((cell * 2048 / 1000 - (32 + Fraction(1047, 500)) * 14) * 4096 / (40 * 64)) / (32 * 12288)
+    assert FH.dead_to_flip(line) == want and 0.1099 < want < 0.1100
+    out = tmp_path / "fh.json"
+    assert FH.main([str(path), "--out", str(out)]) == 0
+    doc = json.loads(out.read_text())
+    assert doc["tiles"] == 2 and doc["unit_rows_covered_by_rho_D"] and doc["inputs"][0]["worst_tile"] == 1
+    inputs = tmp_path / "inputs.json"
+    inputs.write_text(json.dumps({"m": 1, "inputs": [{"pass": "decode", "run": "rq", "manifest_sha256": "ab", "matmul": 7179,
+                                                     "k": 12288, "n": 4096, "NT": 64, "W": 64, "w_max": 1, "method": "census",
+                                                     "drawn": 64, "openings_failed": 0, "failures": 0, "share_max": 5e-5}]}))
+    assert ST.main(["--model", "qwen", str(inputs), "--forming", "qwen", str(out), "--out", str(tmp_path / "t")]) == 0
+    assert json.loads((tmp_path / "t" / "table.json").read_text())["models"][0]["forming"]["tiles"] == 2
+    assert "flips only if at least" in (tmp_path / "t" / "table.md").read_text()
+    flagged = line | {"atoms": 200, "debit_exact": "6800"}
+    assert FH.dead_to_flip(flagged) < want - Fraction(32 * 3, 32 * 12288)
+    path.write_text(json.dumps(line | {"debit_exact": "477"}) + "\n")
+    with pytest.raises(ValueError, match="not Prices.sm120"):
+        FH.main([str(path), "--out", str(out)])
+
+
 def test_clopper_pearson_upper():
     assert SD.clopper_pearson_upper(0, 320, 0.05 / 16) == pytest.approx(1 - (0.05 / 16) ** (1 / 320))
     assert SD.clopper_pearson_upper(0, 320, 0.05 / 16) < 0.02 < math.log(20 * 16) / 64

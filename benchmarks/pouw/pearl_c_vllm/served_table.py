@@ -87,6 +87,16 @@ def markdown(table: dict) -> str:
     lines += ["", f"ε is the largest of a model's inputs' upper limits on the input's honest tile-rejection rate at the cap, "
               f"each at δ = 0.05/m with m = {table['m']}, every input the table measures over all its models and "
               f"measurements (served_debit.input_bound); an input is one matmul of the pass."]
+    for r in table["models"]:
+        if "forming" in r:
+            f = r["forming"]
+            lines += ["", f"{r['model']}: the served debit leaves out Lean's forming term fs·(|C|/n)·elems "
+                      f"(`pearl_c_debit.forming_elements` is a stub). On its {f['tiles']} recorded tiles, at Prices.sm120Loop, a "
+                      f"verdict flips only if at least {f['dead_to_flip_min']:.2%} of a tile's |R|·k elements are salt-dead "
+                      f"(forming_headroom.py; the unneeded ones are bounded by the recorded atoms). Lean's ρ_D = 1/64 "
+                      f"({1 / 64:.2%}) of a unit's elements (`FormingP.saltDeadP_card_le`, under its domain conditions) "
+                      f"{'covers' if f['unit_rows_covered_by_rho_D'] else 'does not cover'} the tiles that hold all their "
+                      f"unit's rows (decode); a prefill tile has the threshold only."]
     return "\n".join(lines) + "\n"
 
 
@@ -100,6 +110,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pending", nargs=3, action="append", default=[], metavar=("NAME", "M", "RUN"),
                    help="a model's fresh trials still running in RUN: their M bounds count in m now, so that no limit moves "
                         "when they land")
+    p.add_argument("--forming", nargs=2, action="append", default=[], metavar=("NAME", "HEADROOM_JSON"),
+                   help="a model's forming_headroom.py report over its recorded tiles")
     p.add_argument("--cap", default="1/1000")
     p.add_argument("--out", type=Path, required=True)
     a = p.parse_args(argv)
@@ -115,6 +127,12 @@ def main(argv: list[str] | None = None) -> int:
     models = [model_row(name, doc, [json.loads(Path(v).read_text()) for v in verifies], fresh.get(name), m)
               | ({"fresh_pending": {"m_model": pending[name][0], "run": pending[name][1]}} if name in pending else {})
               for name, doc, verifies in specs]
+    for name, path in a.forming:
+        doc = json.loads(Path(path).read_text())
+        row = next((r for r in models if r["model"] == name), None)
+        if row is None:
+            p.error(f"--forming {name}: no such --model")
+        row["forming"] = {k: doc[k] for k in ("tiles", "dead_to_flip_min", "worst", "unit_rows_covered_by_rho_D", "rho_D")}
     models += [{"model": name, "absent": reason} for name, reason in a.absent]
     table = {"tool": "pouw_pearl_c_served_table", "cap": a.cap, "m": m, "delta_per_input": 0.05 / m, "models": models}
     a.out.mkdir(parents=True, exist_ok=True)
