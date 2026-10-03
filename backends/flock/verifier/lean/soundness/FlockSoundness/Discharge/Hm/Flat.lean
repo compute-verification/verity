@@ -20,7 +20,8 @@ open Compose Flock.DeriveAll Types.Dag
 and cut bits and the wires' bits (`flatPairs`). -/
 theorem delta_flat_eq (c : Circuit) (pin : ℕ) (ht : c.typed = none)
     (hv1 : ∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
-    (hw : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks) :
+    (hw : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks)
+    (hs : ∀ p ∈ c.ports.toList, p.v2 = false → p.segs = none) :
     (HmRow.delta c pin).1.toList = flatPairs c pin := by
   unfold HmRow.delta
   simp only
@@ -51,9 +52,11 @@ theorem delta_flat_eq (c : Circuit) (pin : ℕ) (ht : c.typed = none)
   intro d hd
   refine FlockSoundness.run_bind_fst (Q := fun r => r.toList = flatPairs c pin)
     (P := fun d' => d'.toList = d.toList ++ rowPairs c pin) ?_ ?_
-  · rw [← rowPairsAll_v1 c pin hv1 hw]
+  · rw [← rowPairsAll_v1 c pin hv1 hw hs]
     refine forIn_range_append _ _ (fun g _ d => ⟨_, rfl, ?_⟩) d
-    refine forIn_range_append _ _ (fun p _ d => ⟨_, rfl, ?_⟩) d
+    refine forIn_range_append _ _ (fun p hp d => ?_) d
+    rw [segs_none_of_v1 hv1 hs hp]
+    refine ⟨_, rfl, ?_⟩
     rw [rowPairsOf, ← List.append_assoc, ← List.append_assoc]
     refine Eq.trans (forIn_range'_append (fun k => (List.range 1024).flatMap fun t => bitPairs c pin
         (msgColOf c g p k + t) (HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) k t)) _ _
@@ -404,7 +407,7 @@ theorem inBit_copyL (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits 
   have hδ : ∀ j, deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) ∧
       deltaEntry st.db x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) := by
     intro j
-    rw [L.delta_b, deltaEntry_eq_count, hda, delta_flat_eq _ _ F.parse.typed hv1 F.parse.portWords, hF]
+    rw [L.delta_b, deltaEntry_eq_count, hda, delta_flat_eq _ _ F.parse.typed hv1 F.parse.portWords F.parse.v1Segs, hF]
     exact ⟨rfl, rfl⟩
   have hx : x < 2 ^ (L.model regs).kLog := hat.lt R.bound (R.range (R.rowNet_lt hn)).1
   exact block_of_rows hz o hx fun j => inBit_rows R hn hat hl hself hx hδ j
