@@ -1,6 +1,7 @@
 """[r8 lane E-cleanup, 2026-09-18 — closes the M10 ADAPTER item] the FA2 scope of a model served with logit soft-capping
 (`attn_logit_softcapping > 0`: Gemma-2) -> the quarantined `AttentionSoftcap_v1{T,NH,KVH,D,BN,CAP}` (`verity_vllm.program.registry.quarantine.dense.softcap`,
-lane gemma 2026-09-17: exact `MufuTanh` over all 2^32 sm_89 words + FA2 difftest 25/25 bitwise, job 0917T223335-9ad747).
+lane gemma 2026-09-17: exact `MufuTanh` over all 2^32 sm_89 words + FA2 difftest 25/25 bitwise, job 0917T223335-9ad747), or
+`AttentionSoftcap_v2` under FA2's per-iteration `Check_inf`.
 
 vLLM passes the model's `attn_logit_softcapping` to `_vllm_fa2_C.varlen_fwd` as `softcap` (float; `FlashAttentionImpl.__init__`:
 `self.logits_soft_cap = logits_soft_cap or 0`).  Inside vllm-flash-attn (`flash_api.cpp::set_params_fprop`) `softcap > 0` selects the
@@ -14,8 +15,10 @@ so relative to `Attention_v3` the body gains one stage in front of the online so
 when the bound launch argument `softcap` is a positive finite float, re-checks every base fact through the base `AttentionScope` (causal,
 `softmax_scale == D**-0.5`, bf16, paged KV, `num_splits`, kBlockN, geometry, rows) on a copy of the launch with `softcap` rewritten to
 `0.0`, keeps the inert-window rule of `AttentionScopeInertWindow` (Gemma-2's even layers pass `window_size_left = 4095`, inert below 4096
-tokens), and then re-binds every resulting `Attention_v3{T,NH,KVH,D,BN}` compute to `AttentionSoftcap_v1{T,NH,KVH,D,BN,CAP=softcap}` with the
-same operands / outputs / attribution / consumed ids.  `softcap` in `(None, 0.0)` is the base pattern's case (returns None); a negative,
+tokens), and then re-binds every resulting attention compute to its softcapped chain (`registry.targets.softcapped`, the builder's
+selection: `Attention_v3{T,NH,KVH,D,BN}` -> `AttentionSoftcap_v1{T,NH,KVH,D,BN,CAP=softcap}` on the accepted target, `Attention_v5` ->
+`AttentionSoftcap_v2` under FA2's per-iteration `Check_inf`; any other chain is Unsupported by name) with the same operands / outputs /
+attribution / consumed ids.  `softcap` in `(None, 0.0)` is the base pattern's case (returns None); a negative,
 NaN or infinite `softcap` is Unsupported here (FA2 takes the softcap path iff `softcap > 0`; the Definition requires `CAP > 0`).
 
 The Definition stays in `quarantine/dense` (no promotion inside the r8 window, brief §2 rule 2); G4 admits it through the run's
@@ -28,17 +31,11 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
-from verity.ir.defs import bind
-from verity_vllm.program.registry.quarantine.dense import softcap as _softcap
-
 from verity_vllm.observe.fold.patterns import FA2_OP_NAMES, AttentionScope, ComputeGroup, as_float, bound_args, find_descendants, op_name, unsupported
+from verity_vllm.observe.fold.patterns.target import _targets
 from verity_vllm.engine.profiles.gen_dense2_patterns import AttentionScopeInertWindow, _annotate, _replace_descendant, _rewrite_args
 from verity_vllm.observe.fold.resolver import Compute, Resolution, StepContext, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
-
-#: the base body's fully qualified name the softcap pattern re-binds (every other spec inside the group is left alone)
-BASE_ATTENTION_ID = "Attention_v3"
-SOFTCAP_STATICS = ("T", "NH", "KVH", "D", "BN")
 
 
 def _is_window(v: Any) -> bool:
@@ -50,7 +47,6 @@ class AttentionScopeSoftcap(AttentionScopeInertWindow):
     """`AttentionScope` for launches whose `softcap > 0` (see the module docstring); windowed launches go through the inert-window rule."""
 
     name: str = "attention.fa2_varlen_fwd.softcap"
-    body: Any = _softcap.AttentionSoftcap                         # the quarantined Definition bound with CAP = softcap
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or op_name(node.op) != "unified_attention_with_output":
@@ -75,16 +71,20 @@ class AttentionScopeSoftcap(AttentionScopeInertWindow):
             return None
         if isinstance(r, Unsupported):
             return _annotate(r, {"softcap": cap})
-        return self._rebind(r, cap)
+        try:
+            return self._rebind(r, cap)
+        except _targets().UnregisteredTarget as e:
+            return unsupported(node, f"target has no registered softcapped attention binding: {e}", softcap=cap)
 
     def _rebind(self, r: Resolution, cap: float) -> Resolution:
-        """Every `Attention_v3{...}` compute of the group -> `AttentionSoftcap_v1{..., CAP=cap}`; operands, outputs, rows, attribution and
-        consumed ids are the base pattern's (the scope's transparent children in `.before` are untouched)."""
+        """Every attention compute of the group -> its softcapped chain with `CAP=cap` (`registry.targets.softcapped`, the selection the
+        builder makes: `Attention_v3` -> `AttentionSoftcap_v1`, `Attention_v5` -> `AttentionSoftcap_v2`; any other chain raises
+        UnregisteredTarget); operands, outputs, rows, attribution and consumed ids are the base pattern's (the scope's transparent
+        children in `.before` are untouched)."""
         def one(c: Resolution) -> Resolution:
-            if not isinstance(c, Compute) or getattr(c.spec, "base_id", None) != BASE_ATTENTION_ID:
+            if not isinstance(c, Compute) or getattr(c.spec, "name", None) != "Attention":
                 return c
-            statics = {k: c.spec.bindings[k] for k in SOFTCAP_STATICS}
-            return dataclasses.replace(c, spec=bind(self.body, CAP=cap, **statics), pattern=self.name)
+            return dataclasses.replace(c, spec=_targets().softcapped(c.spec, cap), pattern=self.name)
         if isinstance(r, ComputeGroup):
             primary = one(r)
             return dataclasses.replace(primary, also=tuple(one(x) for x in r.also))
