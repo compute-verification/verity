@@ -317,6 +317,22 @@ path = "/home/research/.config/systemd/user/infra-pool-publish.timer"
 src = "tools/research/src/research/pods/nebius/infra-pool-publish.timer"
 nodes = ["vy-nebius-2"]
 
+[[file]]  # node 2's runs to node 1's store and R2: the custody n2_commit.sh and n2_build.sh name to `research run`
+path = "/workspace/pouw/infra/bin/n2_custody.sh"
+src = "tools/research/src/research/pods/nebius/n2_custody.sh"
+nodes = ["vy-nebius-2"]
+run = ["user-systemd:n2-custody.timer"]
+
+[[file]]
+path = "/home/research/.config/systemd/user/n2-custody.service"
+src = "tools/research/src/research/pods/nebius/n2-custody.service"
+nodes = ["vy-nebius-2"]
+
+[[file]]
+path = "/home/research/.config/systemd/user/n2-custody.timer"
+src = "tools/research/src/research/pods/nebius/n2-custody.timer"
+nodes = ["vy-nebius-2"]
+
 [[file]]
 path = "/workspace/pouw/infra/bin/backup.sh"
 src = "tools/research/src/research/pods/nebius/backup.sh"

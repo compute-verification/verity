@@ -1,0 +1,969 @@
+{
+ "accepted": false,
+ "case": "PHI4",
+ "check_header": {
+  "perturb:attention_bias": [
+   "attention_bias=True != C[BIAS]=False"
+  ],
+  "perturb:hidden_act": [],
+  "perturb:hidden_size": [
+   "hidden_size=5121 != C[H]=5120"
+  ],
+  "perturb:intermediate_size": [
+   "intermediate_size=17921 != C[I]=17920"
+  ],
+  "perturb:max_position_embeddings": [
+   "max_position_embeddings=16385 != C[MAX_POS]=16384"
+  ],
+  "perturb:num_attention_heads": [
+   "num_attention_heads=41 != C[NH]=40"
+  ],
+  "perturb:num_hidden_layers": [
+   "num_hidden_layers=41 != C[NL]=40"
+  ],
+  "perturb:num_key_value_heads": [
+   "num_key_value_heads=11 != C[KVH]=10"
+  ],
+  "perturb:rms_norm_eps": [
+   "rms_norm_eps=1.00001 != C[EPS]=1e-05"
+  ],
+  "perturb:rope_theta": [
+   "rope_theta=250001 != C[ROPE_THETA]=250000.0"
+  ],
+  "perturb:tie_word_embeddings": [
+   "tie_word_embeddings=True != C[tie_word_embeddings]=False"
+  ],
+  "perturb:vocab_size": [
+   "vocab_size=100353 != C[V]=100352"
+  ],
+  "self": []
+ },
+ "config": {
+  "BIAS": false,
+  "BN": 64,
+  "D": 128,
+  "EPS": 1e-05,
+  "GU": 35840,
+  "H": 5120,
+  "I": 17920,
+  "KVH": 10,
+  "MAX_POS": 16384,
+  "NH": 40,
+  "NL": 40,
+  "QKV": 7680,
+  "ROPE_THETA": 250000.0,
+  "V": 100352,
+  "family": "phi3",
+  "model": "microsoft/phi-4",
+  "revision": "2db69c1c3e91a05d2c64a3185acfbaf36f744e25",
+  "rope_scaling": null,
+  "tie_word_embeddings": false
+ },
+ "id": "vllm-d9105ea80-sm89-eager-bf16-phi4",
+ "kernel_allowlist": {
+  "n": 32,
+  "sha256": "65df505a21c05004"
+ },
+ "patterns": [
+  {
+   "__type__": "GemmLaunchTuned",
+   "kernel": "matmul_kernel_persistent",
+   "name": "gemm.matmul_kernel_persistent.tuned",
+   "num_sms": 128,
+   "table": null
+  },
+  {
+   "__type__": "GemmLaunch",
+   "constexprs": {
+    "A_LARGE": false,
+    "BLOCK_SIZE_K": 64,
+    "BLOCK_SIZE_M": 128,
+    "BLOCK_SIZE_N": 128,
+    "B_LARGE": false,
+    "C_LARGE": false,
+    "GROUP_SIZE_M": 8,
+    "HAS_BIAS": false
+   },
+   "kernel": "matmul_kernel_persistent",
+   "name": "gemm.matmul_kernel_persistent",
+   "num_sms": 128,
+   "num_stages": 3,
+   "num_warps": 8,
+   "wrapper_ops": [
+    "aten.addmm",
+    "aten.bmm",
+    "aten.linear",
+    "aten.matmul",
+    "aten.mm"
+   ]
+  },
+  {
+   "__type__": "RMSNormTritonLaunch",
+   "constexprs": {
+    "BLOCK_SIZE": 1024,
+    "HAS_WEIGHT": true
+   },
+   "eps": 1e-05,
+   "kernel": "_rms_norm_kernel",
+   "name": "rmsnorm.triton_rms_norm_kernel",
+   "num_warps": 4
+  },
+  {
+   "__type__": "FusedAddRMSNorm",
+   "eps": 1e-05,
+   "name": "rmsnorm.fused_add_rms_norm"
+  },
+  {
+   "__type__": "RotaryEmbedding",
+   "name": "rope.rotary_embedding"
+  },
+  {
+   "__type__": "KVCacheUpdate",
+   "name": "kv.reshape_and_cache_flash"
+  },
+  {
+   "__type__": "AttentionScope",
+   "bn": 64,
+   "name": "attention.fa2_varlen_fwd",
+   "num_splits": 1
+  },
+  {
+   "__type__": "SiluAndMul",
+   "name": "act.silu_and_mul"
+  },
+  {
+   "__type__": "Embedding",
+   "name": "embedding.aten_embedding"
+  },
+  {
+   "__type__": "TokenSelectGumbelTopP",
+   "block_size": 1024,
+   "construction": null,
+   "name": "sample.gumbel_topp_select",
+   "vocab": 100352
+  },
+  {
+   "__type__": "TokenSelectGumbelTwoStage",
+   "block_size": 1024,
+   "name": "sample.gumbel_two_stage",
+   "vocab": 100352
+  },
+  {
+   "__type__": "TokenSelectArgmax",
+   "name": "sample.argmax_token_select",
+   "vocab": 100352
+  },
+  {
+   "__type__": "LogitsGather",
+   "name": "sample.logits_gather"
+  },
+  {
+   "__type__": "BiasAdd",
+   "name": "bias_add.aten_add"
+  },
+  {
+   "__type__": "TransparentAten",
+   "name": "transparent.aten"
+  },
+  {
+   "__type__": "TransparentTritonMetadata",
+   "name": "transparent.triton_metadata"
+  }
+ ],
+ "pins": {
+  "attention": {
+   "kBlockM": 64,
+   "kBlockN": 64,
+   "kernel": "flash_fwd_splitkv_kernel",
+   "num_splits": 1
+  },
+  "gemm": {
+   "A_LARGE": false,
+   "BLOCK_SIZE_K": 64,
+   "BLOCK_SIZE_M": 128,
+   "BLOCK_SIZE_N": 128,
+   "B_LARGE": false,
+   "C_LARGE": false,
+   "GROUP_SIZE_M": 8,
+   "HAS_BIAS": false,
+   "NUM_SMS": 128,
+   "num_stages": 3,
+   "num_warps": 8
+  },
+  "gemm_tuned_ada": {
+   "N=12288,K=2048": {
+    "BLOCK_SIZE_K": 64,
+    "m_buckets": [
+     [
+      1,
+      [
+       16,
+       128,
+       8,
+       2
+      ]
+     ],
+     [
+      4,
+      [
+       16,
+       64,
+       8,
+       5
+      ]
+     ],
+     [
+      8,
+      [
+       16,
+       128,
+       8,
+       4
+      ]
+     ],
+     [
+      16,
+      [
+       16,
+       128,
+       4,
+       5
+      ]
+     ],
+     [
+      32,
+      [
+       32,
+       128,
+       4,
+       5
+      ]
+     ],
+     [
+      64,
+      [
+       32,
+       256,
+       4,
+       3
+      ]
+     ],
+     [
+      256,
+      [
+       128,
+       128,
+       8,
+       3
+      ]
+     ],
+     [
+      512,
+      [
+       128,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      1024,
+      [
+       128,
+       128,
+       8,
+       3
+      ]
+     ],
+     [
+      2048,
+      [
+       128,
+       128,
+       4,
+       3
+      ]
+     ]
+    ]
+   },
+   "N=151936,K=2048": {
+    "BLOCK_SIZE_K": 64,
+    "m_buckets": [
+     [
+      1,
+      [
+       16,
+       32,
+       8,
+       5
+      ]
+     ],
+     [
+      4,
+      [
+       16,
+       32,
+       8,
+       5
+      ]
+     ],
+     [
+      8,
+      [
+       16,
+       32,
+       8,
+       5
+      ]
+     ],
+     [
+      16,
+      [
+       16,
+       32,
+       4,
+       4
+      ]
+     ],
+     [
+      32,
+      [
+       16,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      64,
+      [
+       32,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      256,
+      [
+       128,
+       128,
+       4,
+       3
+      ]
+     ],
+     [
+      512,
+      [
+       128,
+       128,
+       4,
+       3
+      ]
+     ],
+     [
+      1024,
+      [
+       128,
+       128,
+       4,
+       3
+      ]
+     ],
+     [
+      2048,
+      [
+       128,
+       128,
+       4,
+       3
+      ]
+     ]
+    ]
+   },
+   "N=2048,K=2048": {
+    "BLOCK_SIZE_K": 64,
+    "m_buckets": [
+     [
+      1,
+      [
+       32,
+       128,
+       8,
+       5
+      ]
+     ],
+     [
+      4,
+      [
+       16,
+       256,
+       8,
+       3
+      ]
+     ],
+     [
+      8,
+      [
+       32,
+       128,
+       8,
+       3
+      ]
+     ],
+     [
+      16,
+      [
+       32,
+       128,
+       8,
+       3
+      ]
+     ],
+     [
+      32,
+      [
+       16,
+       128,
+       8,
+       5
+      ]
+     ],
+     [
+      64,
+      [
+       16,
+       256,
+       4,
+       3
+      ]
+     ],
+     [
+      256,
+      [
+       64,
+       128,
+       8,
+       4
+      ]
+     ],
+     [
+      512,
+      [
+       64,
+       64,
+       4,
+       5
+      ]
+     ],
+     [
+      1024,
+      [
+       64,
+       64,
+       4,
+       5
+      ]
+     ],
+     [
+      2048,
+      [
+       64,
+       64,
+       4,
+       5
+      ]
+     ]
+    ]
+   },
+   "N=2048,K=6144": {
+    "BLOCK_SIZE_K": 128,
+    "m_buckets": [
+     [
+      1,
+      [
+       16,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      4,
+      [
+       16,
+       64,
+       8,
+       4
+      ]
+     ],
+     [
+      8,
+      [
+       16,
+       32,
+       8,
+       4
+      ]
+     ],
+     [
+      16,
+      [
+       16,
+       32,
+       8,
+       4
+      ]
+     ],
+     [
+      32,
+      [
+       16,
+       64,
+       8,
+       3
+      ]
+     ],
+     [
+      64,
+      [
+       32,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      256,
+      [
+       32,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      512,
+      [
+       64,
+       64,
+       4,
+       3
+      ]
+     ],
+     [
+      1024,
+      [
+       64,
+       64,
+       4,
+       3
+      ]
+     ],
+     [
+      2048,
+      [
+       64,
+       64,
+       4,
+       3
+      ]
+     ]
+    ]
+   },
+   "N=4096,K=2048": {
+    "BLOCK_SIZE_K": 64,
+    "m_buckets": [
+     [
+      1,
+      [
+       16,
+       256,
+       8,
+       3
+      ]
+     ],
+     [
+      4,
+      [
+       16,
+       64,
+       4,
+       3
+      ]
+     ],
+     [
+      8,
+      [
+       16,
+       128,
+       8,
+       2
+      ]
+     ],
+     [
+      16,
+      [
+       16,
+       32,
+       4,
+       5
+      ]
+     ],
+     [
+      32,
+      [
+       16,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      64,
+      [
+       64,
+       64,
+       8,
+       3
+      ]
+     ],
+     [
+      256,
+      [
+       64,
+       64,
+       4,
+       5
+      ]
+     ],
+     [
+      512,
+      [
+       64,
+       64,
+       4,
+       5
+      ]
+     ],
+     [
+      1024,
+      [
+       128,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      2048,
+      [
+       128,
+       64,
+       8,
+       4
+      ]
+     ]
+    ]
+   }
+  },
+  "kv_cache": {
+   "block_size": 16,
+   "dtype": "auto"
+  },
+  "rms_norm": {
+   "BLOCK_SIZE": 1024,
+   "HAS_WEIGHT": true,
+   "num_warps": 4
+  }
+ },
+ "probe": {
+  "n": 286
+ },
+ "root_class": {
+  "lm_head.weight": "weight",
+  "model.embed_tokens.weight": "weight",
+  "model.layers.0.input_layernorm.weight": "weight",
+  "model.layers.0.mlp.down_proj.weight": "weight",
+  "model.layers.0.mlp.gate_up_proj.weight": "weight",
+  "model.layers.0.post_attention_layernorm.weight": "weight",
+  "model.layers.0.self_attn.attn._prob_scale": "ignored",
+  "model.layers.0.self_attn.attn._v_scale": "ignored",
+  "model.layers.0.self_attn.attn.k_scale": "ignored",
+  "model.layers.0.self_attn.attn.prob_scale": "ignored",
+  "model.layers.0.self_attn.attn.q_scale": "ignored",
+  "model.layers.0.self_attn.o_proj.weight": "weight",
+  "model.layers.0.self_attn.qkv_proj.weight": "weight",
+  "model.layers.0.self_attn.rotary_emb.cos_sin_cache": "weight",
+  "model.layers.1.input_layernorm.weight": "weight",
+  "model.layers.1.mlp.down_proj.weight": "weight",
+  "model.layers.1.mlp.gate_up_proj.weight": "weight",
+  "model.layers.1.post_attention_layernorm.weight": "weight",
+  "model.layers.1.self_attn.attn._prob_scale": "ignored",
+  "model.layers.1.self_attn.attn._v_scale": "ignored",
+  "model.layers.1.self_attn.attn.k_scale": "ignored",
+  "model.layers.1.self_attn.attn.prob_scale": "ignored",
+  "model.layers.1.self_attn.attn.q_scale": "ignored",
+  "model.layers.1.self_attn.o_proj.weight": "weight",
+  "model.layers.1.self_attn.qkv_proj.weight": "weight",
+  "model.layers.1.self_attn.rotary_emb.cos_sin_cache": "alias-of-cos_sin",
+  "model.layers.39.input_layernorm.weight": "weight",
+  "model.layers.39.mlp.down_proj.weight": "weight",
+  "model.layers.39.mlp.gate_up_proj.weight": "weight",
+  "model.layers.39.post_attention_layernorm.weight": "weight",
+  "model.layers.39.self_attn.attn._prob_scale": "ignored",
+  "model.layers.39.self_attn.attn._v_scale": "ignored",
+  "model.layers.39.self_attn.attn.k_scale": "ignored",
+  "model.layers.39.self_attn.attn.prob_scale": "ignored",
+  "model.layers.39.self_attn.attn.q_scale": "ignored",
+  "model.layers.39.self_attn.o_proj.weight": "weight",
+  "model.layers.39.self_attn.qkv_proj.weight": "weight",
+  "model.layers.39.self_attn.rotary_emb.cos_sin_cache": "alias-of-cos_sin",
+  "model.norm.weight": "weight"
+ },
+ "weight_field": {
+  "lm_head.weight": [
+   "lm_head"
+  ],
+  "model.embed_tokens.weight": [
+   "embed"
+  ],
+  "model.layers.0.input_layernorm.weight": [
+   "layers",
+   0,
+   "ln1"
+  ],
+  "model.layers.0.mlp.down_proj.weight": [
+   "layers",
+   0,
+   "down_w"
+  ],
+  "model.layers.0.mlp.gate_up_proj.weight": [
+   "layers",
+   0,
+   "gate_up_w"
+  ],
+  "model.layers.0.post_attention_layernorm.weight": [
+   "layers",
+   0,
+   "ln2"
+  ],
+  "model.layers.0.self_attn.o_proj.weight": [
+   "layers",
+   0,
+   "o_w"
+  ],
+  "model.layers.0.self_attn.qkv_proj.weight": [
+   "layers",
+   0,
+   "qkv_w"
+  ],
+  "model.layers.0.self_attn.rotary_emb.cos_sin_cache": [
+   "cos_sin"
+  ],
+  "model.layers.1.input_layernorm.weight": [
+   "layers",
+   1,
+   "ln1"
+  ],
+  "model.layers.1.mlp.down_proj.weight": [
+   "layers",
+   1,
+   "down_w"
+  ],
+  "model.layers.1.mlp.gate_up_proj.weight": [
+   "layers",
+   1,
+   "gate_up_w"
+  ],
+  "model.layers.1.post_attention_layernorm.weight": [
+   "layers",
+   1,
+   "ln2"
+  ],
+  "model.layers.1.self_attn.o_proj.weight": [
+   "layers",
+   1,
+   "o_w"
+  ],
+  "model.layers.1.self_attn.qkv_proj.weight": [
+   "layers",
+   1,
+   "qkv_w"
+  ],
+  "model.layers.39.input_layernorm.weight": [
+   "layers",
+   39,
+   "ln1"
+  ],
+  "model.layers.39.mlp.down_proj.weight": [
+   "layers",
+   39,
+   "down_w"
+  ],
+  "model.layers.39.mlp.gate_up_proj.weight": [
+   "layers",
+   39,
+   "gate_up_w"
+  ],
+  "model.layers.39.post_attention_layernorm.weight": [
+   "layers",
+   39,
+   "ln2"
+  ],
+  "model.layers.39.self_attn.o_proj.weight": [
+   "layers",
+   39,
+   "o_w"
+  ],
+  "model.layers.39.self_attn.qkv_proj.weight": [
+   "layers",
+   39,
+   "qkv_w"
+  ],
+  "model.norm.weight": [
+   "norm"
+  ]
+ },
+ "weights_type": {
+  "Record": [
+   [
+    "embed",
+    {
+     "Array": [
+      100352,
+      {
+       "Array": [
+        5120,
+        "Value<16>"
+       ]
+      }
+     ]
+    }
+   ],
+   [
+    "layers",
+    {
+     "Array": [
+      40,
+      {
+       "Record": [
+        [
+         "ln1",
+         {
+          "Array": [
+           5120,
+           "Value<16>"
+          ]
+         }
+        ],
+        [
+         "qkv_w",
+         {
+          "Array": [
+           7680,
+           {
+            "Array": [
+             5120,
+             "Value<16>"
+            ]
+           }
+          ]
+         }
+        ],
+        [
+         "o_w",
+         {
+          "Array": [
+           5120,
+           {
+            "Array": [
+             5120,
+             "Value<16>"
+            ]
+           }
+          ]
+         }
+        ],
+        [
+         "ln2",
+         {
+          "Array": [
+           5120,
+           "Value<16>"
+          ]
+         }
+        ],
+        [
+         "gate_up_w",
+         {
+          "Array": [
+           35840,
+           {
+            "Array": [
+             5120,
+             "Value<16>"
+            ]
+           }
+          ]
+         }
+        ],
+        [
+         "down_w",
+         {
+          "Array": [
+           5120,
+           {
+            "Array": [
+             17920,
+             "Value<16>"
+            ]
+           }
+          ]
+         }
+        ]
+       ]
+      }
+     ]
+    }
+   ],
+   [
+    "norm",
+    {
+     "Array": [
+      5120,
+      "Value<16>"
+     ]
+    }
+   ],
+   [
+    "cos_sin",
+    {
+     "Array": [
+      16384,
+      {
+       "Array": [
+        128,
+        "Value<16>"
+       ]
+      }
+     ]
+    }
+   ],
+   [
+    "lm_head",
+    {
+     "Array": [
+      100352,
+      {
+       "Array": [
+        5120,
+        "Value<16>"
+       ]
+      }
+     ]
+    }
+   ]
+  ]
+ }
+}
