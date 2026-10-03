@@ -1,5 +1,6 @@
 {
  "roots": ["FlockLevel3"],
+ "meaning": ["FlockLevel3", "Flock"],
  "pins": {
   "FlockLevel3.F128.poly_add": {
    "signature": [
