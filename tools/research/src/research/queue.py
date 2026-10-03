@@ -662,8 +662,9 @@ class QuickTier:
     """`suites.py --quick --changed {merge base with main}` at a PR's head, from a clean checkout (`quick_tier.tier`, judged by
     `quick_tier.judge`): one worktree of the caller's repository per machine under `root`, checked out at the head and cleaned of
     everything but its `.venv` and the `.lake` of each of `LEAN_BUILDS` for each PR (one PR at a time: `{name}.lock`), so its
-    environment syncs only what moved and Lake rebuilds only what changed.  Each of `LEAN_BUILDS` is built first (with `lake` on the
-    PATH; a failed build refuses).  Passes are cached by input (`suites.py`), so a re-run after a failure runs only what failed."""
+    environment syncs only what moved and Lake rebuilds only what changed.  Each of `LEAN_BUILDS` is built first (with the PATH's
+    `lake`, else elan's; none, or a failed build, refuses).  Passes are cached by input (`suites.py`), so a re-run after a failure
+    runs only what failed."""
 
     def __init__(self, repo: Path, remote: str, root: Path | None = None):
         self.repo, self.remote = Path(repo), remote

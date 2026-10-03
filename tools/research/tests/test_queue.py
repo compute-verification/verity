@@ -504,12 +504,13 @@ def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(wor
 #: a `suites.py` that says what it was asked and what it found, and fails one test when FAKE_FAIL names it
 FAKE_SUITES = """\
 # it knows "--changed"
-import json, os, sys
+import json, os, shutil, sys
 from pathlib import Path
 a = sys.argv[1:]
 Path(os.environ["FAKE_SEEN"]).write_text(json.dumps({"argv": a, "files": sorted(p.name for p in Path.cwd().iterdir()),
                                                      "pythonpath": os.environ.get("PYTHONPATH"),
                                                      "built": Path("backends/flock/verifier/lean/.lake/built").is_file(),
+                                                     "lake": shutil.which("lake"),
                                                      "env": {k: os.environ.get(k) for k in ("VERITY_STORE_REQUIRED",
                                                              "CHECK_STORE_CUSTODY", "RESEARCH_RUN_ID", "GIT_AUTHOR_EMAIL")}}))
 fail = os.environ.get("FAKE_FAIL")
@@ -815,6 +816,34 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     assert tier(world.gh.prs[1]) is None
     env = json.loads(seen.read_text())["env"]
     assert env["VERITY_STORE_REQUIRED"] == "1" and env["CHECK_STORE_CUSTODY"] is None
+
+
+def test_a_quick_tier_with_no_lake_on_the_path_builds_with_elans_and_with_none_refuses(world, monkeypatch):
+    """On a machine the run's PATH is a non-login shell's, without elan's bin, which check.py puts first itself.  The tier built
+    the verifier only with `lake` on the PATH, so its Lean-dependent tests skipped and the PR was labelled ready (red team, #989).
+    It takes `lake` from ~/.elan/bin, first on the suites' PATH too, and with neither refuses."""
+    from research import queue as Q
+
+    main = world.change({"tools/check/suites.py": FAKE_SUITES, "backends/flock/verifier/lean/lakefile.toml": 'name = "flock"\n'})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setenv("FAKE_SEEN", str(seen := world.tmp / "seen.json"))
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+    tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp))
+    (bare := world.tmp / "no-lake-bin").mkdir()
+    for t in ("git", "python3", "sh", "mkdir"):
+        (bare / t).symlink_to(shutil.which(t))
+    monkeypatch.setenv("PATH", str(bare))
+    monkeypatch.setenv("HOME", str(home := world.tmp / "home"))
+    lean = "backends/flock/verifier/lean"
+    assert tier(world.gh.prs[1]) == f"no `lake` on the PATH or in {home}/.elan/bin to build {lean} with, and without that build its tests skip"
+    (elan := home / ".elan" / "bin").mkdir(parents=True)
+    (elan / "lake").write_text("#!/bin/sh\nmkdir -p .lake && echo built > .lake/built\n")
+    (elan / "lake").chmod(0o755)
+    assert tier(world.gh.prs[1]) is None
+    s = json.loads(seen.read_text())
+    assert s["built"] and s["lake"] == str(elan / "lake")
 
 
 def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, capsys):

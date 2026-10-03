@@ -1,6 +1,6 @@
-"""The quick tier at one checkout, as facts and a verdict: each Lake package `--lean` names built first (with `lake` on the PATH), then
-CMD (`suites.py --quick`) with `--changed BASE`.  `tier` gathers the facts; `judge` reads them as the refusal `research queue ready`
-prints, or None for a pass, the same way wherever the tier ran.
+"""The quick tier at one checkout, as facts and a verdict: each Lake package `--lean` names built first (with the PATH's `lake`, else
+elan's; with neither it refuses), then CMD (`suites.py --quick`) with `--changed BASE`.  `tier` gathers the facts; `judge` reads them
+as the refusal `research queue ready` prints, or None for a pass, the same way wherever the tier ran.
 
     python3 quick_tier.py --head SHA --base SHA [--lean DIR ...] -- CMD...
 
@@ -53,7 +53,8 @@ def run_env(environ, run_dir: str, run_id: str) -> dict:
 def tier(tree: Path, out: Path, head: str, base: str, command: list[str], lean=(), env: dict | None = None) -> dict:
     """The facts of one run of the tier in ``tree``: the commit checked out there, what differs from it before anything runs (each
     kept `.venv` and `.lake` aside), each Lean build's exit, and CMD's exit and report (`out/suites.json`, logs in `out/logs/`).  It
-    stops at the first fact that refuses."""
+    stops at the first fact that refuses.  `lake` is the PATH's, else elan's in `~/.elan/bin` (put first on the PATH, as check.py
+    does); a `--lean` package with neither is an error, since without the build its tests skip."""
     env = {k: v for k, v in (os.environ if env is None else env).items() if k not in CALLER_ENV}
     logs = out / "logs"
     doc = {"kind": KIND, "head": None, "base": base, "dirty": [], "lean": [], "changed": True, "rc": None, "rows": None,
@@ -70,8 +71,14 @@ def tier(tree: Path, out: Path, head: str, base: str, command: list[str], lean=(
     if doc["dirty"]:
         return doc
     lake = shutil.which("lake", path=env.get("PATH"))
-    for d in lean if lake else ():
+    elan = Path(env.get("HOME") or Path.home()) / ".elan" / "bin"
+    if lake is None and (lake := shutil.which("lake", path=str(elan))):
+        env["PATH"] = os.pathsep.join(p for p in (str(elan), env.get("PATH")) if p)
+    for d in lean:
         if (tree / d / "lakefile.toml").is_file():
+            if lake is None:
+                doc["error"] = f"no `lake` on the PATH or in {elan} to build {d} with, and without that build its tests skip"
+                return doc
             print(f"quick tier: `lake build` in {d}", flush=True)
             doc["lean"].append({"dir": d, "rc": subprocess.run([lake, "build"], cwd=tree / d, env=env).returncode})
             if doc["lean"][-1]["rc"]:
