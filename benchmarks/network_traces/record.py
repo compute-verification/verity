@@ -31,9 +31,10 @@ and duration) and, for `commit`, `commits.jsonl` (each run's finalization stall)
 
 **`convert`** rebuilds `trace.json` from those files, and drops what isn't honest timing of an idle GPU:
 - a chunk whose heartbeat or event loop stalled longer than `--freeze-ms` was frozen (SIGSTOP, a paused scope), and the
-  whole chunk is void;
+  whole chunk is void (with `--freeze-scope window`, only the windows the stall overlaps and the next);
 - a window is dropped when another process computed on our GPU, when the rest of the NUMA node kept more than
-  `--max-others-busy` of its CPUs busy, when a sample came over `--freeze-ms` late, or when one of its requests failed;
+  `--max-others-busy` of its CPUs busy or co-tenants more than `--max-affinity-busy` of the job's own, when a sample
+  came over `--freeze-ms` late, or when one of its requests failed;
 - the chunk is cut at dropped windows into contiguous segments, one configuration each.
 
 **`merge`** joins chunks' traces into one for the calibration tool.
@@ -74,7 +75,7 @@ ROLES = {"unsloth/Llama-3.2-1B": "LLAMA32_1B", "Qwen/Qwen2.5-0.5B": "QWEN05"}
 OFFLINE = {"bi-eager": False, "commit": True}
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE_CAPACITY = 100, 600, 4096, 1 << 16
 SAMPLE_S, HEARTBEAT_S = 2.0, 0.01
-FREEZE_MS, MAX_OTHERS_BUSY, TAIL_MS = 1000.0, 0.5, 10_000
+FREEZE_MS, MAX_OTHERS_BUSY, MAX_AFFINITY_BUSY, TAIL_MS = 1000.0, 0.5, 0.9, 10_000
 STALL_S = 120  # an offline engine step or finalize this long is hung: every thread's stack goes to stderr and the job exits
 
 clock = time.monotonic
@@ -570,7 +571,8 @@ def run(args: argparse.Namespace) -> int:
 
 def build_trace(records: Sequence[dict], samples: Sequence[dict], *, name: str, windows: int, labels: dict | None = None,
                 stopped_ms: float | None = None, ingress: str = "text", freeze_ms: float = FREEZE_MS,
-                max_others_busy: float = MAX_OTHERS_BUSY) -> tuple[list[dict], dict]:
+                max_others_busy: float = MAX_OTHERS_BUSY, max_affinity_busy: float = MAX_AFFINITY_BUSY,
+                freeze_scope: str = "chunk") -> tuple[list[dict], dict]:
     """The calibration configurations of one chunk, and what was kept and dropped.
 
     `records` are `requests.jsonl`'s and `samples` `samples.jsonl`'s, both with times in ms from t0 (`t_ms` for a sample,
@@ -583,10 +585,12 @@ def build_trace(records: Sequence[dict], samples: Sequence[dict], *, name: str, 
       the rebuilt traces' rule) or the token-id JSON body sent (`"body"`).
 
     A frozen chunk (a heartbeat or event-loop stall over `freeze_ms` from t0 to `TAIL_MS` after the last window, while its
-    last responses stream) gives no configuration: a stopped process stops its heartbeat too. A window is dropped when a
-    sample overlapping it saw a foreign process on the GPU or the watched CPUs' other users busier than
-    `max_others_busy`, or came over `freeze_ms` late while the heartbeat ran (the host stalled the monitor), or when a
-    request sent in it failed; each run of kept windows is one configuration, its times rebased to its first window."""
+    last responses stream) gives no configuration: a stopped process stops its heartbeat too. With `freeze_scope="window"`
+    a stall drops only the windows it overlaps and the one after, while the backlog it left drains. A window is dropped
+    when a sample overlapping it saw a foreign process on the GPU, the watched CPUs' other users busier than
+    `max_others_busy`, the job's own CPUs busier than `max_affinity_busy` (co-tenants on its cpuset), or came over
+    `freeze_ms` late while the heartbeat ran (the host stalled the monitor), or when a request sent in it failed; each
+    run of kept windows is one configuration, its times rebased to its first window."""
     window_ms = WINDOW_BUCKETS * BUCKET_MS
     if stopped_ms is not None:
         windows = min(windows, max(0, int(stopped_ms // window_ms)))
@@ -594,15 +598,18 @@ def build_trace(records: Sequence[dict], samples: Sequence[dict], *, name: str, 
     measured = [s for s in samples if s["t_ms"] >= 0 and s["t_ms"] - 1000 * s["dt_s"] < end_ms + TAIL_MS]
     stalls = [max(s["hb_max_ms"], s["loop_max_ms"]) for s in measured]
     gaps = [1000 * s["dt_s"] - 1000 * SAMPLE_S for s in measured]
-    frozen = max(stalls, default=0.0) > freeze_ms or (windows > 0 and not measured)
+    frozen = (freeze_scope == "chunk" and max(stalls, default=0.0) > freeze_ms) or (windows > 0 and not measured)
     dropped: dict[int, str] = {}
-    for s, gap in zip(measured, gaps):
+    for s, gap, stall in zip(measured, gaps, stalls):
         why = ("foreign GPU process" if s["foreign_pids"] else
+               "stalled" if stall > freeze_ms else
                "NUMA node busy" if s["others_busy"] > max_others_busy else
+               "job's CPUs saturated" if s.get("affinity_busy", 0.0) > max_affinity_busy else
                "monitor late" if gap > freeze_ms else None)
         if why:
-            lo, hi = s["t_ms"] - 1000 * s["dt_s"], s["t_ms"]
-            for w in range(max(0, int(lo // window_ms)), min(windows - 1, int(hi // window_ms)) + 1):
+            lo, hi = s["t_ms"] - max(1000 * s["dt_s"], stall), s["t_ms"]
+            last = int(hi // window_ms) + (why == "stalled")
+            for w in range(max(0, int(lo // window_ms)), min(windows - 1, last) + 1):
                 dropped.setdefault(w, why)
     kept = [r for r in records if 0 <= r["send_ms"] < end_ms]
     for r in kept:
@@ -677,8 +684,8 @@ def read_lines(path: Path) -> list[dict]:
     return out
 
 
-def convert(out: Path, *, ingress: str = "text", freeze_ms: float = FREEZE_MS,
-            max_others_busy: float = MAX_OTHERS_BUSY) -> dict:
+def convert(out: Path, **rules) -> dict:
+    """`trace.json` and `summary.json` of one job's directory, under `build_trace`'s drop rules (`rules`)."""
     meta = json.loads((out / "meta.json").read_text())
     if "t0_mono" not in meta:
         summary = {"frozen": False, "windows_planned": 0, "windows_kept": 0, "error": "the job ended before t0"}
@@ -690,7 +697,7 @@ def convert(out: Path, *, ingress: str = "text", freeze_ms: float = FREEZE_MS,
               "gpu": meta["gpu"]["name"], "gpu_uuid": meta["gpu"]["uuid"], "run": run_id}
     configs, summary = build_trace(read_lines(out / "requests.jsonl"), samples, name=f"{meta['mode']}/{run_id}",
                                    windows=meta["windows"], labels=labels, stopped_ms=(meta.get("ended") or {}).get("stopped_ms"),
-                                   ingress=ingress, freeze_ms=freeze_ms, max_others_busy=max_others_busy)
+                                   **rules)
     summary |= {"labels": labels, "startup_s": meta.get("startup_s"), "ended": meta.get("ended")}
     (out / "trace.json").write_text(json.dumps(trace_doc(configs), separators=(",", ":")))
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
@@ -734,6 +741,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     c.add_argument("--ingress-bytes", choices=("text", "body"), default="text")
     c.add_argument("--freeze-ms", type=float, default=FREEZE_MS)
     c.add_argument("--max-others-busy", type=float, default=MAX_OTHERS_BUSY)
+    c.add_argument("--max-affinity-busy", type=float, default=MAX_AFFINITY_BUSY)
+    c.add_argument("--freeze-scope", choices=("chunk", "window"), default="chunk")
     m = sub.add_parser("merge", help="join chunks' traces into one")
     m.add_argument("out", type=Path)
     m.add_argument("inputs", nargs="+", type=Path)
@@ -742,7 +751,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run(args)
     if args.cmd == "convert":
         for d in args.dirs:
-            s = convert(d, ingress=args.ingress_bytes, freeze_ms=args.freeze_ms, max_others_busy=args.max_others_busy)
+            s = convert(d, ingress=args.ingress_bytes, freeze_ms=args.freeze_ms, max_others_busy=args.max_others_busy,
+                        max_affinity_busy=args.max_affinity_busy, freeze_scope=args.freeze_scope)
             print(f"{d}: kept {s['windows_kept']}/{s['windows_planned']} windows, frozen={s['frozen']}")
         return 0
     args.out.write_text(json.dumps(merge(args.inputs), separators=(",", ":")))

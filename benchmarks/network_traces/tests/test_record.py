@@ -102,6 +102,9 @@ def test_contamination_and_failures_drop_windows_and_split_the_chunk() -> None:
     busy = {f"t{WINDOW_MS}": {"others_busy": 0.9}}
     _, summary = rec.build_trace(records[1:], samples(4, **busy), name="t", windows=4)
     assert summary["windows_dropped"] == {"0": "NUMA node busy", "1": "NUMA node busy"}
+    crowded = {f"t{WINDOW_MS}": {"affinity_busy": 0.95}}
+    _, summary = rec.build_trace(records[1:], samples(4, **crowded), name="t", windows=4)
+    assert summary["windows_dropped"] == {"0": "job's CPUs saturated", "1": "job's CPUs saturated"}
 
 
 @pytest.mark.parametrize("stall", [{"hb_max_ms": 1500.0}, {"loop_max_ms": 1500.0}])
@@ -109,6 +112,14 @@ def test_a_stall_voids_the_chunk(stall: dict) -> None:
     records = [request("a", 50.0, [[120.0, 1]])]
     configs, summary = rec.build_trace(records, samples(1, t30000=stall), name="t", windows=1)
     assert configs == [] and summary["frozen"]
+
+
+def test_a_window_scoped_stall_drops_the_windows_it_overlaps_and_the_next() -> None:
+    records = [request(c, w * WINDOW_MS + 50.0, [[w * WINDOW_MS + 150.0, 1]]) for w, c in enumerate("abcd")]
+    stall = {f"t{WINDOW_MS + 10_000}": {"hb_max_ms": 15_000.0}}
+    configs, summary = rec.build_trace(records, samples(4, **stall), name="t", windows=4, freeze_scope="window")
+    assert not summary["frozen"] and summary["windows_dropped"] == {"0": "stalled", "1": "stalled", "2": "stalled"}
+    assert [c["name"] for c in configs] == ["t/w3-4"]
 
 
 def test_a_late_sample_while_the_heartbeat_ran_drops_only_its_windows() -> None:
