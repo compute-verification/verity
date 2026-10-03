@@ -73,6 +73,17 @@ theorem zk_session_soundHJR
       ∀ rd : FlockSoundness.Registered.Reads (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
           (rsShHJS dj y₀ ht hc hscope hU hpub),
         OwnReadsHJ I own c pub o.2.2 rd.isRead rd.port rd.readAt → rd.Checked o.1 (regPathsHJ I c pub o.2.2 rd.port) := by
-  sorry
+  intro σ hCR
+  refine ⟨?_, fun o hacc rd hown => checked_of_acceptsHJ I ht own dj y₀ hc hU hpub hscope hTags o hacc rd hown⟩
+  refine le_trans (prob_mono (q := fun o => LiveAcceptsZK I o ∧ _) (fun o h => ⟨acceptsZK_of_R h.1, h.2⟩) _ _) ?_
+  refine zk_headline_exec_tables execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg
+    (decAtZJ (planZHJ dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+    (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
+      (runsZCJH_live I ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ hTags hRec hDraw)) τ _ _ ?_
+  refine (zk_flock_countC execArith hs512 _ (planZHJ dj y₀) (tabZHJ dj y₀) _
+    (loweringSoundZK_of_place execArith _ (planZHJ dj y₀) (tabZHJ dj y₀) (placeZHJ dj y₀ ht hc hscope hU))
+    hRw hM hρ hr (jointZC_ksBound execArith execArith_correct hs512 (planZHJ dj y₀) hk) ht' K₀ σ).trans ?_
+  exact add_le_add (add_le_add (Tables.execOS_subset_miss_le kd hkd Lb src hA3 K₀)
+    (ksAvgZC_le_strict execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) hCR)) le_rfl
 
 end FlockSoundness.Discharge.ZkReg

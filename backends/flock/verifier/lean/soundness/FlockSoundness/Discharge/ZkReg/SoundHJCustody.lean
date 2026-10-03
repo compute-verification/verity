@@ -171,7 +171,8 @@ theorem zk_session_soundHJR_custody
     ∀ o : Reg × Finset (Fin n) × Exec.Transcript, LiveAcceptsZKR I own o →
       ∀ rd : FlockSoundness.Registered.Reads (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
           (rsShHJS dj y₀ ht hc hscope hU hpub),
-        OwnReadsHJ I own c pub o.2.2 rd.isRead rd.port rd.readAt → rd.Checked o.1 (regPathsHJ I c pub o.2.2 rd.port) := by
-  sorry
+        OwnReadsHJ I own c pub o.2.2 rd.isRead rd.port rd.readAt → rd.Checked o.1 (regPathsHJ I c pub o.2.2 rd.port) :=
+  zk_session_soundHJR I ht own dj y₀ wr dg N hc hU hpub hscope kd hkd Lb src hA3
+    (fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _) hTags hCust.1 hk hRw hM hρ hr ht' K₀ τ
 
 end FlockSoundness.Discharge.ZkReg
