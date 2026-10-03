@@ -47,15 +47,85 @@ section Setup
 
 open FlockSoundness.Refine
 
-/-- **The regions avoid the mask slot** (open, the setup's): at every link point, a region claim's `eq` weight vanishes on
-every mask-slot word. A region's subcube lies in the hm96 or output range whose slots it reads, and `HmRow.check` keeps
-that range's span apart from the mask range's word-aligned span. -/
+theorem avoidsMask_delta {st : Stmt} (h : avoidsMask st = true) : deltaAvoidsMask st = true := by
+  simp only [avoidsMask, regionsAvoidMask, Bool.and_eq_true] at h; exact h.1
+
+theorem avoidsMask_cells {st : Stmt} (h : avoidsMask st = true) : regionCellsOff st = true := by
+  simp only [avoidsMask, regionsAvoidMask, Bool.and_eq_true] at h; exact h.2.1
+
+theorem avoidsMask_words {st : Stmt} (h : avoidsMask st = true) : regionWordsOff st = true := by
+  simp only [avoidsMask, regionsAvoidMask, Bool.and_eq_true] at h; exact h.2.2
+
+theorem regionPoint_fixed (st : Stmt) (reg : Region) (r : Array F128) {j : ℕ} (hj : j < st.c.kLog)
+    (hjm : j < st.m) (hf : j ∉ reg.free.toList) :
+    (st.regionPoint reg r)[j]? =
+      some (if (reg.mask >>> j) % 2 == 1 && (reg.fixed >>> j) % 2 == 1 then 1 else 0) := by
+  unfold Stmt.regionPoint
+  simp only [Id.run]
+  refine forIn_id_inv_range (fun p : Array F128 => p[j]? = some _) (fun i _ hi p hp => ⟨_, rfl, ?_⟩)
+    (forIn_id_inv_range (fun p : Array F128 => p[j]? = some _) (fun t _ ht p hp => ⟨_, rfl, ?_⟩) ?_)
+  · rw [Array.set!_eq_setIfInBounds, Array.getElem?_setIfInBounds_ne (by omega)]; exact hp
+  · have hm : reg.free[t]! ∈ reg.free.toList := by
+      rw [getElem!_pos reg.free t (by omega)]; exact Array.getElem_mem_toList _
+    rw [Array.set!_eq_setIfInBounds, Array.getElem?_setIfInBounds_ne (by intro h; apply hf; rw [← h]; exact hm)]; exact hp
+  · simp [hjm, hj]
+
+theorem mul_zero_F128 (a : F128) : a * 0 = 0 := fOf_injective (by rw [fOf_mul, fOf_zero, mul_zero])
+theorem zero_mul_F128 (a : F128) : 0 * a = 0 := fOf_injective (by rw [fOf_mul, fOf_zero, zero_mul])
+theorem one_add_one' : (1 : F128) + 1 = 0 :=
+  fOf_injective (by rw [fOf_add, fOf_one, fOf_zero]; exact CharTwo.add_self_eq_zero 1)
+
+theorem foldl_zero (f : ℕ → F128) : ∀ L : List ℕ, L.foldl (fun acc i => acc * f i) 0 = 0
+  | [] => rfl
+  | i :: L => by rw [List.foldl_cons, zero_mul_F128]; exact foldl_zero f L
+
+theorem foldl_mul_eq_zero (f : ℕ → F128) : ∀ (L : List ℕ) (a : F128), (∃ i ∈ L, f i = 0) →
+    L.foldl (fun acc i => acc * f i) a = 0
+  | [], _, ⟨_, h, _⟩ => absurd h List.not_mem_nil
+  | i :: L, a, ⟨k, hk, hf⟩ => by
+      rw [List.foldl_cons]
+      rcases List.mem_cons.1 hk with rfl | hk
+      · rw [hf, mul_zero_F128]; exact foldl_zero f L
+      · exact foldl_mul_eq_zero f L _ ⟨k, hk, hf⟩
+
+theorem regions_off_of_words {st : Stmt} (hm : st.m = st.c.kLog + st.nbl) (hw : regionWordsOff st = true)
+    (link : Fin 2 → Fin st.mPts → F128) (j : Fin (2 * st.regions.size)) (x : ℕ) (hx : x ∈ maskWordsOf st) :
+    eqWord (regionPtOf st link j) x = 0 := by
+  have hj : j.val / 2 < st.regions.size := by omega
+  have hreg : st.regions[j.val / 2]! ∈ st.regions.toList := by
+    rw [getElem!_pos st.regions _ hj]; exact Array.getElem_mem_toList _
+  obtain ⟨i, hi, hb⟩ := List.any_eq_true.1 (List.all_eq_true.1 (List.all_eq_true.1 hw _ hreg) x hx)
+  rw [List.mem_range] at hi
+  simp only [Bool.and_eq_true, Bool.not_eq_true', bne_iff_ne, ne_eq] at hb
+  obtain ⟨hc, hne⟩ := hb
+  have hnot : i + 7 ∉ (st.regions[j.val / 2]!).free.toList := by
+    intro h
+    have h' : (st.regions[j.val / 2]!).free.contains (i + 7) = true := by simpa using Array.mem_toList_iff.1 h
+    rw [h'] at hc; cases hc
+  have hfix := regionPoint_fixed st (st.regions[j.val / 2]!)
+    (Array.ofFn (link (if j.val % 2 = 0 then 0 else 1))) (by omega) (by omega) hnot
+  generalize (((st.regions[j.val / 2]!).mask >>> (i + 7)) % 2 == 1 &&
+    ((st.regions[j.val / 2]!).fixed >>> (i + 7)) % 2 == 1) = bv at hfix hne
+  unfold eqWord regionPtOf
+  generalize hq : (st.regionPoint st.regions[j.val / 2]! (Array.ofFn (link (if j.val % 2 = 0 then 0 else 1)))).toList.drop 7 = q
+  have hqi : q[i]? = some (if bv = true then 1 else 0) := by rw [← hq, List.getElem?_drop, Array.getElem?_toList, Nat.add_comm]; exact hfix
+  have hlen : i < q.length := (List.getElem?_eq_some_iff.1 hqi).1
+  have hv : q[i]! = (if bv = true then 1 else 0) := by rw [getElem!_pos q i hlen]; exact Option.some.inj ((List.getElem?_eq_getElem hlen).symm.trans hqi)
+  refine foldl_mul_eq_zero _ _ _ ⟨i, List.mem_range.2 hlen, ?_⟩
+  try dsimp only
+  rw [hv]
+  revert hne
+  cases bv <;> cases x.testBit i <;> simp [one_add_one', add_zero]
+
+/-- **The regions avoid the mask slot**: at every link point, a region claim's `eq` weight vanishes on every mask-slot
+word, since the region fixes a word bit where the word differs (`regionWordsOff`). -/
 theorem setupH_regions_off_mask {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
-    (_h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st)
-    (link : Fin 2 → Fin st.mPts → F128) (j : Fin (2 * st.regions.size)) (x : ℕ) (_hx : x ∈ maskWordsOf st) :
-    eqWord (regionPtOf st link j) x = 0 := by
-  sorry
+    (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st)
+    (hdm : avoidsMask st = true)
+    (link : Fin 2 → Fin st.mPts → F128) (j : Fin (2 * st.regions.size)) (x : ℕ) (hx : x ∈ maskWordsOf st) :
+    eqWord (regionPtOf st link j) x = 0 :=
+  regions_off_of_words (Refine.setupH_mask h).2 (avoidsMask_words hdm) link j x hx
 
 end Setup
 
@@ -977,24 +1047,21 @@ theorem hm_check_maskCount {c : Flock.Circuit} {tags : Tags} {ls : Lean.Json} (h
     refine ⟨fun hk => ?_, _, rfl⟩
     simp_all
 
-/-- **The regions avoid the mask slot** (open, and false without a further condition): `Circuit.outRegion` places the
-output region at `ur.start + g0.col·WORD`, and `Net.ofRows` bounds no output group's column, so the region can lie in the
-mask range. -/
-theorem setupH_regions_layout {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
-    {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
-    (_ht : tags.typed = false)
-    (_h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) :
+/-- **The regions' cells avoid the mask slot** (`regionCellsOff`). -/
+theorem regions_layout_of {st : Stmt} (hdm : avoidsMask st = true) :
     ∀ R ∈ regionsOf st, ∀ i < 2 ^ R.free.length, ¬ MaskCol st (R.inBlock i) := by
-  sorry
+  intro R hR i hi hmc
+  have := List.all_eq_true.1 (List.all_eq_true.1 (avoidsMask_cells hdm) R hR) i (List.mem_range.2 hi)
+  rw [maskCol_iff_B] at hmc
+  simp [hmc] at this
 
 /-- **The setup's layout facts**: `HmRow.check`'s mask range is one slot of at least a word, apart from every other
-range (`ExecSetup.setupH_layout`); the pin is a net slot's constant; Δ avoids the mask (`deltaAvoidsMask`); the regions
-(`setupH_regions_layout`). -/
+range (`ExecSetup.setupH_layout`); the pin is a net slot's constant; Δ and the regions avoid the mask (`avoidsMask`). -/
 theorem setupH_maskLayout {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (ht : tags.typed = false)
     (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st)
-    (hdm : deltaAvoidsMask st = true) : MaskLayout st := by
+    (hdm : avoidsMask st = true) : MaskLayout st := by
   have L := setupH_layout ht h
   obtain ⟨_, hc⟩ := Refine.hm_parse_check (setupH_spec ht h).1
   have hmask := (Refine.setupH_mask h).1
@@ -1006,7 +1073,7 @@ theorem setupH_maskLayout {tags : Tags} {circuitFile publicFile : ByteArray} {co
       ∀ r ∈ st.c.ranges.toList, ∀ x, FlockLevel3.covers r x → FlockLevel3.covers m x → r = m :=
     fun m hf r hr _ h1 h2 => eq_of_inSpan L.disj hr (List.mem_of_find?_eq_some hf) (inSpan_of_covers h1)
       (inSpan_of_covers h2)
-  refine ⟨hslot, hapart, delta_of_avoids hdm, ?_, setupH_regions_layout ht h⟩
+  refine ⟨hslot, hapart, delta_of_avoids (avoidsMask_delta hdm), ?_, regions_layout_of hdm⟩
   intro hpin
   cases hf : st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) with
   | none => unfold MaskCol at hpin; rw [hf] at hpin; exact hpin
@@ -1028,7 +1095,7 @@ theorem setupH_mask_isolated {tags : Tags} {circuitFile publicFile : ByteArray} 
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (ht : tags.typed = false)
     (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st)
-    (hdm : deltaAvoidsMask st = true) :
+    (hdm : avoidsMask st = true) :
     MaskIsolated st (stmtOf st (setupH_wf h).1 (regionsOf st)) :=
   maskIsolated_of_layout st _ (setupH_maskLayout ht h hdm)
 
@@ -1049,7 +1116,7 @@ valid witness whose registered values are the public ones satisfies `Table.Inner
 constraints). -/
 theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S))
-    (ht : I.tags.typed = false) (hdm : deltaAvoidsMask y.x.st = true) :
+    (ht : I.tags.typed = false) (hdm : avoidsMask y.x.st = true) :
     let C := coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
     ∀ c, C.Covered c → ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w := by
   intro C c hc w hw hreg ω r
@@ -1226,7 +1293,7 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
       refine Finset.sum_congr rfl fun x _ => ?_
       rw [claimX_region _ _ c r k (by omega) h2 hmS]
       by_cases hx : x.val ∈ maskWordsOf y.x.st
-      · have h0 := setupH_regions_off_mask y.x.h c.rest.link ⟨k - 2, h2⟩ x.val hx
+      · have h0 := setupH_regions_off_mask y.x.h hdm c.rest.link ⟨k - 2, h2⟩ x.val hx
         rw [h0, fOf_zero, zero_mul]
         show fOf (eqWord (regionPtOf y.x.st c.rest.link ⟨k - 2, h2⟩) x.val) * _ = 0
         rw [h0, fOf_zero, zero_mul]

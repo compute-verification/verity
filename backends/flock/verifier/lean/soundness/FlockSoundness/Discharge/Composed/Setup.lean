@@ -106,7 +106,7 @@ theorem bodyOf_padsOnto (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ :
 
 theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
-    (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), deltaAvoidsMask y.x.st = true) :
+    (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), avoidsMask y.x.st = true) :
     CoinedOfSetup (Reg := Reg) P I dj y₀ := by
   intro S R y
   obtain ⟨g1, g2, g3, g4⟩ := bodyOf_geometry (Reg := Reg) P I dj y₀ S R y
