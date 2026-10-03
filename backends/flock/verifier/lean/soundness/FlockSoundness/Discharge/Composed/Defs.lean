@@ -254,14 +254,21 @@ def padNOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : ℕ :=
   (padLenOf Tz st + Zk.K_PAD).nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE
 
 /-- **A `--zk` table's coins other than `β`, `ρ` and the claim points**: each rep's `q₀` level-0 queries over its `L₀` positions,
-each rep's `Q` pads queries over its `nP` positions, and each rep's sacrifice coin `ζ`. -/
-structure RestZK (q0 L0 nP : ℕ) where
+each rep's `Q` pads queries over its `nP` positions, each rep's sacrifice coin `ζ`, and each rep's level-0 lane point
+`r̄^r` over its `k₀` lane bits. -/
+structure RestZK (q0 L0 nP k0 : ℕ) where
   q0s : Fin 2 → Fin q0 → Fin L0
   qP : Fin 2 → Fin Zk.Q → Fin nP
   zeta : Fin 2 → F128
+  rbarPt : Fin 2 → Fin k0 → F256
+
+/-- `eq(p, l)` over K at lane `l`'s bits, least significant first. -/
+noncomputable def eqLane {k : ℕ} (p : Fin k → F256) (l : ℕ) : FlockLevel3.GF256 :=
+  ∏ i : Fin k, if l.testBit i.val then FlockLevel3.GF256.of (p i) else 1 + FlockLevel3.GF256.of (p i)
 
 /-- The draw's other coins: `q₀ = t_pad / 2` level-0 queries (`Zk.schedule`) over `2^logLen` positions. -/
-abbrev RestOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : Type := RestZK (Tz.t / 2) (2 ^ Tz.sch.level₀.logLen) (padNOf Tz st)
+abbrev RestOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : Type :=
+  RestZK (Tz.t / 2) (2 ^ Tz.sch.level₀.logLen) (padNOf Tz st) Tz.sch.k0
 
 /-- The draw's hidden-salt type. -/
 abbrev HiOf (Tz : TabZK 𝔽 mPts) : Type := Fin (hiCount Tz) → ZkView.Salt
@@ -283,7 +290,7 @@ def szOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : ZkView.Sizes where
   nPU := padNOf Tz st - Zk.Q
   nPad := 0
 
-/-- **The draw's tables but their coin-fixed fields** (open, refinement: `nu`, `sReg`, `pubReg`, `rbar`, `s0`, `sP` from `verify --zk` at the draw; `coinedOf` and `bodyOf` replace the
+/-- **The draw's tables but their coin-fixed fields** (open, refinement: `nu`, `sReg`, `pubReg`, `s0`, `sP` from `verify --zk` at the draw; `coinedOf` and `bodyOf` replace the
 others). -/
 noncomputable def tableOf (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     CoinsZK Zk.RANK_POINTS (RestOf Tz st) →
@@ -306,13 +313,13 @@ theorem padNOf_pos (Tz : TabZK 𝔽 mPts) (st : Stmt) : 0 < padNOf Tz st :=
   Nat.mul_pos (Nat.pos_of_ne_zero (Nat.ne_of_gt (Nat.pos_of_isPowerOfTwo (Nat.isPowerOfTwo_nextPowerOfTwo _)))) (Nat.two_pow_pos _)
 
 /-- **The draw's `--zk` table's refinement**: levels ≥ 1's salts, `ByteArray` value lists, `RestOf`'s coins (both reps'
-level-0 queries, opened as `S = Q⁰ ∪ Q¹`, the pads queries, `ζ`), the pads layout's sizes, and `tableOf`'s tables reading `ζ`, each claim's rep (the rank check's points: rep 0's `ab`, `c`, then rep 1's), and
+level-0 queries, opened as `S = Q⁰ ∪ Q¹`, the pads queries, `ζ`), the pads layout's sizes, and `tableOf`'s tables reading `ζ` and `r̄` (`rbar = eq(r̄^r, l)`), each claim's rep (the rank check's points: rep 0's `ab`, `c`, then rep 1's), and
 the exposed `h_fa`, `h_fb` (`ia`, `ib`). -/
 noncomputable def bodyOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedBody Tz.S (maskWordsOf st).length Tz.t where
   Hi := HiOf Tz
   VL := ByteArray
   Rest := RestOf Tz st
-  rest0 := ⟨fun _ _ => ⟨0, Nat.two_pow_pos _⟩, fun _ _ => ⟨0, padNOf_pos Tz st⟩, fun _ => 0⟩
+  rest0 := ⟨fun _ _ => ⟨0, Nat.two_pow_pos _⟩, fun _ _ => ⟨0, padNOf_pos Tz st⟩, fun _ => 0, fun _ _ => 0⟩
   sz := szOf Tz st
   queries := fun ρ => (List.ofFn (ρ.q0s 0) ++ List.ofFn (ρ.q0s 1)).map Fin.val
   padLen := padLenOf Tz st
@@ -321,6 +328,7 @@ noncomputable def bodyOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedBody Tz.S (m
   T := fun c =>
     { tableOf Tz st c with
       ζ := fun r => fOf (c.rest.zeta r)
+      rbar := fun r l => eqLane (c.rest.rbarPt r) l.val
       rep := fun k => if k.val < 2 then 0 else 1
       ia := ⟨(Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).fa, Nat.lt_of_succ_lt (fa_lt Tz st)⟩
       ib := ⟨(Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).fb, fa_lt Tz st⟩ }
