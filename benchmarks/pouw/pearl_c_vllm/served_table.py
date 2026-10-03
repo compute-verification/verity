@@ -26,7 +26,7 @@ def model_row(name: str, inputs: dict, verifies: list[dict], fresh: dict | None)
         raise ValueError(f"{name}: an input's openings failed; the measurement is not of the committed pass")
     out = {"model": name, "run": runs[0], "passes": sorted({r["pass"] for r in rows}),
            "manifests": sorted({f"{r['pass']}:{r['manifest_sha256']}" for r in rows}), "m": inputs["m"],
-           "delta_per_input": inputs["delta_per_input"], "tiles_measured": sum(r["drawn"] for r in rows),
+           "delta_per_input": inputs["delta_per_input"], "tile_draws": sum(r["drawn"] for r in rows),
            "failures": sum(r["failures"] for r in rows), "inputs_with_failures": sum(r["failures"] > 0 for r in rows),
            "share_max": max((r["share_max"] for r in rows if r["share_max"] is not None), default=None),
            "epsilon": inputs["cited_upper"], "epsilon_input": inputs["cited_input"],
@@ -54,12 +54,15 @@ def model_row(name: str, inputs: dict, verifies: list[dict], fresh: dict | None)
 
 def markdown(table: dict) -> str:
     lines = [f"# FP8 served table at cap {table['cap']}", "",
-             "| model | pass | m | tiles | failures | worst share | ε (95% simultaneous) | bound | fresh-salt ε | verify |",
+             "| model | pass | m | tile draws | failures | worst share | ε (95% simultaneous) | bound | fresh-salt ε | verify |",
              "|---|---|---:|---:|---:|---:|---:|---|---:|---|"]
     for r in table["models"]:
+        if "absent" in r:
+            lines.append(f"| {r['model']} | — | — | — | — | — | none | {r['absent']} | — | — |")
+            continue
         fresh = f"{r['fresh']['epsilon']:.4f} ({r['fresh']['trials']} trials, {r['fresh']['failures']} failed)" if "fresh" in r else "—"
         verify = ", ".join(f"{v['pass']} {'ACCEPT' if v['accepted'] else 'REJECT'}" for v in r["verify"]) or "—"
-        lines.append(f"| {r['model']} | `{r['run']}` | {r['m']} | {r['tiles_measured']} | {r['failures']} | "
+        lines.append(f"| {r['model']} | `{r['run']}` | {r['m']} | {r['tile_draws']} | {r['failures']} | "
                      f"{r['share_max']:.3g} | {r['epsilon']:.4f} | {r['epsilon_method']} | {fresh} | {verify} |")
     lines += ["", "ε is the largest of the m inputs' upper limits on the input's honest tile-rejection rate at the cap, each at "
               "δ = 0.05/m (served_debit.input_bound); an input is one matmul of the pass."]
@@ -71,6 +74,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--model", nargs="+", action="append", required=True, metavar=("NAME", "JSON"),
                    help="a model's name, its inputs.json, then any verify.json of its pass")
     p.add_argument("--fresh", nargs=2, action="append", default=[], metavar=("NAME", "INPUTS_JSON"))
+    p.add_argument("--absent", nargs=2, action="append", default=[], metavar=("NAME", "REASON"),
+                   help="a model the table is for but cannot cite, and why")
     p.add_argument("--cap", default="1/1000")
     p.add_argument("--out", type=Path, required=True)
     a = p.parse_args(argv)
@@ -82,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
         name, inputs, *verifies = spec
         models.append(model_row(name, json.loads(Path(inputs).read_text()), [json.loads(Path(v).read_text()) for v in verifies],
                                 fresh.get(name)))
+    models += [{"model": name, "absent": reason} for name, reason in a.absent]
     table = {"tool": "pouw_pearl_c_served_table", "cap": a.cap, "models": models}
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "table.json").write_text(json.dumps(table, indent=1) + "\n")

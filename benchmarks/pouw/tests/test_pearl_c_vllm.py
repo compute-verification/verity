@@ -599,6 +599,10 @@ def test_the_served_table_cites_each_models_worst_input_and_refuses_what_it_cann
     assert (q["epsilon"], q["m"], q["failures"], l["epsilon"]) == (0.09, 2, 0, 0.08)
     assert q["fresh"]["epsilon"] == 0.018 and q["fresh"]["trials"] == 640 and "fresh" not in l
     assert [v["accepted"] for v in q["verify"]] == [True, False] and "| qwen | `rq` | 2 |" in (out / "table.md").read_text()
+    assert q["tile_draws"] == 128
+    assert ST.main(["--model", "qwen", str(files["q"]), "--absent", "llama", "its pass is gone", "--out", str(out)]) == 0
+    assert json.loads((out / "table.json").read_text())["models"][1] == {"model": "llama", "absent": "its pass is gone"}
+    assert "| llama | — | — | — | — | — | none | its pass is gone |" in (out / "table.md").read_text()
     with pytest.raises(ValueError, match="control"):
         ST.main(["--model", "qwen", str(files["q"]), str(files["bad"]), "--out", str(out)])
     with pytest.raises(ValueError, match="one served pass"):
