@@ -840,7 +840,7 @@ class TP2CaptureWorkerExtension:
                             "caps": dict(caps or {}), "match_tokens": dict(match_tokens) if match_tokens else None, "swap_requests": swapped, "swap_rule": swap_rule,
                             "match_capture_dir": (str(match_capture_dir) if match_capture_dir else None), "weights_pin": st_pin,
                             # [TP-08] per-rank sampled replay config: {"programs": {"<rank>": <build dir>}, "of_record": {"<rank>": [digests]},
-                            # "requests": [{request_id r<i>, arrive_step, prompt_len, max_tokens, prompt_token_ids}], per_stratum, max_evaluate, seed, workers}
+                            # "requests": [{request_id r<i>, arrive_step, prompt_len, max_tokens, prompt_token_ids, seed (declared)}], per_stratum, max_evaluate, seed, workers}
                             "replay": (dict(replay) if replay else None),
                             # workload request_id -> r<declared index> (COORD R15 ruling 2); the driver's map when given, else declaration order
                             "request_ids": rid_map}
@@ -871,32 +871,32 @@ class TP2CaptureWorkerExtension:
         return {"rank": st["rank"], "installed": True}
 
     def tp2_commit_finalize(self) -> dict[str, Any]:
-        """After the run: the rank's run root (fixed BEFORE any challenge), per-step leaf counts, coverage declaration."""
+        """After the run: the rank's run root (fixed BEFORE any challenge), per-step leaf counts, coverage declaration.  The warm-up
+        (`pipeline.tp.warmup`) is never a record: nothing of it is bound, attributed, compared or replayed."""
         from verity_vllm.pipeline.commit import assert_pristine, class_coverage
 
         st = self._tp2_commit
         com = st["com"]
-        rc = com.finalize()
+        rc, record = com.finalize(), not st.get("warmup")
         com.uninstall()
         assert_pristine(st["eng"], st["base"])
         st["rc"] = rc
-        d = com.coverage_declaration(rc)
-        st["decl"] = d
-        binding = self._tp2_binding(rc)
-        attribution = self._tp2_attribution(rc)
+        d = st["decl"] = com.coverage_declaration(rc)
+        binding = self._tp2_binding(rc) if record else None
+        attribution = self._tp2_attribution(rc) if record else None
         # [coord M-0481 C2 form (B), TP family] committed partials / MoE received outputs vs the Match capture's stored collectives (same rank)
-        match_oracle = None
-        if st.get("match_capture_dir") and st.get("tps") is not None:
+        match_oracle, match_dir = None, record and st.get("match_capture_dir")
+        if match_dir and st.get("tps") is not None:
             try:
                 from verity_vllm.check import oracle_compare as OC
 
                 match_oracle = st["tps"].compare_match_oracle(st["match_capture_dir"], OC.OpenedReader(com, rc))
             except Exception as e:  # noqa: BLE001
                 match_oracle = {"rank": st["rank"], "verdict": "FAIL", "error": repr(e)[:300]}
-        elif st.get("match_capture_dir"):
+        elif match_dir:
             match_oracle = {"rank": st["rank"], "verdict": "FAIL", "why": "no tp partial source on this rank (partials not bound)"}
         # [manbind MAN-06 / coord M-0451 form (A), per rank -- tp TP-08] the C2 OF RECORD on THIS rank's map, Programs and shards
-        sampled_replay = self._tp2_sampled_replay(rc) if st.get("replay") else None
+        sampled_replay = self._tp2_sampled_replay(rc) if record and st.get("replay") else None
         return _jsonable({"rank": st["rank"], "run_root": rc.run_root.hex(), "binding": binding, "attribution": attribution, "match_oracle": match_oracle,
                           "sampled_replay": sampled_replay, "weights_pin": st.get("weights_pin"),
                           "steps": len(rc.steps), "leaves_per_step": [s.n_leaves for s in rc.steps],
@@ -906,7 +906,8 @@ class TP2CaptureWorkerExtension:
                           "errors_n": rc.extra.get("errors_n", len(rc.extra.get("errors") or [])), "errors": (rc.extra.get("errors") or [])[:10],
                           "identity_check": rc.extra.get("identity_check"), "expected_manifest": com.expected_manifest() if hasattr(com, "expected_manifest") else None,
                           "classes": class_coverage(d), "declaration": d, "weight_registration": rc.weight_registration,
-                          "persistent_bytes": rc.persistent_bytes, "temporary_bytes_peak": rc.temporary_bytes_peak})
+                          "persistent_bytes": rc.persistent_bytes, "temporary_bytes_peak": rc.temporary_bytes_peak, "bounded_staging": rc.extra.get("bounded_staging"),
+                          "plans_cached": (rc.extra.get("native_collect") or {}).get("plans_cached"), "pinned_pool_bytes": rc.extra.get("pinned_pool_bytes")})
 
     def _tp2_logical_request(self, rid: str, step: int | None = None) -> str:
         """Engine row id -> workload `r<i>` (commit_delta's rule, mirrored per rank): vLLM v1 suffixes the external request id with
@@ -1226,9 +1227,9 @@ class TP2CaptureWorkerExtension:
             sr["tp_context"] = tp_ctx
             sr["programs"] = {k: {"dir": loaded[k].get("dir"), "program_digest": digs[k]} for k in loaded}
             sr["rank"] = rank                    # [MAN-06c] the strata carry this rank's label (a per-rank map: every entry identity.rank == rank)
-            wreq = [{"request_id": str(r["request_id"]), "arrive_step": arr[str(r["request_id"])], "prompt_token_ids": list(r.get("prompt_token_ids") or []),
+            wreq = [{"request_id": str(r["request_id"]), "arrive_step": arr[str(r["request_id"])], "prompt_token_ids": list(r.get("prompt_token_ids") or []), "seed": r.get("seed"),
                      "steps": list(range(arr[str(r["request_id"])], arr[str(r["request_id"])] + int(r.get("max_tokens") or 1)))} for r in reqs]
-            lk = SR.boundary_linkage(bmap, rd, wreq, embed_op_path=pi0.embed_op_path())
+            lk = SR.boundary_linkage(bmap, rd, wreq, embed_op_path=pi0.embed_op_path(), splits_of_record=SR.splits_of_record(loaded))
             lk["rank"] = rank
             sr["value_source"] = dict(rd.record(), forked_children=sr.pop("value_reads_in_children", None))
         except Exception as e:  # noqa: BLE001  -- fail closed: an unrunnable replay is 'not evaluated', never PASS
@@ -1501,9 +1502,8 @@ class TP2CaptureWorkerExtension:
         return late_read_check(com, rc, int(self._tp2_commit["rank"]))
 
     def tp2_commit_reset(self) -> dict[str, Any]:
-        st = self._tp2_commit
-        st["com"].reset()
-        return {"rank": st["rank"], "reset": True}
+        self._tp2_commit["com"].reset()
+        return {"rank": self._tp2_commit["rank"], "reset": True}
 
     # ------------------------------------------------------------------ per-rank kernel census
 
