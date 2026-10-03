@@ -46,6 +46,9 @@ Pous/SecurityProofs/P2/             proved: the `m1p` pins (Count, Rows, Domain,
                                     bits breaks `k = 88` from `L = 2^30`)
 Pous/SecurityProofs/Chain/Flat.lean proved, generated: P3 with a concrete `H`, the band, the dense chain scheme and
                                     the public encoder over the overwrite chain (the graded lanes, flattened)
+Pous/SecurityProofs/Continuous/     the continuous audit: MissCount (proved, pinned: the bound on misses whose
+                                    conditional probabilities are at least q_j); Game (draft, unreviewed: the
+                                    variable-state responder and two statements) and PerAnswer (their proofs)
 lean-audit.json                     the policy and pin records for tools/lean/audit.py
 CheckAxioms.lean                    one #print axioms line per headline theorem
 PousTargets.lean                    untrusted, not in the default build: the open statements as sorry targets
@@ -74,7 +77,8 @@ no proof), a kernel replay, and the pinned theorems' records. `lean-audit.json` 
 `Pous.SecurityProofs.X` (among them the stacked one-way bound, the band certificate, and the dense scheme at the 64 KB
 point, with the implementation's tagged keying and its per-segment tags), the raw-storage refutations the `m1p` pins
 cite, and P2 in the cost model (`PousP2Ring`: `meets_of_meetsOn`, the non-vacuity pins `complete`, `tight` and
-`tight_p16448`, and the refutation `not_meetsOn_b19_k88`). A changed record needs a named statement reviewer (Verity's
+`tight_p16448`, and the refutation `not_meetsOn_b19_k88`), and the continuous audit's counting step
+(`PousContinuous.pr_misses_le`, `pr_misses_gt_le`). A changed record needs a named statement reviewer (Verity's
 `AGENTS.md`).
 
 **Submissions** are one file that imports only the trusted layers (`Pous.Protocol`, `Pous.Assumptions`,
