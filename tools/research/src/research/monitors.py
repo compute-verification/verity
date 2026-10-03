@@ -550,12 +550,14 @@ def asks(ctx: Ctx) -> list[Finding]:
 
 def node_heartbeat(ctx: Ctx) -> list[Finding]:
     """Node 1's monitor service hasn't finished a pass for 10 minutes (its state's `last_pass`), so no node-side monitor runs."""
-    out = ctx.sh([*SSH, ctx.node1, f"python3 -c \"import json; print(json.load(open('{ctx.node_state}')).get('last_pass', 0))\""])
-    age = ctx.now - float(out.strip() or 0)
-    if age <= 600:
+    out = ctx.sh([*SSH, ctx.node1, f"python3 -c \"import json, os; p = '{ctx.node_state}'; "
+                  "print(json.load(open(p)).get('last_pass', 0) if os.path.exists(p) else 'missing')\""]).strip()
+    age = None if out == "missing" else ctx.now - float(out or 0)
+    if age is not None and age <= 600:
         return []
-    return [Finding("stale", f"*Node 1's monitors haven't run for {age / 60:.0f} minutes* (`{ctx.node_state}`), so nothing "
-                    "watches node 1's or node 2's invariants.", cleared="*Cleared:* node 1's monitors run again.")]
+    when = "have never finished a pass" if age is None else f"haven't run for {age / 60:.0f} minutes"
+    return [Finding("stale", f"*Node 1's monitors {when}* (`{ctx.node_state}`), so nothing watches node 1's or node 2's "
+                    "invariants.", cleared="*Cleared:* node 1's monitors run again.")]
 
 
 # ---- the registry ---------------------------------------------------------------------------------------------------------------

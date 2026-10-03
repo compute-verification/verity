@@ -461,7 +461,9 @@ def test_node_1s_heartbeat_is_stale_after_10_minutes_without_a_pass():
     def ctx(last):
         return M.Ctx(now=T0, run=Run((has("n1"), (0, f"{last}\n", ""))))
     assert M.node_heartbeat(ctx(T0 - 500)) == []
-    assert M.node_heartbeat(ctx(T0 - 1500))[0].key == "stale"
+    assert "haven't run for 25 minutes" in M.node_heartbeat(ctx(T0 - 1500))[0].text
+    (f,) = M.node_heartbeat(ctx("missing"))
+    assert f.key == "stale" and "never finished a pass" in f.text
 
 
 # ---- the relay -----------------------------------------------------------------------------------------------------------------
