@@ -4126,6 +4126,18 @@ fn main() {
     if let Err(e) = check_public(&c, &inst) {
         refuse(e);
     }
+    // the verifier's commands check Linking on the population before any session; the prover's take no links file
+    if matches!(cmd.as_str(), "serve" | "replay" | "statement") {
+        let path = arg("--links", "");
+        let file: Option<Value> = (!path.is_empty()).then(|| {
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap_or_else(|e| refuse(format!("--links {path}: {e}"))))
+                .unwrap_or_else(|e| refuse(format!("--links {path}: {e}")))
+        });
+        let links = flock_live::circuit::check_links(&c, &inst, file.as_ref()).unwrap_or_else(|e| refuse(e));
+        if links > 0 {
+            eprintln!("links: {links} cut wire(s) checked on the population's public file");
+        }
+    }
     let id = identity(&c);
     let st = Arc::new(Stmt::new(c, inst.n, id).unwrap_or_else(|e| refuse(e)));
     // the device prover holds at most 12 slot types (`gpu_circuit::FC_MAX_TYPES`)
