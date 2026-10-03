@@ -71,12 +71,14 @@ noncomputable def simZ (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Finset (F
     (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (N : ℕ) {L : Law n}
     (hdec : DecodesZK (Gz A Hs T) (outz Hs T) (accz T) I wr opn dec one fin capOf)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) : Strategy (audit L Reg (batchedSessionZC A Hs (planOf T))) :=
-  sessionZC_planOf A Hs T ▸ simAuditZK (Gz A Hs T) (outz Hs T) (accz T) I wr opn dg dec one fin capOf N
-    (fun S R pts r => allInh_repZCAt A Hs (T S R) pts r) hdec τ
+  cast (congrArg (fun g => Strategy (audit L Reg g)) (sessionZC_planOf A Hs T))
+    (simAuditZK (Gz A Hs T) (outz Hs T) (accz T) I wr opn dg dec one fin capOf N
+      (fun S R pts r => allInh_repZCAt A Hs (T S R) pts r) hdec τ)
 
 theorem prob_audit_cast {L : Law n} {g₁ g₂ : Finset (Fin n) → Reg → Game Bool} (h : g₁ = g₂)
     (σ : Strategy (audit L Reg g₁)) (E : Bool × Finset (Fin n) → Prop) :
-    prob E (audit L Reg g₂) (h ▸ σ) = prob E (audit L Reg g₁) σ := by
+    prob E (audit L Reg g₂) (cast (congrArg (fun g => Strategy (audit L Reg g)) h) σ) =
+      prob E (audit L Reg g₁) σ := by
   subst h
   rfl
 
@@ -100,13 +102,13 @@ def RunsZCAssembly (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (I : Inputs) (dj :
 
 /-- **Stub** (item 9, lp-zkbind): each unit's placement is its place in setupH's statement at the draw. `True` until
 lp-zkbind freezes the statement. -/
-def PlacementZK {C : Circuit} (P : Partition C n) (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts)
+def PlacementZK {C : Audit.Circuit} (P : Partition C n) (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts)
     (_place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ (planOf T) (tabOne T) S R u).S u) : Prop :=
   True
 
 /-- **Stub** (item 8, lp-zkbind): the binding's committed values are the unit's real inputs and outputs. `True` until
 lp-zkbind freezes the statement. -/
-def ValueBindingZKLive (A : Arith 𝔽 K) {C : Circuit} (P : Partition C n) (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts)
+def ValueBindingZKLive (A : Arith 𝔽 K) {C : Audit.Circuit} (P : Partition C n) (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts)
     {decode : DecoderZK (C := C) (planOf T) (tabOne T)} {Dh : Type} {Hc : List UInt8 → Dh}
     (_vb : ValueBindingZ A P (planOf T) (tabOne T) decode Hc) : Prop :=
   True

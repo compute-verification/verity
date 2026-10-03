@@ -29,7 +29,7 @@ local notation "𝔽" => FlockLevel3.GF128
 variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl] {mPts n : ℕ} {Reg : Type}
 
 /-- **One `--zk` sampled session, sound and zero knowledge.** -/
-theorem zk_session_composed (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) {C : Circuit} (P : Partition C n)
+theorem zk_session_composed (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) {C : Audit.Circuit} (P : Partition C n)
     (I : Inputs) (ht : I.tags.typed = false) (hh : I.tags.hiddenOutputs = false) (h1 : I.count ≤ 1)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
