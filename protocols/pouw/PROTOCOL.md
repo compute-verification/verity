@@ -451,9 +451,10 @@ useful    U/(α_A·α_B), glue
     (`SM120_LOOP_CAST_8P72`), the statement of the served γ and ε. Its ratio to `wref` differs between linears, so a
     served step's mixed layout drawn by `wref` would not be work-weighted in its sense (red team #919 F1). Elsewhere it
     is `wref`. A tile's draw weight is the sum over its credited cells. Where every cell is credited, that is the cited
-    statement's ticket (the tile's `Wref`). The statements weigh every cell, so on a tile with filler, excluded or
-    voluntary rows the draw is not yet the one they state (Not here yet). An accepted unit is credited
-    (1 − ρ)·`credit_of` over its credited cells.
+    statement's ticket (the tile's `Wref`). The statements weigh every cell, so a tile with filler, excluded or
+    voluntary rows gets less than its `Wref`'s ticket, and unless every tile's credited share is the same, the draw is
+    not yet the one they state (Not here yet). An accepted unit is credited (1 − ρ)·`credit_of` over its credited
+    cells.
   - **The sampling guarantee is per credited cell.** A drawn tile's uncredited cells (filler, excluded or voluntary)
     never count as coverage. Volunteering a tile's other rows lowers that tile's draw weight to its credited cells.
     Lean's statements don't model that yet: their draw weight is the whole tile's `Wref`, whatever is volunteered.
