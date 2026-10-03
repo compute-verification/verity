@@ -195,11 +195,13 @@ def cell_credit(scheme: C.PearlC, record: UnitRecord) -> Fraction:
 
 @dataclass(frozen=True)
 class DrawWref:
-    """The `W_ref` a Lean statement's draw weighs a tile by: `wrefDevRev1K (devAt d prices) c` times the tile's credited
-    share (`pearlCTilesDevRev1K`'s `Wcred`), the scheme's rev1 `wref` at the statement's prices plus `c` per activation
-    element (the honest kernel's forming beyond the record's).  `GγSampled` and `HonestTileCapRate` take tickets
-    proportional to it, so a draw by another price record's `wref` attains the statement's γ only on a layout of one
-    (n, k): on a served step's four linears the per-linear ratios differ (red team #919 F1)."""
+    """The `W_ref` a Lean statement's draw weighs by: `wrefDevRev1K (devAt d prices) c`, the scheme's rev1 `wref` at the
+    statement's prices plus `c` per activation element (the honest kernel's forming beyond the record's).  `GγSampled`,
+    `HonestTileCapRate` and `CompleteSampled` take tickets proportional to a tile's `Wref`, over all of its rows and
+    columns, so a draw by another price record's `wref` attains the statement's γ only on a layout of one (n, k): on a
+    served step's four linears the per-linear ratios differ (red team #919 F1).  `tile_weight` counts credited cells
+    only, so the tickets are the statement's on fully credited tiles; a tile with filler, excluded or voluntary rows is
+    drawn below its `Wref` share, and no Lean statement covers that draw yet (red team #1014)."""
 
     statement: str
     device: str
