@@ -19,12 +19,19 @@ spec = importlib.util.spec_from_file_location("check_for_lean_records", ROOT / "
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 
-#: `audit.py` as far as `--records` sees it: its arguments, working directory, threads and Lean slot logged; reports under `--out`
-#: as `--no-replay` leaves them (no replay time); `--update` writing a record
+#: `audit.py` as far as `--records` sees it: its arguments, working directory, threads, Lean slot and the lock files it holds
+#: open logged; reports under `--out` as `--no-replay` leaves them (no replay time); `--update` writing a record
 FAKE_AUDIT = """\
 import json, os, sys
+held = []
+for fd in os.listdir("/proc/self/fd"):
+    try:
+        held.append(os.readlink(f"/proc/self/fd/{fd}"))
+    except OSError:
+        pass
 with open(os.environ["AUDIT_LOG"], "a") as f:
     f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(), "threads": os.environ.get("LEAN_NUM_THREADS"),
+                        "locks": sorted(p for p in held if p.endswith(".lock")),
                         **({"lean_slot": os.environ["LEAN_SLOT"]} if "LEAN_SLOT" in os.environ else {})}) + "\\n")
 rc = int(os.environ.get("AUDIT_RC", "0"))
 out, pkg = sys.argv[sys.argv.index("--out") + 1], sys.argv[-1]
@@ -176,8 +183,9 @@ def test_a_tree_keeps_one_packages_dependencies(repo, tmp_path):
 
 
 def test_it_holds_a_lean_slot_of_pool_build_and_works_on_that_slots_tree(repo, tmp_path, monkeypatch, capsys):
-    """Never the `audit` pool, where hour-long audits hold every slot, nor the one LEAN_SLOT_POOL names; a node whose SLOTS lists
-    no `build` (nor `any`) refuses it, and nothing runs."""
+    """Never the `audit` pool, where hour-long audits hold every slot, nor the one LEAN_SLOT_POOL names, nor the one LEAN_SLOT
+    says its caller holds; audit.py holds the slot's lock itself. A node whose SLOTS lists no `build` refuses it, even with an
+    `any` pool, and nothing runs."""
     deps, slots = tmp_path / "deps", tmp_path / "locks" / "lean-slots"
     slots.parent.mkdir()
     slots.write_text("check 1\naudit 1\nbuild 2\n")
@@ -187,7 +195,9 @@ def test_it_holds_a_lean_slot_of_pool_build_and_works_on_that_slots_tree(repo, t
     fcntl.flock(held, fcntl.LOCK_EX)
     assert LC.audit_records("p", deps) == 0
     os.close(held)
-    assert _calls(tmp_path)[0]["lean_slot"] == "build/1" and LC.LEAN_SLOT.HELD not in os.environ
+    (call,) = _calls(tmp_path)
+    assert call["lean_slot"] == "build/1" and LC.LEAN_SLOT.HELD not in os.environ
+    assert call["locks"] == [str(slots.parent / "lean-build-1.lock")], "the slot is held until audit.py exits, whoever dies first"
     tree = tmp_path / "cache" / "lean-records" / "build-1"
     assert (tree / "p" / "Pp.lean").is_file() and not (tmp_path / "cache" / "lean-records" / "build-0").exists()
     fd = os.open(slots.parent / "lean-build-1.lock", os.O_RDWR)
@@ -197,9 +207,16 @@ def test_it_holds_a_lean_slot_of_pool_build_and_works_on_that_slots_tree(repo, t
     assert LC.audit_records("p", deps) == 0 and _calls(tmp_path)[0]["lean_slot"] == "build/0"
     assert (tmp_path / "cache" / "lean-records" / "build-0" / "p" / "Pp.lean").is_file()
 
-    slots.write_text("check 1\naudit 1\n")
-    assert LC.audit_records("p", deps) == 2 and _calls(tmp_path) == []
-    assert "lists neither pool 'build' nor 'any'" in capsys.readouterr().out, "a guard never fails open"
+    monkeypatch.setenv(LC.LEAN_SLOT.HELD, "check/0")                  # run from inside check's lean-audit step, say
+    assert LC.audit_records("p", deps) == 0
+    (call,) = _calls(tmp_path)
+    assert call["lean_slot"] == "build/0" and call["argv"][-1] == str(tmp_path / "cache" / "lean-records" / "build-0" / "p")
+
+    capsys.readouterr()
+    for text in ("check 1\naudit 1\n", "check 1\nany 4\n"):
+        slots.write_text(text)
+        assert LC.audit_records("p", deps) == 2 and _calls(tmp_path) == []
+        assert "lists no pool 'build', the only one this request takes" in capsys.readouterr().out, "a guard never fails open"
 
 
 def test_without_lean_slots_its_tree_is_local(repo, tmp_path):

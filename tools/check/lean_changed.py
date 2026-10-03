@@ -8,11 +8,12 @@ merges git combines cleanly that Lean doesn't) fails the run in minutes rather t
 `--records` is a lane's fast path to the records in PKG's `lean-audit.json` (PKG: its path, or a unique part of one):
 `tools/lean/audit.py --build --no-replay --no-runs` on PKG in a tree kept per slot, which prints what the audit prints,
 `--update`'s review included, after a build of only what changed since that slot's last run. It first waits for one of the
-node's Lean slots of pool `build` (`lean_slot.py`; refused when SLOTS lists neither `build` nor `any`), never one of the
-`audit` pool's, where hour-long audits hold every slot. Slot `build/I`'s tree is `lean-records/build-I` under the check cache,
-whoever holds that slot's lock owns it, and the slot is held until audit.py exits; with no SLOTS (a laptop) the tree is
-`lean-records/local`. `--tree` names another only under `lean-records/`. The tree's fetched dependencies are its own copy of the audit's (taken once per manifest and toolchain,
-else fetched cold), never links: where there is no sandbox its build writes as this user, and nothing it writes may reach what
+node's Lean slots of pool `build` (`lean_slot.py`; refused when SLOTS lists no `build` pool, which pool `any` never stands in
+for), never one of the `audit` pool's, where hour-long audits hold every slot, whatever slot (LEAN_SLOT) the process that
+started it holds. Slot `build/I`'s tree is `lean-records/build-I` under the check cache, whoever holds that slot's lock owns
+it, and audit.py inherits the lock's descriptor, so the slot is held until audit.py exits; with no SLOTS (a laptop) the tree
+is `lean-records/local`. `--tree` names another only under `lean-records/`. The tree's fetched dependencies are its own copy
+of the audit's (taken once per manifest and toolchain, else fetched cold), never links: where there is no sandbox its build writes as this user, and nothing it writes may reach what
 the audit keeps. A tree keeps one package's copy (about 170k inodes, 8 GB), so auditing another package that fetches
 dependencies there drops it first. `--update` writes the record back into this checkout, but not in a recorded run, whose
 source tree the commit's other runs share: there it is in the run's `lean-audit/audit-*/`.
@@ -239,8 +240,9 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
         log(f"lean-records: {name!r} matches {len(match)} packages: {', '.join(match or pkgs)}")
         return 2
     pkg = match[0]
+    os.environ.pop(LEAN_SLOT.HELD, None)
     try:
-        slot = LEAN_SLOT.hold(FAST_POOL)
+        slot = LEAN_SLOT.hold(FAST_POOL, or_any=False)
     except LEAN_SLOT.Refused as e:
         log(f"lean-records: {e}")
         return 2
@@ -266,7 +268,8 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
             out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
             argv = [sys.executable, str(AUDIT_PY), "--build", "--no-replay", "--no-runs", *(["--update"] if update else []),
                     *(["--moved", str(moved.resolve())] if moved else []), "--out", str(out), str(tree / pkg)]
-            rc = subprocess.run(argv, cwd=tree, env={**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())}).returncode
+            rc = subprocess.run(argv, cwd=tree, env={**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())},
+                                pass_fds=() if slot is None else (slot,)).returncode
             label(out)
             if run_dir and run_id:
                 write_result(Path(run_dir), run_id, pkg, rc, out, update)
