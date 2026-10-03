@@ -16,3 +16,4 @@ import FlockSoundness.Discharge.ZkLink.StrictZ
 import FlockSoundness.Discharge.ZkLink.Sched
 import FlockSoundness.Discharge.ZkLink.TablesAt
 import FlockSoundness.Discharge.ZkLink.DrawOk
+import FlockSoundness.Discharge.ZkLink.DrawOkJson
