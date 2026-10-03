@@ -189,6 +189,7 @@
    "assumptions": [],
    "type_hash": "70f0a16a45c46e19133b2f90e56b20f7bd1d27ca6064c8f667ec65d5bd209423"
   },
+  "Pous.SecurityProofs.BandMultiMeetsFamilyD0": {},
   "Pous.SecurityProofs.BandMultiMeetsFamilyD1": {
    "signature": ["Pous.SecurityProofs.BandMultiMeetsFamilyD1 : Pous.Guarantees.BandMultiMeetsFamilyD1"],
    "assumptions": [],

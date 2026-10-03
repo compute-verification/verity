@@ -243,9 +243,10 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 
   A scheme may have several certificates (`Scheme.certificates`), and the verifier audits under the first that
   covers its `k` and deadline. The band's are `BandMultiMeetsFamily` (`k = 111` at `D = 5`, the default), then
-  `BandMultiMeetsFamilyD2` (`k = 97` at `D = 2`, `Δ + RTT` under 724.5 µs, `d ≥ 2`) and `BandMultiMeetsFamilyD1`
-  (`k = 93` at `D = 1`, under 483 µs, `d ≥ 1`). An unset `k` stays at the first certificate's, so the default audit is
-  unchanged; the two smaller `k`s are used only when asked for. A band with `d < 5` has only the last two.
+  `BandMultiMeetsFamilyD2` (`k = 97` at `D = 2`, `Δ + RTT` under 724.5 µs, `d ≥ 2`), `BandMultiMeetsFamilyD1`
+  (`k = 93` at `D = 1`, under 483 µs, `d ≥ 1`) and `BandMultiMeetsFamilyD0` (`k = 89` at `D = 0`, under 241.5 µs, every
+  `d`). An unset `k` stays at the first certificate's, so the default audit is unchanged; the three smaller `k`s are
+  used only when asked for. A band with `d < 5` has only the certificates with `D ≤ d`.
 
   `research=True` runs a refused audit anyway, except past the cliff, with the first certificate's refusals as gaps.
 - **`protocol.StorageProfile`** is what an accepted audit establishes: a server whose state held fewer than
@@ -432,8 +433,9 @@ one ideal permutation `Π₂`, and `Pous.BandMulti.chainBandSeg` lays out segmen
 `D = 5`, `Q = 2^20`, `k = 111` and `ε = 2^-128` for every `d ≥ 5`; `BandMultiMeets14` the same for 448 segments
 (14 GiB), with per-segment and with global salts, `BandMultiMeets14K106` at `k = 106` per segment, and
 `BandMultiMeetsFamily` the `k = 111` row for every segment count `N` with `1 ≤ N ≤ 2^64`
-(`Pous/SecurityProofs/Chain/Family.lean`). `BandMultiMeetsFamilyD2` and `BandMultiMeetsFamilyD1` are that family at
-fewer rounds, `D = 2` with `k = 97` for every `d ≥ 2` and `D = 1` with `k = 93` for every `d ≥ 1`, and
+(`Pous/SecurityProofs/Chain/Family.lean`). `BandMultiMeetsFamilyD2`, `BandMultiMeetsFamilyD1` and
+`BandMultiMeetsFamilyD0` are that family at fewer rounds, `D = 2` with `k = 97` for every `d ≥ 2`, `D = 1` with
+`k = 93` for every `d ≥ 1` and `D = 0` with `k = 89` for every `d`, and
 `BandChainMeets64Rounds2` and `BandChainMeets64Rounds1` their one-segment rows
 (`Pous/SecurityProofs/Chain/FamilyRounds.lean`). `BandPubMeets*` are the same rows with an untrusted server encoding and the
 exact setup check (`Pous/Protocol/Model/PubEncoder.lean`), under the four deployment conditions in their docstrings;
@@ -531,7 +533,7 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 | `DenseMeets` | the dense scheme S1 meets `Meets` with no named assumption, in the ideal-hash model only (security, correctness and rate, not decode cost) | proved |
 | `P3ConcreteMeets64`, `P3ConcreteMeets14GB`, `P3ConcreteMeets64D12` | P3 with the overwrite-chain `H` (`Pous/Protocol/Model/P3Chain.lean`), 64 KB labels, `k = 106`: one segment and 971 segments (14.005 GB) on `B(220, 12)` at `D = 10`, and `B(220, 16)` at `D = 12`, in the ideal two-permutation model | proved |
 | `BandChainMeets64`, `BandChainMeets64D5`, `BandChainMeets64D12`, `BandMultiMeets14`, `BandMultiMeets14K106`, `BandMultiMeetsFamily` | the band over the overwrite chain (`Pous/Protocol/Model/BandChain.lean`): 64 KiB labels, `D = 5`, `k = 111`, every `d ≥ 5` and `d = 5`, `12`; 448 segments (14 GiB) at `k = 111`, and at `k = 106` per segment; every segment count from 1 to `2^64` at `k = 111` | proved |
-| `BandMultiMeetsFamilyD2`, `BandMultiMeetsFamilyD1`, `BandChainMeets64Rounds2`, `BandChainMeets64Rounds1` | the band at fewer rounds: every segment count from 1 to `2^64` at `D = 2`, `k = 97`, every `d ≥ 2`, and at `D = 1`, `k = 93`, every `d ≥ 1`; one segment (64 KiB) at each | proved |
+| `BandMultiMeetsFamilyD2`, `BandMultiMeetsFamilyD1`, `BandMultiMeetsFamilyD0`, `BandChainMeets64Rounds2`, `BandChainMeets64Rounds1` | the band at fewer rounds: every segment count from 1 to `2^64` at `D = 2`, `k = 97`, every `d ≥ 2`, at `D = 1`, `k = 93`, every `d ≥ 1`, and at `D = 0`, `k = 89`, every `d`; one segment (64 KiB) at `D = 2` and `D = 1` | proved |
 | `BandPubMeets64`, `BandPubMeets14`, `BandPubMeets14Global`, `BandPubMeetsFamily`, `BandPubMeetsFamilyD2`, `BandPubMeetsFamilyD1` | the same band rows with a public encoder and the exact setup check (`Pous/Protocol/Model/PubEncoder.lean`, `Pous/Protocol/Accounting/PubMeets.lean`) | proved |
 | `BandGradedMeetsFamily` | the band with up to `t` late answers (`Pous/Protocol/Model/Graded.lean`, `Pous/Protocol/Accounting/GradedMeets.lean`): every segment count from 1 to `2^64`, `d ≥ 5`, `D = 5`, `(t, k) = (0, 111), (1, 160), (2, 203), (3, 243)`, each late round within `(D_late, Q_late)` with `5 ≤ D_late ≤ d`, `D_late ≤ 12` | proved |
 | `ChainDenseMeets64`, `ChainDenseMeets111` | the dense scheme over the overwrite chain: 64 KiB at `D = 5`, and the deployment point (`2^16` blocks of 1 KiB, `D = 64`), both at `k = 111` | proved |
