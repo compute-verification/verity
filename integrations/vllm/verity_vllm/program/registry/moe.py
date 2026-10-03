@@ -582,7 +582,10 @@ def MoeRouterSigmoidNorm(B, S, w, v):
 
 @composite("MoeRouterSigmoidBias", 1, ["E", "TOPK", "SCALE", "KERNEL"],
            lambda S: ((("logits", Array(S.E, F32)), ("bias", Array(S.E, F32))), Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
-           conformance="not-yet-established")
+           conformance="exact-model-tested; the RTX PRO 6000's (cc 12.0, 188 SMs) _moe_C.grouped_topk at E=256, TOPK=8, SCALE=2.5, "
+                       "both launches: 10,240 rows bit-exact against this Program and every MUFU-range logit word (65,873,464) "
+                       "against its twin (tests/properties/sigmoid_router_capture_gpu.py; runs r20261003-090316-1374 and "
+                       "r20261003-091025-e5e7, art:a827deda); cc 9.0 not yet captured")
 def MoeRouterSigmoidBias(B, S, logits, bias):
     """`_moe_C.grouped_topk(scores, n_group=1, topk_group=1, TOPK, renormalize=True, SCALE, bias, scoring_func=SIGMOID)` for one
     token row of f32 router logits (`GateLinear`'s f32 output) and the f32 `e_score_correction_bias`: per expert the sigmoid
