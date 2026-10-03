@@ -821,14 +821,141 @@ theorem satisfies_zWith (st : Stmt) (hwf : StmtWF st) (regs : List (Model.Region
   · rw [hblk o _ hI.pin]; exact hpin o
   · rw [hblk o _ (hI.regions R hR i hi)]; exact hreg R hR o i hi h
 
-/-- **The setup's statements isolate the mask slot** (open, the setup's): `HmRow.check`'s ranges are aligned and pairwise
+theorem lastCover_mem : ∀ (rs : List Range) (c : ℕ) {r : Range}, Refine.lastCover rs c = some r →
+    r ∈ rs ∧ FlockLevel3.covers r c
+  | [], _, _, h => by simp [Refine.lastCover] at h
+  | r' :: rs, c, r, h => by
+      rw [Refine.lastCover] at h
+      cases h' : Refine.lastCover rs c with
+      | some r'' =>
+          rw [h', Option.some_or] at h
+          cases h
+          exact ⟨List.mem_cons_of_mem _ (lastCover_mem rs c h').1, (lastCover_mem rs c h').2⟩
+      | none =>
+          rw [h', Option.none_or] at h
+          split at h
+          · cases h; exact ⟨List.mem_cons_self, by assumption⟩
+          · cases h
+
+theorem lastCover_isSome : ∀ (rs : List Range) (c : ℕ) {r : Range}, r ∈ rs → FlockLevel3.covers r c →
+    (Refine.lastCover rs c).isSome
+  | [], _, _, h, _ => absurd h List.not_mem_nil
+  | r' :: rs, c, r, h, hc => by
+      rw [Refine.lastCover]
+      rcases List.mem_cons.1 h with rfl | h
+      · cases Refine.lastCover rs c <;> simp [hc]
+      · have := lastCover_isSome rs c h hc
+        cases h' : Refine.lastCover rs c with
+        | some _ => simp
+        | none => rw [h'] at this; cases this
+
+/-- **The layout facts mask isolation reads**: the mask range is one slot of at least a word, no other range covers a
+column it covers, Δ's pairs avoid its columns, and so do the pin and the regions' cells. -/
+structure MaskLayout (st : Stmt) : Prop where
+  slot : ∀ m, st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) = some m → m.count = 1 ∧ 7 ≤ m.slotLog
+  apart : ∀ m, st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) = some m →
+    ∀ r ∈ st.c.ranges.toList, ∀ x, FlockLevel3.covers r x → FlockLevel3.covers m x → r = m
+  delta : ∀ p ∈ st.da.toList ++ st.db.toList, ¬ MaskCol st p.1 ∧ ¬ MaskCol st p.2
+  pin : ¬ MaskCol st st.pin
+  regions : ∀ R ∈ regionsOf st, ∀ i < 2 ^ R.free.length, ¬ MaskCol st (R.inBlock i)
+
+theorem maskCol_iff {st : Stmt} {m : Range} (hf : st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) = some m)
+    (h1 : m.count = 1) (h7 : 7 ≤ m.slotLog) (x : ℕ) : MaskCol st x ↔ FlockLevel3.covers m x := by
+  unfold MaskCol FlockLevel3.covers
+  rw [hf]
+  dsimp only
+  have hJ : 2 ^ m.slotLog = 128 * 2 ^ (m.slotLog - 7) := by
+    rw [show (128 : ℕ) = 2 ^ 7 by norm_num, ← pow_add, Nat.add_sub_cancel' h7]
+  have hK : 0 < 2 ^ (m.slotLog - 7) := Nat.two_pow_pos _
+  have hs : m.start / 128 = m.pos0 * 2 ^ (m.slotLog - 7) := by
+    rw [Range.start, hJ, ← Nat.mul_assoc, Nat.mul_comm m.pos0 128, Nat.mul_assoc,
+      Nat.mul_div_cancel_left _ (by norm_num)]
+  rw [hs, h1, hJ, ← Nat.div_div_eq_div_mul, Nat.le_div_iff_mul_le hK, Nat.div_lt_iff_lt_mul hK, Nat.add_mul, one_mul]
+
+theorem dCnt_zero {st : Stmt} {d : Array (ℕ × ℕ)} (hd : ∀ p ∈ d.toList, ¬ MaskCol st p.1 ∧ ¬ MaskCol st p.2) (i c : ℕ)
+    (h : MaskCol st i ∨ MaskCol st c) : dCnt d i c = 0 :=
+  List.count_eq_zero.2 fun hm => by rcases h with h | h; exacts [(hd _ hm).1 h, (hd _ hm).2 h]
+
+theorem rangeCnt_mask {st : Stmt} (hL : MaskLayout st) (side : Flock.Kind → ℕ → ℕ → ℕ)
+    (hside : ∀ i c, side Flock.Kind.mask i c = if i = c then 1 else 0) (i c : ℕ) (h : MaskCol st i ∨ MaskCol st c) :
+    rangeCnt side st.c.ranges.toList i c = if i = c then 1 else 0 := by
+  have hf : ∃ m, st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) = some m := by
+    rcases h with h | h <;> (unfold MaskCol at h; split at h; · exact h.elim) <;> exact ⟨_, by assumption⟩
+  obtain ⟨m, hf⟩ := hf
+  obtain ⟨h1, h7⟩ := hL.slot m hf
+  have hmk : m.kind = Flock.Kind.mask := by
+    have hk := List.find?_some hf
+    cases hkd : m.kind <;> rw [hkd] at hk
+    · exact absurd hk (by decide)
+    · exact absurd hk (by intro h; cases h)
+  have hmem : m ∈ st.c.ranges.toList := List.mem_of_find?_eq_some hf
+  have hiff := maskCol_iff hf h1 h7
+  have hsame : ∀ (r : Range) (a b : ℕ), FlockLevel3.covers r b → a / 2 ^ r.slotLog = b / 2 ^ r.slotLog →
+      FlockLevel3.covers r a := fun r a b hb he => by unfold FlockLevel3.covers at *; rw [he]; exact hb
+  unfold rangeCnt
+  cases hl : Refine.lastCover st.c.ranges.toList c with
+  | none =>
+      have hic : i ≠ c := fun he => by
+        subst he
+        have hc : FlockLevel3.covers m i := (hiff i).1 (h.elim id id)
+        have := lastCover_isSome _ i hmem hc
+        rw [hl] at this; cases this
+      simp [hic]
+  | some r =>
+      obtain ⟨hr, hrc⟩ := lastCover_mem _ c hl
+      dsimp only
+      by_cases hq : i / 2 ^ r.slotLog = c / 2 ^ r.slotLog
+      · rw [if_pos hq]
+        have hri := hsame r i c hrc hq
+        have hrm : r = m := by
+          rcases h with h | h
+          · exact hL.apart m hf r hr i hri ((hiff i).1 h)
+          · exact hL.apart m hf r hr c hrc ((hiff c).1 h)
+        subst hrm
+        rw [hmk, hside]
+        by_cases he : i % 2 ^ r.slotLog = c % 2 ^ r.slotLog
+        · have hic : i = c := by
+            rw [← Nat.div_add_mod i (2 ^ r.slotLog), ← Nat.div_add_mod c (2 ^ r.slotLog), hq, he]
+          rw [if_pos he, if_pos hic]
+        · rw [if_neg he, if_neg (by intro h'; subst h'; exact he rfl)]
+      · rw [if_neg hq, if_neg (by intro h'; subst h'; exact hq rfl)]
+
+/-- **Mask isolation from the layout** (`stmtOf`'s `matA`, `matB`): the mask range's identity slot is the only range that
+reads its columns or rows, and Δ adds nothing there. -/
+theorem maskIsolated_of_layout (st : Stmt) (hwf : StmtWF st) (hL : MaskLayout st) :
+    MaskIsolated st (stmtOf st hwf (regionsOf st)) := by
+  have hda : ∀ p ∈ st.da.toList, ¬ MaskCol st p.1 ∧ ¬ MaskCol st p.2 := fun p hp => hL.delta p (List.mem_append_left _ hp)
+  have hdb : ∀ p ∈ st.db.toList, ¬ MaskCol st p.1 ∧ ¬ MaskCol st p.2 := fun p hp => hL.delta p (List.mem_append_right _ hp)
+  have hA : ∀ i c : ℕ, MaskCol st i ∨ MaskCol st c → matA st i c = if i = c then 1 else 0 := fun i c h => by
+    rw [matA, dCnt_zero hda i c h, Nat.add_zero, rangeCnt_mask hL (slotA st) (fun _ _ => rfl) i c h]
+    split_ifs <;> simp
+  have hB : ∀ i c : ℕ, MaskCol st i ∨ MaskCol st c → matB st i c = if i = c then 1 else 0 := fun i c h => by
+    rw [matB, dCnt_zero hdb i c h, Nat.add_zero, rangeCnt_mask hL (slotB st) (fun _ _ => rfl) i c h]
+    split_ifs <;> simp
+  refine ⟨fun i c hi => ?_, fun i c hi hc => ?_, hL.pin, hL.regions⟩
+  · show matA st i.val c.val = _ ∧ matB st i.val c.val = _
+    rw [hA _ _ (Or.inl hi), hB _ _ (Or.inl hi)]
+    exact ⟨by simp [Fin.ext_iff], by simp [Fin.ext_iff]⟩
+  · show matA st i.val c.val = 0 ∧ matB st i.val c.val = 0
+    have hne : i.val ≠ c.val := fun he => hi (he ▸ hc)
+    rw [hA _ _ (Or.inr hc), hB _ _ (Or.inr hc), if_neg hne]; exact ⟨rfl, rfl⟩
+
+/-- **The setup's layout facts** (open, the setup's): `HmRow.check`'s ranges are aligned and pairwise apart with the mask
+range one slot of at least a word; Δ's pairs lie in net slots; the pin is a net slot's constant row; the regions lie in the
+hm96 and output ranges. -/
+theorem setupH_maskLayout {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
+    {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
+    (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) : MaskLayout st := by
+  sorry
+
+/-- **The setup's statements isolate the mask slot**: `HmRow.check`'s ranges are aligned and pairwise
 apart, so the mask range's rows of `A₀`, `B₀` are its own identity rows and no other range's row reads its columns; Δ's
 pairs lie in net slots; the pin is a net slot's constant row; the regions lie in the hm96 and output ranges. -/
 theorem setupH_mask_isolated {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) :
-    MaskIsolated st (stmtOf st (setupH_wf h).1 (regionsOf st)) := by
-  sorry
+    MaskIsolated st (stmtOf st (setupH_wf h).1 (regionsOf st)) :=
+  maskIsolated_of_layout st _ (setupH_maskLayout h)
 
 end Mask
 
