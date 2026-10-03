@@ -12,8 +12,10 @@ the handle who decides a change: an `owner` in a table covers every key under it
 key's live value over SSH, read-only (`COMMANDS`: tmux, ps and /proc reads, `kubectl get`, `cat` and `grep`), and reports
 each key where it differs: `drift` (live differs, or is absent), `undeclared` (live has a key the description lacks) or
 `unknown` (it couldn't be read; unknown is never no drift). Of a process's environment only the lease pool's own variables
-leave the node (`ENV`'s, and any other `VY_POOL_*`). Node 2 is read in one command that reads nothing but the fill runner's `status.txt` while it says
-`timed True`: then, and when `status.txt` is older than `STATUS_STALE_S`, every node 2 key is unknown.
+leave the node (`ENV`'s, and any other `VY_POOL_*`). Node 2 is read in one command whose gate, on node 2's clock and before any
+other read, reads only the fill runner's `status.txt` and `windows`: unless `status.txt` says `QUIET`, is at most
+`STATUS_FRESH_S` old and not ahead of the clock, and no booked window is on or starts within `WINDOW_LEAD_S`, it reads nothing
+else and every node 2 key is unknown.
 
 Values are compared in one spelling per surface (`canon`): Kubernetes quantities by amount (`384Gi` is 412316860416), CPU
 lists by their CPUs, a window by its start and minutes. A window that has ended is not compared. A ClusterQueue held
@@ -54,7 +56,12 @@ DIRECT = {"direct-gpus": "/etc/vy/direct-gpus", "direct-cpus": "/etc/vy/direct-c
 USER_CPUSET = "/etc/systemd/system/user@.service.d/vy-cpuset.conf"
 DISPATCH_ENV = "/workspace/jobs/dispatch/dispatch.env"
 FILL = "/workspace/pouw/fill"
-STATUS_STALE_S = 120
+#: node 2 is read only while its status.txt's first line says this (the quiet form dispatch.py and n2_commit.sh wait for),
+#: it is at most STATUS_FRESH_S old by node 2's clock (fill_runner.py rewrites it every 10 s), and no booked window is on or
+#: starts within WINDOW_LEAD_S (status.txt lags a window's start by up to a fill tick)
+QUIET = "timed False, window waiting False"
+STATUS_FRESH_S = 60
+WINDOW_LEAD_S = 60
 HOLDERS = {"vy-quiet-hour": "/var/lib/vy-quiet-hour/held", "vy-disk-guard": "/var/lib/vy-disk-guard/held"}
 #: a lease pool's tmux session, where its n1_lease.py loop runs
 SESSIONS = {"provers": "n1-lease", "circuits": "n1-lease-circuits"}
@@ -392,17 +399,39 @@ _LEASE = (
 _DISPATCH = (f'f={shlex.quote(DISPATCH_ENV)}; if [ -e "$f" ]; then echo "{FILE_MARK}$f"; '
              f'grep -E "^VY_PROVER_CPUS=" "$f" || [ $? -eq 1 ]; else echo "{ABSENT_MARK}$f"; fi')
 
+# node 2's gate, before any other read there and on its own clock: unless status.txt is QUIET and fresh and no booked window is
+# near (a windows line that doesn't parse counts as one), it prints `refused WHY: STATUS` and reads nothing else
+_N2_GATE = (
+    "set -f\n"
+    f"s=$(head -1 {FILL}/status.txt) || exit 1\n"
+    "now=$(date +%s) || exit 1\n"
+    'no() { printf "refused %s: %s\\n" "$1" "$s"; exit 0; }\n'
+    f'case "$s" in *"{QUIET}"*) ;; *) no "a timed window is on or waiting" ;; esac\n'
+    't=$(date -d "${s%% *}" +%s 2>/dev/null) || no "status.txt does not say when it was written"\n'
+    "[ \"$t\" -le \"$now\" ] || no \"status.txt is stamped $((t - now)) s ahead of node 2's clock\"\n"
+    f'[ $((now - t)) -le {STATUS_FRESH_S} ] || no "status.txt is $((now - t)) s old: is the fill runner running?"\n'
+    f"w={FILL}/windows\n"
+    'if [ -e "$w" ]; then\n'
+    '  while IFS= read -r x || [ -n "$x" ]; do\n'
+    "    set -- ${x%%#*}\n"
+    "    [ $# -gt 0 ] || continue\n"
+    "    m=${2:-30}\n"
+    "    b=$(date -d \"$1\" +%s 2>/dev/null) || no \"windows line '$x' does not parse\"\n"
+    "    case \"$m\" in *[!0-9.]*|*.*.*|.) no \"windows line '$x' does not parse\" ;; esac\n"
+    f"    if awk -v n=\"$now\" -v b=\"$b\" -v m=\"$m\" 'BEGIN {{ exit !(b - {WINDOW_LEAD_S} <= n && n < b + 60 * m) }}'; then\n"
+    f'      no "window $1 ($m min) is on or starts within {WINDOW_LEAD_S} s"\n'
+    "    fi\n"
+    '  done < "$w" || exit 1\n'
+    "fi\n"
+    'printf "status %s\\n" "$s"\n')
+
 COMMANDS = {
     "lease": _LEASE,
     "kueue": shlex.join([*nebius1.KUBECTL, "get", "clusterqueues", "-o", "json"]),
     "holds": _dump(sorted(HOLDERS.values())),
     "files": _dump([LEAN_SLOTS, CHECK_SLOTS, *DIRECT.values(), USER_CPUSET]) + " && " + _DISPATCH,
     "overrides": _dump([OVERRIDES]),
-    # node 2 in one command: while a timed window is on it reads nothing but status.txt
-    "n2": (f"s=$(head -1 {FILL}/status.txt) || exit 1\n"
-           'case "$s" in *"timed True"*) printf "timed %s\\n" "$s"; exit 0 ;; esac\n'
-           'printf "status %s\\n" "$s"\n'
-           + _dump([f"{FILL}/windows", f"{FILL}/cpu-sets", CHECK_SLOTS, *DIRECT.values(), USER_CPUSET, OVERRIDES])),
+    "n2": _N2_GATE + _dump([f"{FILL}/windows", f"{FILL}/cpu-sets", CHECK_SLOTS, *DIRECT.values(), USER_CPUSET, OVERRIDES]),
 }
 READS = {nebius1.NODE: ("lease", "kueue", "holds", "files", "overrides"), nebius2.NODE: ("n2",)}
 
@@ -571,20 +600,11 @@ def _read_kueue(node: str, raw: str | Exception, holds: str | Exception, live: L
 def _read_n2(node: str, raw: str, now: int, live: Live) -> None:
     first, _, rest = raw.partition("\n")
     kind, _, line = first.partition(" ")
-    stamp = line.split(" ", 1)[0]
-    try:
-        age = now - _start(stamp) if kind in ("timed", "status") else None
-    except ValueError:
-        age = None
-    if kind == "timed":
-        live.unknown[node] = f"node 2 is in a timed window ({FILL}/status.txt: {line[:80]!r}): read it after the window ends"
+    if kind == "refused":
+        live.unknown[node] = f"node 2 refused to be read, and nothing else there was: {line[:240]}"
         return
-    if age is None:
-        live.unknown[node] = f"{FILL}/status.txt's first line {first[:80]!r} doesn't say when it was written"
-        return
-    if age > STATUS_STALE_S:
-        live.unknown[node] = (f"{FILL}/status.txt is {age} s old, so whether a timed window is on can't be told: is the fill "
-                              "runner running?")
+    if kind != "status":
+        live.unknown[node] = f"node 2's gate printed {first[:80]!r}, neither a status nor a refusal"
         return
     files = _files(rest)
     # a line fill_runner.py skips is no window and no CPU set, so it is skipped here too

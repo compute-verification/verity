@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -305,23 +306,22 @@ def test_an_unread_command_makes_its_keys_unknown_and_exit_3(capsys, over, prefi
     assert mine and {r["status"] for r in mine} == {"unknown"}
 
 
-def test_node_2_in_a_timed_window_runs_one_command_and_every_key_is_unknown(capsys):
+def test_node_2_refusing_to_be_read_runs_one_command_and_every_key_is_unknown(capsys):
     ran: list = []
-    timed = "timed 2026-10-03T19:20:01Z free GPUs 0/8, kept free -, waiters -, timed True, window waiting False\n"
-    rc, rows = diff(capsys, "nebius-2", ran=ran, n2=timed)
+    refused = ("refused a timed window is on or waiting: 2026-10-03T19:20:01Z free GPUs 0/8, kept free -, waiters -, "
+               "timed True, window waiting False\n")
+    rc, rows = diff(capsys, "nebius-2", ran=ran, n2=refused)
     assert rc == 3 and ran == [(N2, policy.COMMANDS["n2"])]
     assert set(rows) == {k for k in policy.load(NEBIUS) if k.startswith(N2 + ".")}
     assert {r["status"] for r in rows.values()} == {"unknown"}
-    assert "node 2 is in a timed window" in rows[f"{N2}.user-cpuset.delegate"]["why"]
+    assert "node 2 refused to be read, and nothing else there was: a timed window is on or waiting: 2026-10-03T19:20:01Z" \
+        in rows[f"{N2}.user-cpuset.delegate"]["why"]
 
 
-@pytest.mark.parametrize("first, why", [
-    ("status 2026-10-03T19:30:00Z free GPUs 7/8, timed False", "is 630 s old"),
-    ("status free GPUs 7/8, timed False", "doesn't say when it was written"),
-])
-def test_node_2_with_a_stale_or_unstamped_status_is_unknown(capsys, first, why):
+@pytest.mark.parametrize("first", [f"timed {STATUS}", STATUS, ""])
+def test_node_2_output_that_is_neither_a_status_nor_a_refusal_is_unknown(capsys, first):
     rc, rows = diff(capsys, "nebius-2", n2=first + "\n" + dump(N2_FILES))
-    assert rc == 3 and all(r["status"] == "unknown" and why in r["why"] for r in rows.values())
+    assert rc == 3 and all(r["status"] == "unknown" and "neither a status nor a refusal" in r["why"] for r in rows.values())
 
 
 def test_node_2_windows_that_ended_are_left_out_and_a_new_booking_is_undeclared(tmp_path, capsys):
@@ -548,11 +548,52 @@ def test_the_files_commands_mark_absent_files_and_read_one_line_of_the_dispatch_
     assert policy._files(_sh(policy.COMMANDS["holds"], tmp_path)) == {DISK: None, QUIET: "provers\n\n"}
 
 
-def test_the_node_2_command_reads_nothing_but_status_in_a_timed_window(tmp_path):
-    _put(tmp_path, {f"{policy.FILL}/status.txt": "2026-10-03T19:20:01Z free GPUs 0/8, timed True, window waiting False\n"
-                                                 "  running x\n",
-                    f"{policy.FILL}/windows": "2026-10-04T06:30Z 190\n"})
-    assert _sh(policy.COMMANDS["n2"], tmp_path) == "timed 2026-10-03T19:20:01Z free GPUs 0/8, timed True, window waiting False\n"
-    _put(tmp_path, {f"{policy.FILL}/status.txt": STATUS + "\n"})
-    out = _sh(policy.COMMANDS["n2"], tmp_path)
-    assert out.startswith(f"status {STATUS}\n") and policy._files(out)[f"{policy.FILL}/windows"] == "2026-10-04T06:30Z 190\n\n"
+def _n2(tmp_path: Path, status: str, windows: str | None = None) -> str:
+    """Run the node 2 command with node 2's clock at T: a `date` on PATH that answers `date +%s` and passes the rest on."""
+    _put(tmp_path, {f"{policy.FILL}/status.txt": status + "\n  running x\n", f"{policy.FILL}/cpu-sets": "0 0-7\n",
+                    "bin/date": f'#!/bin/sh\n[ "$*" = +%s ] && {{ echo {T}; exit 0; }}\nexec {shutil.which("date")} "$@"\n'})
+    (tmp_path / "bin/date").chmod(0o755)
+    w = tmp_path / policy.FILL.lstrip("/") / "windows"
+    if windows is None:
+        w.unlink(missing_ok=True)
+    else:
+        w.write_text(windows)
+    return _sh(policy.COMMANDS["n2"], tmp_path, str(tmp_path / "bin"))
+
+
+@pytest.mark.parametrize("status, windows, why", [
+    (STATUS.replace("timed False", "timed True"), None, "a timed window is on or waiting"),
+    (STATUS.replace("window waiting False", "window waiting True"), "2026-10-03T19:41Z 20\n", "a timed window is on or waiting"),
+    (STATUS.replace("19:39:59Z", "19:39:29Z"), None, "status.txt is 61 s old: is the fill runner running?"),
+    (STATUS.replace("19:39:59Z", "17:00:00Z"), "2026-10-03T19:30Z 30\n", "status.txt is 9630 s old"),
+    (STATUS.replace("19:39:59Z", "19:40:31Z"), None, "status.txt is stamped 1 s ahead of node 2's clock"),
+    (STATUS.split(" ", 1)[1], None, "status.txt does not say when it was written"),
+    (STATUS, "2026-10-03T19:40Z 20\n", "window 2026-10-03T19:40Z (20 min) is on or starts within 60 s"),
+    (STATUS, "# start UTC, minutes\n2026-10-03T19:41Z 10 # in 30 s\n", "window 2026-10-03T19:41Z (10 min) is on"),
+    (STATUS, "2026-10-03T19:15Z # 30 minutes when unsaid\n", "window 2026-10-03T19:15Z (30 min) is on"),
+    (STATUS, "2026-10-03T19:00Z 40.6", "window 2026-10-03T19:00Z (40.6 min) is on"),
+    (STATUS, "garbage 5\n2026-10-04T06:30Z 190\n", "windows line 'garbage 5' does not parse"),
+    (STATUS, "2026-10-03T19:00Z 1e3\n", "windows line '2026-10-03T19:00Z 1e3' does not parse"),
+])
+def test_node_2_s_gate_refuses_before_reading_anything_else_unless_quiet_fresh_and_clear_of_windows(tmp_path, status, windows,
+                                                                                                    why):
+    out = _n2(tmp_path, status, windows)
+    assert out.startswith(f"refused {why}") and out.endswith(f": {status}\n") and out.count("\n") == 1
+
+
+@pytest.mark.parametrize("windows", [
+    None, "", "# start UTC, minutes\n\n2026-10-03T18:25Z 10 # merge checks off\n2026-10-03T19:42Z 10\n",
+    "2026-10-03T19:00Z 40.4", "2026-10-03T19:41:31Z 1 # starts in 61 s\n"])
+def test_node_2_s_gate_reads_the_files_while_quiet_fresh_and_clear_of_windows(tmp_path, windows):
+    out = _n2(tmp_path, STATUS, windows)
+    files = policy._files(out)
+    assert out.startswith(f"status {STATUS}\n") and files[f"{policy.FILL}/cpu-sets"] == "0 0-7\n\n"
+    assert files[f"{policy.FILL}/windows"] == (None if windows is None else windows + "\n")
+
+
+def test_node_2_s_gate_fails_when_status_txt_cant_be_read(tmp_path):
+    _n2(tmp_path, STATUS)
+    (tmp_path / policy.FILL.lstrip("/") / "status.txt").unlink()
+    with pytest.raises(subprocess.CalledProcessError) as e:
+        _sh(policy.COMMANDS["n2"], tmp_path, str(tmp_path / "bin"))
+    assert e.value.returncode == 1 and e.value.stdout == ""
