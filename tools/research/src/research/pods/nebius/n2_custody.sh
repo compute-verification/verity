@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Node 2's custody: its stores (/workspace/jobs/store, /workspace/research/store) have no remote and the node holds no R2 credential,
-# so every ended run under its run roots goes home as n2_commit.sh's home() sends a Commit: rsync to node 1, `research data attempt
-# publish` into node 1's /workspace/jobs/store, then `research data push` from a one-off Job on node 1 with the Secret research-r2
-# (the credential never leaves Kubernetes). n2_commit.sh and n2_build.sh name this as their runs' custody (RESEARCH_LOCAL_ONLY),
+# so every ended run under its run roots goes home through node 1: rsync to node 1, then a one-off Job there with the Secret
+# research-r2 (the credential never leaves Kubernetes) runs `research data custody RUN --publish` on the copy: the attempt with its
+# run record (logs and declared outputs, store.custody) into node 1's /workspace/jobs/store, pushed to R2 and verified there. The
+# .custody that verify writes beside node 1's copy comes back into node 2's run dir, whose files it lists unchanged, so node 2's
+# own `research data custody --triage` sees the run on the remote. The Job's research is VY_CUSTODY_SRC on node 1, which deploy.toml
+# installs from the commit this file comes from. n2_commit.sh and n2_build.sh name this as their runs' custody (RESEARCH_LOCAL_ONLY),
 # without which `research run` refuses to start on a store with no remote.
 #
 #   on node 2:  n2_custody.sh [--dry-run]   one round (the user timer n2-custody.timer, every 10 min); --dry-run lists what it would push
@@ -10,29 +13,51 @@
 # A run has ended when its status says so or its process is gone: a runner killed before it recorded an end (an OOM kill of its
 # scope) is published with --force and keeps the state it last wrote. A run its own custody preserved (.custody "preserved": true)
 # is only marked; any other waits VY_CUSTODY_SETTLE_S after its records last changed, so a runner's own custody finishes first.
-# A run is marked in STATE/pushed/ once node 1's Job completes. A failure is logged and retried every round, never given up, and
-# the round exits 1, which systemd records (`systemctl --user status n2-custody`).
+# A run is marked in STATE/pushed/ once node 1's Job verified it on R2 and its .custody is back. A failure is logged with its reason
+# and retried every round, never given up, and the round exits 1, which systemd records (`systemctl --user status n2-custody`).
+# A round is bounded: at most VY_CUSTODY_MAX_RUNS pushes, none started after VY_CUSTODY_PASS_S seconds, runs that failed before
+# going last; the rest wait for the next. A run whose attempt node 1 already holds without a run record (the stopgap published it)
+# can never have .custody: the Job pushes that attempt, and the run is held for a person to waive its logs.
+# Only run dirs go home, never a row directory (3 Oct: the stopgap's row sync mirrored 1.2M files to node 1 and overran its window),
+# and a run dir over VY_CUSTODY_MAX_FILES files or VY_CUSTODY_MAX_GB GiB is held instead of mirrored: STATE/held/RUN says why, and the
+# round exits 1 while it is there. Move the bulk out of the run dir (or declare it elsewhere), then remove STATE/held/RUN.
+# The stopgap this replaces, STATE/push.sh in a tmux loop, shares STATE/pushed/ and the Jobs' names but takes no lock: while it runs,
+# a round refuses (exit 3). Exit 0 ok, 1 a run not yet home, 2 usage, 3 refused.
 set -u
 ROOTS=${VY_CUSTODY_ROOTS:-/workspace/jobs/runs=/workspace/jobs/runs,/workspace/research/runs=/workspace/jobs/runs-n2}
 STATE=${VY_CUSTODY_STATE:-/workspace/research/custody-push}
 SETTLE_S=${VY_CUSTODY_SETTLE_S:-900}
+MAX_RUNS=${VY_CUSTODY_MAX_RUNS:-20}
+PASS_S=${VY_CUSTODY_PASS_S:-1200}
+MAX_FILES=${VY_CUSTODY_MAX_FILES:-20000}
+MAX_GB=${VY_CUSTODY_MAX_GB:-50}
+SRC=${VY_CUSTODY_SRC:-/workspace/jobs/custody}
+LOOP=${VY_CUSTODY_LOOP:-$STATE/push.sh}
 N1=${VY_N1:-vy-n1}
 DRY=0
-[ "${1:-}" = --dry-run ] && DRY=1
+case "${1:-}" in
+  "") ;;
+  --dry-run) DRY=1 ;;
+  *) echo "usage: n2_custody.sh [--dry-run]" >&2; exit 2 ;;
+esac
 KUBE="KUBECONFIG=\$HOME/.kube/config kubectl"
-RESEARCH_N1="cd /workspace/jobs && sudo -n -u '#1000' env UV_NO_CONFIG=1 RESEARCH_STORE=/workspace/jobs/store \
-  UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python"
-mkdir -p "$STATE/pushed" "$STATE/failures"
+mkdir -p "$STATE/pushed" "$STATE/failures" "$STATE/held"
 exec 9> "$STATE/.lock"
 flock -n 9 || { echo "n2_custody.sh: another round holds $STATE/.lock"; exit 0; }
 log() { echo "$(date -u +%FT%TZ) $*" | tee -a "$STATE/log"; }
+# the loop's own bash, not a tmux server whose first session started it (its argv keeps that session's command)
+if [ "$DRY" = 0 ] && pids=$(pgrep -f -- "^[^ ]*bash $LOOP( |\$)"); then
+  log "refused: the stopgap loop $LOOP still runs (pid $(echo $pids)) and takes no lock; stop it while it sleeps between rounds" \
+    "(tmux custody-push-3), and the next round takes over"
+  exit 3
+fi
 
-# "CAMPAIGN STATE AGE_S": STATE is the status's, or dead for a run still marked running whose process is gone; AGE_S since its
-# records last changed (status.json, .custody)
+# "CAMPAIGN STATE AGE_S FILES BYTES": STATE is the status's, or dead for a run still marked running whose process is gone; AGE_S since
+# its records last changed (status.json, .custody); FILES and BYTES of the run dir, counted no further than MAX_FILES + 1 files
 info() {
-  python3 - "$1" << 'EOF'
+  python3 - "$1" "$MAX_FILES" << 'EOF'
 import json, os, re, sys, time
-d = sys.argv[1]
+d, cap = sys.argv[1], int(sys.argv[2])
 try:
     m = re.search(r'"campaign": ?"([^"]*)"', open(f"{d}/job.json").read())
 except OSError:
@@ -50,75 +75,129 @@ if state == "running":
         alive = not st          # no status yet: a run that is starting
     state = "running" if alive else "dead"
 mt = max([os.path.getmtime(p) for p in (f"{d}/status.json", f"{d}/.custody") if os.path.exists(p)] or [time.time()])
-print(m.group(1) if m else "-", state, int(time.time() - mt))
+n = size = 0
+if state != "running":
+    for base, _, files in os.walk(d):
+        for f in files:
+            n += 1
+            try:
+                size += os.lstat(os.path.join(base, f)).st_size
+            except OSError:
+                pass
+            if n > cap:
+                break
+        if n > cap:
+            break
+print(m.group(1) if m else "-", state, int(time.time() - mt), n, size)
 EOF
 }
 
-# the research tree node 1 publishes and pushes with: VY_CUSTODY_SRC, else node 1's newest complete tree that `research run --on`
-# shipped (an unfinished one is <sha>.partial-*)
-n1_src() {
-  if [ -n "${VY_CUSTODY_SRC:-}" ]; then echo "$VY_CUSTODY_SRC"; return; fi
-  ssh -n "$N1" 'for t in $(ls -td /workspace/research/src/*/ | grep -E "/[0-9a-f]{40}/$"); do
-    [ -f "${t}tools/research/src/research/store/attempt.py" ] && { echo "${t%/}"; break; }; done'
-}
+human() { awk -v b="$1" 'BEGIN { split("B KiB MiB GiB TiB", u); i = 1; while (b >= 1024 && i < 5) { b /= 1024; i++ } printf "%.1f %s", b, u[i] }'; }
 
-push_run() {  # push_run ROOT DST RUN_ID STATE
+push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 an attempt without a run record, else 1; why= says
   local root=$1 dst=$2 r=$3 name force=
   [ "$4" = dead ] && force=--force
-  rsync -a --rsync-path="sudo -n rsync" --chown=1000:1000 --mkpath "$root/$r/" "$N1:$dst/$r/" || return 1
-  ssh -n "$N1" "$RESEARCH_N1 RESEARCH_RUNS=$dst PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data attempt publish $force $dst/$r" || return 1
+  timeout 1200 rsync -a --timeout=300 --rsync-path="sudo -n rsync" --chown=1000:1000 --mkpath "$root/$r/" "$N1:$dst/$r/" \
+    || { why="rsync to $N1 failed ($?)"; return 1; }
   name=n2-custody-$(echo "$r" | tr -cd 'a-z0-9-' | tail -c 40)
-  ssh "$N1" "$KUBE delete job $name --ignore-not-found > /dev/null && $KUBE create -f - > /dev/null \
-    && $KUBE wait --for=condition=complete --timeout=1800s job/$name > /dev/null" << EOF || return 1
+  # a failed Job never completes: wait for either condition, then name the failure from its log
+  if ! ssh "$N1" "$KUBE delete job $name --ignore-not-found > /dev/null && $KUBE create -f - > /dev/null && for _ in \$(seq 360); do
+    c=\$($KUBE get job $name -o jsonpath='{range .status.conditions[*]}{.type}={.status} {end}'); case \$c in
+    *Complete=True*) exit 0 ;; *Failed=True*) $KUBE logs job/$name --tail=3 >&2; exit 1 ;; esac; sleep 5; done
+    echo 'Job not done in 30 min' >&2; exit 1" 2> "$STATE/.job.err" << EOF; then
 {"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": "$name", "labels": {"verity.dev/lane": "n2-custody", "verity.dev/kind": "custody"}},
- "spec": {"backoffLimit": 2, "ttlSecondsAfterFinished": 3600, "template": {"metadata": {"labels": {"verity.dev/lane": "n2-custody"}}, "spec": {
+ "spec": {"backoffLimit": 1, "ttlSecondsAfterFinished": 3600, "template": {"metadata": {"labels": {"verity.dev/lane": "n2-custody"}}, "spec": {
   "restartPolicy": "Never", "nodeSelector": {"verity.dev/server": "vy-nebius-1"},
   "tolerations": [{"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}],
   "securityContext": {"runAsUser": 1000, "runAsGroup": 1000},
   "containers": [{"name": "main", "image": "${VY_DISPATCH_IMAGE:-us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216}",
    "imagePullPolicy": "IfNotPresent",
-   "command": ["taskset", "-c", "96-127", "bash", "-c", "cd /workspace/jobs && HOME=/tmp UV_NO_CONFIG=1 PYTHONPATH=$SRC/tools/research/src RESEARCH_STORE=/workspace/jobs/store RESEARCH_RUNS=$dst UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data push $r"],
+   "command": ["taskset", "-c", "96-127", "bash", "-c", "cd /workspace/jobs && HOME=/tmp UV_NO_CONFIG=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$SRC/tools/research/src RESEARCH_STORE=/workspace/jobs/store RESEARCH_RUNS=$dst UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data custody $dst/$r --publish --keep-local $force"],
    "envFrom": [{"secretRef": {"name": "research-r2"}}],
    "resources": {"requests": {"cpu": "1", "memory": "2Gi"}},
    "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}]}],
   "volumes": [{"name": "workspace", "hostPath": {"path": "/workspace", "type": "Directory"}}]}}}}
 EOF
+    why="node 1's Job: $(grep -v '^$' "$STATE/.job.err" | tail -1)"
+    grep -qs "names no run record" "$STATE/.job.err" && return 4
+    return 1
+  fi
+  # verify wrote it only with the attempt and its run record verified on R2; node 2's dir holds the same files at the same times
+  ssh -n "$N1" "sudo -n cat $dst/$r/.custody" > "$root/$r/.custody.tmp" \
+    && python3 -c 'import json, sys; sys.exit(0 if json.load(open(sys.argv[1])).get("preserved") is True else 1)' "$root/$r/.custody.tmp" \
+    && mv "$root/$r/.custody.tmp" "$root/$r/.custody" \
+    || { rm -f "$root/$r/.custody.tmp"; why="no preserved .custody at $N1:$dst/$r"; return 1; }
 }
 
-SRC=
-failed=0
+# runs that have not failed go first, so a run that keeps failing never takes a newer one's place in a bounded round
+fresh=() retry=()
 IFS=, read -ra pairs <<< "$ROOTS"
 for pair in "${pairs[@]}"; do
   root=${pair%%=*} dst=${pair#*=}
   for d in "$root"/r*/; do
     [ -d "$d" ] || continue
     r=$(basename "$d")
-    [ -e "$STATE/pushed/$r" ] && continue
-    read -r camp state age < <(info "$d")
-    [ "$state" = running ] && continue
-    if grep -qs '"preserved": true' "$d/.custody"; then
-      [ "$DRY" = 1 ] || touch "$STATE/pushed/$r"
-      continue
-    fi
-    [ "$age" -lt "$SETTLE_S" ] && continue
-    if [ "$DRY" = 1 ]; then
-      echo "would push $root/$r ($camp, $state, $(du -sh "$d" | cut -f1))"
-      continue
-    fi
-    if [ -z "$SRC" ]; then
-      SRC=$(n1_src)
-      [ -n "$SRC" ] || { log "no research tree on $N1 to publish with (VY_CUSTODY_SRC, or /workspace/research/src/<sha>)"; exit 1; }
-    fi
-    if push_run "$root" "$dst" "$r" "$state"; then
-      touch "$STATE/pushed/$r"
-      rm -f "$STATE/failures/$r"
-      log "$root/$r ($camp, $state, $(du -sh "$d" | cut -f1)): on node 1 and pushed to R2 (research from ${SRC##*/})"
-    else
-      n=$(( $(cat "$STATE/failures/$r" 2> /dev/null || echo 0) + 1 ))
-      echo "$n" > "$STATE/failures/$r"
-      log "$root/$r ($camp, $state): push failed ($n so far); the next round retries"
-      failed=$((failed + 1))
-    fi
+    [ -e "$STATE/pushed/$r" ] || [ -e "$STATE/held/$r" ] && continue
+    if [ -e "$STATE/failures/$r" ]; then retry+=("$root|$dst|$r"); else fresh+=("$root|$dst|$r"); fi
   done
 done
-[ "$failed" = 0 ] || { log "$failed run(s) not yet on R2"; exit 1; }
+
+src_ok=
+failed=0 tried=0 left=0
+for c in "${fresh[@]}" "${retry[@]}"; do
+  IFS='|' read -r root dst r <<< "$c"
+  d=$root/$r
+  if [ "$DRY" = 0 ] && { [ "$tried" -ge "$MAX_RUNS" ] || [ "$SECONDS" -ge "$PASS_S" ]; }; then
+    left=$((left + 1))
+    continue
+  fi
+  read -r camp state age files bytes < <(info "$d")
+  [ "$state" = running ] && continue
+  if grep -qs '"preserved": true' "$d/.custody"; then
+    [ "$DRY" = 1 ] || touch "$STATE/pushed/$r"
+    continue
+  fi
+  [ "$age" -lt "$SETTLE_S" ] && continue
+  if [ "$files" -gt "$MAX_FILES" ] || [ "$bytes" -gt $((MAX_GB << 30)) ]; then
+    why="over $( [ "$files" -gt "$MAX_FILES" ] && echo "$MAX_FILES files" || echo "$MAX_GB GiB ($(human "$bytes"))")"
+    if [ "$DRY" = 1 ]; then
+      echo "would hold $d ($camp, $state): $why"
+    else
+      echo "$why" > "$STATE/held/$r"
+      log "$d ($camp, $state): held, $why: not mirrored to node 1; move the bulk out of the run dir, then rm $STATE/held/$r"
+    fi
+    continue
+  fi
+  if [ "$DRY" = 1 ]; then
+    echo "would push $d ($camp, $state, $files files, $(human "$bytes"))"
+    continue
+  fi
+  if [ -z "$src_ok" ]; then
+    ssh -n "$N1" "test -f $SRC/tools/research/src/research/store/custody.py && test -f $SRC/tools/research/store.pod.toml" \
+      || { log "refused: no research tree at $N1:$SRC (deploy.toml installs it: research deploy install vy-nebius-1 --by WHO $SRC/tools/research/src/research $SRC/tools/research/store.pod.toml)"; exit 3; }
+    src_ok=1
+  fi
+  tried=$((tried + 1))
+  why=
+  push_run "$root" "$dst" "$r" "$state"
+  rc=$?
+  if [ "$rc" = 0 ]; then
+    touch "$STATE/pushed/$r"
+    rm -f "$STATE/failures/$r"
+    log "$d ($camp, $state, $files files, $(human "$bytes")): on R2 with its run record, .custody back on node 2"
+  elif [ "$rc" = 4 ]; then
+    echo "node 1 holds its attempt without a run record" > "$STATE/held/$r"
+    log "$d ($camp, $state): held: node 1's store holds its attempt without a run record (published before this custody), so it can" \
+      "never have .custody; the Job pushed what node 1 holds. Label it \`custody waived\` (or fetch it whole), then mv $STATE/held/$r $STATE/pushed/"
+  else
+    n=$(( $(cat "$STATE/failures/$r" 2> /dev/null || echo 0) + 1 ))
+    echo "$n" > "$STATE/failures/$r"
+    log "$d ($camp, $state): push failed ($n so far): $why; the next round retries"
+    failed=$((failed + 1))
+  fi
+done
+[ "$left" = 0 ] || log "round bounded ($tried push(es) in ${SECONDS}s, at most $MAX_RUNS or ${PASS_S}s): $left run dir(s) left for the next round"
+held=$(ls "$STATE/held" | wc -l)
+[ "$held" = 0 ] || echo "$held run(s) held, not mirrored ($STATE/held/)"
+[ "$failed" = 0 ] || log "$failed run(s) not yet on R2"
+[ "$failed" = 0 ] && [ "$held" = 0 ]

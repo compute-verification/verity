@@ -1237,28 +1237,43 @@ def test_n2_commit_gives_a_long_row_the_long_max_min():
     assert max_min("llama32-1b__bf16__rtxpro6000__tp1__b16__i512__o2__mixed__greedy__bi-eager", VY_N2_COMMIT_MAX_MIN="") == "40"
 
 
-@pytest.mark.skipif(shutil.which("bash") is None or not Path("/proc/self/stat").exists(), reason="n2_custody.sh is bash, and reads /proc")
-def test_n2_custody_takes_every_ended_run_home_and_retries_a_failure(tmp_path):
-    """Node 2's store has no remote: a night of runs there sat on the node (2-3 Oct) until a push loop took them. Every ended run
-    goes to node 1 and its Job, a runner killed before it recorded an end with --force; a live one, one still settling and one its
-    own custody preserved don't; a failed push is never given up, and fails the round until it succeeds."""
+@pytest.mark.skipif(shutil.which("bash") is None or shutil.which("pgrep") is None or not Path("/proc/self/stat").exists(),
+                    reason="n2_custody.sh is bash, and reads /proc and pgrep")
+def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_rounds(tmp_path):
+    """Node 2's store has no remote: a night of runs there sat on the node (2-3 Oct) until a push loop took them, attempts without
+    their logs, and on 3 Oct that loop's row sync mirrored 1.2M files and overran its window. Every ended run goes to node 1's Job
+    with its run record, a runner killed before it recorded an end with --force, and comes back with the .custody that Job's verify
+    wrote; a live one, one still settling and one its own custody preserved don't. A round pushes at most VY_CUSTODY_MAX_RUNS within
+    VY_CUSTODY_PASS_S, runs that failed before going last; a run dir over the file bound is held, never mirrored, and so is one whose
+    attempt node 1 holds without a run record; a failed push is never given up and fails the round until it succeeds. While the
+    stopgap loop runs, or node 1 lacks the research tree, a round refuses."""
     root, state, bin_, log = tmp_path / "runs", tmp_path / "state", tmp_path / "bin", tmp_path / "calls.log"
     bin_.mkdir()
     (bin_ / "rsync").write_text(f'#!/bin/sh\necho "rsync $*" >> {log}\n')
-    (bin_ / "ssh").write_text(f'#!/bin/sh\ncat > /dev/null &\necho "ssh $*" >> {log}\n'
-                              'case "$*" in *"attempt publish"*"$FAIL_RUN"*) [ -n "$FAIL_RUN" ] && exit 1 ;; esac\nexit 0\n')
+    (bin_ / "ssh").write_text(
+        '#!/bin/sh\nif [ "$1" = -n ]; then spec=; else spec=$(cat); fi\n'
+        f'echo "ssh $* $spec" >> {log}\n'
+        'case "$*" in\n'
+        '  *"test -f"*) [ -z "$NO_SRC" ]; exit $? ;;\n'
+        '  *"sudo -n cat"*) echo \'{"schema": "research/run-custody/v0.1", "preserved": true}\'; exit 0 ;;\n'
+        'esac\n'
+        'if [ -n "$FAIL_RUN" ]; then case "$spec" in *"$FAIL_RUN"*) echo "Error: boom" >&2; exit 1 ;; esac; fi\n'
+        'case "$spec" in *r8-legacy*) echo "r8-legacy: NO custody on the remote: the attempt names no run record" >&2; exit 1 ;; esac\n'
+        'exit 0\n')
     for f in bin_.iterdir():
         f.chmod(0o755)
     me = int(open("/proc/self/stat").read().rsplit(")", 1)[1].split()[19])
     old = 1_000_000_000                         # settled: records last changed in 2001
 
-    def run(rid, status, *, settled=True, custody=None):
+    def run(rid, status, *, settled=True, custody=None, extra=0):
         d = root / rid
         d.mkdir(parents=True)
         (d / "job.json").write_text(json.dumps({"store": {"campaign": "c1"}}))
         (d / "status.json").write_text(json.dumps(status))
         if custody is not None:
             (d / ".custody").write_text(json.dumps(custody))
+        for i in range(extra):
+            (d / f"row{i}.jsonl").write_text("{}\n")
         for p in d.iterdir():
             if settled:
                 os.utime(p, (old, old))
@@ -1269,23 +1284,60 @@ def test_n2_custody_takes_every_ended_run_home_and_retries_a_failure(tmp_path):
     run("r4-fresh", {"state": "failed"}, settled=False)
     run("r5-preserved", {"state": "done"}, custody={"preserved": True})
     run("r6-fails", {"state": "failed"})
+    run("r7-big", {"state": "done"}, extra=3)
+    run("r8-legacy", {"state": "done"})
 
-    def round_(**env):
-        return subprocess.run(["bash", str(NEBIUS / "n2_custody.sh")], capture_output=True, text=True,
+    def round_(*args, **env):
+        return subprocess.run(["bash", str(NEBIUS / "n2_custody.sh"), *args], capture_output=True, text=True,
                               env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "VY_N1": "n1.invalid",
                                    "VY_CUSTODY_ROOTS": f"{root}=/n1/runs", "VY_CUSTODY_STATE": str(state),
-                                   "VY_CUSTODY_SRC": "/n1/src/abc", **env})
+                                   "VY_CUSTODY_SRC": "/n1/src/abc", "VY_CUSTODY_MAX_FILES": "4", **env})
+
+    assert round_("--now").returncode == 2
+    dry = round_("--dry-run")
+    assert dry.returncode == 0 and not log.exists() and not list((state / "pushed").iterdir())
+    assert f"would push {root}/r1-done (c1, done, 2 files" in dry.stdout and f"would push {root}/r2-dead (c1, dead" in dry.stdout
+    assert f"would hold {root}/r7-big (c1, done): over 4 files" in dry.stdout
+    assert "r3-live" not in dry.stdout and "r4-fresh" not in dry.stdout and "r5-preserved" not in dry.stdout
+
+    (state / "push.sh").write_text("read x\n")
+    loop = subprocess.Popen(["bash", str(state / "push.sh")], stdin=subprocess.PIPE)
+    try:
+        refused = round_()
+    finally:
+        loop.stdin.close()
+        loop.wait()
+    assert refused.returncode == 3 and "refused: the stopgap loop" in refused.stdout and not log.exists()
+    no_src = round_(NO_SRC="1")
+    assert no_src.returncode == 3 and "no research tree at n1.invalid:/n1/src/abc" in no_src.stdout and "rsync" not in log.read_text()
+
+    assert round_(VY_CUSTODY_PASS_S="0").returncode == 0 and "rsync" not in log.read_text()
+    bounded = round_(VY_CUSTODY_MAX_RUNS="1")
+    assert bounded.returncode == 0 and "round bounded (1 push(es)" in bounded.stdout and "7 run dir(s) left" in bounded.stdout
+    assert sorted(p.name for p in (state / "pushed").iterdir()) == ["r1-done"]
+    assert json.loads((root / "r1-done" / ".custody").read_text())["preserved"] is True
 
     first = round_(FAIL_RUN="r6-fails")
-    assert first.returncode == 1 and "r6-fails (c1, failed): push failed (1 so far)" in first.stdout
+    assert first.returncode == 1 and "r6-fails (c1, failed): push failed (1 so far): node 1's Job: Error: boom" in first.stdout
     assert sorted(p.name for p in (state / "pushed").iterdir()) == ["r1-done", "r2-dead", "r5-preserved"]
+    assert sorted(p.name for p in (state / "held").iterdir()) == ["r7-big", "r8-legacy"] and "2 run(s) held" in first.stdout
+    assert "held: node 1's store holds its attempt without a run record" in first.stdout
     calls = log.read_text()
     assert f"{root}/r1-done/ n1.invalid:/n1/runs/r1-done/" in calls and "r3-live" not in calls and "r4-fresh" not in calls
-    assert "attempt publish --force /n1/runs/r2-dead" in calls and "attempt publish  /n1/runs/r1-done" in calls
-    assert "PYTHONPATH=/n1/src/abc/tools/research/src" in calls and "r5-preserved" not in calls
+    assert "data custody /n1/runs/r2-dead --publish --keep-local --force" in calls
+    assert 'data custody /n1/runs/r1-done --publish --keep-local "]' in calls
+    assert "PYTHONPATH=/n1/src/abc/tools/research/src" in calls and "r5-preserved" not in calls and "r7-big" not in calls
+
+    run("r9-new", {"state": "done"})
+    newer = round_(VY_CUSTODY_MAX_RUNS="1", FAIL_RUN="")
+    assert (state / "pushed" / "r9-new").exists() and not (state / "pushed" / "r6-fails").exists(), "a failing run goes last"
+    assert newer.returncode == 1 and "1 run dir(s) left" in newer.stdout
     second = round_(FAIL_RUN="")
-    assert second.returncode == 0 and "r6-fails (c1, failed" in second.stdout and not (state / "failures" / "r6-fails").exists()
+    assert second.returncode == 1 and "r6-fails (c1, failed" in second.stdout and not (state / "failures" / "r6-fails").exists()
     assert (state / "pushed" / "r6-fails").exists() and log.read_text().count("r1-done/ n1.invalid") == 1, "a pushed run is done"
+    for p in (state / "held").iterdir():
+        p.rename(state / "pushed" / p.name)
+    assert round_().returncode == 0
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
