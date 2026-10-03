@@ -27,6 +27,9 @@
 # round exits 1 while it is there. Move the bulk out of the run dir (or declare it elsewhere), then remove STATE/held/RUN.
 # The stopgap this replaces, STATE/push.sh in a tmux loop, shares STATE/pushed/ and the Jobs' names but takes no lock: while it runs,
 # a round refuses (exit 3), as it does while another round holds STATE/.lock. Exit 0 ok, 1 a run not yet home, 2 usage, 3 refused.
+# Node 2's timed windows (PoUW's measurements) run with nothing else on the node: a round starts, and starts each push, only while the
+# fill runner's status is fresh and says no window runs or waits, and no booked window is on or starts within the round's bound
+# (PASS_S + PUSH_S); else it stops there, with one log line and exit 0, and the next round asks again.
 set -u
 ROOTS=${VY_CUSTODY_ROOTS:-/workspace/jobs/runs=/workspace/jobs/runs,/workspace/research/runs=/workspace/jobs/runs-n2}
 STATE=${VY_CUSTODY_STATE:-/workspace/research/custody-push}
@@ -37,6 +40,8 @@ MAX_FILES=${VY_CUSTODY_MAX_FILES:-20000}
 MAX_GB=${VY_CUSTODY_MAX_GB:-50}
 SRC=${VY_CUSTODY_SRC:-/workspace/jobs/custody}
 LOOP=${VY_CUSTODY_LOOP:-$STATE/push.sh}
+FILL=${VY_CUSTODY_FILL:-/workspace/pouw/fill}
+PUSH_S=3600     # the most one push takes: rsync 20 min, the Job's wait 35 min, the calls around them
 N1=${VY_N1:-vy-n1}
 DRY=0
 case "${1:-}" in
@@ -60,6 +65,53 @@ stopgap() {
     "(tmux custody-push-3), and the next round takes over"
   exit 3
 }
+# window: why no push may start now on node 2's account, or nothing. Fail closed, as dispatch's n2_room and write_probe do: the
+# fill runner rewrites status.txt every 10 s, and a first line that doesn't read, is over 60 s old by this clock, or lacks
+# `timed False, window waiting False` is a window; so is a window booked in FILL/windows that is on or starts before END
+END=$(( $(date -u +%s) + PASS_S + PUSH_S ))
+window() {
+  python3 - "$FILL" "$(date -u +%s)" "$END" << 'EOF'
+import sys
+from datetime import datetime, timezone
+fill, now, end = sys.argv[1], float(sys.argv[2]), float(sys.argv[3])
+
+
+def utc(s):
+    t = datetime.fromisoformat(s[:-1] + "+00:00" if s.endswith("Z") else s)
+    return (t if t.tzinfo else t.replace(tzinfo=timezone.utc)).timestamp()
+
+
+try:
+    first = open(f"{fill}/status.txt").read().split("\n")[0]
+    age = now - utc(first.split()[0])
+except (OSError, IndexError, ValueError) as e:
+    sys.exit(f"its fill status doesn't read ({type(e).__name__}: {e})")
+if "timed False, window waiting False" not in first:
+    sys.exit(f"its fill status: {first[:120]}")
+if not -60 <= age <= 60:
+    sys.exit(f"its fill status is {age:.0f} s old (the fill runner rewrites it every 10 s)")
+try:
+    lines = open(f"{fill}/windows").read().splitlines()
+except FileNotFoundError:
+    lines = []
+except OSError as e:
+    sys.exit(f"its booked windows don't read ({type(e).__name__}: {e})")
+for line in lines:
+    f = line.split("#")[0].split()
+    try:
+        s = utc(f[0])
+        e = s + 60 * float(f[1] if len(f) > 1 else 30)
+    except (IndexError, ValueError):
+        continue
+    if s < end and e > now:
+        sys.exit(f"a window booked at {f[0]} for {f[1] if len(f) > 1 else 30} min is on or starts within the round's "
+                 f"{(end - now) / 60:.0f} min")
+EOF
+}
+if ! why=$(window 2>&1); then
+  log "skipped: node 2's timed window: $why; the next round asks again"
+  exit 0
+fi
 [ "$DRY" = 1 ] || stopgap
 
 # "CAMPAIGN STATE AGE_S FILES BYTES": STATE is the status's, dead for a run still marked running whose process is gone, or custody
@@ -236,12 +288,12 @@ for pair in "${pairs[@]}"; do
   done
 done
 
-src_ok=
+src_ok= paused=
 failed=0 tried=0 left=0
 for c in "${fresh[@]}" "${retry[@]}"; do
   IFS='|' read -r root dst r <<< "$c"
   d=$root/$r
-  if [ "$DRY" = 0 ] && { [ "$tried" -ge "$MAX_RUNS" ] || [ "$SECONDS" -ge "$PASS_S" ]; }; then
+  if [ "$DRY" = 0 ] && { [ -n "$paused" ] || [ "$tried" -ge "$MAX_RUNS" ] || [ "$SECONDS" -ge "$PASS_S" ]; }; then
     left=$((left + 1))
     continue
   fi
@@ -273,6 +325,11 @@ for c in "${fresh[@]}" "${retry[@]}"; do
     [ "$rc" = 0 ] || { log "refused: node 1 not reached (\`ssh $N1\` exited $rc)"; exit 3; }
     src_ok=1
   fi
+  if ! why=$(window 2>&1); then
+    paused="node 2's timed window: $why"
+    left=$((left + 1))
+    continue
+  fi
   stopgap
   tried=$((tried + 1))
   why= hold=
@@ -292,7 +349,11 @@ for c in "${fresh[@]}" "${retry[@]}"; do
     failed=$((failed + 1))
   fi
 done
-[ "$left" = 0 ] || log "round bounded ($tried push(es) in ${SECONDS}s, at most $MAX_RUNS or ${PASS_S}s): $left run dir(s) left for the next round"
+if [ -n "$paused" ]; then
+  log "paused after $tried push(es), for $paused: $left run dir(s) left for the next round"
+elif [ "$left" != 0 ]; then
+  log "round bounded ($tried push(es) in ${SECONDS}s, at most $MAX_RUNS or ${PASS_S}s): $left run dir(s) left for the next round"
+fi
 held=$(ls "$STATE/held" | wc -l)
 [ "$held" = 0 ] || echo "$held run(s) held for a person ($STATE/held/RUN says why)"
 [ "$failed" = 0 ] || log "$failed run(s) not yet on R2"

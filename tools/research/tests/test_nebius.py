@@ -1242,13 +1242,17 @@ def test_n2_commit_gives_a_long_row_the_long_max_min():
 #: n2_custody.sh's node 1, faked under N1_FS: rsync copies the run dir there, and ssh answers the round's calls as node 1 would: the
 #: research tree, the Job (its verify writes .custody over node 1's copy; a run JOB_ERR's file names fails with that line instead),
 #: and the cat of that .custody; DURING_JOB=RUN:PATH appends to PATH while RUN's Job runs, LOOP_DURING_JOB=RUN starts the stopgap
-#: loop (STATE/push.sh, its pid in STATE/push.pid) then, ACTIVE_JOB=RUN says RUN's Job has not finished, UNREACHABLE fails every
-#: call. Every call is a line of FAKE_LOG.
+#: loop (STATE/push.sh, its pid in STATE/push.pid) then, TIMED_DURING_JOB=RUN starts a timed window on node 2 then, ACTIVE_JOB=RUN
+#: says RUN's Job has not finished, UNREACHABLE fails every call; CLOCK_AFTER_RSYNC=T sets the clock to T once a run dir is copied.
+#: Every call is a line of FAKE_LOG.
 _N2_RSYNC = r'''
 import os, shutil, sys
 with open(os.environ["FAKE_LOG"], "a") as f:
     f.write("rsync " + " ".join(sys.argv[1:]) + "\n")
 shutil.copytree(sys.argv[-2], os.environ["N1_FS"] + sys.argv[-1].split(":", 1)[1], symlinks=True, dirs_exist_ok=True)
+if os.environ.get("CLOCK_AFTER_RSYNC"):
+    with open(os.environ["FAKE_CLOCK"], "w") as f:
+        f.write(os.environ["CLOCK_AFTER_RSYNC"])
 '''
 _N2_SSH = r'''
 import hashlib, json, os, re, subprocess, sys
@@ -1285,6 +1289,12 @@ if env.get("LOOP_DURING_JOB") == os.path.basename(d):
                             stderr=subprocess.DEVNULL, start_new_session=True)
     with open(env["VY_CUSTODY_STATE"] + "/push.pid", "w") as f:
         f.write(str(loop.pid))
+if env.get("TIMED_DURING_JOB") == os.path.basename(d):
+    status = env["VY_CUSTODY_FILL"] + "/status.txt"
+    with open(status) as f:
+        line = f.read().replace("timed False", "timed True")
+    with open(status, "w") as f:
+        f.write(line)
 copy, files = env["N1_FS"] + d, {}
 for base, _, names in os.walk(copy):
     for n in names:
@@ -1295,17 +1305,28 @@ with open(f"{copy}/.custody", "w") as f:
     json.dump({"schema": "research/run-custody/v0.1", "preserved": True, "verified_from": 4102444800.0, "files": files}, f)
 '''
 SETTLED = 1_000_000_000                         # a run dir's files last changed in 2001
+N2_NOW = 1_790_996_400                          # the scripts' clock (2026-10-03T03:00:00Z): `date -u +FORMAT` reads FAKE_CLOCK
+_FAKE_DATE = '#!/bin/sh\nif [ "$1" = -u ] && [ $# = 2 ] && [ "${2#+}" != "$2" ]; then exec %s -u -d "@$(cat "$FAKE_CLOCK")" "$2"; fi\nexec %s "$@"\n'
+
+
+def _fill_status(fill: Path, t: int, line: str = "free GPUs 0/8, kept free -, waiters -, timed False, window waiting False") -> None:
+    """Node 2's fill runner's status.txt, as it writes it every 10 s, stamped `t`."""
+    fill.mkdir(exist_ok=True)
+    (fill / "status.txt").write_text(f"{datetime.datetime.fromtimestamp(t, datetime.UTC):%Y-%m-%dT%H:%M:%SZ} {line}\nqueued -\n")
 
 
 def _n2_custody(tmp_path: Path) -> types.SimpleNamespace:
     """Node 2 for n2_custody.sh: `run` makes a run dir under its runs root, `round_` runs one round against the fake node 1
-    (_N2_SSH), `calls` is what the rounds asked of node 1, `job_err` fails the named runs' Jobs with a line each."""
+    (_N2_SSH) at `clock` (default N2_NOW) with a fresh fill status unless `status=False`, `calls` is what the rounds asked of node 1,
+    `job_err` fails the named runs' Jobs with a line each."""
     root, state, bin_, n1 = tmp_path / "runs", tmp_path / "state", tmp_path / "bin", tmp_path / "n1"
-    log, errs = tmp_path / "calls.log", tmp_path / "job-err.json"
+    log, errs, clock_file, fill = tmp_path / "calls.log", tmp_path / "job-err.json", tmp_path / "clock", tmp_path / "fill"
     bin_.mkdir()
     for name, src in (("rsync", _N2_RSYNC), ("ssh", _N2_SSH)):
         (bin_ / name).write_text(f"#!{sys.executable}\n{src}")
         (bin_ / name).chmod(0o755)
+    (bin_ / "date").write_text(_FAKE_DATE % (shutil.which("date"), shutil.which("date")))
+    (bin_ / "date").chmod(0o755)
 
     def run(rid, status, *, settled=True, custody=None, extra=0):
         d = root / rid
@@ -1321,13 +1342,17 @@ def _n2_custody(tmp_path: Path) -> types.SimpleNamespace:
                 os.utime(p, (SETTLED, SETTLED))
         return d
 
-    def round_(*args, **env):
+    def round_(*args, clock=N2_NOW, status=True, **env):
+        clock_file.write_text(str(clock))
+        if status:
+            _fill_status(fill, clock - 5)
         return subprocess.run(["bash", str(NEBIUS / "n2_custody.sh"), *args], capture_output=True, text=True,
                               env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "VY_N1": "n1.invalid", "FAKE_LOG": str(log),
-                                   "N1_FS": str(n1), "JOB_ERR": str(errs), "VY_CUSTODY_ROOTS": f"{root}=/n1/runs",
-                                   "VY_CUSTODY_STATE": str(state), "VY_CUSTODY_SRC": "/n1/src/abc", "VY_CUSTODY_MAX_FILES": "4", **env})
+                                   "N1_FS": str(n1), "JOB_ERR": str(errs), "VY_CUSTODY_ROOTS": f"{root}=/n1/runs", "FAKE_CLOCK": str(clock_file),
+                                   "VY_CUSTODY_FILL": str(fill), "VY_CUSTODY_STATE": str(state), "VY_CUSTODY_SRC": "/n1/src/abc",
+                                   "VY_CUSTODY_MAX_FILES": "4", **env})
 
-    return types.SimpleNamespace(root=root, state=state, n1=n1, run=run, round_=round_,
+    return types.SimpleNamespace(root=root, state=state, n1=n1, fill=fill, run=run, round_=round_,
                                  calls=lambda: log.read_text() if log.exists() else "",
                                  job_err=lambda by_run: errs.write_text(json.dumps(by_run)),
                                  names=lambda sub: sorted(p.name for p in (state / sub).iterdir()))
@@ -1534,6 +1559,46 @@ def test_n2_custody_takes_node_1s_marker_home_only_over_the_files_node_1_verifie
     assert not (late / ".custody").exists() and not (late / ".custody.tmp").exists() and CU.marker_problem(late) == "no .custody"
     second = n2.round_()
     assert second.returncode == 0 and n2.calls().count(f"{late}/ n1.invalid") == 1, "a file of it changed: settling again"
+
+
+@N2_CUSTODY
+def test_n2_custody_pauses_for_node_2s_timed_windows(tmp_path):
+    """Node 2's timed windows (PoUW's measurements) run with nothing else on the node, and a round's rsync and hashing ran through
+    them at Nice=19 (#984's red-team finding 13). A round, and each push, starts only while the fill runner's status is under 60 s
+    old and says no window runs or waits, and no booked window is on or starts within the round's bound (PASS_S + PUSH_S: 80 min);
+    a status that is missing, stale or doesn't read is a window. A skipped or paused round is no failure: one log line, exit 0."""
+    n2 = _n2_custody(tmp_path)
+    first, second = (n2.run(f"r20261003-10000{i}-000{i}", {"state": "done"}) for i in (1, 2))
+    skips = []
+    for line in ("free GPUs 0/8, kept free 8, waiters -, timed True, window waiting False",
+                 "free GPUs 2/8, kept free 8, waiters -, timed False, window waiting True"):
+        _fill_status(n2.fill, N2_NOW - 5, line)
+        skips.append(n2.round_(status=False))
+    _fill_status(n2.fill, N2_NOW - 61)
+    skips.append(n2.round_(status=False))
+    (n2.fill / "status.txt").write_text("free GPUs 0/8, kept free -, waiters -, timed False, window waiting False\n")
+    skips.append(n2.round_(status=False))
+    (n2.fill / "status.txt").unlink()
+    skips.append(n2.round_(status=False))
+    (n2.fill / "windows").write_text("# booked windows\n2026-10-03T04:15Z 30 # a measurement, 75 min on\n")
+    skips.append(n2.round_())
+    skips.append(n2.round_("--dry-run"))
+    (n2.fill / "windows").write_text("2026-10-03T02:45Z 30 # on since 02:45\n")
+    skips.append(n2.round_())
+    said = [s.stdout for s in skips]
+    assert all(s.returncode == 0 and "skipped: node 2's timed window: " in s.stdout for s in skips), said
+    assert not n2.calls() and not n2.names("pushed") and "would push" not in said[6]
+    assert "timed True" in said[0] and "window waiting True" in said[1] and "its fill status is 61 s old" in said[2]
+    assert "its fill status doesn't read (ValueError" in said[3] and "its fill status doesn't read (FileNotFoundError" in said[4]
+    assert "a window booked at 2026-10-03T04:15Z for 30 min is on or starts within the round's 80 min" in said[5]
+    assert "a window booked at 2026-10-03T02:45Z" in said[7]
+
+    (n2.fill / "windows").write_text("2026-10-03T02:00Z 30 # ended\n2026-10-03T04:25Z 30 # past the round's bound\n")
+    paused = n2.round_(TIMED_DURING_JOB=first.name)
+    assert paused.returncode == 0 and n2.names("pushed") == [first.name] and second.name not in n2.calls()
+    assert "paused after 1 push(es), for node 2's timed window: its fill status: " in paused.stdout
+    assert "1 run dir(s) left for the next round" in paused.stdout
+    assert n2.round_().returncode == 0 and n2.names("pushed") == [first.name, second.name]
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
