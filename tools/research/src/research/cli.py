@@ -44,6 +44,8 @@
   research pods guard [--budgets NOTES|FILE] [--dry-run] [--detach]   # the one budgets guard: every line of budgets.toml, re-read each poll
   research pods guard status|stop                # its state file / SIGTERM to exactly its recorded pid
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
+  research doctor [--role lane|coordinator|infra] [--json]   # can this VM do its job: secrets by name, tokens by status-only probes,
+                                                 # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (research/doctor.py)
   research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...]   # what runs on the Nebius nodes
                                                  # (pods/nebius/deploy.toml) against main, and installs from a pushed commit (research/deploy.py)
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
@@ -1075,6 +1077,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_launch_request(rest)
     if cmd == "env":
         return cmd_env(rest)
+    if cmd == "doctor":
+        from .doctor import main as doctor_main
+
+        return doctor_main(rest)
     if cmd == "disk-hold":
         from .disk import main as disk_main
 
