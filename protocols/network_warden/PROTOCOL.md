@@ -108,7 +108,7 @@ about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bound
 | Envelope, with no clock | `T·log2(r + 1)` bits per link-window | Proposition 2 |
 | Accepted runs, with clock-sync advice | `A_c + W·log2 #Σ_sync + n·log2 D` bits | `SecurityProofs.EncardAccSeqsLeSync` |
 | A fixed clock, under J (D = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock` |
-| Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
+| Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
 | Ingress, content plus timing | `log2 #Cs` bits plus the ingress timing | `SecurityProofs.EncardIngressDecodableLeContents`, `SecurityProofs.EncardIngressObsDecodableLeContents` |
 
 The inference-only policy charges an isolation unit the ingress covert capacity from the last wipe before it starts,

@@ -148,7 +148,8 @@ The ingress bound adds these:
    `Obs` holds only the ingress rows, but X's enqueues are `op`'s moves (functions of the records), the egress warden
    releases them by W4, and an outside fault on an egress link shows as a status, which `Obs` holds. So the outside's
    feedback is complete. A decoder inside X may read what X's devices read: the record version covers it, and the wire
-   version follows under W2.
+   version follows under W2. Read inward, W2 (`Regenerates`) also covers whatever outside-influenced thing X can see of
+   its own egress (backpressure, release timing): it is all a function of the record.
 9. **Conditioned on the content.** The messages counted are those whose frames on each link, in the order released, are
    a prefix of one prescribed list `c ℓ` (the Program's input, charged as reads; order is content, since the Program
    reads frames in order). How many frames have arrived by the horizon is timing, and is in the count. Messages that
