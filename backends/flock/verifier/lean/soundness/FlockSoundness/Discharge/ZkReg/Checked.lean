@@ -29,14 +29,7 @@ theorem acceptsZK_of_R {I : Inputs} {own : Array Registered.Port} {t : Exec.Tran
 
 /-- `checkRegistered` accepting a statement is `Registered.check` accepting it. -/
 theorem checkRegistered_ok {st : Stmt} {r : Option (Array Registered.Port)} (h : checkRegistered st r = .ok ()) :
-    Registered.check st.c st.pub r (Registered.derived st.partition) = .ok () := by
-  unfold checkRegistered at h
-  split at h
-  · simp only at h
-    split at h
-    · exact absurd h (Registered.throw_ne_ok _ _)
-    · simpa using h
-  · simpa using h
+    Registered.check st.c st.pub r (Registered.derived st.partition) = .ok () := h
 
 /-- `Registered.check` accepting with the verifier's own `own`: the public file has tables `t`, its header names the
 units `idx`, and `checkPort` accepts each of `own`'s ports. -/
@@ -74,6 +67,8 @@ theorem checkPort_at {c : Circuit} {pub : Public} {t : Tables} {indices : Array 
   simp only at h
   split at h
   · rename_i p hp
+    split at h
+    · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
     split at h
     · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
     · obtain ⟨⟨positions, paths⟩, hent, h⟩ := Registered.except_bind_ok h
