@@ -1135,6 +1135,52 @@
    "assumptions": [],
    "type_hash": "a5478b79433351d1d1f31b10beea24cc88ea72bfca8552fa609c6ab67775798f"
   },
+  "FlockSoundness.Audit.Partition.Refines.twoStage_exfiltration": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.Refines.twoStage_exfiltration {nf nc : Nat} {C : FlockSoundness.Audit.Circuit}",
+    "  {Pf : FlockSoundness.Audit.Partition C nf} {Pc : FlockSoundness.Audit.Partition C nc} {a : Fin C.N → Bool}",
+    "  {εks δlink δin : ENNReal} {D : Finset (Fin C.N)} (r : Pf.Refines Pc) {L₁ : FlockSoundness.Audit.Law nc}",
+    "  {L₂ : Fin nc → FlockSoundness.Audit.Law nf} {Reg : Type} {Int : Finset (Fin nc) → Type}",
+    "  {session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → FlockSoundness.Game Bool}",
+    "  (Xc : (R : Reg) → FlockSoundness.Audit.Cont₁ L₁ L₂ Reg Int session R → Fin C.N → Bool)",
+    "  (Yint :",
+    "    (R : Reg) →",
+    "      (ω₁ : L₁.Ω) → (I : Int (L₁.draw ω₁)) → FlockSoundness.Audit.Cont₂ L₁ L₂ Reg Int session R ω₁ I → Fin C.N → Bool)",
+    "  (ext :",
+    "    (S : Finset (Fin nf)) →",
+    "      (R : Reg) →",
+    "        (S₁ : Finset (Fin nc)) → (I : Int S₁) → (session S R S₁ I).Strategy → Fin nf → Option (Fin C.N → Bool))",
+    "  (hks : (r.analysis₂ Xc Yint ext).KnowledgeSound εks) (hlink : (r.analysis₂ Xc Yint ext).LinkSound δlink)",
+    "  (hin : FlockSoundness.Audit.Partition.AnchorsSound₂ Xc a δin) (hD : Finset.instPartialOrder.le D Pc.committed)",
+    "  (hb : Fin nc → Nat) (K : Finset (Fin nc) → Finset (Fin C.N))",
+    "  (hK : ∀ (B : Finset (Fin nc)), Finset.instPartialOrder.le (K B) Pc.committed)",
+    "  (hsep : ∀ (B : Finset (Fin nc)), Pc.Separates (K B) B D)",
+    "  (hw : ∀ (B : Finset (Fin nc)), instLENat.le (K B).card (B.sum fun u => hb u)) {δ : ENNReal} {H k : Nat}",
+    "  (hH :",
+    "    FlockSoundness.Audit.IsHarmBoundOn (FlockSoundness.Audit.effEscape L₁ L₂ r.parent) (fun u => (hb u).cast) δ H.cast)",
+    "  (hk : ENNReal.instPartialOrder.lt (FlockSoundness.Audit.effMiss L₁ L₂ r.parent (instHAdd.hAdd k 1)) δ) {M : Type}",
+    "  [Fintype M] [Nonempty M] [DecidableEq M] (σ : M → (FlockSoundness.Audit.twoStage L₁ L₂ Reg Int session).Strategy)",
+    "  (g : ((Subtype fun x => SetLike.instMembership.mem D x) → Bool) → M) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.avg fun m =>",
+    "      FlockSoundness.Game.prob",
+    "        (fun o =>",
+    "          And (Eq o.fst Bool.true)",
+    "            (Eq",
+    "              (g",
+    "                (FlockSoundness.Audit.Partition.out D",
+    "                  (Xc (FlockSoundness.Audit.reg₂ (σ m)) (FlockSoundness.Audit.cont₁ (σ m)))))",
+    "              m))",
+    "        (FlockSoundness.Audit.twoStage L₁ L₂ Reg Int session) (σ m))",
+    "    (instHAdd.hAdd",
+    "      (instHDiv.hDiv",
+    "        (instHMul.hMul (instHPow.hPow 2 H) ((Finset.range (instHAdd.hAdd k 1)).sum fun j => nc.choose j)).cast",
+    "        (Fintype.card M).cast)",
+    "      (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd δ εks) δlink) δin))"
+   ],
+   "assumptions": [],
+   "type_hash": "c3479e455507050febdc1e3d70e25147be04269786d4747f69b6849ec278035e"
+  },
   "FlockSoundness.Audit.Partition.Refines.twoStage_influence": {
    "signature": [
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence {C : FlockSoundness.Audit.Circuit} {nf nc : Nat}",
@@ -1496,6 +1542,46 @@
    "assumptions": [],
    "type_hash": "ae096dced281a511ad71fc70a4362616b8559d08f30955e8d7a01a8e2f558353"
   },
+  "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration {nf nc : Nat} {C : FlockSoundness.Audit.Circuit}",
+    "  {Pf : FlockSoundness.Audit.Partition C nf} {Pc : FlockSoundness.Audit.Partition C nc} {a : Fin C.N → Bool}",
+    "  {δin : ENNReal} {D : Finset (Fin C.N)} (r : Pf.Refines Pc)",
+    "  (plan : Finset (Fin nf) → (Fin C.N → Bool) → List FlockSoundness.Audit.FlockTable) (hlow : Pf.LoweringSound plan)",
+    "  {L₁ : FlockSoundness.Audit.Law nc} {L₂ : Fin nc → FlockSoundness.Audit.Law nf} {Int : Finset (Fin nc) → Type}",
+    "  (ext : (S₁ : Finset (Fin nc)) → Int S₁ → Fin C.N → Bool)",
+    "  (hin : FlockSoundness.Audit.Partition.AnchorsSound₂ (fun R x => R) a δin)",
+    "  (hD : Finset.instPartialOrder.le D Pc.committed) (hb : Fin nc → Nat) (K : Finset (Fin nc) → Finset (Fin C.N))",
+    "  (hK : ∀ (B : Finset (Fin nc)), Finset.instPartialOrder.le (K B) Pc.committed)",
+    "  (hsep : ∀ (B : Finset (Fin nc)), Pc.Separates (K B) B D)",
+    "  (hw : ∀ (B : Finset (Fin nc)), instLENat.le (K B).card (B.sum fun u => hb u)) {δ : ENNReal} {H k : Nat}",
+    "  (hH :",
+    "    FlockSoundness.Audit.IsHarmBoundOn (FlockSoundness.Audit.effEscape L₁ L₂ r.parent) (fun u => (hb u).cast) δ H.cast)",
+    "  (hk : ENNReal.instPartialOrder.lt (FlockSoundness.Audit.effMiss L₁ L₂ r.parent (instHAdd.hAdd k 1)) δ) {M : Type}",
+    "  [Fintype M] [Nonempty M] [DecidableEq M]",
+    "  (σ :",
+    "    M →",
+    "      (FlockSoundness.Audit.twoStage L₁ L₂ (Fin C.N → Bool) Int fun S R S₁ I =>",
+    "          FlockSoundness.Audit.Partition.flockSession plan S",
+    "            (FlockSoundness.Audit.Partition.extend R (ext S₁ I))).Strategy)",
+    "  (g : ((Subtype fun x => SetLike.instMembership.mem D x) → Bool) → M) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.avg fun m =>",
+    "      FlockSoundness.Game.prob",
+    "        (fun o =>",
+    "          And (Eq o.fst Bool.true) (Eq (g (FlockSoundness.Audit.Partition.out D (FlockSoundness.Audit.reg₂ (σ m)))) m))",
+    "        (FlockSoundness.Audit.twoStage L₁ L₂ (Fin C.N → Bool) Int fun S R S₁ I =>",
+    "          FlockSoundness.Audit.Partition.flockSession plan S (FlockSoundness.Audit.Partition.extend R (ext S₁ I)))",
+    "        (σ m))",
+    "    (instHAdd.hAdd",
+    "      (instHDiv.hDiv",
+    "        (instHMul.hMul (instHPow.hPow 2 H) ((Finset.range (instHAdd.hAdd k 1)).sum fun j => nc.choose j)).cast",
+    "        (Fintype.card M).cast)",
+    "      (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd δ (ENNReal.ofReal (instHPow.hPow 2 (-205)))) 0) δin))"
+   ],
+   "assumptions": [],
+   "type_hash": "cb8011a82dadceff1527044c8427000fa5b15dbe554ccbcf515695b4498d3d40"
+  },
   "FlockSoundness.Audit.Partition.outputs_eq_of_separates": {
    "signature": [
     "FlockSoundness.Audit.Partition.outputs_eq_of_separates {C : FlockSoundness.Audit.Circuit} {n : Nat}",
@@ -1517,6 +1603,297 @@
    ],
    "assumptions": [],
    "type_hash": "a18dc784017e3b94477da672babfcf9242d36aa68ea80950d29818886ed5bc75"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.Achievability": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.Achievability :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.Achievability"
+   ],
+   "assumptions": [],
+   "type_hash": "60fb96d0183b822919f56a0a610920e58afc18ae0083ae684f4cfe2f9080bf85"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.Concentration": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.Concentration :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.Concentration"
+   ],
+   "assumptions": [],
+   "type_hash": "4039b9bdd00d8746a37a4f6bd7719858b393f4442bde59a4d89aa1b89537c7c6"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseAsymptotic": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseAsymptotic :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.ConverseAsymptotic"
+   ],
+   "assumptions": [],
+   "type_hash": "e6eadc009ea09027842074bf4e581bc11f2e79906064cacb5b93a212c3bfa47d"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseExact": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseExact :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.ConverseExact"
+   ],
+   "assumptions": [],
+   "type_hash": "d4dbf44cd5d1e3a390839d9d3804c56a1c6bb0c4e2fe573b01673680a0c13338"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.ExfiltrationOptimum": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ExfiltrationOptimum :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.ExfiltrationOptimum"
+   ],
+   "assumptions": [],
+   "type_hash": "1c42bd8b54776d07b850501577adba62de7e66c941f4de461c04eb751a0c56cd"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityChoice": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityChoice :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.GranularityChoice"
+   ],
+   "assumptions": [],
+   "type_hash": "db08e61b74ae5d61a6127e2ddcd463881a8afd7110c8520a011d65d75413694b"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityOptimum": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityOptimum :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.GranularityOptimum"
+   ],
+   "assumptions": [],
+   "type_hash": "2536aa7c8c38892d4950d16cba4d605d92f0143e4c9e66cab8eed71e3b06738a"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.HeavyUnit": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.HeavyUnit : FlockSoundness.Audit.Partitioning.Guarantees.HeavyUnit"
+   ],
+   "assumptions": [],
+   "type_hash": "e1766f5c1f709cfb2e05c9d4e410b503b3c6919382fd53e245f2a223fc56c36f"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.NestedEscape": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.NestedEscape :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.NestedEscape"
+   ],
+   "assumptions": [],
+   "type_hash": "74a4091066666b2a8c80c2ec66759f8736a45429cd293dc320640e3593857ee7"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.RefinementRule"
+   ],
+   "assumptions": [],
+   "type_hash": "a1d43244ea573d8b11abaf56bbb4232ab1a3c37ae018157bf55d76d39c62f90e"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.RiskConcave": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RiskConcave : FlockSoundness.Audit.Partitioning.Guarantees.RiskConcave"
+   ],
+   "assumptions": [],
+   "type_hash": "c4b6ffe60172f35c4d4e6cadfba6f2ff28af8d2b78c6a3f352a30e4f0aab684b"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost : FlockSoundness.Audit.Partitioning.Guarantees.UnequalCost"
+   ],
+   "assumptions": [],
+   "type_hash": "c7a368d1bac1e7b8583b2e10c4cda4fdbbb698b9e44b72256a22b734d1c4a629"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.UnequalDraws"
+   ],
+   "assumptions": [],
+   "type_hash": "bce414b751f17b213e264719865c2d042504824c6da38405f483a541dbeaa25f"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.achievability": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.achievability :",
+    "  Real.instLT.lt",
+    "    (instHAdd.hAdd (Real.instMin.min 1 (instHMul.hMul (instHDiv.hDiv (Real.log (Real.instInv.inv (1 / 2))) 2) 1))",
+    "      (1 / 4))",
+    "    1"
+   ],
+   "assumptions": [],
+   "type_hash": "c524ded6c6b546a5baa16389539eb1564f64b1f8af3bc2a2d97ab8420230c59b"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.concentration": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.concentration :",
+    "  Real.instLT.lt",
+    "    (instHAdd.hAdd (FlockSoundness.Audit.Partitioning.detectionRisk 2 2 (1 / 2) 2)",
+    "      (FlockSoundness.Audit.Partitioning.detectionRisk 2 2 (1 / 2) 0))",
+    "    (instHAdd.hAdd (FlockSoundness.Audit.Partitioning.detectionRisk 2 2 (1 / 2) 1)",
+    "      (FlockSoundness.Audit.Partitioning.detectionRisk 2 2 (1 / 2) 1))"
+   ],
+   "assumptions": [],
+   "type_hash": "7a6c679e3ee822d0ebb1d19d206ace9325be5667268eee858ead97aa65f37213"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.converse": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.converse :",
+    "  And (Real.instLE.le ((FlockSoundness.Audit.Law.subset 4 2 ⋯).miss 2).toReal (1 / 6))",
+    "    (And",
+    "      (Real.instLT.lt 1",
+    "        (instHMul.hMul (instHAdd.hAdd (instHSub.hSub 4 2) 1)",
+    "          (instHSub.hSub 1 (instHPow.hPow (1 / 6) (Real.instInv.inv 2)))))",
+    "      (Real.instLT.lt 0",
+    "        (instHMul.hMul",
+    "          (instHMul.hMul (instHDiv.hDiv (instHAdd.hAdd (instHSub.hSub 4 2) 1) 2) (Real.log (Real.instInv.inv (1 / 6))))",
+    "          (instHSub.hSub 1 (instHDiv.hDiv (Real.log (Real.instInv.inv (1 / 6))) (instHMul.hMul 2 2))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "f27bb9a37b9ec6fd6b91e32386242fac22141d098c10a6f61d472ee193d0f447"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.exfiltration": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.exfiltration :",
+    "  And (Real.instLE.le (instHAdd.hAdd (instHMul.hMul 1 1) (FlockSoundness.Audit.Partitioning.locBits 4 1)) 4)",
+    "    (And",
+    "      (Real.instLT.lt 4",
+    "        (instHAdd.hAdd (instHMul.hMul 1 (instHAdd.hAdd 1 1))",
+    "          (FlockSoundness.Audit.Partitioning.locBits 4 (instHAdd.hAdd 1 1))))",
+    "      (And",
+    "        (FlockSoundness.Audit.Partitioning.CertifiesLeak (FlockSoundness.Audit.Law.subset 4 4 ⋯) (fun x => 1) (1 / 2) 4)",
+    "        (And",
+    "          (Real.instLT.lt 0",
+    "            (instHMul.hMul (instHSub.hSub 4 1)",
+    "              (instHSub.hSub 1 (instHPow.hPow (1 / 2) (Real.instInv.inv (instHAdd.hAdd 1 1))))))",
+    "          (Real.instLT.lt",
+    "            (instHMul.hMul (instHSub.hSub 4 1)",
+    "              (instHSub.hSub 1 (instHPow.hPow (1 / 2) (Real.instInv.inv (instHAdd.hAdd 1 1)))))",
+    "            (instHDiv.hDiv (instHMul.hMul 4 (Real.log (Real.instInv.inv (1 / 2)))) (instHAdd.hAdd 1 1))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "853dec893f40dcce3d2882fcd1e4aedb8609e88b1c6e5265aa9a9d18f967a154"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.granularity": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.granularity :",
+    "  And",
+    "    (FlockSoundness.Audit.Partitioning.MeetsTarget (FlockSoundness.Audit.Law.subset 1000 1000 ⋯) (fun x => 1) 10",
+    "      (1 / 2))",
+    "    (And",
+    "      (FlockSoundness.Audit.Partitioning.MeetsTarget (FlockSoundness.Audit.Law.subset 500 500 ⋯) (fun x => 2) 10",
+    "        (1 / 2))",
+    "      (And",
+    "        (Real.instLT.lt 0",
+    "          (instHSub.hSub (instHSub.hSub (instHSub.hSub 1 (1 / 10)) (instHDiv.hDiv 10 (instHMul.hMul 1000 1)))",
+    "            (instHDiv.hDiv (instHMul.hMul 1 (Real.log (Real.instInv.inv (1 / 2)))) (instHMul.hMul 2 10))))",
+    "        (Real.instLT.lt 0",
+    "          (instHSub.hSub (instHSub.hSub (instHSub.hSub 1 (2 / 10)) (instHDiv.hDiv 10 (instHMul.hMul 500 2)))",
+    "            (instHDiv.hDiv (instHMul.hMul 2 (Real.log (Real.instInv.inv (1 / 2)))) (instHMul.hMul 2 10))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "cae6de3addaf622605dc7f90cd4bd440df28a3c68baf78027b64a0a68a5587e1"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.heavyUnit": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.heavyUnit :",
+    "  FlockSoundness.Audit.Partitioning.MeetsTarget (FlockSoundness.Audit.Law.subset 1 1 ⋯) (fun x => 1) 1 (1 / 2)"
+   ],
+   "assumptions": [],
+   "type_hash": "9e99a5ac4b3a3d42fce00985d7ae730b052f1a62f0b69005194a28bd89de7032"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.nestedEscape": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.nestedEscape :",
+    "  Eq",
+    "    ((FlockSoundness.Audit.Partitioning.nested 2 2 1 1 2 ⋯).escape",
+    "        (Finset.instSingleton.singleton (EquivLike.toFunLike.coe finProdFinEquiv { fst := 0, snd := 0 }))).toReal",
+    "    (3 / 4)"
+   ],
+   "assumptions": [],
+   "type_hash": "b29b52a70b609ebd4bfaa4f8fc60d78130bc45d704364ecdaaf8455ee7deb1f6"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.refinement": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.refinement :",
+    "  And (instLENat.le (instHMul.hMul 2 (instHAdd.hAdd 1 1)) 4)",
+    "    (And (Real.instLE.le (instHAdd.hAdd (instHMul.hMul 16 1) (FlockSoundness.Audit.Partitioning.locBits 4 1)) 20)",
+    "      (And",
+    "        (Real.instLT.lt 20",
+    "          (instHAdd.hAdd (instHMul.hMul 16 (instHAdd.hAdd 1 1))",
+    "            (FlockSoundness.Audit.Partitioning.locBits 4 (instHAdd.hAdd 1 1))))",
+    "        (And",
+    "          (Real.instLE.le (instHAdd.hAdd 16 (instHDiv.hDiv (Real.logb 2 (instHAdd.hAdd 1 2)) (instHAdd.hAdd 1 1)))",
+    "            (instHAdd.hAdd 16 (Real.logb 2 2)))",
+    "          (And",
+    "            (FlockSoundness.Audit.Partitioning.CertifiesLeak",
+    "              (FlockSoundness.Audit.Law.subset (instHMul.hMul 2 4) (instHMul.hMul 2 4) ⋯) (fun x => 16) (1 / 2) 20)",
+    "            (Real.instLT.lt 0",
+    "              (instHMul.hMul",
+    "                (instHMul.hMul (instHSub.hSub 1 (1 / 4))",
+    "                  (instHSub.hSub 1",
+    "                    (instHDiv.hDiv (Real.log (Real.instInv.inv (1 / 2))) (instHMul.hMul 2 (instHAdd.hAdd 1 1)))))",
+    "                (instHMul.hMul (FlockSoundness.Audit.Partitioning.unitCost 0 1 1)",
+    "                  (instHDiv.hDiv (instHMul.hMul 4 (Real.log (Real.instInv.inv (1 / 2)))) (instHAdd.hAdd 1 1)))))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "d06faf16d4ce169a13f45527ee74a5b83ef99120fbf0f33981079b03ebf812e5"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.riskConcave_needs_k_two": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.riskConcave_needs_k_two :",
+    "  Real.instLT.lt",
+    "    (instHSub.hSub (FlockSoundness.Audit.Partitioning.detectionRisk 2 1 (1 / 2) 1)",
+    "      (FlockSoundness.Audit.Partitioning.detectionRisk 2 1 (1 / 2) 0))",
+    "    (instHSub.hSub (FlockSoundness.Audit.Partitioning.detectionRisk 2 1 (1 / 2) 2)",
+    "      (FlockSoundness.Audit.Partitioning.detectionRisk 2 1 (1 / 2) 1))"
+   ],
+   "assumptions": [],
+   "type_hash": "52e2bfe7535498a346efdbb8250b099a2c9726c4b87ee2868c73be89baf09c4f"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.riskConcave_needs_small_p": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.riskConcave_needs_small_p :",
+    "  Real.instLT.lt",
+    "    (instHSub.hSub (FlockSoundness.Audit.Partitioning.detectionRisk 3 2 (4 / 5) 1)",
+    "      (FlockSoundness.Audit.Partitioning.detectionRisk 3 2 (4 / 5) 0))",
+    "    (instHSub.hSub (FlockSoundness.Audit.Partitioning.detectionRisk 3 2 (4 / 5) 2)",
+    "      (FlockSoundness.Audit.Partitioning.detectionRisk 3 2 (4 / 5) 1))"
+   ],
+   "assumptions": [],
+   "type_hash": "8f720ad3c0c3871dd0cf50ea5d00c6ebd34108f6caa3a902611a332e42b45f5d"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.unequal": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.unequal :",
+    "  And",
+    "    (∀ (u : Fin 100),",
+    "      And (Real.instLE.le 1 (ite (instLTNat.lt u.val 50) 1 2)) (Real.instLE.le (ite (instLTNat.lt u.val 50) 1 2) 2))",
+    "    (And (Real.instLE.le (instHMul.hMul 2 (Real.log (Real.instInv.inv (1 / 2)))) 10)",
+    "      (And",
+    "        (FlockSoundness.Audit.Partitioning.MeetsTarget (FlockSoundness.Audit.Law.subset 100 100 ⋯)",
+    "          (fun u => ite (instLTNat.lt u.val 50) 1 2) 10 (1 / 2))",
+    "        (And",
+    "          (Real.instLT.lt 0",
+    "            (instHMul.hMul",
+    "              (instHMul.hMul (Real.log (Real.instInv.inv (1 / 2)))",
+    "                (instHSub.hSub 1",
+    "                  (instHDiv.hDiv (instHMul.hMul 2 (Real.log (Real.instInv.inv (1 / 2)))) (instHMul.hMul 2 10))))",
+    "              (instHSub.hSub",
+    "                (instHMul.hMul",
+    "                  (instHDiv.hDiv (Finset.univ.sum fun u => ite (instLTNat.lt u.val 50) 1 2) (instHMul.hMul 2 10))",
+    "                  (instHSub.hSub 1 (2 / 10)))",
+    "                (instHAdd.hAdd (Nat.floor (Real.logb 2 (2 / 1))).cast 1))))",
+    "          (Real.instLT.lt 0",
+    "            (instHMul.hMul",
+    "              (instHMul.hMul (Real.log (Real.instInv.inv (1 / 2)))",
+    "                (instHSub.hSub 1",
+    "                  (instHDiv.hDiv (instHMul.hMul 2 (Real.log (Real.instInv.inv (1 / 2)))) (instHMul.hMul 2 10))))",
+    "              (instHSub.hSub",
+    "                (instHMul.hMul",
+    "                  (instHDiv.hDiv",
+    "                    (Finset.univ.sum fun u =>",
+    "                      instHMul.hMul (ite (instLTNat.lt u.val 50) 1 2)",
+    "                        (FlockSoundness.Audit.Partitioning.unitCost 0 1 (ite (instLTNat.lt u.val 50) 1 2)))",
+    "                    (instHMul.hMul (instHPow.hPow 2 2) 10))",
+    "                  (instHSub.hSub 1 (2 / 10)))",
+    "                (instHMul.hMul (instHAdd.hAdd (Nat.floor (Real.logb 2 (2 / 1))).cast 1)",
+    "                  (FlockSoundness.Audit.Partitioning.unitCost 0 1 2))))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "6546b6c89d3d2a2ff02a4aa2f881aa4601822708516f6145c056e0d3d03aab72"
   },
   "FlockSoundness.Audit.audit_window": {
    "signature": [
@@ -4371,6 +4748,55 @@
    "signature": ["FlockSoundness.Discharge.DecodeZL.zl_carries : FlockSoundness.Discharge.DecodeZL.ZLCarries"],
    "assumptions": [],
    "type_hash": "19c312b3ca396c07ddc48aaa133870b77bc340fd709ca0b6e2d63af1ed40cd92"
+  },
+  "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on": {
+   "signature": [
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on : FlockSoundness.Discharge.DrawWords.DecodesWhereOfOn"
+   ],
+   "assumptions": [],
+   "type_hash": "3d5678ee1db0d478e925060af926c96edefccf81d794ffb3d0157cfc62c4b6b2"
+  },
+  "FlockSoundness.Discharge.DrawWords.draw_card_rare": {
+   "signature": ["FlockSoundness.Discharge.DrawWords.draw_card_rare : FlockSoundness.Discharge.DrawWords.DrawCardRare"],
+   "assumptions": [],
+   "type_hash": "c9bb6879cfffc22455ae995a31a1d68815e459932ab0dc1b15ca1c03fa91cde3"
+  },
+  "FlockSoundness.Discharge.DrawWords.execRefines_where": {
+   "signature": [
+    "FlockSoundness.Discharge.DrawWords.execRefines_where : FlockSoundness.Discharge.DrawWords.ExecRefinesWhere"
+   ],
+   "assumptions": [],
+   "type_hash": "efbf083f07913b9dce0568386d6790ead259858f845349ec1fe9b8286d150d62"
+  },
+  "FlockSoundness.Discharge.DrawWords.fallback_rare": {
+   "signature": ["FlockSoundness.Discharge.DrawWords.fallback_rare : FlockSoundness.Discharge.DrawWords.FallbackRare"],
+   "assumptions": [],
+   "type_hash": "138dc663b5738b104d204ec0bdb6daee6e97660f7c8ed2bc469f2263b02fc90b"
+  },
+  "FlockSoundness.Discharge.DrawWords.headline_card": {
+   "signature": ["FlockSoundness.Discharge.DrawWords.headline_card : FlockSoundness.Discharge.DrawWords.HeadlineCard"],
+   "assumptions": [],
+   "type_hash": "f514f077469d7dfe5107a9fdc239971ed5b9f510fdaf22dc072118b03405b626"
+  },
+  "FlockSoundness.Discharge.DrawWords.mPts_at_card": {
+   "signature": ["FlockSoundness.Discharge.DrawWords.mPts_at_card : FlockSoundness.Discharge.DrawWords.MPtsAtCard"],
+   "assumptions": [],
+   "type_hash": "a0eb1cace957a18497651dfe9112daab717549bf10637972bd692567fc2bc4f7"
+  },
+  "FlockSoundness.Discharge.DrawWords.word_reject": {
+   "signature": ["FlockSoundness.Discharge.DrawWords.word_reject : FlockSoundness.Discharge.DrawWords.WordReject"],
+   "assumptions": [],
+   "type_hash": "fe52f94315063c6e7307b647b594d65d944456c57a33a30c6d7a9df5277d8660"
+  },
+  "FlockSoundness.Discharge.DrawWords.word_uniform": {
+   "signature": ["FlockSoundness.Discharge.DrawWords.word_uniform : FlockSoundness.Discharge.DrawWords.WordUniform"],
+   "assumptions": [],
+   "type_hash": "12ed74c9cfd7636df3723a25f0a86fb01bcc95c0f6ced52c7cbb12deba5b9404"
+  },
+  "FlockSoundness.Discharge.DrawWords.words_run": {
+   "signature": ["FlockSoundness.Discharge.DrawWords.words_run : FlockSoundness.Discharge.DrawWords.WordsRun"],
+   "assumptions": [],
+   "type_hash": "60911c74b63950d31f7c0789f03ef3b62ad03d44b7a9ad1ff3780ae890dfecaf"
   },
   "FlockSoundness.Discharge.Exec.Exact.kinds": {
    "signature": [
@@ -8256,14 +8682,52 @@
    "assumptions": [],
    "type_hash": "dcaf61a1601b88f64602443aa252b30494832842abae4d96c2868695f895e932"
   },
-  "FlockSoundness.Discharge.PlaysCoin.coinsOfRounds": {},
-  "FlockSoundness.Discharge.PlaysCoin.cutOfPat": {},
-  "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns": {},
-  "FlockSoundness.Discharge.PlaysCoin.decodesOfRuns": {},
-  "FlockSoundness.Discharge.PlaysCoin.decodesOfRunsAt": {},
-  "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns": {},
-  "FlockSoundness.Discharge.PlaysCoin.tapeOfGroups": {},
-  "FlockSoundness.Discharge.PlaysCoin.toT_exact": {},
+  "FlockSoundness.Discharge.PlaysCoin.coinsOfRounds": {
+   "signature": ["FlockSoundness.Discharge.PlaysCoin.coinsOfRounds : FlockSoundness.Discharge.PlaysCoin.CoinsOfRounds"],
+   "assumptions": [],
+   "type_hash": "4e5df539f536314a4e98d7fd0d71aa60676082b821092323f0c86002e07c3c5c"
+  },
+  "FlockSoundness.Discharge.PlaysCoin.cutOfPat": {
+   "signature": ["FlockSoundness.Discharge.PlaysCoin.cutOfPat : FlockSoundness.Discharge.PlaysCoin.CutOfPat"],
+   "assumptions": [],
+   "type_hash": "9a781afbfd4a9301bab5e6b7e6203e4ac4317b07b07da8773d77499ed288e41c"
+  },
+  "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns": {
+   "signature": [
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns : FlockSoundness.Discharge.PlaysCoin.DecodesAllOfRuns"
+   ],
+   "assumptions": [],
+   "type_hash": "3d4ab0182da96fcb208b5aa2bad65ea148fedd85eb9a602b528c0fd130e63b3e"
+  },
+  "FlockSoundness.Discharge.PlaysCoin.decodesOfRuns": {
+   "signature": ["FlockSoundness.Discharge.PlaysCoin.decodesOfRuns : FlockSoundness.Discharge.PlaysCoin.DecodesOfRuns"],
+   "assumptions": [],
+   "type_hash": "79b919a2644970a0592dd3ee07cdb41695e13a3eaa28a5191d73c544a28960d3"
+  },
+  "FlockSoundness.Discharge.PlaysCoin.decodesOfRunsAt": {
+   "signature": [
+    "FlockSoundness.Discharge.PlaysCoin.decodesOfRunsAt : FlockSoundness.Discharge.PlaysCoin.DecodesOfRunsAt"
+   ],
+   "assumptions": [],
+   "type_hash": "d0847bdd627d2636bf039d02c73d1dbb0880274b0989c5d81742e032ef99f89b"
+  },
+  "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns": {
+   "signature": [
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns : FlockSoundness.Discharge.PlaysCoin.DecodesOnOfRuns"
+   ],
+   "assumptions": [],
+   "type_hash": "256d1b0833f032f29103ad70b253122aea6c27c41e3f80b35ffc78c267be2073"
+  },
+  "FlockSoundness.Discharge.PlaysCoin.tapeOfGroups": {
+   "signature": ["FlockSoundness.Discharge.PlaysCoin.tapeOfGroups : FlockSoundness.Discharge.PlaysCoin.TapeOfGroups"],
+   "assumptions": [],
+   "type_hash": "f4f0643c4285d0e67a17adce2dad2baacebf36e85b3a90420a90b249f69f1df9"
+  },
+  "FlockSoundness.Discharge.PlaysCoin.toT_exact": {
+   "signature": ["FlockSoundness.Discharge.PlaysCoin.toT_exact : FlockSoundness.Discharge.PlaysCoin.ToTExact"],
+   "assumptions": [],
+   "type_hash": "52fdb3fb9347548a38b3414cf174c989d442b8a4b5d71c83da15b25c2025e84d"
+  },
   "FlockSoundness.Discharge.Zero.Prog.zeroCols_singleton": {
    "signature": [
     "FlockSoundness.Discharge.Zero.Prog.zeroCols_singleton {N n : Nat} {p : FlockSoundness.Prog N n} {outs : Finset (Fin N)}",
@@ -8786,6 +9250,17 @@
    "assumptions": [],
    "type_hash": "db6fdd1eba767082a7a25c88e3dc9fe07082b795f9aedf4893a4b4d564650155"
   },
+  "FlockSoundness.Discharge.ZkExec.zk_carries": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_carries : FlockSoundness.Discharge.ZkExec.ZkCarries"],
+   "assumptions": [],
+   "type_hash": "34bdb7ce18f3be8417d7cf4de685cd805721dcd057c0f5da346c4e6ac64d2b84"
+  },
+  "FlockSoundness.Discharge.ZkExec.zk_cut": {},
+  "FlockSoundness.Discharge.ZkExec.zk_decode_sizes": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_decode_sizes : FlockSoundness.Discharge.ZkExec.ZkDecodeSizes"],
+   "assumptions": [],
+   "type_hash": "edab3e5c72a949a00305bd4226834f31a8bc24bc5aaf4954a35dcafe623927d4"
+  },
   "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one": {
    "signature": [
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one {n : Nat} {Reg : Type} {mPts : Nat}",
@@ -8925,6 +9400,16 @@
    "type_hash": "37eef9a9c1e3192a1ae71fc87640375aa47996af524abf0e62258ab6f7cf3a23"
   },
   "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_runs": {},
+  "FlockSoundness.Discharge.ZkExec.zk_rep_frames": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_rep_frames : FlockSoundness.Discharge.ZkExec.ZkRepFrames"],
+   "assumptions": [],
+   "type_hash": "9a4d3c261b738718948201a02caf579c0f7193b2c0b0979bf0f709bcd5b44042"
+  },
+  "FlockSoundness.Discharge.ZkExec.zk_schedule_seams": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.zk_schedule_seams : FlockSoundness.Discharge.ZkExec.ZkScheduleSeams"],
+   "assumptions": [],
+   "type_hash": "d97ab2252c4b6e0b63e5a9bc59438adb3b6159c297aee1ece450dd27ea650367"
+  },
   "FlockSoundness.Discharge.ZkExec.zk_verifyRep_ok": {
    "signature": ["FlockSoundness.Discharge.ZkExec.zk_verifyRep_ok : FlockSoundness.Discharge.ZkExec.ZkRepOk"],
    "assumptions": [],
@@ -10540,6 +11025,10 @@
     "    ∀ (i : Nat),",
     "      instLTNat.lt i sch.levels.size →",
     "        FlockSoundness.Refine.LevelSeam (sch.levels.getD i Flock.instInhabitedLevel.default))",
+    "  (hα1 :",
+    "    ∀ (i : Nat),",
+    "      instLTNat.lt i sch.levels.size →",
+    "        Ne (FlockSoundness.Accounting.ceilLog2 (sch.levels.getD i Flock.instInhabitedLevel.default).q) 1)",
     "  (ho :",
     "    ∀ (ℓ : Nat),",
     "      instLTNat.lt ℓ sch.levels.size →",
@@ -10577,7 +11066,7 @@
     "              (Eq (pend.verdict o) Bool.true)))))"
    ],
    "assumptions": [],
-   "type_hash": "2a4544883248fbc63622de7fa184afc51ce277351cac87c2f452562c33f377e5"
+   "type_hash": "961768dd0f1ad8187ede6522671f0dc72fb5a9160b14343fcb516e852a93433d"
   },
   "FlockSoundness.Refine.ligerito_accepts_opening": {
    "signature": [
@@ -10590,6 +11079,10 @@
     "    ∀ (i : Nat),",
     "      instLTNat.lt i sch.levels.size →",
     "        FlockSoundness.Refine.LevelSeam (sch.levels.getD i Flock.instInhabitedLevel.default))",
+    "  (hα1 :",
+    "    ∀ (i : Nat),",
+    "      instLTNat.lt i sch.levels.size →",
+    "        Ne (FlockSoundness.Accounting.ceilLog2 (sch.levels.getD i Flock.instInhabitedLevel.default).q) 1)",
     "  (ho :",
     "    ∀ (ℓ : Nat),",
     "      instLTNat.lt ℓ sch.levels.size →",
@@ -10618,7 +11111,7 @@
     "              (Eq (pend.verdict o) Bool.true)))))"
    ],
    "assumptions": [],
-   "type_hash": "14be3f62e5844137561b2c03fa2683513bfa2164cc27791785e377f343e8d5d6"
+   "type_hash": "9c76025d51cbd85ce0e8e354bbd622eedc209c640a4a2211f30a8247df734a95"
   },
   "FlockSoundness.Refine.ligerito_refines": {
    "signature": [
@@ -10630,6 +11123,10 @@
     "    ∀ (i : Nat),",
     "      instLTNat.lt i sch.levels.size →",
     "        FlockSoundness.Refine.LevelSeam (sch.levels.getD i Flock.instInhabitedLevel.default))",
+    "  (hα1 :",
+    "    ∀ (i : Nat),",
+    "      instLTNat.lt i sch.levels.size →",
+    "        Ne (FlockSoundness.Accounting.ceilLog2 (sch.levels.getD i Flock.instInhabitedLevel.default).q) 1)",
     "  (ho :",
     "    ∀ (ℓ : Nat),",
     "      instLTNat.lt ℓ sch.levels.size →",
@@ -10683,7 +11180,7 @@
     "                                        (FlockSoundness.Refine.gOf stF.s)))))))))))))"
    ],
    "assumptions": [],
-   "type_hash": "9378ebc9b08fc4ea59dbbc4def7ed10f402de3a33357141869c6a0cde3f1959f"
+   "type_hash": "654dc12872548386c6dec635ab8fc218451c93a8766e457dddef5c9e68c43bde"
   },
   "FlockSoundness.Refine.lincheck_refines": {
    "signature": [
@@ -10812,8 +11309,8 @@
     "    ∀ (k : Nat) (hk : instLTNat.lt k cs'.length),",
     "      FlockSoundness.Refine.ClaimRel m (Array.instGetElem?NatLtSize.getElem! claims k)",
     "        (List.instGetElemNatLtLength.getElem cs' k hk))",
-    "  (hn : instLTNat.lt 0 claims.size) (rs : Array (Array Flock.F128)) (t t' : Flock.Transcript) (T : Flock.F128)",
-    "  (sws : Array Flock.Switched) (hwf : FlockSoundness.Refine.RoundsWF t.rounds)",
+    "  (hn : instLTNat.lt 0 claims.size) (hn1 : Ne claims.size 1) (rs : Array (Array Flock.F128)) (t t' : Flock.Transcript)",
+    "  (T : Flock.F128) (sws : Array Flock.Switched) (hwf : FlockSoundness.Refine.RoundsWF t.rounds)",
     "  (h : Eq (Flock.ringSwitch m claims rs t) (Except.ok { fst := { fst := T, snd := sws }, snd := t' })) :",
     "  And (Eq t'.rounds t.rounds)",
     "    (And (instLENat.le t.k t'.k)",
@@ -10825,7 +11322,7 @@
     "          (FlockSoundness.Refine.OpenRel m claims.size T sws op)))"
    ],
    "assumptions": [],
-   "type_hash": "9e5d4b9e64001b357ece11846155c3efaba2655654bdd21f3d1c7af64c4b8b94"
+   "type_hash": "c866e61487d463dedee5eb14e59c92c704a7d57cf801bd793bab052e3adeef01"
   },
   "FlockSoundness.Refine.opensOKL_of": {
    "signature": [
@@ -10881,7 +11378,7 @@
   "FlockSoundness.Refine.rep_refines": {
    "signature": [
     "FlockSoundness.Refine.rep_refines {D : Type} (spec : Flock.SessionSpec) (st : Flock.Setup)",
-    "  (S : FlockSoundness.Model.Statement) (hm : instLENat.le 13 S.m) (h14 : instLENat.le 14 S.m) (sch : Flock.Schedule)",
+    "  (S : FlockSoundness.Model.Statement) (hm : instLENat.le 13 S.m) (h15 : instLENat.le 15 S.m) (sch : Flock.Schedule)",
     "  (hmS : Eq st.m S.m) (hkS : Eq st.kLog S.kLog) (hfold : FlockSoundness.Refine.FoldRealizes st.fold S)",
     "  (extra : List (FlockSoundness.Model.Claim FlockLevel3.GF128 S.m)) (sess : Flock.Session)",
     "  (hext : FlockSoundness.Refine.ExtraRealizes st S sess.points extra) (hdim : FlockSoundness.Refine.DimSeam sch)",
@@ -10889,6 +11386,10 @@
     "    ∀ (i : Nat),",
     "      instLTNat.lt i sch.levels.size →",
     "        FlockSoundness.Refine.LevelSeam (sch.levels.getD i Flock.instInhabitedLevel.default))",
+    "  (hα1 :",
+    "    ∀ (i : Nat),",
+    "      instLTNat.lt i sch.levels.size →",
+    "        Ne (FlockSoundness.Accounting.ceilLog2 (sch.levels.getD i Flock.instInhabitedLevel.default).q) 1)",
     "  (hschm : Eq sch.m S.m)",
     "  (hwf :",
     "    ∀ (s : Flock.StreamRec), List.instMembership.mem sess.streams.toList s → FlockSoundness.Refine.RoundsWF s.rounds)",
@@ -10942,7 +11443,7 @@
     "                              (Eq (pend.verdict o) Bool.true)))))))))"
    ],
    "assumptions": [],
-   "type_hash": "7e59519be2b45127cfbf964dc1f7b89c915dad961b736203c1c35f4892ddd2a6"
+   "type_hash": "ac3281f8b6f58dd1f3aa27b07aa3a1f9c436f48a477a85bb5e300d69fa201153"
   },
   "FlockSoundness.Refine.setupH_wf": {
    "signature": [
@@ -11502,7 +12003,7 @@
   },
   "FlockSoundness.Refine.zerocheck_refines": {
    "signature": [
-    "FlockSoundness.Refine.zerocheck_refines (m : Nat) (hm : instLENat.le 14 m) (digest cap : ByteArray)",
+    "FlockSoundness.Refine.zerocheck_refines (m : Nat) (hm : instLENat.le 15 m) (digest cap : ByteArray)",
     "  (p : Flock.ZerocheckProof) (t t' : Flock.Transcript) (zc : Flock.ZcOut)",
     "  (hwf : FlockSoundness.Refine.RoundsWF t.rounds)",
     "  (h : Eq (Flock.bindAndZerocheck m digest cap p t) (Except.ok { fst := zc, snd := t' })) :",
@@ -11516,7 +12017,7 @@
     "          (FlockSoundness.Refine.ZcRel m zc zc')))"
    ],
    "assumptions": [],
-   "type_hash": "328e212d90a3fa5049d618fff1d906015045e09389f251aa4601a05327d11909"
+   "type_hash": "4090999ceac6d1bfcd62747565186991b4e433b00a048bd9dbc582304ac3e507"
   },
   "FlockSoundness.Registered.Reads.prob_off_le": {
    "signature": [
@@ -13792,28 +14293,7 @@
    ],
    "assumptions": [],
    "type_hash": "7e0c11a4d90441db227b441f593fc687e9eca34586574971bc5863213962da4a"
-  },
-  "FlockSoundness.Discharge.ZkExec.zk_schedule_seams": {
-   "signature": ["FlockSoundness.Discharge.ZkExec.zk_schedule_seams : FlockSoundness.Discharge.ZkExec.ZkScheduleSeams"],
-   "assumptions": [],
-   "type_hash": "d97ab2252c4b6e0b63e5a9bc59438adb3b6159c297aee1ece450dd27ea650367"
-  },
-  "FlockSoundness.Discharge.ZkExec.zk_rep_frames": {
-   "signature": ["FlockSoundness.Discharge.ZkExec.zk_rep_frames : FlockSoundness.Discharge.ZkExec.ZkRepFrames"],
-   "assumptions": [],
-   "type_hash": "9a4d3c261b738718948201a02caf579c0f7193b2c0b0979bf0f709bcd5b44042"
-  },
-  "FlockSoundness.Discharge.ZkExec.zk_decode_sizes": {
-   "signature": ["FlockSoundness.Discharge.ZkExec.zk_decode_sizes : FlockSoundness.Discharge.ZkExec.ZkDecodeSizes"],
-   "assumptions": [],
-   "type_hash": "edab3e5c72a949a00305bd4226834f31a8bc24bc5aaf4954a35dcafe623927d4"
-  },
-  "FlockSoundness.Discharge.ZkExec.zk_carries": {
-   "signature": ["FlockSoundness.Discharge.ZkExec.zk_carries : FlockSoundness.Discharge.ZkExec.ZkCarries"],
-   "assumptions": [],
-   "type_hash": "34bdb7ce18f3be8417d7cf4de685cd805721dcd057c0f5da346c4e6ac64d2b84"
-  },
-  "FlockSoundness.Discharge.ZkExec.zk_cut": {}
+  }
  },
  "reads": {
   "Flock.CircuitType": {
@@ -14187,6 +14667,13 @@
     "FlockSoundness.CROnly.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.CROnly.flock_headline",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.draw_card_rare",
+    "FlockSoundness.Discharge.DrawWords.fallback_rare",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
+    "FlockSoundness.Discharge.DrawWords.mPts_at_card",
+    "FlockSoundness.Discharge.DrawWords.word_reject",
+    "FlockSoundness.Discharge.DrawWords.word_uniform",
+    "FlockSoundness.Discharge.DrawWords.words_run",
     "FlockSoundness.Discharge.Exec.drawn_n",
     "FlockSoundness.Discharge.Exec.execOS_draw_card",
     "FlockSoundness.Discharge.Exec.execOS_draw_card_or",
@@ -14396,6 +14883,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -14427,6 +14915,9 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -14456,6 +14947,8 @@
     "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
     "FlockSoundness.Discharge.Layout.ofRows_copies",
     "FlockSoundness.Discharge.Layout.ofRows_valPinned",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
@@ -14516,6 +15009,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -14547,6 +15041,9 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -14578,6 +15075,8 @@
     "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
     "FlockSoundness.Discharge.Layout.ofRows_copies",
     "FlockSoundness.Discharge.Layout.ofRows_valPinned",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
@@ -14723,6 +15222,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -14754,6 +15254,9 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -14785,6 +15288,8 @@
     "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
     "FlockSoundness.Discharge.Layout.ofRows_copies",
     "FlockSoundness.Discharge.Layout.ofRows_valPinned",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
@@ -14848,6 +15353,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -14884,6 +15390,9 @@
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
     "FlockSoundness.Discharge.DecodeZL.op_carries",
     "FlockSoundness.Discharge.DecodeZL.zl_carries",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -14924,6 +15433,12 @@
     "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
     "FlockSoundness.Discharge.Layout.ofRows_copies",
     "FlockSoundness.Discharge.Layout.ofRows_valPinned",
+    "FlockSoundness.Discharge.PlaysCoin.coinsOfRounds",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOfRunsAt",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.tapeOfGroups",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
@@ -14992,6 +15507,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -15023,6 +15539,9 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -15054,6 +15573,8 @@
     "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
     "FlockSoundness.Discharge.Layout.ofRows_copies",
     "FlockSoundness.Discharge.Layout.ofRows_valPinned",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
@@ -15122,6 +15643,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -15154,6 +15676,9 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -15182,6 +15707,8 @@
     "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
     "FlockSoundness.Discharge.Layout.ofRows_copies",
     "FlockSoundness.Discharge.Layout.ofRows_valPinned",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
@@ -15235,6 +15762,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -15266,6 +15794,9 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -15294,6 +15825,8 @@
     "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
     "FlockSoundness.Discharge.Layout.ofRows_copies",
     "FlockSoundness.Discharge.Layout.ofRows_valPinned",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -15346,6 +15879,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -15377,6 +15911,9 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -15405,6 +15942,8 @@
     "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
     "FlockSoundness.Discharge.Layout.ofRows_copies",
     "FlockSoundness.Discharge.Layout.ofRows_valPinned",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -15536,6 +16075,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -15567,6 +16107,9 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -15596,6 +16139,8 @@
     "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
     "FlockSoundness.Discharge.Layout.ofRows_copies",
     "FlockSoundness.Discharge.Layout.ofRows_valPinned",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
@@ -15678,6 +16223,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_count_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
@@ -15705,6 +16251,9 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -15727,6 +16276,8 @@
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
     "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
@@ -15809,6 +16360,7 @@
     "FlockSoundness.Accounting.instDecidableOk": "6ff45e7f70c0f9683114f2e765e0f9c5c8ce64c01d70afc473dd93b28887b614"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Discharge.Exec.session_knowledge_soundL",
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
@@ -15936,6 +16488,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -15976,6 +16529,9 @@
     "FlockSoundness.Discharge.Const.image_oneWire",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -16033,6 +16589,8 @@
     "FlockSoundness.Discharge.Placed.Sites.progPlaces_keyProg_inst",
     "FlockSoundness.Discharge.Placed.Sites.rowsOf_keyProg",
     "FlockSoundness.Discharge.Placed.Sites.rowsOf_uniform",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.Zero.Prog.zeroCols_singleton",
     "FlockSoundness.Discharge.Zero.UProg.zeroCols_progPlaces_of_classes",
     "FlockSoundness.Discharge.Zero.UProg.zeroCols_progPlaces_of_setupH",
@@ -16179,6 +16737,9 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.draw_card_rare",
+    "FlockSoundness.Discharge.DrawWords.fallback_rare",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
@@ -16277,6 +16838,7 @@
     "FlockSoundness.Audit.InfluenceWitness.W.lemma47",
     "FlockSoundness.Audit.InfluenceWitness.W.three_mem_exits",
     "FlockSoundness.Audit.Partition.IsRowsUnit.computes_of_cert",
+    "FlockSoundness.Audit.Partition.Refines.twoStage_exfiltration",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.Separates.mono",
     "FlockSoundness.Audit.Partition.Separates.union",
@@ -16291,6 +16853,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Audit.Partition.outputs_eq_of_separates",
     "FlockSoundness.Audit.Partition.separates_exits",
     "FlockSoundness.Binding.HmRows.registered",
@@ -16337,6 +16900,7 @@
     "FlockSoundness.Discharge.Const.constCols_of_oneGate",
     "FlockSoundness.Discharge.Const.constCols_of_oneWire",
     "FlockSoundness.Discharge.Const.image_oneWire",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
@@ -16488,6 +17052,20 @@
     "FlockSoundness.Discharge.ZkSession.zk_knowledgeSound"
    ]
   },
+  "FlockSoundness.Audit.Flock": {
+   "digest": "92c47c9ba79910319b31d83dbedd64b073371c2eb8143bbe47e7a75a7b66d92e",
+   "definitions": {
+    "FlockSoundness.Audit.FlockTable": "359f4f6585a973ac8ac2466d56ebab3edf7985fcc109ad544206af22a625e6e9",
+    "FlockSoundness.Audit.FlockTable.S": "7903f1bcc589abb294e9837d4f27cc6ac215b7faff0c762d4442f17bc1a37021",
+    "FlockSoundness.Audit.FlockTable.game": "b92a6b9ac63ea3b56f31bc07181e2f7c3e63ad3c53a1c2c1782a5ae1c84c4c0c",
+    "FlockSoundness.Audit.FlockTable.mPts": "e7fb6c68bf81c5c4b4b524be5e28a221551a6066329b46cd7722b073d1bf8113",
+    "FlockSoundness.Audit.FlockTable.ptLocal": "e4323466ba369e40e91d1c3288cc64d87473de454d7734d16764b0c53acbfcbe",
+    "FlockSoundness.Audit.FlockTable.sch": "2ba5111444d93c57ccad45ecf5e92b8126def43c25c0af8befb40bf80733ad7c",
+    "FlockSoundness.Audit.Partition.LoweringSound": "a783a03a7eca004204305316e82fe5bc89b87beb55a0b8557e7cd39e07132019",
+    "FlockSoundness.Audit.Partition.flockSession": "fb0328a4974a217d8052878b71d2320c61acef7410d0eacff95aafdfc61b1d79"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_two_stage_exfiltration"]
+  },
   "FlockSoundness.Audit.FlockBatched": {
    "digest": "f00e39e83768c018f096f2f8edc52a35b572ac2ff42a64af1a69f02edc0b664a",
    "definitions": {
@@ -16543,6 +17121,7 @@
     "FlockSoundness.Discharge.Const.constCols_of_oneGate",
     "FlockSoundness.Discharge.Const.constCols_of_oneWire",
     "FlockSoundness.Discharge.Const.image_oneWire",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
@@ -16707,6 +17286,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
@@ -16761,6 +17341,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
@@ -16828,6 +17409,7 @@
     "FlockSoundness.Discharge.Const.constCols_of_instC",
     "FlockSoundness.Discharge.Const.constCols_of_oneGate",
     "FlockSoundness.Discharge.Const.constCols_of_oneWire",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
@@ -16870,7 +17452,11 @@
    },
    "pins": [
     "FlockSoundness.Audit.Partition.audit_exfiltration",
-    "FlockSoundness.Audit.Partition.card_influenceSet_le_harm"
+    "FlockSoundness.Audit.Partition.card_influenceSet_le_harm",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ExfiltrationOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule",
+    "FlockSoundness.Audit.Partitioning.Witness.exfiltration",
+    "FlockSoundness.Audit.Partitioning.Witness.refinement"
    ]
   },
   "FlockSoundness.Audit.Influence": {
@@ -16892,6 +17478,7 @@
     "FlockSoundness.Audit.InfluenceWitness.Two.influence",
     "FlockSoundness.Audit.InfluenceWitness.W.count",
     "FlockSoundness.Audit.InfluenceWitness.W.three_mem_exits",
+    "FlockSoundness.Audit.Partition.Refines.twoStage_exfiltration",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.Separates.mono",
     "FlockSoundness.Audit.Partition.Separates.union",
@@ -16900,6 +17487,7 @@
     "FlockSoundness.Audit.Partition.card_delivered_le",
     "FlockSoundness.Audit.Partition.card_influenceSet_le",
     "FlockSoundness.Audit.Partition.card_influenceSet_le_harm",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Audit.Partition.outputs_eq_of_separates",
     "FlockSoundness.Audit.Partition.separates_exits"
    ]
@@ -16941,9 +17529,10 @@
    ]
   },
   "FlockSoundness.Audit.Law": {
-   "digest": "0bcfa96d57b2865df62e8190a772f69947019185ef759ba286203535b7ddafda",
+   "digest": "a77100297020ff04630e7649609f1b73416aee869faadbc1c8e40b6f23221565",
    "definitions": {
     "FlockSoundness.Audit.Law": "b1c204e017af5bb6aa902ec06acf3cb78a691b879095cd7b24e39eb599e5ddc4",
+    "FlockSoundness.Audit.Law.bernoulli": "2f16d1d541405db53864a529c73be6b7317f3cfdd24019a56ed83ff8576703e5",
     "FlockSoundness.Audit.Law.draw": "25176231b8f5791fbcfa94fd3f40216ba705a18d0167f9909672de5676d63b86",
     "FlockSoundness.Audit.Law.escape": "8dca2af149d09f76f11b001a4ac128eb8e9060a013b88cdd1555b89b8c44e2e9",
     "FlockSoundness.Audit.Law.fintype": "5e1d51451a55852f84d7ee82b418c80fcb346643a2eb234b7c031ad5928324b3",
@@ -16985,6 +17574,7 @@
     "FlockSoundness.Audit.Law.work_escape_floor_le",
     "FlockSoundness.Audit.Law.work_escape_le",
     "FlockSoundness.Audit.Law.work_escape_le_count",
+    "FlockSoundness.Audit.Partition.Refines.twoStage_exfiltration",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
@@ -16996,6 +17586,25 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.Achievability",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseAsymptotic",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseExact",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ExfiltrationOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityChoice",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.HeavyUnit",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.NestedEscape",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws",
+    "FlockSoundness.Audit.Partitioning.Witness.converse",
+    "FlockSoundness.Audit.Partitioning.Witness.exfiltration",
+    "FlockSoundness.Audit.Partitioning.Witness.granularity",
+    "FlockSoundness.Audit.Partitioning.Witness.heavyUnit",
+    "FlockSoundness.Audit.Partitioning.Witness.nestedEscape",
+    "FlockSoundness.Audit.Partitioning.Witness.refinement",
+    "FlockSoundness.Audit.Partitioning.Witness.unequal",
     "FlockSoundness.Audit.audit_window",
     "FlockSoundness.Audit.audit_window_of_le",
     "FlockSoundness.Audit.audit_window_of_le_slack",
@@ -17046,6 +17655,10 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.draw_card_rare",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.decodesOn_of_all",
     "FlockSoundness.Discharge.Exec.execOS_draw_card",
     "FlockSoundness.Discharge.Exec.execOS_draw_card_or",
@@ -17058,6 +17671,7 @@
     "FlockSoundness.Discharge.Exec.setupH_mPts_execOS_or",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
@@ -17172,6 +17786,8 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.execRefines_on",
     "FlockSoundness.Discharge.Exec.execRefines_one",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
@@ -17208,6 +17824,77 @@
     "FlockSoundness.UProg.flock_e2e_count_classes_zero",
     "FlockSoundness.UProg.flock_e2e_drawn_classes",
     "FlockSoundness.UProg.flock_e2e_drawn_classes_zero"
+   ]
+  },
+  "FlockSoundness.Audit.Partitioning.Guarantees": {
+   "digest": "725f72e59f5231e82c95c10ef93c1dfbca1740a3842e5396aa172d69e2c92dd2",
+   "definitions": {
+    "FlockSoundness.Audit.Partitioning.Guarantees.Achievability": "9e37a388e95a5cb246f7d564bcb23224666809059af20b755d16ebc7395f13cd",
+    "FlockSoundness.Audit.Partitioning.Guarantees.Concentration": "d6b5c57356f7ad8772fe535a77b9a6f4ba12b52802bb8e0b4054392f083a5e09",
+    "FlockSoundness.Audit.Partitioning.Guarantees.ConverseAsymptotic": "846bf163521f89dd33e17972d347a9af6659817f713f1b7eb90d052ff59ac9d9",
+    "FlockSoundness.Audit.Partitioning.Guarantees.ConverseExact": "7f657fc3ed62dc3ecb555ac5757da8d3a0f233f3bb19fa9a3d155c78d8312a77",
+    "FlockSoundness.Audit.Partitioning.Guarantees.ExfiltrationOptimum": "630d254c622a6d1ca3c72f9af6ceb72d4e782e321a4124f2256e3a6ee58216b2",
+    "FlockSoundness.Audit.Partitioning.Guarantees.GranularityChoice": "391327afcb7797a68b8336cab73d0236dcc3d3d8567c5a9fb8a8ac64e508a59d",
+    "FlockSoundness.Audit.Partitioning.Guarantees.GranularityOptimum": "cdaf885db38847c3530c046efa90cbc4df9b051883a4a2ed026054312e8408bb",
+    "FlockSoundness.Audit.Partitioning.Guarantees.HeavyUnit": "b5528cf0e2b65976aab0af4c08d9ddc4838bb2e4d987adea605e89759a354a7f",
+    "FlockSoundness.Audit.Partitioning.Guarantees.NestedEscape": "2ccae08b057e3779cb8dde9c4233186f3c2947cc190740cbcf07dfb5845abbc4",
+    "FlockSoundness.Audit.Partitioning.Guarantees.RefinementRule": "9a15ae2f648b879b982b13eb503cc85e5728a070b210befb00abf4626f4f4af5",
+    "FlockSoundness.Audit.Partitioning.Guarantees.RiskConcave": "8d27ceab664e271c5c036cb611ac232e2f085c7a8369e49b40f23e8b46f1d01c",
+    "FlockSoundness.Audit.Partitioning.Guarantees.UnequalCost": "01f2e098445ca5140fe75fe7bdbca5c3484df46e1df71b2af18c64051582911f",
+    "FlockSoundness.Audit.Partitioning.Guarantees.UnequalDraws": "fe02f8114d672999bdca769ff25b6d441fa5748ecd8522342d827d914c1625c0"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.Achievability",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.Concentration",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseAsymptotic",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseExact",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ExfiltrationOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityChoice",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.HeavyUnit",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.NestedEscape",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RiskConcave",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws"
+   ]
+  },
+  "FlockSoundness.Audit.Partitioning.Model": {
+   "digest": "bf236efe3522149b2128c81097269a67f5f34f19018034e2c24af488a5099aca",
+   "definitions": {
+    "FlockSoundness.Audit.Partitioning.CertifiesLeak": "e1952e657e35e728f4488f99aac3507dfab51043842e6359fd04deeaf3dbc85d",
+    "FlockSoundness.Audit.Partitioning.MeetsTarget": "fe87f160d3239722cdcc7e6ddd2b3553bafcdc45eda3b810c60d1f3e954fd243",
+    "FlockSoundness.Audit.Partitioning.cost": "225d10dc5f434353ab89b2a035a0124813829e69b79d5955d2decb54efcde4bf",
+    "FlockSoundness.Audit.Partitioning.detectionRisk": "92f53e27b3ec4ecd71bf61b202bbf8f1ff48de3f67c7b2723f0767b42d2367a2",
+    "FlockSoundness.Audit.Partitioning.locBits": "d2441943f874af777526fbc5f489647ae668f613258e8ddb957bdb36d7c7dd43",
+    "FlockSoundness.Audit.Partitioning.meanDraws": "03e73d38d92b40f50fcd9c37f193aee776ba915b48923cf1c1f26027b8575b46",
+    "FlockSoundness.Audit.Partitioning.nested": "8b408e1a87840c1620f455c58ad606c05a1cd84d1b8d7088622e8504e63b8ec0",
+    "FlockSoundness.Audit.Partitioning.unitCost": "46cdfe75b4586b0d2116f244519a9b4212d044a0bdfd7ced3c807b43aa6cc07c",
+    "FlockSoundness.Audit.Partitioning.wrongIn": "70ade1432b7bb37fb5e5aed84d30dd69a9e92d94fb2d52ba3c1d57a790cf7f87"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.Achievability",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.Concentration",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseAsymptotic",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseExact",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ExfiltrationOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityChoice",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.HeavyUnit",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.NestedEscape",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RiskConcave",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws",
+    "FlockSoundness.Audit.Partitioning.Witness.concentration",
+    "FlockSoundness.Audit.Partitioning.Witness.exfiltration",
+    "FlockSoundness.Audit.Partitioning.Witness.granularity",
+    "FlockSoundness.Audit.Partitioning.Witness.heavyUnit",
+    "FlockSoundness.Audit.Partitioning.Witness.nestedEscape",
+    "FlockSoundness.Audit.Partitioning.Witness.refinement",
+    "FlockSoundness.Audit.Partitioning.Witness.riskConcave_needs_k_two",
+    "FlockSoundness.Audit.Partitioning.Witness.riskConcave_needs_small_p",
+    "FlockSoundness.Audit.Partitioning.Witness.unequal"
    ]
   },
   "FlockSoundness.Audit.RegDraw": {
@@ -17283,6 +17970,9 @@
     "FlockSoundness.CROnly.flock_e2e_count_exec",
     "FlockSoundness.CROnly.flock_e2e_count_exec_hm96",
     "FlockSoundness.CROnly.flock_headline",
+    "FlockSoundness.Discharge.DrawWords.draw_card_rare",
+    "FlockSoundness.Discharge.DrawWords.fallback_rare",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.execOS_draw_card",
     "FlockSoundness.Discharge.Exec.execOS_draw_card_or",
     "FlockSoundness.Discharge.Exec.setupH_mPts_execOS",
@@ -17336,7 +18026,20 @@
    "pins": [
     "FlockSoundness.Audit.InfluenceWitness.Two.accepts",
     "FlockSoundness.Audit.InfluenceWitness.Two.influence",
-    "FlockSoundness.Audit.Partition.Refines.twoStage_influence"
+    "FlockSoundness.Audit.Partition.Refines.twoStage_exfiltration",
+    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration"
+   ]
+  },
+  "FlockSoundness.Audit.TwoStageExfil": {
+   "digest": "ca0a9877b763490273f521082cb10b228a2fa8c1ad5c4b067875515f5780781f",
+   "definitions": {
+    "FlockSoundness.Audit.IsHarmBoundOn": "3350eddbee3ca8ed0069bbb80a32734d641659cfe97c66c6d72729aabd779a01",
+    "FlockSoundness.Audit.effMiss": "fc62f3251d7ece35296ac0362c884917076601434cd5e40505b900f681246599"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Partition.Refines.twoStage_exfiltration",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration"
    ]
   },
   "FlockSoundness.Audit.Window": {
@@ -17482,6 +18185,7 @@
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96",
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96_reads",
     "FlockSoundness.CROnly.flock_headline",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
@@ -17559,6 +18263,7 @@
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96",
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96_reads",
     "FlockSoundness.CROnly.flock_headline",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
@@ -17620,6 +18325,7 @@
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96",
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96_reads",
     "FlockSoundness.CROnly.flock_headline",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
@@ -17759,6 +18465,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
@@ -17840,6 +18547,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
@@ -17978,6 +18686,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -18008,6 +18717,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
@@ -18294,6 +19004,35 @@
     "FlockSoundness.Discharge.ZkExec.zk_carries"
    ]
   },
+  "FlockSoundness.Discharge.DrawWords.Statements": {
+   "digest": "d33ca74cdb44472b343abaaf4ebcbfac331e61e0297525d43577fb7dbb3353ef",
+   "definitions": {
+    "FlockSoundness.Discharge.DrawWords.DecodesWhere": "80646aaa4e93d0f35a7556412d35d18aea2f2aa2fd65c5b2e11bb2609e8727bc",
+    "FlockSoundness.Discharge.DrawWords.DecodesWhereOfOn": "38be2b9e99b3e97db9ce23f053dbd79b363b774c4e9484df3c849f17b1564322",
+    "FlockSoundness.Discharge.DrawWords.DrawCardRare": "87652ffe1075249236df2ce73b954ba5bcff884ee7f0538de325fa830bfa40e4",
+    "FlockSoundness.Discharge.DrawWords.ExecRefinesWhere": "f9058a4bff5a19006759a216cbb410fa83b9d6e282e9886999bac65cce7072cd",
+    "FlockSoundness.Discharge.DrawWords.FallbackRare": "dce9793cd7939d49d7b26367c31e686c62123f39754946c0275378e8cc8c1c52",
+    "FlockSoundness.Discharge.DrawWords.HeadlineCard": "f76d9dd47fbe7cd567759e23cfbb3d0c02f873c2def53c5b2f1e695d43ab643c",
+    "FlockSoundness.Discharge.DrawWords.MPtsAtCard": "bad96a4a45522a16acb45ac8fb4ee3fd7fa63db3d0d73fa3a180b37861d1f8b2",
+    "FlockSoundness.Discharge.DrawWords.WordOK": "b393740e9be018ac57332288d2d96ecc42bccece1f4066a4e376f7fe9ece798f",
+    "FlockSoundness.Discharge.DrawWords.WordReject": "06882cfefbdb5e75297065881356b6446245618c6adc8af8cdab878366c83fe3",
+    "FlockSoundness.Discharge.DrawWords.WordUniform": "315b3a5c9a7985bc94a30006bad70b572f2d412d240ef6d6e48d9dcc8f8c5ad5",
+    "FlockSoundness.Discharge.DrawWords.WordsRun": "78a11ced07ffbacf6749f1b3a8dd369f7b681975c24ebdaa1e8b9ef027e6da65",
+    "FlockSoundness.Discharge.DrawWords.simAuditWhere": "e66d00807324597fd7ae32464ed5691a35ac42d91747b6d99c60f413e4f1e4f7",
+    "FlockSoundness.Discharge.DrawWords.wordOff": "915df275dfe4297c4d0250948a23c897d0d16054868803d4bc3a7378b0a9bf7b"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.draw_card_rare",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.fallback_rare",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
+    "FlockSoundness.Discharge.DrawWords.mPts_at_card",
+    "FlockSoundness.Discharge.DrawWords.word_reject",
+    "FlockSoundness.Discharge.DrawWords.word_uniform",
+    "FlockSoundness.Discharge.DrawWords.words_run"
+   ]
+  },
   "FlockSoundness.Discharge.Exec.CompiledL": {
    "digest": "1efab2f6464ef6f9eb22ded8a25ea6c27ef8d2217b276e23174751c16c6c3b31",
    "definitions": {
@@ -18315,6 +19054,7 @@
     "FlockSoundness.Discharge.Exec.tableOrcL": "98755ef3bd6012e0424f3618956c54b840bd52ff169de05db30523e73278a8f5"
    },
    "pins": [
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
@@ -18395,6 +19135,10 @@
    },
    "pins": [
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
+    "FlockSoundness.Discharge.DrawWords.mPts_at_card",
     "FlockSoundness.Discharge.Exec.accepts_allRetained",
     "FlockSoundness.Discharge.Exec.accepts_rep_rounds",
     "FlockSoundness.Discharge.Exec.accepts_retained",
@@ -18419,6 +19163,8 @@
     "FlockSoundness.Discharge.Integrate.tableAt_stmtOf",
     "FlockSoundness.Discharge.Integrate.tableAt_unsat",
     "FlockSoundness.Discharge.Integrate.table_stmtOf",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -18450,6 +19196,7 @@
     "FlockSoundness.Discharge.Exec.batchStratL": "9cf4a6b2c9b1722741b3dd6810a8ab221dfed2fbd3ae235ec6e34c71f1206925"
    },
    "pins": [
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
@@ -18483,6 +19230,7 @@
     "FlockSoundness.Discharge.Exec.trialStratL": "c4cae1897781eb1ffe808147a65d87389d6c8c783c312a6db18dbfbb0694dd11"
    },
    "pins": [
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
@@ -18548,6 +19296,9 @@
    },
    "pins": [
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
     "FlockSoundness.Discharge.Exec.decodesOn_of_all",
     "FlockSoundness.Discharge.Exec.execRefines_on",
@@ -18556,6 +19307,8 @@
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
@@ -18572,10 +19325,12 @@
    },
    "pins": [
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
     "FlockSoundness.Discharge.Exec.decodesOn_of_all",
     "FlockSoundness.Discharge.Exec.execRefines_on",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Prog.flock_headline_live_on"
    ]
   },
@@ -18585,6 +19340,7 @@
     "FlockSoundness.Discharge.Exec.mPtsOf": "7080ef81fec16a718bf61f0c69adb35559ecb27ee2fa01e9e75939c45dd429cc"
    },
    "pins": [
+    "FlockSoundness.Discharge.DrawWords.mPts_at_card",
     "FlockSoundness.Discharge.Exec.setupH_facts",
     "FlockSoundness.Discharge.Exec.setupH_mPts_drawn",
     "FlockSoundness.Discharge.Exec.setupH_mPts_execOS",
@@ -18616,6 +19372,7 @@
     "FlockSoundness.Discharge.Exec.stratBL": "b9f4d05caca92383853720abf1c834934e7585a6fd0e30d54d84638f48a187c8"
    },
    "pins": [
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
@@ -18639,6 +19396,8 @@
     "FlockSoundness.Discharge.Exec.tableAfterL": "d735078df7588a2a9831dc924c6a5c58d62ce2a975d9fc78505f0125b37489c9"
    },
    "pins": [
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.execRefines_on",
@@ -18673,6 +19432,7 @@
     "FlockSoundness.Discharge.Exec.tableOrcAfterL": "5673c92b7e81e86f40ee1a34309ab0886118791669ec13d64be217a23e56879b"
    },
    "pins": [
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
@@ -18739,6 +19499,12 @@
     "FlockSoundness.Discharge.Exec.repC_kinds",
     "FlockSoundness.Discharge.Exec.repC_spine",
     "FlockSoundness.Discharge.Exec.zerocheck_exact",
+    "FlockSoundness.Discharge.PlaysCoin.cutOfPat",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOfRunsAt",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.tapeOfGroups",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
     "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt",
     "FlockSoundness.Discharge.ZkExec.zk_carries"
@@ -18754,6 +19520,7 @@
     "FlockSoundness.Discharge.Exec.selfSFinderL": "02e43ab7e039e67f39a8eee8516922a441b20ed5a03af17a827a034623d2caa8"
    },
    "pins": [
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
@@ -19487,6 +20254,38 @@
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces"
    ]
   },
+  "FlockSoundness.Discharge.PlaysCoin.Statements": {
+   "digest": "5237ea7f8a965c6ac02e3ecc127d02c381c8431058d853f9250e53b4e0710bb4",
+   "definitions": {
+    "FlockSoundness.Discharge.PlaysCoin.CoinsOfRounds": "c0217b14846ee7c21f862e61d0e6b7a8b8811955aef78c8aac693e85b06be490",
+    "FlockSoundness.Discharge.PlaysCoin.CutOfPat": "d3bd49ac0a0b688d5241494039860980699b2624ef01c7ea6b0b11629950d6f4",
+    "FlockSoundness.Discharge.PlaysCoin.DecodesAllOfRuns": "767e6a81cab50bc5c3847ff45692533d9f738ec1ea9fba232f0921013edabae8",
+    "FlockSoundness.Discharge.PlaysCoin.DecodesOfRuns": "86b194c5f6c7871f6b789b3459b335b2ef46d9ccf3df419f958e18c62337a422",
+    "FlockSoundness.Discharge.PlaysCoin.DecodesOfRunsAt": "3e12f34952be09cd5217402c4bba4207222e02356cbb866643246b08da903928",
+    "FlockSoundness.Discharge.PlaysCoin.DecodesOnOfRuns": "b49d34936f8d7584e50986e47767e3e878d48f3baa16933c5af76afe00862057",
+    "FlockSoundness.Discharge.PlaysCoin.RepRun": "ec14c84dd09b24650e677383441a8f067f44bbc95deb4658d1af3206c8ac61af",
+    "FlockSoundness.Discharge.PlaysCoin.SpineAt": "59f1ad163d785e973052da7faea1eb33b2c4e5b69fcb1d0c9fd14caaccdc7aa9",
+    "FlockSoundness.Discharge.PlaysCoin.TapeOfGroups": "81bb0da246c0a82cd0e674d021ca6e4a69460663a5c5d90bbf303a8b74355c5b",
+    "FlockSoundness.Discharge.PlaysCoin.ToTExact": "97573ab727651e0c0e6df915c52d4f372d6e034322f5fa34d7c63d4aeccdb5df",
+    "FlockSoundness.Discharge.PlaysCoin.coinArr": "4b9e3c3399e15a429771ffd6fbe6cc9249aad269043b98d3bcf5a9aa86f0710a",
+    "FlockSoundness.Discharge.PlaysCoin.coinPat": "cc5eaef507e45ebd969bb36cb7e7c4998db6fd559ffb3d8d1e30747fef4c4fc9",
+    "FlockSoundness.Discharge.PlaysCoin.consHead": "68a365e9b3bef889208fb80fc72198a23c688de2cb0fe85133ef583d1641b8e0",
+    "FlockSoundness.Discharge.PlaysCoin.cut": "10c5d71ffc6a3a0b8711a004b895477b277feef69979d377febe5a06c0f0810e",
+    "FlockSoundness.Discharge.PlaysCoin.groupPat": "a5ceeae206a0a2d4a05ff1f5a2ca0a14ece21e74666b51772e4cbcff840a07fa",
+    "FlockSoundness.Discharge.PlaysCoin.repSpine": "2107f29260f889d43663aeb1181ee0f91122ce0f5770c8a8136bd95c0ffc66a7",
+    "FlockSoundness.Discharge.PlaysCoin.roundGroups": "209b64f0bba2f6f4e2bb2b5ab1f7532e75db7c2e6021eaee7879667e6b9c79da"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.PlaysCoin.coinsOfRounds",
+    "FlockSoundness.Discharge.PlaysCoin.cutOfPat",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOfRunsAt",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.tapeOfGroups",
+    "FlockSoundness.Discharge.PlaysCoin.toT_exact"
+   ]
+  },
   "FlockSoundness.Discharge.Zero.Delta": {
    "digest": "dd6cfa47db7ccdaf818b65ec13da65a9376e6f4d5db52af39832e81d5715af01",
    "definitions": {
@@ -20170,6 +20969,7 @@
     "FlockSoundness.Discharge.Const.constCols_of_oneGate",
     "FlockSoundness.Discharge.Const.constCols_of_oneWire",
     "FlockSoundness.Discharge.Const.image_oneWire",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
@@ -20288,6 +21088,12 @@
     "FlockSoundness.CROnly.flock_e2e_drawn_exec",
     "FlockSoundness.CROnly.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.CROnly.flock_headline",
+    "FlockSoundness.Discharge.DrawWords.draw_card_rare",
+    "FlockSoundness.Discharge.DrawWords.fallback_rare",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
+    "FlockSoundness.Discharge.DrawWords.word_reject",
+    "FlockSoundness.Discharge.DrawWords.word_uniform",
+    "FlockSoundness.Discharge.DrawWords.words_run",
     "FlockSoundness.Discharge.Exec.execOS_draw_card",
     "FlockSoundness.Discharge.Exec.execOS_draw_card_or",
     "FlockSoundness.Discharge.Exec.setupH_mPts_execOS",
@@ -20324,6 +21130,10 @@
     "FlockSoundness.Audit.Law.execOS_subset_escape_le",
     "FlockSoundness.Audit.Law.execOS_work_escape_le",
     "FlockSoundness.CROnly.flock_headline",
+    "FlockSoundness.Discharge.DrawWords.draw_card_rare",
+    "FlockSoundness.Discharge.DrawWords.fallback_rare",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
+    "FlockSoundness.Discharge.DrawWords.words_run",
     "FlockSoundness.Discharge.Exec.execOS_draw_card",
     "FlockSoundness.Discharge.Exec.execOS_draw_card_or",
     "FlockSoundness.Discharge.Exec.setupH_mPts_execOS",
@@ -20623,6 +21433,9 @@
     "FlockSoundness.CROnly.flock_e2e_drawn_exec",
     "FlockSoundness.CROnly.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.CROnly.flock_headline",
+    "FlockSoundness.Discharge.DrawWords.draw_card_rare",
+    "FlockSoundness.Discharge.DrawWords.fallback_rare",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.execOS_draw_card",
     "FlockSoundness.Discharge.Exec.execOS_draw_card_or",
     "FlockSoundness.Discharge.Exec.setupH_mPts_execOS",
@@ -20746,6 +21559,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.session_knowledge_soundL",
@@ -20829,6 +21643,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
@@ -20904,6 +21719,7 @@
     "FlockSoundness.Audit.Law.work_escape_floor_le",
     "FlockSoundness.Audit.Law.work_escape_le",
     "FlockSoundness.Audit.Law.work_escape_le_count",
+    "FlockSoundness.Audit.Partition.Refines.twoStage_exfiltration",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
@@ -20915,6 +21731,25 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.Achievability",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseAsymptotic",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseExact",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ExfiltrationOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityChoice",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.HeavyUnit",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.NestedEscape",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws",
+    "FlockSoundness.Audit.Partitioning.Witness.converse",
+    "FlockSoundness.Audit.Partitioning.Witness.exfiltration",
+    "FlockSoundness.Audit.Partitioning.Witness.granularity",
+    "FlockSoundness.Audit.Partitioning.Witness.heavyUnit",
+    "FlockSoundness.Audit.Partitioning.Witness.nestedEscape",
+    "FlockSoundness.Audit.Partitioning.Witness.refinement",
+    "FlockSoundness.Audit.Partitioning.Witness.unequal",
     "FlockSoundness.Audit.audit_window",
     "FlockSoundness.Audit.audit_window_of_le",
     "FlockSoundness.Audit.audit_window_of_le_slack",
@@ -20973,6 +21808,13 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.draw_card_rare",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.fallback_rare",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
+    "FlockSoundness.Discharge.DrawWords.word_reject",
+    "FlockSoundness.Discharge.DrawWords.word_uniform",
     "FlockSoundness.Discharge.Exec.Exact.kinds",
     "FlockSoundness.Discharge.Exec.Spine.prefix",
     "FlockSoundness.Discharge.Exec.Spine.tape",
@@ -20998,6 +21840,12 @@
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Exec.zerocheck_exact",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.PlaysCoin.coinsOfRounds",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOfRunsAt",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.toT_exact",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
     "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt",
@@ -21126,6 +21974,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_count_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
@@ -21151,6 +22000,8 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.execRefines_on",
     "FlockSoundness.Discharge.Exec.execRefines_one",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
@@ -21237,6 +22088,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
@@ -21300,6 +22152,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_count_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
@@ -21325,6 +22178,8 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.execRefines_on",
@@ -21448,6 +22303,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
@@ -21491,6 +22347,7 @@
     "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
     "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
     "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
+    "FlockSoundness.Audit.Partition.Refines.twoStage_exfiltration",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
@@ -21500,6 +22357,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Audit.audit_window",
     "FlockSoundness.Audit.audit_window_of_le",
     "FlockSoundness.Audit.audit_window_of_le_slack",
@@ -21547,6 +22405,8 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.execRefines_on",
     "FlockSoundness.Discharge.Exec.execRefines_one",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
@@ -21646,6 +22506,8 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.execRefines_on",
     "FlockSoundness.Discharge.Exec.execRefines_one",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
@@ -21746,6 +22608,7 @@
    },
    "pins": [
     "FlockSoundness.CROnly.flock_headline",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Prog.flock_headline",
     "FlockSoundness.Prog.flock_headline_L",
@@ -21767,6 +22630,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -21798,6 +22662,9 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -21826,6 +22693,8 @@
     "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
     "FlockSoundness.Discharge.Layout.ofRows_copies",
     "FlockSoundness.Discharge.Layout.ofRows_valPinned",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -22013,6 +22882,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
@@ -22051,6 +22921,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -22090,6 +22961,9 @@
     "FlockSoundness.Discharge.Const.constCols_of_oneWire",
     "FlockSoundness.Discharge.Const.image_oneWire",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.decodesOn_of_all",
     "FlockSoundness.Discharge.Exec.execRefines_on",
     "FlockSoundness.Discharge.Exec.execRefines_one",
@@ -22134,6 +23008,8 @@
     "FlockSoundness.Discharge.Placed.Sites.progPlaces_keyProg_inst",
     "FlockSoundness.Discharge.Placed.Sites.rowsOf_keyProg",
     "FlockSoundness.Discharge.Placed.Sites.rowsOf_uniform",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.Zero.Prog.zeroCols_singleton",
     "FlockSoundness.Discharge.Zero.UProg.zeroCols_progPlaces_of_classes",
     "FlockSoundness.Discharge.Zero.UProg.zeroCols_progPlaces_of_setupH",
@@ -22300,6 +23176,7 @@
     "FlockSoundness.Discharge.Const.constCols_of_oneGate",
     "FlockSoundness.Discharge.Const.constCols_of_oneWire",
     "FlockSoundness.Discharge.Const.image_oneWire",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
@@ -22457,6 +23334,9 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -22486,6 +23366,8 @@
     "FlockSoundness.Discharge.Layout.keyRow_enc",
     "FlockSoundness.Discharge.Layout.keyRowsEnc_enc",
     "FlockSoundness.Discharge.Layout.keyedRows_enc",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
     "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
@@ -22578,6 +23460,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -22609,6 +23492,9 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -22648,6 +23534,8 @@
     "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
     "FlockSoundness.Discharge.Layout.ofRows_copies",
     "FlockSoundness.Discharge.Layout.ofRows_valPinned",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
     "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
@@ -22819,6 +23707,9 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -22845,6 +23736,8 @@
     "FlockSoundness.Discharge.Exec.verify_cap_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
     "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
@@ -22948,6 +23841,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_count_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
@@ -22974,6 +23868,9 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -22996,6 +23893,8 @@
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
     "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
@@ -23150,6 +24049,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_count_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
@@ -23176,6 +24076,9 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -23197,6 +24100,8 @@
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Exec.zerocheck_exact",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
     "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
@@ -23286,6 +24191,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_count_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
@@ -23312,6 +24218,9 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -23327,6 +24236,8 @@
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
     "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
@@ -23427,6 +24338,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -23475,6 +24387,9 @@
     "FlockSoundness.Discharge.Const.constCols_of_oneWire",
     "FlockSoundness.Discharge.Const.image_oneWire",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -23550,6 +24465,8 @@
     "FlockSoundness.Discharge.Placed.Sites.progPlaces_keyProg_inst",
     "FlockSoundness.Discharge.Placed.Sites.rowsOf_keyProg",
     "FlockSoundness.Discharge.Placed.Sites.rowsOf_uniform",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.Zero.Prog.zeroCols_singleton",
     "FlockSoundness.Discharge.Zero.UProg.zeroCols_progPlaces_of_classes",
     "FlockSoundness.Discharge.Zero.UProg.zeroCols_progPlaces_of_setupH",
@@ -23922,12 +24839,19 @@
    },
    "pins": [
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.decodesOn_of_all",
     "FlockSoundness.Discharge.Exec.execRefines_on",
     "FlockSoundness.Discharge.Exec.execRefines_one",
     "FlockSoundness.Discharge.Exec.live_le_sessionBL",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOfRunsAt",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
@@ -23988,6 +24912,9 @@
    },
    "pins": [
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.Exact.kinds",
     "FlockSoundness.Discharge.Exec.Spine.prefix",
     "FlockSoundness.Discharge.Exec.Spine.tape",
@@ -23999,6 +24926,13 @@
     "FlockSoundness.Discharge.Exec.repC_tape",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.PlaysCoin.coinsOfRounds",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOfRunsAt",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.tapeOfGroups",
+    "FlockSoundness.Discharge.PlaysCoin.toT_exact",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
     "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt",
@@ -24050,6 +24984,7 @@
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
     "FlockSoundness.Discharge.DecodeZL.op_carries",
     "FlockSoundness.Discharge.DecodeZL.zl_carries",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_rep_rounds",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
@@ -24206,12 +25141,12 @@
    ]
   },
   "FlockSoundness.Refine.Run": {
-   "digest": "69b4aa0d6fbb63d67893d9b3ab3ba48fe06a605accb7a5d1f857260a94efa28b",
+   "digest": "a0fc8f06c15fc1b95e3694cf4306a3acf5692260cde53855ef0e4c8ceb41579a",
    "definitions": {
     "FlockSoundness.Game.Msg": "2acda76a98ee7f334fe9942e6a6ac59dcf8e9f97038dc030edf17763a3845850",
     "FlockSoundness.Game.Plays": "8f5854176de8550eb8acc47a52d81025914c84db0f16718dc99c57e1b0b5292f",
     "FlockSoundness.Game.Plays.coinOne": "4cfb6eac93e17e206fccae6c2e8613af3a417a6da2134165d0806da3d4d42ffc",
-    "FlockSoundness.Game.Plays.coinVec": "024f1284eb581a954d057f7efe9d97c9a1c9520414e1f51d47a94af60be4183f",
+    "FlockSoundness.Game.Plays.coinVec": "cdf5fa273359b3b0bfe837fa2623f5ee4e41d203dae053d958b7ff40b855bede",
     "FlockSoundness.Game.Plays.ret": "a2b29cea5c295b161b1397118f7d49842c5a67a74c64f275af8b30a0222cadb5",
     "FlockSoundness.Game.Plays.send": "8be4207955b2829cf88533c19f7a6485810d0786a857f8c68c81bb7926e27351",
     "FlockSoundness.Refine.RoundsWF": "08d52768ab9edae3539ec95ee97f72af16bef76b0f2213abc081a6e71c7c0bf5",
@@ -24222,6 +25157,9 @@
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
     "FlockSoundness.Discharge.DecodeZL.op_carries",
     "FlockSoundness.Discharge.DecodeZL.zl_carries",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.Exact.kinds",
     "FlockSoundness.Discharge.Exec.Spine.prefix",
     "FlockSoundness.Discharge.Exec.Spine.tape",
@@ -24237,6 +25175,14 @@
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.PlaysCoin.coinsOfRounds",
+    "FlockSoundness.Discharge.PlaysCoin.cutOfPat",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOfRunsAt",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.tapeOfGroups",
+    "FlockSoundness.Discharge.PlaysCoin.toT_exact",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
     "FlockSoundness.Discharge.ZkExec.repZCAt_spineAt",
@@ -24287,6 +25233,7 @@
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96_reads",
     "FlockSoundness.CROnly.flock_headline",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -24432,6 +25379,9 @@
     "FlockSoundness.Discharge.DecodeZL.lig_carries",
     "FlockSoundness.Discharge.DecodeZL.op_carries",
     "FlockSoundness.Discharge.DecodeZL.zl_carries",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -24445,6 +25395,12 @@
     "FlockSoundness.Discharge.Exec.verify_cap_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.PlaysCoin.coinsOfRounds",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOfRunsAt",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.tapeOfGroups",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
@@ -24548,6 +25504,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
@@ -24854,6 +25811,9 @@
     "FlockSoundness.Discharge.Const.constCols_of_oneWire",
     "FlockSoundness.Discharge.Const.image_oneWire",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on",
+    "FlockSoundness.Discharge.DrawWords.execRefines_where",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.decodesOn_of_all",
     "FlockSoundness.Discharge.Exec.execRefines_on",
     "FlockSoundness.Discharge.Exec.execRefines_one",
@@ -24896,6 +25856,8 @@
     "FlockSoundness.Discharge.Placed.Sites.progPlaces_keyProg_inst",
     "FlockSoundness.Discharge.Placed.Sites.rowsOf_keyProg",
     "FlockSoundness.Discharge.Placed.Sites.rowsOf_uniform",
+    "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
+    "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.Zero.Prog.zeroCols_singleton",
     "FlockSoundness.Discharge.Zero.UProg.zeroCols_progPlaces_of_classes",
     "FlockSoundness.Discharge.Zero.UProg.zeroCols_progPlaces_of_setupH",
@@ -24963,6 +25925,7 @@
     "FlockSoundness.CROnly.uprog_e2e_drawn",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes",
     "FlockSoundness.CROnly.uprog_e2e_drawn_classes_zero",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
@@ -25062,6 +26025,7 @@
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96",
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96_reads",
     "FlockSoundness.CROnly.flock_headline",
+    "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
