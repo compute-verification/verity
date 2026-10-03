@@ -2,8 +2,8 @@
 
 One audit for every Lake package, run by `check` (`python tools/lean/audit.py --all --build`). It needs the standard
 library, `lake` and the toolchain's `lean`; nothing here imports Verity, so another repository can copy the directory
-(`audit.py`, `Facts.lean`, `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `tests/`) and
-point it at its own packages.
+(`audit.py`, `Facts.lean`, `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `cache.py`,
+`tests/`) and point it at its own packages.
 
 No package code runs where the audit decides anything. The facts come from the `.olean` files read as data (`Facts.lean`
 imports with initializers disabled and no environment extension loaded), and the kernel replay (`Replay.lean`) loads them
@@ -12,7 +12,9 @@ the same way. The only package code that runs is the build's and, after the fact
 code and runs outside it.
 
 ~~~text
-bash tools/lean/setup.sh PKG                      elan, PKG's lean-toolchain, Mathlib's cache when Mathlib is a dependency
+bash tools/lean/setup.sh PKG                      elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when
+                                                  Mathlib is a dependency, and main's cached build of PKG (below)
+python tools/lean/cache.py get [PKG...]           main's cached build of each package, every file sha256-checked
 python tools/lean/audit.py [--build] PKG...       audit these packages (--build: setup.sh and lake build first)
 python tools/lean/audit.py --update PKG...        write the pins' records from the build; commit the diff (a copy of
                                                   each record goes beside its reports, which a recorded run publishes)
@@ -217,6 +219,24 @@ assumption or replaces the hand proof, then records it with `--ack`: the list sa
 used. To see what upstream has proved since the pin, run `upstream.py PKG --fetch --rev origin/main`; a weekly
 `research run` of it tells us when a bump would gain something. A document's "status upstream" line cites this output
 instead of asserting a status.
+
+## The build cache: `cache.py`
+
+Integration publishes the build of each package at every merged commit, and a development machine restores the newest one
+that is an ancestor of its `HEAD`. Lake then unpacks the modules whose input hashes match and compiles the rest. Lake's
+input hashes don't depend on the checkout's path: a build published from `/build/verity` restores in `/workspace`. The
+module docstring has the layout and the rules. In short:
+- The client checks every file's sha256 against the commit's record before Lake sees it, and hands the files to Lake with
+  `lake cache unstage`. Lake never reads the bucket itself, because its hashes aren't cryptographic.
+- A miss or a mismatch means building from source. So do a missing read credential (`LEAN_CACHE_R2_*`), the kill switch
+  (disabled, quarantined or unreachable), and `LEAN_CACHE=off`.
+- The audit never reads the cache: `lake_env()` sets `LAKE_ARTIFACT_CACHE=false` and `LEAN_CACHE=off`, so the validator
+  builds from source.
+- Only integration publishes, and only a clean checkout of a commit on `origin/main`. It builds with `cache.py build` inside
+  its sandbox, then runs `cache.py publish` as root outside it, which hashes the staged files itself and signs with the
+  bucket-scoped key (`/etc/verity/lean-cache.env`).
+- Every write is conditional. A blob that already exists (a 412 or a 409) must have the same MD5, and blobs go up in one
+  part so that their ETag is their MD5. Records go last.
 
 ## Using it from another repository
 

@@ -1,0 +1,506 @@
+"""`tools/lean/cache.py`: the build cache's client restores only files whose sha256 its record names, and its publisher
+uploads only a merged commit's clean build, conditionally and in one part. Against an S3 server here that checks each
+request's signature, the 7-day lock (no overwrite, a 412 or a 409) and the read-only key; the round trip through Lake
+builds a small package at one path and restores it at another."""
+from __future__ import annotations
+
+import datetime
+import hashlib
+import importlib.util
+import json
+import os
+import shutil
+import subprocess
+import sys
+import threading
+import urllib.parse
+from email.utils import formatdate
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from xml.sax.saxutils import escape
+
+import pytest
+
+HERE = Path(__file__).resolve().parent
+spec = importlib.util.spec_from_file_location("lean_cache", HERE.parent / "cache.py")
+C = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(C)
+
+READ, WRITE = ("reader", "read-secret"), ("writer", "write-secret")
+REV = "1" * 40
+PLAT = "x86_64-unknown-linux-gnu"
+
+
+# ---------------------------------------------------------------- an S3 server, as strict as R2 is about what we rely on
+
+class Bucket:
+    def __init__(self, conflict: int = 412, page: int = 1000):
+        self.objects: dict[str, tuple[bytes, float]] = {}
+        self.conflict, self.page, self.now = conflict, page, 1_000_000.0
+        self.log: list[tuple[str, str]] = []
+
+
+def handler(b: Bucket, name: str):
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def _auth(self) -> str | None:
+            """The key id when the signature is right, else None."""
+            u = urllib.parse.urlsplit(self.path)
+            auth = self.headers.get("Authorization", "")
+            try:
+                cred = auth.split("Credential=")[1].split(",")[0]
+                signed = auth.split("SignedHeaders=")[1].split(",")[0].split(";")
+            except IndexError:
+                return None
+            key_id = cred.split("/")[0]
+            secret = dict([READ, WRITE]).get(key_id)
+            if secret is None:
+                return None
+            hs = {h: self.headers[h] for h in signed if h != "host"}
+            if None in hs.values():
+                return None
+            q = dict(urllib.parse.parse_qsl(u.query, keep_blank_values=True))
+            want = C.sign(self.command, self.headers["Host"], urllib.parse.unquote(u.path), q, hs, key_id, secret,
+                          cred.split("/")[2])
+            return key_id if want == auth else None
+
+        def _send(self, code: int, body: bytes = b"", headers: dict | None = None):
+            self.send_response(code)
+            for k, v in (headers or {}).items():
+                self.send_header(k, v)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(body)
+
+        def _key(self) -> str | None:
+            path = urllib.parse.unquote(urllib.parse.urlsplit(self.path).path)
+            if path == f"/{name}":
+                return ""
+            return path[len(f"/{name}/"):] if path.startswith(f"/{name}/") else None
+
+        def _object(self):
+            who, key = self._auth(), self._key()
+            b.log.append((self.command, key or ""))
+            if who is None:
+                return self._send(403)
+            if key is None:
+                return self._send(404)
+            body = self.rfile.read(int(self.headers.get("Content-Length") or 0)) if self.command == "PUT" else b""
+            if self.command in ("PUT", "DELETE") and who != WRITE[0]:
+                return self._send(403)
+            if self.command == "PUT":
+                if hashlib.sha256(body).hexdigest() != self.headers["x-amz-content-sha256"]:
+                    return self._send(400)
+                if key in b.objects:
+                    return self._send(b.conflict if self.headers.get("If-None-Match") == "*" else 403)
+                b.objects[key] = (body, b.now)
+                return self._send(200, headers={"ETag": f'"{hashlib.md5(body).hexdigest()}"'})
+            if self.command == "DELETE":
+                if key in b.objects and b.now - b.objects[key][1] < 7 * 86400:
+                    return self._send(403)
+                b.objects.pop(key, None)
+                return self._send(204)
+            if key == "" and self.command == "GET":
+                return self._list()
+            if key not in b.objects:
+                return self._send(404)
+            data, _ = b.objects[key]
+            return self._send(200, data, {"ETag": f'"{hashlib.md5(data).hexdigest()}"'})
+
+        def _list(self):
+            q = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(self.path).query))
+            keys = sorted(k for k in b.objects if k.startswith(q.get("prefix", "")))
+            start = keys.index(q["continuation-token"]) if "continuation-token" in q else 0
+            page, rest = keys[start:start + b.page], keys[start + b.page:]
+            items = "".join(
+                f"<Contents><Key>{escape(k)}</Key><Size>{len(b.objects[k][0])}</Size>"
+                f"<ETag>&quot;{hashlib.md5(b.objects[k][0]).hexdigest()}&quot;</ETag><LastModified>"
+                f"{datetime.datetime.fromtimestamp(b.objects[k][1], datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')}"
+                f"</LastModified></Contents>" for k in page)
+            more = f"<IsTruncated>true</IsTruncated><NextContinuationToken>{escape(rest[0])}</NextContinuationToken>" if rest \
+                else "<IsTruncated>false</IsTruncated>"
+            xml = f'<?xml version="1.0"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">{items}{more}' \
+                  f"</ListBucketResult>"
+            self._send(200, xml.encode())
+
+        do_GET = do_PUT = do_HEAD = do_DELETE = _object
+
+    return H
+
+
+@pytest.fixture
+def s3():
+    b = Bucket()
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), handler(b, "verity-lean-cache"))
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    url = f"http://127.0.0.1:{srv.server_address[1]}"
+    yield b, url
+    srv.shutdown()
+
+
+def client(url: str, who=WRITE) -> "C.S3":
+    return C.S3(url, "verity-lean-cache", *who)
+
+
+# ---------------------------------------------------------------- fixtures: a repository, a staged build, a fake lake
+
+def sh(*a, cwd=None):
+    subprocess.run(a, cwd=cwd, check=True, capture_output=True)
+
+
+def repo(tmp: Path, name: str = "repo") -> tuple[Path, str]:
+    """A repository with one package `pkg` (toolchain, empty manifest, a `lean-audit.json`) and an `origin/main` at HEAD."""
+    r = tmp / name
+    (r / "pkg").mkdir(parents=True)
+    (r / "pkg" / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+    (r / "pkg" / "lake-manifest.json").write_text('{"version": "1.2.0", "packages": [], "name": "pkg"}\n')
+    (r / "pkg" / "lean-audit.json").write_text("{}\n")
+    (r / ".gitignore").write_text(".lake/\n")
+    sh("git", "init", "-q", "-b", "main", cwd=r)
+    sh("git", "add", ".", cwd=r)
+    sh("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "c", cwd=r)
+    rev = subprocess.run(["git", "-C", str(r), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    sh("git", "update-ref", "refs/remotes/origin/main", rev, cwd=r)
+    return r, rev
+
+
+def stage(tmp: Path, files: dict[str, bytes] | None = None) -> Path:
+    s = tmp / "out" / "pkg" / "stage"
+    s.mkdir(parents=True)
+    for n, data in (files or {"outputs.jsonl": b'"2026-03-17"\n["aa","bb.ltar"]\n', "bb.ltar": b"module archive"}).items():
+        (s / n).write_bytes(data)
+    return s
+
+
+FAKE_LAKE = """import shutil, sys
+# `lake cache unstage DIR`: copy what the client hands Lake to {dest!r}
+assert sys.argv[1:3] == ["cache", "unstage"], sys.argv
+shutil.copytree(sys.argv[3], {dest!r}, dirs_exist_ok=True)
+"""
+
+
+@pytest.fixture
+def lake(tmp_path):
+    p = tmp_path / "fake_lake.py"
+    p.write_text(FAKE_LAKE.format(dest=str(tmp_path / "unstaged")))
+    return [sys.executable, str(p)], tmp_path / "unstaged"
+
+
+def env(url: str, tmp: Path, **kw) -> dict:
+    return {"LEAN_CACHE_R2_ACCESS_KEY_ID": READ[0], "LEAN_CACHE_R2_SECRET_ACCESS_KEY": READ[1],
+            "LEAN_CACHE_R2_ENDPOINT": url, "LEAN_CACHE_BUCKET": "verity-lean-cache", "LAKE_CACHE_DIR": str(tmp / "lc"),
+            "XDG_CACHE_HOME": str(tmp / "xdg"), "PATH": os.environ.get("PATH", ""), **kw}
+
+
+ON = json.dumps({"enabled": True, "quarantined": []}).encode()
+
+
+# ---------------------------------------------------------------- the signature
+
+def test_signature_matches_awss_published_examples():
+    """The two worked examples in AWS's SigV4 documentation for S3 (GET Object with a range, and a bucket listing)."""
+    key = ("AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+    h = {"range": "bytes=0-9", "x-amz-content-sha256": C.EMPTY_SHA, "x-amz-date": "20130524T000000Z"}
+    got = C.sign("GET", "examplebucket.s3.amazonaws.com", "/test.txt", {}, h, *key, "us-east-1")
+    assert got.endswith("Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41")
+    assert "SignedHeaders=host;range;x-amz-content-sha256;x-amz-date," in got
+    h = {"x-amz-content-sha256": C.EMPTY_SHA, "x-amz-date": "20130524T000000Z"}
+    got = C.sign("GET", "examplebucket.s3.amazonaws.com", "/", {"max-keys": "2", "prefix": "J"}, h, *key, "us-east-1")
+    assert got.endswith("Signature=34b48302e7b5fa45bde8084f4b7868a86f0a534bc59db6670ed5711ef69dc6f7")
+
+
+def test_the_server_here_refuses_a_bad_signature(s3):
+    b, url = s3
+    with pytest.raises(C.urllib.error.HTTPError) as e:
+        C.S3(url, "verity-lean-cache", READ[0], "wrong").get("main/x")
+    assert e.value.code == 403
+
+
+# ---------------------------------------------------------------- publish, then restore
+
+def test_a_published_build_restores_every_file_checked(s3, tmp_path, lake):
+    b, url = s3
+    r, rev = repo(tmp_path)
+    s = stage(tmp_path)
+    ident = C.identity(r, "pkg", PLAT)
+    assert C.publish_one(r, rev, "pkg", s, client(url), plat=PLAT, log=lambda m: None) == "published"
+    key = C.record_key(ident, rev)
+    assert key == f"main/leanprover--lean4---v4.34.0/{PLAT}/pkg/{ident['manifest'][:16]}/{rev}.sha256.json"
+    rec = json.loads(b.objects[key][0])
+    assert rec["files"]["bb.ltar"] == {"sha256": hashlib.sha256(b"module archive").hexdigest(), "bytes": 14}
+    assert set(b.objects) == {key, *(C.BLOBS + f["sha256"] for f in rec["files"].values())}
+    lines = []
+    assert C.restore(r, "pkg", client(url, READ), [rev], [], lines.append, env(url, tmp_path), PLAT, lake[0])
+    assert {p.name: p.read_bytes() for p in lake[1].iterdir()} == {n: (s / n).read_bytes() for n in rec["files"]}
+    assert "restored (1 modules" in lines[-1]
+    assert C.publish_one(r, rev, "pkg", s, client(url), plat=PLAT, log=lambda m: None) == "already published"
+
+
+def test_the_newest_published_ancestor_is_restored(s3, tmp_path, lake):
+    b, url = s3
+    r, rev = repo(tmp_path)
+    C.publish_one(r, rev, "pkg", stage(tmp_path), client(url), plat=PLAT, log=lambda m: None)
+    lines = []
+    assert C.restore(r, "pkg", client(url, READ), ["2" * 40, rev, "3" * 40], [], lines.append, env(url, tmp_path), PLAT,
+                     lake[0])
+    assert rev[:12] in lines[-1]
+    assert not C.restore(r, "pkg", client(url, READ), ["2" * 40], [], lines.append, env(url, tmp_path), PLAT, lake[0])
+    assert "no cached build of an ancestor" in lines[-1]
+
+
+def test_a_tampered_blob_restores_nothing(s3, tmp_path, lake):
+    b, url = s3
+    r, rev = repo(tmp_path)
+    C.publish_one(r, rev, "pkg", stage(tmp_path), client(url), plat=PLAT, log=lambda m: None)
+    blob = C.BLOBS + hashlib.sha256(b"module archive").hexdigest()
+    b.objects[blob] = (b"module archivE", b.objects[blob][1])
+    with pytest.raises(C.CacheError, match="not the file its record names"):
+        C.restore(r, "pkg", client(url, READ), [rev], [], print, env(url, tmp_path), PLAT, lake[0])
+    assert not lake[1].exists()
+
+
+def test_a_record_for_another_manifest_or_platform_is_refused(s3, tmp_path, lake):
+    b, url = s3
+    r, rev = repo(tmp_path)
+    C.publish_one(r, rev, "pkg", stage(tmp_path), client(url), plat=PLAT, log=lambda m: None)
+    ident = C.identity(r, "pkg", PLAT)
+    key = C.record_key(ident, rev)
+    rec = json.loads(b.objects[key][0])
+    for field, value in (("platform", "aarch64-unknown-linux-gnu"), ("rev", "2" * 40), ("schema", "lean-cache/v0")):
+        with pytest.raises(C.CacheError):
+            C.check_record(json.dumps({**rec, field: value}).encode(), ident, rev)
+    for bad in ({"../x": {"sha256": "0" * 64, "bytes": 1}}, {"outputs.jsonl": {"sha256": "0" * 64, "bytes": -1}},
+                {"outputs.jsonl": {"sha256": "z" * 64, "bytes": 1}}, {"a.ltar": {"sha256": "0" * 64, "bytes": 1}}):
+        with pytest.raises(C.CacheError):
+            C.check_record(json.dumps({**rec, "files": bad}).encode(), ident, rev)
+
+
+def test_files_already_in_lakes_cache_are_not_fetched_again(s3, tmp_path, lake):
+    b, url = s3
+    r, rev = repo(tmp_path)
+    C.publish_one(r, rev, "pkg", stage(tmp_path), client(url), plat=PLAT, log=lambda m: None)
+    (tmp_path / "lc" / "artifacts").mkdir(parents=True)
+    (tmp_path / "lc" / "artifacts" / "bb.ltar").write_bytes(b"module archive")
+    b.log.clear()
+    lines = []
+    assert C.restore(r, "pkg", client(url, READ), [rev], [], lines.append, env(url, tmp_path), PLAT, lake[0])
+    assert [k for m, k in b.log if k.startswith(C.BLOBS)] == [C.BLOBS + hashlib.sha256(b'"2026-03-17"\n["aa","bb.ltar"]\n')
+                                                             .hexdigest()]
+    assert "1 already here" in lines[-1]
+
+
+# ---------------------------------------------------------------- the client's switches
+
+def test_off_without_a_credential_or_with_the_kill_switch_off(s3, tmp_path, lake):
+    b, url = s3
+    r, rev = repo(tmp_path)
+    lines = []
+    assert C.get(r, ["pkg"], {**env(url, tmp_path), "LEAN_CACHE": "off"}, lines.append) == 0
+    assert "LEAN_CACHE" in lines[-1]
+    assert C.get(r, ["pkg"], {"PATH": os.environ["PATH"]}, lines.append) == 0
+    assert "no read credential" in lines[-1]
+    for doc, why in ((b'{"enabled": false}', "disabled"), (b"not json", "unreachable"), (b'{"enabled": "yes"}', "disabled"),
+                     (b'{"enabled": true, "quarantined": "main/"}', "malformed")):
+        shutil.rmtree(tmp_path / "xdg", ignore_errors=True)
+        assert C.get(r, ["pkg"], env(url, tmp_path), lines.append, fetch_state=lambda u, d=doc: d) == 0
+        assert why in lines[-1], lines[-1]
+
+    def down(u):
+        raise OSError("no route")
+    shutil.rmtree(tmp_path / "xdg", ignore_errors=True)
+    assert C.get(r, ["pkg"], env(url, tmp_path), lines.append, fetch_state=down) == 0
+    assert "unreachable" in lines[-1]
+    assert not [k for m, k in b.log if m == "GET"]
+
+
+def test_the_kill_switch_is_kept_five_minutes():
+    calls = []
+
+    def fetch(u):
+        calls.append(u)
+        return ON
+
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        assert C.state("https://s/x", Path(d), 1000.0, fetch)[0]
+        assert C.state("https://s/x", Path(d), 1000.0 + C.STATE_TTL_S - 1, fetch)[0]
+        assert len(calls) == 1
+        assert C.state("https://s/x", Path(d), 1000.0 + C.STATE_TTL_S, fetch)[0]
+        assert C.state("https://s/y", Path(d), 1000.0 + C.STATE_TTL_S, fetch)[0]
+        assert len(calls) == 3
+
+
+def test_a_quarantined_scope_restores_nothing(s3, tmp_path, lake):
+    b, url = s3
+    r, rev = repo(tmp_path)
+    C.publish_one(r, rev, "pkg", stage(tmp_path), client(url), plat=PLAT, log=lambda m: None)
+    sc = C.scope(C.identity(r, "pkg", PLAT))
+    for q in ([sc], ["main/"], ["main/leanprover--lean4---v4.34.0"]):
+        lines = []
+        assert not C.restore(r, "pkg", client(url, READ), [rev], q, lines.append, env(url, tmp_path), PLAT, lake[0])
+        assert "quarantined" in lines[-1]
+    assert not C.quarantined(sc, ["main/leanprover--lean4---v4.3"])
+
+
+def test_a_package_whose_dependencies_arent_fetched_is_skipped(s3, tmp_path, lake):
+    b, url = s3
+    r, rev = repo(tmp_path)
+    (r / "pkg" / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "mathlib", "type": "git"}]}))
+    lines = []
+    assert not C.restore(r, "pkg", client(url, READ), [rev], [], lines.append, env(url, tmp_path), PLAT, lake[0])
+    assert "dependencies aren't fetched" in lines[-1]
+
+
+# ---------------------------------------------------------------- the publisher's refusals
+
+@pytest.mark.parametrize("conflict", [412, 409])
+def test_an_existing_blob_must_be_the_same_bytes(s3, tmp_path, conflict):
+    b, url = s3
+    b.conflict = conflict
+    r, rev = repo(tmp_path)
+    s = stage(tmp_path)
+    same = C.BLOBS + hashlib.sha256(b"module archive").hexdigest()
+    b.objects[same] = (b"module archive", b.now)
+    assert C.publish_one(r, rev, "pkg", s, client(url), plat=PLAT, log=lambda m: None) == "published"
+    b.objects.clear()
+    b.objects[same] = (b"something else", b.now)
+    with pytest.raises(C.CacheError, match="already stored with other bytes"):
+        C.publish_one(r, rev, "pkg", s, client(url), plat=PLAT, log=lambda m: None)
+    assert not [k for k in b.objects if k.endswith(C.RECORD)]
+
+
+def test_a_different_record_already_published_is_refused(s3, tmp_path):
+    b, url = s3
+    r, rev = repo(tmp_path)
+    s = stage(tmp_path)
+    C.publish_one(r, rev, "pkg", s, client(url), plat=PLAT, log=lambda m: None)
+    (s / "bb.ltar").write_bytes(b"another build")
+    with pytest.raises(C.CacheError, match="already published with other contents"):
+        C.publish_one(r, rev, "pkg", s, client(url), plat=PLAT, log=lambda m: None)
+
+
+def test_the_read_key_cannot_write(s3, tmp_path):
+    b, url = s3
+    with pytest.raises(C.urllib.error.HTTPError) as e:
+        client(url, READ).put("main/blobs/x", b"x")
+    assert e.value.code == 403
+
+
+def test_only_a_clean_checkout_of_a_merged_commit_is_published(s3, tmp_path):
+    b, url = s3
+    r, rev = repo(tmp_path)
+    stage(tmp_path)
+    for bad, why in ((lambda r: (r / "pkg" / "new.lean").write_text("x"), "changes outside"),
+                     (lambda r: (r / "pkg" / "lean-toolchain").write_text("leanprover/lean4:v4.0.0\n"), "changes outside"),
+                     (lambda r: sh("git", "update-ref", "-d", "refs/remotes/origin/main", cwd=r), "not on origin/main")):
+        bad(r)
+        lines = []
+        with pytest.raises(C.CacheError, match=why):
+            C.publish(r, rev, tmp_path / "out", ["pkg"], client(url), lines.append)
+        shutil.rmtree(r)
+        shutil.rmtree(tmp_path / "out")
+        r, rev = repo(tmp_path)
+        stage(tmp_path)
+    with pytest.raises(C.CacheError, match="is not at"):
+        C.publish(r, "2" * 40, tmp_path / "out", ["pkg"], client(url), print)
+    with pytest.raises(C.CacheError, match="not a full commit"):
+        C.publish(r, rev[:12], tmp_path / "out", ["pkg"], client(url), print)
+    assert not b.objects
+
+
+def test_a_stage_with_anything_but_plain_files_is_refused(tmp_path):
+    s = stage(tmp_path)
+    (s / "sub").mkdir()
+    with pytest.raises(C.CacheError, match="plain file"):
+        C.staged(s)
+    (s / "sub").rmdir()
+    (s / "link.ltar").symlink_to(s / "bb.ltar")
+    with pytest.raises(C.CacheError, match="plain file"):
+        C.staged(s)
+    (s / "link.ltar").unlink()
+    (s / C.MAPPING).unlink()
+    with pytest.raises(C.CacheError, match="no outputs.jsonl"):
+        C.staged(s)
+
+
+def test_the_key_file_must_name_all_four(tmp_path):
+    f = tmp_path / "lean-cache.env"
+    f.write_text("export AWS_ACCESS_KEY_ID=a\nAWS_SECRET_ACCESS_KEY='b'\nR2_ENDPOINT=https://x.example\n")
+    with pytest.raises(C.CacheError, match="R2_BUCKET"):
+        C.writer(str(f))
+    f.write_text(f.read_text() + "R2_BUCKET=verity-lean-cache\n")
+    w = C.writer(str(f))
+    assert (w.key_id, w.secret, w.host, w.bucket) == ("a", "b", "x.example", "verity-lean-cache")
+
+
+# ---------------------------------------------------------------- prune
+
+def test_prune_keeps_the_newest_commits_and_what_they_name(s3, tmp_path):
+    b, url = s3
+    b.page = 2
+    r, rev = repo(tmp_path)
+    for i, data in enumerate((b"old", b"mid", b"new")):
+        s = tmp_path / f"s{i}"
+        s.mkdir()
+        (s / C.MAPPING).write_bytes(b"map" + data)
+        (s / "m.ltar").write_bytes(data)
+        ident = C.identity(r, "pkg", PLAT)
+        files = C.staged(s)
+        for n, f in files.items():
+            C.put_blob(client(url), s / n, f)
+        b.objects[C.record_key(ident, str(i) * 40)] = (json.dumps({"files": files}).encode(), b.now)
+        b.now += 86400
+    lines = []
+    assert C.prune(client(url), keep=2, now=b.now, log=lines.append) == 0
+    assert len(b.objects) == 6 * 1 + 3 and "deleted 0 records" in lines[-1]        # nothing is 7 days old yet
+    b.now += 7 * 86400
+    assert C.prune(client(url), keep=2, now=b.now, dry_run=True, log=lines.append) == 0
+    assert len(b.objects) == 9 and "would delete 1 records and 2 blobs" in lines[-1]
+    assert C.prune(client(url), keep=2, now=b.now, log=lines.append) == 0
+    left = {k for k in b.objects}
+    assert {k.rsplit("/", 1)[1][:1] for k in left if k.endswith(C.RECORD)} == {"1", "2"}
+    assert {b.objects[k][0] for k in left if k.startswith(C.BLOBS)} == {b"mid", b"new", b"mapmid", b"mapnew"}
+
+
+# ---------------------------------------------------------------- integration never reads it
+
+def test_the_audit_runs_lake_with_the_cache_off():
+    spec = importlib.util.spec_from_file_location("lean_audit_env", HERE.parent / "audit.py")
+    A = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(A)
+    e = A.lake_env()
+    assert (e["LAKE_ARTIFACT_CACHE"], e["LEAN_CACHE"]) == ("false", "off")
+
+
+# ---------------------------------------------------------------- through Lake
+
+LAKE = shutil.which("lake") or (str(Path.home() / ".elan/bin/lake") if (Path.home() / ".elan/bin/lake").exists() else None)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_lake_restores_a_build_published_from_another_path(s3, tmp_path):
+    """Built at one path and restored at another, `lake build` unpacks every module and compiles none: Lake's input
+    hashes don't depend on the checkout's path, and `lake cache unstage` takes what the client checked."""
+    b, url = s3
+    r, _ = repo(tmp_path, "build")
+    shutil.copytree(HERE / "fixtures" / "control", r / "pkg", ignore=shutil.ignore_patterns(".lake", "lean-audit.json"),
+                    dirs_exist_ok=True)
+    sh("git", "add", ".", cwd=r)
+    sh("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "control", cwd=r)
+    rev = subprocess.run(["git", "-C", str(r), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    sh("git", "update-ref", "refs/remotes/origin/main", rev, cwd=r)
+    dev = tmp_path / "elsewhere" / "dev"
+    sh("git", "clone", "-q", str(r), str(dev))
+    assert C.build(r / "pkg", tmp_path / "out" / "pkg", [LAKE]) == 0
+    assert C.publish(r, rev, tmp_path / "out", ["pkg"], client(url), print) == 0
+    e = {**env(url, tmp_path), "PATH": f"{Path(LAKE).parent}{os.pathsep}{os.environ.get('PATH', '')}"}
+    assert C.get(dev, ["pkg"], e, print, fetch_state=lambda u: ON) == 0
+    out = subprocess.run([LAKE, "build"], cwd=dev / "pkg", env={**os.environ, "LAKE_CACHE_DIR": e["LAKE_CACHE_DIR"]},
+                         capture_output=True, text=True)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "Unpacked" in out.stdout and "Built Control" not in out.stdout, out.stdout
