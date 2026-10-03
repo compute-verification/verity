@@ -26,6 +26,7 @@ import Pouw.SecurityProofs.Dimension.Proofs
 import Pouw.SecurityProofs.Dimension.RouteUPipeProofs
 import Pouw.SecurityProofs.Dimension.RouteUProofs
 import Pouw.SecurityProofs.Draft.BatchSeq
+import Pouw.SecurityProofs.Draft.Unambiguous
 import Pouw.SecurityProofs.Exact
 import Pouw.SecurityProofs.Fp8Atom.Checks
 import Pouw.SecurityProofs.Fp8Atom.Checks.Ada
@@ -91,6 +92,7 @@ import Pouw.SecurityProofs.PearlC.FreezePPure
 import Pouw.SecurityProofs.PearlC.Gamma
 import Pouw.SecurityProofs.PearlC.HiddenGamma
 import Pouw.SecurityProofs.PearlC.HiddenSystem
+import Pouw.SecurityProofs.PearlC.HiddenSystemDecisive
 import Pouw.SecurityProofs.PearlC.HiddenTileGame
 import Pouw.SecurityProofs.PearlC.HonestWords
 import Pouw.SecurityProofs.PearlC.KernelWrefGamma

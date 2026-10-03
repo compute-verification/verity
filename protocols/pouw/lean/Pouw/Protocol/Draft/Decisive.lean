@@ -7,9 +7,9 @@ import Verity.Protocol.Game
 package. A game is decisive (`Decisive`) when every message type it asks for is inhabited (`Productive`), so that every
 position has a run to the end, and two of its runs end differently (`Reaches`): for a verdict, some run accepts and some
 run rejects. A batch of decisive games reads as no other list of games (`Unambiguous`,
-`Pouw.Draft.Game.unambiguous_of_decisive`). Non-constancy is asked of the whole game only: a position from which every run
-rejects is allowed. A game with a constant verdict is not enough: its moves and the schedule's choices can be folded into
-another game of the batch.
+`Pouw.Draft.Game.unambiguous_of_decisive`). Non-constancy is asked of the whole game only: a position from which every
+run rejects is allowed. A game with a constant verdict is not enough: its moves and the schedule's choices can be folded
+into another game of the batch.
 -/
 
 namespace Pouw.Draft.Game

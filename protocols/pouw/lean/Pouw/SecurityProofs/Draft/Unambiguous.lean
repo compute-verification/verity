@@ -14,9 +14,9 @@ can only drift where one of its games ends and the other reading's does not; the
 copy of the other reading's interleaving, which is strictly deeper (`depth_interleave`: the least depth of
 `interleave x y` is `d x + d y + min (d x) (d y)`). Following `h` first (`split_right`) and `g` first (`split_left`)
 each either finds the readings equal or fixes how their least depths differ (`Split`), and the four ways of drifting on
-both sides contradict the depth of the root (`interleave_inj`). The game that ends needs no non-constancy below its root:
-only `g` and `h` themselves are asked to be non-constant. `batch` then peels one game at a time (`batch_inj`), the rest
-of a batch of decisive games being non-constant itself, or the empty batch, whose leaves have length zero.
+both sides contradict the depth of the root (`interleave_inj`). The game that ends needs no non-constancy below its
+root: only `g` and `h` themselves are asked to be non-constant. `batch` then peels one game at a time (`batch_inj`),
+the rest of a batch of decisive games being non-constant itself, or the empty batch, whose leaves have length zero.
 
 A constant game breaks it (`not_unambiguous_of_constant`): `[send Bool fun _ => ret true, send Bool fun b => ret b]` has
 the batch of `[ret true, g₂']`, where `g₂'` replays the first game's move and the schedule's choice.
@@ -77,7 +77,8 @@ theorem map_coin (f : α → β) (C : Type) [Fintype C] [Nonempty C] (k : C → 
     (Game.coin C k).map f = .coin C fun c => (k c).map f := rfl
 
 /-- Relabelling by an injective map is injective. -/
-theorem map_injective {f : α → β} (hf : Function.Injective f) {g g' : Game α} (e : g.map f = g'.map f) : g = g' := by
+theorem map_injective {f : α → β} (hf : Function.Injective f) {g g' : Game α} (e : g.map f = g'.map f) :
+    g = g' := by
   induction g generalizing g' with
   | ret a =>
     cases g' with
@@ -108,7 +109,8 @@ theorem map_injective {f : α → β} (hf : Function.Injective f) {g g' : Game �
 
 /-! ### Outputs -/
 
-theorem reaches_map {f : α → β} {g : Game α} {c : β} : Reaches (g.map f) c ↔ ∃ a, Reaches g a ∧ f a = c := by
+theorem reaches_map {f : α → β} {g : Game α} {c : β} :
+    Reaches (g.map f) c ↔ ∃ a, Reaches g a ∧ f a = c := by
   induction g with
   | ret a => exact ⟨fun h => ⟨a, rfl, h⟩, fun ⟨_, h1, h2⟩ => h1 ▸ h2⟩
   | send M k ih =>
@@ -220,8 +222,8 @@ theorem reaches_of_interleave {g : Game α} {h : Game β} {a : α} {b : β} (r :
         exact ⟨(ihh n r).1, ⟨n, (ihh n r).2⟩⟩
 
 /-- A game with two different outputs has not ended. -/
-theorem live_of_reaches {g : Game α} {a₁ a₂ : α} (ha : a₁ ≠ a₂) (h₁ : Reaches g a₁) (h₂ : Reaches g a₂) :
-    Live g := by
+theorem live_of_reaches {g : Game α} {a₁ a₂ : α} (ha : a₁ ≠ a₂) (h₁ : Reaches g a₁)
+    (h₂ : Reaches g a₂) : Live g := by
   cases g with
   | ret a => exact ha (h₁.symm.trans h₂)
   | send _ _ => trivial
@@ -436,7 +438,8 @@ theorem depth_interleave {g : Game α} {h : Game β} (pg : Productive g) (ph : P
 game of one reading is a relabelled interleaving of the other reading's with the extra depth `Y` of the followed game,
 so strictly deeper. `u`, `u'` are the other games' least depths, `v`, `v'` the followed games'. -/
 def Split (P : Prop) (u u' v v' : ℕ) : Prop :=
-  P ∨ (∃ Y, 0 < Y ∧ u = u' + Y + min u' Y ∧ v' = v + Y) ∨ (∃ Z, 0 < Z ∧ u' = u + Z + min u Z ∧ v = v' + Z)
+  P ∨ (∃ Y, 0 < Y ∧ u = u' + Y + min u' Y ∧ v' = v + Y) ∨
+    (∃ Z, 0 < Z ∧ u' = u + Z + min u Z ∧ v = v' + Z)
 
 /-- Every child of the followed games splits alike, so the games split so. -/
 theorem split_iInf {ι : Type} [Nonempty ι] {P : Prop} {u u' : ℕ} {a b : ι → ℕ}
