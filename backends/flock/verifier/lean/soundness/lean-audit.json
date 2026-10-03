@@ -155,6 +155,11 @@
     "about": "HmRowComputes (circuit/hm96-sha512-row): the sha512x3 and hm96 slots compute SHA-512 and hm96's commit string, the value binding's circuit side (phase 2i)",
     "mentions": ["Sha512.compress", "Sha512.hash"],
     "ack": []
+   },
+   "live-verifier-custody": {
+    "about": "Assumptions.Zk.RecordCustodyZK (live-verifier): the record flock-verify verify --zk reads is the one the verifier's coin server wrote for the live session, and its draw file the one flock-verify draw printed for the verifier's own draw (PROTOCOL.md §17.2: nothing in the record authenticates its writer)",
+    "mentions": ["IO.FS.readFile", "IO.FS.writeFile"],
+    "ack": []
    }
   }
  },
@@ -4748,6 +4753,7 @@
    "assumptions": [],
    "type_hash": "32858bd5b389445c9b2b678842d71b75211cc0074f65e3039e94d6b20c76639f"
   },
+  "FlockSoundness.Discharge.Composed.zk_session_sound_custody": {},
   "FlockSoundness.Discharge.Const.Prog.instC_wire_input": {
    "signature": [
     "FlockSoundness.Discharge.Const.Prog.instC_wire_input {N n : Nat} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N))",
