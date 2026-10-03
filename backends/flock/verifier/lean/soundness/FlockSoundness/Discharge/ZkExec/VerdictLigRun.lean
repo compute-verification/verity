@@ -30,12 +30,13 @@ theorem lane_vals (p : LigeritoProof) (tP : F256)
     (body : ℕ → Array F256 × F256 × F256 → LM (ForInStep (Array F256 × F256 × F256))) (K : ℕ)
     (hbody : ∀ i s st t b st' t', i < K → body i s st t = .ok ((b, st'), t') →
       ∃ s', b = .yield s' ∧ t'.rounds = t.rounds ∧ t'.k = t.k + 1 + (if i + 1 = K then 2 else 0) ∧
-        s'.1 = s.1.push (kOf (t.rounds[t.k]!).coins) ∧ st'.msg = st.msg + 1 ∧ st'.ood = st.ood ∧
-        st'.oods = st.oods ∧ st'.conss = st.conss ∧
-        (i + 1 = K → s'.2 = (kOf (t.rounds[t.k + 1]!).coins, kOf (t.rounds[t.k + 2]!).coins) ∧ st'.s = tP ∧
+        (t.rounds[t.k]!).n = 2 ∧ s'.1 = s.1.push (kOf (t.rounds[t.k]!).coins) ∧ st'.msg = st.msg + 1 ∧
+        st'.ood = st.ood ∧ st'.oods = st.oods ∧ st'.conss = st.conss ∧
+        (i + 1 = K → (t.rounds[t.k + 1]!).n = 2 ∧ (t.rounds[t.k + 2]!).n = 2 ∧
+          s'.2 = (kOf (t.rounds[t.k + 1]!).coins, kOf (t.rounds[t.k + 2]!).coins) ∧ st'.s = tP ∧
           st'.q = Poly.ofMsg p.messages[st.msg]! tP)) :
     ∀ n a s st t s' st' t', a + n = K → 0 < n → forIn (List.range' a n) s body st t = .ok ((s', st'), t') →
-      t'.rounds = t.rounds ∧ t'.k = t.k + n + 2 ∧
+      t'.rounds = t.rounds ∧ t'.k = t.k + n + 2 ∧ (∀ j < n + 2, (t.rounds[t.k + j]!).n = 2) ∧
       s'.1.toList = s.1.toList ++ (consumed t.rounds t.k (t.k + n)).map kOf ∧
       s'.2 = (kOf (t.rounds[t.k + n]!).coins, kOf (t.rounds[t.k + n + 1]!).coins) ∧
       st'.s = tP ∧ st'.q = Poly.ofMsg p.messages[st.msg + n - 1]! tP ∧ st'.msg = st.msg + n ∧ st'.ood = st.ood ∧
@@ -44,24 +45,33 @@ theorem lane_vals (p : LigeritoProof) (tP : F256)
   | 1, a, s, st, t, s', st', t', hK, _, h => by
       rw [List.range'_succ, List.forIn_cons] at h
       obtain ⟨b, st₁, t₁, h₁, h₂⟩ := lbind_ok h
-      obtain ⟨s₁, rfl, hr, hk, hs, hmsg, hood, hoods, hconss, hlast⟩ := hbody a s st t b st₁ t₁ (by omega) h₁
+      obtain ⟨s₁, rfl, hr, hk, hn, hs, hmsg, hood, hoods, hconss, hlast⟩ := hbody a s st t b st₁ t₁ (by omega) h₁
       simp only [List.range'_zero, List.forIn_nil] at h₂
       obtain ⟨rfl, rfl, rfl⟩ := lpure_ok h₂
-      obtain ⟨hρ, hs', hq'⟩ := hlast (by omega)
+      obtain ⟨hn1, hn2, hρ, hs', hq'⟩ := hlast (by omega)
       rw [ite_eq_left (show a + 1 = K by omega)] at hk
-      refine ⟨hr, by omega, ?_, hρ, hs', by rw [hq', Nat.add_sub_cancel], hmsg, hood, hoods, hconss⟩
+      refine ⟨hr, by omega, fun j hj => ?_, ?_, hρ, hs', by rw [hq', Nat.add_sub_cancel], hmsg, hood, hoods, hconss⟩
+      · rcases (show j = 0 ∨ j = 1 ∨ j = 2 by omega) with rfl | rfl | rfl
+        · simpa using hn
+        · exact hn1
+        · exact hn2
       rw [hs, consumed_add]
       simp
   | n + 2, a, s, st, t, s', st', t', hK, _, h => by
       rw [List.range'_succ, List.forIn_cons] at h
       obtain ⟨b, st₁, t₁, h₁, h₂⟩ := lbind_ok h
-      obtain ⟨s₁, rfl, hr, hk, hs, hmsg, hood, hoods, hconss, -⟩ := hbody a s st t b st₁ t₁ (by omega) h₁
+      obtain ⟨s₁, rfl, hr, hk, hn, hs, hmsg, hood, hoods, hconss, -⟩ := hbody a s st t b st₁ t₁ (by omega) h₁
       rw [ite_eq_right (show ¬ a + 1 = K by omega)] at hk
       simp only at h₂
-      obtain ⟨hr', hk', hs', hρ', hsS, hqS, hmsg', hood', hoods', hconss'⟩ :=
+      obtain ⟨hr', hk', hn', hs', hρ', hsS, hqS, hmsg', hood', hoods', hconss'⟩ :=
         lane_vals p tP body K hbody (n + 1) (a + 1) s₁ st₁ t₁ s' st' t' (by omega) (by omega) h₂
-      refine ⟨hr'.trans hr, by omega, ?_, ?_, hsS, ?_, by omega, hood'.trans hood, hoods'.trans hoods,
-        hconss'.trans hconss⟩
+      refine ⟨hr'.trans hr, by omega, fun j hj => ?_, ?_, ?_, hsS, ?_, by omega, hood'.trans hood,
+        hoods'.trans hoods, hconss'.trans hconss⟩
+      · rcases j with _ | j
+        · simpa using hn
+        · have := hn' j (by omega)
+          rw [show t.k + (j + 1) = t₁.k + j by omega, ← hr]
+          exact this
       · rw [hs', hs, hr, hk, consumed_cons _ (show t.k < t.k + (n + 2) by omega)]
         simp only [Array.toList_push, List.map_cons, List.append_assoc, List.singleton_append]
         rw [show t.k + (n + 2) = t.k + 0 + 1 + (n + 1) by omega]
