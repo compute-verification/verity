@@ -49,6 +49,7 @@ def load_registries() -> None:
     import verity.ml.boolean.gemm  # noqa: F401
     import verity.ml.boolean.mufu  # noqa: F401
     import verity.ml.boolean.scalar  # noqa: F401
+    import verity.ml.boolean.universal  # noqa: F401
     import verity.ml.gemm  # noqa: F401
     import verity.ml.kernels  # noqa: F401
     import verity.ml.prims  # noqa: F401
@@ -315,6 +316,15 @@ def _boolean_gather_roots() -> list[Any]:
     return [bind(BGA.Embedding, V=64, H=16), bind(BGA.gather_bf16(1100))]
 
 
+def _universal_roots() -> list[Any]:
+    """Protocol 2's universal unit (`verity.ml.boolean.universal`) at two size classes: G = 16 gates over 16 inputs (W = 32 wires)
+    with 8 outputs, and G = 64 over 64 (W = 128) with 32."""
+    from verity.ir.defs import bind
+    from verity.ml.boolean.universal import UniversalUnit
+
+    return [bind(UniversalUnit, G=16, N_IN=16, N_OUT=8), bind(UniversalUnit, G=64, N_IN=64, N_OUT=32)]
+
+
 def _kernel_roots() -> list[Any]:
     from verity_vllm.program.kernels import kernel_registry as KR
 
@@ -532,7 +542,7 @@ def catalog() -> list[Any]:
         elif isinstance(d, CompositeDefinition) and not d.statics:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
-    roots += _core_roots() + _boolean_roots() + _boolean_gather_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
+    roots += _core_roots() + _boolean_roots() + _boolean_gather_roots() + _universal_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
     for label, make in _model_roots():
         try:
             fn = make()

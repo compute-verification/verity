@@ -6,9 +6,11 @@ What is proved here, CPU only (no rank log exists yet -- R17's Qwen3 TP2 rank lo
     Build's element count (+ the rotary table);
   * on synthetic `vllm.moe_forward` scope events at the RANK shapes (E=128, TOPK=8, H=2048, I_r=384; the recorded kernel bodies of the
     OLMoE capture with Qwen3's `renormalize=True`) the scope folds to the six-part pair-major Group over `MoeRouterTopKOrderedNorm_v1{128,8,8}`,
-    `MoeExpertGemm_v1{128,2048,768}`, `SiluMul_v1{384}`, `MoeExpertGemmW_v1{128,384,2048}`, `MoeSum_v1{8,2048}` -- with the block's TP
-    all-reduce resolved as `AllReduce2_v1{N=2048}` whether vLLM issues it inside the scope or after it -- and refuses, with the observed
-    value, an unnormalised router, another tiling, the padded construction, a shared-experts input;
+    `MoeExpertGemm_v1{128,2048,768}`, `SiluMul_v2{384}`, `MoeExpertGemmW_v1{128,384,2048}`, `MoeSum_v1{8,2048}` -- with the block's TP
+    all-reduce resolved as `AllReduce2_v1{N=2048}` whether vLLM issues it inside the scope or after it, and the router's gate GEMM
+    (`mlp.gate`, which vLLM d9105ea80 launches inside the scope) resolved as the profile's `Gemm_v1{2048,128}` ahead of the router -- and
+    refuses, with the observed value, an unnormalised router, another tiling, the padded construction, a shared-experts input, a gate
+    GEMM that follows the router or writes anything but its logits;
   * on a tiny synthetic configuration (2 layers, 8 experts, small dims) the profile builds, every Definition the fold would bind
     enumerates to a Program with the expected input leaves and no unbound member, and the renormalising router's weights sum to one;
   * `PROFILE_BY_CASE["QWEN3_30B_A3B"]` names this module (the case scan would otherwise find nothing: no other module declares the role).
@@ -34,7 +36,10 @@ from verity_vllm.collectives.embedding_shard import EmbeddingShardCuda
 Q3 = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN3_30B_A3B_tp2")
 from verity_vllm.observe.fold.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
 from verity_vllm.observe.fold.patterns.collectives import TpCollective
+from verity_vllm.observe.fold.patterns.gemm import GemmLaunch
+from verity_vllm.observe.fold.patterns.target import gemm_target_of, pinned_num_sms
 from verity_vllm.observe.fold.tree import step_events
+from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.registry import moe as MOE
 from verity_vllm.program.registry import prims as P
 
@@ -165,13 +170,33 @@ CONSTS = {"group_n": 0, "group_k": 0, "naive_block_assignment": False, **FUSED_M
           "top_k": TOPK, "compute_type": "bf16", "use_fp8_w8a8": False, "use_int8_w8a8": False, "use_int8_w8a16": False,
           "per_channel_quant": False, "HAS_BIAS": False, "SWAP_AB": False, "USE_TD": False}
 LAYER = 5
+GEMM_FN = "vllm.model_executor.determinism.batch_invariant.matmul_kernel_persistent"
+A_GATE_W = 9
+
+
+def gate_tiling(M: int) -> tuple[dict, int, int]:
+    """The tiling (constexprs with NUM_SMS, num_warps, num_stages) the profile's GEMM patterns pin for the gate GEMM [M,H] x [H,E] on the
+    test header's target: the registered target's `launch_config`, over the base `GemmLaunch`'s constexprs."""
+    ctx = _ctx(_start(M))
+    gt, refusal = gemm_target_of(ctx)
+    assert gt is not None, refusal
+    base = next(p for p in Q3.PROFILE.patterns if type(p) is GemmLaunch)
+    tconsts, warps, stages, _src = gt.launch_config(M, E, H)
+    consts = dict(base.constexprs)
+    consts.update({k: v for k, v in tconsts.items() if k in consts or k.startswith("BLOCK_SIZE_")})
+    consts["NUM_SMS"] = pinned_num_sms(ctx, base.num_sms)
+    return consts, warps, stages
 
 
 def moe_scope_events(M: int, *, step: int = 0, naive: bool = False, renormalize: bool = True, all_reduce: str | None = "inside",
-                     consts_up: dict | None = None, shared_experts_input=None, num_stages: int = 3):
+                     consts_up: dict | None = None, shared_experts_input=None, num_stages: int = 3, gate: str | None = None,
+                     gate_consts: dict | None = None):
     """One `vllm.moe_forward` scope of layer LAYER at the rank shapes (cf. test_gen_ov_moe.moe_scope_events).  `all_reduce`: "inside" = the
     collective is a child of the scope (FusedMoE.forward_impl, reduce_results=True); "after" = a sibling after the scope (Qwen3MoeSparseMoeBlock
-    with reduce_results=False); None = no collective (TP1 shape)."""
+    with reduce_results=False); None = no collective (TP1 shape).  `gate`: None = the router logits are an input of the scope (OLMoE);
+    "inside" = vLLM d9105ea80's Qwen3MoeSparseMoeBlock (`FusedMoE(gate=...)`, `router_logits=hidden_states`): the `mlp.gate` GEMM launches
+    in the scope ahead of topk_softmax and writes the logits; "after-router" = that launch follows topk_softmax; "elsewhere" = it writes
+    another allocation; "twice" = two such launches ahead of the router."""
     nid = [1000]
 
     def new():
@@ -186,7 +211,31 @@ def moe_scope_events(M: int, *, step: int = 0, naive: bool = False, renormalize:
     mod = f"model.layers.{LAYER}.mlp.experts"
     evs.append(DispatchEnter(scope, None, step, "forward", "vllm.moe_forward.default",
                              "vllm::moe_forward(Tensor(a0!) hidden_states, Tensor router_logits, Tensor? shared_experts_input, Tensor? input_ids, PyObject layer_name, SymInt hidden_dim_unpadded) -> Tensor",
-                             [hidden, logits, shared_experts_input, None, "layer", H], {}, 7, mod))
+                             [hidden, hidden if gate else logits, shared_experts_input, None, "layer", H], {}, 7, mod))
+
+    def gate_gemm(c):
+        gmod = f"model.layers.{LAYER}.mlp.gate"
+        wt = ViewDesc(A_GATE_W, 0, (H, E), (1, H), "bfloat16", CUDA)
+        i = new()
+        evs.append(DispatchEnter(i, scope, step, "forward", "aten.t.default", "aten::t(Tensor(a) self) -> Tensor(a)", [view(A_GATE_W, (E, H))], {}, 7, gmod))
+        evs.append(DispatchExit(i, wt))
+        i = new()
+        evs.append(DispatchEnter(i, scope, step, "forward", "aten.empty.memory_format", "aten::empty.memory_format(SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None, MemoryFormat? memory_format=None) -> Tensor",
+                                 [[M, E], None, None, None, None, None], {}, 7, gmod))
+        evs.append(DispatchExit(i, c))
+        consts, warps, stages = gate_tiling(M)
+        consts.update(gate_consts or {})
+        args = {"a_ptr": hidden, "b_ptr": wt, "c_ptr": c, "bias_ptr": None, "M": M, "N": E, "K": H, "stride_am": H, "stride_ak": 1,
+                "stride_bk": 1, "stride_bn": H, "stride_cm": E, "stride_cn": 1, **consts}
+        grid = [min(consts["NUM_SMS"], -(-M // consts["BLOCK_SIZE_M"]) * -(-E // consts["BLOCK_SIZE_N"]))]
+        evs.append(TritonLaunch(new(), scope, step, "forward", GEMM_FN, "4a7e9290", args, consts, grid, warps, stages, 7, gmod))
+
+    if gate in ("inside", "twice"):
+        gate_gemm(logits)
+    if gate == "twice":
+        gate_gemm(view(311, (M, E)))
+    if gate == "elsewhere":
+        gate_gemm(view(312, (M, E)))
     w_, ids = view(297, (M, TOPK), "float32"), view(298, (M, TOPK), "int32")
     for al, shp, dt in ((297, (M, TOPK), "float32"), (298, (M, TOPK), "int32"), (299, (M, TOPK), "int32")):
         i = new()
@@ -199,6 +248,8 @@ def moe_scope_events(M: int, *, step: int = 0, naive: bool = False, renormalize:
                              "_moe_C::topk_softmax(Tensor($0! -> ) topk_weights, Tensor($1! -> ) topk_indices, Tensor($2! -> ) token_expert_indices, Tensor gating_output, bool renormalize, Tensor? bias, Tensor? is_padding) -> ()",
                              [w_, ids, tok, logits, renormalize, None, pad], {}, 7, None))
     evs.append(DispatchExit(i, None))
+    if gate == "after-router":
+        gate_gemm(logits)
     i = new()
     evs.append(DispatchEnter(i, scope, step, "forward", "aten.empty_like.default", "aten::empty_like(Tensor self, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None, MemoryFormat? memory_format=None) -> Tensor",
                              [hidden, None, None, None, None, None], {}, 7, None))
@@ -267,7 +318,8 @@ def _start(M: int, step: int = 0, padded: int | None = None) -> StepStart:
 def _ctx(start: StepStart, profile=None) -> StepContext:
     header = RunHeader("verity-capture/log/v1", "2026-09-22T00:00:00Z", "x", {"vllm": "d9105ea80"}, {"repo": Q3.MODEL, "config": {}}, {"requests": []})
     roots = {7: [Root(view(7, (E, 2 * I, H)), "weight", f"model.layers.{LAYER}.mlp.experts.routed_experts.w13_weight")],
-             8: [Root(view(8, (E, H, I)), "weight", f"model.layers.{LAYER}.mlp.experts.routed_experts.w2_weight")]}
+             8: [Root(view(8, (E, H, I)), "weight", f"model.layers.{LAYER}.mlp.experts.routed_experts.w2_weight")],
+             A_GATE_W: [Root(view(A_GATE_W, (E, H)), "weight", f"model.layers.{LAYER}.mlp.gate.weight")]}
     return StepContext(header, start, None, [], roots, C, profile or Q3.PROFILE)
 
 
@@ -279,7 +331,7 @@ def _resolve(M: int, profile=None, **kw):
     return resolve_step(se, _ctx(start, profile)), se
 
 
-EXPECTED_SPECS = [f"MoeRouterTopKOrderedNorm_v1{{E={E},TOPK={TOPK},VPT=8}}", f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v1{{I={I}}}",
+EXPECTED_SPECS = [f"MoeRouterTopKOrderedNorm_v1{{E={E},TOPK={TOPK},VPT=8}}", f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v2{{I={I}}}",
                   f"MoeExpertGemmW_v1{{E={E},K={I},N={H}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
 
 
@@ -314,6 +366,49 @@ def test_rank_scope_folds_to_the_renormalising_pair_major_group_plus_the_block_a
         assert ar.outputs[0].view.alloc == 305 and ar.operands[0].site == f"model.layers.{LAYER}.mlp.experts"
         assert (where == "inside") == (ar in g.parts)
     assert len(res) == (2 if where == "after" else 1)
+
+
+@pytest.mark.parametrize("M,naive,where", [(2, True, "inside"), (3, False, "after"), (32, False, "inside"), (1, True, None)])
+def test_in_scope_gate_gemm_resolves_as_the_profile_s_gemm_ahead_of_the_router(M, naive, where):
+    """vLLM d9105ea80's Qwen3MoeSparseMoeBlock hands FusedMoE its gate and passes router_logits=hidden_states, so the 30B and 235B captures
+    launch `mlp.gate`'s matmul_kernel_persistent inside `vllm.moe_forward`: it is the Group's first Compute, the profile's own GEMM, and
+    writes the logits the router reads."""
+    res, se = _resolve(M, naive=naive, all_reduce=where, gate="inside")
+    groups = [r for r in res if isinstance(r, Group)]
+    assert len(groups) == 1 and not [r for r in res if isinstance(r, Unsupported)], res
+    g = groups[0]
+    assert g.consumed == tuple(sorted(se.roots[0].ids()))
+    computes = [p for p in g.parts if isinstance(p, Compute)]
+    in_scope = [f"AllReduce2_v1{{N={H}}}"] if where == "inside" else []
+    assert [c.spec.id for c in computes] == [f"Gemm_v1{{K={H},N={E}}}"] + EXPECTED_SPECS + in_scope
+    gemm, router = computes[0], computes[1]
+    assert gemm.rows == M and gemm.pattern.startswith("gemm.matmul_kernel_persistent") and gemm.kernels == ("matmul_kernel_persistent",)
+    assert gemm.operands[0].view.alloc == 295 and gemm.operands[1].view.alloc == A_GATE_W and gemm.operands[1].view.shape == (E, H)
+    assert gemm.outputs[0].view.alloc == router.operands[0].view.alloc == 296
+    assert "mlp.gate" in gemm.hint
+
+
+@pytest.mark.parametrize("kw,needle", [
+    (dict(gate="after-router"), "follows topk_softmax"),
+    (dict(gate="elsewhere"), "does not write the router's gating logits"),
+    (dict(gate="twice"), "more than one matmul_kernel_persistent"),
+    (dict(gate="inside", gate_consts={"BLOCK_SIZE_K": 32}), "refused the router's gate GEMM"),   # the gate's tiling is the profile's pin
+])
+def test_in_scope_gate_gemm_declines_unless_it_is_the_router_s_logits_launch(kw, needle):
+    res, _ = _resolve(2, naive=True, all_reduce=None, **kw)
+    bad = [r for r in res if isinstance(r, Unsupported)]
+    assert bad and not [r for r in res if isinstance(r, Group)], res
+    assert any(needle in r.reason for r in bad), [r.reason for r in bad]
+
+
+@pytest.mark.parametrize("construction", ["indexed-read", "indexed-read-ordered"])
+def test_scope_activation_is_the_one_the_moe_construction_declares(construction):
+    """The Build binds the activation `TargetProfile.MOE_CONSTRUCTIONS` declares; a fold binding another version fails the Match's compare."""
+    res, _ = _resolve(2, naive=True, all_reduce=None)
+    g = next(r for r in res if isinstance(r, Group))
+    silu = next(p for p in g.parts if isinstance(p, Compute) and p.spec.name == "SiluMul")
+    declared = [d for d in TargetProfile.MOE_CONSTRUCTIONS[construction]["definitions"] if d.startswith("SiluMul_")]
+    assert [d.split("{")[0] for d in declared] == [silu.spec.id.split("{")[0]], (declared, silu.spec.id)
 
 
 def test_one_step_of_the_row_has_the_build_of_record_collective_count():
