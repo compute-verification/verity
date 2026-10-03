@@ -364,6 +364,33 @@ theorem out_bytes {tags : Tags} {cf : ByteArray} {tables : List (String × ByteA
     rw [hs, hch]
     exact segByte_lt (by omega)
 
+/-- **Unsegmented rows' output rows**: one per output port, each after the input rows, of `2 · words = 128 · chunks`
+bytes (`ParseFacts.portWords`; a `sha512/row/v2` row's by `rowPorts_v2` and `checkRows_out`) and `16 · words` bits. -/
+theorem out_rows_unseg {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ())
+    (hu : ∀ p ∈ c.ports.toList, p.segs = none) :
+    c.outRowPorts = Array.replicate c.outPorts.size 1 ∧
+      ∀ j < c.outPorts.size, HmOut.nIn c + j < c.ports.size ∧
+        2 * (c.ports.getD (HmOut.nIn c + j) default).words = 128 * (c.ports.getD (HmOut.nIn c + j) default).chunks ∧
+        (c.ports.getD (HmOut.nIn c + j) default).bits = 16 * (c.ports.getD (HmOut.nIn c + j) default).words := by
+  have P := parse_facts hp
+  have hr := outRows_single (parse_rowPorts hp).2 hc hu
+  refine ⟨hr, fun j hj => ?_⟩
+  have hj' : j < c.outRowPorts.size := by rw [hr, Array.size_replicate]; exact hj
+  obtain ⟨hlt, -, hun⟩ := checkRows_out hc hj'
+  have hmem : c.ports.getD (HmOut.nIn c + j) default ∈ c.ports.toList := by
+    rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
+    exact Array.getElem_mem_toList hlt
+  generalize c.ports.getD (HmOut.nIn c + j) default = p at hmem hun ⊢
+  obtain ⟨-, h64, hbits⟩ := hun (hu p hmem)
+  refine ⟨hlt, ?_, hbits⟩
+  cases hv : p.v2
+  · exact P.portWords p hmem hv
+  · obtain ⟨⟨mj, typed, hrp⟩, -⟩ := parse_rowPorts hp
+    obtain ⟨-, hch, -⟩ := rowPorts_v2 hrp p hmem hv
+    rw [hch (hu p hmem), hbits]
+    omega
+
 /-- **`sha512/row/v1` rows' output rows**: unsegmented, one per output port, each after the input rows and of
 `2 · words = 128 · chunks` bytes (`ParseFacts.portWords`). -/
 theorem out_rows_v1 {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
