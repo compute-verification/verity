@@ -75,11 +75,21 @@ def msgCol (c : Circuit) (g p byte t : ℕ) : ℕ :=
   let (_, where_) := HmRow.rowSlots c.ports
   let sin := portCols (c.nets.getD c.shaNet default).2.inGroups
   let hin := portCols (c.nets.getD c.hmNet default).2.inGroups
-  let (k, o) := (byte / 128, byte % 128)
+  let (k, o) := HmRow.byteAt c.ports[p]! byte
   if k < (where_[p]!).size then
     let (slot, sub) := (where_[p]!)[k]!
     c.slotCol c.shaNet g slot + sin[2 * sub + 1]!.1 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
   else c.slotCol c.hmNet g p + hin[1]!.1 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
+
+/-- A row byte's offset in its block (`HmRow.byteAt`), segmented or not. -/
+theorem byteAt_snd (p : Port) (byte : ℕ) : (HmRow.byteAt p byte).2 = byte % 128 := by
+  unfold HmRow.byteAt
+  split <;> rfl
+
+/-- An unsegmented row's byte `byte` is in its compression `byte / 128`. -/
+theorem byteAt_none {p : Port} (hs : p.segs = none) (byte : ℕ) : HmRow.byteAt p byte = (byte / 128, byte % 128) := by
+  unfold HmRow.byteAt
+  rw [hs]
 
 /-- **A unit column's block position** in VU `g` (`HmRow.delta`'s `col`): the root's own columns in its slot, a part's
 in its layout's slot. -/
@@ -156,17 +166,10 @@ def TailQ (c : Circuit) (pin : ℕ) (tb : TypedBlock) (r : Array (ℕ × ℕ) ×
     r.1.toList = d.toList ++ Typed.tail c tb true ∧ r.2.toList = d.toList ++ Typed.tail c tb false
 
 /-- **A typed template's Δ** (#277): the flat statement's entries, then the typed tail, in Δ_A and in Δ_B. -/
-theorem delta_typed (c : Circuit) (pin : ℕ) {tb : TypedBlock} (ht : c.typed = some tb)
-    (hs : ∀ p ∈ c.ports.toList, p.segs = none) :
+theorem delta_typed (c : Circuit) (pin : ℕ) {tb : TypedBlock} (ht : c.typed = some tb) :
     TailQ c pin tb (HmRow.delta c pin) := by
-  have hb : ∀ p byte : ℕ, HmRow.byteAt c.ports[p]! byte = (byte / 128, byte % 128) := by
-    intro p byte
-    by_cases hp : p < c.ports.size
-    · rw [getElem!_pos c.ports p hp, HmRow.byteAt, hs _ (Array.getElem_mem_toList hp)]
-    · rw [getElem!_neg c.ports p hp]
-      rfl
   unfold HmRow.delta
-  simp only [hb]
+  simp only
   refine run_bind_pair (Q := TailQ c pin tb) (P := fun d => d.toList = constPairs c pin) ?_ ?_
   · rw [← Array.forIn_toList]
     refine (forIn_id_append (slotPairs c pin) _ (fun r _ d => ?_) #[]).trans ?_

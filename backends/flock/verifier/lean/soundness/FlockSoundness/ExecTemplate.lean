@@ -22,6 +22,8 @@ structure ParseFactsT (tags : Tags) (t : Typed.Template) (c : Circuit) : Prop wh
     ∀ x ∈ more, (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
   /-- a `sha512/row/v1` port's row is whole SHA-512 blocks -/
   portWords : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks
+  /-- a `sha512/row/v1` port is not segmented -/
+  v1Segs : ∀ p ∈ c.ports.toList, p.v2 = false → p.segs = none
   unitNet : c.unitNet < c.nets.size
   root : c.unitNet = 0
   shaNet : c.shaNet < c.nets.size
@@ -35,8 +37,6 @@ structure ParseFactsT (tags : Tags) (t : Typed.Template) (c : Circuit) : Prop wh
   leavesIn : c.leavesIn = #[#[]]
   wires : c.wires = HmRow.rowWires c.ports c.shaNet c.hmNet
   leafCuts : c.leafCuts = #[]
-  /-- a typed statement's rows are `sha512/row/v1` rows, none segmented -/
-  segs : tags.typed = true → ∀ p ∈ c.ports.toList, p.segs = none
 
 set_option maxHeartbeats 4000000 in
 theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {t : Typed.Template}
@@ -304,7 +304,7 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     · obtain ⟨_, hx, -⟩ := except_bind_ok hs; cases hx
     · rename_i hk; cases hs; exact ⟨⟨_, rfl⟩, by simpa using hk⟩) hderived
   exact { pre := by obtain ⟨more, hm, hmore⟩ := hnets; exact ⟨more, hm, hmore⟩
-          portWords := rowPorts_words hrp, segs := rowPorts_segs hrp, unitNet := findIdx?_lt hunit
+          portWords := rowPorts_words hrp, v1Segs := rowPorts_v1 hrp, unitNet := findIdx?_lt hunit
           root := by
             obtain ⟨more, hm, -⟩ := hnets
             obtain ⟨hlt, -, hmin⟩ := Array.findIdx?_eq_some_iff_getElem.1 hunit
