@@ -227,7 +227,7 @@ def test_a_published_build_restores_every_file_checked(s3, tmp_path, lake):
     r, rev = repo(tmp_path)
     s = stage(tmp_path)
     ident = C.identity(r, "pkg", PLAT)
-    assert C.publish_one(r, rev, "pkg", s, client(url), plat=PLAT, log=lambda m: None) == "published"
+    assert C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None) == "published"
     key = C.record_key(ident, rev)
     assert key == f"main/leanprover--lean4---v4.34.0/{PLAT}/pkg/{ident['manifest'][:16]}/{rev}.sha256.json"
     rec = json.loads(b.objects[key][0])
@@ -237,13 +237,14 @@ def test_a_published_build_restores_every_file_checked(s3, tmp_path, lake):
     assert C.restore(r, "pkg", client(url, READ), [rev], [], lines.append, env(url, tmp_path), PLAT, lake[0])
     assert {p.name: p.read_bytes() for p in lake[1].iterdir()} == {n: (s / n).read_bytes() for n in rec["files"]}
     assert "restored (1 modules" in lines[-1]
-    assert C.publish_one(r, rev, "pkg", s, client(url), plat=PLAT, log=lambda m: None) == "already published"
+    assert C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None) == "already published"
 
 
 def test_the_newest_published_ancestor_is_restored(s3, tmp_path, lake):
     b, url = s3
     r, rev = repo(tmp_path)
-    C.publish_one(r, rev, "pkg", stage(tmp_path), client(url), plat=PLAT, log=lambda m: None)
+    stage(tmp_path)
+    C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
     lines = []
     assert C.restore(r, "pkg", client(url, READ), ["2" * 40, rev, "3" * 40], [], lines.append, env(url, tmp_path), PLAT,
                      lake[0])
@@ -255,7 +256,8 @@ def test_the_newest_published_ancestor_is_restored(s3, tmp_path, lake):
 def test_a_tampered_blob_restores_nothing(s3, tmp_path, lake):
     b, url = s3
     r, rev = repo(tmp_path)
-    C.publish_one(r, rev, "pkg", stage(tmp_path), client(url), plat=PLAT, log=lambda m: None)
+    stage(tmp_path)
+    C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
     blob = C.BLOBS + hashlib.sha256(b"module archive").hexdigest()
     b.objects[blob] = (b"module archivE", b.objects[blob][1])
     with pytest.raises(C.CacheError, match="not the file its record names"):
@@ -266,7 +268,8 @@ def test_a_tampered_blob_restores_nothing(s3, tmp_path, lake):
 def test_a_record_for_another_manifest_or_platform_is_refused(s3, tmp_path, lake):
     b, url = s3
     r, rev = repo(tmp_path)
-    C.publish_one(r, rev, "pkg", stage(tmp_path), client(url), plat=PLAT, log=lambda m: None)
+    stage(tmp_path)
+    C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
     ident = C.identity(r, "pkg", PLAT)
     key = C.record_key(ident, rev)
     rec = json.loads(b.objects[key][0])
@@ -282,7 +285,8 @@ def test_a_record_for_another_manifest_or_platform_is_refused(s3, tmp_path, lake
 def test_files_already_in_lakes_cache_are_not_fetched_again(s3, tmp_path, lake):
     b, url = s3
     r, rev = repo(tmp_path)
-    C.publish_one(r, rev, "pkg", stage(tmp_path), client(url), plat=PLAT, log=lambda m: None)
+    stage(tmp_path)
+    C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
     (tmp_path / "lc" / "artifacts").mkdir(parents=True)
     (tmp_path / "lc" / "artifacts" / "bb.ltar").write_bytes(b"module archive")
     b.log.clear()
@@ -337,7 +341,8 @@ def test_the_kill_switch_is_kept_five_minutes():
 def test_a_quarantined_scope_restores_nothing(s3, tmp_path, lake):
     b, url = s3
     r, rev = repo(tmp_path)
-    C.publish_one(r, rev, "pkg", stage(tmp_path), client(url), plat=PLAT, log=lambda m: None)
+    stage(tmp_path)
+    C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
     sc = C.scope(C.identity(r, "pkg", PLAT))
     for q in ([sc], ["main/"], ["main/leanprover--lean4---v4.34.0"]):
         lines = []
@@ -353,6 +358,7 @@ def test_a_package_whose_dependencies_arent_fetched_is_skipped(s3, tmp_path, lak
     lines = []
     assert not C.restore(r, "pkg", client(url, READ), [rev], [], lines.append, env(url, tmp_path), PLAT, lake[0])
     assert "dependencies aren't fetched" in lines[-1]
+
 
 def test_without_lean_the_client_says_to_run_setup_not_that_the_cache_is_unreachable(s3, tmp_path, monkeypatch):
     b, url = s3
@@ -373,11 +379,11 @@ def test_an_existing_blob_must_be_the_same_bytes(s3, tmp_path, conflict):
     s = stage(tmp_path)
     same = C.BLOBS + hashlib.sha256(b"module archive").hexdigest()
     b.objects[same] = (b"module archive", b.now)
-    assert C.publish_one(r, rev, "pkg", s, client(url), plat=PLAT, log=lambda m: None) == "published"
+    assert C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None) == "published"
     b.objects.clear()
     b.objects[same] = (b"something else", b.now)
     with pytest.raises(C.CacheError, match="already stored with other bytes"):
-        C.publish_one(r, rev, "pkg", s, client(url), plat=PLAT, log=lambda m: None)
+        C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
     assert not [k for k in b.objects if k.endswith(C.RECORD)]
 
 
@@ -385,10 +391,10 @@ def test_a_different_record_already_published_is_refused(s3, tmp_path):
     b, url = s3
     r, rev = repo(tmp_path)
     s = stage(tmp_path)
-    C.publish_one(r, rev, "pkg", s, client(url), plat=PLAT, log=lambda m: None)
+    C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
     (s / "bb.ltar").write_bytes(b"another build")
     with pytest.raises(C.CacheError, match="already published with other contents"):
-        C.publish_one(r, rev, "pkg", s, client(url), plat=PLAT, log=lambda m: None)
+        C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
 
 
 def test_the_read_key_cannot_write(s3, tmp_path):
@@ -420,19 +426,57 @@ def test_only_a_clean_checkout_of_a_merged_commit_is_published(s3, tmp_path):
     assert not b.objects
 
 
-def test_a_stage_with_anything_but_plain_files_is_refused(tmp_path):
+def test_the_publisher_follows_no_link_below_out_and_reads_only_plain_files(s3, tmp_path):
+    """The build's user wrote everything below OUT, and the publisher runs as root: a link or a hard link to the key, a
+    FIFO, or a linked directory on the way to the stage must put nothing in the bucket."""
+    b, url = s3
+    r, rev = repo(tmp_path)
+    key = tmp_path / "lean-cache.env"
+    key.write_bytes(b"AWS_SECRET_ACCESS_KEY=secret\n")
+    out = tmp_path / "out"
     s = stage(tmp_path)
-    (s / "sub").mkdir()
-    with pytest.raises(C.CacheError, match="plain file"):
-        C.staged(s)
-    (s / "sub").rmdir()
-    (s / "link.ltar").symlink_to(s / "bb.ltar")
-    with pytest.raises(C.CacheError, match="plain file"):
-        C.staged(s)
-    (s / "link.ltar").unlink()
+
+    def publish():
+        return C.publish_one(r, rev, "pkg", out, client(url), plat=PLAT, log=lambda m: None)
+
+    for plant in (lambda p: p.symlink_to(key), lambda p: os.link(key, p), os.mkfifo, Path.mkdir,
+                  lambda p: p.with_name("k ltar").write_bytes(b"x")):
+        plant(s / "k.ltar")
+        with pytest.raises(C.CacheError, match="not a plain file"):
+            publish()
+        for p in s.iterdir():
+            if p.name not in (C.MAPPING, "bb.ltar"):
+                p.rmdir() if p.is_dir() and not p.is_symlink() else p.unlink()
+    for d in (out, out / "pkg", s):
+        d.rename(tmp_path / "moved")
+        d.symlink_to(tmp_path / "moved")
+        with pytest.raises(C.CacheError, match="not a directory"):
+            publish()
+        d.unlink()
+        (tmp_path / "moved").rename(d)
     (s / C.MAPPING).unlink()
     with pytest.raises(C.CacheError, match="no outputs.jsonl"):
-        C.staged(s)
+        publish()
+    assert not b.objects
+
+
+def test_a_file_swapped_once_hashed_is_not_what_is_uploaded(s3, tmp_path, monkeypatch):
+    b, url = s3
+    r, rev = repo(tmp_path)
+    s = stage(tmp_path)
+    (tmp_path / "lean-cache.env").write_bytes(b"AWS_SECRET_ACCESS_KEY=secret\n")
+    hashed = C.staged
+
+    def then_swapped(out, pkg, into):
+        files = hashed(out, pkg, into)
+        (s / "bb.ltar").unlink()
+        (s / "bb.ltar").symlink_to(tmp_path / "lean-cache.env")
+        return files
+
+    monkeypatch.setattr(C, "staged", then_swapped)
+    assert C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None) == "published"
+    assert b.objects[C.BLOBS + hashlib.sha256(b"module archive").hexdigest()][0] == b"module archive"
+    assert not [k for k, (data, _) in b.objects.items() if b"secret" in data]
 
 
 def test_the_key_file_must_name_all_four(tmp_path):
@@ -452,14 +496,15 @@ def test_prune_keeps_the_newest_commits_and_what_they_name(s3, tmp_path):
     b.page = 2
     r, rev = repo(tmp_path)
     for i, data in enumerate((b"old", b"mid", b"new")):
-        s = tmp_path / f"s{i}"
-        s.mkdir()
+        s, snap = tmp_path / f"o{i}" / "pkg" / "stage", tmp_path / f"snap{i}"
+        s.mkdir(parents=True)
+        snap.mkdir()
         (s / C.MAPPING).write_bytes(b"map" + data)
         (s / "m.ltar").write_bytes(data)
         ident = C.identity(r, "pkg", PLAT)
-        files = C.staged(s)
+        files = C.staged(tmp_path / f"o{i}", "pkg", snap)
         for n, f in files.items():
-            C.put_blob(client(url), s / n, f)
+            C.put_blob(client(url), snap / n, f)
         b.objects[C.record_key(ident, str(i) * 40)] = (json.dumps({"files": files}).encode(), b.now)
         b.now += 86400
     lines = []

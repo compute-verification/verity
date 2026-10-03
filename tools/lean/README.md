@@ -234,7 +234,9 @@ module docstring has the layout and the rules. In short:
   builds from source.
 - Only integration publishes, and only a clean checkout of a commit on `origin/main`. It builds with `cache.py build` inside
   its sandbox, then runs `cache.py publish` as root outside it, which hashes the staged files itself and signs with the
-  bucket-scoped key (`/etc/verity/lean-cache.env`).
+  bucket-scoped key (`/etc/verity/lean-cache.env`). The build's user wrote the stage, so the publisher follows no link
+  below `--out`, takes only regular files with one link, and uploads a private copy of the bytes it hashed: a link
+  planted to the key uploads nothing.
 - Every write is conditional. A blob that already exists (a 412 or a 409) must have the same MD5, and blobs go up in one
   part so that their ETag is their MD5. Records go last.
 

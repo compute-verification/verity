@@ -43,6 +43,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -269,9 +270,11 @@ def identity(root: Path, pkg: str, plat: str | None = None) -> dict:
     toolchain = (d / "lean-toolchain").read_text().strip()
     if not re.fullmatch(r"[A-Za-z0-9._/:+-]+", toolchain):
         raise CacheError(f"{pkg}: unexpected lean-toolchain {toolchain!r}")
+    plat = plat or platform(d, toolchain)
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", plat):
+        raise CacheError(f"not a platform: {plat!r}")
     m = d / "lake-manifest.json"
-    return {"package": pkg, "toolchain": toolchain, "platform": plat or platform(d, toolchain),
-            "manifest": sha256(m) if m.is_file() else EMPTY_SHA}
+    return {"package": pkg, "toolchain": toolchain, "platform": plat, "manifest": sha256(m) if m.is_file() else EMPTY_SHA}
 
 
 def scope(ident: dict) -> str:
@@ -489,17 +492,60 @@ def merged(tree: Path, rev: str, main: str = "origin/main") -> None:
         raise CacheError(f"{tree} has changes outside its build directories: {dirty.splitlines()[0]} ...")
 
 
-def staged(stage: Path) -> dict[str, dict]:
-    """{name: {sha256, bytes}} of every file `lake cache stage` wrote, hashed here; CacheError on anything else there."""
-    if not stage.is_dir() or stage.is_symlink():
-        raise CacheError(f"{stage} is not a staging directory")
-    files = {}
-    for p in sorted(stage.iterdir()):
-        if p.is_symlink() or not p.is_file() or not NAME.match(p.name):
-            raise CacheError(f"{p} is not a plain file with a plain name")
-        files[p.name] = {"sha256": sha256(p), "bytes": p.stat().st_size}
+def _opendir(name: str, at: int | None = None) -> int:
+    try:
+        return os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=at)
+    except OSError as e:
+        raise CacheError(f"{name} is not a directory (a link, or missing: {e.strerror})") from None
+
+
+def staged(out: Path, pkg: str, into: Path) -> dict[str, dict]:
+    """{name: {sha256, bytes}} of every file `lake cache stage` wrote in ``out/<pkg>/stage``, each copied into ``into`` and
+    hashed as it is copied; CacheError on anything there but a regular file with one link and a plain name.
+
+    The build's user wrote everything below ``out`` and this runs as root, so no link is followed below ``out``: each
+    directory is opened relative to its parent and each file relative to the stage, all with `O_NOFOLLOW`, and a file's
+    bytes are read once, from the descriptor whose `fstat` was checked, into ``into``, a directory only root writes. A link
+    planted to the key (or a hard link to it) is refused, and a file changed afterwards changes nothing uploaded."""
+    fd = _opendir(str(out))
+    try:
+        for part in [*pkg.split("/"), "stage"]:
+            nxt = _opendir(part, fd)
+            os.close(fd)
+            fd = nxt
+        files, total = {}, 0
+        for name in sorted(os.listdir(fd)):
+            where = f"{out}/{pkg}/stage/{name}"
+            if not NAME.match(name):
+                raise CacheError(f"{where!r} is not a plain file: its name")
+            try:
+                f = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+            except OSError as e:
+                raise CacheError(f"{where} is not a plain file ({e.strerror})") from None
+            try:
+                st = os.fstat(f)
+                if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+                    raise CacheError(f"{where} is not a plain file (mode {st.st_mode:o}, {st.st_nlink} links)")
+                total += st.st_size
+                if total > MAX_BYTES:
+                    raise CacheError(f"{out}/{pkg}/stage holds more than the {MAX_BYTES >> 30} GiB a package may")
+                h, n = hashlib.sha256(), 0
+                with open(into / name, "xb") as w:
+                    while chunk := os.read(f, 1 << 20):
+                        n += len(chunk)
+                        if n > st.st_size:
+                            break
+                        h.update(chunk)
+                        w.write(chunk)
+                if n != st.st_size:
+                    raise CacheError(f"{where} changed size while it was read")
+            finally:
+                os.close(f)
+            files[name] = {"sha256": h.hexdigest(), "bytes": n}
+    finally:
+        os.close(fd)
     if MAPPING not in files:
-        raise CacheError(f"{stage} has no {MAPPING}")
+        raise CacheError(f"{out}/{pkg}/stage has no {MAPPING}")
     return files
 
 
@@ -507,7 +553,7 @@ def put_blob(s3: S3, p: Path, f: dict) -> bool:
     """``p`` under its sha256; True when it was uploaded, False when the same bytes were already stored."""
     body = p.read_bytes()
     if hashlib.sha256(body).hexdigest() != f["sha256"]:
-        raise CacheError(f"{p} changed while it was published")
+        raise CacheError(f"{p} is not the file that was hashed")
     key = BLOBS + f["sha256"]
     if s3.put(key, body):
         return True
@@ -517,20 +563,23 @@ def put_blob(s3: S3, p: Path, f: dict) -> bool:
     return False
 
 
-def publish_one(tree: Path, rev: str, pkg: str, stage: Path, s3: S3, log=print, plat: str | None = None) -> str:
-    """Upload one package's staged build of ``rev``: its blobs, then its record. Returns what happened."""
+def publish_one(tree: Path, rev: str, pkg: str, out: Path, s3: S3, log=print, plat: str | None = None) -> str:
+    """Upload one package's build of ``rev``, staged in ``out/<pkg>/stage``: its blobs, then its record. Returns what
+    happened."""
     ident = identity(tree, pkg, plat)
-    files = staged(stage)
-    rec = json.dumps({"schema": SCHEMA, "rev": rev, **ident, "files": files}, indent=1, sort_keys=True).encode() + b"\n"
-    key = record_key(ident, rev)
-    old = s3.get(key)
-    if old is not None:
-        if old != rec:
-            raise CacheError(f"{key} is already published with other contents")
-        return "already published"
-    t0 = time.monotonic()
-    with ThreadPoolExecutor(THREADS) as ex:
-        new = list(ex.map(lambda nf: put_blob(s3, stage / nf[0], nf[1]), sorted(files.items())))
+    with tempfile.TemporaryDirectory(prefix="lean-cache-publish-") as tmp:
+        snap = Path(tmp)
+        files = staged(out, pkg, snap)
+        rec = json.dumps({"schema": SCHEMA, "rev": rev, **ident, "files": files}, indent=1, sort_keys=True).encode() + b"\n"
+        key = record_key(ident, rev)
+        old = s3.get(key)
+        if old is not None:
+            if old != rec:
+                raise CacheError(f"{key} is already published with other contents")
+            return "already published"
+        t0 = time.monotonic()
+        with ThreadPoolExecutor(THREADS) as ex:
+            new = list(ex.map(lambda nf: put_blob(s3, snap / nf[0], nf[1]), sorted(files.items())))
     if not s3.put(key, rec) and s3.get(key) != rec:
         raise CacheError(f"{key} was published meanwhile with other contents")
     up = sum(f["bytes"] for (n, f), was in zip(sorted(files.items()), new) if was)
@@ -539,14 +588,15 @@ def publish_one(tree: Path, rev: str, pkg: str, stage: Path, s3: S3, log=print, 
     return "published"
 
 
-def publish(tree: Path, rev: str, out: Path, pkgs: list[str], s3: S3, log=print, main: str = "origin/main") -> int:
-    """`publish`: every package in ``pkgs`` whose ``out/<package>/stage`` exists. 0 when each was published (or already
-    was), 1 when any was refused."""
+def publish(tree: Path, rev: str, out: Path, pkgs: list[str], s3: S3, log=print, main: str = "origin/main",
+            plat: str | None = None) -> int:
+    """`publish`: each package in ``pkgs`` from ``out/<package>/stage``. 0 when each was published (or already was), 1
+    when any was refused. ``out`` is a directory root made; run it only once no process of the build's user is left."""
     merged(tree, rev, main)
     status = 0
     for pkg in pkgs:
         try:
-            publish_one(tree, rev, pkg, out / pkg / "stage", s3, log)
+            publish_one(tree, rev, pkg, out, s3, log, plat)
         except CacheError as e:
             log(f"lean-cache: {pkg}: not published: {e}")
             status = 1
@@ -609,6 +659,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--key-file", default=KEY_FILE)
     p.add_argument("--main", default="origin/main")
+    p.add_argument("--platform", help="the toolchain's target triple, so root never runs elan (default: `lean --version`)")
     r = sub.add_parser("prune", help="(integration) delete what the last N published commits don't need")
     r.add_argument("--keep", type=int, default=20)
     r.add_argument("--dry-run", action="store_true")
@@ -629,7 +680,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if a.cmd == "publish":
         try:
-            return publish(a.tree.resolve(), a.rev, a.out.resolve(), a.packages, s3, main=a.main)
+            return publish(a.tree.resolve(), a.rev, Path(os.path.abspath(a.out)), a.packages, s3, main=a.main,
+                           plat=a.platform)
         except CacheError as e:
             print(f"lean-cache: nothing published: {e}", file=sys.stderr)
             return 1
