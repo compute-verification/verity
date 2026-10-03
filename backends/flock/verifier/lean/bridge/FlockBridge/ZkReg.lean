@@ -43,6 +43,8 @@ def OwnAtDraws (own : Array Flock.Registered.Port)
     OwnReads own c pub o.2.2
       (restrict rd (drawnReads (laySh (Reg := Reg) ht dj y₀ hc hU (pub := pub)) o.2.1)).isRead rd.port rd.readAt
 
+-- Elaborating this at `laySh` exceeds the default 200000 heartbeats.
+set_option maxHeartbeats 4000000 in
 /-- **Registered reads of a `--zk --registered` session are sound.** In any game `G` on the live audit's outcomes (the
 registration, the draw and the transcript), played by `σ`: if the registrant's reads `rd` are the verifier's own at each
 accepted run's draw (`OwnAtDraws`), the registered-path finder meets `cr/sha-512` at `qR`, and the registrant's values
@@ -63,11 +65,15 @@ theorem regReadSound_zk (own : Array Flock.Registered.Port)
     {δ : ℝ≥0∞} (hvals : RegValsSound G σ (LiveAcceptsZKR I own) (fun o => o.2.1) (fun o => o.1) rd Xc δ) :
     Registered.RegReadSound ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition
         (FlockSoundness.Discharge.Layout.outsOf c hU n)) G σ (LiveAcceptsZKR I own) (fun o => o.2.1) Xc
-      (regVals rd) (regGates rd) (ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) + δ) :=
-  RegisteredReads.regReadSound_of_checked G σ (LiveAcceptsZKR I own) (fun o => o.2.1) (fun o => o.1)
-    (fun o => regPaths c pub o.2.2 rd.port) rd Xc
-    (fun o hacc => FlockSoundness.Discharge.ZkReg.checked_of_accepts I ht own dj y₀ hc hU hpub hscope hTags o hacc _
-      (hown o hacc)) hR hvals
+      (regVals rd) (regGates rd) (ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) + δ) := by
+  have hchk : ∀ o : Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript, LiveAcceptsZKR I own o →
+      (restrict rd (drawnReads (laySh (Reg := Reg) ht dj y₀ hc hU (pub := pub)) o.2.1)).Checked o.1
+        (regPaths c pub o.2.2 rd.port) := fun o hacc =>
+    FlockSoundness.Discharge.ZkReg.checked_of_accepts I ht own dj y₀ hc hU hpub hscope hTags o hacc
+      (restrict rd (drawnReads (laySh (Reg := Reg) ht dj y₀ hc hU (pub := pub)) o.2.1)) (hown o hacc)
+  exact RegisteredReads.regReadSound_of_checked (lay := laySh (Reg := Reg) ht dj y₀ hc hU (pub := pub))
+    (rs := rowsSh ht dj y₀ hc hU hpub hscope) G σ (LiveAcceptsZKR I own) (fun o => o.2.1) (fun o => o.1)
+    (fun o => regPaths c pub o.2.2 rd.port) rd Xc hchk hR hvals
 
 end ZkReg
 
