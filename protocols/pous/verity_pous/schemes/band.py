@@ -9,6 +9,11 @@ every `N` from 1 to `2^64`, which is every segment count `BandParams` allows. It
 challenges uniform over all its blocks, the state bound of the whole store, one permutation. At one segment it is also
 `BandChainMeets64`, and at 448 (14 GB) `BandMultiMeets14`.
 
+The same statement at fewer rounds (`FAMILY_ROUNDS`) gives two more certificates, with a smaller `k` under a tighter
+deadline: `BandMultiMeetsFamilyD2`, `k = 97` at `D = 2` (`Δ + RTT < 724.5 µs`) for every `d ≥ 2`, and
+`BandMultiMeetsFamilyD1`, `k = 93` at `D = 1` (`Δ + RTT < 483 µs`) for every `d ≥ 1`. The verifier audits under them
+only when asked for that `k` (`protocol.Verifier`); a band with `d < 5` has no `D = 5` certificate but has these.
+
 It needs the segment tags injective across segments (`segDom_inj`; `2^64` is where `u64 s` stops being injective); with
 a shared domain, identical segments get identical labels and the audit accepts with probability 1
 (`shared_domain_breaks`).
@@ -38,10 +43,18 @@ FAMILY_SEGMENTS = 1 << 64
 """The largest segment count of `BandMultiMeetsFamily` (`N ≤ 2^64`), which is also the most `BandParams` allows."""
 
 
-def chain_certificate(theorem: str, cliff: int | None, segments: int | None) -> Certificate:
+FAMILY_ROUNDS = {5: (111, "Pous.SecurityProofs.BandMultiMeetsFamily"),
+                 2: (97, "Pous.SecurityProofs.BandMultiMeetsFamilyD2"),
+                 1: (93, "Pous.SecurityProofs.BandMultiMeetsFamilyD1")}
+"""The band's certificates at `POINT` by round budget `D`: `k` and the family pin, each for every `d ≥ D` and every
+segment count from 1 to `2^64`. An audit at `D` needs `Δ + RTT < (D + 1)·call_ns`."""
+
+
+def chain_certificate(theorem: str, cliff: int | None, segments: int | None, rounds: int = 5,
+                      k: int = 111) -> Certificate:
     """The chain certificate at `POINT` (the band's `BandMultiMeetsFamily` and dense's `ChainDenseMeets64` share its
-    terms)."""
-    return Certificate(k=111, rounds=5, work=1 << 20, call_ns=pi2_call_ns(POINT[1]), theorem=theorem, cliff=cliff,
+    terms at `D = 5`)."""
+    return Certificate(k=k, rounds=rounds, work=1 << 20, call_ns=pi2_call_ns(POINT[1]), theorem=theorem, cliff=cliff,
                        segments=segments, claims=CHAIN_CLAIMS)
 
 
@@ -61,10 +74,17 @@ class Band(Scheme):
 
     @property
     def certificate(self) -> Certificate | None:
+        """The default certificate, at `D = 5` (`d ≥ 5`)."""
+        return next((c for c in self.certificates if c.rounds == 5), None)
+
+    @property
+    def certificates(self) -> tuple[Certificate, ...]:
+        """`FAMILY_ROUNDS` at every `D ≤ d`, most rounds (the default, when `d ≥ 5`) first."""
         p = self.params
-        if (p.blocks_per_segment, p.m) != POINT or p.d < 5:
-            return None
-        return chain_certificate("Pous.SecurityProofs.BandMultiMeetsFamily", p.d, p.segments)
+        if (p.blocks_per_segment, p.m) != POINT:
+            return ()
+        return tuple(chain_certificate(theorem, p.d, p.segments, rounds, k)
+                     for rounds, (k, theorem) in FAMILY_ROUNDS.items() if rounds <= p.d)
 
     def encode_segment(self, salt: bytes, s: int, w_seg: bytes) -> list[bytes]:
         return dense_codec.encode_segment(self.params, self.prims, salt, s, w_seg)
@@ -73,4 +93,4 @@ class Band(Scheme):
         return dense_codec.decode_segment(self.params, self.prims, salt, s, blocks)
 
 
-__all__ = ["CHAIN_CLAIMS", "FAMILY_SEGMENTS", "POINT", "Band", "chain_certificate"]
+__all__ = ["CHAIN_CLAIMS", "FAMILY_ROUNDS", "FAMILY_SEGMENTS", "POINT", "Band", "chain_certificate"]
