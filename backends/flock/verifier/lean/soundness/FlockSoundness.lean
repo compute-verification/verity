@@ -168,3 +168,4 @@ import FlockSoundness.Discharge.Hidden
 import FlockSoundness.Discharge.ZkCoins
 import FlockSoundness.Discharge.Composed
 import FlockSoundness.Discharge.ZkReg
+import FlockSoundness.Discharge.Recursion
