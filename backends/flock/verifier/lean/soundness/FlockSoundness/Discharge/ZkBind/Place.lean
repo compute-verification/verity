@@ -38,7 +38,13 @@ theorem acceptsZK_accepted {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hidde
           ∃ (T : Model.Statement) (a : Accepted T), a.st = sts[j] ∧ HEq a.regs regs ∧
             a.tags = tagsAt (zkTags I) I.count j ∧ a.cf = I.circuitFile ∧ a.tables = I.tables ∧
             (I.count ≤ 1 → a.draw = recordDraw t.record) := by
-  sorry
+  obtain ⟨spec, sts, hs, -, -, hall⟩ := acceptsZK_setupH I t hh h
+  refine ⟨spec, sts, hs, fun j hj => ⟨(hall j hj).1, fun regs => ?_⟩⟩
+  obtain ⟨d, hd, hdr⟩ := (hall j hj).2
+  have ht' : (tagsAt (zkTags I) I.count j).typed = false :=
+    (tagsAt_typed _ _ _).trans ((zkTags_typed I).trans ht)
+  exact ⟨_, ⟨tagsAt (zkTags I) I.count j, I.circuitFile, I.publicFile, zkCoins I, I.tables, d, I.partition,
+    I.program, sts[j], ht', hd, regs, rfl⟩, rfl, HEq.rfl, rfl, rfl, rfl, hdr⟩
 
 /-! ## Each drawn unit's site in its `--zk` table -/
 
@@ -66,7 +72,7 @@ include hparse in
 acceptance placed. -/
 theorem SitesZ.rowsOf_keyProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     (keyProg c hU n).rows u = (si.acc S R u h).rows := by
-  sorry
+  exact (rows_circuitProg c hU n _ _ u).trans ((si.acc S R u h).rows_eq (hparse S R u h) hU).symm
 
 /-- A drawn unit's columns in its `--zk` table's block: its VU's (`Accepted.col`). -/
 noncomputable def SitesZ.colKey (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
@@ -76,7 +82,7 @@ noncomputable def SitesZ.colKey (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : 
 /-- **The `--zk` table's statement places the program's unit at its VU** (`Accepted.placement`). -/
 theorem SitesZ.placed_keyProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     Placement (tabOfZ planZ tab S R u).S ((keyProg c hU n).rows u) (si.colKey hU hparse S R u h) := by
-  sorry
+  exact placement_rows (si.rowsOf_keyProg hU hparse S R u h) ((si.acc S R u h).placement (si.hvu S R u h))
 
 /-- **The program's own instance is aliased as Δ copies** at each drawn unit's site in its `--zk` table
 (`Aliased.setupH_aliased_of_key`). -/
@@ -86,7 +92,17 @@ theorem SitesZ.aliased_keyProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u
       ∀ z : Model.Witness (tabOfZ planZ tab S R u).S.m, (tabOfZ planZ tab S R u).S.Satisfies z →
         (tabOfZ planZ tab S R u).S.block z (si.o S R u h) (si.colKey hU hparse S R u h x) =
           (tabOfZ planZ tab S R u).S.block z (si.o S R u h) (si.colKey hU hparse S R u h x') := by
-  sorry
+  refine (si.acc S R u h).aliased_of_layout (si.rowsOf_keyProg hU hparse S R u h)
+    (Const.Prog.instC (keyProg c hU n) outs u) (si.o S R u h) (si.hvu S R u h) ?_
+  have hc := (si.acc S R u h).c_eq (hparse S R u h)
+  have e := congrArg Rows.nIn (si.rowsOf_keyProg hU hparse S R u h)
+  refine Aliased.setupH_aliased_of_key (si.acc S R u h).ht (si.acc S R u h).h (si.acc S R u h).regs _ _
+    (si.hvu S R u h) ?_
+  intro x x' hw hx hx'
+  have hw' := ((wire_cast (si.rowsOf_keyProg hU hparse S R u h) (Const.Prog.instC (keyProg c hU n) outs u) x).symm.trans
+    hw).trans (wire_cast (si.rowsOf_keyProg hU hparse S R u h) (Const.Prog.instC (keyProg c hU n) outs u) x')
+  have hk := keyProg_wire_key hU outs u _ _ (lt_of_lt_of_eq hx e.symm) (lt_of_lt_of_eq hx' e.symm) hw'
+  exact (congrArg (fun d => Aliased.srcKey d x.val = Aliased.srcKey d x'.val) hc).mpr hk
 
 /-- **Each drawn unit's place in its `--zk` table, for the circuit's program on Δ's source keys**: at its VU and block
 in its table's accepted statement, from the sites and the parse alone. -/
@@ -105,7 +121,7 @@ theorem SitesZ.placeKey_spec (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
     (si.placeKey hU hparse outs S R u h).R = (keyProg c hU n).rows u ∧
       HEq (si.placeKey hU hparse outs S R u h).inst (Const.Prog.instC (keyProg c hU n) outs u) ∧
       (si.placeKey hU hparse outs S R u h).o = si.o S R u h := by
-  sorry
+  exact ⟨rfl, HEq.rfl, rfl⟩
 
 end Sites
 

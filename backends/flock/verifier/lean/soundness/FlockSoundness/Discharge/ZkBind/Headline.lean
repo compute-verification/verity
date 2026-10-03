@@ -58,7 +58,8 @@ theorem zk_flock_countC_execOS_keyProg (hA : A.Correct) {c : Flock.Circuit} (hU 
       (Law.stratified σs ks hks).miss K +
         ksAvgStrictZ planZ (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
         linkBoundZC A Hs ((keyProg c hU n).partition outs) planZ tab (rs.bindingZ hHm) k Rw M ρ t' (reg σ) (cont σ) +
-        ENNReal.ofReal (tr.bound qT) := by
-  sorry
+        ENNReal.ofReal (tr.bound qT) :=
+  zk_flock_countC_execOS_cr A Hs ((keyProg c hU n).partition outs) planZ tab hA σs ks hks St hS Kd pop Lb src hA3
+    (si.placeKey hU hparse outs) (rs.bindingZ hHm) hk hRw hM hρ hr ht K σ hCR tr hT
 
 end FlockSoundness.Discharge.ZkBind

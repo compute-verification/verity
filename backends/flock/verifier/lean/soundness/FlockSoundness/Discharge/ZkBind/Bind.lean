@@ -162,7 +162,16 @@ def Computes : Prop :=
 
 /-- **The registration fact from `HmRowComputes`**, for `--zk` tables (`HmRows.registered`'s). -/
 theorem registered (hHm : rs.Computes) : lay.Registered rs.scheme := by
-  sorry
+  intro S R u hu M hM g hg
+  unfold scheme
+  split_ifs with hrow
+  · have hc : bytesAt (witZ A planZ tab S R u M) (rs.bcAt S R u (lay.pos g)) =
+        commitString (rs.enc (lay.row S R u M (lay.pos g))) (lay.salt S R u M (lay.pos g)) :=
+      hHm ⟨S, R, u, M, g⟩ ⟨hu, hM, hg, hrow⟩
+    have hb := rs.bc_registered S R u hu M hM g hg hrow
+    rw [hc] at hb
+    exact hb
+  · exact rs.other_registered S R u hu M hM g hg hrow
 
 /-- **The value binding of a `--zk` layout's rows**: `LayoutZ.bindingZ` at the rows' scheme, from `HmRowComputes`. -/
 noncomputable def bindingZ (hHm : rs.Computes) : ValueBindingZ A P planZ tab decode H512 :=
@@ -183,6 +192,9 @@ theorem bindingZ_bit (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ t
       (rs.bindingZ hHm).bit ((rs.bindingZ hHm).val ((rs.bindingZ hHm).opening S R u M
           ((rs.bindingZ hHm).pos ((place S R u h).inst.wire x)))) ((place S R u h).inst.wire x) =
         bit ((tabOfZ planZ tab S R u).S.block (witZ A planZ tab S R u M) (place S R u h).o ((place S R u h).col x)) := by
-  sorry
+  have hs := (rs.bindingZ hHm).opening_spec S R u h M hM _ hg
+  refine ⟨hs.1, hs.2.trans ?_⟩
+  simp only [decodeOfPlace, h, ↓reduceDIte, UnitPlace.decode]
+  exact (place S R u h).inst.decode_wire ((place S R u h).agree hM) x
 
 end FlockSoundness.Discharge.ZkBind
