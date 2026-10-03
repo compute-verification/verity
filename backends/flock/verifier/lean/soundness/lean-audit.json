@@ -11038,6 +11038,7 @@
    "assumptions": [],
    "type_hash": "f7e115cd41fd17353112e2538f83cb14c8306506584e66399c19b404d0a998f5"
   },
+  "FlockSoundness.Discharge.ZkLink.drawOkZK_of_exec": {},
   "FlockSoundness.Discharge.ZkLink.jointZC_ksBound": {
    "signature": [
     "FlockSoundness.Discharge.ZkLink.jointZC_ksBound {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
