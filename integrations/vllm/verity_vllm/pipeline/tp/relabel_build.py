@@ -51,9 +51,10 @@ def template_rank(world: int) -> int:
 def compare_dirs(real: str, relabel: str) -> dict | None:
     """None when `relabel` (a rank's directory written from the template) equals `real` (the rank derived), else the first
     difference, ``{file, path, real, relabel}`` (a JSON path), ``{file, offset, real, relabel}`` (a byte offset and the bytes
-    around it) or ``{file, only_in}``, with ``files``: every file that differs.  Every file is compared byte for byte (``.gz``
-    decompressed) except `TELEMETRY`'s, compared as JSON without those keys, and `SKIPPED`; the files `SUMMARIES` derives from
-    the others come last, so the first difference is in the file that holds it."""
+    around it), ``{file, only_in}`` or ``{file, unreadable}`` (a truncated `.gz`, a summary that is not JSON), with ``files``:
+    every file that differs.  Every file is compared byte for byte (``.gz`` decompressed) except `TELEMETRY`'s, compared as JSON
+    without those keys, and `SKIPPED`; the files `SUMMARIES` derives from the others come last, so the first difference is in the
+    file that holds it."""
     names = sorted((set(os.listdir(real)) | set(os.listdir(relabel))) - set(SKIPPED), key=lambda n: (n in SUMMARIES, n))
     diffs = []
     for name in names:
@@ -63,9 +64,21 @@ def compare_dirs(real: str, relabel: str) -> dict | None:
             diffs += [] if d is None else [{**d, "file": f"{name}/{d['file']}"}]
         elif not (os.path.isfile(a) and os.path.isfile(b)):
             diffs.append({"file": name, "only_in": "real" if os.path.exists(a) else "relabel"})
-        elif (d := _compare_file(name, a, b)) is not None:
-            diffs.append({"file": name, **d})
+        else:
+            try:
+                d = _compare_file(name, a, b)
+            except (OSError, EOFError, ValueError) as e:      # a truncated `.gz`, a summary that is not JSON: a difference
+                d = {"unreadable": f"{type(e).__name__}: {e}"[:400]}
+            if d is not None:
+                diffs.append({"file": name, **d})
     return {**diffs[0], "files": [d["file"] for d in diffs]} if diffs else None
+
+
+def _where(d: dict) -> Any:
+    """Where in its file a `compare_dirs` difference is."""
+    if "only_in" in d:
+        return f"only in the {d['only_in']} directory"
+    return d.get("path", d.get("offset", d.get("unreadable")))
 
 
 def _compare_file(name: str, a: str, b: str) -> dict | None:
@@ -79,7 +92,10 @@ def _compare_file(name: str, a: str, b: str) -> dict | None:
     if d is None:
         return None
     if name.endswith((".json", ".json.gz")) and max(_size(a), _size(b)) <= PARSE_MAX_BYTES:
-        x, y = (json.load(_open(p)) for p in (a, b))
+        try:
+            x, y = (json.load(_open(p)) for p in (a, b))
+        except ValueError:                                    # not JSON on one side: the byte offset is the report
+            return d
         return _path_diff(x, y) if x != y else {**d, "path": "(same values, other bytes: key order or spacing)"}
     return d
 
@@ -182,7 +198,7 @@ def derive(row, todo: list[tuple[Any, ...]], jobs: int) -> None:
     for r, g in sorted(guard.items()):
         d = g.get("difference") or {}
         row.tl("build.relabel_guard", "mark", ("rank", r), ("ok", _tlv(g["ok"])), ("file", _tlv(d.get("file"))),
-               ("path", _tlv(d.get("path", d.get("offset")))))
+               ("path", _tlv(_where(d) if d else None)))
     passed = [r for r in others if guard[r]["ok"]] if guard[t]["ok"] else []
     doc: dict[str, Any] = {"schema": SCHEMA, "world": W, "template": t, "steps": {str(r): g for r, g in sorted(guard.items())},
                            "requests": {}, "canary": None}
@@ -214,7 +230,7 @@ def derive(row, todo: list[tuple[Any, ...]], jobs: int) -> None:
     if can is not None and can["ok"] is False:
         d = can["difference"]
         row.verdict("build", "FAIL", f"relabel canary: rank {can['rank']} {can['request']} derived in full differs from its relabel at "
-                                     f"{d['file']} {d.get('path', d.get('offset'))} (see {chk}/guard.json); no relabeled Program used")
+                                     f"{d['file']} {_where(d)} (see {chk}/guard.json); no relabeled Program used")
         row.tl("stage.build", "end", ("ok", "FAIL"))
         row.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
         raise Stop(10)
