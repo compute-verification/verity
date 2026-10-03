@@ -9912,6 +9912,31 @@
    "assumptions": [],
    "type_hash": "28b76d8498c93eccd945d8bfd2349de278367b90754881e658c2c44e2f9c2e63"
   },
+  "FlockSoundness.Discharge.ZkView.decode_encode": {
+   "signature": ["FlockSoundness.Discharge.ZkView.decode_encode : FlockSoundness.Discharge.ZkView.DecodeEncode"],
+   "assumptions": [],
+   "type_hash": "fd440dc6441af28e45bc7a2124555b5784c2b2a8886b213131a3629d59ac553e"
+  },
+  "FlockSoundness.Discharge.ZkView.honest_msg": {
+   "signature": ["FlockSoundness.Discharge.ZkView.honest_msg : FlockSoundness.Discharge.ZkView.HonestMsg"],
+   "assumptions": [],
+   "type_hash": "523908b80aada56b64576bd2f86a93923455c50fb75d95412349501933296c6a"
+  },
+  "FlockSoundness.Discharge.ZkView.leafSplit": {
+   "signature": ["FlockSoundness.Discharge.ZkView.leafSplit : FlockSoundness.Discharge.ZkView.LeafSplit"],
+   "assumptions": [],
+   "type_hash": "c4ba9730e7a6878dd4e782d1771a01f9be89e637ac7449b68b3c9e12a6b90823"
+  },
+  "FlockSoundness.Discharge.ZkView.zk_wire_fixed": {
+   "signature": ["FlockSoundness.Discharge.ZkView.zk_wire_fixed : FlockSoundness.Discharge.ZkView.ZkWireFixed"],
+   "assumptions": [],
+   "type_hash": "fab1bf0088990ba9f67d94576e2a4816ef2a2ca61cb686ca54e0715c1e8f6570"
+  },
+  "FlockSoundness.Discharge.ZkView.zk_wire_prefinal": {
+   "signature": ["FlockSoundness.Discharge.ZkView.zk_wire_prefinal : FlockSoundness.Discharge.ZkView.ZkWirePrefinal"],
+   "assumptions": [],
+   "type_hash": "aac7537054334a0ff229f3b591e6210a83e5bb322efd1ed1cc75595d28f8783c"
+  },
   "FlockSoundness.Game.Plays.toT": {
    "signature": [
     "FlockSoundness.Game.Plays.toT {W F : Type} [Inhabited W] {ι : W → F} {α : Type} {g : FlockSoundness.Game α}",
@@ -14601,6 +14626,8 @@
     "FlockSoundness.Discharge.Tables.session_transfer",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
+    "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
+    "FlockSoundness.Discharge.ZkView.zk_wire_prefinal",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -14730,6 +14757,9 @@
     "FlockSoundness.Discharge.Tables.session_transfer",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
+    "FlockSoundness.Discharge.ZkView.honest_msg",
+    "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
+    "FlockSoundness.Discharge.ZkView.zk_wire_prefinal",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -14946,6 +14976,9 @@
     "FlockSoundness.Discharge.Tables.session_transfer",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
+    "FlockSoundness.Discharge.ZkView.honest_msg",
+    "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
+    "FlockSoundness.Discharge.ZkView.zk_wire_prefinal",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -15098,6 +15131,9 @@
     "FlockSoundness.Discharge.Tables.session_transfer",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
+    "FlockSoundness.Discharge.ZkView.honest_msg",
+    "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
+    "FlockSoundness.Discharge.ZkView.zk_wire_prefinal",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -15234,6 +15270,9 @@
     "FlockSoundness.Discharge.Tables.session_transfer",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
+    "FlockSoundness.Discharge.ZkView.honest_msg",
+    "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
+    "FlockSoundness.Discharge.ZkView.zk_wire_prefinal",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -15812,6 +15851,8 @@
     "FlockSoundness.Discharge.Tables.session_transfer",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
+    "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
+    "FlockSoundness.Discharge.ZkView.zk_wire_prefinal",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -18009,7 +18050,11 @@
     "FlockSoundness.CROnly.session_shvzk_le",
     "FlockSoundness.CROnly.sum_hidingGap_le",
     "FlockSoundness.Discharge.ZkCoins.committed_le_hm96",
-    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96"
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkView.honest_msg",
+    "FlockSoundness.Discharge.ZkView.leafSplit",
+    "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
+    "FlockSoundness.Discharge.ZkView.zk_wire_prefinal"
    ]
   },
   "FlockSoundness.Certificate": {
@@ -19228,7 +19273,10 @@
     "FlockSoundness.Discharge.Hm.bitL_hash",
     "FlockSoundness.Discharge.Hm.bitL_saltHash",
     "FlockSoundness.Discharge.Hm.hm96_commit",
-    "FlockSoundness.Discharge.Hm.row_commit"
+    "FlockSoundness.Discharge.Hm.row_commit",
+    "FlockSoundness.Discharge.ZkView.honest_msg",
+    "FlockSoundness.Discharge.ZkView.leafSplit",
+    "FlockSoundness.Discharge.ZkView.zk_wire_prefinal"
    ]
   },
   "FlockSoundness.Discharge.Hm.Laid": {
@@ -20458,6 +20506,135 @@
     "FlockSoundness.Discharge.ZkSession.zk_knowledgeSound"
    ]
   },
+  "FlockSoundness.Discharge.ZkView.Defs": {
+   "digest": "b5a1c4d32ebd1024f034491a311dfe5de5b0c1348323ff78781f36c8bd8b10e7",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkView.Base": "218b994153aaa284383b9fb9234aa5b04d0936d50dbb0b722be3c12c6b83e3f5",
+    "FlockSoundness.Discharge.ZkView.Bits": "a4e41b9fe47fb5de86965dfc99fb848b726bd832c58bc705218978cbc657553c",
+    "FlockSoundness.Discharge.ZkView.Causal": "5115b3c342da201208c9a3c756397b58b3f47bf7c1a381e01c1f117093d87d1c",
+    "FlockSoundness.Discharge.ZkView.Coined": "e970e356d9507dd561b7859caf19249651b1871683191d21ef8b64d473fdf23b",
+    "FlockSoundness.Discharge.ZkView.Coined.Ch": "293f3d32c188c3f09b1937874e30f477d436b984dfa7cd871a120d546a3a21e4",
+    "FlockSoundness.Discharge.ZkView.Coined.ChU": "abbb8b0ce50c032634152d3b6c2c40dbed52437deb30eff2ce4c2c9de9108d74",
+    "FlockSoundness.Discharge.ZkView.Coined.Cp": "bcb163d084b8b9c290d373e7458e63bcfdf4d19ff47c516791afaa818219b324",
+    "FlockSoundness.Discharge.ZkView.Coined.CpU": "1765cf04b478070322a7e4e93a7f34a18af0c2c5797ec5fe18f8179f9f904a58",
+    "FlockSoundness.Discharge.ZkView.Coined.E": "c334a11ed0fbe84e667416d992178f481e7765e7b1dfebccb0276bad7bfff937",
+    "FlockSoundness.Discharge.ZkView.Coined.EU": "e81f70e15ce8c52f3a7ffe6fdaa3b0bf94fec61bfa4f94ad19fa91377dbf0462",
+    "FlockSoundness.Discharge.ZkView.Coined.Gp": "8968e1598d81f947abe9a4ae7ca6fbafb8f93e3553ded4e32d937e5989c6f37f",
+    "FlockSoundness.Discharge.ZkView.Coined.GpU": "4495a35c862a30528a43005f5211144724e2079b4c1bdb128cb4ca98604687c4",
+    "FlockSoundness.Discharge.ZkView.Coined.col0At": "33e6991ae074ed062ff0d84a7195f855362689b73e9b126426c51aad0d5ff5f5",
+    "FlockSoundness.Discharge.ZkView.Coined.colPAt": "84f0e7580376b73f566bc3fded512b5da67440bf46035df512d31e908afe1445",
+    "FlockSoundness.Discharge.ZkView.Coined.content": "33e5ae19acfcdd7a5a8ffbb39fb41e8d12ed3e666523329413183a7ac661e386",
+    "FlockSoundness.Discharge.ZkView.Coined.embed": "2a321ffd677612e6239210a05544631cdc1a50b9748364387837dbc053150185",
+    "FlockSoundness.Discharge.ZkView.Coined.eqw": "214a8f6fc9a9c2e564d8d6565ec003689688a2615d101adf35020f4f432df925",
+    "FlockSoundness.Discharge.ZkView.Coined.exeLeaf": "73f7dc4f626d36fd67050d3e2a1376a6fe1c3c20a1b029db86f29b5b59930dbb",
+    "FlockSoundness.Discharge.ZkView.Coined.hidCol0": "6fcea11fb891b6ce78d51592244871405d32cfdb9608e7af162c0f676076cbd6",
+    "FlockSoundness.Discharge.ZkView.Coined.hidColP": "0d0cca33d0817a8d3fa16d2c5cc91046eaf31a822f702241640c99de18808cd2",
+    "FlockSoundness.Discharge.ZkView.Coined.hidExe": "0ce7d541dd30232c71a8cbac589250a421b2a79243e2e5e5fb77c911edc1e7a4",
+    "FlockSoundness.Discharge.ZkView.Coined.hidExeS": "b45c274b82ef96766f74b93695c9149860993b2c6cea162799d9dd25c12b30e1",
+    "FlockSoundness.Discharge.ZkView.Coined.ia": "cbf66a6eadc17086d1b821a45ba800e5b07e444a75fe7906ec95d16470f699a0",
+    "FlockSoundness.Discharge.ZkView.Coined.ib": "19c173ebe6fa3558d475b36e7846a8612fb279063d81dd338b34c4896c937da5",
+    "FlockSoundness.Discharge.ZkView.Coined.lam": "22e732ee9409b80bc94426a57b79a85bc10a0ad2f6ed36f9aece6ff6e09da004",
+    "FlockSoundness.Discharge.ZkView.Coined.lanes": "7b427fa350a2d8f099b9dfe63193e9fd1c9fe60576a9389215608bc98db7ffde",
+    "FlockSoundness.Discharge.ZkView.Coined.lig": "9316e962abeab459b8afdf57cdfdb3872fd775cd02fca51e98fc27b72ddb0e98",
+    "FlockSoundness.Discharge.ZkView.Coined.nu": "4ff71bf8cd1f6af32b9f1f994630be884153c0630b72126f32a2295c3d4a21ee",
+    "FlockSoundness.Discharge.ZkView.Coined.preWith": "fc8ef4259b59d2502c87a4ce79d0ae6ffd4b0c3f14aa322ccdf95619ebbccdfd",
+    "FlockSoundness.Discharge.ZkView.Coined.pubReg": "71692847d0b5a5de0d011d12b56eec42441bfc2c5dd771902ee37cf4025c7272",
+    "FlockSoundness.Discharge.ZkView.Coined.randOf": "dc3caf1cbb5e1c3e8ed7915794173b416bfa59ce4a8a018cd6674f36ed4859f9",
+    "FlockSoundness.Discharge.ZkView.Coined.rbar": "1c33ffdbb9cb7864e6da7bed99a9b7f8f355a33c75561b670a2ba5ac2c487979",
+    "FlockSoundness.Discharge.ZkView.Coined.rep": "d76912dd5eea2d8713954ccf2becc3b94f18e9104f0a5fe4ec89644bcf6a0544",
+    "FlockSoundness.Discharge.ZkView.Coined.s0": "f34faf4f7c3d0198a6bb7566e8278ba83901cf642558e354b68687096f1bfdec",
+    "FlockSoundness.Discharge.ZkView.Coined.sP": "3518212ee738a2a97a6be13bdbe76ef56608ba41860a840ce1ec042fbd71a363",
+    "FlockSoundness.Discharge.ZkView.Coined.sReg": "5682031e11b0c7554458eee0a982a8052f6853f8211587a84134fb4f01ca55d0",
+    "FlockSoundness.Discharge.ZkView.Coined.simExe": "175f97083f1b4c234b708312f3b2d52d5803701d6ce25a25bea8b022a09360a2",
+    "FlockSoundness.Discharge.ZkView.Coined.tab": "8b825bbc218c8eeb92928bb18b548924a966491df1ec0630045a5c9a57c16dcc",
+    "FlockSoundness.Discharge.ZkView.Coined.theta": "c02ad3c91fe7ccdfab921ae6a5fa3936d6fcd7f36b3cdefed3087e618111db99",
+    "FlockSoundness.Discharge.ZkView.Coined.vals": "ba756be725389eb537efe383902951d61211526d5f8dca710554e88b081a3251",
+    "FlockSoundness.Discharge.ZkView.Coined.viewExe": "8a2c7ad846c1dbf514d7d2bc7cdfee38ffbc9a2b7cdd08d670efe4e4514b9564",
+    "FlockSoundness.Discharge.ZkView.Coined.β": "3e386c2798bb3a0be4207044af90ec0817b0962f402a09bd35efdccf392d5c40",
+    "FlockSoundness.Discharge.ZkView.Coined.ζ": "223e760bd30a4cf86bffc028e7bc483a04c146f8d8783af508af974d9c3c3869",
+    "FlockSoundness.Discharge.ZkView.Coined.ρ": "6b1af6bf331939f13c2116eb461aa9ec1ecf126651bae15db0735dda8305f21a",
+    "FlockSoundness.Discharge.ZkView.LeafPos": "b159779e85eaf87fa8953e424bd6f2a6c68716e41ff05fc80fb268a4fcae2c70",
+    "FlockSoundness.Discharge.ZkView.Leaves": "56fe3c1a71aa140d49bb70bec14a2ceec3cb8b561c04b3464f929708713ed634",
+    "FlockSoundness.Discharge.ZkView.My": "909d5e4e16aab45d5ff0b5c7a0f91825452f522ee71c309366a179e4115fe91b",
+    "FlockSoundness.Discharge.ZkView.Salt": "afe66ed834231aaf611170172d6ea7bbf8bed30f426096f664f9859eddafb93e",
+    "FlockSoundness.Discharge.ZkView.Sizes": "07cbc27010e8e41de380f6c39f52741832e4b0ffcadad936e4ac340db5c0df22",
+    "FlockSoundness.Discharge.ZkView.Sizes.L": "84f023ab4243821326092d80c8cb7dd2bfddb7651fab717865b89214dbbac368",
+    "FlockSoundness.Discharge.ZkView.Sizes.nC": "b820eae1fb61decf2e631d166db6f4d78dfa9d0deb8a28209540215d317392a1",
+    "FlockSoundness.Discharge.ZkView.Sizes.nE": "b9d0bd503ca3c9479fc1b032df8910a94e0469dd430a20f110803d33a3fd98b4",
+    "FlockSoundness.Discharge.ZkView.Sizes.nL": "b30444d6569c7c3dfba6ddd7a489ff731139e7350bd9a6e327cb2222b2e486e9",
+    "FlockSoundness.Discharge.ZkView.Sizes.nMask": "ffeb8bee582eaca46819e3ef26c1a5b710863a4b44a5eba22f42d32744f4b941",
+    "FlockSoundness.Discharge.ZkView.Sizes.nPU": "580cc915f58fd034ef2cb262ec915e209a33600ea6af4fcb123da9457afe0a49",
+    "FlockSoundness.Discharge.ZkView.Sizes.nPad": "1163b0bbf6b607b96b41e453081bed95fb686b630c5de2678c1a6c995f591ea4",
+    "FlockSoundness.Discharge.ZkView.Sizes.nQ": "b0d2b10b6db9502419734ec0d100a742beaf84907e8037accec1d9854888543a",
+    "FlockSoundness.Discharge.ZkView.Sizes.nR": "4803ef998b8762c63503e6b7e1710668594493c577af848d9e998c9a8e942672",
+    "FlockSoundness.Discharge.ZkView.Sizes.nS": "121ebb68ab9640c96414b54af9077030ae2c0aa72d539250cf973434a2a8133a",
+    "FlockSoundness.Discharge.ZkView.Sizes.nU": "46765efa4a75b1d47b9a3f8badb15cacb8b7c8228496b022adf6678c8ff95d8f",
+    "FlockSoundness.Discharge.ZkView.Sizes.tpad": "d46206fb8166994481c829ffeef197710e26fd3c6b9affd685f1f16687b79c4a",
+    "FlockSoundness.Discharge.ZkView.bitsOf": "4359524f9052810d956820350b91511e7fb156cb3563662badf9619faffacdb4",
+    "FlockSoundness.Discharge.ZkView.byteOf": "2819416c296298ee4af5b528256c1f7f4e13fd926a9c932ec4d91d348b91826a",
+    "FlockSoundness.Discharge.ZkView.bytesOf": "020e872075239b3f2af838df7096ceb306fcd47987ffc163c82f21db79ed93d6",
+    "FlockSoundness.Discharge.ZkView.digAt": "475edc1a93be9c165e20c25cdbecba429963d48a9e9cb3d5170031903cf0f25c",
+    "FlockSoundness.Discharge.ZkView.honest": "43cca525567a26ac25e9b050bfcd9195e25312cef9186e186f764de052a4f302",
+    "FlockSoundness.Discharge.ZkView.instFintypeBase": "0e78b112e7cd97b73e42fa09ac86bba3ebf25cc458f500fd36223d8b7fcc8305",
+    "FlockSoundness.Discharge.ZkView.leaf0": "e0092ad4551594099066fa9dc0f2f089a4756dcb0c83d0c4613e21f0cba42626",
+    "FlockSoundness.Discharge.ZkView.leafH": "78f09f4de1179473e8f1034956420835063bab467c77c3c1dfe42a40777628c6",
+    "FlockSoundness.Discharge.ZkView.leafI": "453345fc010ddc3cfac83caef5014cce426dae81b2d6e3b20671262ec8070c84",
+    "FlockSoundness.Discharge.ZkView.leafP": "99822c245ee14be010135c8aff1ab32f5593b2352d382a48eb9d355f272b77cb",
+    "FlockSoundness.Discharge.ZkView.leafT": "466d646a184cdd929bcdb717a4e4847fa50bac5075030ed841a6a263bcf9da3e",
+    "FlockSoundness.Discharge.ZkView.msgsAt": "867086d9d924b061a4375f8cf316e7f8c404fb36a9e122085d87b12ad6124607",
+    "FlockSoundness.Discharge.ZkView.pairProver": "9db78217105ab3d56b4e0ffa7e4b3c700e5695fcb5e72fdf8424a10fda0ecab7",
+    "FlockSoundness.Discharge.ZkView.row0": "4f263b40df13ef7cd5aa454261698c38b75af8dc48d99b06e9cb14fcca1ea5db",
+    "FlockSoundness.Discharge.ZkView.saltBytes": "ab6cbca16fc198610ec42ce82a72f44d193e0f80e4b77dddfcb16f905fdf0d90",
+    "FlockSoundness.Discharge.ZkView.saltHash": "3706a7ad00decf25d156fa0f9d9486622d12a4735f0e57885c06f43947ed6f9e",
+    "FlockSoundness.Discharge.ZkView.κ₀": "10423c5791e22861f69c16e6633a27b13654e8b8c4fb3cbc943aa6583a4059d2"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.ZkView.honest_msg",
+    "FlockSoundness.Discharge.ZkView.leafSplit",
+    "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
+    "FlockSoundness.Discharge.ZkView.zk_wire_prefinal"
+   ]
+  },
+  "FlockSoundness.Discharge.ZkView.Statements": {
+   "digest": "a0cf53cbc6f1a61f19f7ce5ed047f1e8c7a0983bf6a9d958b2e1457a92fbfab8",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkView.DecodeEncode": "2fed9005117c7079bad63d52ce9e464cefe7354f37c5536e8697821206880d9f",
+    "FlockSoundness.Discharge.ZkView.HonestMsg": "03f569ff7db7f678b37274046acdcd250040417594188de8549c064346098f01",
+    "FlockSoundness.Discharge.ZkView.LeafSplit": "c4eafea154513f8483bcbbf4a7ce7a31275a355f806f912aea148f915f3731f1",
+    "FlockSoundness.Discharge.ZkView.ZkWireFixed": "4a815ab366c6ae00dcb9cc73b87d65af8e91822605e4a764cac9b45c73f74dd2",
+    "FlockSoundness.Discharge.ZkView.ZkWirePrefinal": "e4369fc39e2dcea94fe5d45f721e067ed61444bb1380a89c36fd482b53225f0a"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.ZkView.decode_encode",
+    "FlockSoundness.Discharge.ZkView.honest_msg",
+    "FlockSoundness.Discharge.ZkView.leafSplit",
+    "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
+    "FlockSoundness.Discharge.ZkView.zk_wire_prefinal"
+   ]
+  },
+  "FlockSoundness.Discharge.ZkView.Wire": {
+   "digest": "f9d6bcfbb74c6a4319d0d3bed97b05f479d9daa18eb0f123d8e227c18442d035",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkView.CapOk": "60828dba2e97e1f2f63390daedf55acf738cd71b052f84748789473e21ddaaa0",
+    "FlockSoundness.Discharge.ZkView.LevelOk": "705490c748e791c10d329bf171fe188a066a4a0ba216062055a3a551156dea92",
+    "FlockSoundness.Discharge.ZkView.SaltsOk": "15c6de07c19094c22e82ff6f6199714c83ccf612e7d27210a753332d3abde1f7",
+    "FlockSoundness.Discharge.ZkView.Shaped": "0fa86a98597298718f6d375c4f22357e7e323dd8c4e6d844693471e8ec6d9532",
+    "FlockSoundness.Discharge.ZkView.encZk": "7e2d9e1f17ff06972454f81a133715b4722698041c814ce4e8e1a997928e786c",
+    "FlockSoundness.Discharge.ZkView.wBytes": "b199ecb55abb2cc55f511fbf88751e68060245b780a49de39616829598dc25a9",
+    "FlockSoundness.Discharge.ZkView.wF256": "ca78705454ddbbfb2fb065603079e002473a7f6554160a7a49cb0a0cc08f7caf",
+    "FlockSoundness.Discharge.ZkView.wInner": "2bc9499a9d1e715957e88a5b4bff06f7be7e98441154ec2815a6de3c904895d3",
+    "FlockSoundness.Discharge.ZkView.wLen": "4f9a7fcca758ebcde969f256bfce405be110d77cfca5b26046453bcca1303c72",
+    "FlockSoundness.Discharge.ZkView.wLevel": "90511369fa559efd70786552d5146c61d90dd7c5f675529ea135bcda4786088f",
+    "FlockSoundness.Discharge.ZkView.wLevel0": "5450771fa6d1136d23a8a538f73c267932d033a61bb05c577f406406f0dedd71",
+    "FlockSoundness.Discharge.ZkView.wLigerito": "e122cd2dd76782b2139f39e93c49a144dbe71394d2dd3aebc853256d6ce3c765",
+    "FlockSoundness.Discharge.ZkView.wPair": "418a9e42aca7c3fe6460796c9375026c3478c62367c0ff9e3d9ec13adc2ac586",
+    "FlockSoundness.Discharge.ZkView.wParams": "f7f9c285b33873847c0ac39a7afa5c9226931b80bb216ac2baed010b56ac1989",
+    "FlockSoundness.Discharge.ZkView.wProof": "17d529dd71ec70d11121d3c22b99382f2e6daa821cf374a020fd7e865d77baec",
+    "FlockSoundness.Discharge.ZkView.wSalts": "aa8c86d5db08dcc75f5b3cca01d101ff21a1b12e67b7088716951fe67713f510",
+    "FlockSoundness.Discharge.ZkView.wVec": "3da4b95c06631a70bc95d70a327493262b66a7e873174187e4fc45dc28424e93"
+   },
+   "pins": ["FlockSoundness.Discharge.ZkView.decode_encode"]
+  },
   "FlockSoundness.E2E": {
    "digest": "af36dc92c5d45f36dd087651489534b8382d6f8e755b3b2304953eaa68b57ec6",
    "definitions": {
@@ -21406,6 +21583,8 @@
     "FlockSoundness.Discharge.ZkSession.zk_flock_count_execOS",
     "FlockSoundness.Discharge.ZkSession.zk_flock_count_execOS_m1",
     "FlockSoundness.Discharge.ZkSession.zk_knowledgeSound",
+    "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
+    "FlockSoundness.Discharge.ZkView.zk_wire_prefinal",
     "FlockSoundness.Game.Plays.toT",
     "FlockSoundness.Game.Sim.prob_le",
     "FlockSoundness.Prog.flock_e2e_count",
@@ -25666,6 +25845,13 @@
     "FlockSoundness.UProg.rowsL1"
    ]
   },
+  "FlockSoundness.ZK.AdaptivePrefinal": {
+   "digest": "fd375fc49dda849d546447c819118544591f6731d1ec94e4681b4c635e3322b8",
+   "definitions": {
+    "FlockSoundness.ZK.Strategy.comap": "6c10771b704bce565c0d4cb63f67aa7da774422e2bfbc06ce693e2cd9bf20415"
+   },
+   "pins": ["FlockSoundness.Discharge.ZkView.honest_msg", "FlockSoundness.Discharge.ZkView.zk_wire_prefinal"]
+  },
   "FlockSoundness.ZK.Adaptivity": {
    "digest": "84e9d40f46aed07c39c0408a24556bd642061cb890efcc6293f9d4a7b5222c12",
    "definitions": {
@@ -25683,6 +25869,8 @@
     "FlockSoundness.CROnly.adaptive_prefinal_hm96_sha512",
     "FlockSoundness.CROnly.adaptive_prefinal_key",
     "FlockSoundness.CROnly.adaptive_prefinal_le",
+    "FlockSoundness.Discharge.ZkView.honest_msg",
+    "FlockSoundness.Discharge.ZkView.zk_wire_prefinal",
     "FlockSoundness.ZK.GK.gk_simulate_hm96",
     "FlockSoundness.ZK.GK.prefinalClose_hm96",
     "FlockSoundness.ZK.Session.adaptive_prefinal_hm96",
@@ -25745,6 +25933,8 @@
     "FlockSoundness.CROnly.adaptive_prefinal_hm96_sha512",
     "FlockSoundness.CROnly.adaptive_prefinal_key",
     "FlockSoundness.CROnly.adaptive_prefinal_le",
+    "FlockSoundness.Discharge.ZkView.honest_msg",
+    "FlockSoundness.Discharge.ZkView.zk_wire_prefinal",
     "FlockSoundness.ZK.GK.gk_simulate_hm96",
     "FlockSoundness.ZK.GK.prefinalClose_hm96",
     "FlockSoundness.ZK.Session.adaptive_prefinal_hm96",
@@ -25933,6 +26123,7 @@
    "pins": [
     "FlockSoundness.CROnly.session_shvzk_gap",
     "FlockSoundness.CROnly.session_shvzk_le",
+    "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
     "FlockSoundness.ZK.GK.gk_simulate_hm96",
     "FlockSoundness.ZK.GK.rewindClose_hm96",
     "FlockSoundness.ZK.Session.session_shvzk_hm96",
@@ -25949,6 +26140,7 @@
    "pins": [
     "FlockSoundness.CROnly.session_shvzk_gap",
     "FlockSoundness.CROnly.session_shvzk_le",
+    "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
     "FlockSoundness.ZK.Session.session_prefinal_indep",
     "FlockSoundness.ZK.Session.session_prefinal_indep_cut",
     "FlockSoundness.ZK.Session.session_shvzk",
@@ -26077,6 +26269,9 @@
     "FlockSoundness.CROnly.adaptive_prefinal_le",
     "FlockSoundness.CROnly.session_shvzk_gap",
     "FlockSoundness.CROnly.session_shvzk_le",
+    "FlockSoundness.Discharge.ZkView.honest_msg",
+    "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
+    "FlockSoundness.Discharge.ZkView.zk_wire_prefinal",
     "FlockSoundness.ZK.GK.gk_simulate_hm96",
     "FlockSoundness.ZK.GK.prefinalClose_hm96",
     "FlockSoundness.ZK.GK.rewindClose_hm96",
