@@ -186,7 +186,10 @@ def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int)
     from verity_vllm.pipeline.tp import rank_replay as RR
 
     t0 = time.perf_counter()
-    b = RB.open_bundle(RB.path(out, pair, rank=rank))
+    try:
+        b = RB.open_bundle(RB.path(out, pair, rank=rank))
+    except (OSError, ValueError) as e:
+        raise Refused(f"pair {pair} rank {rank}: {e}") from e
     ctx, bdir = b["context"], Path(b["path"])
     _row, c, store, run, bmap = _of_record(out, dd, b, pair, rank)
     man = _manifest(o, ctx)

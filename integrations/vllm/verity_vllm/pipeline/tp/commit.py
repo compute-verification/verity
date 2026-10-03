@@ -266,6 +266,22 @@ def pin_gate(cblock: dict, wp_: dict, ok: bool, why: str | None, *, rank: int, r
     return ok, why
 
 
+def c2_and_pin_gates(cblock: dict, f: dict, ok: bool, why: str | None, *, rank: int, replay_on: bool, required: bool, bundle: str) -> tuple[bool | None, str | None]:
+    """The rank's verdict after its C2 of record and its weights pin, from the gates before them (``ok``, ``why``) and its finalize ``f``.
+    A rank whose replay was deferred to its bundle (`--replay-deferred`: sampled-replay grade `deferred`) gets the pin alone: a rank that
+    failed already is decided here, any other is PENDING (None) with its pre-replay verdict in ``cblock["replay_deferred"]["pre"]``,
+    which `pipeline.tp.commit_replay.fold` passes to `replay_gates` once the rank's replay is on the record."""
+    srb = f.get("sampled_replay") or {}
+    sr_, lk_ = (srb.get("sampled_replay") or {}), (srb.get("boundary_linkage") or {})
+    if replay_on and sr_.get("grade") == "deferred":
+        cblock["sampled_replay"], cblock["boundary_linkage"] = sr_, lk_
+        cblock["replay_deferred"] = {"pre": [ok, why], "bundle": bundle}
+        ok, why = pin_gate(cblock, f.get("weights_pin") or {}, ok, why, rank=rank, required=required)
+        return (None, RB.PENDING) if ok else (ok, why)
+    ok, why = replay_gates(cblock, sr_, lk_, ok, why, rank=rank, replay_on=replay_on, required=required)
+    return pin_gate(cblock, f.get("weights_pin") or {}, ok, why, rank=rank, required=required)
+
+
 def annotate_unreplayable(srs: list[dict], xr: dict, pair: int, xrank_families: set[str] | list[str]) -> None:
     """[rev M-0349] self-describing record: the replay's unreplayable collective families name the pass that evaluated them."""
     byf = xr.get("by_family") or {}
@@ -849,20 +865,8 @@ def main(args: Options) -> int:
                                     f"match oracle: {mo.get('mismatch_n')} mismatching / {mo.get('missing_n')} missing in commit / {mo.get('not_in_oracle_n')} committed not in oracle "
                                     f"of {mo.get('tensors')} tensors (first: {(mo.get('mismatches') or mo.get('missing_in_commit') or mo.get('committed_not_in_oracle') or [None])[0]})")
                             ok, why = False, (f"{why}; also: {why_}" if not ok and why else why_)
-                        srb = f.get("sampled_replay") or {}
-                        sr_, lk_ = (srb.get("sampled_replay") or {}), (srb.get("boundary_linkage") or {})
-                        required = args.required_manifest is not None
-                        if replay_cfg is not None and sr_.get("grade") == "deferred":
-                            # --replay-deferred: the gates after this point but the pin wait for the rank's replay from its bundle
-                            # (`pipeline.tp.commit_replay` applies them to this verdict); a rank that failed already is decided here
-                            cblock["sampled_replay"], cblock["boundary_linkage"] = sr_, lk_
-                            cblock["replay_deferred"] = {"pre": [ok, why], "bundle": RB.path(out, pair, rank=rk).name}
-                            ok, why = pin_gate(cblock, f.get("weights_pin") or {}, ok, why, rank=rk, required=required)
-                            if ok:
-                                ok, why = None, RB.PENDING
-                        else:
-                            ok, why = replay_gates(cblock, sr_, lk_, ok, why, rank=rk, replay_on=replay_cfg is not None, required=required)
-                            ok, why = pin_gate(cblock, f.get("weights_pin") or {}, ok, why, rank=rk, required=required)
+                        ok, why = c2_and_pin_gates(cblock, f, ok, why, rank=rk, replay_on=replay_cfg is not None, required=args.required_manifest is not None,
+                                                   bundle=RB.path(out, pair, rank=rk).name)
                         cblock["commit_pass"], cblock["commit_fail_reason"] = ok, why
                         if ok is False:
                             reasons.append(f"rank {rk}: {why}")
