@@ -65,6 +65,63 @@ inductive Reaches (T : Topo) (c : Cls) : Nat → Nat → Prop
   | step {j i : Nat} (k : Nat) (hk : k < c.nIn) (i' : Fin i) (l : Nat) (h : T.src i k = .unit i' l)
       (hr : Reaches T c j i'.val) : Reaches T c j i
 
+theorem Reaches.le {T : Topo} {c : Cls} {j i : Nat} (h : Reaches T c j i) : j ≤ i := by
+  induction h with
+  | refl => exact Nat.le_refl _
+  | step _ _ i' _ _ _ ih => exact Nat.le_trans ih (Nat.le_of_lt i'.isLt)
+
+theorem evalT_eq (T : Topo) (C : Circ) (x : Nat → Bool) (j : Nat) :
+    evalT T C x j = eval C j fun k => route x (evalT T C x) (T.src j k) := by
+  rw [evalT]
+  congr 1
+
+theorem eval_congr {C : Circ} {c : Cls} (hC : fits C c) (j : Nat) {f g : Nat → Bool}
+    (h : ∀ k < c.nIn, f k = g k) : eval C j f = eval C j g := by
+  unfold eval
+  cases hj : C[j]? with
+  | none => rfl
+  | some u =>
+    have hu := (hC.2.2 u (List.mem_of_getElem? hj)).2.1
+    have : (List.ofFn fun k : Fin u.nIn => f k) = List.ofFn fun k : Fin u.nIn => g k :=
+      congrArg List.ofFn (funext fun k => h k (by omega))
+    simp only [interpret, this]
+
+theorem eval_past {C : Circ} {j : Nat} (h : C.length ≤ j) (f : Nat → Bool) : eval C j f = [] := by
+  simp [eval, List.getElem?_eq_none h]
+
+theorem read_dummy (c : Cls) (l : Nat) : read (dummy c) l = false := by
+  unfold read dummy
+  rw [List.getD_eq_getElem?_getD, List.getElem?_replicate]
+  split <;> rfl
+
+/-- The induction behind `wired_cone`: at a unit `i < N` whose feeding units are all correct, the claimed outputs are
+`evalT`'s, bit for bit, and as lists at a unit of `C`. -/
+theorem cone_aux (T : Topo) (C : Circ) (c : Cls) (hC : fits C c) (xOf : Nat → Nat → Bool) (yOf : Nat → List Bool)
+    (x : Nat → Bool) (hw : Wired T c xOf yOf x) :
+    ∀ i, i < c.N → (∀ j, Reaches T c j i → run c (pad C c) j (xOf j) = yOf j) →
+      (i < size C → yOf i = evalT T C x i) ∧ ∀ l, read (yOf i) l = read (evalT T C x i) l := by
+  obtain ⟨-, hreal, hdum⟩ := pad_correct C c hC
+  intro i
+  induction i using Nat.strong_induction_on with
+  | _ i ih =>
+  intro hiN hcone
+  have hrun := hcone i (.refl i)
+  have heq : i < size C → yOf i = evalT T C x i := by
+    intro hi
+    rw [← hrun, hreal i hi (xOf i), evalT_eq]
+    refine eval_congr hC i fun k hk => ?_
+    rw [hw i hiN k hk]
+    cases hs : T.src i k with
+    | input m => rfl
+    | unit i' l =>
+      exact (ih i'.val i'.isLt (Nat.lt_trans i'.isLt hiN) fun j hj => hcone j (.step k hk i' l hs hj)).2 l
+  refine ⟨heq, fun l => ?_⟩
+  by_cases hi : i < size C
+  · rw [heq hi]
+  · have hle : C.length ≤ i := by unfold size at hi; omega
+    rw [← hrun, hdum i hle hiN (xOf i), evalT_eq, eval_past hle, read_dummy]
+    rfl
+
 end Universal
 
 open Universal in
@@ -77,8 +134,8 @@ theorem wired_cone (T : Universal.Topo) (C : Universal.Circ) (c : Universal.Cls)
     (xOf : ℕ → ℕ → Bool) (yOf : ℕ → List Bool) (x : ℕ → Bool) (hw : Universal.Wired T c xOf yOf x)
     (i : ℕ) (hi : i < Universal.size C)
     (hcone : ∀ j, Universal.Reaches T c j i → Universal.run c (Universal.pad C c) j (xOf j) = yOf j) :
-    yOf i = Universal.evalT T C x i := by
-  sorry
+    yOf i = Universal.evalT T C x i :=
+  (cone_aux T C c hC xOf yOf x hw i (Nat.lt_of_lt_of_le hi (pad_correct C c hC).1) hcone).1 hi
 
 open Universal in
 /-- **Composition at the universal unit.** `C` fits `c`; every unit of the padded program is correct on its claimed
@@ -88,8 +145,9 @@ public topology `T` (`Wired`). Then every unit of `C` outputs what `C` end to en
 theorem wired_eval (T : Universal.Topo) (C : Universal.Circ) (c : Universal.Cls) (hC : Universal.fits C c)
     (xOf : ℕ → ℕ → Bool) (yOf : ℕ → List Bool) (x : ℕ → Bool) (hw : Universal.Wired T c xOf yOf x)
     (hu : ∀ i < Universal.units c, Universal.run c (Universal.pad C c) i (xOf i) = yOf i) :
-    ∀ i < Universal.size C, yOf i = Universal.evalT T C x i := by
-  sorry
+    ∀ i < Universal.size C, yOf i = Universal.evalT T C x i := fun i hi =>
+  wired_cone T C c hC xOf yOf x hw i hi fun j hj =>
+    hu j (Nat.lt_of_le_of_lt hj.le (Nat.lt_of_lt_of_le hi (pad_correct C c hC).1))
 
 open Universal in
 /-- **An owed output off `evalT` is a wrong unit**: under `Wired`, if some unit of `C` claims outputs other than `C`'s end
@@ -99,6 +157,11 @@ theorem wired_wrong (T : Universal.Topo) (C : Universal.Circ) (c : Universal.Cls
     (xOf : ℕ → ℕ → Bool) (yOf : ℕ → List Bool) (x : ℕ → Bool) (hw : Universal.Wired T c xOf yOf x)
     (h : ∃ i < Universal.size C, yOf i ≠ Universal.evalT T C x i) :
     1 ≤ wrong (Universal.run c (Universal.pad C c)) (Universal.units c) xOf yOf := by
-  sorry
+  obtain ⟨i, hi, hne⟩ := h
+  refine Nat.one_le_iff_ne_zero.2 fun h0 => hne (wired_eval T C c hC xOf yOf x hw (fun j hj => ?_) i hi)
+  by_contra hj'
+  unfold wrong at h0
+  rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff] at h0
+  exact h0 (Finset.mem_range.2 hj) hj'
 
 end FlockSoundness.Discharge.PrivateCircuit
