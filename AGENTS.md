@@ -79,7 +79,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     Other modules are created when code lands, not before.
   - Tests live in `packages/verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the
- stdlib, `verity` and itself (`tests/test_protocol_boundaries.py`).
+ stdlib, `verity`, itself and the protocols Daniel has allowed it (PoUW imports sampled proofs;
+ `EDGES` in `tests/test_protocol_boundaries.py`).
  The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the one-stage
  audit (`one_stage`: registration, the verifier's draw over a partition's proof units, and the
  audit record with its profile), the two-stage law, its draws from the verifier's own

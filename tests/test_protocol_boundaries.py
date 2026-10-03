@@ -1,5 +1,5 @@
-"""Protocols depend inward only: each imports the standard library, the core `verity` and itself; never another
-protocol, a backend, an integration, `research` or a third-party package.  The application composes protocols."""
+"""Protocols depend inward only: each imports the standard library, the core `verity`, itself and the protocols `EDGES`
+grants it; never a backend, an integration, `research` or a third-party package.  The application composes protocols."""
 
 from __future__ import annotations
 
@@ -11,6 +11,11 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1] / "protocols"
 PROTOCOLS = sorted(p.name for p in ROOT.iterdir() if (p / "pyproject.toml").exists())
+
+# The protocol -> protocol imports Daniel has allowed, each with its ruling (`.agents/skills/friction/SKILL.md`).
+EDGES = {
+    "pouw": {"sampled_proofs"},  # 2026-10-03: PoUW's tile check is a sampled proof.
+}
 
 
 def _imports(path: Path) -> list[tuple[str, int]]:
@@ -42,10 +47,28 @@ def test_a_lean_packages_tooling_is_not_the_protocols_code():
     assert not [p for p in _sources("pouw") if (ROOT / "pouw" / "lean") in p.parents]
 
 
+def _allowed(name: str) -> set[str]:
+    return set(sys.stdlib_module_names) | {"verity", f"verity_{name}"} | {f"verity_{p}" for p in EDGES.get(name, ())}
+
+
+def test_edges_name_protocols_and_stay_acyclic():
+    assert set(EDGES) | set().union(*EDGES.values()) <= set(PROTOCOLS)
+
+    def reaches(a: str, b: str, seen: frozenset[str] = frozenset()) -> bool:
+        return any(c == b or (c not in seen and reaches(c, b, seen | {c})) for c in EDGES.get(a, ()))
+
+    assert not [p for p in EDGES if reaches(p, p)]
+
+
+def test_an_edge_grants_one_direction_to_one_protocol():
+    assert "verity_sampled_proofs" in _allowed("pouw")
+    assert "verity_pouw" not in _allowed("sampled_proofs")
+    assert "verity_pous" not in _allowed("pouw")
+
+
 @pytest.mark.parametrize("name", PROTOCOLS)
-def test_protocol_imports_only_the_core(name):
-    package = f"verity_{name}"
-    allowed = set(sys.stdlib_module_names) | {"verity", package}
+def test_protocol_imports_only_the_core_and_its_edges(name):
+    allowed = _allowed(name)
     offenders = [f"{path.relative_to(ROOT)}:{line}: {mod}"
                  for path in _sources(name)
                  for mod, line in _imports(path) if mod.split(".")[0] not in allowed]

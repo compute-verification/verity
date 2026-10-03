@@ -148,8 +148,9 @@ These are Daniel's rulings, newest first.
   when `--update --moved` prints it as the same statement under its old names, with every definition it reads the same.
 - 2026-10-01: a Lean protocol package may require another protocol's package (NCI's requiring sampled proofs', say),
   because composing their guarantees needs it. The requires stay acyclic, and a protocol never requires a backend. Such a
-  `path` require changes no revision, so a feature PR may add it. Python's protocols still import only `verity` and
-  themselves (`tests/test_protocol_boundaries.py`).
+  `path` require changes no revision, so a feature PR may add it. Python's protocols import only `verity`, themselves
+  and the protocols `EDGES` in `tests/test_protocol_boundaries.py` lists (PoUW → sampled proofs, the ruling of
+  2026-10-03 in `.agents/skills/friction/SKILL.md`).
 - 2026-10-01: there are guarantees and assumptions, and a guarantee is **proved under its assumptions**; there is no
   third status. Some assumptions are better than others: SHA-512's collision resistance (`cr/sha-512`) is a better one
   than a fact about our own circuit that we mean to prove (`HmRowComputes`). So what a guarantee assumes is explicit and

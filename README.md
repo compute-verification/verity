@@ -76,7 +76,7 @@ The commitment establishes the first, and a backend's proof the second. A proof 
 
 ### Protocols
 
-Which parts of a circuit are checked, how they are sampled and what must be committed before a challenge are protocol questions, and none of them changes the circuit. Each protocol under `protocols/` is its own distribution and imports only the standard library, `verity` and itself.
+Which parts of a circuit are checked, how they are sampled and what must be committed before a challenge are protocol questions, and none of them changes the circuit. Each protocol under `protocols/` is its own distribution and imports only the standard library, `verity`, itself and the protocols it builds on (PoUW builds on sampled proofs).
 
 ### Backends
 
