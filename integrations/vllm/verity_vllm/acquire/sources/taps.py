@@ -7,7 +7,8 @@ for the single-rank Commit (`pipeline.commit`: `attach`) and for the rank worker
 merged manifest, and `require_on_every_rank` fails the Commit closed unless every rank attached every tap that is on.  Each rank also
 attaches the route source (`route_source`) when a capture map describes its model, and every rank must have.  The single-rank
 `attach` also attaches the call-boundary source (`call_boundary_source`) whenever the manifest names `call_boundaries` identities;
-`attached` names what it attaches for a row's manifest, constructing nothing (the CPU gate's `call-boundaries`, `acquire.gate`)."""
+`attached` names what it attaches for a row's manifest, constructing nothing (the CPU gate's `call-boundaries`, `acquire.gate`).  Both
+`attach` and every rank's `attach_rank` arm a derived-S Program's prescribed split count (`prescribe_idle_splits`), taps or none."""
 from __future__ import annotations
 
 import json
@@ -62,9 +63,18 @@ def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple
                                                          plan=call_boundary_plan)
     required_classes, _src = scale_products_source.attach(com, bool(SP.manifest_sites(manifest)), manifest, required_classes,
                                                           explicit_classes=explicit_classes, model=model)
-    if hasattr(com, "prescribe_idle_splits") and int(((manifest or {}).get("populations") or {}).get("by_family", {}).get("sampler_splits", 0) or 0):
-        com.prescribe_idle_splits = splits_for_v1            # a derived-S Program: a step vLLM ran without top-p binds its prescribed S
+    prescribe_idle_splits(com, manifest)
     return required_classes
+
+
+def prescribe_idle_splits(com: Any, manifest: Mapping[str, Any] | None) -> bool:
+    """For a derived-S Program (its manifest names `sampler_splits`), a sampling step on which vLLM ran no split kernel (every row at
+    top_p 1) binds the prescribed S `SplitsFor_v1(rows, num_SMs)` (`commit.committer.topp_splits.step_splits`); True when armed.  A
+    manifest without the family (greedy, or B1's constant S) arms nothing, and a step whose split kernels ran binds their S either way."""
+    if hasattr(com, "prescribe_idle_splits") and int(((manifest or {}).get("populations") or {}).get("by_family", {}).get("sampler_splits", 0) or 0):
+        com.prescribe_idle_splits = splits_for_v1
+        return True
+    return False
 
 
 def warmup(com: Any, on: bool) -> None:
@@ -91,10 +101,11 @@ def attached(manifest: Mapping[str, Any] | None) -> list[str]:
 
 def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **given: Any) -> dict[str, Any]:
     """A TP rank's side: attach each tap that is on with the rank's rows of the merged manifest, and the route source when a capture
-    map describes the rank's model (`route_source`, None when none does); per source its stats, or its refusal."""
-    man = json.loads(Path(manifest_path).read_text()) if manifest_path and given else {}
+    map describes the rank's model (`route_source`, absent when none does), per source its stats, or its refusal; and arm the
+    prescribed split count as `attach` does (`prescribe_idle_splits`: "SplitsFor_v1" when armed)."""
+    man = json.loads(Path(manifest_path).read_text()) if manifest_path else {}
     mine = dict(man, identities=[r for r in man.get("identities") or [] if int(r.get("rank", 0)) == int(rank)])
-    out: dict[str, Any] = {}
+    out: dict[str, Any] = {"prescribe_idle_splits": "SplitsFor_v1"} if prescribe_idle_splits(com, mine) else {}
     for f, key, mod, _fam, _cls in SOURCES:
         if not given.get(f):
             continue
@@ -105,14 +116,16 @@ def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **gi
             out[key] = {"error": repr(e)[:200]}
     try:
         rsrc = route_source.attach(com, model, rank)
-        out["route_source"] = None if rsrc is None else {"stats": dict(rsrc.stats)}
+        if rsrc is not None:
+            out["route_source"] = {"stats": dict(rsrc.stats)}
     except (ValueError, RuntimeError, AttributeError) as e:
         out["route_source"] = {"error": repr(e)[:200]}
     return out
 
 
 def for_ranks(taps: TapSources) -> Any:
-    """What `tp2_commit_make` calls on every rank: `attach_rank` with the taps that are on bound (picklable)."""
+    """What `tp2_commit_make` calls on every rank: `attach_rank` with the taps that are on bound (picklable), also when none is, since
+    every rank arms the prescribed split count and attaches the route source."""
     return partial(attach_rank, **taps.given())
 
 
@@ -142,4 +155,4 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
     return required_classes
 
 
-__all__ = ["SOURCES", "TapSources", "attach", "warmup", "attached", "attach_rank", "for_ranks", "require_on_every_rank"]
+__all__ = ["SOURCES", "TapSources", "attach", "prescribe_idle_splits", "warmup", "attached", "attach_rank", "for_ranks", "require_on_every_rank"]

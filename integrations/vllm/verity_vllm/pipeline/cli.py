@@ -227,7 +227,8 @@ def set_environment(environ: Mapping[str, str], keep: tuple[str, ...] = ()) -> N
 
 def process_settings(environ: MutableMapping[str, str]) -> None:
     """The process-wide settings every command takes from the environment: a leased Commit's lease (`gpu_lease.acquire` reads and
-    sets this environment)."""
+    sets this environment).  The dense chain's threads are not among them: `dense_rows` reads `VERITY_DENSE_THREADS` when it is
+    imported, and importing it here would need the core, which a Build's top-level process does not have on its path."""
     if environ.get("VERITY_LEASE_STARTED"):
         from verity_vllm.pipeline import gpu_lease
         gpu_lease.use_environ(environ)

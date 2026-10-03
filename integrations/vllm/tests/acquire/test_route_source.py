@@ -143,6 +143,6 @@ def test_a_tp_rank_attaches_the_route_source_and_every_rank_must(tmp_path):
     assert TAPS.require_on_every_rank(made, ("a",), versions, TAPS.TapSources(), explicit_classes=False) == ("a",)
     assert sorted(versions["route_source"]) == [0, 1]
     other = attach(Com(), torch.nn.Linear(2, 2), None, 0)
-    assert other == {"route_source": None}
+    assert other == {}
     with pytest.raises(SystemExit, match=r"route source did not attach on ranks \[1\]"):
         TAPS.require_on_every_rank([made[0], {"rank": 1, "tap_sources": other}], (), {}, TAPS.TapSources(), explicit_classes=True)
