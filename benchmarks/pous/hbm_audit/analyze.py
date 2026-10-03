@@ -35,11 +35,13 @@ def load(dir_: Path):
 
 
 def honest_by_r(honest: dict, c_gib: int) -> dict:
-    """`{R: digest1-distribution}` at the given `C` size (the audit answer is the one-lane digest)."""
+    """`{R: {kernel1, digest1}}` at the given `C` size. `kernel1` is the clean device read+fold-of-one-lane time used for
+    the placement separation (it is measured the same way as the cheater, tables precomputed); `digest1` is the full audit
+    answer latency (read + z-fold), which sets the deadline `T`."""
     out = {}
     for pt in honest["points"]:
         if pt["c_gib"] == c_gib:
-            out[pt["R"]] = pt["digest1"]
+            out[pt["R"]] = {"kernel1": pt["kernel1"], "digest1": pt.get("digest1", pt["kernel1"])}
     return out
 
 
@@ -72,20 +74,25 @@ def analyze(honest: dict, cheater: dict, margin: float):
         h = hon.get(r)
         if h is None:
             continue
+        kern, dig = h["kernel1"], h["digest1"]
         nbytes = r * BLOCK_BYTES
-        row = {"R": r, "honest_p50": h["ms_p50"], "honest_p99": h["ms_p99"], "honest_p999": h["ms_p999"],
-               "honest_gbps_p50": _rate_gbps(nbytes, h["ms_p50"]), "fracs": {}}
-        T = h["ms_p999"]  # deadline tuned to the honest HBM answer
+        row = {"R": r, "honest_p50": kern["ms_p50"], "honest_p99": kern["ms_p99"], "honest_p999": kern["ms_p999"],
+               "honest_gbps_p50": _rate_gbps(nbytes, kern["ms_p50"]),
+               "digest_p50": dig["ms_p50"], "digest_p999": dig["ms_p999"], "fracs": {}}
+        # the deadline on the full audit answer (read + fold): honest answers clear it; set at the honest digest p999.
+        T = dig["ms_p999"]
         row["T_ms"] = T
+        # the read-time gate the cheater must beat: it reads bytes at BW_dev or BW_pcie, no fold either way.
+        gate = kern["ms_p999"]
         for f in fracs:
             c = che.get((r, f))
             if not c:
                 continue
-            ratio_typ = c["ms_p50"] / h["ms_p50"] if h["ms_p50"] else 0.0
-            ratio_margin = c["ms_min"] / T if T else 0.0  # cheater's best case vs the deadline
+            ratio_typ = c["ms_p50"] / kern["ms_p50"] if kern["ms_p50"] else 0.0
+            ratio_margin = c["ms_min"] / gate if gate else 0.0  # cheater's best read vs the honest read p999
             row["fracs"][f] = {"cheater_p50": c["ms_p50"], "cheater_min": c["ms_min"], "method": c["method"],
                                "ratio_typ": ratio_typ, "ratio_margin": ratio_margin,
-                               "separated": c["ms_min"] > T and h["ms_p999"] <= T and ratio_margin >= margin,
+                               "separated": c["ms_min"] > gate and ratio_margin >= margin,
                                "pcie_gbps_p50": c["pcie_gbps_p50"]}
         rows.append(row)
     # the least f separated with margin, per R, and a recommended (R, T)
@@ -128,11 +135,12 @@ def to_markdown(a: dict) -> str:
              "Honest = one-lane digest over R HBM-resident 64 KiB blocks (device). "
              "Cheater = faster of async-copy-overlap and UVA zero-copy, fraction f of blocks in pinned host DRAM. "
              "Times in ms; ratio = cheater_p50 / honest_p50.", ""]
-    head = ["R", "honest p50", "honest p999 (=T)", "GB/s"] + [f"f={int(f*100)}% p50 (x)" for f in nonzero]
+    head = ["R", "honest read p50", "honest read p999", "T=digest p999", "GB/s"] + \
+        [f"f={int(f*100)}% p50 (x)" for f in nonzero]
     lines.append("| " + " | ".join(head) + " |")
     lines.append("|" + "|".join(["---"] * len(head)) + "|")
     for row in a["rows"]:
-        cells = [str(row["R"]), f"{row['honest_p50']:.3f}", f"{row['honest_p999']:.3f}",
+        cells = [str(row["R"]), f"{row['honest_p50']:.3f}", f"{row['honest_p999']:.3f}", f"{row['digest_p999']:.3f}",
                  f"{row['honest_gbps_p50']:.0f}"]
         for f in nonzero:
             v = row["fracs"].get(f)
@@ -142,15 +150,16 @@ def to_markdown(a: dict) -> str:
             else:
                 cells.append("-")
         lines.append("| " + " | ".join(cells) + " |")
-    lines += ["", "`*` = deadline T = honest p999 separates this (R, f) with the required margin "
-              f"(cheater best-case / T >= {a['margin']}).", ""]
+    lines += ["", "`*` = separated: the cheater's best-case read time exceeds the honest read p999 with the required "
+              f"margin (cheater_min / honest_read_p999 >= {a['margin']}); the full-answer deadline T = honest digest "
+              "p999. The gap is a read-time (bandwidth) effect; the z-fold adds the same small constant to both.", ""]
     rec = a["recommendation"]
     if rec:
         lines += ["### Recommendation", "",
-                  f"- R = {rec['R']}, T = {rec['T_ms']*1000:.0f} us ({rec['T_ms']:.3f} ms)",
-                  f"- honest p999 = {rec['honest_p999_ms']:.3f} ms; cheater(f=5%) best-case = {rec['cheater5_min_ms']:.3f} ms "
-                  f"(p50 {rec['cheater5_p50_ms']:.3f} ms), method = {rec['method']}",
-                  f"- margin ratio (cheater best-case / T) = {rec['margin_ratio']:.2f}x; "
+                  f"- R = {rec['R']}, T = {rec['T_ms']*1000:.0f} us ({rec['T_ms']:.3f} ms, honest digest p999)",
+                  f"- honest read p999 = {rec['honest_p999_ms']:.3f} ms; cheater(f=5%) best-case read = "
+                  f"{rec['cheater5_min_ms']:.3f} ms (p50 {rec['cheater5_p50_ms']:.3f} ms), method = {rec['method']}",
+                  f"- margin ratio (cheater best read / honest read p999) = {rec['margin_ratio']:.2f}x; "
                   f"separates f>=5% with margin: {rec['separated']}", ""]
     else:
         lines += ["### Recommendation", "", "No f=5% point in the cheater sweep.", ""]

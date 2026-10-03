@@ -207,11 +207,20 @@ def cmd_honest(args, torch, meta):
             g, z = D.lane_points(0xB01C, 0)
             g1, _ = D.lane_points(0xB01C, 1)
             nbytes = r * D.BLOCK_BYTES
+            # precompute key-dependent tables once (off the timed path), as a native responder would; time only device work
+            combine0 = D.combine_table(g, "cuda")
+            combine1 = D.combine_table(g1, "cuda")
+            gp0, gp1 = pow(g, D.INTERLEAVE, D.MOD), pow(g1, D.INTERLEAVE, D.MOD)
+            zp = D.z_powers_dev(z, r, "cuda")
+            out = torch.empty(r, dtype=torch.int64, device="cuda")
+            out1 = torch.empty(r, dtype=torch.int64, device="cuda")
             # kernel-only (the HBM read + fold of one lane), many trials for the distribution
-            k_ms = time_events(torch, lambda: D.block_hashes(C, idx, g), iters=args.trials)
-            # full one-lane digest (audit answer latency), and the two-lane digest (one read)
-            f_ms = time_events(torch, lambda: D.device_digest(C, idx, 0xB01C, 0), iters=max(30, args.trials // 4))
-            two_ms = time_events(torch, lambda: D.block_hashes2(C, idx, g, g1), iters=max(30, args.trials // 4))
+            k_ms = time_events(torch, lambda: D.block_hashes_pre(C, idx, combine0, gp0, out), iters=args.trials)
+            # full one-lane digest (audit answer latency = read + fold), and the two-lane digest (one read)
+            f_ms = time_events(torch, lambda: D.fold_pre(D.block_hashes_pre(C, idx, combine0, gp0, out), zp),
+                               iters=max(30, args.trials // 4))
+            two_ms = time_events(torch, lambda: D.block_hashes2_pre(C, idx, combine0, combine1, gp0, gp1, out, out1),
+                                 iters=max(30, args.trials // 4))
             out["points"].append({
                 "c_gib": cg, "n_blocks": n, "R": r,
                 "kernel1": dist(k_ms, nbytes),
