@@ -1,0 +1,199 @@
+import Mathlib.Analysis.SpecialFunctions.Log.Basic
+import Mathlib.Order.ConditionallyCompleteLattice.Indexed
+import Pous.Protocol.Model.Audit
+
+/-!
+# The continuous audit: a timed verifier, and a responder that runs on its clock
+
+Added on 3 Oct 2026, with `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.ContinuousAudit`. Statement reviewer:
+needed. Red team: needed. It replaces PR #896's round-structured draft, which assumed three requirements on the protocol
+(no pipelining, a hard deadline, every answer past `Δ` counted late). Here the verifier is explicit and enforces each
+rule. The responder may try to break any of them, and no statement takes a hypothesis about its timing.
+
+**Time.** One unit is one round of parallel queries to the primitive (`Prog.depth`), as in the sequential audit. `D`
+units and `Q` queries fit in the deadline `Δ` plus the round trip, and `D_late` units and `Q_late` queries in the hard
+deadline `Δ_late` plus the round trip. The verifier's arrival times `arr j` are in the same units.
+
+**The responder** (`ContMachine`) is a machine on the verifier's clock, with a memory of any length.
+
+* When a challenge is sent at time `t`, its memory is `rest W pp C ω h t m`. That is any function of `W`, `pp`, the
+  codeword, the whole primitive, the indices sent before (`h`), `t`, and its memory `m` when the last round closed.
+  Between rounds it may recompute anything, for as long as it likes.
+* During a round it runs one `step` per unit on `W`, `pp`, `h`, its memory and the verifier's message: the index at
+  the round's first unit, `none` after. A step either answers, or sends one round of queries and replaces its memory
+  by any function of their answers. During a round the responder sees neither `C` nor `ω` whole and reaches the
+  primitive only through queries.
+
+**The verifier.** For `j = 0, 1, …`:
+
+1. It sends index `i_j` at `max(arr j, c_{j−1})` (`contSend`), where `c_{j−1}` is the time round `j − 1` closed and
+   `c_{−1} = 0`. A challenge is never outstanding when the next is sent: `TimedVerifier.challenge()` refuses while one
+   is.
+2. It times the answer from its own send time. The answer's delay is the number of units the machine took, the depth
+   of the round's program (`contProg`), as `TimedVerifier.respond()` measures `stop − start` from `challenge()`.
+3. It waits at most `D_late` units. The round closes at the answer, or after `D_late` units with no answer
+   (`contNext`). A round with no answer by then, or whose answer took more than `Q_late` queries, is **rejected**
+   (`contVerdict`): past the hard deadline.
+4. Any other answer that took more than `D` units or `Q` queries is **late**, whatever its block: past `Δ`. An answer
+   within `(D, Q)` is a **hit** if it is the block `C i_j`, and **wrong** otherwise.
+5. With tolerance `f₀` it accepts iff no round is rejected and at most `f₀` rounds are late or wrong (`contAccepts`).
+
+`contRecords` runs rules 1–4 over the indices. Each round's record holds its verdict and the length of the responder's
+memory at the send time. The memory length is the game's measurement, which the verifier never sees.
+
+**The three requirements are theorems about this verifier.** `Pous/SecurityProofs/Continuous/Verifier.lean` proves
+each one for every machine:
+
+1. **No pipelining** (rule 1; `PousContinuous.no_pipelining`, `PousContinuous.close_le_send`). Round `j`'s record
+   depends only on `i_0, …, i_j`, and round `j + 1` is sent no earlier than round `j` closed.
+2. **A hard deadline** (rule 3; `PousContinuous.closed_le`, `PousContinuous.not_reject`). Every round closes within
+   `D_late` units of its own send time. A round that is not rejected answered within `D_late` units and `Q_late`
+   queries.
+3. **Every answer past `Δ` is counted** (rule 4; `PousContinuous.hit_on_time`). A hit took at most `D` units and `Q`
+   queries, so an answer past `Δ` is late or rejected, never a hit.
+
+The continuous bound holds at every `(D_late, Q_late)`, so it does not need the hard deadline, which the verifier
+enforces anyway. A late answer is already a miss, and the memory is measured at each send time whatever the machine
+did before. No cap like the graded audit's `D_late ≤ 12` is a hypothesis here.
+
+**What is measured.** `ε_j = 1 − |m_j|/|C|` (`contFreed`), where `m_j` is the memory at challenge `j`'s send time
+(`contMem`). `ContinuousAudit` bounds `Σ_j max(ε_j − ε_proof, 0)`, with `ε_proof = 1 − (β − B)/|C|` (`epsProof`).
+
+**What a reader takes from the implementation.** These are not timing rules but the scope of the bound:
+
+* **The arrival process is the verifier's own randomness.** It must be independent of the setup, the indices and the
+  answers (a Poisson process from its own `verity.randomness` domain, say). The number of challenges `N` must not
+  adapt to the misses, though rejecting early is fine. The statements hold for every fixed schedule `arr`, so they
+  hold conditional on the arrivals. Per challenge, normalize by the realized `N`, never by `λT`.
+* **Storage at send times, not a time average.** `ε_j` is read at the send times, and a machine may hold more
+  between them.
+* **Indices secret until sent** (`audit.challenge_key`), uniform and independent of the setup.
+* **Work is modeled.** The verifier sees only time. `(D, Q)` and `(D_late, Q_late)` are what the adversary completes
+  within `Δ` and `Δ_late`, the sequential audit's convention.
+* **Wrong answers count as misses** rather than rejecting. A verifier that rejects a wrong answer accepts fewer runs,
+  so the bound covers it.
+-/
+
+namespace Pous
+
+open scoped ENNReal
+
+variable {M : IdealModel}
+
+/-- A responder in the continuous audit (the module docstring, "The responder"). `rest W pp C ω h t m` is its memory
+at the send time `t` of the challenge after the indices `h`, from its memory `m` when the last round closed. During a
+round, `step W pp h m msg` either answers (`inl`) or sends one round of queries and continues on their answers
+(`inr`). `msg` is the round's index at its first unit and `none` after. -/
+structure ContMachine (sch : Scheme M) : Type where
+  rest : Bits sch.n → Bits sch.t → sch.Code → M.Ω → List (Fin sch.B) → ℕ → List Bool → List Bool
+  step : Bits sch.n → Bits sch.t → List (Fin sch.B) → List Bool → Option (Fin sch.B) →
+    Bits sch.ℓ ⊕ (List M.Qry × (List M.Ans → List Bool))
+
+/-- One round of the machine after the indices `h`, from memory `m`, with the message `msg` at its first unit and at
+most `T` units of queries. It returns the answer, if one came within `T` units, and the memory when the round closed. -/
+def ContMachine.round {sch : Scheme M} (mach : ContMachine sch) (W : Bits sch.n) (pp : Bits sch.t)
+    (h : List (Fin sch.B)) : ℕ → List Bool → Option (Fin sch.B) → Prog M (Option (Bits sch.ℓ) × List Bool)
+  | 0, m, msg =>
+    match mach.step W pp h m msg with
+    | .inl a => .ret (some a, m)
+    | .inr _ => .ret (none, m)
+  | T + 1, m, msg =>
+    match mach.step W pp h m msg with
+    | .inl a => .ret (some a, m)
+    | .inr (qs, k) => .round qs fun as => mach.round W pp h T (k as) none
+
+/-- The verifier's verdict on one round. -/
+inductive ContVerdict : Type
+  /-- Within `D` units and `Q` queries, with the right block. -/
+  | hit
+  /-- Within `D` units and `Q` queries, with a wrong block. -/
+  | wrong
+  /-- Within the hard deadline but past `(D, Q)`, whatever the block. -/
+  | late
+  /-- No answer within `D_late` units, or more than `Q_late` queries: past the hard deadline. -/
+  | reject
+  deriving DecidableEq
+
+/-- The verdict on a round whose program is `p`, when the primitive answers by `f` and the right block is `c` (rules 3
+and 4). The program stops after `D_late` units on its own (`ContMachine.round`), so here a missing answer is one that
+did not come within `D_late` units. -/
+def contVerdict {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.Ans) (p : Prog M (Option (Bits ℓ) × σ))
+    (c : Bits ℓ) : ContVerdict :=
+  match (p.run f).1 with
+  | none => .reject
+  | some a =>
+    if Q_late < p.work f then .reject
+    else if D < p.depth f ∨ Q < p.work f then .late
+    else if a = c then .hit else .wrong
+
+/-- The verifier and the responder between rounds: the indices sent so far (oldest first), the time the last round
+closed, and the responder's memory then. -/
+structure ContState (B : ℕ) : Type where
+  sent : List (Fin B)
+  closed : ℕ
+  mem : List Bool
+
+/-- Before the first challenge: nothing sent, time `0`, empty memory. -/
+def ContState.start {B : ℕ} : ContState B := ⟨[], 0, []⟩
+
+/-- Rule 1: the next challenge is sent at its arrival time, or when the last round closed if that is later. -/
+def contSend {B : ℕ} (arr : ℕ → ℕ) (s : ContState B) : ℕ := max (arr s.sent.length) s.closed
+
+/-- The responder's memory when the next challenge is sent. -/
+def contMem {sch : Scheme M} (mach : ContMachine sch) (W : Bits sch.n) (pp : Bits sch.t) (C : sch.Code) (ω : M.Ω)
+    (arr : ℕ → ℕ) (s : ContState sch.B) : List Bool :=
+  mach.rest W pp C ω s.sent (contSend arr s) s.mem
+
+/-- The program of the round that answers index `i` after the state `s`: the machine from its memory at the send
+time, with `i` at the first unit and at most `D_late` units (rules 2 and 3). -/
+def contProg {sch : Scheme M} (mach : ContMachine sch) (D_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t) (C : sch.Code)
+    (ω : M.Ω) (arr : ℕ → ℕ) (s : ContState sch.B) (i : Fin sch.B) : Prog M (Option (Bits sch.ℓ) × List Bool) :=
+  mach.round W pp s.sent D_late (contMem mach W pp C ω arr s) (some i)
+
+/-- The state after that round: `i` sent, the round closed as many units after its send time as its program took on
+the primitive's path (rule 2), and the memory then. -/
+def contNext {sch : Scheme M} (mach : ContMachine sch) (D_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t) (C : sch.Code)
+    (ω : M.Ω) (arr : ℕ → ℕ) (s : ContState sch.B) (i : Fin sch.B) : ContState sch.B :=
+  ⟨s.sent ++ [i], contSend arr s + (contProg mach D_late W pp C ω arr s i).depth (M.answer ω),
+    ((contProg mach D_late W pp C ω arr s i).run (M.answer ω)).2⟩
+
+/-- The state after the indices `h`, from the start. -/
+def contAfter {sch : Scheme M} (mach : ContMachine sch) (D_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t)
+    (C : sch.Code) (ω : M.Ω) (arr : ℕ → ℕ) (h : List (Fin sch.B)) : ContState sch.B :=
+  h.foldl (contNext mach D_late W pp C ω arr) .start
+
+/-- What the audit records of one round: the length of the responder's memory at the send time (the game's
+measurement, which the verifier never sees) and the verdict. -/
+structure ContRecord : Type where
+  held : ℕ
+  verdict : ContVerdict
+
+/-- The record of the round that answers index `i` after the state `s`. -/
+def contRecord {sch : Scheme M} (mach : ContMachine sch) (D Q D_late Q_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t)
+    (C : sch.Code) (ω : M.Ω) (arr : ℕ → ℕ) (s : ContState sch.B) (i : Fin sch.B) : ContRecord :=
+  ⟨(contMem mach W pp C ω arr s).length,
+    contVerdict D Q Q_late (M.answer ω) (contProg mach D_late W pp C ω arr s i) (C i)⟩
+
+/-- The records of the rounds for the indices `is`, from the state `s`: rules 1–4, one round after another. -/
+def contRecords {sch : Scheme M} (mach : ContMachine sch) (D Q D_late Q_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t)
+    (C : sch.Code) (ω : M.Ω) (arr : ℕ → ℕ) : ContState sch.B → List (Fin sch.B) → List ContRecord
+  | _, [] => []
+  | s, i :: is => contRecord mach D Q D_late Q_late W pp C ω arr s i ::
+      contRecords mach D Q D_late Q_late W pp C ω arr (contNext mach D_late W pp C ω arr s i) is
+
+/-- Rule 5: with tolerance `f₀` the verifier accepts iff no round is rejected and at most `f₀` rounds are late or
+wrong. -/
+def contAccepts (f₀ : ℝ) (rs : List ContRecord) : Prop :=
+  (∀ r ∈ rs, r.verdict ≠ .reject) ∧ ((rs.filter fun r => r.verdict = .late ∨ r.verdict = .wrong).length : ℝ) ≤ f₀
+
+/-- The freed fraction of a memory of `held` bits: `ε = 1 − held/|C|`. -/
+noncomputable def contFreed (sch : Scheme M) (held : ℕ) : ℝ :=
+  1 - (held : ℝ) / (sch.B * sch.ℓ)
+
+/-- The per-answer slack of a compression bound to `β` bits: `ε_proof = 1 − (β − B)/|C|`. With
+`TimedINC sch D Q β π`, an answer from a memory of `(1 − ε)·|C|` bits is a hit with probability at most
+`1 − ε + ε_proof`, off a setup event of probability at most `(β + 1)·π` (`Pous.Guarantees.PerAnswer`). -/
+noncomputable def epsProof (sch : Scheme M) (β : ℕ) : ℝ :=
+  1 - ((β : ℝ) - sch.B) / (sch.B * sch.ℓ)
+
+end Pous
