@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import threading
 from pathlib import Path
 
@@ -550,6 +551,55 @@ def test_a_run_generates_its_data_and_fails_on_its_exit(tmp_path, monkeypatch):
     assert tests(policy={"exempt": {}, "runs": {"T": entry}})[0] == [
         "runs: T is not under `exempt`: a run is a test, not a proof the audit reads"]
     assert tests(policy={"exempt": {"U": "?"}, "runs": {"U": entry}})[0] == ["runs: U is not a module of the package"]
+
+
+def _slot_module(repo: Path, body: str) -> None:
+    (repo / "tools" / "check").mkdir(parents=True)
+    (repo / "tools" / "check" / "lean_slot.py").write_text("class Refused(Exception):\n    pass\n\n\n" + body)
+
+
+def test_build_takes_a_lean_audit_slot_unless_one_is_held_or_no_cap_is_set(tmp_path, monkeypatch):
+    """The node's cap holds for an audit run by hand too (vy-nebius-1, 3 Oct: a cap of 4 kept by hand, and overrun)."""
+    monkeypatch.setattr(A, "LEAN_SLOTS", tmp_path / "lean-slots")
+    monkeypatch.setenv("LEAN_SLOT", "")
+    held, refused, bare = tmp_path / "held", tmp_path / "refused", tmp_path / "bare"
+    _slot_module(held, "def hold():\n    return 7\n")
+    _slot_module(refused, "def hold():\n    raise Refused('lists neither pool')\n")
+    bare.mkdir()
+    assert A.lean_slot(held) == 7
+    with pytest.raises(SystemExit, match="audit: lists neither pool"):
+        A.lean_slot(refused)
+    assert A.lean_slot(bare) is None                                  # no module and no cap: another repository's copy
+    A.LEAN_SLOTS.write_text("audit 2\n")
+    with pytest.raises(SystemExit, match="caps Lean audits on this node, and .* is missing"):
+        A.lean_slot(bare)
+    monkeypatch.setenv("LEAN_SLOT", "check/0")                        # inside check's lean-audit step, which holds one
+    assert A.lean_slot(refused) is None and A.lean_slot(bare) is None
+    taken = []
+    monkeypatch.setattr(A, "lean_slot", lambda repo: taken.append(repo) or sys.exit("slot"))
+    with pytest.raises(SystemExit, match="slot"):
+        A.main(["--build", str(tmp_path / "pkg"), "--repo", str(held)])
+    assert taken == [held.resolve()]
+
+
+def test_build_holds_a_slot_of_the_real_lean_slot_module(tmp_path, monkeypatch):
+    """audit.py and `tools/check/lean_slot.py` agree on the module's interface: a free slot is taken and held by this process."""
+    import fcntl
+
+    (tmp_path / "lean-slots").write_text("audit 1\n")
+    monkeypatch.setenv("LEAN_SLOTS", str(tmp_path / "lean-slots"))
+    monkeypatch.setenv("LEAN_SLOT", "")
+    monkeypatch.delenv("LEAN_SLOT_POOL", raising=False)
+    monkeypatch.setattr(sys, "pycache_prefix", str(tmp_path / "pyc"))     # not tools/check/__pycache__, outside the inputs
+    fd = A.lean_slot(A.ROOT)
+    try:
+        assert os.environ["LEAN_SLOT"] == "audit/0"
+        other = os.open(tmp_path / "lean-audit-0.lock", os.O_RDWR)
+        with pytest.raises(BlockingIOError):
+            fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        os.close(other)
+    finally:
+        os.close(fd)
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

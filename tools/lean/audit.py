@@ -51,7 +51,8 @@ environment extension loaded, so none of the package's code runs), and replays t
 
 `--build` builds in a sandbox where the machine allows one (`sandbox.sh`: new user, mount, network and PID namespaces;
 everything read-only but the build's `.lake` directories; no network; nothing outlives the build), and says when it
-cannot; the `compile-time` check stands in for it then.
+cannot; the `compile-time` check stands in for it then. It first takes one of the node's Lean audit slots, and waits for
+one while all are taken (`tools/check/lean_slot.py` in the `--repo` checkout, which says where the node's cap is set).
 
 A record holds the statement, not the proof, so a pin may be recorded on a `sorry` stub and pass once a proof with allowed
 axioms replaces it.  `--update` writes the records and `reads` from the build instead of comparing them, puts the whole
@@ -1065,6 +1066,33 @@ def tampered(seals: dict[str, str], watch: list[Path]) -> list[str]:
     return [p for p, h in seals.items() if not Path(p).exists() or sha256(Path(p)) != h]
 
 
+#: the node's Lean audit cap, as `lean_slot.py` reads it
+LEAN_SLOTS = Path(os.environ.get("LEAN_SLOTS", "/workspace/research/locks/lean-slots"))
+
+
+def lean_slot(repo: Path) -> int | None:
+    """`--build`'s Lean audit slot (`repo`'s `tools/check/lean_slot.py`): its descriptor, which this process keeps open until it
+    exits, so any exit frees the slot. None where no cap is set or a slot is held already (check's lean-audit step holds one).
+    A capped node without the module refuses the audit rather than run it uncapped."""
+    if os.environ.get("LEAN_SLOT"):
+        return None
+    mod = repo / "tools" / "check" / "lean_slot.py"
+    if not mod.is_file():
+        if LEAN_SLOTS.exists():
+            sys.exit(f"audit: {LEAN_SLOTS} caps Lean audits on this node, and {mod} is missing to take a slot: run from a "
+                     "checkout that has it, or pass it as --repo")
+        return None
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("lean_slot_for_audit", mod)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    try:
+        return m.hold()
+    except m.Refused as e:
+        sys.exit(f"audit: {e}")
+
+
 def main(argv: list[str]) -> int:
     global TOOL
     ap = argparse.ArgumentParser(prog="audit.py", description=__doc__.split("\n\n")[0])
@@ -1099,6 +1127,8 @@ def main(argv: list[str]) -> int:
             ap.error(f"{a.moved}: a JSON object of old names to new names")
         if errs := move_errors(moved):
             ap.error(f"{a.moved}: " + "; ".join(errs))
+    if a.build:
+        lean_slot(a.repo.resolve())
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     out = a.out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-audit-")))
     out.mkdir(parents=True, exist_ok=True)
