@@ -143,6 +143,8 @@ for pair in "${pairs[@]}"; do
   for d in "$root"/r*/; do
     [ -d "$d" ] || continue
     r=$(basename "$d")
+    # node 1's shell and the Job's bash -c take the name unquoted
+    [[ $r =~ ^r[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$ ]] || continue
     [ -e "$STATE/pushed/$r" ] || [ -e "$STATE/held/$r" ] && continue
     if [ -e "$STATE/failures/$r" ]; then retry+=("$root|$dst|$r"); else fresh+=("$root|$dst|$r"); fi
   done

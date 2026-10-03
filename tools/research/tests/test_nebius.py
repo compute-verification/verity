@@ -1345,13 +1345,14 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     n2.run(R["big"], {"state": "done"}, extra=3)
     n2.run(R["legacy"], {"state": "done"})
     n2.job_err({R["legacy"]: f"{R['legacy']}: NO custody on the remote: the attempt names no run record"})
+    rogue = n2.run("r20261003-100012-000c; touch pwned", {"state": "done"})       # not a run id: never reaches node 1's shell
 
     assert n2.round_("--now").returncode == 2
     dry = n2.round_("--dry-run")
     assert dry.returncode == 0 and not n2.calls() and not n2.names("pushed")
     assert f"would push {root}/{R['done']} (c1, done, 2 files" in dry.stdout and f"would push {root}/{R['dead']} (c1, dead" in dry.stdout
     assert f"would hold {root}/{R['big']} (c1, done): over 4 files" in dry.stdout
-    assert not [k for k in ("live", "retimed", "unread", "fresh", "preserved") if R[k] in dry.stdout]
+    assert not [k for k in ("live", "retimed", "unread", "fresh", "preserved") if R[k] in dry.stdout] and rogue.name not in dry.stdout
 
     (state / "push.sh").write_text("read x\n")
     loop = subprocess.Popen(["bash", str(state / "push.sh")], stdin=subprocess.PIPE)
@@ -1382,6 +1383,7 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     assert f"data custody /n1/runs/{R['dead']} --publish --keep-local --force" in calls
     assert f'data custody /n1/runs/{R["done"]} --publish --keep-local "]' in calls
     assert "PYTHONPATH=/n1/src/abc/tools/research/src" in calls and R["preserved"] not in calls and R["big"] not in calls
+    assert "touch pwned" not in calls and rogue.name not in n2.names("pushed") + n2.names("held")
 
     n2.run(R["new"], {"state": "done"})
     n2.job_err({})
