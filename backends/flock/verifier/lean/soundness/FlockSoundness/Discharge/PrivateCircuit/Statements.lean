@@ -13,6 +13,8 @@ import FlockSoundness.Game.Prob
 * `RanRegistered`: the session ran the registered program, under `cr/sha-512`. Accepting while protocol 1's bad event
   holds or the session's program is not the registered one `p` is at most protocol 1's bound for `U c` plus
   `q²/2^513`, when the program commitment binds under SHA-512.
+* `PadWrong`: through `PadCorrect`, the circuit's wrong units are at most the padded program's, and as many when the
+  dummies claim their fixed output.
 
 `circuit_private_of_zk` and `circuit_indist_of_zk` take protocol 1's zero knowledge at the `--zk` wire
 (`ZkView.ZkWireFixed`) as a hypothesis, so that they compose with the composed `--zk` headline; `circuit_private` and
@@ -77,5 +79,18 @@ def RanRegistered : Prop :=
     ∀ (cost : β → ℝ) (q : ℝ), (∀ b, cost b ≤ q) →
       Assumptions.SHA512CRStrict Refine.H512 G σ (fun b => some (com.ext (op b) op₀)) cost q →
       prob (fun b => acc b ∧ (Q b ∨ prog b ≠ p)) G σ ≤ B + ENNReal.ofReal (q ^ 2 / 2 ^ (513 : ℝ))
+
+/-- **Padding adds no wrong unit, and hides none**: where padding computes the circuit (`PadCorrect`), at every class `c`
+that `C` fits and every claimed inputs `x` and outputs `y` of the units, `C`'s wrong units among its `n C` are at most
+the padded program's among its `N c` (unit `i < n C` is wrong in one exactly when in the other, whatever the dummies
+claim), and as many when every dummy claims `dummy c`, as the honest prover's do. So "fewer than `K` wrong units" of
+`pad C c`, sampled soundness's conclusion at the padded `N`, is "fewer than `K` wrong units" of `C`. -/
+def PadWrong : Prop :=
+  ∀ {Cls Circ In Out : Type} [DecidableEq Out] {Prog : Cls → Type} (fits : Circ → Cls → Prop)
+    (pad : Circ → (c : Cls) → Prog c) (N : Cls → ℕ) (n : Circ → ℕ) (run : (c : Cls) → Prog c → ℕ → In → Out)
+    (eval : Circ → ℕ → In → Out) (dummy : Cls → Out), PadCorrect fits pad N n run eval dummy →
+    ∀ C c, fits C c → ∀ (x : ℕ → In) (y : ℕ → Out),
+      wrong (eval C) (n C) x y ≤ wrong (run c (pad C c)) (N c) x y ∧
+        ((∀ i, n C ≤ i → i < N c → y i = dummy c) → wrong (run c (pad C c)) (N c) x y = wrong (eval C) (n C) x y)
 
 end FlockSoundness.Discharge.PrivateCircuit

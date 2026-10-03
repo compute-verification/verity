@@ -13,7 +13,9 @@ session is a protocol-1 `--zk` session of `U cls` with the program among its hid
   registration `reg cls p r`, the verifier's view of program `p` registered at the registrant's salts `r`; and the
   session's `--zk` tables at fixed coins, `U cls o v`, a function of the class, the outputs `o` owed to the verifier and
   the registration's view `v` only. That `U` reads nothing else is what "the universal unit is public" means.
-* `PadCorrect`: `U cls` running `pad C cls` computes `C`, at every class `C` fits.
+* `PadCorrect`: `U cls` running `pad C cls` computes `C`, unit by unit, at every class `C` fits, and the units past `C`'s
+  are dummies, which output a fixed value on every input. `wrong`: the wrong units among the first `n`, those whose
+  claimed output is not what the unit computes on its claimed input.
 * `Sat`: a witness the honest prover runs on, every table's registered values and inner constraint holding
   (`ZkWireFixed`'s `hreg` and `hinner`). `ZkOk`: a table family meets `ZkWireFixed`'s conditions on the tables.
 * `zkGap`: `ZkWireFixed`'s bound at the sizes `zs`, `∑ⱼ 2·|Hidⱼ|·hidingGap(My, saltHash)`.
@@ -48,11 +50,20 @@ structure Scheme (Cls Circ Out : Type) (Prog Rr Rv : Cls → Type) (K W Hi VL : 
   zs : (c : Cls) → Fin (J c) → Sizes
   U : (c : Cls) → Out → Rv c → ∀ j, Coined K W Hi VL (zs c j)
 
-/-- **Padding computes the circuit**: at every class `c` that `C` fits, `U c` running `pad C c` (`run c`) computes what
-`C` computes (`eval C`), on every input. -/
+/-- **Padding computes the circuit, unit by unit**: at every class `c` that `C` fits, `C`'s `n C` units are at most the
+class's `N c`; unit `i < n C` of `pad C c`, run by `U c` (`run c p i`), computes what `C`'s unit `i` computes (`eval C i`)
+on every input; and every other unit `i < N c` is a dummy, which outputs `dummy c` whatever its input, so it is correct
+by construction when it claims `dummy c`. -/
 def PadCorrect {Cls Circ In Out : Type} {Prog : Cls → Type} (fits : Circ → Cls → Prop) (pad : Circ → (c : Cls) → Prog c)
-    (run : (c : Cls) → Prog c → In → Out) (eval : Circ → In → Out) : Prop :=
-  ∀ C c, fits C c → ∀ x, run c (pad C c) x = eval C x
+    (N : Cls → ℕ) (n : Circ → ℕ) (run : (c : Cls) → Prog c → ℕ → In → Out) (eval : Circ → ℕ → In → Out)
+    (dummy : Cls → Out) : Prop :=
+  ∀ C c, fits C c → n C ≤ N c ∧ (∀ i < n C, ∀ x, run c (pad C c) i x = eval C i x) ∧
+    ∀ i, n C ≤ i → i < N c → ∀ x, run c (pad C c) i x = dummy c
+
+/-- **The wrong units** among units `0 … n-1` of `f` at the claimed inputs `x` and outputs `y`: those whose claimed
+output is not what the unit computes on its claimed input. Sampled soundness bounds how many there are. -/
+def wrong {In Out : Type} [DecidableEq Out] (f : ℕ → In → Out) (n : ℕ) (x : ℕ → In) (y : ℕ → Out) : ℕ :=
+  ((Finset.range n).filter fun i => f i (x i) ≠ y i).card
 
 section Tables
 
