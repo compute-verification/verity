@@ -28,7 +28,8 @@ ledger is (`ledger.Ledger`). `show` merges the overrides in force from a local l
 its live values and compares live with the policy in force, the description's value with any override applied. A log that
 doesn't verify is refused (exit 3): the policy in force can't be told from it. Recording an override changes nothing on a
 node: n1_lease.py takes its pool's `max`, `borrow` and `borrow-until` from `show` when `$VY_POOL_POLICY` names the command,
-and every other value is still set by hand.
+and every other value is still set by hand. Those three of such a loop are read from the `LIMITS` file it writes, and while it
+says they came from anywhere but the policy, they are drift whatever their values.
 """
 from __future__ import annotations
 
@@ -396,7 +397,7 @@ _LEASE = (
     '    grep -zq "" "$e" 2>/dev/null; [ $? -le 1 ] || { echo "unreadable $s $c"; continue; }\n'
     '    echo "loop $s $c"\n'
     f"    grep -zE '{_ENV_RE}' \"$e\" | tr '\\n\\0' ' \\n'\n"
-    f"    grep -zq '^{POLICY_VAR}=' \"$e\" || continue\n"
+    f"    grep -zq '^{POLICY_VAR}=.' \"$e\" || continue\n"
     "    d=$(grep -z '^GPU_LEASE_DIR=' \"$e\" | tr '\\n\\0' ' \\n' | cut -d= -f2-)\n"
     f'    if l=$(cat "${{d:-/run/gpu-lease}}/{LIMITS}" 2>/dev/null); then echo "limits $l"; else echo "limits"; fi\n'
     "  done\n"
@@ -455,12 +456,14 @@ def read(node: str, run: Callable[[str], str]) -> dict[str, str | Exception]:
 
 @dataclass
 class Live:
-    """A node's live policy: each key's value as read, the prefixes that couldn't be read (with why), notes on keys, and the
-    records of the node's override log."""
+    """A node's live policy: each key's value as read, the prefixes that couldn't be read (with why), notes on keys, faults
+    (keys whose live value is drift whatever it is: the value in force came from the wrong place), and the records of the
+    node's override log."""
     values: dict[str, str]
     unknown: dict[str, str]
     notes: dict[str, str]
     overrides: list[dict[str, Any]] = field(default_factory=list)
+    faults: dict[str, str] = field(default_factory=dict)
 
 
 def _read_overrides(node: str, files: dict[str, str | None], live: Live) -> None:
@@ -541,8 +544,8 @@ def _read_lease(node: str, text: str, live: Live) -> None:
         else:
             env = dict(envs[0])
             limits = env.pop(f"@{LIMITS}", None)
-            if POLICY_VAR in env:
-                for var in (POLICY_VAR, *(ENV[f] for f in POLICY_FIELDS)):
+            if env.pop(POLICY_VAR, ""):
+                for var in (ENV[f] for f in POLICY_FIELDS):
                     env.pop(var, None)
                 _read_limits(prefix, limits, live)
             for var, val in env.items():
@@ -563,9 +566,9 @@ def _read_limits(prefix: str, text: str | None, live: Live) -> None:
         if got[f]:
             live.values[key] = got[f]
         if got["from"] != "policy":
-            live.notes[key] = (f"n1_lease.py can't read ${POLICY_VAR}, so "
-                               + ("the values it last read there are" if got["from"] == "last-policy"
-                                  else "its environment's values are") + " in force")
+            live.faults[key] = (f"n1_lease.py can't read ${POLICY_VAR}, so "
+                                + ("the values it last read there are" if got["from"] == "last-policy"
+                                   else "its environment's values are") + " in force")
 
 
 def _read_kueue(node: str, raw: str | Exception, holds: str | Exception, live: Live) -> None:
@@ -684,12 +687,12 @@ def diff(keys: dict[str, Key], node: str, lv: Live, now: int) -> list[dict[str, 
                 same, bad = canon(k, d.value) == canon(k, lv.values[k]), None
             except (ValueError, IndexError) as e:
                 same, bad = False, f"the live value doesn't parse: {e}"
-            if same:
+            if same and k not in lv.faults:
                 row["status"] = "ok"
             elif k.endswith(".stop-policy") and k in lv.notes and canon(k, d.value) == "None":
                 row.update(status="ok", why=lv.notes[k])
             else:
-                row.update(status="drift", why=bad or lv.notes.get(k) or (
+                row.update(status="drift", why=bad or lv.faults.get(k) or lv.notes.get(k) or (
                     "held by no declared writer" if k.endswith(".stop-policy") else "live differs"))
         rows.append(row)
     for k, val in lv.values.items():

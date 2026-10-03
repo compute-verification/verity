@@ -279,6 +279,8 @@ def _under_policy(limits: str) -> str:
      "n1_lease.py can't read $VY_POOL_POLICY, so its environment's values are in force"),
     ("limits max=7 borrow=4 borrow-until=2026-10-04T10:30:00Z from=last-policy", 1, "drift",
      "n1_lease.py can't read $VY_POOL_POLICY, so the values it last read there are in force"),
+    ("limits max=8 borrow=4 borrow-until=2026-10-04T10:30:00Z from=environment", 1, "drift",    # as declared, and still drift
+     "n1_lease.py can't read $VY_POOL_POLICY, so its environment's values are in force"),
     ("limits", 3, "unknown", "n1_lease.py runs under $VY_POOL_POLICY and its n1-lease.limits can't be read"),
     ("limits max=8 borrow=4", 3, "unknown",
      "n1_lease.py runs under $VY_POOL_POLICY and its n1-lease.limits lacks borrow-until, from"),
@@ -551,6 +553,13 @@ def test_the_lease_command_reads_the_limits_file_of_a_loop_under_the_policy(tmp_
     assert {k: v for k, v in lv.values.items() if ".provers." in k} == {
         f"{N1}.lease-pool.provers.max": "8", f"{N1}.lease-pool.provers.borrow": "4",
         f"{N1}.lease-pool.provers.dir": "/gl"}
+    _put(tmp_path, {"/proc/101/environ": f"VY_POOL_MAX=6\0GPU_LEASE_DIR={tmp_path}/gl\0VY_POOL_POLICY=\0"})
+    out = _sh(policy.COMMANDS["lease"], tmp_path, str(bin_))
+    assert out == "session n1-lease\nloop n1-lease 101\nVY_POOL_MAX=6\nGPU_LEASE_DIR=/gl\nVY_POOL_POLICY=\n"
+    lv = policy.Live({}, {}, {})
+    policy._read_lease(N1, out, lv)
+    assert {k: v for k, v in lv.values.items() if ".provers." in k} == {      # empty is off, to n1_lease.py as here
+        f"{N1}.lease-pool.provers.max": "6", f"{N1}.lease-pool.provers.dir": "/gl"}
 
 
 def test_the_files_commands_mark_absent_files_and_read_one_line_of_the_dispatch_env(tmp_path):
