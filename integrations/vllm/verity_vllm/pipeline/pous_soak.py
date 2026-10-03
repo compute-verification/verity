@@ -543,14 +543,15 @@ class Control:
     """The server's control port, for a verifier on another host: one JSON line per request and per reply, the raw bytes a reply
     lists in ``blobs`` after it.  ``ready``: the server's facts (`ready.json`'s); ``clock``: this host's realtime ns; ``load``:
     the load ``mode`` (sequence ``seq``), replied once the serve loop has applied it; ``rotate``: the server's samples since the
-    last rotate (the sampler stopped, its ``samples.npz`` sent, a new one started) and its vLLM steps since then; ``stop``.
+    last rotate (the sampler stopped, its ``samples.npz`` sent, a new one started), its vLLM steps since then and ``status()``
+    (the serving load's counters); ``stop``.
     Only ``allow`` may connect, one connection at a time."""
 
     def __init__(self, host: str, port: int, allow: str, ready: dict[str, Any], job: Path,
-                 sampler: Callable[[], subprocess.Popen] | None) -> None:
+                 sampler: Callable[[], subprocess.Popen] | None, status: Callable[[], dict[str, Any]] | None = None) -> None:
         import threading
 
-        self.ready, self.job, self.allow, self.start_sampler = ready, job, allow, sampler
+        self.ready, self.job, self.allow, self.start_sampler, self.status = ready, job, allow, sampler, status
         self.sampler = sampler() if sampler else None
         self.want: tuple[str, int] | None = None
         self.acked: dict[int, dict[str, Any]] = {}
@@ -635,7 +636,7 @@ class Control:
         raw = raw[:len(raw) - len(raw) % STEP.size]
         self.steps_off += len(raw)
         blobs.append(("steps", raw))
-        return {"t_ns": time.time_ns()}, blobs
+        return {"t_ns": time.time_ns(), "status": self.status() if self.status else None}, blobs
 
     def close(self) -> None:
         self.stopped.set()
@@ -764,7 +765,8 @@ def cmd_serve(a) -> int:
              "blocks": p.blocks, "block_bytes": p.block_bytes, "total": total, "build_s": build_s,
              "warm_steps": steps.steps if steps else None, "step_log_error": step_error, "second_engine": engine2_info,
              "served_model": model_info, "hostname": socket.gethostname(),
-             "clocksource": _text("/sys/devices/system/clocksource/clocksource0/current_clocksource"), "utc": utc()}
+             "clocksource": _text("/sys/devices/system/clocksource/clocksource0/current_clocksource"),
+             "node": _text(a.node) if a.node else None, "utc": utc()}
     ctl = None
     if a.control_port:
         def sampler() -> subprocess.Popen:
@@ -772,7 +774,8 @@ def cmd_serve(a) -> int:
                    str(a.sampler_cpu), "--targets", f"{os.getpid()}:{ready['responder_tid']},{os.getpid()}:{os.getpid()}",
                    "--cpus", a.sample_cpus, "--gpu-uuid", a.gpu_uuid]
             return subprocess.Popen(cmd + (["--dcgm", str(a.dcgm_gpu)] if a.dcgm_gpu >= 0 else []))
-        ctl = Control(a.listen, a.control_port, a.control_allow, ready, job, sampler)
+        ctl = Control(a.listen, a.control_port, a.control_allow, ready, job, sampler,
+                      lambda: {"serving": serving.stats() if serving else None, "responder": resp.stat()})
         ready["control_port"] = ctl.port
     _write(job / "ready.json", ready)
     control, ack, stop = job / "load.json", job / "load-ack.json", job / "stop-serve"
@@ -1719,13 +1722,14 @@ def cmd_verify(a) -> int:
              "end_utc": utc(), "control_clock_open": c["control_clock_open"]}
         if soak.ctl is not None:
             try:
-                _, blobs = soak.ctl.call("rotate")
+                rdoc, blobs = soak.ctl.call("rotate")
                 with open(job / "steps.bin", "ab") as f:
                     f.write(blobs.get("steps", b""))
                 if blobs.get("samples"):
                     (job / "server-samples.npz").write_bytes(blobs["samples"])
                     with np.load(job / "server-samples.npz") as z:
                         soak.server_arrays = {f"server_sample_{k}": z[k] for k in z.files}
+                e["server_status"] = rdoc.get("status")
                 e["control_clock_close"] = soak.ctl.clock()
             except (OSError, ValueError) as err:
                 e["rotate_error"] = repr(err)
@@ -1863,6 +1867,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--sample-cpus", default=f"{SAMPLE_CPUS[0]}-{SAMPLE_CPUS[-1]}", help="with --control-port: the cores it samples")
     s.add_argument("--gpu-uuid", default="", help="with --control-port: the GPU it samples through NVML")
     s.add_argument("--dcgm-gpu", type=int, default=-1, help="the physical GPU index DCGM reads (warm-up and sampler; -1: none)")
+    s.add_argument("--node", default="", help="a text file of the node's static facts, sent in ready")
     s.add_argument("--idle-exit-s", type=float, default=900.0, help="with --control-port: end after this long without a request")
     v = sub.add_parser("verify")
     v.add_argument("--server", default="", help="HOST:PORT of the server's control port, on another host (else the job's files)")

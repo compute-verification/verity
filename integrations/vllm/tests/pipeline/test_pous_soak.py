@@ -449,7 +449,7 @@ def test_verify_drives_a_server_on_another_host_through_its_control_port(fake, t
     ready = {"port": resp.port, "host": "127.0.0.1", "root": root, "blocks": params.blocks, "block_bytes": S.BLOCK,
              "total": data.nbytes}
     (tmp_path / "server").mkdir()
-    ctl = S.Control("127.0.0.1", 0, "127.0.0.1", ready, tmp_path / "server", None)
+    ctl = S.Control("127.0.0.1", 0, "127.0.0.1", ready, tmp_path / "server", None, lambda: {"responder": resp.stat()})
     acked, stop = [], threading.Event()
     loop = threading.Thread(target=_serve_loop, args=(ctl, acked, stop), daemon=True)
     loop.start()
@@ -483,4 +483,6 @@ def test_verify_drives_a_server_on_another_host_through_its_control_port(fake, t
     with np.load(job / line["chunk"]) as z:
         meta = json.loads(str(z["meta_json"]))
     assert meta["remote"]["server"] == f"127.0.0.1:{ctl.port}" and "control_clock_close" in meta
+    r = meta["server_status"]["responder"]
+    assert r["answered"] + r["pings"] >= line["answers"], "the server's own counts, at the chunk's close"
     assert meta["control_clock_open"]["lo_ns"] <= 0 <= meta["control_clock_open"]["hi_ns"], "one host: offset 0 is bracketed"
