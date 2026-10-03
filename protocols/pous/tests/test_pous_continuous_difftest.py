@@ -34,9 +34,9 @@ from verity_pous.codec import encode_segments
 from verity_pous.verifier import VerifierKey
 
 try:
-    from verity_pous.continuous import ContinuousVerifier, run_continuous
+    from verity_pous.continuous import ContinuousVerifier, Reply, run_continuous
 except ImportError:
-    ContinuousVerifier = run_continuous = None
+    ContinuousVerifier = Reply = run_continuous = None
 
 LEAN = Path(__file__).resolve().parents[1] / "lean"
 MODEL = "Pous/Protocol/Model/Continuous.lean"
@@ -488,9 +488,13 @@ def test_lean_machine_bridge(world, kind, jitter):
 
 @pytest.mark.parametrize("kind", KINDS)
 def test_the_drivers_match_lean(world, kind):
-    """`run_continuous` (arrivals by `wait`) and `run_timed` (back to back) against scripted machines that always
-    answer, some past the hard deadline: the verdicts are Lean's `contRecords` with the drivers' arrivals."""
+    """`run_continuous` over a wire, with arrivals by `wait`, and `run_timed`, back to back, driving scripted machines
+    whose answers come within, past and far past the hard deadline: the verdicts are Lean's `contRecords` with the
+    drivers' arrivals. A silent machine sends `run_continuous` nothing, its transport giving up one nanosecond past
+    `closes_at`, and the driver closes that round by the clock then, as Lean's at `D_late`; `run_timed` cannot stop
+    waiting, so there it answers one unit past its fuel instead."""
     blocks, _ = world
+    silent = 0
     for seed in range(40):
         rng = random.Random(f"driver/{kind}/{seed}")
         limits = rng.choice(LIMITS)
@@ -498,8 +502,9 @@ def test_the_drivers_match_lean(world, kind):
         h = Harness(world, kind, limits, b"driver-%d" % seed, n, max_misses=rng.randrange(n + 1))
         lim, hard = h.oracle.limit, h.oracle.late_limit
         D, Q, D_late, Q_late = _lean_bounds(lim, hard)
-        script = [(d if d is not None else D_late + 1, w, right)
-                  for d, w, right in _script(rng, n, D, Q, D_late, Q_late, hard is not None)]
+        script = _script(rng, n, D, Q, D_late, Q_late, hard is not None)
+        if kind != "continuous":
+            script = [(d if d is not None else D_late + 1, w, right) for d, w, right in script]
         mach, f = Scripted(script, blocks), (lambda q: q)
         v, clock = h.subject.v, h.clock
 
@@ -511,7 +516,22 @@ def test_the_drivers_match_lean(world, kind):
         if kind == "continuous":
             arr = [rng.randrange(10**3) for _ in range(n)]
             arr = [sum(arr[:j + 1]) for j in range(n)]
-            result = run_continuous(v, respond, wait=lambda j: setattr(clock, "now", max(clock.now, arr[j] * CALL)))
+            wire = []
+
+            def send(j, i):
+                if script[j][0] is not None:
+                    wire.append(Reply(j, respond(i)))
+
+            def receive(until):
+                if wire:
+                    return wire.pop()
+                clock.now = max(clock.now, until + 1)
+                return None
+
+            result = run_continuous(v, send, receive,
+                                    wait=lambda j: setattr(clock, "now", max(clock.now, arr[j] * CALL)))
+            assert all(a.elapsed_ns == hard + 1 for a, (d, _, _) in zip(result.answers, script) if d is None)
+            silent += sum(d is None for d, _, _ in script)
         else:
             arr = [0] * n
             result = run_timed(v, respond)
@@ -519,3 +539,4 @@ def test_the_drivers_match_lean(world, kind):
                                   [h.index(j) for j in range(n)])
         assert [verdict(a) for a in result.answers] == [r.verdict for r in lean], (seed, limits, script)
         assert v.accepted == model.cont_accepts(h.subject.max_misses, lean)
+    assert silent or kind != "continuous"
