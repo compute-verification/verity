@@ -178,6 +178,18 @@ def raw_bandwidth(args, torch):
     out[f"pcie_h2d_gathered_{nblk}x64KiB"] = dist(ms, nblk * D.BLOCK_BYTES)
     del hpin, dev
     torch.cuda.empty_cache()
+    # Zero-copy read: the kernel digests blocks straight out of pinned host memory over PCIe (UVA), no staging copy.
+    try:
+        hz = torch.empty((nblk, D.WORDS), dtype=torch.int32, pin_memory=True)
+        hz.random_(-(2**31), 2**31)
+        zidx = torch.arange(nblk, dtype=torch.int64, device="cuda")
+        g0, _ = D.lane_points(0xB01C, 0)
+        ms = time_events(torch, lambda: D.block_hashes(hz, zidx, g0), iters=10, warmup=2)
+        out[f"zerocopy_digest_{nblk}x64KiB"] = dist(ms, nblk * D.BLOCK_BYTES)
+        del hz
+    except Exception as e:  # UVA host access may be unsupported; record it rather than abort the run
+        out["zerocopy_digest_error"] = repr(e)
+    torch.cuda.empty_cache()
     return out
 
 
@@ -193,7 +205,7 @@ def cmd_honest(args, torch, meta):
             if r > n:
                 continue
             idx = random_idx(torch, n, r, seed=0x1000 + r)
-            g, z = D.lane_points(0xBULK if False else 0xB01C, 0)
+            g, z = D.lane_points(0xB01C, 0)
             g1, _ = D.lane_points(0xB01C, 1)
             nbytes = r * D.BLOCK_BYTES
             # kernel-only (the HBM read + fold of one lane), many trials for the distribution
@@ -271,6 +283,49 @@ def measure_cheater_async(torch, C_dev, host_pin, idx, host_hit, g):
     return ms, rh
 
 
+def measure_cheater_zerocopy(torch, C_dev, host_pin, idx, host_hit, g):
+    """The other honest way to touch host-resident blocks: the digest kernel reads them straight out of pinned host
+    memory over PCIe (UVA zero-copy), with no staging copy, while the HBM-resident blocks are digested from device
+    memory on another stream. `host_pin` is a full host copy of `C`, so a host-resident challenged block sits at the same
+    row there as in `C_dev`."""
+    idx_dev = idx[~host_hit]
+    idx_host = idx[host_hit]
+    rh = int(idx_host.numel())
+    s_zc = torch.cuda.Stream()
+    s_cmp = torch.cuda.Stream()
+    out_dev = torch.empty(max(idx_dev.numel(), 1), dtype=torch.int64, device="cuda")
+    out_host = torch.empty(max(rh, 1), dtype=torch.int64, device="cuda")
+    combine = torch.tensor([pow(int(g), D.INTERLEAVE - 1 - l, D.MOD) for l in range(D.INTERLEAVE)],
+                           dtype=torch.int64, device="cuda")
+    gp = pow(int(g), D.INTERLEAVE, D.MOD)
+    kern = D._kernel()
+
+    def once():
+        cur = torch.cuda.current_stream()
+        start = torch.cuda.Event(enable_timing=True)
+        end = torch.cuda.Event(enable_timing=True)
+        start.record(cur)
+        s_zc.wait_stream(cur)
+        s_cmp.wait_stream(cur)
+        if rh:
+            with torch.cuda.stream(s_zc):
+                kern[(rh,)](host_pin, idx_host, combine, out_host, gp, D.MOD, D.INTERLEAVE, D.N_STEPS)
+        if idx_dev.numel():
+            with torch.cuda.stream(s_cmp):
+                kern[(idx_dev.numel(),)](C_dev, idx_dev, combine, out_dev, gp, D.MOD, D.INTERLEAVE, D.N_STEPS)
+        cur.wait_stream(s_zc)
+        cur.wait_stream(s_cmp)
+        end.record(cur)
+        torch.cuda.synchronize()
+        return start.elapsed_time(end)
+
+    for _ in range(3):
+        once()
+    torch.cuda.synchronize()
+    ms = [once() for _ in range(40)]
+    return ms, rh
+
+
 def cmd_cheater(args, torch, meta):
     cg = int(args.cheater_c_gib)
     n = (cg * GIB) // D.BLOCK_BYTES
@@ -294,8 +349,13 @@ def cmd_cheater(args, torch, meta):
             d["R_host"] = rh
             d["host_bytes"] = host_bytes
             d["pcie_gbps_at_p50"] = (host_bytes / (d["ms_p50"] / 1e3) / 1e9) if rh else 0.0
-            out["points"].append({"R": r, "f": f, **d})
-            print(f"cheater C={cg}GiB R={r} f={f}: Rh={rh} p50 {d['ms_p50']:.3f} ms")
+            zc_ms, _ = measure_cheater_zerocopy(torch, C, host_pin, idx, host_hit, g)
+            dz = dist(zc_ms, nbytes)
+            dz["pcie_gbps_at_p50"] = (host_bytes / (dz["ms_p50"] / 1e3) / 1e9) if rh else 0.0
+            out["points"].append({"R": r, "f": f, "async": d, "zerocopy": dz,
+                                  "R_host": rh, "host_bytes": host_bytes})
+            print(f"cheater C={cg}GiB R={r} f={f}: Rh={rh} async p50 {d['ms_p50']:.3f} ms "
+                  f"zerocopy p50 {dz['ms_p50']:.3f} ms")
     write(args, "cheater.json", out)
     del C, host_pin
     torch.cuda.empty_cache()

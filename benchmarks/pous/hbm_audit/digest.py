@@ -88,64 +88,33 @@ _KERNEL = None
 _KERNEL2 = None
 
 
-def _kernel2():
-    """Two independent hash lanes in one read of each block, to show a stronger digest stays HBM-bound."""
-    global _KERNEL2
-    if _KERNEL2 is not None:
-        return _KERNEL2
+def _build():
+    """Compile the Triton kernels once. The modular arithmetic uses Mersenne reduction for `p = 2^31 - 1`: a 62-bit
+    product is folded by `(x & p) + (x >> 31)` twice and one conditional subtract, with no 64-bit division, so the kernel
+    is memory-bound (an integer `% p` on the device is a slow remainder that would make the digest compute-bound and blur
+    the HBM-vs-PCIe separation). `_mm(a, g, w, p) = (a*g + w) mod p` and `_combine` returns `sum_l acc[l]*c[l] mod p`; both
+    give the same value as the plain `% p` reference, which `cmd_validate` checks bit-exactly."""
+    global _KERNEL, _KERNEL2
+    if _KERNEL is not None:
+        return _KERNEL, _KERNEL2
     import triton
     import triton.language as tl
 
     @triton.jit
-    def block_hash2_kernel(
-        c_ptr, idx_ptr, combine0_ptr, combine1_ptr, out0_ptr, out1_ptr, gp0, gp1, p,
-        INTERLEAVE: tl.constexpr, N_STEPS: tl.constexpr,
-    ):
-        b = tl.program_id(0)
-        row = tl.load(idx_ptr + b)
-        base = row * (INTERLEAVE * N_STEPS)
-        off = tl.arange(0, INTERLEAVE)
-        acc0 = tl.zeros([INTERLEAVE], dtype=tl.int64)
-        acc1 = tl.zeros([INTERLEAVE], dtype=tl.int64)
-        for step in range(N_STEPS):
-            w = tl.load(c_ptr + base + step * INTERLEAVE + off)
-            w = (w.to(tl.int64) & 0xFFFFFFFF) % p
-            acc0 = (acc0 * gp0 + w) % p
-            acc1 = (acc1 * gp1 + w) % p
-        c0 = tl.load(combine0_ptr + off)
-        c1 = tl.load(combine1_ptr + off)
-        tl.store(out0_ptr + b, tl.sum((acc0 * c0) % p) % p)
-        tl.store(out1_ptr + b, tl.sum((acc1 * c1) % p) % p)
+    def _red(x, p):
+        # x in [0, 2^62): two folds then a conditional subtract land it in [0, p).
+        x = (x & p) + (x >> 31)
+        x = (x & p) + (x >> 31)
+        return tl.where(x >= p, x - p, x)
 
-    _KERNEL2 = block_hash2_kernel
-    return _KERNEL2
+    @triton.jit
+    def _mm(a, g, w, p):
+        return _red(a * g + w, p)
 
-
-def block_hashes2(C, idx, g0: int, g1: int):
-    """Two lanes' per-block hashes from one read of each challenged block."""
-    import torch
-
-    kernel = _kernel2()
-    r = idx.numel()
-    out0 = torch.empty(r, dtype=torch.int64, device=C.device)
-    out1 = torch.empty(r, dtype=torch.int64, device=C.device)
-
-    def combine(g):
-        return torch.tensor([pow(int(g), INTERLEAVE - 1 - lane, MOD) for lane in range(INTERLEAVE)],
-                            dtype=torch.int64, device=C.device)
-
-    kernel[(r,)](C, idx, combine(g0), combine(g1), out0, out1,
-                 pow(int(g0), INTERLEAVE, MOD), pow(int(g1), INTERLEAVE, MOD), MOD, INTERLEAVE, N_STEPS)
-    return out0, out1
-
-
-def _kernel():
-    """The Triton block-hash kernel (imported lazily so the module loads without torch/triton for the CPU reference test)."""
-    global _KERNEL
-    if _KERNEL is not None:
-        return _KERNEL
-    import triton
-    import triton.language as tl
+    @triton.jit
+    def _combine(acc, c, p):
+        # sum_l acc[l]*c[l] mod p; each product < 2^62 is reduced before the sum so the sum stays < INTERLEAVE*p < 2^62.
+        return _red(tl.sum(_red(acc * c, p)), p)
 
     @triton.jit
     def block_hash_kernel(
@@ -164,15 +133,60 @@ def _kernel():
         off = tl.arange(0, INTERLEAVE)
         acc = tl.zeros([INTERLEAVE], dtype=tl.int64)
         for step in range(N_STEPS):
-            w = tl.load(c_ptr + base + step * INTERLEAVE + off)
-            w = w.to(tl.int64) & 0xFFFFFFFF
-            acc = (acc * gp + (w % p)) % p
-        combine = tl.load(combine_ptr + off)
-        h = tl.sum((acc * combine) % p)
-        tl.store(out_ptr + b, h % p)
+            w = tl.load(c_ptr + base + step * INTERLEAVE + off).to(tl.int64) & 0xFFFFFFFF
+            w = (w & p) + (w >> 31)  # a 32-bit word -> [0, p] in one fold
+            acc = _mm(acc, gp, w, p)
+        tl.store(out_ptr + b, _combine(acc, tl.load(combine_ptr + off), p))
 
-    _KERNEL = block_hash_kernel
-    return _KERNEL
+    @triton.jit
+    def block_hash2_kernel(
+        c_ptr, idx_ptr, combine0_ptr, combine1_ptr, out0_ptr, out1_ptr, gp0, gp1, p,
+        INTERLEAVE: tl.constexpr, N_STEPS: tl.constexpr,
+    ):
+        b = tl.program_id(0)
+        row = tl.load(idx_ptr + b)
+        base = row * (INTERLEAVE * N_STEPS)
+        off = tl.arange(0, INTERLEAVE)
+        acc0 = tl.zeros([INTERLEAVE], dtype=tl.int64)
+        acc1 = tl.zeros([INTERLEAVE], dtype=tl.int64)
+        for step in range(N_STEPS):
+            w = tl.load(c_ptr + base + step * INTERLEAVE + off).to(tl.int64) & 0xFFFFFFFF
+            w = (w & p) + (w >> 31)
+            acc0 = _mm(acc0, gp0, w, p)
+            acc1 = _mm(acc1, gp1, w, p)
+        tl.store(out0_ptr + b, _combine(acc0, tl.load(combine0_ptr + off), p))
+        tl.store(out1_ptr + b, _combine(acc1, tl.load(combine1_ptr + off), p))
+
+    _KERNEL, _KERNEL2 = block_hash_kernel, block_hash2_kernel
+    return _KERNEL, _KERNEL2
+
+
+def _kernel():
+    """The one-lane block-hash kernel (built lazily so the module imports without torch/triton for the CPU reference)."""
+    return _build()[0]
+
+
+def _kernel2():
+    """Two independent hash lanes in one read of each block, to show a stronger digest stays HBM-bound."""
+    return _build()[1]
+
+
+def block_hashes2(C, idx, g0: int, g1: int):
+    """Two lanes' per-block hashes from one read of each challenged block."""
+    import torch
+
+    kernel = _kernel2()
+    r = idx.numel()
+    out0 = torch.empty(r, dtype=torch.int64, device=C.device)
+    out1 = torch.empty(r, dtype=torch.int64, device=C.device)
+
+    def combine(g):
+        return torch.tensor([pow(int(g), INTERLEAVE - 1 - lane, MOD) for lane in range(INTERLEAVE)],
+                            dtype=torch.int64, device=C.device)
+
+    kernel[(r,)](C, idx, combine(g0), combine(g1), out0, out1,
+                 pow(int(g0), INTERLEAVE, MOD), pow(int(g1), INTERLEAVE, MOD), MOD, INTERLEAVE, N_STEPS)
+    return out0, out1
 
 
 def block_hashes(C, idx, g: int, out=None):
