@@ -27,8 +27,9 @@ continuous-audit section of `PROTOCOL.md` must state them as requirements.
    is on the storage held at the arrival times. It says nothing about the time average of storage over `[0, T]`.
 3. **Normalize by the realized `N`, never by `λT`.** The game conditions on the arrivals: `n` is fixed, and the
    responder may know every arrival time in advance, which only helps it. `ContinuousAudit`'s event,
-   `Σ_j max(ε_j − ε_proof, 0) > G(f)`, doesn't mention `n`, so with the number of challenges `N` drawn independently of
-   the indices (Poisson arrivals) the bound holds unconditionally, with `E[N]·(β + 1)·π` in place of `n·(β + 1)·π`.
+   `Σ_j max(ε_j − ε_proof, 0) > G(f)`, doesn't mention `n`, so when the whole arrival process — the arrival times and
+   the number of challenges `N` — is the verifier's own randomness, independent of the setup, the indices and the
+   answers (Poisson arrivals), the bound holds unconditionally, with `E[N]·(β + 1)·π` in place of `n·(β + 1)·π`.
    Per challenge, divide by the realized `N`: `ε̄ = (1/N)·Σ_j max(ε_j − ε_proof, 0)` against `g = G/N`. Dividing by
    `λT` instead claims more than this proves whenever `N < λT`; a per-time statement needs a lower tail on `N`
    (`N ≥ (1 − η)·λT` except with a probability added to the bound, then `g = G/((1 − η)·λT)`).
