@@ -14,6 +14,19 @@ open FlockSoundness.Game
 open scoped ENNReal
 
 theorem ran_registered : RanRegistered := by
-  sorry
+  intro Cls Circ Root Op Prog pad c C com hbind rt op₀ h₀ β G σ acc Q prog op hacc B hB cost q hcost hCR
+  have hle : prob (fun b => acc b ∧ prog b ≠ pad C c) G σ ≤
+      prob (fun b => ∃ x y, some (com.ext (op b) op₀) = some (x, y) ∧ x ≠ y ∧ Refine.H512 x = Refine.H512 y) G σ :=
+    prob_mono (fun b ⟨ha, hne⟩ =>
+      have hc := hbind rt _ _ _ _ (hacc b ha) h₀ hne
+      ⟨_, _, congrArg some Prod.mk.eta.symm, hc.1, hc.2⟩) G σ
+  have hfin : prob (fun b => ∃ x y, some (com.ext (op b) op₀) = some (x, y) ∧ x ≠ y ∧ Refine.H512 x = Refine.H512 y)
+      G σ ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _)
+  have hcoll := hle.trans ((ENNReal.le_ofReal_iff_toReal_le hfin (by positivity)).2 (hCR hcost))
+  calc prob (fun b => acc b ∧ (Q b ∨ prog b ≠ pad C c)) G σ
+      ≤ prob (fun b => (acc b ∧ Q b) ∨ (acc b ∧ prog b ≠ pad C c)) G σ :=
+        prob_mono (fun _ ⟨ha, h⟩ => h.imp (⟨ha, ·⟩) (⟨ha, ·⟩)) G σ
+    _ ≤ prob (fun b => acc b ∧ Q b) G σ + prob (fun b => acc b ∧ prog b ≠ pad C c) G σ := prob_or_le _ _ G σ
+    _ ≤ B + ENNReal.ofReal (q ^ 2 / 2 ^ (513 : ℝ)) := add_le_add hB hcoll
 
 end FlockSoundness.Discharge.PrivateCircuit
