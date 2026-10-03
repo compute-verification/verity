@@ -18,7 +18,7 @@
 # A round is bounded: at most VY_CUSTODY_MAX_RUNS pushes, none started after VY_CUSTODY_PASS_S seconds, runs that failed before
 # going last; the rest wait for the next. A run whose attempt node 1 already holds without a run record (the stopgap published it)
 # can never have .custody: the Job pushes that attempt, and the run is held for a person to waive its logs. So is one whose remote
-# holds another attempt document (an attempt key is write-once), after its one Job: n1_custody.sh --reconcile on node 1 repairs it.
+# holds another attempt document (an attempt key is write-once), after its one Job: node 1's vy-custody --reconcile repairs it.
 # Only run dirs go home, never a row directory (3 Oct: the stopgap's row sync mirrored 1.2M files to node 1 and overran its window),
 # and a run dir over VY_CUSTODY_MAX_FILES files or VY_CUSTODY_MAX_GB GiB is held instead of mirrored: STATE/held/RUN says why, and the
 # round exits 1 while it is there. Move the bulk out of the run dir (or declare it elsewhere), then remove STATE/held/RUN.
@@ -194,7 +194,7 @@ for c in "${fresh[@]}" "${retry[@]}"; do
   elif [ "$rc" = 5 ]; then
     echo "conflict: the remote holds another attempt document for this run id" > "$STATE/held/$r"
     log "$d ($camp, $state): held: R2 holds another attempt document for it (an attempt key is write-once): on node 1," \
-      "n1_custody.sh --reconcile $r --by WHO (the remote's copy is the first ever pushed, and canonical), then rm $STATE/held/$r and the" \
+      "sudo -u research vy-custody --reconcile $r --by WHO (the remote's copy is the first ever pushed, and canonical), then rm $STATE/held/$r and the" \
       "next round brings its .custody home"
   else
     n=$(( $(cat "$STATE/failures/$r" 2> /dev/null || echo 0) + 1 ))

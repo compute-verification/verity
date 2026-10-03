@@ -5,9 +5,10 @@
 # record (logs and declared outputs) into the run's own store, pushed to R2 and verified there, .custody beside the run. Nothing is
 # copied: the run is here already. n2_custody.sh does the same for node 2's runs, through rsync and the same Jobs.
 #
-#   on node 1:  n1_custody.sh [--dry-run]                one round (vy-custody.timer, every 10 min, as research); --dry-run lists it
-#               n1_custody.sh --reconcile RUN --by WHO   a held conflict: the remote's attempt replaces node 1's, then the run publishes
-#                                                        (node 2's copy too, VY_CUSTODY_RELAY, when n2_custody.sh holds the conflict)
+#   on node 1, as research (deploy.toml installs this file as vy-custody):
+#     vy-custody [--dry-run]                one round (vy-custody.timer, every 10 min); --dry-run lists it
+#     vy-custody --reconcile RUN --by WHO   a held conflict: the remote's attempt replaces node 1's, then the run publishes (node 2's
+#                                           copies too, VY_CUSTODY_RELAY, when n2_custody.sh holds the conflict)
 #
 # Which runs: `research data custody --triage --older-min` over each runs root, run as its store's owner (VY_CUSTODY_ROOTS:
 # runs=store=uid; the root's Jobs run as that uid too), the rows that need action and have settled, of runs this machine's kernel ran
@@ -130,8 +131,10 @@ if [ -n "$REC" ]; then
     if custody_job "$REC" "$root" "${STORE[$root]}" "${UID_OF[$root]}" \
       "$research reconcile-attempts $REC --apply && $research custody $root/$REC --publish --keep-local"; then
       rm -f "$STATE/held/$REC" "$STATE/failures/$REC"
+      boot=$(python3 -c 'import json, sys; print((json.load(open(sys.argv[1])).get("environment") or {}).get("boot_id") or "")' \
+        "$root/$REC/job.json" 2> /dev/null)
       log "$root/$REC: reconciled by $BY: the remote's attempt replaced node 1's (kept under attempts/.superseded/); on R2 with its run record" \
-        "$( [ "$spec" = "$RELAY" ] && echo "(node 2's copy: remove n2_custody.sh's hold on node 2, and its next round brings the .custody home)")"
+        "$(grep -qsx -- "${boot:-?}" "$STATE/boots" || echo "(node 2's copy: remove n2_custody.sh's hold on node 2, and its next round brings the .custody home)")"
       exit 0
     fi
     if grep -qs "names no run record" "$tmp/job.err"; then
@@ -260,7 +263,7 @@ while IFS='|' read -r kind a b c camp status files bytes; do
         rm -f "$STATE/failures/$r"
         echo "conflict: the remote holds another attempt document for this run id" > "$STATE/held/$r"
         log "$d ($camp, $status): held: R2 holds another attempt document for it (write-once; triage lists it as conflict, and" \
-          "the store's pending push fails on it): n1_custody.sh --reconcile $r --by WHO (the remote's copy is the first ever pushed, and canonical)"
+          "the store's pending push fails on it): vy-custody --reconcile $r --by WHO (the remote's copy is the first ever pushed, and canonical)"
       elif grep -qs "names no run record" "$tmp/job.err"; then
         rm -f "$STATE/failures/$r"
         log "$d ($camp, $status): its attempt is on R2 without a run record (published without one, and an attempt is immutable):" \

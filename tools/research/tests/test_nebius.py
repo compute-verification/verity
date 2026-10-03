@@ -1327,7 +1327,8 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     assert sorted(p.name for p in (state / "held").iterdir()) == ["r7-big", "r8-legacy", "r8b-conflict"] and "3 run(s) held" in first.stdout
     assert "held: node 1's store holds its attempt without a run record" in first.stdout
     assert "r8b-conflict (c1, done): held: R2 holds another attempt document" in first.stdout
-    assert "n1_custody.sh --reconcile r8b-conflict --by WHO" in first.stdout and not (state / "failures" / "r8b-conflict").exists()
+    assert "sudo -u research vy-custody --reconcile r8b-conflict --by WHO" in first.stdout
+    assert not (state / "failures" / "r8b-conflict").exists()
     calls = log.read_text()
     assert f"{root}/r1-done/ n1.invalid:/n1/runs/r1-done/" in calls and "r3-live" not in calls and "r4-fresh" not in calls
     assert "data custody /n1/runs/r2-dead --publish --keep-local --force" in calls
@@ -1534,7 +1535,7 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     assert f"{R['fails']} (r21-fixture, failed): Job failed (1 so far): Job {n1['fails']}: Error: boom; the next round" in first.stdout
     assert f"{R['legacy']} (r21-fixture, done): its attempt is on R2 without a run record" in first.stdout
     assert f"{R['conflict']} (r21-fixture, done): held: R2 holds another attempt document" in first.stdout
-    assert f"n1_custody.sh --reconcile {R['conflict']} --by WHO" in first.stdout
+    assert f"vy-custody --reconcile {R['conflict']} --by WHO" in first.stdout
     assert held() == [R["empty"], R["big"], R["conflict"]] and (state / "failures" / R["fails"]).read_text() == "1\n"
     assert not (state / "failures" / R["legacy"]).exists() and not (state / "failures" / R["conflict"]).exists()
 
@@ -1559,6 +1560,7 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     assert round_("--reconcile", "r20261003-000099-0099", "--by", "test").returncode == 2
     rec = round_("--reconcile", R["conflict"], "--by", "test")
     assert rec.returncode == 0 and f"{R['conflict']}: reconciled by test" in rec.stdout, rec.stdout + rec.stderr
+    assert "node 2's copy" not in rec.stdout
     assert f"reconcile-attempts {R['conflict']} --apply &&" in command(n1["conflict"])[5]
     assert preserved(J["conflict"]) and list((jobs / "store" / "attempts" / ".superseded").iterdir())
     assert held() == [R["big"]]
