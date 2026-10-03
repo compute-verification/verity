@@ -467,6 +467,40 @@
    "assumptions": [],
    "type_hash": "3c76052ab3f9ea6abd575006dd2fc06826be9f42a0d5ff62d7c0f1c5eea4d1d1"
   },
+  "PousContinuous.pr_misses_gt_le": {
+   "signature": [
+    "PousContinuous.pr_misses_gt_le {α : Type} [Fintype α] [Nonempty α] (n : Nat) (X : List α → α → Prop) (q : List α → Real)",
+    "  (hq : ∀ (h : List α), instLTNat.lt h.length n → Real.instLE.le (q h) (Pous.pr (X h)).toReal) (f β : Real)",
+    "  (hβ : Real.instLT.lt 0 β) :",
+    "  ENNReal.instLE.le",
+    "    (Pous.pr fun I =>",
+    "      And (Real.instLE.le (Finset.filter (fun j => X (List.take j.val (List.ofFn I)) (I j)) Finset.univ).card.cast f)",
+    "        (Real.instLT.lt",
+    "          (iInf fun θ =>",
+    "            instHDiv.hDiv (instHAdd.hAdd (instHMul.hMul θ.val f) (Real.log (instHDiv.hDiv 1 β)))",
+    "              (instHSub.hSub 1 (Real.exp (Real.instNeg.neg θ.val))))",
+    "          (Finset.univ.sum fun j => q (List.take j.val (List.ofFn I)))))",
+    "    (ENNReal.ofReal β)"
+   ],
+   "assumptions": [],
+   "type_hash": "a1f3244064bd672a531aa6c205c9e9bddaae3b149bb7e62dd54fbb2a80206626"
+  },
+  "PousContinuous.pr_misses_le": {
+   "signature": [
+    "PousContinuous.pr_misses_le {α : Type} [Fintype α] [Nonempty α] (n : Nat) (X : List α → α → Prop) (q : List α → Real)",
+    "  (hq : ∀ (h : List α), instLTNat.lt h.length n → Real.instLE.le (q h) (Pous.pr (X h)).toReal) (θ f s : Real)",
+    "  (hθ : Real.instLT.lt 0 θ) :",
+    "  ENNReal.instLE.le",
+    "    (Pous.pr fun I =>",
+    "      And (Real.instLE.le (Finset.filter (fun j => X (List.take j.val (List.ofFn I)) (I j)) Finset.univ).card.cast f)",
+    "        (Real.instLE.le s (Finset.univ.sum fun j => q (List.take j.val (List.ofFn I)))))",
+    "    (ENNReal.ofReal",
+    "      (Real.exp",
+    "        (instHSub.hSub (instHMul.hMul θ f) (instHMul.hMul (instHSub.hSub 1 (Real.exp (Real.instNeg.neg θ))) s))))"
+   ],
+   "assumptions": [],
+   "type_hash": "c9d981378493ecd93c9b9128e413c4ff234e359a1e9d962f63107ee26765f1e1"
+  },
   "PousMargin.raw_b19_128": {
    "signature": [
     "PousMargin.raw_b19_128 (p b D Q k : Nat) (hk : instLENat.le k 100) (ε : ENNReal) :",
@@ -945,6 +979,8 @@
     "Pous.plain_short_coins_insecure",
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
+    "PousContinuous.pr_misses_gt_le",
+    "PousContinuous.pr_misses_le",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
