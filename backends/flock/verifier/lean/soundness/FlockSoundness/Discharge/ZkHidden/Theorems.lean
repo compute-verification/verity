@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.ZkHidden.Statements
+import FlockSoundness.Discharge.ZkHidden.Sched
 import FlockSoundness.Discharge.ZkExec.Setup
 import FlockSoundness.Discharge.HiddenExec.Accepts
 import FlockSoundness.Discharge.HiddenExec.Flat
@@ -44,19 +44,7 @@ theorem acceptsZK_acceptedH : AcceptsZKAcceptedH := by
     recordDraw t.record, I.partition, I.program, st, ht', hst, Hidden.hidden_layout ht' hst,
     unitRowsFlat ht' hst (by rw [hcst]; exact hv1), regs, rfl⟩, rfl, HEq.rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩⟩
 
-theorem zk_schedOK : ZkSchedOK := by
-  sorry
-
-/-- `Zk.schedule` accepts only an `m` with a `fast100` schedule. -/
-theorem fast100_of_schedule {m : ℕ} {p : Flock.Schedule × ℕ} (h : Flock.Zk.schedule m = .ok p) :
-    ∃ s, Flock.fast100 m = some s := by
-  unfold Flock.Zk.schedule at h
-  cases hq : Flock.Zk.queries0 m with
-  | error e => rw [hq] at h; cases h
-  | ok q =>
-    cases hf : Flock.fast100 m with
-    | none => rw [hq] at h; simp [hf, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
-    | some s => exact ⟨s, rfl⟩
+theorem zk_schedOK : ZkSchedOK := zk_schedOK'
 
 /-- **A one-table hidden-output `--zk` acceptance at the coin server's draw sets the draw up**: with `ZkSchedOK`, a
 `DrawSetupZKH` at `dj S`. -/
