@@ -55,22 +55,28 @@ def dlLive (block m : ℕ) : Option (Dec (LiveBlk block) (Fin 2 → Fin m → �
 
 theorem blockDec_coin {block n : ℕ} (h : n ≤ block) (b : LiveBlk block) (i : Fin n) :
     ((blockDec h).e.symm b).1 i = b (Fin.castLE h i) := by
-  sorry
+  simp [blockDec, Equiv.sumArrowEquivProdArrow, Equiv.arrowCongr]
+  rfl
 
 theorem drLive_coin {block n : ℕ} (h : n ≤ block) (b : LiveBlk block) (i : Fin n) :
-    ∃ d, drLive block n = some d ∧ (d.e.symm b).1 i = b (Fin.castLE h i) := by
-  sorry
+    ∃ d, drLive block n = some d ∧ (d.e.symm b).1 i = b (Fin.castLE h i) :=
+  ⟨_, dif_pos h, blockDec_coin h b i⟩
 
 theorem dlLive_point {block m : ℕ} (h : 2 * m ≤ block) (b : LiveBlk block) (k : Fin 2) (t : Fin m) :
     ∃ d, dlLive block m = some d ∧ (d.e.symm b).1 k t = b ⟨k.val * m + t.val, by
       have := Nat.mul_le_mul_right m (Nat.le_of_lt_succ k.isLt); have := t.isLt; omega⟩ := by
-  sorry
+  refine ⟨_, dif_pos h, ?_⟩
+  show b (finCongr (Nat.add_sub_cancel' h) (finSumFinEquiv (Sum.inl (finProdFinEquiv (k, t))))) = _
+  congr 1
+  apply Fin.ext
+  simp [finProdFinEquiv]
+  ring
 
 theorem drLive_none {block n : ℕ} (h : block < n) : drLive block n = none := by
-  sorry
+  simp [drLive]; omega
 
 theorem dlLive_none {block m : ℕ} (h : block < 2 * m) : dlLive block m = none := by
-  sorry
+  simp [dlLive]; omega
 
 /-! ## The tape -/
 
