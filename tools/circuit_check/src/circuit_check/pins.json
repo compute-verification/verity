@@ -402,6 +402,9 @@
   "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=64,SWAP=False}": {
    "and": 19391
   },
+  "MoeExpertFp8BlockCoordinate_v4{K=64,G=32,KB=32,SWAP=False,DOT=BlackwellE4m3QmmaDot32_v2}": {
+   "and": 30639
+  },
   "MoeRouterNormalize_v1{E=8,VPT=4}": {
    "and": 26738
   },

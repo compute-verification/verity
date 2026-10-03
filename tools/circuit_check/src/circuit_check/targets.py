@@ -388,7 +388,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("MoeExpertFp8BlockGemm_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockGemmV2, K=32, N=40, G=32, KB=32, SWAP=False)),
         ("MoeExpertFp8BlockGemmW_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockGemmWV2, K=32, N=40, G=32, KB=32, SWAP=True)),
         # the same with the e4m3 step as a static (cc 12.0's): Qwen3-235B-A22B-FP8's served coordinates at TP8 (w13 K = 4096, w2 K = 192,
-        # G = 64), and on bits two tiles per scale block over a whole and a partial weight block
+        # G = 64), and on bits two tiles per scale block over a whole and a partial weight block; the coordinate on bits at the `_v2`
+        # coordinate's shape, small enough for C-Flock to lower whole (its AND count pinned)
         ("MoeExpertFp8BlockCoordinate_v3", lambda: bind(fp8_moe.MoeExpertFp8BlockCoordinateV3, K=4096, G=64, KB=32, SWAP=False,
                                                         DOT=BlackwellE4m3QmmaDot32)),
         ("MoeExpertFp8BlockCoordinateW_v3", lambda: bind(fp8_moe.MoeExpertFp8BlockCoordinateWV3, K=192, G=64, KB=32, SWAP=False,
@@ -397,7 +398,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
                                                   DOT=BlackwellE4m3QmmaDot32)),
         ("MoeExpertFp8BlockGemmW_v3", lambda: bind(fp8_moe.MoeExpertFp8BlockGemmWV3, K=192, N=72, G=64, KB=32, SWAP=False,
                                                    DOT=BlackwellE4m3QmmaDot32)),
-        ("MoeExpertFp8BlockCoordinate_v4", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateV4, K=128, G=64, KB=32, SWAP=False,
+        ("MoeExpertFp8BlockCoordinate_v4", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateV4, K=64, G=32, KB=32, SWAP=False,
                                                         DOT=BG.BlackwellE4m3QmmaDot32)),
         ("MoeExpertFp8BlockCoordinateW_v4", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateWV4, K=128, G=64, KB=32, SWAP=False,
                                                          DOT=BG.BlackwellE4m3QmmaDot32)),
