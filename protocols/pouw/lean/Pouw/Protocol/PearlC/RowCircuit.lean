@@ -10,9 +10,9 @@ primitive (`Prim`, the template's primitive id in its docstring) and lists its o
 gate, read plain or through core's wiring (`Wire`, which the IR's `CallGraph` folds into its readers), or a constant.
 Its value is the primitive's word function on the operands' values (`Prim.eval`):
 
-* core's primitives without Lean semantics are the fields of `RowOps`, a parameter, which a later instance fills from
-  core (`verity.ml.fp32`, `verity.ml.scalar`, `verity.ml.prims`);
-* PoUW's own are `RowPrims`' word functions;
+* core's primitives are the fields of `RowOps`, a parameter named as core's Lean (`Verity.Protocol.Fp32`, `.Scalar`,
+  `.Prims`), which a later instance fills from it;
+* PoUW's own (`PouwF32SqrtRn_v1`, `PouwETilde_v1`, `PouwBf16Neg_v1`, `PouwSq*`) are `RowPrims`' word functions;
 * `F32Add_v2` is `TileCircuit.f32Add`, the E4M3 k32 atom is the device's `p.step` (`TileCircuit.atomF`) and the NVF4
   atom is `nvf4Word` (`TileCircuit.atom4F`), as in the tile.
 
@@ -32,41 +32,39 @@ open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.TileCircuit
 
 /-! ## Core's primitives, as a parameter -/
 
-/-- The word functions of core's primitives that the row units read and that have no Lean semantics yet, each on words
-as naturals. -/
+/-- The word functions of core's primitives that the row units read and that have no Lean semantics in PoUW, each on
+words as naturals, named as core's (`Verity.Protocol.Fp32`, `.Scalar`, `.Prims`). -/
 structure RowOps where
   /-- `F32Mul_v2` -/
-  mul : ℕ → ℕ → ℕ
+  f32MulV2 : ℕ → ℕ → ℕ
   /-- `F32Div_v2` -/
-  div : ℕ → ℕ → ℕ
+  f32DivV2 : ℕ → ℕ → ℕ
   /-- `F32Fma_v2`: `a·b + c` -/
-  fma : ℕ → ℕ → ℕ → ℕ
-  /-- `PouwF32SqrtRn_v1`, PoUW's primitive on core's FP32 square root (`verity.ml.tc.fp32.sqrt`) -/
-  sqrt : ℕ → ℕ
+  f32FmaV2 : ℕ → ℕ → ℕ → ℕ
   /-- `F32Fmaxf_v1` -/
-  fmaxf : ℕ → ℕ → ℕ
+  f32Fmaxf : ℕ → ℕ → ℕ
   /-- `F32Neg_v1` -/
-  neg : ℕ → ℕ
+  f32Neg : ℕ → ℕ
   /-- `F32ToE4m3Sat_v1` -/
-  toE4m3 : ℕ → ℕ
+  f32ToE4m3Sat : ℕ → ℕ
   /-- `F32ToE2m1Sat_v1` -/
-  toE2m1 : ℕ → ℕ
+  f32ToE2m1Sat : ℕ → ℕ
   /-- `E4m3ToF32_v1` -/
   e4m3ToF32 : ℕ → ℕ
   /-- `F2fpBf16_v1` -/
   f2fpBf16 : ℕ → ℕ
   /-- `I32Le_v1` -/
-  le : ℕ → ℕ → ℕ
+  i32Le : ℕ → ℕ → ℕ
   /-- `SelectI32_v1`: the condition, then the values for `1` and for `0` -/
-  selI32 : ℕ → ℕ → ℕ → ℕ
+  selectI32 : ℕ → ℕ → ℕ → ℕ
   /-- `SelectBf16_v1` -/
-  selBf16 : ℕ → ℕ → ℕ → ℕ
+  selectBf16 : ℕ → ℕ → ℕ → ℕ
   /-- `BitAnd_v1` -/
-  band : ℕ → ℕ → ℕ
+  bitAnd : ℕ → ℕ → ℕ
   /-- `I32Add_v1` -/
-  iadd : ℕ → ℕ → ℕ
+  i32Add : ℕ → ℕ → ℕ
   /-- `F32Fabs_v1`, wiring -/
-  fabs : ℕ → ℕ
+  f32Fabs : ℕ → ℕ
   /-- `Bf16ToF32_v1`, wiring -/
   bf16ToF32 : ℕ → ℕ
 
@@ -139,21 +137,21 @@ def Prim.eval (ops : RowOps) (q : Prim) (l : List ℕ) : ℕ :=
   let z := l.getD 2 0
   (match q with
     | .add => f32Add x y
-    | .mul => ops.mul x y
-    | .div => ops.div x y
-    | .fma => ops.fma x y z
-    | .sqrt => ops.sqrt x
-    | .fmaxf => ops.fmaxf x y
-    | .neg => ops.neg x
-    | .toE4m3 => ops.toE4m3 x
-    | .toE2m1 => ops.toE2m1 x
+    | .mul => ops.f32MulV2 x y
+    | .div => ops.f32DivV2 x y
+    | .fma => ops.f32FmaV2 x y z
+    | .sqrt => sqrtWord x
+    | .fmaxf => ops.f32Fmaxf x y
+    | .neg => ops.f32Neg x
+    | .toE4m3 => ops.f32ToE4m3Sat x
+    | .toE2m1 => ops.f32ToE2m1Sat x
     | .e4m3ToF32 => ops.e4m3ToF32 x
     | .f2fpBf16 => ops.f2fpBf16 x
-    | .le => ops.le x y
-    | .selI32 => ops.selI32 x y z
-    | .selBf16 => ops.selBf16 x y z
-    | .band => ops.band x y
-    | .iadd => ops.iadd x y
+    | .le => ops.i32Le x y
+    | .selI32 => ops.selectI32 x y z
+    | .selBf16 => ops.selectBf16 x y z
+    | .band => ops.bitAnd x y
+    | .iadd => ops.i32Add x y
     | .atom8 p => atomF p false l
     | .atom4 => atom4F false l
     | .eTilde => eTildeWord x y
@@ -175,9 +173,9 @@ inductive Wire
 /-- The wiring's value on the gate's. -/
 def Wire.eval (ops : RowOps) : Wire → ℕ → ℕ
   | .id, x => x
-  | .fabs, x => ops.fabs x
+  | .fabs, x => ops.f32Fabs x
   | .bf16, x => ops.bf16ToF32 x
-  | .bf16Fabs, x => ops.fabs (ops.bf16ToF32 x)
+  | .bf16Fabs, x => ops.f32Fabs (ops.bf16ToF32 x)
 
 /-- One operand: gate `a` read through `w`, or a constant. -/
 inductive Arg

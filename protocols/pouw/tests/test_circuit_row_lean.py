@@ -5,7 +5,8 @@ template's parameter leaves as its input gates. `lean_rows` restates `RowCircuit
 about those tables, so this test and the pinned descriptor digests are what tie them to the Programs. Unlike the tile's
 check (`test_circuit_tile_lean.py`) this one reads each gate's operand order and constants from the template's own gates,
 since `CallGraph` keeps neither. Each primitive's semantics is the trusted step: core's are `RowOps`' fields, PoUW's are
-`RowPrims`, the atoms are `p.step` and `nvf4Word`, and `F32Add_v2` is `f32Add`."""
+`RowPrims` (held to `verity_pouw.circuit.words` by `test_row_prims_lean.py`), the atoms are `p.step` and `nvf4Word`, and
+`F32Add_v2` is `f32Add`."""
 from __future__ import annotations
 
 import struct
