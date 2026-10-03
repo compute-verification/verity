@@ -128,7 +128,12 @@ establishes `StatusComplete` for the windows audited. That is the acceptance hyp
 `SecurityProofs.EncardIngressObsDecodableLe`, `SecurityProofs.EncardIngressDecodableLe` and their `Contents` versions.
 
 The `Contents` versions drop the one given content: messages whose frames follow some content assignment in a set `Cs`
-number at most `#Cs` times that count, so the K charge's sum of content bits and timing bits is a theorem.
+number at most `#Cs` times that count. So Lean proves, for the set `Ms` of messages counted, `log2 #Ms ≤ log2 #Cs` plus
+the timing bits (`SecurityProofs.EncardIngressObsDecodableLeContents`, and
+`SecurityProofs.EncardIngressDecodableLeContents` for the wire). The K charge adds content bits, charged as reads, to
+timing bits. Taking `log2 #Cs` to be those content bits is an accounting step, not part of the theorem. It is exact
+under fixed-length frames (W3): N frames of B bytes have `2^(8·B·N)` contents, so for `Cs` all of them, `log2 #Cs` is
+the `8·B·N` bits read.
 
 ## Calibration (`calibration`)
 
