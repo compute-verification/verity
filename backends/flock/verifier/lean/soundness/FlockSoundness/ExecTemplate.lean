@@ -22,6 +22,8 @@ structure ParseFactsT (tags : Tags) (t : Typed.Template) (c : Circuit) : Prop wh
     ∀ x ∈ more, (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
   /-- a `sha512/row/v1` port's row is whole SHA-512 blocks -/
   portWords : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks
+  /-- a `sha512/row/v1` port is not segmented -/
+  v1Segs : ∀ p ∈ c.ports.toList, p.v2 = false → p.segs = none
   unitNet : c.unitNet < c.nets.size
   root : c.unitNet = 0
   shaNet : c.shaNet < c.nets.size
@@ -116,6 +118,14 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
   (have hh := except_bind_ok h; clear h; obtain ⟨dummyOutputs, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨outPorts, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpR at h)
+  obtain ⟨outRowPorts, h⟩ : ∃ r, jpR r = .ok c := by
+    split at h
+    · exact ⟨_, h⟩
+    · obtain ⟨_, -, h⟩ := except_bind_ok h
+      obtain ⟨r, -, h⟩ := except_bind_ok h
+      exact ⟨r, ite_throw_ok h⟩
+  simp (config := { zeta := false }) only [jpR] at h
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) perVu0 jpP at h
   obtain ⟨pv, h⟩ : ∃ pv, jpP () pv = .ok c := by
     split at h
@@ -294,7 +304,7 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     · obtain ⟨_, hx, -⟩ := except_bind_ok hs; cases hx
     · rename_i hk; cases hs; exact ⟨⟨_, rfl⟩, by simpa using hk⟩) hderived
   exact { pre := by obtain ⟨more, hm, hmore⟩ := hnets; exact ⟨more, hm, hmore⟩
-          portWords := rowPorts_words hrp, unitNet := findIdx?_lt hunit
+          portWords := rowPorts_words hrp, v1Segs := rowPorts_v1 hrp, unitNet := findIdx?_lt hunit
           root := by
             obtain ⟨more, hm, -⟩ := hnets
             obtain ⟨hlt, -, hmin⟩ := Array.findIdx?_eq_some_iff_getElem.1 hunit

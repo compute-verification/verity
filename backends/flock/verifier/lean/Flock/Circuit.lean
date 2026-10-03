@@ -22,14 +22,14 @@ structure Port where
   nb : Nat
   /-- the row's length in bits: a `sha512/row/v1` row's words' -/
   bits : Nat := 16 * words
-  /-- a bit row (`sha512/row/v2`, its leaf `hm96-sha512/row/v2`) -/
+  /-- a bit row (`sha512/row/v2`, its leaf `hm96-sha512/row/v2`; or a segmented one, `segs`) -/
   v2 : Bool := false
   /-- a segmented bit row (`sha512/row-seg/v1`, its leaf `hm96-sha512/row-seg/v1`): each segment's bits and compressions -/
   segs : Option (Array (Nat × Nat)) := none
   deriving Inhabited, Repr
 
 /-- The row bytes its digest hashes after the prefix: `2 * words`, a bit row's `ceil(bits / 8)`. -/
-def Port.bytes (p : Port) : Nat := if p.v2 || p.segs.isSome then (p.bits + 7) / 8 else 2 * p.words
+def Port.bytes (p : Port) : Nat := if p.v2 then (p.bits + 7) / 8 else 2 * p.words
 
 inductive Kind where
   | comp

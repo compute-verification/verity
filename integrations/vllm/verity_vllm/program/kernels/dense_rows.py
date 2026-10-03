@@ -19,7 +19,8 @@ k16 step of `STEPS` (`Gemm_v2`'s DOT; Hopper's is one group of sixteen products,
 are shifts of the 16-bit significand products, the same integers), reading each W row once for all the rows, with the GIL released;
 where it cannot be built, `_chain` computes it in numpy over a W side (values and exponents, transposed) prepared once per weight
 buffer (keyed by its address, shape and strides: a Commit's weight words do not change in place).  Either hands back the same
-coordinates.  Coordinates are split over up to `MAX_THREADS` threads; the words do not depend on the split or the path.
+coordinates.  Coordinates are split over up to `threads()` threads (`MAX_THREADS`, or the cap `VERITY_DENSE_THREADS` sets when this
+module is imported, `use_threads`); the words do not depend on the split or the path.
 `gemm_dot_rows` is `Gemm_v2`'s batch form under kernel "rows": a step's logits rows against the one W by one `gemm_rows`.
 """
 from __future__ import annotations
@@ -268,8 +269,25 @@ def _chain(x: np.ndarray, p: _Prepared, lo: int, hi: int, step: tuple[int, int, 
         return a.astype(np.float32).view(np.uint32), bad
 
 
+_THREADS: list[int] = [MAX_THREADS]
+
+
+def use_threads(n: int | str | None) -> None:
+    """Cap the chain's threads at `n` (at import, `VERITY_DENSE_THREADS`); None, or a value that is not a positive integer, is
+    `MAX_THREADS`."""
+    try:
+        k = MAX_THREADS if n is None else int(n)
+    except ValueError:
+        k = MAX_THREADS
+    _THREADS[0] = k if k > 0 else MAX_THREADS
+
+
+use_threads(os.environ.get("VERITY_DENSE_THREADS"))
+
+
 def threads() -> int:
-    return max(1, min(len(os.sched_getaffinity(0)), MAX_THREADS))
+    """The chain's threads: the cap (`use_threads`, else `MAX_THREADS`), at most this process's CPUs."""
+    return max(1, min(len(os.sched_getaffinity(0)), _THREADS[0]))
 
 
 def dot_ampere(x: np.ndarray, w: np.ndarray, n_threads: int | None = None) -> tuple[np.ndarray, np.ndarray]:
@@ -442,4 +460,4 @@ def _register() -> None:
 _register()
 
 __all__ = ["KERNEL", "KERNELS", "FAST_GEMM_WORDS", "MAX_THREADS", "STEPS", "chain_rows", "dot_ampere", "dot_chain", "gemm_ampere_row",
-           "gemm_dot_rows", "gemm_row", "gemm_rows", "k16_lib", "prepared", "threads"]
+           "gemm_dot_rows", "gemm_row", "gemm_rows", "k16_lib", "prepared", "threads", "use_threads"]

@@ -14,7 +14,8 @@ code and runs outside it.
 ~~~text
 bash tools/lean/setup.sh PKG                      elan, PKG's lean-toolchain, Mathlib's cache when Mathlib is a dependency
 python tools/lean/audit.py [--build] PKG...       audit these packages (--build: setup.sh and lake build first)
-python tools/lean/audit.py --update PKG...        write the pins' records from the build; commit the diff
+python tools/lean/audit.py --update PKG...        write the pins' records from the build; commit the diff (a copy of
+                                                  each record goes beside its reports, which a recorded run publishes)
 python tools/lean/audit.py --all [--root DIR]     the controls, then every package under DIR with a lean-audit.json
 python tools/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
 python tools/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)

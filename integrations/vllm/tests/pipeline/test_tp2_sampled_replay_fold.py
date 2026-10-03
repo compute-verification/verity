@@ -109,6 +109,36 @@ def test_missing_build_dir_for_the_rank_is_named(tmp_path):
     assert r["sampled_replay"]["result"] is None and "no Build dir for rank 1" in r["sampled_replay"]["why"]
 
 
+def test_the_ranks_linkage_reads_each_requests_declared_seed_and_its_programs_s_of_record(tmp_path, monkeypatch):
+    """TP1's linkage links the committed seed to the request's declared seed and the committed splits to SplitsFor_v1 over the
+    Programs' num_SMs (`c2_replay.linkage_requests`, `linkage.splits_of_record`); a rank's linkage takes both from its replay config
+    and its Programs.  Without them phi4-14b TP2 B8 stoch (cov-lw04-gm357) linked 112/112 boundary pairs and still failed: 112 committed
+    seed words with no declared workload seed."""
+    from verity_vllm.check import oracle_compare as OC
+    from verity_vllm.check.replay import driver as SR
+
+    d = tmp_path / "build_request_r1"
+    d.mkdir()
+    with gzip.open(d / "instances.json.gz", "wt") as f:
+        json.dump({"rows": [], "params": [], "digest": "d" * 64}, f)
+    (d / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": "d" * 64}, "LP": 4, "T": 1, "tp": {"world": 2, "rank": 1},
+                                               "sampling": {"splits": "derived", "geometry": {"num_sms": 188}}}))
+    seen: dict = {}
+    monkeypatch.setattr(SR, "ProgramIndex", lambda *a, **k: types.SimpleNamespace(rows=[], prefix="", embed_op_path=lambda: "model.embed_tokens"))
+    monkeypatch.setattr(SR, "model_weights_provider", lambda *a: None)
+    monkeypatch.setattr(SR, "sampled_replay", lambda *a, **k: {"result": True})
+    monkeypatch.setattr(SR, "boundary_linkage", lambda bmap, rd, wreq, **k: seen.update(wreq=wreq, **k) or {"result": True})
+    monkeypatch.setattr(OC, "OpenedReader", lambda com, rc: types.SimpleNamespace(record=dict))
+    cfg = {"programs": {"1": str(d)}, "of_record": {"1": ["d" * 64]},
+           "requests": [{"request_id": "r0", "arrive_step": 0, "prompt_len": 4, "max_tokens": 2, "prompt_token_ids": [1, 2, 3, 4], "seed": 1234}]}
+    w = _worker(cfg, {"entries": [], "digest": "m"})
+    w._tp2_commit["world"] = 2
+    r = w._tp2_sampled_replay(_rc())
+    assert r["boundary_linkage"] == {"result": True, "rank": 1}, r
+    assert [(q["request_id"], q["seed"], q["steps"]) for q in seen["wreq"]] == [("r0", 1234, [0, 1])]
+    assert seen["splits_of_record"] == {"r0": {"derived": 188}} and seen["embed_op_path"] == "model.embed_tokens"
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
 

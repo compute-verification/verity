@@ -4,16 +4,19 @@ Every checked value goes through two tensor-core steps (``verity.ml.tc`` models)
 accumulator, k = 32) that C̃, the fused A′·F_B and B̃·F_A, G and the forming atom run on, and the BF16 step (k = 16) that
 the peel accumulates into C̃'s word.  Beside them the record holds the promotion period G (atoms per fresh +0 accumulator,
 promoted by one FP32 nearest-even add), the W1 prices (`Prices`) that `wref`, `credit_of`, `job_cost` and the debit read,
-and the domain's k bound.  `pearl_c`, `pearl_c_debit`, `pearl_c_u` and `pearl_c_work` read the record; nothing else in them
-names hardware.
+the domain's k bound, and the debit cap ρ (`cap`: a tile whose debit passes ρ times its credited cells' credit is
+rejected, and an accepted unit is credited (1 − ρ)·`creditDevRev1`).  `pearl_c`, `pearl_c_debit`, `pearl_c_u` and
+`pearl_c_work` read the record; nothing else in them names hardware.
 
 * `H100` is the record every ``pearl-c-h100-*`` output was pinned on: `HOPPER_E4M3_K32`, `HOPPER_BF16_WGMMA_K16`, G = 4,
-  Rounds 10-11's W1 prices (research store ``docs/pouw/cheap-binding.md`` §1) and k <= 2^16 (the pure-chain freezing bound).
+  Rounds 10-11's W1 prices (research store ``docs/pouw/cheap-binding.md`` §1), k <= 2^16 (the pure-chain freezing bound)
+  and ρ = 1/400 (TT_OUT(1/400)).
 * `SM120` is the RTX PRO 6000 Blackwell's (``mma.sync``: ``kind::f8f6f4`` m16n8k32 E4M3 and m16n8k16 BF16).  The atom is the
   card's captured step, `BLACKWELL_SM120_E4M3_M16N8K32` (one group of 32 in a 26-bit adder), and the prices are
   `SM120_PRICES` (`Prices.sm120`, measured on node 2); the other fields are stand-ins (`standins` names each):
-  `HOPPER_BF16_M16N8K16` for the peel, and the H100's G = 4 and k bound.  G, the prices and the k bound are statement
-  parameters: they change through the coordinator and the cheap-binding and Lean lanes, not here.
+  `HOPPER_BF16_M16N8K16` for the peel, and the H100's G = 4 and k bound.  Its cap is ρ = 1/1,000 (Daniel, 9:43 AM PDT on
+  2 Oct; Lean `pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192` and its twins).  G, the prices, the k bound and the cap
+  are statement parameters: they change through the coordinator and the cheap-binding and Lean lanes, not here.
 * `SM120_UNPROMOTED` is `SM120` without promotion (G is None: one accumulator from +0 over the whole of k, and the word is
   the last atom's output).  It is the panel's ``pearl-c-sm120`` v2, built for the kernels and the twin; no scheme
   is registered on it and its debit raises until the theory and Lean lanes restate Pearl-C without promotion.
@@ -22,6 +25,7 @@ names hardware.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from fractions import Fraction
 
 from verity.ml.tc.models import (BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16,
                                  HOPPER_E4M3_K32, GroupSum)
@@ -54,12 +58,15 @@ class Device:
     prices: Prices
     k_max: int               # the domain's bound on k
     standins: tuple[str, ...] = ()   # the fields that are stand-ins, each with what it stands in for
+    cap: Fraction = Fraction(1, 400)  # ρ: the tile rule's debit cap and the credit's (1 − ρ)
 
     def __post_init__(self) -> None:
         if (self.atom.dtype, self.atom.k, self.peel.dtype, self.peel.k) != ("e4m3", 32, "bf16", 16):
             raise ValueError(f"{self.name}: Pearl-C takes an E4M3 k32 atom and a BF16 k16 peel step")
         if self.g is not None and self.g < 1:
             raise ValueError(f"{self.name}: G is at least one atom")
+        if not (isinstance(self.cap, Fraction) and 0 < self.cap < 1):
+            raise ValueError(f"{self.name}: the cap ρ is a Fraction in (0, 1)")
 
     @property
     def window(self) -> int:
@@ -95,6 +102,7 @@ SM120 = Device(
         "for the 26-bit atom",
         "k_max: 2^16, the H100's pure-chain freezing bound, until re-derived on the captured atom",
     ),
+    cap=Fraction(1, 1000),
 )
 
 SM120_UNPROMOTED = replace(
