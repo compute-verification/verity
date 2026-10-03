@@ -642,14 +642,15 @@ def alternatives(doc: dict[str, Any]) -> dict[str, dict[str, int]]:
 
 
 def dispatch(doc: dict[str, Any]) -> dict[str, Any]:
-    """Per CUTLASS shape, the CUDA kernels named `cutlass` that each dispatch class ran; ok when every class present ran one set of
-    kernels and the classes' sets differ."""
+    """Per CUTLASS shape, the CUDA kernels named `cutlass` that each dispatch class ran; ok when every shape ran all three classes,
+    each class one set of kernels, and the classes' sets differ."""
     out: dict[str, Any] = {}
     for x in doc["launches"]:
         if x["phase"] == "cutlass":
             names = frozenset(k for k in x["cuda_kernels"] if "cutlass" in k.lower())
             out.setdefault(x["case"], {}).setdefault(x["dispatch"], set()).add(names)
-    ok = bool(out) and all(len(s) == 1 and next(iter(s)) for by in out.values() for s in by.values())
+    ok = bool(out) and all(set(by) == {c for c, _ in DISPATCH} for by in out.values())
+    ok = ok and all(len(s) == 1 and next(iter(s)) for by in out.values() for s in by.values())
     ok = ok and all(len({next(iter(s)) for s in by.values()}) == len(by) for by in out.values())
     return {"classes": {case: {cls: [sorted(n) for n in s] for cls, s in by.items()} for case, by in out.items()}, "ok": ok}
 

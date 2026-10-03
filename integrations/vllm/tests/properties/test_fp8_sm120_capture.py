@@ -113,12 +113,11 @@ def _dense_job(tmp_path, *, form: str = "cutlass", words: str = "cutlass", flip:
     q, s = _quant(x, G)
     w, ws = _weights(rng, N, K), _scales(rng, X.H.cdiv(N, G), K // G)
     X.pair_groups(w, ws, G)
+    if flip_quant:
+        q[4, 9] ^= 1
     out = np.stack([X.block_row(q[r], s[r], w, ws, G=G, KB=KB, form=words)[0] for r in range(M)])
     if flip:
         out[2, 150] ^= 1
-    if flip_quant:
-        q = q.copy()
-        q[4, 9] ^= 1
     return {"phase": form, "case": "ragged", "K": K, "N": N, "M": M, "G": G, "KB": KB, "form": form,
             "paths": X.H._save(tmp_path / f"dense_{words}_{flip}_{flip_quant}", x=x, q=q, s=s, w=w, ws=ws, out=out)}
 
@@ -201,7 +200,7 @@ def test_a_quant_job_finds_a_flipped_byte(tmp_path) -> None:
     q, s = _quant(x, X.MOE_G)
     job = {"phase": "quant", "case": "K192/G64", "K": X.MOE_I, "G": X.MOE_G, "paths": X.H._save(tmp_path / "q", x=x, q=q, s=s)}
     t = _total([X.compare(j) for j in X.quant_jobs(job, 9)])
-    assert (t["quant_rows"], t["quant_mismatch"], t["reference_quant_rows"], t["twin_mismatch"]) == (9, 0, 6, 0)
+    assert (t["quant_rows"], t["quant_mismatch"], t["reference_quant_rows"], t["twin_mismatch"]) == (9, 0, 7, 0)
     q[7, 100] ^= 1
     job["paths"] = X.H._save(tmp_path / "q2", x=x, q=q, s=s)
     t = _total([X.compare(j) for j in X.quant_jobs(job, 9)])
@@ -225,6 +224,7 @@ def test_the_dispatch_check_needs_three_cutlass_kernels() -> None:
     per = {"swap_ab": "cutlass_128x32", "pingpong": "cutlass_64x128_pp", "cooperative": "cutlass_128x128"}
     launches = [_cutlass("qkv_proj", m, [per[X.dispatch_class(m)], "per_token_group_quant"]) for m in X.DENSE_M]
     assert X.dispatch({"launches": launches})["ok"]
+    assert not X.dispatch({"launches": [x for x in launches if x["dispatch"] != "pingpong"]})["ok"]
     same = [_cutlass("qkv_proj", m, ["cutlass_one"]) for m in X.DENSE_M]
     assert not X.dispatch({"launches": same})["ok"]
     mixed = launches + [_cutlass("qkv_proj", 2, ["cutlass_other"])]
@@ -314,7 +314,8 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
 
     def dense(work, phase, name, K_, N_, M, seed):
         job = _dense_job(tmp_path / phase, form=phase, words=phase, flip=phase == "triton")
-        launch = {"phase": phase, "case": name, "K": K_, "N": N_, "M": M, "dispatch": X.dispatch_class(M), "KB": 128,
+        launch = {"phase": phase, "case": name, "K": K_, "N": N_, "M": M, "kernel": X.EXPECTED_KERNEL[phase][1],
+                  "dispatch": X.dispatch_class(M), "KB": 128,
                   "cuda_kernels": next(kernels) if phase == "cutlass" else ["triton"], "deterministic": True, "operands_ok": True,
                   "statics_ok": True}
         return launch, {**job, "case": name, "M": M}
@@ -322,7 +323,11 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     def moe(work, name, M, hot, seed):
         launches = [{"phase": "moe", "case": name, "launch": k, "M": M, "deterministic": True, "statics_ok": True, "operands_ok": True,
                      "assignment_ok": True, "K": K, "N": N, "config": {}, "KB": 32, "SWAP": False, "quant_calls": {}} for k in ("w13", "w2")]
-        return launches, [{**j, "case": name} for k in ("w13", "w2") for j in _moe_job(tmp_path / "m", k)]
+        x = _bf16_rows(np.random.default_rng(8), M, K, X.MOE_G)
+        q, s = _quant(x, X.MOE_G)
+        qjob = {"phase": "moe", "case": name, "launch": "w13_input", "K": K, "G": X.MOE_G,
+                "paths": X.H._save(tmp_path / "mq", x=x, q=q, s=s)}
+        return launches, [*({**j, "case": name} for k in ("w13", "w2") for j in _moe_job(tmp_path / "m", k)), *X.quant_jobs(qjob, M)]
 
     def quant(work, K_, Gq, seed):
         rng = np.random.default_rng(7)
