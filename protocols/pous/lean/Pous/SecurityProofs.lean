@@ -34,6 +34,7 @@ import Pous.SecurityProofs.Thm1.Theorem1iTimed
 import Pous.SecurityProofs.Thm1.Theorem1ii
 import Pous.SecurityProofs.Thm1.Theorem1iiSeq
 import Pous.SecurityProofs.Thm1.Theorem1iiiTimed
+import Pous.SecurityProofs.Chain.PubFamily
 
 /-!
 # The proved guarantees
@@ -135,6 +136,7 @@ theorem ChainDenseMeets64 : Pous.Guarantees.ChainDenseMeets64 := PousSpongeChain
 theorem BandPubMeets64 : Pous.Guarantees.BandPubMeets64 := PousPub.band_pub_meets_64_final
 theorem BandPubMeets14 : Pous.Guarantees.BandPubMeets14 := PousPub.band_pub_meets_14_final
 theorem BandPubMeets14Global : Pous.Guarantees.BandPubMeets14Global := PousPub.band_pub_meets_14_global_final
+theorem BandPubMeetsFamily : Pous.Guarantees.BandPubMeetsFamily := PousPub.band_pub_meets_family_final
 theorem ChainDenseMeets111 : Pous.Guarantees.ChainDenseMeets111 := PousSpongeChain.chainDenseMeets111_final
 
 theorem P2MeetsM1pB19Uncond : Pous.Guarantees.P2MeetsM1pB19Uncond := PousP2p.p2_meets_m1p_b19
