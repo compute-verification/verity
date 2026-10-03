@@ -412,6 +412,25 @@ def test_merge_refuses_an_attempt_whose_result_is_the_lean_fast_paths_whatever_t
     assert "refused: its result can't be read (NotFound" in capsys.readouterr().err
 
 
+def test_merge_refuses_an_attempt_the_index_lists_whose_document_is_gone(tmp_path, monkeypatch, capsys):
+    """The index answers `passing`'s query, but the attempt's document holds its result: with the document gone from the store
+    and no remote to read it from, `get_attempt` returns None, and the gate can't tell what the result was (red team, #966)."""
+    from research.store.local import LocalStore
+
+    main, feat, _tip = _repos(tmp_path)
+    monkeypatch.chdir(feat)
+    assert research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool",
+                          "mytools.decl_check:T", "--cwd", "source", "--", sys.executable, "-c",
+                          (_RESULT % "passed").replace("check/v1", "lean-fast/v1")]) == 0
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--dry-run"]) == 1 and "which no merge accepts" in capsys.readouterr().err
+    store = LocalStore()
+    (rid,) = [r[0] for r in store.index.sql("SELECT id FROM attempts WHERE tool = 'check'")]
+    store.attempt_path(rid).unlink()
+    assert merge_main(["feat", "--dry-run"]) == 1
+    assert f"{rid} done rc=0 refused: its attempt can't be read" in capsys.readouterr().err
+
+
 def test_a_path_rule_requires_its_step_for_a_change_under_the_path(tmp_path, monkeypatch, capsys):
     """The target's declaration says `agree` must pass for a change under flock/: an attempt that skipped it admits a change
     elsewhere but not one under flock/; one where it passed admits both."""

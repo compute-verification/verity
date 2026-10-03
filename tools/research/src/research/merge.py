@@ -65,9 +65,12 @@ REFUSED_KINDS = frozenset({"lean-fast/v1"})
 
 def refused(store, run_id: str) -> str | None:
     """Why the attempt can't pass the gate whatever its exit status, or None: its result is of a kind in `REFUSED_KINDS`, or
-    can't be read (it may be one).  An attempt that published no result has no kind to refuse."""
+    it or its result can't be read (it may be one).  An attempt that published no result has no kind to refuse."""
     try:
-        art = ((store.get_attempt(run_id) or {}).get("outputs") or {}).get("result")
+        doc = store.get_attempt(run_id)
+        if doc is None:
+            return "its attempt can't be read"
+        art = (doc.get("outputs") or {}).get("result")
         kind = store.get_manifest(art).kind if art else None
     except Exception as e:  # noqa: BLE001  (a guard never fails open)
         return f"its result can't be read ({type(e).__name__}: {e})"
