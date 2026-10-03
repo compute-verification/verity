@@ -135,6 +135,12 @@ theorem zk_headline_exec_on (hdec : DecodesOnZK A Hs T I wr opn dec one fin capO
   have h := exec_le_of_refines (execRefinesZK_on A Hs T I wr opn dg dec one fin capOf N hdec τ) Q hB'
   rwa [prob_eq_zero_of_out (fun _ _ h => h) τ, add_zero] at h
 
+omit [Fintype K] in
+/-- **The decoder at the law's draws from `RunsOnZC`** (`ZkExec.decodes_of_runsOnZC`, the coin step `true`). -/
+theorem decodesOnZK_of_runsOnZC (h : RunsOnZC A Hs T I wr opn dec fin capOf L) :
+    DecodesOnZK A Hs T I wr opn dec (fun _ _ _ => true) fin capOf L :=
+  fun ω R => decodes_of_runsOnZC A Hs T I wr opn dec fin capOf h ω R
+
 end On
 
 /-! ## The open pieces -/
