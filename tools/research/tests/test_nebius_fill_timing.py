@@ -247,7 +247,8 @@ def test_start_runs_a_timing_job_unpreemptible_at_nice_0_in_a_top_level_scope_an
     workload = scope[scope.index("--", 4) + 1:]
     assert workload[:3] == ["taskset", "-c", "124-139"] and "nice" not in cmd and kw["start_new_session"]
     assert kw["env"]["GPU_LEASE_WHO"] == "fill:net" and kw["env"]["FILL_JOB"] == "nw-chunk.sh"
-    assert kw["env"]["OMP_NUM_THREADS"] == "8"                        # one compute thread per core, as on node 1
+    pools = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS")
+    assert {kw["env"][v] for v in pools} == {"8"}                    # one compute thread per core, as on node 1
     assert (fill / "running" / ".nw-chunk.sh.cpus").read_text() == "124-139\n"
     assert (fill / "running" / ".nw-chunk.sh.unit").read_text() == f"{unit}\n"
     assert any(a == ("start", "nw-chunk.sh") and k["timing_cpus"] == "124-139" for a, k in (c for c in calls if isinstance(c, tuple)))

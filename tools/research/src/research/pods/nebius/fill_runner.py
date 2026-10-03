@@ -14,7 +14,7 @@ A fill job is an executable script in FILL_DIR/queue/.  Its header says what it 
 #   guests, verity-commit-*.sh, which rank above every other job); mem_gb: a CPU job's memory cap
 #   (default 128; a GPU job's cap is gpu-lease's, 90% of RAM over the GPU count, a timing job's its own scope's, default 128);
 #   timing=1: a timing chunk (network accounting's), on one GPU with cpus CPUs of its own (1 to 16, whole cores; see below)
-#   and OMP_NUM_THREADS one per core, max_min <= FILL_TIMING_MAX_MIN (60)
+#   and its thread pools (OMP_NUM_THREADS, OPENBLAS_, MKL_, NUMEXPR_) one per core, max_min <= FILL_TIMING_MAX_MIN (60)
 
 It must be restartable: it can be stopped (SIGTERM, then SIGKILL 20 s later) at any moment and started again from the top,
 so it resumes from checkpoints in its own output directory.  Its exit status says what happened:
@@ -374,8 +374,10 @@ def start(p: Path, h: dict, backfill: bool = False) -> None:
     if timing:
         # vy-provers' form: root's systemd-run makes the scope in a top-level slice and sets nice 0, then runs CMD as this user
         unit_name = f"fill-timing-{int(time.time() * 1000)}"
-        # one compute thread per core, as `research run --queue --cpus 8` gave the chunks on node 1; the SMT siblings are headroom
-        env["OMP_NUM_THREADS"] = str(len({siblings(c) for c in gpu_set(timing, 1 << 16) or ()}) or h["cpus"])
+        # one compute thread per core in each pool `research run --queue --cpus 8` set for the chunks on node 1; the SMT siblings
+        # are headroom
+        cores = str(len({siblings(c) for c in gpu_set(timing, 1 << 16) or ()}) or h["cpus"])
+        env.update(dict.fromkeys(("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"), cores))
         cmd = [GPU_LEASE, "1", "--on", str(h["on"]), "--max-min", str(h["max_min"]), "--",
                "sudo", "-n", "--preserve-env", "env", f"PATH={env.get('PATH', '')}", "systemd-run", "--quiet", "--scope",
                "--collect", f"--slice={TIMING_SLICE}", "--unit", unit_name, "--nice=0", "-p", f"AllowedCPUs={timing}",
