@@ -235,8 +235,9 @@ i=0
 for spec in "${specs[@]}"; do
   IFS='=' read -r root store uid <<< "$spec"
   i=$((i + 1))
-  (cd / && sudo -n -u "#$uid" env HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$SRC/tools/research/src" RESEARCH_STORE="$store" \
-    python3 -m research data custody --triage --runs-dir "$root" --older-min "$((SETTLE_S / 60))" --json) > "$tmp/triage.$i" 2> "$tmp/triage.err"
+  # no remote (R2 is the Jobs' alone): never a store.toml under a HOME, such as /tmp, that another uid could write first
+  (cd / && sudo -n -u "#$uid" env HOME="$HOME" PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$SRC/tools/research/src" RESEARCH_STORE="$store" \
+    RESEARCH_STORE_CONFIG=/dev/null python3 -m research data custody --triage --runs-dir "$root" --older-min "$((SETTLE_S / 60))" --json) > "$tmp/triage.$i" 2> "$tmp/triage.err"
   rc=$?
   if [ "$rc" -gt 1 ]; then
     log "refused: triage of $root as uid $uid failed ($rc): $(grep -v '^$' "$tmp/triage.err" | tail -1)"

@@ -2064,6 +2064,19 @@ def test_n1_custody_takes_a_run_dirs_text_as_data_never_as_a_plan_line_or_a_shel
 
 
 @N1_CUSTODY
+def test_n1_custody_triages_with_no_remote_another_uid_could_name(tmp_path):
+    """#1004's red-team F8: triage ran with HOME=/tmp and no RESEARCH_STORE_CONFIG, so its remote was /tmp/.research/store.toml,
+    which any uid on node 1 may write first: get_attempt would cache that remote's attempt documents into the store, and the next
+    Job push one to R2 as the run's write-once attempt. Triage runs with the round's own HOME and RESEARCH_STORE_CONFIG=/dev/null,
+    which no uid but root can replace and which names no remote."""
+    node = _n1_custody(tmp_path)
+    node.run(node.jobs, "r20261003-200000-1201", "done")
+    assert node.round_("--dry-run").returncode == 0
+    triage = [ln for ln in node.log.read_text().splitlines() if ln.startswith("sudo ") and "--triage" in ln]
+    assert len(triage) == 2 and all(f" HOME={tmp_path / 'home'} " in ln and " RESEARCH_STORE_CONFIG=/dev/null " in ln for ln in triage), triage
+
+
+@N1_CUSTODY
 def test_n1_custody_pushes_no_record_less_attempt_that_never_left_node_1(tmp_path, monkeypatch):
     """#1004's red-team F7: a local attempt published without its run record that R2 lacks is `attempt-unpreserved`, so a round ran
     `custody --publish` on it, and each store's pending push takes every attempt R2 lacks: R2's write-once key would keep it without
