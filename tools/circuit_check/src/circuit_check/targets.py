@@ -58,6 +58,7 @@ def load_registries() -> None:
             importlib.import_module(f"{R.__name__}.{m.name}")
     from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
     import verity_pouw.circuit.boolean  # noqa: F401  (PoUW's own primitives on bits, the six `pc4` and `pc8` rows call)
+    import verity_pouw.circuit.cap  # noqa: F401  (PoUW's prototype of Pearl-C's per-tile cap)
     import verity_pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
     import verity_pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
     import verity_pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
@@ -201,11 +202,12 @@ def _pouw_roots() -> list[Any]:
     templates at k = 64 with a one-word tile (small enough to lower whole), and its weight side, call side and whole check at
     one row a side; and Pearl-C's (`verity_pouw.circuit.pc8`) the same way at k = 128 (one promotion window), its templates
     on the H100's and sm_120's records and its roots on sm_120's.  Both checks' hiding tiles and roots (``hidden``: the tile
-    digest, `verity_pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes."""
+    digest, `verity_pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes.  The prototype of Pearl-C's
+    per-tile cap (`verity_pouw.circuit.cap`): its word and a one-word tile at k = 256 (two promotion windows) on sm_120."""
     from dataclasses import replace
 
     from verity.ir.defs import bind
-    from verity_pouw.circuit import ncp2, pc4, pc8
+    from verity_pouw.circuit import cap, ncp2, pc4, pc8
     from verity_vllm.program.registry import pouw_rows
 
     shape = ncp2.Shape(16, 64, 16)
@@ -222,6 +224,7 @@ def _pouw_roots() -> list[Any]:
     out += [t for t in [*pc4.templates(64, h4.tile, True).values(), pc4.weight(h4), pc4.call(h4), pc4.check(h4),
                         *pc8.templates(128, h8.tile, "sm120", True).values(), pc8.weight(h8), pc8.call(h8), pc8.check(h8)]
             if t not in out]
+    out += [*cap.templates(256, "sm120").values()]
     return out + [bind(pouw_rows.NcpLinearRow, K=64, N=16), bind(pouw_rows.NcpLinearRowBias, K=64, N=16),
                   bind(pouw_rows.NcpLinearCoordinate, K=64)]
 
