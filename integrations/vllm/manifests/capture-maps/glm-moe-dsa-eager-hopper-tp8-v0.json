@@ -158,9 +158,10 @@
    "status": "exists",
    "definitions": [
     "Fp8GroupQuant_v1",
+    "ScaledMmFp8BlockSharedScale_v1",
     "ScaledMmFp8Block_v1"
    ],
-   "note": "_C.per_token_group_fp8_quant + CUTLASS sm_90 blockwise GEMM (128x128 weight blocks, f32 promotion per 128-wide K block), exact-model-tested on H100 (VLLM_USE_DEEP_GEMM=0). Weights are the checkpoint words."
+   "note": "_C.per_token_group_fp8_quant + CUTLASS sm_90 blockwise GEMM (128x128 weight blocks, f32 promotion per 128-wide K block), exact-model-tested on H100 (VLLM_USE_DEEP_GEMM=0). Weights are the checkpoint words. The target's fp8_scale_construction (shared-per-block, the default) binds ScaledMmFp8BlockSharedScale_v1, ScaledMmFp8Block_v1's function with the scale products committed; per-coordinate binds ScaledMmFp8Block_v1."
   },
   "fp8-block-linear-deepgemm": {
    "status": "tonight",
@@ -173,10 +174,9 @@
   "silu-mul": {
    "status": "exists",
    "definitions": [
-    "SiluMul_v1",
     "SiluMul_v2"
    ],
-   "note": "torch.ops._C.silu_and_mul (CUDA)"
+   "note": "torch.ops._C.silu_and_mul (CUDA act_and_mul_kernel): SiluMul_v2, the Build's silu_mul. SiluMul_v1 is not this kernel's function (NaN, gate -inf, gates past expf overflow, -0)"
   },
   "silu-mul-block-quant": {
    "status": "committed-only",
@@ -186,9 +186,9 @@
   "bf16-add": {
    "status": "exists",
    "definitions": [
-    "Bf16AddF2fp_v1"
+    "ResidualAdd_v1"
    ],
-   "note": "ATen add on bf16: bf16_rn(f32(a) + f32(b)) per element"
+   "note": "ATen add on bf16: bf16_rn(f32(a) + f32(b)) per element, NaN 0x7FC0 (Bf16Add_v1; ResidualAdd_v1{N} per row, the Build's residual_add). Not Bf16AddF2fp_v1, the CUDA _f16Vec add inside fused_add_rms_norm (NaN 0x7FFF)"
   },
   "moe-sum": {
    "status": "exists",
@@ -201,6 +201,7 @@
   "token-select": {
    "status": "exists",
    "definitions": [
+    "TokenSelect_v1",
     "TokenSelect_v2"
    ],
    "note": "greedy argmax over the gathered logits (B1 row: temperature 0)"
