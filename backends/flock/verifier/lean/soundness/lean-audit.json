@@ -21210,7 +21210,7 @@
    ]
   },
   "FlockSoundness.Discharge.ZkLink.Compiled": {
-   "digest": "eb660de9e7ffe0afdaa28ab77e56629f0987a49b13b91cae1835767ade1423ad",
+   "digest": "122a063a3f21624c7f9a989d84b7d47ea7bd15bb3b94e2ba24eae8ef639ad1c3",
    "definitions": {
     "FlockSoundness.Discharge.ZkLink.Hashes": "0a021df667ea5723ed135b0d60babbdee39119cceb6e86c65483fcdecc63b718",
     "FlockSoundness.Discharge.ZkLink.Hashes.E": "a2da2cd6a517c00236c1d679fe4a7db9ae0cbd1cc252d1f8b493480f0d8e6404",
@@ -21257,10 +21257,11 @@
     "FlockSoundness.Discharge.ZkLink.padColumnO": "c35f7e9160af39afa0909d7d6017374f24c75d8a8ebb6bbe8af2f483079de936",
     "FlockSoundness.Discharge.ZkLink.queryAndBatchPadC": "26f041ff14ce5688bf69e88cd694e082b4332c755a6faa61a876041fb2fe00ac",
     "FlockSoundness.Discharge.ZkLink.rateZ": "efcd0acceacf257c407feb7fb960c31bf385a46b67ec3e398c63970112a327db",
-    "FlockSoundness.Discharge.ZkLink.repMaskedZC": "b8d039bce1b6426514e721f2c7b6a00418fb6d4d11d0ead8181ab4e3c88b1c79",
+    "FlockSoundness.Discharge.ZkLink.repMaskedZC": "757b6b4addbf64af6af3e5255a9869edb5d2271e8655112392e39aa8a82f9019",
     "FlockSoundness.Discharge.ZkLink.repZC": "3faa608892cb37be0d68291666949f58b077cb2d81d98a39b9cef84b789f9d9c",
     "FlockSoundness.Discharge.ZkLink.repZCAt": "d6995301e9b6d943f7138c0a11cc9ba227e89176a26e5e34c57c64903b8bfd92",
     "FlockSoundness.Discharge.ZkLink.restZC": "bb42ef65be2bd4e76124aebb2e187ccf05c7f110db2fb7b26e1c18c487cffae2",
+    "FlockSoundness.Discharge.ZkLink.rowOrder": "85ce6280b6c4e7f84180c00311cc023737dd1cf40340af3e59f562da8b92890d",
     "FlockSoundness.Discharge.ZkLink.sessAfterZC": "5ef83432bf7833a80d059738ae826757e828cebb937946b7f822f496a7eded75",
     "FlockSoundness.Discharge.ZkLink.sessionZC": "966855270f1bfa3390fdf354709c623d63006ea3cc3067c7233ebfb81ce0b70f",
     "FlockSoundness.Discharge.ZkLink.sessionZG": "df63eaf3c8cf4441fa311157fc8d4dc5e021e24705417379048839b6d1572059",
@@ -21395,7 +21396,7 @@
    ]
   },
   "FlockSoundness.Discharge.ZkLink.LockRep": {
-   "digest": "31edd8aa7208a4096be4d60617d120d9dced1915fcac033e2957c573add46fb2",
+   "digest": "589bdf10d626cbb9274d6aab1e7fc007d992bd97f69726395d47d1828b2e5d52",
    "definitions": {
     "FlockSoundness.Discharge.ZkLink.IZ": "ce534b54d0f7923258db446e3f79e73d0d6f7a22cfb3d8a0eb01519c9d6d0ca8",
     "FlockSoundness.Discharge.ZkLink.IZ.empty": "7ffe8920935a0c1e39daaa8619588f66a658d5f943346663cff7bef16f6fb82a",
@@ -21412,9 +21413,9 @@
     "FlockSoundness.Discharge.ZkLink.getZ": "9e9c0fcd1dac231475d555bfa8045bd23d44362308d056e7901d0ed00b811de2",
     "FlockSoundness.Discharge.ZkLink.lockAfterZ": "7bf70b8172044102520bc29ff89f20fccad488d9c5de01a0049709246c071926",
     "FlockSoundness.Discharge.ZkLink.lockInnerZ": "68d5f339e3de5276d3ee24e65e76762b7aea1e95219240a76ad23bf3e7e56d21",
-    "FlockSoundness.Discharge.ZkLink.lockMaskedZ": "c2d6663084cf01f64699b27056948e940d62df4b46f62cb887a1035af8ae695d",
+    "FlockSoundness.Discharge.ZkLink.lockMaskedZ": "66956ec2f8df49c9c631eea0222f837c32e893c9917e1047ce8b4c7baa15564c",
     "FlockSoundness.Discharge.ZkLink.lockReindex": "9049c0a5aefb4ede5c375aa33cfed5a4f0fae8e0a19b765539ec5cfdee8359f5",
-    "FlockSoundness.Discharge.ZkLink.lockRepZ": "cce4bd104c8c48bd0df17490278ddad54af0d19b173826a120b6906be67ba35c",
+    "FlockSoundness.Discharge.ZkLink.lockRepZ": "73ca75206ec7a508a4b90755d88118eccb96561104269bb28a36fd928c97462e",
     "FlockSoundness.Discharge.ZkLink.lockRestZ": "0de5461da3274f18a6e0e5b992876284ab74676bc9320e083e9354131db38b96",
     "FlockSoundness.Discharge.ZkLink.lockSessZ": "0c2f03217c8d57919b84f05b10013b7a425b7e47716467eec8299cb1d5eb9c12"
    },
@@ -21430,14 +21431,14 @@
    ]
   },
   "FlockSoundness.Discharge.ZkLink.OracleP": {
-   "digest": "60ce2b7e70d5a16c8cfad33e9ebd59bee9ab8d32a83cf8eee73b8e407d6ed87e",
+   "digest": "fbb6c27c909b4e2ea491435efdb6875f9280708e9e279c6fe680c839a0bd690d",
    "definitions": {
     "FlockSoundness.Discharge.ZkLink.innerGameP": "fd06f62765859af52648cb64d77c0905f91266571704bd7cf95dc9b5405eae91",
     "FlockSoundness.Discharge.ZkLink.orcOutZ": "b6a5f87f996bab158bb3dc486116dc39fed25cb05988cd15eefd0bf880fee2cd",
     "FlockSoundness.Discharge.ZkLink.orcSessZ": "d27b1310e1af77ba54fb79f3ebddcc68d6ef1e100a9577ca67ac93fa9a3a138d",
     "FlockSoundness.Discharge.ZkLink.padWords": "43372e77c7abf992dd278b1456a890490738b2ec2947b9e8b476ddae03a940e5",
     "FlockSoundness.Discharge.ZkLink.repZP": "c0e72a476ae37b20b6c3947dec7dce5ed0e92af4d3894e23a5a0fb38a2781015",
-    "FlockSoundness.Discharge.ZkLink.repZPAt": "e0c8dbe571052f4d4cc3313f8d0a5effa71d75594e418fa902ed6ad6cc8129f0",
+    "FlockSoundness.Discharge.ZkLink.repZPAt": "b1980641126cf83c84b79f45b3d258d7c2aefafe5849c663db213b01888eb268",
     "FlockSoundness.Discharge.ZkLink.tabOrcP": "d1fc6227fad2f2bc3b0c14204c1fbd73a5310ed07ee6e2d6e747b6565bc934d8"
    },
    "pins": [
