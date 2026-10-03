@@ -182,7 +182,7 @@ class Sampler:
         skipped = {"pid": row["pid"], "pss_bytes": None, "skipped": True, **{k: row.get(k) for k in STATUS_RSS},
                    **({} if "rss_bytes" in row else {"rss_bytes_stat": row.get("rss_bytes_stat")})}
         if rss is not None and rss > self.a.pss_max_rss_gb * 1e9:
-            return {**skipped, "reason": f"skipped: rss {rss / 1e9:.1f} GB over --pss-max-rss-gb {self.a.pss_max_rss_gb:g} "
+            return {**skipped, "reason": f"skipped: rss {rss / 1e9:.2f} GB over --pss-max-rss-gb {self.a.pss_max_rss_gb:g} "
                                          "(smaps_rollup holds the process's mmap lock for seconds)"}
         key = (row["pid"], row.get("starttime_ticks"))
         t0 = clock()
