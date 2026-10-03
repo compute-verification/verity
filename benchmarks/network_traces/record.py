@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import faulthandler
 import json
 import math
 import os
@@ -73,6 +74,7 @@ OFFLINE = {"bi-eager": False, "commit": True}
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE_CAPACITY = 100, 600, 4096, 1 << 16
 SAMPLE_S, HEARTBEAT_S = 2.0, 0.01
 FREEZE_MS, MAX_OTHERS_BUSY, TAIL_MS = 1000.0, 0.5, 10_000
+STALL_S = 120  # an offline engine step or finalize this long is hung: every thread's stack goes to stderr and the job exits
 
 clock = time.monotonic
 
@@ -222,10 +224,12 @@ async def replay(port: int, model: str, requests: list[dict], t0: float, drain_u
     return ended
 
 
-def offline_engine(args: argparse.Namespace, commit: bool, meta: dict):
+def offline_engine(args: argparse.Namespace, commit: bool, meta: dict, mix: Sequence[tuple[str, list[dict], float]]):
     """vLLM's engine in this process as the Commit stage builds it (`verity_vllm.engine.build`: batch-invariant, eager,
     no prefix cache), and with `commit` the reference committer (`native_host`), which hashes every Call output of
-    every step into the step's Merkle root on host threads, keeping the tree levels but not the values."""
+    every step into the step's Merkle root on host threads, keeping the tree levels but not the values. Its device
+    staging is sized from the mix's envelope as the Commit stage arms it (`size_arena`: two decode-sized blocks and one
+    prefill-sized one), and refused here, before any request, when it doesn't fit beside the engine."""
     from verity_vllm.engine import vllm_adapter as va
 
     eng = va.build_engine(CHECKPOINTS, max_num_seqs=args.max_num_seqs, case=ROLES[args.model], execution="bi-eager",
@@ -237,11 +241,18 @@ def offline_engine(args: argparse.Namespace, commit: bool, meta: dict):
         return eng, None
     from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
-    com = NativeHostCommitter(eng, run_id="network-traces", hash_threads=args.hash_threads, retain_values=False)
+    com = NativeHostCommitter(eng, run_id="network-traces", hash_threads=args.hash_threads, retain_values=False,
+                              arena_bytes=None)
     t = clock()
     com.register_weights()
-    meta["committer"] = {"name": "native_host", "hash_threads": args.hash_threads, "retain_values": False,
-                         "run_s": WINDOW_BUCKETS * BUCKET_MS / 1000, "register_weights_s": round(clock() - t, 1)}
+    rows = [r for _, reqs, _ in mix for r in reqs]
+    arena = com.size_arena({"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt"]) for r in rows),
+                            "max_new": max(r["max_tokens"] for r in rows),
+                            "max_num_batched_tokens": args.max_num_batched_tokens, "max_model_len": args.max_model_len})
+    meta["committer"] = {"name": com.name, "hash_threads": args.hash_threads, "retain_values": False,
+                         "run_s": WINDOW_BUCKETS * BUCKET_MS / 1000, "register_weights_s": round(clock() - t, 1),
+                         "arena": {k: arena.get(k) for k in ("decode_block_bytes", "prefill_block_bytes", "blocks_preallocated",
+                                                             "step_bound_bytes", "per_token_bytes")}}
     return eng, com
 
 
@@ -274,7 +285,9 @@ def offline_replay(eng, com, requests: list[dict], t0: float, drain_until: float
             core.add_request(q["rid"], {"prompt_token_ids": q["prompt"]},
                              SamplingParams(max_tokens=q["max_tokens"], temperature=0.0, ignore_eos=True))
         if now >= next_run:
+            faulthandler.dump_traceback_later(STALL_S, exit=True)
             rc = com.finalize()
+            faulthandler.cancel_dump_traceback_later()
             done = clock()
             com.uninstall()
             com.reset()
@@ -288,7 +301,9 @@ def offline_replay(eng, com, requests: list[dict], t0: float, drain_until: float
         if not core.has_unfinished_requests():
             stop.wait(max(0.0, min(t0 + pending[-1]["at_s"] if pending else drain_until, next_run) - clock()))
             continue
+        faulthandler.dump_traceback_later(STALL_S, exit=True)
         outs = core.step()
+        faulthandler.cancel_dump_traceback_later()
         t = clock()
         n = 0
         for o in outs:
@@ -518,7 +533,7 @@ def run(args: argparse.Namespace) -> int:
     ended: dict = {"stopped_ms": None, "unfinished": 0}
     try:
         if offline:
-            eng, com = offline_engine(args, OFFLINE[args.mode], meta)
+            eng, com = offline_engine(args, OFFLINE[args.mode], meta, mix)
         else:
             wait_ready(server, port, deadline - args.drain_s - 120)
         ready = clock()
@@ -707,8 +722,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--seed", type=int, default=0)
     r.add_argument("--server-arg", action="append", default=[], help="passed to the vLLM server, e.g. --server-arg=--enforce-eager")
     r.add_argument("--max-num-seqs", type=int, default=256, help="the offline engine's")
-    r.add_argument("--max-num-batched-tokens", type=int, default=16384, help="the offline engine's")
-    r.add_argument("--hash-threads", type=int, default=8, help="the committer's")
+    r.add_argument("--max-num-batched-tokens", type=int, default=8192, help="the offline engine's (the stock server's own)")
+    r.add_argument("--hash-threads", type=int, default=2, help="the committer's (the Commit stage's default)")
     c = sub.add_parser("convert", help="rebuild trace.json and summary.json in job directories")
     c.add_argument("dirs", nargs="+", type=Path)
     c.add_argument("--ingress-bytes", choices=("text", "body"), default="text")
