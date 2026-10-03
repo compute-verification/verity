@@ -1,4 +1,4 @@
-"""[R17 D90] How `Prog` canonicalises a read of a request's peers Input: the received-collective partials of a TP rank.
+"""How `Prog` canonicalises a read of a request's peers Input: the received-collective partials of a TP rank.
 
 The derived rank Program lowers one Input per `peers_<k>` (one field at offset 0); the fold lowers ONE homogeneous peers Record per
 request, its fields at increasing offsets (`Prog.peer_fields[node]` = sorted [(leaf offset, k)], set by the loaders).  A read
