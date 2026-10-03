@@ -7,6 +7,8 @@ import Pouw.Protocol.D1
 import Pouw.Protocol.Dimension.Causal
 import Pouw.Protocol.Dimension.Defs
 import Pouw.Protocol.Dimension.Lift
+import Pouw.Protocol.Draft.BatchSeq
+import Pouw.Protocol.Draft.SampledProofs
 import Pouw.Protocol.Fp8Atom.Atom
 import Pouw.Protocol.Fp8Atom.E4M3
 import Pouw.Protocol.Fp8Atom.Fp32
@@ -127,6 +129,12 @@ drawn tile's proof is sound (`HiddenTile`), what a proof system gives per tile t
 completeness on a population of activations (`Completeness`), its one assumption, the honest tiles' measured cap rate
 (`HonestCap`, empirical), the proof that every honest word is an FP32 word's (`HonestWords`) and completeness from the
 two (`Completeness`).
+
+## `Draft`: provisional text owned elsewhere
+
+The draft of sampled proofs' trusted text that PoUW's hidden audit reads (`SampledProofs`: a proof system's data, its
+soundness against registered inputs and the honest prover's membership in its class), held until lean's sampled-proofs
+package lands, and a batch played one game after another (`BatchSeq`), core-only, held until it moves to core.
 
 ## `TileBound`: the FP4-tile model (`docs/pouw/fp4-tile-model.md`, bc-d9842080)
 
