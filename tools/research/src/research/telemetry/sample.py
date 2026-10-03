@@ -24,7 +24,8 @@ from .events import Emitter, append, stream_id, utc_now_ms
 from .job import write_json_atomic
 from .procs import diskstats, gpu_sample, pss, snapshot_tree, statvfs
 
-#: The clock (seconds) the rounds are scheduled on; a test replaces it.  Records' t_mono stay on time.monotonic.
+#: The clock (seconds) that decides which readings are due within a round and times the smaps_rollup reads; a test replaces it.
+#: The loop's sleeps, gaps and linger, and the records' t_mono, stay on time.monotonic.
 clock = time.monotonic
 #: The RSS breakdown that /proc/<pid>/status gave the process snapshot: what a process whose smaps_rollup is not read records instead.
 STATUS_RSS = ("rss_bytes", "rss_anon_bytes", "rss_file_bytes", "rss_shmem_bytes")
