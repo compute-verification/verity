@@ -255,6 +255,7 @@ theorem zk_rep_plays : ZkRepPlays := by
         (consumed (Flock.Transcript.init rounds dom).rounds k₁ t₁.k ++
           (consumed t₁.rounds t₁.k t₂.k ++ consumed t₂.rounds t₂.k t₃.k))) o ∧ o.2 ≠ PendL.reject := by
     unfold ZkLink.repMaskedZC
+    refine pq_map ?_
     refine pq_bind hpz ?_ rfl rfl
     refine pq_map ?_
     refine pq_bind hpl ?_ rfl rfl

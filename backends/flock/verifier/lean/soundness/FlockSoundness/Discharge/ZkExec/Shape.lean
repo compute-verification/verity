@@ -284,6 +284,7 @@ theorem repMaskedZC_on (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : Pa
       (zcShape F S.m ++ (lcShape F S.kLog ++ (opShape F (extra.length + 2) ++ (ligPadShape F K D sch e t ++ [.msg F]))))
       (fun x => x.2 ≠ PendL.reject) := by
   unfold ZkLink.repMaskedZC
+  refine ExactOn.map (Q := fun x => x.2 ≠ PendL.reject) ?_ fun _ h => h
   refine ExactOn.bind_exact (zerocheckZK_exact A S.m PA tr) fun o => ExactOn.map (Q := fun x => x.2 ≠ PendL.reject)
     ?_ fun _ h => h
   exact ExactOn.bind_exact (lincheckZK_exact A S PA o.1) fun o' =>
