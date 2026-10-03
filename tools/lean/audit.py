@@ -54,8 +54,10 @@ everything read-only but the build's `.lake` directories; no network; nothing ou
 cannot; the `compile-time` check stands in for it then.
 
 A record holds the statement, not the proof, so a pin may be recorded on a `sorry` stub and pass once a proof with allowed
-axioms replaces it.  `--update` writes the records and `reads` from the build instead of comparing them, and prints what
-changed: each changed pin's signature before and after, and each changed definition a pin reads with its source now.  A
+axioms replaces it.  `--update` writes the records and `reads` from the build instead of comparing them, puts the whole
+`lean-audit.json`, changed or not, beside the package's reports too (`audit-TAG/` under `--out`, which a recorded run
+publishes), and prints what changed: each changed pin's signature before and after, and each changed definition a pin reads
+with its source now.  A
 weakened definition passes every axiom check and the replay, so those changes need a named statement reviewer in the merge
 handoff; `--update` records them, it does not approve them.  A pin whose statement is the same but prints differently
 (same type hash and named assumptions: a toolchain's printer, notation) gets one line and needs no reviewer, and so does a
@@ -935,6 +937,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails += lfails
     if update and listed:
         new["compile_time"] = listed
+    if update:
+        dump(work, new)
     if update and new != policy:
         dump(pkg, new)
         notes = review(policy, new, facts, module_files(pkg)) + lnotes

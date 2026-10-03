@@ -51,6 +51,10 @@ python tools/lean/audit.py PKG                once, before pushing (seconds; lev
 Build on a CPU machine; the three packages take about nine minutes from scratch on four cores. Never `lake update`, and
 never change a `require`, a revision or `lean-toolchain` in a feature PR.
 
+To regenerate a record on a pod, run `research run --on POD --project verity --source . --cwd source -- python
+tools/lean/audit.py --build --update PKG` with no wrapper around it. It exits 0 when the audit passes, whether or not the
+record changed, and the record is among the run's outputs, at `lean-audit/audit-TAG/lean-audit.json`.
+
 While proving, check one file at a time, and leave the whole package and the audit for the end:
 
 - **`lake env lean FILE`** prints that file's errors and warnings, and writes nothing. Core's slowest file takes about 10 s
