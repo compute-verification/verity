@@ -487,8 +487,10 @@ def test_every_template_runs_from_a_job_tree_and_bootstraps_outside_it():
 
 def test_store_fetch_lays_each_artifact_out_under_its_hex_through_a_scratch_store_it_removes(tmp_path):
     """store-fetch's run step with `research` from this checkout and a directory remote in place of R2: a tree (PATHS picking its
-    files) and a file artifact land under $OUT/$NAME/<hex>/, the scratch store is gone, a directory older than KEEP_DAYS goes, and
-    an id that isn't a full art id fails before anything is fetched."""
+    files) and a file artifact land under $OUT/$NAME/<hex>/, fetched.tsv names each file's path and sha256, the scratch store is
+    gone, a directory older than KEEP_DAYS goes, and an id that isn't a full art id fails before anything is fetched. An id it
+    can't fetch, or whose fetch writes no file (console, 2 Oct), is named and fails the job, and the others still land."""
+    import hashlib
     import os
     import subprocess
     import sys
@@ -522,11 +524,27 @@ def test_store_fetch_lays_each_artifact_out_under_its_hex_through_a_scratch_stor
     r = subprocess.run(["bash", "-c", run], capture_output=True, text=True, env=env, cwd=tmp_path)
     assert r.returncode == 0, r.stderr
     dest = out / "console-1"
-    assert sorted(str(p.relative_to(dest)) for p in dest.rglob("*") if p.is_file()) == [f"{tree[4:]}/rep1/a.json", f"{one[4:]}/one.bin"]
-    assert not (dest / ".store").exists() and not (out / "old").exists() and "2 artifact(s), 2 file(s)" in r.stdout
+    files = [f"{tree[4:]}/rep1/a.json", f"{one[4:]}/one.bin"]
+    assert sorted(str(p.relative_to(dest)) for p in dest.rglob("*") if p.is_file()) == sorted([*files, "fetched.tsv"])
+    assert not (dest / ".store").exists() and not (out / "old").exists() and "2 of 2 artifact(s), 2 file(s)" in r.stdout
+    listed = [ln.split("\t") for ln in (dest / "fetched.tsv").read_text().splitlines()]
+    assert listed == [[a, str(dest / f), hashlib.sha256((dest / f).read_bytes()).hexdigest()] for a, f in zip((tree, one), files)]
 
     r = subprocess.run(["bash", "-c", run], capture_output=True, text=True, env={**env, "ARTS": f"{tree} {one[:12]}", "NAME": "x"})
     assert r.returncode == 2 and "is not a full art id" in r.stderr and not (out / "x").exists()
+
+    missing = "art:" + "0" * 64
+    r = subprocess.run(["bash", "-c", run], capture_output=True, text=True, env={**env, "ARTS": f"{missing} {one}", "NAME": "y"})
+    assert r.returncode == 1 and f"could not fetch {missing}" in r.stderr, r.stderr
+    assert f"{missing}\t-\tnot fetched" in (out / "y" / "fetched.tsv").read_text().splitlines()
+    assert (out / "y" / one[4:] / "one.bin").exists(), "an id the remote lacks doesn't stop the others"
+
+    (tmp_path / "quiet" / "bin").mkdir(parents=True)
+    (tmp_path / "quiet" / "bin" / "uv").write_text("#!/bin/sh\nexit 0\n")                     # a fetch that exits 0 and writes nothing
+    (tmp_path / "quiet" / "bin" / "uv").chmod(0o755)
+    quiet = run.replace(str(jobs), str(tmp_path / "quiet"))
+    r = subprocess.run(["bash", "-c", quiet], capture_output=True, text=True, env={**env, "ARTS": one, "NAME": "z"})
+    assert r.returncode == 1 and f"could not fetch {one}" in r.stderr and "0 of 1 artifact(s)" in r.stdout, r.stderr
 
 
 def test_a_per_pod_copy_goes_once_research_run_exits(tmp_path):

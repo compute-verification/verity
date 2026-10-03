@@ -44,11 +44,17 @@ Every POLL_S seconds the runner:
   - runs the CPU jobs of an owner listed in FILL_DIR/cpu-sets (`<owner> <cpus> <slots> [mem_gb]  # why`, read each tick) on
     those CPUs instead, up to that many at a time, at nice 19 and ionice idle, with their memory cap lowered to mem_gb if
     given, and paused (none started) while a train check holds FILL_YIELD_LOCK if those CPUs meet FILL_YIELD_CPUS; and logs
-    each scoped CPU job's peak memory (mem_peak_gb) when it exits.
+    each scoped CPU job's peak memory (mem_peak_gb) when it exits;
+  - keeps fill off each fence in FILL_DIR/fences (`<owner> <gpu> <cpus> <until UTC> [<job glob> <minutes>]  # why`, read each
+    tick, a line past its until ignored), which `fill_runner.py fence` writes and logs, one per owner, at most 1 GPU, FENCE_MAX_CPUS
+    cores on that GPU's NUMA node and FENCE_MAX_H hours: it stops any other fill job on the GPU, moves running fill jobs' threads
+    off the cores, keeps the GPU as if in keep-free and starts no job on the cores; a job the glob names runs on that GPU alone,
+    pinned to those cores, with max_min up to the minutes (still stopped, like any fill job, for a window or a waiter).
 Status: FILL_DIR/status.txt; every start, stop and exit: FILL_DIR/events.jsonl.
 """
 from __future__ import annotations
 
+import argparse
 import fcntl
 import fnmatch
 import json
@@ -57,6 +63,7 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import time
 from collections import Counter
 from datetime import datetime, timezone
@@ -97,6 +104,10 @@ COMMIT_PREFIX = "verity-commit-"
 # a Commit reruns from the top when stopped, and a Gemma-2 Commit's CPU phases alone outlast 30 min; booked windows still bound it
 COMMIT_MAX_MIN = int(os.environ.get("FILL_COMMIT_MAX_MIN", "120"))
 CGROUP_ROOT = os.environ.get("FILL_CGROUP_ROOT", "/sys/fs/cgroup")
+# what a fence may take, in the tool rather than a budget line: the GPU is paid for either way, so a fence costs fill's throughput
+FENCE_MAX_CPUS, FENCE_MAX_H = 8, 4
+QUOTA_LOG = Path(os.environ.get("FILL_QUOTA_LOG", "/workspace/verity-guest/kueue-backup/quota-changes.log"))
+PCI_ROOT = Path(os.environ.get("FILL_PCI_ROOT", "/sys/bus/pci/devices"))
 HELD = "held-unknown-exit"
 # runs `bash JOB` and writes its exit status to RC; the trap (a handler, so the job doesn't inherit an ignored signal) keeps the
 # wrapper alive through a stop until the job itself exits
@@ -104,6 +115,7 @@ RC_WRAP = 'trap : TERM INT HUP; bash "$2"; c=$?; echo "$c" > "$1"; exit "$c"'
 
 running: dict[str, dict] = {}
 backoff_until = 0.0
+repinned: set[str] = set()
 
 
 def now() -> str:
@@ -115,11 +127,49 @@ def event(kind: str, job: str, **kw) -> None:
         f.write(json.dumps({"t": now(), "event": kind, "job": job, **kw}) + "\n")
 
 
+def utc(s: str) -> float:
+    """`2026-10-02T14:45Z` (UTC when it names no zone) in epoch seconds."""
+    d = datetime.fromisoformat(s.replace("Z", "+00:00"))
+    return d.replace(tzinfo=d.tzinfo or timezone.utc).timestamp()
+
+
+def fences(t: float | None = None) -> list[dict]:
+    """FILL_DIR/fences, written by `fill_runner.py fence`: `<owner> <gpu> <cpus> <until UTC> [<job glob> <minutes>]  # why`, one
+    per owner.  A line past its until is ignored, so a fence ends on its own."""
+    t = time.time() if t is None else t
+    out = []
+    try:
+        lines = (FILL / "fences").read_text().splitlines()
+    except OSError:
+        return out
+    for line in lines:
+        f = line.split("#")[0].split()
+        if len(f) not in (4, 6) or not f[1].isdigit() or not re.fullmatch(r"[\d,-]+", f[2]) or len(f) == 6 and not f[5].isdigit():
+            continue
+        try:
+            until = utc(f[3])
+        except ValueError:
+            continue
+        if until > t:
+            out.append({"owner": f[0], "gpu": int(f[1]), "cpus": f[2], "until": until, "jobs": f[4] if len(f) == 6 else None,
+                        "minutes": int(f[5]) if len(f) == 6 else 0, "line": line})
+    return out
+
+
+def fence_for(name: str, fs: list[dict]) -> dict | None:
+    """The fence among `fs` whose job glob names job `name`."""
+    return next((f for f in fs if f["jobs"] and fnmatch.fnmatchcase(name, f["jobs"])), None)
+
+
 def max_min_exception(name: str, t: float | None = None) -> int | None:
     """FILL_DIR/max-min: exceptions to the 30-min GPU cap, each approved by infra, one per line, read at each start:
     `<job name glob> <minutes> <until UTC, 2026-10-02T14:45Z>  # who, why`.  A job it names may set max_min up to those minutes
-    and never past the line's until, so the exception ends on its own; a line past its until is ignored."""
+    and never past the line's until, so the exception ends on its own; a line past its until is ignored.  A job a fence names
+    gets the fence's minutes the same way."""
     t = time.time() if t is None else t
+    f = fence_for(name, fences(t))
+    if f and f["until"] - t >= 60:
+        return min(f["minutes"], int((f["until"] - t) // 60))
     try:
         lines = (FILL / "max-min").read_text().splitlines()
     except OSError:
@@ -129,10 +179,9 @@ def max_min_exception(name: str, t: float | None = None) -> int | None:
         if len(f) != 3 or not f[1].isdigit() or not fnmatch.fnmatchcase(name, f[0]):
             continue
         try:
-            until = datetime.fromisoformat(f[2].replace("Z", "+00:00"))
+            left = int((utc(f[2]) - t) // 60)
         except ValueError:
             continue
-        left = int((until.replace(tzinfo=until.tzinfo or timezone.utc).timestamp() - t) // 60)
         if left >= 1:
             return min(int(f[1]), left)
     return None
@@ -283,6 +332,11 @@ def start(p: Path, h: dict, backfill: bool = False) -> None:
     unit_name = None
     own = h.get("cpuset") if not h["gpus"] else None
     cpus = own or (VERITY_CPU_SET if in_pool else CPU_SET)
+    fs = fences()
+    mine = fence_for(name, fs)
+    fenced = set().union(*(gpu_set(f["cpus"], 1 << 16) or set() for f in fs))
+    # taskset needs a CPU: a set the fences would empty (a cpu-sets line of a few cores) keeps its own
+    cpus = mine["cpus"] if mine else cpu_list((gpu_set(cpus, 1 << 16) or set()) - fenced) or cpus
     rc_file = FILL / "running" / f".{name}.rc"
     rc_file.unlink(missing_ok=True)
     cmd = ["nice", "-n", "19", "taskset", "-c", cpus, "bash", "-c", RC_WRAP, "fill-rc", str(rc_file), str(run)]
@@ -334,11 +388,62 @@ def pick_gpus(idle: list[int], allowed: set[int] | None, g: int, n: int) -> list
     return sorted(ok[:g])
 
 
-def keep_free(n: int) -> set[int]:
+def keep_free(n: int, fs: list[dict] | None = None) -> set[int]:
+    """The GPUs fill keeps its jobs off: FILL_DIR/keep-free's, and those of the fences `fs` (by default every live one), where
+    only a fence's own jobs run."""
+    fs = fences() if fs is None else fs
     try:
-        return gpu_set((FILL / "keep-free").read_text().split("#")[0].strip() or None, n) or set()
+        kept = gpu_set((FILL / "keep-free").read_text().split("#")[0].strip() or None, n) or set()
     except OSError:
-        return set()
+        kept = set()
+    return kept | {f["gpu"] for f in fs if f["gpu"] < n}
+
+
+def cpu_list(cpus: set[int]) -> str:
+    """{96, 97, 98, 100} as `96-98,100`."""
+    runs: list[list[int]] = []
+    for c in sorted(cpus):
+        if runs and runs[-1][1] == c - 1:
+            runs[-1][1] = c
+        else:
+            runs.append([c, c])
+    return ",".join(f"{a}-{b}" if b > a else f"{a}" for a, b in runs)
+
+
+def gpu_cpus(i: int) -> set[int]:
+    """The CPUs on GPU i's NUMA node: its PCI device's local_cpulist."""
+    bus = subprocess.run(["nvidia-smi", "-i", str(i), "--query-gpu=pci.bus_id", "--format=csv,noheader"], capture_output=True,
+                         text=True, check=True).stdout.strip()
+    domain, rest = bus.split(":", 1)
+    return gpu_set((PCI_ROOT / f"{domain[-4:]}:{rest}".lower() / "local_cpulist").read_text().strip(), 1 << 16) or set()
+
+
+def repin(f: dict, fs: list[dict]) -> None:
+    """Move every running fill job but fence f's own off f's cores: each thread in the job's process group or its scope (a GPU
+    job's gpu-lease-<pid>, where `research run` starts its workload in a session of its own).  A thread on f's cores alone
+    stays."""
+    off = gpu_set(f["cpus"], 1 << 16) or set()
+    jobs = [j for k, j in running.items() if fence_for(k, fs) is not f]
+    groups = {j["pid"] for j in jobs if j.get("pid")}
+    scopes = tuple(f"/{j['unit']}.scope" for j in jobs if j.get("unit"))
+    moved = 0
+    for d in Path("/proc").glob("[0-9]*"):
+        try:
+            pgid = int((d / "stat").read_text().rsplit(")", 1)[1].split()[2])
+            cg = (d / "cgroup").read_text().strip()
+        except (OSError, IndexError, ValueError):
+            continue
+        if pgid not in groups and not (scopes and cg.endswith(scopes)):
+            continue
+        for task in d.glob("task/[0-9]*"):
+            try:
+                had = os.sched_getaffinity(int(task.name))
+                if had & off and had - off:
+                    os.sched_setaffinity(int(task.name), had - off)
+                    moved += 1
+            except OSError:
+                pass
+    event("fence", "-", owner=f["owner"], gpu=f["gpu"], cpus=f["cpus"], jobs=f["jobs"], threads_moved=moved)
 
 
 def rank(name: str, h: dict) -> int:
@@ -548,6 +653,15 @@ def tick(n: int) -> str:
                 break
             stop(k, f"free {free} < needed {need}")
             deficit -= running[k]["h"]["gpus"]
+    fs = fences()
+    for f in fs:
+        if f["line"] not in repinned:
+            repinned.add(f["line"])
+            repin(f, fs)
+        pid = re.search(r"\bpid=(\d+)", leases[f["gpu"]] or "") if f["gpu"] < n else None
+        k = next((k for k, j in running.items() if pid and j.get("pid") == int(pid.group(1))), None)
+        if k and not running[k].get("stopping") and fence_for(k, fs) is not f:
+            stop(k, f"GPU {f['gpu']} is fenced for {f['owner']}")
     frozen = cpu_frozen(timed, window)
     if frozen and any(not j["h"]["gpus"] and not j.get("stopping") and not j["paused"] for j in running.values()):
         event("freeze-memory", "-", timed=timed, waiting=window, **numa0_gb())
@@ -580,13 +694,21 @@ def tick(n: int) -> str:
     backfill = window and blockers > 0
     if not timed and (not want or backfill) and time.monotonic() >= backoff_until:
         # a job pinned with on=<index> waits for that GPU (a busy one would only bounce off gpu-lease)
-        keep = keep_free(n)
+        keep, fenced = keep_free(n, fs), {f["gpu"] for f in fs}
         booked, t_now = windows(), wall()
-        idle = [i for i, l in enumerate(leases) if l is None and i not in keep]
-        ready = [x for x in queued if x[1]["gpus"] and idle and clears(x[1], booked, t_now) and
-                 (gpu_set(x[1].get("on"), n) is None or any(i in idle for i in gpu_set(x[1]["on"], n)))]
-        by_rank = [[x for x in ready if rank(x[0].name, x[1]) == r] for r in range(3)]
-        left = by_rank[0] + (by_rank[1] or (by_rank[2] if free >= 2 else []))
+        idle = [i for i, l in enumerate(leases) if l is None and (i not in keep or i in fenced)]
+
+        def allowed(x) -> set[int]:
+            f = fence_for(x[0].name, fs)
+            gpus = {f["gpu"]} if f else set(range(n)) - fenced
+            on = gpu_set(x[1].get("on"), n)
+            return gpus if on is None else gpus & on
+
+        ready = [x for x in queued if x[1]["gpus"] and clears(x[1], booked, t_now) and any(i in idle for i in allowed(x))]
+        # nothing else may use a fence's GPU, so its jobs go first
+        theirs = [x for x in ready if fence_for(x[0].name, fs)]
+        by_rank = [[x for x in ready if x not in theirs and rank(x[0].name, x[1]) == r] for r in range(3)]
+        left = theirs + by_rank[0] + (by_rank[1] or (by_rank[2] if free >= 2 else []))
         counts = Counter(j["h"]["owner"] for j in running.values() if j["h"]["gpus"])
         # each job gets its own free GPUs (--on), so jobs started in one tick don't take each other's
         slots = max(0, len(idle) - RESERVE)
@@ -594,7 +716,7 @@ def tick(n: int) -> str:
             best = next_job(left, counts)
             left.remove(best)
             p, h, _ = best
-            got = pick_gpus(idle, gpu_set(h.get("on"), n), h["gpus"], n) if h["gpus"] <= slots else None
+            got = pick_gpus(idle, allowed(best), h["gpus"], n) if h["gpus"] <= slots else None
             if not got:
                 continue
             for i in got:
@@ -606,9 +728,10 @@ def tick(n: int) -> str:
         if not window:
             # Commits that found too few free GPUs take the newest proofs (then pous) fills' GPUs, counting GPUs already freeing
             waiting = sum(h["gpus"] for p, h, _ in queued if h["gpus"] and rank(p.name, h) == 0 and p.exists() and clears(h, booked, t_now))
-            short = waiting - len(idle) - sum(j["h"]["gpus"] for j in running.values() if j["h"]["gpus"] and j.get("stopping"))
-            victims = sorted((k for k, j in running.items() if j["h"]["gpus"] and not j.get("stopping") and rank(k, j["h"])),
-                             key=lambda k: (-rank(k, running[k]["h"]), -running[k]["t0"]))
+            short = (waiting - sum(1 for i in idle if i not in fenced)
+                     - sum(j["h"]["gpus"] for j in running.values() if j["h"]["gpus"] and j.get("stopping")))
+            victims = sorted((k for k, j in running.items() if j["h"]["gpus"] and not j.get("stopping") and rank(k, j["h"])
+                              and not fence_for(k, fs)), key=lambda k: (-rank(k, running[k]["h"]), -running[k]["t0"]))
             for k in victims:
                 if short <= 0:
                     break
@@ -638,7 +761,7 @@ def tick(n: int) -> str:
             counts[best[1]["owner"]] += 1
             cpu_running += 1
         verity_pool(rest)
-    lines = [f"{now()} free GPUs {free}/{n}, kept free {sorted(keep_free(n)) or '-'}, waiters {want or '-'}, timed {timed}, "
+    lines = [f"{now()} free GPUs {free}/{n}, kept free {sorted(keep_free(n, fs)) or '-'}, waiters {want or '-'}, timed {timed}, "
              f"window waiting {window}, "
              f"backfill {backfill}, queued {len(queued)} "
              f"(gpu {sum(1 for x in queued if x[1]['gpus'])}, cpu {sum(1 for x in queued if not x[1]['gpus'])}), "
@@ -647,6 +770,7 @@ def tick(n: int) -> str:
     for k, j in running.items():
         lines.append(f"  running {k} owner={j['h']['owner']} gpus={j['h']['gpus']} since={j['started']}"
                      f"{' PAUSED' if j['paused'] else ''}{' stopping: ' + j['why'] if j.get('stopping') else ''}")
+    lines.extend(f"  fence {f['line'].split('#')[0].strip()}" for f in fs)
     (FILL / "status.txt").write_text("\n".join(lines) + "\n")
     return lines[0]
 
@@ -684,6 +808,84 @@ def adopt() -> None:
         event("adopted", p.name, pgid=pgid)
 
 
+def fence(argv: list[str], t: float | None = None) -> int:
+    """`fill_runner.py fence OWNER --gpu I --cpus LIST --until UTC [--jobs GLOB --max-min M] --why TEXT` writes OWNER's fence
+    (replacing the one it has), `fence OWNER --release` removes it; either is logged in QUOTA_LOG, and the runner acts on it at
+    its next tick."""
+    ap = argparse.ArgumentParser(prog="fill_runner.py fence", description=fence.__doc__)
+    ap.add_argument("owner")
+    ap.add_argument("--gpu", type=int)
+    ap.add_argument("--cpus", help=f"at most {FENCE_MAX_CPUS}, on the GPU's NUMA node: 116-123 or 116,118")
+    ap.add_argument("--until", help=f"UTC, at most {FENCE_MAX_H} h from now: 2026-10-02T23:00Z")
+    ap.add_argument("--jobs", help="a fill job name glob whose jobs run on the GPU and cores (fill jobs still: a window or a "
+                                   "waiter stops them)")
+    ap.add_argument("--max-min", type=int, help="the --jobs jobs' max_min cap, to --until at most")
+    ap.add_argument("--why")
+    ap.add_argument("--release", action="store_true")
+    a = ap.parse_args(argv)
+    t = time.time() if t is None else t
+
+    def refuse(why: str) -> int:
+        print(f"fill_runner.py fence: {why}", file=sys.stderr)
+        return 2
+
+    if not re.fullmatch(r"[^\s#]+", a.owner):
+        return refuse("OWNER is one word without #")
+    with open(FILL / ".fences.lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        live = fences(t)
+        others = [f for f in live if f["owner"] != a.owner]
+        old = next((f for f in live if f["owner"] == a.owner), None)
+        if a.release:
+            if not old:
+                return refuse(f"{a.owner} has no fence")
+            line, note = None, f"fence released, was {old['line'].split('#')[0].strip()}"
+        else:
+            if None in (a.gpu, a.cpus, a.until, a.why):
+                return refuse("--gpu, --cpus, --until and --why are required")
+            if (a.jobs is None) != (a.max_min is None):
+                return refuse("--jobs and --max-min go together")
+            try:
+                until = utc(a.until)
+            except ValueError:
+                return refuse(f"--until {a.until!r} is not a UTC time like 2026-10-02T23:00Z")
+            if not t < until <= t + 3600 * FENCE_MAX_H:
+                return refuse(f"--until must be in the next {FENCE_MAX_H} h")
+            n = gpu_count()
+            if not 0 <= a.gpu < n:
+                return refuse(f"this node's GPUs are 0-{n - 1}")
+            if a.gpu in keep_free(n, []):
+                return refuse(f"GPU {a.gpu} is in FILL_DIR/keep-free")
+            cpus = gpu_set(a.cpus, 1 << 16) if re.fullmatch(r"[\d,-]+", a.cpus) else None
+            if not cpus or len(cpus) > FENCE_MAX_CPUS:
+                return refuse(f"--cpus {a.cpus!r}: 1 to {FENCE_MAX_CPUS} cores")
+            local = gpu_cpus(a.gpu)
+            if not cpus <= local:
+                return refuse(f"cores {cpu_list(cpus - local)} aren't on GPU {a.gpu}'s NUMA node ({cpu_list(local)})")
+            for f in others:
+                theirs = gpu_set(f["cpus"], 1 << 16) or set()
+                if f["gpu"] == a.gpu or cpus & theirs:
+                    return refuse(f"{f['owner']} has GPU {f['gpu']} and cores {f['cpus']} until "
+                                  f"{datetime.fromtimestamp(f['until'], timezone.utc):%H:%MZ}")
+            if a.jobs is not None and (not re.fullmatch(r"[^\s#]+", a.jobs) or not 1 <= a.max_min <= 60 * FENCE_MAX_H):
+                return refuse(f"--jobs is one glob without #, --max-min 1 to {60 * FENCE_MAX_H}")
+            end = datetime.fromtimestamp(until, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            jobs = f" {a.jobs} {a.max_min}" if a.jobs is not None else ""
+            line = f"{a.owner} {a.gpu} {cpu_list(cpus)} {end}{jobs}  # {' '.join(a.why.split())}"
+            note = f"fence {'(replaces its last) ' if old else ''}{line}"
+            for s, e in windows():
+                if s < until and e > t:
+                    print(f"note: the window booked at {datetime.fromtimestamp(s, timezone.utc):%H:%MZ} stops every fill job "
+                          f"while it runs, the fence's too")
+        with open(QUOTA_LOG, "a") as log:
+            log.write(f"{now()} {a.owner} (fill_runner.py fence): {note}\n")
+        tmp = FILL / ".fences.tmp"
+        tmp.write_text("".join(f"{x}\n" for x in [*(f["line"] for f in others), *([line] if line else [])]))
+        os.replace(tmp, FILL / "fences")
+    print(f"{note}\nthe fill runner acts on it within {POLL_S:.0f} s")
+    return 0
+
+
 def main() -> None:
     for d in ("queue", "running", "done", "failed", "logs", HELD):
         (FILL / d).mkdir(parents=True, exist_ok=True)
@@ -698,4 +900,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["fence"]:
+        sys.exit(fence(sys.argv[2:]))
     main()

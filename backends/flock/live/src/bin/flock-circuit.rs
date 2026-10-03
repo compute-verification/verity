@@ -220,6 +220,14 @@ fn identity(c: &Composite) -> Value {
         id["hashes"]["row_leaf_in_circuit"] = json!("hm96-sha512/row/v2 over sha512/row/v2");
         id["outputs"] = json!("hidden: each output port an hm96-sha512/row/v2 row hashed in the circuit; the public file has no output word");
     }
+    // only with a segmented row: a statement of v2 rows alone keeps its digest
+    if c.ports.iter().any(|p| p.segs.is_some()) {
+        id["hashes"]["row_leaf_in_circuit"] = json!(ROW_LEAF_SEG_IDENTITY);
+    }
+    // only with runs of output ports (META `out_row_ports`): a statement of one output row per port keeps its digest
+    if c.meta.get("out_row_ports").is_some() {
+        id["outputs"] = json!(OUT_ROWS_SEG_IDENTITY);
+    }
     id
 }
 
