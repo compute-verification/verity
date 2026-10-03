@@ -139,8 +139,11 @@ The ingress bound adds these:
 
 8. **Ingress reuses the interaction, read inward.** The outside's party is `snd`, X's devices are `op`, and both see
    every record. The outside gets every move of X's (recomputed from the records) rather than only the egress wire,
-   which is at least as strong as the real outside. A decoder inside X may read what X's devices read: the record
-   version covers it, and the wire version follows under W2.
+   which is at least as strong as the real outside. X's egress rows are determined by the records too: the ingress
+   `Obs` holds only the ingress rows, but X's enqueues are `op`'s moves (functions of the records), the egress warden
+   releases them by W4, and an outside fault on an egress link shows as a status, which `Obs` holds. So the outside's
+   feedback is complete. A decoder inside X may read what X's devices read: the record version covers it, and the wire
+   version follows under W2.
 9. **Conditioned on the content.** The messages counted are those whose frames on each link, in the order released, are
    a prefix of one prescribed list `c ℓ` (the Program's input, charged as reads; order is content, since the Program
    reads frames in order). How many frames have arrived by the horizon is timing, and is in the count. Messages that
