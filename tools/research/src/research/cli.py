@@ -539,27 +539,23 @@ def _end_group(run_dir: Path) -> None:
     import signal
     import time
 
-    from .telemetry.procs import list_pids, stat_fields
+    from .telemetry.procs import live_group
 
     try:
         pgid = int(json.loads((run_dir / "status.json").read_text())["pgid"])
     except (OSError, ValueError, KeyError, TypeError):
         return
-
-    def live() -> list[str]:
-        return [f"{st['pid']} {st['comm']}" for pid in list_pids()
-                if (st := stat_fields(pid)) and st["pgrp"] == pgid and st["state"] not in ("Z", "X")]
-
-    if not (left := live()):
+    if not (left := live_group(pgid)):
         return
-    print(f"research: --cwd clone: {len(left)} process(es) of the workload's group {pgid} outlived it ({', '.join(left[:5])}); "
-          f"SIGKILL to the group before removing the clone", file=sys.stderr)
+    print(f"research: --cwd clone: {len(left)} process(es) of the workload's group {pgid} outlived it "
+          f"({', '.join(str(st['pid']) + ' ' + st['comm'] for st in left[:5])}); SIGKILL to the group before removing the clone",
+          file=sys.stderr)
     try:
         os.killpg(pgid, signal.SIGKILL)
     except ProcessLookupError:
         return
     for _ in range(GROUP_END_POLLS):
-        if not live():
+        if not live_group(pgid):
             return
         time.sleep(GROUP_END_POLL_S)
 

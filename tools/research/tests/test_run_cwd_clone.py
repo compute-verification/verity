@@ -21,7 +21,7 @@ from research import runs as R
 from research.cli import main
 from research.store import attempt as A
 from research.telemetry.procs import stat_fields
-from waits import wait_runner
+from waits import Gate, wait_runner
 
 PY = sys.executable
 SRC = str(Path(remote.__file__).resolve().parents[1])
@@ -215,6 +215,36 @@ def test_remove_tries_again_while_the_clone_is_still_filling(tmp_path, monkeypat
     assert clone.remove(tmp_path / "d") is None and len(calls) == 2 and not (tmp_path / "d").exists()
     why = clone.remove(tmp_path / "e")
     assert why.startswith("OSError: [Errno 39] Directory not empty") and why.endswith(f"after {clone.REMOVE_ATTEMPTS} attempts")
+
+
+def test_a_machine_clone_first_removes_what_finished_runs_left_in_scratch_and_never_a_live_runs(tmp_path, capsys):
+    root = tmp_path / "root"
+    exited = subprocess.Popen([PY, "-c", "pass"])
+    exited.wait()
+    gate = Gate(tmp_path / "gate")
+    member = subprocess.Popen([PY, "-c", Gate.WAIT, str(gate.path)], start_new_session=True)   # a workload group still running
+    victim = tmp_path / "victim"
+    (victim / "keep").mkdir(parents=True)
+    runs = {"done": (exited.pid, {"state": "done", "pgid": exited.pid}), "refused": (exited.pid, None),
+            "runner": (os.getpid(), {"state": "done", "pgid": exited.pid}), "group": (exited.pid, {"state": "failed", "pgid": member.pid}),
+            "running": (exited.pid, {"state": "running", "pgid": exited.pid}), "link": (exited.pid, {"state": "done", "pgid": exited.pid})}
+    try:
+        for rid, (runner, status) in runs.items():
+            (root / "runs" / rid).mkdir(parents=True)
+            (root / "runs" / rid / "launch.json").write_text(json.dumps({"runner_pid": runner}))
+            (root / "runs" / rid / ("status.json" if status else "refused.json")).write_text(json.dumps(status or {"fault": "CloneRefused"}))
+            if rid != "link":
+                (root / "scratch" / rid / "tree" / "busy").mkdir(parents=True)
+        (root / "scratch" / "unknown" / "tree").mkdir(parents=True)        # no run dir: nothing says it is over
+        (root / "scratch" / "link").symlink_to(victim)
+        assert clone.home(root / "runs", "new", machine=True) == root / "scratch" / "new"
+    finally:
+        gate.release()
+        member.wait()
+    assert sorted(p.name for p in (root / "scratch").iterdir()) == ["group", "link", "new", "runner", "running", "unknown"]
+    assert (victim / "keep").is_dir()
+    err = capsys.readouterr().err
+    assert f"removed {root / 'scratch' / 'done'}, the clone of finished run done" in err and "finished run refused" in err
 
 
 def test_on_a_machine_the_clone_is_the_shipped_commit_beside_src_and_the_shared_tree_is_untouched(tmp_path, repo, machine, outlivers,

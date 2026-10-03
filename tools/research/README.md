@@ -253,7 +253,9 @@ tree at `<root>/scratch/<run-id>/tree` (about a second; the objects are
 borrowed), checks that it is a clean checkout of the shipped commit, and removes
 it once the workload exits, however it ends, so a cancel or an EXIT trap in one
 run never reaches another's files (`research/clone.py`; job.json
-`run.cwd_clone`). The workload imports the tree's Python from the clone too: each
+`run.cwd_clone`). What is left of the workload's process group is SIGKILLed
+first, and a clone that still could not be removed goes when the next clone is
+made on that machine, once its run is over (never a live run's). The workload imports the tree's Python from the clone too: each
 `PYTHONPATH` entry under the shipped tree is moved to the same directory in the
 clone (`run.remote.pythonpath` says so), and bytecode goes beside the clone, so a
 module that writes beside its `__file__` writes into the clone. A tree the archive stream shipped has no `.git`, so the

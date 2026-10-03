@@ -6,15 +6,17 @@ commit shares: a cancelled duplicate's EXIT trap there removed `PKG/.lake/packag
 source's objects and so costs one checkout (about a second for the repository), detached at the source root's HEAD; on a machine
 that must be the commit the run was shipped for.  The clone lives outside the run dir, so custody never reads it:
 <root>/scratch/<run id>/tree beside src/ on a machine, a temporary directory locally.  The runner removes it once the workload has
-exited, however it ended.  A source root that is not a git checkout's top level (a tree the archive stream shipped has no .git)
+exited, however it ended; on a machine, one it could not remove goes when the next clone is made there (`sweep`).  A source root that is not a git checkout's top level (a tree the archive stream shipped has no .git)
 is refused, never guessed at.
 """
 from __future__ import annotations
 
 import errno
+import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -36,15 +38,54 @@ def sub(cwd: str | None) -> str | None:
 
 def home(runs_root: Path, run_id: str, *, machine: bool) -> Path:
     """The directory that holds the run's clone (its `tree`), created: <root>/scratch/<run id>/ on a machine, beside src/ and the
-    run dir, a fresh temporary directory locally."""
+    run dir, a fresh temporary directory locally.  On a machine it first removes the clones finished runs left there (`sweep`)."""
     if not machine:
         return Path(tempfile.mkdtemp(prefix=f"research-{run_id}-"))
     d = Path(runs_root).parent / "scratch" / run_id
+    sweep(Path(runs_root), d.parent)
     try:
         d.mkdir(parents=True)
     except FileExistsError:
         raise Refused(f"{d} exists already; a run's clone directory is its own") from None
     return d
+
+
+def sweep(runs_root: Path, scratch: Path) -> None:
+    """Remove each scratch/<run id> whose run is over (`_over`): a runner that could not remove its clone, or was killed before it
+    did, leaves it on the machine's disk, and nothing else ever removes it.  A live run's clone is never touched.  Each removal,
+    and each failure, is one line on stderr."""
+    try:
+        entries = list(os.scandir(scratch))
+    except OSError:
+        return
+    for e in entries:
+        if e.is_symlink() or not e.is_dir(follow_symlinks=False) or not _over(runs_root / e.name):
+            continue
+        why = remove(Path(e.path))
+        print(f"research: --cwd clone: removed {e.path}, the clone of finished run {e.name}" if why is None else
+              f"research: --cwd clone: could not remove {e.path}, the clone of finished run {e.name} ({why}); remove it by hand",
+              file=sys.stderr)
+
+
+def _over(run_dir: Path) -> bool:
+    """The run is over: its runner (launch.json runner_pid) has exited, and it refused (refused.json) or its status.json is final
+    with nothing left in the workload's process group (its pgid).  Anything unreadable, or a process that may still be the run's
+    (a recycled pid included), is not over."""
+    from .runs import TERMINAL
+    from .telemetry.procs import live_group, running
+
+    try:
+        if running(int(json.loads((run_dir / "launch.json").read_text())["runner_pid"])):
+            return False
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    if (run_dir / "refused.json").exists():
+        return True
+    try:
+        st = json.loads((run_dir / "status.json").read_text())
+        return st["state"] in TERMINAL and not live_group(int(st["pgid"]))
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
 
 
 def _git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
