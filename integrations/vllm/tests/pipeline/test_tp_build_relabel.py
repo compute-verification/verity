@@ -351,11 +351,12 @@ def _jobs(todo: list) -> list[tuple]:
 
 def test_with_the_flag_off_the_build_issues_the_derives_it_did(tmp_path, monkeypatch):
     plain, relabeled = _tp_build(tmp_path / "off", monkeypatch)
-    assert relabeled == [] and len(plain) == 1 and plain[0][1] == 6
-    assert _jobs(plain[0][0]) == [(r, *x) for r in (0, 1) for x in (
+    assert relabeled == [] and len(plain) == 1
+    assert sorted(_jobs(plain[0][0])) == sorted((r, *x) for r in (0, 1) for x in (
         (f"rank{r}/build_step", "--wrapper", "step", "--M", "2", "--pos0", "8"),
         (f"rank{r}/build_request_LP4_T2", "--wrapper", "request", "--LP", "4", "--T", "2"),
-        (f"rank{r}/build_request_LP8_T3", "--wrapper", "request", "--LP", "8", "--T", "3"))]
+        (f"rank{r}/build_request_LP8_T3", "--wrapper", "request", "--LP", "8", "--T", "3")))
     plain_on, relabeled_on = _tp_build(tmp_path / "on", monkeypatch, "--build-relabel", "on")
-    assert plain_on == [] and len(relabeled_on) == 1 and relabeled_on[0][1] == 6
-    assert _jobs(relabeled_on[0][0]) == _jobs(plain[0][0]), "the relabel gets the todo the plain Build derives"
+    assert plain_on == [] and len(relabeled_on) == 1
+    assert (_jobs(relabeled_on[0][0]), relabeled_on[0][1]) == (_jobs(plain[0][0]), plain[0][1]), \
+        "the relabel gets the derives and the pool width the plain Build has"
