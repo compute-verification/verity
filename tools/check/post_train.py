@@ -19,10 +19,9 @@ is left alone unless --force.
 Jobs started here run one at a time (a lock in the temp directory: the cores are one slot), so a landing waits for the one before
 it.  When that one is labelled and the change between them touches none of the `verity-vllm` suite's inputs (`suites.py
 --changed`), its verdict is carried: the same value, with the same run as `--ref`, and no rebuild.  About three trains in four
-touch them (130 of 171 between 27 Sep and 3 Oct: 19 a day, 32 on the busiest), and a job takes about an hour, so on a busy day
-jobs queue: one that waited, and finds main at a later landing, is labelled `note=regression superseded:<that landing's
-attempt>` and runs nothing, since the later landing's job tests its change too.  A sweep reads `pass` and `fail:` and skips
-`superseded`.
+touch them (130 of 171 between 27 Sep and 3 Oct: 19 a day, 32 on the busiest), and a job takes one to two hours, so jobs queue:
+one that waited, and finds main at a later landing, is labelled `note=regression superseded:<that landing's attempt>` and runs
+nothing, since the later landing's job tests its change too.  A sweep reads `pass` and `fail:` and skips `superseded`.
 """
 from __future__ import annotations
 
@@ -50,8 +49,9 @@ SUPERSEDED = f"{PREFIX}superseded:"
 MARKS = "regression and rebuild"
 SUITE = "verity-vllm"
 LOCK = Path(tempfile.gettempdir()) / "verity-post-train.lock"
-#: the run's bound on the machine: the rebuilds take about an hour on cores 96-127 beside other lanes' jobs
-TIMEOUT_S = 3 * 3600
+#: the run's bound on the machine: the rebuilds took 89 and 104 min on cores 96-127 beside other lanes' jobs (3 Oct; #39's is the
+#: longest), and a run that outlives it is cut off before its junit, so a busier day reads as a failure
+TIMEOUT_S = 4 * 3600
 #: `research run --on` returns once the run is launched, so its records are fetched until they show its end (`research merge` too)
 POLL_S = 60
 #: a runner that died before writing its end is waited for no longer than the run's bound and the runner's publish margin, twice
