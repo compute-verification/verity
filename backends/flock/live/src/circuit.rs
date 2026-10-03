@@ -3252,8 +3252,8 @@ mod tests {
     /// leaf of x, and a stage reading the unit's output and returning y's word, with circuits of their ports' shapes only.
     fn flat_tail_statement() -> String {
         let zeros = "0".repeat(128);
-        let ports = [Port { name: "x".into(), words: 64, comps: 1, bits: 1024, v2: false },
-                     Port { name: "y".into(), words: 64, comps: 1, bits: 1024, v2: false }];
+        let ports = [Port { name: "x".into(), words: 64, comps: 1, bits: 1024, v2: false, segs: None },
+                     Port { name: "y".into(), words: 64, comps: 1, bits: 1024, v2: false, segs: None }];
         let name = |n: usize| ["unit", "stage0", SHA_NET, HM_NET][n];
         let mut wires: Vec<Value> = row_wires(&ports, 2, 3).iter()
             .map(|w| json!([name(w.dst.0), w.dst.1, w.dst.2, name(w.src.0), w.src.1, w.src.2])).collect();
