@@ -178,8 +178,9 @@ def test_a_constant_rotation_is_wiring():
 def test_the_keccak_words_compose_to_turboshake128(monkeypatch):
     """The four builders in place of their word primitives wherever `hashes` calls them (θ's rotations by 1, ρ's offsets,
     χ, ι's constants) compute core's TurboSHAKE128 on a message of input lanes, and every AND they build is χ's: 32 per
-    half-lane per round.  χ's outputs are committed here, as a lowering that commits a call's outputs does; without that,
-    its XOR terms compound round over round, and the 12 rounds' AND operands grow to thousands of bits each."""
+    half-lane per round, and as many commits of its outputs, so χ's operands are θ's outputs, 11 committed bits at most;
+    without the commits χ's XOR terms compound round over round, and the 12 rounds' AND operands grow to thousands of bits
+    each."""
     from verity.commitments.turboshake import turboshake128
     from verity.ml.boolean.forms import ONE, Circuit, const_bits
 
@@ -203,9 +204,7 @@ def test_the_keccak_words_compose_to_turboshake128(monkeypatch):
                 return H._keccak_body(self, None, args[0], 12)
             if all(isinstance(a, int) for a in args):
                 return fn.evaluate(*args)
-            out = build[fn.id](self.C, *(self.g(a) for a in args))
-            # a committed copy of each bit (C-Flock's `sha512_circuit.commit`)
-            return [self.C._new("and", (w, ONE)) for w in out] if fn is W.PouwChi32 else out
+            return build[fn.id](self.C, *(self.g(a) for a in args))
 
         def array(self, halves):
             return [self.g(h) for h in halves]
@@ -214,7 +213,9 @@ def test_the_keccak_words_compose_to_turboshake128(monkeypatch):
     C, n, T = Circuit(cse=True), 20, 8
     lanes = [(C.input(f"lo{i}", 32), C.input(f"hi{i}", 32)) for i in range(n)]
     digest = H.turboshake128(OnForms(C), lanes, 32, 0x1F)
-    assert sum(1 for k, d in zip(C.kind, C.data) if k == "and" and d[1] is not ONE) == 12 * 25 * 2 * 32
+    ands = [d for k, d in zip(C.kind, C.data) if k == "and"]
+    assert sum(1 for d in ands if d[1] is not ONE) == sum(1 for d in ands if d[1] is ONE) == 12 * 25 * 2 * 32
+    assert max(len(x.s) for d in ands if d[1] is not ONE for x in d) == 11 and max(len(d[0].s) for d in ands if d[1] is ONE) == 12
     R = random.Random(20261009)
     msgs = [R.randbytes(8 * n) for _ in range(T)]
     vals = {f"{part}{i}": [sum((int.from_bytes(m[8 * i:8 * i + 8], "little") >> (32 * h + j) & 1) << t
@@ -224,3 +225,16 @@ def test_the_keccak_words_compose_to_turboshake128(monkeypatch):
     for t, m in enumerate(msgs):
         got = b"".join(sum((ev(b) >> t & 1) << j for j, b in enumerate(half)).to_bytes(4, "little") for half in digest)
         assert got == turboshake128(m, 0x1F, 32)
+
+
+def test_chi_commits_its_output_in_forms_and_traces_no_gate_for_it():
+    """In `forms` (C-Flock's pieces run ``.build``) each χ output bit is a committed bit of its own, one row more than its AND
+    (64 for a half-lane); the Definition's gates are its 32 Ands, and its pin counts those."""
+    from verity.ml.boolean.forms import Circuit
+
+    C = Circuit()
+    a, b, c = (C.input(n, 32) for n in "abc")
+    out = B.PouwChi32.build(C, a, b, c)
+    C.output("o", out)
+    assert C.counts()["ands"] == 64 and all(len(x.s) == 1 and x.c == 0 for x in out)
+    assert B.PouwChi32.traced().counts == {"and": 32, "xor": 32, "not": 32}

@@ -812,7 +812,9 @@ useful    U/(α_A·α_B), glue
     that a constant amount, every one `hashes` builds, folds to wiring, so a Keccak-p[1600, 12] is 19,200 ANDs, all χ's.
     A lowering that keeps a call's outputs as XOR forms, as `ir_lower.lower_gates` keeps a piece's, lets χ's XOR terms
     compound round over round: a 12-round TurboSHAKE128 then has AND operands of 3,518 bits on average (7,970 at most),
-    and committing χ's outputs keeps each at 11 or fewer. C-Flock has no piece for these four either.
+    and lowering one permutation runs out of memory. So `PouwChi32_v2` commits its outputs (`forms.Circuit.commit`, a
+    row each and no gate), and a Keccak-p[1600, 12] lowered through the four is 38,400 rows, no AND operand over 12 bits.
+    C-Flock has no piece for these four either.
   - The draw is `plan.tile_layout` (beside `ncp-v2`'s `plan.layout`, which is unchanged): one stratum per template,
     each tile at the W_ref it is given, and a drawn tile proved with its closure, its TM `Pc4RowA` units, and with its
     TN `Pc4RowB` units in the weight's Program, each once per plan (`Plan.proved_b`). It opens nothing.

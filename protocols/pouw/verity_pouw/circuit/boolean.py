@@ -14,7 +14,8 @@ on (lo, hi) half-lanes), the same function on bits.
     PouwRotl64Hi_v2    (lo, hi, c: Array<32, Value<1>>) -> Array<32, Value<1>>                  word view: PouwRotl64Hi_v1
 
 Each is traced from a builder over core's `forms` (`verity.ml.boolean.trace.definition`), so its And gates are the builder's
-live ANDs; a backend whose lowering takes `forms` builders (C-Flock's pieces) can run the builder itself (``.build``).
+live ANDs but for its commits (`forms.Circuit.commit`, a row of a `forms` lowering and no gate); a backend whose lowering
+takes `forms` builders (C-Flock's pieces) can run the builder itself (``.build``).
 
 * `f32_sqrt_rn`: the significand normalized, the exponent made even by doubling it, and a digit-by-digit root (`isqrt`) of
   the 50-bit radicand to 25 bits; the last bit rounds, since no square root of a float lies halfway between two (the
@@ -26,10 +27,13 @@ live ANDs; a backend whose lowering takes `forms` builders (C-Flock's pieces) ca
 * `sq_ceil`: ⌈64 t / n⌉ by non-restoring division (one 34-bit add or subtract per quotient bit, then the remainder's
   sign correction), plus 1 when the remainder is nonzero, rounded up to 48 significant bits with a right shift and its
   sticky bit; n = 0 gives every bit set.
-* `chi32`: Keccak's χ on a half-lane, one AND per bit; xor is free.
+* `chi32`: Keccak's χ on a half-lane, one AND per bit; xor is free.  Its output is committed: a lowering that keeps a
+  call's outputs as XOR forms (C-Flock's) otherwise carries χ's XOR terms into the next round's θ, and over 12 rounds they
+  compound until lowering one Keccak-p[1600, 12] runs out of memory; committed, it is 38,400 rows (19,200 ANDs and as
+  many commits), χ's operands θ's outputs of 11 committed bits at most.
 * `rotl64`: a barrel rotator over the 64-bit word hi:lo, one stage per bit of the amount's low six, the largest first, so
-  each stage builds only the window the returned half reads.  A constant amount, as every call in `hashes` has, folds each
-  stage to wiring with no AND (`forms`' AND of a constant is no gate).
+  each stage's live ANDs are only the window the returned half reads.  A constant amount, as every call in `hashes` has,
+  folds each stage to wiring with no AND (`forms`' AND of a constant is no gate).
 """
 from __future__ import annotations
 
@@ -166,8 +170,8 @@ def sq_ge(C, x, th):
 
 
 def chi32(C, a, b, c):
-    """``PouwChi32_v1``: a xor (not b and c)."""
-    return [x ^ C.AND(NOT(y), z) for x, y, z in zip(a, b, c)]
+    """``PouwChi32_v1``: a xor (not b and c), committed."""
+    return C.commit([x ^ C.AND(NOT(y), z) for x, y, z in zip(a, b, c)])
 
 
 def rotl64(C, lo, hi, c):
