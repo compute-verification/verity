@@ -4543,6 +4543,7 @@
   "FlockSoundness.Discharge.Composed.ZerocheckMasked.final_zero": {},
   "FlockSoundness.Discharge.Composed.ZerocheckMasked.running_eval": {},
   "FlockSoundness.Discharge.Composed.ZerocheckMasked.replay_zerocheck": {},
+  "FlockSoundness.Discharge.Composed.Lincheck.lincheck_complete": {},
   "FlockSoundness.Discharge.Composed.coinedOf_setup": {
    "signature": [
     "FlockSoundness.Discharge.Composed.coinedOf_setup {mPts n : Nat} {Reg : Type} (I : FlockSoundness.Discharge.Exec.Inputs)",
