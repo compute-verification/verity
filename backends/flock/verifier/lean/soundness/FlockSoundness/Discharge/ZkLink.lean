@@ -13,3 +13,4 @@ import FlockSoundness.Discharge.ZkLink.LockRep
 import FlockSoundness.Discharge.ZkLink.BadZ
 import FlockSoundness.Discharge.ZkLink.SessionZ
 import FlockSoundness.Discharge.ZkLink.StrictZ
+import FlockSoundness.Discharge.ZkLink.TablesAt
