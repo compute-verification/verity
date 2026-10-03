@@ -66,6 +66,7 @@ import Pouw.Protocol.PearlC.SkipP
 import Pouw.Protocol.PearlC.Sm120
 import Pouw.Protocol.PearlC.Sm120Vectors
 import Pouw.Protocol.PearlC.Tile
+import Pouw.Protocol.PearlC.Tile4Circuit
 import Pouw.Protocol.PearlC.TileCheck
 import Pouw.Protocol.PearlC.TileCircuit
 import Pouw.Protocol.TileBound.AlignedExactDefs
