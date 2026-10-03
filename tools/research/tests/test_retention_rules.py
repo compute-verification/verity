@@ -244,6 +244,24 @@ def test_a_tree_holding_a_runs_output_waits_for_its_owner_and_an_unpreserved_run
     assert not any(a["path"].startswith("research/src") for a in plan["actions"]), "the rules decide source trees, not the records"
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads every directory")
+def test_a_tree_git_cant_fully_read_is_kept_and_the_log_says_why(tmp_path):
+    root = tmp_path / "ws"
+    t = tree(root)
+    (t / "out").mkdir()
+    (t / "out/result.json").write_text("{}")
+    os.chmod(t / "out", 0)
+    log = RR.Log(tmp_path / "deletions.jsonl", N1, "t", clock)
+    try:
+        plan = run_gc(root, node=N1, live=Scripted({}), apply=True, log=log)
+    finally:
+        os.chmod(t / "out", 0o755)
+    assert (t / "out/result.json").exists()
+    why = f"can't tell what it holds besides its commit: out/ can't be read by uid {os.getuid()}, as whom git runs"
+    assert acts(plan, root)[f"research/src/{t.name}"]["reason"].startswith(why)
+    assert [(x["action"], x["reason"][:len(why)]) for x in lines(log.path)] == [("kept", why)]
+
+
 # ---- proofs' audit trees, Lean dependencies -----------------------------------------------------------------------------------------------
 
 def test_proofs_audit_trees_go_on_node_1_only_once_their_lean_audit_json_is_saved(tmp_path):

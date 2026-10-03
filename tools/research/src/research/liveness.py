@@ -15,7 +15,9 @@ never takes "nothing names it" from a scan that couldn't look. A process gone mi
 `outside_commit(tree, bare)`: the files a source tree holds besides its commit's files, build caches and registered fixtures
 (fixtures/artifacts.json), which may be a run's output. With .git: git status (untracked, ignored and changed files); without, the
 bare repo's commit (`ls-tree`) and files changed after READY.json. git runs as the tree's owner, so root never runs a hook or
-filter its config names, and reads neither the system's nor a global config (no fsmonitor daemon). Unknown when it can't tell.
+filter its config names, and reads neither the system's nor a global config (no fsmonitor daemon). Unknown when it can't tell:
+git exits nonzero or says anything on stderr, or a path in the tree (.git and caches aside) is unreadable to the user git runs
+as (`unreadable`), since git lists nothing for a directory it can't open.
 
 `JobTrees`: node 1's /workspace/jobs/src copies (job_tree.sh) and which of them a live pod still reads.
 """
@@ -186,6 +188,48 @@ def _git(args: list[str], owner_of: Path) -> subprocess.CompletedProcess:
         raise Unknown(f"git {args[0]}: {e}") from None
 
 
+def _git_ok(args: list[str], owner_of: Path, what: str) -> bytes:
+    """git's stdout; Unknown when it exits nonzero or says anything on stderr (`could not open directory`, run as the owner,
+    while it lists nothing for that directory and exits 0)."""
+    cp = _git(args, owner_of)
+    err = cp.stderr.decode(errors="replace").strip()
+    if cp.returncode or err:
+        raise Unknown(f"{what} exited {cp.returncode}" + (f" and said {err.splitlines()[0][:200]!r}" if err else ""))
+    return cp.stdout
+
+
+def unreadable(tree: Path) -> str | None:
+    """The first path in `tree` (.git and build caches aside) that git, run as `_git` runs it (the tree's owner and group when
+    this is root), can't read, else None; OSError when the walk fails."""
+    top = os.stat(tree)
+    as_owner = os.geteuid() == 0 and top.st_uid != 0
+
+    def ok(path: str, need: int) -> bool:
+        if not as_owner:
+            return os.access(path, need)
+        st = os.lstat(path)
+        shift = 6 if st.st_uid == top.st_uid else 3 if st.st_gid == top.st_gid else 0
+        return (st.st_mode >> shift) & need == need
+
+    def fail(e: OSError) -> None:
+        raise e
+
+    if not ok(str(tree), os.R_OK | os.X_OK):
+        return "."
+    for dp, dns, fns in os.walk(tree, onerror=fail):
+        r, sub = os.path.relpath(dp, tree), []
+        for name, need in sorted([(d, os.R_OK | os.X_OK) for d in dns] + [(f, os.R_OK) for f in fns]):
+            p, rel = os.path.join(dp, name), os.path.normpath(os.path.join(r, name))
+            if rel == ".git" or os.path.islink(p) or CACHE.search(rel + ("/" if name in dns else "")):
+                continue
+            if not ok(p, need):
+                return rel + ("/" if name in dns else "")
+            if name in dns:
+                sub.append(name)
+        dns[:] = sub
+    return None
+
+
 def outside_commit(tree: Path | str, bare: Path | str) -> list[str]:
     """What `tree` holds besides its commit's files (module docstring): [] when nothing, each extra as a path, a changed tracked file
     as `<git status code> <path>` (with .git) or `changed <path>` (without); Unknown when it can't tell."""
@@ -208,12 +252,16 @@ def outside_commit(tree: Path | str, bare: Path | str) -> list[str]:
             dns[:] = sorted(d for d in dns if not CACHE.search(os.path.normpath(os.path.join(r, d)) + "/"))
             yield from (os.path.normpath(os.path.join(r, f)) for f in sorted(fns))
 
+    try:
+        if bad := unreadable(tree):
+            uid = os.stat(tree).st_uid if os.geteuid() == 0 else os.geteuid()
+            raise Unknown(f"{bad} can't be read by uid {uid}, as whom git runs, so git can't tell what it holds")
+    except OSError as e:
+        raise Unknown(f"can't walk it: {e.strerror or e}") from None
     extra: list[str] = []
     if (tree / ".git").is_dir():
-        st = _git(["-C", str(tree), "status", "--porcelain", "--ignored", "-z", "--untracked-files=normal"], tree)
-        if st.returncode:
-            raise Unknown(f"git status failed: {st.stderr.decode(errors='replace').strip()[:200]}")
-        entries = iter(st.stdout.split(b"\0"))
+        out = _git_ok(["-C", str(tree), "status", "--porcelain", "--ignored", "-z", "--untracked-files=normal"], tree, "git status")
+        entries = iter(out.split(b"\0"))
         for e in entries:
             if not e:
                 continue
@@ -226,10 +274,11 @@ def outside_commit(tree: Path | str, bare: Path | str) -> list[str]:
             else:
                 extra.append(f"{code.strip()} {rel}")
         return extra
-    ls = _git(["--git-dir", str(bare), "ls-tree", "-r", "--name-only", "-z", tree.name], tree)
-    if ls.returncode:
-        raise Unknown("no .git, and the bare repo lacks the commit")
-    tracked = {x.decode(errors="replace") for x in ls.stdout.split(b"\0") if x}
+    try:
+        ls = _git_ok(["--git-dir", str(bare), "ls-tree", "-r", "--name-only", "-z", tree.name], tree, "git ls-tree")
+    except Unknown as e:
+        raise Unknown(f"no .git, and the bare repo can't list the commit ({e})") from None
+    tracked = {x.decode(errors="replace") for x in ls.split(b"\0") if x}
     try:
         shipped = os.stat(tree / "READY.json").st_mtime + 60
     except OSError:
@@ -314,4 +363,4 @@ class JobTrees:
 
 
 __all__ = ["CACHE", "JobTrees", "Live", "LivenessError", "TERMINAL", "Unknown", "default_kube", "finished", "k3s_kubectl", "live_pods",
-           "matcher", "outside_commit"]
+           "matcher", "outside_commit", "unreadable"]

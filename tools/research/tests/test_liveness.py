@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
+from research import liveness as L
 from research.liveness import JobTrees, Live, LivenessError, Unknown, live_pods, outside_commit
 
 SHA = "ab" * 20
@@ -170,8 +172,40 @@ def test_a_tree_shipped_without_git_is_compared_with_the_bare_repos_commit_and_i
     os.utime(tree / "README.md", (shipped + 120, shipped + 120))
     (tree / "out.log").write_text("a run's")
     assert sorted(outside_commit(tree, bare)) == ["changed README.md", "out.log"]
-    with pytest.raises(Unknown, match="the bare repo lacks the commit"):
+    with pytest.raises(Unknown, match=r"the bare repo can't list the commit \(git ls-tree exited 128 and said 'fatal: "):
         outside_commit(tree.rename(tmp_path / "src" / ("0" * 40)), bare)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads every directory")
+def test_what_git_cant_read_as_the_owner_or_warns_about_is_unknown_never_nothing(tmp_path, monkeypatch):
+    """As root, gc runs git as the tree's owner: about a directory only root can read, git warns `could not open directory`,
+    lists nothing and exits 0. That warning, a nonzero exit, and any path the owner (or this user) can't read are Unknown."""
+    d, _ = repo(tmp_path)
+    (d / "out").mkdir()
+    (d / "out/result.json").write_text("{}")
+    (d / ".venv").mkdir()
+    for path, mode, back, euid in ((d / "out", 0, 0o755, None), (d / "out/result.json", 0o200, 0o644, None),
+                                   (d / "out", 0o305, 0o755, 0), (d / "README.md", 0o244, 0o644, 0)):
+        os.chmod(path, mode)
+        rel = os.path.relpath(path, d) + ("/" if path.is_dir() else "")
+        try:
+            with monkeypatch.context() as m:
+                if euid is not None:
+                    m.setattr(L.os, "geteuid", lambda: euid)
+                with pytest.raises(Unknown, match=f"^{re.escape(rel)} can't be read by uid {os.getuid()}, as whom git runs"):
+                    outside_commit(d, tmp_path / "absent.git")
+        finally:
+            os.chmod(path, back)
+    assert outside_commit(d, tmp_path / "absent.git") == ["out/result.json"]
+    os.chmod(d / ".venv", 0)
+    try:
+        with pytest.raises(Unknown, match=re.escape("git status exited 0 and said \"warning: could not open directory '.venv/'")):
+            outside_commit(d, tmp_path / "absent.git")
+    finally:
+        os.chmod(d / ".venv", 0o755)
+    monkeypatch.setattr(L, "_git", lambda args, _owner: subprocess.CompletedProcess(args, 128, b"", b""))
+    with pytest.raises(Unknown, match="^git status exited 128$"):
+        outside_commit(d, tmp_path / "absent.git")
 
 
 # ---- job trees ------------------------------------------------------------------------------------------------------------------------
