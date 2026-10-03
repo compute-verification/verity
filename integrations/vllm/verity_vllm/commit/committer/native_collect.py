@@ -73,6 +73,7 @@ from verity_vllm.commit.committer.native_host import (
     _StepJob,
     memtrace,
 )
+from verity_vllm.commit.committer.plan_cache import PlanCache, PlanMetas
 from verity_vllm.commit.committer.topp_splits import (SPLITS_IDENTITY, TOPP_SPLIT_KERNELS, TOPP_SPLIT_MODULE, _SplitKernelProxy,  # noqa: F401
                                                       batch_top_p, install_split_kernel_proxies, split_count_of_launches, step_splits,
                                                       uninstall_split_kernel_proxies)
@@ -634,7 +635,6 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.transient_peak_bytes = 0                            # largest learning-step transient host copy (given back after the re-hash)
         self.excluded_bytes = 0                                  # retain=host + exclude: bytes NOT copied to host over the run
         self.plan_mismatches = 0
-        self._nbytes_cache: dict[int, int] = {}
         # execution-environment knob (candidate B variant, labelled): run the model step on a HIGH-priority CUDA stream so the worker's SHA
         # kernels (side stream, default priority) yield SM slots to the serving kernels; fenced both ways with wait_stream at the step
         # boundary (the FA2 tap, the gather flushes and the step event all follow the current stream, so nothing else changes)
@@ -659,8 +659,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             self._nc.auto_bytes_per_block = int(os.environ.get("NATIVE_GATHER_AUTO_BYTES", "32768"))
         self._names: list[str] = []
         self._name_ids: dict[str, int] = {}
-        self._metas_cache: dict[tuple[int, int], list[TensorMeta]] = {}
-        self._ld_cache: dict[int, tuple[list, bytes]] = {}
+        self._metas_cache = PlanCache()                          # (plan key, version) -> PlanMetas, for this run's and the previous run's plans
         self._wrapped: list[Any] = []
         self._plan_key = 0
         self._py_committed = 0
@@ -1059,6 +1058,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             # [R17 fp8] the metas of the plan this hit step is predicted to follow (None on a learning step): the worker needs them
             # BEFORE step end to know which chunks of a window belong to an excluded family (retain=host + exclude)
             job.plan_hint = (self._plan_key, int(self._nc.plan_version(self._plan_key))) if job.plan_used >= 0 else None  # type: ignore[attr-defined]
+            job.hint_entries = self._nc.export_plan(self._plan_key) if self.retain_exclude and job.plan_hint and job.plan_hint not in self._metas_cache else None  # type: ignore[attr-defined]
             job.plan_shape = getattr(self, "_plan_shape", (0, 0))                # type: ignore[attr-defined]  (ntok, nreq) for messages/records
             self._prof_s = 0.0
             self._nc.begin_step(self._plan_key, 0, 0, True, job.step)
@@ -1105,7 +1105,8 @@ class NativeCollectCommitter(NativeHostCommitter):
                 self.errors.extend(str(e)[:300] for e in errs)
         job.cursor = int(used)
         key = self._plan_key
-        entries = self._nc.export_plan(key) if changed else None       # only on a learning step (first step of a shape class / shape change)
+        # a learning step, or a hit on a plan the worker no longer holds (plan_cache: the collector keeps every plan, the worker two runs')
+        entries = self._nc.export_plan(key) if changed or (key, int(version)) not in self._metas_cache else None
         job.plan = (key, int(version), entries)                         # type: ignore[attr-defined]
         st = self._nc.step_stats()
         job.acq_bytes = int(st["bytes"])
@@ -1137,8 +1138,8 @@ class NativeCollectCommitter(NativeHostCommitter):
 
     # ------------------------------------------------------------------ worker side: metas from the plan (cached per plan version)
 
-    def _metas_for(self, job: _StepJob) -> list[TensorMeta]:
-        key, version, entries = job.plan  # type: ignore[attr-defined]
+    def _metas_for(self, job: _StepJob, plan: tuple | None = None) -> PlanMetas:
+        key, version, entries = plan or job.plan  # type: ignore[attr-defined]
         metas = self._metas_cache.get((key, version))
         if metas is None:
             if entries is None:
@@ -1154,17 +1155,16 @@ class NativeCollectCommitter(NativeHostCommitter):
                 m.dev_block = None
                 metas.append(m)
                 first_leaf += n_leaves
-            self._metas_cache[(key, version)] = metas
+            self._metas_cache[(key, version)] = metas = PlanMetas(metas)
         return metas
 
     def layout_digest(self, metas: list[TensorMeta]) -> bytes:  # type: ignore[override]
-        """Same function as R9's staticmethod, memoised per (immutable) metas list -- the digest is recomputed for every step in R9."""
-        hit = self._ld_cache.get(id(metas))
-        if hit is not None and hit[0] is metas:
-            return hit[1]
-        d = NativeHostCommitter.layout_digest(metas)
-        self._ld_cache[id(metas)] = (metas, d)
-        return d
+        """The base class's function, computed once per plan: nothing changes a field it reads once the plan's metas are built."""
+        if not isinstance(metas, PlanMetas):
+            return NativeHostCommitter.layout_digest(metas)
+        if metas.digest is None:
+            metas.digest = NativeHostCommitter.layout_digest(metas)
+        return metas.digest
 
     def _commit_step(self, job: _StepJob) -> None:
         if self.consumer_delay_s:
@@ -1305,9 +1305,9 @@ class NativeCollectCommitter(NativeHostCommitter):
         ranges: list[tuple[int, int, Any]] = []                                 # bounded retain=host (+ exclude): retained byte ranges
         excl_bytes = 0
         if bounded and not learning and self.retain == "host" and self.retain_exclude:
-            # the metas of the plan this step follows: cached by the worker at the end of the learning step of the same (key, version)
-            # (the worker absorbs steps in order, so they are there by now even when the serving thread ran ahead)
-            hint = self._metas_cache.get(getattr(job, "plan_hint", None) or (-1, -1))
+            # the metas of the plan this step follows: cached by the worker at the end of the learning step of the same (key, version) (it
+            # absorbs steps in order), or, when it no longer holds that plan, built from the plan the serving thread exported at step begin
+            hint = self._metas_for(job, (*job.plan_hint, job.hint_entries)) if getattr(job, "plan_hint", None) else None
             if hint is None:
                 raise RuntimeError(f"bounded staging: hit step {job.step} has no cached metas for plan {getattr(job, 'plan_hint', None)} "
                                    "(cannot place the retain-exclude ranges)")
@@ -1628,9 +1628,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         self._gpu_t["tree_ms"] += tree_ms
         t1 = time.perf_counter()
         metas = job.metas
-        nbytes = self._nbytes_cache.get(id(metas))
-        if nbytes is None:
-            nbytes = self._nbytes_cache[id(metas)] = sum(m.nbytes for m in metas)
+        nbytes = metas.nbytes
         n = padded // C
         layout_dig = self.layout_digest(metas)
         root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
@@ -1684,9 +1682,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         self._gpu_t["tree_ms"] += tree_ms
         t1 = time.perf_counter()
         metas = job.metas
-        nbytes = self._nbytes_cache.get(id(metas))
-        if nbytes is None:
-            nbytes = self._nbytes_cache[id(metas)] = sum(m.nbytes for m in metas)
+        nbytes = metas.nbytes
         n = int(levels[0].shape[0])
         layout_dig = self.layout_digest(metas)
         root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
@@ -1805,7 +1801,8 @@ class NativeCollectCommitter(NativeHostCommitter):
     def reset(self) -> None:
         super().reset()
         self._py_committed = 0
-        self._nc.reset_stats()          # plans are kept across runs (the same shape classes recur); metas/digest caches too
+        self._nc.reset_stats()          # plans are kept across runs (the same shape classes recur)
+        self._metas_cache.end_run()     # the worker's metas only for this run's and the previous run's plans (plan_cache)
         self.learned_only_steps = []    # [R17 fp8] per-run bounded-staging counters (the plans learned stay)
         self.learned_only_bytes = 0
         self.transient_peak_bytes = 0
