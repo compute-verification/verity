@@ -144,7 +144,10 @@ docstring) and sizes:
   - δ from 0 up to the p99.99 first-frame latency, in 16 steps;
   - ρ geometrically from the p0.01 production rate up to the p50 rate, in 8 values, each rounded down to a fraction
     with denominator at most 1024 (rounding down keeps a value lenient). Both rates are taken per configuration first:
-    the low end is the p0.01 of the configurations' p0.01 rates, and the high end the median of their medians.
+    the low end is the p0.01 of the configurations' p0.01 rates, and the high end the median of their medians over
+    windows. A configuration's windows are the windows its egress frames span, 1 + its largest anchor // T, and the
+    high end is the least median rate t such that the configurations with a median rate at most t span at least
+    ⌈W/2⌉ of all W windows. So a run cut into more configurations, at a dropped window say, keeps its high end.
 - **The honest prover's choice:** per window, the met value with the least total hand time over the window's frames
   (their total shaping delay). Taking the least δ first would pick a slow ρ to save one bucket, and hold every later
   frame for seconds. Frames are in the Program's canonical order, which is step-major for a batching engine, so a long
