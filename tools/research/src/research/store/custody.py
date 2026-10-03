@@ -29,7 +29,8 @@ run dir, so launcher.log in the record is the whole of it.
 
 A run's custody is a remote fact, so any machine can check it: `research data preserved <run id>` (head mode) and `research data
 custody RUN` answer the same everywhere.  Waivers and never-ran verdicts for the triage are labels on the run id:
-`research data label <run id> custody waived|never-ran --by <who>`.
+`research data label <run id> custody waived|never-ran --by <who>`; a never-ran holds only while the run dir shows no sign that
+its workload started (`ran_evidence`), and a later `custody needed` withdraws either.
 """
 from __future__ import annotations
 
@@ -445,13 +446,39 @@ def runner_publish(run_dir: Path, custody_dir: Path, *, tool: Any = None, condit
 # ---- triage (F2) ------------------------------------------------------------------------------------------------------------------------
 
 def _label_verdict(st: Any, run_id: str) -> str | None:
-    from .vocab import CUSTODY, CUSTODY_VALUES
+    """The run's latest `custody` label when it is a verdict (waived, never-ran); `needed` withdraws an earlier one."""
+    from .vocab import CUSTODY
 
     try:
         labs = st.labels(run_id, key=CUSTODY)
     except Exception:  # noqa: BLE001
         return None
-    return str(labs[-1].value) if labs and str(labs[-1].value) in CUSTODY_VALUES else None
+    return str(labs[-1].value) if labs and str(labs[-1].value) in ("waived", "never-ran") else None
+
+
+#: What `tele run` writes only once it starts the workload: `started`, then the workload's pid in status.json, the sampler
+#: (`sampler_start`, then resources.jsonl's readings of the workload's processes) and `span_start`.
+_RAN_EVENTS = ("started", "span_start", "sampler_start")
+
+
+def ran_evidence(run_dir: Path) -> str | None:
+    """The first record in the run dir showing that its workload started, or None: a pid in status.json, a started, span_start or
+    sampler_start event, a sampler reading, output in stdout.log or stderr.log.  A `custody never-ran` label holds only while
+    there is none (the vocabulary's rule)."""
+    d = Path(run_dir)
+    pid, _ = _runner_pid(_read(d / "status.json") or {})
+    if pid is not None:
+        return f"status.json names pid {pid}"
+    with contextlib.suppress(OSError), (d / "events.jsonl").open(errors="replace") as f:
+        for line in f:
+            with contextlib.suppress(ValueError, AttributeError):
+                if (kind := json.loads(line).get("kind")) in _RAN_EVENTS:
+                    return f"events.jsonl has {kind}"
+    for name, what in (("resources.jsonl", "sampler readings"), ("stdout.log", "output"), ("stderr.log", "output")):
+        with contextlib.suppress(OSError):
+            if (d / name).stat().st_size:
+                return f"{name} holds {what}"
+    return None
 
 
 TRIAGE_SCHEMA = "research/custody-triage/v1"
@@ -572,7 +599,8 @@ def triage_row(st: Any, run_dir: Path, *, verify_remote: bool = False, now: floa
         row.update(state="fetched", why="preserved.json (every file verified from the machine)")
         return row
     verdict = _label_verdict(st, rid)
-    if verdict:
+    ran = ran_evidence(d) if verdict == "never-ran" else None
+    if verdict and not ran:
         row.update(state="waived" if verdict == "waived" else "never-ran", why=f"label custody={verdict}")
         return row
     from ..notes import NEVER_RAN
@@ -632,6 +660,8 @@ def triage_row(st: Any, run_dir: Path, *, verify_remote: bool = False, now: floa
         row.update(state="r2", why=f"on the remote (.custody, verified {m.get('verified_utc') or '?'} on {m.get('host') or '?'})", next=None)
     if ended and row["state"] != "r2":
         row["why"] = f"{ended}; {row['why']}"
+    if ran:
+        row["why"] = f"label custody=never-ran ignored, since {ran}; {row['why']}"
     if row["state"] in NEEDS_ACTION:
         row["bytes"] = sum((d / r).stat().st_size for r in run_files(d))
     return row
@@ -675,5 +705,5 @@ def triage_report(st: Any, roots: list[Path], *, older_min: float | None = None,
 
 
 __all__ = ["ACTIONS", "EXCLUDED", "KIND", "MARKER", "PUBLISH_LOG", "SCHEMA", "custody_env", "divert_output", "force_refusal", "has_custody",
-           "marker_problem", "mint_for_machine", "push_run", "put_run_record", "run_files", "runner_publish", "trimmed_of", "triage",
-           "triage_row", "verify"]
+           "marker_problem", "mint_for_machine", "push_run", "put_run_record", "ran_evidence", "run_files", "runner_publish",
+           "trimmed_of", "triage", "triage_row", "verify"]

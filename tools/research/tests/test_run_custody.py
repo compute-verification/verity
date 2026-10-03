@@ -428,7 +428,10 @@ def test_triage_sorts_every_run_by_custody_state(tmp_path, monkeypatch, capsys):
     lost = runs / "r20260925-010005-eeee"
     lost.mkdir()
     (lost / "remote.json").write_text(json.dumps({"phase": "launched", "pod_id": POD}))
-    waived, empty = _fixture_run(runs, "r20260925-010006-ffff"), _fixture_run(runs, "r20260925-010007-abab")
+    waived, empty = _fixture_run(runs, "r20260925-010006-ffff"), runs / "r20260925-010007-abab"
+    empty.mkdir()
+    (empty / "job.json").write_text("{}")
+    (empty / "status.json").write_text(json.dumps({"state": "submitted"}))
     assert data_main(["label", waived.name, "custody", "waived", "--by", "daniel"]) == 0, "triage's own next step, in the vocabulary"
     assert data_main(["label", empty.name, "custody", "never-ran", "--by", "infra"]) == 0
     assert data_main(["label", empty.name, "custody", "wavied", "--by", "infra"]) == 2
@@ -439,6 +442,45 @@ def test_triage_sorts_every_run_by_custody_state(tmp_path, monkeypatch, capsys):
     assert data_main(["custody", "--triage", "--runs-dir", str(runs)]) == 1
     out = capsys.readouterr().out
     assert "2 need action" in out and lost.name in out and plain.name in out
+
+
+def test_a_never_ran_label_holds_only_while_the_run_dir_agrees_and_custody_needed_withdraws_a_verdict(tmp_path, monkeypatch, capsys):
+    """Node 1's custody round held six `overnight-sep30` runs as never-ran and asked for the label, but each had a pid, `started`,
+    `span_start` and `sampler_start` events and sampler readings of its workload: they ran, were killed and printed nothing. A
+    never-ran label read before every record would take them out of triage for good, and the closed set had no value to undo it."""
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "absent.toml"))
+    runs, st = tmp_path / "runs", LocalStore()
+    ran = _fixture_run(runs, "r20260925-010001-aaaa")
+    assert data_main(["label", ran.name, "custody", "never-ran", "--by", "infra"]) == 0
+    row = CU.triage_row(st, ran, host=HOST)
+    assert row["state"] == "no-custody" and row["state"] in CU.NEEDS_ACTION
+    assert row["why"].startswith("label custody=never-ran ignored, since status.json names pid 4243; no attempt in the store")
+    d = runs / "r20260925-010002-bbbb"
+    d.mkdir()
+    (d / "status.json").write_text(json.dumps({"state": "submitted", "transitions": [{"state": "submitted"}]}))
+    for name in ("stdout.log", "stderr.log", "resources.jsonl"):
+        (d / name).write_text("")
+    (d / "events.jsonl").write_text('{"kind": "submitted"}\nnot json\n[1]\n')
+    assert CU.ran_evidence(d) is None
+    for name, text, says in (("events.jsonl", '{"kind": "submitted"}\n{"kind": "sampler_start"}\n', "events.jsonl has sampler_start"),
+                             ("resources.jsonl", '{"kind": "sample", "processes": [{"pid": 451}]}\n', "resources.jsonl holds sampler readings"),
+                             ("stderr.log", "Killed\n", "stderr.log holds output"),
+                             ("status.json", json.dumps({"state": "running", "transitions": [{"state": "running", "pid": 451}]}),
+                              "status.json names pid 451")):
+        keep = (d / name).read_text()
+        (d / name).write_text(text)
+        assert CU.ran_evidence(d) == says
+        (d / name).write_text(keep)
+    for p in d.iterdir():
+        os.utime(p, (NOW - CU.STALE_S - 3600,) * 2)
+    assert data_main(["label", d.name, "custody", "never-ran", "--by", "infra"]) == 0
+    assert CU.triage_row(st, d, now=NOW, host=HOST)["state"] == "never-ran"
+    assert data_main(["label", d.name, "custody", "needed", "--by", "infra"]) == 0
+    assert data_main(["label", ran.name, "custody", "waived", "--by", "infra"]) == 0
+    assert CU.triage_row(st, ran, host=HOST)["state"] == "waived", "a waiver needs no sign of anything"
+    assert data_main(["label", ran.name, "custody", "needed", "--by", "infra"]) == 0
+    assert [CU.triage_row(st, x, now=NOW, host=HOST)["state"] for x in (d, ran)] == ["no-custody", "no-custody"]
+    capsys.readouterr()
 
 
 HOST = ("node-2", "boot-1")

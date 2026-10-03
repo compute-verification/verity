@@ -551,7 +551,9 @@ from its record. A failure whose key had expired says so in the marker's `error`
   runner, a pod's or another machine's, only with `--runner-gone`, which the caller passes once the run's own host says the runner
   is gone). `research data custody --triage [--verify] [--older-min N] [--runs-dir D ...]` sorts runs roots into `fetched`, `r2`,
   `forced-unverified`, `attempt-no-record`, `attempt-unpreserved`, `no-custody`, `running`, `never-ran`, `waived`; a waiver or
-  never-ran verdict is a label: `research data label RUN custody waived|never-ran --by WHO`. On the machine that ran them, a run
+  never-ran verdict is a label: `research data label RUN custody waived|never-ran --by WHO`, the latest of which wins (`needed`
+  withdraws either), and a never-ran is ignored while the run dir shows its workload started (a pid in status.json, a `started`,
+  `span_start` or `sampler_start` event, a sampler reading, output: `custody.ran_evidence`). On the machine that ran them, a run
   still marked running has ended when its runner's pid is gone (same host and boot), or, when the runner isn't visible there (a
   Kubernetes pod), when none of its records changed for 24 h; a valid `.custody` counts as `r2` where the catalog can't say (node
   2's runs are published on node 1). An attempt published `--force` is `r2` only while a valid `.custody` shows nothing in the run
