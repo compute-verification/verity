@@ -55,35 +55,18 @@ PROTOCOL_SIZE_CAP = 256 * 1024
 BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code (CODE_SUFFIXES), ALLOWLIST and audit records
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
 CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
-#: Data over BLOB_LIMIT that is not a test fixture: runtime tables a module loads, the generated census, twenty vLLM workload
-#: specs (the grid's B16/B32 4096-token and B64 1024-token rows) and two vLLM logs. Each is capped at its size rounded up to
-#: 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over BLOB_LIMIT is registered in
-#: fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
+#: Data over BLOB_LIMIT that is not a test fixture: runtime tables a module loads, the generated census, three vLLM workload
+#: specs and two vLLM logs. Each is capped at its size rounded up to 64 KiB, so none can grow past that and nothing joins them
+#: silently. A test fixture over BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched
+#: (`research data fetch-fixtures`).
 ALLOWLIST = {
     "census/workloads.json": 384 * 1024,
     "integrations/vllm/data/logs/m1.jsonl.gz": 576 * 1024,
     "integrations/vllm/data/logs/m6/log.jsonl.gz": 576 * 1024,
     "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
-    "integrations/vllm/workloads/gemma2-2b__bf16__rtxpro6000__tp1__b64__i1024__o128__mixed__greedy__bi-eager.json": 320 * 1024,
-    "integrations/vllm/workloads/gemma2-2b__bf16__rtxpro6000__tp1__b64__i1024__o128__mixed__stoch-t0.8-p0.95__bi-eager.json": 320 * 1024,
-    "integrations/vllm/workloads/gemma2-2b__bf16__rtxpro6000__tp1__b64__i1024__o128__mixed__stoch-t0.8-p1__bi-eager.json": 320 * 1024,
     "integrations/vllm/workloads/llama32-1b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
-    "integrations/vllm/workloads/llama32-1b__bf16__rtxpro6000__tp1__b16__i4096__o512__mixed__greedy__bi-eager.json": 320 * 1024,
-    "integrations/vllm/workloads/llama32-1b__bf16__rtxpro6000__tp1__b16__i4096__o512__mixed__stoch-t0.8-p0.95__bi-eager.json": 320 * 1024,
-    "integrations/vllm/workloads/llama32-1b__bf16__rtxpro6000__tp1__b16__i4096__o512__mixed__stoch-t0.8-p1__bi-eager.json": 320 * 1024,
-    "integrations/vllm/workloads/mistral-7b__bf16__rtxpro6000__tp1__b64__i1024__o128__mixed__stoch-t0.8-p0.95__bi-eager.json": 320 * 1024,
-    "integrations/vllm/workloads/mistral-7b__bf16__rtxpro6000__tp1__b64__i1024__o128__mixed__stoch-t0.8-p1__bi-eager.json": 320 * 1024,
     "integrations/vllm/workloads/olmoe-1b-7b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
     "integrations/vllm/workloads/qwen25-15b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
-    "integrations/vllm/workloads/smollm2-135m__bf16__rtxpro6000__tp1__b16__i4096__o512__mixed__greedy__bi-eager.json": 320 * 1024,
-    "integrations/vllm/workloads/smollm2-135m__bf16__rtxpro6000__tp1__b16__i4096__o512__mixed__stoch-t0.8-p0.95__bi-eager.json": 320 * 1024,
-    "integrations/vllm/workloads/smollm2-135m__bf16__rtxpro6000__tp1__b16__i4096__o512__mixed__stoch-t0.8-p1__bi-eager.json": 320 * 1024,
-    "integrations/vllm/workloads/smollm2-135m__bf16__rtxpro6000__tp1__b32__i4096__o512__mixed__greedy__bi-eager.json": 448 * 1024,
-    "integrations/vllm/workloads/smollm2-135m__bf16__rtxpro6000__tp1__b32__i4096__o512__mixed__stoch-t0.8-p0.95__bi-eager.json": 448 * 1024,
-    "integrations/vllm/workloads/smollm2-135m__bf16__rtxpro6000__tp1__b32__i4096__o512__mixed__stoch-t0.8-p1__bi-eager.json": 448 * 1024,
-    "integrations/vllm/workloads/smollm2-360m__bf16__rtxpro6000__tp1__b16__i4096__o512__mixed__greedy__bi-eager.json": 320 * 1024,
-    "integrations/vllm/workloads/smollm2-360m__bf16__rtxpro6000__tp1__b16__i4096__o512__mixed__stoch-t0.8-p0.95__bi-eager.json": 320 * 1024,
-    "integrations/vllm/workloads/smollm2-360m__bf16__rtxpro6000__tp1__b16__i4096__o512__mixed__stoch-t0.8-p1__bi-eager.json": 320 * 1024,
     "packages/verity/src/verity/ml/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
@@ -91,8 +74,8 @@ AUDIT_RECORD = "lean-audit.json"
 #: what a statement reviewer reads; it grows 3-5 KiB per pin, so this leaves a package room for several hundred more.
 AUDIT_RECORD_LIMIT = 2 * 1024 * 1024
 #: Tracked data (everything but CODE_SUFFIXES) in the whole tree, so that many small files cannot
-#: add up to what one large one may not be. The vLLM workload specs the grid's rows read are 64 MiB of it.
-DATA_BUDGET = 100 * 1024 * 1024
+#: add up to what one large one may not be.
+DATA_BUDGET = 40 * 1024 * 1024
 REGISTRY = "fixtures/artifacts.json"
 
 
