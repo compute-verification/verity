@@ -28,7 +28,8 @@ are `RowSem`'s formulas on the row's inputs:
   is neither NaN nor a signed zero is `e4m3` of its value (`e4m3_wordVal`), so a code is `e4m3` of its formed word's
   value where the cast is `e4m3Word`'s (`code8W_e4m3`), and `pc8Form` at step words' values is `form8` at the words
   (`pc8Form_value`); with a code that is neither NaN nor `−0` `e4m3` of its value (`e4m3_codeVal`), each code on RowA
-  and RowB is `e4m3` of `pc8Form` at its row's values (`codes8_sem`, `row8A_code_sem`, `row8B_code_sem`).
+  and RowB is `e4m3` of `pc8Form` at its row's values (`codes8_sem`, `row8A_code_sem`, `row8B_code_sem`), and
+  `pc8Sem`'s `α`, `β` and floor at a row of step words are the table's words read as values (`pc8Sem_scales`).
 -/
 
 namespace Pouw.PearlC.RowCircuit
@@ -1445,6 +1446,27 @@ theorem row8B_code_sem (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p
         (wordVal (beta8 ops (val X) K)) (lineVals (val X) K) (lineVals (val X) (K + 32 + 32 * t)))).val := by
   rw [row8B_code (ops := ops) p hK X hX ht]
   exact codes8_sem ops hcast p (val X) K t ha hx hb he hf hD
+
+/-- A row of words read as values. -/
+def rowVals (V : ℕ → ℕ) (K : ℕ) : Fin K → ℚ := fun i => wordVal (V i)
+
+theorem encRow_rowVals {V : ℕ → ℕ} {K : ℕ} (hV : ∀ l < K, AccumProofs.StepWord (V l)) :
+    ∀ l < K, encRow K (rowVals V K) l = V l := by
+  intro l hl
+  simp only [encRow, hl, ↓reduceDIte, rowVals, f32Word_wordVal (hV l hl)]
+
+/-- **`pc8Sem`'s `α`, `β` and floor at a row of step words** are the table's `alpha8`, `beta8` and `floor8` words read
+as values (the floor plus one). -/
+theorem pc8Sem_scales {Q R S : Type} (p : Pipeline)
+    (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
+      Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r)
+    {V : ℕ → ℕ} {K : ℕ} (hK : 8 ≤ K) (hV : ∀ l < K, AccumProofs.StepWord (V l)) :
+    (pc8Sem ops p noise).alpha K (rowVals V K) = wordVal (alpha8 ops V K) ∧
+      (pc8Sem ops p noise).beta K (rowVals V K) = wordVal (beta8 ops V K) ∧
+      (pc8Sem ops p noise).floor K (rowVals V K) = wordVal (floor8 ops V K) + 1 := by
+  have h := encRow_rowVals hV
+  exact ⟨by simp only [pc8Sem, alpha8_congr (ops := ops) hK h], by simp only [pc8Sem, beta8_congr (ops := ops) hK h],
+    by simp only [pc8Sem, floor8_congr (ops := ops) hK h]⟩
 
 end RoundTrip
 
