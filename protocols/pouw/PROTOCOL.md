@@ -446,8 +446,11 @@ useful    U/(α_A·α_B), glue
     - The tile cap and R1 read the credited rows only. Past the count caps the audit rejects.
     - `volunteer` is an honest prover's remedy for a tile over the cap: it gives up the rows whose removal brings each
       tile under, before the beacon.
-  - A cell's draw weight is its row's share of `wref` at the kept width. An accepted unit is credited
-    (1 − ρ)·`credit_of` over its credited cells.
+  - A cell's draw weight is its row's share of `W_ref` at the kept width, the `W_ref` of the Lean statement the draw
+    cites (`draw_wref`). On sm_120 at its cap that is `wrefDevRev1K` at `Prices.sm120Loop` and the honest cast at 8.72
+    (`SM120_LOOP_CAST_8P72`), the statement of the served γ and ε. Its ratio to `wref` differs between linears, so a
+    served step's mixed layout drawn by `wref` would not be work-weighted in its sense (red team #919 F1). Elsewhere it
+    is `wref`. An accepted unit is credited (1 − ρ)·`credit_of` over its credited cells.
   - **The sampling guarantee is per credited cell.** A drawn tile's uncredited cells (filler, excluded or voluntary)
     never count as coverage. Volunteering a tile's other rows only lowers that tile's draw weight to its credited cells,
     which is exactly the bound claimed.

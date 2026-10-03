@@ -17,8 +17,11 @@ red team F1, F2 and F5–F8, research store ``internal/pouw/red-team-pearl-c-vll
     opened tile per excluded row, every one.
   - A credited row must pass the rules.
 * **Credit.**
-  - A cell's draw weight is its row's share of `wref` at |K|: Lean's `wrefDevRev1`, with no weight side (F2), so padding
-    to `k_unit` and filler earn nothing.
+  - A cell's draw weight is its row's share of `W_ref` at |K|, with no weight side (F2), so padding to `k_unit` and
+    filler earn nothing. `W_ref` is the one the draw's Lean statement weighs by (`draw_wref`): on sm_120 at its cap
+    1/1,000, `wrefDevRev1K` at `Prices.sm120Loop` and the honest cast at 8.72 (`SM120_LOOP_CAST_8P72`), so that a served
+    step's mixed linears are drawn in proportion to it (red team #919 F1); elsewhere the scheme's own `wref`, Lean's
+    `wrefDevRev1` at its record.  W, the profile's work, stays the scheme's own `wref`.
   - An accepted unit is credited (1 − ρ)·`creditDevRev1` over its credited cells, at the scheme's cap ρ (`scheme.cap`:
     Pearl-C's is its device record's, 1/400 on the H100 and 1/1,000 on sm_120; Pearl-C4's is its own 1/400).
 * **The tile rule (`check_opened`)**, beside `verity_pouw.audit.Verifier.check_tile`'s openings and digest:
@@ -52,10 +55,11 @@ red team F1, F2 and F5–F8, research store ``internal/pouw/red-team-pearl-c-vll
 
 from __future__ import annotations
 
+import copy
 import struct
 from bisect import bisect_right
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from functools import partial
 from itertools import accumulate
@@ -69,6 +73,7 @@ from ..protocol import Context, Matmul, Shape, Tile, tagged
 from . import pearl_c as C
 from . import pearl_c_debit as D
 from . import pearl_kw as P
+from .pearl_c_device import SM120, Prices
 
 RECORDS_TAG = "verity/pouw/pearl-c/records/v2"
 SPLIT_TAG = "verity/pouw/pearl-c/split/v1"
@@ -188,13 +193,56 @@ def cell_credit(scheme: C.PearlC, record: UnitRecord) -> Fraction:
     return Fraction(scheme.credit_of(Shape(1, record.k_kept, s.n)), s.n)
 
 
+@dataclass(frozen=True)
+class DrawWref:
+    """The `W_ref` a Lean statement's draw weighs a tile by: `wrefDevRev1K (devAt d prices) c` times the tile's credited
+    share (`pearlCTilesDevRev1K`'s `Wcred`), the scheme's rev1 `wref` at the statement's prices plus `c` per activation
+    element (the honest kernel's forming beyond the record's).  `GγSampled` and `HonestTileCapRate` take tickets
+    proportional to it, so a draw by another price record's `wref` attains the statement's γ only on a layout of one
+    (n, k): on a served step's four linears the per-linear ratios differ (red team #919 F1)."""
+
+    statement: str
+    device: str
+    cap: Fraction
+    prices: Prices
+    c: Fraction
+
+
+#: The statement Pearl-C v1's served γ and ε cite on sm_120 at its cap 1/1,000 (`ServedMixedRev1Gamma`, `Completeness`'s
+#: `HonestTileCapRate`): `Prices.sm120Loop` ⟨1047/125, 2, ⟨40, 2⟩⟩ and the honest cast at 218/25 against the record's
+#: 8953/1000 (the credited cast 8 and the A-only forming's measured 1.047, rounded up to qa = 2).
+SM120_LOOP_CAST_8P72 = DrawWref("pearlCSampledSm120v1LoopCast8p72Rev1Cap1000", SM120.name, SM120.cap,
+                                replace(SM120.prices, fadd=Fraction(1047, 125), forming_a_only=2),
+                                Fraction(218, 25) - Fraction(8953, 1000))
+DRAW_WREF = {(SM120.name, SM120.prices, SM120.cap): SM120_LOOP_CAST_8P72}
+
+
+def draw_wref(scheme: C.PearlC) -> DrawWref | None:
+    """The statement the scheme's draw weighs by, or None for the scheme's own `wref` (Lean's at its record, c = 0)."""
+    if type(scheme) is not C.PearlC or scheme.forming != "v1":
+        return None
+    return DRAW_WREF.get((scheme.device.name, scheme.prices, scheme.cap))
+
+
+def ticket_cell(scheme: C.PearlC, record: UnitRecord) -> Fraction:
+    """A credited cell's draw weight: its row's share of the drawn statement's `W_ref` at |K| (`draw_wref`)."""
+    at = draw_wref(scheme)
+    if at is None:
+        return cell_wref(scheme, record)
+    priced = copy.copy(scheme)
+    priced.prices = at.prices
+    s = record.matmul.shape
+    return (Fraction(priced.wref(Shape(1, record.k_kept, s.n))) + at.c * record.k_kept) / s.n
+
+
 def tile_weight(scheme: C.PearlC, record: UnitRecord, tile: Tile) -> Fraction:
     rows, cols = record.credited(tile)
-    return cell_wref(scheme, record) * len(rows) * len(cols)
+    return ticket_cell(scheme, record) * len(rows) * len(cols)
 
 
 def tickets(scheme: C.PearlC, records: Sequence[UnitRecord]) -> list[tuple[int, Tile, int]]:
-    """(record position, tile, integer ticket) for every tile of every record, by its credited cells' `wref`."""
+    """(record position, tile, integer ticket) for every tile of every record, by its credited cells' `W_ref` at the
+    statement the draw cites (`draw_wref`)."""
     weights = [(p, t, tile_weight(scheme, r, t)) for p, r in enumerate(records) for t in scheme.tiles(r.matmul.shape)]
     den = lcm(*(w.denominator for _, _, w in weights)) if weights else 1
     return [(p, t, int(w * den)) for p, t, w in weights]
