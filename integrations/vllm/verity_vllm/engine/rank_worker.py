@@ -17,10 +17,7 @@ and the worker; `profile.build_manifest`'s probes run against them) and whose `r
 `rank<r>/snapshots.json`, `stats.rank<r>.json`, `tokens.rank<r>.json`, `cos_sin_cache.rank<r>.npy`; the engine step
 index is the shared step id (every rank executes the same `scheduler_output`).
 
-Alternatives considered (MECHANISM_TP2.md): the `vllm.general_plugins` entry point (loads in every process, but needs
-a pip-installed distribution with an entry point and gives no per-run install/close hook), an env-var-triggered
-install in the worker's `init_device` / `load_model` (needs a vLLM patch or monkeypatching the Worker class before
-spawn).  `worker_extension_cls` is a documented engine argument with an RPC channel, so it is the least invasive.
+`worker_extension_cls` is a documented engine argument with an RPC channel, so no plugin or patched Worker class.
 
 Also here: `tp2_probe` (process topology + the TP group's communicator choice), and a per-rank kernel census
 (`tp2_profiler_start` / `tp2_profiler_stop`: one `torch.profiler` session per rank over the whole run — the protected
@@ -870,17 +867,20 @@ class TP2CaptureWorkerExtension:
         st["rc"] = None
         return {"rank": st["rank"], "installed": True}
 
-    def tp2_commit_finalize(self) -> dict[str, Any]:
-        """After the run: the rank's run root (fixed BEFORE any challenge), per-step leaf counts, coverage declaration.  The warm-up
-        (`pipeline.tp.warmup`) is never a record: nothing of it is bound, attributed, compared or replayed."""
+    def tp2_commit_finalize(self, checks: bool = True) -> dict[str, Any]:
+        """After the run: the rank's run root (fixed BEFORE any challenge), leaf counts, coverage declaration; a warm-up (`pipeline.tp.warmup`)
+        is never bound, attributed, compared or replayed.  ``checks=False``: the root only (a leased Commit's last run: `pipeline.tp.lease`)."""
         from verity_vllm.pipeline.commit import assert_pristine, class_coverage
 
         st = self._tp2_commit
         com = st["com"]
-        rc, record = com.finalize(), not st.get("warmup")
-        com.uninstall()
-        assert_pristine(st["eng"], st["base"])
-        st["rc"] = rc
+        if st.get("rc") is None:
+            st["rc"] = com.finalize()
+            com.uninstall()
+            assert_pristine(st["eng"], st["base"])
+        rc, record = st["rc"], not st.get("warmup")
+        if not checks:
+            return {"rank": st["rank"], "run_root": rc.run_root.hex()}
         d = st["decl"] = com.coverage_declaration(rc)
         binding = self._tp2_binding(rc) if record else None
         attribution = self._tp2_attribution(rc) if record else None
