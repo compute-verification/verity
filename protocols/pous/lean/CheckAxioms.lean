@@ -87,10 +87,18 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 #print axioms Pous.SecurityProofs.BandMultiMeets14K106
 #print axioms Pous.SecurityProofs.BandMultiMeetsFamily
 #print axioms Pous.SecurityProofs.ChainDenseMeets64
+#print axioms Pous.SecurityProofs.BandMultiMeetsFamilyD2
+#print axioms Pous.SecurityProofs.BandMultiMeetsFamilyD1
+#print axioms Pous.SecurityProofs.BandChainMeets64Rounds2
+#print axioms Pous.SecurityProofs.BandChainMeets64Rounds1
 #print axioms Pous.SecurityProofs.BandPubMeets64
 #print axioms Pous.SecurityProofs.BandPubMeets14
 #print axioms Pous.SecurityProofs.BandPubMeets14Global
+#print axioms Pous.SecurityProofs.BandPubMeetsFamily
+#print axioms Pous.SecurityProofs.BandPubMeetsFamilyD2
+#print axioms Pous.SecurityProofs.BandPubMeetsFamilyD1
 #print axioms Pous.SecurityProofs.ChainDenseMeets111
+#print axioms Pous.SecurityProofs.BandGradedMeetsFamily
 -- the abstract model `m1p` at P2's parameters, no hypothesis: the Meets rows, the slack rows and the error split
 #print axioms Pous.SecurityProofs.P2MeetsM1pB19Uncond
 #print axioms Pous.SecurityProofs.P2MeetsM1pFamilyUncond
