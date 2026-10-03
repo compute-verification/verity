@@ -6,14 +6,12 @@
 function with each value computed once: the selection's order as comparisons, the sum's +0 lanes dropped, the sign as a select."""
 from __future__ import annotations
 
-import hashlib
-import json
-
 import numpy as np
 import pytest
 
 from verity.evaluation import evaluate
-from verity.ir.codec import encode_program
+from verity.evaluation.reference import standalone_call
+from verity.ir import codec
 from verity.ir.defs import bind
 from verity.ir.program import Program
 from verity_vllm.program.registry import moe
@@ -178,5 +176,12 @@ def test_statics_are_checked(bad):
         Program(bind(moe.MoeRouterSigmoidBias, **st))
 
 
-def _digest(fn, **st) -> str:
-    return hashlib.sha256(json.dumps(encode_program(Program(bind(fn, **st))), sort_keys=True).encode()).hexdigest()[:16]
+#: the served word Programs (256 experts, 8 slots, x2.5), by launch: `codec.program_digest` of each standalone Program
+SERVED = {"block": "570962e5b0456984abd1c84ab4b6aafb32f55a36606bc7437624699abdd34f37",
+          "warp": "1f181d66fd0f3c31d7497e73036b68c21437474fcca1ff392547bd7e4b81e12f"}
+
+
+@pytest.mark.parametrize("launch", sorted(SERVED))
+def test_the_served_router_is_pinned(launch):
+    prog, _ = standalone_call(bind(moe.MoeRouterSigmoidBias, E=256, TOPK=8, SCALE=2.5, KERNEL=launch))
+    assert codec.program_digest(codec.encode_program(prog)) == SERVED[launch]
