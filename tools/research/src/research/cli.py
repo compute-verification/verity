@@ -44,8 +44,8 @@
   research pods guard [--budgets NOTES|FILE] [--dry-run] [--detach]   # the one budgets guard: every line of budgets.toml, re-read each poll
   research pods guard status|stop                # its state file / SIGTERM to exactly its recorded pid
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
-  research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...]   # what runs on the Nebius nodes
-                                                 # (pods/nebius/deploy.toml) against main, and installs from a pushed commit (research/deploy.py)
+  research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
+                                                 # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (research/deploy.py)
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report

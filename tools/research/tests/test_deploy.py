@@ -1,6 +1,7 @@
-"""`research deploy`: each node's installed files against `main` (ok, stale, ahead, unknown, missing, restart, strays), and an
-install only from a pushed commit, atomic, keeping owner and mode, with the old file kept and a record line. The node is this
-machine: a runner that runs the probe and the installer locally, over files under a temporary directory."""
+"""`research deploy`: each node's installed files against `main` (ok, stale, ahead, unknown, missing, held, restart, strays), and
+an install only from a pushed commit, atomic, keeping owner and mode, with the old file kept and a record line, restarting the
+units it names. The node is this machine: a runner that runs the probe and the installer locally, over files under a temporary
+directory."""
 from __future__ import annotations
 
 import json
@@ -61,7 +62,7 @@ managed = ["{node}/bin/*"]
 path = "{node}/bin/a.py"
 src = "src/a.py"
 nodes = ["n"]
-run = ["tmux:a"]
+run = ["systemd:a"]
 
 [[file]]
 path = "{node}/bin/b"
@@ -134,7 +135,7 @@ def test_a_process_that_started_before_its_file_was_installed_needs_a_restart(wo
         holder.wait()
     for rep in reps:
         e = next(e for e in rep["entries"] if e["path"] == str(a))
-        assert e["state"] == "ok" and "restart tmux:a" in e["restart"]
+        assert e["state"] == "ok" and "restart systemd:a" in e["restart"]
 
 
 def test_install_refuses_an_unpushed_commit_and_installs_a_pushed_one_atomically_with_a_record(world, capsys):
@@ -144,10 +145,13 @@ def test_install_refuses_an_unpushed_commit_and_installs_a_pushed_one_atomically
     b.chmod(0o750)
     inode = b.stat().st_ino
     _commit(repo, {"src/a.py": "local only\n"}, "unpushed")
-    with pytest.raises(RuntimeError, match="on no origin branch: push it first"):
-        deploy.install(n, "HEAD", "lane-x", [], local, repo=repo)
+    with pytest.raises(deploy.Refused, match="on no origin branch: push it first"):
+        deploy.install(n, "HEAD", "lane-x", [], local, apply=True, repo=repo)
+    assert deploy.main(["install", "n", "--ref", "HEAD", "--by", "lane-x", "--apply", "--no-fetch"], run=local,
+                       manifest=world["manifest"], repo=repo) == 3
+    assert "push it first" in capsys.readouterr().err
 
-    done = deploy.install(n, "origin/fix", "lane-x", [], local, repo=repo)
+    done = deploy.install(n, "origin/fix", "lane-x", [], local, apply=True, repo=repo)["files"]
     assert {Path(f["path"]).name: f["changed"] for f in done} == {"a.py": True, "b": True, "c.py": True, "x.yaml": True}
     assert (node / "bin" / "c.py").read_text() == "c-fix\n" and b.read_text() == "b1\n"
     assert b.stat().st_mode & 0o777 == 0o750 and b.stat().st_ino != inode           # kept its mode; a new inode, renamed over
@@ -161,21 +165,23 @@ def test_install_refuses_an_unpushed_commit_and_installs_a_pushed_one_atomically
     c = next(e for e in rep["entries"] if e["path"].endswith("c.py"))
     assert c["state"] == "ahead" and "by lane-x from origin/fix" in c["detail"]
 
-    assert all(f["changed"] is False for f in deploy.install(n, "origin/fix", "lane-x", [], local, repo=repo))
-    assert deploy.main(["install", "n", str(node / "bin" / "c.py"), "--ref", "origin/main", "--by", "lane-x", "--no-fetch"],
-                       run=local, manifest=world["manifest"], repo=repo) == 0
+    assert all(f["changed"] is False for f in deploy.install(n, "origin/fix", "lane-x", [], local, apply=True, repo=repo)["files"])
+    assert deploy.main(["install", "n", str(node / "bin" / "c.py"), "--ref", "origin/main", "--by", "lane-x", "--apply",
+                        "--no-fetch"], run=local, manifest=world["manifest"], repo=repo) == 0
     assert "installed     " in capsys.readouterr().out and (node / "bin" / "c.py").read_text() == "c1\n"
-    with pytest.raises(RuntimeError, match="not in deploy.toml for n: nope"):
-        deploy.install(n, "origin/main", "lane-x", ["nope"], local, repo=repo)
+    with pytest.raises(deploy.Refused, match="not in deploy.toml for n: nope"):
+        deploy.install(n, "origin/main", "lane-x", ["nope"], local, apply=True, repo=repo)
 
 
 def test_a_dry_run_says_what_would_change_and_an_install_names_only_what_still_runs_old_code(world, capsys):
     node, repo, n = world["node"], world["repo"], world["nodes"]["n"]
-    deploy.install(n, "origin/main", "lane-x", [], local, repo=repo)
+    deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=repo)
     _commit(repo, {"src/a.py": "a3\n", "src/c.py": "c3\n"}, "v3")
     _git(repo, "push", "-q", "origin", "main")
-    dry = deploy.install(n, "origin/main", "lane-x", [], local, dry=True, repo=repo)
+    dry = deploy.install(n, "origin/main", "lane-x", [], local, repo=repo)["files"]
     assert {Path(f["path"]).name: f["changed"] for f in dry} == {"a.py": None, "b": False, "c.py": None, "x.yaml": False}
+    assert deploy.main(["install", "n", "--by", "lane-x", "--no-fetch"], run=local, manifest=world["manifest"], repo=repo) == 0
+    assert "nothing changed: --apply installs and restarts" in capsys.readouterr().out
     assert (node / "bin" / "a.py").read_text() == "a2\n"
 
     def installed_later(name: str, argv: list[str], stdin: bytes | None) -> subprocess.CompletedProcess:
@@ -187,12 +193,14 @@ def test_a_dry_run_says_what_would_change_and_an_install_names_only_what_still_r
 
     holder = subprocess.Popen([sys.executable, "-c", "import sys; sys.stdin.read()", str(node / "bin" / "a.py")], stdin=subprocess.PIPE)
     try:
-        assert deploy.main(["install", "n", "--by", "lane-x", "--no-fetch"], run=installed_later, manifest=world["manifest"], repo=repo) == 0
+        assert deploy.main(["install", "n", "--by", "lane-x", "--apply", "--no-fetch"], run=installed_later,
+                           manifest=world["manifest"], repo=repo) == 0
     finally:
         holder.stdin.close()
         holder.wait()
     out = capsys.readouterr().out
-    assert "restart when safe: tmux:a (" in out and (node / "bin" / "c.py").read_text() == "c3\n"
+    # the holder runs in no unit a.py's entry names, so the path is what to restart
+    assert f"restart when safe: {node / 'bin' / 'a.py'} (" in out and (node / "bin" / "c.py").read_text() == "c3\n"
 
 
 def test_installing_a_changed_unit_reloads_systemd_once_and_an_unchanged_one_does_not(world, monkeypatch):
@@ -211,23 +219,25 @@ def test_installing_a_changed_unit_reloads_systemd_once_and_an_unchanged_one_doe
         return local(name, argv, stdin)
 
     deploy.install(n, "origin/main", "lane-x", [], systemd, repo=repo)
+    assert calls == [] and not (node / "units" / "x.service").exists()                         # a dry run
+    deploy.install(n, "origin/main", "lane-x", [], systemd, apply=True, repo=repo)
     assert calls == [["sudo", "-n", "systemctl", "daemon-reload"]] and (node / "units" / "x.service").read_text().endswith("0-7\n")
-    deploy.install(n, "origin/main", "lane-x", [], systemd, repo=repo)
+    deploy.install(n, "origin/main", "lane-x", [], systemd, apply=True, repo=repo)
     _commit(repo, {"src/c.py": "c4\n"}, "not a unit")
     _git(repo, "push", "-q", "origin", "main")
-    deploy.install(n, "origin/main", "lane-x", [], systemd, repo=repo)
+    deploy.install(n, "origin/main", "lane-x", [], systemd, apply=True, repo=repo)
     assert len(calls) == 1
 
     _commit(repo, {"src/x.timer": "[Timer]\nOnUnitActiveSec=5min\n"}, "a timer change")
     _git(repo, "push", "-q", "origin", "main")
     rc[0] = 1
     with pytest.raises(RuntimeError, match=r"installed .*x\.timer, but `systemctl daemon-reload` failed \(exit 1\): Access denied"):
-        deploy.install(n, "origin/main", "lane-x", [], systemd, repo=repo)
+        deploy.install(n, "origin/main", "lane-x", [], systemd, apply=True, repo=repo)
 
 
 def test_attic_moves_only_strays_none_a_process_runs_and_records_where_each_went(world, capsys):
     node, n = world["node"], world["nodes"]["n"]
-    deploy.install(n, "origin/main", "lane-x", [], local, repo=world["repo"])
+    deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=world["repo"])
     (node / "bin" / "unit.service").write_text("[Unit]\n")
     bak, one_off = node / "bin" / "a.py.bak-20261001T0611Z", node / "bin" / "probe-once.sh"
     bak.write_text("a0\n")
@@ -244,10 +254,15 @@ def test_attic_moves_only_strays_none_a_process_runs_and_records_where_each_went
     finally:
         holder.stdin.close()
         holder.wait()
-    assert deploy.attic(n, "origin/main", "lane-x", [], True, local, dry=True, repo=world["repo"]) == [(str(bak), None),
-                                                                                                       (str(old_tree / "x.yaml"), None)]
+    assert deploy.attic(n, "origin/main", "lane-x", [], True, local, repo=world["repo"]) == [(str(bak), None),
+                                                                                             (str(old_tree / "x.yaml"), None)]
+    assert deploy.main(["attic", "n", "--backups", "--by", "lane-x", "--no-fetch"], run=local, manifest=world["manifest"],
+                       repo=world["repo"]) == 0
+    assert "nothing moved: --apply moves them" in capsys.readouterr().out and bak.exists()
+    assert deploy.main(["attic", "n", str(bak.with_name("nope")), "--by", "lane-x", "--no-fetch"], run=local,
+                       manifest=world["manifest"], repo=world["repo"]) == 3
 
-    assert deploy.main(["attic", "n", str(one_off), "--backups", "--by", "lane-x", "--no-fetch"], run=local,
+    assert deploy.main(["attic", "n", str(one_off), "--backups", "--by", "lane-x", "--apply", "--no-fetch"], run=local,
                        manifest=world["manifest"], repo=world["repo"]) == 0
     assert "restore one with `sudo mv DEST PATH`" in capsys.readouterr().out
     assert not bak.exists() and not one_off.exists() and not old_tree.exists() and (node / "tree").is_dir()
@@ -259,7 +274,7 @@ def test_attic_moves_only_strays_none_a_process_runs_and_records_where_each_went
 
 def test_drift_is_clean_once_everything_is_mains_and_nothing_strays(world, capsys):
     node, n = world["node"], world["nodes"]["n"]
-    deploy.install(n, "origin/main", "lane-x", [], local, repo=world["repo"])
+    deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=world["repo"])
     (node / "bin" / "unit.service").write_text("[Unit]\n")
     rep = deploy.drift(n, "origin/main", local, world["repo"])
     assert deploy.clean(rep), rep
@@ -280,11 +295,11 @@ def test_an_entry_whose_source_the_ref_lacks_is_absent_and_a_ref_deploys_its_own
     n = deploy.load(manifest)["n"]
     d = next(e for e in deploy.drift(n, "origin/main", local, repo)["entries"] if e["path"].endswith("d.py"))
     assert d["state"] == "absent" and "origin/main lacks src/d.py" in d["detail"]
-    with pytest.raises(RuntimeError, match="lacks the source of src/d.py"):
-        deploy.install(n, "origin/main", "lane-x", ["src/d.py"], local, repo=repo)
-    done = deploy.install(n, "origin/main", "lane-x", [], local, repo=repo)
+    with pytest.raises(deploy.Refused, match="lacks the source of src/d.py"):
+        deploy.install(n, "origin/main", "lane-x", ["src/d.py"], local, apply=True, repo=repo)
+    done = deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=repo)["files"]
     assert [f["changed"] for f in done if f["path"].endswith("d.py")] == ["absent"] and not (node / "bin" / "d.py").exists()
-    deploy.install(n, "origin/fix", "lane-x", ["src/d.py"], local, repo=repo)
+    deploy.install(n, "origin/fix", "lane-x", ["src/d.py"], local, apply=True, repo=repo)
     assert (node / "bin" / "d.py").read_text() == "d1\n"
 
     assert deploy.manifest_at("origin/main", repo) is None
@@ -302,6 +317,141 @@ def test_the_manifest_loads_and_every_source_is_a_file_of_the_repository():
             if e.src:
                 assert (deploy.REPO / e.src).is_dir() if e.tree else (deploy.REPO / e.src).is_file(), e.src
             assert e.path.startswith("/") and all(r.split(":", 1)[0] in ("tmux", "systemd", "user-systemd") for r in e.run)
+
+
+FAKE_CGROUP = """import builtins, io
+def open(p, *a, _o=builtins.open, **k):
+    return io.StringIO({cg!r}) if str(p).endswith("/cgroup") else _o(p, *a, **k)
+"""
+
+
+def _units(world, monkeypatch, active=("s.service", "u.service"), cgroup: list[str] | None = None):
+    """The world with units: s (its unit, its environment file, and s.py its process runs), t (stopped), u (a user unit), the
+    timer s.timer and a setup script's g.service, all named by s.env's entry; node n's `quiet` is that {node}/quiet exists. The
+    probe sees every process in the cgroup `cgroup[0]`, when given."""
+    node, repo, manifest = world["node"], world["repo"], world["manifest"]
+    for k, d in (("UNITS", "units"), ("USER_UNITS", "user"), ("ENVS", "env")):
+        monkeypatch.setattr(deploy, k, f"{node}/{d}/")
+    _commit(repo, {"src/s.service": "[Service]\n", "src/t.service": "[Service]\n", "src/u.service": "[Service]\n",
+                   "src/s.timer": "[Timer]\n", "src/s.env": "A=1\n", "src/s.py": "s1\n"}, "units")
+    _git(repo, "push", "-q", "origin", "main")
+    entries = [("units/s.service", "s.service", ["systemd:s"]), ("units/t.service", "t.service", ["systemd:t"]),
+               ("user/u.service", "u.service", ["user-systemd:u"]), ("units/s.timer", "s.timer", ["systemd:s.timer"]),
+               ("env/s.env", "s.env", ["systemd:s", "systemd:s.timer", "systemd:g"]), ("bin/s.py", "s.py", ["systemd:s"])]
+    text = manifest.read_text().replace("\nmanaged = ", f'\nquiet = "test -e {node}/quiet"\nmanaged = ', 1)
+    text += "".join(f'\n[[file]]\npath = "{node}/{p}"\nsrc = "src/{s}"\nnodes = ["n"]\nrun = {json.dumps(r)}\n' for p, s, r in entries)
+    manifest.write_text(text + f'\n[[file]]\npath = "{node}/units/g.service"\nby = "src/setup.sh"\nnodes = ["n"]\n')
+    calls: list[list[str]] = []
+
+    def run(name: str, argv: list[str], stdin: bytes | None) -> subprocess.CompletedProcess:
+        if "systemctl" in argv:
+            calls.append(argv)
+            down = "is-active" in argv and argv[-1] not in active
+            return subprocess.CompletedProcess(argv, 3 if down else 0, b"", b"")
+        if cgroup and len(argv) > 2 and argv[2] == deploy.PROBE:
+            argv = [*argv[:2], FAKE_CGROUP.format(cg=f"0::{cgroup[0]}\n") + argv[2], *argv[3:]]
+        r = local(name, argv, stdin)
+        if argv[:2] == ["sudo", "-n"] and stdin and "files" in (req := json.loads(stdin)):
+            for f in req["files"]:
+                os.utime(f["path"], (FUTURE, FUTURE))
+        return r
+    return deploy.load(manifest)["n"], run, calls
+
+
+def _restarts(node: Path) -> list[dict]:
+    return [r for ln in (node / "research" / "deploy" / "record.jsonl").read_text().splitlines() if "unit" in (r := json.loads(ln))]
+
+
+def test_install_restarts_each_running_service_whose_unit_or_environment_changed_once_the_node_is_quiet(world, monkeypatch, capsys):
+    node, repo = world["node"], world["repo"]
+    n, run, calls = _units(world, monkeypatch)
+    (node / "quiet").write_text("")
+    dry = deploy.install(n, "origin/main", "lane-x", [], run, repo=repo)
+    assert {d["unit"]: d["state"] for d in dry["restarts"]} == {"systemd:s.service": "would restart",
+                                                               "systemd:t.service": "not running",
+                                                               "user-systemd:u.service": "would restart"}
+    assert not [c for c in calls if "is-active" not in c] and not (node / "units" / "s.service").exists()
+
+    calls.clear()
+    assert deploy.main(["install", "n", "--by", "lane-x", "--apply", "--no-fetch"], run=run, manifest=world["manifest"],
+                       repo=repo) == 0
+    assert calls == [["sudo", "-n", "systemctl", "daemon-reload"], ["systemctl", "--user", "daemon-reload"],
+                     ["sudo", "-n", "systemctl", "is-active", "--quiet", "s.service"],
+                     ["sudo", "-n", "systemctl", "try-restart", "s.service"],
+                     ["sudo", "-n", "systemctl", "is-active", "--quiet", "t.service"],
+                     ["systemctl", "--user", "is-active", "--quiet", "u.service"],
+                     ["systemctl", "--user", "try-restart", "u.service"]]               # never s.timer, g.service, nor t's start
+    out = capsys.readouterr().out
+    assert "restarted     systemd:s.service" in out and "not running   systemd:t.service" in out and "it stays stopped" in out
+    head = _git(repo, "rev-parse", "origin/main")
+    assert [(r["unit"], r["restart"], r["why"], r["commit"], r["by"]) for r in _restarts(node)] == [
+        ("systemd:s.service", "restarted", [f"{node}/env/s.env", f"{node}/units/s.service"], head, "lane-x"),
+        ("user-systemd:u.service", "restarted", [f"{node}/user/u.service"], head, "lane-x")]
+
+    (node / "quiet").unlink()
+    _commit(repo, {"src/s.env": "A=2\n"}, "a setting")
+    _git(repo, "push", "-q", "origin", "main")
+    calls.clear()
+    done = deploy.install(n, "origin/main", "lane-x", [], run, apply=True, repo=repo)
+    assert done["restarts"] == [{"unit": "systemd:s.service", "why": [f"{node}/env/s.env"], "state": "not quiet"}]
+    assert calls == [] and (node / "env" / "s.env").read_text() == "A=2\n" and len(_restarts(node)) == 2
+
+
+def test_install_restarts_a_service_whose_process_runs_the_old_script_and_not_one_outside_it(world, monkeypatch):
+    node, repo, cgroup = world["node"], world["repo"], [""]
+    (node / "quiet").write_text("")
+    n, run, calls = _units(world, monkeypatch, cgroup=cgroup)
+    deploy.install(n, "origin/main", "lane-x", [], run, apply=True, repo=repo)
+    for cgroup[0], restarted in (("/system.slice/s.service", True), ("/user.slice/user-1000.slice/session-3.scope", False)):
+        _commit(repo, {"src/s.py": f"s-{restarted}\n"}, "a script change")
+        _git(repo, "push", "-q", "origin", "main")
+        holder = subprocess.Popen([sys.executable, "-c", "import sys; sys.stdin.read()", str(node / "bin" / "s.py")],
+                                  stdin=subprocess.PIPE)
+        try:
+            done = deploy.install(n, "origin/main", "lane-x", [], run, apply=True, repo=repo)
+        finally:
+            holder.stdin.close()
+            holder.wait()
+        assert [(d["unit"], d["why"], d["state"]) for d in done["restarts"]] == (
+            [("systemd:s.service", [f"{node}/bin/s.py"], "restarted")] if restarted else [])
+        s = next(f for f in done["files"] if f["path"].endswith("s.py"))
+        assert s["run"] == ["systemd:s.service" if restarted else str(node / "bin" / "s.py")]
+
+
+def test_a_held_entry_is_reported_and_skipped_and_refused_when_named(world, capsys):
+    node, repo, manifest = world["node"], world["repo"], world["manifest"]
+    _commit(repo, {"src/h.py": "h1\n"}, "a held script")
+    _git(repo, "push", "-q", "origin", "main")
+    manifest.write_text(manifest.read_text() + f'\n[[file]]\npath = "{node}/bin/h.py"\nsrc = "src/h.py"\nnodes = ["n"]\n'
+                                               f'hold = "its owner\'s yes pending"\n')
+    n = deploy.load(manifest)["n"]
+    done = deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=repo)
+    assert [(f["changed"], f["hold"]) for f in done["files"] if f["path"].endswith("h.py")] == [("held", "its owner's yes pending")]
+    assert not (node / "bin" / "h.py").exists()
+    (node / "bin" / "unit.service").write_text("[Unit]\n")
+    rep = deploy.drift(n, "origin/main", local, repo)
+    h = next(e for e in rep["entries"] if e["path"].endswith("h.py"))
+    assert h["state"] == "held" and h["detail"] == "its owner's yes pending (not installed)" and deploy.clean(rep)
+    with pytest.raises(deploy.Refused, match="held in deploy.toml"):
+        deploy.install(n, "origin/main", "lane-x", ["src/h.py"], local, apply=True, repo=repo)
+    assert deploy.main(["install", "n", "src/h.py", "--by", "lane-x", "--apply", "--no-fetch"], run=local, manifest=manifest,
+                       repo=repo) == 3
+    assert "A PR that drops its `hold` comes first" in capsys.readouterr().err and not (node / "bin" / "h.py").exists()
+
+    manifest.write_text(f'[nodes.n]\nrecord = "/r"\n[[file]]\npath = "/p"\nby = "s"\nnodes = ["n"]\nhold = "x"\n')
+    with pytest.raises(ValueError, match="is held, which only an entry install copies"):
+        deploy.load(manifest)
+
+
+def test_restarts_follow_the_changed_file_and_the_services_running_it():
+    n = deploy.Node("n", "/r", [], [deploy.Entry(f"{deploy.UNITS}s.service", "src/s.service", run=["systemd:s"]),
+                                    deploy.Entry(f"{deploy.UNITS}h@.service", "src/h@.service", run=["systemd:h@a"], hold="x"),
+                                    deploy.Entry("/bin/s.py", "src/s.py", run=["systemd:s", "systemd:h@a", "systemd:s.timer"])])
+    py = {"/bin/s.py": n.entries[2]}
+    assert deploy.restarts(n, py, {"/bin/s.py": ["systemd:s.service", "systemd:h@a.service"]}) == {"systemd:s.service": ["/bin/s.py"]}
+    assert deploy.restarts(n, py, {"/bin/s.py": [None, "systemd:other.service"]}) == {}
+    assert deploy.unit_name("systemd:h@a") == "systemd:h@a.service" and deploy.unit_file("systemd:h@a.service") == f"{deploy.UNITS}h@.service"
+    assert deploy.unit_name("tmux:s") is None and deploy.unit_name("user-systemd:p.timer") == "user-systemd:p.timer"
 
 
 def test_a_manifest_entry_needs_exactly_one_of_src_and_by_and_a_known_node(tmp_path):

@@ -20,7 +20,7 @@ after a unit changes, and the timer's next pass runs the new files):
 
 ~~~sh
 research deploy install vy-nebius-1 tools/research/console/{verity_console.py,util_collect.py} \
-    infra/nebius/verity-console.{service,timer} --ref origin/main --by WHO
+    infra/nebius/verity-console.{service,timer} --ref origin/main --by WHO --apply
 ~~~
 
 Deploy to the control pod (`vy-control-verity`, `nv7h6w1pairkcu`). The loop runs `verity_console.py` fresh each time, so the next

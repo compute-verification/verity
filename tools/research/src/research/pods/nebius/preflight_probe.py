@@ -92,7 +92,7 @@ def findings(reps: dict) -> list[str]:
         if "error" in rep:
             continue
         for e in rep["entries"]:
-            if e["state"] != "ok" and not (e["state"] == "missing" and e.get("tree")):
+            if e["state"] not in ("ok", "held") and not (e["state"] == "missing" and e.get("tree")):
                 out.append(f"{n} {e['state']} {e['path']}")
             if e.get("restart"):
                 out.append(f"{n} restart {e['path']}")
@@ -121,7 +121,7 @@ def drift_step(state: dict, reps: dict, post: Callable[[str, "str | None"], "str
                                                                      for n, c in sorted(counts.items())) + "."]
     lines += [f"• {f}" for f in added[:most]] + ([f"• and {len(added) - most} more"] if len(added) > most else [])
     lines += [f"{gone} resolved since the last report."] if gone else []
-    lines.append("Stale or unknown: `research deploy install NODE --by WHO PATH` from main. Ahead: land its PR, then install from "
+    lines.append("Stale or unknown: `research deploy install NODE --by WHO PATH --apply` from main. Ahead: land its PR, then install from "
                  "main. Restart: restart what the entry's `run` names. Stray: move it into the repository and deploy.toml, or delete it.")
     post("\n".join(lines), None)
 
