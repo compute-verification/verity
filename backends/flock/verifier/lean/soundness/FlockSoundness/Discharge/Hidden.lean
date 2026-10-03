@@ -9,6 +9,7 @@ import FlockSoundness.Discharge.Hidden.Layout
 import FlockSoundness.Discharge.Hidden.Flat
 import FlockSoundness.Discharge.Hidden.Committed
 import FlockSoundness.Discharge.Hidden.Theorems
+import FlockSoundness.Discharge.Hidden.Wide.Theorems
 
 /-!
 # Hidden outputs: `Stmt.setupHidden`'s soundness at the protocol as Lean defines it
@@ -25,5 +26,19 @@ import FlockSoundness.Discharge.Hidden.Theorems
   row's message bits as copies of `outSrc` (`msg_copy`);
 * `Committed`: an output row's registered `b ‖ c` at a drawn unit is the commit string of its prefix and the output words
   its VU computes (`outputs_committed'`);
-* `Theorems`: one theorem per frozen statement.
+* `Theorems`: one theorem per frozen statement;
+* `Wide.Defs`, `Wide.Theorems`: `OutputsCommitted` and `OutputsBinding` widened to a tail that returns the outputs
+  (`…Tail`), `sha512/row/v2` rows (`…V2`) and shared rows (`…Wide`);
+* `Wide.Tail`: the Tail statements (`outputs_committed_tail'`, `outputs_binding_tail_of`);
+* `Wide.RowCommit`: a row's commit string under any 128-byte prefix, with or without compressions (`port_commit_rowsP`,
+  `port_commit_rows0`);
+* `Wide.Copies`: `HmRow.delta`'s Δ for any rows (`delta_flat_all`) and its copies at a row's own columns (`…_filterAll`);
+* `Wide.RowBc`: a row's `b ‖ c` under its own prefix for any rows (`row_bc_tgt`);
+* `Wide.V2`: the V2 statements (`outputs_committed_v2'`, `outputs_binding_v2_of`);
+* `Wide.Shared`: a shared-row population's `b ‖ c` at a drawn unit (`bc_drawnW`), and the Wide statements
+  (`outputs_committed_wide'`, `outputs_binding_wide_of`);
+* `Wide.Upv`: a unit per VU from acceptance (`check_upv_pos`, `setupHidden_upv_pos`), since `HmRow.check` refuses
+  `units_per_vu = 0`;
+* `Wide.Checked`: the six widened statements without `0 < st.c.upv` (`…Checked`), proved in `Wide.Theorems`
+  (`…_checked`).
 -/

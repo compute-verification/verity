@@ -24,11 +24,13 @@ once it passes, so a check that one of them fails ends in seconds, not hours.
 
 A step that fails stops the others: each running step's processes get SIGINT (Python code runs its `finally`s, so the Lean audit
 removes its scratch tree) and whatever is left of them SIGKILL after `STOP_GRACE_S`, and no group starts another step. Such a
-step's status is `stopped`. `--keep-going` lets every group run to its end instead, keeping the verdicts its passing steps store.
+step's status is `stopped`. `--keep-going` lets every group run to its end instead, keeping the verdicts its passing steps store,
+except after a step in `HALTS`: a Lean module that doesn't compile fails the audit too, so nothing still running is worth the slot.
 The steps stay in this process's group, which a runner's timeout and a manual stop signal as a whole. Each step's record is
 appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run.
 
-Then three independent groups run at once, the cores split between them (`--cores N`, default the CPUs this process may use):
+Then the independent groups run at once, the cores split between the first two (`--cores N`, default the CPUs this process may
+use):
 
     pytest          every test suite (`tools/check/suites.py`) but those that use Lean, half the cores' worth at once: each
                     package's tests in their own process, a pass reused while its inputs are unchanged; each suite's log and the
@@ -46,6 +48,9 @@ Then three independent groups run at once, the cores split between them (`--core
                     steps built, then its agreement with upstream's Rust verifier (`ci.py`) on the upstream build stored once
                     and pinned by hash (`backends/flock/verifier/upstream.json`), when the run has it; skipped by name without
                     it.  `research merge` requires it for a change under backends/flock/ (`tool.py`)
+    lean-changed    at once with the lean group: `lake build` of each Lake package whose audit misses, on a tree this machine
+                    keeps built (`lean_changed.py`), so a module that no longer compiles ends the run in minutes, not when the
+                    audit's cold build reaches it; it skips what it can't build here and vouches for nothing: the audit decides
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run), each a hit only on identical inputs:
 
@@ -58,6 +63,8 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     and its toolchain and manifest are unchanged; a miss is audited on a scratch tree holding only those, so a
                     read outside them fails there; fetched dependencies stay warm on the machine under manifest + toolchain,
                     and a machine without them restores the bundle `lean-deps.json` pins from the store, not from GitHub
+    lean-changed    not a verdict: its tree under `lean-changed/` keeps each package's last build there, so Lake rebuilds only
+                    what changed and what imports it, and its fetched dependencies are hard links to lean-audit's, read-only
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: backends/flock/verifier/'s
                     tracked files, which pin the upstream build and inputs, the interpreter, the environment)
     flock-rust-tests  likewise (`rust_tests_key`: the script, which pins the Flock commit, the patches, the live crate, the Rust
@@ -475,8 +482,14 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None) -> l
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
     build = ["bash", str(ROOT / "backends" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
-    return [[("pytest", pytest, ROOT)], [("circuit-check", cc, ROOT), ("flock-circuit-build", build, ROOT), ("flock-rust-tests", rust, ROOT)],
-            lean]
+    gs = [[("pytest", pytest, ROOT)], [("circuit-check", cc, ROOT), ("flock-circuit-build", build, ROOT), ("flock-rust-tests", rust, ROOT)],
+          lean]
+    if len(lean) > 1:
+        changed: list[str] | str = ([py, str(ROOT / "tools" / "check" / "lean_changed.py"), "--cache", str(cache_dir() / "lean-audit"),
+                                     "--deps", str(cache_dir() / "lean-deps"), "--tree", str(cache_dir() / "lean-changed")]
+                                    if cache else "skipped: --no-cache: lean-audit builds every package cold")
+        gs.append([("lean-changed", changed, ROOT)])
+    return gs
 
 
 def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
@@ -647,21 +660,25 @@ def _kill_after_grace(p: subprocess.Popen) -> None:
         _signal_tree(p.pid, signal.SIGKILL)
 
 
+#: the steps whose failure stops the run even under --keep-going
+HALTS = frozenset({"lean-changed"})
+
+
 class Steps:
-    """The steps of one run: their processes while they run, so that the first failure stops the others (unless ``keep_going``),
-    and each step's record appended to `STEPS_LOG` as it ends."""
+    """The steps of one run: their processes while they run, so that the first failure stops the others (unless ``keep_going``,
+    and a step in `HALTS` stops them even then), and each step's record appended to `STEPS_LOG` as it ends."""
 
     def __init__(self, out: Path, keep_going: bool = False):
         self.log, self.keep_going = out / STEPS_LOG, keep_going
         self.lock = threading.Lock()
         self.running: dict[str, subprocess.Popen] = {}
         self.stopped: set[str] = set()
-        self.failed: str | None = None
+        self.halted: str | None = None
         self.log.unlink(missing_ok=True)
 
     @property
     def stopping(self) -> bool:
-        return self.failed is not None and not self.keep_going
+        return self.halted is not None
 
     def start(self, name: str, argv: list[str], cwd: Path, env: dict[str, str], log) -> subprocess.Popen | None:
         """The step's process; None, and nothing started, once a failure has stopped the run."""
@@ -675,17 +692,16 @@ class Steps:
         with self.lock:
             self.running.pop(rec["step"], None)
             if rec["step"] in self.stopped and rec["status"] != "passed":
-                rec.update(status="stopped", detail=f"stopped: {self.failed} failed")
+                rec.update(status="stopped", detail=f"stopped: {self.halted} failed")
             rec["ended_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             with open(self.log, "a") as f:
                 f.write(json.dumps(rec) + "\n")
-            if rec["status"] == "failed" and self.failed is None:
-                self.failed = rec["step"]
-                if not self.keep_going:
-                    for name, p in self.running.items():
-                        self.stopped.add(name)
-                        _signal_tree(p.pid, signal.SIGINT)
-                        threading.Thread(target=_kill_after_grace, args=(p,), daemon=True).start()
+            if rec["status"] == "failed" and self.halted is None and (not self.keep_going or rec["step"] in HALTS):
+                self.halted = rec["step"]
+                for name, p in self.running.items():
+                    self.stopped.add(name)
+                    _signal_tree(p.pid, signal.SIGINT)
+                    threading.Thread(target=_kill_after_grace, args=(p,), daemon=True).start()
         return rec
 
 
@@ -710,7 +726,7 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
             p = steps.start(name, argv, cwd, e, f)
             rc = p.wait() if p is not None else None
         if rc is None:
-            rec = {"step": name, "status": "stopped", "detail": f"not started: {steps.failed} failed"}
+            rec = {"step": name, "status": "stopped", "detail": f"not started: {steps.halted} failed"}
         else:
             rec = {"step": name, "status": "passed" if rc == 0 else "failed", "rc": rc, "log": log.name}
         if rc == 0 and key:
@@ -751,8 +767,9 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
         results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in preflight()]
         if not steps.stopping:
             subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
-            with ThreadPoolExecutor(max_workers=3) as ex:
-                results += [r for rs in ex.map(group, groups(out, n, cache, urls)) for r in rs]
+            gs = groups(out, n, cache, urls)
+            with ThreadPoolExecutor(max_workers=len(gs)) as ex:
+                results += [r for rs in ex.map(group, gs) for r in rs]
     finally:
         if urls and urls.name.startswith("lean-deps-urls-"):
             urls.unlink(missing_ok=True)

@@ -46,6 +46,9 @@ KINDS: dict[str, str] = {
                         "meta {targets, files, taken_utc, host}",
     "telemetry/v1": "events.jsonl or resources.jsonl of an attempt",
     "check/v1": "a repository check run's result.json (each step's status and seconds); what `research merge` reads is its attempt",
+    "lean-review/v1": "an `audit.py --update` run's audit.json (tools/lean): per package its review, statement_changes, and the pins and "
+                      "reads it compared with (before) beside those it wrote; a `lean_review` label on pr:<n>@<head> names it "
+                      "(research.queue.reviewed)",
     "flock-upstream-build/v1": "upstream Flock's verifier builds for the agreement job (backends/flock/verifier/upstream-build.sh): "
                                "a tar.gz of upstream-<PR #83 commit> binaries and BUILD.json; meta {flock, rustc, host, bundle_sha256, "
                                "binaries}, pinned by backends/flock/verifier/upstream.json",
