@@ -73,7 +73,7 @@ def test_ssh_key_from_env_is_written_once_mode_600_and_the_laptop_file_wins(rp, 
 def test_threads_writing_the_key_at_once_each_get_the_whole_file(rp, tmp_path, monkeypatch):
     # `research doctor` resolves ssh argv in several probe threads at once: with one temp name per process, on a fresh state dir
     # two threads failed 481 of 500 times (FileNotFoundError from os.replace) and three read zero-length keys
-    priv = b"-----BEGIN OPENSSH PRIVATE KEY-----\n" + b"k" * 400 + b"\n-----END OPENSSH PRIVATE KEY-----\n"
+    priv = b"dummy-ssh-key " * 40 + b"\n"
     monkeypatch.setenv("RUNPOD_SSH_KEY_B64", base64.b64encode(priv).decode())
     for i in range(20):
         monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / f"state-{i}"))

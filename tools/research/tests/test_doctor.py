@@ -344,7 +344,7 @@ def test_ssh_probes_each_machine_with_an_ssh_host_as_research_run_reaches_it(mon
 
 def test_two_ssh_machines_on_a_fresh_state_dir_both_get_the_whole_key(monkeypatch, tmp_path):
     # the probes resolved the key from RUNPOD_SSH_KEY_B64 in their threads at once: 481 of 500 runs failed, some reading it empty
-    key = b"-----BEGIN OPENSSH PRIVATE KEY-----\n" + b"k" * 400 + b"\n-----END OPENSSH PRIVATE KEY-----\n"
+    key = b"dummy-ssh-key " * 40 + b"\n"
     monkeypatch.setenv("RUNPOD_SSH_KEY_B64", base64.b64encode(key).decode())
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "fresh-state"))
     monkeypatch.setattr(runpod, "SSH_KEY", tmp_path / "absent-key")
