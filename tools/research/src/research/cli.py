@@ -135,6 +135,14 @@ def _parse_expect(items: list[str]) -> dict | None:
 
 
 def cmd_run(argv: list[str]) -> int:
+    clones: list[Path] = []          # the run's `--cwd clone` home once made; removed however `_cmd_run` ends
+    try:
+        return _cmd_run(argv, clones)
+    finally:
+        _drop_clone(clones)
+
+
+def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     if "--" not in argv:
         print("research run: the workload command goes after `--`", file=sys.stderr)
         return 2
@@ -292,18 +300,17 @@ def cmd_run(argv: list[str]) -> int:
         os.environ["RESEARCH_STORE"] = str(root.parent / "store")     # machine side: the store lives beside the runs, <root>/store (what `data pull` reads)
     cwd_basis = _resolve_cwd(a)
     remote_info = json.loads(ns.remote_json) if ns.remote_json else None
-    clone_home = clone_rec = None
+    clone_rec = None
     clone_env: dict[str, str] = {}
     if cwd_basis == "clone":
         try:
-            clone_home, clone_rec, clone_env = _make_clone(a, ns, root, run_id, remote_info)
+            clone_rec, clone_env = _make_clone(a, ns, root, run_id, remote_info, clones)
         except clone.Refused as e:
             return _refuse(ns, run_dir, run_id, f"--cwd {a.cwd}: {e}", "CloneRefused", mem_reservation)
     try:
         prep = _prepare_store(ns, a, command, run_id, run_dir, env_map)
     except (ImportError, LookupError, TypeError) as e:
         print(f"research run: --cwd {a.cwd} / --tool {ns.tool}: {e}", file=sys.stderr)
-        _drop_clone(clone_home)
         return 2
     if no_remote:
         prep["section"]["local_only"] = {"reason": ns.local_only, "no_remote": no_remote}
@@ -317,7 +324,6 @@ def cmd_run(argv: list[str]) -> int:
         try:
             remote_info["tool_running"] = remote.check_tool(remote_info.get("tool_identity"))
         except remote.ResearchVersionMismatch as e:
-            _drop_clone(clone_home)
             return _refuse(ns, run_dir, run_id, str(e), type(e).__name__, mem_reservation)
     job = record.extend_job(build_job_from(a, command), run_id=run_id, runs_root=root, expected_fingerprint=_parse_expect(ns.expect),
                             cost=cost, remote=remote_info, store=prep["section"], cwd={"path": a.cwd, "basis": cwd_basis})
@@ -357,7 +363,7 @@ def cmd_run(argv: list[str]) -> int:
             from .mem import release
 
             release(mem_reservation, run_id)
-        _drop_clone(clone_home, run_dir)
+        _drop_clone(clones, run_dir)
     if not ns.custody_dir:
         _publish_attempt(run_dir, prep)
     s = R.summarize(run_dir)
@@ -471,30 +477,30 @@ def _resolve_cwd(a: argparse.Namespace) -> str:
     return "source"
 
 
-def _make_clone(a: argparse.Namespace, ns: argparse.Namespace, runs_root: Path, run_id: str,
-                remote_info: dict | None) -> tuple[Path, dict, dict[str, str]]:
+def _make_clone(a: argparse.Namespace, ns: argparse.Namespace, runs_root: Path, run_id: str, remote_info: dict | None,
+                clones: list[Path]) -> tuple[dict, dict[str, str]]:
     """`--cwd clone[/SUB]`: clone the source root (this process's cwd, as for `--cwd source`) for this run alone (research.clone) and
     point `a.cwd` at it, or at SUB in it.  On a machine the clone must be the shipped commit; locally the checkout must be clean.
-    Returns the directory to remove once the workload has exited, job.json's run.cwd_clone, and the workload's environment
-    (`_clone_imports`); clone.Refused when it cannot."""
+    The directory to remove once the run is over goes on `clones` as soon as it exists.  Returns job.json's run.cwd_clone and the
+    workload's environment (`_clone_imports`); clone.Refused when it cannot."""
     sub = clone.sub(a.cwd) or ""
     source_root = Path(os.getcwd())
     shipped = (remote_info or {}).get("source_sha") if ns.claimed else None
     if ns.claimed and not shipped:
         raise clone.Refused("this run has no shipped source tree to clone (--source GITDIR ships one)")
     home = clone.home(runs_root, run_id, machine=ns.claimed)
+    clones.append(home)
     tree = home / "tree"
+    commit = clone.make(source_root, tree, commit=shipped, clean=not ns.claimed)
     try:
-        commit = clone.make(source_root, tree, commit=shipped, clean=not ns.claimed)
-        where = (tree / sub).resolve()
-        if not where.is_relative_to(tree.resolve()) or not where.is_dir():
-            raise clone.Refused(f"{sub} is not a directory of commit {commit}")
-    except clone.Refused:
-        clone.remove(home)
-        raise
+        inside = (tree / sub).resolve().is_relative_to(tree.resolve()) and (tree / sub).is_dir()
+    except (OSError, RuntimeError):
+        inside = False
+    if not inside:
+        raise clone.Refused(f"{sub} is not a directory of commit {commit}")
     a.cwd = str(tree / sub) if sub else str(tree)
     env = _clone_imports(source_root, tree, home, remote_info) if ns.claimed else {}
-    return home, {"root": str(tree), "of": str(source_root), "commit": commit}, env
+    return {"root": str(tree), "of": str(source_root), "commit": commit}, env
 
 
 def _clone_imports(of: Path, tree: Path, home: Path, remote_info: dict | None) -> dict[str, str]:
@@ -521,15 +527,16 @@ GROUP_END_POLLS = 100
 GROUP_END_POLL_S = 0.05
 
 
-def _drop_clone(home: Path | None, run_dir: Path | None = None) -> None:
-    """Remove the run's clone once its workload has exited; a failure is reported, never fatal.  `run_dir`: the workload ran, and
-    whatever is left of its process group (status.json pgid) is ended first (`_end_group`)."""
-    if home is None:
-        return
-    if run_dir is not None:
-        _end_group(run_dir)
-    if why := clone.remove(home):
-        print(f"research: --cwd clone: could not remove {home} ({why}); remove it by hand", file=sys.stderr)
+def _drop_clone(clones: list[Path], run_dir: Path | None = None) -> None:
+    """Remove the run's clone, if `clones` still holds it, once its workload has exited or the run ended before it; a failure is
+    reported, never fatal.  `run_dir`: the workload ran, and whatever is left of its process group (status.json pgid) is ended
+    first (`_end_group`)."""
+    while clones:
+        home = clones.pop()
+        if run_dir is not None:
+            _end_group(run_dir)
+        if why := clone.remove(home):
+            print(f"research: --cwd clone: could not remove {home} ({why}); remove it by hand", file=sys.stderr)
 
 
 def _end_group(run_dir: Path) -> None:

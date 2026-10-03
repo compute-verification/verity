@@ -192,6 +192,43 @@ def test_a_clone_that_cannot_be_removed_is_reported_and_the_run_keeps_its_status
     assert f"could not remove {left} (OSError: [Errno 16] Device or resource busy); remove it by hand" in capsys.readouterr().err
 
 
+def test_an_unexpected_error_before_the_workload_still_removes_the_clone(tmp_path, repo, monkeypatch):
+    import research.cli as C
+
+    def fails(*a, **k):
+        raise ValueError("a store preparation error")
+
+    monkeypatch.setattr(C, "_prepare_store", fails)
+    with pytest.raises(ValueError):
+        _run(tmp_path / "runs", "clone")
+    assert _clones(tmp_path) == []
+
+
+def test_what_stops_a_clone_being_made_is_a_refusal(tmp_path, repo, monkeypatch):
+    (tmp_path / "file").write_text("")
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path / "file"))
+    with pytest.raises(clone.Refused, match="could not create a directory for the clone .*pass --cwd source"):
+        clone.home(tmp_path / "runs", "r1", machine=False)
+    (tmp_path / "root").mkdir()
+    (tmp_path / "root" / "scratch").write_text("")
+    with pytest.raises(clone.Refused, match="could not create a directory for the clone"):
+        clone.home(tmp_path / "root" / "runs", "r1", machine=True)
+    monkeypatch.setenv("PATH", str(tmp_path / "nowhere"))
+    with pytest.raises(clone.Refused, match="could not run git rev-parse"):
+        clone.make(repo, tmp_path / "c")
+
+
+def test_a_machine_that_cannot_make_the_clone_directory_refuses_the_run(tmp_path, repo):
+    root = tmp_path / "root"
+    sha = _git(repo, "rev-parse", "HEAD")
+    subprocess.run(["git", "clone", "-q", "--shared", str(repo), str(root / "src" / sha)], check=True)
+    (root / "scratch").write_text("")
+    assert remote.launch_request(_request(root, root / "src" / sha, sha, "r-x"))["started"]
+    wait_runner(root / "runs" / "r-x")
+    refused = json.loads((root / "runs" / "r-x" / "refused.json").read_text())
+    assert refused["fault"] == "CloneRefused" and "could not create a directory for the clone (NotADirectoryError" in refused["reason"]
+
+
 def test_remove_says_why_it_could_not(tmp_path):
     (tmp_path / "d" / "x").mkdir(parents=True)
     (tmp_path / "f").write_text("x")

@@ -39,14 +39,23 @@ def sub(cwd: str | None) -> str | None:
 def home(runs_root: Path, run_id: str, *, machine: bool) -> Path:
     """The directory that holds the run's clone (its `tree`), created: <root>/scratch/<run id>/ on a machine, beside src/ and the
     run dir, a fresh temporary directory locally.  On a machine it first removes the clones finished runs left there (`sweep`)."""
+    def cannot(e: OSError) -> Refused:
+        return Refused(f"could not create a directory for the clone ({type(e).__name__}: {e}); pass --cwd source to run in the "
+                       f"source root as it is")
+
     if not machine:
-        return Path(tempfile.mkdtemp(prefix=f"research-{run_id}-"))
+        try:
+            return Path(tempfile.mkdtemp(prefix=f"research-{run_id}-"))
+        except OSError as e:
+            raise cannot(e) from None
     d = Path(runs_root).parent / "scratch" / run_id
     sweep(Path(runs_root), d.parent)
     try:
         d.mkdir(parents=True)
     except FileExistsError:
         raise Refused(f"{d} exists already; a run's clone directory is its own") from None
+    except OSError as e:
+        raise cannot(e) from None
     return d
 
 
@@ -59,7 +68,10 @@ def sweep(runs_root: Path, scratch: Path) -> None:
     except OSError:
         return
     for e in entries:
-        if e.is_symlink() or not e.is_dir(follow_symlinks=False) or not _over(runs_root / e.name):
+        try:
+            if e.is_symlink() or not e.is_dir(follow_symlinks=False) or not _over(runs_root / e.name):
+                continue
+        except OSError:
             continue
         why = remove(Path(e.path))
         print(f"research: --cwd clone: removed {e.path}, the clone of finished run {e.name}" if why is None else
@@ -89,7 +101,10 @@ def _over(run_dir: Path) -> bool:
 
 
 def _git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+    try:
+        return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+    except OSError as e:
+        raise Refused(f"could not run git {args[0]} in {cwd or os.getcwd()} ({type(e).__name__}: {e})") from None
 
 
 def _why(r: subprocess.CompletedProcess) -> str:
