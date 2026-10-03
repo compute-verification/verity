@@ -36,6 +36,7 @@ sha256sum $B $V | tee $O/binaries.sha256
 { nvidia-smi -L; echo "cuda_visible=${CUDA_VISIBLE_DEVICES:-}"; env | grep -E '^(FC_|FLOCK_GEMM_TILE=)' | sort; } > $O/host.txt 2>&1
 sha256sum $STAGED/circuit.txt $STAGED/inst.bin $STAGED/pub.bin $PUBLIC_INPUTS > $O/inputs.sha256
 
+$B statement --zk --instances $STAGED/pub.bin --circuit $STAGED/circuit.txt --tables $STAGED/tables > $O/statement.txt 2>&1
 S=$(mktemp -d); trap 'kill $SP 2>/dev/null; rm -rf $S' EXIT
 PIN=$(sha512sum $STAGED/circuit.txt | cut -d' ' -f1)
 T=$STAGED/tables
@@ -72,7 +73,8 @@ s = {"prove_rc": prc, "live_accepted": L.get("accepted"), "live_why": L.get("why
      "flipped_refused": not (vf and vf[0].get("accepted")), "flipped_why": vf[0].get("why") if vf else (o / "verify-flipped.txt").read_text()[-400:],
      "prover_peak_gb": round(int((o / "prove.maxrss_kb").read_text().split()[-1]) / 2**20, 2) if (o / "prove.maxrss_kb").exists() else None}
 s |= {k: L.get(k) for k in ("instances", "vus_per_block", "k_log", "nbl", "dense_m", "prove_s", "prove_total_s", "e2e_s", "witness_s", "proof_bytes", "statement_digest")}
-s["block_cells"] = 2 ** s["k_log"] if s.get("k_log") is not None else None
+st = [json.loads(l.split("\t", 1)[1]) for l in (o / "statement.txt").read_text().splitlines() if l.startswith("STATEMENT\t")]
+s["statement"] = st[0] if st else None
 s["verdict"] = "ACCEPT" if (prc == 0 and s["live_accepted"] and s["lean_accepted"] and s["flipped_refused"]) else "FAIL"
 (o / "summary.json").write_text(json.dumps(s, indent=1))
 print("SUMMARY", json.dumps(s))
