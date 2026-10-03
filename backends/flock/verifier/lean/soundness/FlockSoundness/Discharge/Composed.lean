@@ -6,6 +6,7 @@ import FlockSoundness.Discharge.Composed.Pads
 import FlockSoundness.Discharge.Composed.Inner
 import FlockSoundness.Discharge.Composed.Inner.Holds
 import FlockSoundness.Discharge.Composed.Setup
+import FlockSoundness.Discharge.Composed.Refine
 
 /-!
 # One `--zk` sampled session: soundness and zero knowledge composed

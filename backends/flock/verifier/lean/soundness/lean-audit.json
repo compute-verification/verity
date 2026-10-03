@@ -4544,6 +4544,7 @@
    "assumptions": [],
    "type_hash": "cb2c25eb538028181a2897d471f460fd07e9f5de8130a580ac6daf0b6d955690"
   },
+  "FlockSoundness.Discharge.Composed.folded_comb": {},
   "FlockSoundness.Discharge.Composed.zk_session_composed": {
    "signature": [
     "FlockSoundness.Discharge.Composed.zk_session_composed {mPts n : Nat} {Reg : Type}",
