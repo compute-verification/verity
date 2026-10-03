@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.PrivateCircuit.InstanceDefs
 import FlockSoundness.Discharge.PrivateCircuit.Privacy
+import FlockSoundness.Discharge.PrivateCircuit.InstanceHides
 
 /-!
 # Protocol 2 is circuit-private at the universal unit
@@ -40,6 +41,40 @@ theorem private_circuit_private
         ≤ simPr (hm96Scheme fits pad L enc J zs U) c o p₀ w₀ encV E + (2 * L c * δ₁ + viewGap (zs c) δ₁) ∧
       simPr (hm96Scheme fits pad L enc J zs U) c o p₀ w₀ encV E
         ≤ realPr (hm96Scheme fits pad L enc J zs U) c o (pad C c) w encV E + (2 * L c * δ₁ + viewGap (zs c) δ₁) := by
-  sorry
+  set S := hm96Scheme fits pad L enc J zs U
+  set ε := 2 * (L c : ℝ≥0∞) * δ₁
+  have hε : Hides (S.reg c) ε := hm96Reg_hides _ hKey
+  set f : (Fin (L c) → Bits × ByteArray) → ℝ≥0∞ := fun v =>
+    prCoin fun q : ∀ j, (U c o v j).tab.SimRand × ((U c o v j).tab.Hid → Salt) =>
+      E v (encV v fun j => (U c o v j).simExe (w₀ j) (q j).1 (q j).2)
+  set g : (Fin (L c) → Salt) → ℝ≥0∞ := fun r =>
+    prCoin fun q : ∀ j, (U c o (S.reg c (pad C c) r) j).tab.Rand
+        × ((U c o (S.reg c (pad C c) r) j).tab.Hid → Salt) =>
+      E (S.reg c (pad C c) r)
+        (encV (S.reg c (pad C c) r) fun j => (U c o (S.reg c (pad C c) r) j).viewExe (w r j) (q j).1 (q j).2)
+  have hreal : realPr S c o (pad C c) w encV E = avg g := rfl
+  have hsim : simPr S c o p₀ w₀ encV E = avg fun r => f (S.reg c p₀ r) := rfl
+  have hstep : ∀ r, g r ≤ f (S.reg c (pad C c) r) + viewGap (zs c) δ₁ ∧
+      f (S.reg c (pad C c) r) ≤ g r + viewGap (zs c) δ₁ := by
+    intro r
+    have h := hView r w₀ (encV (S.reg c (pad C c) r)) (E (S.reg c (pad C c) r))
+    have hgap : ∀ v, ∑ j, 2 * (Fintype.card (U c o v j).tab.Hid : ℝ≥0∞) * δ₁ = viewGap (zs c) δ₁ :=
+      fun v => Finset.sum_congr rfl fun j _ => by rw [card_hid]
+    rw [hgap] at h
+    exact h
+  have hf1 : ∀ v, f v ≤ 1 := fun v => prCoin_le_one' _
+  constructor
+  · calc realPr S c o (pad C c) w encV E = avg g := hreal
+      _ ≤ avg fun r => f (S.reg c (pad C c) r) + viewGap (zs c) δ₁ := avg_mono fun r => (hstep r).1
+      _ = avg (fun r => f (S.reg c (pad C c) r)) + avg fun _ : Fin (L c) → Salt => viewGap (zs c) δ₁ := avg_add _ _
+      _ ≤ (avg (fun r => f (S.reg c p₀ r)) + ε) + viewGap (zs c) δ₁ :=
+          add_le_add (hε.avg_le _ _ f hf1) (avg_const_le _)
+      _ = simPr S c o p₀ w₀ encV E + (ε + viewGap (zs c) δ₁) := by rw [hsim, add_assoc]
+  · calc simPr S c o p₀ w₀ encV E = avg fun r => f (S.reg c p₀ r) := hsim
+      _ ≤ avg (fun r => f (S.reg c (pad C c) r)) + ε := hε.avg_le _ _ f hf1
+      _ ≤ avg (fun r => g r + viewGap (zs c) δ₁) + ε := add_le_add (avg_mono fun r => (hstep r).2) le_rfl
+      _ = avg g + avg (fun _ : Fin (L c) → Salt => viewGap (zs c) δ₁) + ε := by rw [avg_add]
+      _ ≤ avg g + viewGap (zs c) δ₁ + ε := by gcongr; exact avg_const_le _
+      _ = realPr S c o (pad C c) w encV E + (ε + viewGap (zs c) δ₁) := by rw [hreal]; ring
 
 end FlockSoundness.Discharge.PrivateCircuit

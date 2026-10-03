@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.PrivateCircuit.InstanceDefs
 import FlockSoundness.Discharge.PrivateCircuit.Soundness
+import FlockSoundness.Discharge.PrivateCircuit.InstanceCommit
 
 /-!
 # Protocol 2 is sound at the universal unit
@@ -50,6 +51,14 @@ theorem private_circuit_sound
           (ExplicitLeaf.hm96 rs.enc rs.enc_inj).leaf (row (pad C c) i) (rd.ws (ps.site i)))) s.G τ
       ≤ s.Lm.miss K₀ + s.εks τ + s.δlink τ + ENNReal.ofReal (q ^ 2 / 2 ^ (513 : ℝ)) ∧
     ∀ x, run c (pad C c) x = eval C x := by
-  sorry
+  refine ⟨?_, fun x => hpad C c hC x⟩
+  have h := ran_registered (progCommit L) (progCommit_binding L) rt ps.regLeaves ps.regOpening ps.opens_reg s.G τ
+    s.Accepts (fun o => K₀ ≤ ((UP c).wrong (s.vals τ o)).card) (fun o => ps.leaves (s.regOf o))
+    (fun o => ps.opening (s.regOf o) (path o)) (fun o ho => ps.opens_of_checked (hchk o ho))
+    _ (hS hA3 hA6 τ hCR K₀) cost q hcost hBind
+  refine le_trans (prob_mono (fun o ⟨ha, hq⟩ => ⟨ha, hq.imp id fun ⟨i, hi⟩ hl => hi ?_⟩) s.G τ) h
+  have hi' := congrFun hl i
+  simp only [ProgSites.leaves, ProgSites.regLeaves, Reads.leaf, hreg] at hi'
+  exact hi'
 
 end FlockSoundness.Discharge.PrivateCircuit
