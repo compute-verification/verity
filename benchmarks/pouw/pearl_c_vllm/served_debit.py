@@ -22,9 +22,10 @@ N seeded inputs of each (k, n), an input being one matmul of the pass, each meas
 and otherwise by ``--draws`` work-weighted draws, never pooled.  ``<out>/inputs.json`` holds each input's failures, ``W``,
 ``w_max`` and its upper limit at 95% simultaneous over the m inputs (`input_bound`), and the cited maximum.  With
 ``--fresh-draws N`` the same inputs are measured instead by N trials each: a work-weighted tile under a salt of its own,
-derived from ``--fresh-source`` after the pass, so that the trials are independent draws of the input's rate itself
-(`HonestTileCapRate`'s oracle, salt and draw, the activations fixed) and Clopper–Pearson bounds it, near ln(1/δ)/N at no
-failure whatever the input's tile count (lines in ``<label>.fresh-tiles.jsonl``).
+derived from ``--fresh-source`` (recorded OS randomness drawn after the pass, fixed in the command), so that the trials
+are independent draws of the input's rate itself (`HonestTileCapRate`'s oracle, salt and draw, the activations fixed) and
+Clopper–Pearson bounds it, 1 − δ^(1/N) at no failure whatever the input's tile count (lean's ruling: `HonestCap.lean`'s
+fourth case; lines in ``<label>.fresh-tiles.jsonl``).  The cited limit uses every trial run for an input.
 
 A tile is replayed on `fast_tile`'s batch forms (``--scalar``: the scalar reference only), every ``--cross-check``-th tile
 id on both, and ``--resume`` reuses an earlier run's lines on the same pass.
@@ -63,6 +64,7 @@ import statistics
 import sys
 import time
 from fractions import Fraction
+from itertools import accumulate
 from pathlib import Path
 
 import numpy as np
@@ -84,7 +86,7 @@ from verity_vllm.protocol_options import pouw_pearl_c_device as PD  # noqa: E402
 
 CAPS = {"1/400": Fraction(1, 400), "1/600": Fraction(1, 600), "1/1000": Fraction(1, 1000)}
 SEED = 20261002
-FRESH = "verity/pouw/served-fresh-draws/v1"
+FRESH = "verity/pouw/fp8-served-table-fresh-trials/v1"
 
 
 class _Kept(PW._TileRuleView):
@@ -479,13 +481,16 @@ def pick_inputs(job: dict, per_linear: int, census_max: int, draws: int, seed: i
 
 def fresh_trials(job: dict, row: dict, draws: int, source: bytes) -> list[tuple[int, int, int, bytes]]:
     """An input's fresh trials, (tile id, matmul, draw, salt): `draws` work-weighted draws of its tiles with replacement,
-    each under a salt of its own, both derived from `source` (drawn after the pass, so independent of its activations)."""
+    each under a salt of its own, both derived from `source` (recorded OS randomness drawn after the pass, so independent
+    of its activations) under a domain naming the table and a context naming the input.  Draw d is `key.uniform(W, d)`
+    over the tiles' cumulative credited cells, as `pearl_c_work.draw` maps it: within one input every cell weighs the
+    same `W_ref`, so the draw is exactly proportional to `TR.Wref`, as `HonestTileCapRate`'s tickets are."""
     ctx = {"manifest": job["sha256"], "matmul": row["matmul"]}
     ids = list(row["area"])
-    weights = np.array([row["area"][t] for t in ids], dtype=float)
-    rng = np.random.default_rng(int.from_bytes(derive(source, FRESH, ctx | {"use": "tiles"}).value, "big"))
-    picks = rng.choice(len(ids), size=draws, replace=True, p=weights / weights.sum())
-    return [(ids[int(i)], row["matmul"], d, derive(source, FRESH, ctx | {"use": "salt", "draw": d}).value) for d, i in enumerate(picks)]
+    cumulative = list(accumulate(row["area"][t] for t in ids))
+    key = derive(source, FRESH, ctx | {"use": "tiles"})
+    picks = [bisect.bisect_right(cumulative, key.uniform(cumulative[-1], d)) for d in range(draws)]
+    return [(ids[i], row["matmul"], d, derive(source, FRESH, ctx | {"use": "salt", "draw": d}).value) for d, i in enumerate(picks)]
 
 
 def clopper_pearson_upper(x: int, n: int, delta: float) -> float:
@@ -638,7 +643,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="per-input mode: measure each input by N work-weighted draws, each under a fresh salt of its own "
                         "(independent trials of its rate, bounded by Clopper–Pearson) instead of its census or draws")
     p.add_argument("--fresh-source", default=None, metavar="HEX",
-                   help="the 32-byte source the fresh draws and salts derive from (default: os.urandom; give it to resume)")
+                   help="the 32-byte source the fresh draws and salts derive from: recorded OS randomness drawn after the "
+                        "pass, fixed in the command before the run (required with --fresh-draws)")
     p.add_argument("--jobs", type=int, default=len(os.sched_getaffinity(0)))
     p.add_argument("--out", type=Path, default=None)
     a = p.parse_args(argv)
@@ -663,12 +669,14 @@ def main(argv: list[str] | None = None) -> int:
     if a.fresh_draws:
         if a.per_input is None:
             p.error("--fresh-draws takes --per-input")
-        source = bytes.fromhex(a.fresh_source) if a.fresh_source else os.urandom(32)
+        if a.fresh_source is None:
+            p.error("--fresh-draws takes --fresh-source HEX, fixed before the run (lean's condition on the fresh-trial ε)")
+        source = bytes.fromhex(a.fresh_source)
         if len(source) != 32:
             p.error("--fresh-source is 32 bytes")
         fresh = {"fresh_draws": a.fresh_draws, "fresh_source": source.hex()}
         opts |= {"fresh_draws": a.fresh_draws, "fresh_source": source}
-        print(f"fresh draws: {a.fresh_draws} an input from source {source.hex()} (give --fresh-source to resume)", flush=True)
+        print(f"fresh draws: {a.fresh_draws} an input from source {source.hex()}", flush=True)
     labels = labels_of(a.manifests)
     if a.per_input is not None:
         PW._debit_cap, PW.D.chain_debit = _recorded, _chain_recorded

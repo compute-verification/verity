@@ -572,6 +572,23 @@ def test_served_debit_fresh_draws_measure_each_input_under_salts_of_its_own(hone
         SD.main([*args[:6], "cd" * 32, *args[7:], "--out", str(tmp_path / "other"), *resume])
 
 
+def test_fresh_trials_draw_exactly_by_work_from_a_source_fixed_in_the_command(tmp_path):
+    """Lean's conditions on the fresh-trial ε: draw d is `key.uniform(W, d)` over the input's cumulative credited cells
+    (exactly proportional to `TR.Wref` within the input), under a domain naming the table and a context naming the input,
+    and the source is given in the command, never drawn inside the run."""
+    from verity.randomness import derive
+
+    src, job, row = bytes(range(32)), {"sha256": "ab" * 32}, {"matmul": 7, "area": {40: 64 * 64, 41: 64 * 64, 42: 32 * 64}}
+    got = SD.fresh_trials(job, row, 50, src)
+    key = derive(src, "verity/pouw/fp8-served-table-fresh-trials/v1", {"manifest": job["sha256"], "matmul": 7, "use": "tiles"})
+    cum = [4096, 8192, 10240]
+    assert [t for t, *_ in got] == [[40, 41, 42][sum(key.uniform(10240, d) >= c for c in cum)] for d in range(50)]
+    assert [d for _, _, d, _ in got] == list(range(50)) and len({s for *_, s in got}) == 50
+    assert SD.fresh_trials(job | {"sha256": "cd" * 32}, row, 50, src) != got
+    with pytest.raises(SystemExit):
+        SD.main(["m.json", "--per-input", "1", "--fresh-draws", "4", "--out", str(tmp_path)])
+
+
 ST = load("pearl_c_vllm_served_table", KERNEL.parent / "pearl_c_vllm" / "served_table.py")
 
 
