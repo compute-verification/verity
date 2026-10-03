@@ -61,8 +61,9 @@ research run --on vy-nebius-1 --project verity --source . --cwd source --declare
 ~~~
 
 It waits for a check slot (`slot.py`), rebuilds only what changed since that slot's last run, and audits without the kernel
-replay. The new record and `review.txt` are in the run's `lean-audit/audit-*/`; commit the record. It vouches for nothing:
-`check` runs the full audit.
+replay: on `soundness/` with nothing to rebuild that was 6.5 minutes, and a slot's first run, a cold build, 31. The record is in
+the run's `lean-audit/audit-*/`, with `review.txt` when it changed; commit the record. It vouches for nothing: `check` runs
+the full audit.
 
 To regenerate a record on a pod, run `research run --on POD --project verity --source . --cwd source -- python
 tools/lean/audit.py --build --update PKG` with no wrapper around it. It exits 0 when the audit passes, whether or not the
