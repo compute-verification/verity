@@ -52,21 +52,6 @@ def regPathsHP (c : Circuit) (pi : HmIn.Ports) (pub : Public) (t : Exec.Transcri
       ByteArray.empty
   | .inr _ => ByteArray.empty
 
-/-- **`HmIn.loadPublic` loads `HmRow.loadPublic`'s file** at the circuit with its public input words as its output port,
-then only checks it. -/
-theorem loadPublic_nilP {tags : Tags} {c : Circuit} {pi : HmIn.Ports} {pf : ByteArray} {pop : Public}
-    (h : HmIn.loadPublic tags c pi pf = .ok pop) :
-    HmRow.loadPublic tags { c with outPorts := if pi.ports.isEmpty then #[] else #[("public inputs", pi.words)] } pf =
-      .ok pop := by
-  unfold HmIn.loadPublic at h
-  dsimp only at h
-  simp only [throw_bind'] at h
-  repeat' walk_step
-  all_goals
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    assumption
-
 variable {mPts : ℕ} {Reg : Type}
 
 /-- **The registered reads are checked at every accepted outcome with public inputs** (`checked_of_acceptsH`). At an

@@ -15,6 +15,8 @@ circuit's facts are the twin's (`Aliased.UnitFacts` at `Hidden.flatTwin st`, whi
 
 * `rowNet_entryLP`, `laidRows_flatP`, `shaSlot_flatP`, `hmSlot_flatP`: the row nets' slots hold their rows;
 * `zero_bitP`: the forced zero (`HiddenExec.zeroPos_blockH`);
+* `publicCol_rowNet`: a row net's slot's bit is no public column;
+* `msg_copyP`: an output row's message bit holds its copy (`Hidden.msg_copy`);
 * `inBit_copyLP`, `row_copies_flatP`, `row_bc_flatP`: Δ's one copy at a `cv` or `pad` input bit, and a row's `b ‖ c`.
 -/
 
@@ -186,10 +188,62 @@ theorem zero_bitP (hupv : 0 < st.c.upv) (hg : 0 < st.c.g) {regs : List (Model.Re
   rw [h0]
   rfl
 
-variable {pi : HmIn.Ports} (lp : LeavesPublic st.c pi) (hrows : Hidden.OutRows st.c)
+variable {pi : HmIn.Ports} (lp : LeavesPublic st.c pi)
+include lp
+
+/-- **A row net's slot's bit is no public column**: a public column is a unit slot's bit (`publicCol_spec`). -/
+theorem publicCol_rowNet {n s off x : ℕ} (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hat : AtSlot st.c n s off x) :
+    HmIn.publicCol st.c pi x = false := by
+  have R := RowRanges.ofL L F.parse F.check
+  have hun : st.c.unitNet ≠ n := by
+    rcases hn with rfl | rfl
+    · exact F.sha
+    · exact F.hm
+  cases hc : HmIn.publicCol st.c pi x with
+  | false => rfl
+  | true =>
+    exfalso
+    obtain ⟨k, hk, j, -, t, ht, hp, hw, he, -⟩ := publicCol_spec L F.check lp hc
+    exact atSlot_ne Lf F (R.rowNet_lt hn) F.parse.unitNet hun hat
+      (show AtSlot st.c st.c.unitNet k _ x from ⟨hk, L.port_lt_slot hp (by rw [hw]; exact ht), he⟩)
+
+variable (hrows : Hidden.OutRows st.c)
   (hda : st.da = ((HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray).filter
     (fun x => !HmIn.publicCol st.c pi x.1))
-include lp hrows hda
+include hrows hda
+
+/-- **`Hidden.msg_copy` at the statement**: an output row's message bit holds its copy, `outSrc`; the bit is no public
+column (`publicCol_rowNet`), so `HmIn.delta`'s filter keeps its pairs. -/
+theorem msg_copyP (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g j k t : ℕ} (hg : g < st.c.g)
+    (hj : j < st.c.outPorts.size) (hk : k < (st.c.ports.getD (HmOut.nIn st.c + j) default).words) (ht : t < 16) :
+    blockBit (L.model regs) z o (Hidden.deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) =
+      blockBit (L.model regs) z o (Hidden.outSrc st.c g j k t) := by
+  have R : RowRanges st.c := RowRanges.ofL L F.parse F.check
+  have hpos : ∀ q < st.c.ports.size, 0 < st.c.ports[q]!.chunks := fun q hq => (hv1 _ (getElem_mem_toList' hq)).2.2
+  obtain ⟨hp, hb, ht8⟩ := Hidden.outRow_bound hrows hj hk ht
+  obtain ⟨hat, hoff⟩ := Hidden.deltaMsgCol_at R hrows.1 hg hp hb ht8
+  have hx := Hidden.deltaMsgCol_lt R hrows.1 hg hp hb ht8
+  have hfc := Hidden.flat_count_msg Lf F F.parse.rowWires hrows.1 hpos hg hp hb ht8
+  have hpc := publicCol_rowNet L F Lf lp (Or.inl rfl) hat
+  have hδ : ∀ i : ℕ, deltaEntry st.da (Hidden.deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) i =
+        (((if i = Hidden.deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8) then 1 else 0) +
+          (if i = Hidden.outSrc st.c g j k t then 1 else 0) : ℕ) : ZMod 2) ∧
+      deltaEntry st.db (Hidden.deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) i =
+        (((if i = Hidden.deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8) then 1 else 0) +
+          (if i = Hidden.outSrc st.c g j k t then 1 else 0) : ℕ) : ZMod 2) := by
+    intro i
+    have e : deltaEntry st.da (Hidden.deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) i =
+        (((if i = Hidden.deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8) then 1 else 0) +
+          (if i = Hidden.outSrc st.c g j k t then 1 else 0) : ℕ) : ZMod 2) := by
+      rw [hda, deltaEntry_filter (fun j' => by simp [hpc]) i, deltaEntry_eq_count, Array.toList_append,
+        List.count_append, List.toList_toArray,
+        delta_flat_eq _ _ F.parse.typed hv1 F.parse.portWords F.parse.v1Segs, hfc, Nat.zero_add,
+        Hidden.outPairs_count R hrows hg hj hk ht]
+    exact ⟨e, by rw [L.delta_b]; exact e⟩
+  exact block_of_rows hz o hx fun i =>
+    inBit_rows (st := st) R (Or.inl rfl) hat (shaNet_ofRows R.rowNets) (shaLaid_self hoff) hx hδ i
 
 /-- **`Hm.inBit_copyL` at the statement**: at a `cv` or `pad` input bit `x` of a row net's slot, Δ is `HmRow.delta`'s:
 `x` is no public column (no unit slot's bit, `publicCol_spec`) and no output row's message bit (`HmRow.delta` copies
@@ -207,18 +261,7 @@ theorem inBit_copyLP (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits
     blockBit (L.model regs) z o x = blockBit (L.model regs) z o src := by
   have R := RowRanges.ofL L F.parse F.check
   have hF := flatPairs_countL Lf F hrw hn hat hl hoff hf
-  have hun : st.c.unitNet ≠ n := by
-    rcases hn with rfl | rfl
-    · exact F.sha
-    · exact F.hm
-  have hpc : HmIn.publicCol st.c pi x = false := by
-    cases hc : HmIn.publicCol st.c pi x with
-    | false => rfl
-    | true =>
-      exfalso
-      obtain ⟨k, hk, j, -, t, ht, hp, hw, he, -⟩ := publicCol_spec L F.check lp hc
-      exact atSlot_ne Lf F (R.rowNet_lt hn) F.parse.unitNet hun hat
-        (show AtSlot st.c st.c.unitNet k _ x from ⟨hk, L.port_lt_slot hp (by rw [hw]; exact ht), he⟩)
+  have hpc := publicCol_rowNet L F Lf lp hn hat
   have hpos : ∀ q < st.c.ports.size, 0 < st.c.ports[q]!.chunks := fun q hq => (hv1 _ (getElem_mem_toList' hq)).2.2
   have hout : ∀ q ∈ Hidden.outPairs st.c, q.1 ≠ x := by
     intro q hq hqx

@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.ZkPubIn.Sites
+import FlockSoundness.Discharge.ZkPubIn.SiteP
 import FlockSoundness.Discharge.HiddenExec.KeyH
 
 set_option Elab.async false
@@ -27,20 +27,6 @@ open FlockSoundness.Discharge.Layout (keyN keyRowOf portRowW OutsOut KeysRow)
 variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ}
 
 variable {T : Model.Statement}
-
-/-- **Column `x` of block `o` of an accepted statement's witness** (`siteAddrH`). -/
-def siteAddrHP (a : AcceptedHP T) (o : Fin (2 ^ T.nbl)) (x : ℕ) : Fin (2 ^ T.m) :=
-  T.addr o (Fin.cast a.kLog_eq (Layout.inBlockOr a.st.c.kLog x))
-
-/-- **What the registered `b ‖ c` and the public words read at a site** (`BcSiteH` with `HmIn.loadPublic`): block
-`o` and VU `g` of an accepted statement whose draw `d` decodes to `D`, whose proved units are in its population;
-whose block R1CS's regions contain the executable's; whose public file `HmIn.loadPublic` loads to `pop` at the
-circuit's public input ports `pi`; with `g` below `2^⌊log₂ c.g⌋`; and whose proved unit at rank `o · c.g + g` is `u`. -/
-def BcSiteHP (a : AcceptedHP T) (pi : HmIn.Ports) (pop : Public) (o : Fin (2 ^ T.nbl)) (g u : ℕ) : Prop :=
-  ∃ d D, a.draw = some d ∧ Draw.UnitDraw.ofJson d = .ok D ∧ (∀ v ∈ D.proved, v < D.population) ∧
-    (∀ r ∈ a.st.regions.toList, Refine.regionOf a.st.c.kLog (a.st.m - a.st.c.kLog) r ∈ a.regs) ∧
-    HmIn.parse a.st.c = .ok pi ∧ HmIn.loadPublic a.tags a.st.c pi a.pf = .ok pop ∧ g < 2 ^ a.st.c.g.log2 ∧
-    D.proved[o.val * a.st.c.g + g]? = some u
 
 section places
 
