@@ -188,7 +188,7 @@ theorem pubDecodesZ_placeZHP :
     PubDecodesZ execArith ((keyProgP c hU n pi).partition (Layout.outsOf c hU n)) (planAtZKHP (Reg := Reg) dj y₀)
       (tabAtZKHP dj y₀)
       (decodeOfPlace execArith ((keyProgP c hU n pi).partition (Layout.outsOf c hU n)) (planAtZKHP dj y₀)
-        (tabAtZKHP dj y₀) (placeZHP dj y₀ ht hc hscope hU))
+        (tabAtZKHP dj y₀) (placeZHP dj y₀ ht hc hscope hU hpi))
       (pubOnes c hU n pi own) (pubZeros c hU n pi own) := by
   sorry
 
@@ -236,7 +236,7 @@ theorem zk_flock_countC_execOS_atHP (Hs : Hashes 𝔽 Dig (List UInt8))
         ENNReal.ofReal (tr.bound qT) :=
   zk_flock_countC_execOS_cr_pub execArith Hs ((keyProgP c hU n pi).partition (Layout.outsOf c hU n))
     (planAtZKHP dj y₀) (tabAtZKHP dj y₀) execArith_correct σs ks hks St hS Kd pop Lb src hA3
-    (placeZHP dj y₀ ht hc hscope hU)
+    (placeZHP dj y₀ ht hc hscope hU hpi)
     ((rsZHP dj y₀ ht hc hscope hU hpi hpub).bindingZ (rsZHP_computes dj y₀ ht hc hscope hU hpi hpub))
     (pubOnes c hU n pi own) (pubZeros c hU n pi own) (pubDecodesZ_placeZHP dj y₀ ht hc hscope hU hpi hpub)
     hk hRw hM hρ hr ht' K σ hCR tr hT

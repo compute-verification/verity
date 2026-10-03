@@ -78,10 +78,10 @@ noncomputable def keySaltAddrHP (S : Finset (Fin n)) (R : Reg) (u : Fin n)
 variable {si}
 variable (hparse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
     HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
-  (pi : HmIn.Ports) (own : ByteArray) (outs : Finset (Fin (keyN c hU n)))
+  (pi : HmIn.Ports) (hpi : HmIn.parse c = .ok pi) (own : ByteArray) (outs : Finset (Fin (keyN c hU n)))
 
 /-- `SitesHP.progPlaces_keyProgP`'s places. -/
-noncomputable abbrev keyPlaceHP := (SitesHP.progPlaces_keyProgP hU hparse pi outs).derived.place
+noncomputable abbrev keyPlaceHP := (SitesHP.progPlaces_keyProgP hU hparse pi hpi outs).derived.place
 
 variable (popOf : Reg → Public)
 
@@ -89,7 +89,7 @@ variable (popOf : Reg → Public)
 registration's `b ‖ c` the population's public file's (`popOf R`), and single gates with `Layout.keyGate` at the
 public gates' bits (`pubBit`, the verifier's own words). -/
 noncomputable def keyReadersHP : Layout.Readers ((keyProgP c hU n pi).circuit outs) plan tab :=
-  Layout.Readers.ofRows (keyPlaceHP hparse pi outs) (Layout.keyN_pos c hU n) (portRowW c)
+  Layout.Readers.ofRows (keyPlaceHP hparse pi hpi outs) (Layout.keyN_pos c hU n) (portRowW c)
     (W := Finset.univ.sup (portRowW c) + 1)
     (fun q => (Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _)) (Nat.le_add_left 1 _) (rowOfH c hU n outs)
     (keyRowAddrHP si) (keySaltAddrHP si (hU := hU)) (keyBcAddrHP si)
@@ -102,7 +102,7 @@ variable (ho : c.outNet = c.unitNet) (hv1 : ∀ p ∈ c.ports.toList, p.v2 = fal
 include hparse ho hv1 houts in
 /-- **Δ's copies at `keyProgP`'s sites** (`keyProgH_copies`): a column on an input row's bit holds the witness's bit
 at its key's message column; a column on an output row's bit, the bit at the output row's message column. -/
-theorem keyProgHP_copies : (keyReadersHP hparse pi own outs popOf).Copies (keyPlaceHP hparse pi outs) := by
+theorem keyProgHP_copies : (keyReadersHP hparse pi hpi own outs popOf).Copies (keyPlaceHP hparse pi hpi outs) := by
   sorry
 
 include hparse in
@@ -111,7 +111,7 @@ rank is the unit (`BcSiteHP`). -/
 theorem keyProgHP_bcPinned
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSiteHP (si.acc S R u h) pi (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
-    (keyReadersHP hparse pi own outs popOf).BcPinned (P := (keyProgP c hU n pi).partition outs) := by
+    (keyReadersHP hparse pi hpi own outs popOf).BcPinned (P := (keyProgP c hU n pi).partition outs) := by
   sorry
 
 include hparse ho hv1 houts in
@@ -121,33 +121,33 @@ word's at the unit's instance (`OwnWords`, at the unit's rank in the draw, `BcSi
 theorem keyProgHP_valPinned (hkeys : KeysRow c hU (portRowW c))
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSiteHP (si.acc S R u h) pi (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
-    (keyReadersHP hparse pi own outs popOf).ValPinned (P := (keyProgP c hU n pi).partition outs) := by
+    (keyReadersHP hparse pi hpi own outs popOf).ValPinned (P := (keyProgP c hU n pi).partition outs) := by
   sorry
 
 /-- **`lay` at `keyProgP`'s places** (`keyLayoutH`). -/
 noncomputable def keyLayoutHP :
     Binding.Layout ((keyProgP c hU n pi).partition outs) plan tab
-      (((keyProgP c hU n pi).partition outs).placeDecoder plan tab (keyPlaceHP hparse pi outs)) :=
-  (keyReadersHP hparse pi own outs popOf).layout (keyPlaceHP hparse pi outs) Layout.bitCode
-    (keyProgHP_copies hparse pi own outs popOf ho hv1 houts)
+      (((keyProgP c hU n pi).partition outs).placeDecoder plan tab (keyPlaceHP hparse pi hpi outs)) :=
+  (keyReadersHP hparse pi hpi own outs popOf).layout (keyPlaceHP hparse pi hpi outs) Layout.bitCode
+    (keyProgHP_copies hparse pi hpi own outs popOf ho hv1 houts)
 
 /-- **`rs` at `keyProgP`'s places** (`keyRowsH`). -/
 noncomputable def keyRowsHP
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSiteHP (si.acc S R u h) pi (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (hkeys : KeysRow c hU (portRowW c)) :
-    Binding.HmRows (keyLayoutHP hparse pi own outs popOf ho hv1 houts) :=
-  (keyReadersHP hparse pi own outs popOf).rows (keyPlaceHP hparse pi outs) Layout.rowEnc Layout.rowEnc_inj
-    Layout.bitCode Layout.bitCode_inj (keyProgHP_copies hparse pi own outs popOf ho hv1 houts)
-    (keyProgHP_bcPinned hparse pi own outs popOf hsite)
-    (keyProgHP_valPinned hparse pi own outs popOf ho hv1 houts hkeys hsite)
+    Binding.HmRows (keyLayoutHP hparse pi hpi own outs popOf ho hv1 houts) :=
+  (keyReadersHP hparse pi hpi own outs popOf).rows (keyPlaceHP hparse pi hpi outs) Layout.rowEnc Layout.rowEnc_inj
+    Layout.bitCode Layout.bitCode_inj (keyProgHP_copies hparse pi hpi own outs popOf ho hv1 houts)
+    (keyProgHP_bcPinned hparse pi hpi own outs popOf hsite)
+    (keyProgHP_valPinned hparse pi hpi own outs popOf ho hv1 houts hkeys hsite)
 
 /-- **`HmRowComputes` at `keyProgP`'s rows** (`keyRowsH_computes`). -/
 theorem keyRowsHP_computes
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSiteHP (si.acc S R u h) pi (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (hkeys : KeysRow c hU (portRowW c)) :
-    (keyRowsHP hparse pi own outs popOf ho hv1 houts hsite hkeys).Computes := by
+    (keyRowsHP hparse pi hpi own outs popOf ho hv1 houts hsite hkeys).Computes := by
   sorry
 
 end places

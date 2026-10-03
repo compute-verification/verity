@@ -63,7 +63,7 @@ theorem checked_of_acceptsHP (I : Inputs) (ht : I.tags.typed = false) (reg : Arr
     {pi : HmIn.Ports} (hpi : HmIn.parse c = .ok pi)
     {pub : Public} (hpub : HmIn.loadPublic (zkTags I) c pi I.publicFile = .ok pub) (hscope : Layout.scopeOk c = true)
     (hTags : TagsOkH I) (o : Reg × Finset (Fin n) × Exec.Transcript) (hacc : LiveAcceptsZKRP I reg own o)
-    (rd : FlockSoundness.Registered.Reads (layShHP (Reg := Reg) dj y₀ ht hc hscope hU (pi := pi) (pub := pub))
+    (rd : FlockSoundness.Registered.Reads (layShHP (Reg := Reg) dj y₀ ht hc hscope hU hpi (pub := pub))
       (rsShHP dj y₀ ht hc hscope hU hpi hpub))
     (hown : OwnReadsHP reg c pi pub o.2.2 rd.isRead rd.port rd.readAt) :
     rd.Checked o.1 (regPathsHP c pi pub o.2.2 rd.port) := by

@@ -85,21 +85,21 @@ registration the population's public file. -/
 noncomputable abbrev layShHP :
     Binding.Layout ((keyProgP c hU n pi).partition (Layout.outsOf c hU n)) (planShHP (Reg := Reg) dj y₀) (tabShHP dj y₀)
       (((keyProgP c hU n pi).partition (Layout.outsOf c hU n)).placeDecoder (planShHP dj y₀) (tabShHP dj y₀)
-        (keyPlaceHP (sitesShHP_parse dj y₀ ht hc hscope) pi (Layout.outsOf c hU n))) :=
-  keyLayoutHP (sitesShHP_parse dj y₀ ht hc hscope) pi own (Layout.outsOf c hU n) (fun _ => pub)
+        (keyPlaceHP (sitesShHP_parse dj y₀ ht hc hscope) pi hpi (Layout.outsOf c hU n))) :=
+  keyLayoutHP (sitesShHP_parse dj y₀ ht hc hscope) pi hpi own (Layout.outsOf c hU n) (fun _ => pub)
     (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope) (Layout.outsOut_outsOf c hU n)
 
 /-- **`rs` at the public plan**: `keyRowsHP` at `sitesShHP`, with `hsite` from `sitesShHP_bcSite`. -/
-noncomputable abbrev rsShHP : Binding.HmRows (layShHP dj y₀ ht hc hscope hU (own := own) (pi := pi) (pub := pub)
+noncomputable abbrev rsShHP : Binding.HmRows (layShHP dj y₀ ht hc hscope hU hpi (own := own) (pub := pub)
     (Reg := Reg)) :=
-  keyRowsHP (sitesShHP_parse dj y₀ ht hc hscope) pi own (Layout.outsOf c hU n) (fun _ => pub)
+  keyRowsHP (sitesShHP_parse dj y₀ ht hc hscope) pi hpi own (Layout.outsOf c hU n) (fun _ => pub)
     (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope) (Layout.outsOut_outsOf c hU n)
     (sitesShHP_bcSite dj y₀ ht hc hscope hU hpi hpub)
     (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOk_spec hU hscope).1
       (Layout.scopeOk_spec hU hscope).2.2)
 
 theorem rsShHP_computes : (rsShHP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).Computes :=
-  keyRowsHP_computes (sitesShHP_parse dj y₀ ht hc hscope) pi own (Layout.outsOf c hU n) (fun _ => pub)
+  keyRowsHP_computes (sitesShHP_parse dj y₀ ht hc hscope) pi hpi own (Layout.outsOf c hU n) (fun _ => pub)
     (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope) (Layout.outsOut_outsOf c hU n)
     (sitesShHP_bcSite dj y₀ ht hc hscope hU hpi hpub)
     (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOk_spec hU hscope).1
@@ -111,15 +111,15 @@ noncomputable def placeZHP (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈
     UnitPlace ((keyProgP c hU n pi).partition (Layout.outsOf c hU n))
       (tabOfZ (planAtZKHP dj y₀) (tabAtZKHP dj y₀) S R u).S u :=
   placeCast (planAtZKHP_S dj y₀ S R u)
-    (keyPlaceHP (sitesShHP_parse dj y₀ ht hc hscope) pi (Layout.outsOf c hU n) S R u h)
+    (keyPlaceHP (sitesShHP_parse dj y₀ ht hc hscope) pi hpi (Layout.outsOf c hU n) S R u h)
 
 /-- **The decoders agree**: the `--zk` places and the public places read one witness alike. -/
 theorem decAgreeHP :
     DecAgree (P := (keyProgP c hU n pi).partition (Layout.outsOf c hU n)) (planAtZKHP_S (Reg := Reg) dj y₀)
       (decZ := decodeOfPlace execArith ((keyProgP c hU n pi).partition (Layout.outsOf c hU n)) (planAtZKHP dj y₀)
-        (tabAtZKHP dj y₀) (placeZHP dj y₀ ht hc hscope hU))
+        (tabAtZKHP dj y₀) (placeZHP dj y₀ ht hc hscope hU hpi))
       (decS := ((keyProgP c hU n pi).partition (Layout.outsOf c hU n)).placeDecoder (planShHP dj y₀) (tabShHP dj y₀)
-        (keyPlaceHP (sitesShHP_parse dj y₀ ht hc hscope) pi (Layout.outsOf c hU n))) := by
+        (keyPlaceHP (sitesShHP_parse dj y₀ ht hc hscope) pi hpi (Layout.outsOf c hU n))) := by
   intro S R u hu M' M hM _ g _
   simp only [decodeOfPlace, Partition.placeDecoder, hu, ↓reduceDIte, placeZHP, decode_placeCast]
   exact congrArg (fun z => UnitPlace.decode _ z g) hM.symm
@@ -129,17 +129,17 @@ noncomputable abbrev layZHP :
     LayoutZ execArith ((keyProgP c hU n pi).partition (Layout.outsOf c hU n)) (planAtZKHP (Reg := Reg) dj y₀)
       (tabAtZKHP dj y₀)
       (decodeOfPlace execArith ((keyProgP c hU n pi).partition (Layout.outsOf c hU n)) (planAtZKHP dj y₀)
-        (tabAtZKHP dj y₀) (placeZHP dj y₀ ht hc hscope hU)) :=
-  LayoutZ.ofShadow (planAtZKHP_S dj y₀) (layShHP dj y₀ ht hc hscope hU (own := own) (pub := pub))
-    (decAgreeHP dj y₀ ht hc hscope hU)
+        (tabAtZKHP dj y₀) (placeZHP dj y₀ ht hc hscope hU hpi)) :=
+  LayoutZ.ofShadow (planAtZKHP_S dj y₀) (layShHP dj y₀ ht hc hscope hU hpi (own := own) (pub := pub))
+    (decAgreeHP dj y₀ ht hc hscope hU hpi)
 
 /-- **`rs` at the `--zk` tables with the verifier's public inputs**: `rsShHP` moved along `planAtZKHP_S`. -/
-noncomputable abbrev rsZHP : HmRowsZ (layZHP dj y₀ ht hc hscope hU (pi := pi) (pub := pub) (Reg := Reg)) :=
-  HmRowsZ.ofShadow (planAtZKHP_S dj y₀) (decAgreeHP dj y₀ ht hc hscope hU) (rsShHP dj y₀ ht hc hscope hU hpi hpub)
+noncomputable abbrev rsZHP : HmRowsZ (layZHP dj y₀ ht hc hscope hU hpi (pub := pub) (Reg := Reg)) :=
+  HmRowsZ.ofShadow (planAtZKHP_S dj y₀) (decAgreeHP dj y₀ ht hc hscope hU hpi) (rsShHP dj y₀ ht hc hscope hU hpi hpub)
 
 /-- **`hHm` at the `--zk` tables' rows with the verifier's public inputs** (`rsShHP_computes`, moved along). -/
 theorem rsZHP_computes : (rsZHP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).Computes :=
-  HmRowsZ.ofShadow_computes (planAtZKHP_S dj y₀) (decAgreeHP dj y₀ ht hc hscope hU) _
+  HmRowsZ.ofShadow_computes (planAtZKHP_S dj y₀) (decAgreeHP dj y₀ ht hc hscope hU hpi) _
     (rsShHP_computes dj y₀ ht hc hscope hU hpi hpub)
 
 end FlockSoundness.Discharge.ZkPubIn

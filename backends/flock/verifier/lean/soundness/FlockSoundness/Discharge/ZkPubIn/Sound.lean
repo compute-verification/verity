@@ -139,7 +139,7 @@ theorem zk_session_soundHRP
           k Rw M ρ t' (reg (simZA execArith hs512 _ (AcceptsZKP I own) wr _ dg _ _ _ _ N (decodesOnZKA_of_runsOnZCA execArith hs512 _ (AcceptsZKP I own) wr _ _ _ _ (runsZC_liveHP I own ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKHP_live hTags hRec hDraw)) τ))
           (cont (simZA execArith hs512 _ (AcceptsZKP I own) wr _ dg _ _ _ _ N (decodesOnZKA_of_runsOnZCA execArith hs512 _ (AcceptsZKP I own) wr _ _ _ _ (runsZC_liveHP I own ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKHP_live hTags hRec hDraw)) τ)) ∧
     ∀ o : Reg × Finset (Fin n) × Exec.Transcript, LiveAcceptsZKRP I rports own o →
-      ∀ rd : FlockSoundness.Registered.Reads (layShHP (Reg := Reg) dj y₀ ht hc hscope hU (pi := pi) (pub := pub))
+      ∀ rd : FlockSoundness.Registered.Reads (layShHP (Reg := Reg) dj y₀ ht hc hscope hU hpi (pub := pub))
           (rsShHP dj y₀ ht hc hscope hU hpi hpub),
         OwnReadsHP rports c pi pub o.2.2 rd.isRead rd.port rd.readAt →
           rd.Checked o.1 (regPathsHP c pi pub o.2.2 rd.port) := by

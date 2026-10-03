@@ -2,6 +2,7 @@ import FlockSoundness.Discharge.ZkPubIn.Defs
 import FlockSoundness.Discharge.ZkPubIn.Spec
 import FlockSoundness.Discharge.ZkPubIn.Tables
 import FlockSoundness.Discharge.ZkPubIn.Setup
+import FlockSoundness.Discharge.ZkPubIn.Flat
 import FlockSoundness.Discharge.ZkPubIn.Sites
 import FlockSoundness.Discharge.ZkPubIn.KeyP
 import FlockSoundness.Discharge.ZkPubIn.Bind
@@ -23,7 +24,8 @@ with `own` F's bytes, which checks the public words against the verifier's own (
 map (`LeavesPublic`, `pubLeaf`), the key program with a gate per public column (`keyProgP`), the public bits
 (`pubBit`, `pubOnes`, `pubZeros`) and what setupHidden accepts (`SpecP`). `Spec`: `setupHidden_specP`. `Setup`: HiddenExec's
 facts about setupHidden and setupTables with `own` (`setupHidden_wfP`, `setupTables_okHP`). `Tables`: the
-draw's setups and `--zk` tables (`DrawSetupHP`, `DrawSetupZKHP`, `tablesAtZKHP`, `DrawOkZKHP`). `Sites`, `KeyP`,
+draw's setups and `--zk` tables (`DrawSetupHP`, `DrawSetupZKHP`, `tablesAtZKHP`, `DrawOkZKHP`). `Flat`: the statement's layout (`layoutP`) and its flat twin's rows
+off the public leaves (`UnitRowsFlatP`, `rowsFlatP`), and the aliasing they give (`aliased_of_copiesHP`). `Sites`, `KeyP`,
 `Bind`: the sites, the key layout and rows at `keyProgP`, and their `--zk` moves (`placeZHP`, `rsZHP`). `Count`: the
 public-input step (`zk_flock_countC_execOS_atHP`, the count curve at `Xpub pubOnes pubZeros XplurZC`). `Composed`:
 Composed's simulation at any acceptance (`simZA`, `zk_headline_exec_onA`, `RunsOnZCA`). `Runs`: the record
