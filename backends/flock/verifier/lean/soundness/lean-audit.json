@@ -4823,6 +4823,7 @@
    "assumptions": [],
    "type_hash": "46da3f51bac5f7e3d136d2ec5b3c7bcfa50d4b6f51db8975aa0db530afe97021"
   },
+  "FlockSoundness.Discharge.Composed.zk_session_soundJ": {},
   "FlockSoundness.Discharge.Const.Prog.instC_wire_input": {
    "signature": [
     "FlockSoundness.Discharge.Const.Prog.instC_wire_input {N n : Nat} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N))",
