@@ -1,11 +1,13 @@
 """The monitors (`research/monitors.py`): the runner opens each incident once and clears it once, through the alert dir and an
 optional webhook; each check reads its source the way the node writes it; node 2 is read only behind its fill-status guard;
-and the relay posts every new event once."""
+the relay posts every new event once; and the files deploy.toml installs on node 1 run every node-side check."""
 from __future__ import annotations
 
 import json
 import os
 import subprocess
+import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -13,6 +15,8 @@ import pytest
 from research import monitors as M
 
 T0 = 1791060000.0           # 2026-10-03T20:40:00Z
+SRC = Path(__file__).resolve().parents[1] / "src"
+REPO = Path(__file__).resolve().parents[3]
 
 
 def iso(t: float) -> str:
@@ -530,3 +534,29 @@ def test_a_relay_post_tags_its_owners_and_says_what_to_do():
     e = json.loads(ev("open", "m|a", owners=["circuits", "infra"], severity="page"))
     text = M.message(e, lambda h: f"<{h}>")
     assert text.startswith("<circuits> <infra> [page] open m|a\n_What to do:_ a")
+
+
+# ---- what node 1 runs ---------------------------------------------------------------------------------------------------------
+
+def test_the_files_deploy_toml_installs_on_node_1_run_every_node_side_check(tmp_path):
+    """Catches a node-side check importing a module deploy.toml doesn't install: on node 1 that is a pass that fails every
+    minute, which only the relay's heartbeat would notice."""
+    manifest = tomllib.loads((SRC / "research/pods/nebius/deploy.toml").read_text())
+    lib = "/usr/local/lib/vy-monitoring/"
+    files = {e["path"]: e["src"] for e in manifest["file"] if e["path"].startswith(lib + "research/")}
+    assert lib + "research/monitors.py" in files
+    for path, src in files.items():
+        dest = tmp_path / path[len(lib):]
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes((REPO / src).read_bytes())
+    code = ("import research.monitors as M; from research.pods.nebius import n1_alerts; M._probe(); "
+            "print(','.join(m.id for m in M.MONITORS if m.where == 'node'))")
+    r = subprocess.run([sys.executable, "-S", "-c", code], capture_output=True, text=True, cwd=tmp_path,
+                       env={"PYTHONPATH": str(tmp_path), "PATH": os.environ.get("PATH", "")})
+    assert r.returncode == 0, r.stderr
+    assert set(r.stdout.strip().split(",")) == {m.id for m in M.MONITORS if m.where == "node"}
+    unit = (REPO / files[lib + "research/monitors.py"]).parent / "pods/nebius/monitoring/vy-monitors.service"
+    text = unit.read_text()
+    assert f"Environment=PYTHONPATH={lib.rstrip('/')}" in text and "-m research.monitors run --by vy-monitors@vy-nebius-1 --where node" in text
+    for name in ("vy-monitors.service", "vy-monitors.timer"):
+        assert any(e["path"] == f"/etc/systemd/system/{name}" for e in manifest["file"])
