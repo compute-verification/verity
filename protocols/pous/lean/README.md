@@ -59,8 +59,9 @@ Pous/SecurityProofs/Continuous/     the continuous audit: MissCount (proved, pin
 Pous/SecurityProofs/Graded/         proved: the tail rule (`Tail.lean`), Theorem 1(ii) for the graded audit
                                     (`Theorem.lean`) and the band with grace `t` at `D = 5` (`Band.lean`,
                                     `BandGradedMeetsFamily`)
-Pous/SecurityProofs/Bandwidth/      proved: the digest's almost-universality (`Digest.lean`) and the placement bound
-                                    (`Placement.lean`)
+Pous/SecurityProofs/Bandwidth/      proved: the digest's almost-universality (`Digest.lean`), the placement bound
+                                    (`Placement.lean`), and the honest responder, which satisfies `TwoTierBandwidth`
+                                    and is accepted exactly when `b · h ≤ BWpcie · T` (`Honest.lean`)
 lean-audit.json                     the policy and pin records for tools/lean/audit.py
 CheckAxioms.lean                    one #print axioms line per headline theorem
 PousTargets.lean                    untrusted, not in the default build: the open statements as sorry targets
