@@ -41,7 +41,6 @@ import gzip
 import json
 import math
 import multiprocessing
-import sys
 from collections import Counter
 from collections.abc import Iterable, Sequence
 from fractions import Fraction
