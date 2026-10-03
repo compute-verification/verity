@@ -116,3 +116,8 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 #print axioms PousP2Ring.tight
 #print axioms PousP2Ring.tight_p16448
 #print axioms PousP2Ring.not_meetsOn_b19_k88
+-- the bulk read (`Pous/Guarantees/Bandwidth.lean`): the digest is almost universal; the placement guarantee, which
+-- takes the named assumption `TwoTierBandwidth` as a hypothesis, and its form at `f* = BWpcie / BWdev`
+#print axioms Pous.SecurityProofs.DigestAU
+#print axioms Pous.SecurityProofs.HbmPlacement
+#print axioms Pous.SecurityProofs.HbmPlacementFStar

@@ -1,11 +1,14 @@
 import Pous.Protocol.Accounting.LemmaA
 import Pous.Protocol.Model.Inc
 import Pous.Assumptions.P2
+import Pous.Assumptions.Bandwidth
 
 /-!
 # Named assumptions
 
-Each is a `Prop` taken as a hypothesis by the statements that use it, never an `axiom`.
+Each is a `Prop` taken as a hypothesis by the statements that use it, never an `axiom`. P2's are in
+`Pous/Assumptions/P2.lean`, and the host link's ceiling for the bulk read, `TwoTierBandwidth`, is in
+`Pous/Assumptions/Bandwidth.lean`.
 -/
 
 namespace Pous.Assumptions

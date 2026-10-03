@@ -269,6 +269,11 @@
    "assumptions": [],
    "type_hash": "560ed1990f5de6f57790315c444cee8b3cfc454b0ef9520275c93c4b19262b16"
   },
+  "Pous.SecurityProofs.DigestAU": {
+   "signature": ["Pous.SecurityProofs.DigestAU : Pous.Guarantees.DigestAU"],
+   "assumptions": [],
+   "type_hash": "28507ba76d5d5e6bef11710bb963e141a485088072b26732e3721309ac4cfefa"
+  },
   "Pous.SecurityProofs.DomainSepEquiv": {
    "signature": ["Pous.SecurityProofs.DomainSepEquiv : Pous.Guarantees.DomainSepEquiv"],
    "assumptions": [],
@@ -288,6 +293,16 @@
    "signature": ["Pous.SecurityProofs.FischClaim14 : Pous.Guarantees.FischClaim14"],
    "assumptions": [],
    "type_hash": "7956335b9edd4bd7cdc2c8e0f1b0db4904b77390169312a5cb7a32d695556b6a"
+  },
+  "Pous.SecurityProofs.HbmPlacement": {
+   "signature": ["Pous.SecurityProofs.HbmPlacement : Pous.Guarantees.HbmPlacement"],
+   "assumptions": [],
+   "type_hash": "24bc58c57baaffbb8ccd55a92f3f9057e052b888544448a7a92add392ba5a0bf"
+  },
+  "Pous.SecurityProofs.HbmPlacementFStar": {
+   "signature": ["Pous.SecurityProofs.HbmPlacementFStar : Pous.Guarantees.HbmPlacementFStar"],
+   "assumptions": [],
+   "type_hash": "efd15a1c7a6585401594a70b8c77d6b97a87e43925db6a1be8e3bc0c805d01ed"
   },
   "Pous.SecurityProofs.KFloor": {
    "signature": ["Pous.SecurityProofs.KFloor : Pous.Guarantees.KFloor"],
@@ -670,6 +685,13 @@
    },
    "pins": ["Pous.SecurityProofs.A3Prime", "Pous.SecurityProofs.A3PrimeLam"]
   },
+  "Pous.Assumptions.Bandwidth": {
+   "digest": "b091bbf50854a45c2c37da9c04c3a4bb4164c58ff250fd334db0015feb08450e",
+   "definitions": {
+    "Pous.Assumptions.TwoTierBandwidth": "1b6e1d30ed440a10114b1dd3770b561c6ba8f133da4a8cd69e26743024bd0af2"
+   },
+   "pins": ["Pous.SecurityProofs.HbmPlacement", "Pous.SecurityProofs.HbmPlacementFStar"]
+  },
   "Pous.Assumptions.P2": {
    "digest": "2f4bb409e3a24391702c966699a2c6945839431dcd705dc402474016e9bcbd26",
    "definitions": {
@@ -807,6 +829,19 @@
     "Pous.SecurityProofs.Theorem1iiTimed",
     "Pous.SecurityProofs.Theorem1iiiTimed",
     "Pous.SecurityProofs.TransposeMixing"
+   ]
+  },
+  "Pous.Guarantees.Bandwidth": {
+   "digest": "0342a60ecea3c35470fcd990e844fff101ebbf4d99aea1bdb81d39582efacaf3",
+   "definitions": {
+    "Pous.Guarantees.DigestAU": "c1f445ef3dfdd517e14165f2f796ff402b800f251f32c36cd4ebbcd6f5128dfb",
+    "Pous.Guarantees.HbmPlacement": "6ee39240fd2ea6591e6f1012c33210edadd906e3aeb0bfd9f6f174e4153aef56",
+    "Pous.Guarantees.HbmPlacementFStar": "13bf63293e954696ea810b12b042dff466e41d425c9b568ce1c637de5e82baca"
+   },
+   "pins": [
+    "Pous.SecurityProofs.DigestAU",
+    "Pous.SecurityProofs.HbmPlacement",
+    "Pous.SecurityProofs.HbmPlacementFStar"
    ]
   },
   "Pous.Guarantees.P2": {
@@ -967,6 +1002,8 @@
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
     "Pous.SecurityProofs.FibreCount",
+    "Pous.SecurityProofs.HbmPlacement",
+    "Pous.SecurityProofs.HbmPlacementFStar",
     "Pous.SecurityProofs.N10Refuted",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
@@ -1052,8 +1089,11 @@
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.DigestAU",
     "Pous.SecurityProofs.DomainSepEquiv",
     "Pous.SecurityProofs.FibreCount",
+    "Pous.SecurityProofs.HbmPlacement",
+    "Pous.SecurityProofs.HbmPlacementFStar",
     "Pous.SecurityProofs.N10Refuted",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
@@ -1245,6 +1285,27 @@
     "Pous.SecurityProofs.BandTwoWay220_12",
     "Pous.SecurityProofs.BandTwoWay220_12D11",
     "Pous.SecurityProofs.BandTwoWay220_16"
+   ]
+  },
+  "Pous.Protocol.Model.Bandwidth": {
+   "digest": "290e1f2070e8e8810d276ffda8b4b4e1d80a98845eaf258bb631087d7a1eb4a9",
+   "definitions": {
+    "Pous.Bandwidth.Accepts": "35bb0ead0126b97143d1a5fb1db3c8689419542efc08077c2c9489be09f6f942",
+    "Pous.Bandwidth.Blk": "a2ccc670c2053b8f6687cad9817505ca47bdc4cbc0c93f2f3b24618490cb4408",
+    "Pous.Bandwidth.BulkResponder": "3ba953200f882a3a24e8dff67526979902d3d75bd76f33f34fe752670a551bff",
+    "Pous.Bandwidth.BulkResponder.prog": "403db307d80d99237462bb028829b888d9ae173eb569b053999212a2648b59f4",
+    "Pous.Bandwidth.BulkResponder.time": "e359b39b819732dd483f4f24f61ca229d4209e8743ee66fc183ad4bafa0fe009",
+    "Pous.Bandwidth.Key": "3330644e65c6b74d6cefa84def792b99f7645a0627602146ebcc8ac8e888532f",
+    "Pous.Bandwidth.Store": "3e4a9081fd1c0fd68981aef0b8bed723367d8472dd4c59244e346209ac084224",
+    "Pous.Bandwidth.blockHash": "0811bf37e445cd36d5a68d46f74042e55ed90701f11a4fcf88bcdb244527d931",
+    "Pous.Bandwidth.digest": "7e918c97b694960f7c35e92151399a4fb06cc09a427f23fc752220a9439a0616",
+    "Pous.Bandwidth.memory": "a51c38602b30f3883f2c417e507a06b665b597c52eacc00b1fe3295f432745fa",
+    "Pous.Bandwidth.reads": "e7e6713c575f0a6c4838774303bde90f0202a3b5024bb5803aebcc172ec74e0d"
+   },
+   "pins": [
+    "Pous.SecurityProofs.DigestAU",
+    "Pous.SecurityProofs.HbmPlacement",
+    "Pous.SecurityProofs.HbmPlacementFStar"
    ]
   },
   "Pous.Protocol.Model.ColumnGame": {

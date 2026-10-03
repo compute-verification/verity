@@ -12,6 +12,7 @@ import Pous.SecurityProofs.Chain.Flat
 import Pous.SecurityProofs.Chain.Family
 import Pous.SecurityProofs.Chain.FamilyRounds
 import Pous.SecurityProofs.Continuous
+import Pous.SecurityProofs.Bandwidth
 import Pous.SecurityProofs.Graded.Band
 import Pous.SecurityProofs.P2.Margin
 import Pous.SecurityProofs.Accounting.Numbers
@@ -187,5 +188,11 @@ theorem TagInjective14 : Pous.Guarantees.TagInjective14 := @PousDenseReCert.tag_
 theorem BandTwoWay220_12 : Pous.Guarantees.BandTwoWay220_12 := PousP3Column.band_twoWay_220_12
 theorem BandTwoWay220_12D11 : Pous.Guarantees.BandTwoWay220_12D11 := PousP3Column.band_twoWay_220_12_d11
 theorem BandTwoWay220_16 : Pous.Guarantees.BandTwoWay220_16 := PousP3Column.band_twoWay_220_16
+
+/-! ## The bulk read (`Pous/Guarantees/Bandwidth.lean`) -/
+
+theorem DigestAU : Pous.Guarantees.DigestAU := PousBandwidth.digestAU
+theorem HbmPlacement : Pous.Guarantees.HbmPlacement := PousBandwidth.hbmPlacement
+theorem HbmPlacementFStar : Pous.Guarantees.HbmPlacementFStar := PousBandwidth.hbmPlacementFStar
 
 end Pous.SecurityProofs

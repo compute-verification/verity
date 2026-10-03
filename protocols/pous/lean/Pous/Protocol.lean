@@ -5,6 +5,7 @@ import Pous.Protocol.Accounting.PubMeets
 import Pous.Protocol.Game.Oracle
 import Pous.Protocol.Game.Prob
 import Pous.Protocol.Model.Audit
+import Pous.Protocol.Model.Bandwidth
 import Pous.Protocol.Model.BandChain
 import Pous.Protocol.Model.BandGraph
 import Pous.Protocol.Model.ColumnGame

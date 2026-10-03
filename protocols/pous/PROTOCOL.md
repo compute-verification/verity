@@ -541,6 +541,7 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 | `DenseMeets64`, `SegMeets14`, `SegTagMeets14` | the dense scheme at 64 KB, `D = 5`, `k = 106`, in the ideal-hash model: one segment, 448 segments (14 GB), and the 448 segments keyed as the implementation keys them, for every salt | proved |
 | `SegTagAuditSecure`, `DomainSepEquiv`, `TagInjective14` | the tagged keying's transfer: the tagged scheme is as secure as the global one, and the tags relabel the global indices injectively (448 distinct tags) | proved |
 | `BandTwoWay220_12`, `BandTwoWay220_12D11`, `BandTwoWay220_16` | the band certificate for the two-directional column game (`Pous.ColumnGame`): `B(220, 12)` at game depths 10 and 11, and `B(220, 16)` at depth 12, save at most `X = 3` labels | proved |
+| `DigestAU`, `HbmPlacement`, `HbmPlacementFStar` | the bulk read (#935's HBM audit, `Pous/Guarantees/Bandwidth.lean`): over a field of `q` elements, the digest of `R` blocks of `W` words under a uniform key `(g, z)` collides with probability at most `(W − 1 + R − 1)/q`; given `TwoTierBandwidth`, a responder whose `R` distinct challenged blocks include `h` host-resident ones, with `b · h > BWpcie · T`, is accepted within `T` with probability at most `(h + 1)/q` over a uniform store and key; the second states it as `h/R > f* = BWpcie/BWdev` for a deadline `T ≤ R · b/BWdev` | proved |
 
 **Why N10 fails.** Top label `v` reads only column `v` of the lower layer, so an adversary can pay for a lower label a
 column at a time, where whole-label pebbling charges it a whole label. N10′, the column-aware restatement over
@@ -554,6 +555,10 @@ Each is a `Prop` taken as a hypothesis, never an `axiom`.
   least `g` blocks with probability at most `Γ`. For M1 (`G = True`) it is `A2LemmaAM1`.
 - `B1Prime sch Mdom S D Q k` (Conjecture B1′): `sch`'s sequential audit obeys model M1's completion bound. Used by
   `M1Meets`.
+- `TwoTierBandwidth host b BWpcie A` (`Pous/Assumptions/Bandwidth.lean`): a response of `A` that reads `n` distinct
+  blocks of `host`, the blocks device memory does not hold, takes at least `b · n / BWpcie`. `BWpcie` is the host link's
+  ceiling (every path from off-device memory crosses it), `b` the bytes one block must carry across it; device memory
+  has no ceiling. Used by `HbmPlacement` and `HbmPlacementFStar`.
 - Retracted: `InvertibleLabels`, which was N10's statement. It is false (`N10Refuted`).
 
 ## Provisional, waiting on Daniel
@@ -581,6 +586,9 @@ the dense chain scheme and P3 with the concrete `H` ("Guarantees"), in
 - P3's certificate: the code's `h_0` and Lean's `iv(domP3 tag L v)` differ ("P3 (research)").
 - A GPU codec for the dense scheme (#172's is P3's).
 - Native and GPU kernels for encode and decode, and a responder in native code on a high-priority stream.
-- The bulk bandwidth audit that would pin storage to HBM rather than the whole server.
+- The bulk bandwidth audit that would pin storage to HBM rather than the whole server, in the protocol: its read is
+  drafted in #935, and its bound on one read is proved from `TwoTierBandwidth` (`HbmPlacement`). Not proved: the
+  verifier's sampling of the challenged blocks (the bound is per challenge set), and a responder that recomputes a
+  block from others or keeps state besides the store.
 - In `lean/`: N10′ (`ColumnAwareDraft`, `ForwardCoreDraft`, `n10prime`; its core `n10prime_core` is open) and
   `p3-meets` (P3 with a random-oracle `H`) come in later PRs.
