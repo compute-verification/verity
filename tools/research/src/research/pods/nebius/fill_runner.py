@@ -63,7 +63,7 @@ Every POLL_S seconds the runner:
     system.slice, where every other fill job, slot d and the Verity pool run, are confined below them); never a CPU a fence, a
     running timing job or any populated top-level cgroup but PID 1's may use.  Its lease isn't --preemptible and nothing here
     stops it before its max_min, for a waiter, a window, a Commit or a fence, nor moves its threads (booked windows still bound
-    its start).  While one is queued, other 1-GPU jobs take GPUs off TIMING_CPU_SET's NUMA nodes first.  The lease is taken
+    its start).  While one could start, other 1-GPU jobs take the GPUs it couldn't start on first.  The lease is taken
     inside the scope (`sudo -n systemd-run --scope ... -- setpriv ... -- gpu-lease 1 --on G --max-min M --mem-gb 0 -- taskset
     ...`), where a keeper holds it until nothing else is left there: the job is over once its scope is empty, what outlives it
     by a tick is stopped, and a kill of the scope that fails while it is populated is logged (`scope-kill-failed`).
@@ -900,7 +900,6 @@ def tick(n: int) -> str:
         idle = [i for i, l in enumerate(leases) if l is None and (i not in keep or i in fenced)]
         timing = any(x[1].get("timing") for x in queued)
         pool = timing_free(fs) if timing else set()
-        near = {i for i in range(n) if local_cpus(i) & (gpu_set(TIMING_CPU_SET, 1 << 16) or set())} if timing else set()
 
         def allowed(x) -> set[int]:
             f = fence_for(x[0].name, fs)
@@ -910,6 +909,8 @@ def tick(n: int) -> str:
             return {i for i in gpus if carve(pool, local_cpus(i), x[1]["cpus"])} if x[1].get("timing") else gpus
 
         ready = [x for x in queued if x[1]["gpus"] and clears(x[1], booked, t_now) and any(i in idle for i in allowed(x))]
+        # the GPUs a timing job could start on now, which the rest take last
+        near = set().union(*(allowed(x) for x in ready if x[1].get("timing")))
         # nothing else may use a fence's GPU, so its jobs go first
         theirs = [x for x in ready if fence_for(x[0].name, fs)]
         by_rank = [[x for x in ready if x not in theirs and rank(x[0].name, x[1]) == r] for r in range(3)]
@@ -922,7 +923,7 @@ def tick(n: int) -> str:
             left.remove(best)
             p, h, _ = best
             mine = allowed(best)
-            # while a timing job is queued, the rest take the GPUs it can't use first
+            # while a timing job could start, the rest take the GPUs it couldn't start on first
             first = mine - near if near and not h.get("timing") and h["gpus"] == 1 else mine
             got = (pick_gpus(idle, first, h["gpus"], n) or pick_gpus(idle, mine, h["gpus"], n)) if h["gpus"] <= slots else None
             if not got:

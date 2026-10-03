@@ -151,6 +151,27 @@ def test_a_timing_job_gets_a_numa1_gpu_and_whole_cores_of_124_191_alone(node2, m
     assert started[-1] == ("nw-chunk-4.sh", "6", "140-155")
 
 
+def test_other_jobs_leave_only_the_gpus_a_queued_timing_job_could_start_on(node2, monkeypatch):
+    """Steering is for a chunk that can start: while user.slice reaches past 123 (after a reboot, before the deploy's
+    set-property) no chunk can, and a pous job takes the highest free GPU as usual; it used to take NUMA 0's while a chunk sat
+    queued with nowhere to go. A chunk pinned to GPU 6 leaves only GPU 6 to the rest last."""
+    load, fill, cg = node2
+    fr = load()
+    held, want, started, stopped, run = fake_node(fr, monkeypatch, fill)
+    (cg / "user.slice" / "cpuset.cpus.effective").write_text("0-191\n")
+    queue(fill, "nw-chunk.sh", TIMING)
+    queue(fill, "pous-a.sh", "owner=pm gpus=1 max_min=30")
+    fr.tick(8)
+    assert started == [("pous-a.sh", "7", None)] and (fill / "queue" / "nw-chunk.sh").exists()
+    (cg / "user.slice" / "cpuset.cpus.effective").write_text("0-123\n")
+    fr.running.clear(), held.clear(), started.clear()
+    queue(fill, "nw-chunk.sh", TIMING + " on=6")
+    queue(fill, "pous-b.sh", "owner=pm gpus=1 max_min=30")
+    fr.tick(8)
+    fr.tick(8)
+    assert started == [("pous-b.sh", "7", None), ("nw-chunk.sh", "6", "124-139")]
+
+
 def test_a_malformed_header_files_its_job_under_failed_and_the_tick_goes_on(node2, monkeypatch):
     """A value fill reads as a whole number that isn't one (gpus, max_min, prio; a CPU or timing job's mem_gb; a timing job's cpus)
     sends that job to failed/ with an event, and the rest start. Its ValueError used to end every tick before any start, and a
