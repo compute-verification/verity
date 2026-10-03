@@ -163,5 +163,7 @@ import FlockSoundness.Discharge.DecodeZLJ
 import FlockSoundness.ZK.GK
 import FlockSoundness.Discharge.HiddenExec
 import FlockSoundness.Discharge.HiddenDec
+import FlockSoundness.Discharge.HdecCor
 import FlockSoundness.Discharge.Hidden
 import FlockSoundness.Discharge.ZkCoins
+import FlockSoundness.Discharge.PrivateCircuit
