@@ -485,28 +485,30 @@ class Serving:
         self.eng, self.rng, self.concurrency = llm.llm_engine, rng, concurrency
         self.prompt, self.output, self.vocab = prompt, output, vocab
         self.params = lambda n: SamplingParams(temperature=0.0, max_tokens=n, ignore_eos=True, **kind)
-        self.live: set[str] = set()
+        self.live: dict[str, str] = {}      # in flight: the engine's request id (it may add a suffix) to ours
         self.added = self.finished = self.tokens = self.aborted = 0
 
     def _add(self) -> None:
         rid = f"serving-{self.added}"
         self.added += 1
         ids = [int(x) for x in self.rng.integers(self.vocab[0], self.vocab[1], int(self.rng.integers(*self.prompt, endpoint=True)))]
-        self.eng.add_request(rid, {"prompt_token_ids": ids}, self.params(int(self.rng.integers(*self.output, endpoint=True))))
-        self.live.add(rid)
+        got = self.eng.add_request(rid, {"prompt_token_ids": ids}, self.params(int(self.rng.integers(*self.output, endpoint=True))))
+        self.live[got if isinstance(got, str) else rid] = rid
 
     def step(self) -> None:
         while len(self.live) < self.concurrency:
             self._add()
         for out in self.eng.step():
             if out.finished:
-                self.live.discard(out.request_id)
+                k = out.request_id if out.request_id in self.live else \
+                    next((i for i, e in self.live.items() if e == out.request_id), None)
+                self.live.pop(k, None)
                 self.finished += 1
                 self.tokens += len(out.outputs[0].token_ids)
 
     def pause(self) -> None:
         if self.live:
-            self.eng.abort_request(sorted(self.live))
+            self.eng.abort_request(sorted(set(self.live.values())))
             self.aborted += len(self.live)
             self.live.clear()
         while self.eng.has_unfinished_requests():

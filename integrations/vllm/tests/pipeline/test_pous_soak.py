@@ -374,3 +374,41 @@ def test_one_host_brackets_hold_zero_over_a_real_connection(fake):
     assert (done, status) == (n, 0) and info["peer"] == ["127.0.0.1", fake.resp.port]
     lo, hi = S.offset_brackets(rec, np.zeros(n, np.int64))[0]
     assert lo <= 1000 and hi >= -1000, (lo, hi)
+
+
+def test_serving_keeps_its_requests_in_flight_and_pause_drains_them(monkeypatch):
+    import sys
+    import types
+
+    vllm = types.ModuleType("vllm")
+    vllm.SamplingParams = lambda **kw: SimpleNamespace(**kw)
+    monkeypatch.setitem(sys.modules, "vllm", vllm)
+
+    class Engine:  # the engine's request ids carry a suffix; its outputs name a request by ours
+        def __init__(self):
+            self.reqs, self.aborted = {}, []
+
+        def add_request(self, rid, prompt, params):
+            self.reqs[f"{rid}-x"] = (rid, params.max_tokens)
+            return f"{rid}-x"
+
+        def step(self):
+            done = [k for k in sorted(self.reqs)[:2]]
+            return [SimpleNamespace(request_id=self.reqs.pop(k)[0], finished=True, outputs=[SimpleNamespace(token_ids=[1, 2, 3])])
+                    for k in done]
+
+        def abort_request(self, ids):
+            self.aborted += ids
+            self.reqs = {k: v for k, v in self.reqs.items() if v[0] not in ids}
+
+        def has_unfinished_requests(self):
+            return bool(self.reqs)
+
+    eng = Engine()
+    s = S.Serving(SimpleNamespace(llm_engine=eng), np.random.default_rng(0), 5, prompt=(4, 8), output=(2, 3))
+    for _ in range(3):
+        s.step()
+        assert len(s.live) == 3 and len(eng.reqs) == 3, "finished requests leave; the next step refills to 5"
+    s.pause()
+    assert not s.live and not eng.reqs and len(eng.aborted) == 3 and all(not r.endswith("-x") for r in eng.aborted)
+    assert s.stats() == {"added": 9, "finished": 6, "aborted": 3, "finished_tokens": 18}
