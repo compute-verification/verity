@@ -148,7 +148,7 @@ controls() {  # controls D O ROLE: the selftest build's cases, recorded for the 
 }
 
 lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at once as fit beside each other
-  local D=$1 O=$2 role=$3 each par cap running=0 c tag args s case pub own
+  local D=$1 O=$2 role=$3 each par cap c tag args s case pub own
   each=$(( $(stat -L -c %s "$D/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 ))       # GB: its peak is about 5x the circuit text at K=256
   par=$(( STAGE_GB / each )); [ $par -lt 1 ] && par=1; [ $par -gt 8 ] && par=8
   cap=$(( STAGE_GB / par ))
@@ -187,9 +187,9 @@ open(sys.argv[3], 'wb').write(h + b'\n' + p[len(p) - len(b):])" "$D/public-input
   log "  lean: ${#cmds[@]} checks ($LEAN_ONLY), $par at a time, cap $cap GB each"
   for c in "${cmds[@]}"; do
     tag=${c%%|*} args=${c#*|}
+    # counted from the running jobs: `wait -n` also returns for a job that ended earlier unreported (setup's builds)
+    while [ "$(jobs -rp | wc -l)" -ge "$par" ]; do wait -n; done
     $TIME "$O/lean-$tag.time" bash -c "$(vlimit $cap) exec $LEAN $args" > "$O/lean-$tag.out" 2> "$O/lean-$tag.err" &
-    running=$(( running + 1 ))
-    if [ $running -ge $par ]; then wait -n; running=$(( running - 1 )); fi
   done
   wait
   for c in "${cmds[@]}"; do
