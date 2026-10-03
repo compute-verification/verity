@@ -15,6 +15,9 @@
                                                         # the node, wrappers and kind as JSON; exit 3 with {"refused"}
   cluster status [--node nebius-1|nebius-2|all] [--owner OWNER] [--json]   # each node's jobs, GPU-h ready, holds, disk,
                                                         # bundles, read over SSH (status.py); exit 1 if a node can't be read
+  cluster policy show [--description D] [--node N|all] [--json]   # the declared policy: each key, its owner and source
+  cluster policy diff [--description D] [--node N|all] [--json]   # every key whose live value differs, read over SSH
+                                                        # (policy.py); exit 1 drift, 3 a value unread, 2 a bad description
 
 A snapshot is `{"node", "now", "allocations": [...], "queue": [...], "done": [...], "has": [...], "held_locks": [...],
 "last_busy": {alloc: t}, "idle_s": {kind: s}}`, in the shapes `model.allocation_to_dict` and `model.job_to_dict` write.
@@ -118,7 +121,18 @@ def main(argv: list[str] | None = None) -> int:
     st.add_argument("--node", choices=("nebius-1", "nebius-2", "all"), default="all")
     st.add_argument("--owner", help="only this owner's jobs (verity.dev/owner, else the workstream; a submitter on node 2)")
     st.add_argument("--json", action="store_true")
+    po = sub.add_parser("policy", help="the declared policy, and every key where a node's live value differs")
+    posub = po.add_subparsers(dest="pcmd", required=True)
+    for name in ("show", "diff"):
+        pp = posub.add_parser(name)
+        pp.add_argument("--description", default=str(Path(__file__).parents[2] / "descriptions" / "nebius.toml"))
+        pp.add_argument("--node", choices=("nebius-1", "nebius-2", "all"), default="all")
+        pp.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
+
+    if a.cmd == "policy":
+        from . import policy
+        return (policy.main_show if a.pcmd == "show" else policy.main_diff)(a.description, a.node, a.json)
 
     if a.cmd == "status":
         from . import status
