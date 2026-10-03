@@ -406,10 +406,9 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
         raise ValueError(f"leaf layout {layout} is implemented by the native_collect committers only, not {kind}")
     if kind in ("native_host", "native_host_direct"):
         from verity_vllm.commit.committer.native_host import NativeHostCommitter
-        return NativeHostCommitter(engine, run_id=run_id, chunk=args.chunk, hash_threads=args.hash_threads,
+        return NativeHostCommitter(engine, run_id=run_id, chunk=args.chunk, hash_threads=args.hash_threads, populate_threads=getattr(args, "pinned_populate_threads", None),
                                    staging="arena" if kind == "native_host" else "direct", arena_bytes=((args.arena_mb << 20) if args.arena_mb else None),
-                                   batch_copy=bool(getattr(args, "batch_copy", False)), fast_copy=bool(getattr(args, "fast_copy", False)),
-                                   regen_row4=bool(getattr(args, "regen_row4", False)), gpu_tree=bool(getattr(args, "gpu_tree", False)))
+                                   batch_copy=bool(getattr(args, "batch_copy", False)), fast_copy=bool(getattr(args, "fast_copy", False)), regen_row4=bool(getattr(args, "regen_row4", False)), gpu_tree=bool(getattr(args, "gpu_tree", False)))
     if kind in ("native_collect", "native_collect_hook", "native_collect_gather", "native_collect_v2", "native_collect_v2_memcpy", "native_collect_v2_auto",
                 "native_collect_v2b"):
         # R10 acq-native candidate (arm 3): CMT-3's complete path (fast copy + GPU tree + FA2 M1 source) with native acquisition at the
@@ -426,7 +425,7 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
                                       gather=(kind in ("native_collect_gather", "native_collect_v2", "native_collect_v2_auto", "native_collect_v2b")),
                                       native_hooks=v2, auto_blocks=(kind in ("native_collect_v2_auto", "native_collect_v2b")),
                                       native_worker=(kind == "native_collect_v2b"), layout=layout,
-                                      profile=bool(getattr(args, "profile_hooks", False)) and not v2)
+                                      profile=bool(getattr(args, "profile_hooks", False)) and not v2, populate_threads=getattr(args, "pinned_populate_threads", None))
     if kind == "hooks_only":
         from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
@@ -819,7 +818,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
         else:
             com.retain = "host"                 # the replay keeps its values on host so they can be read; the device still holds only arena blocks
             replay_retain = "host"
-        com.pool = type(com.pool)()             # the frozen view owns the original pinned blocks (its levels live there); the replay gets a fresh pool
+        com.pool = com.pool.fresh()             # the frozen view owns the original pinned blocks (its levels live there); the replay gets a fresh pool
         t_r = time.perf_counter()
         try:
             com.reset()
@@ -906,7 +905,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
                        "family": value_family(o.identity.get("name", ""))} for o, k_ok in zip(ops, ok) if not k_ok][:16]}
     if values_from is not None:
         com.reset()                             # drop the replay's host copies
-        com.pool = type(com.pool)()             # ... and FREE their pinned blocks now: `reset()` only returns them to the pool's free list, and
+        com.pool = com.pool.fresh()             # ... and FREE their pinned blocks now: `reset()` only returns them to the pool's free list, and
     #                                             the frozen view + its pool sit in a reference cycle (committer <-> C++ collector) that the
     #                                             cyclic GC frees on ITS schedule -- at B=32 the replay's 99 GB survived into the next pair's
     #                                             replay -> 198 GB > the pod's 188 GB cgroup -> SIGKILL (08:25Z).  Collect explicitly.
@@ -976,6 +975,7 @@ class Options:
     arena_mb: int = option("--arena-mb", type=int, default=0, help="device staging block (MB); default 0 = X-02 auto: sized at arm time from the workload envelope " "(B, max prompt, max_num_batched_tokens, max_model_len; + FA2 hidden stream); 2 blocks preallocated, grown on demand (counted). " "An explicit value smaller than the step bound is refused before the run. Memory headroom for the arena comes from " "--engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
     weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="[R16 sys SYS-05] where the weights registration hashes: host (default; Python pos_leaf per 256-B leaf, 17-24 s for " "a 1B model, ~120 s for 7B, twice per Commit), device (same leaves + tree on the GPU, verity_vllm.commit.committer.leafhash), " "device-checked (both, per-tensor equality asserted; validation runs); a leased Commit's row sets device unless the item sets it " "(pipeline.gpu_lease).  Recorded in versions.json weights.hash")
     hash_threads: int = option("--hash-threads", env="HASH_THREADS", type=int, default=2, help="hashlib worker threads (pod CPU tune 17:30Z: 2 threads x 4 KB = 2.2 GB/s; 8 threads x 4 KB = 0.4 GB/s, GIL thrash)")
+    pinned_populate_threads: int | None = option("--pinned-populate-threads", env="VERITY_PINNED_POPULATE_THREADS", type=int, default=None, help="helper threads that fault a fresh exact pinned block's pages in (MADV_POPULATE_WRITE) before the caller registers it (default: commit.committer.pinned_pool.POPULATE_THREADS; recorded as pinned_populate_threads); 0 = the registration faults them in")
     openings: int = option("--openings", type=int, default=64)
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     engine_arg: list[str] | None = option("--engine-arg", action="append", default=None)
@@ -1021,7 +1021,8 @@ class Options:
     replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a VERIFIER-ISSUED post-commitment challenge (hex/string) -- the seed becomes sha256(challenge || run_root) so an " "adaptive prover cannot grind the sample by recommitting (rev-cb M-0572); default = the run root alone (honest-prover measurement)")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="[MAN-09, rev-cb M-0610] the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="[MAN-09] derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
-    replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all, stratified by family (one stratum per family, round-robin, at least one each) in place of the row's per-stratum sample")
+    replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all (drawn by --replay-draw) in place of the row's per-stratum sample")
+    replay_draw: str = option("--replay-draw", default="uniform", choices=("uniform", "family"), help="with --replay-k: uniform over every unit, or stratified by family (one stratum per family, round-robin, at least one each)")
     replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")

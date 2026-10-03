@@ -51,6 +51,7 @@ except ImportError:                      # the offline core (tests, CPU cross-ch
 
 from verity_vllm.commit import hiding, scheme
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
+from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
 from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
 from verity_vllm.engine import hooks
@@ -58,7 +59,6 @@ from verity_vllm.pipeline.spans import Spans
 
 GPU_CHUNK_BYTES = 256
 DEFAULT_CHUNK = 4096
-BLOCK_BYTES = 64 << 20
 
 # the construction-time selection: TP1 Commits replace it with the acquisition plan's (apply_plan_to_committer; compiled rows:
 # CompiledGraphSource.wrap_model); TP rank committers (engine/rank_worker.py) have no plan yet and keep it
@@ -130,152 +130,6 @@ class _StepJob:
     acq_bytes: int = 0
     deferred_dst: list = field(default_factory=list)   # batched acquisition: arena views awaiting the step-end _foreach_copy_
     deferred_src: list = field(default_factory=list)   # ... and their (held) sources
-
-
-PINNED_EXACT = os.environ.get("VERITY_PINNED_EXACT", "1") != "0"
-_PAGE = 4096
-
-
-def _pinned_block(nbytes: int, exact: bool) -> tuple[Any, Any, str]:
-    """One page-locked host block of `nbytes`.  Returns (block view, its owner tensor, mode).
-
-    [R17 fp8, F-fp8-POW2] `torch.empty(n, pin_memory=True)` goes through torch's CachingHostAllocator, which rounds EVERY request up to
-    the next power of two and never returns a freed block to the OS (torch 2.13.0+cu129 on cp-h100, measured: 3 GiB -> RSS +4 GiB,
-    5 GiB + 7 B -> +8 GiB, 1 GiB + 1 B -> +2 GiB; `del` -> +0).  Pinned pages are committed at allocation, so the process RSS and the
-    cgroup (as shmem) take the ROUNDED size at once while `bytes_total` counts the requested one: on the B8 FP8 row that gap was
-    21,152 MiB of run-phase RSS outside any term of the host bound (FP8-STAGING §6 `run_overhead`), and §5.4's "released pools" at B1.
-    exact=True: a MAP_SHARED|MAP_ANONYMOUS mmap of the page-rounded size + `cudaHostRegister` on it -> page-locked for the D2H copies
-    (measured 29 GB/s, = torch's pinned blocks), RSS == the pool's accounting, `cudaHostUnregister` + munmap on `release()` returns it to
-    the OS.
-    [R17 fp8, F-fp8-FORKPIN (B8 attempt 2, 03:0xZ)] the block MUST be a SHARED mapping, not private anonymous memory: Linux >= 5.9 copies
-    DMA-pinned PRIVATE pages eagerly at fork() (copy_present_pte -> page_needs_cow_for_dma), so every child the C2 sampled replay forks
-    (its evaluator Pool) got its own copy of the whole 59,350 MiB frozen pool at fork time -- cgroup anon 135 -> 239 GB (the cap) in a
-    minute, 20 OOM-killed children in three (measured on a 2 GiB block: private-registered fork -> cgroup anon +2,653 MiB; shared-registered
-    -> +336, the child's RssShmem 2,048 = the shared pages).  Shared mappings are never copy-on-write, so children read the committed
-    store in place, as they did on torch's (also MAP_SHARED) blocks; the cgroup accounts them as shmem, like torch's."""
-    if exact and torch is not None and torch.cuda.is_available():
-        import mmap
-
-        n = (int(nbytes) + _PAGE - 1) // _PAGE * _PAGE
-        mm = mmap.mmap(-1, n, flags=mmap.MAP_SHARED | mmap.MAP_ANONYMOUS)
-        blk = torch.frombuffer(mm, dtype=torch.uint8)
-        rc = torch.cuda.cudart().cudaHostRegister(blk.data_ptr(), n, 0)
-        if int(rc) != 0:
-            mm.close()
-            raise RuntimeError(f"cudaHostRegister({n} B) failed: {rc}")
-        return blk, mm, "exact-registered-shared"
-    return (b := torch.empty(int(nbytes), dtype=torch.uint8, pin_memory=True)), b, "torch-pinned-pow2"
-
-
-EXACT_MODES = ("exact-registered-shared", "exact-registered")      # the second is the F-fp8-POW2 private-anon variant, retired by F-fp8-FORKPIN
-
-
-class _PinnedPool:
-    """Pinned host blocks; `take(n)` returns a uint8 tensor view of n bytes (a tensor never straddles blocks).  Blocks are
-    retained for the run (openings read them) and returned by `reset()`; the pool grows only when the free list is empty
-    (the warm-up instrumented pass sizes it, so steady-state runs allocate nothing).  `bytes_total` is the process RSS the pool
-    holds when `mode == "exact-registered-shared"` (F-fp8-POW2 / F-fp8-FORKPIN; default, env VERITY_PINNED_EXACT=0 for torch's allocator)."""
-
-    def __init__(self, block_bytes: int = BLOCK_BYTES, exact: bool | None = None) -> None:
-        self.block_bytes = block_bytes
-        self.exact = PINNED_EXACT if exact is None else bool(exact)
-        self.mode: str | None = None
-        self.free: list[Any] = []
-        self.all: list[Any] = []
-        self._owners: list[Any] = []          # the registered allocations behind the blocks (unregistered by release())
-        self.cur: Any | None = None
-        self.off = 0
-        self.in_use: list[Any] = []
-        self.allocs = 0
-        self.alloc_s = 0.0
-
-    def _alloc(self, nbytes: int) -> Any:
-        blk, owner, mode = _pinned_block(max(int(nbytes), self.block_bytes), self.exact)
-        if self.mode is None:
-            self.mode = mode
-        self.all.append(blk)
-        self._owners.append(owner)
-        self.allocs += 1
-        return blk
-
-    def release(self) -> int:
-        """Unregister and drop every block (the pool's memory goes back to the OS in exact mode; torch's cache keeps it otherwise).
-        Returns the bytes released.  The pool is empty and reusable afterwards."""
-        n = self.bytes_total
-        if self.mode in EXACT_MODES:
-            rt = torch.cuda.cudart()
-            for b in self.all:
-                rt.cudaHostUnregister(b.data_ptr())
-        owners = self._owners
-        self.free, self.all, self._owners, self.in_use, self.cur, self.off, self.mode = [], [], [], [], None, 0, None
-        self.deferred_unmaps = 0
-        import sys
-
-        for o in owners:
-            if hasattr(o, "close"):
-                # torch.frombuffer holds ONE reference to the mmap object from the tensor's storage (every view shares it) and no buffer
-                # export -- `close()` would succeed under a live view and leave it dangling.  Refs here: `owners`, the loop variable, the
-                # getrefcount argument = 3; more means a view handed out by take() is alive: leave the object to it (munmap happens in
-                # the mmap's dealloc when the last view dies) and say so
-                if sys.getrefcount(o) <= 3:
-                    o.close()                     # munmap now: the shared pages go back to the OS
-                else:
-                    self.deferred_unmaps += 1
-        return n
-
-    def __del__(self) -> None:  # pragma: no cover -- ordering: unregister BEFORE the owners are freed
-        try:
-            if self.mode in EXACT_MODES and torch is not None:
-                self.release()
-        except Exception:  # noqa: BLE001
-            pass
-
-    def _fresh(self, nbytes: int) -> Any:
-        t0 = time.perf_counter()
-        for i, b in enumerate(self.free):
-            if b.numel() >= nbytes:
-                blk = self.free.pop(i)
-                break
-        else:
-            blk = self._alloc(nbytes)
-        self.alloc_s += time.perf_counter() - t0
-        self.in_use.append(blk)
-        return blk
-
-    def take(self, nbytes: int) -> Any:
-        if self.cur is None or self.off + nbytes > self.cur.numel():
-            self.cur = self._fresh(nbytes)
-            self.off = 0
-        v = self.cur[self.off:self.off + nbytes]
-        self.off = (self.off + nbytes + 255) // 256 * 256
-        return v
-
-    def reset(self) -> None:
-        self.free.extend(self.in_use)
-        self.in_use = []
-        self.cur = None
-        self.off = 0
-
-    def take_block(self, nbytes: int) -> Any:
-        """A whole block for a SHORT-LIVED buffer (returned with `give_back`, unlike `take` slices which live until `reset`)."""
-        for i, b in enumerate(self.free):
-            if b.numel() >= nbytes:
-                return self.free.pop(i)
-        t0 = time.perf_counter()
-        blk = self._alloc(nbytes)
-        self.alloc_s += time.perf_counter() - t0
-        return blk
-
-    def give_back(self, blk: Any) -> None:
-        self.free.append(blk)
-
-    @property
-    def bytes_total(self) -> int:
-        return sum(int(b.numel()) for b in self.all)
-
-    @property
-    def bytes_in_use(self) -> int:
-        return sum(int(b.numel()) for b in self.in_use)
 
 
 class _DeviceArena:
@@ -568,7 +422,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
                     replay + linkage records (`c2_freed_before_replay`; attempt 1 never did -> they stacked under the replay pool)
       pool_rounding torch's CachingHostAllocator rounds every pinned block up to the next power of two (RSS +21,152 MiB outside the pool
                     at B8): (levels + kept + learn) x 1.0 worst case when the pool is torch-pinned; 0 when the pool registers exact blocks
-                    (`pool_exact`, `_PinnedPool.mode == "exact-registered-shared"`, RSS == bytes_total)
+                    (`pool_exact`, `PinnedPool.mode == "exact-registered-shared"`, RSS == bytes_total)
       fork_children [F-fp8-FORKPIN, B8 attempt 2] the C2 sampled replay forks its evaluator children (mp Pool) while the Programs and the
                     frozen pool are live: their PRIVATE pages (copy-on-write of the Python objects they touch) are charged to the CGROUP,
                     not to the parent's VmHWM -- an EMPIRICAL term the caller passes (attempt 1: cgroup +7,000 MiB over 33 children on
@@ -822,8 +676,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
     def __init__(self, engine: Any, *, program_digest: bytes | None = None, run_id: str = "run", chunk: int = DEFAULT_CHUNK,
                  hash_threads: int = 2, retain_values: bool = True, acquire_classes: set[str] | None = None, staging: str = "arena",
                  arena_bytes: int = 512 << 20, batch_copy: bool = False, fast_copy: bool = False, regen_row4: bool = False, gpu_tree: bool = False,
-                 geo_digest: bytes | None = None, leaf_scheme: str = scheme.NAME) -> None:
-        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `leaf_scheme`: vllm-v1 position leaves (default) or hm96-sha256/v1 hiding leaves over them (`hiding.LeafSchemeRule`)."""
+                 geo_digest: bytes | None = None, leaf_scheme: str = scheme.NAME, populate_threads: int | None = None) -> None:
+        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `leaf_scheme`: vllm-v1 position leaves (default) or hm96-sha256/v1 hiding leaves over them (`hiding.LeafSchemeRule`).  `populate_threads`: the pinned pool's (`PinnedPool`)."""
         self.engine = engine
         self.runner = getattr(engine, "runner", None)
         self.model = getattr(engine, "model", None)
@@ -840,7 +694,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         # Build record): with them `identity_check` DERIVES each layer's hidden-plane class per step; without them the R13 uniformity rule runs
         self.attention_layer_decls: list | None = None
         self.plane_policy = None                          # fa2_plane_classes.LayoutPolicy override (default: read from the hidden source)
-        self.pool = _PinnedPool()
+        self.pool = PinnedPool(populate_threads=populate_threads)
         self._handles: list = []
         self._orig: dict[str, Any] = {}
         self._hooks = hooks.Hooks()
@@ -2039,6 +1893,9 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                              weight_registration=self.weights,
                              extra={"values_retained_bytes": sum(s.n_bytes for s in steps), "pinned_pool_bytes": self.pool.bytes_total,
                                     "pinned_allocs": self.pool.allocs, "pinned_alloc_s": self.pool.alloc_s, "pinned_pool_mode": self.pool.mode,
+                                    "pinned_populate_s": self.pool.times.get("populate_s", 0.0),
+                                    "pinned_register_s": self.pool.times.get("register_s", 0.0), "pinned_populate_threads": self.pool.populate_threads,
+                                    "pinned_reserved_bytes": self.pool.reserved_bytes, "pinned_reserve_unused": self.pool.reserve_unused,
                                     "pinned_pool_blocks": len(self.pool.all), "errors": self.errors[:10],
                                     "errors_n": len(self.errors),
                                     # X-03 reference integrity (Python acquisition path; the native collector overrides these in its finalize)
@@ -2106,8 +1963,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         return {"modules": modules, "attention_layers": attn_layers, "fa2_hidden_per_layer": 1 if fa2 else 0, "sampler_ids": 1 if any(n == "runner.sampler" for n in modules) else 0,
                 "moe_layers": moe_layers, "moe_tensors_per_layer": (getattr(moe_src, "stats", {}).get("tensors_per_layer", 6) if moe_src is not None else 0),
                 "router_softmax_layers": sorted(int(k) for k in rs_src.layers) if rs_src is not None else [], "tp_sites": sorted(tp_src.site_names()) if tp_src is not None else [], "tp_rank": (tp_src.rank if tp_src is not None else None),
-                # [R19 moe F-r19-moe-1] partials per site per step: 1, or a mid-module site's static call count (OlmoeAttention: 2 gathers)
-                "tp_site_counts": (dict(tp_src.site_counts()) if tp_src is not None and hasattr(tp_src, "site_counts") else {})}
+                # [R19 moe F-r19-moe-1] partials per site per step: 1, or a mid-module site's call count (OlmoeAttention: 2 gathers); the calls its instance's flags rule out are listed
+                "tp_site_counts": (dict(tp_src.site_counts()) if tp_src is not None and hasattr(tp_src, "site_counts") else {}), "tp_sites_ruled_out": list(getattr(tp_src, "mid_sites_ruled_out", None) or [])}
 
     def identity_check(self, manifest: dict[str, Any] | None = None) -> dict[str, Any]:
         """X-03 on IDENTITIES.  For every committed step: (1) every module of the expected manifest produced >= 1 committed tensor and no
@@ -2236,7 +2093,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                    if padded_run else {}),
                 "manifest": {"modules": len(expected_modules), "attention_layers": len(man["attention_layers"]), "fa2_hidden_per_layer": man["fa2_hidden_per_layer"],
                              "sampler_ids": man["sampler_ids"], "moe_layers": len(man.get("moe_layers") or []), "moe_tensors_per_layer": man.get("moe_tensors_per_layer", 0),
-                             "tp_sites": len(man.get("tp_sites") or []), "tp_rank": man.get("tp_rank")},
+                             "tp_sites": len(man.get("tp_sites") or []), "tp_rank": man.get("tp_rank"), "tp_sites_ruled_out": man.get("tp_sites_ruled_out") or []},
                 # [F-r19-int-22] which attention-plane rule each step ran and what it was derived from
                 "fa2_rule": {"steps": dict(fa2_rules_used), "attention_decls": len(decls),
                              "policy": {k: v for k, v in self._plane_policy().__dict__.items() if k != "ms" or v} if decls else None,
@@ -2454,7 +2311,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
     # module (class-name) -> census root families whose NATURALLY-MATERIALIZED outputs the hook on that module binds
     FAMILY_OF_MODULE = {
         "Linear": ("Gemm_v1",), "RMSNorm": ("RMSNormFusedCuda_v2", "RMSNormTriton_v1"), "GemmaRMSNorm": ("RMSNormFusedCuda_v2", "RMSNormTriton_v1"),
-        "SiluAndMul": ("SiluMul_v1",), "GeluAndMul": ("GeluMul_v1",), "RotaryEmbedding": ("RoPE_v1",), "Attention": ("Attention_v3",),
+        "SiluAndMul": ("SiluMul_v1", "SiluMul_v2"), "GeluAndMul": ("GeluMul_v1",), "RotaryEmbedding": ("RoPE_v1",), "Attention": ("Attention_v3",),
         "VocabParallelEmbedding": ("Embedding_v1",), "LogitsProcessor": ("Gemm_v1",), "Sampler": ("TokenSelect_v1",),
     }
 

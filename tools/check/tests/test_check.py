@@ -5,6 +5,8 @@ import importlib.util
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location("repo_check", ROOT / "tools" / "check" / "check.py")
 CHECK = importlib.util.module_from_spec(spec)
@@ -15,8 +17,8 @@ def test_the_steps_are_the_suites_then_circuit_check_then_the_lean_hook(tmp_path
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
     names = [(n, argv if isinstance(argv, str) else argv[1:4]) for n, argv, _cwd in CHECK.steps(tmp_path)]
     assert names[0] == ("pytest", [str(ROOT / "tools/check/suites.py"), "--json", str(tmp_path / "suites.json")])
-    assert names[1] == ("circuit-check", ["-m", "circuit_check", "--all"])
-    assert names[2] == ("flock-circuit-build", [str(ROOT / "backends" / "flock" / "check_build.sh")])
+    assert names[1] == ("flock-circuit-build", [str(ROOT / "backends" / "flock" / "check_build.sh")])
+    assert names[2] == ("circuit-check", ["-m", "circuit_check", "--all"])
     assert names[3] == ("flock-rust-tests", ["CARGO_BUILD_JOBS=1", "RUST_TEST_THREADS=1", "bash"])
     assert names[4] == ("lean", "skipped: backends/flock/verifier/lean is not on this tree")
 
@@ -45,8 +47,9 @@ def test_the_rust_tests_run_the_live_crates_unit_tests_and_every_test_of_the_cra
 
 
 def test_the_rust_tests_key_moves_with_the_script_patches_live_crate_and_toolchain_only(tmp_path, monkeypatch):
+    assert CHECK.rust_toolchain(), "check_build.sh pins its toolchain: an agent VM's default (1.83) can't build upstream"
     flock = tmp_path / "backends" / "flock"
-    files = {"backends/flock/check_build.sh": "x", "backends/flock/flock-sha512-b684b12.patch": "p",
+    files = {"backends/flock/check_build.sh": "set -e\n", "backends/flock/flock-sha512-b684b12.patch": "p",
              "backends/flock/live/src/lib.rs": "fn a() {}", "backends/flock/verifier/ci.py": "", "backends/flock/README.md": ""}
     for f, text in files.items():
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
@@ -57,11 +60,18 @@ def test_the_rust_tests_key_moves_with_the_script_patches_live_crate_and_toolcha
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     monkeypatch.setattr(CHECK, "tracked_files", lambda: list(files))
     e = {"HOME": str(home), "PATH": "/nonexistent"}
-    assert CHECK.rust_tests_key(e) is None, "no rustc yet: the script installs one, and that run stores nothing"
     rustc.parent.mkdir(parents=True)
-    rustc.write_text("#!/bin/sh\necho 'rustc 1.98.1'\n")
+    rustc.write_text('#!/bin/sh\n[ "$RUSTUP_TOOLCHAIN" = 1.98.1 ] && [ "$RUSTUP_AUTO_INSTALL" = 0 ] || exit 1\necho "rustc $RUSTUP_TOOLCHAIN"\n')
     rustc.chmod(0o755)
+    assert CHECK.rust_tests_key(e) is None, "a script that pins no toolchain: what it runs is the machine's to decide"
+    (flock / "check_build.sh").write_text("set -e\nRUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.97.0}\n")
+    assert CHECK.rust_tests_key(e) is None, "the pin isn't installed yet: the script installs it, and that run stores nothing"
+    (flock / "check_build.sh").write_text("set -e\nRUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.98.1}\n")
+    rustc.rename(home / "rustc")
+    assert CHECK.rust_tests_key(e) is None, "no rustc yet: the script installs one, and that run stores nothing"
+    (home / "rustc").rename(rustc)
     key = CHECK.rust_tests_key(e)
+    assert key, "the key's rustc runs under the script's pin, and never installs it"
     (flock / "verifier" / "ci.py").write_text("changed")
     (flock / "README.md").write_text("changed")
     assert CHECK.rust_tests_key(e) == key
@@ -123,7 +133,8 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert (build, unit, audit, agree) == ("lean-build", "lean-unit-cut", "lean-audit", "lean-agreement")
     assert lake[-1].endswith("lake build")
     assert cut[1].endswith("verifier/unit_cut_agree.py") and cut[cut.index("--lean") + 1].endswith(".lake/build/bin/flock-verify")
-    assert lean_audit[1].endswith("tools/check/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit
+    assert lean_audit[1].endswith("tools/check/check.py") and lean_audit[2] == "--lean-slot"
+    assert lean_audit[4].endswith("tools/check/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit
     assert "--fresh" in CHECK.lean_steps(out, cache=False)[2][1]
     assert argv[2:4] == ["--lean-agreement", str(out)] and {Path(x).name for x in argv[4:]} == {"a.tar.gz", "b.tar.gz"}
     (sent / "b.tar.gz").unlink()
@@ -310,6 +321,17 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
         launched.clear()
 
 
+def test_check_refuses_a_python_that_imports_the_trees_packages_from_elsewhere(monkeypatch, capsys):
+    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+    monkeypatch.setenv("PYTHONPATH", f"/tmp/s1350/packages/verity/src:{ROOT / 'tools/research/src'}")
+    probed = []
+    monkeypatch.setattr(CHECK.SUITES, "foreign", lambda pkgs, env: probed.append(env.get("PYTHONPATH")) or "verity from /tmp/s1350/x.py")
+    monkeypatch.setattr(CHECK, "run", lambda *a: pytest.fail("a step ran"))
+    assert CHECK.main([]) == 2
+    assert "against another checkout's code (verity from /tmp/s1350/x.py)" in capsys.readouterr().err
+    assert probed == [str(ROOT / "tools/research/src")]
+
+
 def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setenv("VERITY_SKIP_STORE", "1")
@@ -317,7 +339,7 @@ def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
 
 def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
-    (pt,), (cc, build, rust), (lean,) = CHECK.groups(tmp_path, 16)
+    (pt,), (build, cc, rust), (lean,) = CHECK.groups(tmp_path, 16)
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("backends/flock/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
     assert pt[1][1].endswith("tools/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]
@@ -481,6 +503,69 @@ def test_keep_going_runs_every_other_group_to_its_end(tmp_path, monkeypatch):
                             [("a", ok, tmp_path), ("b", ok, tmp_path)]])
     passed, done = CHECK.run(tmp_path, 2, keep_going=True)
     assert not passed and {s["step"]: s["status"] for s in done} == {"fails": "failed", "a": "passed", "b": "passed"}
+
+
+def test_a_lean_module_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
+    """`lean-changed` exits only once `slow` is running (the FIFO): under --keep-going its failure still stops `slow`."""
+    import os
+
+    gate = tmp_path / "gate"
+    os.mkfifo(gate)
+    slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
+    changed = _py("import sys\nopen(sys.argv[1]).read()\nsys.exit(1)", gate)
+    _fake_run(monkeypatch, [[("slow", slow, tmp_path)], [("lean-changed", changed, tmp_path)]])
+    passed, done = CHECK.run(tmp_path, 2, keep_going=True)
+    by = {s["step"]: s for s in done}
+    assert not passed and by["lean-changed"]["status"] == "failed"
+    assert by["slow"]["status"] == "stopped" and by["slow"]["detail"] == "stopped: lean-changed failed"
+
+
+def test_a_rust_crate_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
+    """flock-circuit-build fails, with cargo's line, only once `slow` is running (the FIFO): under --keep-going `slow` stops."""
+    import os
+
+    gate = tmp_path / "gate"
+    os.mkfifo(gate)
+    slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
+    build = _py("import sys\nopen(sys.argv[1]).read()\nprint('error: could not compile `flock-circuit` (lib)')\nsys.exit(101)", gate)
+    _fake_run(monkeypatch, [[("slow", slow, tmp_path)], [("flock-circuit-build", build, tmp_path)]])
+    passed, done = CHECK.run(tmp_path, 2, keep_going=True)
+    by = {s["step"]: s for s in done}
+    assert not passed and by["flock-circuit-build"]["status"] == "failed" and by["flock-circuit-build"]["halts"]
+    assert by["slow"]["status"] == "stopped" and by["slow"]["detail"] == "stopped: flock-circuit-build failed"
+
+
+def test_a_build_that_fails_without_compiling_does_not_halt(tmp_path, monkeypatch):
+    """A failed clone or toolchain download: no `halts`, so (the Steps test below) the other groups keep their verdicts."""
+    build = _py("print('fatal: unable to access https://github.com/...')\nraise SystemExit(128)")
+    _fake_run(monkeypatch, [[("flock-circuit-build", build, tmp_path)]])
+    passed, (rec,) = CHECK.run(tmp_path, 1, keep_going=True)
+    assert not passed and rec["status"] == "failed" and "halts" not in rec
+
+
+def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_path):
+    steps = CHECK.Steps(tmp_path, keep_going=True)
+    steps.end({"step": "pytest", "status": "failed"})
+    steps.end({"step": "flock-circuit-build", "status": "failed"})
+    assert not steps.stopping
+    steps.end({"step": "lean-changed", "status": "failed"})
+    assert steps.stopping and steps.halted == "lean-changed"
+    steps = CHECK.Steps(tmp_path)
+    steps.end({"step": "pytest", "status": "failed"})
+    assert steps.stopping and steps.halted == "pytest"
+
+
+def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_path, monkeypatch):
+    out, _ = _pinned(tmp_path, monkeypatch)
+    gs = CHECK.groups(out, 8)
+    assert len(gs) == 4 and [n for n, _, _ in gs[3]] == ["lean-changed"] and "lean-changed" in CHECK.HALTS
+    argv = gs[3][0][1]
+    assert argv[1].endswith("tools/check/lean_changed.py")
+    assert argv[argv.index("--cache") + 1] == gs[2][2][1][gs[2][2][1].index("--cache") + 1], "the audit's own passes"
+    assert argv[argv.index("--deps") + 1] == gs[2][2][1][gs[2][2][1].index("--deps") + 1], "and its kept dependencies"
+    assert CHECK.groups(out, 8, cache=False)[3][0][1].startswith("skipped: --no-cache")
+    monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "no-verifier")
+    assert len(CHECK.groups(out, 8)) == 3
 
 
 def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_path, monkeypatch):

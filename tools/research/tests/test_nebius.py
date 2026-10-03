@@ -194,6 +194,23 @@ def test_fill_runner_counts_a_queued_waiter_but_not_a_lease_that_holds_its_gpus_
                 stop_group(p)
 
 
+def test_fill_runner_runs_only_bare_and_one_per_node(tmp_path):
+    """`fill_runner.py --help` fell through to the runner and started a second one on node 2 (memory accounting's soak worker,
+    3 Oct 05:37Z): it adopted the running series job and launched the next on GPU 7. Only a bare `fill_runner.py` runs the
+    runner, and only while no other runner holds FILL_DIR/.runner.lock."""
+    fill = tmp_path / "fill"
+    env = {**os.environ, "FILL_DIR": str(fill), "GPU_LEASE_DIR": str(tmp_path / "gl")}
+    for argv, rc in ((["--help"], 0), (["-h"], 0), (["--once"], 1), (["status"], 1)):
+        r = subprocess.run([sys.executable, str(FILL_RUNNER), *argv], env=env, capture_output=True, text=True)
+        assert r.returncode == rc and "usage: fill_runner.py" in r.stdout + r.stderr, (argv, r)
+    assert not fill.exists()
+    fill.mkdir()
+    with open(fill / ".runner.lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        r = subprocess.run([sys.executable, str(FILL_RUNNER)], env=env, capture_output=True, text=True)
+    assert r.returncode == 1 and "another runner holds" in r.stderr and not (fill / "queue").exists(), r
+
+
 def stop_group(p: subprocess.Popen) -> None:
     """SIGTERM a process started with start_new_session and everything in its group. Terminating only the bash leaves the
     `sleep` it waits on (GPU_LEASE_POLL_S=3600) or the leased command orphaned for the length of that sleep."""
@@ -525,6 +542,27 @@ def test_a_waiter_stops_a_preemptible_lease_and_leaves_an_ordinary_one(tmp_path)
         ordinary.wait()
 
 
+@needs_flock
+def test_a_preemptible_waiter_waits_for_a_preemptible_lease_instead_of_stopping_it(tmp_path):
+    """Node 1, 2026-10-03: a queue of --preemptible trace chunks stopped its own newest lease every ~20 s, each new chunk the
+    oldest waiter in turn."""
+    env = {**gpu_env(tmp_path, count=1), "GPU_LEASE_POLL_S": "0.1"}
+    pause = [sys.executable, "-c", "import sys; print('ready', flush=True); sys.stdin.read()"]
+    fill = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--preemptible", "--mem-gb", "0", "--", *pause], env=env,
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    assert fill.stdout.readline().strip() == "ready"
+    nxt = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--wait", "--preemptible", "--mem-gb", "0", "--", "echo", "got"], env=env,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        queued(nxt)
+        assert fill.poll() is None and not (tmp_path / "gl" / "preempted.log").exists()
+    finally:
+        fill.stdin.close()
+    assert fill.wait() == 0
+    out, _ = nxt.communicate()
+    assert nxt.returncode == 0 and out.strip() == "got"
+
+
 def hold_agent_lock(gl: Path) -> int:
     """Stand in for `cluster agent --mode live`: hold agent.lock (the descriptor is not inherited by gpu-lease)."""
     gl.mkdir(exist_ok=True)
@@ -675,6 +713,7 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
                 for m in re.findall(r"  - path: (\S+)\n    permissions: '\d+'\n    encoding: gz\+b64\n    content: (\S+)", ud)}
     assert embedded["/usr/local/sbin/vy-setup"] == (NEBIUS / "vm_setup.sh").read_bytes()
     assert embedded["/usr/local/sbin/vy-nebius-stop"] == (NEBIUS / "vm_stop.sh").read_bytes()
+    assert embedded["/etc/systemd/system/user@.service.d/vy-cpuset.conf"] == (NEBIUS / "user-cpuset.conf").read_bytes()
     assert embedded["/usr/local/share/vy/lease.sh"] == L.LEASE_SH.read_bytes()
     assert embedded["/usr/local/bin/gpu-lease"] == GPU_LEASE.read_bytes()
     assert b"VY_USER=research\n" in embedded["/etc/vy/vy.env"]
@@ -693,7 +732,7 @@ def test_launch_refuses_to_spend_without_yes_and_a_lease():
     assert r.returncode == 1 and "NEBIUS_SA_ID is not set" in r.stderr
 
 
-def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_still_takes_the_multi_line_secret(tmp_path):
+def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_refuses_the_multi_line_secret(tmp_path):
     fake = tmp_path / "nebius"
     fake.write_text('#!/bin/bash\nwhile [ $# -gt 0 ]; do [ "$1" = --private-key-file-path ] && cp "$2" "$OUT"; shift; done\n')
     fake.chmod(0o755)
@@ -709,7 +748,10 @@ def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_still_takes_the_m
 
     r, key = auth(NEBIUS_SA_PRIVATE_KEY_B64=base64.b64encode(body.encode()).decode())
     assert r.returncode == 0 and key == body and r.stdout == r.stderr == ""
-    r, key = auth(NEBIUS_SA_PRIVATE_KEY=body.rstrip("\n"))
+    r, key = auth(NEBIUS_SA_PRIVATE_KEY=body.rstrip("\n"))    # a multi-line secret leaks through `env | cut -d= -f1`
+    assert r.returncode == 1 and key == "" and "NEBIUS_SA_PRIVATE_KEY (the multi-line key) is no longer read" in r.stderr
+    assert "dummy line" not in r.stderr
+    r, key = auth(NEBIUS_SA_PRIVATE_KEY=body, NEBIUS_SA_PRIVATE_KEY_B64=base64.b64encode(body.encode()).decode())
     assert r.returncode == 0 and key == body
     r, _ = auth(NEBIUS_SA_PRIVATE_KEY_B64="not base64!")
     assert r.returncode == 1 and "NEBIUS_SA_PRIVATE_KEY_B64 is not base64" in r.stderr
@@ -1184,6 +1226,72 @@ def test_n2_commit_refuses_before_touching_a_node(tmp_path):
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
+def test_n2_commit_gives_a_long_row_the_long_max_min():
+    """3 Oct: node 2's 25-min limit stopped cov-gm359's TP2 B8 1024/128 Commit (~45 min) twice, 1.7 GPU-h, before it went back to
+    node 1. A row with 1024 input tokens or batch 32+ gets VY_N2_COMMIT_LONG_MAX_MIN (120); the rest keep VY_N2_COMMIT_MAX_MIN."""
+    def max_min(row: str, **env: str) -> str:
+        return subprocess.run(["bash", str(NEBIUS / "n2_commit.sh"), "max-min", row], capture_output=True, text=True, check=True,
+                              env={**os.environ, "VY_N1": "n1.invalid", "VY_N2": "n2.invalid", "VY_N2_COMMIT_MAX_MIN": "25", **env}).stdout.strip()
+
+    assert max_min("qwen3-14b__bf16__rtxpro6000__tp2__b8__i1024__o128__mixed__greedy__bi-eager") == "120"
+    assert max_min("gemma2-2b__bf16__rtxpro6000__tp1__b32__i256__o32__mixed__greedy__bi-eager") == "120"
+    assert max_min("qwen3-14b__bf16__rtxpro6000__tp2__b8__i1024__o128__g", VY_N2_COMMIT_LONG_MAX_MIN="90") == "90"
+    assert max_min("phi4-14b__bf16__rtxpro6000__tp2__b8__i256__o32__mixed__greedy__bi-eager") == "25"
+    assert max_min("llama32-1b__bf16__rtxpro6000__tp1__b16__i512__o2__mixed__greedy__bi-eager", VY_N2_COMMIT_MAX_MIN="") == "40"
+
+
+@pytest.mark.skipif(shutil.which("bash") is None or not Path("/proc/self/stat").exists(), reason="n2_custody.sh is bash, and reads /proc")
+def test_n2_custody_takes_every_ended_run_home_and_retries_a_failure(tmp_path):
+    """Node 2's store has no remote: a night of runs there sat on the node (2-3 Oct) until a push loop took them. Every ended run
+    goes to node 1 and its Job, a runner killed before it recorded an end with --force; a live one, one still settling and one its
+    own custody preserved don't; a failed push is never given up, and fails the round until it succeeds."""
+    root, state, bin_, log = tmp_path / "runs", tmp_path / "state", tmp_path / "bin", tmp_path / "calls.log"
+    bin_.mkdir()
+    (bin_ / "rsync").write_text(f'#!/bin/sh\necho "rsync $*" >> {log}\n')
+    (bin_ / "ssh").write_text(f'#!/bin/sh\ncat > /dev/null &\necho "ssh $*" >> {log}\n'
+                              'case "$*" in *"attempt publish"*"$FAIL_RUN"*) [ -n "$FAIL_RUN" ] && exit 1 ;; esac\nexit 0\n')
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    me = int(open("/proc/self/stat").read().rsplit(")", 1)[1].split()[19])
+    old = 1_000_000_000                         # settled: records last changed in 2001
+
+    def run(rid, status, *, settled=True, custody=None):
+        d = root / rid
+        d.mkdir(parents=True)
+        (d / "job.json").write_text(json.dumps({"store": {"campaign": "c1"}}))
+        (d / "status.json").write_text(json.dumps(status))
+        if custody is not None:
+            (d / ".custody").write_text(json.dumps(custody))
+        for p in d.iterdir():
+            if settled:
+                os.utime(p, (old, old))
+
+    run("r1-done", {"state": "done"})
+    run("r2-dead", {"state": "running", "transitions": [{"pid": 2**22 + 7, "starttime_ticks": 1}]})
+    run("r3-live", {"state": "running", "transitions": [{"pid": os.getpid(), "starttime_ticks": me}]})
+    run("r4-fresh", {"state": "failed"}, settled=False)
+    run("r5-preserved", {"state": "done"}, custody={"preserved": True})
+    run("r6-fails", {"state": "failed"})
+
+    def round_(**env):
+        return subprocess.run(["bash", str(NEBIUS / "n2_custody.sh")], capture_output=True, text=True,
+                              env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "VY_N1": "n1.invalid",
+                                   "VY_CUSTODY_ROOTS": f"{root}=/n1/runs", "VY_CUSTODY_STATE": str(state),
+                                   "VY_CUSTODY_SRC": "/n1/src/abc", **env})
+
+    first = round_(FAIL_RUN="r6-fails")
+    assert first.returncode == 1 and "r6-fails (c1, failed): push failed (1 so far)" in first.stdout
+    assert sorted(p.name for p in (state / "pushed").iterdir()) == ["r1-done", "r2-dead", "r5-preserved"]
+    calls = log.read_text()
+    assert f"{root}/r1-done/ n1.invalid:/n1/runs/r1-done/" in calls and "r3-live" not in calls and "r4-fresh" not in calls
+    assert "attempt publish --force /n1/runs/r2-dead" in calls and "attempt publish  /n1/runs/r1-done" in calls
+    assert "PYTHONPATH=/n1/src/abc/tools/research/src" in calls and "r5-preserved" not in calls
+    second = round_(FAIL_RUN="")
+    assert second.returncode == 0 and "r6-fails (c1, failed" in second.stdout and not (state / "failures" / "r6-fails").exists()
+    assert (state / "pushed" / "r6-fails").exists() and log.read_text().count("r1-done/ n1.invalid") == 1, "a pushed run is done"
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
 def test_n2_commit_fetches_only_missing_manifests_that_hash_to_their_id(tmp_path):
     """Node 2's store has no remote, so a cited Build's manifest missing there failed cov-g217's precheck after a 19-min bootstrap:
     fetch-manifests copies it from node 1's store, keeps only bytes whose sha256 is the id, and leaves present ones alone."""
@@ -1270,6 +1378,80 @@ def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_
     assert r.returncode == 3 and "refuses" in r.stderr and not r.stdout
     r = place(tmp_path / "no-cluster")
     assert r.returncode == 0 and not r.stdout and "no placement" in r.stderr
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
+def test_n2_commit_keeps_a_row_whose_plans_are_keyed_to_other_code_on_node_1(tmp_path):
+    """cov-gm176's Build wrote its plans from a job tree that the 14:17Z redeploy (2 Oct) replaced. Node 2's Commit ran from the new
+    tree, found the plans' code key differing and derived both with GPU 6 held: two 25-min leases at 0%. submit refuses such a row
+    before it touches node 2, so node 1's leased Commit derives the plans before it takes a GPU. The job tree is a stand-in whose
+    source_identity hashes one file (integrations/vllm's own tests cover code_identity)."""
+    row_name = "gemma2-9b__bf16__rtxpro6000__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
+    tree, row, bin_, log = tmp_path / "tree", tmp_path / "sweep" / row_name, tmp_path / "bin", tmp_path / "ssh.log"
+    pipeline = tree / "integrations" / "vllm" / "verity_vllm" / "pipeline"
+    for d in (pipeline, row / "plan", bin_):
+        d.mkdir(parents=True)
+    (pipeline.parent / "__init__.py").write_text("")
+    (pipeline / "__init__.py").write_text("")
+    (pipeline / "source_identity.py").write_text(
+        "import hashlib, pathlib\nTREE = pathlib.Path(__file__).resolve().parents[4]\n"
+        "def code_identity(root):\n    return {'sha256': hashlib.sha256((pathlib.Path(root) / 'code').read_bytes()).hexdigest()}\n")
+    (tree / "code").write_text("after the redeploy")
+    new, old = hashlib.sha256(b"after the redeploy").hexdigest(), hashlib.sha256(b"before it").hexdigest()
+    (bin_ / "ssh").write_text(f'#!/bin/sh\necho "$*" >> {log}\nexit 1\n')
+    (bin_ / "ssh").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "VY_JOB_PY": sys.executable, "VY_N1": "n1.invalid",
+           "VY_N2": "n2.invalid", "VY_N2_SRC": str(tree)}
+
+    def plans(commit: str | None, boundary: str | None) -> None:
+        for name, code in (("plan/commit_plan.json", commit), ("call_boundary_plan.json", boundary)):
+            (row / name).unlink(missing_ok=True)
+            if code is not None:
+                (row / name).write_text(json.dumps({"schema": "s", "key": {"program_digest": "d", "code": code}}))
+
+    def keyed(t: Path = tree) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(NEBIUS / "n2_commit.sh"), "plan-keyed", str(t), str(row)], capture_output=True, text=True,
+                              env=env)
+
+    assert keyed().returncode == 0
+    plans(new, new)
+    assert keyed().returncode == 0
+    plans(new, old)
+    r = keyed()
+    assert r.returncode == 1 and r.stderr.strip() == f"call_boundary_plan.json is keyed to code {old[:16]}, the Commit's job tree is {new[:16]}"
+    plans(old, new)
+    assert "plan/commit_plan.json is keyed to code" in keyed().stderr
+    plans(None, None)
+    (row / "plan" / "commit_plan.json").write_text("not json")
+    r = keyed()
+    assert r.returncode == 1 and "plan/commit_plan.json is unreadable" in r.stderr
+    (tmp_path / "empty").mkdir()
+    r = keyed(tmp_path / "empty")
+    assert r.returncode == 1 and r.stderr.startswith("source_identity came from ") and r.stderr.strip().endswith("/empty"), r.stderr
+    (tree / "code").unlink()
+    r = keyed()
+    assert r.returncode == 1 and "the job tree's code identity isn't computable (FileNotFoundError" in r.stderr, r.stderr
+    (tree / "code").write_text("after the redeploy")
+
+    item = tmp_path / "item.json"
+    item.write_text(json.dumps({"template": "config-run", "tree": "/t", "env": {
+        "ROW": row_name, "ROLE": "GEMMA2_9B", "REPO": "unsloth/gemma-2-9b", "REVISION": "9145841c", "SWEEP_DIR": str(row.parent)}}))
+    (row / "manifest.json").write_text("{}")
+    (row / "two-task-build-run").write_text("r20261002-120300-0000")
+
+    def submit() -> subprocess.CompletedProcess:
+        log.write_text("")
+        return subprocess.run(["bash", str(NEBIUS / "n2_commit.sh"), "submit", "vllm-epoch-run-cov-gm176", str(item)],
+                              capture_output=True, text=True, env=env)
+
+    plans(old, old)
+    r = submit()
+    assert r.returncode == 3 and "plan/commit_plan.json is keyed to code" in r.stderr and "not queued" in r.stderr, r.stderr
+    assert log.read_text() == ""
+    plans(new, new)
+    r = submit()
+    assert r.returncode == 3 and "isn't staged on node 2" in r.stderr, r.stderr
+    assert log.read_text().startswith("-n n2.invalid ")
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
@@ -1755,6 +1937,24 @@ def test_fill_runner_runs_an_owner_in_cpu_sets_on_its_own_cpus_beside_the_shared
     assert fr.mem_peak_gb(os.getpid()) == 12.34 and fr.mem_peak_gb(2**22 + 7) is None
 
 
+def test_slot_d_runs_through_a_window_only_on_a_slot_d_runs_clause(tmp_path):
+    """Node 2, 3 Oct 2:22 PM UTC: circuits' 14:30Z window said "no merge checks on node 2 through it (no slot-d=runs)", and the
+    words alone let slot d run into it. A window that starts in 2000 and lasts 190 years is open whatever the time."""
+    src = (NEBIUS / "check_slot_d.sh").read_text()
+    program = src[src.index("\n", src.index("<< 'EOF'")) + 1:src.index("\nEOF\n")]
+    windows = tmp_path / "windows"
+
+    def refuses(comment: str) -> bool:
+        windows.write_text(f"# slot-d=runs in a header line\n2000-01-01T00:00Z 99999999 # {comment}\n")
+        return subprocess.run([sys.executable, "-", str(windows), "30"], input=program, text=True,
+                              capture_output=True).returncode != 0
+
+    assert refuses("circuits TP8; no merge checks on node 2 through it (no slot-d=runs)")
+    assert refuses("circuits TP8 (slot-d=runs only for the 8:00 run)")
+    assert not refuses("pouw-ncp, bc-2f661c92 (fallback 13:35Z); slot-d=runs (its host threads stay off 0-47)")
+    assert not refuses("slot-d=runs: Pearl-C4 re-time")
+
+
 def test_fill_runner_pauses_cpu_sets_jobs_on_slot_d_while_a_train_check_holds_its_lock(tmp_path, monkeypatch):
     """Compute accounting (1 Oct 8:58 AM PDT): GPU 0's verifies go back on 0-47 yielding to slot d's train checks. A check runs in
     a login session's cgroup, where nice 19 can't reach, so the runner starts none and pauses its running ones while the check
@@ -1807,6 +2007,156 @@ def test_fill_runner_pauses_cpu_sets_jobs_on_slot_d_while_a_train_check_holds_it
     check.close()
     fr.tick(0)
     assert mine() == [("ver-0.sh", False), ("ver-1.sh", False)] and signals[2:] == [signal.SIGCONT, signal.SIGCONT]
+
+
+def test_fill_runner_fence_command_caps_a_fence_keeps_one_per_owner_and_logs_it(tmp_path, monkeypatch, capsys):
+    """Memory accounting's honest-latency fence on node 2 (2 Oct) took five round trips with infra: keep-free, a respawned pane for
+    fill's CPUs, a max-min line and a revert timer. `fill_runner.py fence` writes one self-expiring line within the caps instead
+    (1 GPU, at most 8 cores on its NUMA node, at most 4 h, one per owner, none on another's GPU or cores) and logs each change."""
+    fill, log = tmp_path / "fill", tmp_path / "quota-changes.log"
+    fill.mkdir()
+    monkeypatch.setenv("FILL_DIR", str(fill))
+    monkeypatch.setenv("FILL_QUOTA_LOG", str(log))
+    spec = importlib.util.spec_from_file_location("fill_runner_fence", FILL_RUNNER)
+    fr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fr)
+    monkeypatch.setattr(fr, "gpu_count", lambda: 8)
+    monkeypatch.setattr(fr, "gpu_cpus", lambda i: set(range(96)) if i < 4 else set(range(96, 192)))
+    t = fr.utc("2026-10-02T20:00Z")
+    base = {"--gpu": "7", "--cpus": "116-123", "--until": "2026-10-02T23:00Z", "--why": "honest latency, thread 1"}
+
+    def fence(owner, change=None):
+        args = {**base, **(change or {})}
+        return fr.fence([owner, *(x for k, v in args.items() if v is not None for x in (k, v))], t=t)
+
+    for change in ({"--cpus": "112-120"}, {"--cpus": "90-97"}, {"--cpus": "x"}, {"--until": "2026-10-03T00:01Z"},
+                   {"--until": "2026-10-02T19:59Z"}, {"--gpu": "8"}, {"--jobs": "meas-*"}, {"--jobs": "meas-*", "--max-min": "241"},
+                   {"--why": None}):
+        assert fence("ma", change) == 2, change
+    (fill / "keep-free").write_text("7  # pous\n")
+    assert fence("ma") == 2
+    (fill / "keep-free").unlink()
+    assert not (fill / "fences").exists() and not log.exists()
+
+    (fill / "windows").write_text("2026-10-02T21:00Z 30 # a booked window\n")
+    assert fence("ma", {"--jobs": "meas-*", "--max-min": "180"}) == 0
+    assert "the window booked at 21:00Z" in capsys.readouterr().out
+    assert (fill / "fences").read_text() == "ma 7 116-123 2026-10-02T23:00:00Z meas-* 180  # honest latency, thread 1\n"
+    (f,) = fr.fences(t)
+    assert (f["gpu"], f["cpus"], f["jobs"], f["minutes"]) == (7, "116-123", "meas-*", 180)
+    assert fence("pm") == 2 and fence("pm", {"--gpu": "6", "--cpus": "120-121"}) == 2
+    assert fence("pm", {"--gpu": "6", "--cpus": "124,125", "--until": "2026-10-02T21:00Z"}) == 0
+    assert fence("ma", {"--gpu": "5", "--cpus": "100-101"}) == 0
+    assert sorted((f["owner"], f["gpu"]) for f in fr.fences(t)) == [("ma", 5), ("pm", 6)]
+    assert [f["owner"] for f in fr.fences(fr.utc("2026-10-02T21:00Z"))] == ["ma"]
+    assert fr.fence(["ma", "--release"], t=t) == 0 and fr.fence(["ma", "--release"], t=t) == 2
+    assert [f["owner"] for f in fr.fences(t)] == ["pm"]
+    notes = [line.split(" ", 1)[1] for line in log.read_text().splitlines()]
+    assert notes == ["ma (fill_runner.py fence): fence ma 7 116-123 2026-10-02T23:00:00Z meas-* 180  # honest latency, thread 1",
+                     "pm (fill_runner.py fence): fence pm 6 124-125 2026-10-02T21:00:00Z  # honest latency, thread 1",
+                     "ma (fill_runner.py fence): fence (replaces its last) ma 5 100-101 2026-10-02T23:00:00Z  # honest latency, "
+                     "thread 1",
+                     "ma (fill_runner.py fence): fence released, was ma 5 100-101 2026-10-02T23:00:00Z"]
+
+
+def test_fill_runner_keeps_fill_off_a_fence_and_runs_the_fences_jobs_there(tmp_path, monkeypatch):
+    """A fence takes its GPU at once: fill stops its own job there, starts no other job there or on the fence's cores, keeps the
+    GPU in "kept free" (so a waiter pinned to it holds no fill back, and node 2's spill keeps off it), and moves running jobs off
+    the cores once. A job its glob names runs on that GPU alone, on those cores, with the fence's max_min, and no Commit stops
+    it for a GPU the Commit can't have."""
+    gl, fill = tmp_path / "gl", tmp_path / "fill"
+    for d in ("queue", "running", "logs"):
+        (fill / d).mkdir(parents=True)
+    gl.mkdir()
+    monkeypatch.setenv("GPU_LEASE_DIR", str(gl))
+    monkeypatch.setenv("FILL_DIR", str(fill))
+    spec = importlib.util.spec_from_file_location("fill_runner_fenced", FILL_RUNNER)
+    fr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fr)
+    (fill / "fences").write_text("ma 1 116-123 2099-01-01T00:00Z meas-* 90  # honest latency\n")
+    held: dict[int, str] = {}
+    started, stopped, repins = [], [], []
+    monkeypatch.setattr(fr, "reap", lambda: None)
+    monkeypatch.setattr(fr, "verity_pool", lambda queued: None)
+    monkeypatch.setattr(fr, "lease", lambda i: held.get(i))
+    monkeypatch.setattr(fr, "waiters", lambda: [])
+    monkeypatch.setattr(fr, "repin", lambda f, fs: repins.append(f["owner"]))
+    monkeypatch.setattr(fr, "start", lambda p, h, backfill=False: started.append((p.name, h["on"], h["max_min"])) or p.unlink())
+    monkeypatch.setattr(fr, "stop", lambda k, why, requeue=True: stopped.append((k, why)) or fr.running[k].update(stopping=True,
+                                                                                                                  why=why))
+
+    def run(name, gpu):
+        held[gpu] = f"pid={10 + gpu} run=- who=fill:o since=2026-10-02T20:00:00Z preempt=1 cmd=x"
+        fr.running[name] = {"pid": 10 + gpu, "t0": 0, "paused": False, "started": "-",
+                            "h": {"gpus": 1, "project": "pous", "owner": "o", "max_min": 10**9}}
+
+    def done(name, gpu):
+        fr.running.pop(name)
+        held.pop(gpu)
+
+    run("pous-a.sh", 0)
+    run("pous-old.sh", 1)
+    for name, head in (("pous-b.sh", "gpus=1 max_min=90"), ("meas-1.sh", "gpus=1 max_min=90")):
+        (fill / "queue" / name).write_text(f"# fill: owner=ma {head}\n")
+    fr.tick(2)
+    assert stopped == [("pous-old.sh", "GPU 1 is fenced for ma")] and started == [] and repins == ["ma"]
+    status = (fill / "status.txt").read_text().splitlines()
+    assert "kept free [1]" in status[0] and status[-1] == "  fence ma 1 116-123 2099-01-01T00:00Z meas-* 90"
+    done("pous-old.sh", 1)
+    fr.tick(2)
+    assert started == [("meas-1.sh", "1", 90)] and repins == ["ma"]
+    run("meas-1.sh", 1)
+    (fill / "queue" / "verity-commit-c.sh").write_text("# fill: owner=c gpus=1 project=verity\n")
+    fr.tick(2)
+    assert stopped[1:] == [("pous-a.sh", "a Commit reclaims its GPU")]
+    done("pous-a.sh", 0)
+    fr.tick(2)
+    assert started[1:] == [("verity-commit-c.sh", "0", 25)]
+    assert fr.header(fill / "queue" / "pous-b.sh")["max_min"] == 30          # the fence's minutes are its jobs' alone
+
+    spec.loader.exec_module(fr)                                             # the real start
+    cmds = []
+    monkeypatch.setattr(fr.shutil, "which", lambda name: None)
+    monkeypatch.setattr(fr.subprocess, "Popen", lambda cmd, **kw: cmds.append(cmd) or type("P", (), {"pid": 1})())
+    monkeypatch.setattr(fr, "event", lambda *a, **kw: None)
+    for name, head in (("meas-2.sh", "gpus=1"), ("pous-c.sh", "gpus=1"), ("cpu.sh", "gpus=0")):
+        p = fill / "queue" / name
+        p.write_text(f"# fill: owner=ma {head}\n")
+        fr.start(p, fr.header(p))
+        assert cmds[-1][cmds[-1].index("taskset") + 2] == ("116-123" if name == "meas-2.sh" else "96-115,124-127"), name
+
+
+def test_fill_runner_moves_running_fill_jobs_off_a_new_fences_cores(tmp_path, monkeypatch):
+    """A fill job already running when a fence starts would keep the fence's cores for up to its max_min: the runner moves each
+    thread of every running fill job off them, except the fence's own jobs and a thread with no other core to go to."""
+    cpus = os.sched_getaffinity(0)
+    if len(cpus) < 2:
+        pytest.skip("needs two CPUs")
+    monkeypatch.setenv("FILL_DIR", str(tmp_path / "fill"))
+    spec = importlib.util.spec_from_file_location("fill_runner_repin", FILL_RUNNER)
+    fr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fr)
+    events = []
+    monkeypatch.setattr(fr, "event", lambda kind, job, **kw: events.append((kind, kw["threads_moved"])))
+    pause = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"]
+    procs = {k: subprocess.Popen(pause, stdout=subprocess.PIPE, text=True, start_new_session=True)
+             for k in ("pous-a.sh", "meas-1.sh", "pous-pinned.sh")}
+    try:
+        for p in procs.values():
+            assert p.stdout.readline().strip() == "ready"
+        off = max(cpus)
+        os.sched_setaffinity(procs["pous-pinned.sh"].pid, {off})
+        for k, p in procs.items():
+            fr.running[k] = {"pid": p.pid, "unit": None, "h": {"gpus": 1}}
+        f = {"owner": "ma", "gpu": 0, "cpus": str(off), "jobs": "meas-*"}
+        fr.repin(f, [f])
+        assert os.sched_getaffinity(procs["pous-a.sh"].pid) == cpus - {off}
+        assert os.sched_getaffinity(procs["meas-1.sh"].pid) == cpus
+        assert os.sched_getaffinity(procs["pous-pinned.sh"].pid) == {off}
+        assert events == [("fence", 1)]
+    finally:
+        for p in procs.values():
+            stop_group(p)
 
 
 @pytest.mark.skipif(not shutil.which("zstd"), reason="zstd")

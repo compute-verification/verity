@@ -34,7 +34,7 @@
 //! template has no statement here.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     sync::{
         OnceLock,
         atomic::{AtomicU64, Ordering},
@@ -171,6 +171,28 @@ const ROLE_X: u8 = 1;
 const MAX_COMPS: usize = 1 << (IN_RANGE_K_LOG - 10);
 /// Free in-block coordinates per verifier point (`r[..PT_LOCAL]`); block coordinates follow.
 pub const PT_LOCAL: usize = 24;
+
+/// Words as aligned power-of-two blocks `(w, e)` (`w` a multiple of `2^e`), ascending: each maximal run of consecutive words
+/// cut from its start, every block the largest aligned one that fits in what is left of the run.
+pub fn aligned_blocks(words: &BTreeSet<usize>) -> Vec<(usize, usize)> {
+    let (mut out, mut it) = (Vec::new(), words.iter().copied().peekable());
+    while let Some(mut a) = it.next() {
+        let mut b = a + 1;
+        while it.next_if_eq(&b).is_some() {
+            b += 1;
+        }
+        while a < b {
+            let mut e = (usize::BITS - 1 - (b - a).leading_zeros()) as usize;
+            while a % (1 << e) != 0 {
+                e -= 1;
+            }
+            out.push((a, e));
+            a += 1 << e;
+        }
+    }
+    out
+}
+
 /// The leaf-commitment scheme this prover and verifier implement for the proof's own Merkle trees, as the composite circuit
 /// pins it (`verity_flock.circuit.LEAF_SCHEME`: today's id and the `hm96-sha256/v1` room it reserves).
 pub fn leaf_scheme() -> Value {
@@ -395,6 +417,11 @@ pub struct Composite {
     pub unit_net: usize,
     pub leaves_in: Vec<Vec<i64>>,
     pub leaves_out: Vec<Vec<usize>>,
+    /// the public input ports (META `public_inputs`, PROTOCOL.md §16.10), `(port, words)`: unit inputs that are no row but
+    /// public words the verifier recomputes from public data, each naming its recomputation (seed and derivation)
+    pub public_inputs: Vec<(String, usize)>,
+    /// each unit's leaf ports' public words (META `leaves_public`): the word's index among the public ports' words, or -1
+    pub leaves_public: Vec<Vec<i64>>,
     pub rows: Vec<RowConsts>,
     pub sha_net: usize,
     pub hm_net: usize,
@@ -821,6 +848,21 @@ impl Composite {
         } else {
             (ints(&meta["leaves_in"]), ints(&meta["leaves_out"]).into_iter().map(|u| u.into_iter().map(|x| x as usize).collect()).collect())
         };
+        let public_inputs: Vec<(String, usize)> = match meta.get("public_inputs") {
+            None => Vec::new(),
+            Some(v) => v.as_array().filter(|a| !a.is_empty()).ok_or("META: public_inputs is not a list of ports")?.iter().map(|p| {
+                let s = |k: &str| p[k].as_str().filter(|x| !x.is_empty());
+                let keys: Option<Vec<&str>> = p.as_object().map(|m| m.keys().map(|k| k.as_str()).collect());
+                match (keys.as_deref(), s("port"), p["words"].as_u64(), s("seed"), s("derivation")) {
+                    (Some(["derivation", "port", "seed", "words"]), Some(nm), Some(w), Some(_), Some(_)) if w > 0 => Ok((nm.to_string(), w as usize)),
+                    _ => Err("META: a public input names no port, words, or recomputation (a non-empty seed and derivation)".to_string()),
+                }
+            }).collect::<Result<_, _>>()?,
+        };
+        if public_inputs.is_empty() != meta.get("leaves_public").is_none() {
+            return Err("META: leaves_public without public_inputs, or public_inputs without leaves_public".into());
+        }
+        let leaves_public = if public_inputs.is_empty() { Vec::new() } else { ints(&meta["leaves_public"]) };
         let dummy_bc = meta["dummy"]["bc"].as_array().ok_or("META: dummy bc")?.iter()
             .map(|d| hexb(d.as_str().unwrap_or("")).and_then(|b| b.try_into().map_err(|_| "b || c length".to_string()))).collect::<Result<Vec<[u8; BC_BYTES]>, String>>()?;
         let dummy_outputs = meta["dummy"]["outputs"].as_array().ok_or("META: dummy outputs")?.iter().map(|x| x.as_u64().unwrap_or(u64::MAX) as u16).collect();
@@ -864,7 +906,7 @@ impl Composite {
         let c = Composite {
             name, sha512, class_sha512, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports, n_in,
             leaf_cuts_of: { let mut v = vec![Vec::new(); upv]; for &(u, j, l) in &leaf_cuts { if u < upv { v[u].push((j, l)); } } v },
-            out_words, out_row_ports, g, upv, unit_net, leaves_in, leaves_out, rows, sha_net, hm_net, out_net, out_ports, leaf_cuts, dummy_bc, dummy_outputs, per_vu, wires,
+            out_words, out_row_ports, g, upv, unit_net, leaves_in, leaves_out, public_inputs, leaves_public, rows, sha_net, hm_net, out_net, out_ports, leaf_cuts, dummy_bc, dummy_outputs, per_vu, wires,
             lookups: lookups_fast.into_iter().collect(), typed: None,
         };
         let typed = instance.map(|inst| {
@@ -957,6 +999,9 @@ impl Composite {
             }
         }
         if let Some(t) = &self.typed {
+            if !self.public_inputs.is_empty() {
+                return Err("public inputs: a typed statement's instance reads only rows".into());
+            }
             self.check_wiring()?;
             return self.check_typed(t);
         }
@@ -1008,13 +1053,99 @@ impl Composite {
         if unit.useful >= 1 << unit.unit_log {
             return Err("the unit fills its slot: no forced-zero row for a zero leaf".into());
         }
+        // a tail that returns the outputs has no power-of-two count, which alone refuses zero units otherwise
+        if self.upv == 0 {
+            return Err("units_per_vu is 0: a VU of no unit".into());
+        }
+        if self.g == 0 {
+            return Err("vus_per_block is 0: a block of no VU".into());
+        }
         if self.dummy_bc.len() != self.ports.len() || self.dummy_outputs.len() != n_out {
             return Err("the pinned dummy values are not one per port and output leaf".into());
         }
         if self.leaf_scheme != leaf_scheme() {
             return Err(format!("leaf-commitment scheme {} is not the one this verifier implements", self.leaf_scheme));
         }
+        self.check_public_inputs()
+    }
+
+    /// The public input ports (§16.10): each named once, and no row's name; one public leaf map per unit, each public leaf a
+    /// zero leaf of `leaves_in`; the unit range unpacked, since the `in` regions read it; their words
+    /// ([`Self::public_leaf_words`]) inside the leaf group, each leaf in them a public or a zero leaf in every unit.
+    fn check_public_inputs(&self) -> Result<(), String> {
+        if self.public_inputs.is_empty() {
+            return Ok(());
+        }
+        let mut names: Vec<&str> = self.public_inputs.iter().map(|p| p.0.as_str()).chain(self.ports.iter().map(|p| p.name.as_str())).collect();
+        names.sort_unstable();
+        if names.windows(2).any(|w| w[0] == w[1]) {
+            return Err("public inputs: a port named twice, or both a row and a public input".into());
+        }
+        let n_pub = self.public_words() as i64;
+        if self.leaves_public.len() != self.upv || self.leaves_public.iter().zip(&self.leaves_in).any(|(lp, li)| {
+            lp.len() != li.len() || lp.iter().zip(li).any(|(&q, &x)| q < -1 || q >= n_pub || (q >= 0 && x != -1))
+        }) {
+            return Err("public inputs: the public leaf maps are not one per unit, each public leaf a public word and a zero leaf of leaves_in".into());
+        }
+        let ur = self.unit_range();
+        if ur.packed {
+            return Err("public inputs: a packed unit range (the in region reads it)".into());
+        }
+        if 7 + log2ceil(ur.count) > PT_LOCAL {
+            return Err(format!("public inputs: {} unit slots, too many for an in region of at most {PT_LOCAL} free bits", ur.count));
+        }
+        let words = self.public_leaf_words();
+        if words.is_empty() {
+            return Err("public inputs: no unit reads a public word".into());
+        }
+        let g0 = &self.unit().in_groups[0];
+        for (w, e) in aligned_blocks(&words) {
+            if w < g0.col || w + (1 << e) > g0.col + g0.words {
+                return Err(format!("public inputs: the in region's words {w}..{} leave the unit's leaf group", w + (1 << e)));
+            }
+        }
+        for (lp, li) in self.leaves_public.iter().zip(&self.leaves_in) {
+            if let Some(j) = (0..li.len()).find(|&j| words.contains(&(g0.col + j / 8)) && lp[j] < 0 && li[j] >= 0) {
+                return Err(format!("public inputs: leaf {j} reads a row word inside word {}, which holds a public word", g0.col + j / 8));
+            }
+        }
         Ok(())
+    }
+
+    /// The public input ports' words (one instance's).
+    pub fn public_words(&self) -> usize {
+        self.public_inputs.iter().map(|p| p.1).sum()
+    }
+
+    /// Whether block column `q` is a bit of a public leaf: in unit slot `k`'s leaf group (unit `k % units_per_vu`), leaf `j`'s
+    /// 16 bits from `col 128 + 16 j`, a public word.
+    pub fn is_public_col(&self, q: usize) -> bool {
+        let ur = self.unit_range();
+        let Some(o) = q.checked_sub(ur.start()) else { return false };
+        let (k, at) = (o >> ur.slot_log, o & ((1 << ur.slot_log) - 1));
+        let Some(x) = at.checked_sub(self.unit().in_groups[0].col * WORD) else { return false };
+        k < ur.count && self.leaves_public.get(k % self.upv).and_then(|l| l.get(x / 16)).is_some_and(|&p| p >= 0)
+    }
+
+    /// The 128-bit words of a unit slot holding some unit's public leaf (leaf `j` in word `col + j / 8` of the leaf group),
+    /// ascending.
+    pub fn public_leaf_words(&self) -> BTreeSet<usize> {
+        let Some(col) = self.unit().in_groups.first().map(|g| g.col) else { return BTreeSet::new() };
+        self.leaves_public.iter().flat_map(|l| l.iter().enumerate().filter(|x| *x.1 >= 0).map(move |(j, _)| col + j / 8)).collect()
+    }
+
+    /// The `in` regions (§16.10), as `(w, s)`: `2^s` words of every unit slot from word `w`. The public leaves' words
+    /// ([`Self::public_leaf_words`]) in aligned blocks of `2^e` words ([`aligned_blocks`]), each split into `2^(e - s)`
+    /// regions, `s = min(e, PT_LOCAL - 7 - log2ceil(units))` (`7 + s` free bits beside the slot bits).
+    pub fn in_regions(&self) -> Vec<(usize, usize)> {
+        let top = PT_LOCAL.saturating_sub(7 + log2ceil(self.unit_range().count));
+        aligned_blocks(&self.public_leaf_words())
+            .into_iter()
+            .flat_map(|(w, e)| {
+                let s = e.min(top);
+                (0..1usize << (e - s)).map(move |r| (w + (r << s), s))
+            })
+            .collect()
     }
 
     /// Every input port of every slot is wired exactly once: a unit's leaf ports by its leaf map, the rest by a wire. The
@@ -1392,6 +1523,11 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
             }
         }
     }
+    // a public leaf's bits are no copy but the in region's: every entry of their rows dropped
+    if !c.public_inputs.is_empty() {
+        da.retain(|e| !c.is_public_col(e.0 as usize));
+        db.retain(|e| !c.is_public_col(e.0 as usize));
+    }
     (da, db)
 }
 
@@ -1412,6 +1548,8 @@ pub struct Instances {
     pub population: Option<(usize, Vec<[u8; BC_BYTES]>)>,
     /// a shared-row file's row tables (header `shared_rows`); `None`: every instance carries its own rows
     pub tables: Option<RowTables>,
+    /// every instance's public input words (the file's last bytes, u16 LE), instance-major, the public ports in order
+    pub public: Vec<u16>,
 }
 
 /// Header `shared_rows: {port: R_p}`: row `p`'s frame-v3 tree is a table of `R_p` committed rows, and instance `i` reads its
@@ -1491,14 +1629,19 @@ impl Instances {
             Some(k) => (k.iter().zip(&c.ports).map(|(r, p)| r * 2 * p.words).sum(), k.iter().sum::<usize>() * SALT_BYTES, k.iter().sum(), 4 * n * np),
         };
         let (rows_len, salts_len) = if has_rows { (rows_len, salts_len) } else { (0, 0) };
-        if body.len() != rows_len + salts_len + BC_BYTES * n_bcs + refs_len {
+        if header.get("public_inputs") != c.meta.get("public_inputs") {
+            return Err("header: public_inputs is not the circuit's".into());
+        }
+        let public_len = 2 * n * c.public_words();
+        if body.len() != rows_len + salts_len + BC_BYTES * n_bcs + refs_len + public_len {
             return Err("instance file length".into());
         }
         let private = |a: usize, len: usize| has_rows.then(|| body[a..a + len].to_vec());
         let (rows, salts) = (private(0, rows_len), private(rows_len, salts_len));
         let pubs = &body[rows_len + salts_len..];
         let bcs = pubs[..BC_BYTES * n_bcs].chunks(BC_BYTES).map(|x| x.try_into().unwrap()).collect();
-        let tail = &pubs[BC_BYTES * n_bcs..];
+        let tail = &pubs[BC_BYTES * n_bcs..BC_BYTES * n_bcs + refs_len];
+        let public = pubs[pubs.len() - public_len..].chunks(2).map(|x| u16::from_le_bytes([x[0], x[1]])).collect();
         let (rows, salts, tables) = match counts {
             None => (rows, salts, None),
             Some(counts) => {
@@ -1522,7 +1665,7 @@ impl Instances {
         }
         header["rows"] = Value::Bool(false);
         let public_sha512 = Self::public_digest(&header, pubs);
-        Ok(Instances { header, n, rows, salts, bcs, public_sha512, population: None, tables })
+        Ok(Instances { header, n, rows, salts, bcs, public_sha512, population: None, tables, public })
     }
 
     /// SHA-512 of the header's compact key-sorted JSON and the public bytes. serde_json's maps are sorted (no `preserve_order`), so
@@ -1566,13 +1709,16 @@ impl Instances {
         if let Some(t) = &self.tables {
             pubs.extend(t.refs.iter().flat_map(|r| r.to_le_bytes()));
         }
+        pubs.extend(self.public.iter().flat_map(|w| w.to_le_bytes()));
         let public_sha512 = Self::public_digest(&header, &pubs);
         let population = Some((self.n, self.bcs.clone()));
+        let pw = c.public_words();
+        let public: Vec<u16> = units.iter().flat_map(|&u| self.public[u * pw..(u + 1) * pw].to_vec()).collect();
         if let Some(t) = &self.tables {
             // the tables stay the population's; the drawn instances keep their refs into them
             let refs = units.iter().flat_map(|&u| t.refs[u * np..(u + 1) * np].to_vec()).collect();
             return Ok(Instances { header, n: units.len(), rows: None, salts: None, bcs: self.bcs.clone(), public_sha512, population,
-                                  tables: Some(RowTables { refs, ..t.clone() }) });
+                                  tables: Some(RowTables { refs, ..t.clone() }), public });
         }
         Ok(Instances {
             header, n: units.len(),
@@ -1582,6 +1728,7 @@ impl Instances {
             public_sha512,
             population,
             tables: None,
+            public,
         })
     }
 
@@ -1602,20 +1749,24 @@ impl Instances {
         self.rows.is_some() || self.tables.as_ref().is_some_and(|t| t.rows.is_some())
     }
 
-    /// Every instance's input rows, instance-major, ports side by side (a shared-row file's gathered by its refs); `None`: the
-    /// verifier's file.
+    /// Every instance's input rows, instance-major, ports side by side (a shared-row file's gathered by its refs), then every
+    /// instance's public input words (u16 LE, as [`Stmt::unit_inputs`] reads them); `None`: the verifier's file.
     pub fn instance_rows(&self, c: &Composite) -> Option<Vec<u8>> {
-        let Some(t) = &self.tables else { return self.rows.clone() };
+        let public = self.public.iter().flat_map(|w| w.to_le_bytes());
+        let Some(t) = &self.tables else {
+            return self.rows.as_ref().map(|r| { let mut r = r.clone(); r.extend(public); r });
+        };
         let rows = t.rows.as_ref()?;
         let np = c.ports.len();
         let base: Vec<usize> = c.ports.iter().zip(&t.counts).scan(0, |a, (p, &r)| { let s = *a; *a += r * 2 * p.words; Some(s) }).collect();
-        let mut out = Vec::with_capacity(self.n * c.row_bytes());
+        let mut out = Vec::with_capacity(self.n * (c.row_bytes() + 2 * c.public_words()));
         for i in 0..self.n {
             for (p, port) in c.ports.iter().enumerate() {
                 let (w, r) = (2 * port.words, t.refs[i * np + p] as usize);
                 out.extend_from_slice(&rows[base[p] + r * w..base[p] + (r + 1) * w]);
             }
         }
+        out.extend(public);
         Some(out)
     }
 
@@ -1773,6 +1924,9 @@ pub fn frame_roots(c: &Composite, inst: &Instances) -> Result<Vec<(String, [u8; 
 pub enum Region {
     /// row `p`'s `b || c` of each VU (its hm96 slot's output)
     Digest(usize),
+    /// the public input words of every unit slot's leaf group ([`Composite::in_regions`]), `In(w, s)`: `2^s` words from
+    /// word `w`
+    In(usize, usize),
 }
 
 pub struct RegionShape {
@@ -2322,6 +2476,10 @@ impl Stmt {
         for p in 0..c.ports.len() {
             out.push(mk(Region::Digest(p), [bits(0, 10), bits(hr.slot_log + lp, lg)].concat(), hr.start() + (p << hr.slot_log) + bc0)?);
         }
+        let ur = c.unit_range();
+        for (w, s) in c.in_regions() {
+            out.push(mk(Region::In(w, s), [bits(0, 7 + s), bits(ur.slot_log, log2ceil(ur.count))].concat(), ur.start() + (w << 7))?);
+        }
         Ok(out)
     }
 
@@ -2464,9 +2622,11 @@ impl Stmt {
         let (Some(rows), Some(i)) = (rows, self.inst_of(b, g)) else { return w };
         let rb = c.row_bytes();
         let mut col = unit.in_groups[0].col * WORD;
+        // a public leaf: instance i's public word q, past every instance's rows (`Instances::instance_rows`)
+        let public_at = |q: i64| (q >= 0).then(|| self.n * rb + 2 * (i * c.public_words() + q as usize));
         for (j, &leaf) in c.leaves_in[u].iter().enumerate() {
-            if leaf >= 0 {
-                let at = i * rb + 2 * leaf as usize;
+            let at = if leaf >= 0 { Some(i * rb + 2 * leaf as usize) } else { c.leaves_public.get(u).and_then(|l| public_at(l[j])) };
+            if let Some(at) = at {
                 let v = u16::from_le_bytes([rows[at], rows[at + 1]]) as u64;
                 if col % WORD < 64 { w[col / WORD].lo |= v << (col % WORD) } else { w[col / WORD].hi |= v << (col % WORD - 64) }
             }
@@ -2776,6 +2936,22 @@ impl Stmt {
         let np = c.ports.len();
         match reg {
             Region::Digest(p) => (0..c.g).flat_map(|g| match self.inst_of(b, g) { Some(i) => inst.bc(i, *p, np), None => c.dummy_bc[*p] }).collect(),
+            // each unit slot's words, 16-bit leaves u16 LE: a public leaf its instance's public word, zero for a zero leaf, a
+            // padding instance or a slot past the units
+            &Region::In(w, s) => {
+                let (ur, np) = (c.unit_range(), c.public_words());
+                let j0 = 8 * (w - c.unit().in_groups[0].col);
+                let mut out = Vec::with_capacity(16 << (s + log2ceil(ur.count)));
+                for k in 0..1usize << log2ceil(ur.count) {
+                    let (g, u) = (k / c.upv, k % c.upv);
+                    let i = if k < ur.count { self.inst_of(b, g) } else { None };
+                    for j in j0..j0 + (8 << s) {
+                        let v = match (i, c.leaves_public[u].get(j)) { (Some(i), Some(&q)) if q >= 0 => inst.public[i * np + q as usize], _ => 0 };
+                        out.extend_from_slice(&v.to_le_bytes());
+                    }
+                }
+                out
+            }
         }
     }
 
@@ -2932,6 +3108,17 @@ mod tests {
         assert!(regions_in_range(&[region((0..14).collect()), overlap]).unwrap_err().contains("LinkLayout"));
     }
 
+    /// §16.10: the in regions' words, run by run, in the largest aligned blocks (the vectors `test_circuit.py` gives Python's).
+    #[test]
+    fn public_words_are_cut_into_aligned_blocks() {
+        let blocks = |w: &[usize]| aligned_blocks(&w.iter().copied().collect());
+        assert_eq!(blocks(&(8..137).collect::<Vec<_>>()), [(8, 3), (16, 4), (32, 5), (64, 6), (128, 3), (136, 0)]);
+        assert_eq!(blocks(&[0, 1, 2, 3]), [(0, 2)]);
+        assert_eq!(blocks(&[3, 5]), [(3, 0), (5, 0)]);
+        assert_eq!(blocks(&[1, 2, 3, 4, 5]), [(1, 0), (2, 1), (4, 1)]);
+        assert!(blocks(&[]).is_empty());
+    }
+
     #[test]
     fn shapes_past_the_spec_are_refused() {
         assert!(shape_in_range(M_MAX, PT_LOCAL + M_MAX - IN_RANGE_K_LOG).is_ok());
@@ -3053,6 +3240,26 @@ mod tests {
         assert_eq!(cv.iter().flat_map(|w| w.to_be_bytes()).collect::<Vec<u8>>(), h.finalize().to_vec());
     }
 
+    /// A circuit with these port groups (bits per port) and no rows but the constant.
+    fn section(name: &str, ins: &[usize], in_words: usize, outs: &[usize], out_words: usize) -> String {
+        let n = (in_words + out_words) * WORD + 1;
+        let head = [format!("flock-ir-unit/v2 {name} {n} {} 1 0 {in_words} {}", n - 1, ins.len())].into_iter()
+            .chain(ins.iter().map(usize::to_string)).chain([format!("1 {in_words} {out_words} {}", outs.len())])
+            .chain(outs.iter().map(usize::to_string)).collect::<Vec<_>>().join(" ");
+        let rows: String = (0..n).map(|i| if i == n - 1 { format!("1 {i} 1 {i}\n") } else { "0 0\n".into() }).collect();
+        format!("CIRCUIT {name} {}\n{head}\n{rows}", n + 1)
+    }
+
+    /// META `rows` entry of a `sha512/row/v1` row of 64 words.
+    fn row64() -> Value {
+        let prefix = row_prefix(64);
+        let mut mid = SHA512_IV;
+        compress(&mut mid, &prefix);
+        let pad = words_be::<16>(&pad_block(256));
+        json!({"prefix": crate::hex(&prefix), "midstate": mid.iter().map(|w| format!("{w:016x}")).collect::<Vec<_>>(),
+               "pad": crate::hex(&pad.iter().flat_map(|w| w.to_be_bytes()).collect::<Vec<u8>>())})
+    }
+
     /// A typed template statement small enough to build here: one row port of 64 words, a unit type calling a flat type
     /// twice (placed in two slots of its layout) with an exported, a bound and a constant-form argument, an AND reading
     /// both parts' outputs, and row circuits that have their ports' shapes but no rows.
@@ -3070,13 +3277,8 @@ mod tests {
         let l0 = with_digest(json!({"type": c, "range_log": 9, "in_split": [], "out_split": [], "own": {"derive": "v2"}, "calls": [], "reads": []}));
         let l1 = with_digest(json!({"type": r, "in_split": [], "out_split": [], "own": {"derive": "v2"}, "reads": [],
                                     "calls": [{"item": 0, "layout": 0, "offset": 0}, {"item": 1, "layout": 0, "offset": 1}]}));
-        let prefix = row_prefix(64);
-        let mut mid = SHA512_IV;
-        compress(&mut mid, &prefix);
-        let pad = words_be::<16>(&pad_block(256));
         let zeros = "0".repeat(128);
-        let row = json!({"prefix": crate::hex(&prefix), "midstate": mid.iter().map(|w| format!("{w:016x}")).collect::<Vec<_>>(),
-                         "pad": crate::hex(&pad.iter().flat_map(|w| w.to_be_bytes()).collect::<Vec<u8>>())});
+        let row = row64();
         // the input row x, then y's output row (its one word zero-padded to a block): one hm96 slot per row
         let meta = json!({"format": crate::typed::FORMAT, "statement": crate::typed::STATEMENT, "program_sha512": zeros,
             "partition": {"rule": PARTITION_V1, "digest": zeros}, "scheme": SCHEME, "row_schema": ROW_SCHEMA,
@@ -3091,15 +3293,6 @@ mod tests {
             "dummy": {"bc": [crate::hex(&[0u8; BC_BYTES]), crate::hex(&[0u8; BC_BYTES])], "outputs": [0]}, "out_ports": [["y", 1]],
             "leaf_scheme": leaf_scheme(),
             "policy": "calls/v1", "unit_in": [], "types": {r.clone(): root, c: callee}, "layouts": [l0, l1], "unit_layout": 1, "unit_type": r});
-        // a row circuit: its port groups (bits per port), no rows but the constant
-        let section = |name: &str, ins: &[usize], in_words: usize, outs: &[usize], out_words: usize| {
-            let n = (in_words + out_words) * WORD + 1;
-            let head = [format!("flock-ir-unit/v2 {name} {n} {} 1 0 {in_words} {}", n - 1, ins.len())].into_iter()
-                .chain(ins.iter().map(usize::to_string)).chain([format!("1 {in_words} {out_words} {}", outs.len())])
-                .chain(outs.iter().map(usize::to_string)).collect::<Vec<_>>().join(" ");
-            let rows: String = (0..n).map(|i| if i == n - 1 { format!("1 {i} 1 {i}\n") } else { "0 0\n".into() }).collect();
-            format!("CIRCUIT {name} {}\n{head}\n{rows}", n + 1)
-        };
         format!("{} t\nMETA {}\n{}{}", crate::typed::FORMAT, serde_json::to_string(&meta).unwrap(),
                 section(SHA_NET, &[512, 1024, 512, 1024, 512, 1024], 64, &[512, 512, 512], 16),
                 section(HM_NET, &[512, 1024, 8 * SALT_BYTES], 32, &[8 * BC_BYTES], 8))
@@ -3237,6 +3430,72 @@ mod tests {
         }).contains("not a power of two"), "three roots");
         assert!(meta_of(&|m| m["wires"] = json!([])).contains("never stated"));
         assert!(Composite::parse(&text, None).is_ok());
+    }
+
+    /// A flat statement whose tail returns the outputs: an input row x and y's output row (one word), a unit reading one
+    /// leaf of x, and a stage reading the unit's output and returning y's word, with circuits of their ports' shapes only.
+    fn flat_tail_statement() -> String {
+        let zeros = "0".repeat(128);
+        let ports = [Port { name: "x".into(), words: 64, comps: 1, bits: 1024, v2: false, segs: None },
+                     Port { name: "y".into(), words: 64, comps: 1, bits: 1024, v2: false, segs: None }];
+        let name = |n: usize| ["unit", "stage0", SHA_NET, HM_NET][n];
+        let mut wires: Vec<Value> = row_wires(&ports, 2, 3).iter()
+            .map(|w| json!([name(w.dst.0), w.dst.1, w.dst.2, name(w.src.0), w.src.1, w.src.2])).collect();
+        wires.push(json!(["stage0", 0, 0, "unit", 0, 0]));
+        let meta = json!({"format": FORMAT, "statement": STATEMENT, "program_sha512": zeros,
+            "partition": {"rule": PARTITION_V1, "digest": zeros}, "scheme": SCHEME, "row_schema": ROW_SCHEMA,
+            "ports": [["x", 64, 1], ["y", 64, 1]], "input_ports": 1, "rows": [row64(), row64()],
+            "row_key_sha512": crate::hex(&Sha512::digest(hm96_sha512_default_key())), "vus_per_block": 2, "k_log": 17,
+            "units_per_vu": 1, "leaves_in": [[0]], "leaves_out": [[]], "leaf_cuts": [], "wires": wires,
+            "out_net": "stage0", "out_net_ports": [0],
+            "ranges": [{"type": "unit", "net": SHA_NET, "slot_log": 14, "pos0": 0, "count": 2, "packed": true},
+                       {"type": "unit", "net": HM_NET, "slot_log": 13, "pos0": 4, "count": 4},
+                       {"type": "unit", "net": "unit", "slot_log": 9, "pos0": 128, "count": 2},
+                       {"type": "unit", "net": "stage0", "slot_log": 9, "pos0": 130, "count": 2},
+                       {"type": "mask", "net": "mask", "slot_log": 10, "pos0": 66, "count": 1}],
+            "per_vu": {SHA_NET: 1, HM_NET: 2, "stage0": 1},
+            "dummy": {"bc": [crate::hex(&[0u8; BC_BYTES]), crate::hex(&[0u8; BC_BYTES])], "outputs": [0]}, "out_ports": [["y", 1]],
+            "leaf_scheme": leaf_scheme()});
+        format!("{FORMAT} t\nMETA {}\n{}{}{}{}", serde_json::to_string(&meta).unwrap(),
+                section("unit", &[16], 1, &[16], 1), section("stage0", &[16], 1, &[16], 1),
+                section(SHA_NET, &[512, 1024, 512, 1024, 512, 1024], 64, &[512, 512, 512], 16),
+                section(HM_NET, &[512, 1024, 8 * SALT_BYTES], 32, &[8 * BC_BYTES], 8))
+    }
+
+    /// No unit in a VU is refused (PROTOCOL.md §16.10, D8), with the tail that returns the outputs, whose unit count need not
+    /// be a power of two, kept consistent: no unit or stage slot, no leaf map and no wire but the rows'.
+    #[test]
+    fn a_tail_with_no_unit_is_refused() {
+        let text = flat_tail_statement();
+        assert!(Composite::parse(&text, None).is_ok(), "{:?}", Composite::parse(&text, None).err());
+        let mut lines: Vec<String> = text.split('\n').map(str::to_string).collect();
+        let mut m: Value = serde_json::from_str(&lines[1][5..]).unwrap();
+        m["units_per_vu"] = json!(0);
+        m["ranges"][2]["count"] = json!(0);
+        m["ranges"][3]["count"] = json!(0);
+        m["per_vu"]["stage0"] = json!(0);
+        m["leaves_in"] = json!([]);
+        m["leaves_out"] = json!([]);
+        m["wires"] = json!(m["wires"].as_array().unwrap()[..2]);
+        lines[1] = format!("META {}", serde_json::to_string(&m).unwrap());
+        let err = Composite::parse(&lines.join("\n"), None).err().unwrap_or_default();
+        assert!(err.contains("units_per_vu is 0"), "{err}");
+    }
+
+    /// No VU in a block is refused (PROTOCOL.md §16.10, D9), with the tail that returns the outputs, whose unit count need not
+    /// be a power of two, kept consistent: every circuit's range has no slot.
+    #[test]
+    fn a_block_with_no_vu_is_refused() {
+        let text = flat_tail_statement();
+        let mut lines: Vec<String> = text.split('\n').map(str::to_string).collect();
+        let mut m: Value = serde_json::from_str(&lines[1][5..]).unwrap();
+        m["vus_per_block"] = json!(0);
+        for i in 0..4 {
+            m["ranges"][i]["count"] = json!(0);
+        }
+        lines[1] = format!("META {}", serde_json::to_string(&m).unwrap());
+        let err = Composite::parse(&lines.join("\n"), None).err().unwrap_or_default();
+        assert!(err.contains("vus_per_block is 0"), "{err}");
     }
 
     #[test]
