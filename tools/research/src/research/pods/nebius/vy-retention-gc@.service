@@ -8,8 +8,9 @@
 # On vy-nebius-2 it starts only when the fill runner wrote its status.txt in the last minute and the first line says
 # `timed False, window waiting False` (as dispatch.py's n2_room reads it); gc itself also refuses from 15 min before a
 # booking in fill/windows until it ends, and checks all of it again before each deletion.
-# Exit 3 (refused: what live work names can't be established, a lock is held, a timed window opened during the pass) is retried
-# in 20 min; 1 (a deletion failed or a path is stuck) and 2 (usage) are not: the log and the journal name the path.
+# Exit 3 (refused: what live work names can't be established, here or on vy-nebius-2 for vy-nebius-1, a lock is held, a timed
+# window opened during the pass) is retried in 20 min; 1 (a deletion failed or a path is stuck) and 2 (usage) are not: the log
+# and the journal name the path. SIGTERM puts back what the pass renamed aside, then it exits 143.
 [Unit]
 Description=research retention gc --apply on %i (vy-retention-gc@%i.timer, every 6 h)
 StartLimitIntervalSec=0

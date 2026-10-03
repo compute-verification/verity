@@ -4,7 +4,8 @@
 # A monitor alerts each owner in report.json's `asks`; `now` in each says when it ran. Deletes nothing, takes no lock.
 # Report's exit 1 (an owner to ask) is a success here. On vy-nebius-2 it starts only when the fill runner wrote its
 # status.txt in the last minute and the first line says `timed False, window waiting False`; report and gc also refuse
-# near a booking in fill/windows (exit 3, retried in 20 min).
+# near a booking in fill/windows. A refusal (exit 3: on vy-nebius-1 also whenever vy-nebius-2 can't say what it names, as
+# in its timed windows) is in the JSON it writes and is not retried, since a retry walks all of /workspace again.
 [Unit]
 Description=research retention report and gc dry run on %i (vy-retention-dry-run@%i.timer, daily)
 StartLimitIntervalSec=0
@@ -22,4 +23,4 @@ ExecStart=/usr/bin/python3 -m research retention gc --node %i --out /workspace/r
 SuccessExitStatus=1
 Restart=on-failure
 RestartSec=20min
-RestartPreventExitStatus=2
+RestartPreventExitStatus=2 3
