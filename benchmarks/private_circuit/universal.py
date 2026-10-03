@@ -23,7 +23,8 @@
   instances: a Program of one `batch` of the unit per layer (`wired_program`), whose wiring is the public layout's. Checked
   against `interpret` composed along the topology and `verity.evaluation` of the Program; `Q_template_instance` makes every
   member one unit, and the topology the partition derives (`derived_topology`) must be the one built. One class statement of
-  `4 n` instances, proved and Lean-verified with `--program` (the verifier derives the units); then the same for a cheating
+  `4 n` instances, proved and Lean-verified (its units as stated; with `--program` too, which a class statement's template
+  name refuses at setup, recorded as `with_program`); then the same for a cheating
   prover whose layer 1 reads a made-up input in place of layer 0's outputs, every unit correct on what it is given, and the
   row records whether the verifiers refuse it. Before it, the one-unit statement at `4 n` instances, the cost comparison.
 """
