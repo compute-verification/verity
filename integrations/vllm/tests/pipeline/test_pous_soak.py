@@ -7,6 +7,7 @@ import ctypes
 import hashlib
 import json
 import shutil
+import socket
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -483,6 +484,57 @@ def test_verify_drives_a_server_on_another_host_through_its_control_port(fake, t
     with np.load(job / line["chunk"]) as z:
         meta = json.loads(str(z["meta_json"]))
     assert meta["remote"]["server"] == f"127.0.0.1:{ctl.port}" and "control_clock_close" in meta
+    assert len(meta["control_clock_open"]["rtt_ns"]) == 200 and min(meta["control_clock_open"]["rtt_ns"]) > 0
+    net = v["network"]
+    assert net["answers"] > 0 and net["negative"] == 0 and {c["config"] for c in net["cells"].values()} == {"tuned"}
     r = meta["server_status"]["responder"]
     assert r["answered"] + r["pings"] >= line["answers"], "the server's own counts, at the chunk's close"
     assert meta["control_clock_open"]["lo_ns"] <= 0 <= meta["control_clock_open"]["hi_ns"], "one host: offset 0 is bracketed"
+
+
+@pytest.mark.slow
+def test_a_stub_server_answers_a_remote_verifier_and_reports_the_network_term(fake, tmp_path):
+    """`stub` and `verify --server` as two processes, nine cells (about 25 s): the stub writes the vk the
+    verifier reads only once connected, takes the idle load, ends when the verifier stops it, and each chunk carries the
+    transport, its probe at open and close, and the per-cell network term.  Catches the stub's wiring, which only the
+    cross-node measurement would otherwise exercise."""
+    import os
+    import subprocess
+    import sys
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
+    cpu = str(min(os.sched_getaffinity(0)))
+    setup, job, state, srv = (tmp_path / n for n in ("setup", "job", "state", "srv"))
+    for d in (job, state):
+        d.mkdir()
+    stub = subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.pous_soak", "stub", "--job", str(srv), "--setup-out",
+                             str(setup), "--native", str(fake.path), "--segments", "1", "--control-port", str(port)],
+                            env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.pous_soak", "verify", "--server", f"127.0.0.1:{port}",
+                            "--transport", "loopback (test)", "--transport-probe", "echo probed",
+                            "--setup", str(setup), "--job", str(job), "--state", str(state), "--native", str(fake.path),
+                            "--until", "4000000000", "--loads", "idle", "--configs", "tuned", "--passes", "1", "--twins", "0",
+                            "--cell-s", "0.3", "--cpu", cpu, "--checker-cpu", cpu, "--sampler-cpu", cpu, "--sample-cpus", cpu],
+                           env=env, capture_output=True, text=True, check=False)
+        assert p.returncode == 0, p.stderr[-2000:]
+        _, err = stub.communicate()
+    finally:
+        if stub.poll() is None:
+            stub.kill()
+            stub.communicate()
+    assert stub.returncode == 0, err[-2000:]
+    served = json.loads((srv / "serve.json").read_text())
+    assert served["idle_exit"] is None and served["responder"]["answered"] > 0
+    (line,) = [json.loads(x) for x in (state / "chunks.log").read_text().splitlines()]
+    v = line["validation"]
+    assert line["wrong"] == 0 and line["runs"] == 9 and v["blocks"]["equal"] and v["offset"]["empty"] == 0
+    with np.load(job / line["chunk"]) as z:
+        meta = json.loads(str(z["meta_json"]))
+    assert meta["transport"] == "loopback (test)" and meta["ready"]["stub"]
+    assert meta["transport_probe_open"]["stdout"] == "probed\n" == meta["transport_probe_close"]["stdout"]
+    net = v["network"]
+    assert net["negative"] == 0 and len(net["cells"]) == 9 and all("reads" in c for c in net["cells"].values())

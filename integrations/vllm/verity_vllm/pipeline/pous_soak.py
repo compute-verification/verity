@@ -2,6 +2,7 @@
 every answer's timing recorded raw.
 
     python -m verity_vllm.pipeline.pous_soak serve   --setup DIR --job DIR --build-dir DIR [--kernels JSON] [--responder-cpu C]
+    python -m verity_vllm.pipeline.pous_soak stub    --job DIR --setup-out DIR --native FAKE.so --control-port P
     python -m verity_vllm.pipeline.pous_soak verify  --setup DIR --job DIR --state DIR --until EPOCH [--cpu C] ...
     python -m verity_vllm.pipeline.pous_soak preserve --custody DIR FILE...
 
@@ -671,16 +672,19 @@ class ControlClient:
 
     def clock(self, n: int = 200) -> dict[str, Any]:
         """The server's clock against this one over ``n`` control round trips: the offset (server minus verifier) lies in
-        [lo, hi], the intersection of each exchange's [t_srv - t1, t_srv - t0]; and the offset at the shortest round trip."""
-        lo, hi, best = -(2**62), 2**62, None
+        [lo, hi], the intersection of each exchange's [t_srv - t1, t_srv - t0]; the offset at the shortest round trip; and
+        every round trip's ns, in order."""
+        lo, hi, best, rtts = -(2**62), 2**62, None, []
         for _ in range(n):
             t0 = time.time_ns()
             s = self.call("clock")[0]["t_ns"]
             t1 = time.time_ns()
             lo, hi = max(lo, s - t1), min(hi, s - t0)
+            rtts.append(t1 - t0)
             if best is None or t1 - t0 < best[0]:
                 best = (t1 - t0, s - (t0 + t1) // 2)
-        return {"exchanges": n, "lo_ns": lo, "hi_ns": hi, "rtt_min_ns": best[0], "offset_at_rtt_min_ns": best[1], "t_ns": time.time_ns()}
+        return {"exchanges": n, "lo_ns": lo, "hi_ns": hi, "rtt_min_ns": best[0], "offset_at_rtt_min_ns": best[1],
+                "rtt_ns": rtts, "t_ns": time.time_ns()}
 
     def close(self, stop: bool = True) -> None:
         """Closes the connection; with ``stop``, the server ends too (else it waits for the next verifier, up to its idle exit)."""
@@ -863,6 +867,56 @@ def warm_serving(serving: Serving, seconds: float, dcgm_gpu: int) -> dict[str, A
             "dcgm_samples": len(rows), "dram_active_mean": round(float(np.nanmean(dram)), 4) if len(dram) else None,
             "dram_active_min": round(float(np.nanmin(dram)), 4) if len(dram) else None,
             "dcgm_raw": [ln for _, ln in lines[:3]] if not len(rows) else None}
+
+
+def cmd_stub(a) -> int:
+    """A server without a GPU or a model, to measure the path between two hosts before a GPU is free: the fake native library's
+    responder over ``--segments`` segments of ``--scheme`` drawn at random in host memory, their verifier key written to
+    ``--setup-out`` (copy it to the verifier's ``--setup``), and the control port, which takes the idle load only."""
+    from verity_pous.verifier import VerifierKey, leaf_hash
+
+    from verity_vllm.pipeline import pous_run as R
+
+    job, out = Path(a.job), Path(a.setup_out)
+    job.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=True)
+    params = R.geometry(a.scheme).with_segments(a.segments)
+    data = np.frombuffer(bytearray(os.urandom(params.blocks * BLOCK)), np.uint8)
+    salt = os.urandom(24)
+    leaves = [leaf_hash(params, salt, i, data[i * BLOCK:(i + 1) * BLOCK].tobytes()) for i in range(params.blocks)]
+    root = VerifierKey.from_leaves(params, salt, leaves).root.hex()
+    (out / "vk-leaves.bin").write_bytes(b"".join(leaves))
+    _write(out / "vk.json", {"salt": salt.hex(), "root": root, "params": params.manifest(), "scheme": a.scheme, "stub": True})
+    lib = load_native(Path(a.native))
+    resp = Responder(lib, data.ctypes.data, data.nbytes, 0, a.responder_cpu, a.listen, a.port)
+    ready = {"port": resp.port, "host": a.listen, "pid": os.getpid(), "responder_tid": resp.stat()["tid"], "root": root,
+             "blocks": params.blocks, "block_bytes": BLOCK, "total": data.nbytes, "stub": "host memory, fake native library, no GPU",
+             "served_model": None, "hostname": socket.gethostname(),
+             "clocksource": _text("/sys/devices/system/clocksource/clocksource0/current_clocksource"),
+             "node": _text(a.node) if a.node else None, "affinity": sorted(os.sched_getaffinity(0)), "utc": utc()}
+
+    def sampler() -> subprocess.Popen:
+        return subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.pous_soak", "sample", "--job", str(job), "--cpu",
+                                 str(a.sampler_cpu), "--targets", f"{os.getpid()}:{ready['responder_tid']}", "--cpus", a.sample_cpus])
+
+    ctl = Control(a.listen, a.control_port, a.control_allow, ready, job, sampler if a.sampler_cpu >= 0 else None,
+                  lambda: {"responder": resp.stat()})
+    ready["control_port"] = ctl.port
+    _write(job / "ready.json", ready)
+    idle_exit = None
+    while not ctl.stopped.is_set():
+        with ctl.cv:
+            ctl.cv.wait_for(lambda: ctl.want is not None or ctl.stopped.is_set(), timeout=5.0)
+        w = ctl.take()
+        if w is not None:
+            doc = {"mode": "idle", "seq": w[1], "t_ns": time.time_ns()}
+            ctl.ack(w[1], doc if w[0] == "idle" else {**doc, "error": f"load {w[0]!r}: a stub serves the idle load only"})
+        if a.idle_exit_s > 0 and time.monotonic() - ctl.last > a.idle_exit_s:
+            idle_exit = f"no control request in {a.idle_exit_s:.0f} s"
+            break
+    _write(job / "serve.json", {"responder": resp.stop(), "idle_exit": idle_exit, "utc": utc()})
+    ctl.close()
+    return 0
 
 
 # ---- the verifier ----------------------------------------------------------------------------------------------------------
@@ -1498,6 +1552,31 @@ def offset_brackets(rec: np.ndarray, run_idx: np.ndarray) -> dict[int, tuple[int
     return out
 
 
+def network_term(rec: np.ndarray, run_idx: np.ndarray, runs: list[dict[str, Any]], ktx: np.ndarray,
+                 table: list[dict[str, Any]]) -> dict[str, Any]:
+    """With the server on another host, each timestamped answer's network term: the verifier's kernel span (its request's TX
+    to the response's last byte's RX, `c_krx_last - c_ktx`) less the server's (`K_tx_resp - K_rx_req`), each on one host's
+    clock, so no offset enters it.  It is everything between the two hosts' sockets: both directions' wire and, through a
+    tunnel, the tunnel's processes.  Per cell, reads and pings apart, in µs."""
+    col = COL
+    have = ((rec[:, col["status"]] == 0) & (rec[:, col["c_ktx"]] > 0) & (rec[:, col["c_krx_last"]] > 0)
+            & (rec[:, col["srv_krx"]] > 0) & (ktx > 0))
+    net = (rec[:, col["c_krx_last"]] - rec[:, col["c_ktx"]]) - (ktx - rec[:, col["srv_krx"]])
+    cell = np.array([runs[int(r)].get("cell", -1) for r in run_idx], np.int64) if len(rec) else np.zeros(0, np.int64)
+    out: dict[str, Any] = {"answers": int(np.count_nonzero(have)), "negative": int(np.count_nonzero(have & (net < 0))),
+                           "cells": {}}
+    for c in np.unique(cell[have]):
+        d: dict[str, Any] = {}
+        for kind, op in (("reads", OP_READ), ("pings", OP_PING)):
+            x = net[have & (cell == c) & (rec[:, col["op"]] == op)] / 1e3
+            if len(x):
+                d[kind] = {"n": len(x), **{f"p{q}_us": round(float(np.percentile(x, q)), 1) for q in (50, 90, 99, 99.9)},
+                           "min_us": round(float(x.min()), 1), "max_us": round(float(x.max()), 1)}
+        t = table[int(c)]
+        out["cells"][str(int(c))] = {"config": t["config"], "rate": t["rate"], "kib": t["kib"], "load": t["load"], **d}
+    return out
+
+
 def validate(rec: np.ndarray, run_idx: np.ndarray, runs: list[dict[str, Any]], steps: np.ndarray, samples: dict[str, np.ndarray],
              checked_blocks: int | None, cell_s: float, table: list[dict[str, Any]] | None = None,
              remote: bool = False) -> dict[str, Any]:
@@ -1538,6 +1617,7 @@ def validate(rec: np.ndarray, run_idx: np.ndarray, runs: list[dict[str, Any]], s
                          "width_ns_p50": int(np.median(width)) if len(width) else None,
                          "mid_ns_min": int(mid.min()) if len(mid) else None, "mid_ns_max": int(mid.max()) if len(mid) else None,
                          "per_run": [[r, lo, hi] for r, (lo, hi) in sorted(br.items())]}
+        out["network"] = network_term(rec, run_idx, runs, ktx, table or cells())
     elif not remote:
         kv = (ktx > 0) & ok
         order["K_tx_resp<=V1"] = int(np.count_nonzero(kv & (ktx > st["V1"] + tol)))
@@ -1631,6 +1711,17 @@ def write_chunk(path: Path, soak: Soak, extra: dict[str, Any]) -> dict[str, Any]
     return doc
 
 
+def _probe(cmd: str) -> dict[str, Any] | None:
+    """``cmd``'s output through the shell (the path's state: a tunnel's TCP_INFO, say), or None without one."""
+    if not cmd:
+        return None
+    try:
+        p = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=20, check=False)
+        return {"utc": utc(), "rc": p.returncode, "stdout": p.stdout[-8000:], "stderr": p.stderr[-1000:]}
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return {"utc": utc(), "error": repr(e)}
+
+
 def cmd_verify(a) -> int:
     from verity_vllm.pipeline import pous_run as R
 
@@ -1640,7 +1731,6 @@ def cmd_verify(a) -> int:
     signal.signal(signal.SIGTERM, lambda *_: soak.stopped.__setitem__(0, True))
     lib = load_native(Path(a.native))
     lib.soak_install_sigterm()
-    doc, _, _ = R.load_vk(Path(a.setup))
     if a.server:
         host, port = a.server.rsplit(":", 1)
         while soak.ctl is None:
@@ -1660,6 +1750,7 @@ def cmd_verify(a) -> int:
                 return 99 if soak.stopped[0] else 0
             time.sleep(1.0)
         ready = _read(ready_path)
+    doc, _, _ = R.load_vk(Path(a.setup))
     clocks = "every stamp CLOCK_REALTIME (kernel software timestamps, clock_gettime in both processes)"
     if a.server:
         clocks = ("two hosts, two clocks, each CLOCK_REALTIME: t_sched, V0, V1 and the c_* kernel stamps are the verifier's, the "
@@ -1669,7 +1760,7 @@ def cmd_verify(a) -> int:
                              "until_utc": utc(a.until * 1e9), "env": json.loads(a.env or "{}"), "cell_s": a.cell_s,
                              "clocks": clocks, "remote": {"server": a.server, "hostname": socket.gethostname()} if a.server else None,
                              "clocksource": _text("/sys/devices/system/clocksource/clocksource0/current_clocksource"),
-                             "node": _text(a.node) if a.node else None}
+                             "node": _text(a.node) if a.node else None, "transport": a.transport or None}
     if not extra["root_matches_vk"]:
         _write(job / "WRONG.json", {"why": f"server root {ready['root']} is not vk's {doc['root']}", "utc": utc()})
         write_chunk(job / f"chunk-{job.name}.npz", soak, extra)
@@ -1708,7 +1799,8 @@ def cmd_verify(a) -> int:
             cost[name] = {"min": out[0], "p50": out[1], "p999": out[2]}
         return {"index": len(chunks), "start_ns": time.time_ns(), "start_utc": utc(), "position_start": pos,
                 "checked0": int(ring.ctl[Ring.CHECKED]), "clock_cost_ns": cost,
-                "control_clock_open": soak.ctl.clock() if soak.ctl is not None else None}
+                "control_clock_open": soak.ctl.clock() if soak.ctl is not None else None,
+                "transport_probe_open": _probe(a.transport_probe)}
 
     def close_chunk(c: dict[str, Any], rc_: int) -> dict[str, Any]:
         """The chunk so far into ``chunk-<job>-<index>.npz`` (the sampler stopped first, so its samples are the chunk's), and
@@ -1719,7 +1811,8 @@ def cmd_verify(a) -> int:
         e = {**extra, "chunk_index": c["index"], "chunk_start_utc": c["start_utc"], "chunk_start_ns": c["start_ns"],
              "clock_cost_ns": c["clock_cost_ns"], "position_start": c["position_start"], "position_end": pos,
              "checked_blocks": int(ring.ctl[Ring.CHECKED]) - c["checked0"], "wrong": int(ring.ctl[Ring.WRONG]), "rc": rc_,
-             "end_utc": utc(), "control_clock_open": c["control_clock_open"]}
+             "end_utc": utc(), "control_clock_open": c["control_clock_open"], "transport_probe_open": c["transport_probe_open"],
+             "transport_probe_close": _probe(a.transport_probe)}
         if soak.ctl is not None:
             try:
                 rdoc, blobs = soak.ctl.call("rotate")
@@ -1871,6 +1964,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--idle-exit-s", type=float, default=900.0, help="with --control-port: end after this long without a request")
     v = sub.add_parser("verify")
     v.add_argument("--server", default="", help="HOST:PORT of the server's control port, on another host (else the job's files)")
+    v.add_argument("--transport", default="", help="how the verifier reaches the server (recorded in every chunk)")
+    v.add_argument("--transport-probe", default="", help="a shell command whose output each chunk records at its open and close")
     v.add_argument("--setup", required=True)
     v.add_argument("--job", required=True)
     v.add_argument("--state", required=True)
@@ -1889,6 +1984,21 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--configs", default=",".join(CONFIGS), help=f"the cross's responder configs, in order (of {ALL_CONFIGS})")
     v.add_argument("--passes", type=int, default=PASSES)
     v.add_argument("--twins", type=int, default=TWINS_PER_PASS, help="timestamping-off twins per pass")
+    t = sub.add_parser("stub")
+    t.add_argument("--job", required=True)
+    t.add_argument("--setup-out", required=True, help="where the stub writes vk.json and vk-leaves.bin")
+    t.add_argument("--native", required=True, help="the fake native library (build_native(fake=True))")
+    t.add_argument("--scheme", default="band-chain/d12/v1")
+    t.add_argument("--segments", type=int, default=8)
+    t.add_argument("--responder-cpu", type=int, default=-1)
+    t.add_argument("--listen", default="127.0.0.1")
+    t.add_argument("--port", type=int, default=0)
+    t.add_argument("--control-port", type=int, default=0)
+    t.add_argument("--control-allow", default="127.0.0.1")
+    t.add_argument("--sampler-cpu", type=int, default=-1, help="the server's sampler's core (-1: no sampler)")
+    t.add_argument("--sample-cpus", default=f"{SAMPLE_CPUS[0]}-{SAMPLE_CPUS[-1]}")
+    t.add_argument("--node", default="")
+    t.add_argument("--idle-exit-s", type=float, default=900.0)
     c = sub.add_parser("check")
     c.add_argument("--setup", required=True)
     c.add_argument("--job", required=True)
@@ -1908,7 +2018,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--timeout", type=float, default=600.0)
     p.add_argument("files", nargs="*")
     a = ap.parse_args(argv)
-    return {"serve": cmd_serve, "verify": cmd_verify, "check": cmd_check, "sample": cmd_sample, "preserve": cmd_preserve}[a.cmd](a)
+    return {"serve": cmd_serve, "stub": cmd_stub, "verify": cmd_verify, "check": cmd_check, "sample": cmd_sample, "preserve": cmd_preserve}[a.cmd](a)
 
 
 if __name__ == "__main__":
