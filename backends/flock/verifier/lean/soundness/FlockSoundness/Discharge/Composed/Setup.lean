@@ -105,7 +105,9 @@ theorem bodyOf_padsOnto (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ :
     (fun i j h => padPos_injective _ hQ (pt_injective (hlt i) (hlt j) h)) (fun k => pt_ne_zero (hlt k)) (by decide)
 
 theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) : CoinedOfSetup (Reg := Reg) P I dj y₀ := by
+    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
+    (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), deltaAvoidsMask y.x.st = true) :
+    CoinedOfSetup (Reg := Reg) P I dj y₀ := by
   intro S R y
   obtain ⟨g1, g2, g3, g4⟩ := bodyOf_geometry (Reg := Reg) P I dj y₀ S R y
   refine ⟨rfl, rfl, rfl, fun _ => rfl, ⟨(bodyOf _ _).rest0⟩, g1, g2, g3, fun c hc => ?_⟩
@@ -120,6 +122,6 @@ theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : 
       GF256.of ⟨a, 0⟩ := fun _ => rfl
   obtain ⟨hrank, hW, hb⟩ := coin_facts _ c hc.1 hβ hρ hw he
   exact ⟨g4 c hc.1, ⟨hβ, hρ, hw, he⟩, hrank, fun _ _ => rfl, hW, bodyOf_padsOnto P I dj y₀ S R y c hc.1, hb,
-    innerOf_holds P I dj y₀ S R y c hc⟩
+    innerOf_holds P I dj y₀ S R y ht (hdm S y) c hc⟩
 
 end FlockSoundness.Discharge.Composed

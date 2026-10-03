@@ -54,17 +54,21 @@ every coin vector the honest prover doesn't refuse (`refused_coins`; `CoinedSetu
 `ρ₀, ρ₁` independent) with no zerocheck outer coin `1` (`CoinedSetup.Covered`), the verifier's view of the draw's table at the executable's leaves, at any valid witness whose
 registered values are the public ones, is within `2·|Hid|·2^-193` of `S_shvzk`'s at any `w0`, both ways.
 
+For an untyped statement (`ht`, as every soundness theorem) whose Δ avoids the mask slot (`deltaAvoidsMask`, a condition
+the honest prover checks on the statement it builds), and for any prover of Ligerito's levels ≥ 1 (`LigProver`).
+
 Coverage: covered coins only. An outer coin `1` is a bad event of probability at most `(m − 13)·2^-128` per rep, which
 the prover doesn't refuse and this doesn't charge. At a refused coin the honest prover stops (`flock-circuit.rs`'s `refused_coins`:
 `at_open` returns `Err` before any `ŝ` leaves), and this says nothing about the view there. The follow-up is the proof
 at every coin vector, through `ZK.Session.session_prefinal_indep_cut` (Lemma A cut where the session stops)
 (`ASSUMPTIONS.md`, open items). -/
 theorem zk_session_view (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
+    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
+    (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), deltaAvoidsMask y.x.st = true)
     (hKey : Assumptions.Zk.HashDerivedKeyHm96) (hPad : Assumptions.Zk.PadNonvanishing40) :
     ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)),
       ZkViewAt (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
-  fun S R y => zkViewAt_of_ok _ (coinedOf_setup (Reg := Reg) P I dj y₀ S R y).2.2.2.2.2 hKey hPad
+  fun S R y => zkViewAt_of_ok _ (coinedOf_setup (Reg := Reg) P I dj y₀ ht hdm S R y).2.2.2.2.2 hKey hPad
 
 /-- **One `--zk` sampled session, sound and zero knowledge.** -/
 theorem zk_session_composed
@@ -96,7 +100,8 @@ theorem zk_session_composed
         (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ))) j
       (zcStrat execArith hs512 (planZAt dj y₀)
         (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ) ω)) qF qS)
-    -- hash-derived-key and PadNonvanishing
+    -- the statement's Δ avoids the mask slot, and hash-derived-key and PadNonvanishing
+    (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), deltaAvoidsMask y.x.st = true)
     (hKey : Assumptions.Zk.HashDerivedKeyHm96)
     (hPad : Assumptions.Zk.PadNonvanishing40) :
     prob (fun o => LiveAcceptsZK I o ∧
@@ -115,7 +120,7 @@ theorem zk_session_composed
           (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ)) ∧
     ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)),
       ZkViewAt (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
-  refine ⟨?_, zk_session_view P I dj y₀ hKey hPad⟩
+  refine ⟨?_, zk_session_view P I dj y₀ ht hdm hKey hPad⟩
   have hdec := decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)
   have hnever : ∀ o : Bool × Finset (Fin n), ¬ (o.1 = true ∧ o.1 = false) := fun o h => by
     rw [h.1] at h; exact Bool.noConfusion h.2

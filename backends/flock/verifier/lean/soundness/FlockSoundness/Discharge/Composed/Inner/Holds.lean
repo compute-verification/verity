@@ -2,6 +2,7 @@ import FlockSoundness.Discharge.Composed.Coined
 import FlockSoundness.Discharge.Composed.Inner.Lane
 import FlockSoundness.Discharge.Composed.Inner.ZerocheckGlue
 import FlockSoundness.Discharge.Composed.Inner.RingSwitch
+import FlockSoundness.ExecSetup
 
 /-!
 # `innerOf_holds`: the honest prover's pads satisfy the inner proof's constraint at the draw
@@ -940,22 +941,96 @@ theorem maskIsolated_of_layout (st : Stmt) (hwf : StmtWF st) (hL : MaskLayout st
     have hne : i.val ≠ c.val := fun he => hi (he ▸ hc)
     rw [hA _ _ (Or.inr hc), hB _ _ (Or.inr hc), if_neg hne]; exact ⟨rfl, rfl⟩
 
-/-- **The setup's layout facts** (open, the setup's): `HmRow.check`'s ranges are aligned and pairwise apart with the mask
-range one slot of at least a word; Δ's pairs lie in net slots; the pin is a net slot's constant row; the regions lie in the
-hm96 and output ranges. -/
+theorem maskCol_iff_B (st : Stmt) (i : ℕ) : MaskCol st i ↔ maskColB st i = true := by
+  unfold MaskCol maskColB
+  cases st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) <;> simp
+
+theorem delta_of_avoids {st : Stmt} (h : deltaAvoidsMask st = true) :
+    ∀ p ∈ st.da.toList ++ st.db.toList, ¬ MaskCol st p.1 ∧ ¬ MaskCol st p.2 := by
+  intro p hp
+  have := List.all_eq_true.1 h p hp
+  simp only [Bool.and_eq_true, Bool.not_eq_true'] at this
+  simp [maskCol_iff_B, this.1, this.2]
+
+theorem kind_of_find {st : Stmt} {m : Range} (hf : st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) = some m) :
+    m.kind = Flock.Kind.mask := by
+  have hk := List.find?_some hf
+  cases hkd : m.kind <;> rw [hkd] at hk
+  · exact absurd hk (by decide)
+  · exact absurd hk (by intro h; cases h)
+
+/-- `HmRow.check`'s mask range is one slot. -/
+theorem hm_check_maskCount {c : Flock.Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.check c tags ls = .ok ()) :
+    ∀ r ∈ c.ranges.toList, r.kind = Flock.Kind.mask → r.count = 1 := by
+  unfold HmRow.check at h
+  dsimp only at h
+  obtain ⟨_, hloop, -⟩ := ebind_ok h
+  clear h
+  rw [← Array.forIn_toList] at hloop
+  refine Refine.list_forIn_each _ (fun r => r.kind = Flock.Kind.mask → r.count = 1) ?_ _ _ _ hloop
+  clear hloop
+  intro r s y hy
+  repeat' (first | (obtain ⟨_, hx, hy⟩ := ebind_ok hy; try (cases hx)) | (split at hy))
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at hy
+    subst hy
+    refine ⟨fun hk => ?_, _, rfl⟩
+    simp_all
+
+/-- **The regions avoid the mask slot** (open, and false without a further condition): `Circuit.outRegion` places the
+output region at `ur.start + g0.col·WORD`, and `Net.ofRows` bounds no output group's column, so the region can lie in the
+mask range. -/
+theorem setupH_regions_layout {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
+    {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
+    (_ht : tags.typed = false)
+    (_h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) :
+    ∀ R ∈ regionsOf st, ∀ i < 2 ^ R.free.length, ¬ MaskCol st (R.inBlock i) := by
+  sorry
+
+/-- **The setup's layout facts**: `HmRow.check`'s mask range is one slot of at least a word, apart from every other
+range (`ExecSetup.setupH_layout`); the pin is a net slot's constant; Δ avoids the mask (`deltaAvoidsMask`); the regions
+(`setupH_regions_layout`). -/
 theorem setupH_maskLayout {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
-    (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) : MaskLayout st := by
-  sorry
+    (ht : tags.typed = false)
+    (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st)
+    (hdm : deltaAvoidsMask st = true) : MaskLayout st := by
+  have L := setupH_layout ht h
+  obtain ⟨_, hc⟩ := Refine.hm_parse_check (setupH_spec ht h).1
+  have hmask := (Refine.setupH_mask h).1
+  have hslot : ∀ m, st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) = some m →
+      m.count = 1 ∧ 7 ≤ m.slotLog := fun m hf =>
+    ⟨hm_check_maskCount hc m (List.mem_of_find?_eq_some hf) (kind_of_find hf),
+      (hmask m (List.mem_of_find?_eq_some hf) (kind_of_find hf)).1⟩
+  have hapart : ∀ m, st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) = some m →
+      ∀ r ∈ st.c.ranges.toList, ∀ x, FlockLevel3.covers r x → FlockLevel3.covers m x → r = m :=
+    fun m hf r hr _ h1 h2 => eq_of_inSpan L.disj hr (List.mem_of_find?_eq_some hf) (inSpan_of_covers h1)
+      (inSpan_of_covers h2)
+  refine ⟨hslot, hapart, delta_of_avoids hdm, ?_, setupH_regions_layout ht h⟩
+  intro hpin
+  cases hf : st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) with
+  | none => unfold MaskCol at hpin; rw [hf] at hpin; exact hpin
+  | some m =>
+      obtain ⟨h1, h7⟩ := hslot m hf
+      have hcm := (maskCol_iff hf h1 h7 st.pin).1 hpin
+      obtain ⟨rp, hrp, ip, hkp, hcp, hpv, -⟩ := L.pin
+      have hcr : FlockLevel3.covers rp st.pin := by
+        rw [hpv, start_eq_slot]
+        exact covers_slot hcp (by rw [L.slotLog rp hrp ip hkp]; exact (L.fit ip).1)
+      have hk := kind_of_find hf
+      rw [← hapart m hf rp hrp _ hcr hcm, hkp] at hk
+      cases hk
 
 /-- **The setup's statements isolate the mask slot**: `HmRow.check`'s ranges are aligned and pairwise
 apart, so the mask range's rows of `A₀`, `B₀` are its own identity rows and no other range's row reads its columns; Δ's
 pairs lie in net slots; the pin is a net slot's constant row; the regions lie in the hm96 and output ranges. -/
 theorem setupH_mask_isolated {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
-    (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) :
+    (ht : tags.typed = false)
+    (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st)
+    (hdm : deltaAvoidsMask st = true) :
     MaskIsolated st (stmtOf st (setupH_wf h).1 (regionsOf st)) :=
-  maskIsolated_of_layout st _ (setupH_maskLayout h)
+  maskIsolated_of_layout st _ (setupH_maskLayout ht h hdm)
 
 end Mask
 
@@ -973,7 +1048,8 @@ theorem tablesAtZK_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : F
 valid witness whose registered values are the public ones satisfies `Table.InnerHolds` (§2.4 line 16's ten
 constraints). -/
 theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)) :
+    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S))
+    (ht : I.tags.typed = false) (hdm : deltaAvoidsMask y.x.st = true) :
     let C := coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
     ∀ c, C.Covered c → ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w := by
   intro C c hc w hw hreg ω r
@@ -1098,7 +1174,7 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
       intro T hT w hw
       subst hT
       exact satisfies_zWith y.x.st y.x.wf.1 (regionsOf y.x.st) (setupH_mask y.x.h).2 (setupH_mask y.x.h).1
-        (setupH_mask_isolated y.x.h) w hw ω.1 rfl
+        (setupH_mask_isolated ((ZkExec.zkTags_typed I).trans ht) y.x.h hdm) w hw ω.1 rfl
     exact key _ (tablesAtZK_eq dj y₀ S R y) w hw
   -- the clear `final_a`, `final_b` are the `a`, `b` claims at the zerocheck's coins
   case hA =>

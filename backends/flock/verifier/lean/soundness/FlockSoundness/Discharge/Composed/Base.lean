@@ -130,6 +130,18 @@ def maskWordsOf (st : Stmt) : List ℕ :=
   | some r => (List.range (2 ^ st.nbl)).flatMap fun b =>
       (List.range (2 ^ (r.slotLog - 7))).map fun j => b * 2 ^ (st.c.kLog - 7) + r.start / 128 + j
 
+/-- Column `i` is in the first mask range's word-aligned span, decidably (`Inner/Holds.lean`'s `MaskCol`). -/
+def maskColB (st : Stmt) (i : ℕ) : Bool :=
+  match st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) with
+  | none => false
+  | some r => decide (r.start / 128 ≤ i / 128 ∧ i / 128 < r.start / 128 + 2 ^ (r.slotLog - 7))
+
+/-- **Δ avoids the mask slot**: no pair of Δ (`da`, `db`) has a row or a column in the mask range's span. A condition on
+the parsed statement, which the honest prover checks on the statement it builds: `HmRow.check` does not imply it, since
+`Net.ofRows` bounds no output group's column, so a wire's source can lie in the mask range. -/
+def deltaAvoidsMask (st : Stmt) : Bool :=
+  (st.da.toList ++ st.db.toList).all fun p => !maskColB st p.1 && !maskColB st p.2
+
 /-- **A region's public bit at witness index `idx`** (`regionValue`): bit `i` of the region's bytes at block `b`, `i` the
 index's free bits and `b` its block bits. Only its values inside the region's subcube matter: a region claim's `eq`
 weight vanishes off it (`regionPoint` fixes the other coordinates). -/
