@@ -11,7 +11,9 @@ on a host.
 
   It needs `util_collect.py` beside it, and the `cluster` package (`tools/cluster/src/cluster`) in `cluster/` beside it: the
   GPU usage rows (`cluster.usage`) it records in `/workspace/usage/usage-hourly.jsonl`, which `research usage` reads, and
-  derives `/workspace/usage/held-idle-hourly.jsonl` from.
+  derives `/workspace/usage/held-idle-hourly.jsonl` from. Each pool's lease ends that pool's idle before a shrink, read from its
+  running `n1_lease.py loop` in `/proc` (three variables of its environment, nothing else), so the console runs as the loops'
+  user, `research`; when it can't read them, node 1's hours wait for a pass that can.
 - **`--group store`** runs on the control pod every 10 minutes, from its `console-loop.sh`. It builds the evidence-store panels
   (build, PoUW overhead, coverage, merge trains). It needs `ovd.py`, a copy of the Project store's
   `scripts/overnight-dashboard.py`, and the `research` package. `console-loop.sh` is the loop, started at boot by the pod's
