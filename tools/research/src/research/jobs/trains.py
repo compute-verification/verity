@@ -9,7 +9,9 @@ the tip.  The reconcile cron (`reconcile(now)`, beside the expire-leases cron) l
   gate      `research merge`'s gate, ported: the Attempt `attempts/{run id}.json` of the job's run in the evidence store is a
             `check` of exactly the tip, clean, done with rc 0, its result is of a kind `main`'s declaration `produces` and not
             in `research.merge.REFUSED_KINDS`, and every step `main`'s `merge_requires` asks for the change (main..tip,
-            `rule_touches`) passed in that result.  The worker's report of "passed" is never the verdict.
+            `rule_touches`) passed in that result.  The worker's report of "passed" is never the verdict.  The declaration
+            is `CHECK = Tool(...)` in main's `tools/check/tool.py`, parsed and its keywords read as literals (`declared`),
+            never run; one this can't read lands nothing.
   land      `main` is moved to the tip with `force: false`, so GitHub itself refuses anything but a fast-forward; a refusal (a
             push in between) rebuilds the train too.
   sweep     then every open PR whose head is on `main` and whose base isn't `main` is closed with a comment naming the landing
@@ -31,6 +33,7 @@ and the site's TypeScript runs the same file with the same two fakes.
 """
 from __future__ import annotations
 
+import ast
 import json
 import re
 from dataclasses import dataclass, field
@@ -51,8 +54,6 @@ REBUILDS = 3
 TRAIN_TIMEOUT_S = 2 * 3600
 LEASE_MARGIN_S = 900
 TOOL_PY = "tools/check/tool.py"
-MERGE_REQUIRES = re.compile(r"merge_requires\s*=\s*(\{.*?\})\s*\)", re.S)
-PRODUCES = re.compile(r"produces\s*=\s*(\[.*?\])", re.S)
 TRAIN_STATES = ("regenerating", "checking", "landed", "would-land", "failed", "stuck", "refused", "cancelled")
 
 
@@ -212,6 +213,41 @@ def _layout(v, pad: str = "") -> str:
 def record_text(record: dict) -> str:
     """audit.py's `text()`: the sections in ORDER, then the rest, laid out one entry per line."""
     return _layout({k: record[k] for k in ORDER if k in record} | {k: v for k, v in record.items() if k not in ORDER}) + "\n"
+
+
+def _strings(v) -> bool:
+    return isinstance(v, list) and all(isinstance(x, str) for x in v)
+
+
+def declared(text: str) -> tuple[list[str], dict[str, list[str]]]:
+    """The `produces` and `merge_requires` of TOOL_PY's `CHECK = Tool(...)`, parsed and never run: the one module-level
+    assignment to CHECK, a call of `Tool` with keyword arguments only, each keyword read with `ast.literal_eval`.  A missing
+    `produces` is no kind and a missing `merge_requires` no step.  Raises ValueError, saying why, on anything else."""
+    try:
+        tree = ast.parse(text, TOOL_PY)
+    except SyntaxError as e:
+        raise ValueError(f"{TOOL_PY} on main doesn't parse ({e.msg}, line {e.lineno})") from None
+    calls = [n.value for n in tree.body
+             if isinstance(n, ast.Assign) and [getattr(t, "id", None) for t in n.targets] == ["CHECK"]]
+    call = calls[0] if len(calls) == 1 else None
+    if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Name) and call.func.id == "Tool" and not call.args
+            and all(k.arg for k in call.keywords) and len({k.arg for k in call.keywords}) == len(call.keywords)):
+        raise ValueError(f"{TOOL_PY} on main has no CHECK = Tool(...) this gate can read: one, at module level, of keyword "
+                         "arguments only")
+    given = {k.arg: k.value for k in call.keywords}
+
+    def literal(key, empty, ok):
+        try:
+            v = ast.literal_eval(given[key]) if key in given else empty
+        except Exception:  # noqa: BLE001  (anything but a literal is unreadable)
+            v = None
+        if not ok(v):
+            raise ValueError(f"{TOOL_PY} on main has a {key} this gate can't read")
+        return v
+
+    return (literal("produces", [], _strings),
+            literal("merge_requires", {}, lambda v: isinstance(v, dict) and all(isinstance(s, str) and _strings(r)
+                                                                                 for s, r in v.items())))
 
 
 @dataclass
@@ -430,12 +466,13 @@ class TrainService(JobService):
         if st.get("state") != "done" or st.get("rc") != 0:
             return f"run {tr.run_id} is {st.get('state')} rc={st.get('rc')}"
         main = self.github.refs["main"]
-        decl = self.github.tree(main).get(TOOL_PY, "")
-        p = PRODUCES.search(decl)
+        decl = self.github.tree(main).get(TOOL_PY)
+        if decl is None:
+            return f"main has no {TOOL_PY}"
         try:
-            kinds = json.loads(p.group(1)) if p else []
-        except ValueError:
-            return f"{TOOL_PY} on main has a produces this gate can't read"
+            kinds, rules = declared(decl)
+        except ValueError as e:
+            return str(e)
         art = (a.get("outputs") or {}).get("result")
         result = self.store.manifests.get(art) if art else None
         if art and not isinstance(result, dict):
@@ -446,11 +483,6 @@ class TrainService(JobService):
         if kind not in kinds:
             what = f"'s result is a {kind}" if kind else f"'s result {art} has no kind" if art else " published no result"
             return f"run {tr.run_id}{what}, and {TOOL_PY} on main produces {', '.join(kinds) or 'nothing'}"
-        m = MERGE_REQUIRES.search(decl)
-        try:
-            rules = json.loads(m.group(1)) if m else {}
-        except ValueError:
-            return f"{TOOL_PY} on main has a merge_requires this gate can't read"
         changed = sorted(self.github.changed(main, tr.tip))
         steps = {s.get("step"): s.get("status") for s in (result.get("meta") or {}).get("steps", [])}
         missing = [f"{step} {steps.get(step, 'absent')}" for step, rule in sorted(rules.items())
