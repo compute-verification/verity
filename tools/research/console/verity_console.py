@@ -868,14 +868,16 @@ for f in sorted(glob.glob(sys.argv[2] + "/*.jsonl")):
             who = next((x[4:] for x in (g.get("lease") or "").split() if x.startswith("who=")), None)
             held = bool(who) or bool(g.get("procs")) or (g.get("mem_mib") or 0) >= 1024
             k = (int(t) // 60 * 60, g["i"])
-            c = out.setdefault(k, [0, 0, 0, 0, 0, None])
-            if d.get("timed") or "util" not in g:
+            c = out.setdefault(k, [0, 0, 0, 0, 0, {}])
+            if d.get("timed") or g.get("util") is None:
                 c[4] += 1
             else:
-                c[2 * (not held) + (not (g.get("util") or 0) > 0)] += 1
-            c[5] = c[5] or who or ("(process, no lease)" if held else None)
-json.dump([[m, i, *(round(x / sum(c[:5]), 3) for x in c[:4]), c[5], round(c[4] / sum(c[:5]), 3)] for (m, i), c in sorted(out.items())],
-          sys.stdout, separators=(",", ":"))
+                c[2 * (not held) + (not g["util"] > 0)] += 1
+            h = who or ("(process, no lease)" if held else None)
+            if h:
+                c[5][h] = c[5].get(h, 0) + 1
+json.dump([[m, i, *(round(x / sum(c[:5]), 3) for x in c[:4]), max(c[5], key=c[5].get) if c[5] else None,
+            round(c[4] / sum(c[:5]), 3)] for (m, i), c in sorted(out.items())], sys.stdout, separators=(",", ":"))
 """
 
 
@@ -925,8 +927,9 @@ def n1_minutes(start: float, end: float) -> list[tuple]:
 
 
 def n2_minutes(start: float) -> list[tuple]:
-    """The same rows for vy-nebius-2 from POUS's 10 s sampler, each share the fraction of the minute's samples, and an eighth:
-    the unmeasured share, samples that read no utilization (a timed window's, which read no NVML)."""
+    """The same rows for vy-nebius-2 from POUS's 10 s sampler, each share the fraction of the minute's samples, the holder the
+    most of its samples name, and an eighth: the unmeasured share, samples that read no utilization (a timed window's, which
+    read no NVML, or a `util` nvidia-smi couldn't read, null)."""
     doc = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", N2_HOST, "python3", "-", str(int(start)), N2_UTIL],
                          input=N2_MINUTES, check=True, capture_output=True, text=True, timeout=120).stdout
     return [(*r[:6], owner_n2(r[6]) if r[6] and not r[6].startswith("(") else r[6], *r[7:]) for r in json.loads(doc)]

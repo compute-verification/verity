@@ -27,21 +27,39 @@ def test_the_console_and_the_module_share_their_labels_and_the_record():
     assert set(vc.NODE_NAMES.values()) == set(usage.NODES.values())
 
 
-def test_node_2s_minutes_count_a_timed_windows_samples_unmeasured(tmp_path):
+LEASE = "pid={} run=- who={} since=2026-10-03T07:00:00Z cmd=x"
+
+
+def n2_minutes_of(tmp_path, samples: list[dict]) -> list:
     util = tmp_path / "util"
     util.mkdir()
-    lease = "pid={} run=- who={} since=2026-10-03T07:00:00Z cmd=x"
-    samples = [{"t": "2026-10-03T08:00:00Z", "gpus": [
-                    {"i": 0, "util": 40, "mem_mib": 2048, "lease": lease.format(1, "fill:bc-15ada664"), "procs": [{"pid": 1}]},
-                    {"i": 1, "util": 0, "mem_mib": 0, "lease": None, "procs": []}]},
-               {"t": "2026-10-03T08:00:10Z", "timed": True, "gpus": [{"i": 0, "lease": lease.format(2, "circuits-tp8")},
-                                                                       {"i": 1, "lease": lease.format(2, "circuits-tp8")}]}]
     f = util / "2026-10-03.jsonl"
     f.write_text("".join(json.dumps(s) + "\n" for s in samples))
     os.utime(f, (H0 + 100, H0 + 100))
-    out = subprocess.run([sys.executable, "-", str(int(H0)), str(util)], input=vc.N2_MINUTES, capture_output=True, text=True,
-                         check=True).stdout
-    assert json.loads(out) == [[H0, 0, 0.5, 0, 0, 0, "fill:bc-15ada664", 0.5], [H0, 1, 0, 0, 0, 0.5, "circuits-tp8", 0.5]]
+    return json.loads(subprocess.run([sys.executable, "-", str(int(H0)), str(util)], input=vc.N2_MINUTES, capture_output=True,
+                                     text=True, check=True).stdout)
+
+
+def test_node_2s_minutes_count_a_timed_windows_samples_unmeasured(tmp_path):
+    samples = [{"t": "2026-10-03T08:00:00Z", "gpus": [
+                    {"i": 0, "util": 40, "mem_mib": 2048, "lease": LEASE.format(1, "fill:bc-15ada664"), "procs": [{"pid": 1}]},
+                    {"i": 1, "util": 0, "mem_mib": 0, "lease": None, "procs": []}]},
+               {"t": "2026-10-03T08:00:10Z", "timed": True, "gpus": [{"i": 0, "lease": LEASE.format(2, "circuits-tp8")},
+                                                                       {"i": 1, "lease": LEASE.format(2, "circuits-tp8")}]}]
+    assert n2_minutes_of(tmp_path, samples) == [[H0, 0, 0.5, 0, 0, 0, "fill:bc-15ada664", 0.5],
+                                                [H0, 1, 0, 0, 0, 0.5, "circuits-tp8", 0.5]]
+
+
+def test_a_util_nvidia_smi_couldnt_read_is_unmeasured_and_a_minute_goes_to_the_holder_of_most_of_it(tmp_path):
+    # red team R: the sampler writes `"util": null` for "[N/A]", which counted as held idle
+    # red team S: one sample of a process before its lease file booked the minute to "(process, no lease)", never useful
+    fill = {"util": 50, "mem_mib": 40000, "lease": LEASE.format(1, "fill:bc-15ada664"), "procs": [{"pid": 1}]}
+    samples = [{"t": "2026-10-03T08:00:00Z", "gpus": [{"i": 0, **fill, "lease": None}, {"i": 1, **fill, "util": None}]}]
+    samples += [{"t": f"2026-10-03T08:00:{s}Z", "gpus": [{"i": 0, **fill}, {"i": 1, **fill, "util": None}]} for s in (10, 20, 30)]
+    samples += [{"t": f"2026-10-03T08:00:{s}Z", "gpus": [{"i": 0, **fill, "lease": LEASE.format(2, "verity:bc-b8aaadaa")},
+                                                         {"i": 1, **fill, "util": None}]} for s in (40, 50)]
+    assert n2_minutes_of(tmp_path, samples) == [[H0, 0, 1.0, 0, 0, 0, "fill:bc-15ada664", 0.0],
+                                                [H0, 1, 0, 0, 0, 0, "fill:bc-15ada664", 1.0]]
 
 
 def test_node_1s_minutes_are_read_at_each_minutes_end_and_memory_holds_by_the_minute(monkeypatch):
