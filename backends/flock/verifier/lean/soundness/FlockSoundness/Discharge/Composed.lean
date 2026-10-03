@@ -1,4 +1,5 @@
 import FlockSoundness.Discharge.Composed.Headline
+import FlockSoundness.Discharge.Composed.Sound
 
 /-!
 # One `--zk` sampled session: soundness and zero knowledge composed

@@ -4544,6 +4544,7 @@
    "assumptions": [],
    "type_hash": "cb2c25eb538028181a2897d471f460fd07e9f5de8130a580ac6daf0b6d955690"
   },
+  "FlockSoundness.Discharge.Composed.tagsOk_circuit967b8d06": {},
   "FlockSoundness.Discharge.Composed.zk_session_composed": {
    "signature": [
     "FlockSoundness.Discharge.Composed.zk_session_composed {mPts n : Nat} {Reg : Type}",
@@ -4690,6 +4691,7 @@
    "assumptions": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96", "FlockSoundness.Assumptions.Zk.PadNonvanishing40"],
    "type_hash": "c492734e37ff9ffbd8d8e6c4f27fe5ad515978c3a48fed20fce16cade500d3ac"
   },
+  "FlockSoundness.Discharge.Composed.zk_session_sound": {},
   "FlockSoundness.Discharge.Const.Prog.instC_wire_input": {
    "signature": [
     "FlockSoundness.Discharge.Const.Prog.instC_wire_input {N n : Nat} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N))",
