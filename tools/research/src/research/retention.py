@@ -6,6 +6,7 @@
     research retention report [--root R] [--depth N] [--json]
     research retention gc [--root R] [--policy default] [--high-pct 80] [--low-pct 75] [--force] [--jobs-dir D]... [--store S] [--json]
                           [--apply]
+    research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root R] [--jobs-dir D]... [--json] [--apply]
 
 A record is a sidecar: `<dir>/.retention.json` for a directory, `<file>.retention.json` beside a file, so it travels with its data
 and `cat` reads it. A directory its owner made read-only has its record beside it, `<dir>.retention.json`; one with both is invalid. It covers everything beneath its path: the walk never descends into a recorded path. Its fields are FIELDS:
@@ -22,6 +23,13 @@ this node that is expired, `low` or `normal`, and preserved or regenerable; a pr
 file now under it at its size, and the artifact PRESERVED on the remote, checked just before the deletion (`store_check`); and no
 file in the job-script directories may name it (`JobScripts`). An implicit record also needs its marker to still vouch for the run
 dir (`custody.marker_problem`). A path holding a nested record is left whole. A dry run (the default) reads no remote.
+
+`rm` deletes the paths it is given, with their owner's yes, for a cleanup the policy doesn't reach. A path qualifies only when a
+record covers it (its own or an ancestor's), that record and every record beneath it (sidecars and implicit ones) are valid, name
+the --approved-by handle as owner and are not `keep`, no job script names it, and nothing in it is read-only or a mount. A path no
+record covers has nobody to say yes, so it is never deleted. Each record is read again just before --apply deletes, and every
+decision of an --apply goes to the node's deletion log, `<root>/LOG`, with who deleted, the approver and --ref. A dry run (the
+default) deletes and logs nothing.
 """
 from __future__ import annotations
 
@@ -54,6 +62,9 @@ DEFAULT_JOBS_DIRS = (Path("/workspace/pouw/fill/queue"), Path("/workspace/pouw/f
 POLICY = "default/v0"
 POLICIES = ("default",)
 KIND = "node-data/v1"
+LOG = Path("research/retention/deletions.jsonl")
+LOG_SCHEMA = "research/retention-log/v1"
+RM_SCHEMA = "research/retention-rm/v0"
 OWNER_RE = re.compile(r"^@[A-Za-z0-9][A-Za-z0-9._-]*$")
 TS = "%Y-%m-%dT%H:%M:%SZ"
 NAME_CHAR = r"[\w.-]"
@@ -701,6 +712,159 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
     return plan
 
 
+# ---- rm -----------------------------------------------------------------------------------------------------------------------------------
+
+def _handle(owner: Any) -> str:
+    """An owner as a lane handle: implicit records name the job's lane without the @."""
+    return "@" + str(owner or "").lstrip("@")
+
+
+def beneath(path: Path, root: Path) -> list[Found]:
+    """Every record strictly beneath `path`: each sidecar's, and the implicit record of each preserved `.custody` marker without one.
+    Symlinks are never followed; OSError when a directory can't be read."""
+    p = Path(path)
+    if not p.is_dir() or p.is_symlink():
+        return []
+    out: dict[Path, Found] = {}
+    for base, dirs, files in os.walk(p, onerror=_raise):
+        dirs.sort()
+        here = Path(base)
+        for name in sorted(files):
+            if name == SIDECAR and here != p:
+                data = here
+            elif name.endswith(SIDECAR) and name != SIDECAR:
+                data = here / name[: -len(SIDECAR)]
+            elif name == CU.MARKER and here != p and not any(os.path.lexists(sc) for sc in _places(here)):
+                data = here
+            else:
+                continue
+            if data not in out and (found := record_at(data, relative(data, root))):
+                out[data] = found
+    return [out[k] for k in sorted(out)]
+
+
+def _covering(path: Path, root: Path) -> tuple[Found | None, list[Found]]:
+    """The record covering `path` (its own or the nearest ancestor's), or None, and every record beneath it."""
+    return find(path, root), beneath(path, root)
+
+
+def _docs(top: Found | None, below: list[Found]) -> list[tuple[Path, dict | None, str | None]]:
+    return [(f.path, f.record, f.error) for f in ([top] if top else []) + below]
+
+
+def _kept(f: Found, root: Path) -> str:
+    r = f.record or {}
+    why = f": {r['why']}" if r.get("why") else ""
+    return f"{relative(f.path, root)} is kept by {_handle(r.get('owner'))} until {r.get('expires') or 'never'} (priority {r.get('priority')}{why})"
+
+
+def _refusal(path: Path, root: Path, approved_by: str, top: Found | None, below: list[Found],
+             in_use: Callable[[Path], str | None]) -> str | None:
+    """Why `rm` may not delete `path` with `approved_by`'s yes, given the records `_covering` found; None when it may."""
+    if top is None:
+        return (f"no record covers it, so nobody can say yes: its owner records it first (`research keep {path} --owner @LANE "
+                f"--expires now --priority low`), or deletes it")
+    for f in (top, *below):
+        if f.error:
+            return f"invalid record at {f.path}: {f.error}"
+        if _handle(f.record["owner"]) != approved_by:
+            return f"{_kept(f, root)}, and --approved-by {approved_by} is not its owner: only {_handle(f.record['owner'])} can say yes"
+        if f.record["priority"] == "keep":
+            return f"{_kept(f, root)}: priority keep is never deleted, until its owner lowers it with `research keep`"
+    if u := in_use(path):
+        return f"in use: {u}"
+    try:
+        ro = _read_only_dir(path) if os.path.isdir(path) and not os.path.islink(path) else None
+    except OSError as e:
+        return f"can't read all of it ({e}), so what it holds is unknown"
+    if ro:
+        return f"{ro} is read-only: its owner makes it writable first"
+    return None
+
+
+def rm(paths: Sequence[Path | str], *, approved_by: str, ref: str, root: Path | str = DEFAULT_ROOT, apply: bool = False,
+       by: str | None = None, in_use: Callable[[Path], str | None] | None = None, now: Callable[[], datetime] = utc_now,
+       node: str | None = None, log: Path | str | None = None) -> dict[str, Any]:
+    """`research retention rm` (module docstring): the plan for `paths`, and with `apply` their deletions, every decision a line in the
+    deletion log (`log`, default `root/LOG`). `in_use` None is `JobScripts` over the DEFAULT_JOBS_DIRS that exist. RecordError when
+    --approved-by is not a handle or --ref is empty, and with `apply` when `by` is missing or the log can't be written."""
+    root = Path(os.path.abspath(root))
+    if not OWNER_RE.match(approved_by or ""):
+        raise RecordError(f"--approved-by {approved_by!r}: give the owner's lane handle, such as @compute-accounting")
+    if not (ref or "").strip():
+        raise RecordError("--ref: give where the owner said yes (a Slack permalink or thread ts)")
+    t, node = now(), node or socket.gethostname()
+    log_path = Path(log) if log else root / LOG
+    if apply:
+        if not by:
+            raise RecordError("--by: say who deletes (your agent's URL; the default is $RESEARCH_AGENT_URL)")
+        try:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            open(log_path, "a").close()
+        except OSError as e:
+            raise RecordError(f"can't write the deletion log {log_path} ({e.strerror or e}), so nothing would record a deletion") from None
+    in_use = in_use or JobScripts([d for d in DEFAULT_JOBS_DIRS if d.is_dir()], root)
+    plan: dict[str, Any] = {"schema": RM_SCHEMA, "root": str(root), "node": node, "now": fmt_utc(t), "apply": apply,
+                            "approved_by": approved_by, "ref": ref, "by": by, "actions": [], "freed_bytes": 0}
+
+    def record(act: dict[str, Any]) -> None:
+        plan["actions"].append(act)
+        if apply:
+            line = {"schema": LOG_SCHEMA, "t": fmt_utc(now()), "node": node, "by": by, "action": act["action"], "path": act["path"],
+                    "rule": None, "owner": ",".join(act["owners"]) or None, "files": act["files"], "bytes": act["bytes"], "age_h": None,
+                    "reason": f"research retention rm, approved by {approved_by} ({ref}): {act['reason']}"
+                              + (f"; {act['error']}" if act["error"] else "")}
+            with open(log_path, "a") as fh:
+                fh.write(json.dumps(line) + "\n")
+
+    for raw in paths:
+        p = Path(os.path.abspath(raw))
+        act: dict[str, Any] = {"path": str(p), "action": "refuse", "reason": "", "owners": [], "bytes": 0, "files": 0, "error": None}
+        try:
+            relative(p, root)
+            if not os.path.lexists(p):
+                raise RecordError(f"{p} does not exist")
+            if p.name.endswith(SIDECAR):
+                raise RecordError(f"{p} is a record, not data: give the path it records")
+            if os.path.ismount(p):
+                raise RecordError(f"{p} is a mount point")
+            errors: list[str] = []
+            act["bytes"], act["files"], _ = measure(p, errors)
+            if errors:
+                raise RecordError(f"can't read all of it ({errors[0]}), so what it holds is unknown")
+            top, below = _covering(p, root)
+        except (RecordError, OSError) as e:
+            act["reason"] = str(e)
+            record(act)
+            continue
+        act["owners"] = sorted({_handle(f.record["owner"]) for f in (top, *below) if f and f.record})
+        if why := _refusal(p, root, approved_by, top, below, in_use):
+            act["reason"] = why
+            record(act)
+            continue
+        act["action"] = "delete"
+        act["reason"] = f"{_kept(top, root)}, and its owner said yes" + (f" ({len(below)} record(s) beneath it, the same owner's)"
+                                                                        if below else "")
+        if apply:
+            try:
+                again = _covering(p, root)
+            except (RecordError, OSError) as e:
+                again, act["error"] = None, f"can't read its records again: {e}"
+            if again is not None and _docs(*again) != _docs(top, below):
+                act["error"] = "its records changed during rm: run it again"
+            if not act["error"] and (u := in_use(p)):
+                act["error"] = f"in use: {u}"
+            act["error"] = act["error"] or _delete(root, p)
+            if act["error"]:
+                act["action"] = "failed"
+            else:
+                plan["freed_bytes"] += act["bytes"]
+        else:
+            plan["freed_bytes"] += act["bytes"]
+        record(act)
+    return plan
+
+
 # ---- the command line ---------------------------------------------------------------------------------------------------------------------
 
 def _size(n: int) -> str:
@@ -890,7 +1054,46 @@ def main(argv: list[str]) -> int:
         for e in plan["errors"]:
             print(f"error: {e}", file=sys.stderr)
         return 1 if failed else 0
-    print(f"research retention: unknown subcommand {sub!r} (have: report, gc)", file=sys.stderr)
+    if sub == "rm":
+        ap = argparse.ArgumentParser(prog="research retention rm", description="delete PATHs with their owner's yes, checked against "
+                                     "every record that covers them or lies beneath them; a dry run unless --apply")
+        ap.add_argument("paths", nargs="+", metavar="PATH")
+        ap.add_argument("--approved-by", required=True, metavar="@OWNER", help="the owner who said yes; every record covering a PATH or "
+                        "beneath it must name this handle")
+        ap.add_argument("--ref", required=True, metavar="REF", help="where the owner said yes (a Slack permalink or thread ts)")
+        ap.add_argument("--by", default=os.environ.get("RESEARCH_AGENT_URL"), metavar="URL",
+                        help="who deletes (default $RESEARCH_AGENT_URL); --apply needs it")
+        ap.add_argument("--root", default=str(DEFAULT_ROOT))
+        ap.add_argument("--jobs-dir", action="append", default=[], metavar="D", help="more job-script directories (beside "
+                        + " and ".join(map(str, DEFAULT_JOBS_DIRS)) + " when they exist): a path a file there names is in use")
+        ap.add_argument("--json", action="store_true")
+        ap.add_argument("--apply", action="store_true", help=f"delete, and log each decision to <root>/{LOG}; without it nothing "
+                                                             "is deleted or logged")
+        ns = ap.parse_args(rest)
+        if missing := [d for d in [ns.root, *ns.jobs_dir] if not Path(d).is_dir()]:
+            print(f"research retention rm: {missing[0]} is not a directory", file=sys.stderr)
+            return 2
+        jobs = [d for d in DEFAULT_JOBS_DIRS if d.is_dir()] + [Path(d) for d in ns.jobs_dir]
+        try:
+            plan = rm(ns.paths, approved_by=ns.approved_by, ref=ns.ref, root=ns.root, apply=ns.apply, by=ns.by,
+                      in_use=JobScripts(jobs, ns.root), now=utc_now)
+        except RecordError as e:
+            print(f"research retention rm: {e}", file=sys.stderr)
+            return 2
+        done = all(a["action"] == "delete" for a in plan["actions"])
+        if ns.json:
+            print(json.dumps(plan, indent=2))
+            return 0 if done else 1
+        mode = f"applying, logged to {Path(plan['root']) / LOG}" if ns.apply else "dry run (--apply deletes)"
+        print(f"research retention rm: {mode}: approved by {plan['approved_by']} ({plan['ref']})")
+        for a in plan["actions"]:
+            verb = {"delete": "DELETE" if ns.apply else "would delete", "refuse": "REFUSED", "failed": "FAILED"}[a["action"]]
+            print(f"{verb:<12} {_size(a['bytes']):>10}  {a['path']}  {a['reason']}" + (f"  ERROR {a['error']}" if a["error"] else ""))
+        n = sum(1 for a in plan["actions"] if a["action"] == "delete")
+        print(f"{'deleted' if ns.apply else 'would delete'} {n} of {len(plan['actions'])} path(s), {_size(plan['freed_bytes'])}"
+              + ("" if ns.apply else "; nothing was deleted"))
+        return 0 if done else 1
+    print(f"research retention: unknown subcommand {sub!r} (have: report, gc, rm)", file=sys.stderr)
     return 2
 
 
