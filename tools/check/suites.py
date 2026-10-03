@@ -128,9 +128,9 @@ def cpus() -> int:
     return n
 
 
-#: what one test process may hold at its peak: `flock-rows` on the largest rmsnorm layouts holds about 4.5 GB, and four at once on
-#: a 15 GB machine were OOM-killed
-TEST_PROCESS_GB = 5
+#: what one test process may hold at its peak, its children included: `test_flock_rows.py` on the rmsnorm-triton 4096 layout peaks at
+#: 8.8 GB (the lowering in the test's Python and `flock-rows` at once), and two at once on a 15 GB machine were OOM-killed
+TEST_PROCESS_GB = 9
 
 
 def default_jobs(meminfo: Path = Path("/proc/meminfo")) -> int:

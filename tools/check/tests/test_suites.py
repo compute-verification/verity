@@ -84,7 +84,7 @@ def test_jobs_default_to_no_more_test_processes_than_available_memory_holds(tmp_
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setattr(S, "cpus", lambda: 4)
     meminfo = tmp_path / "meminfo"
-    for gb, want in ((12, 2), (64, 4), (1, 1)):
+    for gb, want in ((13, 1), (20, 2), (64, 4), (1, 1)):
         meminfo.write_text(f"MemTotal:       99999999 kB\nMemAvailable:   {gb << 20} kB\n")
         assert S.default_jobs(meminfo) == want
     assert S.default_jobs(tmp_path / "absent") == 4
