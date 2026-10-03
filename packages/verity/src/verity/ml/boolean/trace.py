@@ -59,6 +59,10 @@ class TracingCircuit(Circuit):
         w = super()._new(kind, data)
         return TL(w.s, 0, None)
 
+    def commit(self, word):
+        """The word itself: a commit (`forms.Circuit.commit`) is a row of the lowering, not a gate."""
+        return list(word)
+
 
 _KINDS = ("and", "xor", "not")
 
