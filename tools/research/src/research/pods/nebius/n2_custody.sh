@@ -11,10 +11,10 @@
 #   on node 2:  n2_custody.sh [--dry-run]   one round (the user timer n2-custody.timer, every 10 min); --dry-run lists what it would push
 #
 # A run has ended when its status says so or its process is gone: a runner killed before it recorded an end (an OOM kill of its
-# scope) is published with --force and keeps the state it last wrote. A run its own custody preserved (.custody "preserved": true)
-# is only marked; any other waits VY_CUSTODY_SETTLE_S after any file in it last changed, and while its runner holds its custody
-# key, until the key expires (a runner's custody writes nothing into the run dir until its .custody: 11 min once), so a runner's
-# own custody finishes first.
+# scope) is published with --force --runner-gone (node 1 can't see node 2's pids) and keeps the state it last wrote. A run its own
+# custody preserved (.custody "preserved": true) is only marked; any other waits VY_CUSTODY_SETTLE_S after any file in it last
+# changed, and while its runner holds its custody key, until the key expires (a runner's custody writes nothing into the run dir
+# until its .custody: 11 min once), so a runner's own custody finishes first.
 # A run is marked in STATE/pushed/ once node 1's Job verified it on R2 and its .custody is back, which it is only while every file
 # here is the one node 1's copy had. A failure is logged with its reason
 # and retried every round, never given up, and the round exits 1, which systemd records (`systemctl --user status n2-custody`).
@@ -232,7 +232,8 @@ EOF
 push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 held (hold= says what to decide), 6 no Job started
   # for node 1's daily hold (the copy waits there), else 1; why= says
   local root=$1 dst=$2 r=$3 name force=
-  [ "$4" = dead ] && force=--force
+  # dead: its pid is gone here, which node 1, where the Job runs, can't see
+  [ "$4" = dead ] && force="--force --runner-gone"
   name=n2-custody-$(echo "$r" | tr -cd 'a-z0-9-' | tail -c 40)
   # a Job an earlier round left (its ssh dropped) may still be pushing node 1's copy: never rsync under it or delete it, wait on it
   job=$(timeout 60 "${SSH[@]}" -n "$N1" "$KUBE get job $name --ignore-not-found -o jsonpath='{.metadata.name}{range .status.conditions[*]} {.type}={.status}{end}'") \

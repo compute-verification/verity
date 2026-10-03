@@ -1431,7 +1431,7 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     calls = n2.calls()
     assert f"{root}/{R['done']}/ n1.invalid:/n1/runs/{R['done']}/" in calls and R["fresh"] not in calls
     assert not [k for k in ("live", "retimed", "unread") if R[k] in calls], "a live run is never published as dead"
-    assert f"data custody /n1/runs/{R['dead']} --publish --keep-local --force" in calls
+    assert f"data custody /n1/runs/{R['dead']} --publish --keep-local --force --runner-gone" in calls
     assert f'data custody /n1/runs/{R["done"]} --publish --keep-local "]' in calls
     assert "PYTHONPATH=/n1/src/abc/tools/research/src" in calls and R["preserved"] not in calls and R["big"] not in calls
     assert "touch pwned" not in calls and rogue.name not in n2.names("pushed") + n2.names("held")

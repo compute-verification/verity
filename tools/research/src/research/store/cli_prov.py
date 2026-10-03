@@ -3,7 +3,7 @@
     research data lookup --tool NAME [--param k=v]... [--input name=art:...]... [--condition k=v]... [--source-tree SHA] [--any-source] [-- ARGV...]
     research data pull --from MACHINE RUN --project P            copy an attempt + its outputs' manifests and blobs from a machine's store (ssh)
     research data attempt publish RUN_DIR|RUN_ID [--tool SPEC] [--force] | --all [--runs-dir D]
-    research data custody RUN_DIR|RUN_ID [--publish [--force]] | --triage [--verify] [--older-min N] [--runs-dir D ...]   run custody on the remote (store.custody)
+    research data custody RUN_DIR|RUN_ID [--publish [--force [--runner-gone]]] | --triage [--verify] [--older-min N] [--runs-dir D ...]   run custody on the remote (store.custody)
 
 `research.store.cli` (lane store-core) owns the `research data` dispatcher and merges COMMANDS into its table; `main` here is the
 same dispatch for tests and for `python -m research.store.cli_prov`.
@@ -428,7 +428,11 @@ def cmd_custody(argv: list[str]) -> int:
                                                          "once custody holds, the run dir's files of 1 MiB and more are removed (store.evict.evict_custody)")
     ap.add_argument("--keep-local", action="store_true", help="--publish: keep every local run file")
     ap.add_argument("--force", action="store_true", help="--publish: publish a run whose status.json is not terminal (its runner was "
-                                                       "killed before it recorded an end); the attempt keeps the state it last wrote")
+                                                       "killed before it recorded an end); the attempt keeps the state it last wrote. "
+                                                       "Refused (exit 3) while this host can't see that its runner is gone")
+    ap.add_argument("--runner-gone", action="store_true", help="--force: the run's own host says its runner is gone (a pod: `kubectl get "
+                                                             "pod` NotFound; another machine: its pid gone there), which this host can "
+                                                             "see only of a runner that ran here; quiet records are no such evidence")
     ap.add_argument("--triage", action="store_true", help="every run under --runs-dir by custody state; exit 1 while any needs action, "
                                                         "3 when triage itself fails")
     ap.add_argument("--verify", action="store_true", help="--triage: check preservation on the remote (default: the catalog's recorded replicas, "
@@ -447,6 +451,8 @@ def cmd_custody(argv: list[str]) -> int:
         ap.error("--older-min N (N >= 0) is for --triage")
     if ns.force and not ns.publish:
         ap.error("--force is for --publish")
+    if ns.runner_gone and not ns.force:
+        ap.error("--runner-gone is for --force")
     roots = [R.runs_root(x) for x in ns.runs_dir] if ns.runs_dir else [R.runs_root(None)]
     if ns.triage:
         missing = [str(r) for r in roots if not r.is_dir()]
@@ -480,6 +486,9 @@ def cmd_custody(argv: list[str]) -> int:
         return 1
     pushed: list[str] | None = None
     if ns.publish:
+        if ns.force and (why := CU.force_refusal(d, runner_gone=ns.runner_gone)):
+            print(f"research data custody: {d.name}: --force refused: {why}", file=sys.stderr)
+            return 3
         out = A.publish(d, store=st, remote_push=False, run_record=True, force=ns.force)
         if not out.get("published"):
             print(f"research data custody: {d.name}: attempt not published: {out.get('error')}", file=sys.stderr)
