@@ -75,6 +75,16 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Stmt}
 
 set_option maxHeartbeats 4000000 in
+/-- A plain table's setup, `setupH` followed by the refusal of a `public_inputs` meta key, returns `setupH`'s statement. -/
+theorem ok_of_refuse {x : V Stmt} {p : Stmt → Bool} {e : String} {s : Stmt}
+    (h : (do let st ← x; if p st = true then throw e else pure st) = .ok s) : x = .ok s := by
+  cases x with
+  | error => cases h
+  | ok a =>
+    by_cases hp : p a = true
+    · simp [bind, Except.bind, hp, throw, throwThe, MonadExceptOf.throw, Except.bind] at h
+    · simpa [bind, Except.bind, hp, pure, Except.pure] using h
+
 /-- **`setupTables` sets up each table with `setupH`** (§16.12) under a tag without hidden outputs (`hh`; with them
 it calls `setupHidden`). For one table, its statement is `setupH`'s at the session's draw, and the session's spec is
 the table's. For `count > 1`, there are `count` tables, and table `j` is `setupH`'s statement under
@@ -112,10 +122,10 @@ theorem setupTables_ok (hh : tags.hiddenOutputs = false)
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-  · exact Or.inl ⟨by assumption, _, by assumption, rfl, rfl⟩
+  · exact Or.inl ⟨by assumption, _, ok_of_refuse (by assumption), rfl, rfl⟩
   all_goals
     obtain ⟨hsz, hall⟩ := range_mapM_ok (by assumption)
-    exact Or.inr ⟨by omega, hsz, fun j hj => ⟨_, hall j hj⟩, mPts_of_any (by assumption), rfl⟩
+    exact Or.inr ⟨by omega, hsz, fun j hj => ⟨_, ok_of_refuse (hall j hj)⟩, mPts_of_any (by assumption), rfl⟩
 
 /-- A table's tags in a session of `count` tables: the statement's for one, under `Tags.tableIdentity` for several. -/
 def tagsAt (tags : Tags) (count j : ℕ) : Tags :=

@@ -4,8 +4,8 @@
     fp        exact f32 / bf16 arithmetic on words of forms (rounding, conversions, the tensor-core steps)
     tc_step   the finite tensor-core transition (`verity.ml.tc` GroupSum.step) that `fp`'s steps wrap
     softmax   attention's FTZ f32 operations, strict compare, max and -inf guard
-    scalar    the bf16 comparator, the selects, PTX max / min and the E4M3 cast as Boolean Definitions (and names the IEEE f32
-              arithmetic of `elementwise` and the bf16 widening of `cast`)
+    scalar    the bf16 comparator, the selects, the bit AND, PTX max / min and the E4M3 and E2M1 casts as Boolean Definitions
+              (and names the IEEE f32 arithmetic of `elementwise` and the bf16 widening of `cast`)
     fp4       the NVFP4 / MXFP4 block-scaled step (64 E2M1 codes and their scale bytes per operand)
     universal protocol 2's universal unit: one Definition per size class that runs any hidden netlist given as a value
 

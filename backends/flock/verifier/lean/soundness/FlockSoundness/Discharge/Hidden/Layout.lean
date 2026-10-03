@@ -8,7 +8,7 @@ import FlockSoundness.Discharge.Hm.Accept
 An untyped statement `Stmt.setupHidden` accepts has `layout_of`'s layout on the statement with `HmRow.delta`'s Δ, and
 `HmOut.delta` only appends `outPairs` to both of its sides (`hidden_delta'`). Every first column of `outPairs` is a
 message bit of an output row's `sha512x3` slot (`deltaMsgCol_shaRowBit`): the row's byte `2k + t / 8` is below
-`2 · words = 128 · chunks` (`out_chunks`), so it is in one of the row's compressions. A `sha512x3` slot's message bit is an
+`2 · words`, so in one of the row's compressions (`out_bytes`, `HmRow.byteAt`). A `sha512x3` slot's message bit is an
 input bit of a net slot (`deltaIn_inBit`), as `Layout.delta` asks of every pair past the constant pairs.
 -/
 
@@ -20,13 +20,14 @@ namespace FlockSoundness.Discharge.Hidden
 /-- **Row `p`'s message bit `t` of byte `byte`**, in one of the row's compressions, is a message bit of the row's
 `sha512x3` slot. -/
 theorem deltaMsgCol_shaRowBit {c : Circuit} {g p byte t : ℕ} (hg : g < c.g) (hp : p < c.ports.size)
-    (hb : byte < 128 * (c.ports.getD p default).chunks) (ht : t < 8) :
+    (hb : (HmRow.byteAt (c.ports.getD p default) byte).1 < (c.ports.getD p default).chunks) (ht : t < 8) :
     ShaRowBit c (deltaMsgCol c g p byte t) := by
-  refine ⟨g, hg, p, by rw [rowSlots_spec]; exact hp, byte / 128, ?_, 1, by omega,
+  have ho := Typed.byteAt_snd (c.ports.getD p default) byte
+  refine ⟨g, hg, p, by rw [rowSlots_spec]; exact hp, (HmRow.byteAt (c.ports.getD p default) byte).1, ?_, 1, by omega,
     64 * (byte % 128 / 8) + 56 - 8 * (byte % 128 % 8) + t, by omega, ?_⟩
   · rw [Hm.rowSlots_size hp, getElem!_eq_getD']
-    omega
-  · simp only [deltaMsgCol]
+    exact hb
+  · simp only [deltaMsgCol, ho]
     omega
 
 /-- **Every first column of `outPairs` is an input bit of a net slot**, for a circuit `HmRow.parse` accepted and
@@ -40,9 +41,9 @@ theorem outPairs_inBit {tags : Tags} {cf : ByteArray} {tables : List (String × 
   intro x hx
   simp only [outPairs, List.mem_flatMap, List.mem_range, List.mem_cons, List.not_mem_nil, or_false] at hx
   obtain ⟨g, hg, j, hj, k, hk, t, ht, hx⟩ := hx
-  obtain ⟨hlt, hw⟩ := out_chunks hp hc hj
+  obtain ⟨hlt, hw⟩ := out_bytes hp hc hj
   have hs : ShaRowBit c (deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8)) :=
-    deltaMsgCol_shaRowBit hg hlt (by omega) (by omega)
+    deltaMsgCol_shaRowBit hg hlt (hw _ (by omega)) (by omega)
   rcases hx with rfl | rfl <;> exact deltaIn_inBit P C (Or.inl hs)
 
 theorem hidden_layout' : HiddenLayout := by

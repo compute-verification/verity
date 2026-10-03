@@ -26,5 +26,13 @@ import FlockSoundness.Discharge.ZkExec.PlaysDet
 import FlockSoundness.Discharge.ZkExec.VerdictStatements
 import FlockSoundness.Discharge.ZkExec.Verdict
 import FlockSoundness.Discharge.ZkExec.VerdictInner
+import FlockSoundness.Discharge.ZkExec.VerdictLig
+import FlockSoundness.Discharge.ZkExec.VerdictLigPad
+import FlockSoundness.Discharge.ZkExec.VerdictLigFinal
+import FlockSoundness.Discharge.ZkExec.VerdictLigModel
+import FlockSoundness.Discharge.ZkExec.VerdictLigRun
+import FlockSoundness.Discharge.ZkExec.VerdictLigMain
+import FlockSoundness.Discharge.ZkExec.VerdictOpens
+import FlockSoundness.Discharge.ZkExec.VerdictRows
 import FlockSoundness.Discharge.ZkExec.LiveStatements
 import FlockSoundness.Discharge.ZkExec.RunsLive

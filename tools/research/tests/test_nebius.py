@@ -194,6 +194,23 @@ def test_fill_runner_counts_a_queued_waiter_but_not_a_lease_that_holds_its_gpus_
                 stop_group(p)
 
 
+def test_fill_runner_runs_only_bare_and_one_per_node(tmp_path):
+    """`fill_runner.py --help` fell through to the runner and started a second one on node 2 (memory accounting's soak worker,
+    3 Oct 05:37Z): it adopted the running series job and launched the next on GPU 7. Only a bare `fill_runner.py` runs the
+    runner, and only while no other runner holds FILL_DIR/.runner.lock."""
+    fill = tmp_path / "fill"
+    env = {**os.environ, "FILL_DIR": str(fill), "GPU_LEASE_DIR": str(tmp_path / "gl")}
+    for argv, rc in ((["--help"], 0), (["-h"], 0), (["--once"], 1), (["status"], 1)):
+        r = subprocess.run([sys.executable, str(FILL_RUNNER), *argv], env=env, capture_output=True, text=True)
+        assert r.returncode == rc and "usage: fill_runner.py" in r.stdout + r.stderr, (argv, r)
+    assert not fill.exists()
+    fill.mkdir()
+    with open(fill / ".runner.lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        r = subprocess.run([sys.executable, str(FILL_RUNNER)], env=env, capture_output=True, text=True)
+    assert r.returncode == 1 and "another runner holds" in r.stderr and not (fill / "queue").exists(), r
+
+
 def stop_group(p: subprocess.Popen) -> None:
     """SIGTERM a process started with start_new_session and everything in its group. Terminating only the bash leaves the
     `sleep` it waits on (GPU_LEASE_POLL_S=3600) or the leased command orphaned for the length of that sleep."""
@@ -1197,6 +1214,57 @@ def test_n2_commit_gives_a_long_row_the_long_max_min():
     assert max_min("qwen3-14b__bf16__rtxpro6000__tp2__b8__i1024__o128__g", VY_N2_COMMIT_LONG_MAX_MIN="90") == "90"
     assert max_min("phi4-14b__bf16__rtxpro6000__tp2__b8__i256__o32__mixed__greedy__bi-eager") == "25"
     assert max_min("llama32-1b__bf16__rtxpro6000__tp1__b16__i512__o2__mixed__greedy__bi-eager", VY_N2_COMMIT_MAX_MIN="") == "40"
+
+
+@pytest.mark.skipif(shutil.which("bash") is None or not Path("/proc/self/stat").exists(), reason="n2_custody.sh is bash, and reads /proc")
+def test_n2_custody_takes_every_ended_run_home_and_retries_a_failure(tmp_path):
+    """Node 2's store has no remote: a night of runs there sat on the node (2-3 Oct) until a push loop took them. Every ended run
+    goes to node 1 and its Job, a runner killed before it recorded an end with --force; a live one, one still settling and one its
+    own custody preserved don't; a failed push is never given up, and fails the round until it succeeds."""
+    root, state, bin_, log = tmp_path / "runs", tmp_path / "state", tmp_path / "bin", tmp_path / "calls.log"
+    bin_.mkdir()
+    (bin_ / "rsync").write_text(f'#!/bin/sh\necho "rsync $*" >> {log}\n')
+    (bin_ / "ssh").write_text(f'#!/bin/sh\ncat > /dev/null &\necho "ssh $*" >> {log}\n'
+                              'case "$*" in *"attempt publish"*"$FAIL_RUN"*) [ -n "$FAIL_RUN" ] && exit 1 ;; esac\nexit 0\n')
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    me = int(open("/proc/self/stat").read().rsplit(")", 1)[1].split()[19])
+    old = 1_000_000_000                         # settled: records last changed in 2001
+
+    def run(rid, status, *, settled=True, custody=None):
+        d = root / rid
+        d.mkdir(parents=True)
+        (d / "job.json").write_text(json.dumps({"store": {"campaign": "c1"}}))
+        (d / "status.json").write_text(json.dumps(status))
+        if custody is not None:
+            (d / ".custody").write_text(json.dumps(custody))
+        for p in d.iterdir():
+            if settled:
+                os.utime(p, (old, old))
+
+    run("r1-done", {"state": "done"})
+    run("r2-dead", {"state": "running", "transitions": [{"pid": 2**22 + 7, "starttime_ticks": 1}]})
+    run("r3-live", {"state": "running", "transitions": [{"pid": os.getpid(), "starttime_ticks": me}]})
+    run("r4-fresh", {"state": "failed"}, settled=False)
+    run("r5-preserved", {"state": "done"}, custody={"preserved": True})
+    run("r6-fails", {"state": "failed"})
+
+    def round_(**env):
+        return subprocess.run(["bash", str(NEBIUS / "n2_custody.sh")], capture_output=True, text=True,
+                              env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "VY_N1": "n1.invalid",
+                                   "VY_CUSTODY_ROOTS": f"{root}=/n1/runs", "VY_CUSTODY_STATE": str(state),
+                                   "VY_CUSTODY_SRC": "/n1/src/abc", **env})
+
+    first = round_(FAIL_RUN="r6-fails")
+    assert first.returncode == 1 and "r6-fails (c1, failed): push failed (1 so far)" in first.stdout
+    assert sorted(p.name for p in (state / "pushed").iterdir()) == ["r1-done", "r2-dead", "r5-preserved"]
+    calls = log.read_text()
+    assert f"{root}/r1-done/ n1.invalid:/n1/runs/r1-done/" in calls and "r3-live" not in calls and "r4-fresh" not in calls
+    assert "attempt publish --force /n1/runs/r2-dead" in calls and "attempt publish  /n1/runs/r1-done" in calls
+    assert "PYTHONPATH=/n1/src/abc/tools/research/src" in calls and "r5-preserved" not in calls
+    second = round_(FAIL_RUN="")
+    assert second.returncode == 0 and "r6-fails (c1, failed" in second.stdout and not (state / "failures" / "r6-fails").exists()
+    assert (state / "pushed" / "r6-fails").exists() and log.read_text().count("r1-done/ n1.invalid") == 1, "a pushed run is done"
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")

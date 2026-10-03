@@ -29,12 +29,12 @@ def UnitRowsFlat (st : Stmt) : Prop :=
 
 /-! ## What `HmOut.checkRows` checks -/
 
-/-- `HmOut.checkRows` passes only when the rows are the input rows, then one per output port. -/
-theorem checkRows_le {c : Circuit} (h : HmOut.checkRows c = .ok ()) : c.outPorts.size ≤ c.ports.size := by
+/-- `HmOut.checkRows` passes only when the rows are the input rows, then one per run of output ports. -/
+theorem checkRows_le {c : Circuit} (h : HmOut.checkRows c = .ok ()) : c.outRowPorts.size ≤ c.ports.size := by
   unfold HmOut.checkRows at h
   obtain ⟨k, -, h⟩ := ebind_ok h
   by_contra hlt
-  have hne : (k + c.outPorts.size != c.ports.size) = true := by
+  have hne : (k + c.outRowPorts.size != c.ports.size) = true := by
     simp only [bne_iff_ne, ne_eq]
     omega
   simp only [hne, Bool.true_or, ↓reduceIte] at h
@@ -59,7 +59,7 @@ theorem flat_unitFacts (ht : tags.typed = false)
 
 /-- The first column of each of Δ's output pairs is `deltaMsgCol` at a VU, output row, word and bit. -/
 theorem outPairs_fst {c : Circuit} {q : ℕ × ℕ} (hq : q ∈ Hidden.outPairs c) :
-    ∃ g < c.g, ∃ j < c.outPorts.size, ∃ k < (c.ports.getD (HmOut.nIn c + j) default).words, ∃ t < 16,
+    ∃ g < c.g, ∃ j < c.outRowPorts.size, ∃ k < (c.ports.getD (HmOut.nIn c + j) default).words, ∃ t < 16,
       q.1 = Hidden.deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8) := by
   simp only [Hidden.outPairs, List.mem_flatMap, List.mem_range, List.mem_cons, List.not_mem_nil, or_false] at hq
   obtain ⟨g, hg, j, hj, k, hk, t, ht, hq⟩ := hq
@@ -69,7 +69,7 @@ theorem outPairs_fst {c : Circuit} {q : ℕ × ℕ} (hq : q ∈ Hidden.outPairs 
 the VU's `sha512x3` slots, its message input 1024 bits wide, and the bit is inside it. -/
 theorem deltaMsgCol_ne_unit (L : Layout st) (P : ParseFacts tags st.c) (C : CheckFacts st.c)
     (hsha : st.c.unitNet ≠ st.c.shaNet) {g p byte t : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size)
-    (hbyte : byte / 128 < st.c.ports[p]!.chunks) (ht : t < 8) {s₀ b : ℕ} (hs₀ : s₀ < st.c.unitRange.count)
+    (hs : (st.c.ports.getD p default).segs = none) (hbyte : byte / 128 < st.c.ports[p]!.chunks) (ht : t < 8) {s₀ b : ℕ} (hs₀ : s₀ < st.c.unitRange.count)
     (hb : b < 2 ^ st.c.unit.unitLog) : Hidden.deltaMsgCol st.c g p byte t ≠ st.c.unitRange.slot s₀ + b := by
   obtain ⟨h1, h2⟩ := Hm.rowSlot_lt hp hbyte
   have hsz := C.sha_in.1
@@ -80,6 +80,8 @@ theorem deltaMsgCol_ne_unit (L : Layout st) (P : ParseFacts tags st.c) (C : Chec
     (getElem_mem_toList' (by rw [hsz]; exact hidx)) (tt := 64 * (byte % 128 / 8) + 56 - 8 * (byte % 128 % 8) + t)
     (by rw [hw]; omega) hs₀ hb
   dsimp only [Hidden.deltaMsgCol]
+  rw [Typed.byteAt_none hs]
+  dsimp only
   intro he
   refine hne (Eq.trans ?_ he)
   omega
@@ -88,7 +90,7 @@ theorem deltaMsgCol_ne_unit (L : Layout st) (P : ParseFacts tags st.c) (C : Chec
 compressions (`2 · words = 128 · chunks`). -/
 theorem outPairs_ne_unit (L : Layout st) (P : ParseFacts tags st.c) (C : CheckFacts st.c)
     (hsha : st.c.unitNet ≠ st.c.shaNet) (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false)
-    (hle : st.c.outPorts.size ≤ st.c.ports.size) {q : ℕ × ℕ} (hq : q ∈ Hidden.outPairs st.c) {s₀ b : ℕ}
+    (hle : st.c.outRowPorts.size ≤ st.c.ports.size) {q : ℕ × ℕ} (hq : q ∈ Hidden.outPairs st.c) {s₀ b : ℕ}
     (hs₀ : s₀ < st.c.unitRange.count) (hb : b < 2 ^ st.c.unit.unitLog) : q.1 ≠ st.c.unitRange.slot s₀ + b := by
   obtain ⟨g, hg, j, hj, k, hk, t, ht, hq1⟩ := outPairs_fst hq
   rw [hq1]
@@ -96,8 +98,10 @@ theorem outPairs_ne_unit (L : Layout st) (P : ParseFacts tags st.c) (C : CheckFa
   have hw := P.portWords _ (getElem_mem_toList' hp) (hv1 _ (getElem_mem_toList' hp))
   have e : st.c.ports.getD (HmOut.nIn st.c + j) default = st.c.ports[HmOut.nIn st.c + j]! := by
     rw [getElem!_pos st.c.ports _ hp, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hp, Option.getD_some]
+  have hs : (st.c.ports.getD (HmOut.nIn st.c + j) default).segs = none := by
+    rw [e]; exact P.v1Segs _ (getElem_mem_toList' hp) (hv1 _ (getElem_mem_toList' hp))
   rw [e] at hk
-  exact deltaMsgCol_ne_unit L P C hsha hg hp (by omega) (Nat.mod_lt _ (by norm_num)) hs₀ hb
+  exact deltaMsgCol_ne_unit L P C hsha hg hp hs (by omega) (Nat.mod_lt _ (by norm_num)) hs₀ hb
 
 /-- **An untyped hidden statement reads its flat twin's rows at every unit slot's row**, for `sha512/row/v1` rows, when
 its Δ being `HmRow.delta`'s, then `outPairs` ([wave2-hidden]'s `Hidden.hidden_delta'`). -/

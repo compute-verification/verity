@@ -3,6 +3,9 @@ import FlockSoundness.Discharge.ZkExec.PlaysDet
 import FlockSoundness.Discharge.ZkExec.Verify
 import FlockSoundness.Discharge.ZkExec.PlaysRep
 import FlockSoundness.Discharge.ZkExec.RunsSizes
+import FlockSoundness.Discharge.ZkExec.VerdictLig
+import FlockSoundness.Discharge.ZkExec.VerdictOpens
+import FlockSoundness.Discharge.ZkExec.VerdictRows
 
 /-!
 # `RunsZC`'s verdict half: the compiled `--zk` table accepts at the two reps' results
@@ -11,7 +14,9 @@ import FlockSoundness.Discharge.ZkExec.RunsSizes
   (`zk_verifyRep_ok`): both reps share the statement's extra claims, their proofs decode at one shape, their caps are
   the one `root_B` (`capOfRoot_eq`), `opnZ` reads each rep's rows, salts and inner openings off its own proof, and the
   results exist (`zk_rep_plays`).
-* `zk_rep_accepts`: open. Its inner-proof half is `zk_inner_accepts` (`VerdictInner.lean`).
+* `zk_rep_accepts`: `ZkRepAccepts`'s three conclusions, each its own lemma: the Ligerito verdict (`zk_lig_accepts`,
+  `VerdictLig.lean`), the inner check (`zk_inner_of_rep`, `VerdictRows.lean`, through `zk_inner_accepts`) and the
+  requested rows (`zk_opens_ok`, `VerdictOpens.lean`).
 -/
 
 namespace FlockSoundness.Discharge.ZkExec
@@ -21,7 +26,14 @@ open Flock Refine Exec Game Model DecodeZL
 local notation "𝔽" => FlockLevel3.GF128
 
 theorem zk_rep_accepts : ZkRepAccepts := by
-  sorry
+  intro mPts T pts r st sch tPad extras bytes zp rounds dom tr cap₀ os hsch hms hseam hlay hfold hlen hext hdec hwf
+    hrun hk hcap ho hs hin pend hp
+  exact ⟨zk_lig_accepts T pts r st sch tPad extras bytes zp rounds dom tr cap₀ os hsch hms hseam hlay hfold hlen hext
+      hdec hwf hrun hk hcap ho hs hin pend hp,
+    zk_inner_of_rep T pts r st sch tPad extras bytes zp rounds dom tr cap₀ os hsch hms hseam hlay hfold hlen hext hdec
+      hwf hrun hk hcap ho hs hin pend hp,
+    zk_opens_ok T pts r st sch tPad extras zp rounds dom tr cap₀ os hsch hms hseam hlen hext hwf hrun hk hcap ho hs
+      pend hp⟩
 
 section Opn
 
