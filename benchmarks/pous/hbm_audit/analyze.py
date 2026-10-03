@@ -63,12 +63,13 @@ def cheater_best_by_rf(cheater: dict) -> dict:
     return out
 
 
-def analyze(honest: dict, cheater: dict, margin: float):
+def analyze(honest: dict, cheater: dict, margin: float, l2_bytes: int, cache_factor: float):
     c_gib = cheater["c_gib"]
     hon = honest_by_r(honest, c_gib)
     che = cheater_best_by_rf(cheater)
     fracs = sorted({f for (_, f) in che})
     rs = sorted(hon)
+    cache_floor = cache_factor * l2_bytes  # a read smaller than this is served partly from L2, not HBM: not representative
     rows = []
     for r in rs:
         h = hon.get(r)
@@ -78,6 +79,7 @@ def analyze(honest: dict, cheater: dict, margin: float):
         nbytes = r * BLOCK_BYTES
         row = {"R": r, "honest_p50": kern["ms_p50"], "honest_p99": kern["ms_p99"], "honest_p999": kern["ms_p999"],
                "honest_gbps_p50": _rate_gbps(nbytes, kern["ms_p50"]),
+               "bytes": nbytes, "in_cache": nbytes < cache_floor,
                "digest_p50": dig["ms_p50"], "digest_p999": dig["ms_p999"], "fracs": {}}
         # the deadline on the full audit answer (read + fold): honest answers clear it; set at the honest digest p999.
         T = dig["ms_p999"]
@@ -92,77 +94,107 @@ def analyze(honest: dict, cheater: dict, margin: float):
             ratio_margin = c["ms_min"] / gate if gate else 0.0  # cheater's best read vs the honest read p999
             row["fracs"][f] = {"cheater_p50": c["ms_p50"], "cheater_min": c["ms_min"], "method": c["method"],
                                "ratio_typ": ratio_typ, "ratio_margin": ratio_margin,
+                               "distinguishable": c["ms_min"] > T,  # cheater's best answer is slower than the deadline
                                "separated": c["ms_min"] > gate and ratio_margin >= margin,
                                "pcie_gbps_p50": c["pcie_gbps_p50"]}
         rows.append(row)
-    # the least f separated with margin, per R, and a recommended (R, T)
+    # the least f separated with margin, per R, and a recommended (R, T) — cache rows excluded (artefactually fast honest)
     for row in rows:
         sep_fs = [f for f, v in row["fracs"].items() if v["separated"]]
         row["min_separated_f"] = min(sep_fs) if sep_fs else None
-    rec = pick_recommendation(rows, margin)
+    eligible = [r for r in rows if not r["in_cache"]]
+    rec = pick_recommendation(eligible, margin)
     # the overlap threshold f* = BW_pcie / BW_dev: below it a cheater hides the PCIe copy under the device digest, so the
-    # audit cannot separate; above it the copy dominates and the digest runs long. Estimated from the measured rates.
+    # audit cannot separate; above it the copy dominates and the digest runs long. BW_dev is the asymptotic HBM digest
+    # rate (largest out-of-cache R), never a cache-inflated small-R rate.
     raw = honest.get("raw", {})
     pcie = raw.get("pcie_h2d_contig_1024MiB", {}).get("gbps_at_p50") or \
         raw.get("pcie_h2d_contig_256MiB", {}).get("gbps_at_p50")
-    best_dev = max((r["honest_gbps_p50"] for r in rows), default=0.0)
+    best_dev = max((r["honest_gbps_p50"] for r in eligible), default=0.0)
     f_star = (pcie / best_dev) if (pcie and best_dev) else None
     for row in rows:
         row["f_star_overlap"] = (pcie / row["honest_gbps_p50"]) if (pcie and row["honest_gbps_p50"]) else None
     return {"c_gib": c_gib, "margin": margin, "fracs": fracs, "rows": rows, "recommendation": rec,
+            "l2_bytes": l2_bytes, "cache_factor": cache_factor,
             "f_star_overlap": f_star, "bw_dev_gbps": best_dev, "bw_pcie_gbps": pcie, "raw": raw}
 
 
 def pick_recommendation(rows: list[dict], margin: float):
-    """The smallest `R` that separates `f = 5%` with the margin, and its `T`; else the `R` with the best 5% margin."""
-    target = 0.05
-    with5 = [r for r in rows if target in r["fracs"]]
-    sep = [r for r in with5 if r["fracs"][target]["separated"]]
-    pick = min(sep, key=lambda r: r["R"]) if sep else (
-        max(with5, key=lambda r: r["fracs"][target]["ratio_margin"]) if with5 else None)
-    if not pick:
-        return None
-    v = pick["fracs"][target]
-    return {"R": pick["R"], "T_ms": pick["T_ms"], "honest_p999_ms": pick["honest_p999"],
-            "cheater5_min_ms": v["cheater_min"], "cheater5_p50_ms": v["cheater_p50"],
-            "margin_ratio": v["ratio_margin"], "separated": v["separated"], "method": v["method"]}
+    """From the out-of-cache rows: the robust operating point (smallest R where f = 10% separates with the margin) and
+    the f = 5% point (smallest R where f = 5% is distinguishable — cheater best-case over the deadline), with its margin
+    reported honestly (f = 5% sits near f*, so its margin is thin)."""
+    def smallest(frac, pred):
+        cand = [r for r in rows if frac in r["fracs"] and pred(r["fracs"][frac])]
+        return min(cand, key=lambda r: r["R"]) if cand else None
+
+    def point(row, frac):
+        if not row:
+            return None
+        v = row["fracs"][frac]
+        return {"R": row["R"], "T_ms": row["T_ms"], "honest_p999_ms": row["honest_p999"],
+                "cheater_min_ms": v["cheater_min"], "cheater_p50_ms": v["cheater_p50"],
+                "margin_ratio": v["ratio_margin"], "margin_vs_T": v["cheater_min"] / row["T_ms"] if row["T_ms"] else 0.0,
+                "separated": v["separated"], "distinguishable": v["distinguishable"], "method": v["method"]}
+
+    robust = smallest(0.10, lambda v: v["separated"])
+    f5_sep = smallest(0.05, lambda v: v["separated"])
+    f5_cand = [r for r in rows if 0.05 in r["fracs"] and r["fracs"][0.05]["distinguishable"]]
+    f5_dist = max(f5_cand, key=lambda r: r["fracs"][0.05]["cheater_min"] / r["T_ms"]) if f5_cand else None
+    return {"robust_f10": point(robust, 0.10), "f5_separated": point(f5_sep, 0.05),
+            "f5_distinguishable": point(f5_dist, 0.05)}
 
 
 def to_markdown(a: dict) -> str:
     fracs = a["fracs"]
     nonzero = [f for f in fracs if f > 0]
+    l2_mib = a["l2_bytes"] / (1 << 20)
     lines = [f"## Separation on C = {a['c_gib']} GiB (RTX PRO 6000 Blackwell)", "",
              "Honest = one-lane digest over R HBM-resident 64 KiB blocks (device). "
              "Cheater = faster of async-copy-overlap and UVA zero-copy, fraction f of blocks in pinned host DRAM. "
-             "Times in ms; ratio = cheater_p50 / honest_p50.", ""]
-    head = ["R", "honest read p50", "honest read p999", "T=digest p999", "GB/s"] + \
+             "Times in ms; ratio = cheater_p50 / honest_p50. Rows marked `L2` have R*64KiB below "
+             f"{a['cache_factor']:.0f}x the {l2_mib:.0f} MB L2, so the honest read is cache-accelerated (rate far above "
+             "HBM) and the apparent separation is an artefact — excluded from the recommendation and from BW_dev/f*.", ""]
+    head = ["R", "R*b", "honest read p50", "honest read p999", "T=digest p999", "GB/s"] + \
         [f"f={int(f*100)}% p50 (x)" for f in nonzero]
     lines.append("| " + " | ".join(head) + " |")
     lines.append("|" + "|".join(["---"] * len(head)) + "|")
     for row in a["rows"]:
-        cells = [str(row["R"]), f"{row['honest_p50']:.3f}", f"{row['honest_p999']:.3f}", f"{row['digest_p999']:.3f}",
-                 f"{row['honest_gbps_p50']:.0f}"]
+        rb = row["bytes"] / (1 << 20)
+        tag = f"{rb:.0f}MiB`L2`" if row["in_cache"] else f"{rb:.0f}MiB"
+        cells = [str(row["R"]), tag, f"{row['honest_p50']:.3f}", f"{row['honest_p999']:.3f}",
+                 f"{row['digest_p999']:.3f}", f"{row['honest_gbps_p50']:.0f}"]
         for f in nonzero:
             v = row["fracs"].get(f)
             if v:
-                star = "*" if v["separated"] else ""
-                cells.append(f"{v['cheater_p50']:.3f} ({v['ratio_typ']:.2f}x){star}")
+                flag = "*" if v["separated"] else ("d" if v["distinguishable"] else "")
+                cells.append(f"{v['cheater_p50']:.3f} ({v['ratio_typ']:.2f}x){flag}")
             else:
                 cells.append("-")
         lines.append("| " + " | ".join(cells) + " |")
-    lines += ["", "`*` = separated: the cheater's best-case read time exceeds the honest read p999 with the required "
-              f"margin (cheater_min / honest_read_p999 >= {a['margin']}); the full-answer deadline T = honest digest "
-              "p999. The gap is a read-time (bandwidth) effect; the z-fold adds the same small constant to both.", ""]
-    rec = a["recommendation"]
-    if rec:
-        lines += ["### Recommendation", "",
-                  f"- R = {rec['R']}, T = {rec['T_ms']*1000:.0f} us ({rec['T_ms']:.3f} ms, honest digest p999)",
-                  f"- honest read p999 = {rec['honest_p999_ms']:.3f} ms; cheater(f=5%) best-case read = "
-                  f"{rec['cheater5_min_ms']:.3f} ms (p50 {rec['cheater5_p50_ms']:.3f} ms), method = {rec['method']}",
-                  f"- margin ratio (cheater best read / honest read p999) = {rec['margin_ratio']:.2f}x; "
-                  f"separates f>=5% with margin: {rec['separated']}", ""]
+    lines += ["", f"`*` = separated with margin: cheater best-case read exceeds honest read p999 and "
+              f"cheater_min / honest_read_p999 >= {a['margin']}. `d` = distinguishable: cheater best-case answer exceeds "
+              "the deadline T (= honest digest p999) but with margin below the bar. The gap is a read-time (bandwidth) "
+              "effect; the z-fold adds the same small constant to both. `L2` rows are cache artefacts (see above).", ""]
+    rec = a["recommendation"] or {}
+    lines += ["### Recommended operating points (out-of-cache R only)", ""]
+    r10 = rec.get("robust_f10")
+    if r10:
+        lines += [f"- **Robust (f >= 10%): R = {r10['R']}, T = {r10['T_ms']*1000:.0f} us** "
+                  f"({r10['T_ms']:.3f} ms = honest digest p999 + guard). Honest answer p999 {r10['honest_p999_ms']:.3f} ms; "
+                  f"cheater(f=10%) best-case {r10['cheater_min_ms']:.3f} ms, margin {r10['margin_vs_T']:.2f}x over T "
+                  f"(method {r10['method']}). Separates f >= 10% with margin.", ""]
+    f5d = rec.get("f5_distinguishable")
+    f5s = rec.get("f5_separated")
+    if f5s:
+        lines += [f"- **f = 5% with full margin: R = {f5s['R']}, T = {f5s['T_ms']*1000:.0f} us** "
+                  f"(cheater best-case {f5s['cheater_min_ms']:.3f} ms, margin {f5s['margin_vs_T']:.2f}x over T).", ""]
+    elif f5d:
+        lines += [f"- **f = 5% is distinguishable but thin-margin: R = {f5d['R']}, T = {f5d['T_ms']*1000:.0f} us** "
+                  f"(cheater best-case {f5d['cheater_min_ms']:.3f} ms > T = {f5d['T_ms']:.3f} ms, margin only "
+                  f"{f5d['margin_vs_T']:.2f}x over T — f = 5% sits just above f*, so no out-of-cache R clears the "
+                  f"{a['margin']}x bar; use f = 10% for a comfortable margin, or raise R / trials to tighten the tail).", ""]
     else:
-        lines += ["### Recommendation", "", "No f=5% point in the cheater sweep.", ""]
+        lines += ["- f = 5% is not distinguishable out of cache at these rates.", ""]
     raw = a.get("raw", {})
     if raw:
         lines += ["### Reference rates", ""]
@@ -172,20 +204,24 @@ def to_markdown(a: dict) -> str:
         lines.append("")
     if a.get("f_star_overlap"):
         lines += [f"**Overlap threshold** f\\* = BW_pcie / BW_dev = {a['bw_pcie_gbps']:.0f} / {a['bw_dev_gbps']:.0f} "
-                  f"GB/s = {a['f_star_overlap']*100:.1f}%: an overlapping cheater hides the PCIe copy under the device "
-                  f"digest below this host fraction, so a bulk read cannot separate f < f\\*; above it the copy dominates. "
-                  f"To separate f >= 5% the digest must reach BW_dev >= 20*BW_pcie.", ""]
+                  f"GB/s = {a['f_star_overlap']*100:.1f}% (BW_dev = asymptotic out-of-cache HBM digest rate): an "
+                  f"overlapping cheater hides the PCIe copy under the device digest below this host fraction, so a bulk "
+                  f"read cannot separate f < f\\*; above it the copy dominates. f = 5% sits just above f\\*, hence the "
+                  f"thin margin; f = 10% is comfortably above it.", ""]
     return "\n".join(lines)
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", required=True)
-    ap.add_argument("--margin", type=float, default=1.5, help="required cheater-best-case / T ratio to call f separated")
+    ap.add_argument("--margin", type=float, default=1.5, help="required cheater-best-case / honest-p999 ratio for 'separated'")
+    ap.add_argument("--l2-mib", type=float, default=0.0, help="L2 size (MiB); 0 reads honest.json's l2_mib (default 128)")
+    ap.add_argument("--cache-factor", type=float, default=4.0, help="R*b must exceed this x L2 to count as an HBM read")
     args = ap.parse_args()
     d = Path(args.dir)
     honest, cheater = load(d)
-    a = analyze(honest, cheater, args.margin)
+    l2_mib = args.l2_mib or honest.get("l2_mib", 128)
+    a = analyze(honest, cheater, args.margin, int(l2_mib * (1 << 20)), args.cache_factor)
     (d / "summary.json").write_text(json.dumps(a, indent=2))
     md = to_markdown(a)
     (d / "separation.md").write_text(md)
