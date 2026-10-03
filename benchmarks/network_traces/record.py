@@ -273,11 +273,15 @@ def offline_replay(eng, com, requests: list[dict], t0: float, drain_until: float
             core.add_request(q["rid"], {"prompt_token_ids": q["prompt"]},
                              SamplingParams(max_tokens=q["max_tokens"], temperature=0.0, ignore_eos=True))
         if now >= next_run:
-            com.finalize()
+            rc = com.finalize()
+            done = clock()
             com.uninstall()
             com.reset()
             com.install()
-            commits({"t_ms": ms(now - t0), "finalize_ms": ms(clock() - now)})
+            commits({"t_ms": ms(now - t0), "finalize_ms": ms(done - now), "restart_ms": ms(clock() - done),
+                     "steps": len(rc.steps), "bytes": sum(s.n_bytes for s in rc.steps),
+                     "root_ready_delay_ms": ms(rc.root_ready_delay_s), "run_root": rc.run_root.hex(),
+                     "errors": rc.extra.get("errors_n")})
             next_run += window_s
             continue
         if not core.has_unfinished_requests():
@@ -500,7 +504,7 @@ def run(args: argparse.Namespace) -> int:
                    "--max-model-len", str(args.max_model_len), "--disable-uvicorn-access-log", *args.server_arg]
     if not offline:
         meta["server_argv"] = server_argv[1:]
-    (out / "meta.json").write_text(json.dumps(meta, indent=1))
+    (out / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
     stall = {"hb": 0.0, "loop": 0.0}
     samples, requests = JsonLines(out / "samples.jsonl"), JsonLines(out / "requests.jsonl")
     steps, commits = (JsonLines(out / "steps.jsonl"), JsonLines(out / "commits.jsonl")) if offline else (None, None)
@@ -525,7 +529,7 @@ def run(args: argparse.Namespace) -> int:
         reqs = schedule(mix, -args.warmup_s, windows * window_s, args.seed)
         meta |= {"t0_mono": t0, "t0_unix": time.time() + (t0 - clock()), "startup_s": round(ready - start, 1),
                  "windows": windows, "requests": len(reqs)}
-        (out / "meta.json").write_text(json.dumps(meta, indent=1))
+        (out / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
         if offline:
             ended = offline_replay(eng, com, reqs, t0, deadline - 20, requests, steps, commits)
         else:
@@ -541,7 +545,7 @@ def run(args: argparse.Namespace) -> int:
             if f is not None:
                 f.close()
     meta["ended"] = ended
-    (out / "meta.json").write_text(json.dumps(meta, indent=1))
+    (out / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
     convert(out)
     return 0
 

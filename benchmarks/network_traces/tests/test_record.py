@@ -1,10 +1,13 @@
 """The recorder's trace writer on CPU: the open-loop schedule, chunk stamping on an injected clock, the conversion to the
-calibration tool's format with its exclusions, and the merge. No GPU, no server, no clock."""
+calibration tool's format with its exclusions, the merge, and the offline engine's loop on a fake engine. No GPU, no
+server, no clock."""
 
 from __future__ import annotations
 
 import importlib.util
 import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -140,3 +143,78 @@ def test_a_repo_id_resolves_to_its_snapshot_with_or_without_refs(tmp_path: Path)
     (repo / "refs" / "main").write_text("def\n")
     assert rec.local_model("org/m", tmp_path) == str(repo / "snapshots" / "def")
     assert rec.local_model(str(repo), tmp_path) == str(repo)
+
+
+class FakeEngine:
+    """vLLM's LLMEngine surface the offline loop uses: each step adds one token to every running request, in 20 ms."""
+
+    def __init__(self, now: list[float]):
+        self.now, self.running = now, {}
+
+    def add_request(self, rid, prompt, params):
+        self.running[rid] = [params["max_tokens"], 0]
+
+    def has_unfinished_requests(self):
+        return bool(self.running)
+
+    def step(self):
+        self.now[0] += 0.02
+        outs = []
+        for rid, st in list(self.running.items()):
+            st[1] += 1
+            outs.append(types.SimpleNamespace(request_id=rid + "-0", finished=st[1] == st[0],
+                                              outputs=[types.SimpleNamespace(token_ids=list(range(st[1])))]))
+            if st[1] == st[0]:
+                del self.running[rid]
+        return outs
+
+
+class FakeCommitter:
+    def __init__(self):
+        self.calls = []
+
+    def finalize(self):
+        self.calls.append("finalize")
+        return types.SimpleNamespace(steps=[types.SimpleNamespace(n_bytes=8)] * 2, run_root=bytes(32),
+                                     root_ready_delay_s=0.001, extra={"errors_n": 0})
+
+    def __getattr__(self, name):
+        return lambda: self.calls.append(name)
+
+
+def test_the_offline_loop_admits_on_time_stamps_each_step_and_commits_one_run_per_window(monkeypatch) -> None:
+    now = [100.0]
+
+    def clock():
+        now[0] += 0.001
+        return now[0]
+
+    class Event:
+        def is_set(self):
+            return False
+
+        def set(self):
+            pass
+
+        def wait(self, timeout):
+            now[0] += timeout
+
+    monkeypatch.setattr(rec, "clock", clock)
+    monkeypatch.setattr(rec, "threading", types.SimpleNamespace(Event=Event))
+    monkeypatch.setattr(rec.signal, "signal", lambda *_: None)
+    monkeypatch.setitem(sys.modules, "vllm", types.SimpleNamespace(SamplingParams=lambda **kw: kw))
+    monkeypatch.setitem(sys.modules, "verity_vllm.engine.engine_driver",
+                        types.SimpleNamespace(external_id=lambda s: s.rsplit("-", 1)[0]))
+    eng, com = types.SimpleNamespace(llm=types.SimpleNamespace(llm_engine=FakeEngine(now))), FakeCommitter()
+    reqs = [{"rid": f"r{i}", "workload": "b4", "instance": i, "index": 0, "at_s": -5 + 1.5 * i, "prompt": [1, 2, 3],
+             "max_tokens": 3} for i in range(90)]
+    out, steps, commits = [], [], []
+    t0 = now[0] + 5
+    ended = rec.offline_replay(eng, com, reqs, t0, t0 + 200, out.append, steps.append, commits.append)
+    assert ended == {"stopped_ms": None, "unfinished": 0} and [r["ok"] for r in out] == [True] * 90
+    r = next(r for r in out if r["rid"] == "r10")
+    assert r["send_ms"] == r["sched_ms"] == 10_000.0 and 0 <= r["admit_ms"] - r["send_ms"] < 25
+    assert [n for _, n in r["chunks"]] == [1, 1, 1] and r["chunks"][0][0] > r["admit_ms"]
+    assert [c["t_ms"] // 60_000 for c in commits] == [0, 1, 2] and commits[0]["steps"] == 2
+    assert com.calls[:6] == ["reset", "install", "finalize", "uninstall", "reset", "install"]
+    assert sum(s["tokens"] for s in steps) == 270
