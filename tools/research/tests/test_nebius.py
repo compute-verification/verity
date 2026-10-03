@@ -683,6 +683,22 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     assert s["resources"] == {"platform": "gpu-rtx6000-a", "preset": "8gpu-192vcpu-1744gb"}
     nic = s["network_interfaces"][0]
     assert nic["public_ip_address"] == {"static": True} and nic["security_groups"] and s["secondary_disks"][0]["device_id"] == "data"
+    assert "preemptible" not in s
+
+
+def test_dry_run_takes_another_platform_preemptible_with_its_own_identity_and_rate():
+    r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME="vy-h200-1", NEBIUS_PLATFORM="gpu-h200-sxm",
+               NEBIUS_PRESET="8gpu-128vcpu-1600gb", NEBIUS_VM_SA_ID="serviceaccount-self-stop", NEBIUS_PREEMPTIBLE="1")
+    assert r.returncode == 0, r.stderr
+    doc = json.loads(r.stdout.split("# instance create request (ids are placeholders)\n")[1])
+    s = doc["spec"]
+    assert doc["metadata"]["name"] == "vy-h200-1" and s["resources"] == {"platform": "gpu-h200-sxm", "preset": "8gpu-128vcpu-1600gb"}
+    assert s["service_account_id"] == "serviceaccount-self-stop" and s["preemptible"] == {"on_preemption": "STOP"}
+    r = launch("--max-hours", "4", NEBIUS_RATE_USD_PER_HOUR="43.20")
+    assert r.returncode == 1 and "billing at $43.20/h: pass --yes" in r.stderr
+    for bad in ({"NEBIUS_PREEMPTIBLE": "yes"}, {"NEBIUS_RATE_USD_PER_HOUR": "43,20"}):
+        r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", **bad)
+        assert r.returncode == 1 and next(iter(bad)) in r.stderr
 
 
 def test_launch_refuses_to_spend_without_yes_and_a_lease():

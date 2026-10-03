@@ -24,7 +24,8 @@ DATA_DEVICE_ID=data                                # the guest sees /dev/disk/by
 SG_NAME=${VM_NAME}-ssh
 SSH_CIDRS=${NEBIUS_SSH_CIDRS:-0.0.0.0/0}           # comma-separated, at most 8; port 22 only either way
 SSH_USER=research                                  # Nebius reserves root and admin: neither may log in over ssh
-RATE_USD_PER_HOUR=14.40
+RATE_USD_PER_HOUR=${NEBIUS_RATE_USD_PER_HOUR:-14.40}  # the preset's list price; another platform's VM names its own
+PREEMPTIBLE=${NEBIUS_PREEMPTIBLE:-0}               # 1: a preemptible VM, which Nebius stops (never deletes) when it preempts it
 MACHINE=${VM_NAME}
 PROJECT=verity
 

@@ -7,6 +7,9 @@
 #                                                (e.g. 2026-10-07T15:00:00Z, the end of the spend authorization) writes the VM's
 #                                                /etc/research/deadline, a hard cap no lease extension or restart passes (vm_setup.sh)
 #
+# Another VM (e.g. 8x H200 in another project) is this script under per-run overrides (common.sh): NEBIUS_PROJECT_ID, NEBIUS_REGION,
+# NEBIUS_VM_NAME, NEBIUS_PLATFORM, NEBIUS_PRESET, NEBIUS_VM_SA_ID, NEBIUS_DATA_GIB, NEBIUS_RATE_USD_PER_HOUR and NEBIUS_PREEMPTIBLE.
+#
 # Idempotent: every resource is looked up by name first, so a rerun after a failure (or on a stopped VM) resumes; nothing is
 # ever deleted here (teardown.sh).  In order, in project NEBIUS_PROJECT_ID (default-project-uk-south2; set it empty to look up or
 # create NEBIUS_PROJECT_NAME, which needs tenant rights the launching service account doesn't have):
@@ -38,6 +41,8 @@ while [ $# -gt 0 ]; do
   shift
 done
 [ $((DATA_GIB % 93)) -eq 0 ] || [ "$DATA_TYPE" != network_ssd_non_replicated ] || die "NEBIUS_DATA_GIB=$DATA_GIB is not a multiple of 93"
+[[ $RATE_USD_PER_HOUR =~ ^[0-9]+(\.[0-9]+)?$ ]] || die "NEBIUS_RATE_USD_PER_HOUR=$RATE_USD_PER_HOUR is not a price in USD per hour"
+case $PREEMPTIBLE in 0 | 1) ;; *) die "NEBIUS_PREEMPTIBLE=$PREEMPTIBLE is neither 0 nor 1" ;; esac
 if [ "$dry" = 0 ]; then
   [ "$yes" = 1 ] || die "this starts billing at \$$RATE_USD_PER_HOUR/h: pass --yes (or --dry-run)"
   [[ $max_hours =~ ^[0-9]+$ ]] && [ "$max_hours" -ge 1 ] || die "--max-hours H (whole hours >= 1): the VM stops itself after it"
@@ -81,7 +86,7 @@ PY
 # vm_body ... : the instance create request
 vm_body() {
   VB_NAME=$VM_NAME VB_PARENT=$1 VB_PLATFORM=$2 VB_PRESET=$PRESET VB_BOOT=$3 VB_DATA=$4 VB_DEV=$DATA_DEVICE_ID VB_SUBNET=$5 VB_SG=$6 \
-    VB_SA=$7 VB_UD=$8 python3 -c '
+    VB_SA=$7 VB_UD=$8 VB_PREEMPTIBLE=$PREEMPTIBLE python3 -c '
 import json, os
 e = os.environ
 spec = {"resources": {"platform": e["VB_PLATFORM"], "preset": e["VB_PRESET"]},
@@ -92,6 +97,8 @@ spec = {"resources": {"platform": e["VB_PLATFORM"], "preset": e["VB_PRESET"]},
         "cloud_init_user_data": e["VB_UD"], "recovery_policy": "RECOVER"}
 if e["VB_SA"] not in ("", "none"):
     spec["service_account_id"] = e["VB_SA"]
+if e["VB_PREEMPTIBLE"] == "1":
+    spec["preemptible"] = {"on_preemption": "STOP"}
 print(json.dumps({"metadata": {"name": e["VB_NAME"], "parent_id": e["VB_PARENT"], "labels": {"machine": e["VB_NAME"], "project": "verity"}},
                   "spec": spec}))'
 }
