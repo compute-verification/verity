@@ -12,7 +12,9 @@ A fill job is an executable script in FILL_DIR/queue/.  Its header says what it 
 #   jobs of that kind running goes next), then the longest-queued job (a requeued job queues afresh);
     #   project pous (default) or verity (Verity's work, which runs only when no pous job is queued, except circuits' Commit
 #   guests, verity-commit-*.sh, which rank above every other job); mem_gb: a CPU job's memory cap
-#   (default 128; a GPU job's cap is gpu-lease's, 90% of RAM over the GPU count)
+#   (default 128; a GPU job's cap is gpu-lease's, 90% of RAM over the GPU count, a timing job's its own scope's, default 128);
+#   timing=1: a timing chunk (network accounting's), on one GPU with cpus CPUs of its own (1 to 16, whole cores; see below),
+#   max_min <= FILL_TIMING_MAX_MIN (60)
 
 It must be restartable: it can be stopped (SIGTERM, then SIGKILL 20 s later) at any moment and started again from the top,
 so it resumes from checkpoints in its own output directory.  Its exit status says what happened:
@@ -49,7 +51,13 @@ Every POLL_S seconds the runner:
     tick, a line past its until ignored), which `fill_runner.py fence` writes and logs, one per owner, at most 1 GPU, FENCE_MAX_CPUS
     cores on that GPU's NUMA node and FENCE_MAX_H hours: it stops any other fill job on the GPU, moves running fill jobs' threads
     off the cores, keeps the GPU as if in keep-free and starts no job on the cores; a job the glob names runs on that GPU alone,
-    pinned to those cores, with max_min up to the minutes (still stopped, like any fill job, for a window or a waiter).
+    pinned to those cores, with max_min up to the minutes (still stopped, like any fill job, for a window or a waiter);
+  - starts a timing job only on a GPU whose NUMA node holds `cpus` free CPUs of TIMING_CPU_SET in whole cores (SMT siblings),
+    and gives it those CPUs alone, at nice 0, in a scope of the top-level TIMING_SLICE (`sudo -n systemd-run`: user.slice and
+    system.slice, where every other fill job, slot d and the Verity pool run, are confined below them); never a CPU a fence, a
+    running timing job or any populated top-level cgroup but PID 1's may use.  Its lease isn't --preemptible and nothing here
+    stops it before its max_min, for a waiter, a window, a Commit or a fence, nor moves its threads (booked windows still bound
+    its start).  While one is queued, other 1-GPU jobs take GPUs off TIMING_CPU_SET's NUMA nodes first.
 Status: FILL_DIR/status.txt; every start, stop and exit: FILL_DIR/events.jsonl.
 A bare `fill_runner.py` is the runner, which exits at once while another holds FILL_DIR/.runner.lock; any argument but `fence`
 prints the usage.
@@ -59,6 +67,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import fnmatch
+import functools
 import json
 import os
 import re
@@ -108,6 +117,14 @@ COMMIT_MAX_MIN = int(os.environ.get("FILL_COMMIT_MAX_MIN", "120"))
 CGROUP_ROOT = os.environ.get("FILL_CGROUP_ROOT", "/sys/fs/cgroup")
 # what a fence may take, in the tool rather than a budget line: the GPU is paid for either way, so a fence costs fill's throughput
 FENCE_MAX_CPUS, FENCE_MAX_H = 8, 4
+# network accounting's timing chunks kept none of 353 windows on node 2's shared 48-95 at nice 19 (art:88c665c3): each gets
+# whole cores here alone, which only a top-level slice reaches while user.slice and system.slice are confined to 0-123
+TIMING_CPU_SET = os.environ.get("FILL_TIMING_CPU_SET", "124-191")
+TIMING_SLICE = os.environ.get("FILL_TIMING_SLICE", "vy-timing.slice")
+# a chunk is 55 min plus its startup (benchmarks/network_traces/run.sh leases --max-min 60); booked windows still bound it
+TIMING_MAX_MIN = int(os.environ.get("FILL_TIMING_MAX_MIN", "60"))
+TIMING_MAX_CPUS = 16
+CPU_ROOT = Path(os.environ.get("FILL_CPU_ROOT", "/sys/devices/system/cpu"))
 QUOTA_LOG = Path(os.environ.get("FILL_QUOTA_LOG", "/workspace/verity-guest/kueue-backup/quota-changes.log"))
 PCI_ROOT = Path(os.environ.get("FILL_PCI_ROOT", "/sys/bus/pci/devices"))
 HELD = "held-unknown-exit"
@@ -197,11 +214,15 @@ def header(p: Path, t: float | None = None) -> dict:
             for k, v in re.findall(r"(\w+)=(\S+)", m.group(1)):
                 h[k] = int(v) if v.isdigit() else v
     commit = p.name.startswith(COMMIT_PREFIX)
-    h["gpus"] = min(max(int(h["gpus"]), 0), 2 if commit else 1)
+    h["timing"] = h.get("timing") == 1
+    h["gpus"] = 1 if h["timing"] else min(max(int(h["gpus"]), 0), 2 if commit else 1)
+    if h["timing"]:
+        h["cpus"] = min(max(int(h["cpus"]), 1), TIMING_MAX_CPUS)
     # a Verity CPU job has its own CPUs and is frozen through windows, so it may run a whole vLLM Build (2-50 min, some 1-4 h)
     cap = max_min_exception(p.name, t)
     if cap is None:
-        cap = COMMIT_MAX_MIN if commit and h["gpus"] else 360 if h["project"] == "verity" and not h["gpus"] else 30
+        cap = (COMMIT_MAX_MIN if commit and h["gpus"] else TIMING_MAX_MIN if h["timing"]
+               else 360 if h["project"] == "verity" and not h["gpus"] else 30)
     h["max_min"] = min(int(h["max_min"]), cap)
     return h
 
@@ -301,10 +322,12 @@ def waiters() -> list[int]:
 
 
 def scope(j: dict, *args: str) -> bool:
-    """systemctl --user on a job's scope (a Verity or lent CPU job's own, a GPU job's gpu-lease-<pid>): freeze, thaw and kill
-    reach every process in it, including a workload that `research run` starts as its own process group, which killpg misses."""
+    """systemctl --user on a job's scope (a Verity or lent CPU job's own, a GPU job's gpu-lease-<pid>), or the system manager's
+    on a timing job's fill-timing-*: freeze, thaw and kill reach every process in it, including a workload that `research run`
+    starts as its own process group, which killpg misses."""
     unit = j.get("unit")
-    return bool(unit) and subprocess.run(["systemctl", "--user", *args, f"{unit}.scope"], capture_output=True).returncode == 0
+    systemctl = ["sudo", "-n", "systemctl"] if unit and unit.startswith("fill-timing-") else ["systemctl", "--user"]
+    return bool(unit) and subprocess.run([*systemctl, *args, f"{unit}.scope"], capture_output=True).returncode == 0
 
 
 def stop(name: str, why: str, requeue: bool = True) -> None:
@@ -346,7 +369,16 @@ def start(p: Path, h: dict, backfill: bool = False) -> None:
         cmd = ["ionice", "-c3", *cmd]
     if CPU_MEMBIND and not h["gpus"] and not verity:
         cmd = ["numactl", f"--membind={CPU_MEMBIND}", *cmd]
-    if h["gpus"]:
+    timing = h.get("timing_cpus")
+    if timing:
+        # vy-provers' form: root's systemd-run makes the scope in a top-level slice and sets nice 0, then runs CMD as this user
+        unit_name = f"fill-timing-{int(time.time() * 1000)}"
+        cmd = [GPU_LEASE, "1", "--on", str(h["on"]), "--max-min", str(h["max_min"]), "--",
+               "sudo", "-n", "--preserve-env", "env", f"PATH={env.get('PATH', '')}", "systemd-run", "--quiet", "--scope",
+               "--collect", f"--slice={TIMING_SLICE}", "--unit", unit_name, "--nice=0", "-p", f"AllowedCPUs={timing}",
+               "-p", f"MemoryMax={h.get('mem_gb', CPU_MEM_GB)}G", "-p", "MemorySwapMax=0", f"--uid={os.getuid()}",
+               f"--gid={os.getgid()}", "--", "taskset", "-c", timing, "bash", "-c", RC_WRAP, "fill-rc", str(rc_file), str(run)]
+    elif h["gpus"]:
         pin = ["--on", str(h["on"])] if h.get("on") is not None else []
         cmd = [GPU_LEASE, str(h["gpus"]), *pin, "--preemptible", "--max-min", str(h["max_min"]), "--", *cmd]
     elif shutil.which("systemd-run"):
@@ -357,14 +389,17 @@ def start(p: Path, h: dict, backfill: bool = False) -> None:
                "-p", "MemorySwapMax=0", "--", *cmd]
     proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, env=env, cwd=str(FILL), start_new_session=True)
     log.close()
-    if h["gpus"]:
+    if h["gpus"] and not timing:
         unit_name = f"gpu-lease-{proc.pid}"         # gpu-lease runs CMD in the scope named by its own pid
     (FILL / "running" / f".{name}.pgid").write_text(f"{proc.pid}\n")
     if unit_name:
         (FILL / "running" / f".{name}.unit").write_text(f"{unit_name}\n")
+    if timing:
+        (FILL / "running" / f".{name}.cpus").write_text(f"{timing}\n")
     running[name] = {"pid": proc.pid, "proc": proc, "h": h, "t0": time.monotonic(), "started": now(), "paused": False,
                      "unit": unit_name}
-    event("start", name, owner=h["owner"], gpus=h["gpus"], project=h["project"], backfill=backfill)
+    event("start", name, owner=h["owner"], gpus=h["gpus"], project=h["project"], backfill=backfill,
+          **({"timing_cpus": timing} if timing else {}))
 
 
 def gpu_set(on, n: int) -> set[int] | None:
@@ -420,12 +455,68 @@ def gpu_cpus(i: int) -> set[int]:
     return gpu_set((PCI_ROOT / f"{domain[-4:]}:{rest}".lower() / "local_cpulist").read_text().strip(), 1 << 16) or set()
 
 
+_local: dict[int, set[int]] = {}
+
+
+def local_cpus(i: int) -> set[int]:
+    """gpu_cpus(i), read once a runner; none while it can't be read."""
+    if i not in _local:
+        try:
+            _local[i] = gpu_cpus(i)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return set()
+    return _local[i]
+
+
+@functools.cache
+def siblings(c: int) -> frozenset[int]:
+    """CPU c's core: its SMT siblings (CPU_ROOT/cpu<c>/topology/thread_siblings_list); none when that can't be read."""
+    try:
+        return frozenset(gpu_set((CPU_ROOT / f"cpu{c}" / "topology" / "thread_siblings_list").read_text().strip(), 1 << 16) or ())
+    except OSError:
+        return frozenset()
+
+
+def carve(free: set[int], local: set[int], k: int) -> str | None:
+    """At least k CPUs of `free` on `local` (a GPU's NUMA node), lowest first, or None when they don't fit.  A core goes whole,
+    all its SMT siblings or none, so no two jobs share one."""
+    ok, got = free & local, set()
+    for c in sorted(ok):
+        core = siblings(c)
+        if len(got) < k and c == min(core, default=-1) and core <= ok:
+            got |= core
+    return cpu_list(got) if len(got) >= k else None
+
+
+def timing_free(fs: list[dict]) -> set[int]:
+    """TIMING_CPU_SET less every CPU another process may run on: a fence's, a running timing job's, and each populated top-level
+    cgroup's but PID 1's init.scope (user.slice and system.slice hold every other fill job, slot d and the Verity pool): a
+    slice's own cpuset, else that of each populated cgroup in it, as in TIMING_SLICE.  A cgroup that can't be read takes all."""
+    free = gpu_set(TIMING_CPU_SET, 1 << 16) or set()
+    for cpus in [f["cpus"] for f in fs] + [j["h"].get("timing_cpus") for j in running.values()]:
+        free -= gpu_set(cpus, 1 << 16) or set()
+
+    def populated(d: Path) -> bool:
+        return "populated 1" in (d / "cgroup.events").read_text()
+
+    try:
+        for d in Path(CGROUP_ROOT).iterdir():
+            if not d.is_dir() or d.name == "init.scope" or not populated(d):
+                continue
+            own = d.name != TIMING_SLICE and (d / "cpuset.cpus").read_text().strip()
+            for c in [d] if own else [c for c in d.iterdir() if c.is_dir() and populated(c)] or [d]:
+                free -= gpu_set((c / "cpuset.cpus.effective").read_text().strip(), 1 << 16) or set()
+    except OSError:
+        return set()
+    return free
+
+
 def repin(f: dict, fs: list[dict]) -> None:
-    """Move every running fill job but fence f's own off f's cores: each thread in the job's process group or its scope (a GPU
-    job's gpu-lease-<pid>, where `research run` starts its workload in a session of its own).  A thread on f's cores alone
-    stays."""
+    """Move every running fill job but fence f's own and the timing jobs off f's cores: each thread in the job's process group or
+    its scope (a GPU job's gpu-lease-<pid>, where `research run` starts its workload in a session of its own).  A thread on f's
+    cores alone stays."""
     off = gpu_set(f["cpus"], 1 << 16) or set()
-    jobs = [j for k, j in running.items() if fence_for(k, fs) is not f]
+    jobs = [j for k, j in running.items() if fence_for(k, fs) is not f and not j["h"].get("timing")]
     groups = {j["pid"] for j in jobs if j.get("pid")}
     scopes = tuple(f"/{j['unit']}.scope" for j in jobs if j.get("unit"))
     moved = 0
@@ -532,7 +623,7 @@ def reap() -> None:
         run = FILL / "running" / name
         mins = round((time.monotonic() - j["t0"]) / 60, 1)
         paused_min = round((j.get("paused_s", 0.0) + (time.monotonic() - j["paused_at"] if j["paused"] else 0.0)) / 60, 1)
-        for side in ("pgid", "unit", "rc"):
+        for side in ("pgid", "unit", "rc", "cpus"):
             (FILL / "running" / f".{name}.{side}").unlink(missing_ok=True)
         if rc == 0:
             dest, kind = "done", "done"
@@ -639,7 +730,9 @@ def tick(n: int) -> str:
     holders = {l.split()[0] for l in leases if l}
     timed = (n > 0 and all(leases) and len(holders) == 1) or any(l and " timed=1 " in f" {l} " for l in leases)
     window = not timed and any(w >= n for w in want)
-    gpu_jobs = sorted((j["t0"], k) for k, j in running.items() if j["h"]["gpus"] and not j.get("stopping"))
+    # a timing job isn't fill's to stop: until its max_min it holds its GPU as any other lease does
+    gpu_jobs = sorted((j["t0"], k) for k, j in running.items()
+                      if j["h"]["gpus"] and not j.get("stopping") and not j["h"].get("timing"))
     blockers = (n - free) - sum(running[k]["h"]["gpus"] for _, k in gpu_jobs)
     need = RESERVE + sum(want)
     agent = agent_up()
@@ -662,7 +755,7 @@ def tick(n: int) -> str:
             repin(f, fs)
         pid = re.search(r"\bpid=(\d+)", leases[f["gpu"]] or "") if f["gpu"] < n else None
         k = next((k for k, j in running.items() if pid and j.get("pid") == int(pid.group(1))), None)
-        if k and not running[k].get("stopping") and fence_for(k, fs) is not f:
+        if k and not running[k].get("stopping") and fence_for(k, fs) is not f and not running[k]["h"].get("timing"):
             stop(k, f"GPU {f['gpu']} is fenced for {f['owner']}")
     frozen = cpu_frozen(timed, window)
     if frozen and any(not j["h"]["gpus"] and not j.get("stopping") and not j["paused"] for j in running.values()):
@@ -699,12 +792,16 @@ def tick(n: int) -> str:
         keep, fenced = keep_free(n, fs), {f["gpu"] for f in fs}
         booked, t_now = windows(), wall()
         idle = [i for i, l in enumerate(leases) if l is None and (i not in keep or i in fenced)]
+        timing = any(x[1].get("timing") for x in queued)
+        pool = timing_free(fs) if timing else set()
+        near = {i for i in range(n) if local_cpus(i) & (gpu_set(TIMING_CPU_SET, 1 << 16) or set())} if timing else set()
 
         def allowed(x) -> set[int]:
             f = fence_for(x[0].name, fs)
             gpus = {f["gpu"]} if f else set(range(n)) - fenced
             on = gpu_set(x[1].get("on"), n)
-            return gpus if on is None else gpus & on
+            gpus = gpus if on is None else gpus & on
+            return {i for i in gpus if carve(pool, local_cpus(i), x[1]["cpus"])} if x[1].get("timing") else gpus
 
         ready = [x for x in queued if x[1]["gpus"] and clears(x[1], booked, t_now) and any(i in idle for i in allowed(x))]
         # nothing else may use a fence's GPU, so its jobs go first
@@ -718,11 +815,17 @@ def tick(n: int) -> str:
             best = next_job(left, counts)
             left.remove(best)
             p, h, _ = best
-            got = pick_gpus(idle, allowed(best), h["gpus"], n) if h["gpus"] <= slots else None
+            mine = allowed(best)
+            # while a timing job is queued, the rest take the GPUs it can't use first
+            first = mine - near if near and not h.get("timing") and h["gpus"] == 1 else mine
+            got = (pick_gpus(idle, first, h["gpus"], n) or pick_gpus(idle, mine, h["gpus"], n)) if h["gpus"] <= slots else None
             if not got:
                 continue
             for i in got:
                 idle.remove(i)
+            if h.get("timing"):
+                h = {**h, "timing_cpus": carve(pool, local_cpus(got[0]), h["cpus"])}
+                pool -= gpu_set(h["timing_cpus"], 1 << 16) or set()
             start(p, {**h, "on": ",".join(map(str, got))}, backfill=backfill)
             counts[h["owner"]] += 1
             slots -= h["gpus"]
@@ -733,7 +836,8 @@ def tick(n: int) -> str:
             short = (waiting - sum(1 for i in idle if i not in fenced)
                      - sum(j["h"]["gpus"] for j in running.values() if j["h"]["gpus"] and j.get("stopping")))
             victims = sorted((k for k, j in running.items() if j["h"]["gpus"] and not j.get("stopping") and rank(k, j["h"])
-                              and not fence_for(k, fs)), key=lambda k: (-rank(k, running[k]["h"]), -running[k]["t0"]))
+                              and not fence_for(k, fs) and not j["h"].get("timing")),
+                             key=lambda k: (-rank(k, running[k]["h"]), -running[k]["t0"]))
             for k in victims:
                 if short <= 0:
                     break
@@ -771,6 +875,7 @@ def tick(n: int) -> str:
              f"held for an unknown exit {sum(1 for _ in (FILL / HELD).glob('*'))}"]
     for k, j in running.items():
         lines.append(f"  running {k} owner={j['h']['owner']} gpus={j['h']['gpus']} since={j['started']}"
+                     f"{' timing cpus=' + j['h']['timing_cpus'] if j['h'].get('timing_cpus') else ''}"
                      f"{' PAUSED' if j['paused'] else ''}{' stopping: ' + j['why'] if j.get('stopping') else ''}")
     lines.extend(f"  fence {f['line'].split('#')[0].strip()}" for f in fs)
     (FILL / "status.txt").write_text("\n".join(lines) + "\n")
@@ -803,6 +908,12 @@ def adopt() -> None:
             h["lent"] = True
         if unit and unit.startswith("fill-cpuset-"):
             h["cpuset"] = cpu_sets().get(h["owner"], {}).get("cpus") or "adopted"
+        if h["timing"]:
+            # CPUs it may hold that no record names are all taken, so no later job shares them
+            try:
+                h["timing_cpus"] = (FILL / "running" / f".{p.name}.cpus").read_text().strip() or TIMING_CPU_SET
+            except OSError:
+                h["timing_cpus"] = TIMING_CPU_SET
         if h["gpus"] and not unit:
             unit = f"gpu-lease-{pgid}"
         running[p.name] = {"pid": pgid, "proc": None, "h": h, "t0": time.monotonic(), "started": now(),
