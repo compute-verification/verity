@@ -61,6 +61,8 @@ def model_row(name: str, inputs: dict, verifies: list[dict], fresh: dict | None,
     if fresh is not None:
         if {r["run"] for r in fresh["inputs"]} != {runs[0]} or any(r["openings_failed"] for r in fresh["inputs"]):
             raise ValueError(f"{name}: the fresh trials are not of {runs[0]}'s committed pass")
+        if sorted((r["pass"], r["matmul"]) for r in fresh["inputs"]) != sorted((r["pass"], r["matmul"]) for r in rows):
+            raise ValueError(f"{name}: the fresh trials are of other inputs than the committed list (served_inputs.sh)")
         fb, fw = _cite(fresh["inputs"], m)
         out["fresh"] = {"draws": fresh["fresh_draws"], "source": fresh["fresh_source"], "m_model": fresh["m"],
                         "trials": sum(r["drawn"] for r in fresh["inputs"]), "failures": sum(r["failures"] for r in fresh["inputs"]),

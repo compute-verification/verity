@@ -624,6 +624,9 @@ def test_the_served_table_cites_each_models_worst_input_and_refuses_what_it_cann
     assert table["m"] == 2 and table["models"][0]["epsilon"] == pytest.approx(math.log(40) / 32)
     assert table["models"][1] == {"model": "llama", "absent": "its pass is gone"}
     assert "| llama | — | — | — | — | — | none | its pass is gone |" in (out / "table.md").read_text()
+    with pytest.raises(ValueError, match="committed list"):
+        files["fresh"].write_text(json.dumps({"fresh_draws": 320, "fresh_source": "cd", "m": 1, "inputs": [trial(0, 0)]}))
+        ST.main(["--model", "qwen", str(files["q"]), "--fresh", "qwen", str(files["fresh"]), "--out", str(out)])
     with pytest.raises(ValueError, match="control"):
         ST.main(["--model", "qwen", str(files["q"]), str(files["bad"]), "--out", str(out)])
     with pytest.raises(ValueError, match="one served pass"):
