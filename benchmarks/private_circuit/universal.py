@@ -23,10 +23,14 @@
   instances: a Program of one `batch` of the unit per layer (`wired_program`), whose wiring is the public layout's. Checked
   against `interpret` composed along the topology and `verity.evaluation` of the Program; `Q_template_instance` makes every
   member one unit, and the topology the partition derives (`derived_topology`) must be the one built. One class statement of
-  `4 n` instances, proved and Lean-verified (its units as stated; with `--program` too, which a class statement's template
-  name refuses at setup, recorded as `with_program`); then the same for a cheating
-  prover whose layer 1 reads a made-up input in place of layer 0's outputs, every unit correct on what it is given, and the
-  row records whether the verifiers refuse it. Before it, the one-unit statement at `4 n` instances, the cost comparison.
+  `4 n` instances staged with `class_statement.Wiring` (PROTOCOL.md §16.13, Linking: each cut source a link row under its
+  writer's salt, META `links` and `definition`), proved live with the verifier's own `--links` file (`class_statement.links_file`)
+  and Lean-verified with `--program`, which derives the units and checks every cut wire (`without_program` records the
+  refusal without it). Then two cheating provers on the same circuit: one whose layer 1 reads a made-up input in place of
+  layer 0's outputs, every unit correct on what it is given, and one whose link rows hold the right values under salts of
+  their own. Each must be refused by the live verifier with its links before serving, and by Lean with its program on the
+  sessions a live verifier given an empty links list records. Before it, the one-unit statement at `4 n` instances, the
+  cost comparison.
 """
 from __future__ import annotations
 
@@ -558,6 +562,7 @@ def main(argv=None) -> int:
             passed = "broke" not in row and all(c.get("same_circuit") for c in cheats) and (a.stage_only or (
                 h["live"]["accepted"] and all(c.get("refused_live") for c in cheats) and (not a.lean or (
                     h.get("lean", {}).get("accepted") and h["lean"]["against_the_other_public_file"]["refused"]
+                    and h["lean"]["without_program"]["refused"]
                     and all(c.get("refused_lean") for c in cheats)))))
         else:
             passed = "broke" not in row and (a.stage_only or (row["live"]["accepted"] and (not a.lean or (
