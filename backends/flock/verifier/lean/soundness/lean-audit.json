@@ -10007,6 +10007,13 @@
    "assumptions": [],
    "type_hash": "55ce0c3f69256f367ad81143d9b49c0f90f44653843f1d655b4f32af35659278"
   },
+  "FlockSoundness.Discharge.ZkHidden.acceptsZK_acceptedH": {},
+  "FlockSoundness.Discharge.ZkHidden.acceptsZK_oneAny": {},
+  "FlockSoundness.Discharge.ZkHidden.acceptsZK_retainedAny": {},
+  "FlockSoundness.Discharge.ZkHidden.acceptsZK_setupOne": {},
+  "FlockSoundness.Discharge.ZkHidden.tablesAtZKH_live": {},
+  "FlockSoundness.Discharge.ZkHidden.zk_flock_countC_execOS_crH": {},
+  "FlockSoundness.Discharge.ZkHidden.zk_schedOK": {},
   "FlockSoundness.Discharge.ZkLink.allInh_repZCAt": {
    "signature": [
     "FlockSoundness.Discharge.ZkLink.allInh_repZCAt {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
