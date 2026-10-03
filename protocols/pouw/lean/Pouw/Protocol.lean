@@ -60,6 +60,9 @@ import Pouw.Protocol.PearlC.PeelExact
 import Pouw.Protocol.PearlC.PeelExactP
 import Pouw.Protocol.PearlC.PeelExactVectors
 import Pouw.Protocol.PearlC.PeelFp4Vectors
+import Pouw.Protocol.PearlC.Row4Circuit
+import Pouw.Protocol.PearlC.RowCircuit
+import Pouw.Protocol.PearlC.RowPrims
 import Pouw.Protocol.PearlC.SaltDead
 import Pouw.Protocol.PearlC.Skip
 import Pouw.Protocol.PearlC.SkipP
