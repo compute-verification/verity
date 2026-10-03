@@ -29,7 +29,7 @@ open scoped ENNReal
 section Hybrid
 
 variable {I Blk Salt B Cs D α : Type} [Fintype I] [DecidableEq I] [Fintype Blk] [Nonempty Blk] [DecidableEq Blk]
-  [Fintype Salt] [Nonempty Salt] [DecidableEq Cs] {g : TGame I Blk α} {G : Game α}
+  [Fintype Salt] [Nonempty Salt] {g : TGame I Blk α} {G : Game α}
   [AddCommGroup B] [Fintype B]
 
 /-- **The tree-coin hybrid at `mixOf`.** -/
@@ -39,7 +39,32 @@ theorem treeCoins_le_mixOf (hgG : ErD g G) (hg : g.Distinct)
     avg (fun ω : I → Blk × Salt =>
       TGame.pr (E fun i => leaf dig My cs H i (ω i)) g (τ fun i => leaf dig My cs H i (ω i)) ω) ≤
       (mixOf hgG (leaf dig My cs H) τ).pr E + Fintype.card I * δ := by
-  sorry
+  set ℓ := leaf dig My cs H with hℓ
+  let g' : TGame I Blk ((I → D) × α) := .send (I → D) fun v => g.map (Prod.mk v)
+  let τ' : (I → D) → TGame.CStrat Salt g' := fun v => ⟨v, TGame.CStrat.mapS (Prod.mk v) g (τ v)⟩
+  let p' : (I → D) × α → Prop := fun x => E x.1 x.2
+  have hexp : ∀ m, Exp p' g' ℓ τ' m = ∑ ω, W (wt ℓ m) ω * TGame.pr (E (view ℓ m ω)) g (τ (view ℓ m ω)) ω :=
+    fun m => Finset.sum_congr rfl fun ω _ => congrArg _ (TGame.pr_mapS p' (Prod.mk (view ℓ m ω)) g _ ω)
+  have hnone : wt ℓ (fun _ => none) = fun _ _ => (Fintype.card (Blk × Salt) : ℝ≥0∞)⁻¹ :=
+    funext fun _ => funext fun z => wt_none rfl z
+  have hstart : avg (fun ω : I → Blk × Salt => TGame.pr (E fun i => ℓ i (ω i)) g (τ fun i => ℓ i (ω i)) ω) =
+      Exp p' g' ℓ τ' (fun _ => none) := by
+    rw [hexp, hnone, avg_eq_W]
+    rfl
+  have hend : ∀ q : I → Blk × Salt, Exp p' g' ℓ τ' (fillM ℓ (fun _ => none) q) =
+      ∑ r, W (wtR (postK ℓ q)) r * prob (E fun j => ℓ j (q j)) G (toStrat hgG (τ fun j => ℓ j (q j)) r) := by
+    intro q
+    rw [hexp]
+    exact lazy_mix (E fun j => ℓ j (q j)) (sum_postK ℓ q) hgG hg (τ fun j => ℓ j (q j))
+  have hcard : (univ.filter fun j : I => (fun _ : I => (none : Option D)) j = none).card = Fintype.card I := by
+    simp
+  calc avg (fun ω : I → Blk × Salt => TGame.pr (E fun i => ℓ i (ω i)) g (τ fun i => ℓ i (ω i)) ω)
+      = Exp p' g' ℓ τ' (fun _ => none) := hstart
+    _ ≤ avg (fun q : I → Blk × Salt => Exp p' g' ℓ τ' (fillM ℓ (fun _ => none) q)) + Fintype.card I * δ :=
+        fill_le p' g' ℓ τ' (fun k b Γ hΓ => hide_of_twoVector dig My cs H hT k b Γ hΓ) _ _ hcard
+    _ = (mixOf hgG ℓ τ).pr E + Fintype.card I * δ := by
+        rw [mixOf_pr]
+        simp only [hend]
 
 end Hybrid
 
@@ -56,7 +81,33 @@ theorem treeCoins_le_avgMixOf {E₂ I Blk Cs D α : Type} [Field E₂] [Fintype 
         (τ κ fun i => leaf dig (CROnly.hankel (n := 512) (l := 1536) κ) cs (H κ) i (ω i)) ω) ≤
       (Mix.avgOver fun κ => mixOf hgG (leaf dig (CROnly.hankel (n := 512) (l := 1536) κ) cs (H κ)) (τ κ)).pr E +
         Fintype.card I * ENNReal.ofReal (1 / 2 ^ 256) := by
-  sorry
+  have hT : ∀ κ : Key E₂, Hm96TwoVector (CROnly.hankel (n := 512) (l := 1536) κ) cs
+      (ENNReal.ofReal (CROnly.hidingGap (CROnly.hankel (n := 512) (l := 1536) κ) cs) +
+        ENNReal.ofReal (CROnly.hidingGap (CROnly.hankel (n := 512) (l := 1536) κ) cs)) :=
+    fun κ => twoVector_of_hiding _ _ (CROnly.hm96Hiding_gap _ _)
+  have hMk := fun κ => treeCoins_le_mixOf hgG hg dig (CROnly.hankel (n := 512) (l := 1536) κ) cs (H κ) (hT κ) (τ κ)
+  have h257 := CROnly.avg_ofReal_le _ (fun κ => CROnly.hidingGap_nonneg _ _) (CROnly.hm96_sha512_sum hE cs hcs)
+  have hδ : avg (fun κ : Key E₂ => ENNReal.ofReal (CROnly.hidingGap (CROnly.hankel (n := 512) (l := 1536) κ) cs) +
+      ENNReal.ofReal (CROnly.hidingGap (CROnly.hankel (n := 512) (l := 1536) κ) cs)) ≤
+      ENNReal.ofReal (1 / 2 ^ 256) := by
+    rw [avg_add]
+    calc _ ≤ ENNReal.ofReal (1 / 2 ^ 257) + ENNReal.ofReal (1 / 2 ^ 257) := add_le_add h257 h257
+      _ = ENNReal.ofReal (1 / 2 ^ 256) := by
+          rw [← ENNReal.ofReal_add (by norm_num) (by norm_num)]
+          norm_num
+  rw [Mix.avgOver_pr]
+  calc _ ≤ avg (fun κ : Key E₂ =>
+          (mixOf hgG (leaf dig (CROnly.hankel (n := 512) (l := 1536) κ) cs (H κ)) (τ κ)).pr (fun v => E (κ, v)) +
+            Fintype.card I * (ENNReal.ofReal (CROnly.hidingGap (CROnly.hankel (n := 512) (l := 1536) κ) cs) +
+              ENNReal.ofReal (CROnly.hidingGap (CROnly.hankel (n := 512) (l := 1536) κ) cs))) :=
+        avg_mono fun κ => hMk κ fun v => E (κ, v)
+    _ = avg (fun κ =>
+          (mixOf hgG (leaf dig (CROnly.hankel (n := 512) (l := 1536) κ) cs (H κ)) (τ κ)).pr fun v => E (κ, v)) +
+          Fintype.card I * avg (fun κ : Key E₂ =>
+            ENNReal.ofReal (CROnly.hidingGap (CROnly.hankel (n := 512) (l := 1536) κ) cs) +
+              ENNReal.ofReal (CROnly.hidingGap (CROnly.hankel (n := 512) (l := 1536) κ) cs)) := by
+        rw [avg_add, avg_const_mul]
+    _ ≤ _ := add_le_add le_rfl (mul_le_mul_right hδ _)
 
 /-! ## The tree-coin prover at a view -/
 
@@ -94,6 +145,20 @@ theorem treeAudit_le_play {n : ℕ} {E₂ I Blk Cs D Nonce Reg β : Type} [Field
     ∃ M : Mix (auditLive L Reg fun S R => G.map (out S R)) PUnit, ∃ vw : M.Ρ → TreeView L E₂ I Blk D,
       (∀ x, M.σ x = τ.play L hgG out (vw x)) ∧
       ∀ E, prTree L g out dig cs H τ E ≤ M.pr (fun _ => E) + Fintype.card I * ENNReal.ofReal (1 / 2 ^ 256) := by
-  sorry
+  have hMω := fun ω : L.Ω => treeCoins_le_avgMixOf hE hgG hg (dig (τ.2 ω).1) (cs (τ.2 ω).1) (hcs _)
+    (H (τ.2 ω).1) (τ.2 ω).2
+  refine ⟨Mix.piOver L out τ.1 fun ω => Mix.avgOver fun κ =>
+      mixOf hgG (leaf (dig (τ.2 ω).1) (CROnly.hankel (n := 512) (l := 1536) κ) (cs (τ.2 ω).1) (H (τ.2 ω).1 κ))
+        ((τ.2 ω).2 κ),
+    fun x ω => ((x ω).1, fun j => leaf (dig (τ.2 ω).1) (CROnly.hankel (n := 512) (l := 1536) (x ω).1) (cs (τ.2 ω).1)
+      (H (τ.2 ω).1 (x ω).1) j ((x ω).2.1 j), (x ω).2.2), fun _ => rfl, fun E => ?_⟩
+  rw [Mix.piOver_pr]
+  calc prTree L g out dig cs H τ E
+      ≤ avg (fun ω => (Mix.avgOver fun κ =>
+          mixOf hgG (leaf (dig (τ.2 ω).1) (CROnly.hankel (n := 512) (l := 1536) κ) (cs (τ.2 ω).1) (H (τ.2 ω).1 κ))
+            ((τ.2 ω).2 κ)).pr (fun _ o => E (τ.1, L.draw ω, out (L.draw ω) τ.1 o)) +
+          Fintype.card I * ENNReal.ofReal (1 / 2 ^ 256)) :=
+        avg_mono fun ω => hMω ω fun _ o => E (τ.1, L.draw ω, out (L.draw ω) τ.1 o)
+    _ = _ := by rw [avg_add, avg_const]
 
 end FlockSoundness.Discharge.ZkTree
