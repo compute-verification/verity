@@ -211,4 +211,307 @@ theorem folded_rel (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c 
   · rw [List.length_map, hlen, Nat.pow_div (by omega) (by norm_num), show S.kLog - (S.kLog - 6) = 6 by omega]
     exact hi
 
+/-! ## The replay's first constraints -/
+
+section Init
+
+variable (lay : Zk.PadLayout) (P : ZkSession.PadsA lay.len)
+
+theorem rel_maskedArr (v : Array F128) (pad : Fin 64 → Fin lay.len) (idx : ℕ → ℕ)
+    (hpad : ∀ i : Fin 64, (pad i).val = idx i.val) (k : Fin 64) :
+    LinRel (ZkSession.mskF (pad k) (vecOf 64 v k)).toLin
+      ((Array.range 64).map fun i => Zk.Lin.masked v[i]! (idx i) lay.len)[k.val]! := by
+  rw [getElem!_range_map _ k.isLt]
+  exact rel_masked v[k.val]! (pad k) (hpad k)
+
+/-- `P_c(z)`: the `c` half of round 1 at the output coset's weights. -/
+theorem pc_rel (zcp : ZerocheckProof) (hr1c : ∀ i : Fin 64, (P.r1c i).val = lay.r1c i.val) (z : F128) :
+    LinRel (∑ i, execArith.lagΛ (fOf z) i • ZkSession.mskF (P.r1c i) (vecOf 64 zcp.round1c i)).toLin
+      (Zk.Lin.combo (lagrange nodesL den6Inv z)
+        ((Array.range 64).map fun i => Zk.Lin.masked zcp.round1c[i]! (lay.r1c i) lay.len) lay.len) :=
+  rel_combo _ _ _ (by rw [lagrange_size, nodesL_size]) (by simp)
+    (rel_maskedArr lay zcp.round1c P.r1c lay.r1c hr1c)
+
+/-- The zerocheck's first claim `P_ab(z)`: round 1 at the combined weights, plus `P_c(z)`. -/
+theorem zcInit_rel (zcp : ZerocheckProof) (hr1ab : ∀ i : Fin 64, (P.r1ab i).val = lay.r1ab i.val)
+    (hr1c : ∀ i : Fin 64, (P.r1c i).val = lay.r1c i.val) (z : F128) :
+    LinRel (∑ i, execArith.combW (fOf z) i • (ZkSession.mskF (P.r1ab i) (vecOf 64 zcp.round1ab i) +
+          ZkSession.mskF (P.r1c i) (vecOf 64 zcp.round1c i)) +
+        ∑ i, execArith.lagΛ (fOf z) i • ZkSession.mskF (P.r1c i) (vecOf 64 zcp.round1c i)).toLin
+      ((Zk.Lin.combo (combWeights z) ((Array.range 64).map fun i =>
+          ((Array.range 64).map fun i => Zk.Lin.masked zcp.round1ab[i]! (lay.r1ab i) lay.len)[i]!.add
+            ((Array.range 64).map fun i => Zk.Lin.masked zcp.round1c[i]! (lay.r1c i) lay.len)[i]!) lay.len).add
+        (Zk.Lin.combo (lagrange nodesL den6Inv z)
+          ((Array.range 64).map fun i => Zk.Lin.masked zcp.round1c[i]! (lay.r1c i) lay.len) lay.len)) := by
+  refine rel_add (rel_combo _ _ _ (combWeights_size _) (by simp) fun k => ?_) (pc_rel lay P zcp hr1c z)
+  rw [getElem!_range_map _ k.isLt]
+  exact rel_add (rel_maskedArr lay zcp.round1ab P.r1ab lay.r1ab hr1ab k) (rel_maskedArr lay zcp.round1c P.r1c lay.r1c hr1c k)
+
+end Init
+
+/-- **The masked replay's rows** (`zk_replay_plays` with its constraints): at pads placed as the layout `lay` places
+them, the replay's three constraints, its `ab` value and its `c` value are the forms the model's masked zerocheck and
+lincheck compute on the same messages and coins. -/
+theorem zk_replay_rows (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : ByteArray) (t t' : Flock.Transcript)
+    (rp : Zk.Replayed) (S : Model.Statement) (hm : st.m = S.m) (hk : st.kLog = S.kLog) (h15 : 15 ≤ S.m)
+    (hwf : RoundsWF t.rounds) (hc : FoldRealizes st.fold S) (h : Zk.replay st lay p root t = .ok (rp, t'))
+    {np : ℕ} (P : ZkSession.PadsA np) (tr : ZkSession.Triple np) (hlen : lay.len = np)
+    (hr1ab : ∀ i : Fin 64, (P.r1ab i).val = lay.r1ab i.val) (hr1c : ∀ i : Fin 64, (P.r1c i).val = lay.r1c i.val)
+    (hml : ∀ j < S.m - 6, ∀ c : Fin 2, (P.ml j c).val = lay.ml j c.val) (hfc : P.fc.val = lay.fc)
+    (hlc : ∀ j < S.kLog - 6, ∀ c : Fin 2, (P.lc j c).val = lay.lc j c.val)
+    (hzp : ∀ i : Fin 64, (P.zp i).val = lay.zp i.val) (hfa : tr.fa.val = lay.fa) (hfb : tr.fb.val = lay.fb)
+    (hab : tr.ab.val = lay.hab) (h₁ : lay.fa ≠ lay.fb) (h₂ : lay.fa ≠ lay.hab) (h₃ : lay.fb ≠ lay.hab) :
+    t'.rounds = t.rounds ∧ t.k ≤ t'.k ∧
+      ∃ (k₁ : ℕ) (zc : ZkSession.ZcZK 𝔽 np S.m) (row : ZkSession.LinF 𝔽 np) (ab : ZkSession.ClaimZK 𝔽 np S.m)
+        (row' : ZkSession.LinF 𝔽 np),
+        t.k ≤ k₁ ∧ k₁ ≤ t'.k ∧
+        Plays fOf (ZkSession.zerocheckZK execArith S.m P tr) (zcMsgs S.m p.zerocheck) (consumed t.rounds t.k k₁)
+          (zc, row) ∧
+        Plays fOf (ZkSession.lincheckZK execArith S P zc) (lcMsgs S.kLog p.lincheck) (consumed t.rounds k₁ t'.k)
+          (ab, row') ∧
+        (∀ v : F128, ClaimRel S.m { rp.claims[0]! with value := v } ⟨fOf v, ab.skip, ab.x⟩) ∧
+        (∀ v : F128, ClaimRel S.m { rp.claims[1]! with value := v } ⟨fOf v, execArith.lagS zc.z, zc.r⟩) ∧
+        rp.cons.size = 3 ∧ LinRel (zc.vc + ZkSession.mskF P.fc (fOf p.zerocheck.finalC)).toLin rp.cons[0]!.2 ∧
+        LinRel row.toLin rp.cons[1]!.2 ∧ LinRel row'.toLin rp.cons[2]!.2 ∧ LinRel ab.value.toLin rp.abValue ∧
+        rp.cValue = Zk.Lin.masked p.zerocheck.finalC lay.fc lay.len := by
+  subst hlen
+  have hk6 : 6 ≤ S.kLog := S.hk6
+  have hkm : S.kLog ≤ S.m := S.hk
+  unfold Zk.replay at h
+  dsimp only at h
+  rw [hm, hk] at h
+  obtain ⟨t₁, k₁, h⟩ := label_bind h
+  obtain ⟨t₂, k₂, h⟩ := absorbBytes_bind h
+  obtain ⟨t₃, k₃, h⟩ := absorbBytes_bind h
+  obtain ⟨-, h⟩ := check_bind h
+  obtain ⟨t₄, k₄, h⟩ := label_bind h
+  obtain ⟨t₅, k₅, h⟩ := label_bind h
+  obtain ⟨t₆, k₆, h⟩ := absorbBytes_bind h
+  obtain ⟨lt₆, n₆, t₇, r₇, kk₇, h⟩ := sampleVec_bind (by decide) h
+  obtain ⟨lt₇, n₇, t₈, r₈, kk₈, h⟩ := sampleVec_bind (by omega) h
+  obtain ⟨t₉, k₉, h⟩ := absorbSlice_bind h
+  obtain ⟨t₁₀, k₁₀, h⟩ := absorbSlice_bind h
+  obtain ⟨lt₁₀, n₁₀, t₁₁, r₁₁, kk₁₁, h⟩ := sample_bind h
+  obtain ⟨s, t₁₂, hloop, h⟩ := bind_ok h
+  obtain ⟨t₁₃, k₁₃, h⟩ := absorbF_bind h
+  obtain ⟨t₁₄, k₁₄, h⟩ := absorbF_bind h
+  obtain ⟨t₁₅, k₁₅, h⟩ := label_bind h
+  obtain ⟨lt₁₅, n₁₅, t₁₆, r₁₆, kk₁₆, h⟩ := sample_bind h
+  obtain ⟨lt₁₆, n₁₆, t₁₇, r₁₇, kk₁₇, h⟩ := sample_bind h
+  obtain ⟨s', t₁₈, hloop', h⟩ := bind_ok h
+  rcases hf : st.fold.folded ((t₁₅.rounds[t₁₅.k]!).coins.getD 0 0) ((t₁₆.rounds[t₁₆.k]!).coins.getD 0 0)
+      (skipWeights ((t₁₀.rounds[t₁₀.k]!).coins.getD 0 0)) (s.2.extract 0 (S.kLog - 6)) s'.2 with err | v
+  · rw [hf] at h
+    obtain ⟨_, _, h₀, _⟩ := bind_ok h
+    cases h₀
+  rw [hf] at h
+  simp only [pure_bind] at h
+  obtain ⟨hv64, h⟩ := check_bind h
+  obtain ⟨t₁₉, k₁₉, h⟩ := absorbSlice_bind h
+  obtain ⟨lt₁₉, n₁₉, t₂₀, r₂₀, kk₂₀, h⟩ := sample_bind h
+  obtain ⟨hrp, ht'⟩ := pure_ok h
+  subst hrp
+  -- the loops: one one-coin round per step, its coin pushed
+  rw [forIn_range_eq] at hloop hloop'
+  obtain ⟨hr₁₂, hk₁₂, hn₁₂, hs⟩ := forIn_push _ (fun i st' tt b tt' hb => by
+      obtain ⟨tt₁, kk₁, hb⟩ := absorbF_bind hb
+      obtain ⟨tt₂, kk₂, hb⟩ := absorbF_bind hb
+      obtain ⟨-, nn, tt₃, rr₃, kk₃, hb⟩ := sample_bind hb
+      obtain ⟨rfl, rfl⟩ := pure_ok hb
+      have e1 : tt₂.rounds = tt.rounds := by rw [kk₂.2, kk₁.2]
+      have e2 : tt₂.k = tt.k := by rw [kk₂.1, kk₁.1]
+      refine ⟨by rw [← e1, ← e2]; exact nn, by rw [rr₃, e1], by rw [kk₃, e2], ?_⟩
+      rw [← e1, ← e2]
+      exact ⟨_, rfl⟩) (S.m - 6) 0 _ t₁₁ t₁₂ s hloop
+  obtain ⟨hr₁₈, hk₁₈, hn₁₈, hs'⟩ := forIn_push _ (fun i st' tt b tt' hb => by
+      obtain ⟨tt₁, kk₁, hb⟩ := absorbF_bind hb
+      obtain ⟨tt₂, kk₂, hb⟩ := absorbF_bind hb
+      obtain ⟨-, nn, tt₃, rr₃, kk₃, hb⟩ := sample_bind hb
+      obtain ⟨rfl, rfl⟩ := pure_ok hb
+      have e1 : tt₂.rounds = tt.rounds := by rw [kk₂.2, kk₁.2]
+      have e2 : tt₂.k = tt.k := by rw [kk₂.1, kk₁.1]
+      refine ⟨by rw [← e1, ← e2]; exact nn, by rw [rr₃, e1], by rw [kk₃, e2], ?_⟩
+      rw [← e1, ← e2]
+      exact ⟨_, rfl⟩) (S.kLog - 6) 0 _ t₁₇ t₁₈ s' hloop'
+  -- the loops' constraints: the folds of their steps
+  have hfold₁ := forIn_foldF _ (fun j running rr => resStepE lay p.zerocheck.rounds
+      (pinned ++ (t₇.rounds[t₇.k]!).coins) j running rr) t₁₁.rounds t₁₁.k (fun i st' tt b tt' hR hK hb => by
+      obtain ⟨tt₁, kk₁, hb⟩ := absorbF_bind hb
+      obtain ⟨tt₂, kk₂, hb⟩ := absorbF_bind hb
+      obtain ⟨-, -, tt₃, rr₃, kk₃, hb⟩ := sample_bind hb
+      obtain ⟨rfl, rfl⟩ := pure_ok hb
+      have e1 : tt₂.rounds = tt.rounds := by rw [kk₂.2, kk₁.2]
+      have e2 : tt₂.k = tt.k := by rw [kk₂.1, kk₁.1]
+      refine ⟨by rw [rr₃, e1, hR], by rw [kk₃, e2], ?_⟩
+      rw [e1, e2, hR, hK]
+      rfl) (S.m - 6) 0 _ t₁₁ t₁₂ s rfl rfl hloop
+  have hfold₂ := forIn_foldF _ (fun j running rr => lcStepE lay p.lincheck.rounds j running rr) t₁₇.rounds t₁₇.k
+    (fun i st' tt b tt' hR hK hb => by
+      obtain ⟨tt₁, kk₁, hb⟩ := absorbF_bind hb
+      obtain ⟨tt₂, kk₂, hb⟩ := absorbF_bind hb
+      obtain ⟨-, -, tt₃, rr₃, kk₃, hb⟩ := sample_bind hb
+      obtain ⟨rfl, rfl⟩ := pure_ok hb
+      have e1 : tt₂.rounds = tt.rounds := by rw [kk₂.2, kk₁.2]
+      have e2 : tt₂.k = tt.k := by rw [kk₂.1, kk₁.1]
+      refine ⟨by rw [rr₃, e1, hR], by rw [kk₃, e2], ?_⟩
+      rw [e1, e2, hR, hK]
+      rfl) (S.kLog - 6) 0 _ t₁₇ t₁₈ s' rfl rfl hloop'
+  -- the rounds and the counter, in terms of `t`
+  have hr₆ : t₆.rounds = t.rounds := by rw [k₆.2, k₅.2, k₄.2, k₃.2, k₂.2, k₁.2]
+  have hk₆' : t₆.k = t.k := by rw [k₆.1, k₅.1, k₄.1, k₃.1, k₂.1, k₁.1]
+  have hr₇ : t₇.rounds = t.rounds := by rw [r₇, hr₆]
+  have hk₇ : t₇.k = t.k + 1 := by rw [kk₇, hk₆']
+  have hr₁₀ : t₁₀.rounds = t.rounds := by rw [k₁₀.2, k₉.2, r₈, hr₇]
+  have hk₁₀ : t₁₀.k = t.k + 2 := by rw [k₁₀.1, k₉.1, kk₈, hk₇]
+  have hr₁₁ : t₁₁.rounds = t.rounds := by rw [r₁₁, hr₁₀]
+  have hk₁₁ : t₁₁.k = t.k + 3 := by rw [kk₁₁, hk₁₀]
+  have hr₁₅ : t₁₅.rounds = t.rounds := by rw [k₁₅.2, k₁₄.2, k₁₃.2, hr₁₂, hr₁₁]
+  have hk₁₅ : t₁₅.k = t.k + 3 + (S.m - 6) := by rw [k₁₅.1, k₁₄.1, k₁₃.1, hk₁₂, hk₁₁]
+  have hr₁₆ : t₁₆.rounds = t.rounds := by rw [r₁₆, hr₁₅]
+  have hk₁₆ : t₁₆.k = t.k + 3 + (S.m - 6) + 1 := by rw [kk₁₆, hk₁₅]
+  have hr₁₇ : t₁₇.rounds = t.rounds := by rw [r₁₇, hr₁₆]
+  have hk₁₇ : t₁₇.k = t.k + 3 + (S.m - 6) + 2 := by rw [kk₁₇, hk₁₆]
+  have hr₁₉ : t₁₉.rounds = t.rounds := by rw [k₁₉.2, hr₁₈, hr₁₇]
+  have hk₁₉ : t₁₉.k = t.k + 3 + (S.m - 6) + 2 + (S.kLog - 6) := by rw [k₁₉.1, hk₁₈, hk₁₇]
+  have hrt : t'.rounds = t.rounds := by rw [ht', r₂₀, hr₁₉]
+  have hkt : t'.k = t.k + 3 + (S.m - 6) + 2 + (S.kLog - 6) + 1 := by rw [ht', kk₂₀, hk₁₉]
+  set c₀ := (t₆.rounds[t₆.k]!).coins with hc₀
+  set c₁ := (t₇.rounds[t₇.k]!).coins with hc₁
+  set c₂ := (t₁₀.rounds[t₁₀.k]!).coins with hc₂
+  set C : ℕ → Array F128 := fun i => (t₁₁.rounds[t₁₁.k + i]!).coins with hC
+  set cα := (t₁₅.rounds[t₁₅.k]!).coins with hcα
+  set cβ := (t₁₆.rounds[t₁₆.k]!).coins with hcβ
+  set C' : ℕ → Array F128 := fun i => (t₁₇.rounds[t₁₇.k + i]!).coins with hC'
+  set cr := (t₁₉.rounds[t₁₉.k]!).coins with hcr
+  have hsz₀ : c₀.size = 6 := by rw [hc₀, RoundsWF.get (hr₆ ▸ hwf), n₆]
+  have hsz₁ : c₁.size = S.m - 13 := by rw [hc₁, RoundsWF.get (hr₇ ▸ hwf), n₇]
+  have hsz₂ : c₂.size = 1 := by rw [hc₂, RoundsWF.get (hr₁₀ ▸ hwf), n₁₀]
+  have hszα : cα.size = 1 := by rw [hcα, RoundsWF.get (hr₁₅ ▸ hwf), n₁₅]
+  have hszβ : cβ.size = 1 := by rw [hcβ, RoundsWF.get (hr₁₆ ▸ hwf), n₁₆]
+  have hszr : cr.size = 1 := by rw [hcr, RoundsWF.get (hr₁₉ ▸ hwf), n₁₉]
+  have hCsz : ∀ i ∈ List.range' 0 (S.m - 6), (C i).size = 1 := fun i hi => by
+    rw [hC]; simp only; rw [RoundsWF.get (hr₁₁ ▸ hwf), hn₁₂ i (by simpa using hi)]
+  have hC'sz : ∀ i ∈ List.range' 0 (S.kLog - 6), (C' i).size = 1 := fun i hi => by
+    rw [hC']; simp only; rw [RoundsWF.get (hr₁₇ ▸ hwf), hn₁₈ i (by simpa using hi)]
+  -- the coins consumed, split at the lincheck's first
+  have hcoins₁ : consumed t.rounds t.k (t.k + 3 + (S.m - 6)) = c₀ :: c₁ :: c₂ :: (List.range' 0 (S.m - 6)).map C := by
+    rw [consumed_append t.rounds (show t.k ≤ t.k + 1 by omega) (by omega),
+      consumed_append t.rounds (show t.k + 1 ≤ t.k + 2 by omega) (by omega),
+      consumed_append t.rounds (show t.k + 2 ≤ t.k + 3 by omega) (by omega), consumed_succ, consumed_succ,
+      consumed_succ, consumed_eq_map, hc₀, hc₁, hc₂, hC, hr₆, hk₆', hr₇, hk₇, hr₁₀, hk₁₀, hr₁₁, hk₁₁]
+    rfl
+  have hcoins₂ : consumed t.rounds (t.k + 3 + (S.m - 6)) t'.k =
+      cα :: cβ :: ((List.range' 0 (S.kLog - 6)).map C' ++ [cr]) := by
+    rw [hkt, consumed_append t.rounds (show t.k + 3 + (S.m - 6) ≤ t.k + 3 + (S.m - 6) + 1 by omega) (by omega),
+      consumed_append t.rounds (show t.k + 3 + (S.m - 6) + 1 ≤ t.k + 3 + (S.m - 6) + 2 by omega) (by omega),
+      consumed_append t.rounds (show t.k + 3 + (S.m - 6) + 2 ≤ t.k + 3 + (S.m - 6) + 2 + (S.kLog - 6) by omega)
+        (by omega), consumed_succ, consumed_succ, consumed_succ, consumed_eq_map, hcα, hcβ, hcr, hC', hr₁₅, hk₁₅,
+      hr₁₆, hk₁₆, hr₁₇, hk₁₇, hr₁₉, hk₁₉]
+    simp
+  -- the coins the loops pushed
+  obtain ⟨hssz, hsget⟩ := push_get s.2 (S.m - 6) _ hs
+  obtain ⟨hs'sz, hs'get⟩ := push_get s'.2 (S.kLog - 6) _ hs'
+  have hzM : fOf c₂[0]! = fOf (c₂.getD 0 0) := by rw [getElem!_eq_getD]
+  have hrM : fOf cr[0]! = fOf (cr.getD 0 0) := by rw [getElem!_eq_getD]
+  refine ⟨hrt, by omega, t.k + 3 + (S.m - 6), ?zc, ?row, ?ab, ?row', by omega, by omega, ?pz, ?pl, ?c0, ?c1, ?sz,
+    ?r0, ?r1, ?r2, ?rab, ?rc⟩
+  case pz =>
+    rw [hcoins₁]
+    unfold ZkSession.zerocheckZK
+    refine Plays.bind' (ms₂ := zcMsgs S.m p.zerocheck) (cs₂ := c₁ :: c₂ :: (List.range' 0 (S.m - 6)).map C)
+      (Plays.drawVec c₀ hsz₀ (by decide)) ?_ (by simp) (by simp)
+    refine Plays.bind' (ms₂ := zcMsgs S.m p.zerocheck) (cs₂ := c₂ :: (List.range' 0 (S.m - 6)).map C)
+      (Plays.drawVec c₁ hsz₁ (by omega)) ?_ (by simp) (by simp)
+    refine Plays.bind' (ms₂ := ((List.range (S.m - 6)).map fun i => ⟨𝔽 × 𝔽, pairOf p.zerocheck.rounds[i]!⟩) ++
+      [⟨𝔽 × 𝔽, (fOf p.zerocheck.finalA, fOf p.zerocheck.finalB)⟩]) (cs₂ := c₂ :: (List.range' 0 (S.m - 6)).map C)
+      (Plays.recv _ (vecOf 64 p.zerocheck.round1ab, vecOf 64 p.zerocheck.round1c)) ?_ (by simp [zcMsgs]) (by simp)
+    refine Plays.bind' (ms₂ := ((List.range (S.m - 6)).map fun i => ⟨𝔽 × 𝔽, pairOf p.zerocheck.rounds[i]!⟩) ++
+      [⟨𝔽 × 𝔽, (fOf p.zerocheck.finalA, fOf p.zerocheck.finalB)⟩]) (cs₂ := (List.range' 0 (S.m - 6)).map C)
+      (Plays.drawOne c₂ hsz₂) ?_ (by simp) (by simp)
+    refine Plays.bind' (ms₂ := [⟨𝔽 × 𝔽, (fOf p.zerocheck.finalA, fOf p.zerocheck.finalB)⟩]) (cs₂ := [])
+      (residualZK_plays P p.zerocheck.rounds C (S.m - 6) 0 0 _ _ hCsz) ?_ (by simp [List.range_eq_range']) (by simp)
+    refine Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.recv _ (fOf p.zerocheck.finalA, fOf p.zerocheck.finalB)) ?_
+      (by simp) (by simp)
+    exact Plays.pure (ι := fOf) _
+  case pl =>
+    rw [hcoins₂]
+    unfold ZkSession.lincheckZK
+    refine Plays.bind' (ms₂ := lcMsgs S.kLog p.lincheck)
+      (cs₂ := cβ :: ((List.range' 0 (S.kLog - 6)).map C' ++ [cr])) (Plays.drawOne cα hszα) ?_ (by simp) (by simp)
+    refine Plays.bind' (ms₂ := lcMsgs S.kLog p.lincheck) (cs₂ := (List.range' 0 (S.kLog - 6)).map C' ++ [cr])
+      (Plays.drawOne cβ hszβ) ?_ (by simp) (by simp)
+    refine Plays.bind' (ms₂ := [⟨Fin 64 → 𝔽, vecOf 64 p.lincheck.zPartial⟩]) (cs₂ := [cr])
+      (lcRoundsZK_plays P p.lincheck.rounds C' (S.kLog - 6) 0 0 _ hC'sz) ?_
+      (by simp [lcMsgs, List.range_eq_range']) (by simp)
+    refine Plays.bind' (ms₂ := []) (cs₂ := [cr]) (Plays.recv _ (vecOf 64 p.lincheck.zPartial)) ?_ (by simp) (by simp)
+    refine Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawOne cr hszr) ?_ (by simp) (by simp)
+    exact Plays.pure (ι := fOf) _
+  case c0 =>
+    intro w
+    show ClaimRel S.m (⟨w, skipWeights (cr.getD 0 0), s'.2.reverse ++ s.2.extract (S.kLog - 6) (S.m - 6)⟩ :
+      Flock.Claim) _
+    have hxs : (s'.2.reverse ++ s.2.extract (S.kLog - 6) (S.m - 6)).size = S.m - 6 := by
+      simp [hssz, hs'sz]; omega
+    refine ⟨rfl, skipWeights_size _, fun _ => by simp only [hrM]; rfl, hxs, fun i => ?_⟩
+    simp only
+    rw [getElem!_pos _ i.val (by rw [hxs]; exact i.isLt), Array.getElem_append]
+    by_cases hi : i.val < S.kLog - 6
+    · have hi' : i.val < s'.2.reverse.size := by simp [hs'sz, hi]
+      rw [dite_eq_left hi, dite_eq_left hi', Array.getElem_reverse, ← getElem!_pos s'.2 _ (by omega),
+        hs'get _ (by omega), Nat.zero_add, getElem!_eq_getD]
+      congr 3
+      simp [hs'sz]
+    · have hi' : ¬ i.val < s'.2.reverse.size := by simp [hs'sz, hi]
+      have hidx : S.kLog - 6 + (i.val - s'.2.reverse.size) = i.val := by simp [hs'sz]; omega
+      rw [dite_eq_right hi, dite_eq_right hi', Array.getElem_extract,
+        ← getElem!_pos s.2 _ (by simp [hs'sz] at *; omega), hidx, hsget _ i.isLt, Nat.zero_add, getElem!_eq_getD]
+  case c1 =>
+    intro w
+    simp only [abcClaims_one]
+    exact ⟨rfl, skipWeights_size _, fun _ => by rw [hzM]; rfl,
+      by rw [Array.size_append, FlockLevel3.pinned_size, hsz₁]; omega, fun i => zcVector_eq c₁ hsz₁ (by omega) i⟩
+  case sz => rfl
+  case r0 =>
+    rw [hzM]
+    show LinRel _ ((Zk.Lin.combo _ _ lay.len).add _)
+    refine rel_add ?_ ?_
+    · have e := pc_rel lay P p.zerocheck hr1c (c₂.getD 0 0)
+      convert e using 2
+    · exact rel_masked _ P.fc hfc
+  case r1 =>
+    rw [hzM]
+    show LinRel _ (s.1.add _)
+    rw [hfold₁]
+    refine rel_add ?_ (prod_rel tr lay rfl hfa hfb hab h₁ h₂ h₃ _ _)
+    refine res_fold_rel P lay rfl p.zerocheck.rounds (pinned ++ c₁) C (S.m - 6) 0 _ _ _
+      (fun i => by rw [Nat.zero_add]; exact zcVector_eq c₁ hsz₁ (by omega) i)
+      (fun i hi c => by rw [Nat.zero_add]; exact hml i hi c) ?_
+    convert zcInit_rel lay P p.zerocheck hr1ab hr1c (c₂.getD 0 0) using 2
+  case r2 =>
+    rw [hzM, getElem!_eq_getD cα 0, getElem!_eq_getD cβ 0]
+    show LinRel _ (s'.1.add _)
+    rw [hfold₂]
+    refine rel_add (lc_fold_rel P lay rfl p.lincheck.rounds C' (S.kLog - 6) 0 _ _
+      (fun i hi c => by rw [Nat.zero_add]; exact hlc i hi c)
+      (rel_addConst (rel_add (rel_scale (rel_masked p.zerocheck.finalA tr.fa hfa) (cα.getD 0 0))
+        (rel_masked p.zerocheck.finalB tr.fb hfb)) (cβ.getD 0 0))) ?_
+    have hcb := rel_combo v _ (fun k => ZkSession.mskF (P.zp k) (vecOf 64 p.lincheck.zPartial k)) (eq_of_beq hv64)
+      (by simp) (rel_maskedArr lay p.lincheck.zPartial P.zp lay.zp hzp)
+    convert hcb using 3
+    rename_i k _
+    congr 1
+    exact folded_rel S st.fold hc _ _ _ s.2 s'.2 v (by rw [hssz]; omega) hf _ _
+      (fun j => by
+        show fOf (C (0 + j.val))[0]! = _
+        rw [hsget j.val (by omega), Nat.zero_add, getElem!_eq_getD]
+        try rfl) hs'sz (fun j => by
+        rw [hs'get j.val j.isLt, Nat.zero_add, getElem!_eq_getD]
+        try rfl) k k.isLt
+  case rab =>
+    rw [hrM]
+    convert rel_combo _ _ _ (skipWeights_size _) (by simp) (rel_maskedArr lay p.lincheck.zPartial P.zp lay.zp hzp)
+      using 3
+    rfl
+  case rc => rfl
+
 end FlockSoundness.Discharge.ZkExec
