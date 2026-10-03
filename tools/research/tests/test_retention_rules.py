@@ -835,7 +835,7 @@ def test_the_report_shows_the_rules_paths_and_asks_the_owner_of_each_big_unowned
     assert {a["path"]: (a["owners"], a["what"]) for a in rep["asks"]} == {
         "hf": (list(R.WEIGHTS), "weights"), "cache": (["@infra"], "not in the policy: infra finds its owner"),
         "jobs": (["@infra"], "not in the policy: infra finds its owner"),
-        "research/runs": (["@circuits", "@infra", "@pouw-c"], "run dirs")}
+        "research/runs": (["@circuits", "@infra"], "run dirs; pouw-c name no lane handle, so infra finds their owner")}
     (root / "jobs/src").mkdir()
     (root / "jobs/src/pod-a").mkdir()
     rep = R.report(root, now=clock, usage=lambda _p: (100, 10, 90), node=N1, places=places, ask_gib=1e-6)
@@ -847,3 +847,16 @@ def test_the_report_shows_the_rules_paths_and_asks_the_owner_of_each_big_unowned
     out = capsys.readouterr().out
     assert f"ASK {' '.join(R.WEIGHTS)}: hf, 2.0 KiB unowned (weights)" in out and f"research/src/{t.name} (rule src-tree)" in out
     assert research_main(["retention", "report", "--root", str(root), "--node", N1]) == 0
+
+
+def test_a_run_dir_is_asked_of_its_lanes_handle_and_one_whose_lane_or_campaign_names_none_of_infra(tmp_path):
+    """Most of node 1's run dirs carry only store.campaign (overnight-sep30, vllm-sm120, verity), which names no one to ask."""
+    root = tmp_path / "ws"
+    for rid, job in (("r1", {"store": {"campaign": "overnight-sep30"}}), ("r2", {"ownership": {"lane": "pouw"}, "store": {"campaign": "proofs"}}),
+                     ("r3", {"ownership": {"lane": "@memory-accounting"}}), ("r4", {"store": {"campaign": "vllm-sm120"}}), ("r5", {})):
+        (root / "jobs/runs" / rid).mkdir(parents=True)
+        (root / "jobs/runs" / rid / "job.json").write_text(json.dumps(job))
+    assert R.run_owners(root / "jobs/runs", root) == (["@infra", "@memory-accounting", "@proofs"], ["overnight-sep30", "vllm-sm120"])
+    assert R.run_lanes(root / "jobs/runs/r1", root) == ["@infra"]
+    registry = json.loads((Path(__file__).resolve().parents[3] / ".agents/skills/using-slack/registry.json").read_text())
+    assert set(R.HANDLES) <= {"@" + h["handle"] for h in registry["handles"]}, "a handle the registry no longer has"

@@ -82,6 +82,9 @@ ASK = (("hf", WEIGHTS, "weights"), ("jobs/hf", WEIGHTS, "weights"),
        ("pouw", ("@compute-accounting",), "PoUW's data"),
        ("research/runs", (), "run dirs"), ("jobs/runs", (), "run dirs"), ("jobs/runs-n2", (), "run dirs"))
 ASK_ELSE = (("@infra",), "not in the policy: infra finds its owner")
+#: the lane handles a run dir's lane or campaign may name (lead handles of .agents/skills/using-slack/registry.json, which a node's
+#: package doesn't carry); any other name is no one to ask, so infra is asked
+HANDLES = ("@infra", "@proofs", "@circuits", "@compute-accounting", "@memory-accounting", "@network-accounting", "@console")
 KIND = "node-data/v1"
 OWNER_RE = re.compile(r"^@[A-Za-z0-9][A-Za-z0-9._-]*$")
 TS = "%Y-%m-%dT%H:%M:%SZ"
@@ -493,21 +496,28 @@ def scan(root: Path | str = DEFAULT_ROOT, depth: int = 2, rules: RR.RuleSet | No
 ORDER = {"invalid": 0, "unowned": 0, "expired": 1, "recorded": 2}
 
 
-def run_lanes(d: Path, root: Path) -> list[str]:
-    """The lanes of the unrecorded run dirs at `d` (a run dir, or a directory of them): job.json's lane, else its campaign, else
-    @infra."""
+def run_owners(d: Path, root: Path) -> tuple[list[str], list[str]]:
+    """(the owners to ask about the unrecorded run dirs at `d`, a run dir or a directory of them; the names among them that are
+    no handle): job.json's lane, else its campaign, as a handle (HANDLES), else @infra."""
     try:
         dirs = [d] if (d / "job.json").is_file() else sorted(c for c in d.iterdir() if c.is_dir() and not c.is_symlink())
     except OSError:
-        return ["@infra"]
-    lanes = set()
+        return ["@infra"], []
+    owners, strays = set(), set()
     for c in dirs:
         if record_at(c, relative(c, root)) is not None:
             continue
         job = _read_json(c / "job.json") or {}
-        lane = (job.get("ownership") or {}).get("lane") or (job.get("store") or {}).get("campaign")
-        lanes.add(("" if lane.startswith("@") else "@") + lane if isinstance(lane, str) and lane else "@infra")
-    return sorted(lanes) or ["@infra"]
+        names = [n for n in ((job.get("ownership") or {}).get("lane"), (job.get("store") or {}).get("campaign")) if isinstance(n, str) and n]
+        handle = next((h for n in names if (h := ("" if n.startswith("@") else "@") + n) in HANDLES), None)
+        owners.add(handle or "@infra")
+        strays.update(names[:1] if handle is None else ())
+    return sorted(owners) or ["@infra"], sorted(strays)
+
+
+def run_lanes(d: Path, root: Path) -> list[str]:
+    """The owners `run_owners` asks about the run dirs at `d`."""
+    return run_owners(d, root)[0]
 
 
 def asks(root: Path, rows: list[dict[str, Any]], gib: float) -> list[dict[str, Any]]:
@@ -517,7 +527,12 @@ def asks(root: Path, rows: list[dict[str, Any]], gib: float) -> list[dict[str, A
         if d["state"] != "unowned" or d["bytes"] < gib * (1 << 30):
             continue
         hit = max((a for a in ASK if d["path"] == a[0] or d["path"].startswith(a[0] + "/")), key=lambda a: len(a[0]), default=None)
-        owners, what = (hit[1] or run_lanes(root / d["path"], root), hit[2]) if hit else ASK_ELSE
+        owners, what = (hit[1], hit[2]) if hit else ASK_ELSE
+        if hit and not hit[1]:
+            owners, strays = run_owners(root / d["path"], root)
+            if strays:
+                what += (f"; {', '.join(strays[:3])}{f' and {len(strays) - 3} more' if len(strays) > 3 else ''} name no lane handle, so "
+                         "infra finds their owner")
         out.append({"path": d["path"], "bytes": d["bytes"], "files": d["files"], "rest": d["rest"], "owners": list(owners), "what": what})
     return out
 
@@ -1116,7 +1131,7 @@ def _names_main(argv: list[str]) -> int:
     return 1 if names else 0
 
 
-__all__ = ["ASK", "DEFAULT_JOBS_DIRS", "FIELDS", "GC_SCHEMA", "JobScripts", "KIND", "LOG", "POLICY", "PRIORITIES", "REPORT_SCHEMA",
-           "RUN_EXPIRY", "SCHEMA", "SIDECAR", "RecordError", "asks", "beside", "check", "covering", "covers", "find", "gc", "implicit", "keep",
-           "keep_main", "load", "main", "problems", "record_at", "report", "rule_record", "run_lanes", "scan", "sidecar", "store_check",
-           "target", "write"]
+__all__ = ["ASK", "DEFAULT_JOBS_DIRS", "FIELDS", "GC_SCHEMA", "HANDLES", "JobScripts", "KIND", "LOG", "NAMES_SCHEMA", "POLICY", "PRIORITIES",
+           "REPORT_SCHEMA", "RUN_EXPIRY", "SCHEMA", "SIDECAR", "RecordError", "asks", "beside", "check", "covering", "covers", "find", "gc",
+           "implicit", "keep", "keep_main", "load", "main", "problems", "record_at", "report", "rule_record", "run_lanes", "run_owners", "scan",
+           "sidecar", "store_check", "target", "write"]
