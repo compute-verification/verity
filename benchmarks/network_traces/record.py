@@ -33,7 +33,7 @@ and duration) and, for `commit`, `commits.jsonl` (each run's finalization stall)
 - a chunk whose heartbeat or event loop stalled longer than `--freeze-ms` was frozen (SIGSTOP, a paused scope), and the
   whole chunk is void;
 - a window is dropped when another process computed on our GPU, when the rest of the NUMA node kept more than
-  `--max-others-busy` of its CPUs busy, or when one of its requests failed;
+  `--max-others-busy` of its CPUs busy, when a sample came over `--freeze-ms` late, or when one of its requests failed;
 - the chunk is cut at dropped windows into contiguous segments, one configuration each.
 
 **`merge`** joins chunks' traces into one for the calibration tool.
@@ -581,11 +581,11 @@ def build_trace(records: Sequence[dict], samples: Sequence[dict], *, name: str, 
     - ingress: ⌈bytes/B⌉ frames at its send time, where bytes is a text prompt's 4·prompt_len + 512 (`ingress="text"`,
       the rebuilt traces' rule) or the token-id JSON body sent (`"body"`).
 
-    A frozen chunk (a heartbeat or event-loop stall over `freeze_ms`, or a gap in the samples, from t0 to `TAIL_MS` after
-    the last window, while its last responses stream) gives no configuration. A window is dropped when a sample
-    overlapping it saw a foreign process on the GPU or the watched CPUs' other users busier than `max_others_busy`, or
-    when a request sent in it failed; each run of kept windows is one configuration, its times rebased to its first
-    window."""
+    A frozen chunk (a heartbeat or event-loop stall over `freeze_ms` from t0 to `TAIL_MS` after the last window, while its
+    last responses stream) gives no configuration: a stopped process stops its heartbeat too. A window is dropped when a
+    sample overlapping it saw a foreign process on the GPU or the watched CPUs' other users busier than
+    `max_others_busy`, or came over `freeze_ms` late while the heartbeat ran (the host stalled the monitor), or when a
+    request sent in it failed; each run of kept windows is one configuration, its times rebased to its first window."""
     window_ms = WINDOW_BUCKETS * BUCKET_MS
     if stopped_ms is not None:
         windows = min(windows, max(0, int(stopped_ms // window_ms)))
@@ -593,11 +593,12 @@ def build_trace(records: Sequence[dict], samples: Sequence[dict], *, name: str, 
     measured = [s for s in samples if s["t_ms"] >= 0 and s["t_ms"] - 1000 * s["dt_s"] < end_ms + TAIL_MS]
     stalls = [max(s["hb_max_ms"], s["loop_max_ms"]) for s in measured]
     gaps = [1000 * s["dt_s"] - 1000 * SAMPLE_S for s in measured]
-    frozen = max(stalls + gaps, default=0.0) > freeze_ms or (windows > 0 and not measured)
+    frozen = max(stalls, default=0.0) > freeze_ms or (windows > 0 and not measured)
     dropped: dict[int, str] = {}
-    for s in measured:
+    for s, gap in zip(measured, gaps):
         why = ("foreign GPU process" if s["foreign_pids"] else
-               "NUMA node busy" if s["others_busy"] > max_others_busy else None)
+               "NUMA node busy" if s["others_busy"] > max_others_busy else
+               "monitor late" if gap > freeze_ms else None)
         if why:
             lo, hi = s["t_ms"] - 1000 * s["dt_s"], s["t_ms"]
             for w in range(max(0, int(lo // window_ms)), min(windows - 1, int(hi // window_ms)) + 1):

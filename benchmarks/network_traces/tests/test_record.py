@@ -104,11 +104,20 @@ def test_contamination_and_failures_drop_windows_and_split_the_chunk() -> None:
     assert summary["windows_dropped"] == {"0": "NUMA node busy", "1": "NUMA node busy"}
 
 
-@pytest.mark.parametrize("stall", [{"hb_max_ms": 1500.0}, {"loop_max_ms": 1500.0}, {"dt_s": 5.0}])
-def test_a_stall_or_a_gap_in_the_samples_voids_the_chunk(stall: dict) -> None:
+@pytest.mark.parametrize("stall", [{"hb_max_ms": 1500.0}, {"loop_max_ms": 1500.0}])
+def test_a_stall_voids_the_chunk(stall: dict) -> None:
     records = [request("a", 50.0, [[120.0, 1]])]
     configs, summary = rec.build_trace(records, samples(1, t30000=stall), name="t", windows=1)
     assert configs == [] and summary["frozen"]
+
+
+def test_a_late_sample_while_the_heartbeat_ran_drops_only_its_windows() -> None:
+    records = [request("a", 50.0, [[120.0, 1]]), request("b", WINDOW_MS + 50.0, [[WINDOW_MS + 150.0, 1]])]
+    late = {f"t{WINDOW_MS + 30_000}": {"dt_s": 5.0}}
+    configs, summary = rec.build_trace(records, samples(2, **late), name="t", windows=2)
+    assert not summary["frozen"] and summary["windows_dropped"] == {"1": "monitor late"}
+    assert summary["segments"] == [(0, 1)] and [c["name"] for c in configs] == ["t/w0-1"]
+    assert summary["sample_gap_ms_max"] == 3000.0
 
 
 def test_a_stopped_chunk_keeps_the_whole_windows_before_the_stop() -> None:
