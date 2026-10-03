@@ -463,7 +463,8 @@ def test_a_never_ran_label_holds_only_while_the_run_dir_agrees_and_custody_neede
     (d / "events.jsonl").write_text('{"kind": "submitted"}\nnot json\n[1]\n')
     assert CU.ran_evidence(d) is None
     for name, text, says in (("events.jsonl", '{"kind": "submitted"}\n{"kind": "sampler_start"}\n', "events.jsonl has sampler_start"),
-                             ("resources.jsonl", '{"kind": "sample", "processes": [{"pid": 451}]}\n', "resources.jsonl holds sampler readings"),
+                             ("resources.jsonl", '{"kind": "sample", "processes": [{"pid": 451}]}\n',
+                              "resources.jsonl holds sampler readings"),
                              ("stderr.log", "Killed\n", "stderr.log holds output"),
                              ("status.json", json.dumps({"state": "running", "transitions": [{"state": "running", "pid": 451}]}),
                               "status.json names pid 451")):
