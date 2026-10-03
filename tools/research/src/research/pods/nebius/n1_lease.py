@@ -26,7 +26,8 @@ Each tick, with the brain absent (local rules):
 With `$VY_POOL_POLICY` set (a command printing this pool's keys of the cluster policy in force, `cluster/policy/v1` JSON:
 `python3 -m cluster policy show --key vy-nebius-1.lease-pool.provers --json` from tools/cluster), the pool's `max`, `borrow` and
 `borrow-until` come from it instead, read again every `POLICY_EVERY_S`, so an override (`cluster policy override`) takes effect
-without a restart. A key it lacks, and all three while it fails, keep the environment's values; each change is logged (`policy`),
+without a restart. A key it lacks, and all three while it fails or answers a `max` or `borrow` that isn't a whole number of the
+node's GPUs, keep the environment's values; each change is logged (`policy`),
 and the three in force are written to `$GPU_LEASE_DIR/n1-lease.limits` at each read (`cluster policy diff` reads them there).
 **Heartbeat and expiry.** Each tick reads every lease (lock holders from /proc/locks, the owner line, the pod from the holder's
 cgroup) into `n1-lease.json`; that record is the lease's heartbeat. A lease held `$VY_LEASE_EXPIRY_GRACE_S` past its `until=` (a
@@ -93,6 +94,16 @@ def epoch(s: str | None) -> float | None:
         return datetime.strptime(s or "", "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
     except ValueError:
         return None
+
+
+def gpu_count(field: str, v, cap: int) -> int:
+    """A policy's `max` or `borrow`: a whole number of GPUs from 0 to `cap`, as an int or a string of digits; ValueError for
+    anything else (-1, 1.5, Infinity, "8x")."""
+    if isinstance(v, str) and v.isascii() and v.isdigit():
+        v = int(v)
+    if type(v) is not int or not 0 <= v <= cap:
+        raise ValueError(f"{field} {v!r} isn't a whole number of GPUs from 0 to {cap}")
+    return v
 
 
 def kubectl(*args: str, stdin: str | None = None) -> str:
@@ -265,7 +276,8 @@ class Controller:
         self.policy_error: str | None = None
 
     def pool_limits(self, t: float, dry: bool = False) -> dict:
-        """The pool's max, borrow and borrow-until: `$VY_POOL_POLICY`'s while it answers, else the environment's."""
+        """The pool's max, borrow and borrow-until: `$VY_POOL_POLICY`'s while it answers with whole numbers of the node's GPUs
+        and a UTC borrow-until, else the environment's. Nothing the command prints raises out of here."""
         if not POLICY or (self.policy_at is not None and t - self.policy_at < POLICY_EVERY_S):
             return self.limits
         self.policy_at = t
@@ -285,8 +297,8 @@ class Controller:
             for f, v in seen.items():
                 if f == "borrow-until" and epoch(str(v)) is None:
                     raise ValueError(f"borrow-until {v!r} isn't %Y-%m-%dT%H:%M:%SZ")
-                got[f] = str(v) if f == "borrow-until" else int(v)
-        except (subprocess.SubprocessError, OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+                got[f] = str(v) if f == "borrow-until" else gpu_count(f, v, len(self.table))
+        except Exception as e:  # noqa: BLE001  (a bad policy must never stop the loop)
             got, err = env, f"{type(e).__name__}: {e}"[:200]
         if not dry:
             if got != self.limits or err != self.policy_error:
@@ -332,10 +344,10 @@ class Controller:
 
     def tick(self, t: float, obs: dict | None = None, dry: bool = False) -> dict:
         self.events = []
-        lim = self.pool_limits(t, dry)
-        obs = obs or self.observe()
         if not self.table:
             self.table = gpu_table()
+        lim = self.pool_limits(t, dry)
+        obs = obs or self.observe()
         n = len(self.table)
         pods_by_uid = {p["metadata"].get("uid"): p for p in obs["pods"]}
         pods_by_job: dict[str, list[dict]] = {}

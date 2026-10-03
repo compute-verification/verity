@@ -155,6 +155,10 @@ N1_TABLE = '[policy.vy-nebius-1]\nowner = "infra"\n'
     (N1_TABLE + 'lease-pool = { provers = { borrow-until = "2026-10-04T10:30Z" } }\n',
      "n1_lease.py reads only %Y-%m-%dT%H:%M:%SZ (else it never stops borrowing)"),
     (N1_TABLE + "lease-pool = { builders = { max = 2 } }\n", "a lease pool key is lease-pool.POOL.FIELD"),
+    (N1_TABLE + "lease-pool = { provers = { max = inf } }\n", f"{N1}.lease-pool.provers.max: 'inf' is not a whole number"),
+    (N1_TABLE + "lease-pool = { provers = { max = -1 } }\n", "'-1' is not a whole number"),
+    (N1_TABLE + "lease-pool = { provers = { max = 2.5 } }\n", "'2.5' is not a whole number"),
+    (N1_TABLE + "lease-pool = { provers = { borrow = 9 } }\n", f"{N1}.lease-pool.provers.borrow: 9 is more GPUs than {N1} has (8)"),
     (N1_TABLE + "kueue = { provers = { gpu = { quota = 3 } } }\n", "a Kueue key is kueue.QUEUE.stop-policy"),
     (N1_TABLE + 'kueue = { provers = { memory = { nominal = "lots" } } }\n', "kueue.provers.memory.nominal"),
     (N1_TABLE + "kueue = { provers = { gpu = { nominal = 3 } } }\n",
@@ -410,6 +414,12 @@ def test_an_override_is_a_dry_run_until_applied_and_show_merges_it_with_who_why_
     ({"key": f"{N1}.lease-pool.builders.max"}, "a lease pool key is lease-pool.POOL.FIELD"),
     ({"key": f"{N2}.kueue.provers.gpu.nominal"}, "no reader for 'kueue' on vy-nebius-2"),
     ({"key": f"{N1}.lease-pool.provers.borrow-until", "value": "tomorrow"}, "n1_lease.py reads only"),
+    ({"key": f"{N1}.lease-pool.provers.max", "value": "-1"}, "'-1' is not a whole number"),
+    ({"key": f"{N1}.lease-pool.provers.borrow", "value": "-4"}, "'-4' is not a whole number"),
+    ({"key": f"{N1}.lease-pool.provers.max", "value": "1.5"}, "'1.5' is not a whole number"),
+    ({"key": f"{N1}.lease-pool.provers.max", "value": "inf"}, "'inf' is not a whole number"),
+    ({"key": f"{N1}.lease-pool.provers.max", "value": "8x"}, "'8x' is not a whole number"),
+    ({"key": f"{N1}.lease-pool.provers.max", "value": "9"}, "9 is more GPUs than vy-nebius-1 has (8)"),
     ({"key": f"{N1}.check-slots.d", "value": "128-15x"}, "bad CPU list item"),
 ])
 def test_an_override_is_refused_naming_each_problem(capsys, tmp_path, args, why):

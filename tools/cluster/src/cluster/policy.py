@@ -73,6 +73,8 @@ ENV = {"name": "VY_POOL_NAME", "dir": "GPU_LEASE_DIR", "queue": "VY_POOL_QUEUE",
 #: directory, so that file, not its environment, is their live value
 POLICY_VAR = "VY_POOL_POLICY"
 POLICY_FIELDS = ("max", "borrow", "borrow-until")
+#: of those, the numbers of GPUs: whole numbers, at most the node's GPUs
+GPU_FIELDS = ("max", "borrow")
 LIMITS = "n1-lease.limits"
 KUEUE_RESOURCES = {"gpu": "nvidia.com/gpu", "cpu": "cpu", "memory": "memory"}
 KUEUE_FIELDS = {"nominal": "nominalQuota", "borrowing": "borrowingLimit", "lending": "lendingLimit"}
@@ -180,6 +182,8 @@ def problems(cluster: model.Cluster, keys: dict[str, Key]) -> list[str]:
         if s == "lease-pool" and (len(rest) != 2 or rest[0] not in SESSIONS or rest[1] not in ENV):
             out.append(f"{k.key}: a lease pool key is lease-pool.POOL.FIELD, POOL one of {sorted(SESSIONS)}, FIELD one of "
                        f"{sorted(ENV)}")
+        elif s == "lease-pool" and rest[1] in GPU_FIELDS and int(canon(k.key, k.value)) > len(cluster.nodes[k.node].gpus):
+            out.append(f"{k.key}: {k.value} is more GPUs than {k.node} has ({len(cluster.nodes[k.node].gpus)})")
         elif s == "lease-pool" and rest[1] == "borrow-until":
             try:
                 datetime.strptime(str(k.value), UNTIL_FORMAT)
@@ -242,8 +246,8 @@ def canon(key: str, value: Any) -> str:
     if s == "check-slots":
         cpus, *opts = v.split()
         return " ".join([cpuset.format(cpuset.parse(cpus)), *sorted(opts)])
-    if s == "lean-slots":
-        if not v.isdigit():
+    if s == "lean-slots" or s == "lease-pool" and parts[-1] in GPU_FIELDS:
+        if not (v.isascii() and v.isdigit()):
             raise ValueError(f"{v!r} is not a whole number")
         return str(int(v))
     if s == "fill" and parts[2] == "window":
@@ -346,7 +350,7 @@ def override_problems(cluster: model.Cluster, keys: dict[str, Key], key: str, va
 
 
 def _value(v: str) -> int | str:
-    return int(v) if v.isdigit() else v
+    return int(v) if v.isascii() and v.isdigit() else v
 
 
 FILE_MARK = "@@policy-file "

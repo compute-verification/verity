@@ -1799,12 +1799,12 @@ def test_n1_lease_borrows_only_for_preemptible_waiters_before_its_deadline_and_s
     os.close(lock)
 
 
-@needs_flock
-def test_n1_lease_takes_its_pool_limits_from_the_policy_command_and_the_environments_while_it_fails(monkeypatch, tmp_path, reap):
+def _policy_lease(monkeypatch, tmp_path, max_: int, policy: str | None = None):
+    """The controller with VY_POOL_MAX=`max_` under a policy command (`cat` of a document, or `policy`), and a waiter that wants
+    3 GPUs, which 3 nominal allow; the waiter's lock fd, and `keys(**kv)`, which writes the document."""
     import fcntl
-    t = 1_800_000_000.0
     doc = tmp_path / "policy.json"
-    m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_MAX=1, VY_POOL_POLICY=f"cat {doc}")
+    m, calls, _ = _n1_lease(monkeypatch, tmp_path, VY_POOL_MAX=max_, VY_POOL_POLICY=policy or f"cat {doc}")
     w = tmp_path / "gl" / "wait.1.4242"
     w.write_text("pid=4242 n=3 who=adhoc:me since=x\n")
     fd = os.open(w, os.O_RDONLY)
@@ -1813,6 +1813,13 @@ def test_n1_lease_takes_its_pool_limits_from_the_policy_command_and_the_environm
     def keys(pools=("provers",), **kv):
         doc.write_text(json.dumps({"schema": "cluster/policy/v1", "keys": [
             {"key": f"vy-nebius-1.lease-pool.{p}.{k.replace('_', '-')}", "value": v} for p in pools for k, v in kv.items()]}))
+    return m, calls, fd, doc, keys
+
+
+@needs_flock
+def test_n1_lease_takes_its_pool_limits_from_the_policy_command_and_the_environments_while_it_fails(monkeypatch, tmp_path, reap):
+    t = 1_800_000_000.0
+    m, calls, fd, doc, keys = _policy_lease(monkeypatch, tmp_path, 1)
     c = m.Controller()
     steps = [(lambda: keys(max=3, borrow=0, idle_s=600), t, 3, None),            # 3 wanted, 3 nominal, max 3 by policy
              (lambda: keys(max=2), t + 1, 3, None),                                # read again only after POLICY_EVERY_S
@@ -1830,6 +1837,18 @@ def test_n1_lease_takes_its_pool_limits_from_the_policy_command_and_the_environm
         assert (tmp_path / "gl" / "n1-lease.limits").read_text() == \
             f"max={want} borrow=0 borrow-until= from={'environment' if error else 'policy'}\n"
     os.close(fd)
+
+
+@needs_flock
+@pytest.mark.parametrize("value", ["-1", -1, 1.5, float("inf"), "8x", 5, True, None])
+def test_n1_lease_refuses_a_policy_max_that_isnt_a_whole_number_of_its_gpus_and_goes_on(monkeypatch, tmp_path, reap, value):
+    m, calls, fd, _, keys = _policy_lease(monkeypatch, tmp_path, 3)
+    keys(max=value)
+    events = [e for e in m.Controller().tick(1_800_000_000.0)["events"] if e["ev"] == "policy"]
+    os.close(fd)
+    assert len([a for a, _ in calls if a[0] == "create"]) == 3
+    assert len(events) == 1 and events[0]["limits"]["max"] == 3 and events[0]["fallback"] == "environment"
+    assert f"max {value!r} isn't a whole number of GPUs from 0 to 4" in events[0]["error"]
 
 
 @needs_flock
