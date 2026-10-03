@@ -184,7 +184,7 @@ theorem out_copyH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
   have R : RowRanges st.c := RowRanges.ofL (st := Hidden.flatTwin st) L0 F0.parse F0.check
   have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
     rw [s.da, Hidden.hidden_delta']
-  have hrows : Hidden.OutRows st.c := fun j hj => Hidden.out_chunks hpa hcr hj
+  have hrows : Hidden.OutRows st.c := Hidden.out_rows_v1 hpa hcr fun p hp => (hv1 p hp).1
   obtain ⟨h16, -, hlo⟩ := Layout.check_out P.typed ho hls
   have hget : ∀ u < st.c.upv, st.c.leavesOut.getD u #[] = st.c.leavesOut[u]! := fun u hu => by
     rw [Hidden.getElem!_eq_getD']; rfl
@@ -194,19 +194,22 @@ theorem out_copyH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
     (fun u hu o' ho' => by rw [hget u hu] at ho'; exact (hlo u hu).2 o' ho')
     h16 (fun u hu => by rw [hget u hu]; exact (hlo u hu).1) hpv g hu' hj
   have hkw : k < (st.c.ports.getD (HmOut.nIn st.c + jo) default).words :=
-    lt_of_lt_of_le hk (checkRows_words hcr hjo)
+    lt_of_lt_of_le hk (checkRows_words hcr hrows.2.1 hrows.1 hjo)
   have hsrc : Hidden.outSrc st.c g jo k t = st.c.unitRange.slot (g * st.c.upv + u') + Layout.outCol st.c j t := by
     unfold Hidden.outSrc
+    rw [Hidden.outGroup_single hrows.2.1 hjo]
+    dsimp only
     simp only [hk, ↓reduceIte]
     rw [hw, hleaf]
     unfold Layout.outCol
     omega
   have hmc := Hidden.msg_copy L L0 F0 hv1 hda hrows hz o hg hjo hkw ht
-  obtain ⟨hp, hw2⟩ := hrows jo hjo
+  obtain ⟨hp, hw2⟩ := hrows.2.2 jo hjo
   have hb : (16 * k + t) / 8 = 2 * k + t / 8 := by omega
   have hb8 : (16 * k + t) % 8 = t % 8 := by omega
-  have hks : (2 * k + t / 8) / 128 < ((HmRow.rowSlots st.c.ports).2[HmOut.nIn st.c + jo]!).size := by
-    rw [Hm.rowSlots_size hp, Hidden.getElem!_eq_getD']
+  have hks : (HmRow.byteAt (st.c.ports.getD (HmOut.nIn st.c + jo) default) (2 * k + t / 8)).1 <
+      ((HmRow.rowSlots st.c.ports).2[HmOut.nIn st.c + jo]!).size := by
+    rw [Typed.byteAt_none (Hidden.segs_getD hrows.1 hp), Hm.rowSlots_size hp, Hidden.getElem!_eq_getD']
     omega
   have hin := Layout.msgCol_lt_of_parse hpa hg hp (2 * k + t / 8) (t % 8) (Nat.mod_lt _ (by norm_num))
   refine bit_inj _ _ ?_
@@ -233,7 +236,7 @@ theorem AcceptedH.row_bc (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
   have F0 := flat_unitFacts ht h
   have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
     rw [s.da, Hidden.hidden_delta']
-  have hrows : Hidden.OutRows st.c := fun j hj => Hidden.out_chunks hpa hcr hj
+  have hrows : Hidden.OutRows st.c := Hidden.out_rows_v1 hpa hcr fun p hp => (hv1 p hp).1
   have hz0 := Hidden.sat_flat L L0 F0 hv1 hda hrows hz
   exact Hm.row_bc_flat L0 F0 rfl (Hm.upv_pos F0.check ho) hv1 hz0 o hg hp
 
