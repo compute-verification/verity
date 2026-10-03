@@ -391,7 +391,7 @@ theorem depth_interleave {g : Game α} {h : Game β} (pg : Productive g) (ph : P
       rw [depth_live (g := .send _ _) (h := .send _ _) trivial trivial]
       show min ((⨅ m, depth (interleave (k m) (Game.send N j))) + 1)
         ((⨅ n, depth (interleave (Game.send M k) (j n))) + 1) + 1 = _
-      simp only [e1 ph, e2]
+      rw [congrArg iInf (funext (e1 ph)), congrArg iInf (funext e2)]
       rw [iInf_add_min, iInf_add_min', depth_send M k, depth_send N j]
       omega
     | coin C j ihh =>
@@ -401,7 +401,7 @@ theorem depth_interleave {g : Game α} {h : Game β} (pg : Productive g) (ph : P
       rw [depth_live (g := .send _ _) (h := @Game.coin _ _ _ _ _) trivial trivial]
       show min ((⨅ m, depth (interleave (k m) (Game.coin C j))) + 1)
         ((⨅ n, depth (interleave (Game.send M k) (j n))) + 1) + 1 = _
-      simp only [e1 ph, e2]
+      rw [congrArg iInf (funext (e1 ph)), congrArg iInf (funext e2)]
       rw [iInf_add_min, iInf_add_min', depth_send M k, depth_coin C j]
       omega
   | coin C k ih =>
@@ -418,7 +418,7 @@ theorem depth_interleave {g : Game α} {h : Game β} (pg : Productive g) (ph : P
       rw [depth_live (g := @Game.coin _ _ _ _ _) (h := .send _ _) trivial trivial]
       show min ((⨅ m, depth (interleave (k m) (Game.send N j))) + 1)
         ((⨅ n, depth (interleave (Game.coin C k) (j n))) + 1) + 1 = _
-      simp only [e1 ph, e2]
+      rw [congrArg iInf (funext (e1 ph)), congrArg iInf (funext e2)]
       rw [iInf_add_min, iInf_add_min', depth_coin C k, depth_send N j]
       omega
     | coin C' j ihh =>
@@ -428,7 +428,7 @@ theorem depth_interleave {g : Game α} {h : Game β} (pg : Productive g) (ph : P
       rw [depth_live (g := @Game.coin _ _ _ _ _) (h := @Game.coin _ _ _ _ _) trivial trivial]
       show min ((⨅ m, depth (interleave (k m) (Game.coin C' j))) + 1)
         ((⨅ n, depth (interleave (Game.coin C k) (j n))) + 1) + 1 = _
-      simp only [e1 ph, e2]
+      rw [congrArg iInf (funext (e1 ph)), congrArg iInf (funext e2)]
       rw [iInf_add_min, iInf_add_min', depth_coin C k, depth_coin C' j]
       omega
 
@@ -752,12 +752,10 @@ theorem not_unambiguous_of_constant :
   have e : batch ([] ++ Game.ret true :: [Game.send Bool fun first =>
       if first then Game.send Bool fun _ => Game.send Bool fun b => Game.ret b
       else Game.send Bool fun b => Game.send Bool fun _ => Game.ret b]) =
-      batch [Game.send Bool (fun _ => Game.ret true), Game.send Bool (fun b => Game.ret b)] := by
-    simp only [List.nil_append, batch, Game.interleave, Game.interleaveWith, Game.map, Game.bind]
-    congr 1
-    funext first
-    cases first <;> rfl
+      batch [Game.send Bool (fun _ => Game.ret true), Game.send Bool (fun b => Game.ret b)] :=
+    congrArg (Game.send Bool) (funext fun first => by cases first <;> rfl)
   have := h [] _ _ e
-  simp at this
+  injection this with h1
+  cases h1
 
 end Pouw.Draft.Game
