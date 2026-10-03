@@ -200,9 +200,9 @@ class DrawWref:
     `HonestTileCapRate` and `CompleteSampled` take tickets proportional to a tile's `Wref`, over all of its rows and
     columns, so a draw by another price record's `wref` attains the statement's γ only on a layout of one (n, k): on a
     served step's four linears the per-linear ratios differ (red team #919 F1).  `tile_weight` counts credited cells
-    only, so the tickets are the statement's on fully credited tiles; a tile with filler, excluded or voluntary rows gets
-    less than its `Wref`'s ticket at the scale that fully credited tiles get theirs, so unless every tile's credited share
-    is the same, no Lean statement covers that draw yet (red team #1014)."""
+    only, so the tickets are the statement's on fully credited tiles; a tile with filler, excluded or voluntary rows
+    gets less than its `Wref`'s ticket at the scale that fully credited tiles get theirs, so unless every tile's
+    credited share is the same, no Lean statement covers that draw yet (red team #1014)."""
 
     statement: str
     device: str
