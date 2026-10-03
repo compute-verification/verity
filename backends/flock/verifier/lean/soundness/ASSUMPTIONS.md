@@ -225,7 +225,8 @@ Not soundness's: the PoUW window's keyed draw takes A4 and A5, and `HmRowCompute
 prove. Zero knowledge's two (`Hm96Hiding`, `PadNonvanishing`) are in `FlockSoundness/Assumptions.lean` and
 `docs/zk-proof-public.md`. `Hm96Hiding` is now proved for hm96 at a bound on its gap (`CROnly.hm96Hiding_gap`; for
 hm96-sha512 over a uniform key, `CROnly.hm96_sha512_bad_keys`, What is pinned, below), while zero knowledge still takes
-`hash-derived-key` for the pinned key and `PadNonvanishing`.
+`hash-derived-key` for the pinned key and `PadNonvanishing`. `hash-derived-key` is `Assumptions.HashDerivedKey`: `Hm96Hiding` at `2^-193`, instantiated at hm96-sha512's
+`ZkView.My` and `ZkView.saltHash` (`Composed.zk_session_composed`).
 - A4 (`Assumptions.KeyedStreamsUniform`), which the PoUW window's keyed draw takes as `hA4`;
 - A5 (`Assumptions.UniformSecret`), which the same draw takes as `hsec`;
 - `Assumptions.HmRowComputes`, not cryptographic: the circuit's row hashing, which the rows' value binding

@@ -4542,6 +4542,7 @@
    "assumptions": [],
    "type_hash": "8be091f3d95f07de4c7cf133faf6b65a369b2a05104e15ff0d23d66aafcea58e"
   },
+  "FlockSoundness.Discharge.Composed.coinedOf_setup": {},
   "FlockSoundness.Discharge.Composed.zk_session_composed": {
    "signature": [
     "FlockSoundness.Discharge.Composed.zk_session_composed {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K]",
