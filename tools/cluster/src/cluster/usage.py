@@ -15,7 +15,8 @@ read without utilization (node 2's sampler reads no NVML in a timed window, so a
 - A lease holds its GPU for exactly its span, for its owner: its part of each minute is busy, idle and unmeasured in the
   proportions of that GPU's reading (whichever holder the reading names), and unmeasured when there is no reading. The
   rest of the minute counts by the reading, where a lease pool's own pod is `POOL_UNLEASED`: the pool held the GPU and
-  leased it to nobody.
+  leased it to nobody. Leases that overlap on a GPU share its minute in proportion to their parts, so a GPU-minute is
+  never held for more than 60 s.
 - Unmeasured time is held but neither busy nor idle, as `ledger.gpu_usage` counts unsampled time, so a held-idle share is
   of measured held time.
 - A row's `owner` is the lane its holder's GPU-time counts to and its `kind` the job family the holder's name gives (a
@@ -92,22 +93,26 @@ def hourly(node: str, minutes: Iterable[tuple], leases: Iterable[Lease] | None =
     minutes = list(minutes)
     by_key = {(r[0], r[1]): r for r in minutes}
     covered: dict[tuple, float] = defaultdict(float)
+    parts = []
     for g, a, b, owner, kind in leases or ():
         m = int(a) // 60 * 60
         while m < b:
             f = min(b, m + 60) - max(a, m)
-            r = by_key.get((m, g))
-            covered[(m, g)] += f / 60
-            x = acc[(hour(m), owner, kind)]
-            if r is None:
-                x[2] += f
-            else:
-                x[0] += f * (r[2] + r[4])
-                x[1] += f * (r[3] + r[5])
-                x[2] += f * _unmeasured(r)
+            covered[(m, g)] += f
+            parts.append((m, g, f, owner, kind))
             m += 60
+    for m, g, f, owner, kind in parts:
+        f *= min(1.0, 60 / covered[(m, g)])
+        r = by_key.get((m, g))
+        x = acc[(hour(m), owner, kind)]
+        if r is None:
+            x[2] += f
+        else:
+            x[0] += f * (r[2] + r[4])
+            x[1] += f * (r[3] + r[5])
+            x[2] += f * _unmeasured(r)
     for r in minutes:
-        rest = 60 * max(0.0, 1.0 - covered.get((r[0], r[1]), 0.0))
+        rest = max(0.0, 60 - covered.get((r[0], r[1]), 0.0))
         if not rest:
             continue
         h, um = hour(r[0]), _unmeasured(r)

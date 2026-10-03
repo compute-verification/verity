@@ -42,6 +42,17 @@ def test_a_lease_holds_its_gpu_for_its_span_busy_by_the_gpus_reading_and_the_res
     assert set(rows) == {(h, "circuits", "gpu-lease"), (h, "circuits", usage.POOL_UNLEASED), (h, "proofs", "gpu-lease")}
 
 
+def test_leases_that_overlap_on_a_gpu_share_its_minute_and_never_hold_it_longer():
+    # the two pools can't hold one GPU at once, but nothing upstream checks their spans are disjoint (red team M)
+    minutes = [(H0, 0, 1.0, 0, 0, 0, "gpu-pool-circuits-a")]
+    leases = [usage.Lease(0, H0, H0 + 60, "circuits", "gpu-lease"), usage.Lease(0, H0 + 30, H0 + 60, "proofs", "gpu-lease")]
+    rows = by(usage.hourly("vy-nebius-1", minutes, leases, attribute=attribute, pooled=lambda h: h.startswith("gpu-pool-")))
+    h = "2026-10-03T08:00Z"
+    assert secs(rows[(h, "circuits", "gpu-lease")]) == (40, 40, 0, 0, 40)
+    assert secs(rows[(h, "proofs", "gpu-lease")]) == (20, 20, 0, 0, 20)
+    assert set(rows) == {(h, "circuits", "gpu-lease"), (h, "proofs", "gpu-lease")}
+
+
 def test_without_leases_a_pool_pod_is_an_ordinary_holder_and_time_nobody_holds_has_no_owner():
     minutes = [(H0, 0, 0, 1.0, 0, 0, "gpu-pool-circuits-a"), (H0, 1, 0, 0, 1.0, 0, None), (H0, 2, 0, 0, 0, 1.0, None)]
     rows = by(usage.hourly("vy-nebius-1", minutes, attribute=attribute, pooled=lambda h: True))
