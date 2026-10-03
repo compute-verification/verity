@@ -182,17 +182,50 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        40, 29, {"exists": 17, "tonight": 4, "port": 6, "copy": 1, "committed-only": 17})
+        40, 29, {"exists": 16, "tonight": 4, "port": 6, "copy": 2, "committed-only": 20})
     assert brief(CM.counts(CMAP, ENV, ("dense-mha",))) == (
-        37, 1973, {"exists": 774, "tonight": 300, "port": 391, "copy": 78, "committed-only": 430}, 21)
+        40, 2050, {"exists": 699, "tonight": 300, "port": 391, "copy": 79, "committed-only": 581}, 21)
     assert brief(CM.counts(CMAP, ENV, ("sparse-mqa",))) == (
-        43, 2156, {"exists": 717, "tonight": 300, "port": 313, "copy": 78, "committed-only": 748}, 183)
+        46, 2233, {"exists": 642, "tonight": 300, "port": 313, "copy": 79, "committed-only": 899}, 183)
 
 
-def test_moe_source_binds_its_six_tensors_on_every_moe_layer():
+def test_the_bound_tap_counts():
+    """The taps the committer binds by name on one rank per step (`commit`), by binder and route."""
+    def bound(routes):
+        c = CM.counts(CMAP, ENV, routes)
+        return c["bound_taps_per_step"], c["bound_taps_per_step_by_binder"]
+
+    assert bound(("dense-mha",)) == (1174, {"module_hook": 646, "moe": 525, "sampler": 1, "tp_partial": 2})
+    assert bound(("sparse-mqa",)) == (1117, {"module_hook": 589, "moe": 525, "sampler": 1, "tp_partial": 2})
+
+
+@pytest.mark.parametrize("route", ["dense-mha", "sparse-mqa"])
+def test_every_bound_tap_has_one_committer_name_and_it_maps_back_to_its_id(route):
+    names = CM.committer_names(CMAP, ENV, routes=(route,), rank=3)
+    assert len(names) == CM.counts(CMAP, ENV, (route,))["bound_taps_per_step"]
+    got = CM.bind_names(CMAP, ENV, list(names) + ["model.layers.0.not_a_tap/0"], profile="0123456789ab", request="r0", t=0,
+                        phase="prefill", routes=(route,), rank=3)
+    assert got["unknown"] == ["model.layers.0.not_a_tap/0"] and got["missing"] == []
+    bound = [t["id"] for t in CMAP["taps"] if t.get("commit")]
+    want = CM.identities(CMAP, ENV, profile="0123456789ab", request="r0", t=0, phase="prefill", routes=(route,), rank=3,
+                         binders=tuple(CMAP["binders"]))
+    assert got["ids"] == sorted(want) and bound
+    assert "logits_processor/shard_rank3" in names and "model.embed_tokens/part_rank3" in names
+    dropped = CM.bind_names(CMAP, ENV, list(names)[1:], profile="0123456789ab", request="r0", t=0, phase="prefill", routes=(route,), rank=3)
+    assert dropped["missing"] == [next(iter(names))]
+
+
+def test_a_tap_bound_by_an_unknown_binder_fails():
+    cmap = copy.deepcopy(CMAP)
+    next(t for t in cmap["taps"] if t["id"] == "o_proj")["commit"]["binder"] = "nobody"
+    assert any("commit binder 'nobody'" in p for p in _check(cmap))
+
+
+def test_moe_source_binds_its_seven_tensors_on_every_moe_layer():
     sourced = [t for t in CMAP["taps"] if t.get("source", "").startswith("moe/")]
-    assert len(sourced) == moe_source.TENSORS_PER_LAYER
-    assert {t["source"].rsplit("/", 1)[1] for t in sourced} == {"router_w", "router_ids", "up", "act", "down", "sum"}
+    assert len(sourced) == moe_source.TENSORS_PER_LAYER + 1                     # act_scale: block-FP8 experts
+    assert {t["source"].rsplit("/", 1)[1] for t in sourced} == {"router_w", "router_ids", "up", "act", "act_scale", "down", "sum"}
+    assert all(t["commit"] == {"name": t["source"], "binder": "moe"} for t in sourced)
     assert {t["layers"] for t in sourced} == {"moe"} and {t["manifest_family"] for t in sourced} == {"moe_block_stream"}
     runner = next(g for g in RANK0["groups"] if g["pattern"] == "model.layers.{i}.mlp.experts")
     assert runner["type"] in moe_source.MOE_MODULE_CLASSES and sorted(runner["layers"]) == CM.layer_set(CMAP, "moe", ENV)

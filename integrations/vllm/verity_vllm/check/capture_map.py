@@ -238,6 +238,11 @@ def check(cmap: dict[str, Any], inventory: dict[str, Any], config: dict[str, Any
         route = t.get("route")
         if route is not None and route not in cmap.get("routes", {}):
             problems.append(f"{where}: unknown route {route!r}")
+        c = t.get("commit")
+        if c is not None and c.get("binder") not in cmap.get("binders", {}):
+            problems.append(f"{where}: commit binder {c.get('binder')!r} is not one of the map's binders")
+        if c is not None and "layers" in t and "{" + LAYER_VAR + "}" not in c.get("name", ""):
+            problems.append(f"{where}: commit name {c.get('name')!r} must name its layer")
         try:
             layers = tap_layers(cmap, t, env)
             shape = [dim(d, env, free) for d in t["shape"]]
@@ -315,21 +320,59 @@ def check_target(cmap: dict[str, Any], doc: dict[str, Any]) -> list[str]:
                   if got.get(k) != v]
 
 
-def identities(cmap: dict[str, Any], env: dict[str, int], *, profile: str, request: str, t: int, phase: str,
-               routes: tuple[str, ...] | None = None, rank: int | None = None) -> list[str]:
-    """The canonical value ids of every tap one step captures on one rank (`s=<rank>` when `rank` is given), for the step's
-    `routes` (all of them when None)."""
-    out = []
+def _step_taps(cmap: dict[str, Any], env: dict[str, int], phase: str, routes: tuple[str, ...] | None,
+               binders: tuple[str, ...] | None = None):
+    """(tap, layer) for every tap one step captures on `routes` (all when None); with `binders`, only the taps one of them binds."""
     for tap in cmap["taps"]:
         if tap.get("route") is not None and routes is not None and tap["route"] not in routes:
             continue
         if tap.get("phases") and phase not in tap["phases"]:
             continue
+        if binders is not None and (tap.get("commit") or {}).get("binder") not in binders:
+            continue
         layers = tap_layers(cmap, tap, env)
         for layer in (layers if layers is not None else [None]):
-            name = tap["layer"] if layer is None else layer
-            out.append(format_id(value_id(profile, request, t, phase, name, _at(tap["op"], layer), tap["port"], shard=rank)))
+            yield tap, layer
+
+
+def _value_id(tap: dict[str, Any], layer: int | None, *, profile: str, request: str, t: int, phase: str, rank: int | None) -> str:
+    name = tap["layer"] if layer is None else layer
+    return format_id(value_id(profile, request, t, phase, name, _at(tap["op"], layer), tap["port"], shard=rank))
+
+
+def identities(cmap: dict[str, Any], env: dict[str, int], *, profile: str, request: str, t: int, phase: str,
+               routes: tuple[str, ...] | None = None, rank: int | None = None, binders: tuple[str, ...] | None = None) -> list[str]:
+    """The canonical value ids of every tap one step captures on one rank (`s=<rank>` when `rank` is given), for the step's
+    `routes` (all of them when None); with `binders`, only the taps those committer binders bind (`commit.binder`)."""
+    return [_value_id(tap, layer, profile=profile, request=request, t=t, phase=phase, rank=rank)
+            for tap, layer in _step_taps(cmap, env, phase, routes, binders)]
+
+
+def committer_names(cmap: dict[str, Any], env: dict[str, int], *, phase: str = "prefill", routes: tuple[str, ...] | None = None,
+                    rank: int = 0, binders: tuple[str, ...] | None = None) -> dict[str, tuple[dict[str, Any], int | None]]:
+    """The committer's tensor name (`commit.name`: `{i}` the layer, `{r}` the rank) of every bound tap one step captures on one
+    rank -> (tap, layer).  Two taps of one step under one name is a `MapError`."""
+    out: dict[str, tuple[dict[str, Any], int | None]] = {}
+    for tap, layer in _step_taps(cmap, env, phase, routes, binders):
+        c = tap.get("commit")
+        if c is None:
+            continue
+        name = _at(c["name"], layer).replace("{r}", str(rank))
+        if name in out:
+            raise MapError(f"taps {out[name][0]['id']} and {tap['id']} are both committed as {name}")
+        out[name] = (tap, layer)
     return out
+
+
+def bind_names(cmap: dict[str, Any], env: dict[str, int], names, *, profile: str, request: str, t: int, phase: str,
+               routes: tuple[str, ...] | None = None, rank: int | None = None, binders: tuple[str, ...] | None = None
+               ) -> dict[str, list[str]]:
+    """One step's committed tensor names on one rank against the map: `ids`, the value id of every name the map lists; `unknown`,
+    the names it does not list; `missing`, the names of bound taps (of `binders`, when given) the step did not commit."""
+    want = committer_names(cmap, env, phase=phase, routes=routes, rank=rank or 0, binders=binders)
+    got = set(names)
+    return {"ids": sorted(_value_id(*want[n], profile=profile, request=request, t=t, phase=phase, rank=rank) for n in got & want.keys()),
+            "unknown": sorted(got - want.keys()), "missing": sorted(want.keys() - got)}
 
 
 def counts(cmap: dict[str, Any], env: dict[str, int], routes: tuple[str, ...] | None = None) -> dict[str, Any]:
@@ -338,6 +381,7 @@ def counts(cmap: dict[str, Any], env: dict[str, int], routes: tuple[str, ...] | 
     per_status = dict.fromkeys(STATUSES, 0)
     templates = dict.fromkeys(STATUSES, 0)
     target_only = 0
+    by_binder: dict[str, int] = {}
     for tap in cmap["taps"]:
         if tap.get("route") is not None and routes is not None and tap["route"] not in routes:
             continue
@@ -346,10 +390,14 @@ def counts(cmap: dict[str, Any], env: dict[str, int], routes: tuple[str, ...] | 
         per_status[status[tap["program"]]] += n
         templates[status[tap["program"]]] += 1
         target_only += n if tap.get("target_only") else 0
+        if tap.get("commit"):
+            b = tap["commit"]["binder"]
+            by_binder[b] = by_binder.get(b, 0) + n
     return {"module_entries": len(cmap["modules"]), "module_types": len({m["type"] for m in cmap["modules"]}),
             "tap_templates": sum(templates.values()), "tap_templates_by_status": templates,
             "taps_per_step": sum(per_status.values()), "taps_per_step_by_status": per_status,
-            "target_only_taps_per_step": target_only}
+            "target_only_taps_per_step": target_only, "bound_taps_per_step": sum(by_binder.values()),
+            "bound_taps_per_step_by_binder": dict(sorted(by_binder.items()))}
 
 
 def check_document(cmap: dict[str, Any], doc: dict[str, Any], config: dict[str, Any], tp: int, registry: Any = None,
