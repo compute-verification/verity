@@ -99,6 +99,8 @@ Newest first. Each is Daniel's.
   Any other change to `lean-audit.json` needs a new grant.
 - 2026-10-02 (10:27 PM PDT): `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption. Hiding is
   proved at a fresh uniform key, and nobody works on proving that the pinned key behaves like one.
+- 2026-10-02 (10:27 PM PDT): the lander starts every merge check (`check --record`, `research merge`). The PR captain
+  (`ci`) trial-merges, preflights and hands over train tips, but never starts a merge check itself.
 - 2026-10-02 (7:23 AM PDT): an overhead reported to Daniel is the `--zk` prover's only (no M0 number and no `--zk`/M0
   ratio), normalized to the chip's peak: prover seconds over the time the computation's FLOPs take at the census's dense
   datasheet peak for its dtype, never over a measured runtime such as a vLLM run's, written to one significant digit

@@ -1,7 +1,7 @@
 """sweep/workload.py — the ONE deterministic heterogeneous workload generator of the R12 sweep (BRIEF §12).
 
     verity-vllm workload --row-id <row-id> --hf-repo <repo> --revision <rev> --batch B --max-input I --max-output O \\
-        [--sampling greedy|stoch-t0.8-p0.95] [--arrivals none|staggered] [--tokenizer <snapshot dir or tokenizer.json>] [--case <ROLE>] \\
+        [--sampling greedy|stoch-t0.8-p0.95|stoch-t0.8-p1] [--arrivals none|staggered] [--tokenizer <snapshot dir or tokenizer.json>] [--case <ROLE>] \\
         [--lengths-only] [--check] --out workloads/<row-id>.json
 
 Output = the existing request-list workload format (`verity-vllm/workload/v1`, see `workloads/workload_cov_*.json`) that
@@ -19,7 +19,8 @@ Shape plan for batch B over [lo, I] (lo = 8, or 1 when I < 32):
 Prompts: distinct real text from `verity_vllm/engine/profiles/corpus_coverage.json` (three public-domain Gutenberg books), each request
 starting at a different seeded paragraph, tokenized with the served model's tokenizer.json (`tokenizers`, add_special_tokens=False like
 every earlier workload) and truncated to the exact planned length.  Sampling `stoch-t0.8-p0.95`: temperature 0.8 / top_p 0.95 and an
-independent stored seed per request (`requests[i].seed`, read by `load_workload`).  Arrivals `staggered`: request 0 at 0 s, the
+independent stored seed per request (`requests[i].seed`, read by `load_workload`).  `stoch-t0.8-p1`: the same without the top-p mask (temperature and
+Gumbel-max only).  Arrivals `staggered`: request 0 at 0 s, the
 others at seeded offsets over the first ~60 % of a full-length run; stored as `arrival_offsets_s` and as the step-indexed
 `arrive_step` the loaders consume (`arrive_step = round(offset_s / nominal_step_s)`, nominal_step_s = 0.010, recorded).
 `--lengths-only` writes the plan without text/token ids (no tokenizer needed) so lanes can see the shape plan on a laptop.
@@ -47,6 +48,7 @@ SWEEP_SCHEMA = "verity-sweep/workload/v1"
 SAMPLING = {
     "greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0},
     "stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95, "top_k": 0},
+    "stoch-t0.8-p1": {"temperature": 0.8, "top_p": 1.0, "top_k": 0},
 }
 NOMINAL_STEP_S = 0.010          # a decode step of the 1–2B models on L40S (R11: 7.5–10.9 ms); converts arrival seconds -> arrive_step
 MIN_CAP = 2                     # the "very short" output cap (prefill + one decode step)

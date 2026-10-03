@@ -14,7 +14,8 @@ Each guarantee is a `def G : Prop`, stated over `Protocol`'s definitions with th
 (`Assumptions`). Its proof is the theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, and a guarantee without
 one is open: nothing may cite it until it is proved.
 
-`docs/network-transparency/timing-channel.md`: Proposition 2 (§2.3), Theorem 1(b) (§2.2) and Theorem 3 (§2.4).
+`docs/network-transparency/timing-channel.md`: Proposition 2 (§2.3), Theorem 1(b) (§2.2), Theorem 3 (§2.4), and the
+ingress bound (§2.5, "Ingress content"; §3.2).
 -/
 
 namespace NetTiming.Guarantees
@@ -210,5 +211,39 @@ def EncardDecodableLeBlocks : Prop :=
     Zs.encard ≤
       ((Fintype.card Ac * D ^ n *
         ∏ β, min (Fintype.card (At β)) (∏ c ∈ univ.filter (fun c => blk c = β), Fintype.card (U c)) : ℕ) : ℕ∞)
+
+/-! ## The ingress bound: what the outside can deliver into X through timing -/
+
+/-- **The ingress timing bound, from the records.** As `EncardIngressDecodableLe` below, but the decoder inside X reads
+the records of the first `n` steps, everything X's devices (`op`) read, rather than the wire. This needs no W2, and the
+wire version follows from it. -/
+def EncardIngressObsDecodableLe : Prop :=
+  ∀ {L K S : ℕ} {Msg In Act Wire : Type}
+    (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
+    (hW4 : Packed I.warden) (hr : Allocated I.warden r) (hJ : JitterBounded I.warden D)
+    (c : Fin L → List (List Bool)) (Ms : Set Msg)
+    (hacc : ∀ m ∈ Ms, StatusComplete n (I.obsRun m n))
+    (hc : ∀ m ∈ Ms, ∀ ℓ, linkFrames (I.obsRun m n) ℓ <+: c ℓ)
+    (dec : List (Obs L K S) → Msg) (hdec : ∀ m ∈ Ms, dec (I.obsRun m n) = m),
+    Ms.encard ≤ (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞)
+
+/-- **The ingress timing bound.** Read the interaction inward (`NetTiming.Protocol.Ingress`): the secret `m` is the
+outside's message, `snd m` chooses when ingress frames arrive and reacts to every record (and so to X's egress), `op`
+is X's devices, the record's `rows` are what the `L` ingress links release into X, and `wire` is everything that enters
+X. Take messages `Ms` whose runs keep every status complete up to `n`, and whose frames on each link `ℓ`, in the order
+released, are a prefix of the prescribed content `c ℓ` (the Program's input, charged as reads). If a decoder inside X
+reads the wire and recovers every message in `Ms`, then under W2, W4 with allocation `r ℓ`, and J, there are at most
+`(∏_ℓ (r ℓ + 1))^n · D^n` of them: `n · Σ_ℓ log2(r ℓ + 1)` bits of timing, which is `T·log2(r_in + 1)` per ingress
+link-window, and `n·log2 D` of jitter, none under J's `D = 1`. -/
+def EncardIngressDecodableLe : Prop :=
+  ∀ {L K S : ℕ} {Msg In Act Wire : Type}
+    (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
+    (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.warden view) (hW4 : Packed I.warden)
+    (hr : Allocated I.warden r) (hJ : JitterBounded I.warden D)
+    (c : Fin L → List (List Bool)) (Ms : Set Msg)
+    (hacc : ∀ m ∈ Ms, StatusComplete n (I.obsRun m n))
+    (hc : ∀ m ∈ Ms, ∀ ℓ, linkFrames (I.obsRun m n) ℓ <+: c ℓ)
+    (dec : List Wire → Msg) (hdec : ∀ m ∈ Ms, dec (I.wireRun m n) = m),
+    Ms.encard ≤ (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞)
 
 end NetTiming.Guarantees
