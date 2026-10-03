@@ -53,6 +53,20 @@ def test_each_names_its_word_primitive_and_is_boolean():
         assert d is B.PouwSqCeil or is_boolean(d.bind())
 
 
+def test_building_a_tile_check_registers_them():
+    """C-Flock's lowering finds a primitive's Boolean Definition only in core's registry, so importing `pc4` (and `pc8`,
+    which imports it) must register all six, in a fresh interpreter where nothing else imported `boolean`."""
+    import subprocess
+    import sys
+
+    ids = [w.id.replace("_v1", "_v2") for w in (W.PouwF32SqrtRn, W.PouwETilde, W.PouwBf16Neg, W.PouwSqAcc, W.PouwSqCeil,
+                                                W.PouwSqGe)]
+    code = ("import sys, verity_pouw.circuit.pc8\nfrom verity.ir.defs import REGISTRY\n"
+            f"missing = [i for i in {ids!r} if i not in REGISTRY]\nsys.exit(','.join(missing) if missing else 0)")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+
+
 def test_bf16_neg_on_every_word():
     assert _words(B.PouwBf16Neg, W.PouwBf16Neg, np.arange(1 << 16)) == 1 << 16
 
