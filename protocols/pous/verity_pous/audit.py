@@ -55,6 +55,10 @@ CERTIFIED_ROUNDS = 10
 WORK = 1 << 14
 """`Q`: queries per answer (§2c)."""
 
+LATE_ROUNDS = 12
+"""The most sequential calls a late answer may take, `D_late ≤ 12` (`Pous.SecurityProofs.BandGradedMeetsFamily`, with
+`D_late ≤ d`): at 241.5 µs per call the hard deadline needs `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14` ms."""
+
 
 def _challenges(vk: VerifierKey) -> int:
     return getattr(vk.params, "challenges", CHALLENGES)
@@ -93,7 +97,8 @@ class HonestResponder:
 @dataclass(frozen=True, slots=True)
 class Answer:
     """One answer: its index, verdict, and either its oracle cost (`simulate`) or its latency (`TimedVerifier`), with
-    the responder's own `report` (for example its device and server nanoseconds) beside it."""
+    the responder's own `report` (for example its device and server nanoseconds) beside it.  `rejected` is an answer
+    past the hard deadline, or none by then: its block is never checked, and it is neither correct nor on time."""
 
     j: int
     index: int
@@ -102,6 +107,7 @@ class Answer:
     cost: Cost | None = None
     elapsed_ns: int | None = None
     report: object = None
+    rejected: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +117,16 @@ class AuditResult:
     @property
     def accepted(self) -> bool:
         return all(a.correct and a.on_time for a in self.answers)
+
+    @property
+    def late(self) -> int:
+        """The answers past `Δ + RTT`, the rejected ones included."""
+        return sum(not a.on_time for a in self.answers)
+
+    @property
+    def misses(self) -> int:
+        """The answers wrong or late: the continuous audit's miss count."""
+        return sum(not (a.correct and a.on_time) for a in self.answers)
 
     @property
     def rounds(self) -> tuple[int, ...]:
@@ -156,16 +172,32 @@ class TimedVerifier:
     `deadline_ns + rtt_allowance_ns`, and checks the block against
     `vk`'s leaf digests, or with `path` against its root when `root_only`.  A second challenge before the answer, or
     more than `k`, is refused.
+
+    `late_deadline_ns` (`Δ_late`, at least `Δ`) adds a hard deadline: it is refused when `Δ_late + RTT` fits more than
+    `LATE_ROUNDS` calls of the parameters' `call_ns`, or more than the band's `d`.  An answer past `Δ_late + RTT` is
+    rejected without checking its block.  Once that deadline has passed with no answer, `expire()` closes the challenge
+    as rejected, and so does the next `challenge()` before it reveals another index.  Without it, the verifier waits for
+    each answer however late it is.
     """
 
     def __init__(self, vk: VerifierKey, key: Key, k: int | None = None, deadline_ns: int = DEADLINE_NS,
                  rtt_allowance_ns: int = RTT_ALLOWANCE_NS, clock: Callable[[], int] = time.perf_counter_ns,
-                 on_answer: Callable[[Answer], None] | None = None, root_only: bool = False) -> None:
+                 on_answer: Callable[[Answer], None] | None = None, root_only: bool = False,
+                 late_deadline_ns: int | None = None) -> None:
         if deadline_ns < 0 or rtt_allowance_ns < 0:
             raise ValueError("deadlines and allowances are nonnegative")
         check_deployment(vk.params, deadline_ns, rtt_allowance_ns)
+        if late_deadline_ns is not None:
+            if late_deadline_ns < deadline_ns:
+                raise ValueError("the hard deadline is at least the deadline")
+            call_ns = getattr(vk.params, "call_ns", CALL_NS)
+            late = deadline_rounds(late_deadline_ns, rtt_allowance_ns, call_ns)
+            if late > LATE_ROUNDS:
+                raise ValueError(f"Δ_late + RTT = {late_deadline_ns + rtt_allowance_ns} ns fits D_late = {late} "
+                                 f"calls of {call_ns} ns, past the cap of {LATE_ROUNDS}")
+            check_deployment(vk.params, late_deadline_ns, rtt_allowance_ns)
         self.vk, self.key, self.k, self.root_only = vk, key, _challenges(vk) if k is None else k, root_only
-        self.deadline_ns, self.rtt_allowance_ns = deadline_ns, rtt_allowance_ns
+        self.deadline_ns, self.rtt_allowance_ns, self.late_deadline_ns = deadline_ns, rtt_allowance_ns, late_deadline_ns
         self.clock, self.on_answer = clock, on_answer
         self.answers: list[Answer] = []
         self._open: tuple[int, int] | None = None
@@ -176,6 +208,16 @@ class TimedVerifier:
         return self.deadline_ns + self.rtt_allowance_ns
 
     @property
+    def late_limit_ns(self) -> int | None:
+        """Δ_late plus the round-trip allowance, or None without a hard deadline."""
+        return None if self.late_deadline_ns is None else self.late_deadline_ns + self.rtt_allowance_ns
+
+    @property
+    def pending(self) -> int | None:
+        """The open challenge's `j`, or None."""
+        return None if self._open is None else len(self.answers)
+
+    @property
     def done(self) -> bool:
         return len(self.answers) == self.k
 
@@ -184,7 +226,7 @@ class TimedVerifier:
         return self.done and AuditResult(tuple(self.answers)).accepted
 
     def challenge(self) -> int:
-        if self._open is not None:
+        if self._open is not None and self._expire(self.clock()) is None:
             raise RuntimeError("the previous challenge is unanswered")
         if self.done:
             raise RuntimeError(f"all {self.k} challenges are answered")
@@ -199,8 +241,32 @@ class TimedVerifier:
         i, start = self._open
         self._open = None
         elapsed = stop - start
+        if self.late_limit_ns is not None and elapsed > self.late_limit_ns:
+            return self._record(Answer(len(self.answers), i, False, False, elapsed_ns=elapsed, report=report,
+                                       rejected=True))
         correct = self.vk.check_path(i, block, path or ()) if self.root_only else self.vk.check(i, block)
-        a = Answer(len(self.answers), i, correct, elapsed <= self.limit_ns, elapsed_ns=elapsed, report=report)
+        return self._record(Answer(len(self.answers), i, correct, elapsed <= self.limit_ns, elapsed_ns=elapsed,
+                                   report=report))
+
+    def expire(self) -> Answer:
+        """Close the open challenge unanswered, once its hard deadline has passed: rejected."""
+        if self._open is None:
+            raise RuntimeError("no challenge is open")
+        if self.late_limit_ns is None:
+            raise RuntimeError("no hard deadline: the verifier waits for the answer")
+        a = self._expire(self.clock())
+        if a is None:
+            raise RuntimeError("the open challenge is within its hard deadline")
+        return a
+
+    def _expire(self, now: int) -> Answer | None:
+        i, start = self._open
+        if self.late_limit_ns is None or now - start <= self.late_limit_ns:
+            return None
+        self._open = None
+        return self._record(Answer(len(self.answers), i, False, False, elapsed_ns=now - start, rejected=True))
+
+    def _record(self, a: Answer) -> Answer:
         self.answers.append(a)
         if self.on_answer is not None:
             self.on_answer(a)
