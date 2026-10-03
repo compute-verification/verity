@@ -55,7 +55,8 @@ most the time to read the `R` challenged blocks at `BWdev` (`T · BWdev ≤ R ·
 host memory holds, `f = h / R`, exceeds `f* = BWpcie / BWdev`, the verifier accepts with probability at most
 `(h + 1) / |F|`. `BWdev` is the verifier's parameter, the rate the honest server reaches; it is not assumed to bound
 anything. At #935's numbers (`BWpcie ≈ 56 GB/s`, `BWdev ≈ 1.54 TB/s`) `f* ≈ 3.6%`; its recommended deadline,
-`T = 0.50 ms` for `R = 8,192` blocks of 64 KiB, is `BWdev ≈ 1.07 TB/s` here, where `f* ≈ 5.2%`. -/
+`T = 0.50 ms` for `R = 8,192` blocks, is `BWdev = R · b / T ≈ 1.04 TB/s` at `b = 63,488` (`TwoTierBandwidth`), where
+`f* ≈ 6.1%` at the link's ceiling of about 63 GB/s (5.4% at the measured 56 GB/s): about 496 host-resident blocks. -/
 def HbmPlacementFStar : Prop :=
   ∀ (N R W : ℕ) (F : Type) [Field F] [Fintype F], 0 < W →
     ∀ (host : Finset (Fin N)) (b BWpcie BWdev T : ℝ≥0) (A : BulkResponder N R W F),
