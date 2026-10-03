@@ -217,14 +217,17 @@ def EncardDecodableLeBlocks : Prop :=
 
 `constantRate T W ss frames` (`NetTiming.Protocol.Schedule`) is the Program of `schedule.py`: windows of `T` buckets,
 `W` of them with advice, one clock-sync value of `ss` per window, and the Program's frames, anchors and logical indices
-`frames ins c ℓ` read from the ingress and the content advice `c`. None of these guarantees has a dataflow hypothesis. -/
+`frames ins c ℓ` read from the ingress and the content advice `c`. None of these guarantees has a dataflow hypothesis.
+The four counts take a horizon within the windows with advice (`hn : n ≤ W * T`): the audit (`Audit.check_link`) gives
+verdicts for those `W` windows only, so every step counted is a step it checks. -/
 
 /-- **Theorem 3's clock-sync form, for the shipped schedule.** The constant-rate Program's accepted observation
 sequences of length `n` with jitter below `D` number at most `#Ac · #Σ_sync^W · D^n`: `A_c + W·log2 #Σ_sync` bits plus
 jitter, which is 7 bits per window at 16 × 8 sync values. This holds for every frame function, sync set and operator. -/
 def EncardAccSeqsLeConstantRate : Prop :=
   ∀ {L K S : ℕ} {In Ac : Type} [Fintype Ac] (T W : ℕ) (ss : SyncSet)
-    (frames : List In → Ac → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
+    (frames : List In → Ac → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
+    (hn : n ≤ W * T),
     (AccSeqs (constantRate (S := S) T W ss frames) op n D).encard ≤
       ((Fintype.card Ac * ss.size ^ W * D ^ n : ℕ) : ℕ∞)
 
@@ -233,7 +236,8 @@ Program's accepted sequences number at most `#Ac · D^n`: timing carries nothing
 (`D = 1`) nothing at all, at most `#Ac` sequences for the content advice. -/
 def EncardAccSeqsLeConstantRateFixedClock : Prop :=
   ∀ {L K S : ℕ} {In Ac : Type} [Fintype Ac] (T W : ℕ) (ss : SyncSet) (hfix : ss.size = 1)
-    (frames : List In → Ac → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
+    (frames : List In → Ac → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
+    (hn : n ≤ W * T),
     (AccSeqs (constantRate (S := S) T W ss frames) op n D).encard ≤ ((Fintype.card Ac * D ^ n : ℕ) : ℕ∞)
 
 /-- **A window's rows read only its own and earlier windows' syncs** (PROTOCOL.md, "The audit"; `expected_grids`).
@@ -251,7 +255,7 @@ the horizon reaches count, however many windows the advice covers. -/
 def EncardAccSeqsLeConstantRateWindows : Prop :=
   ∀ {L K S : ℕ} {In Ac : Type} [Fintype Ac] (T W : ℕ) (ss : SyncSet)
     (frames : List In → Ac → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In) (n D m : ℕ)
-    (hm : n ≤ m * T),
+    (hn : n ≤ W * T) (hm : n ≤ m * T),
     (AccSeqs (constantRate (S := S) T W ss frames) op n D).encard ≤
       ((Fintype.card Ac * ss.size ^ min W m * D ^ n : ℕ) : ℕ∞)
 
@@ -262,7 +266,7 @@ to `n`. Then `Zs` has at most `#Ac · #Σ_sync^min(W, m) · D^n` elements: a cov
 def EncardDecodableLeConstantRate : Prop :=
   ∀ {L K S : ℕ} {Z In Act Wire Ac : Type} [Fintype Ac]
     (I : Interaction L K S Z In Act Wire) (T W : ℕ) (ss : SyncSet)
-    (frames : List In → Ac → Fin L → List LogicalFrame) (n D m : ℕ) (hm : n ≤ m * T)
+    (frames : List In → Ac → Fin L → List LogicalFrame) (n D m : ℕ) (hn : n ≤ W * T) (hm : n ≤ m * T)
     (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.warden view) (hJ : JitterBounded I.warden D)
     (Zs : Set Z) (hacc : ∀ z ∈ Zs, AcceptedUpTo (constantRate (S := S) T W ss frames) I.op n (I.obsRun z n))
     (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z n) = z),

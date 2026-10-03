@@ -146,7 +146,8 @@ The statements were frozen and reviewed by a red team before their proofs, and a
 ingress bound's statements were frozen before their proofs as well; the review of the first two is on the pull request
 that added them (danielreuter/verity#894), and the review of the content versions is on the one stacked on it. The
 constant-rate Program's five statements and the definitions they read were frozen on `sorry` stubs and pinned before
-their proofs, and their statement review is on danielreuter/verity#949. All 47 pins are proved. The reference
+their proofs. Their statement review, on danielreuter/verity#949, gave GO with one change: the four counts take
+`n ≤ W·T`. All 47 pins are proved. The reference
 implementation, `protocols/network_warden` (`verity_network_warden`), mirrors 19 of the pins and the three unpinned
 lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
 
@@ -194,13 +195,15 @@ The constant-rate Program adds these:
 13. **Exactly `schedule.py`.** Each definition in `NetTiming.Protocol.Schedule` names the Python it mirrors, and computes
     the same rows: δ is a `ℕ`, ρ a positive `Rat`, `⌊λ/ρ⌋` is Python's `(λ · den) // num`, a frame anchored past the last
     window with advice is handed at `max(last, W·T, anchor)`, and frames handed at or after the horizon `W·T` are never
-    enqueued. Past the horizon, where Python has no grid, the queue drains with nothing enqueued.
+    enqueued. Past the horizon, where Python has no grid, the queue drains with nothing enqueued. The audit checks `W`
+    windows, so the four counts take `n ≤ W·T` (`hn`): every step they count is a step the audit checks.
 14. **The frames are the Program's computation, left abstract.** `frames ins c ℓ` gives link `ℓ`'s frames in canonical
     order, with their content, anchors and logical indices, from the ingress and the content advice `c`. Every guarantee
     holds for every such function, so it covers any way the Program fixes anchors (the recorded bucket of the request a
     frame answers) and indices. Content advice that moves anchors is counted in `#Ac`.
-15. **One clock per spatial unit.** Every egress link reads the same window's sync (decision A's default). A clock per
-    link is a different advice type, covered by `EncardAccSeqsLeAdvice` directly.
+15. **One clock per spatial unit.** Every egress link reads the same window's sync (decision A's default), and the
+    audit enforces it (danielreuter/verity#956). A clock per link is a different advice type, covered by
+    `EncardAccSeqsLeAdvice` directly.
 16. **The allocation is the slot count `S`** on every egress link, as in Python, where a row has `allocation` slots.
 17. **In-set advice.** The advice ranges over `ss.Elem`, the values of Σ_sync: a run whose declared sync is outside the
     set is an `advice` violation and rejected, so its advice is never counted. `ExpectedRowCausal` takes any clock-sync

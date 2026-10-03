@@ -95,13 +95,15 @@ def payloads (frames : List LogicalFrame) (k : ℕ) : List Bool :=
 /-- `expected_grids`, read at bucket `t`: the warden's rule (FIFO at the allocation `S`, left-packed, the queue carried
 across windows) applied to the enqueue counts, with the frames leaving in canonical order. For `t < W·T` this is row
 `t mod T` of Python's grid for window `t / T`. Past the horizon, where Python has no grid, the queue drains with
-nothing enqueued. -/
+nothing enqueued. The audit checks `W` windows, so it never reads these rows past `W·T`. -/
 def expectedRow (S T W : ℕ) (syncs : Fin W → ClockSync) (frames : List LogicalFrame) (t : ℕ) : Row S (List Bool) :=
   fifoGrid (t + 1) S (payloads frames) (enqueued T W syncs frames) (Fin.last t)
 
 /-- **The constant-rate Program.** Windows of `T` buckets, `W` of them with advice, the sync set `ss`, and the Program's
 frames `frames ins c ℓ` on each egress link `ℓ`, in canonical order, from the ingress `ins` and the content advice `c`.
-With advice `(c, σ)`, link `ℓ`'s row at step `t` is `expectedRow` of those frames under the declared syncs `σ`. -/
+With advice `(c, σ)`, link `ℓ`'s row at step `t` is `expectedRow` of those frames under the declared syncs `σ`. Every
+link reads the same `σ`, one clock per spatial unit (`README.md`, modelling choice 15), which the audit enforces
+(PR #956). -/
 def constantRate {L S : ℕ} {In Ac : Type} (T W : ℕ) (ss : SyncSet)
     (frames : List In → Ac → Fin L → List LogicalFrame) : Program L S In (Ac × (Fin W → ss.Elem)) where
   rows t ins a ℓ := expectedRow S T W (fun w => ss.sync (a.2 w)) (frames ins a.1 ℓ) t
