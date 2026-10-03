@@ -6403,6 +6403,7 @@
    "assumptions": [],
    "type_hash": "7b099b9cb3ad2e10ac594f2361acad091b14100e72ba778fc557546a91e943c9"
   },
+  "FlockSoundness.Discharge.Hidden.setupH_g_pos": {},
   "FlockSoundness.Discharge.Hidden.setupHidden_spec": {
    "signature": ["FlockSoundness.Discharge.Hidden.setupHidden_spec : FlockSoundness.Discharge.Hidden.SetupHiddenSpec"],
    "assumptions": [],

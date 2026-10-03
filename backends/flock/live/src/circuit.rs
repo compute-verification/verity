@@ -849,6 +849,9 @@ impl Composite {
         if self.upv == 0 {
             return Err("units_per_vu is 0: a VU of no unit".into());
         }
+        if self.g == 0 {
+            return Err("vus_per_block is 0: a block of no VU".into());
+        }
         if self.dummy_bc.len() != self.ports.len() || self.dummy_outputs.len() != n_out {
             return Err("the pinned dummy values are not one per port and output leaf".into());
         }
@@ -3065,6 +3068,22 @@ mod tests {
         lines[1] = format!("META {}", serde_json::to_string(&m).unwrap());
         let err = Composite::parse(&lines.join("\n"), None).err().unwrap_or_default();
         assert!(err.contains("units_per_vu is 0"), "{err}");
+    }
+
+    /// No VU in a block is refused (PROTOCOL.md §16.10, D9), with the tail that returns the outputs, whose unit count need not
+    /// be a power of two, kept consistent: every circuit's range has no slot.
+    #[test]
+    fn a_block_with_no_vu_is_refused() {
+        let text = flat_tail_statement();
+        let mut lines: Vec<String> = text.split('\n').map(str::to_string).collect();
+        let mut m: Value = serde_json::from_str(&lines[1][5..]).unwrap();
+        m["vus_per_block"] = json!(0);
+        for i in 0..4 {
+            m["ranges"][i]["count"] = json!(0);
+        }
+        lines[1] = format!("META {}", serde_json::to_string(&m).unwrap());
+        let err = Composite::parse(&lines.join("\n"), None).err().unwrap_or_default();
+        assert!(err.contains("vus_per_block is 0"), "{err}");
     }
 
     #[test]
