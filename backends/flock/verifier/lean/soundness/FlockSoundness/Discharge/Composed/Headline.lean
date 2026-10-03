@@ -111,16 +111,16 @@ theorem zk_session_composed (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) {C : Audi
       (tabOne (tablesAtZK (Reg := Reg) dj y₀)) hA σs ks hks St hS Kd pop Lb src hA3 place vb hk hRw hM hρ hr ht' K₀
       (simZ A Hs _ I wr opn dg dec one fin capOf N hdec τ) hCR tr hT
     unfold simZ at hc
-    rw [prob_audit_cast] at hc
+    rw [prob_audit_cast (sessionZC_planOf A Hs _)] at hc
     exact zk_headline_exec_one (Gz A Hs _) (outz Hs _) (accz _) I wr opn dg dec one fin capOf N _
       (fun S R pts r => allInh_repZCAt A Hs _ pts r) hdec τ _ _ hc
   · intro W Hi VL _ _ _ J zs T Out enc hrank cols hL ht hS pos hpos hlt hGp hW hpads hβ w hreg hinner w0 E
     have hpad : ∀ j, (T j).tab.PadOnto := fun j =>
-      padOnto_M1 (T j).tab A hA (cols j) (hL j) (ht j) (hS j) κ (pos j) (hpos j) (hlt j) (hGp j) (hPad _ (hL j))
+      FlockSoundness.ZK.padOnto_M1 (T j).tab A hA (cols j) (hL j) (ht j) (hS j) κ (pos j) (hpos j) (hlt j) (hGp j) (hPad _ (hL j))
     have hgap : ∀ j, 2 * (Fintype.card (T j).tab.Hid : ℝ≥0∞) *
         ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) ≤
         2 * Fintype.card (T j).tab.Hid * ENNReal.ofReal δ₁ := fun j =>
-      mul_le_mul_left' (ENNReal.ofReal_le_ofReal hKey) _
+      by gcongr; exact hKey
     have h := ZkView.zk_wire_fixed zs T enc hrank hpad hW hpads hβ w hreg hinner w0 E
     exact ⟨h.1.trans (add_le_add le_rfl (Finset.sum_le_sum fun j _ => hgap j)),
       h.2.trans (add_le_add le_rfl (Finset.sum_le_sum fun j _ => hgap j))⟩
