@@ -170,6 +170,13 @@
   }
  },
  "pins": {
+  "FlockSoundness.Discharge.ZkLink.session_knowledge_sound_accZ": {},
+  "FlockSoundness.Discharge.ZkLink.jointZC_ksBound": {},
+  "FlockSoundness.Discharge.ZkLink.ksBoundAccZ_le_strict": {},
+  "FlockSoundness.Discharge.ZkLink.ksAvgZC_le_strict": {},
+  "FlockSoundness.Discharge.ZkLink.zk_flock_countC_execOS_ks": {},
+  "FlockSoundness.Discharge.ZkLink.zk_flock_countC_execOS_strict": {},
+  "FlockSoundness.Discharge.ZkLink.zk_flock_countC_execOS_cr": {},
   "FlockSoundness.Audit.InfluenceWitness.A.accepts": {
    "signature": [
     "FlockSoundness.Audit.InfluenceWitness.A.accepts",
