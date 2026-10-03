@@ -138,7 +138,7 @@ class CutlassScaledMmFp8Block:
         try:
             T.fp8_block_dot(tp)
         except T.UnregisteredTarget as e:
-            return unsupported(node, f"target has no registered blockwise FP8 binding: {e}", compute_capability=list(tp.compute_capability))
+            return unsupported(node, str(e), compute_capability=list(tp.compute_capability))
         # the record must ATTEST the kernel class its FP8 linears carried (`RunHeader.profile.backends.fp8_block_gemm_kernel`, read back
         # from `Fp8LinearMethod.fp8_linear` by the capture engine): `_C.cutlass_scaled_mm` is also reachable from other kernel classes'
         # fallbacks, and a header without the read-back (a pre-R15 capture) does not say which kernel ran -- refused, never assumed
