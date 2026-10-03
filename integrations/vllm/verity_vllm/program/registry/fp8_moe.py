@@ -173,8 +173,8 @@ def MoeExpertFp8BlockGemmW(B, S, xq, sx, g, w, ws):
 # ---------------------------------------------------------------------------------------------------------
 
 DOT_CONF = ("model-untested: read from vLLM d9105ea80 fused_moe_kernel and Triton 3.7.1; on cc 12.0 (DOT = BlackwellE4m3QmmaDot32_v1) "
-             "every 32-wide tile of the block-[64, 64] w13 and w2 launches is one QMMA.16832.F32.E4M3.E4M3 from RZ, and "
-             "tests/properties/fp8_sm120_capture_gpu.py (moe) is its hardware check")
+             "every 32-wide tile of the block-[64, 64] w13 and w2 launches is one QMMA.16832.F32.E4M3.E4M3 from RZ; its hardware check "
+             "is the cc 12.0 fused-MoE FP8 capture (pending)")
 
 
 def coordinate_sig(routed: bool, e4m3=E4M3, f32=F32, bf16=BF16):
