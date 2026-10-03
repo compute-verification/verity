@@ -37,6 +37,11 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "On the capture's GPU, the installed FA2 softcap kernel launches kBlockM 64 and kBlockN fa2_kblock_n(D), MUFU ex2 / rcp are "
              "core's tables and MUFU.TANH is MufuTanh_v1 on every input, and every checked output row equals the registered "
              "AttentionSoftcap_v2, which the target binds, on every head."),
+    Property("glm53_block_fp8_capture", "verity-vllm/glm53-block-fp8-capture/v1",
+             "On the capture's Hopper GPU, vLLM selects CutlassFp8BlockScaledMMKernel for GLM-5.3's FP8 linears and Triton's "
+             "fused_moe_kernel (TritonExperts) for its experts, and at GLM-5.3's shapes every output word of every launch equals "
+             "ScaledMmFp8Block_v1 or MoeExpertFp8BlockGemm(W)_v1 at the launch's statics, and every activation quant equals "
+             "Fp8GroupQuant_v1, bit for bit."),
     Property("norm_tap_exactness", "verity-vllm/norm-tap-exactness/v1",
              "The tapped norm kernels (fused CUDA op, Triton copy) compute exactly the installed kernels' outputs, write every row's "
              "scale, and each scale is the IR model's scale bit for bit; the Triton copy's compiled arithmetic is the installed kernel's."),
