@@ -154,17 +154,27 @@ EOF
 push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 held (hold= says what to decide), else 1; why= says
   local root=$1 dst=$2 r=$3 name force=
   [ "$4" = dead ] && force=--force
-  timeout 1200 rsync -a --timeout=300 --rsync-path="sudo -n rsync" --chown=1000:1000 --mkpath "$root/$r/" "$N1:$dst/$r/" \
-    || { why="rsync to $N1 failed ($?)"; return 1; }
   name=n2-custody-$(echo "$r" | tr -cd 'a-z0-9-' | tail -c 40)
+  # a Job an earlier round left (its ssh dropped) may still be pushing node 1's copy: never rsync under it or delete it, wait on it
+  job=$(timeout 60 "${SSH[@]}" -n "$N1" "$KUBE get job $name --ignore-not-found -o jsonpath='{.metadata.name}{range .status.conditions[*]} {.type}={.status}{end}'") \
+    || { why="node 1's Job $name: its state not read ($?)"; return 1; }
+  start="$KUBE delete job $name --ignore-not-found > /dev/null && $KUBE create -f - > /dev/null"
+  case $job in
+    "" | *Complete=True* | *Failed=True*)
+      timeout 1200 rsync -a --timeout=300 --rsync-path="sudo -n rsync" --chown=1000:1000 --mkpath "$root/$r/" "$N1:$dst/$r/" \
+        || { why="rsync to $N1 failed ($?)"; return 1; } ;;
+    *)
+      start=true
+      log "$root/$r: node 1's Job $name, from an earlier round, has not finished: waiting on it" ;;
+  esac
   # a failed Job never completes: wait for either condition, then name the failure from its log
-  if ! timeout 2100 "${SSH[@]}" "$N1" "$KUBE delete job $name --ignore-not-found > /dev/null && $KUBE create -f - > /dev/null &&
+  if ! timeout 2100 "${SSH[@]}" "$N1" "$start &&
     end=\$((\$(date +%s) + 1800)) && while [ \$(date +%s) -lt \$end ]; do
     c=\$($KUBE get job $name -o jsonpath='{range .status.conditions[*]}{.type}={.status} {end}'); case \$c in
     *Complete=True*) exit 0 ;; *Failed=True*) $KUBE logs job/$name --tail=3 >&2; exit 1 ;; esac; sleep 5; done
     echo 'Job not done in 30 min' >&2; exit 1" 2> "$STATE/.job.err" << EOF; then
 {"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": "$name", "labels": {"verity.dev/lane": "n2-custody", "verity.dev/kind": "custody"}},
- "spec": {"backoffLimit": 1, "ttlSecondsAfterFinished": 3600, "template": {"metadata": {"labels": {"verity.dev/lane": "n2-custody"}}, "spec": {
+ "spec": {"backoffLimit": 1, "activeDeadlineSeconds": 3600, "ttlSecondsAfterFinished": 3600, "template": {"metadata": {"labels": {"verity.dev/lane": "n2-custody"}}, "spec": {
   "restartPolicy": "Never", "nodeSelector": {"verity.dev/server": "vy-nebius-1"},
   "tolerations": [{"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}],
   "securityContext": {"runAsUser": 1000, "runAsGroup": 1000},

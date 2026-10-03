@@ -1241,7 +1241,8 @@ def test_n2_commit_gives_a_long_row_the_long_max_min():
 
 #: n2_custody.sh's node 1, faked under N1_FS: rsync copies the run dir there, and ssh answers the round's calls as node 1 would: the
 #: research tree, the Job (its verify writes .custody over node 1's copy; a run JOB_ERR's file names fails with that line instead),
-#: and the cat of that .custody; DURING_JOB=RUN:PATH appends to PATH while RUN's Job runs. Every call is a line of FAKE_LOG.
+#: and the cat of that .custody; DURING_JOB=RUN:PATH appends to PATH while RUN's Job runs, ACTIVE_JOB=RUN says RUN's Job has not
+#: finished, UNREACHABLE fails every call. Every call is a line of FAKE_LOG.
 _N2_RSYNC = r'''
 import os, shutil, sys
 with open(os.environ["FAKE_LOG"], "a") as f:
@@ -1259,6 +1260,10 @@ if env.get("UNREACHABLE"):
     sys.exit(255)
 if "test -f" in cmd:
     sys.exit(1 if env.get("NO_SRC") else 0)
+if "{.metadata.name}" in cmd:
+    name = re.search(r"get job (\S+)", cmd).group(1)
+    print(name if name == "n2-custody-" + env.get("ACTIVE_JOB", "") else "", end="")
+    sys.exit(0)
 if m := re.search(r"sudo -n cat (\S+)", cmd):
     try:
         sys.stdout.write(open(env["N1_FS"] + m.group(1)).read())
@@ -1463,6 +1468,22 @@ def test_n2_custody_leaves_a_run_to_its_runners_own_custody_until_the_runners_ke
     assert n2.round_().returncode == 0 and n2.names("pushed") == [left.name, old.name]
     keys[mine].unlink()
     assert n2.round_().returncode == 0 and n2.names("pushed") == [mine.name, left.name, old.name]
+
+
+@N2_CUSTODY
+def test_n2_custody_waits_on_a_job_an_earlier_round_left_running_and_never_deletes_it(tmp_path):
+    """A round whose ssh dropped leaves its Job running on node 1, still pushing node 1's copy. The next round deleted that Job, push
+    and all, and rsynced under it; it waits on it instead, and the marker that Job writes comes home only over node 2's files."""
+    n2 = _n2_custody(tmp_path)
+    d = n2.run("r20261003-100001-0001", {"state": "done"})
+    n2.job_err({d.name: "Job not done in 30 min"})
+    assert n2.round_().returncode == 1 and n2.calls().count(f"delete job n2-custody-{d.name}") == 1
+    n2.job_err({})
+    again = n2.round_(ACTIVE_JOB=d.name)
+    assert again.returncode == 0 and n2.names("pushed") == [d.name] and CU.marker_problem(d) is None
+    assert f"node 1's Job n2-custody-{d.name}, from an earlier round, has not finished: waiting on it" in again.stdout
+    calls = n2.calls()
+    assert calls.count(f"{d}/ n1.invalid") == 1 and calls.count(f"delete job n2-custody-{d.name}") == 1 and " n1.invalid true &&" in calls
 
 
 @N2_CUSTODY
