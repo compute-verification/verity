@@ -10,7 +10,8 @@ team. Their proof, `band_graded_meets_family`, is checked here and assumes nothi
 `chainExPostFactoG_v6`, as for `BandMultiMeetsFamily`.
 
 **The point.** `BandMultiMeetsFamily`'s band: `N` segments (`1 ≤ N ≤ 2^64`) of `2^9` blocks of 64 KiB, in-degree
-`d ≥ 5`, capacity 512, both salt layouts, `D = 5`, `Q = 2^20`, `ε = 2^-128`, `δ = 1%`, with up to `t` late rounds:
+`d ≥ 5`, capacity 512, both salt layouts, `D = 5`, `Q = 2^20`, `ε = 2^-128`, `δ = 1%`, with up to `t` late rounds, each
+within a hard bound `(D_late, Q_late)` with `5 ≤ D_late ≤ d`, `D_late < 2^9` and `Q_late ≥ 2^20`:
 
 | `t` | `k` | `P[Bin(k, 0.95923) ≥ k − t]` |
 |-----|-----|------------------------------|
@@ -31,7 +32,24 @@ recipe of `Family.lean` and a union exponent that grows with `k`:
 Lowering `β` by at most `22,029` bits (`N ≥ 2`) and `2,829` bits (`N = 1`) keeps `p₀ ≤ 95923/100000` in both cases
 (`p₀_fam_le`, `p₀_one_le`; at `N = 1` and `k = 300` with 15 bits to spare), and `binTail_mono` replaces `p₀` by
 `95923/100000`. At `t = 0` and `k = 111` the statement is `BandMultiMeetsFamily`'s, by
-`gradedMeets_zero_iff`.
+`gradedMeets_zero_iff` (`D = 5 ≤ D_late`, `Q = 2^20 ≤ Q_late`).
+
+**The deployment condition: the window is too short to re-encode `C`.** The certificate holds at every
+`(D_late, Q_late)` (`band_graded_fam_dom`); the conditions on `D_late` are what makes the game's `S`-bit state a model
+of storage at rest (`Graded/Game.lean`), so `BandGradedMeetsFamily` carries them as hypotheses. Block `v` of a segment
+absorbs its `min(v mod 2^9, d)` newest parents, newest first, then the pad, so it takes `min(v mod 2^9, d) + 1`
+sequential `Π₂` calls even with every parent held, and block `v + 1`'s chain starts from `C_v`. Re-encoding a segment
+from `W` therefore takes `R(d) = Σ_{v < 2^9} (min(v, d) + 1)` sequential calls, at least `R(5) = 3,057`.
+- `D_late ≤ d` is the band's cliff (`PROTOCOL.md`, "Deployment condition, the cliff") applied to `Δ_late`: at
+  `D_late = d + 1` the gap attack rebuilds, within one late round, every dropped block whose parents are held. With
+  `D_late ≤ d` a late round, like an on-time one, rebuilds no block at a segment position `≥ d`. At the deployed
+  `d = 12` it is `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14 ms`, the bound `band.check_deployment` already puts on `Δ`.
+- `D_late < 2^9` bounds the late rounds when `d ≥ 2^9 − 1`, where the band is the complete DAG and `D_late ≤ d` alone
+  would let one late round re-encode a whole segment (`R = 2^9·(2^9 + 1)/2 = 131,328` calls).
+- With both, the window of every row of the table, `k − t` rounds of `D = 5` and `t` of `D_late`, is at most
+  `240·5 + 3·511 = 2,733 < 3,057 ≤ R(d)` sequential calls, for every `d ≥ 5`: too short to re-encode a segment from
+  `W`.
+- `Q_late` is any work bound at least `Q`: re-encoding is limited by its depth, not its width.
 -/
 
 namespace PousGraded
@@ -42,21 +60,26 @@ open scoped ENNReal
 /-! ## Statements (DRAFT) -/
 
 /-- DRAFT. The `N`-segment band under the implementation's per-segment tags, with `k` rounds of which up to `t` may be
-late. -/
-def ChainBandGradedMeetsSeg (N : ℕ) [NeZero N] (d k t : ℕ) : Prop :=
+late, each late round within `(D_late, Q_late)`. -/
+def ChainBandGradedMeetsSeg (N : ℕ) [NeZero N] (d D_late Q_late k t : ℕ) : Prop :=
   ∀ salt : Bits 192,
-    GradedMeets (chainBandSeg N (2 ^ 9) d 524288 512 (segDom salt (2 ^ 9))) 5 (2 ^ 20) k t ((2⁻¹ : ℝ≥0∞) ^ 128)
+    GradedMeets (chainBandSeg N (2 ^ 9) d 524288 512 (segDom salt (2 ^ 9))) 5 (2 ^ 20) D_late Q_late k t
+      ((2⁻¹ : ℝ≥0∞) ^ 128)
 
 /-- DRAFT. The same with one global salt and global indices. -/
-def ChainBandGradedMeetsSegGlobal (N : ℕ) [NeZero N] (d k t : ℕ) : Prop :=
+def ChainBandGradedMeetsSegGlobal (N : ℕ) [NeZero N] (d D_late Q_late k t : ℕ) : Prop :=
   ∀ salt : Bits 256,
-    GradedMeets (chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) 5 (2 ^ 20) k t ((2⁻¹ : ℝ≥0∞) ^ 128)
+    GradedMeets (chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) 5 (2 ^ 20) D_late Q_late k t
+      ((2⁻¹ : ℝ≥0∞) ^ 128)
 
-/-- DRAFT. **The band with grace `t`**: for every `1 ≤ N ≤ 2^64`, `d ≥ 5` and `(t, k)` in the table, both layouts. -/
+/-- DRAFT. **The band with grace `t`**: for every `1 ≤ N ≤ 2^64`, `d ≥ 5`, hard bound `(D_late, Q_late)` with
+`5 ≤ D_late ≤ d`, `D_late < 2^9` and `2^20 ≤ Q_late`, and `(t, k)` in the table, both layouts. The conditions on
+`D_late` are the deployment condition (the module docstring): the audit's window is too short to re-encode `C`. -/
 def BandGradedMeetsFamily : Prop :=
   ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 5 ≤ d →
+    ∀ D_late Q_late : ℕ, 5 ≤ D_late → D_late ≤ d → D_late < 2 ^ 9 → 2 ^ 20 ≤ Q_late →
     ∀ tk ∈ ([(0, 111), (1, 160), (2, 203), (3, 243)] : List (ℕ × ℕ)),
-      ChainBandGradedMeetsSeg N d tk.2 tk.1 ∧ ChainBandGradedMeetsSegGlobal N d tk.2 tk.1
+      ChainBandGradedMeetsSeg N d D_late Q_late tk.2 tk.1 ∧ ChainBandGradedMeetsSegGlobal N d D_late Q_late tk.2 tk.1
 
 /-! ## The union term at any `k ≤ 1000` -/
 
@@ -155,11 +178,11 @@ theorem binTail_243_3 : binTail 243 3 (ENNReal.ofReal (95923 / 100000)) ≤ ENNR
 /-! ## The certificate -/
 
 /-- **The `N`-segment band with grace `t` at `k ≤ 300` rounds, for every domain injective on its blocks**, whenever
-`P[Bin(k, 95923/100000) ≥ k − t] ≤ 1%`. Unconditional. -/
+`P[Bin(k, 95923/100000) ≥ k − t] ≤ 1%`, at every hard bound `(D_late, Q_late)`. Unconditional. -/
 theorem band_graded_fam_dom (N : ℕ) [NeZero N] (hN : N ≤ 2 ^ 64) (d : ℕ) (hd : 5 ≤ d) (dom : ℕ → Bits 512)
-    (hdom : Function.Injective (fun i : Fin (N * 2 ^ 9) => dom i)) (k t : ℕ) (hk : k ≤ 300)
+    (hdom : Function.Injective (fun i : Fin (N * 2 ^ 9) => dom i)) (D_late Q_late k t : ℕ) (hk : k ≤ 300)
     (hbin : binTail k t (ENNReal.ofReal (95923 / 100000)) ≤ ENNReal.ofReal (Params.δ : ℝ)) :
-    GradedMeets (chainBandSeg N (2 ^ 9) d 524288 512 dom) 5 (2 ^ 20) k t ((2⁻¹ : ℝ≥0∞) ^ 128) := by
+    GradedMeets (chainBandSeg N (2 ^ 9) d 524288 512 dom) 5 (2 ^ 20) D_late Q_late k t ((2⁻¹ : ℝ≥0∞) ^ 128) := by
   have hN1 : 1 ≤ N := Nat.one_le_iff_ne_zero.2 (NeZero.ne N)
   have hM := band_meets_fam_dom chainExPostFactoG_v6 N hN d hd dom hdom
   refine ⟨hM.1, hM.2.1, hM.2.2.1, hM.2.2.2.1, ?_⟩
@@ -184,7 +207,7 @@ theorem band_graded_fam_dom (N : ℕ) [NeZero N] (hN : N ≤ 2 ^ 64) (d : ℕ) (
 
 /-- **`BandGradedMeetsFamily`, proved** (unconditional). -/
 theorem band_graded_meets_family : BandGradedMeetsFamily := by
-  intro N _ hN d hd tk htk
+  intro N _ hN d hd D_late Q_late _ _ _ _ tk htk
   have hb : tk.2 ≤ 300 ∧
       binTail tk.2 tk.1 (ENNReal.ofReal (95923 / 100000)) ≤ ENNReal.ofReal (Params.δ : ℝ) := by
     simp only [List.mem_cons, List.not_mem_nil, or_false] at htk
@@ -193,8 +216,8 @@ theorem band_graded_meets_family : BandGradedMeetsFamily := by
     · exact ⟨by norm_num, binTail_160_1⟩
     · exact ⟨by norm_num, binTail_203_2⟩
     · exact ⟨by norm_num, binTail_243_3⟩
-  exact ⟨fun salt => band_graded_fam_dom N hN d hd _ (segDom_inj salt hN (by norm_num)) _ _ hb.1 hb.2,
+  exact ⟨fun salt => band_graded_fam_dom N hN d hd _ (segDom_inj salt hN (by norm_num)) D_late Q_late _ _ hb.1 hb.2,
     fun salt => band_graded_fam_dom N hN d hd _
-      (dom_inj salt (le_trans (Nat.mul_le_mul_right _ hN) (by norm_num))) _ _ hb.1 hb.2⟩
+      (dom_inj salt (le_trans (Nat.mul_le_mul_right _ hN) (by norm_num))) D_late Q_late _ _ hb.1 hb.2⟩
 
 end PousGraded

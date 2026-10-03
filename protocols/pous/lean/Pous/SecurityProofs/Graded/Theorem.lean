@@ -9,15 +9,17 @@ with the tail rule in place of the chain rule:
 
 `Pr[accept] ≤ (Σ_{j<k} B^j)·π + P[Bin(k, c) ≥ k − t]` for any `c ≤ 1` with `p₀ ≤ c`.
 
-A late round's program is unbounded, so the compressor cannot run it. It runs `cut` instead: the round's program
+A late round's program may exceed `(D, Q)`, so the compressor cannot run it. It runs `cut` instead: the round's program
 stopped after `D` rounds or `Q` queries. `cut` is `(D, Q)`-bounded (`cut_bounded`), and on a round that is on time it
 returns what the program returns (`cut_run`). So with `E`, `st` and the per-history compressor of `theorem1_ii_seq`
 built from the cut programs, `Pr[E] ≤ (Σ_{j<k} B^j)·π` as before, and off `E` each round's cut program is right with
 probability at most `p₀` given any history. When every answer is correct, a round whose cut program is wrong was late
 (`misses_le_late`), so accepting with at most `t` late rounds needs at most `t` misses, which
-`pr_hits_ge_le_binomial` bounds.
+`pr_hits_ge_le_binomial` bounds. The proof never runs a late program, so it holds for every hard bound
+`(D_late, Q_late)`: `GradedResponder.bounded` only restricts the responder.
 
-`gradedAuditSecure_zero_iff`: with no grace the graded audit is the sequential audit.
+`gradedAuditSecure_zero_iff`: with no grace the graded audit is the sequential audit, for `D ≤ D_late` and
+`Q ≤ Q_late`.
 -/
 
 namespace PousGraded
@@ -53,6 +55,10 @@ theorem cut_depth_work {α : Type} (dflt : α) (f : M.Qry → M.Ans) (p : Prog M
 
 theorem cut_bounded {α : Type} (dflt : α) (D Q : ℕ) (p : Prog M α) : (cut dflt D Q p).Bounded D Q :=
   fun ω => cut_depth_work dflt (M.answer ω) p D Q
+
+theorem bounded_mono {α : Type} {p : Prog M α} {D Q D' Q' : ℕ} (h : p.Bounded D Q) (hD : D ≤ D') (hQ : Q ≤ Q') :
+    p.Bounded D' Q' :=
+  fun ω => ⟨(h ω).1.trans hD, (h ω).2.trans hQ⟩
 
 /-- On a path within `(D, Q)` the stopped program returns what the program returns. -/
 theorem cut_run {α : Type} (dflt : α) (f : M.Qry → M.Ans) (p : Prog M α) :
@@ -129,13 +135,16 @@ theorem seqAnswers_cut {ℓ S B : ℕ} (f : M.Qry → M.Ans) (D Q : ℕ) (dflt :
 
 /-! ### Sanity: no grace is the sequential audit -/
 
-/-- **With `t = 0` the graded audit is the sequential audit.** A bounded responder is never late, and a graded
-responder that is never late answers as its stopped (bounded) form does. -/
-theorem gradedAuditSecure_zero_iff (sch : Scheme M) (S D Q k : ℕ) (δ ε : ℝ≥0∞) :
-    GradedAuditSecure sch S D Q k 0 δ ε ↔ AuditSecure sch .sequential S D Q k δ ε := by
+/-- **With `t = 0` the graded audit is the sequential audit**, at every hard bound `(D_late, Q_late)` at least
+`(D, Q)`. A bounded responder is a graded one and is never late, and a graded responder that is never late answers as
+its stopped (bounded) form does. -/
+theorem gradedAuditSecure_zero_iff (sch : Scheme M) (S D Q D_late Q_late k : ℕ) (hD : D ≤ D_late) (hQ : Q ≤ Q_late)
+    (δ ε : ℝ≥0∞) :
+    GradedAuditSecure sch S D Q D_late Q_late k 0 δ ε ↔ AuditSecure sch .sequential S D Q k δ ε := by
   constructor
   · intro h W A₁ A₂
-    refine le_trans (pr_mono fun x hx => ?_) (h W A₁ ⟨A₂.step⟩)
+    refine le_trans (pr_mono fun x hx => ?_)
+      (h W A₁ ⟨A₂.step, fun W pp j σ i => bounded_mono (A₂.bounded W pp j σ i) hD hQ⟩)
     simp only [seqAccepts] at hx
     simp only [gradedAccepts]
     refine ⟨(map_fst_gradedAnswers _ _ _ _ _ _ _).trans hx, ?_⟩
@@ -148,18 +157,18 @@ theorem gradedAuditSecure_zero_iff (sch : Scheme M) (S D Q k : ℕ) (δ ε : ℝ
     simp only [seqAccepts]
     exact (seqAnswers_cut _ _ _ _ _ _ _ _ (Nat.le_zero.1 hx.2)).trans hx.1
 
-theorem gradedMeets_zero_iff (sch : Scheme M) (D Q k : ℕ) (ε : ℝ≥0∞) :
-    GradedMeets sch D Q k 0 ε ↔ Meets sch .sequential D Q k ε := by
+theorem gradedMeets_zero_iff (sch : Scheme M) (D Q D_late Q_late k : ℕ) (hD : D ≤ D_late) (hQ : Q ≤ Q_late)
+    (ε : ℝ≥0∞) : GradedMeets sch D Q D_late Q_late k 0 ε ↔ Meets sch .sequential D Q k ε := by
   unfold GradedMeets Meets
-  rw [gradedAuditSecure_zero_iff]
+  rw [gradedAuditSecure_zero_iff sch _ D Q D_late Q_late k hD hQ]
 
 /-! ### Theorem 1(ii), graded -/
 
 /-- **Theorem 1(ii) for the graded audit.** As `theorem1_ii_seq`, with `P[Bin(k, c) ≥ k − t]` in place of `p₀^k`, for
-any `c ≤ 1` at least `p₀`. -/
-theorem theorem1_ii_graded (sch : Scheme M) (D Q β S k t : ℕ) (π c : ℝ≥0∞) (hc : c ≤ 1)
+any `c ≤ 1` at least `p₀`, at every hard bound `(D_late, Q_late)`. -/
+theorem theorem1_ii_graded (sch : Scheme M) (D Q β S k t : ℕ) {D_late Q_late : ℕ} (π c : ℝ≥0∞) (hc : c ≤ 1)
     (hp : ENNReal.ofReal (p₀ β S sch.B sch.ℓ) ≤ c) (hinc : TimedINC sch D Q β π) (W : Bits sch.n)
-    (A₁ : Preprocessor sch S) (A₂ : GradedResponder sch S) :
+    (A₁ : Preprocessor sch S) (A₂ : GradedResponder sch S D_late Q_late) :
     pr (gradedAccepts sch D Q k t W A₁ A₂) ≤
       (∑ j ∈ Finset.range k, (sch.B : ℝ≥0∞) ^ j) * π + binTail k t c := by
   classical
