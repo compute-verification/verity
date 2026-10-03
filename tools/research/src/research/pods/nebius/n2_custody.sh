@@ -17,8 +17,9 @@
 # here is the one node 1's copy had. A failure is logged with its reason
 # and retried every round, never given up, and the round exits 1, which systemd records (`systemctl --user status n2-custody`).
 # A round is bounded: at most VY_CUSTODY_MAX_RUNS pushes, none started after VY_CUSTODY_PASS_S seconds, runs that failed before
-# going last; the rest wait for the next. A run whose attempt node 1 already holds without a run record (the stopgap published it)
-# can never have .custody: the Job pushes that attempt, and the run is held for a person to waive its logs.
+# going last; the rest wait for the next. A failure no retry can mend is held, with the Job's line, for a person to decide: node 1
+# holds the run's attempt without a run record (the stopgap published it), R2 holds another attempt for its id (its runner's own),
+# or its attempt's run record lacks what the run dir holds now.
 # Only run dirs go home, never a row directory (3 Oct: the stopgap's row sync mirrored 1.2M files to node 1 and overran its window),
 # and a run dir over VY_CUSTODY_MAX_FILES files or VY_CUSTODY_MAX_GB GiB is held instead of mirrored: STATE/held/RUN says why, and the
 # round exits 1 while it is there. Move the bulk out of the run dir (or declare it elsewhere), then remove STATE/held/RUN.
@@ -135,7 +136,7 @@ with open(f"{d}/.custody.tmp", "w") as fh:
 EOF
 }
 
-push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 an attempt without a run record, else 1; why= says
+push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 held (hold= says what to decide), else 1; why= says
   local root=$1 dst=$2 r=$3 name force=
   [ "$4" = dead ] && force=--force
   timeout 1200 rsync -a --timeout=300 --rsync-path="sudo -n rsync" --chown=1000:1000 --mkpath "$root/$r/" "$N1:$dst/$r/" \
@@ -160,8 +161,23 @@ push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 an
   "volumes": [{"name": "workspace", "hostPath": {"path": "/workspace", "type": "Directory"}}]}}}}
 EOF
     why="node 1's Job: $(grep -v '^$' "$STATE/.job.err" | tail -1)"
-    grep -qs "names no run record" "$STATE/.job.err" && return 4
-    return 1
+    # what no retry can mend is held, with what a person decides (the line names the push's conflict beside verify's error)
+    case $why in
+      *RemoteConflict*|*"DIFFERENT attempt document"*)
+        hold="R2 already holds another attempt for $r (an attempt is write-once), so node 1's can never replace it; when its runner's own"
+        hold+=" custody pushed that one, $root/$r/.custody names its run record and what the record lacks. Take R2's copy into node 1's"
+        hold+=" store (\`research data reconcile-attempts $r --apply\` there); what R2's record lacks is only in this run dir: keep it, or"
+        hold+=" put it in the store (\`research data put --kind K --file P --preserve\`)" ;;
+      *"not in the run record"*|*"changed since it was taken"*)
+        hold="its attempt's run record, taken from an earlier copy of the run dir, lacks what the run dir holds now, and an attempt never"
+        hold+=" changes; the rest is on R2 with that record, the difference only in this run dir: keep it, or put it in the store"
+        hold+=" (\`research data put --kind K --file P --preserve\`)" ;;
+      *"names no run record"*)
+        hold="node 1's store holds its attempt without a run record (published before this custody), so it can never have .custody; the"
+        hold+=" Job pushed what node 1 holds. Label it \`custody waived\` (or fetch it whole)" ;;
+      *) return 1 ;;
+    esac
+    return 4
   fi
   # verify wrote it only with the attempt and its run record verified on R2, over node 1's copy as the rsync left it
   if ! ssh -n "$N1" "sudo -n cat $dst/$r/.custody" > "$root/$r/.custody.tmp"; then
@@ -226,7 +242,7 @@ for c in "${fresh[@]}" "${retry[@]}"; do
     src_ok=1
   fi
   tried=$((tried + 1))
-  why=
+  why= hold=
   push_run "$root" "$dst" "$r" "$state"
   rc=$?
   if [ "$rc" = 0 ]; then
@@ -234,9 +250,8 @@ for c in "${fresh[@]}" "${retry[@]}"; do
     rm -f "$STATE/failures/$r"
     log "$d ($camp, $state, $files files, $(human "$bytes")): on R2 with its run record, .custody back on node 2"
   elif [ "$rc" = 4 ]; then
-    echo "node 1 holds its attempt without a run record" > "$STATE/held/$r"
-    log "$d ($camp, $state): held: node 1's store holds its attempt without a run record (published before this custody), so it can" \
-      "never have .custody; the Job pushed what node 1 holds. Label it \`custody waived\` (or fetch it whole), then mv $STATE/held/$r $STATE/pushed/"
+    echo "$why" > "$STATE/held/$r"
+    log "$d ($camp, $state): held: $why. $hold; then mv $STATE/held/$r $STATE/pushed/"
   else
     n=$(( $(cat "$STATE/failures/$r" 2> /dev/null || echo 0) + 1 ))
     echo "$n" > "$STATE/failures/$r"
@@ -246,6 +261,6 @@ for c in "${fresh[@]}" "${retry[@]}"; do
 done
 [ "$left" = 0 ] || log "round bounded ($tried push(es) in ${SECONDS}s, at most $MAX_RUNS or ${PASS_S}s): $left run dir(s) left for the next round"
 held=$(ls "$STATE/held" | wc -l)
-[ "$held" = 0 ] || echo "$held run(s) held, not mirrored ($STATE/held/)"
+[ "$held" = 0 ] || echo "$held run(s) held for a person ($STATE/held/RUN says why)"
 [ "$failed" = 0 ] || log "$failed run(s) not yet on R2"
 [ "$failed" = 0 ] && [ "$held" = 0 ]

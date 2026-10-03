@@ -1381,7 +1381,7 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     assert first.returncode == 1 and f"{R['fails']} (c1, failed): push failed (1 so far): node 1's Job: Error: boom" in first.stdout
     assert n2.names("pushed") == [R["done"], R["dead"], R["preserved"]]
     assert n2.names("held") == [R["big"], R["legacy"]] and "2 run(s) held" in first.stdout
-    assert "held: node 1's store holds its attempt without a run record" in first.stdout
+    assert "the attempt names no run record. node 1's store holds its attempt without a run record" in first.stdout
     calls = n2.calls()
     assert f"{root}/{R['done']}/ n1.invalid:/n1/runs/{R['done']}/" in calls and R["fresh"] not in calls
     assert not [k for k in ("live", "retimed", "unread") if R[k] in calls], "a live run is never published as dead"
@@ -1401,6 +1401,39 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     for p in (state / "held").iterdir():
         p.rename(state / "pushed" / p.name)
     assert n2.round_().returncode == 0
+
+
+@N2_CUSTODY
+def test_n2_custody_holds_what_no_retry_can_mend_each_with_its_reason(tmp_path):
+    """A Job that fails the same way every round is held, with its line and what a person decides, and the rest are retried.
+    r20261003-174723-7ea5's runner pushed its attempt and run record, then lean-audit.log changed, and the stopgap published an
+    attempt without a run record on node 1: R2's write-once key refuses that, so waiving its logs is the wrong advice. An attempt
+    whose run record lacks what the run dir holds now never changes either."""
+    n2 = _n2_custody(tmp_path)
+    legacy, conflict, stale, differs, flaky = (n2.run(f"r20261003-10000{i}-000{i}", {"state": "failed"}) for i in range(1, 6))
+    lines = {legacy.name: f"{legacy.name}: NO custody on the remote: the attempt names no run record (published without custody)",
+             conflict.name: (f"{conflict.name}: NO custody on the remote: the attempt names no run record (published without custody); "
+                             f"push: RemoteConflict: attempts/{conflict.name}.json: remote holds 4171 bytes, local is 2655"),
+             stale.name: f"{stale.name}: NO custody on the remote: 0 file(s) not in the run record, 1 changed since it was taken: x.log",
+             differs.name: (f"{differs.name}: NO custody on the remote: not preserved on the remote: attempts/{differs.name}.json: the "
+                            "remote holds a DIFFERENT attempt document for this run id"),
+             flaky.name: "error: the server was unable to return a response in the time allotted"}
+    n2.job_err(lines)
+    first = n2.round_()
+    assert first.returncode == 1 and n2.names("held") == [legacy.name, conflict.name, stale.name, differs.name]
+    assert n2.names("failures") == [flaky.name] and "4 run(s) held" in first.stdout
+    for d in (legacy, conflict, stale, differs):
+        assert (n2.state / "held" / d.name).read_text() == f"node 1's Job: {lines[d.name]}\n"
+    said = {d.name: next(x for x in first.stdout.splitlines() if f"{d} (c1, failed): held: " in x) for d in (legacy, conflict, stale, differs)}
+    assert "Label it `custody waived`" in said[legacy.name] and "custody waived" not in said[conflict.name] + said[stale.name]
+    assert f"R2 already holds another attempt for {conflict.name}" in said[conflict.name] and f"{conflict}/.custody names its" in said[conflict.name]
+    assert f"`research data reconcile-attempts {conflict.name} --apply` there" in said[conflict.name]
+    assert "R2 already holds another attempt" in said[differs.name] and "lacks what the run dir holds now" in said[stale.name]
+    assert said[legacy.name].endswith(f"then mv {n2.state}/held/{legacy.name} {n2.state}/pushed/")
+    n2.job_err({})
+    again = n2.round_()
+    assert again.returncode == 1 and n2.names("pushed") == [flaky.name] and "4 run(s) held" in again.stdout
+    assert all(n2.calls().count(f"{d}/ n1.invalid") == 1 for d in (legacy, conflict, stale, differs)), "a held run is not retried"
 
 
 @N2_CUSTODY

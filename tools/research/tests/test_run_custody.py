@@ -576,6 +576,25 @@ def test_publish_force_takes_home_a_run_whose_runner_died_before_recording_an_en
     assert CU.has_custody(d) == (True, "on the remote (.custody)")
 
 
+def test_a_publish_that_the_remote_refuses_names_the_conflict_beside_the_missing_record(tmp_path, monkeypatch, capsys):
+    """r20261003-174723-7ea5: its runner's custody pushed the attempt and its run record, then a file of the run dir changed, and the
+    stopgap published an attempt without a run record on node 1, which the remote's write-once key refuses. n2_custody.sh holds a
+    run on the line `research data custody --publish` prints, so that line names the push's RemoteConflict too."""
+    from research.store import attempt as A
+
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    d = _fixture_run(tmp_path / "runs", "r20260925-010001-aaaa")
+    assert data_main(["custody", str(d), "--publish", "--keep-local", "--store", str(tmp_path / "runner")]) == 0
+    (d / "stdout.log").write_text("the workload's stdout, and a line after the record\n")
+    assert A.publish(d, store=LocalStore(tmp_path / "n1", config_path=tmp_path / "absent.toml"))["published"]
+    capsys.readouterr()
+    assert data_main(["custody", str(d), "--publish", "--keep-local", "--store", str(tmp_path / "n1")]) == 1
+    out = capsys.readouterr().out
+    assert "NO custody on the remote: the attempt names no run record" in out and "; push: RemoteConflict: " in out
+
+
 def test_a_launch_longer_than_the_default_custody_key_needs_an_explicit_ttl_capped_at_24h(capsys):
     assert cli._custody_ttl_problem(None, ["--timeout", "3600"]) is None
     assert "outlives the custody key's default lifetime (6h)" in cli._custody_ttl_problem(None, ["--timeout=30000"])

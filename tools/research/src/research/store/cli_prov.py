@@ -500,7 +500,7 @@ def cmd_custody(argv: list[str]) -> int:
             print(f"{rep['run_id']}: removed {len(ev['files'])} local file(s), {ev['evicted_bytes'] / 1e6:.1f} MB, preserved in {ev['artifact']} "
                   f"(`research data fetch {ev['artifact']} --to {d}` restores them; --keep-local keeps them)")
     else:
-        print(f"{rep['run_id']}: NO custody on the remote: {rep['error']}")
+        print(f"{rep['run_id']}: NO custody on the remote: {rep['error']}" + (f"; push: {pushed[0]}" if pushed else ""))
     return 0 if rep["preserved"] else 1
 
 
