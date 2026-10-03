@@ -46,51 +46,6 @@ section Setup
 
 open FlockSoundness.Refine
 
-set_option Elab.async false
-
-/-- `HmRow.check`'s mask range: unpacked, one slot of at least a word, inside the block. -/
-theorem hm_check_mask {c : Flock.Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.check c tags ls = .ok ()) :
-    ∀ r ∈ c.ranges.toList, r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ c.kLog := by
-  unfold HmRow.check at h
-  dsimp only at h
-  obtain ⟨_, hloop, -⟩ := ebind_ok h
-  clear h
-  rw [← Array.forIn_toList] at hloop
-  refine list_forIn_each _ (fun r => r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ c.kLog)
-    ?_ _ _ _ hloop
-  clear hloop
-  intro r s y hy
-  have hp : 1 ≤ nextPow2 r.count := Nat.one_le_two_pow
-  repeat' (first | (obtain ⟨_, hx, hy⟩ := ebind_ok hy; try (cases hx)) | (split at hy))
-  all_goals
-    simp only [pure, Except.pure, Except.ok.injEq] at hy
-    subst hy
-    refine ⟨fun hk => ?_, _, rfl⟩
-    simp only [hk, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, not_or, not_lt, not_and] at *
-    first
-    | omega
-    | (constructor; omega; nlinarith [Nat.one_le_two_pow (n := r.slotLog)])
-    | simp_all
-
-set_option maxHeartbeats 2000000 in
-/-- **`Stmt.setupH`'s mask slot is a slot of at least a word inside the block** (`HmRow.check`). -/
-theorem setupH_mask {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
-    {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
-    (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) :
-    (∀ r ∈ st.c.ranges.toList, r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ st.c.kLog) ∧
-      st.m = st.c.kLog + st.nbl := by
-  unfold Stmt.setupH at h
-  dsimp only at h
-  simp only [throw_bind', pure_bind] at h
-  repeat' walk_step
-  all_goals
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    obtain ⟨_, hc⟩ : ∃ ls, HmRow.check _ tags ls = .ok () := by
-      first | exact hm_parse_check (by assumption) | exact hm_parseTyped_check (by assumption)
-    exact ⟨hm_check_mask hc, rfl⟩
-
-
 /-- **The regions avoid the mask slot** (open, the setup's): at every link point, a region claim's `eq` weight vanishes on
 every mask-slot word. A region's subcube lies in the hm96 or output range whose slots it reads, and `HmRow.check` keeps
 that range's span apart from the mask range's word-aligned span. -/
