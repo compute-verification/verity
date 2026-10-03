@@ -13,6 +13,8 @@
   when a fold Match is on disk.  The ranks run the guarded-max FA2 tap build and every tap the manifest names the family of
   (``row_records.applicable_taps``), as the single-GPU row does.  A leased item's ``tp-commit`` holds the task's GPUs from right
   before its engine to its last run's finalize (``Row.run_gpu``, `pipeline.tp.lease`); such a row has no Match (its processes see no GPU).
+  With ``--replay-deferred 1`` every rank seals a replay bundle in place of its C2 replay and the Commit is PENDING until the
+  **replay** stage (CPU, ``tp-commit-replay``) replays every rank's bundle and decides it.
 
 A **config run** (``--config-run 1``, world 2 only: ``row.run_row`` refuses a larger one): the Build, the strict word check of its
 manifest over the W ranks' components, ONE instrumented ``tp-commit`` (``--pairs 1 --warmup 1 --only-arm instrumented --replay-k K``:
@@ -66,6 +68,7 @@ class TpRow(Row):
         self.cb, self.cm, self.ck_ = build, match, commit
         self.trap = False
         self.config_run = commit.config_run == "1"
+        self.replay_pending = False
 
     def run(self) -> int:
         try:
@@ -78,6 +81,9 @@ class TpRow(Row):
                 self.match()
             if stage_on(self.stages, "commit"):
                 self.commit()
+            if stage_on(self.stages, "replay"):
+                self.replay()
+                self.replay_pending = False
         except Stop as s:
             if self.config_run and self.trap:
                 RC.config_record(self)
@@ -85,7 +91,9 @@ class TpRow(Row):
         finally:
             if self.trap:
                 self.research_result()
-        if self.config_run:
+        if self.replay_pending:
+            self.log("Commit PENDING: every rank's C2 replay runs on CPU from its sealed bundle (`row stage replay`, `tp-commit-replay`)")
+        elif self.config_run:
             RC.config_record(self)
         self.tl("row", "end", ("ok", "true"))
         self.timeline_report()
@@ -363,6 +371,8 @@ class TpRow(Row):
         with open(f"{d}/row.log", "a") as f:
             f.writelines(ln[:400] + "\n" for ln in tagged[-16:])
         wall = int(time.time()) - t0
+        if self.commit_pending(rc_k, wall):
+            return
         if self.config_run:
             RC.commit_verdict(self, rc_k, wall)
             return
@@ -391,4 +401,42 @@ class TpRow(Row):
                        *arms, "--replay-workers", str(ck.replay_workers), "--label", self.row, "--out", f"{d}/commit")
         if not self.config_run and self.fold_profile and os.path.isfile(f"{self.M}/fold_match/tp2_fold_match.json"):
             cmd.append("--require-fold-match")
+        if ck.replay_deferred == "1":
+            cmd.append("--replay-deferred")
         return cmd + R.tap_source_args(taps, self.env) + (ck.extra_commit_args or "").split()
+
+    def commit_pending(self, rck: int, wall: int) -> bool:
+        """True when the Commit ran every check but the ranks' C2 replay, which it deferred to their sealed bundles (`--replay-deferred`,
+        `commit/replay_deferred.json`): the stage is PENDING until `replay` decides it."""
+        sm = R.load_json(f"{self.d}/commit/summary.json") or {}
+        bundles = (sm.get("replay_deferred") or {}).get("bundles") or []
+        if not (self.ck_.replay_deferred == "1" and rck == 0 and sm.get("pass") is None and bundles):
+            return False
+        self.verdict("commit", "PENDING", f"rc={rck} wall={wall}s {R.tp_commit_line(self.d)}; {len(bundles)} rank replay bundles sealed "
+                                          f"({', '.join(os.path.basename(b['path']) for b in bundles)})")
+        self.tl("stage.commit", "end", ("ok", "PENDING"), ("wall_s", wall))
+        self.replay_pending = True
+        return True
+
+    def replay(self) -> None:
+        """The deferred C2 of the Commit, on CPU (`tp-commit-replay`), from every rank's sealed bundle: each rank's shards composed from
+        the checkpoint of record at (world, rank) and opened against its committed weights root.  Its exit decides the stage."""
+        d = self.d
+        self.tl("stage.replay", "start")
+        why = (f"no deferred Commit in {d}/commit (commit/replay_deferred.json)" if not os.path.isfile(f"{d}/commit/replay_deferred.json") else
+               f"no checkpoint dir of record on this host (CK='{self.ck}')" if not (self.ck and os.path.isdir(self.ck)) else None)
+        rc, wall = 2, 0
+        if why is None:
+            t0 = int(time.time())
+            rc = self.run_tl("replay.tp_commit_replay", RC.REPLAY_TIMEOUT, f"{d}/replay.log", self.cli(
+                "tp-commit-replay", f"{d}/commit", "--checkpoint-dir", self.ck, "--checkpoints-manifest", self.path("manifests/checkpoints.json"),
+                "--model", self.repo, "--revision", self.rev))
+            wall = int(time.time()) - t0
+            why = None if rc == 0 else _tail_bytes(f"{d}/replay.log")
+        ok = "PASS" if rc == 0 else "FAIL"
+        self.verdict("replay", ok, f"rc={rc} wall={wall}s the ranks' C2 replay on CPU from their bundles" + (f": {why}" if why else ""))
+        self.tl("stage.replay", "end", ("ok", ok), ("wall_s", wall))
+        if ok != "PASS":
+            self.log("REPLAY FAIL -> stop")
+            self.tl("row", "end", ("ok", "false"), ("stopped_at", "replay"))
+            raise Stop(12)

@@ -123,6 +123,8 @@ def run_row(o: Run | Stage, stages: str) -> int:
             raise UsageError(f"--config-run 1: {o.row} runs at world {world}; the config run covers single-GPU and TP2 rows for now")
         if o.commit.group:
             raise UsageError(f"--commit-group: {o.row} is a tensor-parallel row; a grouped Commit is a single-GPU row's")
+        if o.commit.replay_deferred == "slim":
+            raise UsageError(f"--replay-deferred slim: {o.row} is a tensor-parallel row; the slim plan is a single-GPU Commit's (TP defers with 1)")
         return TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=stages, env=o.env, world=world, gpu_util=o.gpu_util,
                      nccl_p2p_disable=o.nccl_p2p_disable, build=o.build, match=o.match, commit=o.commit).run()
     from verity_vllm.pipeline.row_stages import SingleRow
