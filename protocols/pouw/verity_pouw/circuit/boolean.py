@@ -119,6 +119,16 @@ def up48(C, v):
     return m[:47] + [m[47] ^ m[48]] + add(C, e, [m[48]], width=16)     # 2^48 is 2^47 · 2
 
 
+def _add_about_b(C, a, b, c):
+    """a + b + c over equal widths, its carries written about b (`forms.maj`'s z = b, not the carry): an operand XORed into
+    every bit of b and c, such as a quotient bit, cancels in each sum bit instead of piling up in the carries."""
+    out = []
+    for x, y in zip(a, b):
+        out.append(x ^ y ^ c)
+        c = y ^ C.AND(x ^ y, c ^ y)
+    return out
+
+
 def sq_ceil(C, t, n):
     """``PouwSqCeil_v1``: up48(⌈64 t / n⌉), every bit set for n = 0."""
     num = [ZERO] * 6 + list(t)
@@ -127,7 +137,7 @@ def sq_ceil(C, t, n):
     for bit in reversed(num):
         neg = r[33]
         r = [bit] + r[:33]
-        r = add(C, r, [b ^ NOT(neg) for b in d], NOT(neg), width=34)
+        r = _add_about_b(C, r, [b ^ NOT(neg) for b in d], NOT(neg))
         q.append(NOT(r[33]))
     rem = add(C, r, [C.AND(r[33], b) for b in d], width=34)
     c = add(C, q[::-1], [or_reduce(C, rem[:32])], width=len(num) + 1)
