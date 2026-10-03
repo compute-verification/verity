@@ -814,7 +814,7 @@ useful    U/(α_A·α_B), glue
   - The six PoUW primitives the row units call (`PouwF32SqrtRn`, `PouwETilde`, `PouwBf16Neg`, `PouwSqAcc`, `PouwSqCeil`,
     `PouwSqGe`) have Boolean versions, the same functions on bits (`circuit.boolean`, `_v2`, traced from `forms` builders;
     their AND counts are pinned in circuit-check's `pins.json`). C-Flock's lowering maps a primitive id to a piece of its own
-    (`ir_lower.PIECES`) and has no entry for them yet, nor for core's `E4m3ToF32`, `F32ToE2m1Sat` and `BitAnd`.
+    (`ir_lower.PIECES`), which has entries for core's `E4m3ToF32`, `F32ToE2m1Sat` and `BitAnd` but none for these six yet.
   - The draw is `plan.tile_layout` (beside `ncp-v2`'s `plan.layout`, which is unchanged): one stratum per template,
     each tile at the W_ref it is given, and a drawn tile proved with its closure, its TM `Pc4RowA` units, and with its
     TN `Pc4RowB` units in the weight's Program, each once per plan (`Plan.proved_b`). It opens nothing.
