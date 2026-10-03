@@ -222,6 +222,75 @@ def test_prepare_refuses_a_moved_head_a_conflict_and_a_failing_lint_and_pushes_n
     assert _git(origin, "for-each-ref", "refs/heads/train-prep") == "" and "research-train" not in _git(main, "worktree", "list")
 
 
+def test_keep_both_imports_takes_ours_then_the_lines_theirs_adds():
+    from research.merge import keep_both_imports
+
+    text = "-- head\n<<<<<<< HEAD\nimport A\nimport B\n\n=======\nimport B\nfrom x import y\n\n>>>>>>> abc1234 (C)\nrest\n"
+    assert keep_both_imports(text) == "-- head\nimport A\nimport B\n\nfrom x import y\nrest\n"
+    assert keep_both_imports(text.replace("from x import y", "def f := 1")) is None
+    assert keep_both_imports("no conflict\n") is None and keep_both_imports("<<<<<<< HEAD\nimport A\n=======\n") is None
+
+
+def _files_branch(main: Path, name: str, files: dict[str, str]) -> str:
+    _git(main, "checkout", "-q", "-b", name, "main")
+    for path, text in files.items():
+        (main / path).write_text(text)
+    _git(main, "add", *files)
+    _git(main, "commit", "-q", "-m", name)
+    _git(main, "checkout", "-q", "main")
+    return _git(main, "rev-parse", name)
+
+
+def _origin_with(tmp_path: Path, main: Path, files: dict[str, str], prs: dict[int, dict[str, str]]) -> tuple[Path, dict[int, str]]:
+    """A bare `origin` holding main with ``files`` added, and pull request N's head adding ``prs[N]`` on that main."""
+    for path, text in files.items():
+        (main / path).write_text(text)
+    _git(main, "add", *files)
+    _git(main, "commit", "-q", "-m", "base")
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", str(origin))
+    _git(main, "remote", "add", "origin", str(origin))
+    heads = {n: _files_branch(main, f"pr{n}", f) for n, f in prs.items()}
+    _git(main, "push", "-q", "origin", "main", *[f"pr{n}:refs/pull/{n}/head" for n in prs])
+    return origin, heads
+
+
+def test_a_conflict_only_on_import_lines_keeps_both_sides_and_any_other_line_refuses(tmp_path, monkeypatch, capsys):
+    """Stacked PRs each adding a module to one root import list (old-circuits-and-proofs resolved #850, #857, #860, #861, #863
+    and #866 on FlockSoundness.lean by hand, 2 Oct): the train keeps ours, then the lines theirs adds, and says so in the
+    merge's `Imports:` trailer; a conflict holding any other line still refuses, and nothing is pushed."""
+    main, _feat, _tip = _repos(tmp_path)
+    tail = "\ntheorem t : True := trivial\n"
+    origin, heads = _origin_with(tmp_path, main, {"Root.lean": "import A\n" + tail}, {
+        8: {"Root.lean": "import A\nimport B\n" + tail, "B.lean": "def b := 1\n"},
+        9: {"Root.lean": "import A\nimport C\n" + tail},
+        10: {"Root.lean": "import A\n-- D's note\nimport D\n" + tail}})
+    monkeypatch.chdir(main)
+    pins = [f"{n}@{heads[n][:9]}" for n in (8, 9, 10)]
+    assert merge_main(["--train", "--prepare", "train-prep/i", *pins[:2], "--lint", "true"]) == 0, capsys.readouterr().err
+    assert _git(origin, "show", "train-prep/i:Root.lean") + "\n" == "import A\nimport B\nimport C\n" + tail
+    assert _git(origin, "log", "-1", "--format=%B", "train-prep/i").endswith("Imports: Root.lean")
+    assert "Imports:" not in _git(origin, "log", "-1", "--format=%B", "train-prep/i^1"), "#8 merged cleanly"
+    capsys.readouterr()
+    assert merge_main(["--train", "--prepare", "train-prep/j", *pins, "--lint", "true"]) == 1
+    assert "#10 does not merge onto the train so far (a conflict in Root.lean holds more than import lines)" in capsys.readouterr().err
+    assert _git(origin, "for-each-ref", "refs/heads/train-prep/j") == "" and "research-train" not in _git(main, "worktree", "list")
+
+
+def test_a_json_file_git_merges_into_a_repeated_key_refuses_the_train(tmp_path, monkeypatch, capsys):
+    """Two PRs pinning a record of the same name in one `lean-audit.json`, a few lines apart: git merges the lines cleanly into
+    an object with the key twice, which `json.loads` would read as the last one silently."""
+    main, _feat, _tip = _repos(tmp_path)
+    audit = '{\n  "pins": {\n    "a": 1,\n    "m": 5,\n    "z": 9\n  }\n}\n'
+    origin, heads = _origin_with(tmp_path, main, {"lean-audit.json": audit}, {
+        11: {"lean-audit.json": audit.replace('"a": 1,\n', '"a": 1,\n    "b": 2,\n')},
+        12: {"lean-audit.json": audit.replace('"m": 5,\n', '"m": 5,\n    "b": 3,\n')}})
+    monkeypatch.chdir(main)
+    assert merge_main(["--train", "--prepare", "train-prep/k", "11@" + heads[11][:9], "12@" + heads[12][:9], "--lint", "true"]) == 1
+    assert "merging #12 onto the train leaves lean-audit.json unparseable as JSON" in capsys.readouterr().err
+    assert _git(origin, "for-each-ref", "refs/heads/train-prep/k") == ""
+
+
 _RESULT = ("import json, os; d = os.environ['RESEARCH_RUN_DIR']; json.dump({'schema': 'research/result/v0.1', 'kind': 'check/v1', "
            "'run_id': os.environ['RESEARCH_RUN_ID'], 'workload_fingerprint': {}, 'validation': {'status': 'passed', 'checker': 't'}, "
            "'measurements': [], 'steps': [{'step': 'agree', 'status': '%s'}]}, open(d + '/result.json', 'w'))")
