@@ -87,6 +87,7 @@ BROKER_METHODS = ("auth.test", "chat.getPermalink", "chat.postMessage", "convers
 DIRECT_ONLY = ("usergroups.create", "usergroups.enable", "usergroups.update")        # `groups sync --apply`: the token itself
 BROKER_MAX_BODY = 65536                                                   # bytes of request JSON; the route refuses more (413)
 ERROR_CODE_RE = re.compile(r"^[a-z0-9_]{1,64}$")
+SCOPES_RE = re.compile(r"^[a-z0-9_.:]{1,64}(,[a-z0-9_.:]{1,64}){0,15}$")      # a not-ok answer's `needed`: chat:write,users:read
 EVERY = "every handle"
 DESCRIPTION_MAX = 140                                            # Slack's user-group description limit (description_too_long)
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
@@ -382,7 +383,9 @@ class Slack:
         if not isinstance(out, dict):
             raise SlackError(f"{method}: the answer is not a JSON object")
         if not out.get("ok"):
-            raise SlackError(f"{method}: {out.get('error', 'not ok')}" + (f" (needed scope {out['needed']})" if out.get("needed") else ""))
+            error, needed = out.get("error"), out.get("needed")     # echoed only when they are codes: an answer is not to be printed
+            raise SlackError(f"{method}: {error if isinstance(error, str) and ERROR_CODE_RE.fullmatch(error) else 'not ok'}"
+                             + (f" (needed scope {needed})" if isinstance(needed, str) and SCOPES_RE.fullmatch(needed) else ""))
         return out
 
     def _broker(self, method: str, args: dict[str, str]) -> dict:

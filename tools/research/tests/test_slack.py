@@ -318,6 +318,19 @@ def broker(fake, monkeypatch):
     return b
 
 
+def test_a_not_ok_answer_s_error_and_needed_scopes_are_echoed_only_as_codes():
+    answers = iter([{"ok": False, "error": "missing_scope", "needed": "chat:write,users:read.email"},
+                    {"ok": False, "error": "<html>refused dummy-verity-bot</html>", "needed": "see https://example.invalid/x\n"},
+                    {"ok": False, "error": "invalid_auth\n"}, {"ok": False, "error": 7}])
+    api = slack.Slack(TOKEN, transport=lambda url, data, headers: next(answers))
+    said = []
+    for _ in range(4):
+        with pytest.raises(slack.SlackError) as e:
+            api.call("auth.test")
+        said.append(str(e.value))
+    assert said == ["auth.test: missing_scope (needed scope chat:write,users:read.email)"] + ["auth.test: not ok"] * 3
+
+
 def test_the_transport_is_direct_with_a_token_and_the_broker_without_or_when_forced(monkeypatch):
     assert slack.via(TOKEN) == "direct" and slack.via(None) == "broker" and slack.via("") == "broker"
     monkeypatch.setenv("RESEARCH_SLACK_VIA", "broker")
