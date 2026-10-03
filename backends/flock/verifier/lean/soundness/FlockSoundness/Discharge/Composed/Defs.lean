@@ -10,15 +10,15 @@ import FlockSoundness.Discharge.ZkBind
   `ZkExec.sessionZC` at them is `ZkLink.batchedSessionZC` at the one-table plan (`sessionZC_planOf`).
 * `DecodesOnZK`, `simZ`, `execRefinesZK_on`: `DecodesZK`, `simAuditZK` and `execRefinesZK_one` at the law's draws only
   (as `Tables.DecodesOnJ` is on the public path), the simulated strategy carried into the compiled batched session.
-* `RunsZCAssembly` (item 4, open): with `TablesAtZKLive` (item 3), the coin server's record and its draw at each of the
-  law's draws, the decoder is right at the law's draws (`DecodesOnZK`).
+* `RunsZCAt`, `decodesOnZK_of_runsAt`: `ZkExec.RunsZC` at one draw, and the decoder at the law's draws from it there.
+* `RunsZCLiveAt` (open): `ZkExec.RunsZCLive` draw-wise, the form the composed headline consumes.
 * `CoinedSetup`, `coinedOf`, `CoinedOK`, `CoinedOfSetup` (new item, open): the `--zk` table of a draw as `ZkView`'s
   `Coined` tables at the executable's leaves, at each coin vector, and the structural facts Lemma B reads of them.
 -/
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game Audit Exec Refine Flock Model ZkSession ZkLink ZkExec
+open Game Audit Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
@@ -141,21 +141,58 @@ end On
 
 /-! ## The open pieces -/
 
-/-- **`RunsZC` assembled** (item 4, open): on public-output one-table inputs with untyped tags, given `TablesAtZKLive`
-(item 3), the coin server's record of the live session (`RecordsLiveZK`) and its draw at each of the law's draws
-(`DrawOkZK` at `L.draw ω`), the decoder is right at the law's draws for the compiled tables `tablesAtZK`
-(`DecodesOnZK`): each rep's `RepRun` on its stream and proof file, and the table's verdict on them. -/
-def RunsZCAssembly (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
+section Runs
+
+variable (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (I : Inputs)
+  (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
+  (opn : Finset (Fin n) → Reg → Array ByteArray → OpensZ 𝔽 D Sl)
+  (dec : Finset (Fin n) → Reg → ℕ → ByteArray → List Msg)
+  (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
+  (capOf : Finset (Fin n) → Reg → ByteArray → Fin 1 → Cap D)
+
+/-- **`RunsZC` at one draw** (`ZkExec.RunsZC`'s body at `S`): at every registration, on every live outcome flock-verify
+`--zk` accepts at draw `S`, each rep has a `RepRun` on its rounds along `shapeZ`, and the compiled table accepts at the
+two runs' ends. -/
+def RunsZCAt (S : Finset (Fin n)) : Prop :=
+  ∀ R (o : LiveOut mPts), AcceptsZK I (wr S R o) → ∃ pend : PendZ 𝔽 D Sl × PendZ 𝔽 D Sl,
+    PlaysCoin.RepRun (repZ A Hs T S R o.pts 0) (shapeZ (K := K) (D := D) T S R o.pts) (dec S R) o.rep0
+      (fin S R 0 o.proofs) pend.1 ∧
+    PlaysCoin.RepRun (repZ A Hs T S R o.pts 1) (shapeZ (K := K) (D := D) T S R o.pts) (dec S R) o.rep1
+      (fin S R 1 o.proofs) pend.2 ∧
+    accZ T S R (outZ Hs T S R (capOf S R o.rootB) pend (opn S R o.proofs)) = true
+
+omit [Fintype K] in
+theorem runsZC_iff_at : RunsZC A Hs T I wr opn dec fin capOf ↔ ∀ S, RunsZCAt A Hs T I wr opn dec fin capOf S :=
+  Iff.rfl
+
+omit [Fintype K] in
+/-- **The decoder at the law's draws from `RunsZC` at them** (`decodesZK_of_runsZC` at `L.draw ω` only). -/
+theorem decodesOnZK_of_runsAt {L : Law n} (h : ∀ ω, RunsZCAt A Hs T I wr opn dec fin capOf (L.draw ω)) :
+    DecodesOnZK A Hs T I wr opn dec (fun _ _ _ => true) fin capOf L := by
+  intro ω R
+  refine PlaysCoin.decodesOfRunsAt (outZ Hs T (L.draw ω) R) _ _ (opn (L.draw ω) R) (dec (L.draw ω) R)
+    (fin (L.draw ω) R) (capOf (L.draw ω) R) (repZ A Hs T (L.draw ω) R) fun o ho => ?_
+  obtain ⟨pend, h₀, h₁, hacc⟩ := h ω R o ho
+  obtain ⟨hl₀, hl₁⟩ := accZ_lig Hs T hacc
+  exact ⟨pend, _, _, repZCAt_spineAt A Hs (T (L.draw ω) R) o.pts 0 hl₀, h₀,
+    repZCAt_spineAt A Hs (T (L.draw ω) R) o.pts 1 hl₁, h₁, hacc⟩
+
+end Runs
+
+/-- **`RunsZCLive`, draw-wise** (the open piece; the shape the composed headline consumes): `ZkExec.RunsZCLive` with
+the coin server's draw and `RunsZC` at one draw `S` (`DrawOkZK … S → RunsZCAt … S`) in place of every draw's. It gives
+`RunsZCLive` (`RunsZCLiveAt.toLive`). -/
+def RunsZCLiveAt : Prop :=
+  ∀ {n mPts : ℕ} {Reg : Type} (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
-    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
-    (opn : ∀ (_ : Finset (Fin n)) (_ : Reg), Array ByteArray → OpensZ 𝔽 D Sl)
-    (dec : Finset (Fin n) → Reg → ℕ → ByteArray → List Msg) (one : Finset (Fin n) → Reg → ℕ → Bool)
-    (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
-    (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (L : Law n) : Prop :=
-  I.tags.typed = false → I.tags.hiddenOutputs = false → I.count ≤ 1 →
-    TablesAtZKLive (n := n) (mPts := mPts) (Reg := Reg) → RecordsLiveZK I dj wr →
-      (∀ ω, DrawOkZK I dj mPts (L.draw ω)) →
-      DecodesOnZK A Hs (tablesAtZK (Reg := Reg) dj y₀) I wr opn dec one fin capOf L
+    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript),
+    TablesAtZKLive (n := n) (mPts := mPts) (Reg := Reg) → TagsOk I → RecordsLiveZK I dj wr →
+    ∀ S, DrawOkZK I dj mPts S →
+    RunsZCAt (K := FlockLevel3.GF256) execArith hs512 (tablesAtZK (Reg := Reg) dj y₀) I wr
+      (opnAtZ (tablesAtZK dj y₀) I dj) (decAtZ (tablesAtZK dj y₀)) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) S
+
+theorem RunsZCLiveAt.toLive (h : RunsZCLiveAt) : RunsZCLive :=
+  fun I ht dj _ y₀ wr hT hO hR hD S => h I ht dj y₀ wr hT hO hR S (hD S)
 
 /-! ## The session's tables at the executable's leaves (new item, open) -/
 

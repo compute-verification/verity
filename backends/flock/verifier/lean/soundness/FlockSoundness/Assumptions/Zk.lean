@@ -13,7 +13,7 @@ namespace FlockSoundness.Assumptions.Zk
 open FlockSoundness
 
 /-- The salt hash keys Hm96 hiding at `2^-193` (`HashDerivedKey` at `ZkView.My`, `ZkView.saltHash`). -/
-def SaltHiding : Prop := HashDerivedKey Discharge.ZkView.My Discharge.ZkView.saltHash
+def HashDerivedKeyHm96 : Prop := HashDerivedKey Discharge.ZkView.My Discharge.ZkView.saltHash
 
 /-- Every pad of at most 40 columns is nonvanishing under `execArith` at `fOf PAD_C`. -/
 def PadNonvanishing40 : Prop :=
