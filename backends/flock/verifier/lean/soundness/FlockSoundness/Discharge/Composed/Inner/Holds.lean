@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.Composed.Defs
+import FlockSoundness.Discharge.Composed.Coined
 
 /-!
 # `innerOf_holds`: the honest prover's pads satisfy the inner proof's constraint at the draw

@@ -1,3 +1,4 @@
+import FlockSoundness.Discharge.Composed.Coined
 import FlockSoundness.Discharge.Composed.Setup
 import FlockSoundness.Assumptions.Zk
 

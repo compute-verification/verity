@@ -6,7 +6,7 @@ import FlockSoundness.Discharge.ZkBind
 /-!
 # A draw's `--zk` table: its coins and sizes
 
-What `coinedOf` (`Composed/Defs.lean`) and `innerOf` (`Composed/Inner.lean`) both read:
+What `coinedOf` (`Composed/Coined.lean`) and `innerOf` (`Composed/Inner.lean`) both read:
 
 * `CoinsZK`: a table's coin vector, the coins `refused_coins` reads (`β`, `ρ`) and the others (`rest`).
 * `RestZK`, `RestOf`: the other coins at a draw, every coin `verify --zk` draws for a rep, in its order: level 0's queries,

@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.Composed.Defs
+import FlockSoundness.Discharge.Composed.Coined
 import FlockSoundness.ZK.Complete
 
 /-!

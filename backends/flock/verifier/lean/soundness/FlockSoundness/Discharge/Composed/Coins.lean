@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.Composed.Defs
+import FlockSoundness.Discharge.Composed.Coined
 
 /-!
 # The coin facts of `CoinedOK`, from `Admits`
