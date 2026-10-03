@@ -409,15 +409,17 @@ def selection() -> dict[str, Any]:
         from vllm.model_executor.layers.fused_moe.activation import MoEActivation
         from vllm.model_executor.layers.fused_moe.config import FusedMoEConfig, FusedMoEParallelConfig, RoutingMethodType
         from vllm.model_executor.layers.fused_moe.oracle.fp8 import select_fp8_moe_backend
-        from vllm.model_executor.layers.quantization.utils.quant_utils import GroupShape, create_fp8_quant_key
+        from vllm.model_executor.layers.quantization.utils.quant_utils import GroupShape, create_fp8_quant_key, kFp8Dynamic128Sym
 
         cfg = FusedMoEConfig(num_experts=NUM_EXPERTS, experts_per_token=TOP_K, hidden_dim=HIDDEN, intermediate_size=MOE_I,
                              num_local_experts=NUM_EXPERTS, num_logical_experts=NUM_EXPERTS, activation=MoEActivation.SILU, device="cuda",
                              routing_method=RoutingMethodType.Renormalize, moe_parallel_config=FusedMoEParallelConfig.make_no_parallel(),
                              in_dtype=torch.bfloat16)
+        # the keys `Fp8MoEMethod` selects with (quantization/fp8.py:536-540): the refined block in the weight key, and kFp8Dynamic128Sym
+        # for the activations whatever the block (the Triton kernel quantizes them at the weight key's block_k); a (1, 64) activation
+        # key matches no backend
         backend, cls = select_fp8_moe_backend(config=cfg, weight_key=create_fp8_quant_key(static=True, group_shape=GroupShape(MOE_G, MOE_G)),
-                                              activation_key=create_fp8_quant_key(static=False, group_shape=GroupShape(1, MOE_G)),
-                                              allow_vllm_cutlass=False)
+                                              activation_key=kFp8Dynamic128Sym, allow_vllm_cutlass=False)
         rec["moe"] = {"backend": getattr(backend, "name", str(backend)), "experts": getattr(cls, "__name__", None)}
         rec["moe_ok"] = rec["moe"] == {"backend": "TRITON", "experts": "TritonExperts"}
     except Exception as e:  # noqa: BLE001
