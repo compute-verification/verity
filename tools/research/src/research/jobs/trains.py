@@ -7,8 +7,9 @@ the tip.  The reconcile cron (`reconcile(now)`, beside the expire-leases cron) l
             checked again (at most REBUILDS), before any gate: the gate's diff is main..tip, which GitHub's three-dot compare
             gives only while `main` is an ancestor.
   gate      `research merge`'s gate, ported: the Attempt `attempts/{run id}.json` of the job's run in the evidence store is a
-            `check` of exactly the tip, clean, done with rc 0, and every step `main`'s `merge_requires` asks for the change
-            (main..tip, `rule_touches`) passed in its result.  The worker's report of "passed" is never the verdict.
+            `check` of exactly the tip, clean, done with rc 0, its result is of a kind `main`'s declaration `produces` and not
+            in `research.merge.REFUSED_KINDS`, and every step `main`'s `merge_requires` asks for the change (main..tip,
+            `rule_touches`) passed in that result.  The worker's report of "passed" is never the verdict.
   land      `main` is moved to the tip with `force: false`, so GitHub itself refuses anything but a fast-forward; a refusal (a
             push in between) rebuilds the train too.
   sweep     then every open PR whose head is on `main` and whose base isn't `main` is closed with a comment naming the landing
@@ -34,7 +35,7 @@ import json
 import re
 from dataclasses import dataclass, field
 
-from ..merge import rule_touches
+from ..merge import REFUSED_KINDS, rule_touches
 from .model import DEFAULT_MAX_ATTEMPTS, JobService, Refused, check_line
 
 REPO = "danielreuter/verity"
@@ -51,6 +52,7 @@ TRAIN_TIMEOUT_S = 2 * 3600
 LEASE_MARGIN_S = 900
 TOOL_PY = "tools/check/tool.py"
 MERGE_REQUIRES = re.compile(r"merge_requires\s*=\s*(\{.*?\})\s*\)", re.S)
+PRODUCES = re.compile(r"produces\s*=\s*(\[.*?\])", re.S)
 TRAIN_STATES = ("regenerating", "checking", "landed", "would-land", "failed", "stuck", "refused", "cancelled")
 
 
@@ -140,7 +142,7 @@ class FakeGitHub:
 @dataclass
 class FakeStore:
     attempts: dict[str, dict] = field(default_factory=dict)     # attempts/{run id}.json
-    manifests: dict[str, dict] = field(default_factory=dict)    # an art id's manifest: a result's `meta`, a run record's `payload.files`
+    manifests: dict[str, dict] = field(default_factory=dict)    # an art id's manifest: a result's `kind` and `meta`, a run record's `payload.files`
     objects: dict[str, str] = field(default_factory=dict)       # objects/sha256/{hex}
 
     def run_file(self, run_id: str, path: str) -> str | None:
@@ -428,14 +430,29 @@ class TrainService(JobService):
         if st.get("state") != "done" or st.get("rc") != 0:
             return f"run {tr.run_id} is {st.get('state')} rc={st.get('rc')}"
         main = self.github.refs["main"]
-        m = MERGE_REQUIRES.search(self.github.tree(main).get(TOOL_PY, ""))
+        decl = self.github.tree(main).get(TOOL_PY, "")
+        p = PRODUCES.search(decl)
+        try:
+            kinds = json.loads(p.group(1)) if p else []
+        except ValueError:
+            return f"{TOOL_PY} on main has a produces this gate can't read"
+        art = (a.get("outputs") or {}).get("result")
+        result = self.store.manifests.get(art) if art else None
+        if art and not isinstance(result, dict):
+            return f"run {tr.run_id}'s result {art} isn't in the store"
+        kind = result.get("kind") if result else None
+        if kind in REFUSED_KINDS:
+            return f"run {tr.run_id}'s result is a {kind}, which no merge accepts"
+        if kind not in kinds:
+            what = f"'s result is a {kind}" if kind else f"'s result {art} has no kind" if art else " published no result"
+            return f"run {tr.run_id}{what}, and {TOOL_PY} on main produces {', '.join(kinds) or 'nothing'}"
+        m = MERGE_REQUIRES.search(decl)
         try:
             rules = json.loads(m.group(1)) if m else {}
         except ValueError:
             return f"{TOOL_PY} on main has a merge_requires this gate can't read"
         changed = sorted(self.github.changed(main, tr.tip))
-        steps = {s.get("step"): s.get("status") for s in
-                 (self.store.manifests.get((a.get("outputs") or {}).get("result") or "", {}).get("meta") or {}).get("steps", [])}
+        steps = {s.get("step"): s.get("status") for s in (result.get("meta") or {}).get("steps", [])}
         missing = [f"{step} {steps.get(step, 'absent')}" for step, rule in sorted(rules.items())
                    if rule_touches(rule, changed) and steps.get(step) != "passed"]
         return f"the change needs {', '.join(missing)} to have passed in run {tr.run_id}" if missing else None
