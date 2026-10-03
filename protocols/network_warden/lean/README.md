@@ -26,6 +26,7 @@ NetTiming/SecurityProofs/Advice.lean     Theorem 3 (the 2^A cap, one clock-sync 
 NetTiming/SecurityProofs/Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap, causality, seven bits
                                          per window opened, the composed statement) and its witnesses
 NetTiming/SecurityProofs/Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from inside X)
+NetTiming/SecurityProofs/PerWindow.lean  the last two over `m` whole windows: the factor per window and per link-window
 NetTiming/SecurityProofs/Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 lean-audit.json                the policy and pin records for tools/lean/audit.py
@@ -36,7 +37,7 @@ CheckAxioms.lean               one #print axioms line per pin, then the three pr
 lake exe cache get                                          # Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                                  # NetTiming (the default target)
 python3 ../../../tools/lean/audit.py .                      # Verity's Lean audit
-lake env lean CheckAxioms.lean                              # the axioms of the 47 pins and the 3 unpinned
+lake env lean CheckAxioms.lean                              # the axioms of the 51 pins and the 3 unpinned
 ~~~
 
 **Trusted without proof:** the statements in `NetTiming/Protocol/`, `NetTiming/Assumptions.lean` and
@@ -47,7 +48,7 @@ as `docs/…` and `internal/…` name the network-transparency project store, wh
 **The audit.** `tools/lean/audit.py` audits every declaration under `NetTiming`: allowed axioms (only `propext`,
 `Classical.choice` and `Quot.sound`), named assumptions, escapes, orphan files, the import layers (`NetTiming.Protocol`,
 `NetTiming.Assumptions` and `NetTiming.Guarantees` import only one another and Mathlib, never a proof), the dependency
-record, a kernel replay, and the 47 pins' records, whose meaning it follows through those three (`meaning`).
+record, a kernel replay, and the 51 pins' records, whose meaning it follows through those three (`meaning`).
 A changed record needs a named statement reviewer (Verity's `AGENTS.md`).
 
 ## The model
@@ -113,7 +114,7 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 
 ## The pins
 
-The 47 records in `lean-audit.json`. The 31 guarantees are pinned as `NetTiming.SecurityProofs.G`, each proved by the
+The 51 records in `lean-audit.json`. The 35 guarantees are pinned as `NetTiming.SecurityProofs.G`, each proved by the
 lemma of the same statement whose name it spells in UpperCamelCase (`SecurityProofs.CardFree` by `card_free`):
 
 - **Proposition 2** (`NetTiming.SecurityProofs.Occupancy`): `CardFree`, `CardLeftPacked`, `FillInjective`,
@@ -128,6 +129,9 @@ lemma of the same statement whose name it spells in UpperCamelCase (`SecurityPro
   `EncardDecodableLeConstantRate`.
 - **The ingress bound** (`NetTiming.SecurityProofs.Ingress`): `EncardIngressObsDecodableLe`, `EncardIngressDecodableLe`,
   `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`.
+- **Per window** (`NetTiming.SecurityProofs.PerWindow`): `EncardAccSeqsLeConstantRatePerWindow`,
+  `EncardDecodableLeConstantRatePerWindow`, `EncardIngressObsDecodableLePerWindow`,
+  `EncardIngressObsDecodableLeContentsPerWindow`.
 
 The 16 witnesses are pinned as lemmas, under their own names (`NetTiming.SecurityProofs.Sanity`, and the last three in
 `NetTiming.SecurityProofs.Schedule`):
@@ -147,14 +151,20 @@ ingress bound's statements were frozen before their proofs as well; the review o
 that added them (danielreuter/verity#894), and the review of the content versions is on the one stacked on it. The
 constant-rate Program's five statements and the definitions they read were frozen on `sorry` stubs and pinned before
 their proofs. Their statement review, on danielreuter/verity#949, gave GO with one change: the four counts take
-`n ≤ W·T`. All 47 pins are proved. The reference
+`n ≤ W·T`. The four per-window statements are frozen on `sorry` stubs and pinned, awaiting their statement review;
+the other 47 pins are proved. The reference
 implementation, `protocols/network_warden` (`verity_network_warden`), mirrors 19 of the pins and the three unpinned
 lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
 
 ## Modelling choices a statement reviewer checks
 
-1. **Steps are buckets across all of ∂X.** The note states Theorem 1 per link-window. The tree lemma is granularity-free,
-   and a per-window count follows by applying it to window chunks; that chunking is not stated.
+1. **Steps are buckets across all of ∂X.** The note states its bounds per link-window. The guarantees count steps, and
+   the per-window ones read the horizon of `m` whole windows of `T` buckets, `n = m·T`, each with its parent's
+   hypotheses at that horizon and no other: the shipped schedule's bound is `#Ac · (#Σ_sync · D^T)^m`
+   (`EncardAccSeqsLeConstantRatePerWindow`, `EncardDecodableLeConstantRatePerWindow`), and the ingress bound
+   `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment (`EncardIngressObsDecodableLePerWindow`, and its `Contents`
+   version). The factor per window is the bound's, not a count per window: content advice and an earlier window's sync
+   can first show in a later window, so one window may continue a given prefix in more than `#Σ_sync · D^T` ways.
 2. **The Program reads ingress up to and including step t.** The note's W1 lag allows only ingress before t. This is
    more permissive, so the bounds cover more Programs.
 3. **Theorem 3 counts all accepted sequences,** not only those a run produces, which makes it stronger and needs no
@@ -184,7 +194,7 @@ The ingress bound adds these:
     and W4 hold for every action, faults included, and complete statuses carry nothing.
 11. **One allocation per link, one bucket width.** Link `ℓ` has allocation `r ℓ` (`Allocated`) within the shared slot
     count `S`, and every link shares the step, a bucket of ∂X. Ingress links with different bucket widths are not
-    modelled; the per-link-window count `(r_in + 1)^T` follows by reading the product over steps and links.
+    modelled. Over `m` whole windows each link-window contributes `(r ℓ + 1)^T` (`EncardIngressObsDecodableLePerWindow`).
 12. **No Program, no clock.** The bound reads no Program and no advice: the outside sender chooses when frames arrive,
     so no clock pins ingress timing. Jitter on the inward release adds `D^n` (J, `D = 1` when tested ideal). W3's frame
     length and the FIFO rule are not used; the FIFO warden attains the bound (`EncardFifoGrids`, read for the ingress
