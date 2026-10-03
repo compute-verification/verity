@@ -138,9 +138,53 @@ def test_sm120_lifecycle_and_work_audit():
     assert res.audit.accepted and res.audit.profile.scheme == "pearl-c-sm120-v1"
 
 
+def test_the_cap_is_the_records(monkeypatch):
+    """ρ is the device record's: 1/1,000 on sm120 (Daniel, 9:43 AM PDT on 2 Oct; Lean `…Rev1Cap1000`), 1/400 on the H100,
+    at either record's prices, and Pearl-C4's own 1/400.  The certificate names it, and the credit, the tile rule and V-EX's
+    remedy all read it: a tile whose debit lies between the two caps fails on sm120, passes on the same record at 1/400,
+    and `volunteer` gives rows up for it on sm120 alone."""
+    from verity_pouw.audit import Epoch, Prover, Workload
+    from verity_pouw.schemes import pearl_c4
+
+    s, h = get("pearl-c-sm120-v1"), get("pearl-c-h100-v1")
+    assert (s.cap, h.cap, D.CAP, SM120_UNPROMOTED.cap) == (Fraction(1, 1000), Fraction(1, 400), Fraction(1, 400), Fraction(1, 1000))
+    assert C.PearlC(forming="v1", prices=C.SM120_PRICES).cap == Fraction(1, 400) == pearl_c4.PearlC4().cap
+    assert dict(s.certificate.parameters)["cap"] == "1/1000" and dict(h.certificate.parameters)["cap"] == "1/400"
+    assert s.certificate.hypotheses[0].startswith("TT_OUT(1/1000)") and "less than 99.9% of" in s.certificate.hypotheses[0]
+    assert h.certificate.hypotheses[0].startswith("TT_OUT(1/400)") and "less than 99.75% of" in h.certificate.hypotheses[0]
+    with pytest.raises(ValueError):
+        dataclasses.replace(SM120, cap=Fraction(1))
+
+    k = 128
+    sm = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=SM120)
+    at400 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=dataclasses.replace(SM120, cap=Fraction(1, 400)))
+    rows_a, rows_b = CV.rows_f32("cap", "A", 32, k), CV.rows_f32("cap", "B", 16, k)
+    work = Workload((Matmul(3, Shape(32, k, 16), 9),))
+    prover = Prover(sm, {9: rows_b})
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
+    tr = prover.prove(epoch, {3: rows_a})
+    splits = {9: W.Split(k)}
+    records = W.declare(sm, epoch, {3: rows_a}, {9: rows_b}, splits)
+    assert records == W.declare(at400, epoch, {3: rows_a}, {9: rows_b}, splits)
+    cells = 32 * 16 * W.cell_credit(sm, records[0])
+    assert W.work(sm, records)[1] == Fraction(999, 1000) * cells and W.work(at400, records)[1] == Fraction(399, 400) * cells
+
+    tile_credit = 16 * 16 * W.cell_credit(sm, records[0])
+    atoms = int(Fraction(1, 1000) * tile_credit / D.atom_units(SM120)) + 1
+    assert Fraction(1, 1000) * tile_credit < atoms * D.atom_units(SM120) <= Fraction(1, 400) * tile_credit
+    monkeypatch.setattr(D, "chain_debit", lambda a, b, device=None: (atoms, 0))
+    assert W.tile_cap(sm, records[0], [[0] * k] * 16, [[0] * k] * 16) == (atoms * 34, Fraction(1, 1000) * tile_credit)
+    beacon, before = Q.LATEST, Q.recorded_before(Q.LATEST)
+    out = W.audit(sm, epoch, prover, tr, splits, records, before, beacon, 2)
+    assert not out.audit.accepted and all("exceeds the cap" in v.reason for v in out.audit.verdicts if not v.ok)
+    assert W.audit(at400, epoch, prover, tr, splits, records, before, beacon, 2).audit.accepted
+    assert W.volunteer(sm, epoch, tr, records, {3: rows_a}, {9: rows_b}) != ({}, {})
+    assert W.volunteer(at400, epoch, tr, records, {3: rows_a}, {9: rows_b}) == ({}, {})
+
+
 def test_debit_replays_the_devices_atom():
     """sm120's flags are joint skips of its own atom replayed from scratch, and the debit prices a flagged atom-word at
-    atom.k + fadd/G."""
+    atom.k + fadd/G and a later +0 promotion at fadd."""
     def replay(a, b, skip):
         total = 0
         for g in range(0, len(a) // 32, SM120.g):
@@ -161,9 +205,10 @@ def test_debit_replays_the_devices_atom():
                     keeps |= skip
             assert {t for t in range(g, g + SM120.g) if flags[t]} == keeps
     assert D.atom_units(H100) == D.ATOM_UNITS == 40 and D.atom_units(SM120) == 34
-    assert D.debit_units(3, 2, device=SM120) == D.debit_units(3, 2, C.SM120_PRICES) == 3 * 34 + 2 * 40
+    assert D.debit_units(3, 2, device=SM120, zeros=5) == D.debit_units(3, 2, C.SM120_PRICES, zeros=5)
+    assert D.debit_units(3, 2, device=SM120, zeros=5) == 3 * 34 + 2 * 40 + 5 * 8
     other = dataclasses.replace(SM120, g=8, prices=dataclasses.replace(SM120.prices, fadd=16, forming_credited=60))
-    assert D.atom_units(other) == 34 and D.debit_units(3, 2, device=other) == 3 * 34 + 2 * 60
+    assert D.atom_units(other) == 34 and D.debit_units(3, 2, device=other, zeros=5) == 3 * 34 + 2 * 60 + 5 * 16
 
 
 @pytest.mark.parametrize("m,k,n", [(1, 128, 128), (128, 3584, 4608), (2048, 18944, 3584)])
@@ -177,7 +222,7 @@ def test_accounting_reads_the_record(m, k, n):
     assert s.credit_of(sh) < h.credit_of(sh)
     pr = Prices("test", fadd=16, bf16_mac=3, forming_credited=60, forming_a_only=5)
     o = C.PearlC(forming="v1", device=dataclasses.replace(SM120, g=2, prices=pr, standins=()))
-    chain = m * n * (k + 16 * (k // 64))
+    chain = m * n * (k + 16 * (k // 64 - 1))
     assert o.wref(sh) == chain + m * k * 32 + 3 * 64 * m * n + 65 * m * k
     assert o.credit_of(sh) == o.wref(sh) - 5 * m * k
     assert o.job_cost(n, k) == 65 * n * k + n * 32 * (k + 16 * (k // 64)) + 32 * 32 * (k + 16 * (k // 64)) + 16 * n * 32 * 32
@@ -213,7 +258,8 @@ def test_unpromoted_instance_and_accounting():
     assert "no promotion" in s.certificate.hypotheses[0]
     sh = Shape(128, 4096, 256)
     promoted = C.PearlC(forming="v1", device=SM120)
-    assert promoted.wref(sh) - s.wref(sh) == 128 * 256 * C.SM120_PRICES.fadd * (4096 // 128)
+    assert promoted.wref(sh) - s.wref(sh) == 128 * 256 * C.SM120_PRICES.fadd * (4096 // 128 - 1)
+    assert s.first_adds(sh) == 0 and promoted.first_adds(sh) == 128 * 256 * C.SM120_PRICES.fadd
     with pytest.raises(KeyError):
         get("pearl-c-sm120-unpromoted-v1")
     with pytest.raises(NotImplementedError):
