@@ -205,10 +205,56 @@ def CoinedSetup.Admits (C : CoinedSetup) (c : CoinsZK C.z.nC C.Rest) : Prop :=
 pin, and the public regions' values). -/
 def CoinedSetup.Valid (C : CoinedSetup) (w : Witness C.S.m) : Prop := C.S.Satisfies w
 
-/-- **The draw's `--zk` table as `Coined` tables** (open: the definition is the new item's to write, from what
-`verify --zk` sets up at the draw: its statement `Tz.S`, schedule, pads layout, inner code and the honest prover's
-level-0 code; the mask slot from the draw's executable statement `st`). -/
-noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup := sorry
+/-- A `--zk` table's sizes with the rank check's `RANK_POINTS` claim points over `nMask` mask words. -/
+def withMask (z : ZkView.Sizes) (nMask : ℕ) : ZkView.Sizes := { z with nC := Zk.RANK_POINTS, nMask }
+
+/-- **The refinement of a `--zk` table that its coins do not fix**: the hidden-value and value-list types, the type of
+the coins other than `β`, `ρ` and the claim points (the opened positions among them), one such coin, the other sizes,
+M1's level-0 `cols` and opened positions `pos`, and each coin vector's `Coined` table, whose `embed`, `β`, `ρ`, `eqw` and
+`Gp` `coinedOf` replaces by what the coins and M1's code fix. -/
+structure CoinedBody (S : Statement) (nMask : ℕ) where
+  Hi : Type
+  VL : Type
+  [addHi : AddCommGroup Hi]
+  [finHi : Fintype Hi]
+  [decHi : DecidableEq Hi]
+  Rest : Type
+  rest0 : Rest
+  sz : ZkView.Sizes
+  cols : ℕ
+  pos : Fin sz.nS → ℕ
+  T : CoinsZK Zk.RANK_POINTS Rest → ZkView.Coined FlockLevel3.GF256 (Witness S.m) Hi VL (withMask sz nMask)
+
+/-- **The draw's `--zk` table's refinement** (open: the new item's to write, from what `verify --zk` sets up at the draw:
+its statement `Tz.S`, schedule, pads layout, inner code and the honest prover's level-0 code, at the mask slot of the
+draw's executable statement `st`). -/
+noncomputable def bodyOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedBody Tz.S (maskWordsOf st).length := sorry
+
+/-- **The draw's `--zk` table as `Coined` tables**: `bodyOf`'s tables over `Tz.S`, with `RANK_POINTS` claim points over
+the mask slot's words (`maskWordsOf st`), reading their coins (`β`, `ρ`, the rank check's weights `eq(p_k, x)`, `embed`
+the inclusion of F128 in F256) and M1's padding columns at the opened positions, `κ·X̂_i + X̂_{2^cols + i}` at
+`κ = PAD_C`. -/
+noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
+  let B := bodyOf Tz st
+  letI := B.addHi
+  letI := B.finHi
+  letI := B.decHi
+  { S := Tz.S
+    Hi := B.Hi
+    VL := B.VL
+    Rest := B.Rest
+    z := withMask B.sz (maskWordsOf st).length
+    maskWords := fun x => (maskWordsOf st).getD x.val 0
+    T := fun c =>
+      { B.T c with
+        embed := FlockLevel3.embed
+        β := fun r => fOf (c.beta r)
+        ρ := fun r i => if i = 0 then FlockLevel3.GF256.of (c.rho r).1 else FlockLevel3.GF256.of (c.rho r).2
+        eqw := fun k x => fOf (eqWord (c.points k) ((maskWordsOf st).getD x.val 0))
+        Gp := fun q i => fOf Zk.PAD_C * execArith.Xhat i.val (B.cols + 1) (execArith.omega (B.pos q))
+          + execArith.Xhat (2 ^ B.cols + i.val) (B.cols + 1) (execArith.omega (B.pos q)) }
+    cols := B.cols
+    pos := B.pos }
 
 /-- **The structural facts Lemma B reads**, of a `CoinedSetup` at the arithmetic `A` and M1's padding constant `κ`: M1's
 level-0 padding geometry (`cols ≤ 40`, `t_pad ≤ 2^cols`, at most `t_pad` distinct opened positions inside
@@ -244,10 +290,6 @@ def CoinedOfSetup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finse
     (∀ x, (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).maskWords x = (maskWordsOf y.x.st).getD x 0) ∧
     Nonempty (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).Rest ∧
     CoinedOK execArith (fOf Zk.PAD_C) (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st)
-
-theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) : CoinedOfSetup (Reg := Reg) I dj y₀ := by
-  sorry
 
 /-- **Zero knowledge at a `CoinedSetup`, at `δ₁` per hidden leaf** (Lemma B, `ZkWireFixed`'s form at one table): at any
 coin vector the honest prover doesn't refuse, for any encoding `enc` of the view (the proof files) and any event `E`, the real view
