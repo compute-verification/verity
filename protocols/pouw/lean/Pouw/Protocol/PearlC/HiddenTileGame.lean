@@ -45,8 +45,12 @@ def BoundedByInduced {O : Type} (Cls : Transcript → O → (g : Verity.Game Boo
   C-Flock, the hm96-binding step: the rows the proof speaks of are `τ`'s under `o`, with L3 and L8).
 
 An empty `Cls` makes a `TileGame` trivial to give (`Bad` everything), as an empty class makes `TileProofSoundAll`
-vacuous (`HiddenAudit`'s docstring), so one says something about a proof system only beside the theorem that the honest
-prover's induced strategies are in its `Cls`. -/
+vacuous (`HiddenAudit`'s docstring). So a `TileGame` says something about a proof system only when `Cls` is the proof
+system's own class of single-game strategies, stated without reading which of `τ`'s tiles are good (C-Flock's: every
+collision finder built from the strategy meets `cr/sha-512` or `ecr/sha-512` at `q`), and only beside the theorem that
+the honest prover's induced strategies are in it. Holding the honest prover is not enough: the strategies of games that
+are no bad tile's proof game hold it, and give a `TileGame` for every tile at `ηzk = 0` with `Bad` the tile being bad,
+and so `GγHidden` from `GγSampled` with no proof system (the red team's F2 on #919). -/
 structure TileGame [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (TR : TileRules Q R S)
     (HA : HiddenAudit Q R S)
     (Cls : Transcript → HA.Opening → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop) (ηzk : ℕ → ℝ)
