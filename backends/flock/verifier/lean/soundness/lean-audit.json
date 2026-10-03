@@ -9924,6 +9924,8 @@
    "assumptions": [],
    "type_hash": "f7e115cd41fd17353112e2538f83cb14c8306506584e66399c19b404d0a998f5"
   },
+  "FlockSoundness.Discharge.ZkLink.drawFileZK_of_toJson": {},
+  "FlockSoundness.Discharge.ZkLink.ofJson_toJson_drawOf": {},
   "FlockSoundness.Discharge.ZkLink.drawOkZK_of_exec": {
    "signature": [
     "FlockSoundness.Discharge.ZkLink.drawOkZK_of_exec {n : Nat} (I : FlockSoundness.Discharge.Exec.Inputs)",
