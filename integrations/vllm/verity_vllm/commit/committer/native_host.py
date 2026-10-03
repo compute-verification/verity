@@ -166,8 +166,8 @@ class _DeviceArena:
         return blk
 
     # P0 (R13) backpressure: the ring never grows past its preallocation while a fitting block is merely BUSY; the serving thread waits for
-    # the worker to release one (the engine stalls instead of the collector OOMing).  Growth is allowed only when NO block of the ring can
-    # ever fit the request (a step larger than every block), or when VERITY_ARENA_GROW=1 restores the R12 behaviour.
+    # the worker to release one (the engine stalls instead of the collector OOMing).  Growth only when NO block of the ring can ever fit (a
+    # step larger than every block), with VERITY_ARENA_GROW=1 (R12), or `wait=False`: the worker, the only releaser, must not wait on itself.
     GROW = os.environ.get("VERITY_ARENA_GROW", "0").strip() in ("1", "true", "yes")
     WAIT_TIMEOUT_S = float(os.environ.get("VERITY_ARENA_WAIT_S", "600"))
 
@@ -178,14 +178,13 @@ class _DeviceArena:
                 best = i
         return best
 
-    def take(self, min_bytes: int = 0) -> Any:
+    def take(self, min_bytes: int = 0, *, wait: bool = True) -> Any:
         # best fit: the SMALLEST free block that holds the step (X-02: decode steps must not consume the prefill-sized block)
         with self._cv:
             best = self._best_free(min_bytes)
             if best >= 0:
                 return self.free.pop(best)
-            fits_any = any(b.numel() >= min_bytes for b in self.all)
-            if fits_any and not self.GROW:
+            if wait and not self.GROW and any(b.numel() >= min_bytes for b in self.all):
                 t0 = time.perf_counter()
                 while best < 0:
                     if not self._cv.wait(timeout=1.0):
@@ -1095,6 +1094,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             if dummy or getattr(scheduler_output, "total_num_scheduled_tokens", 0) == 0:
                 return orig_exec(scheduler_output, *a, **kw)
             me._end_step()                       # a step whose sample() we never saw
+            me._step_min_bytes = 0 if me.arena_explicit else me.step_min_bytes(   # X-02 as native_collect; an explicit ring is one size
+                int(scheduler_output.total_num_scheduled_tokens), len(getattr(scheduler_output, "num_scheduled_tokens", ()) or ()))
             me._begin_step()
             return orig_exec(scheduler_output, *a, **kw)
 
@@ -1166,8 +1167,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             src.on_step_begin()
         if self.arena is not None:
             t0 = time.perf_counter()
-            self._cur.arena = self.arena.take()
-            self._cur.cursor = 0
+            self._cur.arena = self.arena.take(int(getattr(self, "_step_min_bytes", 0) or 0))
             self.spans.add("acquisition", time.perf_counter() - t0, step=self._cur.step)
         if self.footprint is not None:
             self.footprint.event("begin_step", step=self._cur.step, arena_block_bytes=int(self._cur.arena.numel()) if self._cur.arena is not None else None,
@@ -1258,7 +1258,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             blocks = job.overflow + [(job.arena, job.cursor)]
             if len(blocks) > 1:                                   # overflow: concatenate the used parts into one block (rare; counted)
                 total = sum(u for _b, u in blocks)
-                cat = self.arena.take(total)
+                cat = self.arena.take(total, wait=False)          # the block that fits may be one this step holds
                 base = 0
                 for blk, used in blocks:
                     if used:
@@ -1273,7 +1273,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             used = job.cursor
             padded = -(-used // GPU_CHUNK_BYTES) * GPU_CHUNK_BYTES
             if padded > job.arena.numel():
-                big = self.arena.take(padded)
+                big = self.arena.take(padded, wait=False)
                 big[:used].copy_(job.arena[:used])
                 self.arena.release(job.arena)
                 job.arena = big
