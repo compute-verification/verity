@@ -31,6 +31,7 @@ from pathlib import Path
 
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.config import group, option
+from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.tp import config_run as TPC
 from verity_vllm.pipeline.tp import warmup as WU
 from verity_vllm.pipeline.tp.import_path import write_import_path_runtime
@@ -222,6 +223,109 @@ def query_population_gate(sr: dict | None, *, rank: int, required: bool) -> tupl
     return block, None
 
 
+def replay_gates(cblock: dict, sr_: dict, lk_: dict, ok: bool, why: str | None, *, rank: int, replay_on: bool, required: bool) -> tuple[bool, str | None]:
+    """The rank's C2 of record into its verdict, after the gates before it (in the rank's process, or from its bundle on CPU:
+    `pipeline.tp.commit_replay`).  [TP-08 / manbind MAN-06 O1, per rank] sampled exact replay result True AND boundary linkage True
+    on this rank; absence, a partial (a stratum not evaluated, an input not retained), population 0 or a mismatch = FAIL named.
+    [revb F-r17b-38 (i) / R17-3, per rank] the replay's POPULATION reconciled against Q(P) (population.query_checks) goes INTO the
+    verdict, fail closed, by the dense committer's rule -- not behind the gates above: a PASS-graded replay over a population that does
+    not reconcile (int-2 TP2 B1: 960 VUs outside Q(P) + 960 identities without rows per rank) is named."""
+    cblock["sampled_replay"] = ({k: v for k, v in sr_.items() if k not in ("strata", "trace")} | {"strata_n": len(sr_.get("strata") or {})}) if sr_ else None
+    cblock["boundary_linkage"] = lk_ or None
+    if replay_on and ok:
+        if sr_.get("result") is not True:
+            ok, why = False, f"sampled replay (C2 of record, rank {rank}): {sr_.get('grade') or 'not run'} -- {sr_.get('why') or sr_.get('error') or 'no result'}"
+        elif lk_.get("result") is not True:
+            ok, why = False, f"boundary linkage (rank {rank}): {lk_.get('why') or 'not run'}"
+    if replay_on:
+        qp_block, qp_fail = query_population_gate(sr_, rank=rank, required=required)
+        cblock["query_population"] = qp_block
+        if qp_fail is not None:
+            ok, why = False, (f"{why}; also: {qp_fail}" if not ok and why else qp_fail)
+    return ok, why
+
+
+def pin_gate(cblock: dict, wp_: dict, ok: bool, why: str | None, *, rank: int, required: bool) -> tuple[bool, str | None]:
+    """[manbind MAN-09 / COORD M-0614 (1), per rank] the WEIGHTS OF RECORD: every served shard's sha256 == the digest composed from the
+    pinned checkpoint by this rank's Program shard map; False -> FAIL named; absent with --required-manifest -> FAIL 'weights unpinned
+    (MAN-09)' (fail closed); --no-weights-pin only records that choice, the verdict still FAILs closed.  The pin is NOT behind the
+    earlier gates: a served shard that is not the checkpoint of record is the first-named fault even when its downstream symptoms
+    (match oracle mismatches at the first collective input) already failed the rank (measured b1_tp12 neg_flip_weight_r1: oracle 826
+    mismatches on rank 1 AND weights_pin False naming down_proj)."""
+    cblock["weights_pin"] = ({k: v for k, v in wp_.items() if k != "mismatched"} | {"mismatched": (wp_.get("mismatched") or [])[:8], "mismatched_n": len(wp_.get("mismatched") or [])}) if wp_ else None
+    if required:
+        pin_why = None
+        if wp_.get("result") is False:
+            first = ((wp_.get("mismatched") or [{}])[0]).get("served_name") if wp_.get("mismatched") else (wp_.get("missing") or [None])[0]
+            pin_why = f"weights of record (rank {rank}): {wp_.get('why')} (first: {first})"
+        elif wp_.get("result") is not True:
+            pin_why = f"weights unpinned (MAN-09, rank {rank}): {wp_.get('why') or 'no weights of record'}"
+        if pin_why is not None:
+            why = pin_why + (f"; also: {why}" if not ok and why else "")
+            ok = False
+    return ok, why
+
+
+def annotate_unreplayable(srs: list[dict], xr: dict, pair: int, xrank_families: set[str] | list[str]) -> None:
+    """[rev M-0349] self-describing record: the replay's unreplayable collective families name the pass that evaluated them."""
+    byf = xr.get("by_family") or {}
+    for sr in srs:
+        for u_ in (sr or {}).get("unreplayable") or []:
+            fam_ = str(u_.get("family"))
+            if fam_ in xrank_families:
+                u_["evaluated_by"] = {"pass": "cross_rank_collectives (TP-12, rev F-r16-18 / COORD ruling 27)", "result": xr.get("result"),
+                                      "picks": (byf.get(fam_) or {}).get("picks"), "equal": (byf.get(fam_) or {}).get("equal"),
+                                      "artifact": f"xrank_pair{pair}.json", "rule": "sampled strata over the committed collective outputs (>= per_stratum per site x kind x phase), not every VU"}
+
+
+def _query_population_component(rows: list[dict], replay_on: bool) -> dict:
+    """[revb F-r17b-38 (i)] the population reconciliation per rank, AND-ed, as a named component beside sampled_replay (read from the last
+    instrumented pair's per-rank blocks, where the gate wrote it into the verdict); None while a rank's replay is deferred."""
+    pr = _last_per_rank(rows)
+    qp_per_rank = {str(r_): (c.get("query_population") or None) for r_, c in pr.items()}
+    deferred = sorted(str(r_) for r_, c in pr.items() if (c.get("sampled_replay") or {}).get("grade") == "deferred")
+    return {"result": (None if not replay_on or not qp_per_rank or deferred else all(isinstance(b, dict) and b.get("ok") is True and not b.get("fail") for b in qp_per_rank.values())),
+            "per_rank": {r_: ({k: b.get(k) for k in ("present", "ok", "counts", "fail")} if isinstance(b, dict) else None) for r_, b in sorted(qp_per_rank.items())},
+            "rule": "population.query_checks.ok True on EVERY rank (R17-3 reconciliation against Q(P)); False / absent with a required manifest = the rank FAILs by name (F-r17b-38)",
+            "why": (None if not replay_on else (f"deferred: ranks {deferred} replay from their bundles" if deferred else None)
+                    or "; ".join(f"rank {r_}: {b.get('fail')}" for r_, b in sorted(qp_per_rank.items()) if isinstance(b, dict) and b.get("fail")) or None)}
+
+
+def annotate_value_correspondence(vc: dict | None, sr_comp: dict, lk_comp: dict, qp_comp: dict, wp_comp: dict, xr_comp: dict, fb_comp: dict,
+                                  *, replay_on: bool) -> dict:
+    """coverage.json's `value_correspondence` with the C2 of record's components on it: ``vc`` as the value check / Match record left it."""
+    vc = vc or {"method": "no value check / Match record this attempt", "result": None, "file": None, "components": {}}
+    comps = vc.setdefault("components", {})
+    comps["sampled_replay"], comps["boundary_linkage"] = sr_comp, lk_comp
+    comps["query_population"] = qp_comp
+    if qp_comp.get("result") is False and vc.get("result") is not False:
+        vc["result"] = False
+    comps["weights_pin"] = wp_comp
+    if wp_comp.get("result") is not True and vc.get("result") is True:
+        vc["result"] = False if wp_comp.get("result") is False else None
+    comps["cross_rank_collectives"] = xr_comp
+    if xr_comp.get("result") is False and vc.get("result") is not False:
+        vc["result"] = False
+    comps["fold_match_binding"] = {k: fb_comp.get(k) for k in ("result", "n_bindings", "n_recorder", "n_bad_bindings", "why", "rule")} | {"artifact": "fold_match_binding.json"}
+    if fb_comp.get("result") is False and vc.get("result") is not False:
+        vc["result"] = False
+    if replay_on:
+        comps["replay"] = {"result": sr_comp.get("result"), "reference": "see components.sampled_replay (manbind MAN-06 sampled exact replay, per rank)"}
+        both = (sr_comp.get("result") is True and lk_comp.get("result") is True)
+        if sr_comp.get("deferred"):
+            both = None
+            vc["result"] = False if vc.get("result") is False else None
+        else:
+            vc["result"] = (both and vc["result"]) if vc.get("result") is not None else (both if (sr_comp.get("result") is not None) else None)
+        vc["method"] = f"sampled-exact-replay({sr_comp.get('result') and 'complete' or (sr_comp.get('per_rank') and next(iter(sr_comp['per_rank'].values())).get('grade')) or 'not-evaluated'}, per rank) + boundary-linkage + " + str(vc.get("method"))
+        vc["c2_of_record"] = {"form": "A (sampled replay) per rank", "result": both, "rule": "MAN-06 O1: result true on EVERY rank and pair, else the Commit FAILs named"}
+    return vc
+
+
+#: summary.json's `sampled_replay`: the keys of components.sampled_replay it carries
+SR_SUMMARY_KEYS = ("result", "n", "sample", "population", "weights", "weights_self_consistent", "weights_pinned", "weights_note", "unreplayable", "per_rank", "per_run", "why")
+
+
 def _sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, dict]:
     """[TP-08 / manbind MAN-06, report M-0512 form (A) shape] `components.sampled_replay` {result, population, n, strata, seed, unreplayable,
     why, per_rank} and `components.boundary_linkage` {result, method, checked, why, per_rank}, folded over the ranks of the LAST
@@ -292,6 +396,10 @@ def _sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, 
                "checked": sum(int(l.get("pairs") or 0) for l in lks.values()), "linked": sum(int(l.get("linked") or 0) for l in lks.values()),
                "per_rank": {r_: {k2: l.get(k2) for k2 in ("result", "pairs", "linked", "why")} for r_, l in lks.items()},
                "why": (None if lk_ok else "; ".join(f"rank {r_}: {l.get('why') or 'no result'}" for r_, l in lks.items() if l.get("result") is not True) or "a rank of an earlier pair failed")}
+    deferred = sorted({str(r_) for p in pairs for r_, c in p.items() if (c.get("sampled_replay") or {}).get("grade") == "deferred"}, key=int)
+    if deferred:
+        for comp in (sr_comp, lk_comp):
+            comp.update(result=None, deferred={"ranks": deferred}, why=f"deferred: ranks {deferred} replay on CPU from their bundles (`verity-vllm tp-commit-replay`)")
     return sr_comp, lk_comp
 
 
@@ -349,6 +457,11 @@ class Options:
     replay_max: int = option("--replay-max", type=int, default=2000, help="cap on the stratified sample per rank (never below one VU per stratum)")
     replay_seed: int | None = option("--replay-seed", type=int, default=None, help="targeted seed (default: each rank's run root after commitment, O6)")
     replay_workers: int | None = option("--replay-workers", type=int, default=None)
+    replay_deferred: str | None = option("--replay-deferred", nargs="?", const="full", default=None, choices=("full",),
+                                         help="each rank's C2 sampled replay + boundary linkage do not run in its process: every rank of every instrumented run "
+                                              "seals a replay bundle (<out>/replay_bundle_p<pair>_rank<r>/, verity_vllm.pipeline.replay_bundle) and the Commit's "
+                                              "verdict stays PENDING (exit 0 when every check this process runs passes) until `verity-vllm tp-commit-replay <out>` "
+                                              "replays the bundles on CPU against the checkpoint and decides it as this process would have")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="[manbind MAN-09, COORD M-0614 (1)] the PINNED checkpoint snapshot (safetensors shards + config.json): each rank " "builds its weights of record from its rank Program's shard map (engine-free) and compares every served shard's sha256 " "to it right after register_weights; a difference FAILs named (rank, param). Required with --required-manifest unless " "--no-weights-pin (then the record says 'weights unpinned (MAN-09)' and the Commit FAILs closed)")
     checkpoints_manifest: str | None = option("--checkpoints-manifest", default=None, help="manifests/checkpoints.json (default: the repo's) -- the shard sha256s of record")
     checkpoint_model: str | None = option("--checkpoint-model", default=None, help="HF repo id selecting the checkpoints.json entry when --checkpoint-dir is not its local_path")
@@ -374,8 +487,11 @@ def main(args: Options) -> int:
     from verity_vllm.commit.challenge import challenge_positions
     from verity_vllm.commit.partition import require_partition
     from verity_vllm import protocol_options as PO
+    from verity_vllm.pipeline.tp import commit_replay as TPR
     if args.world is not None:
         args.tp = int(args.world)
+    if args.replay_deferred and (not args.required_manifest or args.no_sampled_replay):
+        raise SystemExit("--replay-deferred defers the ranks' sampled replay: it needs --required-manifest and no --no-sampled-replay")
     relabel = None
     if args.relabel_rank:
         a, b = args.relabel_rank.split(":")
@@ -605,6 +721,7 @@ def main(args: Options) -> int:
     WU.run(llm, lambda: run_workload(eng, va.throwaway_requests(eng, reqs, seed=200), sampling), out, args.committer, args.rpc_timeout)
 
     rows: list[dict] = []
+    bundles_of: dict[int, dict[int, dict | None]] = {}     # --replay-deferred: pair -> rank -> what its finalize wrote for its bundle
     tokens_ref = None
     all_pass = True
     xrank_pairs: list[dict] = []     # [TP-12] one verdict per instrumented pair
@@ -630,8 +747,11 @@ def main(args: Options) -> int:
             row["tokens_equal_ref"] = r["tokens"] == tokens_ref
             if arm != "control":
                 t_f = time.perf_counter()
-                fin = TPL.finalize(llm, args.rpc_timeout, f"work.pair{pair}.{arm}", last=pair == args.pairs - 1 and k == len(order) - 1 and not args.value_check)
+                fin = TPL.finalize(llm, args.rpc_timeout, f"work.pair{pair}.{arm}", last=pair == args.pairs - 1 and k == len(order) - 1 and not args.value_check,
+                                   defer={"out": str(out), "pair": pair} if args.replay_deferred else None)
                 t_ready = time.perf_counter() - t_f
+                if args.replay_deferred:
+                    bundles_of[pair] = {int(f["rank"]): (f.get("sampled_replay") or {}).pop("bundle", None) for f in fin}
                 if match_capture_dir is not None:
                     print("[tp2commit] match oracle (tp partials vs capture): " + "; ".join(
                         f"rank {f['rank']} {(f.get('match_oracle') or {}).get('verdict')} steps {(f.get('match_oracle') or {}).get('steps_compared')} tensors {(f.get('match_oracle') or {}).get('tensors')} "
@@ -729,45 +849,22 @@ def main(args: Options) -> int:
                                     f"match oracle: {mo.get('mismatch_n')} mismatching / {mo.get('missing_n')} missing in commit / {mo.get('not_in_oracle_n')} committed not in oracle "
                                     f"of {mo.get('tensors')} tensors (first: {(mo.get('mismatches') or mo.get('missing_in_commit') or mo.get('committed_not_in_oracle') or [None])[0]})")
                             ok, why = False, (f"{why}; also: {why_}" if not ok and why else why_)
-                        # [TP-08 / manbind MAN-06 O1, per rank] the C2 OF RECORD: sampled exact replay result True AND boundary linkage True on
-                        # this rank; absence, a partial (a stratum not evaluated, an input not retained), population 0 or a mismatch = FAIL named
                         srb = f.get("sampled_replay") or {}
                         sr_, lk_ = (srb.get("sampled_replay") or {}), (srb.get("boundary_linkage") or {})
-                        cblock["sampled_replay"] = ({k: v for k, v in sr_.items() if k not in ("strata", "trace")} | {"strata_n": len(sr_.get("strata") or {})}) if sr_ else None
-                        cblock["boundary_linkage"] = lk_ or None
-                        if replay_cfg is not None and ok:
-                            if sr_.get("result") is not True:
-                                ok, why = False, f"sampled replay (C2 of record, rank {rk}): {sr_.get('grade') or 'not run'} -- {sr_.get('why') or sr_.get('error') or 'no result'}"
-                            elif lk_.get("result") is not True:
-                                ok, why = False, f"boundary linkage (rank {rk}): {lk_.get('why') or 'not run'}"
-                        # [revb F-r17b-38 (i) / R17-3, per rank] the replay's POPULATION reconciled against Q(P) (population.query_checks) goes INTO
-                        # the verdict, fail closed, by the dense committer's rule -- not behind the gates above: a PASS-graded replay over a
-                        # population that does not reconcile (int-2 TP2 B1: 960 VUs outside Q(P) + 960 identities without rows per rank) is named
-                        if replay_cfg is not None:
-                            qp_block, qp_fail = query_population_gate(sr_, rank=rk, required=args.required_manifest is not None)
-                            cblock["query_population"] = qp_block
-                            if qp_fail is not None:
-                                ok, why = False, (f"{why}; also: {qp_fail}" if not ok and why else qp_fail)
-                        # [manbind MAN-09 / COORD M-0614 (1), per rank] the WEIGHTS OF RECORD: every served shard's sha256 == the digest composed
-                        # from the pinned checkpoint by this rank's Program shard map; False -> FAIL named; absent with --required-manifest ->
-                        # FAIL 'weights unpinned (MAN-09)' (fail closed); --no-weights-pin only records that choice, the verdict still FAILs closed
-                        wp_ = f.get("weights_pin") or {}
-                        cblock["weights_pin"] = ({k: v for k, v in wp_.items() if k != "mismatched"} | {"mismatched": (wp_.get("mismatched") or [])[:8], "mismatched_n": len(wp_.get("mismatched") or [])}) if wp_ else None
-                        if args.required_manifest is not None:
-                            # the pin is NOT behind the earlier gates: a served shard that is not the checkpoint of record is the first-named
-                            # fault even when its downstream symptoms (match oracle mismatches at the first collective input) already failed the
-                            # rank (measured b1_tp12 neg_flip_weight_r1: oracle 826 mismatches on rank 1 AND weights_pin False naming down_proj)
-                            pin_why = None
-                            if wp_.get("result") is False:
-                                first = ((wp_.get("mismatched") or [{}])[0]).get("served_name") if wp_.get("mismatched") else (wp_.get("missing") or [None])[0]
-                                pin_why = f"weights of record (rank {rk}): {wp_.get('why')} (first: {first})"
-                            elif wp_.get("result") is not True:
-                                pin_why = f"weights unpinned (MAN-09, rank {rk}): {wp_.get('why') or 'no weights of record'}"
-                            if pin_why is not None:
-                                why = pin_why + (f"; also: {why}" if not ok and why else "")
-                                ok = False
+                        required = args.required_manifest is not None
+                        if replay_cfg is not None and sr_.get("grade") == "deferred":
+                            # --replay-deferred: the gates after this point but the pin wait for the rank's replay from its bundle
+                            # (`pipeline.tp.commit_replay` applies them to this verdict); a rank that failed already is decided here
+                            cblock["sampled_replay"], cblock["boundary_linkage"] = sr_, lk_
+                            cblock["replay_deferred"] = {"pre": [ok, why], "bundle": RB.path(out, pair, rank=rk).name}
+                            ok, why = pin_gate(cblock, f.get("weights_pin") or {}, ok, why, rank=rk, required=required)
+                            if ok:
+                                ok, why = None, RB.PENDING
+                        else:
+                            ok, why = replay_gates(cblock, sr_, lk_, ok, why, rank=rk, replay_on=replay_cfg is not None, required=required)
+                            ok, why = pin_gate(cblock, f.get("weights_pin") or {}, ok, why, rank=rk, required=required)
                         cblock["commit_pass"], cblock["commit_fail_reason"] = ok, why
-                        if not ok:
+                        if ok is False:
                             reasons.append(f"rank {rk}: {why}")
                         per_rank[rk] = cblock
                         if pair == 0:
@@ -832,21 +929,14 @@ def main(args: Options) -> int:
                             reasons.append(f"rank {rk}: {per_rank[rk]['commit_fail_reason']}")
                     for rk in per_rank:
                         per_rank[rk]["cross_rank_collectives"] = {k: xr.get(k) for k in ("result", "picks", "equal", "mismatch_n", "missing_n", "why")}
-                    # [rev M-0349] self-describing record: the replay's unreplayable collective families name the pass that evaluated them
                     try:
-                        byf = xr.get("by_family") or {}
-                        for f_ in fin:
-                            for u_ in ((f_.get("sampled_replay") or {}).get("sampled_replay") or {}).get("unreplayable") or []:
-                                fam_ = str(u_.get("family"))
-                                if fam_ in xrank_families:
-                                    u_["evaluated_by"] = {"pass": "cross_rank_collectives (TP-12, rev F-r16-18 / COORD ruling 27)", "result": xr.get("result"),
-                                                          "picks": (byf.get(fam_) or {}).get("picks"), "equal": (byf.get(fam_) or {}).get("equal"),
-                                                          "artifact": f"xrank_pair{pair}.json", "rule": "sampled strata over the committed collective outputs (>= per_stratum per site x kind x phase), not every VU"}
+                        annotate_unreplayable([((f_.get("sampled_replay") or {}).get("sampled_replay") or {}) for f_ in fin], xr, pair, xrank_families)
                         (out / f"finalize_pair{pair}.json").write_text(json.dumps(fin, indent=1, default=str) + "\n")
                     except Exception as e:  # noqa: BLE001
                         print(f"[tp2commit] unreplayable.evaluated_by annotate failed: {e!r}", flush=True)
                     skipped = [str((c.get("binding") or {}).get("skipped")) for c in per_rank.values() if (c.get("binding") or {}).get("skipped")]
-                    if pair == 0 or reasons:
+                    pending = sorted(rk for rk, c in per_rank.items() if c.get("commit_pass") is None)
+                    if pair == 0 or reasons or pending:
                         cov_ok = all((c.get("binding") or {}).get("coverage", {}).get("ok") for c in per_rank.values()) and not reasons
                         man_hdrs = {r: ((c.get("binding") or {}).get("population") or {}).get("manifest") for r, c in per_rank.items()}
                         cov = {"checker": ("verity/coverage/binding-r15-tp04 (verity_vllm.commit.binding per TP rank; population of record = manbind's required manifest "
@@ -886,7 +976,7 @@ def main(args: Options) -> int:
                                "openings_after_release": True, "collector_variant": "windowed", "retention": os.environ.get("VERITY_RETAIN", "host"),
                                "negatives_suite": "tp2_commit --omit-rank / --omit-rank-partials <r> / --omit-partial-site r:site / --flip-partial r:site (TP-12) / --serve-shard-from r:param:from (TP-10) / --relabel-rank a:b / --wrong-root-rank <r> / --no-tp-partials / --swap-requests r:ra:rb (this lane) + bind test_binding_negatives.py (BIND-01, TP1)",
                                "negatives": versions["negatives"],
-                               "reason": "; ".join(reasons) if reasons else None}
+                               "reason": "; ".join(reasons) if reasons else None, "replay_pending_ranks": [int(r_) for r_ in pending] or None}
                         (out / ("coverage.json" if pair == 0 else f"coverage_pair{pair}.json")).write_text(json.dumps(cov, indent=1, default=str) + "\n")
                     row["commit"] = {"tp_run_root": root.hex(), "world": world, "per_rank": per_rank, "root_combination": versions["root_combination"],
                                      "commitment_vector": [{"rank": int(f["rank"]), "run_root": f["run_root"], "leaves": f["leaves"], "steps": f["steps"]} for f in sorted(fin, key=lambda f: f["rank"])],
@@ -894,7 +984,8 @@ def main(args: Options) -> int:
                                      "leaves": sum(c["leaves"] for c in per_rank.values()), "bytes_bound": sum(c["bytes_bound"] for c in per_rank.values()),
                                      "tensors": sum(c["tensors"] for c in per_rank.values()),
                                      "openings": {"n": sum(c["openings"]["n"] for c in per_rank.values()), "verified": sum(c["openings"]["verified"] for c in per_rank.values())},
-                                     "t_ready_after_run_s": t_ready, "commit_pass": not reasons, "commit_fail_reason": "PASS" if not reasons else "; ".join(reasons)}
+                                     "t_ready_after_run_s": t_ready, "commit_pass": False if reasons else (None if pending else True),
+                                     "commit_fail_reason": "; ".join(reasons) if reasons else (RB.PENDING if pending else "PASS")}
                     if reasons:
                         all_pass = False
                         print(f"[tp2commit] COMMIT FAIL (pair {pair}): {row['commit']['commit_fail_reason']}", flush=True)
@@ -1011,43 +1102,20 @@ def main(args: Options) -> int:
           f"bad {fb_comp.get('n_bad_bindings')} {fb_comp.get('why') or ''}", flush=True)
     if fb_comp.get("result") is False:
         all_pass = False
-    # [revb F-r17b-38 (i)] the population reconciliation per rank, AND-ed, as a named component beside sampled_replay (read from the last
-    # instrumented pair's per-rank blocks, where the gate above wrote it into the verdict)
-    qp_per_rank = {str(r_): (c.get("query_population") or None) for r_, c in _last_per_rank(rows).items()}
-    qp_comp = {"result": (None if replay_cfg is None or not qp_per_rank else all(isinstance(b, dict) and b.get("ok") is True and not b.get("fail") for b in qp_per_rank.values())),
-               "per_rank": {r_: ({k: b.get(k) for k in ("present", "ok", "counts", "fail")} if isinstance(b, dict) else None) for r_, b in sorted(qp_per_rank.items())},
-               "rule": "population.query_checks.ok True on EVERY rank (R17-3 reconciliation against Q(P)); False / absent with a required manifest = the rank FAILs by name (F-r17b-38)",
-               "why": (None if replay_cfg is None else "; ".join(f"rank {r_}: {b.get('fail')}" for r_, b in sorted(qp_per_rank.items()) if isinstance(b, dict) and b.get("fail")) or None)}
+    qp_comp = _query_population_component(rows, replay_cfg is not None)
     print(f"[tp2commit] C2 population vs Q(P) (F-r17b-38): result {qp_comp['result']} per rank "
-          f"{ {r_: ((b or {}).get('ok'), (b or {}).get('counts')) for r_, b in sorted(qp_per_rank.items())} } {qp_comp.get('why') or ''}", flush=True)
+          f"{ {r_: ((b or {}).get('ok'), (b or {}).get('counts')) for r_, b in sorted(qp_comp['per_rank'].items())} } {qp_comp.get('why') or ''}", flush=True)
+    all_pass_but_c2 = all_pass
     if qp_comp["result"] is False:
         all_pass = False
+    vc_base = None
     try:
         covp = out / "coverage.json"
         if covp.exists():
             cj = json.loads(covp.read_text())
-            vc = cj.get("value_correspondence") or {"method": "no value check / Match record this attempt", "result": None, "file": None, "components": {}}
-            comps = vc.setdefault("components", {})
-            comps["sampled_replay"], comps["boundary_linkage"] = sr_comp, lk_comp
-            comps["query_population"] = qp_comp
-            if qp_comp.get("result") is False and vc.get("result") is not False:
-                vc["result"] = False
-            comps["weights_pin"] = wp_comp
-            if wp_comp.get("result") is not True and vc.get("result") is True:
-                vc["result"] = False if wp_comp.get("result") is False else None
-            comps["cross_rank_collectives"] = xr_comp
-            if xr_comp.get("result") is False and vc.get("result") is not False:
-                vc["result"] = False
-            comps["fold_match_binding"] = {k: fb_comp.get(k) for k in ("result", "n_bindings", "n_recorder", "n_bad_bindings", "why", "rule")} | {"artifact": "fold_match_binding.json"}
-            if fb_comp.get("result") is False and vc.get("result") is not False:
-                vc["result"] = False
-            if replay_cfg is not None:
-                comps["replay"] = {"result": sr_comp.get("result"), "reference": "see components.sampled_replay (manbind MAN-06 sampled exact replay, per rank)"}
-                both = (sr_comp.get("result") is True and lk_comp.get("result") is True)
-                vc["result"] = (both and vc["result"]) if vc.get("result") is not None else (both if (sr_comp.get("result") is not None) else None)
-                vc["method"] = f"sampled-exact-replay({sr_comp.get('result') and 'complete' or (sr_comp.get('per_rank') and next(iter(sr_comp['per_rank'].values())).get('grade')) or 'not-evaluated'}, per rank) + boundary-linkage + " + str(vc.get("method"))
-                vc["c2_of_record"] = {"form": "A (sampled replay) per rank", "result": both, "rule": "MAN-06 O1: result true on EVERY rank and pair, else the Commit FAILs named"}
-            cj["value_correspondence"] = vc
+            vc_base = json.loads(json.dumps(cj.get("value_correspondence"), default=str))
+            cj["value_correspondence"] = annotate_value_correspondence(cj.get("value_correspondence"), sr_comp, lk_comp, qp_comp, wp_comp, xr_comp, fb_comp,
+                                                                       replay_on=replay_cfg is not None)
             covp.write_text(json.dumps(cj, indent=1, default=str) + "\n")
     except Exception as e:  # noqa: BLE001
         print(f"[tp2commit] coverage.json sampled_replay annotate failed: {e!r}", flush=True)
@@ -1080,7 +1148,7 @@ def main(args: Options) -> int:
                                                                      for r_, c in _last_per_rank(rows).items()}),
             "oracle_compare": _oracle_compare_component(rows, versions, man_doc),
             # [TP-08 / MAN-06 form (A) per rank] the C2 of record, folded over ranks and pairs (full records in finalize_pair<k>.json)
-            "sampled_replay": (None if replay_cfg is None else {k: sr_comp.get(k) for k in ("result", "n", "sample", "population", "weights", "weights_self_consistent", "weights_pinned", "weights_note", "unreplayable", "per_rank", "per_run", "why")}),
+            "sampled_replay": (None if replay_cfg is None else {k: sr_comp.get(k) for k in SR_SUMMARY_KEYS}),
             "boundary_linkage": (None if replay_cfg is None else lk_comp),
             "cross_rank_collectives": xr_comp,
             # [R17 tp D90, rev R1 at Commit] fold peer leaves bound by digest to the recorder rows the committed partials were compared against
@@ -1103,8 +1171,13 @@ def main(args: Options) -> int:
     summ["negative_applied"] = applied or None
     not_applied = sorted(k_ for k_, v_ in applied.items() if v_["applied"] is not True)
     if not_applied:
-        why_na = f"NEGATIVE NOT APPLIED: {not_applied} -- {json.dumps(applied, default=str)[:400]}; the run is an error, not a verdict"
         summ["pass"], summ["negative_not_applied"] = None, not_applied
+    if args.replay_deferred:
+        TPR.seal(out, summ, rows, bundles_of, replay_cfg=replay_cfg, required_manifest=args.required_manifest, world=world, versions=versions,
+                 all_pass=all_pass_but_c2, vc_base=vc_base, comps={"weights_pin": wp_comp, "cross_rank_collectives": xr_comp, "fold_match_binding": fb_comp},
+                 xrank_pairs=xrank_pairs, xrank_families=sorted(xrank_families), label=args.label)
+    if not_applied:
+        why_na = f"NEGATIVE NOT APPLIED: {not_applied} -- {json.dumps(applied, default=str)[:400]}; the run is an error, not a verdict"
         try:
             fixed = []
             for l_ in (out / "runs.jsonl").read_text().splitlines():
@@ -1121,5 +1194,7 @@ def main(args: Options) -> int:
         print(f"[tp2commit] {why_na}", flush=True)
         return 3
     (out / "summary.json").write_text(json.dumps(summ, indent=1, default=str) + "\n")
-    print(f"[tp2commit] {'PASS' if summ['pass'] else 'FAIL'} delta {summ['delta_wall_mean']} s ({summ['delta_wall_pct']}%) roots {[x[:16] if x else None for x in summ['tp_run_roots']]}", flush=True)
-    return 0 if summ["pass"] else 1
+    verdict = "PENDING" if summ["pass"] is None and summ.get("replay_deferred") else "PASS" if summ["pass"] else "FAIL"
+    print(f"[tp2commit] {verdict} delta {summ['delta_wall_mean']} s ({summ['delta_wall_pct']}%) roots {[x[:16] if x else None for x in summ['tp_run_roots']]}"
+          + (f"; the C2 replay of every rank runs on CPU from {[b['path'] for b in summ['replay_deferred']['bundles']]}" if verdict == "PENDING" else ""), flush=True)
+    return 0 if verdict != "FAIL" else 1
