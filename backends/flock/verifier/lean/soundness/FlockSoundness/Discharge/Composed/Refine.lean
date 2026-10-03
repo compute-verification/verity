@@ -29,6 +29,27 @@ theorem folded_comb (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c
     (h : c.folded α β (skipWeights z) ρ ts = .ok w) :
     ∀ i < 64, fOf w[i]! = Model.foldAll (ts.toList.map fOf) (2 ^ S.kLog)
       (Model.comb execArith S (fOf z) (fOf α) (fOf β) (vecOf (S.kLog - 6) ρ)) i := by
-  sorry
+  have hk6 : 6 ≤ S.kLog := S.hk6
+  obtain ⟨v, hv, hvsz, hwv⟩ := hc.folded _ _ _ _ _ w h
+  rw [hc.pin] at hwv
+  have hsz : (v.modify S.pin.val fun x => x + β).size = 2 ^ S.kLog := by simp [hvsz]
+  have hlen : ts.toList.length = S.kLog - 6 := by simp [hts]
+  have hdiv : 2 ^ S.kLog / 2 ^ (S.kLog - 6) = 64 := by
+    rw [Nat.pow_div (by omega) (by norm_num), show S.kLog - (S.kLog - 6) = 6 by omega]
+  intro i hi
+  have hi' : i < (v.modify S.pin.val fun x => x + β).size / 2 ^ ts.toList.length := by
+    rw [hsz, hlen, hdiv]; exact hi
+  rw [hwv, ← Array.foldl_toList, foldl_halve ts.toList _ i hi', hsz]
+  refine foldAll_congr _ (2 ^ S.kLog) _ _ (fun col hcol => ?_) i (by rw [List.length_map, hlen, hdiv]; exact hi)
+  have hfr := hc.fold α (skipWeights z) ρ v (skipWeights_size _) hρ hv ⟨col, hcol⟩
+  rw [modify_get! v S.pin.val col _ (by omega), Model.comb, dite_eq_left hcol]
+  have hsum : fOf v[col]! = ∑ i : Fin (2 ^ S.kLog), execArith.lagS (fOf z) ⟨i.val % 64, Nat.mod_lt _ (by norm_num)⟩ *
+      Model.eqAt (vecOf (S.kLog - 6) ρ) (i.val / 64) *
+        (fOf α * ((S.A₀ i ⟨col, hcol⟩).val : 𝔽) + ((S.B₀ i ⟨col, hcol⟩).val : 𝔽)) := by
+    rw [hfr]
+    rfl
+  by_cases hp : S.pin.val = col
+  · rw [ite_eq_left hp, ite_eq_left hp.symm, fOf_add, hsum]
+  · rw [ite_eq_right hp, ite_eq_right (Ne.symm hp), add_zero, hsum]
 
 end FlockSoundness.Discharge.Composed
