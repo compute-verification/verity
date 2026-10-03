@@ -10,6 +10,7 @@ from pathlib import Path
 
 import research.merge as M
 from research.cli import main as research_main
+from test_merge_gate import CHECKED, DECL
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -45,6 +46,8 @@ def _world(tmp_path: Path):
     repo.mkdir()
     (repo / "mytools").mkdir()
     (repo / "mytools" / "decl_check.py").write_text("from research.store.tool import Tool\nT = Tool(name='check', version='1')\n")
+    (repo / "tools" / "check").mkdir(parents=True)
+    (repo / "tools" / "check" / "tool.py").write_text(DECL.format(""))
     (repo / ".gitignore").write_text("__pycache__/\n")
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "add", "-A")
@@ -151,7 +154,7 @@ def test_a_merge_sweeps_after_it_lands_and_says_to_push_first(tmp_path, monkeypa
     gh.open[3]["headRefOid"] = _git(repo, "rev-parse", "HEAD")
     monkeypatch.chdir(repo)
     assert research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool",
-                          "mytools.decl_check:T", "--cwd", "source", "--", "true"]) == 0
+                          "mytools.decl_check:T", "--cwd", "source", "--", *CHECKED]) == 0
     _git(repo, "checkout", "-q", "main")
     capsys.readouterr()
     assert M.main(["C"]) == 0
@@ -173,7 +176,7 @@ def _checked_c(tmp_path, monkeypatch, gh, repo):
     gh.open[3]["headRefOid"] = _git(repo, "rev-parse", "HEAD")
     monkeypatch.chdir(repo)
     assert research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool",
-                          "mytools.decl_check:T", "--cwd", "source", "--", "true"]) == 0
+                          "mytools.decl_check:T", "--cwd", "source", "--", *CHECKED]) == 0
     _git(repo, "checkout", "-q", "main")
 
 
