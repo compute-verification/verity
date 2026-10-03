@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import argparse
 import json
 import multiprocessing as mp
 import os
@@ -798,9 +799,18 @@ def _proc(pid, rss):
             "rss_shmem_bytes": 0}
 
 
+class _Clock:
+    """The sampler's clock: the test sets it, and a fake read that takes time moves it."""
+
+    def __init__(self, t):
+        self.t = t
+
+    def __call__(self):
+        return self.t
+
+
 def _sampler(tmp_path, monkeypatch, table, read, *flags):
     """A Sampler over the process table `table` (re-read every round, so a test may change it), whose smaps_rollup reads are `read`."""
-    import argparse
     from research.telemetry import sample
 
     monkeypatch.delenv("TELEMETRY_STREAM_SUFFIX", raising=False)
@@ -830,3 +840,52 @@ def test_pss_every_0_turns_pss_off(tmp_path, monkeypatch):
         a = rcli._harness_parser("research run").parse_args(["--attempt-dir", str(tmp_path), "--stage", "s", "--pss-every", every])
         instruments = rcli.build_job_from(a, ["true"])["telemetry"]["instruments"]
         assert ("pss" in instruments) is has and "process" in instruments, (every, instruments)
+
+
+def test_a_process_over_pss_max_rss_gb_is_never_read_in_any_round(tmp_path, monkeypatch):
+    """smaps_rollup of a 91-120 GB vLLM engine took 1.6-2.7 s under its mmap lock, and the engine's steps behind it had a 2-4.5x longer
+    p99. A process over --pss-max-rss-gb (default 8) is recorded from its status RSS instead, in the cadence, topology-change and
+    final rounds alike, and counted `skipped`, not `denied` (which stays what the reader refused)."""
+    from research.telemetry import sample
+
+    clk = _Clock(1000.0)
+    monkeypatch.setattr(sample, "clock", clk)
+    opened = []
+
+    def read(pid):
+        opened.append(pid)
+        return {"pid": pid, "pss_bytes": None, "reason": "permission denied"} if pid == 13 else {"pid": pid, "pss_bytes": GB // 2}
+
+    table = [_proc(10, 97_300_000_000), _proc(12, GB), _proc(13, GB)]
+    s = _sampler(tmp_path, monkeypatch, table, read, "--pss-every", "60")
+    s.round()                                     # the first round
+    clk.t = 1006.0
+    table.append(_proc(14, GB))
+    s.round()                                     # a child appeared: a topology-change round, 54 s before the cadence's
+    clk.t = 1007.0
+    s.round()                                     # nothing due
+    clk.t = 1008.0
+    s.round(final=True)
+    recs = _records(tmp_path, "pss")
+    assert len(recs) == 3 and 10 not in opened and opened.count(12) == 3 and opened.count(14) == 2
+    for r in recs:
+        assert r["processes"][0] == {
+            "pid": 10, "pss_bytes": None, "skipped": True, "rss_bytes": 97_300_000_000, "rss_anon_bytes": 72_975_000_000,
+            "rss_file_bytes": 24_325_000_000, "rss_shmem_bytes": 0,
+            "reason": "skipped: rss 97.3 GB over --pss-max-rss-gb 8 (smaps_rollup holds the process's mmap lock for seconds)"}
+        assert r["skipped"] == 1 and r["denied"] == 1 and r["pss_sum_bytes"] == GB // 2 * (len(r["processes"]) - 2)
+    assert [len(r["processes"]) for r in recs] == [3, 4, 4]
+
+
+def test_research_run_passes_the_pss_flags_through_tele_run_to_the_sampler(tmp_path):
+    from research import cli as rcli
+    from research.telemetry import run as trun, sample
+
+    ap = argparse.ArgumentParser()
+    sample.add_args(ap)
+    for flags, want in (([], (5.0, 8.0)), (["--pss-every", "0", "--pss-max-rss-gb", "2.5"], (0.0, 2.5))):
+        a = rcli._harness_parser("research run").parse_args(["--attempt-dir", str(tmp_path), "--stage", "s", *flags])
+        argv = trun._sampler_argv(a, tmp_path, 4242)
+        assert argv[:4] == [*trun._tele_argv(), "sample"]
+        got = ap.parse_args(argv[4:])
+        assert (got.pss_every, got.pss_max_rss_gb, got.root_pid) == (*want, 4242)

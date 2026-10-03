@@ -31,6 +31,11 @@ def _tele_argv() -> list[str]:
     return [sys.executable, "-m", "research.telemetry"]
 
 
+def _sampler_argv(a: argparse.Namespace, d: Path, root_pid: int) -> list[str]:
+    return _tele_argv() + ["sample", "--attempt-dir", str(d), "--cadence", str(a.cadence), "--root-pid", str(root_pid), "--pss-every", str(a.pss_every),
+                           "--pss-max-rss-gb", str(a.pss_max_rss_gb), "--linger", str(a.linger)] + sum((["--mount", m] for m in a.mount), [])
+
+
 def _tele_env() -> dict[str, str]:
     """[R18 infra, r18-int-2; F-r18-infra-1] the sidecar is `python -m research.telemetry` in a NEW process: launched through a script
     that put its import root on sys.path in-process only, the child found no package -- the r18-int-1 canary's sampler.log reads
@@ -163,10 +168,8 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
     # ---- sampler in its own session
     sampler = None
     if not a.no_sampler:
-        sargs = _tele_argv() + ["sample", "--attempt-dir", str(d), "--cadence", str(a.cadence), "--root-pid", str(proc.pid), "--pss-every", str(a.pss_every),
-                                "--linger", str(a.linger)] + sum((["--mount", m] for m in a.mount), [])
         try:
-            sampler = subprocess.Popen(sargs, start_new_session=True, stdout=open(d / "sampler.log", "ab"), stderr=subprocess.STDOUT, env=_tele_env())
+            sampler = subprocess.Popen(_sampler_argv(a, d, proc.pid), start_new_session=True, stdout=open(d / "sampler.log", "ab"), stderr=subprocess.STDOUT, env=_tele_env())
         except OSError as e:
             em.emit("mark", stage=a.stage, name="sampler_start_failed", error=str(e))
             sampler = None
@@ -243,6 +246,8 @@ def add_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--grace", type=float, default=10.0)
     ap.add_argument("--cadence", type=float, default=1.0)
     ap.add_argument("--pss-every", type=float, default=5.0, help="seconds between the sampler's PSS rounds (default 5); 0 turns PSS off")
+    ap.add_argument("--pss-max-rss-gb", type=float, default=8.0,
+                    help="the sampler never reads smaps_rollup of a process with more RSS than this, in GB (default 8; tele sample --help)")
     ap.add_argument("--linger", type=float, default=3.0)
     ap.add_argument("--mount", action="append", default=[])
     ap.add_argument("--no-sampler", action="store_true")

@@ -23,6 +23,11 @@ from .events import Emitter, append, stream_id, utc_now_ms
 from .job import write_json_atomic
 from .procs import diskstats, gpu_sample, pss, snapshot_tree, statvfs
 
+#: The clock (seconds) the rounds are scheduled on; a test replaces it.  Records' t_mono stay on time.monotonic.
+clock = time.monotonic
+#: The RSS breakdown that /proc/<pid>/status gave the process snapshot: what a process whose smaps_rollup is not read records instead.
+STATUS_RSS = ("rss_bytes", "rss_anon_bytes", "rss_file_bytes", "rss_shmem_bytes")
+
 
 class Sampler:
     def __init__(self, a: argparse.Namespace):
@@ -88,7 +93,7 @@ class Sampler:
     # ---- one round ------------------------------------------------------------------------------------------------------------------
     def round(self, final: bool = False) -> bool:
         """Take one round of readings.  Returns False when the workload root has gone."""
-        now = time.monotonic()
+        now = clock()
         alive = True
         # cgroup
         try:
@@ -120,12 +125,14 @@ class Sampler:
         if self.a.pss_every > 0 and (final or now - self.last_pss >= self.a.pss_every
                                      or (self.topology_changed_at and now - self.topology_changed_at < self.cadence and now - self.last_pss >= 5.0)):
             try:
-                out = [pss(r["pid"]) for r in rows[: self.a.max_pids]]
+                out = [self._pss(r) for r in rows[: self.a.max_pids]]
                 tot = sum(x["pss_bytes"] for x in out if x.get("pss_bytes") is not None)
                 rss_sum = sum(r.get("rss_bytes") or 0 for r in rows)
+                skipped = sum(1 for x in out if x.get("skipped"))
                 self.write("pss", "process", {"processes": out, "pss_sum_bytes": tot, "rss_sum_bytes": rss_sum,
-                                              "denied": sum(1 for x in out if x.get("pss_bytes") is None),
-                                              "note": "pss shares pages proportionally; rss_sum counts shared pages once per process"})
+                                              "denied": sum(1 for x in out if x.get("pss_bytes") is None) - skipped, "skipped": skipped,
+                                              "note": "pss shares pages proportionally; rss_sum counts shared pages once per process; pss_sum "
+                                                      "leaves out the denied and the skipped (not read; their status RSS is recorded instead)"})
             except Exception as e:  # noqa: BLE001
                 self.err("pss", repr(e))
             self.last_pss = now
@@ -158,6 +165,16 @@ class Sampler:
         self.samples += 1
         return alive
 
+    def _pss(self, row: dict[str, Any]) -> dict[str, Any]:
+        """The process's smaps_rollup, unless its RSS is over --pss-max-rss-gb: the read walks the whole address space under the
+        process's mmap lock, which stalls a large process for seconds."""
+        rss = row.get("rss_bytes", row.get("rss_bytes_stat"))
+        if rss is not None and rss > self.a.pss_max_rss_gb * 1e9:
+            return {"pid": row["pid"], "pss_bytes": None, "skipped": True, **{k: row.get(k) for k in STATUS_RSS},
+                    "reason": f"skipped: rss {rss / 1e9:.1f} GB over --pss-max-rss-gb {self.a.pss_max_rss_gb:g} "
+                              "(smaps_rollup holds the process's mmap lock for seconds)"}
+        return pss(row["pid"])
+
     def write_self(self) -> None:
         ru = resource.getrusage(resource.RUSAGE_SELF)
         body = {"cpu_s": (ru.ru_utime + ru.ru_stime), "maxrss_bytes": ru.ru_maxrss * (1024 if sys.platform != "darwin" else 1),
@@ -177,7 +194,8 @@ class Sampler:
         signal.signal(signal.SIGHUP, signal.SIG_IGN)
         for s in (signal.SIGTERM, signal.SIGINT):
             signal.signal(s, self._on_signal)
-        self.emitter.emit("sampler_start", pid=os.getpid(), cadence_s=self.cadence, pss_every_s=self.a.pss_every, gpu_every_s=self.a.gpu_every,
+        self.emitter.emit("sampler_start", pid=os.getpid(), cadence_s=self.cadence, pss_every_s=self.a.pss_every,
+                          pss_max_rss_gb=self.a.pss_max_rss_gb, gpu_every_s=self.a.gpu_every,
                           root_pid=self.a.root_pid, pgid=self.a.pgid, scope=self.scope, scope_reason=self.scope_reason, resources=str(self.path.name),
                           collector_version=COLLECTOR_VERSION)
         rc = 0
@@ -228,6 +246,9 @@ def add_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--root-pid", type=int, default=None, help="workload root; the tree = its descendants; exit after --linger once it is gone")
     ap.add_argument("--pgid", type=int, default=None, help="alternatively: every process of this process group")
     ap.add_argument("--pss-every", type=float, default=5.0, help="seconds between PSS rounds (smaps_rollup reads; default 5); 0 turns PSS off")
+    ap.add_argument("--pss-max-rss-gb", type=float, default=8.0,
+                    help="never read smaps_rollup of a process whose RSS (/proc/<pid>/status) is over this many GB (default 8): the read "
+                         "holds the process's mmap lock for seconds. Its status RSS is recorded instead")
     ap.add_argument("--gpu-every", type=float, default=5.0)
     ap.add_argument("--gpu-timeout", type=float, default=3.0)
     ap.add_argument("--storage-every", type=float, default=5.0)
