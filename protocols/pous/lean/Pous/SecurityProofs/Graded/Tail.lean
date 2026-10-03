@@ -4,12 +4,12 @@ import Pous.SecurityProofs.Thm1.Theorem1iiSeq
 # The tail rule for sequential rounds
 
 `pr_seq_le` bounds the probability that all `k` rounds succeed by `c^k` when each succeeds with conditional
-probability at most `c` given the history. `pr_misses_le` is its tail form: the probability that at most `t` of the
-`k` rounds fail is at most `binTail k t c = P[Bin(k, c) ≥ k − t] = Σ_{j ≤ t} C(k, j)·(1 − c)^j·c^(k − j)`, for every
-`c ≤ 1`. It is one induction on `k`, as for `pr_seq_le`. In the step, a first round that succeeds with probability
-`q ≤ c` leaves at most `q·T(t) + (1 − q)·T(t − 1)`, which is at most `c·T(t) + (1 − c)·T(t − 1)` because the bound
-grows with `t` (`binTail_le_succ`, `mix_le`). The bound also grows with `c` on `[0, 1]` (`binTail_mono`), so a
-certified `p₀ ≤ r` may be replaced by `r`.
+probability at most `c` given the history. `pr_hits_ge_le_binomial` is its tail form: the probability that at most
+`t` of the `k` rounds fail is at most `binTail k t c = P[Bin(k, c) ≥ k − t] = Σ_{j ≤ t} C(k, j)·(1 − c)^j·c^(k − j)`,
+for every `c ≤ 1`. It is one induction on `k`, as for `pr_seq_le`. In the step, a first round that succeeds with
+probability `q ≤ c` leaves at most `q·T(t) + (1 − q)·T(t − 1)`, which is at most `c·T(t) + (1 − c)·T(t − 1)` because
+the bound grows with `t` (`binTail_le_succ`, `mix_le`). The bound also grows with `c` on `[0, 1]` (`binTail_mono`), so
+a certified `p₀ ≤ r` may be replaced by `r`.
 
 Pure probability: no game and no primitive. A round is any function of the history, through a state `x : X` that
 `nxt` advances and `ok` judges.
@@ -170,7 +170,7 @@ noncomputable def misses {X : Type} {B : ℕ} (nxt : ℕ → X → Fin B → X) 
 /-- **The tail rule.** If after every history of fewer than `k` indices a uniform next index succeeds with
 probability at most `c ≤ 1`, then at most `t` of the `k` rounds fail with probability at most
 `P[Bin(k, c) ≥ k − t]`. At `t = 0` it is `pr_seq_le`'s `c^k`. -/
-theorem pr_misses_le {X : Type} {B : ℕ} [NeZero B] (nxt : ℕ → X → Fin B → X) (ok : ℕ → X → Fin B → Prop)
+theorem pr_hits_ge_le_binomial {X : Type} {B : ℕ} [NeZero B] (nxt : ℕ → X → Fin B → X) (ok : ℕ → X → Fin B → Prop)
     (c : ℝ≥0∞) (hc : c ≤ 1) :
     ∀ (k t j : ℕ) (x : X),
       (∀ h : List (Fin B), h.length < k → pr (ok (j + h.length) (after nxt j h x)) ≤ c) →

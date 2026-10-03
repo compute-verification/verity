@@ -14,7 +14,8 @@ stopped after `D` rounds or `Q` queries. `cut` is `(D, Q)`-bounded (`cut_bounded
 returns what the program returns (`cut_run`). So with `E`, `st` and the per-history compressor of `theorem1_ii_seq`
 built from the cut programs, `Pr[E] ≤ (Σ_{j<k} B^j)·π` as before, and off `E` each round's cut program is right with
 probability at most `p₀` given any history. When every answer is correct, a round whose cut program is wrong was late
-(`misses_le_late`), so accepting with at most `t` late rounds needs at most `t` misses, which `pr_misses_le` bounds.
+(`misses_le_late`), so accepting with at most `t` late rounds needs at most `t` misses, which
+`pr_hits_ge_le_binomial` bounds.
 
 `gradedAuditSecure_zero_iff`: with no grace the graded audit is the sequential audit.
 -/
@@ -187,7 +188,7 @@ theorem theorem1_ii_graded (sch : Scheme M) (D Q β S k t : ℕ) (π c : ℝ≥0
     (add_le_add ?_ le_rfl)
   · -- off `E`: a round's stopped program is right with probability at most `p₀` given any history, and a wrong
     -- one was late
-    refine le_trans (pr_mono fun I hI => ?_) (pr_misses_le (nxt W (sch.enc W a.1 a.2).1 a.1)
+    refine le_trans (pr_mono fun I hI => ?_) (pr_hits_ge_le_binomial (nxt W (sch.enc W a.1 a.2).1 a.1)
       (fun j σ i => ((cut dflt D Q (A₂.step W (sch.enc W a.1 a.2).1 j σ i)).run (M.answer a.1)).1 =
         (sch.enc W a.1 a.2).2 i) c hc k t 0 (A₁ W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1)
       fun h hh => ?_)
