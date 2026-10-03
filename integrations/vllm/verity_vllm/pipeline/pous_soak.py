@@ -594,6 +594,7 @@ class Control:
             seq = int(req["seq"])
             with self.cv:
                 self.want = (str(req["mode"]), seq)
+                self.cv.notify_all()
                 if not self.cv.wait_for(lambda: seq in self.acked, timeout=120):
                     raise TimeoutError(f"the serve loop did not take load {req['mode']} in 120 s")
                 return self.acked.pop(seq), []
@@ -601,6 +602,8 @@ class Control:
             return self.rotate()
         if op == "stop":
             self.stopped.set()
+            with self.cv:
+                self.cv.notify_all()
             return {"stopped": True}, []
         raise ValueError(f"unknown op {op!r}")
 

@@ -70,7 +70,8 @@ def test_read_steps_round_trips_the_step_log(tmp_path):
 def fake(tmp_path_factory):
     if shutil.which("g++") is None:
         pytest.skip("no g++")
-    lib = S.load_native(S.build_native(tmp_path_factory.mktemp("native"), None, fake=True))
+    path = S.build_native(tmp_path_factory.mktemp("native"), None, fake=True)
+    lib = S.load_native(path)
     from verity_pous.verifier import leaf_hash
 
     blocks = 16
@@ -80,7 +81,7 @@ def fake(tmp_path_factory):
     vk = SimpleNamespace(params=params, salt=salt,
                          leaves=tuple(leaf_hash(params, salt, i, data[i * S.BLOCK:(i + 1) * S.BLOCK].tobytes()) for i in range(blocks)))
     resp = S.Responder(lib, data.ctypes.data, data.nbytes, 0, -1)
-    yield SimpleNamespace(lib=lib, data=data, vk=vk, resp=resp, blocks=blocks)
+    yield SimpleNamespace(lib=lib, path=path, data=data, vk=vk, resp=resp, blocks=blocks)
     resp.stop()
 
 
@@ -290,12 +291,15 @@ def test_dcgm_rows_reads_dmon_lines_and_marks_na():
 
 def _serve_loop(ctl, acked, stop):
     """The serve loop's side of `Control`: each load taken is applied and acknowledged."""
-    while not stop.is_set() and not ctl.stopped.is_set():
+    while True:
+        with ctl.cv:
+            ctl.cv.wait_for(lambda: ctl.want is not None or stop.is_set() or ctl.stopped.is_set())
+        if stop.is_set() or ctl.stopped.is_set():
+            return
         w = ctl.take()
         if w is not None:
             acked.append(w)
             ctl.ack(w[1], {"mode": w[0], "seq": w[1], "t_ns": 1})
-        stop.wait(0.001)
 
 
 def test_control_round_trip_ready_clock_load_rotate_and_stop(tmp_path):
@@ -322,9 +326,12 @@ def test_control_round_trip_ready_clock_load_rotate_and_stop(tmp_path):
         with pytest.raises(OSError, match="unknown op"):
             c.call("nope")
         c.close()
-        assert ctl.stopped.wait(5)
+        assert ctl.stopped.is_set(), "set before the reply to stop"
     finally:
         stop.set()
+        with ctl.cv:
+            ctl.cv.notify_all()
+        loop.join()
         ctl.close()
 
 
@@ -412,3 +419,68 @@ def test_serving_keeps_its_requests_in_flight_and_pause_drains_them(monkeypatch)
     s.pause()
     assert not s.live and not eng.reqs and len(eng.aborted) == 3 and all(not r.endswith("-x") for r in eng.aborted)
     assert s.stats() == {"added": 9, "finished": 6, "aborted": 3, "finished_tokens": 18}
+
+
+@pytest.mark.slow
+def test_verify_drives_a_server_on_another_host_through_its_control_port(fake, tmp_path):
+    """`verify --server` end to end on the CPU: the real verifier process against a `Control` and a responder over host memory
+    holding one segment of band-chain/d12/v1, nine cells (about 25 s).  Catches what the pieces' tests can't: the remote path's
+    wiring (ready over the port, loads acknowledged, rotate per chunk, offset brackets in the chunk, the server stopped at the
+    end) in the process `check` would never otherwise run before a GPU job does."""
+    import os
+    import subprocess
+    import sys
+    import threading
+
+    from verity_pous.verifier import VerifierKey, leaf_hash
+    from verity_vllm.pipeline import pous_run as R
+
+    scheme = "band-chain/d12/v1"
+    params = R.geometry(scheme).with_segments(1)
+    data = np.random.default_rng(11).integers(0, 256, params.blocks * S.BLOCK, dtype=np.uint8)
+    salt = hashlib.sha256(b"remote soak salt").digest()[:24]
+    leaves = [leaf_hash(params, salt, i, data[i * S.BLOCK:(i + 1) * S.BLOCK].tobytes()) for i in range(params.blocks)]
+    root = VerifierKey.from_leaves(params, salt, leaves).root.hex()
+    setup = tmp_path / "setup"
+    setup.mkdir()
+    (setup / "vk.json").write_text(json.dumps({"salt": salt.hex(), "root": root, "params": params.manifest(), "scheme": scheme}))
+    (setup / "vk-leaves.bin").write_bytes(b"".join(leaves))
+    resp = S.Responder(fake.lib, data.ctypes.data, data.nbytes, 0, -1)
+    ready = {"port": resp.port, "host": "127.0.0.1", "root": root, "blocks": params.blocks, "block_bytes": S.BLOCK,
+             "total": data.nbytes}
+    (tmp_path / "server").mkdir()
+    ctl = S.Control("127.0.0.1", 0, "127.0.0.1", ready, tmp_path / "server", None)
+    acked, stop = [], threading.Event()
+    loop = threading.Thread(target=_serve_loop, args=(ctl, acked, stop), daemon=True)
+    loop.start()
+    job, state = tmp_path / "job", tmp_path / "state"
+    job.mkdir()
+    state.mkdir()
+    cpu = str(min(os.sched_getaffinity(0)))
+    try:
+        p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.pous_soak", "verify", "--server", f"127.0.0.1:{ctl.port}",
+                            "--setup", str(setup), "--job", str(job), "--state", str(state), "--native", str(fake.path),
+                            "--until", "4000000000", "--loads", "idle", "--configs", "tuned", "--passes", "1", "--twins", "0",
+                            "--cell-s", "0.3", "--cpu", cpu, "--checker-cpu", cpu, "--sampler-cpu", cpu, "--sample-cpus", cpu],
+                           env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}, capture_output=True, text=True, check=False)
+        assert p.returncode == 0, p.stderr[-2000:]
+        assert ctl.stopped.is_set(), "a finished cross stops the server"
+    finally:
+        stop.set()
+        with ctl.cv:
+            ctl.cv.notify_all()
+        loop.join()
+        ctl.close()
+        resp.stop()
+    assert acked == [("idle", 1)], "one load, acknowledged by the serve loop"
+    assert json.loads((job / "ready.json").read_text())["root"] == root
+    (line,) = [json.loads(x) for x in (state / "chunks.log").read_text().splitlines()]
+    v = line["validation"]
+    assert line["wrong"] == 0 and line["runs"] == 9 and line["answers"] > 0 and v["blocks"]["equal"]
+    bad = {k: x for k, x in v["order_violations"].items() if x and k != "..<=S4"}   # the kernel's tail after sendmsg: counted
+    assert not bad, bad
+    assert v["offset"]["runs"] == 9 and v["offset"]["empty"] == 0
+    with np.load(job / line["chunk"]) as z:
+        meta = json.loads(str(z["meta_json"]))
+    assert meta["remote"]["server"] == f"127.0.0.1:{ctl.port}" and "control_clock_close" in meta
+    assert meta["control_clock_open"]["lo_ns"] <= 0 <= meta["control_clock_open"]["hi_ns"], "one host: offset 0 is bracketed"
