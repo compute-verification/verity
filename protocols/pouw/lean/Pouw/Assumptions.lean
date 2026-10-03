@@ -37,6 +37,7 @@ import Pouw.Assumptions.NCP.RouteUGame
 import Pouw.Assumptions.NCP.RouteUWord
 import Pouw.Assumptions.PearlC.DeviceChainCap
 import Pouw.Assumptions.PearlC.DeviceChainCapKernel
+import Pouw.Assumptions.PearlC.HiddenTile
 import Pouw.Assumptions.PearlC.RowSeedAssumptions
 import Pouw.Assumptions.PearlC.TTOut
 import Pouw.Assumptions.PearlC.TTOutChainOnly

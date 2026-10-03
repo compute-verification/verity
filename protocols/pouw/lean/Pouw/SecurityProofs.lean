@@ -87,6 +87,8 @@ import Pouw.SecurityProofs.PearlC.Freeze
 import Pouw.SecurityProofs.PearlC.FreezeP
 import Pouw.SecurityProofs.PearlC.FreezePPure
 import Pouw.SecurityProofs.PearlC.Gamma
+import Pouw.SecurityProofs.PearlC.HiddenGamma
+import Pouw.SecurityProofs.PearlC.HiddenTileGame
 import Pouw.SecurityProofs.PearlC.KernelWrefGamma
 import Pouw.SecurityProofs.PearlC.Peel
 import Pouw.SecurityProofs.PearlC.PeelExactChecks
@@ -99,7 +101,10 @@ import Pouw.SecurityProofs.PearlC.RowSeedCode
 import Pouw.SecurityProofs.PearlC.RowSeedFragment
 import Pouw.SecurityProofs.PearlC.RowSeedGamma
 import Pouw.SecurityProofs.PearlC.RowSeedSkip
+import Pouw.SecurityProofs.PearlC.ServedMixedRev1Gamma
+import Pouw.SecurityProofs.PearlC.ServedRev1Gamma
 import Pouw.SecurityProofs.PearlC.Sm120Checks
+import Pouw.SecurityProofs.PearlC.TileCapRev1Gamma
 import Pouw.SecurityProofs.PearlC.TileGamma
 import Pouw.SecurityProofs.PearlC.TileUOnlyGamma
 import Pouw.SecurityProofs.PearlC.UOnlyGamma
