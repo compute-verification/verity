@@ -21,9 +21,9 @@ it reads in order, and its value from theirs. No evaluator for IR Programs: the 
 * **One proof unit** (`Spec.part`) holds every computed gate.
 
 Which gate reads which, the widths and the outputs are checked against the template's `CallGraph`, with the checked
-templates' descriptor digests pinned, by a test beside `pc8`'s. The order of a gate's reads is not in the `CallGraph`;
-it and each primitive's semantics are the trusted part: `F32Add_v2` is `f32Add`, the atom is `p.step` and the K16 step
-is `k16Step`, each pinned by its conformance vectors.
+templates' descriptor digests pinned, by `tests/test_circuit_tile_lean.py`. The order of a gate's reads is not in the
+`CallGraph`; it and each primitive's semantics are the trusted part: `F32Add_v2` is `f32Add`, the atom is `p.step` and
+the K16 step is `k16Step`, each pinned by its conformance vectors.
 -/
 
 namespace Pouw.PearlC.TileCircuit
