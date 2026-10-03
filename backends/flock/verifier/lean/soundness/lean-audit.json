@@ -10288,6 +10288,7 @@
    "assumptions": [],
    "type_hash": "8f61a754f7e4ddd9a1dfc32dee9b73905810dc6e6f5df6f4359befebe72c198d"
   },
+  "FlockSoundness.Discharge.ZkExec.zk_lig_accepts": {},
   "FlockSoundness.Discharge.ZkExec.zk_ligerito_plays": {
    "signature": ["FlockSoundness.Discharge.ZkExec.zk_ligerito_plays : FlockSoundness.Discharge.ZkExec.ZkLigeritoPlays"],
    "assumptions": [],
