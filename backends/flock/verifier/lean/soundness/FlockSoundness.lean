@@ -153,6 +153,7 @@ import FlockSoundness.Discharge.Exec
 import FlockSoundness.Discharge.Integrate
 import FlockSoundness.Discharge.ZkSession
 import FlockSoundness.Discharge.ZkLink
+import FlockSoundness.Discharge.ZkBind
 import FlockSoundness.Discharge.DecodeZL
 import FlockSoundness.Discharge.ZkView
 import FlockSoundness.Discharge.DrawWords
