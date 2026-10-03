@@ -191,7 +191,7 @@ class FakeEngine:
 
 class FakeCommitter:
     def __init__(self):
-        self.calls = []
+        self.calls, self.errors = [], []
 
     def finalize(self):
         self.calls.append("finalize")
@@ -238,3 +238,8 @@ def test_the_offline_loop_admits_on_time_stamps_each_step_and_commits_one_run_pe
     assert [c["t_ms"] // 60_000 for c in commits] == [0, 1, 2] and commits[0]["steps"] == 2
     assert com.calls[:6] == ["reset", "install", "finalize", "uninstall", "reset", "install"]
     assert sum(s["tokens"] for s in steps) == 270
+    com.errors.append("worker step 7: ImportError('no research')")
+    t0 = now[0] + 5
+    with pytest.raises(RuntimeError, match="no research"):
+        rec.offline_replay(eng, com, [q | {"rid": "again." + q["rid"]} for q in reqs], t0, t0 + 200,
+                           out.append, steps.append, commits.append)

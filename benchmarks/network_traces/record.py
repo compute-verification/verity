@@ -309,6 +309,8 @@ def offline_replay(eng, com, requests: list[dict], t0: float, drain_until: float
         outs = core.step()
         faulthandler.cancel_dump_traceback_later()
         t = clock()
+        if com is not None and com.errors:
+            raise RuntimeError(f"the committer failed a step, keeping its staging block: {com.errors[0]}")
         n = 0
         for o in outs:
             rec = live.get(external_id(o.request_id))
