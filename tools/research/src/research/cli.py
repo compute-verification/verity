@@ -357,7 +357,7 @@ def cmd_run(argv: list[str]) -> int:
             from .mem import release
 
             release(mem_reservation, run_id)
-        _drop_clone(clone_home)
+        _drop_clone(clone_home, run_dir)
     if not ns.custody_dir:
         _publish_attempt(run_dir, prep)
     s = R.summarize(run_dir)
@@ -516,10 +516,52 @@ def _clone_imports(of: Path, tree: Path, home: Path, remote_info: dict | None) -
     return {"PYTHONPATH": os.pathsep.join(entries), "PYTHONPYCACHEPREFIX": str(home / "pycache")}
 
 
-def _drop_clone(home: Path | None) -> None:
-    """Remove the run's clone once its workload has exited; a failure is reported, never fatal."""
-    if home is not None and (why := clone.remove(home)):
+#: how many times `_end_group` looks for the group's members after its SIGKILL, GROUP_END_POLL_S apart, before removing the clone anyway
+GROUP_END_POLLS = 100
+GROUP_END_POLL_S = 0.05
+
+
+def _drop_clone(home: Path | None, run_dir: Path | None = None) -> None:
+    """Remove the run's clone once its workload has exited; a failure is reported, never fatal.  `run_dir`: the workload ran, and
+    whatever is left of its process group (status.json pgid) is ended first (`_end_group`)."""
+    if home is None:
+        return
+    if run_dir is not None:
+        _end_group(run_dir)
+    if why := clone.remove(home):
         print(f"research: --cwd clone: could not remove {home} ({why}); remove it by hand", file=sys.stderr)
+
+
+def _end_group(run_dir: Path) -> None:
+    """SIGKILL what is left of the workload's process group once its leader has exited: a member that ignored the SIGTERM `research
+    cancel` sends, or that the workload left running, would keep writing into the clone while it is removed (rmtree then fails with
+    ENOTEMPTY and the clone stays).  The clone is the run's own, so nothing else needs those processes."""
+    import signal
+    import time
+
+    from .telemetry.procs import list_pids, stat_fields
+
+    try:
+        pgid = int(json.loads((run_dir / "status.json").read_text())["pgid"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return
+
+    def live() -> list[str]:
+        return [f"{st['pid']} {st['comm']}" for pid in list_pids()
+                if (st := stat_fields(pid)) and st["pgrp"] == pgid and st["state"] not in ("Z", "X")]
+
+    if not (left := live()):
+        return
+    print(f"research: --cwd clone: {len(left)} process(es) of the workload's group {pgid} outlived it ({', '.join(left[:5])}); "
+          f"SIGKILL to the group before removing the clone", file=sys.stderr)
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    for _ in range(GROUP_END_POLLS):
+        if not live():
+            return
+        time.sleep(GROUP_END_POLL_S)
 
 
 def _refuse(ns: argparse.Namespace, run_dir: Path, run_id: str, reason: str, fault: str, mem_reservation: str | None) -> int:

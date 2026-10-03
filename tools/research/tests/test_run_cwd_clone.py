@@ -4,7 +4,11 @@ Proofs ran one Lean audit twice at one sha with `--cwd source`; cancelling the d
 `sh -c`, as in test_remote_preflight.py."""
 from __future__ import annotations
 
+import errno
 import json
+import os
+import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -16,23 +20,62 @@ from research import clone, remote
 from research import runs as R
 from research.cli import main
 from research.store import attempt as A
+from research.telemetry.procs import stat_fields
 from waits import wait_runner
 
 PY = sys.executable
 SRC = str(Path(remote.__file__).resolve().parents[1])
+# a member of the workload's group that ignores SIGTERM and keeps writing into its cwd, so the clone keeps filling while it is
+# removed; once its cwd is gone it waits for a signal.  It says it is ready (SIGTERM ignored) on stdout.
+WRITER = """
+import os, signal
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+os.write(1, b'r')
+i = 0
+while True:
+    try:
+        os.makedirs('busy', exist_ok=True)
+        open(f'busy/{i % 1000}', 'w').close()
+    except OSError:
+        signal.pause()
+    i += 1
+"""
 # leaves a build tree in its cwd, says where it ran, at which commit and where it imported the workspace module `leaky` from (when
 # the tree has one, `_workspace`), then ends as argv[1] says: an exit status, or `term`, the SIGTERM to its process group that
-# `research cancel` sends
-PROBE = ("import importlib.util, json, os, signal, subprocess, sys; os.makedirs('.lake/packages/dep'); "
-         "head = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip(); "
-         "mod = importlib.util.find_spec('leaky') and __import__('leaky'); "
-         "json.dump({'cwd': os.getcwd(), 'head': head, 'module': mod and mod.__file__, 'wrote': mod and str(mod.OUT), "
-         "'mark': getattr(mod, 'MARK', None)}, open(os.path.join(os.environ['RESEARCH_RUN_DIR'], 'seen.json'), 'w')); "
-         "end = sys.argv[1] if len(sys.argv) > 1 else '0'; os.killpg(0, signal.SIGTERM) if end == 'term' else sys.exit(int(end))")
+# `research cancel` sends, which leaves a WRITER (its pid in seen.json `outliver`) running
+PROBE = f"""
+import importlib.util, json, os, signal, subprocess, sys
+os.makedirs('.lake/packages/dep')
+head = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
+mod = importlib.util.find_spec('leaky') and __import__('leaky')
+seen = {{'cwd': os.getcwd(), 'head': head, 'module': mod and mod.__file__, 'wrote': mod and str(mod.OUT), 'mark': getattr(mod, 'MARK', None)}}
+end = sys.argv[1] if len(sys.argv) > 1 else '0'
+if end == 'term':
+    child = subprocess.Popen([sys.executable, '-c', {WRITER!r}], stdout=subprocess.PIPE)
+    child.stdout.read(1)
+    seen['outliver'] = child.pid
+json.dump(seen, open(os.path.join(os.environ['RESEARCH_RUN_DIR'], 'seen.json'), 'w'))
+os.killpg(0, signal.SIGTERM) if end == 'term' else sys.exit(int(end))
+"""
 
 
 def _git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+
+def _gone(pid: int) -> bool:
+    st = stat_fields(pid)
+    return st is None or st["state"] in ("Z", "X")
+
+
+@pytest.fixture
+def outlivers():
+    """The WRITERs a test's runs left; any still running at the end are killed (the old runner left them writing)."""
+    pids: list[int] = []
+    yield pids
+    for pid in pids:
+        if not _gone(pid):
+            os.kill(pid, signal.SIGKILL)
 
 
 def _workspace(repo: Path) -> None:
@@ -91,10 +134,14 @@ def _clones(tmp_path: Path) -> list[Path]:
 
 
 @pytest.mark.parametrize("end, rc", [("0", 0), ("3", 3), ("term", 143)])
-def test_a_local_run_gets_a_clone_at_head_outside_its_run_dir_removed_however_it_ends(tmp_path, repo, end, rc):
+def test_a_local_run_gets_a_clone_at_head_outside_its_run_dir_removed_however_it_ends(tmp_path, repo, outlivers, end, rc, capsys):
     assert _run(tmp_path / "runs", "clone", end) == rc
     [run_dir] = (tmp_path / "runs").iterdir()
     seen = _seen(run_dir)
+    if end == "term":
+        outlivers.append(seen["outliver"])
+        assert _gone(seen["outliver"]), "the group member that ignored SIGTERM is SIGKILLed before the clone is removed"
+        assert "1 process(es) of the workload's group" in capsys.readouterr().err
     tree = Path(seen["cwd"])
     assert seen["head"] == _git(repo, "rev-parse", "HEAD") and tree.name == "tree"
     assert tree.parent.parent == (tmp_path / "tmp").resolve() and not tree.is_relative_to(run_dir.resolve())
@@ -153,7 +200,25 @@ def test_remove_says_why_it_could_not(tmp_path):
     assert clone.remove(tmp_path / "f").startswith("NotADirectoryError")
 
 
-def test_on_a_machine_the_clone_is_the_shipped_commit_beside_src_and_the_shared_tree_is_untouched(tmp_path, repo, machine, capsys):
+def test_remove_tries_again_while_the_clone_is_still_filling(tmp_path, monkeypatch):
+    (tmp_path / "d" / "x").mkdir(parents=True)
+    (tmp_path / "e").mkdir()
+    real, calls = shutil.rmtree, []
+
+    def filling(path, *a, **k):
+        calls.append(path)
+        if len(calls) == 1 or path == tmp_path / "e":
+            raise OSError(errno.ENOTEMPTY, "Directory not empty", str(path))
+        return real(path, *a, **k)
+
+    monkeypatch.setattr(shutil, "rmtree", filling)
+    assert clone.remove(tmp_path / "d") is None and len(calls) == 2 and not (tmp_path / "d").exists()
+    why = clone.remove(tmp_path / "e")
+    assert why.startswith("OSError: [Errno 39] Directory not empty") and why.endswith(f"after {clone.REMOVE_ATTEMPTS} attempts")
+
+
+def test_on_a_machine_the_clone_is_the_shipped_commit_beside_src_and_the_shared_tree_is_untouched(tmp_path, repo, machine, outlivers,
+                                                                                                    capsys):
     _workspace(repo)
     assert _on(tmp_path, repo, "clone/pkg", "term") == 0
     assert "workload cwd: --cwd clone/pkg (the run's own clone of the shipped tree" in capsys.readouterr().err
@@ -164,6 +229,8 @@ def test_on_a_machine_the_clone_is_the_shipped_commit_beside_src_and_the_shared_
     shared = (machine / "src" / sha).resolve()
     tree = (machine / "scratch" / rid / "tree").resolve()
     seen = _seen(run_dir)
+    outlivers.append(seen["outliver"])
+    assert _gone(seen["outliver"]) and "outlived it" in (run_dir / "launcher.log").read_text(), "SIGKILLed before the removal"
     assert Path(seen["cwd"]) == tree / "pkg" and seen["head"] == sha
     assert Path(seen["module"]) == tree / "m" / "src" / "leaky" / "__init__.py", "the workspace's code is imported from the clone"
     assert Path(seen["wrote"]) == tree / "m" / "reports" / "plot.txt", "so a write beside its __file__ lands in the clone"

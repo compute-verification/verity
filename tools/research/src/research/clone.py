@@ -11,6 +11,7 @@ is refused, never guessed at.
 """
 from __future__ import annotations
 
+import errno
 import os
 import shutil
 import subprocess
@@ -92,12 +93,22 @@ def make(source_root: Path, dest: Path, *, commit: str | None = None, clean: boo
     return head
 
 
-def remove(path: Path) -> str | None:
+#: rmtree passes over a clone that is still filling (ENOTEMPTY): a process that has just been SIGKILLed may finish one more write
+REMOVE_ATTEMPTS = 3
+
+
+def remove(path: Path, attempts: int = REMOVE_ATTEMPTS) -> str | None:
     """Remove a run's clone directory: None once it is gone, else why not (the caller reports it; it never fails a run)."""
-    try:
-        shutil.rmtree(path)
-    except FileNotFoundError:
-        pass
-    except OSError as e:
-        return f"{type(e).__name__}: {e}"
-    return None
+    why = None
+    for _ in range(attempts):
+        try:
+            shutil.rmtree(path)
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            why = f"{type(e).__name__}: {e}"
+            if e.errno != errno.ENOTEMPTY:
+                return why
+        if not os.path.lexists(path):
+            return None
+    return f"{why or 'it kept filling'} after {attempts} attempts"
