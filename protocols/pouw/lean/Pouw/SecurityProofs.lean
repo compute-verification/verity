@@ -110,6 +110,7 @@ import Pouw.SecurityProofs.PearlC.Tile4Circuit
 import Pouw.SecurityProofs.PearlC.TileCapRev1Gamma
 import Pouw.SecurityProofs.PearlC.TileCheck
 import Pouw.SecurityProofs.PearlC.TileCircuit
+import Pouw.SecurityProofs.PearlC.TileProtocol
 import Pouw.SecurityProofs.PearlC.TileValues
 import Pouw.SecurityProofs.PearlC.TileGamma
 import Pouw.SecurityProofs.PearlC.TileUOnlyGamma
