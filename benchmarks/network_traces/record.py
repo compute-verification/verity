@@ -229,7 +229,8 @@ async def replay(port: int, model: str, requests: list[dict], t0: float, drain_u
 def offline_engine(args: argparse.Namespace, commit: bool, meta: dict, mix: Sequence[tuple[str, list[dict], float]]):
     """vLLM's engine in this process as the Commit stage builds it (`verity_vllm.engine.build`: batch-invariant, eager,
     no prefix cache), and with `commit` the reference committer (`native_host`), which hashes every Call output of
-    every step into the step's Merkle root on host threads, keeping the tree levels but not the values. Its device
+    every step into the step's Merkle root on host threads (or on the GPU, `--gpu-tree`), keeping the tree levels but
+    not the values. At about 1.4 MB of Call outputs per token, the host path can't keep up with the mixes. Its device
     staging is sized from the mix's envelope as the Commit stage arms it (`size_arena`: two decode-sized blocks and one
     prefill-sized one), and refused here, before any request, when it doesn't fit beside the engine."""
     from verity_vllm.engine import vllm_adapter as va
@@ -245,7 +246,7 @@ def offline_engine(args: argparse.Namespace, commit: bool, meta: dict, mix: Sequ
     from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
     com = NativeHostCommitter(eng, run_id="network-traces", hash_threads=args.hash_threads, retain_values=False,
-                              arena_bytes=None)
+                              arena_bytes=None, gpu_tree=args.gpu_tree)
     t = clock()
     com.register_weights()
     rows = [r for _, reqs, _ in mix for r in reqs]
@@ -736,6 +737,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--gpu-memory-utilization", type=float, default=0.7,
                    help="the offline engine's, leaving the committer's prefill-sized staging block room beside it")
     r.add_argument("--hash-threads", type=int, default=2, help="the committer's (the Commit stage's default)")
+    r.add_argument("--gpu-tree", action="store_true",
+                   help="the committer hashes each step's stream on the GPU (CMT-2's chunk tree), with no copy to the host")
     c = sub.add_parser("convert", help="rebuild trace.json and summary.json in job directories")
     c.add_argument("dirs", nargs="+", type=Path)
     c.add_argument("--ingress-bytes", choices=("text", "body"), default="text")
