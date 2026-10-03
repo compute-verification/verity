@@ -46,6 +46,9 @@
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
   research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...]   # what runs on the Nebius nodes
                                                  # (pods/nebius/deploy.toml) against main, and installs from a pushed commit (research/deploy.py)
+  research usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] | wasters --day YYYY-MM-DD [--top 3] [--json]
+                                                 # GPU-h held, busy and useful per node and UTC hour, and the holdings that held GPUs
+                                                 # idle: `cluster usage` (tools/cluster usage.py) over the console's record on vy-nebius-1
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
@@ -1045,6 +1048,22 @@ def cmd_inspect(argv: list[str]) -> int:
     return 0
 
 
+CLUSTER_SRC = Path(__file__).resolve().parents[3] / "cluster" / "src"
+
+
+def cmd_usage(argv: list[str]) -> int:
+    """`research usage ...` is `cluster usage ...`, run from this tree's tools/cluster (research never imports cluster), with
+    its output and exit code: 0, 1 when the record is unread or stale, 2 on bad arguments or with no tools/cluster here."""
+    import subprocess
+
+    if not (CLUSTER_SRC / "cluster" / "usage.py").is_file():
+        print(f"research usage: no tools/cluster beside this research package ({CLUSTER_SRC})", file=sys.stderr)
+        return 2
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(CLUSTER_SRC) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    return subprocess.run([sys.executable, "-m", "cluster", "usage", *argv], env=env).returncode
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] in ("-h", "--help"):
@@ -1135,6 +1154,8 @@ def main(argv: list[str] | None = None) -> int:
         from .slack import main as slack_main
 
         return slack_main(rest, prog=f"research {cmd}")
+    if cmd == "usage":
+        return cmd_usage(rest)
     age = checkout_age()
     print(f"research: unknown command {cmd!r}" + (f". {age} If {cmd!r} is newer than that, update the checkout "
                                                   "(`git pull`) and retry." if age else "") + f"\n\n{__doc__.strip()}",
