@@ -428,6 +428,36 @@ one ideal permutation `Π₂`, and `Pous.BandMulti.chainBandSeg` lays out segmen
 exact setup check (`Pous/Protocol/Model/PubEncoder.lean`), under the four deployment conditions in their docstrings. The
 band needs `d ≥ D`.
 
+### The graded audit
+
+The graded audit (`Pous/Protocol/Model/Graded.lean`, `GradedMeets` in `Pous/Protocol/Accounting/GradedMeets.lean`) is
+the sequential audit with a grace of `t` late answers. A round is late when its program takes more than `D` rounds or
+`Q` queries on its own path, and every round, late or not, stays within a hard bound `(D_late, Q_late)`. The audit
+accepts when every answer is correct and at most `t` are late; at `t = 0` it is the sequential audit
+(`gradedMeets_zero_iff`). `Pous.SecurityProofs.BandGradedMeetsFamily` proves, with no hypothesis, the band at every
+segment count from 1 to `2^64` and every `d ≥ 5`, at `D = 5`, `Q = 2^20`, `ε = 2^-128`, `δ = 1%`, for
+`(t, k) = (0, 111), (1, 160), (2, 203), (3, 243)`, whenever `5 ≤ D_late ≤ d`, `D_late ≤ 12` and `Q_late ≥ 2^20`
+(`Pous/SecurityProofs/Graded/`: `theorem1_ii_graded` with the binomial tail `pr_hits_ge_le_binomial`).
+
+The game assumes three requirements on the protocol, and the certificate says nothing about a protocol that breaks one:
+
+1. **No pipelining.** The verifier sends challenge `j + 1` only after it receives answer `j`, and each round's deadline
+   runs from its own challenge's send time.
+2. **A hard deadline.** An answer past `Δ_late` rejects, and a wrong or missing answer rejects. `D_late` is the
+   sequential `Π₂` calls an adversary completes within `Δ_late + RTT`, as `D` is within `Δ + RTT`: `D_late ≤ 12` at
+   241.5 µs per call is `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14` ms, the band's cliff at `d = 12`.
+3. **Every answer past `Δ` is counted late.**
+
+**Isolation over the whole graded window.** Perfect isolation ("The problem") is assumed for the whole graded audit, not
+round by round: from the first challenge to the last answer the server has no outside help, and its state when each
+challenge arrives is its storage at rest. The worst row is `t = 3`, `k = 243` rounds. After a late answer the prover
+times the next arrival, so the certificate needs the whole window to be too short to re-encode `C` from `W`: under the
+cap it is at most `240·5 + 3·12 = 1,236` sequential `Π₂` calls, and re-encoding a segment takes
+`R(d) = Σ_{v<512} (min(v, d) + 1) ≥ R(5) = 3,057` (6,578 at `d = 12`).
+
+No graded verifier exists yet: `audit.TimedVerifier` and `protocol.Verifier` accept only when every answer is correct
+and on time, the `t = 0` rule (`DISCREPANCIES.md` B5).
+
 ### The dense scheme
 
 `Pous.Dense.denseScheme B ℓ` is one segment of `B` blocks of `ℓ` bits: `C_i = W_i ⊕ H(i, C_{<i})` over the complete DAG,
@@ -489,6 +519,7 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 | `P3ConcreteMeets64`, `P3ConcreteMeets14GB`, `P3ConcreteMeets64D12` | P3 with the overwrite-chain `H` (`Pous/Protocol/Model/P3Chain.lean`), 64 KB labels, `k = 106`: one segment and 971 segments (14.005 GB) on `B(220, 12)` at `D = 10`, and `B(220, 16)` at `D = 12`, in the ideal two-permutation model | proved |
 | `BandChainMeets64`, `BandChainMeets64D5`, `BandChainMeets64D12`, `BandMultiMeets14`, `BandMultiMeets14K106`, `BandMultiMeetsFamily` | the band over the overwrite chain (`Pous/Protocol/Model/BandChain.lean`): 64 KiB labels, `D = 5`, `k = 111`, every `d ≥ 5` and `d = 5`, `12`; 448 segments (14 GiB) at `k = 111`, and at `k = 106` per segment; every segment count from 1 to `2^64` at `k = 111` | proved |
 | `BandPubMeets64`, `BandPubMeets14`, `BandPubMeets14Global` | the same band rows with a public encoder and the exact setup check (`Pous/Protocol/Model/PubEncoder.lean`, `Pous/Protocol/Accounting/PubMeets.lean`) | proved |
+| `BandGradedMeetsFamily` | the band with up to `t` late answers (`Pous/Protocol/Model/Graded.lean`, `Pous/Protocol/Accounting/GradedMeets.lean`): every segment count from 1 to `2^64`, `d ≥ 5`, `D = 5`, `(t, k) = (0, 111), (1, 160), (2, 203), (3, 243)`, each late round within `(D_late, Q_late)` with `5 ≤ D_late ≤ d`, `D_late ≤ 12` | proved |
 | `ChainDenseMeets64`, `ChainDenseMeets111` | the dense scheme over the overwrite chain: 64 KiB at `D = 5`, and the deployment point (`2^16` blocks of 1 KiB, `D = 64`), both at `k = 111` | proved |
 | `B5Stacked` | the one-way bound on Fisch's stacked graph | proved |
 | `DenseMeets64`, `SegMeets14`, `SegTagMeets14` | the dense scheme at 64 KB, `D = 5`, `k = 106`, in the ideal-hash model: one segment, 448 segments (14 GB), and the 448 segments keyed as the implementation keys them, for every salt | proved |
@@ -513,7 +544,8 @@ Each is a `Prop` taken as a hypothesis, never an `axiom`.
 
 - `|C| ≥ |W|` in `Meets` (so `|pp| ≤ 0.05·|W|`): otherwise a scheme can keep `W` in the free `pp`.
 - `ε_crypto ≤ 2^-128`: an unbounded `ε` makes the requirement vacuous.
-- Which reveal a graded `Meets` may use, which waits on the per-answer versus shared deadline.
+- Which reveal a graded `Meets` may use, which waits on the per-answer versus shared deadline. `GradedMeets` is the
+  sequential reveal with a deadline per answer.
 
 ## Choices that could be wrong
 
