@@ -247,7 +247,7 @@ def test_a_timing_job_needs_an_owner_infra_lists_and_gets_at_most_a_gpus_memory_
 def test_fill_never_stops_a_timing_job_and_a_whole_node_window_waits_for_it(node2, monkeypatch):
     """A timing chunk is not preemptible. A waiter, a timed lease, a Commit or a fence stops other fill jobs, never it; a window's
     `gpu-lease 8 --wait` waits for it to end (fill backfills meanwhile), and then stops the rest of fill. No chunk starts whose
-    max_min reaches a booked window."""
+    max_min, and the 2 min past it a chunk may hold its GPU, reach a booked window."""
     load, fill, _ = node2
     fr = load()
     held, want, started, stopped, run = fake_node(fr, monkeypatch, fill)
@@ -296,12 +296,14 @@ def test_fill_never_stops_a_timing_job_and_a_whole_node_window_waits_for_it(node
     t = fr.utc("2026-10-03T23:00Z")
     (fill / "windows").write_text("2026-10-03T23:00Z 30 # a booked window\n")
     queue(fill, "nw-next.sh", TIMING)
-    monkeypatch.setattr(fr, "wall", lambda: t - 59 * 60)
+    # 60 min and the 2 a chunk may overrun them (gpu-lease's kill, fill's reap of what outlives it) reach the window from 21:59Z
+    monkeypatch.setattr(fr, "wall", lambda: t - 61 * 60)
     fr.tick(8)
-    assert all(name != "nw-next.sh" for name, _, _ in started)        # 60 min from 22:01Z reach the window
-    monkeypatch.setattr(fr, "wall", lambda: t - 60 * 60)
+    assert all(name != "nw-next.sh" for name, _, _ in started)
+    monkeypatch.setattr(fr, "wall", lambda: t - 62 * 60)
     fr.tick(8)
     assert started[-1] == ("nw-next.sh", "7", "124-139")
+    assert fr.clears({"max_min": 30}, fr.windows(), t - 30 * 60)       # a job a window stops needs no margin
 
 
 def test_a_new_fence_moves_other_fill_jobs_threads_but_never_a_timing_jobs(node2, monkeypatch):

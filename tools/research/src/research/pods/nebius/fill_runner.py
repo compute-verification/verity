@@ -44,7 +44,8 @@ Every POLL_S seconds the runner:
   - stops a job past its max_min (not counting time paused) and requeues it;
   - starts GPU jobs on every free GPU beyond RESERVE when nobody waits, except the GPUs listed in FILL_DIR/keep-free
     (e.g. `1`, or `0,1`, with an optional `# reason`; a waiter pinned inside them doesn't count), and none whose max_min would reach into a window booked in
-    FILL_DIR/windows (`2026-10-01T10:00Z 30 # who`, one per line: start in UTC, minutes); Commit guests first, then pous,
+    FILL_DIR/windows (`2026-10-01T10:00Z 30 # who`, one per line: start in UTC, minutes; a timing job's max_min plus
+    TIMING_MARGIN_MIN, 2); Commit guests first, then pous,
     then the rest of Verity's (only with 2+ GPUs free), and a Commit that finds no free GPU stops the newest proofs or pous
     GPU job outside a window; and CPU jobs up to CPU_SLOTS, pinned
     to CPU_SET at nice 19; more queued CPU jobs borrow the Verity pool's idle slots while no Verity job waits;
@@ -133,6 +134,9 @@ TIMING_CPU_SET = os.environ.get("FILL_TIMING_CPU_SET", "124-191")
 TIMING_SLICE = os.environ.get("FILL_TIMING_SLICE", "vy-timing.slice")
 # a chunk is 55 min plus its startup (benchmarks/network_traces/run.sh leases --max-min 60); booked windows still bound it
 TIMING_MAX_MIN = int(os.environ.get("FILL_TIMING_MAX_MIN", "60"))
+# how far past its max_min a timing job may hold its GPU: gpu-lease's SIGKILL 20 s after it, a tick to see what outlived the
+# job, and the stop's 20 s to SIGKILL
+TIMING_MARGIN_MIN = 2
 TIMING_MAX_CPUS = 16
 CPU_ROOT = Path(os.environ.get("FILL_CPU_ROOT", "/sys/devices/system/cpu"))
 QUOTA_LOG = Path(os.environ.get("FILL_QUOTA_LOG", "/workspace/verity-guest/kueue-backup/quota-changes.log"))
@@ -659,8 +663,10 @@ wall = time.time
 
 
 def clears(h: dict, booked: list[tuple[float, float]], t: float) -> bool:
-    """Whether a job started at `t` ends, at its max_min, before every booked window, or starts after it."""
-    return all(t + 60 * h["max_min"] <= s or t >= e for s, e in booked)
+    """Whether a job started at `t` ends, at its max_min (a timing job, which no window stops, TIMING_MARGIN_MIN after it),
+    before every booked window, or starts after it."""
+    end = t + 60 * (h["max_min"] + (TIMING_MARGIN_MIN if h.get("timing") else 0))
+    return all(end <= s or t >= e for s, e in booked)
 
 
 def next_job(left: list, counts: Counter):
