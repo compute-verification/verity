@@ -27,6 +27,7 @@ import pytest
 from research import remote
 from research.pods import lease as L
 from research.pods import registry
+from research.store import custody as CU
 
 NEBIUS = Path(registry.__file__).resolve().parent / "nebius"
 GPU_LEASE = Path(registry.__file__).resolve().parent / "sh" / "gpu_lease.sh"
@@ -1240,7 +1241,7 @@ def test_n2_commit_gives_a_long_row_the_long_max_min():
 
 #: n2_custody.sh's node 1, faked under N1_FS: rsync copies the run dir there, and ssh answers the round's calls as node 1 would: the
 #: research tree, the Job (its verify writes .custody over node 1's copy; a run JOB_ERR's file names fails with that line instead),
-#: and the cat of that .custody. Every call is a line of FAKE_LOG.
+#: and the cat of that .custody; DURING_JOB=RUN:PATH appends to PATH while RUN's Job runs. Every call is a line of FAKE_LOG.
 _N2_RSYNC = r'''
 import os, shutil, sys
 with open(os.environ["FAKE_LOG"], "a") as f:
@@ -1267,6 +1268,10 @@ err = json.load(open(env["JOB_ERR"])).get(os.path.basename(d)) if os.path.exists
 if err:
     print(err, file=sys.stderr)
     sys.exit(1)
+run, _, path = env.get("DURING_JOB", "").partition(":")
+if run == os.path.basename(d):
+    with open(path, "a") as f:
+        f.write("a line node 2 wrote after the rsync\n")
 copy, files = env["N1_FS"] + d, {}
 for base, _, names in os.walk(copy):
     for n in names:
@@ -1396,6 +1401,26 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     for p in (state / "held").iterdir():
         p.rename(state / "pushed" / p.name)
     assert n2.round_().returncode == 0
+
+
+@N2_CUSTODY
+def test_n2_custody_takes_node_1s_marker_home_only_over_the_files_node_1_verified(tmp_path):
+    """Node 1's .custody vouches for the copy the rsync left there, on node 1's clock. A line appended on node 2 after the rsync and
+    before the Job's verify is in no run record, yet the marker listed the file and was dated after the append, so node 2's triage
+    called the run r2. It comes home only over files with the size and sha256 it lists, dated by node 2's clock. A run still writing
+    any file (its sampler, a late log line) is settling, whatever its status.json says."""
+    n2 = _n2_custody(tmp_path)
+    ok, late, busy = (n2.run(f"r20261003-10000{i}-000{i}", {"state": "done"}, extra=1) for i in (1, 2, 3))
+    (busy / "row0.jsonl").write_text("{}\n{}\n")
+    first = n2.round_(DURING_JOB=f"{late.name}:{late / 'row0.jsonl'}")
+    assert first.returncode == 1 and n2.names("pushed") == [ok.name] and busy.name not in n2.calls()
+    assert json.loads((ok / ".custody").read_text())["verified_from"] < 4102444800.0, "dated by node 2's clock, not node 1's"
+    assert CU.marker_problem(ok) is None
+    assert (f"{late} (c1, done): push failed (1 so far): node 1's .custody not taken home: row0.jsonl differs from node 1's copy: "
+            "changed here after the rsync") in first.stdout
+    assert not (late / ".custody").exists() and not (late / ".custody.tmp").exists() and CU.marker_problem(late) == "no .custody"
+    second = n2.round_()
+    assert second.returncode == 0 and n2.calls().count(f"{late}/ n1.invalid") == 1, "a file of it changed: settling again"
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")

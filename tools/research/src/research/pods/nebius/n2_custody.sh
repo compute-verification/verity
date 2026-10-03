@@ -12,8 +12,9 @@
 #
 # A run has ended when its status says so or its process is gone: a runner killed before it recorded an end (an OOM kill of its
 # scope) is published with --force and keeps the state it last wrote. A run its own custody preserved (.custody "preserved": true)
-# is only marked; any other waits VY_CUSTODY_SETTLE_S after its records last changed, so a runner's own custody finishes first.
-# A run is marked in STATE/pushed/ once node 1's Job verified it on R2 and its .custody is back. A failure is logged with its reason
+# is only marked; any other waits VY_CUSTODY_SETTLE_S after any file in it last changed, so a runner's own custody finishes first.
+# A run is marked in STATE/pushed/ once node 1's Job verified it on R2 and its .custody is back, which it is only while every file
+# here is the one node 1's copy had. A failure is logged with its reason
 # and retried every round, never given up, and the round exits 1, which systemd records (`systemctl --user status n2-custody`).
 # A round is bounded: at most VY_CUSTODY_MAX_RUNS pushes, none started after VY_CUSTODY_PASS_S seconds, runs that failed before
 # going last; the rest wait for the next. A run whose attempt node 1 already holds without a run record (the stopgap published it)
@@ -53,7 +54,7 @@ if [ "$DRY" = 0 ] && pids=$(pgrep -f -- "^[^ ]*bash $LOOP( |\$)"); then
 fi
 
 # "CAMPAIGN STATE AGE_S FILES BYTES": STATE is the status's, or dead for a run still marked running whose process is gone; AGE_S since
-# its records last changed (status.json, .custody); FILES and BYTES of the run dir, counted no further than MAX_FILES + 1 files
+# any file of the run dir last changed; FILES and BYTES of the run dir; all three counted no further than MAX_FILES + 1 files
 info() {
   python3 - "$1" "$MAX_FILES" << 'EOF'
 import json, os, re, sys, time
@@ -80,25 +81,59 @@ if state == "running":
     except Exception:           # no status yet, or no pid that parses: never taken for dead
         alive = True
     state = "running" if alive else "dead"
-mt = max([os.path.getmtime(p) for p in (f"{d}/status.json", f"{d}/.custody") if os.path.exists(p)] or [time.time()])
-n = size = 0
+now = time.time()
+mt, n, size = now, 0, 0
 if state != "running":
+    mt = 0
     for base, _, files in os.walk(d):
         for f in files:
             n += 1
             try:
-                size += os.lstat(os.path.join(base, f)).st_size
+                s = os.lstat(os.path.join(base, f))
             except OSError:
-                pass
+                continue
+            size, mt = size + s.st_size, max(mt, s.st_mtime)
             if n > cap:
                 break
         if n > cap:
             break
-print(m.group(1) if m else "-", state, int(time.time() - mt), n, size)
+print(m.group(1) if m else "-", state, int(now - (mt or now)), n, size)
 EOF
 }
 
 human() { awk -v b="$1" 'BEGIN { split("B KiB MiB GiB TiB", u); i = 1; while (b >= 1024 && i < 5) { b /= 1024; i++ } printf "%.1f %s", b, u[i] }'; }
+
+# relay RUN_DIR: node 1's .custody (RUN_DIR/.custody.tmp) vouches for node 1's copy, on node 1's clock. It holds here only when every
+# file here is in it with the same size and sha256, and from this node's clock read before hashing (node 1's if earlier), so a file
+# written here after the rsync stops it now, and one written after this check voids it (store.custody.marker_problem); else says why
+relay() {
+  python3 - "$1" << 'EOF'
+import hashlib, json, os, sys, time
+d = sys.argv[1]
+try:
+    m = json.load(open(f"{d}/.custody.tmp"))
+    t0, files = min(float(m["verified_from"]), time.time()), dict(m["files"])
+except (OSError, ValueError, KeyError, TypeError) as e:
+    sys.exit(f"it doesn't read ({type(e).__name__}: {e})")
+if m.get("preserved") is not True:
+    sys.exit(f"not preserved ({m.get('error') or '?'})")
+markers = {".fetched", ".fetched.tmp", ".custody", ".custody.tmp", "preserved.json", "run-files.evicted.json", ".custody-trimmed.json"}
+for base, _, names in os.walk(d):
+    for f in names:
+        p = os.path.join(base, f)
+        rel = os.path.relpath(p, d)
+        if rel in markers or os.path.islink(p) or not os.path.isfile(p):     # store.custody.run_files
+            continue
+        if rel not in files:
+            sys.exit(f"{rel} is not in it: written here after the rsync")
+        with open(p, "rb") as fh:
+            if list(files[rel]) != [os.fstat(fh.fileno()).st_size, hashlib.file_digest(fh, "sha256").hexdigest()]:
+                sys.exit(f"{rel} differs from node 1's copy: changed here after the rsync")
+m["verified_from"] = t0
+with open(f"{d}/.custody.tmp", "w") as fh:
+    json.dump(m, fh)
+EOF
+}
 
 push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 an attempt without a run record, else 1; why= says
   local root=$1 dst=$2 r=$3 name force=
@@ -128,11 +163,16 @@ EOF
     grep -qs "names no run record" "$STATE/.job.err" && return 4
     return 1
   fi
-  # verify wrote it only with the attempt and its run record verified on R2; node 2's dir holds the same files at the same times
-  ssh -n "$N1" "sudo -n cat $dst/$r/.custody" > "$root/$r/.custody.tmp" \
-    && python3 -c 'import json, sys; sys.exit(0 if json.load(open(sys.argv[1])).get("preserved") is True else 1)' "$root/$r/.custody.tmp" \
-    && mv "$root/$r/.custody.tmp" "$root/$r/.custody" \
-    || { rm -f "$root/$r/.custody.tmp"; why="no preserved .custody at $N1:$dst/$r"; return 1; }
+  # verify wrote it only with the attempt and its run record verified on R2, over node 1's copy as the rsync left it
+  if ! ssh -n "$N1" "sudo -n cat $dst/$r/.custody" > "$root/$r/.custody.tmp"; then
+    rm -f "$root/$r/.custody.tmp"
+    why="no .custody at $N1:$dst/$r"
+    return 1
+  fi
+  why=$(relay "$root/$r" 2>&1) && mv "$root/$r/.custody.tmp" "$root/$r/.custody" && return 0
+  rm -f "$root/$r/.custody.tmp"
+  why="node 1's .custody not taken home: $why"
+  return 1
 }
 
 # runs that have not failed go first, so a run that keeps failing never takes a newer one's place in a bounded round
