@@ -11,8 +11,10 @@ Three measurements, each written to one JSON under `--out`:
   host DRAM, by async H2D copies overlapped with the digest of the HBM-resident rest, over a sweep of `R` and `f`; and the
   PCIe H2D rate it measures.
 
-Run on a leased GPU through node 2's fill queue (`job.sh`). The honest/cheater separation and the recommended `R`, `T` are
-derived from these JSONs by `analyze.py`.
+Run on a leased GPU through the research queue (`research run --queue --on vy-nebius-1 --gpus 1 ...`). `honest` and `cheater`
+write results per point to `--out` and skip points already there, so a preempted sweep resumes from a persistent `--out`
+instead of starting over. The honest/cheater separation and the recommended `R`, `T` are derived from these JSONs by
+`analyze.py`.
 """
 
 from __future__ import annotations
@@ -108,6 +110,10 @@ def dist(ms: list[float], nbytes: int) -> dict:
 
 
 def cmd_validate(args, torch, meta):
+    prev = load_existing(args, "validate.json", {"kind": "validate"})
+    if prev.get("all_ok"):  # a resume need not re-validate; the kernel is bit-exact and the hash tables are fixed
+        print("validate: OK (cached)")
+        return
     n = 64
     C = make_C(torch, n, seed=1)
     host = C.to("cpu").numpy().view(np.uint32)
@@ -196,13 +202,16 @@ def raw_bandwidth(args, torch):
 def cmd_honest(args, torch, meta):
     sizes = [int(x) for x in args.c_gib.split(",")]
     rs = [1 << e for e in range(args.r_lo, args.r_hi + 1)]
-    out = {"meta": meta, "kind": "honest", "l2_mib": 128, "raw": {}, "points": []}
+    out = load_existing(args, "honest.json", {"meta": meta, "kind": "honest", "l2_mib": 128, "raw": {}, "points": []})
+    done = {(p["c_gib"], p["R"]) for p in out["points"]}
     for cg in sizes:
         n = (cg * GIB) // D.BLOCK_BYTES
-        C = make_C(torch, n, seed=cg)
+        C = None  # allocate C lazily, so a resume that skips a whole size never touches HBM for it
         for r in rs:
-            if r > n:
+            if r > n or (cg, r) in done:
                 continue
+            if C is None:
+                C = make_C(torch, n, seed=cg)
             idx = random_idx(torch, n, r, seed=0x1000 + r)
             g, z = D.lane_points(0xB01C, 0)
             g1, _ = D.lane_points(0xB01C, 1)
@@ -227,16 +236,25 @@ def cmd_honest(args, torch, meta):
                 "digest1": dist(f_ms, nbytes),
                 "kernel2": dist(two_ms, nbytes),
             })
+            write(args, "honest.json", out)  # per-point: a preemption keeps every point already measured
             print(f"honest C={cg}GiB R={r}: kernel1 p50 {dist(k_ms, nbytes)['ms_p50']:.3f} ms "
                   f"{dist(k_ms, nbytes)['gbps_at_p50']:.0f} GB/s")
-        del C
-        torch.cuda.empty_cache()
-    write(args, "honest.json", out)  # the device-resident result is on disk before the riskier reference rates
-    try:
-        out["raw"] = raw_bandwidth(args, torch)
-    except Exception as e:  # a reference-rate hiccup must not cost the sweep
-        out["raw"] = {"error": repr(e)}
+        if C is not None:
+            del C
+            torch.cuda.empty_cache()
+    if not out.get("raw") or out["raw"].get("error"):  # the reference rates once, after the sweep (or on a resume that lacks them)
+        try:
+            out["raw"] = raw_bandwidth(args, torch)
+        except Exception as e:  # a reference-rate hiccup must not cost the sweep
+            out["raw"] = {"error": repr(e)}
+        write(args, "honest.json", out)
+    want = [(cg, 1 << e) for cg in sizes for e in range(args.r_lo, args.r_hi + 1)
+            if (1 << e) <= (cg * GIB) // D.BLOCK_BYTES]
+    have = {(p["c_gib"], p["R"]) for p in out["points"]}
+    out["complete"] = all(k in have for k in want) and bool(out.get("raw")) and not out["raw"].get("error")
     write(args, "honest.json", out)
+    if out["complete"]:
+        print("HONEST_COMPLETE")
 
 
 # --------------------------------------------------------------------------- cheater
@@ -342,44 +360,54 @@ def measure_cheater_zerocopy(torch, C_dev, host_pin, idx, host_hit, g):
 def cmd_cheater(args, torch, meta):
     cg = int(args.cheater_c_gib)
     n = (cg * GIB) // D.BLOCK_BYTES
-    C = make_C(torch, n, seed=cg)
-    host_pin = torch.empty((n, D.WORDS), dtype=torch.int32, pin_memory=True)
-    host_pin.copy_(C)  # the cheater's host copy of C; challenged host blocks are read contiguously from here
     g, z = D.lane_points(0xB01C, 0)
     rs = [1 << e for e in range(args.r_lo, args.r_hi + 1)]
     fs = [float(x) for x in args.fracs.split(",")]
-    out = {"meta": meta, "kind": "cheater", "c_gib": cg, "n_blocks": n, "points": []}
-    zc_ok = True  # once zero-copy fails (e.g. UVA unsupported), stop retrying it but keep the async sweep
-    for r in rs:
-        idx = random_idx(torch, n, r, seed=0x2000 + r)
-        for f in fs:
-            mask = host_resident_mask(torch, n, f, seed=0x3000 + int(f * 1000))
-            host_hit = mask[idx]
-            ms, rh = measure_cheater_async(torch, C, host_pin, idx, host_hit, g)
-            nbytes = r * D.BLOCK_BYTES
-            host_bytes = rh * D.BLOCK_BYTES
-            d = dist(ms, nbytes)
-            d["f_nominal"] = f
-            d["R_host"] = rh
-            d["host_bytes"] = host_bytes
-            d["pcie_gbps_at_p50"] = (host_bytes / (d["ms_p50"] / 1e3) / 1e9) if rh else 0.0
-            dz = None
-            if zc_ok:
-                try:
-                    zc_ms, _ = measure_cheater_zerocopy(torch, C, host_pin, idx, host_hit, g)
-                    dz = dist(zc_ms, nbytes)
-                    dz["pcie_gbps_at_p50"] = (host_bytes / (dz["ms_p50"] / 1e3) / 1e9) if rh else 0.0
-                except Exception as e:
-                    zc_ok = False
-                    out["zerocopy_error"] = repr(e)
-            out["points"].append({"R": r, "f": f, "async": d, "zerocopy": dz,
-                                  "R_host": rh, "host_bytes": host_bytes})
-            write(args, "cheater.json", out)  # incremental: a later crash keeps the points already measured
-            zp = f"{dz['ms_p50']:.3f}" if dz else "n/a"
-            print(f"cheater C={cg}GiB R={r} f={f}: Rh={rh} async p50 {d['ms_p50']:.3f} ms zerocopy p50 {zp} ms")
+    out = load_existing(args, "cheater.json", {"meta": meta, "kind": "cheater", "c_gib": cg, "n_blocks": n, "points": []})
+    done = {(p["R"], p["f"]) for p in out["points"]}
+    zc_ok = not out.get("zerocopy_error")  # once zero-copy fails (e.g. UVA unsupported), stop retrying it
+    if not all((r, f) in done for r in rs for f in fs):
+        C = make_C(torch, n, seed=cg)
+        host_pin = torch.empty((n, D.WORDS), dtype=torch.int32, pin_memory=True)
+        host_pin.copy_(C)  # the cheater's host copy of C; challenged host blocks are read contiguously from here
+        for r in rs:
+            idx = None
+            for f in fs:
+                if (r, f) in done:
+                    continue
+                if idx is None:
+                    idx = random_idx(torch, n, r, seed=0x2000 + r)
+                mask = host_resident_mask(torch, n, f, seed=0x3000 + int(f * 1000))
+                host_hit = mask[idx]
+                ms, rh = measure_cheater_async(torch, C, host_pin, idx, host_hit, g)
+                nbytes = r * D.BLOCK_BYTES
+                host_bytes = rh * D.BLOCK_BYTES
+                d = dist(ms, nbytes)
+                d["f_nominal"] = f
+                d["R_host"] = rh
+                d["host_bytes"] = host_bytes
+                d["pcie_gbps_at_p50"] = (host_bytes / (d["ms_p50"] / 1e3) / 1e9) if rh else 0.0
+                dz = None
+                if zc_ok:
+                    try:
+                        zc_ms, _ = measure_cheater_zerocopy(torch, C, host_pin, idx, host_hit, g)
+                        dz = dist(zc_ms, nbytes)
+                        dz["pcie_gbps_at_p50"] = (host_bytes / (dz["ms_p50"] / 1e3) / 1e9) if rh else 0.0
+                    except Exception as e:
+                        zc_ok = False
+                        out["zerocopy_error"] = repr(e)
+                out["points"].append({"R": r, "f": f, "async": d, "zerocopy": dz,
+                                      "R_host": rh, "host_bytes": host_bytes})
+                write(args, "cheater.json", out)  # incremental: a later crash keeps the points already measured
+                zp = f"{dz['ms_p50']:.3f}" if dz else "n/a"
+                print(f"cheater C={cg}GiB R={r} f={f}: Rh={rh} async p50 {d['ms_p50']:.3f} ms zerocopy p50 {zp} ms")
+        del C, host_pin
+        torch.cuda.empty_cache()
+    have = {(p["R"], p["f"]) for p in out["points"]}
+    out["complete"] = all((r, f) in have for r in rs for f in fs)
     write(args, "cheater.json", out)
-    del C, host_pin
-    torch.cuda.empty_cache()
+    if out["complete"]:
+        print("CHEATER_COMPLETE")
 
 
 # --------------------------------------------------------------------------- io
@@ -390,6 +418,21 @@ def write(args, name: str, obj: dict):
     p = Path(args.out) / name
     p.write_text(json.dumps(obj, indent=2))
     print(f"wrote {p}")
+
+
+def load_existing(args, name: str, default: dict) -> dict:
+    """Resume support: the prior JSON at `--out/name` if it is readable, else `default`. `--out` is a path that persists
+    across runs, so a preempted sweep continues from the points it already wrote instead of starting over."""
+    p = Path(args.out) / name
+    if p.exists():
+        try:
+            prev = json.loads(p.read_text())
+            if isinstance(prev, dict) and prev.get("kind") == default["kind"]:
+                prev.setdefault("points", default.get("points", []))
+                return prev
+        except (ValueError, OSError):
+            pass
+    return default
 
 
 def main():
