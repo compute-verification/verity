@@ -444,11 +444,13 @@ def runner_publish(run_dir: Path, custody_dir: Path, *, tool: Any = None, condit
 # ---- triage (F2) ------------------------------------------------------------------------------------------------------------------------
 
 def _label_verdict(st: Any, run_id: str) -> str | None:
+    from .vocab import CUSTODY, CUSTODY_VALUES
+
     try:
-        labs = st.labels(run_id, key="custody")
+        labs = st.labels(run_id, key=CUSTODY)
     except Exception:  # noqa: BLE001
         return None
-    return str(labs[-1].value) if labs and str(labs[-1].value) in ("waived", "never-ran") else None
+    return str(labs[-1].value) if labs and str(labs[-1].value) in CUSTODY_VALUES else None
 
 
 TRIAGE_SCHEMA = "research/custody-triage/v1"

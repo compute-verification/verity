@@ -427,12 +427,14 @@ def test_triage_sorts_every_run_by_custody_state(tmp_path, monkeypatch, capsys):
     lost = runs / "r20260925-010005-eeee"
     lost.mkdir()
     (lost / "remote.json").write_text(json.dumps({"phase": "launched", "pod_id": POD}))
-    waived = _fixture_run(runs, "r20260925-010006-ffff")
-    st.add_label(waived.name, "custody", "waived", "daniel")
+    waived, empty = _fixture_run(runs, "r20260925-010006-ffff"), _fixture_run(runs, "r20260925-010007-abab")
+    assert data_main(["label", waived.name, "custody", "waived", "--by", "daniel"]) == 0, "triage's own next step, in the vocabulary"
+    assert data_main(["label", empty.name, "custody", "never-ran", "--by", "infra"]) == 0
+    assert data_main(["label", empty.name, "custody", "wavied", "--by", "infra"]) == 2
     capsys.readouterr()
     states = {r["run"]: r["state"] for r in CU.triage(LocalStore(), runs)}
     assert states == {r2.name: "r2", plain.name: "attempt-no-record", fetched.name: "fetched", never.name: "never-ran",
-                      lost.name: "no-custody", waived.name: "waived"}
+                      lost.name: "no-custody", waived.name: "waived", empty.name: "never-ran"}
     assert data_main(["custody", "--triage", "--runs-dir", str(runs)]) == 1
     out = capsys.readouterr().out
     assert "2 need action" in out and lost.name in out and plain.name in out
