@@ -70,6 +70,35 @@ theorem sitesShHP_parse :
 variable (hU : Built c.unit) {pi : HmIn.Ports} (hpi : HmIn.parse c = .ok pi) {pub : Public}
   (hpub : HmIn.loadPublic (zkTags I) c pi I.publicFile = .ok pub)
 
+theorem proved_rankP {S : Finset (Fin n)} {d : Lean.Json} (x : DrawSetupHP (zkInputs I) own mPts S d) {u : Fin n}
+    (h : u ∈ S) : x.D.proved[x.rank u]? = some u.val := by
+  have hl : x.rank u < x.D.proved.toList.length := by simpa using x.rank_lt h
+  have := List.getElem_idxOf (x := u.val) (xs := x.D.proved.toList) hl
+  rw [Array.getElem?_eq_getElem (x.rank_lt h), ← Array.getElem_toList]
+  exact congrArg some this
+
+include hU hpi hpub in
+/-- **`BcSiteHP` at a draw's table** (`tableH_bcSiteS`): the table's draw is `dj S`, which decodes to `D`, its regions
+are the executable's, the circuit's public input ports are `pi` and its public file loads (`HmIn.loadPublic`) to `pub`,
+and the unit's block and VU index its rank in `D.proved`, the VU below `2^⌊log₂ c.g⌋` (`Layout.vu_lt_pow2`). -/
+theorem tableHP_bcSite {S : Finset (Fin n)} (x : DrawSetupHP (zkInputs I) own mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
+    BcSiteHP (x.table.acc (zkTyped ht) hc (v2_of_scope hscope)) pi pub (x.table.o u h) (x.table.vu u h) u.val := by
+  have hcx : x.st.c = c := TableHP.c_eq (I := zkInputs I) hc x.table
+  refine ⟨dj S, x.D, rfl, x.hD, Layout.proved_lt_population x.hD, fun r hr => List.mem_map_of_mem hr, ?_, ?_, ?_, ?_⟩
+  · show HmIn.parse x.st.c = .ok pi
+    rw [hcx]
+    exact hpi
+  · show HmIn.loadPublic (zkTags I) x.st.c pi I.publicFile = .ok pub
+    rw [hcx]
+    exact hpub
+  · show x.rank u % x.st.c.g < 2 ^ x.st.c.g.log2
+    rw [hcx]
+    exact Layout.vu_lt_pow2 (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOk_spec hU hscope).2.1
+      (hcx ▸ Nat.mod_lt _ x.hg)
+  · show x.D.proved[x.rank u / x.st.c.g * x.st.c.g + x.rank u % x.st.c.g]? = some u.val
+    rw [Nat.div_add_mod']
+    exact proved_rankP x h
+
 include hU hpi hpub in
 /-- **`BcSiteHP` at every satisfiable site** of the public plan (`sitesShH_bcSite`): at a draw `verify --zk` sets up,
 the unit's rank in the draw's table; at a refused draw no message satisfies the table. -/
@@ -78,7 +107,22 @@ theorem sitesShHP_bcSite :
       (M : Binding.Msg (planShHP dj y₀) (tabShHP dj y₀) S R u), Binding.Sat (planShHP dj y₀) (tabShHP dj y₀) S R u M →
         BcSiteHP ((sitesShHP dj y₀ ht hc hscope).acc S R u h) pi pub ((sitesShHP dj y₀ ht hc hscope).o S R u h)
           ((sitesShHP dj y₀ ht hc hscope).vu S R u h) u.val := by
-  sorry
+  intro S R u h M hM
+  show BcSiteHP ((tableShHP dj y₀ S).acc (zkTyped ht) hc (v2_of_scope hscope)) pi pub ((tableShHP dj y₀ S).o u h)
+    ((tableShHP dj y₀ S).vu u h) u.val
+  by_cases hS : Nonempty (DrawSetupZKHP I own mPts S (dj S))
+  · have e : tableShHP dj y₀ S = (Classical.choice hS).x.table := by
+      unfold tableShHP
+      rw [dite_eq_left_of_eq_true (eq_true hS)]
+    rw [e]
+    exact tableHP_bcSite dj ht hc hscope hU hpi hpub _ h
+  · have e : tableShHP dj y₀ S = y₀.x.refused S := by
+      unfold tableShHP
+      rw [dite_eq_right_of_eq_false (eq_false hS)]
+    have hns : ∀ z, ¬ (tableShHP dj y₀ S).T.S.Satisfies z := by
+      rw [e]
+      exact y₀.x.refused_unsat S
+    exact absurd hM (hns _)
 
 /-- **`lay` at the public plan**: `keyLayoutHP` at `sitesShHP`, the program's outputs the returned outputs' bits, the
 registration the population's public file. -/

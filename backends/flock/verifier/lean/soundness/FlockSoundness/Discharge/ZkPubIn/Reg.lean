@@ -1,4 +1,5 @@
 import FlockSoundness.Discharge.ZkPubIn.Bind
+import FlockSoundness.Discharge.ZkPubIn.Setup
 import FlockSoundness.Discharge.ZkReg.CheckedH
 
 /-!
@@ -16,7 +17,7 @@ setupHidden's drawn statement is `HmIn.drawn c pi pub d` (the population's `in` 
 
 namespace FlockSoundness.Discharge.ZkPubIn
 
-open Flock FlockLevel3 Refine ZkLink ZkExec ZkBind ZkHidden HiddenExec HiddenDec DecodeZL
+open Flock FlockLevel3 Refine ZkLink ZkExec ZkBind ZkHidden HiddenExec HiddenDec DecodeZL ZkReg
 open FlockSoundness.Discharge.Exec (Inputs recordDraw)
 
 theorem acceptsZKP_of_RP {I : Inputs} {reg : Array Registered.Port} {own : ByteArray} {t : Exec.Transcript}
@@ -51,6 +52,21 @@ def regPathsHP (c : Circuit) (pi : HmIn.Ports) (pub : Public) (t : Exec.Transcri
       ByteArray.empty
   | .inr _ => ByteArray.empty
 
+/-- **`HmIn.loadPublic` loads `HmRow.loadPublic`'s file** at the circuit with its public input words as its output port,
+then only checks it. -/
+theorem loadPublic_nilP {tags : Tags} {c : Circuit} {pi : HmIn.Ports} {pf : ByteArray} {pop : Public}
+    (h : HmIn.loadPublic tags c pi pf = .ok pop) :
+    HmRow.loadPublic tags { c with outPorts := if pi.ports.isEmpty then #[] else #[("public inputs", pi.words)] } pf =
+      .ok pop := by
+  unfold HmIn.loadPublic at h
+  dsimp only at h
+  simp only [throw_bind'] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    assumption
+
 variable {mPts : ℕ} {Reg : Type}
 
 /-- **The registered reads are checked at every accepted outcome with public inputs** (`checked_of_acceptsH`). At an
@@ -67,6 +83,79 @@ theorem checked_of_acceptsHP (I : Inputs) (ht : I.tags.typed = false) (reg : Arr
       (rsShHP dj y₀ ht hc hscope hU hpi hpub))
     (hown : OwnReadsHP reg c pi pub o.2.2 rd.isRead rd.port rd.readAt) :
     rd.Checked o.1 (regPathsHP c pi pub o.2.2 rd.port) := by
-  sorry
+  intro p hp
+  obtain ⟨u, q, d, D, dp, idx, rfl, hmem, hfind, hd, hD, hdp, hidx, hu, hread⟩ := hown p hp
+  obtain ⟨spec, sts, hs, hreg, -, -⟩ := hacc
+  have hh : (zkTags I).hiddenOutputs = true := (zkTags_hiddenOutputs I).trans hTags.1
+  rcases setupTables_okHP hh hs with ⟨-, st, hst, -, rfl⟩ | ⟨hc', -⟩
+  swap
+  · exact absurd hTags.2.2.2 (by change 1 < I.count at hc'; omega)
+  change Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (recordDraw o.2.2.record)
+    I.partition I.program (some own) = .ok st at hst
+  rw [hd] at hst
+  obtain ⟨pi₀, s⟩ := setupHidden_specP hst
+  have hcst : st.c = c := by
+    have h1 := s.parse
+    rw [hc] at h1
+    exact (Except.ok.inj h1).symm
+  have hpi₀ : pi₀ = pi := by
+    have h1 := s.inParse
+    rw [hcst, hpi] at h1
+    exact (Except.ok.inj h1).symm
+  subst hpi₀
+  obtain ⟨pop', hpop', -, -, -, hdr⟩ := s.pub
+  rw [hcst, hpub] at hpop'
+  cases hpop'
+  have hdr' := hdr d rfl
+  rw [hcst, hdp] at hdr'
+  have hpd : st.pub = dp := (Except.ok.inj hdr').symm
+  have hdpR : HmRow.drawn { c with outPorts := #[("public inputs", pi₀.words)] } pub d = .ok dp := by
+    have := hdp
+    unfold HmIn.drawn at this
+    simpa only [s.ports, Bool.false_eq_true, ↓reduceIte] using this
+  have hload : HmRow.loadPublic (zkTags I) { c with outPorts := #[("public inputs", pi₀.words)] } I.publicFile =
+      .ok pub := by
+    simpa only [s.ports, Bool.false_eq_true, ↓reduceIte] using loadPublic_nilP hpub
+  have hck := checkRegistered_ok (array_forM_ok hreg 0 (by simp))
+  simp only [List.getElem_toArray, List.getElem_cons_zero] at hck
+  rw [hcst, hpd] at hck
+  obtain ⟨tb, idx', htb, hidx', hports⟩ := check_tables hck
+  rw [hidx] at hidx'
+  cases hidx'
+  obtain ⟨p', positions, paths, hp', hent, hall⟩ := checkPort_at (hports _ hmem)
+  rw [hfind] at hp'
+  cases hp'
+  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.drawn_spec hdpR
+  rw [hD] at hD'
+  cases hD'
+  have hi : D.proved.idxOf u.val < D.proved.size := Array.idxOf_lt_length_of_mem hu
+  obtain ⟨-, hreads, hopens⟩ := hall _ (by rw [hn]; exact hi)
+  rw [hread] at hreads
+  have hra : rd.readAt (.inl (u, q)) =
+      positions.getD (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) 0 := by
+    simpa using hreads
+  have hpath : regPathsHP c pi₀ pub o.2.2 rd.port (.inl (u, q)) =
+      paths.getD (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) ByteArray.empty := by
+    simp [regPathsHP, hd, hD, hdp, htb, hent, Except.toOption]
+  have hleaf : ((layShHP (Reg := Reg) dj y₀ ht hc hscope hU hpi (pub := pub)).regLeaf o.1 (.inl (u, q))).1 =
+      Hm96.Default512.treeLeaf (pub.digest u.val q.val c.ports.size) := by
+    show (H512 (K512.leafPrefix ++ (pub.digest u.val q.val c.ports.size).data.toList)).1 = _
+    rw [H512_val]
+    show Sha512.hash ⟨(Hm96.Default512.leafPrefix.data.toList ++ (pub.digest u.val q.val c.ports.size).data.toList).toArray⟩ =
+      Sha512.hash (Hm96.Default512.leafPrefix ++ pub.digest u.val q.val c.ports.size)
+    rw [← data_append, bytes_of_list]
+  have hget : D.proved[D.proved.idxOf u.val]'hi = u.val := by
+    have := Array.findIdx_getElem (xs := D.proved) (p := (· == u.val)) (w := hi)
+    simp only [beq_iff_eq] at this
+    exact this
+  have hdig : pub.digest u.val q.val c.ports.size =
+      Registered.tableRow dp tb q.val (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) := by
+    have h1 := Hidden.drawn_digestW hload hdpR hD (Layout.proved_lt_population hD) hi q.isLt
+    rw [hget] at h1
+    rw [← h1]
+    simp only [Public.digest, htb, Registered.tableRow, Registered.ref]
+  show Registered.opensLeaf (rd.port (.inl (u, q))) _ (rd.readAt (.inl (u, q))) _ = true
+  rw [hleaf, hra, hpath, hdig]
+  exact hopens
 
 end FlockSoundness.Discharge.ZkPubIn
