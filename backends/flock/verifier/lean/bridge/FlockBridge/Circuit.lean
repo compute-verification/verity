@@ -55,7 +55,10 @@ unfolding. -/
   reads g := (C.op g).args.toFinset
   reads_lt g a ha := C.topo g a (List.mem_toFinset.1 ha)
   input_reads g h := by
-    cases hg : C.op g <;> simp_all [Op.isInput, Op.args]
+    revert h
+    cases C.op g with
+    | input => exact fun _ => List.toFinset_nil
+    | and _ _ | xor _ _ | not _ | row _ _ => exact fun h => absurd h Bool.false_ne_true
   op g v := BitVec.ofBool ((C.op g).apply fun a => (v a).getLsbD 0)
   op_congr g v v' h := by
     rw [Op.apply_congr (C.op g) fun x hx => by rw [h x (List.mem_toFinset.2 hx)]]
