@@ -1334,7 +1334,7 @@
     "H"
    ],
    "program": "fp8-moe-triton",
-   "tp": "column",
+   "tp": "partial",
    "rank_identical": false,
    "h200_only": false,
    "manifest_family": "moe_block_stream",
