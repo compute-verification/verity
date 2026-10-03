@@ -330,17 +330,19 @@ def DrawOkZK (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : 
 /-! ## The statement -/
 
 /-- **Wherever flock-verify accepts, the `--zk` table is the executable's.** On public-output one-table inputs whose
-`--statement` tags are untyped, with `wr` the coin server's record (`RecordsLiveZK`) and its draws `DrawOkZK`: whenever
-`verify --zk` accepts what `wr` writes for `o` at draw `S`, setupH's statement `st` at `dj S` under the `--zk` tags is
+`--statement` tags are untyped, with `wr` the coin server's record (`RecordsLiveZK`): whenever the draw `S` is `DrawOkZK`
+(pointwise: link points depend on `|S|`, so no `mPts` holds at every draw) and `verify --zk` accepts what `wr` writes
+for `o` at it, setupH's statement `st` at `dj S` under the `--zk` tags is
 well formed (`StmtWF`, `RegionsWF`), `Zk.schedule st.m` is `(sch, t_pad)`, the draw has a `DrawSetupZK` at `st`, `sch`
 and `t_pad` whose table (`stmtOf st` at `st`'s regions, `Zk.verify`'s dimensions, pads and inner code) is
 `tablesAtZK … S R`, and at the record's link points `Setup.ofCircuit st`'s extra claims are that table's
-(`ExtraRealizes`, as `ofCircuit_extra`). -/
+(`ExtraRealizes`, as `ofCircuit_extra`). The reference setup `y₀` (a refused draw's table) is data, so no hypothesis is
+taken at its draw `S₀`. -/
 def TablesAtZKLive : Prop :=
   ∀ (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript),
-    I.tags.hiddenOutputs = false → I.count ≤ 1 → RecordsLiveZK I dj wr → (∀ S, DrawOkZK I dj mPts S) →
-    ∀ S R o, AcceptsZK I (wr S R o) →
+    I.tags.hiddenOutputs = false → I.count ≤ 1 → RecordsLiveZK I dj wr →
+    ∀ S R o, DrawOkZK I dj mPts S → AcceptsZK I (wr S R o) →
       ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
         Stmt.setupH (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition I.program =
           .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
@@ -351,7 +353,7 @@ def TablesAtZKLive : Prop :=
               (Model.extraClaims y.table.S y.table.ptLocal mPts (ptsOf mPts points))
 
 theorem tablesAtZK_live : TablesAtZKLive (n := n) (mPts := mPts) (Reg := Reg) := by
-  intro I ht dj S₀ y₀ wr hh hc1 hrec hdraw S R o hacc
+  intro I ht dj S₀ y₀ wr hh hc1 hrec S R o hdraw hacc
   obtain ⟨st, hst, -, hv⟩ := ZkExec.acceptsZK_one I _ hh hc1 hacc
   rw [(hrec S R o hacc).1] at hst
   obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := ZkExec.zk_verify_ok _ _ _ _ hv
@@ -363,8 +365,8 @@ theorem tablesAtZK_live : TablesAtZKLive (n := n) (mPts := mPts) (Reg := Reg) :=
   have ht' : (ZkExec.zkInputs I).tags.typed = false := (ZkExec.zkTags_typed I).trans ht
   obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
-  obtain ⟨x, rfl⟩ := drawSetup_of_setupH_g (I := ZkExec.zkInputs I) (S := S) ht' hst hf hD ((hdraw S).1 D hD)
-    ((hdraw S).2 _ hst)
+  obtain ⟨x, rfl⟩ := drawSetup_of_setupH_g (I := ZkExec.zkInputs I) (S := S) ht' hst hf hD (hdraw.1 D hD)
+    (hdraw.2 _ hst)
   obtain ⟨y, rfl, rfl, rfl⟩ := drawSetupZK_of ht x hz'
   have hwf := setupH_wf hst
   refine ⟨y.x.st, y.sch, y.tPad, hwf.1, hwf.2, hst, hz', y, rfl, rfl, rfl, ?_, ?_⟩
