@@ -14,7 +14,9 @@ note:20260930T2205Z-report-resource-steward), as implicit records, each with a r
     check-scratch  @infra   2 h   every        /tmp/pytest-of-research/pytest-<n> and <check cache>/lean-audit-scratch-* in which
                                                nothing changed for 2 h
     trash          @infra   any   every        what an interrupted pass renamed aside (src/.trash, jobs/src/.trash,
-                                               .lake/packages.rs-trash-*)
+                                               .lake/packages.rs-trash-*) and nothing live names, by its path or by what named
+                                               its original (a tree's sha, a job copy's path); named, it stays aside, since it
+                                               may be partly deleted
 
 Nothing live may name a path a rule deletes (liveness.Live: a source tree by its sha, anything else by its path), here or on the
 node's PEERS (node 1 asks node 2, and refuses when it can't). A source tree, a
@@ -23,7 +25,9 @@ once more, put back if anything names it now (`stuck` when it can't be), and onl
 they are. A rule never deletes PROTECTED paths (pouw/gpu3-fp8, check's verdict caches lean-deps and circuit-check), a path a record
 covers (an explicit `research keep` wins), or one holding a record or a mount. `Sweep.run` raises Refused when what live work names
 can't be established, or when node 2's guard (`timed`, read again before every deletion) says a timed window may run, after
-putting back whatever is still renamed aside. Every decision about a path old enough for its rule goes to the deletion log (`Log`).
+putting back whatever is still renamed aside; so does any other failure, and SIGTERM (`Terminated`), before it propagates. Every
+decision about a path old enough for its rule goes to the deletion log (`Log`), and each rename aside goes there first
+(`renamed`, its trash path in the reason), so a pass killed outright leaves a line for each path it left aside.
 """
 from __future__ import annotations
 
@@ -33,7 +37,9 @@ import json
 import os
 import re
 import shutil
+import signal
 import tempfile
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -47,6 +53,7 @@ WORKSPACE = Path("/workspace")
 CHECK_CACHE = Path("/home/research/.cache/verity-check")
 PYTEST_TMP = Path("/tmp/pytest-of-research")
 SHA = re.compile(r"[0-9a-f]{40}")
+ASIDE = re.compile(r"([0-9a-f]{40})-\d+")    # a source tree renamed aside: src/.trash/<sha>-<when>
 LAKE = ("backends/flock/verifier/lean", "backends/flock/verifier/lean/level3", "backends/flock/verifier/lean/soundness")
 LA = "backends/flock/verifier/lean/soundness/lean-audit.json"
 LOG_SCHEMA = "research/retention-log/v1"
@@ -73,6 +80,20 @@ class Refused(RuntimeError):
 
 class SaveError(RuntimeError):
     """The audit trees' lean-audit.json could not be preserved; the message says why."""
+
+
+class Terminated(SystemExit):
+    """SIGTERM during an --apply pass (systemctl stop, TimeoutStartSec, shutdown): the pass puts back what is aside, then exits 143."""
+
+
+def _terminated(signum: int, _frame: Any) -> None:
+    raise Terminated(128 + signum)
+
+
+def _stopped(e: BaseException) -> str:
+    if isinstance(e, Refused):
+        return str(e)
+    return "SIGTERM stopped the pass" if isinstance(e, Terminated) else f"the pass failed ({type(e).__name__}{f': {e}' if str(e) else ''})"
 
 
 @dataclass(frozen=True)
@@ -409,8 +430,9 @@ class Sweep:
         self.t = self.now().timestamp()
         self.rules = rules = RuleSet(self.places, self.node)
         pl = self.places
-        trash = [(p, "trash") for d in (pl.src / ".trash", pl.jobs / ".trash") for p in _dirs(d)]
-        trash += [(p, "trash") for t in _dirs(pl.src) if SHA.fullmatch(t.name) for k in LAKE
+        trash = [(p, (str(p), *([m[1]] if (m := ASIDE.fullmatch(p.name)) else []))) for p in _dirs(pl.src / ".trash")]
+        trash += [(p, (str(p), str(pl.jobs / p.name))) for p in _dirs(pl.jobs / ".trash")]
+        trash += [(p, (str(p), t.name)) for t in _dirs(pl.src) if SHA.fullmatch(t.name) for k in LAKE
                   for p in sorted((t / k / ".lake").glob("packages.rs-trash-*")) if _is_dir(p)]
         trees = [t for t in _dirs(pl.src) if SHA.fullmatch(t.name)]
         old = [t for t in trees if self._old("src-tree", os.lstat(t).st_mtime)]
@@ -419,15 +441,18 @@ class Sweep:
         scratch = [(p, s) for base, g in pl.scratch for p in (sorted(base.glob(g)) if base.is_dir() else [])
                    if _is_dir(p) and self._old("check-scratch", s := newest(p))]
         jobs, jt = self._job_copies(rules)
-        patterns = ([t.name for t in dict.fromkeys([*old, *lake])] + [str(p) for p, _ in trash] + [str(p) for p, _ in scratch]
+        patterns = ([t.name for t in dict.fromkeys([*old, *lake])] + [x for _, pats in trash for x in pats] + [str(p) for p, _ in scratch]
                     + [str(pl.jobs / e) for e, _ in jobs])
         if not patterns:
             return self.acts
         named = self._names(patterns)
 
         going: list[_Cand] = []
-        for p, rule in trash:
-            if c := self._vet(p, rule, os.lstat(p).st_mtime, named.get(str(p), [])):
+        for p, pats in trash:
+            refs = list(dict.fromkeys(r for x in pats for r in named.get(x, [])))
+            if jt is not None and p.parent == pl.jobs / ".trash" and (held := jt.held(p.name)):
+                refs.append(held)
+            if c := self._vet(p, "trash", os.lstat(p).st_mtime, refs):
                 going.append(c)
         audit: list[_Cand] = []
         complete = {t: os.lstat(t).st_mtime_ns for t in trees if (t / ATTEMPT).is_file()} if self.node in NODE1 else {}
@@ -460,6 +485,8 @@ class Sweep:
                 self._add(Act(c.path, c.rule, "delete", why, c.files, c.bytes, self._age(c.stamp)))
             return self.acts
         self._pending: list[_Cand] = []
+        main = threading.current_thread() is threading.main_thread()
+        prev = signal.signal(signal.SIGTERM, _terminated) if main else None
         try:
             for c in [c for c in going if c.rule == "trash"]:
                 self._quiet()
@@ -467,9 +494,14 @@ class Sweep:
             self._quiet()
             self._rename([c for c in going if c.rule in ("src-tree", "audit-tree", "lean-deps", "jobs-src")])
             self._recheck([c for c in going if c.rule == "check-scratch"], jt is not None)
-        except Refused as e:
-            self._undo(f"put back undecided: {e}")
+        except BaseException as e:
+            if main:
+                signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            self._undo(f"put back undecided: {_stopped(e)}")
             raise
+        finally:
+            if main:
+                signal.signal(signal.SIGTERM, signal.SIG_DFL if prev is None else prev)
         return self.acts
 
     # ---- the steps --------------------------------------------------------------------------------------------------------------------
@@ -563,6 +595,9 @@ class Sweep:
             c.trash = (c.path.with_name(f"packages.rs-trash-{stamp}") if c.rule == "lean-deps" else
                        pl.jobs / ".trash" / c.path.name if c.rule == "jobs-src" else pl.src / ".trash" / f"{c.path.name}-{stamp}")
             self._pending.append(c)
+            if self.log is not None:
+                self.log("renamed", c.path, rule=c.rule, owner=RULES[c.rule].owner, files=c.files, bytes=c.bytes,
+                         age_h=self._age(c.stamp), reason=f"aside to {c.trash} until the check after the rename")
             try:
                 c.trash.parent.mkdir(exist_ok=True)
                 os.rename(c.path, c.trash)
@@ -624,6 +659,10 @@ class Sweep:
             err = None
         except OSError as e:
             err = f"{type(e).__name__}: {e}"
+        except BaseException as e:
+            self._add(Act(c.path, c.rule, "delete", c.reason or DELETES[c.rule], c.files, c.bytes, self._age(c.stamp),
+                          f"{_stopped(e)} while deleting it: what is left of it stays at {where}"))
+            raise
         self._add(Act(c.path, c.rule, "delete", c.reason or DELETES[c.rule], c.files, c.bytes, self._age(c.stamp), err))
 
     def _add(self, a: Act) -> None:
@@ -665,5 +704,6 @@ def store_saver(store_root: str | None, node: str, by: str | None) -> Callable[[
     return save
 
 
-__all__ = ["Act", "FRESH", "LA", "LAKE", "LEAD", "LOCKS", "LOG_SCHEMA", "Log", "NODE1", "Places", "QUIET", "RULES", "Refused", "Rule",
-           "RuleSet", "SaveError", "Sweep", "TIMED_NODES", "booked", "inventory", "lock", "newest", "store_saver", "timed"]
+__all__ = ["ATTEMPT", "Act", "FRESH", "LA", "LAKE", "LEAD", "LOCKS", "LOG_SCHEMA", "Log", "NEWEST", "NODE1", "PEERS", "Places", "QUIET",
+           "RULES", "Refused", "Rule", "RuleSet", "SaveError", "Sweep", "TIMED_NODES", "Terminated", "booked", "inventory", "lock", "newest",
+           "peers", "store_saver", "timed"]

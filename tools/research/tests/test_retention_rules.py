@@ -9,7 +9,9 @@ import itertools
 import json
 import os
 import re
+import signal
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -155,7 +157,9 @@ def test_a_tree_nothing_names_goes_while_a_live_process_in_another_keeps_it_and_
     assert a[f"research/src/{gone.name}"]["files"] > 3 and plan["freed_bytes"] == a[f"research/src/{gone.name}"]["bytes"]
     assert [(x["action"], x["path"], x["rule"], x["by"], x["node"], x["t"]) for x in lines(log.path)] == [
         ("kept", str(used), "src-tree", "vy-retention-gc@vy-nebius-2", N2, "2031-01-01T00:00:00Z"),
+        ("renamed", str(gone), "src-tree", "vy-retention-gc@vy-nebius-2", N2, "2031-01-01T00:00:00Z"),
         ("deleted", str(gone), "src-tree", "vy-retention-gc@vy-nebius-2", N2, "2031-01-01T00:00:00Z")]
+    assert lines(log.path)[1]["reason"] == f"aside to {root}/research/src/.trash/{gone.name}-{int(T)} until the check after the rename"
     assert all(x["schema"] == RR.LOG_SCHEMA and x["owner"] == "@infra" for x in lines(log.path))
 
 
@@ -289,6 +293,100 @@ def test_a_check_after_the_renames_that_fails_puts_everything_back_and_refuses(t
     assert a.exists() and b.exists() and os.listdir(root / "research/src/.trash") == []
     assert plan["refused"].startswith("can't establish what live work names after the renames (kubectl get pods exited 1: refused)")
     assert {x["reason"] for x in plan["rules"]} == {f"put back undecided: {plan['refused']}"}
+
+
+def test_a_pass_that_fails_puts_back_what_is_aside_and_trash_it_leaves_goes_once_nothing_names_its_tree(tmp_path, monkeypatch):
+    """Any failure after the renames (a request dir gone between glob and iterdir), or one in the middle of a deletion, which
+    leaves the rest of the tree in src/.trash: the log has a line for each step, and the next pass looks for the trash's commit."""
+    root = tmp_path / "ws"
+    t = tree(root)
+    trash = root / "research/src/.trash"
+    log = RR.Log(tmp_path / "deletions.jsonl", N1, "t", clock)
+    gone = FileNotFoundError(2, "No such file or directory", str(root / "research/requests/r2x"))
+    with pytest.raises(FileNotFoundError):
+        run_gc(root, node=N1, live=Scripted({}, gone), apply=True, log=log)
+    assert (t / "README.md").exists() and os.listdir(trash) == []
+    assert [(x["action"], x["path"], x["reason"]) for x in lines(log.path)] == [
+        ("renamed", str(t), f"aside to {trash}/{t.name}-{int(T)} until the check after the rename"),
+        ("kept", str(t), f"put back undecided: the pass failed (FileNotFoundError: {gone})")]
+
+    def interrupted(p, *_a, **_kw):
+        os.unlink(Path(p) / "README.md")
+        raise KeyboardInterrupt
+
+    with monkeypatch.context() as m, pytest.raises(KeyboardInterrupt):
+        m.setattr(RR.shutil, "rmtree", interrupted)
+        run_gc(root, node=N1, live=Scripted({}, {}), apply=True, log=log)
+    [left] = trash.iterdir()
+    assert not t.exists() and left.name == f"{t.name}-{int(T)}" and not (left / "README.md").exists()
+    assert (lines(log.path)[-1]["action"], lines(log.path)[-1]["reason"]) == ("failed", f"{RR.DELETES['src-tree']} (the pass failed "
+                                                                              f"(KeyboardInterrupt) while deleting it: what is left of it stays at {left})")
+
+    a = acts(run_gc(root, node=N1, live=Scripted({t.name: ["pods:agent"]}), apply=True, log=log), root)
+    assert left.exists() and a[os.path.relpath(left, root)] == {**a[os.path.relpath(left, root)], "rule": "trash", "action": "keep",
+                                                                 "reason": "named by pods:agent"}
+    run_gc(root, node=N1, live=Scripted({}), apply=True, log=log)
+    assert os.listdir(trash) == [] and lines(log.path)[-1]["action"] == "deleted"
+
+
+def test_trash_stays_aside_while_live_work_names_it_or_what_it_was(tmp_path):
+    """A tree an interrupted pass left in src/.trash by its sha, a job copy in jobs/src/.trash by its path in jobs/src, a tree's
+    .lake/packages.rs-trash-* by the tree's sha; nothing is put back, since a deletion may have been under way."""
+    root = tmp_path / "ws"
+    t = tree(root, lake=True)
+    ago(t, 1)
+    sha = "c" * 40
+    aside, job, lake, other = (root / f"research/src/.trash/{sha}-{int(T) - 60}", root / "jobs/src/.trash/pod-a",
+                               t / RR.LAKE[0] / ".lake/packages.rs-trash-5", root / "research/src/.trash/other")
+    for d in (aside, job, lake, other):
+        d.mkdir(parents=True)
+    live = Scripted({sha: ["pods:agent"], str(root / "jobs/src/pod-a"): ["proc:3(python)"], t.name: ["proc:4(lake)"]})
+    plan = run_gc(root, live=live, apply=True)
+    assert aside.exists() and job.exists() and lake.exists() and not other.exists()
+    assert {k: (x["rule"], x["action"], x["reason"]) for k, x in acts(plan, root).items()} == {
+        os.path.relpath(aside, root): ("trash", "keep", "named by pods:agent"), "jobs/src/.trash/pod-a": ("trash", "keep", "named by proc:3(python)"),
+        os.path.relpath(lake, root): ("trash", "keep", "named by proc:4(lake)"), "research/src/.trash/other": ("trash", "delete", RR.DELETES["trash"])}
+
+
+STOPPED = """import sys
+sys.path.insert(0, sys.argv[2])
+from pathlib import Path
+import test_retention_rules as H
+
+
+def stopped_here():
+    print("aside", flush=True)
+    sys.stdin.read()
+    return {}
+
+
+root = Path(sys.argv[1])
+H.run_gc(root, node=H.N1, live=H.Scripted({}, stopped_here), apply=True, log=H.RR.Log(root / "deletions.jsonl", H.N1, "t", H.clock))
+"""
+
+
+def test_sigterm_during_an_apply_puts_back_what_is_aside_logs_it_and_exits_143(tmp_path):
+    """systemd's SIGTERM (systemctl stop, TimeoutStartSec, shutdown) ends Python without `finally` unless the pass handles it;
+    a child gc stopped in the check after its rename."""
+    root = tmp_path / "ws"
+    t = tree(root)
+    (tmp_path / "child.py").write_text(STOPPED)
+    p = subprocess.Popen([sys.executable, str(tmp_path / "child.py"), str(root), str(Path(__file__).parent)], stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE, text=True)
+    try:
+        assert p.stdout.readline() == "aside\n"
+        p.send_signal(signal.SIGTERM)
+        assert p.wait() == 143
+    finally:
+        if p.poll() is None:
+            p.kill()
+            p.wait()
+        p.stdin.close()
+        p.stdout.close()
+    assert (t / "README.md").exists() and os.listdir(root / "research/src/.trash") == []
+    assert [(x["action"], x["reason"]) for x in lines(root / "deletions.jsonl")] == [
+        ("renamed", f"aside to {root}/research/src/.trash/{t.name}-{int(T)} until the check after the rename"),
+        ("kept", "put back undecided: SIGTERM stopped the pass")]
 
 
 def test_liveness_it_cant_establish_refuses_before_any_deletion(tmp_path, monkeypatch, capsys):
@@ -586,9 +684,9 @@ def test_a_window_seen_mid_pass_stops_the_next_deletion_and_puts_back_what_is_as
     plan = run_gc(root, live=Scripted({}, window_opens), apply=True, log=log)
     assert a.exists() and b.exists() and os.listdir(root / "research/src/.trash") == [], "deleted nothing more, put both back"
     assert plan["refused"].endswith("(seen during the pass: what is renamed aside goes back, and nothing more is deleted)")
-    assert [(x["action"], x["reason"].split(":")[0]) for x in lines(log.path)] == [
-        ("deleted", "an interrupted pass left it, and nothing live names it"), ("kept", "put back undecided"),
-        ("kept", "put back undecided")]
+    assert [(x["action"], x["reason"].split(":")[0].split(" /")[0]) for x in lines(log.path)] == [
+        ("deleted", "an interrupted pass left it, and nothing live names it"), ("renamed", "aside to"), ("renamed", "aside to"),
+        ("kept", "put back undecided"), ("kept", "put back undecided")]
 
     status(root)
     rec = root / "data/old"
