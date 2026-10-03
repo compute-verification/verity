@@ -4,7 +4,7 @@ rtxpro6000 row, the evidence the sm_120 block-FP8 Definitions will cite.
 vLLM runs as that row's engine does with the dense linears pinned to CUTLASS: `VLLM_USE_DEEP_GEMM=0` (TargetProfile `fp8_block_gemm=
 "cutlass"`, target_profile.py `env()`; DeepGEMM off also turns E8M0 off, so every scale is an f32 word), `VLLM_BATCH_INVARIANT=1`,
 custom ops on.  One GPU process writes one JSON verdict line per case (stdout, prefixed `VERDICT `, and `<out>/verdicts.jsonl`), the
-property record `<out>/fp8_sm120_capture.json` (`fp8_sm120_capture`, `properties.record`), and last `FP8-SM120 GO` or `NO-GO`.  On a
+property record `<out>/blackwell_fp8_capture.json` (`blackwell_fp8_capture`, `properties.record`), and last `FP8-SM120 GO` or `NO-GO`.  On a
 device that is not cc 12.0 it writes one `skip` verdict and exits 3; a NO-GO exits 1.
 
   selection  `init_fp8_linear_kernel` at the row's two FP8 linears selects CutlassFp8BlockScaledMMKernel, and TritonFp8BlockScaledMMKernel
@@ -63,8 +63,8 @@ from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_block_fp8_capture_gpu as H
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/fp8-sm120-capture/v1"
-RECORD = "fp8_sm120_capture.json"
+SCHEMA = "verity-vllm/blackwell-fp8-capture/v1"
+RECORD = "blackwell_fp8_capture.json"
 VERDICTS = "verdicts.jsonl"
 WANT_CC = (12, 0)
 HIDDEN = 4096
