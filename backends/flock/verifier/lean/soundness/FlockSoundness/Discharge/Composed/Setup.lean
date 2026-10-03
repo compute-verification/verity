@@ -118,8 +118,8 @@ theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : 
     fun _ _ => rfl
   have he : ∀ a : F128, ((coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).embed (fOf a) =
       GF256.of ⟨a, 0⟩ := fun _ => rfl
-  obtain ⟨hrank, hW, hb⟩ := coin_facts _ c hc hβ hρ hw he
-  exact ⟨g4 c hc, ⟨hβ, hρ, hw, he⟩, hrank, fun _ _ => rfl, hW, bodyOf_padsOnto I dj y₀ S R y c hc, hb,
-    innerOf_holds I dj y₀ S R y c hc⟩
+  obtain ⟨hrank, hW, hb⟩ := coin_facts _ c hc.1 hβ hρ hw he
+  exact ⟨g4 c hc.1, ⟨hβ, hρ, hw, he⟩, hrank, fun _ _ => rfl, hW, bodyOf_padsOnto I dj y₀ S R y c hc.1, hb,
+    innerOf_holds I dj y₀ S R y c hc.1⟩
 
 end FlockSoundness.Discharge.Composed

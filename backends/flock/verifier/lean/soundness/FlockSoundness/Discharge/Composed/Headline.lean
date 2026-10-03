@@ -48,12 +48,13 @@ theorem zkViewAt_of_ok (C : CoinedSetup) (hC : CoinedOK execArith (fOf Zk.PAD_C)
 
 variable {mPts n : ℕ} {Reg : Type}
 
-/-- **One `--zk` sampled session is zero knowledge, at the coin vectors the honest prover doesn't refuse.** At every
-draw `verify --zk` sets up, at every coin vector the honest prover doesn't refuse (`refused_coins`; `CoinedSetup.Admits`: `β ≠ 0`, the mask slot's rank,
-`ρ₀, ρ₁` independent), the verifier's view of the draw's table at the executable's leaves, at any valid witness whose
+/-- **One `--zk` sampled session is zero knowledge, at the covered coin vectors.** At every draw `verify --zk` sets up, at
+every coin vector the honest prover doesn't refuse (`refused_coins`; `CoinedSetup.Admits`: `β ≠ 0`, the mask slot's rank,
+`ρ₀, ρ₁` independent) with no zerocheck outer coin `1` (`CoinedSetup.Covered`), the verifier's view of the draw's table at the executable's leaves, at any valid witness whose
 registered values are the public ones, is within `2·|Hid|·2^-193` of `S_shvzk`'s at any `w0`, both ways.
 
-Coverage: unrefused coins only. At a refused coin the honest prover stops (`flock-circuit.rs`'s `refused_coins`:
+Coverage: covered coins only. An outer coin `1` is a bad event of probability at most `(m − 13)·2^-128` per rep, which
+the prover doesn't refuse and this doesn't charge. At a refused coin the honest prover stops (`flock-circuit.rs`'s `refused_coins`:
 `at_open` returns `Err` before any `ŝ` leaves), and this says nothing about the view there. The follow-up is the proof
 at every coin vector, through `ZK.Session.session_prefinal_indep_cut` (Lemma A cut where the session stops)
 (`ASSUMPTIONS.md`, open items). -/

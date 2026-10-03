@@ -229,9 +229,11 @@ hm96-sha512 over a uniform key, `CROnly.hm96_sha512_bad_keys`, What is pinned, b
 `ZkView.My` and `ZkView.saltHash` (`Composed.zk_session_composed`).
 Open item (zero knowledge's coverage): `Composed.zk_session_view` holds at the coin vectors the honest prover doesn't
 refuse (`refused_coins` in `flock-circuit.rs`; `CoinedSetup.Admits`: `β ≠ 0`, the mask slot's rank `128·k`, `ρ₀, ρ₁`
-independent over F128; the verifier also checks `β` and `ρ`) and says nothing about the view at a refused one. The
-prover already stops there (`at_open` returns `Err` before any `ŝ` leaves); what is open is the proof at every coin
-vector, through `ZK.Session.session_prefinal_indep_cut` (Lemma A cut where the session stops).
+independent over F128; the verifier also checks `β` and `ρ`) with no zerocheck outer coin `1` (`CoinedSetup.Covered`),
+and says nothing about the view at the others. The prover already stops at a refused coin (`at_open` returns `Err`
+before any `ŝ` leaves); an outer coin `1` it doesn't refuse (`inv 0 = 0` in the residual round), a bad event of
+probability at most `(m − 13)·2^-128` per rep. What is open is the proof at every coin vector, through
+`ZK.Session.session_prefinal_indep_cut` (Lemma A cut where the session stops), charging that bad event to `δ`.
 - A4 (`Assumptions.KeyedStreamsUniform`), which the PoUW window's keyed draw takes as `hA4`;
 - A5 (`Assumptions.UniformSecret`), which the same draw takes as `hsec`;
 - `Assumptions.HmRowComputes`, not cryptographic: the circuit's row hashing, which the rows' value binding

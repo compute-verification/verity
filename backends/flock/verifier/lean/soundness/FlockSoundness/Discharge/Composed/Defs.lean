@@ -199,11 +199,19 @@ attribute [instance] CoinedSetup.addHi CoinedSetup.finHi CoinedSetup.decHi
 /-- **The coin vectors the honest prover doesn't refuse** (`refused_coins`, `flock-circuit.rs`): `β ≠ 0` in both reps
 (`beta.isZero`, which `Zk.verifyInner` also checks), the mask slot's weights at the claim points of rank `128·k`
 (`mask_rank_ok`, the rank check in `at_open`; the verifier does not check it), and `ρ₀, ρ₁` independent over F128 in both
-reps (`ZkLigerito.rhoIndependent`, which the verifier also checks); and no zerocheck outer coin `1` in either rep (the
-residual round's `(1 + r_j)⁻¹`, `inv 0 = 0`: a bad event, not a refusal of the prover). -/
+reps (`ZkLigerito.rhoIndependent`, which the verifier also checks). -/
 def CoinedSetup.Admits (C : CoinedSetup) (c : CoinsZK C.Rest) : Prop :=
-  (∀ r, (c.beta r).isZero = false) ∧ MaskRankOk (C.points c) C.maskWords ∧ (∀ r, Zk.rhoIndependent (c.rho r) = true) ∧
-    ∀ r, ∀ x ∈ C.rOuter c r, x ≠ 1
+  (∀ r, (c.beta r).isZero = false) ∧ MaskRankOk (C.points c) C.maskWords ∧ ∀ r, Zk.rhoIndependent (c.rho r) = true
+
+/-- **The coin vectors zero knowledge covers**: those the honest prover doesn't refuse (`Admits`) with no zerocheck outer
+coin `1` in either rep.
+
+Coverage: at an outer coin `r_j = 1` the residual round's `(1 + r_j)⁻¹` is `inv 0 = 0` (`Zk.replay`), the verifier's
+batched check is off by a witness-dependent term, and the view there is not simulated. The prover doesn't refuse these
+coins; they are a bad event of probability at most `(m − 13)·2^-128` per rep (`m − 13` uniform outer coins), which the
+proof at every coin vector charges (`ASSUMPTIONS.md`, open items). -/
+def CoinedSetup.Covered (C : CoinedSetup) (c : CoinsZK C.Rest) : Prop :=
+  C.Admits c ∧ ∀ r, ∀ x ∈ C.rOuter c r, x ≠ 1
 
 /-- **The valid witnesses**: those satisfying the table's statement (`Statement.Satisfies`: the R1CS in every block, the
 pin, and the public regions' values). -/
@@ -361,14 +369,14 @@ noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
     rOuter := fun c r => List.ofFn (c.rest.rOuter r) }
 
 /-- **The structural facts Lemma B reads**, of a `CoinedSetup` at the arithmetic `A` and M1's padding constant `κ`: M1's
-level-0 padding geometry (`cols ≤ 40`, `t_pad ≤ 2^cols`, at most `t_pad` opened positions), and at every coin vector
-the honest prover doesn't refuse: the opened positions distinct and inside `2^(cols+1)`, the table reads its coins (`β`, `ρ`, the rank check's
+level-0 padding geometry (`cols ≤ 40`, `t_pad ≤ 2^cols`, at most `t_pad` opened positions), and at every covered coin
+vector (`Covered`): the opened positions distinct and inside `2^(cols+1)`, the table reads its coins (`β`, `ρ`, the rank check's
 weights `eq(p_k, x)` and `embed` the inclusion of F128 in F256), the rank check, M1's padding columns `Gp`, each rep's
 `W^r` bijective, the pads onto, `β ≠ 0`, and the inner relation at every valid witness whose registered values are the
 public ones. -/
 def CoinedOK (A : Arith 𝔽 FlockLevel3.GF256) (κ : 𝔽) (C : CoinedSetup) : Prop :=
   C.cols ≤ 40 ∧ C.z.tpad ≤ 2 ^ C.cols ∧ C.z.nS ≤ C.z.tpad ∧
-    ∀ c : CoinsZK C.Rest, C.Admits c →
+    ∀ c : CoinsZK C.Rest, C.Covered c →
       (Function.Injective (C.pos c) ∧ ∀ q, C.pos c q < 2 ^ (C.cols + 1)) ∧
       ((∀ r, (C.T c).β r = fOf (c.beta r)) ∧
         (∀ r, (C.T c).ρ r 0 = FlockLevel3.GF256.of (c.rho r).1 ∧ (C.T c).ρ r 1 = FlockLevel3.GF256.of (c.rho r).2) ∧
@@ -396,11 +404,11 @@ def CoinedOfSetup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finse
     CoinedOK execArith (fOf Zk.PAD_C) (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st)
 
 /-- **Zero knowledge at a `CoinedSetup`, at `δ₁` per hidden leaf** (Lemma B, `ZkWireFixed`'s form at one table): at any
-coin vector the honest prover doesn't refuse, for any encoding `enc` of the view (the proof files) and any event `E`, the real view
+covered coin vector (`Covered`), for any encoding `enc` of the view (the proof files) and any event `E`, the real view
 at any valid witness `w` whose registered values are the public ones and `S_shvzk`'s at any `w0` are within
 `2·|Hid|·δ₁`, both ways. -/
 def ZkViewAt (C : CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=
-  ∀ (c : CoinsZK C.Rest), C.Admits c → ∀ {Out : Type} (enc : (∀ _ : Fin 1, (C.T c).tab.View) → Out)
+  ∀ (c : CoinsZK C.Rest), C.Covered c → ∀ {Out : Type} (enc : (∀ _ : Fin 1, (C.T c).tab.View) → Out)
     (w w0 : Fin 1 → Witness C.S.m), (∀ j, C.Valid (w j)) → ∀ (_hreg : ∀ j, (C.T c).tab.sReg (w j) = (C.T c).tab.pubReg)
     (E : Out → Prop),
     Game.prCoin (fun p : ∀ _ : Fin 1, (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) =>
