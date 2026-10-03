@@ -9432,6 +9432,7 @@
    "assumptions": [],
    "type_hash": "830470269c8de370eacabc9cbd381362d0f6e1c00295c377166dad976546ce73"
   },
+  "FlockSoundness.Discharge.PrivateCircuit.private_circuit": {},
   "FlockSoundness.Discharge.PrivateCircuit.private_circuit_private": {
    "signature": [
     "FlockSoundness.Discharge.PrivateCircuit.private_circuit_private {Cls Circ Out : Type} {Prog : Cls → Type}",
