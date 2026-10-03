@@ -27,6 +27,17 @@ def test_the_console_and_the_module_share_their_labels_and_the_record():
     assert set(vc.NODE_NAMES.values()) == set(usage.NODES.values())
 
 
+def test_a_console_without_its_cluster_tree_says_which_tree_to_install(tmp_path):
+    # red team T: node 1 has neither /workspace/research/console/cluster nor /workspace/cluster/src
+    console = tmp_path / "research" / "console"
+    console.mkdir(parents=True)
+    (console / "verity_console.py").write_bytes((Path(__file__).parents[1] / "console" / "verity_console.py").read_bytes())
+    probe = ("import sys; sys.path.insert(0, sys.argv[1]); import verity_console as v\n"
+             "try:\n    v.usage_rows({'node 2': []})\nexcept ModuleNotFoundError as e:\n    print(e)")
+    out = subprocess.run([sys.executable, "-I", "-S", "-c", probe, str(console)], capture_output=True, text=True, check=True).stdout
+    assert f"install deploy.toml's tree {console / 'cluster'} (research deploy install vy-nebius-1 --by WHO" in out
+
+
 LEASE = "pid={} run=- who={} since=2026-10-03T07:00:00Z cmd=x"
 
 

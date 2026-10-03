@@ -1055,12 +1055,17 @@ USAGE_RECORD = Path("/workspace/usage/usage-hourly.jsonl")  # cluster.usage.RECO
 
 
 def usage_module():
-    """`cluster.usage`, the one usage computation: the copy deploy.toml ships beside this script, else the checkout's."""
+    """`cluster.usage`, the one usage computation: the copy deploy.toml ships beside this script, else the checkout's; never
+    another `cluster` on the path."""
     for p in (HERE, HERE.parents[1] / "cluster" / "src"):
         if (p / "cluster" / "usage.py").is_file():
             if str(p) not in sys.path:
                 sys.path.insert(0, str(p))
             break
+    else:
+        raise ModuleNotFoundError(f"no cluster/usage.py beside the console or in a checkout: install deploy.toml's tree "
+                                  f"{HERE / 'cluster'} (research deploy install vy-nebius-1 --by WHO {HERE / 'cluster'})",
+                                  name="cluster")
     from cluster import usage  # noqa: PLC0415  node 1's python3 has no cluster installed
     return usage
 
