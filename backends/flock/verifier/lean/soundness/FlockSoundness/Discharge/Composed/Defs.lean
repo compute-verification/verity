@@ -156,7 +156,7 @@ def eqWord (p : List F128) (x : ℕ) : F128 :=
 reached by some mask bits. -/
 def MaskRankOk {k M : ℕ} (pts : Fin k → List F128) (words : Fin M → ℕ) : Prop :=
   Function.Surjective fun u : Fin M → ZMod 2 => fun j : Fin k =>
-    ∑ x, fOf (eqWord (pts j) (words x)) * ZK.castF (F := 𝔽) (u x)
+    ∑ x, fOf (eqWord (pts j) (words x)) * ZK.Table.castF (F := 𝔽) (u x)
 
 /-- **A table's coin vector**, the coins `refused_coins` reads named: each rep's inner-proof `β`
 (`Zk.verifyInner`) and Ligerito's `ρ` (`ZkLigerito`), each claim's rank-check point, and the table's other coins. -/
@@ -186,12 +186,12 @@ structure CoinedSetup where
 
 attribute [instance] CoinedSetup.addHi CoinedSetup.finHi CoinedSetup.decHi
 
-/-- **The coin vectors `verify --zk` does not refuse** (`refused_coins`): `β ≠ 0` in both reps (`Zk.verifyInner`'s
-`beta.isZero` check), the mask slot's weights at the claim points of rank `128·k` (the honest prover's `mask_rank_ok`;
-the verifier does not check it, the prover and the simulator refuse it), and `ρ₀, ρ₁` independent over F128 in both
-reps (`ZkLigerito.rhoIndependent`). -/
+/-- **The coin vectors the honest prover doesn't refuse** (`refused_coins`, `flock-circuit.rs`): `β ≠ 0` in both reps
+(`beta.isZero`, which `Zk.verifyInner` also checks), the mask slot's weights at the claim points of rank `128·k`
+(`mask_rank_ok`, the rank check in `at_open`; the verifier does not check it), and `ρ₀, ρ₁` independent over F128 in both
+reps (`ZkLigerito.rhoIndependent`, which the verifier also checks). -/
 def CoinedSetup.Admits (C : CoinedSetup) (c : CoinsZK C.z.nC C.Rest) : Prop :=
-  (∀ r, (c.beta r).isZero = false) ∧ MaskRankOk c.points C.maskWords ∧ ∀ r, rhoIndependent (c.rho r) = true
+  (∀ r, (c.beta r).isZero = false) ∧ MaskRankOk c.points C.maskWords ∧ ∀ r, Zk.rhoIndependent (c.rho r) = true
 
 /-- **The valid witnesses**: those satisfying the table's statement (`Statement.Satisfies`: the R1CS in every block, the
 pin, and the public regions' values). -/
@@ -204,7 +204,7 @@ noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) : CoinedSetup := sorry
 
 /-- **The structural facts Lemma B reads**, of a `CoinedSetup` at the arithmetic `A` and M1's padding constant `κ`: M1's
 level-0 padding geometry (`cols ≤ 40`, `t_pad ≤ 2^cols`, at most `t_pad` distinct opened positions inside
-`2^(cols+1)`), and at every coin vector the executable admits: the table reads its coins (`β`, `ρ`, the rank check's
+`2^(cols+1)`), and at every coin vector the honest prover doesn't refuse: the table reads its coins (`β`, `ρ`, the rank check's
 weights `eq(p_k, x)` and `embed` the inclusion of F128 in F256), the rank check, M1's padding columns `Gp`, each rep's
 `W^r` bijective, the pads onto, `β ≠ 0`, and the inner relation at every valid witness whose registered values are the
 public ones. -/
@@ -237,7 +237,7 @@ theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : 
   sorry
 
 /-- **Zero knowledge at a `CoinedSetup`, at `δ₁` per hidden leaf** (Lemma B, `ZkWireFixed`'s form at one table): at any
-coin vector the executable admits, for any encoding `enc` of the view (the proof files) and any event `E`, the real view
+coin vector the honest prover doesn't refuse, for any encoding `enc` of the view (the proof files) and any event `E`, the real view
 at any valid witness `w` whose registered values are the public ones and `S_shvzk`'s at any `w0` are within
 `2·|Hid|·δ₁`, both ways. -/
 def ZkViewAt (C : CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=

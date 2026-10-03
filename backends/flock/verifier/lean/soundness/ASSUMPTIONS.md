@@ -227,11 +227,11 @@ prove. Zero knowledge's two (`Hm96Hiding`, `PadNonvanishing`) are in `FlockSound
 hm96-sha512 over a uniform key, `CROnly.hm96_sha512_bad_keys`, What is pinned, below), while zero knowledge still takes
 `hash-derived-key` for the pinned key and `PadNonvanishing`. `hash-derived-key` is `Assumptions.HashDerivedKey`: `Hm96Hiding` at `2^-193`, instantiated at hm96-sha512's
 `ZkView.My` and `ZkView.saltHash` (`Composed.zk_session_composed`).
-Open item (zero knowledge's coverage): `Composed.zk_session_view` holds at the coin vectors `verify --zk` admits
-(`CoinedSetup.Admits`: `β ≠ 0`, the mask slot's rank `128·k`, `ρ₀, ρ₁` independent over F128) and says nothing about
-the view at a refused one. Every coin vector is the follow-up, through `ZK.Session.session_prefinal_indep_cut` (Lemma A
-cut where the session stops), and needs the honest prover to stop at a refused coin rather than release `y`. Until
-then the gap is bounded only by the refused coins' probability.
+Open item (zero knowledge's coverage): `Composed.zk_session_view` holds at the coin vectors the honest prover doesn't
+refuse (`refused_coins` in `flock-circuit.rs`; `CoinedSetup.Admits`: `β ≠ 0`, the mask slot's rank `128·k`, `ρ₀, ρ₁`
+independent over F128; the verifier also checks `β` and `ρ`) and says nothing about the view at a refused one. The
+prover already stops there (`at_open` returns `Err` before any `ŝ` leaves); what is open is the proof at every coin
+vector, through `ZK.Session.session_prefinal_indep_cut` (Lemma A cut where the session stops).
 - A4 (`Assumptions.KeyedStreamsUniform`), which the PoUW window's keyed draw takes as `hA4`;
 - A5 (`Assumptions.UniformSecret`), which the same draw takes as `hsec`;
 - `Assumptions.HmRowComputes`, not cryptographic: the circuit's row hashing, which the rows' value binding
