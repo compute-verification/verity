@@ -33,11 +33,22 @@ def _token(iso: str) -> str:
     return f"<!date^{int(u.timestamp())}^{{date_short_pretty}} {{time}}|{both(u)}>"
 
 
-def test_slack_dates_rewrites_both_forms_with_hh_mm_on_today_utc():
+def test_slack_dates_rewrites_both_forms_with_hh_mm_nearest_now():
     text = "freeze at 22:00Z, thaw 2026-11-01T09:30Z, recheck 2026-11-01T08:30:15Z; by 9:05Z."
     assert slack_dates(text, NOW) == (f"freeze at {_token('2026-09-30T22:00Z')}, thaw {_token('2026-11-01T09:30Z')}, "
                                       f"recheck {_token('2026-11-01T08:30:15Z')}; by {_token('2026-09-30T09:05Z')}.")
     assert slack_dates("22:00Z", dt.datetime(2026, 11, 1, 23, 0, tzinfo=UTC)).endswith("|2:00 PM PST (22:00Z)>")
+
+
+@pytest.mark.parametrize("now, text, want", [
+    (dt.datetime(2026, 10, 3, 16, 25, tzinfo=UTC), "00:00Z", "2026-10-04T00:00Z"),   # the coming midnight, not 16 h ago
+    (dt.datetime(2026, 10, 3, 16, 25, tzinfo=UTC), "02:00Z", "2026-10-04T02:00Z"),
+    (dt.datetime(2026, 10, 3, 16, 25, tzinfo=UTC), "06:00Z", "2026-10-03T06:00Z"),   # 10 h ago is nearer than 14 h ahead
+    (dt.datetime(2026, 10, 3, 0, 10, tzinfo=UTC), "23:50Z", "2026-10-02T23:50Z"),    # 20 min ago, across the date line
+    (dt.datetime(2026, 12, 31, 23, 0, tzinfo=UTC), "01:00Z", "2027-01-01T01:00Z"),
+])
+def test_slack_dates_takes_the_hh_mm_nearest_now_across_midnight(now, text, want):
+    assert slack_dates(text, now) == _token(want)
 
 
 @pytest.mark.parametrize("text", [

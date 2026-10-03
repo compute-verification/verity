@@ -38,15 +38,19 @@ def both(t: dt.datetime | str | float) -> str:
 
 
 def slack_dates(text: str, now: dt.datetime | None = None) -> str:
-    """Each `HH:MMZ` (on `now`'s UTC date) and `YYYY-MM-DDTHH:MM[:SS]Z` outside code, links and URLs, as
-    `<!date^UNIX^{date_short_pretty} {time}|FALLBACK>` with `both` as the fallback."""
-    today = _utc(now or dt.datetime.now(UTC)).date()
+    """Each `HH:MMZ` (the one nearest `now`: `00:00Z` written at 16:25Z is the coming midnight, not the one 16 h ago) and
+    `YYYY-MM-DDTHH:MM[:SS]Z` outside code, links and URLs, as `<!date^UNIX^{date_short_pretty} {time}|FALLBACK>` with `both`
+    as the fallback."""
+    t0 = _utc(now or dt.datetime.now(UTC))
 
     def token(m: re.Match) -> str:
         y, mo, d, hh, mm, ss, h2, m2 = m.groups()
         try:
-            day = dt.date(int(y), int(mo), int(d)) if y else today
-            u = dt.datetime(day.year, day.month, day.day, int(hh or h2), int(mm or m2), int(ss or 0), tzinfo=UTC)
+            if y:
+                u = dt.datetime(int(y), int(mo), int(d), int(hh), int(mm), int(ss or 0), tzinfo=UTC)
+            else:
+                at = dt.datetime.combine(t0.date(), dt.time(int(h2), int(m2)), tzinfo=UTC)
+                u = min((at + dt.timedelta(days=k) for k in (-1, 0, 1)), key=lambda c: abs(c - t0))
         except ValueError:
             return m[0]
         return f"<!date^{int(u.timestamp())}^{{date_short_pretty}} {{time}}|{both(u)}>"
