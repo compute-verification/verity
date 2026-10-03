@@ -1,7 +1,7 @@
 import NetTiming
 open NetTiming
 
--- The 31 pins (`lean-audit.json`'s `pins`): the 22 guarantees' proofs, then the nine witnesses.
+-- The 35 pins (`lean-audit.json`'s `pins`): the 24 guarantees' proofs, then the 11 witnesses.
 #print axioms SecurityProofs.CardFree
 #print axioms SecurityProofs.CardLeftPacked
 #print axioms SecurityProofs.FillInjective
@@ -24,6 +24,8 @@ open NetTiming
 #print axioms SecurityProofs.EncardAccSeqsLeBlocks
 #print axioms SecurityProofs.EncardAccSeqsLeBlocksCounts
 #print axioms SecurityProofs.EncardDecodableLeBlocks
+#print axioms SecurityProofs.EncardIngressObsDecodableLe
+#print axioms SecurityProofs.EncardIngressDecodableLe
 #print axioms witnessWarden_assumptions
 #print axioms witnessWarden_jitter_varies
 #print axioms witnessProgram_conditions
@@ -32,6 +34,8 @@ open NetTiming
 #print axioms joint_witness_bound
 #print axioms zP_accepts_one
 #print axioms zP_constOp_accepts_one
+#print axioms ingress_witness
+#print axioms ingress_witness_tight
 #print axioms toy_leftPacked
 
 -- Proved and audited, not pinned: no record in `lean-audit.json`, so not citable as pinned.
