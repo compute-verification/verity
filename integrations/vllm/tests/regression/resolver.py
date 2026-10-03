@@ -267,7 +267,8 @@ class Row:
         """A directory holding the row's request Programs (`build_request*/instances.json.gz` beside the derive's `result.json`) -- the
         live row dir, or, when the Programs and the records live in different trees (the store's `programs` / `records` artifacts,
         the pod's staged programs dir: `instances.json.gz` + `manifest.json` only), a merged view assembled under the scratch dir: one
-        symlink per frozen `build_request*/…` file of fixtures.toml, each resolved through `path()` (sha / size checked).  None when no
+        hard link (a symlink across filesystems) per frozen `build_request*/…` file of fixtures.toml, each resolved through `path()`
+        (sha / size checked).  None when no
         Programs are reachable.  Both engines read `result.json` (attention impls observed) beside the instances, so a split layout
         must be re-joined here, from the frozen index, never by guessing."""
         root: Path | None = None
@@ -303,7 +304,10 @@ class Row:
             dst.parent.mkdir(parents=True, exist_ok=True)
             if dst.is_symlink() or dst.exists():
                 dst.unlink()
-            dst.symlink_to(src)
+            try:
+                os.link(src, dst)        # the store's trees/ is a cache eviction may clear under a rebuild that reads for an hour
+            except OSError:
+                dst.symlink_to(src)
             n += 1
         if not any(view.glob("build_request*/instances.json.gz")) and not any(view.glob("build/rank*/build_request*/instances.json.gz")):
             raise NotResolvable(f"{self.key}: merged Programs view has no instances.json.gz ({n} files linked under {view})")

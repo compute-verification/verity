@@ -4,11 +4,15 @@ What a recorded check (VERITY_STORE_REQUIRED=1) may skip: a check retired on the
 does not resolve, which fails.  The checks that recompute from a row's Programs (manifest_digest, step_segmentation, the #57 negative)
 skip unless VERITY_REGRESSION_REBUILD=1 (the post-train job), which selects them by their `rebuild` mark.  A query
 manifest's rows beyond v1 are its "promoted" facts whatever the engine is called (`v2-query`, `q-word` since S1).  A post-flip reference
-row (no `commit_summary.json`) is summarised from its own evidence.  A row's `manifest_flags` replaces POLICIES_OFF.
+row (no `commit_summary.json`) is summarised from its own evidence.  A row's `manifest_flags` replaces POLICIES_OFF.  A merged
+Programs view outlives the trees it was assembled from.
 """
 from __future__ import annotations
 
+import gzip
+import hashlib
 import json
+import shutil
 
 import pytest
 
@@ -138,6 +142,25 @@ def test_a_row_without_a_summary_or_a_verdict_of_record_is_not_summarised(tmp_pa
     row = _post_flip_row(tmp_path, monkeypatch, rc=0)
     (tmp_path / "rows" / "k" / "verdict.json").unlink()
     assert CS.applies(row) is not None
+
+
+def test_a_merged_programs_view_outlives_the_trees_it_links_from(tmp_path, monkeypatch):
+    """The store's trees/ is a cache that eviction may clear while a rebuild reads the view (#11's rebuild failed on its view's
+    result.json in r20261003-173418-89e5): the view holds hard links, so its files stay readable when their trees go."""
+    data = {"build_request/instances.json.gz": gzip.compress(b"[]"), "build_request/result.json": b"{}"}
+    programs, records = tmp_path / "programs" / "k", tmp_path / "records"
+    for root, rel in ((programs, "build_request/instances.json.gz"), (records, "build_request/result.json")):
+        (root / rel).parent.mkdir(parents=True)
+        (root / rel).write_bytes(data[rel])
+    files = {rel: {"role": "record", "bytes": len(v), "sha256": hashlib.sha256(v).hexdigest()} for rel, v in data.items()}
+    monkeypatch.setenv(resolver.ROWS_ROOT_ENV, str(tmp_path / "programs"))
+    monkeypatch.setenv(resolver.SCRATCH_ENV, str(tmp_path / "scratch"))
+    view = resolver.Row("k", {"row": 9, "local": {"m": str(records)}, "files": files}, fixtures={}).programs_root()
+    assert view is not None and view.is_relative_to(tmp_path / "scratch")
+    shutil.rmtree(tmp_path / "programs")
+    shutil.rmtree(records)
+    assert gzip.decompress((view / "build_request/instances.json.gz").read_bytes()) == b"[]"
+    assert (view / "build_request/result.json").read_bytes() == b"{}"
 
 
 def test_a_rows_manifest_flags_replace_the_policies_off():
