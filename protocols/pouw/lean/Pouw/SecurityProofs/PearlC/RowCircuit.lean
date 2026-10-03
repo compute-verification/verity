@@ -16,7 +16,10 @@ are `RowSem`'s formulas on the row's inputs:
   `t`'s output `code8W` at `alpha8`'s and `beta8`'s words of its row;
 * a row chain (`Chain8Holds`) is the tile check's chain on the codes it reads: each atom's word (`chain8_atom`,
   `atom8_eval`), each window (`chain8_window`), the running sum (`chain8_add`), so its last word is `chainWordP? p 4`'s
-  (`chain8_word`), and RowA's `P_A` word `q` is that word cast to bf16 (`row8A_pa`).
+  (`chain8_word`), and RowA's `P_A` word `q` is that word cast to bf16 (`row8A_pa`);
+* RowB's `P_B` word `q` is the BF16 cast of `Σ_s ẽ_s·g_{s,q}` (`pbAcc`, the FMAs from `+0` of the rescaled noise' FP32
+  words, `pre8_ew`) plus its chain's word negated (`row8B_pb`), and the rescaled noise' BF16 words, `P_A`'s head and
+  `P_B`'s tail negated, are `row8A_be` and `row8B_nbe`.
 -/
 
 namespace Pouw.PearlC.RowCircuit
@@ -353,6 +356,18 @@ theorem pre8_eTilde (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) :
     show ep8At K b + (3 * l + 1) - 1 = ep8At K b + 3 * l by omega, g0, (pre8_alpha hK h).2]
   rfl
 
+/-- **The rescaled noise' words**: each code's FP32 word. -/
+theorem pre8_ew (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) :
+    ∀ l < 32, V (ew8At K b + l) = Prim.eval ops .e4m3ToF32 [eTilde8 ops (beta8 ops V K) (V (K + l))] := by
+  intro l hl
+  obtain ⟨-, hr⟩ := runsHold_append ops V h
+  rw [statsRuns_len] at hr
+  obtain ⟨-, -, -, -, -, -, hw, -⟩ := hr
+  have hw' : RunHolds ops V (ew8Run K b) (ew8At K b) := hw
+  have g := hw' l (by simp [ew8Run]; omega)
+  simp only [ew8Run, List.map_cons, List.map_nil, Arg.eval, Wire.eval_id] at g
+  rw [g, pre8_eTilde hK h l hl]
+
 /-- **Position `t`'s code**: `code8W` at `α`'s word, `x_t`, the rescaled noise' codes and the form basis' row `t`. -/
 theorem pre8_code (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) :
     ∀ t < K, V (code8 K b t) = code8W ops p (alpha8 ops V K) (V t)
@@ -659,5 +674,229 @@ theorem row8A_pa {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8A p 
     post8At K (rowIn K false) + q * (5 * nw + 1) + (5 * (nw - 1) + 4) by omega, hw]
 
 end Chain8
+
+/-! ## RowB's `P_B` -/
+
+/-- `Σ_s ẽ_s·g_s` as RowB's FMAs accumulate it, `s` ascending from `+0`: the word after term `s`. -/
+def pbAcc (ew g : ℕ → ℕ) : ℕ → ℕ
+  | 0 => Prim.eval ops .fma [ew 0, g 0, 0]
+  | s + 1 => Prim.eval ops .fma [ew (s + 1), g (s + 1), pbAcc ew g s]
+
+section Mid8
+
+open AccumProofs PeelExact PeelExactP
+
+variable {ops} (p : Pipeline)
+
+theorem pbAcc_congr {ew ew' g g' : ℕ → ℕ} : ∀ n, (∀ s ≤ n, ew s = ew' s ∧ g s = g' s) →
+    pbAcc ops ew g n = pbAcc ops ew' g' n
+  | 0, h => by simp only [pbAcc, (h 0 le_rfl).1, (h 0 le_rfl).2]
+  | n + 1, h => by
+    simp only [pbAcc, (h (n + 1) le_rfl).1, (h (n + 1) le_rfl).2, pbAcc_congr n fun s hs => h s (by omega)]
+
+/-- **RowB computes `P_B`'s words**: at depth `K = 128·nw`, a transcript correct on RowB whose code outputs hold `B̃`'s
+codes `A` and whose chain basis' column `q` holds `B` has on `P_B`'s word `q` the BF16 cast of `Σ_s ẽ_s·g_{s,q}` (the
+FMAs from `+0` of the rescaled noise' FP32 words against `G`'s column `q`) plus the negated word of the chain over `A`
+and `B` (`chainWordP? p 4`, the pinned order). -/
+theorem row8B_pb {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8B p K).spec ops).toCircuit.Transcript)
+    (hX : ((row8B p K).spec ops).part.Correct X 0) (A B : Fin (128 * nw) → Code)
+    (hA : ∀ t : Fin (128 * nw), val X (code8 K (rowIn K true) t) = (A t).val) {q : ℕ} (hq : q < 32)
+    (hB : ∀ t : Fin (128 * nw), val X (33 * K + 32 + 32 * t + q) = (B t).val) {c : ℕ}
+    (hc : chainWordP? p 4 (rowAtoms A B) = some c) :
+    val X (post8At K (rowIn K true) + q * (5 * nw + 35) + 5 * nw + 34) =
+      Prim.eval ops .f2fpBf16 [Prim.eval ops .add
+        [pbAcc ops (fun s => Prim.eval ops .e4m3ToF32 [eTilde8 ops (beta8 ops (val X) K) (val X (K + s))])
+          (fun s => val X (65 * K + 32 + 32 * s + q)) 31, Prim.eval ops .neg [c]]] := by
+  have hKn : K / 128 = nw := by omega
+  have h8 : 8 ≤ K := by omega
+  have hlen := pre8Runs_len p K (rowIn K true)
+  have hN : (row8B p K).N = post8At K (rowIn K true) + 32 * (5 * nw + 35) + 64 + 1 := by
+    show rowIn K true + runsLen (row8B p K).runs = _
+    simp only [row8B, runsLen_append, runsLen, mid8Run, Run.rep, nb8Run, okwRun, Run.ofList, List.length_cons,
+      List.length_nil, hKn]
+    omega
+  have hout : ∀ g ∈ (row8B p K).outs,
+      val X g = val (((row8B p K).spec ops).toCircuit.eval X) g := fun g hg =>
+    Spec.out_eq ((row8B p K).spec ops) X hX (List.mem_toFinset.2 hg) (by
+      simp only [row8B, List.mem_append, List.mem_map, List.mem_range, List.mem_singleton] at hg
+      show g < (row8B p K).N
+      rw [hN]
+      rcases hg with ((⟨t, ht, rfl⟩ | ⟨l, hl, rfl⟩) | ⟨l, hl, rfl⟩) | rfl
+      · unfold code8; unfold post8At at hlen ⊢; omega
+      · rw [hKn]
+        have : l * (5 * nw + 35) + 5 * nw + 34 < 32 * (5 * nw + 35) := by nlinarith
+        omega
+      · omega
+      · omega)
+  have hmem : post8At K (rowIn K true) + q * (5 * nw + 35) + 5 * nw + 34 ∈ (row8B p K).outs := by
+    simp only [row8B, List.mem_append, List.mem_map, List.mem_range, hKn]
+    exact Or.inl (Or.inl (Or.inr ⟨q, hq, rfl⟩))
+  rw [hout _ hmem]
+  obtain ⟨V, hV⟩ : ∃ V, V = val (((row8B p K).spec ops).toCircuit.eval X) := ⟨_, rfl⟩
+  rw [← hV]
+  have hh := Rows.holds ops (row8B p K) X
+  rw [← hV] at hh
+  have hsplit := runsHold_append ops V hh
+  have hpre : RunsHold ops V (pre8Runs p K (rowIn K true)) (rowIn K true) := hsplit.1
+  have hpost := hsplit.2
+  rw [show (row8B p K).nIn + runsLen (pre8Runs p K (rowIn K true)) = post8At K (rowIn K true) from hlen] at hpost
+  have hmid : RunHolds ops V (mid8Run p K (rowIn K true)) (post8At K (rowIn K true)) := hpost.1
+  have hin : ∀ l < rowIn K true, V l = val X l := fun l hl => by
+    rw [hV]; exact Rows.val_input ops (row8B p K) X hl
+  have hgate : ∀ s < 5 * nw + 35, V (post8At K (rowIn K true) + q * (5 * nw + 35) + s) =
+      (mid8 p K (rowIn K true) q s (post8At K (rowIn K true) + q * (5 * nw + 35) + s)).prim.eval ops
+        ((mid8 p K (rowIn K true) q s (post8At K (rowIn K true) + q * (5 * nw + 35) + s)).args.map
+          (Arg.eval ops V)) := by
+    intro s hs
+    have hr : q * (5 * nw + 35) + s < (mid8Run p K (rowIn K true)).n := by
+      simp only [mid8Run, Run.rep, hKn]
+      nlinarith
+    have := hmid _ hr
+    have hd : (q * (5 * nw + 35) + s) / (5 * nw + 35) = q := by
+      rw [Nat.add_comm, Nat.add_mul_div_right _ _ (by omega), Nat.div_eq_of_lt hs, Nat.zero_add]
+    have hm : (q * (5 * nw + 35) + s) % (5 * nw + 35) = s := by
+      rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hs]
+    simp only [mid8Run, Run.rep, hKn, hd, hm] at this
+    rw [← Nat.add_assoc] at this
+    exact this
+  have hacc : ∀ s, s < 32 → V (post8At K (rowIn K true) + q * (5 * nw + 35) + s) =
+      pbAcc ops (fun s => V (ew8At K (rowIn K true) + s)) (fun s => V (65 * K + 32 + 32 * s + q)) s := by
+    intro s
+    induction s with
+    | zero =>
+      intro _
+      rw [hgate 0 (by omega)]
+      simp only [mid8, show (0 : ℕ) < 32 by omega, ↓reduceIte, List.map_cons, List.map_nil, Arg.eval,
+        Wire.eval_id, pbAcc]
+    | succ s ih =>
+      intro hs
+      rw [hgate (s + 1) (by omega)]
+      simp only [mid8, hs, ↓reduceIte, Nat.add_one_ne_zero, List.map_cons, List.map_nil, Arg.eval, Wire.eval_id,
+        pbAcc]
+      rw [show post8At K (rowIn K true) + q * (5 * nw + 35) + (s + 1) - 1 =
+        post8At K (rowIn K true) + q * (5 * nw + 35) + s by omega, ih (by omega)]
+  have hch : Chain8Holds (ops := ops) p V (code8 K (rowIn K true)) (fun t => 33 * K + 32 + 32 * t + q)
+      (post8At K (rowIn K true) + q * (5 * nw + 35) + 32) nw := by
+    intro r hr
+    have := hgate (32 + r) (by omega)
+    simp only [mid8, show ¬ (32 + r < 32) by omega, show 32 + r < 32 + 5 * (K / 128) by omega, ↓reduceIte,
+      show 32 + r - 32 = r by omega] at this
+    rw [show post8At K (rowIn K true) + q * (5 * nw + 35) + 32 + r =
+      post8At K (rowIn K true) + q * (5 * nw + 35) + (32 + r) by omega]
+    exact this
+  have hA' : ∀ t : Fin (128 * nw), V (code8 K (rowIn K true) t) = (A t).val := by
+    intro t
+    have ht : code8 K (rowIn K true) t ∈ (row8B p K).outs := by
+      simp only [row8B, List.mem_append, List.mem_map, List.mem_range]
+      exact Or.inl (Or.inl (Or.inl ⟨t, by omega, rfl⟩))
+    rw [hV, ← hout _ ht, hA t]
+  have hB' : ∀ t : Fin (128 * nw), V (33 * K + 32 + 32 * t + q) = (B t).val := by
+    intro t
+    rw [hin _ (by simp only [rowIn]; omega), hB t]
+  have hw := chain8_word p hnw hch A B hA' hB' hc
+  have hneg := hgate (32 + 5 * nw) (by omega)
+  have hadd := hgate (33 + 5 * nw) (by omega)
+  have hcast := hgate (34 + 5 * nw) (by omega)
+  simp only [mid8, hKn] at hneg hadd hcast
+  simp only [show ¬ (32 + 5 * nw < 32) by omega, show ¬ (32 + 5 * nw < 32 + 5 * nw) from Nat.lt_irrefl _,
+    ↓reduceIte, List.map_cons, List.map_nil, Arg.eval, Wire.eval_id] at hneg
+  simp only [show ¬ (33 + 5 * nw < 32) by omega, show ¬ (33 + 5 * nw < 32 + 5 * nw) by omega,
+    show ¬ (33 + 5 * nw = 32 + 5 * nw) by omega, ↓reduceIte, List.map_cons, List.map_nil, Arg.eval,
+    Wire.eval_id] at hadd
+  simp only [show ¬ (34 + 5 * nw < 32) by omega, show ¬ (34 + 5 * nw < 32 + 5 * nw) by omega,
+    show ¬ (34 + 5 * nw = 32 + 5 * nw) by omega, show ¬ (34 + 5 * nw = 33 + 5 * nw) by omega, ↓reduceIte,
+    List.map_cons, List.map_nil, Arg.eval, Wire.eval_id] at hcast
+  rw [show post8At K (rowIn K true) + q * (5 * nw + 35) + 5 * nw + 34 =
+      post8At K (rowIn K true) + q * (5 * nw + 35) + (34 + 5 * nw) by omega, hcast,
+    show post8At K (rowIn K true) + q * (5 * nw + 35) + (34 + 5 * nw) - 1 =
+      post8At K (rowIn K true) + q * (5 * nw + 35) + (33 + 5 * nw) by omega, hadd,
+    show post8At K (rowIn K true) + q * (5 * nw + 35) + (33 + 5 * nw) - 2 - 5 * nw =
+      post8At K (rowIn K true) + q * (5 * nw + 35) + 31 by omega,
+    show post8At K (rowIn K true) + q * (5 * nw + 35) + (33 + 5 * nw) - 1 =
+      post8At K (rowIn K true) + q * (5 * nw + 35) + (32 + 5 * nw) by omega, hneg,
+    show post8At K (rowIn K true) + q * (5 * nw + 35) + (32 + 5 * nw) - 1 =
+      post8At K (rowIn K true) + q * (5 * nw + 35) + 32 + (5 * (nw - 1) + 4) by omega, hw, hacc 31 (by omega)]
+  have hE : pbAcc ops (fun s => V (ew8At K (rowIn K true) + s)) (fun s => V (65 * K + 32 + 32 * s + q)) 31 =
+      pbAcc ops (fun s => Prim.eval ops .e4m3ToF32 [eTilde8 ops (beta8 ops (val X) K) (val X (K + s))])
+        (fun s => val X (65 * K + 32 + 32 * s + q)) 31 := by
+    refine pbAcc_congr 31 fun s hs => ⟨?_, hin _ (by simp only [rowIn, ↓reduceIte]; omega)⟩
+    rw [pre8_ew h8 hpre s (by omega), hin _ (by simp only [rowIn]; omega),
+      beta8_congr h8 fun l hl => hin l (by simp only [rowIn]; omega)]
+  rw [hE]
+
+/-- **RowA writes the rescaled noise' BF16 words** (`be_A`, `P_A`'s head in `paRow?`): word `l` is the BF16 cast of
+`ẽ_l`'s FP32 word. -/
+theorem row8A_be {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8A p K).spec ops).toCircuit.Transcript)
+    (hX : ((row8A p K).spec ops).part.Correct X 0) {l : ℕ} (hl : l < 32) :
+    val X (post8At K (rowIn K false) + 32 * (5 * nw + 1) + l) =
+      Prim.eval ops .f2fpBf16 [Prim.eval ops .e4m3ToF32 [eTilde8 ops (beta8 ops (val X) K) (val X (K + l))]] := by
+  have hKn : K / 128 = nw := by omega
+  have h8 : 8 ≤ K := by omega
+  have hlen := pre8Runs_len p K (rowIn K false)
+  have hmem : post8At K (rowIn K false) + 32 * (5 * nw + 1) + l ∈ (row8A p K).outs := by
+    simp only [row8A, List.mem_append, List.mem_map, List.mem_range, hKn]
+    exact Or.inl (Or.inl (Or.inr ⟨l, hl, rfl⟩))
+  have hlt : post8At K (rowIn K false) + 32 * (5 * nw + 1) + l < ((row8A p K).spec ops).N := by
+    show _ < rowIn K false + runsLen (row8A p K).runs
+    simp only [row8A, runsLen_append, runsLen, af8Run, Run.rep, bew8Run, okwRun, Run.ofList, List.length_cons,
+      List.length_nil, hKn]
+    omega
+  rw [Spec.out_eq _ X hX (List.mem_toFinset.2 hmem) hlt]
+  obtain ⟨V, hV⟩ : ∃ V, V = val (((row8A p K).spec ops).toCircuit.eval X) := ⟨_, rfl⟩
+  rw [← hV]
+  have hh := Rows.holds ops (row8A p K) X
+  rw [← hV] at hh
+  have hsplit := runsHold_append ops V hh
+  have hpre : RunsHold ops V (pre8Runs p K (rowIn K false)) (rowIn K false) := hsplit.1
+  have hpost := hsplit.2
+  rw [show (row8A p K).nIn + runsLen (pre8Runs p K (rowIn K false)) = post8At K (rowIn K false) from hlen] at hpost
+  have hin : ∀ l < rowIn K false, V l = val X l := fun l hl => by
+    rw [hV]; exact Rows.val_input ops (row8A p K) X hl
+  have g := hpost.2.1 l (by simp [bew8Run]; omega)
+  simp only [bew8Run, List.map_cons, List.map_nil, Arg.eval, Wire.eval_id, af8Run, Run.rep, hKn] at g
+  rw [g, pre8_ew h8 hpre l hl, hin _ (by simp only [rowIn]; omega),
+    beta8_congr h8 fun l hl => hin l (by simp only [rowIn]; omega)]
+
+/-- **RowB writes the rescaled noise' BF16 words negated** (`P_B`'s tail in `pbRow?`): word `l` is the BF16 cast of
+`ẽ_l`'s FP32 word, its sign flipped. -/
+theorem row8B_nbe {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8B p K).spec ops).toCircuit.Transcript)
+    (hX : ((row8B p K).spec ops).part.Correct X 0) {l : ℕ} (hl : l < 32) :
+    val X (post8At K (rowIn K true) + 32 * (5 * nw + 35) + 2 * l + 1) = Prim.eval ops .bf16Neg
+      [Prim.eval ops .f2fpBf16 [Prim.eval ops .e4m3ToF32 [eTilde8 ops (beta8 ops (val X) K) (val X (K + l))]]] := by
+  have hKn : K / 128 = nw := by omega
+  have h8 : 8 ≤ K := by omega
+  have hlen := pre8Runs_len p K (rowIn K true)
+  have hmem : post8At K (rowIn K true) + 32 * (5 * nw + 35) + 2 * l + 1 ∈ (row8B p K).outs := by
+    simp only [row8B, List.mem_append, List.mem_map, List.mem_range, hKn]
+    exact Or.inl (Or.inr ⟨l, hl, rfl⟩)
+  have hlt : post8At K (rowIn K true) + 32 * (5 * nw + 35) + 2 * l + 1 < ((row8B p K).spec ops).N := by
+    show _ < rowIn K true + runsLen (row8B p K).runs
+    simp only [row8B, runsLen_append, runsLen, mid8Run, Run.rep, nb8Run, okwRun, Run.ofList, List.length_cons,
+      List.length_nil, hKn]
+    omega
+  rw [Spec.out_eq _ X hX (List.mem_toFinset.2 hmem) hlt]
+  obtain ⟨V, hV⟩ : ∃ V, V = val (((row8B p K).spec ops).toCircuit.eval X) := ⟨_, rfl⟩
+  rw [← hV]
+  have hh := Rows.holds ops (row8B p K) X
+  rw [← hV] at hh
+  have hsplit := runsHold_append ops V hh
+  have hpre : RunsHold ops V (pre8Runs p K (rowIn K true)) (rowIn K true) := hsplit.1
+  have hpost := hsplit.2
+  rw [show (row8B p K).nIn + runsLen (pre8Runs p K (rowIn K true)) = post8At K (rowIn K true) from hlen] at hpost
+  have hin : ∀ l < rowIn K true, V l = val X l := fun l hl => by
+    rw [hV]; exact Rows.val_input ops (row8B p K) X hl
+  have g1 := hpost.2.1 (2 * l + 1) (by simp [nb8Run]; omega)
+  have g0 := hpost.2.1 (2 * l) (by simp [nb8Run]; omega)
+  have e1 : (2 * l + 1) % 2 = 1 := by omega
+  have e0 : 2 * l % 2 = 0 := by omega
+  simp only [nb8Run, e0, e1, ↓reduceIte, show (1 : ℕ) ≠ 0 by omega, show 2 * l / 2 = l by omega, List.map_cons,
+    List.map_nil, Arg.eval, Wire.eval_id, mid8Run, Run.rep, hKn] at g0 g1
+  rw [show post8At K (rowIn K true) + 32 * (5 * nw + 35) + 2 * l + 1 =
+      post8At K (rowIn K true) + 32 * (5 * nw + 35) + (2 * l + 1) by omega, g1,
+    show post8At K (rowIn K true) + 32 * (5 * nw + 35) + (2 * l + 1) - 1 =
+      post8At K (rowIn K true) + 32 * (5 * nw + 35) + 2 * l by omega, g0, pre8_ew h8 hpre l hl,
+    hin _ (by simp only [rowIn]; omega), beta8_congr h8 fun l hl => hin l (by simp only [rowIn]; omega)]
+
+end Mid8
 
 end Pouw.PearlC.RowCircuit
