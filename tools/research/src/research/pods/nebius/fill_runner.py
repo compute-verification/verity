@@ -14,7 +14,8 @@ A fill job is an executable script in FILL_DIR/queue/.  Its header says what it 
 #   guests, verity-commit-*.sh, which rank above every other job); mem_gb: a CPU job's memory cap
 #   (default 128; a GPU job's cap is gpu-lease's, 90% of RAM over the GPU count, a timing job's its own scope's, default 128);
 #   timing=1: a timing chunk (network accounting's), on one GPU with cpus CPUs of its own (1 to 16, whole cores; see below)
-#   and its thread pools (OMP_NUM_THREADS, OPENBLAS_, MKL_, NUMEXPR_) one per core, max_min <= FILL_TIMING_MAX_MIN (60);
+#   and its thread pools (OMP_NUM_THREADS, OPENBLAS_, MKL_, NUMEXPR_) one per core, max_min <= FILL_TIMING_MAX_MIN (60)
+#   whatever max-min line or fence names it (a Commit guest's timing=1 is ignored);
 #   a value fill reads as a whole number that isn't one sends the job to failed/ (event `failed`, why `header: gpus=one`)
 
 It must be restartable: it can be stopped (SIGTERM, then SIGKILL 20 s later) at any moment and started again from the top,
@@ -230,7 +231,7 @@ def header(p: Path, t: float | None = None) -> dict:
             return HEADER[k]
 
     commit = p.name.startswith(COMMIT_PREFIX)
-    h["timing"] = h.get("timing") == 1
+    h["timing"] = h.get("timing") == 1 and not commit
     for k in ("gpus", "max_min", "prio"):
         h[k] = whole(k)
     h["gpus"] = 1 if h["timing"] else min(max(h["gpus"], 0), 2 if commit else 1)
@@ -243,6 +244,9 @@ def header(p: Path, t: float | None = None) -> dict:
     if cap is None:
         cap = (COMMIT_MAX_MIN if commit and h["gpus"] else TIMING_MAX_MIN if h["timing"]
                else 360 if h["project"] == "verity" and not h["gpus"] else 30)
+    if h["timing"]:
+        # nothing stops a timing job before its max_min, so no exception lifts that
+        cap = min(cap, TIMING_MAX_MIN)
     h["max_min"] = min(h["max_min"], cap)
     if bad:
         h["bad"] = " ".join(bad)

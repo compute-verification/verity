@@ -174,6 +174,24 @@ def test_a_malformed_header_files_its_job_under_failed_and_the_tick_goes_on(node
     assert fr.running["old.sh"]["h"]["gpus"] == 1
 
 
+def test_no_exception_lifts_a_timing_job_past_its_cap_and_a_commit_is_never_one(node2):
+    """Nothing stops a timing job before its max_min, so nothing lifts that past FILL_TIMING_MAX_MIN: not a FILL_DIR/max-min line
+    (they used to give it the line's minutes), a fence that names it (up to 4 h) or the Commit prefix (120 min and rank 0, above
+    every job). A Commit guest's timing=1 is ignored: it stays an ordinary, preemptible Commit."""
+    load, fill, _ = node2
+    fr = load()
+    (fill / "max-min").write_text("nw-* 240 2099-01-01T00:00Z  # infra, a long sweep\n")
+    queue(fill, "nw-chunk.sh", TIMING.replace("max_min=60", "max_min=240"))
+    assert fr.header(fill / "queue" / "nw-chunk.sh")["max_min"] == 60
+    (fill / "max-min").unlink()
+    (fill / "fences").write_text("net 7 140-147 2099-01-01T00:00Z nw-* 240  # a fence naming the chunk\n")
+    assert fr.header(fill / "queue" / "nw-chunk.sh", t=fr.utc("2098-12-31T00:00Z"))["max_min"] == 60
+    (fill / "fences").unlink()
+    queue(fill, "verity-commit-x.sh", "owner=c gpus=1 timing=1 cpus=16 max_min=120 project=verity")
+    h = fr.header(fill / "queue" / "verity-commit-x.sh")
+    assert (h["timing"], h["gpus"], h["max_min"]) == (False, 1, 120)
+
+
 def test_fill_never_stops_a_timing_job_and_a_whole_node_window_waits_for_it(node2, monkeypatch):
     """A timing chunk is not preemptible. A waiter, a timed lease, a Commit or a fence stops other fill jobs, never it; a window's
     `gpu-lease 8 --wait` waits for it to end (fill backfills meanwhile), and then stops the rest of fill. No chunk starts whose
