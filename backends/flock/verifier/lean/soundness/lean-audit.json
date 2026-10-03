@@ -18334,6 +18334,8 @@
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
     "FlockSoundness.Discharge.ZkExec.zk_verifyRep_ok",
     "FlockSoundness.Discharge.ZkExec.zk_verify_ok",
+    "FlockSoundness.Discharge.ZkLink.batchedSessionZC_one",
+    "FlockSoundness.Discharge.ZkLink.sessionZC_one",
     "FlockSoundness.Discharge.ZkView.decode_encode",
     "FlockSoundness.Discharge.ZkView.honest_msg",
     "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
