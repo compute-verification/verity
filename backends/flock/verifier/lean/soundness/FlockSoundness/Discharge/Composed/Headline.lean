@@ -1,4 +1,5 @@
 import FlockSoundness.Discharge.Composed.Defs
+import FlockSoundness.ZK.Complete
 
 /-!
 # The composed headline of one `--zk` sampled session
