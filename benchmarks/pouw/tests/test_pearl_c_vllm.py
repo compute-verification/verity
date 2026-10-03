@@ -519,14 +519,34 @@ def test_served_debit_per_input_bounds_each_input_on_its_own(honest_pass, tmp_pa
 
 
 def test_served_debit_input_bounds():
-    """The per-input limits: the work-weighted rule of three at no failure, Clopper–Pearson at its textbook values, and
-    Bernstein no tighter than the observed rate."""
+    """The per-input limits (lean's rulings on #923): the work-weighted rule of three for a census and for n draws at no
+    failure, Bernstein no tighter than the observed rate, and no bound for a sampled input with failures."""
     row = {"method": "census", "failures": 0, "failures_weighted": 0, "W": 64 * 4096, "w_max": 4096}
     assert SD.input_bound(row, 0.05)[0] == pytest.approx(math.log(20) / 64)
-    assert SD._clopper_pearson_upper(0, 100, 0.05) == pytest.approx(1 - 0.05 ** (1 / 100), rel=1e-9)
-    assert SD._clopper_pearson_upper(1, 10, 0.025) == pytest.approx(0.4450, abs=1e-4)
+    a = 4096 / (2048 * 4096)
+    drawn = {"method": "sampled", "failures": 0, "W": 2048 * 4096, "w_max": 4096, "drawn": 64}
+    assert SD.input_bound(drawn, 0.05)[0] == pytest.approx(math.log(20) * a / (1 - math.exp(-64 * a)))
+    assert SD.input_bound(drawn, 0.05)[0] > math.log(20) / 64 > SD.input_bound(drawn | {"drawn": 10 ** 6}, 0.05)[0]
+    assert SD.input_bound(drawn | {"drawn": 10 ** 6}, 0.05)[0] == pytest.approx(math.log(20) * a)
+    assert SD.input_bound(drawn | {"failures": 1, "failures_weighted": 4096}, 0.05) == (1.0, "sampled with failures: measure this input in full")
     up = SD._bernstein_upper(3 * 4096, 4096, 64 * 4096, 0.05)
     assert 3 / 64 < up < 1
+    assert SD.input_bound(row | {"failures": 3, "failures_weighted": 3 * 4096}, 0.05)[0] == up
+
+
+def test_served_debit_rebound_recomputes_an_inputs_json(tmp_path):
+    """`--rebound` rewrites a recorded inputs.json's bounds from its counts alone, at δ = 0.05/m, with no manifest."""
+    rows = [{"pass": "decode", "run": "r", "manifest_sha256": "0", "matmul": i, "weight": i, "m": 1, "k": 4096, "n": 4096,
+             "NT": nt, "W": nt * 4096, "w_max": 4096, "method": method, "drawn": drawn, "openings_failed": 0, "failures": 0,
+             "failures_weighted": 0, "share_max": None, "reasons": [], "upper": 0.0, "bound_method": "old"}
+            for i, (nt, method, drawn) in enumerate([(64, "census", 64), (2048, "sampled", 64)])]
+    src = tmp_path / "inputs.json"
+    src.write_text(json.dumps({"seed": 7, "census_max": 128, "draws": 64, "inputs": rows}))
+    assert SD.main(["--rebound", str(src), "--out", str(tmp_path / "out")]) == 0
+    doc = json.loads((tmp_path / "out" / "inputs.json").read_text())
+    assert doc["m"] == 2 and doc["delta_per_input"] == 0.025 and doc["seed"] == 7
+    assert [r["upper"] for r in doc["inputs"]] == [SD.input_bound(r, 0.025)[0] for r in rows]
+    assert doc["cited_upper"] == doc["inputs"][1]["upper"] and doc["cited_input"]["matmul"] == 1
 
 
 def test_served_debits_share_is_the_tile_rules_debit_over_its_rev1_credit():

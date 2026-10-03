@@ -316,18 +316,6 @@ def pick_inputs(job: dict, per_linear: int, census_max: int, draws: int, seed: i
     return out
 
 
-def _clopper_pearson_upper(k: int, n: int, delta: float) -> float:
-    """The exact binomial upper limit: the largest p with P[Bin(n, p) <= k] >= delta."""
-    if k >= n:
-        return 1.0
-    cdf = lambda p: sum(math.comb(n, i) * p ** i * (1 - p) ** (n - i) for i in range(k + 1))
-    lo, hi = k / n, 1.0
-    for _ in range(100):
-        mid = (lo + hi) / 2
-        lo, hi = (mid, hi) if cdf(mid) >= delta else (lo, mid)
-    return hi
-
-
 def _bernstein_upper(x: float, w_max: float, total: float, delta: float) -> float:
     """An upper limit on the mean work-weighted rate μ/W of independent tiles from their observed weighted failures x:
     Bernstein's lower tail, P[X <= μ - t] <= exp(-t² / (2·w_max·μ + 2·w_max·t/3)), solved for the largest μ it allows."""
@@ -341,15 +329,22 @@ def _bernstein_upper(x: float, w_max: float, total: float, delta: float) -> floa
 
 
 def input_bound(row: dict, delta: float) -> tuple[float, str]:
-    """Lean's ruling on #923: each input's rate at a simultaneous upper confidence limit (δ = 0.05/m per input).
-    A census with no failure gives ln(1/δ)·w_max/W (the rule of three for a work-weighted draw: P[none fail] = Π(1 - p_g)
-    <= exp(-p·W/w_max)), assuming the input's tiles fail independently (each tile's noise is the oracle at points of its
-    own); a census with failures, Bernstein on the weighted sum; a sampled input, Clopper–Pearson on its draws."""
+    """Lean's ruling on #923: each input's rate p = E[X] (X its work-weighted failing fraction under the tiles' noise) at a
+    simultaneous upper confidence limit (δ = 0.05/m per input), assuming the input's tiles fail independently (each tile's
+    noise is the oracle at points of its own).  With a = w_max/W:
+    - a census with no failure: ln(1/δ)·a (P[none fail] = Π(1 - p_g) <= exp(-p/a));
+    - n work-weighted draws with no failure: ln(1/δ)·a / (1 - exp(-n·a)) (E[(1 - X)^n] <= E[exp(-nX)] <= exp(-p(1 - exp(-n·a))/a));
+      Clopper–Pearson on the draws would bound the realized X, not p;
+    - a census with failures: Bernstein on the weighted sum;
+    - draws with failures: no bound here (1): such an input must be measured in full."""
+    a = row["w_max"] / row["W"]
+    if row["failures"] == 0:
+        if row["method"] == "census":
+            return min(1.0, math.log(1 / delta) * a), "census, rule of three (work-weighted)"
+        return min(1.0, math.log(1 / delta) * a / -math.expm1(-row["drawn"] * a)), "sampled, rule of three (work-weighted draws)"
     if row["method"] == "census":
-        if row["failures"] == 0:
-            return min(1.0, math.log(1 / delta) * row["w_max"] / row["W"]), "census, rule of three (work-weighted)"
         return _bernstein_upper(row["failures_weighted"], row["w_max"], row["W"], delta), "census, Bernstein"
-    return _clopper_pearson_upper(row["failures"], len(row["drawn"]), delta), "sampled, Clopper-Pearson"
+    return 1.0, "sampled with failures: measure this input in full"
 
 
 def measure_inputs(path: Path, per_linear: int, census_max: int, draws: int, seed: int, jobs: int, out_dir: Path) -> list[dict]:
@@ -390,18 +385,49 @@ def measure_inputs(path: Path, per_linear: int, census_max: int, draws: int, see
     return rows
 
 
+def write_inputs(rows: list[dict], seed: int, census_max: int, draws: int, out_dir: Path) -> int:
+    """Each input's bound at δ = 0.05/m, the cited maximum and the run's result, into ``<out>/inputs.json``."""
+    delta = 0.05 / len(rows)
+    for r in rows:
+        r["upper"], r["bound_method"] = input_bound(r, delta)
+    worst = max(rows, key=lambda r: r["upper"])
+    doc = {"tool": "pouw_pearl_c_served_debit/per-input", "seed": seed, "confidence": 0.95, "m": len(rows),
+           "delta_per_input": delta, "census_max": census_max, "draws": draws,
+           "cited_upper": worst["upper"], "cited_input": {k: worst[k] for k in ("pass", "matmul", "weight", "m", "k", "n")},
+           "independence": "every bound assumes an input's tiles fail independently (each tile's noise is the oracle at "
+                           "points of its own)", "inputs": rows}
+    path = out_dir / "inputs.json"
+    path.write_text(json.dumps(doc, indent=1) + "\n")
+    ok = all(r["openings_failed"] == 0 for r in rows)
+    run_result.write(path, ok, "pearl-c served debit, per input: every measured tile's openings and checked values hold",
+                     f"{len(rows)} inputs, {sum(r['failures'] for r in rows)} rejected tiles; the worst input's 95% "
+                     f"simultaneous upper limit {worst['upper']:.4g} ({worst['bound_method']})",
+                     [("inputs", len(rows), "count"), ("failures", sum(r["failures"] for r in rows), "count"),
+                      ("cited_upper", worst["upper"], "share")])
+    return 0 if ok else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("manifests", type=Path, nargs="+")
+    p.add_argument("manifests", type=Path, nargs="*")
     p.add_argument("--tiles", type=int, nargs="+", default=None, help="tiles per stratum, one per manifest")
     p.add_argument("--per-input", type=int, default=None, metavar="N",
                    help="per-input mode: N seeded inputs of each (k, n) per manifest, each bounded on its own (inputs.json)")
     p.add_argument("--census-max", type=int, default=128, help="per-input mode: an input of at most this many tiles is measured in full")
     p.add_argument("--draws", type=int, default=64, help="per-input mode: work-weighted draws of a larger input")
+    p.add_argument("--rebound", type=Path, default=None, metavar="INPUTS_JSON",
+                   help="recompute an inputs.json's bounds from its recorded counts (no tile is measured; manifests unused)")
     p.add_argument("--seed", type=int, default=SEED)
     p.add_argument("--jobs", type=int, default=len(os.sched_getaffinity(0)))
     p.add_argument("--out", type=Path, default=None)
     a = p.parse_args(argv)
+    if a.rebound is not None:
+        doc = json.loads(a.rebound.read_text())
+        out_dir = a.out or a.rebound.parent
+        out_dir.mkdir(parents=True, exist_ok=True)
+        return write_inputs(doc["inputs"], doc["seed"], doc["census_max"], doc["draws"], out_dir)
+    if not a.manifests:
+        p.error("give one or more manifests")
     if (a.tiles is None) == (a.per_input is None):
         p.error("give --tiles (pooled strata) or --per-input (each input bounded)")
     if a.tiles is not None and len(a.tiles) != len(a.manifests):
@@ -414,24 +440,7 @@ def main(argv: list[str] | None = None) -> int:
             rows = [r for path in a.manifests for r in measure_inputs(path, a.per_input, a.census_max, a.draws, a.seed, a.jobs, out_dir)]
         finally:
             PW._debit_cap, PW.D.chain_debit = _DEBIT_CAP, _CHAIN_DEBIT
-        delta = 0.05 / len(rows)
-        for r in rows:
-            r["upper"], r["bound_method"] = input_bound(r, delta)
-        worst = max(rows, key=lambda r: r["upper"])
-        doc = {"tool": "pouw_pearl_c_served_debit/per-input", "seed": a.seed, "confidence": 0.95, "m": len(rows),
-               "delta_per_input": delta, "census_max": a.census_max, "draws": a.draws,
-               "cited_upper": worst["upper"], "cited_input": {k: worst[k] for k in ("pass", "matmul", "weight", "m", "k", "n")},
-               "independence": "the census bounds assume an input's tiles fail independently (each tile's noise is the "
-                               "oracle at points of its own)", "inputs": rows}
-        path = out_dir / "inputs.json"
-        path.write_text(json.dumps(doc, indent=1) + "\n")
-        ok = all(r["openings_failed"] == 0 for r in rows)
-        run_result.write(path, ok, "pearl-c served debit, per input: every measured tile's openings and checked values hold",
-                         f"{len(rows)} inputs, {sum(r['failures'] for r in rows)} rejected tiles; the worst input's 95% "
-                         f"simultaneous upper limit {worst['upper']:.4g} ({worst['bound_method']})",
-                         [("inputs", len(rows), "count"), ("failures", sum(r["failures"] for r in rows), "count"),
-                          ("cited_upper", worst["upper"], "share")])
-        return 0 if ok else 1
+        return write_inputs(rows, a.seed, a.census_max, a.draws, out_dir)
     PW._debit_cap, PW.D.chain_debit = _recorded, _chain_recorded
     try:
         passes = [measure(path, per, a.seed, a.jobs, out_dir) for path, per in zip(a.manifests, a.tiles)]
