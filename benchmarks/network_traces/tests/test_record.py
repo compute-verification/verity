@@ -417,6 +417,7 @@ def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path
     monkeypatch.setitem(sys.modules, "vllm", types.SimpleNamespace(SamplingParams=lambda **kw: kw))
     monkeypatch.setitem(sys.modules, "verity_vllm.engine.engine_driver",
                         types.SimpleNamespace(external_id=lambda s: s.rsplit("-", 1)[0]))
+    frozen = gc.get_freeze_count()  # not 0: CPython starts with objects in the permanent generation
     rc = rec.main(["run", "--out", str(tmp_path), "--model", "unsloth/Llama-3.2-1B", "--mode", "bi-eager",
                    "--mix", "b4=5", "--minutes", "3.5", "--warmup-s", "10"])
     meta = json.loads((tmp_path / "meta.json").read_text())
@@ -426,7 +427,7 @@ def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path
         assert "t0_mono" not in meta and summary["error"] == "the job ended before t0"
         assert "gc" not in meta and first == []
         return
-    assert meta["gc"]["frozen_before_t0"] > 0 and first == [(meta["gc"]["frozen_before_t0"], False)]
+    assert meta["gc"]["frozen_before_t0"] > frozen and first == [(meta["gc"]["frozen_before_t0"], False)]
     assert meta["windows"] == 2 and summary["windows_planned"] == (1 if evict else 2)
     assert summary["windows_kept"] == summary["windows_planned"]
     assert len(json.loads((tmp_path / "trace.json").read_text())["configurations"]) == 1
