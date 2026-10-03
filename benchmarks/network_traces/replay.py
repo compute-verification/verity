@@ -3,8 +3,9 @@
 `network-warden-calibrate` sizes the warden from honest traces (`record.py`'s) and estimates the honest miss rate with
 its own model of the prover. This runs the protocol's code on the same windows, at the parameters of a calibration
 report (its JSON), and reports what the audit itself decides. Each configuration of a trace is one run of one spatial
-unit, so it gets its own `audit.Audit`, whose clock its egress link sets:
-- **the honest prover** declares a sync per window with `calibration.choose_syncs` over the report's Σ_sync;
+unit, so it gets its own `audit.Audit` and one clock:
+- **the honest prover** declares one sync per window for all the configuration's egress links, met on every one, with
+  `calibration.choose_syncs` over the report's Σ_sync;
 - **the honest sender** is `schedule.run_shaper`, driving a `grid.Warden` at the report's egress r. A late frame goes
   when ready, so a window that no sync meets deviates from the Program's grid;
 - **the ingress warden** is a `grid.Warden` at the report's r_in and τ_in. A frame is enqueued at the first ingress
@@ -147,21 +148,23 @@ def replay_configuration(cfg: dict, setup: Setup) -> tuple[list[dict], dict]:
     rows: list[dict] = []
     tally = new_tally()
     run = cfg.get("labels", {}).get("run")
-    for link in cfg.get("egress", []):
+    egress = cfg.get("egress", [])
+    T = setup.grid["window_buckets"]
+    windows = config_windows(cfg, T)
+    links = [([LogicalFrame(payload(k), f["anchor"], f["index"]) for k, f in enumerate(link["frames"])],
+              [f["ready"] for f in link["frames"]]) for link in egress]
+    syncs, hands_per_link, misses = choose_syncs(links, sync_set, T)
+    syncs = syncs + [eager] * (windows - len(syncs))
+    tally["egress"]["calibrator_misses"] += misses
+    for link, (frames, ready), hands in zip(egress, links, hands_per_link, strict=True):
         name, params = link["link"], setup.egress[link["link"]]
-        T = params.buckets
-        windows = config_windows(cfg, T)
-        frames = [LogicalFrame(payload(k), f["anchor"], f["index"]) for k, f in enumerate(link["frames"])]
-        ready = [f["ready"] for f in link["frames"]]
-        syncs, hands, misses = choose_syncs(frames, ready, sync_set, T)
-        syncs = syncs + [eager] * (windows - len(syncs))
         logical = handing_buckets(frames, syncs, T)
         actual, last = [], 0
         for h, r in zip(logical, ready, strict=True):
             last = max(h, r, last)
             actual.append(last)
         if actual != hands:
-            raise AssertionError(f"{cfg.get('name')}: the shaper's hand times differ from the calibrator's")
+            raise AssertionError(f"{cfg.get('name')} {name}: the shaper's hand times differ from the calibrator's")
         own_late = Counter(f.anchor // T for f, h, r in zip(frames, logical, ready, strict=True) if r > h)
         records = run_shaper(frames, ready, syncs, Warden(name, params))
         published = [commit(r, params) for r in records]
@@ -187,7 +190,6 @@ def replay_configuration(cfg: dict, setup: Setup) -> tuple[list[dict], dict]:
             tally["egress"]["slots"] += slots
         del expected, deviating
         e = tally["egress"]
-        e["calibrator_misses"] += misses
         e["late_windows"] += len(own_late)
         e["frames"] += len(frames)
         for k, f in enumerate(frames):

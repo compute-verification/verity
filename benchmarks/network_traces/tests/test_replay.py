@@ -1,6 +1,6 @@
 """The end-to-end replay on a tiny synthetic trace calibrated by the library: an honest run is accepted on every
-link-window, raw and committed, and a session made late past every sync is a `mismatch` in its own window and in the
-window its frames spill into."""
+link-window, raw and committed, with one sync per window shared by a configuration's egress links, and a session made
+late past every sync is a `mismatch` in its own window and in the window its frames spill into."""
 
 from __future__ import annotations
 
@@ -73,6 +73,25 @@ def test_an_honest_run_is_accepted_raw_and_committed(tmp_path: Path) -> None:
     r = report["egress"][0]["allocation"]
     assert e["padding_share"] == 1 - 36 / (3 * T * r)
     assert i["frames"] == 9 and i["delivery_delay_ms"]["max"] == 70.0
+
+
+def test_the_egress_links_of_a_configuration_share_one_sync_per_window(tmp_path: Path) -> None:
+    """One clock per spatial unit: a second link whose first frames are 5 buckets late raises every window's δ from 3
+    to 5 on both links, and both are accepted, raw and committed."""
+    doc = trace()
+    cfg = doc["configurations"][0]
+    slow = [f | {"ready": f["anchor"] + 5 + f["index"]} for f in cfg["egress"][0]["frames"]]
+    cfg["egress"].append({"link": "responses-b", "frames": canonical(slow)})
+    report = calibration.calibrate(doc)
+    summary, rows = run(tmp_path, doc, report)
+    egress = [r for r in rows if r["direction"] == "egress"]
+    assert sorted((r["link"], r["window"]) for r in egress) == [(link, w) for link in ("responses", "responses-b")
+                                                                for w in range(3)]
+    assert all(r["raw"] is None and r["committed"] is None for r in rows)
+    assert {(r["window"], r["sync"][0], r["sync"][1]) for r in egress} == {(w, 5, egress[w]["sync"][1]) for w in range(3)}
+    e = summary["egress"]
+    assert e["accepted"] == {"raw": 6, "committed": 6} and e["calibrator_misses"] == 0
+    assert summary["committed_agrees"] and summary["runs_accepted"] == {"raw": 1, "committed": 1}
 
 
 def test_a_session_late_past_every_sync_is_a_mismatch(tmp_path: Path) -> None:
