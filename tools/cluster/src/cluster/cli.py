@@ -15,11 +15,15 @@
                                                         # the node, wrappers and kind as JSON; exit 3 with {"refused"}
   cluster status [--node nebius-1|nebius-2|all] [--owner OWNER] [--json]   # each node's jobs, GPU-h ready, holds, disk,
                                                         # bundles, read over SSH (status.py); exit 1 if a node can't be read
+  cluster usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] [--file PATH]   # per node and UTC hour: busy
+                                                        # and useful against 95% / 90%, held idle, unmeasured (usage.py)
+  cluster usage wasters --day YYYY-MM-DD [--top N] [--json] [--file PATH]   # held-but-idle GPU-hours by holding, most first;
+                                                        # both read the console's record on vy-nebius-1, exit 1 if stale or unread
 
 A snapshot is `{"node", "now", "allocations": [...], "queue": [...], "done": [...], "has": [...], "held_locks": [...],
 "last_busy": {alloc: t}, "idle_s": {kind: s}}`, in the shapes `model.allocation_to_dict` and `model.job_to_dict` write.
-Only `agent` reads a clock or touches a node (`agent.py`), and `status`, which only reads them; `shadow replay` runs the
-same planner over a day's copied logs.
+Only `agent` reads a clock or touches a node (`agent.py`), and `status` and `usage`, which only read them; `shadow replay`
+runs the same planner over a day's copied logs.
 """
 from __future__ import annotations
 
@@ -31,7 +35,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from . import ledger, model, plan
+from . import ledger, model, plan, usage
 
 
 def _lines(path: str) -> list[str]:
@@ -118,7 +122,11 @@ def main(argv: list[str] | None = None) -> int:
     st.add_argument("--node", choices=("nebius-1", "nebius-2", "all"), default="all")
     st.add_argument("--owner", help="only this owner's jobs (verity.dev/owner, else the workstream; a submitter on node 2)")
     st.add_argument("--json", action="store_true")
+    usage.add_parser(sub)
     a = ap.parse_args(argv)
+
+    if a.cmd == "usage":
+        return usage.main(a)
 
     if a.cmd == "status":
         from . import status
