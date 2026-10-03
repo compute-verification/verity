@@ -11,7 +11,7 @@ honest answer is more than the stored block.  Everything else is written once, h
    (`PUBLIC`).  The two give the same guarantee (Lean `pubAuditSecure_exact_iff`).
 4. **Serve.** `decode` of a segment, and `decode_tensor` of one tensor of a `layout.Layout`.
 5. **Audit.** `Verifier` reveals `k` indices one at a time.  Each answer must arrive within `Δ + RTT` and match `vk`.
-   The verifier refuses any `k` or deadline the scheme's certificate does not cover.  An accepted audit gives a
+   The verifier refuses any `k` or deadline that none of the scheme's certificates covers.  An accepted audit gives a
    `StorageProfile`: what the certificate says about the server, and what that rests on.
 
 Every coin is drawn here through `verity.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme draws
@@ -144,8 +144,8 @@ class Scheme(ABC):
     Like `verity.commitments.scheme.CommitmentScheme`, it is a named, versioned format behind a small interface, looked
     up by name (`schemes.get`), with its conformance vectors pinned under the name (`tests/fixtures/schemes/`).  A
     subclass sets `name` (its byte-format version string), `backend` (the reference primitives for its parameters) and
-    `certificate`.  It implements `encode_segment` and `decode_segment`, and `respond` only when an honest answer is
-    more than the stored block.
+    `certificate` (and `certificates`, when it has several).  It implements `encode_segment` and `decode_segment`, and
+    `respond` only when an honest answer is more than the stored block.
 
     **Segment `s` must be keyed injectively in `s`**, across every segment of `W`: `tag_s = salt ‖ u64 s`
     (`labels.tag`), or one salt with global indices.  With a shared domain, identical segments get identical labels,
@@ -166,6 +166,13 @@ class Scheme(ABC):
     def certificate(self) -> Certificate | None:
         """The certificate at these parameters; None when no theorem covers them."""
         return None
+
+    @property
+    def certificates(self) -> tuple[Certificate, ...]:
+        """Every certificate at these parameters, the default (`certificate`, when there is one) first.  A scheme with
+        guarantees at several round budgets lists them all; the verifier audits under the first that covers its `k` and
+        deadline."""
+        return () if self.certificate is None else (self.certificate,)
 
     @abstractmethod
     def encode_segment(self, salt: bytes, s: int, w_seg: bytes) -> list[bytes]:
@@ -314,10 +321,12 @@ class Verifier:
     """The timed audit of a scheme: `audit.TimedVerifier` at the certificate's `k`, with sequential reveal and a strict
     deadline per answer.
 
-    It refuses any `k` or deadline outside the scheme's certificate, and a scheme with no certificate at its
-    parameters.  `research=True` runs such an audit anyway, and its profile lists the refusals as gaps.  An experimental
-    scheme is refused unless `experimental=True`.  The band's
-    cliff is refused regardless (`band.check_deployment`); the attack past it is replayed with `audit.simulate`."""
+    It audits under the first of the scheme's `certificates` that covers `k` and the deadline (with `k` unset, each at
+    its own `k`), so the default `k` is the first certificate's: the band's `k = 111` at `D = 5`, and `k = 97` at
+    `D = 2` or `k = 93` at `D = 1` only when asked for.  It refuses an audit that none covers, and a scheme with no
+    certificate at its parameters.  `research=True` runs such an audit anyway, and its profile lists the first
+    certificate's refusals as gaps.  An experimental scheme is refused unless `experimental=True`.  The band's cliff is
+    refused regardless (`band.check_deployment`); the attack past it is replayed with `audit.simulate`."""
 
     def __init__(self, scheme: Scheme, vk: VerifierKey, key: Key, *, k: int | None = None,
                  deadline_ns: int = audit.DEADLINE_NS, rtt_allowance_ns: int = audit.RTT_ALLOWANCE_NS,
@@ -327,7 +336,8 @@ class Verifier:
             raise ValueError("vk was built for other parameters than the scheme's")
         if scheme.experimental and not experimental:
             raise ValueError(f"{scheme.name} is experimental ({scheme.experimental}): pass experimental=True to audit it")
-        cert, limit = scheme.certificate, deadline_ns + rtt_allowance_ns
+        certs, limit = scheme.certificates, deadline_ns + rtt_allowance_ns
+        cert = next((c for c in certs if not c.refusals(c.k if k is None else k, limit)), certs[0] if certs else None)
         uncovered: tuple[str, ...] = ()
         if cert is None:
             if k is None:
@@ -339,7 +349,9 @@ class Verifier:
             if cert.segments is not None and scheme.params.segments != cert.segments:
                 uncovered = (f"W has {scheme.params.segments} segments; {cert.theorem} is about {cert.segments}",)
         if refused and not research:
-            raise ValueError(f"the audit is outside the certificate: {'; '.join(refused)} (research=True runs it anyway)")
+            others = "".join(f"; under {c.theorem}: {'; '.join(c.refusals(k, limit))}" for c in certs if c is not cert)
+            raise ValueError(f"the audit is outside the certificate: {'; '.join(refused)}{others} "
+                             "(research=True runs it anyway)")
         self.scheme, self.certificate, self.gaps = scheme, cert, refused + uncovered
         self.timed = audit.TimedVerifier(vk, key, k, deadline_ns, rtt_allowance_ns, clock, root_only=root_only)
 

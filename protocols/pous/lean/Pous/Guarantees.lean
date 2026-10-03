@@ -4,6 +4,7 @@ import Mathlib.Data.ZMod.Basic
 import Pous.Protocol.Accounting.LemmaA
 import Pous.Protocol.Accounting.Params
 import Pous.Protocol.Accounting.PubMeets
+import Pous.Protocol.Accounting.GradedMeets
 import Pous.Assumptions
 import Pous.Protocol.Model.HashChain
 import Pous.Protocol.Model.Dense
@@ -644,6 +645,58 @@ def ChainDenseMeets64 : Prop :=
     Meets (Pous.Sponge.chainDense (2 ^ 9) 524288 512 (Pous.Sponge.dom salt)) .sequential 5 (2 ^ 20) 111
       ((2⁻¹ : ℝ≥0∞) ^ 128)
 
+/-! ### The band at `D = 2` and `D = 1` rounds
+
+Added on 3 Oct 2026, approved by Daniel (3 Oct 2026, 05:27Z). Statement reviewer: @lean, to be confirmed. Each
+statement is a band pin above with only the round budget `D`, the challenge count `k` and the bound on the in-degree
+`d` changed; the model, the scope and `d ≥ D` (`BandGapAttack`) are as there. The proofs are
+`Pous/SecurityProofs/Chain/FamilyRounds.lean`'s (`Pous.BandMulti.Rounds`): `Family.lean`'s certificate with `D` and
+`k` as parameters. -/
+
+/-- **Unconditional: the band store at `D = 2` rounds and `k = 97`, at every segment count from 1 to 2^64.**
+`BandMultiMeetsFamily` at `D = 2` and `k = 97`, for every `d ≥ 2`: for every `N` with `1 ≤ N ≤ 2^64` and every
+`d ≥ 2`, the `N`-segment band `chainBandSeg N (2^9) d` meets the requirement at `D = 2`, `Q = 2^20`, `k = 97`,
+`ε = 2^-128`, both with the implementation's per-segment tags (`segDom salt`, any 192-bit salt) and with one global
+salt and global indices (`dom salt`). Proof: `Pous.BandMulti.Rounds.band_meets_family_d2`; here
+`Pous.SecurityProofs.BandMultiMeetsFamilyD2`. -/
+def BandMultiMeetsFamilyD2 : Prop :=
+  ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 2 ≤ d →
+    (∀ salt : Bits 192,
+      Meets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.BandMulti.segDom salt (2 ^ 9))) .sequential
+        2 (2 ^ 20) 97 ((2⁻¹ : ℝ≥0∞) ^ 128)) ∧
+    (∀ salt : Bits 256,
+      Meets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) .sequential 2 (2 ^ 20) 97
+        ((2⁻¹ : ℝ≥0∞) ^ 128))
+
+/-- **Unconditional: the band store at `D = 1` round and `k = 93`, at every segment count from 1 to 2^64.**
+`BandMultiMeetsFamily` at `D = 1` and `k = 93`, for every `d ≥ 1`, both domain layouts. Proof:
+`Pous.BandMulti.Rounds.band_meets_family_d1`; here `Pous.SecurityProofs.BandMultiMeetsFamilyD1`. -/
+def BandMultiMeetsFamilyD1 : Prop :=
+  ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 1 ≤ d →
+    (∀ salt : Bits 192,
+      Meets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.BandMulti.segDom salt (2 ^ 9))) .sequential
+        1 (2 ^ 20) 93 ((2⁻¹ : ℝ≥0∞) ^ 128)) ∧
+    (∀ salt : Bits 256,
+      Meets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) .sequential 1 (2 ^ 20) 93
+        ((2⁻¹ : ℝ≥0∞) ^ 128))
+
+/-- **Unconditional: the band scheme at 64 KiB, `D = 2` rounds and `k = 97`.** `BandChainMeets64` at `D = 2` and
+`k = 97`, for every `d ≥ 2` and salt (the suffix counts rounds, where `BandChainMeets64D5`'s names the in-degree).
+Proof: `Pous.BandMulti.Rounds.band_meets_64_d2`, `BandMultiMeetsFamilyD2`'s global layout at `N = 1`; here
+`Pous.SecurityProofs.BandChainMeets64Rounds2`. -/
+def BandChainMeets64Rounds2 : Prop :=
+  ∀ d : ℕ, 2 ≤ d → ∀ salt : Bits 256,
+    Meets (Pous.BandChain.chainBand (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) .sequential 2 (2 ^ 20) 97
+      ((2⁻¹ : ℝ≥0∞) ^ 128)
+
+/-- **Unconditional: the band scheme at 64 KiB, `D = 1` round and `k = 93`.** `BandChainMeets64` at `D = 1` and
+`k = 93`, for every `d ≥ 1` and salt. Proof: `Pous.BandMulti.Rounds.band_meets_64_d1`; here
+`Pous.SecurityProofs.BandChainMeets64Rounds1`. -/
+def BandChainMeets64Rounds1 : Prop :=
+  ∀ d : ℕ, 1 ≤ d → ∀ salt : Bits 256,
+    Meets (Pous.BandChain.chainBand (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) .sequential 1 (2 ^ 20) 93
+      ((2⁻¹ : ℝ≥0∞) ^ 128)
+
 /-! ### The band with a public encoder (`Pous.Protocol.Model.PubEncoder`, `Pous.Protocol.Accounting.PubMeets`)
 
 Added on 29 Sep 2026, with the band pins. Statement reviewer: the statement red team (`bc-22298e90`), GO
@@ -680,6 +733,53 @@ def BandPubMeets14Global : Prop :=
     PubMeets (Pous.BandMulti.chainBandSeg 448 (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) (exactCheck _) .sequential
       5 (2 ^ 20) 111 ((2⁻¹ : ℝ≥0∞) ^ 128)
 
+/-- **Unconditional: the band store with a public encoder at every segment count from 1 to 2^64.** For every `N` with
+`1 ≤ N ≤ 2^64` and every `d ≥ 5`, `PubMeets` for the `N`-segment band `chainBandSeg N (2^9) d` with the exact check, at
+`D = 5`, `Q = 2^20`, `k = 111`, `ε = 2^-128`, both with the implementation's per-segment tags (`segDom salt`, segment
+`s` keyed by `salt ‖ u64(s)`, any 192-bit salt) and with one global salt and global indices (`dom salt`). It is
+`BandMultiMeetsFamily` with an untrusted server encoding the data (`PubMeets ↔ Meets` at every `N`: `band_pub_iff_seg`,
+`band_pub_iff_seg_global`), under the same four deployment conditions (§48). At `N = 448` it is `BandPubMeets14` and
+`BandPubMeets14Global`. Added on 3 Oct 2026. Statement reviewer: @lean (to be confirmed). Proof:
+`PousPub.band_pub_meets_family_final` (`Pous/SecurityProofs/Chain/PubFamily.lean`); here
+`Pous.SecurityProofs.BandPubMeetsFamily`. -/
+def BandPubMeetsFamily : Prop :=
+  ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 5 ≤ d →
+    (∀ salt : Bits 192,
+      PubMeets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.BandMulti.segDom salt (2 ^ 9)))
+        (exactCheck _) .sequential 5 (2 ^ 20) 111 ((2⁻¹ : ℝ≥0∞) ^ 128)) ∧
+    (∀ salt : Bits 256,
+      PubMeets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) (exactCheck _)
+        .sequential 5 (2 ^ 20) 111 ((2⁻¹ : ℝ≥0∞) ^ 128))
+
+/-- **Unconditional: the band store with a public encoder at `D = 2` rounds and `k = 97`, at every segment count from
+1 to 2^64.** `BandPubMeetsFamily` at `D = 2` and `k = 97`, for every `d ≥ 2`: it is `BandMultiMeetsFamilyD2` with an
+untrusted server encoding the data and the exact check (`PubMeets ↔ Meets` at every `N`), both domain layouts, under
+the same four deployment conditions (§48). Added on 3 Oct 2026. Statement reviewer: @lean (to be confirmed). Proof:
+`PousPub.band_pub_meets_family_d2` (`Pous/SecurityProofs/Chain/PubRounds.lean`); here
+`Pous.SecurityProofs.BandPubMeetsFamilyD2`. -/
+def BandPubMeetsFamilyD2 : Prop :=
+  ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 2 ≤ d →
+    (∀ salt : Bits 192,
+      PubMeets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.BandMulti.segDom salt (2 ^ 9)))
+        (exactCheck _) .sequential 2 (2 ^ 20) 97 ((2⁻¹ : ℝ≥0∞) ^ 128)) ∧
+    (∀ salt : Bits 256,
+      PubMeets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) (exactCheck _)
+        .sequential 2 (2 ^ 20) 97 ((2⁻¹ : ℝ≥0∞) ^ 128))
+
+/-- **Unconditional: the band store with a public encoder at `D = 1` round and `k = 93`, at every segment count from
+1 to 2^64.** `BandPubMeetsFamily` at `D = 1` and `k = 93`, for every `d ≥ 1`: `BandMultiMeetsFamilyD1` with a public
+encoder and the exact check, both domain layouts, under the same four deployment conditions (§48). Added on
+3 Oct 2026. Statement reviewer: @lean (to be confirmed). Proof: `PousPub.band_pub_meets_family_d1`; here
+`Pous.SecurityProofs.BandPubMeetsFamilyD1`. -/
+def BandPubMeetsFamilyD1 : Prop :=
+  ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 1 ≤ d →
+    (∀ salt : Bits 192,
+      PubMeets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.BandMulti.segDom salt (2 ^ 9)))
+        (exactCheck _) .sequential 1 (2 ^ 20) 93 ((2⁻¹ : ℝ≥0∞) ^ 128)) ∧
+    (∀ salt : Bits 256,
+      PubMeets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) (exactCheck _)
+        .sequential 1 (2 ^ 20) 93 ((2⁻¹ : ℝ≥0∞) ^ 128))
+
 /-! ### The dense deployment over the overwrite chain
 
 Re-pinned on 29 Sep 2026 from `k = 107` to `k = 111`: the dense chain scheme at the deployment point was pinned in the
@@ -698,6 +798,37 @@ def ChainDenseMeets111 : Prop :=
   ∀ salt : Bits 256,
     Meets (Pous.Sponge.chainDense (2 ^ 16) 8192 512 (Pous.Sponge.dom salt)) .sequential 64 (2 ^ 20) 111
       ((2⁻¹ : ℝ≥0∞) ^ 128)
+
+/-! ### The band with grace `t` (`Pous.Protocol.Model.Graded`, `Pous.Protocol.Accounting.GradedMeets`)
+
+Added on 3 Oct 2026. Statement reviewer: @lean (PR #905; the game's requirements on the protocol are in
+`Pous/Protocol/Model/Graded.lean` and `PROTOCOL.md`, "The graded audit"). -/
+
+/-- **Unconditional: the band store with up to `t` late answers, at every segment count from 1 to 2^64.** For every `N`
+with `1 ≤ N ≤ 2^64`, every `d ≥ 5`, every hard bound `(D_late, Q_late)` with `5 ≤ D_late ≤ d`, `D_late ≤ 12` and
+`2^20 ≤ Q_late`, and each `(t, k)` of `(0, 111)`, `(1, 160)`, `(2, 203)`, `(3, 243)`, `GradedMeets` for the `N`-segment
+band `chainBandSeg N (2^9) d` at `D = 5`, `Q = 2^20`, `ε = 2^-128`, both with the implementation's per-segment tags
+(`segDom salt`, any 192-bit salt) and with one global salt and global indices (`dom salt`). Each `k` is the least with
+`P[Bin(k, 95923/100000) ≥ k − t] ≤ 1%`; at `t = 0` and `k = 111` the row is `BandMultiMeetsFamily`'s
+(`PousGraded.gradedMeets_zero_iff`).
+
+The hypotheses on `D_late` are the deployment condition, necessary for the game's `S`-bit state to be a model of
+storage at rest: the audit's window must be too short to re-encode `C`. Re-encoding a segment from `W` takes
+`R(d) = Σ_{v < 2^9} (min(v, d) + 1) ≥ R(5) = 3,057` sequential `Π₂` calls, and every row's window, `k − t` rounds at
+`D = 5` and `t` at `D_late`, is at most `240·5 + 3·12 = 1,236`. `D_late ≤ d` is the band's cliff applied to
+`Δ_late`; at the deployed `d = 12` both caps are `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14 ms`. Proof:
+`PousGraded.band_graded_meets_family` (`Pous/SecurityProofs/Graded/Band.lean`); here
+`Pous.SecurityProofs.BandGradedMeetsFamily`. -/
+def BandGradedMeetsFamily : Prop :=
+  ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 5 ≤ d →
+    ∀ D_late Q_late : ℕ, 5 ≤ D_late → D_late ≤ d → D_late ≤ 12 → 2 ^ 20 ≤ Q_late →
+    ∀ tk ∈ ([(0, 111), (1, 160), (2, 203), (3, 243)] : List (ℕ × ℕ)),
+      (∀ salt : Bits 192,
+        GradedMeets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.BandMulti.segDom salt (2 ^ 9))) 5
+          (2 ^ 20) D_late Q_late tk.2 tk.1 ((2⁻¹ : ℝ≥0∞) ^ 128)) ∧
+      (∀ salt : Bits 256,
+        GradedMeets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) 5 (2 ^ 20) D_late
+          Q_late tk.2 tk.1 ((2⁻¹ : ℝ≥0∞) ^ 128))
 
 /-! ### Proved results cited outside the package
 
