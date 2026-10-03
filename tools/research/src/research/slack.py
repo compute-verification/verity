@@ -253,10 +253,10 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         raise urllib.error.URLError("redirected; refusing to forward the bearer token")
 
 
-def post(url: str, data: bytes, headers: dict[str, str]) -> dict:
+def post(url: str, data: bytes, headers: dict[str, str], timeout: float = 30) -> dict:
     """The one HTTP exchange: POST `data`, parse the JSON answer. Raises urllib's errors for the caller to map."""
     req = urllib.request.Request(url, data=data, method="POST", headers=headers)
-    with urllib.request.build_opener(_NoRedirect).open(req, timeout=30) as r:
+    with urllib.request.build_opener(_NoRedirect).open(req, timeout=timeout) as r:
         return json.load(r)
 
 
