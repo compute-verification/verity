@@ -12,8 +12,8 @@ import pytest
 from verity_pous import band, dense
 from verity_pous.audit import DEADLINE_NS, LATE_ROUNDS, TimedVerifier, challenge_key
 from verity_pous.codec import encode_segments
-from verity_pous.continuous import ContinuousVerifier, run_continuous
-from verity_pous.verifier import VerifierKey
+from verity_pous.continuous import ContinuousVerifier, Reply, run_continuous
+from verity_pous.verifier import MerkleTree, VerifierKey
 
 PARAMS = band.BandParams(16, 64, 12, 2)
 SALT = bytes(range(24))
@@ -47,27 +47,113 @@ def _wrong(blocks, i):
     return blocks[(i + 1) % len(blocks)]
 
 
-def test_honest_stream(world):
-    """Arrivals far apart, each answered within Δ: accepted, every index the single audit's draw, and the stream is not
-    extended past `n`."""
+class Wire:
+    """A transport on the injected clock.  `send(j, i)` records the send and schedules what `replies(j, i)` returns,
+    `(latency, Reply)` pairs timed from the send.  `receive(until)` delivers the earliest reply in by `until`, moving
+    the clock to its arrival, else moves the clock past `until` and returns None."""
+
+    def __init__(self, clock, replies):
+        self.clock, self.replies, self.sent, self.queue = clock, replies, [], []
+
+    def send(self, j, i):
+        self.sent.append((j, i, self.clock.now))
+        self.queue += [(self.clock.now + latency, reply) for latency, reply in self.replies(j, i)]
+
+    def receive(self, until):
+        self.queue.sort(key=lambda q: q[0])
+        if self.queue and self.queue[0][0] <= until:
+            t, reply = self.queue.pop(0)
+            self.clock.now = max(self.clock.now, t)
+            return reply
+        self.clock.now = max(self.clock.now, until + 1)
+        return None
+
+
+def _run(v, clock, replies, wait=None):
+    wire = Wire(clock, replies)
+    return run_continuous(v, wire.send, wire.receive, wait), wire
+
+
+@pytest.mark.parametrize("root_only", [False, True])
+def test_honest_stream(world, root_only):
+    """Arrivals far apart, each answered within Δ: accepted, every index the single audit's draw sent at its arrival,
+    and the stream is not extended past `n`."""
     blocks, vk = world
-    clock, gaps, waited = Clock(), random.Random(5), []
+    clock, gaps, waited, tree = Clock(), random.Random(5), [], MerkleTree(vk.leaves)
 
     def wait(j):
-        waited.append(j)
         clock.now += gaps.randrange(10**6, 10**9)
+        waited.append((j, clock.now))
 
-    def respond(i):
-        clock.now += DEADLINE_NS
-        return blocks[i]
+    def replies(j, i):
+        return [(DEADLINE_NS, Reply(j, blocks[i], tree.path(i) if root_only else None))]
 
-    v = _verifier(vk, 50, clock)
-    result = run_continuous(v, respond, wait=wait)
+    v = _verifier(vk, 50, clock, root_only=root_only)
+    result, wire = _run(v, clock, replies, wait)
     key = challenge_key(b"audit", vk)
-    assert v.accepted and result.misses == 0 and waited == list(range(50))
+    assert v.accepted and result.misses == 0 and [j for j, _ in waited] == list(range(50))
     assert [(a.j, a.index) for a in result.answers] == [(j, key.uniform(PARAMS.blocks, j)) for j in range(50)]
+    assert [(j, t) for j, _, t in wire.sent] == waited
     with pytest.raises(RuntimeError, match="all 50 challenges are answered"):
         v.challenge()
+
+
+# Liveness: the driver closes every challenge by the verifier's clock.
+
+def test_a_silent_responder_cannot_hang_the_stream(world):
+    """No reply ever: `run_continuous` still ends, each challenge rejected just past its hard deadline and counted
+    late, the last one included."""
+    _, vk = world
+    clock, seen = Clock(), []
+    v = _verifier(vk, 6, clock, max_misses=6, rtt_allowance_ns=40_000, on_answer=seen.append)
+    result, wire = _run(v, clock, lambda j, i: [])
+    assert v.done and v.pending is None and len(wire.sent) == 6
+    assert all(a.rejected and not a.correct and not a.on_time for a in result.answers)
+    assert [a.elapsed_ns for a in result.answers] == [LATE + 40_000 + 1] * 6
+    assert result.misses == result.late == 6 and seen == list(result.answers) and v.accepted
+
+
+def test_a_slow_answer_is_closed_by_the_clock_and_never_credited(world):
+    """Answer 0 is on its way past the hard deadline: the driver expires challenge 0 at the deadline without waiting
+    for it, sends challenge 1 for the same block, and drops answer 0 when it lands, so only answer 1 is credited to
+    challenge 1."""
+    blocks, vk = world
+    clock = Clock()
+    v = _verifier(vk, 2, clock, _same_block_twice(vk))
+    latency = {0: LATE + 100_000, 1: DEADLINE_NS}
+    result, wire = _run(v, clock, lambda j, i: [(latency[j], Reply(j, blocks[i]))])
+    (_, i, _), (_, i1, t1) = wire.sent
+    assert i == i1 and t1 == LATE + 1 and not wire.queue
+    assert [(a.correct, a.on_time, a.rejected, a.elapsed_ns) for a in result.answers] == [
+        (False, False, True, LATE + 1), (True, True, False, DEADLINE_NS)]
+    assert result.misses == 1
+
+
+def test_replies_for_other_challenges_cannot_hold_one_open(world):
+    """A transport with a reply always waiting, each naming another challenge, revealed or not: the driver drops them
+    and still closes every challenge at its hard deadline."""
+    blocks, vk = world
+    clock, sent = Clock(), []
+    v = _verifier(vk, 3, clock)
+
+    def receive(until):
+        clock.now += 300_000
+        j, i = sent[-1]
+        return Reply(j + 1 if clock.now % 600_000 else j - 1, blocks[i])
+
+    result = run_continuous(v, lambda j, i: sent.append((j, i)), receive)
+    assert [(a.rejected, a.elapsed_ns) for a in result.answers] == [(True, 7 * 300_000)] * 3
+
+
+def test_a_transport_that_gives_up_early_fails_closed(world):
+    """`receive` returning None within the hard deadline breaks its contract: the driver stops with the challenge
+    open, recording nothing, rather than closing it early or waiting forever."""
+    _, vk = world
+    clock = Clock()
+    v = _verifier(vk, 2, clock)
+    with pytest.raises(RuntimeError, match="within its hard deadline"):
+        run_continuous(v, lambda j, i: None, lambda until: None)
+    assert v.answers == () and v.pending == 0 and v.closes_at == LATE
 
 
 # 1. No pipelining.

@@ -25,11 +25,23 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from verity.randomness import Key
 
 from .audit import DEADLINE_NS, RTT_ALLOWANCE_NS, Answer, AuditResult, TimedVerifier
 from .verifier import VerifierKey
+
+
+@dataclass(frozen=True, slots=True)
+class Reply:
+    """An answer off the wire: the challenge `j` it names, its block, a root-only verifier's `path`, and the responder's
+    own `report`."""
+
+    j: int
+    block: bytes
+    path: tuple[bytes, ...] | None = None
+    report: object = None
 
 
 class ContinuousVerifier:
@@ -70,6 +82,23 @@ class ContinuousVerifier:
         return tuple(self.timed.answers)
 
     @property
+    def pending(self) -> int | None:
+        """The open challenge's `j`, or None."""
+        return self.timed.pending
+
+    @property
+    def closes_at(self) -> int | None:
+        """The open challenge's send time plus `Δ_late + RTT`: on the verifier's clock past it, the challenge is
+        rejected.  None with no challenge open."""
+        sent = self.timed.sent_ns
+        return None if sent is None else sent + self.late_limit_ns
+
+    @property
+    def overdue(self) -> bool:
+        """The verifier's clock is past `closes_at`, so `expire()` closes the open challenge."""
+        return self.closes_at is not None and self.timed.clock() > self.closes_at
+
+    @property
     def misses(self) -> int:
         return self.result().misses
 
@@ -103,20 +132,29 @@ class ContinuousVerifier:
         return self.timed.result()
 
 
-def run_continuous(verifier: ContinuousVerifier, respond: Callable[[int], bytes | tuple[bytes, object]],
-                   path: Callable[[int], tuple[bytes, ...]] | None = None,
-                   wait: Callable[[int], None] | None = None) -> AuditResult:
-    """Drive `verifier` against `respond(index)` through all `n` challenges.  `wait(j)` returns at challenge `j`'s
-    arrival time on the verifier's own schedule; without it the challenges arrive back to back.  `respond` returns the
-    block, or `(block, report)`; `path(index)` serves a root-only verifier."""
+def run_continuous(verifier: ContinuousVerifier, send: Callable[[int, int], None],
+                   receive: Callable[[int], Reply | None], wait: Callable[[int], None] | None = None) -> AuditResult:
+    """Drive `verifier` through all `n` challenges over a transport.  `wait(j)` returns at challenge `j`'s arrival time
+    on the verifier's own schedule; without it each challenge is sent once the last one closes.  `send(j, index)` sends
+    challenge `j`.  `receive(until)` returns the next `Reply` in, or None once the verifier's clock is past `until`, the
+    open challenge's `closes_at`, with none.
+
+    A reply naming the open challenge answers it; any other is dropped, its own challenge closed and counted already
+    or not yet revealed.  Once the hard deadline has passed the driver closes the open challenge with `expire()`, the
+    last one too, so a silent or slow responder never holds the stream open.  A transport that returns None before
+    then fails closed: `expire()` refuses, and the audit stops with the challenge open."""
     while not verifier.done:
         if wait is not None:
-            wait(len(verifier.timed.answers))
+            wait(len(verifier.answers))
         j, i = verifier.challenge()
-        out = respond(i)
-        block, report = out if isinstance(out, tuple) else (out, None)
-        verifier.respond(j, block, path(i) if path is not None else None, report)
+        send(j, i)
+        while verifier.pending == j:
+            reply = receive(verifier.closes_at)
+            if reply is not None and reply.j == j:
+                verifier.respond(j, reply.block, reply.path, reply.report)
+            elif reply is None or verifier.overdue:
+                verifier.expire()
     return verifier.result()
 
 
-__all__ = ["ContinuousVerifier", "run_continuous"]
+__all__ = ["ContinuousVerifier", "Reply", "run_continuous"]

@@ -218,6 +218,11 @@ class TimedVerifier:
         return None if self._open is None else len(self.answers)
 
     @property
+    def sent_ns(self) -> int | None:
+        """The open challenge's send time on the verifier's clock, or None."""
+        return None if self._open is None else self._open[1]
+
+    @property
     def done(self) -> bool:
         return len(self.answers) == self.k
 

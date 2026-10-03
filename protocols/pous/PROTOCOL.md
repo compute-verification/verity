@@ -300,8 +300,13 @@ game's three requirements on the protocol:
    or expired. `AuditResult.misses` counts every wrong or late answer, and `AuditResult.late` every answer past
    `Δ + RTT`, rejected ones included.
 
-`run_continuous(verifier, respond, wait=...)` drives the stream, and `wait(j)` returns at arrival `j`. The caller chooses
-the arrival times and `n`, and nothing here draws or checks them. The game needs both to be the verifier's own
+`run_continuous(verifier, send, receive, wait=...)` drives the stream over a transport. `wait(j)` returns at arrival
+`j`, `send(j, i)` sends challenge `j`, and `receive(until)` returns the next `Reply(j, block, path, report)`, or None
+once the verifier's clock is past `until`, the open challenge's `closes_at` (its send time plus `Δ_late + RTT`). A
+reply naming any challenge but the open one is dropped. Once the hard deadline has passed, the driver closes the open
+challenge with `expire()`, the last one too, so a silent or slow responder cannot hold the stream open. A transport
+that returns None before the deadline makes `expire()` refuse, and the audit stops with the challenge open. The caller
+chooses the arrival times and `n`, and nothing here draws or checks them. The game needs both to be the verifier's own
 randomness, independent of the setup, the indices and the answers. Without `late_deadline_ns`, `TimedVerifier` is
 unchanged, the single audit's verifier. `tests/test_pous_continuous.py` tests each requirement.
 
