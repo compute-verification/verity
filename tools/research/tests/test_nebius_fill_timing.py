@@ -297,6 +297,30 @@ def test_timing_cpus_leave_out_every_cpu_another_cgroup_or_a_fence_may_use_and_f
     assert fr.timing_free([]) == set()
 
 
+def test_no_timing_job_starts_while_a_lent_scope_holds_124_191_and_one_starts_once_it_ends(node2, monkeypatch):
+    """Node 2 on 3 Oct, 18:30-20:10Z: circuits' 235B Commit in a scope of the top-level vy-lend.slice on 80-91,124-191, beside
+    compute accounting's two zk runs in that slice on 48-79 and 92-123. Each scope counts on its own: the Commit's (or an
+    AllowedCPUs on the slice itself) holds every chunk back, and once it is gone a chunk starts with the zk runs still there."""
+    load, fill, cg = node2
+    fr = load()
+    held, want, started, stopped, run = fake_node(fr, monkeypatch, fill)
+    cgroup(cg, "vy-lend.slice", "0-191", True)
+    for name, cpus in (("circuits-tp8-commit5.scope", "80-91,124-191"), ("zk-a.scope", "48-79"), ("zk-b.scope", "92-123")):
+        cgroup(cg / "vy-lend.slice", name, cpus, True, cpus)
+    queue(fill, "nw-chunk.sh", TIMING)
+    fr.tick(8)
+    assert fr.timing_free([]) == set() and started == []
+    (cg / "vy-lend.slice" / "circuits-tp8-commit5.scope" / "cgroup.events").write_text("populated 0\n")
+    (cg / "vy-lend.slice" / "cpuset.cpus").write_text("80-91,124-191\n")
+    (cg / "vy-lend.slice" / "cpuset.cpus.effective").write_text("80-91,124-191\n")
+    fr.tick(8)
+    assert started == []
+    (cg / "vy-lend.slice" / "cpuset.cpus").write_text("\n")
+    (cg / "vy-lend.slice" / "cpuset.cpus.effective").write_text("0-191\n")
+    fr.tick(8)
+    assert fr.timing_free([]) == set(range(140, 192)) and started == [("nw-chunk.sh", "7", "124-139")]
+
+
 def test_a_fence_takes_no_core_a_running_timing_job_holds(node2, monkeypatch, tmp_path, capsys):
     load, fill, _ = node2
     monkeypatch.setenv("FILL_QUOTA_LOG", str(tmp_path / "quota-changes.log"))
