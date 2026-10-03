@@ -494,7 +494,7 @@ class MoEFusedExpertsOrdered(MoEFusedExperts):
 MOE_CONSTRUCTION_PATTERNS = {"indexed-read": MoEFusedExperts, "padded": MoEFusedExpertsPadded, "indexed-read-ordered": MoEFusedExpertsOrdered}
 
 #: the experts class whose arithmetic the block-FP8 pair forms state (`TargetProfile.moe_backend = "triton"`)
-TRITON_EXPERTS = TargetProfile.MOE_BACKEND_EXPERTS["triton"]
+TRITON_EXPERTS = TargetProfile.MOE_BACKEND_KERNELS["triton"]
 K_QUANT = "per_token_group_fp8_quant"
 
 

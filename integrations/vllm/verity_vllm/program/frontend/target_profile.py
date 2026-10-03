@@ -213,7 +213,7 @@ class TargetProfile:
     # the registered block-scaled FP8 GEMM selections: value -> the vLLM kernel class the selector must have taken
     FP8_BLOCK_GEMM_KERNELS = {"cutlass": "CutlassFp8BlockScaledMMKernel"}
     # the registered fused-MoE backends: value -> the experts class every fused-MoE layer must carry
-    MOE_BACKEND_EXPERTS = {"triton": "TritonExperts"}
+    MOE_BACKEND_KERNELS = {"triton": "TritonExperts"}
 
     #: [R17-42] the registered MoE constructions: value -> the frontend rule family that owns the block's leaf kernels and the Definitions
     #: it binds (one Program per construction; the digest differs by construction on the same trace)
@@ -272,8 +272,8 @@ class TargetProfile:
         if self.fp8_block_gemm is not None and self.fp8_block_gemm not in self.FP8_BLOCK_GEMM_KERNELS:
             raise ValueError(f"fp8_block_gemm must be None (vLLM's selector) or one of {sorted(self.FP8_BLOCK_GEMM_KERNELS)}; "
                              f"got {self.fp8_block_gemm!r}")
-        if self.moe_backend is not None and self.moe_backend not in self.MOE_BACKEND_EXPERTS:
-            raise ValueError(f"moe_backend must be None (vLLM's selector) or one of {sorted(self.MOE_BACKEND_EXPERTS)}; got {self.moe_backend!r}")
+        if self.moe_backend is not None and self.moe_backend not in self.MOE_BACKEND_KERNELS:
+            raise ValueError(f"moe_backend must be None (vLLM's selector) or one of {sorted(self.MOE_BACKEND_KERNELS)}; got {self.moe_backend!r}")
         if self.async_scheduling is not None and not isinstance(self.async_scheduling, bool):
             # [R17-1] a declared value is a boolean (JSON true/false) -- "1"/"true" strings are not accepted (one spelling, no coercion)
             raise ValueError(f"async_scheduling must be None (the pinned resolver's value), true or false; got {self.async_scheduling!r}")
@@ -486,7 +486,7 @@ class TargetProfile:
 
     def moe_experts_class(self) -> str | None:
         """The experts class the declared `moe_backend` must have selected (None = not declared: whatever vLLM takes)."""
-        return None if self.moe_backend is None else self.MOE_BACKEND_EXPERTS[self.moe_backend]
+        return None if self.moe_backend is None else self.MOE_BACKEND_KERNELS[self.moe_backend]
 
     @classmethod
     def from_json(cls, d: dict) -> "TargetProfile":
