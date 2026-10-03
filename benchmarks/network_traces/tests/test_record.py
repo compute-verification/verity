@@ -1,12 +1,14 @@
 """The recorder's trace writer on CPU: the open-loop schedule, chunk stamping on an injected clock, the conversion to the
-calibration tool's format with its exclusions, the merge, and the offline engine's loop on a fake engine. No GPU, no
-server, no clock."""
+calibration tool's format with its exclusions, the merge, and the offline engine's loop and a whole job on a fake
+engine, evicted or not. No GPU, no server, no clock."""
 
 from __future__ import annotations
 
 import gc
 import importlib.util
 import json
+import math
+import signal
 import sys
 import types
 from pathlib import Path
@@ -103,9 +105,45 @@ def test_contamination_and_failures_drop_windows_and_split_the_chunk() -> None:
     busy = {f"t{WINDOW_MS}": {"others_busy": 0.9}}
     _, summary = rec.build_trace(records[1:], samples(4, **busy), name="t", windows=4)
     assert summary["windows_dropped"] == {"0": "NUMA node busy", "1": "NUMA node busy"}
-    crowded = {f"t{WINDOW_MS}": {"affinity_busy": 0.95}}
-    _, summary = rec.build_trace(records[1:], samples(4, **crowded), name="t", windows=4)
-    assert summary["windows_dropped"] == {"0": "job's CPUs saturated", "1": "job's CPUs saturated"}
+    crowded = {f"t{WINDOW_MS}": {"affinity_busy": 0.99}}
+    _, summary = rec.build_trace(records[1:], samples(4, **crowded), name="t", windows=4, affinity_cpus=32)
+    assert summary["windows_dropped"] == {"0": "co-tenants on the job's CPUs", "1": "co-tenants on the job's CPUs"}
+
+
+def test_the_job_cpu_rule_counts_co_tenants_not_our_own_use() -> None:
+    """On an 8-CPU cpuset, window 1 is 95% busy with the job using 6 cores (co-tenants 20%), and window 3 is 95% busy
+    with the job using 0.8 (co-tenants 85%, under the line) and then 0.16 (93%). The co-tenant rule keeps window 1 and
+    drops window 3; the total rule drops both."""
+    records = [request(c, w * WINDOW_MS + 50.0, [[w * WINDOW_MS + 150.0, 1]]) for w, c in enumerate("abcd")]
+    at = {f"t{WINDOW_MS + 30_000}": {"affinity_busy": 0.95, "own_cores": 6.0},
+          f"t{3 * WINDOW_MS + 20_000}": {"affinity_busy": 0.95, "own_cores": 0.8},
+          f"t{3 * WINDOW_MS + 30_000}": {"affinity_busy": 0.95, "own_cores": 0.16}}
+    configs, summary = rec.build_trace(records, samples(4, **at), name="t", windows=4, affinity_cpus=8)
+    assert summary["windows_dropped"] == {"3": "co-tenants on the job's CPUs"} and summary["cpu_rule"] == "cotenants"
+    assert [c["name"] for c in configs] == ["t/w0-3"] and summary["cotenant_busy"]["max"] == pytest.approx(0.93)
+    _, total = rec.build_trace(records, samples(4, **at), name="t", windows=4, affinity_cpus=8, cpu_rule="total")
+    assert total["windows_dropped"] == {"1": "job's CPUs saturated", "3": "job's CPUs saturated"}
+    _, unsized = rec.build_trace(records, samples(4, **at), name="t", windows=4)
+    assert unsized["windows_dropped"] == total["windows_dropped"] | {"1": "co-tenants on the job's CPUs",
+                                                                      "3": "co-tenants on the job's CPUs"}
+    with pytest.raises(ValueError, match="cpu_rule"):
+        rec.build_trace(records, samples(4), name="t", windows=4, cpu_rule="own")
+
+
+def test_convert_takes_the_cpuset_from_meta_and_the_rule_from_its_flag(tmp_path: Path) -> None:
+    records = [request(c, w * WINDOW_MS + 50.0, [[w * WINDOW_MS + 150.0, 1]]) for w, c in enumerate("ab")]
+    at = {f"t{30_000}": {"affinity_busy": 0.95, "own_cores": 6.0}}
+    meta = {"t0_mono": 0.0, "windows": 2, "mode": "plaintext", "model": "m", "mix": "b4=1", "host": "h",
+            "gpu": {"name": "g", "uuid": "u"}, "env": {"RESEARCH_RUN_ID": "r1"}, "affinity": list(range(8))}
+    (tmp_path / "meta.json").write_text(json.dumps(meta))
+    (tmp_path / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
+    (tmp_path / "samples.jsonl").write_text("".join(json.dumps(s | {"mono": s["t_ms"] / 1000}) + "\n"
+                                                    for s in samples(2, **at)))
+    assert rec.main(["convert", str(tmp_path)]) == 0
+    assert json.loads((tmp_path / "summary.json").read_text())["windows_kept"] == 2
+    assert rec.main(["convert", str(tmp_path), "--cpu-rule", "total"]) == 0
+    summary = json.loads((tmp_path / "summary.json").read_text())
+    assert summary["windows_dropped"] == {"0": "job's CPUs saturated"} and summary["cpu_rule"] == "total"
 
 
 @pytest.mark.parametrize("stall", [{"hb_max_ms": 1500.0}, {"loop_max_ms": 1500.0}])
@@ -253,6 +291,93 @@ def test_the_offline_loop_admits_on_time_stamps_each_step_and_commits_one_run_pe
         rec.offline_replay(eng, com, [q | {"rid": "again." + q["rid"]} for q in reqs], t0, t0 + 200,
                            out.append, steps.append, commits.append)
     assert not any(isinstance(c, rec.Collections) for c in gc.callbacks)
+
+
+@pytest.mark.parametrize("evict", ["in the replay", "at startup", None])
+def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path, monkeypatch, evict) -> None:
+    """A whole offline `run` on the fake engine and the injected clock, with SIGTERM delivered 90 s after t0, while the
+    engine loads (seeds 62-69's eviction), or never."""
+    now, handlers, evict_at = [100.0], {}, [math.inf]
+
+    def clock():
+        now[0] += 0.001
+        return now[0]
+
+    class Event:
+        def __init__(self):
+            self.flag = False
+
+        def is_set(self):
+            return self.flag
+
+        def set(self):
+            self.flag = True
+
+        def wait(self, timeout):
+            if not self.flag:
+                now[0] += timeout
+
+    class Monitor:
+        """The spawned monitor: when joined, a quiet sample every SAMPLE_S since it started."""
+
+        def __init__(self, target, args, daemon):
+            self.path = args[0]
+
+        def start(self):
+            self.began = now[0]
+
+        def join(self, timeout):
+            lines, t = rec.JsonLines(self.path), self.began
+            while (t := t + rec.SAMPLE_S) <= now[0]:
+                lines({"mono": t, "dt_s": rec.SAMPLE_S, "hb_max_ms": 1.0, "loop_max_ms": 1.0, "foreign_pids": [],
+                       "others_busy": 0.05, "affinity_busy": 0.1, "load": [1.0, 1.0, 1.0], "own_cores": 0.5,
+                       "sm_mhz": 2400})
+            lines.close()
+
+    class Evicting(FakeEngine):
+        def step(self):
+            if now[0] >= evict_at[0]:
+                evict_at[0] = math.inf
+                handlers[signal.SIGTERM](signal.SIGTERM, None)
+            return super().step()
+
+    def offline_engine(args, commit, meta, mix):
+        if evict == "at startup":
+            handlers[signal.SIGTERM](signal.SIGTERM, None)
+        if evict == "in the replay":
+            evict_at[0] = now[0] + args.warmup_s + 90
+        return types.SimpleNamespace(llm=types.SimpleNamespace(llm_engine=Evicting(now))), None
+
+    monkeypatch.setattr(rec, "clock", clock)
+    monkeypatch.setattr(rec, "threading", types.SimpleNamespace(Event=Event))
+    monkeypatch.setattr(rec, "multiprocessing", types.SimpleNamespace(
+        get_context=lambda _: types.SimpleNamespace(Event=Event, Process=Monitor)))
+    monkeypatch.setattr(rec, "signal", types.SimpleNamespace(
+        SIGTERM=signal.SIGTERM, SIG_IGN=signal.SIG_IGN, signal=lambda sig, h: handlers.__setitem__(sig, h)))
+    monkeypatch.setattr(rec, "resource", types.SimpleNamespace(
+        RLIMIT_NOFILE=0, getrlimit=lambda _: (1024, 1024), setrlimit=lambda *_: None))
+    monkeypatch.setattr(rec, "identity", lambda: {"host": "h", "gpu": {"index": 0, "uuid": "GPU-0", "name": "fake"},
+                                                  "affinity": list(range(8)), "watched": [], "env": {}})
+    monkeypatch.setattr(rec, "local_model", lambda name, _: name)
+    monkeypatch.setattr(rec, "offline_engine", offline_engine)
+    monkeypatch.setattr(rec, "load_workload",  # 8 s per request: the last outlasts the last window, so it's monitored
+                        lambda _: [{"index": 0, "offset_s": 0.0, "prompt": [1, 2, 3], "max_tokens": 400}])
+    monkeypatch.setitem(sys.modules, "vllm", types.SimpleNamespace(SamplingParams=lambda **kw: kw))
+    monkeypatch.setitem(sys.modules, "verity_vllm.engine.engine_driver",
+                        types.SimpleNamespace(external_id=lambda s: s.rsplit("-", 1)[0]))
+    rc = rec.main(["run", "--out", str(tmp_path), "--model", "unsloth/Llama-3.2-1B", "--mode", "bi-eager",
+                   "--mix", "b4=5", "--minutes", "3.5", "--warmup-s", "10"])
+    meta = json.loads((tmp_path / "meta.json").read_text())
+    summary = json.loads((tmp_path / "summary.json").read_text())
+    assert rc == (143 if evict else 0) and meta["ended"]["evicted"] is bool(evict)
+    if evict == "at startup":
+        assert "t0_mono" not in meta and summary["error"] == "the job ended before t0"
+        return
+    assert meta["windows"] == 2 and summary["windows_planned"] == (1 if evict else 2)
+    assert summary["windows_kept"] == summary["windows_planned"]
+    assert len(json.loads((tmp_path / "trace.json").read_text())["configurations"]) == 1
+    if evict:
+        assert 90_000 <= meta["ended"]["stopped_ms"] < 96_000
 
 
 def test_collections_add_up_each_collection_and_take_resets(monkeypatch) -> None:
