@@ -12145,6 +12145,8 @@
    "assumptions": [],
    "type_hash": "49bc8ef5b1e2715f04313f36bf9ab90599d203127e6e66ea0924fcd3fdd1542a"
   },
+  "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR": {},
+  "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody": {},
   "FlockSoundness.Discharge.ZkReg.zk_session_soundHR": {},
   "FlockSoundness.Discharge.ZkReg.zk_session_soundHR_custody": {},
   "FlockSoundness.Discharge.ZkReg.zk_session_soundR": {},
