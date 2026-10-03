@@ -21,7 +21,8 @@ note:20260930T2205Z-report-resource-steward), as implicit records, each with a r
 Nothing live may name a path a rule deletes (liveness.Live: a source tree by its sha, anything else by its path), here or on the
 node's PEERS (node 1 asks node 2, and refuses when it can't). A source tree, a
 job tree or a .lake/packages is renamed aside first (one rename, so nothing sees it half deleted); then every renamed path is checked
-once more, put back if anything names it now (`stuck` when it can't be), and only then deleted. Scratch and trash are deleted where
+once more, put back if anything names it now or, a source tree, it holds anything outside its commit now (`stuck` when it can't
+be), and only then deleted. Scratch and trash are deleted where
 they are. A rule never deletes PROTECTED paths (pouw/gpu3-fp8, check's verdict caches lean-deps and circuit-check), a path a record
 covers (an explicit `research keep` wins), or one holding a record or a mount. `Sweep.run` raises Refused when what live work names
 can't be established, or when node 2's guard (`timed`, read again before every deletion) says a timed window may run, after
@@ -623,6 +624,8 @@ class Sweep:
                 refs.append(held)
             if refs:
                 self._put_back(c, f"named after the rename: {_refs(refs)}")
+            elif why := self._changed(c):
+                self._put_back(c, why)
             else:
                 self._quiet()
                 self._remove(c, c.trash)
@@ -632,6 +635,19 @@ class Sweep:
             else:
                 self._quiet()
                 self._remove(c, c.path)
+
+    def _changed(self, c: _Cand) -> str | None:
+        """Why a source tree renamed aside may not go after all: what it holds besides its commit now, at its trash path (a short
+        run that wrote its output and exited between the first look and the rename)."""
+        if c.rule not in ("src-tree", "audit-tree") or c.trash is None:
+            return None
+        try:
+            extra = outside_commit(c.trash, self.places.bare, c.path.name)
+        except Unknown as e:
+            return f"can't tell what it holds besides its commit after the rename: {e}"
+        if extra != ([f"M {LA}"] if c.rule == "audit-tree" else []):
+            return f"{len(extra)} file(s) outside its commit after the rename, e.g. {', '.join(extra[:3])}: its owner decides"
+        return None
 
     def _undo(self, why: str) -> None:
         """Put back every candidate still renamed aside (one appended just before its rename may not be)."""

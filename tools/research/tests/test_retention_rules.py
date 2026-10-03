@@ -431,6 +431,27 @@ def test_a_tree_holding_a_runs_output_waits_for_its_owner_and_an_unpreserved_run
     assert not any(a["path"].startswith("research/src") for a in plan["actions"]), "the rules decide source trees, not the records"
 
 
+def test_output_written_after_the_first_look_and_before_the_rename_keeps_the_tree(tmp_path, monkeypatch):
+    """A short run on an old tree that writes results/ and exits between outside_commit and the rename: the tree is looked at
+    again where it was renamed to."""
+    root = tmp_path / "ws"
+    t, gone = tree(root), tree(root)
+    looked = RR.inventory
+
+    def a_run_writes(p):
+        out = looked(p)
+        if p == t:
+            (t / "results").mkdir()
+            (t / "results/new.json").write_text("{}")
+        return out
+
+    monkeypatch.setattr(RR, "inventory", a_run_writes)
+    plan = run_gc(root, node=N1, live=Scripted({}, {}), apply=True)
+    assert (t / "results/new.json").exists() and not gone.exists() and os.listdir(root / "research/src/.trash") == []
+    assert acts(plan, root)[f"research/src/{t.name}"]["reason"] == (
+        "1 file(s) outside its commit after the rename, e.g. results/new.json: its owner decides")
+
+
 def test_a_tree_with_work_committed_or_stashed_in_it_waits_for_its_owner(tmp_path):
     root = tmp_path / "ws"
     committed, stashed = tree(root), tree(root)
