@@ -145,6 +145,35 @@ def test_a_timing_job_gets_a_numa1_gpu_and_whole_cores_of_124_191_alone(node2, m
     assert started[-1] == ("nw-chunk-4.sh", "6", "140-155")
 
 
+def test_a_malformed_header_files_its_job_under_failed_and_the_tick_goes_on(node2, monkeypatch):
+    """A value fill reads as a whole number that isn't one (gpus, max_min, prio; a CPU or timing job's mem_gb; a timing job's cpus)
+    sends that job to failed/ with an event, and the rest start. Its ValueError used to end every tick before any start, and a
+    running job's ended the runner at adoption. A GPU job's mem_gb, which fill never reads, is no reason."""
+    load, fill, _ = node2
+    fr = load()
+    held, want, started, stopped, run = fake_node(fr, monkeypatch, fill)
+    events = []
+    monkeypatch.setattr(fr, "event", lambda kind, job, **kw: events.append((kind, job, kw.get("why"))))
+    queue(fill, "pous-a.sh", "owner=pm gpus=1 max_min=30")
+    queue(fill, "pous-m.sh", "owner=pm gpus=1 max_min=30 mem_gb=48G")
+    bad = {"bad-gpus.sh": "owner=pm gpus=one", "bad-min.sh": "owner=pm max_min=1h", "bad-prio.sh": "owner=pm prio=high",
+           "bad-mem.sh": "owner=pm gpus=0 mem_gb=48G", "bad-cpus.sh": "owner=net timing=1 cpus=8,9"}
+    for name, head in bad.items():
+        queue(fill, name, head)
+    fr.tick(8)
+    assert {name for name, _, _ in started} == {"pous-a.sh", "pous-m.sh"}
+    assert sorted(p.name for p in (fill / "failed").iterdir()) == sorted(bad)
+    whys = {job: why for kind, job, why in events if kind == "failed"}
+    assert whys == {"bad-gpus.sh": "header: gpus=one", "bad-min.sh": "header: max_min=1h", "bad-prio.sh": "header: prio=high",
+                    "bad-mem.sh": "header: mem_gb=48G", "bad-cpus.sh": "header: cpus=8,9"}
+    assert "free GPUs" in (fill / "status.txt").read_text()
+
+    (fill / "running" / "old.sh").write_text("#!/bin/bash\n# fill: owner=pm gpus=one\n")
+    (fill / "running" / ".old.sh.pgid").write_text(f"{os.getpid()}\n")
+    fr.adopt()
+    assert fr.running["old.sh"]["h"]["gpus"] == 1
+
+
 def test_fill_never_stops_a_timing_job_and_a_whole_node_window_waits_for_it(node2, monkeypatch):
     """A timing chunk is not preemptible. A waiter, a timed lease, a Commit or a fence stops other fill jobs, never it; a window's
     `gpu-lease 8 --wait` waits for it to end (fill backfills meanwhile), and then stops the rest of fill. No chunk starts whose

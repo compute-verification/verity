@@ -207,24 +207,44 @@ def max_min_exception(name: str, t: float | None = None) -> int | None:
     return None
 
 
+HEADER = {"owner": "unknown", "gpus": 1, "max_min": 25, "cpus": 8, "project": "pous", "on": None, "prio": 0, "mem_gb": CPU_MEM_GB}
+
+
 def header(p: Path, t: float | None = None) -> dict:
-    h = {"owner": "unknown", "gpus": 1, "max_min": 25, "cpus": 8, "project": "pous", "on": None, "prio": 0}
+    """The job's header, normalized.  A value fill reads as a whole number that isn't one (gpus, max_min, prio; a CPU or timing
+    job's mem_gb; a timing job's cpus) keeps its default and is named in h["bad"]: the runner files a queued job so under failed/."""
+    h = {k: v for k, v in HEADER.items() if k != "mem_gb"}
     for line in p.read_text(errors="replace").splitlines()[:20]:
         m = re.match(r"#\s*fill:\s*(.*)", line)
         if m:
             for k, v in re.findall(r"(\w+)=(\S+)", m.group(1)):
                 h[k] = int(v) if v.isdigit() else v
+    bad = []
+
+    def whole(k: str) -> int:
+        try:
+            return int(h[k])
+        except ValueError:
+            bad.append(f"{k}={h[k]}")
+            return HEADER[k]
+
     commit = p.name.startswith(COMMIT_PREFIX)
     h["timing"] = h.get("timing") == 1
-    h["gpus"] = 1 if h["timing"] else min(max(int(h["gpus"]), 0), 2 if commit else 1)
+    for k in ("gpus", "max_min", "prio"):
+        h[k] = whole(k)
+    h["gpus"] = 1 if h["timing"] else min(max(h["gpus"], 0), 2 if commit else 1)
+    if "mem_gb" in h and (h["timing"] or not h["gpus"]):
+        h["mem_gb"] = whole("mem_gb")
     if h["timing"]:
-        h["cpus"] = min(max(int(h["cpus"]), 1), TIMING_MAX_CPUS)
+        h["cpus"] = min(max(whole("cpus"), 1), TIMING_MAX_CPUS)
     # a Verity CPU job has its own CPUs and is frozen through windows, so it may run a whole vLLM Build (2-50 min, some 1-4 h)
     cap = max_min_exception(p.name, t)
     if cap is None:
         cap = (COMMIT_MAX_MIN if commit and h["gpus"] else TIMING_MAX_MIN if h["timing"]
                else 360 if h["project"] == "verity" and not h["gpus"] else 30)
-    h["max_min"] = min(int(h["max_min"]), cap)
+    h["max_min"] = min(h["max_min"], cap)
+    if bad:
+        h["bad"] = " ".join(bad)
     return h
 
 
@@ -786,7 +806,12 @@ def tick(n: int) -> str:
     for p in sorted((FILL / "queue").glob("*")):
         if p.is_file() and not p.name.startswith("."):
             try:
-                queued.append((p, header(p), p.stat().st_mtime))
+                h = header(p)
+                if h.get("bad"):
+                    shutil.move(str(p), FILL / "failed" / p.name)
+                    event("failed", p.name, owner=h["owner"], why=f"header: {h['bad']}")
+                    continue
+                queued.append((p, h, p.stat().st_mtime))
             except OSError:
                 pass
     started = False
