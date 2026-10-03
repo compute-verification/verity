@@ -1184,6 +1184,21 @@ def test_n2_commit_refuses_before_touching_a_node(tmp_path):
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
+def test_n2_commit_gives_a_long_row_the_long_max_min():
+    """3 Oct: node 2's 25-min limit stopped cov-gm359's TP2 B8 1024/128 Commit (~45 min) twice, 1.7 GPU-h, before it went back to
+    node 1. A row with 1024 input tokens or batch 32+ gets VY_N2_COMMIT_LONG_MAX_MIN (120); the rest keep VY_N2_COMMIT_MAX_MIN."""
+    def max_min(row: str, **env: str) -> str:
+        return subprocess.run(["bash", str(NEBIUS / "n2_commit.sh"), "max-min", row], capture_output=True, text=True, check=True,
+                              env={**os.environ, "VY_N1": "n1.invalid", "VY_N2": "n2.invalid", "VY_N2_COMMIT_MAX_MIN": "25", **env}).stdout.strip()
+
+    assert max_min("qwen3-14b__bf16__rtxpro6000__tp2__b8__i1024__o128__mixed__greedy__bi-eager") == "120"
+    assert max_min("gemma2-2b__bf16__rtxpro6000__tp1__b32__i256__o32__mixed__greedy__bi-eager") == "120"
+    assert max_min("qwen3-14b__bf16__rtxpro6000__tp2__b8__i1024__o128__g", VY_N2_COMMIT_LONG_MAX_MIN="90") == "90"
+    assert max_min("phi4-14b__bf16__rtxpro6000__tp2__b8__i256__o32__mixed__greedy__bi-eager") == "25"
+    assert max_min("llama32-1b__bf16__rtxpro6000__tp1__b16__i512__o2__mixed__greedy__bi-eager", VY_N2_COMMIT_MAX_MIN="") == "40"
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
 def test_n2_commit_fetches_only_missing_manifests_that_hash_to_their_id(tmp_path):
     """Node 2's store has no remote, so a cited Build's manifest missing there failed cov-g217's precheck after a 19-min bootstrap:
     fetch-manifests copies it from node 1's store, keeps only bytes whose sha256 is the id, and leaves present ones alone."""
