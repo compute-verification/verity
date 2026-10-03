@@ -32,5 +32,7 @@ import FlockSoundness.Discharge.ZkExec.VerdictLigFinal
 import FlockSoundness.Discharge.ZkExec.VerdictLigModel
 import FlockSoundness.Discharge.ZkExec.VerdictLigRun
 import FlockSoundness.Discharge.ZkExec.VerdictLigMain
+import FlockSoundness.Discharge.ZkExec.VerdictOpens
+import FlockSoundness.Discharge.ZkExec.VerdictRows
 import FlockSoundness.Discharge.ZkExec.LiveStatements
 import FlockSoundness.Discharge.ZkExec.RunsLive
