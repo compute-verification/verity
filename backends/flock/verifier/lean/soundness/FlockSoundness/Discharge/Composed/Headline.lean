@@ -1,5 +1,5 @@
 import FlockSoundness.Discharge.Composed.Defs
-import FlockSoundness.ZK.Complete
+import FlockSoundness.Assumptions.Zk
 
 /-!
 # The composed headline of one `--zk` sampled session
@@ -32,8 +32,8 @@ set_option maxRecDepth 8000 in
 /-- **Zero knowledge at a `CoinedSetup` from its facts**: Lemma B (`session_shvzk_hm96`) at one table, its leaves'
 hiding `HashDerivedKey`'s, its row (ii) `padOnto_M1`'s from `PadNonvanishing`. -/
 theorem zkViewAt_of_ok (C : CoinedSetup FlockLevel3.GF256) (hC : CoinedOK execArith (fOf Zk.PAD_C) C)
-    (hKey : Assumptions.HashDerivedKey ZkView.My ZkView.saltHash)
-    (hPad : ∀ cols ≤ 40, Assumptions.PadNonvanishing execArith cols (fOf Zk.PAD_C)) :
+    (hKey : Assumptions.Zk.SaltHiding)
+    (hPad : Assumptions.Zk.PadNonvanishing40) :
     ZkViewAt C ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
   obtain ⟨hL, ht, hS, hpos, hlt, hT⟩ := hC
   intro c Out enc w w0 hreg E
@@ -86,8 +86,8 @@ theorem zk_session_composed (Hs : Hashes 𝔽 Dig (List UInt8))
       (zcStrat execArith Hs (planZAt dj y₀)
         (cont (simZ execArith Hs _ I wr opn dg dec one fin capOf N (hRuns ht hh h1 hTab hRec hDraw) τ) ω)) qF qS)
     -- hash-derived-key and PadNonvanishing
-    (hKey : Assumptions.HashDerivedKey ZkView.My ZkView.saltHash)
-    (hPad : ∀ cols ≤ 40, Assumptions.PadNonvanishing execArith cols (fOf Zk.PAD_C)) :
+    (hKey : Assumptions.Zk.SaltHiding)
+    (hPad : Assumptions.Zk.PadNonvanishing40) :
     prob (fun o => LiveAcceptsZK I o ∧
         K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
           (XplurZC execArith Hs ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀) (tabZAt dj y₀)
