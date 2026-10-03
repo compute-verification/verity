@@ -317,7 +317,8 @@ def render_hourly(rep: dict) -> str:
 
 
 def render_wasters(rep: dict) -> str:
-    out = [f"held but idle GPU-hours on {rep['day']} (UTC), the top {rep['top']} holdings ({rep['source']})"]
+    out = [f"held but idle GPU-hours on {rep['day']} (UTC), the top {rep['top']} holdings ({rep['source']})",
+           "hours covered: " + ", ".join(f"{n} {k} of 24" for n, k in rep["hours_covered"].items())]
     cells = [("NODE", "OWNER", "KIND", "HELD IDLE GPU-H", "HELD GPU-H", "IDLE % OF MEASURED", "UNMEASURED GPU-H")]
     cells += [(w["node"], w["owner"], w["kind"] or "-", _h(w["idle_s"]), _h(w["held_s"]), _pct(w["idle_pct"]),
                _h(w["unmeasured_s"])) for w in rep["wasters"]]
@@ -330,10 +331,10 @@ clock = time.time
 
 
 def main(a: argparse.Namespace, runner: Callable[[str], str] | None = None) -> int:
-    """`cluster usage hourly|wasters`: 0 with the report, 1 when the record can't be read or has no rows, or (hourly) a
-    node's newest recorded hour ended over STALE_S ago, an hour of the window that ended that long ago isn't recorded, or one
-    was read for fewer than WHOLE_MIN minutes; 2 on bad arguments (argparse's). Reads only: one `tail` or `grep` of RECORD on
-    vy-nebius-1 over SSH, or `--file`."""
+    """`cluster usage hourly|wasters`: 0 with the report, 1 when the record can't be read or has no rows, an hour of the
+    window (the day) that ended over STALE_S ago isn't recorded, or (hourly) a node's newest recorded hour ended that long ago
+    or an hour was read for fewer than WHOLE_MIN minutes; 2 on bad arguments (argparse's). Wasters report the hours each
+    node's rows cover. Reads only: one `tail` or `grep` of RECORD on vy-nebius-1 over SSH, or `--file`."""
     from . import status
 
     now = clock()
@@ -375,10 +376,17 @@ def main(a: argparse.Namespace, runner: Callable[[str], str] | None = None) -> i
         render = render_hourly
     else:
         day = [r for r in rows if r["hour"].startswith(f"{a.day}T")]
+        covered = {n: sorted({r["hour"] for r in day if r["node"] == n}) for n in NODES.values()}
+        d0 = hour_t(f"{a.day}T00:00Z")
+        due = [hour(d0 + 3600 * k) for k in range(24) if d0 + 3600 * (k + 1) + STALE_S <= now]
         if not findings and not day:
             findings.append(f"no hours of {a.day} in {src}")
+        for n, have in covered.items() if not findings else ():
+            if missing := [h for h in due if h not in have]:
+                findings.append(f"{n}: {len(missing)} of {a.day}'s hours ended over {STALE_S // 3600} h ago and aren't "
+                                f"recorded, from {missing[0]}: the wasters cover {len(have)} of its 24 hours")
         rep = {"schema": WASTERS, "t": int(now), "source": src, "day": a.day, "top": a.top, "useful_rule": USEFUL_TODAY,
-               "wasters": wasters(day, a.top), "findings": findings}
+               "hours_covered": {n: len(h) for n, h in covered.items()}, "wasters": wasters(day, a.top), "findings": findings}
         render = render_wasters
     print(json.dumps(rep, indent=1, sort_keys=True) if a.json else render(rep), end="\n" if a.json else "")
     return 1 if findings else 0

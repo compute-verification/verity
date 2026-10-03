@@ -1053,7 +1053,8 @@ CLUSTER_SRC = Path(__file__).resolve().parents[3] / "cluster" / "src"
 
 def cmd_usage(argv: list[str]) -> int:
     """`research usage ...` is `cluster usage ...`, run from this tree's tools/cluster (research never imports cluster), with
-    its output and exit code: 0, 1 when the record is unread or stale, 2 on bad arguments or with no tools/cluster here."""
+    its output and exit code: 0, 1 on a finding (the record unread, stale or short of hours), 2 on bad arguments or with no
+    tools/cluster here."""
     import subprocess
 
     if not (CLUSTER_SRC / "cluster" / "usage.py").is_file():

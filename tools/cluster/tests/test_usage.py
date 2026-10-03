@@ -225,17 +225,38 @@ def test_an_hour_read_for_under_50_minutes_has_no_shares_and_a_part_read_or_miss
     assert rc == 1 and "MIN READ" in out and any(ln.startswith("2026-10-03T08:00Z  vy-nebius-2  15 ") for ln in out.splitlines())
 
 
+def day_of_free_time(day: str = "2026-10-03") -> list[dict]:
+    return [row(f"{day}T{h:02d}:00Z", n, None, None, 0, 8 * 3600) for h in range(24) for n in ("vy-nebius-1", "vy-nebius-2")]
+
+
 def test_wasters_ranks_one_days_holdings_and_finds_a_day_with_no_hours(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr(usage, "clock", lambda: epoch("2026-10-04T00:10:00Z"))
-    f = record_file(tmp_path, [row("2026-10-03T08:00Z", "vy-nebius-2", "memory-accounting", "fill", 100, 900),
+    f = record_file(tmp_path, [*day_of_free_time(), row("2026-10-03T08:00Z", "vy-nebius-2", "memory-accounting", "fill", 100, 900),
                                row("2026-10-03T09:00Z", "vy-nebius-1", "proofs", "gpu-lease", 100, 300),
                                row("2026-10-02T23:00Z", "vy-nebius-1", "circuits", "gpu-lease", 0, 9000)])
     rc, out = run(capsys, "wasters", "--day", "2026-10-03", "--top", "1", "--file", f, "--json")
     rep = json.loads(out)
-    assert rc == 0 and rep["schema"] == usage.WASTERS
+    assert rc == 0 and rep["schema"] == usage.WASTERS and rep["hours_covered"] == {"vy-nebius-1": 24, "vy-nebius-2": 24}
     assert [(w["node"], w["owner"], w["idle_s"]) for w in rep["wasters"]] == [("vy-nebius-2", "memory-accounting", 900)]
     rc, out = run(capsys, "wasters", "--day", "2026-10-01", "--file", f)
     assert rc == 1 and "finding: no hours of 2026-10-01" in out
+
+
+def test_wasters_say_the_hours_they_cover_and_a_day_short_of_the_hours_that_ended_is_a_finding(tmp_path, capsys, monkeypatch):
+    # red team P: a record that stops at 01Z ranked one hour as the day's wasters, exit 0
+    monkeypatch.setattr(usage, "clock", lambda: epoch("2026-10-04T00:10:00Z"))     # 22Z and 23Z ended under 2 h ago
+    f = record_file(tmp_path, [row("2026-10-03T00:00Z", "vy-nebius-1", "proofs", "gpu-lease", 100, 300)])
+    rc, out = run(capsys, "wasters", "--day", "2026-10-03", "--file", f, "--json")
+    rep = json.loads(out)
+    assert rc == 1 and rep["hours_covered"] == {"vy-nebius-1": 1, "vy-nebius-2": 0}
+    assert rep["findings"] == [
+        "vy-nebius-1: 21 of 2026-10-03's hours ended over 2 h ago and aren't recorded, from 2026-10-03T01:00Z: the wasters "
+        "cover 1 of its 24 hours",
+        "vy-nebius-2: 22 of 2026-10-03's hours ended over 2 h ago and aren't recorded, from 2026-10-03T00:00Z: the wasters "
+        "cover 0 of its 24 hours"]
+    f = record_file(tmp_path, [r for r in day_of_free_time() if r["hour"] < "2026-10-03T22"])
+    rc, out = run(capsys, "wasters", "--day", "2026-10-03", "--file", f)
+    assert rc == 0 and "hours covered: vy-nebius-1 22 of 24, vy-nebius-2 22 of 24" in out
 
 
 def test_bad_arguments_exit_2_and_an_unreadable_record_exits_1(tmp_path, capsys):
@@ -255,7 +276,7 @@ def test_without_file_it_reads_vy_nebius_1s_record_with_one_tail_or_grep(capsys,
 
     def runner(cmd: str) -> str:
         sent.append(cmd)
-        return "tail of a line\n" + json.dumps(r) + "\n"
+        return "tail of a line\n" + "".join(json.dumps(x) + "\n" for x in [*day_of_free_time(), r])
 
     a = argparse.Namespace(ucmd="hourly", node="nebius-1", hours=2, json=True, file=None)
     assert usage.main(a, runner=runner) == 0
