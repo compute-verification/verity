@@ -3,8 +3,9 @@ import Pouw.Protocol.PearlC.Tile
 /-!
 # The honest tiles' measured cap rate, completeness's one assumption (trusted; a `Prop` taken as a hypothesis)
 
-The sampled audit's completeness (`CompleteSampled`, `Pouw.Protocol.PearlC.Completeness`) needs two facts about the
-honest prover's drawn tile: its words are the reference's, and its replayed debit is within the cap. The first is
+The sampled audit's completeness (`CompleteSampled`, `Pouw.Protocol.PearlC.Completeness`) takes the workload's weights
+passing the rules as a hypothesis (`Workload.WeightsOK`), and needs two facts about the honest prover's drawn tile: its
+words are the reference's, and its replayed debit is within the cap. The first is
 proved (`HonestWords`: every reference value is an FP32 word's). The second depends on the activations and the noise,
 and nothing proves it; `HonestTileCapRate` assumes it at the rate a measurement gives.
 
@@ -50,10 +51,10 @@ open Pouw.PearlC
 variable {Q R S : Type}
 
 /-- **An honest drawn tile exceeds the cap at most `ε` of the time** (empirical: an upper confidence limit on a measured
-rate of honest tiles that fail the check, not a hardness assumption). For every in-domain workload `U`, every activation
-input `act` in the population `Served`, and every ticket count `w` proportional to the tiles' `W_ref`: over the oracle,
-the salt and one work-weighted draw, the probability that the drawn tile is of a unit of the layout and its replayed
-debit on the honest activations exceeds the cap (`TR.capOK` fails) is at most `ε`.
+rate of honest tiles that fail the check, not a hardness assumption). For every in-domain workload `U` whose weights
+pass the rules, every activation input `act` in the population `Served`, and every ticket count `w` proportional to the
+tiles' `W_ref`: over the oracle, the salt and one work-weighted draw, the probability that the drawn tile is of a unit
+of the layout and its replayed debit on the honest activations exceeds the cap (`TR.capOK` fails) is at most `ε`.
 
 The bound is per input, an input being one `(U, act)`: one linear's GEMM in one pass. `ε` is the cited maximum over the
 `m` measured inputs of each input's upper confidence limit at `δ = 0.05/m` (95% simultaneous), rounded up: at no failure
@@ -68,7 +69,7 @@ through the Python check that #865's L5 test ties to it. The measurement is `ser
 with failures. -/
 def HonestTileCapRate [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (TR : TileRules Q R S)
     (D : Layout → Prop) (Served : Workload → (ℕ → Codes) → Prop) (ε : ℝ) : Prop :=
-  ∀ U : Workload, U.InDomain P D → ∀ act : ℕ → Codes, Served U act →
+  ∀ U : Workload, U.InDomain P D → U.WeightsOK P → ∀ act : ℕ → Codes, Served U act →
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
       pr (fun x : (Q → R) × S × Ticket w (TR.tiling U.layout).NT =>
           (TR.tiling U.layout).unit x.2.2.1 < U.layout.N ∧

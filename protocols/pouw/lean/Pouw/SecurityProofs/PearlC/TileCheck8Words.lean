@@ -12,10 +12,10 @@ protocol's word functions agree only conditionally:
   `F32Neg`, `F2fpBf16`, `F32Fabs`, `SelectI32`) agree with the protocol's word functions where both are defined. They
   are open at core's instance `coreOps`;
 * `Row8OK`: a row's words are finite and its `α` and `β` step words, with `β > 0` (`Stats8OK`). It is no hypothesis
-  of L3: a credited row's follows from `PearlCSem.RowOK`, and a weight's from the domain (`Workload.InDomain`'s
-  `OperandOK`), by magnitudes (`RowStats`, `TileCheckWords`). The table reads a `−0` word, and a word's bits above 32, as `pc8Sem` reads them
-  (`ZeroSign`): `|−0| = |+0|`, `fma(−0, −0, ·) = fma(+0, +0, ·)`, and the step reads `α·(−0)` and `α·(+0)` alike
-  (`alpha8_zeroSign`, `beta8_zeroSign`, `form8_zeroSign`);
+  of L3: a credited row's follows from `PearlCSem.RowOK`, and a weight's from the check's own `weightOK`
+  (`TileCheck.Accepts`), by magnitudes (`RowStats`, `TileCheckWords`). The table reads a `−0` word, and a word's bits
+  above 32, as `pc8Sem` reads them (`ZeroSign`): `|−0| = |+0|`, `fma(−0, −0, ·) = fma(+0, +0, ·)`, and the step reads
+  `α·(−0)` and `α·(+0)` alike (`alpha8_zeroSign`, `beta8_zeroSign`, `form8_zeroSign`);
 * `Noise8OK`: no code of the noise is NaN (`Line8OK` at every line of its four factors), a property of `pc8Sem`'s noise
   parameter. Python's noise has none: `sample_line`'s codes are finite by its norm bound, and `fp8_to_f32` refuses a
   NaN code. On the other codes, `−0` included, the table's `E′` is `lineCodes`'s (`eTilde8_line`: `fp32.mul(β, −0)` is
