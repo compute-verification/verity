@@ -7,9 +7,9 @@ import FlockSoundness.Discharge.Hm.Accept
 
 An untyped statement `Stmt.setupHidden` accepts has `layout_of`'s layout on the statement with `HmRow.delta`'s Δ, and
 `HmOut.delta` only appends `outPairs` to both of its sides (`hidden_delta'`). Every first column of `outPairs` is a
-message bit of an output row's `sha512x3` slot (`deltaMsgCol_shaRowBit`): the row's byte `2k + t / 8` is below
-`2 · words`, so in one of the row's compressions (`out_bytes`, `HmRow.byteAt`). A `sha512x3` slot's message bit is an
-input bit of a net slot (`deltaIn_inBit`), as `Layout.delta` asks of every pair past the constant pairs.
+message bit of an output row's `sha512x3` slot or, past the row's compressions (an exact-length row's last block), of
+its `hm96` slot's `pad` (`deltaMsgCol_rowBit`). Either is an input bit of a net slot (`deltaIn_inBit`), as
+`Layout.delta` asks of every pair past the constant pairs.
 -/
 
 open Flock FlockLevel3
@@ -17,17 +17,19 @@ open Lean (Json)
 
 namespace FlockSoundness.Discharge.Hidden
 
-/-- **Row `p`'s message bit `t` of byte `byte`**, in one of the row's compressions, is a message bit of the row's
-`sha512x3` slot. -/
-theorem deltaMsgCol_shaRowBit {c : Circuit} {g p byte t : ℕ} (hg : g < c.g) (hp : p < c.ports.size)
-    (hb : (HmRow.byteAt (c.ports.getD p default) byte).1 < (c.ports.getD p default).chunks) (ht : t < 8) :
-    ShaRowBit c (deltaMsgCol c g p byte t) := by
+/-- **Row `p`'s message bit `t` of byte `byte`** is a message bit of the row's `sha512x3` slot for the byte's
+compression, or, past the row's compressions, a `pad` bit of its `hm96` slot. -/
+theorem deltaMsgCol_rowBit {c : Circuit} {g p byte t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (ht : t < 8) :
+    ShaRowBit c (deltaMsgCol c g p byte t) ∨ HmRowBit c (deltaMsgCol c g p byte t) := by
   have ho := Typed.byteAt_snd (c.ports.getD p default) byte
-  refine ⟨g, hg, p, by rw [rowSlots_spec]; exact hp, (HmRow.byteAt (c.ports.getD p default) byte).1, ?_, 1, by omega,
-    64 * (byte % 128 / 8) + 56 - 8 * (byte % 128 % 8) + t, by omega, ?_⟩
-  · rw [Hm.rowSlots_size hp, getElem!_eq_getD']
-    exact hb
-  · simp only [deltaMsgCol, ho]
+  by_cases hk : (HmRow.byteAt (c.ports.getD p default) byte).1 < ((HmRow.rowSlots c.ports).2[p]!).size
+  · refine Or.inl ⟨g, hg, p, by rw [rowSlots_spec]; exact hp, (HmRow.byteAt (c.ports.getD p default) byte).1, hk, 1,
+      by omega, 64 * (byte % 128 / 8) + 56 - 8 * (byte % 128 % 8) + t, by omega, ?_⟩
+    simp only [deltaMsgCol, hk, ↓reduceIte, ho]
+    omega
+  · refine Or.inr ⟨g, hg, p, by rw [rowSlots_spec]; exact hp, 1, by omega,
+      64 * (byte % 128 / 8) + 56 - 8 * (byte % 128 % 8) + t, by omega, ?_⟩
+    simp only [deltaMsgCol, hk, ↓reduceIte, ho]
     omega
 
 /-- **Every first column of `outPairs` is an input bit of a net slot**, for a circuit `HmRow.parse` accepted and
@@ -40,11 +42,10 @@ theorem outPairs_inBit {tags : Tags} {cf : ByteArray} {tables : List (String × 
   have C := check_facts P.typed hcheck
   intro x hx
   simp only [outPairs, List.mem_flatMap, List.mem_range, List.mem_cons, List.not_mem_nil, or_false] at hx
-  obtain ⟨g, hg, j, hj, k, hk, t, ht, hx⟩ := hx
-  obtain ⟨hlt, hw⟩ := out_bytes hp hc hj
-  have hs : ShaRowBit c (deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8)) :=
-    deltaMsgCol_shaRowBit hg hlt (hw _ (by omega)) (by omega)
-  rcases hx with rfl | rfl <;> exact deltaIn_inBit P C (Or.inl hs)
+  obtain ⟨g, hg, j, hj, k, -, t, -, hx⟩ := hx
+  have hlt := (checkRows_out hc hj).1
+  have hs := deltaMsgCol_rowBit hg hlt (byte := 2 * k + t / 8) (Nat.mod_lt t (by norm_num))
+  rcases hx with rfl | rfl <;> exact deltaIn_inBit P C (hs.imp id Or.inl)
 
 theorem hidden_layout' : HiddenLayout := by
   intro tags cf pf coins tables draw partition program st ht h

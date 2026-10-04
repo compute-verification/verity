@@ -54,6 +54,43 @@ def test_a_tree_that_is_not_a_checkout_is_refused(tmp_path, monkeypatch, capsys)
     assert S.main(["--list"]) == 2 and "is not a git checkout" in capsys.readouterr().err
 
 
+def test_the_tests_get_the_callers_pythonpath_entries_inside_the_tree_only(tmp_path, monkeypatch):
+    """An `export PYTHONPATH=...` naming another checkout, left in a shell, would run this tree's tests against that checkout."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join(["/tmp/s1350/packages/verity/src", str(tmp_path / "src"), ""]))
+    assert S.tests_pythonpath() == os.pathsep.join([str(S.CHILD), str(tmp_path / "src")])
+    monkeypatch.delenv("PYTHONPATH")
+    assert S.tests_pythonpath() == str(S.CHILD)
+
+
+def test_a_python_that_imports_the_trees_packages_from_another_checkout_is_named(tmp_path, monkeypatch):
+    tree, other = tmp_path / "tree", tmp_path / "other"
+    for root in (tree, other):
+        (root / "protocols" / "pous" / "verity_pous").mkdir(parents=True)
+        (root / "protocols" / "pous" / "verity_pous" / "__init__.py").write_text("")
+    S = _suites(monkeypatch, tree)
+    pkgs = {"verity-pous": "protocols/pous", "research": "tools/research"}
+    env = dict(os.environ, PYTHONPATH=str(other / "protocols" / "pous"))
+    assert S.foreign(pkgs, env) == f"verity_pous from {other / 'protocols' / 'pous' / 'verity_pous' / '__init__.py'}"
+    env["PYTHONPATH"] = str(tree / "protocols" / "pous")
+    assert S.foreign(pkgs, env) is None
+
+
+def test_suites_refuse_a_python_that_imports_the_trees_packages_from_elsewhere(tmp_path, monkeypatch, capsys):
+    (tmp_path / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
+    (tmp_path / "pkg" / "tests").mkdir(parents=True)
+    (tmp_path / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setenv("PYTHONPATH", f"/tmp/explorer/a{os.pathsep}{tmp_path / 'pkg'}")
+    probed = []
+    monkeypatch.setattr(S, "foreign", lambda pkgs, env: probed.append(env["PYTHONPATH"]) or "verity_pous from /tmp/s1350/x.py")
+    assert S.main([]) == 2
+    assert "against another checkout's code (verity_pous from /tmp/s1350/x.py)" in capsys.readouterr().err
+    assert probed == [os.pathsep.join([str(S.CHILD), str(tmp_path / "pkg")])]
+    assert S.main(["--list"]) == 0 and len(probed) == 1
+
+
 def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
     """Git ignores build outputs, so a suite whose tests run or skip on one declares it (`[tool.verity.tests] artifacts`), and
     its pass is reused only for the same build."""
@@ -196,6 +233,44 @@ def test_changed_selects_the_suites_a_change_touches_by_path_runner_or_lock(tmp_
     (tmp_path / "tools" / "check").mkdir(parents=True)
     (tmp_path / "tools" / "check" / "suites.py").write_text("# the runner\n")
     assert touched() == ["a", "b"]
+
+
+def test_changed_selects_the_suite_a_file_is_moved_out_of(tmp_path, monkeypatch):
+    """git reports a rename by its destination alone unless asked not to, which would leave out the suite the file left."""
+    _workspace(tmp_path)
+    (tmp_path / "a" / "mod.py").write_text("".join(f"X{i} = {i}\n" for i in range(20)))
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "mv", "a/mod.py", "b/mod.py")
+    assert [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())] == ["a", "b"]
+
+
+def test_a_declared_package_is_its_directory_without_its_dependencies(tmp_path, monkeypatch):
+    """A test that reads a declared package's dependency fails the guard, which allows only `inputs_of`, so a change there
+    need not run the suite that declared the package."""
+    _workspace(tmp_path)
+    (tmp_path / "pyproject.toml").write_text((tmp_path / "pyproject.toml").read_text().replace('["a", "b"]', '["a", "b", "c"]'))
+    (tmp_path / "b" / "pyproject.toml").write_text('[project]\nname = "b"\ndependencies = ["a"]\n\n[tool.uv.sources]\n'
+                                                   'a = { workspace = true }\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    (tmp_path / "c" / "tests").mkdir(parents=True)
+    (tmp_path / "c" / "pyproject.toml").write_text('[project]\nname = "c"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n'
+                                                   '[tool.verity.tests]\ninputs = ["b"]\n')
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
+    by = {s.name: s for s in S.discover()}
+    assert S.inputs_of(by["b"], pkgs) == ["a", "b"] and S.inputs_of(by["c"], pkgs) == ["b", "c"]
+
+    def touched():
+        return [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())]
+
+    (tmp_path / "a" / "mod.py").write_text("X = 1\n")
+    assert touched() == ["a", "b"]
+    (tmp_path / "b" / "mod.py").write_text("Y = 1\n")
+    assert touched() == ["a", "b", "c"]
 
 
 def test_a_pass_is_reused_only_while_what_it_used_beside_its_key_holds(tmp_path, monkeypatch):
@@ -591,12 +666,16 @@ def test_the_tracer_names_what_a_key_narrowed_to_the_tests_reads_must_hold(tmp_p
     spec.loader.exec_module(R)
     child = str(HERE / "guard" / "child")
     env = {"VERITY_SUITE_ROOT": str(tmp_path), "VERITY_SUITE_READS": str(tmp_path / "reads"), "VERITY_SUITE_MODULE": "pkg/tests/test_x.py",
-           "PYTHONPATH": child}
+           "PYTHONPATH": child, "VERITY_SUITE_ALLOW": '["lib/used.py"]'}
     for k, v in env.items():
         monkeypatch.setenv(k, v)
     r = R.Reads()
     assert r.traced(str(tmp_path / "lib" / "__pycache__" / "used.cpython-314.pyc")) == "lib/used.py"
+    assert r.traced(str(tmp_path / "lib" / "__pycache__" / "used.cpython-314.pyc.140214632246000")) == "lib/used.py"
     assert r.traced(str(tmp_path / "__pycache__" / "top.cpython-314.opt-1.pyc")) == "top.py"
+    for cached in ("used.cpython-314.pyc", "used.cpython-314.pyc.140214632246000"):    # an input file's import, and its write
+        assert r.classify(str(tmp_path / "lib" / "__pycache__" / cached)) is None
+    assert r.classify(str(tmp_path / "lib" / "__pycache__" / "other.cpython-314.pyc")) == ("O", "lib/__pycache__/other.cpython-314.pyc")
     assert r.traced(str(tmp_path / "lib" / "data.json")) == "lib/data.json" and r.traced("/elsewhere/x") is None
     assert r.traced(str(Path(child) / "sitecustomize.py")) is None
     assert r.trace("open", (str(tmp_path / "lib" / "a.py"), "r", 0)) == ("F", "lib/a.py")

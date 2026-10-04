@@ -185,6 +185,32 @@ def members() -> dict[str, str]:
     return out
 
 
+def tests_pythonpath() -> str:
+    """The tests' PYTHONPATH: the tracer's directory (`CHILD`), then the caller's entries inside this tree. An entry naming another
+    checkout, such as an `export PYTHONPATH=...` left in a shell, would run this tree's tests against that checkout's code."""
+    return os.pathsep.join([str(CHILD), *(p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep)
+                                          if p and Path(p).resolve().is_relative_to(ROOT))])
+
+
+#: prints where each top-level module named on its command line would be imported from, without importing any of them
+_ORIGINS = ("import importlib.util as u, json, sys; "
+            "print(json.dumps({n: getattr(u.find_spec(n), 'origin', None) for n in sys.argv[1:]}))")
+
+
+def foreign(pkgs: dict[str, str], env: dict[str, str], python: str = sys.executable) -> str | None:
+    """The members' `verity*` packages that `python` under `env` would import from outside this tree, each with where from, or
+    None. A virtualenv installed from another checkout runs this tree's tests against that checkout's code."""
+    names = sorted({p.parent.name for d in pkgs.values() for g in ("verity*/__init__.py", "*/verity*/__init__.py")
+                    for p in (ROOT / d).glob(g)})
+    if not names:
+        return None
+    r = subprocess.run([python, "-c", _ORIGINS, *names], env=env, capture_output=True, text=True)
+    if r.returncode:
+        return f"{python} can't say where it imports them from: {r.stderr.strip()[-300:]}"
+    away = {n: o for n, o in json.loads(r.stdout.splitlines()[-1]).items() if o and not Path(o).resolve().is_relative_to(ROOT)}
+    return ", ".join(f"{n} from {o}" for n, o in sorted(away.items())) or None
+
+
 def metadata() -> list[str]:
     """The workspace's metadata: every pyproject.toml, and the lockfile. A suite's key holds what it resolves to (`resolved`);
     the tests may read the files themselves, which the guard records."""
@@ -315,14 +341,10 @@ def environment() -> dict:
 
 
 def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
-    """Its directory, its dependencies' directories, and its declared inputs; a declared input that is a workspace package
-    brings that package's dependencies too."""
-    paths = {suite.path, *closure(suite, pkgs), *suite.inputs}
-    by_path = {p: n for n, p in pkgs.items()}
-    for p in suite.inputs:
-        if p in by_path:
-            paths.update(closure(Suite(by_path[p], p, (by_path[p],), ()), pkgs))
-    return sorted(paths)
+    """Its directory, its dependencies' directories, and its declared inputs. A declared workspace package is its directory
+    alone: the guard allows what this returns, so a test that reads that package's own dependencies fails until they are
+    declared too."""
+    return sorted({suite.path, *closure(suite, pkgs), *suite.inputs})
 
 
 def _under(path: str, prefixes: list[str]) -> bool:
@@ -333,7 +355,7 @@ def touched(suites: list[Suite], pkgs: dict[str, str], rev: str, tree: str, lock
     """The suites whose key the change from ``rev`` to ``tree`` moves by path: a changed file under their inputs (the repository's
     own suite keys on all of them) or in the runner, or a changed resolution in `uv.lock`. What their tests read beside the key
     (`used`) is left out, so a suite this skips can still miss its cached pass."""
-    files = _git("diff", "--name-only", rev, tree).split()
+    files = _git("diff", "--no-renames", "--name-only", rev, tree).split()      # a rename names its source too
     if any(f in RUNNER for f in files):
         return list(suites)
     before = lock
@@ -965,8 +987,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     (logs / f"{slug}.reuse.json").unlink(missing_ok=True)
     reads_log = logs / f"{slug}.reads"
     reads_log.unlink(missing_ok=True)
-    env.update(VERITY_SUITE_READS=str(reads_log), VERITY_SUITE_DIR=str(ROOT / suite.path),
-               PYTHONPATH=os.pathsep.join([str(CHILD), *([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else [])]))
+    env.update(VERITY_SUITE_READS=str(reads_log), VERITY_SUITE_DIR=str(ROOT / suite.path), PYTHONPATH=tests_pythonpath())
     if reuse:
         (logs / f"{slug}.reuse.json").write_text(json.dumps(sorted(reuse)))
         env["VERITY_SUITE_REUSE"] = str(logs / f"{slug}.reuse.json")
@@ -1078,6 +1099,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     pkgs, suites = members(), discover()
+    if not (a.list or a.explain) and (away := foreign(pkgs, dict(os.environ, PYTHONPATH=tests_pythonpath()))):
+        print(f"suites: {sys.executable} would run this tree's tests against another checkout's code ({away}); run them with "
+              f"{ROOT}'s own environment: `uv run tools/check/suites.py` there", file=sys.stderr)
+        return 2
     skipped = select(suites, a.skip) if a.skip else []
     chosen = [s for s in select(suites, [a.explain] if a.explain else a.suites) if s not in skipped]
     args = (QUICK if a.quick else []) + extra

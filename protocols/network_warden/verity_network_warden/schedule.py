@@ -9,7 +9,8 @@ positive fraction of frames per bucket, and may be below 1 for sessions slower t
 eligible at `anchor + delta + ⌊λ / rho⌋`, using the sync of the window that holds its anchor. The sender's shaper hands frames to
 the warden in canonical order, each at `h(k) = max(eligible(k), h(k−1))`. The warden's own rule (FIFO at the allocation
 r, left-packed) then fixes every grid. So the Program's grids are a function of its frames, the recorded anchors and the
-sync advice, and the timing channel of accepted runs is at most `log2 #Σ_sync` bits per window.
+sync advice, and the timing channel of accepted runs is at most `log2 #Σ_sync` bits per window, summed from the run's
+first window: a later window alone may carry more.
 """
 
 from __future__ import annotations
@@ -70,11 +71,18 @@ class SyncSet:
 
 @dataclass(frozen=True, slots=True)
 class LogicalFrame:
-    """A real frame as the Program fixes it: its content, its anchor and its logical index."""
+    """A real frame as the Program fixes it: its content, its anchor and its logical index.
+
+    The index is non-negative, as Lean's ℕ is: a negative λ can make a frame eligible before its anchor, in an earlier
+    window, whose grid would then read the later window's sync."""
 
     payload: bytes
     anchor: int
     index: int
+
+    def __post_init__(self) -> None:
+        if self.index < 0:
+            raise ValueError("a logical index is non-negative")
 
 
 def eligible(frame: LogicalFrame, sync: ClockSync) -> int:

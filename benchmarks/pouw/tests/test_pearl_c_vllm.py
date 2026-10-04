@@ -9,6 +9,7 @@ import json
 import shutil
 import sys
 import types
+from fractions import Fraction
 from pathlib import Path
 from typing import ClassVar
 
@@ -25,6 +26,7 @@ from verity_pouw.audit import (
     TILE_SCHEMA,
     Epoch,
     Prover,
+    Verifier,
     Workload,
     activation_binding,
     commit_rows,
@@ -32,7 +34,7 @@ from verity_pouw.audit import (
     transcript_domain,
     weight_binding,
 )
-from verity_pouw.protocol import Matmul, Shape
+from verity_pouw.protocol import Context, Matmul, Shape
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c_work as PW
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
@@ -54,6 +56,7 @@ def load(name: str, path: Path):
 R = load("pearl_c_sm120_run", KERNEL / "run.py")
 F = load("pearl_c_sm120_fixture", KERNEL / "fixture.py")
 VR = load("pearl_c_vllm_verify_run", KERNEL.parent / "pearl_c_vllm" / "verify_run.py")
+SD = load("pearl_c_vllm_served_debit", KERNEL.parent / "pearl_c_vllm" / "served_debit.py")
 
 
 def bf16_words(rng, rows: int, k: int, scale: float = 1.0) -> np.ndarray:
@@ -461,6 +464,51 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
     path.write_text(json.dumps(man))
     r = VR.verify(path, 3, 1, "test", b"verifier" * 4)
     assert not r["accepted"] and "records are not the ones" in r["line"]
+
+
+@pytest.mark.slow
+def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_path):
+    path, s, epoch, prover, tr, splits, records = honest_pass
+    out = tmp_path / "out"
+    assert SD.main([str(path), "--tiles", "3", "--jobs", "1", "--out", str(out)]) == 0
+    assert PW._debit_cap is SD._DEBIT_CAP
+    (got,) = json.loads((out / "summary.json").read_text())["passes"]
+    assert got["scheme"] == s.name and got["cap"] == str(s.cap) and got["openings_failed"] == 0
+    assert set(got["strata"]) == {"m32-k128-n16", "m16-k128-n32"} and got["tiles_total"] == tr.commitment.count
+    assert got["strata"]["m32-k128-n16"]["credited_macs"] == (20 - 1) * 16 * 128
+    tiles = [json.loads(line) for line in (out / f"{path.parent.name}.tiles.jsonl").read_text().splitlines()]
+    assert len(tiles) == got["sampled"] and got["measured"] == sum("share" in t for t in tiles) > 0
+    refs = Verifier(PW._TileRuleView(s), epoch).refs
+    for t in (t for t in tiles if "share" in t):
+        ref, rec = refs[t["tile"]], records[t["matmul"]]
+        op = prover.open(epoch, ref.id)
+        a, b = [o.value for o in op.a], [o.value for o in op.b]
+        u = epoch.workload.matmuls[ref.matmul]
+        ctx = Context(epoch.salt, u, tr.activation_roots[ref.matmul], epoch.weight_roots[u.weight])
+        ops = s.encode(ctx, s.noise(ctx), a, b, ref.tile)
+        rows, cols = rec.credited(ref.tile)
+        debit, cap = PW._debit_cap(s, rec, ref.tile, ops, rows, cols)
+        credit = PW.cell_credit(s, rec) * len(rows) * len(cols)
+        assert (t["debit_exact"], t["ratio"], t["credit_exact"]) == (str(debit), float(debit / cap), str(credit))
+        assert {key: t[key] for key in t if key.startswith("share")} == {"share": float(debit / credit)}
+        assert t["ok"] == (PW.check_opened(s, rec, ref.tile, a, b, ops) is None)
+
+
+def test_served_debits_share_is_the_tile_rules_debit_over_its_rev1_credit():
+    """served_debit's credit is the tile rule's cap over ρ, `creditDevRev1`'s share of the credited cells, with the first
+    promotion add of every word out once: every share it records is `tileDebitRev1` over that credit, none with the add
+    taken out a second time."""
+    s = PPD.scheme_of(SCHEME)
+    rng, shape, rows, cols = np.random.default_rng(11), Shape(64, 512, 48), 3, 2
+    rec = PW.UnitRecord(Matmul(0, shape, 0), shape.m, shape.k, (), ())
+    codes = lambda r: [[0] * shape.k] + [[int(c) for c in rng.integers(0, 0x70, shape.k) | (rng.integers(0, 2, shape.k) << 7)]
+                                         for _ in range(r - 1)]
+    debit, cap = PW.tile_cap(s, rec, codes(rows), codes(cols))
+    credit = Fraction(s.credit_of(Shape(1, shape.k, shape.n)), shape.n) * rows * cols
+    assert s.first_adds(Shape(1, shape.k, shape.n)) == s.prices.fadd * shape.n > 0 and debit > 0
+    got = SD.tile_numbers(s, debit, cap)
+    assert (got["debit_exact"], got["credit_exact"], got["ratio"]) == (str(debit), str(credit), float(debit / cap))
+    assert {key: got[key] for key in got if key.startswith("share")} == {"share": float(debit / credit)}
 
 
 # ---- the panel rows -----------------------------------------------------------------------------------------------
