@@ -10,7 +10,8 @@ lock's package-level sections are split (`roots`, `exempt`, `layers`, `dependenc
 proofs. The run refuses, changing nothing, when the spec is not separable: a spec module importing a proof module, a pin
 whose statement names a definition of a proof module, a module neither rule places, or a trusted file (`TRUSTED.sha256`,
 the grader's allowed imports) among the moved ones. It is idempotent: on a tree already split it says so and exits 0, and a
-half-split tree is refused.
+half-split tree is refused. A verified `--apply` also removes this script and its test (`OBSOLETE`): from then on the
+package boundary holds what they check, and a rerun on a later `main` starts from the commit that adds them.
 
 The spec is `Pous.Protocol`, `Pous.Assumptions` and `Pous.Guarantees` with what is under them, plus `SPEC_EXTRA`: two
 modules under the proofs' name that the grader trusts (`grade.sh` lets a submission import them, `TRUSTED.sha256` hashes
@@ -57,6 +58,8 @@ PACKAGE_SECTIONS = ("roots", "exempt", "layers", "dependencies", "runs", "compil
 #: sections whose split needs a person: the run refuses while one is non-empty
 UNSPLIT = ("escapes", "dependency_unchecked")
 PIN_SECTIONS = ("guarantees", "pins")
+#: removed by a verified --apply: after the split the package boundary holds what these check
+OBSOLETE = ("protocols/pous/lean_split.py", "protocols/pous/tests/test_pous_lean_split.py")
 
 PROOFS_LAKEFILE_NOTE = """\
 # PoUS's proofs, which require its spec (`protocols/pous/lean`). Lake resolves a module to the first package whose library
@@ -118,7 +121,7 @@ def pin_section(lock: dict) -> str:
 
 
 def proof_globs(proof_mods: set[str], spec_mods: set[str]) -> list[str]:
-    """Globs that claim exactly ``proof_mods``: a directory's `X.+` where nothing under it is spec, else its modules one by one."""
+    """Globs claiming exactly ``proof_mods``: `X.+` for a directory with no spec module under it, else its modules one by one."""
     out: list[str] = []
 
     def walk(prefix: str) -> None:
@@ -227,6 +230,9 @@ class Plan:
                     proofs[k] = b
         spec["roots"] = self.spec_roots()
         proofs["roots"] = sorted(r for r in lock.get("roots", []) if owner(r) == "proofs") or ["Pous"]
+        if "exempt" in proofs:
+            # `lake env lean` resolves `Pous.*` through one search directory, which now holds only one package's modules
+            proofs["exempt"] = {k: v.replace("lake env lean ", "lake lean ") for k, v in proofs["exempt"].items()}
         if "dependencies" in lock:
             spec["dependencies"] = proofs["dependencies"] = lock["dependencies"]
         self.spec_lock = {k: (spec[k] if k in spec else v) for k, v in lock.items() if k not in PACKAGE_SECTIONS or k in spec}
@@ -275,14 +281,16 @@ class Plan:
               f"{len(self.globs())} globs")
         print(f"  {PROOFS}/lake-manifest.json   the spec's, with the path entry first and the name {PROOFS_PACKAGE}")
         print(f"  {PROOFS}/lean-toolchain       the spec's")
-        print(f"  {PROOFS}/lean-audit.json      {json.dumps({k: v for k, v in self.proofs_lock.items() if k != 'dependencies'}, ensure_ascii=False)}"
-              f" + the spec's dependencies record")
+        policy = json.dumps({k: v for k, v in self.proofs_lock.items() if k != "dependencies"}, ensure_ascii=False)
+        print(f"  {PROOFS}/lean-audit.json      {policy} + the spec's dependencies record")
         print("edited:")
         print(f"  {SPEC}/lakefile.toml          library Pous rooted at {', '.join(self.spec_roots())}")
-        changed = [k for k in self.spec_lock if self.spec_lock[k] != self.lock.get(k)] + [k for k in self.lock if k not in self.spec_lock]
+        changed = [k for k in self.spec_lock if self.spec_lock[k] != self.lock.get(k)]
+        changed += [k for k in self.lock if k not in self.spec_lock]
         print(f"  {SPEC}/lean-audit.json        {', '.join(changed)} changed; byte-identical: "
               f"{', '.join(k for k in self.lock if k not in changed and k in self.spec_lock)}")
         print(f"  {SPEC}/TRUSTED.sha256         regenerated with README.md's command (lakefile.toml's hash)")
+        print(f"removed: {', '.join(OBSOLETE)}")
         print(f"unchanged: Grader/Registry.lean (its targets are Pous.Guarantees.*), grade.sh (it builds only spec modules), "
               f"check.sh, PousTargets.lean")
 
@@ -315,8 +323,8 @@ def git(repo: Path, *args: str) -> str:
 def apply(plan: Plan) -> list[str]:
     """Perform ``plan``; the problems the checks after it find (empty: done and verified)."""
     repo, sd, pd = plan.repo, plan.spec_dir, plan.proofs_dir
-    if dirty := git(repo, "status", "--porcelain", "--", SPEC, PROOFS).strip():
-        return [f"uncommitted changes under {SPEC} or {PROOFS}:\n{dirty}"]
+    if dirty := git(repo, "status", "--porcelain", "--", SPEC, PROOFS, *OBSOLETE).strip():
+        return [f"uncommitted changes under {SPEC}, {PROOFS} or to this script:\n{dirty}"]
     audit = load_audit(repo)
     old_text = (sd / "lean-audit.json").read_text()
     if audit.text(plan.lock) != old_text:
@@ -359,7 +367,10 @@ def apply(plan: Plan) -> list[str]:
         return ["README.md has no TRUSTED.sha256 regeneration command"]
     subprocess.run(["bash", "-c", cmd.group(1)], cwd=sd, check=True, env={"LC_ALL": "C", "PATH": "/usr/bin:/bin"})
     git(repo, "add", "--", SPEC, PROOFS)
-    return verify(plan, old_text, new_text, audit)
+    problems = verify(plan, old_text, new_text, audit)
+    if not problems:
+        git(repo, "rm", "-q", "--", *OBSOLETE)
+    return problems
 
 
 def verify(plan: Plan, old_text: str, new_text: str, audit) -> list[str]:
@@ -401,7 +412,7 @@ def main(argv: list[str] | None = None) -> int:
     for p in problems:
         print(f"lean_split: FAILED CHECK: {p}")
     if not problems:
-        print(f"lean_split: applied and staged; every non-package section of the lock is byte-identical, TRUSTED.sha256 checks")
+        print("lean_split: applied and staged; every non-package section of the lock is byte-identical, TRUSTED.sha256 checks")
     return 1 if problems else 0
 
 
