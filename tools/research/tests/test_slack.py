@@ -206,6 +206,26 @@ def test_handles_and_subscriptions(registry, capsys):
     assert rc == 0 and f'channelId="{COORD}", topLevelOnly=true' in out and ALERTS not in out
 
 
+def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
+    rc, out, _ = run(capsys, "owners", "tools/research/src/research/slack.py", "tools/research/src/research/cli.py",
+                     "packages/verity/src/verity/ml/tc.py", "packages/verity/src/verity/ir/cut.py", "AGENTS.md", "nowhere/x")
+    assert rc == 0 and [line.split() for line in out.splitlines()] == [
+        ["@comms", "tools/research/src/research/slack.py"], ["@infra", "tools/research/src/research/cli.py"],
+        ["@circuits", "packages/verity/src/verity/ml/tc.py"], ["@proofs", "packages/verity/src/verity/ir/cut.py"],
+        ["@top", "AGENTS.md"], ["-", "nowhere/x"]]
+    monkeypatch.setattr("sys.stdin", io.StringIO("tools/research/src/research/slack.pyc\n./AGENTS.md\n"))
+    rc, out, _ = run(capsys, "owners")
+    assert [line.split()[0] for line in out.splitlines()] == ["@infra", "@top"]
+
+
+def test_registry_refuses_a_path_two_handles_own(registry, capsys):
+    reg = json.loads(registry.read_text())
+    reg["handles"][1]["owns"] = [reg["handles"][0]["owns"][0]]
+    registry.write_text(json.dumps(reg))
+    rc, _, err = run(capsys, "owners", "AGENTS.md")
+    assert rc == 2 and "no other handle owns" in err
+
+
 def test_subscriptions_fail_visibly_without_channel_ids(registry, capsys):
     reg = json.loads(registry.read_text())
     reg["channels"]["agent-coordination"]["id"] = None

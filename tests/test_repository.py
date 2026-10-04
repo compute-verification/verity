@@ -268,6 +268,15 @@ def test_allowlists_name_tracked_files() -> None:
     assert not stale, "ALLOWLIST names files that are no longer tracked; remove them:\n" + "\n".join(stale)
 
 
+def test_owned_paths_exist() -> None:
+    """Each handle's `owns` entries in the messaging registry name tracked paths, so a move updates its owners' map."""
+    tracked = _tracked()
+    reg = json.loads((ROOT / ".agents/skills/using-slack/registry.json").read_text())
+    stale = sorted(f"@{h['handle']}: {p}" for h in reg["handles"] for p in h.get("owns", [])
+                   if not any(t == p or t.startswith(p if p.endswith("/") else p + "/") for t in tracked))
+    assert not stale, "registry `owns` entries that match no tracked path; update them:\n" + "\n".join(stale)
+
+
 def test_tracked_data_within_budget() -> None:
     total = 0
     for p in _tracked():
