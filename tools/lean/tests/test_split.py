@@ -133,7 +133,9 @@ def test_the_split_is_a_pure_move(tmp_path):
     root = checkout(tmp_path, mathlib=True)
     lock = (root / PKG / "lean-audit.json").read_text()
     pins_before = json.loads((root / S.LEAN_DEPS).read_text())["deps"]
-    notes = S.apply(S.plan(root / PKG, "p", [], root), root)
+    p = S.plan(root / PKG, "p", [], root)
+    S.describe(p)
+    notes = S.apply(p, root)
     dest = root / "security_proofs" / "p"
     status = subprocess.run(["git", "status", "--porcelain"], cwd=root, capture_output=True, text=True).stdout
     assert "R  protocols/p/lean/P/SecurityProofs/Lemma.lean -> security_proofs/p/P/SecurityProofs/Lemma.lean" in status
