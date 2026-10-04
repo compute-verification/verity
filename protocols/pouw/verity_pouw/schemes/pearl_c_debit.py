@@ -9,17 +9,22 @@
   - The later promotions are monotone in the total, so the totals after group g that they carry to the output form an
     interval. It is found backward by bisection over FP32 order (`Freeze.lean`'s certificates, `jointFlagsFast_eq`).
   - A word's flags read only its two rows over the full k, so a tile's openings are enough.
-* `chain_atoms(a_rows, b_rows)`: the flagged atoms summed over the tile's words (the chain debit is additive over words).
+* `word_debit(a, b)` is a word's flags and its later promotions into a +0 total, rev1's `laterZeroPromos`
+  (`DeviceRev1.lean`): the g ≥ 1 whose total after g groups is ±0, so that promotion g + 1 returns its group's word and a
+  program may skip it. The first promotion of every word adds into T_0 = +0; rev1 takes it out of the credit instead
+  (`pearl_c.PearlC.first_adds`).
+* `chain_debit(a_rows, b_rows)`: the flagged atoms and the later +0 promotions, each summed over the tile's words (the
+  chain debit is additive over words).
 * `forming_elements(...)`: **a stub that returns 0.** P3's per-tile rule is still being written: an A′ element is shared by
   every tile of its row band, and P3's owner is stating how a per-tile `needed` and the element's credit are apportioned.
   Until it is relayed, the replayed debit is the chain debit alone.
-* `debit_units(atoms, elements, prices, device)` is `debitDev` at a device's W1 prices (`pearl_c.Prices`, the device's
-  own by default), `debitOf` at
-  `Params.pi`, `Costs.adopted` on the H100: per flagged atom-word its 32 MACs and a quarter of a promotion add (40 on
-  the H100, 34 on sm_120), and fs per debited element (64 and 40).
+* `debit_units(atoms, elements, prices, device, zeros=…)` is rev1's `tileDebitRev1` at a device's W1 prices
+  (`pearl_c.Prices`, the device's own by default): `debitDev` (`debitOf` at `Params.pi`, `Costs.adopted` on the H100),
+  per flagged atom-word its 32 MACs and a quarter of a promotion add (40 on the H100, 34 on sm_120) and fs per debited
+  element (64 and 40), and an add per later +0 promotion (32 and 8).
 * The cap ρ is the device record's (`Device.cap`; `CAP` is the H100's 1/400, sm_120's is 1/1,000): a tile whose debit
-  exceeds ρ times its credited cells' credit, their share of the unit's `creditOf` (`pearl_c_work.tile_cap`), is rejected
-  (`capOK`, per tile: `Tile.lean`'s `tileShare`).
+  exceeds ρ times its credited cells' credit, their share of the unit's `creditDevRev1` (`pearl_c_work.tile_cap`), is
+  rejected (`pearlCTilesDevRev1`'s `capOK`, per tile: `Tile.lean`'s `tileShare`).
 
 Each takes the scheme's device (`pearl_c_device`, the H100 by default): its atom, G and prices.  The module constants are
 the H100's.
@@ -112,6 +117,12 @@ def _masked(atoms: Sequence[tuple[Sequence[int], Sequence[int]]], device: Device
 
 def word_flags(a: Sequence[int], b: Sequence[int], device: Device = H100) -> list[bool]:
     """`Skip.wordFlags k a b t` for t < k/32."""
+    return word_debit(a, b, device)[0]
+
+
+def word_debit(a: Sequence[int], b: Sequence[int], device: Device = H100) -> tuple[list[bool], int]:
+    """A word's flags (`word_flags`) and its later promotions into a +0 total, rev1's `laterZeroPromos`: the g in
+    [1, k/(32·G)) whose total after g groups is ±0, so that promotion g + 1 returns its group's word."""
     g_, atom = _promoted(device), device.atom.k
     if len(a) != len(b) or len(a) % (g_ * atom):
         raise P.Reject("a word's rows are whole promotion groups")
@@ -132,12 +143,19 @@ def word_flags(a: Sequence[int], b: Sequence[int], device: Device = H100) -> lis
         lo, hi = bounds[g]
         keeps = [mask for mask, w in masked.items() if mask and lo <= _key(_promote(totals[g], w)) <= hi]
         flags.extend(any(mask >> j & 1 for mask in keeps) for j in range(g_))
-    return flags
+    return flags, sum(1 for t in totals[1:-1] if t == 0)
 
 
-def chain_atoms(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]], device: Device = H100) -> int:
-    """The flagged atoms over every word (a_row, b_row) of a tile: `Skip.chainDebit`'s count, additive over words."""
-    return sum(sum(word_flags(a, b, device)) for a in a_rows for b in b_rows)
+def chain_debit(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]], device: Device = H100
+                ) -> tuple[int, int]:
+    """(atoms, zeros) over every word (a_row, b_row) of a tile, both additive over words: the flagged atoms
+    (`Skip.chainDebit`'s count) and the later promotions into a +0 total (`laterZeroPromos`)."""
+    atoms = zeros = 0
+    for a in a_rows:
+        for b in b_rows:
+            flags, z = word_debit(a, b, device)
+            atoms, zeros = atoms + sum(flags), zeros + z
+    return atoms, zeros
 
 
 def forming_elements(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]]) -> int:
@@ -145,7 +163,10 @@ def forming_elements(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[
     return 0
 
 
-def debit_units(atoms: int, elements: int, prices: Prices | None = None, device: Device = H100) -> Fraction:
-    """`debitDev` at a device's prices (`debitOf Params.pi Costs.adopted` at the H100's): per flagged atom-word its 32 MACs
-    and 1/G of a promotion add, and fs per debited element; `prices` the device's own by default."""
-    return atom_units(device, prices) * atoms + (prices or device.prices).forming_credited * elements
+def debit_units(atoms: int, elements: int, prices: Prices | None = None, device: Device = H100, *, zeros: int
+                ) -> Fraction:
+    """rev1's debit at a device's prices (`tileDebitRev1`): `debitDev` (`debitOf Params.pi Costs.adopted` at the H100's),
+    per flagged atom-word its 32 MACs and 1/G of a promotion add and fs per debited element, and an add per later
+    promotion into a +0 total; `prices` the device's own by default."""
+    p = prices or device.prices
+    return atom_units(device, prices) * atoms + p.forming_credited * elements + p.fadd * zeros

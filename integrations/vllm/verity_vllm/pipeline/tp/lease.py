@@ -177,14 +177,17 @@ def release(llm: Any, rpc_timeout: float, after: str, *, wait: Callable[[float],
     return True
 
 
-def finalize(llm: Any, rpc_timeout: float, after: str, *, last: bool, wait: Callable[[float], Any] = time.sleep) -> list[dict[str, Any]]:
+def finalize(llm: Any, rpc_timeout: float, after: str, *, last: bool, wait: Callable[[float], Any] = time.sleep,
+             defer: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """The ranks' finalize of instrumented run ``after`` (`TP2CaptureWorkerExtension.tp2_commit_finalize`).  Under a lease, when it is
-    the Commit's last device work (``last``), every rank's root is fixed first, then the GPUs go back (``release``), then the checks."""
+    the Commit's last device work (``last``), every rank's root is fixed first, then the GPUs go back (``release``), then the checks.
+    ``defer`` ({"out", "pair"}): the ranks write their replay bundles with the checks, in place of their sampled replay."""
+    kw = {"defer": defer} if defer else None
     if not (last and GL._HELD):
-        return llm.collective_rpc("tp2_commit_finalize", timeout=rpc_timeout)
+        return llm.collective_rpc("tp2_commit_finalize", timeout=rpc_timeout, **({"kwargs": kw} if kw else {}))
     llm.collective_rpc("tp2_commit_finalize", timeout=rpc_timeout, kwargs={"checks": False})
     release(llm, rpc_timeout, after, wait=wait)
-    return llm.collective_rpc("tp2_commit_finalize", timeout=rpc_timeout)
+    return llm.collective_rpc("tp2_commit_finalize", timeout=rpc_timeout, **({"kwargs": kw} if kw else {}))
 
 
 def reset(llm: Any, rpc_timeout: float) -> None:
