@@ -6,20 +6,21 @@ The spec is what the lock trusts: the modules under `<root>.Protocol`, `<root>.A
 module the lock's `reads` names, and the modules `--keep` names (a spec module under a proof's name, such as a module a
 grader trusts), with the package's tools that import only those (its exempt modules and its other libraries). Everything
 else is the proofs, umbrella roots included, and moves to a new Lake package `security_proofs/NAME/` that requires the spec
-package by path, with the same toolchain and the same Mathlib. Module names are kept, so the lock's `guarantees` and `reads`
-stay byte for byte; only its package-level sections (`roots`, and the `exempt`, `runs`, `layers` and `upstream` entries about
-moved modules) are divided between the two packages.
+package by path, with the same toolchain and the same Mathlib. A proof module whose root namespace is also a spec module's
+moves under a root of its own (`P.SecurityProofs.X` becomes the module `PProofs.SecurityProofs.X`), since Lean's search path
+gives every module under a root to the first package holding it; declarations keep their names, so the lock's `guarantees`
+and `reads` stay byte for byte. Only its package-level sections are divided between the two packages: `roots`, `proved_in`
+(the spec's lock names the new package), and the `exempt`, `runs`, `layers` and `upstream` entries about moved modules,
+under their new names.
 
 It refuses, printing the edges, when a spec module imports a proof module: either the import goes, or the imported module is
 the spec's too (`--keep`). Without `--apply` it prints the plan and changes nothing. With `--apply` it `git mv`s the proofs,
 writes the new package's `lakefile.toml`, `lake-manifest.json`, `lean-toolchain` and `lean-audit.json`, gives the spec
 package its roots, gives every package that requires the spec and imports a moved module a require of the new package,
+rewrites every Lean file's imports of a renamed module and every other lock's `layers` that let a module import one,
 re-keys `tools/lean/lean-deps.json` for each manifest it changes (the bundles stay the same: only path dependencies differ),
 rewrites the repository-relative paths of the moved files wherever a tracked file names them, and lists the mentions it
 could not rewrite (a path built from parts, prose) for a person to read.
-
-Until the audit validates a spec's lock against the package that proves its theorems, the spec package's own audit reports
-its guarantees missing; `audit.py` on the proofs package with the spec's lock checks every record (`--check-lock` here prints how).
 """
 from __future__ import annotations
 
@@ -132,6 +133,11 @@ def plan(pkg: Path, area: str, keep: list[str], root: Path = ROOT) -> dict:
     proofs = sorted(set(files) - spec_side)
     if not proofs:
         raise Refused(f"{pkg} has no proofs to move")
+    spec_tops = {m.split(".")[0] for m in spec_side}
+    rename = {m: proof_name(m, spec_tops) for m in proofs if proof_name(m, spec_tops) != m}
+    taken = set(files) | {m for _, d in path_requires(pkg) for m in A.lean_modules(d)}
+    if clash := sorted({n.split(".")[0] for n in rename.values()} & {m.split(".")[0] for m in taken}):
+        raise Refused(f"the proofs' root {', '.join(clash)} is already a root of {pkg} or of a package it requires")
     tops = sorted(m for m in seed if not any(p != m and A.under([p], m) for p in seed))
     reach, todo = set(), deque(tops)
     while todo:
@@ -147,14 +153,16 @@ def plan(pkg: Path, area: str, keep: list[str], root: Path = ROOT) -> dict:
     def side(mods: list[str]) -> set[str]:
         return {"spec" if m in spec_side else "proofs" for m in mods}
 
-    lock_spec, lock_proofs = dict(policy), {"roots": roots}
+    proof_roots = [rename.get(r, r) for r in roots]
+    lock_spec, lock_proofs = dict(policy), {"roots": proof_roots}
     lock_spec["roots"] = spec_roots
+    lock_spec["proved_in"] = [rel(pkg, dest)]
     for key in ("exempt", "runs", "compile_time"):
         mine, theirs = {}, {}
         for k, v in policy.get(key, {}).items():
             s = side([m for m in files if A.under([k], m)] or [k])
             (mine if "spec" in s else {})[k] = v
-            (theirs if "proofs" in s else {})[k] = v
+            (theirs if "proofs" in s else {})[proof_name(k, spec_tops)] = v
         if key in policy:
             if mine:
                 lock_spec[key] = mine
@@ -168,7 +176,12 @@ def plan(pkg: Path, area: str, keep: list[str], root: Path = ROOT) -> dict:
     layers_spec, layers_proofs = {}, {}
     for k, v in policy.get("layers", {}).items():
         inside = [m for m in files if A.under([k], m)]
-        (layers_spec if not inside or set(inside) & spec_side else layers_proofs)[k] = v
+        if not inside or set(inside) & spec_side:
+            layers_spec[k] = v
+        if set(inside) - spec_side:
+            layers_proofs[proof_name(k, spec_tops)] = v | {
+                "imports": renamed_prefixes(v.get("imports", []), proofs, spec_side, spec_tops),
+                "except": [rename.get(m, m) for m in v.get("except", [])]}
     if "layers" in policy:
         lock_spec["layers"] = layers_spec
         if layers_proofs:
@@ -193,7 +206,8 @@ def plan(pkg: Path, area: str, keep: list[str], root: Path = ROOT) -> dict:
                     if not a.startswith("{") and (pkg / a).is_file()})
     tracked = git_files(root)
     pkg_rel = pkg.relative_to(root).as_posix()
-    moves = {f"{pkg_rel}/{files[m]}": f"{dest.relative_to(root).as_posix()}/{files[m]}" for m in proofs}
+    moves = {f"{pkg_rel}/{files[m]}": f"{dest.relative_to(root).as_posix()}/"
+             + ("/".join(rename[m].split(".")) + ".lean" if m in rename else files[m]) for m in proofs}
     moves |= {f"{pkg_rel}/{e}": f"{dest.relative_to(root).as_posix()}/{e}" for e in extra}
     moves = {a: b for a, b in sorted(moves.items()) if a in tracked}
 
@@ -211,13 +225,33 @@ def plan(pkg: Path, area: str, keep: list[str], root: Path = ROOT) -> dict:
         uses = sorted({i for f in A.lean_modules(d).values() for i in imports(d / f) if i in set(proofs)})
         if uses:
             dependents.append({"package": d.resolve().relative_to(root).as_posix(), "imports": uses})
+    main_lib = main_libs[0]["name"] if main_libs else roots[0]
     return {"package": pkg_rel, "area": area, "dest": dest.relative_to(root).as_posix(),
             "name": f"security_proofs_{area}", "spec": sorted(spec_side), "seed": sorted(seed), "proofs": proofs,
-            "keep": sorted(keep), "spec_roots": spec_roots, "proof_roots": roots, "moves": moves,
-            "main_lib": main_libs[0]["name"] if main_libs else roots[0],
-            "globs": globs([m for m in proofs if any(A.under([r], m) for r in roots)], set(files)),
-            "spec_requires": spec_needs, "proofs_requires": proofs_needs, "dependents": dependents,
-            "lock_spec": lock_spec, "lock_proofs": lock_proofs}
+            "keep": sorted(keep), "spec_roots": spec_roots, "proof_roots": proof_roots, "rename": rename, "moves": moves,
+            "main_lib": main_lib, "proofs_lib": proof_name(main_lib, spec_tops | {main_lib}),
+            "spec_tops": sorted(spec_tops), "spec_requires": spec_needs, "proofs_requires": proofs_needs,
+            "dependents": dependents, "lock_spec": lock_spec, "lock_proofs": lock_proofs}
+
+
+def proof_name(m: str, tops: set[str]) -> str:
+    """A proof module's name in the proofs package: under a root namespace of its own (`P.SecurityProofs.X` as
+    `PProofs.SecurityProofs.X`) when its root is also a root of the spec's modules, since Lean's search path gives every
+    module under a root to the first package holding it. Its declarations keep their names."""
+    r, dot, rest = m.partition(".")
+    return f"{r}Proofs{dot}{rest}" if r in tops else m
+
+
+def renamed_prefixes(prefixes: list[str], proofs, spec_side, tops: set[str]) -> list[str]:
+    """A layer's `imports` for the modules after a split: a prefix that names proof modules also under their new root; one
+    that names spec modules, or no module of the package, as it is."""
+    out = []
+    for p in prefixes:
+        if any(A.under([p], m) for m in spec_side) or not any(A.under([p], m) for m in proofs):
+            out.append(p)
+        if any(A.under([p], m) for m in proofs) and proof_name(p, tops) not in out:
+            out.append(proof_name(p, tops))
+    return out
 
 
 def git_files(root: Path) -> set[str]:
@@ -251,7 +285,7 @@ def spec_lakefile(text: str, p: dict) -> str:
 def proofs_lakefile(spec_pkg: Path, dest: Path, p: dict) -> str:
     text = (spec_pkg / "lakefile.toml").read_text()
     cfg = tomllib.loads(text)
-    head = [f'name = "{p["name"]}"', f'defaultTargets = {json.dumps(p["proof_roots"])}', ""]
+    head = [f'name = "{p["name"]}"', f'defaultTargets = {json.dumps([p["proofs_lib"]])}', ""]
     if opts := re.search(r"(?ms)^\[leanOptions\]\n.*?(?=^\[|\Z)", text):
         head.append(opts.group(0).rstrip() + "\n")
     reqs = [b.rstrip() + "\n" for t, b, c in blocks(text) if t == "require" and "path" not in c]
@@ -260,21 +294,8 @@ def proofs_lakefile(spec_pkg: Path, dest: Path, p: dict) -> str:
         if name in p["proofs_requires"] and name not in p["spec_requires"]:
             reqs.append(f'[[require]]\nname = "{name}"\npath = "{rel(dest, d)}"\n')
     libs = (f'# The proofs of `{p["package"]}`\'s guarantees and every lemma behind them, untrusted: the spec\'s lock says what '
-            f'they prove. Named by\n# globs, not roots: a root is a prefix of the spec\'s module names, and Lake would look '
-            f'for those modules here too.\n[[lean_lib]]\nname = "{p["main_lib"]}"\nroots = []\nglobs = {json.dumps(p["globs"])}\n')
+            f'they prove.\n[[lean_lib]]\nname = "{p["proofs_lib"]}"\nroots = {json.dumps(p["proof_roots"])}\n')
     return "\n".join(head) + "\n" + "\n".join(reqs) + "\n" + libs
-
-
-def globs(proofs: list[str], files: set[str]) -> list[str]:
-    """The fewest Lake globs that name exactly the proof modules of a library: a module whose descendants are all proofs as
-    `M.*` (it and its submodules), any other as itself."""
-    out = []
-    for m in sorted(proofs):
-        if any(g.endswith(".*") and A.under([g[:-2]], m) for g in out):
-            continue
-        below = [f for f in files if f != m and A.under([m], f)]
-        out.append(f"{m}.*" if below and all(f in proofs for f in below) else m)
-    return out
 
 
 def entry(name: str, d: str, inherited: bool) -> dict:
@@ -389,6 +410,8 @@ def apply(p: dict, root: Path = ROOT) -> list[str]:
             notes += rekey(pins, old_keys[dep], deps_key(dep), d["package"], keep_old=False)
         doc["deps"] = dict(sorted(pins.items()))
         write_json(pins_path, doc)
+    notes += rewrite_imports(p, root)
+    notes += relayer(p, root)
     notes += rewrite_paths(p, root)
     notes += stale_hashes(pkg, root)
     rewritten = [n.split()[1] for n in notes if n.startswith("rewrote: ")]
@@ -397,14 +420,57 @@ def apply(p: dict, root: Path = ROOT) -> list[str]:
     return notes
 
 
+def rewrite_imports(p: dict, root: Path) -> list[str]:
+    """Every tracked Lean file's imports of a renamed proof module, under its new name (the header only)."""
+    if not p["rename"]:
+        return []
+    notes = []
+    for f in sorted(git_files(root)):
+        path = root / f
+        if not f.endswith(".lean") or not path.is_file():
+            continue
+        lines, count = path.read_text().split("\n"), 0
+        code = A.strip_comments("\n".join(lines)).split("\n")
+        for i, s in enumerate(code):
+            s = s.strip()
+            if not s or s in ("module", "prelude"):
+                continue
+            if not IMPORT.match(s):
+                break
+            new = re.sub(r"(?<![\w.'])([\w.'\u0080-\uffff]+)", lambda m: p["rename"].get(m.group(1), m.group(1)), lines[i])
+            count += new != lines[i]
+            lines[i] = new
+        if count:
+            path.write_text("\n".join(lines))
+            notes.append(f"rewrote: {f} ({count} import(s))")
+    return notes
+
+
+def relayer(p: dict, root: Path) -> list[str]:
+    """Each other lock's `layers` that let a module import the moved proofs, also under their new root."""
+    pkg, dest = (root / p["package"]).resolve(), (root / p["dest"]).resolve()
+    spec, proofs, tops = set(p["spec"]), set(p["proofs"]), set(p["spec_tops"])
+    notes = []
+    for d in lake_packages(root):
+        if d.resolve() in (pkg, dest) or not (d / A.POLICY).is_file():
+            continue
+        policy = json.loads((d / A.POLICY).read_text())
+        layers = {k: v | {"imports": renamed_prefixes(v.get("imports", []), proofs, spec, tops)}
+                  for k, v in policy.get("layers", {}).items()}
+        if layers != policy.get("layers", {}):
+            A.dump(d, policy | {"layers": layers})
+            notes.append(f"rewrote: {(d / A.POLICY).relative_to(root).as_posix()} (layers that import the moved proofs)")
+    return notes
+
+
 def moved_dirs(p: dict, tracked: set[str]) -> dict[str, str]:
     """{directory: its new path} for each directory under the package all of whose tracked files move."""
     out = {}
-    for a in p["moves"]:
+    for a, b in p["moves"].items():
         d = a.rsplit("/", 1)[0]
         while d != p["package"] and d.startswith(p["package"] + "/"):
             if all(f in p["moves"] for f in tracked if f.startswith(d + "/")):
-                out[d] = p["dest"] + d[len(p["package"]):]
+                out[d] = b[:len(b) - len(a) + len(d)]
             d = d.rsplit("/", 1)[0]
     return out
 
@@ -477,18 +543,13 @@ def stale_hashes(pkg: Path, root: Path) -> list[str]:
     return out
 
 
-def check_lock_recipe(p: dict) -> str:
-    return (f"cp {p['package']}/lean-audit.json $TMP/spec.json && python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); "
-            f"d[\"roots\"]={json.dumps(p['proof_roots'])}; ...' (the spec's lock with the proofs' roots) > "
-            f"{p['dest']}/lean-audit.json && python tools/lean/audit.py --build {p['dest']}")
-
-
 def describe(p: dict) -> str:
     lines = [f"split {p['package']} -> spec (stays) + {p['dest']} (package {p['name']})",
              f"  spec: {len(p['spec'])} modules ({len(p['seed'])} the lock trusts, {len(p['spec']) - len(p['seed'])} tools "
              f"that import only them){'; kept under proof names: ' + ', '.join(p['keep']) if p['keep'] else ''}",
              f"  spec roots: {', '.join(p['spec_roots'])}",
-             f"  proofs: {len(p['proofs'])} modules, roots {', '.join(p['proof_roots'])}; {len(p['moves'])} files move",
+             f"  proofs: {len(p['proofs'])} modules, roots {', '.join(p['proof_roots'])}, library {p['proofs_lib']}; "
+             f"{len(p['rename'])} renamed under their own root; {len(p['moves'])} files move",
              f"  requires: spec {p['spec_requires'] or '(no path packages)'}; proofs: "
              + ", ".join(["the spec", *(r for r in p["proofs_requires"] if r not in p["spec_requires"])]),
              f"  lock: guarantees {len(p['lock_spec'].get('guarantees', p['lock_spec'].get('pins', {})))} and reads {len(p['lock_spec'].get('reads', {}))} stay byte for "

@@ -308,15 +308,14 @@ instead of asserting a status.
 their own, `security_proofs/NAME/`, that requires the spec by path. The spec is what the lock trusts: the modules under the
 roots' `Protocol`, `Assumptions` and `Guarantees`, the modules `reads` names, any `--keep` names (a spec module under a
 proof's name, kept with its name), and the package's tools that import only those. It refuses when a spec module imports a
-proof module, and prints the edges. Module names are kept, so `guarantees` and `reads` stay byte for byte; `roots` and the
-`exempt`, `runs`, `layers` and `upstream` entries about moved modules go to the new package's `lean-audit.json`. Without
-`--apply` it prints the plan. With it, it also gives every package that imports a moved module a require of the new one,
-re-keys `tools/lean/lean-deps.json` to the same bundles, rewrites the moved files' repository paths, and lists the mentions
-it can't rewrite.
-
-The two packages share a root namespace, which Lake builds but Lean's search path does not resolve: a module goes to the
-first `LEAN_PATH` directory holding its root (`Verity/`), so `lake env lean FILE` in the proofs package fails on a spec
-import, and so would the audit's `Facts.lean` and `Replay.lean`. Use `lake lean FILE` there, which passes Lake's import map.
+proof module, and prints the edges. The proofs move under a root of their own (`Verity.SecurityProofs.X` becomes the module
+`VerityProofs.SecurityProofs.X`, `Verity` the umbrella `VerityProofs`), as `proved_in` requires; declarations keep their
+names, so `guarantees` and `reads` stay byte for byte. The spec's lock gains `proved_in`, and `roots` and the `exempt`,
+`runs`, `layers` and `upstream` entries about moved modules go to the new package's `lean-audit.json` under the new names.
+Without `--apply` it prints the plan. With it, it also gives every package that imports a moved module a require of the new
+one, rewrites every Lean file's imports of a renamed module and other locks' `layers` that allowed them, re-keys
+`tools/lean/lean-deps.json` to the same bundles, rewrites the moved files' repository paths, and lists the mentions it can't
+rewrite.
 
 ## The build cache: `cache.py`
 

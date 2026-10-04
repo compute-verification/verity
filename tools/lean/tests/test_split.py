@@ -1,6 +1,7 @@
 """`tools/lean/split.py`: a package's spec and its proofs computed from its sources and lock, a spec that imports a proof
 refused, and the split carried out as a pure move on a fixture checkout (the lock's guarantees and reads byte for byte, the
-proofs package requiring the spec by path, a dependent requiring the proofs, `lean-deps.json` re-keyed to the same bundles);
+proofs under a root of their own and the spec's lock naming them in `proved_in`, the proofs package requiring the spec by
+path, a dependent requiring the proofs and importing them by their new names, `lean-deps.json` re-keyed to the same bundles);
 then built with Lake and audited when `lake` is on the PATH."""
 from __future__ import annotations
 
@@ -107,9 +108,25 @@ def test_the_partition(tmp_path):
     assert p["spec_roots"] == ["P.Guarantees", "P.Protocol"]
     assert p["dest"] == "security_proofs/p"
     assert p["dependents"] == [{"package": DEPENDENT, "imports": ["P.SecurityProofs.Lemma"]}]
+    assert p["rename"] == {"P": "PProofs", "P.SecurityProofs": "PProofs.SecurityProofs",
+                           "P.SecurityProofs.Lemma": "PProofs.SecurityProofs.Lemma"}
+    assert p["proof_roots"] == ["PProofs"] and p["proofs_lib"] == "PProofs"
     assert p["lock_spec"]["guarantees"] == A.load(root / PKG)["guarantees"]
+    assert p["lock_spec"]["proved_in"] == ["../../../security_proofs/p"]
     assert "exempt" not in p["lock_spec"] and p["lock_proofs"]["exempt"] == {"CheckAxioms": "the axioms list"}
-    assert list(p["lock_spec"]["layers"]) == ["P.Protocol"] and list(p["lock_proofs"]["layers"]) == ["P.SecurityProofs.Lemma"]
+    assert list(p["lock_spec"]["layers"]) == ["P.Protocol"] and list(p["lock_proofs"]["layers"]) == ["PProofs.SecurityProofs.Lemma"]
+
+
+def test_a_layer_that_allows_proofs_allows_them_under_their_new_root():
+    spec, proofs = {"P.Protocol", "P.Guarantees"}, {"P", "P.SecurityProofs", "P.SecurityProofs.Lemma"}
+    assert S.renamed_prefixes(["Mathlib", "P.Protocol", "P.SecurityProofs", "P", "Q"], proofs, spec, {"P"}) == \
+        ["Mathlib", "P.Protocol", "PProofs.SecurityProofs", "P", "PProofs", "Q"]
+
+
+def test_a_proofs_root_already_taken_is_refused(tmp_path):
+    root = checkout(tmp_path, extra={"PProofs.lean": "import P.Protocol\n"})
+    with pytest.raises(S.Refused, match="the proofs' root PProofs is already a root"):
+        S.plan(root / PKG, "p", [], root)
 
 
 def test_a_spec_that_imports_a_proof_is_refused(tmp_path):
@@ -125,7 +142,7 @@ def test_a_spec_that_imports_a_proof_is_refused(tmp_path):
 def test_the_dry_run_changes_nothing(tmp_path, capsys):
     root = checkout(tmp_path)
     assert S.main([str(root / PKG), "--area", "p", "--root", str(root)]) == 0
-    assert "mv protocols/p/lean/P/SecurityProofs/Lemma.lean -> security_proofs/p/P/SecurityProofs/Lemma.lean" in capsys.readouterr().out
+    assert "mv protocols/p/lean/P/SecurityProofs/Lemma.lean -> security_proofs/p/PProofs/SecurityProofs/Lemma.lean" in capsys.readouterr().out
     assert subprocess.run(["git", "status", "--porcelain"], cwd=root, capture_output=True, text=True).stdout == ""
 
 
@@ -138,25 +155,29 @@ def test_the_split_is_a_pure_move(tmp_path):
     notes = S.apply(p, root)
     dest = root / "security_proofs" / "p"
     status = subprocess.run(["git", "status", "--porcelain"], cwd=root, capture_output=True, text=True).stdout
-    assert "R  protocols/p/lean/P/SecurityProofs/Lemma.lean -> security_proofs/p/P/SecurityProofs/Lemma.lean" in status
-    assert (dest / "P.lean").exists() and not (root / PKG / "P.lean").exists()
+    assert "protocols/p/lean/P/SecurityProofs/Lemma.lean -> security_proofs/p/PProofs/SecurityProofs/Lemma.lean" in status
+    assert (dest / "PProofs.lean").exists() and not (root / PKG / "P.lean").exists()
+    assert (dest / "PProofs.lean").read_text() == "import P.Protocol\nimport P.Guarantees\nimport PProofs.SecurityProofs\n"
+    assert (dest / "CheckAxioms.lean").read_text() == "import PProofs\n#print axioms P.SecurityProofs.t\n"
+    assert (root / DEPENDENT / "Q.lean").read_text().startswith("import PProofs.SecurityProofs.Lemma\nimport P.Guarantees\n")
     assert (dest / "lean-toolchain").read_text() == TOOLCHAIN
     new_spec = json.loads((root / PKG / "lean-audit.json").read_text())
     old = json.loads(lock)
     assert new_spec["roots"] == ["P.Guarantees", "P.Protocol"]
-    assert {k: v for k, v in new_spec.items() if k not in ("roots", "exempt", "layers")} == \
+    assert new_spec["proved_in"] == ["../../../security_proofs/p"]
+    assert {k: v for k, v in new_spec.items() if k not in ("roots", "proved_in", "exempt", "layers")} == \
         {k: v for k, v in old.items() if k not in ("roots", "exempt", "layers")}
     assert json.dumps(new_spec["guarantees"]) == json.dumps(old["guarantees"])
     assert (root / PKG / "lean-audit.json").read_text() == A.text(new_spec) and '"pins": ["P.SecurityProofs.t"]' in lock
     cfg = tomllib.loads((dest / "lakefile.toml").read_text())
     assert [(r["name"], r.get("path"), r.get("rev")) for r in cfg["require"]] == \
         [("mathlib", None, FETCHED["rev"]), ("p", "../../protocols/p/lean", None)]
-    assert cfg["leanOptions"] == {"autoImplicit": False} and cfg["lean_lib"] == [{"name": "P", "roots": [], "globs": ["P", "P.SecurityProofs.*"]}]
+    assert cfg["leanOptions"] == {"autoImplicit": False} and cfg["lean_lib"] == [{"name": "PProofs", "roots": ["PProofs"]}]
     assert tomllib.loads((root / PKG / "lakefile.toml").read_text())["lean_lib"] == [{"name": "P", "roots": ["P.Guarantees", "P.Protocol"]}]
     m = json.loads((dest / "lake-manifest.json").read_text())
     assert m["name"] == "security_proofs_p" and [e["name"] for e in m["packages"]] == ["p", "mathlib"]
-    assert A.load(dest) == {"roots": ["P"], "exempt": {"CheckAxioms": "the axioms list"},
-                            "layers": {"P.SecurityProofs.Lemma": old["layers"]["P.SecurityProofs.Lemma"]}, "guarantees": {}}
+    assert A.load(dest) == {"roots": ["PProofs"], "exempt": {"CheckAxioms": "the axioms list"},
+                            "layers": {"PProofs.SecurityProofs.Lemma": old["layers"]["P.SecurityProofs.Lemma"]}, "guarantees": {}}
     assert (root / DEPENDENT / "lakefile.toml").read_text().endswith(
         'path = "../../p/lean"\n\n[[require]]\nname = "security_proofs_p"\npath = "../../../security_proofs/p"\n\n'
         '# Q\'s library.\n[[lean_lib]]\nname = "Q"\n')
@@ -170,11 +191,11 @@ def test_the_split_is_a_pure_move(tmp_path):
     assert pins[S.deps_key(dest)] == pins_before[S.deps_key(root / PKG)] | {"package": "security_proofs/p"}
     assert pins[S.deps_key(root / DEPENDENT)]["sha256"] == "b" * 64 and len(pins) == 3
     readme = (root / "README.md").read_text()
-    assert "`security_proofs/p/P/SecurityProofs/Lemma.lean`" in readme and "`security_proofs/p/P/SecurityProofs/`" in readme
+    assert "`security_proofs/p/PProofs/SecurityProofs/Lemma.lean`" in readme and "`security_proofs/p/PProofs/SecurityProofs/`" in readme
     assert (root / "protocols" / "p" / "PROTOCOL.md").read_text() == \
-        "Proved in `security_proofs/p/P/SecurityProofs/Lemma.lean`, not `lean/P/Protocol.lean`.\n"
+        "Proved in `security_proofs/p/PProofs/SecurityProofs/Lemma.lean`, not `lean/P/Protocol.lean`.\n"
     assert (root / "protocols" / "p" / "py" / "m.py").read_text() == \
-        '"""Proved in `security_proofs/p/P/SecurityProofs/` and `security_proofs/p/P/SecurityProofs.lean`."""\n'
+        '"""Proved in `security_proofs/p/PProofs/SecurityProofs/` and `security_proofs/p/PProofs/SecurityProofs.lean`."""\n'
     assert (root / PKG / "README.md").read_text().endswith("\nP/SecurityProofs/Lemma.lean   the lemma\n")
     assert [n for n in notes if n.startswith("read: ")] == [
         f"read: {PKG}/README.md:2: P/SecurityProofs/Lemma.lean   the lemma",
@@ -226,10 +247,9 @@ def test_deps_key_is_lean_audit_s(tmp_path):
 @pytest.mark.slow
 @pytest.mark.skipif(LAKE is None, reason="needs lake")
 def test_the_split_builds(tmp_path):
-    """What only Lake shows: the spec, the proofs and a dependent build after the split, the proofs' library (globs, not a
-    root that is a prefix of the spec's module names) finds the spec's modules in the other package, Lake keeps the
-    manifests the split wrote, and `lake lean` elaborates a proof file. (`lake env lean` does not: Lean's search path gives
-    every module under a root namespace to the first directory holding that root, and both packages hold `P/`.)"""
+    """What only Lake shows: the spec, the proofs and a dependent build after the split, the proofs under their own root
+    find the spec's modules in the other package, Lake keeps the manifests the split wrote, and `lake env lean` (the
+    search path `Facts.lean` and `Replay.lean` read with) elaborates a proof file that imports spec and proof modules."""
     root = checkout(tmp_path)
     env = A.lake_env()
     S.apply(S.plan(root / PKG, "p", [], root), root)
@@ -238,5 +258,5 @@ def test_the_split_builds(tmp_path):
         r = subprocess.run([LAKE, "build"], cwd=d, env=env, capture_output=True, text=True)
         assert r.returncode == 0, r.stdout + r.stderr
     assert subprocess.run(["git", "diff", "--stat"], cwd=root, capture_output=True, text=True).stdout == ""
-    r = subprocess.run([LAKE, "lean", "P/SecurityProofs.lean"], cwd=dest, env=env, capture_output=True, text=True)
+    r = subprocess.run([LAKE, "env", "lean", "PProofs.lean"], cwd=dest, env=env, capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
