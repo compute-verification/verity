@@ -1,6 +1,6 @@
 """`research` command line.
 
-  research run [--project P] [--stage S] [--timeout T] [--expect K=V ...] [--require-result] [--runs-dir D] [harness flags] -- CMD...
+  research run [--project P] [--stage S] [--timeout T] [--expect K=V ...] [--require-result] [--run-record] [--runs-dir D] [harness flags] -- CMD...
   research run [--tool NAME|module:NAME] [--scratch NAME ...] [--campaign C] [...] -- CMD...   # evidence store: derivation before, attempt after
   research run --local-only REASON [...] -- CMD...   # where the store has no usable remote a local run refuses (exit 3): REASON says
                                                  # what preserves its records instead (default $RESEARCH_LOCAL_ONLY; job.json records it)
@@ -192,6 +192,9 @@ def cmd_run(argv: list[str]) -> int:
                     help="with --on: no run custody on the remote; the records stay on the machine until `research fetch --all`")
     ap.add_argument("--custody-ttl", default=None, metavar="TTL", help="with --custody-r2: the minted key's lifetime (default 6h, at most 24h; it must outlast "
                                                                        "the run and its upload: a --timeout over 6h needs it)")
+    ap.add_argument("--run-record", action="store_true",
+                    help="a local run: the attempt also carries every run file (logs included; what custody keeps) as its run record, as an "
+                         "--on run's custody does: for a pod whose run dir nothing else preserves (store.custody)")
     ap.add_argument("--expect", action="append", default=[], metavar="K=V", help="expected workload fingerprint entry (recorded separately from what the workload observes)")
     ap.add_argument("--require-result", action="store_true", help="a zero exit without a valid result.json exits 65")
     ap.add_argument("--stage", default="run", help="stage name recorded in the job (default: run)")
@@ -211,6 +214,10 @@ def cmd_run(argv: list[str]) -> int:
     if ns.claimed:
         _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
+    if ns.run_record and (ns.on or ns.queue):
+        print("research run: --run-record is for a local run; --on MACHINE and --queue keep every run file through their custody "
+              "(--custody-r2, the default there)", file=sys.stderr)
+        return 2
     if ns.queue:
         try:
             harness_opts = _normalize_timeout(harness_opts)
@@ -354,7 +361,7 @@ def cmd_run(argv: list[str]) -> int:
 
             release(mem_reservation, run_id)
     if not ns.custody_dir:
-        _publish_attempt(run_dir, prep)
+        _publish_attempt(run_dir, prep, run_record=ns.run_record)
     s = R.summarize(run_dir)
     line = f"research: run {run_id} {s['state']} rc={s['rc']} class={s['class'] or '-'} result={s['result']}"
     if s["result"] == "absent":
@@ -598,14 +605,14 @@ def _no_usable_remote() -> str | None:
         return f"{type(e).__name__}: {e}"
 
 
-def _publish_attempt(run_dir: Path, prep: dict) -> None:
+def _publish_attempt(run_dir: Path, prep: dict, *, run_record: bool = False) -> None:
     from . import env as E
     from .store import attempt as A
 
     conds = prep.get("conditions")
     if conds is not None:
         conds["exec.load_end"] = E.load_now()
-    out = A.publish(run_dir, tool=prep.get("tool"), conditions=conds)
+    out = A.publish(run_dir, tool=prep.get("tool"), conditions=conds, run_record=run_record)
     if out.get("published"):
         if out.get("already"):
             pres = "  (already in the store)"
@@ -1048,6 +1055,9 @@ def main(argv: list[str] | None = None) -> int:
 
         print(__version__)
         return 0
+    from .secret_hint import recover
+
+    recover()
     cmd, rest = argv[0], argv[1:]
     if cmd == "run":
         return cmd_run(rest)
