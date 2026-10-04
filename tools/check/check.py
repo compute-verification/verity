@@ -32,7 +32,8 @@ The steps stay in this process's group, which a runner's timeout and a manual st
 appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run.
 
 Then the independent groups run at once, the cores split between the first two (`--cores N`, default the CPUs this process may
-use):
+use). Which group a step is in, its order there, and whether its failure halts the run come from `tools/check/ci.toml`
+(`declaration.py`); this file builds each step's command, and refuses one the declaration doesn't name:
 
     pytest          every test suite (`tools/check/suites.py`) but those that use Lean, half the cores' worth at once: each
                     package's tests in their own process, a pass reused while its inputs are unchanged; each suite's log and the
@@ -148,6 +149,11 @@ def _load(name: str):
     sys.modules[spec.name] = m                       # dataclasses resolve their module by name
     spec.loader.exec_module(m)
     return m
+
+
+DECLARATION = _load("declaration")
+#: the jobs `tools/check/ci.toml` declares: their groups, order within a group, and what halts the run (`groups`, `HALTS`)
+JOBS = DECLARATION.load()
 
 
 #: the verdict packs (`verdicts.py`)
@@ -546,14 +552,23 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None) -> l
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
     build = ["bash", str(ROOT / "backends" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
-    gs = [[("pytest", pytest, ROOT)], [("flock-circuit-build", build, ROOT), ("circuit-check", cc, ROOT), ("flock-rust-tests", rust, ROOT)],
-          lean]
+    built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
+             "circuit-check": ("circuit-check", cc, ROOT), "flock-rust-tests": ("flock-rust-tests", rust, ROOT)}
     if len(lean) > 1:
+        built |= {s[0]: s for s in lean}
         changed: list[str] | str = ([py, str(ROOT / "tools" / "check" / "lean_changed.py"), "--cache", str(cache_dir() / "lean-audit"),
                                      "--deps", str(cache_dir() / "lean-deps"), "--tree", str(cache_dir() / "lean-changed")]
                                     if cache else "skipped: --no-cache: lean-audit builds every package cold")
-        gs.append([("lean-changed", changed, ROOT)])
-    return gs
+        built["lean-changed"] = ("lean-changed", changed, ROOT)
+    else:
+        built["lean-build"] = lean[0]                  # no verifier: one skip, named `lean`, where its group starts
+    if undeclared := set(built) - {j.name for j in JOBS}:
+        raise DECLARATION.DeclarationError(f"check.py builds {', '.join(sorted(undeclared))}, which ci.toml doesn't declare")
+    gs: dict[int, list[tuple[str, list[str] | str, Path]]] = {}
+    for j in JOBS:
+        if j.name in built:
+            gs.setdefault(j.group, []).append(built[j.name])
+    return [gs[k] for k in sorted(gs)]
 
 
 def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
@@ -735,11 +750,11 @@ def _kill_after_grace(p: subprocess.Popen) -> None:
         _signal_tree(p.pid, signal.SIGKILL)
 
 
-#: the steps whose failure stops the run even under --keep-going
-HALTS = frozenset({"lean-changed"})
-#: ... and those whose failure does when their log has this text; without it (a failed clone or toolchain download) the other
-#: groups keep their verdicts
-HALTS_ON = {"flock-circuit-build": "error: could not compile"}
+#: the steps whose failure stops the run even under --keep-going (`halts` in ci.toml)
+HALTS = frozenset(j.name for j in JOBS if j.halts)
+#: ... and those whose failure does when their log has this text (`halts_on`); without it (a failed clone or toolchain download)
+#: the other groups keep their verdicts
+HALTS_ON = {j.name: j.halts_on for j in JOBS if j.halts_on}
 
 
 class Steps:
