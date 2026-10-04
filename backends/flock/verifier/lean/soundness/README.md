@@ -407,7 +407,7 @@ term below 2^-170.
 
 The masked protocol and the reference prover are in DESIGN.md §6, and the session model in DESIGN.md §11.
 
-**In Lean** (`FlockSoundness/ZK/`, pinned, the standard axioms only), for the model of one masked table `ZK/Table.lean`
+**In Lean** (`FlockSoundness/ZK/`, the standard axioms only), for the model of one masked table `ZK/Table.lean`
 (the reference prover `Table.view`, the simulator `Table.sim`) and sessions of `J` of them:
 
 - **Lemma B**, special honest-verifier zero knowledge at a fixed coin vector where the prover refuses nothing:

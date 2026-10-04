@@ -60,7 +60,7 @@ draws**. `Key.subset`, which draws each swap from its own `verity.randomness` st
 uniform $k$-subset. The window's per-call draws under one key form one `Law.stratified` over its (call, template)
 strata. So the live window draw (`keyedWindow`) escapes $B$ with at most `Law.stratified`'s escape plus the $\eta$ of A4
 (`Assumptions.KeyedStreamsUniform`), on a uniform window secret (A5). `keyedWindow_audit_of_record` and
-`keyedWindow_extraction_audit_of_record` put it through the window pins (`audit_window_split_of_record_of_le_slack`, and
+`keyedWindow_extraction_audit_of_record` put it through the window theorems (`audit_window_split_of_record_of_le_slack`, and
 at the compiled layer `extraction_audit_window_split_of_record_of_le_slack`): the 0.1% event has probability at most
 $2^{-40} + \eta + \varepsilon_{ks} + \delta_{link}$. The key's context is the receipt digest, so the real game's draw
 depends on the registration: `auditReg` (`Audit/RegDraw.lean`), and `prob_auditReg` moves each of its strategies to the
