@@ -281,14 +281,61 @@
    "note": "FA3 dense causal prefill (FlashAttnPrefillBackend.run_prefill_new_tokens -> flash_attn_varlen_func, fa_version 3) at qk head 256 / v head 256. AttentionFA3_v1 is FA3 at head dim 128 (kBlockN 128, RescaleOBeforeGemm false); the head-256 tile geometry and rescale order must be pinned before it binds"
   },
   "mla-sparse-attention": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "FlashAttnMLASparseImpl.forward_mqa: absorbed MLA over the selected keys (latent 512 + rope 64, scale 1/16) from the bf16 MLA cache"
+   "status": "exists",
+   "definitions": [
+    "SparseMla_v1",
+    "SparseMlaHead_v1",
+    "SparseMlaBlock_v1",
+    "SparseMla_v2",
+    "SparseMlaHead_v2",
+    "SparseMlaBlock_v2"
+   ],
+   "note": "FlashAttnMLASparseImpl.forward_mqa -> FA3 flash_attn_varlen_func (FLASH_ATTN_MLA_SPARSE: bf16 MLA cache, no DCP): per query token the NHL heads over the row's valid_counts selected rows [kv_c 512 | k_pe 64] in the top-k's order, scale 1/16: SparseMla_v1{T=valid count,NH=8,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}. FlashInfer's sparse path (FLASHINFER_MLA_SPARSE_SM90) runs only with an fp8 KV cache or a named --attention-backend and has no Definition; model-untested until the H200 capture (tests/properties/glm53_dsa_capture_gpu.py) gives its go"
   },
-  "dsa-indexer": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "the lightning indexer: LayerNorm + RoPE + ue8m0 FP8 quant of k into the indexer cache, RoPE + FP8 quant of q and the head weights (fused_q), DeepGEMM fp8_fp4_mqa_logits / fp8_fp4_paged_mqa_logits, and the top-2048 selection (top_k_per_row_prefill / cooperative_topk)"
+  "dsa-indexer-q": {
+   "status": "exists",
+   "definitions": [
+    "DsaIndexerQ_v1",
+    "DsaIndexerQHead_v1",
+    "DsaUe8m0Quant_v1",
+    "DsaUe8m0Scale_v1",
+    "DsaIndexerQ_v2",
+    "DsaIndexerQHead_v2",
+    "DsaUe8m0Quant_v2",
+    "DsaUe8m0Scale_v2"
+   ],
+   "note": "fused_q (Triton _fused_q_kernel, num_warps 1; the CuTe DSL branch needs capability >= 100): per head the interleaved RoPE of the first 64 dims and the ue8m0 FP8 quantisation (q_fp8, port 1), and the head weight times the q scale, 128^-0.5 and 32^-0.5 (weights, port 2): DsaIndexerQ_v1{H=32,D=128,ROPE=64} per token; model-untested until the H200 capture (tests/properties/glm53_dsa_capture_gpu.py) gives its go"
+  },
+  "dsa-indexer-k": {
+   "status": "exists",
+   "definitions": [
+    "DsaIndexerKRow_v1",
+    "DsaUe8m0Quant_v1",
+    "DsaUe8m0Scale_v1",
+    "DsaIndexerKRow_v2",
+    "DsaUe8m0Quant_v2",
+    "DsaUe8m0Scale_v2"
+   ],
+   "note": "_fused_norm_rope_kernel, program 0: k_norm (LayerNorm, eps 1e-6, f32 weight and bias), the interleaved RoPE of the first 64 dims and the ue8m0 FP8 quantisation, written as the cache row (128 e4m3 bytes + one f32 scale): DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06} per row; model-untested until the H200 capture (tests/properties/glm53_dsa_capture_gpu.py) gives its go"
+  },
+  "dsa-mqa-logits": {
+   "status": "exists",
+   "definitions": [
+    "DsaMqaLogits_v1",
+    "DsaMqaLogit_v1",
+    "DsaMqaLogits_v2",
+    "DsaMqaLogit_v2"
+   ],
+   "note": "DeepGEMM fp8_mqa_logits (prefill) / fp8_paged_mqa_logits (decode), clean_logits False: per (query row, key) the sum over the 32 heads of relu(q_h . k) * w_h in the kernels' order, times the key's scale: DsaMqaLogits_v1{N=keys,H=32,D=128} per row. Only a row's keys are written (clean_logits False), so only those columns are compared; model-untested until the H200 capture (tests/properties/glm53_dsa_capture_gpu.py) gives its go"
+  },
+  "dsa-topk": {
+   "status": "exists",
+   "definitions": [
+    "DsaTopKShortRow_v1",
+    "DsaTopKShortRow_v2"
+   ],
+   "when": "every row has at most TOPK = 2048 keys",
+   "note": "top_k_per_row_prefill (prefill) / cooperative_topk (decode, at most 64 rows; else persistent_topk): a row of at most 2048 keys takes each kernel's shortcut, slot i = i when i < the row's length, else -1: DsaTopKShortRow_v1{TOPK=2048}. A longer row is a radix selection whose order (ties included) the kernels leave to their atomics, with no Definition; model-untested until the H200 capture (tests/properties/glm53_dsa_capture_gpu.py) gives its go"
   }
  },
  "binders": {
@@ -1271,7 +1318,7 @@
     "IH",
     "ID"
    ],
-   "program": "dsa-indexer",
+   "program": "dsa-indexer-q",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": true,
@@ -1299,7 +1346,7 @@
     "M",
     "IH"
    ],
-   "program": "dsa-indexer",
+   "program": "dsa-indexer-q",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": true,
@@ -1326,7 +1373,7 @@
     "M",
     "=ID + 4"
    ],
-   "program": "dsa-indexer",
+   "program": "dsa-indexer-k",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": true,
@@ -1362,7 +1409,7 @@
     "M",
     "CTX"
    ],
-   "program": "dsa-indexer",
+   "program": "dsa-mqa-logits",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": true,
@@ -1386,7 +1433,7 @@
     "M",
     "TOPK"
    ],
-   "program": "dsa-indexer",
+   "program": "dsa-topk",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": true,
