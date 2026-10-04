@@ -504,8 +504,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 probe = vm.probe_collectives(mod, inputs, cfg, ntok, bus, profile=target)
                 res["tp"]["collectives"] = {"n": len(probe), "by_kind": _count([p["kind"] for p in probe]),
                                             "by_shape": _count([f'{p["kind"]}{tuple(p["shape"])}' for p in probe]), "record": probe}
-                peers = bus.example_peers()
-                mod, inputs = vm.WithPeers(mod, bus), tuple(inputs) + tuple(peers)
+                mod, inputs = vm.with_peers(mod, inputs, bus)
             applied_export: dict = {}
             ep = vm.export_module(mod, inputs, cfg, ntok, intercept_triton=intercept, launch_log=log, profile=target, applied_out=applied_export)
             res["export"] = {"secs": round(time.time() - t0, 2), "n_nodes": len(list(ep.graph.nodes)), "op_histogram": vm.op_histogram(ep),

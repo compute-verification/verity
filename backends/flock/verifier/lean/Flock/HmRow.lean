@@ -379,6 +379,9 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
       seen := seen.set! o true
   if seen.any (!·) then throw "an output leaf no unit returns"
   if unit.useful ≥ 2 ^ unit.unitLog then throw "the unit fills its slot: no forced-zero row for a zero leaf"
+  -- a tail that returns the outputs has no power-of-two count, which alone refuses zero units otherwise
+  if c.upv == 0 then throw "units_per_vu is 0: a VU of no unit"
+  if c.g == 0 then throw "vus_per_block is 0: a block of no VU"
   if c.dummyDigests.size != c.ports.size || c.dummyOutputs.size != nOut then
     throw "the pinned dummy values are not one per port and output leaf"
   if let some pinned := tags.pinnedLeafScheme then
@@ -488,7 +491,7 @@ def rowPorts (mj : Json) (typed : Bool) : V (Array Port) := do
         | none => if seg then MAX_COMPS + 1 else serial)
       if want.2 > MAX_COMPS || (words, comps) != want then
         throw s!"port {name}: a row of {l} bits is {want.1} u16 leaves and {want.2} compressions, not META's {words} and {comps}"
-      pure ({ name, words, chunks := comps, nb := 0, bits := l, v2 := !seg, segs := segs.map (·.1) } : Port)
+      pure ({ name, words, chunks := comps, nb := 0, bits := l, v2 := true, segs := segs.map (·.1) } : Port)
   let listed ← J.arr mj "rows" ctx
   let bad := s!"META: a row's constants are not {if v2 then "sha512/row/v2 or sha512/row-seg/v1" else "sha512/row/v1"}'s"
   if listed.size != ports.size then throw bad

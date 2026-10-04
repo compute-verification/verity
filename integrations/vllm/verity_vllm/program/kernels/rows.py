@@ -734,10 +734,10 @@ def _check_targets() -> dict[str, list]:
     }
 
 
-def _row(family: str, fn: Callable, returns: tuple[str, ...], sample: Callable | None = None, batch: Callable | None = None) -> None:
+def _row(family: str, fn: Callable, returns: tuple[str, ...], sample: Callable | None = None, check_targets: Callable | None = None, batch: Callable | None = None) -> None:
     k = ROWS[family] = RowKernel(family, fn, returns)
     register(family, _instance(k), kernel=KERNEL, domain=DOMAIN, sample=sample or _sample(),
-             check_targets=lambda rng: _check_targets()[family], batch=batch)
+             check_targets=check_targets or (lambda rng: _check_targets()[family]), batch=batch)
 
 
 _row("Gemm_v1", gemm, ("0",))
@@ -779,7 +779,7 @@ _row("MoeFfnFixed_v1", partial(moe_ffn_fixed, router_gemm=True), ("out",))
 _row("MoeSum_v1", moe_sum, ("sum",))
 
 from verity_vllm.program.kernels import dense_rows  # noqa: E402  -- the dense chain's kernels (registers them) and the float64 GEMM chain
-from verity_vllm.program.kernels import softcap_rows  # noqa: E402  -- AttentionSoftcap_v2's head twin
+from verity_vllm.program.kernels import act_rows, softcap_rows  # noqa: E402  -- SiluMul_v2's row, AttentionSoftcap_v2's head twin
 
 
 def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
@@ -788,9 +788,9 @@ def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dic
     return softcap_rows.attention_softcap(f64_statics(statics), ops, prim_static(statics, "DOT", f), prim_static(statics, "INV", f))
 
 
-EVALUATORS[softcap_rows.FAMILY] = softcap_rows.EVALUATOR
-_k = ROWS[softcap_rows.FAMILY] = RowKernel(softcap_rows.FAMILY, attention_softcap, ("out",))
-register(softcap_rows.FAMILY, _instance(_k), kernel=KERNEL, domain=DOMAIN, sample=_sample(), check_targets=softcap_rows.check_targets)
+EVALUATORS |= {m.FAMILY: m.EVALUATOR for m in (softcap_rows, act_rows)}
+_row(softcap_rows.FAMILY, attention_softcap, ("out",), check_targets=softcap_rows.check_targets)
+_row(act_rows.FAMILY, act_rows.silu_mul_expf, ("out",), check_targets=act_rows.check_targets)
 
 from verity_vllm.program.kernels import ir_rows  # noqa: E402
 

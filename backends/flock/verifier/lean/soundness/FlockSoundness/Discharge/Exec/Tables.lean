@@ -101,15 +101,17 @@ theorem table_refines_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statemen
       pend₀.verdict (opensOf p₀ p₁ sch) = true ∧ pend₁.verdict (opensOf p₀ p₁ sch) = true ∧
       OpensOKL H512 enc512 leaf512 (capDig p₀.cap) 0 pend₀ (opensOf p₀ p₁ sch) (saltsOf p₀ p₁ sch) ∧
       OpensOKL H512 enc512 leaf512 (capDig p₀.cap) 1 pend₁ (opensOf p₀ p₁ sch) (saltsOf p₀ p₁ sch) := by
-  have h14 : 14 ≤ S.m := by have := exec_fast100_ge hf; omega
+  have h15 : 15 ≤ S.m := by have := exec_fast100_ge hf; omega
   obtain ⟨hdim, hsm⟩ := fast100_dims st.m sch hf
   have hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default) := fun i hi =>
     fast100_level st.m sch hf _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
+  have hα1 : ∀ i < sch.levels.size, ceilLog2 (sch.levels.getD i default).q ≠ 1 := fun i hi =>
+    fast100_alpha st.m sch hf _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
   have hschm : sch.m = S.m := hsm.trans hmS
-  obtain ⟨s₀, p₀, hs₀, hp₀, hc₀, -, hsz₀, hw₀, hrest₀⟩ := rep_refines spec st S hm h14 sch hmS hkS hfold extra
-    sess hext hdim hlv hschm hwf i 0 _ _ h0
-  obtain ⟨s₁, p₁, hs₁, hp₁, hc₁, -, hsz₁, hw₁, hrest₁⟩ := rep_refines spec st S hm h14 sch hmS hkS hfold extra
-    sess hext hdim hlv hschm hwf i 1 _ _ h1
+  obtain ⟨s₀, p₀, hs₀, hp₀, hc₀, -, hsz₀, hw₀, hrest₀⟩ := rep_refines spec st S hm h15 sch hmS hkS hfold extra
+    sess hext hdim hlv hα1 hschm hwf i 0 _ _ h0
+  obtain ⟨s₁, p₁, hs₁, hp₁, hc₁, -, hsz₁, hw₁, hrest₁⟩ := rep_refines spec st S hm h15 sch hmS hkS hfold extra
+    sess hext hdim hlv hα1 hschm hwf i 1 _ _ h1
   obtain ⟨pend₀, hpl₀, hcaps₀, hreqs₀, hver₀⟩ := hrest₀ capDig (opensOf p₀ p₁ sch) fun ℓ _ j _ => rfl
   obtain ⟨pend₁, hpl₁, hcaps₁, hreqs₁, hver₁⟩ := hrest₁ capDig (opensOf p₀ p₁ sch) fun ℓ _ j _ => rfl
   rw [hms] at hreqs₀ hreqs₁ hw₀ hw₁

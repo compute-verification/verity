@@ -387,7 +387,9 @@ def test_a_pack_pod_starts_only_when_a_queued_entry_fits_the_bundle_cap(dispatch
 
 @pytest.mark.parametrize("path, drain", [("dispatch.py", (12, 33)), ("sky/commit_pack.py", (12, 28))])
 def test_no_pack_pod_starts_or_claims_from_1210z_and_none_runs_past_1235z(monkeypatch, path, drain):
+    before = dict(os.environ)
     mod = _load(NEBIUS / path, f"windows_{drain[1]}", monkeypatch)
+    assert dict(os.environ) == before                    # on node 1 its dispatch.env reached the next tests (#925's train)
     day = 1790812800                                     # 2026-10-01T00:00:00Z
 
     def at(h: int, m: int) -> float:
