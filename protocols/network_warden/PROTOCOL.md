@@ -137,7 +137,7 @@ about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bound
 The inference-only policy charges an isolation unit the ingress covert capacity from the last wipe before it starts,
 plus what survived that wipe. `capacity.k_share` expresses bits as a share of `K = 9.12e7` bits.
 
-`lean-audit.json` pins as guarantees only the four whose bounds `calibration.calibrate` reports: egress over a horizon
+`lean-audit.json` lists as guarantees only the four whose bounds `calibration.calibrate` reports: egress over a horizon
 (`capacity.egress_bits_per_day_one_clock`, `SecurityProofs.EncardDecodableLeConstantRate`) and per window
 (`clock_sync.bits_per_window`, `SecurityProofs.EncardDecodableLeConstantRatePerWindow`), and ingress over a horizon (the
 K charge, `k_charge.share_of_k_by_span` from each link's `rate_bps`, `SecurityProofs.EncardIngressObsDecodableLe`) and
@@ -276,14 +276,14 @@ replays recorded traces through the proxy in real time, and on an injected clock
 
 `uv run tools/check/suites.py verity-network-warden`. The tests enumerate small horizons, so they check the Lean
 statements on examples and prove nothing. By name, they mirror 19 of the Lean package's 35 statements
-`NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, none of them among the four `lean-audit.json` pins, and three more
-proved lemmas:
+`NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, none of them among its four guarantees (`lean-audit.json`'s
+`guarantees`), and three more proved lemmas:
 - **`test_network_warden_grid.py`:**
   - Proposition 2's ten statements, by enumeration: `SecurityProofs.CardFree`, `SecurityProofs.CardLeftPacked`,
     `SecurityProofs.FillInjective`, `SecurityProofs.ExistsFillOfLeftPacked`, `SecurityProofs.CardCountsEqLe`,
     `SecurityProofs.CardCountsLeLe`, `SecurityProofs.ReleasedSelf`, `SecurityProofs.SumReleasedLe`,
     `SecurityProofs.EncardFifoGrids` and `SecurityProofs.EncardFifoGridsLeOfAvailable`;
-  - `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid` (`NetTiming.SecurityProofs.Occupancy`);
+  - the lemmas `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid` (`NetTiming.SecurityProofs.Occupancy`);
   - the warden's semantics, which Lean takes as hypotheses (W4 packing, W5's untimed status, W6 fail-closed);
 - **`test_network_warden_capacity.py`:**
   - `SecurityProofs.EncardLeProdOfBranching`, the tree lemma;

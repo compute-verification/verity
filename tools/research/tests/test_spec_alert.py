@@ -17,8 +17,8 @@ def _g(sig: str, h: str) -> dict:
     return {"signature": [sig], "assumptions": [], "type_hash": h}
 
 
-def _doc(pins: dict, defs: dict | None = None, readers: tuple[str, ...] = ("P.t",)) -> dict:
-    return {"pins": pins, "reads": {"P.Defs": {"digest": "x", "definitions": defs or {}, "pins": list(readers)}}}
+def _doc(guarantees: dict, defs: dict | None = None, readers: tuple[str, ...] = ("P.t",)) -> dict:
+    return {"guarantees": guarantees, "reads": {"P.Defs": {"digest": "x", "definitions": defs or {}, "guarantees": list(readers)}}}
 
 
 class Api:
@@ -59,8 +59,17 @@ def test_a_changed_definition_names_the_guarantees_that_read_it():
     old = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H1, "P.E": H2}, readers)
     new = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H3, "P.E": H2}, readers)
     assert spec.changes(old, new) == ["• definition `P.D` changed; read by `P.t`, `P.u`, `P.v`, `P.w` and 2 more"]
-    moved = {"reads": {"P.Other": {"definitions": {"P.D": H1, "P.E": H2}, "pins": ["P.t"]}}, "pins": old["pins"]}
+    moved = {"reads": {"P.Other": {"definitions": {"P.D": H1, "P.E": H2}, "guarantees": ["P.t"]}}, "guarantees": old["guarantees"]}
     assert spec.changes(old, moved) == []                                   # same names and hashes in another module
+
+
+def test_a_record_from_before_the_rename_compares_by_what_it_says():
+    new = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H1}, ("P.t",))
+    old = {"pins": new["guarantees"], "reads": {"P.Defs": {"digest": "x", "definitions": {"P.D": H1}, "pins": ["P.t"]}}}
+    assert spec.changes(old, new) == []
+    assert spec.changes(old, _doc({"P.t": _g("P.t : E", H2)}, {"P.D": H3})) == [
+        "• changed guarantee `P.t`, before:\n```\nP.t : D\n```\nafter:\n```\nP.t : E\n```",
+        "• definition `P.D` changed; read by `P.t`"]
 
 
 def _repo(tmp_path: Path) -> Path:
