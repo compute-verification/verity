@@ -847,19 +847,22 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
     from verity_vllm.program.registry import dsa
 
     rec: dict[str, Any] = {"cases": {}, "errors": {}}
-    logits = lst["logits"]
-    ks = torch.zeros(SEQ, dtype=torch.int32, device="cuda")
-    ke = torch.arange(1, SEQ + 1, dtype=torch.int32, device="cuda")
-    outs = []
-    for _ in range(2):
-        out = torch.full((SEQ, TOPK), -1, dtype=torch.int32, device="cuda")
-        ops.top_k_per_row_prefill(logits, ks, ke, out, SEQ, logits.stride(0), logits.stride(1), TOPK)
-        outs.append(out.cpu().numpy())
-    served = _check_topk(logits.cpu().numpy(), np.arange(1, SEQ + 1), outs[0])
-    served["deterministic_short"] = bool(np.array_equal(outs[0][:TOPK], outs[1][:TOPK]))
-    served["deterministic_long"] = bool(np.array_equal(outs[0][TOPK:], outs[1][TOPK:]))
-    rec["cases"]["prefill_served"] = served
-    rec["prefill_rows"] = outs[0]
+    if lst is None:
+        rec["errors"]["prefill_served"] = "no served logits (the logits phase failed)"
+    else:
+        logits = lst["logits"]
+        ks = torch.zeros(SEQ, dtype=torch.int32, device="cuda")
+        ke = torch.arange(1, SEQ + 1, dtype=torch.int32, device="cuda")
+        outs = []
+        for _ in range(2):
+            out = torch.full((SEQ, TOPK), -1, dtype=torch.int32, device="cuda")
+            ops.top_k_per_row_prefill(logits, ks, ke, out, SEQ, logits.stride(0), logits.stride(1), TOPK)
+            outs.append(out.cpu().numpy())
+        served = _check_topk(logits.cpu().numpy(), np.arange(1, SEQ + 1), outs[0])
+        served["deterministic_short"] = bool(np.array_equal(outs[0][:TOPK], outs[1][:TOPK]))
+        served["deterministic_long"] = bool(np.array_equal(outs[0][TOPK:], outs[1][TOPK:]))
+        rec["cases"]["prefill_served"] = served
+        rec["prefill_rows"] = outs[0]
     vals, lens, names = _topk_rows(11)
     rows = len(lens)
     start = 5
@@ -1144,8 +1147,8 @@ def gpu(work: Path, outdir: Path, quick: bool, doc: dict[str, Any]) -> list[dict
         st["logits"] = r[2]
         for x in r[0]:
             print(f"[glm53-dsa] logits {x['case']:8s} {json.dumps(x['checks'])} {json.dumps(x.get('info', {}))}", flush=True)
-    topk = step("topk", lambda: phase_topk(o, st["logits"]))
-    if topk is not None:
+    topk = step("topk", lambda: phase_topk(o, st.get("logits")))
+    if topk is not None and "prefill_rows" in topk:
         st["topk"] = {"prefill_rows": topk.pop("prefill_rows")}
     doc["topk"] = topk or {"ok": False}
     brief = {k: {f: v for f, v in g.items() if f != "long"} for k, g in doc["topk"].get("cases", {}).items()}
