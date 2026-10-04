@@ -1,6 +1,7 @@
 {
- "roots": ["NetTiming.Assumptions", "NetTiming.Difftest", "NetTiming.Guarantees", "NetTiming.Protocol"],
+ "roots": ["NetTiming"],
  "exempt": {
+  "CheckAxioms": "the #print axioms list (`lake env lean CheckAxioms.lean`)",
   "NetTimingDifftest": "the difftest against the Python audit, under `runs`: compiled evaluation of NetTiming.Difftest.main, audited under NetTiming, a test and not a proof"
  },
  "runs": {
