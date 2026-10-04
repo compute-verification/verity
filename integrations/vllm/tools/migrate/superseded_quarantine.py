@@ -426,6 +426,9 @@ def move_quarantine(root: Path) -> list[str]:
         importers += [f"{rel}: from {QUARANTINE_MODULE} import ..." for rel in _from_quarantine_importers(root)]
         if importers:
             raise Refused("core library code imports a lane that would move:\n  " + "\n  ".join(importers))
+    for _rel, text in _scoped(root):
+        _rewrite(text)
+    _member_texts(root)
     dst_pkg = f"{EXPERIMENTAL}/{PACKAGE}"
     for lane in pending:
         if (root / dst_pkg / lane).exists():
@@ -464,10 +467,10 @@ def _from_quarantine_importers(root: Path) -> list[str]:
     return out
 
 
-def _register_member(root: Path) -> list[str]:
-    changed = []
-    p = root / "pyproject.toml"
-    text = p.read_text(encoding="utf-8")
+def _member_texts(root: Path) -> dict[str, str]:
+    """{pyproject: its text with the experimental member registered}: the workspace's members, the root's dependencies and
+    sources, and the vLLM suite's inputs (its tests import the moved lanes)."""
+    text = (root / "pyproject.toml").read_text(encoding="utf-8")
     new = _add_to_array(text, "members", EXPERIMENTAL, "tool.uv.workspace")
     new = _add_to_array(new, "dependencies", DISTRIBUTION, "project")
     if not re.search(rf"^{re.escape(DISTRIBUTION)} = ", new, re.M):
@@ -480,22 +483,38 @@ def _register_member(root: Path) -> list[str]:
         last = [i for i in range(at, end) if lines[i].rstrip().endswith("{ workspace = true }")]
         lines.insert(last[-1] + 1 if last else at, f"{DISTRIBUTION} = {{ workspace = true }}\n")
         new = "".join(lines)
-    tomllib.loads(new)
-    if new != text:
-        p.write_text(new, encoding="utf-8")
-        changed.append("pyproject.toml")
-    p = root / VLLM / "pyproject.toml"
-    text = p.read_text(encoding="utf-8")
+    out = {"pyproject.toml": new}
+    text = (root / VLLM / "pyproject.toml").read_text(encoding="utf-8")
     new = _add_to_array(text, "inputs", EXPERIMENTAL, "tool.verity.tests")
     note = f"# Test-only: tests that check a quarantine lane's re-exports, adapters or collective import `{PACKAGE}` ({EXPERIMENTAL}).\n"
     if new != text and note not in new:
         m = re.search(r"^\[tool\.verity\.tests\]\s*\n", new, re.M)
         new = new[:m.end()] + note + new[m.end():]
-    tomllib.loads(new)
-    if new != text:
-        p.write_text(new, encoding="utf-8")
-        changed.append(f"{VLLM}/pyproject.toml")
+    out[f"{VLLM}/pyproject.toml"] = new
+    for t in out.values():
+        tomllib.loads(t)
+    return out
+
+
+def _register_member(root: Path) -> list[str]:
+    changed = []
+    for rel, new in _member_texts(root).items():
+        p = root / rel
+        if p.read_text(encoding="utf-8") != new:
+            p.write_text(new, encoding="utf-8")
+            changed.append(rel)
     return changed
+
+
+def _scoped(root: Path):
+    """(path, text) of each tracked text file the module rewrite applies to: the vLLM integration and the experimental package."""
+    for rel in tracked(root):
+        if not rel.startswith((f"{VLLM}/", f"{EXPERIMENTAL}/")) or rel.startswith(UNTOUCHED) or rel in KEYED_LISTS:
+            continue
+        try:
+            yield rel, (root / rel).read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
 
 
 def _rewrite_tree(root: Path) -> list[str]:
@@ -515,18 +534,10 @@ def _rewrite_tree(root: Path) -> list[str]:
         if p.is_file() and old in (text := p.read_text(encoding="utf-8")):
             p.write_text(text.replace(old, new_line), encoding="utf-8")
             changed.append(rel)
-    scope = (f"{VLLM}/", f"{EXPERIMENTAL}/")
-    for rel in tracked(root):
-        if not rel.startswith(scope) or rel.startswith(UNTOUCHED) or rel in KEYED_LISTS:
-            continue
-        p = root / rel
-        try:
-            text = p.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            continue
+    for rel, text in list(_scoped(root)):
         new = _rewrite(text)
         if new != text:
-            p.write_text(new, encoding="utf-8")
+            (root / rel).write_text(new, encoding="utf-8")
             changed.append(rel)
     return changed
 
