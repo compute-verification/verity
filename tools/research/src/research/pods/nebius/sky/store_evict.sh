@@ -6,7 +6,7 @@
 # are free. Nothing that isn't preserved is touched. Falling short of the mark is not a failure (nothing more is preserved);
 # output that isn't the tool's JSON is. One line per run goes to the journal (journalctl -u vy-store-evict).
 # With $VY_EVICT_SRC (research's unit, store_evict_src.conf: /workspace/research/src) it also deletes the `research run` source
-# trees there that are on origin ($VY_EVICT_ORIGIN, default the tool's) and that nothing uses, every hour whatever the mark
+# trees there recoverable on the node (a ref of $VY_EVICT_ORIGIN, default <root>/git/verity.git) that nothing uses, every hour whatever the mark
 # (`--src-dir`, store/evict.py `evict_src`); the line says how many went and why the rest stayed.
 #   VY_RESEARCH_TOOL: the research tool to run (default the newest snapshot under /workspace/research/tool).
 set -uo pipefail

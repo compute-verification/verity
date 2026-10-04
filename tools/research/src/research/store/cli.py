@@ -316,9 +316,10 @@ def cmd_evict(argv: list[str]) -> int:
     ap.add_argument("--runs-dir", default=None, metavar="DIR", help="runs root for --runs (default $RESEARCH_RUNS or ~/.research/runs)")
     ap.add_argument("--quiet-min", type=float, default=EV.QUIET_S / 60, metavar="M", help="--runs: skip run dirs touched in the last M minutes (default 30)")
     ap.add_argument("--src-dir", default=None, metavar="DIR",
-                    help="also delete the `research run` source trees under DIR (<root>/src) that are on origin and that nothing uses, "
+                    help="also delete the `research run` source trees under DIR (<root>/src) recoverable on the node that nothing uses, "
                          "whatever the target (evict.py `evict_src`; needs root or CAP_SYS_PTRACE to read /proc)")
-    ap.add_argument("--src-origin", default=EV.ORIGIN, metavar="URL", help=f"--src-dir: the origin `git ls-remote` lists (default {EV.ORIGIN})")
+    ap.add_argument("--src-origin", default=None, metavar="URL",
+                    help="--src-dir: the repository whose refs make a tree recoverable (default <root>/git/verity.git, the node's own)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store)

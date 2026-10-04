@@ -15,9 +15,11 @@ Two kinds of local copy can go, and only these:
   `run-files.evicted.json` in the run dir lists what went and the `research data fetch`es that bring it back.
 
 * **source trees** (`<root>/src/<sha>`, `evict_src`): the trees `research run --on` ships per commit (remote.py `ship_source`;
-  up to 24 GB and 480k inodes with Lean builds), whose bytes are origin's commit.  Oldest first, every one that meets root's three
-  conditions (Slack, 4 Oct 03:48Z), each established afresh: (1) its commit is reachable from a ref on origin (`git ls-remote`, and
-  for a commit that is no tip, the history of the tips the node's `<root>/git/verity.git` holds); (2) nothing uses it: no live
+  up to 24 GB and 480k inodes with Lean builds), whose bytes are a commit's.  Oldest first, every one that meets root's three
+  conditions (Slack, 4 Oct 03:48Z; condition 1 read as recoverability, root 4 Oct 17:27Z), each established afresh: (1) it is
+  recoverable on the node: its commit is reachable from a ref of the node's `<root>/git/verity.git`, which holds
+  `refs/research/src/<sha>` for every tree shipped and from which `research run` re-ships it (`git ls-remote`, or of
+  `--src-origin`); (2) nothing uses it: no live
   process names it (cwd, root, exe, open file, map, command line, environment), no run that has not ended and no request without a
   run dir names it, no live check or Lean slot holder or waiter (`<root>/locks`) names it, no job script queued for the fill
   (`retention.JobScripts`) names it, and nothing in it changed and no run naming it was recorded within `SRC_KEEP_S`; (3) no run
@@ -26,7 +28,7 @@ Two kinds of local copy can go, and only these:
   unused tree costs inodes as much as bytes (node 1 at 74% inodes, 4 Oct), and `research run` re-ships one from
   `refs/research/src/<sha>`.  Before a deletion the tree is checked again, renamed to `.evicting-<sha>-<nonce>` (never executable
   by name), checked once more (renamed back when something uses it) and removed READY.json first.  It fails closed: a condition
-  it cannot establish (origin unlisted, a process it cannot read, a record it cannot read) deletes nothing and says why.
+  it cannot establish (the repository unlisted, a process it cannot read, a record it cannot read) deletes nothing and says why.
 
 Never touched: pending (unpushed or unverified) objects, `manifests/`, `attempts/`, `labels/`, `catalog.sqlite`, `scratch/`.
 Artifacts that are flagged `remote` in the catalog but never verified are counted in `held_back_bytes` so the operator can
@@ -369,7 +371,6 @@ def parse_gb(text: str) -> int:
 
 SRC_KEEP_S = 2 * 3600        # a tree changed, or named by a run recorded, this recently may be being shipped or about to run
 SRC_BUDGET_S = 30 * 60       # no deletion starts after this long, so the unit's `timeout 3000` never cuts a pass off mid-tree
-ORIGIN = "https://github.com/danielreuter/verity.git"
 GIT_TIMEOUT_S = 300
 ASIDE = ".evicting-"         # <src>/.evicting-<sha>-<nonce>: a tree on its way out, never executable by name
 READY_FILE = "READY.json"    # remote.READY_FILE: the marker that makes <src>/<sha> executable
@@ -392,8 +393,8 @@ def _git(args: list[str], stdin: str | None = None) -> subprocess.CompletedProce
 
 
 def on_origin(shas: set[str], origin: str, git_dir: Path) -> set[str]:
-    """The commits of `shas` reachable from a ref of `origin` (`git ls-remote`: branches, PR heads, tags, any): a tip itself, or in
-    the history of a tip that `git_dir` holds (a commit's id covers its parents, so an ancestor there is one on origin)."""
+    """The commits of `shas` reachable from a ref of `origin` (`git ls-remote`: any ref): a tip itself, or in the history of a tip
+    that `git_dir` holds (a commit's id covers its parents, so an ancestor there is reachable from the tip)."""
     def run(args: list[str], what: str, stdin: str | None = None) -> str:
         try:
             r = _git(args, stdin)
@@ -646,7 +647,7 @@ def _raise_oserror(e: OSError) -> None:
     raise e
 
 
-def evict_src(src_root: Path, *, origin: str = ORIGIN, dry_run: bool = False, git_dir: Path | None = None,
+def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = False, git_dir: Path | None = None,
               runs_dirs: list[Path] | None = None, requests_dir: Path | None = None, locks_dir: Path | None = None,
               jobs_dirs: list[Path] | None = None, proc: Path = Path("/proc"), keep_s: float = SRC_KEEP_S,
               budget_s: float = SRC_BUDGET_S, now: float | None = None, clock: Callable[[], float] = time.monotonic,
@@ -655,13 +656,14 @@ def evict_src(src_root: Path, *, origin: str = ORIGIN, dry_run: bool = False, gi
     `.evicting-*` leftovers of an interrupted pass that nothing uses.  The report lists every tree deleted (inodes, bytes) and every
     tree kept with its reasons, each prefixed by what it is: `1:`/`2:`/`3:` (root's conditions), `recent:`, `record:`, `budget:`;
     `error` says what could not be established, and then nothing more was deleted.  `<root>` is `src_root`'s parent: its
-    `git/verity.git`, `runs/` and `runs-aside/`, `requests/` and `locks/` unless given."""
+    `git/verity.git` (also `origin`, condition 1's repository), `runs/` and `runs-aside/`, `requests/` and `locks/` unless given."""
     from .. import retention as RT  # noqa: PLC0415
 
     say = log or (lambda s: None)
     src_root = Path(src_root)
     root = src_root.parent
     git_dir = git_dir or root / "git" / "verity.git"
+    origin = origin or str(git_dir)
     runs_dirs = [root / "runs", root / "runs-aside"] if runs_dirs is None else [Path(d) for d in runs_dirs]
     requests_dir = requests_dir or root / "requests"
     locks_dir = locks_dir or root / "locks"
@@ -703,7 +705,7 @@ def evict_src(src_root: Path, *, origin: str = ORIGIN, dry_run: bool = False, gi
                 own, mtimes[s] = _own_reasons(src_root, s, t_wall, keep_s)
                 reasons[s] |= uses.get(s, set()) | own
                 if s not in on:
-                    reasons[s].add("1: on no ref of origin")
+                    reasons[s].add(f"1: not recoverable on the node: on no ref of {_redact(origin)}")
             for n in leftovers:
                 if why := uses.get(n[len(ASIDE):len(ASIDE) + 40]):
                     rep["kept"].append({"tree": n, "why": sorted(why)})

@@ -1,6 +1,6 @@
 """`research data evict --src-dir`: the hourly eviction of `research run`'s shipped source trees (`evict.evict_src`).  Node 1 hit
 74% inodes on 4 Oct with nothing pruning `/workspace/research/src`, and @infra pruned it by hand under root's three conditions:
-the commit is on origin, nothing uses the tree, and no run record holds it as its source's only copy.  Each condition keeps a
+the tree is recoverable on the node, nothing uses it, and no run record holds it as its source's only copy.  Each condition keeps a
 tree here, a pass that can't establish one deletes nothing, and a tree meeting all of them goes."""
 import json
 import os
@@ -119,7 +119,7 @@ def test_trees_meeting_every_condition_go_oldest_first_and_the_rest_are_kept_wit
     ready = len(json.dumps({"schema": "research/source-ready/v0.1", "identity": node.a}))
     assert all(d["inodes"] == 5 and d["bytes"] == 10 + 1 + ready for d in rep["deleted"]), "3 files, tools/ and the tree itself"
     assert rep["deleted_inodes"] == 10
-    assert kept(rep) == {node.c: ["1: on no ref of origin"]} and rep["kept_by"] == {"1": 1}
+    assert kept(rep) == {node.c: [f"1: not recoverable on the node: on no ref of {node.origin}"]} and rep["kept_by"] == {"1": 1}
     assert sorted(os.listdir(node.src)) == [node.c], "nothing left aside"
     assert (node.src / node.c / EV.READY_FILE).exists()
 
@@ -424,3 +424,15 @@ def test_the_cli_runs_the_pass_whatever_the_target_and_reports_it(node, monkeypa
     assert main(["evict", "--target-free-gb", "0", "--src-dir", str(node.src), "--src-origin", node.origin, "--dry-run", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["src"] == {"deleted": [], "kept": [], "error": None}
     assert seen["src"] == node.src and seen["origin"] == node.origin and seen["dry_run"] is True
+
+
+def test_by_default_a_tree_is_recoverable_when_the_nodes_own_repository_holds_its_commit(node):
+    """Root, 4 Oct 17:27Z: condition 1 is recoverability, so the node's `git/verity.git` (refs/research/src/<sha>, what `research
+    run` re-ships from) is its repository and no credential for GitHub is needed: c, a branch origin never saw, goes; a tree whose
+    commit the node doesn't hold stays."""
+    stray = "f" * 40
+    tree(node.src, stray, 6)
+    rep = run(node, origin=None)
+    assert rep["error"] is None and rep["origin"] == str(node.root / "git" / "verity.git")
+    assert node.c in {d["tree"] for d in rep["deleted"]} and not (node.src / node.c).exists()
+    assert kept(rep)[stray] == [f"1: not recoverable on the node: on no ref of {node.root / 'git' / 'verity.git'}"]

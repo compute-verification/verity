@@ -859,7 +859,7 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     the rest stayed, the reason it deleted nothing included."""
     import subprocess
     conf = (SKY / "store_evict_src.conf").read_text()
-    assert "Environment=VY_EVICT_SRC=/workspace/research/src\n" in conf and "AmbientCapabilities=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH\n" in conf
+    assert "Environment=VY_EVICT_SRC=/workspace/research/src VY_EVICT_ORIGIN=/workspace/research/git/verity.git\n" in conf and "AmbientCapabilities=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH\n" in conf
     dest = "/etc/systemd/system/vy-store-evict-research.service.d/src.conf"
     assert f'"$SRC/store_evict_src.conf" {dest}' in (SKY / "cluster_up.sh").read_text()
     deploy = (SKY.parent / "deploy.toml").read_text()
@@ -884,7 +884,7 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     assert json.loads((tmp_path / "argv.json").read_text()) == ["data", "evict", "--target-free-gb", "2500", "--runs", "--runs-dir",
                                                                  "/workspace/research/runs", "--src-dir", "/workspace/research/src", "--json"]
     assert "target reached: False; src trees: deleted 2 (31.0 GB, 812345 inodes), kept 3 (1:1 2:2) (tool)" in r.stdout
-    r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "VY_EVICT_ORIGIN": "/workspace/research/origin.git",
+    r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "VY_EVICT_ORIGIN": "/workspace/research/git/verity.git",
                                                                      "FAKE_ERROR": "2: /proc/1 is unreadable"}, capture_output=True, text=True)
-    assert json.loads((tmp_path / "argv.json").read_text())[-3:] == ["--src-origin", "/workspace/research/origin.git", "--json"]
+    assert json.loads((tmp_path / "argv.json").read_text())[-3:] == ["--src-origin", "/workspace/research/git/verity.git", "--json"]
     assert r.returncode == 0 and "kept 3 (1:1 2:2), nothing more deleted: 2: /proc/1 is unreadable (tool)" in r.stdout
