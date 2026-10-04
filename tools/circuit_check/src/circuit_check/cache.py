@@ -27,12 +27,12 @@ the task list's build, nor an earlier target's check):
 The binding files (`targets.py` and each Definition module's sidecar, `sidecars`) and the pins files (`pins.json` and each
 sidecar's) are not files of any target: a target holds the parts of each binding file it depends on (its binding units and the
 rest of that file with every binding unit cut out, ``common``, each by the digest of its AST, so comments and formatting are no
-input; any binding code its check ran, by the unit that holds it) and the pins its check looked up (`recorded_pins`), each in the
-file that holds it or would (`sidecars.pin_file`), by its value, or absent.  The checker's own version is the digest of this
-package's sources less `targets.py` and `pins.json`.  Beside them the key holds the interpreter, the platform, the installed
-distributions, the request (the target, its options, and whether the partition invariant applies to it, as the catalog resolved
-it) and the ``VERITY_*`` / ``CIRCUIT_CHECK_*`` environment.  Each target's check runs with a memo of its own, so no result an
-earlier target computed stands in for its reads.
+input; any binding code its check ran, by the unit that holds it) and the pins its check looked up (`recorded_pins`), each in
+the file that holds it (one no file holds, where it would be added, `sidecars.pin_reads`), by its value, or absent. The
+checker's own version is the digest of this package's sources less `targets.py` and `pins.json`. Beside them the key holds the
+interpreter, the platform, the installed distributions, the request (the target, its options, and whether the partition
+invariant applies to it, as the catalog resolved it) and the ``VERITY_*`` / ``CIRCUIT_CHECK_*`` environment. Each target's check
+runs with a memo of its own, so no result an earlier target computed stands in for its reads.
 
 A hit means every file, listing, probe, library, binding unit and pin this target's check read or resolved is unchanged
 (the tree as git has it, `visible`: bytecode or a build inside the tree counts as absent).  Not covered: a file a C extension
@@ -253,7 +253,7 @@ def unit_files(paths: Iterable[str]) -> None:
 
 
 def pin_files(paths: Iterable[str], where: Any) -> None:
-    """The pins files beside `pins.json`, and ``where(kind, key)``: the file that holds a pin, or would."""
+    """The pins files beside `pins.json`, and ``where(kind, key)``: the files a lookup of a pin read (`sidecars.pin_reads`)."""
     _PIN_FILES.clear()
     _PIN_FILES.update(os.path.abspath(p) for p in paths)
     _PIN_FILE[:] = [where]
@@ -774,13 +774,13 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
     pin_rels = {r for f in [PINS, *_PIN_FILES] if (r := _rel(f)) is not None}
     pins = {f"{r}#*" for r in pin_rels & acc.files}
     acc.files -= pin_rels
-    where = _PIN_FILE[0] if _PIN_FILE else (lambda kind, key: PINS)
+    where = _PIN_FILE[0] if _PIN_FILE else (lambda kind, key: [PINS])
     for p in acc.pins:
         kind, _, key = p.partition("#")
         if p == "*" or key == "*":
             pins |= {f"{r}#{p}" for r in pin_rels}
-        elif (r := _rel(where(kind, key))) is not None:
-            pins.add(f"{r}#{p}")
+        else:
+            pins |= {f"{r}#{p}" for f in where(kind, key) if (r := _rel(f)) is not None}
     return {"files": sorted(acc.files), "dirs": sorted(acc.dirs), "probes": sorted(acc.probes - acc.files - acc.dirs),
             "libs": sorted(acc.libs), "units": sorted(held), "pins": sorted(pins)}
 

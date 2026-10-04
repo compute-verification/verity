@@ -21,6 +21,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from circuit_check import sidecars as SC
 from circuit_check import targets as TG
 from verity.ir.defs import REGISTRY, PrimitiveDefinition
 from verity.ir.types import Array
@@ -181,7 +182,7 @@ def _primitives() -> list[PrimitiveDefinition]:
     root = Path(R.__path__[0])
     loaded = sorted(importlib.import_module(m.name).__name__ for m in pkgutil.walk_packages(R.__path__, f"{R.__name__}."))
     on_disk = {".".join((R.__name__, *f.relative_to(root).with_suffix("").parts)).removesuffix(".__init__")
-               for f in root.rglob("*.py")}
+               for f in root.rglob("*.py") if SC.SUFFIX not in f.name}
     assert loaded == sorted(on_disk - {R.__name__}), "a module of the vLLM registry was skipped"
     for p in [d for d in REGISTRY.defs.values() if isinstance(d, PrimitiveDefinition) and TG._authored(d)]:
         if not p.id.startswith("Lifted[") and not hasattr(p, "ordinary_of"):

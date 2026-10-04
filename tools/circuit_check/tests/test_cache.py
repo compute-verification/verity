@@ -305,7 +305,8 @@ def _model_roots():
 
 
 def _sidecar(root: Path) -> None:
-    _edit(root, "syn/catalog.py", ', (("_model_roots:SynOther_v1",), model)]', "]")
+    text = (root / "syn/catalog.py").read_text()
+    (root / "syn/catalog.py").write_text(text.replace(', (("_model_roots:SynOther_v1",), model)', "", 1))
     _edit(root, "targets.py", '("SynOther_v1", lambda: "SynOther_v1"),\n', "")
     (root / "syn/other.circuit-check.py").write_text(SIDECAR.lstrip("\n"))
     pins = json.loads((root / "pins.json").read_text())
@@ -334,6 +335,27 @@ def test_a_sidecars_binding_and_pin_are_held_as_targets_pys_are(tmp_path):
     pins["pieces"]["SynOther_v1"] = {"and": 6}
     (root / "syn/other.circuit-check.json").write_text(json.dumps(pins))
     assert _run(root)["hits"] == ["SynTop_v1"]
+
+
+def test_an_unpinned_target_reruns_when_its_pin_is_added_where_it_goes_or_to_pins_json(tmp_path):
+    """SynK has no pin: its check read the absence in the pins file a new pin of it goes to (its module's sidecar) and in
+    `pins.json`, so adding it to either reruns SynK alone.  (A new file in `syn` would rerun every target, whose imports
+    listed the directory, so the sidecar is there from the start.)"""
+    root = _tree(tmp_path)
+    _bindings(root, '(("_sized_roots",), sized)', families=("SynK_v1",))
+    _edit(root, "syn/catalog.py", '(("_model_roots:SynOther_v1",), model), ', "")
+    _sidecar(root)
+    (root / "syn/kdef.circuit-check.json").write_text("{}")
+    _run(root)
+    assert set(_entry(root, "SynK_v1{K=2}")["reads"]["pins"]) == {"syn/kdef.circuit-check.json#pieces#SynK_v1{K=2}",
+                                                                  "pins.json#pieces#SynK_v1{K=2}"}
+    (root / "syn/kdef.circuit-check.json").write_text(json.dumps({"pieces": {"SynK_v1{K=2}": {"and": 2}}}))
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    (root / "syn/kdef.circuit-check.json").write_text("{}")
+    _run(root)
+    pins = json.loads((root / "pins.json").read_text())
+    (root / "pins.json").write_text(json.dumps({"pieces": {**pins["pieces"], "SynK_v1{K=2}": {"and": 2}}}))
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
 
 
 def test_a_new_pin_goes_to_the_sidecar_of_its_definitions_module(tmp_path):

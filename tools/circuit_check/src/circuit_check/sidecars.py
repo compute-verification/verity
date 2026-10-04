@@ -128,7 +128,7 @@ def load_pins(shared: Path = SHARED_PINS) -> dict:
                 out.setdefault(kind, {})[key] = v
     _WHERE.clear()
     _WHERE.update(where)
-    CC.pin_files([str(p) for p in pin_files()], pin_file)
+    CC.pin_files([str(p) for p in pin_files()], pin_reads)
     return out
 
 
@@ -139,6 +139,14 @@ def pin_file(kind: str, key: str) -> Path:
         return have
     mod = pin_owner(kind, key)
     return (path_of(mod, "json") if mod else None) or _SHARED[0]
+
+
+def pin_reads(kind: str, key: str) -> list[Path]:
+    """Where a check that looked up pin ``key`` of ``kind`` read it: the file that holds it; for one no file holds, the file a
+    new one goes to (`pin_file`) and `pins.json`, where it could be added by hand."""
+    if (have := _WHERE.get((kind, key))) is not None:
+        return [have]
+    return list(dict.fromkeys([pin_file(kind, key), _SHARED[0]]))
 
 
 def write_pins(updates: dict[tuple[str, str], Any]) -> None:
@@ -245,4 +253,4 @@ def owner(d: Any) -> str | None:
 
 
 __all__ = ["PACKAGES", "PIN_KINDS", "SHARED_PINS", "SUFFIX", "binding_modules", "discover", "load_pins", "owner", "path_of",
-           "pin_file", "pin_files", "pin_owner", "rel", "write_pins"]
+           "pin_file", "pin_files", "pin_owner", "pin_reads", "rel", "write_pins"]
