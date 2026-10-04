@@ -180,6 +180,25 @@ def test_what_the_preflight_adds_to_its_inputs_is_the_runs_even_when_nothing_was
     assert (root / "runs" / "r1" / "inputs" / "added.json").read_text() == "{}" and not (req.parent / "inputs").exists()
 
 
+def test_a_refusal_after_the_preflight_passed_deletes_the_staged_credentials(tmp_path):
+    """The preflight admits, then --exclusive finds another run live: nothing will ever take the staged URLs out of the request dir."""
+    root = tmp_path / "root"
+    req = _request(root, "r1", _tree(tmp_path), custody=True, env={"PF_ADD": "1"})
+    doc = json.loads(req.read_text())
+    doc["exclusive"] = True
+    req.write_text(json.dumps(doc))
+    (root / "runs" / "r0").mkdir(parents=True)
+    (root / "runs" / "r0" / "status.json").write_text('{"state": "running"}')
+    (req.parent / "inputs").mkdir()
+    (req.parent / "inputs" / "lean-deps-urls.json").write_text('{"k": "https://r2/o?X-Amz-Signature=s"}')
+    (req.parent / "inputs" / "sent.txt").write_text("x")
+    out = remote.launch_request(req)
+    assert out["started"] is False and "other run(s) are live" in out["refused"]
+    assert (req.parent / "inputs" / "added.json").exists(), "the preflight ran and passed"
+    assert not (req.parent / "inputs" / "lean-deps-urls.json").exists() and (req.parent / "inputs" / "sent.txt").exists()
+    assert not (req.parent / remote.CUSTODY_DIR / "cred.json").exists()
+
+
 def test_an_unreadable_declaration_refuses_and_none_means_no_preflight(tmp_path):
     root = tmp_path / "root"
     bad = _tree(tmp_path, decl="raise RuntimeError('broken')\n")

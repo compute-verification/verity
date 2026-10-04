@@ -18,7 +18,7 @@ UNDECLARED_CAP_BYTES; every other file is listed (path, bytes, sha256) without b
 .agents/skills/writing-runs/SKILL.md).  The listing is the record's `meta.trimmed` when it fits in TRIMMED_INLINE_BYTES, else the
 file TRIMMED_LISTING in the record's own tree, named by `meta.trimmed_listing` (`trimmed_of`).  A credential a run may be sent
 (CREDENTIALS) is deleted from the run dir before its record is taken, whatever the run's tool and however it ended, so no record
-holds one.
+holds one; a refused launch deletes it from the request dir (remote.py).
 
 `.custody` (research/run-custody/v0.1) is written only when the attempt is PRESERVED on the remote, names a run record, and every
 file now in the run dir is in that record with the same size and sha256 (hashed after `verified_from`, the clock read before

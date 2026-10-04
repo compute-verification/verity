@@ -394,9 +394,12 @@ def test_a_refused_claim_deletes_the_staged_key(tmp_path):
     doc = json.loads(req.read_text())
     doc["remote"]["source_sha"] = "f" * 40                    # no READY tree: refused
     req.write_text(json.dumps(doc))
+    (req.parent / "inputs").mkdir()
+    (req.parent / "inputs" / "lean-deps-urls.json").write_text(URLS)
     out = remote.launch_request(req)
     assert out["started"] is False and out["fault"] == "SourceNotReady"
     assert not (req.parent / remote.CUSTODY_DIR / CU.CRED_FILE).exists()
+    assert not (req.parent / "inputs" / "lean-deps-urls.json").exists(), "nothing will take the sent URLs out of the request dir"
 
 
 # ---- drain / the reaper from any machine ---------------------------------------------------------------------------------------------------
