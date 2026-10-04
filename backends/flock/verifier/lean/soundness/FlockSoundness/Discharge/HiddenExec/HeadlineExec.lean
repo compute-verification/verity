@@ -39,15 +39,15 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Fl
   (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) (hU : Built c.unit)
   {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none) {Reg : Type}
 
-include hU hpub hpt in
+include hU hpub in
 /-- **The site fact at a drawn table under hidden outputs**: at a draw flock-verify sets up with `Stmt.setupHidden`,
 each drawn unit's site is `BcSiteH`: the acceptance's draw is `dj S`, which decodes to `D`, its regions are the
-executable's, its public file loads (`HmOut.loadPublic`) to `pub`, and the unit's block and VU index its rank in
-`D.proved`, the VU below `2^⌊log₂ c.g⌋` (`Layout.vu_lt_pow2`). -/
-theorem tableH_bcSite {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
+executable's, its public file loads (`HmOut.loadPublic`) to `pub`, with or without shared rows, and the unit's block
+and VU index its rank in `D.proved`, the VU below `2^⌊log₂ c.g⌋` (`Layout.vu_lt_pow2`). -/
+theorem tableH_bcSiteS {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     BcSiteH (x.table.acc ht hc (v2_of_scope hscope)) pub (x.table.o u h) (x.table.vu u h) u.val := by
   have hcx : x.st.c = c := x.table.c_eq hc
-  refine ⟨dj S, x.D, rfl, x.hD, Layout.proved_lt_population x.hD, fun r hr => List.mem_map_of_mem hr, ?_, hpt, ?_, ?_⟩
+  refine ⟨dj S, x.D, rfl, x.hD, Layout.proved_lt_population x.hD, fun r hr => List.mem_map_of_mem hr, ?_, ?_, ?_⟩
   · show HmOut.loadPublic I.tags x.st.c I.publicFile = .ok pub
     rw [hcx]
     exact hpub
@@ -57,6 +57,13 @@ theorem tableH_bcSite {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) {u :
   · show x.D.proved[x.rank u / x.st.c.g * x.st.c.g + x.rank u % x.st.c.g]? = some u.val
     rw [Nat.div_add_mod']
     exact x.proved_rank h
+
+set_option linter.unusedSectionVars false in
+include hU hpub hpt in
+/-- `tableH_bcSiteS` at a public file without shared rows. -/
+theorem tableH_bcSite {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
+    BcSiteH (x.table.acc ht hc (v2_of_scope hscope)) pub (x.table.o u h) (x.table.vu u h) u.val :=
+  tableH_bcSiteS ht hc hscope dj hU hpub x h
 
 include hU hpub hpt in
 /-- **`BcSiteH` at every satisfiable site** of the one-table hidden plan: at a draw flock-verify sets up by

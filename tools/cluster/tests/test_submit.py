@@ -131,11 +131,11 @@ def test_the_cli_prints_the_placement_or_the_refusal(capsys):
 KINDS = Path(__file__).parents[1] / "kinds"
 
 
-def test_the_repos_kinds_load_and_lean_audit_is_proofs_cpu_m():
+def test_the_repos_kinds_load_and_lean_audit_is_leans_cpu_m():
     reg = kinds.load(KINDS)
     k = reg["lean-audit"]
-    assert (k.owner, k.phase, k.max_wall_min, k.restart) == ("proofs", "cpu-m", 20, "idempotent") and k.question
-    assert k.source["file"] == "kinds/proofs.toml" and len(k.source["sha256"]) == 64
+    assert (k.owner, k.phase, k.max_wall_min, k.restart) == ("lean", "cpu-m", 20, "idempotent") and k.question
+    assert k.source["file"] == "kinds/lean.toml" and len(k.source["sha256"]) == 64
     assert kinds.kinds_dir(NEBIUS) == KINDS.resolve()
 
 
@@ -145,7 +145,7 @@ def test_a_registered_kind_supplies_what_the_job_leaves_unsaid_and_names_itself_
     assert (out["node"], out["max_s"], out["job"]["cpus"], out["job"]["memory_gib"], out["job"]["max_s"]) == \
         ("vy-nebius-1", 1200, 8, 32, 2100)
     assert out["kind"] == "lean-audit" and out["question"].startswith("Do core's Lean proofs") and out["warnings"] == []
-    assert out["kind_source"]["file"] == "kinds/proofs.toml" and "GPU_LEASE_WHO=lean-audit:proofs-w" in out["wrap"]
+    assert out["kind_source"]["file"] == "kinds/lean.toml" and "GPU_LEASE_WHO=lean-audit:proofs-w" in out["wrap"]
     assert out["disk_gb"] == kinds.DISK_GB
 
 

@@ -360,13 +360,17 @@ def test_core_row_prefixes_name_the_row_length_only_and_no_old_frames_prefix():
 
 
 def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache(monkeypatch, tmp_path: Path):
-    pkg, src = Path(CS.__file__).parent, tmp_path / "src"          # verity_flock's sources, as the stage key's code digest reads them
-    for f in pkg.rglob("*.py"):
-        (src / f.relative_to(pkg)).parent.mkdir(parents=True, exist_ok=True)
-        (src / f.relative_to(pkg)).write_bytes(f.read_bytes())
+    import verity
+
+    src = {}                                                       # the packages' sources, as the stage key's code digest reads them
+    for name, pkg in (("verity_flock", Path(CS.__file__).parent), ("verity", Path(verity.__file__).parent)):
+        src[name] = tmp_path / "src" / name
+        for f in pkg.rglob("*.py"):
+            (src[name] / f.relative_to(pkg)).parent.mkdir(parents=True, exist_ok=True)
+            (src[name] / f.relative_to(pkg)).write_bytes(f.read_bytes())
     find_spec = importlib.util.find_spec
-    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: SimpleNamespace(submodule_search_locations=[str(src)])
-                        if name == "verity_flock" else find_spec(name, *a))
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: SimpleNamespace(submodule_search_locations=[str(src[name])])
+                        if name in src else find_spec(name, *a))
 
     def fresh(s):
         (CS._CTX["out"] / s[:16]).mkdir(parents=True, exist_ok=True)
@@ -389,11 +393,12 @@ def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache
 
     assert not cached("first") and built == [1]
     assert cached("again") and built == [1]                            # a cache hit composes nothing
-    sha = src / "sha512_circuit.py"
+    sha = src["verity"] / "ml" / "boolean" / "sha512.py"
     assert "CARRY_EVERY = 5" in sha.read_text()
     sha.write_text(sha.read_text().replace("CARRY_EVERY = 5", "CARRY_EVERY = 4"))
     assert not cached("sha512-parameter") and built == [1, 1]          # a SHA-512 parameter is in the key
-    (src / "class_statement.py").write_text((src / "class_statement.py").read_text() + "\n# another version\n")
+    cs = src["verity_flock"] / "class_statement.py"
+    cs.write_text(cs.read_text() + "\n# another version\n")
     assert not cached("code") and built == [1, 1, 1]                   # and so is the code's version
 
 
@@ -488,6 +493,20 @@ def test_selftest_gpu_runs_the_selftest_on_the_gpu(monkeypatch, tmp_path: Path):
     assert CS.prove("flock-circuit", tmp_path, 4, 0, selftest="honest")["all_pass"] is True
     assert "--gpu" in seen[0] and seen[0][-2:] == ["--only", "gpu_paths_agree"]
     assert "--gpu" not in seen[1]
+
+
+def test_each_selftest_case_keeps_its_stderr_beside_the_class_records(monkeypatch, tmp_path: Path):
+    def run(cmd, **_kw):
+        case = cmd[cmd.index("--only") + 1] if "--only" in cmd else None
+        return CS.subprocess.CompletedProcess(cmd, 0, stdout=f'NEG\t{{"case": "{case}", "pass": false}}\n',
+                                              stderr=f"thread 'main' panicked: {case}: out of memory\n")
+
+    monkeypatch.setattr(CS.subprocess, "run", run)
+    rec = CS.prove("flock-circuit", tmp_path, 16, 0, selftest="gpu_proofs_match_cpu", gpu=True)
+    assert rec["finished"] is True and rec["all_pass"] is False and "stderr_tail" not in rec   # a verdict: no tail in the record
+    CS.prove("flock-circuit", tmp_path, 16, 0, selftest=True)
+    assert (tmp_path / "selftest-gpu_proofs_match_cpu.err").read_text() == "thread 'main' panicked: gpu_proofs_match_cpu: out of memory\n"
+    assert (tmp_path / "selftest-all.err").read_text() == "thread 'main' panicked: None: out of memory\n"
 
 
 def test_a_verifier_pod_serves_every_point_of_a_gpu_session_on_the_same_processes(monkeypatch, tmp_path: Path):

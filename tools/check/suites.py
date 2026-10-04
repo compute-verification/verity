@@ -27,8 +27,12 @@ fails without running.
 Every run loads `guard/verity_suite_guard.py`, which fails the suite if its tests open a repository file outside its inputs,
 so a cached pass never hides a change to something the tests read. It also records what the key leaves out but the tests
 used: the workspace metadata files they opened, the installed distributions they imported outside their resolved
-dependencies, and the imports that found nothing. A pass is reused only while each of those is as it was. Programs a test
-starts as a subprocess are not traced: list what they read under `inputs`.
+dependencies, and the imports that found nothing. A pass is reused only while each of those is as it was. A Python a test
+starts, or a Python started by a program it starts, traces its own opens while it keeps the suite's PYTHONPATH and environment
+(`guard/child/`): one that opens a file outside the inputs fails the suite as the test would, and so does one whose tracer
+doesn't start; the failure names the test and the file. Nothing sees into other programs (bash, git, `uv`, a Python run with
+`-I`, `-E` or `-S`, or on a PYTHONPATH without the tracer): what they read is unchecked, and checking it would mean keying
+their suite on the whole tree. List what they read under `inputs`, or give the test a stand-in for it.
 
 Per-test verdicts. In a suite that declares `parallel = true`, whose tests run in any order and in any process, each test that
 passed is also kept on its own, even when its suite failed: under its module's key (`module_key`), which is the suite's with the
@@ -966,6 +970,8 @@ class Result:
     child_outside: dict | None = None    # test module (or "*") -> what a process its tests started read outside the inputs
     traced: set | None = None        # "F<tab>file" / "L<tab>directory" every process of the run read (None: the guard traced nothing)
     untraced: dict | None = None     # test module (or "*") -> programs its tests started that no tracer sees into
+    ran_all: bool = False            # pytest itself passed: every test it ran passed
+    child_reads: list | None = None  # (kind, file or why, tests): "O" a file a child read outside the inputs, "E" a child untraced
 
 
 #: pytest with the guard loaded by name (`-p`), which xdist repeats in each worker, from `guard/`: appended to sys.path, and
@@ -1004,29 +1010,34 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     seconds = time.monotonic() - start
     rep = json.loads(report.read_text()) if report.exists() else None
     ran_all = rc == 0 or (rc == 5 and bool(reuse))           # 5: nothing left to run, every test's pass reused
-    passed = ran_all and rep is not None and not rep["outside"] and not rep["unguarded"]
     rep = rep or {}
     reported = bool(rep)
-    reads, child_outside = {m: set(fs) for m, fs in (rep.get("reads") or {}).items()}, {}
+    reads, child_outside, by = {m: set(fs) for m, fs in (rep.get("reads") or {}).items()}, {}, {}
     traced = set(rep["traced"]) if isinstance(rep.get("traced"), list) else None
     untraced = {m: set(v) for m, v in (rep.get("untraced") or {}).items()}
+    base = "" if suite.path == "." else suite.path + "/"
     for line in reads_log.read_text().splitlines() if reads_log.exists() else ():
-        kind, module, rel = (line.split("\t", 2) + ["", ""])[:3]
+        kind, module, rel, test = (line.split("\t", 3) + ["", "", ""])[:4]
         if kind == "R":
             reads.setdefault(module, set()).add(rel)
         elif kind in ("O", "E"):
             child_outside.setdefault(module, []).append(rel)
+            who = test or ("a session fixture or conftest" if module == "*" else f"{module.removeprefix(base)} (on import)")
+            by.setdefault((kind, rel), set()).add(who)
         elif kind in ("F", "L") and traced is not None:
             traced.add(f"{kind}\t{rel}")
         elif kind == "X":
             untraced.setdefault(module, set()).add(rel)
     rep["reads"] = {m: sorted(fs) for m, fs in sorted(reads.items())}
+    # a child's read outside the inputs is the test's own: no key covers it, so nothing vouches for a pass
+    passed = ran_all and reported and not rep["outside"] and not rep["unguarded"] and not child_outside
     return Result(suite, "passed" if passed else "failed", seconds, rep.get("counts"), rep.get("outside"),
                   rep.get("unmarked_slow"), log, workers=workers, unguarded=rep.get("unguarded"), reported=reported,
                   watched=rep.get("watched"), distributions=rep.get("distributions"), missing=rep.get("missing"),
                   passed=rep.get("passed"), failed_tests=rep.get("failed"), reads=rep.get("reads"), reused=len(reuse),
                   child_outside={m: sorted(set(fs)) for m, fs in child_outside.items()}, traced=traced,
-                  untraced={m: sorted(v) for m, v in untraced.items()})
+                  untraced={m: sorted(v) for m, v in untraced.items()}, ran_all=ran_all,
+                  child_reads=[(k, rel, sorted(w)) for (k, rel), w in sorted(by.items())])
 
 
 class Slots:
@@ -1190,10 +1201,17 @@ def main(argv: list[str] | None = None) -> int:
         r.nondeterministic = sorted(set(per[s].nondeterministic)) if s in per else []
         print(f"{r.status:7} {s.name:28} {_count(r)} in {r.seconds:.0f} s" + (f" on {r.workers} workers" if r.workers > 1 else "")
               + (f"; {kept} per-test passes kept" if kept and per[s].narrow else f"; {kept} outcomes recorded" if kept else ""))
-        if r.child_outside:
-            gone = sorted({f for fs in r.child_outside.values() for f in fs})
-            print(f"        processes its tests started read {len(gone)} files outside its inputs ({', '.join(gone[:3])}): no per-test "
-                  f"verdict is kept for {', '.join(sorted(r.child_outside)[:3])}; list them under [tool.verity.tests] inputs")
+        if r.child_reads:
+            def who(w: list[str]) -> str:
+                return " and ".join(w) if len(w) < 3 else f"{w[0]}, {w[1]} and {len(w) - 2} more"
+            files = [f"{rel}: read by a process that {who(w)} started" for k, rel, w in r.child_reads if k == "O"]
+            blind = [f"a Python that {who(w)} started could not start its read guard ({why.removeprefix('the tracer did not start: ')})"
+                     for k, why, w in r.child_reads if k == "E"]
+            lines = files + blind
+            print(f"        processes its tests started read outside its inputs, so nothing vouches for its pass:\n          "
+                  + "\n          ".join(lines[:10]) + (f"\n          and {len(lines) - 10} more" if len(lines) > 10 else "")
+                  + (f"\n        list each file under [tool.verity.tests] inputs in {s.path}/pyproject.toml with a comment saying why, "
+                     "or give the test a stand-in for it" if files else ""))
         if r.nondeterministic:
             print(f"        NONDETERMINISTIC: {', '.join(r.nondeterministic[:5])}{' ...' if len(r.nondeterministic) > 5 else ''} both passed "
                   "and failed under one key: their inputs were identical")
@@ -1211,7 +1229,7 @@ def main(argv: list[str] | None = None) -> int:
                   f" depend on the package, or list the path under [tool.verity.tests] inputs in {s.path}/pyproject.toml")
         elif r.unguarded:
             print(f"        xdist workers {', '.join(r.unguarded)} sent the guard no record of what they read\n        log: {r.log}")
-        elif r.log is not None:
+        elif r.log is not None and not (r.ran_all and r.child_reads):     # failed on its children's reads alone: said above
             if not r.reported:
                 print("        the guard wrote no report, so nothing vouches for what the tests read")
             print("        " + "\n        ".join(r.log.read_text().splitlines()[-25:]) + f"\n        log: {r.log}")
@@ -1249,7 +1267,8 @@ def main(argv: list[str] | None = None) -> int:
         a.json.write_text(json.dumps([{"suite": r.suite.path, "name": r.suite.name, "status": r.status, "key": r.key,
                                        "seconds": round(r.seconds, 1), "workers": r.workers, "counts": r.counts,
                                        "failed_tests": r.failed_tests, "log": str(r.log) if r.log else None,
-                                       "outside": r.outside, "unguarded": r.unguarded, "since": r.since, "reused": r.reused,
+                                       "outside": r.outside, "child_outside": r.child_outside, "unguarded": r.unguarded,
+                                       "since": r.since, "reused": r.reused,
                                        "contradicts": r.contradicts, "nondeterministic": r.nondeterministic} for r in results]
                                      + [{"suite": s.path, "name": s.name, "status": "skipped"} for s in skipped], indent=1) + "\n")
     return 1 if failed or written else 0
