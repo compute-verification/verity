@@ -1,9 +1,9 @@
 """Captures of vLLM d9105ea80's Triton MLA decode (`TritonMLAImpl.forward_mqa` -> `decode_attention_fwd`, grouped kernel,
 `is_mla=True`) at GLM-4.7-Flash's shapes, for `mla.TritonMlaDecode`:
 
-    # node, torch venv:  python -m verity_vllm.program.registry.mla_capture produce --out DIR [--suite NAME]
-    # verity venv:       python -m verity_vllm.program.registry.mla_capture check --dir DIR [--out REPORT.json]
-    #                    python -m verity_vllm.program.registry.mla_capture check-bits --dir DIR [--tmin T] [--tmax T]
+    # node, torch venv:  verity-vllm mla-capture produce --out DIR [--suite NAME] [--triton-cache DIR]
+    # verity venv:       verity-vllm mla-capture check --dir DIR [--out REPORT.json]
+    #                    verity-vllm mla-capture check-bits --dir DIR [--tmin T] [--tmax T]
     #                        [--worker I --workers N] [--skip EARLIER.json ...] [--fresh] [--out R.json]
 
 `check` holds the numpy models (`mla_check`) to every captured word; `check-bits` evaluates the Boolean Definitions
@@ -14,16 +14,19 @@ manifest and only the kernel's outputs are stored: `o` (bf16 words `[B, H, 512]`
 scratch `attn_logits` (f32 words `[B, H, SPLITS, 513]`: each split's `acc / e_sum` and `e_max + log(e_sum)`). `produce` calls
 `decode_attention_fwd` exactly as forward_mqa does: q `[B, H, 576]`, the paged cache `[pages, PAGE, 1, 576]` and its first 512
 columns as the value buffer, a shuffled block table, `k_scale = v_scale = 1.0`. With `TRITON_CACHE_DIR` set the compiled
-kernels' TTGIR, LLIR, PTX and cubin land there; `produce` writes each cubin's SASS beside it.
+kernels' TTGIR, LLIR, PTX and cubin land there; `produce` writes each cubin's SASS beside it (`--triton-cache`, which defaults
+to that variable).
 """
 from __future__ import annotations
 
-import argparse
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+
+from verity_vllm.config import option
 
 DL, DR = 512, 64
 D = DL + DR
@@ -153,6 +156,10 @@ def bmm_inputs(case: dict) -> tuple[np.ndarray, np.ndarray]:
 def combine_inputs(case: dict) -> tuple[np.ndarray, np.ndarray]:
     T, HD = case["T"], case["HD"]
     return operand_words(case, 0, T * HD, "x").reshape(T, HD), operand_words(case, 1, T * HD, "x").reshape(T, HD)
+
+
+#: op -> its case's inputs, rebuilt from the manifest (`mla_check.check`)
+INPUTS = {"decode": case_inputs, "bmm": bmm_inputs, "combine": combine_inputs}
 
 
 # --- produce (node, torch venv) -----------------------------------------------------------------------------------------
@@ -289,9 +296,7 @@ def _sass(cache_dir: Path) -> list[str]:
 RUN = {"decode": _run_case, "bmm": _run_bmm, "combine": _run_combine}
 
 
-def produce(out: Path, suite_name: str, device: str = "cuda") -> dict:
-    import os
-
+def produce(out: Path, suite_name: str, device: str = "cuda", triton_cache: Path | None = None) -> dict:
     import torch
     import triton
     import vllm
@@ -309,9 +314,8 @@ def produce(out: Path, suite_name: str, device: str = "cuda") -> dict:
     for i, case in enumerate(cases):
         np.savez_compressed(out / f"case_{i}.npz", **RUN[case.get("op", "decode")](case, device))
         print(f"[mla-capture] case {i}: {json.dumps(case)[:160]}", file=sys.stderr, flush=True)
-    cache = os.environ.get("TRITON_CACHE_DIR")
-    if cache:
-        man["sass"] = _sass(Path(cache))
+    if triton_cache is not None:
+        man["sass"] = _sass(triton_cache)
     (out / "manifest.json").write_text(json.dumps(man, indent=1) + "\n")
     return man
 
@@ -434,42 +438,56 @@ def check_bits(d: Path, tmax: int | None = None, worker: int = 0, workers: int =
     return rep
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="mla_capture")
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("produce")
-    p.add_argument("--out", required=True)
-    p.add_argument("--suite", default="decode-v1")
-    p.add_argument("--device", default="cuda")
-    c = sub.add_parser("check")
-    c.add_argument("--dir", required=True)
-    c.add_argument("--out")
-    cb = sub.add_parser("check-bits")
-    cb.add_argument("--dir", required=True)
-    cb.add_argument("--out")
-    cb.add_argument("--tmin", type=int)
-    cb.add_argument("--tmax", type=int)
-    cb.add_argument("--worker", type=int, default=0)
-    cb.add_argument("--workers", type=int, default=1)
-    cb.add_argument("--skip", nargs="*", default=[], help="earlier check-bits reports: their finished keys are not rerun")
-    cb.add_argument("--fresh", action="store_true", help="each key in a new process (a worker's memory is one key's)")
-    a = ap.parse_args(argv)
-    if a.cmd == "produce":
-        produce(Path(a.out), a.suite, a.device)
+@dataclass(frozen=True, kw_only=True)
+class ProduceOptions:
+    """Capture a suite's cases on the GPU (node, torch venv)."""
+
+    out: str = option("--out")
+    suite: str = option("--suite", default="decode-v1")
+    device: str = option("--device", default="cuda")
+    triton_cache: str | None = option("--triton-cache", env="TRITON_CACHE_DIR", default=None,
+                                      help="the Triton cache the run compiles into, whose cubins' SASS the manifest records")
+
+
+@dataclass(frozen=True, kw_only=True)
+class CheckOptions:
+    """The numpy models (`mla_check`) against every captured word."""
+
+    dir: str = option("--dir")
+    out: str | None = option("--out", default=None)
+
+
+@dataclass(frozen=True, kw_only=True)
+class CheckBitsOptions:
+    """The Boolean Definitions on bits against the captures."""
+
+    dir: str = option("--dir")
+    out: str | None = option("--out", default=None)
+    tmin: int | None = option("--tmin", type=int, default=None)
+    tmax: int | None = option("--tmax", type=int, default=None)
+    worker: int = option("--worker", type=int, default=0)
+    workers: int = option("--workers", type=int, default=1)
+    skip: list[str] = option("--skip", nargs="*", default=[], help="earlier check-bits reports: their finished keys are not rerun")
+    fresh: bool = option("--fresh", action="store_true", default=False,
+                         help="each key in a new process (a worker's memory is one key's)")
+
+
+COMMANDS = {"produce": ProduceOptions, "check": CheckOptions, "check-bits": CheckBitsOptions}
+
+
+def main(a: ProduceOptions | CheckOptions | CheckBitsOptions) -> int:
+    if isinstance(a, ProduceOptions):
+        produce(Path(a.out), a.suite, a.device, Path(a.triton_cache) if a.triton_cache else None)
         return 0
-    if a.cmd == "check-bits":
+    if isinstance(a, CheckBitsOptions):
         rep = check_bits(Path(a.dir), a.tmax, a.worker, a.workers, Path(a.out) if a.out else None, a.tmin,
                          done_keys([Path(p) for p in a.skip]), a.fresh)
         print(json.dumps({k: rep[k] for k in ("rows", "mismatched_rows", "words_bad", "first_mismatch")}), file=sys.stderr)
         return 0 if rep["mismatched_rows"] == 0 else 1
     from verity_vllm.program.registry import mla_check
 
-    rep = mla_check.check(Path(a.dir))
+    rep = mla_check.check(Path(a.dir), INPUTS)
     if a.out:
         Path(a.out).write_text(json.dumps(rep, indent=1) + "\n")
     print(json.dumps(rep["summary"]), file=sys.stderr)
     return 0 if rep["summary"]["mismatched_rows"] == 0 else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

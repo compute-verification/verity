@@ -61,8 +61,8 @@ from verity.ml.boolean import fp
 from verity.ml.boolean import gemm as BG
 from verity.ml.boolean import mufu as BM
 from verity.ml.boolean import scalar as BS
-from verity.ml.boolean.forms import NOT, mux, or_reduce, const_bits
-from verity.ml.boolean.softmax import _eq_const, f32_gt
+from verity.ml.boolean.forms import NOT, and_reduce, mux, or_reduce, const_bits
+from verity.ml.boolean.softmax import f32_gt
 from verity.ml.boolean.trace import definition
 from verity_vllm.program.registry.boolean_attention import _Bits
 
@@ -100,8 +100,8 @@ def exp_sub(C, x, m):
 def merge_gate(C, e_max, e_sum):
     """One split's ``tl = e_max + logf(e_sum)`` is finite: e_max finite and e_sum a positive normal (FTZ logf)."""
     e = e_sum[23:31]
-    finite = NOT(_eq_const(C, e_max[23:31], 0xFF))
-    normal = C.AND(NOT(_eq_const(C, e, 0xFF)), or_reduce(C, e))
+    finite = NOT(and_reduce(C, e_max[23:31]))
+    normal = C.AND(NOT(and_reduce(C, e)), or_reduce(C, e))
     return [C.AND(C.AND(finite, normal), NOT(e_sum[31]))]
 
 
@@ -114,7 +114,7 @@ def mla_out(C, acc, e_sum, rcp, gate):
 
 
 TritonExpSub = definition("TritonExpSub", 1, exp_sub, (("x", F32), ("m", F32)), F32,
-                          doc="Triton's tl.exp(x - m) on sm_120: ex2.approx.f32(RN(RN(x - m) * 0x3FB8AA3B)), ptxas's lowering")
+                          doc="Triton's tl.exp(x - m): ex2.approx.f32(RN(RN(x - m) * 0x3FB8AA3B)), ptxas's lowering")
 TritonMlaGate = definition("TritonMlaGate", 1, merge_gate, (("e_max", F32), ("e_sum", F32)), BL.BIT,
                            doc="one split's e_max + logf(e_sum) is finite: e_max finite, e_sum a positive normal")
 TritonMlaOut = definition("TritonMlaOut", 1, mla_out, (("acc", F32), ("e_sum", F32), ("rcp", F32), ("gate", BL.BIT)), BF16,
