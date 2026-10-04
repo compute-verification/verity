@@ -31,8 +31,14 @@
   "_private.Flock.Program.0.Flock.Program.gateIn": "partial def: a gate's inputs in an activation, resolving references through scopes (descriptor §6, §7); no proof is about it, and qword_program_agree.py covers it",
   "Flock.Extract.evalDef": "partial def: cut.evaluate_definition with its memo, recursing through a separable body's members (PROTOCOL.md 16.7); no proof is about it, and qword_program_agree.py covers it"
  },
+ "layers": {
+  "Flock": {
+   "imports": ["Flock", "Lean", "Std"],
+   "except": [],
+   "why": "the executable verifier is trusted text, whose spec is its soundness guarantee: it imports only itself and Lean's own libraries, never a proof"
+  }
+ },
  "reads_exempt": {
-  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "FlockProofs": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "pins": {
