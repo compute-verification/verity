@@ -1,9 +1,8 @@
 """Commitment schemes: a commitment binds its maker to a vector of leaves before any coins are drawn, and opens one leaf
 at a time.
 
-Everyone who opens a commitment in a deployment must use the same scheme, so the configuration names it. `MerkleSha256`
-stands in for today's `verity.commitments` (`frame_v3`, `hm96`, `vllm_v1` and their SHA-512 variants); unlike them, its
-leaves do not hide.
+Everyone who opens a commitment must use the same scheme. `MerkleSha256` stands in for today's `verity.commitments`
+(`frame_v3`, `hm96`, `vllm_v1` and their SHA-512 variants); unlike them, its leaves do not hide.
 """
 
 from __future__ import annotations
@@ -68,6 +67,3 @@ class MerkleSha256:
             node = _h(b"\x01", node, sibling) if index % 2 == 0 else _h(b"\x01", sibling, node)
             index //= 2
         return node == commitment.root
-
-
-SCHEMES: dict[str, type[CommitmentScheme]] = {MerkleSha256.name: MerkleSha256}

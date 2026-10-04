@@ -1,7 +1,7 @@
 /-! What a circuit is and what it computes, beside `circuit.py`, which implements it. A placeholder: the real
 statement is today's `packages/verity/lean/Verity/Protocol/Circuit.lean`. -/
 
-namespace Verity.Circuits
+namespace Verity.Primitives
 
 inductive Op | add | mul | xor | and | not
 
@@ -21,4 +21,4 @@ def Op.apply : Op → Nat → Nat → Nat
 def trace (c : Circuit) (inputs : List Nat) : List Nat :=
   c.gates.foldl (fun wires (op, a, b) => wires ++ [op.apply (wires.getD a 0) (wires.getD b 0)]) inputs
 
-end Verity.Circuits
+end Verity.Primitives

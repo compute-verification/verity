@@ -1,12 +1,12 @@
 [project]
 name = "verity"
 version = "0.0.0"
-description = "The protocol, the circuit library, the primitives and the light subprotocols."
+description = "The protocol, the primitives and the light subprotocols."
 requires-python = ">=3.12"
 dependencies = []
 
 [dependency-groups]
-dev = ["verity-sp1", "toy-serving"]
+dev = ["verity-sp1"]
 
 [build-system]
 requires = ["hatchling"]
@@ -17,9 +17,8 @@ packages = ["verity"]
 exclude = ["**/*.lean", "**/.lake", "**/pyproject.toml"]
 
 [tool.uv.workspace]
-members = ["verity/subprotocols/sampled_proofs/sp1", "integrations/toy_serving"]
+members = ["verity/subprotocols/sampled_proofs/sp1"]
 
 [tool.uv.sources]
 verity = { workspace = true }
 verity-sp1 = { workspace = true }
-toy-serving = { workspace = true }

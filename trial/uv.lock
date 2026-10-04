@@ -4,7 +4,6 @@ requires-python = ">=3.12"
 
 [manifest]
 members = [
-    "toy-serving",
     "verity",
     "verity-sp1",
 ]
@@ -19,34 +18,19 @@ wheels = [
 ]
 
 [[package]]
-name = "toy-serving"
-version = "0.0.0"
-source = { editable = "integrations/toy_serving" }
-dependencies = [
-    { name = "verity" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity", editable = "." }]
-
-[[package]]
 name = "verity"
 version = "0.0.0"
 source = { editable = "." }
 
 [package.dev-dependencies]
 dev = [
-    { name = "toy-serving" },
     { name = "verity-sp1" },
 ]
 
 [package.metadata]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "toy-serving", editable = "integrations/toy_serving" },
-    { name = "verity-sp1", editable = "verity/subprotocols/sampled_proofs/sp1" },
-]
+dev = [{ name = "verity-sp1", editable = "verity/subprotocols/sampled_proofs/sp1" }]
 
 [[package]]
 name = "verity-sp1"

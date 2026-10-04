@@ -1,47 +1,39 @@
-"""Running the protocol: one deployment, under one configuration, over many epochs.
+"""Running the protocol: every party against every other, over one log.
 
-    refuse      every reason the configuration cannot run, once, before anything runs
-    set up      the commitment scheme and the auditor's challenge source, shared by every epoch
-    repeat      `epoch.run_epoch`, each epoch's record chained to the previous one's digest
-
-Every epoch yields its report as it ends: each layer's verdict comes every epoch, and silence is never an accept. An
-integration runs this with itself as the developer; `epochs` is unbounded by default, so a deployment runs until it stops.
+`run` starts each party, then delivers the log's events in order, each to the parties it is addressed to, appending
+whatever they send in reply, until nothing is left to deliver. It yields one party's view as the log grows: every event
+that party sent or received. The auditor trusts the verifier, so the verifier's view is the protocol's output: its
+profiles are events in it.
 """
 
 from __future__ import annotations
 
-import itertools
-from collections.abc import Iterable, Iterator
+from collections import deque
+from collections.abc import Iterator, Mapping
 
-from verity.primitives.commitments import SCHEMES
-from verity.primitives.randomness import SOURCES
-from verity.primitives.registry import NotInstalled
-from verity.protocol.accounting.account import Inventory
-from verity.protocol.configuration import Configuration, refusals
-from verity.protocol.epoch import Developer, EpochRecord, EpochReport, make_audits, run_epoch
+from verity.primitives.events import Event, Party
 
 
-class Refused(ValueError):
-    def __init__(self, reasons: tuple[str, ...]):
-        self.reasons = reasons
-        super().__init__("configuration refused: " + "; ".join(reasons))
+def run(parties: Mapping[str, Party], view: str) -> Iterator[Event]:
+    live = dict(parties)
+    log: deque[Event] = deque()
+    for name in parties:
+        log.extend(_advance(live, name, None))
+    while log:
+        event = log.popleft()
+        if view == event.sender or view in event.to:
+            yield event
+        for name in event.to:
+            if name not in parties:
+                raise KeyError(f"{event.sender} sent {type(event.body).__name__} to {name}, who is not a party")
+            if name in live:
+                log.extend(_advance(live, name, event))
 
 
-def run(
-    config: Configuration, developer: Developer, inventory: Inventory, epochs: Iterable[int] | None = None
-) -> Iterator[tuple[EpochReport, EpochRecord]]:
-    why = list(refusals(config))
-    if not why:
-        try:
-            make_audits(config, SCHEMES[config.commitments]())
-        except NotInstalled as e:
-            why.append(str(e))
-    if why:
-        raise Refused(tuple(why))
-
-    scheme, source = SCHEMES[config.commitments](), SOURCES[config.challenges]()
-    previous = None
-    for epoch in itertools.count(1) if epochs is None else epochs:
-        report, record = run_epoch(config, scheme, source, developer, inventory, epoch, previous)
-        previous = record.digest()
-        yield report, record
+def _advance(live: dict[str, Party], name: str, event: Event | None) -> list[Event]:
+    try:
+        sends = live[name].send(event)
+    except StopIteration as stop:
+        sends = stop.value or ()
+        del live[name]
+    return [Event(name, s.to, s.body) for s in sends]

@@ -1,2 +1,3 @@
-"""What subprotocols are built from: `commitments` (binding to values before coins are drawn), `randomness` (where coins
-come from, and the rule every draw follows), `registry` (constructions found by name among what is installed)."""
+"""What everything above is built from: `events` (parties and what they send), `circuit` and `partition` (what a
+circuit computes, and its proof units), `commitments` (binding to values before coins are drawn), `randomness` (coins
+from a verifier's secret)."""

@@ -12,7 +12,7 @@ import hashlib
 import json
 from collections.abc import Mapping, Sequence
 
-from verity.circuits.circuit import OPS, Circuit
+from verity.primitives.circuit import OPS, Circuit
 
 Partition = tuple[tuple[int, ...], ...]  # regions, each a tuple of gate indices
 

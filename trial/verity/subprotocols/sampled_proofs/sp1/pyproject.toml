@@ -1,12 +1,9 @@
 [project]
 name = "verity-sp1"
 version = "0.0.0"
-description = "The SP1 construction's dependencies and registration; its source ships with verity."
+description = "The SP1 construction's dependencies; its source ships with verity."
 requires-python = ">=3.12"
 dependencies = ["verity", "tomli-w"]
-
-[project.entry-points."verity.constructions"]
-"sampled_proofs/sp1" = "verity.subprotocols.sampled_proofs.sp1.construction:Sp1"
 
 [build-system]
 requires = ["hatchling"]

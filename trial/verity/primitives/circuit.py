@@ -1,8 +1,7 @@
-"""The circuit library: build, name, evaluate and trace circuits.
+"""Circuits: build, name, evaluate and trace them.
 
-What a circuit is and what it computes is stated in `Circuit.lean`, beside `circuit.py`; this library
-implements it and is held to it by conformance vectors, never named by the configuration. A toy of descriptor v1: one
-flat list of two-input gates. Word gates (`add`, `mul`) act on wires mod 2**32; the Boolean profile's gates (`and`,
+What a circuit is and what it computes is stated in `Circuit.lean`, beside this file; this implements it and is held
+to it by conformance vectors. A toy of descriptor v1: one flat list of two-input gates. Word gates (`add`, `mul`) act on wires mod 2**32; the Boolean profile's gates (`and`,
 `xor`, `not`, which ignores its second operand) on bits, as `verity.ir.boolean` does.
 """
 
