@@ -73,7 +73,7 @@ def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProc
 
 
 #: result kinds that pass no merge gate, whatever `--tool` recorded them and whatever its declaration says it produces:
-#: `lean-fast/v1` is the Lean fast path's (`tools/check/lean_changed.py --records`), an audit without the kernel replay,
+#: `lean-fast/v1` is the Lean fast path's (`tools/lean/lean_changed.py --records`), an audit without the kernel replay,
 #: which every merge check keeps
 REFUSED_KINDS = frozenset({"lean-fast/v1"})
 #: what `check.py --record --on` puts before the declared command (its `slot_wrap`): one of the machine's check slots, then
