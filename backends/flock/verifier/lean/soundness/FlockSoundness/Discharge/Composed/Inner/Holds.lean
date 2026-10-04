@@ -1048,16 +1048,30 @@ theorem regions_layout_of {st : Stmt} (hdm : avoidsMask st = true) :
   rw [maskCol_iff_B] at hmc
   simp [hmc] at this
 
-/-- **The setup's layout facts**: `HmRow.check`'s mask range is one slot of at least a word, apart from every other
-range (`ExecSetup.setupH_layout`); the pin is a net slot's constant; Δ and the regions avoid the mask (`avoidsMask`). -/
-theorem setupH_maskLayout {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
+/-- **What the mask layout reads of a setup**: `Layout`, `HmRow.check` on its circuit, and `m`. Both `Stmt.setupH` and
+`Stmt.setupHidden` (untyped) give it. -/
+structure MaskSetup (st : Stmt) : Prop where
+  layout : Layout st
+  check : ∃ tags ls, HmRow.check st.c tags ls = .ok ()
+  m : st.m = st.c.kLog + st.nbl
+
+theorem MaskSetup.mask {st : Stmt} (M : MaskSetup st) :
+    ∀ r ∈ st.c.ranges.toList, r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ st.c.kLog :=
+  let ⟨_, _, hc⟩ := M.check; Refine.hm_check_mask hc
+
+theorem maskSetup_of_setupH {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (ht : tags.typed = false)
-    (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st)
-    (hdm : avoidsMask st = true) : MaskLayout st := by
-  have L := setupH_layout ht h
-  obtain ⟨_, hc⟩ := Refine.hm_parse_check (setupH_spec ht h).1
-  have hmask := (Refine.setupH_mask h).1
+    (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) : MaskSetup st :=
+  ⟨setupH_layout ht h, let ⟨ls, hc⟩ := Refine.hm_parse_check (setupH_spec ht h).1; ⟨_, ls, hc⟩,
+    (Refine.setupH_mask h).2⟩
+
+/-- **A setup's layout facts**: `HmRow.check`'s mask range is one slot of at least a word, apart from every other range
+(`Layout`); the pin is a net slot's constant; Δ and the regions avoid the mask (`avoidsMask`). -/
+theorem maskLayout_of {st : Stmt} (M : MaskSetup st) (hdm : avoidsMask st = true) : MaskLayout st := by
+  have L := M.layout
+  obtain ⟨_, _, hc⟩ := M.check
+  have hmask := M.mask
   have hslot : ∀ m, st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) = some m →
       m.count = 1 ∧ 7 ≤ m.slotLog := fun m hf =>
     ⟨hm_check_maskCount hc m (List.mem_of_find?_eq_some hf) (kind_of_find hf),
@@ -1080,6 +1094,14 @@ theorem setupH_maskLayout {tags : Tags} {circuitFile publicFile : ByteArray} {co
       have hk := kind_of_find hf
       rw [← hapart m hf rp hrp _ hcr hcm, hkp] at hk
       cases hk
+
+/-- **The setup's layout facts** (`maskLayout_of` at `Stmt.setupH`). -/
+theorem setupH_maskLayout {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
+    {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
+    (ht : tags.typed = false)
+    (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st)
+    (hdm : avoidsMask st = true) : MaskLayout st :=
+  maskLayout_of (maskSetup_of_setupH ht h) hdm
 
 /-- **The setup's statements isolate the mask slot**: `HmRow.check`'s ranges are aligned and pairwise
 apart, so the mask range's rows of `A₀`, `B₀` are its own identity rows and no other range's row reads its columns; Δ's
@@ -1104,24 +1126,23 @@ theorem tablesAtZK_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : F
   rw [tableAtZK, dif_pos ⟨y⟩]
   exact tableZK_eq _ _
 
-/-- **The inner relation at the draw** (open, inner lane): at every coin vector the honest prover doesn't refuse, every
-valid witness whose registered values are the public ones satisfies `Table.InnerHolds` (§2.4 line 16's ten
-constraints). -/
-theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S))
-    (ht : I.tags.typed = false) (hdm : avoidsMask y.x.st = true) :
-    let C := coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
+/-- **The inner relation at a `--zk` table of a setup** (`innerOf_holds` at any table `Tz` over `st`'s statement at its
+regions, `st` a `MaskSetup` that avoids the mask slot): at every coin vector the honest prover doesn't refuse, every valid
+witness whose registered values are the public ones satisfies `Table.InnerHolds`. -/
+theorem innerOf_holds_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hwf : StmtWF st) (hS : Tz.S = stmtOf st hwf (regionsOf st))
+    (M : MaskSetup st) (hdm : avoidsMask st = true) :
+    let C := coinedOf P Tz st
     ∀ c, C.Admits c → ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w := by
   intro C c hc w hw hreg ω r
   apply batch_of_rows
   intro k
-  have hE : (layOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).hab = (C.T c).tab.nE := by
+  have hE : (layOf (Tz) st).hab = (C.T c).tab.nE := by
     show _ = padLenOf _ _ - 4
     simp only [padLenOf, layOf, Zk.PadLayout.len, Zk.PadLayout.tw]
     omega
   obtain ⟨hfa, hfb, htx, hty, htw⟩ := lay_triple _ _ hE
   have hv : (ZK.Table.View.pre (C.T c).tab ((C.T c).tab.view w ω)).2.1 r =
-      honestMasked (tablesAtZK dj y₀ S R) y.x.st c r (zWith y.x.st w ω.1) (ω.2.1.2.1 r)
+      honestMasked (Tz) st c r (zWith st w ω.1) (ω.2.1.2.1 r)
         ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm) := funext fun i => by
     show _ + _ = _ + _
     refine congrArg (_ + ·) ?_
@@ -1129,62 +1150,62 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
       (Equiv.symm_apply_eq _).2 (Fin.ext (by simp [padEquiv]))]
     rfl
   have hinner : (ZK.Table.View.pre (C.T c).tab ((C.T c).tab.view w ω)).2.2.2.2.1 r =
-      (innerEps (tablesAtZK dj y₀ S R) y.x.st c r *
+      (innerEps (Tz) st c r *
           ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
-            (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).fa) +
+            (ix (C.T c).tab.nE (layOf (Tz) st).fa) +
         ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
-          (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).tx),
+          (ix (C.T c).tab.nE (layOf (Tz) st).tx),
        ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
-          (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).fb) +
+          (ix (C.T c).tab.nE (layOf (Tz) st).fb) +
         ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
-          (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).ty)) := by
+          (ix (C.T c).tab.nE (layOf (Tz) st).ty)) := by
     rw [comp_symm_lt _ _ hfa, comp_symm_lt _ _ hfb, htx, hty, comp_symm_tail _ 1 (by omega),
       comp_symm_tail _ 2 (by omega)]
     rfl
   have hab : ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
-        (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).hab) =
+        (ix (C.T c).tab.nE (layOf (Tz) st).hab) =
       ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
-          (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).fa) *
+          (ix (C.T c).tab.nE (layOf (Tz) st).fa) *
         ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
-          (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).fb) := by
+          (ix (C.T c).tab.nE (layOf (Tz) st).fb) := by
     rw [comp_symm_lt _ _ hfa, comp_symm_lt _ _ hfb,
-      show ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).hab = ix (C.T c).tab.nE ((C.T c).tab.nE + 0) from
+      show ix (C.T c).tab.nE (layOf (Tz) st).hab = ix (C.T c).tab.nE ((C.T c).tab.nE + 0) from
         congrArg _ hE, comp_symm_tail _ 0 (by omega)]
     rfl
   have htw' : ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
-        (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).tw) =
+        (ix (C.T c).tab.nE (layOf (Tz) st).tw) =
       ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
-          (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).tx) *
+          (ix (C.T c).tab.nE (layOf (Tz) st).tx) *
         ((C.T c).tab.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.nE).symm)
-          (ix (C.T c).tab.nE (layOf (tablesAtZK dj y₀ S R) y.x.st).ty) := by
+          (ix (C.T c).tab.nE (layOf (Tz) st).ty) := by
     rw [htw, htx, hty, comp_symm_tail _ 1 (by omega), comp_symm_tail _ 2 (by omega), comp_symm_tail _ 3 (by omega)]
     rfl
-  have hmS : y.x.st.m = (tablesAtZK dj y₀ S R).S.m := by rw [tablesAtZK_eq dj y₀ S R y]; rfl
-  have hkS : y.x.st.c.kLog = (tablesAtZK dj y₀ S R).S.kLog := by rw [tablesAtZK_eq dj y₀ S R y]; rfl
-  have hm7 : 7 ≤ (tablesAtZK dj y₀ S R).S.m := by have := (tablesAtZK dj y₀ S R).hm; omega
-  obtain ⟨hnd, hlt⟩ := maskWordsOf_ok y.x.st (setupH_mask y.x.h).2 (setupH_mask y.x.h).1
+  have hmS : st.m = (Tz).S.m := by rw [hS]; rfl
+  have hkS : st.c.kLog = (Tz).S.kLog := by rw [hS]; rfl
+  have hm7 : 7 ≤ (Tz).S.m := by have := (Tz).hm; omega
+  obtain ⟨hnd, hlt⟩ := maskWordsOf_ok st M.m M.mask
   rw [hmS] at hlt
   have hs0 : ∀ v : Fin 128, fOf (shArr (ZK.Table.View.pre (C.T c).tab ((C.T c).tab.view w ω)).1 (2 * r.val))[v.val]! = shat hm7
-      (RingSwitch.claimOf (tablesAtZK dj y₀ S R).S.m (Lincheck.lcAbClaim (tablesAtZK dj y₀ S R).S.m (tablesAtZK dj y₀ S R).S.kLog
-        (rhoF (tablesAtZK dj y₀ S R) y.x.st c r) (tsF (tablesAtZK dj y₀ S R) y.x.st c r) (c.rest.rPrime r))) (zWith y.x.st w ω.1) v := by
+      (RingSwitch.claimOf (Tz).S.m (Lincheck.lcAbClaim (Tz).S.m (Tz).S.kLog
+        (rhoF (Tz) st c r) (tsF (Tz) st c r) (c.rest.rPrime r))) (zWith st w ω.1) v := by
     intro v
     have h2r : 2 * r.val < Zk.RANK_POINTS := by have := r.isLt; simp only [Zk.RANK_POINTS]; omega
-    have hcl : Lincheck.lcAbClaim (tablesAtZK dj y₀ S R).S.m (tablesAtZK dj y₀ S R).S.kLog
-        (rhoF (tablesAtZK dj y₀ S R) y.x.st c r) (tsF (tablesAtZK dj y₀ S R) y.x.st c r) (c.rest.rPrime r) =
+    have hcl : Lincheck.lcAbClaim (Tz).S.m (Tz).S.kLog
+        (rhoF (Tz) st c r) (tsF (Tz) st c r) (c.rest.rPrime r) =
         (claimsOf c.rest r)[0]! := by
       rw [← hmS, ← hkS]; rfl
     have hpt : pointsOf c.rest ⟨2 * r.val, h2r⟩ = ((claimsOf c.rest r)[0]!).x.toList.drop 1 := by
       show ((claimsOf c.rest (if 2 * r.val < 2 then 0 else 1))[2 * r.val % 2]!).x.toList.drop 1 = _
       rw [show 2 * r.val % 2 = 0 by omega, rep_of_lt r (2 * r.val) (by omega)]
-    have hx : (Lincheck.lcAbClaim (tablesAtZK dj y₀ S R).S.m (tablesAtZK dj y₀ S R).S.kLog
-        (rhoF (tablesAtZK dj y₀ S R) y.x.st c r) (tsF (tablesAtZK dj y₀ S R) y.x.st c r) (c.rest.rPrime r)).x.size =
-        (tablesAtZK dj y₀ S R).S.m - 6 := by
-      have := (tablesAtZK dj y₀ S R).S.hk
+    have hx : (Lincheck.lcAbClaim (Tz).S.m (Tz).S.kLog
+        (rhoF (Tz) st c r) (tsF (Tz) st c r) (c.rest.rPrime r)).x.size =
+        (Tz).S.m - 6 := by
+      have := (Tz).S.hk
       simp only [Lincheck.lcAbClaim, rhoF, tsF, Array.size_append, Array.size_reverse, Array.size_ofFn,
         Array.size_extract]
       omega
     rw [RingSwitch.shat_eqWord _ _ hx, hcl, extract_one_toList, ← hpt]
-    refine Eq.trans ?_ (sHat_shat y.x.st hm7 w rfl ω.1 hnd hlt
+    refine Eq.trans ?_ (sHat_shat st hm7 w rfl ω.1 hnd hlt
       (fun x => fOf (eqWord (pointsOf c.rest ⟨2 * r.val, h2r⟩) x)) v)
     rw [shArr, getElem!_pos _ v.val (by simp), Array.getElem_ofFn]
     unfold sHatAt
@@ -1192,19 +1213,19 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
     · rfl
     · exact absurd h2r ‹_›
   have hs1 : ∀ v : Fin 128, fOf (shArr (ZK.Table.View.pre (C.T c).tab ((C.T c).tab.view w ω)).1 (2 * r.val + 1))[v.val]! = shat hm7
-      (RingSwitch.claimOf (tablesAtZK dj y₀ S R).S.m (cClaim (tablesAtZK dj y₀ S R) y.x.st c r)) (zWith y.x.st w ω.1) v := by
+      (RingSwitch.claimOf (Tz).S.m (cClaim (Tz) st c r)) (zWith st w ω.1) v := by
     intro v
     have h2r : 2 * r.val + 1 < Zk.RANK_POINTS := by have := r.isLt; simp only [Zk.RANK_POINTS]; omega
-    have hcl : cClaim (tablesAtZK dj y₀ S R) y.x.st c r = (claimsOf c.rest r)[1]! := rfl
+    have hcl : cClaim (Tz) st c r = (claimsOf c.rest r)[1]! := rfl
     have hpt : pointsOf c.rest ⟨2 * r.val + 1, h2r⟩ = ((claimsOf c.rest r)[1]!).x.toList.drop 1 := by
       show ((claimsOf c.rest (if 2 * r.val + 1 < 2 then 0 else 1))[(2 * r.val + 1) % 2]!).x.toList.drop 1 = _
       rw [show (2 * r.val + 1) % 2 = 1 by omega, rep_of_lt r (2 * r.val + 1) (by omega)]
-    have hx : (cClaim (tablesAtZK dj y₀ S R) y.x.st c r).x.size = (tablesAtZK dj y₀ S R).S.m - 6 := by
-      have := (tablesAtZK dj y₀ S R).hm
+    have hx : (cClaim (Tz) st c r).x.size = (Tz).S.m - 6 := by
+      have := (Tz).hm
       simp only [cClaim, rF, Array.size_append, FlockLevel3.pinned_size, Array.size_ofFn]
       omega
     rw [RingSwitch.shat_eqWord _ _ hx, hcl, extract_one_toList, ← hpt]
-    refine Eq.trans ?_ (sHat_shat y.x.st hm7 w rfl ω.1 hnd hlt
+    refine Eq.trans ?_ (sHat_shat st hm7 w rfl ω.1 hnd hlt
       (fun x => fOf (eqWord (pointsOf c.rest ⟨2 * r.val + 1, h2r⟩) x)) v)
     rw [shArr, getElem!_pos _ v.val (by simp), Array.getElem_ofFn]
     unfold sHatAt
@@ -1212,30 +1233,30 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
     · rfl
     · exact absurd h2r ‹_›
   rw [hv, hinner]
-  refine rows_honest (tablesAtZK dj y₀ S R) y.x.st c r (zWith y.x.st w ω.1) (ω.2.1.2.1 r) _ hE hmS hkS ?hw
+  refine rows_honest (Tz) st c r (zWith st w ω.1) (ω.2.1.2.1 r) _ hE hmS hkS ?hw
     (rF_ne_one _ _ c r (hc.2.2.2 r)) ?hA ?hB _ hs0 hs1 ?hk0 ?hL ?hT ((C.T c).tab.y1' w ω.1 ω.2.1.2.1 r)
     (fun _ => rfl) hab htw' k
   -- the executable statement's sizes are the table's, and the schedule's lane split
   case hk0 =>
-    have := (tablesAtZK dj y₀ S R).hshape.2.2.1
-    have := (tablesAtZK dj y₀ S R).hmsch
+    have := (Tz).hshape.2.2.1
+    have := (Tz).hmsch
     omega
   case hL =>
-    show 2 ^ (tablesAtZK dj y₀ S R).sch.level₀.logCols = _
-    have := (tablesAtZK dj y₀ S R).hshape.2.2.1
-    have := (tablesAtZK dj y₀ S R).hmsch
+    show 2 ^ (Tz).sch.level₀.logCols = _
+    have := (Tz).hshape.2.2.1
+    have := (Tz).hmsch
     rw [Accounting.Schedule.level₀]
     congr 1
     omega
   -- the prover's table `z = (w, u)` satisfies the statement
   case hw =>
-    have key : ∀ (T : TabZK FlockLevel3.GF128 mPts) (_ : T = y.table) (w : Witness T.S.m), T.S.Satisfies w →
-        T.S.Satisfies (zWith y.x.st w ω.1) := by
-      intro T hT w hw
-      subst hT
-      exact satisfies_zWith y.x.st y.x.wf.1 (regionsOf y.x.st) (setupH_mask y.x.h).2 (setupH_mask y.x.h).1
-        (setupH_mask_isolated ((ZkExec.zkTags_typed I).trans ht) y.x.h hdm) w hw ω.1 rfl
-    exact key _ (tablesAtZK_eq dj y₀ S R y) w hw
+    have key : ∀ (S' : Statement) (_ : S' = stmtOf st hwf (regionsOf st)) (w : Witness S'.m), S'.Satisfies w →
+        S'.Satisfies (zWith st w ω.1) := by
+      intro S' hS' w hw
+      subst hS'
+      exact satisfies_zWith st hwf (regionsOf st) M.m M.mask (maskIsolated_of_layout st hwf (maskLayout_of M hdm))
+        w hw ω.1 rfl
+    exact key _ hS w hw
   -- the clear `final_a`, `final_b` are the `a`, `b` claims at the zerocheck's coins
   case hA =>
     exact finalA_holds _ (six_le _) _ _ _ _ (fun i => by rw [aT, dite_eq_left i.isLt]) _ _ _
@@ -1244,12 +1265,12 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
   -- the masked claims' `ŝ` is the honest `shat` at the replay's claims, and the opening's target is `Σ_y f(y)·b(y)`
   -- the opening's target is `Σ_y f(y)·b(y)`: ring switching claim by claim (`recombine_sum`)
   case hT =>
-    have hrec : ∀ k : Fin (2 + 2 * y.x.st.regions.size),
-        recombine execArith (swAt (tablesAtZK dj y₀ S R) y.x.st c r (ZK.Table.View.pre (C.T c).tab ((C.T c).tab.view w ω)).1 k.val) (fun i => fOf (c.rest.rpp r k i)) =
-        ∑ y' : Fin (2 ^ ((tablesAtZK dj y₀ S R).S.m - 7)), wordOf (zWith y.x.st w ω.1) y'.val *
-          Model.phi execArith (fun i => fOf (c.rest.rpp r k i)) (Model.eqAt (claimX (tablesAtZK dj y₀ S R) y.x.st c r k.val) y'.val) := by
+    have hrec : ∀ k : Fin (2 + 2 * st.regions.size),
+        recombine execArith (swAt (Tz) st c r (ZK.Table.View.pre (C.T c).tab ((C.T c).tab.view w ω)).1 k.val) (fun i => fOf (c.rest.rpp r k i)) =
+        ∑ y' : Fin (2 ^ ((Tz).S.m - 7)), wordOf (zWith st w ω.1) y'.val *
+          Model.phi execArith (fun i => fOf (c.rest.rpp r k i)) (Model.eqAt (claimX (Tz) st c r k.val) y'.val) := by
       intro k
-      refine recombine_sum execArith execArith_correct hm7 _ _ (wordOf_bits hm7 (zWith y.x.st w ω.1)) _ _
+      refine recombine_sum execArith execArith_correct hm7 _ _ (wordOf_bits hm7 (zWith st w ω.1)) _ _
         (fun v => ?_) _
       rcases k with ⟨k, hk⟩
       by_cases h0 : k = 0
@@ -1276,30 +1297,42 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
         unfold claimX
         rw [ite_eq_right h0, ite_eq_left rfl]
         exact cTail _ _ c r hmS (j.val + 1) (by omega)
-      have h2 : k - 2 < 2 * y.x.st.regions.size := by omega
+      have h2 : k - 2 < 2 * st.regions.size := by omega
       unfold swAt
       rw [ite_eq_right h0, ite_eq_right h1]
       show dite _ _ _ = _
       rw [dite_eq_left h2]
       refine (congrFun (congrFun hreg ⟨k - 2, h2⟩) v).symm.trans ?_
-      show (∑ x : Fin (2 ^ ((tablesAtZK dj y₀ S R).S.m - 7)), _) = _
+      show (∑ x : Fin (2 ^ ((Tz).S.m - 7)), _) = _
       refine Finset.sum_congr rfl fun x _ => ?_
       rw [claimX_region _ _ c r k (by omega) h2 hmS]
-      by_cases hx : x.val ∈ maskWordsOf y.x.st
-      · have h0 := setupH_regions_off_mask y.x.h hdm c.rest.link ⟨k - 2, h2⟩ x.val hx
+      by_cases hx : x.val ∈ maskWordsOf st
+      · have h0 := regions_off_of_words M.m (avoidsMask_words hdm) c.rest.link ⟨k - 2, h2⟩ x.val hx
         rw [h0, fOf_zero, zero_mul]
-        show fOf (eqWord (regionPtOf y.x.st c.rest.link ⟨k - 2, h2⟩) x.val) * _ = 0
+        show fOf (eqWord (regionPtOf st c.rest.link ⟨k - 2, h2⟩) x.val) * _ = 0
         rw [h0, fOf_zero, zero_mul]
-      · refine congrArg (fOf (eqWord (regionPtOf y.x.st c.rest.link ⟨k - 2, h2⟩) x.val) * ·) ?_
-        have hz := zWith_off y.x.st hm7 w rfl ω.1 x v hx
+      · refine congrArg (fOf (eqWord (regionPtOf st c.rest.link ⟨k - 2, h2⟩) x.val) * ·) ?_
+        have hz := zWith_off st hm7 w rfl ω.1 x v hx
         rw [castF_eq]
         unfold wordBit
         rw [dite_eq_left (show 128 * x.val + v.val < 2 ^ _ from (addr128 hm7 x v).isLt)]
         exact congrArg (fun b : ZMod 2 => ((b.val : ℕ) : FlockLevel3.GF128)) hz.symm
     unfold openT
     refine (Finset.sum_congr rfl fun k _ => congrArg (fOf (c.rest.rsGamma r k) * ·) (hrec k)).trans ?_
-    exact sum_swap_mul (fun k => fOf (c.rest.rsGamma r k)) (wordOf (zWith y.x.st w ω.1))
+    exact sum_swap_mul (fun k => fOf (c.rest.rsGamma r k)) (wordOf (zWith st w ω.1))
       (fun k y' => Model.phi execArith (fun i => fOf (c.rest.rpp r k i))
-        (Model.eqAt (claimX (tablesAtZK dj y₀ S R) y.x.st c r k.val) y'))
+        (Model.eqAt (claimX (Tz) st c r k.val) y'))
+
+
+/-- **The inner relation at the draw** (open, inner lane): at every coin vector the honest prover doesn't refuse, every
+valid witness whose registered values are the public ones satisfies `Table.InnerHolds` (§2.4 line 16's ten
+constraints). -/
+theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
+    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S))
+    (ht : I.tags.typed = false) (hdm : avoidsMask y.x.st = true) :
+    let C := coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
+    ∀ c, C.Admits c → ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w :=
+  innerOf_holds_of P _ y.x.st y.x.wf.1 (by rw [tablesAtZK_eq dj y₀ S R y]; rfl)
+    (maskSetup_of_setupH ((ZkExec.zkTags_typed I).trans ht) y.x.h) hdm
 
 end FlockSoundness.Discharge.Composed
