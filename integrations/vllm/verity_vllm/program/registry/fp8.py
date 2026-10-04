@@ -331,17 +331,27 @@ def ScaledMmFp8BlockCoordinate(B, S, xq, sx, wrow, sw):
     return B.call(P.F2fpBf16, acc)
 
 
+def weight_blocks(N: int, G: int) -> int:
+    """The weight-block rows of `weight_scale_inv` for N output rows: `cdiv(N, G)`.  A merged linear's last part may end mid-block
+    (`validate_fp8_block_shape`, fp8_utils.py:1250-1257 at d9105ea80: "we allow the last matrix to not be a multiple of block size"), as
+    GLM-5.3's `fused_qkv_a_proj` = q_a_proj (2048) + kv_a_proj_with_mqa (576), N = 2624 over 21 scale rows; every part but the last starts
+    on a block boundary, so column n reads scale row n // G whatever the parts are."""
+    return -(-N // G)
+
+
 @composite("ScaledMmFp8Block", 1, ["K", "N", "G"],
            lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("w", Array(S.N, Array(S.K, E4M3))),
-                       ("ws", Array(S.N // S.G, Array(S.K // S.G, F32)))), Array(S.N, BF16)),
+                       ("ws", Array(weight_blocks(S.N, S.G), Array(S.K // S.G, F32)))), Array(S.N, BF16)),
            conformance=_BLOCK_CONF)
 def ScaledMmFp8Block(B, S, xq, sx, w, ws):
     """`_C.cutlass_scaled_mm` (blockwise) on one token row: the N output coordinates (`ScaledMmFp8BlockCoordinate`), column n over the
-    weight row `w[n]` and the scale row `ws[n // G]` (one f32 per 128x128 weight block).  The N children are the coordinates."""
+    weight row `w[n]` and the scale row `ws[n // G]` (one f32 per 128x128 weight block).  The N children are the coordinates.  N need
+    not be a multiple of G: the last weight block then has N % G rows and the same coordinates (the kernel lays the block scales out
+    as `tile_atom_to_shape_SFB(m, n, k)`, scaled_mm_blockwise_sm90_fp8_dispatch.cuh:164-168, and `cutlass_scaled_mm` checks only
+    16-byte strides, scaled_mm_entry.cu:207-210; the H200 capture checks N = 2624)."""
     K, N, G = S.K, S.N, S.G
-    assert N % G == 0, (N, G)
     coord = bind(ScaledMmFp8BlockCoordinate, K=K, G=G)
-    parts = [B.batch(coord, xq, sx, w[nb * G:(nb + 1) * G], ws[nb], axes=(None, None, 0, None)) for nb in range(N // G)]
+    parts = [B.batch(coord, xq, sx, w[nb * G:min((nb + 1) * G, N)], ws[nb], axes=(None, None, 0, None)) for nb in range(weight_blocks(N, G))]
     return _Coll(Array(N, BF16), concat([p.refs for p in parts]))
 
 
@@ -382,16 +392,26 @@ def ScaledMmFp8BlockSharedScaleTile(B, S, xq, sx, w, sw):
 
 @composite("ScaledMmFp8BlockSharedScale", 1, ["K", "N", "G"],
            lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("w", Array(S.N, Array(S.K, E4M3))),
-                       ("ws", Array(S.N // S.G, Array(S.K // S.G, F32)))), Array(S.N, BF16)),
+                       ("ws", Array(weight_blocks(S.N, S.G), Array(S.K // S.G, F32)))), Array(S.N, BF16)),
            conformance=_BLOCK_CONF)
 def ScaledMmFp8BlockSharedScale(B, S, xq, sx, w, ws):
-    """`ScaledMmFp8Block_v1{K,N,G}`'s function and signature, each weight block's scale products computed once: the N/G weight blocks
-    (`ScaledMmFp8BlockSharedScaleTile`), block nb over the weight rows `w[nb*G:(nb+1)*G]` and the scale row `ws[nb]`."""
+    """`ScaledMmFp8Block_v1{K,N,G}`'s function and signature, each weight block's scale products computed once: the N/G whole weight
+    blocks (`ScaledMmFp8BlockSharedScaleTile`), block nb over the weight rows `w[nb*G:(nb+1)*G]` and the scale row `ws[nb]`; a partial
+    last block (N % G rows) is its K/G products once and its coordinates reading them, in this body."""
     K, N, G = S.K, S.N, S.G
-    assert N % G == 0, (N, G)
-    blocks = w.reshape(Array(N // G, Array(G, Array(K, E4M3))))
-    out = B.batch(bind(ScaledMmFp8BlockSharedScaleTile, K=K, G=G), xq, sx, blocks, ws, axes=(None, None, 0, 0))
-    return _Coll(Array(N, BF16), out.refs)
+    full, r = divmod(N, G)
+    if not r:
+        blocks = w.reshape(Array(N // G, Array(G, Array(K, E4M3))))
+        out = B.batch(bind(ScaledMmFp8BlockSharedScaleTile, K=K, G=G), xq, sx, blocks, ws, axes=(None, None, 0, 0))
+        return _Coll(Array(N, BF16), out.refs)
+    parts = []
+    if full:
+        blocks = _Coll(Array(full, Array(G, Array(K, E4M3))), w[0:full * G].refs)
+        scales = _Coll(Array(full, Array(K // G, F32)), ws[0:full].refs)
+        parts.append(B.batch(bind(ScaledMmFp8BlockSharedScaleTile, K=K, G=G), xq, sx, blocks, scales, axes=(None, None, 0, 0)))
+    s = B.batch(P.F32Mul, sx, ws[full], axes=(0, 0))
+    parts.append(B.batch(bind(ScaledMmFp8BlockCoordinateGivenScale, K=K, G=G), xq, s, w[full * G:N], axes=(None, None, 0)))
+    return _Coll(Array(N, BF16), concat([p.refs for p in parts]))
 
 
 #: each restated GEMM by the Definition it restates (bound instead under `fp8_scale_construction = shared-per-block`)
