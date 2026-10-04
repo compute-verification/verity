@@ -72,6 +72,33 @@ def test_every_template_is_checked():
     assert {sub.template.id for sub, _ in TEMPLATES.values()} == set(TM.TEMPLATES)
 
 
+def _descriptor_digest(fn) -> str:
+    """A target's canonical descriptor digest: its Program's, or a primitive's descriptor entry inside a one-Call wrapper."""
+    from verity.ir import codec
+    from verity.ir.annotations import definition_digest
+    from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, bind
+    from verity.ir.program import Program
+
+    if not isinstance(fn, PrimitiveDefinition):
+        return codec.program_digest(codec.encode_program(Program(fn)))
+    params, ret = fn.signature()
+    wrap = CompositeDefinition("SplitDigestWrap", 1, (), lambda S: (params, ret), lambda B, S, *a: B.call(fn, *a), register=False)
+    return definition_digest(codec.encode_program(Program(bind(wrap))), fn.id)
+
+
+@pytest.mark.parametrize("pinned", sorted((Path(__file__).parent / "fixtures" / "split").glob("*.json")), ids=lambda p: p.stem)
+def test_a_split_family_keeps_its_targets_and_digests(pinned):
+    """`fixtures/split/<family>.json` was written before that family's registry modules were split into Definitions, twins and
+    vocabulary (`integrations/vllm/tools/migrate/split_<family>.py pin`). Every target it lists is still checked, at the same
+    canonical descriptor digest, and every Definition family it lists is still registered. A new binding may add targets."""
+    pin = json.loads(pinned.read_text())
+    missing = sorted(set(pin["definitions"]) - set(SUITE))
+    assert not missing, f"{pin['family']}: targets no longer checked: {missing}"
+    moved = {fid: (want, got) for fid, want in pin["definitions"].items() if (got := _descriptor_digest(SUITE[fid])) != want}
+    assert not moved, f"{pin['family']}: descriptor digests changed: {moved}"
+    assert not sorted(set(pin["registered"]) - set(TG.REGISTERED)), pin["family"]
+
+
 def test_the_partition_applies_to_the_calls_of_served_programs():
     calls = TG.call_families()
     assert {"Gemm_v1", "RMSNormTriton_v1", "Attention_v3", "TokenSelect_v1", "GumbelTopPTokenSelect_v1", "RoPEHead_v1"} <= calls
