@@ -114,6 +114,13 @@
       "usergroup": null
     },
     {
+      "handle": "architecture",
+      "holder": "the architecture lane (bc-d6f8b221-3466-569c-9917-fe7189b1c3b2)",
+      "remit": "The repo's layout and architecture: the layout trial (trial/, PR #1036) and how protocols, constructions and their specs are organized.",
+      "charter": "Daniel, 2026-10-04 10:19 AM PDT (\"get yourself a handle\")",
+      "usergroup": null
+    },
+    {
       "handle": "top",
       "holder": "top-level, Daniel's coordinator (bc-7f347b4b-6175-4b6e-84c6-731add2f8589)",
       "remit": "Top-level: Daniel's coordinator across every lead.",
