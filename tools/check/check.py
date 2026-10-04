@@ -32,8 +32,9 @@ The steps stay in this process's group, which a runner's timeout and a manual st
 appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run.
 
 Then the independent groups run at once, the cores split between the first two (`--cores N`, default the CPUs this process may
-use). Which group a step is in, its order there, and whether its failure halts the run come from `tools/check/ci.toml`
-(`declaration.py`); this file builds each step's command, and refuses one the declaration doesn't name:
+use). Which group a step is in, its order there, a step in another group it waits on, and whether its failure halts the run
+come from `tools/check/ci.toml` (`declaration.py`); this file builds each step's command, and refuses one the declaration
+doesn't name:
 
     pytest          every test suite (`tools/check/suites.py`) but those that use Lean, half the cores' worth at once: each
                     package's tests in their own process, a pass reused while its inputs are unchanged; each suite's log and the
@@ -45,10 +46,11 @@ use). Which group a step is in, its order there, and whether its failure halts t
                     its report beside the run's result; then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
     lean            `lake build` of the Lean verifier (`backends/flock/verifier/lean`), then its partition check against
-                    `verity.ir.partition` (`unit_cut_agree.py`), then the suites that use Lean (`AFTER_LEAN`, outcomes in
-                    `suites-lean.json`) on what those steps built, then its agreement with upstream's Rust verifier (`ci.py`) on
+                    `verity.ir.partition` (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci.py`) on
                     the upstream build stored once and pinned by hash (`backends/flock/verifier/upstream.json`), when the run has
                     it; skipped by name without it.  `research merge` requires it for a change under backends/flock/ (`tool.py`)
+    lean-suites     once lean-build has passed, beside the rest of the lean group: the suites that use Lean (`AFTER_LEAN`,
+                    outcomes in `suites-lean.json`) on the verifier it built
     lean-audit      at once with the lean group: the audit of every Lake package with a `lean-audit.json` (`lean_audit.py`,
                     which runs `tools/lean/audit.py` on scratch trees of its own: axioms, sorry, declared axioms, escapes,
                     files, kernel bypasses, code run while compiling, dependency .olean digests, the guarantees' records, a
@@ -758,6 +760,8 @@ HALTS = frozenset(j.name for j in JOBS if j.halts)
 #: ... and those whose failure does when their log has this text (`halts_on`); without it (a failed clone or toolchain download)
 #: the other groups keep their verdicts
 HALTS_ON = {j.name: j.halts_on for j in JOBS if j.halts_on}
+#: a step that starts only once the named step in another group has ended (`after` in ci.toml)
+AFTER = {j.name: j.after for j in JOBS if j.after}
 
 
 class Steps:
@@ -857,12 +861,27 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
     urls = take_lean_deps_urls(out)
     steps = Steps(out, keep_going)
 
+    ended: dict[str, threading.Event] = {}
+    status: dict[str, str] = {}
+
     def group(g: list) -> list[dict]:
         done = []
-        for name, argv, cwd in g:
-            done.append(_step(name, argv, cwd, out, cache, steps))
-            if done[-1]["status"] in ("failed", "stopped"):
-                break
+        try:
+            for name, argv, cwd in g:
+                if (first := AFTER.get(name)) in ended:
+                    ended[first].wait()
+                    if status.get(first) not in ("passed", "skipped"):
+                        done.append(steps.end({"step": name, "status": "stopped", "seconds": 0.0,
+                                               "detail": f"not started: {first} {status.get(first, 'did not run')}"}))
+                        break
+                done.append(_step(name, argv, cwd, out, cache, steps))
+                status[name] = done[-1]["status"]
+                ended[name].set()
+                if done[-1]["status"] in ("failed", "stopped"):
+                    break
+        finally:
+            for name, _, _ in g:
+                ended[name].set()
         return done
 
     try:
@@ -870,6 +889,7 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
         if not steps.stopping:
             subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
             gs = groups(out, n, cache, urls)
+            ended.update({name: threading.Event() for g in gs for name, _, _ in g})
             with ThreadPoolExecutor(max_workers=len(gs)) as ex:
                 results += [r for rs in ex.map(group, gs) for r in rs]
     finally:
