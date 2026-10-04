@@ -36,6 +36,13 @@ id, the word count and the role, and each tree holds exactly one (schema id, wor
     cap-rows (pouw/cap-rows/v1)   a strip's admission bits sixteen per word, low     6                  X
                                   bit first, 64 bits (TM <= 64, the rest zero),
                                   then the cap's bound as two words (`cap`)
+    cap-chunks                    a tile row's two chunk digests, two bytes per      32                 X
+      (pouw/cap-chunks/v1)        word, low byte first: `PearlTileDigest`'s
+                                  TurboSHAKE128 (D = 0x21) of each 32 columns' C̃
+                                  and U (TN <= 64; the second zero at TN <= 32)
+    cap-sums (pouw/cap-sums/v1)   a tile row's flag count, later +0 promotions and   7                  X
+                                  forming elements as two words each, then its
+                                  words' good bit's ok word (`cap`)
 
     row        X (per call)    W (registered)
     bf16       row-seg/v1      row/v2
@@ -47,14 +54,20 @@ id, the word count and the role, and each tree holds exactly one (schema id, wor
     tile       row/v2          (none)
     cap-word   row/v2          (none)
     cap-flags  row/v2          (none)
-    cap-rows   row/v2          (none)
+    cap-sums   row/v2          (none)
+    cap-rows   row-seg/v1      (none)
+    cap-chunks row-seg/v1      (none)
 
-Every per-call row (role X) but ok, the tile digest and the cap's per-word and per-strip rows is a row-seg row, so decode's
-serial hash chain is a segment's, not the row's (Daniel's ruling, card 637f70c6).  The cap's per-word and per-strip rows
-are at most one SHA-512 block at any k up to 2^14 (and one 1 KiB segment at any k), so a segment's chain is the row's and
-v2 hashes it in fewer blocks.  Every other row is a v2 row, the registered ones included, so each (row, role)
-has one leaf schema in the registered tree and in every statement that reads or writes it, and no row is `sha512/row/v1`
-(Daniel's ruling, Slack 1790973124.259289).  A v2 row costs what a v1 row of the same words would, a 128-byte prefix block
+Every per-call row (role X) but ok, the tile digest and the cap's per-word and per-row-sum rows is a row-seg row, so
+decode's serial hash chain is a segment's, not the row's (Daniel's ruling, card 637f70c6).  The cap's per-word and per-row-sum
+rows are at most one SHA-512 block at any k up to 2^14, so a segment's chain is the row's and v2 hashes them in fewer
+blocks.  The cap's strip row and chunk digests are row-seg although as short, because C-Flock's composer refuses a unit
+none of whose rows hashes a block before its last one (its SHA-512 range would hold no slot): a row-seg row always does
+(its segment, then the outer message), and without them the strip (ok rows in, cap-rows out), a row digest (cap-word
+rows in, cap-chunks out), the tile (cap-chunks rows in, the tile digest out) and the tally (cap-sums rows and cap-rows
+in) would read and write only one-block v2 rows; a row tally has one through sd.  Every other row is a v2 row, the
+registered ones included, so each (row, role) has one leaf schema in the registered tree and in every statement that
+reads or writes it, and no row is `sha512/row/v1` (Daniel's ruling, Slack 1790973124.259289).  A v2 row costs what a v1 row of the same words would, a 128-byte prefix block
 and the row; the role byte that v2 drops is bound by the registration domain.  nvfp4-p's codes and scales are
 `rowleaf.nvfp4_row_bytes`' bytes, and every row's bytes are `rowleaf.bit_row`'s of its elements.
 
@@ -94,31 +107,49 @@ DIGEST = Array(8, U32)
 #: an ok row's one word, as its row unit returns it: the admission bit at bit 0, bits 1-15 zero
 OK = Value(16)
 P_WORDS = 64
+#: a cap-chunks row's chunk digests: a tile row of at most 64 columns (pc8's tile)
+CAP_CHUNKS = 2
 #: each row's schema id, which a registration domain binds with the row's word count (`ROW_WORDS`, at depth k) and role
 SCHEMAS = {"bf16": "pouw/row-bf16/v1", "fp32": "pouw/row-fp32/v1", "nvfp4-p": "pouw/row-nvfp4-p/v1",
            "fp8-p": "pouw/row-fp8-p/v1", "ok": "pouw/row-ok/v1", "tile": "pouw/tile-h0/v1", "sd": "pouw/row-sd/v1",
-           "cap-word": "pouw/cap-word/v1", "cap-flags": "pouw/cap-flags/v1", "cap-rows": "pouw/cap-rows/v1"}
+           "cap-word": "pouw/cap-word/v1", "cap-flags": "pouw/cap-flags/v1", "cap-rows": "pouw/cap-rows/v1",
+           "cap-chunks": "pouw/cap-chunks/v1", "cap-sums": "pouw/cap-sums/v1"}
 ROW_WORDS = {"bf16": lambda k: k, "fp32": lambda k: 2 * k, "nvfp4-p": lambda k: k // 4 + k // 32 + P_WORDS,
              "fp8-p": lambda k: k // 2 + P_WORDS, "ok": lambda k: 1, "tile": lambda k: 16, "sd": lambda k: k // 16,
-             "cap-word": lambda k: 4, "cap-flags": lambda k: -(-k // 512) + 5, "cap-rows": lambda k: 6}
+             "cap-word": lambda k: 4, "cap-flags": lambda k: -(-k // 512) + 5, "cap-rows": lambda k: 6,
+             "cap-chunks": lambda k: 16 * CAP_CHUNKS, "cap-sums": lambda k: 7}
 _V2, _SEG = SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG
 #: each row's frame-leaf schema in a tree of each role it sits in: the per-call rows (role X) segmented, and the registered
-#: rows (role W), the admission bit, the tile digest and the cap's per-word and per-strip rows v2
+#: rows (role W), the admission bit, the tile digest and the cap's per-word and per-row-sum rows v2
 ROW_SCHEMA = {("bf16", ROLE_X): _SEG, ("bf16", ROLE_W): _V2, ("fp32", ROLE_X): _SEG, ("fp32", ROLE_W): _V2,
               ("nvfp4-p", ROLE_X): _SEG, ("nvfp4-p", ROLE_W): _V2, ("fp8-p", ROLE_X): _SEG, ("fp8-p", ROLE_W): _V2,
               ("ok", ROLE_X): _V2, ("ok", ROLE_W): _V2, ("tile", ROLE_X): _V2, ("sd", ROLE_X): _SEG,
-              ("cap-word", ROLE_X): _V2, ("cap-flags", ROLE_X): _V2, ("cap-rows", ROLE_X): _V2}
+              ("cap-word", ROLE_X): _V2, ("cap-flags", ROLE_X): _V2, ("cap-sums", ROLE_X): _V2, ("cap-rows", ROLE_X): _SEG,
+              ("cap-chunks", ROLE_X): _SEG}
+
+
+def chunk_digests(e: H.Emit, c, u, tn: int) -> list:
+    """`PearlTileDigest`'s digests of one tile row (``c``, ``u``: its TN words' C̃ and U): TurboSHAKE128 (D = 0x21) of each
+    32-column chunk, eight half-lanes each."""
+    out: list = []
+    for h in range(0, tn, C.CHUNK):
+        cols = range(h, min(h + C.CHUNK, tn))
+        ws = [c[j] for j in cols] + [u[j] for j in cols]
+        out += H.turboshake128(e, list(zip(ws[0::2], ws[1::2])), 32, C.D_MESSAGE)
+    return out
+
+
+def leaf_digest(e: H.Emit, digests: Sequence) -> list:
+    """`PearlTileDigest`'s h0 from its rows' chunk digests in order: TurboSHAKE128 (D = 0x22) of them."""
+    return H.turboshake128(e, list(zip(digests[0::2], digests[1::2])), 32, C.D_LEAF)
 
 
 def _tile_digest_body(B, S_, c, u):
     e = H.Emit(B)
     digests: list = []
     for r in range(S_.TM):
-        for h in range(0, S_.TN, C.CHUNK):
-            cols = range(h, min(h + C.CHUNK, S_.TN))
-            ws = [c[r][j] for j in cols] + [u[r][j] for j in cols]
-            digests += H.turboshake128(e, list(zip(ws[0::2], ws[1::2])), 32, C.D_MESSAGE)
-    return e.array(H.turboshake128(e, list(zip(digests[0::2], digests[1::2])), 32, C.D_LEAF))
+        digests += chunk_digests(e, c[r], u[r], S_.TN)
+    return e.array(leaf_digest(e, digests))
 
 
 PearlTileDigestDef = CompositeDefinition(
@@ -203,15 +234,26 @@ def words_cap_rows(oks: Sequence[int], bound: int) -> list[int]:
     return [sum(bits[w + q] << q for q in range(16)) for w in range(0, 64, 16)] + words_fp32([bound])
 
 
+def words_cap_chunks(digests: Sequence[bytes]) -> list[int]:
+    if not 0 < len(digests) <= CAP_CHUNKS or any(len(d) != 32 for d in digests):
+        raise ValueError(f"a cap-chunks row is a tile row's 1 to {CAP_CHUNKS} 32-byte chunk digests")
+    raw = b"".join(digests) + bytes(32 * (CAP_CHUNKS - len(digests)))
+    return [int.from_bytes(raw[2 * i:2 * i + 2], "little") for i in range(16 * CAP_CHUNKS)]
+
+
+def words_cap_sums(atoms: int, zeros: int, elems: int, good: int) -> list[int]:
+    return words_fp32([atoms, zeros, elems]) + words_ok(good)
+
+
 def row_digest(row: str, role: int, words: Sequence[int]) -> bytes:
     """x, the digest of a ``row`` row of 16-bit ``words`` in a tree of ``role``, under its schema (`ROW_SCHEMA`): core's
     `sha512/row-seg/v1` or `sha512/row/v2` digest of the words as a bit row, 16 bits a word; an ok row's words, and a
-    cap-flags row's last word, pass `ok_of`."""
+    cap-flags and cap-sums row's last word, pass `ok_of`."""
     schema = ROW_SCHEMA.get((row, role))
     if schema is None:
         raise ValueError(f"no {row} row sits in a tree of role {role}")
-    if row in ("ok", "cap-flags"):
-        ok_of(words[-1:] if row == "cap-flags" else words)
+    if row in ("ok", "cap-flags", "cap-sums"):
+        ok_of(words[-1:] if row != "ok" else words)
     if not words:
         raise ValueError(f"a {row} row is a positive number of words, not 0")
     if schema == _SEG:
@@ -267,7 +309,7 @@ def statement_rows(unit: dict, k: int, reads: dict[str, int] | None = None) -> d
     return {"row_schemas": ins + outs, **({"out_row_ports": counts} if named else {})}
 
 
-__all__ = ["DIGEST", "INST", "KEY", "OK", "PearlTileDigestDef", "P_WORDS", "ROW_SCHEMA", "ROW_WORDS", "SCHEMAS", "commit",
-           "digest_bytes", "ok_of", "row_digest", "statement_rows", "tile_digest", "tree_leaf", "words_bf16", "words_cap_flags",
-           "words_cap_rows", "words_cap_word", "words_fp32", "words_fp8_p", "words_nvfp4_p", "words_ok", "words_sd",
-           "words_tile"]
+__all__ = ["CAP_CHUNKS", "DIGEST", "INST", "KEY", "OK", "PearlTileDigestDef", "P_WORDS", "ROW_SCHEMA", "ROW_WORDS", "SCHEMAS",
+           "chunk_digests", "commit", "digest_bytes", "leaf_digest", "ok_of", "row_digest", "statement_rows", "tile_digest",
+           "tree_leaf", "words_bf16", "words_cap_chunks", "words_cap_flags", "words_cap_rows", "words_cap_sums",
+           "words_cap_word", "words_fp32", "words_fp8_p", "words_nvfp4_p", "words_ok", "words_sd", "words_tile"]

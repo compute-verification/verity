@@ -501,8 +501,8 @@ class Unit:
     where: tuple[int, ...] = field(default=())    # a row unit's row; a tile or tally unit's (tile row, tile column); a
                                                   # word unit's (row, column)
 
-#: the roles whose units sit on a grid, one batch node per grid row (`cap`'s word and tally units beside the tile)
-GRID_ROLES = ("tile", "word", "tally")
+#: the roles whose units sit on a grid, one batch node per grid row (`cap`'s word, row and tally units beside the tile)
+GRID_ROLES = ("tile", "word", "row_digest", "row_tally", "tally")
 
 
 def units(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -> tuple[Unit, ...]:

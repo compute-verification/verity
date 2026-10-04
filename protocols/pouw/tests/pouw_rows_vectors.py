@@ -26,12 +26,14 @@ OUT = Path(__file__).with_name("vectors") / "pouw_rows.json"
 ROLES = {"x": ROLE_X, "w": ROLE_W}
 #: (case, row, role, k or (TM, TN)): the four element rows in both trees at k = 64 and 4,096 (in role X a row-seg row of
 #: one short segment and of several), the tile digests, the ok rows, and the cap's rows: the salt-dead counts (row-seg, one
-#: short segment and two), a word's C̃ ‖ U, its flags row with padding (k = 256) and without (8,192), and a strip's row
+#: short segment and two), a word's C̃ ‖ U, its flags row with padding (k = 256) and without (8,192), a tile row's chunk
+#: digests at TN = 32 (one, then zeros) and 64 (two; the case's k is TN), a tile row's sums, and a strip's row
 CASES = tuple((f"{row}-{role}-{k}", row, role, k) for row in ("bf16", "fp32", "nvfp4-p", "fp8-p")
               for role in ("x", "w") for k in (64, 4096)) + (
     ("tile-2x33", "tile", "x", (2, 33)), ("tile-64x64", "tile", "x", (64, 64)), ("ok-x", "ok", "x", 64), ("ok-w", "ok", "w", 4096),
     ("sd-x-64", "sd", "x", 64), ("sd-x-16384", "sd", "x", 16384), ("cap-word-x", "cap-word", "x", 64),
     ("cap-flags-x-256", "cap-flags", "x", 256), ("cap-flags-x-8192", "cap-flags", "x", 8192),
+    ("cap-chunks-x-32", "cap-chunks", "x", 32), ("cap-chunks-x-64", "cap-chunks", "x", 64), ("cap-sums-x", "cap-sums", "x", 64),
     ("cap-rows-x", "cap-rows", "x", 64))
 
 
@@ -72,6 +74,11 @@ def inputs(case: str, row: str, k) -> dict:
     if row == "cap-flags":
         return {"flags": codes(case, "flags", k // 32, 1), "atoms": u32(case, "atoms", 1)[0],
                 "zeros": u32(case, "zeros", 1)[0], "good": codes(case, "good", 1, 1)[0]}
+    if row == "cap-chunks":
+        return {"digests": [shake(case, f"d{h}", 32) for h in range(-(-k // C.CHUNK))]}
+    if row == "cap-sums":
+        return {"atoms": u32(case, "atoms", 1)[0], "zeros": u32(case, "zeros", 1)[0], "elems": u32(case, "elems", 1)[0],
+                "good": codes(case, "good", 1, 1)[0]}
     if row == "cap-rows":
         return {"oks": codes(case, "oks", k, 1), "bound": u32(case, "bound", 1)[0]}
     tm, tn = k
@@ -95,6 +102,10 @@ def words(row: str, x: dict) -> list[int]:
         return L.words_cap_word(x["c"], x["u"])
     if row == "cap-flags":
         return L.words_cap_flags(x["flags"], x["atoms"], x["zeros"], x["good"])
+    if row == "cap-chunks":
+        return L.words_cap_chunks(x["digests"])
+    if row == "cap-sums":
+        return L.words_cap_sums(x["atoms"], x["zeros"], x["elems"], x["good"])
     if row == "cap-rows":
         return L.words_cap_rows(x["oks"], x["bound"])
     return L.words_tile(C.leaf(types.SimpleNamespace(c=x["c"], u=x["u"])))
