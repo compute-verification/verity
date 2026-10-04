@@ -45,6 +45,7 @@ def load_registries() -> None:
 
     import verity.ml.boolean.attention  # noqa: F401
     import verity.ml.boolean.cast  # noqa: F401
+    import verity.ml.boolean.comb  # noqa: F401
     import verity.ml.boolean.elementwise  # noqa: F401
     import verity.ml.boolean.gemm  # noqa: F401
     import verity.ml.boolean.mufu  # noqa: F401
@@ -325,6 +326,18 @@ def _universal_roots() -> list[Any]:
     return [bind(UniversalUnit, G=16, N_IN=16, N_OUT=8), bind(UniversalUnit, G=64, N_IN=64, N_OUT=32)]
 
 
+def _comb_roots() -> list[Any]:
+    """A hidden unit circuit's lincheck share (`verity.ml.boolean.comb`) at slot log 7 and two reps' fixed coins: one entry, a
+    chunk of two entries with its running sum, and the dense column. A larger slot log repeats the same step per coin."""
+    import random
+
+    from verity.ml.boolean import comb as K
+
+    g = random.Random(20261004).getrandbits
+    ps = [K.Point(g(128), [g(128) for _ in range(64)], [g(128)], [g(128)]) for _ in range(2)]
+    return [K.entry_definition(7, ps), K.chunk_definition(7, 2, ps), K.column_definition(7, 127, ps)]
+
+
 def _kernel_roots() -> list[Any]:
     from verity_vllm.program.kernels import kernel_registry as KR
 
@@ -569,6 +582,7 @@ def catalog() -> list[Any]:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
     roots += _core_roots() + _boolean_roots() + _boolean_gather_roots() + _universal_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
+    roots += _comb_roots()
     for label, make in _model_roots():
         try:
             fn = make()

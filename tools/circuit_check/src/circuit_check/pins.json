@@ -120,6 +120,15 @@
   "BlackwellNvf4OmmaDot64_v2": {
    "and": 6864
   },
+  "CombChunk_v1{SL=7,E=2,POINT={bbe2becfb989}}": {
+   "and": 1260
+  },
+  "CombColumn_v1{SL=7,COL=127,POINT={bbe2becfb989}}": {
+   "and": 0
+  },
+  "CombEntry_v1{SL=7,POINT={bbe2becfb989}}": {
+   "and": 630
+  },
   "DivFullRcp_v2": {
    "and": 1152
   },
@@ -930,6 +939,9 @@
    "and": 0
   },
   "Xor2_v1": {
+   "and": 0
+  },
+  "Xor3_v1": {
    "and": 0
   }
  },
