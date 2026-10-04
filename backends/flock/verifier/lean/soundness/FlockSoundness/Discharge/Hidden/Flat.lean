@@ -61,9 +61,14 @@ def msgOff (b t : ℕ) : ℕ := 64 * (b % 128 / 8) + 56 - 8 * (b % 128 % 8) + t
 theorem msgOff_lt {b t : ℕ} (ht : t < 8) : msgOff b t < 1024 := by
   unfold msgOff; omega
 
-theorem deltaMsgCol_eq (c : Circuit) (g p b t : ℕ) (hs : (c.ports.getD p default).segs = none) :
+theorem deltaMsgCol_eq (c : Circuit) (g p b t : ℕ) (hs : (c.ports.getD p default).segs = none)
+    (hp : p < c.ports.size) (hk : b / 128 < c.ports[p]!.chunks) :
     deltaMsgCol c g p b t = shaBase c g p (b / 128) + shaIn c (2 * shaSub c p (b / 128) + 1) + msgOff b t := by
-  simp only [deltaMsgCol, Typed.byteAt_none hs, shaBase, shaIn, shaSub, msgOff]
+  have hk' : (HmRow.byteAt (c.ports.getD p default) b).1 < ((HmRow.rowSlots c.ports).2[p]!).size := by
+    rw [Typed.byteAt_none hs, rowSlots_size hp]
+    exact hk
+  simp only [deltaMsgCol, hk', ↓reduceIte]
+  simp only [Typed.byteAt_none hs, shaBase, shaIn, shaSub, msgOff]
   omega
 
 theorem segs_getD {c : Circuit} (hu : ∀ p ∈ c.ports.toList, p.segs = none) {p : ℕ} (hp : p < c.ports.size) :
@@ -89,7 +94,7 @@ theorem deltaMsgCol_at {g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (h
   have hsub : shaSub c p (b / 128) < 3 := hs.2
   refine ⟨⟨R.slot_lt_count (Or.inl rfl) hg (by rw [R.perVu_sha]; exact hs.1),
     R.net_off_lt (Or.inl rfl) (shaNet_ofRows R.rowNets) (by rw [shaNet_inRows R.rowNets]; omega), ?_⟩, by omega⟩
-  rw [deltaMsgCol_eq _ _ _ _ _ (segs_getD hu hp), (shaIn_eq R.rowNets _ hsub).2, shaBase, Circuit.slotCol]
+  rw [deltaMsgCol_eq _ _ _ _ _ (segs_getD hu hp) hp hk, (shaIn_eq R.rowNets _ hsub).2, shaBase, Circuit.slotCol]
   omega
 
 theorem deltaMsgCol_lt {g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hb : b < 128 * c.ports[p]!.chunks)

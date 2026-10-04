@@ -23,12 +23,17 @@ from . import CANCEL_ACTORS
 from .cancel import add_args as cancel_args, cancel as cancel_run
 from .classify import classify, write as write_failure
 from .events import Emitter, append, events_path, utc_now_ms
-from .job import build_job, input_ref, set_status, sha256_file, write_json_atomic
+from .job import build_job, input_ref, sampler_instruments, set_status, sha256_file, write_json_atomic
 from .procs import stat_fields
 
 
 def _tele_argv() -> list[str]:
     return [sys.executable, "-m", "research.telemetry"]
+
+
+def _sampler_argv(a: argparse.Namespace, d: Path, root_pid: int) -> list[str]:
+    return _tele_argv() + ["sample", "--attempt-dir", str(d), "--cadence", str(a.cadence), "--root-pid", str(root_pid), "--pss-every", str(a.pss_every),
+                           "--pss-max-rss-gb", str(a.pss_max_rss_gb), "--linger", str(a.linger)] + sum((["--mount", m] for m in a.mount), [])
 
 
 def _tele_env() -> dict[str, str]:
@@ -136,7 +141,7 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
                         release_tag=a.release_tag, workload_digest=a.workload_digest, stage=a.stage, inputs=[input_ref(x) for x in a.input],
                         profile={k: os.environ.get(k) for k in a.profile_key if k in os.environ}, command=cmd, declared_outputs=a.declared_output,
                         timeout_s=a.timeout, reservation={"gpu": a.reservation_gpu, "host_memory_bytes": a.reservation_host_memory_bytes},
-                        policy_version=policy_version, policy_sha256=policy_sha, instruments=["cgroup", "process", "pss", "gpu", "storage"] if not a.no_sampler else [],
+                        policy_version=policy_version, policy_sha256=policy_sha, instruments=sampler_instruments(a.pss_every) if not a.no_sampler else [],
                         cadence_s=a.cadence, pss_every_s=a.pss_every)
         write_json_atomic(d / "job.json", job)
     em.queue("started", stage=a.stage, job=a.job, attempt=a.attempt)
@@ -163,10 +168,8 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
     # ---- sampler in its own session
     sampler = None
     if not a.no_sampler:
-        sargs = _tele_argv() + ["sample", "--attempt-dir", str(d), "--cadence", str(a.cadence), "--root-pid", str(proc.pid), "--pss-every", str(a.pss_every),
-                                "--linger", str(a.linger)] + sum((["--mount", m] for m in a.mount), [])
         try:
-            sampler = subprocess.Popen(sargs, start_new_session=True, stdout=open(d / "sampler.log", "ab"), stderr=subprocess.STDOUT, env=_tele_env())
+            sampler = subprocess.Popen(_sampler_argv(a, d, proc.pid), start_new_session=True, stdout=open(d / "sampler.log", "ab"), stderr=subprocess.STDOUT, env=_tele_env())
         except OSError as e:
             em.emit("mark", stage=a.stage, name="sampler_start_failed", error=str(e))
             sampler = None
@@ -242,7 +245,9 @@ def add_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--timeout", type=float, default=None, help="seconds; SIGTERM with a timeout marker, then SIGKILL after --grace")
     ap.add_argument("--grace", type=float, default=10.0)
     ap.add_argument("--cadence", type=float, default=1.0)
-    ap.add_argument("--pss-every", type=float, default=5.0)
+    ap.add_argument("--pss-every", type=float, default=5.0, help="seconds between the sampler's PSS rounds (default 5); 0 turns PSS off")
+    ap.add_argument("--pss-max-rss-gb", type=float, default=8.0,
+                    help="the sampler never reads smaps_rollup of a process with more RSS than this, in GB (default 8; tele sample --help)")
     ap.add_argument("--linger", type=float, default=3.0)
     ap.add_argument("--mount", action="append", default=[])
     ap.add_argument("--no-sampler", action="store_true")

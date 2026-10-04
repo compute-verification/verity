@@ -265,7 +265,8 @@ class BuildConfig:
 
     build_jobs: str | None = option("--build-jobs", env="BUILD_JOBS", default=None,
                                     help="concurrent derives: N, or auto (default): 0.8 x the memory headroom (or --build-ram-budget-gb, if "
-                                         "smaller) over the largest shape's planned derive peak, at most one per CPU (TP: ranks x shapes)")
+                                         "smaller) over the largest shape's planned derive peak, at most one per CPU and one per derive "
+                                         "(TP: ranks x (shapes + 1); its per-rank composes are sized from memory too)")
     build_ram_budget_gb: float | None = option("--build-ram-budget-gb", env="BUILD_RAM_BUDGET_GB", type=float, default=None,
                                                help="auto's memory budget when the host's headroom is shared (a sweep's per-config share)")
     build_timeout: int | None = option("--build-timeout", env="BUILD_TIMEOUT", type=int, default=None,
@@ -318,8 +319,10 @@ class CommitConfig:
                                   "config_record.json; no Match, no manifest-verify rebuild, no VU export")
     replay_k: int = option("--replay-k", env="REPLAY_K", type=int, default=256, help="config run: the replay's k units")
     replay_deferred: str = option("--replay-deferred", env="REPLAY_DEFERRED", default="0",
-                                  help="config run: 1 = the Commit writes a replay bundle and exits without the replay; the verdict "
-                                       "stays pending until `row stage replay` (CPU) replays the bundle; slim = a slim bundle")
+                                  help="config run (any run of a TP row; above TP2 its Commit replays in process all the same): 1 = the Commit "
+                                       "writes a replay bundle (per rank) and exits without "
+                                       "the replay; the verdict stays pending until `row stage replay` (CPU) replays the bundle; slim = a "
+                                       "slim bundle (single-GPU)")
     config_baseline: str = option("--config-baseline", env="CONFIG_BASELINE", default="0",
                                   help="config run: 1 = the Commit also runs the uninstrumented control arm (one pair), the baseline of "
                                        "the record's extraction slowdown")

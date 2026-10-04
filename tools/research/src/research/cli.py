@@ -62,7 +62,9 @@
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
 to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd logs).  The workload's cwd is its run dir, locally and
 with --on; `--cwd source` (or `source/SUB`, a relative SUB) runs it in the source root (the invoking directory; with --on, the shipped
-tree other runs of the commit share), an absolute --cwd as given; job.json run.cwd / run.cwd_basis record it.  It exits with the workload's status; with
+tree other runs of the commit share), `--cwd clone` (or `clone/SUB`) in a private `git clone --shared` of the source root at its HEAD,
+outside the run dir and removed when the workload exits (research/clone.py), an absolute --cwd as given; job.json run.cwd /
+run.cwd_basis record it.  It exits with the workload's status; with
 --require-result, a zero exit and a missing or invalid result.json exits 65 instead.  Harness flags pass through unchanged
 (--tree-sha, --workload-digest, --input name=path, --declared-output, --policy, --no-sampler, ...).  `run` and `fetch --all` refuse
 (exit 3) while the runs root's filesystem has less than $RESEARCH_DISK_FLOOR_GB free (default 1.5; 0 turns it off), and name the
@@ -83,6 +85,7 @@ import os
 import sys
 from pathlib import Path
 
+from . import clone
 from . import compare as C
 from . import record, remote, result
 from . import runs as R
@@ -102,7 +105,7 @@ def _harness_parser(prog: str) -> argparse.ArgumentParser:
 def build_job_from(a: argparse.Namespace, command: list[str]) -> dict:
     """Mirror of the job the harness would build for this namespace (telemetry.run.run), so that pre-writing job.json changes
     nothing the harness records.  Kept in one place; if the harness's call changes upstream, change this."""
-    from .telemetry.job import build_job, input_ref, sha256_file
+    from .telemetry.job import build_job, input_ref, sampler_instruments, sha256_file
 
     policy_sha = sha256_file(a.policy)[0] if a.policy and Path(a.policy).exists() else None
     policy_version = a.policy_version
@@ -118,7 +121,7 @@ def build_job_from(a: argparse.Namespace, command: list[str]) -> dict:
                      profile={k: os.environ.get(k) for k in a.profile_key if k in os.environ}, command=command, declared_outputs=a.declared_output,
                      timeout_s=a.timeout, reservation={"gpu": a.reservation_gpu, "host_memory_bytes": a.reservation_host_memory_bytes},
                      policy_version=policy_version, policy_sha256=policy_sha,
-                     instruments=["cgroup", "process", "pss", "gpu", "storage"] if not a.no_sampler else [], cadence_s=a.cadence, pss_every_s=a.pss_every)
+                     instruments=sampler_instruments(a.pss_every) if not a.no_sampler else [], cadence_s=a.cadence, pss_every_s=a.pss_every)
 
 
 def _parse_expect(items: list[str]) -> dict | None:
@@ -134,6 +137,14 @@ def _parse_expect(items: list[str]) -> dict | None:
 
 
 def cmd_run(argv: list[str]) -> int:
+    clones: list[Path] = []          # the run's `--cwd clone` home once made; removed however `_cmd_run` ends
+    try:
+        return _cmd_run(argv, clones)
+    finally:
+        _drop_clone(clones)
+
+
+def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     if "--" not in argv:
         print("research run: the workload command goes after `--`", file=sys.stderr)
         return 2
@@ -220,6 +231,9 @@ def cmd_run(argv: list[str]) -> int:
         print("research run: --run-record is for a local run; --on MACHINE and --queue keep every run file through their custody "
               "(--custody-r2, the default there)", file=sys.stderr)
         return 2
+    if (ns.on or ns.queue) and (why := remote.pss_bound_problem(harness_opts, Path(ns.source).expanduser() if ns.source else None)):
+        print(f"research run: refused: {why}", file=sys.stderr)
+        return 3
     if ns.queue:
         try:
             harness_opts = _normalize_timeout(harness_opts)
@@ -297,6 +311,14 @@ def cmd_run(argv: list[str]) -> int:
     if ns.claimed and not os.environ.get("RESEARCH_STORE"):
         os.environ["RESEARCH_STORE"] = str(root.parent / "store")     # machine side: the store lives beside the runs, <root>/store (what `data pull` reads)
     cwd_basis = _resolve_cwd(a)
+    remote_info = json.loads(ns.remote_json) if ns.remote_json else None
+    clone_rec = None
+    clone_env: dict[str, str] = {}
+    if cwd_basis == "clone":
+        try:
+            clone_rec, clone_env = _make_clone(a, ns, root, run_id, remote_info, clones)
+        except clone.Refused as e:
+            return _refuse(ns, run_dir, run_id, f"--cwd {a.cwd}: {e}", "CloneRefused", mem_reservation)
     try:
         prep = _prepare_store(ns, a, command, run_id, run_dir, env_map)
     except (ImportError, LookupError, TypeError) as e:
@@ -310,25 +332,15 @@ def cmd_run(argv: list[str]) -> int:
         a.cwd = str(run_dir)
     run_dir.mkdir(parents=True, exist_ok=ns.claimed)
     cost = json.loads(ns.cost_json) if ns.cost_json else None
-    remote_info = json.loads(ns.remote_json) if ns.remote_json else None
     if ns.claimed and remote_info is not None:
         try:
             remote_info["tool_running"] = remote.check_tool(remote_info.get("tool_identity"))
         except remote.ResearchVersionMismatch as e:
-            from .telemetry.events import utc_now_ms
-            from .telemetry.job import write_json_atomic
-
-            write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": str(e), "fault": type(e).__name__, "at_utc": utc_now_ms()})
-            print(f"research run: refused: {e}", file=sys.stderr)
-            if ns.exclusive_lock:
-                remote.release_exclusive(Path(ns.exclusive_lock).parent, run_id)
-            if mem_reservation:
-                from .mem import release
-
-                release(mem_reservation, run_id)
-            return 3
+            return _refuse(ns, run_dir, run_id, str(e), type(e).__name__, mem_reservation)
     job = record.extend_job(build_job_from(a, command), run_id=run_id, runs_root=root, expected_fingerprint=_parse_expect(ns.expect),
                             cost=cost, remote=remote_info, store=prep["section"], cwd={"path": a.cwd, "basis": cwd_basis})
+    if clone_rec:
+        job["run"]["cwd_clone"] = clone_rec
     try:                                                          # which build each installed binary is (binprov.py); never stops a run
         from .binprov import snapshot
 
@@ -345,6 +357,7 @@ def cmd_run(argv: list[str]) -> int:
     # --env is the workload's: set for the harness (which spawns it with this environment), then restored so the store publish below
     # runs with the caller's environment (a workload-only AWS_* must not become the push credentials)
     apply_env = {k: v for k, v in env_map.items() if not (ns.claimed and k == "PYTHONPATH")}   # launch_request composed it: tool, tree roots, then this
+    apply_env = {**clone_env, **apply_env}
     saved_env = {k: os.environ.get(k) for k in apply_env}
     os.environ.update(apply_env)
     print(f"research: run {run_id} -> {run_dir}" + (f"  cwd={a.cwd}" if a.cwd else ""), file=sys.stderr)
@@ -362,6 +375,7 @@ def cmd_run(argv: list[str]) -> int:
             from .mem import release
 
             release(mem_reservation, run_id)
+        _drop_clone(clones, run_dir)
     if not ns.custody_dir:
         _publish_attempt(run_dir, prep, run_record=ns.run_record)
     s = R.summarize(run_dir)
@@ -459,16 +473,133 @@ def _resolve_cwd(a: argparse.Namespace) -> str:
     The SOURCE ROOT is this process's cwd: the invoking directory locally, the shipped tree <root>/src/<sha>/ on a machine (launch_request
     starts the runner there; the store's closure and tool declarations are read from it).  `--cwd source` names it, `--cwd source/SUB` or
     a relative `--cwd SUB` a directory under it (an explicit opt-in to running inside a tree other runs may share); an absolute `--cwd`
-    is taken as given.  No `--cwd`: basis `run_dir`, set by the caller once the store preparation has read the source root."""
+    is taken as given.  `--cwd clone` (or `clone/SUB`): basis `clone`, `a.cwd` left as given for `_make_clone`, which puts the run's
+    own clone of the source root in its place.  No `--cwd`: basis `run_dir`, set by the caller once the store preparation has read
+    the source root."""
     if a.cwd is None:
         return "run_dir"
     raw = a.cwd
     if os.path.isabs(raw):
         return "explicit"
+    if clone.sub(raw) is not None:
+        return "clone"
     if raw == CWD_SOURCE or raw.startswith(CWD_SOURCE + "/"):
         raw = raw[len(CWD_SOURCE):].lstrip("/")
     a.cwd = os.path.abspath(os.path.join(os.getcwd(), raw))
     return "source"
+
+
+def _make_clone(a: argparse.Namespace, ns: argparse.Namespace, runs_root: Path, run_id: str, remote_info: dict | None,
+                clones: list[Path]) -> tuple[dict, dict[str, str]]:
+    """`--cwd clone[/SUB]`: clone the source root (this process's cwd, as for `--cwd source`) for this run alone (research.clone) and
+    point `a.cwd` at it, or at SUB in it.  On a machine the clone must be the shipped commit; locally the checkout must be clean.
+    The directory to remove once the run is over goes on `clones` as soon as it exists.  Returns job.json's run.cwd_clone and the
+    workload's environment (`_clone_imports`); clone.Refused when it cannot."""
+    sub = clone.sub(a.cwd) or ""
+    source_root = Path(os.getcwd())
+    shipped = (remote_info or {}).get("source_sha") if ns.claimed else None
+    if ns.claimed and not shipped:
+        raise clone.Refused("this run has no shipped source tree to clone (--source GITDIR ships one)")
+    home = clone.home(runs_root, run_id, machine=ns.claimed)
+    clones.append(home)
+    tree = home / "tree"
+    commit = clone.make(source_root, tree, commit=shipped, clean=not ns.claimed)
+    try:
+        inside = (tree / sub).resolve().is_relative_to(tree.resolve()) and (tree / sub).is_dir()
+    except (OSError, RuntimeError):
+        inside = False
+    if not inside:
+        raise clone.Refused(f"{sub} is not a directory of commit {commit}")
+    a.cwd = str(tree / sub) if sub else str(tree)
+    env = _clone_imports(source_root, tree, home, remote_info) if ns.claimed else {}
+    return {"root": str(tree), "of": str(source_root), "commit": commit}, env
+
+
+def _clone_imports(of: Path, tree: Path, home: Path, remote_info: dict | None) -> dict[str, str]:
+    """A machine's runner has the shipped tree's import roots on PYTHONPATH (launch_request), so the workload would import its code
+    from the shared tree: a write beside a module's __file__ would land there, and the run would execute that tree's files, whatever
+    another run left in them, while the record describes the clean clone.  Each entry under `of` is moved to the same directory in
+    the clone (run.remote.pythonpath too), and bytecode goes beside the clone: under <root>/cache/pycache every clone path would add
+    its own copies, never removed.  Locally the workload imports from whatever its interpreter has installed (an editable install
+    points at the invoking checkout); nothing is moved."""
+    base = os.path.realpath(of)
+
+    def move(p: str) -> str:
+        real = os.path.realpath(p)
+        return str(tree / os.path.relpath(real, base)) if real == base or real.startswith(base + os.sep) else p
+
+    if remote_info is not None and remote_info.get("pythonpath"):
+        remote_info["pythonpath"] = [move(p) for p in remote_info["pythonpath"]]
+    entries = [move(p) for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
+    return {"PYTHONPATH": os.pathsep.join(entries), "PYTHONPYCACHEPREFIX": str(home / "pycache")}
+
+
+#: how many times `_end_group` looks for the group's members after its SIGKILL, GROUP_END_POLL_S apart, before removing the clone anyway
+GROUP_END_POLLS = 100
+GROUP_END_POLL_S = 0.05
+
+
+def _drop_clone(clones: list[Path], run_dir: Path | None = None) -> None:
+    """Remove the run's clone, if `clones` still holds it, once its workload has exited or the run ended before it; a failure is
+    reported, never fatal.  `run_dir`: the workload ran, and whatever is left of its process group (status.json pgid) is ended
+    first (`_end_group`)."""
+    while clones:
+        home = clones.pop()
+        if run_dir is not None:
+            _end_group(run_dir)
+        if why := clone.remove(home):
+            print(f"research: --cwd clone: could not remove {home} ({why}); remove it by hand", file=sys.stderr)
+
+
+def _end_group(run_dir: Path) -> None:
+    """SIGKILL what is left of the workload's process group once its leader has exited: a member that ignored the SIGTERM `research
+    cancel` sends, or that the workload left running, would keep writing into the clone while it is removed (rmtree then fails with
+    ENOTEMPTY and the clone stays).  The clone is the run's own, so nothing else needs those processes."""
+    import signal
+    import time
+
+    from .telemetry.procs import live_group
+
+    try:
+        pgid = int(json.loads((run_dir / "status.json").read_text())["pgid"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return
+    if not (left := live_group(pgid)):
+        return
+    print(f"research: --cwd clone: {len(left)} process(es) of the workload's group {pgid} outlived it "
+          f"({', '.join(str(st['pid']) + ' ' + st['comm'] for st in left[:5])}); SIGKILL to the group before removing the clone",
+          file=sys.stderr)
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    for _ in range(GROUP_END_POLLS):
+        if not live_group(pgid):
+            return
+        time.sleep(GROUP_END_POLL_S)
+
+
+def _refuse(ns: argparse.Namespace, run_dir: Path, run_id: str, reason: str, fault: str, mem_reservation: str | None) -> int:
+    """Refuse the run before its workload (exit 3).  A claimed run records refused.json, deletes its custody key (nothing will
+    publish, so it goes now and not at its expiry, as launch_request's refusals do) and gives back its exclusive lock and memory
+    reservation; a local one has nothing to record yet."""
+    print(f"research run: refused: {reason}", file=sys.stderr)
+    if not ns.claimed:
+        return 3
+    from .store.custody import CRED_FILE
+    from .telemetry.events import utc_now_ms
+    from .telemetry.job import write_json_atomic
+
+    write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": reason, "fault": fault, "at_utc": utc_now_ms()})
+    if ns.custody_dir:
+        (Path(ns.custody_dir) / CRED_FILE).unlink(missing_ok=True)
+    if ns.exclusive_lock:
+        remote.release_exclusive(Path(ns.exclusive_lock).parent, run_id)
+    if mem_reservation:
+        from .mem import release
+
+        release(mem_reservation, run_id)
+    return 3
 
 
 def _parse_env(items: list[str]) -> dict[str, str] | None:

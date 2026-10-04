@@ -22,7 +22,7 @@ from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, credenti
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
 from research.store.model import Label
-from test_merge_gate import CHECKED, DECL
+from test_merge_gate import CHECK_FILES, CHECKED
 
 RULES = """\
 hold_label = "hold"
@@ -72,7 +72,7 @@ class World:
         for rel, text in {"a.txt": "a\n", "b.txt": "b\n", "c.txt": "c\n", "ci/queue.toml": RULES, ".gitignore": "__pycache__/\n",
                           "pkg/lean-audit.json": json.dumps({"guarantees": {"T": "1"}, "reads": {}, "dependencies": {"M": "1"}}),
                           "mytools/decl_check.py": "from research.store.tool import Tool\nT = Tool(name='check', version='1')\n",
-                          "tools/check/tool.py": DECL.format("")}.items():
+                          **CHECK_FILES}.items():
             (self.dev / rel).parent.mkdir(parents=True, exist_ok=True)
             (self.dev / rel).write_text(text)
         _git(self.dev, "init", "-q", "-b", "main")
@@ -197,6 +197,20 @@ def test_grants_follow_paths_and_lean_audit_sections_at_the_exact_head(world):
     world.gh.put(1, world.change({"integrations/vllm/x.py": "x = 2\n"}))
     members, entries = q.sync()
     assert 1 not in [m.pr for m in members] and entries[1].state == "waiting"     # a new head needs a new grant
+
+
+def test_a_file_renamed_out_of_a_grants_paths_needs_the_grant(tmp_path):
+    """git reports a rename by its destination alone unless asked not to, which would leave out the grant the file's old path
+    needs."""
+    (tmp_path / "integrations" / "vllm").mkdir(parents=True)
+    (tmp_path / "integrations" / "vllm" / "x.py").write_text("x = 1\n")
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "mv", "integrations/vllm/x.py", "x.py")
+    _git(tmp_path, "commit", "-q", "-m", "move")
+    assert Rules.parse(RULES).needs(tmp_path, base, _git(tmp_path, "rev-parse", "HEAD")) == {"vllm-coordinator"}
 
 
 def test_a_lean_review_covers_only_the_change_it_printed_as_the_same_statements():
@@ -514,7 +528,8 @@ Path(os.environ["FAKE_SEEN"]).write_text(json.dumps({"argv": a, "files": sorted(
                                                      "built": Path("backends/flock/verifier/lean/.lake/built").is_file(),
                                                      "lake": shutil.which("lake"),
                                                      "env": {k: os.environ.get(k) for k in ("VERITY_STORE_REQUIRED",
-                                                             "CHECK_STORE_CUSTODY", "RESEARCH_RUN_ID", "GIT_AUTHOR_EMAIL")}}))
+                                                             "CHECK_STORE_CUSTODY", "RESEARCH_RUN_ID", "GIT_AUTHOR_EMAIL",
+                                                             "PYTHONPYCACHEPREFIX")}}))
 fail = os.environ.get("FAKE_FAIL")
 Path(a[a.index("--json") + 1]).write_text(json.dumps([{"name": "pkg", "suite": "pkg", "status": "failed" if fail else "passed",
                                                        "failed_tests": [fail] if fail else None}]))
@@ -821,7 +836,9 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     """On the machine the workload's environment holds no store credential, so `check.py` hands its steps the run's custody key
     (CHECK_STORE_CUSTODY) and VERITY_STORE_REQUIRED=1.  The tier handed neither: C-Flock's store-backed tests skipped as "the
     evidence store is not reachable", and the skip passed (red team, #989).  It hands both as check.py does, never the caller's,
-    and nothing of the recording run's own; with no key staged, the store is still required."""
+    and nothing of the recording run's own; with no key staged, the store is still required.  The machine's PYTHONPYCACHEPREFIX
+    reached the suites, so test_remote_cwd.py's runs wrote their bytecode there instead of under their own root and every PR whose
+    tier ran tools/research on vy-nebius-1 failed it (#985, #1021)."""
     from research import queue as Q
 
     main = world.change({"tools/check/suites.py": FAKE_SUITES})
@@ -829,6 +846,7 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
     monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen := world.tmp / "seen.json"))
+    monkeypatch.setenv("PYTHONPYCACHEPREFIX", str(world.tmp / "the-machines-pycache"))
     monkeypatch.setenv("CHECK_STORE_CUSTODY", str(world.tmp / "the-callers-custody"))
     monkeypatch.delenv("VERITY_STORE_REQUIRED", raising=False)
     monkeypatch.delenv("FAKE_FAIL", raising=False)
@@ -839,7 +857,7 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     key = machine.root / "requests" / flags[flags.index("--id") + 1] / "custody"
     env = json.loads(seen.read_text())["env"]
     assert env["VERITY_STORE_REQUIRED"] == "1" and env["CHECK_STORE_CUSTODY"] == str(key.resolve())
-    assert env["RESEARCH_RUN_ID"] is None and env["GIT_AUTHOR_EMAIL"]
+    assert env["RESEARCH_RUN_ID"] is None and env["PYTHONPYCACHEPREFIX"] is None and env["GIT_AUTHOR_EMAIL"]
     machine.custody_r2 = False
     assert tier(world.gh.prs[1]) is None
     env = json.loads(seen.read_text())["env"]

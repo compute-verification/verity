@@ -167,6 +167,34 @@
       ]
     },
     {
+      "name": "the gate refuses a result id that isn't a string, and a result whose steps it can't read or that lists a step twice (research merge reads the first, this gate the last)",
+      "steps": [
+        {"at": 0, "store": {"attempts": {"r2": {"id": "r2", "tool": {"name": "check"}, "source": {"commit": "m0+b1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": ["art:res-r2"]}}}, "manifests": {"art:res-r2": {"kind": "check/v1", "meta": {"steps": []}}}}},
+        {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"id": 1, "tip": "m0+b1", "job": 1}}},
+        {"at": 0, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
+        {"at": 0, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed", "run_id": "r2"}, "expect": {"status": 200}},
+        {"at": 1, "reconcile": true, "expect": {"moved": [1]}},
+        {"at": 2, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "run r2's result id isn't a string"}}},
+        {"at": 3, "store": {"attempts": {"r2": {"id": "r2", "tool": {"name": "check"}, "source": {"commit": "m0+b1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": "art:twice"}}}, "manifests": {"art:twice": {"kind": "check/v1", "meta": {"steps": [{"step": "lean-agreement", "status": "skipped"}, {"step": "lean-agreement", "status": "passed"}]}}}}},
+        {"at": 3, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"id": 2}}},
+        {"at": 4, "reconcile": true, "expect": {"moved": [2]}},
+        {"at": 5, "req": ["GET", "/api/trains/2"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "run r2's result lists step lean-agreement more than once"}}},
+        {"at": 6, "store": {"attempts": {"r2": {"id": "r2", "tool": {"name": "check"}, "source": {"commit": "m0+b1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": "art:unnamed"}}}, "manifests": {"art:unnamed": {"kind": "check/v1", "meta": {"steps": [{"status": "passed"}]}}}}},
+        {"at": 6, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"id": 3}}},
+        {"at": 7, "reconcile": true, "expect": {"moved": [3]}},
+        {"at": 8, "req": ["GET", "/api/trains/3"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "run r2's result has steps this gate can't read"}}},
+        {"at": 9, "store": {"attempts": {"r2": {"id": "r2", "tool": {"name": "check"}, "source": {"commit": "m0+b1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": "art:nometa"}}}, "manifests": {"art:nometa": {"kind": "check/v1", "meta": ["steps"]}}}},
+        {"at": 9, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"id": 4}}},
+        {"at": 10, "reconcile": true, "expect": {"moved": [4]}},
+        {"at": 11, "req": ["GET", "/api/trains/4"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "run r2's result has steps this gate can't read"}}},
+        {"at": 12, "store": {"attempts": {"r2": {"id": "r2", "tool": {"name": "check"}, "source": {"commit": "m0+b1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": "art:res-r2"}}}}},
+        {"at": 12, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"id": 5}}},
+        {"at": 13, "reconcile": true, "expect": {"moved": [5]}},
+        {"at": 14, "req": ["GET", "/api/trains/5"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "landed"}}},
+        {"at": 14, "expect_github": {"refs": {"main": "m0+b1"}, "prs": {"2": {"state": "merged"}}}}
+      ]
+    },
+    {
       "name": "a change the target's merge_requires names lands only with that step passed",
       "steps": [
         {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [6]}, "expect": {"status": 201, "body": {"tip": "m0+f1"}}},
