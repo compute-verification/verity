@@ -169,6 +169,11 @@
    "assumptions": [],
    "type_hash": "412e999c4c07bf8b7811d5f925c72702cec51a1831a78fb71dc4b4a7c4c3fc12"
   },
+  "Pous.SecurityProofs.BandGradedMeetsFamily": {
+   "signature": ["Pous.SecurityProofs.BandGradedMeetsFamily : Pous.Guarantees.BandGradedMeetsFamily"],
+   "assumptions": [],
+   "type_hash": "73c0b7242a746835f2cd5af1ec4cfd49cca4fc778002d98856a49b399fee60b4"
+  },
   "Pous.SecurityProofs.BandMultiMeets14": {
    "signature": ["Pous.SecurityProofs.BandMultiMeets14 : Pous.Guarantees.BandMultiMeets14"],
    "assumptions": [],
@@ -183,6 +188,11 @@
    "signature": ["Pous.SecurityProofs.BandMultiMeetsFamily : Pous.Guarantees.BandMultiMeetsFamily"],
    "assumptions": [],
    "type_hash": "70f0a16a45c46e19133b2f90e56b20f7bd1d27ca6064c8f667ec65d5bd209423"
+  },
+  "Pous.SecurityProofs.BandMultiMeetsFamilyD0": {
+   "signature": ["Pous.SecurityProofs.BandMultiMeetsFamilyD0 : Pous.Guarantees.BandMultiMeetsFamilyD0"],
+   "assumptions": [],
+   "type_hash": "c5f63b948c256416b5b36f3e14d8aa8cb3d18bddc685f7f3e186b8b9567caa5e"
   },
   "Pous.SecurityProofs.BandMultiMeetsFamilyD1": {
    "signature": ["Pous.SecurityProofs.BandMultiMeetsFamilyD1 : Pous.Guarantees.BandMultiMeetsFamilyD1"],
@@ -536,6 +546,15 @@
    "assumptions": [],
    "type_hash": "c9d981378493ecd93c9b9128e413c4ff234e359a1e9d962f63107ee26765f1e1"
   },
+  "PousGraded.gradedMeets_zero_iff": {
+   "signature": [
+    "PousGraded.gradedMeets_zero_iff {M : Pous.IdealModel} (sch : Pous.Scheme M) (D Q D_late Q_late k : Nat)",
+    "  (hD : instLENat.le D D_late) (hQ : instLENat.le Q Q_late) (ε : ENNReal) :",
+    "  Iff (Pous.GradedMeets sch D Q D_late Q_late k 0 ε) (Pous.Meets sch Pous.Reveal.sequential D Q k ε)"
+   ],
+   "assumptions": [],
+   "type_hash": "11392f762574c259f3c79e12ce1bea680fbf124e3c8fd4efa327246e648cef43"
+  },
   "PousMargin.raw_b19_128": {
    "signature": [
     "PousMargin.raw_b19_128 (p b D Q k : Nat) (hk : instLENat.le k 100) (ε : ENNReal) :",
@@ -659,7 +678,7 @@
    "pins": ["PousP2Ring.not_meetsOn_b19_k88", "PousP2Ring.tight_p16448"]
   },
   "Pous.Guarantees": {
-   "digest": "64a5d3f24b5018848ac0af277279c1d60abb5e46c8018a1523c05372c65ba8f0",
+   "digest": "d22104ee43232792d7fcc40e7bcf96b5c8bb74ca46250496b7ee3912ad81f8b3",
    "definitions": {
     "Pous.Guarantees.A1CompressionCard": "4bdc9218360926b7313e50a5882d2d7c72bf905191984cb666c8cad07a435774",
     "Pous.Guarantees.A1CompressionPr": "45e347c38d963ece9d1f073c9efb190b752629dc1364ddeee128432ee1e5fd9d",
@@ -678,9 +697,11 @@
     "Pous.Guarantees.BandChainMeets64D5": "0d4eb049d79e6c42fe35dadf0746b0d8634782cd9b2fd9f4a55c1fdbd59f10ae",
     "Pous.Guarantees.BandChainMeets64Rounds1": "c944d4dcf616ec2d63a59b540380bbd1b9f3318046e8781bac2d3c7c8d934976",
     "Pous.Guarantees.BandChainMeets64Rounds2": "362be886c2f94038ff4932ec56c10cbdfa4783551699504480cfe32434851775",
+    "Pous.Guarantees.BandGradedMeetsFamily": "d7e4a45aa7c5c286613454e568c0fd92b2a9bbf4b4df2fcc59f61ae2a24efa4b",
     "Pous.Guarantees.BandMultiMeets14": "ee4d8b855ec67b97b91433094ddcb5b0075cb8373125dce1327e0ad58c7d4b01",
     "Pous.Guarantees.BandMultiMeets14K106": "e6d4bc050a0ab8957694ca111b89f29bebb0d215c24e6e6c189021772b08eb75",
     "Pous.Guarantees.BandMultiMeetsFamily": "38acde34b71bbb04a7d19f031fb26b8c3586f95d76e7ede42c36742d4861336f",
+    "Pous.Guarantees.BandMultiMeetsFamilyD0": "b34c1a3c0a8488656e83eee516313b951315391d5ce2406ad9e3ea2b78072090",
     "Pous.Guarantees.BandMultiMeetsFamilyD1": "4b325d938a20cc915de4f919a7c740642d336e298790f4bbab092184e05e6c1f",
     "Pous.Guarantees.BandMultiMeetsFamilyD2": "2aafa1eeb7b1638689f0cec3ed52c6c1749c0c9313262895923f143d767cfc23",
     "Pous.Guarantees.BandPubMeets14": "d986825aeeed19e9422df88ca8bcd2d01b95fe4147cceca5412279d90f9321fa",
@@ -741,9 +762,11 @@
     "Pous.SecurityProofs.BandChainMeets64D5",
     "Pous.SecurityProofs.BandChainMeets64Rounds1",
     "Pous.SecurityProofs.BandChainMeets64Rounds2",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD2",
     "Pous.SecurityProofs.BandPubMeets14",
@@ -805,6 +828,13 @@
     "Pous.SecurityProofs.P2SlackFamilyUncond"
    ]
   },
+  "Pous.Protocol.Accounting.GradedMeets": {
+   "digest": "4af4e7e25629ec16f9bfab71b839349841691b42f7e8ac3a56849edb1457d745",
+   "definitions": {
+    "Pous.GradedMeets": "fdb468a799a9fc714a7e6ebdcfc84c4a90acc841cfa57058180d847ea18bf74d"
+   },
+   "pins": ["Pous.SecurityProofs.BandGradedMeetsFamily", "PousGraded.gradedMeets_zero_iff"]
+  },
   "Pous.Protocol.Accounting.Params": {
    "digest": "3ae4cf02f914e89aef86f7a97df55e5b99671478c007e62ca89576f23a655e1c",
    "definitions": {
@@ -822,9 +852,11 @@
     "Pous.SecurityProofs.BandChainMeets64D5",
     "Pous.SecurityProofs.BandChainMeets64Rounds1",
     "Pous.SecurityProofs.BandChainMeets64Rounds2",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD2",
     "Pous.SecurityProofs.BandPubMeets14",
@@ -854,6 +886,7 @@
     "Pous.k_ge_86",
     "Pous.not_meets_eps_one",
     "Pous.not_meets_of_lt_eps",
+    "PousGraded.gradedMeets_zero_iff",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
@@ -916,9 +949,11 @@
     "Pous.SecurityProofs.BandChainMeets64D5",
     "Pous.SecurityProofs.BandChainMeets64Rounds1",
     "Pous.SecurityProofs.BandChainMeets64Rounds2",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD2",
     "Pous.SecurityProofs.BandPubMeets14",
@@ -966,6 +1001,7 @@
     "Pous.plain_short_coins_insecure",
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
+    "PousGraded.gradedMeets_zero_iff",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
@@ -999,9 +1035,11 @@
     "Pous.SecurityProofs.BandChainMeets64D5",
     "Pous.SecurityProofs.BandChainMeets64Rounds1",
     "Pous.SecurityProofs.BandChainMeets64Rounds2",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD2",
     "Pous.SecurityProofs.BandPubMeets14",
@@ -1054,6 +1092,7 @@
     "Pous.raw_sim_accepted",
     "PousContinuous.pr_misses_gt_le",
     "PousContinuous.pr_misses_le",
+    "PousGraded.gradedMeets_zero_iff",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
@@ -1092,9 +1131,11 @@
     "Pous.SecurityProofs.BandChainMeets64D5",
     "Pous.SecurityProofs.BandChainMeets64Rounds1",
     "Pous.SecurityProofs.BandChainMeets64Rounds2",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD2",
     "Pous.SecurityProofs.BandPubMeets14",
@@ -1138,6 +1179,7 @@
     "Pous.plain_short_coins_insecure",
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
+    "PousGraded.gradedMeets_zero_iff",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
@@ -1176,9 +1218,11 @@
     "Pous.SecurityProofs.BandChainMeets64D5",
     "Pous.SecurityProofs.BandChainMeets64Rounds1",
     "Pous.SecurityProofs.BandChainMeets64Rounds2",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD2",
     "Pous.SecurityProofs.BandPubMeets14",
@@ -1244,9 +1288,11 @@
     "Pous.SecurityProofs.BandChainMeets64D5",
     "Pous.SecurityProofs.BandChainMeets64Rounds1",
     "Pous.SecurityProofs.BandChainMeets64Rounds2",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD2",
     "Pous.SecurityProofs.BandPubMeets14",
@@ -1265,6 +1311,17 @@
     "Pous.SecurityProofs.SegTagMeets14",
     "Pous.SecurityProofs.TagInjective14"
    ]
+  },
+  "Pous.Protocol.Model.Graded": {
+   "digest": "38e7bf0cb50ea843538dcb97e0c7ed9a3d4f43824e0b765dddb537b6ea4414f2",
+   "definitions": {
+    "Pous.GradedAuditSecure": "2a76d3b258416e9d0b410f416b88be4507564674ec347088bb8330d91e78ab50",
+    "Pous.GradedResponder": "214a52b79b852e9e49abeaa3642001bfdb6e94be7b5f5f98bc37d1584b7c797d",
+    "Pous.GradedResponder.step": "ac0c03d207d07eafbc30ed34e7f18097da0dc295c8d106e4517b103b0de54188",
+    "Pous.gradedAccepts": "154be4d3e811c2651677a6bff608ea0cacf1bf80b8d4025957574b521399995e",
+    "Pous.gradedAnswers": "e67977dc61ba7c5af9c002908ae633b59e78e6e3dc3586ffabaf2b0ee14f7198"
+   },
+   "pins": ["Pous.SecurityProofs.BandGradedMeetsFamily", "PousGraded.gradedMeets_zero_iff"]
   },
   "Pous.Protocol.Model.HashChain": {
    "digest": "e5a856998d00a7c438418f62831a53ccbaf75e94ea767358fe03814aaca2f858",
@@ -1347,9 +1404,11 @@
     "Pous.SecurityProofs.BandChainMeets64D5",
     "Pous.SecurityProofs.BandChainMeets64Rounds1",
     "Pous.SecurityProofs.BandChainMeets64Rounds2",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD2",
     "Pous.SecurityProofs.BandPubMeets14",
@@ -1389,9 +1448,11 @@
     "Pous.SecurityProofs.BandChainMeets64D5",
     "Pous.SecurityProofs.BandChainMeets64Rounds1",
     "Pous.SecurityProofs.BandChainMeets64Rounds2",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD2",
     "Pous.SecurityProofs.BandPubMeets14",
@@ -1495,9 +1556,11 @@
     "Pous.SecurityProofs.BandChainMeets64D5",
     "Pous.SecurityProofs.BandChainMeets64Rounds1",
     "Pous.SecurityProofs.BandChainMeets64Rounds2",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD2",
     "Pous.SecurityProofs.BandPubMeets14",
@@ -1593,9 +1656,11 @@
     "Pous.SecurityProofs.BandChainMeets64D5",
     "Pous.SecurityProofs.BandChainMeets64Rounds1",
     "Pous.SecurityProofs.BandChainMeets64Rounds2",
+    "Pous.SecurityProofs.BandGradedMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeets14",
     "Pous.SecurityProofs.BandMultiMeets14K106",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD2",
     "Pous.SecurityProofs.BandPubMeets14",
@@ -1640,6 +1705,7 @@
     "Pous.plain_short_coins_insecure",
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
+    "PousGraded.gradedMeets_zero_iff",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
