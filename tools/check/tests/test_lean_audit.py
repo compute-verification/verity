@@ -60,7 +60,7 @@ sys.exit(1 if failed else 0)
 def _tree(tmp: Path, monkeypatch) -> Path:
     root = tmp / "repo"
     files = {
-        "tools/lean/audit.py": FAKE_AUDIT,
+        "tools/lean/audit.py": FAKE_AUDIT, "tools/lean/README.md": "", "tools/lean/tests/fixtures/control.lean": "",
         "tools/lean/lean_audit.py": "", "tools/check/common.py": "", "tools/check/check.py": "",
         "pkg/a/lakefile.toml": "", "pkg/a/lean-toolchain": "v1\n", "pkg/a/A.lean": "theorem a : True := trivial\n",
         "pkg/a/lake-manifest.json": json.dumps({"packages": [{"name": "dep", "type": "git", "rev": "abc"}]}),
@@ -101,6 +101,21 @@ def test_verdicts_are_reused_only_while_every_input_is_unchanged(tmp_path, monke
     assert rc == 0 and sorted(ran) == ["pkg/a warm", "pkg/b cold"] and doc["cached"] == {}
     (root / "tools/lean/audit.py").write_text(FAKE_AUDIT + "\n# the auditor changed\n")
     assert sorted(_run(tmp_path, 5)[1]) == ["pkg/a warm", "pkg/b cold"]     # the auditor is an input of every package
+
+
+def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
+    """b201 (r20261004-150518-b201) audited all 8 packages again, 69 min, partly on edits to `tools/lean/README.md` and
+    `tools/lean/tests/`, which no audit reads. They stay out of the scratch tree too, so an audit that read one would fail."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    assert _run(tmp_path, 1)[0] == 0
+    (root / "tools/lean/README.md").write_text("reworded\n")
+    (root / "tools/lean/tests/fixtures/control.lean").write_text("theorem c : True := trivial\n")
+    rc, ran, doc = _run(tmp_path, 2)
+    assert rc == 0 and ran == [] and sorted(doc["cached"]) == ["pkg/a", "pkg/b"]
+    (root / "pkg/b/lean-audit.json").write_text(json.dumps({"reads": ["tools/lean/tests/fixtures/control.lean"]}))
+    rc, _ran, doc = _run(tmp_path, 3)
+    assert rc == 1 and doc["failed"] == ["pkg/b"]
 
 
 def test_a_cache_reached_through_a_symlink_keeps_every_report(tmp_path, monkeypatch):
@@ -270,6 +285,8 @@ def test_the_real_packages_and_their_inputs():
     got = LA.inputs("backends/flock/verifier/lean/soundness", files)
     assert "backends/flock/verifier/lean/level3/lean-audit.json" in got and "backends/flock/verifier/lean/Main.lean" in got
     assert "tools/lean/audit.py" in got and not [f for f in got if f.startswith("backends/flock/verifier/lean/soundness/.lake")]
+    assert "tools/lean/Replay.lean" in got and "tools/lean/README.md" not in got
+    assert not [f for f in got if f.startswith("tools/lean/tests/")]
 
 
 def test_a_failed_dependency_fetch_is_no_verdict_and_is_retried():

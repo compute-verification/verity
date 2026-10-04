@@ -9,8 +9,10 @@ whose passes can't be reused, with dependencies kept warm.
 A package's verdict is reused while everything its audit reads is unchanged. Its key hashes:
 - the tracked files of the package, less the Lake packages nested in it (`audit.lean_modules` skips them);
 - the same for each package it requires by path (`audit.path_deps`);
-- `tools/lean/` (the auditor, its controls and this file) and `tools/check/common.py`, the helpers it imports: not
-  `check.py`, which only launches it, so an edit to `check.py` alone keeps every package's verdict;
+- `tools/lean/` (the auditor and this file) and `tools/check/common.py`, the helpers it imports: not `check.py`, which only
+  launches it, so an edit to `check.py` alone keeps every package's verdict. Nor `tools/lean/tests/` (the controls, which the
+  `tools/lean` suite runs) or its `*.md`, which the audit never reads: the scratch tree leaves them out too, so a read of one
+  would fail there;
 - the package's `lean-toolchain` and `lake-manifest.json`, which pin the toolchain and the fetched dependencies.
 
 When one package misses, the audit runs on a scratch tree holding only the missed packages' inputs, from that tree's own copy of
@@ -111,7 +113,7 @@ FLAGS = ["--build"]
 def inputs(pkg: str, files: list[str]) -> list[str]:
     """Every tracked file an audit of ``pkg`` can read."""
     own = [f for p in (pkg, *path_deps(pkg)) for f in own_files(p, files)]
-    tool = [f for f in files if f.startswith(LEAN_TOOL)]
+    tool = [f for f in files if f.startswith(LEAN_TOOL) and not f.startswith(LEAN_TOOL + "tests/") and not f.endswith(".md")]
     return sorted({*own, *tool, "tools/check/common.py"})
 
 
