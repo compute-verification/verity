@@ -5,6 +5,9 @@ in gates is the work's own digest:
 * `PearlTileDigest{TM,TN}`: `pearl_c.leaf` (hashing h0) of a tile's C̃ and U: TurboSHAKE128 (D = 0x21) of each row's
   32-column chunks, then TurboSHAKE128 (D = 0x22) of those digests, on `hashes.KeccakP1600R12`.  A hiding tile unit returns
   it in place of its checked words.
+* Its two halves, for a tile cut into sub-tiles (`tilesub`): `PearlRowChunks{TN,SB}`, one tile row's chunk digests from
+  its TN / SB sub-tiles' C̃ and U, and `PearlTileLeaf{TM,TN}`, the tile digest over its TM rows' chunk digests.
+  Composed they are `PearlTileDigest`'s gates.
 
 The rows (`SCHEMAS`), each a row of 16-bit words with every narrower element packed low bits first (flock-fp's packed
 rows), so the row's bytes are the tensor's memory.  Each is the row C-Flock's port of its words commits (`ROW_SCHEMA`): an
@@ -46,6 +49,19 @@ of one row's units (k is the segment's length where the row is a segment's):
 At the deployed row_k (2,048) each of the six is short (one block with SHA-512's padding: at most 55 words) or whole
 blocks (a multiple of 64 words), the v2 rows C-Flock's widened scope takes; pc8-carry's zero words are for that.
 
+A tile unit cut into sub-tiles of a × b words (`tilesub`, ``Shape.tile_sub``) passes its values in two more, both v2 and
+in the call's session (b is the sub-tile's column count):
+
+    row (schema id)                       words                                                      n words
+    sub-cu (pouw/row-sub-cu/v1)           one tile row of a sub-tile: its b C̃ words, then its b U    4b
+                                          words, FP32 each as two, low half first
+    tile-chunks (pouw/tile-chunks-h0/v1)  a tile row's chunk digests (`pearl_c.message_digest`, one  64
+                                          per 32 columns, at most four), two bytes per word, low
+                                          byte first, then zero words
+
+sub-cu is short for every b of `tilesub.SUBS` but 16, where it is one block.  tile-chunks' zero words make it one whole
+block, so the units that read only sub-cu and tile-chunks rows still compress a block, which C-Flock's `compose` needs.
+
 nvfp4-p's codes and scales are `rowleaf.nvfp4_row_bytes`' bytes, and every row's bytes are `rowleaf.bit_row`'s of its
 elements.  Which unit ports make up each row is `pc4.PORTS` and `pc8.PORTS`, and `rowk.PORTS4` and `rowk.PORTS8` for the
 cut.  `words_*` are each row's words from its elements, and `commit` and `tree_leaf` a row's commit string and tree leaf;
@@ -84,28 +100,43 @@ SCHEMAS = {"bf16": "pouw/row-bf16/v1", "fp32": "pouw/row-fp32/v1", "nvfp4-p": "p
            "fp8-p": "pouw/row-fp8-p/v1", "ok": "pouw/row-ok/v1", "tile": "pouw/tile-h0/v1",
            "pc8-head": "pouw/row-pc8-head/v1", "pc8-carry": "pouw/row-pc8-carry/v1", "fp8-codes": "pouw/row-fp8-codes/v1",
            "pc4-head": "pouw/row-pc4-head/v1", "pc4-carry": "pouw/row-pc4-carry/v1",
-           "nvfp4-codes": "pouw/row-nvfp4-codes/v1"}
+           "nvfp4-codes": "pouw/row-nvfp4-codes/v1", "sub-cu": "pouw/row-sub-cu/v1",
+           "tile-chunks": "pouw/tile-chunks-h0/v1"}
 ROW_WORDS = {"bf16": lambda k: k, "fp32": lambda k: 2 * k, "nvfp4-p": lambda k: k // 4 + k // 32 + P_WORDS,
              "fp8-p": lambda k: k // 2 + P_WORDS, "ok": lambda k: 1, "tile": lambda k: 16,
              "pc8-head": lambda k: 23, "pc8-carry": lambda k: 128, "fp8-codes": lambda k: k // 2, "pc4-head": lambda k: 3,
-             "pc4-carry": lambda k: 64, "nvfp4-codes": lambda k: k // 4 + k // 32}
+             "pc4-carry": lambda k: 64, "nvfp4-codes": lambda k: k // 4 + k // 32, "sub-cu": lambda b: 4 * b,
+             "tile-chunks": lambda k: 64}
 #: each row's frame-leaf schema as C-Flock commits it: rows of 16-bit elements v1, packed rows, the admission bit, the
-#: tile digest and the cut's rows v2
+#: tile digest and the cuts' rows v2
 ROW_SCHEMA = {"bf16": SCHEMA_HM96_SHA512_ROW, "fp32": SCHEMA_HM96_SHA512_ROW, "nvfp4-p": SCHEMA_HM96_SHA512_ROW_V2,
               "fp8-p": SCHEMA_HM96_SHA512_ROW_V2, "ok": SCHEMA_HM96_SHA512_ROW_V2, "tile": SCHEMA_HM96_SHA512_ROW_V2,
-              **dict.fromkeys(("pc8-head", "pc8-carry", "fp8-codes", "pc4-head", "pc4-carry", "nvfp4-codes"),
-                              SCHEMA_HM96_SHA512_ROW_V2)}
+              **dict.fromkeys(("pc8-head", "pc8-carry", "fp8-codes", "pc4-head", "pc4-carry", "nvfp4-codes", "sub-cu",
+                               "tile-chunks"), SCHEMA_HM96_SHA512_ROW_V2)}
+#: the most chunk digests a tile-chunks row holds (a tile row of at most 128 columns), and its words as 32-bit halves
+TILE_CHUNKS, CHUNKS_U32 = 4, 32
+
+
+def _row_chunks(e: H.Emit, c: list, u: list) -> list:
+    """TurboSHAKE128 (D = 0x21) of each 32-column chunk of one tile row's C̃ then U (``c``, ``u``: its words in column
+    order), the digests' words in order."""
+    digests: list = []
+    for h in range(0, len(c), C.CHUNK):
+        ws = c[h:h + C.CHUNK] + u[h:h + C.CHUNK]
+        digests += H.turboshake128(e, list(zip(ws[0::2], ws[1::2])), 32, C.D_MESSAGE)
+    return digests
+
+
+def _leaf(e: H.Emit, digests: list):
+    return e.array(H.turboshake128(e, list(zip(digests[0::2], digests[1::2])), 32, C.D_LEAF))
 
 
 def _tile_digest_body(B, S_, c, u):
     e = H.Emit(B)
     digests: list = []
     for r in range(S_.TM):
-        for h in range(0, S_.TN, C.CHUNK):
-            cols = range(h, min(h + C.CHUNK, S_.TN))
-            ws = [c[r][j] for j in cols] + [u[r][j] for j in cols]
-            digests += H.turboshake128(e, list(zip(ws[0::2], ws[1::2])), 32, C.D_MESSAGE)
-    return e.array(H.turboshake128(e, list(zip(digests[0::2], digests[1::2])), 32, C.D_LEAF))
+        digests += _row_chunks(e, [c[r][j] for j in range(S_.TN)], [u[r][j] for j in range(S_.TN)])
+    return _leaf(e, digests)
 
 
 PearlTileDigestDef = CompositeDefinition(
@@ -118,6 +149,52 @@ PearlTileDigestDef = CompositeDefinition(
 @lru_cache(maxsize=16)
 def tile_digest(tm: int, tn: int) -> SpecializedDefinition:
     return bind(PearlTileDigestDef, TM=tm, TN=tn)
+
+
+def _row_chunks_body(B, S_, c, u):
+    e, sb = H.Emit(B), S_.SB
+    row = lambda x: [x[j // sb][j % sb] for j in range(S_.TN)]                  # noqa: E731
+    digests = _row_chunks(e, row(c), row(u))
+    return e.array(digests + [0] * (CHUNKS_U32 - len(digests)))
+
+
+def _row_chunks_sig(S_):
+    part = Array(S_.TN // S_.SB, Array(S_.SB, W.F32))
+    return (("c", part), ("u", part)), Array(CHUNKS_U32, U32)
+
+
+PearlRowChunksDef = CompositeDefinition(
+    "PouwPearlRowChunks", 1, ("TN", "SB"), _row_chunks_sig, _row_chunks_body,
+    doc="One tile row's chunk digests (`pearl_c.message_digest`, h0) from its TN / SB sub-tiles' rows of C̃ and U: eight "
+        "little-endian words per 32-column chunk, then zero words (the tile-chunks row).",
+    conformance="protocol-defined")
+
+
+def _tile_leaf_body(B, S_, d):
+    n = 8 * -(-S_.TN // C.CHUNK)
+    return _leaf(H.Emit(B), [d[r][w] for r in range(S_.TM) for w in range(n)])
+
+
+PearlTileLeafDef = CompositeDefinition(
+    "PouwPearlTileLeaf", 1, ("TM", "TN"), lambda S_: ((("d", Array(S_.TM, Array(CHUNKS_U32, U32))),), DIGEST),
+    _tile_leaf_body,
+    doc="`pearl_c.leaf` (h0) of a TM x TN tile from its rows' chunk digests (`PearlRowChunks`): TurboSHAKE128 (D = 0x22) "
+        "of every row's in order, `PearlTileDigest`'s 32 bytes as eight little-endian words.",
+    conformance="protocol-defined")
+
+
+@lru_cache(maxsize=16)
+def row_chunks(tn: int, sb: int) -> SpecializedDefinition:
+    if not (0 < sb and tn % sb == 0 and 0 < -(-tn // C.CHUNK) <= TILE_CHUNKS):
+        raise ValueError(f"a row's chunk digests need SB | TN <= {C.CHUNK * TILE_CHUNKS}: TN = {tn}, SB = {sb}")
+    return bind(PearlRowChunksDef, TN=tn, SB=sb)
+
+
+@lru_cache(maxsize=16)
+def tile_leaf(tm: int, tn: int) -> SpecializedDefinition:
+    if not (0 < tm and 0 < -(-tn // C.CHUNK) <= TILE_CHUNKS):
+        raise ValueError(f"a tile leaf reads at most {TILE_CHUNKS} chunk digests a row: TN = {tn}")
+    return bind(PearlTileLeafDef, TM=tm, TN=tn)
 
 
 def digest_bytes(words: Sequence[int]) -> bytes:
@@ -165,6 +242,26 @@ def words_tile(digest: bytes) -> list[int]:
     if len(digest) != 32:
         raise ValueError("a tile digest is 32 bytes")
     return [int.from_bytes(digest[2 * i:2 * i + 2], "little") for i in range(16)]
+
+
+def words_sub_cu(c: Sequence[int], u: Sequence[int]) -> list[int]:
+    if not 0 < len(c) == len(u):
+        raise ValueError("a sub-cu row is a sub-tile row's b C̃ words and its b U words")
+    return words_fp32(c) + words_fp32(u)
+
+
+def row_chunk_digests(c: Sequence[int], u: Sequence[int]) -> list[bytes]:
+    """The h0 digests of one tile row's 32-column chunks of C̃ ‖ U (``c``, ``u``: its FP32 words), as `pearl_c.leaf`
+    hashes them."""
+    pack = lambda ws: b"".join((v & W.M32).to_bytes(4, "little") for v in ws)       # noqa: E731
+    return [C.message_digest(pack(c[h:h + C.CHUNK]) + pack(u[h:h + C.CHUNK])) for h in range(0, len(c), C.CHUNK)]
+
+
+def words_tile_chunks(digests: Sequence[bytes]) -> list[int]:
+    if not 0 < len(digests) <= TILE_CHUNKS:
+        raise ValueError(f"a tile-chunks row is 1 to {TILE_CHUNKS} chunk digests")
+    words = [w for d in digests for w in words_tile(d)]
+    return words + [0] * (ROW_WORDS["tile-chunks"](0) - len(words))
 
 
 def _halves(v: int, n: int) -> list[int]:
@@ -238,7 +335,9 @@ def tree_leaf(bc: bytes) -> bytes:
     return INST.tree_leaf(KEY, bc)
 
 
-__all__ = ["DIGEST", "INST", "KEY", "OK", "PearlTileDigestDef", "P_WORDS", "ROW_SCHEMA", "ROW_WORDS", "SCHEMAS", "commit",
-           "digest_bytes", "ok_of", "row_digest", "row_leaf", "tile_digest", "tree_leaf", "words_bf16", "words_fp32",
-           "words_fp8_codes", "words_fp8_p", "words_nvfp4_codes", "words_nvfp4_p", "words_ok", "words_pc4_carry",
-           "words_pc4_head", "words_pc8_carry", "words_pc8_head", "words_tile"]
+__all__ = ["CHUNKS_U32", "DIGEST", "INST", "KEY", "OK", "PearlRowChunksDef", "PearlTileDigestDef", "PearlTileLeafDef",
+           "P_WORDS", "ROW_SCHEMA", "ROW_WORDS", "SCHEMAS", "TILE_CHUNKS", "commit", "digest_bytes", "ok_of",
+           "row_chunk_digests", "row_chunks", "row_digest", "row_leaf", "tile_digest", "tile_leaf", "tree_leaf", "words_bf16",
+           "words_fp32", "words_fp8_codes", "words_fp8_p", "words_nvfp4_codes", "words_nvfp4_p", "words_ok",
+           "words_pc4_carry", "words_pc4_head", "words_pc8_carry", "words_pc8_head", "words_sub_cu", "words_tile",
+           "words_tile_chunks"]

@@ -5,7 +5,8 @@ a row schema and needs a reason in the PR.
 
 Inputs are derived, not stored: part ``p`` of case ``c`` is the first bytes of SHAKE256("verity/pouw/rows-vectors/v1", c, p),
 read as the schema's elements (16-, 32- and 64-bit words little-endian, codes one per byte masked to their width), and the salt
-is its 192 bytes of part "salt".  A tile case's C̃ and U are TM x TN 32-bit words, hashed by `pearl_c.leaf`.  Each case's
+is its 192 bytes of part "salt".  A tile case's C̃ and U are TM x TN 32-bit words, hashed by `pearl_c.leaf`; a sub-cu
+case's are one row of b words, and a tile-chunks case's one tile row of TN words, hashed per 32-column chunk.  Each case's
 leaf is the row C-Flock commits from its words and salt (`leaves.ROW_SCHEMA`); a case's name says which tree (x or w) the
 row sits in, which its registration domain binds and its leaf does not."""
 
@@ -33,7 +34,9 @@ CASES = (("bf16-x-64", "bf16", 64), ("bf16-w-4096", "bf16", 4096),
          ("fp8-codes-x-64", "fp8-codes", 64), ("fp8-codes-w-2048", "fp8-codes", 2048),
          ("pc4-head-x", "pc4-head", 2048), ("pc4-head-w", "pc4-head", 2048),
          ("pc4-carry-x", "pc4-carry", 2048), ("pc4-carry-w", "pc4-carry", 2048),
-         ("nvfp4-codes-x-64", "nvfp4-codes", 64), ("nvfp4-codes-w-2048", "nvfp4-codes", 2048))
+         ("nvfp4-codes-x-64", "nvfp4-codes", 64), ("nvfp4-codes-w-2048", "nvfp4-codes", 2048),
+         ("sub-cu-x-2", "sub-cu", 2), ("sub-cu-x-16", "sub-cu", 16),
+         ("tile-chunks-x-33", "tile-chunks", 33), ("tile-chunks-x-64", "tile-chunks", 64))
 
 
 def shake(case: str, part: str, n: int) -> bytes:
@@ -80,6 +83,8 @@ def inputs(case: str, row: str, k) -> dict:
         return {"tot": u32(case, "tot", C.R)}
     if row == "nvfp4-codes":
         return {"codes": codes(case, "codes", k, 4), "scales": codes(case, "scales", k // 16, 8)}
+    if row in ("sub-cu", "tile-chunks"):
+        return {"c": u32(case, "c", k), "u": u32(case, "u", k)}
     tm, tn = k
     return {"c": [u32(case, f"c{i}", tn) for i in range(tm)], "u": [u32(case, f"u{i}", tn) for i in range(tm)]}
 
@@ -107,6 +112,10 @@ def words(row: str, x: dict) -> list[int]:
         return L.words_pc4_carry(x["tot"])
     if row == "nvfp4-codes":
         return L.words_nvfp4_codes(x["codes"], x["scales"])
+    if row == "sub-cu":
+        return L.words_sub_cu(x["c"], x["u"])
+    if row == "tile-chunks":
+        return L.words_tile_chunks(L.row_chunk_digests(x["c"], x["u"]))
     return L.words_tile(C.leaf(types.SimpleNamespace(c=x["c"], u=x["u"])))
 
 
