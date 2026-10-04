@@ -5,7 +5,7 @@ selected is `CutlassFp8BlockScaledMMKernel` (`VLLM_USE_DEEP_GEMM=0`; the DeepGEM
     _C.per_token_group_fp8_quant(x[M,K] bf16, x_q![M,K] e4m3, x_s![M,K/G] f32, G, eps=1e-10, -448, 448, ue8m0=False, col_major, tma)
         -> Compute(Fp8GroupQuant_v1{K,G}, rows=M, (PerRow(x),), (PerRow(x_q), PerRow(x_s)))
     _C.cutlass_scaled_mm(out![M,N] bf16, x_q[M,K] e4m3, W.T [K,N] (view of the e4m3 [N,K] parameter), x_s[M,K/G] f32,
-                         Ws.T [K/G,N/G] (view of the f32 [N/G,K/G] `weight_scale_inv` parameter), bias=None)
+                         Ws.T [K/G,cdiv(N,G)] (view of the f32 [cdiv(N,G),K/G] `weight_scale_inv` parameter), bias=None)
         -> Compute(ScaledMmFp8BlockSharedScale_v1{K,N,G}, rows=M, (PerRow(x_q), PerRow(x_s), Shared(W), Shared(Ws)), (PerRow(out),))
 
 The GEMM's Definition is the record target's `fp8_scale_construction`: `ScaledMmFp8BlockSharedScale_v1` by default (each weight
@@ -103,11 +103,12 @@ class PerTokenGroupFp8Quant:
 
 @dataclass
 class CutlassScaledMmFp8Block:
-    """`_C.cutlass_scaled_mm(out!, a, b, a_scales, b_scales, bias)` with a `[M, K/G]` x `[K/G, N/G]` scale pair = the BLOCKWISE
+    """`_C.cutlass_scaled_mm(out!, a, b, a_scales, b_scales, bias)` with a `[M, K/G]` x `[K/G, cdiv(N, G)]` scale pair = the BLOCKWISE
     dispatch (`cutlass_scaled_mm_blockwise_sm90_fp8` -> `cutlass_3x_gemm_fp8_blockwise<bf16, ...>`).  `b` is `weight.T` (a `[K, N]`
-    strides `(1, K)` view of the e4m3 `[N, K]` parameter), `b_scales` is `weight_scale_inv.T` (a `[K/G, N/G]` view of the f32
-    `[N/G, K/G]` parameter); both must be checkpoint parameters (weight Roots).  Per-tensor / per-channel scale shapes are a
-    different kernel (`cutlass_scaled_mm_sm90_fp8`, no block promotion) and are refused; so is a bias (the epilogue changes)."""
+    strides `(1, K)` view of the e4m3 `[N, K]` parameter), `b_scales` is `weight_scale_inv.T` (a `[K/G, cdiv(N, G)]` view of the f32
+    `[cdiv(N, G), K/G]` parameter; N may end mid-block, `fp8.weight_blocks`); both must be checkpoint parameters (weight Roots).
+    Per-tensor / per-channel scale shapes are a different kernel (`cutlass_scaled_mm_sm90_fp8`, no block promotion) and are refused;
+    so is a bias (the epilogue changes)."""
 
     group: int
     name: str = "fp8.cutlass_scaled_mm_blockwise"
@@ -142,14 +143,14 @@ class CutlassScaledMmFp8Block:
             return unsupported(node, "a / out are not row-major [M,K] / [M,N] views", a=repr(xq), out=repr(out))
         M, K = xq.shape
         N = out.shape[1]
-        if K % G or N % G:
-            return unsupported(node, "K or N is not a multiple of the block", K=K, N=N, G=G)
+        if K % G:
+            return unsupported(node, "K is not a multiple of the block", K=K, N=N, G=G)
         if xs.shape != (M, K // G):
             return unsupported(node, "a_scales is not the per-token-group [M, K/G] scale (per-tensor / per-channel scaling is another kernel)",
                                a_scales=repr(xs), M=M, K=K, G=G)
         try:
             w = as_weight_view(b, K, N)
-            ws = as_weight_view(bs, K // G, N // G)
+            ws = as_weight_view(bs, K // G, fp8.weight_blocks(N, G))
         except GeometryError as e:
             return unsupported(node, str(e))
         if not (xq.dtype == E4M3 and w.dtype == E4M3 and xs.dtype == "float32" and ws.dtype == "float32" and out.dtype == "bfloat16"):

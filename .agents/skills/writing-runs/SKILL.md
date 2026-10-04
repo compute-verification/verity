@@ -16,6 +16,10 @@ store's remote once the workload exits. Every byte the workload leaves there is 
 too. Run `r20260930-080414-bae0` started a build in its run dir, and custody spent 54 minutes on 9.5 GiB before it was
 killed. Whoever writes the job decides what to keep.
 
+A local `research run` (no `--on`, as in a pod) publishes only its telemetry and the files its `result.json` lists, unless it
+passes `--run-record`. With it, the attempt carries the same selection custody's run record does. The Nebius Sky templates
+with a free-form `CMD` (`port-capture`, `prover-bench`, `prover-dev`) pass it.
+
 ## What custody keeps
 
 - **Always uploaded:** the run's own files, meaning the logs, `job.json`, `status.json`, `events.jsonl`, `result.json` and

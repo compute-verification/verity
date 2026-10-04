@@ -457,25 +457,28 @@ class LocalStore:
         self.index.set_presence(art_id, local=self._blobs_local(m))
         if to is None:
             final = self.root / "trees" / hex_
-            if final.is_dir() and all((final / f.path).is_file() for f in wanted):
-                return final
-            if paths:                                                   # a partial fetch lands in place; the cache is complete when every file is there
-                self._materialise(srcs, final)
-                return final
-            work = final.parent / f".tmp-{hex_}-{os.getpid()}"
-            shutil.rmtree(work, ignore_errors=True)
-            self._materialise(srcs, work)
-            try:
-                os.rename(work, final)
-            except OSError:
-                shutil.rmtree(final, ignore_errors=True)                # an incomplete partial fetch is superseded by the full one
-                try:
-                    os.rename(work, final)
-                except OSError:
-                    shutil.rmtree(work, ignore_errors=True)
+            if not (final.is_dir() and all((final / f.path).is_file() for f in wanted)):
+                self._land_tree(final, srcs, partial=bool(paths))
+            os.utime(final)   # eviction leaves a tree fetched within `evict.TREE_KEEP_S`: whoever fetched it may still read it
             return final
         self._materialise(srcs, Path(to))
         return Path(to)
+
+    def _land_tree(self, final: Path, srcs: list[tuple[TreeFile, Path]], *, partial: bool) -> None:
+        # A tree already in trees/ (a partial fetch, or another process's fetch that landed first) is completed in place with the
+        # files it lacks, and nothing in it is replaced or removed: another process may be reading it.  Each file lands whole, so
+        # the cache is complete when every file is there.
+        if partial or final.is_dir():
+            self._materialise([(f, b) for f, b in srcs if not (final / f.path).is_file()], final)
+            return
+        work = final.parent / f".tmp-{final.name}-{os.getpid()}"
+        shutil.rmtree(work, ignore_errors=True)
+        self._materialise(srcs, work)
+        try:
+            os.rename(work, final)
+        except OSError:
+            self._materialise([(f, b) for f, b in srcs if not (final / f.path).is_file()], final)
+            shutil.rmtree(work, ignore_errors=True)
 
     @staticmethod
     def _materialise(srcs: list[tuple[TreeFile, Path]], dst: Path) -> None:

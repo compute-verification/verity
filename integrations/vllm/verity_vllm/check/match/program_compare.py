@@ -38,6 +38,7 @@ from verity.ir.program import RUN, input_id
 from verity_vllm.check.match import split_selects
 from verity_vllm.check.match.canonical_operands import as_progression as _asP, weight_field_name as _field_name
 from verity_vllm.check.match import supplied_inputs as SI
+from verity_vllm.check.match.peer_reads import PeerReads
 from verity_vllm.check.match.sampler_geometry import constant_splits_agree
 from verity_vllm.config import option
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch] the step-boundary families
@@ -71,7 +72,7 @@ def _registry():
     return reg
 
 
-class Prog:
+class Prog(PeerReads):
     """A decoded root body as an instance sequence."""
 
     compact = False   # operand representation: runs (record) | run progressions ([R17 mfast] cb_a.compact); set per instance in __init__
@@ -149,22 +150,6 @@ class Prog:
     def _node_functions(self):   # the run-form decode's per-node spec id and operand runs; a subclass may return functions equal to these
         from verity.ir import codec, refs
         return codec._spec_id, refs.runs
-
-    def _peer_src(self, idx: int, lo: int, hi: int):
-        """("PEER", k, lo', hi') for a read of leaf range [lo, hi) of peers Input node `idx`; None when the range is not inside one field."""
-        import bisect
-        flds = getattr(self, "peer_fields", {}).get(idx)
-        if not flds:
-            return None
-        offs = [o for o, _ in flds]
-        j = bisect.bisect_right(offs, lo) - 1
-        if j < 0:
-            return ("PEER?", idx, lo, hi)
-        base, k = flds[j]
-        end = flds[j + 1][0] if j + 1 < len(flds) else None
-        if end is not None and hi > end:
-            return ("PEER?", idx, lo, hi)      # a read spanning two collectives' fields is not a peer operand of either
-        return ("PEER", k, lo - base, hi - base)
 
     def _bind_splits(self) -> None:
         """[R16 stoch/global, COORD M-0169 (4)] Bind the derived split count S of every top-p TokenSelect (its operand SPLITS_OPERAND).
@@ -295,7 +280,7 @@ class Prog:
                 e = self.i2step[i][0]
                 out.append([("SPLITS", e, e + 1)])
                 continue
-            out.append([self._src(run, unfold) for run in a])
+            out.append([self._src(r, unfold) for run in a for r in self._split_peer(run)])
         return out
 
     def _srcP(self, p: tuple, unfold: bool) -> list[tuple]:
@@ -366,28 +351,10 @@ class Prog:
                 return [("N", (s0, jj0, lo0, hi0), (ds, 0, dL, dH), c)]
         return self._per_run(p, unfold)
 
-    def _peer_srcP(self, p: tuple, unfold: bool) -> list[tuple]:
-        """[R17 D90 x mfast] `_peer_src` over a progression of reads of one peers Input node: uniform ("PEER", k, (lo', hi'), (dL, dH), c)
-        iff every run's [lo, hi) lies inside the SAME field (the whole span does: fields are disjoint and sorted), else the record's
-        per-run answer (a run outside every field or spanning two is ("PEER?", ..) run by run)."""
-        import bisect
-        _space, (idx0, lo0, hi0), (_dI, dL, dH), c = p
-        flds = getattr(self, "peer_fields", {}).get(idx0)
-        if flds and c > 1:
-            span_lo, span_hi = min(lo0, lo0 + (c - 1) * dL), max(hi0, hi0 + (c - 1) * dH)
-            offs = [o for o, _ in flds]
-            j = bisect.bisect_right(offs, span_lo) - 1
-            if j >= 0:
-                base, k = flds[j]
-                end = flds[j + 1][0] if j + 1 < len(flds) else None
-                if end is None or span_hi <= end:
-                    return [("PEER", k, (lo0 - base, hi0 - base), (dL, dH), c)]
-        return self._per_run(p, unfold)
-
     def _per_run(self, p: tuple, unfold: bool) -> list[tuple]:
-        """The record's `_src` on every run of a progression, each as a one-run progression."""
+        """The record's `_src` on every run of a progression (a peers read split as the record splits it), each as a one-run progression."""
         from verity_vllm.program.compact import expand
-        return [_asP(self._src(run, unfold)) for run in expand([p])]
+        return [_asP(self._src(r, unfold)) for run in expand([p]) for r in self._split_peer(run)]
 
     def _src(self, run, unfold: bool):
         space, idx, lo, hi = run
