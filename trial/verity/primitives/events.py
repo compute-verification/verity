@@ -8,7 +8,7 @@ is, so the order it waits in loses nothing, and one it never waits for never rea
 between is its own state and never enters the log. An event's body is a frozen dataclass whose class is its kind,
 defined by the module that owns it.
 
-A send goes to a principal, and every actor of that principal receives it; a send to no one is a record, which the
+A send goes to a principal, and every other actor of that principal receives it; a send to no one is a record, which the
 sender's own principal receives. So actors need no names: an actor reads the kinds it reads, each from the principal
 it trusts for it (`receive`, `gather`, `collect`).
 """

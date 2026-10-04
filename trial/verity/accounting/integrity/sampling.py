@@ -21,7 +21,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Draw:
-    """Verifier to prover: the units it must have checked, numbered at the construction's scale."""
+    """Verifier to prover: the drawn units, which the prover must open or prove, numbered at the construction's
+    scale."""
 
     units: tuple[int, ...]
 
@@ -52,5 +53,6 @@ class Weighted:
 
 
 def _coin(coins: bytes, unit: int) -> int:
-    """The unit's coin, uniform over [0, 2**256): counter-mode SHA-256 (`verity.randomness`)."""
+    """The unit's coin, uniform over [0, 2**256): SHA-256 over the coins and the unit's index, as the main repo's
+    `verity.randomness` samplers draw."""
     return int.from_bytes(hashlib.sha256(coins + unit.to_bytes(8, "big")).digest(), "big")

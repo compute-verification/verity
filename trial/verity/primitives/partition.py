@@ -6,11 +6,11 @@ region lies in one isolation unit, so a wire that crosses an isolation unit's bo
 commitment to the regions' boundaries holds every wire NCI reads (in the main repo, a `verity.ir.partition.Hierarchy`
 of two levels, the finer refining the coarser).
 
-The builder chooses the partition; the verifier checks it has the properties the policy needs (`validate`: every gate
-in exactly one region, and each region's boundary at most `max_width` wires). A set of gates is checked through its
-boundary: the wires it reads from outside (`inputs`) and the wires it produces that anything outside reads, or that
-the circuit outputs (`outputs`). The baseline is the circuit's own, so it is on no boundary. Today's references:
-`verity.ir.cut` (the width rule) and `verity.ir.partition_object`.
+The builder chooses the partition; proofs' verifier checks it has the properties sampled proofs need (`validate`:
+every gate in exactly one region, and each region's boundary at most `max_width` wires). A set of gates is checked
+through its boundary: the wires it reads from outside (`inputs`) and the wires it produces that anything outside
+reads, or that the circuit outputs (`outputs`). The baseline is the circuit's own, so it is on no boundary. Today's
+references: `verity.ir.cut` (the width rule) and `verity.ir.partition_object`.
 """
 
 from __future__ import annotations

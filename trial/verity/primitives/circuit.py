@@ -33,7 +33,7 @@ class Circuit:
     gates: tuple[tuple[str, int, int], ...]  # (op, wire, wire); wire i < inputs is input i, then one wire per gate
     outputs: tuple[int, ...]
     baseline: tuple[int, ...] = ()  # what its first inputs hold in every execution (weights, constants)
-    state: tuple[tuple[int, int], ...] = ()  # per input after the baseline: (executions back, which of its outputs)
+    state: tuple[tuple[int, int], ...] = ()  # per state input: (executions back, which of the writer's outputs)
 
     def __hash__(self) -> int:
         return self._hash

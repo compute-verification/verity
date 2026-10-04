@@ -16,7 +16,7 @@ lake build    # the Lean beside the Python
 
 The principals are the prover, the verifier, and the trusted hardware: replayers, wardens, pingers. An actor is one
 principal's part in one protocol, a transducer over one ordered log of events (`verity.primitives.events`). A send goes
-to a principal, and every actor of that principal receives it; a record (a send to no one) goes to the sender's own
+to a principal, and every other actor of that principal receives it; a record (a send to no one) goes to the sender's own
 principal, which is how one protocol's verifier reads what another's established. What an actor observes and computes
 in between is its own state and never enters the log. `verity.run.run(principals, view)` takes each principal's actors,
 plays them against each other and yields one principal's view. The auditor trusts the verifier, so the verifier's view
@@ -32,11 +32,11 @@ closes the stream: one epoch. A partition has two levels (`verity.primitives.par
 bounds, each split into regions, which proofs sample. An execution may read state an earlier one wrote (as a decode
 step reads its KV cache): that wire is committed once, in the writer's root, so the step that reads it reads what the
 step that wrote it committed, and the stream's isolation units join through it: a session is one isolation unit, which
-reads only its prompt however many steps it took. The verifier rebuilds each execution's circuit from its advice (`Stream`). Every
-statement over the stream names its digest.
+reads only its prompt however many steps it took. The verifier rebuilds each execution's circuit from its advice
+(`Stream`). Every statement over the stream names its digest.
 
-What the verifier establishes splits in two. **Accounting** says what happened, in three families, each reading the
-ones before it:
+What the verifier establishes splits in two. **Accounting** says what happened, in three families: integrity and
+utilization read the stream, and coverage reads them both.
 - **integrity**: the executions are what their circuits compute, up to a bound on wrong units;
 - **utilization**: at least so much compute (work, keyed by a salt) and memory (space, a timed audit of an encoding)
   was used between a challenge and a clock's reading;
@@ -56,7 +56,7 @@ Onsite the verifier's hardware counts the fleet, times work and memory challenge
 links, so it also bounds memory and network, and its inventory is a measurement.
 
 A construction is a frozen dataclass of its parameters, with a method per principal it involves that returns that
-principal's actor (`Replay(k, delta).verifier()`). A trusted principal's method takes its readings
+principal's actor (`Replay(law, delta).verifier()`). A trusted principal's method takes its readings
 (`pinger(fleet, work_window, space_seconds)`), and an actor that reads one takes the principal it trusts for it
 (`Work.verifier(clock_from)`). Choosing a construction is choosing a value. A product is a construction whose fields
 are constructions: its methods return the lists of its parts' actors, and its guarantee is proved from theirs. Actors
@@ -74,7 +74,7 @@ Imports point down only, in Python and in Lean:
 verity/run.py              the runner
 verity/remote.py, onsite.py   the products: who reports each reading, and which policies judge the account
 verity/compliance          whether it was allowed: a module per policy (nci)
-verity/accounting          what happened, each family reading the ones below it:
+verity/accounting          what happened; coverage reads the families below it:
     coverage               the headroom per resource (compute, memory, network), from the inventory and the warden
     utilization            work and space used between a challenge and a clock's reading
     integrity              whether the executions are what their circuits compute (replay, proofs)

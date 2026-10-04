@@ -17,8 +17,8 @@ the capacity may be left.
 Coverage reads integrity, so the policy reads it through coverage, and holds except with coverage's probability.
 
 An epoch's verdict says nothing outside its window. A period is epochs back to back (`period`): each complies, and each
-window opens no later than the one before it closed, so no time between them goes unaccounted. An epoch with no
-verdict leaves a gap, so the period fails closed.
+window opens no later than the one before it closed, so no time between them goes unaccounted. `period` takes every
+epoch's verdict; an epoch with none leaves the period with none, which fails closed.
 """
 
 from __future__ import annotations
