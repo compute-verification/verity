@@ -213,6 +213,41 @@ def test_a_file_renamed_out_of_a_grants_paths_needs_the_grant(tmp_path):
     assert Rules.parse(RULES).needs(tmp_path, base, _git(tmp_path, "rev-parse", "HEAD")) == {"vllm-coordinator"}
 
 
+def test_files_main_already_has_from_a_merged_tip_need_no_grant(tmp_path):
+    """A PR that merged a train-prep tip and then `main`, after `main` landed the tip's vLLM PR on its own, has two merge bases
+    with `main`; a diff from either names a file it doesn't change, and asked #1012 and #1055 for the vLLM coordinator's grant."""
+    (tmp_path / "integrations" / "vllm").mkdir(parents=True)
+    (tmp_path / "integrations" / "vllm" / "x.py").write_text("x = 1\n")
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "t.py").write_text("t = 1\n")
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    _git(tmp_path, "checkout", "-q", "-b", "vllm")
+    (tmp_path / "integrations" / "vllm" / "x.py").write_text("x = 2\n")
+    _git(tmp_path, "commit", "-qam", "the vLLM PR")
+    _git(tmp_path, "checkout", "-q", "-b", "tip", "main")
+    _git(tmp_path, "merge", "-q", "--no-ff", "--no-edit", "vllm")
+    _git(tmp_path, "checkout", "-q", "main")
+    (tmp_path / "README.md").write_text("another PR\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "another PR lands")
+    _git(tmp_path, "checkout", "-q", "-b", "pr", "main~1")
+    (tmp_path / "tools" / "t.py").write_text("t = 2\n")
+    _git(tmp_path, "commit", "-qam", "the PR")
+    _git(tmp_path, "merge", "-q", "--no-edit", "tip")
+    _git(tmp_path, "merge", "-q", "--no-edit", "main")
+    _git(tmp_path, "checkout", "-q", "main")
+    _git(tmp_path, "merge", "-q", "--no-ff", "--no-edit", "vllm")
+    head = _git(tmp_path, "rev-parse", "pr")
+    assert len(_git(tmp_path, "merge-base", "--all", "main", head).split()) == 2
+    assert Rules.parse(RULES).needs(tmp_path, "main", head) == set()
+    _git(tmp_path, "checkout", "-q", "pr")
+    (tmp_path / "integrations" / "vllm" / "x.py").write_text("x = 3\n")
+    _git(tmp_path, "commit", "-qam", "the PR's own vLLM edit")
+    assert Rules.parse(RULES).needs(tmp_path, "main", _git(tmp_path, "rev-parse", "HEAD")) == {"vllm-coordinator"}
+
+
 def test_a_lean_review_covers_only_the_change_it_printed_as_the_same_statements():
     """`reviewed`: an `audit.py --update` report stands in for the statement reviewer only on its own package, only when it printed
     nothing a reviewer must read, and only for entries it saw change: one another PR changed on `main` meanwhile isn't covered."""

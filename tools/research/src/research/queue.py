@@ -214,13 +214,18 @@ class Rules:
         return f"{who}; granted with `research data label {grant_target(pr, head)} grant ROLE --by LANE` ({self.source})"
 
     def needs(self, repo: Path, base: str, head: str, reviews: Callable[[], list[dict]] = list) -> set[str]:
-        """The roles whose grants the change `base`...`head` (from their merge base) needs.  A `lean_audit` role isn't needed for a
+        """The roles whose grants the change `base`...`head` needs: the paths where `base` and its clean merge with `head` differ,
+        which is what landing `head` changes. A history merged across (a tip's train-prep merge, then `main`) has several merge
+        bases, and a diff from any one of them names files other PRs changed, `main` has already, and that need grants this
+        change doesn't. When the merge conflicts, the diff from their merge base.  A `lean_audit` role isn't needed for a
         lean-audit.json whose change one of the `audit.py --update` reports from `reviews()` printed whole as the same statements
         (`reviewed`): Daniel's ruling (AGENTS.md "Lean") that a guarantee that only moved needs no statement reviewer."""
         from .merge import rule_touches
 
         mb = _out(repo, "merge-base", base, head)
-        changed = [p for p in _out(repo, "diff", "--no-renames", "--name-only", mb, head).splitlines() if p]   # a rename's source too
+        merged = _git(repo, "merge-tree", "--write-tree", "--no-messages", base, head, check=False)
+        old, new = (base, merged.stdout.split()[0]) if merged.returncode == 0 and merged.stdout.strip() else (mb, head)
+        changed = [p for p in _out(repo, "diff", "--no-renames", "--name-only", old, new).splitlines() if p]   # a rename's source too
         roles = {r.role for r in self.grants if r.paths and rule_touches(list(r.paths), changed)}
         audits = [p for p in changed if p == "lean-audit.json" or p.endswith("/lean-audit.json")]
         reports = None
