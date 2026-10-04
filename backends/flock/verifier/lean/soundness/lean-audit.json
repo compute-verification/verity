@@ -4952,7 +4952,7 @@
     "  (hdm :",
     "    ∀ (S : Finset (Fin n)) (y : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S (dj S)),",
     "      Eq (FlockSoundness.Discharge.Composed.avoidsMask y.x.st) Bool.true)",
-    "  (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) (hPad : FlockSoundness.Assumptions.Zk.PadNonvanishing40) :",
+    "  (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) :",
     "  And",
     "    (ENNReal.instLE.le",
     "      (FlockSoundness.Game.prob",
@@ -5021,8 +5021,8 @@
     "          (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀ S R) y.x.st)",
     "        (instHPow.hPow 2 (-193)))"
    ],
-   "assumptions": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96", "FlockSoundness.Assumptions.Zk.PadNonvanishing40"],
-   "type_hash": "26e64ffc234f77bd9539204c0b7bcccfdaefac1b243e5f25d418c5732790a803"
+   "assumptions": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"],
+   "type_hash": "7e9a61014775a9f6275753d4b1f26c8faa8791d52dd2d8854929d70f1619ef4e"
   },
   "FlockSoundness.Discharge.Composed.zk_session_sound": {
    "signature": [
@@ -5164,15 +5164,15 @@
     "  (hdm :",
     "    ∀ (S : Finset (Fin n)) (y : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S (dj S)),",
     "      Eq (FlockSoundness.Discharge.Composed.avoidsMask y.x.st) Bool.true)",
-    "  (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) (hPad : FlockSoundness.Assumptions.Zk.PadNonvanishing40)",
-    "  (S : Finset (Fin n)) (R : Reg) (y : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S (dj S)) :",
+    "  (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) (S : Finset (Fin n)) (R : Reg)",
+    "  (y : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S (dj S)) :",
     "  FlockSoundness.Discharge.Composed.ZkViewAt",
     "    (FlockSoundness.Discharge.Composed.coinedOf (fun {mPts} => P) (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀ S R)",
     "      y.x.st)",
     "    (instHPow.hPow 2 (-193))"
    ],
-   "assumptions": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96", "FlockSoundness.Assumptions.Zk.PadNonvanishing40"],
-   "type_hash": "8b5e84dd147e0a89640279ff9ce7ab5721650f8a5e696e4f9023ea2269c0c4e5"
+   "assumptions": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"],
+   "type_hash": "d258322bf477a3d89584e19f41b89524c4de58c57b1ede7d595a7c8ab2ffdc90"
   },
   "FlockSoundness.Discharge.Const.Prog.instC_wire_input": {
    "signature": [
@@ -11032,7 +11032,37 @@
    "assumptions": [],
    "type_hash": "32b716e044d668aed03d6af9094f271fea7308a590aa9dcd9c877f40252d2572"
   },
-  "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all": {},
+  "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all {mPts n : Nat} {Reg : Type}",
+    "  (P : FlockSoundness.Discharge.Composed.LigProver) (I : FlockSoundness.Discharge.Exec.Inputs)",
+    "  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
+    "  (y₀ : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S₀ (dj S₀)) (ht : Eq I.tags.typed Bool.false)",
+    "  (hdm :",
+    "    ∀ (S : Finset (Fin n)) (y : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S (dj S)),",
+    "      Eq (FlockSoundness.Discharge.Composed.avoidsMask y.x.st) Bool.true)",
+    "  (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) (S : Finset (Fin n)) (R : Reg)",
+    "  (y : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S (dj S)) :",
+    "  And",
+    "    (FlockSoundness.Discharge.ZkEveryCoin.ZkViewAll",
+    "      (FlockSoundness.Discharge.Composed.coinedOf (fun {mPts} => P)",
+    "        (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀ S R) y.x.st)",
+    "      (instHPow.hPow 2 (-193)))",
+    "    (ENNReal.instLE.le",
+    "      (FlockSoundness.Game.prCoin fun c =>",
+    "        And",
+    "          ((FlockSoundness.Discharge.Composed.coinedOf (fun {mPts} => P)",
+    "                (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀ S R) y.x.st).Admits",
+    "            c)",
+    "          (Not",
+    "            ((FlockSoundness.Discharge.Composed.coinedOf (fun {mPts} => P)",
+    "                  (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀ S R) y.x.st).Covered",
+    "              c)))",
+    "      (instHMul.hMul (instHMul.hMul 2 (instHSub.hSub y.x.st.m 13).cast) (instHPow.hPow 2 (-128))))"
+   ],
+   "assumptions": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"],
+   "type_hash": "d70a1ed0c93b64edbad1be937d8fe035a0949810773d5b2b3082b2818ce4a017"
+  },
   "FlockSoundness.Discharge.ZkExec.acceptsZK_one": {
    "signature": ["FlockSoundness.Discharge.ZkExec.acceptsZK_one : FlockSoundness.Discharge.ZkExec.AcceptsZKOne"],
    "assumptions": [],
@@ -17001,6 +17031,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -17272,6 +17303,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -17595,6 +17627,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -17894,6 +17927,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -18106,6 +18140,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -18373,6 +18408,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -18650,6 +18686,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -18975,6 +19012,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -19263,6 +19301,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -19559,6 +19598,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -19765,6 +19805,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -20103,6 +20144,7 @@
     "FlockSoundness.Discharge.ZkBind.wit_surj",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -20437,6 +20479,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -20736,6 +20779,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -21064,6 +21108,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -21398,6 +21443,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -21716,6 +21762,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -21978,6 +22025,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -22340,6 +22388,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -22562,6 +22611,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -22867,6 +22917,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -23189,6 +23240,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -23391,6 +23443,7 @@
     "FlockSoundness.Discharge.ZkBind.rsZAt_computes",
     "FlockSoundness.Discharge.ZkBind.wit_surj",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -23720,6 +23773,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -23879,6 +23933,7 @@
     "FlockSoundness.Discharge.Tables.headline_tables",
     "FlockSoundness.Discharge.Tables.headline_tables_subset",
     "FlockSoundness.Discharge.ZkBind.acceptsZK_accepted",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -24127,6 +24182,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -24366,6 +24422,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -24554,6 +24611,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -24903,6 +24961,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -25013,6 +25072,7 @@
     "FlockSoundness.Discharge.ZkBind.sitesZAt_parse",
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -25283,6 +25343,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -25544,6 +25605,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -25750,6 +25812,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -26166,6 +26229,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -26392,6 +26456,7 @@
     "FlockSoundness.Discharge.ZkBind.sitesZAt_parse",
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -26456,6 +26521,7 @@
     "FlockSoundness.Discharge.ZkBind.sitesZAt_parse",
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -26672,6 +26738,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.wit_surj",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
@@ -26857,6 +26924,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.wit_surj",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
@@ -27046,6 +27114,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.runsZC_live",
     "FlockSoundness.Discharge.ZkLink.tablesAtZK_live",
     "FlockSoundness.Refine.ofCircuit_extra",
@@ -27179,6 +27248,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.wit_surj",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
@@ -27397,6 +27467,7 @@
     "FlockSoundness.Discharge.ZkBind.wit_surj",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
@@ -27592,6 +27663,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.wit_surj",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
@@ -27771,6 +27843,7 @@
     "FlockSoundness.Discharge.ZkBind.rsZAt_computes",
     "FlockSoundness.Discharge.ZkBind.wit_surj",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.runsZC_live",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
     "FlockSoundness.Discharge.ZkExec.zk_cut",
@@ -27933,6 +28006,7 @@
     "FlockSoundness.Discharge.ZkBind.rsZAt_computes",
     "FlockSoundness.Discharge.ZkBind.wit_surj",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.runsZC_live",
     "FlockSoundness.Discharge.ZkExec.zk_lig_accepts",
     "FlockSoundness.Discharge.ZkExec.zk_ligerito_plays",
@@ -28086,6 +28160,7 @@
     "FlockSoundness.Discharge.ZkBind.rsZAt_computes",
     "FlockSoundness.Discharge.ZkBind.wit_surj",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.runsZC_live",
     "FlockSoundness.Discharge.ZkExec.zk_lig_accepts",
     "FlockSoundness.Discharge.ZkExec.zk_ligerito_plays",
@@ -28372,6 +28447,7 @@
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.wit_surj",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
@@ -28556,6 +28632,7 @@
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
     "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
     "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
@@ -28683,6 +28760,7 @@
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
     "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
     "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
@@ -28778,6 +28856,7 @@
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
     "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
     "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
@@ -29026,6 +29105,7 @@
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
     "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
     "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
@@ -29212,6 +29292,7 @@
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
     "FlockSoundness.Discharge.ZkCoins.committed_le",
     "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_execOS",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_runs",
@@ -29274,14 +29355,14 @@
    ]
   },
   "FlockSoundness.Assumptions.Zk": {
-   "digest": "fb573dc4c446b264aaad070cc2bb7bfc13fd24d602bec14edb67654f777bf80c",
+   "digest": "9ae663f3d38a9dde2d3853971c0628b63c84ed778ba368dc9d63007bd889b816",
    "definitions": {
-    "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "ff4f8f0ffda4d6bbc622adca36f997c60f66dbe90c654a3f9441bb22c98739c4",
-    "FlockSoundness.Assumptions.Zk.PadNonvanishing40": "3a74633e7163cec1681002b169cb474d27ddd1dd20e11646bb56311bbc4b35f6"
+    "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "ff4f8f0ffda4d6bbc622adca36f997c60f66dbe90c654a3f9441bb22c98739c4"
    },
    "pins": [
     "FlockSoundness.Discharge.Composed.zk_session_composed",
-    "FlockSoundness.Discharge.Composed.zk_session_view"
+    "FlockSoundness.Discharge.Composed.zk_session_view",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all"
    ]
   },
   "FlockSoundness.Audit.Circuit": {
@@ -31082,6 +31163,7 @@
     "FlockSoundness.Discharge.Composed.zk_session_view",
     "FlockSoundness.Discharge.ZkCoins.committed_le_hm96",
     "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkView.honest_msg",
     "FlockSoundness.Discharge.ZkView.leafSplit",
     "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
@@ -31498,6 +31580,7 @@
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
     "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
     "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
@@ -31682,7 +31765,7 @@
    ]
   },
   "FlockSoundness.Discharge.Composed.Base": {
-   "digest": "b4f5e9ec51e764568d144a322f81c8a6513aa7313efe1f8188091e37fbac8a86",
+   "digest": "fc5023dbc022419115aeb1e9478b32e18df83e7c22f6a1f22db894748694cce2",
    "definitions": {
     "FlockSoundness.Discharge.Composed.CoinsZK": "897889c0c5319dde7853e92f803323171432a3a998557cd22e7113e7b41f867d",
     "FlockSoundness.Discharge.Composed.CoinsZK.beta": "9f5dd5c3493cff2d0df3d0efeddfc98494302cf7c721b0334f8f2add8781966d",
@@ -31695,6 +31778,14 @@
     "FlockSoundness.Discharge.Composed.RestZK.lane": "4358eff6dd5d0681c7e784f436d1fdda4315d2fc0914a0de8183551f4cca75eb",
     "FlockSoundness.Discharge.Composed.RestZK.lcAlpha": "411b61584b03d73f07a01de187b6e4dca16ea306f7ea37faa42b7e407e24cc2e",
     "FlockSoundness.Discharge.Composed.RestZK.lcBeta": "94507fa5bd44e5719451804c66fd8fd024d0813a1814b916e22bb5e71e4a1ca4",
+    "FlockSoundness.Discharge.Composed.RestZK.ligAlpha": "3e38c8a82ad6db2d3fb3ee9ee436a4d75e2cdbf8598f3d571a055b6c14e2cb1b",
+    "FlockSoundness.Discharge.Composed.RestZK.ligAlpha0": "55a0983e855ae34d4ee561f36b842b08ea227c4289909865283ce99d78071836",
+    "FlockSoundness.Discharge.Composed.RestZK.ligB": "9a9a912a007d7993a362c1e20f1e93223d80664e9180f52ad792c42b1bc9afb0",
+    "FlockSoundness.Discharge.Composed.RestZK.ligB0": "910b59681eff14d275da186d9ba37d46e896ee5845c341dd25897e59806bc05b",
+    "FlockSoundness.Discharge.Composed.RestZK.ligFold": "cfd14af718a148e546099b7f2e84d51b37277ea0230c049d656d26e956d9d916",
+    "FlockSoundness.Discharge.Composed.RestZK.ligQ": "807caf9dd41d18c3ea12ab3cb956b1186ecfd8045b9b2a83cee03ea97f6b9d26",
+    "FlockSoundness.Discharge.Composed.RestZK.ligZ": "37a45f134a15c34be50d9748b48f66ea0885ef56ed40b45fc21572a01c08ca2b",
+    "FlockSoundness.Discharge.Composed.RestZK.ligZB": "30885e4b0e06b66f69fa1473a96ba5322f552858428f07d8cb8336379d545e4f",
     "FlockSoundness.Discharge.Composed.RestZK.link": "587047b9d82ddd089b011615c1020ccef838517de0d915add93d94c0595b31a5",
     "FlockSoundness.Discharge.Composed.RestZK.ood": "c7d1388ec7b2eefa7942a1bad9d252e1fee7080c0bd23d3f1199a272fad613bf",
     "FlockSoundness.Discharge.Composed.RestZK.oodPt": "a4dd11af3f580fdfde96a8111d361f3fc3f6e6ab377d29717075c06eab4b4457",
@@ -31702,6 +31793,7 @@
     "FlockSoundness.Discharge.Composed.RestZK.qP": "bdc79479cbaaefa283bdf04bf435999b935f301660ec87e4bd9b7f574a118b4e",
     "FlockSoundness.Discharge.Composed.RestZK.rOuter": "f1e7e41d1af1cf32f790a5c812080498dd322f9140b32c7361550dde629bf0a1",
     "FlockSoundness.Discharge.Composed.RestZK.rPrime": "12cc6d93f2bad1986619c84ae94ad7bfba7690ea9d9a102122f62e25576181b7",
+    "FlockSoundness.Discharge.Composed.RestZK.rSkip": "4a634b36ca1e646d95fd6a8b524eeda967a2c4ec049cd0f28c4ab93f77a4791a",
     "FlockSoundness.Discharge.Composed.RestZK.rho": "8f853d335f0e22340391f3c12e6a9b871ce584462a6f86fb73b1cac4d967c8c9",
     "FlockSoundness.Discharge.Composed.RestZK.rpp": "cb6df675d05226c3e61c368454f85ec42ee7c666270b85541e344168418a08e4",
     "FlockSoundness.Discharge.Composed.RestZK.rsGamma": "a004477201d7591cb49aeb2ea26a035f7707c9fe34b26b5609b6c8130709e7b2",
@@ -31729,7 +31821,8 @@
    "pins": [
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
-    "FlockSoundness.Discharge.Composed.zk_session_view"
+    "FlockSoundness.Discharge.Composed.zk_session_view",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all"
    ]
   },
   "FlockSoundness.Discharge.Composed.Coined": {
@@ -31781,7 +31874,8 @@
    "pins": [
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
-    "FlockSoundness.Discharge.Composed.zk_session_view"
+    "FlockSoundness.Discharge.Composed.zk_session_view",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all"
    ]
   },
   "FlockSoundness.Discharge.Composed.Defs": {
@@ -31875,7 +31969,8 @@
    "pins": [
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
-    "FlockSoundness.Discharge.Composed.zk_session_view"
+    "FlockSoundness.Discharge.Composed.zk_session_view",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all"
    ]
   },
   "FlockSoundness.Discharge.Composed.Inner.Lincheck": {
@@ -31901,7 +31996,8 @@
     "FlockSoundness.Discharge.Composed.Lincheck.replay_lincheck",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
-    "FlockSoundness.Discharge.Composed.zk_session_view"
+    "FlockSoundness.Discharge.Composed.zk_session_view",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all"
    ]
   },
   "FlockSoundness.Discharge.Composed.Inner.LincheckReplay": {
@@ -31941,7 +32037,8 @@
     "FlockSoundness.Discharge.Composed.ZerocheckMasked.running_eval",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
-    "FlockSoundness.Discharge.Composed.zk_session_view"
+    "FlockSoundness.Discharge.Composed.zk_session_view",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all"
    ]
   },
   "FlockSoundness.Discharge.Composed.Inner.ZerocheckMasked": {
@@ -31968,7 +32065,8 @@
     "FlockSoundness.Discharge.Composed.ZerocheckMasked.running_eval",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
-    "FlockSoundness.Discharge.Composed.zk_session_view"
+    "FlockSoundness.Discharge.Composed.zk_session_view",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all"
    ]
   },
   "FlockSoundness.Discharge.Composed.Inner.ZerocheckReplay": {
@@ -32400,6 +32498,7 @@
     "FlockSoundness.Discharge.ZkBind.sitesZAt_parse",
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -33462,6 +33561,7 @@
     "FlockSoundness.Discharge.ZkBind.sitesZAt_parse",
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.runsZC_live",
     "FlockSoundness.Discharge.ZkLink.tablesAtZK_live"
    ]
@@ -34517,6 +34617,24 @@
     "FlockSoundness.Discharge.ZkCoins.session_coins_sound"
    ]
   },
+  "FlockSoundness.Discharge.ZkEveryCoin.Defs": {
+   "digest": "8c043638ff79f97f849b700ce30dcdbe13f30eb75f615c4d36aa9dde8057ccfa",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkEveryCoin.ZkViewAll": "45b6af4e58726ec21acd53b757420ca3696fe4e9defaaa649d0ae03c473b9f6e",
+    "FlockSoundness.Discharge.ZkEveryCoin.coinsEquiv": "1dc1df60756632909428e1498a034c4a66cc41b78c5bf372822d8be38c3ba4ac",
+    "FlockSoundness.Discharge.ZkEveryCoin.f128Equiv": "95067d8eb0993bebda51b0b125bbd52a1b1d7b182120999fd1cd83bcb68cf4ed",
+    "FlockSoundness.Discharge.ZkEveryCoin.f256Equiv": "31288e499a5262b24823c96f1e5ae297fa07acf0543e60d78bffd253f31dae91",
+    "FlockSoundness.Discharge.ZkEveryCoin.instFintypeCoinsZK": "646186c2abf674b5c01c6f55982dece18cab084a4825345bf2dc2cc5af1efe96",
+    "FlockSoundness.Discharge.ZkEveryCoin.instFintypeF128": "a92044cf5cec6ddcd05460628fc538109e7f20015bbffa1684fd67b8d4f283bc",
+    "FlockSoundness.Discharge.ZkEveryCoin.instFintypeF256": "5326fd97df04aa1308505294eba35d2ffe13dff47ba3ac8e1cc8376c5adcae69",
+    "FlockSoundness.Discharge.ZkEveryCoin.instFintypeRestCoinedOf": "97d9bff95c61113dff06259c4b0257bbfe460c409892579d1591ff40942f9af6",
+    "FlockSoundness.Discharge.ZkEveryCoin.outExe": "c9b22d388192e3caa32316097dcc862c0ebb51b9383353ec3301be1fcd9e875c",
+    "FlockSoundness.Discharge.ZkEveryCoin.restEquiv": "f347f6c46864eabea4f583e6bf0969463bcbf106f1e29963cca2917ce9cdcbc5",
+    "FlockSoundness.Discharge.ZkEveryCoin.sentAt": "893b5d653312149ff0b70e07f3aac8e84603017eb0f7aa98161dca06a07b162f",
+    "FlockSoundness.Discharge.ZkEveryCoin.simAll": "ae764581175f3216d662644b40a51ad382a8d6fb86371c0f2c7599e09da82051"
+   },
+   "pins": ["FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all"]
+  },
   "FlockSoundness.Discharge.ZkExec.Coin": {
    "digest": "cc35f9441f4fa4f25b3b275a34b8a4a7be61ed8156eb5b03ce7404d8ff71e73a",
    "definitions": {
@@ -34571,6 +34689,7 @@
     "FlockSoundness.Discharge.ZkBind.sitesZAt_parse",
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -34739,6 +34858,7 @@
     "FlockSoundness.Discharge.ZkBind.sitesZAt_parse",
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
@@ -35257,6 +35377,7 @@
     "FlockSoundness.Discharge.ZkBind.sitesZAt_parse",
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.runsZC_live",
     "FlockSoundness.Discharge.ZkLink.tablesAtZK_live"
    ]
@@ -35324,6 +35445,7 @@
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
     "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
     "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
@@ -35448,6 +35570,7 @@
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
     "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
     "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
@@ -35547,6 +35670,7 @@
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
     "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
     "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
@@ -35670,6 +35794,7 @@
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
     "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
     "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
@@ -35822,6 +35947,7 @@
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_view",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkView.honest_msg",
     "FlockSoundness.Discharge.ZkView.leafSplit",
     "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
@@ -37034,6 +37160,7 @@
     "FlockSoundness.Discharge.ZkCoins.committed_le_hm96",
     "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
     "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
@@ -38050,6 +38177,7 @@
     "FlockSoundness.Discharge.ZkBind.rsZAt_computes",
     "FlockSoundness.Discharge.ZkBind.wit_surj",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.runsZC_live",
     "FlockSoundness.Discharge.ZkExec.zk_lig_accepts",
     "FlockSoundness.Discharge.ZkExec.zk_ligerito_plays",
@@ -38206,6 +38334,7 @@
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
     "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
     "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
@@ -38270,7 +38399,8 @@
     "FlockSoundness.Discharge.Composed.Lincheck.lincheck_complete",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
-    "FlockSoundness.Discharge.Composed.zk_session_view"
+    "FlockSoundness.Discharge.Composed.zk_session_view",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all"
    ]
   },
   "FlockSoundness.LinkFinder": {
@@ -38504,6 +38634,7 @@
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
     "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
     "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
@@ -39175,6 +39306,7 @@
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
     "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
     "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
@@ -39875,6 +40007,7 @@
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
     "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
     "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
@@ -40369,6 +40502,7 @@
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_keyProg",
     "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
     "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.repZCAt_kinds",
@@ -41215,6 +41349,7 @@
     "FlockSoundness.Discharge.ZkBind.sitesZAt_parse",
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.runsZC_live",
     "FlockSoundness.Discharge.ZkLink.tablesAtZK_live",
     "FlockSoundness.Refine.ofCircuit_extra",
@@ -41496,6 +41631,7 @@
     "FlockSoundness.Discharge.ZkBind.sitesZAt_parse",
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.runsZC_live",
     "FlockSoundness.Discharge.ZkExec.zk_carries",
     "FlockSoundness.Discharge.ZkExec.zk_cut",
@@ -41572,6 +41708,7 @@
     "FlockSoundness.Discharge.ZkBind.sitesZAt_parse",
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.runsZC_live",
     "FlockSoundness.Discharge.ZkLink.tablesAtZK_live",
     "FlockSoundness.Refine.ofCircuit_extra",
@@ -41676,6 +41813,7 @@
     "FlockSoundness.Discharge.ZkBind.sitesZAt_parse",
     "FlockSoundness.Discharge.ZkBind.tableAtZK_S",
     "FlockSoundness.Discharge.ZkBind.zk_flock_countC_execOS_at",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkExec.decodesZK_of_runsZC",
     "FlockSoundness.Discharge.ZkExec.decodes_of_runsOnZC",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
@@ -42657,6 +42795,15 @@
     "FlockSoundness.UProg.rowsL1"
    ]
   },
+  "FlockSoundness.ZK.Abort": {
+   "digest": "b28148f11eeae3405e18196e54c93d9967b1fe52b66f2e5fe3dd548cbb896e2a",
+   "definitions": {
+    "FlockSoundness.ZK.Table.View.toPre": "c2d20d8653ef0fc2901a32533f0517b9ed14e8cdbb5d4554e3be2a19b63d1c57",
+    "FlockSoundness.ZK.Table.abort": "d150cdac287e3473abb8dcf60c2d11602ea82ee9d2f7e5966877067b29fec76a",
+    "FlockSoundness.ZK.Table.pubAbort": "bf45cb9999a02afefc9646e5af6249536572fc6954a7b3109103b8c74691796c"
+   },
+   "pins": ["FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all"]
+  },
   "FlockSoundness.ZK.AdaptivePrefinal": {
    "digest": "fd375fc49dda849d546447c819118544591f6731d1ec94e4681b4c635e3322b8",
    "definitions": {
@@ -42720,7 +42867,7 @@
    ]
   },
   "FlockSoundness.ZK.Cut": {
-   "digest": "ed3e8594ea334fe8bad109fe00aa0af0332ee9e8022f0bf69bcd9e4b66d597cf",
+   "digest": "5d8bd65c715f927f23565b0e302004bb14cfa1623d7a251f84eddc22094c9fea",
    "definitions": {
     "FlockSoundness.ZK.Session.Phase": "203ade33623f3468833f9a121b91b22bf77a311832a29a1d1dba2a06b35831c6",
     "FlockSoundness.ZK.Session.Phase.idx": "32e18621ab1359b09df503e731c75f508ff219b2c3f4bade2738648a2bedf802",
@@ -42733,6 +42880,17 @@
     "FlockSoundness.ZK.Session.sent": "4736a4c56d67b78656219b06d609f34591d77e4f6f7e24267f0d6bcd75224749",
     "FlockSoundness.ZK.Table.Admits": "fa35c0a49b81b606ea75ff3703d3d6d4cb98ae3fbc679bb39210b8eee98149be",
     "FlockSoundness.ZK.Table.Cut": "0460fd78f6974fa654987da5332069256e337b8789dfec4b8f829d01b751cc1d",
+    "FlockSoundness.ZK.Table.Cut.Y1": "0486d986cfe8751e096bacea2696a43459ef60507b63e340e92b6418d9ec7e69",
+    "FlockSoundness.ZK.Table.Cut.Y2": "76994787b962e8d72f6f8cc2cd7a4041b055ef772f536e0ab56425bae42e0efc",
+    "FlockSoundness.ZK.Table.Cut.inner": "c525c77b9c2dd58bbcfafe13cc6b7a05c156df0af5eeac5c217545d2db8a2994",
+    "FlockSoundness.ZK.Table.Cut.leaves0": "67568a5934743a0756ff5c9abaf6c514ec7ce42ed2d28aea3492148106a81972",
+    "FlockSoundness.ZK.Table.Cut.leavesP": "728bb5835075dd319b94980525944ac27ed26559b553b6fcc48bfc6b17480df2",
+    "FlockSoundness.ZK.Table.Cut.lig": "0a3c3ccafa40e035966fdf41b2163914b60b2af52bc106099b46dddf43040bca",
+    "FlockSoundness.ZK.Table.Cut.masked": "050fbcc9b8937f5d4603d6c5db6c3c841facbfab8ef657e5a27faea1c14e7a9b",
+    "FlockSoundness.ZK.Table.Cut.sHat": "0fa69fa2fc28e60fb335075ad4dd12d6e7d81a14b048ea7f53f7cee6e4cd4c8f",
+    "FlockSoundness.ZK.Table.Cut.tauCom": "2b5cf22b7004ee8691ba7c31b1a9893da557cd4244b3dd200e505895f19317fd",
+    "FlockSoundness.ZK.Table.Cut.y1": "a66055320ed80f549013ce3ef122a1a22b215ccb0ed25104b873296ee1c93b55",
+    "FlockSoundness.ZK.Table.Cut.ybar": "897e7c6011a49aced6e8868bdef96bd019459e575507fc30de945b312ff18a53",
     "FlockSoundness.ZK.Table.RankOn": "d440f917ed6b7583b9fe9fa5522569b19a4a00f328329892de648d25b6a5fd51",
     "FlockSoundness.ZK.Table.Sent": "2119984d98006090223ed3b2a594dd012ed07369eafe4150892b904701ef29d5",
     "FlockSoundness.ZK.Table.Sent.cl": "dec7c0195d02956fcac4105abbbc20eede4ef2dc7e8f7a32eb9926278c94716d",
@@ -42745,6 +42903,7 @@
     "FlockSoundness.CROnly.adaptive_prefinal_hm96_sha512",
     "FlockSoundness.CROnly.adaptive_prefinal_key",
     "FlockSoundness.CROnly.adaptive_prefinal_le",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkView.honest_msg",
     "FlockSoundness.Discharge.ZkView.zk_wire_prefinal",
     "FlockSoundness.ZK.GK.gk_simulate_hm96",
@@ -42937,6 +43096,7 @@
     "FlockSoundness.CROnly.session_shvzk_le",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_view",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
     "FlockSoundness.ZK.GK.gk_simulate_hm96",
     "FlockSoundness.ZK.GK.rewindClose_hm96",
@@ -42956,6 +43116,7 @@
     "FlockSoundness.CROnly.session_shvzk_le",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_view",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
     "FlockSoundness.ZK.Session.session_prefinal_indep",
     "FlockSoundness.ZK.Session.session_prefinal_indep_cut",
@@ -43088,6 +43249,7 @@
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_view",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all",
     "FlockSoundness.Discharge.ZkView.honest_msg",
     "FlockSoundness.Discharge.ZkView.zk_wire_fixed",
     "FlockSoundness.Discharge.ZkView.zk_wire_prefinal",
@@ -43122,7 +43284,8 @@
    "pins": [
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
-    "FlockSoundness.Discharge.Composed.zk_session_view"
+    "FlockSoundness.Discharge.Composed.zk_session_view",
+    "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all"
    ]
   }
  },
