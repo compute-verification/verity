@@ -4,6 +4,7 @@ import FlockSoundness.Discharge.ScopeG.Keys
 import FlockSoundness.Discharge.ScopeG.Places
 import FlockSoundness.Discharge.ScopeG.Bind
 import FlockSoundness.Discharge.ScopeG.Headline
+import FlockSoundness.Discharge.ScopeG.Place
 import FlockSoundness.Discharge.ScopeG.Zk
 
 /-!
@@ -36,8 +37,14 @@ This area freezes the VU's program and the hidden-output headline at it; the pro
 * `Headline`: `VuBindH`, a binding of the VU's program at the hidden tables; `flock_headline_exec_hiddenG_of`, the
   headline at any one; `vuBindH_nonempty`, `vuBindHT_nonempty` from `Bind`'s obligations (`vuBindH_of`);
   `flock_headline_exec_hiddenG` at `scopeOkG` and `flock_headline_exec_hiddenGT` at `scopeOkGT`.
+* `Place`: P1, the VU's rows placed at any `AcceptedH` at any VU, its inputs on their unit slots (`vuPlace_at`, from
+  `vuRealizes`), assembled from `Place/`: `Pos` (`vuPos`, `wireSrcG`, `slotRowG`, `lookupAt`), and the pieces open on
+  `sorry` stubs, `Flat` (hidden rows are the flat twin's at a VU's slots), `Delta` (Δ at input and computed rows),
+  `Stage` (each net's rows at its slots), `Lookup` (a lookup slot's table reads), `Bounds` (columns in the block, the
+  constants' rows) and `Cols` (the order decoded into slots).
 * `Zk`: the `--zk` form: `VuPlaceZ`, a placement at each `--zk` table's acceptance, and its places (`VuPlaceZ.place`);
-  open: `vuPlaceZ_nonempty`; `zk_flock_countG`, `ZkHidden.zk_flock_countC_execOS_crH` at `vuProg` and that placement.
+  `vuPlaceZ_nonempty` from `vuPlace_at` and `SitesZ` (open: `sitesZ_nonempty`); `zk_flock_countG`,
+  `ZkHidden.zk_flock_countC_execOS_crH` at `vuProg` and that placement.
 
 Not here: a gemm coordinate also reads shared-row public tables, which every hidden-output headline excludes
 (`pub.tables = none`).

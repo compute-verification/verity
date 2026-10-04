@@ -1,5 +1,5 @@
 import FlockSoundness.Discharge.ZkHidden
-import FlockSoundness.Discharge.ScopeG.Places
+import FlockSoundness.Discharge.ScopeG.Place
 
 set_option Elab.async false
 
@@ -9,12 +9,13 @@ set_option Elab.async false
 `ZkHidden.zk_flock_countC_execOS_crH` holds at any partition and any places of its drawn units in the `--zk` tables'
 statements (`place`). At the VU's program (`vuProg`, `vuOutsOf`) the places come as `Places.lean`'s do at the hidden
 tables, from a placement of the VU's rows with its inputs on their unit slots, here at each `--zk` table's acceptance
-(`VuPlaceZ`, an `AcceptedH` as `ZkHidden.AcceptsZKAcceptedH` gives one): `VuPlaceZ.place`, aliased at every input group
-from keys (`vuProg_aliased`).
+(`VuPlaceZ`): `VuPlaceZ.place`, aliased at every input group from keys (`vuProg_aliased`).
 
-* Open, a named obligation on a `sorry` stub: `vuPlaceZ_nonempty`, that the `--zk` tables have such a placement.
-* `zk_flock_countG`: the count curve at `vuProg` and the placement the obligation gives (`vuPlaceZG`), at `scopeOkGT`
-  (so at `scopeOkG`); its value binding `vb` is a hypothesis, as in `zk_flock_countC_execOS_crH`.
+* `vuPlaceZ_nonempty`: such a placement, each site's acceptance placing its VU's rows (`vuPlace_at`, `Place.lean`).
+* Open, a named obligation on a `sorry` stub: `sitesZ_nonempty`, each drawn unit's site in its `--zk` table (`SitesZ`:
+  the table's acceptance, the unit's VU and block).
+* `zk_flock_countG`: the count curve at `vuProg` and the placement `vuPlaceZG`, at `scopeOkGT` (so at `scopeOkG`); its
+  value binding `vb` is a hypothesis, as in `zk_flock_countC_execOS_crH`.
 -/
 
 namespace FlockSoundness.Discharge.ScopeG
@@ -67,13 +68,36 @@ variable {K : Type} [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ} {D Sl : T
   (ht : (zkInputs I).tags.typed = false)
   (hc : HmOut.parse (zkInputs I).tags (zkInputs I).circuitFile (zkInputs I).tables = .ok c)
 
-/-! ## The obligation -/
+/-! ## The placement -/
+
+variable (c) in
+/-- **Each drawn unit's site in its `--zk` table**: the table's acceptance (of the circuit `c`), the unit's VU and
+block there (`SitesH` at the `--zk` tables). -/
+structure SitesZ (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts))
+    (tabZ : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) where
+  acc : ∀ S R u, u ∈ S → AcceptedH (tabOfZ planZ tabZ S R u).S
+  hc : ∀ S R u (h : u ∈ S), (acc S R u h).st.c = c
+  vu : ∀ (S : Finset (Fin n)) (_ : Reg) (u : Fin n), u ∈ S → ℕ
+  hvu : ∀ S R u (h : u ∈ S), vu S R u h < c.g
+  o : ∀ S R u, u ∈ S → Fin (2 ^ (tabOfZ planZ tabZ S R u).S.nbl)
+
+include ht hc in
+/-- **The `--zk` hidden tables have sites**: each `--zk` table is the hidden table of the draw setup it wraps
+(`DrawSetupZKH.x`, at `zkInputs I`), so `ScopeW.accW` of `HiddenExec.tableAtH`'s table gives the acceptance, and the
+table's `vu` and `o` the unit's VU and block. -/
+theorem sitesZ_nonempty (hs : scopeOkGT c = true) :
+    Nonempty (SitesZ c (planAtZKH (Reg := Reg) dj y₀) (tabAtZKH dj y₀)) := sorry
 
 include ht hc in
 /-- **The VU's rows are placed with their inputs on their unit slots at the `--zk` hidden tables**: at a one-table
-hidden-output `--zk` session of an untyped circuit at `scopeOkGT` with `sha512/row/v1` rows. -/
+hidden-output `--zk` session of an untyped circuit at `scopeOkGT` with `sha512/row/v1` rows. Each site's acceptance
+places its VU's rows (`vuPlace_at`). -/
 theorem vuPlaceZ_nonempty (hs : scopeOkGT c = true) (hv1 : ∀ p ∈ c.ports.toList, p.v2 = false) :
-    Nonempty (VuPlaceZ c hs (planAtZKH (Reg := Reg) dj y₀) (tabAtZKH dj y₀)) := sorry
+    Nonempty (VuPlaceZ c hs (planAtZKH (Reg := Reg) dj y₀) (tabAtZKH dj y₀)) := by
+  obtain ⟨Q⟩ := sitesZ_nonempty dj y₀ ht hc hs (Reg := Reg)
+  have hp := fun S R u (h : u ∈ S) => vuPlace_at (Q.acc S R u h) (Q.hc S R u h) hs (Q.hvu S R u h)
+  exact ⟨⟨Q.acc, Q.hc, Q.vu, Q.hvu, Q.o, fun S R u h => (hp S R u h).choose,
+    fun S R u h => (hp S R u h).choose_spec.1, fun S R u h => (hp S R u h).choose_spec.2⟩⟩
 
 /-- The placement at the `--zk` hidden tables (`vuPlaceZ_nonempty`). -/
 noncomputable def vuPlaceZG (hs : scopeOkGT c = true) (hv1 : ∀ p ∈ c.ports.toList, p.v2 = false) :
