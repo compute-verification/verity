@@ -386,6 +386,35 @@ def test_f32_div_fmaxf_and_select_as_the_lean_states():
     assert all(SelectI32.evaluate(c, a, b) == (a if c % 2 == 1 else b) for c in range(4) for a, b in pairs[:500])
 
 
+def test_f32_fma_overflow_and_div_of_a_nonfinite_word_as_the_lean_states():
+    """`F32Fma_v2` of finite words whose exact `x·y + z` overflows writes `f32Word` of it (`±inf`), as the squares-overflow
+    row's `fma(2¹²⁶, 2¹²⁶, +0)` does; and `F32Div_v2` of a non-finite word by a finite one (zero included) is not finite.
+    These are the Lean's `Pc8OpsAgree.fmaOvf` and `.divNonfin`."""
+    rng = random.Random(12)
+
+    def val(w: int) -> Fraction:
+        return Fraction(P.f32_of_bits(w))
+
+    def big() -> int:
+        return rng.getrandbits(1) << 31 | rng.randrange(0xC0, 0xFF) << 23 | rng.getrandbits(23)
+
+    def finite_word() -> int:
+        w = rng.getrandbits(32)
+        return w if (w >> 23) & 0xFF != 0xFF else w & 0xFF7FFFFF
+
+    triples = [(0x7E800000, 0x7E800000, 0), (0x7F7FFFFF, 0x7F7FFFFF, 0xFF7FFFFF), (0x7F7FFFFF, 0x3F800000, 0x73800000),
+               (0xFF7FFFFF, 0x3F800000, 0xF3800000)]
+    triples += [(big(), big(), rng.choice([finite_word(), big(), 0, 0x80000000])) for _ in range(6000)]
+    ovf = [(a, b, c) for a, b, c in triples
+           if (f32_word(val(a) * val(b) + val(c)) >> 23) & 0xFF == 0xFF]
+    assert len(ovf) > 1000 and (0x7E800000, 0x7E800000, 0) in ovf
+    assert all(F32FmaV2.evaluate(a, b, c) == f32_word(val(a) * val(b) + val(c)) for a, b, c in ovf)
+    nonfinite = [0x7F800000, 0xFF800000, 0x7FC00000, 0xFFC00000, 0x7F800001, 0xFFFFFFFF, 0x7FFFFFFF]
+    nonfinite += [rng.getrandbits(1) << 31 | 0xFF << 23 | rng.getrandbits(23) for _ in range(200)]
+    finite = [0, 0x80000000, 1, 0x3F800000, 0x41800000, 0x7F7FFFFF, 0xFF7FFFFF] + [finite_word() for _ in range(200)]
+    assert all((F32DivV2.evaluate(a, b) >> 23) & 0xFF == 0xFF for a in nonfinite for b in finite)
+
+
 def test_v1_registry_and_cost():
     s = get("pearl-c-h100-v1")
     assert s.name == "pearl-c-h100-v1" and dict(s.certificate.parameters)["forming"] == "v1"

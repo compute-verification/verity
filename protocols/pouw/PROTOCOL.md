@@ -848,7 +848,9 @@ scales and codes by the following primitive calls, in this order. Each result is
 The Lean names are `rowMax`, `rowRho`, `alpha8`, `beta8`, `floor8`, `eTilde8`, `code8W`, `alpha4` and `beta4`
 (`Pouw/Protocol/PearlC/RowSem.lean`, namespace `PearlC.RowCircuit`). Pearl-C's and Pearl-C4's semantics at them are `pc8Sem` and
 `pc4Sem`, on the row's words re-encoded (`f32Word`; `pc4`: `bf16WordOf`). Their `α` and `β` are those words read back as
-values. `pc8Sem`'s floor is `φ`'s value plus 1, so the rule `1 ≤ floor` is `φ ≥ 0`. `pc8Sem`'s forming value is `D_t`'s,
+values. `pc8Sem`'s floor is `φ`'s value plus 1 where `ρ`'s word is finite and `0` where it is not, so the rule
+`1 ≤ floor` is `ρ` finite and `φ ≥ 0`, the circuit's flag. `pc4Sem`'s `β` is `0` where `β`'s word is not finite, so
+`RowAdmit4` refuses the row, as the circuit's flag (`β ≤ F32_MAX`) does. `pc8Sem`'s forming value is `D_t`'s,
 and its `e4m3` is the code wherever `F32ToE4m3Sat_v1` agrees with `e4m3Word` and `D_t` is not NaN.
 
 ## Not here yet

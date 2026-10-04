@@ -162,9 +162,10 @@ the BF16 narrowing is `rnBf16?`; the widening of `−0` is FP32's `−0`; `F32Fa
 `−0` by `−0` is that of `+0` by `+0` on every word, the infinities and NaNs included (both products are `+0`); FP32
 divide by a nonzero word rounds as `f32Word` (an exact zero signed as `F32Mul`'s), and a finite word over `+inf` is the
 zero of its sign; a product whose first factor is not finite is not finite; `F32Fmaxf` against a finite nonzero word
-is the larger, a NaN losing; and `SelectI32` selects on its condition's low bit. Each is a fact about IEEE binary32
-(round to nearest even, gradual underflow) or core's integer primitives, open until core's Lean semantics of the
-primitives. -/
+is the larger, a NaN losing; `SelectI32` selects on its condition's low bit; an FMA of finite words whose exact value
+overflows writes its `f32Word` (`±inf`); and a quotient of a non-finite word by a finite one is not finite. Each is a
+fact about IEEE binary32 (round to nearest even, gradual underflow) or core's integer primitives, open until core's
+Lean semantics of the primitives. -/
 structure Pc8OpsAgree (ops : RowOps) : Prop where
   cast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val
   widen : ∀ c : Code, c.isNaN = false → c.val ≠ 0x80 → ops.e4m3ToF32 c.val % 2 ^ 32 = f32Word (codeVal c)
@@ -186,6 +187,9 @@ structure Pc8OpsAgree (ops : RowOps) : Prop where
   fmaxfAny : ∀ a b : ℕ, ∀ y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ b = some y → y ≠ 0 →
     ops.f32Fmaxf a b % 2 ^ 32 = if a = 0x7F800000 ∨ ∃ x, wordQ a = some x ∧ y < x then a else b
   sel : ∀ c a b, ops.selectI32 c a b = if c % 2 = 1 then a else b
+  fmaOvf : ∀ a b c : ℕ, ∀ x y z : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → c < 2 ^ 32 → wordQ a = some x → wordQ b = some y →
+    wordQ c = some z → wordQ (f32Word (x * y + z)) = none → ops.f32FmaV2 a b c % 2 ^ 32 = f32Word (x * y + z)
+  divNonfin : ∀ a b : ℕ, a < 2 ^ 32 → wordQ a = none → (wordQ b).isSome → wordQ (ops.f32DivV2 a b % 2 ^ 32) = none
 
 /-- A noise line as the table reads it: no NaN code (`0x7F`, `0xFF`). -/
 def Line8OK (e : Fin Params.pi.r → Code) : Prop := ∀ q, (e q).isNaN = false

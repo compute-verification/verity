@@ -12,12 +12,16 @@ import Pouw.SecurityProofs.PearlC.Block4Sem
 * `pc8` (`stats8OK_of_rho`): where `ρ`'s word is finite, `ρ ≥ 0` (`sqrtWord_nonneg`). At `ρ = 0`, or where
   `t = s + 4ρ` is `+inf` (so `α = +0`), the floor `F32Fma(ρ, α, −1)` is about `−1`. Else `t` is finite and
   `d ≥ t ≥ 4ρ` up to three roundings, since `s ≥ 0` (`rowMax_word`), so `ρ·α ≤ 113`; a floor of at least `0` then
-  gives `ρ·α ≥ 1/2`, and `β = F32Mul(F32Mul(ρ, α), 2^(−19/2))` is a positive finite word. `pc8Sem`'s floor reads a
-  NaN word as `480`, so it admits a row whose `ρ` is `+inf`: a finite `ρ` is Python's condition (`s5_stats`' partials)
-  and the circuit's (`ρ ≤ F32_MAX`), not yet the floor rule's.
+  gives `ρ·α ≥ 1/2`, and `β = F32Mul(F32Mul(ρ, α), 2^(−19/2))` is a positive finite word. `pc8Sem`'s floor is `0`
+  where `ρ`'s word is not finite, so the floor rule asks a finite `ρ`, as Python (`s5_stats`' partials) and the
+  circuit (`ρ ≤ F32_MAX`) do.
 * `pc4` (`row4OK_stats_of_beta`): where `β`'s word is finite and `RowAdmit4` holds, `β > 0`, so `α > 0`: at `α = +0`
-  the product `δρ·α` is `±0` or not finite (`mulNonfin`), and `β` with it. `RowAdmit4` reads a NaN `β` as `480`, so a
-  finite `β` is the circuit's condition (`β ≤ F32_MAX`) and Python's (`pearl_c4.stats`), not yet the rule's.
+  the product `δρ·α` is `±0` or not finite (`mulNonfin`), and `β` with it. `pc4Sem`'s `β` is `0` where `β`'s word is
+  not finite, so `RowAdmit4` asks a finite `β`, as the circuit (`β ≤ F32_MAX`) and Python (`pearl_c4.stats`) do.
+
+The squares-overflow row (`test_circuit_pc8`'s and `test_circuit_pc4`'s `squares-overflow`: finite words, every 8th one
+`2¹²⁶`) is the vector both refusals are checked on: each sampled square overflows, so `ρ` is `+inf`, and `pc8Sem`
+(`pc8Sem_squaresOverflow`) and `pc4Sem` (`pc4Sem_squaresOverflow`) refuse the row, as Python and the circuit do.
 -/
 
 namespace Pouw.PearlC.RowCircuit
@@ -151,6 +155,18 @@ theorem sqrtWord_nonneg {a : ℕ} {r : ℚ} (h : wordQ (sqrtWord a % 2 ^ 32) = s
     · rw [h0, PeelExactProofs.wordQ_negZero] at h; cases h; exact le_rfl
   · rw [h0] at h
     exact wordQ_nonneg (f32Word_lt31 hy) h
+
+/-- `PouwF32SqrtRn_v1` of a word that is not finite is not finite (`+inf` or NaN). -/
+theorem sqrtWord_nonfin {a : ℕ} (h : wordQ a = none) : wordQ (sqrtWord a % 2 ^ 32) = none := by
+  have hnan : wordQ 0x7FFFFFFF = none := by decide +kernel
+  rw [← wordQ_mod32] at h
+  have he := wordQ_none_exp h
+  unfold sqrtWord
+  dsimp only
+  rw [ite_eq_left he]
+  split_ifs with hi
+  · rw [Nat.mod_mod, wordQ_mod32]; rwa [wordQ_mod32] at h
+  · exact hnan
 
 /-! ## The primitives on words -/
 
@@ -449,5 +465,120 @@ theorem row4OK_stats_of_beta (hA : Pc8OpsAgree ops) {k : ℕ} {x : ℕ → ℕ} 
     stepWord_of_lt31 (lt31_of_pos (eval_lt32 .mul rfl _) hb hbpos) hb⟩
 
 end Pc4
+
+/-! ## The squares-overflow row -/
+
+section Overflow
+
+variable {ops : RowOps}
+
+/-- A butterfly round over `n` sums that are all `+inf` gives `+inf` sums. -/
+theorem bfly_pinf {h n : ℕ} {v : ℕ → ℕ} (hv : ∀ j < n, v j = 0x7F800000) :
+    ∀ j < n, bfly ops h n v j = 0x7F800000 := by
+  intro j hj
+  have h1 : f32Add 0x7F800000 0x7F800000 = 0x7F800000 := by decide +kernel
+  have h2 : f32Add 0x7F800000 0 = 0x7F800000 := by decide +kernel
+  show f32Add (v j) (if j + h < n then v (j + h) else 0) % 2 ^ 32 = _
+  rw [hv j hj]
+  split_ifs with hjh
+  · rw [hv _ hjh, h1]; rfl
+  · rw [h2]; rfl
+
+/-- The butterfly's sum of `n ≥ 1` partials that are all `+inf` is `+inf`. -/
+theorem sumSq_pinf {w : Wire} {x : ℕ → ℕ} {n : ℕ} (hn : 0 < n)
+    (hv : ∀ j < n, fmaAcc ops w x (accLast n j) = 0x7F800000) : sumSq ops w x n = 0x7F800000 :=
+  bfly_pinf (bfly_pinf (bfly_pinf (bfly_pinf (bfly_pinf hv)))) 0 hn
+
+/-- Where the sum of squares is `+inf`, `ρ`'s word is not finite. -/
+theorem rowRho_nonfin (hA : Pc8OpsAgree ops) {w : Wire} {x : ℕ → ℕ} {K : ℕ} (hn : 0 < K / 8) (hn' : K / 8 < 2 ^ 127)
+    (hs : sumSq ops w x (K / 8) = 0x7F800000) : wordQ (rowRho ops w x K) = none := by
+  have h1 : (1 : ℚ) ≤ ((K / 8 : ℕ) : ℚ) := by exact_mod_cast hn
+  obtain ⟨v, hv, -, -⟩ := f32Word_pos (y := ((K / 8 : ℕ) : ℚ)) (le_trans (by norm_num) h1) (by exact_mod_cast hn')
+  have hd := hA.divNonfin 0x7F800000 (f32Word ((K / 8 : ℕ) : ℚ)) (by norm_num) wordQ_pinf (by rw [hv]; rfl)
+  unfold rowRho
+  rw [hs]
+  exact sqrtWord_nonfin hd
+
+/-- On a row whose every 8th word, read through `w`, is `2¹²⁶` (`0x7E800000`), each of at most 32 partials is
+`fma(2¹²⁶, 2¹²⁶, +0)`, which overflows to `+inf`. -/
+theorem fmaAcc_pinf (hA : Pc8OpsAgree ops) {w : Wire} {x : ℕ → ℕ} {n : ℕ} (hn : n ≤ 32)
+    (hx : ∀ t < n, w.eval ops (x (8 * t)) = 0x7E800000) : ∀ j < n, fmaAcc ops w x (accLast n j) = 0x7F800000 := by
+  intro j hj
+  have hl : accLast n j = j := by
+    unfold accLast
+    rw [Nat.div_eq_of_lt (by omega : n - 1 - j < 32)]
+    rfl
+  have hq : wordQ 0x7E800000 = some ((2 : ℚ) ^ 126) := by decide +kernel
+  have ho : f32Word ((2 : ℚ) ^ 126 * 2 ^ 126 + 0) = 0x7F800000 := by decide +kernel
+  rw [hl, fmaAcc, ite_eq_left (by omega : j < 32)]
+  show ops.f32FmaV2 (w.eval ops (x (8 * j))) (w.eval ops (x (8 * j))) 0 % 2 ^ 32 = _
+  rw [hx j hj, hA.fmaOvf _ _ _ _ _ _ (by norm_num) (by norm_num) (by norm_num) hq hq Freeze.wordQ_zero
+    (by rw [ho]; exact wordQ_pinf), ho]
+
+/-- `ρ`'s word on a squares-overflow row of `8 ≤ K ≤ 256` words (every 8th one `2¹²⁶` through `w`) is not finite. -/
+theorem rowRho_squaresOverflow (hA : Pc8OpsAgree ops) {w : Wire} {x : ℕ → ℕ} {K : ℕ} (hK : 8 ≤ K) (hK' : K ≤ 256)
+    (hx : ∀ t < K / 8, w.eval ops (x (8 * t)) = 0x7E800000) : wordQ (rowRho ops w x K) = none :=
+  rowRho_nonfin hA (by omega) (by omega) (sumSq_pinf (by omega) (fmaAcc_pinf hA (by omega) hx))
+
+/-- **`pc8Sem` refuses the squares-overflow row** (`test_circuit_pc8`'s `squares-overflow`, which the circuit and Python
+refuse): row `i` of a committed operand of `8 ≤ K ≤ 256` columns whose every 8th word is `2¹²⁶` (`0x7E800000`). Each
+sampled square overflows, so `ρ`'s word is `+inf` and the floor is `0`. -/
+theorem pc8Sem_squaresOverflow (hA : Pc8OpsAgree ops) {Q R S : Type} (p : Pipeline)
+    (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
+      Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r)
+    {m K i : ℕ} {W : Codes} (hK : 8 ≤ K) (hK' : K ≤ 256) (hi : i < m)
+    (hW : ∀ t, 8 * t < K → W i (8 * t) = 0x7E800000) : ¬ (pc8Sem ops p noise).RowOK m K W i := by
+  intro h
+  have hf := (h.2 hi).2
+  have hρ : wordQ (rowRho ops .id (encRow K (wordsVal m K W ⟨i, hi⟩)) K) = none := by
+    refine rowRho_squaresOverflow hA hK hK' fun t ht => ?_
+    have h8 : 8 * t < K := by omega
+    show encRow K (wordsVal m K W ⟨i, hi⟩) (8 * t) = 0x7E800000
+    rw [encRow, dite_eq_left h8]
+    show f32Word ((wordQ (W i (8 * t))).getD 0) = _
+    rw [hW t h8]
+    decide +kernel
+  simp only [pc8Sem, hρ, Option.isSome_none, Bool.false_eq_true, ↓reduceIte] at hf
+  norm_num at hf
+
+/-- **`pc4Sem` refuses the squares-overflow row** (`test_circuit_pc4`'s `squares-overflow`, which the circuit and
+Python refuse): row `i` of a committed operand of `8 ≤ K ≤ 256` columns whose every 8th word is `2¹²⁶` (`0x7E800000`,
+the widened BF16 word `0x7E80`). `ρ` is `+inf`, so `δρ` and `β` are not finite, `pc4Sem`'s `β` is `0` and `RowAdmit4`
+fails (`e4m3(0)` is code `0`). -/
+theorem pc4Sem_squaresOverflow (hA : Pc4OpsAgree ops) {Q R S : Type}
+    (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
+      Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k)
+    {m K i : ℕ} {W : Codes} (hK : 8 ≤ K) (hK' : K ≤ 256) (hi : i < m)
+    (hW : ∀ t, 8 * t < K → W i (8 * t) = 0x7E800000) : ¬ (pc4Sem ops lines).RowOK m K W i := by
+  intro h
+  obtain ⟨-, h8, -⟩ := h.2 hi
+  have hρ : wordQ (rowRho ops .bf16 (encRow16 K (wordsVal m K W ⟨i, hi⟩)) K) = none := by
+    refine rowRho_squaresOverflow hA.toPc8OpsAgree hK hK' fun t ht => ?_
+    have h8 : 8 * t < K := by omega
+    have hb : encRow16 K (wordsVal m K W ⟨i, hi⟩) (8 * t) = 0x7E80 := by
+      rw [encRow16, dite_eq_left h8]
+      show bf16WordOf ((wordQ (W i (8 * t))).getD 0) = _
+      rw [hW t h8]
+      decide +kernel
+    show ops.bf16ToF32 (encRow16 K (wordsVal m K W ⟨i, hi⟩) (8 * t)) = _
+    rw [hb, hA.bf16w _ (by norm_num)]
+    rfl
+  simp only [pc4Sem] at h8
+  generalize encRow16 K (wordsVal m K W ⟨i, hi⟩) = x at hρ h8
+  have hd : wordQ (drho4 ops x K) = none :=
+    hA.mulNonfin _ 0x3E800000 (eval_lt32 (ops := ops) .sqrt rfl _) hρ (by rw [wordQ_cQuarter]; rfl)
+  obtain ⟨-, a, ha, -⟩ := alpha_spec hA.toPc8OpsAgree (t := Prim.eval ops .add [rowMax ops .bf16Fabs x (K - 1),
+    Prim.eval ops .mul [0x40800000, drho4 ops x K]]) (eval_lt32 .add rfl _) wordQ_c2688 (by norm_num)
+    (by norm_num) (by norm_num)
+  have ha' : wordQ (alpha4 ops x K) = some a := ha
+  have hm : wordQ (Prim.eval ops .mul [drho4 ops x K, alpha4 ops x K]) = none :=
+    hA.mulNonfin _ _ (eval_lt32 .mul rfl _) hd (by show (wordQ (alpha4 ops x K)).isSome = true; rw [ha']; rfl)
+  have hβ : wordQ (beta4 ops x K) = none :=
+    hA.mulNonfin _ 0x3EA920A7 (eval_lt32 .mul rfl _) hm (by rw [wordQ_cKbeta]; rfl)
+  have h0 : (e4m3 0).val = 0 := by decide +kernel
+  simp only [hβ, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, h0] at h8
+  omega
+
+end Overflow
 
 end Pouw.PearlC.RowCircuit

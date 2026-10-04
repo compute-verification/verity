@@ -158,13 +158,15 @@ def _at(words: list[int], updates: dict[int, int]) -> list[int]:
 
 
 def _rows() -> dict[str, list[int]]:
-    """Honest rows and rows the scheme refuses: non-finite words at sampled (0, 8, …) and unsampled positions, a spike
-    that makes a_E subnormal (D-NF), one that only screens its block, a zero row, rows of tiny and of huge words."""
+    """Honest rows and rows the scheme refuses: non-finite words at sampled (0, 8, …) and unsampled positions, finite
+    words whose sampled squares overflow (ρ and β not finite: `pc4Sem_squaresOverflow`), a spike that makes a_E
+    subnormal (D-NF), one that only screens its block, a zero row, rows of tiny and of huge words."""
     base = [V.row_codes("pc4-circuit", "A", i, K) for i in range(3)]
     spike = lambda v: _at(base[0], {1: P.f32_to_bf16(v)})  # noqa: E731
     return {"honest-0": base[0], "honest-1": base[1], "negated": [w ^ 0x8000 for w in base[2]],
             "inf-unsampled": _at(base[0], {1: 0x7F80}), "minus-inf-sampled": _at(base[0], {0: 0xFF80}),
             "nan-unsampled": _at(base[0], {3: 0x7FC0}), "minus-nan-sampled": _at(base[0], {8: 0xFFC1}),
+            "squares-overflow": _at(base[0], {p: 0x7E80 for p in range(0, K, 8)}),
             "spike-2^16": spike(2.0 ** 16), "spike-256": spike(256.0), "max-unsampled": _at(base[0], {1: 0x7F7F}),
             "zero": [0] * K, "tiny": [0x0001] * K, "huge": [0x7F7F] * K}
 

@@ -39,21 +39,31 @@ section Sem4
 
 variable (ops : RowOps)
 
+/-- `pc4Sem`'s `β` of a row: `beta4`'s word read as a value, `0` where it is not finite. -/
+def beta4V {k : ℕ} (X : Fin k → ℚ) : ℚ :=
+  if (wordQ (beta4 ops (encRow16 k X) k)).isSome then wordVal (beta4 ops (encRow16 k X) k) else 0
+
 /-- `pc4Sem`'s `A′`: row `i` of the activations' values formed at its `α` and `β` with `E_A`'s line `i` and `F_A`. -/
 def form4A {m n k : ℕ} (z : Lines4 m n k) (act : Codes) : Op4 m := fun i =>
-  formRow (wordVal (alpha4 ops (encRow16 k (wordsVal m k act i)) k))
-    (wordVal (beta4 ops (encRow16 k (wordsVal m k act i)) k)) (wordsVal m k act i) (z.EA i) z.FA
+  formRow (wordVal (alpha4 ops (encRow16 k (wordsVal m k act i)) k)) (beta4V ops (wordsVal m k act i))
+    (wordsVal m k act i) (z.EA i) z.FA
 
 /-- `pc4Sem`'s `B̃`: row `j` of the weights' values formed with `E_B`'s line `j` and `F_B`. -/
 def form4B {m n k : ℕ} (z : Lines4 m n k) (wt : Codes) : Op4 n := fun j =>
-  formRow (wordVal (alpha4 ops (encRow16 k (wordsVal n k wt j)) k))
-    (wordVal (beta4 ops (encRow16 k (wordsVal n k wt j)) k)) (wordsVal n k wt j) (z.EB j) z.FB
+  formRow (wordVal (alpha4 ops (encRow16 k (wordsVal n k wt j)) k)) (beta4V ops (wordsVal n k wt j))
+    (wordsVal n k wt j) (z.EB j) z.FB
 
 /-- A row's `Ẽ` at `a_E = e4m3(β)`, the row `peelFp4` reads for it. -/
 def be4 {k : ℕ} (X : Fin k → ℚ) (e : Fin 32 → Nib) : Fin 32 → ℕ :=
-  eTilde e (e4m3 (wordVal (beta4 ops (encRow16 k X) k)))
+  eTilde e (e4m3 (beta4V ops X))
 
 end Sem4
+
+/-- Where `β`'s word is a step word, `pc4Sem`'s `β` is its value. -/
+theorem beta4V_eq {ops : RowOps} {k : ℕ} {X : Fin k → ℚ} (h : AccumProofs.StepWord (beta4 ops (encRow16 k X) k)) :
+    beta4V ops X = wordVal (beta4 ops (encRow16 k X) k) := by
+  unfold beta4V
+  rw [ite_eq_left (by rw [PeelExactProofs.wordQ_fields (AccumProofs.finite?_exp h.2.2)]; rfl)]
 
 theorem getD_lt32 {o : Option ℕ} (h : ∀ w, o = some w → w < 2 ^ 32) : o.getD 0 < 2 ^ 32 := by
   cases o with
@@ -116,6 +126,11 @@ theorem entry4_words {M K N TM TN nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
       wordQ (val X (uGlob4 M N K TM TN i j)) = devFp4Sm120.useful (form4A ops z act) (form4B ops z wt) z.FA z.FB
         (fun i => be4 ops (wordsVal M K act i) (z.EA i)) (fun j => be4 ops (wordsVal N K wt j) (z.EB j)) i j := by
   obtain ⟨a, b, af, bf, gL, ha, hb, -, haf, hbf, hgg, hpa, hpb⟩ := peelRows4_spec hr
+  have ha' := ha
+  have hb' := hb
+  have hpa' := hpa
+  have hpb' := hpb
+  simp only [form4A, form4B, be4, beta4V_eq hA.beta, beta4V_eq hB.beta] at ha' hb' hpa' hpb'
   obtain ⟨hgl, hgrow⟩ := PeelExactProofs.mapM_ofFn _ [] hgg
   have h16 : 16 ∣ K := ⟨4 * nw, by omega⟩
   have hk : 64 ∣ K := ⟨nw, hK⟩
@@ -161,10 +176,10 @@ theorem entry4_words {M K N TM TN nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
     rfl
   have cA := (whole4 ops M K N TM TN).cut_correct X (blockA4 ops M K N) i
   have cB := (whole4 ops M K N TM TN).cut_correct X (blockB4 ops M K N) j
-  obtain ⟨hSA, hCA⟩ := row4A_form hops h8 h16 _ cA hA hxA heA hfA ha
-  obtain ⟨hSB, hCB⟩ := row4B_form hops h8 h16 _ cB hB hxB heB hfB hb
-  have paA := row4A_paWords hops hnw hK _ cA hA hxA heA hfA hbA ha haf hpa
-  have pbB := row4B_pbWords hops hnw hK _ cB hB hxB heB hfB hbB hb hbf hgl hgB hpb
+  obtain ⟨hSA, hCA⟩ := row4A_form hops h8 h16 _ cA hA hxA heA hfA ha'
+  obtain ⟨hSB, hCB⟩ := row4B_form hops h8 h16 _ cB hB hxB heB hfB hb'
+  have paA := row4A_paWords hops hnw hK _ cA hA hxA heA hfA hbA ha' haf hpa'
+  have pbB := row4B_pbWords hops hnw hK _ cB hB hxB heB hfB hbB hb' hbf hgl hgB hpb'
   have hPA : ∀ q < 64, val ((whole4 ops M K N TM TN).cut X (blockA4 ops M K N) i) (paOut4 K q) = pa.getD q 0 := by
     intro q hq
     unfold paOut4

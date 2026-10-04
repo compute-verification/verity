@@ -210,7 +210,7 @@ def _flip(words: list[int], at: int, admitted) -> tuple[list[int], list[int]]:
 
 def _rows(dev: str) -> dict[str, list[int]]:
     """Honest rows and rows the scheme refuses: non-finite words at sampled (0, 8, …) and unsampled positions, an overflowing
-    sum of squares, a zero row, an all-(−0) row, a subnormal row, the largest word, and both sides of the noise floor and
+    sum of squares (ρ not finite: `pc8Sem_squaresOverflow`), a zero row, an all-(−0) row, a subnormal row, the largest word, and both sides of the noise floor and
     of liveness (one word bisected to its flip; and a row whose third dead entry meets the threshold with equality); and an
     honest row with +0 and −0 words at sampled and unsampled positions."""
     base = [C.parse_f32_row(r, K) for r in V.rows_f32("pc8-circuit", "A", 3, K)]

@@ -120,7 +120,9 @@ def pc8Form (p : Pipeline) : FormChain Params.pi.r :=
 
 /-- **Pearl-C's semantics at `pc8`'s row arithmetic**, on the step `p`: `α`, `β` and the floor from the row's words
 (`alpha8`, `beta8`, `floor8 + 1`, so the floor rule `1 ≤ floor` is `ρ·α − 1 ≥ 0`), the forming `pc8Form`, and the noise
-as given. -/
+as given. The floor is `0`, so the row is refused, where `ρ`'s word is not finite (NaN or ±inf): Python's `s5_stats`
+refuses such a row (`_check_finite` on the partials, which are non-negative sums) and the circuit's flag asks
+`ρ ≤ F32_MAX`. -/
 def pc8Sem {Q R S : Type} (p : Pipeline)
     (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r) : PearlCSem Q R S where
@@ -128,15 +130,18 @@ def pc8Sem {Q R S : Type} (p : Pipeline)
   fc := pc8Form ops p
   alpha := fun k X => wordVal (alpha8 ops (encRow k X) k)
   beta := fun k X => wordVal (beta8 ops (encRow k X) k)
-  floor := fun k X => wordVal (floor8 ops (encRow k X) k) + 1
+  floor := fun k X =>
+    if (wordQ (rowRho ops .id (encRow k X) k)).isSome then wordVal (floor8 ops (encRow k X) k) + 1 else 0
 
 /-- **Pearl-C4's semantics at `pc4`'s row arithmetic**: `α` and `β` from the row's BF16 words (`alpha4`, `beta4`), and
-the noise lines as given. -/
+the noise lines as given. `β` is `0`, so `RowAdmit4` refuses the row, where `β`'s word is not finite (NaN or ±inf), as
+Python refuses it (`s5_stats`' `_check_finite`, `pearl_c4.stats`' `_finite`) and the circuit's flag asks
+`β ≤ F32_MAX`. -/
 def pc4Sem {Q R S : Type}
     (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k) : Fp4Sem Q R S where
   lines := lines
   alpha := fun k X => wordVal (alpha4 ops (encRow16 k X) k)
-  beta := fun k X => wordVal (beta4 ops (encRow16 k X) k)
+  beta := fun k X => if (wordQ (beta4 ops (encRow16 k X) k)).isSome then wordVal (beta4 ops (encRow16 k X) k) else 0
 
 end Pouw.PearlC.RowCircuit

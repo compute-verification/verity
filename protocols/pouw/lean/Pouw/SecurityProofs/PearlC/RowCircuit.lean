@@ -1447,17 +1447,18 @@ theorem encRow_rowVals {V : ℕ → ℕ} {K : ℕ} (hV : ∀ l < K, AccumProofs.
   simp only [encRow, hl, ↓reduceDIte, rowVals, f32Word_wordVal (hV l hl)]
 
 /-- **`pc8Sem`'s `α`, `β` and floor at a row of step words** are the table's `alpha8`, `beta8` and `floor8` words read
-as values (the floor plus one). -/
+as values (the floor plus one where `rowRho`'s word is finite, else `0`). -/
 theorem pc8Sem_scales {Q R S : Type} (p : Pipeline)
     (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r)
     {V : ℕ → ℕ} {K : ℕ} (hK : 8 ≤ K) (hV : ∀ l < K, AccumProofs.StepWord (V l)) :
     (pc8Sem ops p noise).alpha K (rowVals V K) = wordVal (alpha8 ops V K) ∧
       (pc8Sem ops p noise).beta K (rowVals V K) = wordVal (beta8 ops V K) ∧
-      (pc8Sem ops p noise).floor K (rowVals V K) = wordVal (floor8 ops V K) + 1 := by
+      (pc8Sem ops p noise).floor K (rowVals V K) =
+        if (wordQ (rowRho ops .id V K)).isSome then wordVal (floor8 ops V K) + 1 else 0 := by
   have h := encRow_rowVals hV
   exact ⟨by simp only [pc8Sem, alpha8_congr (ops := ops) hK h], by simp only [pc8Sem, beta8_congr (ops := ops) hK h],
-    by simp only [pc8Sem, floor8_congr (ops := ops) hK h]⟩
+    by simp only [pc8Sem, floor8_congr (ops := ops) hK h, rowRho_congr (ops := ops) hK h]⟩
 
 end RoundTrip
 
