@@ -41,8 +41,10 @@ of one row's units (k is the segment's length where the row is a segment's):
                                           high byte zero
     pc4-carry (pouw/row-pc4-carry/v1)     the 32 chains' accumulators so far (FP32 words, two each)  64
     nvfp4-codes (pouw/row-nvfp4-codes/v1) a segment's k E2M1 codes four per word, then its k/16      k/4 + k/32
-                                          UE4M3 scale bytes two per word  nvfp4-p's codes and
-scales are `rowleaf.nvfp4_row_bytes`' bytes, and every row's bytes are `rowleaf.bit_row`'s of its elements.  Which unit
+                                          UE4M3 scale bytes two per word
+
+nvfp4-p's codes and scales are `rowleaf.nvfp4_row_bytes`' bytes, and every row's bytes are `rowleaf.bit_row`'s of its
+elements.  Which unit
 ports make up each row is `pc4.PORTS` and `pc8.PORTS`.  `words_*` are each row's words from its elements, and `commit` and
 `tree_leaf` a row's commit string and tree leaf; ``tests/vectors/pouw_rows.json`` pins them, and C-Flock's tests recompute
 every vector through its ports (``backends/flock/tests/test_pouw_rows.py``).  The anchored inputs are no row: they are
