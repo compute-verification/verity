@@ -21,8 +21,10 @@ before you start, how to climb from a CPU test to a served row, what to record, 
 found them.
 
 It points at the tools rather than repeating them: the harness's `README.md` (`benchmarks/pouw/harness/`, #491), the
-panel's `add-a-row.md`, and the vLLM integration API (#567). `store:pous/<path>` is the POUS Project store (a Project
-worker has it under `/cursor/stores/`). Parts
+panel's `add-a-row.md`, and the vLLM integration API (#567). The pages lanes keep writing are in the notes
+(`~/.research/notes`): `kb/sm120/` holds the facts, the technique catalog and the panel's pages, and `campaigns/pouw/`
+the RTX PRO brief, the lanes' checkpoints, the price twins and the assessor's folder. The panel's tool (`panel.py` and its
+`attempts.jsonl`) is still in the POUS Project store's `internal/pouw/panel/`, until its rows move to the evidence store. Parts
 marked **(lands with …)** change when that work merges; [When the tooling lands](#when-the-tooling-lands) lists them.
 
 ## The objective
@@ -47,16 +49,16 @@ Ten minutes here saves a GPU window. For your line, version and mechanism:
    family (a new schedule, forming or mainloop, not a knob in your own kernel) with
    `research notes claim pouw/<slug> --lane <you> --hypothesis "..."`. `claim` refuses an approach that is live under
    another lane, or that was killed, unless you pass `--reopen WHY`. The CLI is on #240 until it merges.
-2. **Attempts:** search the technique catalog, `store:pous/docs/pouw/tried-techniques.md`, for your mechanism: one row
+2. **Attempts:** search the technique catalog, `kb/sm120/tried-techniques.md` in the notes, for your mechanism: one row
    per technique tried on sm_120, with its kernel and head, its measured effect and runs, and kept, dropped, open or
    superseded with the reason. Then the attempts since it was built: the harness's records
    (`research data select --kind kernel-attempt/v1`, or `python benchmarks/pouw/harness/ledger.py rows --refresh`),
-   the panel's rows for the line (`store:pous/docs/pouw/panel.md`), and the owning lane's latest checkpoints
-   (`store:pous/internal/pouw/rtx-pro/workers/*.md`).
-3. **Gotchas:** `store:pous/docs/pouw/sm120-gotchas.md`, one line per fact with its source. Read your toolchain's and
+   the panel's rows for the line (`kb/sm120/panel.md`), and the owning lane's latest checkpoints
+   (`campaigns/pouw/rtx-pro/workers/*.md`).
+3. **Gotchas:** `kb/sm120/gotchas.md` in the notes, one line per fact with its source. Read your toolchain's and
    the node's sections before your first build.
 4. **Owner:** every kernel directory, shared module and tool has one owner lane (the table in
-   `store:pous/internal/pouw/rtx-pro/brief.md`). A change to someone else's code goes to them, as a PR against their
+   `campaigns/pouw/rtx-pro/brief.md`). A change to someone else's code goes to them, as a PR against their
    branch or a message to them, never as an edit in their tree.
 
 If it was tried and dropped, your hypothesis says what's different this time, or you pick something else.
@@ -148,7 +150,7 @@ Every GPU tier holds to these. Each came from a voided row, a lost window or GPU
 
 **γ at both prices.** Compute γ at the cheapest bit-exact FADD (8.00 W1 per word) and at the measured in-loop price
 (1047/125 = 8.376), publish the larger, and say which won.
-- The prices come from the Lean pins (`store:pous/internal/pouw/price-twins-lean/`), not from a device record or a
+- The prices come from the Lean pins (`campaigns/pouw/price-twins-lean/` in the notes), not from a device record or a
   diagnostic.
 - In the harness you don't compute or type γ. The attempt record looks it up in `price_twins.json`, the Lean pins'
   twins, on the variant's `prices` path, at both prices. A result that types γ in gets no record.
@@ -176,7 +178,7 @@ again.
   `ledger.py outcome ART <outcome> --reason "..." --ref <run> --by <you> --push`. Numbers go in records and judgments
   in labels; `research data label` refuses a measurement.
 - **Anything priced or timed outside the harness is a panel row:** `panel.py append`, with every field described in
-  `store:pous/internal/pouw/panel/add-a-row.md`.
+  `kb/sm120/panel-add-a-row.md` in the notes.
   - A measured row needs the verifier's commit, its accept line, the transcript naming the run, the control's reject
     line and both sides' per-rep clocks; `panel.py` refuses the row without them.
   - Add `--noisy` when anything shared the GPU or the node.
@@ -242,7 +244,7 @@ nobody.
   only to unblock, to ask for a decision, or when your result changes someone's plan (lane contract §3a).
 - **Serialize your own edits:** write, then commit, then run, never a write and a launch at once. Commit and push often:
   a VM reset has wiped uncommitted work twice.
-- **The assessor's folder and id are its own** (`store:pous/internal/pouw/red-team/`). Send it code or a job through the
+- **The assessor's folder and id are its own** (`campaigns/pouw/red-team/` in the notes). Send it code or a job through the
   coordinator.
 
 ## Leave it better than you found it
@@ -254,7 +256,7 @@ finish a session:
   own (`.agents/skills/friction/SKILL.md`, §1). Otherwise write a friction note, or two lines naming the earlier one under
   `recurs:`.
 - **Learned a fact** about the toolchain, the card, a library or the node? Add one line to
-  `store:pous/docs/pouw/sm120-gotchas.md` with its source (a run id, a commit, a status file and time), in its section.
+  `kb/sm120/gotchas.md` in the notes with its source (a run id, a commit, a status file and time), in its section.
   When a line is wrong, correct it; don't add a contradiction.
 - **Checked a rule by hand that code could check?** It belongs in the tool, with the fix in its failure message: propose it
   to the tool's owner, pricing it with `.agents/skills/process-design/SKILL.md` if it gates other lanes.
@@ -292,8 +294,8 @@ Whoever lands one of these updates this skill in the same PR, and deletes what i
 |---|---|---|---|
 | #491, the harness, on `main` | harness owner (bc-0de2d624), through a train | commands point at `main`, not a tree assembled from branches | per-kernel copies of the SASS gate and `verify.py` (`pearl_c_sm120/`) |
 | #491's self-recording: on #491 (#583); the runner's publishing on #590 | bc-1a23b70c, with the harness owner and the panel's renderer | done: "What's been tried" step 2, "Name it", "Record it", the γ rows above | hand `panel.py append`, once 90% of tier-2 runs record themselves |
-| the technique catalog: first version `store:pous/docs/pouw/tried-techniques.md`; then generated from the records | bc-1a23b70c | done: "What's been tried" reads it | — |
-| the facts page: first version `store:pous/docs/pouw/sm120-gotchas.md`, hand-kept; then `fact` records | bc-1a23b70c | done: "Gotchas" and "Learned a fact" point at it; later, it is generated from `fact` records | research-notes `kb/sm120-kernels.md` (now a pointer) |
+| the technique catalog: first version `kb/sm120/tried-techniques.md` (notes); then generated from the records | bc-1a23b70c | done: "What's been tried" reads it | — |
+| the facts page: first version `kb/sm120/gotchas.md` (notes), hand-kept; then `fact` records | bc-1a23b70c | done: "Gotchas" and "Learned a fact" point at it; later, it is generated from `fact` records | research-notes `kb/sm120-kernels.md` (now a pointer) |
 | lane benches as tier-2a harness arms | harness owner | tier 2a runs in the harness, gated and recorded | `mainloop_bench`, `nvf4_bench` and `run.py check` as separate benches |
 | #240, the approach registry's CLI, on `main` | the research coordinator | `research notes claim`, `approach`, `approaches` run from `main` | — |
 | #567, then the migration's steps 2 to 4 | bc-f4e8ae34 | "Hooking a kernel into vLLM" | #540's `e2e.install`, `vllm_bench.install`, the fixed-name module cache |
@@ -302,6 +304,6 @@ Whoever lands one of these updates this skill in the same PR, and deletes what i
 
 - Every run you started is in the evidence store (`research data preserved <run|art>` exits 0), fill outputs included.
 - Every attempt has a row or a record, an outcome and a reason, so the next agent finds what you tried and dropped.
-- Every fact you learned is a line in `store:pous/docs/pouw/sm120-gotchas.md`; every friction you hit is fixed or noted.
+- Every fact you learned is a line in `kb/sm120/gotchas.md` in the notes; every friction you hit is fixed or noted.
 - Your PR description says what you fixed and what you deleted along the way.
 - You hold no GPU lease, and no job of yours reads a tree you are about to change.
