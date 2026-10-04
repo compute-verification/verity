@@ -49,8 +49,8 @@ class Compute:
             *(f"no peak for {device}" for device in fleet.devices if device not in self.peak),
             *((f"{work.work} work in a window the fleet could do {capacity} in",) if work.work > capacity else ()),
         )
-        right = 0 if reasons or not profile.gates else (profile.gates - profile.wrong_gates) / profile.gates
-        covered = int(work.work * right)
+        gates = profile.gates
+        covered = 0 if reasons or not gates.total else work.work * (gates.total - gates.wrong) // gates.total
         delta = profile.delta + work.delta
         return (
             Send(ComputeCoverage(work.stream, capacity, inventory_from, covered, capacity - covered, delta, reasons)),

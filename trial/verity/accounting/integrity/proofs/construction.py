@@ -61,7 +61,7 @@ class Proofs:
         )
         n = len(units)
         if refused:
-            return (Send(profile(stream, "region", [0] * n, n, self.delta, refused)),)
+            return (Send(profile(stream, "region", [0] * n, [0] * n, n, self.delta, refused)),)
 
         law = Subset(self.k)
         drawn = law.draw(derive(secret, "verity/integrity/proofs/v1", stream), n)
@@ -77,8 +77,8 @@ class Proofs:
             proved = yield from receive(Proved, "prover")
 
         reasons = tuple(f"region {u}: does not verify" for u in drawn if not results[u])
-        sizes = [len(u.gates) for u in units]
-        return (Send(profile(stream, "region", sizes, law.bound(n, self.delta), self.delta, reasons)),)
+        gates, outputs = [len(u.gates) for u in units], [len(u.outputs) for u in units]
+        return (Send(profile(stream, "region", gates, outputs, law.bound(n, self.delta), self.delta, reasons)),)
 
     def prover(
         self, registration: Registration, executions: Sequence[Execution], inputs: Sequence[tuple[int, ...]]

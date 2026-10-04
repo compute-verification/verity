@@ -3,9 +3,9 @@ A replayer runs drawn executions again without their inputs leaving the site; a 
 work, and challenges memory where a deadline can be tight; a warden on the links sees what leaves. So onsite also
 bounds memory and network, and its inventory is a count rather than an assumption.
 
-    verifier    integrity, work, network and NCI read the registration and the stream; compute coverage reads
-                integrity's profile, the work bound and the counted inventory; memory coverage reads the space bound
-                and the inventory
+    verifier    integrity, work and NCI read the registration and the stream; compute coverage reads integrity's
+                profile, the work bound and the counted inventory; memory coverage the space bound and the inventory;
+                network coverage integrity's profile and the warden's report
     prover      registers its builder and streams its executions as remotely; opens them for the replayer, finds their
                 shares, and answers space's challenges from the encoding it holds
     replayer    integrity's

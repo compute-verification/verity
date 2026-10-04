@@ -6,6 +6,7 @@ values."""
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
@@ -25,6 +26,16 @@ class Unit:
     @property
     def gates(self) -> tuple[int, ...]:
         return self.partition[self.region]
+
+    @property
+    def outputs(self) -> tuple[int, ...]:
+        """The circuit's outputs this unit computes."""
+        return tuple(w for w in P.boundary(self.circuit, self.gates)[1] if w in _outputs(self.circuit))
+
+
+@functools.cache
+def _outputs(circuit: Circuit) -> frozenset[int]:
+    return frozenset(circuit.outputs)
 
 
 class ProofSystem(Protocol):

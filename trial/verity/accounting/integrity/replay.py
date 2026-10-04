@@ -72,7 +72,7 @@ class Replay:
         stream, n = digest(registration, executions), len(executions)
         refused = check(registration, executions, self.scheme)
         if refused:
-            return (Send(profile(stream, "execution", [0] * n, n, self.delta, refused)),)
+            return (Send(profile(stream, "execution", [0] * n, [0] * n, n, self.delta, refused)),)
 
         law = Subset(self.k)
         drawn = law.draw(derive(secret, "verity/integrity/replay/v1", stream), n)
@@ -89,8 +89,9 @@ class Replay:
             for i in drawn
             if not results.get(i)
         )
-        sizes = [len(built(registration.builder, e.advice)[0].gates) for e in executions]
-        return (Send(profile(stream, "execution", sizes, law.bound(n, self.delta), self.delta, reasons)),)
+        circuits = [built(registration.builder, e.advice)[0] for e in executions]
+        gates, outputs = [len(c.gates) for c in circuits], [len(c.outputs) for c in circuits]
+        return (Send(profile(stream, "execution", gates, outputs, law.bound(n, self.delta), self.delta, reasons)),)
 
     def replayer(self) -> Actor:
         got = yield from gather({ToReplay: "verifier", Inputs: "prover"})

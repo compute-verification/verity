@@ -112,6 +112,9 @@ def show(event: Event) -> None:
 
 def _brief(value: object) -> str:
     if is_dataclass(value):
+        fields = vars(value)
+        if fields and all(isinstance(v, (int, float)) for v in fields.values()):
+            return f"{type(value).__name__}({', '.join(f'{k}={v}' for k, v in fields.items())})"
         return type(value).__name__
     if isinstance(value, tuple) and all(isinstance(v, str) for v in value):
         return repr(value)
