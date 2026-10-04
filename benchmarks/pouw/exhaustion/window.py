@@ -324,6 +324,7 @@ class Card:
         self.ev_done = [self.event() for _ in range(RING * BATCH)] if self.schedule == "overlap" else []
         self.ev_commit = [self.event() for _ in range(RING * BATCH)] if self.schedule == "overlap" else []
         self.ev_batch = [self.event() for _ in range(RING)]
+        self.ev_keys = self.event()
 
     def stream(self) -> ctypes.c_void_p:
         s = ctypes.c_void_p()
@@ -379,9 +380,13 @@ class Card:
             self.dev.ck("cuMemsetD8_v2", R.u64(self.sets[s][name]), POISON, self.size[name])
 
     def keys(self, i0: int, count: int) -> None:
-        """GEMMs i0 .. i0 + count's keys into their ring slots (a batch's slots are contiguous)."""
+        """GEMMs i0 .. i0 + count's keys into their ring slots (a batch's slots are contiguous).  A copy from pageable memory
+        may return before its DMA lands, and the non-blocking streams don't wait for the null stream's work: the commit
+        stream waits for an event behind the copy."""
         blob = b"".join(gemm_keys(self.sch, self.salt, self.root_b, matmul(self.card, i, self.shape)) for i in range(i0, i0 + count))
         self.put(self.kring + SLOT * (i0 % (RING * BATCH)), blob)
+        self.dev.ck("cuEventRecord", self.ev_keys, None)
+        self.dev.ck("cuStreamWaitEvent", self.stream_c, self.ev_keys, 0)
 
     def enqueue(self, i: int) -> None:
         d, s, slot = self.dev, i & 1, i % (RING * BATCH)
