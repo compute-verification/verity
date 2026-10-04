@@ -158,7 +158,7 @@ def test_a_signal_stops_the_unit_and_job_exec_exits_128_plus_it(tmp_path, monkey
     monkeypatch.chdir(d)
     before = signal.getsignal(signal.SIGTERM)
     runs = Runner()
-    rc = jobuser.main(["--user", "vyjob", "--unit", "research-job-r1", "--", "sleep", "9"], run=runs, check=lambda u: passwd(),
+    rc = jobuser.main(["--user", "vyjob", "--unit", "research-job-r1", "--", "python", "-c", "x"], run=runs, check=lambda u: passwd(),
                       popen=lambda argv, **kw: Proc(1, lambda: os.kill(os.getpid(), signal.SIGTERM)),
                       environ={"RESEARCH_RUN_DIR": str(d)})
     assert rc == 128 + signal.SIGTERM

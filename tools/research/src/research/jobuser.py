@@ -74,8 +74,8 @@ def check_user(name: str, *, getpwnam=pwd.getpwnam, getgrall=grp.getgrall, uid: 
     try:
         pw = getpwnam(name)
     except KeyError:
-        raise Refused(f"--job-user {name}: no such user here (sudo useradd --system --no-create-home --home-dir /nonexistent "
-                      f"--shell /usr/sbin/nologin {name})") from None
+        raise Refused(f"--job-user {name}: no such user here (sudo useradd --system --no-create-home --shell /usr/sbin/nologin "
+                      f"{name})") from None
     if pw.pw_uid in (0, uid):
         raise Refused(f"--job-user {name}: uid {pw.pw_uid} is {'root' if pw.pw_uid == 0 else 'the runner'}")
     groups = getgrall()
