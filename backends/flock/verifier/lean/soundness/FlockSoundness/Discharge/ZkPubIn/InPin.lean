@@ -550,4 +550,151 @@ theorem drawn_own {c : Circuit} {pi : HmIn.Ports} {tags : Tags} {pf own : ByteAr
 
 end own
 
+/-! ## A public leaf's bit at a drawn unit's site -/
+
+section site
+
+theorem getD_size_of_nonneg' {a : Array ℤ} {j : ℕ} (h : 0 ≤ a.getD j (-1)) : j < a.size := by
+  by_contra hj
+  rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by omega), Option.getD_none] at h
+  omega
+
+/-- **A public leaf's bit**: input `x` of a VU, `pubLeaf` at `(q, t)`, is bit `t < 16` of leaf port `p` of copy
+`x / W`'s leaf group (`W = inWords · WORD`), at column `col · 128 + 16 p + t`, and the copy's public leaf map has public
+word `q < pi.words` at `p`. -/
+theorem pubLeaf_spec {st : Stmt} (L : FlockSoundness.Layout st) (C : CheckFacts st.c) {pi : HmIn.Ports}
+    (lp : LeavesPublic st.c pi) {x q t : ℕ} (hx : x < st.c.upv * (st.c.unit.inWords * WORD))
+    (hpl : pubLeaf st.c pi x = some (q, t)) :
+    ∃ p, t < 16 ∧ x % (st.c.unit.inWords * WORD) = (st.c.unit.inGroups.getD 0 default).col * WORD + 16 * p + t ∧
+      p < (pi.leaves.getD (x / (st.c.unit.inWords * WORD)) #[]).size ∧
+      (pi.leaves.getD (x / (st.c.unit.inWords * WORD)) #[]).getD p (-1) = (q : ℤ) ∧ q < pi.words := by
+  have hW : 0 < st.c.unit.inWords * WORD := Nat.pos_of_ne_zero fun h => by rw [h, Nat.mul_zero] at hx; omega
+  have hxW : x / (st.c.unit.inWords * WORD) < st.c.upv := (Nat.div_lt_iff_lt_mul hW).2 hx
+  unfold pubLeaf at hpl
+  dsimp only at hpl
+  split at hpl
+  · rename_i hm
+    obtain ⟨hmb, hpb⟩ := hm
+    split at hpl
+    · rename_i hq0
+      simp only [Option.some.injEq, Prod.mk.injEq] at hpl
+      obtain ⟨hq, ht⟩ := hpl
+      obtain ⟨p, t', hp, ht', hpt⟩ := Aliased.mem_portBits hmb
+      have hpo := portOf_eq (Aliased.portBits_nodup L.unit_built) hp ht'
+      rw [← hpt] at hpo
+      rw [hpo] at hpb hq0 hq ht
+      obtain ⟨-, hcol, hw⟩ := firstGroup_port C.unit_groups.1 hpb
+      have h16 := portCols_16_get C.unit_groups.2 hpb
+      have hb16 : (st.c.unit.inGroups.getD 0 default).bits[p]! = 16 :=
+        C.unit_groups.2 _ (by
+          rw [getElem!_pos (st.c.unit.inGroups.getD 0 default).bits p hpb]
+          exact Array.getElem_mem_toList hpb)
+      have hsz : (portCols #[(st.c.unit.inGroups.getD 0 default)]).size =
+          (st.c.unit.inGroups.getD 0 default).bits.size := by
+        simpa using congrArg List.length (portCols_single (st.c.unit.inGroups.getD 0 default))
+      have hjs : p < (portCols #[(st.c.unit.inGroups.getD 0 default)]).size := by rw [hsz]; exact hpb
+      rw [Array.getD_eq_getD_getElem?, Array.getElem?_map, Array.getElem?_eq_getElem hjs, Option.map_some,
+        Option.getD_some] at hcol
+      rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hjs, Option.getD_some] at h16
+      have hc1 : (portCols st.c.unit.inGroups)[p]!.1 = (st.c.unit.inGroups.getD 0 default).col * WORD + 16 * p := by
+        rw [← hcol, h16]
+      have ht16 : t' < 16 := by rw [hw, hb16] at ht'; exact ht'
+      have hpl' := getD_size_of_nonneg' hq0
+      refine ⟨p, ?_, ?_, hpl', ?_, ?_⟩
+      · omega
+      · omega
+      · rw [← hq]; omega
+      · have := ((lp.maps _ hxW).2 p hpl').2.1
+        rw [← hq]
+        omega
+    · cases hpl
+  · cases hpl
+
+variable {T : Model.Statement}
+
+/-- **A public leaf's bit at a drawn unit's site is the verifier's own**: in a satisfying witness of an accepted
+statement with public input ports `pi`, at a site (`BcSiteHP`: block `o`, VU `g`, proved unit `u`), the column of a
+VU input `x` that is bit `t` of a public leaf at public word `q` (`pubLeaf`) holds bit `t` of the verifier's own word
+`q` of unit `u` (`ownWord`, at `u · pi.words + q`): the `in` region over the leaf's word pins it (`in_pinned`) to the
+drawn statement's public word of the slot's instance (`inVal_pub`), the population's word of `u`, which
+`HmIn.checkOwn` found the verifier's own (`drawn_own`). -/
+theorem pub_siteHP (a : AcceptedHP T) {pi : HmIn.Ports} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ}
+    (hs : BcSiteHP a pi pop o g u) {z : Witness T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) (x : Fin a.rows.w)
+    (hx : x.val < a.rows.nIn) {q t : ℕ} (hpl : pubLeaf a.st.c pi x.val = some (q, t)) :
+    bit (T.block z o (a.col hg x)) = Nat.testBit (ownWord a.own (u * pi.words + q)) t := by
+  obtain ⟨d, D, hd, hD, hlt, hregs, hpi, hpop, -, hu⟩ := hs
+  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht, h, L, hR, regs, hT⟩ := a
+  subst hT
+  dsimp only at hd hregs hpi hpop hu hg x hx hpl ⊢
+  subst hd
+  obtain ⟨pi₀, s⟩ := setupHidden_specP h
+  obtain rfl : pi = pi₀ := (Except.ok.inj (s.inParse.symm.trans hpi)).symm
+  obtain ⟨pop', hpop', -, hownw, -, hdr⟩ := s.pub
+  rw [hpop] at hpop'
+  cases hpop'
+  have F := flat_unitFactsP ht h
+  have lp := s.leavesPublic
+  have hn := L.unitRows_nIn
+  have hx' : x.val < st.c.upv * (unitRows st L.unit_built).nIn := hx
+  have hx'' : x.val < st.c.upv * (st.c.unit.inWords * WORD) := by rw [← hn]; exact hx'
+  obtain ⟨p, ht16, hxr, hpsz, hq, hqw⟩ := pubLeaf_spec L F.check lp hx'' hpl
+  have hW : 0 < st.c.unit.inWords * WORD := Nat.pos_of_ne_zero fun h => by rw [h, Nat.mul_zero] at hx''; omega
+  have hu' : x.val / (st.c.unit.inWords * WORD) < st.c.upv := (Nat.div_lt_iff_lt_mul hW).2 hx''
+  have hmw := mem_words (c := st.c) (by rw [lp.size]; exact hu') hpsz (by rw [hq]; omega)
+  obtain ⟨⟨w', s'⟩, hRm, b, hb, hb1, hw1, hw2⟩ := inRegions_cover st.c pi (blocks_cover _ hmw)
+  have hcolb := (lp.blocks b hb).1
+  simp only at hb1 hw1 hw2
+  obtain ⟨ro, ri, -, hri, hreg⟩ := s.regions
+  have hsub : ∀ r ∈ ri.toList, r ∈ st.regions.toList := fun r hr => by
+    rw [hreg, Array.toList_append]; exact List.mem_append_right _ hr
+  set col := (st.c.unit.inGroups.getD 0 default).col with hcol
+  have hj0 : 8 * (w' - col) ≤ p := by omega
+  have hP : 0 < 2 ^ s' := Nat.two_pow_pos _
+  have hjl : p - 8 * (w' - col) < 8 * 2 ^ s' := by omega
+  have hm : 16 * (p - 8 * (w' - col)) + t < 128 * 2 ^ s' := by omega
+  have hk := L.slot_lt hg hu'
+  have hpin := in_pinned L regs hregs hri hsub s.ports hRm hz o hk hm
+  have hv : st.c.unitRange.slot (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) + w' * WORD +
+      (16 * (p - 8 * (w' - col)) + t) = st.c.unitRange.slot (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) +
+        x.val % (st.c.unit.inWords * WORD) := by
+    rw [hxr]
+    simp only [WORD]
+    omega
+  have hcolv : (AcceptedHP.col ⟨tags, cf, pf, coins, tables, some d, partition, program, own, st, ht, h, L, hR, regs,
+      rfl⟩ hg x).val = st.c.unitRange.slot (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) +
+        x.val % (st.c.unit.inWords * WORD) := by
+    unfold AcceptedHP.col
+    rw [Fin.val_cast]
+    unfold stackPlace
+    rw [dite_eq_left hx']
+    show st.c.unitRange.slot (g * st.c.upv + x.val / (unitRows st L.unit_built).nIn) +
+      x.val % (unitRows st L.unit_built).nIn = _
+    rw [hn]
+  have hfin : Layout.inBlockOr st.c.kLog (st.c.unitRange.slot (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) +
+      w' * WORD + (16 * (p - 8 * (w' - col)) + t)) =
+      AcceptedHP.col ⟨tags, cf, pf, coins, tables, some d, partition, program, own, st, ht, h, L, hR, regs, rfl⟩ hg x := by
+    have hlt' := (AcceptedHP.col ⟨tags, cf, pf, coins, tables, some d, partition, program, own, st, ht, h, L, hR, regs,
+      rfl⟩ hg x).isLt
+    rw [hcolv, ← hv] at hlt'
+    have hlt'' : st.c.unitRange.slot (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) + w' * WORD +
+        (16 * (p - 8 * (w' - col)) + t) < 2 ^ st.c.kLog := hlt'
+    apply Fin.ext
+    simp only [Layout.inBlockOr, hlt'', ↓reduceDIte]
+    rw [hcolv, hv]
+  rw [← hfin, hpin, show (16 * (p - 8 * (w' - col)) + t) / 16 = p - 8 * (w' - col) by omega,
+    show (16 * (p - 8 * (w' - col)) + t) % 16 = t by omega]
+  have hdr' := hdr d rfl
+  have hdrR : HmRow.drawn { st.c with outPorts := #[("public inputs", pi.words)] } pop d = .ok st.pub := by
+    unfold HmIn.drawn at hdr'
+    simpa only [s.ports, Bool.false_eq_true, ↓reduceIte] using hdr'
+  obtain ⟨D', hD', -, hpn, -⟩ := Layout.drawn_spec hdrR
+  rw [hD] at hD'
+  cases hD'
+  obtain ⟨hr, -⟩ := Array.getElem?_eq_some_iff.1 hu
+  rw [inVal_pub hu' hk (by rw [hpn]; exact hr) (q := (q : ℤ)) (by rw [Nat.add_sub_cancel' hj0]; exact hq)
+    (Int.natCast_nonneg q), Int.toNat_natCast]
+  rw [drawn_own s.ports hpop hownw hdr' hD hlt hu hqw]
+
+end site
+
 end FlockSoundness.Discharge.ZkPubIn

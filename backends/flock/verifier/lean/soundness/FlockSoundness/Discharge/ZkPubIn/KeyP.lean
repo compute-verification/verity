@@ -1,4 +1,5 @@
 import FlockSoundness.Discharge.ZkPubIn.KeyWire
+import FlockSoundness.Discharge.ZkPubIn.InPin
 
 set_option Elab.async false
 
