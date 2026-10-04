@@ -197,7 +197,7 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
   `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; an assumption is a named
   `Prop` in the package's assumptions module, taken as a hypothesis; every `.lean` file is built, and every declaration
   is replayed through the kernel.
-- A guarantee (README "Glossary"), the theorem a ledger, a table or a PR cites as proved, is listed in `lean-audit.json`,
+- A guarantee (README "Glossary"), a theorem something outside Lean relies on as proved, is listed in `lean-audit.json`,
   and `audit.py --update` records what it says in the lock: its statement and every definition the statement reads. No axiom check
   can catch a weakened definition, so when a change to those records lands on `main`, Daniel gets a DM showing it (each
   changed statement before and after, each changed definition as it is now). Nobody signs off and nothing waits on it.

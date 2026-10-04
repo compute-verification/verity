@@ -129,7 +129,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   name a kernel bypass, each with the reason. An entry that no longer matches a hit fails, so the list stays current.
 - `dependencies` is written by `--update`: per fetched package and for the toolchain, a digest of the `.olean` files of the
   modules the package imports.
-- `pins`: the guarantees, the theorems a document or a PR cites as proved (README "Glossary"), and any lemma pinned
+- `pins`: the guarantees (README "Glossary"), and any lemma still pinned
   beside them. `--update` fills each record, and a `reads` section, from the build: the signature, the named assumptions
   among the hypotheses, a hash of the type, and for each module the definitions the pins read, with a hash each, the pins that read them, and a `digest` of those hashes (which
   the record therefore determines). Without `--update` the audit fails on any difference, so a statement, or a definition
