@@ -20,17 +20,32 @@ the committed cell values follow the wiring: cells on one cycle carry one value.
   fixes before the verifier draws `(β, γ)`, accepting the check while its values do not follow its wiring has probability
   at most `|ι|/|F|`. `wired_diag`: the batched check over several units' cells, tagged by (unit, local cell), checks
   each unit's wiring.
+* **Acyclicity is local, against one global order**, the public unit index and, within a unit, its cell index. Each unit
+  proves two things in `RouteRel`, its own unit relation:
+  - **external**: each read points below its own unit's index (`Entry.Acyclic`, as in `ClassRel`);
+  - **internal**: its wiring `σ_u` is ordered (`Ordered` against the public gate rows `GateRows`: every consumer cell is
+    wired from a cell below it, and the input heads sit at their fixed cells). An ordered wiring determines its outputs
+    (`ordered_determines`): cells on which the gate rows hold and which follow `σ_u` are `runOrd σ_u` of the unit's inputs,
+    the reference semantics that evaluates the cells in increasing order (`evalOrd`).
+
+  Both are checked only at the drawn units, which is all soundness needs: a unit whose registered wiring is not ordered
+  fails its unit relation, so if it is drawn it is wrong in the committed values (`ε_ks + δ_link`), and if it is not drawn
+  it is at most a unit that may be wrong against the store (`bad`), which the draw misses at the law's rate like any other.
+  The undrawn units' wiring is irrelevant: the bound reads no property of the registered table. In the implementation a
+  unit's internal proof is done once, the first time it is drawn, and later audits reuse it through the binding of
+  `com_σ_u`; here it is part of each drawn unit's relation.
 * **`route_p_sound`**: protocol 2 with route P's units. It is `private_circuit_sound_reads` at `routeCircuits`, with
   the block conjunct of the class relation replaced by route P's unit check (`RouteRel`: the public gate rows hold on the
-  unit's committed cells, which carry its reads and writes) and one more term, the wiring check's escape `εW` (`hW`,
+  unit's committed cells, which carry its reads and writes, and its wiring is ordered) and one more term, the wiring
+  check's escape `εW` (`hW`,
   `wiring_escape` at the session's coins over the drawn units' cells). A wrong owed output means a drawn unit wrong in
   the committed values (`ε_ks + δ_link`), the draw missing the units wrong against the store (the law's escape), a drawn
   unit whose cells do not follow its wiring with the check passed (`εW`), or a SHA-512 collision on the store or the
   table. The draw is over units and reads only the verifier's coins and the public class: one size class, one public
   unit circuit, so the law has no strata by circuit (`s.Lm` is any law over the units).
-* What `σ` computes is the unit circuit's reference semantics `runP σ`, at the registered wirings only (`Determines`):
-  a cyclic wiring can leave the cells under-determined, so where the registration does not prove that each consumer reads
-  an earlier source, the owed outputs are judged against `runP` at whatever `Determines` holds of.
+* What `σ` computes is the unit circuit's semantics `runP σ`, which `route_p_sound` ties to `runOrd` only at ordered
+  wirings (`hrun`; `runP := runOrd R outC` meets it by `rfl`). A cyclic wiring can leave the cells under-determined
+  (`Determines` fails), and at one the owed outputs are judged against whatever `runP` gives.
 
 Route P's privacy rests on the registered commitment's hiding over the openings one registration allows
 (`Assumptions.RegHides`, budgeted per registration), stated and not proved here.
@@ -240,17 +255,106 @@ def Determines {F : Type} {nc nIn nOut : ℕ} (gok : (Fin nc → F) → Prop) (i
     (runP : (Fin nc → Fin nc) → (Fin nIn → F) → Fin nOut → F) (σ : Fin nc → Fin nc) : Prop :=
   ∀ c : Fin nc → F, gok c → Wired c σ → ∀ l, c (outC l) = runP σ (fun k => c (inC k)) l
 
+/-- **A cell of route P's gate table**: a gate cell (a source carrying its gate's function of lower cells; a constant
+cell is a gate of no inputs), the head of input `k` (a source carrying that input), or a consumer (a gate's input cell or
+any other cell that reads its net's source). -/
+inductive CellKind (nIn : ℕ) where
+  | gate
+  | head (k : Fin nIn)
+  | consumer
+
+/-- **Route P's public gate rows** over `nc` cells: each cell's kind, and at each gate cell `j` its gate's function `fn j`
+of the cells, which reads only cells below `j` (`fn_local`: in each row the gate's input cells precede its output cells,
+as `a_g = l_g·r_g` and `x_g = l_g + r_g` follow `l_g, r_g`). -/
+structure GateRows (F : Type) (nc nIn : ℕ) where
+  kind : Fin nc → CellKind nIn
+  fn : Fin nc → (Fin nc → F) → F
+  fn_local : ∀ (j : Fin nc) (c c' : Fin nc → F), (∀ i, i < j → c i = c' i) → fn j c = fn j c'
+
+/-- **The gate rows hold on the cells `c`**: every gate cell carries its gate's function of the cells. -/
+def GateRows.Holds {F : Type} {nc nIn : ℕ} (R : GateRows F nc nIn) (c : Fin nc → F) : Prop :=
+  ∀ j, R.kind j = .gate → c j = R.fn j c
+
+/-- **The wiring `σ` is ordered** against the gate rows `R`, with input `k` at `inC k`, in the unit's own cell order:
+every consumer cell `j` is the wiring's image of a cell below it (`σ i = j`, `i < j`), and the input heads are exactly
+the cells `inC k`, each the head of its own input. A canonical `σ` (each net's cycle in increasing cell order from its
+source) with `σ⁻¹ j < j` at every consumer `j` is ordered (`ordered_of_perm`). -/
+def Ordered {F : Type} {nc nIn : ℕ} (R : GateRows F nc nIn) (inC : Fin nIn → Fin nc) (σ : Fin nc → Fin nc) : Prop :=
+  (∀ j, R.kind j = .consumer → ∃ i, σ i = j ∧ i < j) ∧ ∀ j k, R.kind j = .head k ↔ j = inC k
+
+/-- **The cells in increasing order** at the wiring `σ` and the inputs `x`: a gate cell is its gate's function of the cells
+below it, the head of input `k` is `x k`, and a consumer `j` is the cell below it that `σ` sends to `j` (`default` when
+there is none). -/
+noncomputable def evalOrd {F : Type} [Inhabited F] {nc nIn : ℕ} (R : GateRows F nc nIn) (σ : Fin nc → Fin nc)
+    (x : Fin nIn → F) (j : Fin nc) : F :=
+  match R.kind j with
+  | .gate => R.fn j fun i => if _h : i < j then evalOrd R σ x i else default
+  | .head k => x k
+  | .consumer => if h : ∃ i, σ i = j ∧ i < j then evalOrd R σ x (Classical.choose h) else default
+termination_by j.val
+decreasing_by
+  all_goals first
+    | assumption
+    | exact (Classical.choose_spec h).2
+
+/-- **Route P's reference semantics**: the output cells of `evalOrd`. -/
+noncomputable def runOrd {F : Type} [Inhabited F] {nc nIn nOut : ℕ} (R : GateRows F nc nIn) (outC : Fin nOut → Fin nc)
+    (σ : Fin nc → Fin nc) (x : Fin nIn → F) (l : Fin nOut) : F :=
+  evalOrd R σ x (outC l)
+
+/-- At an ordered wiring, cells on which the gate rows hold and which follow the wiring are `evalOrd` of their input
+heads. -/
+theorem evalOrd_eq {F : Type} [Inhabited F] {nc nIn : ℕ} (R : GateRows F nc nIn) (inC : Fin nIn → Fin nc)
+    (σ : Fin nc → Fin nc) (ho : Ordered R inC σ) (c : Fin nc → F) (hc : R.Holds c) (hw : Wired c σ) (j : Fin nc) :
+    c j = evalOrd R σ (fun k => c (inC k)) j := by
+  suffices ∀ n (j : Fin nc), j.val = n → c j = evalOrd R σ (fun k => c (inC k)) j from this _ j rfl
+  intro n
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+  rintro j rfl
+  rw [evalOrd]
+  split
+  next hk =>
+    refine (hc j hk).trans (R.fn_local j _ _ fun i hi => ?_)
+    rw [dite_eq_left hi]
+    exact ih i.val hi i rfl
+  next k hk =>
+    exact congrArg c ((ho.2 j k).1 hk)
+  next hk =>
+    have h := ho.1 j hk
+    rw [dite_eq_left h]
+    obtain ⟨hs, hlt⟩ := Classical.choose_spec h
+    rw [← ih _ hlt _ rfl]
+    conv_lhs => rw [← hs]
+    exact hw _
+
+/-- **An ordered wiring determines its outputs**, at `runOrd`: for gate rows `R` that every `gok` assignment satisfies,
+any cells on which `gok` holds and which follow an ordered `σ` carry `runOrd R outC σ` of their input cells at their
+output cells. -/
+theorem ordered_determines {F : Type} [Inhabited F] {nc nIn nOut : ℕ} (R : GateRows F nc nIn)
+    {gok : (Fin nc → F) → Prop} (hR : ∀ c, gok c → R.Holds c) (inC : Fin nIn → Fin nc) (outC : Fin nOut → Fin nc)
+    (σ : Fin nc → Fin nc) (ho : Ordered R inC σ) : Determines gok inC outC (runOrd R outC) σ :=
+  fun c hg hw l => evalOrd_eq R inC σ ho c (hR c hg) hw (outC l)
+
+/-- **A permutation whose inverse sends every consumer below itself is ordered**, with the input heads at `inC`. -/
+theorem ordered_of_perm {F : Type} {nc nIn : ℕ} (R : GateRows F nc nIn) (inC : Fin nIn → Fin nc)
+    (σ : Equiv.Perm (Fin nc)) (hπ : ∀ j, R.kind j = .consumer → σ.symm j < j)
+    (hh : ∀ j k, R.kind j = .head k ↔ j = inC k) : Ordered R inC σ :=
+  ⟨fun j hj => ⟨σ.symm j, σ.apply_symm_apply j, hπ j hj⟩, hh⟩
+
 /-- **Route P's class relation at unit `u`**: `ClassRel`'s reads (the entry read opens the table root at `u` and is acyclic,
-each input read opens the store root at the cell the entry names, each output write at `u`'s output row), with the block
-conjunct replaced by the unit check: the public gate rows hold on `u`'s committed cells `cl u` (`gok`), whose input cells
-carry its input reads and whose output cells its output writes. The wiring is not checked here: the batched check over the
-drawn units' cells does that (`wiring_escape`). -/
+each input read opens the store root at the cell the entry names, each output write at `u`'s output row), the entry's
+wiring ordered against the public gate rows `R` (`Ordered`), and the block conjunct replaced by the unit check: the public
+gate rows hold on `u`'s committed cells `cl u` (`gok`), whose input cells carry its input reads and whose output cells its
+output writes. The wiring is not checked here: the batched check over the drawn units' cells does that
+(`wiring_escape`). -/
 def RouteRel {F : Type} {nc nIn nOut N G M : ℕ} {runP : (Fin nc → Fin nc) → (Fin nIn → F) → Fin nOut → F}
     (L : ReadLayout (hiddenPop (routeCircuits F nc nIn nOut runP) N) G)
     (lfT : ExplicitLeaf (Entry (hiddenPop (routeCircuits F nc nIn nOut runP) N))) (lfS : ExplicitLeaf F)
-    (idx : Cell → Fin M) (gok : (Fin nc → F) → Prop) (inC : Fin nIn → Fin nc) (outC : Fin nOut → Fin nc)
-    (cl : Fin N → Fin nc → Reads.Field G F) (rtT rtS : Flock.Registered.Port) (v : Fin G → Bool) (u : Fin N) : Prop :=
-  ReadOk lfT rtT u ((L.ent u).read v) ∧ (L.tabOf v u).Acyclic u ∧
+    (idx : Cell → Fin M) (R : GateRows F nc nIn) (gok : (Fin nc → F) → Prop) (inC : Fin nIn → Fin nc)
+    (outC : Fin nOut → Fin nc) (cl : Fin N → Fin nc → Reads.Field G F) (rtT rtS : Flock.Registered.Port)
+    (v : Fin G → Bool) (u : Fin N) : Prop :=
+  ReadOk lfT rtT u ((L.ent u).read v) ∧ (L.tabOf v u).Acyclic u ∧ Ordered R inC (L.tabOf v u).dims ∧
     (∀ k, ReadOk lfS rtS (idx ((L.tabOf v u).src k)) ((L.inp u k).read v)) ∧
     (∀ l : Fin nOut, ReadOk lfS rtS (idx (.out u l)) ((L.out u l).read v)) ∧
     gok (fun i => (cl u i).read v) ∧ (∀ k, (cl u (inC k)).read v = L.xOf v u k) ∧
@@ -270,8 +374,9 @@ variable {F : Type} [Inhabited F] {nc nIn nOut N : ℕ} {runP : (Fin nc → Fin 
 open Classical in
 /-- **Route P is sound at the drawn units.** Protocol 2 at `hiddenPop (routeCircuits F nc nIn nOut runP) N`: each unit's
 topology entry holds its wiring `σ_u` and the store cells it reads, committed under the table root; the class net computes
-route P's unit relation at each unit's check gate (`hcomp`: reads, public gate rows on the unit's committed cells `cl u`,
-and those cells carrying its reads and writes); every registered wiring determines its outputs (`hdet`); and the wiring
+route P's unit relation at each unit's check gate (`hcomp`: reads, the entry's wiring ordered against the public gate rows
+`R`, public gate rows on the unit's committed cells `cl u`, and those cells carrying its reads and writes); every
+assignment `gok` holds of satisfies `R` (`hR`); the unit semantics `runP` is `runOrd` at ordered wirings (`hrun`); and the wiring
 check over the drawn units' cells escapes with at most `εW` (`hW`: accepting while a drawn unit not wrong in the committed
 values has cells not following its entry's wiring). The rest is `private_circuit_sound_reads`'s. Then, with `T₀`, `w` the
 registered table and store: (1) a delivered value off the committed one is at most `q_S²/2^513`; (2) if the registered
@@ -282,14 +387,16 @@ to end on the committed cells is at most `q_S²/2^513` plus, when the owed outpu
 theorem route_p_sound
     (L : ReadLayout (hiddenPop (routeCircuits F nc nIn nOut runP) N) C.N)
     (lfT : ExplicitLeaf (Entry (hiddenPop (routeCircuits F nc nIn nOut runP) N))) (lfS : ExplicitLeaf F)
-    (idx : Cell → Fin M) (gok : (Fin nc → F) → Prop) (inC : Fin nIn → Fin nc) (outC : Fin nOut → Fin nc)
+    (idx : Cell → Fin M) (R : GateRows F nc nIn) (gok : (Fin nc → F) → Prop) (hR : ∀ c, gok c → R.Holds c)
+    (inC : Fin nIn → Fin nc) (outC : Fin nOut → Fin nc)
+    (hrun : ∀ σ, Ordered R inC σ → runP σ = runOrd R outC σ)
     (cl : Fin N → Fin nc → Reads.Field C.N F)
     (rootT rootS : Reg → Flock.Registered.Port) (good : Reg → (Fin C.N → Bool) → Prop) (ok : Fin N → Fin C.N)
-    (hcomp : ClassComputes Pt good (fun R v u => RouteRel L lfT lfS idx gok inC outC cl (rootT R) (rootS R) v u) ok)
+    (hcomp : ClassComputes Pt good (fun Rg v u => RouteRel L lfT lfS idx R gok inC outC cl (rootT Rg) (rootS Rg) v u)
+      ok)
     (rtT₀ rtS₀ : Flock.Registered.Port)
     (tr : Fin N → ReadVal (Entry (hiddenPop (routeCircuits F nc nIn nOut runP) N))) (wo : Fin M → ReadVal F)
     (htr : ∀ j : Fin N, ReadOk lfT rtT₀ j (tr j)) (hwo : ∀ i : Fin M, ReadOk lfS rtS₀ i (wo i))
-    (hdet : ∀ j : Fin N, Determines gok inC outC runP (tr j).val.dims)
     (s : UnitSession Pt Reg) (drawn : s.Out → Finset (Fin N)) (hD : ZkSessionDrawn s drawn)
     (hE : DrawEscapes s drawn) (hA3 : Assumptions.UniformRandomBytes s.Lb s.src) (hA6 : s.A6)
     (τ : Strategy s.G) (hCR : s.CR τ) (hgood : ∀ o, s.Accepts o → good (s.regOf o) (s.vals τ o))
@@ -329,7 +436,7 @@ theorem route_p_sound
   have hwr := classWrongOn_of_computes hcomp
   have hRB := reads_bind_le s.G τ lfS rtS₀ Fin.val wo hwo (storeReads L idx s τ drawn owed pubIn yD xD) costS qS hcS hS
   have hrel : ∀ o, s.Accepts o → ∀ u, u ∉ Pt.wrong (s.vals τ o) →
-      RouteRel L lfT lfS idx gok inC outC cl (rootT (s.regOf o)) (rootS (s.regOf o)) (s.vals τ o) u :=
+      RouteRel L lfT lfS idx R gok inC outC cl (rootT (s.regOf o)) (rootS (s.regOf o)) (s.vals τ o) u :=
     fun o ha u hu => by
       by_contra hr
       exact hu ((hwr _ _ (hgood o ha) u).2 hr)
@@ -402,14 +509,19 @@ theorem route_p_sound
     swap
     · exact Or.inl (Or.inr (Or.inl ⟨u, hu, hwu, hWd⟩))
     by_cases hT : L.tabOf (s.vals τ o) u = T₀ u
-    · obtain ⟨hr1, hr2, hr3, hr4, hg, hin, hout⟩ := hr
+    · obtain ⟨hr1, hr2, hro, hr3, hr4, hg, hin, hout⟩ := hr
       have hcr : ClassRel L lfT lfS idx (rootT (s.regOf o)) (rootS (s.regOf o)) (s.vals τ o) u := by
         refine ⟨hr1, hr2, hr3, hr4, fun l => ?_⟩
         have hW' : Wired (fun i => (cl u i).read (s.vals τ o)) (tr u).val.dims := by
           rw [hT] at hWd
           exact hWd
         have hd : (cl u (outC l)).read (s.vals τ o) =
-            runP (tr u).val.dims (fun k => (cl u (inC k)).read (s.vals τ o)) l := hdet u _ hg hW' l
+            runP (tr u).val.dims (fun k => (cl u (inC k)).read (s.vals τ o)) l := by
+          have ho : Ordered R inC (tr u).val.dims := by
+            rw [hT] at hro
+            exact hro
+          rw [hrun _ ho]
+          exact ordered_determines R hR inC outC _ ho _ hg hW' l
         have hx : (fun k => (cl u (inC k)).read (s.vals τ o)) = L.xOf (s.vals τ o) u := funext hin
         show runP (L.tabOf (s.vals τ o) u).dims (L.xOf (s.vals τ o) u) l = L.yOf (s.vals τ o) u l
         rw [← hout l, hd, hx, hT]
