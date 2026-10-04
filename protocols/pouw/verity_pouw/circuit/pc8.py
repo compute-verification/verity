@@ -14,7 +14,9 @@ reading the weight's B̃ and P_B as committed inputs; `Pc8Check` is both in one 
 port) has no circuit here.  The hiding Programs are `pc4`'s (``Shape.hidden``): `Pc8TileHidden` returns its tile digest in
 place of C̃ and U, and the rows are C-Flock-committed ports (`PORTS`), with fp32 input rows, fp8-p rows (A′_i ‖ P_A,i,
 B̃_j ‖ P_B,j; `leaves`) and each row's ``ok`` row, and the anchored inputs public input regions.  ``Shape.cap`` adds the
-per-tile cap to the hiding call, cut into a unit per word, the tile and its tally (`cap`); off, nothing here changes.
+per-tile cap to the hiding call, cut into a unit per word, the tile and its tally (`cap`); ``Shape.row_k`` cuts each row
+unit along k into a head, a form per segment of row_k positions and a tail (`rowk`), so that a row unit fits C-Flock's
+block at every served k; off, nothing here changes.
 
 ``DEV`` names a device record (`pearl_c_device.DEVICES`): its E4M3 k32 atom (`HopperE4m3QgmmaDot32` on the H100,
 `BlackwellE4m3QmmaDot32` on sm_120) and its promotion period G.  The peel's BF16 k16 step is `HopperBF16WgmmaDot16` on
@@ -80,18 +82,18 @@ BASIS = lambda k: Array(k, LINE)                                                
 CODES = lambda n, k: Array(n, Array(k, E4M3))                                       # noqa: E731
 
 
-def _chain(e: pc4._Emit, a, b, k: int, dev: str):
+def _chain(e: pc4._Emit, a, b, k: int, dev: str, acc=0):
     """The device's replay of a·b (`pearl_c.chain`): per window of G atoms a fresh +0 accumulator chains them, and one
-    FP32 add promotes it into the total; unpromoted, one accumulator from +0 over all of k."""
+    FP32 add promotes it into the total; unpromoted, one accumulator from +0 over all of k.  ``acc`` is the total (or the
+    accumulator) the chain starts from: +0, or the carry of the k positions before ``a`` and ``b`` (`rowk`)."""
     d = DEVICES[dev]
     atom = ATOMS[d.atom.name]
     step = lambda acc, s: e.call(atom, acc, a[s:s + SLICE], b[s:s + SLICE])   # noqa: E731
     if d.g is None:
-        acc = 0
         for s in range(0, k, SLICE):
             acc = step(acc, s)
         return acc
-    total = 0
+    total = acc
     for ws in range(0, k, d.window):
         local = 0
         for s in range(ws, ws + d.window, SLICE):
@@ -100,8 +102,8 @@ def _chain(e: pc4._Emit, a, b, k: int, dev: str):
     return total
 
 
-def _stats(e: pc4._Emit, x, k: int):
-    """(ρ, α, β_row, ok) of one row of k FP32 words (`pearl_c.s5_stats`, `live_row`, the noise floor; module docstring)."""
+def _moments(e: pc4._Emit, x, k: int):
+    """(s, ρ, α, β_row, θ) of one row of k FP32 words: max |x|, `pearl_c.s5_stats` and `live_row`'s threshold."""
     mag = [e.call(F32Fabs, x[t]) for t in range(k)]
     s = mag[0]
     for m in mag[1:]:
@@ -122,20 +124,48 @@ def _stats(e: pc4._Emit, x, k: int):
     for p in positions:
         total = e.call(W.PouwSqAcc, total, x[p])
     th = e.call(W.PouwSqCeil, total, len(positions))
-    dead = 0
-    for t_ in range(k):
+    return s, rho, alpha, beta, th
+
+
+def _dead(e: pc4._Emit, x, th, lo: int, hi: int, dead=0):
+    """``dead`` plus the number of positions t in [lo, hi) whose word is dead at the threshold θ (`live_row`)."""
+    for t_ in range(lo, hi):
         dead = e.call(I32Add, dead, e.call(SelectI32, e.call(W.PouwSqGe, x[t_], th), 1, 0))
+    return dead
+
+
+def _bounds(e: pc4._Emit, s, rho, alpha):
+    """The row's noise floor bit and its finiteness bit (module docstring)."""
     floor = e.call(I32Le, 0, e.call(F32FmaV2, rho, alpha, MINUS_ONE))
     finite = e.call(BitAnd, e.call(I32Le, s, F32_MAX), e.call(I32Le, rho, F32_MAX))
+    return floor, finite
+
+
+def _stats(e: pc4._Emit, x, k: int):
+    """(α, β_row, ok) of one row of k FP32 words (`pearl_c.s5_stats`, `live_row`, the noise floor; module docstring)."""
+    s, rho, alpha, beta, th = _moments(e, x, k)
+    dead = _dead(e, x, th, 0, k)
+    floor, finite = _bounds(e, s, rho, alpha)
     ok = e.call(BitAnd, finite, e.call(BitAnd, floor, e.call(I32Le, dead, k // 64)))
     return alpha, beta, ok
+
+
+def _ep(e: pc4._Emit, beta, line):
+    """E′ = e4m3(β·E), the row's scaled noise line."""
+    return [e.call(F32ToE4m3Sat, e.call(F32MulV2, beta, e.call(E4m3ToF32, line[p]))) for p in range(R)]
+
+
+def _codes(e: pc4._Emit, x, alpha, ep_line, basis, lo: int, hi: int, dev: str):
+    """The codes e4m3(atom(α·x_t, E′, F_t)) of positions t in [lo, hi), ``basis`` holding F's lines from position lo."""
+    atom = ATOMS[DEVICES[dev].atom.name]
+    return [e.call(F32ToE4m3Sat, e.call(atom, e.call(F32MulV2, alpha, x[t]), ep_line, basis[t - lo])) for t in range(lo, hi)]
 
 
 def _form(e: pc4._Emit, x, alpha, beta, line, basis, k: int, dev: str):
     """A row's E′ = e4m3(β·E) (with E′'s FP32 decode), its codes e4m3(atom(α·x_t, E′, F_t)) (`pearl_c.form_v1`) and their
     accumulators α·x_t."""
     atom = ATOMS[DEVICES[dev].atom.name]
-    ep = [e.call(F32ToE4m3Sat, e.call(F32MulV2, beta, e.call(E4m3ToF32, line[p]))) for p in range(R)]
+    ep = _ep(e, beta, line)
     ew = [e.call(E4m3ToF32, c) for c in ep]
     ep_line = array_of(ep)
     accs, codes = [], []
@@ -311,11 +341,22 @@ def templates(k: int, tile: tuple[int, int] = TILE, dev: str = "sm120",
 
 # ---- the Programs --------------------------------------------------------------------------------------------------------
 
+class _CapPorts(pc4.RowK):
+    """`pc4.RowK` for the ports, and under the cap `cap.PORTS`."""
+
+    def __get__(self, shape, cls=None) -> dict:
+        if shape is not None and shape.cap:
+            from . import cap
+            return cap.PORTS
+        return super().__get__(shape, cls)
+
+
 @dataclass(frozen=True)
 class Shape:
     """M rows of A and N rows of B at depth k on device ``dev``, cut into tiles of ``tile`` (the scheme's is 64 x 64);
     ``hidden``, the hiding Programs; ``cap``, the hiding Programs with the per-tile cap, cut into word, tile and tally
-    units (`cap`).  `anchors.TileAnchors` reads its units' ports and its anchors' derivations."""
+    units (`cap`); ``row_k``, each row unit cut into k / row_k segments (`rowk`; None, today's Programs), not with the
+    cap.  `anchors.TileAnchors` reads its units' ports and its anchors' derivations."""
 
     m: int
     k: int
@@ -324,15 +365,10 @@ class Shape:
     dev: str = "sm120"
     hidden: bool = False
     cap: bool = False
-    derivations: ClassVar[dict] = DERIVATIONS
+    row_k: int | None = None
+    ports = _CapPorts(PORTS, "PORTS8")
+    derivations = pc4.RowK(DERIVATIONS, "DERIVATIONS8")
     seeds: ClassVar[dict] = SEEDS
-
-    @property
-    def ports(self) -> dict:
-        if self.cap:
-            from . import cap
-            return cap.PORTS
-        return PORTS
 
     def check(self) -> None:
         d = DEVICES.get(self.dev)
@@ -342,28 +378,41 @@ class Shape:
         if (self.k % d.window or not 0 < self.k <= d.k_max or min(self.m, self.n, tm, tn) <= 0 or self.m % tm
                 or self.n % tn):
             raise DomainError(f"Pearl-C's circuit needs {d.window} | k <= {d.k_max} and whole tiles on each side: {self}")
+        if self.cap and self.row_k is not None:
+            raise DomainError(f"Pearl-C's cap is not cut along k (row_k): {self}")
         if self.cap:
             from . import cap
             cap.check_shape(self)
+        if self.row_k is not None:
+            from . import rowk
+            rowk.check8(self)
 
 
-def _weight_units(B, k: int, dev: str, b, eb, fa, fb, g):
+def _weight_units(B, k: int, dev: str, b, eb, fa, fb, g, row_k: int | None = None):
+    if row_k is not None:
+        from . import rowk
+        return rowk.rows8(B, k, row_k, dev, "b", b, eb, fb, fa, g)
     rows = B.batch(templates(k, TILE, dev)["row_b"], b, eb, fb, fa, g, axes=(0, 0, None, None, None))
     return [array_of([rows[j][f] for j in range(len(b))]) for f in range(3)]
 
 
-def _call_units(B, k: int, tile: tuple[int, int], dev: str, a, ea, fa, fb, bc, pb, hidden: bool = False):
-    """The call's units: (C̃, U, ok), or under hiding (the tile digests by tile row and column, ok)."""
+def _call_units(B, k: int, tile: tuple[int, int], dev: str, a, ea, fa, fb, bc, pb, hidden: bool = False,
+                row_k: int | None = None):
+    """The call's units: (C̃, U, ok), or under hiding (the tile digests by tile row and column, ok); with ``row_k``, each
+    A row's unit cut into `rowk`'s pieces."""
     tm, tn = tile
     tp = templates(k, tile, dev, hidden)
-    rows = B.batch(tp["row_a"], a, ea, fa, fb, axes=(0, 0, None, None))
     m, n = len(a), len(bc)
+    if row_k is None:
+        rows = B.batch(tp["row_a"], a, ea, fa, fb, axes=(0, 0, None, None))
+        ac, pa, ok = (array_of([rows[i][f] for i in range(m)]) for f in range(3))
+    else:
+        from . import rowk
+        ac, pa, ok = rowk.rows8(B, k, row_k, dev, "a", a, ea, fa, fb)
     ms, ns = m // tm, n // tn
-    ac, pa = (array_of([rows[i][f] for i in range(m)]) for f in range(2))
     blocks = lambda x, h, t: x.reshape(Array(h, Array(t, x.type.elem)))            # noqa: E731
     acs, pas, bcs, pbs = blocks(ac, ms, tm), blocks(pa, ms, tm), blocks(bc, ns, tn), blocks(pb, ns, tn)
     tiles = [B.batch(tp["tile"], acs[rs], bcs, pas[rs], pbs, axes=(None, 0, None, 0)) for rs in range(ms)]
-    ok = array_of([rows[i][2] for i in range(m)])
     if hidden:
         return array_of([array_of([tiles[rs][cs] for cs in range(ns)]) for rs in range(ms)]), ok
     cw, uw = (array_of([array_of([tiles[i // tm][j // tn][f][i % tm][j % tn] for j in range(n)]) for i in range(m)])
@@ -440,6 +489,9 @@ Pc8CheckHiddenDef = CompositeDefinition(
 
 def weight(shape: Shape) -> SpecializedDefinition:
     shape.check()
+    if shape.row_k is not None:
+        from . import rowk
+        return rowk.root8(shape, "weight")
     return bind(Pc8WeightDef, K=shape.k, N=shape.n, DEV=shape.dev)
 
 
@@ -448,6 +500,9 @@ def call(shape: Shape) -> SpecializedDefinition:
     if shape.cap:
         from . import cap
         return cap.call(shape)
+    if shape.row_k is not None:
+        from . import rowk
+        return rowk.root8(shape, "call")
     return bind(Pc8CallHiddenDef if shape.hidden else Pc8CallDef, M=shape.m, K=shape.k, N=shape.n, TM=shape.tile[0],
                 TN=shape.tile[1], DEV=shape.dev)
 
@@ -457,6 +512,9 @@ def check(shape: Shape) -> SpecializedDefinition:
     if shape.cap:
         from . import cap
         return cap.check(shape)
+    if shape.row_k is not None:
+        from . import rowk
+        return rowk.root8(shape, "check")
     return bind(Pc8CheckHiddenDef if shape.hidden else Pc8CheckDef, M=shape.m, K=shape.k, N=shape.n, TM=shape.tile[0],
                 TN=shape.tile[1], DEV=shape.dev)
 
@@ -468,13 +526,16 @@ _ROLE_OF = {id(Pc8RowBDef): "row_b", id(Pc8RowADef): "row_a", id(Pc8TileDef): "t
 
 
 def _role_of() -> dict[int, str]:
-    from . import cap
-    return _ROLE_OF | cap.ROLE_OF
+    from . import cap, rowk
+    return _ROLE_OF | cap.ROLE_OF | rowk.ROLE_OF
 
 
 def query(shape: Shape, side: str = "check") -> dict[str, Any]:
-    """`Q_template_instances` over the side's unit templates (`ROLES`, or under the cap `cap.ROLES`), in the order its root
-    body first uses them."""
+    """`Q_template_instances` over the side's unit templates (`ROLES`, under the cap `cap.ROLES`, or with ``row_k``
+    `rowk.ROLES`), in the order its root body first uses them."""
+    if shape.row_k is not None:
+        from . import rowk
+        return PO.template_instances_query(rowk.unit_templates8(shape, side))
     if shape.cap:
         from . import cap
         tp, roles = cap.unit_templates(shape.k, shape.dev, shape.tile, shape.n), cap.ROLES

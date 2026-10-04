@@ -85,6 +85,26 @@ are each row's words from its elements, and `commit` and `tree_leaf` a row's com
 each output row as its reader does, and compose each unit's statement rows (``backends/flock/tests/test_pouw_rows.py``).
 The anchored inputs are no row: they are public input regions (`anchors.region_words`).
 
+A row unit cut along k (`rowk`, ``Shape.row_k``) passes its pieces' values in six more rows, all v2 in either role, each in
+the session of one row's units (k is the segment's length where the row is a segment's):
+
+    row (schema id)                       words                                                      n words
+    pc8-head (pouw/row-pc8-head/v1)       α (two words), E′'s 32 E4M3 codes two per word, θ (four    23
+                                          words), then a word whose bit 0 is the finite bit, bit 1
+                                          the floor bit and bits 2-15 zero
+    pc8-carry (pouw/row-pc8-carry/v1)     the dead count so far (two words), the 32 chains' totals   128
+                                          so far (FP32 words, two each), then 62 zero words
+    fp8-codes (pouw/row-fp8-codes/v1)     a segment's k E4M3 codes two per word                      k/2
+    pc4-head (pouw/row-pc4-head/v1)       α (two words), then a word whose low byte is a_E and       3
+                                          high byte zero
+    pc4-carry (pouw/row-pc4-carry/v1)     the 32 chains' accumulators so far (FP32 words, two each)  64
+    nvfp4-codes (pouw/row-nvfp4-codes/v1) a segment's k E2M1 codes four per word, then its k/16      k/4 + k/32
+                                          UE4M3 scale bytes two per word
+
+At the deployed row_k (2,048) each of the six is short (one block with SHA-512's padding: at most 55 words) or whole
+blocks (a multiple of 64 words), the v2 rows C-Flock's widened scope takes; pc8-carry's zero words are for that.  The
+cut's ports are `rowk.PORTS4` and `rowk.PORTS8`.
+
 An admission value has one ok leaf only while the word's bits 1-15 are zero, and no row check sees them: C-Flock's and the
 Lean verifier's hash a hidden row's bits as given.  So the row unit that writes the row returns the word (`OK`), not the bit,
 as a select between the constants 1 and 0, every bit fixed in gates (`pc4.ok_word`), and `ok_of` refuses any other word.
@@ -119,19 +139,26 @@ CAP_ROW_WORDS = 64
 SCHEMAS = {"bf16": "pouw/row-bf16/v1", "fp32": "pouw/row-fp32/v1", "nvfp4-p": "pouw/row-nvfp4-p/v1",
            "fp8-p": "pouw/row-fp8-p/v1", "ok": "pouw/row-ok/v1", "tile": "pouw/tile-h0/v1", "sd": "pouw/row-sd/v1",
            "cap-word": "pouw/cap-word/v1", "cap-flags": "pouw/cap-flags/v1", "cap-rows": "pouw/cap-rows/v1",
-           "cap-chunks": "pouw/cap-chunks/v1", "cap-sums": "pouw/cap-sums/v1"}
+           "cap-chunks": "pouw/cap-chunks/v1", "cap-sums": "pouw/cap-sums/v1",
+           "pc8-head": "pouw/row-pc8-head/v1", "pc8-carry": "pouw/row-pc8-carry/v1", "fp8-codes": "pouw/row-fp8-codes/v1",
+           "pc4-head": "pouw/row-pc4-head/v1", "pc4-carry": "pouw/row-pc4-carry/v1",
+           "nvfp4-codes": "pouw/row-nvfp4-codes/v1"}
 ROW_WORDS = {"bf16": lambda k: k, "fp32": lambda k: 2 * k, "nvfp4-p": lambda k: k // 4 + k // 32 + P_WORDS,
              "fp8-p": lambda k: k // 2 + P_WORDS, "ok": lambda k: 1, "tile": lambda k: 16, "sd": lambda k: k // 16,
              "cap-word": lambda k: 4, "cap-flags": lambda k: -(-k // 512) + 5, "cap-rows": lambda k: CAP_ROW_WORDS,
-             "cap-chunks": lambda k: CAP_ROW_WORDS, "cap-sums": lambda k: 7}
+             "cap-chunks": lambda k: CAP_ROW_WORDS, "cap-sums": lambda k: 7,
+             "pc8-head": lambda k: 23, "pc8-carry": lambda k: 128, "fp8-codes": lambda k: k // 2, "pc4-head": lambda k: 3,
+             "pc4-carry": lambda k: 64, "nvfp4-codes": lambda k: k // 4 + k // 32}
 _V2, _SEG = SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG
+#: the rows of a row unit cut along k (`rowk`)
+CUT_ROWS = ("pc8-head", "pc8-carry", "fp8-codes", "pc4-head", "pc4-carry", "nvfp4-codes")
 #: each row's frame-leaf schema in a tree of each role it sits in: the per-call rows (role X) segmented, and the registered
-#: rows (role W), the admission bit, the tile digest and the cap's rows v2
+#: rows (role W), the admission bit, the tile digest, the cap's rows and the cut's rows v2
 ROW_SCHEMA = {("bf16", ROLE_X): _SEG, ("bf16", ROLE_W): _V2, ("fp32", ROLE_X): _SEG, ("fp32", ROLE_W): _V2,
               ("nvfp4-p", ROLE_X): _SEG, ("nvfp4-p", ROLE_W): _V2, ("fp8-p", ROLE_X): _SEG, ("fp8-p", ROLE_W): _V2,
               ("ok", ROLE_X): _V2, ("ok", ROLE_W): _V2, ("tile", ROLE_X): _V2, ("sd", ROLE_X): _SEG,
               ("cap-word", ROLE_X): _V2, ("cap-flags", ROLE_X): _V2, ("cap-sums", ROLE_X): _V2, ("cap-rows", ROLE_X): _V2,
-              ("cap-chunks", ROLE_X): _V2}
+              ("cap-chunks", ROLE_X): _V2, **{(row, role): _V2 for row in CUT_ROWS for role in (ROLE_X, ROLE_W)}}
 
 
 def chunk_digests(e: H.Emit, c, u, tn: int) -> list:
@@ -219,6 +246,47 @@ def words_tile(digest: bytes) -> list[int]:
 
 def words_sd(counts: Sequence[int]) -> list[int]:
     return words_fp32(counts)
+
+
+def _halves(v: int, n: int) -> list[int]:
+    return [(v >> (16 * h)) & 0xFFFF for h in range(n)]
+
+
+def words_pc8_head(alpha: int, ep: Sequence[int], th: int, finite: int, floor: int) -> list[int]:
+    if len(ep) != C.R or finite not in (0, 1) or floor not in (0, 1):
+        raise ValueError("a pc8-head row is α, E′'s 32 codes, θ and the finite and floor bits")
+    return _halves(alpha, 2) + [(ep[2 * w] & 0xFF) | (ep[2 * w + 1] & 0xFF) << 8 for w in range(C.R // 2)] + \
+        _halves(th, 4) + [finite | floor << 1]
+
+
+def words_pc8_carry(dead: int, tot: Sequence[int]) -> list[int]:
+    if len(tot) != C.R:
+        raise ValueError("a pc8-carry row is the dead count and 32 FP32 totals")
+    words = _halves(dead, 2) + words_fp32(tot)
+    return words + [0] * (ROW_WORDS["pc8-carry"](0) - len(words))
+
+
+def words_fp8_codes(codes: Sequence[int]) -> list[int]:
+    if len(codes) % 2:
+        raise ValueError("an fp8-codes row is an even number of codes")
+    return [(codes[2 * w] & 0xFF) | (codes[2 * w + 1] & 0xFF) << 8 for w in range(len(codes) // 2)]
+
+
+def words_pc4_head(alpha: int, ae: int) -> list[int]:
+    return _halves(alpha, 2) + [ae & 0xFF]
+
+
+def words_pc4_carry(tot: Sequence[int]) -> list[int]:
+    if len(tot) != C.R:
+        raise ValueError("a pc4-carry row is 32 FP32 accumulators")
+    return words_fp32(tot)
+
+
+def words_nvfp4_codes(codes: Sequence[int], scales: Sequence[int]) -> list[int]:
+    if len(codes) % 32 or len(scales) * 16 != len(codes):
+        raise ValueError("an nvfp4-codes row is k codes (32 | k) and k/16 scale bytes")
+    return ([sum((codes[4 * w + q] & 0xF) << (4 * q) for q in range(4)) for w in range(len(codes) // 4)]
+            + [(scales[2 * w] & 0xFF) | (scales[2 * w + 1] & 0xFF) << 8 for w in range(len(scales) // 2)])
 
 
 def words_cap_word(c: int, u: int) -> list[int]:
@@ -316,8 +384,9 @@ def statement_rows(unit: dict, k: int, reads: dict[str, int] | None = None) -> d
     return {"row_schemas": ins + outs, **({"out_row_ports": counts} if named else {})}
 
 
-__all__ = ["CAP_CHUNKS", "CAP_ROW_WORDS", "DIGEST", "INST", "KEY", "OK", "PearlTileDigestDef", "P_WORDS", "ROW_SCHEMA",
-           "ROW_WORDS", "SCHEMAS",
+__all__ = ["CAP_CHUNKS", "CAP_ROW_WORDS", "CUT_ROWS", "DIGEST", "INST", "KEY", "OK", "PearlTileDigestDef", "P_WORDS",
+           "ROW_SCHEMA", "ROW_WORDS", "SCHEMAS",
            "chunk_digests", "commit", "digest_bytes", "leaf_digest", "ok_of", "row_digest", "statement_rows", "tile_digest",
            "tree_leaf", "words_bf16", "words_cap_chunks", "words_cap_flags", "words_cap_rows", "words_cap_sums",
-           "words_cap_word", "words_fp32", "words_fp8_p", "words_nvfp4_p", "words_ok", "words_sd", "words_tile"]
+           "words_cap_word", "words_fp32", "words_fp8_codes", "words_fp8_p", "words_nvfp4_codes", "words_nvfp4_p",
+           "words_ok", "words_pc4_carry", "words_pc4_head", "words_pc8_carry", "words_pc8_head", "words_sd", "words_tile"]

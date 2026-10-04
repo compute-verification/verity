@@ -4,7 +4,7 @@ protocols/pouw/tests/pouw_rows_vectors.py`` rewrites ``tests/vectors/pouw_rows.j
 a row schema and needs a reason in the PR.
 
 Inputs are derived, not stored: part ``p`` of case ``c`` is the first bytes of SHAKE256("verity/pouw/rows-vectors/v1", c, p),
-read as the schema's elements (16-bit and 32-bit words little-endian, codes one per byte masked to their width), and the salt
+read as the schema's elements (16-, 32- and 64-bit words little-endian, codes one per byte masked to their width), and the salt
 is its 192 bytes of part "salt".  A tile case's C̃ and U are TM x TN 32-bit words, hashed by `pearl_c.leaf`.  Each case's
 leaf is the row C-Flock commits from its words and salt under the schema of its row and its tree's role (x or w,
 `leaves.ROW_SCHEMA`), which its registration domain binds and its leaf does not; a `sha512/row-seg/v1` row's case also
@@ -27,14 +27,21 @@ ROLES = {"x": ROLE_X, "w": ROLE_W}
 #: (case, row, role, k or (TM, TN)): the four element rows in both trees at k = 64 and 4,096 (in role X a row-seg row of
 #: one short segment and of several), the tile digests, the ok rows, and the cap's rows: the salt-dead counts (row-seg, one
 #: short segment and two), a word's C̃ ‖ U, its flags row with padding (k = 256) and without (8,192), a tile row's chunk
-#: digests at TN = 32 (one, then zeros) and 64 (two; the case's k is TN), a tile row's sums, and a strip's row
+#: digests at TN = 32 (one, then zeros) and 64 (two; the case's k is TN), a tile row's sums, a strip's row, and the row
+#: cut's (`rowk`) six rows in both trees, a segment's codes rows at k = 64 and 2,048
 CASES = tuple((f"{row}-{role}-{k}", row, role, k) for row in ("bf16", "fp32", "nvfp4-p", "fp8-p")
               for role in ("x", "w") for k in (64, 4096)) + (
     ("tile-2x33", "tile", "x", (2, 33)), ("tile-64x64", "tile", "x", (64, 64)), ("ok-x", "ok", "x", 64), ("ok-w", "ok", "w", 4096),
     ("sd-x-64", "sd", "x", 64), ("sd-x-16384", "sd", "x", 16384), ("cap-word-x", "cap-word", "x", 64),
     ("cap-flags-x-256", "cap-flags", "x", 256), ("cap-flags-x-8192", "cap-flags", "x", 8192),
     ("cap-chunks-x-32", "cap-chunks", "x", 32), ("cap-chunks-x-64", "cap-chunks", "x", 64), ("cap-sums-x", "cap-sums", "x", 64),
-    ("cap-rows-x", "cap-rows", "x", 64))
+    ("cap-rows-x", "cap-rows", "x", 64)) + (
+    ("pc8-head-x", "pc8-head", "x", 2048), ("pc8-head-w", "pc8-head", "w", 2048),
+    ("pc8-carry-x", "pc8-carry", "x", 2048), ("pc8-carry-w", "pc8-carry", "w", 2048),
+    ("fp8-codes-x-64", "fp8-codes", "x", 64), ("fp8-codes-w-2048", "fp8-codes", "w", 2048),
+    ("pc4-head-x", "pc4-head", "x", 2048), ("pc4-head-w", "pc4-head", "w", 2048),
+    ("pc4-carry-x", "pc4-carry", "x", 2048), ("pc4-carry-w", "pc4-carry", "w", 2048),
+    ("nvfp4-codes-x-64", "nvfp4-codes", "x", 64), ("nvfp4-codes-w-2048", "nvfp4-codes", "w", 2048))
 
 
 def shake(case: str, part: str, n: int) -> bytes:
@@ -81,6 +88,20 @@ def inputs(case: str, row: str, k) -> dict:
                 "good": codes(case, "good", 1, 1)[0]}
     if row == "cap-rows":
         return {"oks": codes(case, "oks", k, 1), "bound": u32(case, "bound", 1)[0]}
+    if row == "pc8-head":
+        return {"alpha": u32(case, "alpha", 1)[0], "ep": codes(case, "ep", C.R, 8),
+                "th": int.from_bytes(shake(case, "th", 8), "little"), "finite": codes(case, "finite", 1, 1)[0],
+                "floor": codes(case, "floor", 1, 1)[0]}
+    if row == "pc8-carry":
+        return {"dead": u32(case, "dead", 1)[0], "tot": u32(case, "tot", C.R)}
+    if row == "fp8-codes":
+        return {"codes": codes(case, "codes", k, 8)}
+    if row == "pc4-head":
+        return {"alpha": u32(case, "alpha", 1)[0], "ae": codes(case, "ae", 1, 8)[0]}
+    if row == "pc4-carry":
+        return {"tot": u32(case, "tot", C.R)}
+    if row == "nvfp4-codes":
+        return {"codes": codes(case, "codes", k, 4), "scales": codes(case, "scales", k // 16, 8)}
     tm, tn = k
     return {"c": [u32(case, f"c{i}", tn) for i in range(tm)], "u": [u32(case, f"u{i}", tn) for i in range(tm)]}
 
@@ -108,6 +129,18 @@ def words(row: str, x: dict) -> list[int]:
         return L.words_cap_sums(x["atoms"], x["zeros"], x["elems"], x["good"])
     if row == "cap-rows":
         return L.words_cap_rows(x["oks"], x["bound"])
+    if row == "pc8-head":
+        return L.words_pc8_head(x["alpha"], x["ep"], x["th"], x["finite"], x["floor"])
+    if row == "pc8-carry":
+        return L.words_pc8_carry(x["dead"], x["tot"])
+    if row == "fp8-codes":
+        return L.words_fp8_codes(x["codes"])
+    if row == "pc4-head":
+        return L.words_pc4_head(x["alpha"], x["ae"])
+    if row == "pc4-carry":
+        return L.words_pc4_carry(x["tot"])
+    if row == "nvfp4-codes":
+        return L.words_nvfp4_codes(x["codes"], x["scales"])
     return L.words_tile(C.leaf(types.SimpleNamespace(c=x["c"], u=x["u"])))
 
 

@@ -559,6 +559,7 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     C-Flock's committed ports (`pc8.PORTS`), with `pouw/row-fp32/v1` input rows, `pouw/row-fp8-p/v1` rows and
     `pouw/row-ok/v1` rows. A 64 × 64 tile's digest is 281 Keccak-p[1600, 12] in gates. `plan.tile_layout` draws a tile
     with its rows, as for `pc4`.
+  - The row cut along k (``Shape.row_k``, `circuit.rowk`) is `pc4`'s, below, on each of the three records.
   - Not in it yet: the debit and the cap. Until they land, Pearl-C's runs are checked by its reference audit, a
     development shortcut that opens rows.
 
@@ -839,6 +840,25 @@ useful    U/(α_A·α_B), glue
   - The draw is `plan.tile_layout` (beside `ncp-v2`'s `plan.layout`, which is unchanged): one stratum per template,
     each tile at the W_ref it is given, and a drawn tile proved with its closure, its TM `Pc4RowA` units, and with its
     TN `Pc4RowB` units in the weight's Program, each once per plan (`Plan.proved_b`). It opens nothing.
+  - **The row cut (`circuit.rowk`, ``Shape.row_k``) is opt-in**, for both checks. C-Flock proves one instance in at most
+    a 2^27-bit block (`verity_flock.circuit.K_MAX`), and a whole row unit outgrows it before the served k (Pearl-C's row
+    of A on sm_120 past k = 2,560; Pearl-C4's fills it at 4,096). A shape with ``row_k`` (2,048 deployed, `rowk.ROW_K`)
+    cuts each row unit along k into a head (the row's statistics and E′, or a_E), one form per segment of row_k positions
+    (its codes, and the clean-up's 32 chains over it started from the previous form's carry) and a tail (P, from the
+    chains and, on B, E′·G). Pearl-C's ok is the tail's (the dead count is carried), Pearl-C4's the head's.
+    - A segment is whole device windows and whole 32-position blocks, so each form adds the same atoms in the same order
+      as the whole row, and the carry is exact: the pieces' outputs are the whole row's, and every value is computed in
+      exactly one unit.
+    - The tail writes the fp8-p or nvfp4-p row today's row unit writes, so a tile reads its rows unchanged. The pieces
+      pass their values in six more v2 rows (`leaves`' pc8-head, pc8-carry, fp8-codes, pc4-head, pc4-carry and
+      nvfp4-codes; `rowk.PORTS8`, `PORTS4`). At row_k = 2,048 each is short (at most 55 words) or whole SHA-512 blocks,
+      the v2 rows C-Flock's widened scope takes; pc8-carry ends in 62 zero words for that.
+    - A form reads its segment of F_A and F_B as a public input region under the anchor's slice rule,
+      `verity/pouw/anchor/<scheme>/<anchor>/slice/v1` (`rowk.DERIVATIONS8`, `DERIVATIONS4`,
+      `anchors.Derivation.per_segment`), which only the cut's shapes name.
+    - A shape without ``row_k`` builds today's Programs, their digests unchanged. `pouw_rows.json` pins the six rows and
+      `pouw_regions.json` the slice regions (`row_k_cases`). Every form still opens the row of A whole, so a form's SHA
+      work grows with k, and past k = 18,432 (Pearl-C's row of A) a form no longer fits.
   - Not in it yet: the debit and the cap, R1, D-24, and the plan's link checks and paths. Until those land, runs are
     checked by the replay above, a development shortcut that opens rows, and every report says so.
 - **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
