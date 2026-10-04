@@ -1,6 +1,5 @@
-"""One epoch of the protocol: the composition.
+"""One epoch: the step `run` repeats. Lower-level than `run`, which refuses the configuration once and chains the epochs.
 
-    refuse                  every reason the configuration cannot run, before anything runs
     developer commits       the weights of record and the baseline θ, before any coins exist
     audits open             each subprotocol gets its own challenger, bound to those commitments
     developer serves        the epoch's work, with each subprotocol's prover side in place
@@ -10,7 +9,7 @@
     compliance decides      from the validated account alone
 
 The outside auditor learns the two verdicts (`EpochReport`). The auditor devices keep the `EpochRecord`, which binds
-every commitment and profile of the epoch to one digest.
+every commitment and profile of the epoch, and the previous epoch's record, to one digest.
 """
 
 from __future__ import annotations
@@ -22,13 +21,12 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Protocol
 
-from verity.primitives.commitments import SCHEMES, Commitment
-from verity.primitives.randomness import SOURCES, Challenger
-from verity.primitives.registry import NotInstalled
+from verity.primitives.commitments import Commitment, CommitmentScheme
+from verity.primitives.randomness import ChallengeSource, Challenger
 from verity.protocol.accounting.account import Account, Inventory
 from verity.protocol.accounting.check import Evidence, check
 from verity.protocol.compliance import Disclosure, complies
-from verity.protocol.configuration import Configuration, refusals
+from verity.protocol.configuration import Configuration
 from verity.subprotocols.network_warden import audit as network_warden
 from verity.subprotocols.pous import audit as pous
 from verity.subprotocols.pouw import audit as pouw
@@ -45,12 +43,6 @@ class Verdict(Enum):
 
 class NoAnswer(Exception):
     """Raised by a developer side that did not answer by its deadline."""
-
-
-class Refused(ValueError):
-    def __init__(self, reasons: tuple[str, ...]):
-        self.reasons = reasons
-        super().__init__("configuration refused: " + "; ".join(reasons))
 
 
 @dataclass(frozen=True)
@@ -94,38 +86,34 @@ class EpochRecord:
     account: Commitment | None
     profiles: Mapping[str, str]  # subprotocol -> digest of what it established
     reasons: tuple[str, ...]
+    previous: str | None  # the previous epoch's record digest
     evidence: Evidence | None = field(default=None, compare=False)  # what `profiles` digests, kept by the auditor devices
 
     def digest(self) -> str:
         return _digest({k: v for k, v in asdict(self).items() if k != "evidence"})
 
 
-def run(config: Configuration, developer: Developer, inventory: Inventory, epoch: int) -> tuple[EpochReport, EpochRecord]:
-    why = list(refusals(config))
-    if why:
-        raise Refused(tuple(why))
-    scheme, source = SCHEMES[config.commitments](), SOURCES[config.challenges]()
-    audits: dict[str, object] = {}
-    for name, make, choice in (
-        ("sampled_proofs", lambda c: sampled_proofs.Audit(c.construction, c.parameters, c.delta, scheme), config.sampled_proofs),
-        ("pouw", lambda c: pouw.Audit(c.construction, c.parameters), config.pouw),
-        ("pous", lambda c: pous.Audit(c.construction, c.parameters), config.pous),
-        ("network_warden", lambda c: network_warden.Audit(c.construction, c.parameters), config.network_warden),
-    ):
+def make_audits(config: Configuration, scheme: CommitmentScheme) -> dict[str, object]:
+    """A fresh audit for every enabled subprotocol; raises `NotInstalled` for a construction that is not installed."""
+    made: dict[str, object] = {"sampled_proofs": sampled_proofs.Audit(
+        config.sampled_proofs.construction, config.sampled_proofs.parameters, config.sampled_proofs.delta, scheme)}
+    for name, module, choice in (("pouw", pouw, config.pouw), ("pous", pous, config.pous), ("network_warden", network_warden, config.network_warden)):
         if choice is not None:
-            try:
-                audits[name] = make(choice)
-            except NotInstalled as e:
-                why.append(f"{name}: {e}")
-    if why:
-        raise Refused(tuple(why))
+            made[name] = module.Audit(choice.construction, choice.parameters)
+    return made
 
+
+def run_epoch(
+    config: Configuration, scheme: CommitmentScheme, source: ChallengeSource, developer: Developer, inventory: Inventory,
+    epoch: int, previous: str | None,
+) -> tuple[EpochReport, EpochRecord]:
+    audits = make_audits(config, scheme)
     weights = baseline = account_commitment = None
     evidence = None
     try:
         weights, baseline = developer.commit(epoch)
         start = EpochStart(epoch, config.digest(), weights, baseline, inventory)
-        bindings = {"epoch": str(epoch), "configuration": start.configuration, "weights": weights.root.hex(), "baseline": baseline.root.hex()}
+        bindings = {"epoch": str(epoch), "previous": previous or "", "configuration": start.configuration, "weights": weights.root.hex(), "baseline": baseline.root.hex()}
         challenger = {name: Challenger(source, name, bindings) for name in audits}
         audits["sampled_proofs"].open(challenger["sampled_proofs"])
         if "pouw" in audits:
@@ -141,13 +129,13 @@ def run(config: Configuration, developer: Developer, inventory: Inventory, epoch
             channel=audits["network_warden"].close([u.id for u in account.units]) if "network_warden" in audits else None,
         )
     except NoAnswer as e:
-        record = EpochRecord(epoch, config.digest(), weights, baseline, account_commitment, _profiles(evidence), (f"no answer: {e}",), evidence)
+        record = EpochRecord(epoch, config.digest(), weights, baseline, account_commitment, _profiles(evidence), (f"no answer: {e}",), previous, evidence)
         return EpochReport(Verdict.SILENT, Verdict.SILENT), record
 
     opened = () if scheme.commit([account.encode(), nonce]) == account_commitment else ("account: does not open its commitment",)
     validated, reasons = check(account, account_commitment, inventory, evidence, config.delta)
     reasons = opened + reasons
-    record = EpochRecord(epoch, start.configuration, weights, baseline, account_commitment, _profiles(evidence), reasons, evidence)
+    record = EpochRecord(epoch, start.configuration, weights, baseline, account_commitment, _profiles(evidence), reasons, previous, evidence)
     if reasons:
         return EpochReport(Verdict.REJECT, Verdict.REJECT), record
     ok = complies(validated, config.policy, config.nci.construction, scheme, developer.disclose())

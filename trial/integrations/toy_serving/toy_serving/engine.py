@@ -28,9 +28,9 @@ NOVEL_BITS = {"honest": 800, "rollout": 1_000_000}  # what each request reads be
 
 
 class Engine:
-    def __init__(self, scheme: str, integrity: str, law: Subset, mode: str = "honest", space: bool = True):
+    def __init__(self, scheme: str, integrity: str, law: Subset, mode: str = "honest", space: bool = True, lazy_epochs: frozenset[int] = frozenset()):
         self.scheme, self.integrity, self.law = SCHEMES[scheme](), integrity, law
-        self.mode, self.space = mode, space
+        self.mode, self.space, self.lazy_epochs = mode, space, lazy_epochs
         self.inputs: list[tuple[int, ...]] = []  # all it keeps of each execution: traces are ephemeral
         self.committed: list[dict[int, int]] = []  # the boundary values it committed, per execution
         self.roots: list[Commitment] = []
@@ -39,12 +39,14 @@ class Engine:
         return self.scheme.commit([b"weights of record"]), self.scheme.commit([b"baseline"])
 
     def serve(self, start: EpochStart) -> None:
+        self.inputs, self.committed, self.roots = [], [], []
+        self.epoch = start.epoch
         wires = R.boundary_wires(CHAT, PAIRS)
         for request in range(4):
             inputs = (request + 3, 7)
             values = trace(CHAT, inputs)
             committed = {w: values[w] for w in wires}
-            if self.mode == "lazy" and request > 0:  # skipped the work: commits made-up values
+            if self.mode == "lazy" and request > 0 and self.epoch in self.lazy_epochs:  # skipped the work: commits made-up values
                 committed = {w: (v if w < CHAT.inputs else secrets.randbits(32)) for w, v in committed.items()}
             self.inputs.append(inputs)
             self.committed.append(committed)
@@ -62,7 +64,9 @@ class Engine:
     # sampled proofs
     def register(self) -> tuple[R.Registration, dict[str, Circuit]]:
         executions = tuple(R.Execution(CHAT.id(), PAIRS, root) for root in self.roots)
-        return R.Registration(executions, self.law), {CHAT.id(): CHAT}
+        registration = R.Registration(executions, self.law, getattr(self, "registered", None))
+        self.registered = registration.digest()
+        return registration, {CHAT.id(): CHAT}
 
     def open_unit(self, u: int) -> Opening:
         i, r = divmod(u, len(PAIRS))
