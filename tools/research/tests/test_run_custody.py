@@ -174,13 +174,14 @@ def test_a_sent_credential_is_deleted_before_the_record_is_taken_whatever_the_wo
     req, runs = _request(tmp_path, RID, command, vault)
     (req.parent / "inputs").mkdir()
     (req.parent / "inputs" / "lean-deps-urls.json").write_text(URLS)
+    (req.parent / "inputs" / ".lean-deps-urls.json.x1y2z3").write_text(URLS)
     (req.parent / "inputs" / "sent.txt").write_text("x")
     assert remote.launch_request(req)["started"]
     d = runs / RID
     marker = _wait_marker(d)
     assert marker["preserved"] is True and CU.marker_problem(d) is None
-    assert not (d / "inputs" / "lean-deps-urls.json").exists() and "inputs/sent.txt" in marker["files"]
-    assert not any(f.startswith("inputs/lean-deps-urls") for f in marker["files"])
+    assert os.listdir(d / "inputs") == ["sent.txt"] and "inputs/sent.txt" in marker["files"]
+    assert not any("lean-deps-urls" in f for f in marker["files"])
     _no_url_anywhere(vault)
 
 
@@ -198,6 +199,30 @@ def test_a_repair_publish_deletes_a_sent_credential_too(tmp_path, monkeypatch, c
     assert data_main(["custody", FIXTURE_RID, "--runs-dir", str(runs), "--publish"]) == 0
     assert not (d / "inputs" / "lean-deps-urls.json").exists() and CU.has_custody(d) == (True, "on the remote (.custody)")
     _no_url_anywhere(vault)
+
+
+@pytest.mark.parametrize("shape", ["inputs-is-a-file", "credential-is-a-dir", "inputs-is-a-symlink"])
+def test_a_run_dir_of_any_shape_still_gets_its_record(tmp_path, shape):
+    """What a workload leaves at a credential's path is its own: custody deletes only a file there, never through a symlinked inputs/
+    (which `run_files` doesn't follow either), and an odd shape never costs the run its record (red team, #1055 F4)."""
+    run = tmp_path / "runs" / "r1"
+    run.mkdir(parents=True)
+    (run / "stdout.log").write_text("ok\n")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "lean-deps-urls.json").write_text("not the run's\n")
+    if shape == "inputs-is-a-file":
+        (run / "inputs").write_text("a workload's own file\n")
+    elif shape == "credential-is-a-dir":
+        (run / "inputs" / "lean-deps-urls.json").mkdir(parents=True)
+        (run / "inputs" / "lean-deps-urls.json" / "x").write_text("x")
+    else:
+        (run / "inputs").symlink_to(elsewhere)
+    st = LocalStore(tmp_path / "store")
+    rr = CU.put_run_record(st, run, "r1")
+    assert rr and (elsewhere / "lean-deps-urls.json").exists()
+    held = {"inputs-is-a-file": {"inputs"}, "credential-is-a-dir": {"inputs/lean-deps-urls.json/x"}, "inputs-is-a-symlink": set()}[shape]
+    assert {f.path for f in st.get_manifest(rr).payload.files} == {"stdout.log", *held}
 
 
 def test_a_failed_publish_leaves_a_negative_marker_forgets_the_key_and_the_guard_refuses(tmp_path, capsys, monkeypatch):
@@ -396,10 +421,11 @@ def test_a_refused_claim_deletes_the_staged_key(tmp_path):
     req.write_text(json.dumps(doc))
     (req.parent / "inputs").mkdir()
     (req.parent / "inputs" / "lean-deps-urls.json").write_text(URLS)
+    (req.parent / "inputs" / ".lean-deps-urls.json.k1ll3d").write_text(URLS)    # a preflight killed between write and replace
     out = remote.launch_request(req)
     assert out["started"] is False and out["fault"] == "SourceNotReady"
     assert not (req.parent / remote.CUSTODY_DIR / CU.CRED_FILE).exists()
-    assert not (req.parent / "inputs" / "lean-deps-urls.json").exists(), "nothing will take the sent URLs out of the request dir"
+    assert os.listdir(req.parent / "inputs") == [], "nothing will take the sent URLs out of the request dir"
 
 
 # ---- drain / the reaper from any machine ---------------------------------------------------------------------------------------------------

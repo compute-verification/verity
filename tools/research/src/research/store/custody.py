@@ -154,15 +154,25 @@ def stage(run_dir: Path, into: Path, rels: list[str] | None = None) -> list[str]
     return rels
 
 
-#: What a run may be sent that grants access until it expires, relative to its run dir and its request dir: check's presigned URLs
-#: of the Lean dependency bundles (`tools/check/check.py` LEAN_DEPS_URLS), which a run of anything else never takes out of inputs/
-CREDENTIALS = ("inputs/lean-deps-urls.json",)
+#: What a run may be sent that grants access until it expires, as globs relative to its run dir and its request dir: check's presigned
+#: URLs of the Lean dependency bundles (`tools/check/check.py` LEAN_DEPS_URLS), which a run of anything else never takes out of inputs/,
+#: and the temporary name a shipped tree's preflight writes that file under before replacing it
+CREDENTIALS = ("inputs/lean-deps-urls.json", "inputs/.lean-deps-urls.json.*")
 
 
 def drop_credentials(d: Path) -> None:
-    for rel in CREDENTIALS:
-        with contextlib.suppress(FileNotFoundError):
-            (Path(d) / rel).unlink()
+    """Delete each file (or symlink) under ``d`` that CREDENTIALS names; whatever else a workload left at those paths, a directory or a
+    file where inputs/ should be, stays, and a symlinked inputs/ is not followed, as `run_files` doesn't follow it."""
+    for pattern in CREDENTIALS:
+        parent, name = pattern.rsplit("/", 1)
+        where = Path(d) / parent
+        if where.is_symlink() or not where.is_dir():
+            continue
+        with os.scandir(where) as entries:
+            found = [e.path for e in entries if fnmatch.fnmatchcase(e.name, name) and not e.is_dir(follow_symlinks=False)]
+        for p in found:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(p)
 
 
 def put_run_record(st: Any, run_dir: Path, run_id: str) -> str | None:
