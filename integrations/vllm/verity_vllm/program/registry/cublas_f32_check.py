@@ -113,3 +113,45 @@ def probe_single(j: int) -> np.ndarray:
 
 def output_digest(y_rows: np.ndarray) -> str:
     return hashlib.sha256(np.ascontiguousarray(y_rows, dtype=F32).view(U32).astype("<u4").tobytes()).hexdigest()[:16]
+
+
+def digest_of(digests) -> str:
+    return hashlib.sha256("".join(digests).encode()).hexdigest()[:16]
+
+
+#: r20261004-163918-3519 (RTX PRO 6000 Blackwell, torch 2.13.0+cu129, cuBLAS 12.9.1.4, vLLM's batch-invariant workspace config):
+#: the M each tree reproduced on every weight kind (gemmSN_TN_kernel for M = 2..16, cutlass_80_simt_sgemm 64x64 / 128x32 / 128x64
+#: beyond), and `digest_of` the per-M `output_digest`s of `probe_rows(M)` in M order, by (weight kind, tree)
+PROBE_RUN = "r20261004-163918-3519"
+PROBE_MS = {"gemv": tuple(range(2, 17)), "simt": tuple(range(17, 301)) + (384, 511, 512, 513, 1024, 1025, 2048, 4096, 8192)}
+PROBE_DIGESTS = {("bf16", "gemv"): "9401fac2a4daaf58", ("bf16", "simt"): "6968cc1898618bc0",
+                 ("f32", "gemv"): "9db658a2455f80e6", ("f32", "simt"): "980c962592be0405",
+                 ("neg", "gemv"): "31d20502ea9f1cce", ("neg", "simt"): "2edd47e83fcf487d"}
+
+
+#: r20261004-164622-187e (the same stack): M = 1 (gemv2T_kernel_val) as `digest_of` the digests of `probe_single(j)`, j < 32, and row
+#: 2's batched prefill M = 3151 (cutlass_80_simt_sgemm_64x64) over `probe_rows(3151)`, by weight kind
+PROBE_RUN_2 = "r20261004-164622-187e"
+PROBE_M1_DIGESTS = {"bf16": "973ef60b4eedb9ca", "f32": "eb0842c405ba07d3", "neg": "3dd6ff69d9016af8"}
+PROBE_M3151_DIGESTS = {"bf16": "c1ea062cb2b39cc6", "f32": "b9df201f4351eeaa", "neg": "651e5ccd341d6140"}
+
+
+def _digests(tree: str, xs: list[np.ndarray], kind: str):
+    y = MODELS[tree](np.concatenate(xs), probe_weights(kind))
+    ends = np.cumsum([len(x) for x in xs])
+    return [output_digest(y[e - len(x):e]) for x, e in zip(xs, ends)]
+
+
+def probe_digest(kind: str, tree: str) -> str:
+    """`PROBE_DIGESTS[(kind, tree)]` as the tree's model computes it."""
+    return digest_of(_digests(tree, [probe_inputs(M)[probe_rows(M)] for M in PROBE_MS[tree]], kind))
+
+
+def probe_m1_digest(kind: str) -> str:
+    """`PROBE_M1_DIGESTS[kind]` as the gemv model computes it."""
+    return digest_of(_digests("gemv", [probe_single(j) for j in range(32)], kind))
+
+
+def probe_m3151_digest(kind: str) -> str:
+    """`PROBE_M3151_DIGESTS[kind]` as the simt model computes it."""
+    return _digests("simt", [probe_inputs(3151)[probe_rows(3151)]], kind)[0]

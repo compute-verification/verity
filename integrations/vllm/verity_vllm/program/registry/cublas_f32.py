@@ -11,7 +11,8 @@ reduce K differently, so each is its own dot:
 
 on words, and each one's v2 the same body on bits (its ``word`` the v1, so `boolean.boolean_version` finds it). The trees are the
 ones exact LCA queries recover (r20261004-070541-1622: x = 1, w = 1 except +-2^60 at a pair, M = 1, 8 and 256 at K = 2048), and
-the outputs on random data, f32 weights included, are the sm_120 kernels' (r20261004-065341-db1b kernel table;
+their outputs equal the sm_120 kernels' on bf16-exact x against bf16-exact, 23-bit f32 and all-negative weights at every M probed
+(r20261004-163918-3519: 2..300 and nine larger M; r20261004-164622-187e: M = 1 and 3151; `cublas_f32_check`,
 `tests/program/test_cublas_f32.py`).
 """
 from __future__ import annotations

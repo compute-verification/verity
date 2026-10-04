@@ -62,6 +62,16 @@ def test_word_equals_the_numpy_model(tree: str) -> None:
     assert not np.array_equal(_u32(other), _u32(want))
 
 
+@pytest.mark.slow
+@pytest.mark.parametrize("kind", CK.W_KINDS)
+def test_models_reproduce_the_sm120_probe(kind: str) -> None:
+    """Each tree's model gives the GPU's outputs at every M the probes saw it serve (`cublas_f32_check.PROBE_RUN`, `PROBE_RUN_2`)."""
+    for tree in C.TREES:
+        assert CK.probe_digest(kind, tree) == CK.PROBE_DIGESTS[(kind, tree)], (kind, tree)
+    assert CK.probe_m1_digest(kind) == CK.PROBE_M1_DIGESTS[kind]
+    assert CK.probe_m3151_digest(kind) == CK.PROBE_M3151_DIGESTS[kind]
+
+
 def test_bad_statics_are_refused() -> None:
     with pytest.raises(ValueError, match="K_multiple_of_256"):
         _ = bind(C.CublasGemvDotWord, K=320).body
@@ -75,4 +85,5 @@ def test_kernel_table_is_one_tree_per_m() -> None:
         spans = sorted((lo, hi) for lo, hi, _, _ in ranges)
         assert all(a[1] < b[0] for a, b in zip(spans, spans[1:]))
     assert FL.cublas_f32_kernel(2048, 64, 1)[1] == "gemv" and FL.cublas_f32_kernel(2048, 64, 256)[1] == "simt"
-    assert FL.cublas_f32_kernel(2048, 64, 6) is None and FL.cublas_f32_kernel(2048, 32, 1) is None
+    assert FL.cublas_f32_kernel(2048, 64, 16)[1] == "gemv" and FL.cublas_f32_kernel(2048, 64, 17)[1] == "simt"
+    assert FL.cublas_f32_kernel(2048, 64, 301) is None and FL.cublas_f32_kernel(2048, 32, 1) is None

@@ -17,13 +17,12 @@ from verity_vllm.program.frontend.rules.vllm_bindings.operands import aten
 CUBLAS_STACK = {"torch": "2.13.0+cu129", "nvidia-cublas-cu12": "12.9.1.4"}
 CUBLAS_CC = (12, 0)
 
-# (K, N) -> ((M_lo, M_hi, kernel, TREE), ...): the kernel cuBLAS launches for x[M, K] @ W[N, K]^T on sm_120 at CUBLAS_STACK with split-K
-# off (r20261004-065341-db1b) and the `CublasF32Linear` tree it reduces with (exact LCA queries, r20261004-070541-1622); an M in no
+# (K, N) -> ((M_lo, M_hi, kernel family, TREE), ...): the kernels cuBLAS launches for x[M, K] @ W[N, K]^T on sm_120 at CUBLAS_STACK with
+# split-K off and the `CublasF32Linear` tree whose outputs equal theirs at each M (`cublas_f32_check.PROBE_RUN`, `PROBE_RUN_2`); an M in no
 # range is unmeasured
 F32_LINEAR_KERNELS = {
-    (2048, 64): ((1, 1, "gemv2T_kernel_val<int, int, float, float, float, float, 128, 16, 2, 2, false, false>", "gemv"),
-                 (8, 8, "gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false>", "gemv"),
-                 (256, 256, "cutlass_80_simt_sgemm_128x32_8x5_tn_align1", "simt")),
+    (2048, 64): ((1, 1, "gemv2T_kernel_val", "gemv"), (2, 16, "gemmSN_TN_kernel", "gemv"), (17, 300, "cutlass_80_simt_sgemm", "simt"),
+                 *((m, m, "cutlass_80_simt_sgemm", "simt") for m in (384, 511, 512, 513, 1024, 1025, 2048, 3151, 4096, 8192))),
 }
 
 
