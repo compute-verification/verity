@@ -9,10 +9,13 @@ this, detached, after each push it lands (`after_land` in `tool.py`); run it by 
 
 COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in.  Its tree is checked
 out in a worktree of its own and the rebuilds run there through `research run --on MACHINE`, pinned to --cores, under
-VERITY_REGRESSION_REBUILD=1 and VERITY_STORE_REQUIRED=1.  `research run --on` returns at launch, so this fetches the run's records
-until they show its end (each POLL_S); then that check attempt is labelled `note=regression pass` or
-`note=regression fail:<rows>` (`--by regression --ref <run>`), and circuits sweeps those labels daily.  A landing whose attempt has
-no such label is one whose job didn't finish here (the caller's VM suspended, the machine refused the run): run this again.  The
+VERITY_REGRESSION_REBUILD=1 and VERITY_STORE_REQUIRED=1, at nice 19.  `research run --on` returns at launch, so this fetches the
+run's records until they show its end (each POLL_S); then that check attempt is labelled `note=regression pass` or
+`note=regression fail:<rows>` (`--by regression --ref <run>`), and circuits sweeps those labels daily.  A run cut off before its end
+(past TIMEOUT_S on a busy machine, or cancelled) tested nothing: it is labelled `note=regression inconclusive:timeout` (or
+`:cancelled`), which is no regression and no verdict to carry, so the next landing's job runs the rebuilds again.  A landing
+whose attempt has no such label is one whose job didn't finish here (the caller's VM suspended, the machine refused the run): run
+this again.  The
 run is preserved from the machine either way; only the label needs this process to live.  An attempt that has its label already
 is left alone unless --force.
 
@@ -21,7 +24,8 @@ it.  When that one is labelled and the change between them touches none of the `
 --changed`), its verdict is carried: the same value, with the same run as `--ref`, and no rebuild.  About three trains in four
 touch them (130 of 171 between 27 Sep and 3 Oct: 19 a day, 32 on the busiest), and a job takes one to two hours, so jobs queue:
 one that waited, and finds main at a later landing, is labelled `note=regression superseded:<that landing's attempt>` and runs
-nothing, since the later landing's job tests its change too.  A sweep reads `pass` and `fail:` and skips `superseded`.
+nothing, since the later landing's job tests its change too.  A sweep reads `pass` and `fail:` and skips `superseded:` and
+`inconclusive:`.
 """
 from __future__ import annotations
 
@@ -39,18 +43,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 MACHINE = "vy-nebius-1"
-#: node 1's guest cores; its check slots hold 8-95 and 128-159
+#: node 1's guest cores; its check slots hold 8-95 and 128-159, and 160-191 is proofs' (infra, 4 Oct: 96-127 at nice 19)
 CORES = "96-127"
 BY = "regression"
 PREFIX = "regression "
 PASS = f"{PREFIX}pass"
 FAIL = f"{PREFIX}fail:"
 SUPERSEDED = f"{PREFIX}superseded:"
+INCONCLUSIVE = f"{PREFIX}inconclusive:"
 MARKS = "regression and rebuild"
 SUITE = "verity-vllm"
 LOCK = Path(tempfile.gettempdir()) / "verity-post-train.lock"
 #: the run's bound on the machine: the rebuilds took 89 and 104 min on cores 96-127 beside other lanes' jobs (3 Oct; #39's is the
-#: longest), and a run that outlives it is cut off before its junit, so a busier day reads as a failure
+#: longest); a run that outlives it is cut off before its junit, and is inconclusive, not a failure
 TIMEOUT_S = 4 * 3600
 #: `research run --on` returns once the run is launched, so its records are fetched until they show its end (`research merge` too)
 POLL_S = 60
@@ -92,9 +97,12 @@ def _order(row: str) -> tuple[int, int, str]:
     return (0, int(row[1:]), "") if re.fullmatch(r"r\d+", row) else (1, 0, row)
 
 
-def verdict(junit: Path, rc: int | None = None) -> str:
+def verdict(junit: Path, rc: int | None = None, cut: str | None = None) -> str:
     """`regression pass`, or `regression fail:<rows>`: the rows whose test failed (`r39`; `negative_57` for the refusal), or why
-    there is nothing to read.  A skip (a check `fixtures.toml` retires on a row) is neither."""
+    there is nothing to read.  A skip (a check `fixtures.toml` retires on a row) is neither.  A run cut off before its end (``cut``:
+    `timeout`, `cancelled`) is `regression inconclusive:<cut>`, whatever it wrote."""
+    if cut:
+        return INCONCLUSIVE + cut
     if not junit.is_file():
         return f"{FAIL}no junit (run rc={rc})"
     failed, passed = [], 0
@@ -135,7 +143,8 @@ def untouched(tree: Path, rev: str) -> bool:
 def carried(sha: str, tree: Path) -> dict | None:
     """The verdict of the landing before ``sha`` (its first parent), with that landing's attempt as `from`, when the change since
     touches none of the suite's inputs: the rebuilds would read what they read there.  None, and the job runs, when the parent is
-    no landing, has no verdict yet (none, or `superseded`), or its verdict came from no junit (a run that failed before its tests)."""
+    no landing, has no verdict yet (none, `superseded` or `inconclusive`), or its verdict came from no junit (a run that failed
+    before its tests)."""
     prev = check_attempt(f"{sha}^1", cwd=tree)
     lab = labelled(prev) if prev else None
     value = str(lab["value"]) if lab else ""
@@ -162,7 +171,7 @@ def _status(p: Path) -> dict:
 
 
 def job(cores: str, workers: int) -> str:
-    return JOB.format(pin=f"taskset -c {cores} " if cores else "", marks=shlex.quote(MARKS), workers=workers)
+    return JOB.format(pin="nice -n 19 " + (f"taskset -c {cores} " if cores else ""), marks=shlex.quote(MARKS), workers=workers)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -237,7 +246,8 @@ def _land(a: argparse.Namespace, sha: str, attempt: str | None) -> int:
             return 1
         f = research("fetch", rid, "--all", "--on", a.on, cwd=tree)
         print((f.stdout + f.stderr).strip()[-1000:], flush=True)
-        v = verdict(runs_root() / rid / "out" / "junit.xml", st.get("rc"))
+        cut = ("timeout" if st.get("timed_out") else "cancelled") if st.get("state") == "cancelled" else None
+        v = verdict(runs_root() / rid / "out" / "junit.xml", st.get("rc"), cut)
         if a.dry_run:
             print(f"post-train: {sha[:12]}: --dry-run, so {attempt or 'no check attempt'} gets no note={v} (ref {rid})")
             return 0 if v == PASS else 1

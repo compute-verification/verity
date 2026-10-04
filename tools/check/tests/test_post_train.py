@@ -67,10 +67,11 @@ SHA = "f" * 40
 PREV = "r20261003-120000-0001"
 
 
-def _fake_landing(tmp_path, monkeypatch, attempt, prev_label=None, untouched=False, polls=0):
+def _fake_landing(tmp_path, monkeypatch, attempt, prev_label=None, untouched=False, polls=0, cut=None):
     """A landing ``SHA`` admitted on ``attempt``, after a landing admitted on PREV that carries ``prev_label``; every call to
     `research` is recorded, and a run (launched with the lock held: jobs run one at a time) fails r39, its records showing its end
-    after ``polls`` fetches (at launch for 0, never for -1).  Returns the calls and the sleeps between fetches."""
+    after ``polls`` fetches (at launch for 0, never for -1), or ends with the runner's status ``cut`` and no junit.  Returns the
+    calls and the sleeps between fetches."""
     runs = tmp_path / "runs"
     tmp_path.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(PT, "LOCK", tmp_path / "post-train.lock")
@@ -81,8 +82,9 @@ def _fake_landing(tmp_path, monkeypatch, attempt, prev_label=None, untouched=Fal
 
     def end(rid):
         (runs / rid / "out").mkdir(parents=True, exist_ok=True)
-        _junit(runs / rid / "out", {"test_reproduces[T0-manifest_digest-r39]": "fail"})
-        (runs / rid / "status.json").write_text(json.dumps({"state": "done", "rc": 1}))
+        if not cut:
+            _junit(runs / rid / "out", {"test_reproduces[T0-manifest_digest-r39]": "fail"})
+        (runs / rid / "status.json").write_text(json.dumps(cut or {"state": "done", "rc": 1}))
 
     def research(*args, cwd=None):
         calls.append(args)
@@ -139,7 +141,8 @@ def test_a_landing_that_touches_none_of_the_inputs_carries_the_verdict_before_it
 def test_a_verdict_is_not_carried_over_a_change_to_the_inputs_nor_from_a_run_that_never_tested(tmp_path, monkeypatch):
     ok = {"key": "note", "value": "regression pass", "by": "regression", "ref": "r20261003-120500-beef"}
     broken = {**ok, "value": "regression fail:no junit (run rc=3)"}
-    for name, prev, untouched in (("touched", ok, False), ("broken", broken, True), ("unlabelled", None, True)):
+    cut = {**ok, "value": "regression inconclusive:timeout"}
+    for name, prev, untouched in (("touched", ok, False), ("broken", broken, True), ("cut", cut, True), ("unlabelled", None, True)):
         calls, _ = _fake_landing(tmp_path / name, monkeypatch, "r20261003-145201-e806", prev, untouched=untouched)
         assert PT.main([]) == 1, name
         assert [c[:2] for c in calls if c[0] == "run" or c[:2] == ("data", "label")] == [("run", "--id"), ("data", "label")], name
@@ -161,6 +164,17 @@ def test_a_run_launched_before_is_waited_for_and_none_is_launched(tmp_path, monk
     assert not any(c[0] == "run" for c in calls)
     assert calls[-1] == ("data", "label", "r20261003-145201-e806", "note", "regression fail:r39", "--by", "regression",
                          "--ref", "r20261003-190207-2759")
+
+
+def test_a_run_cut_off_before_its_end_is_inconclusive_not_a_failure(tmp_path, monkeypatch):
+    j = _junit(tmp_path, {"test_reproduces[T0-manifest_digest-r39]": "fail"})
+    assert PT.verdict(j, 143, "timeout") == "regression inconclusive:timeout", "whatever it wrote before the cut"
+    for name, status, value in (("timeout", {"state": "cancelled", "rc": 143, "signal": 15, "timed_out": True}, "timeout"),
+                                ("cancel", {"state": "cancelled", "rc": 143, "signal": 15, "timed_out": False}, "cancelled")):
+        calls, _ = _fake_landing(tmp_path / name, monkeypatch, "r20261003-145201-e806", cut=status)
+        assert PT.main([]) == 1, name
+        assert calls[-1] == ("data", "label", "r20261003-145201-e806", "note", f"regression inconclusive:{value}", "--by",
+                             "regression", "--ref", _launched(calls)), name
 
 
 def test_a_run_that_never_shows_its_end_gets_no_label(tmp_path, monkeypatch):
@@ -237,8 +251,9 @@ def test_untouched_is_suites_saying_the_change_touches_none(monkeypatch):
     assert not PT.untouched(ROOT, "HEAD^1")
 
 
-def test_the_job_pins_the_rebuilds_to_the_cores_it_is_given():
+def test_the_job_pins_the_rebuilds_to_the_cores_it_is_given_at_nice_19():
     pinned, free = PT.job("96-127", 12), PT.job("", 4)
-    assert "taskset -c 96-127 ../../.venv/bin/python -m pytest" in pinned and "taskset" not in free
+    assert "nice -n 19 taskset -c 96-127 ../../.venv/bin/python -m pytest" in pinned and "taskset" not in free
+    assert "nice -n 19 ../../.venv/bin/python -m pytest" in free
     assert "-m 'regression and rebuild' -n 12" in pinned and "-n 4" in free
     assert "VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1" in pinned and "fetch-fixtures" in pinned
