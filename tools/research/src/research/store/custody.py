@@ -583,7 +583,14 @@ def force_refusal(run_dir: Path, *, runner_gone: bool = False, now: float | None
 
 def triage_row(st: Any, run_dir: Path, *, verify_remote: bool = False, now: float | None = None,
                host: tuple[str, str | None] | None = None) -> dict[str, Any]:
-    """One run dir's custody state (TRIAGE_STATES) with the reason, the next step and when its records last changed (`ended_utc`)."""
+    """One run dir's custody state (TRIAGE_STATES) with the reason, the next step and when its records last changed (`ended_utc`).
+
+    A `custody` label waived|never-ran decides, the latest one winning (`needed` withdraws either), but a never-ran is ignored while
+    `ran_evidence` shows the workload started.  On the machine that ran it, a run still marked running has ended when its runner's
+    pid is gone (same host and boot), or, when the runner isn't visible there (a Kubernetes pod), when none of its records changed
+    for 24 h.  A valid `.custody` counts as `r2` where the catalog can't say (node 2's runs are published on node 1).  An attempt
+    published `--force` is `r2` only while a valid `.custody` shows nothing in the run dir changed after its run record was taken,
+    else `forced-unverified`: its write-once attempt can't take the run's real end."""
     from . import preserved
 
     d = Path(run_dir)
