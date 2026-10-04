@@ -331,7 +331,9 @@ Nothing that bounds spend may depend on an agent VM, which can be suspended at a
 The disk floor: `research run` and `research fetch --all` refuse (exit 3) while the runs root's filesystem has less than
 `$RESEARCH_DISK_FLOOR_GB` free (default 1.5; `0` turns it off), naming the eviction that frees it. `research data custody RUN
 --publish` removes the run's files of 1 MiB and more once custody holds (`--keep-local` keeps them); `run-files.evicted.json`
-names the fetch that restores them.
+names the fetch that restores them. `research data evict --src-dir DIR` (node 1's hourly research unit) also deletes, oldest first
+and whatever the mark, each shipped source tree on origin that no process, run, request, slot or fill job uses, unchanged for 2 h
+and its runs' clean source; a condition it can't establish keeps them all (`store/evict.py`).
 
 ### research data
 

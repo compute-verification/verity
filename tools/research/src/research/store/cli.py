@@ -13,9 +13,10 @@
   research data fetch ART [--to DIR] [--path GLOB]... [--list [--json]]
                                                    materialise the payload (file or tree, or just the files matching --path); prints the path;
                                                    --list prints the tree's files (path, bytes, local/remote) and fetches nothing
-  research data evict --target-free-gb N [--dry-run] [--runs [--runs-dir D]] [--min-mb M] [--keep-trees] [--json]
+  research data evict --target-free-gb N [--dry-run] [--runs [--runs-dir D]] [--min-mb M] [--keep-trees] [--src-dir D [--src-origin URL]] [--json]
                                                    free disk: evict blobs (and trees/) whose artifacts are PRESERVED on the remote, largest first;
-                                                   --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached
+                                                   --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached;
+                                                   --src-dir deletes the shipped source trees on origin that nothing uses, whatever the target
   research data verify ART [--json]                PRESERVED check against the remote (exit 1 when not preserved)
   research data preserved (RUN|ART)... [--mode head|readback|recorded] [--json]
                                                    the durability gate: exit 0 iff the attempt manifest, every output artifact AND every local
@@ -314,6 +315,10 @@ def cmd_evict(argv: list[str]) -> int:
     ap.add_argument("--runs", action="store_true", help="also evict preserved big files from finished run directories (writes run-files.evicted.json)")
     ap.add_argument("--runs-dir", default=None, metavar="DIR", help="runs root for --runs (default $RESEARCH_RUNS or ~/.research/runs)")
     ap.add_argument("--quiet-min", type=float, default=EV.QUIET_S / 60, metavar="M", help="--runs: skip run dirs touched in the last M minutes (default 30)")
+    ap.add_argument("--src-dir", default=None, metavar="DIR",
+                    help="also delete the `research run` source trees under DIR (<root>/src) that are on origin and that nothing uses, "
+                         "whatever the target (evict.py `evict_src`; needs root or CAP_SYS_PTRACE to read /proc)")
+    ap.add_argument("--src-origin", default=EV.ORIGIN, metavar="URL", help=f"--src-dir: the origin `git ls-remote` lists (default {EV.ORIGIN})")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store)
@@ -326,6 +331,8 @@ def cmd_evict(argv: list[str]) -> int:
 
         rep["runs"] = EV.evict_runs(st, runs_root(ns.runs_dir), target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes,
                                     quiet_s=ns.quiet_min * 60, log=say)
+    if ns.src_dir:
+        rep["src"] = EV.evict_src(Path(ns.src_dir), origin=ns.src_origin, dry_run=ns.dry_run, log=say)
     if ns.json:
         _dump(rep)
     last = rep.get("runs") or rep["store"]
