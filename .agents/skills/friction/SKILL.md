@@ -97,6 +97,13 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-04 (2:21 PM PDT): the repository migration finishes in short serial time. A lead launches workers for every
+  piece that doesn't wait on another (Lean ones in separate checkouts), and spends compute wherever it shortens the
+  critical path: reruns, check capacity, extra CPU pods. Pods still bound themselves under a `budgets.toml` line, and GPU
+  work still names its question.
+- 2026-10-04 (2:21 PM PDT): during the migration, ci resolves a conflict that is only a rename (a moved file that another
+  PR edited) in the train tip's merge commit, instead of sending the PR back for a restack, and names each resolution in
+  the handoff. A conflict that needs judgment still goes to the PR's owner, and `check` still runs on the merged tree.
 - 2026-10-03: a test tier too slow for `check` (the vLLM reference regression's manifest rebuilds, about an hour) runs as a
   detached job after each train lands on `main` (`tools/check/post_train.py`, started by `research merge --push`) and labels
   the landing's check attempt `note=regression pass` or `fail:<rows>`, which circuits sweeps daily; `check` blocks on the
