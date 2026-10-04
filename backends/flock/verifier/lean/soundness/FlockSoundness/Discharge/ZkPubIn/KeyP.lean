@@ -15,7 +15,10 @@ registration's bit there is the verifier's own (`Layout.keyGate` at `pubBit`):
 * `keyReadersHP`: `Layout.Readers.ofRows` at those rows, single gates with `Layout.keyGate (fun _ g => pubBit …)`;
 * `keyProgHP_copies`, `keyProgHP_bcPinned`, `keyProgHP_valPinned`: Δ's copies, the registered `b ‖ c`, and the single
   gates' values: the constant, the zero, and at a public gate the `in` region's bit, the verifier's own word's
-  (`OwnWords`, at the unit's rank in the draw);
+  (`OwnWords`, at the unit's rank in the draw; `pub_siteHP`), at sites whose acceptances check the readers' own words
+  (`hown`);
+* `AcceptedHP.zero_blockP`, `single_gateP`, `constCols_keyProgHP`, `zeroCols_keyProgHP`: the zero input's 0, the four
+  kinds of single gate, and `hConst`, `hZero` at `keyProgP`'s places;
 * `keyLayoutHP`, `keyRowsHP`, `keyRowsHP_computes`.
 -/
 
@@ -378,6 +381,106 @@ theorem keyProgHP_valPinned (hkeys : KeysRow c hU (portRowW c))
     · exact absurd e1 hne1
     · exact absurd e0 hne0
     · rfl
+
+include hparse in
+/-- **A public gate decodes to the verifier's own bit at `keyProgP`'s places**: at a drawn unit's committed gate with
+a value (`pubBit … = some b`), a satisfying message decodes `b`. The gate is an input gate `2 + u · B + x` of the unit
+whose source `x` is a public leaf's bit, so `keyIdxP` puts that input alone on it, and the input's column holds the
+verifier's own word's bit (`pub_siteHP`, at the site's `BcSiteHP` and own words `hown`). -/
+theorem keyPlaceHP_decode_pub
+    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
+      BcSiteHP (si.acc S R u h) pi (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
+    (hown : ∀ S R u (h : u ∈ S), (si.acc S R u h).own = own)
+    {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S) {M : Binding.Msg plan tab S R u}
+    (hM : Binding.Sat plan tab S R u M) {g : Fin (keyN c hU n)} (hg : g ∈ ((keyProgP c hU n pi).partition outs).io u)
+    {b : Bool} (hb : pubBit c hU n pi own g = some b) :
+    (keyPlaceHP hparse pi hpi outs S R u hu).decode (Binding.wit plan tab S R u M) g = b := by
+  obtain ⟨x, hx⟩ := Layout.exists_col_of_io ((keyPlaceHP hparse pi hpi outs) S R u hu).inst hg
+  subst hx
+  unfold UnitPlace.decode
+  rw [((keyPlaceHP hparse pi hpi outs) S R u hu).inst.decode_wire
+    (((keyPlaceHP hparse pi hpi outs) S R u hu).agree hM) x]
+  have hb' : pubBit c hU n pi own ((Const.Prog.instC (keyProgP c hU n pi) outs u).wire x) = some b := hb
+  clear hb
+  unfold pubBit at hb'
+  split_ifs at hb' with hrange
+  rcases hpl : pubLeaf c pi
+      ((((Const.Prog.instC (keyProgP c hU n pi) outs u).wire x).val - 2) % Layout.keyB c hU) with _ | ⟨q, t⟩
+  · rw [hpl] at hb'
+    cases hb'
+  rw [hpl] at hb'
+  obtain rfl := Option.some.inj hb'
+  by_cases hxi : x.val < ((keyProgP c hU n pi).rows u).nIn
+  · have hxB : x.val < Layout.keyB c hU := lt_of_lt_of_eq hxi (nIn_keyProgP u)
+    have hv : (Const.Prog.insAt (keyProgP c hU n pi) u x.val).val =
+        (Placed.insOf n (Layout.keyB c hU) (keyIdxP c pi (Layout.keyB c hU)) u.val ⟨x.val, hxB⟩).val :=
+      Placed.insAt_uniform n u x.val hxB
+    have hw : ((Const.Prog.instC (keyProgP c hU n pi) outs u).wire x).val =
+        (Placed.srcGate n (Layout.keyB c hU) u.isLt (keyIdxP c pi (Layout.keyB c hU) ⟨x.val, hxB⟩)).val := by
+      rw [Const.Prog.instC_wire_input _ _ _ x hxi, hv,
+        Placed.insOf_of_lt (nU := n) (B := Layout.keyB c hU) (src := keyIdxP c pi (Layout.keyB c hU)) u.isLt]
+    rcases hk : keyIdxP c pi (Layout.keyB c hU) ⟨x.val, hxB⟩ with _ | b'
+    · rw [hk] at hw
+      simp only [Placed.srcGate, Placed.zeroGate] at hw
+      omega
+    rw [hk] at hw
+    simp only [Placed.srcGate] at hw
+    have hB : 0 < Layout.keyB c hU := lt_of_le_of_lt (Nat.zero_le _) hxB
+    have hd : (((Const.Prog.instC (keyProgP c hU n pi) outs u).wire x).val - 2) / Layout.keyB c hU = u.val := by
+      rw [hw, show 2 + u.val * Layout.keyB c hU + b'.val - 2 = b'.val + u.val * Layout.keyB c hU by omega,
+        Nat.add_mul_div_right _ _ hB, Nat.div_eq_of_lt b'.isLt, Nat.zero_add]
+    have hm : (((Const.Prog.instC (keyProgP c hU n pi) outs u).wire x).val - 2) % Layout.keyB c hU = b'.val := by
+      rw [hw, show 2 + u.val * Layout.keyB c hU + b'.val - 2 = b'.val + u.val * Layout.keyB c hU by omega,
+        Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt b'.isLt]
+    rw [hm] at hpl
+    have hbx : b' = ⟨x.val, hxB⟩ := by
+      by_cases hp : (pubLeaf c pi x.val).isSome
+      · have hself : keyIdxP c pi (Layout.keyB c hU) ⟨x.val, hxB⟩ = some ⟨x.val, hxB⟩ := by
+          unfold keyIdxP
+          simp [hp]
+        rw [hself] at hk
+        exact (Option.some.inj hk).symm
+      · have := ((keyIdxP_none c pi _ ⟨x.val, hxB⟩ (Option.not_isSome_iff_eq_none.1 hp)).2 b' hk).1
+        rw [hpl] at this
+        cases this
+    subst hbx
+    rw [hd, ← hown S R u hu]
+    have hrw := SitesHP.rowsOf_keyProgP hU hparse pi S R u hu
+    have hc := (si.acc S R u hu).c_eq (hparse S R u hu)
+    have hxa : (Fin.cast (congrArg FlockSoundness.Rows.w hrw) x).val < (si.acc S R u hu).rows.nIn :=
+      lt_of_lt_of_eq hxi (congrArg FlockSoundness.Rows.nIn hrw)
+    exact pub_siteHP (si.acc S R u hu) (hsite S R u hu M hM) hM (si.hvu S R u hu)
+      (Fin.cast (congrArg FlockSoundness.Rows.w hrw) x) hxa (by rw [hc]; exact hpl)
+  · exfalso
+    by_cases hone : x = ((keyProgP c hU n pi).rows u).one
+    · subst hone
+      have h0 : (Const.Prog.oneAt (keyProgP c hU n pi) u).val = (Placed.oneGate n (Layout.keyB c hU)).val :=
+        Layout.oneAt_uniform_val (k := Placed.inGates n (Layout.keyB c hU)) (R := Placed.circuitRows c hU)
+          (ins := Placed.insOf n (Layout.keyB c hU) (keyIdxP c pi (Layout.keyB c hU)))
+          (one := Placed.oneGate n (Layout.keyB c hU))
+          (hone := Placed.insOf_ne_one n (Layout.keyB c hU) (keyIdxP c pi (Layout.keyB c hU))) n u
+      have h2 := hrange.1
+      rw [Const.Prog.instC_wire_one, h0] at h2
+      simp [Placed.oneGate] at h2
+    · have hxw := x.isLt
+      have hne : x.val ≠ ((keyProgP c hU n pi).rows u).nIn + ((keyProgP c hU n pi).rows u).nComp := fun he =>
+        hone (Fin.ext he)
+      have hi : x.val - ((keyProgP c hU n pi).rows u).nIn < ((keyProgP c hU n pi).rows u).nComp := by
+        change x.val < ((keyProgP c hU n pi).rows u).nIn + ((keyProgP c hU n pi).rows u).nComp + 1 at hxw
+        omega
+      have hx' : x = ((keyProgP c hU n pi).rows u).comp ⟨_, hi⟩ :=
+        Fin.ext (by simp only [FlockSoundness.Rows.comp]; omega)
+      have hm : (keyProgP c hU n pi).unit ((Const.Prog.instC (keyProgP c hU n pi) outs u).wire x) = some u := by
+        have := (Const.Prog.instC (keyProgP c hU n pi) outs u).mem ⟨_, hi⟩
+        rw [← hx'] at this
+        exact this
+      have hnone : (keyProgP c hU n pi).unit ((Const.Prog.instC (keyProgP c hU n pi) outs u).wire x) = none :=
+        Layout.unit_uniform_input (k := Placed.inGates n (Layout.keyB c hU)) (R := Placed.circuitRows c hU)
+          (ins := Placed.insOf n (Layout.keyB c hU) (keyIdxP c pi (Layout.keyB c hU)))
+          (one := Placed.oneGate n (Layout.keyB c hU))
+          (hone := Placed.insOf_ne_one n (Layout.keyB c hU) (keyIdxP c pi (Layout.keyB c hU))) n _ hrange.2
+      rw [hnone] at hm
+      cases hm
 
 /-- **`lay` at `keyProgP`'s places** (`keyLayoutH`). -/
 noncomputable def keyLayoutHP :

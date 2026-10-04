@@ -190,7 +190,19 @@ theorem pubDecodesZ_placeZHP :
       (decodeOfPlace execArith ((keyProgP c hU n pi).partition (Layout.outsOf c hU n)) (planAtZKHP dj y₀)
         (tabAtZKHP dj y₀) (placeZHP dj y₀ ht hc hscope hU hpi))
       (pubOnes c hU n pi own) (pubZeros c hU n pi own) := by
-  sorry
+  intro S R u hu M hsat g hg
+  obtain ⟨Ms, hws, hMs⟩ := shadow_msg (planAtZKHP_S (Reg := Reg) dj y₀) S R u M hsat
+  have hag := decAgreeHP dj y₀ ht hc hscope hU hpi S R u hu M Ms hws hsat g hg
+  have hval : ∀ b, pubBit c hU n pi own g = some b →
+      decodeOfPlace execArith ((keyProgP c hU n pi).partition (Layout.outsOf c hU n)) (planAtZKHP dj y₀)
+        (tabAtZKHP dj y₀) (placeZHP dj y₀ ht hc hscope hU hpi) S R u M g = b := fun b hb => by
+    rw [hag]
+    simp only [Partition.placeDecoder, hu, ↓reduceDIte]
+    exact keyPlaceHP_decode_pub (sitesShHP_parse dj y₀ ht hc hscope) pi hpi own (Layout.outsOf c hU n)
+      (fun _ => pub) (sitesShHP_bcSite dj y₀ ht hc hscope hU hpi hpub) (fun _ _ _ _ => rfl) hu hMs hg hb
+  refine ⟨fun h1 => hval true ?_, fun _ h0 => hval false ?_⟩
+  · exact ((@Finset.mem_filter _ (fun g => pubBit c hU n pi own g = some true) (Classical.decPred _) _ _).1 h1).2
+  · exact ((@Finset.mem_filter _ (fun g => pubBit c hU n pi own g = some false) (Classical.decPred _) _ _).1 h0).2
 
 /-- **The public-input step: the compiled `--zk` count curve at the public transcript of the `--zk` tables with the
 verifier's public inputs.** `zk_flock_countC_execOS_cr_pub` at `planAtZKHP` with `place := placeZHP`,
