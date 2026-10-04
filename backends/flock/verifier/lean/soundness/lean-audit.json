@@ -13350,6 +13350,7 @@
    "assumptions": [],
    "type_hash": "66d33417a25033fa350a33066c672738135860b6d2c5ccba6051a992d3c18b40"
   },
+  "FlockSoundness.Discharge.ZkReg.zk_session_soundR_own": {},
   "FlockSoundness.Discharge.ZkSession.TabZK.after_sound": {
    "signature": [
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
