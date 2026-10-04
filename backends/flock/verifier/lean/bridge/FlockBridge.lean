@@ -4,4 +4,5 @@ import FlockBridge.Registered
 import FlockBridge.RegisteredReads
 import FlockBridge.RegisteredReadsP
 import FlockBridge.ZkReg
+import FlockBridge.ZkRegW
 import FlockBridge.ZkPubIn
