@@ -1,4 +1,5 @@
 import FlockSoundness.Discharge.FailClosed.Scope
+import FlockSoundness.Discharge.FailClosed.Mask
 import FlockSoundness.Discharge.FailClosed.Composed
 import FlockSoundness.Discharge.FailClosed.ZkHidden
 import FlockSoundness.Discharge.FailClosed.Exec
@@ -11,6 +12,8 @@ import FlockSoundness.Discharge.FailClosed.One
 so its acceptance (`Verifies`, `VerifiesZK`) carries the facts about the statement that the headlines took as
 hypotheses (`FailClosed/Scope.lean`). The headlines restated over it, with no hypothesis on the statement's form:
 `FailClosed/Composed.lean` (public outputs, `--zk`), `FailClosed/ZkHidden.lean` (hidden outputs, `--zk`) and
-`FailClosed/Exec.lean` (one table, no `--zk`, public or hidden outputs). `FailClosed/One.lean` is the one theorem over
-all of it (`flock_verify_sound`): its conclusion splits on the statement and states each case's strongest claim.
+`FailClosed/Exec.lean` (one table, no `--zk`, public or hidden outputs). Zero knowledge's views take `avoidsMask` from
+the setup (`FailClosed/Mask.lean`): `verify --zk` refuses a statement whose Δ or regions meet the mask slot.
+`FailClosed/One.lean` is the one theorem over all of it (`flock_verify_sound`): its conclusion splits on the statement
+and states each case's strongest claim.
 -/
