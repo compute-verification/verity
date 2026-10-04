@@ -57,6 +57,7 @@ OV_SAMPLING_SUFFIX = "_ovs"
 _MODULE_RE = re.compile(r"^derived_([A-Z0-9_]+?)(?:_tp(\d+))?(_ovs)?$")
 _LAYER_RE_FMT = r"^{prefix}\.(\d+)\.(.+)$"
 _ATTN_SCALES = r"(k_scale|v_scale|q_scale|prob_scale|_k_scale|_v_scale|_q_scale|_prob_scale)"
+_SCALE_INV = "_scale_inv"
 
 
 # ------------------------------------------------------------------------------------------------------------------------------- names
@@ -116,6 +117,9 @@ def rank_hf_config(cfg: dict[str, Any], world: int) -> dict[str, Any]:
         if not out.get("head_dim"):
             out["head_dim"] = int(out["hidden_size"]) // int(out["num_attention_heads"])   # the FULL model's head width: a rank keeps it
         for k in sharded_keys(cfg):
+            if k == "num_key_value_heads" and out[k] < world and world % out[k] == 0:
+                out[k] = 1          # QKVParallelLinear: each key/value head on world // heads ranks (num_kv_head_replicas)
+                continue
             if out[k] % world:
                 raise ValueError(f"{k}={out[k]} is not divisible by the world {world}")
             out[k] = out[k] // world
@@ -153,7 +157,7 @@ def structural_refusal(cfg: dict[str, Any]) -> str | None:
         E = cfg.get("num_experts") or cfg.get("num_local_experts")
         if not E:
             return "MoE family without num_experts in config.json"
-    why = analytic.quant_refusal(cfg.get("quantization_config"))
+    why = analytic.quant_refusal(cfg.get("quantization_config"), cfg)
     if why:
         return why
     return None
@@ -247,8 +251,12 @@ def make_weight_field(cfg: dict[str, Any], C: dict[str, Any]) -> Callable[[str],
             if rest in dense_only:
                 return None
             f = extra_layer.get(rest)
+            if f is None and rest.endswith(_SCALE_INV) and extra_layer.get(rest[:-len(_SCALE_INV)]):
+                f = f"{extra_layer[rest[:-len(_SCALE_INV)]]}_ws"          # an FP8 expert stack's block scales (`analytic._fp8_fields`)
             if f is not None:
                 return ("layers", layer, f) if f in layer_fields else None
+            path = base_wf(name)
+            return path if path is None or len(path) < 3 or path[2] in layer_fields else None
         return base_wf(name)
 
     return weight_field

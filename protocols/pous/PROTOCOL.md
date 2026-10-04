@@ -277,6 +277,64 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   and `vk` root. `VERITY_POUS_SLOW=1` also encodes a whole band12 segment through the interface against
   `band/64kb/segment`.
 
+## The continuous audit's verifier (`continuous`)
+
+`continuous.ContinuousVerifier(vk, key, n, late_deadline_ns=Δ_late, max_misses=f₀)` is the verifier of the
+continuous audit's model, `lean/Pous/Protocol/Model/Continuous.lean`, with the guarantee
+`Pous.SecurityProofs.ContinuousAudit` (#954): `n` challenges over time, drawn as the timed audit's indices, accepted
+when at most `f₀` answers miss. A miss is an answer that is wrong or later than `Δ + RTT`. `n` is fixed before the
+stream, so the stream is never stopped or extended on misses, though it may reject early (`exceeded`). The verifier is
+one `audit.TimedVerifier` over the stream with a hard deadline, and it enforces the three requirements that
+`lean/Pous/SecurityProofs/Continuous/Verifier.lean` proves of the model's verifier:
+
+1. **No pipelining.** `challenge()` reveals index `j + 1` only once answer `j` is in or `Δ_late + RTT` has passed since
+   index `j` was revealed, and in that case it first closes challenge `j` as rejected; the close stands even when `j`
+   was the last and `challenge()` then refuses (`run_continuous` closes it with `expire()`). Each deadline runs from the
+   verifier's own clock reading at the reveal; a latency the responder reports (`Answer.report`) is never read. An
+   answer names its challenge (`respond(j, block)`), and an answer to any challenge but the open one is refused,
+   whether that challenge is closed or not yet revealed. So a stale answer is never credited to the next challenge,
+   even when both ask for the same block.
+2. **A hard deadline.** An answer past `Δ_late + RTT` is rejected without its block being checked (`Answer.rejected`).
+   So is a challenge still unanswered by then, closed by `expire()` or by the next `challenge()`. `TimedVerifier`
+   refuses a `Δ_late` below `Δ`, and one whose `D_late` exceeds `audit.LATE_ROUNDS = 12` or the band's `d`, where
+   `D_late` is the number of 241.5 µs calls that fit in `Δ_late + RTT`; at `d = 12`, `Δ_late + RTT` must be under
+   3,139,500 ns. That cap is the graded audit's; `ContinuousAudit` holds at every `D_late`, so for it the cap is only
+   conservative. `ContinuousVerifier` refuses to run without a hard deadline.
+3. **Every late answer counted.** Every challenge closes with exactly one `Answer`, whether it was answered, rejected
+   or expired. `AuditResult.misses` counts every wrong or late answer, and `AuditResult.late` every answer past
+   `Δ + RTT`, rejected ones included.
+
+Run the continuous audit only on `ContinuousVerifier`, never on a bare `TimedVerifier` with `late_deadline_ns`. Its
+`respond(block)` names no challenge, so once challenge `j` expires, an answer to `j` still in flight is credited to
+`j + 1`, a hit when both ask for the same block. That block was on the wire, not in the memory the model measures at
+the send time, so the audit would credit storage the responder does not hold (#954's red team).
+
+**The audit's duration cap.** `audit.AUDIT_CAP = 1,505` (`Pous.Rebuild.auditCap`) is the cap on a graded audit's
+window that `Pous.SecurityProofs.BackgroundRebuildExcluded` requires the verifier to enforce (#953).
+`TimedVerifier(..., audit_cap=...)` and `ContinuousVerifier(..., audit_cap=...)` enforce it on the verifier's clock,
+counted in calls of the parameters' `call_ns` as `D` and `D_late` are, so the limit is 1,505 × 241.5 µs ≈ 363.5 ms.
+- An answer received more than `audit_cap · call_ns` after the first challenge's send is rejected unchecked and aborts
+  the audit (`ends_at`). So does a challenge closed after that time by `expire()` or the next `challenge()`.
+- `closes_at` is never past `ends_at`, so `run_continuous` closes the open challenge there.
+- An aborted audit (`aborted`, `AuditResult.aborted`) never accepts, whatever its misses, and reveals no other index.
+  It is rejected and never retried with fresh challenges, since a retry would let a prover that stalls near its
+  deadlines escape a failing audit.
+- A cap from 1 to 1,505 is accepted.
+
+The cap is off by default. The continuous audit's guarantee measures the memory at each send time and needs no cap,
+and its model's verifier has none. Under the cap, a stream whose arrivals spread over more than 363.5 ms always
+aborts.
+
+`run_continuous(verifier, send, receive, wait=...)` drives the stream over a transport. `wait(j)` returns at arrival
+`j`, `send(j, i)` sends challenge `j`, and `receive(until)` returns the next `Reply(j, block, path, report)`, or None
+once the verifier's clock is past `until`, the open challenge's `closes_at` (its send time plus `Δ_late + RTT`). A
+reply naming any challenge but the open one is dropped. Once the hard deadline has passed, the driver closes the open
+challenge with `expire()`, the last one too, so a silent or slow responder cannot hold the stream open. A transport
+that returns None before the deadline makes `expire()` refuse, and the audit stops with the challenge open. The caller
+chooses the arrival times and `n`, and nothing here draws or checks them. The game needs both to be the verifier's own
+randomness, independent of the setup, the indices and the answers. Without `late_deadline_ns`, `TimedVerifier` is
+unchanged, the single audit's verifier. `tests/test_pous_continuous.py` tests each requirement.
+
 ## API
 
 | Module | What it holds |
@@ -386,6 +444,11 @@ column storage, whole lower labels as separators, meet in the middle through `P�
 - the two-labels-from-one-item attacks (`test_pous_two_for_one.py`), bit-exact on real labels: they succeed on the XOR
   sponge and on Miyaguchi–Preneel over band rows, and fail on the overwrite chain. The designer's state game
   (`pous_state_game.py`, from `internal/p3-instantiation/overwrite-state-game.py`) agrees on dense and band rows;
+- the continuous audit's verifiers against the Lean model (`test_pous_continuous_difftest.py`). `pous_continuous_model.py`
+  transcribes the verifier of `lean/Pous/Protocol/Model/Continuous.lean` definition by definition (a test finds each
+  one word for word in the Lean file) and restates it on the verifier's clock. Fuzzed and scripted traces (answers at
+  and one nanosecond past each deadline, wrong, pipelined, stale and dropped answers) must agree with it action for
+  action, and Lean `ContMachine`s run against the verifier must get `contRecords`' verdicts and `contAccepts`;
 - the Lean vectors (`fixtures/lean_vectors.json`).
 
 The Lean vectors come from `tests/lean/PousRefCheck.lean`, which evaluates Lean's `c1'`, `topLabel'`, `transpose`,
@@ -466,9 +529,24 @@ The game assumes three requirements on the protocol, and the certificate says no
 **Isolation over the whole graded window.** Perfect isolation ("The problem") is assumed for the whole graded audit, not
 round by round: from the first challenge to the last answer the server has no outside help, and its state when each
 challenge arrives is its storage at rest. The worst row is `t = 3`, `k = 243` rounds. After a late answer the prover
-times the next arrival, so the certificate needs the whole window to be too short to re-encode `C` from `W`: under the
-cap it is at most `240·5 + 3·12 = 1,236` sequential `Π₂` calls, and re-encoding a segment takes
-`R(d) = Σ_{v<512} (min(v, d) + 1) ≥ R(5) = 3,057` (6,578 at `d = 12`).
+times the next arrival, so the certificate needs the whole window to be too short to re-encode `C` from `W`.
+Re-encoding a segment takes `R(d) = Σ_{v<512} (min(v, d) + 1) ≥ R(5) = 3,057` sequential `Π₂` calls (6,578 at
+`d = 12`). The window is wall-clock time, and a rebuild runs through the rounds and the verifier's gaps between them.
+A round answered at its deadline lasts just under `D + 1` call-times, so under the cap on `D_late` a row's rounds last
+under `240·6 + 3·13 = 1,479` call-times, and no deadline bounds the gaps. **The graded verifier must therefore cap the
+audit's duration:** it aborts, without accepting, an audit that lasts more than `1,505 · call_ns` (≈ 363.5 ms at
+241.5 µs) on its own clock, from its first challenge's send to its last answer's receipt. That leaves 26 call-times
+(≈ 6.3 ms) for the worst row's 242 gaps if every round answers at its deadline.
+`Pous.SecurityProofs.BackgroundRebuildExcluded` proves the counts, and that programs which know `W` but hold no state
+about `Π₂`, each within any `T ≤ 1,505` sequential calls and `2^128` queries, output every label of a segment with
+probability at most `2^-128` (`Pous/SecurityProofs/Rebuild/`). The bound rests on the cap, which is the proof's reach,
+not on `R(d)`.
+
+It excludes only re-encoding a *whole* segment from `W` with *no* state about `Π₂`, and is not a claim that no rebuild
+is possible. Within the cap, `W` alone rebuilds a segment's first 253 labels (49%) at `d = 5` and its first 121 (24%) at
+`d = 12`. `d` consecutive held labels restart the chain, so two held runs (10 labels, 2.0% of the segment) at `d = 5`,
+or four (48 labels, 9.4%) at `d = 12`, let a prover re-encode a whole segment within the cap. That gap between the
+storage held at rest and what is present when a challenge arrives is not bounded by this guarantee.
 
 No graded verifier exists yet: `audit.TimedVerifier` and `protocol.Verifier` accept only when every answer is correct
 and on time, the `t = 0` rule (`DISCREPANCIES.md` B5).
@@ -536,6 +614,7 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 | `BandMultiMeetsFamilyD2`, `BandMultiMeetsFamilyD1`, `BandMultiMeetsFamilyD0`, `BandChainMeets64Rounds2`, `BandChainMeets64Rounds1` | the band at fewer rounds: every segment count from 1 to `2^64` at `D = 2`, `k = 97`, every `d ≥ 2`, at `D = 1`, `k = 93`, every `d ≥ 1`, and at `D = 0`, `k = 89`, every `d`; one segment (64 KiB) at `D = 2` and `D = 1` | proved |
 | `BandPubMeets64`, `BandPubMeets14`, `BandPubMeets14Global`, `BandPubMeetsFamily`, `BandPubMeetsFamilyD2`, `BandPubMeetsFamilyD1` | the same band rows with a public encoder and the exact setup check (`Pous/Protocol/Model/PubEncoder.lean`, `Pous/Protocol/Accounting/PubMeets.lean`) | proved |
 | `BandGradedMeetsFamily` | the band with up to `t` late answers (`Pous/Protocol/Model/Graded.lean`, `Pous/Protocol/Accounting/GradedMeets.lean`): every segment count from 1 to `2^64`, `d ≥ 5`, `D = 5`, `(t, k) = (0, 111), (1, 160), (2, 203), (3, 243)`, each late round within `(D_late, Q_late)` with `5 ≤ D_late ≤ d`, `D_late ≤ 12` | proved |
+| `BackgroundRebuildExcluded` | under the graded verifier's cap of `1,505 · call_ns` on an audit's duration, no audit re-encodes a whole band segment from `W` alone (`Pous/Protocol/Accounting/Rebuild.lean`): every row's rounds last under 1,479 call-times at `D_late ≤ 12`, re-encoding costs `R(d) ≥ R(5) = 3,057`, and programs with no state about `Π₂` re-encode a whole segment within `1,505` calls with probability at most `2^-128`. A prefix, or a whole segment from a few held labels, can be rebuilt within the cap | proved |
 | `ChainDenseMeets64`, `ChainDenseMeets111` | the dense scheme over the overwrite chain: 64 KiB at `D = 5`, and the deployment point (`2^16` blocks of 1 KiB, `D = 64`), both at `k = 111` | proved |
 | `B5Stacked` | the one-way bound on Fisch's stacked graph | proved |
 | `DenseMeets64`, `SegMeets14`, `SegTagMeets14` | the dense scheme at 64 KB, `D = 5`, `k = 106`, in the ideal-hash model: one segment, 448 segments (14 GB), and the 448 segments keyed as the implementation keys them, for every salt | proved |
