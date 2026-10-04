@@ -1,10 +1,12 @@
 """Novel communication intensity: the policy that throttles frontier training and leaves inference alone
 (`Nci.Protocol` in the main repo). Every isolation unit, here a region of an execution's partition, has at most
 `gamma` gates and reads at most `alpha` bits of novel information per gate. A bit is novel unless it is on the
-baseline, which is on no region's boundary. Advice is novel too, and reaches a unit through the structure the builder
-gives it rather than through its boundary, so it has a budget of its own: at most `advice` bits across the epoch's
-executions. And the rule binds only what is in the account: whatever ran in the compute that coverage leaves uncovered
-went unchecked, so at most `headroom` of the capacity may be left.
+baseline, which is on no region's boundary; so the baseline must have been declared up front, before any epoch whose
+outputs could have shaped it, and the registration must name one of the `builders` declared then. Advice is novel
+too, and reaches a unit through the structure the builder gives it rather than through its boundary, so it has a
+budget of its own: at most `advice` bits across the epoch's executions. And the rule binds only what is in the
+account: whatever ran in the compute that coverage leaves uncovered went unchecked, so at most `headroom` of the
+capacity may be left.
 
     verifier    takes the registration, the stream (one epoch) and compute coverage over it; rebuilds each distinct
                 advice's circuit, and records whether the epoch complies
@@ -44,12 +46,15 @@ class Nci:
     alpha: float  # novel bits read per gate
     advice: int  # advice bits per epoch
     headroom: float  # the most of the compute capacity coverage may leave uncovered
+    builders: frozenset[str]  # the ids of the builders declared up front
 
     def verifier(self) -> Actor:
         registration = yield from receive(Registration, "prover")
         executions = yield from collect(Execution, Closed, "prover")
         coverage = yield from receive(ComputeCoverage, "verifier")
         stream, reasons = digest(registration, executions), []
+        if registration.builder.id() not in self.builders:
+            reasons.append(f"builder {registration.builder.id()} was not declared up front")
         if coverage.reasons or coverage.stream != stream:
             reasons.append("compute coverage not established")
         elif coverage.headroom > self.headroom * coverage.capacity:

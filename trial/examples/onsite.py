@@ -30,7 +30,7 @@ onsite = Onsite(
     compute=Compute(peak={"gpu": 1000.0}),
     memory=Memory(size={"gpu": 32 * 1024}),
     network=Network(max_timing_bits=7, side_bits=1000),
-    nci=Nci(gamma=4096, alpha=0.2, advice=8, headroom=0.3),
+    nci=Nci(gamma=4096, alpha=0.2, advice=8, headroom=0.3, builders=frozenset({builder.id()})),
 )
 registration, executions, inputs = executed(builder, schedule(requests, (3, 1, 4), builder), onsite.integrity.scheme)
 fleet = {"gpu": 2}
