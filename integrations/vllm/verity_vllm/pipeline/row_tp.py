@@ -5,15 +5,18 @@
   memory holds, at most ranks x (shapes + 1), as the single-GPU Build sizes them; the composes likewise, at most one per rank).  A PASS Build
   also builds the required-value manifest over the W ranks (``manifest build-global --programs-root build/rank<r>``), and
   the row stops (exit 21) when it names call boundaries (``Row.call_boundaries``: a TP Commit attaches no call-boundary source).
+  With ``--build-relabel on`` one template rank's request derives write the other ranks' (`pipeline.tp.relabel_build`).
 * **Match**: the capture under the observer and collective recorder, the ``--no-observer`` control, the collective-level
   check (``tp-match --arm check``); a request that stopped before its cap gets its served-shape Program derived per rank
   and GP-01 recomposed (``eos-truncated``); then, with a rank profile (default ``derived_<ROLE>_tp<W>``; ``--fold-profile ''``
-  = collective-level only, named), the per-rank fold Match (``tp-fold-match``).
+  = collective-level only, named), the per-rank fold Match (``tp-fold-match``).  A leased item's capture and control each hold the
+  task's GPUs from right before their engine to their exit (``Row.run_gpu``); everything after them runs on the CPU, unleased.
 * **Commit**: the manifest over the W ranks, complete, then ``tp-commit`` with the windowed staging in its environment
   (``VERITY_WINDOW_MB`` / ``VERITY_WINDOW_SLOTS`` / ``VERITY_RETAIN``, and a config run's ``VERITY_STAGING_BOUNDED``: flags it does not have) and ``--require-fold-match``
   when a fold Match is on disk.  The ranks run the guarded-max FA2 tap build and every tap the manifest names the family of
-  (``row_records.applicable_taps``), as the single-GPU row does.  A leased item's ``tp-commit`` holds the task's GPUs from right
-  before its engine to its last run's finalize (``Row.run_gpu``, `pipeline.tp.lease`); such a row has no Match (its processes see no GPU).
+  (``row_records.applicable_taps``), as the single-GPU row does.  Each rank's weights registration hashes on its GPU
+  (``VERITY_WEIGHTS_HASH=device`` unless the item sets ``host`` or ``device-checked``).  A leased item's ``tp-commit`` holds the task's
+  GPUs from right before its engine to its last run's finalize (``Row.run_gpu``, `pipeline.tp.lease`).
   With ``--replay-deferred 1`` every rank seals a replay bundle in place of its C2 replay and the Commit is PENDING until the
   **replay** stage (CPU, ``tp-commit-replay``) replays every rank's bundle and decides it.
 
@@ -36,11 +39,13 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
+from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, stage_on
 
 TP_UTIL = "0.6"
+MATCH_LEG_KEPT = "a Match leg holds its GPUs to its exit: its engine is its last work"
 
 
 def _tail_bytes(path: str, n: int = 200) -> str:
@@ -181,6 +186,9 @@ class TpRow(Row):
         if self.signalled:
             self.cancelled(1)
 
+    def step(self, r: int, out: str | None = None) -> tuple[Any, ...]:
+        return (r, out or f"{self.rank(r)}/build_step", "--wrapper", "step", "--M", str(self.B), "--pos0", "8")
+
     def request(self, r: int, lp: int, t: int) -> tuple[Any, ...]:
         out = f"{self.rank(r)}/build_request_LP{lp}_T{t}"
         shutil.rmtree(out, ignore_errors=True)
@@ -227,7 +235,7 @@ class TpRow(Row):
         for r in range(self.W):
             os.makedirs(self.rank(r), exist_ok=True)
             if not R.derived_ok(f"{self.rank(r)}/build_step"):
-                steps.append((r, f"{self.rank(r)}/build_step", "--wrapper", "step", "--M", str(self.B), "--pos0", "8"))
+                steps.append(self.step(r))
         requests = [self.request(r, lp, t) for lp, t in R.longest_first(self.shapes) for r in range(self.W)
                     if not R.derived_ok(f"{self.rank(r)}/build_request_LP{lp}_T{t}")]
         return requests + steps
@@ -237,7 +245,12 @@ class TpRow(Row):
         self.to_b = self.cb.build_timeout or 7200
         t0 = int(time.time())
         self.tl("stage.build", "start")
-        self.derive_all(self.build_todo(), self.derive_jobs(self.shapes, self.W * (nsh + 1)))
+        todo, jobs = self.build_todo(), self.derive_jobs(self.shapes, self.W * (nsh + 1))
+        if self.cb.build_relabel == "on":
+            from verity_vllm.pipeline.tp import relabel_build
+            relabel_build.derive(self, todo, jobs)
+        else:
+            self.derive_all(todo, jobs)
         for r in range(self.W):
             for f in sorted(glob.glob(f"{self.rank(r)}/*.rc")):
                 self.log(f"derive {os.path.basename(f[:-3])} rank{r} rc={open(f).read().strip()} {_tail_bytes(f[:-3] + '.log')}")
@@ -270,10 +283,10 @@ class TpRow(Row):
 
     # ------------------------------------------------------------------------------------------------ Match
     def match(self) -> None:
+        """The capture and the control, the GPU legs, each under the item's lease when it has one (`Row.run_gpu`: all the task's GPUs from
+        right before the leg's engine to its exit, recorded in ``match/lease/<leg>/``); the check, the served-shape derives and the fold
+        Match after them, on the CPU, with no device and no lease."""
         cm, M = self.cm, self.M
-        if self.leased:
-            self.verdict("match", "FAIL", "a leased TP row's processes see no GPU outside its Commit's lease: its Match runs unleased (a config run has none)")
-            raise Stop(11)
         to_m, to_f = cm.match_timeout or 3600, cm.fold_timeout or 7200
         self.to_b = self.cb.build_timeout or 7200
         for r in range(self.W):
@@ -285,10 +298,12 @@ class TpRow(Row):
                        "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", *self.engine)
         t0 = int(time.time())
         self.tl("stage.match", "start")
-        rc_cap = self.run_tl("match.capture", to_m, f"{M}/capture.log", [*cap, "--record-collectives", "--out", f"{M}/capture"])
+        rc_cap = self.run_gpu("match.capture", to_m, f"{M}/capture.log", [*cap, "--record-collectives", "--out", f"{M}/capture"],
+                              lease_dir=f"{M}/lease/capture", kept=MATCH_LEG_KEPT)
         ranks = " ".join(_grep(f"{M}/capture.log", lambda s: s.startswith("[tp2] rank ") and s[11:].split(":", 1)[0].isdigit() and ":" in s[11:]))
         self.log(f"match capture rc={rc_cap} {(ranks + ' ' if ranks else '')[:300]}")
-        rc_ctl = self.run_tl("match.control", to_m, f"{M}/control.log", [*cap, "--no-observer", "--out", f"{M}/control"])
+        rc_ctl = self.run_gpu("match.control", to_m, f"{M}/control.log", [*cap, "--no-observer", "--out", f"{M}/control"],
+                              lease_dir=f"{M}/lease/control", kept=MATCH_LEG_KEPT)
         rc_chk = self.run_tl("match.check", to_m, f"{M}/check.log", self.cli("tp-match", "--arm", "check", "--out", M, *br))
         chk = R.tp_check_line(M)
         self.log(f"match check rc={rc_chk}: {chk or 'no tp2_match.json'}")
@@ -375,7 +390,9 @@ class TpRow(Row):
         self.child_env["VERITY_RETAIN"] = ck.retain
         if self.config_run:
             self.child_env["VERITY_STAGING_BOUNDED"] = "1"
-        self.log(f"commit staging: window_mb={ck.window_mb} slots={ck.window_slots} retain={ck.retain}{' bounded' if self.config_run else ''}")
+        self.child_env.setdefault(GL.WEIGHTS_HASH, "device")
+        self.log(f"commit staging: window_mb={ck.window_mb} slots={ck.window_slots} retain={ck.retain}{' bounded' if self.config_run else ''}; "
+                 f"weights hash {self.child_env[GL.WEIGHTS_HASH]}")
         rc_k = self.run_gpu("commit.tp_commit", to_k, f"{d}/commit.log", self.commit_cmd(taps))
         keys = ("PASS", "FAIL", "sampled replay", "match oracle", "weights pin", "cross-rank collectives", "fold-Match", "C2 population", "coverage")
         tagged = _grep(f"{d}/commit.log", lambda s: s.startswith("[tp2commit] ") and s[12:].lstrip(" ").startswith(keys))

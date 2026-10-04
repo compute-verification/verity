@@ -12,7 +12,8 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = [
   "/workspace/verity-guest/bin/*", "/workspace/verity-guest/*.sh", "/workspace/verity-guest/*.py",
   "/usr/local/bin/vy-*", "/usr/local/bin/gpu-lease*", "/usr/local/sbin/vy-*", "/usr/local/lib/vy-monitoring/*",
-  "/etc/systemd/system/vy-*", "/workspace/jobs/dispatch/*.env", "/home/research/commit-release/*.py",
+  "/usr/local/lib/vy-lean-cache/*", "/etc/systemd/system/vy-*", "/workspace/jobs/dispatch/*.env",
+  "/home/research/commit-release/*.py",
 ]
 
 [nodes.vy-nebius-2]
@@ -262,6 +263,12 @@ by = "tools/research/src/research/pods/nebius/sky/cluster_up.sh"
 nodes = ["vy-nebius-1"]
 
 [[file]]
+path = "/etc/systemd/system/vy-store-evict-research.service.d/src.conf"
+src = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"
+nodes = ["vy-nebius-1"]
+run = ["systemd:vy-store-evict-research.timer"]
+
+[[file]]
 path = "/etc/systemd/system/vy-usage.service"
 by = "tools/research/src/research/pods/nebius/sky/cluster_up.sh"
 nodes = ["vy-nebius-1"]
@@ -279,6 +286,35 @@ nodes = ["vy-nebius-1"]
 [[file]]
 path = "/etc/systemd/system/vy-exporter.service"
 by = "tools/research/src/research/pods/nebius/monitoring/host_up.sh"
+nodes = ["vy-nebius-1"]
+
+# ---- node 1: the Lean build cache. Infra's sandbox and its user (`sudo -n vy-lean-build-setup` after installing), then console's
+# key (/etc/verity/lean-cache.env), then lean's publisher in place of run-daily's stub, then `systemctl enable --now` the timer by
+# hand. No `run`: the timer is started last, never by an install.
+
+[[file]]
+path = "/usr/local/sbin/vy-lean-build-setup"
+src = "tools/research/src/research/pods/nebius/lean_build_setup.sh"
+nodes = ["vy-nebius-1"]
+
+[[file]]
+path = "/usr/local/bin/vy-lean-sandbox"
+src = "tools/research/src/research/pods/nebius/lean_sandbox.py"
+nodes = ["vy-nebius-1"]
+
+[[file]]
+path = "/usr/local/lib/vy-lean-cache/run-daily"
+src = "tools/research/src/research/pods/nebius/lean_cache_daily.sh"
+nodes = ["vy-nebius-1"]
+
+[[file]]
+path = "/etc/systemd/system/vy-lean-cache-daily.service"
+src = "tools/research/src/research/pods/nebius/vy-lean-cache-daily.service"
+nodes = ["vy-nebius-1"]
+
+[[file]]
+path = "/etc/systemd/system/vy-lean-cache-daily.timer"
+src = "tools/research/src/research/pods/nebius/vy-lean-cache-daily.timer"
 nodes = ["vy-nebius-1"]
 
 # ---- node 2: PoUW's node, Verity's guest (/workspace/pouw/infra, tools/cluster's agent)
@@ -332,6 +368,18 @@ nodes = ["vy-nebius-2"]
 path = "/home/research/.config/systemd/user/n2-custody.timer"
 src = "tools/research/src/research/pods/nebius/n2-custody.timer"
 nodes = ["vy-nebius-2"]
+
+[[tree]]  # the research node 1's Jobs publish and push node 2's runs with (n2_custody.sh's VY_CUSTODY_SRC), and each node's
+# `research data custody --triage` runs, laid out as in the repository: store.remote reads the bucket's pin, store.pod.toml, three
+# directories up
+path = "/workspace/jobs/custody/tools/research/src/research"
+src = "tools/research/src/research"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+
+[[file]]
+path = "/workspace/jobs/custody/tools/research/store.pod.toml"
+src = "tools/research/store.pod.toml"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
 
 [[file]]
 path = "/workspace/pouw/infra/bin/backup.sh"

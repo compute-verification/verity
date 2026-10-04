@@ -156,9 +156,13 @@ def cores() -> int:
 
 
 def lake_env() -> dict[str, str]:
+    """The environment of every `lake` and `setup.sh` the audit runs. The audit builds from source: Lake neither reads nor
+    writes its local artifact cache, and `setup.sh` restores nothing from the build cache (`cache.py`)."""
     env = dict(os.environ)
     env["PATH"] = f"{Path.home() / '.elan' / 'bin'}{os.pathsep}{env.get('PATH', '')}"
     env.setdefault("LEAN_NUM_THREADS", str(cores()))
+    env["LAKE_ARTIFACT_CACHE"] = "false"
+    env["LEAN_CACHE"] = "off"
     return env
 
 
