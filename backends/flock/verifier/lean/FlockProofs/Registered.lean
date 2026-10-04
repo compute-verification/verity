@@ -43,27 +43,29 @@ theorem checkPort_ok {c : Circuit} {pub : Public} {t : Tables} {indices : Array 
   · rename_i p hp
     split at h
     · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
-    · rename_i hfit
-      obtain ⟨⟨positions, paths⟩, _, h⟩ := except_bind_ok h
-      simp only at h
-      split at h
+    · split at h
       · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
-      · split at h
-        · exact absurd h (throw_ne_ok _ _)
-        · rename_i hrow
-          split at h
-          · rename_i hinst
-            have hpn := List.find?_some hp
-            refine ⟨p, List.mem_range.mp (List.mem_of_find?_eq_some hp), by simpa using hpn, by simpa using hfit,
-              fun i hi => ?_⟩
-            have hi' := List.find?_eq_none.mp hinst i (List.mem_range.mpr hi)
-            simp only [Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not, not_or, Classical.not_not] at hi'
-            obtain ⟨hr, hreads⟩ := hi'
-            have ho := List.find?_eq_none.mp hrow _ (List.mem_range.mpr hr)
-            exact ⟨hr, _, _, hreads, by simpa using ho⟩
-          · split at h
-            · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
-            · split at h <;> exact absurd h (throw_ne_ok _ _)
+      · rename_i hfit
+        obtain ⟨⟨positions, paths⟩, _, h⟩ := except_bind_ok h
+        simp only at h
+        split at h
+        · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
+        · split at h
+          · exact absurd h (throw_ne_ok _ _)
+          · rename_i hrow
+            split at h
+            · rename_i hinst
+              have hpn := List.find?_some hp
+              refine ⟨p, List.mem_range.mp (List.mem_of_find?_eq_some hp), by simpa using hpn, by simpa using hfit,
+                fun i hi => ?_⟩
+              have hi' := List.find?_eq_none.mp hinst i (List.mem_range.mpr hi)
+              simp only [Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not, not_or, Classical.not_not] at hi'
+              obtain ⟨hr, hreads⟩ := hi'
+              have ho := List.find?_eq_none.mp hrow _ (List.mem_range.mpr hr)
+              exact ⟨hr, _, _, hreads, by simpa using ho⟩
+            · split at h
+              · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
+              · split at h <;> exact absurd h (throw_ne_ok _ _)
   · exact absurd h (throw_ne_ok _ _)
 
 /-- **`Registered.check` accepting.** If the verifier holds registered roots (`own`) and `check` accepts the statement, the
