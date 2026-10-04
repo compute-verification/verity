@@ -273,13 +273,13 @@ def check_bmm(case: dict, out: dict) -> dict:
 
 
 def check_combine(case: dict, out: dict) -> dict:
+    """ATen's bf16 combine with NaN 0x7FFF (F2FP), the word sm_120 writes; 0x7FC0's count is reported beside it."""
     routed, shared = MC.combine_inputs(case)
-    rep = {}
-    for nan in (0x7FFF, 0x7FC0):
-        m = combine_rows(routed, shared, case["rsf"], nan)
-        bad = out["out"] != m
-        rep[hex(nan)] = {"words_bad": int(bad.sum()), "rows_bad": int(bad.any(axis=1).sum()), "first": _first(out["out"], m, bad)}
-    return {"rows": int(routed.shape[0]), "by_nan": rep}
+    m = combine_rows(routed, shared, case["rsf"], 0x7FFF)
+    bad = out["out"] != m
+    other = int((out["out"] != combine_rows(routed, shared, case["rsf"], 0x7FC0)).any(axis=1).sum())
+    return {"rows": int(routed.shape[0]), "words_bad": int(bad.sum()), "mismatched_rows": int(bad.any(axis=1).sum()),
+            "first": _first(out["out"], m, bad), "rows_bad_at_nan_0x7fc0": other}
 
 
 def check_mufu(d: Path) -> dict:
@@ -314,9 +314,6 @@ def check(d: Path, only: list[int] | None = None) -> dict:
         op = case.get("op", "decode")
         out = dict(np.load(d / f"case_{i}.npz"))
         r = CHECK[op](case, out)
-        if op == "combine":
-            best = min(r["by_nan"].values(), key=lambda v: v["rows_bad"])
-            r["mismatched_rows"] = best["rows_bad"]
         rows += r["rows"]
         mismatched += r["mismatched_rows"]
         rep["cases"].append({"case": i, **{k: v for k, v in case.items() if k != "seqlens"},
