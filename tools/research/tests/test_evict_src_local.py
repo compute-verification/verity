@@ -2,8 +2,6 @@
 red team's recheck of 437c8cf32, each of which deleted a tree with work in it; the rest check that
 what a ship and a test run leave behind (READY.json, build caches, fetched fixtures) doesn't pin a tree forever."""
 import json
-import os
-import subprocess
 
 from research.store import evict as EV
 from test_evict_src import NOW, _age, _git, fake_proc, kept, node, run  # noqa: F401  (node is a fixture)
