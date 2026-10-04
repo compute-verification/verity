@@ -283,6 +283,7 @@ def moe_ops_traced(model=None):
                 continue
             if fe is packets.get("moe_forward") or fe is packets.get("moe_forward_shared"):
                 h.patch(m, "_forward_entry", (lambda hs, rl, sei, ids, _name, _hd, _l=m: _l._forward_impl(hs, rl, sei, ids)))
+        _router_bias_through_owner(model, h)
     if "fused_experts" in packets:
         # `_OpNamespace.__getattr__` caches resolved packets as instance attributes; a plain function in its place is what callers
         # of `torch.ops.vllm.fused_experts(**kw)` now reach, and the packet is restored below.
@@ -299,6 +300,28 @@ def moe_ops_traced(model=None):
         h.patch(_ws, "_manager", _ExportWorkspaceManager())
     with h:
         yield
+
+
+def _router_bias_through_owner(model, h) -> None:
+    """A MoE router is a plain object (not a module) holding the layer's `e_score_correction_bias` Parameter (`GroupedTopKRouter`,
+    `FusedTopKBiasRouter`).  The export swaps each module's parameters for its own tensors while it traces, so a reference held
+    outside the module tree is the original tensor, which the export lifts as a hidden constant.  For the duration, each such
+    router reads the bias from the module that registers it, at every `select_experts` (the same Parameter: the bias the engine
+    loads into it)."""
+    owners = {id(p): (mod, n) for mod in model.modules() for n, p in mod._parameters.items() if p is not None}
+    for m in model.modules():
+        r = getattr(m, "router", None)
+        b = getattr(r, "e_score_correction_bias", None)
+        if r is None or isinstance(r, torch.nn.Module) or not isinstance(b, torch.nn.Parameter) or id(b) not in owners:
+            continue
+        owner, name = owners[id(b)]
+
+        def select(*a, _r=r, _o=owner, _n=name, _sel=r.select_experts, **k):
+            _r.e_score_correction_bias = getattr(_o, _n)
+            return _sel(*a, **k)
+
+        h.patch(r, "e_score_correction_bias", b)
+        h.patch(r, "select_experts", select)
 
 
 class _ExportWorkspaceManager:
