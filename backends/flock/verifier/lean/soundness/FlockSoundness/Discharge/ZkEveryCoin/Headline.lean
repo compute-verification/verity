@@ -75,7 +75,33 @@ theorem coin_close (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.
       ∧ prCoin (fun p : (C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt) => E c (simAll C c w0 p.1 p.2))
         ≤ prCoin (fun p : (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) => E c (outExe C c w p.1 p.2))
           + 2 * Fintype.card (LeafPos C.z) * (2 : ℝ≥0∞) ^ (-193 : ℤ) := by
-  sorry
+  by_cases hA : C.Admits c
+  · simp only [outExe, simAll, hA, ite_true]
+    obtain ⟨h1, h2⟩ := zkViewAt_of_ok C hC hKey c hA
+      (fun v => (Sum.inl (v 0) : (C.T c).tab.View ⊕ (C.T c).tab.Cut)) (fun _ => w) (fun _ => w0) (fun _ => hv)
+      (fun _ => hreg c) (E c)
+    have eR := ZK.prCoin_congr_equiv (Equiv.funUnique (Fin 1) ((C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt)))
+      (fun p => E c (.inl ((C.T c).viewExe w p.1 p.2)))
+    have eS := ZK.prCoin_congr_equiv (Equiv.funUnique (Fin 1) ((C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt)))
+      (fun p => E c (.inl ((C.T c).simExe w0 p.1 p.2)))
+    have hs : ∑ _j : Fin 1, 2 * (Fintype.card (C.T c).tab.Hid : ℝ≥0∞) * (2 : ℝ≥0∞) ^ (-193 : ℤ)
+        ≤ 2 * Fintype.card (LeafPos C.z) * (2 : ℝ≥0∞) ^ (-193 : ℤ) := by
+      rw [Fin.sum_univ_one]
+      gcongr
+      exact_mod_cast card_hid_le C c
+    exact ⟨(eR.symm.trans_le h1).trans (add_le_add (le_of_eq eS) hs),
+      (eS.symm.trans_le h2).trans (add_le_add (le_of_eq eR) hs)⟩
+  · simp only [outExe, simAll, hA, ite_false, ZkView.Coined.viewExe_eq]
+    have hT := leafT_hm96 C c
+    have hS : (C.T c).tab.Admits (sentAt C c) :=
+      ZK.Session.sent_admits (fun _ : Fin 1 => (C.T c).tab) (fun _ => (C.T c).rep) 0
+    have h1 : Assumptions.Hm96Hiding (C.T c).hm96.My (C.T c).hm96.cs ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
+      rw [ZkView.Coined.hm96At_My (C.T c) ZkView.My rfl, ZkView.Coined.hm96At_cs (C.T c) ZkView.My rfl]
+      exact hKey
+    have h := ZK.Table.table_abort_hm96 (C.T c).tab (C.T c).hm96 _ hT h1 (sentAt C c) hS w (hreg c) w0
+      (fun v => E c (.inr v))
+    rw [card_pre] at h
+    exact h
 
 /-- **Zero knowledge at every coin vector at a `CoinedSetup` from its facts**: Lemma B where the prover doesn't refuse
 (`zkViewAt_of_ok`), and the refusal where it does (`Table.table_abort_hm96`, which reads nothing of `CoinedOK`). -/
@@ -83,7 +109,17 @@ theorem zkViewAll_of_ok (C : CoinedSetup) [Fintype (CoinsZK C.Rest)]
     (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C)
     (hKey : Assumptions.Zk.HashDerivedKeyHm96) :
     ZkViewAll C ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
-  sorry
+  intro w w0 hv hreg E
+  have hc := coin_close C hC hKey w w0 hv hreg E
+  constructor
+  · refine (avg_mono fun c => (hc c).1).trans ?_
+    rw [avg_add]
+    gcongr
+    exact avg_const_le _
+  · refine (avg_mono fun c => (hc c).2).trans ?_
+    rw [avg_add]
+    gcongr
+    exact avg_const_le _
 
 /-- **A coordinate that can be overwritten in place is uniform**: if `upd c x` puts `x` at `f`'s coordinate and nowhere
 else, `f` of a uniform `c` hits any value with probability at most `1/|Val|`. -/
@@ -134,7 +170,24 @@ coins of each of the two reps is uniform over F128. -/
 theorem outer_one_le (P : LigProver) {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     prCoin (fun c : CoinsZK (coinedOf P Tz st).Rest => ¬ ∀ r, ∀ x ∈ (coinedOf P Tz st).rOuter c r, x ≠ 1)
       ≤ 2 * (st.m - 13 : ℕ) * (2 : ℝ≥0∞) ^ (-128 : ℤ) := by
-  sorry
+  classical
+  have hsub : ∀ c : CoinsZK (coinedOf P Tz st).Rest, (¬ ∀ r, ∀ x ∈ (coinedOf P Tz st).rOuter c r, x ≠ 1) →
+      ∃ i ∈ (Finset.univ : Finset (Fin 2 × Fin (st.m - 13))), c.rest.rOuter i.1 i.2 = 1 := by
+    intro c h
+    have : ¬ ∀ r, ∀ x ∈ List.ofFn (c.rest.rOuter r), x ≠ 1 := h
+    push Not at this
+    obtain ⟨r, x, hx, h1⟩ := this
+    obtain ⟨j, hj⟩ := List.mem_ofFn.1 hx
+    exact ⟨(r, j), Finset.mem_univ _, hj.trans h1⟩
+  have hm := prCoin_mono hsub
+  have he := prCoin_exists_le (C := CoinsZK (coinedOf P Tz st).Rest) (Finset.univ : Finset (Fin 2 × Fin (st.m - 13)))
+    (fun i c => c.rest.rOuter i.1 i.2 = 1)
+  have hs : ∑ i : Fin 2 × Fin (st.m - 13), prCoin (fun c : CoinsZK (coinedOf P Tz st).Rest => c.rest.rOuter i.1 i.2 = 1)
+      ≤ ∑ _i : Fin 2 × Fin (st.m - 13), (2 : ℝ≥0∞) ^ (-128 : ℤ) :=
+    Finset.sum_le_sum fun i _ => prCoin_outer_one P Tz st i.1 i.2
+  refine hm.trans (he.trans (hs.trans (le_of_eq ?_)))
+  rw [Finset.sum_const, Finset.card_univ, Fintype.card_prod, Fintype.card_fin, Fintype.card_fin, nsmul_eq_mul,
+    Nat.cast_mul, Nat.cast_ofNat]
 
 variable {mPts n : ℕ} {Reg : Type} (P : LigProver)
 
@@ -158,6 +211,6 @@ theorem zk_session_view_all (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S�
     (hKey : Assumptions.Zk.HashDerivedKeyHm96) :
     ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)),
       ZkViewAll (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
-  sorry
+  fun S R y => zkViewAll_of_ok _ (coinedOf_setup (Reg := Reg) P I dj y₀ ht hdm S R y).2.2.2.2.2 hKey
 
 end FlockSoundness.Discharge.ZkEveryCoin
