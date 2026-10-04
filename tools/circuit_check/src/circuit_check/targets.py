@@ -204,8 +204,9 @@ def _pouw_roots() -> list[Any]:
     on the H100's and sm_120's records and its roots on sm_120's.  Both checks' hiding tiles and roots (``hidden``: the tile
     digest, `verity_pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes.  The prototype of Pearl-C's
     per-tile cap (`verity_pouw.circuit.cap`): its row (pc8's with the salt-dead counts), its word and a one-word tile at
-    k = 256 (two promotion windows) on sm_120, and the split's units (``cap``: the strip, the word unit, the tile and its
-    tally) and roots at the same k with one row a side."""
+    k = 256 (two promotion windows) on sm_120, and the split's units (``cap``: the strip, the word unit, a tile row's
+    digests and sums, the tile and its tally) and roots at the same k with one row a side, and a tile row's digests and
+    sums at the deployed 64 columns (two chunks)."""
     from dataclasses import replace
 
     from verity.ir.defs import bind
@@ -228,7 +229,9 @@ def _pouw_roots() -> list[Any]:
             if t not in out]
     out += [*cap.templates(256, "sm120").values()]
     split = pc8.Shape(1, 256, 1, tile=(1, 1), dev="sm120", hidden=True, cap=True)
-    out += [t for r, t in cap.unit_templates(256, "sm120").items() if r in ("strip", "word", "tile", "tally")]
+    out += [t for r, t in cap.unit_templates(256, "sm120").items()
+            if r in ("strip", "word", "row_digest", "row_tally", "tile", "tally")]
+    out += [bind(cap.Pc8CapRowDigestDef, TN=64), bind(cap.Pc8CapRowTallyDef, K=256, TN=64)]
     out += [pc8.call(split), pc8.check(split)]
     return out + [bind(pouw_rows.NcpLinearRow, K=64, N=16), bind(pouw_rows.NcpLinearRowBias, K=64, N=16),
                   bind(pouw_rows.NcpLinearCoordinate, K=64)]
