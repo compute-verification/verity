@@ -12,4 +12,3 @@ rev = "5ed2965256430c3649e86755f9576b54eca72435"
 
 [[lean_lib]]
 name = "NetTiming"
-roots = ["NetTiming.Assumptions", "NetTiming.Difftest", "NetTiming.Guarantees", "NetTiming.Protocol"]

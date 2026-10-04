@@ -30,12 +30,6 @@
    "run": "r20261002-013330-8cff",
    "sha256": "c9a35455c168955a68a87fb6e8301e84114ef79c032ae4efdb14f3be669af603"
   },
-  "5dced5d739a3026bfa70f4292502aec7beadcd473121be1427d75da466e1eb1a": {
-   "bytes": 706797442,
-   "package": "security_proofs/warden",
-   "run": "r20261002-013330-8cff",
-   "sha256": "6ed219a253d9af409d3f8e06c4843e1f13f0081a9eac96048964d299b7c55836"
-  },
   "7f695ff36f2ff2aa61d16775fab5ba1e738b38ca9369552ba8f14cdeee7c70f2": {
    "bytes": 701650941,
    "package": "packages/verity/lean",

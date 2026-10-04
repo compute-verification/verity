@@ -1,6 +1,7 @@
 {
- "roots": ["NetTiming.Assumptions", "NetTiming.Difftest", "NetTiming.Guarantees", "NetTiming.Protocol"],
+ "roots": ["NetTiming"],
  "exempt": {
+  "CheckAxioms": "the #print axioms list (`lake env lean CheckAxioms.lean`)",
   "NetTimingDifftest": "the difftest against the Python audit, under `runs`: compiled evaluation of NetTiming.Difftest.main, audited under NetTiming, a test and not a proof"
  },
  "runs": {
@@ -33,7 +34,7 @@
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
   }
  },
- "pins": {
+ "guarantees": {
   "NetTiming.SecurityProofs.CardCountsEqLe": {
    "signature": ["NetTiming.SecurityProofs.CardCountsEqLe : NetTiming.Guarantees.CardCountsEqLe"],
    "assumptions": [],
@@ -462,7 +463,7 @@
     "NetTiming.Regenerates": "0520d939fabb6322356aa0473896aa3e831f7c9109c8948772fe7b7a6fea82b1",
     "NetTiming.UntimedStatus": "a015b8611413a71d687e892b9f069bc03ab29ce579dd19c9533b7de9b9679c49"
    },
-   "pins": [
+   "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks",
     "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts",
     "NetTiming.SecurityProofs.EncardDecodableLe",
@@ -526,7 +527,7 @@
     "NetTiming.Guarantees.ReleasedSelf": "8979c51b293670929608ddd92aaf74e447742024e5691b2cf8518f4dc5d576e9",
     "NetTiming.Guarantees.SumReleasedLe": "52ac9708422a5416fab3bd5e3ed7691a820b673004cb2430d92ff32c640db835"
    },
-   "pins": [
+   "guarantees": [
     "NetTiming.SecurityProofs.CardCountsEqLe",
     "NetTiming.SecurityProofs.CardCountsLeLe",
     "NetTiming.SecurityProofs.CardFree",
@@ -581,7 +582,7 @@
     "NetTiming.released": "5dbceb6ee682c7d972fb16f08ec0c1dfb84ba70b492ba1bb9055d217c9d0a3db",
     "NetTiming.rowCount": "95cee3532364711f79cb77b0ba21751b405644470a935c9f92c99eda351ab005"
    },
-   "pins": [
+   "guarantees": [
     "NetTiming.SecurityProofs.CardLeftPacked",
     "NetTiming.SecurityProofs.EncardAccSeqsLeAdvice",
     "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks",
@@ -635,7 +636,7 @@
     "NetTiming.linkFrames": "bc3a5c6523ea256a634e78bd6745d0818f783786c6fb054800d3f3f3cd080663",
     "NetTiming.rowFrames": "a1c2604aec04da7731fcbd03d5189d5e8c3d2915e7c3ad309dc1320af225403e"
    },
-   "pins": [
+   "guarantees": [
     "NetTiming.SecurityProofs.EncardIngressDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
@@ -682,7 +683,7 @@
     "NetTiming.Warden.wire": "41756fc4243c14060c4460603106856128fcdcccc3b3ab09943b5d77b910e0f2",
     "NetTiming.ingressUpTo": "d5d3269d8dd71a353c700722aa08bd635e621d61f95c36aaf14a34ebf1bbafe3"
    },
-   "pins": [
+   "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsLeAdvice",
     "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks",
     "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts",
@@ -744,7 +745,7 @@
     "NetTiming.handingFrom": "607425da711bd04e5a8da14485601f1ddf0bd2afac5ff5428b7b6cfa8119ba5d",
     "NetTiming.payloads": "629f7e81bf6e3bc9a64a924267226b9298a3069c46e5d2a8101b6bc9e43f1d87"
    },
-   "pins": [
+   "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate",
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock",
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow",
