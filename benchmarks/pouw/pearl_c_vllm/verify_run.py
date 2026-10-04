@@ -203,7 +203,9 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
             out["cross_check_failed"] = differ
         if fast:
             out["cross_checked"] = [t for t, _, _, same in verdicts if same is not None]
+        at = PW.draw_wref(scheme)
         out.update(accepted=ok, scheme=scheme.name, source=source.hex(), tiles=[t for t, *_ in verdicts],
+                   draw_wref=at.statement if at else "wref",
                    drawn=draws, exclusion_tiles=len(todo) - draws,
                    verdicts=[{"tile": t, "ok": g, "reason": r} for t, g, r, _ in verdicts], w_ref=str(w_ref), credit=str(credit))
         out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: pearl_c_work's tiles ({draws} drawn, "
