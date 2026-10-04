@@ -1,0 +1,22 @@
+{
+ "definitions": {
+  "PouwBf16Neg_v2": {
+   "and": 0
+  },
+  "PouwETilde_v2": {
+   "and": 88
+  },
+  "PouwF32SqrtRn_v2": {
+   "and": 937
+  },
+  "PouwSqAcc_v2": {
+   "and": 2511
+  },
+  "PouwSqCeil_v2": {
+   "and": 27531
+  },
+  "PouwSqGe_v2": {
+   "and": 1036
+  }
+ }
+}

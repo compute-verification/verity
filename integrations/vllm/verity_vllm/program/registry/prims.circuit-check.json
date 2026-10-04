@@ -1,0 +1,31 @@
+{
+ "pieces": {
+  "DivFullScaleA_v2": {
+   "and": 1542
+  },
+  "F32Sub_v2": {
+   "and": 823
+  },
+  "GatherBf16x16_v1": {
+   "and": 283
+  },
+  "GatherBf16x32_v1": {
+   "and": 538
+  },
+  "GatherBf16x4_v1": {
+   "and": 93
+  },
+  "GatherBf16x64_v1": {
+   "and": 1049
+  },
+  "RopeOutAdd_v1": {
+   "and": 2998
+  },
+  "RopeOut_v1": {
+   "and": 2998
+  },
+  "SiluMulBf16_v1": {
+   "and": 2699
+  }
+ }
+}

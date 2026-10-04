@@ -1,0 +1,16 @@
+{
+ "pieces": {
+  "BitAtx16_v1": {
+   "and": 43
+  },
+  "GumbelNoiseLane_v1": {
+   "and": 109421
+  },
+  "GumbelNoiseLane_v2": {
+   "and": 109391
+  },
+  "GumbelStreamKey_v1": {
+   "and": 9758
+  }
+ }
+}
