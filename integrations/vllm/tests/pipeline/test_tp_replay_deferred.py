@@ -496,3 +496,81 @@ def test_a_pending_tp_commit_waits_for_the_replay_stage_which_decides_it(tmp_pat
     stage, cmd = ran[-1]
     assert stage == "replay.tp_commit_replay" and cmd[cmd.index("tp-commit-replay") + 1] == f"{t.d}/commit" and cmd[cmd.index("--checkpoint-dir") + 1] == t.ck
     assert ("replay PASS" if rc_replay == 0 else "replay FAIL") in (Path(t.d) / "stages.txt").read_text()
+
+
+class _AtLease(Exception):
+    pass
+
+
+@pytest.mark.parametrize("world, defers", [(2, True), (4, False)])
+def test_a_tp_commit_above_tp2_drops_the_deferral_before_it_takes_its_gpus(tmp_path, monkeypatch, capsys, world, defers):
+    """The row's `tp-commit --replay-deferred` (REPLAY_DEFERRED=1, as the dispatcher's auto resolves it) run to its GPU lease: at world 4
+    the flag is gone by then, so no rank's finalize defers and nothing is sealed, and the Commit's log says why; world 2 still defers."""
+    pytest.importorskip("torch")
+    import sys
+    from tests.pipeline.test_config_run import _tp
+    from verity_vllm.engine import engine_profile, vllm_adapter
+    from verity_vllm.pipeline import cli
+    from verity_vllm.pipeline.tp import lease
+
+    t = _tp(tmp_path, "--config-run", "1", "--replay-deferred", "1")
+    t.W = world
+    cmd = t.commit_cmd([])
+    args = cli.parse("tp-commit", cmd[cmd.index("tp-commit") + 1:], {})
+    assert (args.tp, args.replay_deferred) == (world, "full")
+
+    def acquire(*a, **k):
+        raise _AtLease(args.replay_deferred)
+
+    monkeypatch.setitem(sys.modules, "vllm", types.SimpleNamespace(LLM=None))
+    monkeypatch.setattr(engine_profile, "apply_env", lambda *a, **k: None)
+    monkeypatch.setattr(vllm_adapter, "load_workload", lambda *a, **k: {})
+    monkeypatch.setattr(lease, "acquire", acquire)
+    with pytest.raises(_AtLease) as at:
+        TC.main(args)
+    assert at.value.args[0] == ("full" if defers else None)
+    said = [ln for ln in capsys.readouterr().out.splitlines() if "--replay-deferred not taken" in ln]
+    assert said == ([] if defers else ["[tp2commit] --replay-deferred not taken (world 4 > 2: deferral is proven at TP2 only): every rank's C2 "
+                                       "replay runs in its process"])
+
+
+def test_a_tp_commit_that_replayed_in_process_above_tp2_leaves_the_replay_stage_nothing_to_do(tmp_path, monkeypatch):
+    """World 4 under REPLAY_DEFERRED=1: the Commit is decided, not PENDING, and the dispatcher's `row stage replay` runs no CPU replay and
+    does not fail (its world-2 control is `test_a_pending_tp_commit_waits_for_the_replay_stage_which_decides_it`)."""
+    from tests.pipeline.test_config_run import _tp
+    from verity_vllm.pipeline import row_records as R_
+
+    t = _tp(tmp_path, "--config-run", "1", "--replay-deferred", "1")
+    t.W = 4
+    (Path(t.d) / "commit").mkdir()
+    (Path(t.d) / "commit" / "summary.json").write_text(json.dumps({"only_arm": "instrumented", "commit_pass": True, "pass": True,
+                                                                    "replay_deferred": {"skipped": "world 4 > 2: deferral is proven at TP2 only"}}))
+    monkeypatch.setattr(R_, "tp_rank_workload_digest", lambda bdir, r: f"wd{r}")
+    monkeypatch.setattr(R_, "tp_manifest_complete", lambda d: True)
+    monkeypatch.setattr(R_, "applicable_taps", lambda man, ck: [])
+    t.hidden_so = str(tmp_path / "verity_fa2_matReqG.so")
+    Path(t.hidden_so).touch()
+    ran = []
+    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: ran.append(stage) or 0)
+    t.commit()
+    assert not t.replay_pending and "commit PASS" in (Path(t.d) / "stages.txt").read_text()
+    t.replay()
+    assert ran == ["commit.tp_commit"] and "replay" not in (Path(t.d) / "stages.txt").read_text()
+    assert "nothing deferred, the Commit replayed every rank in process (world 4 > 2" in (Path(t.d) / "row.log").read_text()
+
+
+def test_a_slim_bundle_above_tp2_is_not_refused_and_reaches_tp_commit_as_its_flag(tmp_path, monkeypatch):
+    from tests.pipeline.test_config_run import _tp
+    from tests.pipeline.test_row import TP_DENSE, _opts
+    from verity_vllm.pipeline import cli
+    from verity_vllm.pipeline.row import run_row
+    from verity_vllm.pipeline.row_tp import TpRow
+
+    worlds = []
+    monkeypatch.setattr(TpRow, "run", lambda self: worlds.append(self.W) or 0)
+    o = _opts(tmp_path, "--replay-deferred", "slim", "--world", "4", row=TP_DENSE)
+    assert run_row(o, o.stages) == 0 and worlds == [4]
+    t = _tp(tmp_path / "t", "--replay-deferred", "slim")
+    t.W = 4
+    cmd = t.commit_cmd([])
+    assert cli.parse("tp-commit", cmd[cmd.index("tp-commit") + 1:], {}).replay_deferred == "full"

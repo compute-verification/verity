@@ -2,7 +2,7 @@
 linkage, population reconciliation and weights pin into its verdict (`replay_gates`, `pin_gate`, `c2_and_pin_gates`), the components
 folded over the ranks (`sampled_replay_components`, `query_population_component`, `annotate_value_correspondence`), and `seal`, which
 seals every rank's replay bundle of a deferred Commit (`tp-commit --replay-deferred`) and writes `replay_deferred.json`.  `pipeline.tp.commit`
-decides in place with them, `pipeline.tp.commit_replay` from the ranks' replays on CPU."""
+decides in place with them, `pipeline.tp.commit_replay` from the ranks' replays on CPU.  A Commit above TP2 never defers (`deferral_skipped`)."""
 from __future__ import annotations
 
 import hashlib
@@ -16,6 +16,18 @@ from verity_vllm.pipeline import replay_bundle as RB
 
 DEFERRED = "replay_deferred.json"
 SCHEMA = "verity-vllm/tp-replay-deferred/v1"
+#: the largest world whose Commit defers its ranks' C2 replay: deferral is proven at TP2 only, so a larger world replays in process
+DEFER_MAX_WORLD = 2
+
+
+def deferral_skipped(args: Any) -> str | None:
+    """Why a `tp-commit --replay-deferred` of `args.tp` ranks replays in process all the same, or None when it defers (or was not asked to).
+    It drops the flag, so no rank's finalize defers, and says why in the Commit's log."""
+    why = f"world {args.tp} > {DEFER_MAX_WORLD}: deferral is proven at TP2 only" if args.replay_deferred and args.tp > DEFER_MAX_WORLD else None
+    if why:
+        print(f"[tp2commit] --replay-deferred not taken ({why}): every rank's C2 replay runs in its process", flush=True)
+        args.replay_deferred = None
+    return why
 
 
 def sha256_file(p: Path) -> str:

@@ -318,7 +318,8 @@ class CommitConfig:
                                   "config_record.json; no Match, no manifest-verify rebuild, no VU export")
     replay_k: int = option("--replay-k", env="REPLAY_K", type=int, default=256, help="config run: the replay's k units")
     replay_deferred: str = option("--replay-deferred", env="REPLAY_DEFERRED", default="0",
-                                  help="config run (any run of a TP row): 1 = the Commit writes a replay bundle (per rank) and exits without "
+                                  help="config run (any run of a TP row; above TP2 its Commit replays in process all the same): 1 = the Commit "
+                                       "writes a replay bundle (per rank) and exits without "
                                        "the replay; the verdict stays pending until `row stage replay` (CPU) replays the bundle; slim = a "
                                        "slim bundle (single-GPU)")
     config_baseline: str = option("--config-baseline", env="CONFIG_BASELINE", default="0",

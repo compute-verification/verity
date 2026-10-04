@@ -242,7 +242,7 @@ class Options:
                                          help="each rank's C2 sampled replay + boundary linkage do not run in its process: every rank of every instrumented run "
                                               "seals a replay bundle (<out>/replay_bundle_p<pair>_rank<r>/, verity_vllm.pipeline.replay_bundle) and the Commit's "
                                               "verdict stays PENDING (exit 0 when every check this process runs passes) until `verity-vllm tp-commit-replay <out>` "
-                                              "replays the bundles on CPU against the checkpoint and decides it as this process would have")
+                                              "replays the bundles on CPU against the checkpoint and decides it as this process would have (TP2 at most: `c2.deferral_skipped`)")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="[manbind MAN-09, COORD M-0614 (1)] the PINNED checkpoint snapshot (safetensors shards + config.json): each rank " "builds its weights of record from its rank Program's shard map (engine-free) and compares every served shard's sha256 " "to it right after register_weights; a difference FAILs named (rank, param). Required with --required-manifest unless " "--no-weights-pin (then the record says 'weights unpinned (MAN-09)' and the Commit FAILs closed)")
     checkpoints_manifest: str | None = option("--checkpoints-manifest", default=None, help="manifests/checkpoints.json (default: the repo's) -- the shard sha256s of record")
     checkpoint_model: str | None = option("--checkpoint-model", default=None, help="HF repo id selecting the checkpoints.json entry when --checkpoint-dir is not its local_path")
@@ -272,6 +272,7 @@ def main(args: Options) -> int:
         args.tp = int(args.world)
     if args.replay_deferred and (not args.required_manifest or args.no_sampled_replay):
         raise SystemExit("--replay-deferred defers the ranks' sampled replay: it needs --required-manifest and no --no-sampled-replay")
+    deferral_skipped = C2.deferral_skipped(args)
     relabel = None
     if args.relabel_rank:
         a, b = args.relabel_rank.split(":")
@@ -939,6 +940,8 @@ def main(args: Options) -> int:
     not_applied = sorted(k_ for k_, v_ in applied.items() if v_["applied"] is not True)
     if not_applied:
         summ["pass"], summ["negative_not_applied"] = None, not_applied
+    if deferral_skipped:
+        summ["replay_deferred"] = {"skipped": deferral_skipped}
     if args.replay_deferred:
         C2.seal(out, summ, rows, bundles_of, replay_cfg=replay_cfg, required_manifest=args.required_manifest, world=world, versions=versions,
                  all_pass=all_pass_but_c2, vc_base=vc_base, comps={"weights_pin": wp_comp, "cross_rank_collectives": xr_comp, "fold_match_binding": fb_comp},

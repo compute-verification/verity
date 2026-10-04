@@ -401,7 +401,7 @@ class TpRow(Row):
                        *arms, "--replay-workers", str(ck.replay_workers), "--label", self.row, "--out", f"{d}/commit")
         if not self.config_run and self.fold_profile and os.path.isfile(f"{self.M}/fold_match/tp2_fold_match.json"):
             cmd.append("--require-fold-match")
-        if ck.replay_deferred == "1":
+        if ck.replay_deferred in ("1", "slim"):    # slim reaches a TP row only above TP2 (`run_row`), where tp-commit replays in process
             cmd.append("--replay-deferred")
         return cmd + R.tap_source_args(taps, self.env) + (ck.extra_commit_args or "").split()
 
@@ -422,6 +422,9 @@ class TpRow(Row):
         """The deferred C2 of the Commit, on CPU (`tp-commit-replay`), from every rank's sealed bundle: each rank's shards composed from
         the checkpoint of record at (world, rank) and opened against its committed weights root.  Its exit decides the stage."""
         d = self.d
+        if skipped := ((R.load_json(f"{d}/commit/summary.json") or {}).get("replay_deferred") or {}).get("skipped"):
+            self.log(f"replay: nothing deferred, the Commit replayed every rank in process ({skipped})")
+            return
         self.tl("stage.replay", "start")
         why = (f"no deferred Commit in {d}/commit (commit/replay_deferred.json)" if not os.path.isfile(f"{d}/commit/replay_deferred.json") else
                f"no checkpoint dir of record on this host (CK='{self.ck}')" if not (self.ck and os.path.isdir(self.ck)) else None)
