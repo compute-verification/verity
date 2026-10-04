@@ -12,12 +12,14 @@
 //! - `base DIR COPIES m0|zk`: the circuit's C-Flock rows tiled COPIES ≥ 8 times, the last 2^14 rows of each block its mask
 //!   slot; 4 extra claims (two I/O regions at two link points).
 //! - `gate DIR m0|zk`: route P's gate table, the last words of each block its mask slot; 7 extra claims (the wiring's three and
-//!   the I/O regions' four).
+//!   the I/O regions' four). A build with READ_D = D > 0 adds each block's READ_SLOTS D-bit read comparators and 2 claims for
+//!   their public region.
 //! - `acyc DIR m0|zk [UNIT_LOG]`: the acyclicity table over σ's predecessor map (`acyc`); 3 extra claims.
 //! - `sigma DIR m0|zk [UNIT_LOG]`: σ committed (zk: with level 0's hiding) and opened at one point; zk adds a
 //!   re-registration, a fresh commitment of the same σ with both opened at one point.
 //!
-//! env: RUNS=2 (timed sessions after a first, cold one that also gives peak memory), ACYC_KLOG=23.
+//! env: RUNS=2 (timed sessions after a first, cold one that also gives peak memory), ACYC_KLOG=16 (the acyclicity table's
+//! block).
 use std::{
     env::{args, var},
     fs,
@@ -97,6 +99,11 @@ fn meta(dir: &Path, key: &str) -> usize {
     let s = fs::read_to_string(dir.join("meta.json")).unwrap();
     let at = s.find(&format!(r#""{key}":"#)).unwrap_or_else(|| panic!("meta.json has no {key}")) + key.len() + 3;
     s[at..].split([',', '}']).next().unwrap().parse().unwrap()
+}
+
+fn meta_or(dir: &Path, key: &str, default: usize) -> usize {
+    let s = fs::read_to_string(dir.join("meta.json")).unwrap();
+    if s.contains(&format!(r#""{key}":"#)) { meta(dir, key) } else { default }
 }
 
 fn bits_to_packed(z: &[u64]) -> Vec<F128> {
@@ -434,8 +441,27 @@ fn base(dir: &Path, copies: usize, zk: bool) {
     sessions("base", &st, &bits_to_packed(&z), zk, &json);
 }
 
+/// rec_holo_kill.rs's `cmp_rows`: each block's `n` read comparators, `d` groups (p_k, c_k, t_k, x_k) each, after its
+/// constant row; a unit's reads use its first block's.
+fn cmp_rows(d: usize, n: usize, pin: usize) -> Vec<(usize, Vec<usize>, Vec<usize>)> {
+    let xor = |v: Vec<usize>| xor_row(&v, &[], false);
+    let mut rows = Vec::new();
+    for g in 0..d * n {
+        let (k, q) = (g % d, 4 * (1 + g));
+        rows.push((q, vec![q], vec![q]));
+        rows.push((q + 1, vec![q + 1], vec![q + 1]));
+        let lt = if k == 0 { vec![] } else { vec![q - 3, q - 2] };
+        rows.push((q + 2, xor(vec![q, q + 1, pin]), xor([lt, vec![q + 1]].concat())));
+        rows.push(if k + 1 == d { (q + 3, xor(vec![q + 1, q + 2]), vec![pin]) } else { (q + 3, vec![], vec![]) });
+    }
+    rows
+}
+
+/// Route P's gate table. With the build's `read_d` > 0, every block's comparators too (`cmp_rows`), and 2 more extra claims
+/// for their public region (base(u)'s bits and the results).
 fn gate(dir: &Path, zk: bool) {
-    let (mu, k_log) = (meta(dir, "mu"), meta(dir, "gate_klog"));
+    let (mu, k_log, read_d) = (meta(dir, "mu"), meta(dir, "gate_klog"), meta_or(dir, "read_d", 0));
+    let read_n = meta_or(dir, "read_slots", 0);
     let k = 1usize << k_log;
     let mut z = read_u64s(&dir.join("rp_z.bin"));
     let (mut ra, mut rb) = (vec![Vec::new(); k], vec![Vec::new(); k]);
@@ -448,12 +474,21 @@ fn gate(dir: &Path, zk: bool) {
         ra[c + 2] = vec![c];
         rb[c + 2] = vec![c + 1];
     }
+    for (c, a, b) in cmp_rows(read_d, read_n, 0) {
+        ra[c] = a;
+        rb[c] = b;
+    }
     let blocks = 1usize << (mu - k_log);
     let words = MASK_MIN.div_ceil(blocks).next_power_of_two();
+    assert!(4 * (1 + read_d * read_n) <= k - 128 * words, "the comparators meet the mask slot");
     let mut rng = Rng::new(0x6A7E);
     let mask = mask_slot(&mut z, &mut ra, &mut rb, k_log, mu, 128 * words, &mut rng);
-    let st = St { r1cs: Arc::new(block_r1cs(mu, k_log, ra, rb, 0)), mask, extra: 7 };
-    let json = format!(r#""mask_rows_per_block":{},"#, 128 * words);
+    let st = St { r1cs: Arc::new(block_r1cs(mu, k_log, ra, rb, 0)), mask, extra: 7 + if read_d > 0 { 2 } else { 0 } };
+    let json = format!(
+        r#""mask_rows_per_block":{},"read_d":{read_d},"read_slots":{read_n},"comparator_cells":{},"#,
+        128 * words,
+        4 * read_d * read_n * blocks
+    );
     sessions("gate", &st, &bits_to_packed(&z), zk, &json);
 }
 
@@ -565,7 +600,7 @@ fn acyc(dir: &Path, zk: bool, unit_log: Option<usize>) {
     let t = Instant::now();
     let (pi, io, joined) = predecessors(dir, mu);
     let canon_s = t.elapsed().as_secs_f64();
-    let k_log: usize = env_or("ACYC_KLOG", 23);
+    let k_log: usize = env_or("ACYC_KLOG", 16);
     let (k, cpb) = (1usize << k_log, 1usize << (k_log - 6));
     let n_cons = 1usize << (mu - 1);
     let m = mu + 5;

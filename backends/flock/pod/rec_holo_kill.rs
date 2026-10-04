@@ -14,10 +14,14 @@
 //!   lincheck needs 8 blocks), verified.
 //! - `gate` and `base` then time upstream's lincheck and the commit alone (`*_phases`); `base` also times the lincheck's
 //!   circuit-dependent sum over its matrices as a parallel gather per column.
-//! - `selftest`: the streaming GKR, plain and fast, against `prove_batched` (same proof bytes) at small sizes.
+//! - `selftest`: the read comparator's rows against p < base (`cmp_selftest`), and the streaming GKR, plain and fast,
+//!   against `prove_batched` (same proof bytes) at small sizes.
 //!
 //! env: RUNS=3 (timed runs after a first, cold run that also gives peak memory), FILL=0.9 BASE_KLOG=23 P_FRESH=0.25
-//! SEED=1 (build, full), UNITS=8 UNIT_LOG=22 (build, sampled), GATE_KLOG=16.
+//! SEED=1 (build, full), UNITS=8 UNIT_LOG=22 (build, sampled), GATE_KLOG=16. READ_D=0 (build, sampled): with D > 0 every
+//! block holds READ_SLOTS=8 D-bit read comparators (`cmp_rows`), a unit's R_u = ⌈fresh bits / 1024⌉ reads in its first
+//! block's, each checking a read position below base(u) = READ_REG + g_u·READ_OUT (g_u: unit u's index among READ_N;
+//! defaults 2^20, 64, 2^26).
 use std::{
     collections::HashMap,
     env::{args, var},
@@ -233,6 +237,96 @@ struct Rp {
     c1: u32,
     io_rows: usize,
     const_rows: usize,
+    slot_d: usize,
+    slot_n: usize,
+}
+
+/// The read comparators' rows in a block of route P's gate table: `n` comparators of `d` groups each, after the block's
+/// constant row. Comparator r's group k is (p_k, c_k, t_k, x_k) at cells 4(1 + r·d + k)..: p the read position's bit (a
+/// consumer that σ_u wires to a constant net), c the bit of the unit's region start base(u) (a public region), t_k =
+/// (p_k + c_k + 1)·(lt_k + c_k) with lt_0 = 0 and lt_{k+1} = c_k + t_k, so that lt_d = [p < base(u)]. The last group's x
+/// holds lt_d (a public region fixes it to 1); the other x are 0. The constant 1 is `pin`, the block's pinned cell. A unit's
+/// reads use its first block's comparators, whose cells precede every gate row of the unit: there π(j) < j at each
+/// consumer (the acyclicity table) leaves a position bit nothing to depend on but constants and earlier comparator cells,
+/// so the positions are fixed by σ_u. Returns (cell, A row, B row).
+fn cmp_rows(d: usize, n: usize, pin: usize) -> Vec<(usize, Vec<usize>, Vec<usize>)> {
+    let xor = |mut v: Vec<usize>| {
+        v.sort_unstable();
+        let mut o: Vec<usize> = Vec::new();
+        for c in v {
+            if o.last() == Some(&c) {
+                o.pop();
+            } else {
+                o.push(c);
+            }
+        }
+        o
+    };
+    let mut rows = Vec::new();
+    for g in 0..d * n {
+        let (k, q) = (g % d, 4 * (1 + g));
+        rows.push((q, vec![q], vec![q]));
+        rows.push((q + 1, vec![q + 1], vec![q + 1]));
+        let lt = if k == 0 { vec![] } else { vec![q - 3, q - 2] };
+        rows.push((q + 2, xor(vec![q, q + 1, pin]), xor([lt, vec![q + 1]].concat())));
+        rows.push(if k + 1 == d { (q + 3, xor(vec![q + 1, q + 2]), vec![pin]) } else { (q + 3, vec![], vec![]) });
+    }
+    rows
+}
+
+/// The comparator's z values (p_k, c_k, t_k, x_k) for position p against base, d bits.
+fn cmp_groups(p: u64, base: u64, d: usize) -> Vec<[u64; 4]> {
+    let mut lt = 0u64;
+    (0..d)
+        .map(|k| {
+            let (pk, ck) = ((p >> k) & 1, (base >> k) & 1);
+            let t = (pk ^ ck ^ 1) & (lt ^ ck);
+            lt = ck ^ t;
+            [pk, ck, t, if k + 1 == d { lt } else { 0 }]
+        })
+        .collect()
+}
+
+/// `cmp_rows` against its meaning: at d = 8, every (p, base) gives a witness that satisfies the rows with result [p < base];
+/// at d = 4, for every (p, base), exactly one assignment of the t and x cells satisfies them.
+fn cmp_selftest() {
+    for d in [4usize, 8] {
+        let rows = cmp_rows(d, 1, 0);
+        let mut bad = 0;
+        for base in 0..1u64 << d {
+            for p in 0..1u64 << d {
+                let mut z = vec![0u8; 4 * (1 + d)];
+                z[0] = 1;
+                for (k, g) in cmp_groups(p, base, d).iter().enumerate() {
+                    for (i, &v) in g.iter().enumerate() {
+                        z[4 * (1 + k) + i] = v as u8;
+                    }
+                }
+                let dot = |r: &[usize], z: &[u8]| r.iter().fold(0, |a, &i| a ^ z[i]);
+                let sat = |z: &[u8]| rows.iter().all(|(c, ra, rb)| dot(ra, z) & dot(rb, z) == z[*c]);
+                if !sat(&z) || (z[4 * d + 3] == 1) != (p < base) {
+                    bad += 1;
+                }
+                if d == 4 {
+                    let free: Vec<usize> = (0..d).flat_map(|k| [4 * (1 + k) + 2, 4 * (1 + k) + 3]).collect();
+                    let n_sat = (0..1u32 << free.len())
+                        .filter(|m| {
+                            let mut y = z.clone();
+                            for (j, &c) in free.iter().enumerate() {
+                                y[c] = (m >> j & 1) as u8;
+                            }
+                            sat(&y)
+                        })
+                        .count();
+                    if n_sat != 1 {
+                        bad += 1;
+                    }
+                }
+            }
+        }
+        println!(r#"{{"kind":"selftest_comparator","d":{d},"pairs":{},"failures":{bad}}}"#, 1u64 << (2 * d));
+        assert_eq!(bad, 0, "the read comparator's rows fail at d = {d}");
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -260,7 +354,17 @@ impl Rp {
             c1: NONE,
             io_rows: 0,
             const_rows: 0,
+            slot_d: 0,
+            slot_n: 0,
         }
+    }
+
+    fn slot(&self) -> usize {
+        self.slot_d * self.slot_n
+    }
+
+    fn in_slot(&self, g: usize) -> bool {
+        (1..=self.slot()).contains(&(g % self.rpb))
     }
 
     fn set(v: &mut Vec<u64>, i: usize, b: bool) {
@@ -290,12 +394,47 @@ impl Rp {
         g
     }
 
+    /// A gate row after the block's constant row and its comparator slot (`slot()` rows, left zero for `fill_slots`).
     fn row(&mut self, l: bool, r: bool) -> usize {
-        if self.rows % self.rpb == 0 {
-            self.raw_row(true, true);
-            self.const_rows += 1;
+        loop {
+            let at = self.rows % self.rpb;
+            if at == 0 {
+                self.raw_row(true, true);
+                self.const_rows += 1;
+            } else if at <= self.slot() {
+                self.raw_row(false, false);
+            } else {
+                break;
+            }
         }
         self.raw_row(l, r)
+    }
+
+    /// Fills the comparators (`cmp_rows`) of the unit at rows [start, start + rows): comparator r of its first block compares
+    /// the read position pos[r] (0 past the unit's reads) with base, every other block's compare 0; each position bit is
+    /// joined to the unit's constant net of its value.
+    fn fill_slots(&mut self, start: usize, rows: usize, base: u64, pos: &[u64]) {
+        let (d, n) = (self.slot_d, self.slot_n);
+        assert!(start % self.rpb == 0 && rows % self.rpb == 0 && self.rows >= start + rows);
+        assert!(pos.len() <= n, "{} reads, {n} comparators", pos.len());
+        assert!(base < 1u64 << d, "base(u) = {base} needs more than {d} bits");
+        for (b, r) in (0..rows / self.rpb).flat_map(|b| (0..n).map(move |r| (b, r))) {
+            let p = if b == 0 { pos.get(r).copied().unwrap_or(0) } else { 0 };
+            assert!(p < base);
+            let groups = cmp_groups(p, base, d);
+            for (k, &[pk, ck, t, x]) in groups.iter().enumerate() {
+                let q = 4 * (start + b * self.rpb + 1 + r * d + k);
+                for (i, v) in [pk, ck, t, x].into_iter().enumerate() {
+                    Self::set(&mut self.z, q + i, v == 1);
+                }
+                for (i, v) in [pk, ck, t, x ^ pk ^ ck].into_iter().enumerate() {
+                    Self::set(&mut self.w, q + i, v == 1);
+                }
+                let net = if pk == 1 { self.c1 } else { self.c0 };
+                self.join(net, q);
+            }
+            assert_eq!(groups[d - 1][3], 1);
+        }
     }
 
     fn head(&mut self, cell: usize) -> u32 {
@@ -439,6 +578,15 @@ impl Rp {
         }
         for g in 0..n / 4 {
             let c = 4 * g;
+            if self.in_slot(g) {
+                let k = (g % self.rpb - 1) % self.slot_d;
+                let (p, cb, t, x) = (bit(&self.z, c), bit(&self.z, c + 1), bit(&self.z, c + 2), bit(&self.z, c + 3));
+                let lt = if k == 0 { 0 } else { bit(&self.z, c - 3) ^ bit(&self.z, c - 2) };
+                assert_eq!(t, (p ^ cb ^ 1) & (lt ^ cb), "comparator slot at cell {c}");
+                assert_eq!(x, if k + 1 == self.slot_d { cb ^ t } else { 0 }, "comparator slot at cell {c}");
+                assert!((0..3).all(|i| bit(&self.w, c + i) == bit(&self.z, c + i)) && bit(&self.w, c + 3) == x ^ p ^ cb);
+                continue;
+            }
             assert_eq!(bit(&self.z, c + 2), bit(&self.z, c) & bit(&self.z, c + 1));
             assert_eq!(bit(&self.w, c + 3), bit(&self.z, c) ^ bit(&self.z, c + 1));
             assert_eq!(bit(&self.z, c + 3), 0);
@@ -697,9 +845,17 @@ fn build(dir: &Path, nets: &Path, mode: &str) {
         units,
     };
     let rpb = c.rp.rpb;
-    let margin = |u: &Unit| u.rp_rows + u.rp_rows / rpb + 2;
+    let read_d: usize = if mode == "full" { 0 } else { env_or("READ_D", 0) };
+    let read_n: usize = if read_d == 0 { 0 } else { env_or("READ_SLOTS", 8) };
+    (c.rp.slot_d, c.rp.slot_n) = (read_d, read_n);
+    let slot = read_d * read_n;
+    let margin = |u: &Unit| {
+        if slot == 0 { u.rp_rows + u.rp_rows / rpb + 2 } else { u.rp_rows + (u.rp_rows / (rpb - 1 - slot) + 2) * (1 + slot) }
+    };
     let mut unit_rows = Vec::new();
     let mut unit_fresh = Vec::new();
+    let (mut unit_base, mut unit_reads) = (Vec::new(), Vec::new());
+    let mut used = 0;
     let (mu, base_klog, units_n, unit_log) = if mode == "full" {
         let base_klog: usize = env_or("BASE_KLOG", 23);
         let cap = (env_or("FILL", 0.9) * (1usize << base_klog) as f64) as usize;
@@ -711,13 +867,17 @@ fn build(dir: &Path, nets: &Path, mode: &str) {
         }
         unit_rows.push(c.rp.rows);
         unit_fresh.push(c.fresh_bits);
+        used = c.rp.rows;
         let mu = (4 * c.rp.rows).next_power_of_two().trailing_zeros() as usize;
         (mu.max(gate_klog + 3), base_klog, 1, mu)
     } else {
         let n: usize = env_or("UNITS", 8);
         let unit_log: usize = env_or("UNIT_LOG", 22);
         let g = 1usize << (unit_log - 2);
-        for _ in 0..n {
+        let (reg, out, total): (u64, u64, u64) =
+            (env_or("READ_REG", 1 << 20), env_or("READ_OUT", 64), env_or("READ_N", 1 << 26));
+        let mut prng = Rng::new(0x9EAD ^ env_or("SEED", 1u64));
+        for u in 0..n {
             c.rp.start_unit(g);
             let (r0, f0, from) = (c.rp.rows, c.fresh_bits, c.outs.len());
             loop {
@@ -725,14 +885,24 @@ fn build(dir: &Path, nets: &Path, mode: &str) {
                 let Some(i) = c.pick(|u| margin(u) <= room) else { break };
                 c.add(i, from);
             }
+            assert!(c.rp.rows < r0 + g, "unit {u} overflows its {g} rows");
             unit_rows.push(c.rp.rows - r0);
             unit_fresh.push(c.fresh_bits - f0);
+            used = c.rp.rows;
+            if read_d > 0 {
+                let base = reg + (u as u64 + 1) * (total / (n as u64 + 1)) * out;
+                let pos: Vec<u64> = (0..(c.fresh_bits - f0).div_ceil(1024)).map(|_| prng.below(base as usize) as u64).collect();
+                c.rp.pad_to(r0 - 1 + g);
+                c.rp.fill_slots(r0 - 1, g, base, &pos);
+                unit_base.push(base);
+                unit_reads.push(pos.len());
+            }
         }
         let mu = unit_log + n.next_power_of_two().trailing_zeros() as usize;
         let base_klog = (c.base.rows()).next_power_of_two().trailing_zeros() as usize;
         (mu, base_klog, n, unit_log)
     };
-    let used_rows = c.rp.rows;
+    let used_rows = used;
     c.rp.pad_to(1 << (mu - 2));
     c.rp.close();
     c.rp.check();
@@ -744,7 +914,7 @@ fn build(dir: &Path, nets: &Path, mode: &str) {
     let per_type: Vec<String> = c.units.iter().map(|u| format!(r#""{}":[{},{}]"#, u.name, u.rp_rows, u.n_in + u.rows.len())).collect();
     let fixed = c.rp.sigma.iter().enumerate().filter(|&(i, &s)| i as u32 == s).count();
     let meta = format!(
-        r#"{{"kind":"build","mode":"{mode}","mu":{mu},"gate_klog":{gate_klog},"gate_rows_used":{used_rows},"cells":{},"cells_fixed":{fixed},"io_rows":{},"const_rows":{},"base_klog":{base_klog},"base_rows":{},"base_nnz_a":{},"base_nnz_b":{},"base_copy_rows":{},"base_fresh_rows":{},"fresh_bits":{},"units":{units_n},"unit_log":{unit_log},"unit_rows":{:?},"unit_fresh_bits":{:?},"cat_gate_rows":{:?},"instances":{{{}}},"rows_per_instance_rp_base":{{{}}},"build_s":{:.1}}}"#,
+        r#"{{"kind":"build","mode":"{mode}","mu":{mu},"gate_klog":{gate_klog},"gate_rows_used":{used_rows},"cells":{},"cells_fixed":{fixed},"io_rows":{},"const_rows":{},"base_klog":{base_klog},"base_rows":{},"base_nnz_a":{},"base_nnz_b":{},"base_copy_rows":{},"base_fresh_rows":{},"fresh_bits":{},"units":{units_n},"unit_log":{unit_log},"unit_rows":{:?},"unit_fresh_bits":{:?},"read_d":{read_d},"read_slots":{read_n},"unit_reads":{unit_reads:?},"unit_base":{unit_base:?},"cat_gate_rows":{:?},"instances":{{{}}},"rows_per_instance_rp_base":{{{}}},"build_s":{:.1}}}"#,
         4 * used_rows,
         c.rp.io_rows,
         c.rp.const_rows,
@@ -771,11 +941,16 @@ fn meta(dir: &Path, key: &str) -> usize {
     s[at..].split([',', '}']).next().unwrap().parse().unwrap()
 }
 
+fn meta_or(dir: &Path, key: &str, default: usize) -> usize {
+    let s = fs::read_to_string(dir.join("meta.json")).unwrap();
+    if s.contains(&format!(r#""{key}":"#)) { meta(dir, key) } else { default }
+}
+
 // ---------------------------------------------------------------------------
 // gate: C-Flock's proof of route P's gate table
 // ---------------------------------------------------------------------------
 
-fn gate_matrices(k_log: usize) -> (SparseBinaryMatrix, SparseBinaryMatrix) {
+fn gate_matrices(k_log: usize, read_d: usize, read_n: usize) -> (SparseBinaryMatrix, SparseBinaryMatrix) {
     let k = 1usize << k_log;
     let (mut a, mut b) = (vec![Vec::new(); k], vec![Vec::new(); k]);
     for g in 0..k / 4 {
@@ -786,6 +961,10 @@ fn gate_matrices(k_log: usize) -> (SparseBinaryMatrix, SparseBinaryMatrix) {
         b[c + 1] = vec![c + 1];
         a[c + 2] = vec![c];
         b[c + 2] = vec![c + 1];
+    }
+    for (c, ra, rb) in cmp_rows(read_d, read_n, 0) {
+        a[c] = ra;
+        b[c] = rb;
     }
     (SparseBinaryMatrix::new(k, k, a), SparseBinaryMatrix::new(k, k, b))
 }
@@ -925,7 +1104,7 @@ fn phases(label: &str, r1cs: &BlockR1cs, z: &[F128], csc: Option<[(Vec<u32>, Vec
 fn gate(dir: &Path) {
     let (mu, k_log) = (meta(dir, "mu"), meta(dir, "gate_klog"));
     let z = bits_to_packed(&read_u64s(&dir.join("rp_z.bin")));
-    let (a_0, b_0) = gate_matrices(k_log);
+    let (a_0, b_0) = gate_matrices(k_log, meta_or(dir, "read_d", 0), meta_or(dir, "read_slots", 0));
     let r1cs = block_r1cs(mu, k_log, a_0, b_0);
     assert!(r1cs.satisfies_packed(&z), "route P's gate table does not satisfy its R1CS");
     let t = Instant::now();
@@ -1072,6 +1251,7 @@ fn sigma(dir: &Path, unit_log: Option<usize>) {
 // ---------------------------------------------------------------------------
 
 fn selftest() {
+    cmp_selftest();
     for mu in [6usize, 8, 11, 14, 17] {
         let n = 1usize << mu;
         let mut rng = Rng::new(0x7E57 ^ mu as u64);
