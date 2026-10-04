@@ -168,6 +168,49 @@ def test_custody_deletes_the_lean_dependency_urls_wherever_a_run_leaves_them():
     assert f"inputs/{CHECK.LEAN_DEPS_URLS}" in CREDENTIALS
 
 
+def test_the_launcher_signs_each_pinned_bundle_with_a_credential_for_those_gets_alone(tmp_path, monkeypatch, capsys):
+    """Every pinned bundle of this tree's packages, warm on the machine or not, which the launcher can't see, and nothing else; the
+    credential each URL carries may only GET those bundles, for as long as the URLs live (red team, #1055 F1 and F3). Without the
+    parent key, or with only a temporary credential (a pod's), nothing is signed."""
+    import base64
+    import json
+    import types
+    import urllib.parse
+
+    from research.store.credentials import decode_jwt
+    from research.store.local import object_key
+
+    pins = {f"key-{n}": {"package": f"pkg/{n}", "sha256": c * 32, "bytes": 1} for n, c in (("a", "ab"), ("b", "cd"), ("stale", "ef"))}
+    la = types.SimpleNamespace(packages=lambda files: ["pkg/a", "pkg/b", "pkg/unpinned"], deps_key=lambda p: f"key-{p.name}",
+                               pins=lambda: pins, URL_TTL_S=21600)
+    monkeypatch.setattr(CHECK, "_lean_audit", lambda: la)
+    monkeypatch.setattr(CHECK, "tracked_files", lambda root: [])
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "none.toml"))
+    monkeypatch.setenv("R2_ENDPOINT", f"https://{'0' * 32}.r2.cloudflarestorage.com")
+    monkeypatch.setenv("R2_BUCKET", "dummy-bucket")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "dummy-parent-key-id")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "dummy-parent-secret")
+    monkeypatch.delenv("AWS_SESSION_TOKEN", raising=False)
+    p = CHECK.lean_deps_url_file(tmp_path)
+    urls = json.loads(p.read_text())
+    assert p.name == CHECK.LEAN_DEPS_URLS and p.stat().st_mode & 0o777 == 0o600 and set(urls) == {"key-a", "key-b"}
+    objects = sorted(object_key(pins[k]["sha256"]) for k in ("key-a", "key-b"))
+    for k, url in urls.items():
+        q = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(url).query))
+        claims = decode_jwt(base64.b64decode(q["X-Amz-Security-Token"]).decode()[len("jwt/"):])[1]
+        assert urllib.parse.urlsplit(url).path.endswith(object_key(pins[k]["sha256"])) and q["X-Amz-Expires"] == "21600"
+        assert claims["actions"] == ["GetObject"] and claims["paths"] == {"prefixPaths": [], "objectPaths": objects}
+        assert claims["exp"] - claims["iat"] == 21600
+    p.unlink()
+    monkeypatch.setenv("AWS_SESSION_TOKEN", "dummy")
+    assert CHECK.lean_deps_url_file(tmp_path) is None and not p.exists()
+    assert "(the environment holds a session token" in capsys.readouterr().err
+    monkeypatch.delenv("AWS_SESSION_TOKEN")
+    monkeypatch.delenv("AWS_SECRET_ACCESS_KEY")
+    assert CHECK.lean_deps_url_file(tmp_path) is None and not p.exists()
+    assert capsys.readouterr().err.startswith("check: no presigned URLs for the pinned Lean dependency bundles (local signing needs")
+
+
 def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch):
     import json
 

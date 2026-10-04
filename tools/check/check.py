@@ -215,8 +215,26 @@ def _lean_audit():
 
 
 def lean_deps_url_file(dest: Path) -> Path | None:
-    """`lean-deps-urls.json` for this tree's pinned Lean dependency bundles, signed by this machine's store remote."""
-    return _lean_audit().url_file(dest)
+    """`dest/lean-deps-urls.json` (mode 600): a GET of each of this tree's pinned Lean dependency bundles, warm on the machine or
+    not, which this machine can't see, signed with a credential minted here for those GETs alone (`credentials.presign_gets`). None,
+    with the reason on stderr, when it can't mint one: a URL carries its credential, so none is signed with the store's own."""
+    from research.store.credentials import MintError, presign_gets
+    from research.store.local import object_key
+
+    la = _lean_audit()
+    want = {la.deps_key(ROOT / p) for p in la.packages(tracked_files(ROOT) or [])}
+    pinned = {k: object_key(v["sha256"]) for k, v in sorted(la.pins().items()) if k in want}
+    if not pinned:
+        return None
+    try:
+        signed = presign_gets(list(pinned.values()), la.URL_TTL_S)
+    except MintError as e:
+        print(f"check: no presigned URLs for the pinned Lean dependency bundles ({e})", file=sys.stderr)
+        return None
+    p = dest / LEAN_DEPS_URLS
+    with os.fdopen(os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
+        json.dump({k: signed[o] for k, o in pinned.items()}, f)
+    return p
 
 
 #: the lean-audit step's wrapper when it audits anything: one of the node's Lean audit slots, from pool `check` (lean_slot.py)
