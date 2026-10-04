@@ -1,13 +1,8 @@
 {
- "roots": [
-  "Pous.Assumptions",
-  "Pous.Guarantees",
-  "Pous.Protocol",
-  "Pous.SecurityProofs.Accounting.Numbers",
-  "Pous.SecurityProofs.Sanity"
- ],
+ "roots": ["Pous"],
  "exempt": {
   "PousTargets": "open targets: every pinned statement as a sorry stub",
+  "CheckAxioms": "the headline #print axioms list (`lake env lean CheckAxioms.lean`)",
   "Grader": "the grader executable, which imports only Lean",
   "submissions": "graded one file at a time by grade.sh"
  },
@@ -70,7 +65,7 @@
    "why": "P2's pins and its cost model read only the game, the models and the parameters"
   }
  },
- "pins": {
+ "guarantees": {
   "Pous.Accounting.p₀_at_report": {
    "signature": [
     "Pous.Accounting.p₀_at_report (B β S : Nat) (hB : instLTNat.lt 0 B)",
@@ -723,14 +718,14 @@
    "definitions": {
     "Pous.Assumptions.LemmaA": "443085b332aa09cadfa71231d70da316fb946789f2a8eefc024e04651911d8e6"
    },
-   "pins": ["Pous.SecurityProofs.A3Prime", "Pous.SecurityProofs.A3PrimeLam"]
+   "guarantees": ["Pous.SecurityProofs.A3Prime", "Pous.SecurityProofs.A3PrimeLam"]
   },
   "Pous.Assumptions.P2": {
    "digest": "2f4bb409e3a24391702c966699a2c6945839431dcd705dc402474016e9bcbd26",
    "definitions": {
     "Pous.P2.Assumptions.PrimeP16448": "88582f4a680fa4e016b25a000b822b465fd7754100edbea9718994503e8d20fe"
    },
-   "pins": ["PousP2Ring.not_meetsOn_b19_k88", "PousP2Ring.tight_p16448"]
+   "guarantees": ["PousP2Ring.not_meetsOn_b19_k88", "PousP2Ring.tight_p16448"]
   },
   "Pous.Guarantees": {
    "digest": "d25db3fee31de4b7f165c3ce71f61134948fd238a2d82d0335b6171353f15656",
@@ -805,7 +800,7 @@
     "Pous.Guarantees.Theorem1iiiTimed": "4ae192107eb0bd3402320ed1689398e0a825e8c18f1c900cdbf0c1a942f2546b",
     "Pous.Guarantees.TransposeMixing": "9eaff8140f5e9acda9cebe6cc5f9c72fa11aec4b06f9f85a583c8f2d7d2a923c"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.A1CompressionCard",
     "Pous.SecurityProofs.A1CompressionPr",
     "Pous.SecurityProofs.A3Prime",
@@ -886,7 +881,7 @@
     "Pous.Guarantees.P2SlackB19Uncond": "29abf694f38211f455a2a46a228f6e968f6320e447ed414279fde6a9be57d863",
     "Pous.Guarantees.P2SlackFamilyUncond": "56aa4860fbb0c6a834054089ba0cb9b580789ca4ac9e4188a48b59a75bf76fd5"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -922,7 +917,7 @@
    "definitions": {
     "Pous.GradedMeets": "fdb468a799a9fc714a7e6ebdcfc84c4a90acc841cfa57058180d847ea18bf74d"
    },
-   "pins": ["Pous.SecurityProofs.BandGradedMeetsFamily", "PousGraded.gradedMeets_zero_iff"]
+   "guarantees": ["Pous.SecurityProofs.BandGradedMeetsFamily", "PousGraded.gradedMeets_zero_iff"]
   },
   "Pous.Protocol.Accounting.Params": {
    "digest": "3ae4cf02f914e89aef86f7a97df55e5b99671478c007e62ca89576f23a655e1c",
@@ -935,7 +930,7 @@
     "Pous.Params.ρ": "44def8edadaf34487bc90e56af018f9151023082e982951a77f82f78d819f9b9",
     "Pous.Scheme.stateBound": "f219b3199888b8a45eac393ac75becffadc935c7cd567be9198c400bd69c17d1"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
     "Pous.SecurityProofs.BandChainMeets64D5",
@@ -995,7 +990,7 @@
    "definitions": {
     "Pous.PubMeets": "ab8d37a96a8969b4ed4b1836f7d6b1004ee009c78e21d6d9010a0f0fae532827"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BandPubMeets14",
     "Pous.SecurityProofs.BandPubMeets14Global",
     "Pous.SecurityProofs.BandPubMeets64",
@@ -1011,7 +1006,7 @@
     "Pous.Rebuild.gradedRoundSpan": "93974497a624bcd403471c0aba04c2942a6bc0036f2b7ed92009cf5cd9417a9f",
     "Pous.Rebuild.rebuildCalls": "ac875c4993032c122cbfd259d74a84c8e1e92365dd3a217a1afbf71f8c504ca2"
    },
-   "pins": ["Pous.SecurityProofs.BackgroundRebuildExcluded"]
+   "guarantees": ["Pous.SecurityProofs.BackgroundRebuildExcluded"]
   },
   "Pous.Protocol.Game.Oracle": {
    "digest": "3d3028385cd2a63e503b4bbce467b1f191203e9fbe059b8dbaffd10c8af7646d",
@@ -1035,7 +1030,7 @@
     "Pous.Prog.width": "103b4c4c3498ea759b4f4ca468153cb220c3ada770fa23bf394404c6ffd3fa59",
     "Pous.Prog.work": "d2d99c0b30b712934b04158c0ded72b0ba662f4a1cc358734c2223d113b94ae3"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.A3Prime",
     "Pous.SecurityProofs.A3PrimeLam",
     "Pous.SecurityProofs.A6RederiveTimed",
@@ -1129,7 +1124,7 @@
     "Pous.Bits": "9290fa20f06bfe4423f67acf59109a8e4d14d7a87a9aa1e5085b43ee795a0f68",
     "Pous.pr": "e2d360abdc3bb446124cc63b9261aab7c0e25149c089edabce91272c925d6edb"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.A1CompressionPr",
     "Pous.SecurityProofs.A3Prime",
     "Pous.SecurityProofs.A3PrimeLam",
@@ -1241,7 +1236,7 @@
     "Pous.seqAnswers": "fa7d86156927a2653b23b9db3a28c80e980af999c7989217f0f078f60a80fed3",
     "Pous.simAccepts": "62c4ef9b9565b20f69da1313f95ed2e92d2b3f1f1d2ff63bc1f71c38a804523d"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.A3Prime",
     "Pous.SecurityProofs.A3PrimeLam",
     "Pous.SecurityProofs.A6RederiveTimed",
@@ -1336,7 +1331,7 @@
     "Pous.Sponge.labelOv": "5623d70ee6b9af03c4bf55def1dba451dfcf97daf345d00776a736bcb04b6d75",
     "Pous.Sponge.parentsNF": "51d3bef2ec734d993123fef15fb08b38752fd81f2371023def33918aed8590e9"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BackgroundRebuildExcluded",
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
@@ -1369,7 +1364,7 @@
     "PousP3Column.bandExtra": "926b6bbb6cfba369ffd7d983ab345e93c68d173e31fa0bc54c575a35c9080323",
     "PousP3Column.bandGraph": "a5ae49163821e67404587ed7150029cd4a8ad5afedb2ae8edf9038e989775884"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BandTwoWay220_12",
     "Pous.SecurityProofs.BandTwoWay220_12D11",
     "Pous.SecurityProofs.BandTwoWay220_16"
@@ -1388,7 +1383,7 @@
     "Pous.ColumnGame.colReach": "8340c9c4a09fe2c29a2c7b09d49cd33b341f4b4dcf7caeb969f031b20be754ee",
     "Pous.ColumnGame.colRound": "80a8f82080990c7ba7da02b3a97dba9bca3d3a65a5dfc328a829463fb2bfb0ff"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BandTwoWay220_12",
     "Pous.SecurityProofs.BandTwoWay220_12D11",
     "Pous.SecurityProofs.BandTwoWay220_16"
@@ -1433,7 +1428,7 @@
     "Pous.instDecidableContIdle": "edaa489be824f05be3f6f7bfedb99b9df67757d391b24af87c4b6c66aff21f6d",
     "Pous.instDecidableEqContVerdict": "f8797b24bc6254abd63282e2f6bdd91704a366d26e0aa0dbe937d0ddefe44e41"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BandFamilyContinuousTimeAverage",
     "Pous.SecurityProofs.ContinuousAudit",
     "Pous.SecurityProofs.ContinuousComplete",
@@ -1457,7 +1452,7 @@
     "Pous.Dense.tagModel": "648fc7fdd08370681c218f9d04ff23cac53a6906775d7532acc024c1f8a0f86c",
     "Pous.Dense.u64": "f087af4cdf02fed056eab22fed4abd149af1284835f2ee7d90996b77649d71d8"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BackgroundRebuildExcluded",
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
@@ -1510,14 +1505,14 @@
     "Pous.gradedAccepts": "154be4d3e811c2651677a6bff608ea0cacf1bf80b8d4025957574b521399995e",
     "Pous.gradedAnswers": "e67977dc61ba7c5af9c002908ae633b59e78e6e3dc3586ffabaf2b0ee14f7198"
    },
-   "pins": ["Pous.SecurityProofs.BandGradedMeetsFamily", "PousGraded.gradedMeets_zero_iff"]
+   "guarantees": ["Pous.SecurityProofs.BandGradedMeetsFamily", "PousGraded.gradedMeets_zero_iff"]
   },
   "Pous.Protocol.Model.HashChain": {
    "digest": "e5a856998d00a7c438418f62831a53ccbaf75e94ea767358fe03814aaca2f858",
    "definitions": {
     "Pous.HashChain.chain": "affcd1bc396153ec2ab98fd700f822f7c4ad6f8410cbe21f991f36f16cf0d70b"
    },
-   "pins": ["Pous.SecurityProofs.B3Chain"]
+   "guarantees": ["Pous.SecurityProofs.B3Chain"]
   },
   "Pous.Protocol.Model.Inc": {
    "digest": "9352a36a027abdda16eb029eaf0018bccc8853371a51393a70026febf2273918",
@@ -1531,7 +1526,7 @@
     "Pous.p₀": "5166f8e0cd663fb60423766493b947b52a62f0977545532db60ca58f2b7973b5",
     "Pous.timedProdAccepts": "46718a69c664bce0955c57567926dc21f28ea5982381b32dbdbc3d2fabab4719"
    },
-   "pins": [
+   "guarantees": [
     "Pous.Accounting.p₀_at_report",
     "Pous.SecurityProofs.A3Prime",
     "Pous.SecurityProofs.A3PrimeLam",
@@ -1567,7 +1562,7 @@
     "Pous.Invertible.topLabel": "76993478d6f7dcf0b64b52861e2c237b296c90ea2c66221badf2cf094b26a2bc",
     "Pous.Invertible.transpose": "61a65308a340351b2169d5cfebe2872c952f5019fddff4c68b5750495e1c4e77"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.N10Refuted",
     "Pous.SecurityProofs.P3ConcreteMeets14GB",
     "Pous.SecurityProofs.P3ConcreteMeets64",
@@ -1587,7 +1582,7 @@
     "Pous.Labelling.label": "de58201dab92cfeba618485ae187fd3ac193920e4948449fc067a2b0c6e5ef7c",
     "Pous.Labelling.reach": "b203a14adb42ec04bf6fa23cd704174b83eb61688ec5210ae9c7483d8d5af707"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.B5ExPostFacto",
     "Pous.SecurityProofs.B5ExPostFactoBounded",
     "Pous.SecurityProofs.B5Stacked",
@@ -1638,7 +1633,7 @@
    "definitions": {
     "Pous.codeEquiv": "5431e034e408a3add1b4c547c4a73d431438e40ba35a2b2f767ced58e1f174ab"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BackgroundRebuildExcluded",
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
@@ -1698,7 +1693,7 @@
     "Pous.permAct": "57f826c894c3dc492df3da7be0515db5713131866bf421543f0b4667df76f265",
     "Pous.permsp": "d4fa4566b0ea5f7ad48a716aa9c4a6397da89f45fcd110dc2fa0502ecabfe819"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -1750,7 +1745,7 @@
     "Pous.Sponge.parentsDesc": "e0c021c592c36635fb1c492903c3b6f7b37b6a4e6ce8446cde7d429d083ffd52",
     "Pous.Sponge.topLabelC": "54d4a1ff4b10263de1e6301967dddc8cd6af6187582485dcc71538541fa7d1e8"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BackgroundRebuildExcluded",
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
@@ -1790,7 +1785,7 @@
     "Pous.DRG.StackedEdge": "582a4c8100b08621574d8334fe0427d24a365e0d3a2b32dd6c73a6c0c91fdbcd",
     "Pous.DRG.Unpebbled": "ce43ef80457223032674fe507da539b4e1baf5500e5bfa32b413b849e98927a6"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.B2Stacking",
     "Pous.SecurityProofs.B5Stacked",
     "Pous.SecurityProofs.FischClaim13",
@@ -1817,7 +1812,7 @@
     "Pous.pubSeqAccepts": "108d79bc61b4e7373dffe7b8f1cd40ceb835da12f42d8b3b76b6e163f36e10f4",
     "Pous.pubSimAccepts": "dac6b02c5feb99bfd73bdda4e8a29aedf6706a6f598e542a3f366a1ab4b81fe7"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BandPubMeets14",
     "Pous.SecurityProofs.BandPubMeets14Global",
     "Pous.SecurityProofs.BandPubMeets64",
@@ -1831,7 +1826,7 @@
    "definitions": {
     "Pous.Sampled.seqState": "88adbf0e6305a1e08df7cbb57d91ffac4191d6f56651083fcc554f67b9dd9231"
    },
-   "pins": ["Pous.SecurityProofs.SampledAuditSeq"]
+   "guarantees": ["Pous.SecurityProofs.SampledAuditSeq"]
   },
   "Pous.Protocol.Model.Scheme": {
    "digest": "4c2daf388f74e6bbba183a9fe2508c77043e8149d219698b42b37210453cc3d5",
@@ -1850,7 +1845,7 @@
     "Pous.Scheme.t": "fc8bee5b18948b88737142fe5ff74f8ed361b46468a87c34a51652defe23b8e1",
     "Pous.Scheme.ℓ": "cc713501fb08eb0fb1403b0163bb043f5e39683832d9c644e0cf50c5d6000f9c"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.A3Prime",
     "Pous.SecurityProofs.A3PrimeLam",
     "Pous.SecurityProofs.A6RederiveTimed",
@@ -1954,7 +1949,7 @@
    "definitions": {
     "PousDenseReCert.liftPar": "ad4ea847e7e3cd0cb4196503f44b974fc22fcf490d8e5dd3ef20bf17dc115715"
    },
-   "pins": ["Pous.SecurityProofs.SegTagAuditSecure"]
+   "guarantees": ["Pous.SecurityProofs.SegTagAuditSecure"]
   },
   "Pous.Protocol.P2.Cost": {
    "digest": "5abba780cc73de0811c80ce3bf600d3225649b2d99da669b1143fbebe1fe4e11",
@@ -1998,7 +1993,7 @@
     "Pous.sqE": "3727f1863cf42a82d1b2940a9ca18c4ff59c2909e3b961c3a0d83c5def7eaaed",
     "Pous.sqFix": "af2e924abf530e9aac7cc294dbe5208b2f7d8f4cc5d382a2e3644a35e525905b"
    },
-   "pins": [
+   "guarantees": [
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
