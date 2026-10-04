@@ -29,6 +29,7 @@
 #      HZ_LEAN (the Lean checks to run, as globs over their tags or <config>/<tag>: "st-* tile-k4096/honest-own"; default
 #      every one)  HZ_PROVE_ONLY=1 (the proving build and the --zk session only: no selftest build, controls or Lean)
 #      HZ_ROW_K (stage.py's: a cut row's segment length, in the stage cache's key)  HZ_LIBRARY=1 (the library check above)
+#      HZ_OVERLAP=1 (a config's Lean checks run beside the next config's staging, session and controls; one config's at a time)
 set -uo pipefail
 SRC=$(pwd)
 J=$SRC/benchmarks/pouw/hidden_zk
@@ -242,9 +243,9 @@ library_start() {   # library_start ROLE K D O: with HZ_LIBRARY=1, the library's
     exec $PY $J/stage.py $1 $2 $N $3.lib" > "$4/stage-library.out" 2> "$4/stage-library.err" &
   LIB_PID=$!
 }
-library_end() {     # library_end D O: waits for it; O/library.json, its sha512 against the fast staging's
+library_end() {     # library_end D O: waits for it (from a subshell too); O/library.json, its sha512 against the fast staging's
   [ -n "${LIB_PID:-}" ] || return 0
-  wait "$LIB_PID"; LIB_PID=
+  while kill -0 "$LIB_PID" 2>/dev/null; do sleep 10; done; LIB_PID=
   log "  library staging: $("$PY" -c "import json, sys; from pathlib import Path; f = json.load(open(sys.argv[1])); \
 p = Path(sys.argv[2]); t = json.load(open(sys.argv[3])); l = json.load(open(p)) if p.exists() else None; \
 r = {'fast_sha512': f['circuit_sha512'], 'library_sha512': l and l['circuit_sha512'], 'equal': bool(l) and l['circuit_sha512'] == f['circuit_sha512'], \
@@ -253,6 +254,15 @@ json.dump(r, open(sys.argv[4], 'w'), indent=1); print('sha512 equal' if r['equal
 r['library_sha512'] and r['library_sha512'][:16], 'exit', r['exit'], r['wall_s'], 's', r['maxrss_gb'], 'GB')" \
     "$2/stage.json" "$1.lib/stage.json" "$2/stage-library.time" "$2/library.json") $(tail -1 "$2/stage-library.err" | cut -c1-160)"
   rm -rf "$1.lib"
+}
+
+finish_config() {   # finish_config D O: the library check's result, the summaries, and D's files gone
+  local s
+  library_end "$1" "$2"
+  "$PY" "$J/summarize.py" "$OUT" > /dev/null
+  s=$(readlink "$1/stage.json")   # without a kept cache, a config's staged files go with it
+  [ -n "${HZ_CACHE:-}" ] || [ -z "$s" ] || rm -rf "$(dirname "$s")"
+  rm -rf "$1"
 }
 
 run_configs() {
@@ -269,18 +279,22 @@ run_configs() {
     [ -e "$D/public-inputs.bin" ] && cp "$D/public-inputs.bin" "$D/public-inputs-wrong.bin" "$O/"
     log "$tag: staged: $("$PY" -c "import json; s = json.load(open('$O/stage.json')); c = json.load(open('$O/stage-cache.json')); print(s['definition'], s['ands'], 'ANDs, k_log', s['k_log'], s['circuit_bytes'], 'B, sha512', s['circuit_sha512'][:16], 'peak', s['maxrss_gb'], 'GB,', s['seconds']['total'], 's,', s.get('staging'), 'staging, cache', 'hit' if c['hit'] else 'miss')")"
     library_start "$role" "$k" "$D" "$O"
-    if [ "${HZ_STAGE_ONLY:-0}" = 1 ]; then library_end "$D" "$O"; "$PY" "$J/summarize.py" "$OUT" > /dev/null; rm -rf "$D"; continue; fi
+    if [ "${HZ_STAGE_ONLY:-0}" = 1 ]; then finish_config "$D" "$O"; continue; fi
     log "$tag: --zk session ($WARM warm + $RUNS timed)"
     session "$D" "$O" || log "$tag: --zk session FAILED: $(tail -2 "$O/prove.err")"
     if [ "${HZ_PROVE_ONLY:-0}" != 1 ]; then
       controls "$D" "$O"
+      if [ "${HZ_OVERLAP:-0}" = 1 ]; then   # one config's Lean checks at a time, beside the next config's staging and session
+        [ -z "${LEAN_PID:-}" ] || wait "$LEAN_PID"
+        ( lean_jobs "$D" "$O"; finish_config "$D" "$O" ) &
+        LEAN_PID=$!
+        continue
+      fi
       lean_jobs "$D" "$O"
     fi
-    library_end "$D" "$O"
-    "$PY" "$J/summarize.py" "$OUT" > /dev/null
-    rm -rf "$D"
-    [ -n "${HZ_CACHE:-}" ] || rm -rf "$W/cache/stage"   # without a kept cache, a config's staged files go with it
+    finish_config "$D" "$O"
   done
+  [ -z "${LEAN_PID:-}" ] || wait "$LEAN_PID"
   "$PY" "$J/summarize.py" "$OUT" | tee -a "$OUT/job.log"
   log "hidden-zk: done"
 }
