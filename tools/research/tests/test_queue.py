@@ -22,7 +22,7 @@ from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, credenti
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
 from research.store.model import Label
-from test_merge_gate import CHECKED, DECL
+from test_merge_gate import CHECK_FILES, CHECKED
 
 RULES = """\
 hold_label = "hold"
@@ -72,7 +72,7 @@ class World:
         for rel, text in {"a.txt": "a\n", "b.txt": "b\n", "c.txt": "c\n", "ci/queue.toml": RULES, ".gitignore": "__pycache__/\n",
                           "pkg/lean-audit.json": json.dumps({"pins": {"T": "1"}, "reads": {}, "dependencies": {"M": "1"}}),
                           "mytools/decl_check.py": "from research.store.tool import Tool\nT = Tool(name='check', version='1')\n",
-                          "tools/check/tool.py": DECL.format("")}.items():
+                          **CHECK_FILES}.items():
             (self.dev / rel).parent.mkdir(parents=True, exist_ok=True)
             (self.dev / rel).write_text(text)
         _git(self.dev, "init", "-q", "-b", "main")
