@@ -139,7 +139,10 @@ A tool's declaration may name result steps a merge needs by path (`Tool.merge_re
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
 `passed` admits it; `!` patterns leave paths out (`!README.md`: every file of that name under the prefixes). `check` requires
 `lean-agreement` for `backends/flock/`, less its README.md and PROTOCOL.md files; `--train --send FILE` ships what such a step
-needs.
+needs. It may also name what runs after a landing (`Tool.after_land`, an argv, read from the target's checkout too): once
+`--push` has pushed a merge or a train, that argv is started in the checkout, in a session of its own, with the landed commit
+appended, and nothing it does changes the merge's exit code. `check`'s is `tools/check/post_train.py`, the vLLM reference
+regression's manifest rebuilds, which label the landing's check attempt when they end.
 
 **Not live yet:** `main` still moves only by the trains the research coordinator lands with `research merge`, so a `ready`
 label alone lands nothing; ask the train runner on Slack as well until the queue lands a full train.
@@ -208,18 +211,7 @@ that no entry lists (`stray`); the hourly preflight probe posts its findings whe
 loop or script goes into the repository and the manifest before it runs; a backup of a replaced file is
 `.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ...
 --by WHO` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
-
-A Lean build that must not touch the node's credentials, such as the Lean build cache's daily build of `main`
-(`vy-lean-cache-daily.timer`, 06:15 UTC, its publisher lean's), runs on `vy-nebius-1` through `vy-lean-sandbox`
-(`pods/nebius/lean_sandbox.py`, run as root): `checkout SHA` makes `/build/verity` a fresh clone of a commit on `main`, `run
-[--deps PKG=DIR] -- CMD` takes a slot of the `build` pool in node 1's Lean slot file and runs CMD as `lean-build` in a transient
-systemd unit with no network, no `/home`, no `/etc/verity`, an empty `/run` and `/workspace`, nothing writable but the tree, and
-only the variables passed with `-E`, and `clean`, which a publisher waits on, passes once no process of `lean-build` is alive, no
-sandbox unit is up, the tree is still the commit's outside `.lake`, and nothing in a `.lake` is a link, a hard link, a special
-file, setuid, writable by group or others, or another user's. Probes run inside
-the unit before every build; one that gets through stops it (exit 3), and a unit that can't start is a refusal (exit 2), never
-a build as another user. Dependencies are restored outside first and bound read-only (readable by others: `chmod -R a+rX`).
-`vy-lean-build-setup` (`pods/nebius/lean_build_setup.sh`) makes the user and checks it from that user's side.
+A Lean build kept from node 1's credentials (the Lean cache's daily one) runs in `vy-lean-sandbox` (`lean_sandbox.py`).
 
 An unlisted or foreign machine is refused before anything is contacted. The
 tool ships as a content-addressed source snapshot under `<root>/tool/` and
@@ -367,9 +359,7 @@ research data label ART verified accepted --by red-team-1 [--ref RUN]           
 research data reindex [--remote]             research data sql "SELECT ..."       # read-only connection
 ~~~
 
-Python: `research.store.local.LocalStore` (`put_artifact`, `get_manifest`,
-`fetch`, `where`, `put_attempt`, `get_attempt`, `add_label`, `labels`,
-`snapshot`, `verify`, `push`, `reindex`, `.index`, `.remote`). Nothing is
+Python: `research.store.local.LocalStore`, its methods listed in the contract. Nothing is
 called PRESERVED without a remote; nothing in the store is ever overwritten.
 
 ### The evidence store: `--tool`, `--scratch`, and the publish step
@@ -440,6 +430,7 @@ research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regener
 research keep show PATH                      # the record covering PATH, explicit or implicit, as JSON
 research retention report [--root /workspace] [--depth 2] [--json]
 research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--apply]
+research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root /workspace] [--jobs-dir D]... [--json] [--apply]
 ~~~
 
 `--preserve` puts the path in the store as `node-data/v1` and pushes it PRESERVED (the store README's §7) before recording its id;
@@ -455,6 +446,15 @@ count as preserved, and `preserved.check` in head mode must find the artifact PR
 for the run dir (the store README's §10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and reads
 no remote; either way it prints every deletion and every skip with its reason. Its named failure: on 1 Oct node 2 held 737 GiB of
 unowned, unpreserved bitsets that nobody could decide to delete.
+
+`rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
+record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the
+`--approved-by` handle as owner and are not `keep`. No job script may name the path, and nothing in it may be read-only or a mount. A
+path no record covers has nobody to say yes and is never deleted. The records are read again just before `--apply` deletes. Each
+decision of an `--apply` (delete, refuse, failed) is a `research/retention-log/v1` line in `/workspace/research/retention/deletions.jsonl`
+with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`. Its named failure: on 3 Oct a disk cleanup ran a bare `rm -rf`
+on four FP8 passes (about 74 GB each) under `pouw/mvp-e2e`. Their record named @compute-accounting as owner until 7 Oct, but another
+lane had approved the deletion, so the passes were lost. Here that `rm` is refused with the true owner's name.
 
 ### Slack
 
