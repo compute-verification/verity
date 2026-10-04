@@ -34,6 +34,10 @@ environment extension loaded, so none of the package's code runs), and replays t
                  canonical form of the term that ignores what `Expr.hash` ignores (records written with its 32 bits are
                  checked as they are until `--update` rewrites them); a record written before guarantees were called
                  that holds them as `pins`, and is read so (`as_guarantees`)
+    proved_in    (a spec package whose guarantees another package proves) a package `proved_in` names does not require this
+                 one by path, holds guarantees in its own policy, shares a module root with a package it requires, or
+                 imports modules of its own outside its roots; or a guarantee is proved by none of this package and those, or
+                 by two
     replay       the kernel rejects a declaration of an audited module when `Replay.lean` sends them all to it again, on
                  one import of what they import from outside, one declaration per task on Lean's threads
                  (`LEAN_NUM_THREADS`, by default the CPUs the audit may use): a declaration that skipped the kernel shows
@@ -50,6 +54,14 @@ environment extension loaded, so none of the package's code runs), and replays t
                  its `generate` command writes) has a SHA-256 other than the record's (`--update` records it)
     tamper       this tool's files, the toolchain's `lean`, `lake` or `leanchecker`, or the `.olean` files of a package
                  built earlier in the run changed during it; the Lean files are run from a copy taken before the first build
+
+A spec package's guarantees may be proved in other packages, which `require` it by path: its policy's `proved_in` lists
+them (paths relative to it), each with a policy of its own that records no guarantee (its roots, layers and the rest).
+The guarantees are then read from the `.olean` files of the package that declares each in a module under its roots, with
+the spec's `meaning`, `axioms` and `assumptions` (`proved`), and judged, recorded and updated in the spec's policy exactly
+as guarantees proved in the spec package itself: moving a proof into another package leaves the record as it was. A
+package `proved_in` names is audited in the same run (its own replay is what checks its proofs), without `--update`
+unless named, and the spec's reading waits for its build.
 
 `--build` builds in a sandbox where the machine allows one (`sandbox.sh`: new user, mount, network and PID namespaces;
 everything read-only but the build's `.lake` directories; no network; nothing outlives the build), and says when it
@@ -128,7 +140,7 @@ FIXTURES = HERE / "tests" / "fixtures"
 #: name components of the declarations Lean generates for a definition (listed under `reads` with it, not by name)
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
-ORDER = ("roots", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "compile_time", "dependency_unchecked", "layers",
+ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "compile_time", "dependency_unchecked", "layers",
          "upstream", "guarantees", "reads", "dependencies")
 
 
@@ -616,6 +628,87 @@ def module_files(pkg: Path) -> dict[str, Path]:
     return {m: d / rel for d in [*deps, pkg] for m, rel in lean_modules(d).items()}
 
 
+def provers(pkg: Path, policy: dict) -> list[tuple[str, Path]]:
+    """The packages the policy's `proved_in` names, each as written (a path relative to ``pkg``) and resolved."""
+    return [(p, (pkg / p).resolve()) for p in policy.get("proved_in", [])]
+
+
+def assign(names, sources: list[tuple[str, dict, dict]]) -> tuple[dict, list[str], dict[str, list[str]]]:
+    """(each guarantee's facts, failures, {package: the guarantees it proves}) over ``sources``, each (a package, the facts of
+    its roots, its own modules), the spec package first. A package proves a guarantee when it declares it in one of its own
+    modules under its roots, which its replay covers. A pure function of the facts: the tests run it."""
+    pins, fails, by = {}, [], {label: [] for label, _, _ in sources}
+    for n in sorted(names):
+        found = [(label, f["pins"][n], f, files) for label, f, files in sources
+                 if f["pins"].get(n, {}).get("kind", "missing") != "missing"]
+        hits = [(label, p) for label, p, f, files in found if p.get("module") in files and p.get("module") in f["modules"]]
+        if len(hits) > 1:
+            where = " and in ".join(f"{p['module']} ({label})" for label, p in hits)
+            fails.append(f"guarantees: {n} is proved in {where}: one package proves a guarantee; remove the others")
+        elif not hits and found:
+            fails.append(f"guarantees: {n} is declared in {found[0][1].get('module')}, which no package of "
+                         f"{', '.join(label for label, _, _ in sources)} audits: a guarantee is proved in a module under the "
+                         f"roots of the spec package or of a package its `proved_in` names")
+        pins[n] = (hits or [x[:2] for x in found] or [(None, {"kind": "missing"})])[0][1]
+        if hits:
+            by[hits[0][0]].append(n)
+    return pins, fails, by
+
+
+def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, str] | None = None,
+           ready=lambda q: None) -> tuple[list[str], dict, dict[str, list[str]]]:
+    """(failures, ``facts`` with each guarantee's facts taken from the package that proves it, {package: the guarantees it
+    proves}) for a policy whose `proved_in` names the packages that prove its guarantees. Each must require ``pkg`` by path
+    and hold a policy of its own without guarantees; ``ready`` (one) returns once its build has ended. `Facts.lean` reads its
+    roots with this policy's `meaning`, `axioms` and guarantees, so the judgment is the one of guarantees proved in ``pkg``.
+    Raises RuntimeError when a package's facts cannot be read."""
+    fails, sources, conflicts = [], [("this package", facts, lean_modules(pkg))], list(facts.get("moved_conflicts", []))
+    for entry, q in provers(pkg, policy):
+        if q == pkg.resolve() or not (q / POLICY).is_file():
+            fails.append(f"proved_in: {entry} is {'this package' if q == pkg.resolve() else f'no package with a {POLICY}'}")
+            continue
+        if pkg.resolve() not in path_deps(q):
+            fails.append(f"proved_in: {entry} does not require this package by path, so its theorems are not about this "
+                         f"package's statements")
+            continue
+        try:
+            qpol = load(q)
+        except ValueError as e:
+            fails.append(f"proved_in: {entry}/{POLICY}: {e}")
+            continue
+        if qpol.get("guarantees"):
+            fails.append(f"proved_in: {entry}'s {POLICY} lists guarantees; the guarantees it proves are recorded here, in "
+                         f"the spec's lock, and it records none")
+        files = lean_modules(q)
+        shared = {m.split(".")[0] for m in files} & {m.split(".")[0] for d in path_deps(q) for m in lean_modules(d)}
+        if shared:
+            fails.append(f"proved_in: {entry}'s modules share the root {', '.join(sorted(shared))} with a package it requires: "
+                         f"Lean looks a module up in the first package on its path holding its root, so `lake env lean` "
+                         f"cannot load both; put its modules under a root of their own (declarations keep their names)")
+            continue
+        ready(q)
+        qwork = work / f"proved-in-{re.sub(r'[^A-Za-z0-9]+', '_', entry)}"
+        qwork.mkdir(parents=True, exist_ok=True)
+        qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
+                          "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {})}, qwork, moved)
+        lib = (q / ".lake" / "build" / "lib" / "lean").resolve()
+        loaded = {".".join(Path(o).resolve().relative_to(lib).with_suffix("").parts) for o in qf["oleans"]
+                  if Path(o).resolve().is_relative_to(lib)}
+        if unaudited := sorted(loaded - set(qf["modules"])):
+            fails.append(f"proved_in: {entry}'s roots ({', '.join(qpol['roots'])}) import its {', '.join(unaudited)}, which are "
+                         f"not under them, so its replay does not check them")
+        for n, p in qf["pins"].items():
+            listed = qpol.get("compile_time", {})
+            if p.get("kind", "missing") != "missing" and p.get("module") in files and (
+                    hit := sorted({p["module"], *(r["module"] for r in p.get("reads", []))} & set(listed))):
+                fails.append(f"compile-time: {entry} lists {', '.join(hit)} under `compile_time`, where {n} is declared or "
+                             f"read; move the compile-time code or the declarations to another module")
+        sources.append((entry, qf, files))
+        conflicts += qf.get("moved_conflicts", [])
+    pins, more, by = assign(policy.get("guarantees", {}), sources)
+    return fails + more, facts | {"pins": pins, "moved_conflicts": conflicts}, by
+
+
 REPRINTED = "printed differently: the same statement (type hash and named assumptions unchanged)"
 REHASHED = "rehashed with SHA-256: the same statement (its 32-bit hash matched)"
 REGROUPED = "read groups rehashed with SHA-256: the same definitions (their 32-bit hashes matched)"
@@ -869,9 +962,11 @@ def template(pkg: Path) -> dict:
 
 
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
-          log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None) -> dict:
+          log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None,
+          ready=lambda q: None) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
-    passed, before anything reads it. ``runs`` runs the package's tests (`tests`), ``repo`` the checkout their data's
+    passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
+    ended (`proved`). ``runs`` runs the package's tests (`tests`), ``repo`` the checkout their data's
     `generate` reads. ``moved`` ({old name: new name}, with ``update``) renames the record's guarantees, and the review compares
     the build with the records under the old names (`review`). An update's report holds the review, whether it changes what a
     guarantee says (`statement_changes`), and the guarantees and reads it compared with (`before`) beside those it wrote."""
@@ -915,12 +1010,16 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     s = time.monotonic()
     try:
         facts = facts_of(pkg, current, work, moved)
+        cross: list[str] = []
+        if "proved_in" in policy:
+            cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, ready)
     except RuntimeError as e:
         rep["failures"].append(f"lean: {e}")
         return rep
     rep["seconds"]["audit"] = round(time.monotonic() - s, 1)
     files = lean_modules(pkg)
     fails, new = judge(current, facts, files, update)
+    fails = cross + fails
     s = time.monotonic()
     missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)
     rep["seconds"]["dependency-sources"] = round(time.monotonic() - s, 1)
@@ -983,7 +1082,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         dump(work, new)
     if update and new != policy:
         dump(pkg, new)
-        notes = review(policy, new, facts, module_files(pkg)) + lnotes
+        sources = {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
+        notes = review(policy, new, facts, sources) + lnotes
         (work / "review.txt").write_text("\n".join(notes) + "\n")
         rep["review"] = notes
         must = statement_changes(notes)
@@ -1143,6 +1243,13 @@ def main(argv: list[str]) -> int:
             ap.error(f"{a.moved}: a JSON object of old names to new names")
         if errs := move_errors(moved):
             ap.error(f"{a.moved}: " + "; ".join(errs))
+    named = set(pkgs)
+    for p in pkgs:                                      # grows: a package proving another's guarantees is audited beside it
+        try:
+            more = provers(p, load(p)) if (p / POLICY).is_file() else []
+        except ValueError:
+            more = []                                   # its audit reports the policy
+        pkgs += [q for _, q in more if q not in pkgs and (q / POLICY).is_file()]
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     out = a.out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-audit-")))
     out.mkdir(parents=True, exist_ok=True)
@@ -1183,8 +1290,10 @@ def main(argv: list[str]) -> int:
         for d in needs[pkg]:
             built[d].wait()
         try:
-            rep = audit(pkg, out, a.build, a.update, not a.no_replay, a.fresh, built=lambda: seal(pkg), runs=not a.no_runs,
-                        repo=a.repo.resolve(), moved=moved)
+            mine = pkg in named
+            rep = audit(pkg, out, a.build, a.update and mine, not a.no_replay, a.fresh, built=lambda: seal(pkg),
+                        runs=not a.no_runs, repo=a.repo.resolve(), moved=moved if mine else None,
+                        ready=lambda q: built[q].wait() if q in built else None)
         finally:
             if not built[pkg].is_set():
                 seal(pkg)

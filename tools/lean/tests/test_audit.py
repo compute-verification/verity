@@ -538,6 +538,142 @@ def test_packages_are_audited_side_by_side_and_a_build_waits_for_the_builds_it_r
     assert [r["package"] for r in doc["packages"]] == [str(a), str(b), str(c)] and doc["failed"] == [str(c)]
 
 
+def test_a_guarantee_is_proved_by_exactly_one_package():
+    spec = facts(modules=["P.Defs"], pins={"P.t": {"kind": "missing"}, "P.u": fact() | {"module": "P.Defs"},
+                                            "P.v": {"kind": "missing"}, "P.w": {"kind": "missing"}})
+    proofs = facts(modules=["Q.Thms"], pins={"P.t": fact() | {"module": "Q.Thms"}, "P.u": fact() | {"module": "P.Defs"},
+                                              "P.v": fact() | {"module": "P.Lemmas"}, "P.w": {"kind": "missing"}})
+    other = facts(modules=["R.Thms"], pins={"P.t": fact() | {"module": "R.Thms"}, "P.u": {"kind": "missing"},
+                                             "P.v": {"kind": "missing"}, "P.w": {"kind": "missing"}})
+    sources = [("this package", spec, {"P.Defs": "P/Defs.lean", "P.Lemmas": "P/Lemmas.lean"}),
+               ("../q", proofs, {"Q.Thms": "Q/Thms.lean"}), ("../r", other, {"R.Thms": "R/Thms.lean"})]
+    pins, fails, by = A.assign(["P.t", "P.u", "P.v", "P.w"], sources[:2])
+    assert fails == ["guarantees: P.v is declared in P.Lemmas, which no package of this package, ../q audits: a guarantee is "
+                     "proved in a module under the roots of the spec package or of a package its `proved_in` names"]
+    assert pins["P.t"]["module"] == "Q.Thms" and pins["P.u"]["module"] == "P.Defs" and pins["P.w"] == {"kind": "missing"}
+    assert by == {"this package": ["P.u"], "../q": ["P.t"]}
+    assert A.judge(POLICY | {"guarantees": {"P.w": {}}}, facts(pins={"P.w": pins["P.w"]}), FILES, update=True)[0] == [
+        "guarantees: P.w is missing"]
+    fails = A.assign(["P.t"], sources)[1]
+    assert fails == ["guarantees: P.t is proved in Q.Thms (../q) and in R.Thms (../r): one package proves a guarantee; "
+                     "remove the others"]
+
+
+def test_a_proving_package_requires_the_spec_records_no_guarantee_and_keeps_its_own_module_root(tmp_path):
+    spec, q = tmp_path / "spec", tmp_path / "proofs"
+    for d, rel in ((spec, "Core/Protocol.lean"), (q, "Core/SecurityProofs.lean")):
+        (d / rel).parent.mkdir(parents=True)
+        (d / rel).write_text("")
+    (q / A.POLICY).write_text(json.dumps({"roots": ["Core.SecurityProofs"], "guarantees": {"Core.t": {}}}))
+    policy = {"roots": ["Core.Protocol"], "proved_in": ["../proofs", "../nowhere", "."], "guarantees": {}}
+    fails = A.proved(spec, policy, facts(modules=[], pins={}), tmp_path / "work")[0]
+    assert fails == ["proved_in: ../proofs does not require this package by path, so its theorems are not about this "
+                     "package's statements", f"proved_in: ../nowhere is no package with a {A.POLICY}",
+                     "proved_in: . is this package"]
+    (q / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": "spec", "dir": "../spec"}]}))
+    fails = A.proved(spec, policy | {"proved_in": ["../proofs"]}, facts(modules=[], pins={}), tmp_path / "work")[0]
+    assert fails == [f"proved_in: ../proofs's {A.POLICY} lists guarantees; the guarantees it proves are recorded here, in the "
+                     "spec's lock, and it records none",
+                     "proved_in: ../proofs's modules share the root Core with a package it requires: Lean looks a module up "
+                     "in the first package on its path holding its root, so `lake env lean` cannot load both; put its "
+                     "modules under a root of their own (declarations keep their names)"]
+
+
+def test_a_package_proving_anothers_guarantees_is_audited_beside_it(tmp_path, monkeypatch):
+    """`s` names `p` under `proved_in`, and `p` requires `s`: auditing `s` audits `p` too, `--update` only `s`, and `s`'s
+    reading of `p` waits for `p`'s build, which waits for `s`'s."""
+    s, p = tmp_path / "s", tmp_path / "p"
+    for d in (s, p):
+        d.mkdir()
+    (s / A.POLICY).write_text(json.dumps({"roots": ["S"], "proved_in": ["../p"]}))
+    (p / A.POLICY).write_text(json.dumps({"roots": ["SP"]}))
+    (p / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": "s", "dir": "../s"}]}))
+    events, calls = [], {}
+
+    def fake(pkg, out, build, update, replay, fresh, log=print, built=lambda: None, ready=lambda q: None, **kw):
+        calls[pkg.name] = {"update": update, "moved": kw.get("moved")}
+        events.append(("start", pkg.name))
+        built()
+        events.append(("built", pkg.name))
+        if pkg.name == "s":
+            ready(p.resolve())
+            events.append(("read", "s"))
+        return {"package": str(pkg), "seconds": {}, "failures": []}
+
+    monkeypatch.setattr(A, "audit", fake)
+    (tmp_path / "moves.json").write_text('{"S.a": "S.b"}')
+    assert A.main([str(s), "--update", "--moved", str(tmp_path / "moves.json"), "--out", str(tmp_path / "out")]) == 0
+    assert calls == {"s": {"update": True, "moved": {"S.a": "S.b"}}, "p": {"update": False, "moved": None}}
+    assert events.index(("built", "s")) < events.index(("start", "p")) < events.index(("built", "p")) < events.index(("read", "s"))
+    doc = json.loads((tmp_path / "out" / "audit.json").read_text())
+    assert [r["package"] for r in doc["packages"]] == [str(s), str(p)]
+
+
+CORE = {"Core/Protocol.lean": "namespace Core\ndef double (n : Nat) : Nat := 2 * n\nend Core\n",
+        "Core/Assumptions.lean": "namespace Core\ndef Hyp : Prop := ∀ n : Nat, n + 0 = n\nend Core\n",
+        "Core/Guarantees.lean": "import Core.Protocol\nimport Core.Assumptions\nnamespace Core.Guarantees\n"
+                                "def Main : Prop := Core.Hyp → ∀ n, Core.double n = n + n\nend Core.Guarantees\n"}
+PROOFS = ("import Core.Guarantees\nnamespace Core.SecurityProofs\n"
+          "theorem inline (h : Core.Hyp) (n : Nat) : Core.double n = n + n := by unfold Core.double; omega\n"
+          "theorem main : Core.Guarantees.Main := fun h n => inline h n\nend Core.SecurityProofs\n")
+SPEC = {"assumptions": ["Core.Assumptions"], "meaning": ["Core.Protocol", "Core.Assumptions", "Core.Guarantees"],
+        "layers": {"Core.Protocol": {"imports": ["Core.Protocol"], "why": "the definitions import no proof"}},
+        "guarantees": {"Core.SecurityProofs.main": {}, "Core.SecurityProofs.inline": {}}}
+
+
+def _package(d: Path, files: dict[str, str], lakefile: str, policy: dict) -> None:
+    for rel, text in files.items():
+        (d / rel).parent.mkdir(parents=True, exist_ok=True)
+        (d / rel).write_text(text)
+    (d / "lakefile.toml").write_text(lakefile)
+    (d / "lean-toolchain").write_text((A.FIXTURES / "control" / "lean-toolchain").read_text())
+    A.dump(d, policy)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_moving_the_proofs_into_another_package_leaves_the_spec_record_as_it_was(tmp_path):
+    """The pure-move property on a real build: a spec (`Protocol`, `Assumptions`, `Guarantees`) whose two guarantees (one
+    stated as a `Guarantees` definition, one inline with a named assumption) are proved first in the spec's own package, then
+    in a package of their own that requires it, its modules under a root of their own and the declarations under their old
+    names. The spec's `--update` writes the same guarantees and reads both times, and its audit passes beside the proofs'.
+    Then a proof module the proofs' roots import but do not cover (exempt) fails the spec's audit: its replay skips it."""
+    one, spec, proofs, out = tmp_path / "one", tmp_path / "spec", tmp_path / "proofs", tmp_path / "out"
+    _package(one, CORE | {"Core/SecurityProofs.lean": PROOFS, "Core.lean": "".join(
+        f"import Core.{m}\n" for m in ("Protocol", "Assumptions", "Guarantees", "SecurityProofs"))},
+        'name = "one"\ndefaultTargets = ["Core"]\n[[lean_lib]]\nname = "Core"\n', SPEC | {"roots": ["Core"]})
+    roots = ["Core.Protocol", "Core.Assumptions", "Core.Guarantees"]
+    _package(spec, CORE, f'name = "spec"\ndefaultTargets = ["Core"]\n[[lean_lib]]\nname = "Core"\nroots = {json.dumps(roots)}\n',
+             SPEC | {"roots": roots, "proved_in": ["../proofs"]})
+    _package(proofs, {"CoreProofs.lean": PROOFS}, 'name = "proofs"\ndefaultTargets = ["CoreProofs"]\n[[require]]\n'
+             'name = "spec"\npath = "../spec"\n[[lean_lib]]\nname = "CoreProofs"\n', {"roots": ["CoreProofs"]})
+    build = lambda d: subprocess.run(["lake", "build"], cwd=d, check=True, capture_output=True, env=A.lake_env())
+    for d in (one, spec, proofs):
+        build(d)
+    for d in (one, proofs):
+        assert A.audit(d, out, update=True, replay=False, runs=False, log=lambda *_: None)["failures"] == []
+    proofs_policy = (proofs / A.POLICY).read_text()
+    assert set(json.loads(proofs_policy)) == {"roots", "dependencies"}
+    assert A.main([str(spec), "--update", "--no-replay", "--out", str(out)]) == 0
+    assert (proofs / A.POLICY).read_text() == proofs_policy, "the proofs' policy is not the one `--update` writes"
+    split, whole = A.load(spec), A.load(one)
+    assert split["guarantees"] == whole["guarantees"] and split["reads"] == whole["reads"]
+    assert set(whole["reads"]) == {"Core.Protocol", "Core.Assumptions", "Core.Guarantees"}
+    assert split["guarantees"]["Core.SecurityProofs.inline"]["assumptions"] == ["Core.Hyp"]
+    assert A.main([str(spec), "--out", str(out)]) == 0
+    reps = {Path(r["package"]).name: r for r in json.loads((out / "audit.json").read_text())["packages"]}
+    assert reps["spec"]["proved_in"] == {"this package": [], "../proofs": sorted(SPEC["guarantees"])} and "replay" in reps["proofs"]["seconds"]
+    (proofs / "Extra").mkdir()
+    (proofs / "Extra" / "Lemma.lean").write_text("theorem Extra.lemma : True := trivial\n")
+    (proofs / "CoreProofs.lean").write_text("import Extra.Lemma\n" + PROOFS)
+    (proofs / "lakefile.toml").write_text((proofs / "lakefile.toml").read_text() + 'roots = ["CoreProofs", "Extra.Lemma"]\n')
+    A.dump(proofs, A.load(proofs) | {"exempt": {"Extra": "a lemma outside the roots"}})
+    build(proofs)
+    assert A.audit(spec, out, replay=False, runs=False, log=lambda *_: None)["failures"] == [
+        "proved_in: ../proofs's roots (CoreProofs) import its Extra.Lemma, which are not under them, so its replay does not "
+        "check them"]
+
+
 def _runs(tmp_path, monkeypatch, entry, exit=0):
     """A package whose exempt module `T` is a test under `runs`, the commands it would run (`lake` faked to exit ``exit``; a
     `generate` runs for real), and a function auditing it: (failures, the `runs` section as found)."""
