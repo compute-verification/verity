@@ -27,13 +27,17 @@ the task list's build, nor an earlier target's check):
 `targets.py` and `pins.json` are not files of any target: a target holds the parts of `targets.py` it depends on (its binding
 units and the rest of the module with every binding unit cut out, ``common``, each by the digest of its AST, so comments and
 formatting are no input; any `targets.py` code its check ran, by the unit that holds it) and the entries of `pins.json` its check
-looked up (`recorded_pins`), each by its value, or absent.  The checker's own version is the digest of this package's sources less
+looked up (`recorded_pins`), each by its value, or absent.  Likewise each Definition whose kernels its check looked up in
+`verity.evaluation.batch._KERNELS` (`_RecordedKernels`), by what is registered for it now (each kernel's name, domain, version and
+the file and first line of its function and sampler), or none: the module that registers a kernel is imported with the
+registries, and no check of a target without one runs any of it.  The checker's own version is the digest of this package's sources less
 those two.  Beside them the key holds the interpreter, the platform, the installed distributions, the request (the target, its
 options, and whether the partition invariant applies to it, as the catalog resolved it) and the ``VERITY_*`` / ``CIRCUIT_CHECK_*``
 environment.  Each target's check runs with a memo of its own, so no result an earlier target computed stands in for its reads.
 
 A hit means every file, listing, probe, library, `targets.py` unit and pin this target's check read or resolved is unchanged
-(the tree as git has it, `visible`: bytecode or a build inside the tree counts as absent).  Not covered: a file a C extension
+(the tree as git has it, `visible`: a file git does not track, bytecode, a build or a fetched file inside the tree, counts as
+absent, so a read of one is never keyed on its content).  Not covered: a file a C extension
 reads with its own I/O (none here); anything outside the repository, which the interpreter, platform and distribution list stand
 for; a file a module read while it was imported before tracing began (the checker's own imports, ``verity.ir`` and
 ``verity.evaluation`` among them: their sources are inputs, data they opened at import is not); what a function read or imported
@@ -44,7 +48,7 @@ id); and what a binding ran that changes a Definition it did not make, keeping i
 it imported) and left where a Definition made before it, or outside every binding, reads it, closed over or in a module's state,
 rather than passed as a static (a static is in the id).  A new file in a package the registries enumerate changes the listing
 every target holds, so it reruns everything.  What the tracer cannot see (a program it starts: ``subprocess``, ``os.system``,
-``exec``, ``posix_spawn``) makes the process's later results uncacheable (`untraced`).
+``exec``, ``posix_spawn``, a ``fork``) makes the process's later results uncacheable (`untraced`).
 
 Only a verdict is stored, of the tree its check read: not a check that raised (an ImportError says the environment was broken,
 not what the target is), nor one whose reads, digested again by the process that ran it right after, differ from the digests
@@ -69,7 +73,7 @@ from typing import Any, Iterable, Iterator
 SCHEMA = "circuit-check-cache/v2"
 _ROOT: list[Path] = []
 #: what the tracer cannot see: a program started from here, or a repository library loaded by the dynamic loader
-UNTRACEABLE = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn")
+UNTRACEABLE = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn", "os.fork")
 _UNTRACED: list[str] = []
 _INTERNAL: list[bool] = []
 _HERE = Path(__file__).resolve().parent
@@ -79,9 +83,9 @@ TARGETS, PINS = _HERE / "targets.py", _HERE / "pins.json"
 
 class Frame:
     """What one recording saw: reads (relative to the root), the files of the code that ran, the first lines of `targets.py`'s
-    code that ran, the specializations whose body it read, and the pins it looked up."""
+    code that ran, the specializations whose body it read, the pins it looked up, and the Definitions whose kernels it looked up."""
 
-    __slots__ = ("files", "dirs", "probes", "libs", "code", "lines", "defs", "pins")
+    __slots__ = ("files", "dirs", "probes", "libs", "code", "lines", "defs", "pins", "kernels")
 
     def __init__(self) -> None:
         self.files: set[str] = set()
@@ -92,6 +96,7 @@ class Frame:
         self.lines: set[int] = set()
         self.defs: dict[int, Any] = {}
         self.pins: set[str] = set()
+        self.kernels: set[str] = set()
 
     def merge(self, o: "Frame", defs: bool = True) -> None:
         self.files |= o.files
@@ -103,6 +108,7 @@ class Frame:
         if defs:
             self.defs.update(o.defs)
         self.pins |= o.pins
+        self.kernels |= o.kernels
 
 
 #: the open recordings, innermost last; the first holds what the process read outside every recording
@@ -295,6 +301,12 @@ def _instrument() -> None:
         from verity.ir import defs as D
     except ImportError:
         return
+    try:
+        from verity.evaluation import batch
+    except ImportError:
+        batch = None
+    if batch is not None and not isinstance(batch._KERNELS, _RecordedKernels):
+        batch._KERNELS = _RecordedKernels(batch._KERNELS)
     build0 = D._build_body
 
     def _build_body(sp):
@@ -458,6 +470,75 @@ class recorded_pins:
         return len(self._d)
 
 
+# --- the kernels a check looked up ------------------------------------------------------------------------------------------
+
+class _RecordedKernels(dict):
+    """`verity.evaluation.batch._KERNELS`, noting in the open recording each Definition whose kernels are looked up (a lookup
+    that finds none included), and all of them on any enumeration.  Registering (``setdefault``) is no lookup."""
+
+    def _note(self, key: Any) -> None:
+        if len(_FRAMES) > 1 and not _INTERNAL:
+            _FRAMES[-1].kernels.add(str(key))
+
+    def get(self, key, default=None):
+        self._note(key)
+        return dict.get(self, key, default)
+
+    def __getitem__(self, key):
+        self._note(key)
+        return dict.__getitem__(self, key)
+
+    def __contains__(self, key) -> bool:
+        self._note(key)
+        return dict.__contains__(self, key)
+
+    def __iter__(self):
+        self._note("*")
+        return dict.__iter__(self)
+
+    def keys(self):
+        self._note("*")
+        return dict.keys(self)
+
+    def values(self):
+        self._note("*")
+        return dict.values(self)
+
+    def items(self):
+        self._note("*")
+        return dict.items(self)
+
+
+def _where(fn: Any) -> str | None:
+    """Where ``fn`` is defined (its file, relative to the root when inside it, and first line), or its type's name."""
+    import functools
+    import inspect
+
+    if fn is None:
+        return None
+    while isinstance(fn, functools.partial):
+        fn = fn.func
+    fn = inspect.unwrap(fn)
+    code = getattr(fn, "__code__", None) or getattr(getattr(fn, "__call__", None), "__code__", None)
+    if code is None:
+        return f"{type(fn).__module__}.{type(fn).__qualname__}"
+    return f"{_rel(code.co_filename) or code.co_filename}:{code.co_firstlineno}"
+
+
+def _kernels_now(key: str) -> str | None:
+    """What is registered now for ``key`` (``*``: for every Definition), digested; None when nothing is."""
+    try:
+        from verity.evaluation import batch
+    except ImportError:
+        return None
+    reg = batch._KERNELS
+    keys = sorted(dict.keys(reg)) if key == "*" else [key]
+    got = {k: {n: [kn.domain, kn.version, _where(kn.fn), _where(kn.sample)] for n, kn in sorted(dict.get(reg, k, {}).items())}
+           for k in keys}
+    got = {k: v for k, v in got.items() if v}
+    return hashlib.sha256(json.dumps(got, sort_keys=True).encode()).hexdigest() if got else None
+
+
 # --- targets.py's units -----------------------------------------------------------------------------------------------------
 
 def _is_binding(name: str) -> bool:
@@ -469,13 +550,14 @@ def _digest_ast(node: ast.AST) -> str:
 
 
 def _model_list(fn: ast.FunctionDef) -> list[ast.expr] | None:
-    """The entries of `_model_roots`' returned list, when every one is a ``(label, make)`` tuple."""
+    """The entries of `_model_roots`' returned list, when every one is a ``(label, make)`` tuple and no two share a label (each
+    entry's unit is named by its label, so two of one label are one unit, and the whole function is that unit then)."""
     rets = [n for n in ast.walk(fn) if isinstance(n, ast.Return)]
     if len(rets) != 1 or not isinstance(rets[0].value, ast.List):
         return None
     elts = rets[0].value.elts
     if all(isinstance(e, ast.Tuple) and e.elts and isinstance(e.elts[0], ast.Constant) and isinstance(e.elts[0].value, str)
-           for e in elts):
+           for e in elts) and len({e.elts[0].value for e in elts}) == len(elts):
         return elts
     return None
 
@@ -662,6 +744,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
     acc.dirs |= outside.dirs
     acc.probes |= outside.probes
     acc.libs |= outside.libs
+    acc.kernels |= outside.kernels
     seen_defs: set[int] = set()
     seen_units: set[str] = set()
     stack = list(acc.defs.values()) + list(roots)
@@ -695,6 +778,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
         acc.libs |= f.libs
         acc.lines |= f.lines
         acc.pins |= f.pins
+        acc.kernels |= f.kernels
         work.extend(f.code)
         if defs:
             stack.extend(f.defs.values())
@@ -737,7 +821,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
         acc.pins.add("*")
     return {"files": sorted(acc.files), "dirs": sorted(acc.dirs), "probes": sorted(acc.probes - acc.files - acc.dirs),
             "libs": sorted(acc.libs), "units": sorted(f"{trel}#{u}" for u in unit_names) if trel is not None else [],
-            "pins": sorted(f"{prel}#{p}" for p in acc.pins) if prel is not None else []}
+            "pins": sorted(f"{prel}#{p}" for p in acc.pins) if prel is not None else [], "kernels": sorted(acc.kernels)}
 
 
 def version() -> str:
@@ -827,7 +911,8 @@ def _digests_of(root: Path, got: dict[str, list[str]], fresh: bool) -> dict[str,
     libs = {r: memo("l", r, lambda r=r: _sha_file(root / r) if (root / r).is_file() else None) for r in got.get("libs", [])}
     units = {r: memo("u", r, lambda r=r: _unit(root, r, seen)) for r in got.get("units", [])}
     pins = {r: memo("n", r, lambda r=r: _pin(root, r, seen)) for r in got.get("pins", [])}
-    return {"files": files, "dirs": dirs, "probes": probes, "libs": libs, "units": units, "pins": pins}
+    kernels = {r: memo("k", r, lambda r=r: _kernels_now(r)) for r in got.get("kernels", [])}
+    return {"files": files, "dirs": dirs, "probes": probes, "libs": libs, "units": units, "pins": pins, "kernels": kernels}
 
 
 _MEMO: dict[tuple[str, str, str], str | None] = {}
