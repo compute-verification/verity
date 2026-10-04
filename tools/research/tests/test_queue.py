@@ -740,6 +740,40 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
     assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h2) is False
 
 
+def test_a_remote_quick_tier_does_not_wait_for_a_local_tier_of_the_same_repository(world, monkeypatch):
+    """A local tier holds its worktree's lock for the whole tier (about an hour on a lane's VM), and a remote tier from any worktree
+    of the same repository took that lock to check out and ship, so every `--on` tier on the VM waited for it (two lanes, 4 Oct);
+    a remote tier ships from a worktree of its own."""
+    import fcntl
+    import hashlib
+
+    from research import queue as Q
+
+    main = world.change({"tools/check/suites.py": FAKE_SUITES})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    h1 = world.change({"a.txt": "a1\n"})
+    world.gh.put(1, h1, ready=False)
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setenv("FAKE_SEEN", str(world.tmp / "seen.json"))
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+
+    class NonBlocking:
+        LOCK_EX, LOCK_NB = fcntl.LOCK_EX, fcntl.LOCK_NB
+
+        @staticmethod
+        def flock(f, op):
+            fcntl.flock(f, op | fcntl.LOCK_NB)                  # a held lock raises here instead of hanging the test
+
+    monkeypatch.setattr(Q, "fcntl", NonBlocking)
+    common = _git(world.dev, "rev-parse", "--path-format=absolute", "--git-common-dir").strip()
+    (ready := world.tmp / "ready").mkdir()
+    tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp))
+    with open(ready / f"{hashlib.sha256(common.encode()).hexdigest()[:12]}.lock", "w") as local:
+        fcntl.flock(local, fcntl.LOCK_EX)
+        assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is True
+
+
 def _reports(status: dict | None = None, result=lambda doc: doc, raw: str | None = None):
     """A run's outcome on the machine: status.json `status` (done, exit 0, unless given) and the result.json of a pass at the head as
     quick_tier.py writes it, through `result` (None: no result.json), or `raw` as the file."""
