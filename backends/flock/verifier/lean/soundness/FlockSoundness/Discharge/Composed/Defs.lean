@@ -4,14 +4,12 @@ import FlockSoundness.Discharge.ZkView
 import FlockSoundness.Discharge.ZkBind
 
 /-!
-# One `--zk` sampled session: the pieces the composed headline reads
+# One `--zk` sampled session: the pieces the soundness half reads
 
 * `Gz`, `outz`, `accz`: the compiled `--zk` table at each draw (one table) as `modelTable`'s pieces, so that
   `ZkExec.sessionZC` at them is `ZkLink.batchedSessionZC` at the one-table plan (`sessionZC_planOf`).
 * `DecodesOnZK`, `simZ`, `execRefinesZK_on`: `DecodesZK`, `simAuditZK` and `execRefinesZK_one` at the law's draws only
   (as `Tables.DecodesOnJ` is on the public path), the simulated strategy carried into the compiled batched session.
-* `CoinedSetup`, `coinedOf`, `CoinedOK`, `CoinedOfSetup` (new item, open): the `--zk` table of a draw as `ZkView`'s
-  `Coined` tables at the executable's leaves, at each coin vector, and the structural facts Lemma B reads of them.
 -/
 
 namespace FlockSoundness.Discharge.Composed
@@ -142,80 +140,5 @@ theorem decodesOnZK_of_runsOnZC (h : RunsOnZC A Hs T I wr opn dec fin capOf L) :
   fun ω R => decodes_of_runsOnZC A Hs T I wr opn dec fin capOf h ω R
 
 end On
-
-/-! ## The open pieces -/
-
-/-! ## The session's tables at the executable's leaves (new item, open) -/
-
-/-- **A `--zk` table as `ZkView`'s tables**: the witness, hidden-value and value-list types, the coin vectors, the sizes,
-the `Coined` table at each coin vector (its leaves the executable's: `Coined.tab`), and M1's level-0 padding data (the
-level-0 message's `cols` and the opened positions `pos`) that `padOnto_M1` reads. -/
-structure CoinedSetup (K : Type) [Field K] where
-  W : Type
-  Hi : Type
-  VL : Type
-  [addHi : AddCommGroup Hi]
-  [finHi : Fintype Hi]
-  [decHi : DecidableEq Hi]
-  Coins : Type
-  z : ZkView.Sizes
-  T : Coins → ZkView.Coined K W Hi VL z
-  cols : ℕ
-  pos : Fin z.nS → ℕ
-  /-- The coin vectors `verify --zk` does not refuse (`refused_coins`: `β = 0`, mask-slot weights of rank `< 128·k`,
-  `ρ₀, ρ₁` dependent over F128). -/
-  Admits : Coins → Prop
-  /-- The witnesses that satisfy the session's circuit. -/
-  Valid : W → Prop
-
-attribute [instance] CoinedSetup.addHi CoinedSetup.finHi CoinedSetup.decHi
-
-/-- **The draw's `--zk` table as `Coined` tables** (open: the definition is the new item's to write, from what
-`verify --zk` sets up at the draw: its schedule, pads layout, inner code and the honest prover's level-0 code). -/
-noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) : CoinedSetup FlockLevel3.GF256 := sorry
-
-/-- **The structural facts Lemma B reads**, of a `CoinedSetup` at the arithmetic `A` and M1's padding constant `κ`: M1's
-level-0 padding geometry (`cols ≤ 40`, `t_pad ≤ 2^cols`, at most `t_pad` distinct opened positions inside
-`2^(cols+1)`), and at every coin vector the rank check, M1's padding columns `Gp`, each rep's `W^r` bijective, the pads
-onto, `β ≠ 0`, and the inner relation at every valid witness whose registered values are the public ones, at every coin
-vector the executable admits (at a refused one, `verify --zk` stops). -/
-def CoinedOK (A : Arith 𝔽 K) (κ : 𝔽) (C : CoinedSetup K) : Prop :=
-  C.cols ≤ 40 ∧ C.z.tpad ≤ 2 ^ C.cols ∧ C.z.nS ≤ C.z.tpad ∧ Function.Injective C.pos ∧
-    (∀ q, C.pos q < 2 ^ (C.cols + 1)) ∧
-    ∀ c : C.Coins, C.Admits c → (C.T c).tab.Rank ∧
-      (∀ q i, (C.T c).tab.Gp q i = κ * A.Xhat i.val (C.cols + 1) (A.omega (C.pos q))
-        + A.Xhat (2 ^ C.cols + i.val) (C.cols + 1) (A.omega (C.pos q))) ∧
-      (∀ r, Function.Bijective fun p : 𝔽 × 𝔽 => (C.T c).tab.Wr r p.1 p.2) ∧ (C.T c).tab.PadsOnto ∧
-      (∀ r, (C.T c).tab.β r ≠ 0) ∧
-      ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w
-
-/-- **The session's tables satisfy Lemma B's facts** (new item, open): at every draw `verify --zk` sets up, the
-`Coined` tables of the draw's `--zk` table (`coinedOf (tablesAtZK dj y₀ S R)`) are `CoinedOK` at `execArith` and
-`PAD_C`. -/
-def CoinedOfSetup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) : Prop :=
-  ∀ (S : Finset (Fin n)) (R : Reg), Nonempty (DrawSetupZK I mPts S (dj S)) →
-    CoinedOK execArith (fOf Zk.PAD_C) (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R))
-
-theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) : CoinedOfSetup (Reg := Reg) I dj y₀ := by
-  sorry
-
-/-- **Zero knowledge at a `CoinedSetup`, at `δ₁` per hidden leaf** (Lemma B, `ZkWireFixed`'s form at one table): at any
-coin vector the executable admits, for any encoding `enc` of the view (the proof files) and any event `E`, the real view at any valid witness `w`
-whose registered values are the public ones and `S_shvzk`'s at any `w0` are within `2·|Hid|·δ₁`, both ways. -/
-def ZkViewAt (C : CoinedSetup K) (δ₁ : ℝ≥0∞) : Prop :=
-  ∀ (c : C.Coins), C.Admits c → ∀ {Out : Type} (enc : (∀ _ : Fin 1, (C.T c).tab.View) → Out)
-    (w w0 : Fin 1 → C.W), (∀ j, C.Valid (w j)) → ∀ (_hreg : ∀ j, (C.T c).tab.sReg (w j) = (C.T c).tab.pubReg) (E : Out → Prop),
-    Game.prCoin (fun p : ∀ _ : Fin 1, (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) =>
-        E (enc fun j => (C.T c).viewExe (w j) (p j).1 (p j).2))
-        ≤ Game.prCoin (fun p : ∀ _ : Fin 1, (C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt) =>
-            E (enc fun j => (C.T c).simExe (w0 j) (p j).1 (p j).2))
-          + ∑ _j : Fin 1, 2 * Fintype.card (C.T c).tab.Hid * δ₁
-      ∧ Game.prCoin (fun p : ∀ _ : Fin 1, (C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt) =>
-          E (enc fun j => (C.T c).simExe (w0 j) (p j).1 (p j).2))
-        ≤ Game.prCoin (fun p : ∀ _ : Fin 1, (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) =>
-            E (enc fun j => (C.T c).viewExe (w j) (p j).1 (p j).2))
-          + ∑ _j : Fin 1, 2 * Fintype.card (C.T c).tab.Hid * δ₁
 
 end FlockSoundness.Discharge.Composed

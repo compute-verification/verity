@@ -1,4 +1,5 @@
-import FlockSoundness.Discharge.Composed.Defs
+import FlockSoundness.Discharge.Composed.Coined
+import FlockSoundness.Discharge.Composed.Setup
 import FlockSoundness.Assumptions.Zk
 
 /-!
@@ -12,7 +13,7 @@ import FlockSoundness.Assumptions.Zk
   `δ_tree = 0` (`execAccept` is acceptance, so the tree's event is empty: `TreeRewind.ofNever`), carried to
   flock-verify's acceptance by `zk_headline_exec_on`;
 * **zero knowledge**: at every draw `verify --zk` sets up, the verifier's view of the session's table at the executable's
-  leaves (`coinedOf (tablesAtZK dj y₀ S R)`) is within `2·|Hid|·2^-193` of `S_shvzk`'s, which reads only the public
+  leaves (`coinedOf P (tablesAtZK dj y₀ S R)`) is within `2·|Hid|·2^-193` of `S_shvzk`'s, which reads only the public
   values, both ways (Lemma B, `session_shvzk_hm96`, with `PadOnto` from `PadNonvanishing` by `padOnto_M1`).
 
 What it rests on: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `δ_link`: `⊤` at a prover whose link finders break
@@ -31,22 +32,43 @@ local notation "𝔽" => FlockLevel3.GF128
 set_option maxRecDepth 8000 in
 /-- **Zero knowledge at a `CoinedSetup` from its facts**: Lemma B (`session_shvzk_hm96`) at one table, its leaves'
 hiding `HashDerivedKey`'s, its row (ii) `padOnto_M1`'s from `PadNonvanishing`. -/
-theorem zkViewAt_of_ok (C : CoinedSetup FlockLevel3.GF256) (hC : CoinedOK execArith (fOf Zk.PAD_C) C)
+theorem zkViewAt_of_ok (C : CoinedSetup) (hC : CoinedOK execArith (fOf Zk.PAD_C) C)
     (hKey : Assumptions.Zk.HashDerivedKeyHm96)
     (hPad : Assumptions.Zk.PadNonvanishing40) :
     ZkViewAt C ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
-  obtain ⟨hL, ht, hS, hpos, hlt, hT⟩ := hC
+  obtain ⟨hL, ht, hS, hT⟩ := hC
   intro c hc Out enc w w0 hv hreg E
-  obtain ⟨hrank, hGp, hW, hpads, hβ, hinner⟩ := hT c hc
+  obtain ⟨⟨hpos, hlt⟩, -, hrank, hGp, hW, hpads, hβ, hinner⟩ := hT c hc
   have hpad : (C.T c).tab.PadOnto :=
-    FlockSoundness.ZK.padOnto_M1 (C.T c).tab execArith execArith_correct C.cols hL ht hS (fOf Zk.PAD_C) C.pos hpos
+    FlockSoundness.ZK.padOnto_M1 (C.T c).tab execArith execArith_correct C.cols hL ht hS (fOf Zk.PAD_C) (C.pos c) hpos
       hlt hGp (hPad _ hL)
   simp only [ZkView.Coined.viewExe_eq, ZkView.Coined.simExe_eq]
   exact FlockSoundness.ZK.Session.session_shvzk_hm96 (fun _ => (C.T c).tab) (fun _ => (C.T c).hm96)
     (fun _ => hKey) (fun _ => hrank) (fun _ => hpad) (fun _ => hW) (fun _ => hpads) (fun _ => hβ) w hreg
     (fun j => hinner (w j) (hv j) (hreg j)) w0 fun v => E (enc v)
 
-variable {mPts n : ℕ} {Reg : Type}
+variable {mPts n : ℕ} {Reg : Type} (P : LigProver)
+
+/-- **One `--zk` sampled session is zero knowledge, at the covered coin vectors.** At every draw `verify --zk` sets up, at
+every coin vector the honest prover doesn't refuse (`refused_coins`; `CoinedSetup.Admits`: `β ≠ 0`, the mask slot's rank,
+`ρ₀, ρ₁` independent) with no zerocheck outer coin `1` (`CoinedSetup.Covered`), the verifier's view of the draw's table at the executable's leaves, at any valid witness whose
+registered values are the public ones, is within `2·|Hid|·2^-193` of `S_shvzk`'s at any `w0`, both ways.
+
+For an untyped statement (`ht`, as every soundness theorem) whose Δ and regions avoid the mask slot (`avoidsMask`, a condition
+the honest prover checks on the statement it builds), and for any prover of Ligerito's levels ≥ 1 (`LigProver`).
+
+Coverage: covered coins only. An outer coin `1` is a bad event of probability at most `(m − 13)·2^-128` per rep, which
+the prover doesn't refuse and this doesn't charge. At a refused coin the honest prover stops (`flock-circuit.rs`'s `refused_coins`:
+`at_open` returns `Err` before any `ŝ` leaves), and this says nothing about the view there. The follow-up is the proof
+at every coin vector, through `ZK.Session.session_prefinal_indep_cut` (Lemma A cut where the session stops)
+(`ASSUMPTIONS.md`, open items). -/
+theorem zk_session_view (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
+    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
+    (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), avoidsMask y.x.st = true)
+    (hKey : Assumptions.Zk.HashDerivedKeyHm96) (hPad : Assumptions.Zk.PadNonvanishing40) :
+    ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)),
+      ZkViewAt (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
+  fun S R y => zkViewAt_of_ok _ (coinedOf_setup (Reg := Reg) P I dj y₀ ht hdm S R y).2.2.2.2.2 hKey hPad
 
 /-- **One `--zk` sampled session, sound and zero knowledge.** -/
 theorem zk_session_composed
@@ -78,7 +100,8 @@ theorem zk_session_composed
         (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ))) j
       (zcStrat execArith hs512 (planZAt dj y₀)
         (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ) ω)) qF qS)
-    -- hash-derived-key and PadNonvanishing
+    -- the statement's Δ avoids the mask slot, and hash-derived-key and PadNonvanishing
+    (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), avoidsMask y.x.st = true)
     (hKey : Assumptions.Zk.HashDerivedKeyHm96)
     (hPad : Assumptions.Zk.PadNonvanishing40) :
     prob (fun o => LiveAcceptsZK I o ∧
@@ -95,9 +118,9 @@ theorem zk_session_composed
           ((rsZAt ht dj y₀ hc hU hpub hpt hscope).bindingZ (rsZAt_computes ht dj y₀ hc hU hpub hpt hscope))
           k Rw M ρ t' (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ))
           (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ)) ∧
-    ∀ (S : Finset (Fin n)) (R : Reg), Nonempty (DrawSetupZK I mPts S (dj S)) →
-      ZkViewAt (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R)) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
-  refine ⟨?_, fun S R hS' => zkViewAt_of_ok _ (coinedOf_setup (Reg := Reg) I dj y₀ S R hS') hKey hPad⟩
+    ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)),
+      ZkViewAt (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
+  refine ⟨?_, zk_session_view P I dj y₀ ht hdm hKey hPad⟩
   have hdec := decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)
   have hnever : ∀ o : Bool × Finset (Fin n), ¬ (o.1 = true ∧ o.1 = false) := fun o h => by
     rw [h.1] at h; exact Bool.noConfusion h.2

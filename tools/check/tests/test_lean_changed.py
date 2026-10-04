@@ -1,10 +1,13 @@
 """`tools/check/lean_changed.py`: what it builds (each package whose audit misses, what it requires first), the tree it keeps
-built, dependencies as read-only hard links to the audit's, and a failure only on a Lean error in the tree's own files."""
+built, dependencies as read-only hard links to the audit's, and a failure only on a Lean error in the tree's own files or on
+a pin the audit fails on that build."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -103,8 +106,18 @@ def test_only_a_lean_error_in_the_trees_own_files_fails_it(tmp_path, monkeypatch
 
 
 FAKE_LAKE = r"""#!/usr/bin/env bash
-# `lake build` as Lake reports it: a Lean error on a line `BROKEN`, a failure of its own on `INFRA`, else a build
+# `lake build` as Lake reports it: a Lean error on a line `BROKEN`, a failure of its own on `INFRA`, else a build; and
+# `lake env lean --run Facts.lean CONFIG` writing the facts and canonical forms in the file $FACTS, failing without one
 set -u
+echo "$*" >> "$LOG.args"
+if [ "$1" = env ]; then
+  [ -f "${FACTS:-}" ] || { echo "error: unknown module prefix 'C' (a root that was not built?)"; exit 1; }
+  PYTHON -c 'import json, sys
+config, facts = (json.load(open(p)) for p in sys.argv[1:])
+json.dump(facts["facts"], open(config["out"], "w"))
+open(config["canon"], "w").write("".join(json.dumps(r) + "\n" for r in facts["canon"]))' "${@: -1}" "$FACTS"
+  exit
+fi
 mkdir -p .lake/build && echo "$PWD" >> "$LOG"
 if grep -l INFRA -r --include='*.lean' . >/dev/null; then echo "error: could not resolve dependency"; exit 1; fi
 f=$(grep -l BROKEN -r --include='*.lean' --exclude-dir=.lake . | head -1)
@@ -117,7 +130,7 @@ def _fake_sandbox(tmp: Path, monkeypatch) -> tuple[Path, Path]:
     """`lake` as `FAKE_LAKE`, in a sandbox that only runs the command (the real one: `test_the_sandbox_keeps_...`)."""
     lake, log = tmp / "bin" / "lake", tmp / "lake.log"
     lake.parent.mkdir()
-    lake.write_text(FAKE_LAKE)
+    lake.write_text(FAKE_LAKE.replace("PYTHON", sys.executable))
     lake.chmod(0o755)
     (tmp / "sandbox.sh").write_text('while [ "$1" != -- ]; do shift; done; shift; exec "$@"\n')
     monkeypatch.setattr(LC, "SANDBOX", tmp / "sandbox.sh")
@@ -171,6 +184,107 @@ def test_it_skips_where_it_cannot_build_and_when_another_check_holds_the_tree(tm
     monkeypatch.setattr(LC, "sandboxed", lambda: False)
     assert LC.run(cache, deps, tree) == 0
     assert "skipped: no build sandbox here" in capsys.readouterr().out
+
+
+def _facts(definition: str) -> dict:
+    """What `Facts.lean` writes for package `c`, whose one pin `C.c_eq` reads the definition `c` (canonical form
+    ``definition``)."""
+    pin = {"kind": "theorem", "axioms": [], "hypotheses": [], "signature": "theorem C.c_eq : c = 1",
+           "reads": [{"name": "c", "module": "C", "kind": "defn", "lines": [1, 1],
+                      "hash": hashlib.sha256(definition.encode()).hexdigest()[:16]}]}
+    return {"facts": {"offenders": [], "declared_axioms": [], "escapes": [], "modules": ["C"], "imports": {"C": []},
+                      "pins": {"C.c_eq": pin}, "oleans": [], "axioms": [], "lean": "v1", "declarations": 1},
+            "canon": [{"id": "pin:C.c_eq", "canon": "c = 1"}, {"id": "read:c", "canon": definition}]}
+
+
+def _recorded(facts: dict) -> dict:
+    """The policy `audit.py --update` writes for package `c` from ``facts`` (`facts_of`'s hashes of the canonical forms)."""
+    sha = {r["id"]: hashlib.sha256(r["canon"].encode()).hexdigest() for r in facts["canon"]}
+    f = json.loads(json.dumps(facts["facts"]))
+    for name, p in f["pins"].items():
+        p["type_sha256"] = sha[f"pin:{name}"]
+        for r in p["reads"]:
+            r["sha256"] = sha[f"read:{r['name']}"]
+    return LC.AUDIT.judge({"roots": ["C"], "pins": {"C.c_eq": {}}}, f, {}, update=True)[1]
+
+
+def test_a_pinned_record_a_merge_left_stale_fails_it_and_an_unreadable_build_skips_it(tmp_path, monkeypatch, capsys):
+    root, files = _tree(tmp_path, monkeypatch)
+    log, _ = _fake_sandbox(tmp_path, monkeypatch)
+    cache, deps, tree, facts = tmp_path / "cache", tmp_path / "deps", tmp_path / "tree", tmp_path / "facts.json"
+    monkeypatch.setenv("FACTS", str(facts))
+    facts.write_text(json.dumps(_facts("def c := 1")))
+    (root / "c" / "lean-audit.json").write_text(json.dumps(_recorded(_facts("def c := 1"))))
+    assert LC.run(cache, deps, tree) == 0
+    out = capsys.readouterr().out
+    assert "lean-changed: c: its pins match their records" in out
+    assert "lean-changed: PASS: built 2 of the 3 package(s) whose audit misses; compared the pins of 1" in out
+    calls = Path(f"{log}.args").read_text().splitlines()
+    assert calls[:2] == ["build", "build +C"], "a package with pins has its roots built, as the audit builds them"
+    assert calls[2].split()[:4] == ["env", "lean", "--run", str(tree / "c" / ".lake" / "lean-changed-facts" / "Facts.lean")]
+    assert (tree / "c" / ".lake" / "lean-changed-facts" / "Facts.lean").read_bytes() == (
+        LC.AUDIT.TOOL / "Facts.lean").read_bytes(), "the audit's own `Facts.lean`, copied where the sandbox shows it"
+    assert not (tree / "p" / ".lake" / "lean-changed-facts").exists(), "a package without pins is only built"
+
+    facts.write_text(json.dumps(_facts("def c := 2")))
+    assert LC.run(cache, deps, tree) == 1, "the definition the pin reads changed and its record did not"
+    out = capsys.readouterr().out
+    assert "lean-changed: c: FAILED" in out and "pins: definitions in C that C.c_eq read changed (changed: c)" in out
+    assert "lean-changed: FAIL (c)" in out
+
+    facts.unlink()
+    assert LC.run(cache, deps, tree) == 0
+    out = capsys.readouterr().out
+    assert "lean-changed: c: its pins are not compared here: `Facts.lean` failed (exit 1" in out
+    assert "lean-changed: PASS: built 2 of the 3 package(s) whose audit misses; compared the pins of 0" in out
+
+
+def test_only_the_pins_failures_fail_it(tmp_path, monkeypatch):
+    """The audit's other failures (an orphan file, an unlisted escape, a sorry outside the pins) are the audit's to report."""
+    _tree(tmp_path, monkeypatch)
+    _, lake = _fake_sandbox(tmp_path, monkeypatch)
+    tree, facts = tmp_path / "tree", tmp_path / "facts.json"
+    monkeypatch.setenv("FACTS", str(facts))
+    doc = _facts("def c := 1")
+    policy = _recorded(doc)
+    doc["facts"]["escapes"] = [{"name": "C.io", "why": ["opaque"], "module": "C"}]
+    doc["facts"]["offenders"] = [{"name": "C.other", "axioms": ["sorryAx"]}]
+    facts.write_text(json.dumps(doc))
+    (tree / "c").mkdir(parents=True)
+    (tree / "c" / "lean-audit.json").write_text(json.dumps(policy))
+    (tree / "c" / "Orphan.lean").write_text("def o := 1\n")
+    assert LC.records("c", tree, str(lake)) == []
+    (tree / "c" / "lean-audit.json").write_text(json.dumps(policy | {"pins": {**policy["pins"], "C.gone": {}}}))
+    assert LC.records("c", tree, str(lake)) == ["pins: C.gone is missing"]
+
+
+def test_the_facts_are_read_in_the_sandbox(tmp_path, monkeypatch):
+    """`Facts.lean` runs as `lake env` in the package, whose `.lake/packages` are hard links to the dependencies the audit
+    keeps: it reads them there, and cannot write them. It runs from a copy in the package's `.lake`, since the sandbox's
+    private /tmp hides a checkout there."""
+    if not LC.sandboxed():
+        pytest.skip("no unprivileged user namespaces here (`unshare`); lean_changed skips its builds where there are none")
+    _tree(tmp_path, monkeypatch)
+    tree = tmp_path / "tree"
+    pkg = tree / "c"
+    store = tmp_path / "deps" / "k"
+    (store / "dep").mkdir(parents=True)
+    (store / "dep" / "Dep.olean").write_text("kept")
+    (pkg / ".lake" / "packages" / "dep").mkdir(parents=True)
+    os.link(store / "dep" / "Dep.olean", pkg / ".lake" / "packages" / "dep" / "Dep.olean")
+    doc = _facts("def c := 1")
+    (pkg / "lean-audit.json").write_text(json.dumps(_recorded(doc)))
+    (tmp_path / "facts.json").write_text(json.dumps(doc))
+    lake = tmp_path / "lake"
+    lake.write_text(f"#!/usr/bin/env bash\necho tampered > .lake/packages/dep/Dep.olean 2>/dev/null && exit 3\n"
+                    f'[ -r "$4" ] && [[ "$4" == {pkg / ".lake"}/* ]] || exit 4\n'
+                    f"{sys.executable} -c 'import json, sys\nconfig, facts = (json.load(open(p)) for p in sys.argv[1:])\n"
+                    f"json.dump(facts[\"facts\"], open(config[\"out\"], \"w\"))\nopen(config[\"canon\"], \"w\").write("
+                    f"\"\".join(json.dumps(r) + \"\\n\" for r in facts[\"canon\"]))' \"${{@: -1}}\" {tmp_path / 'facts.json'}\n")
+    lake.chmod(0o755)
+    assert LC.records("c", tree, str(lake)) == []
+    assert (store / "dep" / "Dep.olean").read_text() == "kept"
+    assert (pkg / ".lake" / "lean-changed-facts" / "facts.json").is_file()
 
 
 def test_the_sandbox_keeps_the_dependencies_read_only_and_the_build_writable(tmp_path):
