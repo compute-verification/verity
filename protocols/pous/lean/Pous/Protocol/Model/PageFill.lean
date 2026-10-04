@@ -44,6 +44,13 @@ def tweak (K : Bits 256) (p : ℕ) : Tweak :=
 /-- The primitive: one permutation of pages per tweak. -/
 abbrev PageOmega (pb : ℕ) : Type := Tweak → Equiv.Perm (Page pb)
 
+/-- `PageOmega` is finite, as a local instance for `pageModel` and its proofs (P3's `instFintypeP3COmega` precedent):
+the computable instance over `Bits 320` makes unification unfold the literal `320`. -/
+@[instance_reducible]
+noncomputable def instFintypePageOmega (pb : ℕ) : Fintype (PageOmega pb) := Fintype.ofFinite _
+
+attribute [local instance] instFintypePageOmega
+
 /-- **The page model**: an ideal tweakable permutation of `pb`-byte pages, one independent uniform permutation per
 tweak, with queries `π_T` and `π_T⁻¹`. -/
 noncomputable def pageModel (pb : ℕ) : IdealModel where
