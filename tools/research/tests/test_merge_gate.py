@@ -494,6 +494,25 @@ def test_a_path_rule_requires_its_step_for_a_change_under_the_path(tmp_path, mon
     assert merge_main(["feat", "--dry-run"]) == 0
 
 
+def test_a_file_renamed_out_of_a_path_rule_requires_its_step(tmp_path):
+    """git reports a rename by its destination alone unless asked not to, which would leave out the step the file's old path
+    requires."""
+    from research.merge import required_steps
+
+    main, _feat, _tip = _repos(tmp_path)
+    (main / "tools" / "check").mkdir(parents=True)
+    (main / "tools" / "check" / "tool.py").write_text("from research.store.tool import Tool\n"
+                                                      "CHECK = Tool(name='check', version='1', merge_requires={'agree': ['flock/']})\n")
+    (main / "flock").mkdir()
+    (main / "flock" / "x.txt").write_text("x\n")
+    _git(main, "add", "-A")
+    _git(main, "commit", "-q", "-m", "rule")
+    base = _git(main, "rev-parse", "HEAD")
+    _git(main, "mv", "flock/x.txt", "x.txt")
+    _git(main, "commit", "-q", "-m", "move")
+    assert required_steps(main, base, _git(main, "rev-parse", "HEAD"), "check") == {"agree": ["flock/"]}
+
+
 def test_a_stacked_train_meets_the_steps_the_declaration_main_gained_from_the_train_ahead(tmp_path, monkeypatch, capsys):
     """A adds the rule that `agree` must pass for a change under flock/; C, checked on A, changes flock/. Once A lands, C merges
     tree-identically, and the steps are read from main's declaration (now A's) against the diff from main's tip (C's flock/
