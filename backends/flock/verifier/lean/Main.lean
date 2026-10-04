@@ -271,7 +271,8 @@ verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one wi
 values its own `--registered F` (`Registered.check`), and a circuit with public input ports its own `--public-inputs F`
 (§16.10). Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
-Exit 0 iff every session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
+A statement whose form the soundness proof does not cover is refused (`ProvedScope.check`, §16.15), each session with
+the reason. Exit 0 iff every session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
 none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--coins seed|os | --zk] [--session-tables J] --session DIR..."
@@ -323,13 +324,15 @@ def verifyCmd (args : List String) : IO UInt32 := do
     | some k => match k.toNat? with
       | some k => pure (some k)
       | none => IO.eprintln "verify: --stratified K: K is a natural number"; return 2
+  -- a statement that sets up is still refused when the soundness proof does not cover its form (`ProvedScope.check`)
+  let scope := ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
         let r ← buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs
         if zk then r.2.forM Zk.shapeOk
         pure r) with
-    | .ok (spec, sts) => Except.ok (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
+    | .ok (spec, sts) => scope.map fun () => (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
     | .error e => Except.error s!"setup: {e}"
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
   -- each statement is set up once, when a session first needs it: the population's, and each draw's

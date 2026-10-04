@@ -27,6 +27,7 @@ import Flock.Zk
 import Flock.Partition
 import Flock.HmNets
 import Flock.HmRow
+import Flock.ProvedScope
 import Flock.Registered
 import Flock.TemplateQuery
 import Flock.Derive
