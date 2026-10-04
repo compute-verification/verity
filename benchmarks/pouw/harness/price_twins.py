@@ -201,18 +201,23 @@ def _jsonable(row: dict) -> dict:
     return {k: (str(v) if isinstance(v, Fraction) else v) for k, v in row.items()}
 
 
+def guarantees(doc: dict) -> dict[str, dict]:
+    """A Lean audit record's guarantees; the store's files, written before they were called that, hold them as `pins`."""
+    return doc["guarantees"] if "guarantees" in doc else doc["pins"]
+
+
 def build(root: Path, repo_audit: Path = REPO_AUDIT) -> dict:
     """The table from the POUS Project store at `root` and the repository's audit: every twin, one per pin (the Lean
     store's copy of a pin first, the repository's last)."""
     files = {rel: root / rel for rel in (LEAN_STORE, *STAGED)} | {REPO_SOURCE: repo_audit}
     pinned: dict[str, str] = {}
     for rel in (REPO_SOURCE, LEAN_STORE):
-        pinned |= {k: v.get("type_hash") for k, v in json.loads(files[rel].read_text())["pins"].items()}
+        pinned |= {k: v.get("type_hash") for k, v in guarantees(json.loads(files[rel].read_text())).items()}
     defs = lifted_definitions(json.loads(repo_audit.read_text()), repo_audit.parent)
     sources, twins, seen = [], [], set()
     for rel, path in files.items():
         raw = path.read_bytes()
-        rows = extract(json.loads(raw)["pins"], rel, pinned, defs)
+        rows = extract(guarantees(json.loads(raw)), rel, pinned, defs)
         sources.append({"path": rel, "sha256": hashlib.sha256(raw).hexdigest(), "twins": len(rows)})
         for r in rows:
             if r["pin"] not in seen:
