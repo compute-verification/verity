@@ -81,7 +81,16 @@ theorem outBitRowW_spec {u u' : Fin n} {d : ℕ × ℕ × ℕ} {q : Fin c.ports.
     (h : outBitRowW c u d = some (u', ⟨q, k⟩)) :
     u' = u ∧ q.val = HmOut.nIn c + outRunOf c (outWordOf c d) ∧
       k.val = 16 * (outWordOf c d - (HmOut.outGroup c (outRunOf c (outWordOf c d))).2.2.1) + d.2.2 := by
-  sorry
+  unfold outBitRowW at h
+  split at h
+  · split at h
+    · simp only [Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨hu, hs⟩ := h
+      subst hu
+      cases hs
+      exact ⟨rfl, rfl, rfl⟩
+    · exact absurd h (by simp)
+  · exact absurd h (by simp)
 
 /-- **Output word `o` is word `o - at` of run `outRunOf c o`**, which starts at output word `at`, for `o < outWords`,
 when the runs cover the output ports (`run_holds`). -/
@@ -103,35 +112,59 @@ theorem outRowOfW_wire (outs : Finset (Fin (keyN c hU n))) {u : Fin n} (x : Fin 
     (hx : ((keyProg c hU n).rows u).nIn ≤ x.val) :
     outRowOfW c hU n outs ((Const.Prog.instC (keyProg c hU n) outs u).wire x) =
       outBitRowW c u (outDecode c hU x.val) := by
-  sorry
+  have hc : ∃ x', (Const.Prog.instC (keyProg c hU n) outs u).wire x' =
+      (Const.Prog.instC (keyProg c hU n) outs u).wire x := ⟨x, rfl⟩
+  have hch : Classical.choose hc = x := by
+    rcases (Const.Prog.instC (keyProg c hU n) outs u).shared _ x (Classical.choose_spec hc) with he | ⟨-, h2⟩
+    · exact he
+    · omega
+  unfold outRowOfW
+  rw [hgu]
+  dsimp only
+  rw [dite_eq_left hc, hch]
 
 theorem outRowOfW_wire_some (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n} (x : Fin ((keyProg c hU n).rows u).w)
     {q : Fin c.ports.size} {k : Fin (portRowW c q)}
     (h : outRowOfW c hU n outs ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = some (u', ⟨q, k⟩)) :
     (keyProg c hU n).unit ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = some u ∧
       ((keyProg c hU n).rows u).nIn ≤ x.val ∧ outBitRowW c u (outDecode c hU x.val) = some (u', ⟨q, k⟩) := by
-  sorry
+  rcases hgu : (keyProg c hU n).unit ((Const.Prog.instC (keyProg c hU n) outs u).wire x) with _ | u''
+  · unfold outRowOfW at h
+    rw [hgu] at h
+    exact absurd h (by simp)
+  · obtain ⟨rfl, hx⟩ := unit_wire outs x hgu
+    exact ⟨rfl, hx, (outRowOfW_wire outs x hgu hx).symm.trans h⟩
 
 theorem rowOfHW_of_key (outs : Finset (Fin (keyN c hU n))) {g : Fin (keyN c hU n)}
     {r : Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)} (h : keyRowOf c hU n (portRowW c) g = some r) :
     rowOfHW c hU n outs g = some r := by
-  sorry
+  unfold rowOfHW
+  rw [h]
 
 theorem rowOfHW_of_none (outs : Finset (Fin (keyN c hU n))) {g : Fin (keyN c hU n)}
     (h : keyRowOf c hU n (portRowW c) g = none) : rowOfHW c hU n outs g = outRowOfW c hU n outs g := by
-  sorry
+  unfold rowOfHW
+  rw [h]
 
 theorem rowOfHW_none (outs : Finset (Fin (keyN c hU n))) {g : Fin (keyN c hU n)}
     (h : rowOfHW c hU n outs g = none) :
     keyRowOf c hU n (portRowW c) g = none ∧ outRowOfW c hU n outs g = none := by
-  sorry
+  rcases hk : keyRowOf c hU n (portRowW c) g with _ | r
+  · exact ⟨rfl, (rowOfHW_of_none outs hk).symm.trans h⟩
+  · rw [rowOfHW_of_key outs hk] at h
+    cases h
 
 /-- **A row bit of a unit's own instance is that unit's row**, at runs. -/
 theorem rowOfHW_wire_unit (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n} (x : Fin ((keyProg c hU n).rows u).w)
     {q : Fin c.ports.size} {k : Fin (portRowW c q)}
     (h : rowOfHW c hU n outs ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = some (u', ⟨q, k⟩)) :
     u' = u := by
-  sorry
+  rcases hk : keyRowOf c hU n (portRowW c) ((Const.Prog.instC (keyProg c hU n) outs u).wire x) with _ | r
+  · rw [rowOfHW_of_none outs hk] at h
+    exact (outBitRowW_spec (outRowOfW_wire_some outs x h).2.2).1
+  · rw [rowOfHW_of_key outs hk] at h
+    rw [h] at hk
+    exact (Layout.keyRowOf_wire outs x hk).1
 
 /-! ## Output-row copies at runs -/
 
@@ -204,37 +237,9 @@ theorem keyProgHW_bcPinned
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSiteH (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
     (keyReadersHW hparse outs popOf).BcPinned (P := (keyProg c hU n).partition outs) := by
-  have hunit : ∀ {u u' : Fin n} (x : Fin ((keyProg c hU n).rows u).w) {q : Fin c.ports.size}
-      {k : Fin (portRowW c q)},
-      rowOfHW c hU n outs ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = some (u', ⟨q, k⟩) → u' = u := by
-    intro u u' x q k hr
-    unfold rowOfHW at hr
-    rcases hk : keyRowOf c hU n (portRowW c) ((Const.Prog.instC (keyProg c hU n) outs u).wire x) with _ | r
-    · rw [hk] at hr
-      dsimp only at hr
-      unfold outRowOfW at hr
-      rcases hgu : (keyProg c hU n).unit ((Const.Prog.instC (keyProg c hU n) outs u).wire x) with _ | u''
-      · rw [hgu] at hr
-        exact absurd hr (by simp)
-      · rw [hgu] at hr
-        dsimp only at hr
-        rw [← (unit_wire outs x hgu).1]
-        split at hr
-        · unfold outBitRowW at hr
-          split at hr
-          · split at hr
-            · simp only [Option.some.injEq, Prod.mk.injEq] at hr
-              exact hr.1.symm
-            · exact absurd hr (by simp)
-          · exact absurd hr (by simp)
-        · exact absurd hr (by simp)
-    · rw [hk] at hr
-      dsimp only at hr
-      rw [hr] at hk
-      exact (Layout.keyRowOf_wire outs x hk).1
   refine Layout.ofRows_bcPinned _ fun S R u hu M hM g hg u' q k hr => ?_
   obtain ⟨x, rfl⟩ := Layout.exists_col_of_io ((keyPlaceH hparse outs) S R u hu).inst hg
-  rw [hunit x hr]
+  rw [rowOfHW_wire_unit outs x hr]
   have hc := (si.acc S R u hu).c_eq (hparse S R u hu)
   have hnp : (si.acc S R u hu).st.c.ports.size = c.ports.size := by rw [hc]
   have := bc_site_ofH (hsite S R u hu M hM) hM (si.hvu S R u hu) (p := q.val) (by rw [hnp]; exact q.isLt)
