@@ -5,6 +5,7 @@
   memory holds, at most ranks x (shapes + 1), as the single-GPU Build sizes them; the composes likewise, at most one per rank).  A PASS Build
   also builds the required-value manifest over the W ranks (``manifest build-global --programs-root build/rank<r>``), and
   the row stops (exit 21) when it names call boundaries (``Row.call_boundaries``: a TP Commit attaches no call-boundary source).
+  With ``--build-relabel on`` one template rank's request derives write the other ranks' (`pipeline.tp.relabel_build`).
 * **Match**: the capture under the observer and collective recorder, the ``--no-observer`` control, the collective-level
   check (``tp-match --arm check``); a request that stopped before its cap gets its served-shape Program derived per rank
   and GP-01 recomposed (``eos-truncated``); then, with a rank profile (default ``derived_<ROLE>_tp<W>``; ``--fold-profile ''``
@@ -181,6 +182,9 @@ class TpRow(Row):
         if self.signalled:
             self.cancelled(1)
 
+    def step(self, r: int, out: str | None = None) -> tuple[Any, ...]:
+        return (r, out or f"{self.rank(r)}/build_step", "--wrapper", "step", "--M", str(self.B), "--pos0", "8")
+
     def request(self, r: int, lp: int, t: int) -> tuple[Any, ...]:
         out = f"{self.rank(r)}/build_request_LP{lp}_T{t}"
         shutil.rmtree(out, ignore_errors=True)
@@ -227,7 +231,7 @@ class TpRow(Row):
         for r in range(self.W):
             os.makedirs(self.rank(r), exist_ok=True)
             if not R.derived_ok(f"{self.rank(r)}/build_step"):
-                steps.append((r, f"{self.rank(r)}/build_step", "--wrapper", "step", "--M", str(self.B), "--pos0", "8"))
+                steps.append(self.step(r))
         requests = [self.request(r, lp, t) for lp, t in R.longest_first(self.shapes) for r in range(self.W)
                     if not R.derived_ok(f"{self.rank(r)}/build_request_LP{lp}_T{t}")]
         return requests + steps
@@ -237,7 +241,12 @@ class TpRow(Row):
         self.to_b = self.cb.build_timeout or 7200
         t0 = int(time.time())
         self.tl("stage.build", "start")
-        self.derive_all(self.build_todo(), self.derive_jobs(self.shapes, self.W * (nsh + 1)))
+        todo, jobs = self.build_todo(), self.derive_jobs(self.shapes, self.W * (nsh + 1))
+        if self.cb.build_relabel == "on":
+            from verity_vllm.pipeline.tp import relabel_build
+            relabel_build.derive(self, todo, jobs)
+        else:
+            self.derive_all(todo, jobs)
         for r in range(self.W):
             for f in sorted(glob.glob(f"{self.rank(r)}/*.rc")):
                 self.log(f"derive {os.path.basename(f[:-3])} rank{r} rc={open(f).read().strip()} {_tail_bytes(f[:-3] + '.log')}")

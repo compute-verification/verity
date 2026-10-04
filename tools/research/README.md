@@ -206,6 +206,7 @@ that no entry lists (`stray`); the hourly preflight probe posts its findings whe
 loop or script goes into the repository and the manifest before it runs; a backup of a replaced file is
 `.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ...
 --by WHO` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
+A Lean build kept from node 1's credentials (the Lean cache's daily one) runs in `vy-lean-sandbox` (`lean_sandbox.py`).
 
 An unlisted or foreign machine is refused before anything is contacted. The
 tool ships as a content-addressed source snapshot under `<root>/tool/` and
@@ -353,9 +354,7 @@ research data label ART verified accepted --by red-team-1 [--ref RUN]           
 research data reindex [--remote]             research data sql "SELECT ..."       # read-only connection
 ~~~
 
-Python: `research.store.local.LocalStore` (`put_artifact`, `get_manifest`,
-`fetch`, `where`, `put_attempt`, `get_attempt`, `add_label`, `labels`,
-`snapshot`, `verify`, `push`, `reindex`, `.index`, `.remote`). Nothing is
+Python: `research.store.local.LocalStore`, its methods listed in the contract. Nothing is
 called PRESERVED without a remote; nothing in the store is ever overwritten.
 
 ### The evidence store: `--tool`, `--scratch`, and the publish step
