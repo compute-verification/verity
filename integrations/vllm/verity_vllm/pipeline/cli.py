@@ -103,6 +103,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "topp-split-probe": ("verity_vllm.pipeline.topp_split_probe", "top-p split fixture"),
     "tp-capture": ("verity_vllm.pipeline.tp.capture", "tensor-parallel M1 capture"),
     "tp-commit": ("verity_vllm.pipeline.tp.commit", "tensor-parallel Commit"),
+    "tp-commit-replay": ("verity_vllm.pipeline.tp.commit_replay", "a deferred tensor-parallel Commit's C2 replay on CPU, from its ranks' sealed bundles"),
     "tp-fold-match": ("verity_vllm.pipeline.tp.fold_match", "per-rank fold Match of a tensor-parallel row"),
     "tp-match": ("verity_vllm.pipeline.tp.match", "tensor-parallel Match at the collective level"),
     "twins": ("verity_vllm.program.kernels.twins", "vectorized twins of the registered bodies"),

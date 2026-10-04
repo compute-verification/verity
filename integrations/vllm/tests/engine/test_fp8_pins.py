@@ -1,7 +1,7 @@
 """The FP8 pins in `manifests/checkpoints.json` (every entry with `fp8_of`), checked offline.
 
 Each shipped config.json (`profiles/hf_configs/<ROLE>.config.json`) is the pinned bytes and the quantization the integration
-serves (`program.model.quant_refusal`), or a MoE one it refuses by name.  A recipe pin (`recipe`, `engine.fp8_checkpoint`)
+serves (`program.model.quant_refusal`); a MoE one keeps every router in bf16 and derives a profile.  A recipe pin (`recipe`, `engine.fp8_checkpoint`)
 names its BF16 base pin and keeps its shard names; its revision is the recipe's digest of the made files, its made config is
 the recipe's transform of the base config wherever that is shipped, and it resolves under the pins' HF cache like a hub
 snapshot.  The shard bytes themselves are checked where they are made: `verity-vllm fp8-checkpoint make --role ROLE`."""
@@ -56,9 +56,8 @@ def test_fp8_pin_config_is_the_pinned_bytes_and_the_served_quantization(entry):
     shards = entry["safetensors_sha256"]
     assert shards and all(entry["files"][fn]["sha256"] == sha and len(sha) == 64 for fn, sha in shards.items())
     assert len(entry["revision"]) == 40 and not entry.get("gated")
-    why = M.quant_refusal(qc)
-    assert (why is None) == (not _is_moe(qc))                                  # dense: served as is
-    assert _is_moe(qc) == ("mixed-precision" in (why or ""))                   # MoE: its routers kept in bf16, refused by name
+    assert M.quant_refusal(qc, cfg) is None                                    # served as is; a MoE's routers are its bf16 `gate_w`
+    assert _is_moe(qc) == ("mixed-precision" in (M.quant_refusal(qc) or ""))  # the routers are admitted only with a MoE's config
 
 
 @pytest.mark.parametrize("entry", RECIPE_PINS, ids=[e["role"] for e in RECIPE_PINS])
@@ -79,9 +78,11 @@ def test_recipe_pin_is_the_recipes_output_of_its_base_pin(entry):
         assert F.fp8_config(shipped_base.read_bytes()) == raw
 
 
-def test_moe_fp8_pins_are_refused_by_name():
+def test_moe_fp8_pins_derive_fp8_experts_and_bf16_routers():
     moe = [e for e in FP8_PINS if _is_moe(_config(e)[1]["quantization_config"])]
     assert moe
     for e in moe:
-        with pytest.raises(ImportError, match="mixed-precision"):
-            G.make_module(f"verity_vllm.engine.profiles.{G.module_name(e['role'], 1)}")
+        mod = G.make_module(f"verity_vllm.engine.profiles.{G.module_name(e['role'], 1)}")
+        width = {n: t.homogeneous_width() for n, t in dict(M.weights_type(mod.C).fields)["layers"].elem.fields}
+        assert {n: width.get(n) for n in ("gate_w", "w13", "w13_ws", "w2", "w2_ws")} == {
+            "gate_w": 16, "w13": 8, "w13_ws": 32, "w2": 8, "w2_ws": 32}

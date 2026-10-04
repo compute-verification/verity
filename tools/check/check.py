@@ -32,7 +32,8 @@ The steps stay in this process's group, which a runner's timeout and a manual st
 appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run.
 
 Then the independent groups run at once, the cores split between the first two (`--cores N`, default the CPUs this process may
-use):
+use). Which group a step is in, its order there, and whether its failure halts the run come from `tools/check/ci.toml`
+(`declaration.py`); this file builds each step's command, and refuses one the declaration doesn't name:
 
     pytest          every test suite (`tools/check/suites.py`) but those that use Lean, half the cores' worth at once: each
                     package's tests in their own process, a pass reused while its inputs are unchanged; each suite's log and the
@@ -68,7 +69,9 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     and its toolchain and manifest are unchanged; a miss is audited on a scratch tree holding only those, so a
                     read outside them fails there; fetched dependencies stay warm on the machine under manifest + toolchain,
                     and a machine without them restores the bundle `lean-deps.json` pins from the store, not from GitHub; a
-                    step that audits any package first waits for one of the node's Lean audit slots (`lean_slot.py`)
+                    step that audits any package first waits for one of the node's Lean audit slots (`lean_slot.py`). The
+                    step fails on a fast-path result in its `audit.json`, cached or not (`lean_fast`): no merge check
+                    accepts an audit without the kernel replay
     lean-changed    not a verdict: its tree under `lean-changed/` keeps each package's last build there, so Lake rebuilds only
                     what changed and what imports it, and its fetched dependencies are hard links to lean-audit's, read-only
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: backends/flock/verifier/'s
@@ -146,6 +149,11 @@ def _load(name: str):
     sys.modules[spec.name] = m                       # dataclasses resolve their module by name
     spec.loader.exec_module(m)
     return m
+
+
+DECLARATION = _load("declaration")
+#: the jobs `tools/check/ci.toml` declares: their groups, order within a group, and what halts the run (`groups`, `HALTS`)
+JOBS = DECLARATION.load()
 
 
 #: the verdict packs (`verdicts.py`)
@@ -237,6 +245,26 @@ def lean_audit_misses(cache: bool = True) -> bool:
     if not cache or files is None:
         return True
     return any(not (cache_dir() / "lean-audit" / f"{la.key(p, files, la.FLAGS)}.json").is_file() for p in la.packages(files))
+
+
+def lean_fast(out: Path) -> str | None:
+    """Why the lean-audit step's pass is refused, or None: its `audit.json` can't be read, or holds a fast-path result
+    (`lean_changed.py --records`) for a package, a report of kind `lean_changed.FAST_KIND` or a pass without the kernel replay."""
+    p = out / "lean-audit" / "audit.json"
+    try:
+        doc = json.loads(p.read_text())
+    except (OSError, ValueError) as e:
+        return f"refused: no readable {p} ({type(e).__name__}) shows that every package had the full audit"
+    reports = doc.get("packages", []) if isinstance(doc, dict) else None
+    if not isinstance(reports, list) or not all(isinstance(r, dict) for r in reports):
+        return f"refused: {p} is not an audit's report (an object whose packages are a list of objects)"
+    kind = _load("lean_changed").FAST_KIND
+    replayed = [isinstance(r.get("seconds"), dict) and "replay" in r["seconds"] for r in reports]
+    fast = [str(r.get("package")) for r, rep in zip(reports, replayed) if r.get("kind") == kind or (not r.get("failures") and not rep)]
+    if fast or doc.get("kind") == kind:
+        return (f"refused: {', '.join(fast) or p}: a {kind} result (the fast path: no kernel replay, no tests), which no merge "
+                "check accepts")
+    return None
 
 
 def lean_slot(cmd: list[str]) -> list[str]:
@@ -449,7 +477,8 @@ def record(argv: list[str]) -> int:
     if not landable(base):
         print(f"check: this commit can't land as is; the train's check is the merge check (merging it into {base} gives a tree "
               f"other than its own, so `research merge` won't take this check)")
-    changed = subprocess.run(["git", "diff", "--name-only", base, "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
+    changed = subprocess.run(["git", "diff", "--no-renames", "--name-only", base, "HEAD"], cwd=ROOT, capture_output=True, text=True,
+                             check=True).stdout.split()                        # a rename names its source too
     from research.merge import rule_touches
 
     need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)] + ["lean-agreement"] * agreement
@@ -524,14 +553,23 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None) -> l
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
     build = ["bash", str(ROOT / "backends" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
-    gs = [[("pytest", pytest, ROOT)], [("flock-circuit-build", build, ROOT), ("circuit-check", cc, ROOT), ("flock-rust-tests", rust, ROOT)],
-          lean]
+    built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
+             "circuit-check": ("circuit-check", cc, ROOT), "flock-rust-tests": ("flock-rust-tests", rust, ROOT)}
     if len(lean) > 1:
+        built |= {s[0]: s for s in lean}
         changed: list[str] | str = ([py, str(ROOT / "tools" / "check" / "lean_changed.py"), "--cache", str(cache_dir() / "lean-audit"),
                                      "--deps", str(cache_dir() / "lean-deps"), "--tree", str(cache_dir() / "lean-changed")]
                                     if cache else "skipped: --no-cache: lean-audit builds every package cold")
-        gs.append([("lean-changed", changed, ROOT)])
-    return gs
+        built["lean-changed"] = ("lean-changed", changed, ROOT)
+    else:
+        built["lean-build"] = lean[0]                  # no verifier: one skip, named `lean`, where its group starts
+    if undeclared := set(built) - {j.name for j in JOBS}:
+        raise DECLARATION.DeclarationError(f"check.py builds {', '.join(sorted(undeclared))}, which ci.toml doesn't declare")
+    gs: dict[int, list[tuple[str, list[str] | str, Path]]] = {}
+    for j in JOBS:
+        if j.name in built:
+            gs.setdefault(j.group, []).append(built[j.name])
+    return [gs[k] for k in sorted(gs)]
 
 
 def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
@@ -713,11 +751,11 @@ def _kill_after_grace(p: subprocess.Popen) -> None:
         _signal_tree(p.pid, signal.SIGKILL)
 
 
-#: the steps whose failure stops the run even under --keep-going
-HALTS = frozenset({"lean-changed"})
-#: ... and those whose failure does when their log has this text; without it (a failed clone or toolchain download) the other
-#: groups keep their verdicts
-HALTS_ON = {"flock-circuit-build": "error: could not compile"}
+#: the steps whose failure stops the run even under --keep-going (`halts` in ci.toml)
+HALTS = frozenset(j.name for j in JOBS if j.halts)
+#: ... and those whose failure does when their log has this text (`halts_on`); without it (a failed clone or toolchain download)
+#: the other groups keep their verdicts
+HALTS_ON = {j.name: j.halts_on for j in JOBS if j.halts_on}
 
 
 class Steps:
@@ -784,11 +822,14 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
             rc = p.wait() if p is not None else None
         if rc is None:
             rec = {"step": name, "status": "stopped", "detail": f"not started: {steps.halted} failed"}
+        elif rc == 0 and name == "lean-audit" and (why := lean_fast(out)):
+            print(f"check: {name}: {why}", flush=True)
+            rec = {"step": name, "status": "failed", "rc": rc, "log": log.name, "detail": why}
         else:
             rec = {"step": name, "status": "passed" if rc == 0 else "failed", "rc": rc, "log": log.name}
             if rc and name in HALTS_ON and HALTS_ON[name] in log.read_text(errors="replace"):
                 rec["halts"] = True
-        if rc == 0 and key:
+        if rec["status"] == "passed" and key:
             entry.parent.mkdir(parents=True, exist_ok=True)
             entry.write_text(json.dumps({"key": key, "argv": argv, "passed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}))
             rec["cache"] = {"stored": key}
