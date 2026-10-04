@@ -132,8 +132,7 @@ theorem ownReads_shape {own : Array Registered.Port}
       rw [hport]
       have hreg' : own.find? (fun reg => (List.range c.ports.size).find? (fun j => c.ports[j]!.name == reg.name) ==
           some q.val) = some reg := hreg
-      have hf : ((List.range c.ports.size).find? (fun j => c.ports[j]!.name == reg.name) == some q.val) = true :=
-        Array.find?_some hreg'
+      have hf := Array.find?_some hreg'
       refine ⟨Array.mem_of_find?_eq_some hreg', beq_iff_eq.mp hf, ?_⟩
       show reg.reads[(popUnits pub).getD u.val 0]? = some (some ((ownPos own c pub u.val q.val).getD 0))
       rw [hk0]
@@ -163,8 +162,7 @@ theorem laySh_pos_unit {u u' : Fin n} {q : Fin c.ports.size}
         (Layout.outsOf c hU n) Hm.saltCol (fun _ => pub) (Layout.outBitOf c hU n (Layout.outsOf c hU n) fun _ => pub)).pos
           _ = _)
     rw [h2] at hpos
-    simp only [Sum.inl.injEq, Prod.mk.injEq] at hpos
-    obtain ⟨rfl, rfl⟩ := hpos
+    obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Sum.inl.inj hpos)
     exact (Layout.keyRowOf_wire _ x hk).1
 
 /-- **The verifier's own reads at an accepted live outcome.** At a live outcome `(R, S, wr S R lo)` that
