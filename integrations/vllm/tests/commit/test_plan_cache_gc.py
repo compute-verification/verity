@@ -62,6 +62,31 @@ def counted(monkeypatch, native_worker: bool, count: int) -> dict[str, list[int]
     return seen
 
 
+def test_a_record_answers_its_readers_as_its_metas_do_without_building_them():
+    """The readers that take a record's columns (the retain-exclude ranges, the layout summary, the names) or a pass-only
+    `scan()` (the layout digest, the step's sequences) get what the plan's `TensorMeta`s give, and the record builds none;
+    iterating it builds them once, so every pass sees the same objects."""
+    from verity_vllm.commit.committer.native_host import NativeHostCommitter as NH
+    from verity_vllm.commit.committer.plan_cache import PlanMetas
+
+    names = ["model.embed_tokens/in", "fa2.m1/L0/acc", "model.layers.0.mlp.down_proj", "fa2.m1/L1/acc", "runner.sampler/sampled_token_ids"]
+    entries, off = [], 0
+    for i, (dtype, shape, nbytes) in enumerate([(torch.int32, (5,), 20), (torch.float32, (300, 4), 4800), (torch.bfloat16, (5, 24), 240),
+                                                (torch.float32, (200, 4), 3200), (torch.int32, (), 4)]):
+        gap = -off % 4
+        entries.append((i, dtype, shape, nbytes, off + gap, gap))
+        off += gap + nbytes
+    record, metas = PlanMetas.of_entries(entries, names, 256), list(PlanMetas.of_entries(entries, names, 256))
+    ranges = P.NC._excluded_chunk_ranges(record, {"fa2_hidden_m1"}, 256)
+    assert ranges == P.NC._excluded_chunk_ranges(metas, {"fa2_hidden_m1"}, 256) and len(ranges) == 2
+    assert record.summary() == [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes] for m in metas]
+    assert list(record.names) == [m.name for m in metas] and record.nbytes == sum(m.nbytes for m in metas)
+    assert NH.layout_digest(record.scan()) == NH.layout_digest(metas)
+    assert repr(NH._step_sequences(P.SimpleNamespace(), 0, record.scan())) == repr(NH._step_sequences(P.SimpleNamespace(), 0, metas))
+    assert record._metas is None
+    assert [id(m) for m in record] == [id(m) for m in record] and record[2] is record.scan()[2] and len(record) == len(metas)
+
+
 @pytest.mark.parametrize("native_worker", [False, True], ids=["python-worker", "native-worker"])
 def test_a_cached_plan_keeps_one_object_tracked_whatever_its_tensor_count(monkeypatch, native_worker):
     """At 9 and at 200 tensors per step, the cache keeps one tracked object per plan (its record) beside at most four of its
