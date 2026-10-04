@@ -134,7 +134,7 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert lake[-1].endswith("lake build")
     assert cut[1].endswith("verifier/unit_cut_agree.py") and cut[cut.index("--lean") + 1].endswith(".lake/build/bin/flock-verify")
     assert lean_audit[1].endswith("tools/check/check.py") and lean_audit[2] == "--lean-slot"
-    assert lean_audit[4].endswith("tools/check/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit
+    assert lean_audit[4].endswith("tools/lean/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit
     assert "--fresh" in CHECK.lean_steps(out, cache=False)[2][1]
     assert argv[2:4] == ["--lean-agreement", str(out)] and {Path(x).name for x in argv[4:]} == {"a.tar.gz", "b.tar.gz"}
     (sent / "b.tar.gz").unlink()
@@ -401,15 +401,19 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert not any(s in pt[1] for s in CHECK.AFTER_LEAN), "without the Lean steps the suites that use Lean run with the rest"
 
 
-def test_the_suites_that_use_lean_run_after_the_lean_steps_have_built_everything(tmp_path, monkeypatch):
+def test_the_suites_that_use_lean_run_after_the_verifier_is_built_and_beside_the_audit(tmp_path, monkeypatch):
     """Not beside `lake build`: whether their tests run or skip, and what `lake` finds built, must not depend on how far the
-    concurrent Lean group has got (verity-flock passed or failed on build order, r20260929-015410-5a20)."""
+    concurrent Lean group has got (verity-flock passed or failed on build order, r20260929-015410-5a20). The audit builds only
+    in scratch trees of its own, so it is a group of its own and nothing in the Lean group waits on it (r20261004-024819-11bc:
+    the audit's 3,238 s, then the suites' 979 s and the agreement's 515 s, one after another)."""
     out, _ = _pinned(tmp_path, monkeypatch)
-    (_, pytest, _), = CHECK.groups(out, 8)[0]
-    lean = CHECK.groups(out, 8)[2]
-    assert [n for n, _, _ in lean] == ["lean-build", "lean-unit-cut", "lean-audit", "lean-suites", "lean-agreement"]
+    gs = CHECK.groups(out, 8)
+    (_, pytest, _), = gs[0]
+    lean = gs[2]
+    assert [n for n, _, _ in lean] == ["lean-build", "lean-unit-cut", "lean-suites", "lean-agreement"]
+    assert [n for n, _, _ in gs[3]] == ["lean-audit"] and gs[3][0][1][4].endswith("tools/lean/lean_audit.py")
     assert all(pytest[pytest.index(s) - 1] == "--skip" for s in CHECK.AFTER_LEAN)
-    argv = lean[3][1]
+    argv = lean[2][1]
     assert argv[:2] == ["bash", "-c"] and argv[2].startswith(CHECK.ELAN), "with elan's lake on the PATH, as lean-build has it"
     assert all(f" {s} " in argv[2] for s in CHECK.AFTER_LEAN) and "suites-lean.json" in argv[2] and "--jobs 4" in argv[2]
 
@@ -613,7 +617,7 @@ def test_the_lean_audit_step_refuses_a_fast_path_result(tmp_path):
     so does an `audit.json` that can't be read."""
     import json
 
-    kind = CHECK._load("lean_changed").FAST_KIND
+    kind = CHECK._load("lean_changed", CHECK.LEAN_JOBS).FAST_KIND
     write = "import pathlib, sys\np = pathlib.Path(sys.argv[1])\np.parent.mkdir(exist_ok=True)\np.write_text(sys.argv[2])"
     full = {"package": "a", "failures": [], "seconds": {"build": 1.0, "audit": 1.0, "replay": 1.0}}
 
@@ -641,12 +645,12 @@ def test_the_lean_audit_step_refuses_a_fast_path_result(tmp_path):
 def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_path, monkeypatch):
     out, _ = _pinned(tmp_path, monkeypatch)
     gs = CHECK.groups(out, 8)
-    assert len(gs) == 4 and [n for n, _, _ in gs[3]] == ["lean-changed"] and "lean-changed" in CHECK.HALTS
-    argv = gs[3][0][1]
-    assert argv[1].endswith("tools/check/lean_changed.py")
-    assert argv[argv.index("--cache") + 1] == gs[2][2][1][gs[2][2][1].index("--cache") + 1], "the audit's own passes"
-    assert argv[argv.index("--deps") + 1] == gs[2][2][1][gs[2][2][1].index("--deps") + 1], "and its kept dependencies"
-    assert CHECK.groups(out, 8, cache=False)[3][0][1].startswith("skipped: --no-cache")
+    assert len(gs) == 5 and [n for n, _, _ in gs[4]] == ["lean-changed"] and "lean-changed" in CHECK.HALTS
+    argv, audit = gs[4][0][1], gs[3][0][1]
+    assert argv[1].endswith("tools/lean/lean_changed.py")
+    assert argv[argv.index("--cache") + 1] == audit[audit.index("--cache") + 1], "the audit's own passes"
+    assert argv[argv.index("--deps") + 1] == audit[audit.index("--deps") + 1], "and its kept dependencies"
+    assert CHECK.groups(out, 8, cache=False)[4][0][1].startswith("skipped: --no-cache")
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "no-verifier")
     assert len(CHECK.groups(out, 8)) == 3
 
@@ -661,6 +665,18 @@ def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_pa
     assert done[1]["detail"] == "not started: preflight-lock failed" and not marker.exists()
     _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
     assert CHECK.run(tmp_path, 2)[0] and marker.exists()
+
+
+def test_a_failed_preflight_starts_nothing_else_even_under_keep_going(tmp_path, monkeypatch):
+    """Every train's check runs with --keep-going: a failed preflight must still end it in seconds, not hold its slot."""
+    marker = tmp_path / "ran"
+    touch = _py("open(__import__('sys').argv[1], 'w')", marker)
+    for failing in ("preflight-lock", "preflight-lints"):
+        pre = [(n, _py("raise SystemExit(1)") if n == failing else _py("pass"), tmp_path) for n in ("preflight-lock", "preflight-lints")]
+        _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=pre)
+        ok, done = CHECK.run(tmp_path, 2, keep_going=True)
+        assert not ok and "pytest" not in {s["step"] for s in done} and not marker.exists(), failing
+        assert {s["step"]: s["status"] for s in done}[failing] == "failed"
 
 
 def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
