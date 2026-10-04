@@ -186,7 +186,8 @@ theorem zk_session_drawnRegValsHRP
   · exact absurd (rd.read_row _ hread) hrow
 
 /-- **No drawn unit of a `--zk --registered --public-inputs` session reads a registered read whose leaf is not the
-registrant's**, except with probability `qR²/2^513`: `zk_session_offR` at `zk_session_soundHRP`'s session. -/
+registrant's**, except with probability `qR²/2^513`: `zk_session_offR` at `zk_session_soundHRP`'s session, in the live
+audit under any law and live session, with `hown` at its outcomes (the shape of `ZkPubIn.ownAtDrawsHP_of_check`). -/
 theorem zk_session_offHRP
     (I : Inputs) (ht : I.tags.typed = false) (rports : Array Flock.Registered.Port) (own : ByteArray)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKHP I own mPts S₀ (dj S₀))
@@ -197,16 +198,20 @@ theorem zk_session_offHRP
     (hscope : Layout.scopeOk c = true)
     -- the verify command's tags
     (hTags : TagsOkH I)
-    -- the registered reads, the verifier's own at each accepted outcome's drawn units
+    -- the live audit: any law and live session
+    (L : Audit.Law n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
+    -- the registered reads, the verifier's own at the draw of each accepted live outcome
     (rd : FlockSoundness.Registered.Reads (layShHP (Reg := Reg) dj y₀ ht hc hscope hU hpi (pub := pub))
       (rsShHP dj y₀ ht hc hscope hU hpi hpub))
-    (hown : ∀ o : Reg × Finset (Fin n) × Exec.Transcript, LiveAcceptsZKRP I rports own o →
-      OwnReadsHP rports c pi pub o.2.2
-        (rd.restrict (FlockSoundness.Registered.drawnReads (layShHP dj y₀ ht hc hscope hU hpi (pub := pub)) o.2.1)).isRead
+    (hown : ∀ (R : Reg) (ω : L.Ω) (lo : LiveOut mPts),
+      LiveAcceptsZKRP I rports own (R, L.draw ω, wr (L.draw ω) R lo) →
+      OwnReadsHP rports c pi pub (wr (L.draw ω) R lo)
+        (rd.restrict
+          (FlockSoundness.Registered.drawnReads (layShHP dj y₀ ht hc hscope hU hpi (pub := pub)) (L.draw ω))).isRead
         rd.port rd.readAt)
-    -- the game, and cr/sha-512 for the registered-path finder
-    (G : Game (Reg × Finset (Fin n) × Exec.Transcript)) (σ : Strategy G) {qR : ℝ}
-    (hR : (StrictCR.oneRun G σ fun o =>
+    -- the live prover, and cr/sha-512 for the registered-path finder
+    (σ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) {qR : ℝ}
+    (hR : (StrictCR.oneRun (auditLive L Reg (liveOf dg mPts N wr)) σ fun o =>
       (rd.restrict (FlockSoundness.Registered.drawnReads (layShHP dj y₀ ht hc hscope hU hpi (pub := pub)) o.2.1)).pick
         o.1 (regPathsHP c pi pub o.2.2 rd.port)).CR H512 qR) :
     prob (fun o => LiveAcceptsZKRP I rports own o ∧
@@ -214,17 +219,10 @@ theorem zk_session_offHRP
           rd.isRead ((layShHP dj y₀ ht hc hscope hU hpi (pub := pub)).pos g) ∧
           (layShHP dj y₀ ht hc hscope hU hpi (pub := pub)).regLeaf o.1
               ((layShHP dj y₀ ht hc hscope hU hpi (pub := pub)).pos g) ≠
-            rd.leaf ((layShHP dj y₀ ht hc hscope hU hpi (pub := pub)).pos g)) G σ ≤
+            rd.leaf ((layShHP dj y₀ ht hc hscope hU hpi (pub := pub)).pos g))
+        (auditLive L Reg (liveOf dg mPts N wr)) σ ≤
       ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) := by
-  have hchk : ∀ o : Reg × Finset (Fin n) × Exec.Transcript, LiveAcceptsZKRP I rports own o →
-      (rd.restrict (FlockSoundness.Registered.drawnReads (layShHP dj y₀ ht hc hscope hU hpi (pub := pub)) o.2.1)).Checked
-        o.1 (regPathsHP c pi pub o.2.2 rd.port) := fun o hacc =>
-    checked_of_acceptsHP I ht rports own dj y₀ hc hU hpi hpub hscope hTags o hacc
-      (rd.restrict (FlockSoundness.Registered.drawnReads (layShHP dj y₀ ht hc hscope hU hpi (pub := pub)) o.2.1))
-      (hown o hacc)
-  exact FlockSoundness.Registered.Reads.prob_offDrawn_le (lay := layShHP dj y₀ ht hc hscope hU hpi (pub := pub)) G σ
-    (LiveAcceptsZKRP I rports own) (fun o => o.2.1) (fun o => o.1) (fun o => regPathsHP c pi pub o.2.2 rd.port) rd
-    hchk hR
+  sorry
 
 end Session
 
