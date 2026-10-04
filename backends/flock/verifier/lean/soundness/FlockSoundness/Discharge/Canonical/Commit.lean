@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.Canonical.Format
 import FlockSoundness.Discharge.Canonical.Chain
+import FlockSoundness.Discharge.Canonical.OutCopy
 import FlockSoundness.Discharge.Hidden.Wide.RowBc
 import FlockSoundness.Discharge.Hidden.Wide.Upv
 import FlockSoundness.Discharge.HiddenExec.SiteH
@@ -16,15 +17,15 @@ commit string of `P(ℓ)` and `packBits` of the `ℓ` bits the witness holds at 
 
 * `rowBits`: the `ℓ` bits at row `p`'s message columns;
 * `row_bc_C`: `row_bc_tgt` at any unsegmented bit row of the flat statement whose compressions are the ones its length
-  needs (`chunks + 1 = ⌈(⌈ℓ / 8⌉ + 17) / 128⌉`, `HmRow.rowPorts`' count, `chunks_of_parse`);
+  needs (`chunks + 1 = ⌈(⌈ℓ / 8⌉ + 17) / 128⌉`, `HmRow.rowPorts`' count, `v2_of_parse`);
 * `bc_site_commitC`: `bc_site_commitH` at a canonical circuit's accepted hidden-output statement.
 
 `row_bc_C`: `row_copies_tgt`'s copies into the chain hold unchanged (`inBit_copyAll`); a message bit `HmRow.msgBit`
-calls `.const v` (`msg_filterC`, `pad_filterAll`) holds `v`, which is `Chain.rowTail`'s bit there (`constBit_rowC`: the
-fill bits of the last data byte are `packBits`' zeros, the rest `padTail(128 + B)`), and its `.row i` bits are the
-message columns themselves (`msgCol_eq`, `msgCol_pad`), so `Chain.row_commitC` hashes `P(ℓ) ‖ packBits (rowBits …)`
-(`port_commit_rowsC`). `bc_site_commitC`: the hidden statement's satisfying witness satisfies its flat twin
-(`sat_flatC`: `outPairs` writes only row bits, where the twin's row is a self row, `rowBit_self`), then `row_bc_C`.
+calls `.const v` (`msg_filterConstC`, `pad_filterAll`) holds `v`, which is `Chain.rowTail`'s bit there
+(`constBit_rowC`: the fill bits of the last data byte are `packBits`' zeros, the rest `padTail(128 + B)`), and its
+`.row i` bits are the message columns themselves (`msgCol_eq`, `msgCol_pad`), so `Chain.row_commitC` hashes
+`P(ℓ) ‖ packBits (rowBits …)` (`port_commit_rowsC`). `bc_site_commitC`: the hidden statement's satisfying witness
+satisfies its flat twin (`OutCopy`'s `sat_flatC`, at `outRowsC_of`'s output rows), then `row_bc_C`.
 -/
 
 namespace FlockSoundness.Discharge.Canonical
@@ -153,7 +154,7 @@ include R hu
 
 /-- **Δ's copy into compression `k`'s message bit `t₀`**, for any rows: the constant `HmRow.constBit` gives there, none
 at a row bit. -/
-theorem msg_filterC {pin g p k t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hk : k < c.ports[p]!.chunks)
+theorem msg_filterConstC {pin g p k t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hk : k < c.ports[p]!.chunks)
     (ht₀ : t₀ < 1024) :
     (rowCopiesAll c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
         (fun e => e.1 = msgColOf c g p k + t₀) =
@@ -389,7 +390,7 @@ theorem row_bc_C (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.up
     by_cases hbit : 8 * (128 * k + o') + t < st.c.ports[p]!.bits
     · rw [hrowbit _ hbit, show (8 * (128 * k + o') + t) / 8 = 128 * k + o' by omega,
         show (8 * (128 * k + o') + t) % 8 = t by omega, msgCol_eq st.c g p k hs (by rw [hsz]; exact hk) ho' ht]
-    · have hf := msg_filterC R hu (pin := st.pin) hg hp hk hwb
+    · have hf := msg_filterConstC R hu (pin := st.pin) hg hp hk hwb
       rw [constBit_rowC hv hs hbl k ho' ht (by omega)] at hf
       simp only [bitCopy] at hf
       have hat := shaPos_at R hu hg hp hk (off := 512 + wordBit (8 * o' + t)) (by omega)
@@ -417,152 +418,7 @@ theorem row_bc_C (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.up
         (hmNet_ofRows R.rowNets) (by rw [hmNet_inRows R.rowNets]; omega) (hmLaid_self (by omega)) hf]
       exact blockBit_ite hpin hzero _
 
-/-- **The flat Δ's row at a row bit is a self row**, for any rows: at an input bit `x` of a `sha512x3` or `hm96` slot
-where the rows' copies and wires write nothing. -/
-theorem self_of_filter (hda : st.da = (HmRow.delta st.c st.pin).1) (hu : ∀ p ∈ st.c.ports.toList, p.segs = none)
-    {n s off x : ℕ} (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hat : AtSlot st.c n s off x) {l : Flock.HmNets.Laid}
-    {name : String}
-    (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2)
-    (hoff : off < (st.c.nets.getD n default).2.inWords * Flock.WORD)
-    (hself : l.ra.getD off #[] = #[off] ∧ l.rb.getD off #[] = #[off]) (hx : x < 2 ^ st.c.kLog)
-    (hf : (rowCopiesAll st.c st.pin ++
-        wireCopiesOf st.c (HmRow.rowWires st.c.ports st.c.shaNet st.c.hmNet).toList).filter (fun e => e.1 = x) = [])
-    (j : Fin (2 ^ st.c.kLog)) :
-    placedA st ⟨x, hx⟩ j = (if j.val = x then 1 else 0) ∧ placedB st ⟨x, hx⟩ j = (if j.val = x then 1 else 0) := by
-  have R := RowRanges.ofL L F.parse F.check
-  have hfc : ∀ j', (flatPairsAll st.c st.pin).count (x, j') = 0 := fun j' => by
-    rw [flatAll_count L F F.parse.rowWires hn hat hl hoff j', hf]
-    rfl
-  have hδ : ∀ j : ℕ, deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = x then 1 else 0) : ℕ) : ZMod 2) ∧
-      deltaEntry st.db x j = (((if j = x then 1 else 0) + (if j = x then 1 else 0) : ℕ) : ZMod 2) := by
-    intro j
-    have e : deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = x then 1 else 0) : ℕ) : ZMod 2) := by
-      rw [deltaEntry_eq_count, hda, delta_flat_all _ _ F.parse.typed hu, hfc]
-      split_ifs <;> rfl
-    exact ⟨e, by rw [L.delta_b]; exact e⟩
-  exact inBit_rows R hn hat hl hself hx hδ j
-
-/-- **The flat Δ's row at a row's message bit is a self row**, for any rows: at an unsegmented row's byte `b` within
-its blocks, bit `t`, below its `ℓ` bits, Δ copies nothing (`msg_filterC`, `pad_filterAll`, `constBit_none`). -/
-theorem rowBit_self (hda : st.da = (HmRow.delta st.c st.pin).1) (hu : ∀ p ∈ st.c.ports.toList, p.segs = none)
-    {g p b t : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size) (hb : b < 128 * (st.c.ports[p]!.chunks + 1))
-    (ht : t < 8) (hbit : 8 * b + t < st.c.ports[p]!.bits) (hx : Typed.msgCol st.c g p b t < 2 ^ st.c.kLog)
-    (j : Fin (2 ^ st.c.kLog)) :
-    placedA st ⟨Typed.msgCol st.c g p b t, hx⟩ j = (if j.val = Typed.msgCol st.c g p b t then 1 else 0) ∧
-      placedB st ⟨Typed.msgCol st.c g p b t, hx⟩ j = (if j.val = Typed.msgCol st.c g p b t then 1 else 0) := by
-  have R := RowRanges.ofL L F.parse F.check
-  have hs := hu _ (getElem_mem_toList' hp)
-  have hsz := rowSlots_size hp
-  have hwb : wordBit (8 * (b % 128) + t) < 1024 := by unfold wordBit; omega
-  have hbit' : 8 * (128 * (b / 128) + b % 128) + t < st.c.ports[p]!.bits := by rw [Nat.div_add_mod]; exact hbit
-  rcases Nat.lt_or_ge (b / 128) st.c.ports[p]!.chunks with hk | hk
-  · have hs' : shaSub st.c p (b / 128) < 3 := (rowSlot_lt hp hk).2
-    have hcol := msgCol_eq st.c g p (b / 128) hs (by rw [hsz]; exact hk) (Nat.mod_lt b (by norm_num)) ht
-    rw [Nat.div_add_mod] at hcol
-    have hcol' : Typed.msgCol st.c g p b t = msgColOf st.c g p (b / 128) + wordBit (8 * (b % 128) + t) := hcol
-    have hf := msg_filterC R hu (pin := st.pin) hg hp hk hwb
-    rw [constBit_none _ _ _ (Nat.mod_lt b (by norm_num)) ht hbit'] at hf
-    have hat := shaPos_at R hu hg hp hk (off := 512 + wordBit (8 * (b % 128) + t)) (by omega)
-    rw [← msgColOf_pos R hu hp hk] at hat
-    revert hx
-    rw [hcol']
-    intro hx
-    exact self_of_filter L F hda hu (Or.inl rfl) hat (shaNet_ofRows R.rowNets) (by rw [shaNet_inRows R.rowNets]; omega)
-      (shaLaid_self (by omega)) hx hf j
-  · have hk' : b / 128 = st.c.ports[p]!.chunks := by omega
-    have hcol := msgCol_pad st.c g p hs (Nat.mod_lt b (by norm_num)) ht
-    rw [hsz, ← hk', Nat.div_add_mod] at hcol
-    have hf := pad_filterAll R hu (pin := st.pin) hg hp hwb
-    rw [hsz, ← hk', constBit_none _ _ _ (Nat.mod_lt b (by norm_num)) ht hbit'] at hf
-    have hx' : padCol st.c g p + wordBit (8 * (b % 128) + t) =
-        st.c.slotCol st.c.hmNet g p + (512 + wordBit (8 * (b % 128) + t)) := by
-      rw [padCol_eq R.rowNets, Nat.add_assoc]
-    rw [hx'] at hf hcol
-    revert hx
-    rw [hcol]
-    intro hx
-    exact self_of_filter L F hda hu (Or.inr rfl) (R.hmIn_at hg hp (off := 512 + wordBit (8 * (b % 128) + t)) (by omega))
-      (hmNet_ofRows R.rowNets) (by rw [hmNet_inRows R.rowNets]; omega) (hmLaid_self (by omega)) hx hf j
-
 end Bc
-
-/-! ## The hidden statement and its flat twin -/
-
-section Twin
-
-open Hm Hidden
-
-variable {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout st) (L0 : FlockSoundness.Layout (flatTwin st))
-  (F0 : Aliased.UnitFacts tags (flatTwin st))
-include L L0 F0
-
-/-- **A satisfying witness of the hidden statement satisfies its flat twin**, for unsegmented rows in the compressions
-their lengths need, whose output rows (after the input rows) hold `16 · words` bits: `outPairs` writes only those
-rows' bits, where the twin's row is a self row (`rowBit_self`), and elsewhere the rows agree. -/
-theorem sat_flatC (hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray)
-    (hu : ∀ p ∈ st.c.ports.toList, p.segs = none)
-    (hn : ∀ p < st.c.ports.size, st.c.ports[p]!.chunks + 1 = ((st.c.ports[p]!.bits + 7) / 8 + 17 + 127) / 128)
-    (hout : ∀ j < st.c.outRowPorts.size, HmOut.nIn st.c + j < st.c.ports.size ∧
-      (st.c.ports.getD (HmOut.nIn st.c + j) default).bits = 16 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
-    (hz : (L.model regs).Satisfies z) : (L0.model regs).Satisfies z := by
-  refine ⟨fun o i => ?_, hz.2.1, hz.2.2⟩
-  by_cases hi : ∃ q ∈ outPairs st.c, q.1 = i.val
-  · obtain ⟨q, hq, hqi⟩ := hi
-    simp only [outPairs, List.mem_flatMap, List.mem_range, List.mem_cons, List.not_mem_nil, or_false] at hq
-    obtain ⟨g, hg, j, hj, k, hk, t, ht, hq⟩ := hq
-    have hq1 : q.1 = Typed.msgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8) := by
-      rw [msgCol_delta]
-      rcases hq with rfl | rfl <;> rfl
-    obtain ⟨hp, hb⟩ := hout j hj
-    have hnp := hn _ hp
-    rw [getElem!_eq_getD'] at hnp
-    have hb' : 2 * k + t / 8 < 128 * (st.c.ports[HmOut.nIn st.c + j]!.chunks + 1) := by
-      rw [getElem!_eq_getD']; omega
-    have hbit : 8 * (2 * k + t / 8) + t % 8 < st.c.ports[HmOut.nIn st.c + j]!.bits := by
-      rw [getElem!_eq_getD']; omega
-    have hx : Typed.msgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8) < 2 ^ st.c.kLog := by
-      rw [← hq1, hqi]; exact i.isLt
-    have hie : i = ⟨Typed.msgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8), hx⟩ :=
-      Fin.ext (hqi.symm.trans hq1)
-    subst hie
-    have hrow : ∀ i' : Fin (2 ^ st.c.kLog),
-        (L0.model regs).A₀ ⟨Typed.msgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8), hx⟩ i' =
-          (if i' = ⟨Typed.msgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8), hx⟩ then 1 else 0) ∧
-        (L0.model regs).B₀ ⟨Typed.msgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8), hx⟩ i' =
-          (if i' = ⟨Typed.msgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8), hx⟩ then 1 else 0) := by
-      intro i'
-      have hs := rowBit_self L0 F0 rfl hu hg hp hb' (Nat.mod_lt _ (by norm_num)) hbit hx i'
-      have e : (if i'.val = Typed.msgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8) then (1 : ZMod 2)
-          else 0) = if i' = ⟨Typed.msgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8), hx⟩ then 1 else 0 := by
-        simp [Fin.ext_iff]
-      exact ⟨hs.1.trans e, hs.2.trans e⟩
-    rw [mulVec_single (S := L0.model regs) _ (fun i' => (hrow i').1),
-      mulVec_single (S := L0.model regs) _ (fun i' => (hrow i').2)]
-    have hsq : ∀ a : ZMod 2, a * a = a := by decide
-    exact hsq _
-  · push Not at hi
-    have hdb : st.db = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray := L.delta_b.trans hda
-    have hA : ∀ i', (L0.model regs).A₀ i i' = (L.model regs).A₀ i i' := fun i' => by
-      show rangesEntry st (slotEntryA st) i.val i'.val + deltaEntry (HmRow.delta st.c st.pin).1 i.val i'.val =
-        rangesEntry st (slotEntryA st) i.val i'.val + deltaEntry st.da i.val i'.val
-      rw [hda, deltaEntry_append_out hi]
-    have hB : ∀ i', (L0.model regs).B₀ i i' = (L.model regs).B₀ i i' := fun i' => by
-      show rangesEntry st (slotEntryB st) i.val i'.val + deltaEntry (HmRow.delta st.c st.pin).2 i.val i'.val =
-        rangesEntry st (slotEntryB st) i.val i'.val + deltaEntry st.db i.val i'.val
-      rw [hdb, deltaEntry_append_out hi, delta_snd _ _ F0.parse.typed]
-    have eA : (L0.model regs).A₀.mulVec ((L0.model regs).block z o) i =
-        (L.model regs).A₀.mulVec ((L.model regs).block z o) i := by
-      simp only [Matrix.mulVec, dotProduct, hA]
-      rfl
-    have eB : (L0.model regs).B₀.mulVec ((L0.model regs).block z o) i =
-        (L.model regs).B₀.mulVec ((L.model regs).block z o) i := by
-      simp only [Matrix.mulVec, dotProduct, hB]
-      rfl
-    rw [eA, eB]
-    exact hz.1 o i
-
-end Twin
 
 variable {T : Model.Statement}
 
@@ -583,24 +439,11 @@ theorem AcceptedH.row_bcC (a : AcceptedH T) (hfmt : formatOk a.st.c = true) {z :
   have F0 := HiddenExec.flat_unitFacts ht h
   have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
     rw [s.da, Hidden.hidden_delta']
-  obtain ⟨hrow, hex, -, -, -⟩ := formatOk_spec L.unit_built hfmt
-  have hu : ∀ p ∈ st.c.ports.toList, p.segs = none := fun p hp => (hrow p hp).2
-  have hpf : ∀ q < st.c.ports.size, st.c.ports[q]!.words = (st.c.ports[q]!.bits + 15) / 16 ∧
-      st.c.ports[q]!.chunks + 1 = ((st.c.ports[q]!.bits + 7) / 8 + 17 + 127) / 128 := fun q hq =>
-    v2_of_parse hpa hq (hrow _ (getElem_mem_toList' hq)).1 (hrow _ (getElem_mem_toList' hq)).2
-  have hout : ∀ j < st.c.outRowPorts.size, HmOut.nIn st.c + j < st.c.ports.size ∧
-      (st.c.ports.getD (HmOut.nIn st.c + j) default).bits =
-        16 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words := fun j hj => by
-    have hle := HiddenExec.checkRows_le hcr
-    have hq : HmOut.nIn st.c + j < st.c.ports.size := by unfold HmOut.nIn; omega
-    have hw := (hpf _ hq).1
-    have he := hex j hj
-    rw [Hidden.getElem!_eq_getD'] at hw
-    exact ⟨hq, by omega⟩
-  have hz0 := sat_flatC L L0 F0 hda hu (fun q hq => (hpf q hq).2) hout hz
+  obtain ⟨hrow, -, -, -, -⟩ := formatOk_spec L.unit_built hfmt
+  have hz0 := sat_flatC L L0 F0 hda (outRowsC_of L.unit_built hpa hcr hfmt).1 hz
   have hupv : 0 < st.c.upv := Hidden.setupHidden_upv_pos ht h
-  exact row_bc_C L0 F0 rfl hupv hu hz0 o hg hp (hrow _ (getElem_mem_toList' hp)).1
-    (hpf p hp).2
+  have hpr := hrow _ (getElem_mem_toList' hp)
+  exact row_bc_C L0 F0 rfl hupv (fun q hq => (hrow q hq).2) hz0 o hg hp hpr.1 (v2_of_parse hpa hp hpr.1 hpr.2).2
 
 /-- **A canonical row's `b ‖ c` at a drawn unit's site** (`bc_site_commitH` for canonical circuits): in a satisfying
 witness of an accepted hidden-output statement on a canonical circuit, at block `o`, VU `g` and row `p`, input or

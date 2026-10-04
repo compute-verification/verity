@@ -139,6 +139,8 @@ theorem rows_committedC : RowsCommittedC := by
       (Hm.bytesOf (Hm.blockBit (L.model regs) z o) 192 (Hm.saltCol st.c g p)) :=
     row_bc_C L0 F0 rfl hupv hrows.1 (sat_flatC L L0 F0 hda hrows hz) o hg hp
       ((formatOk_spec hU hfmt).1 _ (getElem_mem_toList' hp)).1
+      (v2_of_parse hpa hp ((formatOk_spec hU hfmt).1 _ (getElem_mem_toList' hp)).1
+        ((formatOk_spec hU hfmt).1 _ (getElem_mem_toList' hp)).2).2
   rw [← hbc, ← Hidden.bytesAt_bc L R regs z o hg hp]
   exact (Hidden.bc_drawnW h hpop hD hlt L regs hregs hz o hg (formatOk_vu_lt hfmt hg) hp hr).symm
 
