@@ -254,17 +254,17 @@ theorem msgCopy_unseg (c : Circuit) (pin x : ℕ) (out : ℕ → ℕ) {p : Port}
     simp only [HmRow.msgBit, hs, h, msgCopy, Hidden.bitCopy]
 
 /-- Δ's copies into compression `k`'s `cv` of VU `g`'s segmented row `p`, at a chain start. -/
-def segCv (c : Circuit) (pin g p k : ℕ) : List (ℕ × ℕ) :=
+def segCvCopies (c : Circuit) (pin g p k : ℕ) : List (ℕ × ℕ) :=
   (HmRow.chainStart c.ports[p]! k).toList.flatMap fun j =>
     (List.range 512).map fun t => (cvAt c g p k + t, constSrc c pin (startMid c.ports[p]! j) t)
 
 /-- Δ's copies into compression `k`'s message of VU `g`'s segmented row `p`. -/
-def segMsg (c : Circuit) (pin g p k : ℕ) : List (ℕ × ℕ) :=
+def segMsgCopies (c : Circuit) (pin g p k : ℕ) : List (ℕ × ℕ) :=
   (List.range 1024).flatMap fun t => msgCopy c pin (msgAt c g p k + t) (outAt c g p) (HmRow.msgBit c.ports[p]! k t)
 
 theorem rowCopiesSeg_eq (c : Circuit) (pin g p : ℕ) :
     rowCopiesSeg c pin g p = (List.range (((HmRow.rowSlots c.ports).2[p]!).size + 1)).flatMap fun k =>
-      segCv c pin g p k ++ segMsg c pin g p k := rfl
+      segCvCopies c pin g p k ++ segMsgCopies c pin g p k := rfl
 
 theorem inPos_add (c : Circuit) (g p k t : ℕ) : inPos c g p k t = inPos c g p k 0 + t := by
   unfold inPos Hidden.shaPos
@@ -292,15 +292,15 @@ include R
 theorem padCol_msgAt {g p : ℕ} (hp : p < c.ports.size) : padCol c g p = msgAt c g p c.ports[p]!.chunks := by
   rw [msgAt_hm hp, padCol_eq R.rowNets, (hmIn_eq R.rowNets).2.1]
 
-theorem segCv_pos {pin g p k : ℕ} {e : ℕ × ℕ} (hp : p < c.ports.size) (he : e ∈ segCv c pin g p k) :
+theorem segCvCopies_pos {pin g p k : ℕ} {e : ℕ × ℕ} (hp : p < c.ports.size) (he : e ∈ segCvCopies c pin g p k) :
     ∃ t < 512, e.1 = inPos c g p k t := by
-  simp only [segCv, List.mem_flatMap, List.mem_map, List.mem_range] at he
+  simp only [segCvCopies, List.mem_flatMap, List.mem_map, List.mem_range] at he
   obtain ⟨j, -, t, ht, rfl⟩ := he
   exact ⟨t, ht, cvAt_pos R hp t⟩
 
-theorem segMsg_pos {pin g p k : ℕ} {e : ℕ × ℕ} (hp : p < c.ports.size) (he : e ∈ segMsg c pin g p k) :
+theorem segMsgCopies_pos {pin g p k : ℕ} {e : ℕ × ℕ} (hp : p < c.ports.size) (he : e ∈ segMsgCopies c pin g p k) :
     ∃ t < 1024, e.1 = inPos c g p k (512 + t) := by
-  simp only [segMsg, List.mem_flatMap, List.mem_range] at he
+  simp only [segMsgCopies, List.mem_flatMap, List.mem_range] at he
   obtain ⟨t, ht, he⟩ := he
   exact ⟨t, ht, by rw [msgCopy_fst he, msgAt_pos R hp]⟩
 
@@ -329,9 +329,9 @@ theorem rowOf_pos {pin g p : ℕ} {e : ℕ × ℕ} (hp : p < c.ports.size) (he :
   · rw [rowCopiesSeg_eq] at he
     simp only [List.mem_flatMap, List.mem_range, List.mem_append, rowSlots_size hp] at he
     obtain ⟨k, hk, he | he⟩ := he
-    · obtain ⟨t, ht, he⟩ := segCv_pos R hp he
+    · obtain ⟨t, ht, he⟩ := segCvCopies_pos R hp he
       exact ⟨k, t, by omega, by omega, he⟩
-    · obtain ⟨t, ht, he⟩ := segMsg_pos R hp he
+    · obtain ⟨t, ht, he⟩ := segMsgCopies_pos R hp he
       exact ⟨k, 512 + t, by omega, by omega, he⟩
   · simp only [Hidden.rowCopiesOf, List.mem_append] at he
     rcases he with (he | he) | he
@@ -480,19 +480,19 @@ theorem wireFW_msg {g p k t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hk
 theorem rowCopiesSeg_filter {pin g p k off : ℕ} (hg : g < c.g) (hp : p < c.ports.size)
     (hk : k ≤ c.ports[p]!.chunks) (ho : off < 1536) :
     (rowCopiesSeg c pin g p).filter (fun e => e.1 = inPos c g p k off) =
-      (segCv c pin g p k).filter (fun e => e.1 = inPos c g p k off) ++
-        (segMsg c pin g p k).filter (fun e => e.1 = inPos c g p k off) := by
+      (segCvCopies c pin g p k).filter (fun e => e.1 = inPos c g p k off) ++
+        (segMsgCopies c pin g p k).filter (fun e => e.1 = inPos c g p k off) := by
   have hkm : k ∈ List.range (((HmRow.rowSlots c.ports).2[p]!).size + 1) := by
     rw [List.mem_range, rowSlots_size hp]; omega
   have hne : ∀ k' ∈ List.range (((HmRow.rowSlots c.ports).2[p]!).size + 1), k' ≠ k →
-      (segCv c pin g p k' ++ segMsg c pin g p k').filter (fun e => e.1 = inPos c g p k off) = [] := by
+      (segCvCopies c pin g p k' ++ segMsgCopies c pin g p k').filter (fun e => e.1 = inPos c g p k off) = [] := by
     intro k' hk' hne
     rw [List.mem_range, rowSlots_size hp] at hk'
     refine filter_nil_of _ _ fun e he h => ?_
     rcases List.mem_append.1 he with he | he
-    · obtain ⟨t, ht, he1⟩ := segCv_pos R hp he
+    · obtain ⟨t, ht, he1⟩ := segCvCopies_pos R hp he
       exact hne (inPos_inj R hg hp (by omega) (by omega) hg hp hk ho (he1.symm.trans h)).2.2.1
-    · obtain ⟨t, ht, he1⟩ := segMsg_pos R hp he
+    · obtain ⟨t, ht, he1⟩ := segMsgCopies_pos R hp he
       exact hne (inPos_inj R hg hp (by omega) (by omega) hg hp hk ho (he1.symm.trans h)).2.2.1
   rw [rowCopiesSeg_eq, filter_flatMap_single _ List.nodup_range _ _ k hkm hne, List.filter_append]
 
@@ -506,13 +506,13 @@ theorem rowOf_cv {pin g p k t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (
   unfold rowOf
   split
   · rw [rowCopiesSeg_filter R hg hp hk (by omega)]
-    have hm : (segMsg c pin g p k).filter (fun e => e.1 = inPos c g p k t₀) = [] :=
+    have hm : (segMsgCopies c pin g p k).filter (fun e => e.1 = inPos c g p k t₀) = [] :=
       filter_nil_of _ _ fun e he h => by
-        obtain ⟨t, ht, he1⟩ := segMsg_pos R hp he
+        obtain ⟨t, ht, he1⟩ := segMsgCopies_pos R hp he
         have := (inPos_inj R hg hp hk (by omega) hg hp hk (by omega) (he1.symm.trans h)).2.2.2
         omega
     rw [hm, List.append_nil]
-    unfold segCv
+    unfold segCvCopies
     cases HmRow.chainStart c.ports[p]! k with
     | none => rfl
     | some j =>
@@ -551,13 +551,13 @@ theorem rowOf_msg {pin g p k t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) 
   unfold rowOf
   split
   · rw [msgAt_pos R hp, rowCopiesSeg_filter R hg hp hk (by omega)]
-    have hcv : (segCv c pin g p k).filter (fun e => e.1 = inPos c g p k (512 + t₀)) = [] :=
+    have hcv : (segCvCopies c pin g p k).filter (fun e => e.1 = inPos c g p k (512 + t₀)) = [] :=
       filter_nil_of _ _ fun e he h => by
-        obtain ⟨t, ht, he1⟩ := segCv_pos R hp he
+        obtain ⟨t, ht, he1⟩ := segCvCopies_pos R hp he
         have := (inPos_inj R hg hp hk (by omega) hg hp hk (by omega) (he1.symm.trans h)).2.2.2
         omega
     rw [hcv, List.nil_append, ← msgAt_pos R hp]
-    unfold segMsg
+    unfold segMsgCopies
     rw [filter_flatMap_single _ List.nodup_range _ _ t₀ (List.mem_range.2 ht₀) fun t _ hne =>
       filter_nil_of _ _ fun e he => by rw [msgCopy_fst he]; omega]
     exact filter_msgCopy _ _ _ _ _
