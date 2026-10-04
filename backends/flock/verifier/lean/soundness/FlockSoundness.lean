@@ -173,3 +173,4 @@ import FlockSoundness.Discharge.ZkHidden
 import FlockSoundness.Discharge.ZkReg
 import FlockSoundness.Discharge.ZkPubIn
 import FlockSoundness.Discharge.ScopeW
+import FlockSoundness.Discharge.ScopeW.Reads
