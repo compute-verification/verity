@@ -643,17 +643,18 @@ def served_bindings() -> dict[str, object]:
     return out
 
 
-def facts(repo: Path) -> dict:
+def facts(repo: Path, suite: dict | None = None, pins: dict | None = None) -> dict:
     """What the split must not change: the family's Definitions with each one's id and digest at every circuit-check binding, pin
-    and served binding, and circuit-check's whole task list."""
+    and served binding, and circuit-check's whole task list.  ``suite`` / ``pins``: `circuit_check.targets.suite()` and
+    `circuit_check.checks.load_pins()` when the caller has them already (about a minute to build)."""
     from circuit_check import checks as CK
     from circuit_check import targets as TG
     from verity.ir.codec import descriptor_id
 
     TG.load_registries()
     fam = family_definitions(repo)
-    suite = TG.suite()
-    pins = CK.load_pins()
+    suite = TG.suite() if suite is None else suite
+    pins = CK.load_pins() if pins is None else pins
     bound = {fid: fn for fid, fn in suite.items() if family_of(fn) in fam}
     pinned = {}
     for key, pin in pins.get("definitions", {}).items():
