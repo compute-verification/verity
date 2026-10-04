@@ -218,55 +218,6 @@ noncomputable def rowOfHW (outs : Finset (Fin (keyN c hU n))) (g : Fin (keyN c h
   | some r => some r
   | none => outRowOfW c hU n outs g
 
-theorem outBitRowW_spec {u u' : Fin n} {d : ℕ × ℕ × ℕ} {q : Fin c.ports.size} {k : Fin (portRowW c q)}
-    (h : outBitRowW c u d = some (u', ⟨q, k⟩)) :
-    u' = u ∧ q.val = HmOut.nIn c + outRunOf c (outWordOf c d) ∧
-      k.val = 16 * (outWordOf c d - (HmOut.outGroup c (outRunOf c (outWordOf c d))).2.2.1) + d.2.2 := by
-  unfold outBitRowW at h
-  split at h
-  · split at h
-    · simp only [Option.some.injEq, Prod.mk.injEq] at h
-      obtain ⟨hu, hs⟩ := h
-      subst hu
-      cases hs
-      exact ⟨rfl, rfl, rfl⟩
-    · exact absurd h (by simp)
-  · exact absurd h (by simp)
-
-/-- **Output word `o` is word `o - at` of run `outRunOf c o`**, which starts at output word `at`, for `o < outWords`,
-when the runs cover the output ports (`run_holds`). -/
-theorem outRunOf_spec (hsum : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size) {o : ℕ} (ho : o < c.outWords) :
-    outRunOf c o < c.outRowPorts.size ∧ (HmOut.outGroup c (outRunOf c o)).2.2.1 ≤ o ∧
-      o - (HmOut.outGroup c (outRunOf c o)).2.2.1 < (HmOut.outGroup c (outRunOf c o)).2.2.2 := by
-  have hpos := runs_pos hsum ho
-  have hP : (HmOut.outGroup c (outRunOf c o)).2.2.1 ≤ o :=
-    Nat.findGreatest_spec (P := fun j => (HmOut.outGroup c j).2.2.1 ≤ o) (Nat.zero_le _)
-      (by simp only [runStart_zero, Nat.zero_le])
-  have hle : outRunOf c o ≤ c.outRowPorts.size - 1 := Nat.findGreatest_le _
-  have hlt : outRunOf c o < c.outRowPorts.size := by omega
-  refine ⟨hlt, hP, run_holds hsum ho hlt hP fun h1 => ?_⟩
-  have hng := Nat.findGreatest_is_greatest (P := fun j => (HmOut.outGroup c j).2.2.1 ≤ o) (k := outRunOf c o + 1)
-    (Nat.lt_succ_self _) (by omega)
-  simpa only [not_le] using hng
-
-/-- **An output word's bit is an output row's, at runs**: at an output word of the circuit, in a circuit whose runs
-cover its output ports and whose output rows, of the widened shapes, hold their runs' words (`HmOut.checkRows`), each of
-its 16 bits is a bit of the row of the run holding it. -/
-theorem outBitRowW_ne_none (hsum : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size)
-    (hcr : HmOut.checkRows c = .ok ()) (hW : ∀ p ∈ c.ports.toList, rowShapeW p = true) (u : Fin n)
-    {d : ℕ × ℕ × ℕ} (hw : outWordOf c d < c.outWords) (ht : d.2.2 < 16) : outBitRowW c u d ≠ none := by
-  obtain ⟨hr, -, hk⟩ := outRunOf_spec hsum hw
-  have hle := checkRows_le_wordsW hcr hW hr
-  have hq := (Hidden.checkRows_out hcr hr).1
-  have hpw : portRowW c ⟨_, hq⟩ =
-      16 * (c.ports.getD (HmOut.nIn c + outRunOf c (outWordOf c d)) default).words := by
-    unfold portRowW
-    rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hq, Option.getD_some]
-    rfl
-  unfold outBitRowW
-  rw [dite_eq_left hq, dite_eq_left (by rw [hpw]; omega)]
-  exact Option.some_ne_none _
-
 theorem outRowOfW_wire (outs : Finset (Fin (keyN c hU n))) {u : Fin n} (x : Fin ((keyProg c hU n).rows u).w)
     (hgu : (keyProg c hU n).unit ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = some u)
     (hx : ((keyProg c hU n).rows u).nIn ≤ x.val) :
@@ -360,7 +311,10 @@ theorem out_copy_bitW (ho : st.c.outNet = st.c.unitNet) (hcr : HmOut.checkRows s
     refine (hlo u' hu').2 _ ?_
     rw [← hget]
     exact Array.getElem_mem_toList _
-  obtain ⟨hr, hle, hkk⟩ := outRunOf_spec hsum hwlt
+  obtain ⟨hr, hle, hlt⟩ := outRunOf_spec st.c hsum hwlt
+  have hkk : outWordOf st.c (u', j, t) - (HmOut.outGroup st.c (outRunOf st.c (outWordOf st.c (u', j, t)))).2.2.1 <
+      (HmOut.outGroup st.c (outRunOf st.c (outWordOf st.c (u', j, t)))).2.2.2 := by
+    omega
   have hw : (HmOut.outGroup st.c (outRunOf st.c (outWordOf st.c (u', j, t)))).2.2.1 +
       (outWordOf st.c (u', j, t) - (HmOut.outGroup st.c (outRunOf st.c (outWordOf st.c (u', j, t)))).2.2.1) =
       (st.c.leavesOut.getD u' #[])[j] := by
@@ -397,7 +351,11 @@ theorem out_copy_keyW {T : Model.Statement} (a : AcceptedH T) (hce : a.st.c = c)
     refine (hlo u' hu').2 _ ?_
     rw [← hget]
     exact Array.getElem_mem_toList _
-  obtain ⟨hr, hle, hkk⟩ := outRunOf_spec (Hidden.parse_rowPorts a.parse).2 hwlt
+  obtain ⟨hr, hle, hlt⟩ := outRunOf_spec a.st.c (Hidden.parse_rowPorts a.parse).2 hwlt
+  have hkk : outWordOf a.st.c (u', j, t) -
+      (HmOut.outGroup a.st.c (outRunOf a.st.c (outWordOf a.st.c (u', j, t)))).2.2.1 <
+      (HmOut.outGroup a.st.c (outRunOf a.st.c (outWordOf a.st.c (u', j, t)))).2.2.2 := by
+    omega
   have hw : (HmOut.outGroup a.st.c (outRunOf a.st.c (outWordOf a.st.c (u', j, t)))).2.2.1 +
       (outWordOf a.st.c (u', j, t) -
         (HmOut.outGroup a.st.c (outRunOf a.st.c (outWordOf a.st.c (u', j, t)))).2.2.1) =
@@ -515,7 +473,7 @@ theorem keyProgHW_valPinned (hkeys : KeysRow c hU (portRowW c)) :
       refine (hlo u'' hu').2 _ ?_
       rw [← hget]
       exact Array.getElem_mem_toList _
-    exact outBitRowW_ne_none (Hidden.parse_rowPorts (hparse S R u hu)).2 hcr hW u hwlt ht hno'
+    exact outBitRowW_ne_none hcr (Hidden.parse_rowPorts (hparse S R u hu)).2 hW u hwlt ht hno'
 
 /-- **`lay` at `keyProg`'s places in hidden-output tables, at the widened scope**: `keyReadersHW`'s layout, with
 `bitCode` for the single gates and Δ's copies from `keyProgHW_copies`. -/

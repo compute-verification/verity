@@ -6,12 +6,12 @@ set_option Elab.async false
 /-!
 # Output rows of runs of output ports
 
-An output row is one output port or a run of them (`HmOut.outGroup`): run `j` starts at output word `at_j` and holds
-`w_j` words. The first run starts at word 0 and each starts where the one before it ends (`runStart_zero`,
-`runStart_succ`), and the runs cover the output words (`runStart_size`), so output word `o` is word `o - at_r` of the
-run `r` that starts at or before it while the next starts past it (`run_holds`). Its row, of any widened shape, holds
-the run's words: exactly at a bit row, zero-padded to whole SHA-512 blocks at a lone port's row (`checkRows_wordsW`).
+An output row is one output port or a run of them (`HmOut.outGroup`). The runs are contiguous and cover the output
+words, and an output row of a widened shape holds its run's words, exactly at a bit row and zero-padded to whole
+SHA-512 blocks at a lone port's row (`outGroup_start_succ`, `outGroup_start_size`, `outRunOf_spec` and
+`outRowW_words`, beside `outBitRowW` in `KeyH.lean`, which reads this file):
 
+* `checkRows_le_wordsW`, `checkRows_words_segW`: an output row's words hold its run's, exactly at a segmented row;
 * `outRowsS_of`: the output rows `msg_copyW` reads (`OutRowsS`), from `rowShapeW` and `HmOut.checkRows`;
 * `out_copyW`: at Δ's context (`RowDelta`), copy `u'`'s output `j`, bit `t` is bit `t` of word `k` of run `r`'s row
   message (`msg_copyW`, `outCol_leaf`), at every widened shape, a segmented output row among them;
@@ -24,88 +24,15 @@ open Flock FlockLevel3 Model
 open FlockSoundness.Discharge.Hm (blockBit blockBit_of_lt)
 open FlockSoundness.Discharge.HiddenExec
 
-/-! ## Runs of output ports -/
+/-! ## An output row's words -/
 
 section runs
 
 variable {c : Circuit}
 
-theorem foldl_add_extract_succ (a : Array ℕ) (j : ℕ) :
-    (a.extract 0 (j + 1)).foldl (· + ·) 0 = (a.extract 0 j).foldl (· + ·) 0 + a.getD j 0 := by
-  rw [← Array.foldl_toList, ← Array.foldl_toList, Array.toList_extract, Array.toList_extract,
-    List.extract_eq_take_drop, List.extract_eq_take_drop, List.drop_zero, Nat.sub_zero, Nat.sub_zero, List.take_add_one,
-    List.foldl_append, Array.getD_eq_getD_getElem?, ← Array.getElem?_toList]
-  cases a.toList[j]? <;> simp
-
-theorem foldl_snd_extract_add (a : Array (String × ℕ)) (i k : ℕ) :
-    (a.extract 0 (i + k)).foldl (· + ·.2) 0 =
-      (a.extract 0 i).foldl (· + ·.2) 0 + (a.extract i (i + k)).foldl (· + ·.2) 0 := by
-  simp only [← Array.foldl_toList, Array.toList_extract, List.extract_eq_take_drop, List.drop_zero, Nat.sub_zero,
-    Nat.add_sub_cancel_left, Hidden.foldl_snd_eq, Nat.zero_add, List.take_add, List.map_append, List.sum_append]
-
-/-- **The first run starts at output word 0.** -/
-theorem runStart_zero (c : Circuit) : (HmOut.outGroup c 0).2.2.1 = 0 := by
-  simp [HmOut.outGroup]
-
-/-- **Each run starts where the one before it ends.** -/
-theorem runStart_succ (c : Circuit) (j : ℕ) :
-    (HmOut.outGroup c (j + 1)).2.2.1 = (HmOut.outGroup c j).2.2.1 + (HmOut.outGroup c j).2.2.2 := by
-  simp only [HmOut.outGroup]
-  rw [foldl_add_extract_succ, foldl_snd_extract_add]
-
-/-- **The runs cover the output words**: past the last run is output word `outWords`, when the runs cover the output
-ports (`Hidden.parse_rowPorts`). -/
-theorem runStart_size (hsum : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size) :
-    (HmOut.outGroup c c.outRowPorts.size).2.2.1 = c.outWords := by
-  simp only [HmOut.outGroup, Array.extract_size, hsum, Circuit.outWords]
-
-/-- **There is a run** below an output word, when the runs cover the output ports. -/
-theorem runs_pos (hsum : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size) {o : ℕ} (ho : o < c.outWords) :
-    0 < c.outRowPorts.size := by
-  by_contra h0
-  have h := runStart_size hsum
-  rw [show c.outRowPorts.size = 0 by omega, runStart_zero] at h
-  omega
-
-/-- **Run `r` holds output word `o`** when it starts at or before `o` and the next run, if any, starts past it: `o` is
-below its end. -/
-theorem run_holds (hsum : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size) {o r : ℕ} (ho : o < c.outWords)
-    (hr : r < c.outRowPorts.size) (hle : (HmOut.outGroup c r).2.2.1 ≤ o)
-    (hnext : r + 1 < c.outRowPorts.size → o < (HmOut.outGroup c (r + 1)).2.2.1) :
-    o - (HmOut.outGroup c r).2.2.1 < (HmOut.outGroup c r).2.2.2 := by
-  rcases Nat.lt_or_ge (r + 1) c.outRowPorts.size with h | h
-  · have := hnext h
-    rw [runStart_succ] at this
-    omega
-  · have := runStart_size hsum
-    rw [show c.outRowPorts.size = r + 1 by omega, runStart_succ] at this
-    omega
-
-/-! ## An output row's words -/
-
-theorem rowShapeW_bits {p : Port} (h : rowShapeW p = true) : p.bits = 16 * p.words := by
-  unfold rowShapeW at h
-  simp only [Bool.and_eq_true, beq_iff_eq] at h
-  exact h.1
-
 theorem getD_mem_ports {q : ℕ} (hq : q < c.ports.size) : c.ports.getD q default ∈ c.ports.toList := by
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hq, Option.getD_some]
   exact Array.getElem_mem_toList _
-
-/-- **An output row holds its run's words** (`HmOut.checkRows`), at rows of the widened shapes (`16 · words` bits):
-exactly, at a bit row of the run's bits (`sha512/row/v2` or `sha512/row-seg/v1`), or zero-padded to whole SHA-512 blocks
-at a lone port's row. -/
-theorem checkRows_wordsW (hcr : HmOut.checkRows c = .ok ()) (hW : ∀ p ∈ c.ports.toList, rowShapeW p = true)
-    {j : ℕ} (hj : j < c.outRowPorts.size) :
-    (c.ports.getD (HmOut.nIn c + j) default).words = (HmOut.outGroup c j).2.2.2 ∨
-      ((HmOut.outGroup c j).2.1 = 1 ∧
-        (c.ports.getD (HmOut.nIn c + j) default).words = ((HmOut.outGroup c j).2.2.2 + 63) / 64 * 64) := by
-  obtain ⟨hlt, hrow⟩ := Hidden.checkRows_out hcr hj
-  have hb := rowShapeW_bits (hW _ (getD_mem_ports hlt))
-  rcases hrow with ⟨h1, hw, -, -⟩ | ⟨-, hb'⟩
-  · exact Or.inr ⟨h1, hw⟩
-  · left
-    omega
 
 /-- **A segmented output row's words are exactly its run's** (`sha512/row-seg/v1`, as row_a's output row). -/
 theorem checkRows_words_segW (hcr : HmOut.checkRows c = .ok ()) (hW : ∀ p ∈ c.ports.toList, rowShapeW p = true)
@@ -118,11 +45,14 @@ theorem checkRows_words_segW (hcr : HmOut.checkRows c = .ok ()) (hW : ∀ p ∈ 
     cases hs
   · omega
 
-/-- **An output row's words hold its run's** (`checkRows_wordsW`). -/
+/-- **An output row's words hold its run's**: exactly, or a lone port's padded to whole SHA-512 blocks
+(`Hidden.checkRows_out`, at rows of `16 · words` bits). -/
 theorem checkRows_le_wordsW (hcr : HmOut.checkRows c = .ok ()) (hW : ∀ p ∈ c.ports.toList, rowShapeW p = true)
     {j : ℕ} (hj : j < c.outRowPorts.size) :
     (HmOut.outGroup c j).2.2.2 ≤ (c.ports.getD (HmOut.nIn c + j) default).words := by
-  rcases checkRows_wordsW hcr hW hj with h | ⟨-, h⟩ <;> omega
+  obtain ⟨hlt, hrow⟩ := Hidden.checkRows_out hcr hj
+  have hb := rowShapeW_bits (hW _ (getD_mem_ports hlt))
+  rcases hrow with ⟨-, hw, -, -⟩ | ⟨-, hb'⟩ <;> omega
 
 /-- **The output rows `msg_copyW` reads** (`OutRowsS`): every row of a widened shape, and each output row after the
 input rows (`Hidden.checkRows_out`). -/
