@@ -552,8 +552,11 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     module docstring).
   - The noise lines and G are verifier-derived public inputs, as in `pc4` (`anchors.TileAnchors`, G on the record's
     chain), and each is a public input region in a unit's proof (`pc8.DERIVATIONS`; one u16 word per E4M3 code).
-  - The Programs evaluate to `pearl_c.json`'s pinned H100 test instance, and to the scheme on sm_120's records. Every
-    partition computes each value in exactly one unit.
+  - The Programs evaluate to `pearl_c.json`'s pinned H100 test instance, and to the scheme on sm_120's records whose
+    tiles are whole: 64 | m at the scheme's 64 × 64 tile, or a call under 64 rows at a tile of m × 64 (decode's 32).
+    `Shape.check` refuses a short last tile row, which the scheme's domain admits (`Row tiles` above), so a call such as
+    m = 80 (a 64-row tile row and a 16-row one) has no Program yet. Every partition computes each value in exactly one
+    unit.
   - The hiding Programs are `pc4`'s (``Shape.hidden``; the rows and their vectors are under `circuit.pc4` below):
     `Pc8TileHidden` returns its tile digest in place of C̃ and U, the weight's Program is `Pc8Weight`, and the rows are
     C-Flock's committed ports (`pc8.PORTS`), with `pouw/row-fp32/v1` input rows, `pouw/row-fp8-p/v1` rows and
