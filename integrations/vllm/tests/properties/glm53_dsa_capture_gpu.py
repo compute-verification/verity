@@ -29,8 +29,9 @@ A phase that raises records its error and fails the verdict without stopping the
              clean_logits=False, sparse_attn_indexer.py:496-507) on rows FULL_ROWS, random rows and random (row, key) pairs, and
              `fp8_fp4_paged_mqa_logits` (one context per DECODE_LENS entry, its query the last token's, sparse_attn_indexer.py:600-613)
              on every key: each logit against `DsaMqaLogit_v1{32,128}` (twin `logit_rows`; the reference on a sample).
-  topk       `top_k_per_row_prefill` on the served logits (twice) and on synthetic rows from a row start of 5; `cooperative_topk` and
-             `persistent_topk` (sparse_attn_indexer.py:617-656) and the `top_k_per_row_decode` fallback (recorded) on synthetic rows
+  topk       `top_k_per_row_prefill` on the served logits (twice) and on synthetic rows from a row start of 5; `persistent_topk`,
+             `cooperative_topk` where vLLM calls it (not on sm_120; 10 and 8 rows, its clusters of 4 and 8 on sm_90), both
+             sparse_attn_indexer.py:617-656, and the `top_k_per_row_decode` fallback (recorded) on synthetic rows
              of TOPK_LENS keys, tie rows and a negative length: every row of at most 2048 keys against `DsaTopKShortRow_v1{2048}`
              (closed form `topk_short`, the reference on its lengths); a longer row a valid top-2048 set (recorded: no Definition
              states its order or its ties).
@@ -55,7 +56,8 @@ phase through `DsaIndexerKRow_v1` (which states the form `fma(x, cos, RN(+-partn
 the bytes are.
 
 GO needs every phase's words compared with 0 mismatches and 0 unresolved (a non-finite logit accumulator; these operands keep every
-logit finite), the reference sampled where a twin stands in with 0 disagreements, deterministic reruns, the checks above, and the RoPE
+logit finite), the reference sampled where a twin stands in with 0 disagreements, deterministic reruns (the prefill logits on the words
+they write, `logits_rerun`), the checks above, and the RoPE
 probe settled (one candidate form each for the even and the odd outputs of k_pe and of q_pe, or only flushing forms).
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
@@ -785,9 +787,11 @@ def phase_logits(work: Path, o: dict[str, Any], kst: dict[str, Any], qst: dict[s
     L = _u32(logits)
     Ld = _u32(dec)
     dec_eq = sum(int((Ld[b, :n] != L[n - 1, :n]).sum()) for b, n in enumerate(DECODE_LENS))
+    same, past_window = logits_rerun(logits, logits2)
     recs = [{"phase": "logits", "case": "prefill", "shape": list(logits.shape),
-             "checks": {"gather": bool(gather_ok), "deterministic": bool(torch.equal(logits.view(torch.int32), logits2.view(torch.int32))),
-                        "shape": list(logits.shape) == [SEQ, SEQ] and logits.dtype == torch.float32}},
+             "checks": {"gather": bool(gather_ok), "deterministic": same,
+                        "shape": list(logits.shape) == [SEQ, SEQ] and logits.dtype == torch.float32},
+             "info": {"words_past_window_differing": past_window}},
             {"phase": "logits", "case": "decode", "shape": list(dec.shape), "lens": list(DECODE_LENS),
              "checks": {"shape": list(dec.shape) == [B, MAX_MODEL_LEN] and dec.dtype == torch.float32},
              "info": {"words_differing_from_prefill": dec_eq}}]
@@ -808,6 +812,28 @@ def phase_logits(work: Path, o: dict[str, Any], kst: dict[str, Any], qst: dict[s
     jobs += [{"phase": "logits", "case": "decode", "kind": "logits", "paths": paths, "keys": ["rd", "cd", "gotd"], "range": [a, b]}
              for a, b in _chunks(r_dec.size, JOB_LOGITS)]
     return recs, jobs, {"logits": logits}
+
+
+def logits_rerun(a, b) -> tuple[bool, int]:
+    """Two prefill logits runs (ks = 0, ke = r + 1, clean_logits=False): whether they agree on every word of each row's window [0, r],
+    the words the kernel writes, and how many words past the windows differ (unwritten: only clean_logits sets them, to -inf,
+    deep_gemm.py:542)."""
+    import torch
+
+    window = torch.ones(a.shape, dtype=torch.bool, device=a.device).tril()
+    diff = a.view(torch.int32) != b.view(torch.int32)
+    return not bool(diff[window].any()), int(diff[~window].sum())
+
+
+def _clear_launch_error() -> None:
+    """A launch that fails leaves its error pending for the next CUDA call to report: take it here, not in the next kernel's case."""
+    import torch
+
+    try:
+        torch.zeros(1, device="cuda")
+        torch.cuda.synchronize()
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _topk_rows(gen_seed: int) -> tuple[np.ndarray, np.ndarray, list[str]]:
@@ -844,6 +870,8 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
     from verity.evaluation import evaluate
     from verity.ir.defs import bind
     from vllm import _custom_ops as ops
+    from vllm.model_executor.layers.sparse_attn_indexer import RADIX_TOPK_WORKSPACE_SIZE
+    from vllm.platforms import current_platform
     from verity_vllm.program.registry import dsa
 
     rec: dict[str, Any] = {"cases": {}, "errors": {}}
@@ -877,26 +905,36 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
     rec["cases"]["prefill_start5"] = _check_topk(wide, np.maximum(lens, 0), pout.cpu().numpy(), start)
     dl = torch.from_numpy(vals).to("cuda")
     seq_lens = torch.from_numpy(lens).to("cuda").reshape(rows, 1).contiguous()
-    for name, call in (("cooperative", lambda out, ws: torch.ops._C.cooperative_topk(dl, seq_lens, out, ws, TOPK, int(lens.max()))),
-                       ("persistent", lambda out, ws: torch.ops._C.persistent_topk(dl, seq_lens, out, ws, TOPK, dl.shape[1])),
-                       ("decode_fallback", lambda out, ws: ops.top_k_per_row_decode(dl, 1, seq_lens, out, rows, dl.stride(0), dl.stride(1), TOPK))):
+    # sparse_attn_indexer.py:617-623 at k = 2048, rows <= 64 and stride % 4 == 0 (both hold here)
+    rec["cooperative_served"] = cooperative = bool(current_platform.has_device_capability(90)
+                                                    and not current_platform.is_device_capability_family(120))
+    kernels = [("persistent", rows, lambda d, sl, out, ws, m: torch.ops._C.persistent_topk(d, sl, out, ws, TOPK, d.shape[1]))]
+    if cooperative:
+        # on sm_90, 10 rows take clusters of 4 and 8 rows clusters of 8 (cooperative_topk.cu:94-102)
+        kernels += [(name, n, lambda d, sl, out, ws, m: torch.ops._C.cooperative_topk(d, sl, out, ws, TOPK, m))
+                    for name, n in (("cooperative", rows), ("cooperative_8rows", 8))]
+    kernels.append(("decode_fallback", rows, lambda d, sl, out, ws, m: ops.top_k_per_row_decode(d, 1, sl, out, d.shape[0], d.stride(0),
+                                                                                                d.stride(1), TOPK)))
+    for name, n, call in kernels:
         try:
             outs = []
             for _ in range(2):
-                out = torch.full((rows, TOPK), -1, dtype=torch.int32, device="cuda")
-                call(out, torch.zeros(1024 * 1024, dtype=torch.uint8, device="cuda"))
+                out = torch.full((n, TOPK), -1, dtype=torch.int32, device="cuda")
+                call(dl[:n], seq_lens[:n], out, torch.zeros(RADIX_TOPK_WORKSPACE_SIZE, dtype=torch.uint8, device="cuda"),
+                     int(lens[:n].max()))
                 outs.append(out.cpu().numpy())
-            r = _check_topk(vals, lens, outs[0])
-            r["deterministic_short"] = bool(np.array_equal(outs[0][lens <= TOPK], outs[1][lens <= TOPK]))
+            r = _check_topk(vals[:n], lens[:n], outs[0])
+            r["deterministic_short"] = bool(np.array_equal(outs[0][lens[:n] <= TOPK], outs[1][lens[:n] <= TOPK]))
             rec["cases"][name] = r
         except Exception as e:  # noqa: BLE001
             rec["errors"][name] = _error(e)
+            _clear_launch_error()
     ref_lens = sorted({0, 1, 2, TOPK - 1, TOPK, -3})
     fn = bind(dsa.DsaTopKShortRow, TOPK=TOPK)
     rec["reference_lengths"] = ref_lens
     rec["reference_ok"] = all(list(evaluate(fn, n & 0xFFFFFFFF)) == (topk_short(np.array([max(n, 0)]))[0].astype(np.int64)
                                                                      & 0xFFFFFFFF).tolist() for n in ref_lens)
-    gating = ("prefill_served", "prefill_start5", "cooperative", "persistent")
+    gating = ("prefill_served", "prefill_start5", "persistent") + (("cooperative", "cooperative_8rows") if cooperative else ())
     rec["ok"] = bool(rec["reference_ok"] and all(g in rec["cases"] and rec["cases"][g]["short_rows"] > 0
                                                  and rec["cases"][g]["short_mismatch"] == 0 for g in gating)
                      and rec["cases"]["prefill_served"]["deterministic_short"])

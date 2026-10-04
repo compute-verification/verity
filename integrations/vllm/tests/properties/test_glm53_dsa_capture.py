@@ -255,6 +255,17 @@ def test_the_logits_jobs_take_the_kernel_words(tmp_path) -> None:
     assert _total(res)["unresolved"] == 4 + 2 and _total(res)["mismatch"] == 0
 
 
+def test_the_logits_rerun_compares_the_words_each_row_writes() -> None:
+    """With clean_logits=False the words past row r's window [0, r] are whatever the buffer held: they differ between reruns
+    without making the kernel nondeterministic, and a differing word inside a window does."""
+    a = torch.randn(5, 7)
+    b = a.clone()
+    b[1, 2], b[0, 6] = float("nan"), 3.0
+    assert X.logits_rerun(a, b) == (True, 2)
+    b[3, 3] = torch.nextafter(a[3, 3], torch.tensor(float("inf")))
+    assert X.logits_rerun(a, b) == (False, 2)
+
+
 # ------------------------------------------------------------------------------------------------------------- attention
 def test_the_attn_jobs_take_the_kernel_words(tmp_path) -> None:
     rng = np.random.default_rng(10)
