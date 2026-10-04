@@ -194,9 +194,9 @@ def slot_wrap(priority: bool = False) -> list[str]:
 
 
 def take_lean_deps_urls(out: Path) -> Path | None:
-    """The presigned URLs sent with the run or signed by its preflight (`preflight.py`), moved out of the run directory, where the
-    steps write, before any step starts: each grants a read until it expires. Custody deletes one left there before it takes the
-    run's record (`research.store.custody.CREDENTIALS`)."""
+    """The presigned URLs sent with the run, moved out of the run directory, where the steps write, before any step starts: each
+    grants a read until it expires. Custody deletes one left there before it takes the run's record
+    (`research.store.custody.CREDENTIALS`)."""
     sent = out / "inputs" / LEAN_DEPS_URLS
     if not sent.is_file():
         return Path(os.environ[LEAN_DEPS_URLS_ENV]) if os.environ.get(LEAN_DEPS_URLS_ENV) else None

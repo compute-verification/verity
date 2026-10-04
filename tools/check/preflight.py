@@ -10,8 +10,8 @@ One line per fact on stdout, one per failure on stderr. It checks:
 - that `pod_setup.sh` ran: uv at the version it pins, elan with the toolchain the Lake packages pin, and cargo, on the PATH a
   run sees;
 - that each Lean package's dependencies are warm on this machine, or restorable from the store: `lean-deps.json` pins a bundle
-  for its manifest and toolchain and the run carries its presigned URL (`check.py --lean-deps-files`), or a check run's custody
-  key signs one here, so the audit never clones them from GitHub;
+  for its manifest and toolchain and the run carries its presigned URL (`check.py --lean-deps-files`), so the audit never
+  clones them from GitHub;
 - that the store answers: every bundle still to restore, or else one pinned object, is read with the run's custody key
   (RESEARCH_PREFLIGHT_CUSTODY), else through its sent URL;
 - that the CPU has `avx512f` when the run carries the pinned upstream build (so lean-agreement runs) and its RUSTFLAGS need it;
@@ -19,11 +19,7 @@ One line per fact on stdout, one per failure on stderr. It checks:
   recorded on this machine took (their `resources.jsonl`) when that is more, plus 1.25 times each dependency tree to restore.
   A machine with check slots (`slot.py`) shares its disk with other work, which a recorded drop in free space counts, so
   there it is 45 GB (vy-nebius-1, 1 Oct: a 2 GB check "took" 607 GB while the node's jobs wrote).
-The run's `--send` files are in RESEARCH_PREFLIGHT_INPUTS. When the run is check's own (RESEARCH_PREFLIGHT_TOOL names its --tool)
-and has custody, the URLs it lacks are signed with the custody key and, once every check passes, merged into that directory's
-`lean-deps-urls.json` (mode 600; the directory made if nothing was sent), which `check.py` moves out of the run directory before
-any step starts. Not for `--preflight check` before a run of anything else: nothing there would take the file out of the run's
-record.
+The run's `--send` files are in RESEARCH_PREFLIGHT_INPUTS.
 """
 from __future__ import annotations
 
@@ -34,7 +30,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -118,63 +113,29 @@ def pins(root: Path) -> dict[str, dict]:
     return json.loads(p.read_text())["deps"] if p.is_file() else {}
 
 
-def sign(keys: list[str], pinned: dict[str, dict], custody: Path) -> tuple[dict[str, str], str | None]:
-    """({deps_key: URL}, None): a GET of each of ``keys``' pinned bundles, signed with the run's custody key, which no URL
-    outlives; ({}, the error's type) when they can't all be. A URL is never printed: it grants a read until it expires."""
-    from research.store.custody import custody_env
-    from research.store.local import object_key
-    from research.store.remote import load_remote
-
-    try:
-        with custody_env(custody):
-            remote = load_remote()
-            return {k: remote.presign(object_key(pinned[k]["sha256"]), LA.URL_TTL_S) for k in keys}, None
-    except Exception as e:  # noqa: BLE001
-        return {}, type(e).__name__
-
-
-def lean_deps(root: Path, packages: list[str], cache: Path, urls: dict[str, str],
-              custody: Path | None = None) -> tuple[list[str], list[str], list[dict], dict[str, str]]:
-    """(facts, failures, the bundles the audit will restore from the store, the URLs signed here): each package's dependencies,
-    warm here under ``cache``/lean-deps or restorable through a URL for the pinned bundle, sent with the run or, when it sent
-    none, signed with the custody key in ``custody``."""
-    facts, fails, restore, named = [], [], [], {}
+def lean_deps(root: Path, packages: list[str], cache: Path, urls: dict[str, str]) -> tuple[list[str], list[str], list[dict]]:
+    """(facts, failures, the bundles the audit will restore from the store): each package's dependencies, warm here under
+    ``cache``/lean-deps or restorable through a sent URL, the pinned bundle's."""
+    facts, fails, restore, seen = [], [], [], set()
     pinned = pins(root)
     for p in packages:
-        if (k := LA.deps_key(root / p)) is not None:
-            named.setdefault(k, p)
-    lacking = [k for k in named if k in pinned and k not in urls and not (cache / "lean-deps" / k).is_dir()]
-    signed, why = sign(lacking, pinned, custody) if lacking and custody is not None else ({}, None)
-    for k, p in named.items():
+        k = LA.deps_key(root / p)
+        if k is None or k in seen:
+            continue
+        seen.add(k)
         pin = pinned.get(k)
         if (cache / "lean-deps" / k).is_dir():
             facts.append(f"{p}: Lean dependencies warm here ({k[:12]})")
         elif pin is None:
             fails.append(f"{p}: {LA.PIN} pins no bundle for its manifest and toolchain ({k[:12]}) and none is warm here, so its audit "
                          f"would clone them from GitHub: pin one (`lean_audit.py --pin RUN` after a cold `--export` run)")
-        elif k not in urls and k not in signed:
-            fails.append(f"{p}: its Lean dependencies ({k[:12]}) are not warm here and the run carries no URL for their bundle"
-                         + (f", nor could its custody key sign one ({why})" if why else "")
-                         + ": send `$(uv run python tools/check/check.py --lean-deps-files)` from a launcher whose store remote signs, "
-                           "or record the check with custody (the default with --on), whose key signs one here")
+        elif k not in urls:
+            fails.append(f"{p}: its Lean dependencies ({k[:12]}) are not warm here and the run carries no URL for their bundle: send "
+                         f"`$(uv run python tools/check/check.py --lean-deps-files)`")
         else:
             restore.append({"name": f"{p}'s Lean bundle {k[:12]}", "key": k, "sha256": pin["sha256"], "bytes": pin["bytes"]})
-            facts.append(f"{p}: Lean dependencies restorable from the store ({k[:12]}, {pin['bytes'] >> 20} MiB)"
-                         + (", through a URL signed with the run's custody key" if k in signed else ""))
-    return facts, fails, restore, signed
-
-
-def write_urls(path: Path, urls: dict[str, str]) -> None:
-    """``urls`` as ``path``, mode 600 and replaced whole, in a directory made (mode 700) when the launcher sent nothing."""
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
-    try:
-        with os.fdopen(fd, "w") as f:
-            json.dump(urls, f)
-        os.replace(tmp, path)
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
+            facts.append(f"{p}: Lean dependencies restorable from the store ({k[:12]}, {pin['bytes'] >> 20} MiB)")
+    return facts, fails, restore
 
 
 def probe(root: Path, packages: list[str]) -> list[dict]:
@@ -352,29 +313,20 @@ def checkout(root: Path, sha: str | None) -> tuple[list[str], list[str]]:
 
 
 def run(root: Path, inputs: Path | None, custody: Path | None, cache: Path, cpuinfo: Path = Path("/proc/cpuinfo"),
-        usage=shutil.disk_usage, sha: str | None = None, runs: Path | None = None, shared: bool = False,
-        tool: str | None = None) -> tuple[list[str], list[str]]:
-    """``tool``: the run's --tool when it is check's own run (RESEARCH_PREFLIGHT_TOOL), whose `check.py` takes the URLs signed here
-    out of the run directory."""
+        usage=shutil.disk_usage, sha: str | None = None, runs: Path | None = None, shared: bool = False) -> tuple[list[str], list[str]]:
     lean = (root / "backends" / "flock" / "verifier" / "lean" / "lakefile.toml").exists()
     packages = LA.packages(CHECK.tracked_files(root) or []) if lean else []
     sent = inputs / CHECK.LEAN_DEPS_URLS if inputs is not None else None
     urls = json.loads(sent.read_text()) if sent is not None and sent.is_file() else {}
-    signer = custody if tool and sent is not None and custody is not None and (custody / "cred.json").is_file() else None
     facts, fails = checkout(root, sha)
     f, x = setup(root, packages)
     facts, fails = facts + f, fails + x
     if x:
         fails.append(f"prepare the pod: `{POD_SETUP}`")
-    f, x, restore, signed = lean_deps(root, packages, cache, urls, signer)
+    f, x, restore = lean_deps(root, packages, cache, urls)
     facts, fails = facts + f, fails + x
     for f, x in (store(restore or probe(root, packages), urls, custody), cpu(root, inputs, cpuinfo), disk(root, cache, restore, usage, runs, shared)):
         facts, fails = facts + f, fails + x
-    if signed and not fails:
-        try:
-            write_urls(sent, {**urls, **signed})
-        except OSError as e:
-            fails.append(f"the URLs signed with the run's custody key could not be written to {sent} ({type(e).__name__})")
     return facts, fails
 
 
@@ -385,8 +337,7 @@ def _env_path(name: str) -> Path | None:
 def main() -> int:
     runs = ROOT.parent.parent / "runs" if ROOT.parent.name == "src" else None       # a shipped tree: <root>/src/<sha>, <root>/runs
     facts, fails = run(ROOT, _env_path("RESEARCH_PREFLIGHT_INPUTS"), _env_path("RESEARCH_PREFLIGHT_CUSTODY"), CHECK.cache_dir(),
-                       sha=os.environ.get("RESEARCH_SOURCE_SHA"), runs=runs, shared=SLOT.SLOTS.exists(),
-                       tool=os.environ.get("RESEARCH_PREFLIGHT_TOOL") or None)
+                       sha=os.environ.get("RESEARCH_SOURCE_SHA"), runs=runs, shared=SLOT.SLOTS.exists())
     for line in facts:
         print(line, flush=True)
     for line in fails:

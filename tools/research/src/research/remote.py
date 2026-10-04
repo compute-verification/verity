@@ -57,12 +57,10 @@
     preflight       a `--tool` whose declaration in the shipped tree names a preflight (`Tool.preflight`: a Python script there and its
                     args) has it run by launch-request, in the tree, before anything else is admitted: exit 0 admits the run, anything
                     else refuses it (PreflightFailed, refused.json; nothing started, no attempt, so never a verdict), with the script's
-                    stderr as the reason.  It gets the runner's environment plus RESEARCH_PREFLIGHT_INPUTS (the run's --send files, a
-                    directory it may make and add to: an admitted run gets it as <run>/inputs), RESEARCH_PREFLIGHT_TOOL (the run's
-                    --tool; empty for --preflight TOOL) and, with custody, RESEARCH_PREFLIGHT_CUSTODY (the staged key's dir).  A
-                    declaration that cannot be read refuses the run.  `--preflight TOOL` runs TOOL's preflight before a run of anything
-                    else (a Lean record regeneration on a check pod), and refuses when the tree declares none.  job.json
-                    run.remote.preflight and the launch's answer carry its report.
+                    stderr as the reason.  It gets the runner's environment plus RESEARCH_PREFLIGHT_INPUTS (the run's --send files) and,
+                    with custody, RESEARCH_PREFLIGHT_CUSTODY (the staged key's dir).  A declaration that cannot be read refuses the run.
+                    `--preflight TOOL` runs TOOL's preflight before a run of anything else (a Lean record regeneration on a check
+                    pod), and refuses when the tree declares none.  job.json run.remote.preflight and the launch's answer carry its report.
     observe/fetch   `research fetch <id>` copies the small records (or --all files) into the local run dir over one ssh+tar, extracted
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
@@ -1175,8 +1173,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         if holder and holder != run_id:
             raise Refused(f"machine is exclusively held by run {holder} (still live); not starting {run_id}")
         if pf_argv := tool_preflight(req.get("harness_args") or [], src_dir, req.get("preflight_tool")):
-            pf_env = {**env, "RESEARCH_PREFLIGHT_INPUTS": str(request_path.parent / "inputs"),
-                      "RESEARCH_PREFLIGHT_TOOL": "" if req.get("preflight_tool") else flag_value(req.get("harness_args") or [], "--tool") or ""}
+            pf_env = {**env, "RESEARCH_PREFLIGHT_INPUTS": str(request_path.parent / "inputs")}
             if req.get("custody"):
                 pf_env["RESEARCH_PREFLIGHT_CUSTODY"] = str(request_path.parent / CUSTODY_DIR)
             remote["preflight"] = preflight = run_preflight(pf_argv, src_dir, pf_env)
@@ -1197,7 +1194,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
             (request_path.parent / CUSTODY_DIR / "cred.json").unlink(missing_ok=True)
         from .store.custody import drop_credentials
 
-        drop_credentials(request_path.parent)     # sent or preflight-signed URLs: no run will take them out of the staged inputs/
+        drop_credentials(request_path.parent)     # sent URLs: no run will take them out of the staged inputs/
         pf = {"preflight": e.report} if isinstance(e, PreflightFailed) and e.report else {}
         write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": str(e), "fault": type(e).__name__, "at_utc": utc_now_ms(), **pf})
         return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": False, "refused": str(e), "fault": type(e).__name__, **pf}
