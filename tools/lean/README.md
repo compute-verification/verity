@@ -231,6 +231,22 @@ used. To see what upstream has proved since the pinned revision, run `upstream.p
 `research run` of it tells us when a bump would gain something. A document's "status upstream" line cites this output
 instead of asserting a status.
 
+## Splitting a spec from its proofs: `split.py`
+
+`python tools/lean/split.py PKG --area NAME [--keep MODULE ...] [--apply]` moves a package's proofs into a Lake package of
+their own, `security_proofs/NAME/`, that requires the spec by path. The spec is what the lock trusts: the modules under the
+roots' `Protocol`, `Assumptions` and `Guarantees`, the modules `reads` names, any `--keep` names (a spec module under a
+proof's name, kept with its name), and the package's tools that import only those. It refuses when a spec module imports a
+proof module, and prints the edges. Module names are kept, so `guarantees` and `reads` stay byte for byte; `roots` and the
+`exempt`, `runs`, `layers` and `upstream` entries about moved modules go to the new package's `lean-audit.json`. Without
+`--apply` it prints the plan. With it, it also gives every package that imports a moved module a require of the new one,
+re-keys `tools/lean/lean-deps.json` to the same bundles, rewrites the moved files' repository paths, and lists the mentions
+it can't rewrite.
+
+The two packages share a root namespace, which Lake builds but Lean's search path does not resolve: a module goes to the
+first `LEAN_PATH` directory holding its root (`Verity/`), so `lake env lean FILE` in the proofs package fails on a spec
+import, and so would the audit's `Facts.lean` and `Replay.lean`. Use `lake lean FILE` there, which passes Lake's import map.
+
 ## The build cache: `cache.py`
 
 Integration publishes the build of each package at every merged commit, and a development machine restores the newest one
