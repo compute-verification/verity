@@ -6,7 +6,7 @@ import Pous.Protocol.Accounting.EraseMeets
 # Secure erasure: volatile memory in full use through the spot reads
 
 Added on 4 Oct 2026, under the model Daniel set that day: the disks are unplugged, so the prover's memory is volatile
-only (HBM and host DRAM), and the audit is a proof of memory utilization. The game is
+only (device memory and host DRAM), and the audit is a proof of memory utilization. The game is
 `Pous/Protocol/Model/SecureErasure.lean`, the requirement `EraseMeets` (`Pous/Protocol/Accounting/EraseMeets.lean`).
 Proofs: `Pous/SecurityProofs/SecureErasure/`.
 
@@ -14,7 +14,7 @@ Proofs: `Pous/SecurityProofs/SecureErasure/`.
 incompressibility of the keyed fill there (the band's `TimedINC`, proved, `PousSpongeChain.chainExPostFactoG_v6`): a
 timed spot read within `(D, Q)` needs the block, or what it takes to rebuild it within `D` rounds, in memory. No named
 assumption. **No bandwidth-separation premise:** none of them reads or assumes the host-link bound `TwoTierBandwidth`
-(PR #1010, dropped on 3 Oct 2026); HBM and host DRAM count alike.
+(PR #1010, dropped on 3 Oct 2026); device memory and host DRAM count alike.
 -/
 
 namespace Pous.Guarantees
@@ -76,10 +76,10 @@ Cite it as "cannot keep it through all the reads", never as "holds at the challe
 
 `M` must be the prover's whole volatile memory, on-chip SRAM included; with host DRAM, `N` is the total over 32 MiB.
 `N = 3072` is 96 GiB (`SecureErasureMeets96GiB`), the GDDR7 an RTX PRO 6000 has, but no fill covers all of it: software
-sees about 95 GiB, and the 4 Oct 2026 calibration filled 93.86 GiB (`N = 3003`). On one device the guarantee holds at
-the `N` the fill reaches, and the memory outside the fill adds to what a prover can keep. The read deadline `T_read` is a symbol: any
-deadline within which the prover completes at most 5 rounds of `Π₂` calls and `2^20` calls per answer; its hardware
-calibration is separate. The fill deadline does not enter.
+sees about 95 GiB, and the 4 Oct 2026 calibration filled 93.86 GiB, so `N = 3003` whole segments (93.84 GiB). On one
+device the guarantee holds at the `N` the fill reaches, and the memory outside the fill adds to what a prover can keep.
+The read deadline `T_read` is a symbol: any deadline within which the prover completes at most 5 rounds of `Π₂` calls
+and `2^20` calls per answer; its hardware calibration is separate. The fill deadline does not enter.
 
 The numbers: `9593/10000` bounds the band's certified per-read success `p₀` at `⌊ρ·|C|⌋` bits for every `N` (one
 segment is the worst, `p₀ ≈ 0.959292`), and `2152` is the least `s` with `(9593/10000)^s ≤ 2^-129`. That is more than the
@@ -104,8 +104,9 @@ per-segment tags. For every `d ≥ 5` and salt, and a prover whose whole volatil
 each spot read's arrival is at most `⌊(18/19)·|C|⌋` bits it is accepted with probability at most `2^-128`, and if it
 keeps at least `96 GiB / 19 + 32` bytes (about 5.05 GiB) of foreign content through the 2152 spot reads it wins with
 probability at most `2^-128`. 96 GiB is an RTX PRO 6000's GDDR7, but one device cannot hold this fill (about 95 GiB is
-visible to software); for one device, cite the family at the `N` its fill reaches. Same footing as the family: no named
-assumption, no bandwidth-separation premise. Proof: `PousErase.secure_erasure_meets_96GiB`. -/
+visible to software); for one device, cite the family at the `N` its fill reaches, with the memory outside the fill
+added to what a prover can keep. Same footing as the family: no named assumption, no bandwidth-separation premise.
+Proof: `PousErase.secure_erasure_meets_96GiB`. -/
 def SecureErasureMeets96GiB : Prop :=
   ∀ d : ℕ, 5 ≤ d → ∀ salt : Bits 192,
     EraseMeets (Pous.BandMulti.chainBandSeg 3072 (2 ^ 9) d 524288 512 (Pous.BandMulti.segDom salt (2 ^ 9)))

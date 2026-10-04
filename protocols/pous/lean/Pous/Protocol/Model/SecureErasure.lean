@@ -4,7 +4,7 @@ import Pous.Protocol.Model.Audit
 # The secure-erasure audit: volatile memory in full use through the spot reads
 
 Added on 4 Oct 2026, under the model Daniel set that day: the disks are unplugged, so the prover's memory is volatile
-only (HBM and host DRAM), and the audit is a proof of memory utilization. A prover declares `S` bits of volatile memory;
+only (device memory and host DRAM), and the audit is a proof of memory utilization. A prover declares `S` bits of volatile memory;
 the audit asks it to fill them with the keyed fill `C` and then reads `C` back at random places under a short deadline.
 `EraseMeets` (`Pous/Protocol/Accounting/EraseMeets.lean`) states the requirement over this game.
 
@@ -38,7 +38,7 @@ arrivals, which is what the guarantee is about; unlike the storage audit (`Pous/
 rounds are bounded"), it needs no link to storage at rest, and a prover may recompute anything during the audit within
 its memory.
 
-**What the game does not model.** The bandwidth between memory tiers: HBM and host DRAM count alike, and no statement
+**What the game does not model.** The bandwidth between memory tiers: device memory and host DRAM count alike, and no statement
 over this game rests on a bandwidth-separation premise (the host-link assumption `TwoTierBandwidth` was dropped on
 3 Oct 2026). Memory the prover has beyond the `S` bits it declares: `S` must be all of its volatile memory.
 
