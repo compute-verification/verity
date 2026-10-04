@@ -762,6 +762,9 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         print(f"research: run {run_id} refused on {ns.on} ({launch.get('fault') or 'Refused'}): {launch.get('refused')}  (recorded in {run_dir})", file=sys.stderr)
         return 3
     print(f"research: run {run_id} launched on {ns.on} ({rec['pod_id']}) pid={launch.get('runner_pid')} -> {rec['remote_run_dir']}", file=sys.stderr)
+    if launch.get("unconfirmed"):
+        print(f"research: {ns.on} could not confirm its runner is up ({launch['unconfirmed']}); `research fetch {run_id}` says how it went",
+              file=sys.stderr)
     if launch.get("first_record") == "disk-hold":
         print(f"research: {ns.on} holds it for disk before its runner starts (research disk-hold, in its launcher.log)", file=sys.stderr)
     print(f"research: workload cwd: {rec.get('workload_cwd') or remote.WORKLOAD_CWD_DEFAULT}", file=sys.stderr)
