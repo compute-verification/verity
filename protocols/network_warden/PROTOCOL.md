@@ -270,6 +270,9 @@ them.
     anchor's next bucket at the earliest, so it is never handed into an unfaulted window.
   - A request released in an ingress window's last bucket has its window published before the deadline, so its
     lateness shows on egress only.
+- **A dropped queue.** A fault drops the queue, but the Program's grid carries queued frames into the next window (FIFO
+  across windows). So an egress window that closes faulted while its queue would still hold frames faults the next
+  one too, with the same reason, until a faulted window closes with none.
 - **The slack** bounds how late a tick may run: 25 ms by default, a quarter bucket. A deployment sets it from the jitter
   its timing bounds assume (J).
 
@@ -316,8 +319,8 @@ statements on examples and prove nothing. By name, they mirror 19 of the Lean pa
   - an honest run's records, hand times and wire are the Program's, accepted raw and committed;
   - senders that burst, spread, or pick their write times at random or by bits give the same wire, byte for byte;
   - a frame held past every sync is a mismatch;
-  - a late tick, an overrun, a refused stream, a request forwarded a bucket late and out-of-set advice each fail
-    closed;
+  - a late tick, an overrun, a refused stream, a request forwarded a bucket late, a fault that drops a carried queue
+    and out-of-set advice each fail closed;
 
 No test mirrors the other eight pins of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
 `SecurityProofs.EncardDecodableLe`, `SecurityProofs.NoFaultOfAccepted`, `SecurityProofs.RecordedRowEqFill`,

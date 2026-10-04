@@ -128,6 +128,31 @@ def test_out_of_set_advice_duplicates_and_overflow_fail_closed():
     assert shaper.warden._fault is Reason.OVERFLOW
 
 
+def test_a_fault_that_drops_a_carried_queue_faults_the_next_window():
+    """Five streams' first frames are due at bucket 2 at r = 1, so the Program's grid carries three into window 1. A
+    fault in window 0 drops them: window 1 is faulted too, with the same reason, not a mismatch, and window 2, which
+    nothing reaches, is complete. With one stream, whose frames are spaced, nothing is carried and window 1 is
+    complete."""
+    P = GridParams(buckets=4, allocation=1, frame_bytes=1)
+    sync_set = SyncSet((0,), (1,))
+    syncs = [ClockSync(0, 1)] * 3
+    for frames, statuses in (([LogicalFrame(bytes([k]), 2, 0) for k in range(5)], [Reason.MONITOR_UNAVAILABLE] * 2),
+                             ([LogicalFrame(bytes([k]), 2, k) for k in range(4)], [Reason.MONITOR_UNAVAILABLE])):
+        shaper, records = Shaper(Warden("responses", P), syncs, sync_set), []
+        for t in range(len(syncs) * P.buckets):
+            if t == 2:
+                for k, frame in enumerate(frames):
+                    shaper.arrive(k, frame, 2)
+            if t == 3:
+                shaper.warden.fault(Reason.MONITOR_UNAVAILABLE)
+            if (record := shaper.tick()[1]) is not None:
+                records.append(record)
+        statuses += [None] * (len(syncs) - len(statuses))
+        assert [r.status.reason for r in records] == statuses
+        expected = expected_grids(frames, syncs, P)
+        assert all(r.grid == expected[r.window] for r in records if r.status.complete)
+
+
 def test_the_bucketer_enqueues_at_the_next_boundary():
     """Frames arriving at bucket time s go out at ⌈s⌉, at most r_in per bucket, FIFO."""
     P = GridParams(buckets=4, allocation=1, frame_bytes=1)

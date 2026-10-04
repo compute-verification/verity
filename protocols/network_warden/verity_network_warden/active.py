@@ -27,7 +27,8 @@ model) and released by the ingress `Warden` at r_in into its stream's server con
 A frame anchored past them is never handed, nor is any frame behind it (`schedule.handing_buckets`).
 
 **Faults fail closed** through `Warden.fault`: the rest of the window is padding, the queue is dropped, and the status
-names the first reason (W6). They are:
+names the first reason (W6). Since the Program's grid carries a queue into the next window, an egress window that
+closes faulted while its queue would still hold frames faults the next one too, with the same reason. They are:
 - a late tick (`monitor-unavailable`): the ticker woke more than `slack` after its boundary. A bucket it missed is
   still emitted, as padding, so every window keeps its T rows and no bucket slips into the next;
 - an overrun: the link still holds a whole bucket unwritten at a tick (`delivery-refused`), or the queue or the
@@ -112,13 +113,16 @@ class Shaper:
 
     `arrive` takes a frame at its canonical position with its ready bucket; `tick` hands what is due at the current
     bucket by `run_shaper`'s rule, ticks the warden and returns its row, with the window's record at its last bucket.
-    Fed every frame at its ready bucket, the records equal `run_shaper`'s and `hands` its hand times."""
+    Fed every frame at its ready bucket, the records equal `run_shaper`'s and `hands` its hand times.
+
+    `queued` is what the warden's queue would hold had no fault dropped it. A window that closes faulted with frames
+    still queued faults the next one too, with the same reason: the Program's grid carries them over."""
 
     def __init__(self, warden: Warden, syncs: Sequence[ClockSync], sync_set: SyncSet) -> None:
         self.warden, self.syncs, self.sync_set = warden, list(syncs), sync_set
         self.pending: dict[int, tuple[LogicalFrame, int]] = {}
         self.next = 0
-        self.h = self.last = self.t = 0
+        self.h = self.last = self.t = self.queued = 0
         self.hands: list[int] = []
         self._check_advice()
 
@@ -150,11 +154,15 @@ class Shaper:
             self.h, self.last, self.next = h, hand, self.next + 1
             self.hands.append(hand)
             self.warden.enqueue(frame.payload)
+            self.queued += 1
         row = self.warden.tick()
+        self.queued -= min(self.queued, self.warden.params.allocation)
         self.t += 1
         record = None
         if self.t % T == 0:
             record = self.warden.close_window()
+            if self.queued and not record.status.complete:
+                self.warden.fault(record.status.reason)
             self._check_advice()
         return row, record
 
