@@ -59,6 +59,7 @@ in the call's session (b is the sub-tile's column count):
                                           per 32 columns, at most four), two bytes per word, low
                                           byte first, then zero words
 
+A hiding sub-tile writes each of its a sub-cu rows as an output port of its own (`tilesub.SubTile8Def`, `SubTile4Def`).
 sub-cu is short for every b of `tilesub.SUBS` but 16, where it is one block.  tile-chunks' zero words make it one whole
 block, so the units that read only sub-cu and tile-chunks rows still compress a block, which C-Flock's `compose` needs.
 

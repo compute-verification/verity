@@ -2,9 +2,9 @@
 over them are `PearlTileDigest` composed, `pearl_c.leaf` byte for byte and the pinned tile-chunks rows; the cut roots give
 today's roots' outputs, plain and hiding, for Pearl-C on the H100, sm_120 and sm_120 unpromoted and for Pearl-C4, with and
 without the row cut, with the same computing gates, and their partition computes every value in exactly one unit; a sub-tile
-is today's tile template at a × b; each piece's ports are committed rows of `leaves`' schemas, short or whole blocks, and none
-reads a public input region; a drawn sub-tile is proved with its whole tile; and with ``tile_sub`` unset nothing is the
-cut's."""
+is today's tile template at a × b, under hiding rewired (`SubTile`) to one output port per sub-cu row; each piece's ports
+are committed rows of `leaves`' schemas, each output row one port, short or whole blocks, and none reads a public input
+region; a drawn sub-tile is proved with its whole tile; and with ``tile_sub`` unset nothing is the cut's."""
 from __future__ import annotations
 
 import json
@@ -153,6 +153,41 @@ def test_the_cut_roots_give_todays_outputs(shape, hidden):
         assert got[:-(shape.m + n)] == CF.tile_digests(shape.tile, rows(c), rows(u))
 
 
+def _tile_at(shape):
+    """Today's tile template at the shape's sub-tile."""
+    args = (shape.k, shape.tile_sub, shape.dev) if _mod(shape) is pc8 else (shape.k, shape.tile_sub)
+    return _mod(shape).templates(*args)["tile"]
+
+
+def _sub_tile(shape):
+    """A sub-tile's unit template: today's tile template at a × b, or under hiding its `SubTile` wrapper."""
+    if not shape.hidden:
+        return _tile_at(shape)
+    return (tilesub.sub_tile8(shape.k, shape.tile_sub, shape.dev) if _mod(shape) is pc8
+            else tilesub.sub_tile4(shape.k, shape.tile_sub))
+
+
+@pytest.mark.parametrize("shape", SHAPES, ids=IDS)
+def test_a_hiding_sub_tile_writes_one_output_per_sub_cu_row(shape):
+    """A hiding sub-tile's unit (`SubTile`) is today's tile template at a × b, rewired with no computing gate: its output r
+    is row r of C̃ then row r of U, the sub-cu row's elements, one output port per committed row."""
+    cut = replace(shape, hidden=True)
+    sub, tile = _sub_tile(cut), _tile_at(cut)
+    (sa, sb), body = shape.tile_sub, sub.body
+    assert [nd.fn.id for nd in body.nodes] == [tile.id]
+    params, out = sub.signature()
+    assert params == tile.signature()[0] and len(out.fields) == sa
+    assert all(f.leaf_widths() == [32] * (2 * sb) for f in out.fields)
+    rng = random.Random(sa * 10 + sb)
+    args = [[rng.getrandbits(sum(t.leaf_widths()) // len(t.leaf_widths())) for _ in t.leaf_widths()] for _p, t in params]
+    whole = evaluate(tile, *args)
+    c, u, got = whole[:sa * sb], whole[sa * sb:], evaluate(sub, *args)
+    for r in range(sa):
+        row = got[r * 2 * sb:(r + 1) * 2 * sb]
+        assert row == c[r * sb:(r + 1) * sb] + u[r * sb:(r + 1) * sb]
+        assert L.words_sub_cu(row[:sb], row[sb:]) == L.words_fp32(row)
+
+
 def _counts(shape, side: str) -> dict[str, int]:
     (tm, tn), (sa, sb), (m, n) = shape.tile, shape.tile_sub, (shape.m, shape.n)
     rows = {"row_b": n, "row_a": m}
@@ -188,8 +223,7 @@ def test_the_cut_computes_every_value_in_exactly_one_unit(shape, side, hidden):
         rs, cs = grid[role]
         assert [u.where for u in us if u.role == role] == ([(r, c) for r in range(rs) for c in range(cs)]
                                                            if role in _counts(cut, side) else [])
-    args = (shape.k, shape.tile_sub, shape.dev) if mod is pc8 else (shape.k, shape.tile_sub)
-    sub_tile = mod.templates(*args)["tile"]
+    sub_tile = _sub_tile(cut)
     assert {nd.fn.id for nd in fn.body.nodes if nd.fn.defn is sub_tile.defn} == {sub_tile.id}
     assert {u.template for u in us if u.role == "tile"} == {descriptor_id(sub_tile)}
     part = PO.evaluate(prog, q)
@@ -214,17 +248,22 @@ def test_the_deployed_sub_tile_is_todays_tile_template_at_2x2():
             pc8.Shape(64, 4096, 64, hidden=hidden, tile_sub=sub).check()
             pc4.Shape(64, 4096, 64, hidden=hidden, tile_sub=sub).check()
     shape = pc8.Shape(2, 128, 2, tile=(2, 2), dev="h100", tile_sub=(1, 1), hidden=True)
-    assert tilesub.unit_templates8(shape, "call")[1:] == [pc8.templates(128, (1, 1), "h100")["tile"], L.row_chunks(2, 1),
+    assert tilesub.unit_templates8(shape, "call")[1:] == [tilesub.sub_tile8(128, (1, 1), "h100"), L.row_chunks(2, 1),
                                                           L.tile_leaf(2, 2)]
+    assert tilesub.unit_templates8(replace(shape, hidden=False), "call")[1:] == [pc8.templates(128, (1, 1), "h100")["tile"]]
+    for sub in (tilesub.sub_tile8(4096, tilesub.TILE_SUB, "sm120"), tilesub.sub_tile4(4096, tilesub.TILE_SUB)):
+        tile = (pc8.templates(4096, (2, 2), "sm120") if sub.defn is tilesub.SubTile8Def else pc4.templates(4096, (2, 2)))
+        assert [nd.fn for nd in sub.body.nodes] == [tile["tile"]]
 
 
 # ---- the ports, the anchors and the layout --------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("shape", SHAPES, ids=IDS)
 def test_the_ports_are_each_pieces_committed_rows(shape):
-    """Each tile piece's ports (`tilesub.PORTS8`, `PORTS4`) list every parameter and output once: a sub-tile its a rows of
-    A's and b rows of B's data rows and a sub-cu row per row of it, a row digest its TN / b sub-cu rows and its tile-chunks
-    row, the leaf its TM tile-chunks rows and today's tile row; the rows' are today's or the row cut's."""
+    """Each tile piece's ports (`tilesub.PORTS8`, `PORTS4`, at the sub-tile's a) list every parameter and output once: a
+    sub-tile its a rows of A's and b rows of B's data rows and its a sub-cu rows, each one output port alone (a one-port
+    v2 row, at a = 1 too), a row digest its TN / b sub-cu rows and its tile-chunks row, the leaf its TM tile-chunks rows
+    and today's tile row, each of those one output port too; the rows' are today's or the row cut's."""
     cut = replace(shape, hidden=True)
     ports = cut.ports
     mod = _mod(shape)
@@ -232,10 +271,13 @@ def test_the_ports_are_each_pieces_committed_rows(shape):
     assert set(ports) == set(rows) | set(tilesub.ROLES)
     assert all(ports[r] == rows[r] for r in rows if r != "tile")
     (tm, tn), (sa, sb) = shape.tile, shape.tile_sub
-    args = (shape.k, shape.tile_sub, shape.dev) if mod is pc8 else (shape.k, shape.tile_sub)
     a_ports, b_ports = (("ac", "pa"), ("bc", "pb")) if mod is pc8 else (("ac", "as", "pa"), ("bc", "bs", "pb"))
-    CF.check_ports(mod.templates(*args)["tile"], ports["tile"], cut.derivations, shape.k,
-                   dict.fromkeys(a_ports, sa) | dict.fromkeys(b_ports, sb) | {0: sa, 1: sa}, {"sub-cu": sb})
+    CF.check_ports(_sub_tile(cut), ports["tile"], cut.derivations, shape.k,
+                   dict.fromkeys(a_ports, sa) | dict.fromkeys(b_ports, sb), {"sub-cu": sb})
+    for role in tilesub.ROLES:
+        outs = [ps for _schema, _role, ps in ports[role]["rows"] if all(type(p) is int for p in ps)]
+        assert all(len(ps) == 1 for ps in outs), (role, outs)
+    assert [ps for schema, _r, ps in ports["tile"]["rows"] if schema == "sub-cu"] == [(r,) for r in range(sa)]
     CF.check_ports(L.row_chunks(tn, sb), ports["row_digest"], cut.derivations, shape.k, {"c": tn // sb, "u": tn // sb},
                    {"sub-cu": sb})
     CF.check_ports(L.tile_leaf(tm, tn), ports["tile_leaf"], cut.derivations, shape.k, {"d": tm})
@@ -307,8 +349,9 @@ def test_shapes_off_the_cut_are_refused():
 def test_off_the_cut_nothing_is_the_cuts():
     """With ``tile_sub`` unset the roots, queries, units, ports and anchors are today's (or the row cut's): no root, template
     or role of the tile cut's."""
-    cut_ids = {id(d) for d in tilesub.ROOTS} | {id(L.PearlRowChunksDef), id(L.PearlTileLeafDef)}
-    assert len(cut_ids) == 16 + 2
+    cut_ids = {id(d) for d in tilesub.ROOTS} | {id(d) for d in (tilesub.SubTile8Def, tilesub.SubTile4Def,
+                                                                L.PearlRowChunksDef, L.PearlTileLeafDef)}
+    assert len(cut_ids) == 16 + 4
     for mod, shape in ((pc8, pc8.Shape(4, 128, 8, tile=(2, 4))), (pc4, pc4.Shape(4, 64, 8, tile=(2, 4))),
                        (pc8, pc8.Shape(2, 256, 2, tile=(1, 2), row_k=128)), (pc4, pc4.Shape(2, 128, 2, tile=(1, 2), row_k=64))):
         for shape_ in (shape, replace(shape, hidden=True)):
@@ -322,7 +365,9 @@ def test_off_the_cut_nothing_is_the_cuts():
         assert json.dumps(mod.query(shape, "check")) == json.dumps(
             PO.template_instances_query([mod.templates(shape.k, shape.tile, *args)[r] for r in mod.ROLES["check"]]))
         assert mod.Shape.ports is mod.PORTS and mod.Shape.derivations is mod.DERIVATIONS
-        cut = replace(shape, tile_sub=(1, 1))
-        assert cut.ports is (tilesub.PORTS8 if mod is pc8 else tilesub.PORTS4) and cut.derivations is mod.DERIVATIONS
-        assert replace(cut, row_k=64 if mod is pc4 else 128).ports is (
-            tilesub.PORTS8_ROWK if mod is pc8 else tilesub.PORTS4_ROWK)
+        for sub in ((1, 1), (2, 4)):
+            cut = replace(shape, tile_sub=sub)
+            assert cut.ports is (tilesub.PORTS8 if mod is pc8 else tilesub.PORTS4)[sub[0]]
+            assert cut.derivations is mod.DERIVATIONS
+            assert replace(cut, row_k=64 if mod is pc4 else 128).ports is (
+                tilesub.PORTS8_ROWK if mod is pc8 else tilesub.PORTS4_ROWK)[sub[0]]

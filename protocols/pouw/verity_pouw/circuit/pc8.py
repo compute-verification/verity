@@ -374,6 +374,9 @@ def _call_units(B, k: int, tile: tuple[int, int], dev: str, a, ea, fa, fb, bc, p
     A row's unit cut into `rowk`'s pieces, and with ``sub`` each tile's into `tilesub`'s sub-tiles and digest units."""
     tm, tn = sub or tile
     tp = templates(k, sub or tile, dev, hidden and sub is None)
+    if hidden and sub is not None:
+        from . import tilesub
+        tp = tp | {"tile": tilesub.sub_tile8(k, sub, dev)}
     m, n = len(a), len(bc)
     if row_k is None:
         rows = B.batch(tp["row_a"], a, ea, fa, fb, axes=(0, 0, None, None))

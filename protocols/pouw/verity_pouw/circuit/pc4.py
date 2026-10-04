@@ -354,8 +354,8 @@ def templates(k: int, tile: tuple[int, int] = TILE, hidden: bool = False) -> dic
 class Cut:
     """A tile check's `Shape` attribute (``ports``, ``derivations``) that is ``today`` on the class and on a shape with
     neither cut; with ``row_k`` set `rowk`'s attribute ``name`` (the row cut's roles and anchors), and with ``tile_sub`` set
-    `tilesub`'s where it has one (its ports: ``name``, or with ``row_k`` too ``name``_ROWK).  So the class and every shape
-    without a cut read today's dicts, which neither module changes."""
+    `tilesub`'s where it has one (its ports: ``name``, or with ``row_k`` too ``name``_ROWK, at the sub-tile's row count).
+    So the class and every shape without a cut read today's dicts, which neither module changes."""
 
     def __init__(self, today: dict, name: str) -> None:
         self.today, self.name = today, name
@@ -365,7 +365,8 @@ class Cut:
             return self.today
         from . import rowk, tilesub
         if shape.tile_sub is not None and hasattr(tilesub, self.name):
-            return getattr(tilesub, self.name + ("" if shape.row_k is None else "_ROWK"))
+            tilesub.check(shape)
+            return getattr(tilesub, self.name + ("" if shape.row_k is None else "_ROWK"))[shape.tile_sub[0]]
         return self.today if shape.row_k is None else getattr(rowk, self.name)
 
 
@@ -414,6 +415,9 @@ def _call_units(B, k: int, tile: tuple[int, int], a, ea, fa, fb, bc, bs, pb, hid
     A row's unit cut into `rowk`'s pieces, and with ``sub`` each tile's into `tilesub`'s sub-tiles and digest units."""
     tm, tn = sub or tile
     tp = templates(k, sub or tile, hidden and sub is None)
+    if hidden and sub is not None:
+        from . import tilesub
+        tp = tp | {"tile": tilesub.sub_tile4(k, sub)}
     m, n = len(a), len(bc)
     if row_k is None:
         rows = B.batch(tp["row_a"], a, ea, fa, fb, axes=(0, 0, None, None))

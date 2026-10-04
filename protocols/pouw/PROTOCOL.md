@@ -838,17 +838,22 @@ useful    U/(α_A·α_B), glue
   - **The tile cut (`circuit.tilesub`, ``Shape.tile_sub``) is opt-in** too, for both checks. A whole 64 × 64 tile unit is
     4,096 words' chains over k, 2^32 bits or more at every served k. A shape with ``tile_sub = (a, b)`` (each of a and b
     one of 1, 2, 4, 8 and 16, dividing the tile; (2, 2) deployed, `tilesub.TILE_SUB`) cuts each tile unit into sub-tiles
-    of a × b words, each today's tile template at a × b (`templates(k, (a, b))["tile"]`), one unit a sub-tile.
+    of a × b words, each today's tile template at a × b (`templates(k, (a, b))["tile"]`), one unit a sub-tile. Under
+    hiding the unit is `Pc8SubTile` or `Pc4SubTile` (`tilesub.SubTile8Def`, `SubTile4Def`): that template with its
+    outputs rewired, wiring only, as one output port per tile row, row r of C̃ then row r of U. So each sub-cu row is
+    one port, which C-Flock commits as a one-port v2 row of exactly its words, as the hidden-output soundness proofs
+    take; at a = 1 too, where the template's (C̃, U) would be a run of two ports.
     - Under hiding the tile digest is two more templates: `PearlRowChunks{TN,SB}`, one unit per row of A and tile
       column, reads the row's TN / b sub-tile rows of C̃ ‖ U and computes its chunk digests (TurboSHAKE128, D = 0x21);
       `PearlTileLeaf{TM,TN}`, one unit per tile, reads its TM rows' chunk digests and computes the leaf (D = 0x22).
       Composed they are `PearlTileDigest`, so the leaf writes today's tile-h0 row and the roots return today's outputs.
       A 64 × 64 tile at (2, 2) is 1,024 sub-tiles, 64 row digests and one leaf; every value is computed in exactly one
       unit.
-    - They pass their values in two more v2 rows (`tilesub.PORTS8`, `PORTS4`): `leaves`' sub-cu, 4b words, a sub-tile
-      row's b C̃ words then its b U words (short for b ≤ 8, one block at 16); and tile-chunks, 64 words, a tile row's
-      chunk digests (at most four, so a hiding cut takes TN ≤ 128) then zero words to one whole block, so a unit that
-      reads only these rows still compresses a block, as C-Flock's `compose` needs. No piece reads a public input region.
+    - They pass their values in two more v2 rows (`tilesub.PORTS8`, `PORTS4`, by the sub-tile's a), each one output port
+      of its writer: `leaves`' sub-cu, 4b words, a sub-tile row's b C̃ words then its b U words (short for b ≤ 8, one
+      block at 16); and tile-chunks, 64 words, a tile row's chunk digests (at most four, so a hiding cut takes TN ≤ 128)
+      then zero words to one whole block, so a unit that reads only these rows still compresses a block, as C-Flock's
+      `compose` needs. No piece reads a public input region.
     - A drawn sub-tile is proved with its whole tile (`plan.tile_layout`): the tile's other sub-tiles, under hiding its
       row digests and its leaf, and its rows of A's and of B's units. The tile stratum is the sub-tiles, each at the W_ref
       the caller gives a sub-tile.
