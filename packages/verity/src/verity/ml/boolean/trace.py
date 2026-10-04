@@ -5,10 +5,11 @@ in order), each a list of forms LSB first, as C-Flock's pieces take one argument
 list of forms (one element) or a list of elements, those of the return type in order.
 
 `trace` runs it once on a `Circuit` whose forms remember how they were made (`TL`: the XOR of two forms, or the NOT of one),
-and keeps the ANDs live in the outputs. Each AND becomes one `And2_v1`; each AND operand and each output is written as the
-XORs and NOTs the builder made it by (identical forms share one wire), or, for a form the builder did not make from tracked
-forms, as a balanced XOR tree over its bits. So the gate circuit has exactly the builder's live ANDs, and its XOR and NOT gates
-are the builder's own linear work.
+and keeps the ANDs live in the outputs. Each AND becomes one `And2_v1`, except a committed copy (an AND with the constant 1,
+``A = form, B = 1``, as `sha512.commit` writes one), which becomes no gate: its bit is its form's wire. Each AND operand and each
+output is written as the XORs and NOTs the builder made it by (identical forms share one wire), or, for a form the builder did
+not make from tracked forms, as a balanced XOR tree over its bits. So the gate circuit has exactly the builder's live ANDs (its
+copies none), and its XOR and NOT gates are the builder's own linear work.
 
 `emit` writes a traced circuit into a body, laid out level by level: each node is a batch of one gate kind over gates of equal
 depth, its operands named explicitly. `definition` wraps a builder as a `CompositeDefinition` whose body is its traced circuit,
@@ -25,7 +26,7 @@ from verity.ir.defs import CompositeDefinition, FunctionDefinition, SpecializedD
 from verity.ir.refs import Affine, Coll, Explicit, Ref, concat
 from verity.ir.types import Array, Type
 
-from .forms import Circuit, L
+from .forms import ONE, Circuit, L
 
 __all__ = ["TL", "Traced", "TracingCircuit", "definition", "emit", "trace", "word_of"]
 
@@ -201,6 +202,9 @@ def trace(build: Callable, params: Sequence[Type], ret: Type, *, cse: bool = Tru
 
     for v in sorted(v for v in live if C.kind[v] == "and"):
         a, b = C.data[v]
+        if ONE.key() in (a.key(), b.key()):
+            wire_of_bit[v] = wire(b if a.key() == ONE.key() else a)
+            continue
         wire_of_bit[v] = gate("and", wire(a), wire(b))
     outputs = [wire(f) for f in outs]
     gates, outputs = _prune(first, gates, outputs)
