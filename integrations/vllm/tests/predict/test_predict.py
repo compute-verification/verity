@@ -176,7 +176,8 @@ def test_the_biased_linear_follows_the_targets_rule(target, kind):
     (TINY, {"sampling": {**STOCH, "splits": None}}, "without a split count"),
     (TINY, {"sampling": {"kind": "mixed"}}, "sampling 'mixed'"),
     (TINY, {"tp": {"world": 4, "rank": 0}}, "tensor parallel world 4"),
-    ({**TINY, "num_key_value_heads": 1}, {"tp": {"world": 2, "rank": 0}}, "4 query and 1 key/value heads over 2 ranks"),
+    ({**TINY, "hidden_size": 96, "num_attention_heads": 6, "num_key_value_heads": 3}, {"tp": {"world": 2, "rank": 0}},
+     "6 query and 3 key/value heads over 2 ranks"),
     ({**TINY, "vocab_size": 250}, {"tp": {"world": 2, "rank": 1}}, "a vocabulary of 250 over 2 ranks"),
     (TINY, {"tp": {"world": 2, "rank": 0}, "sampling": dict(STOCH)}, "stochastic sampling under tensor parallelism"),
 ])
