@@ -18,7 +18,7 @@ tokens), and then re-binds every resulting `Attention_v3{T,NH,KVH,D,BN}` compute
 same operands / outputs / attribution / consumed ids.  `softcap` in `(None, 0.0)` is the base pattern's case (returns None); a negative,
 NaN or infinite `softcap` is Unsupported here (FA2 takes the softcap path iff `softcap > 0`; the Definition requires `CAP > 0`).
 
-The Definition was promoted to `registry.dense` after the r8 window (R15 dense, F-dense-05); its admission record is the run's
+The Definition has since been promoted to `registry.dense`; its admission record is the run's
 `quarantine.json` (per-Definition difftest record, `verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json`, inherited by `cov_pod.sh`).
 """
 from __future__ import annotations
