@@ -259,8 +259,14 @@ def check_eps(EPS: float) -> None:
         raise ValueError(f"DsaIndexerKRow: EPS {EPS} below 2^-126 (rsqrt.approx.ftz and RsqrtApprox agree on operands from there)")
 
 
-def _row(B, D: int, words: list):
-    return Coll(Array(D, F32), concat([r.refs for r in words]))
+def _row(D: int, words: list, t=F32):
+    return Coll(Array(D, t), concat([r.refs for r in words]))
+
+
+def k_slot(o: Ops, S, k, w, b, cs, quant, t=F32):
+    """`DsaIndexerKRow`'s body over ``o``'s steps, the quantisation a Call of ``quant`` (`DsaUe8m0Quant` at N = D)."""
+    check_eps(S.EPS)
+    return o.B.call(quant, _row(S.D, k_row(o, S.D, S.ROPE, k, w, b, cs, o.word(f32_bits(S.EPS))), t))
 
 
 @composite("DsaIndexerKRow", 1, ["D", "ROPE", "EPS"],
@@ -275,16 +281,20 @@ def DsaIndexerKRow(B, S, k, w, b, cs):
     reads), `rstd = rsqrt.approx.ftz(eps + var)` (`RsqrtApprox_v1`: the operand is at least eps, never subnormal), `n = fma(d * rstd,
     w, b)`; the interleaved RoPE (`rope_interleaved`; the kernel re-derives the partner's n from the same mean and rstd, the same
     word); then `DsaUe8m0Quant_v1{D}`: the slot's D e4m3 bytes and its f32 scale (kernels.py:76-87)."""
-    check_eps(S.EPS)
-    o = word_ops(B)
-    row = k_row(o, S.D, S.ROPE, k, w, b, cs, o.word(f32_bits(S.EPS)))
-    return B.call(bind(DsaUe8m0Quant, N=S.D), _row(B, S.D, row))
+    return k_slot(word_ops(B), S, k, w, b, cs, bind(DsaUe8m0Quant, N=S.D))
 
 
 def q_weight(o: Ops, D: int, NH: int, scale, w):
     """`index_weights *= q_scale; *= softmax_scale; *= head_scale` (kernels.py:816-826; PTX `mul.f32(scale, w)` then the two
     kernel arguments, f32(D^-0.5) and f32(NH^-0.5), each on the left)."""
     return o.mul(o.word(f32_bits(NH ** -0.5)), o.mul(o.word(f32_bits(D ** -0.5)), o.mul(scale, o.cvt(w))))
+
+
+def q_head(o: Ops, S, q, cs, w, quant, t=F32):
+    """`DsaIndexerQHead`'s body over ``o``'s steps, the quantisation a Call of ``quant``."""
+    check_row_statics(S.D, S.ROPE)
+    qs = o.B.call(quant, _row(S.D, rope_interleaved(o, [o.cvt(q[i]) for i in range(S.D)], cs, S.ROPE), t))
+    return tuple_of(qs[0], q_weight(o, S.D, S.NH, qs[1], w))
 
 
 @composite("DsaIndexerQHead", 1, ["D", "ROPE", "NH"],
@@ -294,11 +304,7 @@ def DsaIndexerQHead(B, S, q, cs, w):
     """One (token, head) of `_fused_q_kernel` program 1 (kernels.py:761-826; one warp, lane l elements l, l+32, l+64, l+96): the
     interleaved RoPE of f32(q) (`rope_interleaved`), `DsaUe8m0Quant_v1{D}` (index_q_fp8's row), and the head's weight
     (`q_weight`, index_weights_out's word).  NH is the indexer's head count (32 on GLM-5.3, replicated at every TP rank)."""
-    check_row_statics(S.D, S.ROPE)
-    o = word_ops(B)
-    row = rope_interleaved(o, [o.cvt(q[i]) for i in range(S.D)], cs, S.ROPE)
-    qs = B.call(bind(DsaUe8m0Quant, N=S.D), _row(B, S.D, row))
-    return tuple_of(qs[0], q_weight(o, S.D, S.NH, qs[1], w))
+    return q_head(word_ops(B), S, q, cs, w, bind(DsaUe8m0Quant, N=S.D))
 
 
 def heads(B, head, H: int, D: int, q, cs, w, e4m3=E4M3, f32=F32):
