@@ -50,8 +50,8 @@ def load(name: str) -> tuple[Circuit, list[tuple[int, ...]]]:
 @dataclass(frozen=True)
 class Batched:
     """The builder of a scheduler step: as many requests as the step's advice says, side by side through `circuit`,
-    sharing its baseline, each with `partition`'s regions. The advice is the batch size less one, since how the
-    scheduler batches is a runtime choice no one fixes ahead of time."""
+    sharing its baseline, each partitioned as `partition` (so each request is its own isolation units). The advice is
+    the batch size less one, since how the scheduler batches is a runtime choice no one fixes ahead of time."""
 
     circuit: Circuit
     partition: P.Partition
@@ -76,7 +76,11 @@ class Batched:
 
         gates = tuple((op, wire(j, x), wire(j, y)) for j in range(n) for op, x, y in c.gates)
         outputs = tuple(wire(j, o) for j in range(n) for o in c.outputs)
-        partition = tuple(tuple(j * len(c.gates) + g for g in region) for j in range(n) for region in self.partition)
+        partition = tuple(
+            tuple(tuple(j * len(c.gates) + g for g in region) for region in unit)
+            for j in range(n)
+            for unit in self.partition
+        )
         return Circuit(total, gates, outputs, c.baseline), partition
 
 

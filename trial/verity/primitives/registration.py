@@ -7,10 +7,10 @@ builder knows how to read. Every circuit it builds holds the baseline (weights, 
 registering the builder registers the baseline.
 
 Then the prover streams its executions as it runs them, and closes the stream: one epoch. Per execution: its advice,
-and one root over the value of every boundary wire of the partition the builder gave it (one leaf per wire, in wire
-order). The verifier rebuilds each execution's circuit from its advice: integrity opens and proves against the roots,
-work keys each execution's work from its salt and root, and NCI checks the partitions as isolation units. Every
-statement over the stream names its digest. Today's reference for the commitment:
+and one root over the value of every boundary wire of the regions of the partition the builder gave it (one leaf per
+wire, in wire order). The verifier rebuilds each execution's circuit from its advice: integrity opens and proves against
+the roots, work keys each execution's work from its salt and root, and NCI checks the partitions' isolation units.
+Every statement over the stream names its digest. Today's reference for the commitment:
 `verity_sampled_proofs.one_stage.registration`.
 
 The builder here is Python, which prover and verifier both run, standing in for a provable program (Rust under SP1, say)
@@ -79,8 +79,8 @@ def digest(registration: Registration, executions: Sequence[Execution] = ()) -> 
 
 @functools.cache
 def wires(circuit: Circuit, partition: P.Partition) -> tuple[int, ...]:
-    """Every boundary wire of the partition, in the order the root commits them."""
-    return tuple(sorted({w for region in partition for side in P.boundary(circuit, region) for w in side}))
+    """Every boundary wire of the partition's regions, in the order the root commits them."""
+    return tuple(sorted({w for region in P.regions(partition) for side in P.boundary(circuit, region) for w in side}))
 
 
 def leaf(wire: int, value: int) -> bytes:

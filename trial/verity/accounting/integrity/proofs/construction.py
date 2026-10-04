@@ -96,5 +96,5 @@ def _units(registration: Registration, executions: Sequence[Execution]) -> list[
     units = []
     for i, e in enumerate(executions):
         circuit, partition = built(registration.builder, e.advice)
-        units.extend((i, Unit(circuit, partition, e.root, r)) for r in range(len(partition)))
+        units.extend((i, Unit(circuit, partition, e.root, region)) for region in P.regions(partition))
     return units

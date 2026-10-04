@@ -21,11 +21,7 @@ class Unit:
     circuit: Circuit
     partition: P.Partition
     root: Commitment
-    region: int
-
-    @property
-    def gates(self) -> tuple[int, ...]:
-        return self.partition[self.region]
+    gates: P.Region  # one of the partition's regions
 
     @property
     def outputs(self) -> tuple[int, ...]:

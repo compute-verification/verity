@@ -1,12 +1,11 @@
 """Novel communication intensity: the policy that throttles frontier training and leaves inference alone
-(`Nci.Protocol` in the main repo). Every isolation unit, here a region of an execution's partition, has at most
-`gamma` gates and reads at most `alpha` bits of novel information per gate. A bit is novel unless it is on the
-baseline, which is on no region's boundary; so the baseline must have been declared up front, before any epoch whose
-outputs could have shaped it, and the registration must name one of the `builders` declared then. Advice is novel
-too, and reaches a unit through the structure the builder gives it rather than through its boundary, so it has a
-budget of its own: at most `advice` bits across the epoch's executions. And the rule binds only what is in the
-account: whatever ran in the compute that coverage leaves uncovered went unchecked, so at most `headroom` of the
-capacity may be left.
+(`Nci.Protocol` in the main repo). Every isolation unit of an execution's partition has at most `gamma` gates and
+reads at most `alpha` bits of novel information per gate. A bit is novel unless it is on the baseline, which is on no
+isolation unit's boundary; so the baseline must have been declared up front, before any epoch whose outputs could have
+shaped it, and the registration must name one of the `builders` declared then. Advice is novel too, and reaches a unit
+through the structure the builder gives it rather than through its boundary, so it has a budget of its own: at most
+`advice` bits across the epoch's executions. And the rule binds only what is in the account: whatever ran in the
+compute that coverage leaves uncovered went unchecked, so at most `headroom` of the capacity may be left.
 
     verifier    takes the registration, the stream (one epoch) and compute coverage over it; rebuilds each distinct
                 advice's circuit, and records whether the epoch complies
@@ -70,8 +69,11 @@ class Nci:
             except ValueError as error:
                 reasons.append(str(error))
                 continue
-            for r, region in enumerate(partition):
-                novel = len(P.boundary(circuit, region)[0])
-                if len(region) > self.gamma or novel > self.alpha * len(region):
-                    reasons.append(f"advice {advice!r} region {r}: {len(region)} gates reading {novel} novel bits")
+            for u, unit in enumerate(partition):
+                gates = P.gates(unit)
+                novel = len(P.boundary(circuit, gates)[0])
+                if len(gates) > self.gamma or novel > self.alpha * len(gates):
+                    reasons.append(
+                        f"advice {advice!r} isolation unit {u}: {len(gates)} gates reading {novel} novel bits"
+                    )
         return (Send(Complies(stream, not reasons, coverage.delta, tuple(reasons))),)
