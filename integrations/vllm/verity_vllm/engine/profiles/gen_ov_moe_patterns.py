@@ -42,7 +42,6 @@ from verity.ir.defs import bind
 from verity_vllm.program.registry import act as _ACT
 from verity_vllm.program.registry import moe as _MOE
 from verity_vllm.program.registry import targets as T
-from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (SiluAndMul, bound_args, find_descendants, is_int, is_row_major, op_name, scope_transparents, target_of,
@@ -251,7 +250,7 @@ class MoEFusedExperts:
         if self.router == "ordered":
             router_def = _MOE.MoeRouterTopKOrderedNorm if self.renormalize else _MOE.MoeRouterTopKOrdered
         else:
-            router_def = _MOE.MoeRouterTopKNorm if self.renormalize else Q.MoeRouterTopK
+            router_def = _MOE.MoeRouterTopKNorm if self.renormalize else _MOE.MoeRouterTopK
         if a.get("renormalize") is not bool(self.renormalize) or a.get("bias") is not None:
             return unsupported(node, f"{router_def.id} is the renormalize={bool(self.renormalize)}, bias-free softmax router",
                                renormalize=a.get("renormalize"), bias=repr(a.get("bias")), profile_renormalize=bool(self.renormalize))
@@ -330,7 +329,7 @@ class MoEFusedExperts:
             return unsupported(node, "moe_sum input is not the contiguous bf16 [M,TOPK,H] down-GEMM output", input=repr(y), cache3=repr(c3))
         if out.shape != (M, H) or not is_row_major(out) or out.dtype != "bfloat16":
             return unsupported(node, "moe_sum output is not a row-major bf16 [M,H] view", output=repr(out))
-        parts.append(Compute(bind(Q.MoeSum, TOPK=TOPK, H=H), M, (PerRow(y),), (PerRow(out),), (msum.id,), hint=f"{hint}/moe_sum",
+        parts.append(Compute(bind(_MOE.MoeSum, TOPK=TOPK, H=H), M, (PerRow(y),), (PerRow(out),), (msum.id,), hint=f"{hint}/moe_sum",
                              kernels=(K_SUM,), attribution=tuple(ctx.start.rows), pattern=self.name))
         # 7. [TP] the in-scope collective(s) the scope patterns resolved (log order): the all-reduce of the routed sum, after MoeSum
         parts.extend(sorted(extra, key=lambda c: min(c.consumed)))

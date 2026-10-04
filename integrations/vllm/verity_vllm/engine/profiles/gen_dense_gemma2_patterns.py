@@ -1,5 +1,5 @@
-"""[GEN dense / ov-dense] Gemma-2's eager-unfused ATen chain -> the lane's quarantined Definitions
-(`verity_vllm.program.registry.quarantine.dense`, one `SEMANTIC_ID` per module, each difftested on the pod).
+"""[GEN dense / ov-dense] Gemma-2's eager-unfused ATen chain -> the lane's Definitions, promoted from the
+quarantine to `verity_vllm.program.registry.dense` (and `b1.Bf16MulScalarTensor`), each difftested on the pod.
 
 vLLM d9105ea80 runs `Gemma2ForCausalLM` in eager mode with `VLLM_BATCH_INVARIANT=1`; nothing of the norm / GeGLU / softcap
 is fused into the b1 kernels the base profile knows, so the raw log shows the ATen ops themselves (one decode step, layer L):
@@ -44,10 +44,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.ir.defs import bind
-from verity_vllm.program.registry.quarantine.dense import (add_scalar_bf16, add_scalar_f32, add_widened_bf16, bf16_div_scalar,
-                                                bf16_mul_scalar, bf16_mul_scalar_tensor, bf16_tanh, gelu_tanh_mul, mean_triton,
-                                                mul_vec_f32, narrow_f32_bf16, rsqrt_f32, scale_row_bf16, scale_row_f32,
-                                                square_bf16, square_f32)
+from verity_vllm.program.registry import b1 as _b1
+from verity_vllm.program.registry import dense as _dense
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (BiasAdd, _check_pins, as_float, attribution_for, base_op, bound_args, hint_of, is_row_major,
@@ -110,11 +108,11 @@ class ScalarAddF32:
         rows, N = geo
         src = widened_source(x, ctx)
         if src is not None:
-            spec = bind(add_scalar_bf16.AddScalarBf16, N=N, C=c)
+            spec = bind(_dense.AddScalarBf16, N=N, C=c)
             roots = ctx.roots_of(src)
             return _compute(node, ctx, spec, rows, (_operand(src),), (_operand(out),), self.name, KERNELS_ELEMENTWISE,
                             roots[0].name if roots else "add_scalar")
-        return _compute(node, ctx, bind(add_scalar_f32.AddScalarF32, N=N, C=c), rows, (_operand(x),), (_operand(out),), self.name)
+        return _compute(node, ctx, bind(_dense.AddScalarF32, N=N, C=c), rows, (_operand(x),), (_operand(out),), self.name)
 
 
 @dataclass
@@ -140,8 +138,8 @@ class SquarePow:
         M, N = geo
         src = widened_source(x, ctx)
         if src is not None:
-            return _compute(node, ctx, bind(square_bf16.SquareBf16, N=N), M, (PerRow(src),), (PerRow(out),), self.name)
-        return _compute(node, ctx, bind(square_f32.SquareF32, N=N), M, (PerRow(x),), (PerRow(out),), self.name)
+            return _compute(node, ctx, bind(_dense.SquareBf16, N=N), M, (PerRow(src),), (PerRow(out),), self.name)
+        return _compute(node, ctx, bind(_dense.SquareF32, N=N), M, (PerRow(x),), (PerRow(out),), self.name)
 
 
 @dataclass
@@ -184,7 +182,7 @@ class MeanDimTriton:
             return bad
         if k.enter.grid and tuple(k.enter.grid) != (M,):
             return unsupported(node, "mean_kernel grid is not one program per row", grid=k.enter.grid, M=M)
-        return _compute(node, ctx, bind(mean_triton.MeanTriton, N=N), M, (PerRow(x),), (PerRow(out),), self.name, ("mean_kernel",),
+        return _compute(node, ctx, bind(_dense.MeanTriton, N=N), M, (PerRow(x),), (PerRow(out),), self.name, ("mean_kernel",),
                         consumed=tuple(sorted(node.ids())))
 
 
@@ -209,7 +207,7 @@ class RsqrtF32Pattern:
         rows, N = geo
         if widened_source(x, ctx) is not None:
             return unsupported(node, "rsqrt of a widened bf16 view has no Definition (RsqrtF32 reads f32)", x=repr(x))
-        return _compute(node, ctx, bind(rsqrt_f32.RsqrtF32, N=N), rows, (_operand(x),), (_operand(out),), self.name)
+        return _compute(node, ctx, bind(_dense.RsqrtF32, N=N), rows, (_operand(x),), (_operand(out),), self.name)
 
 
 @dataclass
@@ -236,12 +234,12 @@ class MulF32:
         if y.rank == 2 and y.shape == (M, 1):
             src = widened_source(x, ctx)
             if src is not None:
-                return _compute(node, ctx, bind(scale_row_bf16.ScaleRowBf16, N=N), M, (PerRow(src), PerRow(y)), (PerRow(out),), self.name)
-            return _compute(node, ctx, bind(scale_row_f32.ScaleRowF32, N=N), M, (PerRow(x), PerRow(y)), (PerRow(out),), self.name)
+                return _compute(node, ctx, bind(_dense.ScaleRowBf16, N=N), M, (PerRow(src), PerRow(y)), (PerRow(out),), self.name)
+            return _compute(node, ctx, bind(_dense.ScaleRowF32, N=N), M, (PerRow(x), PerRow(y)), (PerRow(out),), self.name)
         if y.rank == 1 and y.shape == (N,) and y.strides == (1,):
             if widened_source(x, ctx) is not None:
                 return unsupported(node, "row-vector mul of a widened bf16 view has no Definition (MulVecF32 reads f32)", x=repr(x))
-            return _compute(node, ctx, bind(mul_vec_f32.MulVecF32, N=N), M, (PerRow(x), Shared(y)), (PerRow(out),), self.name)
+            return _compute(node, ctx, bind(_dense.MulVecF32, N=N), M, (PerRow(x), Shared(y)), (PerRow(out),), self.name)
         return unsupported(node, "f32 mul broadcast shape is neither [M,N]*[M,1] nor [M,N]*[N]", x=repr(x), y=repr(y))
 
 
@@ -269,7 +267,7 @@ class AddWidened:
         if xs is None or rs is None:
             return unsupported(node, "f32 + f32 add whose operands are not both widened bf16 views has no Definition", x=repr(x), r=repr(r))
         M, N = x.shape
-        return _compute(node, ctx, bind(add_widened_bf16.AddWidenedBf16, N=N), M, (PerRow(xs), PerRow(rs)), (PerRow(out),), self.name)
+        return _compute(node, ctx, bind(_dense.AddWidenedBf16, N=N), M, (PerRow(xs), PerRow(rs)), (PerRow(out),), self.name)
 
 
 @dataclass
@@ -292,7 +290,7 @@ class NarrowToBf16:
         if geo is None or out.shape != x.shape or not (is_row_major(out) if out.rank == 2 else out.strides == (1,)):
             return unsupported(node, "f32 -> bf16 narrowing over views that are not row-major [M,N] / contiguous [N]", x=repr(x), out=repr(out))
         rows, N = geo
-        return _compute(node, ctx, bind(narrow_f32_bf16.NarrowF32ToBf16, N=N), rows, (_operand(x),), (_operand(out),), self.name)
+        return _compute(node, ctx, bind(_dense.NarrowF32ToBf16, N=N), rows, (_operand(x),), (_operand(out),), self.name)
 
 
 @dataclass
@@ -318,7 +316,7 @@ class EmbedScale:
             return unsupported(node, "bf16 scalar-tensor mul over views that are not row-major [M,N]", e=repr(e), out=repr(out))
         M, N = e.shape
         roots = ctx.roots_of(s)
-        return _compute(node, ctx, bind(bf16_mul_scalar_tensor.Bf16MulScalarTensor, N=N), M, (PerRow(e), Shared(s)), (PerRow(out),), self.name,
+        return _compute(node, ctx, bind(_b1.Bf16MulScalarTensor, N=N), M, (PerRow(e), Shared(s)), (PerRow(out),), self.name,
                         KERNELS_ELEMENTWISE, roots[0].name if roots else "scalar_tensor")
 
 
@@ -344,7 +342,7 @@ class GeluTanhAndMul:
             return unsupported(node, "registered_values: GeluTanhMul_v3 reads the registered table gelu_tanh_bf16, which the fold "
                                "does not supply yet")
         M, I = out.shape
-        return _compute(node, ctx, bind(gelu_tanh_mul.GeluTanhMul, I=I), M, (PerRow(x),), (PerRow(out),), self.name, ("act_and_mul_kernel",),
+        return _compute(node, ctx, bind(_dense.GeluTanhMul, I=I), M, (PerRow(x),), (PerRow(out),), self.name, ("act_and_mul_kernel",),
                         "gelu_tanh_and_mul")
 
 
@@ -378,11 +376,11 @@ class Bf16ScalarChain:
             return unsupported(node, "bf16 scalar op over views that are not row-major [M,N]", x=repr(x), out=repr(out))
         M, N = x.shape
         if b == "aten.div":
-            spec = bind(bf16_div_scalar.Bf16DivScalar, N=N, C=c)
+            spec = bind(_dense.Bf16DivScalar, N=N, C=c)
         elif b == "aten.mul":
-            spec = bind(bf16_mul_scalar.Bf16MulScalar, N=N, C=c)
+            spec = bind(_dense.Bf16MulScalar, N=N, C=c)
         else:
-            spec = bind(bf16_tanh.Bf16Tanh, N=N)
+            spec = bind(_dense.Bf16Tanh, N=N)
         return _compute(node, ctx, spec, M, (PerRow(x),), (PerRow(out),), self.name)
 
 

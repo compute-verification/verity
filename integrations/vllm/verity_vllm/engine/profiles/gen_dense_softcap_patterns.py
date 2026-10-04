@@ -1,5 +1,5 @@
 """[r8 lane E-cleanup, 2026-09-18 — closes the M10 ADAPTER item] the FA2 scope of a model served with logit soft-capping
-(`attn_logit_softcapping > 0`: Gemma-2) -> the quarantined `AttentionSoftcap_v1{T,NH,KVH,D,BN,CAP}` (`verity_vllm.program.registry.quarantine.dense.softcap`,
+(`attn_logit_softcapping > 0`: Gemma-2) -> `AttentionSoftcap_v1{T,NH,KVH,D,BN,CAP}` (`verity_vllm.program.registry.dense`, promoted from the quarantine,
 lane gemma 2026-09-17: exact `MufuTanh` over all 2^32 sm_89 words + FA2 difftest 25/25 bitwise, job 0917T223335-9ad747).
 
 vLLM passes the model's `attn_logit_softcapping` to `_vllm_fa2_C.varlen_fwd` as `softcap` (float; `FlashAttentionImpl.__init__`:
@@ -18,7 +18,7 @@ tokens), and then re-binds every resulting `Attention_v3{T,NH,KVH,D,BN}` compute
 same operands / outputs / attribution / consumed ids.  `softcap` in `(None, 0.0)` is the base pattern's case (returns None); a negative,
 NaN or infinite `softcap` is Unsupported here (FA2 takes the softcap path iff `softcap > 0`; the Definition requires `CAP > 0`).
 
-The Definition stays in `quarantine/dense` (no promotion inside the r8 window, brief §2 rule 2); G4 admits it through the run's
+The Definition was promoted to `registry.dense` after the r8 window (R15 dense, F-dense-05); its admission record is the run's
 `quarantine.json` (per-Definition difftest record, `verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json`, inherited by `cov_pod.sh`).
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.ir.defs import bind
-from verity_vllm.program.registry.quarantine.dense import softcap as _softcap
+from verity_vllm.program.registry import dense as _dense
 
 from verity_vllm.observe.fold.patterns import FA2_OP_NAMES, AttentionScope, ComputeGroup, as_float, bound_args, find_descendants, op_name, unsupported
 from verity_vllm.engine.profiles.gen_dense2_patterns import AttentionScopeInertWindow, _annotate, _replace_descendant, _rewrite_args
@@ -50,7 +50,7 @@ class AttentionScopeSoftcap(AttentionScopeInertWindow):
     """`AttentionScope` for launches whose `softcap > 0` (see the module docstring); windowed launches go through the inert-window rule."""
 
     name: str = "attention.fa2_varlen_fwd.softcap"
-    body: Any = _softcap.AttentionSoftcap                         # the quarantined Definition bound with CAP = softcap
+    body: Any = _dense.AttentionSoftcap                           # the softcap Definition bound with CAP = softcap
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or op_name(node.op) != "unified_attention_with_output":
