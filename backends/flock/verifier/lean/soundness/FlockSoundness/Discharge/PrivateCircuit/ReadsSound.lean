@@ -111,7 +111,100 @@ theorem private_circuit_sound_reads
       ≤ (if OwedWrongR P T₀ w owed then
           s.Lm.escape (bad P T₀ w) + (s.εks τ + s.δlink τ) + ENNReal.ofReal (qT ^ 2 / 2 ^ (513 : ℝ)) else 0) +
         ENNReal.ofReal (qS ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  intro w T₀
+  classical
+  have hRB := reads_bind_le s.G τ lfS rtS₀ Fin.val wo hwo (storeReads L idx s τ drawn owed pubIn yD xD) costS qS hcS hS
+  have hrel : ∀ o, s.Accepts o → ∀ u, u ∉ Pt.wrong (s.vals τ o) →
+      ClassRel L lfT lfS idx (rootT (s.regOf o)) (rootS (s.regOf o)) (s.vals τ o) u := fun o ha u hu => by
+    by_contra hr
+    exact hu ((hwr _ _ (hgood o ha) u).2 hr)
+  have h1 : prob (fun o => s.Accepts o ∧ rootT (s.regOf o) = rtT₀ ∧ rootS (s.regOf o) = rtS₀ ∧
+      ((∃ m ∈ pubIn, (xD o m).val ≠ w (.reg m)) ∨ ∃ p ∈ owed, (yD o p).val ≠ w (.out p.1 p.2))) s.G τ
+      ≤ ENNReal.ofReal (qS ^ 2 / 2 ^ (513 : ℝ)) := by
+    refine le_trans (prob_mono (fun o ⟨ha, _, hS', hq⟩ => ?_) _ _) hRB
+    have hd := hdel o ha
+    rw [hS'] at hd
+    rcases hq with ⟨m, hm, hne⟩ | ⟨p, hp, hne⟩
+    · exact ⟨idx (.reg m), xD o m, Or.inr (Or.inr ⟨m, hm, rfl, rfl⟩), hd.2 m hm, hne⟩
+    · exact ⟨idx (.out p.1 p.2), yD o p, Or.inr (Or.inl ⟨p, hp, rfl, rfl⟩), hd.1 p hp, hne⟩
+  have h2 : OwedWrongR P T₀ w owed →
+      prob (fun o => s.Accepts o ∧ rootT (s.regOf o) = rtT₀ ∧ rootS (s.regOf o) = rtS₀) s.G τ
+        ≤ s.Lm.escape (bad P T₀ w) + (s.εks τ + s.δlink τ) + ENNReal.ofReal (qS ^ 2 / 2 ^ (513 : ℝ)) +
+          ENNReal.ofReal (qT ^ 2 / 2 ^ (513 : ℝ)) := by
+    intro _
+    let acc : s.Out → Prop := fun o => s.Accepts o ∧ rootT (s.regOf o) = rtT₀ ∧ rootS (s.regOf o) = rtS₀
+    let Q : s.Out → Prop := fun o => (∃ u ∈ drawn o, u ∈ Pt.wrong (s.vals τ o)) ∨
+      (∃ i x, storeReads L idx s τ drawn owed pubIn yD xD o i x ∧ ReadOk lfS rtS₀ (↑i) x ∧ x.val ≠ (wo i).val) ∨
+        Disjoint (drawn o) (bad P T₀ w)
+    have hQ : prob (fun o => acc o ∧ Q o) s.G τ
+        ≤ s.Lm.escape (bad P T₀ w) + (s.εks τ + s.δlink τ) + ENNReal.ofReal (qS ^ 2 / 2 ^ (513 : ℝ)) := by
+      calc _ ≤ prob (fun o => (s.Accepts o ∧ ∃ u ∈ drawn o, u ∈ Pt.wrong (s.vals τ o)) ∨
+            ((∃ i x, storeReads L idx s τ drawn owed pubIn yD xD o i x ∧ ReadOk lfS rtS₀ (↑i) x ∧
+              x.val ≠ (wo i).val) ∨
+              (s.Accepts o ∧ Disjoint (drawn o) ((fun _ : Reg => bad P T₀ w) (s.regOf o))))) s.G τ := by
+            refine prob_mono (fun o ⟨⟨ha, _⟩, hq⟩ => ?_) _ _
+            rcases hq with h | h | h
+            · exact Or.inl ⟨ha, h⟩
+            · exact Or.inr (Or.inl h)
+            · exact Or.inr (Or.inr ⟨ha, h⟩)
+        _ ≤ _ := prob_or_le _ _ _ _
+        _ ≤ _ := add_le_add le_rfl (prob_or_le _ _ _ _)
+        _ ≤ (s.εks τ + s.δlink τ) + (ENNReal.ofReal (qS ^ 2 / 2 ^ (513 : ℝ)) + s.Lm.escape (bad P T₀ w)) :=
+            add_le_add (hD hA3 hA6 τ hCR) (add_le_add hRB ((hE τ _).trans (iSup_le fun _ => le_rfl)))
+        _ = _ := by ring
+    have hOpens : ∀ o, acc o → (regCommit lfT P.N).Opens rtT₀ (fun j => (tabFill L s τ drawn tr o j).val)
+        (rtT₀, tabFill L s τ drawn tr o) := by
+      rintro o ⟨ha, hT', -⟩
+      refine show _ ∧ _ from ⟨rfl, fun j => ⟨rfl, ?_⟩⟩
+      by_cases hj : j ∈ drawn o ∧ j ∉ Pt.wrong (s.vals τ o)
+      · have := (hrel o ha j hj.2).1
+        rw [hT'] at this
+        simpa only [tabFill, ite_eq_left hj] using this
+      · simpa only [tabFill, ite_eq_right hj] using htr j
+    have hRR := ran_registered (regCommit lfT P.N) (regCommit_binding lfT P.N) rtT₀ T₀ (rtT₀, tr)
+      (show _ ∧ _ from ⟨rfl, fun j => ⟨rfl, htr j⟩⟩) s.G τ acc Q
+      (fun o j => (tabFill L s τ drawn tr o j).val) (fun o => (rtT₀, tabFill L s τ drawn tr o)) hOpens _ hQ
+      costT qT hcT hT
+    refine le_trans (prob_mono (fun o ha => ⟨ha, ?_⟩) _ _) hRR
+    obtain ⟨ha, hT', hS'⟩ := ha
+    by_cases hdis : Disjoint (drawn o) (bad P T₀ w)
+    · exact Or.inl (Or.inr (Or.inr hdis))
+    obtain ⟨u, hu, hbad⟩ := Finset.not_disjoint_iff.1 hdis
+    by_cases hwu : u ∈ Pt.wrong (s.vals τ o)
+    · exact Or.inl (Or.inl ⟨u, hu, hwu⟩)
+    have hr := hrel o ha u hwu
+    by_cases hT : L.tabOf (s.vals τ o) u = T₀ u
+    · rcases classRel_bad L lfT lfS idx _ _ _ u hr T₀ w hT hbad with ⟨k, hk⟩ | ⟨l, hl⟩
+      · refine Or.inl (Or.inr (Or.inl ⟨idx ((L.tabOf (s.vals τ o) u).src k), (L.inp u k).read (s.vals τ o),
+          Or.inl ⟨u, hu, hwu, Or.inl ⟨k, rfl, rfl⟩⟩, ?_, ?_⟩))
+        · have := hr.2.2.1 k
+          rw [hS'] at this
+          exact this
+        · show L.xOf (s.vals τ o) u k ≠ (wo (idx ((L.tabOf (s.vals τ o) u).src k))).val
+          rw [hT]
+          exact hk
+      · refine Or.inl (Or.inr (Or.inl ⟨idx (.out u l), (L.out u l).read (s.vals τ o),
+          Or.inl ⟨u, hu, hwu, Or.inr ⟨l, rfl, rfl⟩⟩, ?_, hl⟩))
+        have := hr.2.2.2.1 l
+        rw [hS'] at this
+        exact this
+    · refine Or.inr fun heq => hT ?_
+      have := congrFun heq u
+      unfold tabFill at this
+      rw [ite_eq_left ⟨hu, hwu⟩] at this
+      exact this
+  refine ⟨h1, h2, ?_⟩
+  by_cases hOW : OwedWrongR P T₀ w owed
+  · rw [ite_eq_left hOW]
+    refine le_trans (prob_mono (fun o ⟨ha, hT', hS', _⟩ => ⟨ha, hT', hS'⟩) _ _) ((h2 hOW).trans (le_of_eq ?_))
+    ring
+  · rw [ite_eq_right hOW, zero_add]
+    refine le_trans (prob_mono (fun o ⟨ha, hT', hS', hq⟩ => ⟨ha, hT', hS', ?_⟩) _ _) h1
+    rcases hq with h | ⟨p, hp, hne⟩
+    · exact Or.inl h
+    · refine Or.inr ⟨p, hp, fun heq => hne (heq.trans ?_)⟩
+      by_contra hne'
+      exact hOW ⟨p, hp, hne'⟩
 
 end Sound
 
@@ -140,7 +233,8 @@ theorem private_circuit_private_reads
           (2 * Nc c * δ₁ + zkGap (zs c)) ∧
       simPr (hm96Scheme fits tab Nc (fun c T j => encE c (T j)) J zs U) c o p₀ w₀ encV E
         ≤ realPr (hm96Scheme fits tab Nc (fun c T j => encE c (T j)) J zs U) c o (tab C c) w encV E +
-          (2 * Nc c * δ₁ + zkGap (zs c)) := by
-  sorry
+          (2 * Nc c * δ₁ + zkGap (zs c)) :=
+  circuit_private (hm96Scheme fits tab Nc (fun c T j => encE c (T j)) J zs U) c (2 * Nc c * δ₁)
+    (hm96Reg_hides _ hKey) o C w hZk hSat p₀ w₀ encV E
 
 end FlockSoundness.Discharge.PrivateCircuit

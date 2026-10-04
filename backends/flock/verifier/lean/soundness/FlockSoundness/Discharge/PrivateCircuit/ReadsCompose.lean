@@ -29,17 +29,42 @@ variable {V : Type} [Inhabited V] (P : Pop V)
 the model's end to end on the store's registered cells. -/
 theorem store_cone (T : Table P) (w : Cell → V) (i : Fin P.N) (h : ∀ j, Reaches P T j i → UnitOk P T w j) :
     ∀ l : Fin P.o, w (.out i l) = evalR P T (fun m => w (.reg m)) i l := by
-  sorry
+  suffices H : ∀ n (i : Fin P.N), i.val = n → (∀ j, Reaches P T j i → UnitOk P T w j) →
+      ∀ l : Fin P.o, w (.out i l) = evalR P T (fun m => w (.reg m)) i l from H i.val i rfl h
+  intro n
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+  intro i hi h l
+  obtain ⟨hac, hblk⟩ := h i (.refl i)
+  rw [← hblk l, evalR]
+  congr 2
+  funext k
+  cases hs : (T i).src k with
+  | reg m => rfl
+  | out i' l' =>
+    have ha := hac k i' l' hs
+    have hi' : i' < P.N := lt_trans ha.1 i.isLt
+    dsimp only
+    rw [dite_eq_left_of_eq_true (eq_true ha)]
+    exact ih i' (hi ▸ ha.1) ⟨i', hi'⟩ rfl (fun j hj => h j (.step k ⟨i', hi'⟩ l' hs hj)) ⟨l', ha.2⟩
 
 /-- **Wrong owed outputs are a unit wrong against the store in an owed unit's cone.** -/
 theorem owedWrong_cone (T : Table P) (w : Cell → V) (owed : Finset (Fin P.N × Fin P.o)) (h : OwedWrongR P T w owed) :
     ∃ p ∈ owed, ∃ j ∈ cone P T p.1, j ∈ bad P T w := by
-  sorry
+  classical
+  obtain ⟨p, hp, hne⟩ := h
+  refine ⟨p, hp, ?_⟩
+  by_contra hno
+  refine hne (store_cone P T w p.1 (fun j hj => ?_) p.2)
+  by_contra hj'
+  exact hno ⟨j, by unfold cone; exact Finset.mem_filter.2 ⟨Finset.mem_univ _, hj⟩,
+    by unfold bad; exact Finset.mem_filter.2 ⟨Finset.mem_univ _, hj'⟩⟩
 
 /-- **Wrong owed outputs leave a unit wrong against the store.** -/
 theorem owedWrong_bad (T : Table P) (w : Cell → V) (owed : Finset (Fin P.N × Fin P.o)) (h : OwedWrongR P T w owed) :
     (bad P T w).Nonempty := by
-  sorry
+  obtain ⟨_, _, j, _, hj⟩ := owedWrong_cone P T w owed h
+  exact ⟨j, hj⟩
 
 variable {P}
 
@@ -52,6 +77,17 @@ theorem classRel_bad {G M : ℕ} (L : ReadLayout P G) (lfT : ExplicitLeaf (Entry
     (hrel : ClassRel L lfT lfS idx rtT rtS v u) (T : Table P) (w : Cell → V) (hT : L.tabOf v u = T u)
     (hbad : u ∈ bad P T w) :
     (∃ k, L.xOf v u k ≠ w ((T u).src k)) ∨ ∃ l : Fin P.o, L.yOf v u l ≠ w (.out u l) := by
-  sorry
+  classical
+  by_contra hno
+  have hx : L.xOf v u = fun k => w ((T u).src k) := funext fun k => by
+    by_contra h
+    exact hno (Or.inl ⟨k, h⟩)
+  have hy : ∀ l, L.yOf v u l = w (.out u l) := fun l => by
+    by_contra h
+    exact hno (Or.inr ⟨l, h⟩)
+  obtain ⟨-, hac, -, -, hblk⟩ := hrel
+  have hok : UnitOk P T w u := ⟨by rw [← hT]; exact hac, fun l => by rw [← hy l, ← hblk l, hT, hx]⟩
+  unfold bad at hbad
+  exact (Finset.mem_filter.1 hbad).2 hok
 
 end FlockSoundness.Discharge.PrivateCircuit.Reads

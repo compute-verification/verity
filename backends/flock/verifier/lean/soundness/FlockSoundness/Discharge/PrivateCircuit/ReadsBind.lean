@@ -27,12 +27,24 @@ variable {α : Type}
 values give an explicit SHA-512 collision, `readPair`'s. -/
 theorem read_binding (lf : ExplicitLeaf α) (rt : Flock.Registered.Port) (i : ℕ) (x y : ReadVal α)
     (hx : ReadOk lf rt i x) (hy : ReadOk lf rt i y) (hne : x.val ≠ y.val) : Collides (readPair lf rt i x y) := by
-  sorry
+  unfold readPair
+  split_ifs with hl
+  · exact lf.pair_spec _ _ _ _ hne hl
+  · exact TwoOpenings.collides _ ⟨hl, hx, hy⟩
 
 /-- **The commitment of `n` values under one registered root binds**: two openings of one root to two different value
 vectors give an explicit SHA-512 collision, `readPair` at the first index where they differ. -/
 theorem regCommit_binding (lf : ExplicitLeaf α) (n : ℕ) : (regCommit lf n).Binding := by
-  sorry
+  classical
+  intro rt p p' op op' ho ho' hne
+  obtain ⟨hr, hp⟩ := ho
+  obtain ⟨hr', hp'⟩ := ho'
+  have h : ∃ i, (op.2 i).val ≠ (op'.2 i).val := by
+    obtain ⟨i, hi⟩ := Function.ne_iff.1 hne
+    exact ⟨i, by rw [(hp i).1, (hp' i).1]; exact hi⟩
+  show Collides (dite _ _ _)
+  rw [dite_eq_left h]
+  exact read_binding lf op.1 _ _ _ (hr ▸ (hp _).2) (hr ▸ hr'.symm ▸ (hp' _).2) (Classical.choose_spec h)
 
 open Classical in
 /-- **The read finder's output** at an outcome `b`: for a read `Rd b i x` at the registrant's index `i` that checks
@@ -54,6 +66,21 @@ theorem reads_bind_le {β Ix : Type} (G : Game β) (σ : Strategy G) (lf : Expli
     (hCR : Assumptions.SHA512CRStrict H512 G σ (fun b => some (readPick lf rt idx wo Rd b)) cost q) :
     prob (fun b => ∃ i x, Rd b i x ∧ ReadOk lf rt (idx i) x ∧ x.val ≠ (wo i).val) G σ
       ≤ ENNReal.ofReal (q ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  classical
+  have hcoll : ∀ b, (∃ i x, Rd b i x ∧ ReadOk lf rt (idx i) x ∧ x.val ≠ (wo i).val) →
+      Collides (readPick lf rt idx wo Rd b) := by
+    intro b h
+    unfold readPick
+    rw [dite_eq_left h]
+    obtain ⟨-, hok, hne⟩ := Classical.choose_spec (Classical.choose_spec h)
+    exact read_binding lf rt _ _ _ hok (hwo _) hne
+  have hfin : prob (fun b => ∃ x y, some (readPick lf rt idx wo Rd b) = some (x, y) ∧ x ≠ y ∧
+      H512 x = H512 y) G σ ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _)
+  calc _ ≤ prob (fun b => ∃ x y, some (readPick lf rt idx wo Rd b) = some (x, y) ∧ x ≠ y ∧
+        H512 x = H512 y) G σ := by
+        refine prob_mono (fun b h => ?_) G σ
+        have hc := hcoll b h
+        exact ⟨_, _, congrArg some Prod.mk.eta.symm, hc.1, hc.2⟩
+    _ ≤ _ := (ENNReal.le_ofReal_iff_toReal_le hfin (by positivity)).2 (hCR hcost)
 
 end FlockSoundness.Discharge.PrivateCircuit.Reads
