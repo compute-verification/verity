@@ -133,7 +133,7 @@ theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (Stri
   rename_i ht
   split at h
   · rename_i hs
-    exact ⟨c, pub, hc, hp, by simpa using ht, (Bool.or_eq_true _ _).1 hs⟩
+    exact ⟨c, pub, hc, hp, by simpa using ht, (Bool.or_eq_true _ _).mp hs⟩
   · cases h
 
 namespace Checks
@@ -173,6 +173,7 @@ theorem covered : ProvedScope.scopeOk (circ t I) = true ∨ ProvedScope.canonica
   have : circ t I = c := by unfold circ; rw [hc]
   rw [this]; exact hs
 
+omit h in
 private theorem canonicalOk_and {c : Circuit} (hs : ProvedScope.canonicalOk t zk c = true) :
     zk = true ∧ t.hiddenOutputs = true ∧ c.outNet = c.unitNet ∧ ProvedScope.formatOk c = true := by
   simp only [ProvedScope.canonicalOk, Bool.and_eq_true, beq_iff_eq] at hs

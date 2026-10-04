@@ -9,8 +9,8 @@ set_option Elab.async false
 A public table (a shared-row population, header `shared_rows`) registers its rows in the same canonical row form as a
 unit's own: each table row is one `b ‖ c` of the same row geometry, and instance `i` reads row `refs[i · np + p]` of
 port `p`'s table (`Public.digest`). So the canonical format needs no separate form for tables, and the binding needs
-no `pop.tables = none`: `BcSiteC` is `HiddenExec.BcSiteH` without it, and `bc_site_ofC` is `bc_site_ofH` through
-main's `Hidden.bc_drawnW` (`bc_drawnH` without `pop.tables = none`, `Wide/Shared.lean`).
+no `pop.tables = none`: neither does `HiddenExec.BcSiteH`, through `Hidden.bc_drawnW` (`bc_drawnH` without it,
+`Wide/Shared.lean`), so `BcSiteC` states what `BcSiteH` does and `bc_site_ofC` is `bc_site_ofH`.
 
 **Proof work.** None: both are proved here.
 -/
@@ -22,7 +22,7 @@ open FlockSoundness.Discharge.HiddenExec (AcceptedH siteAddrH BcSiteH)
 
 variable {T : Model.Statement}
 
-/-- **What `bc_site_ofC` reads at a site**: `BcSiteH` without `pop.tables = none`. Block `o` and VU `g` of an accepted
+/-- **What `bc_site_ofC` reads at a site**: what `BcSiteH` reads. Block `o` and VU `g` of an accepted
 statement whose draw `d` decodes to `D`, whose proved units are in its population; whose block R1CS's regions contain
 the executable's; whose public file `HmOut.loadPublic` loads to `pop`, with or without shared rows; with `g` below
 `2^⌊log₂ c.g⌋`; and whose proved unit at rank `o · c.g + g` is `u`. -/
@@ -33,22 +33,14 @@ def BcSiteC (a : AcceptedH T) (pop : Public) (o : Fin (2 ^ T.nbl)) (g u : ℕ) :
     D.proved[o.val * a.st.c.g + g]? = some u
 
 theorem BcSiteC.of_H {a : AcceptedH T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ} (h : BcSiteH a pop o g u) :
-    BcSiteC a pop o g u := by
-  obtain ⟨d, D, hd, hD, hlt, hregs, hpop, -, hg2, hu⟩ := h
-  exact ⟨d, D, hd, hD, hlt, hregs, hpop, hg2, hu⟩
+    BcSiteC a pop o g u := h
 
 /-- **The `b ‖ c` at a drawn unit's site is the population's**, with or without shared rows (`bc_site_ofH` through
 `Hidden.bc_drawnW`), for every row `p`. -/
 theorem bc_site_ofC {a : AcceptedH T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ} (hs : BcSiteC a pop o g u)
     {z : Witness T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) {p : ℕ} (hp : p < a.st.c.ports.size) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => siteAddrH a o (Layout.bcAddr a.st.c g p j.val t.val)) =
-      (pop.digest u p a.st.c.ports.size).data.toList := by
-  obtain ⟨d, D, hd, hD, hlt, hregs, hpop, hg2, hu⟩ := hs
-  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, h, L, hR, regs, hT⟩ := a
-  subst hT
-  dsimp only at hd hregs hpop hu hg hg2 hp ⊢
-  subst hd
-  obtain ⟨hr, rfl⟩ := Array.getElem?_eq_some_iff.1 hu
-  exact Hidden.bc_drawnW h hpop hD hlt L regs hregs hz o hg hg2 hp hr
+      (pop.digest u p a.st.c.ports.size).data.toList :=
+  HiddenExec.bc_site_ofH hs hz hg hp
 
 end FlockSoundness.Discharge.Canonical
