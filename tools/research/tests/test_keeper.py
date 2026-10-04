@@ -324,6 +324,47 @@ def test_cancel_chunk_terms_the_workloads_group_as_a_manual_cancel(tmp_path):
         workload.wait()
 
 
+def test_research_keeper_set_status_and_stop_reach_the_nodes_keeper_over_ssh(tmp_path, monkeypatch, capsys):
+    """The CLI from a VM: `set` ships the tool snapshot and writes the target through the node's vy-keeper (here the repository's,
+    reached through `sh -c` for ssh), `status` reads it back, `stop` stops it. The node's clock is real, so its 48 h bound is
+    lifted and the target's until is far ahead; the CLI's own check runs on an injected clock."""
+    from research import cli
+    from research import keeper as K
+
+    root = tmp_path / "research"
+    (tmp_path / "machines.toml").write_text(f'[machines.vy-nebius-2]\nprovider = "ssh"\nhost = "n2"\nuser = "research"\nproject = "verity"\n'
+                                            f'root = "{root}"\npython = "{sys.executable}"\n')
+    monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
+    monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **k: ["sh", "-c"])
+    monkeypatch.setattr(K, "NODE_KEEPER", str(KEEPER))
+    monkeypatch.setattr(K, "clock", lambda: t("2098-12-31T12:00"))
+    for k, v in (("KEEPER_DIR", tmp_path / "keep"), ("KEEPER_ROOT", root), ("KEEPER_NODE", "vy-nebius-2"), ("KEEPER_MAX_AHEAD_H", 10**6)):
+        monkeypatch.setenv(k, str(v))
+    on = ["--on", "vy-nebius-2"]
+    assert cli.main(["keeper", "set", "sweep", *on, "--project", "verity", "--n", "2", "--until", "2099-01-01T00:00Z", "--owner", "@proofs",
+                     "--max-min", "25", "--lane", "proofs", "--declared-output", "out/*", "--", "python3", "-m", "x", "--seed", "{seed}"]) == 0
+    assert "sweep on vy-nebius-2: 2 chunk(s) of `python3 -m x --seed '{seed}'`" in capsys.readouterr().out
+    doc = json.loads((tmp_path / "keep" / "targets" / "sweep.json").read_text())
+    req = doc["request"]
+    assert (doc["owner"], doc["n"], doc["max_min"], doc["command"]) == ("@proofs", 2, 25, ["python3", "-m", "x", "--seed", "{seed}"])
+    assert req["runs_root"] == str(root / "runs") and (Path(req["tool"]) / "research" / "keeper.py").is_file()
+    assert req["harness_args"] == ["--stage", "run", "--project", "verity", "--lane", "proofs", "--declared-output", "out/*"]
+    assert req["remote"]["machine"] == "vy-nebius-2" and req["remote"]["tool_identity"] == remote.tool_identity()
+    assert cli.main(["keeper", "status", *on, "--json"]) == 0
+    row, = json.loads(capsys.readouterr().out)
+    assert (row["name"], row["owner"], row["next_seed"], row["live"], row["stopped"]) == ("sweep", "@proofs", 0, [], None)
+    assert cli.main(["keeper", "stop", "sweep", *on, "--by", "@proofs", "--reason", "campaign done"]) == 0
+    assert "sweep on vy-nebius-2 stopped: no more chunks start (0 live)" in capsys.readouterr().out
+    assert cli.main(["keeper", "set", "sweep", *on, "--project", "verity", "--n", "2", "--until", "2099-01-01T00:00Z", "--owner", "@circuits",
+                     "--", "x", "{seed}"]) == 1
+    assert "vy-nebius-2 refuses it: target sweep is @proofs's" in capsys.readouterr().err
+    assert cli.main(["keeper", "set", "sweep", *on, "--project", "verity", "--n", "2", "--until", "2099-01-03T00:00Z", "--owner", "@proofs",
+                     "--", "x", "{seed}"]) == 2
+    assert "is not in the next 48 h" in capsys.readouterr().err
+    assert cli.main(["keeper", "set", "sweep", *on, "--project", "verity", "--n", "2", "--until", "2099-01-01T00:00Z", "--owner", "@proofs",
+                     "--", "x", "1"]) == 2
+
+
 def test_vy_keeper_set_reads_the_target_on_stdin_and_status_reports_it(tmp_path):
     env = {"KEEPER_DIR": str(tmp_path / "keep"), "KEEPER_ROOT": str(tmp_path / "research"), "KEEPER_NODE": "vy-nebius-2", "PATH": "/usr/bin:/bin"}
     doc = target(SimpleNamespace(ROOT=tmp_path / "research"), until="2099-01-01T00:00Z")
