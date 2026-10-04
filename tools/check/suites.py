@@ -355,7 +355,7 @@ def touched(suites: list[Suite], pkgs: dict[str, str], rev: str, tree: str, lock
     """The suites whose key the change from ``rev`` to ``tree`` moves by path: a changed file under their inputs (the repository's
     own suite keys on all of them) or in the runner, or a changed resolution in `uv.lock`. What their tests read beside the key
     (`used`) is left out, so a suite this skips can still miss its cached pass."""
-    files = _git("diff", "--name-only", rev, tree).split()
+    files = _git("diff", "--no-renames", "--name-only", rev, tree).split()      # a rename names its source too
     if any(f in RUNNER for f in files):
         return list(suites)
     before = lock
