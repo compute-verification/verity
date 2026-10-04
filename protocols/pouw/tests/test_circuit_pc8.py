@@ -34,6 +34,7 @@ from verity_pouw.schemes.pearl_c_device import DEVICES, SM120_UNPROMOTED
 K = 128
 CASE = next(c for c in json.loads(V.OUT.read_text())["cases"] if c["case"] == "test-16-v1")
 SEED = bytes(range(32))
+MIXED_ZERO = {0: 0x80000000, 16: 0, 3: 0x80000000, 5: 0, 9: 0x80000000}
 
 
 def _flat(lines) -> list[int]:
@@ -209,8 +210,9 @@ def _flip(words: list[int], at: int, admitted) -> tuple[list[int], list[int]]:
 
 def _rows(dev: str) -> dict[str, list[int]]:
     """Honest rows and rows the scheme refuses: non-finite words at sampled (0, 8, …) and unsampled positions, an overflowing
-    sum of squares, a zero row, a subnormal row, the largest word, and both sides of the noise floor and of liveness (one
-    word bisected to its flip; and a row whose third dead entry meets the threshold with equality)."""
+    sum of squares, a zero row, an all-(−0) row, a subnormal row, the largest word, and both sides of the noise floor and
+    of liveness (one word bisected to its flip; and a row whose third dead entry meets the threshold with equality); and an
+    honest row with +0 and −0 words at sampled and unsampled positions."""
     base = [C.parse_f32_row(r, K) for r in V.rows_f32("pc8-circuit", "A", 3, K)]
     at = lambda w, updates: [updates.get(t, v) for t, v in enumerate(w)]  # noqa: E731
     ok = lambda w: _scheme_row(w, "row_a", dev) is not None  # noqa: E731
@@ -222,7 +224,7 @@ def _rows(dev: str) -> dict[str, list[int]]:
             "inf-unsampled": at(base[0], {1: 0x7F800000}), "minus-inf-sampled": at(base[0], {0: 0xFF800000}),
             "nan-unsampled": at(base[0], {3: 0x7FC00000}), "nan-sampled": at(base[0], {8: 0xFFC00001}),
             "squares-overflow": at(base[0], {p: _bits(2.0 ** 126) for p in range(0, K, 8)}), "zero": [0] * K,
-            "subnormal": [1] * K, "max-unsampled": at(base[0], {1: 0x7F7FFFFF}), "floor-in": floor_in, "floor-out": floor_out,
+            "minus-zero": [0x80000000] * K, "mixed-zero": at(base[0], MIXED_ZERO), "subnormal": [1] * K, "max-unsampled": at(base[0], {1: 0x7F7FFFFF}), "floor-in": floor_in, "floor-out": floor_out,
             "live-in": live_in, "live-out": live_out, "live-equal": at(two_dead, {3: _bits(8.0)}),
             "live-below": at(two_dead, {3: _bits(8.0) - 1})}
 
@@ -244,7 +246,22 @@ def test_the_row_units_admission_is_the_schemes_and_their_outputs_the_schemes(si
         if want is not None:
             admitted.add(name)
             assert list(out[:K]) == want[0] and list(out[K:-1]) == want[1], name
-    assert admitted == {"honest-0", "honest-1", "negated", "floor-in", "live-in", "live-below"}
+    assert admitted == {"honest-0", "honest-1", "negated", "mixed-zero", "floor-in", "live-in", "live-below"}
+
+
+@pytest.mark.parametrize("side", ["row_a", "row_b"])
+def test_a_row_unit_reads_minus_zero_as_zero(side):
+    """A row unit's outputs on a row with −0 words are its outputs with +0 in their place, as the Lean's `pc8Sem` reads
+    a row by value, and the scheme's (the admission test above)."""
+    fa, fb = C._basis(SEED, 0, K, C.LINE_NORM_V1), C._basis(SEED, 1, K, C.LINE_NORM_V1)
+    own, other = (fa, fb) if side == "row_a" else (fb, fa)
+    extra = [] if side == "row_a" else [_flat(C.gram(SEED, K, C.LINE_NORM_V1, DEVICES["h100"]))]
+    fn, e = pc8.templates(K, pc8.TILE, "h100")[side], P.sample_line(SEED, 0 if side == "row_a" else 1, 0, 5)
+    run = lambda w: evaluate(fn, w, e, _flat(own), _flat(other), *extra)  # noqa: E731
+    rows = _rows("h100")
+    plus = lambda w: [0 if x == 0x80000000 else x for x in w]  # noqa: E731
+    assert run(rows["mixed-zero"]) == run(plus(rows["mixed-zero"])) and run(rows["mixed-zero"])[-1] == 1
+    assert run(rows["minus-zero"]) == run(rows["zero"]) and run(rows["minus-zero"])[-1] == 0
 
 
 # ---- the partition ----------------------------------------------------------------------------------------------------

@@ -16,7 +16,8 @@ import pytest
 import pearl_c_vectors as CV
 import pearl_vectors as PV
 from verity.commitments.turboshake import turboshake128
-from verity.ml.fp32 import F32MulV2
+from verity.ml.fp32 import F32FmaV2, F32MulV2
+from verity.ml.scalar import F32Fabs
 from verity.ml.tc.models import HOPPER_BF16_WGMMA_K16
 from verity_pouw.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
 from verity_pouw.schemes import get
@@ -308,6 +309,18 @@ def test_f32_mul_signs_a_zero_product():
     `Pc8OpsAgree.mulZero` and `.mul` state."""
     pairs = ((0, 0xBF800000), (0x80000000, 0x3F800000), (1, 0x80000000), (0x80000000, 0xBF800000), (0, 0x3F800000))
     assert [F32MulV2.evaluate(a, b) for a, b in pairs] == [0x80000000] * 3 + [0, 0]
+
+
+def test_a_row_words_sign_of_zero_reaches_neither_its_magnitude_nor_its_square():
+    """`F32Fabs_v1` clears the sign bit, and `F32Fma_v2(−0, −0, c)` is `F32Fma_v2(+0, +0, c)` on every word `c`, the
+    infinities and NaNs included, as the Lean's `Pc8OpsAgree.fabs` and `.fmaSq0` state: a row's `−0` words give its
+    `+0` words' `s` and `ρ`."""
+    rng = random.Random(7)
+    specials = [0, 0x80000000, 1, 0x80000001, 0x7F7FFFFF, 0xFF7FFFFF, 0x7F800000, 0xFF800000, 0x7FC00000, 0xFFC00001,
+                0x7F800001, 0x3F800000, 0xBF800000]
+    words = specials + [rng.getrandbits(32) for _ in range(4000)]
+    assert all(F32Fabs.evaluate(w) == w & 0x7FFFFFFF for w in words)
+    assert all(F32FmaV2.evaluate(0x80000000, 0x80000000, c) == F32FmaV2.evaluate(0, 0, c) for c in words)
 
 
 def test_v1_registry_and_cost():

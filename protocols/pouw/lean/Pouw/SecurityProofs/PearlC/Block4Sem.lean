@@ -228,13 +228,12 @@ theorem recip_facts : ∀ c : Code, 1 ≤ c.val → c.val ≤ 126 →
 
 /-! ## The agreement -/
 
-/-- **Core's primitives agree with the values `pc4`'s blocks read**, beyond `Pc8OpsAgree`'s: `F32Fabs` clears the
-sign bit; `F32Fmaxf` of two finite words with the sign bit clear is the one of larger value, `a` at equal values
+/-- **Core's primitives agree with the values `pc4`'s blocks read**, beyond `Pc8OpsAgree`'s (which has `F32Fabs`
+clearing the sign bit): `F32Fmaxf` of two finite words with the sign bit clear is the one of larger value, `a` at equal values
 (PTX `max.f32`); `F32Div` of finite words by a nonzero divisor is `f32Word` of the quotient, an exact zero signed as
 `F32Mul`'s; `F32ToE2m1Sat` of a word that is not NaN is `e2m1Word`'s code (it saturates `±inf` to `±6`, as `e2m1Word`
 does reading them at `±480`). Core's Lean semantics will discharge them. -/
 structure Pc4OpsAgree (ops : RowOps) : Prop extends WholeCircuit.Pc8OpsAgree ops where
-  fabs : ∀ w, ops.f32Fabs w = w % 2 ^ 31
   fmaxf : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ a = some x → wordQ b = some y →
     signBit a = false → signBit b = false → ops.f32Fmaxf a b % 2 ^ 32 = if x < y then b else a
   div : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ a = some x → wordQ b = some y → y ≠ 0 →
