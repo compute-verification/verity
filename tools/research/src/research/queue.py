@@ -72,6 +72,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from . import quick_tier
+from .gates import git_env
 from .store import ids, vocab
 
 BRANCH, SHADOW_BRANCH = "next", "queue-shadow"
@@ -93,7 +94,7 @@ class QueueError(Exception):
 
 def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
     r = subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=repo, capture_output=True, text=True,
-                       env={**os.environ, "GIT_TERMINAL_PROMPT": "0", **(env or {})})
+                       env=git_env(GIT_TERMINAL_PROMPT="0", **(env or {})))
     if check and r.returncode:
         raise QueueError(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()[-400:]}")
     return r
@@ -216,7 +217,7 @@ class Rules:
         from .merge import rule_touches
 
         mb = _out(repo, "merge-base", base, head)
-        changed = [p for p in _out(repo, "diff", "--name-only", mb, head).splitlines() if p]
+        changed = [p for p in _out(repo, "diff", "--no-renames", "--name-only", mb, head).splitlines() if p]   # a rename's source too
         roles = {r.role for r in self.grants if r.paths and rule_touches(list(r.paths), changed)}
         audits = [p for p in changed if p == "lean-audit.json" or p.endswith("/lean-audit.json")]
         reports = None
