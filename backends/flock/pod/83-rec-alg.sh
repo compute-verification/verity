@@ -20,8 +20,8 @@ fi
 [ -f "${INNER:?an inner session directory}/claims.json" ] || { echo "INNER=$INNER: no claims.json" >&2; exit 1; }
 . backends/flock/pod/rec-env.sh
 
-FI=$S/forged-inner; rm -rf $FI; mkdir -p $FI && cp -r $INNER/session $INNER/public.json $INNER/claims.json $FI/
-python3 backends/flock/pod/rec_inner.py forge --what challenge --inner $FI > $O/forged.json
+FI=$S/forged-inner; rm -rf $FI; mkdir -p $FI && cp -r $INNER/session $INNER/public.json $INNER/private.json $INNER/claims.json $FI/
+python3 backends/flock/pod/rec_inner.py forge --what challenge --inner $FI > $O/forged.json || exit 1
 /usr/bin/time -v -o $O/time-stage.txt python3 -m verity_flock.rec_residuals $INNER $S/st --forged $FI > $O/stage.json 2> $O/stage.err
 echo "stage exit $?"
 wait $LP
@@ -76,15 +76,21 @@ def gb(p):
 
 stage = json.loads(text(o / "stage.json").splitlines()[0]) if text(o / "stage.json") else None
 
+def verdict(t):
+    # the partition note quotes S, which can hold a newline
+    at = t.find("VERDICT ")
+    return json.JSONDecoder(strict=False).raw_decode(t[at + 8:])[0] if at >= 0 else None
+
 def one(d):
-    lean = next((json.loads(l.split(" ", 1)[1]) for l in text(d / "lean.log").splitlines() if l.startswith("VERDICT ")), None)
+    lean = verdict(text(d / "lean.log"))
     up = next((json.loads(l.split("\t", 1)[1]) for l in text(d / "replay.txt").splitlines() if l.startswith("UPSTREAM")), None)
     live = [json.loads(l[5:]) for l in text(d / "prove.txt").splitlines() if l.startswith("LIVE")]
     return {"stage": (stage or {}).get(d.name), "prove_wall": tv(d / "time-prove.txt", r"Elapsed \(wall clock\) time"),
             "prover_peak_gb": gb(d / "time-prove.txt"),
             "live": {k: live[0].get(k) for k in ("accepted", "prove_s", "prove_total_s", "e2e_s", "proof_bytes", "wire_sent", "wire_recv",
                                                  "k_log", "dense_m", "instances")} if live else None,
-            "lean": {k: lean.get(k) for k in ("accepted", "why", "partition", "registered")} if lean else text(d / "lean.log")[-400:],
+            "lean": {**{k: lean.get(k) for k in ("accepted", "why", "registered")},
+                     "partition": {k: v for k, v in (lean.get("partition") or {}).items() if k != "note"}} if lean else text(d / "lean.log")[-400:],
             "lean_wall": tv(d / "time-lean.txt", r"Elapsed \(wall clock\) time"), "lean_peak_gb": gb(d / "time-lean.txt"),
             "replay": up if up else text(d / "replay.txt")[-400:], "sizes": text(d / "sizes.txt")}
 
