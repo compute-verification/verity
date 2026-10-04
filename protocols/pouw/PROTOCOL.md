@@ -474,11 +474,18 @@ useful    U/(α_A·α_B), glue
     - The tile cap and R1 read the credited rows only. Past the count caps the audit rejects.
     - `volunteer` is an honest prover's remedy for a tile over the cap: it gives up the rows whose removal brings each
       tile under, before the beacon.
-  - A cell's draw weight is its row's share of `wref` at the kept width. An accepted unit is credited
-    (1 − ρ)·`credit_of` over its credited cells.
+  - A cell's draw weight is its row's share of `W_ref` at the kept width, the `W_ref` of the Lean statement the draw
+    cites (`draw_wref`). On sm_120 at its cap that is `wrefDevRev1K` at `Prices.sm120Loop` and the honest cast at 8.72
+    (`SM120_LOOP_CAST_8P72`), the statement of the served γ and ε. Its ratio to `wref` differs between linears, so a
+    served step's mixed layout drawn by `wref` would not be work-weighted in its sense (red team #919 F1). Elsewhere it
+    is `wref`. A tile's draw weight is the sum over its credited cells. Where every cell is credited, that is the cited
+    statement's ticket (the tile's `Wref`). The statements weigh every cell, so a tile with filler, excluded or
+    voluntary rows gets less than its `Wref`'s ticket, and unless every tile's credited share is the same, the draw is
+    not yet the one they state (Not here yet). An accepted unit is credited (1 − ρ)·`credit_of` over its credited
+    cells.
   - **The sampling guarantee is per credited cell.** A drawn tile's uncredited cells (filler, excluded or voluntary)
-    never count as coverage. Volunteering a tile's other rows only lowers that tile's draw weight to its credited cells,
-    which is exactly the bound claimed.
+    never count as coverage. Volunteering a tile's other rows lowers that tile's draw weight to its credited cells.
+    Lean's statements don't model that yet: their draw weight is the whole tile's `Wref`, whatever is volunteered.
   - On an opened tile the verifier checks that filler rows are zero, that every row is zero past the kept width, that
     credited rows pass the per-row rules and excluded rows fail them, and that the replayed debit over the credited words
     is at most ρ times those cells' credit. ρ is the device record's cap (`Device.cap`): 1/400 on the H100.
@@ -852,6 +859,9 @@ useful    U/(α_A·α_B), glue
   are gated by these vectors when they land. Pearl-C's H100 kernel is `benchmarks/pouw/pearl_c/`, its sm_120 kernel
   `benchmarks/pouw/pearl_c_sm120/`.
 - The per-weight share of the honest reference's work in `wref`, and a `TargetProfile` Definition of the NCP GEMM.
+- For Pearl-C's draw: `GγSampled`, `HonestTileCapRate` and `CompleteSampled` take tickets proportional to the whole
+  tile's `Wref`, while the audit weighs a tile by its credited cells. The two agree on fully credited tiles. Closing it
+  means Lean statements over credited-cell tickets, or tickets over every cell; lean's to choose (red team #1014).
 - C-Flock's side of the proof's identifier: the header's `identifier`, its binding through `pub.sha`, and the verifier's
   `--identifier` (proofs' lane).
 - For `ncp-v2`:
