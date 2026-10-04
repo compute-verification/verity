@@ -500,7 +500,7 @@ def test_a_file_renamed_out_of_a_path_rule_requires_its_step(tmp_path):
     from research.merge import required_steps
 
     main, _feat, _tip = _repos(tmp_path)
-    (main / "tools" / "check").mkdir(parents=True)
+    (main / "tools" / "check").mkdir(parents=True, exist_ok=True)
     (main / "tools" / "check" / "tool.py").write_text("from research.store.tool import Tool\n"
                                                       "CHECK = Tool(name='check', version='1', merge_requires={'agree': ['flock/']})\n")
     (main / "flock").mkdir()
