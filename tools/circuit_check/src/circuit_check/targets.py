@@ -95,9 +95,13 @@ def _value(s: str) -> Any:
         return s
 
 
+_DIGEST = re.compile(r"\{[0-9a-f]{12}\}")
+
+
 def definition(spec: str) -> Any:
     """The registered Definition ``spec`` names, bound to the statics its id writes, or else the suite's target of that id: a
-    Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers."""
+    Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers, or one whose
+    id writes a mapping static as its digest (`verity.ir.defs._fmt_static`), which no id can bind again."""
     from verity_vllm.query import word as W
 
     load_registries()
@@ -105,7 +109,13 @@ def definition(spec: str) -> Any:
     if m is None:
         raise ValueError(f"not a Definition id: {spec!r}")
     fam, body = m[1], m[2]
-    statics = {k: _value(v) for k, v in _split(body).items()} if body else {}
+    written = _split(body) if body else {}
+    if any(_DIGEST.search(v) for v in written.values()):
+        fn = suite().get(spec.strip())
+        if fn is None:
+            raise KeyError(f"{spec!r} writes a static as its digest, and no suite target has that id")
+        return fn
+    statics = {k: _value(v) for k, v in written.items()}
     try:
         fn = W.specialization(fam, statics)
     except KeyError:

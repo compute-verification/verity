@@ -98,6 +98,18 @@ def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch
         TG.definition("NoSuchDefinition_v9")
 
 
+def test_an_id_with_a_digested_static_resolves_through_the_suite(monkeypatch):
+    """A mapping static's id is its digest (the comb Definitions' coins), which no id binds again: `circuit-check <id>` checks the
+    suite's target of that id, and a digest no target has raises instead of binding the digest's text."""
+    monkeypatch.setattr(TG, "suite", lambda: SUITE)
+    digested = sorted(fid for fid in SUITE if TG._DIGEST.search(fid))
+    assert {fid.partition("{")[0] for fid in digested} >= {"CombEntry_v1", "CombChunk_v1", "CombColumn_v1"}
+    for fid in digested:
+        assert TG.definition(fid) is SUITE[fid]
+    with pytest.raises(KeyError):
+        TG.definition("CombEntry_v1{SL=7,POINT={000000000000}}")
+
+
 # --- the suite ----------------------------------------------------------------------------------------------------------------
 
 @pytest.mark.circuit_suite
