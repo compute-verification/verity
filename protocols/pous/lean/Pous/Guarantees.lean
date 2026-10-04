@@ -19,6 +19,7 @@ import Pous.Protocol.Model.SampledAudit
 import Pous.Guarantees.P2
 import Pous.Protocol.Model.BandGraph
 import Pous.Protocol.Model.SegLift
+import Pous.Protocol.Model.Continuous
 
 /-!
 # Guarantees
@@ -844,6 +845,53 @@ def BandGradedMeetsFamily : Prop :=
       (∀ salt : Bits 256,
         GradedMeets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) 5 (2 ^ 20) D_late
           Q_late tk.2 tk.1 ((2⁻¹ : ℝ≥0∞) ^ 128))
+
+/-! ### The continuous audit (`Pous.Protocol.Model.Continuous`)
+
+Added on 3 Oct 2026. Statement reviewer: needed. Red team: needed. The verifier enforces the three timing rules: it
+reveals the next index only after the last round closed, rejects an answer past the hard deadline, and counts every
+answer past `Δ` as a miss, with every rejected or wrong one. Neither statement takes a hypothesis about them, and both
+hold at every hard deadline `(D_late, Q_late)` and every arrival schedule `arr` (`Pous/Protocol/Model/Continuous.lean`).
+-/
+
+/-- **The per-answer bound in the continuous audit.** From `TimedINC sch D Q β π`, for every machine, every arrival
+schedule, every hard deadline `(D_late, Q_late)` and every history `h` (the indices sent before): off a setup event of
+probability at most `(β + 1)·π`, the round after `h` is a hit with probability at most `1 − ε + ε_proof` over its
+uniform index, where `ε` is the freed fraction of the responder's memory at that round's send time. The `β + 1` is a
+union over the memory's length. Proof: `PousContinuous.per_answer`; here `Pous.SecurityProofs.PerAnswer`. -/
+def PerAnswer : Prop :=
+  ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late β : ℕ) (π : ℝ≥0∞), TimedINC sch D Q β π →
+    ∀ (W : Bits sch.n) (mach : ContMachine sch) (arr : ℕ → ℕ) (h : List (Fin sch.B)),
+      pr (fun a : M.Ω × sch.Coins =>
+          let pp := (sch.enc W a.1 a.2).1
+          let C := (sch.enc W a.1 a.2).2
+          let s := contAfter mach D_late W pp C a.1 arr h
+          ¬ pr (fun i => (contRecord mach D Q D_late Q_late W pp C a.1 arr s i).verdict = .hit) ≤
+            ENNReal.ofReal (1 - contFreed sch (contMem mach W pp C a.1 arr s).length + epsProof sch β))
+        ≤ (β + 1) * π
+
+/-- **The continuous audit's guarantee** (the explorer note, §1). From `TimedINC sch D Q β π`, for every machine,
+every arrival schedule, every hard deadline `(D_late, Q_late)`, every `f` and every `βe > 0` (the explorer's `β`), over
+the setup and `n` uniform indices: the verifier accepts with tolerance `f` and `Σ_j max(ε_j − ε_proof, 0)` exceeds
+`G(f) = inf_{θ > 0} (θ·f + ln(1/βe)) / (1 − e^−θ)` with probability at most `βe + n·(β + 1)·π`. Here `ε_j` is the
+freed fraction of the responder's memory at challenge `j`'s send time. The positive part keeps a memory above `|C|` at
+one challenge (`ε_j < 0`) from offsetting a shortfall at another. Dividing by `n`:
+`Pr[accept(f₀) ∧ ε̄ > g(f₀)] ≤ βe + n·(β + 1)·π`, with `ε̄ = (1/n)·Σ_j max(ε_j − ε_proof, 0)` and `g = G/n`. When
+`ε_proof ≥ 0` (whenever the bound is not vacuous), `max(ε_j − ε_proof, 0) ≥ max(ε_j, 0) − ε_proof`, so the same bound
+holds for the average of `max(ε_j, 0)` exceeding `ε_proof + g(f₀)`. The scope is the module docstring's: conditional
+on the arrivals, storage at send times, and `g` normalized by the realized number of challenges, never by `λT`. Proof:
+`PousContinuous.continuous_audit`; here `Pous.SecurityProofs.ContinuousAudit`. -/
+def ContinuousAudit : Prop :=
+  ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late β n : ℕ) (π : ℝ≥0∞), TimedINC sch D Q β π →
+    ∀ (W : Bits sch.n) (mach : ContMachine sch) (arr : ℕ → ℕ) (f βe : ℝ), 0 < βe →
+      pr (fun x : Outcome sch n =>
+          let pp := (sch.enc W x.1 x.2.1).1
+          let C := (sch.enc W x.1 x.2.1).2
+          let rs := contRecords mach D Q D_late Q_late W pp C x.1 arr .start (List.ofFn x.2.2)
+          contAccepts f rs ∧
+            (⨅ θ : Set.Ioi (0 : ℝ), ((θ : ℝ) * f + Real.log (1 / βe)) / (1 - Real.exp (-(θ : ℝ)))) <
+              (rs.map fun r => max (contFreed sch r.held - epsProof sch β) 0).sum)
+        ≤ ENNReal.ofReal βe + n * (β + 1) * π
 
 /-! ### Proved results cited outside the package
 
