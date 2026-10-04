@@ -18,7 +18,8 @@ SLOTS (`slot.py`'s line), re-reads SLOTS every POLL_S, and prints each slot's ho
 took the slot) and the waiters ahead of it whenever that changes, and every REPORT_EVERY polls otherwise. Who asked is --by,
 else RESEARCH_LANE, else whoever holds the check slot this runs in (slot.py's `check-NAME.who`), else RESEARCH_AGENT_URL.
 
-`python3 tools/check/lean_slot.py --status`: each pool's slots and holders, then its waiters. Stdlib only: it runs before uv.
+`python3 tools/check/lean_slot.py --status [--json]`: each pool's slots and holders, then its waiters; --json, the same as one
+JSON object (`status_doc`), which `check.py --slots` reads from every machine. Stdlib only: it runs before uv.
 
 From Python (`audit.py --build`): `hold(pool)` takes a slot for the calling process and returns its descriptor, which the
 process keeps open until it exits (None: no cap here, or a slot is held already).
@@ -44,9 +45,15 @@ ANY = "any"
 #: set in CMD's environment to the slot it holds, `POOL/I`
 HELD = "LEAN_SLOT"
 
-_spec = importlib.util.spec_from_file_location("check_slot_for_lean_slot", Path(__file__).resolve().parent / "slot.py")
-SLOT = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(SLOT)
+#: slot.py, from beside this file, unless a caller loaded it under this name already: `check.py --slots` sends both files to a
+#: machine on stdin, where neither is on disk
+SLOT_MODULE = "check_slot_for_lean_slot"
+if SLOT_MODULE in sys.modules:
+    SLOT = sys.modules[SLOT_MODULE]
+else:
+    _spec = importlib.util.spec_from_file_location(SLOT_MODULE, Path(__file__).resolve().parent / "slot.py")
+    SLOT = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(SLOT)
 
 
 class Refused(Exception):
@@ -95,22 +102,38 @@ def take(d: Path, pool: str, n: int) -> tuple[int, int] | None:
     return None
 
 
-def status(pools: dict[str, int], d: Path, now: datetime, proc: Path = Path("/proc"), only: str | None = None,
-           before: str | None = None) -> list[str]:
-    """Each pool's slots (``only``: that pool's) with their holders, then its live waiters (``before``: those ahead of that
-    ticket). A slot past N that is still held (the steward lowered N) is listed too."""
-    out = []
+def pool_docs(pools: dict[str, int], d: Path, now: datetime, proc: Path = Path("/proc"), only: str | None = None,
+              before: str | None = None) -> dict[str, dict]:
+    """Each pool (``only``: that one) by name: its N, its slots with their holders (`slot.holding`), and its live waiters
+    (``before``: those ahead of that ticket). A slot past N that is still held (the steward lowered N) is listed too."""
+    out = {}
     for pool, n in sorted(pools.items()):
         if only is not None and pool != only:
             continue
         held = {int(p.stem.rsplit("-", 1)[1]) for p in d.glob(f"lean-{pool}-*.lock") if p.stem.rsplit("-", 1)[1].isdigit()}
+        slots = []
         for i in sorted(set(range(n)) | {i for i in held if i >= n}):
-            h = SLOT.held_by(lock_path(d, pool, i), lock_path(d, pool, i).with_suffix(".who"), now, proc)
-            if i >= n and h == "free":
-                continue
-            out.append(f"{pool}/{i}{'' if i < n else ' (past N)'}  {h}")
-        out += [f"{pool}: {w}" for w in SLOT.waiters(d / line_name(pool), now, before)]
+            h = SLOT.holding(lock_path(d, pool, i), lock_path(d, pool, i).with_suffix(".who"), now, proc)
+            if i < n or h is not None:
+                slots.append({"index": i, "past_n": i >= n, "holder": h})
+        out[pool] = {"n": n, "slots": slots, "waiters": SLOT.waiting(d / line_name(pool), now, before)}
     return out
+
+
+def status(pools: dict[str, int], d: Path, now: datetime, proc: Path = Path("/proc"), only: str | None = None,
+           before: str | None = None) -> list[str]:
+    """`pool_docs` as lines: each slot with its holder, then the pool's waiters."""
+    out = []
+    for pool, p in pool_docs(pools, d, now, proc, only, before).items():
+        out += [f"{pool}/{s['index']}{' (past N)' if s['past_n'] else ''}  {SLOT.held_text(s['holder'])}" for s in p["slots"]]
+        out += [f"{pool}: {SLOT.waiter_text(w)}" for w in p["waiters"]]
+    return out
+
+
+def status_doc(now: datetime, proc: Path = Path("/proc")) -> dict:
+    """`--status --json`: SLOTS and its pools (`pool_docs`; null without SLOTS, so audits here run uncapped)."""
+    return {"file": str(SLOTS), "now": f"{now:%Y-%m-%dT%H:%MZ}",
+            "pools": pool_docs(parse(SLOTS.read_text()), SLOTS.parent, now, proc) if SLOTS.exists() else None}
 
 
 def asker(by: str | None = None) -> dict:
@@ -174,10 +197,14 @@ def hold(pool: str | None = None, by: str | None = None, **kw) -> int | None:
 
 def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sleep) -> int:
     if argv[:1] == ["--status"]:
-        if not SLOTS.exists():
+        if argv[1:] == ["--json"]:
+            print(json.dumps(status_doc(now())))
+        elif argv[1:]:
+            sys.exit("usage: lean_slot.py --status [--json]")
+        elif not SLOTS.exists():
             print(f"no Lean audit cap on this machine ({SLOTS})")
-            return 0
-        print("\n".join(status(parse(SLOTS.read_text()), SLOTS.parent, now())))
+        else:
+            print("\n".join(status(parse(SLOTS.read_text()), SLOTS.parent, now())))
         return 0
     opts, cmd = (argv[:argv.index("--")], argv[argv.index("--") + 1:]) if "--" in argv else ([], argv)
     val = {k: opts[opts.index(k) + 1] for k in ("--pool", "--by") if k in opts[:-1]}
