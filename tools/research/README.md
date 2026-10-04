@@ -113,11 +113,10 @@ listed twice. Anything else, unreadable included, passes no gate, and a refusal 
 <attempt id>` trailer; `research` only reads the attempts of the repository's tool (`tools/check`). `--canary` checks, in scratch
 stores, that every gate refuses each bad attempt in `CANARY` and admits a good one.
 
-`research merge --train A B C` merges the refs in order onto the target's tip in a scratch worktree (one `--no-ff` merge each,
-so the chain's commits are the train's prefixes), records the tool on the last (`research run --tool`, `--on` a machine and
-polled there), and fast-forwards the target to it when it passes: the exact tree checked is the one that lands. When it fails,
-the prefixes are bisected (each checked the same way) to the first ref whose merge breaks it, and the target fast-forwards to
-the longest prefix that passed.
+`research merge --train A B C` merges the refs in order onto the target's tip in a scratch worktree, one `--no-ff` merge each
+(so its commits are the train's prefixes), records the tool on the last (`research run --tool`, `--on` a machine), and when it
+passes fast-forwards the target to that exact tree. On a failure it bisects the prefixes to the first ref whose merge breaks it
+and fast-forwards to the longest prefix that passed.
 
 `research merge --train --prepare BRANCH [--onto BASE] N@SHA ...` is the lander's train build: the same chain, in a scratch
 worktree, onto the remote's `--into` or a train ahead's prep branch (`--onto`). An `N@SHA` or `BRANCH@SHA` whose head moved is
