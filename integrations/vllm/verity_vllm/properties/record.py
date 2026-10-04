@@ -48,6 +48,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "DsaIndexerQ_v1, every compared prefill and paged logit DsaMqaLogit_v1, every top-k row of at most 2048 keys "
              "DsaTopKShortRow_v1, and every compared FA3 sparse output SparseMlaHead_v1 at its row's valid count, bit for bit; "
              "the k_pe and q_pe RoPE words are each one named contraction."),
+    Property("blackwell_fp8_capture", "verity-vllm/blackwell-fp8-capture/v1",
+             "On the capture's cc 12.0 GPU, vLLM selects CutlassFp8BlockScaledMMKernel (and TritonFp8BlockScaledMMKernel under "
+             "--linear-backend triton) for the 235B FP8 TP8 row's linears and TritonExperts at block [64, 64] for its experts, the "
+             "three M classes run three CUTLASS kernels, and at those shapes every output word equals the k32 BlackwellE4m3QmmaDot32 "
+             "block model of its kernel (CUTLASS's FFMA(d, FMUL(sx, sw), acc), Triton's FFMA(FMUL(d, sx), sw, acc)) and every "
+             "activation quant Fp8GroupQuant_v1 at G 64 or 128, bit for bit, while each competing model is refuted."),
     Property("norm_tap_exactness", "verity-vllm/norm-tap-exactness/v1",
              "The tapped norm kernels (fused CUDA op, Triton copy) compute exactly the installed kernels' outputs, write every row's "
              "scale, and each scale is the IR model's scale bit for bit; the Triton copy's compiled arithmetic is the installed kernel's."),
