@@ -236,7 +236,7 @@ class Rules:
                 f"grant the rules name until it merges cleanly")
             return {r.role for r in self.grants}
         merged = r.stdout.split("\n", 1)[0]
-        changed = [p for p in _git(repo, "diff", "--name-only", "-z", "--ignore-submodules=none", base, merged).stdout.split("\0") if p]
+        changed = [p for p in _git(repo, "diff", "--no-renames", "--name-only", "-z", "--ignore-submodules=none", base, merged).stdout.split("\0") if p]   # a rename's source too
         roles = {r.role for r in self.grants if r.paths and rule_touches(list(r.paths), changed)}
         audits = [p for p in changed if p == "lean-audit.json" or p.endswith("/lean-audit.json")]
         reports = None

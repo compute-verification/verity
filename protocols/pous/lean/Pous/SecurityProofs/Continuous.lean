@@ -3,12 +3,16 @@ import Pous.SecurityProofs.Continuous.Verifier
 import Pous.SecurityProofs.Continuous.PerAnswer
 import Pous.SecurityProofs.Continuous.Band
 import Pous.SecurityProofs.Continuous.Complete
+import Pous.SecurityProofs.Continuous.TimeAverage
+import Pous.SecurityProofs.Continuous.BandTimeAverage
 
 /-!
 # The continuous audit
 
 The game is `Pous/Protocol/Model/Continuous.lean` (trusted): an explicit timed verifier and a responder that runs on
-its clock. The statements are `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.ContinuousAudit`.
+its clock. The statements are `Pous.Guarantees.PerAnswer`, `Pous.Guarantees.ContinuousAudit`,
+`Pous.Guarantees.ContinuousComplete`, `Pous.Guarantees.ContinuousTimeAverage` and
+`Pous.Guarantees.BandFamilyContinuousTimeAverage`.
 
 * `Continuous/MissCount.lean`: the counting step, pure probability (`PousContinuous.pr_misses_le`,
   `PousContinuous.pr_misses_gt_le`).
@@ -24,4 +28,10 @@ its clock. The statements are `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.C
   rate at most `q` is rejected with probability at most `P[Bin(n, q) > f₀]`, by the graded audit's tail rule
   (`PousContinuous.continuous_complete`; pinned as `Pous.SecurityProofs.ContinuousComplete`). The honest responder
   is the case `q = 0` (`honest_complete`, not pinned).
+* `Continuous/TimeAverage.lean`: the verifier draws the arrivals, and the bound reads the memory at every idle slot
+  (`PousContinuous.continuous_time_average`; pinned as `Pous.SecurityProofs.ContinuousTimeAverage`).
+* `Continuous/BandTimeAverage.lean`: that bound on the `N`-segment band at every `D ≤ 510`, `k ≤ 900`
+  (`PousContinuous.band_cont_time_average_row`), and the rows `D = 0, 1, 2, 5`
+  (`PousContinuous.band_family_continuous_time_average`; pinned as
+  `Pous.SecurityProofs.BandFamilyContinuousTimeAverage`).
 -/

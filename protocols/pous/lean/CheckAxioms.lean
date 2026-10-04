@@ -104,6 +104,13 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 #print axioms Pous.SecurityProofs.ContinuousAudit
 #print axioms Pous.SecurityProofs.BackgroundRebuildExcluded
 #print axioms Pous.SecurityProofs.ContinuousComplete
+#print axioms Pous.SecurityProofs.ContinuousTimeAverage
+#print axioms Pous.SecurityProofs.BandFamilyContinuousTimeAverage
+-- secure erasure (the 4 Oct volatile-memory model): the digest, the reduction, the band family and 96 GiB
+#print axioms Pous.SecurityProofs.DigestAU
+#print axioms Pous.SecurityProofs.SecureErasureMeets
+#print axioms Pous.SecurityProofs.SecureErasureMeetsFamily
+#print axioms Pous.SecurityProofs.SecureErasureMeets96GiB
 -- the abstract model `m1p` at P2's parameters, no hypothesis: the Meets rows, the slack rows and the error split
 #print axioms Pous.SecurityProofs.P2MeetsM1pB19Uncond
 #print axioms Pous.SecurityProofs.P2MeetsM1pFamilyUncond

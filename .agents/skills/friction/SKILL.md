@@ -154,6 +154,10 @@ Newest first. Each is Daniel's unless it names the coordinator.
   the Lean catches up), and the PR whose Lean covers it deletes the file.
 - 2026-10-01: whoever lands a train runs `research merge --sweep` after each push, which closes the landed PRs, retargets
   their children and deletes landed branches. `research merge --push` pushes the merge and then sweeps, so a lander passes it.
+- 2026-09-30 (2:52 PM PDT; at all hours since the coordinator's 06:33Z Oct 4): GPU work runs only as items its lane owner
+  said yes to, each naming its research question (`--question`, or a `question` label on its run). There is no filler:
+  idle GPUs beat padded ones, a steward reports idle GPUs instead of offering them as backfill, and approved backfill runs
+  on preemptible leases.
 - 2026-09-30: the Lean infrastructure lane changes `tools/lean`, the `lean-proofs` skill, `check`'s Lean steps, shared
   Lean foundations and Lean or Mathlib bumps (in a PR of their own, announced first) without asking. It speeds up another
   lane's proofs when no pinned record changes; a changed record in another lane's package goes through that lane. What a

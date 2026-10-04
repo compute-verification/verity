@@ -409,7 +409,7 @@ def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, l
     rules = getattr(declaration(repo, tool), "merge_requires", None)
     if not rules:
         return {}
-    changed = [p for p in _git(repo, "diff", "--name-only", base, commit).stdout.splitlines() if p]
+    changed = [p for p in _git(repo, "diff", "--no-renames", "--name-only", base, commit).stdout.splitlines() if p]   # a rename's source too
     out = {}
     for step, rule in rules.items():
         if hit := rule_touches(rule, changed):
