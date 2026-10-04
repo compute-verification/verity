@@ -32,7 +32,7 @@ variable {n : ℕ} {Gate : Type}
 /-- **The registered reads are the verifier's own at the record's draw, with public inputs**: `OwnReadsH`, at the
 circuit with public input ports `pi` (the check reads the units from the population's header, whichever drawn statement
 `pi` makes). -/
-def OwnReadsHP (reg : Array Registered.Port) (c : Circuit) (pi : HmIn.Ports) (pub : Public) (t : Exec.Transcript)
+def OwnReadsHP (reg : Array Registered.Port) (c : Circuit) (_pi : HmIn.Ports) (pub : Public) (t : Exec.Transcript)
     (isRead : (Fin n × Fin c.ports.size) ⊕ Gate → Prop) (port : (Fin n × Fin c.ports.size) ⊕ Gate → Registered.Port)
     (readAt : (Fin n × Fin c.ports.size) ⊕ Gate → ℕ) : Prop :=
   OwnReadsH (n := n) reg c pub t isRead port readAt
