@@ -267,7 +267,8 @@ def _boolean_roots() -> list[Any]:
     two heads of 8. MLA (`registry.mla`): Triton's one-split decode at one head of two keys over a 16 + 16 latent (a partial
     block, so its masked columns), which reaches the head, the block, the score and every element; the absorb bmm at two heads,
     K = 32, N = 3; the shared-expert combine at 8 elements with GLM-4.7-Flash's routed_scaling_factor. cuBLAS's f32 router gate
-    (`cublas_f32`): the gemv dot at its one-group K = 256 (16 classes of one tile), the SIMT dot and the linear over it at K = 32."""
+    (`cublas_f32`): the gemv dot at its one-group K = 256 (16 classes of one tile), the SIMT dot and the linear over it at K = 32.
+    MLA decode's absorb with W_UK as stored (`mla_word.MlaAbsorb_v2`) at the bmm's binding."""
     from verity.ir.defs import bind
     from verity.ml.boolean import attention as BAT
     from verity.ml.boolean import gemm as BG
@@ -284,6 +285,7 @@ def _boolean_roots() -> list[Any]:
     from verity_vllm.program.registry import cublas_f32 as CUB
     from verity_vllm.program.registry import gumbel_boolean as GB
     from verity_vllm.program.registry import mla
+    from verity_vllm.program.registry import mla_word as MW
     from verity_vllm.program.registry import moe as M
     from verity_vllm.program.registry import prims as P
     from verity_vllm.program.registry import sampling_boolean as SB
@@ -319,7 +321,8 @@ def _boolean_roots() -> list[Any]:
             bind(boolean_rope.RoPEGptJ, NHEADS=2, D=8),
             bind(mla.TritonMlaDecode, H=1, T=2, DL=16, DR=16, BN=32, SPLITS=1, SCALE=0x3D800000, DOT=HOP),
             bind(mla.MlaBmm, NHEADS=2, K=32, N=3, DOT=HOP), bind(mla.MoeSharedCombine, H=8, RSF=0x3FE66666),
-            bind(CUB.CublasGemvDot, K=256), bind(CUB.CublasSimtDot, K=32), bind(CUB.CublasF32Linear, K=32, N=2, TREE="simt")] + rows
+            bind(CUB.CublasGemvDot, K=256), bind(CUB.CublasSimtDot, K=32), bind(CUB.CublasF32Linear, K=32, N=2, TREE="simt"),
+            bind(MW.MlaAbsorbBits, NHEADS=2, K=32, N=3, DOT=HOP)] + rows
 
 
 def _boolean_gather_roots() -> list[Any]:
@@ -455,6 +458,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("TritonMlaDecodeWord_v1", lambda: bind(mla_word.TritonMlaDecodeWord, H=1, T=65, DL=16, DR=16, BN=32, SPLITS=1,
                                                 SCALE=0x3D800000, DOT=hopper.HopperBF16WgmmaDot16)),
         ("MlaBmmWord_v1", lambda: bind(mla_word.MlaBmmWord, NHEADS=2, K=32, N=3, DOT=hopper.HopperBF16WgmmaDot16)),
+        ("MlaAbsorb_v1", lambda: bind(mla_word.MlaAbsorb, NHEADS=2, K=32, N=3, DOT=hopper.HopperBF16WgmmaDot16)),
         # the router gate's gemv tree (the vocabulary's sample binds the SIMT one at K = 32): one group of 16 classes
         ("CublasF32Linear_v1/gemv", lambda: bind(cublas_f32.CublasF32LinearWord, K=256, N=2, TREE="gemv")),
     ]

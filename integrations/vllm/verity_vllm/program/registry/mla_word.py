@@ -9,6 +9,9 @@ Match evaluate words; circuit-check proves the Boolean). Each step is the core w
     TritonMlaDecodeHeadWord_v1{T, DL, DR, BN, SPLITS, SCALE, DOT}                 `TritonMlaDecodeHead_v1`
     TritonMlaDecodeWord_v1{H, T, DL, DR, BN, SPLITS, SCALE, DOT}                  `TritonMlaDecode_v1`
     MlaBmmWord_v1{NHEADS, K, N, DOT}                                              `MlaBmm_v1`: Gemm_v2{K, N, DOT} per head
+    MlaAbsorb_v1{NHEADS, K, N, DOT}       (x: Array<NHEADS, Array<K, BF16>>, w: Array<NHEADS, Array<K, Array<N, BF16>>>)
+                                          `MlaBmmWord_v1` of x against each head's w transposed: the absorb with W_UK in
+                                          kv_b_proj's stored layout; `MlaAbsorb_v2` is the same body over `MlaBmm_v1` on bits
 
 DOT is the word k16 step (`HopperBF16WgmmaDot16_v1` on sm_120, the word of the Boolean `HopperBF16WgmmaDot16_v2`).
 ``x - m`` is `F32Sub_v2` (FSUB); the Boolean's canonical NaNs and the word FMUL's propagated ones differ only in payloads that
@@ -20,18 +23,20 @@ false). The output's ``+ 0`` turns a -0 quotient into +0, as the Boolean's clear
 """
 from __future__ import annotations
 
-from verity.ir.defs import bind, composite
+from verity.ir.defs import CompositeDefinition, bind, composite
 from verity.ir.refs import Coll, concat, strided_view, tuple_of
 from verity.ir.types import Array, Tuple
 from verity.ml import fp32 as W
 from verity.ml import gemm as G
 from verity.ml import mufu as M
 from verity.ml import scalar as SC
+from verity.ml.boolean.trace import word_of
 from verity.ml.prims import ZERO32, F2fpBf16, const
+from verity_vllm.program.registry import mla as BMLA
 from verity_vllm.program.registry.prims import A16, BF16, BIT, F32, F32SubV2
 from verity_vllm.program.registry.ref_prims import F32GtStrict
 
-__all__ = ["MlaBmmWord", "TritonExpSubWord", "TritonMlaBlockWord", "TritonMlaDecodeHeadWord", "TritonMlaDecodeWord",
+__all__ = ["MlaAbsorb", "MlaAbsorbBits", "MlaBmmWord", "TritonExpSubWord", "TritonMlaBlockWord", "TritonMlaDecodeHeadWord", "TritonMlaDecodeWord",
            "TritonMlaGateWord", "TritonMlaOutWord", "TritonMlaScoreWord", "MLA_WORD_COMPOSITES"]
 
 NEG_INF = 0xFF800000
@@ -208,5 +213,33 @@ def MlaBmmWord(B, S, x, w):
     return B.batch(bind(G.Gemm, K=S.K, N=S.N, DOT=S.DOT), x, w, axes=(0, 0))
 
 
+def _absorb_type(bf16):
+    return lambda S: ((("x", Array(S.NHEADS, Array(S.K, bf16))), ("w", Array(S.NHEADS, Array(S.K, Array(S.N, bf16))))),
+                      Array(S.NHEADS, Array(S.N, bf16)))
+
+
+def _absorb(bmm, bf16):
+    def body(B, S, x, w):
+        # the transpose is a view of this body's own parameter (one `Strided` per head on words, per head and column on bits):
+        # inlined at a Program's root, a view of the weights record would be one reference per leaf
+        NH, K, N, E = S.NHEADS, S.K, S.N, bf16.leaves
+        if E == 1:
+            parts = [strided_view(w, h * K * N, K, 1, N, N * K) for h in range(NH)]
+        else:
+            parts = [strided_view(w, (h * K * N + n) * E, E, N * E, 1, K * E) for h in range(NH) for n in range(N)]
+        wt = Coll(Array(NH, Array(N, Array(K, bf16))), concat(parts))
+        return B.call(bind(bmm, NHEADS=NH, K=K, N=N, DOT=S.DOT), x, wt)
+    return body
+
+
+ABSORB_DOC = ("MLA decode's W_UK_T absorb for one token row, ``w[h][k][n]`` kv_b_proj's W_UK rows of head h as stored: the bmm of "
+              "``x[h]`` against ``w[h]`` transposed on each head")
+MlaAbsorb = CompositeDefinition("MlaAbsorb", 1, ("NHEADS", "K", "N", "DOT"), _absorb_type(BF16), _absorb(MlaBmmWord, BF16),
+                                doc=f"{ABSORB_DOC} (`MlaBmmWord_v1`)", conformance=CONFORMANCE)
+MlaAbsorbBits = CompositeDefinition("MlaAbsorb", 2, ("NHEADS", "K", "N", "DOT"), _absorb_type(BMLA.BF16), _absorb(BMLA.MlaBmm, BMLA.BF16),
+                                    doc=f"{ABSORB_DOC} (`MlaBmm_v1`, on bits)", conformance=CONFORMANCE)
+MlaAbsorbBits.word = lambda b: bind(MlaAbsorb, NHEADS=b["NHEADS"], K=b["K"], N=b["N"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
+
+
 MLA_WORD_COMPOSITES = [TritonExpSubWord, TritonMlaScoreWord, TritonMlaBlockWord, TritonMlaGateWord, TritonMlaOutWord,
-                       TritonMlaDecodeHeadWord, TritonMlaDecodeWord, MlaBmmWord]
+                       TritonMlaDecodeHeadWord, TritonMlaDecodeWord, MlaBmmWord, MlaAbsorb]

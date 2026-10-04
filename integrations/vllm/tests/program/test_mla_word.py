@@ -94,6 +94,25 @@ def test_bmm_agrees_with_the_model() -> None:
         assert np.array_equal(got, want)
 
 
+def test_absorb_takes_w_uk_as_stored() -> None:
+    """`MlaAbsorb_v1` is `bmm_kernel`'s model on W_UK as kv_b_proj stores it (``w[h][k][n]``), its Boolean `MlaAbsorb_v2` the same
+    words, and `boolean_version` links them; the transpose stays one `Strided` per head in the word body."""
+    from verity.ir.refs import Concat, Strided
+    from verity_vllm.program.boolean import boolean_version
+
+    rng = np.random.default_rng(14)
+    NH, K, N, n = 3, 32, 5, 24
+    x, w = _bf16_words(rng, (n, NH, K), "spread"), _bf16_words(rng, (n, NH, K, N), "special")
+    word = bind(MW.MlaAbsorb, NHEADS=NH, K=K, N=N, DOT=P.HopperBF16WgmmaDot16)
+    got = _words(word, x, w).astype(U16)
+    assert np.array_equal(got, np.stack([MK.bmm_rows(x[i][:, None, :], w[i])[:, 0] for i in range(n)]))
+    boolean = bind(MW.MlaAbsorbBits, NHEADS=NH, K=K, N=N, DOT=BG.HopperBF16WgmmaDot16)
+    assert np.array_equal(got, _bits(boolean, x, w).astype(U16))
+    assert boolean_version(word).id == boolean.id
+    wt = word.body.nodes[-1].args[1].refs
+    assert isinstance(wt, Concat) and len(wt.parts) == NH and all(isinstance(p, Strided) for p in wt.parts)
+
+
 def test_the_word_decode_rejects_what_it_does_not_model() -> None:
     with pytest.raises(ValueError, match="SPLITS_is_1"):
         _ = bind(MW.TritonMlaDecodeHeadWord, T=2, DL=16, DR=16, BN=32, SPLITS=2, SCALE=SCALE, DOT=P.HopperBF16WgmmaDot16).body

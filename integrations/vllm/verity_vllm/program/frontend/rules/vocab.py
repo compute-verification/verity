@@ -364,6 +364,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # MLA (`rules/vllm_bindings/mla_attention.py`): the absorb / V-up bmms and Triton's one-split MLA decode, the word twins of
            # `registry.mla`'s Boolean Definitions
            "mla_bmm": lambda NHEADS, K, N, DOT: ir_bind(_mlaw.MlaBmmWord, NHEADS=NHEADS, K=K, N=N, DOT=DOT),
+           "mla_absorb": lambda NHEADS, K, N, DOT: ir_bind(_mlaw.MlaAbsorb, NHEADS=NHEADS, K=K, N=N, DOT=DOT),
            "mla_decode": lambda H, T, DL, DR, SPLITS, SM_SCALE, DOT: ir_bind(_mlaw.TritonMlaDecodeWord, H=H, T=T, DL=DL, DR=DR,
                                                                              BN=_mlaw.BLOCK_N, SPLITS=SPLITS, SCALE=SM_SCALE, DOT=DOT),
            # [R17-42 route A (3)] the fused-MoE block under `TargetProfile.moe_construction = "padded"` as ONE kind per token: the fixed-slot
@@ -440,7 +441,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "rope_gptj": "RoPEGptJ_v2{NHEADS,D}: vLLM _C.rotary_embedding GPT-J (interleaved pairs 2i, 2i+1; the odd output's y*cos rounded, "
                         "x*sin fused), bf16 cos/sin cache row as Input",
            "mla_bmm": "MlaBmmWord_v1{NHEADS,K,N,DOT}: vLLM's batch-invariant bmm_kernel for one token row, Gemm_v2{K,N,DOT} per head "
-                      "(MLA's W_UK_T absorb and W_UV up-projection; word twin of registry.mla.MlaBmm_v1)",
+                      "(MLA's W_UV up-projection; word twin of registry.mla.MlaBmm_v1)",
+           "mla_absorb": "MlaAbsorb_v1{NHEADS,K,N,DOT}: MLA decode's W_UK_T absorb, MlaBmmWord_v1 of q_nope against each head's W_UK rows "
+                         "of kv_b_proj as stored, transposed inside the Definition (registry.mla_word; MlaAbsorb_v2 on bits)",
            "mla_decode": "TritonMlaDecodeWord_v1{H,T,DL,DR,BN=32,SPLITS,SCALE=SM_SCALE,DOT}: Triton's one-split MLA decode (decode_attention_fwd, "
                          "is_mla, BLOCK_N 32) of one query token over the request's T cache rows [kv_c | k_pe] (word twin of "
                          "registry.mla.TritonMlaDecode_v1); SM_SCALE the f32 word of sm_scale",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.ir.refs import Coll, PartLog, array_of, concat, strided_view
+from verity.ir.refs import Coll, PartLog, array_of, concat
 from verity.ir.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type
@@ -136,9 +136,10 @@ class MlaAttentionWithOutputRule(StateRule):
     """`vllm::unified_mla_attention_with_output(q[T, NH, DN+DR], kv_c_normed[T, L], k_pe[T, 1, DR], output![T, NH*DV], layer_name,
     output_scale?, output_block_scale?, kv_cache_dummy_dep?)`: the latent cache is implicit state keyed by `layer_name`, made
     explicit as the layer's history of rows `[kv_c | k_pe]`; `output` (an allocation) is rebound.  `W = kv_b_proj.weight`
-    [NH*(DN+DV), L], read as views (`W_UK_T[h][p] = W[h*(DN+DV)+p]`, `W_UV[h] = W[h*(DN+DV)+DN : (h+1)*(DN+DV)]`):
+    [NH*(DN+DV), L], read as row views (`W_UK[h] = W[h*(DN+DV) : h*(DN+DV)+DN]`, `W_UV[h] = W[h*(DN+DV)+DN : (h+1)*(DN+DV)]`):
 
-    * one query row (vLLM's decode: query_len 1 at any history, `forward_mqa`): `MlaBmmWord{NH, DN, L}` of q_nope against W_UK_T,
+    * one query row (vLLM's decode: query_len 1 at any history, `forward_mqa`): `MlaAbsorb{NH, DN, L}` of q_nope against W_UK
+      (`MlaBmmWord{NH, DN, L}` against W_UK_T, transposed inside the Definition),
       `TritonMlaDecodeWord{NH, P, L, DR, 32, 1, SCALE}` of `[ql_nope | q_pe]` over the P history rows, `MlaBmmWord{NH, L, DV}` against
       W_UV;
     * T > 1 rows opening the history (prefill without context, `forward_mha`): `Gemm{L, NH*(DN+DV)}` per row (`kv_b_proj`), then per
@@ -158,8 +159,9 @@ class MlaAttentionWithOutputRule(StateRule):
                                    "T == 1 (decode) or the call opens the history (prefill without context); DV == DN + DR on the prefill",
                                    "the prefill's scale is (DN+DR)^-0.5 (FA2's folded constant); the decode's scale is the observed f32 word",
                                    "assumed (op contract): causal attention over the history + this call's rows"),
-                    evidence_domain="structural; numerics: MlaBmmWord_v1 / TritonMlaDecodeWord_v1 (exact-model-tested twins of the MLA lane's Boolean "
-                                    "MlaBmm_v1 / TritonMlaDecode_v1), Gemm_v2 and Attention_v5 (FA2 Check_inf, BN = fa2_kblock_n(D))")
+                    evidence_domain="structural; numerics: MlaAbsorb_v1 / MlaBmmWord_v1 / TritonMlaDecodeWord_v1 (exact-model-tested twins of the "
+                                    "MLA lane's Boolean MlaBmm_v1 / TritonMlaDecode_v1), Gemm_v2 and Attention_v5 (FA2 Check_inf, "
+                                    "BN = fa2_kblock_n(D))")
 
     def targets(self):
         return _vllm_op("unified_mla_attention_with_output")
@@ -261,8 +263,8 @@ class MlaAttentionWithOutputRule(StateRule):
 
     def _decode(self, ctx, node, hint, q0, hist, P, W, NH, L, DN, DR, DV, H, scale, dot):
         x = Coll(Array(NH, Array(DN, BF16)), concat([q0[h][0:DN].refs for h in range(NH)]))
-        w_uk = Coll(Array(NH, Array(L, Array(DN, BF16))), concat([strided_view(W, h * H * L, DN, 1, L, L * DN) for h in range(NH)]))
-        absorb = ctx.kind("mla_bmm", node, NHEADS=NH, K=DN, N=L, DOT=dot)
+        w_uk = Coll(Array(NH, Array(DN, Array(L, BF16))), concat([W[h * H:h * H + DN].refs for h in range(NH)]))
+        absorb = ctx.kind("mla_absorb", node, NHEADS=NH, K=DN, N=L, DOT=dot)
         ql = ctx.call(absorb, x, w_uk, node=node, rule=self, name=f"{hint}/absorb")
         mqa_q = Coll(Array(NH, Array(L + DR, BF16)), concat([r for h in range(NH) for r in (ql[h].refs, q0[h][DN:DN + DR].refs)]))
         kv = Coll(Array(P, Array(L + DR, BF16)), hist.cut(P))
