@@ -3,22 +3,20 @@ import FlockSoundness.Discharge.Composed.Sound
 import FlockSoundness.Discharge.Composed.Headline
 
 /-!
-# Draft: the instance's protocol-1 hypotheses from objective 1's session theorems
+# The instance's protocol-1 hypotheses from objective 1's session theorems
 
 The private-circuit instance takes protocol 1's soundness and zero knowledge at the universal unit as Props
 (`ZkSessionSound`, `ZkSessionView`). Here they are discharged from `zk_session_sound` and from the zero-knowledge half of
-`zk_session_composed` (`zkViewAt_of_ok` at `coinedOf_setup`), at the sessions those theorems cover:
+`zk_session_composed` (`zk_session_view`), at the sessions those theorems cover:
 
 * `realSession`: the `UnitSession` of a `--zk` session as `zk_session_sound` reads it: the live game `auditLive`,
   flock-verify `--zk`'s acceptance, the stratified law, and the extracted values, `ε_ks`, `δ_link` and `cr/sha-512` of the
   simulated prover `simZ … τ`. Those read A6's three facts (`TagsOk`, `RecordsLiveZK`, `DrawOkZK` at the law's draws)
   through `runsZC_live`, so the session reads them by cases on `A6`.
 * `zkSessionSound_real`: `ZkSessionSound realSession` from `zk_session_sound`, under the count curve's side conditions.
-* `zkSessionView_of_zkViewAt`, `zkSessionView_real`: `ZkSessionView` at one table, from `ZkViewAt` at an admitted coin
-  vector and a valid witness whose registered values are the public ones; at a draw's `coinedOf` tables, under
-  `hash-derived-key` and `PadNonvanishing`, at `δ₁ = 2^-193`.
-
-`coinedOf` and `coinedOf_setup` are `sorry` on this branch (objective 1's open item), so `zkSessionView_real` is too.
+* `zkSessionView_of_zkViewAt`, `zkSessionView_real`: `ZkSessionView` at one table, from `ZkViewAt` at a covered coin
+  vector and a valid witness whose registered values are the public ones; at a draw's `coinedOf` tables
+  (`zk_session_view`), under `hash-derived-key` and `PadNonvanishing`, at `δ₁ = 2^-193`.
 -/
 
 namespace FlockSoundness.Discharge.PrivateCircuit
@@ -103,24 +101,29 @@ theorem zkSessionSound_real (hS : Law.ExecStrata σs ks St) (hk : 1 ≤ k) (hRw 
 
 end Sound
 
-/-- **`ZkSessionView` at one table from `ZkViewAt`**, at an admitted coin vector `c` and a valid witness `w` whose
+/-- **`ZkSessionView` at one table from `ZkViewAt`**, at a covered coin vector `c` and a valid witness `w` whose
 registered values are the public ones. -/
-theorem zkSessionView_of_zkViewAt {K : Type} [Field K] (C : CoinedSetup K) {δ₁ : ℝ≥0∞} (h : ZkViewAt C δ₁)
-    (c : C.Coins) (hc : C.Admits c) (w : C.W) (hw : C.Valid w) (hreg : (C.T c).tab.sReg w = (C.T c).tab.pubReg) :
+theorem zkSessionView_of_zkViewAt (C : CoinedSetup) {δ₁ : ℝ≥0∞} (h : ZkViewAt C δ₁) (c : CoinsZK C.Rest)
+    (hc : C.Covered c) (w : Witness C.S.m) (hw : C.Valid w) (hreg : (C.T c).tab.sReg w = (C.T c).tab.pubReg) :
     ZkSessionView (fun _ : Fin 1 => C.T c) (fun _ => w) δ₁ :=
   fun w₀ _ enc E => h c hc enc (fun _ => w) w₀ (fun _ => hw) (fun _ => hreg) E
 
-/-- **`ZkSessionView` at a draw's `--zk` table**, from the zero-knowledge half of `zk_session_composed`
-(`zkViewAt_of_ok` at `coinedOf_setup`), under `hash-derived-key` and `PadNonvanishing`, at `δ₁ = 2^-193`. -/
-theorem zkSessionView_real (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (hS : Nonempty (DrawSetupZK I mPts S (dj S)))
+/-- **`ZkSessionView` at a draw's `--zk` table**, from `zk_session_view` (the zero-knowledge half of
+`zk_session_composed`), for an untyped statement whose Δ and regions avoid the mask slot, under `hash-derived-key` and
+`PadNonvanishing`, at `δ₁ = 2^-193`. -/
+theorem zkSessionView_real (P : LigProver) (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
+    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
+    (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), avoidsMask y.x.st = true)
     (hKey : Assumptions.Zk.HashDerivedKeyHm96) (hPad : Assumptions.Zk.PadNonvanishing40)
-    (c : (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R)).Coins) (hc : (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R)).Admits c)
-    (w : (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R)).W) (hw : (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R)).Valid w)
-    (hreg : ((coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R)).T c).tab.sReg w =
-      ((coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R)).T c).tab.pubReg) :
-    ZkSessionView (fun _ : Fin 1 => (coinedOf (tablesAtZK (Reg := Reg) dj y₀ S R)).T c) (fun _ => w)
+    (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S))
+    (c : CoinsZK (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).Rest)
+    (hc : (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).Covered c)
+    (w : Witness (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).S.m)
+    (hw : (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).Valid w)
+    (hreg : ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).tab.sReg w =
+      ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).tab.pubReg) :
+    ZkSessionView (fun _ : Fin 1 => (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c) (fun _ => w)
       ((2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
-  zkSessionView_of_zkViewAt _ (zkViewAt_of_ok _ (coinedOf_setup I dj y₀ S R hS) hKey hPad) c hc w hw hreg
+  zkSessionView_of_zkViewAt _ (zk_session_view P I dj y₀ ht hdm hKey hPad S R y) c hc w hw hreg
 
 end FlockSoundness.Discharge.PrivateCircuit
