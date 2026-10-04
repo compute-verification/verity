@@ -25,8 +25,9 @@ gates hold the anchors (`anchors8`) and the registered gates `rows8`'s values, a
 device's (`entry8_accepts`). `tileCheck8_computesWords` is L3's words for the plain `pc8` Program, with `Collides` never
 used: on tile rules whose tiles lie in their unit and a domain of whole-tile shapes (`Shape8`), under `Pc8OpsAgree` and
 the named hypotheses at each entry of a credited row (`Pc8EntryOK`, which includes that the peel's factor rows exist);
-`tileCheck8_computesWords_pearlC` is it on the audit's tiles. The cap is not part of it: its verdict is a separate
-conjunct, decided by units of its own.
+`tileCheck8_computesWords_pearlC` is it on the audit's tiles. `D_dev` (`pearlCDomainDev`) gives `Shape8`'s `k` but
+leaves `m` and `n` free (`shape8_of_pearlCDomainDev`), so `tileCheck8_computesWords_domain` is it on `D_dev`'s layouts
+of whole tiles. The cap is not part of it: its verdict is a separate conjunct, decided by units of its own.
 -/
 
 namespace Pouw.PearlC.WholeCircuit
@@ -1025,5 +1026,26 @@ theorem tileCheck8_computesWords_pearlC {ops : RowOps} (hops : Pc8OpsAgree ops) 
   tileCheck8_computesWords hops p pr ρ noise _ D
     (fun L hL _ hg => hsh L hL _ (auditTiling_unit_lt 64 64 L hg))
     (auditTiling_rows_lt 64 64) (auditTiling_cols_lt 64 64) hent
+
+/-- `D_dev`'s `k` is whole-tile for `pc8`, a positive multiple of 128. Its `m` and `n` are free, so `Shape8` also needs
+`64 ∣ m` and `64 ∣ n`. -/
+theorem shape8_of_pearlCDomainDev {d : PearlCDevice} {L : Layout} (h : pearlCDomainDev d L) {u : ℕ} (hu : u < L.N)
+    (hm : 64 ∣ (L.shape u).m) (hn : 64 ∣ (L.shape u).n) : Shape8 (L.shape u) := by
+  obtain ⟨-, -, hk0, ⟨c, hc⟩, -, -⟩ := h u hu
+  exact ⟨hm, hn, c, by omega, hc⟩
+
+/-- **L3's words for the plain `pc8` Program on `D_dev`'s whole-tile layouts** and the audit's tiles:
+`tileCheck8_computesWords_pearlC` with `Shape8`'s `k` from `D_dev` (`shape8_of_pearlCDomainDev`). -/
+theorem tileCheck8_computesWords_domain {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pipeline) (pr : Prices)
+    (c : Costs) (ρ : ℚ) (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
+      Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r)
+    (hent : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) (i : Fin (U.layout.shape u).m)
+      (j : Fin (U.layout.shape u).n), (pc8Sem ops p noise).RowOK (U.layout.shape u).m (U.layout.shape u).k act i →
+        Pc8EntryOK ops p (noise H s U u act) act (U.weight (U.layout.wid u)) i j) :
+    (tileCheck8 ops p noise).ComputesWords (pearlCProtocolDev (devAt p 4 pr) (pc8Sem ops p noise) ρ)
+      (pearlCTiles (pc8Sem ops p noise) c ρ) (fun L => pearlCDomainDev (devAt p 4 pr) L ∧
+        ∀ u < L.N, 64 ∣ (L.shape u).m ∧ 64 ∣ (L.shape u).n) :=
+  tileCheck8_computesWords_pearlC hops p pr c ρ noise _
+    (fun _ hL u hu => shape8_of_pearlCDomainDev hL.1 hu (hL.2 u hu).1 (hL.2 u hu).2) hent
 
 end Pouw.PearlC.WholeCircuit
