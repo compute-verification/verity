@@ -12,6 +12,7 @@ import Pous.SecurityProofs.Chain.Flat
 import Pous.SecurityProofs.Chain.Family
 import Pous.SecurityProofs.Chain.FamilyRounds
 import Pous.SecurityProofs.Continuous
+import Pous.SecurityProofs.SecureErasure
 import Pous.SecurityProofs.Graded.Band
 import Pous.SecurityProofs.P2.Margin
 import Pous.SecurityProofs.Accounting.Numbers
@@ -43,8 +44,8 @@ import Pous.SecurityProofs.Chain.PubRounds
 /-!
 # The proved guarantees
 
-`Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `Pous/Guarantees.lean` and
-`Pous/Guarantees/P2.lean` that has a proof. `lean-audit.json` pins these theorems, so a change to a guarantee, or to a
+`Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `Pous/Guarantees.lean`,
+`Pous/Guarantees/P2.lean` and `Pous/Guarantees/SecureErasure.lean` that has a proof. `lean-audit.json` pins these theorems, so a change to a guarantee, or to a
 definition it reads, changes their records. The open statements (`A2LemmaAM1`, `A5RabinGcd`, `A7Params`, `M1Meets`)
 have no entry here.
 
@@ -151,6 +152,10 @@ theorem BandPubMeetsFamilyD2 : Pous.Guarantees.BandPubMeetsFamilyD2 := PousPub.b
 theorem BandPubMeetsFamilyD1 : Pous.Guarantees.BandPubMeetsFamilyD1 := PousPub.band_pub_meets_family_d1
 theorem ChainDenseMeets111 : Pous.Guarantees.ChainDenseMeets111 := PousSpongeChain.chainDenseMeets111_final
 theorem BandGradedMeetsFamily : Pous.Guarantees.BandGradedMeetsFamily := PousGraded.band_graded_meets_family
+theorem DigestAU : Pous.Guarantees.DigestAU := PousDigest.digestAU
+theorem SecureErasureMeets : Pous.Guarantees.SecureErasureMeets := PousErase.secure_erasure_meets
+theorem SecureErasureMeetsFamily : Pous.Guarantees.SecureErasureMeetsFamily := PousErase.secure_erasure_meets_family
+theorem SecureErasureMeets96GiB : Pous.Guarantees.SecureErasureMeets96GiB := PousErase.secure_erasure_meets_96GiB
 
 theorem P2MeetsM1pB19Uncond : Pous.Guarantees.P2MeetsM1pB19Uncond := PousP2p.p2_meets_m1p_b19
 theorem P2MeetsM1pFamilyUncond : Pous.Guarantees.P2MeetsM1pFamilyUncond := PousP2p.family
