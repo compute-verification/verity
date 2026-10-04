@@ -6,7 +6,8 @@ import FlockSoundness.Discharge.ZkReg.Defs
 `AcceptsZKR` reads the statements `Stmt.setupTables` sets up, whichever setup the tags choose, so it is the event at
 hidden outputs too (`Stmt.setupHidden`, the default `--statement`), as `AcceptsZK` is `zk_session_soundH`'s. What
 differs is the drawn statement: setupHidden's is `HmOut.drawn c pub d`, `HmRow.drawn` at the circuit without its output
-words. `OwnReadsH` and `regPathsH` are `OwnReads` and `regPaths` at that drawn statement.
+words. `regPathsH` is `regPaths` at that drawn statement. `OwnReadsH` is `OwnReads`: the check reads each instance's
+unit from the population's header (`Registered.checkSession`, `Registered.tableUnits`), not from the drawn statement's.
 -/
 
 namespace FlockSoundness.Discharge.ZkReg
@@ -16,16 +17,17 @@ open FlockSoundness.Discharge.Exec (recordDraw)
 
 variable {n : ℕ} {Gate : Type}
 
-/-- **The registered reads are the verifier's own at the record's draw, under hidden outputs**: `OwnReads` at the drawn
-statement `HmOut.drawn c pub d`. -/
+/-- **The registered reads are the verifier's own at the record's draw, under hidden outputs**: each registered read
+`p` is the row `(u, q)` of a drawn instance `u`, its port is one of `own` and is the circuit's port `q` by name, and its
+position is the one `own` gives for `u`'s unit, as the population `pub`'s header names the units
+(`Registered.unitIndices`). -/
 def OwnReadsH (own : Array Registered.Port) (c : Circuit) (pub : Public) (t : Exec.Transcript)
     (isRead : (Fin n × Fin c.ports.size) ⊕ Gate → Prop) (port : (Fin n × Fin c.ports.size) ⊕ Gate → Registered.Port)
     (readAt : (Fin n × Fin c.ports.size) ⊕ Gate → ℕ) : Prop :=
-  ∀ p, isRead p → ∃ u q d D dp idx, p = .inl (u, q) ∧ port p ∈ own ∧
+  ∀ p, isRead p → ∃ u q d D units, p = .inl (u, q) ∧ port p ∈ own ∧
     (List.range c.ports.size).find? (fun j => c.ports[j]!.name == (port p).name) = some q.val ∧
-    recordDraw t.record = some d ∧ Draw.UnitDraw.ofJson d = .ok D ∧ HmOut.drawn c pub d = .ok dp ∧
-    Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved ∧
-    (port p).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some (readAt p))
+    recordDraw t.record = some d ∧ Draw.UnitDraw.ofJson d = .ok D ∧ u.val ∈ D.proved ∧
+    Registered.unitIndices pub.header = .ok units ∧ (port p).reads[units.getD u.val 0]? = some (some (readAt p))
 
 /-- **The paths of the registered reads, under hidden outputs**: `regPaths` at the drawn statement
 `HmOut.drawn c pub d`. -/

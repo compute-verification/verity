@@ -16,6 +16,7 @@ import FlockSoundness.Discharge.ZkPubIn.Runs
 import FlockSoundness.Discharge.ZkPubIn.Reg
 import FlockSoundness.Discharge.ZkPubIn.Sound
 import FlockSoundness.Discharge.ZkPubIn.SoundCustody
+import FlockSoundness.Discharge.ZkPubIn.Own
 
 /-!
 # One hidden-output `--zk` sampled session with the verifier's public inputs
@@ -37,5 +38,6 @@ public-input step (`zk_flock_countC_execOS_atHP`, the count curve at `Xpub pubOn
 Composed's simulation at any acceptance (`simZA`, `zk_headline_exec_onA`, `RunsOnZCA`). `Runs`: the record
 (`RecordsLiveZKP`) and `runsZC_liveHP`. `Reg`: the registered reads (`OwnReadsHP`, `checked_of_acceptsHP`). `Sound`:
 `zk_session_soundHP`, `zk_session_soundHRP`; `SoundCustody`: their `_custody` forms, under `live-verifier`
-(`Assumptions.ZkPubIn.RecordCustodyZKP`).
+(`Assumptions.ZkPubIn.RecordCustodyZKP`). `Own`: the reads the verifier builds from R (`ownReadsHP`, `drawnOwnHP`) and
+`ownAtDrawsHP_of_check`, `OwnReadsHP` at every accepted live outcome.
 -/
