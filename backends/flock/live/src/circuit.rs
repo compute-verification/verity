@@ -162,8 +162,10 @@ const SHA512_ROW_SEG_SEGMENT_TAG: &[u8] = b"verity/sha512-row-seg/v1/segment\0";
 pub const ROW_SEG_BITS: usize = 8192;
 /// a statement's `outputs` identity with runs of output ports (META `out_row_ports`), the Lean verifier's `Tags.outRowsIdentity`
 pub const OUT_ROWS_SEG_IDENTITY: &str = "hidden: each output port an hm96-sha512/row/v2 row, or each run of output ports in META out_row_ports one hm96-sha512/row-seg/v1 row of their words, hashed in the circuit; the public file has no output word";
+/// the same with a run committed as a `hm96-sha512/row/v2` row, the Lean verifier's `Tags.outRowsV2Identity`
+pub const OUT_ROWS_V2_IDENTITY: &str = "hidden: each output port an hm96-sha512/row/v2 row, or each run of output ports in META out_row_ports one hm96-sha512/row/v2 or hm96-sha512/row-seg/v1 row of their words (its row_schemas entry), hashed in the circuit; the public file has no output word";
 /// what `Composite::check` refuses of the output rows, word for word the Lean verifier's (`HmOut.checkRows`)
-pub const OUT_ROWS_REFUSED: &str = "the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks, all their bits) or per run of output ports (META out_row_ports: a sha512/row-seg/v1 row of exactly their words, named after the first), each name once";
+pub const OUT_ROWS_REFUSED: &str = "the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks, all their bits) or per run of output ports (META out_row_ports), a bit row of exactly their words (sha512/row/v2 or sha512/row-seg/v1) named after the first, each name once";
 const ROLE_X: u8 = 1;
 /// a port's compressions, at most: each reads 1024 message columns of a block of at most 2^IN_RANGE_K_LOG
 const MAX_COMPS: usize = 1 << (IN_RANGE_K_LOG - 10);
@@ -968,10 +970,9 @@ impl Composite {
         if self.n_in > self.ports.len() || self.ports.len() - self.n_in != self.out_row_ports.len() || names.windows(2).any(|w| w[0] == w[1])
             || self.out_rows().iter().enumerate().any(|(j, p)| {
                 let (first, k, _, w) = self.out_group(j);
-                out_names.get(first) != Some(&p.name.as_str()) || match p.segs {
-                    Some(_) => p.bits != 16 * w,
-                    None => k != 1 || p.words != w.div_ceil(64) * 64 || p.bits != 16 * p.words,
-                }
+                let padded = k == 1 && p.words == w.div_ceil(64) * 64 && p.bits == 16 * p.words;
+                out_names.get(first) != Some(&p.name.as_str())
+                    || !if p.segs.is_some() { p.bits == 16 * w } else if p.v2 { p.bits == 16 * w || padded } else { padded }
             })
         {
             return Err(OUT_ROWS_REFUSED.into());
@@ -1895,6 +1896,66 @@ pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+pub const LINKS_FORMAT: &str = "verity/flock-links/v1";
+
+/// Linking (PROTOCOL.md §16.13) on the registered population's public file: the verifier's own links file (`--links`,
+/// `verity/flock-links/v1`, derived from its program and query: `verity_flock.class_statement.links_file`) is for this
+/// circuit, its partition and META `links`' ports, and every `(reader, port, writer)` it lists has the reader's link row's
+/// `b || c` equal to the writer's output row's. A circuit with META `links` needs the file; one without takes none. The links
+/// checked. This binds a public topology; it does not hide the topology (the links file is the verifier's view of the circuit).
+pub fn check_links(c: &Composite, inst: &Instances, file: Option<&Value>) -> Result<usize, String> {
+    let ports: Vec<String> = match c.meta.get("links") {
+        None => {
+            return match file {
+                Some(_) => Err("--links: the circuit declares no links (META links)".into()),
+                None => Ok(0),
+            };
+        }
+        Some(ls) => ls.as_array().ok_or("META links is not a list")?.iter()
+            .map(|x| x["port"].as_str().map(String::from).ok_or("META links: a link names no port".to_string())).collect::<Result<_, _>>()?,
+    };
+    let Some(f) = file else {
+        return Err("the circuit declares links (META links): pass the verifier's own links file (--links F)".into());
+    };
+    if f["format"] != LINKS_FORMAT {
+        return Err(format!("--links: not a {LINKS_FORMAT} file"));
+    }
+    if f["circuit_sha512"].as_str() != Some(crate::hex(&c.sha512).as_str()) {
+        return Err("--links: derived for another circuit".into());
+    }
+    if f["partition"] != c.meta["partition"]["digest"] {
+        return Err("--links: derived for another partition than the circuit's".into());
+    }
+    if f["ports"] != json!(ports) {
+        return Err("--links: its ports are not the circuit's link rows (META links)".into());
+    }
+    let np = c.ports.len();
+    if c.ports.len() != c.n_in + 1 {
+        return Err("META links: a statement with links has one output row".into());
+    }
+    if inst.population.is_some() {
+        return Err("links are checked on the registered population's file, before a draw".into());
+    }
+    let (n, out) = (inst.n, np - 1);
+    let links = f["links"].as_array().ok_or("--links: links is not a list")?;
+    for x in links {
+        let bad = || format!("--links: {x} is not [reader, port, writer] over the file's {n} instances and the circuit's link rows");
+        let a = x.as_array().filter(|a| a.len() == 3).ok_or_else(bad)?;
+        let (Some(r), Some(name), Some(w)) = (a[0].as_u64(), a[1].as_str(), a[2].as_u64()) else { return Err(bad()) };
+        let (r, w) = (r as usize, w as usize);
+        let Some(p) = c.ports[..c.n_in].iter().position(|q| q.name == name).filter(|_| ports.iter().any(|q| q == name)) else {
+            return Err(bad());
+        };
+        if r >= n || w >= n {
+            return Err(bad());
+        }
+        if inst.bc(r, p, np) != inst.bc(w, out, np) {
+            return Err(format!("cut wire from instance {w}'s output row to instance {r}'s row {name}: the reader's row is not the writer's committed output row (their b || c differ)"));
+        }
+    }
+    Ok(links.len())
 }
 
 /// The frame-v3-sha512 roots of the file's public part, one row tree per row (input rows, then output rows): over the

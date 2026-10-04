@@ -180,6 +180,13 @@ leaf, and so gives Lemma B's bound, `2·|Hid|·δ₁`, at most the paper's `2·�
 def Hm96Hiding {Y B C : Type} [Fintype Y] [Fintype B] (My : Y → B) (c : Y → C) (δ₁ : ℝ≥0∞) : Prop :=
   ∀ E : B × C → Prop, prCoin (fun y : Y => E (My y, c y)) ≤ prCoin (fun p : B × Y => E (p.1, c p.2)) + δ₁
 
+/-- **`hash-derived-key`: the pinned hm96 key hides at `2^-193`** (ruling F). `Hm96Hiding My c (2^-193)` for the keyed
+hash `My` of the pinned key `K*` and the salt hash `c`: hm96 §3 shows it fails for at most `2^-64` of the keys
+(`hm96_sha512_bad_keys`), and that the pinned key is not among them is the assumption. It is instantiated at
+hm96-sha512's `ZkView.My` and `ZkView.saltHash`. -/
+def HashDerivedKey {Y B C : Type} [Fintype Y] [Fintype B] (My : Y → B) (c : Y → C) : Prop :=
+  Hm96Hiding My c ((2 : ℝ≥0∞) ^ (-193 : ℤ))
+
 /-- **Zero knowledge's `X_L + κ ≠ 0` on the level-0 domain** (`docs/zk-proof-public.md` §1.2, gap 12).
 
 M1 pads a level-0 lane with `(X_L + κ)·μ`, where `X_L = Ŵ_cols` and `κ` is the element `PAD_C`. On the domain `X_L(ω_q)` is

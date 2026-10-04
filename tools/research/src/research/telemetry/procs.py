@@ -100,6 +100,17 @@ def oom_score(pid: int) -> int | None:
         return None
 
 
+def running(pid: int) -> bool:
+    """`pid` exists and has not exited (a zombie has)."""
+    st = stat_fields(pid)
+    return st is not None and st["state"] not in ("Z", "X")
+
+
+def live_group(pgid: int) -> list[dict[str, Any]]:
+    """The members of process group `pgid` that have not exited."""
+    return [st for pid in list_pids() if (st := stat_fields(pid)) and st["pgrp"] == pgid and st["state"] not in ("Z", "X")]
+
+
 def descendants(root_pid: int, all_stats: dict[int, dict[str, Any]]) -> set[int]:
     kids: dict[int, list[int]] = {}
     for pid, st in all_stats.items():
