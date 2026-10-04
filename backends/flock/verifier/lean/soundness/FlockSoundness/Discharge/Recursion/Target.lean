@@ -1,3 +1,4 @@
+import FlockSoundness.Discharge.Exec.SessionL
 import FlockSoundness.Discharge.Exec.StrictCRL
 import FlockSoundness.Refine.Run
 
@@ -16,8 +17,8 @@ block statement on the inner messages and the inner coins.
   the values of the side-`A` entries at `(i mod 2^slotLog, c mod 2^slotLog)`; `B₀` likewise; with the class's pin and the
   public regions. `Canonical`: the value-1 entries strictly increasing in (side, column, row), then the padding
   `(A, 0, 0, 0)`.
-* `InnerAccepts`: C-Flock's compiled table under a leaf scheme `Lf` (`Model.tableCL`), played on that statement with the
-  inner messages and coins (`Game.Plays`), ends accepted.
+* `InnerAccepts`: C-Flock's compiled table under a leaf scheme `Lf` (`Model.tableCL`), after its level-0 cap and the
+  link points, played on that statement with the inner messages and coins (`Game.Plays`), ends accepted.
 * `hidden_sound_iop`, `hidden_sound_fast100`: the interactive table (oracles sent whole, live coins) on every hidden
   statement of the class: when no witness satisfies it, every prover makes it accept with probability at most
   `tableError`, at most `2^-205` for `22 ≤ m ≤ 33`. Statistical: no assumption, so it is `InnerSound`'s kind of bound.
@@ -110,13 +111,16 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
   [Inhabited W]
 
 /-- **V*'s target relation.** C-Flock's compiled table under the leaf scheme `Lf`, on the hidden statement
-`M.toStatement regs` at the schedule `sch`, played with the inner messages `ms` and the inner coins `cs` (read through
-`ι`), ends accepted. -/
+`M.toStatement regs` at the schedule `sch`, after its level-0 cap `cap₀` and the link points `pts` (`tableCL_eq`), played
+with the inner messages `ms` and the inner coins `cs` (read through `ι`), ends accepted. This is the run flock-verify
+refines each table it accepts to (`accepts_tables_hm96_of_leaf`). -/
 def InnerAccepts (ι : W → F) (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (sch : Schedule) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
-    (M : Hidden cls) (ms : List Game.Msg) (cs : List (Array W)) : Prop :=
-  ∃ out : OutCL F D Sl, Plays ι (tableCL A H E Lf (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts) ms cs out ∧
-    out.accepted = true
+    (M : Hidden cls) (cap₀ : Cap D) (pts : Fin 2 → Fin cls.mPts → F) (ms : List Game.Msg) (cs : List (Array W)) :
+    Prop :=
+  ∃ out : OutCL F D Sl,
+    Plays ι (tableAfterL A H E Lf (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts cap₀ pts) ms cs out ∧
+      out.accepted = true
 
 omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] in
 /-- A level-0 table the statement's committed values satisfy has a witness. -/
