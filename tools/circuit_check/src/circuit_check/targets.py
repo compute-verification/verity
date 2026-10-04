@@ -352,7 +352,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.ml.boolean import gemm as BG
     from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64
     from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, fp8_moe, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling
-    from verity_vllm.program.registry import serve3, spec
+    from verity_vllm.program.registry import mla_word, serve3, spec
     from verity_vllm.program.registry import value_inputs as VI
     from verity_vllm.program.registry import boolean_attention, boolean_fp8, boolean_fp8_moe, tables
 
@@ -448,6 +448,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("RoPEGptJ_v1", lambda: bind(ref_prims.RoPEGptJ, NHEADS=2, D=16)),
         ("RoPEGptJ_v2", lambda: bind(ref_prims.RoPEGptJV2, NHEADS=2, D=16)),
         ("RoPEInterleavedRef_v1", lambda: bind(ref_prims.RoPEInterleavedRef, D=16, DT="bf16")),
+        # the word twins of `mla`'s Boolean decode and bmm: 17 keys, so one block with a full DOT group and a masked one
+        ("TritonMlaDecodeWord_v1", lambda: bind(mla_word.TritonMlaDecodeWord, H=1, T=17, DL=16, DR=16, BN=32, SPLITS=1,
+                                                SCALE=0x3D800000, DOT=hopper.HopperBF16WgmmaDot16)),
+        ("MlaBmmWord_v1", lambda: bind(mla_word.MlaBmmWord, NHEADS=2, K=32, N=3, DOT=hopper.HopperBF16WgmmaDot16)),
     ]
 
 
