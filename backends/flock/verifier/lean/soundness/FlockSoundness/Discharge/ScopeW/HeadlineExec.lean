@@ -39,7 +39,7 @@ include hU hpub hpt in
 theorem tableH_bcSiteW {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     BcSiteH (accW ht hc (scopeOkW_ports hscope) x.table) pub (x.table.o u h) (x.table.vu u h) u.val := by
   have hcx : x.st.c = c := x.table.c_eq hc
-  refine ⟨dj S, x.D, rfl, x.hD, Layout.proved_lt_population x.hD, fun r hr => List.mem_map_of_mem hr, ?_, hpt, ?_, ?_⟩
+  refine ⟨dj S, x.D, rfl, x.hD, Layout.proved_lt_population x.hD, fun r hr => List.mem_map_of_mem hr, ?_, ?_, ?_⟩
   · show HmOut.loadPublic I.tags x.st.c I.publicFile = .ok pub
     rw [hcx]
     exact hpub

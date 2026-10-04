@@ -243,7 +243,7 @@ theorem out_copyHP (a : AcceptedHP T) (ho : a.st.c.outNet = a.st.c.unitNet)
     (fun u hu o' ho' => by rw [hget u hu] at ho'; exact (hlo u hu).2 o' ho')
     h16 (fun u hu => by rw [hget u hu]; exact (hlo u hu).1) hpv g hu' hj
   have hkw : k < (st.c.ports.getD (HmOut.nIn st.c + jo) default).words :=
-    lt_of_lt_of_le hk (checkRows_words hcr hrows.2.1 hrows.1 hjo)
+    lt_of_lt_of_le hk (checkRows_words hcr hrows.2.1 hrows.1 (fun p hp => (hv1 p hp).1) hjo)
   have hsrc : Hidden.outSrc st.c g jo k t = st.c.unitRange.slot (g * st.c.upv + u') + Layout.outCol st.c j t := by
     unfold Hidden.outSrc
     rw [Hidden.outGroup_single hrows.2.1 hjo]
@@ -256,14 +256,10 @@ theorem out_copyHP (a : AcceptedHP T) (ho : a.st.c.outNet = a.st.c.unitNet)
   obtain ⟨hp, hw2⟩ := hrows.2.2 jo hjo
   have hb : (16 * k + t) / 8 = 2 * k + t / 8 := by omega
   have hb8 : (16 * k + t) % 8 = t % 8 := by omega
-  have hks : (HmRow.byteAt (st.c.ports.getD (HmOut.nIn st.c + jo) default) (2 * k + t / 8)).1 <
-      ((HmRow.rowSlots st.c.ports).2[HmOut.nIn st.c + jo]!).size := by
-    rw [Typed.byteAt_none (Hidden.segs_getD hrows.1 hp), Hm.rowSlots_size hp, Hidden.getElem!_eq_getD']
-    omega
   have hin := Layout.msgCol_lt_of_parse hpa hg hp (2 * k + t / 8) (t % 8) (Nat.mod_lt _ (by norm_num))
   refine bit_inj _ _ ?_
   rw [hb, hb8, bit_siteAddrHP ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht', h, L, hR, regs, rfl⟩
-    z o hin, Hidden.msgCol_delta hks, hmc, hsrc, ← hcol, blockBit_of_lt _ z o (Fin.isLt _)]
+    z o hin, Hidden.msgCol_delta st.c g (HmOut.nIn st.c + jo) (2 * k + t / 8) (t % 8), hmc, hsrc, ← hcol, blockBit_of_lt _ z o (Fin.isLt _)]
 
 /-! ## The rows' `b ‖ c` at a site -/
 
