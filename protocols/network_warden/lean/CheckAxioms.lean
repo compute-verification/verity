@@ -1,7 +1,7 @@
 import NetTiming
 open NetTiming
 
--- The 51 pins (`lean-audit.json`'s `pins`): the 35 guarantees' proofs, then the 16 witnesses.
+-- The 35 statements' proofs (four of them `lean-audit.json`'s `pins`), then the 16 witnesses.
 #print axioms SecurityProofs.CardFree
 #print axioms SecurityProofs.CardLeftPacked
 #print axioms SecurityProofs.FillInjective
