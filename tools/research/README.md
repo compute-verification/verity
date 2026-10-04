@@ -14,16 +14,16 @@ exists. This file is for people changing the tool.
 ~~~text
 src/research/
 ├── cli.py          research run | fetch | status | inspect | tele | data | launch-request
-├── store/          the evidence store (`research data`): README.md is the spec; canon, ids, model, local, index, remote, remote_s3, kinds, cli
 ├── runs.py         run ids, the local registry (~/.research/runs or $RESEARCH_RUNS), read-time summaries
 ├── record.py       job.json v0.2 = the harness's v0.1 + tool, run, workload_fingerprint.expected, cost; v0.1 stays readable
 ├── result.py       the result.json contract (schema, run_id, fingerprint, validation, measurements, artifacts)
 ├── remote.py       --on: machines file, tool/source snapshots, request, claim-by-run-id, exclusive lock, fetch, preservation manifest
 ├── disk.py         --disk-gb admission (--queue): held on the machine while the disk would pass 80%, released at 75%
 ├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
+├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
-├── store/          the evidence store (README.md there is the contract): tool, tools_registry, derivation, attempt, cli_prov (provenance)
-│                   + canon, local, index, remote, kinds, cli (storage)
+├── store/          the evidence store (`research data`; README.md there is the contract): tool, tools_registry, derivation, attempt,
+│                   cli_prov (provenance) + canon, ids, model, local, index, remote, remote_s3, kinds, cli (storage)
 ├── telemetry/      the recorded-attempt harness: job.json, status.json, events.jsonl, resources.jsonl, failure.json
 └── pods/           RunPod lifecycle (runpod.py), leases (lease.py), budgets.toml and its guard (budgets.py, guard.py), memory guard, pod-side sh/
 tests/              pure-Python; the machine side of --on is exercised locally (launch_request is a plain function)
@@ -63,6 +63,13 @@ unset stays unset. If one is still missing, the store, `research queue
 ready`, node ssh and the Nebius scripts fail and say `rerun from a fresh tmux
 login shell` (`secret_hint.py`).
 
+`research doctor [--role lane|coordinator|infra] [--json]` says whether this
+VM can do its job before a run finds out: the role's secret names
+(`doctor.SECRETS`) against what the VM injects, status-only probes (`gh`,
+dry-run pushes, the store's remote, Slack for coordinator and infra, ssh to
+each machine), `uv sync --check`, the disk floor and the clock. Each finding
+names its fix (exit 1). It prints names and verdicts, never a value or body.
+
 ## Commands
 
 ~~~text
@@ -96,6 +103,7 @@ research merge --train --prepare BRANCH [--onto BASE] N@SHA ...      # build a t
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
 research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
+research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research slack ask|announce|reply|pickup|done|decline|roster|match|verify-author|read|handles|subscriptions|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
@@ -258,10 +266,10 @@ starts the runner detached; re-delivering a launch after an ssh drop finds
 the claim and reports state. The runner's argv carries the workload's command, so a
 `pkill -f` aimed at the workload matches it too: it logs SIGTERM / SIGHUP to
 launcher.log and keeps supervising, so the run still records its end and
-publishes. Stop a run with `research cancel RUN --reason TEXT` from the launcher: SIGTERM to its workload's process group
-(status.json `pgid`), recorded first as a manual cancel in events.jsonl, so the run classifies `CANCELLED_MANUAL`. On the
-machine the same is `kill -TERM -<pgid>`. Never SIGKILL the runner: one killed during its custody upload leaves the run without
-custody and its minted key on disk. `--exclusive` refuses if any run is live, and
+publishes. Stop a run with `research cancel RUN --reason TEXT` from any VM: SIGTERM to its workload's process group
+(status.json `pgid`, if a member's env has the run's `RESEARCH_RUN_DIR`), recorded first as a manual cancel, so the run
+classifies `CANCELLED_MANUAL`. On the machine the same is `kill -TERM -<pgid>`. Never SIGKILL the runner: one killed during
+its custody upload leaves the run without custody and its minted key on disk. `--exclusive` refuses if any run is live, and
 any launch refuses if an exclusive holder is live.
 
 The shipped tree is extracted with extraction mtimes (`tar -m`), not the commit time `git archive` stamps: a build dir shared
@@ -333,7 +341,9 @@ Nothing that bounds spend may depend on an agent VM, which can be suspended at a
 The disk floor: `research run` and `research fetch --all` refuse (exit 3) while the runs root's filesystem has less than
 `$RESEARCH_DISK_FLOOR_GB` free (default 1.5; `0` turns it off), naming the eviction that frees it. `research data custody RUN
 --publish` removes the run's files of 1 MiB and more once custody holds (`--keep-local` keeps them); `run-files.evicted.json`
-names the fetch that restores them.
+names the fetch that restores them. `research data evict --src-dir DIR` (node 1's hourly research unit) also deletes, oldest first
+and whatever the mark, each shipped source tree recoverable on the node (exactly a commit on a ref of its `git/verity.git`) that no process, run, request, slot or fill job uses, unchanged for 2 h
+and its runs' clean source; a condition it can't establish keeps them all (`store/evict.py`).
 
 ### research data
 
@@ -472,18 +482,8 @@ verify-author in private channels; `channels:history` for a public one), `reacti
 `groups sync` `usergroups:read` and `usergroups:write`. It must be a member of both channels (`chat:write.public` does not
 reach private channels), and Cursor's Slack app must be in both too: Cursor delivers the wakes, this bot posts.
 
-**Scaling past wake-on-everything (a design, not built).** Cursor's `subscribe_slack_channel` wakes every subscriber on every
-top-level message and has no mention filter, so each handle holder pays one wake (and one `match`) per ask anyone makes, and
-that cost grows with (handles × asks). Threads already scope replies to their participants, and workers never subscribe;
-what grows is `#agent-coordination`'s top level. The fix is a relay: a small service subscribed to the Slack Events API
-(`message.groups`) for `#agent-coordination`, which reads the registry, finds the handles a message addresses, and posts a
-one-line pointer (the permalink, the asker, the first line) into each addressed handle's own inbox channel
-(`#inbox-<handle>`, one per registry handle, created by the relay). Each holder then subscribes only to its inbox, top-level
-only, and never wakes for someone else's ask; `match` stays as the check on the one message it is woken for, and a thread's
-participants still subscribe to the thread itself. The relay holds only a bot token with `groups:history`, `chat:write` and
-`groups:write`, is idempotent per event id (Slack retries deliveries), sends what it can't route to `@infra`, and must fail
-visibly, not silently: when it is down, holders fall back to subscribing to `#agent-coordination` itself. Build it when
-wakes per holder per day make the top level a measurable cost, not before.
+Routing: each handle holder subscribes to its own inbox, not to the top level; the sending CLI rings the doorbells of the
+handles a post addresses (`route_targets`) until the console site's events route does (`slack.py`'s docstring).
 
 ### Notes and evidence over MCP
 

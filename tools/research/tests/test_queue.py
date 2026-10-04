@@ -974,6 +974,40 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
     assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h2) is False
 
 
+def test_a_remote_quick_tier_does_not_wait_for_a_local_tier_of_the_same_repository(world, monkeypatch):
+    """A local tier holds its worktree's lock for the whole tier (about an hour on a lane's VM), and a remote tier from any worktree
+    of the same repository took that lock to check out and ship, so every `--on` tier on the VM waited for it (two lanes, 4 Oct);
+    a remote tier ships from a worktree of its own."""
+    import fcntl
+    import hashlib
+
+    from research import queue as Q
+
+    main = world.change({"tools/check/suites.py": FAKE_SUITES})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    h1 = world.change({"a.txt": "a1\n"})
+    world.gh.put(1, h1, ready=False)
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setenv("FAKE_SEEN", str(world.tmp / "seen.json"))
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+
+    class NonBlocking:
+        LOCK_EX, LOCK_NB = fcntl.LOCK_EX, fcntl.LOCK_NB
+
+        @staticmethod
+        def flock(f, op):
+            fcntl.flock(f, op | fcntl.LOCK_NB)                  # a held lock raises here instead of hanging the test
+
+    monkeypatch.setattr(Q, "fcntl", NonBlocking)
+    common = _git(world.dev, "rev-parse", "--path-format=absolute", "--git-common-dir").strip()
+    (ready := world.tmp / "ready").mkdir()
+    tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp))
+    with open(ready / f"{hashlib.sha256(common.encode()).hexdigest()[:12]}.lock", "w") as local:
+        fcntl.flock(local, fcntl.LOCK_EX)
+        assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is True
+
+
 def _reports(status: dict | None = None, result=lambda doc: doc, raw: str | None = None):
     """A run's outcome on the machine: status.json `status` (done, exit 0, unless given) and the result.json of a pass at the head as
     quick_tier.py writes it, through `result` (None: no result.json), or `raw` as the file."""
@@ -1018,6 +1052,66 @@ def test_a_remote_quick_tier_passes_only_on_a_readable_report_of_a_pass_at_the_h
     assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is (refusal is None)
     if refusal is not None:
         assert re.search(r"the quick tier failed: .*" + refusal, capsys.readouterr().err)
+
+
+def _orphaned(world, monkeypatch, **reports):
+    """A `research queue ready 1 --on vy-test` whose caller died while its run waited (a killed shell, a suspended VM): the run on the
+    machine ends as ``reports`` says, and nothing marks the PR; the machine, the run's id and the head it was for."""
+    from research import queue as Q
+
+    machine = Machine(world.tmp, outcome=_reports(**reports))
+    tier, _ = _remote_tier(world, monkeypatch, machine)
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+
+    def died(d: Path) -> dict:
+        raise KeyboardInterrupt("injected: the caller is gone")
+
+    tier.fetch = died
+    with pytest.raises(KeyboardInterrupt):
+        Q.ready(world.gh, world.store, 1, "lane-1", tier)
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False
+    flags = machine.launched[-1]
+    return machine, flags[flags.index("--id") + 1], h1
+
+
+def test_judge_marks_a_pr_ready_from_its_quick_tiers_run_once_it_ended_without_its_caller(world, monkeypatch, capsys):
+    """`ready --on` writes the mark only once its own wait sees the run end, so a tier that passed after its caller died left the PR
+    unmarked, and the only way to mark it was to run the whole tier again."""
+    from research import queue as Q
+
+    machine, rid, h1 = _orphaned(world, monkeypatch)
+    capsys.readouterr()
+    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 0
+    assert f"#1 is ready at {h1[:12]} (pr:1@{h1})" in capsys.readouterr().out
+    [label] = world.store.labels(grant_target(1, h1), key=vocab.READY)
+    assert label.value is True and label.by == "lane-1"
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is True
+
+
+JUDGE_REFUSALS = {
+    "a run that hasn't ended": ({"status": {"state": "running"}}, r"run (\S+) hasn't ended \(last seen running\): `research inspect \1`"),
+    "not a quick tier": ({"result": lambda d: {**d, "kind": "check/v1"}}, r"run \S+'s result is a check/v1, not a quick-tier/v1 report"),
+    "no result": ({"result": lambda d: None}, r"run \S+ on its machine ended done \(exit 0\) without a result\.json"),
+    "a failed tier": ({"status": {"state": "failed", "rc": 1}},
+                      r"#1 is not marked ready at \w{12}: the quick tier failed: run \S+'s facts show a pass, but it ended failed"),
+    "a head that moved": ({}, r"run \S+ ran the quick tier at \w{12}, which is no open PR's head now \(pushed again since, or closed\?\)"),
+    "a run that isn't there": ({}, r"no run matching 'r-nowhere' under "),
+}
+
+
+@pytest.mark.parametrize("case", list(JUDGE_REFUSALS))
+def test_judge_refuses_a_run_that_has_not_ended_is_not_a_quick_tier_failed_or_whose_pr_moved(world, monkeypatch, capsys, case):
+    from research import queue as Q
+
+    kw, refusal = JUDGE_REFUSALS[case]
+    machine, rid, h1 = _orphaned(world, monkeypatch, **kw)
+    if case == "a head that moved":
+        world.gh.put(1, world.change({"a.txt": "a2\n"}), ready=False)
+    capsys.readouterr()
+    assert Q.judge(world.gh, world.store, "r-nowhere" if case == "a run that isn't there" else rid, "lane-1", fetch=machine.fetch) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("research queue judge: ") and err.count("\n") == 1 and re.search(refusal, err)
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False
 
 
 def test_a_remote_quick_tier_that_cannot_launch_or_is_never_seen_to_end_fails_after_a_bounded_wait(world, monkeypatch):
@@ -1132,6 +1226,11 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
+    for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
+                      (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number")):
+        with pytest.raises(SystemExit) as e:
+            research_main(argv)
+        assert e.value.code == 2 and why in capsys.readouterr().err
 
 
 def test_quick_tier_py_refuses_a_call_it_cannot_place(tmp_path, monkeypatch):

@@ -127,8 +127,11 @@ class _StepHasher:
 class _Collector:
     """`native_collect.cpp`'s `Collector` on the arena path (no gather, no windows), with `native_plans.h`'s plans."""
 
+    RELEASE_PER_STEP = 2
+
     def __init__(self) -> None:
         self.plans: dict[int, tuple[int, int, bytes, int]] = {}  # key -> (version, used, pickled entries, the last run that used it)
+        self.pending: list[bytes] = []                           # dropped plans' entries, out of the book, freed by the next run's steps
         self.run, self.run_used, self.floor = 0, False, 0
         self.arena_of = None
         self.active = False
@@ -143,6 +146,7 @@ class _Collector:
 
     def begin_step(self, key, arena_ptr, nbytes, use_plan, step_id=-1):
         assert not self.active
+        del self.pending[-self.RELEASE_PER_STEP:]
         version, used, blob, _run = self.plans.get(key, (self.floor, 0, pickle.dumps(()), 0))
         self.plans[key] = (version, used, blob, self.run)
         self.run_used = True
@@ -215,7 +219,7 @@ class _Collector:
 
     def stats(self):
         return {"plans": len(self.plans), "plan_entries": sum(len(self._entries(k)) for k in self.plans), "expected": self.expected,
-                "committed": 0}
+                "committed": 0, "plans_pending": len(self.pending), "plan_entries_pending": sum(len(pickle.loads(b)) for b in self.pending)}
 
     def window_stats(self):
         return {}
@@ -227,9 +231,11 @@ class _Collector:
         self.reset_stats()
         if not self.run_used:
             return
-        for key, (version, _used, _blob, run) in list(self.plans.items()):
+        self.pending.clear()
+        for key, (version, _used, blob, run) in list(self.plans.items()):
             if run != self.run:
                 self.floor = max(self.floor, version + 1)
+                self.pending.append(blob)
                 del self.plans[key]
         self.run, self.run_used = self.run + 1, False
 
@@ -399,9 +405,9 @@ WORKERS = pytest.mark.parametrize("native_worker", [False, True], ids=["python-w
 
 @WORKERS
 def test_the_plan_caches_stay_bounded_while_every_step_learns_a_new_plan(monkeypatch, native_worker):
-    """Over runs whose every decode step learns a new plan, the collector holds the plans of the run that just ended and the
-    worker the metas of the two latest runs' plans, not every step's since the process started, and the heap a full collection
-    walks stops growing after the second run."""
+    """Over runs whose every decode step learns a new plan, the collector holds the plans of the run that just ended (and those of
+    the run before it, dropped and freed by the next run's steps) and the worker the metas of the two latest runs' plans, not every
+    step's since the process started, and the heap a full collection walks stops growing after the second run."""
     com = committer(monkeypatch, native_worker=native_worker)
     sizes, kept, heaps, plans = [], [], [], []
     for sched in rising():
@@ -409,9 +415,11 @@ def test_the_plan_caches_stay_bounded_while_every_step_learns_a_new_plan(monkeyp
         sizes.append(len(com._metas_cache))
         kept.append(retained(com))
         heaps.append(heap())
-        plans.append((com._nc.stats()["plans"], com._nc.stats()["plan_entries"]))
+        st = com._nc.stats()
+        plans.append((st["plans"], st["plan_entries"], st["plans_pending"], st["plan_entries_pending"]))
     assert com._nc.learned == RUNS * STEPS and com.errors == []
-    assert plans == [(STEPS, STEPS * TENSORS)] * RUNS, f"the collector's plans and entries after each run: {plans}"
+    book = (STEPS, STEPS * TENSORS)
+    assert plans == [(*book, 0, 0)] + [(*book, *book)] * (RUNS - 1), f"the collector's plans, entries and pending after each run: {plans}"
     assert max(sizes) <= 2 * STEPS, f"plans cached after each run: {sizes}"
     per_plan = TENSORS + 1                                     # the metas list and one TensorMeta per tensor
     assert max(kept) <= 2 * STEPS * per_plan + 8, f"objects the caches keep alive after each run: {kept}"
