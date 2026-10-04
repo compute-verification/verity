@@ -64,7 +64,7 @@ run: |
   cd "$SRC"
   export PATH=$CUDA_HOME/bin:$PATH
   rc=0
-  PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --campaign "$CAMPAIGN" -- bash -c "cd \"$SRC\" && $CMD" || rc=$?
+  PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --campaign "$CAMPAIGN" --run-record -- bash -c "cd \"$SRC\" && $CMD" || rc=$?
   # the private copy goes once research run has exited (it imports from this tree while it publishes), never from a trap; the
   # shared one stays for the tree's other jobs
   cd / && rm -rf "$priv"

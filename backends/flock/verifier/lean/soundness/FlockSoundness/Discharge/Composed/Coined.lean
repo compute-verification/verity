@@ -19,7 +19,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {mPts n : ℕ} {Reg : Type} (P : LigProver)
 
-/-! ## The session's tables at the executable's leaves (new item, open) -/
+/-! ## The session's tables at the executable's leaves -/
 
 /-- **The mask slot's weights span** (`zk_veil.rs`'s `mask_rank_ok`, rank `= 128·k`): the vectors
 `(eq(p_1, x), …, eq(p_k, x))` over the mask words `x` span `GF(2)^{128k}`, i.e. every value of the claims' masked sums is
@@ -251,7 +251,7 @@ def CoinedOK (A : Arith 𝔽 FlockLevel3.GF256) (κ : 𝔽) (C : CoinedSetup) : 
       (∀ r, (C.T c).tab.β r ≠ 0) ∧
       ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w
 
-/-- **The session's tables satisfy Lemma B's facts** (new item, open): at every draw `verify --zk` sets up (`y`), the
+/-- **The session's tables satisfy Lemma B's facts** (proved: `coinedOf_setup`): at every draw `verify --zk` sets up (`y`), the
 `Coined` tables of the draw's `--zk` table at its executable statement (`coinedOf P (tablesAtZK dj y₀ S R) y.x.st`) are over
 the table's statement, check rank over the `RANK_POINTS` claim points at the statement's mask words (`maskWordsOf`), have
 other coins, and are `CoinedOK` at `execArith` and `PAD_C`. -/

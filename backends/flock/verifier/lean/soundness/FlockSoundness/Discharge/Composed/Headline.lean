@@ -20,8 +20,12 @@ import FlockSoundness.ZK.PadNonvanishing40
 
 What it rests on: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `δ_link`: `⊤` at a prover whose link finders break
 it), A3 (`hA3`), A6 and the coin server (`RecordsLiveZK`, and `DrawOkZK` at each of the law's draws),
-and `hash-derived-key` (`Assumptions.HashDerivedKey` at hm96-sha512's key); and the open pieces
-`CoinedOfSetup` (`coinedOf_setup`); `RunsZC` at the law's draws is `ZkExec.runsZC_live`.
+and `hash-derived-key` (`Assumptions.HashDerivedKey` at hm96-sha512's key). `CoinedOfSetup` is proved
+(`coinedOf_setup`), and `RunsZC` at the law's draws is `ZkExec.runsZC_live`.
+
+The zero knowledge holds at every coin the prover doesn't refuse (`CoinedSetup.Admits`, a zerocheck outer coin `1` among
+the refused), with the coins committed at `Hello` under `keyed-cr` (not modelled; `ASSUMPTIONS.md`, zero knowledge's
+coverage).
 -/
 
 namespace FlockSoundness.Discharge.Composed
