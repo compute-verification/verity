@@ -65,6 +65,11 @@ class MerkleSha256(CommitmentScheme):
     def verify(self, commitment: Commitment, index: int, leaf: bytes, proof: object) -> bool:
         if commitment.scheme != self.name or not 0 <= index < commitment.leaves:
             return False
+        # a path of any other length would let one root open as two trees
+        if not isinstance(proof, (list, tuple)) or len(proof) != (commitment.leaves - 1).bit_length():
+            return False
+        if not all(isinstance(s, bytes) and len(s) == 32 for s in proof):
+            return False
         node = _h(b"\x00", leaf)
         for sibling in proof:
             node = _h(b"\x01", node, sibling) if index % 2 == 0 else _h(b"\x01", sibling, node)
