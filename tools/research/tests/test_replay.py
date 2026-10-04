@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -234,3 +235,114 @@ def test_cli_dry_run_json_summary_and_refusals(st, env, capsys):
     assert research_main(["replay", SET]) == 2
     assert research_main(["replay", "pous/re-run", "--dry-run"]) == 1
     assert "no target is labelled replay_set=pous/re-run" in capsys.readouterr().err
+
+
+# ---- the relaunch ----------------------------------------------------------------------------------------------------------------------
+
+def _repo(tmp: Path) -> tuple[Path, str, str]:
+    """A git repo with two commits: (its dir, the first's sha, the second's)."""
+    d = tmp / "repo"
+    d.mkdir()
+    git = ["git", "-C", str(d), "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]
+    subprocess.run([*git, "init", "-q"], check=True)
+    shas = []
+    for n in ("1", "2"):
+        (d / "f.txt").write_text(n)
+        subprocess.run([*git, "add", "f.txt"], check=True)
+        subprocess.run([*git, "commit", "-q", "-m", n], check=True)
+        shas.append(subprocess.run([*git, "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip())
+    return d, shas[0], shas[1]
+
+
+class _Judge:
+    def __init__(self, verdict="same"):
+        self.verdict, self.calls = verdict, []
+
+    def __call__(self, st, originals, replay, expect):
+        self.calls.append((originals, replay, expect))
+        return {"verdict": self.verdict, "reasons": ["equal: 1 status field"]}
+
+
+def _replay_labels(st: LocalStore, run_id: str) -> list[tuple]:
+    return [(lab.value, lab.by, lab.ref) for lab in st.labels(run_id, key="replay")]
+
+
+def test_relaunch_runs_each_replayable_attempt_at_rev_and_labels_its_original(st, env, monkeypatch):
+    from research import remote
+    repo, first, _ = _repo(env)
+    _run(st, env, R1, inputs={"spec.json": b"{}"})
+    st.add_label(R1, "replay_expect", "refused: SECRET", by="t")
+    _run(st, env, R2, env={"HF_TOKEN": "<redacted>"})
+    seen = []
+
+    def launch(argv):
+        src = Path(argv[argv.index("--source") + 1])
+        head = subprocess.run(["git", "-C", str(src), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        sent = Path(argv[argv.index("--send") + 1])
+        seen.append((argv, head, (src / "f.txt").read_text(), sent.read_bytes()))
+        return 0
+
+    looks = {}
+
+    def observe_fn(run_id):
+        looks[run_id] = looks.get(run_id, 0) + 1
+        return ({"id": run_id}, None) if looks[run_id] > 2 else (None, "running")
+
+    sleeps = []
+    judge = _Judge()
+    monkeypatch.setattr(RP, "judge", judge)
+    rep = RP.relaunch(st, SET, at=first, repo=repo, runs_root=env / "runs", machines=remote.load_machines(), by="infra",
+                      launch=launch, observe_fn=observe_fn, sleep=sleeps.append, poll_s=5)
+    (argv, head, content, sent), = seen
+    new = rep["attempts"][[x["run"] for x in rep["attempts"]].index(R1)]["replay"]
+    assert argv[:3] == ["run", "--id", new] and f"RESEARCH_REPLAY_OF={R1}" in argv
+    assert (head, content, sent, rep["commit"]) == (first, "1", b"{}", first)
+    assert judge.calls == [([R1, R2], new, "refused: SECRET")], "a not replayable attempt of the computation still bounds its band"
+    assert sleeps == [5, 5]
+    assert _replay_labels(st, R1) == [("same", "infra", new)]
+    assert _replay_labels(st, R2) == [("not-replayable", "infra", None)]
+    assert subprocess.run(["git", "-C", str(repo), "worktree", "list"], capture_output=True, text=True).stdout.count("\n") == 1, \
+        "the checkout is removed"
+    RP.relaunch(st, SET, at=first, repo=repo, runs_root=env / "runs", machines=remote.load_machines(), by="infra", wait=False,
+                launch=lambda argv: 0)
+    assert _replay_labels(st, R2) == [("not-replayable", "infra", None)], "one not-replayable label per asserter"
+
+
+def test_a_refused_launch_and_a_run_that_ends_unpublished_are_reported_not_judged(st, env, monkeypatch):
+    from research import remote
+    repo, _, second = _repo(env)
+    _run(st, env, R1)
+    _run(st, env, R2)
+    judge = _Judge()
+    monkeypatch.setattr(RP, "judge", judge)
+    rcs = iter([3, 0])
+    sleeps = []
+    rep = RP.relaunch(st, SET, at="HEAD", repo=repo, runs_root=env / "runs", machines=remote.load_machines(), by="infra",
+                      launch=lambda argv: next(rcs), observe_fn=lambda r: (None, "failed"), sleep=sleeps.append)
+    refused, unpublished = sorted(rep["attempts"], key=lambda x: x["launch_rc"], reverse=True)
+    assert rep["commit"] == second
+    assert "was refused (exit 3" in refused["outcome"]
+    assert "ended (failed) without an attempt in the store" in unpublished["outcome"]
+    assert len(sleeps) == RP.PUBLISH_POLLS, "an ended run's attempt gets the publisher's grace before it is given up on"
+    assert judge.calls == [] and _replay_labels(st, R1) == _replay_labels(st, R2) == []
+
+
+def test_judge_labels_each_replay_the_catalog_holds_once(st, env, monkeypatch):
+    _run(st, env, R1)
+    _run(st, env, R2)
+    new = "r20261004-000000-9999"
+    st.put_attempt(_attempt(new, env={RP.REPLAY_OF_ENV: R1}))
+    judge = _Judge("within-band")
+    monkeypatch.setattr(RP, "judge", judge)
+    rep = RP.judge_set(st, SET, by="infra")
+    assert [(x["run"], x["replay"], x["verdict"]["verdict"]) for x in rep["judged"]] == [(R1, new, "within-band")]
+    assert judge.calls == [([R1, R2], new, None)], "the set's attempts of the same derivation are the originals"
+    assert _replay_labels(st, R1) == [("within-band", "infra", new)]
+    assert RP.judge_set(st, SET, by="infra")["judged"] == []
+
+
+def test_cli_relaunch_refuses_a_rev_the_repo_lacks(st, env, capsys):
+    repo, _, _ = _repo(env)
+    _run(st, env, R1)
+    assert research_main(["replay", SET, "--at", "no-such-rev", "--repo", str(repo)]) == 2
+    assert "no-such-rev" in capsys.readouterr().err

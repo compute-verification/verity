@@ -90,6 +90,7 @@ research inspect RUN [--json]            # fetch, status RUN and inspect take a 
                                          # --on NAME, else on each ssh machine, and its records fetched here
 research data SUBCOMMAND ...             # the store: put/show/fetch/select/... and lookup / pull / attempt publish
 research replay SET... --dry-run [--at REV] [--on M] [--fetch] [--json]   # replay_set=SET's attempts: replayable / needs window / not replayable, and each relaunch (replay.py)
+research replay SET... --at REV [--on M] [--no-wait] | --judge   # relaunch the replayable ones at REV (RESEARCH_REPLAY_OF), label each original replay=VERDICT --ref <replay>
 research pods create --name N --max-hours H ... | list | terminate | check-part    # RunPod lifecycle (pods/runpod.py, pods/part.py)
 research pods extend TARGET --hours H | lease TARGET                               # the pod's lease (pods/lease.py)
 research pods guard [--budgets NOTES|FILE] [--detach] | status | stop               # the one budgets guard (pods/guard.py, pods/budgets.py)

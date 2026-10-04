@@ -92,6 +92,8 @@ OUTCOME = "outcome"
 COMMIT_MAP = "commit_map"                             # on a commit-map/v1 artifact: whether the history rewrite it records applies
 CUSTODY = "custody"                                   # on a run id: whether `research data custody --triage` needs more of it
 CUSTODY_VALUES = ("waived", "never-ran", "needed")
+REPLAY = "replay"                                     # on an attempt of a replay set: what `research replay` found, --ref the replay run
+REPLAY_VALUES = ("same", "within-band", "differs", "expected-change", "not-replayable")
 
 # ---- evidence labels: probe captures and input sets --------------------------------------------------------------------------------
 
@@ -297,6 +299,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(COMMIT_MAP, GROUP_VERIFICATION, ENUM, "on a commit-map/v1 artifact, by its approver (research.commitmap.ACCEPTORS): whether the rewrite it "
        "records applies, so that records keyed by an old commit are read for its image; the latest label wins", COMMIT_MAP_VALUES),
     _k(VERIFIED, GROUP_VERIFICATION, ENUM, "an independent verifier's verdict on the result's proof(s)", VERIFIED_VALUES),
+    _k(REPLAY, GROUP_VERIFICATION, ENUM, "on an attempt of a replay set, by `research replay`: its replay at a new commit against it (--ref the "
+       "replay run; research.compare.verdict), or not-replayable (no ref: `research replay SET --dry-run` says why)", REPLAY_VALUES),
     _k(VERIFIER, GROUP_VERIFICATION, TEXT, "which verifier produced the verdict (binary or module + revision)"),
     _k(VERIFIER_SECONDS, GROUP_VERIFICATION, NUMBER, "the verifier's wall seconds for the verdict"),
     _k(INDEPENDENTLY_VERIFIED, GROUP_VERIFICATION, BOOL, "the back-fill's spelling of verified=accepted (true) / rejected (false); read, not written anew",
