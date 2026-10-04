@@ -217,7 +217,7 @@ class Rules:
         from .merge import rule_touches
 
         mb = _out(repo, "merge-base", base, head)
-        changed = [p for p in _out(repo, "diff", "--name-only", mb, head).splitlines() if p]
+        changed = [p for p in _out(repo, "diff", "--no-renames", "--name-only", mb, head).splitlines() if p]   # a rename's source too
         roles = {r.role for r in self.grants if r.paths and rule_touches(list(r.paths), changed)}
         audits = [p for p in changed if p == "lean-audit.json" or p.endswith("/lean-audit.json")]
         reports = None

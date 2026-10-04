@@ -61,6 +61,7 @@ def load_registries() -> None:
     import verity_pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
     import verity_pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
     import verity_pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
+    import verity_pouw.circuit.rowk  # noqa: F401  (both tile checks' row units cut along k)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -201,11 +202,14 @@ def _pouw_roots() -> list[Any]:
     templates at k = 64 with a one-word tile (small enough to lower whole), and its weight side, call side and whole check at
     one row a side; and Pearl-C's (`verity_pouw.circuit.pc8`) the same way at k = 128 (one promotion window), its templates
     on the H100's and sm_120's records and its roots on sm_120's.  Both checks' hiding tiles and roots (``hidden``: the tile
-    digest, `verity_pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes."""
+    digest, `verity_pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes.  The row units cut along k
+    (`verity_pouw.circuit.rowk`, ``Shape.row_k``) in two segments: Pearl-C4's pieces at k = 128 and its roots, Pearl-C's
+    pieces at k = 256 on the H100's and sm_120's records and at k = 64 unpromoted, and its roots on sm_120's, plain and
+    hiding."""
     from dataclasses import replace
 
     from verity.ir.defs import bind
-    from verity_pouw.circuit import ncp2, pc4, pc8
+    from verity_pouw.circuit import ncp2, pc4, pc8, rowk
     from verity_vllm.program.registry import pouw_rows
 
     shape = ncp2.Shape(16, 64, 16)
@@ -222,6 +226,15 @@ def _pouw_roots() -> list[Any]:
     out += [t for t in [*pc4.templates(64, h4.tile, True).values(), pc4.weight(h4), pc4.call(h4), pc4.check(h4),
                         *pc8.templates(128, h8.tile, "sm120", True).values(), pc8.weight(h8), pc8.call(h8), pc8.check(h8)]
             if t not in out]
+    cut = [p for side in ("a", "b") for pieces in (rowk.pieces4(128, 64, side), rowk.pieces8(256, 128, "h100", side),
+                                                    rowk.pieces8(256, 128, "sm120", side),
+                                                    rowk.pieces8(64, 32, "sm120-unpromoted", side))
+           for p in (pieces[0], pieces[1], *pieces[2], pieces[3])]
+    for mod, s in ((pc4, pc4.Shape(1, 128, 1, tile=(1, 1), row_k=64)),
+                   (pc8, pc8.Shape(1, 256, 1, tile=(1, 1), dev="sm120", row_k=128))):
+        cut += [build(replace(s, hidden=h)) for h in (False, True) for build in (mod.weight, mod.call, mod.check)]
+    seen = {t.id for t in out}
+    out += [t for t in cut if t.id not in seen and not seen.add(t.id)]
     return out + [bind(pouw_rows.NcpLinearRow, K=64, N=16), bind(pouw_rows.NcpLinearRowBias, K=64, N=16),
                   bind(pouw_rows.NcpLinearCoordinate, K=64)]
 
@@ -403,6 +416,15 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         # a partial last weight block (GLM-5.3's fused_qkv_a_proj, N = 2624 over 21 scale rows)
         ("ScaledMmFp8Block_v1/ragged", lambda: bind(fp8.ScaledMmFp8Block, K=256, N=192, G=128)),
         ("ScaledMmFp8BlockSharedScale_v1/ragged", lambda: bind(fp8.ScaledMmFp8BlockSharedScale, K=256, N=192, G=128)),
+        # the blockwise linear over a GEMM target's step (cc 12.0's), at the v1 and v2 forms' shapes
+        ("ScaledMmFp8Block_v3", lambda: bind(fp8.ScaledMmFp8BlockV3, K=256, N=192, G=128, DOT=BlackwellE4m3QmmaDot32)),
+        ("ScaledMmFp8BlockSharedScale_v3", lambda: bind(fp8.ScaledMmFp8BlockSharedScaleV3, K=256, N=192, G=128,
+                                                        DOT=BlackwellE4m3QmmaDot32)),
+        ("ScaledMmFp8Block_v4", lambda: bind(boolean_fp8.ScaledMmFp8BlockV4, K=32, N=32, G=32, DOT=BG.BlackwellE4m3QmmaDot32)),
+        ("ScaledMmFp8BlockSharedScale_v4", lambda: bind(boolean_fp8.ScaledMmFp8BlockSharedScaleV4, K=64, N=32, G=32,
+                                                        DOT=BG.BlackwellE4m3QmmaDot32)),
+        # the activation quant at fused_moe's group (fp8.QUANT_GROUPS)
+        ("Fp8GroupQuant_v1/g64", lambda: bind(fp8.Fp8GroupQuant, K=128, G=64)),
         # fused_moe_kernel's block FP8 expert GEMMs: GLM-5.3's served coordinates (w13 K = 6144, w2 K = 256 at TP8), and small ones
         # that reach two tiles per scale block, two dot steps per tile, SWAP_AB and a partial last weight block
         ("MoeExpertFp8BlockCoordinate_v1", lambda: bind(fp8_moe.MoeExpertFp8BlockCoordinate, K=6144, G=128, KB=32, SWAP=False)),
@@ -479,6 +501,7 @@ ROOT_ERRORS: list[tuple[str, str]] = []
 def _vocabulary_bindings() -> list[tuple[str, Any]]:
     """Every frontend vocabulary kind (the Definitions the torch frontend binds served ops to) at small statics: (label, the bound
     Definition, or the error)."""
+    from verity.ml.prims import BlackwellE4m3QmmaDot32
     from verity_vllm.program.frontend.rules import vocab as V
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.registry import prims as P
@@ -486,7 +509,7 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,
              "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0, "FA2_MASKED_FROM": 0,
-             "SCALE": "shared-per-block", "S": 4,
+             "SCALE": "shared-per-block", "S": 4, "FP8_DOT": BlackwellE4m3QmmaDot32,
              "CONSTRUCTION": "shared-greedy", "TARGET": TargetProfile.default()}
     wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element blocks and 256-thread quantization
     vocabularies = [v for v in vars(V).values() if isinstance(v, V.Vocabulary)]

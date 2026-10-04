@@ -5,8 +5,9 @@ The spec is what each package's `lean-audit.json` records: every guarantee's sta
 hash) and every definition the statements read (its hash, under `reads`). Between the main the push replaced and the one it
 pushed, `changes` lists the guarantees added, removed or restated, and the definitions whose hash changed under the same
 name. A guarantee that moved (removed and added under another name with the same type hash), one that only prints
-differently, and a definition that moved send nothing. A DM that fails is printed and posted to #agent-alerts, so a spec
-change never lands unseen.
+differently, and a definition that moved send nothing. The DM opens with each package's tally, then lists what existing
+guarantees and definitions now say before the new guarantees. A DM that fails is printed and posted to #agent-alerts, so
+a spec change never lands unseen.
 """
 from __future__ import annotations
 
@@ -67,25 +68,39 @@ def _restated(a: dict, b: dict) -> bool:
     return ha != hb
 
 
-def changes(old: dict, new: dict) -> list[str]:
-    """What changed in one package's spec, from its record ``old`` to ``new``, as Slack text: one entry per guarantee or
-    definition, empty when every change is a move or a reprint."""
+def _entries(old: dict, new: dict) -> list[tuple[str, str]]:
+    """``changes``' entries with their kinds (`changed`, `removed`, `definition`, `new`), in that order: what an existing
+    guarantee says comes first, so a DM cut at `LIMIT` loses new guarantees' signatures before anything else."""
     a, b = _guarantees(old), _guarantees(new)
     gone = {n: r for n, r in a.items() if n not in b}
     came = {n: r for n, r in b.items() if n not in a}
     moved = {r.get("type_hash") for r in gone.values()} & {r.get("type_hash") for r in came.values()} - {None, ""}
-    out = [f"• new guarantee `{n}`\n{_signature(r)}" for n, r in sorted(came.items()) if r.get("type_hash") not in moved]
-    out += [f"• removed guarantee `{n}`" for n, r in sorted(gone.items()) if r.get("type_hash") not in moved]
-    out += [f"• changed guarantee `{n}`, before:\n{_signature(a[n])}\nafter:\n{_signature(b[n])}"
-            for n in sorted(set(a) & set(b)) if _restated(a[n], b[n])]
+    out = [("changed", f"• changed guarantee `{n}`, before:\n{_signature(a[n])}\nafter:\n{_signature(b[n])}")
+           for n in sorted(set(a) & set(b)) if _restated(a[n], b[n])]
+    out += [("removed", f"• removed guarantee `{n}`") for n, r in sorted(gone.items()) if r.get("type_hash") not in moved]
     da, db = _definitions(old), _definitions(new)
     for d in sorted(set(da) & set(db)):
         (h0, _), (h1, readers) = da[d], db[d]
         if h0 is not None and h1 is not None and len(h0) == len(h1) and h0 != h1:
             shown = ", ".join(f"`{r}`" for r in readers[:READERS_SHOWN])
             more = f" and {len(readers) - READERS_SHOWN} more" if len(readers) > READERS_SHOWN else ""
-            out.append(f"• definition `{d}` changed; read by {shown or 'no guarantee'}{more}")
+            out.append(("definition", f"• definition `{d}` changed; read by {shown or 'no guarantee'}{more}"))
+    out += [("new", f"• new guarantee `{n}`\n{_signature(r)}")
+            for n, r in sorted(came.items()) if r.get("type_hash") not in moved]
     return out
+
+
+def changes(old: dict, new: dict) -> list[str]:
+    """What changed in one package's spec, from its record ``old`` to ``new``, as Slack text: one entry per guarantee or
+    definition, empty when every change is a move or a reprint."""
+    return [text for _, text in _entries(old, new)]
+
+
+def _tally(kinds: list[str]) -> str:
+    """`guarantees: 1 changed, 19 new; definitions: 2 changed` for one package's entries."""
+    g = ", ".join(f"{kinds.count(k)} {k}" for k in ("changed", "removed", "new") if k in kinds)
+    d = kinds.count("definition")
+    return "; ".join(([f"guarantees: {g}"] if g else []) + ([f"definitions: {d} changed"] if d else []))
 
 
 def web(repo: Path, remote: str) -> str | None:
@@ -100,20 +115,24 @@ def message(repo: Path, old: str, new: str, url: str | None = None, prs: list[in
     it landed, default to the numbers in its first-parent subjects (`Merge #12 #34 (…)`)."""
     paths = [p for p in _git(repo, "diff", "--name-only", old, new).splitlines()
              if p == RECORD or p.endswith("/" + RECORD)]
-    blocks = []
+    tallies, blocks = [], []
     for p in paths:
-        if lines := changes(_record(repo, old, p), _record(repo, new, p)):
-            blocks.append(f"*{p.rpartition('/')[0] or '.'}*\n" + "\n".join(lines))
+        if entries := _entries(_record(repo, old, p), _record(repo, new, p)):
+            pkg = p.rpartition('/')[0] or '.'
+            tallies.append(f"• `{pkg}`: {_tally([k for k, _ in entries])}")
+            blocks.append(f"*{pkg}*\n" + "\n".join(text for _, text in entries))
     if not blocks:
         return None
     compare = f"<{url}/compare/{old[:12]}...{new[:12]}|{old[:9]}..{new[:9]}>" if url else f"{old[:9]}..{new[:9]}"
     if prs is None:
         prs = sorted({int(n) for n in re.findall(r"#(\d+)", _git(repo, "log", "--first-parent", "--format=%s", f"{old}..{new}"))})
     landed = ", ".join(f"<{url}/pull/{n}|#{n}>" if url else f"#{n}" for n in prs)
-    text = f"A spec change landed on main ({compare})" + (f" from {landed}" if landed else "") + ".\n\n" + "\n\n".join(blocks)
+    text = (f"A spec change landed on main ({compare})" + (f" from {landed}" if landed else "") + ".\n" + "\n".join(tallies)
+            + "\n\n" + "\n\n".join(blocks))
     if len(text) > LIMIT:
-        cut = text.rfind("\n", 0, LIMIT)
-        text = text[:cut] + ("\n```" if text[:cut].count("```") % 2 else "") + f"\n… the rest is in {compare}."
+        tail = f"\n… the rest is in {compare}."
+        cut = text.rfind("\n", 0, LIMIT - len(tail) - len("\n```"))
+        text = text[:cut] + ("\n```" if text[:cut].count("```") % 2 else "") + tail
     return text
 
 

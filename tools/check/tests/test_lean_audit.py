@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -24,21 +25,23 @@ spec = importlib.util.spec_from_file_location("check_for_test_lean_audit", ROOT 
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 
-#: a stand-in for tools/lean/audit.py --all --build --root R --out O: each package fails when a file its policy names under
-#: "reads" is missing (an input the key would not cover), fetches its git dependencies into .lake/packages, and notes what ran
+#: a stand-in for tools/lean/audit.py --build PKG... --out O, run in the scratch tree: each named package fails when a file its
+#: policy names under "reads" is missing (an input the key would not cover) or a package it requires by path is not in the tree,
+#: fetches its git dependencies into .lake/packages, and notes what ran
 FAKE_AUDIT = r'''
 import json, sys
 from pathlib import Path
 a = sys.argv[1:]
-root, out = Path(a[a.index("--root") + 1]), Path(a[a.index("--out") + 1])
+root, out = Path.cwd(), Path(a[a.index("--out") + 1])
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo"))]
 out.mkdir(parents=True, exist_ok=True)
 (out / "repo.txt").write_text(a[a.index("--repo") + 1] if "--repo" in a else "")
 reps, failed = [], []
-for pol in sorted(root.rglob("lean-audit.json")):
-    pkg = pol.parent
-    if "tools/lean" in str(pkg):
-        continue
+for pkg in named:
+    pol = pkg / "lean-audit.json"
     missing = [r for r in json.loads(pol.read_text()).get("reads", []) if not (root / r).exists()]
+    missing += [d["dir"] for d in json.loads((pkg / "lake-manifest.json").read_text())["packages"]
+                if d["type"] == "path" and not (pkg / d["dir"] / "lean-audit.json").exists()]
     deps = pkg / ".lake" / "packages" / "dep"
     warm = (deps / "built").exists()
     if json.loads((pkg / "lake-manifest.json").read_text())["packages"]:
@@ -89,8 +92,8 @@ def test_verdicts_are_reused_only_while_every_input_is_unchanged(tmp_path, monke
     rc, ran, doc = _run(tmp_path, 1)
     assert rc == 1 and sorted(ran) == ["pkg/a cold", "pkg/b cold"] and doc["failed"] == ["pkg/b"] and doc["cached"] == {}
     (root / "pkg/b/lean-audit.json").write_text("{}")
-    rc, ran, doc = _run(tmp_path, 2)                   # a reused; b (and a, its path dependency) audited, a's dependencies warm
-    assert rc == 0 and sorted(ran) == ["pkg/a warm", "pkg/b cold"] and list(doc["cached"]) == ["pkg/a"]
+    rc, ran, doc = _run(tmp_path, 2)                   # a reused; only b audited, with a, its path dependency, in its tree
+    assert rc == 0 and ran == ["pkg/b cold"] and list(doc["cached"]) == ["pkg/a"]
     rc, ran, doc = _run(tmp_path, 3)                   # nothing changed: nothing runs
     assert rc == 0 and ran == [] and sorted(doc["cached"]) == ["pkg/a", "pkg/b"] and doc["passed"]
     (root / "pkg/a/A.lean").write_text("theorem a : True := by trivial\n")
@@ -338,6 +341,31 @@ def test_a_cold_machine_takes_the_pinned_bundle_from_the_store(tmp_path, monkeyp
     assert sorted((out / "ran.txt").read_text().split("\n")[:-1]) == ["pkg/a warm", "pkg/b cold"]
     listing = json.loads((tmp_path / "export" / "lean-deps.json").read_text())["deps"]
     assert list(listing) == [k] and listing[k]["package"] == "pkg/a" and (tmp_path / "export" / f"{k}.tar.gz").is_file()
+
+
+def test_setup_takes_a_cold_packages_pinned_bundle_from_the_store_and_replaces_nothing(tmp_path, monkeypatch):
+    """`--restore PKG` (`tools/lean/setup.sh`): the pinned bundle becomes PKG's `.lake/packages` when its bytes are the
+    pinned ones; dependencies already there, a manifest with no pin, or other bytes leave the package for lake to fetch."""
+    root = _tree(tmp_path, monkeypatch)
+    k = LA.deps_key(root / "pkg/a")
+    (tmp_path / "made" / "dep").mkdir(parents=True)
+    (tmp_path / "made" / "dep" / "built").write_text("x")
+    pin = LA.bundle(tmp_path / "made", tmp_path / f"{k}.tar.gz")
+    pins = lambda p: (root / LA.PIN).write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": p}))
+    pins({k: {"package": "pkg/a", **pin, "run": "r1"}})
+    monkeypatch.setattr(pytest.importorskip("research.store.remote"), "load_remote",
+                        lambda: types.SimpleNamespace(presign=lambda key, ttl: (tmp_path / f"{k}.tar.gz").as_uri()))
+    logs, deps = [], root / "pkg/a/.lake/packages"
+    assert LA.restore_into("pkg/a", logs.append) == 0
+    assert (deps / "dep" / "built").read_text() == "x" and sorted(p.name for p in deps.parent.iterdir()) == ["packages"]
+    (deps / "dep" / "built").write_text("mine")
+    assert LA.restore_into("pkg/a", logs.append) == 0 and (deps / "dep" / "built").read_text() == "mine"
+    shutil.rmtree(deps.parent)
+    pins({k: {"package": "pkg/a", **pin, "sha256": "0" * 64, "run": "r1"}})
+    assert LA.restore_into("pkg/a", logs.append) == 1 and not deps.exists() and "not the pinned bundle" in logs[-1]
+    pins({})
+    assert LA.restore_into("pkg/a", logs.append) == 0 and not deps.exists() and "no bundle is pinned" in logs[-1]
+    assert LA.restore_into("pkg/b", logs.append) == 0 and not (root / "pkg/b/.lake").exists()       # path dependencies only
 
 
 def test_pinning_takes_only_bundles_on_the_remote_for_this_trees_manifests(tmp_path, monkeypatch, capsys):
