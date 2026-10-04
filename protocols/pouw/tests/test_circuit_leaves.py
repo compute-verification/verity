@@ -125,6 +125,26 @@ def test_a_units_statement_rows_are_its_ports_schemas(mod, role):
     assert {s for s, _bits in got["row_schemas"]} <= {SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG}
 
 
+def test_a_cut_pieces_statement_rows_take_its_segments_codes_rows_at_row_k():
+    """Under the row cut (`rowk.PORTS4`) a form writes its segment's codes row at depth row_k (``depths``) and the tail
+    reads one per segment, before the last carry; the head writes the head row (short v2) and the ok row."""
+    from verity_pouw.circuit import rowk
+
+    k, ks = 256, 64
+    v2 = lambda row, d=k: [L.ROW_SCHEMA[row, ROLE_X], 16 * L.ROW_WORDS[row](d)]  # noqa: E731
+    seg = [L.ROW_SCHEMA["bf16", ROLE_X], 16 * k]
+    depths = {"nvfp4-codes": ks}
+    assert L.statement_rows(rowk.PORTS4["row_a_head"], k, None, depths) == {
+        "row_schemas": [seg, v2("pc4-head"), v2("ok")], "out_row_ports": [3, 1]}
+    assert L.statement_rows(rowk.PORTS4["row_a_form"], k, None, depths) == {
+        "row_schemas": [seg, v2("pc4-head"), v2("pc4-carry"), v2("nvfp4-codes", ks), v2("pc4-carry")],
+        "out_row_ports": [2, 1]}
+    tail = L.statement_rows(rowk.PORTS4["row_a_tail"], k, {"cs": k // ks, "ss": k // ks}, depths)
+    assert tail == {"row_schemas": [v2("pc4-head"), *[v2("nvfp4-codes", ks)] * (k // ks), v2("pc4-carry"),
+                                    [L.ROW_SCHEMA["nvfp4-p", ROLE_X], 16 * L.ROW_WORDS["nvfp4-p"](k)]],
+                    "out_row_ports": [3]}
+
+
 def test_statement_rows_refuse_ports_that_are_no_statement():
     """A row of input and output ports, a row whose ports a tile reads different numbers of, and output rows that miss,
     repeat or reorder an output are refused."""

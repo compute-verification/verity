@@ -347,9 +347,10 @@ def tree_leaf(bc: bytes) -> bytes:
     return INST.tree_leaf(KEY, bc)
 
 
-def statement_rows(unit: dict, k: int, reads: dict[str, int] | None = None) -> dict:
+def statement_rows(unit: dict, k: int, reads: dict[str, int] | None = None, depths: dict[str, int] | None = None) -> dict:
     """A unit's committed rows as its C-Flock statement's META names them, from its ports (``unit``: `pc4.PORTS[role]` or
-    `pc8.PORTS[role]`) at depth ``k``: ``row_schemas``, each row's [schema, bits] (`ROW_SCHEMA`, ``16 ROW_WORDS``), the input
+    `pc8.PORTS[role]`) at depth ``k`` (or ``depths[row]``: a `rowk` segment's codes row at row_k): ``row_schemas``, each
+    row's [schema, bits] (`ROW_SCHEMA`, ``16 ROW_WORDS``), the input
     rows in their order (``reads[p]`` rows of a row whose ports a tile reads one row of each of, row r of each port its r-th)
     then the output rows, each a row of exactly its words, and ``out_row_ports``, each output row's run of output ports,
     which META names when an output row is a row-seg row or a run of several (else every output row is one port's).  The
@@ -365,7 +366,7 @@ def statement_rows(unit: dict, k: int, reads: dict[str, int] | None = None) -> d
                          f"input region: not {sorted(map(str, advice & bound)) or 'outputs'}")
     ins, outs, runs = [], [], []
     for row, role, ps in unit["rows"]:
-        entry = [ROW_SCHEMA[row, role], 16 * ROW_WORDS[row](k)]
+        entry = [ROW_SCHEMA[row, role], 16 * ROW_WORDS[row]((depths or {}).get(row, k))]
         if all(isinstance(p, str) for p in ps):
             n = {reads.get(p, 1) for p in ps}
             if len(n) != 1:
