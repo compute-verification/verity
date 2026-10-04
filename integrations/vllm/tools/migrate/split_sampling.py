@@ -462,6 +462,21 @@ def leftovers() -> list[str]:
 
 
 ALLOWLISTS = VLLM / "tests" / "lint" / "allowlists"
+CENSUS_ROOTS = VLLM / "tests" / "census_roots.txt"
+ADAPTER_ROOT = "# properties-admission --adapter: imported by name"
+
+
+def declare_census_root() -> bool:
+    """The adapter is imported only by its `--adapter` name, so the dead-module census needs it as a root, like the other adapters."""
+    lines = CENSUS_ROOTS.read_text(encoding="utf-8").splitlines(keepends=True)
+    if any(ln.split("#", 1)[0].strip() == HARNESS_MODULE for ln in lines):
+        return False
+    at = [i for i, ln in enumerate(lines) if ADAPTER_ROOT in ln]
+    if not at:
+        raise SplitError(f"{CENSUS_ROOTS.relative_to(REPO)} names no adapter root ({ADAPTER_ROOT!r}) to add {HARNESS_MODULE} beside")
+    lines.insert(at[-1] + 1, f"{HARNESS_MODULE}      {ADAPTER_ROOT}\n")
+    CENSUS_ROOTS.write_text("".join(lines), encoding="utf-8")
+    return True
 
 
 def move_allowlist_entries() -> list[str]:
@@ -694,6 +709,8 @@ def split(verify: bool) -> None:
         print(f"moved the admission adapter {HARNESS} -> {HARNESS_MODULE}")
         for c in move_allowlist_entries():
             print(f"  moved its allowlist entries in {c}")
+    if declare_census_root():
+        print(f"declared {HARNESS_MODULE} in {CENSUS_ROOTS.relative_to(REPO)}")
     changed = rewrite_references()
     print(f"rewrote references in {len(changed)} file(s)" + "".join(f"\n  {c}" for c in changed))
     if update_backend_known():
