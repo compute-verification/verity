@@ -68,7 +68,9 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     and its toolchain and manifest are unchanged; a miss is audited on a scratch tree holding only those, so a
                     read outside them fails there; fetched dependencies stay warm on the machine under manifest + toolchain,
                     and a machine without them restores the bundle `lean-deps.json` pins from the store, not from GitHub; a
-                    step that audits any package first waits for one of the node's Lean audit slots (`lean_slot.py`)
+                    step that audits any package first waits for one of the node's Lean audit slots (`lean_slot.py`). The
+                    step fails on a fast-path result in its `audit.json`, cached or not (`lean_fast`): no merge check
+                    accepts an audit without the kernel replay
     lean-changed    not a verdict: its tree under `lean-changed/` keeps each package's last build there, so Lake rebuilds only
                     what changed and what imports it, and its fetched dependencies are hard links to lean-audit's, read-only
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: backends/flock/verifier/'s
@@ -89,6 +91,11 @@ holds no AWS_SESSION_TOKEN): a temporary credential cannot mint the custody key,
 is refused inside a recorded run.  Outside one, the store-backed tests skip where no remote is configured.  Under
 VERITY_STORE_REQUIRED=1 the suites' guard fails any skip whose reason says "the evidence store is not reachable", whichever helper
 fetched (C-Flock's `verifier/ci.py` hands the custody key to its store CLI too).
+
+The vLLM reference regression.  A recorded run's steps also get VERITY_REGRESSION=1, so integrations/vllm's suite runs
+`tests/regression`'s T0 tier against the frozen rows in the store (about four minutes of tests): every check but the manifest
+rebuilds, which take an hour and run after each train on main instead (`post_train.py`).  Under VERITY_STORE_REQUIRED=1 a row's
+input or contract that doesn't resolve fails there; only a check `fixtures.toml` retires on a row, with its reason, skips.
 """
 from __future__ import annotations
 
@@ -122,6 +129,8 @@ MACHINE_PREFIXES = ("RUNPOD_",)
 #: the recording run's custody dir, for `store_io` (not VERITY_-prefixed: the suites' cache keys on those, and the path is per run)
 CUSTODY_ENV = "CHECK_STORE_CUSTODY"
 STORE_REQUIRED_ENV = "VERITY_STORE_REQUIRED"
+#: integrations/vllm's reference regression (`tests/regression`): on in a recorded run, its T0 tier less the manifest rebuilds
+REGRESSION_ENV = "VERITY_REGRESSION"
 
 
 def custody_dir() -> Path | None:
@@ -230,6 +239,26 @@ def lean_audit_misses(cache: bool = True) -> bool:
     if not cache or files is None:
         return True
     return any(not (cache_dir() / "lean-audit" / f"{la.key(p, files, la.FLAGS)}.json").is_file() for p in la.packages(files))
+
+
+def lean_fast(out: Path) -> str | None:
+    """Why the lean-audit step's pass is refused, or None: its `audit.json` can't be read, or holds a fast-path result
+    (`lean_changed.py --records`) for a package, a report of kind `lean_changed.FAST_KIND` or a pass without the kernel replay."""
+    p = out / "lean-audit" / "audit.json"
+    try:
+        doc = json.loads(p.read_text())
+    except (OSError, ValueError) as e:
+        return f"refused: no readable {p} ({type(e).__name__}) shows that every package had the full audit"
+    reports = doc.get("packages", []) if isinstance(doc, dict) else None
+    if not isinstance(reports, list) or not all(isinstance(r, dict) for r in reports):
+        return f"refused: {p} is not an audit's report (an object whose packages are a list of objects)"
+    kind = _load("lean_changed").FAST_KIND
+    replayed = [isinstance(r.get("seconds"), dict) and "replay" in r["seconds"] for r in reports]
+    fast = [str(r.get("package")) for r, rep in zip(reports, replayed) if r.get("kind") == kind or (not r.get("failures") and not rep)]
+    if fast or doc.get("kind") == kind:
+        return (f"refused: {', '.join(fast) or p}: a {kind} result (the fast path: no kernel replay, no tests), which no merge "
+                "check accepts")
+    return None
 
 
 def lean_slot(cmd: list[str]) -> list[str]:
@@ -542,16 +571,18 @@ ENV_PASS = frozenset({"PATH", "HOME", "TMPDIR", "TEMP", "TMP", "LANG", "LANGUAGE
 ENV_PASS_PREFIXES = ("LC_", "XDG_", "UV_", "VERITY_", "FLOCK_")
 #: What check sets for its steps from its own state, never from the environment: a check run inside a step (its own tests) would
 #: otherwise pass its parent's on.
-ENV_OWN = frozenset({CUSTODY_ENV, STORE_REQUIRED_ENV})
+ENV_OWN = frozenset({CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV})
 
 
 def env() -> dict[str, str]:
     """The steps' environment: this process's variables that `ENV_PASS` and `ENV_PASS_PREFIXES` name, less `ENV_OWN`; PYTHONPATH
     entries inside this tree only (a machine's runner puts its shipped `research` first); and a git identity.  Inside a recorded
-    run, the store is required and the run's custody dir is passed on (the module docstring's "The evidence store")."""
+    run, the store is required, the run's custody dir is passed on and the vLLM reference regression runs (the module docstring's
+    "The evidence store")."""
     out = {k: v for k, v in os.environ.items() if (k in ENV_PASS or k.startswith(ENV_PASS_PREFIXES)) and k not in ENV_OWN}
     if os.environ.get("RESEARCH_RUN_ID"):
         out[STORE_REQUIRED_ENV] = "1"
+        out[REGRESSION_ENV] = "1"
         if custody := custody_dir():
             out[CUSTODY_ENV] = str(custody)
     keep = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p and Path(p).resolve().is_relative_to(ROOT)]
@@ -775,11 +806,14 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
             rc = p.wait() if p is not None else None
         if rc is None:
             rec = {"step": name, "status": "stopped", "detail": f"not started: {steps.halted} failed"}
+        elif rc == 0 and name == "lean-audit" and (why := lean_fast(out)):
+            print(f"check: {name}: {why}", flush=True)
+            rec = {"step": name, "status": "failed", "rc": rc, "log": log.name, "detail": why}
         else:
             rec = {"step": name, "status": "passed" if rc == 0 else "failed", "rc": rc, "log": log.name}
             if rc and name in HALTS_ON and HALTS_ON[name] in log.read_text(errors="replace"):
                 rec["halts"] = True
-        if rc == 0 and key:
+        if rec["status"] == "passed" and key:
             entry.parent.mkdir(parents=True, exist_ok=True)
             entry.write_text(json.dumps({"key": key, "argv": argv, "passed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}))
             rec["cache"] = {"stored": key}
