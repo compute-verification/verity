@@ -1,5 +1,8 @@
 {
  "roots": ["FlockSoundness"],
+ "exempt": {
+  "FlockSoundness.Discharge.Canonical": "open targets: the canonical I/O format's headline, which waits for verifier change V1 (parse_formatOk), and the statements its gaps need (Gaps.lean), sorry until they land; lake build FlockSoundness.Discharge.Canonical.All builds them"
+ },
  "assumptions": ["FlockSoundness.Assumptions"],
  "meaning": ["FlockSoundness", "FlockLevel3", "Flock"],
  "compile_time": {

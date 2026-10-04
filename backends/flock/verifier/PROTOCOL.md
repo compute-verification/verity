@@ -1516,6 +1516,63 @@ hidden outputs, `setupH` or `Stmt.setupHidden`; under `--zk`, one table or sever
 statements with the same reason (`backends/flock/live`'s `proved_scope`): its verdict is the refusal, and
 `without_refusal` keeps the session's verdict otherwise.
 
+### 16.16 The canonical I/O format (target; V1 enforces it)
+
+One row format for everything an untyped §16.13 statement registers, so a new workload needs no verifier or proof change.
+It narrows §16.10 and §16.13, and V1 (below) makes the verifier refuse every untyped circuit outside it. The soundness
+package states its binding and the session headline at this format (`FlockSoundness/Discharge/Canonical/`), outside the
+root import, so §17.4 is unchanged. The headline is proved from V1's `parse_formatOk`, which is `sorry` until V1 lands, and
+the three statements of `Canonical/Gaps.lean` are `sorry`.
+
+- **Rows.** Every row, input or output, is §16.10's bit row (`hm96-sha512/row/v2`) at its own `ℓ < 2^64`:
+  `x = SHA-512(P(ℓ) ‖ bytes)`, `B = ⌈ℓ/8⌉` bytes, bits low first, fill bits zero, then SHA-512's own padding
+  `0x80 ‖ 0* ‖ be128(8·(128 + B))`. That is `n + 1 = ⌈(B + 17)/128⌉` blocks after `P(ℓ)`. The first `n` are the row's
+  `sha512x3` compressions, and the last is the `hm96` slot's `pad`. The row's bytes end in one of the last two blocks, so
+  either can be partial, with Δ pinning its padding bits as constants (§16.10). With `n = 0` the `hm96` slot hashes the
+  row alone. No width condition: `16·words` and whole blocks retire with `v1`.
+- **Inputs.** Any number of input rows (META `input_ports`), each of any `ℓ`, with or without leaf cuts. Every unit input
+  bit is a row bit (a leaf's or leaf cut's message bit below `ℓ`) or the forced zero. It is never another net's output or a
+  fixed column, and the unit's computed columns read port bits only.
+- **Outputs.** One output row per run of output ports (META `out_row_ports`; absent, one per port), of exactly `ℓ = 16·w`
+  bits for the run's `w` words. Bit `16k + t` is bit `t` of the run's word `k`, as the returning net (the unit, or a tail's
+  last stage) computes it. That is the row a reader of the run as one input port commits (§16.13 linking). There is no
+  zero-padded output row.
+- **Shared rows** (§16.10 `shared_rows`) are tables of rows in this form, and nothing changes for them. Public input ports are
+  in the format (a public leaf is a zero leaf of `leaves_in`), but the session headline doesn't cover them yet. Registered
+  reads (§16.10) require `v1` rows until V3. `Canonical/Gaps.lean` states what each of these needs, and what a tail's
+  outputs need.
+- **VUs.** `vus_per_block` is a power of two for every circuit. `Digest(p)` has `⌊log₂ G⌋` free VU bits, so its claim
+  reaches only the VUs below `2^⌊log₂ G⌋`. §16.10 checks the power of two only when the unit returns the outputs, so
+  today a tail that returns them at `G = 3` is parsed, and VU 2's `b ‖ c` lies outside the region's VUs.
+- **Instances and retirements.**
+  - A §16.13 `v2` statement whose output rows are exact is already an instance.
+  - `hm96-sha512/row/v1` rows and zero-padded output rows retire. They have other prefixes, so a workload that moves
+    re-registers new digests, leaves and roots.
+  - `hm96-sha512/row-seg/v1` (core's `frame_v3/PROTOCOL.md`, PoUW's A rows, card 637f70c6) is outside the format until
+    Daniel rules on it. Keeping it costs one lemma family. Each segment is a row's chain under its own prefix, ending
+    in a plain SHA-512 digest instead of `hm96`, and the outer row's message bits are wired from those digests.
+  - Typed statements (§16.11) are outside the format.
+- **V1.** After `checkRows`, `HmOut.parse` and `flock-verify`'s twin refuse an untyped circuit that fails
+  `Canonical.formatOk`, one refusal per conjunct:
+  - `rowOk`: every row `v2` and unsegmented;
+  - `outRowsExact`;
+  - `readsRows` and `portReadsB`;
+  - `unit_log ≤ 32`;
+  - `vusPow2`.
+- **V2** (a tail's outputs). The verifier walks each VU's output cone over the block's `A₀`, `B₀` and Δ, and refuses a
+  cycle or a column that is neither pinned (the pin, a region bit), an input row's data bit, nor computed from such
+  columns. Main accepts any wiring of the right widths, so a tail's outputs need not be a function of its inputs. A
+  stage's input row past the net's ports is a self row, which no wire fills. That row is free, so V2 refuses any cone
+  through it (`Gaps.OutputsComputedC`).
+- **V3** (registered reads of canonical rows). `checkPort` accepts an unsegmented `v2` row of the registered width in
+  bits, and `rowLeaf` tags the leaf with the row's schema. Registration commits `hm96-sha512/row/v2` leaves
+  (`Gaps.RegisteredRowC`).
+- **Parser limits.** The format doesn't need three of the parser's limits, and they stay until the verifier lifts them:
+  - a `v2` statement whose rows all have no compression is refused (§16.10's pin), so a statement needs one row of
+    more than 888 bits;
+  - a tail's output words must be a power of two in number;
+  - a unit has at most two input groups: 16-bit leaf ports, then cut ports.
+
 ## 17. Acceptance, assumptions and trust
 
 ### 17.1 How the Lean verifier becomes the verifier of record
