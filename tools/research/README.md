@@ -309,29 +309,8 @@ evidence is on the machine. Provisioning is a separate, explicit act; `--on` nev
 
 ### Standing campaign targets: `research keeper`
 
-A lane that wants a stream of chunks on a Nebius node ("keep N of this chunk leased on node X, seed = counter, until T") sets a
-target there instead of keeping an agent VM awake to relaunch them:
-
-~~~text
-research keeper set sweep-a --on vy-nebius-2 --project verity --n 4 --until 2026-10-05T12:00Z --max-min 30 \
-    --source . --cwd source --tool T --campaign C -- python -m pkg.chunk --seed {seed}
-research keeper status [sweep-a] --on vy-nebius-2     # live chunks (run ids, seeds), the seed counter, failures, why it starts none
-research keeper stop sweep-a --on vy-nebius-2 [--cancel] --reason TEXT
-~~~
-
-`set` ships the research package and the tree as `research run --on` does and writes the target on the node, through `vy-keeper
-set` over ssh (`/workspace/research/keep/targets/<name>.json`). The node's `vy-keeper.timer` ticks every minute as research
-(`pods/nebius/keeper.py`, whose docstring has the rules). It keeps N chunks live, running or waiting for their lease, each a
-recorded `research run` on that machine with the next seed of the target's counter, which never hands a seed out twice, across
-restarts and crashes. A chunk's workload runs under `gpu-lease G --wait --preemptible [--max-min M]`, so a waiter always gets its
-GPUs back, and a preempted chunk's place goes to a new seed. No chunk starts past `until` (at most 48 h ahead), in a window booked
-in node 2's fill windows file or node 1's daily hold (12:10-13:30Z), or when its max_min would reach one. A malformed target is
-skipped and logged, never guessed at, and 3 failed chunks in a row (any exit but 0 and 143, a refusal, or no final status) pause
-it until it is set again. Setting a name again replaces its values and re-arms it, and its seeds carry on; another owner's name is
-refused. job.json's `run.remote.keeper` names each chunk's target, owner and seed, and `research status RUN --on NODE` reads its
-records. The node's run custody preserves them (node 2's `n2_custody.sh` covers `/workspace/research/runs`); without it they stay
-on the node until `research fetch --all RUN --on NODE`. `stop` starts no more chunks; `--cancel` also stops the live ones as
-`research cancel` does. Every change is a line of `/workspace/research/keep/events.jsonl`.
+`research keeper set|stop|status NAME --on NODE` keeps N chunks of a command leased on a Nebius node until a deadline, the next
+`{seed}` of a counter each, so no agent VM stays awake to relaunch them: `research keeper --help`, and `pods/nebius/keeper.py`.
 
 ### Pods bound themselves: leases, one budget file, one guard
 

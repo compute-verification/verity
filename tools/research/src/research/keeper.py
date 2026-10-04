@@ -1,17 +1,28 @@
-"""`research keeper`: standing campaign targets on a Nebius node, set and stopped from any VM over ssh. The node's side is
-pods/nebius/keeper.py (`vy-keeper`, ticked every minute by vy-keeper.timer), whose docstring says what a tick does.
+"""`research keeper`: standing campaign targets on a Nebius node, set and stopped from any VM over ssh. A lane that wants a stream
+of chunks ("keep N of this chunk leased on node X, seed = counter, until T") sets a target there instead of keeping an agent VM
+awake to relaunch them. The node's side is pods/nebius/keeper.py (`vy-keeper`, ticked every minute by vy-keeper.timer), whose
+docstring says what a tick does.
 
   research keeper set NAME --on MACHINE --project P --n N --until UTC --max-min M [--gpus G] [--seed-from S] [--owner WHO]
                       [--source GITDIR] [--env K=V ...] [--tool T] [--campaign C] [research run flags ...] -- CMD... {seed}
   research keeper stop NAME --on MACHINE [--cancel] [--reason TEXT] [--by WHO]
   research keeper status [NAME] --on MACHINE [--json]
 
+  research keeper set sweep-a --on vy-nebius-2 --project verity --n 4 --until 2026-10-05T12:00Z --max-min 30 \\
+      --source . --cwd source --tool T --campaign C -- python -m pkg.chunk --seed {seed}
+
 `set` ships the research package and the --source tree as `research run --on` does, and writes the target on the node: keep N
 chunks of CMD live (running, or waiting for their lease) until UTC, at most 48 h ahead, each with `{seed}` replaced by the next
 seed of the target's counter. Every chunk is a recorded `research run` on that machine, its workload under `gpu-lease G --wait
---preemptible --max-min M`, so a waiter can always take its GPUs back (a preempted chunk's place goes to a new seed). Setting a
-NAME again replaces its values and re-arms it after a stop or a pause (3 failed chunks in a row); its seed counter carries on.
-`stop` starts no more chunks; `--cancel` also sends SIGTERM to the live chunks' workloads, recorded as manual cancels.
+--preemptible --max-min M`, so a waiter can always take its GPUs back (a preempted chunk's place goes to a new seed). M counts
+from the lease's grant: the node cancels a chunk whose lease would meet a window booked on node 2 or node 1's daily hold
+(12:10-13:30Z), and one still waiting at UTC. --env may not set GPU_LEASE_* or CUDA_VISIBLE_DEVICES: the lease is the keeper's.
+Setting a NAME again replaces its values and re-arms it after a stop or a pause (3 failed chunks in a row); its seed counter
+carries on, and another owner's NAME is refused. `stop` starts no more chunks; `--cancel` also sends SIGTERM to the live chunks'
+workloads, recorded as manual cancels. Stop chunks that way, never by stopping their unit: systemd then SIGKILLs the runner,
+which records no final status. job.json's run.remote.keeper names each chunk's target, owner and seed, and `research status RUN
+--on MACHINE` reads its records; node 2's run custody (n2_custody.sh) preserves them, and elsewhere they stay on the node until
+`research fetch --all RUN --on MACHINE`.
 """
 from __future__ import annotations
 
@@ -20,6 +31,7 @@ import json
 import os
 import re
 import shlex
+import subprocess
 import sys
 import time
 from datetime import datetime, timedelta
@@ -49,7 +61,11 @@ def _connect(machine: str, project: str | None = None) -> tuple[dict[str, Any], 
 
 def _node(m: dict[str, Any], ssh: list[str], argv: list[str], stdin: bytes | None = None) -> Any:
     """`vy-keeper ARGV` on the node: its JSON answer; Refused with its refusal, or its stderr when it gave none."""
-    r = remote.ssh_run(ssh, [m["python"], NODE_KEEPER, *argv], stdin=stdin, timeout=120)
+    try:
+        r = remote.ssh_run(ssh, [m["python"], NODE_KEEPER, *argv], stdin=stdin, timeout=120)
+    except subprocess.TimeoutExpired:
+        raise remote.Refused(f"`vy-keeper {argv[0]}` on {m['name']} gave no answer in 120 s; it may still apply once the node's lock "
+                             f"frees (`research keeper status --on {m['name']}` says)") from None
     try:
         out = json.loads(r.stdout.decode(errors="replace").strip().splitlines()[-1])
     except (IndexError, ValueError):
