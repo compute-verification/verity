@@ -29,6 +29,9 @@ MLA_PINS = {"attention": "mla", "impl": "vllm.v1.attention.backends.mla.triton_m
 `TritonMLAImpl` (one split under batch invariance) after the bf16 absorb bmm, and `forward_mha` on FA2's varlen prefill over the
 call's own rows.  The FA version pin is the active target's (`registry.targets.check_flash_attn_registered`)."""
 
+# vLLM reads these only for truth, and off ROCm `@if_aiter_supported` makes them None: the pin is "present and falsy".
+MLA_FALSY_PINS = frozenset({"is_amx_bmm_enabled", "is_aiter_triton_fp8_bmm_enabled", "is_aiter_triton_fp4_bmm_enabled"})
+
 
 def _f32_bits(x: float) -> int:
     return int(np.float32(x).view(np.uint32))
@@ -56,7 +59,7 @@ def _mla_pins_ok(layer_name: str) -> str | None:
     for k, want in MLA_PINS.items():
         want = want_fav if k == "vllm_flash_attn_version" else want
         got = obs.get(k, "<absent>")
-        if got != want:
+        if not (got in (None, False) if k in MLA_FALSY_PINS else got == want):
             return f"numerics_unregistered: MLA attention {k}={got!r} (observed on layer {layer_name!r}) differs from the pinned {want!r}"
     dims = {k: obs.get(k) for k in ("num_heads", "impl_num_heads", "kv_lora_rank", "qk_nope_head_dim", "qk_rope_head_dim", "v_head_dim")}
     if any(not isinstance(v, int) or v <= 0 for v in dims.values()) or dims["num_heads"] != dims["impl_num_heads"]:
