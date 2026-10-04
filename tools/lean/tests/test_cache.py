@@ -635,7 +635,8 @@ def node(tmp: Path, url: str, run_rc: int = 0, clean_rc: int = 0) -> tuple["D.No
 def test_the_daily_run_builds_in_the_sandbox_and_publishes_only_after_clean(s3, tmp_path):
     b, url = s3
     n, log, sha = node(tmp_path, url)
-    (n.deps / "stale-key").mkdir(parents=True)
+    n.deps.mkdir(mode=0o755, parents=True)                  # not by the umask: `owned_dirs` refuses a group-writable one
+    (n.deps / "stale-key").mkdir()
     lines = []
     assert D.daily(n, lines.append) == 0, "\n".join(lines)
     steps = log.read_text().splitlines()
