@@ -3,8 +3,8 @@
 #
 # Auth reads the Cursor secrets NEBIUS_SA_ID, NEBIUS_SA_PUBLIC_KEY_ID and NEBIUS_SA_PRIVATE_KEY_B64 (the PEM as one line of base64,
 # `base64 -w0 key.pem`).  The key must be one line: a multi-line secret's body lines pass through `env | cut -d= -f1` and escape
-# Cursor's redaction, which is how the old multi-line NEBIUS_SA_PRIVATE_KEY leaked six times by 2 Oct; it is still read when _B64
-# is unset.
+# Cursor's redaction, which is how the old multi-line NEBIUS_SA_PRIVATE_KEY leaked six times by 2 Oct and again on 3 Oct. It is
+# refused, so that nobody keeps it as a Cursor secret.
 # The key is written to a mode-600 file in a mode-700 directory made for this process and removed when it exits; the CLI's profile
 # lives there too (`nebius -c`), so nothing is written to ~/.nebius or the repository and no value is ever printed.  Never run these
 # with `bash -x`.
@@ -43,9 +43,11 @@ nebius_auth() {
       *) die "$v is not set (a Cursor secret: Dashboard -> Cloud Agents -> Secrets)" ;;
     esac
   done
-  if [ -z "${NEBIUS_SA_PRIVATE_KEY_B64:-}${NEBIUS_SA_PRIVATE_KEY:-}" ]; then
+  if [ -z "${NEBIUS_SA_PRIVATE_KEY_B64:-}" ]; then
+    [ -z "${NEBIUS_SA_PRIVATE_KEY:-}" ] || die "NEBIUS_SA_PRIVATE_KEY (the multi-line key) is no longer read: store the key as \
+NEBIUS_SA_PRIVATE_KEY_B64 (\`base64 -w0 key.pem\`) and delete NEBIUS_SA_PRIVATE_KEY (Dashboard -> Cloud Agents -> Secrets)"
     case ",${CLOUD_AGENT_INJECTED_SECRET_NAMES:-}," in
-      *",NEBIUS_SA_PRIVATE_KEY_B64,"* | *",NEBIUS_SA_PRIVATE_KEY,"*)
+      *",NEBIUS_SA_PRIVATE_KEY_B64,"*)
         die "the Nebius key is not in this shell though this VM injects it: rerun from a fresh tmux login shell" ;;
       *) die "NEBIUS_SA_PRIVATE_KEY_B64 is not set (a Cursor secret, \`base64 -w0 key.pem\`: Dashboard -> Cloud Agents -> Secrets)" ;;
     esac
@@ -53,14 +55,8 @@ nebius_auth() {
   NB_DIR=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/nebius-auth.XXXXXX") || die "mktemp failed"
   chmod 700 "$NB_DIR"
   trap 'rm -rf "$NB_DIR"' EXIT
-  if [ -n "${NEBIUS_SA_PRIVATE_KEY_B64:-}" ]; then
-    (umask 077 && printf '%s' "$NEBIUS_SA_PRIVATE_KEY_B64" | base64 -d > "$NB_DIR/key.pem" 2>/dev/null) \
-      || die "NEBIUS_SA_PRIVATE_KEY_B64 is not base64"
-  else
-    local key=$NEBIUS_SA_PRIVATE_KEY
-    case $key in *$'\n'*) ;; *) key=${key//\\n/$'\n'} ;; esac    # a PEM pasted with literal \n
-    (umask 077 && printf '%s\n' "$key" > "$NB_DIR/key.pem")
-  fi
+  (umask 077 && printf '%s' "$NEBIUS_SA_PRIVATE_KEY_B64" | base64 -d > "$NB_DIR/key.pem" 2>/dev/null) \
+    || die "NEBIUS_SA_PRIVATE_KEY_B64 is not base64"
   "$NEBIUS_BIN" --no-check-update -c "$NB_DIR/config.yaml" profile create sa --endpoint api.nebius.cloud \
     --service-account-id "$NEBIUS_SA_ID" --public-key-id "$NEBIUS_SA_PUBLIC_KEY_ID" \
     --private-key-file-path "$NB_DIR/key.pem" --skip-auth > /dev/null 2>&1 || die "could not write the CLI profile"
