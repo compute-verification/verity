@@ -1,4 +1,5 @@
 import FlockSoundness.Registered.Binding
+import FlockSoundness.Discharge.Exec.Live
 import FlockBridge.Registered
 
 /-!
@@ -12,10 +13,12 @@ gate at which the transcript is off the registered values. Here it follows from 
   the reads cover, and each one's bit in the row the registrant committed at its commit string.
 * **The check reads only the draw's units** (`drawnReads`, `restrict`): the verifier reads the registered values at the
   drawn statement's instances. `RegReadSound` charges only drawn units, so that is enough.
-* **The registered leaf** (`prob_off_le`): where the registered check holds at every accepted run, an accepting run
-  whose registered leaf at a drawn unit's read is not the registrant's is a SHA-512 collision of the registered-path
-  finder, at most `qR²/2^513` under `cr/sha-512`: `Reads.prob_off_le` at reads and a registration that depend on the
-  run.
+* **The registered leaf** (`prob_off_le`): where the registered check holds at every accepted outcome the game can
+  reach (`Game.Out`), an accepting run whose registered leaf at a drawn unit's read is not the registrant's is a SHA-512
+  collision of the registered-path finder, at most `qR²/2^513` under `cr/sha-512`: `Reads.prob_off_le` at reads and a
+  registration that depend on the run. The check is asked only at reachable outcomes because the verifier's reads at an
+  outcome are its own only where the outcome's draw is its record's: in the live audit, at `(R, L.draw ω, t)` with `t`
+  the live session's transcript at that draw (`out_auditLive`), not at every triple.
 * **The registrant's values** (`RegValsSound`, named): an accepting run rarely draws a unit that reads the registrant's
   leaf at a registered gate where the transcript is not the registrant's bit. For C-Flock's value layer this is the
   extraction's step: a drawn unit's satisfying witness holds the registrant's row there or an hm96 collision against it
@@ -67,6 +70,42 @@ def regVals (rd : Reads lay rs) : Fin C.N → Bool := fun g => lay.bit (rd.wv (l
 
 variable {Out : Type}
 
+/-- `prob_mono` at the outcomes `G` can reach: an event that implies another at each of them is no likelier. -/
+theorem prob_mono_out {G : FlockSoundness.Game Out} {p q : Out → Prop}
+    (h : ∀ o, FlockSoundness.Game.Out G o → p o → q o) (s : FlockSoundness.Game.Strategy G) :
+    FlockSoundness.Game.prob p G s ≤ FlockSoundness.Game.prob q G s := by
+  classical
+  calc FlockSoundness.Game.prob p G s
+      ≤ FlockSoundness.Game.prob (fun o => q o ∨ (p o ∧ ¬ FlockSoundness.Game.Out G o)) G s :=
+        FlockSoundness.Game.prob_mono (fun o hp => by
+          by_cases ho : FlockSoundness.Game.Out G o
+          · exact Or.inl (h o ho hp)
+          · exact Or.inr ⟨hp, ho⟩) G s
+    _ ≤ FlockSoundness.Game.prob q G s +
+          FlockSoundness.Game.prob (fun o => p o ∧ ¬ FlockSoundness.Game.Out G o) G s :=
+        FlockSoundness.Game.prob_or_le _ _ G s
+    _ = FlockSoundness.Game.prob q G s := by
+        rw [FlockSoundness.Game.prob_eq_zero_of_out (p := fun o => p o ∧ ¬ FlockSoundness.Game.Out G o)
+          (fun o ho hn => hn.2 ho) s, add_zero]
+
+/-- **The live audit's outcomes**: the registration `R`, the law's draw at some `ω`, and the live session's transcript
+at that draw and registration for some live outcome `lo`. -/
+theorem out_auditLive {L : FlockSoundness.Audit.Law n} {dg : ByteArray → ByteArray} {N : ℕ}
+    {wr : Finset (Fin n) → Reg → FlockSoundness.Refine.LiveOut mPts → FlockSoundness.Discharge.Exec.Transcript}
+    {o : Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript}
+    (h : FlockSoundness.Game.Out (FlockSoundness.Discharge.Exec.auditLive L Reg
+      (FlockSoundness.Discharge.Exec.liveOf dg mPts N wr)) o) :
+    ∃ (R : Reg) (ω : L.Ω) (lo : FlockSoundness.Refine.LiveOut mPts), o = (R, L.draw ω, wr (L.draw ω) R lo) := by
+  unfold FlockSoundness.Discharge.Exec.auditLive at h
+  cases h with
+  | send R h =>
+    cases h with
+    | coin ω h =>
+      obtain ⟨t, ht, rfl⟩ := FlockSoundness.Game.Out.of_map h
+      unfold FlockSoundness.Discharge.Exec.liveOf at ht
+      obtain ⟨lo, -, rfl⟩ := FlockSoundness.Game.Out.of_map ht
+      exact ⟨R, ω, lo, rfl⟩
+
 /-- **The registrant's values at the drawn units' registered reads, up to `δ`** (named hypothesis), at strategy `s`: an
 accepting run of `G` draws a unit that reads, at a registered gate `g`, the registrant's leaf under the run's
 registration `R o`, while `Xc` is not the registrant's bit at `g`, with probability at most `δ`. -/
@@ -76,21 +115,21 @@ def RegValsSound (G : FlockSoundness.Game Out) (s : FlockSoundness.Game.Strategy
       lay.regLeaf (R o) (lay.pos g) = rd.leaf (lay.pos g) ∧ Xc g ≠ regVals rd g) G s ≤ δ
 
 /-- **The registered reads' term at each run's reads and registration, under `SHA512CRStrict` (`cr/sha-512`).** In a
-game `G` played by `σ` whose accepted runs pass the registered check at their registration `R o` for the reads `rdo o`,
-through their paths: the probability of accepting while some read's leaf is not the registrant's is at most
-`qR²/2^513`, for the finder that plays `G` once and outputs the extractor's pair. `Reads.prob_off_le`, at reads and a
-registration that depend on the run. -/
+game `G` played by `σ` whose accepted outcomes `o` (those `G` can reach) pass the registered check at their
+registration `R o` for the reads `rdo o`, through their paths: the probability of accepting while some read's leaf is
+not the registrant's is at most `qR²/2^513`, for the finder that plays `G` once and outputs the extractor's pair.
+`Reads.prob_off_le`, at reads and a registration that depend on the run. -/
 theorem prob_off_le (G : FlockSoundness.Game Out) (σ : FlockSoundness.Game.Strategy G) (accept : Out → Prop)
     (R : Out → Reg) (rdo : Out → Reads lay rs) (path : Out → lay.Pos → ByteArray)
-    (hchk : ∀ o, accept o → (rdo o).Checked (R o) (path o)) {qR : ℝ}
+    (hchk : ∀ o, FlockSoundness.Game.Out G o → accept o → (rdo o).Checked (R o) (path o)) {qR : ℝ}
     (hR : (FlockSoundness.StrictCR.oneRun G σ fun o => (rdo o).pick (R o) (path o)).CR FlockSoundness.Refine.H512 qR) :
     FlockSoundness.Game.prob (fun o => accept o ∧ (rdo o).Off (R o)) G σ ≤
       ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) := by
   have hle : FlockSoundness.Game.prob (fun o => accept o ∧ (rdo o).Off (R o)) G σ ≤
       FlockSoundness.Game.prob
         (fun o => FlockSoundness.StrictCR.IsColl FlockSoundness.Refine.H512 ((rdo o).pick (R o) (path o))) G σ :=
-    FlockSoundness.Game.prob_mono (fun o ⟨ha, hoff⟩ =>
-      ((rdo o).openings (R o) (path o) ((rdo o).offAt (R o))).isColl ((rdo o).offAt_conflict (hchk o ha) hoff)) G σ
+    prob_mono_out (fun o ho ⟨ha, hoff⟩ =>
+      ((rdo o).openings (R o) (path o) ((rdo o).offAt (R o))).isColl ((rdo o).offAt_conflict (hchk o ho ha) hoff)) σ
   have hev : (FlockSoundness.Game.prob
       (fun o => FlockSoundness.StrictCR.IsColl FlockSoundness.Refine.H512 ((rdo o).pick (R o) (path o))) G σ).toReal ≤
         qR ^ 2 / 2 ^ (513 : ℝ) := by
@@ -103,14 +142,15 @@ theorem prob_off_le (G : FlockSoundness.Game Out) (σ : FlockSoundness.Game.Stra
   exact hle.trans ((ENNReal.le_ofReal_iff_toReal_le hfin (by positivity)).2 hev)
 
 /-- **Registered reads are sound, from the registered check.** In a game `G` played by `σ`, with drawn units `drawn o`
-and registration `R o` on each run: if every accepted run passes the registered check on the registrant's reads at the
-commit strings its drawn units read (`hchk`), the registered-path finder meets `cr/sha-512` at `qR` (`hR`), and the
-registrant's values hold up to `δ` (`RegValsSound`), then registered reads are sound for `Xc` against the registered
-values `regVals rd` on the registered gates `regGates rd`, up to `qR²/2^513 + δ`. -/
+and registration `R o` on each run: if every accepted outcome `G` can reach passes the registered check on the
+registrant's reads at the commit strings its drawn units read (`hchk`), the registered-path finder meets `cr/sha-512` at
+`qR` (`hR`), and the registrant's values hold up to `δ` (`RegValsSound`), then registered reads are sound for `Xc`
+against the registered values `regVals rd` on the registered gates `regGates rd`, up to `qR²/2^513 + δ`. -/
 theorem regReadSound_of_checked (G : FlockSoundness.Game Out) (σ : FlockSoundness.Game.Strategy G)
     (acc : Out → Prop) (drawn : Out → Finset (Fin n)) (R : Out → Reg) (path : Out → lay.Pos → ByteArray)
     (rd : Reads lay rs) (Xc : Fin C.N → Bool)
-    (hchk : ∀ o, acc o → (restrict rd (drawnReads lay (drawn o))).Checked (R o) (path o)) {qR : ℝ}
+    (hchk : ∀ o, FlockSoundness.Game.Out G o → acc o →
+      (restrict rd (drawnReads lay (drawn o))).Checked (R o) (path o)) {qR : ℝ}
     (hR : (FlockSoundness.StrictCR.oneRun G σ fun o =>
       (restrict rd (drawnReads lay (drawn o))).pick (R o) (path o)).CR FlockSoundness.Refine.H512 qR)
     {δ : ℝ≥0∞} (hvals : RegValsSound G σ acc drawn R rd Xc δ) :
@@ -152,7 +192,8 @@ probability at most `qR²/2^513 + δ`. -/
 theorem regJoint_of_checked (G : FlockSoundness.Game Out) (σ : FlockSoundness.Game.Strategy G)
     (acc : Out → Prop) (drawn : Out → Finset (Fin n)) (R : Out → Reg) (path : Out → lay.Pos → ByteArray)
     (rd : Reads lay rs) (Xc : Fin C.N → Bool)
-    (hchk : ∀ o, acc o → (restrict rd (drawnReads lay (drawn o))).Checked (R o) (path o)) {qR : ℝ}
+    (hchk : ∀ o, FlockSoundness.Game.Out G o → acc o →
+      (restrict rd (drawnReads lay (drawn o))).Checked (R o) (path o)) {qR : ℝ}
     (hR : (FlockSoundness.StrictCR.oneRun G σ fun o =>
       (restrict rd (drawnReads lay (drawn o))).pick (R o) (path o)).CR FlockSoundness.Refine.H512 qR)
     {δ : ℝ≥0∞} (hjoint : RegJointSound G σ acc drawn R rd Xc δ) :
@@ -179,7 +220,8 @@ makes an accepting run draw a wrong unit or be off the registered values `regVal
 theorem registered_of_checked_joint (G : FlockSoundness.Game Out) (σ : Verity.Game.Strategy (Game.toCore G))
     (acc : Out → Prop) (drawn : Out → Finset (Fin n)) (R : Out → Reg) (path : Out → lay.Pos → ByteArray)
     (rd : Reads lay rs) (Xc : Fin C.N → Bool)
-    (hchk : ∀ o, acc o → (restrict rd (drawnReads lay (drawn o))).Checked (R o) (path o)) {qR : ℝ}
+    (hchk : ∀ o, FlockSoundness.Game.Out G o → acc o →
+      (restrict rd (drawnReads lay (drawn o))).Checked (R o) (path o)) {qR : ℝ}
     (hR : (FlockSoundness.StrictCR.oneRun G (Game.Strategy.ofCore G σ) fun o =>
       (restrict rd (drawnReads lay (drawn o))).pick (R o) (path o)).CR FlockSoundness.Refine.H512 qR)
     {δ : ℝ≥0∞} (hjoint : RegJointSound G (Game.Strategy.ofCore G σ) acc drawn R rd Xc δ) :

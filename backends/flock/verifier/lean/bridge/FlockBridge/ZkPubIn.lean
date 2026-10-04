@@ -6,9 +6,10 @@ import FlockBridge.RegisteredReads
 
 `FlockBridge.ZkReg` with the verifier's public inputs, at C-Flock's hidden-output sessions with public input ports
 (`ZkPubIn.LiveAcceptsZKRP`, `rports` R's ports, `own` F's bytes), on the public plan's layout and rows
-(`ZkPubIn.layShHP`, `ZkPubIn.rsShHP`). The registered check at every accepted run is `ZkPubIn.checked_of_acceptsHP`
-(`zk_session_soundHRP`'s second conjunct), for the registrant's reads at the commit strings the run's drawn units read,
-when those are the verifier's own there (`OwnAtDrawsHP`, named): `regReadSound_zkHP`, in any game.
+(`ZkPubIn.layShHP`, `ZkPubIn.rsShHP`). The registered check at every accepted outcome of the live audit is
+`ZkPubIn.checked_of_acceptsHP` (`zk_session_soundHRP`'s second conjunct), for the registrant's reads at the commit
+strings the outcome's drawn units read, when those are the verifier's own there (`OwnAtDrawsHP`, named):
+`regReadSound_zkHP`, under any law and live session.
 
 In the live audit, the committed values are `zk_session_soundHRP`'s public transcript (`Xpub (pubOnes …) (pubZeros …)
 XplurZC` at `ZkPubIn.simZA … τ`, on every public-input gate the verifier's own bit):
@@ -29,19 +30,25 @@ becomes `RegisteredReads.registered_of_checked_joint` at that bound: `hchk` from
 (`RegisteredReads.RegJointSound`) from the joint form, and `η = qR²/2^513 + ε_ks + δ_link + δ_reg`. `hvals`, the count
 conjunct and `miss 1` drop out, and `regReadSound_zk_sessionHP`'s `hvals` follows from the joint form by `prob_mono`.
 
-**Coverage (open).** Everything here is stated for any circuit the verifier parses (`hc`, `hpi`, `hscope`); nothing here
-claims these theorems are non-vacuous for PoUW's circuits. C-Flock's hidden-output soundness for v2 output rows is proved
-for one output port per output row and whole-SHA-512-block ports, and PoUW's ok rows (one word), tile digests (16 words)
-and the v2 data row of `row_b` (a run of 2 or 3 ports) are neither. Whether `zk_session_soundHRP` reaches exact v2 output
-rows is not settled; if it does not, covering PoUW's circuits depends on per-output-row soundness for exact runs with a
-partial last block (C-Flock's option B).
+**Vacuous for PoUW's circuits today.** Everything here is stated for any circuit the verifier parses (`hc`, `hpi`,
+`hscope`), and nothing here claims it is non-vacuous for PoUW's circuits. Every theorem takes
+`hscope : Layout.scopeOk c = true`, whose `v1Ports` asks every port, input or output, to be a `sha512/row/v1` row, and
+`HmRow.rowPorts` makes every port of a `row_schemas` manifest `v2`, row-seg included: no PoUW circuit meets `hscope`,
+so these theorems say nothing about PoUW's circuits until C-Flock's scope widens to v2 and row-seg ports. They are
+generic in the circuit and apply once it does. Even then, C-Flock's hidden-output soundness for v2 output rows is
+proved for one output port per output row and whole-SHA-512-block ports, and PoUW's ok rows (one word), tile digests
+(16 words) and the v2 data row of `row_b` (a run of 2 or 3 ports) are neither; if the widened `zk_session_soundHRP`
+does not reach exact v2 output rows, covering PoUW's circuits depends on per-output-row soundness for exact runs with
+a partial last block (C-Flock's option B).
 
-**`OwnAtDrawsHP` and reads defined from the registered file.** If C-Flock defines the reads from R's ports
-(`rd := rdOf …`, with `port`, `readAt` and `isRead` from R) and proves `OwnAtDrawsHP` from the executable's check
-(`ownAtDraws_of_check`), no statement here changes: each holds for every `rd`, and its instance at `rd := rdOf …` takes
-that lemma for `hown`. A lemma about the unrestricted reads also gives `OwnAtDrawsHP`, since `OwnReadsHP` for
-`rd.isRead` implies it for `restrict`'s, which reads fewer commit strings. If the lemma takes more than this session's
-hypotheses (the record's draw, `RecordsLiveZKP` and `DrawOkZKHP`), those join the instance, not these statements.
+**`OwnAtDrawsHP` and reads defined from the registered file.** `OwnAtDrawsHP` is asked at the live audit's outcomes
+`(R, L.draw ω, wr (L.draw ω) R lo)` only, as `ZkReg.OwnAtDraws` is: `OwnReadsHP` needs each read's unit in the
+transcript's recorded draw, which is the law's draw there and need not be at an arbitrary triple. That is the shape of
+C-Flock's `ZkReg.ownAtDraws_of_check` (`cursor/own-at-draws-95d4`, not merged here yet), which proves the form
+without public inputs at `rd := ZkReg.ownReads … own …` (restricted to a draw `S`, `ZkReg.drawnOwn … S`) from
+`hRec` and `(hDraw ω).1`. A public-input analog at reads defined from R's ports (not stated yet) would discharge
+`hown` here as `fun R ω lo hacc => … hRec (hDraw ω).1 R lo hacc …`, with no change to these statements: each holds
+for every `rd`.
 -/
 
 namespace FlockBridge
@@ -73,52 +80,63 @@ variable {n : ℕ} {I : Inputs} (ht : I.tags.typed = false) {own : ByteArray} {m
   (hU : FlockSoundness.Built c.unit) {pi : Flock.HmIn.Ports} (hpi : Flock.HmIn.parse c = .ok pi) {pub : Flock.Public}
   (hpub : Flock.HmIn.loadPublic (zkTags I) c pi I.publicFile = .ok pub) (hscope : scopeOk c = true)
 
-/-- **The registrant's reads are the verifier's own at each accepted run's draw, with public inputs** (named
-hypothesis): at every run that `flock-verify verify --zk --registered R --public-inputs F` accepts (`rports` R's ports,
-`own` F's bytes), the registrant's reads at the commit strings the run's drawn units read are the verifier's own there
-(`OwnReadsHP`): rows of drawn instances, at ports of `rports` named as the circuit's, at the positions `rports` gives for
-the units the drawn statement `HmIn.drawn c pi pub` names. -/
-def OwnAtDrawsHP (rports : Array Flock.Registered.Port)
+/-- **The registrant's reads are the verifier's own at each accepted live outcome's draw, with public inputs** (named
+hypothesis): at every outcome of the live audit under the law `L` and the live session `wr` (a registration `R`, the
+law's draw at `ω`, and the transcript `wr` writes there at a live outcome `lo`) that
+`flock-verify verify --zk --registered R --public-inputs F` accepts (`rports` R's ports, `own` F's bytes), the
+registrant's reads at the commit strings the drawn units read are the verifier's own there (`OwnReadsHP`): rows of drawn
+instances, at ports of `rports` named as the circuit's, at the positions `rports` gives for the units the drawn
+statement `HmIn.drawn c pi pub` names. -/
+def OwnAtDrawsHP (rports : Array Flock.Registered.Port) (L : FlockSoundness.Audit.Law n)
+    (wr : Finset (Fin n) → Reg → LiveOut mPts → FlockSoundness.Discharge.Exec.Transcript)
     (rd : FlockSoundness.Registered.Reads (layShHP (Reg := Reg) dj y₀ ht hc hscope hU hpi (pub := pub))
       (rsShHP dj y₀ ht hc hscope hU hpi hpub)) : Prop :=
-  ∀ o : Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript, LiveAcceptsZKRP I rports own o →
-    OwnReadsHP rports c pi pub o.2.2
-      (restrict rd (drawnReads (layShHP (Reg := Reg) dj y₀ ht hc hscope hU hpi (pub := pub)) o.2.1)).isRead rd.port
-      rd.readAt
+  ∀ (R : Reg) (ω : L.Ω) (lo : LiveOut mPts),
+    LiveAcceptsZKRP I rports own (R, L.draw ω, wr (L.draw ω) R lo) →
+    OwnReadsHP rports c pi pub (wr (L.draw ω) R lo)
+      (restrict rd (drawnReads (layShHP (Reg := Reg) dj y₀ ht hc hscope hU hpi (pub := pub)) (L.draw ω))).isRead
+      rd.port rd.readAt
 
-/-- **Registered reads of a `--zk --registered R --public-inputs F` session are sound.** In any game `G` on the live
-audit's outcomes (the registration, the draw and the transcript), played by `σ`: if the registrant's reads `rd` are the
-verifier's own at each accepted run's draw (`OwnAtDrawsHP`), the registered-path finder meets `cr/sha-512` at `qR`, and
-the registrant's values hold for `Xc` up to `δ` (`RegValsSound`), then registered reads are sound for `Xc` against
-`regVals rd` on `regGates rd`, up to `qR²/2^513 + δ`. -/
-theorem regReadSound_zkHP (rports : Array Flock.Registered.Port) (hTags : TagsOkH I)
-    (G : FlockSoundness.Game (Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript))
-    (σ : Strategy G)
+/-- **Registered reads of a `--zk --registered R --public-inputs F` session are sound.** In the live audit under any
+law `L` and live session `wr` (outcomes: the registration, the draw and the transcript), played by `σ`: if the
+registrant's reads `rd` are the verifier's own at each accepted outcome's draw (`OwnAtDrawsHP`), the registered-path
+finder meets `cr/sha-512` at `qR`, and the registrant's values hold for `Xc` up to `δ` (`RegValsSound`), then
+registered reads are sound for `Xc` against `regVals rd` on `regGates rd`, up to `qR²/2^513 + δ`. -/
+theorem regReadSound_zkHP (rports : Array Flock.Registered.Port) (hTags : TagsOkH I) (L : FlockSoundness.Audit.Law n)
+    (wr : Finset (Fin n) → Reg → LiveOut mPts → FlockSoundness.Discharge.Exec.Transcript)
+    (dg : ByteArray → ByteArray) (N : ℕ) (σ : Strategy (auditLive L Reg (liveOf dg mPts N wr)))
     (rd : FlockSoundness.Registered.Reads (layShHP (Reg := Reg) dj y₀ ht hc hscope hU hpi (pub := pub))
       (rsShHP dj y₀ ht hc hscope hU hpi hpub))
-    (hown : OwnAtDrawsHP ht dj y₀ hc hU hpi hpub hscope rports rd)
+    (hown : OwnAtDrawsHP ht dj y₀ hc hU hpi hpub hscope rports L wr rd)
     (Xc : Fin ((keyProgP c hU n pi).circuit (outsOf c hU n)).N → Bool) {qR : ℝ}
-    (hR : (oneRun G σ fun o =>
+    (hR : (oneRun (auditLive L Reg (liveOf dg mPts N wr)) σ fun o =>
       (restrict rd (drawnReads (layShHP (Reg := Reg) dj y₀ ht hc hscope hU hpi (pub := pub)) o.2.1)).pick o.1
         (regPathsHP c pi pub o.2.2 rd.port)).CR H512 qR)
-    {δ : ℝ≥0∞} (hvals : RegValsSound G σ (LiveAcceptsZKRP I rports own) (fun o => o.2.1) (fun o => o.1) rd Xc δ) :
-    Registered.RegReadSound ((keyProgP c hU n pi).partition (outsOf c hU n)) G σ (LiveAcceptsZKRP I rports own)
-      (fun o => o.2.1) Xc (regVals rd) (regGates rd) (ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) + δ) := by
-  have hchk : ∀ o : Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript, LiveAcceptsZKRP I rports own o →
+    {δ : ℝ≥0∞} (hvals : RegValsSound (auditLive L Reg (liveOf dg mPts N wr)) σ (LiveAcceptsZKRP I rports own)
+      (fun o => o.2.1) (fun o => o.1) rd Xc δ) :
+    Registered.RegReadSound ((keyProgP c hU n pi).partition (outsOf c hU n)) (auditLive L Reg (liveOf dg mPts N wr)) σ
+      (LiveAcceptsZKRP I rports own) (fun o => o.2.1) Xc (regVals rd) (regGates rd)
+      (ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) + δ) := by
+  have hchk : ∀ o : Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript,
+      FlockSoundness.Game.Out (auditLive L Reg (liveOf dg mPts N wr)) o → LiveAcceptsZKRP I rports own o →
       (restrict rd (drawnReads (layShHP (Reg := Reg) dj y₀ ht hc hscope hU hpi (pub := pub)) o.2.1)).Checked o.1
-        (regPathsHP c pi pub o.2.2 rd.port) := fun o hacc =>
-    checked_of_acceptsHP I ht rports own dj y₀ hc hU hpi hpub hscope hTags o hacc
-      (restrict rd (drawnReads (layShHP (Reg := Reg) dj y₀ ht hc hscope hU hpi (pub := pub)) o.2.1)) (hown o hacc)
+        (regPathsHP c pi pub o.2.2 rd.port) := by
+    intro o hout hacc
+    obtain ⟨R, ω, lo, rfl⟩ := RegisteredReads.out_auditLive hout
+    exact checked_of_acceptsHP I ht rports own dj y₀ hc hU hpi hpub hscope hTags _ hacc
+      (restrict rd (drawnReads (layShHP (Reg := Reg) dj y₀ ht hc hscope hU hpi (pub := pub)) (L.draw ω)))
+      (hown R ω lo hacc)
   exact RegisteredReads.regReadSound_of_checked (lay := layShHP (Reg := Reg) dj y₀ ht hc hscope hU hpi (pub := pub))
-    (rs := rsShHP dj y₀ ht hc hscope hU hpi hpub) G σ (LiveAcceptsZKRP I rports own) (fun o => o.2.1) (fun o => o.1)
-    (fun o => regPathsHP c pi pub o.2.2 rd.port) rd Xc hchk hR hvals
+    (rs := rsShHP dj y₀ ht hc hscope hU hpi hpub) (auditLive L Reg (liveOf dg mPts N wr)) σ
+    (LiveAcceptsZKRP I rports own) (fun o => o.2.1) (fun o => o.1) (fun o => regPathsHP c pi pub o.2.2 rd.port) rd Xc
+    hchk hR hvals
 
 /-- **Registered reads of a `--zk --registered R --public-inputs F` session are sound, at the public transcript its
 soundness reads.** `regReadSound_zkHP` in the live audit at `zk_session_soundHRP`'s public transcript (`Xpub` of the
 verifier's own bits over `XplurZC` at `simZA … τ`): if the registrant's reads are the verifier's own at each accepted
-run's draw (`OwnAtDrawsHP`), `cr/sha-512` holds for the registered-path finder (`hR`), and the registrant's values hold
-there up to `δ` (`hvals`, named until C-Flock's joint form at this session), registered reads are sound up to
-`qR²/2^513 + δ`. -/
+live outcome's draw (`OwnAtDrawsHP`), `cr/sha-512` holds for the registered-path finder (`hR`), and the registrant's
+values hold there up to `δ` (`hvals`, named until C-Flock's joint form at this session), registered reads are sound up
+to `qR²/2^513 + δ`. -/
 theorem regReadSound_zk_sessionHP (rports : Array Flock.Registered.Port)
     (wr : Finset (Fin n) → Reg → LiveOut mPts → FlockSoundness.Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -129,7 +147,8 @@ theorem regReadSound_zk_sessionHP (rports : Array Flock.Registered.Port)
     (hTags : TagsOkH I) (hRec : RecordsLiveZKP I own dj wr) {k Rw : ℕ}
     (rd : FlockSoundness.Registered.Reads (layShHP (Reg := Reg) dj y₀ ht hc hscope hU hpi (pub := pub))
       (rsShHP dj y₀ ht hc hscope hU hpi hpub))
-    (hown : OwnAtDrawsHP ht dj y₀ hc hU hpi hpub hscope rports rd)
+    (hown : OwnAtDrawsHP ht dj y₀ hc hU hpi hpub hscope rports
+      (FlockSoundness.Audit.Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) wr rd)
     (τ : Strategy (auditLive (FlockSoundness.Audit.Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (liveOf dg mPts N wr)))
     {qR : ℝ}
@@ -164,15 +183,15 @@ theorem regReadSound_zk_sessionHP (rports : Array Flock.Registered.Port)
             hs512 _ (AcceptsZKP I own) wr _ _ _ _ (runsZC_liveHP I own ht hc (scopeOk_spec hU hscope).2.1 dj y₀ wr _
               tablesAtZKHP_live hTags hRec hDraw)) τ)) k Rw))
       (regVals rd) (regGates rd) (ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) + δ) :=
-  regReadSound_zkHP ht dj y₀ hc hU hpi hpub hscope rports hTags _ τ rd hown _ hR hvals
+  regReadSound_zkHP ht dj y₀ hc hU hpi hpub hscope rports hTags _ wr dg N τ rd hown _ hR hvals
 
 /-- **Soundness against registered values of a `--zk --registered R --public-inputs F` session, in the core game.** For
 every strategy `τ` of the live audit, at its core strategy: on `zk_session_soundHRP`'s assumptions at `K₀ = 1`, if the
-registrant's reads are the verifier's own at each accepted run's draw (`OwnAtDrawsHP`), `cr/sha-512` holds for the
-registered-path finder (`hR`), and the registrant's values hold at the public transcript up to `δ` (`hvals`, named),
+registrant's reads are the verifier's own at each accepted live outcome's draw (`OwnAtDrawsHP`), `cr/sha-512` holds for
+the registered-path finder (`hR`), and the registrant's values hold at the public transcript up to `δ` (`hvals`, named),
 some core transcript makes an accepting run draw a wrong unit or be off the registered values `regVals rd` on the
-registered gates `regGates rd` with probability at most `(miss 1 + ε_ks + δ_link) + (qR²/2^513 + δ)`, where `miss 1`
-is close to 1 under a sampled law. `Registered.registered_core`, with the drawn wrong units from `zk_session_soundHRP`'s
+registered gates `regGates rd` with probability at most `(miss 1 + ε_ks + δ_link) + (qR²/2^513 + δ)`, where `miss 1` is
+close to 1 under a sampled law. `Registered.registered_core`, with the drawn wrong units from `zk_session_soundHRP`'s
 count conjunct at `K₀ = 1` and the registered reads from `regReadSound_zk_sessionHP`. -/
 theorem registered_zk_sessionHP (rports : Array Flock.Registered.Port)
     (wr : Finset (Fin n) → Reg → LiveOut mPts → FlockSoundness.Discharge.Exec.Transcript)
@@ -188,7 +207,8 @@ theorem registered_zk_sessionHP (rports : Array Flock.Registered.Port)
     (hr : ∀ S R j, rateZ (planAtZKHP (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (rd : FlockSoundness.Registered.Reads (layShHP (Reg := Reg) dj y₀ ht hc hscope hU hpi (pub := pub))
       (rsShHP dj y₀ ht hc hscope hU hpi hpub))
-    (hown : OwnAtDrawsHP ht dj y₀ hc hU hpi hpub hscope rports rd)
+    (hown : OwnAtDrawsHP ht dj y₀ hc hU hpi hpub hscope rports
+      (FlockSoundness.Audit.Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) wr rd)
     (τ : Strategy (auditLive (FlockSoundness.Audit.Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (liveOf dg mPts N wr)))
     {qF qS : ℝ}
@@ -285,7 +305,8 @@ theorem registered_zk_sessionHP_custody {I : Inputs} (ht : I.tags.typed = false)
     (hr : ∀ S R j, rateZ (planAtZKHP (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (rd : FlockSoundness.Registered.Reads (layShHP (Reg := Reg) dj y₀ ht hc hscope hU hpi (pub := pub))
       (rsShHP dj y₀ ht hc hscope hU hpi hpub))
-    (hown : OwnAtDrawsHP ht dj y₀ hc hU hpi hpub hscope rports rd)
+    (hown : OwnAtDrawsHP ht dj y₀ hc hU hpi hpub hscope rports
+      (FlockSoundness.Audit.Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) wr rd)
     (τ : Strategy (auditLive (FlockSoundness.Audit.Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (liveOf dg (mPtsOf c.g (∑ s, ks s)) N wr)))
     {qF qS : ℝ}
