@@ -349,6 +349,11 @@
    "assumptions": [],
    "type_hash": "3ed31232024990431903fe4c620f6d25eca2f8d6b2e0ec876ad0089a1a8c53e5"
   },
+  "Pous.SecurityProofs.PageFillAuditSecure": {
+   "signature": ["Pous.SecurityProofs.PageFillAuditSecure : Pous.Guarantees.PageFillAuditSecure"],
+   "assumptions": [],
+   "type_hash": "5f96bb75f0f7382efa23f3800893a3d21b24ff07906c5c848a7422b3b61b6161"
+  },
   "Pous.SecurityProofs.ReverseNeedsAllChildren": {
    "signature": ["Pous.SecurityProofs.ReverseNeedsAllChildren : Pous.Guarantees.ReverseNeedsAllChildren"],
    "assumptions": [],
@@ -379,10 +384,25 @@
    "assumptions": [],
    "type_hash": "318251ded382a3566886a469f97ee26b768d7831c549344a67d6f22af787c9ad"
   },
+  "Pous.SecurityProofs.SecureErasureMeetsDraw": {
+   "signature": ["Pous.SecurityProofs.SecureErasureMeetsDraw : Pous.Guarantees.SecureErasureMeetsDraw"],
+   "assumptions": [],
+   "type_hash": "7381aceda906ec136aadc6c6566225f71b26dbb34b1f787fe6a35789b2f169d9"
+  },
   "Pous.SecurityProofs.SecureErasureMeetsFamily": {
    "signature": ["Pous.SecurityProofs.SecureErasureMeetsFamily : Pous.Guarantees.SecureErasureMeetsFamily"],
    "assumptions": [],
    "type_hash": "e877b6118f63c5f3114ffd8ab8a54911832b8c4449ff3cdb5d652fe3aa74d2fe"
+  },
+  "Pous.SecurityProofs.SecureErasurePages96112": {
+   "signature": ["Pous.SecurityProofs.SecureErasurePages96112 : Pous.Guarantees.SecureErasurePages96112"],
+   "assumptions": [],
+   "type_hash": "95272649d59b260b3bb8e81df3586457ce4ea7f87b004ec0a4d4b7b2c1b0783a"
+  },
+  "Pous.SecurityProofs.SecureErasurePagesFamily": {
+   "signature": ["Pous.SecurityProofs.SecureErasurePagesFamily : Pous.Guarantees.SecureErasurePagesFamily"],
+   "assumptions": [],
+   "type_hash": "9825240d1437c565142465342b99c698b0ff1669fb50036281904ef809c3418b"
   },
   "Pous.SecurityProofs.SegMeets14": {
    "signature": ["Pous.SecurityProofs.SegMeets14 : Pous.Guarantees.SegMeets14"],
@@ -863,12 +883,34 @@
     "Pous.SecurityProofs.SecureErasureMeetsFamily"
    ]
   },
+  "Pous.Guarantees.SecureErasurePages": {
+   "digest": "703b6c57d50c2739442639cd273e62d9889923581f7b24a5776d7421c135c9fc",
+   "definitions": {
+    "Pous.Guarantees.PageFillAuditSecure": "91369bcead862aea915d3ec15ce644c25b917efde2d4cd1af09ace0c8ecd5fcc",
+    "Pous.Guarantees.SecureErasureMeetsDraw": "6af203c1f8eeabaefc90c9d9ca37351543d42a54b6c12301fab8ef83c9a82544",
+    "Pous.Guarantees.SecureErasurePages96112": "6b3cd02debfa629208935d85465d0aea58f7dfdbf82b4508862f896b55dc2168",
+    "Pous.Guarantees.SecureErasurePagesFamily": "025bbf385830d783eca5b63f489f220ec95af5f4993065bad39d3d59ad60641c"
+   },
+   "pins": [
+    "Pous.SecurityProofs.PageFillAuditSecure",
+    "Pous.SecurityProofs.SecureErasureMeetsDraw",
+    "Pous.SecurityProofs.SecureErasurePages96112",
+    "Pous.SecurityProofs.SecureErasurePagesFamily"
+   ]
+  },
   "Pous.Protocol.Accounting.EraseMeets": {
    "digest": "6c5d0a62e2cad38786ca153fe3f00541c79ff8d277b1bd5ac7599dc7315bc298",
    "definitions": {
     "Pous.EraseMeets": "2fae65625d879d92a291808f8bb16943defd93eaf769067963c05004937eab3d"
    },
    "pins": ["Pous.SecurityProofs.SecureErasureMeets96GiB", "Pous.SecurityProofs.SecureErasureMeetsFamily"]
+  },
+  "Pous.Protocol.Accounting.EraseMeetsDistinct": {
+   "digest": "292ac2117e1c8c9ea9be48b4e01371049a95f25674296b89d49404871e13a030",
+   "definitions": {
+    "Pous.EraseMeetsDistinct": "7c316e881eaf86bf329fbbd06e911a42a6627dce977ceff801908089f9b1aa05"
+   },
+   "pins": ["Pous.SecurityProofs.SecureErasurePages96112", "Pous.SecurityProofs.SecureErasurePagesFamily"]
   },
   "Pous.Protocol.Accounting.GradedMeets": {
    "digest": "4af4e7e25629ec16f9bfab71b839349841691b42f7e8ac3a56849edb1457d745",
@@ -923,6 +965,8 @@
     "Pous.SecurityProofs.P3ConcreteMeets64D12",
     "Pous.SecurityProofs.SecureErasureMeets96GiB",
     "Pous.SecurityProofs.SecureErasureMeetsFamily",
+    "Pous.SecurityProofs.SecureErasurePages96112",
+    "Pous.SecurityProofs.SecureErasurePagesFamily",
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagMeets14",
     "Pous.junk_not_meets",
@@ -1021,12 +1065,16 @@
     "Pous.SecurityProofs.P3ConcreteMeets14GB",
     "Pous.SecurityProofs.P3ConcreteMeets64",
     "Pous.SecurityProofs.P3ConcreteMeets64D12",
+    "Pous.SecurityProofs.PageFillAuditSecure",
     "Pous.SecurityProofs.SampledAuditProd",
     "Pous.SecurityProofs.SampledAuditSeq",
     "Pous.SecurityProofs.SampledAuditSim",
     "Pous.SecurityProofs.SecureErasureMeets",
     "Pous.SecurityProofs.SecureErasureMeets96GiB",
+    "Pous.SecurityProofs.SecureErasureMeetsDraw",
     "Pous.SecurityProofs.SecureErasureMeetsFamily",
+    "Pous.SecurityProofs.SecureErasurePages96112",
+    "Pous.SecurityProofs.SecureErasurePagesFamily",
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagAuditSecure",
     "Pous.SecurityProofs.SegTagMeets14",
@@ -1112,12 +1160,16 @@
     "Pous.SecurityProofs.P3ConcreteMeets14GB",
     "Pous.SecurityProofs.P3ConcreteMeets64",
     "Pous.SecurityProofs.P3ConcreteMeets64D12",
+    "Pous.SecurityProofs.PageFillAuditSecure",
     "Pous.SecurityProofs.SampledAuditProd",
     "Pous.SecurityProofs.SampledAuditSeq",
     "Pous.SecurityProofs.SampledAuditSim",
     "Pous.SecurityProofs.SecureErasureMeets",
     "Pous.SecurityProofs.SecureErasureMeets96GiB",
+    "Pous.SecurityProofs.SecureErasureMeetsDraw",
     "Pous.SecurityProofs.SecureErasureMeetsFamily",
+    "Pous.SecurityProofs.SecureErasurePages96112",
+    "Pous.SecurityProofs.SecureErasurePagesFamily",
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagAuditSecure",
     "Pous.SecurityProofs.SegTagMeets14",
@@ -1208,12 +1260,16 @@
     "Pous.SecurityProofs.P3ConcreteMeets14GB",
     "Pous.SecurityProofs.P3ConcreteMeets64",
     "Pous.SecurityProofs.P3ConcreteMeets64D12",
+    "Pous.SecurityProofs.PageFillAuditSecure",
     "Pous.SecurityProofs.SampledAuditProd",
     "Pous.SecurityProofs.SampledAuditSeq",
     "Pous.SecurityProofs.SampledAuditSim",
     "Pous.SecurityProofs.SecureErasureMeets",
     "Pous.SecurityProofs.SecureErasureMeets96GiB",
+    "Pous.SecurityProofs.SecureErasureMeetsDraw",
     "Pous.SecurityProofs.SecureErasureMeetsFamily",
+    "Pous.SecurityProofs.SecureErasurePages96112",
+    "Pous.SecurityProofs.SecureErasurePagesFamily",
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagAuditSecure",
     "Pous.SecurityProofs.SegTagMeets14",
@@ -1650,6 +1706,26 @@
     "Pous.SecurityProofs.SecureErasureMeetsFamily"
    ]
   },
+  "Pous.Protocol.Model.PageFill": {
+   "digest": "263a6785e3ab0ff878ee0ee160a88a7cab75e96d2916fcb44a50017523874595",
+   "definitions": {
+    "Pous.PageFill.Page": "5506a4147af77b5186199b4d2336cf2f9b2036a650839495ed1ec82f47d84f3f",
+    "Pous.PageFill.PageOmega": "9d3672d2146564f1e8cff87a67511e73329a4208a5973c707353dee728eef9d0",
+    "Pous.PageFill.Tweak": "30f8b6266f81721c185c62bafb75a383dfc48c369e72ef619c3c1267cbbb2fa3",
+    "Pous.PageFill.byte": "e7465f5618181ef479a409d1eca462be5759a01f206c6907236f8706b86ec7e6",
+    "Pous.PageFill.instFintypePageOmega": "37f71b6db19245e685a4dce2b8106595eb886407607d712bd1c9ca6eac2cb77f",
+    "Pous.PageFill.page": "4ac8e6e5e863a41ccadbcb8db592fd5ae76a41857c056a555b7637ee15315d90",
+    "Pous.PageFill.pageModel": "c74c855f3f9c19a3d997a74507000682e2b43bd92a0e00e2fe11e8e8e45d8d67",
+    "Pous.PageFill.pageScheme": "e585e9a2dd3497843ac372438ca180f791ccf59fde80e7cf17582394a5d49216",
+    "Pous.PageFill.tweak": "4142c5737d8f52435e455a43ac0ef019a1d111fcf785c454a05f51df65b8f82e",
+    "Pous.PageFill.zeroPage": "d2f912f3b8dd5c280b347470a88836ce4b03631a875ef3240c13d8be1f725277"
+   },
+   "pins": [
+    "Pous.SecurityProofs.PageFillAuditSecure",
+    "Pous.SecurityProofs.SecureErasurePages96112",
+    "Pous.SecurityProofs.SecureErasurePagesFamily"
+   ]
+  },
   "Pous.Protocol.Model.Pebbling": {
    "digest": "864b3448b88daff3f3f8b9252eca5333451b34c8a78c500664a6fbbe70db2ac9",
    "definitions": {
@@ -1694,6 +1770,24 @@
     "Pous.SecurityProofs.BandPubMeetsFamily",
     "Pous.SecurityProofs.BandPubMeetsFamilyD1",
     "Pous.SecurityProofs.BandPubMeetsFamilyD2"
+   ]
+  },
+  "Pous.Protocol.Model.ReadDraw": {
+   "digest": "687a7f416ce7924b41b7bbddc94e58f297aeb9c1979ebb95d73988fca1eaea8e",
+   "definitions": {
+    "Pous.AuditSecureDraw": "abc05780ddb03237b06950e8b8a1a163f2e545172337de5639cf95b15a5ea455",
+    "Pous.EraseOutcomeDraw": "b306703fac49adce1dd0bab9fa6f19ee0654b1642ec3748123186c5708fd6daf",
+    "Pous.EraseSecureDraw": "4888161404726324bbf595daa7b6dbc7cd276a3f370dff6db234c03c4c4a154e",
+    "Pous.OutcomeDraw": "f2257ba392989e4ea154de08b950245b1eb0a28870dd459bf07b6e6a273fa8b6",
+    "Pous.distinctReads": "32c7bb5ee180a44a920ebd341c3f474b14f0ffa76ec7b72c7a44cee64d0293f9",
+    "Pous.eraseWinsDraw": "f14419da329c859c3e8824d0dda139808e86dc77f2e9600ccf1edcdefd3fcde4",
+    "Pous.seqAcceptsDraw": "fcfe0189aa1cc6d9418f28abd572544069857b08bdfb93e0065766058643c9f4"
+   },
+   "pins": [
+    "Pous.SecurityProofs.PageFillAuditSecure",
+    "Pous.SecurityProofs.SecureErasureMeetsDraw",
+    "Pous.SecurityProofs.SecureErasurePages96112",
+    "Pous.SecurityProofs.SecureErasurePagesFamily"
    ]
   },
   "Pous.Protocol.Model.SampledAudit": {
@@ -1757,12 +1851,16 @@
     "Pous.SecurityProofs.P3ConcreteMeets14GB",
     "Pous.SecurityProofs.P3ConcreteMeets64",
     "Pous.SecurityProofs.P3ConcreteMeets64D12",
+    "Pous.SecurityProofs.PageFillAuditSecure",
     "Pous.SecurityProofs.SampledAuditProd",
     "Pous.SecurityProofs.SampledAuditSeq",
     "Pous.SecurityProofs.SampledAuditSim",
     "Pous.SecurityProofs.SecureErasureMeets",
     "Pous.SecurityProofs.SecureErasureMeets96GiB",
+    "Pous.SecurityProofs.SecureErasureMeetsDraw",
     "Pous.SecurityProofs.SecureErasureMeetsFamily",
+    "Pous.SecurityProofs.SecureErasurePages96112",
+    "Pous.SecurityProofs.SecureErasurePagesFamily",
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagAuditSecure",
     "Pous.SecurityProofs.SegTagMeets14",
@@ -1810,7 +1908,10 @@
    "pins": [
     "Pous.SecurityProofs.SecureErasureMeets",
     "Pous.SecurityProofs.SecureErasureMeets96GiB",
-    "Pous.SecurityProofs.SecureErasureMeetsFamily"
+    "Pous.SecurityProofs.SecureErasureMeetsDraw",
+    "Pous.SecurityProofs.SecureErasureMeetsFamily",
+    "Pous.SecurityProofs.SecureErasurePages96112",
+    "Pous.SecurityProofs.SecureErasurePagesFamily"
    ]
   },
   "Pous.Protocol.Model.SegLift": {

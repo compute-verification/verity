@@ -45,7 +45,8 @@ import Pous.SecurityProofs.Chain.PubRounds
 # The proved guarantees
 
 `Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `Pous/Guarantees.lean`,
-`Pous/Guarantees/P2.lean` and `Pous/Guarantees/SecureErasure.lean` that has a proof. `lean-audit.json` pins these theorems, so a change to a guarantee, or to a
+`Pous/Guarantees/P2.lean`, `Pous/Guarantees/SecureErasure.lean` and `Pous/Guarantees/SecureErasurePages.lean` that has
+a proof. `lean-audit.json` pins these theorems, so a change to a guarantee, or to a
 definition it reads, changes their records. The open statements (`A2LemmaAM1`, `A5RabinGcd`, `A7Params`, `M1Meets`)
 have no entry here.
 
@@ -156,6 +157,10 @@ theorem DigestAU : Pous.Guarantees.DigestAU := PousDigest.digestAU
 theorem SecureErasureMeets : Pous.Guarantees.SecureErasureMeets := PousErase.secure_erasure_meets
 theorem SecureErasureMeetsFamily : Pous.Guarantees.SecureErasureMeetsFamily := PousErase.secure_erasure_meets_family
 theorem SecureErasureMeets96GiB : Pous.Guarantees.SecureErasureMeets96GiB := PousErase.secure_erasure_meets_96GiB
+theorem SecureErasureMeetsDraw : Pous.Guarantees.SecureErasureMeetsDraw := PousErase.secure_erasure_meets_draw
+theorem PageFillAuditSecure : Pous.Guarantees.PageFillAuditSecure := PousErase.page_audit_secure
+theorem SecureErasurePagesFamily : Pous.Guarantees.SecureErasurePagesFamily := PousErase.secure_erasure_pages_family
+theorem SecureErasurePages96112 : Pous.Guarantees.SecureErasurePages96112 := PousErase.secure_erasure_pages_96112
 
 theorem P2MeetsM1pB19Uncond : Pous.Guarantees.P2MeetsM1pB19Uncond := PousP2p.p2_meets_m1p_b19
 theorem P2MeetsM1pFamilyUncond : Pous.Guarantees.P2MeetsM1pFamilyUncond := PousP2p.family

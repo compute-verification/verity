@@ -64,9 +64,10 @@ meets `EraseMeetsDistinct` at `f = 1/19`, `D = 0` (any `Q`), `s = 3430` spot rea
 
 - every prover whose volatile memory at each spot read's arrival is at most `⌊(18/19)·|C|⌋` bits is accepted with
   probability at most `2^-128`;
-- every prover with `P` MiB of volatile memory that keeps foreign content of at least `P MiB / 19 + 32` bytes
-  (`f·|C| + 2λ` bits) at every spot read's arrival wins with probability at most `2^-128`: an accepted prover cannot
-  keep that foreign content through all the reads, except with probability `2^-128`.
+- every prover with `P` MiB of volatile memory that keeps uniform foreign content of at least `P MiB / 19 + 32` bytes
+  (`f·|C| + 2λ` bits; independent of the fill, the pages' permutations and the reads, and read from its memory alone)
+  at every spot read's arrival wins with probability at most `2^-128`: an accepted prover cannot keep that foreign
+  content through all the reads, except with probability `2^-128`.
 
 Cite it as "cannot keep it through all the reads", for a verifier that draws 3430 distinct byte reads, each within a
 `T_read` below one page's recomputation (`KeyedFill.recompute_ns`, 1.7352 ms for 1 MiB pages), which is what `D = 0`
@@ -89,8 +90,9 @@ def SecureErasurePagesFamily : Prop :=
 `P = 96112` pages of 1 MiB meets `EraseMeetsDistinct` at `f = 1/19`, `D = 0` (any `Q`), `s = 3046` spot reads at
 distinct byte indices and `ε = 2^-128`: a prover whose memory at each spot read's arrival is at most `⌊(18/19)·|C|⌋`
 bits is accepted with probability at most `2^-128`, and a prover with 93.86 GiB of volatile memory that keeps at least
-`93.86 GiB / 19 + 32` bytes (about 4.94 GiB) of foreign content at every spot read's arrival wins with probability at
-most `2^-128`: an accepted prover cannot keep it through all the reads.
+`93.86 GiB / 19 + 32` bytes (about 4.94 GiB) of uniform foreign content (independent of the fill, the pages'
+permutations and the reads, and read from its memory alone) at every spot read's arrival wins with probability at most
+`2^-128`: an accepted prover cannot keep it through all the reads.
 
 `P = 96112` is the fill the 4 Oct 2026 node-2 calibration reached on an RTX PRO 6000
 (`art:3340ecbae35eb5e3732bec54c72f4196a94318f04d8d561f8dc83b6dbfc9c2cf`, 93.86 GiB), which shows software about 95 GiB of

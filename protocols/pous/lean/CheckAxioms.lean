@@ -105,6 +105,11 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 #print axioms Pous.SecurityProofs.SecureErasureMeets
 #print axioms Pous.SecurityProofs.SecureErasureMeetsFamily
 #print axioms Pous.SecurityProofs.SecureErasureMeets96GiB
+-- secure erasure of the keyed page fill with distinct byte reads: the reduction over any draw, the audit, every P and P = 96112
+#print axioms Pous.SecurityProofs.SecureErasureMeetsDraw
+#print axioms Pous.SecurityProofs.PageFillAuditSecure
+#print axioms Pous.SecurityProofs.SecureErasurePagesFamily
+#print axioms Pous.SecurityProofs.SecureErasurePages96112
 -- the abstract model `m1p` at P2's parameters, no hypothesis: the Meets rows, the slack rows and the error split
 #print axioms Pous.SecurityProofs.P2MeetsM1pB19Uncond
 #print axioms Pous.SecurityProofs.P2MeetsM1pFamilyUncond
