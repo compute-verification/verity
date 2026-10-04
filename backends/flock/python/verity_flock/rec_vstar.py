@@ -104,7 +104,7 @@ def decode(b: bytes) -> dict:
         r.u64()
     if r.u32() != HM96_KIND:
         raise ValueError("not an hm96-sha512/v1 proof")
-    pair = lambda: (r.f128(), r.f128())  # noqa: E731
+    pair = lambda: (r.f128(), r.f128())
     r.vec(r.f128), r.vec(r.f128), r.vec(pair), r.f128(), r.f128(), r.f128(), r.vec(r.u64)
     r.vec(pair), r.vec(r.f128), r.vec(pair), r.vec(r.u64)
     r.vec(lambda: (r.vec(r.f128), r.u64())), r.vec(r.u64)
@@ -190,11 +190,12 @@ def _stream_rounds(public: dict, stream: str) -> list[dict]:
 
 
 def query_rounds(public: dict, stream: str, qs: list[int]) -> list[dict]:
-    """The rounds whose coins are the query coins of a rep's levels in order: the rounds with no caps and no message rows
-    whose coin count is the next level's ``Q`` (the verifier's own schedule places them; v0 finds them by that shape)."""
+    """The rounds whose coins are the query coins of a rep's levels in order: the rounds with no caps whose coin count is
+    the next level's ``Q`` (the last level's also absorbs ``yr``; the verifier's own schedule places them, v0 finds them by
+    that shape)."""
     out, li = [], 0
     for r in _stream_rounds(public, stream):
-        if li < len(qs) and not r["caps"] and not r["commits"] and r["n"] == qs[li]:
+        if li < len(qs) and not r["caps"] and r["n"] == qs[li]:
             out.append(r)
             li += 1
     if li != len(qs):
@@ -204,12 +205,17 @@ def query_rounds(public: dict, stream: str, qs: list[int]) -> list[dict]:
 
 def public_caps(public: dict, stream: str) -> list[list[bytes]]:
     """Each Ligerito level's cap as the coin server received it: level 0's from the binding round, then each later cap in
-    the order the rounds absorbed them (one cap a round)."""
+    the order the rounds absorbed them (one cap a round). Ligerito absorbs level 0's cap again when it starts; that copy
+    must equal the binding round's and is not a level of its own."""
     caps = []
     for r in _stream_rounds(public, stream):
         for c in r["caps"]:
             b = bytes.fromhex(c)
             caps.append([b[i:i + HASH] for i in range(0, len(b), HASH)])
+    if len(caps) > 1 and len(caps[1]) == len(caps[0]):
+        if caps[1] != caps[0]:
+            raise ValueError(f"{stream}: Ligerito's initial cap is not the binding round's")
+        del caps[1]
     return caps
 
 

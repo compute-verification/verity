@@ -8,7 +8,6 @@ import json
 import struct
 
 import pytest
-
 from verity_flock import rec_live as RL
 from verity_sampled_proofs.one_stage import registered as G
 

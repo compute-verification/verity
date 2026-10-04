@@ -34,9 +34,9 @@ import json
 import os
 import socket
 import struct
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 
 from verity.commitments import hm96
 
@@ -486,7 +486,8 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
     return a summary. ``ready`` is called with the bound address."""
     host, port = listen.rsplit(":", 1)
     with socket.create_server((host, int(port))) as srv:
-        addr = "%s:%d" % srv.getsockname()[:2]
+        h, p = srv.getsockname()[:2]
+        addr = f"{h}:{p}"
         if ready:
             ready(addr)
         while True:
