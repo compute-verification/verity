@@ -3,7 +3,7 @@ import Pous.Protocol.Model.BandChain
 import Pous.Protocol.Accounting.EraseMeets
 
 /-!
-# Secure erasure: volatile memory in full use at the challenge
+# Secure erasure: volatile memory in full use through the spot reads
 
 Added on 4 Oct 2026, under the model Daniel set that day: the disks are unplugged, so the prover's memory is volatile
 only (HBM and host DRAM), and the audit is a proof of memory utilization. The game is
@@ -48,8 +48,8 @@ the audit's bound covers.
 
 It rests on what `AuditSecure` rests on for the scheme (for the band: the ideal-primitive model, the keyed fill's
 incompressibility and the `(D, Q)` game), and on nothing else: no named assumption and no bandwidth-separation premise
-(`TwoTierBandwidth`, dropped on 3 Oct 2026, is not used). The memory is bounded at every spot read's arrival, the
-challenge instant among them; the fill and the digest are unbounded. Proof: `PousErase.secure_erasure_meets`. -/
+(`TwoTierBandwidth`, dropped on 3 Oct 2026, is not used). The memory is bounded at every spot read's arrival; the fill
+and the digest are unbounded. Proof: `PousErase.secure_erasure_meets`. -/
 def SecureErasureMeets : Prop :=
   ∀ {M : IdealModel} (sch : Scheme M) (K V : Type) [Fintype K] [Nonempty K] (dig : K → sch.Code → V)
     (S S' S_φ D Q s : ℕ) (δ ε : ℝ≥0∞),
@@ -62,14 +62,19 @@ segment, so a fill of `M = N · 32 MiB`), keyed by the verifier's fresh key as i
 any 192-bit salt, or one global 256-bit salt), meets `EraseMeets` at `f = 1 − ρ = 1/19`, `D = 5`, `Q = 2^20`,
 `s = 2152` spot reads and `ε = 2^-128`:
 
-- every prover whose volatile memory at each spot read's arrival, the challenge instant among them, is at most
-  `⌊(18/19)·|C|⌋` bits is accepted with probability at most `2^-128`;
+- every prover whose volatile memory at each spot read's arrival is at most `⌊(18/19)·|C|⌋` bits is accepted with
+  probability at most `2^-128`;
 - every prover with `M` bytes of volatile memory that keeps foreign content of at least `M/19` bytes and 32 bytes
-  (`f·|C| + 2λ` bits) through the spot reads wins with probability at most `2^-128`. So a prover accepted with
-  probability above `2^-128` holds at least `(18/19)·M − 32` bytes of the keyed fill at the challenge instant, and less
-  than `M/19 + 32` bytes of its memory can hold anything from before the challenge.
+  (`f·|C| + 2λ` bits) through the spot reads wins with probability at most `2^-128`. So no prover is accepted and still
+  holds that foreign content at every spot read's arrival, except with probability `2^-128`. This bounds what survives
+  the reads, not what is held at one instant: a prover can hold about `M/10` bytes of foreign content at the first spot
+  read's arrival and be accepted with probability about 0.9, erasing it while it rebuilds, during the first reads, the
+  blocks it dropped.
 
-`M` must be the prover's whole volatile memory: one RTX PRO 6000's 96 GiB of HBM is `N = 3072`
+Cite it as "cannot keep it through all the reads", never as "holds at the challenge", and for a verifier that draws
+2152 sequential reads under a deadline bounding `(D, Q) = (5, 2^20)`.
+
+`M` must be the prover's whole volatile memory, on-chip SRAM included: one RTX PRO 6000's 96 GiB of GDDR7 is `N = 3072`
 (`SecureErasureMeets96GiB`); with host DRAM, `N` is the total over 32 MiB. The read deadline `T_read` is a symbol: any
 deadline within which the prover completes at most 5 rounds of `Π₂` calls and `2^20` calls per answer; its hardware
 calibration is separate. The fill deadline does not enter.
@@ -92,7 +97,7 @@ def SecureErasureMeetsFamily : Prop :=
       EraseMeets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt))
         (1 - Params.ρ) 5 (2 ^ 20) 2152 ((2⁻¹ : ℝ≥0∞) ^ 128))
 
-/-- **Secure erasure of one RTX PRO 6000's HBM, 96 GiB.** `SecureErasureMeetsFamily` at `N = 3072` segments of 32 MiB,
+/-- **Secure erasure of one RTX PRO 6000's 96 GiB of GDDR7.** `SecureErasureMeetsFamily` at `N = 3072` segments of 32 MiB,
 with the implementation's per-segment tags. For every `d ≥ 5` and salt, and a prover whose whole volatile memory is the
 96 GiB: if its memory at each spot read's arrival is at most `⌊(18/19)·|C|⌋` bits it is accepted with probability at
 most `2^-128`, and if it keeps at least `96 GiB / 19 + 32` bytes (about 5.05 GiB) of foreign content through the 2152

@@ -1,7 +1,7 @@
 import Pous.Protocol.Model.Audit
 
 /-!
-# The secure-erasure audit: volatile memory in full use at the challenge
+# The secure-erasure audit: volatile memory in full use through the spot reads
 
 Added on 4 Oct 2026, under the model Daniel set that day: the disks are unplugged, so the prover's memory is volatile
 only (HBM and host DRAM), and the audit is a proof of memory utilization. A prover declares `S` bits of volatile memory;
@@ -29,7 +29,8 @@ prover's foreign content beside it:
    the hardware calibration of `T_read` is separate.
 5. The verifier **accepts** iff `h = dig κ C` and every returned block is correct.
 6. The prover **keeps** its foreign content iff `keep j σ_j = z` at every round `j < s` (`EraseProver.keep`): `z` can be
-   read off its memory at every spot read's arrival, by any procedure, which may change from round to round.
+   read off its memory at every spot read's arrival, by any function of the memory alone (it does not query the
+   primitive), which may change from round to round.
 
 **Memory.** `σ_j` is the prover's whole volatile memory at round `j`'s arrival, and nothing else survives from one round
 to the next: no disk, no network (perfect isolation, the 4 Oct model). So the state bound is a bound on memory at the
