@@ -12,13 +12,14 @@ protocol's word functions agree only conditionally:
   with the protocol's word functions where both are defined. Core's Lean semantics will discharge them;
 * `Row8OK`: a row's words are step words (no `−0`), as are its `α` and `β`, and `β > 0`;
 * `Line8OK`: the noise lines' entries are E4M3 values (`NoiseCode`). Their rescaled codes `E′` are never NaN
-  (`lineCodes_notNaN`), and the table's `bf16(E′)` is the protocol's `codeBf16 E′`, `−0` included (`be8_word`);
-* `CastWord` of the formed words, so the cast is `e4m3` of the formed value.
+  (`lineCodes_notNaN`), and the table's `bf16(E′)` is the protocol's `codeBf16 E′`, `−0` included (`be8_word`).
 
-On them a row unit's codes are `pc8Sem`'s (`quant8`, so `quant8A`/`quant8B` are `unitChain`'s `A′`/`B̃`) and its
-factor row is the peel's (`row8A_paWords`, `row8B_pbWords`). `entry8_words` chains RowA `i` and RowB `j` into their
-tile (`TileCheck8`'s `chain8_*`): where the three units are correct and the peel's factor rows exist, entry `(i, j)`'s
-`C̃` and `U` are the device's ticket and useful words (`tile_devAt`).
+On them the formed words are `CastWord`s (`formWord8_castWord`), so the cast is `e4m3` of the formed value: the step
+writes a NaN only from a NaN and never writes `−0`, and its accumulator `α·x_t` (a product of step words), `E′` and the
+basis' codes are not NaN. A row unit's codes are `pc8Sem`'s (`quant8`, so `quant8A`/`quant8B` are `unitChain`'s
+`A′`/`B̃`) and its factor row is the peel's (`row8A_paWords`, `row8B_pbWords`). `entry8_words` chains RowA `i` and RowB
+`j` into their tile (`TileCheck8`'s `chain8_*`): where the three units are correct and the peel's factor rows exist,
+entry `(i, j)`'s `C̃` and `U` are the device's ticket and useful words (`tile_devAt`).
 
 On the whole table a gate holds its assignment's low bits at its width (`val_in8`, `val_tile8`), so where the public
 gates hold the anchors (`anchors8`) and the registered gates `rows8`'s values, an entry's registered words are the
@@ -134,14 +135,16 @@ end Words
 
 /-- **Core's primitives agree with the protocol's word functions** where both are defined: the E4M3 cast is
 `e4m3Word`; the widening of a code other than NaN and `−0` is its value's FP32 word; FP32 multiply and FMA round as
-`f32Word`, `fmaWord?` (a zero product of equal signs is `+0`); negation flips the sign bit; the BF16 narrowing is
-`rnBf16?`; and the widening of `−0` is FP32's `−0`. Each is a fact about IEEE binary32 (round to nearest even, gradual
-underflow), open until core's Lean semantics of the primitives. -/
+`f32Word`, `fmaWord?` (a zero product of equal signs is `+0`, of opposite signs `−0`); negation flips the sign bit;
+the BF16 narrowing is `rnBf16?`; and the widening of `−0` is FP32's `−0`. Each is a fact about IEEE binary32 (round to
+nearest even, gradual underflow), open until core's Lean semantics of the primitives. -/
 structure Pc8OpsAgree (ops : RowOps) : Prop where
   cast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val
   widen : ∀ c : Code, c.isNaN = false → c.val ≠ 0x80 → ops.e4m3ToF32 c.val % 2 ^ 32 = f32Word (codeVal c)
   mul : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ a = some x → wordQ b = some y →
     (x * y = 0 → signBit a = signBit b) → ops.f32MulV2 a b % 2 ^ 32 = f32Word (x * y)
+  mulZero : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ a = some x → wordQ b = some y → x * y = 0 →
+    signBit a ≠ signBit b → ops.f32MulV2 a b % 2 ^ 32 = 0x80000000
   fma : ∀ a b c w : ℕ, a < 2 ^ 32 → b < 2 ^ 32 → c < 2 ^ 32 → fmaWord? a b c = some w →
     ops.f32FmaV2 a b c % 2 ^ 32 = w
   neg : ∀ w < 2 ^ 32, ops.f32Neg w % 2 ^ 32 = negWord w
@@ -411,6 +414,121 @@ theorem encRow_rowQ {K : ℕ} {w : ℕ → ℕ} (hw : ∀ l < K, AccumProofs.Ste
   intro l hl
   simp only [encRow, hl, ↓reduceDIte, rowQ, stepWord_getD (hw l hl), f32Word_wordVal (hw l hl)]
 
+theorem encCodes_of_lt {e : Fin Params.pi.r → ℚ} {l : ℕ} (hl : l < 32) : encCodes e l = (e4m3 (e ⟨l, hl⟩)).val := by
+  unfold encCodes
+  exact dite_eq_left hl
+
+/-! ## The formed word is a `CastWord` -/
+
+section Cast8
+
+/-- A word that is not a NaN reads as a value that is not NaN. -/
+theorem fp32Value_isNaN_false {w : ℕ} (h : (w >>> 23) % 256 = 255 → w % 2 ^ 23 = 0) :
+    (fp32Value w).isNaN = false := by
+  unfold fp32Value
+  dsimp only
+  split_ifs with h1 h2 <;> first | rfl | exact absurd (h h1) h2
+
+/-- `packTerm` never writes a NaN. -/
+theorem packTerm_notNaN (t : Term) : (packTerm t >>> 23) % 256 = 255 → packTerm t % 2 ^ 23 = 0 := by
+  by_cases h0 : t.mag = 0
+  · unfold packTerm; rw [ite_eq_left h0]; decide
+  by_cases h1 : 127 < t.exp
+  · unfold packTerm; rw [ite_eq_right h0, ite_eq_left h1]; split <;> decide
+  rw [AccumProofs.packTerm_fin t h0 h1 (AccumProofs.packTerm_exp t h1)]
+  have hm := AccumProofs.and_mask_lt t.mag
+  have hs : (if t.neg = true then 1 else 0) ≤ 1 := by split <;> norm_num
+  have he : (t.exp + 127 - if t.mag &&& 1 <<< 23 = 0 then 1 else 0).toNat < 255 := by split_ifs <;> omega
+  generalize (t.exp + 127 - if t.mag &&& 1 <<< 23 = 0 then 1 else 0).toNat = ef at he ⊢
+  generalize (if t.neg = true then 1 else 0) = s at hs ⊢
+  generalize t.mag &&& 0x7FFFFF = m at hm ⊢
+  simp only [Nat.shiftRight_eq_div_pow, Nat.reducePow] at hm ⊢
+  omega
+
+/-- A group step from a value that is not NaN, over finite products, is not NaN: one infinity at most. -/
+theorem groupStepTotal_notNaN (w : ℕ) (z : ℤ) {v : Value} (hv : v.isNaN = false) {ps : List Value}
+    (hps : ∀ q ∈ ps, ∃ t, q = .fin t) : (groupStepTotal w z v ps).isNaN = false := by
+  have hp : ∀ f : Value → Bool, (∀ t, f (.fin t) = false) → ps.any f = false := fun f hf => by
+    rw [List.any_eq_false]
+    intro q hq
+    obtain ⟨t, rfl⟩ := hps q hq
+    simp [hf]
+  unfold groupStepTotal
+  dsimp only
+  rw [List.any_cons, List.any_cons, List.any_cons, hp _ (fun _ => rfl), hp _ (fun _ => rfl),
+    hp _ (fun _ => rfl)]
+  rcases v with _ | s | t
+  · exact absurd hv (by decide)
+  · cases s <;> rfl
+  · simp only [Value.isNaN, Value.isInf, Bool.or_self, Bool.and_self, Bool.false_eq_true, ↓reduceIte]
+    split_ifs <;> rfl
+
+/-- The groups folded from a value that is not NaN, over codes that are not NaN, are not NaN: E4M3 has no
+infinities, so every product is finite. -/
+theorem fold_notNaN (p : Pipeline) : ∀ (gs : List ℕ) (v : Value) (ab : List (Code × Code)), v.isNaN = false →
+    (∀ x ∈ ab, x.1.isNaN = false ∧ x.2.isNaN = false) → (p.fold gs v ab).isNaN = false
+  | [], _, _, hv, _ => hv
+  | _ :: gs, _, _, hv, hab => fold_notNaN p gs _ _
+      (groupStepTotal_notNaN _ _ hv fun q hq => by
+        obtain ⟨x, hx, rfl⟩ := List.mem_map.1 hq
+        obtain ⟨h1, h2⟩ := hab x (List.mem_of_mem_take hx)
+        exact ⟨product x.1 x.2, by simp [productTotal, h1, h2]⟩)
+      fun x hx => hab x (List.mem_of_mem_drop hx)
+
+/-- **A step's word is a `CastWord`** from an accumulator that is not NaN, over codes that are not NaN: it writes a
+NaN only from a NaN, and never writes `−0` (`step_ne_negZero`). -/
+theorem step_castWord (p : Pipeline) {acc : ℕ} {a b : List Code} (hacc : (fp32Value acc).isNaN = false)
+    (ha : ∀ c ∈ a, c.isNaN = false) (hb : ∀ c ∈ b, c.isNaN = false) : CastWord (p.step acc a b) := by
+  refine ⟨?_, fun h0 => ?_⟩
+  · have hv := fold_notNaN p p.groups _ (a.zip b) hacc fun x hx =>
+      ⟨ha _ (List.of_mem_zip hx).1, hb _ (List.of_mem_zip hx).2⟩
+    unfold Pipeline.step
+    generalize p.fold p.groups (fp32Value acc) (a.zip b) = v at hv
+    rcases v with _ | s | t
+    · exact absurd hv (by decide)
+    · cases s <;> decide
+    · exact packTerm_notNaN t
+  · have hw : AccumProofs.StepWord (p.step acc a b) :=
+      ⟨AccumProofs.step_lt _ _ _ _, AccumProofs.step_ne_negZero _ _ _ _, by
+        unfold finite?; rw [ite_eq_right (wordQ_exp_ne h0)]⟩
+    rw [AccumProofs.wordQ_zero_word hw h0]
+    rfl
+
+variable {ops : RowOps} (hops : Pc8OpsAgree ops)
+include hops
+
+/-- The product of two step words is not NaN: `f32Word` of the product, or `−0` (`mulZero`). -/
+theorem mul8_notNaN {a b : ℕ} (ha : AccumProofs.StepWord a) (hb : AccumProofs.StepWord b) :
+    (fp32Value (Prim.eval ops .mul [a, b])).isNaN = false := by
+  have hqa := stepWord_wordQ ha
+  have hqb := stepWord_wordQ hb
+  simp only [Prim.eval, Prim.w, List.getD_cons_zero, List.getD_cons_succ]
+  by_cases hz : wordVal a * wordVal b = 0 ∧ signBit a ≠ signBit b
+  · rw [hops.mulZero _ _ _ _ ha.1 hb.1 hqa hqb hz.1 hz.2]; decide
+  · rw [hops.mul _ _ _ _ ha.1 hb.1 hqa hqb fun h0 => by by_contra hs; exact hz ⟨h0, hs⟩]
+    exact fp32Value_isNaN_false (f32Word_notNaN _)
+
+/-- **The formed word is a `CastWord`** on a `Row8OK` row and a `Line8OK` noise line: its accumulator `α·x_t` is the
+product of step words, its noise codes are `lineCodes`'s and its basis codes `e4m3`'s, none of them NaN. -/
+theorem formWord8_castWord (p : Pipeline) {K : ℕ} {w : ℕ → ℕ} (hA : Row8OK ops K w) {e : Fin Params.pi.r → ℚ}
+    (hL : Line8OK e) (t : Fin K) (f : Fin Params.pi.r → ℚ) :
+    CastWord (formWord8 ops p (alphaQ8 ops K w) (rowQ K w t) (betaQ8 ops K w) e f) := by
+  have hx := hA.1 t t.isLt
+  unfold formWord8 form8 alphaQ8 betaQ8
+  rw [show rowQ K w t = wordVal (w t) from stepWord_getD hx, f32Word_wordVal hA.2.1, f32Word_wordVal hA.2.2.1,
+    f32Word_wordVal hx, List.cons_append, atom8_eval]
+  refine step_castWord p (mul8_notNaN hops hA.2.1 hx) ?_ ?_
+  · intro c hc
+    obtain ⟨l, rfl⟩ := List.mem_ofFn.1 hc
+    rw [eTilde8_line hops hA.2.2.1 hA.2.2.2 ⟨l, l.isLt⟩ (hL _), code_val]
+    exact lineCodes_notNaN _ _ _
+  · intro c hc
+    obtain ⟨l, rfl⟩ := List.mem_ofFn.1 hc
+    rw [encCodes_of_lt l.isLt, code_val]
+    simpa [Code.isNaN] using e4m3_notNaN _
+
+end Cast8
+
 section RowWords
 
 variable {ops : RowOps} (hops : Pc8OpsAgree ops)
@@ -419,13 +537,13 @@ include hops
 /-- **A row unit's code is `quant8`'s**: `code8W` on a row holding the row's words, its noise line's and a form basis
 row's codes. -/
 theorem code8_quant (p : Pipeline) {K : ℕ} (hK : 8 ≤ K) {V w : ℕ → ℕ} (hx : ∀ l < K, V l = w l)
-    (hA : Row8OK ops K w) (e : Fin Params.pi.r → ℚ) (F : Matrix (Fin K) (Fin Params.pi.r) ℚ)
-    (he : ∀ l < 32, V (K + l) = encCodes e l) (t : Fin K) (hf : ∀ l < 32, V (K + 32 + 32 * t + l) = encCodes (F t) l)
-    (hD : CastWord (formWord8 ops p (alphaQ8 ops K w) (rowQ K w t) (betaQ8 ops K w) e (F t))) :
+    (hA : Row8OK ops K w) {e : Fin Params.pi.r → ℚ} (hL : Line8OK e) (F : Matrix (Fin K) (Fin Params.pi.r) ℚ)
+    (he : ∀ l < 32, V (K + l) = encCodes e l) (t : Fin K)
+    (hf : ∀ l < 32, V (K + 32 + 32 * t + l) = encCodes (F t) l) :
     code8W ops p (alpha8 ops V K) (V t) (fun l => eTilde8 ops (beta8 ops V K) (V (K + l)))
         (fun l => V (K + 32 + 32 * t + l)) = (quant8 ops p w e F t).val :=
   code8W_sem hops p hK (x := rowQ K w) (fun l => by rw [hx l l.isLt, encRow_rowQ hA.1 l l.isLt]) hA.2.1 hA.2.2.1 e
-    (F t) t he hf hD
+    (F t) t he hf (formWord8_castWord hops p hA hL t (F t))
 
 /-- **A row unit's rescaled noise code is `lineCodes`'s** at `pc8Sem`'s `β` of the row's words. -/
 theorem eTilde8_row {K : ℕ} (hK : 8 ≤ K) {V w : ℕ → ℕ} (hx : ∀ l < K, V l = w l) (hA : Row8OK ops K w)
@@ -436,10 +554,6 @@ theorem eTilde8_row {K : ℕ} (hK : 8 ≤ K) {V w : ℕ → ℕ} (hx : ∀ l < K
   exact eTilde8_line hops hA.2.2.1 hA.2.2.2 ⟨s, hs⟩ (hL ⟨s, hs⟩)
 
 end RowWords
-
-theorem encCodes_of_lt {e : Fin Params.pi.r → ℚ} {l : ℕ} (hl : l < 32) : encCodes e l = (e4m3 (e ⟨l, hl⟩)).val := by
-  unfold encCodes
-  exact dite_eq_left hl
 
 theorem getD_ofFn32 (f : Fin 32 → ℕ) {s : ℕ} (hs : s < 32) : (List.ofFn f).getD s 0 = f ⟨s, hs⟩ :=
   PeelExactProofs.getD_ofFn f 0 ⟨s, hs⟩
@@ -467,8 +581,6 @@ theorem row8A_paWords (p : Pipeline) {nw : ℕ} (hnw : 0 < nw)
     (hf : ∀ t : Fin (128 * nw), ∀ l < 32, val XA (128 * nw + 32 + 32 * t + l) = encCodes (F t) l)
     (hb : ∀ t : Fin (128 * nw), ∀ q < 32, val XA (33 * (128 * nw) + 32 + 32 * t + q) = encCodes (Fc t) q)
     (hA : Row8OK ops (128 * nw) w) (hL : Line8OK e)
-    (hD : ∀ t : Fin (128 * nw), CastWord (formWord8 ops p (alphaQ8 ops (128 * nw) w) (rowQ (128 * nw) w t)
-      (betaQ8 ops (128 * nw) w) e (F t)))
     {af pa : List ℕ}
     (haf : (List.ofFn fun q : Fin 32 => chainWordP? p 4 (rowAtoms (quant8 ops p w e F) ((basis8 Fc)ᵀ q))).mapM id =
       some af)
@@ -478,7 +590,7 @@ theorem row8A_paWords (p : Pipeline) {nw : ℕ} (hnw : 0 < nw)
   have hK8 : 8 ≤ 128 * nw := by omega
   have hcode : ∀ t : Fin (128 * nw),
       val XA (code8 (128 * nw) (rowIn (128 * nw) false) t) = (quant8 ops p w e F t).val := fun t =>
-    (row8A_code (ops := ops) p hK8 XA hX t.isLt).trans (code8_quant hops p hK8 hx hA e F he t (hf t) (hD t))
+    (row8A_code (ops := ops) p hK8 XA hX t.isLt).trans (code8_quant hops p hK8 hx hA hL F he t (hf t))
   refine ⟨hcode, fun q hq => ?_⟩
   obtain ⟨hpa1, hpa2⟩ := PeelExactProofs.paRow_spec hpa List.length_ofFn
   obtain ⟨hafl, hafq⟩ := PeelExactProofs.mapM_ofFn _ 0 haf
@@ -506,8 +618,6 @@ theorem row8B_pbWords (p : Pipeline) {nw : ℕ} (hnw : 0 < nw)
     (hf : ∀ t : Fin (128 * nw), ∀ l < 32, val XB (128 * nw + 32 + 32 * t + l) = encCodes (F t) l)
     (hb : ∀ t : Fin (128 * nw), ∀ q < 32, val XB (33 * (128 * nw) + 32 + 32 * t + q) = encCodes (Fc t) q)
     (hA : Row8OK ops (128 * nw) w) (hL : Line8OK e)
-    (hD : ∀ t : Fin (128 * nw), CastWord (formWord8 ops p (alphaQ8 ops (128 * nw) w) (rowQ (128 * nw) w t)
-      (betaQ8 ops (128 * nw) w) e (F t)))
     {bf pb : List ℕ} {gL : List (List ℕ)}
     (hbf : (List.ofFn fun q : Fin 32 => chainWordP? p 4 (rowAtoms (quant8 ops p w e F) ((basis8 Fc)ᵀ q))).mapM id =
       some bf)
@@ -519,7 +629,7 @@ theorem row8B_pbWords (p : Pipeline) {nw : ℕ} (hnw : 0 < nw)
   have hK8 : 8 ≤ 128 * nw := by omega
   have hcode : ∀ t : Fin (128 * nw),
       val XB (code8 (128 * nw) (rowIn (128 * nw) true) t) = (quant8 ops p w e F t).val := fun t =>
-    (row8B_code (ops := ops) p hK8 XB hX t.isLt).trans (code8_quant hops p hK8 hx hA e F he t (hf t) (hD t))
+    (row8B_code (ops := ops) p hK8 XB hX t.isLt).trans (code8_quant hops p hK8 hx hA hL F he t (hf t))
   refine ⟨hcode, fun q hq => ?_⟩
   obtain ⟨hpb1, hpb2⟩ := PeelExactProofs.pbRow_spec hpb List.length_ofFn
   obtain ⟨-, hbfq⟩ := PeelExactProofs.mapM_ofFn _ 0 hbf
@@ -612,10 +722,6 @@ theorem entry8_words (p : Pipeline) (pr : Prices) {M K N TM TN nw : ℕ} (hnw : 
     (hg : ∀ s < 32, ∀ q < 32, val X (gAt M N K + 32 * s + q) = gram8 p z s q)
     (hA : Row8OK ops K (act i)) (hB : Row8OK ops K (wt j))
     (hLA : Line8OK (z.EA i)) (hLB : Line8OK (z.EB j))
-    (hDA : ∀ t : Fin K, CastWord (formWord8 ops p (alphaQ8 ops K (act i)) (rowQ K (act i) t) (betaQ8 ops K (act i))
-      (z.EA i) (z.FA t)))
-    (hDB : ∀ t : Fin K, CastWord (formWord8 ops p (alphaQ8 ops K (wt j)) (rowQ K (wt j) t) (betaQ8 ops K (wt j))
-      (z.EB j) (z.FB t)))
     {c : ℕ} {pa pb : List ℕ}
     (hr : PeelExactProofsP.peelRowsP p 4 (quant8A ops p z act) (quant8B ops p z wt) (basis8 z.FA) (basis8 z.FB)
       (fun i => be8 (betaQ8 ops K (act i)) (z.EA i)) (fun j => be8 (betaQ8 ops K (wt j)) (z.EB j)) i j =
@@ -641,14 +747,14 @@ theorem entry8_words (p : Pipeline) (pr : Prices) {M K N TM TN nw : ℕ} (hnw : 
     (fun l hl => (hinA _ (by omega)).trans (by rw [portA8_e hl, hea l hl]))
     (fun t l hl => (hinA _ (by have := t.isLt; omega)).trans (by rw [portA8_f t.isLt hl, hfa t l hl]))
     (fun t q hq => (hinA _ (by have := t.isLt; omega)).trans (by rw [portA8_b hq, hfb t q hq]))
-    hA hLA hDA haf hpa
+    hA hLA haf hpa
   obtain ⟨codeB, pbB⟩ := row8B_pbWords hops p hnw _
     ((whole8 ops p M (128 * nw) N TM TN).cut_correct X (blockB8 ops p M (128 * nw) N) j)
     (fun l hl => (hinB l (by omega)).trans (by rw [portB8_x hl, hxb l hl]))
     (fun l hl => (hinB _ (by omega)).trans (by rw [portB8_e hl, heb l hl]))
     (fun t l hl => (hinB _ (by have := t.isLt; omega)).trans (by rw [portB8_f t.isLt hl, hfb t l hl]))
     (fun t q hq => (hinB _ (by have := t.isLt; omega)).trans (by rw [portB8_b t.isLt hq, hfa t q hq]))
-    hB hLB hDB hbf hgl
+    hB hLB hbf hgl
     (fun s hs q hq => by
       have h := (PeelExactProofs.mapM_ofFn _ 0 (hgrow ⟨s, hs⟩)).2 ⟨q, hq⟩
       refine (hinB _ (by omega)).trans ?_
@@ -922,18 +1028,14 @@ theorem tileSide_dvd_iff (d : ℕ) : tileSide d ∣ d ↔ d ≤ 64 ∨ 64 ∣ d 
     exact ⟨Or.inr, fun h' => h'.elim (fun _ => ⟨1, by omega⟩) id⟩
 
 /-- **The named hypotheses at entry `(i, j)`** of a unit with noise `z`, activations `act` and weights `wt`: `Row8OK` at
-row `i` of `act` and row `j` of `wt`, `Line8OK` at their noise lines, `CastWord` at their formed words, and the peel's
-factor rows exist (`peelRowsP`, which `devAt`'s useful word reads; where it fails the useful value is `none`). -/
+row `i` of `act` and row `j` of `wt`, `Line8OK` at their noise lines, and the peel's factor rows exist (`peelRowsP`,
+which `devAt`'s useful word reads; where it fails the useful value is `none`). -/
 structure Pc8EntryOK (ops : RowOps) (p : Pipeline) {m n k : ℕ} (z : Noise m n k Params.pi.r) (act wt : Codes)
     (i : Fin m) (j : Fin n) : Prop where
   rowA : Row8OK ops k (act i)
   rowB : Row8OK ops k (wt j)
   lineA : Line8OK (z.EA i)
   lineB : Line8OK (z.EB j)
-  castA : ∀ t : Fin k, CastWord (formWord8 ops p (alphaQ8 ops k (act i)) (rowQ k (act i) t) (betaQ8 ops k (act i))
-    (z.EA i) (z.FA t))
-  castB : ∀ t : Fin k, CastWord (formWord8 ops p (alphaQ8 ops k (wt j)) (rowQ k (wt j) t) (betaQ8 ops k (wt j))
-    (z.EB j) (z.FB t))
   peel : (PeelExactProofsP.peelRowsP p 4 (quant8A ops p z act) (quant8B ops p z wt) (basis8 z.FA) (basis8 z.FB)
     (fun i => be8 (betaQ8 ops k (act i)) (z.EA i)) (fun j => be8 (betaQ8 ops k (wt j)) (z.EB j)) i j).isSome
 
@@ -965,7 +1067,7 @@ theorem entry8_accepts (p : Pipeline) (pr : Prices) {M K N TM TN nw : ℕ} (hnw 
       wordQ (us i j) = (devAt p 4 pr).useful (quant8A ops p z act) (quant8B ops p z wt)
         (basis8 z.FA) (basis8 z.FB) (fun i => be8 (betaQ8 ops K (act i)) (z.EA i))
         (fun j => be8 (betaQ8 ops K (wt j)) (z.EB j)) i j := by
-  obtain ⟨hA, hB, hLA, hLB, hDA, hDB, hP⟩ := hE
+  obtain ⟨hA, hB, hLA, hLB, hP⟩ := hE
   obtain ⟨⟨c, pa, pb⟩, hr⟩ := Option.isSome_iff_exists.1 hP
   have hK0 : 0 < K / 128 := by subst hK; omega
   obtain ⟨h1, h2, h3, h4, h5, h6⟩ := layout8 M N K
@@ -1003,7 +1105,7 @@ theorem entry8_accepts (p : Pipeline) (pr : Prices) {M K N TM TN nw : ℕ} (hnw 
     (hcone _ (cone8T ops p M K N TM TN hM hN i.isLt j.isLt hK0 fun g hg => hT g (Or.inl hg)))
     (hcone _ (cone8A ops p M K N TM TN hM hN i.isLt j.isLt fun g hg => hT g (Or.inr hg)))
     (hcone _ (cone8B ops p M K N TM TN hM hN i.isLt j.isLt fun g hg => hT g (Or.inr hg)))
-    hxa hea hxb heb hfa hfb hg hA hB hLA hLB hDA hDB hr
+    hxa hea hxb heb hfa hfb hg hA hB hLA hLB hr
   obtain ⟨he, -, -⟩ := tile_index hM hN i.isLt j.isLt
   have hti := Nat.mod_lt (i : ℕ) (Nat.pos_of_dvd_of_pos hM (Nat.zero_lt_of_lt i.isLt))
   have htj := Nat.mod_lt (j : ℕ) (Nat.pos_of_dvd_of_pos hN (Nat.zero_lt_of_lt j.isLt))

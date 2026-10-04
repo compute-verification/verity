@@ -16,6 +16,7 @@ import pytest
 import pearl_c_vectors as CV
 import pearl_vectors as PV
 from verity.commitments.turboshake import turboshake128
+from verity.ml.fp32 import F32MulV2
 from verity.ml.tc.models import HOPPER_BF16_WGMMA_K16
 from verity_pouw.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
 from verity_pouw.schemes import get
@@ -300,6 +301,13 @@ def test_bf16_of_code_keeps_the_sign_of_minus_zero():
     """`bf16(E′)` widens `−0` (0x80) to `0x8000`, with its sign. The Lean's `codeBf16` pins the same words
     (`WholeCircuit.codeBf16_examples`)."""
     assert [C._bf16_of_code(c) for c in (0x80, 0x00, 0x38, 0xFE)] == [0x8000, 0x0000, 0x3F80, 0xC3E0]
+
+
+def test_f32_mul_signs_a_zero_product():
+    """`F32Mul_v2` writes a zero product of opposite signs as `−0` and of equal signs as `+0`, as the Lean's
+    `Pc8OpsAgree.mulZero` and `.mul` state."""
+    pairs = ((0, 0xBF800000), (0x80000000, 0x3F800000), (1, 0x80000000), (0x80000000, 0xBF800000), (0, 0x3F800000))
+    assert [F32MulV2.evaluate(a, b) for a, b in pairs] == [0x80000000] * 3 + [0, 0]
 
 
 def test_v1_registry_and_cost():
