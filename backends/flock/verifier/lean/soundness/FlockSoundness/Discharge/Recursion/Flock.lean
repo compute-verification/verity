@@ -14,7 +14,8 @@ hypotheses at each history and, for those that read the prover's strategy (`cr/s
 registered-value finders, `ZkOuter.CR`), at each leaf the prover reaches. What V*'s circuit must compute is one named
 Prop, `VBridge`: at an accepted outcome, a value layer with no wrong unit whose drawn units read the registrant's values
 at the registered reads (the hidden circuit `P`, the draw, the coins) holds an inner transcript the inner verifier accepts
-on `P`'s statement at the rounds' coins. The stage hypotheses (`htr`, `hCR`) and `InnerSound` are `recursive_sound`'s.
+on `P`'s statement at the rounds' coins. The stage hypotheses (`htr`, `hCR`) and `InnerSound` are `recursive_sound`'s;
+`zk_session_recursive_upto` takes `recursive_sound_upto`'s instead.
 
 The bound: `E[miss 1 + 2·(ksAvgStrictZ + linkBoundZC) + regTermZC] + Σ_{k < r} (E[εtr k] + (Σ_pos κ k pos)·√(q_k²/2^513))
 + ε_in`, the expectations over the draw and the rounds' coins at the prover's leaves (`expAt`). `ksAvgStrictZ +
@@ -154,6 +155,64 @@ def VBridge (zs : Reg → L.Ω → List (Cm × I.Coin) → ZkOuter mPts nv Reg' 
     (zs R ω t).RegAgree ((zs R ω t).layer dg N k Rw τ) o →
     I.accepts (x R ω) ((wmsg ((zs R ω t).layer dg N k Rw τ)).zip (t.map Prod.snd))
 
+/-- **The recursive audit with V*'s `--zk --registered` session as the outer proof is sound, up to what the inner verifier
+reads**: `recursive_sound_upto` at V*'s session, as `zk_session_recursive` is `recursive_sound` there. Stage `i` opens to
+`msg i v`, and its transfer bounds the message V*'s layer holds for round `i` not being `same i` as that. -/
+theorem zk_session_recursive_upto
+    -- V*'s law and A3
+    {m : ℕ} (σs : Fin nv → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
+    (hA3 : Assumptions.UniformRandomBytes Lb src)
+    -- V*'s session at each history
+    (zs : Reg → L.Ω → List (Cm × I.Coin) →
+      ZkOuter mPts nv Reg' c hU hscope (Law.execOS (n := nv) src (.stratified Kd (Array.ofFn St)) pop))
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    -- the count curve's parameters
+    {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
+    (hr : ∀ R ω t S R' j, rateZ (planZAt (Reg := Reg') (zs R ω t).dj (zs R ω t).y₀ S R') j k ≤ ρ)
+    {t' : ℝ} (ht' : 0 ≤ t')
+    -- the recursive prover, and cr/sha-512 for its outer simulation's finders at the leaves it reaches
+    (σ : Strategy (recGame L Reg I Cm fun R ω t => (zs R ω t).game dg N))
+    {qF qS qW : ℝ} (hCRo : AllAt σ fun ω t τ => (zs σ.1 ω t).CR dg N k Rw qF qS qW τ)
+    -- the hidden circuit's statement, the messages V*'s layer holds, and V*'s bridge
+    (x : Reg → L.Ω → I.Stmt) (wmsg : (Fin (Layout.keyN c hU nv) → Bool) → List I.Msg)
+    (hbr : VBridge zs dg N k Rw x wmsg)
+    -- what the inner verifier reads of each round's message
+    (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
+    (hsame : ∀ y (ms ms' : List I.Msg) (ρs : List I.Coin), (∀ i < ρs.length, Option.Rel (same i ρs) ms[i]? ms'[i]?) →
+      I.accepts y (ms.zip ρs) → I.accepts y (ms'.zip ρs))
+    -- the stages: commitments' openings, transfer, and cr/sha-512 for the fork finders
+    {V Pos : Type} [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos] (ob : Openings H512 V)
+    (cmt : Cm → Pos → ob.Dg) (msg : ℕ → (Pos → V) → I.Msg)
+    (T : ℕ → ∀ R ω t, Strategy ((zs R ω t).game dg N) → Pos → Finder (Finset ob.Op))
+    (εtr : ℕ → ∀ R ω t, Strategy ((zs R ω t).game dg N) → ℝ≥0∞) (κ : ℕ → Pos → ℝ≥0∞) (q : ℕ → ℝ)
+    (htr : ∀ i < I.r, AllAt σ fun ω t τ => ∀ (v : Pos → V) (e : Cm × I.Coin), t[i]? = some e →
+      prob (fun b => LiveAcceptsZKR (zs σ.1 ω t).I (zs σ.1 ω t).own b ∧ ¬ Option.Rel (same i (t.map Prod.snd))
+          (wmsg ((zs σ.1 ω t).layer dg N k Rw τ))[i]? (some (msg i v))) ((zs σ.1 ω t).game dg N) τ ≤
+        εtr i σ.1 ω t τ +
+          ∑ pos, κ i pos * prob (OffAt ob (cmt e.1 pos) (v pos)) (T i σ.1 ω t τ pos).g (T i σ.1 ω t τ pos).s)
+    (hCR : ∀ i < I.r, ∀ ω pos, (forkAt ob σ cmt (T i) i ω pos).CR H512 (q i))
+    -- the inner protocol
+    {εin : ℝ≥0∞} (hin : InnerSound I εin) :
+    prob (fun o => LiveAcceptsZKR (zs o.1 o.2.1 o.2.2.1).I (zs o.1 o.2.1 o.2.2.1).own o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
+        (recGame L Reg I Cm fun R ω t => (zs R ω t).game dg N) σ ≤
+      expAt σ (fun ω t τ => (zs σ.1 ω t).bound dg N (Law.stratified σs ks hks) k Rw M ρ t' qF qS qW τ) +
+        ∑ i ∈ Finset.range I.r,
+          (expAt σ (εtr i σ.1) + (∑ pos, κ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
+  have h := recursive_sound_upto ob σ (fun R ω t o => LiveAcceptsZKR (zs R ω t).I (zs R ω t).own o) x
+    (W := (Fin (Layout.keyN c hU nv) → Bool) × I.Stmt) (fun R ω t τ => ((zs R ω t).layer dg N k Rw τ, x R ω))
+    Prod.snd (fun w => wmsg w.1) same hsame cmt msg T εtr κ q
+    (εo := expAt σ fun ω t τ => (zs σ.1 ω t).bound dg N (Law.stratified σs ks hks) k Rw M ρ t' qF qS qW τ) (εP := 0)
+    ?_ ?_ htr hCR hin
+  · rwa [add_zero] at h
+  · exact avg_mono fun ω => leafAvg_mono_all ((hCRo ω).mono fun t s _ hs =>
+      ZkOuter.accepts_le σs ks hks St hS Kd pop Lb src hA3 (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' _ hs _
+        (hbr σ.1 ω t _))
+  · refine le_of_eq ((congrArg avg (funext fun ω => ?_)).trans (avg_const 0))
+    refine (leafAvg_congr_len (G := fun _ _ => 0) (fun t s _ => ?_) _).trans (leafAvg_const 0 _)
+    exact le_antisymm ((prob_mono (fun b hb => hb.2 rfl) _ _).trans (prob_false _ _).le) zero_le
+
 /-- **The recursive audit with V*'s `--zk --registered` session as the outer proof is sound.** The prover registers `R`,
 the verifier draws `ω` by `L`, `I.r` rounds of a commitment and a live coin follow, and V*'s session at the history
 (`zs R ω t`) ends the audit, which accepts when flock-verify `--zk --registered` accepts V*'s session. On
@@ -198,18 +257,9 @@ theorem zk_session_recursive
         (recGame L Reg I Cm fun R ω t => (zs R ω t).game dg N) σ ≤
       expAt σ (fun ω t τ => (zs σ.1 ω t).bound dg N (Law.stratified σs ks hks) k Rw M ρ t' qF qS qW τ) +
         ∑ i ∈ Finset.range I.r,
-          (expAt σ (εtr i σ.1) + (∑ pos, κ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
-  have h := recursive_sound ob σ (fun R ω t o => LiveAcceptsZKR (zs R ω t).I (zs R ω t).own o) x
-    (W := (Fin (Layout.keyN c hU nv) → Bool) × I.Stmt) (fun R ω t τ => ((zs R ω t).layer dg N k Rw τ, x R ω))
-    Prod.snd (fun w => wmsg w.1) cmt msg T εtr κ q
-    (εo := expAt σ fun ω t τ => (zs σ.1 ω t).bound dg N (Law.stratified σs ks hks) k Rw M ρ t' qF qS qW τ) (εP := 0)
-    ?_ ?_ htr hCR hin
-  · rwa [add_zero] at h
-  · exact avg_mono fun ω => leafAvg_mono_all ((hCRo ω).mono fun t s _ hs =>
-      ZkOuter.accepts_le σs ks hks St hS Kd pop Lb src hA3 (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' _ hs _
-        (hbr σ.1 ω t _))
-  · refine le_of_eq ((congrArg avg (funext fun ω => ?_)).trans (avg_const 0))
-    refine (leafAvg_congr_len (G := fun _ _ => 0) (fun t s _ => ?_) _).trans (leafAvg_const 0 _)
-    exact le_antisymm ((prob_mono (fun b hb => hb.2 rfl) _ _).trans (prob_false _ _).le) zero_le
+          (expAt σ (εtr i σ.1) + (∑ pos, κ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin :=
+  zk_session_recursive_upto σs ks hks St hS Kd pop Lb src hA3 zs dg N hk hRw hM hρ hr ht' σ hCRo x wmsg hbr
+    (fun _ _ a b => a = b) I.accepts_of_rel_eq ob cmt (fun _ => msg) T εtr κ q
+    (fun i hi => by simpa only [rel_eq_iff, ne_eq] using htr i hi) hCR hin
 
 end FlockSoundness.Discharge.Recursion
