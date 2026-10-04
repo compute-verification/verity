@@ -17,7 +17,14 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Test-only: tests/proofs and tests/ml cross-check against the numerical backend, the tensor-core probe and
-# the research store, and read the repository's fixtures and census.
-inputs = ["backends/numerical", "census", "fixtures/discrepancy_log.json", "fixtures/hawkeye", "fixtures/tc", "fixtures/typed-obligation-v0", "tools/research", "tools/tc_probe"]
+# Test-only: tests/proofs/test_tc_probe_families.py imports the tensor-core probe's tile generation (tools/tc_probe/tc_probe.py),
+# and the tests read the repository's fixtures and census. tests/proofs/test_discrepancy_log.py checks that each evidence ref in
+# fixtures/discrepancy_log.json exists, which the guard can't see: list here every ref outside the paths above.
+inputs = ["census", "fixtures/discrepancy_log.json", "fixtures/hawkeye", "fixtures/tc", "fixtures/typed-obligation-v0", "tools/tc_probe",
+          "backends/numerical/python/verity_numerical/reference/hawkeye_close.py",
+          "backends/numerical/tests/checker/test_fp8.py",
+          "backends/numerical/tests/reference/hawkeye_harness.cpp",
+          "backends/numerical/tests/reference/test_hawkeye_close.py",
+          "backends/numerical/tests/reference/test_normalisation_d3.py",
+          "tools/tc_probe_fp4/probe.py"]
 parallel = true
