@@ -40,6 +40,7 @@ import Pous.SecurityProofs.Thm1.Theorem1iiSeq
 import Pous.SecurityProofs.Thm1.Theorem1iiiTimed
 import Pous.SecurityProofs.Chain.PubFamily
 import Pous.SecurityProofs.Chain.PubRounds
+import Pous.SecurityProofs.Rebuild.Exclusion
 
 /-!
 # The proved guarantees
@@ -152,6 +153,14 @@ theorem BandPubMeetsFamilyD2 : Pous.Guarantees.BandPubMeetsFamilyD2 := PousPub.b
 theorem BandPubMeetsFamilyD1 : Pous.Guarantees.BandPubMeetsFamilyD1 := PousPub.band_pub_meets_family_d1
 theorem ChainDenseMeets111 : Pous.Guarantees.ChainDenseMeets111 := PousSpongeChain.chainDenseMeets111_final
 theorem BandGradedMeetsFamily : Pous.Guarantees.BandGradedMeetsFamily := PousGraded.band_graded_meets_family
+theorem PerAnswer : Pous.Guarantees.PerAnswer := PousContinuous.per_answer
+theorem ContinuousAudit : Pous.Guarantees.ContinuousAudit := PousContinuous.continuous_audit
+theorem BackgroundRebuildExcluded : Pous.Guarantees.BackgroundRebuildExcluded :=
+  PousRebuild.background_rebuild_excluded
+theorem ContinuousComplete : Pous.Guarantees.ContinuousComplete := PousContinuous.continuous_complete
+theorem ContinuousTimeAverage : Pous.Guarantees.ContinuousTimeAverage := PousContinuous.continuous_time_average
+theorem BandFamilyContinuousTimeAverage : Pous.Guarantees.BandFamilyContinuousTimeAverage :=
+  PousContinuous.band_family_continuous_time_average
 theorem DigestAU : Pous.Guarantees.DigestAU := PousDigest.digestAU
 theorem SecureErasureMeets : Pous.Guarantees.SecureErasureMeets := PousErase.secure_erasure_meets
 theorem SecureErasureMeetsFamily : Pous.Guarantees.SecureErasureMeetsFamily := PousErase.secure_erasure_meets_family
