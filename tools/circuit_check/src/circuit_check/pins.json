@@ -579,6 +579,9 @@
   "SiluMulBf16_v4": {
    "and": 1380
   },
+  "SiluMulFp8BlockQuantResult_v2": {
+   "and": 16899
+  },
   "SiluMul_v3{I=8}": {
    "and": 10976
   },
