@@ -32,7 +32,13 @@ open Flock FlockLevel3
 
 /-- **A row the widened scope covers**: `16 · words` bits, and a `sha512/row/v1` row with at least one chunk, a
 `sha512/row/v2` row of whole blocks or of one short block, or a `sha512/row-seg/v1` row of whole 64-word blocks, its
-segments and compressions `HmRow.segShape`'s. -/
+segments and compressions `HmRow.segShape`'s.
+
+The `sha512/row/v1` branch reads no `segs`, as `Layout.v1Ports` doesn't, while `HmRow.prefixOf` and `rowEncOf` read
+`segs.isSome` first. No parsed circuit has a port with `v2 = false` and `segs = some _`: `ParseFacts.v1Segs`
+(`parse_facts`, from `rowPorts_v1`) gives `segs = none` at every `v2 = false` port of a circuit `HmRow.parse` accepted,
+and every statement at `scopeOkW` takes its circuit from `HmRow.parse` (`HmOut.parse` through
+`HiddenExec.parse_untyped`). -/
 def rowShapeW (p : Port) : Bool :=
   p.bits == 16 * p.words && (if !p.v2 then 0 < p.chunks else 0 < p.words && match p.segs with
     | none => (0 < p.chunks && 2 * p.words == 128 * p.chunks) || (p.chunks == 0 && 2 * p.words + 17 ≤ 128)
@@ -77,6 +83,14 @@ theorem rowShapeW_spec {p : Port} (h : rowShapeW p = true) :
     · exact Or.inr (Or.inr (Or.inl ⟨rfl, rfl, hb, hw, hc, he⟩))
   · obtain ⟨hb, hw, ⟨⟨h64, rfl⟩, hc⟩⟩ := h
     exact Or.inr (Or.inr (Or.inr ⟨rfl, rfl, hb, hw, h64, hc⟩))
+
+/-- Every row `rowShapeW` admits is `16 · words` bits. -/
+theorem rowShapeW_bits {p : Port} (h : rowShapeW p = true) : p.bits = 16 * p.words := by
+  rcases rowShapeW_spec h with h | h | h | h
+  · exact h.2.1
+  · exact h.2.2.1
+  · exact h.2.2.1
+  · exact h.2.2.1
 
 /-- **`scopeOkW` gives `rs`'s circuit conditions**, as `Layout.scopeOk_spec`: `h1`, `ho` and `PortReads`. -/
 theorem scopeOkW_spec {c : Circuit} (hU : Built c.unit) (h : scopeOkW c = true) :
