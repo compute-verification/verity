@@ -102,6 +102,10 @@ def test_salt_and_window_root_bind_their_inputs():
 
 def test_fraction_draws_and_gamma():
     assert A.draws_needed() == 59 and (1 - A.EPS_S) ** 59 <= A.DELTA_S < (1 - A.EPS_S) ** 58
+    for t in (59, 60, 300, 600):
+        e = A.eps_for(t)
+        assert (1 - e) ** t <= A.DELTA_S < (1 - (e - Fraction(1, 10**6))) ** t and e <= A.EPS_S
+    assert A.eps_for(300) == pytest.approx(0.00994, abs=1e-5)
     g = A.gamma(8192, 8192)
     assert g["gamma"] == "1648180439/446072750000" and g["status"] == "pinned"
     assert g["pin"] == "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192" and g["source"].endswith("lean-audit.json")
@@ -245,8 +249,8 @@ def test_audit_accepts_an_honest_window_and_rejects_both_controls(honest, monkey
                                                                               "wrong salt": (False, "activation opening")}
     f = res["fraction"]
     assert res["gemms"] == {"0": 2, "1": 1} and f["capacity_gemms"] == 2 * DURATION * 1000 and f["credited_gemms"] == 3
-    gamma = Fraction(res["gamma"]["gamma"])
-    assert f["fraction"] == pytest.approx(float((1 - gamma) * Fraction(19, 20) * 3 / 120000))
+    gamma, eps = Fraction(res["gamma"]["gamma"]), A.eps_for(60)
+    assert f["eps_s"] == str(eps) and f["fraction"] == pytest.approx(float((1 - gamma) * (1 - eps) * 3 / 120000))
 
 
 @pytest.fixture

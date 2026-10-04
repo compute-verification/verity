@@ -19,8 +19,8 @@ FP8 capacity.
 5. The fraction: certified = (1 − γ)(1 − ε_s)·N, N the credited GEMMs; capacity = Σ_cards duration / t_base, t_base the
    card's cuBLASLt FP8 time per GEMM at the shape (the fastest `lt*` baseline's median, harness bench.py, before and after the
    window, averaged); fraction = certified / capacity.  γ is the Lean-pinned price twin `price_twins.lookup` publishes for
-   pearl-c-sm120/v1 on the cast-8.72 path at 8,192³ (`../harness/price_twins.json`), never typed in; ε_s = 1/20 at
-   δ_s = (1 − ε_s)^t ≤ 1/20, so t ≥ 59 draws.
+   pearl-c-sm120/v1 on the cast-8.72 path at 8,192³ (`../harness/price_twins.json`), never typed in; ε_s is the
+   least (on a grid of 10⁻⁶) with (1 − ε_s)^t ≤ δ_s = 1/20 for the window's t draws, and t ≥ 59 (ε_s ≤ 1/20) is required.
 
   python audit.py OUT [--bench-before DIR] [--bench-after DIR] [--jobs J] [--commit SHA]
 
@@ -75,6 +75,16 @@ def draws_needed(eps: Fraction = EPS_S, delta: Fraction = DELTA_S) -> int:
     while t > 1 and (1 - eps) ** (t - 1) <= delta:
         t -= 1
     return t
+
+
+def eps_for(t: int, delta: Fraction = DELTA_S, den: int = 10**6) -> Fraction:
+    """The least ε_s on a grid of 1/den with (1 − ε_s)^t ≤ δ_s: what t draws establish (at most 1/20 from t = 59)."""
+    e = Fraction(math.ceil((1 - float(delta) ** (1 / t)) * den), den)
+    while e > Fraction(1, den) and (1 - (e - Fraction(1, den))) ** t <= delta:
+        e -= Fraction(1, den)
+    while (1 - e) ** t > delta:
+        e += Fraction(1, den)
+    return e
 
 
 def gamma(n: int, k: int) -> dict:
@@ -185,7 +195,9 @@ def audit(out: Path, before: Path | None, after: Path | None, jobs: int, commit:
     note("draw", picked == dr["draws"] and dr["t_source_ns"] >= win["t_root_ns"],
          f"{len(picked)} tiles from source {dr['source'][:16]}… drawn after the root")
     need = draws_needed()
-    note("draws enough", len(picked) >= need, f"t = {len(picked)}, (1 − ε_s)^t ≤ δ_s needs t ≥ {need}")
+    eps = eps_for(len(picked)) if picked else EPS_S
+    note("draws enough", len(picked) >= need, f"t = {len(picked)} (ε_s = 1/20 at δ_s = 1/20 needs t ≥ {need}): ε_s = {eps} "
+         f"({float(eps):.4%}) at δ_s = {DELTA_S}")
     by_card = {c["card"]: c for c in closes}
     weights = {}
     for c in closes:
@@ -271,9 +283,9 @@ def audit(out: Path, before: Path | None, after: Path | None, jobs: int, commit:
          else f"no published price twin at n {shape[1]}, k {shape[2]}: {g.get('missing')}")
     frac = None
     if counts and set(base_ms) == set(counts):
-        frac = fraction(counts, base_ms, start["duration_s"], None if g["gamma"] is None else Fraction(g["gamma"]))
-        frac["vs_fastest_plain"] = fraction(counts, base_fast, start["duration_s"],
-                                            None if g["gamma"] is None else Fraction(g["gamma"]))
+        gm = None if g["gamma"] is None else Fraction(g["gamma"])
+        frac = fraction(counts, base_ms, start["duration_s"], gm, eps)
+        frac["vs_fastest_plain"] = fraction(counts, base_fast, start["duration_s"], gm, eps)
     note("baseline", frac is not None, f"cuBLASLt before/after on {len(base_ms)} of {len(counts)} cards")
     ok = all(c["ok"] for c in checks)
     return {"schema": W.SCHEMA + "/audit", "verifier_commit": commit, "ok": ok, "scheme": sch.name, "shape": shape,
