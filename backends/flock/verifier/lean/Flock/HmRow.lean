@@ -382,6 +382,9 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
   -- a tail that returns the outputs has no power-of-two count, which alone refuses zero units otherwise
   if c.upv == 0 then throw "units_per_vu is 0: a VU of no unit"
   if c.g == 0 then throw "vus_per_block is 0: a block of no VU"
+  -- the Digest region's VU bits are `Nat.log2 g` here and `trailing_zeros` in the Rust verifier, which pin every VU,
+  -- and agree, only at a power of two
+  if !isPow2 c.g then throw "vus_per_block is not a power of two: the Digest region would pin some VUs and not others"
   if c.dummyDigests.size != c.ports.size || c.dummyOutputs.size != nOut then
     throw "the pinned dummy values are not one per port and output leaf"
   if let some pinned := tags.pinnedLeafScheme then

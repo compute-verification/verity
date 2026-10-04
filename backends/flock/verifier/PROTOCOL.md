@@ -1213,9 +1213,11 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   no slots would escape the block bound.
 - **Units.** `units_per_vu ≥ 1` (D8, §17.1). The unit range's `vus_per_block × units_per_vu` slots are a power of two only
   when the unit returns the outputs, so a tail that returns them would otherwise pass with no unit in a VU.
-- **Blocks.** `vus_per_block ≥ 1` (D9, §17.1). Every range's count is `vus_per_block` times its per-VU count, and the
-  unit range's power-of-two bound binds only when the unit returns the outputs, so a tail that returns them would otherwise
-  pass with no VU in a block.
+- **Blocks.** `vus_per_block ≥ 1` (D9, §17.1), and a power of two whatever returns the outputs. Every range's count is
+  `vus_per_block` times its per-VU count, and the unit range's power-of-two bound binds only when the unit returns the
+  outputs, so a tail that returns them would otherwise pass with no VU in a block, or with `G = 3`: the `Digest` regions'
+  `log2 G` VU bits (Lean's `Nat.log2`, Rust's `trailing_zeros`, which agree only at a power of two) would pin VUs 0 and 1
+  in one verifier, VU 0 in the other, and VU 2 in neither.
 - **Wires.** META `wires` begins with the row wires, which the verifier derives and compares: compression `k`'s `cv` from
   compression `k − 1`'s `out`, and hm96 slot `p`'s `cv` from the row's last compression. No other wire touches a row slot.
 - **The pin** is the constant column of the first slot of the first range that is not the mask (`HmRow.pin`). That range
@@ -1508,8 +1510,9 @@ expectation):
 - **D8:** at least one unit per VU (§16.10). Upstream's `Composite::check` in the pinned builds that have tails (`25519ba1`,
   `967b8d06`) lets `units_per_vu = 0` through when a tail returns the outputs; the spec refuses it, as
   `backends/flock/live`'s now does. No vector exercises it.
-- **D9:** at least one VU per block (§16.10). Upstream's `Composite::check` in the same builds lets `vus_per_block = 0`
-  through when a tail returns the outputs; the spec refuses it, as `backends/flock/live`'s now does. No vector exercises it.
+- **D9:** at least one VU per block, and a power of two of them (§16.10). Upstream's `Composite::check` in the same builds
+  lets `vus_per_block = 0` through when a tail returns the outputs; the spec refuses it, and every `vus_per_block` not a
+  power of two, as `backends/flock/live`'s now does. No vector exercises either.
 - **D10:** a statement form the soundness proof does not cover (§16.15). The pinned upstream builds verify it; the spec
   refuses every session, as `backends/flock/live`'s now does. A set marked `lean_refuses` in `vectors.json` expects that
   refusal of the Lean verifier and each session's own verdict of upstream (`agree.py --lean-refuses`).

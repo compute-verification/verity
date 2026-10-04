@@ -127,3 +127,31 @@ def test_a_block_with_no_vu_is_refused(store, tmp_path):
     p = subprocess.run([str(BIN), "statement", "--statement", SETS["flat", "gemm-coordinate"], "--circuit", str(bad),
                         "--public", str(d / "pub-4.bin")], capture_output=True, text=True)
     assert p.returncode == 1 and "vus_per_block is 0: a block of no VU" in p.stdout, (p.stdout, p.stderr)
+
+
+@pytest.mark.slow
+def test_a_block_of_three_vus_is_refused(store, tmp_path):
+    """`vus_per_block = 3` is refused as the circuit is read, though a tail returns the outputs (PROTOCOL.md §16.10, D9;
+    the Rust side is `circuit.rs`'s `a_block_of_three_vus_is_refused`): the Digest region's VU bits, `Nat.log2 3 = 1` here
+    and `trailing_zeros(3) = 0` in Rust, would pin VUs 0 and 1 here, VU 0 there, and VU 2 in neither. The statement is flat
+    GEMM's composed for three VUs a block, as the red team staged it, with its public file of three instances."""
+    pytest.importorskip("verity_numerical")
+    from verity_numerical.bench import templates as TM
+    from verity_numerical.bench.generate import generate
+    from verity_numerical.bench.input_sets import InputSet
+
+    from verity_flock import circuit as FC
+    from verity_flock import ir_lower as IL
+
+    s = InputSet.open(generate(TM.parse_subcircuit_id("gemm-coordinate/k64/sm80-mma-bf16"), 3, 20260926, tmp_path)["path"])
+    low = FC.lowering_for_set(s)
+    text = FC.compose(low, s.subcircuit, vus_per_block=3, statics=FC.set_statics(s))
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    assert meta["vus_per_block"] == 3 and meta["out_net"] != "unit" and low.units.cut
+    (tmp_path / "circuit.txt").write_text(text)
+    IL.write_tables(tmp_path / "tables")
+    FC.write(text, s, 0, 3, tmp_path / "inst-3.bin", tmp_path / "pub-3.bin", salt_key=b"fail-closed/vus-per-block-3")
+    p = subprocess.run([str(BIN), "statement", "--statement", SETS["flat", "gemm-coordinate"], "--circuit",
+                        str(tmp_path / "circuit.txt"), "--public", str(tmp_path / "pub-3.bin"), "--tables",
+                        str(tmp_path / "tables")], capture_output=True, text=True)
+    assert p.returncode == 1 and "vus_per_block is not a power of two" in p.stdout, (p.stdout, p.stderr)
