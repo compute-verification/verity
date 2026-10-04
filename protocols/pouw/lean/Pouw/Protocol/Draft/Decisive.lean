@@ -1,7 +1,7 @@
 import Verity.Protocol.Game
 
 /-!
-# Decisive games (provisional; trusted)
+# Decisive games: decisiveness, not completeness (provisional; trusted)
 
 **Provisional.** Core-only definitions about `Verity.Game`, held here beside `BatchSeq` until they move to core's
 package. A game is decisive (`Decisive`) when every message type it asks for is inhabited (`Productive`), so that every
@@ -10,6 +10,11 @@ run rejects. A batch of decisive games reads as no other list of games (`Unambig
 `Pouw.Draft.Game.unambiguous_of_decisive`). Non-constancy is asked of the whole game only: a position from which every
 run rejects is allowed. A game with a constant verdict is not enough: its moves and the schedule's choices can be folded
 into another game of the batch.
+
+**Existential, so no completeness claim.** `Reaches` picks the messages and the coins. The accepting run of a decisive
+verdict game may need messages the honest prover never sends and coins that fall its way: C-Flock's all-zero run
+accepts every table, satisfiable or not. So decisiveness gives `Unambiguous` and nothing more. It says nothing about how
+often the honest prover, or any prover, is accepted; that is the reference prover's completeness, which stays open.
 -/
 
 namespace Pouw.Draft.Game
