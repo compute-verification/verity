@@ -16,6 +16,20 @@ without `--zk`, the circuit and public file as the headlines read them (`circ`, 
 (`Checks.tables`) and `Layout.scopeOk` (`Checks.scope`, by `scopeOk_eq`: the executable's `ProvedScope.scopeOk` is
 `Layout.scopeOk`, its port bits a mask). The unconditional headlines (`FailClosed.Composed`, `FailClosed.ZkHidden`,
 `FailClosed.Exec`) are over `Verifies`, with no hypothesis on the statement's form.
+
+`Checks` is `verifyCmd`'s call `ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome` argument for
+argument. `tags` is `Inputs.tags` without `--zk` and `zkTags` under it (`--statement`'s, after `withCoins`, then `Zk.tags`
+at `maskLogOf circuitB` and `count`, on the coin tree of `tableNames count`). The circuit, public file and tables are the
+bytes `verifyCmd` sets the session up from, and `count` is `--session-tables`. The flag is `false`: with
+`--public-inputs` the check refuses every session, and without it `buildSession` passes `setupTables` no public input
+words, the setup `Accepts` models. A session's verdict is `verifyCmd`'s `setupOf` at the record's `recordDraw` (the check
+requires `hm96Rows`): `setupTables`, under `--zk` `Zk.shapeOk` on every table, then the check, and then `verify` or
+`Zk.verify`. So a session `verifyCmd` accepts satisfies `Verifies` (under `--zk`, `VerifiesZK`). `verifyCmd` refuses
+more, which only shrinks the event: registered reads (`checkRegistered`: a header naming registered values without
+`--registered`; with it, `Registered.check` needs a shared-row public file, which the check refuses), a coin-tree key an
+earlier session of the run used, and a session file it cannot read. A later session of a run whose draw has an earlier
+one's canonical form is verified against that earlier setup; `canon` takes integers only, so the two draws hold the same
+content.
 -/
 
 namespace FlockSoundness.Discharge.FailClosed
