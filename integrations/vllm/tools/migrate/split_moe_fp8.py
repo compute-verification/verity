@@ -584,7 +584,7 @@ class _StmtEdit:
 def rewrite_file(path: Path, text: str, index: dict[tuple[str, str], str]) -> str:
     sources = {s for s, _ in index}
     names = {n for _, n in index}
-    if not any(n in text for n in names):
+    if not any(n in text for n in names) and "*" not in text:
         return text
     tree = ast.parse(text)
     mod = module_of(path)
