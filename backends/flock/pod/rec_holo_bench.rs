@@ -3,9 +3,11 @@
 //! - `mul`: F128 multiplications per second, one dependent chain per thread (latency) and over 2^24-element vectors (memory)
 //! - `gkr`: product_gkr::prove_batched (the wiring permutation argument) at 2^mu cells: prove/verify seconds, proof bytes
 //! - `sumcheck3`: a degree-3 sumcheck over 2^mu terms of v*e1*e2 (a sparse matrix evaluation's core), seconds
-//! - `lincheck`: upstream's lincheck prover at 2^m rows with blocks of 2^k_log rows (k_log = m: one block, no repetition),
+//! - `lincheck`: upstream's lincheck prover at 2^m rows with blocks of 2^k_log rows (at least 8 blocks: k_log ≤ m − 3),
 //!   LC_D random nonzeros per row in each of A_0 and B_0, seconds
-//! env: GKR_MUS="20 22 24" SC_MUS="20 22 24" LC_CASES="20:11 20:20" LC_D=15 RUNS=3
+//! - `comb`: the lincheck's circuit-dependent sum comb[c] = α·Σ e[i] over A's column c + Σ e[i] over B's, as a parallel
+//!   gather over a column-major list of CB_D random rows per column in each of A and B, at 2^k_log columns, seconds
+//! env: GKR_MUS="20 22 24" SC_MUS="20 22 24" LC_CASES="20:11 20:17" LC_D=15 CB_KLOGS="21 24" CB_D=15 RUNS=3
 use std::{env::var, fs::read_to_string, hint::black_box, time::Instant};
 
 use flock_core::{
@@ -137,6 +139,47 @@ fn main() {
             r#"{{"kind":"gkr","mu":{mu},"threads":{threads},"prove_s":{p:.6},"ns_per_cell":{:.3},"verify_s":{:.6},"proof_bytes":{bytes},"peak_rss_mb":{}}}"#,
             p * 1e9 / cells as f64,
             median(tv),
+            peak_rss_mb()
+        );
+    }
+
+    let cd: usize = var("CB_D").ok().and_then(|s| s.parse().ok()).unwrap_or(15);
+    for k_log in mus("CB_KLOGS", "21 24") {
+        let k = 1usize << k_log;
+        let idx = |salt: u64| -> Vec<u32> {
+            (0..k * cd)
+                .into_par_iter()
+                .map(|j| {
+                    let mut x = (j as u64 ^ salt).wrapping_add(0x9E37_79B9_7F4A_7C15);
+                    x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+                    x = (x ^ (x >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+                    ((x ^ (x >> 31)) as usize & (k - 1)) as u32
+                })
+                .collect()
+        };
+        let (ia, ib) = (idx(0xA), idx(0xB));
+        let e = rng.f128_vec(k);
+        let alpha = rng.f128();
+        let mut ts = Vec::new();
+        for run in 0..=runs {
+            let t = Instant::now();
+            let comb: Vec<F128> = (0..k)
+                .into_par_iter()
+                .map(|c| {
+                    let s = |v: &[u32]| v[c * cd..(c + 1) * cd].iter().fold(F128::ZERO, |acc, &i| acc + e[i as usize]);
+                    alpha * s(&ia[..]) + s(&ib[..])
+                })
+                .collect();
+            black_box(&comb);
+            if run > 0 {
+                ts.push(t.elapsed().as_secs_f64());
+            }
+        }
+        let s = median(ts);
+        println!(
+            r#"{{"kind":"comb","k_log":{k_log},"nnz_per_col":{},"threads":{threads},"s":{s:.6},"ns_per_nonzero":{:.3},"peak_rss_mb":{}}}"#,
+            2 * cd,
+            s * 1e9 / (2 * cd * k) as f64,
             peak_rss_mb()
         );
     }
