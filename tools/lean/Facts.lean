@@ -22,11 +22,14 @@ judgement; `audit.py` holds the policy.
 
 The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `audit.py` keeps them only to check records written
 before SHA-256. When `CONFIG` names a `canon` path, the pins' statements and the definitions they read are also written
-there, one JSON line each, as `canon` texts, and `audit.py` hashes those with SHA-256.
+there, one JSON line each, as `canon` texts, and `audit.py` hashes those with SHA-256. A pinned statement that is a
+definition under `meaning` applied under binders (`∀ xs, G as`) is also written with that definition unfolded once
+(`liftOf`), with the definition and its module, so that `audit.py` can certify a statement lifted into a `Guarantees`
+definition as the statement its record holds.
 
 With `moved` (pairs of a new name, a declaration or a namespace, and the old name it moved from), each of those texts is
 written once more with the names as they were before the move (the longest moved prefix renamed back), and a pinned
-statement that is a `Prop` definition under `meaning` also with that definition unfolded (`statementOf`), so that
+statement that is such a definition also with that definition unfolded (`liftOf`), so that
 `audit.py` can compare them with records made before the move. `moved_conflicts` lists each constant of those texts (or
 pin) whose old name would be another one's too: there the comparison would not tell the two apart. A constant that keeps
 its name stands for itself, and an old name that only a declaration outside the texts still has (an old theorem kept as a
@@ -159,15 +162,21 @@ partial def inlineAuxProofs (env : Environment) (e : Expr) : Expr :=
   let e' := e.replace fun x => (auxProof? env x.getAppFn).map (·.beta x.getAppArgs)
   if e' == e then e else inlineAuxProofs env e'
 
-/-- When a statement is a `Prop` definition declared under `meaning` (a theorem `t : G` that proves a named statement),
-that definition and its value, with the proofs the elaborator abstracted out of it put back, so that it reads as the
-same statement written as a theorem's type would. -/
-def statementOf (env : Environment) (meaning : Array Name) (t : Expr) : Option (Name × Expr) := do
-  let .const g us := t.consumeMData | none
-  let .defnInfo v ← env.find? g | none
-  let i ← env.getModuleIdxFor? g
-  guard (v.type.isProp && under meaning env.header.moduleNames[i.toNat]!)
-  return (g, inlineAuxProofs env (v.value.instantiateLevelParams v.levelParams us))
+/-- When a statement is a definition declared under `meaning` applied to arguments under binders, `∀ xs, G.{us} as` (a
+theorem `t (xs) : G as` that proves a named statement), that definition and the statement with it unfolded once: the
+binders `xs` as they are, and in place of `G.{us} as` the value of `G` at the levels `us` with its leading `fun`s
+instantiated by `as` (`Expr.beta`, as `Meta.unfoldDefinition?` unfolds an applied constant), with the proofs the
+elaborator abstracted out of that value put back, so that it reads as the same statement written as a theorem's type
+would. Nothing else is reduced. -/
+partial def liftOf (env : Environment) (meaning : Array Name) : Expr → Option (Name × Expr)
+  | .forallE n d b bi => (liftOf env meaning b).map fun (g, b') => (g, .forallE n d b' bi)
+  | .mdata _ e => liftOf env meaning e
+  | e => do
+    let .const g us := e.getAppFn | none
+    let .defnInfo v ← env.find? g | none
+    let i ← env.getModuleIdxFor? g
+    guard (us.length == v.levelParams.length && under meaning env.header.moduleNames[i.toNat]!)
+    return (g, inlineAuxProofs env ((v.value.instantiateLevelParams v.levelParams us).beta e.getAppArgs))
 
 /-- What a constant's axioms depend on (as `Lean.collectAxioms` walks it). -/
 def uses : ConstantInfo → Array Name
@@ -354,8 +363,12 @@ unsafe def main (args : List String) : IO UInt32 := do
     for p in pins do
       let some ci := env.find? p | continue
       h.putStrLn (Json.mkObj [("id", toJson s!"pin:{p}"), ("canon", toJson (canonText ci.type))]).compress
+      let head := liftOf env meaning ci.type
+      if let some (g, s) := head then
+        let m := (env.getModuleIdxFor? g).map fun i => env.header.moduleNames[i.toNat]!.toString
+        h.putStrLn (Json.mkObj [("id", toJson s!"lift:{p}"), ("head", toJson g.toString), ("module", toJson m),
+          ("canon", toJson (canonText s))]).compress
       if !back.isEmpty then
-        let head := statementOf env meaning ci.type
         named := (ci.type.getUsedConstants ++ ((head.map (·.2.getUsedConstants)).getD #[])).foldl (·.insert ·) (named.insert p)
         let unfolded := match head with
           | some (g, s) => [("head", toJson g.toString), ("unfolded", toJson (canonText s rn))]

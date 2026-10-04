@@ -160,8 +160,8 @@ def test_the_sha256_hash_is_expr_hash_s_equivalence(tmp_path):
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
-    """`Facts.lean`'s renaming and unfolding on a real build: a guarantee restated as a `Prop` definition (its old theorem kept as
-    the lemma that proves it), one whose statement holds a proof Lean abstracts out of a definition (`_proof_1`), and a
+    """`Facts.lean`'s renaming and unfolding on a real build: a guarantee lifted into a `Guarantees` definition (its old theorem
+    kept as the lemma that proves it), one whose statement holds a proof Lean abstracts out of a definition (`_proof_1`), and a
     guarantee renamed, all the same statement, a definition renamed with its content and one renamed with a new body; then a
     statement that reads a moved definition beside one that has its old name, which the audit refuses."""
     pkg = tmp_path / "control"
@@ -189,29 +189,100 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     moved = {"Control.a": "Control.SecurityProofs.a", "Control.b": "Control.SecurityProofs.b",
              "Control.c": "Control.SecurityProofs.c", "Control.f": "Control.Protocol.f", "Control.g": "Control.Protocol.g"}
     after = ("def Control.Protocol.f (n : Nat) : Nat := n + 0\ndef Control.Protocol.g (n : Nat) : Nat := 0 + n\n"
-             "def Control.Guarantees.A : Prop := ∀ n, Control.Protocol.f n = n\n"
              "theorem Control.a (n : Nat) : Control.Protocol.f n = n := rfl\n"
-             "theorem Control.SecurityProofs.a : Control.Guarantees.A := Control.a\n"
              "theorem Control.SecurityProofs.b (n : Nat) : Control.Protocol.g n = n := Nat.zero_add n\n"
-             f"def Control.Guarantees.C : Prop := ∀ n : Nat, {fin}\ntheorem Control.c (n : Nat) : {fin} := rfl\n"
-             "theorem Control.SecurityProofs.c : Control.Guarantees.C := Control.c\n")
+             f"theorem Control.c (n : Nat) : {fin} := rfl\n")
+    spec = pkg / "Control" / "Guarantees.lean"
+    stated = ("import Control.Moves\ndef Control.Guarantees.A : Prop := ∀ n, Control.Protocol.f n = n\n"
+              f"def Control.Guarantees.C : Prop := ∀ n : Nat, {fin}\n")
     moves.write_text(after)
+    spec.write_text(stated)
+    (pkg / "Control" / "Lifted.lean").write_text(
+        "import Control.Guarantees\ntheorem Control.SecurityProofs.a : Control.Guarantees.A := Control.a\n"
+        "theorem Control.SecurityProofs.c : Control.Guarantees.C := Control.c\n")
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Lifted\n")
     build()
     rep = audit(moved=moved)
     assert rep["failures"] == []
     assert rep["before"] == {k: json.loads(before)[k] for k in ("guarantees", "reads")} and rep["guarantees"] == A.load(pkg)["guarantees"]
     must = A.statement_changes(rep["review"])
     assert set(rep["review"]) - set(must) == {
-        f"guarantee Control.SecurityProofs.a: moved from Control.a, restated as Control.Guarantees.A: {A.MOVED}",
-        f"guarantee Control.SecurityProofs.c: moved from Control.c, restated as Control.Guarantees.C: {A.MOVED}",
+        f"guarantee Control.SecurityProofs.a: moved from Control.a, lifted into Control.Guarantees.A: {A.MOVED}",
+        f"guarantee Control.SecurityProofs.c: moved from Control.c, lifted into Control.Guarantees.C: {A.MOVED}",
         f"guarantee Control.SecurityProofs.b: moved from Control.b: {A.MOVED}", f"reads: 1 {A.MOVED_READS}"}
     assert must[0] == ("definition Control.Protocol.g (Control.Moves), was Control.g (Control.Moves), read by "
                        "Control.SecurityProofs.b: changed") and must[-1] == "    def Control.Protocol.g (n : Nat) : Nat := 0 + n"
     (pkg / A.POLICY).write_text(before)
-    moves.write_text("def Control.f (n : Nat) : Nat := n\n" + after.replace("f n = n\n", "f n = Control.f n\n"))
+    moves.write_text("def Control.f (n : Nat) : Nat := n\n" + after)
+    spec.write_text(stated.replace("f n = n\n", "f n = Control.f n\n"))
     build()
     rep = audit(moved=moved)
     assert [f.split(":")[0] for f in rep["failures"]] == ["moved"] and "Control.Protocol.f would be Control.f" in rep["failures"][0]
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_lift_into_guarantees_is_certified_on_a_real_build(tmp_path):
+    """`Facts.lean`'s one-step unfolding on a real build, without `--moved`: lifts with no binders, with binders whose argument
+    the definition's own binder must shift (`Q`), universe-polymorphic (`R`), and with a named assumption kept as a binder
+    (`V`) are each the same statement; a definition that differs (`S`, `n * 2` for `n + n`), one that takes the named
+    assumption in (`T`) and one outside a `Guarantees` module (`Spec.W`) are changes of meaning; the guarantee nobody
+    lifted keeps its record byte for byte."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Lifts\n")
+    lifts = pkg / "Control" / "Lifts.lean"
+    lifts.write_text(
+        "import Control.Assumptions\nimport Control.Defs\nnamespace Control\n"
+        "theorem p : ∀ n : Nat, double n = n + n := by intro n; unfold double; omega\n"
+        "theorem q (n : Nat) : ∀ m : Nat, double n + m = m + double n := fun _ => Nat.add_comm _ _\n"
+        "theorem r.{u} (α : Sort u) (a : α) : a = a := rfl\n"
+        "theorem s (n : Nat) : double n = n + n := by unfold double; omega\n"
+        "theorem t (h : Hyp) (n : Nat) : double n = n + n := by unfold double; omega\n"
+        "theorem v (h : Hyp) (n : Nat) : double n = n + n := by unfold double; omega\n"
+        "theorem w (n : Nat) : double n = n + n := by unfold double; omega\n"
+        "end Control\n")
+    A.dump(pkg, A.load(pkg) | {"guarantees": {f"Control.{n}": {} for n in ("main_thm", *"pqrstvw")}})
+    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    audit = lambda: A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None)
+    build()
+    assert audit()["failures"] == []
+    before = A.load(pkg)
+    (pkg / "Control" / "Guarantees.lean").write_text(
+        "import Control.Assumptions\nimport Control.Defs\nnamespace Control.Guarantees\nopen Control\nuniverse u\n"
+        "def P : Prop := ∀ n : Nat, double n = n + n\n"
+        "def Q (n : Nat) : Prop := ∀ m : Nat, double n + m = m + double n\n"
+        "def R (α : Sort u) (a : α) : Prop := a = a\n"
+        "def S (n : Nat) : Prop := double n = n * 2\n"
+        "def T : Prop := Hyp → ∀ n : Nat, double n = n + n\n"
+        "def V (n : Nat) : Prop := double n = n + n\n"
+        "end Control.Guarantees\n")
+    (pkg / "Control" / "Spec.lean").write_text(
+        "import Control.Defs\nnamespace Control.Spec\ndef W (n : Nat) : Prop := Control.double n = n + n\nend Control.Spec\n")
+    lifts.write_text(
+        "import Control.Guarantees\nimport Control.Spec\nnamespace Control\n"
+        "theorem p : Guarantees.P := by intro n; unfold double; omega\n"
+        "theorem q (n : Nat) : Guarantees.Q n := fun _ => Nat.add_comm _ _\n"
+        "theorem r.{u} (α : Sort u) (a : α) : Guarantees.R α a := rfl\n"
+        "theorem s (n : Nat) : Guarantees.S n := by unfold Guarantees.S double; omega\n"
+        "theorem t : Guarantees.T := by intro _ n; unfold double; omega\n"
+        "theorem v (h : Hyp) (n : Nat) : Guarantees.V n := by unfold Guarantees.V double; omega\n"
+        "theorem w (n : Nat) : Spec.W n := by unfold Spec.W double; omega\n"
+        "end Control\n")
+    build()
+    rep = audit()
+    assert rep["failures"] == []
+    after = A.load(pkg)
+    assert after["guarantees"]["Control.main_thm"] == before["guarantees"]["Control.main_thm"]
+    assert after["guarantees"]["Control.q"]["signature"] == ["Control.q (n : Nat) : Control.Guarantees.Q n"]
+    must = A.statement_changes(rep["review"])
+    assert set(rep["review"]) - set(must) == {f"guarantee Control.{n}: lifted into Control.Guarantees.{n.upper()}: {A.LIFTED}"
+                                              for n in "pqrv"}
+    assert [line for line in must if line.startswith(("guarantee", "definition"))] == [
+        "guarantee Control.s: changed", "guarantee Control.t: changed", "guarantee Control.w: changed",
+        "definition Control.Guarantees.S (Control.Guarantees), read by Control.s: new",
+        "definition Control.Guarantees.T (Control.Guarantees), read by Control.t: new",
+        "definition Control.Spec.W (Control.Spec), read by Control.w: new"]
+    assert "  named assumptions: Control.Hyp -> none" in must
 
 
 def test_generated_constants_belong_to_their_declaration():
@@ -242,19 +313,18 @@ def moved_fact(name="Q.t", was="P.t", h="00000000000000cc", as_was="000000000000
               extra=()):
     """A guarantee ``was`` renamed to ``name``, reading `P.f` renamed to `Q.f` (in `Q.Defs`), as `Facts.lean` reports it after
     `--moved`: its statement's text under the old names hashes like ``as_was``, `Q.f`'s like ``f_was``; with ``head``,
-    its type is that `Prop` definition, whose value under the old names hashes like ``as_was``."""
+    its type is that definition applied to `n`, which unfolded under the old names hashes like ``as_was``."""
     reads = [{"name": "Q.f", "module": "Q.Defs", "kind": "def", "hash": f, "moved": {"as": "P.f", "sha256": sha(f_was)}},
              {"name": "Q.f.match_1", "module": "Q.Defs", "kind": "def", "hash": "2" * 32,
               "moved": {"as": "P.f.match_1", "sha256": sha("2" * 32)}},
              {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32,
               "moved": {"as": "P.Hyp", "sha256": sha("3" * 32)}}, *extra]
-    signature = f"{name} : {head}" if head else f"{name} (h : P.Hyp) (n : Nat) : Q.f n = n"
-    p = fact(signature=signature, h=h, reads=[{k: v for k, v in r.items() if k != "moved"} for r in reads],
-            hyps=[] if head else None)
+    signature = f"{name} (h : P.Hyp) (n : Nat) : {head + ' n' if head else 'Q.f n = n'}"
+    p = fact(signature=signature, h=h, reads=[{k: v for k, v in r.items() if k != "moved"} for r in reads])
     for r, m in zip(p["reads"], reads):
         r["moved"] = m["moved"]
     p["moved"] = {"as": was, "sha256": sha(head or as_was)} | ({"head": head, "unfolded_sha256": sha(as_was)} if head else {})
-    return p
+    return p | ({"lift": {"head": head, "module": "Q.Guarantees", "unfolded_sha256": sha(head)}} if head else {})
 
 
 def test_a_definition_read_in_another_module_is_the_same_definition():
@@ -287,18 +357,56 @@ def test_a_moved_guarantee_and_its_definitions_are_compared_with_their_old_recor
     assert text[:2] == ["guarantee Q.t: changed (moved from P.t)", "  before:"] and A.statement_changes(text) == text[:-1]
 
 
-def test_a_statement_restated_as_a_prop_definition_is_the_same_statement():
+def test_a_moved_statement_lifted_into_a_guarantees_definition_is_the_same_statement():
     old = recorded()
     current = {**POLICY, "guarantees": {"Q.t": old["guarantees"]["P.t"]}}
     head = {"name": "Q.T", "module": "Q.Guarantees", "kind": "def", "hash": "5" * 32, "moved": {"as": "Q.T", "sha256": sha("5" * 32)}}
     now = facts(pins={"Q.t": moved_fact(head="Q.T", extra=[head])})
     new = A.judge(current, now, FILES, update=True)[1]
-    assert new["guarantees"]["Q.t"]["signature"] == ["Q.t : Q.T"] and "Q.Guarantees" in new["reads"]
+    assert new["guarantees"]["Q.t"]["signature"] == ["Q.t (h : P.Hyp) (n : Nat) : Q.T n"] and "Q.Guarantees" in new["reads"]
     text = A.review(old, new, now, {})
-    assert text == [f"guarantee Q.t: moved from P.t, restated as Q.T: {A.MOVED}", f"reads: 1 {A.MOVED_READS}"]
+    assert text == [f"guarantee Q.t: moved from P.t, lifted into Q.T: {A.MOVED}", f"reads: 1 {A.MOVED_READS}"]
     now = facts(pins={"Q.t": moved_fact(head="Q.T", extra=[head], as_was="00000000000000bb")})
     text = A.review(old, A.judge(current, now, FILES, update=True)[1], now, {})
     assert text[0] == "guarantee Q.t: changed (moved from P.t)" and "definition Q.T (Q.Guarantees), read by Q.t: new" in text
+
+
+def lifted_fact(unfolded="00000000000000aa", module="P.Guarantees", hyps=None, name="P.t"):
+    """`P.t` lifted into `P.T` (in ``module``): `theorem P.t (h : P.Hyp) (n : Nat) : P.T n`, whose type with `P.T` unfolded
+    once hashes like ``unfolded``, as `Facts.lean` reports it without `--moved`."""
+    head = {"name": "P.T", "module": module, "kind": "def", "hash": "5" * 32}
+    p = fact(signature=f"{name} (h : P.Hyp) (n : Nat) : P.T n", h="00000000000000bb", reads=fact()["reads"] + [head], hyps=hyps)
+    p["reads"][0] |= {"lines": None}
+    return p | {"lift": {"head": "P.T", "module": module, "unfolded_sha256": sha(unfolded)}}
+
+
+def test_a_guarantee_lifted_into_a_guarantees_definition_is_the_same_statement():
+    old = recorded()
+    now = facts(pins={"P.t": lifted_fact()})
+    new = A.judge(old, now, FILES, update=True)[1]
+    assert new["guarantees"]["P.t"]["type_hash"] == sha("00000000000000bb") and "P.Guarantees" in new["reads"]
+    text = A.review(old, new, now, {})
+    assert text == [f"guarantee P.t: lifted into P.T: {A.LIFTED}"] and A.statement_changes(text) == []
+    assert A.lifted_into(old["guarantees"]["P.t"], new["guarantees"]["P.t"], now["pins"]["P.t"], {}) == "P.T"
+
+
+def test_a_lift_the_audit_cannot_certify_is_a_change_of_meaning():
+    """The unfolded definition says something else, it is not in a `Guarantees` module, or the lift took a named assumption
+    into the definition; and a lift's definition that another, changed guarantee also reads is shown in full."""
+    old = recorded()
+    for now in (facts(pins={"P.t": lifted_fact(unfolded="00000000000000cc")}),
+                facts(pins={"P.t": lifted_fact(module="P.Defs")}), facts(pins={"P.t": lifted_fact(hyps=[])})):
+        text = A.review(old, A.judge(old, now, FILES, update=True)[1], now, {})
+        assert text[:2] == ["guarantee P.t: changed", "  before:"] and A.statement_changes(text) == text
+        module = now["pins"]["P.t"]["lift"]["module"]
+        assert f"definition P.T ({module}), read by P.t: new" in text
+    assert "  named assumptions: P.Hyp -> none" in text
+    two = facts(pins={"P.t": fact(), "P.u": fact(signature="P.u : True", h="00000000000000dd")})
+    old = A.judge(POLICY | {"guarantees": {"P.t": {}, "P.u": {}}}, two, FILES, update=True)[1]
+    now = facts(pins={"P.t": lifted_fact(), "P.u": lifted_fact(name="P.u", unfolded="00000000000000ee")})
+    text = A.review(old, A.judge(old, now, FILES, update=True)[1], now, {})
+    assert text[0] == f"guarantee P.t: lifted into P.T: {A.LIFTED}" and text[1] == "guarantee P.u: changed"
+    assert "definition P.T (P.Guarantees), read by P.t, P.u: new" in text
 
 
 def test_a_map_that_cannot_tell_declarations_apart_compares_nothing_under_the_old_names():
