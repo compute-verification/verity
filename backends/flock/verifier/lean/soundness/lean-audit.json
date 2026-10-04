@@ -11032,6 +11032,7 @@
    "assumptions": [],
    "type_hash": "32b716e044d668aed03d6af9094f271fea7308a590aa9dcd9c877f40252d2572"
   },
+  "FlockSoundness.Discharge.ZkEveryCoin.zk_session_view_all": {},
   "FlockSoundness.Discharge.ZkExec.acceptsZK_one": {
    "signature": ["FlockSoundness.Discharge.ZkExec.acceptsZK_one : FlockSoundness.Discharge.ZkExec.AcceptsZKOne"],
    "assumptions": [],
