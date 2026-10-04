@@ -143,6 +143,16 @@ def test_a_branch_adding_a_file_under_a_moved_directory(repo, tmp_path):
     assert not any(p.startswith("app/") for p in paths(r2, r["result"]))
 
 
+def test_an_edit_beside_a_rewritten_import_is_not_a_conflict(repo):
+    """The script rewrites `import app.util`; the branch edits the line above it. Against the tree before the move both sides
+    change that region, differently; against the move commit only the branch does."""
+    on(repo, "pr", ("edit beside", {"app/main.py": edit(MAIN, "from app.util import f1\n", "from app.util import f1, f2\n")}))
+    r = RS.restack("pr", "move", cwd=str(repo))
+    assert r["status"] == "clean", r
+    assert show(repo, r["result"], "app/main.py").startswith("from app.core.util import f1, f2\nimport app.core.util\n")
+    assert r["plain"] == {"status": "conflicted", "files": ["app/main.py"]}
+
+
 def test_a_real_content_conflict_after_the_move(repo, monkeypatch, capsys):
     on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 3", "return 30")}))
     moved = RS.rev("move", str(repo))

@@ -11,8 +11,10 @@ same script rather than by rename detection:
 2. check that merge out in a scratch worktree, run B's `tools/move/layout.py` at its root, and commit what it changed. Files
    the branch added are moved and rewritten too, which rename detection can't do. Where the branch edited `tools/move/`
    itself, B's copy runs and the branch's is put back before the commit.
-3. merge `--onto` (default M; the moved main once M has landed, which must contain M). After step 2 both sides agree on every
-   path and import, so what conflicts here is real content.
+3. merge `--onto` (default M; the moved main once M has landed, which must contain M), with M as the merge base. M is the
+   script run on B, so against it the branch's side holds only the branch's own changes, in moved paths and names, and the
+   other side only what landed after the move: what conflicts here is real content. (Against B instead, a line the script
+   rewrote next to one the branch edited would conflict.)
 
 A branch that already contains M skips to step 3. The branch, its ref and the caller's checkout are never changed: the
 commits go to the object store, and the scratch worktree is removed. Each branch's outcome is `clean` (with the result's
@@ -58,9 +60,10 @@ def contains(ancestor: str, descendant: str, cwd: str | None) -> bool:
     return git("merge-base", "--is-ancestor", ancestor, descendant, cwd=cwd, ok=(0, 1)).returncode == 0
 
 
-def merge_trees(ours: str, theirs: str, cwd: str | None) -> tuple[str, list[str]]:
+def merge_trees(ours: str, theirs: str, cwd: str | None, base: str | None = None) -> tuple[str, list[str]]:
     """`git merge-tree` (ort, with rename detection): (tree, conflicted paths)."""
-    p = git("merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", ours, theirs, cwd=cwd, ok=(0, 1))
+    pin = [f"--merge-base={base}"] if base else []
+    p = git("merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", *pin, ours, theirs, cwd=cwd, ok=(0, 1))
     fields = [s.decode() for s in p.stdout.split(b"\0") if s]
     return fields[0], sorted(set(fields[1:])) if p.returncode else []
 
@@ -137,7 +140,7 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
 
     if contains(onto, head, cwd):
         return {**r, "status": "up-to-date", "result": head}
-    tip = head
+    tip, ran = head, False
     if not contains(move, head, cwd):
         if not contains(base, head, cwd):
             tree, conflicts = merge_trees(head, base, cwd)
@@ -149,6 +152,7 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
             tree, restored = run_script(tip, base, python, cwd)
         except ScriptFailed as e:
             return {**r, "status": "script-failed", "step": "script", "error": str(e)}
+        ran = True
         if tree != tree_of(tip, cwd):
             msg = (f"restack: rerun {SCRIPT} from {move[:12]} on {branch}\n\n"
                    f"The layout move's codemod, run at the root of this tree as {move[:12]} was made from {base[:12]}.\n\n"
@@ -157,7 +161,7 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
             r["steps"].append({"step": "script", "commit": tip, "restored": restored})
     if contains(onto, tip, cwd):
         return {**r, "status": "clean", "result": tip}
-    tree, conflicts = merge_trees(tip, onto, cwd)
+    tree, conflicts = merge_trees(tip, onto, cwd, base=move if ran else None)
     if conflicts:
         return {**r, "status": "conflicted", "step": "moved", "files": conflicts}
     result = commit_tree(tree, [tip, onto], f"Merge {onto[:12]} (the layout move) into {branch}, restacked\n", cwd)
