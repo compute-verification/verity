@@ -63,7 +63,8 @@ class Onsite:
         return [self.integrity.replayer()]
 
     def pinger(self, fleet: Mapping[str, int], work_window: Window, space_seconds: float) -> list[Actor]:
-        """Its readings: the devices it counted, and its clock's for the work's window and space's answer."""
+        """Its readings: the most devices it counted at any time in the work's window, and its clock's for that window
+        and for space's answer."""
         return [inventory(fleet), self.work.clock(work_window), self.space.pinger(space_seconds)]
 
     def warden(self, bytes_out: int, timing_bits: int) -> list[Actor]:

@@ -1,6 +1,7 @@
 """Network coverage: what left the site, as the warden on its links saw it, against what the stream explains: the
 output bits of its executions, which leave as responses, where integrity says they are what the circuits computed. The
-headroom is everything else that left, plus what the timing and the side channels could carry.
+headroom is everything else that left, plus what the timing and the side channels could carry. Every output counts as
+a response, so outputs that stay as state (a KV cache) explain as many bits of anything else.
 
     warden      on every link out of the site: reports the bytes that left over the epoch, and the bits their timing
                 could carry (its readings)
