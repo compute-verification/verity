@@ -187,15 +187,19 @@ def host_summary(hosts: list[dict]) -> dict:
         for p in h.get("points", []):
             rates[(p["gen"], p["procs"], p["phase"], h["host_bytes"])].append(p["gbps"])
         out.setdefault("host_bytes", []).append(h.get("host_bytes"))
-        out["mem_total_bytes"] = h["meta"].get("mem_total_bytes")
+        if h["meta"].get("mem_total_bytes"):
+            out["mem_total_bytes"] = h["meta"]["mem_total_bytes"]
         out["affinity"] = h["meta"].get("affinity")
         out["errors"] += h.get("errors", [])
         for spec, r in h.get("soak", {}).items():
             ms = [s * 1e3 for s in r["seconds"]]
             d = dist(ms)
-            out["soak"].append({"spec": spec, "gen": r["gen"], "procs": r["procs"], "bytes": r["bytes"], "pass_ms": d,
-                                "gbps_p50": gbps(r["bytes"], d.get("p50")), "gbps_p999": gbps(r["bytes"], d.get("p999")),
-                                "gbps_min": gbps(r["bytes"], d.get("max"))})
+            pr = [p for _, p in r.get("pressure", [])]
+            out["soak"].append({"spec": spec, "run": h["_run"], "gen": r["gen"], "procs": r["procs"], "bytes": r["bytes"],
+                                "pass_ms": d, "gbps_p50": gbps(r["bytes"], d.get("p50")),
+                                "gbps_p999": gbps(r["bytes"], d.get("p999")), "gbps_min": gbps(r["bytes"], d.get("max")),
+                                "load1_median": float(np.median([p["load1"] for p in pr])) if pr else None,
+                                "cpu_psi_median": float(np.median([p["cpu"] for p in pr])) if pr else None})
         if "d2h" in h:
             d = h["d2h"]
             ms = [x["seconds"] * 1e3 for x in d["reps"]]
@@ -296,18 +300,22 @@ def to_markdown(a: dict) -> str:
                      f"{r['gbps_median']:.1f} | "
                      f"{r['gbps_min']:.1f} | {r['gbps_max']:.1f} |")
     if host.get("soak"):
-        L.append("\n| repeated passes | bytes | n | p50 ms | p99 ms | p99.9 ms | max ms | GB/s p50 | GB/s at p99.9 |")
-        L.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+        L.append("\n| repeated passes (gen:procs:reps) | run | node load1 / CPU PSI % (median) | bytes | n | p50 ms | "
+                 "p99 ms | p99.9 ms | max ms | GB/s p50 | GB/s at p99.9 |")
+        L.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
         for r in host["soak"]:
             d = r["pass_ms"]
             if d.get("n"):
-                L.append(f"| {r['spec']} | {r['bytes'] / GIB:.0f} GiB | {d['n']} | {d['p50']:.1f} | {d['p99']:.1f} | "
-                         f"{d['p999']:.1f} | {d['max']:.1f} | {r['gbps_p50']:.1f} | {r['gbps_p999']:.1f} |")
+                load = (f"{r['load1_median']:.0f} / {r['cpu_psi_median']:.0f}" if r.get("load1_median") is not None
+                        else "")
+                L.append(f"| {r['spec']} | {r['run']} | {load} | {r['bytes'] / GIB:.0f} GiB | {d['n']} | "
+                         f"{d['p50']:.1f} | {d['p99']:.1f} | {d['p999']:.1f} | {d['max']:.1f} | {r['gbps_p50']:.1f} | "
+                         f"{r['gbps_p999']:.1f} |")
         for name in ("d2h", "uva_digest"):
             for r in host.get(name, []):
                 d = r.get("pass_ms", {})
                 if d.get("n"):
-                    L.append(f"| {name} (1 GPU, PCIe) | {r['bytes'] / GIB:.0f} GiB | {d['n']} | {d['p50']:.1f} | "
+                    L.append(f"| {name} (1 GPU, PCIe) | | | {r['bytes'] / GIB:.0f} GiB | {d['n']} | {d['p50']:.1f} | "
                              f"{d['p99']:.1f} | {d['p999']:.1f} | {d['max']:.1f} | {r['gbps_p50']:.1f} | "
                              f"{gbps(r['bytes'], d['p999']):.1f} |")
     if host.get("errors"):
@@ -324,18 +332,34 @@ def _cpus(aff) -> str:
     return f"{min(aff)}-{max(aff)} ({len(aff)})"
 
 
-def host_line(host: dict) -> str | None:
-    best = [r for r in host.get("soak", []) if r["pass_ms"].get("n")]
-    if not best or not host.get("mem_total_bytes"):
+def host_deadline(r: dict, m: int, margin: float, max_guard: float) -> float:
+    """The same rule as the HBM deadline, over one spec's repeated passes, scaled from the pass buffer to `m` bytes (s)."""
+    d = r["pass_ms"]
+    return math.ceil(m / r["bytes"] * max(d["p999"] * (1 + margin), d["max"] * (1 + max_guard)) / 100) / 10
+
+
+def host_line(host: dict, margin: float, max_guard: float) -> str | None:
+    """T_host from the keyed fill whose p99.9 rate is best (a memset is not keyed and only shows the write ceiling), and
+    the same rule on the slowest keyed spec, the heaviest co-tenant load measured."""
+    keyed = [r for r in host.get("soak", []) if r["pass_ms"].get("n", 0) >= 100 and r["gen"] != "memset"]
+    if not keyed or not host.get("mem_total_bytes"):
         return None
     m = host["mem_total_bytes"]
-    parts = []
-    for r in best:
-        t = m / (r["gbps_p999"] * 1e9)
-        parts.append(f"{r['gen']} x{r['procs']} at its p99.9 rate {r['gbps_p999']:.1f} GB/s fills M_host = "
-                     f"{m / GIB:.0f} GiB in {t:.1f} s")
-    return "; ".join(parts) + (" (measured on cores " + _cpus(host.get("affinity")) + " of NUMA node 0 only; a "
-                               "prover using every core of both sockets is faster, so these bound T_host from above)")
+    best, worst = max(keyed, key=lambda r: r["gbps_p999"]), min(keyed, key=lambda r: r["gbps_p999"])
+
+    def say(r):
+        t, d, k = host_deadline(r, m, margin, max_guard), r["pass_ms"], m / r["bytes"] / 1e3
+        return (f"{m / 1e9:.0f} GB ({m / GIB:.0f} GiB) / {m / 1e9 / t:.1f} GB/s = {t:.1f} s ({r['gen']} on "
+                f"{r['procs']} processes, {d['n']} passes of {r['bytes'] / GIB:.0f} GiB"
+                + (f" at node load1 {r['load1_median']:.0f}" if r.get("load1_median") is not None else "") + ": "
+                f"p50 {r['gbps_p50']:.1f} GB/s; p99.9 {r['gbps_p999']:.1f} GB/s, +{t / (k * d['p999']) - 1:.0%}; "
+                f"slowest pass {gbps(r['bytes'], d['max']):.1f} GB/s, +{t / (k * d['max']) - 1:.0%})")
+
+    line = f"T_host = M_host / BW = {say(best)}"
+    if worst is not best:
+        line += f"; under the heaviest load measured, {say(worst)}"
+    return line + (f". Measured on cores {_cpus(host.get('affinity'))} of NUMA node 0 only: a prover using every core "
+                   "of both sockets fills faster, so these bound the honest T_host from above.")
 
 
 def main():
@@ -369,7 +393,7 @@ def main():
                   "that rate" if rec.get("T_full_device_ms") else "") + ")")
     soak.pop("_wall", None)
     a = {"schema": "verity/erase-calib/v0", "params": {"margin": args.margin, "max_guard": args.max_guard},
-         "one_line": one, "host_line": host_line(host), "recommendation": rec, "counts": counts, "soak": soak,
+         "one_line": one, "host_line": host_line(host, args.margin, args.max_guard), "recommendation": rec, "counts": counts, "soak": soak,
          "probe": probe_summary(docs["probe"]), "sweep": sweep_rows, "host": host}
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
