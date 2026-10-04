@@ -182,6 +182,7 @@ from verity_vllm.program.registry import b1_tp2 as TP2
 from verity_vllm.program.registry import pad_prims as PP
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import sampling as _sampling  # [R15 stoch]
+from verity_vllm.program import sampling_vocab
 from verity_vllm.program.registry import topp_words as _topp_words  # the keep word as word gates at a constant S
 from verity_vllm.program.registry.quarantine.ln import layer_norm_aten as _LN
 
@@ -375,8 +376,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # exact to vLLM d9105ea80 `_temperature_kernel` -> `_apply_topp_split` (S splits) -> `_gumbel_sample_kernel` + argmax; the seed, pos,
            # temperature, top_p and [R16, coord M-0169] the split count S (= SplitsFor_v1(|live|, num_SMs), a derived value of the workload the
            # request Program reads from its `splits` Input) are OPERANDS).  `rules/vllm_sampling.py` asks for it.  Greedy rows keep `token_select`.
-           # `CONSTRUCTION` = the target's `sampler_construction` (`registry.sampling.select_for`; the role and its note stay as they were)
-           "token_select_stochastic": lambda V, CONSTRUCTION: ir_bind(_sampling.select_for(_sampling.GumbelTopPTokenSelect, CONSTRUCTION), V=V),
+           # `CONSTRUCTION` = the target's `sampler_construction` (`sampling_vocab.select_for`; the role and its note stay as they were)
+           "token_select_stochastic": lambda V, CONSTRUCTION: ir_bind(sampling_vocab.select_for(_sampling.GumbelTopPTokenSelect, CONSTRUCTION), V=V),
            # the same select at a constant split count S (a single-request workload): its top-p keep word as word gates
            # (registry.topp_words, `GumbelTopPTokenSelect_v2{V,S}`, the same six operands), so a partition query cuts it
            "token_select_stochastic_split": lambda V, S: ir_bind(_topp_words.GumbelTopPTokenSelectV2, V=V, S=S),

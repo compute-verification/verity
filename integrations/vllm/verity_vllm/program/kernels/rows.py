@@ -90,7 +90,7 @@ EVALUATORS = {
     # logits row + the Program's Const32 top_p / temperature + the committed runner.sampler/seed and /splits words of the (step, request)
     "GumbelTopPTokenSelect_v1": "verity_vllm.program.registry.sampling.GumbelTopPTokenSelect{V} via verity.evaluation.evaluate (TemperatureScale -> "
                                 "TopPMask_v1 (S = the committed `splits` operand) -> GumbelSelectF32 on the committed seed + Const64 pos)",
-    "GumbelTopPTokenSelectSharedGreedy_v1": "GumbelTopPTokenSelect_v1's row (the same function, registry.sampling.SHARED_GREEDY; "
+    "GumbelTopPTokenSelectSharedGreedy_v1": "GumbelTopPTokenSelect_v1's row (the same function, sampling_vocab.SHARED_GREEDY; "
                                             "TargetProfile.sampler_construction = shared-greedy)",
     "GumbelTopPTokenSelect_v2": "GumbelTopPTokenSelect_v1's row at the split count S (registry.topp_words, a single-request Program's select): "
                                 "`splits` = S as v1 reads it, any other value as an unlaunched count, where v1 keeps no lane either",

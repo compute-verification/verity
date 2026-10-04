@@ -144,7 +144,7 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
     allowed to follow the inflated batch), a top-p select on a step the state schedules nobody at is named, a scheduled sampling step
     without a top-p select is named, and a step whose state is unestablished fails closed.  The live->S transitions are reported with
     their causes (`transitions`).  Without `scheduled` the check reads the observed logits rows as before (R16 form)."""
-    from verity_vllm.program.registry.sampling import SHARED_GREEDY
+    from verity_vllm.program.sampling_vocab import SHARED_GREEDY
     from verity_vllm.program.registry.topp_split import splits_for
     from verity_vllm.program.sampling_event import family_of
     topp = (_TOPP_FAMILY, SHARED_GREEDY[_TOPP_FAMILY].id)   # either `sampler_construction`

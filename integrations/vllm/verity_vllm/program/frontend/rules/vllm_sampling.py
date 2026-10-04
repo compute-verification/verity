@@ -44,7 +44,7 @@ def f32_bits(x: float) -> int:
 class GumbelTopPTokenSelectRule(OpRule):
     """`vllm_iface.gumbel_topp_token_select(logits bf16 [.., V], seed int64 [1], temperature: float, top_p: float, pos: int, splits int32 [1])`
     -> per row `GumbelTopPTokenSelect_v1{V}(row, Const32[top_p], seed[0], Const64[pos], Const32[temperature], splits[0])` (its
-    `registry.sampling.SHARED_GREEDY` entry under the target's `sampler_construction = shared-greedy`), an I32 token id per row (the op's
+    `sampling_vocab.SHARED_GREEDY` entry under the target's `sampler_construction = shared-greedy`), an I32 token id per row (the op's
     int32 result).  Refused: a temperature of 0 (that is the greedy `TokenSelect_v1`, not a stochastic select — do not
     relabel), a seed that is not a 64-bit 1-element value collection (the seed must be a Program input, never a literal), a non-static
     pos, a `splits` that is not a 32-bit 1-element value collection (S is the workload's derived value, read from the request's `splits`

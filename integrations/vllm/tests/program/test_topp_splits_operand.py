@@ -97,7 +97,7 @@ def test_the_operand_changes_the_result_where_the_geometry_matters():
 
 @pytest.mark.parametrize("bad", [0, 3, 5, 31, 33, 64, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF, 0xFFFFFFF0])
 def test_a_split_count_the_pipeline_never_launches_keeps_no_lane(bad):
-    from verity_vllm.program.registry import sampling_rows as SR
+    from verity_vllm.program.kernels import sampling_rows as SR
     V = 64
     x = _row(V)
     word = _eval(SM.topp_mask_word(V), [x.view(np.uint32), _u32(_bits(0.9)), _u32(bad)])[0]

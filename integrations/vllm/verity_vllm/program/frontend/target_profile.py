@@ -123,7 +123,7 @@ class TargetProfile:
     sampler_construction -> how the stochastic token select is constructed (a Program static, declared-and-bound, never attested).
                            `"greedy-check-per-stage"` binds `GumbelTokenSelect_v1` / `GumbelTopPTokenSelect_v1`, whose temperature scale
                            and Gumbel select each compute `temp == 0`; `"shared-greedy"` (the default when None) binds their
-                           `registry.sampling.SHARED_GREEDY` entry (the same function), which computes it once for both.  Omitted from
+                           `sampling_vocab.SHARED_GREEDY` entry (the same function), which computes it once for both.  Omitted from
                            `to_json()` when None.
     fp8_scale_construction -> how the blockwise FP8 GEMM's scale products `sx[kb] * sw[nb][kb]` are constructed (a Program static,
                            declared-and-bound, never attested).  `"shared-per-block"` (the default when None) binds

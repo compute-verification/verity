@@ -103,7 +103,7 @@ def _eval_job_rows(job: tuple) -> tuple[int, "np.ndarray", float]:
     """[R17 stoch, COORD R17-34 (3) lever (a)] the same Definition over the whole row at once: `sampling_rows.gumbel_topp_token_select_row`
     (numpy twins of the registered gates, held word-equal to `evaluate_spec` in tests/program/test_sampling_rows.py) -> the same
     (token, masked fp32 row, seconds) triple.  The words layout is `_eval_job`'s: [bf16 row, top_p, seed, pos, temp] (uint64 arrays)."""
-    from verity_vllm.program.registry import sampling_rows as SR
+    from verity_vllm.program.kernels import sampling_rows as SR
     V, S, words = job
     t1 = time.time()
     bf, p_w, seed_w, pos_w, t_w = words
@@ -117,7 +117,7 @@ def _eval_job_rows(job: tuple) -> tuple[int, "np.ndarray", float]:
 
 EVALUATORS = {"lane": _eval_job, "rows": _eval_job_rows}
 EVALUATOR_DOC = {"lane": "evaluate_spec: the registry interpreter walks GumbelTopPTokenSelect_v1{V,S} gate by gate over the V lanes",
-                 "rows": "sampling_rows: numpy twins of the same registered gates over the whole row at once (verity_vllm/program/registry/sampling_rows.py), "
+                 "rows": "sampling_rows: numpy twins of the same registered gates over the whole row at once (verity_vllm/program/kernels/sampling_rows.py), "
                          "held word-equal to the lane walk by tests/program/test_sampling_rows.py and by the reference rows of this run"}
 
 
@@ -724,7 +724,7 @@ class Options:
                                "shape, compared with the mask kernel's constexpr S at every checked row; needs --workload)")
     evaluator: str = option("--evaluator", env="STOCH_EVALUATOR", default="lane", choices=sorted(EVALUATORS),
                             help="'lane' = the registry interpreter over the V lanes (the path of record; default; env STOCH_EVALUATOR); 'rows' = the "
-                            "vectorised twins of the same gates (verity_vllm/program/registry/sampling_rows.py), milliseconds per row")
+                            "vectorised twins of the same gates (verity_vllm/program/kernels/sampling_rows.py), milliseconds per row")
     reference_rows: int = option("--reference-rows", type=int, env="STOCH_REFERENCE_ROWS", default=8,
                                  help="under --evaluator rows: this many value-checked rows ALSO go through the lane walk; token + masked row must agree "
                                  "word for word or the verdict is FAIL by name (default 8; env STOCH_REFERENCE_ROWS)")

@@ -1,4 +1,4 @@
-"""`verity_vllm.program.registry.sampling_rows` — the vectorised twins of the sampler Definition are WORD-EQUAL to the registered scalar
+"""`verity_vllm.program.kernels.sampling_rows` — the vectorised twins of the sampler Definition are WORD-EQUAL to the registered scalar
 evaluators and to the lane-walk `evaluate_spec(GumbelTopPTokenSelect_v1)`; on the R16 GPU fixture rows both equal the device's
 served token and the device kernel's masked row.  [R17 stoch, COORD R17-34 (3) lever (a)]  CPU only; the `div.full` model
 (TemperatureScale) needs the in-tree MUFU tables (`rms_relation.tables`) -- those tests skip without them, the noise / log / select tests do not.
@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.program.registry import sampling as SP
-from verity_vllm.program.registry import sampling_rows as SR
+from verity_vllm.program.kernels import sampling_rows as SR
 
 HERE = os.path.dirname(__file__)
 FIX = os.path.join(HERE, "data", "topp_split_fixture")
