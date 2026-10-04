@@ -1,5 +1,5 @@
-"""What the examples share: a real circuit, eight requests to serve through it, a scheduler that batches them into
-steps and the builder of a step's circuit, and printing a view.
+"""What the examples share: a real circuit and requests to serve through it, a scheduler that batches them into steps,
+the builder of a step's circuit, the runtime that runs and commits the steps, and printing a view.
 
 The circuits are verity's FP32 adder and BF16 comparison, exported as Boolean circuits with reference vectors from
 `verity.evaluation.bits.evaluate_bits` (`data/`). A request is a pair of random floats.
