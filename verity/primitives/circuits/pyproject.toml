@@ -1,0 +1,25 @@
+[project]
+name = "verity-circuits"
+version = "0.1.0"
+description = "Verity's circuits: the IR (`verity.ir`: types, Definitions, Programs, the canonical layout, the descriptor codec, partitions) and the one evaluator (`verity.evaluation`), as portions of the `verity` namespace."
+requires-python = ">=3.12"
+dependencies = ["numpy>=1.26"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# `verity` is a namespace package (PEP 420): this wheel ships `verity/ir` and `verity/evaluation`, and no `verity/__init__.py`.
+packages = ["src/verity"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# Test-only: the tests build their programs from `verity.ml`'s primitives (`scalar`, `prims`) and self-check `verity.ml`'s
+# registered kernels (tests/evaluation/test_evaluation.py, which also replays core's tensor-core captures under
+# packages/verity/tests/ml/fixtures and fixtures/tc), so they read the rest of core.
+inputs = ["packages/verity", "fixtures/tc"]
+parallel = true

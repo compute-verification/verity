@@ -3,7 +3,7 @@ name = "verity-workspace"
 version = "0.0.0"
 description = "Verity monorepo root; a uv workspace, not a package."
 requires-python = ">=3.12"
-dependencies = ["research", "cluster", "verity", "verity-sp1", "verity-numerical", "verity-vllm", "verity-sampled-proofs", "verity-pous", "verity-network-warden", "verity-pouw", "verity-flock", "verity-circuit-check"]
+dependencies = ["research", "cluster", "verity", "verity-circuits", "verity-sp1", "verity-numerical", "verity-vllm", "verity-sampled-proofs", "verity-pous", "verity-network-warden", "verity-pouw", "verity-flock", "verity-circuit-check"]
 
 [project.optional-dependencies]
 # torch from the PyTorch CPU index, for CPU machines and `check`: about 0.2 GB, where the members' `torch` extras take PyPI's
@@ -25,12 +25,13 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.workspace]
-members = ["tools/research", "tools/cluster", "packages/verity", "backends/sp1", "backends/numerical", "integrations/vllm", "protocols/sampled_proofs", "protocols/pous", "protocols/network_warden", "protocols/pouw", "backends/flock", "tools/circuit_check", "tools/check", "tools/lean", "tools/native_peak", "tools/tc_probe", "tools/tc_probe_fp4", "benchmarks/commitments", "backends/gkr", "backends/direct", "benchmarks/pouw", "benchmarks/network_traces"]
+members = ["tools/research", "tools/cluster", "packages/verity", "verity/primitives/circuits", "backends/sp1", "backends/numerical", "integrations/vllm", "protocols/sampled_proofs", "protocols/pous", "protocols/network_warden", "protocols/pouw", "backends/flock", "tools/circuit_check", "tools/check", "tools/lean", "tools/native_peak", "tools/tc_probe", "tools/tc_probe_fp4", "benchmarks/commitments", "backends/gkr", "backends/direct", "benchmarks/pouw", "benchmarks/network_traces"]
 
 [tool.uv.sources]
 research = { workspace = true }
 cluster = { workspace = true }
 verity = { workspace = true }
+verity-circuits = { workspace = true }
 verity-sp1 = { workspace = true }
 verity-numerical = { workspace = true }
 verity-vllm = { workspace = true }

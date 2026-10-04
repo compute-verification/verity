@@ -1,7 +1,8 @@
 # Verity core (`verity`)
 
-One distribution, one module per concern. Import from the module that owns an object (`from verity.ir import Program`);
-`verity` itself re-exports nothing. The architecture and the dependency direction between these modules are the root
+One module per concern. Import from the module that owns an object (`from verity.ir import Program`); `verity` itself
+re-exports nothing: it is a namespace package (PEP 420) with no `__init__.py`, whose modules several distributions ship
+(`verity.ir` and `verity.evaluation` are `verity-circuits`, under `verity/primitives/circuits/`; the rest is this one). The architecture and the dependency direction between these modules are the root
 `README.md`; the repository map with each module's contents is the root `AGENTS.md`.
 
 | module | what it owns |
