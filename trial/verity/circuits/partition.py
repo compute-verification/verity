@@ -54,3 +54,28 @@ def validate(circuit: Circuit, partition: Partition, max_width: int) -> tuple[st
 
 def digest(circuit: Circuit, partition: Partition) -> str:
     return hashlib.sha256(json.dumps([circuit.id(), partition], separators=(",", ":")).encode()).hexdigest()[:16]
+
+
+def greedy(circuit: Circuit, max_width: int) -> Partition:
+    """A prover's partition: consecutive gates, each region grown while its boundary stays within `max_width` wires."""
+    readers: dict[int, list[int]] = {}
+    for g, (_, a, b) in enumerate(circuit.gates):
+        for w in {a, b}:
+            readers.setdefault(w, []).append(g)
+    outputs = set(circuit.outputs)
+    regions: list[tuple[int, ...]] = []
+    start = 0
+    while start < len(circuit.gates):
+        end = start + 1
+        while end < len(circuit.gates) and _width(circuit, start, end + 1, readers, outputs) <= max_width:
+            end += 1
+        regions.append(tuple(range(start, end)))
+        start = end
+    return tuple(regions)
+
+
+def _width(circuit: Circuit, start: int, end: int, readers: Mapping[int, list[int]], outputs: set[int]) -> int:
+    produced = {wire_of(circuit, g) for g in range(start, end)}
+    ins = {w for g in range(start, end) for w in circuit.gates[g][1:] if w not in produced}
+    outs = {w for w in produced if w in outputs or any(not start <= r < end for r in readers.get(w, ()))}
+    return len(ins) + len(outs)

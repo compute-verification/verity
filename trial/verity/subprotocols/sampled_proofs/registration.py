@@ -10,6 +10,7 @@ committed.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
@@ -55,6 +56,7 @@ class Registration:
         return hashlib.sha256(b"verity/registration/v0\0" + body.encode()).hexdigest()
 
 
+@functools.cache
 def boundary_wires(circuit: Circuit, partition: P.Partition) -> tuple[int, ...]:
     return tuple(sorted({w for region in partition for side in P.boundary(circuit, region) for w in side}))
 

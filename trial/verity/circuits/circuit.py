@@ -1,8 +1,9 @@
 """The circuit library: build, name, evaluate and trace circuits.
 
 What a circuit is and what it computes is stated in `Circuit.lean`, beside `circuit.py`; this library
-implements it and is held to it by conformance vectors, never named by the configuration. A toy: gates over integer
-wires mod 2**32.
+implements it and is held to it by conformance vectors, never named by the configuration. A toy of descriptor v1: one
+flat list of two-input gates. Word gates (`add`, `mul`) act on wires mod 2**32; the Boolean profile's gates (`and`,
+`xor`, `not`, which ignores its second operand) on bits, as `verity.ir.boolean` does.
 """
 
 from __future__ import annotations
@@ -12,7 +13,13 @@ import json
 from dataclasses import dataclass
 
 MASK = 2**32 - 1
-OPS = {"add": lambda a, b: (a + b) & MASK, "mul": lambda a, b: (a * b) & MASK, "xor": lambda a, b: a ^ b}
+OPS = {
+    "add": lambda a, b: (a + b) & MASK,
+    "mul": lambda a, b: (a * b) & MASK,
+    "xor": lambda a, b: a ^ b,
+    "and": lambda a, b: a & b,
+    "not": lambda a, b: a ^ 1,
+}
 
 
 @dataclass(frozen=True)
@@ -24,6 +31,11 @@ class Circuit:
     def id(self) -> str:
         body = {"inputs": self.inputs, "gates": self.gates, "outputs": self.outputs}
         return hashlib.sha256(json.dumps(body, separators=(",", ":")).encode()).hexdigest()[:16]
+
+    @classmethod
+    def from_json(cls, obj: dict) -> Circuit:
+        """The flat format `examples/data/*.json` carries: `inputs`, `gates` as [op, wire, wire], `outputs`."""
+        return cls(int(obj["inputs"]), tuple((op, int(a), int(b)) for op, a, b in obj["gates"]), tuple(obj["outputs"]))
 
 
 def trace(circuit: Circuit, inputs: tuple[int, ...]) -> tuple[int, ...]:

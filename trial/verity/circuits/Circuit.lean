@@ -3,7 +3,7 @@ statement is today's `packages/verity/lean/Verity/Protocol/Circuit.lean`. -/
 
 namespace Verity.Circuits
 
-inductive Op | add | mul | xor
+inductive Op | add | mul | xor | and | not
 
 structure Circuit where
   inputs : Nat
@@ -14,6 +14,8 @@ def Op.apply : Op → Nat → Nat → Nat
   | .add, a, b => (a + b) % 2 ^ 32
   | .mul, a, b => (a * b) % 2 ^ 32
   | .xor, a, b => a ^^^ b
+  | .and, a, b => a &&& b
+  | .not, a, _ => a ^^^ 1
 
 /-- Every wire's value: what `trace` in `circuit.py` returns. -/
 def trace (c : Circuit) (inputs : List Nat) : List Nat :=

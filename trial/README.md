@@ -1,9 +1,10 @@
 # Layout trial
 
-A toy of the proposed layout. Run an epoch:
+A toy of the proposed layout. Run the protocol over several epochs (`verity.protocol.run.run`):
 
 ~~~bash
-uv sync && uv run python -m toy_serving [--integrity replay|sp1] [--mode honest|lazy|rollout] [--no-space] [--k K] [--verbose]
+uv sync && uv run python -m toy_serving [--epochs N] [--integrity replay|sp1] [--mode honest|lazy|rollout] [--no-space] [--k K] [--verbose]
+uv run python examples/floats.py [--circuit f32_add|bf16_gt_strict] [--mode lazy] [--corrupt C]   # verity's real circuits
 lake build    # the Lean beside the Python
 ~~~
 
