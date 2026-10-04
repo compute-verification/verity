@@ -63,7 +63,7 @@ def rows8 (p : Pipeline) (M N K TM TN : ℕ) (act wt tk us : Codes) (g : ℕ) : 
 fails. -/
 def gram8 (p : Pipeline) {m n k : ℕ} (z : Noise m n k Params.pi.r) (s q : ℕ) : ℕ :=
   if h : s < 32 ∧ q < 32 then
-    (chainWordP? p 4 (rowAtoms (fun l => e4m3 (z.FB l ⟨s, h.1⟩)) (fun l => e4m3 (z.FA l ⟨q, h.2⟩)))).getD 0
+    (chainWordP? p 4 (rowAtoms (fun l => z.FB l ⟨s, h.1⟩) (fun l => z.FA l ⟨q, h.2⟩))).getD 0
   else 0
 
 /-- The anchors on gate `g` from the unit's noise `z`: line `i`'s codes on `ea` and line `j`'s on `eb`, the bases' codes

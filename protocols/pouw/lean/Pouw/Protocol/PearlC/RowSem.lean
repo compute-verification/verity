@@ -25,7 +25,7 @@ On a row of `K` FP32 words `x_0, …, x_{K−1}` (`pc4`: BF16 words, widened):
 A `PearlCSem` reads a row as values (`wordsVal`), so these formulas run on the row's words re-encoded (`f32Word`; `pc4`'s
 `bf16WordOf`), and read their results back with `wordVal`. `pc8Sem`'s forming value is `D_t`'s, so `FormChain.elem`'s
 `e4m3` of it is `F32ToE4m3Sat(D_t)` wherever the cast agrees with `e4m3Word` and `D_t` is not NaN. The noise
-(`noise`, `lines`) stays a parameter.
+(`noise`, `lines`) stays a parameter, of codes in both: `pc8`'s noise codes are the words the Program reads.
 -/
 
 namespace Pouw.PearlC.RowCircuit
@@ -109,8 +109,8 @@ def encRow (k : ℕ) (X : Fin k → ℚ) (l : ℕ) : ℕ := if h : l < k then f3
 /-- A row of values as BF16 words, `0` past its end. -/
 def encRow16 (k : ℕ) (X : Fin k → ℚ) (l : ℕ) : ℕ := if h : l < k then bf16WordOf (X ⟨l, h⟩) else 0
 
-/-- A noise line's entries as E4M3 codes, `0` past its end. -/
-def encCodes {r : ℕ} (e : Fin r → ℚ) (l : ℕ) : ℕ := if h : l < r then (e4m3 (e ⟨l, h⟩)).val else 0
+/-- A noise line's codes as words, `0` past its end. -/
+def encCodes {r : ℕ} (e : Fin r → Code) (l : ℕ) : ℕ := if h : l < r then (e ⟨l, h⟩).val else 0
 
 /-- **`pc8`'s forming chain**: the formed word `form8` at `α`, `x` and `β`'s words and the noise' and basis' codes,
 read as a value. -/

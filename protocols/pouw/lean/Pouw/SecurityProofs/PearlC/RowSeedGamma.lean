@@ -203,7 +203,7 @@ theorem MatEq.useful (d : PearlCDevice) {m n k m' n' k' : ℕ} {A : Matrix (Fin 
   exact MatEq.refl _
 
 theorem FormChain.elem_congr {r : ℕ} {fc fc' : FormChain r} (hfc : fc = fc') {a a' x x' b b' : ℚ}
-    {e e' f f' : Fin r → ℚ} (ha : a = a') (hx : x = x') (hb : b = b') (he : e = e') (hf : f = f') :
+    {e e' f f' : Fin r → Code} (ha : a = a') (hx : x = x') (hb : b = b') (he : e = e') (hf : f = f') :
     fc.elem a x b e f = fc'.elem a' x' b' e' f' := by
   subst hfc ha hx hb he hf; rfl
 
@@ -233,7 +233,7 @@ theorem unitChain_snd_apply (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : W
         ((sem.noise H s U u act).EB b) ((sem.noise H s U u act).FB l) := rfl
 
 /-- The peel's BF16 noise row of one operand row, `bf16(E′)` with `E′ = lineCodes β e`, as `unitUsefulDev` reads it. -/
-def beRow (β : ℚ) (e : Fin Params.pi.r → ℚ) : Fin 32 → ℕ := fun p => codeBf16 (lineCodes β e p)
+def beRow (β : ℚ) (e : Fin Params.pi.r → Code) : Fin 32 → ℕ := fun p => codeBf16 (lineCodes β e p)
 
 theorem atNat_ticket_row {d : PearlCDevice} (hd : d.RowLocal) {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code)
     (B : Matrix (Fin n) (Fin k) Code) {i : ℕ} (hi : i < m) (j : ℕ) :
@@ -259,7 +259,7 @@ theorem useful_row {d : PearlCDevice} (hd : d.RowLocal) (sem : PearlCSem Q R S) 
     (u : ℕ) (act : Codes) {i : ℕ} (hi : i < (U.layout.shape u).m) (j : ℕ) :
     atNat (sem.unitUsefulDev d H s U u act) i j =
       atNat (d.useful (fun _ : Fin 1 => (sem.unitChain H s U u act).1 ⟨i, hi⟩) (sem.unitChain H s U u act).2
-        (fun l p => e4m3 ((sem.noise H s U u act).FA l p)) (fun l p => e4m3 ((sem.noise H s U u act).FB l p))
+        (fun l p => (sem.noise H s U u act).FA l p) (fun l p => (sem.noise H s U u act).FB l p)
         (fun _ : Fin 1 => beRow (sem.beta (U.layout.shape u).k
           (wordsVal (U.layout.shape u).m (U.layout.shape u).k act ⟨i, hi⟩)) ((sem.noise H s U u act).EA ⟨i, hi⟩))
         (fun b => beRow (sem.beta (U.layout.shape u).k
@@ -331,8 +331,8 @@ theorem split_useful {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem
   have hk := (splitShape_k hu hi).symm
   refine congrFun (congrFun (MatEq.atNat_eq (MatEq.useful d (matEq_row (splitRow_fst hN H s hu hi act))
     (splitRow_snd hN H s hu hi act) ?_ ?_ ?_ ?_)) 0) j
-  · exact ⟨hk, rfl, fun l p hl hp hl' _ => congrArg e4m3 ((hz.2.1 l hl hl' ⟨p, hp⟩).1)⟩
-  · exact ⟨hk, rfl, fun l p hl hp hl' _ => congrArg e4m3 ((hz.2.1 l hl hl' ⟨p, hp⟩).2)⟩
+  · exact ⟨hk, rfl, fun l p hl hp hl' _ => (hz.2.1 l hl hl' ⟨p, hp⟩).1⟩
+  · exact ⟨hk, rfl, fun l p hl hp hl' _ => (hz.2.1 l hl hl' ⟨p, hp⟩).2⟩
   · exact matEq_row (VecEq.of_eq (congrArg₂ beRow (finFun_congr hN.2.2.1 hk fun _ _ _ => rfl) (funext hz.1)))
   · refine ⟨(splitShape_n hu hi).symm, rfl, fun b p hb hp hb' _ => ?_⟩
     exact congrFun (congrArg₂ beRow
