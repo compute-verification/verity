@@ -18,8 +18,7 @@ retires with `sha512/row/v1`).
 `readsRows`'s keys the keys a computed row reads (an input column outside every port is a self row, which Δ copies
 nothing into). `vusPow2` is new and does narrow: it is what `outNet = unitNet` gave the region pin for free.
 
-**Proof work.** `formatOk_spec` is `Layout.scopeOk_spec`'s unfolding at the new conjuncts (`Bool.and_eq_true`,
-`List.all_eq_true`): mechanical, no new lemma. `formatOk_g_pos` and `formatOk_vu_lt` are proved here.
+Every declaration here is proved.
 -/
 
 namespace FlockSoundness.Discharge.Canonical
@@ -60,22 +59,6 @@ def formatOk (c : Circuit) : Bool :=
 /-- **The canonical row widths**: row `q`'s own bits, `ℓ_q` (`sha512/row/v1`'s `16 · words`, `Layout.portRowW`, retires). -/
 def rowW (c : Circuit) (q : Fin c.ports.size) : ℕ := c.ports[q].bits
 
-/-- **`formatOk` gives the binding lemmas' circuit conditions**: every row a bit row without segments, output rows of
-exactly their run's bits, every unit input a row bit, the zero or unread, computed unit rows reading port bits only,
-and every VU below `2^⌊log₂ g⌋`.
-
-*Route*: unfold `formatOk`, split the conjunction (`Bool.and_eq_true`), and read each `all` (`Array.all_eq_true'`,
-`List.all_eq_true`, `List.mem_range`); `PortReads` is `Layout.portReads_of_portReadsB`; the VU bound rewrites `hg` by
-`vusPow2`. -/
-theorem formatOk_spec {c : Circuit} (hU : Built c.unit) (h : formatOk c = true) :
-    (∀ p ∈ c.ports.toList, p.v2 = true ∧ p.segs = none) ∧
-    (∀ j < c.outRowPorts.size,
-      (c.ports.getD (HmOut.nIn c + j) default).bits = 16 * (HmOut.outGroup c j).2.2.2) ∧
-    (∀ x < c.upv * (c.unit.inWords * WORD),
-      (∀ net slot col, Aliased.srcKey c x ≠ .wire net slot col) ∧ ∀ col, Aliased.srcKey c x ≠ .lit col) ∧
-    Layout.PortReads c hU ∧ (∀ {g : ℕ}, g < c.g → g < 2 ^ c.g.log2) := by
-  sorry
-
 theorem vusPow2_of_formatOk {c : Circuit} (h : formatOk c = true) : 2 ^ c.g.log2 = c.g := by
   simp only [formatOk, vusPow2, Bool.and_eq_true, beq_iff_eq] at h
   exact h.2
@@ -89,5 +72,29 @@ theorem formatOk_g_pos {c : Circuit} (h : formatOk c = true) : 0 < c.g := by
 theorem formatOk_vu_lt {c : Circuit} (h : formatOk c = true) {g : ℕ} (hg : g < c.g) : g < 2 ^ c.g.log2 := by
   rw [vusPow2_of_formatOk h]
   exact hg
+
+/-- **`formatOk` gives the binding lemmas' circuit conditions**: every row a bit row without segments, output rows of
+exactly their run's bits, every unit input a row bit, the zero or unread, computed unit rows reading port bits only,
+and every VU below `2^⌊log₂ g⌋`. -/
+theorem formatOk_spec {c : Circuit} (hU : Built c.unit) (h : formatOk c = true) :
+    (∀ p ∈ c.ports.toList, p.v2 = true ∧ p.segs = none) ∧
+    (∀ j < c.outRowPorts.size,
+      (c.ports.getD (HmOut.nIn c + j) default).bits = 16 * (HmOut.outGroup c j).2.2.2) ∧
+    (∀ x < c.upv * (c.unit.inWords * WORD),
+      (∀ net slot col, Aliased.srcKey c x ≠ .wire net slot col) ∧ ∀ col, Aliased.srcKey c x ≠ .lit col) ∧
+    Layout.PortReads c hU ∧ (∀ {g : ℕ}, g < c.g → g < 2 ^ c.g.log2) := by
+  have hvu := @formatOk_vu_lt c h
+  unfold formatOk at h
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  obtain ⟨⟨⟨⟨⟨hrow, hout⟩, hreads⟩, hpr⟩, hu⟩, -⟩ := h
+  refine ⟨fun p hp => ?_, fun j hj => ?_, fun x hx => ?_, Layout.portReads_of_portReadsB hU hu hpr, hvu⟩
+  · have := (Array.all_eq_true'.1 hrow) p (Array.mem_toList_iff.1 hp)
+    simp only [rowOk, Bool.and_eq_true, Option.isNone_iff_eq_none] at this
+    exact this
+  · unfold outRowsExact at hout
+    exact beq_iff_eq.1 (List.all_eq_true.1 hout j (List.mem_range.2 hj))
+  · unfold readsRows at hreads
+    have hk := List.all_eq_true.1 hreads x (List.mem_range.2 hx)
+    refine ⟨fun net slot col he => ?_, fun col he => ?_⟩ <;> rw [he] at hk <;> exact Bool.false_ne_true hk
 
 end FlockSoundness.Discharge.Canonical
