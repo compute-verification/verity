@@ -1,9 +1,10 @@
-"""`lean_changed`: check's early Lean step. `lake build` of every Lake package whose Lean audit misses (`lean_audit.py`: its
-inputs changed since a pass kept on this machine), on a tree this machine keeps built, so a module that no longer compiles (two
-merges git combines cleanly that Lean doesn't) fails the run in minutes rather than when the audit's cold build reaches it.
+"""`lean_changed`: Lean's early job, which `check` runs as its lean-changed step. `lake build` of every Lake package whose Lean
+audit misses (`lean_audit.py`: its inputs changed since a pass kept on this machine), on a tree this machine keeps built, so a
+module that no longer compiles (two merges git combines cleanly that Lean doesn't) fails the run in minutes rather than when
+the audit's cold build reaches it.
 
-    python tools/check/lean_changed.py --cache DIR --deps DIR --tree DIR
-    python tools/check/lean_changed.py --records PKG [--update [--moved FILE]] [--out DIR]   a lane's records, on a kept tree
+    python tools/lean/lean_changed.py --cache DIR --deps DIR --tree DIR
+    python tools/lean/lean_changed.py --records PKG [--update [--moved FILE]] [--out DIR]   a lane's records, on a kept tree
 
 `--records` is a lane's fast path to the records in PKG's `lean-audit.json` (PKG: its path, or a unique part of one):
 `tools/lean/audit.py --build --no-replay --no-runs` on PKG in a tree kept per slot, which prints what the audit prints,
@@ -72,7 +73,7 @@ def _module(path: Path, name: str):
     return m
 
 
-LA = _module(ROOT / "tools" / "check" / "lean_audit.py", "lean_audit_for_lean_changed")
+LA = _module(ROOT / "tools" / "lean" / "lean_audit.py", "lean_audit_for_lean_changed")
 #: `tools/lean/audit.py`, this step's own copy: `records` runs its commands in the sandbox
 AUDIT = _module(ROOT / "tools" / "lean" / "audit.py", "lean_audit_tool_for_lean_changed")
 #: where `Facts.lean` writes a package's facts: inside its `.lake`, which the sandbox leaves writable and `sync` leaves alone
@@ -278,7 +279,7 @@ def write_result(run_dir: Path, run_id: str, pkg: str, rc: int, out: Path, updat
     rel = os.path.relpath(out, run_dir)
     doc = {"schema": "research/result/v0.1", "kind": FAST_KIND, "run_id": run_id,
            "workload_fingerprint": {"package": pkg, "update": update, "replay": False, "runs": False},
-           "validation": {"status": "passed" if rc == 0 else "failed", "checker": "tools/check/lean_changed.py --records",
+           "validation": {"status": "passed" if rc == 0 else "failed", "checker": "tools/lean/lean_changed.py --records",
                           "detail": f"audit.py exit {rc} without the kernel replay or the tests: not a Lean verdict, and no "
                                     "merge accepts it"},
            "artifacts": [] if rel.startswith("..") else [rel]}

@@ -57,7 +57,7 @@ about 22 minutes unpinned on the check cores.
 
 ~~~text
 research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- \
-  python3 tools/check/lean_changed.py --records PKG --update
+  python3 tools/lean/lean_changed.py --records PKG --update
 ~~~
 
 It waits for one of the node's Lean slots of pool `build` (`lean_slot.py`; a node whose slot file lists no `build` pool

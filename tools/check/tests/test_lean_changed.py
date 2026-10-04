@@ -1,4 +1,4 @@
-"""`tools/check/lean_changed.py`: what it builds (each package whose audit misses, what it requires first), the tree it keeps
+"""`tools/lean/lean_changed.py`: what it builds (each package whose audit misses, what it requires first), the tree it keeps
 built, dependencies as read-only hard links to the audit's, and a failure only on a Lean error in the tree's own files or on
 a guarantee the audit fails on that build."""
 from __future__ import annotations
@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-spec = importlib.util.spec_from_file_location("check_lean_changed", ROOT / "tools" / "check" / "lean_changed.py")
+spec = importlib.util.spec_from_file_location("check_lean_changed", ROOT / "tools" / "lean" / "lean_changed.py")
 LC = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(LC)
 
