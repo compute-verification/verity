@@ -1,7 +1,9 @@
-"""The verifier's exact check with record-and-reject, and an honest shaper that meets the logical schedule."""
+"""The verifier's exact check with record-and-reject, an honest shaper that meets the logical schedule, one clock per
+spatial unit, and the ingress links' status check."""
 
 from verity_network_warden.audit import Audit
-from verity_network_warden.grid import GridParams, Reason, Record, Warden
+from verity_network_warden.commitment import commit
+from verity_network_warden.grid import COMPLETE, GridParams, Reason, Record, Warden
 from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, run_shaper
 
 P = GridParams(buckets=4, allocation=2, frame_bytes=1)
@@ -88,3 +90,83 @@ def test_an_out_of_set_sync_flags_only_its_own_window():
     tampered = records[:2] + [Record("responses", 2, tuple(tuple(r) for r in rows), records[2].status)]
     verdicts = Audit().check_link("responses", tampered, FRAMES, declared, SYNC_SET, P)
     assert [v.violation for v in verdicts] == [None, "advice", "mismatch"]
+
+
+def test_egress_links_with_the_same_syncs_are_accepted():
+    """The spatial unit's clock is each window's sync, which every egress link declares alike."""
+    audit = Audit()
+    for link in ("responses", "tokens"):
+        audit.check_link(link, run_shaper(FRAMES, honest_ready(), SYNCS, Warden(link, P)), FRAMES, SYNCS, SYNC_SET, P)
+    assert audit.accepted and len(audit.verdicts) == 6
+    assert audit.syncs == dict(enumerate(SYNCS))
+
+
+def test_a_link_with_another_sync_is_advice_in_that_window_only():
+    """A second egress link declares δ = 2 in window 1, in the set but not the unit's: one sync per window for all links
+    is the advice `EncardAccSeqsLeSync` counts, `#Σ_sync^W`. Window 1 of the link checked second is an advice
+    violation, its other windows are accepted, and the first link checked sets the clock. The same holds committed."""
+    other = [SYNCS[0], ClockSync(2, 1), SYNCS[2]]
+    assert other[1] in SYNC_SET and other[1] != SYNCS[1]
+    responses = run_shaper(FRAMES, honest_ready(), SYNCS, Warden("responses", P))
+    tokens = run_shaper(FRAMES, honest_ready(), other, Warden("tokens", P))
+    assert all(v.accepted for v in Audit().check_link("tokens", tokens, FRAMES, other, SYNC_SET, P))
+    for committed in (False, True):
+        resp, tok = ([commit(r, P) for r in recs] if committed else recs for recs in (responses, tokens))
+        audit = Audit()
+        audit.check_link("responses", resp, FRAMES, SYNCS, SYNC_SET, P)
+        audit.check_link("tokens", tok, FRAMES, other, SYNC_SET, P)
+        assert [(v.link, v.window, v.violation) for v in audit.violations] == [("tokens", 1, "advice")]
+        audit = Audit()
+        audit.check_link("tokens", tok, FRAMES, other, SYNC_SET, P)
+        audit.check_link("responses", resp, FRAMES, SYNCS, SYNC_SET, P)
+        assert [(v.link, v.window, v.violation) for v in audit.violations] == [("responses", 1, "advice")]
+
+
+def ingress_run(arrivals, faults=None):
+    """An ingress warden's records: `arrivals[w][t]` frames reach it in bucket t of window w, when the outside chooses,
+    and window w faults with `faults[w]` from its start when given."""
+    warden = Warden("requests", P)
+    records = []
+    for w, counts in enumerate(arrivals):
+        if faults and w in faults:
+            warden.fault(faults[w])
+        for n in counts:
+            for _ in range(n):
+                warden.enqueue(b"q")
+            warden.tick()
+        records.append(warden.close_window())
+    return records
+
+
+def test_ingress_links_are_checked_on_their_statuses_only():
+    """Ingress rows are the Program's input, so no grid is compared: two runs with different timing are both accepted,
+    raw and committed."""
+    early = ingress_run([[2, 0, 0, 0], [1, 1, 0, 0], [0, 0, 0, 0]])
+    late = ingress_run([[0, 0, 0, 2], [0, 0, 1, 1], [0, 0, 0, 3]])
+    assert [r.grid for r in early] != [r.grid for r in late]
+    for records in (early, late, [commit(r, P) for r in early], [commit(r, P) for r in late]):
+        assert [v.violation for v in Audit().check_ingress_link("requests", records, 3)] == [None, None, None]
+
+
+def test_ingress_status_duplicate_and_missing_record_are_violations():
+    """An incomplete ingress status is a `status` violation, a second record for a window is a duplicate even if the two
+    agree, and a missing record is no verdict, raw or committed. Another link's record for the window doesn't count."""
+    records = ingress_run([[1, 0, 0, 0], [0, 2, 0, 0]], faults={1: Reason.DELIVERY_REFUSED})
+    assert Audit().check_ingress_link("requests", records, 2)[0].accepted
+    recs = [records[0], *records, Record("responses", 2, records[0].grid, COMPLETE)]
+    expected = ["duplicate", "status:delivery-refused", "no-verdict"]
+    assert [v.violation for v in Audit().check_ingress_link("requests", recs, 3)] == expected
+    assert [v.violation for v in Audit().check_ingress_link("requests", [commit(r, P) for r in recs], 3)] == expected
+
+
+def test_a_run_is_accepted_only_if_every_link_is():
+    """Lean's `StatusComplete` needs every boundary link's status complete: with honest egress, the run is accepted when
+    the ingress statuses are complete, and rejected, on the ingress window alone, when one is not."""
+    egress = run_shaper(FRAMES, honest_ready(), SYNCS, Warden("responses", P))
+    faulted = [("requests", 2, "status:monitor-unavailable")]
+    for faults, violations in ((None, []), ({2: Reason.MONITOR_UNAVAILABLE}, faulted)):
+        audit = Audit()
+        audit.check_link("responses", egress, FRAMES, SYNCS, SYNC_SET, P)
+        audit.check_ingress_link("requests", ingress_run([[1, 0, 0, 1]] * 3, faults), 3)
+        assert len(audit.verdicts) == 6 and audit.accepted == (not violations)
+        assert [(v.link, v.window, v.violation) for v in audit.violations] == violations

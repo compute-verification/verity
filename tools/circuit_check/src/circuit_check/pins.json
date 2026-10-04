@@ -105,6 +105,9 @@
   "Bf16ToF32_v2": {
    "and": 0
   },
+  "BitAnd_v2": {
+   "and": 1
+  },
   "BlackwellE4m3QmmaDot32_v2": {
    "and": 9128
   },
@@ -140,6 +143,9 @@
   },
   "DotE4m3_v4{K=64,DOT=BlackwellE4m3QmmaDot32_v2}": {
    "and": 17984
+  },
+  "E4m3ToF32_v2": {
+   "and": 15
   },
   "Embedding_v2{V=1100,H=2}": {
    "and": 36032
@@ -242,6 +248,9 @@
   },
   "F32SubFtz_v3": {
    "and": 952
+  },
+  "F32ToE2m1Sat_v2": {
+   "and": 60
   },
   "F32ToE4m3Sat_v2": {
    "and": 231
@@ -380,6 +389,18 @@
   },
   "MeanWarpsTriton_v1{N=16}": {
    "and": 7224
+  },
+  "MoeExpertFp8BlockCoordinateW_v2{K=64,G=32,KB=32,SWAP=True}": {
+   "and": 28533
+  },
+  "MoeExpertFp8BlockCoordinate_v2{K=64,G=32,KB=32,SWAP=False}": {
+   "and": 26103
+  },
+  "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=32,SWAP=True}": {
+   "and": 26103
+  },
+  "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=64,SWAP=False}": {
+   "and": 19391
   },
   "MoeRouterNormalize_v1{E=8,VPT=4}": {
    "and": 26738
@@ -558,6 +579,9 @@
   "SiluMulBf16_v4": {
    "and": 1380
   },
+  "SiluMulFp8BlockQuantResult_v2": {
+   "and": 16899
+  },
   "SiluMul_v3{I=8}": {
    "and": 10976
   },
@@ -599,6 +623,12 @@
   },
   "TokenSelect_v2{V=50}": {
    "and": 2661
+  },
+  "UniversalUnit_v1{G=16,N_IN=16,N_OUT=8}": {
+   "and": 1066
+  },
+  "UniversalUnit_v1{G=64,N_IN=64,N_OUT=32}": {
+   "and": 16674
   }
  },
  "pieces": {
@@ -622,6 +652,9 @@
   },
   "Bf16ToF32_v1": {
    "and": 0
+  },
+  "BitAnd_v1": {
+   "and": 1
   },
   "BitAtx16_v1": {
    "and": 43
@@ -658,6 +691,9 @@
   },
   "DivFullScaleA_v2": {
    "and": 1542
+  },
+  "E4m3ToF32_v1": {
+   "and": 15
   },
   "F2fpBf16_v1": {
    "and": 77
@@ -760,6 +796,9 @@
   },
   "F32ToBf16Rn_v1": {
    "and": 77
+  },
+  "F32ToE2m1Sat_v1": {
+   "and": 60
   },
   "F32ToE4m3Sat_v1": {
    "and": 238
