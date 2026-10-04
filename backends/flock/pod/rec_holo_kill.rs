@@ -6,15 +6,15 @@
 //!   compute the same outputs and that w is constant on σ's cycles, and write DIR/*.bin and DIR/meta.json.
 //! - `gate DIR`: C-Flock's proof of route P's gate table (A = I ⊗ A_gate), with the opening's two claims (verified) and
 //!   with the three more that the wiring argument's ŵ(ρ) adds.
-//! - `gkr DIR dense|stream UNSTORED DOUBLE`: the wiring product GKR on (w, σ): upstream's `prove_batched`, or the
-//!   streaming prover; proof digest, verified.
+//! - `gkr DIR dense|stream|fast UNSTORED DOUBLE`: the wiring product GKR on (w, σ): upstream's `prove_batched`, the
+//!   streaming prover, or the streaming prover on AVX-512 kernels (DOUBLE always on); proof digest, verified.
 //! - `sigma DIR [UNIT_LOG]`: commit σ as a binary polynomial (registration) and open it at one point (each audit); with
 //!   UNIT_LOG, only unit 0's σ_u.
 //! - `base DIR COPIES`: C-Flock's proof of the same circuit's rows as one block A_0, tiled COPIES ≥ 8 times (upstream's
 //!   lincheck needs 8 blocks), verified.
 //! - `gate` and `base` then time upstream's lincheck and the commit alone (`*_phases`); `base` also times the lincheck's
 //!   circuit-dependent sum over its matrices as a parallel gather per column.
-//! - `selftest`: the streaming GKR against `prove_batched` (same proof bytes) at small sizes.
+//! - `selftest`: the streaming GKR, plain and fast, against `prove_batched` (same proof bytes) at small sizes.
 //!
 //! env: RUNS=3 (timed runs after a first, cold run that also gives peak memory), FILL=0.9 BASE_KLOG=23 P_FRESH=0.25
 //! SEED=1 (build, full), UNITS=8 UNIT_LOG=22 (build, sampled), GATE_KLOG=16.
@@ -38,7 +38,7 @@ use flock_core::{
         ligerito::{LigeritoProfile, embedded_initial_k_or_default},
         open_batch_mixed_ligerito_with_precomputed_s_hat_v_and_grinding,
     },
-    product_gkr::{prove_batched, rec_holo_prove_batched_stream, verify_batched},
+    product_gkr::{prove_batched, rec_holo_prove_batched_fast, rec_holo_prove_batched_stream, verify_batched},
     r1cs::{BlockR1cs, SparseBinaryMatrix, WitnessLayout},
     test_rng::Rng,
     verifier::verify_ligerito,
@@ -983,6 +983,10 @@ fn gkr(dir: &Path, how: &str, unstored: usize, double: bool) {
             let t = Instant::now();
             let (p, _) = prove_batched(&f, &g, &s, None, &mut ch);
             (p, t.elapsed().as_secs_f64())
+        } else if how == "fast" {
+            let t = Instant::now();
+            let (p, _) = rec_holo_prove_batched_fast(&w, &sigma, unstored, &mut ch);
+            (p, t.elapsed().as_secs_f64())
         } else {
             let t = Instant::now();
             let (p, _) = rec_holo_prove_batched_stream(&w, &sigma, unstored, double, &mut ch);
@@ -1098,9 +1102,17 @@ fn selftest() {
         let mut ch = FsChallenger::new(b"rec-holo-selftest");
         let (dense, _) = prove_batched(&f, &f, &perm, None, &mut ch);
         let want = bincode::serialize(&dense).unwrap();
-        for (unstored, double) in [(1, false), (2, false), (1, true), (2, true), (3, true)] {
+        let cases = [(1, false, false), (2, false, false), (1, true, false), (2, true, false), (3, true, false)];
+        for (unstored, double, fast) in cases.into_iter().chain([1, 2, 3].map(|u| (u, true, true))) {
+            let prove = |w: &[u64], ch: &mut FsChallenger| {
+                if fast {
+                    rec_holo_prove_batched_fast(w, &sigma, unstored, ch).0
+                } else {
+                    rec_holo_prove_batched_stream(w, &sigma, unstored, double, ch).0
+                }
+            };
             let mut ch = FsChallenger::new(b"rec-holo-selftest");
-            let (p, _) = rec_holo_prove_batched_stream(&w, &sigma, unstored, double, &mut ch);
+            let p = prove(&w, &mut ch);
             let same = bincode::serialize(&p).unwrap() == want;
             let mut chv = FsChallenger::new(b"rec-holo-selftest");
             let ok = verify_batched(mu, &p, None, &mut chv).is_ok();
@@ -1108,10 +1120,10 @@ fn selftest() {
             let x = long.unwrap();
             bad[x >> 6] ^= 1 << (x & 63);
             let mut chb = FsChallenger::new(b"rec-holo-selftest");
-            let (pb, _) = rec_holo_prove_batched_stream(&bad, &sigma, unstored, double, &mut chb);
+            let pb = prove(&bad, &mut chb);
             let mut chv = FsChallenger::new(b"rec-holo-selftest");
             let rejects = verify_batched(mu, &pb, None, &mut chv).is_err();
-            println!(r#"{{"kind":"selftest","mu":{mu},"unstored":{unstored},"double":{double},"same_bytes":{same},"verifies":{ok},"rejects_broken_wire":{rejects}}}"#);
+            println!(r#"{{"kind":"selftest","mu":{mu},"unstored":{unstored},"double":{double},"fast":{fast},"same_bytes":{same},"verifies":{ok},"rejects_broken_wire":{rejects}}}"#);
             assert!(same && ok && rejects, "streaming GKR selftest failed at μ {mu}");
         }
     }

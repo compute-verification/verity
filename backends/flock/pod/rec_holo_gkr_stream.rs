@@ -310,3 +310,405 @@ pub fn rec_holo_prove_batched_stream<C: Challenger>(
     let claim = ProductGkrBatchedClaim { rho, f_eval, g_eval, s_sigma_eval };
     (proof, claim)
 }
+
+// ---------------------------------------------------------------------------
+// The same prover on AVX-512: one register holds a pair's four values (L0, R0, L1, R1), a fold is one multiply
+// (a + (a + b)·ρ), eq-weighted sums accumulate unreduced, and a leaf's tag α·v + β is four byte-table lookups (α·v is
+// GF(2)-linear in v's bits).
+// ---------------------------------------------------------------------------
+
+#[cfg(all(target_arch = "x86_64", target_feature = "avx512f", target_feature = "vpclmulqdq"))]
+pub use rh_fast::rec_holo_prove_batched_fast;
+
+#[cfg(all(target_arch = "x86_64", target_feature = "avx512f", target_feature = "vpclmulqdq"))]
+mod rh_fast {
+    use core::arch::x86_64::{
+        __m512i, _mm_set_epi64x, _mm512_broadcast_i32x4, _mm512_bslli_epi128, _mm512_clmulepi64_epi128,
+        _mm512_loadu_si512, _mm512_set_epi64, _mm512_setzero_si512, _mm512_shuffle_i64x2, _mm512_storeu_si512,
+        _mm512_xor_si512,
+    };
+    use core::mem::transmute;
+
+    use rayon::prelude::ParallelSlice;
+
+    use super::*;
+    use crate::field::gf2_128::x86_64::ghash_mul_x4;
+
+    type V = __m512i;
+
+    #[inline(always)]
+    fn mul(x: V, y: V) -> V {
+        // SAFETY: avx512f and vpclmulqdq are enabled for the whole build (the module's cfg).
+        unsafe { ghash_mul_x4(x, y) }
+    }
+
+    #[inline(always)]
+    fn xor(x: V, y: V) -> V {
+        // SAFETY: as `mul`.
+        unsafe { _mm512_xor_si512(x, y) }
+    }
+
+    #[inline(always)]
+    fn zero() -> V {
+        // SAFETY: as `mul`.
+        unsafe { _mm512_setzero_si512() }
+    }
+
+    #[inline(always)]
+    fn splat(a: F128) -> V {
+        // SAFETY: as `mul`.
+        unsafe { _mm512_broadcast_i32x4(_mm_set_epi64x(a.hi as i64, a.lo as i64)) }
+    }
+
+    #[inline(always)]
+    fn set4(v: [F128; 4]) -> V {
+        // SAFETY: F128 is repr(C) {lo, hi}, so four of them are the register's lanes 0..3 in order.
+        unsafe { transmute::<[F128; 4], V>(v) }
+    }
+
+    #[inline(always)]
+    fn lanes(v: V) -> [F128; 4] {
+        // SAFETY: as `set4`; every bit pattern is an F128.
+        unsafe { transmute::<V, [F128; 4]>(v) }
+    }
+
+    #[inline(always)]
+    fn load(p: &[F128], i: usize) -> V {
+        assert!(4 * i + 4 <= p.len());
+        // SAFETY: four readable F128 at 4i (asserted).
+        unsafe { _mm512_loadu_si512(p.as_ptr().add(4 * i).cast()) }
+    }
+
+    #[inline(always)]
+    fn store(p: &mut [F128], i: usize, v: V) {
+        assert!(4 * i + 4 <= p.len());
+        // SAFETY: four writable F128 at 4i (asserted).
+        unsafe { _mm512_storeu_si512(p.as_mut_ptr().add(4 * i).cast(), v) }
+    }
+
+    #[inline(always)]
+    fn fold(a: V, b: V, r: V) -> V {
+        xor(a, mul(xor(a, b), r))
+    }
+
+    /// For a pair (a, b) of entries `[L0, R0, L1, R1]`: `[b.L0·b.L1, b.R0·b.R1, s.L0·s.L1, s.R0·s.R1]` with s = a + b,
+    /// the two circuits' gate values at 1 and at ∞.
+    #[inline(always)]
+    fn gates(a: V, b: V) -> V {
+        let s = xor(a, b);
+        // SAFETY: as `mul`.
+        let (x, y) = unsafe { (_mm512_shuffle_i64x2::<0x44>(b, s), _mm512_shuffle_i64x2::<0xEE>(b, s)) };
+        mul(x, y)
+    }
+
+    /// Four lanes of unreduced products, reduced once.
+    #[derive(Clone, Copy)]
+    struct Acc {
+        lo: V,
+        mid: V,
+        hi: V,
+    }
+
+    impl Acc {
+        #[inline(always)]
+        fn new() -> Self {
+            Self { lo: zero(), mid: zero(), hi: zero() }
+        }
+
+        #[inline(always)]
+        fn add(&mut self, x: V, y: V) {
+            // SAFETY: as `mul`.
+            unsafe {
+                self.lo = xor(self.lo, _mm512_clmulepi64_epi128::<0x00>(x, y));
+                self.hi = xor(self.hi, _mm512_clmulepi64_epi128::<0x11>(x, y));
+                self.mid = xor(
+                    self.mid,
+                    xor(_mm512_clmulepi64_epi128::<0x01>(x, y), _mm512_clmulepi64_epi128::<0x10>(x, y)),
+                );
+            }
+        }
+
+        /// `lo + x^64·(mid + x^64·hi)` mod the GHASH polynomial, per lane: `ghash_mul_x4`'s two reduction stages.
+        #[inline(always)]
+        fn reduce(self) -> V {
+            // SAFETY: as `mul`.
+            unsafe {
+                let poly = _mm512_set_epi64(0, 0x87, 0, 0x87, 0, 0x87, 0, 0x87);
+                let red = |t0: V, t1: V| {
+                    xor(xor(t0, _mm512_bslli_epi128::<8>(t1)), _mm512_clmulepi64_epi128::<0x01>(t1, poly))
+                };
+                red(self.lo, red(self.mid, self.hi))
+            }
+        }
+    }
+
+    fn combine(v: V, lambda: F128) -> (F128, F128) {
+        let [a, b, c, d] = lanes(v);
+        (a + lambda * b, c + lambda * d)
+    }
+
+    /// One round's message over a source of entries: `src(j)` is entry j of a layer `[L0, R0, L1, R1]`.
+    fn message<S: Fn(usize) -> V + Sync>(src: &S, lambda: F128, eq: &SplitEqGhash) -> (F128, F128) {
+        let (lo, hi) = (&eq.lo, &eq.hi);
+        let (block, n_blocks) = (lo.len(), hi.len());
+        let block_fn = |x_hi: usize| -> V {
+            let mut acc = Acc::new();
+            for (x_lo, &el) in lo.iter().enumerate() {
+                let xp = x_hi * block + x_lo;
+                acc.add(gates(src(2 * xp), src(2 * xp + 1)), splat(el));
+            }
+            mul(acc.reduce(), splat(hi[x_hi]))
+        };
+        let v = match sumcheck_round_min_len(block * n_blocks, n_blocks) {
+            Some(min_len) => (0..n_blocks).into_par_iter().with_min_len(min_len).map(block_fn).reduce(zero, xor),
+            None => (0..n_blocks).map(block_fn).fold(zero(), xor),
+        };
+        combine(v, lambda)
+    }
+
+    /// Fold `half` entries of `src` at ρ into `dst` and, while they are in registers, the next round's message over them.
+    fn fold_message<S: Fn(usize) -> V + Sync>(
+        src: &S,
+        half: usize,
+        rho: F128,
+        dst: &mut [F128],
+        lambda: F128,
+        eq_next: Option<&SplitEqGhash>,
+    ) -> Option<(F128, F128)> {
+        let r = splat(rho);
+        let f = |x: usize| fold(src(2 * x), src(2 * x + 1), r);
+        let dst = &mut dst[..4 * half];
+        let Some(eq) = eq_next else {
+            const CH: usize = 1 << 12;
+            dst.par_chunks_mut(4 * CH).enumerate().for_each(|(ci, c)| {
+                for t in 0..c.len() / 4 {
+                    store(c, t, f(ci * CH + t));
+                }
+            });
+            return None;
+        };
+        let (lo, hi) = (&eq.lo, &eq.hi);
+        let (block, n_blocks) = (lo.len(), hi.len());
+        debug_assert_eq!(block * n_blocks, half / 2);
+        let chunk = 2 * block;
+        let body = |x_hi: usize, c: &mut [F128]| -> V {
+            let base = x_hi * chunk;
+            let mut acc = Acc::new();
+            for (x_lo, &el) in lo.iter().enumerate() {
+                let (a, b) = (f(base + 2 * x_lo), f(base + 2 * x_lo + 1));
+                store(c, 2 * x_lo, a);
+                store(c, 2 * x_lo + 1, b);
+                acc.add(gates(a, b), splat(el));
+            }
+            mul(acc.reduce(), splat(hi[x_hi]))
+        };
+        let v = match sumcheck_round_min_len(block * n_blocks, n_blocks) {
+            Some(min_len) => dst
+                .par_chunks_mut(4 * chunk)
+                .with_min_len(min_len)
+                .enumerate()
+                .map(|(x_hi, c)| body(x_hi, c))
+                .reduce(zero, xor),
+            None => dst.chunks_mut(4 * chunk).enumerate().map(|(x_hi, c)| body(x_hi, c)).fold(zero(), xor),
+        };
+        Some(combine(v, lambda))
+    }
+
+    fn collect<S: Fn(usize) -> V + Sync>(n: usize, src: &S) -> Vec<F128> {
+        const CH: usize = 1 << 12;
+        let mut out: Vec<F128> = crate::alloc_uninit_vec(4 * n);
+        out.par_chunks_mut(4 * CH).enumerate().for_each(|(ci, c)| {
+            for t in 0..c.len() / 4 {
+                store(c, t, src(ci * CH + t));
+            }
+        });
+        out
+    }
+
+    /// Layer s − 1's entries from layer s's: entry y is `[A.L0·A.L1, A.R0·A.R1, B.L0·B.L1, B.R0·B.R1]` with A, B the
+    /// entries y and y + n/2 of the n below.
+    fn halve(q: &[F128]) -> Vec<F128> {
+        let n = q.len() / 8;
+        collect(n, &|y: usize| {
+            let (a, b) = (load(q, y), load(q, y + n));
+            // SAFETY: as `mul`.
+            unsafe { mul(_mm512_shuffle_i64x2::<0x44>(a, b), _mm512_shuffle_i64x2::<0xEE>(a, b)) }
+        })
+    }
+
+    struct Leaves<'a> {
+        w: &'a [u64],
+        sigma: &'a [u32],
+        alpha: V,
+        beta: V,
+        mu: usize,
+    }
+
+    impl Leaves<'_> {
+        /// `[i, σ(i), i + h, σ(i + h)]`'s leaves: each lane's tag `α·v + β` for its index v < 2^32 is one product's two
+        /// low terms and one reduction, plus the cell's bit.
+        #[inline(always)]
+        fn lv(&self, i: usize, h: usize) -> V {
+            let j = i + h;
+            let bit = |x: usize| ((self.w[x >> 6] >> (x & 63)) & 1) as i64;
+            let (bi, bj) = (bit(i), bit(j));
+            // SAFETY: as `mul`.
+            unsafe {
+                let v = _mm512_set_epi64(0, self.sigma[j] as i64, 0, j as i64, 0, self.sigma[i] as i64, 0, i as i64);
+                let t0 = _mm512_clmulepi64_epi128::<0x00>(v, self.alpha);
+                let t1 = _mm512_clmulepi64_epi128::<0x10>(v, self.alpha);
+                let poly = _mm512_set_epi64(0, 0x87, 0, 0x87, 0, 0x87, 0, 0x87);
+                let t = xor(xor(t0, _mm512_bslli_epi128::<8>(t1)), _mm512_clmulepi64_epi128::<0x01>(t1, poly));
+                xor(xor(t, self.beta), _mm512_set_epi64(0, bj, 0, bj, 0, bi, 0, bi))
+            }
+        }
+
+        /// Entry x of layer s, `[VL_s(x), VR_s(x), VL_s(x + h), VR_s(x + h)]` with h = 2^(s−1), from the leaves.
+        #[inline(always)]
+        fn entry(&self, s: usize, x: usize) -> V {
+            let h = 1usize << (s - 1);
+            let lv = |i: usize| self.lv(i, h);
+            let mut v = lv(x);
+            for t in 1..1usize << (self.mu - s) {
+                v = mul(v, lv(x + (t << s)));
+            }
+            v
+        }
+    }
+
+    fn sigma_eval(sigma: &[u32], rho: &[F128]) -> F128 {
+        let nu = rho.len().min(16);
+        let eq_lo = build_eq(&rho[..nu]);
+        let eq_hi = build_eq(&rho[nu..]);
+        sigma
+            .par_chunks(1 << nu)
+            .enumerate()
+            .map(|(b, c)| {
+                let mut acc = Acc::new();
+                for (j, s) in c.chunks_exact(4).enumerate() {
+                    acc.add(load(&eq_lo, j), set4(from_fn(|i| F128::new(s[i] as u64, 0))));
+                }
+                let [a, b2, c2, d] = lanes(acc.reduce());
+                eq_hi[b] * (a + b2 + c2 + d)
+            })
+            .reduce(|| F128::ZERO, |a, b| a + b)
+    }
+
+    /// One layer's sumcheck (k rounds) over the entries `src` of layer k + 1, returning its rounds, its challenges and
+    /// the last entry. `two`: bind the first two rounds from `src` before writing (k ≥ 2).
+    fn layer<S: Fn(usize) -> V + Sync, C: Challenger>(
+        src: &S,
+        k: usize,
+        r_pt: &[F128],
+        lambda: F128,
+        two: bool,
+        ch: &mut C,
+    ) -> (Vec<(F128, F128)>, Vec<F128>, V) {
+        if k == 0 {
+            return (Vec::new(), Vec::new(), src(0));
+        }
+        let h = 1usize << k;
+        let mut rounds = Vec::with_capacity(k);
+        let mut r_prime = Vec::with_capacity(k + 1);
+        let mut round = |m: (F128, F128), ch: &mut C| -> F128 {
+            ch.observe_f128(m.0);
+            ch.observe_f128(m.1);
+            let rho = ch.sample_f128();
+            rounds.push(m);
+            r_prime.push(rho);
+            rho
+        };
+        let rho0 = round(message(src, lambda, &SplitEqGhash::new(&r_pt[1..k])), ch);
+        let (mut cur, mut len, mut pending, done);
+        if two && k >= 2 {
+            let r0 = splat(rho0);
+            let src1 = |x: usize| fold(src(2 * x), src(2 * x + 1), r0);
+            let rho1 = round(message(&src1, lambda, &SplitEqGhash::new(&r_pt[2..k])), ch);
+            len = h / 4;
+            cur = crate::alloc_uninit_vec::<F128>(4 * len);
+            let eq_next = (2 < k).then(|| SplitEqGhash::new(&r_pt[3..k]));
+            pending = fold_message(&src1, len, rho1, &mut cur, lambda, eq_next.as_ref());
+            done = 2;
+        } else {
+            len = h / 2;
+            cur = crate::alloc_uninit_vec::<F128>(4 * len);
+            let eq_next = (1 < k).then(|| SplitEqGhash::new(&r_pt[2..k]));
+            pending = fold_message(src, len, rho0, &mut cur, lambda, eq_next.as_ref());
+            done = 1;
+        }
+        let mut nxt = crate::alloc_uninit_vec::<F128>(4 * (len / 2).max(1));
+        for i in done..k {
+            let rho = round(pending.expect("round i's message was produced already"), ch);
+            let eq_next = (i + 1 < k).then(|| SplitEqGhash::new(&r_pt[i + 2..k]));
+            let c = &cur[..4 * len];
+            pending = fold_message(&|x| load(c, x), len / 2, rho, &mut nxt, lambda, eq_next.as_ref());
+            len /= 2;
+            swap(&mut cur, &mut nxt);
+        }
+        debug_assert_eq!(len, 1, "layer {k}: folds must reduce to one entry");
+        let last = load(&cur, 0);
+        (rounds, r_prime, last)
+    }
+
+    /// [`rec_holo_prove_batched_stream`]`(w, σ, unstored, true, ch)` on these kernels: the same proof bytes.
+    pub fn rec_holo_prove_batched_fast<C: Challenger>(
+        w: &[u64],
+        sigma: &[u32],
+        unstored: usize,
+        ch: &mut C,
+    ) -> (ProductGkrBatchedProof, ProductGkrBatchedClaim) {
+        let n = sigma.len();
+        assert!(n.is_power_of_two() && n >= 64 && w.len() * 64 == n);
+        let mu = n.trailing_zeros() as usize;
+        assert!(mu <= 32 && unstored >= 1 && unstored < mu, "need μ ≤ 32 and 1 ≤ unstored < μ");
+        ch.observe_label(DOMAIN_BATCHED);
+        let alpha = ch.sample_f128();
+        let beta = ch.sample_f128();
+        let leaves = Leaves { w, sigma, alpha: splat(alpha), beta: splat(beta), mu };
+
+        let top = mu - unstored;
+        let mut q: Vec<Vec<F128>> = vec![Vec::new(); mu + 1];
+        q[top] = collect(1 << (top - 1), &|x| leaves.entry(top, x));
+        for s in (1..top).rev() {
+            q[s] = halve(&q[s + 1]);
+        }
+        let [a, b, c, d] = lanes(load(&q[1], 0));
+        let (top_lhs, top_rhs) = (a * c, b * d);
+        ch.observe_f128(top_lhs);
+        ch.observe_f128(top_rhs);
+
+        let mut r_pt: Vec<F128> = Vec::new();
+        let mut layers = Vec::with_capacity(mu);
+        let (mut claim_l, mut claim_r) = (F128::ZERO, F128::ZERO);
+        for k in 0..mu {
+            let lambda = ch.sample_f128();
+            let s = k + 1;
+            let (rounds, mut r_prime, last) = if s <= top {
+                let qs = take(&mut q[s]);
+                layer(&|x| load(&qs, x), k, &r_pt, lambda, false, ch)
+            } else {
+                layer(&|x| leaves.entry(s, x), k, &r_pt, lambda, true, ch)
+            };
+            let [vl0, vr0, vl1, vr1] = lanes(last);
+            for v in [vl0, vl1, vr0, vr1] {
+                ch.observe_f128(v);
+            }
+            layers.push(BatchedLayerProof { rounds, vl0, vl1, vr0, vr1 });
+            let c_k = ch.sample_f128();
+            let one_plus_c = F128::ONE + c_k;
+            claim_l = one_plus_c * vl0 + c_k * vl1;
+            claim_r = one_plus_c * vr0 + c_k * vr1;
+            r_prime.push(c_k);
+            r_pt = r_prime;
+        }
+        let rho = r_pt;
+        let s_sigma_eval = sigma_eval(sigma, &rho);
+        let f_eval = claim_l + alpha * s_id_eval(&s_id_basis(mu), &rho) + beta;
+        let g_eval = claim_r + alpha * s_sigma_eval + beta;
+        observe_evals(ch, &[f_eval, g_eval, s_sigma_eval]);
+        let proof =
+            ProductGkrBatchedProof { top_lhs, top_rhs, layers, f_eval, g_eval, s_sigma_eval, grinding_nonces: Vec::new() };
+        let claim = ProductGkrBatchedClaim { rho, f_eval, g_eval, s_sigma_eval };
+        (proof, claim)
+    }
+}
