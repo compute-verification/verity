@@ -4,6 +4,7 @@ import FlockSoundness.Discharge.ScopeG.Keys
 import FlockSoundness.Discharge.ScopeG.Places
 import FlockSoundness.Discharge.ScopeG.Bind
 import FlockSoundness.Discharge.ScopeG.Headline
+import FlockSoundness.Discharge.ScopeG.Zk
 
 /-!
 # The headlines' scope widened to cut inputs and tails: frozen statements
@@ -35,6 +36,8 @@ This area freezes the VU's program and the hidden-output headline at it; the pro
 * `Headline`: `VuBindH`, a binding of the VU's program at the hidden tables; `flock_headline_exec_hiddenG_of`, the
   headline at any one; `vuBindH_nonempty`, `vuBindHT_nonempty` from `Bind`'s obligations (`vuBindH_of`);
   `flock_headline_exec_hiddenG` at `scopeOkG` and `flock_headline_exec_hiddenGT` at `scopeOkGT`.
+* `Zk`: the `--zk` form: `VuPlaceZ`, a placement at each `--zk` table's acceptance, and its places (`VuPlaceZ.place`);
+  open: `vuPlaceZ_nonempty`; `zk_flock_countG`, `ZkHidden.zk_flock_countC_execOS_crH` at `vuProg` and that placement.
 
 Not here: a gemm coordinate also reads shared-row public tables, which every hidden-output headline excludes
 (`pub.tables = none`).

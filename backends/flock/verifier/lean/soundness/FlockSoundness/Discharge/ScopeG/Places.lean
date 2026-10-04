@@ -133,6 +133,34 @@ theorem vuB_eq (c : Flock.Circuit) (hs : scopeOkGT c = true) : vuB c hs = (vuIns
 def vuInPos (c : Flock.Circuit) (g s : ℕ) : ℕ :=
   c.unitRange.slot (g * c.upv + (vuIns c).getD s 0 / unitW c) + (vuIns c).getD s 0 % unitW c
 
+/-- **Inputs of a unit of `vuProg` on one gate carry one value** at any columns that put its inputs on VU `g`'s unit
+slots (`vuInPos`) in an accepted hidden statement of its circuit: they have one key (`vuProg_wire_key`), so one value
+(`acc_key_block`). -/
+theorem vuProg_aliased {c : Flock.Circuit} {hs : scopeOkGT c = true} {n : ℕ} {T : Model.Statement} (a : AcceptedH T)
+    (hc : a.st.c = c) {g : ℕ} (hg : g < c.g) (col : Fin (vuRows c hs).w → Fin (2 ^ T.kLog))
+    (hcol : ∀ x : Fin (vuRows c hs).w, x.val < vuB c hs → (col x).val = vuInPos c g x.val)
+    (outs : Finset (Fin (vuN c hs n))) (u : Fin n) (o : Fin (2 ^ T.nbl)) :
+    ∀ x x', (Const.Prog.instC (vuProg c hs n) outs u).wire x = (Const.Prog.instC (vuProg c hs n) outs u).wire x' →
+      x.val < ((vuProg c hs n).rows u).nIn → x'.val < ((vuProg c hs n).rows u).nIn →
+      ∀ z : Witness T.m, T.Satisfies z →
+        T.block z o (col (Fin.cast (congrArg Rows.w (rows_vuProg c hs n u)) x)) =
+          T.block z o (col (Fin.cast (congrArg Rows.w (rows_vuProg c hs n u)) x')) := by
+  intro x x' hw hx hx' z hsat
+  have hk := vuProg_wire_key hs outs u x x' hx hx' hw
+  have e := congrArg Rows.nIn (rows_vuProg c hs n u)
+  have h1 : x.val < vuB c hs := lt_of_lt_of_eq hx e
+  have h2 : x'.val < vuB c hs := lt_of_lt_of_eq hx' e
+  have hx1 : (vuIns c).getD x.val 0 < c.upv * unitW c := vuIns_lt c (by rw [← vuB_eq c hs]; exact h1)
+  have hx2 : (vuIns c).getD x'.val 0 < c.upv * unitW c := vuIns_lt c (by rw [← vuB_eq c hs]; exact h2)
+  have hk' : Aliased.srcKey c ((vuIns c).getD x.val 0) = Aliased.srcKey c ((vuIns c).getD x'.val 0) := hk
+  have hr1 : (col (Fin.cast (congrArg Rows.w (rows_vuProg c hs n u)) x)).val =
+      c.unitRange.slot (g * c.upv + (vuIns c).getD x.val 0 / unitW c) + (vuIns c).getD x.val 0 % unitW c :=
+    hcol _ h1
+  have hr2 : (col (Fin.cast (congrArg Rows.w (rows_vuProg c hs n u)) x')).val =
+      c.unitRange.slot (g * c.upv + (vuIns c).getD x'.val 0 / unitW c) + (vuIns c).getD x'.val 0 % unitW c :=
+    hcol _ h2
+  exact acc_key_block a hc hg hx1 hx2 hk' hr1 hr2 hsat o
+
 section place
 
 variable {c : Flock.Circuit} {hs : scopeOkGT c = true} {n : ℕ} {Reg : Type} {mPts : ℕ}
@@ -166,21 +194,9 @@ theorem VuPlace.aliased (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       ∀ z : Witness (Partition.tabOf plan tab S R u).S.m, (Partition.tabOf plan tab S R u).S.Satisfies z →
         (Partition.tabOf plan tab S R u).S.block z (si.o S R u h) (P.colP S R u h x) =
           (Partition.tabOf plan tab S R u).S.block z (si.o S R u h) (P.colP S R u h x') := by
-  intro x x' hw hx hx' z hsat
-  have hk := vuProg_wire_key hs outs u x x' hx hx' hw
-  have e := congrArg Rows.nIn (rows_vuProg c hs n u)
-  have h1 : x.val < vuB c hs := lt_of_lt_of_eq hx e
-  have h2 : x'.val < vuB c hs := lt_of_lt_of_eq hx' e
   have hc := (si.acc S R u h).c_eq (hparse S R u h)
   have hg : si.vu S R u h < c.g := by rw [← hc]; exact si.hvu S R u h
-  have hx1 : (vuIns c).getD x.val 0 < c.upv * unitW c := vuIns_lt c (by rw [← vuB_eq c hs]; exact h1)
-  have hx2 : (vuIns c).getD x'.val 0 < c.upv * unitW c := vuIns_lt c (by rw [← vuB_eq c hs]; exact h2)
-  have hk' : Aliased.srcKey c ((vuIns c).getD x.val 0) = Aliased.srcKey c ((vuIns c).getD x'.val 0) := hk
-  have hr1 : (P.colP S R u h x).val = c.unitRange.slot (si.vu S R u h * c.upv + (vuIns c).getD x.val 0 / unitW c) +
-      (vuIns c).getD x.val 0 % unitW c := P.hcol S R u h _ h1
-  have hr2 : (P.colP S R u h x').val = c.unitRange.slot (si.vu S R u h * c.upv + (vuIns c).getD x'.val 0 / unitW c) +
-      (vuIns c).getD x'.val 0 % unitW c := P.hcol S R u h _ h2
-  exact acc_key_block (si.acc S R u h) hc hg hx1 hx2 hk' hr1 hr2 hsat _
+  exact vuProg_aliased (si.acc S R u h) hc hg (P.col S R u h) (P.hcol S R u h) outs u (si.o S R u h)
 
 include hparse in
 /-- **`ProgPlaces` for the VU's program**: each drawn unit placed by `P`, its instance the program's own
