@@ -139,7 +139,10 @@ A tool's declaration may name result steps a merge needs by path (`Tool.merge_re
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
 `passed` admits it; `!` patterns leave paths out (`!README.md`: every file of that name under the prefixes). `check` requires
 `lean-agreement` for `backends/flock/`, less its README.md and PROTOCOL.md files; `--train --send FILE` ships what such a step
-needs.
+needs. It may also name what runs after a landing (`Tool.after_land`, an argv, read from the target's checkout too): once
+`--push` has pushed a merge or a train, that argv is started in the checkout, in a session of its own, with the landed commit
+appended, and nothing it does changes the merge's exit code. `check`'s is `tools/check/post_train.py`, the vLLM reference
+regression's manifest rebuilds, which label the landing's check attempt when they end.
 
 **Not live yet:** `main` still moves only by the trains the research coordinator lands with `research merge`, so a `ready`
 label alone lands nothing; ask the train runner on Slack as well until the queue lands a full train.
