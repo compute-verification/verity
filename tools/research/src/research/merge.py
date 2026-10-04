@@ -599,12 +599,20 @@ def _push_and_sweep(repo: Path, into: str, remote: str, push: bool) -> int:
     only what is on the remote; a refused push sweeps nothing and fails. Without ``push`` the sweep finds nothing the merge
     landed, says so, and `research merge --sweep` after the push does it."""
     if push:
+        was = _git(repo, "ls-remote", remote, f"refs/heads/{into}", check=False).stdout.split()[:1]
         r = _git(repo, "push", "-q", remote, f"refs/heads/{into}:refs/heads/{into}", check=False)
         if r.returncode:
             print(f"research merge: push of {into} to {remote} refused, nothing swept: {(r.stderr or r.stdout).strip()[-300:]}",
                   file=sys.stderr)
             return 1
         print(f"research merge: pushed {into} to {remote}")
+        if was:
+            from .spec_alert import alert
+
+            alert(repo, was[0], _git(repo, "rev-parse", f"refs/heads/{into}").stdout.strip(), gh=lambda *a: _gh_cli(repo, *a))
+        else:
+            print(f"research merge: GUARANTEE CHANGES NOT CHECKED: {remote} had no {into} before the push, so there's nothing "
+                  "to compare with; tell Daniel by hand if a lean-audit.json's pins or reads changed", file=sys.stderr)
     _sweep_after(repo, into, remote)
     return 0
 
