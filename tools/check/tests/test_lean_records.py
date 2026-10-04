@@ -44,7 +44,7 @@ with open(os.path.join(out, "audit.json"), "w") as f:
     json.dump({"passed": not rc, "failed": [pkg] if rc else [], "packages": [rep]}, f)
 if "--update" in sys.argv:
     with open(os.path.join(pkg, "lean-audit.json"), "w") as f:
-        f.write('{"pins": {"A.t": {}}}')
+        f.write('{"guarantees": {"A.t": {}}}')
 sys.exit(rc)
 """
 
@@ -110,7 +110,7 @@ def test_the_audit_runs_without_the_replay_on_the_trees_own_copy_of_the_audits_d
 
     assert LC.audit_records("a", deps, tree, update=True) == 0
     assert _argv(_calls(tmp_path)[0]) == ["--build", "--no-replay", "--no-runs", "--update", "--out", "OUT", str(tree / "a")]
-    assert (repo / "a" / "lean-audit.json").read_text() == '{"pins": {"A.t": {}}}', "the record comes back to the checkout"
+    assert (repo / "a" / "lean-audit.json").read_text() == '{"guarantees": {"A.t": {}}}', "the record comes back to the checkout"
     out = capsys.readouterr().out
     assert f"lean-records: wrote {repo / 'a' / 'lean-audit.json'}" in out
     assert "dependencies copied" not in out, "the tree keeps its copy while the manifest and toolchain stay"
