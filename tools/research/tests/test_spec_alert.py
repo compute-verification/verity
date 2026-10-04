@@ -134,3 +134,10 @@ def test_a_push_to_main_alerts_on_what_it_moved_main_across(tmp_path, monkeypatc
     monkeypatch.setattr(merge, "_sweep_after", lambda *a: None)
     assert merge._push_and_sweep(repo, "main", "origin", True) == 0
     assert seen == [(old, new)]
+
+
+def test_the_queue_names_the_pull_requests_it_landed(tmp_path):
+    repo = _repo(tmp_path)
+    old = _commit(repo, "lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}), "base")
+    new = _commit(repo, "lean-audit.json", _doc({"P.t": _g("P.t : B", H2)}), "queue: #5 at abc")
+    assert " from #5, #6.\n" in spec.message(repo, old, new, None, prs=[5, 6])

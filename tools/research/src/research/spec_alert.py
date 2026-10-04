@@ -1,5 +1,5 @@
-"""The DM a spec change sends Daniel when `research merge --push` lands it on main (his ruling, 3 Oct: a change to what a
-guarantee says waits on nobody, and he is shown it).
+"""The DM a spec change sends Daniel when it lands on main, by `research merge --push` or `research queue land` (his ruling,
+3 Oct: a change to what a guarantee says waits on nobody, and he is shown it).
 
 The spec is what each package's `lean-audit.json` records: every guarantee's statement (its printed signature and type
 hash) and every definition the statements read (its hash, under `reads`). Between the main the push replaced and the one it
@@ -95,8 +95,9 @@ def web(repo: Path, remote: str) -> str | None:
     return f"https://github.com/{m[1]}/{m[2]}" if m else None
 
 
-def message(repo: Path, old: str, new: str, url: str | None = None) -> str | None:
-    """The DM for main moving from ``old`` to ``new``, or None when no guarantee says anything new."""
+def message(repo: Path, old: str, new: str, url: str | None = None, prs: list[int] | None = None) -> str | None:
+    """The DM for main moving from ``old`` to ``new``, or None when no guarantee says anything new.  ``prs``, the pull requests
+    it landed, default to the numbers in its first-parent subjects (`Merge #12 #34 (…)`)."""
     paths = [p for p in _git(repo, "diff", "--name-only", old, new).splitlines()
              if p == RECORD or p.endswith("/" + RECORD)]
     blocks = []
@@ -106,7 +107,8 @@ def message(repo: Path, old: str, new: str, url: str | None = None) -> str | Non
     if not blocks:
         return None
     compare = f"<{url}/compare/{old[:12]}...{new[:12]}|{old[:9]}..{new[:9]}>" if url else f"{old[:9]}..{new[:9]}"
-    prs = sorted({int(n) for n in re.findall(r"#(\d+)", _git(repo, "log", "--first-parent", "--format=%s", f"{old}..{new}"))})
+    if prs is None:
+        prs = sorted({int(n) for n in re.findall(r"#(\d+)", _git(repo, "log", "--first-parent", "--format=%s", f"{old}..{new}"))})
     landed = ", ".join(f"<{url}/pull/{n}|#{n}>" if url else f"#{n}" for n in prs)
     text = f"A spec change landed on main ({compare})" + (f" from {landed}" if landed else "") + ".\n\n" + "\n\n".join(blocks)
     if len(text) > LIMIT:
@@ -115,14 +117,14 @@ def message(repo: Path, old: str, new: str, url: str | None = None) -> str | Non
     return text
 
 
-def alert(repo: Path, old: str, new: str, *, remote: str = "origin", api=None, reg: dict | None = None,
-          log=print) -> bool:
+def alert(repo: Path, old: str, new: str, *, remote: str = "origin", prs: list[int] | None = None, api=None,
+          reg: dict | None = None, log=print) -> bool:
     """DM Daniel what the push from ``old`` to ``new`` changed in the spec; True when it was sent or there was nothing to
     send. A failure is printed and posted to #agent-alerts, and returns False."""
     from .slack import Slack, SlackError, human_entry, load_registry, registry_path
 
     try:
-        text = message(repo, old, new, web(repo, remote))
+        text = message(repo, old, new, web(repo, remote), prs)
     except (subprocess.CalledProcessError, ValueError) as e:
         text = f"A change landed on main ({old[:9]}..{new[:9]}), and reading its `lean-audit.json` records failed: {e}"
     if text is None:
