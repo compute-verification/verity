@@ -68,6 +68,7 @@ def test_evict_store_only_verified_blobs_largest_first_and_honest_presence(store
     store.push(shared_b, preserve=False)                                               # flagged remote, never verified -> held back
     store.fetch(verified)                                                              # a trees/ cache entry
     assert (store.root / "trees" / ids.hex_of(verified)).is_dir()
+    os.utime(store.root / "trees" / ids.hex_of(verified), (0, 0))                     # fetched long ago
 
     free = {"n": 1000}
     plan = EV.plan_store(store, min_bytes=1000)
@@ -96,6 +97,26 @@ def test_evict_store_only_verified_blobs_largest_first_and_honest_presence(store
     assert "would evict" in capsys.readouterr().out
     assert main(["evict", "--target-free-gb", "99999", "--dry-run", "--json"]) == 1, "an unreachable target is exit 1"
     assert json.loads(capsys.readouterr().out)["store"]["reached_target"] is False
+
+
+def test_evict_leaves_a_tree_someone_fetched_within_a_day(store, tmp_path):
+    """Node 1's hourly eviction runs below its mark all day, so clearing trees/ whole took the files a run's view links into
+    from under the run (the vLLM regression's #11 rebuild, r20261003-173418-89e5): only entries nobody fetched within
+    TREE_KEEP_S go, and a fetch, a cache hit too, refreshes its entry."""
+    from research.store import evict as EV
+
+    old = store.put_artifact("run-files/v1", {"n": 1}, tree=_tree(tmp_path / "old", {"a.bin": b"a" * 10}))
+    new = store.put_artifact("run-files/v1", {"n": 2}, tree=_tree(tmp_path / "new", {"b.bin": b"b" * 20}))
+    t_old, t_new = store.fetch(old), store.fetch(new)
+    os.utime(t_old, (0, 0))
+    os.utime(t_new, (0, 0))
+    assert store.fetch(new) == t_new and t_new.stat().st_mtime > 0, "a cache hit refreshes its entry"
+    fetched = t_new.stat().st_mtime
+    rep = EV.evict_store(store, target_free_bytes=1, min_bytes=1, free_fn=lambda: 0, now=fetched + EV.TREE_KEEP_S - 1)
+    assert rep["trees_removed"] and rep["trees_kept"] == 1
+    assert not t_old.exists() and (t_new / "b.bin").read_bytes() == b"b" * 20
+    rep = EV.evict_store(store, target_free_bytes=1, min_bytes=1, free_fn=lambda: 0, now=fetched + EV.TREE_KEEP_S + 1)
+    assert rep["trees_removed"] and rep["trees_kept"] == 0 and not t_new.exists()
 
 
 def test_evict_runs_only_preserved_terminal_quiet_runs_and_leaves_a_restore_record(store, fs_remote, tmp_path, capsys):
