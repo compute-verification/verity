@@ -4,7 +4,7 @@ of them miss.
 Its model is the verifier of `lean/Pous/Protocol/Model/Continuous.lean` (#954), with the guarantee
 `Pous.SecurityProofs.ContinuousAudit`.  That verifier sends `n` uniform, independent indices and counts a miss for
 every round that is not a hit: wrong, late or rejected.  Three requirements are theorems about it
-(`lean/Pous/SecurityProofs/Continuous/Verifier.lean`), and `ContinuousVerifier` enforces each one on a single
+(`security_proofs/pous/Pous/SecurityProofs/Continuous/Verifier.lean`), and `ContinuousVerifier` enforces each one on a single
 `audit.TimedVerifier` over the whole stream, with its clock and its index draws:
 
 1. **No pipelining.** Challenge `j + 1` is revealed only once answer `j` is in or its hard deadline has passed

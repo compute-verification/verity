@@ -188,7 +188,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
      conditions in their docstrings, and `BandPubMeetsFamilyD2` and `BandPubMeetsFamilyD1` the same family at
      `D = 2`, `k = 97` and at `D = 1`, `k = 93`;
    - dense: `dense_pub_meets_64` and `seg_pub_meets_14` (a random-oracle `H`), and `chain_pub_meets_64` (the overwrite
-     chain), given `ChainExPostFacto`, which `chainExPostFacto_v6` proves (`lean/Pous/SecurityProofs/Chain/Flat.lean`;
+     chain), given `ChainExPostFacto`, which `chainExPostFacto_v6` proves (`security_proofs/pous/Pous/SecurityProofs/Chain/Flat.lean`;
      not a guarantee).
 
    An accept-all check provably fails (`acceptAll_fails_dense`). P3 goes through the same code, but its
@@ -307,7 +307,7 @@ continuous audit's model, `lean/Pous/Protocol/Model/Continuous.lean`, with the g
 when at most `f₀` answers miss. A miss is an answer that is wrong or later than `Δ + RTT`. `n` is fixed before the
 stream, so the stream is never stopped or extended on misses, though it may reject early (`exceeded`). The verifier is
 one `audit.TimedVerifier` over the stream with a hard deadline, and it enforces the three requirements that
-`lean/Pous/SecurityProofs/Continuous/Verifier.lean` proves of the model's verifier:
+`security_proofs/pous/Pous/SecurityProofs/Continuous/Verifier.lean` proves of the model's verifier:
 
 1. **No pipelining.** `challenge()` reveals index `j + 1` only once answer `j` is in or `Δ_late + RTT` has passed since
    index `j` was revealed, and in that case it first closes challenge `j` as rejected; the close stands even when `j`
@@ -679,10 +679,10 @@ Each is a `Prop` taken as a hypothesis, never an `axiom`.
 
 Done, in this package: in the random-oracle model, the dense re-certificate at `POINT_64K` (`dense_meets_64`), the
 multi-segment lemma (`seg_meets_14`, 14 GB) and its form for the code's per-segment `tag_s` domains
-(`segTag_meets_14`), in `lean/Pous/SecurityProofs/Dense/`. Over the overwrite chain, the ex post facto bounds
+(`segTag_meets_14`), in `security_proofs/pous/Pous/SecurityProofs/Dense/`. Over the overwrite chain, the ex post facto bounds
 `ChainExPostFactoG` and `ChainExPostFacto` (`chainExPostFactoG_v6`, `chainExPostFacto_v6`), and from them the band,
 the dense chain scheme and P3 with the concrete `H` ("Guarantees"), in
-`lean/Pous/SecurityProofs/Chain/Flat.lean`. Pending:
+`security_proofs/pous/Pous/SecurityProofs/Chain/Flat.lean`. Pending:
 
 - P3's certificate: the code's `h_0` and Lean's `iv(domP3 tag L v)` differ ("P3 (research)").
 - A GPU codec for the dense scheme (#172's is P3's).
