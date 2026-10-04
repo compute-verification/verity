@@ -11,13 +11,19 @@ compute that coverage leaves uncovered went unchecked, so at most `headroom` of 
                 advice's circuit, and records whether the epoch complies
 
 Coverage reads integrity, so the policy reads it through coverage, and holds except with coverage's probability.
+
+An epoch's verdict says nothing outside its window. A period is epochs back to back (`period`): each complies, and each
+window opens no later than the one before it closed, so no time between them goes unaccounted. An epoch with no
+verdict leaves a gap, so the period fails closed.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from verity.accounting.coverage.compute import ComputeCoverage
+from verity.accounting.utilization.work import Window
 from verity.primitives import partition as P
 from verity.primitives.events import Actor, Send, collect, receive
 from verity.primitives.registration import (
@@ -31,9 +37,23 @@ from verity.primitives.registration import (
 
 @dataclass(frozen=True)
 class Complies:
-    """Whether the stream kept to the policy; except with probability `delta`, it did if `complies`."""
+    """Whether the stream kept to the policy over the work's `window`; except with probability `delta`, it did if
+    `complies`."""
 
     stream: str
+    window: Window
+    complies: bool
+    delta: float
+    reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class Period:
+    """Whether the epochs over `streams`, back to back over `window`, kept to the policy; except with probability
+    `delta`, they did if `complies`."""
+
+    streams: tuple[str, ...]
+    window: Window
     complies: bool
     delta: float
     reasons: tuple[str, ...]
@@ -76,4 +96,18 @@ class Nci:
                     reasons.append(
                         f"advice {advice!r} isolation unit {u}: {len(gates)} gates reading {novel} novel bits"
                     )
-        return (Send(Complies(stream, not reasons, coverage.delta, tuple(reasons))),)
+        return (Send(Complies(stream, coverage.window, not reasons, coverage.delta, tuple(reasons))),)
+
+
+def period(epochs: Sequence[Complies]) -> Period:
+    """The verdicts of a period's epochs, in order, by one clock. Windows that overlap only count capacity twice; a gap
+    between two is time nothing accounts for. The deltas add, by a union bound."""
+    reasons = [f"epoch {i}: {why}" for i, epoch in enumerate(epochs) for why in epoch.reasons]
+    reasons += [
+        f"{b.window.opened - a.window.closed:.2f}s unaccounted between epochs {i} and {i + 1}"
+        for i, (a, b) in enumerate(zip(epochs, epochs[1:]))
+        if b.window.opened > a.window.closed
+    ]
+    window = Window(epochs[0].window.opened, epochs[-1].window.closed)
+    delta = sum(epoch.delta for epoch in epochs)
+    return Period(tuple(epoch.stream for epoch in epochs), window, not reasons, delta, tuple(reasons))

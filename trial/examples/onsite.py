@@ -15,7 +15,7 @@ from verity.accounting.coverage.network import Network
 from verity.accounting.integrity.replay import Replay
 from verity.accounting.integrity.sampling import Weighted
 from verity.accounting.utilization.space import Space, encode
-from verity.accounting.utilization.work import Work
+from verity.accounting.utilization.work import Window, Work
 from verity.compliance.nci import Nci
 from verity.onsite import Onsite
 from verity.primitives import partition as P
@@ -41,7 +41,7 @@ principals = {
     "verifier": onsite.verifier(),
     "prover": onsite.prover(registration, executions, transcripts, encode(b"weights", 2048)),
     "replayer": onsite.replayer(),
-    "pinger": onsite.pinger(fleet, work_seconds=tries(registration, executions) / (2 * 1000.0), space_seconds=0.0004),
+    "pinger": onsite.pinger(fleet, Window(0.0, tries(registration, executions) / (2 * 1000.0)), space_seconds=0.0004),
     "warden": onsite.warden(bytes_out=len(requests) * len(circuit.outputs) // 8, timing_bits=7),
 }
 for event in run(principals, view="verifier"):

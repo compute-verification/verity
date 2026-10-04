@@ -3,9 +3,9 @@ registration and before the stream, keys the work of every execution the prover 
 to be and whatever their advice.
 
     verifier    takes the registration, sends a salt drawn from its secret, takes the stream, the shares, and the
-                seconds `clock_from`'s clock read between the salt and the shares; records the bound
+                window `clock_from`'s clock read (when the salt went out and the shares came in); records the bound
     prover      once it has the salt, searches each execution's work for shares under that execution's key
-    clock       the reading, by whoever the verifier trusts for it: itself (remote) or a pinger at the site (onsite)
+    clock       the readings, by whoever the verifier trusts for them: itself (remote) or a pinger at the site (onsite)
 
 Useful work keys the prover's own declared computation; proof of work would key filler the verifier chose. Both bound
 the same thing, compute busy after the salt and done when the clock was read; usefulness decides only whether the
@@ -53,18 +53,21 @@ class Shares:
 
 
 @dataclass(frozen=True)
-class Elapsed:
-    seconds: float
+class Window:
+    """A clock's readings, in seconds: when the salt went out, and when the shares came in."""
+
+    opened: float
+    closed: float
 
 
 @dataclass(frozen=True)
 class WorkBound:
-    """At least `work` tries went into the stream's keyed work in the `seconds` between the salt and the shares, by
+    """At least `work` tries went into the stream's keyed work in the `window` between the salt and the shares, by
     `clock_from`'s clock; except with probability `delta`."""
 
     stream: str
     work: int
-    seconds: float
+    window: Window
     clock_from: str
     delta: float
 
@@ -79,15 +82,15 @@ class Work:
         registration = yield from receive(Registration, "prover")
         salt = derive(secret, "verity/work/salt/v0", digest(registration))
         executions = yield from collect(Execution, Closed, "prover", Send(Salt(salt), "prover"))
-        got = yield from gather({Shares: "prover", Elapsed: clock_from})
-        shares, seconds = got[Shares].nonces, got[Elapsed].seconds
+        got = yield from gather({Shares: "prover", Window: clock_from})
+        shares, window = got[Shares].nonces, got[Window]
         valid = sum(
             len(
                 {n for n in shares.get(i, ()) if 0 <= n < _budget(registration, e) and self._share(_key(salt, i, e), n)}
             )
             for i, e in enumerate(executions)
         )
-        bound = WorkBound(digest(registration, executions), self._tries(valid), seconds, clock_from, self.delta)
+        bound = WorkBound(digest(registration, executions), self._tries(valid), window, clock_from, self.delta)
         return (Send(bound),)
 
     def prover(self, registration: Registration, executions: Sequence[Execution]) -> Actor:
@@ -98,8 +101,8 @@ class Work:
             nonces[i] = tuple(n for n in range(_budget(registration, e)) if self._share(key, n))
         return (Send(Shares(nonces), "verifier"),)
 
-    def clock(self, seconds: float) -> Actor:
-        return tell(Send(Elapsed(seconds), "verifier"))
+    def clock(self, window: Window) -> Actor:
+        return tell(Send(window, "verifier"))
 
     def _share(self, key: bytes, nonce: int) -> bool:
         h = hashlib.sha256(key + nonce.to_bytes(8, "big")).digest()

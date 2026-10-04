@@ -12,7 +12,7 @@ from verity.accounting.coverage.compute import Compute
 from verity.accounting.integrity.proofs.construction import Proofs
 from verity.accounting.integrity.proofs.transparent import Transparent
 from verity.accounting.integrity.sampling import Weighted
-from verity.accounting.utilization.work import Work
+from verity.accounting.utilization.work import Window, Work
 from verity.compliance.nci import Nci
 from verity.primitives import partition as P
 from verity.remote import Remote
@@ -32,7 +32,7 @@ registration, executions, transcripts = executed(
 )
 fleet = {"gpu": 2}
 principals = {
-    "verifier": remote.verifier(seconds=tries(registration, executions) / (2 * 1000.0)),
+    "verifier": remote.verifier(Window(0.0, tries(registration, executions) / (2 * 1000.0))),
     "prover": remote.prover(registration, executions, transcripts, fleet),
 }
 for event in run(principals, view="verifier"):

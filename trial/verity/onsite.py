@@ -24,7 +24,7 @@ from verity.accounting.coverage.memory import Memory
 from verity.accounting.coverage.network import Network
 from verity.accounting.integrity.replay import Replay
 from verity.accounting.utilization.space import Space
-from verity.accounting.utilization.work import Salt, Work
+from verity.accounting.utilization.work import Salt, Window, Work
 from verity.compliance.nci import Nci
 from verity.primitives.events import Actor
 from verity.primitives.registration import Execution, Registration, serve
@@ -68,9 +68,9 @@ class Onsite:
     def replayer(self) -> list[Actor]:
         return [self.integrity.replayer()]
 
-    def pinger(self, fleet: Mapping[str, int], work_seconds: float, space_seconds: float) -> list[Actor]:
+    def pinger(self, fleet: Mapping[str, int], work_window: Window, space_seconds: float) -> list[Actor]:
         """Its readings: the devices it counted, and its clock's for the work's window and space's answer."""
-        return [inventory(fleet), self.work.clock(work_seconds), self.space.pinger(space_seconds)]
+        return [inventory(fleet), self.work.clock(work_window), self.space.pinger(space_seconds)]
 
     def warden(self, bytes_out: int, timing_bits: int) -> list[Actor]:
         return [self.network.warden(bytes_out, timing_bits)]

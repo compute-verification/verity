@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 from verity.accounting.coverage.inventory import Fleet
 from verity.accounting.integrity.profile import IntegrityProfile
-from verity.accounting.utilization.work import WorkBound
+from verity.accounting.utilization.work import Window, WorkBound
 from verity.primitives.events import Actor, Send, gather
 
 
@@ -27,6 +27,7 @@ class ComputeCoverage:
     probability `delta`."""
 
     stream: str
+    window: Window
     capacity: int
     inventory_from: str
     covered: int
@@ -42,7 +43,8 @@ class Compute:
     def verifier(self, inventory_from: str) -> Actor:
         got = yield from gather({IntegrityProfile: "verifier", WorkBound: "verifier", Fleet: inventory_from})
         profile, work, fleet = got[IntegrityProfile], got[WorkBound], got[Fleet]
-        capacity = int(work.seconds * sum(n * self.peak.get(device, 0) for device, n in fleet.devices.items()))
+        seconds = work.window.closed - work.window.opened
+        capacity = int(seconds * sum(n * self.peak.get(device, 0) for device, n in fleet.devices.items()))
         reasons = (
             *(("integrity not established",) if not profile.accepted else ()),
             *(("integrity and work are over different streams",) if profile.stream != work.stream else ()),
@@ -52,6 +54,7 @@ class Compute:
         gates = profile.gates
         covered = 0 if reasons or not gates.total else work.work * (gates.total - gates.wrong) // gates.total
         delta = profile.delta + work.delta
-        return (
-            Send(ComputeCoverage(work.stream, capacity, inventory_from, covered, capacity - covered, delta, reasons)),
+        coverage = ComputeCoverage(
+            work.stream, work.window, capacity, inventory_from, covered, capacity - covered, delta, reasons
         )
+        return (Send(coverage),)
