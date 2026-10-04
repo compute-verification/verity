@@ -1,4 +1,4 @@
-import Pouw.SecurityProofs.PearlC.RowStats
+import Pouw.SecurityProofs.PearlC.PeelExists
 import Pouw.SecurityProofs.PearlC.TileCheck4Words
 
 /-!
@@ -18,7 +18,8 @@ row the domain's `OperandOK` (`Workload.InDomain`). By magnitudes (`RowStats`) t
 What stays named: `Pc8OpsAgree` and `Pc4OpsAgree` (core's primitives), `Noise8OK` (no NaN code in `pc8`'s noise),
 and at each entry of a credited row `Pc8EntryOK` or `Pc4EntryOK` (the peel's rows exist; for `pc4` also that the rows'
 values widen from their BF16 words). `_pearlC` is each on the audit's tiles, and `_domain` on `D_dev`'s whole-tile
-layouts and on D₄.
+layouts and on D₄. At a step `⟨[32], w, z⟩` with `w ≥ 24` (`sm120E4m3`), `D_dev`'s `k ≤ 2^16` and `Noise8OK` give
+`Pc8EntryOK` (`PeelExists`), so `tileCheck8_computesWords_wide` names no hypothesis at an entry.
 -/
 
 namespace Pouw.PearlC.WholeCircuit
@@ -84,7 +85,7 @@ theorem tileCheck8_computesWords {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pi
     (hrow : ∀ (sh : Shape) (act : Codes) (i : ℕ), TR.rowOK sh act i → (pc8Sem ops p noise).RowOK sh.m sh.k act i)
     (hnoise : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes), Noise8OK (noise H s U u act))
     (hent : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) (i : Fin (U.layout.shape u).m)
-      (j : Fin (U.layout.shape u).n), TR.rowOK (U.layout.shape u) act i →
+      (j : Fin (U.layout.shape u).n), D U.layout → u < U.layout.N → TR.rowOK (U.layout.shape u) act i →
         Pc8EntryOK ops p (noise H s U u act) act (U.weight (U.layout.wid u)) i j) :
     (tileCheck8 ops p noise).ComputesWords (pearlCProtocolDev (devAt p 4 pr) (pc8Sem ops p noise) ρ) TR D := by
   intro U hU H s g hg c X ⟨hcone, hpub, hreg⟩
@@ -102,7 +103,7 @@ theorem tileCheck8_computesWords {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pi
     (fun v hv h => hreg ⟨v, hv⟩ (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩))
     (row8OK_of_floor hops p noise him hR.1 (hR.2 him).2)
     (row8OK_of_floor hops p noise hjn (hW.1 j hjn) (hW.2 ⟨j, hjn⟩).2)
-    (hnoise H s U _ c.act) (hent H s U _ c.act ⟨i, him⟩ ⟨j, hjn⟩ hok)
+    (hnoise H s U _ c.act) (hent H s U _ c.act ⟨i, him⟩ ⟨j, hjn⟩ hU.2.1 (hunit _ g hg) hok)
   refine ⟨w1.trans ?_, w2.trans ?_⟩
   · show _ = atNat _ i j
     unfold atNat
@@ -121,7 +122,8 @@ theorem tileCheck8_computesWords_pearlC {ops : RowOps} (hops : Pc8OpsAgree ops) 
     (D : Layout → Prop) (hsh : ∀ L, D L → ∀ u < L.N, Shape8 (L.shape u))
     (hnoise : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes), Noise8OK (noise H s U u act))
     (hent : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) (i : Fin (U.layout.shape u).m)
-      (j : Fin (U.layout.shape u).n), (pc8Sem ops p noise).RowOK (U.layout.shape u).m (U.layout.shape u).k act i →
+      (j : Fin (U.layout.shape u).n), D U.layout → u < U.layout.N →
+        (pc8Sem ops p noise).RowOK (U.layout.shape u).m (U.layout.shape u).k act i →
         Pc8EntryOK ops p (noise H s U u act) act (U.weight (U.layout.wid u)) i j) :
     (tileCheck8 ops p noise).ComputesWords (pearlCProtocolDev (devAt p 4 pr) (pc8Sem ops p noise) ρ)
       (pearlCTiles (pc8Sem ops p noise) c ρ) D :=
@@ -137,13 +139,29 @@ theorem tileCheck8_computesWords_domain {ops : RowOps} (hops : Pc8OpsAgree ops) 
       Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r)
     (hnoise : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes), Noise8OK (noise H s U u act))
     (hent : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) (i : Fin (U.layout.shape u).m)
-      (j : Fin (U.layout.shape u).n), (pc8Sem ops p noise).RowOK (U.layout.shape u).m (U.layout.shape u).k act i →
+      (j : Fin (U.layout.shape u).n), pearlCDomainDev (devAt p 4 pr) U.layout → u < U.layout.N →
+        (pc8Sem ops p noise).RowOK (U.layout.shape u).m (U.layout.shape u).k act i →
         Pc8EntryOK ops p (noise H s U u act) act (U.weight (U.layout.wid u)) i j) :
     (tileCheck8 ops p noise).ComputesWords (pearlCProtocolDev (devAt p 4 pr) (pc8Sem ops p noise) ρ)
       (pearlCTiles (pc8Sem ops p noise) c ρ) (fun L => pearlCDomainDev (devAt p 4 pr) L ∧
         ∀ u < L.N, tileSide (L.shape u).m ∣ (L.shape u).m ∧ tileSide (L.shape u).n ∣ (L.shape u).n) :=
   tileCheck8_computesWords_pearlC hops p pr c ρ noise _
-    (fun _ hL u hu => shape8_of_pearlCDomainDev hL.1 hu (hL.2 u hu).1 (hL.2 u hu).2) hnoise hent
+    (fun _ hL u hu => shape8_of_pearlCDomainDev hL.1 hu (hL.2 u hu).1 (hL.2 u hu).2) hnoise
+    fun H s U u act i j hD hu => hent H s U u act i j hD.1 hu
+
+/-- **L3's words for the plain `pc8` Program at a step `⟨[32], w, z⟩` with `w ≥ 24`** (`sm120E4m3` among them), on
+`D_dev`'s whole-tile layouts: `tileCheck8_computesWords_domain` with no hypothesis at an entry, since `D_dev`'s
+`k ≤ 2^16` and `Noise8OK` give the peel's rows (`PeelExists.pc8EntryOK_of_wide`). -/
+theorem tileCheck8_computesWords_wide {ops : RowOps} (hops : Pc8OpsAgree ops) {w : ℕ} (hw : 24 ≤ w) (zf : ℤ)
+    (pr : Prices) (c : Costs) (ρ : ℚ) (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
+      Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r)
+    (hnoise : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes), Noise8OK (noise H s U u act)) :
+    (tileCheck8 ops ⟨[32], w, zf⟩ noise).ComputesWords
+      (pearlCProtocolDev (devAt ⟨[32], w, zf⟩ 4 pr) (pc8Sem ops ⟨[32], w, zf⟩ noise) ρ)
+      (pearlCTiles (pc8Sem ops ⟨[32], w, zf⟩ noise) c ρ) (fun L => pearlCDomainDev (devAt ⟨[32], w, zf⟩ 4 pr) L ∧
+        ∀ u < L.N, tileSide (L.shape u).m ∣ (L.shape u).m ∧ tileSide (L.shape u).n ∣ (L.shape u).n) :=
+  tileCheck8_computesWords_domain hops _ pr c ρ noise hnoise fun H s U u act i j hD hu _ =>
+    PeelExists.pc8EntryOK_of_wide hw zf (hD u hu).2.2.2.2.2 (hnoise H s U u act) act _ i j
 
 /-! ## `pc4`'s tile check computes the words -/
 

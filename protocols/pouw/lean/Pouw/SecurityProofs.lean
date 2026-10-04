@@ -127,6 +127,7 @@ import Pouw.SecurityProofs.PearlC.TileCheck4
 import Pouw.SecurityProofs.PearlC.TileCheck4Words
 import Pouw.SecurityProofs.PearlC.Block4Sem
 import Pouw.SecurityProofs.PearlC.RowStats
+import Pouw.SecurityProofs.PearlC.PeelExists
 import Pouw.SecurityProofs.PearlC.TileCheckWords
 import Pouw.SecurityProofs.Prob
 import Pouw.SecurityProofs.QTree
