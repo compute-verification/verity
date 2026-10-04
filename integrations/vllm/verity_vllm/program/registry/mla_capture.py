@@ -4,7 +4,7 @@
     # node, torch venv:  python -m verity_vllm.program.registry.mla_capture produce --out DIR [--suite NAME]
     # verity venv:       python -m verity_vllm.program.registry.mla_capture check --dir DIR [--out REPORT.json]
     #                    python -m verity_vllm.program.registry.mla_capture check-bits --dir DIR [--tmin T] [--tmax T]
-    #                        [--worker I --workers N] [--skip EARLIER.json ...] [--out R.json]
+    #                        [--worker I --workers N] [--skip EARLIER.json ...] [--fresh] [--out R.json]
 
 `check` holds the numpy models (`mla_check`) to every captured word; `check-bits` evaluates the Boolean Definitions
 themselves: `mla.TritonMlaDecodeHead` on the one-split decode rows, `mla.MlaBmm` and `mla.MoeSharedCombine` on every case.
@@ -381,14 +381,29 @@ def done_keys(reports: list[Path]) -> set[str]:
     return keys
 
 
+def _check_key(d: Path, key: str, tmin: int | None, tmax: int | None) -> tuple[int, int, int, dict | None]:
+    """One key of `check_bits`: (rows, mismatched rows, differing words, the first differing word or None)."""
+    man = json.loads((d / "manifest.json").read_text())
+    got, want, where = _bits_groups(d, man, tmin, tmax)[key][1]()
+    got, want = got.astype(np.uint16), want.astype(np.uint16)
+    bad = got != want
+    first = None
+    if bad.any():
+        r, c = (int(v) for v in np.argwhere(bad)[0])
+        first = {**where(r), "column": c, "got": int(got[r, c]), "want": int(want[r, c])}
+    return bad.shape[0], int(bad.any(axis=1).sum()), int(bad.sum()), first
+
+
 def check_bits(d: Path, tmax: int | None = None, worker: int = 0, workers: int = 1, out: Path | None = None,
-               tmin: int | None = None, skip: set[str] = frozenset()) -> dict:
+               tmin: int | None = None, skip: set[str] = frozenset(), fresh: bool = False) -> dict:
     """The Boolean Definitions on bits (`verity.evaluation.bits`) at GLM-4.7-Flash's statics against the captured words:
     `mla.TritonMlaDecodeHead` against `o` of every one-split decode row with tmin <= T <= tmax (one evaluation per distinct
     T), `mla.MlaBmm` against `c` and `mla.MoeSharedCombine` against `out` (one evaluation per case). The keys not in `skip`
     are dealt to `workers` shares by cost (largest first) and this call takes share `worker`; each finished key is written
-    to `out` at once, so a stopped worker keeps what it checked and a rerun skips it (`done_keys`)."""
+    to `out` at once, so a stopped worker keeps what it checked and a rerun skips it (`done_keys`). With `fresh` each key
+    runs in a new process: a worker's memory is then one key's, where in one process it grows with every T it has bound."""
     import time
+    from concurrent.futures import ProcessPoolExecutor
 
     man = json.loads((d / "manifest.json").read_text())
     groups = {k: g for k, g in _bits_groups(d, man, tmin, tmax).items() if k not in skip}
@@ -402,16 +417,16 @@ def check_bits(d: Path, tmax: int | None = None, worker: int = 0, workers: int =
                  "rows": 0, "mismatched_rows": 0, "words_bad": 0, "first_mismatch": None, "by_key": {}}
     for key in sorted(mine, key=lambda k: (groups[k][0], k)):
         t0 = time.time()
-        got, want, where = groups[key][1]()
-        got, want = got.astype(np.uint16), want.astype(np.uint16)
-        bad = got != want
-        n, nb = bad.shape[0], int(bad.any(axis=1).sum())
+        if fresh:
+            with ProcessPoolExecutor(1, max_tasks_per_child=1) as pool:
+                n, nb, nw, first = pool.submit(_check_key, d, key, tmin, tmax).result()
+        else:
+            n, nb, nw, first = _check_key(d, key, tmin, tmax)
         if nb and rep["first_mismatch"] is None:
-            r, c = (int(v) for v in np.argwhere(bad)[0])
-            rep["first_mismatch"] = {**where(r), "column": c, "got": int(got[r, c]), "want": int(want[r, c])}
+            rep["first_mismatch"] = first
         rep["rows"] += n
         rep["mismatched_rows"] += nb
-        rep["words_bad"] += int(bad.sum())
+        rep["words_bad"] += nw
         rep["by_key"][key] = {"rows": n, "mismatched_rows": nb, "seconds": round(time.time() - t0, 1)}
         print(f"{key} rows={n} bad_rows={nb} {time.time() - t0:.1f}s", flush=True)
         if out:
@@ -437,13 +452,14 @@ def main(argv: list[str] | None = None) -> int:
     cb.add_argument("--worker", type=int, default=0)
     cb.add_argument("--workers", type=int, default=1)
     cb.add_argument("--skip", nargs="*", default=[], help="earlier check-bits reports: their finished keys are not rerun")
+    cb.add_argument("--fresh", action="store_true", help="each key in a new process (a worker's memory is one key's)")
     a = ap.parse_args(argv)
     if a.cmd == "produce":
         produce(Path(a.out), a.suite, a.device)
         return 0
     if a.cmd == "check-bits":
         rep = check_bits(Path(a.dir), a.tmax, a.worker, a.workers, Path(a.out) if a.out else None, a.tmin,
-                         done_keys([Path(p) for p in a.skip]))
+                         done_keys([Path(p) for p in a.skip]), a.fresh)
         print(json.dumps({k: rep[k] for k in ("rows", "mismatched_rows", "words_bad", "first_mismatch")}), file=sys.stderr)
         return 0 if rep["mismatched_rows"] == 0 else 1
     from verity_vllm.program.registry import mla_check

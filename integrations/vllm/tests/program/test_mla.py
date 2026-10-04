@@ -234,7 +234,8 @@ def test_check_bits_replays_bmm_and_combine_captures(tmp_path) -> None:
     rep = MC.check_bits(tmp_path, out=tmp_path / "r.json")
     assert (rep["rows"], rep["mismatched_rows"]) == (2 * 3 + 3, 0)
     assert MC.done_keys([tmp_path / "r.json"]) == {"case=0", "case=1"}
-    assert MC.check_bits(tmp_path, skip={"case=1"})["by_key"].keys() == {"case=0"}
+    again = MC.check_bits(tmp_path, skip={"case=1"}, fresh=True)
+    assert again["by_key"].keys() == {"case=0"} and (again["rows"], again["mismatched_rows"]) == (2 * 3, 0)
     out[1, 3] ^= 1
     np.savez(tmp_path / "case_1.npz", out=out)
     first = [r["first_mismatch"] for r in (MC.check_bits(tmp_path, workers=2, worker=w) for w in (0, 1)) if r["mismatched_rows"]]
