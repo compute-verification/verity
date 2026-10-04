@@ -186,7 +186,8 @@ theorem zk_session_sound_custody
 /-- **One public-output `--zk` sampled session of `J` tables that flock-verify accepts is sound.** `Composed.zk_session_soundJ` over `VerifiesZK`, at every number of tables. -/
 theorem zk_session_soundJ
     (I : Inputs) (hh : I.tags.hiddenOutputs = false)
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the law (the live subset draw) and A3
@@ -233,7 +234,7 @@ theorem zk_session_soundJ_custody
     (I : Inputs) (hh : I.tags.hiddenOutputs = false)
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I (mPtsOf (circZ I).g (kd / nTab I)) S₀ (dj S₀))
+    {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) (mPtsOf (circZ I).g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length (mPtsOf (circZ I).g (kd / nTab I)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -279,7 +280,7 @@ theorem zk_session_soundJ_custody_json
     (I : Inputs) (hh : I.tags.hiddenOutputs = false)
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I (mPtsOf (circZ I).g (kd / nTab I)) S₀ (dj S₀))
+    {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) (mPtsOf (circZ I).g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length (mPtsOf (circZ I).g (kd / nTab I)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)

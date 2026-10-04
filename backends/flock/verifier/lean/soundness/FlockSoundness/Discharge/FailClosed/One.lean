@@ -55,10 +55,11 @@ draw alone (`plan S R` does not depend on the registration `R`), so the plans ha
 a large enough `k` meets `hr` at every statement, draw file and setup, for every `ρ > 0` (`hr_exec`, `hr_execH`, `hr_z`,
 `hr_zj`, `hr_zh`, `hr_zhj`). The bound states its dependence on `k`.
 
-Every claim also takes a reference setup (`x₀`, `y₀`) at some draw. At one table, every session flock-verify accepts at a
-draw the coin server's file proves, with the session's link points, sets one up (`setup_of_verifies`,
-`setupH_of_verifies`, `setupZ_of_verifiesZK`, `setupZH_of_verifiesZK`), so where there is none it accepts no such
-session. -/
+Every claim also takes a reference setup (`x₀`, `y₀`) at some draw: at one table a setup of the statement, and in the
+claims at every number of tables (`SoundZJ`, `SoundZHJ`, `ViewZHJ`) a setup of table 0 under its tags (`inputsJ I 0`).
+Every session flock-verify accepts at a draw the coin server's file proves, with the session's link points, sets one up
+(`setup_of_verifies`, `setupH_of_verifies`, `setupZ_of_verifiesZK`, `setupZH_of_verifiesZK`, and at any number of
+tables `setupZJ_of_verifiesZK`, `setupZHJ_of_verifiesZK`), so where there is none it accepts no such session. -/
 
 /-- **A rerun count meeting a rate**: when a plan reads the draw alone, some `k ≥ 1` puts every table's
 `2^{w T}/(e·k)` at most `ρ`. -/
@@ -331,7 +332,8 @@ set_option linter.unusedVariables false in
 /-- The claim at a public-output statement of any number of tables under `--zk`, the law the live subset draw: `zk_session_soundJ`'s. -/
 def SoundZJ (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the law (the live subset draw) and A3
@@ -372,7 +374,7 @@ def SoundZJ (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
           k Rw M ρ t' (reg σ) (cont σ))
 
 theorem soundZJ (I : Inputs) (hh : I.tags.hiddenOutputs = false) : SoundZJ I hh :=
-  @fun _ _ _ dj _ y₀ wr dg N kd hkd _ _ _ Lb src hA3 hDraw hRec _ _ _ hk hRw hM _ hρ hr _ ht' K₀ τ _ _ hCR =>
+  @fun _ _ _ dj _ _ y₀ wr dg N kd hkd _ _ _ Lb src hA3 hDraw hRec _ _ _ hk hRw hM _ hρ hr _ ht' K₀ τ _ _ hCR =>
     zk_session_soundJ I hh dj y₀ wr dg N kd hkd Lb src hA3 hDraw hRec hk hRw hM hρ hr ht' K₀ τ hCR
 
 /-- `SoundZ`'s `hr` holds for some rerun count at every statement, draw file and setup. -/
@@ -383,13 +385,13 @@ theorem hr_z (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S�
 
 /-- `SoundZJ`'s `hr` holds for some rerun count at every statement, draw file and setup. -/
 theorem hr_zj (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
+    {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateZ (planZJ (Reg := Reg) dj y₀ S R) j k ≤ ρ :=
   exists_k_rateZ (planZJ dj y₀) (fun _ _ _ => rfl) hρ
 
-/-- **`SoundZ`'s setup exists at every accepted draw**, and so `SoundZJ`'s at one table: where flock-verify `--zk`
-accepts a one-table session whose record's draw is `dj S`, at a draw the coin server's file proves with the session's
-link points (`DrawOkZK`), there is a `y₀ : DrawSetupZK I mPts S (dj S)`. -/
+/-- **`SoundZ`'s setup exists at every accepted draw**: where flock-verify `--zk` accepts a one-table session whose
+record's draw is `dj S`, at a draw the coin server's file proves with the session's link points (`DrawOkZK`), there is a
+`y₀ : DrawSetupZK I mPts S (dj S)`. -/
 theorem setupZ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count ≤ 1) {n mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : VerifiesZK I t)
     (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZK I dj mPts S) :
@@ -407,6 +409,30 @@ theorem setupZ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) (h
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
   obtain ⟨x, rfl⟩ := drawSetup_of_setupH_g (I := zkInputs I) (S := S) ht' hst hf hD (hok.1 D hD) (hok.2 _ hst)
   obtain ⟨y, -, -, -⟩ := drawSetupZK_of h.2.typed x hz'
+  exact ⟨y⟩
+
+/-- **`SoundZJ`'s setup exists at every accepted draw, at every number of tables**: where flock-verify `--zk` accepts a
+session whose record's draw is `dj S`, at a draw whose parts the coin server's file proves with the session's link
+points (`DrawOkZKJ`), table 0 sets up, so there is a `y₀ : DrawSetupZJ (inputsJ I 0) mPts _ _`. -/
+theorem setupZJ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) {n mPts : ℕ}
+    (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : VerifiesZK I t)
+    (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKJ I dj mPts S) :
+    Nonempty (DrawSetupZJ (inputsJ I 0) mPts (partS I (dj S) S ⟨0, nTab_pos I⟩) (drawJ I (dj S) 0)) := by
+  obtain ⟨spec, sts, hs, -, hv⟩ := h.1
+  obtain ⟨hsz, hstJ⟩ := setupOf_tableJ hh hd hs
+  have hj : 0 < sts.size := hsz ▸ nTab_pos I
+  have hst := hstJ 0 hj
+  obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
+  obtain ⟨hs0, c0, hz0, -⟩ := hall 0 (by simpa using hj)
+  simp only [Array.getElem_map] at hz0
+  have hz' : Zk.schedule sts[0].m = .ok (schs[0].1, schs[0].2) := hz0
+  obtain ⟨-, -, sch₀, hf⟩ := schedule_spec hz'
+  have ht' : (inputsJ I 0).tags.typed = false := typedJ h.2.typed 0
+  obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst
+  obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
+  obtain ⟨x, hx⟩ := drawSetup_of_setupH_g (I := inputsJ I 0) (S := partS I (dj S) S ⟨0, nTab_pos I⟩) (mPts := mPts)
+    ht' hst hf hD ((hok ⟨0, nTab_pos I⟩).1 D hD) ((hok ⟨0, nTab_pos I⟩).2 _ hst)
+  obtain ⟨y, -, -, -⟩ := drawSetupZJ_of ht' x (sch := schs[0].1) (tPad := schs[0].2) (by rw [hx]; exact hz')
   exact ⟨y⟩
 
 set_option linter.unusedVariables false in
@@ -486,7 +512,8 @@ set_option linter.unusedVariables false in
 /-- The claim at a hidden-output statement of any number of tables under `--zk`, the law the live subset draw: `zk_session_soundHJ`'s. -/
 def SoundZHJ (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hv : Layout.scopeOk (circZ I) = true) : Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the law (the live subset draw) and A3
@@ -531,7 +558,7 @@ def SoundZHJ (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hv : Layout.scopeO
 
 theorem soundZHJ (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hv : Layout.scopeOk (circZ I) = true) :
     SoundZHJ I hh hv :=
-  @fun _ _ _ dj _ y₀ wr dg N kd hkd _ _ _ Lb src hA3 hDraw hRec _ _ _ hk hRw hM _ hρ hr _ ht' K₀ τ _ _ hCR =>
+  @fun _ _ _ dj _ _ y₀ wr dg N kd hkd _ _ _ Lb src hA3 hDraw hRec _ _ _ hk hRw hM _ hρ hr _ ht' K₀ τ _ _ hCR =>
     zk_session_soundHJ I hh hv dj y₀ wr dg N kd hkd Lb src hA3 hDraw hRec hk hRw hM hρ hr ht' K₀ τ hCR
 
 set_option linter.unusedVariables false in
@@ -540,7 +567,8 @@ subset draw: `Canonical.zk_session_soundC_verifies`'s. The check accepts such a 
 hidden outputs. -/
 def SoundZHJC (I : Inputs) (hv : Layout.scopeOk (circZ I) = false) : Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the law (the live subset draw) and A3
@@ -584,7 +612,7 @@ def SoundZHJC (I : Inputs) (hv : Layout.scopeOk (circZ I) = false) : Prop :=
           k Rw M ρ t' (reg σ) (cont σ))
 
 theorem soundZHJC (I : Inputs) (hv : Layout.scopeOk (circZ I) = false) : SoundZHJC I hv :=
-  @fun _ _ _ dj _ y₀ wr dg N kd hkd _ _ _ Lb src hA3 hDraw hRec _ _ _ hk hRw hM _ hρ hr _ ht' K₀ τ _ _ hCR =>
+  @fun _ _ _ dj _ _ y₀ wr dg N kd hkd _ _ _ Lb src hA3 hDraw hRec _ _ _ hk hRw hM _ hρ hr _ ht' K₀ τ _ _ hCR =>
     Canonical.zk_session_soundC_verifies I hv dj y₀ wr dg N kd hkd Lb src hA3 hDraw hRec hk hRw hM hρ hr ht' K₀ τ hCR
 
 /-- `SoundZH`'s `hr` holds for some rerun count at every statement, draw file and setup. -/
@@ -595,24 +623,49 @@ theorem hr_zh (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S
 
 /-- `SoundZHJ`'s `hr` holds for some rerun count at every statement, draw file and setup. -/
 theorem hr_zhj (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
+    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ :=
   exists_k_rateZ (planZHJ dj y₀) (fun _ _ _ => rfl) hρ
 
-/-- **`SoundZH`'s setup exists at every accepted draw**, and so `SoundZHJ`'s at one table (`setupZ_of_verifiesZK` under
-hidden outputs). -/
+/-- **`SoundZH`'s setup exists at every accepted draw** (`setupZ_of_verifiesZK` under hidden outputs). -/
 theorem setupZH_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1) {n mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : VerifiesZK I t)
     (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKH I dj mPts S) :
     Nonempty (DrawSetupZKH I mPts S (dj S)) :=
   ZkHidden.drawSetupZKH_of_accepts ZkHidden.zk_schedOK h.2.typed (h.2.parseH hh) (Checks.outNet h.2) hh hn h.1 hd hok
 
+/-- **`SoundZHJ`'s setup exists at every accepted draw, at every number of tables** (`setupZJ_of_verifiesZK` under
+hidden outputs). -/
+theorem setupZHJ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = true) {n mPts : ℕ}
+    (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : VerifiesZK I t)
+    (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKHJ I dj mPts S) :
+    Nonempty (DrawSetupZHJ (inputsJ I 0) mPts (partS I (dj S) S ⟨0, nTab_pos I⟩) (drawJ I (dj S) 0)) := by
+  obtain ⟨spec, sts, hs, hshape, hv⟩ := h.1
+  obtain ⟨hsz, hstJ⟩ := setupOf_tableJH hh hd hs
+  have hj : 0 < sts.size := hsz ▸ nTab_pos I
+  have hst := hstJ 0 hj
+  obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
+  obtain ⟨hs0, c0, hz0, -⟩ := hall 0 (by simpa using hj)
+  simp only [Array.getElem_map] at hz0
+  have hz' : Zk.schedule sts[0].m = .ok (schs[0].1, schs[0].2) := hz0
+  obtain ⟨sch₀, hf⟩ := fast100_of_schedule hz'
+  have ht' : (inputsJ I 0).tags.typed = false := typedJ h.2.typed 0
+  have hcJ : HmOut.parse (inputsJ I 0).tags (inputsJ I 0).circuitFile (inputsJ I 0).tables = .ok (circZ I) :=
+    (parseH_tagsAt ((zkTags_typed I).trans h.2.typed) _ _ _ _).trans (h.2.parseH hh)
+  obtain ⟨pop, -, hdr⟩ := setupHidden_drawn hst
+  obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { sts[0].c with outPorts := #[] }) hdr
+  obtain ⟨x, hx⟩ := drawSetupH_of_setupHidden (I := inputsJ I 0) (S := partS I (dj S) S ⟨0, nTab_pos I⟩)
+    (mPts := mPts) ht' hcJ (Checks.outNet h.2) hst hf hD ((hok ⟨0, nTab_pos I⟩).1 D hD) ((hok ⟨0, nTab_pos I⟩).2 _ hst)
+  obtain ⟨y, -, -, -⟩ := drawSetupZHJ_of x (by rw [hx]; exact array_forM_ok hshape 0 hj)
+    (sch := schs[0].1) (tPad := schs[0].2) (by rw [hx]; exact hz')
+  exact ⟨y⟩
+
 set_option linter.unusedVariables false in
 /-- Zero knowledge at a hidden-output statement of any number of tables under `--zk`, at every statement the check
 passes: `zk_session_composedHJ`'s second half. -/
 def ViewZHJ (I : Inputs) : Prop :=
   ∀ (P : LigProver) {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     -- every table's statement avoids the mask slot, and hash-derived-key
     (hdm : ∀ (S : Finset (Fin n)) (j : Fin (nTab I))
       (y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)), avoidsMask y.x.st = true)
@@ -623,7 +676,7 @@ def ViewZHJ (I : Inputs) : Prop :=
         (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ))
 
 theorem viewZHJ (I : Inputs) : ViewZHJ I :=
-  @fun P _ _ _ dj _ y₀ hdm hKey hs => ZkHidden.zk_session_viewHJ P I dj y₀ hs.typed hdm hKey
+  @fun P _ _ _ dj _ _ y₀ hdm hKey hs => ZkHidden.zk_session_viewHJ P I dj y₀ hs.typed hdm hKey
 
 end
 

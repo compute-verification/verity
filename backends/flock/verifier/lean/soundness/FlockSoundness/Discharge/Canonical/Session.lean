@@ -70,7 +70,8 @@ variable {n mPts : ℕ} {Reg : Type}
 
 section Shadow
 
-variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+  (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
   (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
   (hfmt : formatOk c = true) (hU : Built c.unit) {pub : Public}
   (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
@@ -136,7 +137,8 @@ end Shadow
 (`runsZCJH_live` without `outNet = unitNet`). -/
 theorem runsZCJH_liveC (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hfmt : formatOk c = true)
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (L : Law n) (hT : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (L.draw ω)) :
@@ -264,7 +266,8 @@ theorem runsZCJH_liveC (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circu
 of any length, output rows of runs of output ports, shared public tables. -/
 theorem zk_session_soundC
     (I : Inputs) (ht : I.tags.typed = false)
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the session's circuit, in the canonical format, and public file
@@ -323,7 +326,7 @@ theorem zk_session_soundC_custody_json
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hfmt : formatOk c = true)
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZKH I (mPtsOf c.g (kd / nTab I)) S₀ (dj S₀))
+    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)

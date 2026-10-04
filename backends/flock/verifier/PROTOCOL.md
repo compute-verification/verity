@@ -1058,6 +1058,8 @@ included. Claims are listed region-major, then point 0 before point 1.
   - The input rows end before the constant (`128 · inWords ≤ constPos`, 128 rows per input word). Otherwise an input
     port could cover the constant's column, and Δ's input copies would rewrite the slot's constant row, leaving the
     unit's constant free.
+  - Each output group ends inside the slot (`col + words ≤ 2^{unit_log} / 128`, D11). Otherwise a region at its column
+    (`Circuit.outRegion`) would reach past the slot into the next range's columns.
   - Upstream's composite verifier checks none of these.
   - Lookup slots (META `lookups`, in key order after the expanded circuits, each named `lookup:<table>`) are built from
     SHA-256-pinned tables (`rsq, sqrt, rcp, ex2`) as two-level one-hot circuits.
@@ -1619,6 +1621,13 @@ expectation):
 - **D10:** the header's `identifier` (§16.10). Upstream ignores it (the public digest binds it); the spec refuses one that
   is not the verifier's own `--identifier F`. No vector exercises it; `backends/flock/tests/test_lean_identifier.py` runs
   it on the Lean verifier.
+- **D11:** each expanded circuit's output groups end inside its slot, `col + words ≤ 2^{unit_log} / 128` (§16.5,
+  `Net.ofRows`). Upstream's `IrUnitNet::parse` in every pinned build checks only that a group is an aligned power of two of
+  words, and its `Composite::check` doesn't bound an output column, so upstream accepts a statement that moves an output
+  group past the slot; the spec refuses it, as `backends/flock/live`'s parser now does. Honest statements pass both: every
+  writer (`ir_lower.layout`, `derive`, `tail.stage_layout`) closes its output groups before the constant row, so
+  `128 · (col + words) ≤ constPos < useful ≤ 2^{unit_log}`. No vector exercises it;
+  `backends/flock/tests/test_lean_out_group_slot.py` runs it on the Lean verifier.
 - **D12:** a statement form the soundness proof does not cover (§16.15). The pinned upstream builds verify it; the spec
   refuses every session, as `backends/flock/live`'s now does. A set marked `lean_refuses` in `vectors.json` expects that
   refusal of the Lean verifier and each session's own verdict of upstream (`agree.py --lean-refuses`). So, too, a draw

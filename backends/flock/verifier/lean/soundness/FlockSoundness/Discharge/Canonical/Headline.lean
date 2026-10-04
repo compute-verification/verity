@@ -36,7 +36,8 @@ variable {mPts n : ℕ} {Reg : Type}
 `zk_session_soundC` over `VerifiesZK`, at a circuit outside `Layout.scopeOk`. -/
 theorem zk_session_soundC_verifies
     (I : Inputs) (hv : Layout.scopeOk (circZ I) = false)
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the law (the live subset draw) and A3
@@ -103,7 +104,7 @@ theorem zk_session_sound_canonical
     (I : Inputs) (hv : Layout.scopeOk (circZ I) = false)
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZKH I (mPtsOf (circZ I).g (kd / nTab I)) S₀ (dj S₀))
+    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf (circZ I).g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf (circZ I).g (kd / nTab I)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
