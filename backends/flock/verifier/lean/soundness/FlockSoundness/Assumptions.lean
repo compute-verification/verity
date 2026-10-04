@@ -22,7 +22,8 @@ The rest are not soundness's hardness assumptions. Assumption 4 is a hypothesis 
 keyed streams, for the PoUW window draw, and Assumption 5 one about the window's secret. `HmRowComputes` is not
 cryptographic: it says the circuit's row-hashing slots compute SHA-512, a fact about the circuit that is still to prove
 (phase 2i), named here so that the value binding's theorems take it as a hypothesis. Zero knowledge's are hm96 leaf hiding
-(T1, `Hm96Hiding`) and `X_L + κ ≠ 0` on the level-0 domain (`PadNonvanishing`).
+(T1, `Hm96Hiding`) and `X_L + κ ≠ 0` on the level-0 domain (`PadNonvanishing`). Route P's privacy adds the registered
+commitment's hiding over the openings one registration allows (`RegHides`).
 
 Assumption 1, BCHKS25's mutual correlated agreement up to the Johnson bound, is proved (`mcaError_le_bchks25`, from DKT26).
 Merkle binding is proved too (VCVio's binding theorem, `Merkle`): a conflict of two verifying openings is a collision, which
@@ -195,5 +196,15 @@ on upstream's NTT. It is a fact about the concrete arithmetic that `Arith.Correc
 `2^(cols+1)` positions of a level-0 codeword; `ZK.padOnto_M1` takes it for Lemma B's row (ii). -/
 def PadNonvanishing {F K : Type} [Field F] [Field K] (A : Model.Arith F K) (cols : ℕ) (κ : F) : Prop :=
   ∀ q < 2 ^ (cols + 1), A.What cols (A.omega q) + κ ≠ 0
+
+/-- **`RegHides(A)`: the registered commitment hides across the openings one registration allows** (route P, rec-holo
+§3.3). The registrant commits a hidden object `x : X` (route P: a unit's wiring) under its uniform padding `ρ : R`, sized
+for `A` native openings; `view x ρ q` is what the verifier sees of that registration: the commitment and its openings, at
+the opening schedule `q : Q`, the verifier's choice of up to `A` opening points, each as a function of what it has seen.
+The assumption: for any two objects of one public size and any schedule, every event of the view has probabilities within
+`δ`. The budget is per registration: after `A` openings the registrant registers again. It rests on the commitment's
+padding covering every column and combination the `A` openings reveal, with hm96 leaves under `hash-derived-key`. -/
+def RegHides {X R Q V : Type} [Fintype R] (view : X → R → Q → V) (δ : ℝ≥0∞) : Prop :=
+  ∀ (x x' : X) (q : Q) (E : V → Prop), prCoin (fun ρ : R => E (view x ρ q)) ≤ prCoin (fun ρ : R => E (view x' ρ q)) + δ
 
 end FlockSoundness.Assumptions

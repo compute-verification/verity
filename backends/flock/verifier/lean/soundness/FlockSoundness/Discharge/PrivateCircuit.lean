@@ -18,6 +18,7 @@ import FlockSoundness.Discharge.PrivateCircuit.ReadsDraw
 import FlockSoundness.Discharge.PrivateCircuit.ReadsSound
 import FlockSoundness.Discharge.PrivateCircuit.ReadsNonVacuous
 import FlockSoundness.Discharge.PrivateCircuit.ReadsHidden
+import FlockSoundness.Discharge.PrivateCircuit.RouteP
 
 /-!
 # Protocol 2, the private circuit
@@ -49,4 +50,6 @@ unit circuit is a committed witness in its topology entry, the class list is siz
 output widths and padded unit count per class), and `private_circuit_sound_hidden` is the read binding at a committed
 unit circuit, checked by the outer verifier circuit V*; `private_circuit_private_hidden` and
 `private_circuit_indist_hidden` give a view that is a function of the size-only class list and the owed outputs.
+Route P (`PrivateCircuit/RouteP.lean`) hides units that all differ with no recursion: one public table of gate rows,
+each unit's hidden wiring checked by a grand product (`wiring_sound`, `wiring_escape`), and `route_p_sound`.
 -/
