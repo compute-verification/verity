@@ -83,6 +83,65 @@ def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
     pin = pins.get("pieces", {}).get(fn.id)
     return {"failures": [], "warnings": [], "gates": fn.gates, "h": memo["h"], "pin": pin, "kind": reg.KINDS.get(fn.id)}
 """,
+    # the bindings, as the harness runs them (`targets._produce`), and the families the suite keeps of what their roots reach
+    "syn/catalog.py": """
+from verity.ir.defs import bind
+
+
+def core():
+    from syn import extra, top
+    return [bind(top.SynTop)]
+
+
+def model():
+    from syn import other
+    return [bind(other.SynOther)]
+
+
+def made():
+    from syn import factory, ops
+    return [bind(factory.make(ops.SWAP))]
+
+
+def sized():
+    from syn import ksize, kdef
+    return [bind(kdef.SynK, K=ksize.K + 1)]
+
+
+BINDINGS = [(("_core_roots",), core), (("_model_roots:SynOther_v1",), model)]
+FAMILIES = ["SynOther_v1", "SynTop_v1"]
+""",
+    # a registry module the core binding imports and uses nothing of
+    "syn/extra.py": "X = 1\n",
+    # a Definition a binding makes, whose body closes over a value the binding read from `syn.ops`
+    "syn/factory.py": """
+from verity.ir import composite
+
+from syn.prims import SynAdd, V
+
+
+def make(swap):
+    @composite("SynMade", 1, [], lambda S: ((("a", V), ("b", V)), V))
+    def SynMade(B, S, a, b):
+        return B.call(SynAdd, b, a) if swap else B.call(SynAdd, a, b)
+    return SynMade
+""",
+    "syn/ops.py": "SWAP = False\n",
+    # a Definition bound at a static the binding computed from `syn.ksize`
+    "syn/kdef.py": """
+from verity.ir import composite
+
+from syn.prims import SynAdd, V
+
+
+@composite("SynK", 1, ["K"], lambda S: ((("a", V), ("b", V)), V))
+def SynK(B, S, a, b):
+    out = a
+    for _ in range(S.K):
+        out = B.call(SynAdd, out, b)
+    return out
+""",
+    "syn/ksize.py": "K = 1\n",
     "targets.py": """
 def _core_roots():
     return ["SynTop_v1"]
@@ -117,18 +176,21 @@ inner = CC._interpreter_dirs
 CC._interpreter_dirs = lambda: (*inner(), str(repo) + "/")      # the checker's own modules come from the repository
 CC.trace(root)
 
-import syn.idle, syn.other, syn.top  # noqa: E401  (the registries, imported before any check, as `load_registries` does)
-from syn import check
-from verity.ir.defs import bind
+# the registries, imported before any check, as `load_registries` does
+import syn.extra, syn.idle, syn.kdef, syn.other, syn.top  # noqa: E401
+from syn import catalog, check
 
-suite = {"SynOther_v1": bind(syn.other.SynOther), "SynTop_v1": bind(syn.top.SynTop)}
-for fn in suite.values():
-    fn.body                                                     # built in the catalog, before every check
+suite = {}
+for units, make in catalog.BINDINGS:
+    roots = TG._produce(units, make)
+    for fid, fn in TG.reachable(roots).items():                 # built in the catalog, before every check
+        if TG.family(fn) in catalog.FAMILIES:
+            suite[fid] = fn
+            TG.BINDINGS.setdefault(fid, set()).update(units)
 TG.load_registries = lambda: None
-TG.suite = lambda: dict(suite)
+TG.suite = lambda: dict(sorted(suite.items()))
 TG.templates = lambda: []
 TG.call_families = lambda: set()
-TG.BINDINGS.update({"SynTop_v1": {"_core_roots"}, "SynOther_v1": {"_model_roots:SynOther_v1"}})
 CK.check_definition = check.check_definition
 rep = cli.run([], CK.Options(), everything=True, log=None, cache=root / "cache")
 hits = sorted(t["target"] for t in rep["targets"] if "cache" in t)
@@ -240,6 +302,52 @@ def test_a_module_an_earlier_target_imported_is_held_by_every_check_that_imports
     assert "syn/reg.py" in _entry(root, "SynOther_v1")["reads"]["files"] and "syn/reg.py" in _entry(root, "SynTop_v1")["reads"]["files"]
     _edit(root, "syn/reg.py", '"top"', '"tip"')
     assert _run(root)["hits"] == []
+
+
+def _bindings(root: Path, *extra: str, families: tuple[str, ...] = ()) -> None:
+    """Run the catalog's bindings ``extra`` beside the core and model ones, and keep ``families`` too."""
+    _edit(root, "syn/catalog.py", '(("_model_roots:SynOther_v1",), model)]',
+          '(("_model_roots:SynOther_v1",), model)' + "".join(f", {e}" for e in extra) + "]")
+    _edit(root, "syn/catalog.py", 'FAMILIES = [', "FAMILIES = [" + "".join(f'"{f}", ' for f in families))
+
+
+def test_a_registry_module_a_binding_imports_reruns_only_what_that_binding_made(tmp_path):
+    """The core binding imports `syn.extra` and makes SynTop_v1; SynSub_v1, which its root reaches, was made by SynTop's body
+    build, after the binding ran, so it holds the binding's unit but not what the binding imported."""
+    root = _tree(tmp_path)
+    _bindings(root, families=("SynSub_v1",))
+    _run(root)
+    top, sub = _entry(root, "SynTop_v1")["reads"], _entry(root, "SynSub_v1")["reads"]
+    assert "syn/extra.py" in top["files"] and "syn/extra.py" not in sub["files"]
+    assert "targets.py#_core_roots" in sub["units"]
+    _edit(root, "syn/extra.py", "X = 1", "X = 2")
+    assert _run(root)["hits"] == ["SynOther_v1", "SynSub_v1"]
+
+
+def test_a_definition_a_binding_made_reruns_when_a_module_the_binding_read_changes(tmp_path):
+    """SynMade's body closes over `syn.ops.SWAP`, which only the binding read: the binding's text is unchanged, the
+    Definition's id too, and its body is not."""
+    root = _tree(tmp_path)
+    _bindings(root, '(("_made_roots",), made)', families=("SynMade_v1",))
+    _run(root)
+    assert "syn/ops.py" in _entry(root, "SynMade_v1")["reads"]["files"]
+    _edit(root, "syn/ops.py", "SWAP = False", "SWAP = True")
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+
+
+def test_a_static_a_binding_computed_from_a_module_reruns_its_definition(tmp_path):
+    """SynK is bound at ``K = ksize.K + 1``: a change to `syn.ksize` changes the specialization's id and the module the binding
+    read, so it reruns either way, and the other targets do not."""
+    root = _tree(tmp_path)
+    _bindings(root, '(("_sized_roots",), sized)', families=("SynK_v1",))
+    out = _run(root)
+    assert out["stats"]["stored"] == 3
+    assert "syn/ksize.py" in _entry(root, "SynK_v1{K=2}")["reads"]["files"]
+    _edit(root, "syn/ksize.py", "K = 1", "K = 1  # unchanged value")
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(root, "syn/ksize.py", "K = 1  # unchanged value", "K = 2")
+    out = _run(root)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["stored"] == 1
 
 
 def test_the_catalogs_units_are_its_root_functions_and_entries():

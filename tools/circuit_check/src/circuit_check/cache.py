@@ -13,8 +13,12 @@ the task list's build, nor an earlier target's check):
   its target through body nodes) brings the recording of its body's build (`verity.ir.defs._build_body`: the code that ran and
   the files read while it was traced, wherever in the process that happened, its nested builds included), and each primitive
   the file of its evaluator;
-- what the target's own bindings produced: the recordings of the catalog's root functions, `_model_roots` entries and
-  `TEMPLATE_PARAMS` entries whose roots reach it (`targets.BINDINGS`), while they ran;
+- what made the Definitions it reached: the recording of each catalog root function, `_model_roots` entry or `TEMPLATE_PARAMS`
+  entry while it ran (`producing`), held by every Definition made while it ran (`made_by`: a primitive, composite or
+  specialization constructed then, and each specialization of a composite constructed then) and by every target that reaches
+  one; a target holds the `targets.py` units of every binding whose roots reach it (`targets.BINDINGS`) by their digests, but
+  not what a binding ran when it made none of what the target reaches (a registry module a root function imports is no input
+  of a primitive it returns);
 - each module among those files with its import closure: the in-tree modules its top-level ``import`` statements name (and its
   parent packages), recursively, and what was read and run while it was first imported in this process (a loader hook);
 - what the process read outside every recording (the registries' imports listing their packages, ``pkgutil`` enumerating
@@ -32,12 +36,15 @@ A hit means every file, listing, probe, library, `targets.py` unit and pin this 
 (the tree as git has it, `visible`: bytecode or a build inside the tree counts as absent).  Not covered: a file a C extension
 reads with its own I/O (none here); anything outside the repository, which the interpreter, platform and distribution list stand
 for; a file a module read while it was imported before tracing began (the checker's own imports, ``verity.ir`` and
-``verity.evaluation`` among them: their sources are inputs, data they opened at import is not); what a function
-read or imported in its body when it did not run in the recording (a value a process-wide cache, ``functools.cache`` and the
-like, holds from a call another target's check made, beyond the function's own file and its module's closure); and an edit to a binding that does not reach the target, even if it changes which object of the same id
-the catalog builds (the registry refuses two Definitions of one id).  A new file in a package the registries enumerate changes
-the listing every target holds, so it reruns everything.  What the tracer cannot see (a program it starts: ``subprocess``,
-``os.system``, ``exec``, ``posix_spawn``) makes the process's later results uncacheable (`untraced`).
+``verity.evaluation`` among them: their sources are inputs, data they opened at import is not); what a function read or imported
+in its body when it did not run in the recording (a value a process-wide cache, ``functools.cache`` and the like, holds from a
+call another target's check made, beyond the function's own file and its module's closure); an edit to a binding that does not
+reach the target, even if it changes which object of the same id the catalog builds (the registry refuses two Definitions of one
+id); and what a binding ran that changes a Definition it did not make, keeping its id: a value it computed (from a module only
+it imported) and left where a Definition made before it, or outside every binding, reads it, closed over or in a module's state,
+rather than passed as a static (a static is in the id).  A new file in a package the registries enumerate changes the listing
+every target holds, so it reruns everything.  What the tracer cannot see (a program it starts: ``subprocess``, ``os.system``,
+``exec``, ``posix_spawn``) makes the process's later results uncacheable (`untraced`).
 
 Only a verdict is stored, of the tree its check read: not a check that raised (an ImportError says the environment was broken,
 not what the target is), nor one whose reads, digested again by the process that ran it right after, differ from the digests
@@ -104,6 +111,9 @@ _FRAMES: list[Frame] = [Frame()]
 _MODULES: dict[str, Frame] = {}
 #: what each binding unit read and ran while it made its roots
 _PRODUCED: dict[str, Frame] = {}
+#: the binding units running now (`producing`), and each Definition made while one ran, with those units
+_MAKING: list[tuple[str, ...]] = []
+_MADE: dict[int, tuple[Any, frozenset[str]]] = {}
 
 
 def _sha_file(p: Path) -> str:
@@ -295,6 +305,20 @@ def _instrument() -> None:
         return body
 
     D._build_body = _build_body
+
+    def marking(cls) -> None:
+        init0 = cls.__init__
+
+        def __init__(self, *a, **k):
+            init0(self, *a, **k)
+            units = frozenset(u for us in _MAKING for u in us) | made_by(getattr(self, "defn", None))
+            if units:
+                _MADE[id(self)] = (self, units)
+
+        cls.__init__ = __init__
+
+    for cls in (D.PrimitiveDefinition, D.CompositeDefinition, D.SpecializedDefinition):
+        marking(cls)
     get = D.SpecializedDefinition.body.fget
 
     def body(self):
@@ -349,6 +373,25 @@ def produced(units: Iterable[str], fr: Frame) -> None:
     """Hold ``fr`` (what a binding read and ran while it made its roots) under each of its ``units``."""
     for u in units:
         _PRODUCED.setdefault(u, Frame()).merge(fr)
+
+
+@contextmanager
+def producing(units: tuple[str, ...]) -> Iterator[Frame]:
+    """Run a binding's ``units``: what it reads and runs is held under them (`produced`), and every Definition made meanwhile
+    (a primitive, a composite, a specialization, or one of a composite made so) is marked as theirs (`made_by`)."""
+    with recording() as fr:
+        _MAKING.append(tuple(units))
+        try:
+            yield fr
+        finally:
+            _MAKING.pop()
+    produced(units, fr)
+
+
+def made_by(d: Any) -> frozenset[str]:
+    """The binding units that were running when ``d`` was made (empty when none was)."""
+    e = _MADE.get(id(d))
+    return e[1] if e is not None and e[0] is d else frozenset()
 
 
 # --- the pins a check looked up ---------------------------------------------------------------------------------------------
@@ -587,9 +630,10 @@ def _evaluators(d: Any) -> list[str]:
 
 
 def attributed(fr: Frame, units: Iterable[str] = (), roots: Iterable[Any] = ()) -> dict[str, list[str]]:
-    """What a target's check read or resolved: its recording ``fr``, the recordings of its binding ``units`` and of the builds
-    of every specialization it read or reaches from ``roots``, each module among them with its import closure, and what the
-    process read outside every recording."""
+    """What a target's check read or resolved: its recording ``fr``; for every specialization it read or reaches from
+    ``roots``, its build's recording and the recording of each binding that made it (`made_by`; without ``roots``, those of
+    all its binding ``units``); each module among them with its import closure; its ``units`` by digest; and what the process
+    read outside every recording."""
     _INTERNAL.append(True)
     try:
         return _attributed(fr, units, roots)
@@ -606,9 +650,10 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
             by_file.setdefault(os.path.abspath(f), name)
     acc = Frame()
     acc.merge(fr)
-    for u in units:
-        if u in _PRODUCED:                             # what the binding ran, not every body its roots reach
-            acc.merge(_PRODUCED[u], defs=False)
+    if not roots:                                      # a template, or a target named on the command line: its whole bindings
+        for u in units:
+            if u in _PRODUCED:
+                acc.merge(_PRODUCED[u], defs=False)
     outside = _FRAMES[0]
     # an import's own reads count with its module's closure, and the task list's reads of the pins and the catalog with what
     # each target looks up in them
@@ -618,6 +663,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
     acc.probes |= outside.probes
     acc.libs |= outside.libs
     seen_defs: set[int] = set()
+    seen_units: set[str] = set()
     stack = list(acc.defs.values()) + list(roots)
     code: set[str] = set(acc.code)
     done: set[str] = set()
@@ -630,6 +676,10 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
             if id(d) in seen_defs:
                 continue
             seen_defs.add(id(d))
+            for u in made_by(d):                       # what made it ran: not every Definition its binding's roots reach
+                if u in _PRODUCED and u not in seen_units:
+                    seen_units.add(u)
+                    take(_PRODUCED[u], defs=False)
             built = getattr(d, "_circuit_check_built", None)
             if built is not None:
                 take(built)
@@ -638,7 +688,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
             if body is not None:
                 stack.extend(n.fn for n in body.nodes)
 
-    def take(f: Frame) -> None:
+    def take(f: Frame, defs: bool = True) -> None:
         acc.files |= f.files
         acc.dirs |= f.dirs
         acc.probes |= f.probes
@@ -646,7 +696,8 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
         acc.lines |= f.lines
         acc.pins |= f.pins
         work.extend(f.code)
-        stack.extend(f.defs.values())
+        if defs:
+            stack.extend(f.defs.values())
 
     while True:
         expand()

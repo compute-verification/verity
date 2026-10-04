@@ -189,10 +189,9 @@ BINDINGS: dict[str, set[str]] = {}
 
 
 def _produce(units: tuple[str, ...], make: Callable[[], list[Any]], by_unit: list | None = None) -> list[Any]:
-    """``make()``'s roots, recorded while it runs (what the targets they reach were built from, `cache.produced`)."""
-    with CC.recording() as fr:
+    """``make()``'s roots, recorded while it runs, with every Definition it makes (`cache.producing`)."""
+    with CC.producing(units):
         got = make()
-    CC.produced(units, fr)
     if by_unit is not None:
         by_unit.append((units, got))
     return got
