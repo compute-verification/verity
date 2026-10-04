@@ -299,24 +299,27 @@ def out_rows(outs: dict, out_ports: list[tuple[str, int]], rows: list[Port], cou
     return out
 
 
-def _out_ports(outs: list, bit_rows: bool, seg_out_rows) -> tuple[list[Port], list[int]]:
-    """The output rows and each one's run of output ports: one row per port (``out_row``), and each run in ``seg_out_rows``
-    (consecutive output ports, in order) one ``sha512/row-seg/v1`` row of exactly their words, named after its first."""
+def _out_ports(outs: list, bit_rows: bool, seg_out_rows, v2_out_rows=()) -> tuple[list[Port], list[int]]:
+    """The output rows and each one's run of output ports: one row per port (``out_row``), each run in ``seg_out_rows``
+    (consecutive output ports, in order) one ``sha512/row-seg/v1`` row of exactly their words, and each run in ``v2_out_rows``
+    (one port or several) one ``sha512/row/v2`` row of exactly their words, each named after its first."""
     names = [nm for nm, _ in outs]
     starts, covered = {}, set()
-    for run in seg_out_rows:
-        i = names.index(run[0]) if run and run[0] in names else -1
-        if i < 0 or list(run) != names[i:i + len(run)] or covered & set(run):
-            raise ValueError(f"segmented output row {list(run)}: a run of consecutive output ports, each in one row")
-        starts[i] = len(run)
-        covered |= set(run)
+    for seg, runs in ((True, seg_out_rows), (False, v2_out_rows)):
+        for run in runs:
+            i = names.index(run[0]) if run and run[0] in names else -1
+            if i < 0 or list(run) != names[i:i + len(run)] or covered & set(run):
+                raise ValueError(f"output row {list(run)}: a run of consecutive output ports, each in one row")
+            starts[i] = (len(run), seg)
+            covered |= set(run)
     rows, counts, j = [], [], 0
     while j < len(outs):
         if j in starts:
-            w = sum(x for _, x in outs[j:j + starts[j]])
-            rows.append(Port(outs[j][0], w, 16 * w, True))
-            counts.append(starts[j])
-            j += starts[j]
+            k, seg = starts[j]
+            w = sum(x for _, x in outs[j:j + k])
+            rows.append(Port(outs[j][0], w, 16 * w, seg))
+            counts.append(k)
+            j += k
         else:
             rows.append(out_row(*outs[j], bit_row=bit_rows))
             counts.append(1)
@@ -487,7 +490,8 @@ def public_blocks(group: tuple, li: list[list[int]], lp: list[list[int]]) -> lis
 
 def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: bool = False, partition: str | None = None,
             program: str | None = None, statics: dict | None = None, port_bits: list | None = None,
-            public_inputs: dict | None = None, seg_ports: frozenset[str] = frozenset(), seg_out_rows: tuple = ()) -> str:
+            public_inputs: dict | None = None, seg_ports: frozenset[str] = frozenset(), seg_out_rows: tuple = (),
+            v2_out_rows: tuple = ()) -> str:
     """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
     (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
     ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
@@ -496,7 +500,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     in place of the one ``row_schema``; ``seg_ports``: the input ports among them that are segmented rows (``sha512/row-seg/v1``,
     PoUW's per-call role-X rows); ``seg_out_rows``: runs of consecutive output ports each committed as one segmented row of
     exactly their words, named after its first (META ``out_row_ports``), so that a unit reading the row as one input port
-    has the writer's leaf.
+    has the writer's leaf; ``v2_out_rows``: runs (one port or several) each committed as one ``sha512/row/v2`` row of exactly
+    their words (PoUW's ok, tile digest and role-W rows), in place of a lone port's row zero-padded to whole blocks.
 
     ``public_inputs`` (``{port: {"seed": ..., "derivation": ...}}``): input ports that are not rows but public words the verifier
     recomputes from public data, each naming its seed and derivation (PROTOCOL.md §16.10). The units read them from ``in``
@@ -539,9 +544,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     if pins:
         public_blocks(low.layout.in_groups[0], leaves_in, leaves_public)
     outs = [[p.name, w] for p, (w, _) in zip(sub.outputs, lv["out_ports"])]
-    if seg_out_rows and port_bits is None:
-        raise ValueError(f"{low.name}: segmented output rows are bit rows (row_schemas)")
-    orows, counts = _out_ports(outs, bool(port_bits), seg_out_rows)
+    if (seg_out_rows or v2_out_rows) and port_bits is None:
+        raise ValueError(f"{low.name}: output rows of exactly their words are bit rows (row_schemas)")
+    orows, counts = _out_ports(outs, bool(port_bits), seg_out_rows, v2_out_rows)
     ports = ins + orows
     ul = _slot_log(low.layout.useful)
     if low.layout.useful == 1 << ul:
@@ -596,7 +601,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             "rows": [_row_consts(p) for p in ports], "units_per_vu": U.n, "unit_log": ul, "leaves_in": leaves_in, "leaves_out": lv["out"],
             **({"public_inputs": pins, "leaves_public": leaves_public} if pins else {}),
             "row_key_sha512": LEAF_SCHEME["key_sha512"], "dummy": _dummy(low, in_ports, ins, outs, orows, sub, counts), "leaf_scheme": LEAF_SCHEME,
-            **({"out_row_ports": counts} if seg_out_rows else {}),
+            **({"out_row_ports": counts} if seg_out_rows or max(counts, default=1) > 1 else {}),
             # only for a template that needs them (attention, GEMM): absent means the unit returns the outputs and no leaf cut
             **({"out_net": out_net, "out_net_ports": out_net_ports} if U.tail_rets else {}), **({"leaf_cuts": leaf_cuts} if leaf_cuts else {}), "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
             "wires": _row_wires(ports) + tail_wires, "program_digests": programs,
@@ -773,10 +778,12 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     ``salts`` (``{port: [192-byte salt, ...]}``, every row port's, one per table row, or per instance without tables): the
     committer's own salts.
 
-    ``registered`` (``{port: {"value", "positions", "paths"}}``, input ports, with ``tables``): the ports whose table rows are
-    rows of a registered value, committed with the registration's salts (``salts``), each table row's position and frame-v3
-    path to the registered root (``verity_sampled_proofs.one_stage.registered``); the header's ``registered``. An output row
-    is never registered: it is its instance's own.
+    ``registered`` (``{port: {"value", "positions", "paths"}}``, with ``tables``): the ``sha512/row/v1`` rows whose table rows
+    are rows of a registered value, committed with the registration's salts (``salts``), each table row's position and
+    frame-v3 path to the registered root (``verity_sampled_proofs.one_stage.registered``); the header's ``registered``. A port
+    is an input port (its table's rows) or an output port's row (its table the instances' output rows, one each: instance
+    ``i``'s output is the registered row at ``positions[i]``, under that row's registered salt ``salts[port][i]``). A padding
+    instance's rows keep their zero salts and pinned ``dummy`` either way: the verifier opens only the instances' rows.
 
     A circuit with public inputs (META ``public_inputs``, PROTOCOL.md §16.10): the header names them as META does, and both files
     end with every instance's public words (u16 LE, instance-major, the ports in order): ``public_words``
@@ -797,11 +804,15 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     if (tables is None) != (refs is None) or (tables is not None and not share_rows):
         raise ValueError("tables and refs are given together, with share_rows")
     if registered is not None:
-        if tables is None or salts is None or not registered or not set(registered) <= {p.name for p in ins}:
-            raise ValueError("registered: some input ports' tables, given with their tables, refs and registered salts")
-        words = {p.name: p.words for p in ports}
+        if tables is None or salts is None or not registered or not set(registered) <= {p.name for p in ports}:
+            raise ValueError("registered: some rows' tables (input ports' or output rows'), given with their tables, refs and "
+                             "registered salts")
+        by_name = {p.name: p for p in ports}
         for name, e in registered.items():
-            rows_p = len(np.asarray(tables[name]).reshape(-1, words[name]))
+            if by_name[name].bits is not None:
+                raise ValueError(f"registered port {name}: a {by_name[name].schema} row, and registered rows are "
+                                 f"{ROW_SCHEMA} rows")
+            rows_p = n if by_name[name] in orows else len(np.asarray(tables[name]).reshape(-1, by_name[name].words))
             if set(e) != {"value", "positions", "paths"} or len(e["positions"]) != rows_p or len(e["paths"]) != rows_p:
                 raise ValueError(f"registered port {name}: a value, and one position and path per table row")
     if tables is not None:
