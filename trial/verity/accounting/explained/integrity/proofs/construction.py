@@ -15,9 +15,9 @@ import secrets
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from verity.accounting.integrity.profile import profile
-from verity.accounting.integrity.proofs.system import ProofSystem, Unit
-from verity.accounting.integrity.sampling import Draw, Weighted
+from verity.accounting.explained.integrity.profile import profile
+from verity.accounting.explained.integrity.proofs.system import ProofSystem, Unit
+from verity.accounting.explained.integrity.sampling import Draw, Weighted
 from verity.primitives import partition as P
 from verity.primitives.commitments import CommitmentScheme, MerkleSha256
 from verity.primitives.events import Actor, Send, collect, receive

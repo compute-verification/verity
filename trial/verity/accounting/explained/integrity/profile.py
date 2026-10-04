@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from verity.accounting.integrity.sampling import Weighted
+from verity.accounting.explained.integrity.sampling import Weighted
 
 
 @dataclass(frozen=True)

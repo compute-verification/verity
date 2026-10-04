@@ -2,18 +2,19 @@
 
     uv run python examples/datacenter.py [scenario ...]
 
-The site is a fleet of six H100s and two A100s serving two models behind one scheduler. A generator's sessions take
-several steps each and carry their state from step to step, as a decode step reads its KV cache (verity's FP32 adder,
-keeping a running sum: `Sessions`); a classifier's requests take one step each (verity's BF16 comparison). The
+The site is six H100s and two A100s behind one uplink, serving two models behind one scheduler. A generator's sessions
+take several steps each and carry their state from step to step, as a decode step reads its KV cache (verity's FP32
+adder, keeping a running sum: `Sessions`); a classifier's requests take one step each (verity's BF16 comparison). The
 builder, declared before the first epoch, routes each step to a model (`Routed`: a route bit, then the model's advice),
 and each session is one inference unit of the stream however many steps it took. The census's facts per device are
-its peak (tries a second) and its memory (bytes), at toy scale. Each epoch is one run: the prover registers, takes the
-salt, streams the epoch's steps and closes the stream, and the verifier's view holds the account and NCI's verdict. A
-period is the epochs back to back, each window opening where the last closed (`nci.period`).
+its peak (tries a second), its memory (bytes) and its egress (bits a second), at toy scale. Each epoch is one run: the
+prover registers, takes the salt, streams the epoch's steps and closes the stream, and the verifier's view holds the
+account and NCI's verdict. A period is the epochs back to back, each window opening where the last closed
+(`nci.period`).
 
-A simulated site produces every reading: how long the epoch took on the fleet that ran it, which devices are there,
-what memory held, what left on the links. Each scenario changes what the site did, and runs under both products with
-one NCI policy.
+A simulated site produces every reading: how long the epoch took on the devices that ran it, which devices are
+there, what memory held, what left on the links. Each scenario changes how the site was run (its `Conduct`), and runs
+under both products with one NCI policy.
 """
 
 import hashlib
@@ -26,15 +27,15 @@ from dataclasses import dataclass, field, replace
 
 from common import Batched, load, transcribe
 
-from verity.accounting.coverage.compute import Compute
-from verity.accounting.coverage.memory import Memory
-from verity.accounting.coverage.network import Network
-from verity.accounting.integrity.proofs.construction import Proofs
-from verity.accounting.integrity.proofs.transparent import Transparent
-from verity.accounting.integrity.replay import Replay
-from verity.accounting.integrity.sampling import Weighted
-from verity.accounting.utilization.space import Space, encode
-from verity.accounting.utilization.work import Salt, Window, Work
+from verity.accounting.capacity import Device
+from verity.accounting.coverage import Coverage
+from verity.accounting.explained.integrity.proofs.construction import Proofs
+from verity.accounting.explained.integrity.proofs.transparent import Transparent
+from verity.accounting.explained.integrity.replay import Replay
+from verity.accounting.explained.integrity.sampling import Weighted
+from verity.accounting.explained.space import Space, encode
+from verity.accounting.explained.work import Salt, Window, Work
+from verity.accounting.observed import Network
 from verity.compliance.nci import Nci, period
 from verity.onsite import Onsite
 from verity.primitives import partition as P
@@ -44,14 +45,17 @@ from verity.primitives.registration import Builder, Registration, Stream, built,
 from verity.remote import Remote
 from verity.run import run
 
-PEAK = {"h100": 2000.0, "a100": 1000.0}  # tries a second
-MEMORY = {"h100": 80 * 1024, "a100": 40 * 1024}  # bytes
-FLEET = {"h100": 6, "a100": 2}
+CENSUS = {
+    "h100": Device(work=2000.0, memory=80 * 1024),
+    "a100": Device(work=1000.0, memory=40 * 1024),
+    "uplink": Device(egress=10_000.0),
+}
+SITE = {"h100": 6, "a100": 2, "uplink": 1}
 RTT = 0.02  # seconds between the verifier and the site
 EPOCHS = 3
 SESSIONS, STEPS = 8, 4  # the generator's sessions per epoch, and each one's steps
 REQUESTS = 96  # the classifier's, per epoch
-BLOCKS = 16 * 1024  # of the weights' encoding, 32 bytes each: 512 KiB of the fleet's 560
+BLOCKS = 16 * 1024  # of the weights' encoding, 32 bytes each: 512 KiB of the site's 560
 
 
 @dataclass(frozen=True)
@@ -155,33 +159,32 @@ comparison, compares = load("bf16_gt_strict", n=EPOCHS * REQUESTS, seed=2)
 ROUTED = Routed((Sessions(adder, P.greedy(adder, 16)), Batched(comparison, P.greedy(comparison, 16), 3)))
 WEIGHTS = encode(b"weights", BLOCKS)
 
-NCI = Nci(gamma=16384, alpha=0.2, headroom=0.2, builders=frozenset({ROUTED.id()}))
+NCI = Nci(gamma=16384, alpha=0.2, max_headroom=0.2, builders=frozenset({ROUTED.id()}))
 WORK = Work(difficulty=3, delta=0.01)
 REMOTE = Remote(
     integrity=Proofs(law=Weighted(gates=0.03, outputs=1.0), max_width=16, delta=0.01, system=Transparent()),
     work=WORK,
-    compute=Compute(peak=PEAK),
+    coverage=Coverage(CENSUS, resources=("compute",)),
     nci=NCI,
 )
 ONSITE = Onsite(
     integrity=Replay(law=Weighted(gates=0.03, outputs=0.03), delta=0.01),
     work=WORK,
     space=Space(seed=b"weights", blocks=BLOCKS, k=64, deadline=0.001, delta=0.01),
-    compute=Compute(peak=PEAK),
-    memory=Memory(size=MEMORY),
     network=Network(max_timing_bits=7, side_bits=64),
+    coverage=Coverage(CENSUS, resources=("compute", "memory", "network")),
     nci=NCI,
 )
 
 
 @dataclass(frozen=True)
-class Site:
-    """What the site did in an epoch; honestly, by default."""
+class Conduct:
+    """How the site was run in an epoch; honestly, by default."""
 
-    devices: Mapping[str, int] = field(default_factory=lambda: dict(FLEET))  # there, counted or not
-    busy: float = 0.9  # the share of its peak the requests kept the declared fleet busy
+    devices: Mapping[str, int] = field(default_factory=lambda: dict(SITE))  # there, counted or not
+    busy: float = 0.9  # the share of its peak the requests kept the declared devices busy
     fill: float = 0.0  # the share of its peak the scheduler fills up to with filler steps, if more
-    hidden: float = 0.0  # the share of the declared fleet's time that went to undeclared work
+    hidden: float = 0.0  # the share of the declared devices' time that went to undeclared work
     batch: int = 8  # sessions or requests per step, at most
     builder: Builder = ROUTED  # the one it registered
     forge: Callable[[Sequence[Circuit], list], list] | None = None  # what it changed in its transcripts
@@ -212,36 +215,51 @@ def inject(circuits: Sequence[Circuit], transcripts: list) -> list:
     ]
 
 
-# name -> (the site, whether remote should find it complying over the period, whether onsite should, what it shows);
-# None: either
-SCENARIOS: dict[str, tuple[Site, bool | None, bool | None, str]] = {
-    "honest": (Site(), True, True, "the declared fleet serves at 90% of peak"),
-    "idle": (Site(busy=0.6), False, False, "honest at 60% of peak: idle time is headroom, as hidden work would be"),
-    "idle-filled": (Site(busy=0.6, fill=0.9), True, True, "at 60%, and the scheduler fills to 90% with filler steps"),
-    "hidden-training": (Site(hidden=0.3), False, False, "30% of the declared fleet's time on undeclared work"),
+# name -> (how the site is run, whether remote should find it complying over the period, whether onsite should, what
+# it shows); None: either
+SCENARIOS: dict[str, tuple[Conduct, bool | None, bool | None, str]] = {
+    "honest": (Conduct(), True, True, "the declared devices serve at 90% of peak"),
+    "idle": (Conduct(busy=0.6), False, False, "honest at 60% of peak: idle time is headroom, as hidden work would be"),
+    "idle-filled": (
+        Conduct(busy=0.6, fill=0.9),
+        True,
+        True,
+        "at 60%, and the scheduler fills to 90% with filler steps",
+    ),
+    "hidden-training": (Conduct(hidden=0.3), False, False, "30% of the declared devices' time on undeclared work"),
     "hidden-devices": (
-        Site(devices={"h100": 10, "a100": 2}),
+        Conduct(devices={**SITE, "h100": 10}),
         True,
         False,
-        "four undeclared H100s train beside it: remote takes the declared fleet, the pinger counts them",
+        "four undeclared H100s train beside it: remote takes the declared site, the pinger counts them",
     ),
-    "between-epochs": (Site(gap=3.0), False, False, "3 s of undeclared work between windows; each epoch complies"),
-    "skipped-step": (Site(forge=skip), False, False, "one step's transcript made up rather than computed"),
-    "flipped-bit": (Site(forge=flip), None, False, "one response bit wrong: priced into remote's bound"),
-    "injected-state": (Site(forge=inject), False, False, "every continuing step reads state its session never wrote"),
-    "unbatched": (Site(batch=1), True, True, "a step per session or request, each paying its own step's advice"),
-    "training": (Site(builder=Training(ROUTED)), False, False, "an undeclared builder, a step per inference unit"),
-    "evicted-weights": (Site(held=0.7), True, True, "memory holds 70% of the weights: no policy reads memory yet"),
-    "exfiltration": (Site(leaked=4096), True, True, "4 KiB leave beside the responses: no policy reads network yet"),
-    "withheld-shares": (Site(withheld=True), False, False, "the shares never arrive: no verdict, which fails closed"),
+    "between-epochs": (Conduct(gap=3.0), False, False, "3 s of undeclared work between windows; each epoch complies"),
+    "skipped-step": (Conduct(forge=skip), False, False, "one step's transcript made up rather than computed"),
+    "flipped-bit": (Conduct(forge=flip), None, False, "one response bit wrong: priced into remote's bound"),
+    "injected-state": (
+        Conduct(forge=inject),
+        False,
+        False,
+        "every continuing step reads state its session never wrote",
+    ),
+    "unbatched": (Conduct(batch=1), True, True, "a step per session or request, each paying its own step's advice"),
+    "training": (Conduct(builder=Training(ROUTED)), False, False, "an undeclared builder, a step per inference unit"),
+    "evicted-weights": (Conduct(held=0.7), True, True, "memory holds 70% of the weights: no policy reads memory yet"),
+    "exfiltration": (Conduct(leaked=4096), True, True, "4 KiB leave beside the responses: no policy reads network yet"),
+    "withheld-shares": (
+        Conduct(withheld=True),
+        False,
+        False,
+        "the shares never arrive: no verdict, which fails closed",
+    ),
 }
 
 
-def schedule(site: Site, epoch: int) -> list[tuple[str, tuple[int, ...]]]:
+def schedule(conduct: Conduct, epoch: int) -> list[tuple[str, tuple[int, ...]]]:
     """The scheduler's steps for an epoch, each its advice and fresh inputs: the generator's sessions in cohorts of
-    `site.batch`, a cohort's steps in turn, spread evenly among the classifier's."""
+    `conduct.batch`, a cohort's steps in turn, spread evenly among the classifier's."""
     sessions = [adds[(epoch * SESSIONS + s) * STEPS :][:STEPS] for s in range(SESSIONS)]
-    cohorts = [sessions[c : c + site.batch] for c in range(0, SESSIONS, site.batch)]
+    cohorts = [sessions[c : c + conduct.batch] for c in range(0, SESSIONS, conduct.batch)]
     # a session opens on its first pair, and adds each later pair's second number to its running sum
     generator = [
         (c, t, len(cohort), sum((s[t] if t == 0 else s[t][len(s[t]) // 2 :] for s in cohort), ()))
@@ -249,7 +267,9 @@ def schedule(site: Site, epoch: int) -> list[tuple[str, tuple[int, ...]]]:
         for t in range(STEPS)
     ]
     mine = compares[epoch * REQUESTS : (epoch + 1) * REQUESTS]
-    classifier = [(len(b), sum(b, ())) for b in (mine[r : r + site.batch] for r in range(0, REQUESTS, site.batch))]
+    classifier = [
+        (len(b), sum(b, ())) for b in (mine[r : r + conduct.batch] for r in range(0, REQUESTS, conduct.batch))
+    ]
     order = sorted(
         [(k / len(generator), 0, k) for k in range(len(generator))]
         + [(k / len(classifier), 1, k) for k in range(len(classifier))]
@@ -267,44 +287,49 @@ def schedule(site: Site, epoch: int) -> list[tuple[str, tuple[int, ...]]]:
     return steps
 
 
-def runtime(site: Site, epoch: int) -> tuple[Stream, list, float, int]:
+def runtime(conduct: Conduct, epoch: int) -> tuple[Stream, list, float, int]:
     """What the site's runtime leaves for an epoch: its stream and the transcripts it keeps; and the seconds the epoch
     took, and the output bits its responses carry."""
-    steps = schedule(site, epoch)
-    circuits = [built(site.builder, advice)[0] for advice, _ in steps]
-    rate = sum(n * PEAK[d] for d, n in FLEET.items())
-    seconds = sum(len(c.gates) for c in circuits) / (rate * site.busy * (1 - site.hidden))
+    steps = schedule(conduct, epoch)
+    circuits = [built(conduct.builder, advice)[0] for advice, _ in steps]
+    rate = sum(n * CENSUS[d].work for d, n in SITE.items())
+    seconds = sum(len(c.gates) for c in circuits) / (rate * conduct.busy * (1 - conduct.hidden))
     filler = (adder.inputs - len(adder.baseline)) * 8 * (0,)  # eight one-step sessions of zeros
-    while sum(len(c.gates) for c in circuits) < site.fill * rate * seconds:
+    while sum(len(c.gates) for c in circuits) < conduct.fill * rate * seconds:
         steps.append(("0111000", filler))
-        circuits.append(built(site.builder, "0111000")[0])
-    transcripts = transcribe(site.builder, steps)
-    if site.forge:
-        transcripts = site.forge(circuits, transcripts)
+        circuits.append(built(conduct.builder, "0111000")[0])
+    transcripts = transcribe(conduct.builder, steps)
+    if conduct.forge:
+        transcripts = conduct.forge(circuits, transcripts)
     scheme = REMOTE.integrity.scheme
-    executions = tuple(commit(site.builder, advice, t, scheme) for (advice, _), t in zip(steps, transcripts))
-    return Stream(Registration(site.builder), executions), transcripts, seconds, sum(len(c.outputs) for c in circuits)
+    executions = tuple(commit(conduct.builder, advice, t, scheme) for (advice, _), t in zip(steps, transcripts))
+    return (
+        Stream(Registration(conduct.builder), executions),
+        transcripts,
+        seconds,
+        sum(len(c.outputs) for c in circuits),
+    )
 
 
-def epoch(product: str, site: Site, e: int, opened: float) -> dict[str, object]:
+def epoch(product: str, conduct: Conduct, e: int, opened: float) -> dict[str, object]:
     """The verifier's records for one epoch whose window opened at `opened`, by the product's clock."""
-    stream, transcripts, seconds, outputs = runtime(site, e)
-    work = Withheld(WORK.difficulty, WORK.delta) if site.withheld else WORK
+    stream, transcripts, seconds, outputs = runtime(conduct, e)
+    work = Withheld(WORK.difficulty, WORK.delta) if conduct.withheld else WORK
     if product == "remote":
         principals = {
             "verifier": REMOTE.verifier(Window(opened, opened + seconds + RTT)),
-            "prover": replace(REMOTE, work=work).prover(stream, transcripts, FLEET),
+            "prover": replace(REMOTE, work=work).prover(stream, transcripts, SITE),
         }
     else:
-        held = int(site.held * BLOCKS)
+        held = int(conduct.held * BLOCKS)
         principals = {
             "verifier": ONSITE.verifier(),
             "prover": replace(ONSITE, work=work).prover(
                 stream, transcripts, WEIGHTS[:held] + (bytes(32),) * (BLOCKS - held)
             ),
             "replayer": ONSITE.replayer(),
-            "pinger": ONSITE.pinger(site.devices, Window(opened, opened + seconds), space_seconds=0.0004),
-            "warden": ONSITE.warden(bytes_out=math.ceil(outputs / 8) + site.leaked, timing_bits=7),
+            "pinger": ONSITE.pinger(conduct.devices, Window(opened, opened + seconds), space_seconds=0.0004),
+            "warden": ONSITE.warden(bytes_out=math.ceil(outputs / 8) + conduct.leaked, timing_bits=7),
         }
     return {type(ev.body).__name__: ev.body for ev in run(principals, "verifier") if ev.sender == ev.to}
 
@@ -312,17 +337,13 @@ def epoch(product: str, site: Site, e: int, opened: float) -> dict[str, object]:
 def line(records: Mapping[str, object]) -> str:
     """The epoch's account and verdict, in a line."""
     parts = []
-    if c := records.get("ComputeCoverage"):
-        window = f"[{c.window.opened:5.2f}, {c.window.closed:5.2f}]s"
-        covered = f"{window} compute {_share(c.covered, c.capacity)} covered"
-        parts.append(covered if not c.reasons else "compute not covered")
-    for kind, name in (("MemoryCoverage", "memory"), ("NetworkCoverage", "network")):
-        if r := records.get(kind):
-            total = getattr(r, "capacity", None) or r.bits
-            parts.append(f"{name} headroom {_share(r.headroom, total)}")
+    if account := records.get("Account"):
+        parts.append(f"[{account.window.opened:5.2f}, {account.window.closed:5.2f}]s headroom")
+        for name, r in account.resources.items():
+            parts.append(f"{name} {_share(r.headroom, r.capacity)}" if not r.reasons else f"{name} unaccounted")
     verdict = records.get("Complies")
     if verdict is None:
-        missing = [k for k in ("WorkBound", "IntegrityProfile", "ComputeCoverage", "Complies") if k not in records]
+        missing = [k for k in ("WorkBound", "IntegrityProfile", "Account", "Complies") if k not in records]
         parts.append(f"NO VERDICT (no {', '.join(missing)})")
     else:
         parts.append("complies" if verdict.complies else f"FAILS: {'; '.join(verdict.reasons[:2])}")
@@ -335,17 +356,17 @@ def _share(part: int, whole: int) -> str:
 
 def scenario(name: str) -> dict[str, bool]:
     """Run a scenario's epochs under both products, say how each period came out, and whether it complied."""
-    site, *_, shows = SCENARIOS[name]
+    conduct, *_, shows = SCENARIOS[name]
     print(f"\n{name}: {shows}")
     complied = {}
     for product in ("remote", "onsite"):
         verdicts, opened = [], 0.0
         for e in range(EPOCHS):
-            records = epoch(product, site, e, opened)
+            records = epoch(product, conduct, e, opened)
             print(f"  {product}  epoch {e}  {line(records)}")
             if verdict := records.get("Complies"):
                 verdicts.append(verdict)
-                opened = verdict.window.closed + site.gap
+                opened = verdict.window.closed + conduct.gap
         result = period(verdicts) if len(verdicts) == EPOCHS else None
         if result is None:
             print(f"  {product}  period: no verdict for {EPOCHS - len(verdicts)} of {EPOCHS} epochs: does not comply")
@@ -359,7 +380,7 @@ def scenario(name: str) -> dict[str, bool]:
 
 if __name__ == "__main__":
     names = sys.argv[1:] or list(SCENARIOS)
-    print(f"fleet {FLEET}; builder {ROUTED.id()}; {EPOCHS} epochs; NCI {NCI}")
+    print(f"site {SITE}; builder {ROUTED.id()}; {EPOCHS} epochs; NCI {NCI}")
     outcomes = {name: scenario(name) for name in names}
     print(f"\n{'the period':18}{'remote':12}onsite        (! where not as described)")
     surprised = False

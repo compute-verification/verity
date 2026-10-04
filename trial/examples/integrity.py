@@ -11,10 +11,10 @@ import sys
 
 from common import Batched, executed, load, schedule, show
 
-from verity.accounting.integrity.proofs.construction import Proofs
-from verity.accounting.integrity.proofs.transparent import Transparent
-from verity.accounting.integrity.replay import Replay
-from verity.accounting.integrity.sampling import Weighted
+from verity.accounting.explained.integrity.proofs.construction import Proofs
+from verity.accounting.explained.integrity.proofs.transparent import Transparent
+from verity.accounting.explained.integrity.replay import Replay
+from verity.accounting.explained.integrity.sampling import Weighted
 from verity.primitives import partition as P
 from verity.primitives.registration import serve
 from verity.run import run
@@ -28,7 +28,7 @@ if construction == "replay":
     others = {"replayer": [integrity.replayer()]}
 else:
     if construction == "sp1":
-        from verity.accounting.integrity.proofs.sp1.sp1 import Sp1 as system
+        from verity.accounting.explained.integrity.proofs.sp1.sp1 import Sp1 as system
     else:
         system = Transparent
     law = Weighted(gates=0.05, outputs=0.05)

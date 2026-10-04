@@ -1,5 +1,5 @@
 """Remote Verity end to end on a real circuit: the prover's scheduler batches eight requests into steps, it streams
-each step's advice and commitment over a fleet of two devices it keeps busy, and `run` prints the verifier's view.
+each step's advice and commitment over a site of two devices it keeps busy, and `run` prints the verifier's view.
 
     uv run python examples/remote.py [f32_add|bf16_gt_strict]
 """
@@ -8,11 +8,12 @@ import sys
 
 from common import Batched, executed, load, schedule, show, tries
 
-from verity.accounting.coverage.compute import Compute
-from verity.accounting.integrity.proofs.construction import Proofs
-from verity.accounting.integrity.proofs.transparent import Transparent
-from verity.accounting.integrity.sampling import Weighted
-from verity.accounting.utilization.work import Window, Work
+from verity.accounting.capacity import Device
+from verity.accounting.coverage import Coverage
+from verity.accounting.explained.integrity.proofs.construction import Proofs
+from verity.accounting.explained.integrity.proofs.transparent import Transparent
+from verity.accounting.explained.integrity.sampling import Weighted
+from verity.accounting.explained.work import Window, Work
 from verity.compliance.nci import Nci
 from verity.primitives import partition as P
 from verity.remote import Remote
@@ -24,14 +25,14 @@ builder = Batched(circuit, P.greedy(circuit, 16), advice_bits=2)
 remote = Remote(
     integrity=Proofs(law=Weighted(gates=0.05, outputs=1.0), max_width=16, delta=0.01, system=Transparent()),
     work=Work(difficulty=3, delta=0.01),
-    compute=Compute(peak={"gpu": 1000.0}),
-    nci=Nci(gamma=4096, alpha=0.2, headroom=0.4, builders=frozenset({builder.id()})),
+    coverage=Coverage(census={"gpu": Device(work=1000.0)}, resources=("compute",)),
+    nci=Nci(gamma=4096, alpha=0.2, max_headroom=0.4, builders=frozenset({builder.id()})),
 )
 stream, transcripts = executed(builder, schedule(requests, (3, 1, 4), builder), remote.integrity.scheme)
-fleet = {"gpu": 2}
+site = {"gpu": 2}
 principals = {
     "verifier": remote.verifier(Window(0.0, tries(stream) / (2 * 1000.0))),
-    "prover": remote.prover(stream, transcripts, fleet),
+    "prover": remote.prover(stream, transcripts, site),
 }
 for event in run(principals, view="verifier"):
     show(event)

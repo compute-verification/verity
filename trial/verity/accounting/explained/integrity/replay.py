@@ -18,8 +18,8 @@ import secrets
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from verity.accounting.integrity.profile import profile
-from verity.accounting.integrity.sampling import Draw, Weighted
+from verity.accounting.explained.integrity.profile import profile
+from verity.accounting.explained.integrity.sampling import Draw, Weighted
 from verity.primitives import partition as P
 from verity.primitives.circuit import evaluate
 from verity.primitives.commitments import CommitmentScheme, MerkleSha256

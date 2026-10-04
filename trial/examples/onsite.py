@@ -1,5 +1,5 @@
 """Onsite Verity end to end on a real circuit: the prover's scheduler batches eight requests into steps and streams
-them over a fleet of two devices it keeps busy, the verifier's hardware at the site replays, counts, times and watches
+them over a site of two devices and an uplink, the verifier's hardware at the site replays, counts, times and observes
 the link, and `run` prints the verifier's view.
 
     uv run python examples/onsite.py [f32_add|bf16_gt_strict]
@@ -9,13 +9,13 @@ import sys
 
 from common import Batched, executed, load, schedule, show, tries
 
-from verity.accounting.coverage.compute import Compute
-from verity.accounting.coverage.memory import Memory
-from verity.accounting.coverage.network import Network
-from verity.accounting.integrity.replay import Replay
-from verity.accounting.integrity.sampling import Weighted
-from verity.accounting.utilization.space import Space, encode
-from verity.accounting.utilization.work import Window, Work
+from verity.accounting.capacity import Device
+from verity.accounting.coverage import Coverage
+from verity.accounting.explained.integrity.replay import Replay
+from verity.accounting.explained.integrity.sampling import Weighted
+from verity.accounting.explained.space import Space, encode
+from verity.accounting.explained.work import Window, Work
+from verity.accounting.observed import Network
 from verity.compliance.nci import Nci
 from verity.onsite import Onsite
 from verity.primitives import partition as P
@@ -28,18 +28,20 @@ onsite = Onsite(
     integrity=Replay(law=Weighted(gates=0.05, outputs=0.05), delta=0.01),
     work=Work(difficulty=3, delta=0.01),
     space=Space(seed=b"weights", blocks=2048, k=64, deadline=0.001, delta=0.01),
-    compute=Compute(peak={"gpu": 1000.0}),
-    memory=Memory(size={"gpu": 32 * 1024}),
     network=Network(max_timing_bits=7, side_bits=1000),
-    nci=Nci(gamma=4096, alpha=0.2, headroom=0.3, builders=frozenset({builder.id()})),
+    coverage=Coverage(
+        census={"gpu": Device(work=1000.0, memory=32 * 1024), "uplink": Device(egress=1000.0)},
+        resources=("compute", "memory", "network"),
+    ),
+    nci=Nci(gamma=4096, alpha=0.2, max_headroom=0.3, builders=frozenset({builder.id()})),
 )
 stream, transcripts = executed(builder, schedule(requests, (3, 1, 4), builder), onsite.integrity.scheme)
-fleet = {"gpu": 2}
+site = {"gpu": 2, "uplink": 1}
 principals = {
     "verifier": onsite.verifier(),
     "prover": onsite.prover(stream, transcripts, encode(b"weights", 2048)),
     "replayer": onsite.replayer(),
-    "pinger": onsite.pinger(fleet, Window(0.0, tries(stream) / (2 * 1000.0)), space_seconds=0.0004),
+    "pinger": onsite.pinger(site, Window(0.0, tries(stream) / (2 * 1000.0)), space_seconds=0.0004),
     "warden": onsite.warden(bytes_out=len(requests) * len(circuit.outputs) // 8, timing_bits=7),
 }
 for event in run(principals, view="verifier"):

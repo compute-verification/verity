@@ -8,13 +8,14 @@ must have been declared up front, before any epoch whose outputs could have shap
 one of the `builders` declared then. Advice is novel too, and reaches a unit
 through the structure the builder gives it rather than through its boundary: the builder reads all of it, so any unit
 of the execution may depend on all of it, and each is charged it beside its boundary. And the rule binds only what is
-in the account: whatever ran in the compute that coverage leaves uncovered went unchecked, so at most `headroom` of
-the capacity may be left.
+in the account: whatever ran in the compute headroom went unchecked, so it may be at most `max_headroom` of the compute
+capacity.
 
-    verifier    takes the registration, the stream (one epoch) and compute coverage over it; rebuilds each execution's
+    verifier    takes the registration, the stream (one epoch) and the account over it; rebuilds each execution's
                 circuit, and records whether the epoch complies
 
-Coverage reads integrity, so the policy reads it through coverage, and holds except with coverage's probability.
+The account reads integrity, so the policy reads it through the account, and holds except with the account's
+probability.
 
 An epoch's verdict says nothing outside its window. A period is epochs back to back (`period`): each complies, and each
 window opens no later than the one before it closed, so no time between them goes unaccounted. `period` takes every
@@ -26,8 +27,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from verity.accounting.coverage.compute import ComputeCoverage
-from verity.accounting.utilization.work import Window
+from verity.accounting.coverage import Account
+from verity.accounting.explained.work import Window
 from verity.primitives import partition as P
 from verity.primitives.events import Actor, Send, collect, receive
 from verity.primitives.registration import Closed, Execution, Registration, Stream, inference_units
@@ -61,21 +62,22 @@ class Period:
 class Nci:
     gamma: int  # gates per inference unit
     alpha: float  # novel bits read per gate
-    headroom: float  # the most of the compute capacity coverage may leave uncovered
+    max_headroom: float  # the most of the compute capacity the account may leave as headroom
     builders: frozenset[str]  # the ids of the builders declared up front
 
     def verifier(self) -> Actor:
         registration = yield from receive(Registration, "prover")
         stream = Stream(registration, (yield from collect(Execution, Closed, "prover")))
-        coverage = yield from receive(ComputeCoverage, "verifier")
+        account = yield from receive(Account, "verifier")
+        compute = account.resources["compute"]
         reasons = []
         if registration.builder.id() not in self.builders:
             reasons.append(f"builder {registration.builder.id()} was not declared up front")
-        if coverage.reasons or coverage.stream != stream.digest():
-            reasons.append("compute coverage not established")
-        elif coverage.headroom > self.headroom * coverage.capacity:
+        if compute.reasons or account.stream != stream.digest():
+            reasons.append("compute not accounted for")
+        elif compute.headroom > self.max_headroom * compute.capacity:
             reasons.append(
-                f"{coverage.headroom / coverage.capacity:.0%} of compute uncovered, over {self.headroom:.0%}"
+                f"{compute.headroom / compute.capacity:.0%} of compute headroom, over {self.max_headroom:.0%}"
             )
         try:
             units = inference_units(stream)
@@ -90,7 +92,7 @@ class Nci:
                     f"inference unit {u} of execution {i}, over {steps} executions: {gates} gates reading {novel} novel"
                     " bits"
                 )
-        return (Send(Complies(stream.digest(), coverage.window, not reasons, coverage.delta, tuple(reasons))),)
+        return (Send(Complies(stream.digest(), account.window, not reasons, account.delta, tuple(reasons))),)
 
 
 def _reads(stream: Stream, parts: Sequence[tuple[int, int]]) -> tuple[int, int]:

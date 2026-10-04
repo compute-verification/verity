@@ -9,7 +9,7 @@ import hashlib
 import json
 import random
 import struct
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, is_dataclass
 from pathlib import Path
 
@@ -120,6 +120,10 @@ def show(event: Event) -> None:
     fields = ", ".join(f"{name}={_brief(value)}" for name, value in vars(event.body).items())
     to = "record" if event.to == event.sender else event.to
     print(f"{event.sender} -> {to}: {type(event.body).__name__}({fields})")
+    for value in vars(event.body).values():
+        if isinstance(value, Mapping) and value and all(is_dataclass(v) for v in value.values()):
+            for key, v in value.items():
+                print(f"    {key}: " + ", ".join(f"{name}={_brief(x)}" for name, x in vars(v).items()))
 
 
 def _brief(value: object) -> str:

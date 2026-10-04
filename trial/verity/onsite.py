@@ -1,16 +1,15 @@
 """Onsite Verity: remote Verity's accounting, with the verifier's hardware at the site in place of the prover's word.
-A replayer runs drawn executions again without their inputs leaving the site; a pinger counts the fleet, times the
-work, and challenges memory where a deadline can be tight; a warden on the links sees what leaves. So onsite also
-bounds memory and network, and its inventory is a count rather than an assumption.
+A replayer runs drawn executions again without their inputs leaving the site; a pinger surveys the site, times the
+work, and challenges memory where a deadline can be tight; a warden on the links observes what leaves. So onsite also
+accounts for memory and network, and its site is a count rather than an assumption.
 
-    verifier    integrity, work and NCI read the registration and the stream; compute coverage reads integrity's
-                profile, the work bound and the counted inventory; memory coverage the space bound and the inventory;
-                network coverage integrity's profile and the warden's report
+    verifier    integrity, work and NCI read the registration and the stream; space and the warden's audit read their
+                readings; coverage reads all of them and the pinger's site
     prover      registers its builder and streams its executions as remotely; opens them for the replayer, finds their
                 shares, and answers space's challenges from the encoding it holds
     replayer    integrity's
-    pinger      counts the fleet, times the work, and challenges and times space
-    warden      reads the links
+    pinger      surveys the site, times the work, and challenges and times space
+    warden      observes the links
 """
 
 from __future__ import annotations
@@ -18,13 +17,12 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from verity.accounting.coverage.compute import Compute
-from verity.accounting.coverage.inventory import inventory
-from verity.accounting.coverage.memory import Memory
-from verity.accounting.coverage.network import Network
-from verity.accounting.integrity.replay import Replay
-from verity.accounting.utilization.space import Space
-from verity.accounting.utilization.work import Salt, Window, Work
+from verity.accounting.capacity import survey
+from verity.accounting.coverage import Coverage
+from verity.accounting.explained.integrity.replay import Replay
+from verity.accounting.explained.space import Space
+from verity.accounting.explained.work import Salt, Window, Work
+from verity.accounting.observed import Network
 from verity.compliance.nci import Nci
 from verity.primitives.events import Actor
 from verity.primitives.registration import Stream, serve
@@ -35,9 +33,8 @@ class Onsite:
     integrity: Replay
     work: Work
     space: Space
-    compute: Compute
-    memory: Memory
     network: Network
+    coverage: Coverage
     nci: Nci
 
     def verifier(self) -> list[Actor]:
@@ -45,9 +42,8 @@ class Onsite:
             self.integrity.verifier(),
             self.work.verifier(clock_from="pinger"),
             self.space.verifier(),
-            self.compute.verifier(inventory_from="pinger"),
-            self.memory.verifier(inventory_from="pinger"),
             self.network.verifier(),
+            self.coverage.verifier(site_from="pinger"),
             self.nci.verifier(),
         ]
 
@@ -62,10 +58,10 @@ class Onsite:
     def replayer(self) -> list[Actor]:
         return [self.integrity.replayer()]
 
-    def pinger(self, fleet: Mapping[str, int], work_window: Window, space_seconds: float) -> list[Actor]:
+    def pinger(self, site: Mapping[str, int], work_window: Window, space_seconds: float) -> list[Actor]:
         """Its readings: the most devices it counted at any time in the work's window, and its clock's for that window
         and for space's answer."""
-        return [inventory(fleet), self.work.clock(work_window), self.space.pinger(space_seconds)]
+        return [survey(site), self.work.clock(work_window), self.space.pinger(space_seconds)]
 
     def warden(self, bytes_out: int, timing_bits: int) -> list[Actor]:
         return [self.network.warden(bytes_out, timing_bits)]
