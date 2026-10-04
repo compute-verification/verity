@@ -4,10 +4,7 @@ It says which circuits ran, in which isolation units, on which devices, using ho
 developer computes it, commits to it at the end of the epoch, and accounting checks the commitment against what the
 subprotocols established.
 
-A circuit is named by its digest under the circuit format. What a circuit is, and what it computes, is the accounting
-spec's (`lean/`, with `verity/ir/PROTOCOL.md` until the encoding is stated there too); the library that builds, queries
-and evaluates circuits (`verity.ir`, `verity.evaluation` today) implements those definitions and is held to them by
-conformance vectors.
+A circuit is named by its id under `verity.circuits`, whose `Circuit.lean` states what it is and computes.
 """
 
 from __future__ import annotations

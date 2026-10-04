@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 dependencies = ["verity", "tomli-w"]
 
 [project.entry-points."verity.constructions"]
-"sampled_proofs/sp1" = "verity.subprotocols.sampled_proofs.sp1:Sp1"
+"sampled_proofs/sp1" = "verity.subprotocols.sampled_proofs.sp1.construction:Sp1"
 
 [build-system]
 requires = ["hatchling"]

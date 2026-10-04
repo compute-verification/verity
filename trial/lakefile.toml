@@ -1,0 +1,9 @@
+name = "verity"
+defaultTargets = ["verity"]
+
+# One Lake package for the whole tree: each .lean file sits beside the Python it states, and its module name is its
+# path (verity/circuits/Circuit.lean is `verity.circuits.Circuit`).
+[[lean_lib]]
+name = "verity"
+srcDir = "."
+globs = ["verity.+"]

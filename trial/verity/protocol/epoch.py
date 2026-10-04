@@ -1,17 +1,16 @@
 """One epoch of the protocol: the composition.
 
-    validate the configuration          every refusal at once, before anything runs
-    developer commits                   the weights of record and the baseline θ, before any coins exist
-    sessions open                       each subprotocol binds to those commitments and draws its salts
-    developer serves                    the epoch's work, every enabled construction's developer side in place;
-                                        subprotocols exchange live (timed challenges, taps) over their own channels
-    developer closes                    commits to its account and opens it to the auditor devices
-    sessions close                      draws, openings, proofs, verification: one finding each
-    accounting decides                  the validated account, or the reasons it was rejected
-    compliance decides                  from the validated account alone
+    refuse                  every reason the configuration cannot run, before anything runs
+    developer commits       the weights of record and the baseline θ, before any coins exist
+    audits open             each subprotocol gets its own challenger, bound to those commitments
+    developer serves        the epoch's work, with each subprotocol's prover side in place
+    developer closes        commits to its account and opens it to the auditor devices
+    audits close            each establishes its profile, from what the account commits to
+    accounting decides      the validated account, or the reasons it was rejected
+    compliance decides      from the validated account alone
 
 The outside auditor learns the two verdicts (`EpochReport`). The auditor devices keep the `EpochRecord`, which binds
-every commitment and finding of the epoch to one digest; how much of it a deployment discloses is its configuration's.
+every commitment and profile of the epoch to one digest.
 """
 
 from __future__ import annotations
@@ -23,12 +22,17 @@ from dataclasses import asdict, dataclass
 from enum import Enum
 from typing import Protocol
 
+from verity.primitives.commitments import SCHEMES, Commitment
+from verity.primitives.randomness import SOURCES, Challenger
+from verity.primitives.registry import NotInstalled
 from verity.protocol.accounting.account import Account, Inventory
-from verity.protocol.accounting.check import check
-from verity.protocol.accounting.interfaces import EpochStart, Finding
-from verity.protocol.challenges import Challenger
-from verity.protocol.commitments import Commitment
-from verity.protocol.configuration import Configuration, resolve
+from verity.protocol.accounting.check import Evidence, check
+from verity.protocol.compliance import Disclosure, complies
+from verity.protocol.configuration import Configuration, refusals
+from verity.subprotocols.network_warden import audit as network_warden
+from verity.subprotocols.pous import audit as pous
+from verity.subprotocols.pouw import audit as pouw
+from verity.subprotocols.sampled_proofs import audit as sampled_proofs
 
 
 class Verdict(Enum):
@@ -40,7 +44,7 @@ class Verdict(Enum):
 
 
 class NoAnswer(Exception):
-    """Raised by a developer side, or a session waiting on one, that did not answer by its deadline."""
+    """Raised by a developer side that did not answer by its deadline."""
 
 
 class Refused(ValueError):
@@ -49,19 +53,30 @@ class Refused(ValueError):
         super().__init__("configuration refused: " + "; ".join(reasons))
 
 
+@dataclass(frozen=True)
+class EpochStart:
+    epoch: int
+    configuration: str  # its digest
+    weights: Commitment  # the weights of record, one commitment every subprotocol binds to
+    baseline: Commitment  # θ: what reads are novel against
+    inventory: Inventory
+
+
 class Developer(Protocol):
     def commit(self, epoch: int) -> tuple[Commitment, Commitment]:
         """The weights of record and the baseline θ, before any coins are drawn."""
 
     def serve(self, start: EpochStart) -> None:
-        """Run the epoch's work with every enabled construction's developer side in place."""
+        """Run the epoch's work with every enabled subprotocol's prover side in place."""
 
     def close(self, epoch: int) -> tuple[Commitment, Account, bytes]:
-        """The commitment to the epoch's account, the account, and the nonce it is committed with (leaves: the
-        account's encoding, then the nonce)."""
+        """The commitment to the account, the account, and its nonce (leaves: the account's encoding, then the nonce)."""
 
-    def side(self, interface: str) -> object:
-        """Its side of the construction behind `interface` ("compliance" for the compliance proof)."""
+    def prover(self, subprotocol: str) -> object:
+        """Its prover side of `subprotocol`, whose API that subprotocol's audit defines."""
+
+    def disclose(self) -> Disclosure:
+        """What compliance's proof needs."""
 
 
 @dataclass(frozen=True)
@@ -77,48 +92,64 @@ class EpochRecord:
     weights: Commitment | None
     baseline: Commitment | None
     account: Commitment | None
-    findings: Mapping[str, str]  # interface -> digest of its finding
-    reasons: tuple[str, ...]  # why accounting rejected, if it did
+    profiles: Mapping[str, str]  # subprotocol -> digest of what it established
+    reasons: tuple[str, ...]
 
     def digest(self) -> str:
         return _digest(asdict(self))
 
 
-def run(
-    config: Configuration,
-    developer: Developer,
-    inventory: Inventory,
-    epoch: int,
-) -> tuple[EpochReport, EpochRecord]:
-    components, refused = resolve(config)
-    if refused:
-        raise Refused(refused)
-    constructions, commitments = components.constructions, components.commitments
+def run(config: Configuration, developer: Developer, inventory: Inventory, epoch: int) -> tuple[EpochReport, EpochRecord]:
+    why = list(refusals(config))
+    audits: dict[str, object] = {}
+    for name, module, choice in (
+        ("sampled_proofs", sampled_proofs, config.sampled_proofs),
+        ("pouw", pouw, config.pouw),
+        ("pous", pous, config.pous),
+        ("network_warden", network_warden, config.network_warden),
+    ):
+        if choice is not None:
+            try:
+                audits[name] = module.Audit(choice.construction, choice.parameters)
+            except NotInstalled as e:
+                why.append(f"{name}: {e}")
+    if why:
+        raise Refused(tuple(why))
+    scheme, source = SCHEMES[config.commitments](), SOURCES[config.challenges]()
+
     weights = baseline = account_commitment = None
-    findings: dict[str, Finding] = {}
+    evidence = None
     try:
         weights, baseline = developer.commit(epoch)
         start = EpochStart(epoch, config.digest(), weights, baseline, inventory)
         bindings = {"epoch": str(epoch), "configuration": start.configuration, "weights": weights.root.hex(), "baseline": baseline.root.hex()}
-        sessions = {i: constructions[i].session(c.parameters) for i, c in config.accounting.items()}
-        for interface, session in sessions.items():
-            session.open(start, Challenger(components.challenges, interface, bindings))
+        challenger = {name: Challenger(source, name, bindings) for name in audits}
+        audits["sampled_proofs"].open(challenger["sampled_proofs"])
+        if "pouw" in audits:
+            audits["pouw"].open(challenger["pouw"])
+        if "pous" in audits:
+            audits["pous"].open(weights, challenger["pous"])
         developer.serve(start)
         account_commitment, account, nonce = developer.close(epoch)
-        for interface, session in sessions.items():
-            findings[interface] = session.close(account, developer.side(interface))
+        units = [e.circuit for e in account.executions]
+        evidence = Evidence(
+            integrity=audits["sampled_proofs"].close(units, account_commitment.root.hex(), developer.prover("sampled_proofs")),
+            work=audits["pouw"].close(developer.prover("pouw")) if "pouw" in audits else None,
+            space=audits["pous"].close(developer.prover("pous")) if "pous" in audits else None,
+            channel=audits["network_warden"].close([u.id for u in account.units]) if "network_warden" in audits else None,
+        )
     except NoAnswer as e:
-        record = EpochRecord(epoch, config.digest(), weights, baseline, account_commitment, _digests(findings), (f"no answer: {e}",))
+        record = EpochRecord(epoch, config.digest(), weights, baseline, account_commitment, _profiles(evidence), (f"no answer: {e}",))
         return EpochReport(Verdict.SILENT, Verdict.SILENT), record
 
-    opened = () if commitments.commit([account.encode(), nonce]) == account_commitment else ("account: does not open its commitment",)
-    validated, why = check(account, account_commitment, start, findings, config.delta)
-    reasons = opened + why
-    record = EpochRecord(epoch, start.configuration, weights, baseline, account_commitment, _digests(findings), reasons)
+    opened = () if scheme.commit([account.encode(), nonce]) == account_commitment else ("account: does not open its commitment",)
+    validated, reasons = check(account, account_commitment, inventory, evidence, config.delta)
+    reasons = opened + reasons
+    record = EpochRecord(epoch, start.configuration, weights, baseline, account_commitment, _profiles(evidence), reasons)
     if reasons:
         return EpochReport(Verdict.REJECT, Verdict.REJECT), record
-    complies = components.compliance.verify(validated, config.policy, developer.side("compliance"))
-    return EpochReport(Verdict.ACCEPT, Verdict.ACCEPT if complies else Verdict.REJECT), record
+    ok = complies(validated, config.policy, config.nci.construction, scheme, developer.disclose())
+    return EpochReport(Verdict.ACCEPT, Verdict.ACCEPT if ok else Verdict.REJECT), record
 
 
 def _digest(obj: object) -> str:
@@ -133,5 +164,5 @@ def _default(obj: object) -> object:
     return str(obj)
 
 
-def _digests(findings: Mapping[str, Finding]) -> dict[str, str]:
-    return {i: _digest(asdict(f)) for i, f in findings.items()}
+def _profiles(evidence: Evidence | None) -> dict[str, str]:
+    return {k: _digest(asdict(v)) for k, v in evidence.present().items()} if evidence else {}

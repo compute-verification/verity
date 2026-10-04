@@ -1,9 +1,9 @@
 """Accounting's decision: does the evidence validate the committed account, and what does it establish?
 
-Accounting has no policy. It accepts when every enabled subprotocol accepted and their findings are consistent with the
-account; what it establishes (unaccounted work and memory per device, covert capacity per isolation unit, wrong proof
-units, the summed δ) goes to compliance in the validated account, whose rules decide what is allowed. An interface the
-configuration leaves off establishes nothing: its resource counts as entirely unaccounted.
+Accounting has no policy. It accepts when every enabled subprotocol accepted and what they established is consistent with
+the account; what it establishes (unaccounted work and memory per device, covert capacity per isolation unit, wrong proof
+units, the summed δ) goes to compliance in the validated account. A subprotocol the configuration leaves off establishes
+nothing: its resource counts as entirely unaccounted.
 """
 
 from __future__ import annotations
@@ -11,17 +11,25 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from verity.protocol.accounting.account import Account
-from verity.protocol.accounting.interfaces import (
-    INTERFACES,
-    ChannelFinding,
-    EpochStart,
-    Finding,
-    IntegrityFinding,
-    SpaceFinding,
-    WorkFinding,
-)
-from verity.protocol.commitments import Commitment
+from verity.primitives.commitments import Commitment
+from verity.protocol.accounting.account import Account, Inventory
+from verity.subprotocols.network_warden.audit import ChannelProfile
+from verity.subprotocols.pous.audit import StorageProfile
+from verity.subprotocols.pouw.audit import WorkProfile
+from verity.subprotocols.sampled_proofs.audit import IntegrityProfile
+
+
+@dataclass(frozen=True)
+class Evidence:
+    """What the subprotocols established this epoch: integrity is required, the rest are optional."""
+
+    integrity: IntegrityProfile
+    work: WorkProfile | None = None
+    space: StorageProfile | None = None
+    channel: ChannelProfile | None = None
+
+    def present(self) -> dict[str, object]:
+        return {k: v for k, v in vars(self).items() if v is not None}
 
 
 @dataclass(frozen=True)
@@ -42,29 +50,20 @@ class ValidatedAccount:
     epoch: int
     account: Commitment
     balances: tuple[Balance, ...]
-    covert_bits: Mapping[str, int] | None  # per isolation unit; None when the channel interface is off (unbounded)
+    covert_bits: Mapping[str, int] | None  # per isolation unit; None when no warden bounds the channel
     wrong_units: int
     delta: float
 
 
 def check(
-    account: Account, commitment: Commitment, start: EpochStart, findings: Mapping[str, Finding], delta: float
+    account: Account, commitment: Commitment, inventory: Inventory, evidence: Evidence, delta: float
 ) -> tuple[ValidatedAccount | None, tuple[str, ...]]:
     """The validated account, or None with every reason it was rejected."""
-    why: list[str] = []
-    for name, f in findings.items():
-        if not isinstance(f, INTERFACES[name]):
-            why.append(f"{name}: a {type(f).__name__} is not a {INTERFACES[name].__name__}")
-        elif not f.accepted:
-            why.append(f"{name}: rejected")
-    integrity = findings.get("integrity")
-    if not isinstance(integrity, IntegrityFinding):
-        why.append("integrity: no finding, and nothing else shows the declared work ran as declared")
-    total = sum(f.delta for f in findings.values())
+    why = [f"{name}: rejected" for name, p in evidence.present().items() if not p.accepted]
+    total = sum(p.delta for p in evidence.present().values())
     if total > delta:
-        why.append(f"δ: the findings sum to {total}, over the configured {delta}")
+        why.append(f"δ: the evidence sums to {total}, over the configured {delta}")
 
-    inventory = start.inventory
     devices = {d.id for d in inventory.devices}
     spatial = {s.id: s for s in inventory.spatial_units}
     units = {u.id: u for u in account.units}
@@ -78,15 +77,14 @@ def check(
             why.append(f"{e.circuit}: isolation unit {e.unit} is not in the account")
         elif (s := spatial.get(units[e.unit].spatial_unit)) is not None and e.device not in s.devices:
             why.append(f"{e.circuit}: device {e.device} is outside its isolation unit's spatial unit")
-        if isinstance(integrity, IntegrityFinding) and e.circuit not in integrity.covered:
+        if e.circuit not in evidence.integrity.covered:
             why.append(f"{e.circuit}: executed, and integrity did not cover it")
 
-    work, space, channel = findings.get("work"), findings.get("space"), findings.get("channel")
     balances = []
     for d in inventory.devices:
         declared_work, declared_bits = account.declared(d.id)
-        certified = work.certified.get(d.id, 0) if isinstance(work, WorkFinding) else 0
-        occupied = space.occupied_bits.get(d.id, 0) if isinstance(space, SpaceFinding) else 0
+        certified = evidence.work.certified.get(d.id, 0) if evidence.work else 0
+        occupied = evidence.space.occupied_bits.get(d.id, 0) if evidence.space else 0
         if certified > declared_work:
             why.append(f"{d.id}: {certified} work certified, more than the {declared_work} declared")
         if declared_work > d.work:
@@ -98,12 +96,11 @@ def check(
                     max(d.memory_bits - declared_bits - occupied, 0))
         )
     covert = None
-    if isinstance(channel, ChannelFinding):
-        covert = dict(channel.covert_bits)
+    if evidence.channel:
+        covert = dict(evidence.channel.covert_bits)
         if set(covert) != set(units):
             why.append(f"channel: charged {sorted(covert)}, the account's isolation units are {sorted(units)}")
 
     if why:
         return None, tuple(why)
-    wrong = integrity.wrong_units if isinstance(integrity, IntegrityFinding) else 0
-    return ValidatedAccount(account.epoch, commitment, tuple(balances), covert, wrong, total), ()
+    return ValidatedAccount(account.epoch, commitment, tuple(balances), covert, evidence.integrity.wrong_units, total), ()

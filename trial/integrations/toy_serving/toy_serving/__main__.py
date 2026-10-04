@@ -5,11 +5,11 @@ from __future__ import annotations
 import argparse
 from fractions import Fraction
 
-from verity.protocol.compliance.policy import NciBound
 from verity.protocol.configuration import Choice, Configuration
 from verity.protocol.epoch import Refused, run
+from verity.subprotocols.nci.policy import NciBound
 
-from toy_serving import INVENTORY, Engine
+from toy_serving.engine import INVENTORY, Engine
 
 p = argparse.ArgumentParser()
 p.add_argument("--integrity", default="replay")
@@ -17,17 +17,16 @@ p.add_argument("--mode", default="honest", choices=("honest", "lazy", "rollout")
 p.add_argument("--no-space", action="store_true")
 args = p.parse_args()
 
-accounting = {
-    "integrity": Choice("sampled_proofs", args.integrity, delta=0.01, parameters={"k": 4}),
-    "work": Choice("pouw", "pearl-c", delta=0.01),
-    "channel": Choice("network_warden", "constant-rate", parameters={"bits_per_unit": 7}),
-}
-if not args.no_space:
-    accounting["space"] = Choice("pous", "band-chain", delta=0.01)
 config = Configuration(
-    variant="v0", accounting=accounting, compliance=Choice("nci", "disclosed"),
-    commitments="sha256-leaves", challenges="auditor-secret",
-    policy=(NciBound(gates=1000, alpha=Fraction(10)),), delta=0.05,
+    sampled_proofs=Choice(args.integrity, delta=0.01, parameters={"k": 4}),
+    pouw=Choice("pearl-c", delta=0.01),
+    pous=None if args.no_space else Choice("band-chain", delta=0.01),
+    network_warden=Choice("constant-rate", parameters={"bits_per_unit": 7}),
+    nci=Choice("disclosed"),
+    policy=NciBound(gates=1000, alpha=Fraction(10)),
+    commitments="sha256-leaves",
+    challenges="auditor-secret",
+    delta=0.05,
 )
 try:
     report, record = run(config, Engine(mode=args.mode, space=not args.no_space), INVENTORY, epoch=1)
