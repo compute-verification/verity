@@ -50,6 +50,18 @@ def receive(kind: type, sender: str, *sends: Send) -> Generator[tuple[Send, ...]
     return (yield from gather({kind: sender}, *sends))[kind]
 
 
+def collect(kind: type, until: type, sender: str, *sends: Send) -> Generator[tuple[Send, ...], Event, tuple]:
+    """Send `sends`, then take every `kind` from `sender`, in order, until an `until` from it: a stream."""
+    out, got = sends, []
+    while True:
+        event = yield out
+        out = ()
+        if event.sender == sender and isinstance(event.body, until):
+            return tuple(got)
+        if event.sender == sender and isinstance(event.body, kind):
+            got.append(event.body)
+
+
 def tell(*sends: Send) -> Actor:
     """An actor that sends `sends` and nothing more: a declaration, or a reading."""
     yield sends

@@ -17,9 +17,7 @@ class Transparent(ProofSystem):
     def prove(
         self, scheme: CommitmentScheme, units: Sequence[Unit], values: Sequence[Sequence[int]]
     ) -> tuple[Opening, ...]:
-        return tuple(
-            open_wires(scheme, u.circuit, u.execution.partition, v, _boundary(u)) for u, v in zip(units, values)
-        )
+        return tuple(open_wires(scheme, u.circuit, u.partition, v, _boundary(u)) for u, v in zip(units, values))
 
     def verify(self, scheme: CommitmentScheme, units: Sequence[Unit], proof: object) -> bool:
         return (
@@ -31,7 +29,9 @@ class Transparent(ProofSystem):
 
 def check(scheme: CommitmentScheme, unit: Unit, opening: Opening) -> bool:
     ins, outs = P.boundary(unit.circuit, unit.gates)
-    if set(opening.values) != {*ins, *outs} or not verify_opening(scheme, unit.circuit, unit.execution, opening):
+    if set(opening.values) != {*ins, *outs} or not verify_opening(
+        scheme, unit.circuit, unit.partition, unit.root, opening
+    ):
         return False
     produced = P.evaluate_region(unit.circuit, unit.gates, {w: opening.values[w] for w in ins})
     return all(produced[w] == opening.values[w] for w in outs)

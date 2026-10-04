@@ -7,10 +7,10 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class IntegrityProfile:
-    """If `accepted`: of the registration's `units` at `scale`, at most `wrong_units` are wrong, except with probability
+    """If `accepted`: of the stream's `units` at `scale`, at most `wrong_units` are wrong, except with probability
     `delta`."""
 
-    registration: str  # its digest
+    registration: str  # the stream's digest
     scale: str  # what a unit is: "execution", "region"
     accepted: bool
     units: int

@@ -1,15 +1,19 @@
-"""What the examples share: a real circuit, eight requests to serve through it, and printing a view.
+"""What the examples share: a real circuit, eight requests to serve through it, a scheduler that batches them into
+steps and the builder of a step's circuit, and printing a view.
 
 The circuits are verity's FP32 adder and BF16 comparison, exported as Boolean circuits with reference vectors from
 `verity.evaluation.bits.evaluate_bits` (`data/`). A request is a pair of random floats.
 """
 
+import hashlib
 import json
 import random
 import struct
-from dataclasses import is_dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, is_dataclass
 from pathlib import Path
 
+from verity.primitives import partition as P
 from verity.primitives.circuit import Circuit, evaluate
 from verity.primitives.events import Event
 
@@ -18,22 +22,65 @@ def load(name: str) -> tuple[Circuit, list[tuple[int, ...]]]:
     """The circuit (its baseline is its constants) and the requests."""
     data = json.loads((Path(__file__).parent / "data" / f"{name}.json").read_text())
     circuit = Circuit.from_json(data)
-    bits = (circuit.inputs - len(data["constants"])) // 2  # per operand
+    bits = (circuit.inputs - len(circuit.baseline)) // 2  # per operand
 
-    def wires(a: int, b: int) -> tuple[int, ...]:
-        """The constant wires, then each operand's bits, least significant first."""
-        return (*data["constants"], *((a >> i) & 1 for i in range(bits)), *((b >> i) & 1 for i in range(bits)))
+    def inputs(a: int, b: int) -> tuple[int, ...]:
+        """Each operand's bits, least significant first."""
+        return (*((a >> i) & 1 for i in range(bits)), *((b >> i) & 1 for i in range(bits)))
 
     def pattern(x: float) -> int:
         """FP32's bit pattern, or BF16's (its top half)."""
         return struct.unpack("<I", struct.pack("<f", x))[0] >> (32 - bits)
 
     for v in data["vectors"]:
-        assert sum(bit << i for i, bit in enumerate(evaluate(circuit, wires(v["a"], v["b"])))) == v["out"], v
+        assert sum(bit << i for i, bit in enumerate(evaluate(circuit, inputs(v["a"], v["b"])))) == v["out"], v
     print(f"{data['source']}: {len(circuit.gates)} gates, agrees with its {len(data['vectors'])} reference vectors")
     rng = random.Random(0)
-    requests = [wires(pattern(rng.uniform(-100, 100)), pattern(rng.uniform(-100, 100))) for _ in range(8)]
-    return circuit, requests
+    return circuit, [inputs(pattern(rng.uniform(-100, 100)), pattern(rng.uniform(-100, 100))) for _ in range(8)]
+
+
+@dataclass(frozen=True)
+class Batched:
+    """The builder of a scheduler step: as many requests as the step's advice says, side by side through `circuit`,
+    sharing its baseline, each with `partition`'s regions. The advice is the batch size less one, since how the
+    scheduler batches is a runtime choice no one fixes ahead of time."""
+
+    circuit: Circuit
+    partition: P.Partition
+    advice_bits: int  # so at most 2**advice_bits requests a step
+
+    def id(self) -> str:
+        body = json.dumps(["examples/Batched/v0", self.circuit.id(), self.partition, self.advice_bits])
+        return hashlib.sha256(body.encode()).hexdigest()[:16]
+
+    def build(self, advice: str) -> tuple[Circuit, P.Partition]:
+        c, n = self.circuit, int(advice or "0", 2) + 1
+        b, own = len(c.baseline), c.inputs - len(c.baseline)  # baseline inputs, and each request's own
+        total = b + n * own
+
+        def wire(j: int, w: int) -> int:
+            """Request j's copy of the circuit's wire w."""
+            if w < b:
+                return w
+            if w < c.inputs:
+                return b + j * own + (w - b)
+            return total + j * len(c.gates) + (w - c.inputs)
+
+        gates = tuple((op, wire(j, x), wire(j, y)) for j in range(n) for op, x, y in c.gates)
+        outputs = tuple(wire(j, o) for j in range(n) for o in c.outputs)
+        partition = tuple(tuple(j * len(c.gates) + g for g in region) for j in range(n) for region in self.partition)
+        return Circuit(total, gates, outputs, c.baseline), partition
+
+
+def schedule(
+    requests: Sequence[tuple[int, ...]], sizes: Sequence[int], builder: Batched
+) -> list[tuple[str, tuple[int, ...]]]:
+    """The scheduler's steps, `sizes[i]` requests in step i, in order: each step's advice and inputs."""
+    steps, start = [], 0
+    for n in sizes:
+        steps.append((format(n - 1, f"0{builder.advice_bits}b"), sum(requests[start : start + n], ())))
+        start += n
+    return steps
 
 
 def show(event: Event) -> None:

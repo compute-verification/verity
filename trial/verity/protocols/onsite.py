@@ -2,9 +2,10 @@
 drawn executions again without their inputs leaving the site; a pinger measures capacity instead of taking the
 prover's word, and times PoUS's audit; a warden on the link sees the traffic.
 
-    verifier    integrity, PoUW and NCI read the registration; compute reads integrity's profile and PoUW's bound;
-                memory reads PoUS's bound; network reads the traffic
-    prover      registers its work; opens it for the replayer, salts it, and holds PoUS's encoding
+    verifier    integrity, PoUW and NCI read the registration and the stream; compute reads integrity's profile and
+                PoUW's bound; memory reads PoUS's bound; network reads the traffic
+    prover      registers its builder and streams its executions as remotely; opens them for the replayer, finds their
+                shares, and holds PoUS's encoding
     replayer    integrity's
     pinger      measures compute and memory capacity, and times PoUS's challenges
     warden      reads the link
@@ -16,17 +17,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import ClassVar
 
-from verity.primitives import partition as P
-from verity.primitives.circuit import Circuit
-from verity.primitives.events import Actor, Send, tell
-from verity.primitives.registration import register
+from verity.primitives.events import Actor
+from verity.primitives.registration import Builder, Registration, execute, serve
 from verity.protocols.compute import Compute
 from verity.protocols.integrity.replay import Replay
 from verity.protocols.memory import Memory
 from verity.protocols.nci import Nci
 from verity.protocols.network import Network
 from verity.protocols.pous import Pous
-from verity.protocols.pouw import Pouw
+from verity.protocols.pouw import Pouw, Salt
 from verity.protocols.transparency import Transparency
 
 
@@ -55,13 +54,16 @@ class Onsite:
         return [p.verifier() for p in protocols]
 
     def prover(
-        self, circuit: Circuit, partition: P.Partition, inputs: Sequence[tuple[int, ...]], encoding: Sequence[bytes]
+        self, builder: Builder, steps: Sequence[tuple[str, tuple[int, ...]]], encoding: Sequence[bytes]
     ) -> list[Actor]:
-        registration = register(circuit, partition, inputs, self.integrity.scheme)
+        """`steps` are the executions as the prover runs them: each one's advice and inputs."""
+        registration = Registration(builder)
+        executions = [execute(builder, advice, inputs, self.integrity.scheme) for advice, inputs in steps]
+        inputs = [inputs for _, inputs in steps]
         return [
-            tell(Send(registration, "verifier")),
-            self.integrity.prover(inputs, registration),
-            self.pouw.prover(registration),
+            serve(registration, executions, after=Salt),
+            self.integrity.prover(registration, executions, inputs),
+            self.pouw.prover(registration, executions),
             self.pous.prover(encoding),
         ]
 

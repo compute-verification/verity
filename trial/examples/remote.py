@@ -1,11 +1,12 @@
-"""Remote Verity end to end on a real circuit: the prover serves eight requests, and `run` prints the verifier's view.
+"""Remote Verity end to end on a real circuit: the prover's scheduler batches eight requests into steps, it streams each
+step's advice and commitment, and `run` prints the verifier's view.
 
-uv run python examples/remote.py [f32_add|bf16_gt_strict]
+    uv run python examples/remote.py [f32_add|bf16_gt_strict]
 """
 
 import sys
 
-from common import load, show
+from common import Batched, load, schedule, show
 
 from verity.primitives import partition as P
 from verity.protocols.integrity.proofs.construction import Proofs
@@ -16,6 +17,7 @@ from verity.protocols.remote import Remote
 from verity.run import run
 
 circuit, requests = load(sys.argv[1] if len(sys.argv) > 1 else "f32_add")
+builder = Batched(circuit, P.greedy(circuit, 16), advice_bits=2)
 
 remote = Remote(
     integrity=Proofs(k=64, max_width=16, delta=0.01, system=Transparent()),
@@ -24,7 +26,9 @@ remote = Remote(
 )
 principals = {
     "verifier": remote.verifier(),
-    "prover": remote.prover(circuit, P.greedy(circuit, 16), requests, capacity=2 * len(requests) * len(circuit.gates)),
+    "prover": remote.prover(
+        builder, schedule(requests, (3, 1, 4), builder), capacity=2 * len(requests) * len(circuit.gates)
+    ),
 }
 for event in run(principals, view="verifier"):
     show(event)

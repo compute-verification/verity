@@ -22,10 +22,13 @@ plays them against each other and yields one principal's view. The auditor trust
 is the output: what its actors establish are records in it. Replayers, wardens and pingers are trusted too but sealed:
 what they see stays their own, and reaches the verifier only as what they send it.
 
-Every protocol over the prover's work reads one object, the prover's first message: its registration
-(`verity.primitives.registration`), the circuits it declares (each with its baseline) and a root per execution over
-the boundary wires of the partition it chose, sent before any coins are drawn. Integrity opens and proves against the
-roots, PoUW salts the digest, NCI checks the partitions.
+Every protocol over the prover's work reads one stream (`verity.primitives.registration`). First, before any coins,
+the registration: the prover's builder, the program that builds each execution's circuit and partition from a bounded
+bitstring of advice (the runtime choices no one could fix ahead of time: how requests were batched, a preemption, an
+autotune pick), holding the baseline (weights, constants) as every circuit's first inputs. Then per execution its advice
+and a root over the boundary wires of its partition, until the prover closes the stream. The verifier rebuilds each
+execution's circuit from its advice. Integrity opens and proves against the roots, PoUW keys each execution's work from
+one salt drawn before the stream, and NCI checks the partitions; every statement names the stream's digest.
 
 A construction is a frozen dataclass of its parameters, with a method per principal it involves that returns that
 principal's actor (`Replay(k, delta).verifier()`). A trusted principal's method takes its readings (`pinger(elapsed)`).

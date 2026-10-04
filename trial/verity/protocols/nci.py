@@ -1,9 +1,10 @@
 """Novel communication intensity: the policy that throttles frontier training and leaves inference alone. A condition on
-the declaration, with no rounds of its own (`Nci.Protocol` in the main repo): every isolation unit, here a region of the
-registered partition, has at most `gamma` gates and reads at most `alpha` bits of novel information per gate. A bit is
-novel unless it is on its circuit's baseline.
+what the prover ran, with no rounds of its own (`Nci.Protocol` in the main repo): every isolation unit, here a region of
+an execution's partition, has at most `gamma` gates and reads at most `alpha` bits of novel information per gate. A bit
+is novel unless it is on the baseline, which is on no region's boundary.
 
-    verifier    takes the registration, and records whether it complies
+    verifier    takes the registration and the stream, rebuilds each distinct advice's circuit, and records whether
+                every execution complies
 """
 
 from __future__ import annotations
@@ -11,13 +12,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from verity.primitives import partition as P
-from verity.primitives.events import Actor, Send, receive
-from verity.primitives.registration import Registration
+from verity.primitives.events import Actor, Send, collect, receive
+from verity.primitives.registration import (
+    Closed,
+    Execution,
+    Registration,
+    built,
+    digest,
+)
 
 
 @dataclass(frozen=True)
 class Complies:
-    registration: str
+    registration: str  # the stream's digest
     complies: bool
     reasons: tuple[str, ...]
 
@@ -29,14 +36,16 @@ class Nci:
 
     def verifier(self) -> Actor:
         registration = yield from receive(Registration, "prover")
+        executions = yield from collect(Execution, Closed, "prover")
         reasons = []
-        for circuit_id, partition in {(e.circuit, e.partition) for e in registration.executions}:
-            circuit = registration.circuits.get(circuit_id)
-            if circuit is None:
-                reasons.append(f"circuit {circuit_id} not given")
+        for advice in dict.fromkeys(e.advice for e in executions):
+            try:
+                circuit, partition = built(registration.builder, advice)
+            except ValueError as error:
+                reasons.append(str(error))
                 continue
             for r, region in enumerate(partition):
-                novel = len(set(P.boundary(circuit, region)[0]) - set(circuit.baseline))
+                novel = len(P.boundary(circuit, region)[0])
                 if len(region) > self.gamma or novel > self.alpha * len(region):
-                    reasons.append(f"circuit {circuit_id} region {r}: {len(region)} gates reading {novel} novel bits")
-        return (Send(Complies(registration.digest(), not reasons, tuple(sorted(reasons)))),)
+                    reasons.append(f"advice {advice!r} region {r}: {len(region)} gates reading {novel} novel bits")
+        return (Send(Complies(digest(registration, executions), not reasons, tuple(reasons))),)

@@ -9,7 +9,7 @@ structure Circuit where
   inputs : Nat
   gates : List (Op × Nat × Nat)
   outputs : List Nat
-  /-- The inputs bound when it is registered; the rest are bound per run. -/
+  /-- What its first inputs hold in every execution; the rest vary. -/
   baseline : List Nat := []
 
 def Op.apply : Op → Nat → Nat → Nat
@@ -19,8 +19,8 @@ def Op.apply : Op → Nat → Nat → Nat
   | .and, a, b => a &&& b
   | .not, a, _ => a ^^^ 1
 
-/-- Every wire's value: what `trace` in `circuit.py` returns. -/
+/-- Every wire's value, from the inputs after the baseline: what `trace` in `circuit.py` returns. -/
 def trace (c : Circuit) (inputs : List Nat) : List Nat :=
-  c.gates.foldl (fun wires (op, a, b) => wires ++ [op.apply (wires.getD a 0) (wires.getD b 0)]) inputs
+  c.gates.foldl (fun wires (op, a, b) => wires ++ [op.apply (wires.getD a 0) (wires.getD b 0)]) (c.baseline ++ inputs)
 
 end Verity.Primitives
