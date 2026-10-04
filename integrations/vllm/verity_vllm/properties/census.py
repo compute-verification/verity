@@ -78,6 +78,8 @@ KERNEL_MATCH: dict[str, tuple[str, ...]] = {
     # all_token_ids, bumps total_len / num_computed_tokens; integer pointers only).  Runs AFTER runner.sample() returns,
     # i.e. outside the observer's step window; not in the pinned profile's allowlist -> residue; see census_m1.md.
     "_post_update_kernel": (r"^_post_update_kernel(\b|$)",),
+    # cuBLAS's SIMT f32 GEMM family (`f32_linear.F32_LINEAR_KERNELS`: the f32 router gate at 17 <= M); the tile is in the name
+    "cutlass_80_simt_sgemm": (r"cutlass_80_simt_sgemm_\w+",),
     # --- transparent / infrastructure (patterns.COPY_KERNELS / FILL_KERNELS and the profile allowlist) ---
     "Memcpy": (r"^Memcpy ",),
     "Memset": (r"^Memset ",),

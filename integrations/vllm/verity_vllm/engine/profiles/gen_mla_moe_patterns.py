@@ -662,7 +662,7 @@ class MoEFusedSharedExperts(MoEFusedExperts):
             return unsupported(node, "the grouped_topk launch at this E is unmeasured", E=E)
         parts.append((router.id, Compute(bind(_MOE.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=float(rsf), KERNEL=kernel), M,
                                          (PerRow(scores), Shared(bias)), (PerRow(weights), PerRow(ids)), (router.id,), hint=f"{hint}/router",
-                                         kernels=("grouped_topk_kernel",), attribution=tuple(ctx.start.rows), pattern=self.name,
+                                         kernels=(f"single_group_topk_{kernel}_kernel",), attribution=tuple(ctx.start.rows), pattern=self.name,
                                          roots=(None, _weight_root(ctx, bias, "e_score_correction_bias")))))
         for al in aligns:
             parts.append((al.id, Transparent("noop", (al.id,), hint=f"{hint}/moe_align_block_size: pair->expert-block schedule; no output word depends on it",
