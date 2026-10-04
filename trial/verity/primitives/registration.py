@@ -67,9 +67,12 @@ class Closed:
 
 @functools.cache
 def built(builder: Builder, advice: str) -> tuple[Circuit, P.Partition]:
-    if len(advice) > builder.advice_bits or set(advice) - {"0", "1"}:
+    if not isinstance(advice, str) or len(advice) > builder.advice_bits or set(advice) - {"0", "1"}:
         raise ValueError(f"advice {advice!r} is not a bitstring of at most {builder.advice_bits} bits")
-    return builder.build(advice)
+    circuit, partition = builder.build(advice)
+    if set(circuit.baseline) - {0, 1}:
+        raise ValueError(f"advice {advice!r} builds a baseline that is not bits")
+    return circuit, partition
 
 
 @dataclass(frozen=True)
@@ -114,7 +117,7 @@ def wires(circuit: Circuit, partition: P.Partition) -> tuple[int, ...]:
 
 
 def leaf(wire: int, value: int) -> bytes:
-    return wire.to_bytes(4, "big") + value.to_bytes(4, "big")
+    return wire.to_bytes(4, "big") + bytes([value])
 
 
 def commit(builder: Builder, advice: str, values: Sequence[int], scheme: CommitmentScheme) -> Execution:
@@ -204,7 +207,7 @@ def open_wires(
 
 def verify_opening(scheme: CommitmentScheme, stream: Stream, opening: Opening) -> bool:
     for (i, w), v in opening.values.items():
-        if not 0 <= i < len(stream.executions):
+        if not 0 <= i < len(stream.executions) or v not in (0, 1):  # a wire is a bit
             return False
         root, index = stream.executions[i].root, _index(*stream.built(i))
         if w not in index or not scheme.verify(root, index[w], leaf(w, v), opening.paths.get((i, w))):

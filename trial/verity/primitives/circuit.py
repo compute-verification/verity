@@ -1,9 +1,8 @@
 """Circuits: build, name and evaluate them, and give their transcripts (every wire's value).
 
-What a circuit is and what it computes is stated in `Circuit.lean`, beside this file; this implements it and is held
-to it by conformance vectors. A toy of descriptor v1: one flat list of two-input gates. Word gates (`add`, `mul`) act
-on wires mod 2**32; the Boolean profile's gates (`and`, `xor`, `not`, which ignores its second operand) on bits, as
-`verity.ir.boolean` does.
+What a circuit is and what it computes is stated in `Circuit.lean`, beside this file; this implements it. A toy of
+descriptor v1's Boolean profile, as `verity.ir.boolean` is: one flat list of two-input gates (`and`, `xor`, `not`, which
+ignores its second operand) on bits, so a wire is a bit, and a count of wires a count of bits.
 
 A circuit is one execution of a stream, and its inputs say where they come from: first the baseline, the same in every
 execution; then its state, which earlier executions of the stream wrote (a decode step's KV cache); then the rest,
@@ -17,10 +16,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 
-MASK = 2**32 - 1
 OPS = {
-    "add": lambda a, b: (a + b) & MASK,
-    "mul": lambda a, b: (a * b) & MASK,
     "xor": lambda a, b: a ^ b,
     "and": lambda a, b: a & b,
     "not": lambda a, b: a ^ 1,

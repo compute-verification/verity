@@ -3,7 +3,8 @@ statement is today's `packages/verity/lean/Verity/Protocol/Circuit.lean`. -/
 
 namespace Verity.Primitives
 
-inductive Op | add | mul | xor | and | not
+/-- The Boolean profile's gates, on bits. -/
+inductive Op | xor | and | not
 
 structure Circuit where
   inputs : Nat
@@ -16,8 +17,6 @@ structure Circuit where
   state : List (Nat × Nat) := []
 
 def Op.apply : Op → Nat → Nat → Nat
-  | .add, a, b => (a + b) % 2 ^ 32
-  | .mul, a, b => (a * b) % 2 ^ 32
   | .xor, a, b => a ^^^ b
   | .and, a, b => a &&& b
   | .not, a, _ => a ^^^ 1
