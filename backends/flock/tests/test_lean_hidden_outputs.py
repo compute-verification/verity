@@ -134,7 +134,7 @@ def test_a_block_of_three_vus_is_refused(store, tmp_path):
     """`vus_per_block = 3` is refused as the circuit is read, though a tail returns the outputs (PROTOCOL.md §16.10, D9;
     the Rust side is `circuit.rs`'s `a_block_of_three_vus_is_refused`): the Digest region's VU bits, `Nat.log2 3 = 1` here
     and `trailing_zeros(3) = 0` in Rust, would pin VUs 0 and 1 here, VU 0 there, and VU 2 in neither. The statement is flat
-    GEMM's composed for three VUs a block, as the red team staged it, with its public file of three instances."""
+    GEMM's composed for three VUs a block, with its public file of three instances."""
     pytest.importorskip("verity_numerical")
     from verity_numerical.bench import templates as TM
     from verity_numerical.bench.generate import generate
