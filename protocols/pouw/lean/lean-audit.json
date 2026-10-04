@@ -1,5 +1,5 @@
 {
- "roots": ["Pouw"],
+ "roots": ["Pouw.Assumptions", "Pouw.Guarantees", "Pouw.Protocol", "Pouw.SecurityProofs.Dimension.Lifting"],
  "exempt": {
   "PouwBulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof"
  },

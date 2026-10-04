@@ -16,3 +16,4 @@ path = "../../../packages/verity/lean"
 
 [[lean_lib]]
 name = "Pouw"
+roots = ["Pouw.Assumptions", "Pouw.Guarantees", "Pouw.Protocol", "Pouw.SecurityProofs.Dimension.Lifting"]

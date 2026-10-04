@@ -1,4 +1,4 @@
-"""Lean's integer form of the cap circuit's tests (`lean/Pouw/SecurityProofs/PearlC/Cap/IntForm.lean`) against the scheme:
+"""Lean's integer form of the cap circuit's tests (`security_proofs/pouw/Pouw/SecurityProofs/PearlC/Cap/IntForm.lean`) against the scheme:
 its `IntPrices` are the devices' prices, and each kernel-checked pin in `Cap/Pins.lean` is what Python computes at that
 shape: `creditInt` is `PearlC(forming="v1").credit_of`, and `capPin` / `capPinTop` are `cap._cap_constants` at the device's
 g, prices and cap (that test skips where `verity_pouw.circuit.cap` is absent)."""
