@@ -39,7 +39,7 @@ transformers = pytest.importorskip("transformers")
 
 from verity.ir.codec import program_digest
 from verity_vllm.program.frontend.derive import DERIVE_VERSION, DeriveReport, Unsupported, derive_report
-from verity_vllm.program.registry.serve3_reference import materialize
+from verity_vllm.program.twins.serve3_reference import materialize
 from verity.ir.types import Array, Record, Value
 
 # ---------------------------------------------------------------------------------------------------------

@@ -54,7 +54,7 @@ from verity.ir import partition as PT
 from verity.ir.codec import encode_program, program_digest
 from verity.ir.evaluate import evaluate_region
 from verity_vllm.program.registry import b1, lifted as L
-from verity_vllm.program.registry import serve3_reference as ref
+from verity_vllm.program.twins import serve3_reference as ref
 from tests.program.test_serve3 import D_MAX, LP, TINY, Y_RAW, _inputs
 
 try:  # the production host core (the one revb accepted on F-r17b-44 / moe M-1023): pos_leaf + fold_levels + fold_path

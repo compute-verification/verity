@@ -24,7 +24,7 @@ from verity.ir import Program, bind
 from verity.ir.codec import decode_program, encode_program, program_digest
 from verity.ir.defs import REGISTRY, composite
 from verity_vllm.program.registry import b1, lifted as L, moe_pad as MP
-from verity_vllm.program.registry import serve3_reference as ref
+from verity_vllm.program.twins import serve3_reference as ref
 from verity_vllm.program.registry.prims import BF16
 from verity.ir.types import Array
 

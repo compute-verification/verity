@@ -146,7 +146,7 @@ class TargetProfile:
                            `RMSNormFusedCuda_v4`, `Attention_v10` / `Attention_v11`); a Definition that has no such version keeps
                            its constants.  Declaring false is refused (declare None).  Omitted from `to_json()` when None.
 
-    Derived (not fields; one rule each, `verity_vllm.program.registry.targets` consumes them): `tensor_core_family` (the registered k16
+    Derived (not fields; one rule each, `verity_vllm.program.vocabulary.targets` consumes them): `tensor_core_family` (the registered k16
     tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90, `blackwell_consumer` for sm_120) and `tuned_gemm_arch_family` (vLLM's tuned
     batch-invariant GEMM table for the capability: `ada` 8.9, `hopper` 9.x, None otherwise — mirrors
     `batch_invariant_configs._get_tuned_matmul_arch_family`, read back by the builder).

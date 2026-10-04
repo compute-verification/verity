@@ -181,7 +181,7 @@ class UnifiedAttentionWithOutputRule(StateRule):
         # [R13 hopper] target-keyed chain: on the accepted target (Ampere step, FA2) the role stays `attention` / `attention_softcap`
         # (digests unchanged); otherwise `attention_dot` = Attention_v2{BN, DOT, INV} with the block size of the launch the target's FA
         # version issues (FA3's tile rule reads the launch's query rows: this call's T when it opens a history, 1 per request on decode).
-        from verity_vllm.program.registry import targets as TG
+        from verity_vllm.program.vocabulary import targets as TG
         tp = active_target_profile()
         accepted = TG.uses_accepted_kinds(tp)
         geom = None
