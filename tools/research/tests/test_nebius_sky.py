@@ -851,3 +851,40 @@ def test_the_store_eviction_drops_only_preserved_copies_hourly_as_ubuntu_and_fai
     r = run("reached", VY_EVICT_STORE="/workspace/research/store", VY_EVICT_RUNS="/workspace/research/runs")   # research's own instance
     seen = json.loads((tmp_path / "argv.json").read_text())
     assert r.returncode == 0 and seen["store"] == "/workspace/research/store" and seen["argv"][6] == "/workspace/research/runs"
+
+
+def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what_it_kept(tmp_path):
+    """Node 1 hit 74% inodes on 4 Oct with nothing pruning /workspace/research/src: research's unit (its drop-in, from cluster_up.sh
+    and deploy.toml) passes `--src-dir` with the capabilities its /proc scan needs, and the journal line counts what went and why
+    the rest stayed, the reason it deleted nothing included."""
+    import subprocess
+    conf = (SKY / "store_evict_src.conf").read_text()
+    assert "Environment=VY_EVICT_SRC=/workspace/research/src\n" in conf and "AmbientCapabilities=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH\n" in conf
+    dest = "/etc/systemd/system/vy-store-evict-research.service.d/src.conf"
+    assert f'"$SRC/store_evict_src.conf" {dest}' in (SKY / "cluster_up.sh").read_text()
+    deploy = (SKY.parent / "deploy.toml").read_text()
+    assert f'path = "{dest}"\nsrc = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"\nnodes = ["vy-nebius-1"]' in deploy
+    tool, bin_dir = tmp_path / "tool", tmp_path / "bin"
+    (tool / "research").mkdir(parents=True)
+    bin_dir.mkdir()
+    (tool / "research" / "__init__.py").write_text("")
+    (tool / "research" / "__main__.py").write_text(
+        "import json, os, sys\n"
+        "open(os.environ['FAKE_ARGV'], 'w').write(json.dumps(sys.argv[1:]))\n"
+        "src = {'deleted': [{'tree': 'a'}, {'tree': 'b'}], 'deleted_bytes': 31e9, 'deleted_inodes': 812345, 'kept': [{'tree': 'c'}] * 3,\n"
+        "       'kept_by': {'1': 1, '2': 2}, 'error': os.environ.get('FAKE_ERROR')}\n"
+        "print(json.dumps({'store': {'evicted_bytes': 0, 'reached_target': False}, 'runs': {'evicted_bytes': 0}, 'src': src}))\n"
+        "sys.exit(1)\n")
+    (bin_dir / "df").write_text('#!/bin/sh\necho " Avail"\necho " 1443"\n')
+    (bin_dir / "df").chmod(0o755)
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "VY_RESEARCH_TOOL": str(tool), "FAKE_ARGV": str(tmp_path / "argv.json"),
+           "VY_EVICT_STORE": "/workspace/research/store", "VY_EVICT_RUNS": "/workspace/research/runs", "VY_EVICT_SRC": "/workspace/research/src"}
+    r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert json.loads((tmp_path / "argv.json").read_text()) == ["data", "evict", "--target-free-gb", "2500", "--runs", "--runs-dir",
+                                                                 "/workspace/research/runs", "--src-dir", "/workspace/research/src", "--json"]
+    assert "target reached: False; src trees: deleted 2 (31.0 GB, 812345 inodes), kept 3 (1:1 2:2) (tool)" in r.stdout
+    r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "VY_EVICT_ORIGIN": "/workspace/research/origin.git",
+                                                                     "FAKE_ERROR": "2: /proc/1 is unreadable"}, capture_output=True, text=True)
+    assert json.loads((tmp_path / "argv.json").read_text())[-3:] == ["--src-origin", "/workspace/research/origin.git", "--json"]
+    assert r.returncode == 0 and "kept 3 (1:1 2:2), nothing more deleted: 2: /proc/1 is unreadable (tool)" in r.stdout
