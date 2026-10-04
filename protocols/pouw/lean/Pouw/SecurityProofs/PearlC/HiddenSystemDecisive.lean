@@ -24,7 +24,7 @@ commitment, is decisive, the drawn tiles' proof games read as no other list, wha
 theorem HiddenSystem.unambiguous_of_decisive (HS : HiddenSystem Q R S) (TR : TileRules Q R S) (U : Workload)
     (τ : (Q → R) → S → Transcript) (salts : (Q → R) → S → ℕ → HS.O) (w : ℕ → ℕ) (t : ℕ)
     (hDec : ∀ (H : Q → R) (s : S) (j : ℕ), j < (TR.tiling U.layout).NT →
-      Pouw.Draft.Game.Decisive (HS.game H s U (HS.root U (τ H s) (HS.honestOpening U salts H s)) j)) :
+      Verity.Game.Decisive (HS.game H s U (HS.root U (τ H s) (HS.honestOpening U salts H s)) j)) :
     ∀ x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT),
       Pouw.Draft.Game.Unambiguous (List.ofFn fun i =>
         HS.game x.1 x.2.1 U (HS.root U (τ x.1 x.2.1) (HS.honestOpening U salts x.1 x.2.1)) (x.2.2 i).1) := by
@@ -41,7 +41,7 @@ theorem HiddenSystem.honestProver_bounded_of_decisive (HS : HiddenSystem Q R S) 
     (salts : (Q → R) → S → ℕ → HS.O) (w : ℕ → ℕ) (t q : ℕ)
     (hD : ∀ H s, HS.Distinct U H s (τ H s) (HS.honestOpening U salts H s))
     (hDec : ∀ (H : Q → R) (s : S) (j : ℕ), j < (TR.tiling U.layout).NT →
-      Pouw.Draft.Game.Decisive (HS.game H s U (HS.root U (τ H s) (HS.honestOpening U salts H s)) j)) :
+      Verity.Game.Decisive (HS.game H s U (HS.root U (τ H s) (HS.honestOpening U salts H s)) j)) :
     (HiddenAudit.ofSystem HS).ProverBounded (HS.honestProver TR U τ salts w t) q :=
   HS.honestProver_bounded hHon TR U τ salts w t q hD (HS.unambiguous_of_decisive TR U τ salts w t hDec)
 
@@ -50,9 +50,9 @@ is decisive on every root, so is every tile's proof game on the honest commitmen
 salt and workload: `honestProver_bounded_of_decisive`'s `hDec`. -/
 theorem HiddenSystem.decisive_of_sys_decisive (HS : HiddenSystem Q R S) (TR : TileRules Q R S) (U : Workload)
     (τ : (Q → R) → S → Transcript) (salts : (Q → R) → S → ℕ → HS.O)
-    (hSys : ∀ (k : HS.K) (r : HS.Rt), Pouw.Draft.Game.Decisive (((HS.sys k).game r).map (HS.sys k).accept)) :
+    (hSys : ∀ (k : HS.K) (r : HS.Rt), Verity.Game.Decisive (((HS.sys k).game r).map (HS.sys k).accept)) :
     ∀ (H : Q → R) (s : S) (j : ℕ), j < (TR.tiling U.layout).NT →
-      Pouw.Draft.Game.Decisive (HS.game H s U (HS.root U (τ H s) (HS.honestOpening U salts H s)) j) := by
+      Verity.Game.Decisive (HS.game H s U (HS.root U (τ H s) (HS.honestOpening U salts H s)) j) := by
   intro H s j _
   have e : HS.game H s U (HS.root U (τ H s) (HS.honestOpening U salts H s)) j =
       ((HS.sys (HS.kind U j)).game (HS.root U (τ H s) (HS.honestOpening U salts H s) H s j).2).map

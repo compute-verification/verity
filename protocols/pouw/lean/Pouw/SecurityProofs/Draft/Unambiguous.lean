@@ -1,5 +1,5 @@
 import Pouw.Protocol.Draft.BatchSeq
-import Pouw.Protocol.Draft.Decisive
+import Verity.Protocol.Game.Decisive
 import Mathlib.Order.ConditionallyCompleteLattice.Basic
 
 /-!

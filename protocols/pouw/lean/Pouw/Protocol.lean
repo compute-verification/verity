@@ -8,7 +8,6 @@ import Pouw.Protocol.Dimension.Causal
 import Pouw.Protocol.Dimension.Defs
 import Pouw.Protocol.Dimension.Lift
 import Pouw.Protocol.Draft.BatchSeq
-import Pouw.Protocol.Draft.Decisive
 import Pouw.Protocol.Draft.SampledProofs
 import Pouw.Protocol.Fp8Atom.Atom
 import Pouw.Protocol.Fp8Atom.E4M3
