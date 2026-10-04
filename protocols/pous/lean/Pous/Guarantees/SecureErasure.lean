@@ -74,8 +74,10 @@ any 192-bit salt, or one global 256-bit salt), meets `EraseMeets` at `f = 1 − 
 Cite it as "cannot keep it through all the reads", never as "holds at the challenge", and for a verifier that draws
 2152 sequential reads under a deadline bounding `(D, Q) = (5, 2^20)`.
 
-`M` must be the prover's whole volatile memory, on-chip SRAM included: one RTX PRO 6000's 96 GiB of GDDR7 is `N = 3072`
-(`SecureErasureMeets96GiB`); with host DRAM, `N` is the total over 32 MiB. The read deadline `T_read` is a symbol: any
+`M` must be the prover's whole volatile memory, on-chip SRAM included; with host DRAM, `N` is the total over 32 MiB.
+`N = 3072` is 96 GiB (`SecureErasureMeets96GiB`), the GDDR7 an RTX PRO 6000 has, but no fill covers all of it: software
+sees about 95 GiB, and the 4 Oct 2026 calibration filled 93.86 GiB (`N = 3003`). On one device the guarantee holds at
+the `N` the fill reaches, and the memory outside the fill adds to what a prover can keep. The read deadline `T_read` is a symbol: any
 deadline within which the prover completes at most 5 rounds of `Π₂` calls and `2^20` calls per answer; its hardware
 calibration is separate. The fill deadline does not enter.
 
@@ -97,12 +99,13 @@ def SecureErasureMeetsFamily : Prop :=
       EraseMeets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt))
         (1 - Params.ρ) 5 (2 ^ 20) 2152 ((2⁻¹ : ℝ≥0∞) ^ 128))
 
-/-- **Secure erasure of one RTX PRO 6000's 96 GiB of GDDR7.** `SecureErasureMeetsFamily` at `N = 3072` segments of 32 MiB,
-with the implementation's per-segment tags. For every `d ≥ 5` and salt, and a prover whose whole volatile memory is the
-96 GiB: if its memory at each spot read's arrival is at most `⌊(18/19)·|C|⌋` bits it is accepted with probability at
-most `2^-128`, and if it keeps at least `96 GiB / 19 + 32` bytes (about 5.05 GiB) of foreign content through the 2152
-spot reads it wins with probability at most `2^-128`. Same footing as the family: no named assumption, no
-bandwidth-separation premise. Proof: `PousErase.secure_erasure_meets_96GiB`. -/
+/-- **Secure erasure of 96 GiB.** `SecureErasureMeetsFamily` at `N = 3072` segments of 32 MiB, with the implementation's
+per-segment tags. For every `d ≥ 5` and salt, and a prover whose whole volatile memory is the 96 GiB: if its memory at
+each spot read's arrival is at most `⌊(18/19)·|C|⌋` bits it is accepted with probability at most `2^-128`, and if it
+keeps at least `96 GiB / 19 + 32` bytes (about 5.05 GiB) of foreign content through the 2152 spot reads it wins with
+probability at most `2^-128`. 96 GiB is an RTX PRO 6000's GDDR7, but one device cannot hold this fill (about 95 GiB is
+visible to software); for one device, cite the family at the `N` its fill reaches. Same footing as the family: no named
+assumption, no bandwidth-separation premise. Proof: `PousErase.secure_erasure_meets_96GiB`. -/
 def SecureErasureMeets96GiB : Prop :=
   ∀ d : ℕ, 5 ≤ d → ∀ salt : Bits 192,
     EraseMeets (Pous.BandMulti.chainBandSeg 3072 (2 ^ 9) d 524288 512 (Pous.BandMulti.segDom salt (2 ^ 9)))
