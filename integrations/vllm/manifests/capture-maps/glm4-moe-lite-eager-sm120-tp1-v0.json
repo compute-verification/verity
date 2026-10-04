@@ -1,0 +1,1847 @@
+{
+ "schema": "verity-vllm/capture-map/v0",
+ "id": "glm4-moe-lite-eager-sm120-tp1-v0",
+ "purpose": "The capture half of a semantic profile for a Glm4MoeLiteForCausalLM checkpoint (GLM-4.7-Flash) served eager at TP1 on the RTX PRO 6000 (sm_120) under VLLM_BATCH_INVARIANT=1: every module the pinned vLLM builds for the checkpoint's config.json, what each one computes on the forward path, and the taps the committer attaches to -- each tap's tensor, dtype, shape, where it is captured, and whether a Program checks it today (exists), tonight (tonight: on a named branch), after a kernel is pinned to a registered family (port), by word equality with the taps it copies (copy), or not at all (committed-only: bound by the Commit, reported as an unverified unit, never folded into delta). The module list is checked against the meta-device inventory of the same config (verity_vllm.engine.meta_inventory; tests/check/test_capture_map_glm4_moe_lite.py), so a module the map misses fails a test. The MLA attention is DeepseekV2MLAAttention's, as GLM-5.3's without the indexer: its Programs are shared with that map.",
+ "architectures": [
+  "Glm4MoeLiteForCausalLM"
+ ],
+ "model_type": "glm4_moe_lite",
+ "model_class": "vllm.model_executor.models.glm4_moe_lite.Glm4MoeLiteForCausalLM",
+ "pins": {
+  "vllm": "0.28.1rc1.dev472+gd9105ea80",
+  "vllm_commit": "d9105ea8001e0a6d77a96327d17515bb5791fb36",
+  "torch": "2.13.0+cu129",
+  "checkpoint": {
+   "repo": "zai-org/GLM-4.7-Flash",
+   "revision": "7dd20894a642a0aa287e9827cb1a1f7f91386b67",
+   "config_sha256": "dc9b97c7c9bed726a2e6939da4234d5c43abb3edec8812068c9a1af1dbc13acb"
+  },
+  "inventory_runs": {
+   "VLLM_BATCH_INVARIANT=1": "r20261004-055658-7b45 (inv-tp1.json, rank 0, the target profile; tests/check/fixtures/glm4_moe_lite; inv-tp4.json: ranks 0-3, one signature)"
+  },
+  "backend_logs": "r20261004-054658-ac8e (the bi-eager serve smoke, TP1): 'Using TRITON_MLA attention backend', 'Using FLASH_ATTN MLA prefill backend', 'Using TRITON Unquantized MoE backend out of potential backends: [FlashInfer TRTLLM, FlashInfer CUTLASS, TRITON, BATCHED_TRITON]'"
+ },
+ "target": {
+  "compute_capability": [
+   12,
+   0
+  ],
+  "num_sms": 188,
+  "device": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+  "device_memory_gb": 95,
+  "tensor_parallel_size": 1,
+  "pipeline_parallel_size": 1,
+  "enforce_eager": true,
+  "kv_cache_dtype": "auto",
+  "dtype": "bfloat16",
+  "quantization": null,
+  "profile": {
+   "compute_capability": [
+    12,
+    0
+   ],
+   "num_sms": 188,
+   "batch_invariant": true
+  },
+  "env": {
+   "VLLM_BATCH_INVARIANT": "1"
+  },
+  "switches": {
+   "VLLM_BATCH_INVARIANT": true,
+   "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true
+  },
+  "env_reasons": {
+   "VLLM_BATCH_INVARIANT": "1 makes every step's words independent of the batch (the bi-eager rows): cuBLASLt with split-K disabled for the linears (sm_120 is not cc 8.x, so no Triton matmul override), vLLM's Triton bmm_kernel for torch.bmm, the Triton RMSNorm for a norm without residual, fp32_precision ieee, one KV split in the Triton MLA decode, and prefix caching off. TRITON_MLA supports it on sm_120 (the smoke run's two passes and its b1/b8 pair are token-identical)"
+  }
+ },
+ "selections": {
+  "attention_backend": "TRITON_MLA (TritonMLAImpl, num_kv_splits 1 under batch invariance): the decode rows of a step take the absorbed MQA path",
+  "prefill_backend": "FlashAttnPrefillBackend, vllm_flash_attn_version 2 (qk head 256 = 192 nope + 64 rope, v head 256, 20 heads, scale 1/16, causal, non-paged varlen over the step's new tokens): the prefill rows",
+  "linear": "every bf16 linear (fused_qkv_a_proj, q_b_proj, kv_b_proj, o_proj, the dense and shared-expert MLPs, lm_head): F.linear on cuBLASLt with split-K disabled, Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1} (gemm_targets.blackwell_consumer)",
+  "bmm": "torch.bmm is vllm.model_executor.determinism.batch_invariant.bmm_batch_invariant (a Triton kernel, f32 accumulation ascending over K tiles): the two absorbed MLA bmms",
+  "rmsnorm": "rms_norm_batch_invariant: without residual the Triton _rms_norm_kernel (layer 0's input_layernorm, q_a_layernorm, kv_a_layernorm); with residual _C.fused_add_rms_norm (every other input/post-attention norm and model.norm)",
+  "rotary": "one shared RotaryEmbedding (is_neox_style false, base 1e6, rotary_dim 64, cos_sin_cache [202752, 64] bf16): _C.rotary_embedding in place on q's rope dims and k_pe",
+  "router_gemm": "mlp.gate is an nn.Linear on f32 weights over hidden_states.to(float32): cuBLASLt SGEMM (fp32_precision ieee)",
+  "router": "GroupedTopKRouter -> _C.grouped_topk (sigmoid, + e_score_correction_bias for the selection only, n_group 1, topk_group 1, top 4 of 64, renormalize, routed_scaling_factor 1.0 inside the kernel)",
+  "moe_experts": "TritonExperts (TRITON unquantized backend): the w13 launch, _C.silu_and_mul, the w2 launch with MUL_ROUTED_WEIGHT, then _C.moe_sum (f32 ascending over the 4 slots, one conversion)",
+  "shared_combine": "MoERunner: fused_output *= 1.8 (routed_scaling_factor, in place, bf16) then shared_output + fused_output (bf16); no all-reduce at TP1",
+  "embedding": "VocabParallelEmbedding at TP1: a plain row gather (no mask, no all-reduce)",
+  "mtp": "num_nextn_predict_layers 1 is not built: no speculative decoding in the serve command"
+ },
+ "routes": {
+  "mha-prefill": "the step's prefill rows (the last M - num_decode_tokens rows): kv_b_proj up-projects their normed latents, FA2 runs dense causal attention over q = [q_nope | roped q_pe], k = [k_nope | k_pe], v, and the output is copied into the o_proj input. With no cached context in the step (no chunked prefill, prefix caching off) there is no context pass. Every row-1 and row-2 prefill takes it",
+  "mqa-decode": "the step's decode rows (the first num_decode_tokens rows): q_nope is absorbed through W_UK_T (bmm), the Triton MLA decode attends over the MLA cache in the latent space (512 + 64), and the W_UV bmm writes the o_proj input"
+ },
+ "step_routes": {
+  "prefill": "mha-prefill (with mqa-decode too for a step that also holds decode rows)",
+  "decode": "mqa-decode"
+ },
+ "symbols": {
+  "H": "hidden_size",
+  "V": "vocab_size",
+  "NH": "num_attention_heads",
+  "QL": "q_lora_rank",
+  "KVL": "kv_lora_rank",
+  "DN": "qk_nope_head_dim",
+  "DR": "qk_rope_head_dim",
+  "DV": "v_head_dim",
+  "E": "n_routed_experts",
+  "K": "num_experts_per_tok",
+  "MI": "moe_intermediate_size",
+  "NS": "n_shared_experts",
+  "I": "intermediate_size",
+  "L": "num_hidden_layers",
+  "FD": "first_k_dense_replace",
+  "W": "=tp",
+  "NHL": "=NH // W",
+  "QKH": "=DN + DR",
+  "MIL": "=MI // W",
+  "SIL": "=NS * MI // W",
+  "IL": "=I // W",
+  "KVA": "=QL + KVL + DR"
+ },
+ "free_symbols": {
+  "M": "tokens this step",
+  "MD": "the step's decode rows (attn_metadata.num_decode_tokens; they come first)",
+  "MP": "the step's prefill rows (M - MD)",
+  "MS": "rows sampled this step (logits_indices: one per running request)"
+ },
+ "layer_sets": {
+  "all": "0 <= i < L",
+  "first": "i == 0",
+  "after_first": "1 <= i < L",
+  "dense": "i < FD",
+  "moe": "i >= FD"
+ },
+ "programs": {
+  "embedding": {
+   "status": "exists",
+   "definitions": [
+    "Embedding_v1"
+   ],
+   "note": "VocabParallelEmbedding at TP1: the row table[tok]"
+  },
+  "bf16-gemm": {
+   "status": "exists",
+   "definitions": [
+    "Gemm_v2"
+   ],
+   "note": "F.linear bf16 on cuBLASLt without split-K: Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}, the ascending chain of sm_120's mma.sync m16n8k16 step (gemm_targets.blackwell_consumer)"
+  },
+  "rmsnorm-triton": {
+   "status": "exists",
+   "definitions": [
+    "RMSNormTriton_v1"
+   ],
+   "note": "rms_norm_batch_invariant's Triton _rms_norm_kernel (no residual): N = 2048 (layer 0's input_layernorm), 768 (q_a_layernorm), 512 (kv_a_layernorm)"
+  },
+  "rmsnorm-fused-cuda": {
+   "status": "exists",
+   "definitions": [
+    "RMSNormFusedCuda_v2"
+   ],
+   "note": "_C.fused_add_rms_norm (residual add, then RMSNorm; both outputs written in place)"
+  },
+  "silu-mul": {
+   "status": "exists",
+   "definitions": [
+    "SiluMul_v1",
+    "SiluMul_v2"
+   ],
+   "note": "torch.ops._C.silu_and_mul (CUDA)"
+  },
+  "moe-experts-triton": {
+   "status": "exists",
+   "definitions": [
+    "MoeExpertGemm_v2",
+    "MoeExpertGemmW_v2"
+   ],
+   "note": "the TritonExperts launches of invoke_fused_moe_triton_kernel on bf16 (w13; w2 with MUL_ROUTED_WEIGHT), DOT the target's step (targets.moe_expert_gemm_spec)"
+  },
+  "moe-sum": {
+   "status": "exists",
+   "definitions": [
+    "MoeSum_v1",
+    "MoeSum_v2"
+   ],
+   "note": "_C.moe_sum over the TOPK down rows (already weighted by the router in the w2 launch): f32 from zero, ascending k, one conversion (moe_sum_vec_kernel)"
+  },
+  "bf16-mul-scalar": {
+   "status": "exists",
+   "definitions": [
+    "Bf16MulScalar_v1",
+    "Bf16MulScalar_v3"
+   ],
+   "note": "fused_output *= routed_scaling_factor (ATen mul on bf16 by a Python float: bf16_rn(f32(x) * f32(1.8)))"
+  },
+  "bf16-add": {
+   "status": "exists",
+   "definitions": [
+    "Bf16AddF2fp_v1"
+   ],
+   "note": "shared_output + fused_output: ATen add on bf16, bf16_rn(f32(a) + f32(b)) per element"
+  },
+  "shared-combine": {
+   "status": "tonight",
+   "definitions": [],
+   "branch": "cursor/mla-programs-8c79",
+   "alternative_to": "bf16-add",
+   "when": "the scaled routed output is not tapped",
+   "note": "MoeSharedCombine_v1{H, RSF} (the MLA lane): the scale and the add in one Definition, from moe.sum and shared.down_proj"
+  },
+  "token-select": {
+   "status": "exists",
+   "definitions": [
+    "TokenSelect_v2"
+   ],
+   "note": "greedy argmax over the logits (temperature 0)"
+  },
+  "copy-equality": {
+   "status": "copy",
+   "definitions": [],
+   "note": "a value the runtime only moves (a cache write): checked by word equality against the taps it copies, no Program"
+  },
+  "rope-gptj": {
+   "status": "port",
+   "definitions": [
+    "RoPEHeadGptJ_v1",
+    "RoPEGptJ_v1"
+   ],
+   "note": "_C.rotary_embedding with is_neox false (apply_token_rotary_embedding<IS_NEOX=false>) on the 64 rope dims, from the bf16 cos_sin_cache row at the token's position. The word view is registered; the Boolean RoPEHeadGptJ_v2 / RoPEGptJ_v2 come from the MLA lane (cursor/mla-programs-8c79), and no CUDA capture has pinned the kernel's operation order yet"
+  },
+  "fa2-prefill-attention": {
+   "status": "port",
+   "definitions": [
+    "Attention_v5"
+   ],
+   "note": "FA2 dense causal prefill (FlashAttnPrefillBackend.run_prefill_new_tokens -> flash_attn_varlen_func, fa_version 2) at head dim 256 (q/k 192 + 64, v 256), 20 heads, scale 1/16. Attention_v5 is the sm_120 FA2 chain (check-inf per iteration, kBlockM 64) at head dim 128; at 256 FA2 picks Flash_fwd_kernel_traits<256, 64, 64, 4> on sm_120 (99 KB of shared memory per block), so BN = fa2_kblock_n(256) = 64, which a captured call must still pin"
+  },
+  "sigmoid-router": {
+   "status": "tonight",
+   "definitions": [],
+   "branch": "cursor/sigmoid-router-8c79",
+   "note": "_C.grouped_topk(logits, n_group=1, topk_group=1, topk=4, renormalize=True, routed_scaling_factor=1.0, bias, scoring_func=1): MoeRouterSigmoidBias_v1{E, TOPK, SCALE, KERNEL} (#915), exact-model-tested on the RTX PRO 6000 at E 256, TOPK 8, SCALE 2.5; this map's E 64, TOPK 4, SCALE 1.0 is not yet captured"
+  },
+  "mla-absorb-bmm": {
+   "status": "tonight",
+   "definitions": [],
+   "branch": "cursor/mla-programs-8c79",
+   "note": "MlaBmm_v1{NHEADS, K, N, DOT} (the MLA lane): bmm_batch_invariant's Triton bmm per head, q absorb NHEADS 20, K 192, N 512 and the V up-projection NHEADS 20, K 512, N 256"
+  },
+  "triton-mla-decode": {
+   "status": "tonight",
+   "definitions": [],
+   "branch": "cursor/mla-programs-8c79",
+   "note": "TritonMlaDecode_v1{H, T, DL, DR, BN, SPLITS, SCALE} (the MLA lane): TritonMLAImpl.forward_mqa -> decode_attention_fwd (grouped, is_mla), H 20, DL 512, DR 64, BN 32, SPLITS 1, SCALE 1/16"
+  },
+  "router-gemm-f32": {
+   "status": "committed-only",
+   "definitions": [],
+   "note": "nn.Linear(f32) over the f32-cast hidden states: cuBLASLt SGEMM (fp32_precision ieee, no TF32). No f32 GEMM Definition is registered"
+  }
+ },
+ "taps": [
+  {
+   "id": "embed",
+   "op": "embed_tokens.embedding",
+   "port": 0,
+   "layer": "embed",
+   "module": "model.embed_tokens",
+   "site": {
+    "kind": "module_output",
+    "target": "model.embed_tokens",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "embedding",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.embed_tokens.weight",
+     "provenance": "checkpoint",
+     "rows": "V"
+    }
+   ]
+  },
+  {
+   "id": "norm",
+   "op": "norm.rmsnorm",
+   "port": 0,
+   "layer": "norm",
+   "module": "model.norm",
+   "site": {
+    "kind": "module_output",
+    "target": "model.norm",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "rmsnorm-fused-cuda",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.norm.weight",
+     "provenance": "checkpoint"
+    }
+   ],
+   "note": "the last layer's MLP output + residual, normed (the new residual is discarded)"
+  },
+  {
+   "id": "logits",
+   "op": "lm_head.gemm",
+   "port": 0,
+   "layer": "lm_head",
+   "module": "logits_processor",
+   "site": {
+    "kind": "module_output",
+    "target": "logits_processor",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "MS",
+    "V"
+   ],
+   "program": "bf16-gemm",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "lm_head.weight",
+     "provenance": "checkpoint",
+     "rows": "V"
+    }
+   ],
+   "note": "LogitsProcessor._get_logits: lm_head.quant_method.apply (UnquantizedEmbeddingMethod: F.linear) over the sampled rows of model.norm's output; the all-gather is the identity at TP1"
+  },
+  {
+   "id": "sampler",
+   "op": "sampler.select",
+   "port": 0,
+   "layer": "sampler",
+   "module": null,
+   "site": {
+    "kind": "runner",
+    "target": "vllm/v1/sample/sampler.py:Sampler",
+    "detail": "the sampled token ids"
+   },
+   "dtype": "int32",
+   "shape": [
+    "MS"
+   ],
+   "program": "token-select",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "sampled_token_ids"
+  },
+  {
+   "id": "input_layernorm.first",
+   "op": "layers.{i}.input_layernorm.rmsnorm",
+   "port": 0,
+   "layers": "first",
+   "module": "model.layers.{i}.input_layernorm",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.input_layernorm",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "rmsnorm-triton",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.input_layernorm.weight",
+     "provenance": "checkpoint"
+    }
+   ],
+   "note": "layer 0: the embedding normed with no residual; the residual is the embedding itself"
+  },
+  {
+   "id": "input_layernorm",
+   "op": "layers.{i}.input_layernorm.rmsnorm",
+   "port": 0,
+   "layers": "after_first",
+   "module": "model.layers.{i}.input_layernorm",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.input_layernorm",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "rmsnorm-fused-cuda",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.input_layernorm.weight",
+     "provenance": "checkpoint"
+    }
+   ],
+   "note": "the previous layer's MLP output + residual, normed; written in place over that output"
+  },
+  {
+   "id": "input_layernorm.residual",
+   "op": "layers.{i}.input_layernorm.rmsnorm",
+   "port": 1,
+   "layers": "after_first",
+   "module": "model.layers.{i}.input_layernorm",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.input_layernorm",
+    "output": 1
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "rmsnorm-fused-cuda",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs"
+  },
+  {
+   "id": "post_attention_layernorm",
+   "op": "layers.{i}.post_attention_layernorm.rmsnorm",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.post_attention_layernorm",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.post_attention_layernorm",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "rmsnorm-fused-cuda",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.post_attention_layernorm.weight",
+     "provenance": "checkpoint"
+    }
+   ],
+   "note": "o_proj's output + residual, normed; written in place over o_proj's output"
+  },
+  {
+   "id": "post_attention_layernorm.residual",
+   "op": "layers.{i}.post_attention_layernorm.rmsnorm",
+   "port": 1,
+   "layers": "all",
+   "module": "model.layers.{i}.post_attention_layernorm",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.post_attention_layernorm",
+    "output": 1
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "rmsnorm-fused-cuda",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs"
+  },
+  {
+   "id": "fused_qkv_a_proj",
+   "op": "layers.{i}.self_attn.fused_qkv_a_proj.gemm",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.self_attn.fused_qkv_a_proj",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.self_attn.fused_qkv_a_proj",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "KVA"
+   ],
+   "program": "bf16-gemm",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.self_attn.fused_qkv_a_proj.weight",
+     "provenance": "checkpoint",
+     "rows": "KVA"
+    }
+   ],
+   "note": "q_a_proj (768) and kv_a_proj_with_mqa (512 + 64) fused. Copied at hook time: the RoPE rewrites its last 64 columns (k_pe) in place"
+  },
+  {
+   "id": "q_a_layernorm",
+   "op": "layers.{i}.self_attn.q_a_layernorm.rmsnorm",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.self_attn.q_a_layernorm",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.self_attn.q_a_layernorm",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "QL"
+   ],
+   "program": "rmsnorm-triton",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.self_attn.q_a_layernorm.weight",
+     "provenance": "checkpoint"
+    }
+   ],
+   "note": "over fused_qkv_a_proj's first 768 columns (a strided view; the kernel reads it contiguous)"
+  },
+  {
+   "id": "kv_a_layernorm",
+   "op": "layers.{i}.self_attn.kv_a_layernorm.rmsnorm",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.self_attn.kv_a_layernorm",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.self_attn.kv_a_layernorm",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "KVL"
+   ],
+   "program": "rmsnorm-triton",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.self_attn.kv_a_layernorm.weight",
+     "provenance": "checkpoint"
+    }
+   ],
+   "note": "over fused_qkv_a_proj's columns 768..1279"
+  },
+  {
+   "id": "q_b_proj",
+   "op": "layers.{i}.self_attn.q_b_proj.gemm",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.self_attn.q_b_proj",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.self_attn.q_b_proj",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "=NHL * QKH"
+   ],
+   "program": "bf16-gemm",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.self_attn.q_b_proj.weight",
+     "provenance": "checkpoint",
+     "rows": "=NHL * QKH"
+    }
+   ],
+   "note": "per head 192 nope + 64 rope. Copied at hook time: the RoPE rewrites each head's rope columns in place"
+  },
+  {
+   "id": "q_pe_rope",
+   "op": "layers.{i}.self_attn.rotary_emb",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.self_attn",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/layers/rotary_embedding/base.py:RotaryEmbedding.forward_cuda",
+    "output": 0,
+    "detail": "called from layer i's MultiHeadLatentAttentionWrapper.forward on q[..., 192:] (in place)"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "NHL",
+    "DR"
+   ],
+   "program": "rope-gptj",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.self_attn.rotary_emb.cos_sin_cache",
+     "provenance": "computed at init (get_rope, base 1e6)",
+     "shared": true
+    }
+   ]
+  },
+  {
+   "id": "k_pe_rope",
+   "op": "layers.{i}.self_attn.rotary_emb",
+   "port": 1,
+   "layers": "all",
+   "module": "model.layers.{i}.self_attn",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/layers/rotary_embedding/base.py:RotaryEmbedding.forward_cuda",
+    "output": 1,
+    "detail": "k_pe: fused_qkv_a_proj's last 64 columns, one head (in place)"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    1,
+    "DR"
+   ],
+   "program": "rope-gptj",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.self_attn.rotary_emb.cos_sin_cache",
+     "provenance": "computed at init (get_rope, base 1e6)",
+     "shared": true
+    }
+   ]
+  },
+  {
+   "id": "mla_kv_cache",
+   "op": "layers.{i}.self_attn.mla_kv_cache",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.self_attn.mla_attn.mla_attn",
+   "site": {
+    "kind": "cache_rows",
+    "target": "model.layers.{i}.self_attn.mla_attn.mla_attn.kv_cache",
+    "detail": "the rows at this step's slot_mapping after unified_mla_kv_cache_update: concat(kv_a_layernorm, k_pe_rope) in bf16 (kv_cache_dtype auto)"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "=KVL + DR"
+   ],
+   "program": "copy-equality",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "note": "what the decode attention of every later step reads; word-equal to the two taps it copies"
+  },
+  {
+   "id": "kv_b_proj",
+   "op": "layers.{i}.self_attn.kv_b_proj.gemm",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.self_attn.kv_b_proj",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.self_attn.kv_b_proj",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "MP",
+    "=NHL * (DN + DV)"
+   ],
+   "program": "bf16-gemm",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "mha-prefill",
+   "weights": [
+    {
+     "param": "model.layers.{i}.self_attn.kv_b_proj.weight",
+     "provenance": "checkpoint",
+     "rows": "=NHL * (DN + DV)"
+    }
+   ],
+   "note": "forward_mha: the prefill rows' normed latents up-projected, per head 192 k_nope then 256 v"
+  },
+  {
+   "id": "attn.mha",
+   "op": "layers.{i}.self_attn.attn.mha",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.self_attn.mla_attn.mla_attn",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/v1/attention/backends/mla/prefill/flash_attn.py:FlashAttnPrefillBackend.run_prefill_new_tokens",
+    "detail": "FA2's output for the step's prefill rows ([..., :DV], then copied into the o_proj input)"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "MP",
+    "NHL",
+    "DV"
+   ],
+   "program": "fa2-prefill-attention",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "mha-prefill"
+  },
+  {
+   "id": "q_nope_absorb",
+   "op": "layers.{i}.self_attn.W_UK_T.bmm",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.self_attn.kv_b_proj",
+   "site": {
+    "kind": "out_argument",
+    "target": "vllm/model_executor/layers/attention/mla_attention.py:MLAAttention.forward_impl",
+    "argument": "mqa_ql_nope",
+    "detail": "torch.bmm(mqa_q_nope, self.W_UK_T, out=mqa_ql_nope) over the decode rows"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "NHL",
+    "MD",
+    "KVL"
+   ],
+   "program": "mla-absorb-bmm",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "mqa-decode",
+   "weights": [
+    {
+     "param": "model.layers.{i}.self_attn.mla_attn.mla_attn.W_UK_T",
+     "provenance": "load-derived: kv_b_proj.weight split per head and permuted ([NHL, DN, KVL])",
+     "after_load": true
+    }
+   ]
+  },
+  {
+   "id": "attn.mqa",
+   "op": "layers.{i}.self_attn.attn.mqa",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.self_attn.mla_attn.mla_attn",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/v1/attention/backends/mla/triton_mla.py:TritonMLAImpl.forward_mqa",
+    "output": 0,
+    "detail": "attn_out in the latent space for the decode rows, reading the MLA cache"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "MD",
+    "NHL",
+    "KVL"
+   ],
+   "program": "triton-mla-decode",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "mqa-decode"
+  },
+  {
+   "id": "v_absorb",
+   "op": "layers.{i}.self_attn.W_UV.bmm",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.self_attn.kv_b_proj",
+   "site": {
+    "kind": "out_argument",
+    "target": "vllm/model_executor/layers/attention/mla_attention.py:MLACommonImpl._v_up_proj",
+    "argument": "out",
+    "detail": "torch.bmm(attn_out, self.W_UV, out=output[:MD]) (written through a transposed view)"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "MD",
+    "=NHL * DV"
+   ],
+   "program": "mla-absorb-bmm",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "mqa-decode",
+   "weights": [
+    {
+     "param": "model.layers.{i}.self_attn.mla_attn.mla_attn.W_UV",
+     "provenance": "load-derived: kv_b_proj.weight split per head ([NHL, KVL, DV])",
+     "after_load": true
+    }
+   ]
+  },
+  {
+   "id": "o_proj",
+   "op": "layers.{i}.self_attn.o_proj.gemm",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.self_attn.o_proj",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.self_attn.o_proj",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "bf16-gemm",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.self_attn.o_proj.weight",
+     "provenance": "checkpoint",
+     "rows": "H"
+    }
+   ],
+   "note": "over the attention output (decode rows from v_absorb, prefill rows from attn.mha). Copied at hook time: post_attention_layernorm writes over it"
+  },
+  {
+   "id": "mlp.gate_up_proj",
+   "op": "layers.{i}.mlp.gate_up_proj.gemm",
+   "port": 0,
+   "layers": "dense",
+   "module": "model.layers.{i}.mlp.gate_up_proj",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.mlp.gate_up_proj",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "=2 * IL"
+   ],
+   "program": "bf16-gemm",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.mlp.gate_up_proj.weight",
+     "provenance": "checkpoint",
+     "rows": "=2 * IL"
+    }
+   ]
+  },
+  {
+   "id": "mlp.act_fn",
+   "op": "layers.{i}.mlp.act_fn.act_mul",
+   "port": 0,
+   "layers": "dense",
+   "module": "model.layers.{i}.mlp.act_fn",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.mlp.act_fn",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "IL"
+   ],
+   "program": "silu-mul",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs"
+  },
+  {
+   "id": "mlp.down_proj",
+   "op": "layers.{i}.mlp.down_proj.gemm",
+   "port": 0,
+   "layers": "dense",
+   "module": "model.layers.{i}.mlp.down_proj",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.mlp.down_proj",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "bf16-gemm",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.mlp.down_proj.weight",
+     "provenance": "checkpoint",
+     "rows": "H"
+    }
+   ]
+  },
+  {
+   "id": "mlp.gate",
+   "op": "layers.{i}.mlp.gate.gemm",
+   "port": 0,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.gate",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.mlp.gate",
+    "output": 0
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "E"
+   ],
+   "program": "router-gemm-f32",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.mlp.gate.weight",
+     "provenance": "checkpoint",
+     "rows": "E"
+    }
+   ]
+  },
+  {
+   "id": "moe.router_w",
+   "op": "layers.{i}.mlp.experts.router",
+   "port": 0,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.experts",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/_custom_ops.py:grouped_topk",
+    "detail": "topk_values: the renormalised sigmoid weights (routed_scaling_factor 1.0 inside the kernel)"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "K"
+   ],
+   "program": "sigmoid-router",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "weights": [
+    {
+     "param": "model.layers.{i}.mlp.gate.e_score_correction_bias",
+     "provenance": "checkpoint"
+    }
+   ],
+   "source": "moe/L{i}/router_w"
+  },
+  {
+   "id": "moe.router_ids",
+   "op": "layers.{i}.mlp.experts.router",
+   "port": 1,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.experts",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/_custom_ops.py:grouped_topk",
+    "detail": "topk_indices"
+   },
+   "dtype": "int32",
+   "shape": [
+    "M",
+    "K"
+   ],
+   "program": "sigmoid-router",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "source": "moe/L{i}/router_ids"
+  },
+  {
+   "id": "moe.up",
+   "op": "layers.{i}.mlp.experts.moe_up",
+   "port": 0,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.experts.routed_experts",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/model_executor/layers/fused_moe/fused_moe.py:invoke_fused_moe_triton_kernel",
+    "detail": "the w13 launch (MUL_ROUTED_WEIGHT=False): C, pair-major"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "K",
+    "=2 * MIL"
+   ],
+   "program": "moe-experts-triton",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "weights": [
+    {
+     "param": "model.layers.{i}.mlp.experts.routed_experts.w13_weight",
+     "provenance": "checkpoint",
+     "rows": "=2 * MIL"
+    }
+   ],
+   "source": "moe/L{i}/up"
+  },
+  {
+   "id": "moe.act",
+   "op": "layers.{i}.mlp.experts.moe_act",
+   "port": 0,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.experts.routed_experts",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/model_executor/layers/fused_moe/fused_moe.py:invoke_fused_moe_triton_kernel",
+    "detail": "A of the w2 launch (MUL_ROUTED_WEIGHT=True): _C.silu_and_mul's bf16 output"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "=M * K",
+    "MIL"
+   ],
+   "program": "silu-mul",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "source": "moe/L{i}/act"
+  },
+  {
+   "id": "moe.down",
+   "op": "layers.{i}.mlp.experts.moe_down",
+   "port": 0,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.experts.routed_experts",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/model_executor/layers/fused_moe/fused_moe.py:invoke_fused_moe_triton_kernel",
+    "detail": "the w2 launch (MUL_ROUTED_WEIGHT=True): C, pair-major"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "K",
+    "H"
+   ],
+   "program": "moe-experts-triton",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "weights": [
+    {
+     "param": "model.layers.{i}.mlp.experts.routed_experts.w2_weight",
+     "provenance": "checkpoint",
+     "rows": "H"
+    }
+   ],
+   "source": "moe/L{i}/down"
+  },
+  {
+   "id": "moe.sum",
+   "op": "layers.{i}.mlp.experts.moe_sum",
+   "port": 0,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.experts.routed_experts",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/_custom_ops.py:moe_sum",
+    "detail": "out"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "moe-sum",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "source": "moe/L{i}/sum",
+   "note": "copied at the launch: the runner scales this buffer in place (moe.scaled)"
+  },
+  {
+   "id": "moe.scaled",
+   "op": "layers.{i}.mlp.experts.routed_scale",
+   "port": 0,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.experts",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/layers/fused_moe/runner/moe_runner.py:MoERunner._maybe_apply_routed_scale_to_output",
+    "output": 1,
+    "detail": "fused_output after fused_output *= routed_scaling_factor (1.8)"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "bf16-mul-scalar",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs"
+  },
+  {
+   "id": "shared.gate_up_proj",
+   "op": "layers.{i}.mlp.shared_experts.gate_up_proj.gemm",
+   "port": 0,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.shared_experts.gate_up_proj",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.mlp.shared_experts.gate_up_proj",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "=2 * SIL"
+   ],
+   "program": "bf16-gemm",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.mlp.shared_experts.gate_up_proj.weight",
+     "provenance": "checkpoint",
+     "rows": "=2 * SIL"
+    }
+   ]
+  },
+  {
+   "id": "shared.act_fn",
+   "op": "layers.{i}.mlp.shared_experts.act_fn.act_mul",
+   "port": 0,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.shared_experts.act_fn",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.mlp.shared_experts.act_fn",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "SIL"
+   ],
+   "program": "silu-mul",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs"
+  },
+  {
+   "id": "shared.down_proj",
+   "op": "layers.{i}.mlp.shared_experts.down_proj.gemm",
+   "port": 0,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.shared_experts.down_proj",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.mlp.shared_experts.down_proj",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "bf16-gemm",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.mlp.shared_experts.down_proj.weight",
+     "provenance": "checkpoint",
+     "rows": "H"
+    }
+   ]
+  },
+  {
+   "id": "moe.out",
+   "op": "layers.{i}.mlp.experts.add",
+   "port": 0,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.experts",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.mlp.experts",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "bf16-add",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "note": "MoERunner.forward: shared_output + fused_output (moe.scaled); reduce_results is moot at TP1"
+  }
+ ],
+ "modules": [
+  {
+   "pattern": "",
+   "type": "Glm4MoeLiteForCausalLM",
+   "disposition": "container",
+   "reason": "runs model.forward and compute_logits"
+  },
+  {
+   "pattern": "model",
+   "type": "Glm4MoeLiteModel",
+   "disposition": "container",
+   "reason": "embedding, the layer loop and the final fused-add RMSNorm (tapped at model.norm)"
+  },
+  {
+   "pattern": "model.layers",
+   "type": "ModuleList",
+   "disposition": "container",
+   "reason": "holds the decoder layers"
+  },
+  {
+   "pattern": "model.layers.{i}",
+   "type": "Glm4MoeLiteDecoderLayer",
+   "disposition": "container",
+   "reason": "the two norms around self_attn and mlp; its values are tapped at the norms"
+  },
+  {
+   "pattern": "model.embed_tokens",
+   "type": "VocabParallelEmbedding",
+   "disposition": "taps",
+   "taps": [
+    "embed"
+   ]
+  },
+  {
+   "pattern": "lm_head",
+   "type": "ParallelLMHead",
+   "disposition": "weights-only",
+   "taps": [
+    "logits"
+   ],
+   "reason": "its forward is never called: LogitsProcessor applies lm_head.quant_method"
+  },
+  {
+   "pattern": "logits_processor",
+   "type": "LogitsProcessor",
+   "disposition": "taps",
+   "taps": [
+    "logits"
+   ]
+  },
+  {
+   "pattern": "model.norm",
+   "type": "RMSNorm",
+   "disposition": "taps",
+   "taps": [
+    "norm"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.input_layernorm",
+   "type": "RMSNorm",
+   "disposition": "taps",
+   "taps": [
+    "input_layernorm.first",
+    "input_layernorm",
+    "input_layernorm.residual"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.post_attention_layernorm",
+   "type": "RMSNorm",
+   "disposition": "taps",
+   "taps": [
+    "post_attention_layernorm",
+    "post_attention_layernorm.residual"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn",
+   "type": "Glm4MoeLiteMLAAttention",
+   "disposition": "taps",
+   "taps": [
+    "q_pe_rope",
+    "k_pe_rope"
+   ],
+   "reason": "DeepseekV2MLAAttention: holds the projections, the norms and the rope, and calls mla_attn"
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.fused_qkv_a_proj",
+   "type": "DeepSeekV2FusedQkvAProjLinear",
+   "disposition": "taps",
+   "taps": [
+    "fused_qkv_a_proj"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.q_a_layernorm",
+   "type": "RMSNorm",
+   "disposition": "taps",
+   "taps": [
+    "q_a_layernorm"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.kv_a_layernorm",
+   "type": "RMSNorm",
+   "disposition": "taps",
+   "taps": [
+    "kv_a_layernorm"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.q_b_proj",
+   "type": "ColumnParallelLinear",
+   "disposition": "taps",
+   "taps": [
+    "q_b_proj"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.kv_b_proj",
+   "type": "ColumnParallelLinear",
+   "disposition": "taps",
+   "taps": [
+    "kv_b_proj",
+    "q_nope_absorb",
+    "v_absorb"
+   ],
+   "reason": "its forward runs on the prefill rows only (forward_mha); its weight, split at load, is W_UK_T and W_UV of the decode rows' bmms"
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.o_proj",
+   "type": "RowParallelLinear",
+   "disposition": "taps",
+   "taps": [
+    "o_proj"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.rotary_emb",
+   "type": "RotaryEmbedding",
+   "disposition": "fused",
+   "shared": true,
+   "taps": [
+    "q_pe_rope",
+    "k_pe_rope"
+   ],
+   "reason": "one instance shared by every layer (named_modules lists it once, at layer 0); tapped per layer at its forward_cuda return"
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.rotary_emb.apply_rotary_emb",
+   "type": "ApplyRotaryEmb",
+   "disposition": "inactive",
+   "shared": true,
+   "reason": "forward_cuda calls _C.rotary_embedding directly; ApplyRotaryEmb runs only in forward_native",
+   "active_when": "forward_native (a non-CUDA platform)"
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn",
+   "type": "MultiHeadLatentAttentionWrapper",
+   "disposition": "container",
+   "reason": "MultiHeadLatentAttentionWrapper.forward: fused_qkv_a_proj, the norms, q_b_proj, the rope, mla_attn and o_proj (fuse_qkv_rmsnorm false, no indexer)"
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn",
+   "type": "MLAAttention",
+   "disposition": "taps",
+   "taps": [
+    "mla_kv_cache",
+    "attn.mha",
+    "attn.mqa"
+   ],
+   "reason": "unified_mla_kv_cache_update writes the cache, forward_impl splits the step's rows into decode (MQA) and prefill (MHA)"
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn._decode_concat_quant_fp8_op",
+   "type": "_DecodeConcatQuantFP8",
+   "disposition": "inactive",
+   "reason": "concatenates and quantizes the decode query for an FP8 MLA cache",
+   "active_when": "kv_cache_dtype fp8"
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn._quant_fp8_op",
+   "type": "QuantFP8",
+   "disposition": "inactive",
+   "reason": "quantizes the output for a fused FP8 output quant",
+   "active_when": "an FP8 output quant fusion"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp",
+   "type": "Glm4MoeLiteMLP",
+   "disposition": "container",
+   "reason": "gate_up -> SiluAndMul -> down",
+   "when": "dense"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.gate_up_proj",
+   "type": "MergedColumnParallelLinear",
+   "disposition": "taps",
+   "taps": [
+    "mlp.gate_up_proj"
+   ],
+   "when": "dense"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.act_fn",
+   "type": "SiluAndMul",
+   "disposition": "taps",
+   "taps": [
+    "mlp.act_fn"
+   ],
+   "when": "dense"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.down_proj",
+   "type": "RowParallelLinear",
+   "disposition": "taps",
+   "taps": [
+    "mlp.down_proj"
+   ],
+   "when": "dense"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp",
+   "type": "Glm4MoeLite",
+   "disposition": "container",
+   "reason": "Glm4MoE.forward: the f32 gate, then the MoERunner (experts)",
+   "when": "moe"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.gate",
+   "type": "Linear",
+   "disposition": "taps",
+   "taps": [
+    "mlp.gate"
+   ],
+   "when": "moe"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.experts",
+   "type": "MoERunner",
+   "disposition": "taps",
+   "taps": [
+    "moe.router_w",
+    "moe.router_ids",
+    "moe.scaled",
+    "moe.out"
+   ],
+   "when": "moe"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.experts.routed_experts",
+   "type": "RoutedExperts",
+   "disposition": "taps",
+   "taps": [
+    "moe.up",
+    "moe.act",
+    "moe.down",
+    "moe.sum"
+   ],
+   "when": "moe"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.experts.routed_experts.quant_method",
+   "type": "UnquantizedFusedMoEMethod",
+   "disposition": "container",
+   "reason": "selects TritonExperts (the TRITON unquantized backend) and runs it; its launches are tapped on routed_experts",
+   "when": "moe"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.experts._shared_experts",
+   "type": "SharedExperts",
+   "disposition": "container",
+   "reason": "runs mlp.shared_experts for the runner",
+   "when": "moe"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.shared_experts",
+   "type": "Glm4MoeMLP",
+   "disposition": "container",
+   "reason": "the one shared expert: gate_up -> SiluAndMul -> down (reduce_results false)",
+   "when": "moe"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.shared_experts.gate_up_proj",
+   "type": "MergedColumnParallelLinear",
+   "disposition": "taps",
+   "taps": [
+    "shared.gate_up_proj"
+   ],
+   "when": "moe"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.shared_experts.act_fn",
+   "type": "SiluAndMul",
+   "disposition": "taps",
+   "taps": [
+    "shared.act_fn"
+   ],
+   "when": "moe"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.shared_experts.down_proj",
+   "type": "RowParallelLinear",
+   "disposition": "taps",
+   "taps": [
+    "shared.down_proj"
+   ],
+   "when": "moe"
+  }
+ ],
+ "expect": [
+  {
+   "pattern": "",
+   "type": "Glm4MoeLiteForCausalLM",
+   "path": "flags.fuse_qkv_a_proj",
+   "value": true
+  },
+  {
+   "pattern": "",
+   "type": "Glm4MoeLiteForCausalLM",
+   "path": "flags.use_mha",
+   "value": false
+  },
+  {
+   "pattern": "model",
+   "type": "Glm4MoeLiteModel",
+   "path": "flags.is_fused_shared_expert_enabled",
+   "value": false
+  },
+  {
+   "pattern": "model",
+   "type": "Glm4MoeLiteModel",
+   "path": "flags.is_v32",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn",
+   "type": "MLAAttention",
+   "path": "kernels.impl.type",
+   "value": "vllm.v1.attention.backends.mla.triton_mla.TritonMLAImpl"
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn",
+   "type": "MLAAttention",
+   "path": "kernels.impl.kv_cache_dtype",
+   "value": "auto"
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn",
+   "type": "MLAAttention",
+   "path": "kernels.impl.num_heads",
+   "value": "=NHL"
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn",
+   "type": "MLAAttention",
+   "path": "kernels.impl.q_pad_num_heads",
+   "value": null
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn",
+   "type": "MLAAttention",
+   "path": "kernels.impl._use_flashinfer_concat_mla_k",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn",
+   "type": "MLAAttention",
+   "path": "kernels.prefill_backend.type",
+   "value": "vllm.v1.attention.backends.mla.prefill.flash_attn.FlashAttnPrefillBackend"
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn",
+   "type": "MLAAttention",
+   "path": "kernels.prefill_backend.vllm_flash_attn_version",
+   "value": 2
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn",
+   "type": "MLAAttention",
+   "path": "kernels.prefill_backend.requires_v_padding",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn",
+   "type": "MLAAttention",
+   "path": "attrs.head_size",
+   "value": "=KVL + DR"
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn",
+   "type": "MLAAttention",
+   "path": "attrs.supports_dense_mha_prefill",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn",
+   "type": "MLAAttention",
+   "path": "flags.use_sparse",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn",
+   "type": "MLAAttention",
+   "path": "flags.use_direct_call",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn",
+   "type": "MultiHeadLatentAttentionWrapper",
+   "path": "flags.fuse_qkv_rmsnorm",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.mla_attn",
+   "type": "MultiHeadLatentAttentionWrapper",
+   "path": "flags.is_sparse",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.rotary_emb",
+   "type": "RotaryEmbedding",
+   "path": "attrs.base",
+   "value": 1000000
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.rotary_emb",
+   "type": "RotaryEmbedding",
+   "path": "attrs.rotary_dim",
+   "value": "=DR"
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.rotary_emb",
+   "type": "RotaryEmbedding",
+   "path": "flags.is_neox_style",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.rotary_emb",
+   "type": "RotaryEmbedding",
+   "path": "flags.use_flashinfer",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.fused_qkv_a_proj",
+   "type": "DeepSeekV2FusedQkvAProjLinear",
+   "path": "flags._use_min_latency_gemm",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.fused_qkv_a_proj",
+   "type": "DeepSeekV2FusedQkvAProjLinear",
+   "path": "kernels.quant_method.type",
+   "value": "vllm.model_executor.layers.linear.UnquantizedLinearMethod"
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.q_b_proj",
+   "type": "ColumnParallelLinear",
+   "path": "kernels.quant_method.type",
+   "value": "vllm.model_executor.layers.linear.UnquantizedLinearMethod"
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.kv_b_proj",
+   "type": "ColumnParallelLinear",
+   "path": "kernels.quant_method.type",
+   "value": "vllm.model_executor.layers.linear.UnquantizedLinearMethod"
+  },
+  {
+   "pattern": "model.layers.{i}.self_attn.o_proj",
+   "type": "RowParallelLinear",
+   "path": "kernels.quant_method.type",
+   "value": "vllm.model_executor.layers.linear.UnquantizedLinearMethod"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.gate_up_proj",
+   "type": "MergedColumnParallelLinear",
+   "path": "kernels.quant_method.type",
+   "value": "vllm.model_executor.layers.linear.UnquantizedLinearMethod"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.down_proj",
+   "type": "RowParallelLinear",
+   "path": "kernels.quant_method.type",
+   "value": "vllm.model_executor.layers.linear.UnquantizedLinearMethod"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.shared_experts.gate_up_proj",
+   "type": "MergedColumnParallelLinear",
+   "path": "kernels.quant_method.type",
+   "value": "vllm.model_executor.layers.linear.UnquantizedLinearMethod"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.shared_experts.down_proj",
+   "type": "RowParallelLinear",
+   "path": "kernels.quant_method.type",
+   "value": "vllm.model_executor.layers.linear.UnquantizedLinearMethod"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.experts",
+   "type": "MoERunner",
+   "path": "kernels.router.type",
+   "value": "vllm.model_executor.layers.fused_moe.router.grouped_topk_router.GroupedTopKRouter"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.experts",
+   "type": "MoERunner",
+   "path": "kernels.router.scoring_func",
+   "value": "sigmoid"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.experts",
+   "type": "MoERunner",
+   "path": "kernels.router.top_k",
+   "value": "=K"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.experts",
+   "type": "MoERunner",
+   "path": "kernels.router.global_num_experts",
+   "value": "=E"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.experts",
+   "type": "MoERunner",
+   "path": "kernels.router.num_expert_group",
+   "value": 1
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.experts",
+   "type": "MoERunner",
+   "path": "kernels.router.topk_group",
+   "value": 1
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.experts",
+   "type": "MoERunner",
+   "path": "kernels.router.renormalize",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.experts",
+   "type": "MoERunner",
+   "path": "kernels.router.routed_scaling_factor",
+   "value": 1.0
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.experts",
+   "type": "MoERunner",
+   "path": "attrs.routed_scaling_factor",
+   "value": 1.8
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.experts.routed_experts",
+   "type": "RoutedExperts",
+   "path": "flags.use_grouped_topk",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.mlp.experts.routed_experts",
+   "type": "RoutedExperts",
+   "path": "attrs.intermediate_size_per_partition",
+   "value": "=MIL"
+  },
+  {
+   "pattern": "model.layers.{i}.mlp",
+   "type": "Glm4MoeLite",
+   "path": "flags.is_fused_shared_expert_enabled",
+   "value": false
+  },
+  {
+   "pattern": "lm_head",
+   "type": "ParallelLMHead",
+   "path": "kernels.quant_method.type",
+   "value": "vllm.model_executor.layers.vocab_parallel_embedding.UnquantizedEmbeddingMethod"
+  },
+  {
+   "pattern": "model.embed_tokens",
+   "type": "VocabParallelEmbedding",
+   "path": "flags.disable_tp",
+   "value": false
+  }
+ ],
+ "capture_work": [
+  "moe_source: add vllm._custom_ops.grouped_topk as the router launch site (router_w = topk_values, router_ids = topk_indices); cursor/glm53-capture-work-8c79 (#920) does it for GLM-5.3",
+  "copy at hook time: fused_qkv_a_proj and q_b_proj (the RoPE rewrites their rope columns in place inside the same forward), o_proj and every MLP output (the next fused_add_rms_norm writes over them), moe_sum's out (the runner scales it in place)",
+  "function-return and out-argument taps on the MLA path, which the attention source of #920 (DeepseekV32Attention) does not reach: RotaryEmbedding.forward_cuda per calling layer (the module is shared), MLAAttention.forward_impl's W_UK_T bmm, FlashAttnPrefillBackend.run_prefill_new_tokens, TritonMLAImpl.forward_mqa, MLACommonImpl._v_up_proj, MoERunner._maybe_apply_routed_scale_to_output",
+  "read the MLA cache rows at slot_mapping after unified_mla_kv_cache_update (kv_cache_dtype auto: 576 bf16 words per row)",
+  "record per step and layer the decode/prefill row split (attn_metadata.num_decode_tokens) so the step's taps bind kv_b_proj and attn.mha to its prefill rows and q_nope_absorb, attn.mqa and v_absorb to its decode rows"
+ ]
+}

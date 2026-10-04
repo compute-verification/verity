@@ -1,0 +1,3865 @@
+{
+ "schema": "verity-vllm/meta-inventory/v1",
+ "repo": "zai-org/GLM-4.7-Flash",
+ "revision": "7dd20894a642a0aa287e9827cb1a1f7f91386b67",
+ "config_sha256": "dc9b97c7c9bed726a2e6939da4234d5c43abb3edec8812068c9a1af1dbc13acb",
+ "vllm": "0.28.1rc1.dev472+gd9105ea80",
+ "torch": "2.13.0+cu129",
+ "platform": "NvmlCudaPlatform",
+ "target": {
+  "compute_capability": [
+   12,
+   0
+  ],
+  "num_sms": 188,
+  "batch_invariant": true,
+  "attention_backend": null,
+  "vllm_revision": "d9105ea80",
+  "numerics_profile": "b1-eager-v3",
+  "flash_attn_version": null
+ },
+ "device": {
+  "name": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+  "memory_gb": 95
+ },
+ "env": {
+  "VLLM_BATCH_INVARIANT": "1"
+ },
+ "tp": 1,
+ "num_layers": null,
+ "max_model_len": 1152,
+ "kv_cache_dtype": "auto",
+ "architecture": "Glm4MoeLiteForCausalLM",
+ "model_class": "vllm.model_executor.models.glm4_moe_lite.Glm4MoeLiteForCausalLM",
+ "quantization": null,
+ "cache_dtype": "auto",
+ "run": "r20261004-055658-7b45",
+ "ranks": {
+  "0": {
+   "applied": {
+    "compute_capability": [
+     12,
+     0
+    ],
+    "num_sms": 188,
+    "batch_invariant": true,
+    "vllm_version": "0.28.1rc1.dev472+gd9105ea80",
+    "torch_version": "2.13.0+cu129",
+    "triton_version": "3.7.1",
+    "tuned_gemm_arch_family": null
+   },
+   "selections": {
+    "deep_gemm_supported": true,
+    "deep_gemm_e8m0": true,
+    "VLLM_BATCH_INVARIANT": true,
+    "VLLM_USE_DEEP_GEMM": true,
+    "VLLM_MOE_USE_DEEP_GEMM": true,
+    "VLLM_USE_DEEP_GEMM_E8M0": true,
+    "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
+    "VLLM_ALLREDUCE_USE_FLASHINFER": true,
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": true
+   },
+   "modules": 1131,
+   "module_types": {
+    "ApplyRotaryEmb": 1,
+    "ColumnParallelLinear": 94,
+    "DeepSeekV2FusedQkvAProjLinear": 47,
+    "Glm4MoeLite": 46,
+    "Glm4MoeLiteDecoderLayer": 47,
+    "Glm4MoeLiteForCausalLM": 1,
+    "Glm4MoeLiteMLAAttention": 47,
+    "Glm4MoeLiteMLP": 1,
+    "Glm4MoeLiteModel": 1,
+    "Glm4MoeMLP": 46,
+    "Linear": 46,
+    "LogitsProcessor": 1,
+    "MLAAttention": 47,
+    "MergedColumnParallelLinear": 47,
+    "MoERunner": 46,
+    "ModuleList": 1,
+    "MultiHeadLatentAttentionWrapper": 47,
+    "ParallelLMHead": 1,
+    "QuantFP8": 47,
+    "RMSNorm": 189,
+    "RotaryEmbedding": 1,
+    "RoutedExperts": 46,
+    "RowParallelLinear": 94,
+    "SharedExperts": 46,
+    "SiluAndMul": 47,
+    "UnquantizedFusedMoEMethod": 46,
+    "VocabParallelEmbedding": 1,
+    "_DecodeConcatQuantFP8": 47
+   },
+   "groups": [
+    {
+     "pattern": "",
+     "type": "Glm4MoeLiteForCausalLM",
+     "module": "vllm.model_executor.models.glm4_moe_lite",
+     "layers": [],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        -1
+       ]
+      }
+     ],
+     "example": "",
+     "attrs": {
+      "use_mha": false
+     },
+     "flags": {
+      "fuse_qkv_a_proj": true,
+      "use_mha": false
+     },
+     "source": {
+      "forward": "vllm/model_executor/models/glm4_moe_lite.py:603",
+      "forward_sha256": "70089418c2682d85",
+      "forward_owner": "Glm4MoeLiteForCausalLM"
+     }
+    },
+    {
+     "pattern": "lm_head",
+     "type": "ParallelLMHead",
+     "module": "vllm.model_executor.layers.vocab_parallel_embedding",
+     "layers": [],
+     "shapes": [
+      {
+       "tensors": {
+        "weight": {
+         "dtype": "bfloat16",
+         "kind": "param",
+         "shape": [
+          154880,
+          2048
+         ]
+        }
+       },
+       "layers": [
+        -1
+       ]
+      }
+     ],
+     "example": "lm_head",
+     "attrs": {
+      "tp_size": 1,
+      "tp_rank": 0,
+      "num_embeddings": 154880,
+      "num_embeddings_per_partition": 154880,
+      "embedding_dim": 2048,
+      "shard_indices": "<vllm.model_executor.layers.vocab_parallel_embedding.VocabParallelEmbeddingShardIndices>",
+      "disable_tp": false,
+      "org_vocab_size": 154880
+     },
+     "flags": {
+      "disable_tp": false,
+      "use_fused_embedding": false
+     },
+     "kernels": {
+      "quant_method": {
+       "type": "vllm.model_executor.layers.vocab_parallel_embedding.UnquantizedEmbeddingMethod"
+      }
+     },
+     "source": {
+      "forward": "vllm/model_executor/layers/vocab_parallel_embedding.py:615",
+      "forward_sha256": "076d17d8b5d823e4",
+      "forward_owner": "ParallelLMHead"
+     }
+    },
+    {
+     "pattern": "logits_processor",
+     "type": "LogitsProcessor",
+     "module": "vllm.model_executor.layers.logits_processor",
+     "layers": [],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        -1
+       ]
+      }
+     ],
+     "example": "logits_processor",
+     "attrs": {
+      "scale": 1.0,
+      "logits_as_input": false,
+      "vocab_size": 154880,
+      "org_vocab_size": 154880
+     },
+     "flags": {
+      "logits_as_input": false,
+      "use_all_gather": true
+     },
+     "source": {
+      "forward": "vllm/model_executor/layers/logits_processor.py:98",
+      "forward_sha256": "85b544ca3eff53d3",
+      "forward_owner": "LogitsProcessor"
+     }
+    },
+    {
+     "pattern": "model",
+     "type": "Glm4MoeLiteModel",
+     "module": "vllm.model_executor.models.glm4_moe_lite",
+     "layers": [],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        -1
+       ]
+      }
+     ],
+     "example": "model",
+     "attrs": {
+      "vocab_size": 154880
+     },
+     "flags": {
+      "do_not_compile": true,
+      "is_fused_shared_expert_enabled": false,
+      "is_v32": false
+     },
+     "source": {
+      "forward": "vllm/model_executor/models/glm4_moe_lite.py:273",
+      "forward_sha256": "8925123061c048e7",
+      "forward_owner": "Glm4MoeLiteModel"
+     }
+    },
+    {
+     "pattern": "model.embed_tokens",
+     "type": "VocabParallelEmbedding",
+     "module": "vllm.model_executor.layers.vocab_parallel_embedding",
+     "layers": [],
+     "shapes": [
+      {
+       "tensors": {
+        "weight": {
+         "dtype": "bfloat16",
+         "kind": "param",
+         "shape": [
+          154880,
+          2048
+         ]
+        }
+       },
+       "layers": [
+        -1
+       ]
+      }
+     ],
+     "example": "model.embed_tokens",
+     "attrs": {
+      "tp_size": 1,
+      "tp_rank": 0,
+      "num_embeddings": 154880,
+      "num_embeddings_per_partition": 154880,
+      "embedding_dim": 2048,
+      "shard_indices": "<vllm.model_executor.layers.vocab_parallel_embedding.VocabParallelEmbeddingShardIndices>",
+      "disable_tp": false,
+      "org_vocab_size": 154880
+     },
+     "flags": {
+      "disable_tp": false,
+      "use_fused_embedding": false
+     },
+     "kernels": {
+      "quant_method": {
+       "type": "vllm.model_executor.layers.vocab_parallel_embedding.UnquantizedEmbeddingMethod"
+      }
+     },
+     "source": {
+      "forward": "vllm/model_executor/layers/vocab_parallel_embedding.py:504",
+      "forward_sha256": "68182cd78aa5ff5a",
+      "forward_owner": "VocabParallelEmbedding"
+     }
+    },
+    {
+     "pattern": "model.layers",
+     "type": "ModuleList",
+     "module": "torch.nn.modules.container",
+     "layers": [],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        -1
+       ]
+      }
+     ],
+     "example": "model.layers",
+     "source": {
+      "forward": "torch/nn/modules/module.py:391",
+      "forward_sha256": "c0bac63d1c2b53c6",
+      "forward_owner": "Module"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}",
+     "type": "Glm4MoeLiteDecoderLayer",
+     "module": "vllm.model_executor.models.glm4_moe_lite",
+     "layers": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.0",
+     "attrs": {
+      "routed_scaling_factor": 1.8
+     },
+     "source": {
+      "forward": "vllm/model_executor/models/glm4_moe_lite.py:181",
+      "forward_sha256": "b010380a8ef367c6",
+      "forward_owner": "Glm4MoeLiteDecoderLayer"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.input_layernorm",
+     "type": "RMSNorm",
+     "module": "vllm.model_executor.layers.layernorm",
+     "layers": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {
+        "weight": {
+         "dtype": "bfloat16",
+         "kind": "param",
+         "shape": [
+          2048
+         ]
+        }
+       },
+       "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.0.input_layernorm",
+     "attrs": {
+      "variance_epsilon": 1e-05
+     },
+     "flags": {
+      "_enforce_enable": false,
+      "has_weight": true,
+      "pass_weight": true,
+      "pass_weight_add": true
+     },
+     "source": {
+      "forward": "vllm/model_executor/custom_op.py:135",
+      "forward_sha256": "dd02c7c9ca3fa203",
+      "forward_owner": "CustomOp"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.mlp",
+     "type": "Glm4MoeLiteMLP",
+     "module": "vllm.model_executor.models.glm4_moe_lite",
+     "layers": [
+      0
+     ],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        0
+       ]
+      }
+     ],
+     "example": "model.layers.0.mlp",
+     "source": {
+      "forward": "vllm/model_executor/models/glm4_moe.py:111",
+      "forward_sha256": "ab63fe100a57275b",
+      "forward_owner": "Glm4MoeMLP"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.mlp",
+     "type": "Glm4MoeLite",
+     "module": "vllm.model_executor.models.glm4_moe_lite",
+     "layers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.1.mlp",
+     "attrs": {
+      "routed_scaling_factor": 1.8,
+      "tp_size": 1
+     },
+     "flags": {
+      "enable_eplb": false,
+      "is_fused_shared_expert_enabled": false
+     },
+     "source": {
+      "forward": "vllm/model_executor/models/glm4_moe.py:210",
+      "forward_sha256": "9dfd65b337277aaf",
+      "forward_owner": "Glm4MoE"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.mlp.act_fn",
+     "type": "SiluAndMul",
+     "module": "vllm.model_executor.layers.activation",
+     "layers": [
+      0
+     ],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        0
+       ]
+      }
+     ],
+     "example": "model.layers.0.mlp.act_fn",
+     "flags": {
+      "_enforce_enable": false
+     },
+     "source": {
+      "forward": "vllm/model_executor/custom_op.py:135",
+      "forward_sha256": "dd02c7c9ca3fa203",
+      "forward_owner": "CustomOp"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.mlp.down_proj",
+     "type": "RowParallelLinear",
+     "module": "vllm.model_executor.layers.linear",
+     "layers": [
+      0
+     ],
+     "shapes": [
+      {
+       "tensors": {
+        "weight": {
+         "dtype": "bfloat16",
+         "kind": "param",
+         "shape": [
+          2048,
+          10240
+         ]
+        }
+       },
+       "layers": [
+        0
+       ]
+      }
+     ],
+     "example": "model.layers.0.mlp.down_proj",
+     "attrs": {
+      "reduce_results": true,
+      "tp_size": 1,
+      "tp_rank": 0,
+      "input_size": 10240,
+      "output_size": 2048,
+      "input_size_per_partition": 10240,
+      "output_size_per_partition": 2048,
+      "output_partition_sizes": [
+       2048
+      ],
+      "return_bias": true,
+      "skip_bias_add": false,
+      "disable_tp": false
+     },
+     "flags": {
+      "allow_fp8_block_shape_mismatch": false,
+      "disable_tp": false,
+      "has_bias": false,
+      "input_is_parallel": true,
+      "reduce_results": true,
+      "return_bias": true,
+      "skip_bias_add": false
+     },
+     "kernels": {
+      "quant_method": {
+       "type": "vllm.model_executor.layers.linear.UnquantizedLinearMethod",
+       "_gemm_impl": {
+        "type": "builtins.function"
+       }
+      }
+     },
+     "source": {
+      "forward": "vllm/model_executor/layers/linear.py:1750",
+      "forward_sha256": "d90bdc0c707aa085",
+      "forward_owner": "RowParallelLinear"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.mlp.experts",
+     "type": "MoERunner",
+     "module": "vllm.model_executor.layers.fused_moe.runner.moe_runner",
+     "layers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.1.mlp.experts",
+     "attrs": {
+      "routed_scaling_factor": 1.8,
+      "layer_name": "model.layers.1.mlp.experts"
+     },
+     "flags": {
+      "_already_called_process_weights_after_loading": true,
+      "_fse_fuse_gate": false,
+      "enable_dbo": false
+     },
+     "kernels": {
+      "router": {
+       "type": "vllm.model_executor.layers.fused_moe.router.grouped_topk_router.GroupedTopKRouter",
+       "_routing_replay_out": null,
+       "capture_fn": null,
+       "eplb_state": null,
+       "global_num_experts": 64,
+       "num_expert_group": 1,
+       "num_fused_shared_experts": 0,
+       "renormalize": true,
+       "routed_scaling_factor": 1.0,
+       "scoring_func": "sigmoid",
+       "top_k": 4,
+       "topk_group": 1
+      }
+     },
+     "source": {
+      "forward": "vllm/model_executor/layers/fused_moe/runner/moe_runner.py:678",
+      "forward_sha256": "127b4181bca91a07",
+      "forward_owner": "MoERunner"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.mlp.experts._shared_experts",
+     "type": "SharedExperts",
+     "module": "vllm.model_executor.layers.fused_moe.runner.shared_experts",
+     "layers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.1.mlp.experts._shared_experts",
+     "flags": {
+      "enable_dbo": false
+     },
+     "source": {
+      "forward": "vllm/model_executor/layers/fused_moe/runner/shared_experts.py:172",
+      "forward_sha256": "c2e1f1bc6f7154fc",
+      "forward_owner": "SharedExperts"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.mlp.experts.routed_experts",
+     "type": "RoutedExperts",
+     "module": "vllm.model_executor.layers.fused_moe.routed_experts",
+     "layers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {
+        "e_score_correction_bias": {
+         "dtype": "float32",
+         "kind": "param",
+         "shape": [
+          64
+         ]
+        },
+        "w13_weight": {
+         "dtype": "bfloat16",
+         "kind": "param",
+         "shape": [
+          64,
+          3072,
+          2048
+         ]
+        },
+        "w2_weight": {
+         "dtype": "bfloat16",
+         "kind": "param",
+         "shape": [
+          64,
+          2048,
+          1536
+         ]
+        }
+       },
+       "layers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.1.mlp.experts.routed_experts",
+     "attrs": {
+      "scoring_func": "sigmoid",
+      "top_k": 4,
+      "use_grouped_topk": true,
+      "num_expert_group": 1,
+      "topk_group": 1,
+      "routed_scaling_factor": 1.0,
+      "renormalize": true,
+      "local_num_experts": 64,
+      "global_num_experts": 64,
+      "intermediate_size_per_partition": 1536,
+      "layer_name": "model.layers.1.mlp.experts"
+     },
+     "flags": {
+      "apply_router_weight_on_input": false,
+      "is_fused_checkpoint_transposed": false,
+      "renormalize": true,
+      "use_grouped_topk": true
+     },
+     "source": {
+      "forward": "vllm/model_executor/layers/fused_moe/routed_experts.py:1294",
+      "forward_sha256": "70b710eede8b5e3c",
+      "forward_owner": "RoutedExperts"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.mlp.experts.routed_experts.quant_method",
+     "type": "UnquantizedFusedMoEMethod",
+     "module": "vllm.model_executor.layers.fused_moe.unquantized_fused_moe_method",
+     "layers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.1.mlp.experts.routed_experts.quant_method",
+     "flags": {
+      "_enforce_enable": false
+     },
+     "source": {
+      "forward": "vllm/model_executor/custom_op.py:135",
+      "forward_sha256": "dd02c7c9ca3fa203",
+      "forward_owner": "CustomOp"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.mlp.gate",
+     "type": "Linear",
+     "module": "torch.nn.modules.linear",
+     "layers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {
+        "e_score_correction_bias": {
+         "dtype": "float32",
+         "kind": "param",
+         "shape": [
+          64
+         ]
+        },
+        "weight": {
+         "dtype": "float32",
+         "kind": "param",
+         "shape": [
+          64,
+          2048
+         ]
+        }
+       },
+       "layers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.1.mlp.gate",
+     "source": {
+      "forward": "torch/nn/modules/linear.py:130",
+      "forward_sha256": "c0ab8f42cc3bf948",
+      "forward_owner": "Linear"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.mlp.gate_up_proj",
+     "type": "MergedColumnParallelLinear",
+     "module": "vllm.model_executor.layers.linear",
+     "layers": [
+      0
+     ],
+     "shapes": [
+      {
+       "tensors": {
+        "weight": {
+         "dtype": "bfloat16",
+         "kind": "param",
+         "shape": [
+          20480,
+          2048
+         ]
+        }
+       },
+       "layers": [
+        0
+       ]
+      }
+     ],
+     "example": "model.layers.0.mlp.gate_up_proj",
+     "attrs": {
+      "tp_size": 1,
+      "tp_rank": 0,
+      "input_size": 2048,
+      "output_size": 20480,
+      "input_size_per_partition": 2048,
+      "output_size_per_partition": 20480,
+      "output_partition_sizes": [
+       10240,
+       10240
+      ],
+      "return_bias": true,
+      "skip_bias_add": false,
+      "disable_tp": false
+     },
+     "flags": {
+      "allow_fp8_block_shape_mismatch": false,
+      "disable_tp": false,
+      "gather_output": false,
+      "has_bias": false,
+      "return_bias": true,
+      "skip_bias_add": false
+     },
+     "kernels": {
+      "quant_method": {
+       "type": "vllm.model_executor.layers.linear.UnquantizedLinearMethod",
+       "_gemm_impl": {
+        "type": "builtins.function"
+       }
+      }
+     },
+     "source": {
+      "forward": "vllm/model_executor/layers/linear.py:595",
+      "forward_sha256": "308fabe081224a58",
+      "forward_owner": "ColumnParallelLinear"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.mlp.shared_experts",
+     "type": "Glm4MoeMLP",
+     "module": "vllm.model_executor.models.glm4_moe",
+     "layers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.1.mlp.shared_experts",
+     "source": {
+      "forward": "vllm/model_executor/models/glm4_moe.py:111",
+      "forward_sha256": "ab63fe100a57275b",
+      "forward_owner": "Glm4MoeMLP"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.mlp.shared_experts.act_fn",
+     "type": "SiluAndMul",
+     "module": "vllm.model_executor.layers.activation",
+     "layers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.1.mlp.shared_experts.act_fn",
+     "flags": {
+      "_enforce_enable": false
+     },
+     "source": {
+      "forward": "vllm/model_executor/custom_op.py:135",
+      "forward_sha256": "dd02c7c9ca3fa203",
+      "forward_owner": "CustomOp"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.mlp.shared_experts.down_proj",
+     "type": "RowParallelLinear",
+     "module": "vllm.model_executor.layers.linear",
+     "layers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {
+        "weight": {
+         "dtype": "bfloat16",
+         "kind": "param",
+         "shape": [
+          2048,
+          1536
+         ]
+        }
+       },
+       "layers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.1.mlp.shared_experts.down_proj",
+     "attrs": {
+      "reduce_results": false,
+      "tp_size": 1,
+      "tp_rank": 0,
+      "input_size": 1536,
+      "output_size": 2048,
+      "input_size_per_partition": 1536,
+      "output_size_per_partition": 2048,
+      "output_partition_sizes": [
+       2048
+      ],
+      "return_bias": true,
+      "skip_bias_add": false,
+      "disable_tp": false
+     },
+     "flags": {
+      "allow_fp8_block_shape_mismatch": false,
+      "disable_tp": false,
+      "has_bias": false,
+      "input_is_parallel": true,
+      "reduce_results": false,
+      "return_bias": true,
+      "skip_bias_add": false
+     },
+     "kernels": {
+      "quant_method": {
+       "type": "vllm.model_executor.layers.linear.UnquantizedLinearMethod",
+       "_gemm_impl": {
+        "type": "builtins.function"
+       }
+      }
+     },
+     "source": {
+      "forward": "vllm/model_executor/layers/linear.py:1750",
+      "forward_sha256": "d90bdc0c707aa085",
+      "forward_owner": "RowParallelLinear"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.mlp.shared_experts.gate_up_proj",
+     "type": "MergedColumnParallelLinear",
+     "module": "vllm.model_executor.layers.linear",
+     "layers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {
+        "weight": {
+         "dtype": "bfloat16",
+         "kind": "param",
+         "shape": [
+          3072,
+          2048
+         ]
+        }
+       },
+       "layers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.1.mlp.shared_experts.gate_up_proj",
+     "attrs": {
+      "tp_size": 1,
+      "tp_rank": 0,
+      "input_size": 2048,
+      "output_size": 3072,
+      "input_size_per_partition": 2048,
+      "output_size_per_partition": 3072,
+      "output_partition_sizes": [
+       1536,
+       1536
+      ],
+      "return_bias": true,
+      "skip_bias_add": false,
+      "disable_tp": false
+     },
+     "flags": {
+      "allow_fp8_block_shape_mismatch": false,
+      "disable_tp": false,
+      "gather_output": false,
+      "has_bias": false,
+      "return_bias": true,
+      "skip_bias_add": false
+     },
+     "kernels": {
+      "quant_method": {
+       "type": "vllm.model_executor.layers.linear.UnquantizedLinearMethod",
+       "_gemm_impl": {
+        "type": "builtins.function"
+       }
+      }
+     },
+     "source": {
+      "forward": "vllm/model_executor/layers/linear.py:595",
+      "forward_sha256": "308fabe081224a58",
+      "forward_owner": "ColumnParallelLinear"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.post_attention_layernorm",
+     "type": "RMSNorm",
+     "module": "vllm.model_executor.layers.layernorm",
+     "layers": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {
+        "weight": {
+         "dtype": "bfloat16",
+         "kind": "param",
+         "shape": [
+          2048
+         ]
+        }
+       },
+       "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.0.post_attention_layernorm",
+     "attrs": {
+      "variance_epsilon": 1e-05
+     },
+     "flags": {
+      "_enforce_enable": false,
+      "has_weight": true,
+      "pass_weight": true,
+      "pass_weight_add": true
+     },
+     "source": {
+      "forward": "vllm/model_executor/custom_op.py:135",
+      "forward_sha256": "dd02c7c9ca3fa203",
+      "forward_owner": "CustomOp"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.self_attn",
+     "type": "Glm4MoeLiteMLAAttention",
+     "module": "vllm.model_executor.models.glm4_moe_lite",
+     "layers": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.0.self_attn",
+     "attrs": {
+      "max_position_embeddings": 202752,
+      "num_heads": 20,
+      "num_local_heads": 20,
+      "kv_lora_rank": 512,
+      "qk_nope_head_dim": 192,
+      "qk_rope_head_dim": 64,
+      "v_head_dim": 256,
+      "q_lora_rank": 768
+     },
+     "flags": {
+      "is_v32": false
+     },
+     "source": {
+      "forward": "vllm/model_executor/models/deepseek_v2.py:1229",
+      "forward_sha256": "4ac8cd307f2dd757",
+      "forward_owner": "DeepseekV2MLAAttention"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.self_attn.fused_qkv_a_proj",
+     "type": "DeepSeekV2FusedQkvAProjLinear",
+     "module": "vllm.model_executor.models.deepseek_v2",
+     "layers": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {
+        "weight": {
+         "dtype": "bfloat16",
+         "kind": "param",
+         "shape": [
+          1344,
+          2048
+         ]
+        }
+       },
+       "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.0.self_attn.fused_qkv_a_proj",
+     "attrs": {
+      "tp_size": 1,
+      "tp_rank": 0,
+      "input_size": 2048,
+      "output_size": 1344,
+      "input_size_per_partition": 2048,
+      "output_size_per_partition": 1344,
+      "output_partition_sizes": [
+       768,
+       576
+      ],
+      "return_bias": true,
+      "skip_bias_add": false,
+      "disable_tp": true,
+      "_use_min_latency_gemm": false
+     },
+     "flags": {
+      "_use_min_latency_gemm": false,
+      "allow_fp8_block_shape_mismatch": false,
+      "disable_tp": true,
+      "gather_output": false,
+      "has_bias": false,
+      "return_bias": true,
+      "skip_bias_add": false
+     },
+     "kernels": {
+      "quant_method": {
+       "type": "vllm.model_executor.layers.linear.UnquantizedLinearMethod",
+       "_gemm_impl": {
+        "type": "builtins.function"
+       }
+      }
+     },
+     "source": {
+      "forward": "vllm/model_executor/models/deepseek_v2.py:974",
+      "forward_sha256": "65c8b68a08cd7978",
+      "forward_owner": "DeepSeekV2FusedQkvAProjLinear"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.self_attn.kv_a_layernorm",
+     "type": "RMSNorm",
+     "module": "vllm.model_executor.layers.layernorm",
+     "layers": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {
+        "weight": {
+         "dtype": "bfloat16",
+         "kind": "param",
+         "shape": [
+          512
+         ]
+        }
+       },
+       "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.0.self_attn.kv_a_layernorm",
+     "attrs": {
+      "variance_epsilon": 1e-05
+     },
+     "flags": {
+      "_enforce_enable": false,
+      "has_weight": true,
+      "pass_weight": true,
+      "pass_weight_add": true
+     },
+     "source": {
+      "forward": "vllm/model_executor/custom_op.py:135",
+      "forward_sha256": "dd02c7c9ca3fa203",
+      "forward_owner": "CustomOp"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.self_attn.kv_b_proj",
+     "type": "ColumnParallelLinear",
+     "module": "vllm.model_executor.layers.linear",
+     "layers": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {
+        "weight": {
+         "dtype": "bfloat16",
+         "kind": "param",
+         "shape": [
+          8960,
+          512
+         ]
+        }
+       },
+       "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.0.self_attn.kv_b_proj",
+     "attrs": {
+      "tp_size": 1,
+      "tp_rank": 0,
+      "input_size": 512,
+      "output_size": 8960,
+      "input_size_per_partition": 512,
+      "output_size_per_partition": 8960,
+      "output_partition_sizes": [
+       8960
+      ],
+      "return_bias": true,
+      "skip_bias_add": false,
+      "disable_tp": false
+     },
+     "flags": {
+      "_cpu_skip_gemm_dispatch": true,
+      "allow_fp8_block_shape_mismatch": false,
+      "disable_tp": false,
+      "gather_output": false,
+      "has_bias": false,
+      "return_bias": true,
+      "skip_bias_add": false
+     },
+     "kernels": {
+      "quant_method": {
+       "type": "vllm.model_executor.layers.linear.UnquantizedLinearMethod",
+       "_gemm_impl": {
+        "type": "builtins.function"
+       }
+      }
+     },
+     "source": {
+      "forward": "vllm/model_executor/layers/linear.py:595",
+      "forward_sha256": "308fabe081224a58",
+      "forward_owner": "ColumnParallelLinear"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.self_attn.mla_attn",
+     "type": "MultiHeadLatentAttentionWrapper",
+     "module": "vllm.model_executor.layers.mla",
+     "layers": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.0.self_attn.mla_attn",
+     "attrs": {
+      "skip_topk": false,
+      "num_heads": 20,
+      "kv_lora_rank": 512,
+      "qk_nope_head_dim": 192,
+      "qk_rope_head_dim": 64,
+      "v_head_dim": 256,
+      "q_lora_rank": 768
+     },
+     "flags": {
+      "dcp_q_replicate": false,
+      "fuse_qkv_rmsnorm": false,
+      "is_sparse": false,
+      "skip_topk": false
+     },
+     "source": {
+      "forward": "vllm/model_executor/layers/mla.py:155",
+      "forward_sha256": "f002c83c6c854cb9",
+      "forward_owner": "MultiHeadLatentAttentionWrapper"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn",
+     "type": "MLAAttention",
+     "module": "vllm.model_executor.layers.attention.mla_attention",
+     "layers": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {
+        "_k_scale": {
+         "dtype": "float32",
+         "kind": "buffer",
+         "shape": []
+        },
+        "_k_scale_cpu": {
+         "dtype": "float32",
+         "kind": "attr",
+         "shape": []
+        },
+        "_prob_scale": {
+         "dtype": "float32",
+         "kind": "buffer",
+         "shape": []
+        },
+        "_q_scale": {
+         "dtype": "float32",
+         "kind": "buffer",
+         "shape": []
+        },
+        "_v_scale": {
+         "dtype": "float32",
+         "kind": "buffer",
+         "shape": []
+        },
+        "_v_scale_cpu": {
+         "dtype": "float32",
+         "kind": "attr",
+         "shape": []
+        },
+        "kv_cache": {
+         "dtype": "bfloat16",
+         "kind": "attr",
+         "shape": [
+          0
+         ]
+        }
+       },
+       "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.0.self_attn.mla_attn.mla_attn",
+     "attrs": {
+      "head_size": 576,
+      "kv_cache_dtype": "auto",
+      "num_heads": 20,
+      "kv_lora_rank": 512,
+      "qk_nope_head_dim": 192,
+      "qk_rope_head_dim": 64,
+      "v_head_dim": 256,
+      "q_lora_rank": 768,
+      "scale": 0.0625,
+      "use_sparse": false,
+      "layer_name": "model.layers.0.self_attn.attn",
+      "use_pcp": false,
+      "supports_dense_mha_prefill": true
+     },
+     "flags": {
+      "dcp_q_replicate": false,
+      "is_amx_bmm_enabled": false,
+      "non_causal_multi_token_decode": false,
+      "use_direct_call": false,
+      "use_pcp": false,
+      "use_sparse": false
+     },
+     "kernels": {
+      "impl": {
+       "type": "vllm.v1.attention.backends.mla.triton_mla.TritonMLAImpl",
+       "_sm_count": 188,
+       "_use_flashinfer_concat_mla_k": false,
+       "dcp_rank": 0,
+       "dcp_world_size": 1,
+       "head_size": 576,
+       "indexer": null,
+       "is_aiter_triton_fp8_bmm_enabled": null,
+       "kv_cache_dtype": "auto",
+       "kv_lora_rank": 512,
+       "need_to_return_lse_for_decode": false,
+       "num_heads": 20,
+       "num_kv_heads": 1,
+       "pcp_rank": 0,
+       "pcp_world_size": 1,
+       "q_lora_rank": 768,
+       "q_pad_num_heads": null,
+       "qk_head_dim": 256,
+       "qk_nope_head_dim": 192,
+       "qk_rope_head_dim": 64,
+       "scale": 0.0625,
+       "supports_quant_query_input": true,
+       "total_cp_rank": 0,
+       "total_cp_world_size": 1,
+       "v_head_dim": 256
+      },
+      "prefill_backend": {
+       "type": "vllm.v1.attention.backends.mla.prefill.flash_attn.FlashAttnPrefillBackend",
+       "_is_vllm_fa": true,
+       "kv_lora_rank": 512,
+       "num_heads": 20,
+       "qk_nope_head_dim": 192,
+       "qk_rope_head_dim": 64,
+       "requires_v_padding": true,
+       "scale": 0.0625,
+       "v_head_dim": 256,
+       "vllm_flash_attn_version": 2
+      }
+     },
+     "source": {
+      "forward": "vllm/model_executor/layers/attention/mla_attention.py:727",
+      "forward_sha256": "3e08ad26b9ba3b57",
+      "forward_owner": "MLAAttention"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn._decode_concat_quant_fp8_op",
+     "type": "_DecodeConcatQuantFP8",
+     "module": "vllm.model_executor.layers.attention.mla_attention",
+     "layers": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.0.self_attn.mla_attn.mla_attn._decode_concat_quant_fp8_op",
+     "flags": {
+      "_enforce_enable": false,
+      "column_major_scales": false,
+      "is_group_quant": false,
+      "static": true,
+      "tma_aligned_scales": false,
+      "use_deep_gemm_supported": true,
+      "use_per_token_if_dynamic": false,
+      "use_ue8m0": true
+     },
+     "source": {
+      "forward": "vllm/model_executor/custom_op.py:135",
+      "forward_sha256": "dd02c7c9ca3fa203",
+      "forward_owner": "CustomOp"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.self_attn.mla_attn.mla_attn._quant_fp8_op",
+     "type": "QuantFP8",
+     "module": "vllm.model_executor.layers.quantization.input_quant_fp8",
+     "layers": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.0.self_attn.mla_attn.mla_attn._quant_fp8_op",
+     "flags": {
+      "_enforce_enable": false,
+      "column_major_scales": false,
+      "is_group_quant": false,
+      "static": true,
+      "tma_aligned_scales": false,
+      "use_deep_gemm_supported": true,
+      "use_per_token_if_dynamic": false,
+      "use_ue8m0": true
+     },
+     "source": {
+      "forward": "vllm/model_executor/custom_op.py:135",
+      "forward_sha256": "dd02c7c9ca3fa203",
+      "forward_owner": "CustomOp"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.self_attn.o_proj",
+     "type": "RowParallelLinear",
+     "module": "vllm.model_executor.layers.linear",
+     "layers": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {
+        "weight": {
+         "dtype": "bfloat16",
+         "kind": "param",
+         "shape": [
+          2048,
+          5120
+         ]
+        }
+       },
+       "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.0.self_attn.o_proj",
+     "attrs": {
+      "reduce_results": true,
+      "tp_size": 1,
+      "tp_rank": 0,
+      "input_size": 5120,
+      "output_size": 2048,
+      "input_size_per_partition": 5120,
+      "output_size_per_partition": 2048,
+      "output_partition_sizes": [
+       2048
+      ],
+      "return_bias": true,
+      "skip_bias_add": false,
+      "disable_tp": false
+     },
+     "flags": {
+      "allow_fp8_block_shape_mismatch": false,
+      "disable_tp": false,
+      "has_bias": false,
+      "input_is_parallel": true,
+      "reduce_results": true,
+      "return_bias": true,
+      "skip_bias_add": false
+     },
+     "kernels": {
+      "quant_method": {
+       "type": "vllm.model_executor.layers.linear.UnquantizedLinearMethod",
+       "_gemm_impl": {
+        "type": "builtins.function"
+       }
+      }
+     },
+     "source": {
+      "forward": "vllm/model_executor/layers/linear.py:1750",
+      "forward_sha256": "d90bdc0c707aa085",
+      "forward_owner": "RowParallelLinear"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.self_attn.q_a_layernorm",
+     "type": "RMSNorm",
+     "module": "vllm.model_executor.layers.layernorm",
+     "layers": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {
+        "weight": {
+         "dtype": "bfloat16",
+         "kind": "param",
+         "shape": [
+          768
+         ]
+        }
+       },
+       "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.0.self_attn.q_a_layernorm",
+     "attrs": {
+      "variance_epsilon": 1e-05
+     },
+     "flags": {
+      "_enforce_enable": false,
+      "has_weight": true,
+      "pass_weight": true,
+      "pass_weight_add": true
+     },
+     "source": {
+      "forward": "vllm/model_executor/custom_op.py:135",
+      "forward_sha256": "dd02c7c9ca3fa203",
+      "forward_owner": "CustomOp"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.self_attn.q_b_proj",
+     "type": "ColumnParallelLinear",
+     "module": "vllm.model_executor.layers.linear",
+     "layers": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+     ],
+     "shapes": [
+      {
+       "tensors": {
+        "weight": {
+         "dtype": "bfloat16",
+         "kind": "param",
+         "shape": [
+          5120,
+          768
+         ]
+        }
+       },
+       "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+       ]
+      }
+     ],
+     "example": "model.layers.0.self_attn.q_b_proj",
+     "attrs": {
+      "tp_size": 1,
+      "tp_rank": 0,
+      "input_size": 768,
+      "output_size": 5120,
+      "input_size_per_partition": 768,
+      "output_size_per_partition": 5120,
+      "output_partition_sizes": [
+       5120
+      ],
+      "return_bias": true,
+      "skip_bias_add": false,
+      "disable_tp": false
+     },
+     "flags": {
+      "allow_fp8_block_shape_mismatch": false,
+      "disable_tp": false,
+      "gather_output": false,
+      "has_bias": false,
+      "return_bias": true,
+      "skip_bias_add": false
+     },
+     "kernels": {
+      "quant_method": {
+       "type": "vllm.model_executor.layers.linear.UnquantizedLinearMethod",
+       "_gemm_impl": {
+        "type": "builtins.function"
+       }
+      }
+     },
+     "source": {
+      "forward": "vllm/model_executor/layers/linear.py:595",
+      "forward_sha256": "308fabe081224a58",
+      "forward_owner": "ColumnParallelLinear"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.self_attn.rotary_emb",
+     "type": "RotaryEmbedding",
+     "module": "vllm.model_executor.layers.rotary_embedding.base",
+     "layers": [
+      0
+     ],
+     "shapes": [
+      {
+       "tensors": {
+        "cos_sin_cache": {
+         "dtype": "bfloat16",
+         "kind": "buffer",
+         "shape": [
+          202752,
+          64
+         ]
+        }
+       },
+       "layers": [
+        0
+       ]
+      }
+     ],
+     "example": "model.layers.0.self_attn.rotary_emb",
+     "attrs": {
+      "is_neox_style": false,
+      "rotary_dim": 64,
+      "head_size": 64,
+      "max_position_embeddings": 202752,
+      "base": 1000000,
+      "dtype": "bfloat16"
+     },
+     "flags": {
+      "_enforce_enable": false,
+      "is_neox_style": false,
+      "use_flashinfer": false
+     },
+     "source": {
+      "forward": "vllm/model_executor/custom_op.py:135",
+      "forward_sha256": "dd02c7c9ca3fa203",
+      "forward_owner": "CustomOp"
+     }
+    },
+    {
+     "pattern": "model.layers.{i}.self_attn.rotary_emb.apply_rotary_emb",
+     "type": "ApplyRotaryEmb",
+     "module": "vllm.model_executor.layers.rotary_embedding.common",
+     "layers": [
+      0
+     ],
+     "shapes": [
+      {
+       "tensors": {},
+       "layers": [
+        0
+       ]
+      }
+     ],
+     "example": "model.layers.0.self_attn.rotary_emb.apply_rotary_emb",
+     "attrs": {
+      "is_neox_style": false
+     },
+     "flags": {
+      "_enforce_enable": false,
+      "enable_fp32_compute": false,
+      "is_neox_style": false
+     },
+     "source": {
+      "forward": "vllm/model_executor/custom_op.py:135",
+      "forward_sha256": "dd02c7c9ca3fa203",
+      "forward_owner": "CustomOp"
+     }
+    },
+    {
+     "pattern": "model.norm",
+     "type": "RMSNorm",
+     "module": "vllm.model_executor.layers.layernorm",
+     "layers": [],
+     "shapes": [
+      {
+       "tensors": {
+        "weight": {
+         "dtype": "bfloat16",
+         "kind": "param",
+         "shape": [
+          2048
+         ]
+        }
+       },
+       "layers": [
+        -1
+       ]
+      }
+     ],
+     "example": "model.norm",
+     "attrs": {
+      "variance_epsilon": 1e-05
+     },
+     "flags": {
+      "_enforce_enable": false,
+      "has_weight": true,
+      "pass_weight": true,
+      "pass_weight_add": true
+     },
+     "source": {
+      "forward": "vllm/model_executor/custom_op.py:135",
+      "forward_sha256": "dd02c7c9ca3fa203",
+      "forward_owner": "CustomOp"
+     }
+    }
+   ],
+   "signature": "5da377b60a94bba987cf42ba664b7736413c1546bf781de9e31eff8310451019"
+  }
+ }
+}
