@@ -63,12 +63,8 @@ unset stays unset. If one is still missing, the store, `research queue
 ready`, node ssh and the Nebius scripts fail and say `rerun from a fresh tmux
 login shell` (`secret_hint.py`).
 
-`research doctor [--role lane|coordinator|infra] [--json]` says whether this
-VM can do its job before a run finds out: the role's secret names
-(`doctor.SECRETS`) against what the VM injects, status-only probes (`gh`,
-dry-run pushes, the store's remote, Slack for coordinator and infra, ssh to
-each machine), `uv sync --check`, the disk floor and the clock. Each finding
-names its fix (exit 1). It prints names and verdicts, never a value or body.
+`research doctor [--role lane|coordinator|infra] [--json]`: can this VM do its job (secret names, status-only
+probes, ssh, `uv sync --check`, disk, clock); each finding names its fix (exit 1); it never prints a value.
 
 ## Commands
 
@@ -221,10 +217,9 @@ loop or script goes into the repository and the manifest before it runs; a backu
 --by WHO --apply` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
 A Lean build kept from node 1's credentials (the Lean cache's daily one) runs in `vy-lean-sandbox` (`lean_sandbox.py`).
 
-A monitor (`research/monitors.py`: id, owner, severity, a check with stable finding keys, the action) is what wakes someone.
-`research monitors list|check [ID]|run --by WHO` lists, runs once, or keeps state and writes one alert note per incident
-opened and one line when it clears. Node 1's `vy-monitors.timer` runs the node-side ones (node 2 over ssh only while its fill
-says `timed False`); `research monitors relay` runs the relay-side ones and posts opens and clears in `#agent-alerts`.
+A monitor (`research/monitors.py`: id, owner, severity, a check, the action) is what wakes someone: `research monitors
+list|check [ID]|run --by WHO`. Node 1's `vy-monitors.timer` writes one alert note per incident and one per clear (node 2 only
+while its fill says `timed False`); `research monitors relay` posts them in `#agent-alerts`.
 
 An unlisted or foreign machine is refused before anything is contacted. The
 tool ships as a content-addressed source snapshot under `<root>/tool/` and
@@ -235,9 +230,8 @@ checks again before the workload starts. On a mismatch the run is refused
 with `ResearchVersionMismatch`, naming the running package's path. A package
 too old to know the check fails closed. The one exception: a `--source`
 tree's own older package runs unverified, and the launcher says so. job.json
-records `run.remote.tool_running`. `launched` is said only once the runner has
-written job.json (it tells `launch-request` on a FIFO); a runner that exits
-first is refused (`RunnerFailed`, its log's tail, exit 3). `--source` ships
+records `run.remote.tool_running`. `launched` waits for the runner's job.json; a
+runner that exits first is refused (exit 3). `--source` ships
 `git archive HEAD` of a clean checkout to `<root>/src/<sha>/` (a dirty tree is
 refused, not mislabeled). The ship is verified before anything may run from
 it: the archive lands in `<sha>.partial-<nonce>/`, its sha256 is compared on
@@ -278,8 +272,8 @@ the claim and reports state. The runner's argv carries the workload's command, s
 `pkill -f` aimed at the workload matches it too: it logs SIGTERM / SIGHUP to
 launcher.log and keeps supervising, so the run still records its end and
 publishes. Stop a run with `research cancel RUN --reason TEXT` from any VM: SIGTERM to its workload's process group
-(status.json `pgid`, if a member's env has the run's `RESEARCH_RUN_DIR`), recorded first as a manual cancel, so the run
-classifies `CANCELLED_MANUAL`. On the machine the same is `kill -TERM -<pgid>`. Never SIGKILL the runner: one killed during
+(status.json `pgid`), recorded first as a manual cancel, so the run
+classifies `CANCELLED_MANUAL` (on the machine: `kill -TERM -<pgid>`). Never SIGKILL the runner: one killed during
 its custody upload leaves the run without custody and its minted key on disk. `--exclusive` refuses if any run is live, and
 any launch refuses if an exclusive holder is live.
 
@@ -328,8 +322,8 @@ evidence is on the machine. Provisioning is a separate, explicit act; `--on` nev
 
 ### Standing campaign targets: `research keeper`
 
-`research keeper set|stop|status NAME --on NODE` keeps N chunks of a command leased on a Nebius node until a deadline, the next
-`{seed}` of a counter each, so no agent VM stays awake to relaunch them: `research keeper --help`, and `pods/nebius/keeper.py`.
+`research keeper set|stop|status NAME --on NODE` keeps N chunks of a command leased on a node until a deadline, each the next
+`{seed}`, so no VM stays awake to relaunch them (`pods/nebius/keeper.py`).
 
 ### Pods bound themselves: leases, one budget file, one guard
 
@@ -357,9 +351,9 @@ Nothing that bounds spend may depend on an agent VM, which can be suspended at a
 The disk floor: `research run` and `research fetch --all` refuse (exit 3) while the runs root's filesystem has less than
 `$RESEARCH_DISK_FLOOR_GB` free (default 1.5; `0` turns it off), naming the eviction that frees it. `research data custody RUN
 --publish` removes the run's files of 1 MiB and more once custody holds (`--keep-local` keeps them); `run-files.evicted.json`
-names the fetch that restores them. `research data evict --src-dir DIR` (node 1's hourly research unit) also deletes, oldest first
-and whatever the mark, each shipped source tree recoverable on the node (exactly a commit on a ref of its `git/verity.git`) that no process, run, request, slot or fill job uses, unchanged for 2 h
-and its runs' clean source; a condition it can't establish keeps them all (`store/evict.py`).
+names the fetch that restores them. `research data evict --src-dir DIR` (node 1's hourly unit) also deletes each
+shipped source tree that is exactly a commit on a ref of the node's `git/verity.git`, unused and unchanged for 2 h; any doubt
+keeps them all (`store/evict.py`).
 
 ### research data
 
@@ -499,7 +493,7 @@ verify-author in private channels; `channels:history` for a public one), `reacti
 reach private channels), and Cursor's Slack app must be in both too: Cursor delivers the wakes, this bot posts.
 
 Routing: each handle holder subscribes to its own inbox, not to the top level; the sending CLI rings the doorbells of the
-handles a post addresses (`route_targets`) until the console site's events route does (`slack.py`'s docstring).
+handles a post addresses (`route_targets`, `slack.py`).
 
 ### Notes and evidence over MCP
 
