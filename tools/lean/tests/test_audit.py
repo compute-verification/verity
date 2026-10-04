@@ -269,10 +269,15 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
              "theorem Control.SecurityProofs.b (n : Nat) : Control.Protocol.g n = n := Nat.zero_add n\n"
              f"theorem Control.c (n : Nat) : {fin} := rfl\n")
     spec = pkg / "Control" / "Guarantees.lean"
+
+    def stated_as_spec():
+        pol = A.load(pkg)
+        A.dump(pkg, pol | {"layers": pol["layers"] | {"Control.Guarantees": {"imports": ["Control.Moves"]}}})
     stated = ("import Control.Moves\ndef Control.Guarantees.A : Prop := ∀ n, Control.Protocol.f n = n\n"
               f"def Control.Guarantees.C : Prop := ∀ n : Nat, {fin}\n")
     moves.write_text(after)
     spec.write_text(stated)
+    stated_as_spec()
     (pkg / "Control" / "Lifted.lean").write_text(
         "import Control.Guarantees\ntheorem Control.SecurityProofs.a : Control.Guarantees.A := Control.a\n"
         "theorem Control.SecurityProofs.c : Control.Guarantees.C := Control.c\n")
@@ -289,6 +294,7 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     assert must[0] == ("definition Control.Protocol.g (Control.Moves), was Control.g (Control.Moves), read by "
                        "Control.SecurityProofs.b: changed") and must[-1] == "    def Control.Protocol.g (n : Nat) : Nat := 0 + n"
     (pkg / A.POLICY).write_text(before)
+    stated_as_spec()
     moves.write_text("def Control.f (n : Nat) : Nat := n\n" + after)
     spec.write_text(stated.replace("f n = n\n", "f n = Control.f n\n"))
     build()
@@ -317,7 +323,7 @@ def test_a_lift_into_guarantees_is_certified_on_a_real_build(tmp_path):
         "theorem v (h : Hyp) (n : Nat) : double n = n + n := by unfold double; omega\n"
         "theorem w (n : Nat) : double n = n + n := by unfold double; omega\n"
         "end Control\n")
-    A.dump(pkg, A.load(pkg) | {"guarantees": {f"Control.{n}": {} for n in ("main_thm", *"pqrstvw")}})
+    A.dump(pkg, A.load(pkg) | {"guarantees": {f"Control.{n}": {"owner": "@lean"} for n in ("main_thm", *"pqrstvw")}})
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
     audit = lambda: A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None)
     build()
@@ -344,6 +350,9 @@ def test_a_lift_into_guarantees_is_certified_on_a_real_build(tmp_path):
         "theorem v (h : Hyp) (n : Nat) : Guarantees.V n := by unfold Guarantees.V double; omega\n"
         "theorem w (n : Nat) : Spec.W n := by unfold Spec.W double; omega\n"
         "end Control\n")
+    pol = A.load(pkg)
+    A.dump(pkg, pol | {"layers": pol["layers"] | {"Control.Guarantees": {"imports": ["Control.Assumptions", "Control.Defs"]},
+                                                  "Control.Spec": {"imports": ["Control.Defs"]}}})
     build()
     rep = audit()
     assert rep["failures"] == []
@@ -478,7 +487,7 @@ def test_a_lift_the_audit_cannot_certify_is_a_change_of_meaning():
         assert f"definition P.T ({module}), read by P.t: new" in text
     assert "  named assumptions: P.Hyp -> none" in text
     two = facts(pins={"P.t": fact(), "P.u": fact(signature="P.u : True", h="00000000000000dd")})
-    old = A.judge(POLICY | {"guarantees": {"P.t": {}, "P.u": {}}}, two, FILES, update=True)[1]
+    old = A.judge(POLICY | {"guarantees": {"P.t": {"owner": "@lean"}, "P.u": {"owner": "@lean"}}}, two, FILES, update=True)[1]
     now = facts(pins={"P.t": lifted_fact(), "P.u": lifted_fact(name="P.u", unfolded="00000000000000ee")})
     text = A.review(old, A.judge(old, now, FILES, update=True)[1], now, {})
     assert text[0] == f"guarantee P.t: lifted into P.T: {A.LIFTED}" and text[1] == "guarantee P.u: changed"
