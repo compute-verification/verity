@@ -11,7 +11,9 @@ published on the machine that ran it with a minted key, so custody no longer dep
         (`preserved.check`, head mode; up to PUSH_TRIES), deletes the key, and writes <run>/.custody.
     research data custody RUN [--publish] [--runs-dir D] [--json]        verify a run's custody on the remote and (re)write .custody;
                                                                           --publish first publishes it with a run record and pushes
-    research data custody --triage [--runs-dir D] [--verify] [--json]    every run under the runs root by custody state (F2)
+    research data custody --triage [--runs-dir D ...] [--verify] [--older-min N] [--json]
+                                                                          every run under the runs roots by custody state (F2); with
+                                                                          --older-min, the ended runs not on the remote after N minutes
 
 The record uploads the run's own files, the files matching its `--declared-output` globs, and undeclared files up to
 UNDECLARED_CAP_BYTES; every other file is listed (path, bytes, sha256) without bytes (`select`; how jobs declare outputs:
@@ -29,7 +31,8 @@ run dir, so launcher.log in the record is the whole of it.
 
 A run's custody is a remote fact, so any machine can check it: `research data preserved <run id>` (head mode) and `research data
 custody RUN` answer the same everywhere.  Waivers and never-ran verdicts for the triage are labels on the run id:
-`research data label <run id> custody waived|never-ran --by <who>`.
+`research data label <run id> custody waived|never-ran --by <who>`; a never-ran holds only while the run dir shows no sign that
+its workload started (`ran_evidence`), and a later `custody needed` withdraws either.
 """
 from __future__ import annotations
 
@@ -46,6 +49,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from ..telemetry.job import write_json_atomic
+from .attempt import TERMINAL as TERMINAL_STATES
 from .evict import EVICTED_FILE
 
 MARKER = ".custody"
@@ -62,7 +66,8 @@ ACTIONS = ("HeadObject", "GetObject", "GetBucketLocation", "ListObjectsV1", "Lis
            "PutObject", "CreateMultipartUpload", "UploadPart", "CompleteMultipartUpload", "AbortMultipartUpload")
 PUSH_TRIES = 3
 PUSH_RETRY_S = 20.0
-TRIAGE_STATES = ("fetched", "r2", "attempt-no-record", "attempt-unpreserved", "no-custody", "running", "never-ran", "waived")
+TRIAGE_STATES = ("fetched", "r2", "forced-unverified", "attempt-no-record", "attempt-unpreserved", "no-custody", "running", "never-ran",
+                 "waived")
 
 
 # ---- the run dir ------------------------------------------------------------------------------------------------------------------------
@@ -465,27 +470,168 @@ def runner_publish(run_dir: Path, custody_dir: Path, *, tool: Any = None, condit
 # ---- triage (F2) ------------------------------------------------------------------------------------------------------------------------
 
 def _label_verdict(st: Any, run_id: str) -> str | None:
+    """The run's latest `custody` label when it is a verdict (waived, never-ran); `needed` withdraws an earlier one."""
+    from .vocab import CUSTODY
+
     try:
-        labs = st.labels(run_id, key="custody")
+        labs = st.labels(run_id, key=CUSTODY)
     except Exception:  # noqa: BLE001
         return None
     return str(labs[-1].value) if labs and str(labs[-1].value) in ("waived", "never-ran") else None
 
 
-def triage_row(st: Any, run_dir: Path, *, verify_remote: bool = False) -> dict[str, Any]:
-    """One run dir's custody state (TRIAGE_STATES) with the reason and the next step."""
+#: What `tele run` writes only once it starts the workload: `started`, then the workload's pid in status.json, the sampler
+#: (`sampler_start`, then resources.jsonl's readings of the workload's processes) and `span_start`.
+_RAN_EVENTS = ("started", "span_start", "sampler_start")
+
+
+def ran_evidence(run_dir: Path) -> str | None:
+    """The first record in the run dir showing that its workload started, or None: a pid in status.json, a started, span_start or
+    sampler_start event, a sampler reading, output in stdout.log or stderr.log.  A `custody never-ran` label holds only while
+    there is none (the vocabulary's rule)."""
+    d = Path(run_dir)
+    pid, _ = _runner_pid(_read(d / "status.json") or {})
+    if pid is not None:
+        return f"status.json names pid {pid}"
+    with contextlib.suppress(OSError), (d / "events.jsonl").open(errors="replace") as f:
+        for line in f:
+            with contextlib.suppress(ValueError, AttributeError):
+                if (kind := json.loads(line).get("kind")) in _RAN_EVENTS:
+                    return f"events.jsonl has {kind}"
+    for name, what in (("resources.jsonl", "sampler readings"), ("stdout.log", "output"), ("stderr.log", "output")):
+        with contextlib.suppress(OSError):
+            if (d / name).stat().st_size:
+                return f"{name} holds {what}"
+    return None
+
+
+TRIAGE_SCHEMA = "research/custody-triage/v1"
+NEEDS_ACTION = ("no-custody", "attempt-unpreserved", "attempt-no-record", "forced-unverified")
+#: A run whose runner this machine can't see (it ran in another pid namespace: a Kubernetes pod on node 1) has ended once none of
+#: its records changed for this long: a pod preempted or killed before its runner recorded an end leaves its status `running`.
+STALE_S = 24 * 3600
+_RECORDS = ("status.json", "job.json", "stdout.log", "stderr.log", "launcher.log", "sampler.log", "events.jsonl", "resources.jsonl")
+
+
+def this_host() -> tuple[str, str | None]:
+    """(hostname, boot id): a runner's pid means something here only when its job.json names both."""
+    import socket
+
+    try:
+        boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    except OSError:
+        boot = None
+    return socket.gethostname(), boot
+
+
+def _changed(d: Path) -> float | None:
+    """When the run's own records last changed (its end, for an ended run); markers about the dir don't count."""
+    ts = []
+    for name in _RECORDS:
+        with contextlib.suppress(OSError):
+            ts.append((d / name).stat().st_mtime)
+    return max(ts) if ts else None
+
+
+def _runner_pid(status: dict[str, Any]) -> tuple[Any, Any]:
+    """(pid, starttime_ticks) of the run's runner: status.json's own, which `set_status` keeps when a later `running` transition
+    carries none (`tele set-timeout`'s), else the last transition that has one."""
+    for t in (status, *reversed(status.get("transitions") or [])):
+        if isinstance(t, dict) and t.get("pid") is not None:
+            return t.get("pid"), t.get("starttime_ticks")
+    return None, None
+
+
+def _alive(pid: Any, ticks: Any) -> bool | None:
+    """Whether process `pid` with that start time runs here; None when `pid` doesn't read as one, which is never taken for dead."""
+    try:
+        if int(pid) <= 0:
+            return None
+        fields = Path(f"/proc/{int(pid)}/stat").read_text().rsplit(")", 1)[1].split()
+    except FileNotFoundError:
+        return False
+    except (OSError, ValueError, TypeError):
+        return None
+    try:
+        return ticks is None or int(fields[19]) == int(ticks)
+    except (ValueError, IndexError, TypeError):
+        return None
+
+
+def _runner(d: Path, status: dict[str, Any], now: float, host: tuple[str, str | None]) -> tuple[bool, str, bool | None]:
+    """(ended, how, alive) for a run dir without a launcher's remote.json, i.e. on the machine that ran it, whose status isn't
+    terminal: its runner's pid with the same start time when job.json says it ran on this host since this boot, dead when it ran on
+    this host before a reboot; else STALE_S. `alive` is what this host saw of the runner: False gone, True running here, None it
+    can't see it (a Kubernetes pod's runner, in another pid namespace, or another machine's)."""
+    env = (_read(d / "job.json") or {}).get("environment") or {}
+    if status and env.get("hostname") == host[0] and host[1] and env.get("boot_id") and env["boot_id"] != host[1]:
+        return True, f"dead: this host rebooted since its runner started (boot {env['boot_id']}, now {host[1]})", False
+    local = bool(status) and (env.get("hostname"), env.get("boot_id")) == host and bool(host[1])
+    pid, ticks = _runner_pid(status)
+    alive = _alive(pid, ticks) if local else None
+    if alive is False:
+        return True, f"dead: its runner (pid {pid}) is gone without recording an end", False
+    if alive:
+        return False, "running here", True
+    changed = _changed(d)
+    if changed is not None and now - changed > STALE_S:
+        return True, f"stale: status {status.get('state') or 'absent'}, and no record changed for {(now - changed) / 3600:.0f} h", None
+    if not status:
+        return False, "starting (no status.json yet)", None
+    return (False, "running here (its status names no pid that reads)" if local else
+            "running elsewhere (its runner is not visible from here)", None)
+
+
+def force_refusal(run_dir: Path, *, runner_gone: bool = False, now: float | None = None,
+                  host: tuple[str, str | None] | None = None) -> str | None:
+    """Why `research data custody RUN --publish --force` must not publish the run as its runner last left it, or None. A status
+    that isn't terminal is the runner's last word only once the runner is gone. This host can see that of a runner that ran here
+    (its pid, its boot); of any other (a Kubernetes pod, another machine) only the run's own host can, and the caller says it did
+    with `runner_gone` (n1_custody.sh: `kubectl get pod` says NotFound; n2_custody.sh: the pid is gone on node 2). Records quiet
+    for STALE_S never are: a pod whose workload prints nothing for a day may still run."""
+    d = Path(run_dir)
+    status = _read(d / "status.json") or {}
+    if status.get("state") in TERMINAL_STATES:
+        return None
+    _, how, alive = _runner(d, status, time.time() if now is None else now, host or this_host())
+    if alive is False:
+        return None
+    if alive:
+        return f"its runner is {how}"
+    if runner_gone:
+        return None
+    where = ((_read(d / "job.json") or {}).get("environment") or {}).get("hostname") or "?"
+    return (f"{how}; this host can't see its runner (job.json names host {where}): pass --runner-gone once that host says it is gone "
+            f"(a pod: `kubectl get pod {where}` NotFound)")
+
+
+def triage_row(st: Any, run_dir: Path, *, verify_remote: bool = False, now: float | None = None,
+               host: tuple[str, str | None] | None = None) -> dict[str, Any]:
+    """One run dir's custody state (TRIAGE_STATES) with the reason, the next step and when its records last changed (`ended_utc`).
+
+    A `custody` label waived|never-ran decides, the latest one winning (`needed` withdraws either), but a never-ran is ignored while
+    `ran_evidence` shows the workload started.  On the machine that ran it, a run still marked running has ended when its runner's
+    pid is gone (same host and boot), or, when the runner isn't visible there (a Kubernetes pod), when none of its records changed
+    for 24 h.  A valid `.custody` counts as `r2` where the catalog can't say (node 2's runs are published on node 1).  An attempt
+    published `--force` is `r2` only while a valid `.custody` shows nothing in the run dir changed after its run record was taken,
+    else `forced-unverified`: its write-once attempt can't take the run's real end."""
     from . import preserved
 
     d = Path(run_dir)
     rid = d.name
-    row: dict[str, Any] = {"run": rid, "state": None, "why": None, "next": None, "bytes": sum((d / r).stat().st_size for r in run_files(d))}
+    now = time.time() if now is None else now
+    changed = _changed(d)
+    row: dict[str, Any] = {"run": rid, "state": None, "why": None, "next": None, "bytes": None,
+                           "ended_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(changed)) if changed else None,
+                           "age_min": round((now - changed) / 60, 1) if changed else None}
     rec = _read(d / "remote.json") or {}
     status = _read(d / "status.json") or {}
     if (d / "preserved.json").exists():
         row.update(state="fetched", why="preserved.json (every file verified from the machine)")
         return row
     verdict = _label_verdict(st, rid)
-    if verdict:
+    ran = ran_evidence(d) if verdict == "never-ran" else None
+    if verdict and not ran:
         row.update(state="waived" if verdict == "waived" else "never-ran", why=f"label custody={verdict}")
         return row
     from ..notes import NEVER_RAN
@@ -493,28 +639,62 @@ def triage_row(st: Any, run_dir: Path, *, verify_remote: bool = False) -> dict[s
     if rec and (rec.get("phase") in NEVER_RAN or (d / "refused.json").exists()):
         row.update(state="never-ran", why=f"launch phase {rec.get('phase')}" + (" (refused)" if (d / "refused.json").exists() else ""))
         return row
+    ended, force = None, " --force --runner-gone (once its host says its runner is gone)"
+    if not rec and status.get("state") not in TERMINAL_STATES:
+        is_ended, how, alive = _runner(d, status, now, host or this_host())
+        if not is_ended:
+            row.update(state="running", why=how)
+            return row
+        ended = how
+        if alive is False:
+            force = " --force"
     try:
         doc = st.get_attempt(rid)
     except Exception:  # noqa: BLE001
         doc = None
     if doc is None:
-        live = status.get("state") not in ("done", "failed", "cancelled") and rec.get("phase") == "launched"
+        live = status.get("state") not in TERMINAL_STATES and rec.get("phase") == "launched"
         row.update(state="running" if live and status else "no-custody",
                    why=("still running as last observed" if live and status else
-                        "no attempt in the store" + ("" if status else ", and its records were never fetched")),
+                        "no attempt in the store" + ("" if status or not rec else ", and its records were never fetched")),
                    next=(f"research fetch {rid}" if live and status else
-                         f"research fetch --all {rid} (pod alive), else research data custody {rid} --publish, or label custody waived"))
-        return row
-    rr = (doc.get("outputs") or {}).get("run_record")
-    chk = preserved.check(st, [rid], mode="head" if verify_remote else "recorded", head_fallback=verify_remote)
-    if not chk["preserved"]:
-        why = [e for x in chk["not_preserved"] for e in x.get("errors") or []] or [chk.get("reason") or "?"]
-        row.update(state="attempt-unpreserved", why=f"attempt not preserved: {why[0]}", next=f"research data push {rid}")
-    elif not rr:
-        row.update(state="attempt-no-record", why="attempt preserved, but its logs are only here (published without a run record)",
-                   next=f"research fetch --all {rid} (pod alive), else keep the local dir or label custody waived")
+                         f"research fetch --all {rid} (pod alive), else research data custody {rid} --publish"
+                         + (force if ended else "") + ", or label custody waived"))
     else:
-        row.update(state="r2", why="attempt and run record preserved on the remote")
+        rr = (doc.get("outputs") or {}).get("run_record")
+        chk = preserved.check(st, [rid], mode="head" if verify_remote else "recorded", head_fallback=verify_remote)
+        # an attempt published --force froze the run as its runner last left it; it is the run's end only while nothing in the run
+        # dir changed after its run record was taken (a pod forced while it still ran ends later, and its write-once attempt can't)
+        forced = (doc.get("status") or {}).get("state") not in TERMINAL_STATES
+        unvouched = marker_problem(d) if forced and rr else None
+        if not chk["preserved"]:
+            why = [e for x in chk["not_preserved"] for e in x.get("errors") or []] or [chk.get("reason") or "?"]
+            row.update(state="attempt-unpreserved", why=f"attempt not preserved: {why[0]}", next=f"research data push {rid}")
+        elif not rr:
+            row.update(state="attempt-no-record", why="attempt preserved, but its logs are only here (published without a run record)",
+                       next=f"research fetch --all {rid} (pod alive), else keep the local dir or label custody waived")
+        elif unvouched:
+            row.update(state="forced-unverified",
+                       why=(f"attempt and run record preserved, published --force with status {(doc.get('status') or {}).get('state')}, "
+                            f"and no .custody shows the record holds the run dir as it is now: {unvouched}"),
+                       next=(f"research data custody {rid} (it writes .custody while the run record still holds the run dir)"
+                             if unvouched in ("no .custody", "unreadable .custody") else
+                             "the attempt is write-once, so what the run wrote after its run record is only here: keep the run dir, or put "
+                             "it in the store (research data put --kind K --tree DIR --preserve), then label custody waived"))
+        else:
+            row.update(state="r2", why="attempt and run record preserved on the remote" + (
+                " (published --force, and .custody shows nothing in the run dir changed since)" if forced else ""))
+    # the marker is written only after a head-mode check of the remote, on whichever machine published the run (node 2's runs are
+    # published on node 1); --verify trusts only what it asks the remote itself
+    if row["state"] in ("no-custody", "attempt-unpreserved") and not (verify_remote and doc is not None) and marker_problem(d) is None:
+        m = _read(d / MARKER) or {}
+        row.update(state="r2", why=f"on the remote (.custody, verified {m.get('verified_utc') or '?'} on {m.get('host') or '?'})", next=None)
+    if ended and row["state"] != "r2":
+        row["why"] = f"{ended}; {row['why']}"
+    if ran:
+        row["why"] = f"label custody=never-ran ignored, since {ran}; {row['why']}"
+    if row["state"] in NEEDS_ACTION:
+        row["bytes"] = sum((d / r).stat().st_size for r in run_files(d))
     return row
 
 
@@ -526,13 +706,35 @@ def _read(p: Path) -> dict[str, Any] | None:
     return d if isinstance(d, dict) else None
 
 
-def triage(st: Any, runs_dir: Path, *, verify_remote: bool = False) -> list[dict[str, Any]]:
+def triage(st: Any, runs_dir: Path, *, verify_remote: bool = False, now: float | None = None,
+           host: tuple[str, str | None] | None = None) -> list[dict[str, Any]]:
     root = Path(runs_dir)
     dirs = sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")
                   and ((p / "job.json").exists() or (p / "remote.json").exists())) if root.is_dir() else []
-    return [triage_row(st, d, verify_remote=verify_remote) for d in dirs]
+    host = host or this_host()
+    return [triage_row(st, d, verify_remote=verify_remote, now=now, host=host) for d in dirs]
 
 
-__all__ = ["ACTIONS", "CREDENTIALS", "EXCLUDED", "KIND", "MARKER", "PUBLISH_LOG", "SCHEMA", "custody_env", "divert_output", "drop_credentials",
-           "has_custody", "marker_problem", "mint_for_machine", "push_run", "put_run_record", "run_files", "runner_publish", "trimmed_of",
-           "triage", "triage_row", "verify"]
+def triage_report(st: Any, roots: list[Path], *, older_min: float | None = None, verify_remote: bool = False, now: float | None = None,
+                  host: tuple[str, str | None] | None = None) -> dict[str, Any]:
+    """`research data custody --triage` (TRIAGE_SCHEMA): every run under `roots`; a run needing action whose records last changed
+    under `older_min` minutes ago is `settling` and doesn't count, so `needs_action` is the invariant "ended runs not on the remote
+    after N minutes"."""
+    now = time.time() if now is None else now
+    rows = []
+    for root in roots:
+        for r in triage(st, root, verify_remote=verify_remote, now=now, host=host):
+            r["root"] = str(root)
+            r["settling"] = bool(r["state"] in NEEDS_ACTION and older_min is not None and r["age_min"] is not None
+                                 and r["age_min"] < older_min)
+            rows.append(r)
+    todo = [r for r in rows if r["state"] in NEEDS_ACTION and not r["settling"]]
+    return {"schema": TRIAGE_SCHEMA, "host": (host or this_host())[0], "now_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
+            "runs_roots": [str(r) for r in roots], "runs_root": str(roots[0]) if roots else None, "older_min": older_min,
+            "counts": {s: sum(1 for r in rows if r["state"] == s) for s in TRIAGE_STATES},
+            "rows": rows, "needs_action": len(todo), "settling": sum(1 for r in rows if r["settling"])}
+
+
+__all__ = ["ACTIONS", "CREDENTIALS", "EXCLUDED", "KIND", "MARKER", "PUBLISH_LOG", "SCHEMA", "custody_env", "divert_output",
+           "drop_credentials", "force_refusal", "has_custody", "marker_problem", "mint_for_machine", "push_run",
+           "put_run_record", "ran_evidence", "run_files", "runner_publish", "trimmed_of", "triage", "triage_row", "verify"]
