@@ -142,6 +142,16 @@ def evaluate_region(circuit: Circuit, region: Sequence[int], inputs: Mapping[int
     return {wire_of(circuit, g): wires[wire_of(circuit, g)] for g in region}
 
 
+def consistent(circuit: Circuit, gates: Sequence[int], values: Mapping[int, int]) -> bool:
+    """Whether `values`, bits on exactly the boundary of `gates`, are what the gates compute: run from the values on
+    their inputs, they give the values on their outputs."""
+    ins, outs = boundary(circuit, gates)
+    if set(values) != {*ins, *outs} or set(values.values()) - {0, 1}:
+        return False
+    produced = evaluate_region(circuit, gates, {w: values[w] for w in ins})
+    return all(produced[w] == values[w] for w in outs)
+
+
 def covers(circuit: Circuit, partition: Partition) -> bool:
     """Whether the regions hold every gate exactly once."""
     return sorted(g for region in regions(partition) for g in region) == list(range(len(circuit.gates)))

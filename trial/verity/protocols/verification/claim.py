@@ -1,10 +1,9 @@
 """What verification establishes: that a computation gave some outputs.
 
-A claim is that a set of gates of a circuit computes, from the values committed for the wires it reads from outside,
-the values committed for the wires on its boundary that it produces (`circuits.boundary`). Each of those wires' value
-is committed as one leaf (`leaf`) of a commitment made before any coins were drawn, so a claim names where: the
-commitment, and the leaf's index in it. An opening of a claim is its boundary values with their paths, and `check`
-decides the claim from one: it opens against the commitments, and runs the gates again from the opened inputs.
+A claim is `circuits.consistent` on values the prover committed to before any coins were drawn: a set of gates of a
+circuit, and where each wire on its boundary is committed (the commitment, and the leaf's index in it; each wire's
+value is one leaf, `leaf`). An opening is those values with their paths, and `check` decides the claim from one: the
+values open against the commitments, and the gates compute them.
 
 Every construction records `Verified`: the claims it was given, and whether each holds. They differ in who sees the
 opening: the prover proves the claims to the verifier (`proofs`), or trusted hardware checks them where the values
@@ -16,7 +15,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from verity.primitives.circuits import Circuit, Region, boundary, evaluate_region
+from verity.primitives.circuits import Circuit, Region, consistent
 from verity.primitives.commitments import Commitment, CommitmentScheme
 
 
@@ -38,15 +37,12 @@ class Claim:
     at: tuple[tuple[int, Commitment, int], ...]  # per boundary wire, by wire: (wire, its commitment, its leaf's index)
 
     def check(self, scheme: CommitmentScheme, opening: Opening) -> bool:
-        ins, outs = boundary(self.circuit, self.gates)
-        if [w for w, _, _ in self.at] != sorted({*ins, *outs}) or set(opening.values) != {*ins, *outs}:
-            return False
-        for w, commitment, index in self.at:
-            value = opening.values[w]
-            if value not in (0, 1) or not scheme.verify(commitment, index, leaf(value), opening.paths.get(w)):
-                return False
-        produced = evaluate_region(self.circuit, self.gates, {w: opening.values[w] for w in ins})
-        return all(produced[w] == opening.values[w] for w in outs)
+        values = opening.values
+        return (
+            set(values) == {w for w, _, _ in self.at}
+            and consistent(self.circuit, self.gates, values)
+            and all(scheme.verify(c, k, leaf(values[w]), opening.paths.get(w)) for w, c, k in self.at)
+        )
 
 
 @dataclass(frozen=True)
