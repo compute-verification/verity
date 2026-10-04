@@ -206,13 +206,15 @@ def _pouw_roots() -> list[Any]:
     digest, `verity_pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes.  The row units cut along k
     (`verity_pouw.circuit.rowk`, ``Shape.row_k``) in two segments: Pearl-C4's pieces at k = 128 and its roots, Pearl-C's
     pieces at k = 256 on the H100's and sm_120's records and at k = 64 unpromoted, and its roots on sm_120's, plain and
-    hiding.  The tile units cut into sub-tiles (`verity_pouw.circuit.tilesub`, ``Shape.tile_sub``): a tile's digest units
-    (`leaves.PearlRowChunks`, `PearlTileLeaf`) at a partial chunk and at two sub-tiles a row, and each scheme's call and
-    check roots on a 1 × 2 tile of 1 × 1 sub-tiles, without and with the row cut, plain and hiding."""
+    hiding.  The tile units cut into sub-tiles (`verity_pouw.circuit.tilesub`, ``Shape.tile_sub``): each scheme's sub-tile
+    (today's tile template, its outputs one per row) at the deployed 2 × 2, Pearl-C4's at k = 64 and Pearl-C's at k = 128 on
+    sm_120's record, a tile's digest units (`leaves.PearlRowChunks`, `PearlTileLeaf`) at a partial chunk and at two
+    sub-tiles a row, and each scheme's call and check roots on a 1 × 2 tile of 1 × 1 sub-tiles, without and with the row cut,
+    plain and hiding."""
     from dataclasses import replace
 
     from verity.ir.defs import bind
-    from verity_pouw.circuit import leaves, ncp2, pc4, pc8, rowk
+    from verity_pouw.circuit import leaves, ncp2, pc4, pc8, rowk, tilesub
     from verity_vllm.program.registry import pouw_rows
 
     shape = ncp2.Shape(16, 64, 16)
@@ -236,6 +238,7 @@ def _pouw_roots() -> list[Any]:
     for mod, s in ((pc4, pc4.Shape(1, 128, 1, tile=(1, 1), row_k=64)),
                    (pc8, pc8.Shape(1, 256, 1, tile=(1, 1), dev="sm120", row_k=128))):
         cut += [build(replace(s, hidden=h)) for h in (False, True) for build in (mod.weight, mod.call, mod.check)]
+    cut += [tilesub.sub_tile4(64, tilesub.TILE_SUB), tilesub.sub_tile8(128, tilesub.TILE_SUB, "sm120")]
     cut += [leaves.row_chunks(1, 1), leaves.row_chunks(4, 2), leaves.tile_leaf(2, 4)]
     for mod, s in ((pc4, pc4.Shape(1, 64, 2, tile=(1, 2), tile_sub=(1, 1))),
                    (pc4, pc4.Shape(1, 128, 2, tile=(1, 2), row_k=64, tile_sub=(1, 1))),

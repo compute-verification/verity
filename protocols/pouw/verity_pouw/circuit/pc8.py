@@ -384,10 +384,12 @@ def _call_units(B, k: int, tile: tuple[int, int], dev: str, a, ea, fa, fb, bc, p
     ms, ns = m // tm, n // tn
     blocks = lambda x, h, t: x.reshape(Array(h, Array(t, x.type.elem)))            # noqa: E731
     acs, pas, bcs, pbs = blocks(ac, ms, tm), blocks(pa, ms, tm), blocks(bc, ns, tn), blocks(pb, ns, tn)
-    tiles = [B.batch(tp["tile"], acs[rs], bcs, pas[rs], pbs, axes=(None, 0, None, 0)) for rs in range(ms)]
-    if hidden and sub is not None:
+    if sub is not None:
         from . import tilesub
-        return tilesub.digests(B, tiles, m, n, tile, sub), ok
+        subs = [B.batch(tilesub.sub_tile8(k, sub, dev), acs[rs], bcs, pas[rs], pbs, axes=(None, 0, None, 0))
+                for rs in range(ms)]
+        return (*tilesub.outputs(B, subs, m, n, tile, sub, hidden), ok)
+    tiles = [B.batch(tp["tile"], acs[rs], bcs, pas[rs], pbs, axes=(None, 0, None, 0)) for rs in range(ms)]
     if hidden:
         return array_of([array_of([tiles[rs][cs] for cs in range(ns)]) for rs in range(ms)]), ok
     cw, uw = (array_of([array_of([tiles[i // tm][j // tn][f][i % tm][j % tn] for j in range(n)]) for i in range(m)])

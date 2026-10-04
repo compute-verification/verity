@@ -354,8 +354,8 @@ def templates(k: int, tile: tuple[int, int] = TILE, hidden: bool = False) -> dic
 class Cut:
     """A tile check's `Shape` attribute (``ports``, ``derivations``) that is ``today`` on the class and on a shape with
     neither cut; with ``row_k`` set `rowk`'s attribute ``name`` (the row cut's roles and anchors), and with ``tile_sub`` set
-    `tilesub`'s where it has one (its ports: ``name``, or with ``row_k`` too ``name``_ROWK).  So the class and every shape
-    without a cut read today's dicts, which neither module changes."""
+    the ports are `tilesub.ports` of the shape (today's or the row cut's rows', and its pieces' at its a).  So the class and
+    every shape without a cut read today's dicts, which neither module changes."""
 
     def __init__(self, today: dict, name: str) -> None:
         self.today, self.name = today, name
@@ -364,8 +364,8 @@ class Cut:
         if shape is None or shape.row_k is None and shape.tile_sub is None:
             return self.today
         from . import rowk, tilesub
-        if shape.tile_sub is not None and hasattr(tilesub, self.name):
-            return getattr(tilesub, self.name + ("" if shape.row_k is None else "_ROWK"))
+        if shape.tile_sub is not None and self.name.startswith("PORTS"):
+            return tilesub.ports(shape)
         return self.today if shape.row_k is None else getattr(rowk, self.name)
 
 
@@ -425,11 +425,13 @@ def _call_units(B, k: int, tile: tuple[int, int], a, ea, fa, fb, bc, bs, pb, hid
     blocks = lambda x, h, t: x.reshape(Array(h, Array(t, x.type.elem)))            # noqa: E731
     acs, ass, pas = blocks(ac, ms, tm), blocks(as_, ms, tm), blocks(pa, ms, tm)
     bcs, bss, pbs = blocks(bc, ns, tn), blocks(bs, ns, tn), blocks(pb, ns, tn)
+    if sub is not None:
+        from . import tilesub
+        subs = [B.batch(tilesub.sub_tile4(k, sub), acs[rs], ass[rs], bcs, bss, pas[rs], pbs, axes=(None, None, 0, 0, None, 0))
+                for rs in range(ms)]
+        return (*tilesub.outputs(B, subs, m, n, tile, sub, hidden), ok)
     tiles = [B.batch(tp["tile"], acs[rs], ass[rs], bcs, bss, pas[rs], pbs, axes=(None, None, 0, 0, None, 0))
              for rs in range(ms)]
-    if hidden and sub is not None:
-        from . import tilesub
-        return tilesub.digests(B, tiles, m, n, tile, sub), ok
     if hidden:
         return array_of([array_of([tiles[rs][cs] for cs in range(ns)]) for rs in range(ms)]), ok
     cw, uw = (array_of([array_of([tiles[i // tm][j // tn][f][i % tm][j % tn] for j in range(n)]) for i in range(m)])

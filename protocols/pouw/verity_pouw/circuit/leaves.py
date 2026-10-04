@@ -64,7 +64,8 @@ block, so the units that read only sub-cu and tile-chunks rows still compress a 
 
 nvfp4-p's codes and scales are `rowleaf.nvfp4_row_bytes`' bytes, and every row's bytes are `rowleaf.bit_row`'s of its
 elements.  Which unit ports make up each row is `pc4.PORTS` and `pc8.PORTS`, `rowk.PORTS4` and `rowk.PORTS8` for the row
-cut, and `tilesub.PORTS4` and `tilesub.PORTS8` for the tile cut.  `words_*` are each row's words from its elements, and `commit` and `tree_leaf` a row's commit string and tree leaf;
+cut, and `tilesub.ports` of the shape for the tile cut, where each sub-cu row is one output port of its sub-tile.  `words_*`
+are each row's words from its elements, and `commit` and `tree_leaf` a row's commit string and tree leaf;
 ``tests/vectors/pouw_rows.json`` pins them, and C-Flock's tests recompute every vector through its ports
 (``backends/flock/tests/test_pouw_rows.py``).  The anchored inputs are no row: they are public input regions
 (`anchors.region_words`).
