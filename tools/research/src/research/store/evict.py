@@ -19,9 +19,11 @@ Two kinds of local copy can go, and only these:
   conditions (Slack, 4 Oct 03:48Z; condition 1 read as recoverability, root 4 Oct 17:27Z), each established afresh: (1) it is
   recoverable on the node: its commit is reachable from a ref of the node's `<root>/git/verity.git`, which holds
   `refs/research/src/<sha>` for every tree shipped and from which `research run` re-ships it (`git ls-remote`, or of
-  `--src-origin`, `--no-replace-objects`), and the tree is exactly that commit (its `.git` HEAD is it and `git status` shows
-  nothing but READY.json); (2) nothing uses it: no live process names it (cwd, root, exe, open file, map, command line,
-  environment, any `src/<sha>` they spell, a thread's cwd when its leader exited), no git worktree made from it, no run that has not ended and no request without a
+  `--src-origin`, `--no-replace-objects`), and the tree is exactly that commit: its `.git` is a ship's (no config key, exclude,
+  object, ref or stash of its own), its HEAD is the commit, no index entry is marked skip-worktree or assume-unchanged, and
+  `git status`, run without system or global config, shows nothing but READY.json, build caches and fetched fixtures, ignored
+  files included (`_local_changes`); (2) nothing uses it: no live process names it (cwd, root, exe, open file, map, command line,
+  environment, any `src/<sha>` they spell, any sha a process inside `<src>` names, a thread's cwd when its leader exited), no git worktree made from it, no run that has not ended and no request without a
   run dir names it, no live check or Lean slot holder or waiter (`<root>/locks`) names it, no job script queued for the fill
   (`retention.JobScripts`) names it, and nothing in it changed and no run naming it was recorded within `SRC_KEEP_S`; (3) no run
   record holds it as its source's only copy: its READY.json names its own commit, and every run record naming it names that commit
@@ -391,9 +393,9 @@ def _redact(url: str) -> str:
     return re.sub(r"//[^/@]*@", "//***@", url)
 
 
-def _git(args: list[str], stdin: str | None = None) -> subprocess.CompletedProcess:
+def _git(args: list[str], stdin: str | None = None, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(["git", "--no-replace-objects", *args], input=stdin, capture_output=True, text=True, timeout=GIT_TIMEOUT_S,
-                          env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"})
+                          env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0", **(env or {})})
 
 
 def on_origin(shas: set[str], origin: str, git_dir: Path) -> set[str]:
@@ -427,9 +429,20 @@ _LOOSE = re.compile(rf"(?:^|[/\0\s:=])src/+(?:\./)*(?:{re.escape(ASIDE)})?([0-9a
 """A tree named however a process spells it (`src/<sha>` relative to its cwd, `//`, `/./`): any `src/<sha>` keeps that sha."""
 
 
+_BARE = re.compile(rf"(?:^|[/\0\s:=])(?:{re.escape(ASIDE)})?([0-9a-f]{{40}})(?![0-9a-f])")
+"""Any sha a process inside <src> names (`../<sha>` from a tree, `<sha>/x.py` from <src>): it may be a sibling tree."""
+
+
+def _roots(src_root: Path) -> str:
+    return "|".join(map(re.escape, sorted({os.path.abspath(src_root), os.path.realpath(src_root)}, key=len, reverse=True)))
+
+
 def _tree_pattern(src_root: Path) -> re.Pattern[str]:
-    roots = sorted({os.path.abspath(src_root), os.path.realpath(src_root)}, key=len, reverse=True)
-    return re.compile(f"(?:{'|'.join(map(re.escape, roots))})/(?:{re.escape(ASIDE)})?([0-9a-f]{{40}})(?![0-9a-f])")
+    return re.compile(f"(?:{_roots(src_root)})/(?:{re.escape(ASIDE)})?([0-9a-f]{{40}})(?![0-9a-f])")
+
+
+def _inside(src_root: Path) -> re.Pattern[str]:
+    return re.compile(f"(?:{_roots(src_root)})(?:/|$)")
 
 
 def _quiet(fn: Callable[[], Any]) -> Any:
@@ -457,9 +470,10 @@ def _proc_texts(base: Path) -> list[str]:
     return [t for t in out if t]
 
 
-def proc_uses(pattern: re.Pattern[str], proc: Path = Path("/proc")) -> dict[str, set[str]]:
-    """{sha: reasons} for the trees a live process names.  Unestablished when `proc` can't be listed or a live process outside the
-    kernel can't be read: as anyone but root, without CAP_SYS_PTRACE, most can't."""
+def proc_uses(pattern: re.Pattern[str], proc: Path = Path("/proc"), inside: re.Pattern[str] | None = None) -> dict[str, set[str]]:
+    """{sha: reasons} for the trees a live process names; a process whose cwd `inside` matches (<src> or a tree in it) keeps every sha
+    it names.  Unestablished when `proc` can't be listed or a live process outside the kernel can't be read: as anyone but root,
+    without CAP_SYS_PTRACE, most can't."""
     try:
         pids = sorted((p for p in os.listdir(proc) if p.isdigit()), key=int)
     except OSError as e:
@@ -470,11 +484,13 @@ def proc_uses(pattern: re.Pattern[str], proc: Path = Path("/proc")) -> dict[str,
     for pid in pids:
         try:
             texts = _proc_texts(proc / pid)
+            cwd = (_quiet(lambda pid=pid: os.readlink(proc / pid / "cwd")) or "") if texts and inside else ""
         except PermissionError as e:
             raise Unestablished(f"2: {proc / pid} is unreadable ({e.strerror}) as uid {os.geteuid()}: the pass needs root or "
                                 "CAP_SYS_PTRACE") from None
         joined = "\n".join(texts)
-        for m in [*pattern.finditer(joined), *_LOOSE.finditer(joined)]:
+        bare = _BARE.finditer(joined) if cwd and inside and inside.match(cwd) else ()
+        for m in [*pattern.finditer(joined), *_LOOSE.finditer(joined), *bare]:
             comm = (_quiet((proc / pid / "comm").read_text) or "?").strip()
             uses.setdefault(m.group(1), set()).add(f"2: process {pid} ({comm}) uses it")
     return uses
@@ -630,30 +646,110 @@ def _own_reasons(src_root: Path, sha: str, now: float, keep_s: float) -> tuple[s
     return why, newest
 
 
+SHIP_CONFIG = re.compile(r"core\.(?:repositoryformatversion|filemode|bare|logallrefupdates)|remote\.origin\.(?:url|fetch)"
+                         r"|branch\.[^\n]+\.(?:remote|merge)")
+"""The keys a ship's clone has in .git/config (every tree on vy-nebius-1, 4 Oct).  Any other key may change what `git status`
+reports (excludes, fsmonitor, filters, sparse checkout, an include) or run a command, so the tree is kept rather than trusted."""
+SHIP_EXCLUDE = frozenset({f"/{READY_FILE}"})
+REGENERABLE = re.compile(r"(?:^|/)(?:\.lake|\.venv|__pycache__|\.pytest_cache|\.ruff_cache|\.mypy_cache|node_modules|target"
+                         r"|[^/]*\.egg-info)(?:/|$)|\.py[co]$")
+"""Ignored paths a build or test run regenerates.  Every other ignored path but READY.json and a fetched fixture (re-fetchable by
+its id) may be a workload's only output (`out/`, `results/`, `*.png`...) and keeps the tree."""
+_CLEAN_GIT = {"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"}
+_CLEAN_C = ["-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c", "core.excludesFile=/dev/null",
+            "-c", "core.hooksPath=/dev/null"]
+
+
+def _fixture_paths(tree: Path) -> list[str]:
+    """The paths `fixtures/artifacts.json` registers (fetched fixtures are among them); [] when it is absent or unreadable."""
+    doc = _doc(_quiet((tree / "fixtures" / "artifacts.json").read_text))
+    return [p.strip("/") for k, p in (doc or {}).items() if k.startswith("art:") and isinstance(p, str) and p.strip("/")]
+
+
+def _ignored_ok(tree: Path, path: str, fixtures: list[str]) -> bool:
+    """Whether ignored `path` (a directory ends in /) holds only READY.json, regenerable files and fetched fixtures."""
+    def ok(p: str) -> bool:
+        return p == READY_FILE or bool(REGENERABLE.search(p)) or any(p == f or p.startswith(f + "/") for f in fixtures)
+    p = path.rstrip("/")
+    if ok(p):
+        return True
+    if not path.endswith("/") or not any(f.startswith(p + "/") for f in fixtures):
+        return False
+    for dp, dns, fns in os.walk(tree / p, onerror=_raise_oserror):
+        rel = os.path.relpath(dp, tree)
+        dns[:] = [d for d in dns if not ok(f"{rel}/{d}")]
+        if not all(ok(f"{rel}/{n}") for n in fns) or any(os.path.islink(os.path.join(dp, d)) for d in dns):
+            return False
+    return True
+
+
 def _local_changes(tree: Path, sha: str) -> set[str]:
-    """Why the tree is not exactly its commit, so deleting it would lose work no ref holds: no `.git` to compare with, a HEAD other
-    than `sha`, any change `git status` shows (tracked, or untracked and not ignored) but READY.json, or a worktree made from it.
-    Run only for a tree about to go: it reads every file's metadata."""
-    why: set[str] = set()
+    """Why the tree is not exactly its commit, so deleting it would lose work no ref of the node's repo holds: a `.git` that is not
+    a ship's (any config key but SHIP_CONFIG's, an exclude, a sparse checkout, an object or ref of its own, a stash, a worktree made
+    from it), a HEAD other than `sha`, an index entry `git status` is told to skip, or any change `git status` shows, tracked,
+    untracked, or ignored but READY.json, regenerable caches and fetched fixtures.  Git runs without system or global config and
+    with every command-running key off.  Run only for a tree about to go: it reads every file's metadata."""
     gd = tree / ".git"
     if not os.path.lexists(gd):
         return {"1: not recoverable on the node: no .git to compare it with its commit"}
-    if gd.is_dir() and _quiet(lambda: os.listdir(gd / "worktrees")):
+    if gd.is_symlink() or not gd.is_dir():
+        return {"1: not recoverable on the node: .git is not a directory, so another repository may hold its state"}
+    why: set[str] = set()
+    if _quiet(lambda: os.listdir(gd / "worktrees")):
         why.add("2: a git worktree made from it (.git/worktrees) may be in use")
-    try:
-        r = _git(["--git-dir", str(gd), "--work-tree", str(tree), "status", "--porcelain=v2", "--branch", "-z",
-                  "--untracked-files=normal", "--ignore-submodules=none"])
-    except (OSError, subprocess.TimeoutExpired) as e:
-        return why | {f"1: git status failed: {type(e).__name__}: {e}"}
-    if r.returncode:
-        return why | {f"1: git status failed (rc {r.returncode}): {(r.stderr or r.stdout).strip()[-200:]}"}
-    entries = [e for e in r.stdout.split("\0") if e]
+
+    def git(*args: str) -> str | None:
+        try:
+            r = _git([*_CLEAN_C, "--git-dir", str(gd), "--work-tree", str(tree), *args], env=_CLEAN_GIT)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            why.add(f"1: git {args[0]} failed: {type(e).__name__}: {e}")
+            return None
+        if r.returncode:
+            why.add(f"1: git {args[0]} failed (rc {r.returncode}): {(r.stderr or r.stdout).strip()[-200:]}")
+            return None
+        return r.stdout
+
+    keys = git("config", "--file", str(gd / "config"), "--list", "--name-only", "-z")
+    if keys is not None and (odd := sorted({k for k in keys.split("\0") if k and not SHIP_CONFIG.fullmatch(k)})):
+        why.add(f"1: its .git/config sets {', '.join(odd[:3])}, which a ship's doesn't: git status may not report its changes")
+    exclude = _quiet((gd / "info" / "exclude").read_text) or ""
+    if odd := [ln for ln in exclude.splitlines() if ln.strip() and not ln.startswith("#") and ln.strip() not in SHIP_EXCLUDE]:
+        why.add(f"1: its .git/info/exclude hides {odd[0][:80]!r}")
+    if os.path.lexists(gd / "info" / "sparse-checkout"):
+        why.add("1: a sparse checkout (.git/info/sparse-checkout)")
+    if os.path.lexists(gd / "logs" / "refs" / "stash"):
+        why.add("1: not recoverable on the node: a stash in its .git")
+    counts = dict(ln.split(": ", 1) for ln in (git("count-objects", "-v") or "").splitlines() if ": " in ln)
+    if any(counts.get(k, "0") != "0" for k in ("count", "in-pack", "garbage")):
+        why.add(f"1: not recoverable on the node: objects in its own .git (count-objects: {counts}), a commit or stash made in it")
+    refs = (git("for-each-ref", "--format=%(refname)") or "").split()
+    if own := [r for r in refs if not r.startswith("refs/remotes/origin/")]:
+        why.add(f"1: not recoverable on the node: ref(s) of its own: {', '.join(own[:3])}")
+    if why:
+        return why
+    flags = git("ls-files", "-v", "-z")
+    if hidden := [e[2:] for e in (flags or "").split("\0") if e and (e[0].islower() or e[0] == "S")]:
+        why.add(f"1: {len(hidden)} file(s) git status is told to skip (assume-unchanged or skip-worktree), e.g. {hidden[0][-120:]!r}")
+    out = git("status", "--porcelain=v2", "--branch", "-z", "--untracked-files=normal", "--ignored=matching",
+              "--ignore-submodules=none")
+    if out is None or flags is None:
+        return why
+    entries = [e for e in out.split("\0") if e]
     head = next((e.split()[2] for e in entries if e.startswith("# branch.oid ")), None)
-    changes = [e for e in entries if not e.startswith("#") and e != f"? {READY_FILE}"]
     if head != sha:
         why.add(f"1: not recoverable on the node: its HEAD is {head}")
+    changes = [e for e in entries if not e.startswith(("#", "! ")) and e != f"? {READY_FILE}"]
     if changes:
         why.add(f"1: not recoverable on the node: {len(changes)} local change(s) no commit holds, e.g. {changes[0][-120:]!r}")
+    if why:
+        return why
+    fixtures = _fixture_paths(tree)
+    try:
+        kept = [e[2:] for e in entries if e.startswith("! ") and not _ignored_ok(tree, e[2:], fixtures)]
+    except OSError as e:
+        return {f"1: cannot read its ignored files: {type(e).__name__}: {e}"}
+    if kept:
+        why.add(f"1: not recoverable on the node: {len(kept)} ignored path(s) no build regenerates, e.g. {kept[0][-120:]!r}")
     return why
 
 
@@ -715,11 +811,16 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
     locks_dir = locks_dir or root / "locks"
     jobs = RT.JobScripts([Path(d) for d in (RT.DEFAULT_JOBS_DIRS if jobs_dirs is None else jobs_dirs) if Path(d).is_dir()], root=root)
     t_wall, t0 = time.time() if now is None else now, clock()
-    pattern = _tree_pattern(src_root)
+    pattern, inside = _tree_pattern(src_root), _inside(src_root)
     rep: dict[str, Any] = {"src_root": str(src_root), "dry_run": dry_run, "origin": _redact(origin), "trees": 0, "deleted": [],
                            "kept": [], "deleted_inodes": 0, "deleted_bytes": 0, "kept_by": {}, "error": None}
     if not dry_run and src_root.is_dir():
-        lock = open(src_root / LOCK, "a")      # held for the pass: another pass would take this one's aside tree for a leftover
+        try:
+            lock = open(src_root / LOCK, "a")  # held for the pass: another pass would take this one's aside tree for a leftover
+        except OSError as e:
+            rep["error"] = f"cannot open {src_root / LOCK}: {type(e).__name__}: {e} (made by another user? remove it)"
+            say(f"src: nothing done: {rep['error']}")
+            return rep
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
@@ -731,7 +832,7 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
     def live(shas: set[str]) -> dict[str, set[str]]:
         """Condition 2 and the run records' part of 3, read afresh."""
         why: dict[str, set[str]] = {}
-        for found in (proc_uses(pattern, proc), record_uses(pattern, runs_dirs, requests_dir, now=t_wall + clock() - t0, keep_s=keep_s),
+        for found in (proc_uses(pattern, proc, inside), record_uses(pattern, runs_dirs, requests_dir, now=t_wall + clock() - t0, keep_s=keep_s),
                       slot_uses(pattern, locks_dir, proc)):
             for s, rs in found.items():
                 if s in shas:
@@ -793,7 +894,7 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
                 reasons[s].add(f"error: {type(e).__name__}: {e}")
                 continue
             try:
-                after = live({s}).get(s, set())
+                after = live({s}).get(s, set()) | _local_changes(aside, s)
             except BaseException:
                 _put_back(aside, src_root / s)
                 raise

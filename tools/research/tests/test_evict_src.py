@@ -360,9 +360,9 @@ def test_a_user_that_appears_before_the_deletion_keeps_the_tree_and_after_the_re
     """Each tree is checked again just before it goes, then renamed aside (never executable by name) and checked once more."""
     real, calls = EV.proc_uses, []
 
-    def late(pattern, proc):
+    def late(pattern, proc, *rest):
         calls.append(1)
-        found = real(pattern, proc)
+        found = real(pattern, proc, *rest)
         if len(calls) == 2:                      # the pre-check of a
             found.setdefault(node.a, set()).add("2: process 7 (late) uses it")
         if len(calls) == 4:                      # b's check after its rename
@@ -381,11 +381,11 @@ def test_a_user_that_appears_before_the_deletion_keeps_the_tree_and_after_the_re
 def test_a_check_that_fails_after_the_rename_puts_the_tree_back_and_stops(node, monkeypatch):
     real, calls = EV.proc_uses, []
 
-    def failing(pattern, proc):
+    def failing(pattern, proc, *rest):
         calls.append(1)
         if len(calls) == 3:
             raise EV.Unestablished("2: /proc/9 is unreadable")
-        return real(pattern, proc)
+        return real(pattern, proc, *rest)
 
     monkeypatch.setattr(EV, "proc_uses", failing)
     rep = run(node)
@@ -486,9 +486,9 @@ def test_one_pass_at_a_time(node, monkeypatch):
     is still finding a user; it does nothing instead."""
     real, calls, inner = EV.proc_uses, [], []
 
-    def hooked(pattern, proc):
+    def hooked(pattern, proc, *rest):
         calls.append(1)
-        found = real(pattern, proc)
+        found = real(pattern, proc, *rest)
         if len(calls) == 3:                      # a's check after its rename: another pass starts
             inner.append(EV.evict_src(node.src, origin=node.origin, now=NOW, proc=node.proc, jobs_dirs=[], clock=lambda: 0.0))
             found.setdefault(node.a, set()).add("2: process 77 (lean) uses it")
