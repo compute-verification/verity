@@ -175,6 +175,10 @@ alone, and skipped by name elsewhere): record it with
 `uv run python tools/check/check.py --record --on POD`, which sends that build when the commit touches `backends/flock/`.
 `check` reuses a pass (a test suite, a circuit-check target, a Lean package's audit) only while every input it read is
 unchanged, and keeps each pod's Lean dependencies warm under their manifest and toolchain.
+A pure move goes through the same `check`, but once `uv run python tools/check/move_check.py BASE HEAD` certifies it (only
+byte-identical renames, edits that rewrite moved paths or imports in path-bearing files, and a Lean split's new
+package copied from its source) the lander may schedule it
+first in a quiet window, alone in its train (Daniel, 4 Oct).
 
 ## Lean
 
