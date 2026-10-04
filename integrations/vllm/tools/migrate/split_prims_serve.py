@@ -10,7 +10,7 @@ registry whole (`MOVES`).  After the split a Definition module of the family imp
 Definition modules (`DEFINITION_IMPORTS`), so that the registry directory holds only what the catalog takes:
 
     registry/X.py's twins       -> verity_vllm/program/twins/X.py        (numpy/C++ reference twins, difftest adapters)
-    registry/X.py's vocabulary  -> verity_vllm/program/vocabulary/X.py   (which Definition an identity, a profile or a target binds)
+    registry/X.py's vocabulary  -> verity_vllm/program/vocabulary/       (which Definition an identity, a profile or a target binds)
     lifted.py's record rules    -> verity_vllm/program/lifting/workload.py (GP-01's workload, the lag a record attests, the use document)
 
 A move keeps every name, body and docstring; no Definition is touched, so no Definition id or descriptor digest moves.  Every
@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import ast
 import io
+import json
 import re
 import subprocess
 import sys
@@ -91,10 +92,10 @@ SPLITS = (
                  "# `test_ref_prims.py`; the registered bodies above are the definition, these are not.\n"
                  "# ---------------------------------------------------------------------------------------------------------\n",),
           patches=(("the registered bodies above are", "the registered bodies of `verity_vllm.program.registry.ref_prims` are"),)),
-    Split(f"{REG}.b1", "verity_vllm.program.vocabulary.b1",
+    Split(f"{REG}.b1", "verity_vllm.program.vocabulary.serve",
           ("FA2_KERNEL_SOURCE", "fa2_kernel_geometry", "profile_attention_consts", "SERVE_FAMILIES", "DEFAULT_SERVE_FAMILY",
            "FA2_SPLITKV_KERNEL_NAMES", "LEGACY_ATTENTION_GEOMETRY", "serve_family", "attention_geometry_static", "serve_program",
-           "serve_program_of_identity"), "b1_vocabulary",
+           "serve_program_of_identity"), "serve_vocabulary",
           '"""Which B1 serving Definition an instance identity binds (`program.identity`: `case`, `family`, `attention`), and the\n'
           'attention kernel geometry a semantic profile declares; the Definitions are `verity_vllm.program.registry.b1`\'s."""\n',
           patches=(('cfg = globals().get(f"{case}_CONFIG")', 'cfg = getattr(_b1, f"{case}_CONFIG", None)'),),
@@ -129,7 +130,7 @@ DEFINITION_IMPORTS = DEFINITION_MODULES + tuple(f"{REG}.{m}" for m in (
 #: dead-code keep entries for the modules only tests reach once the split takes them out of a live module
 KEEP = {
     "verity_vllm.program.twins.ref_prims": "numpy twins of registry.ref_prims, a testing aid checked by tests/program/test_ref_prims.py",
-    "verity_vllm.program.vocabulary.b1": "the B1 identity -> Serve binding (registry.b1's vocabulary until the split); tests/program/test_composition.py",
+    "verity_vllm.program.vocabulary.serve": "the B1 identity -> Serve binding (registry.b1's vocabulary until the split); tests/program/test_composition.py",
 }
 
 TEXT_SUFFIXES = {".py", ".md", ".json", ".sh", ".toml", ".txt", ".yaml", ".yml", ".cfg", ".ini"}
@@ -663,7 +664,6 @@ def rewrite_allowlist(text: str) -> str:
 
 def rewrite_keep(text: str) -> str:
     """`tests/dead_code_keep.json`: the twins and vocabulary modules only tests import keep a named reason."""
-    import json
     doc = json.loads(text)
     mods = doc["modules"]
     changed = False
@@ -672,6 +672,107 @@ def rewrite_keep(text: str) -> str:
             mods[m] = why
             changed = True
     return json.dumps(doc, indent=1, ensure_ascii=False) + "\n" if changed else text
+
+
+LINT = f"{VLLM}/tests/lint/allowlists"
+SIZE_LIMIT = 800    # tests/lint/test_p10_size.py: a module over this many lines needs an entry, whose count only comes down
+
+
+def _rel(mod: str) -> str:
+    return path_of(mod)[len(VLLM) + 1:]
+
+
+def _imported(tree: Tree, mod: str) -> set[str]:
+    """Every module (and `module.name`) `mod`'s file imports, as P9 names them (without `verity_vllm.`)."""
+    out = set()
+    for n in ast.walk(ast.parse(tree.read(path_of(mod)))):
+        if isinstance(n, ast.ImportFrom):
+            base = _absolute(mod, n, path_of(mod).endswith("__init__.py"))
+            out |= {base} | {f"{base}.{a.name}" for a in n.names}
+        elif isinstance(n, ast.Import):
+            out |= {a.name for a in n.names}
+    return {m.removeprefix("verity_vllm.") for m in out}
+
+
+def rewrite_ratchet(tree: Tree, text: str) -> str:
+    """A `tests/lint/allowlists/*.json` ratchet (an entry per line, keyed by file, kind, symbol, detail): an entry of a split
+    module whose symbol moved follows it; P9's import edge of the module follows the import; P10's size of the module comes down
+    to its size now (and goes when that is under the limit).  Entries that land on one key add their counts."""
+    out: list[str] = []
+    seen: dict[tuple, int] = {}
+    for line in text.splitlines(keepends=True):
+        body = line.strip().rstrip(",")
+        if not (body.startswith("{") and '"file"' in body):
+            out.append(line)
+            continue
+        e = json.loads(body)
+        orig = dict(e)
+        for sp in SPLITS:
+            if e["file"] != _rel(sp.src):
+                continue
+            if e["symbol"].split(".")[0] in sp.names:
+                e["file"] = _rel(sp.dst)
+            elif e["kind"] == "layer" and e["symbol"] == "<module>":
+                a, _, b = e["detail"].partition(" -> ")
+                if b not in _imported(tree, sp.src) and b in _imported(tree, sp.dst):
+                    e["file"], e["detail"] = _rel(sp.dst), f"{sp.dst.removeprefix('verity_vllm.')} -> {b}"
+            elif e["kind"] == "module" and e["detail"] == "lines":
+                e["count"] = len(tree.read(path_of(sp.src)).splitlines())
+        if e != orig and e["kind"] == "module" and e["detail"] == "lines" and e.get("count", 1) <= SIZE_LIMIT:
+            continue
+        key = (e["file"], e["kind"], e["symbol"], e["detail"])
+        if key in seen:
+            i = seen[key]
+            prev = json.loads(out[i].strip().rstrip(","))
+            prev["count"] = prev.get("count", 1) + e.get("count", 1)
+            out[i] = out[i][:len(out[i]) - len(out[i].lstrip())] + json.dumps(prev, ensure_ascii=False) + ("," if out[i].rstrip().endswith(",") else "") + "\n"
+            continue
+        seen[key] = len(out)
+        if e == orig:
+            out.append(line)
+            continue
+        indent = line[:len(line) - len(line.lstrip())]
+        out.append(indent + json.dumps(e, ensure_ascii=False) + ("," if line.rstrip().endswith(",") else "") + "\n")
+    return re.sub(r",(\s*\n\s*\])", r"\1", "".join(out))
+
+
+def size_caps(tree: Tree) -> dict[str, int]:
+    """P10's module caps, by file relative to the integration."""
+    caps: dict[str, int] = {}
+    if not tree.exists(f"{LINT}/p10_size.json"):
+        return caps
+    for line in tree.read(f"{LINT}/p10_size.json").splitlines():
+        body = line.strip().rstrip(",")
+        if body.startswith("{") and '"module"' in body:
+            e = json.loads(body)
+            caps[e["file"]] = e.get("count", 1)
+    return caps
+
+
+def fit_size(rel: str, before: str, text: str, caps: dict[str, int]) -> str:
+    """An importer the rewrite grew past its P10 cap gets its lines back by joining adjacent top-level `from M import ...`
+    statements of one module (each one line, the join at most 130 columns); refused when that is not enough."""
+    cap = caps.get(rel[len(VLLM) + 1:], SIZE_LIMIT)
+    n = len(text.splitlines())
+    if n <= cap or n <= len(before.splitlines()):
+        return text
+    lines = text.splitlines(keepends=True)
+    t = ast.parse(text)
+    body = t.body
+    i = len(body) - 1
+    while i > 0 and n > cap:
+        a, b = body[i - 1], body[i]
+        i -= 1
+        if (isinstance(a, ast.ImportFrom) and isinstance(b, ast.ImportFrom) and a.module == b.module and a.level == b.level == 0
+                and a.lineno == a.end_lineno and b.lineno == b.end_lineno == a.lineno + 1 and "#" not in lines[a.lineno - 1] + lines[b.lineno - 1]):
+            joined = _render_from(a.module, list(a.names) + list(b.names), "")
+            if "\n" not in joined:
+                lines[a.lineno - 1:b.lineno] = [joined + "\n"]
+                n -= 1
+                i -= 1   # `a` is joined now: the pair above it is not adjacent lines of the source any more
+    if n > cap:
+        raise Refused(f"{rel}: the rewrite grows it to {n} lines, over its P10 cap of {cap}")
+    return "".join(lines)
 
 
 # --- checks -------------------------------------------------------------------------------------------------------------------
@@ -760,6 +861,7 @@ def run(root: Path, check: bool = False, log=print) -> list[str]:
         log(f"{split(tree, sp, ext):7.7} {sp.src}: {len(sp.names)} names -> {sp.dst}")
     files = tree.files()
     rules = text_rules()
+    caps = size_caps(tree)
     unsure: list[str] = []
     for rel in files:
         if rel.startswith(EXCLUDE) or Path(rel).suffix not in TEXT_SUFFIXES:
@@ -770,12 +872,17 @@ def run(root: Path, check: bool = False, log=print) -> list[str]:
             continue
         new = rewrite_importers(rel, text) if rel.endswith(".py") else text
         new = rewrite_text(rel, new, rules, unsure)
+        if rel.endswith(".py") and new != text:
+            new = fit_size(rel, text, new, caps)
         if rel == f"{VLLM}/tests/by_name_allowlist.json":
             new = rewrite_allowlist(new)
         if rel == f"{VLLM}/tests/dead_code_keep.json":
             new = rewrite_keep(new)
         if new != text:
             tree.write(rel, new)
+    for rel in files:
+        if rel.startswith(f"{LINT}/") and rel.endswith(".json"):
+            tree.write(rel, rewrite_ratchet(tree, tree.read(rel)))
     for rel in tree.dirty:
         if rel.endswith(".py"):
             try:
