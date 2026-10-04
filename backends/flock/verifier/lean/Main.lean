@@ -99,12 +99,6 @@ def statementInputs (args : List String) : IO (Except String (ByteArray × ByteA
       if ← p.pathExists then tables := tables ++ [(t.name, ← IO.FS.readBinFile p)]
     return .ok (c, pb, cm, tables)
 
-/-- An hm96 statement's registered reads (`Registered.check`). A hidden-output statement's registered ports may be its
-output rows as well as its input rows (§16.13): an output row's table is its instances' own rows, each opened against the
-registered root at the position its unit reads, so the instance's output is that row of the registered value. -/
-def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
-  Registered.check st.c st.pub registered (Registered.derived st.partition)
-
 /-- The statement of `tags` from its inputs; an `hm96-sha512/row/v1` statement needs no compression circuit and, for a drawn
 session, is the drawn units' statement over the registered population (§7.3). -/
 def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
@@ -115,7 +109,7 @@ def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (t
   else if tags.hm96Rows then do
     let st ← if tags.hiddenOutputs then Stmt.setupHidden tags circuitB pubB coins tables draw partition program publicInputs
       else Stmt.setupH tags circuitB pubB coins tables draw partition program
-    checkRegistered st registered
+    Registered.checkStmt st pubB draw 1 0 registered
     return st
   else do
     if registered.isSome then throw s!"{tags.name}: registered reads are an hm96-sha512 row statement's"
@@ -133,7 +127,7 @@ def buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
   if tags.hm96Rows then do
     let (spec, sts) ← Stmt.setupTables tags circuitB pubB coins count tables draw partition program work stratified closure
       publicInputs
-    for st in sts do checkRegistered st registered
+    Registered.checkSession sts pubB draw count registered
     return (spec, sts)
   else if count > 1 then throw s!"{tags.name}: one table per session"
   else do
