@@ -142,6 +142,10 @@ def structural_refusal(cfg: dict[str, Any]) -> str | None:
     if fam not in FF.FAMILY_FACTS:
         return f"model_type {fam!r} is not in the family facts table {FF.FAMILIES} (needs its own mechanism record)"
     arch = FF.FAMILY_FACTS[fam]["arch"]
+    if arch == "mla-moe":
+        return (f"{fam}: multi-head latent attention (kv_lora_rank={cfg.get('kv_lora_rank')!r}, interleaved RoPE over qk_rope_head_dim="
+                f"{cfg.get('qk_rope_head_dim')!r}) with a sigmoid grouped-top-k router and shared experts: the κ fold has no MLA attention, "
+                f"interleaved-RoPE or shared-expert patterns")
     if effective_sliding_window(cfg) and "dense2" not in (FF.FAMILY_FACTS[fam].get("patterns") or ()):
         # only families whose vLLM code hands the window to FA2 as an inert `window_size_left >= max_seqlen_k` (Phi-3, Gemma-2: the
         # inert-window scope decides from the LAUNCH) are served; any other windowed configuration is outside the pinned splitkv patterns

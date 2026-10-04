@@ -110,7 +110,7 @@ def test_profile_module_for_case_is_derived_not_looked_up():
     from verity_vllm.engine import profiles
     assert not hasattr(profiles, "PROFILE_BY_CASE")
     refused = {"QWEN15_AWQ": "awq", "QWEN3_30B_A3B_FP8": "mixed-precision",      # shipped configs the constructor refuses by name
-               "QWEN3_235B_A22B_FP8": "mixed-precision"}
+               "QWEN3_235B_A22B_FP8": "mixed-precision", "GLM47_FLASH": "multi-head latent attention"}
     for role, world in ROLES:
         if role in refused:
             continue
@@ -130,7 +130,7 @@ def test_family_facts_rules_agree_with_analytic():
     for fam, f in FF.FAMILY_FACTS.items():
         if fam in analytic.FAMILY_RULES:
             assert f["rules"] == analytic.FAMILY_RULES[fam], fam
-        assert f["arch"] in ("dense", "dense-ln", "moe"), fam
+        assert f["arch"] in ("dense", "dense-ln", "moe", "mla-moe"), fam
         assert "ForCausalLM" in f["vllm_class"], fam
         assert "vllm/model_executor/models/" in f["rules_provenance"] or "transformers" in f["rules_provenance"], fam
 
@@ -224,6 +224,19 @@ def test_structural_refusals_are_stated():
     m = json.loads((dg.HF_CONFIG_DIR / "QWEN3_30B_A3B.config.json").read_text())
     assert "mlp_only_layers" in G.structural_refusal({**m, "mlp_only_layers": [0]})
     assert "awq" in G.structural_refusal(json.loads((dg.HF_CONFIG_DIR / "QWEN15_AWQ.config.json").read_text()))
+    glm = json.loads((dg.HF_CONFIG_DIR / "GLM47_FLASH.config.json").read_text())
+    assert "multi-head latent attention" in G.structural_refusal(glm) and "kv_lora_rank=512" in G.structural_refusal(glm)
+
+
+def test_mla_moe_facts_resolve_to_the_checkpoints_values():
+    """GLM-4.7-Flash's family facts (refused by the constructor) resolve to what vLLM builds for its config.json."""
+    glm = json.loads((dg.HF_CONFIG_DIR / "GLM47_FLASH.config.json").read_text())
+    vals, prov = FF.resolve_facts(glm, {})
+    assert vals["MLA"] is True and vals["ROPE_NEOX"] is False and vals["SCORING"] == "sigmoid" and vals["ROUTER_DTYPE"] == "float32"
+    assert (vals["Q_LORA"], vals["KV_LORA"], vals["QK_NOPE"], vals["QK_ROPE"], vals["V_HEAD"]) == (768, 512, 192, 64, 256)
+    assert vals["ATTN_SCALE"] == pytest.approx(256 ** -0.5) and prov["ATTN_SCALE"] == "derived"
+    assert (vals["NUM_EXPERTS"], vals["N_GROUP"], vals["TOPK_GROUP"], vals["FIRST_DENSE"], vals["SHARED_EXPERTS"]) == (64, 1, 1, 1, 1)
+    assert vals["RENORMALIZE"] is True and vals["ROUTED_SCALING"] == 1.8 and G.moe_width_key(glm) == "moe_intermediate_size"
 
 
 def test_olmoe_rank_record_holds_the_whole_all_heads_qk_norm():

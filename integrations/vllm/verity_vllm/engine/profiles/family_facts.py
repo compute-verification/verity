@@ -14,7 +14,7 @@ Every fact cites the vLLM source that hard-codes it (`provenance`: file:line @ d
   * `derive` -- a value computed from the configuration the way vLLM computes it (Gemma-2's `normalizer = sqrt(H)`; Pythia's rotary width).
 `rules` are the `analytic.config_of` family rules (QKV bias, default rope theta, per-head q/k norm); for the families `analytic.FAMILY_RULES`
 already lists they MUST agree (`tests/test_profiles_generic.py` pins that), the others (`gpt_neox`, `qwen3_moe`) are passed as `family_rules`.
-`arch` selects the constructor class in `profiles.generic` (`dense`, `dense-ln`, `moe`); `params` are the architecture's vLLM parameter
+`arch` selects the constructor class in `profiles.generic` (`dense`, `dense-ln`, `moe`; `mla-moe` is described and refused); `params` are the architecture's vLLM parameter
 names that the base Llama map (`vllm_d9105ea80_sm89_eager._LAYER_FIELDS`) does not know, per weights-Record field.
 """
 from __future__ import annotations
@@ -31,6 +31,9 @@ _NEOX = "vllm/model_executor/models/gpt_neox.py"
 _PHI3 = "vllm/model_executor/models/phi3.py"
 _OLMOE = "vllm/model_executor/models/olmoe.py"
 _Q3MOE = "vllm/model_executor/models/qwen3_moe.py"
+_GLM4LITE = "vllm/model_executor/models/glm4_moe_lite.py"
+_GLM4MOE = "vllm/model_executor/models/glm4_moe.py"
+_DSV2 = "vllm/model_executor/models/deepseek_v2.py"
 _LN = "vllm/model_executor/layers/layernorm.py"
 
 
@@ -190,6 +193,47 @@ FAMILY_FACTS: dict[str, dict[str, Any]] = {
         "moe_width_key": "moe_intermediate_size",
         "moe_width_provenance": f"{_Q3MOE}:186-190,:213-219 the experts' width is moe_intermediate_size; intermediate_size is the dense-MLP width of mlp_only_layers "
                                 f"(none here: mlp_only_layers empty, decoder_sparse_step 1)",
+    },
+    # --------------------------------------------------------------------------------------------------------------------------- mla-moe
+    # Multi-head latent attention + a sigmoid grouped-top-k MoE with shared experts.  `structural_refusal` refuses the class: the κ fold
+    # has no MLA attention, interleaved-RoPE or shared-expert vocabulary, so a profile would be silently mis-fitted.  The facts below are
+    # what the Build's lowering and the capture map read.
+    "glm4_moe_lite": {
+        "arch": "mla-moe", "vllm_class": "Glm4MoeLiteForCausalLM",
+        "rules": {"qkv_bias_key": "attention_bias"},
+        "rules_provenance": f"{_GLM4LITE}:100-101,134-155 Glm4MoeLiteMLAAttention = DeepseekV2MLAAttention ({_DSV2}:1042-1096: fused_qkv_a_proj, q_b_proj, "
+                            f"kv_b_proj, o_proj without bias); transformers 5.17 Glm4MoeLiteConfig attention_bias = False",
+        "facts": {
+            "MLA": {"const": True, "provenance": f"{_GLM4LITE}:134-155 attn_cls = Glm4MoeLiteMLAAttention when model_config.use_mla (is_deepseek_mla)"},
+            "Q_LORA": {"key": "q_lora_rank", "provenance": f"{_DSV2}:1042-1046,1072-1079 fused_qkv_a_proj [q_lora_rank | kv_lora_rank + qk_rope_head_dim], "
+                                                           f"q_a_layernorm = RMSNorm(q_lora_rank), q_b_proj"},
+            "KV_LORA": {"key": "kv_lora_rank", "provenance": f"{_DSV2}:1088-1095 kv_a_layernorm = RMSNorm(kv_lora_rank), kv_b_proj [kv_lora_rank -> "
+                                                             f"heads * (qk_nope_head_dim + v_head_dim)]"},
+            "QK_NOPE": {"key": "qk_nope_head_dim", "provenance": f"{_DSV2}:1033-1034 qk_head_dim = qk_nope_head_dim + qk_rope_head_dim"},
+            "QK_ROPE": {"key": "qk_rope_head_dim", "provenance": f"{_DSV2}:1112-1117 get_rope(qk_rope_head_dim, ...)"},
+            "V_HEAD": {"key": "v_head_dim", "provenance": f"{_DSV2}:1089-1095 kv_b_proj output heads * (qk_nope_head_dim + v_head_dim)"},
+            "ROPE_NEOX": {"const": False, "provenance": f"{_DSV2}:1112-1117 get_rope(..., is_neox_style=False): interleaved (even, odd) rotary pairs"},
+            "ATTN_SCALE": {"derive": lambda cfg, C: float(int(cfg["qk_nope_head_dim"]) + int(cfg["qk_rope_head_dim"])) ** -0.5,
+                           "provenance": f"{_DSV2}:1034 scaling = qk_head_dim**-0.5 (:1118-1126 multiply by the yarn mscale only when rope_type != default)"},
+            "FIRST_DENSE": {"key": "first_k_dense_replace",
+                            "provenance": f"{_GLM4LITE}:157-174 layers below first_k_dense_replace are Glm4MoeLiteMLP(intermediate_size), the rest Glm4MoeLite"},
+            "NUM_EXPERTS": {"key": "n_routed_experts", "provenance": f"{_GLM4MOE}:132,184-187 FusedMoE(num_experts=config.n_routed_experts)"},
+            "N_GROUP": {"key": "n_group", "provenance": f"{_GLM4MOE}:192-194 use_grouped_topk=True, num_expert_group=config.n_group"},
+            "TOPK_GROUP": {"key": "topk_group", "provenance": f"{_GLM4MOE}:195 topk_group=config.topk_group"},
+            "RENORMALIZE": {"key": "norm_topk_prob", "provenance": f"{_GLM4MOE}:190 renormalize=config.norm_topk_prob"},
+            "SCORING": {"const": "sigmoid", "provenance": f"{_GLM4MOE}:196,200 scoring_func='sigmoid', e_score_correction_bias=gate.e_score_correction_bias "
+                                                          f"(an f32 parameter, :149-151)"},
+            "ROUTED_SCALING": {"key": "routed_scaling_factor",
+                               "provenance": f"{_GLM4MOE}:128,198-199 routed_scaling_factor applied to the routed output (apply_routed_scale_to_output "
+                                             f"unless ROCm aiter)"},
+            "ROUTER_DTYPE": {"const": "float32", "provenance": f"{_GLM4MOE}:143-148,203,215 gate = nn.Linear(hidden, n_routed_experts, bias=False, "
+                                                               f"dtype=float32) over hidden_states.to(float32); router_logits_dtype=float32"},
+            "SHARED_EXPERTS": {"key": "n_shared_experts", "provenance": f"{_GLM4MOE}:166-182 shared_experts = Glm4MoeMLP(moe_intermediate_size * "
+                                                                        f"n_shared_experts, reduce_results=False) passed to FusedMoE"},
+        },
+        "moe_width_key": "moe_intermediate_size",
+        "moe_width_provenance": f"{_GLM4MOE}:184-189 FusedMoE(intermediate_size=config.moe_intermediate_size); intermediate_size is the dense layers' width "
+                                f"({_GLM4LITE}:167-174)",
     },
 }
 
