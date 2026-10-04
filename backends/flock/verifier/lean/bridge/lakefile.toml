@@ -1,0 +1,19 @@
+name = "flock_bridge"
+defaultTargets = ["FlockBridge"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+# C-Flock's soundness, whose games, circuits and audit the bridge reads (ArkLib, and through it the one Mathlib).
+[[require]]
+name = "FlockSoundness"
+path = "../soundness"
+
+# Verity core's Lean: the model every protocol states its guarantees in, which C-Flock's objects map into.
+[[require]]
+name = "verity"
+path = "../../../../../packages/verity/lean"
+
+[[lean_lib]]
+name = "FlockBridge"

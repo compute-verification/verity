@@ -1,0 +1,21 @@
+{
+ "roots": ["FlockBridge"],
+ "meaning": ["FlockBridge", "FlockSoundness", "Verity.Protocol", "Verity.Assumptions", "Verity.Guarantees"],
+ "pins": {},
+ "dependencies": {
+  "Arklib": "a100ce185a5f9f8e2a6e1d3b0f1782f006d7e280c602619a98cee5c970de0331",
+  "CompPoly": "b35d6047fbdd4decc997b0e37de48c0a528d8b11b2d77c370bbc98b691cf572d",
+  "LeanSearchClient": "10aad9bd3954ead737fba8bd3b55709e5171edda2656068ad330158e6ad622c9",
+  "PolyFun": "d6c4bf9613dfeab9b80598baff217484de34ac616a0475184a5ce2aefad5a502",
+  "Qq": "7e75bb83a56f636baeb8e63ef3d44e1ac8b33e2ed4bf187462e0cc9bbdb55adf",
+  "VCVio": "d8c0d42db31325df600f165e6fc5fd1ad5fb38da84ea81d52fcb92cc4dd73d22",
+  "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
+  "batteries": "5a2410f298248ea44bf4d2fba0cf6fa143c56a185230ef6f3d1d6e22effd58f8",
+  "cslib": "4fbda9ca9a3ebb5d9e1215ea17eca3ef36fb846b72ef716232fca52747cbfdb1",
+  "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
+  "mathlib": "ee11c449f532ab29db1bb3478f8f5673f885a8a11f4b5338fbfc71a9fe7822a3",
+  "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
+  "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
+  "toolchain": "076b745e127dd8e9e2468e257f7eab44c77823db1ad416e53f25bb9d892f2dac"
+ }
+}
