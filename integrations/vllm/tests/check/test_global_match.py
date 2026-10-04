@@ -1789,7 +1789,7 @@ def test_sampler_geometry_check_evaluates_s_per_engine_step_against_the_realized
     """M-0169: vLLM picks the top-p split count S = splits_for(sampler batch, num_SMs) on the host per launch; the fold carries it on every
     GumbelTopPTokenSelect of the step. GM-01 evaluates S_t = SplitsFor_v1(|live(t)|, num_SMs) from the RECORD's live count (the requests with
     a logits row at t) and the Program's declared num_SMs -- L40S 142 SMs: 8 live -> 16, 4 live -> 32 (registry/topp_split)."""
-    from verity_vllm.program.registry.topp_split import splits_for
+    from verity_vllm.program.registry.topp_geometry import splits_for
     assert (splits_for(8, 142), splits_for(4, 142), splits_for(1, 142)) == (16, 32, 32)
     gp = {"applicability": {"components": {"num_sms": 142}}}
     # engine step 0: 8 live requests (S must be 16); step 1: 4 live (S must be 32) -- a verified EOS halved the batch
@@ -1972,7 +1972,7 @@ def test_sampler_geometry_check_reads_live_from_the_scheduled_state_and_refuses_
     """R17 stoch: with the scheduled state, the record's logits rows and the SampleEnd batch must EQUAL the scheduled live count and S is
     evaluated at that count. A sampler row the workload does not schedule (an undeclared request, a row past a stop) inflates the observed
     batch and vLLM's S follows it -- the R16 form (observed rows) accepted that; the scheduled form names both disagreements."""
-    from verity_vllm.program.registry.topp_split import splits_for
+    from verity_vllm.program.registry.topp_geometry import splits_for
     gp = {"applicability": {"components": {"num_sms": 142}}}
     reqs = [_req(f"r{i}", 0, 2) for i in range(4)] + [_req("r4", 0, 1)]      # 5 live at step 0 (S 16), 4 at step 1 (S 32)
     sc = SG.scheduled_live_counts(reqs, _present(reqs))
@@ -2017,7 +2017,7 @@ def test_scheduled_state_on_the_r15_b8_record_reproduces_the_kernel_s_flips():
     """The R15 B8 staggered stoch record (157 engine steps, 8 requests arriving 0..44 with caps 2..128, every request served to its cap):
     the scheduled state from (arrival, cap, length stop) alone equals the recorded live count at every step and its S transitions are the
     kernel's flips (0,1,32) -> (32,5,16) -> (101,4,32)."""
-    from verity_vllm.program.registry.topp_split import splits_for
+    from verity_vllm.program.registry.topp_geometry import splits_for
     p = os.path.join(os.path.dirname(gm.__file__), "..", "..", "..", "tests", "program", "data", "topp_split_fixture", "b8_s_schedule_r15_attempt2.json")
     d = json.load(open(p))
     reqs = [_req(rid, v["arrive"], v["served"], cap=v["cap"]) for rid, v in d["served_vs_cap"].items()]

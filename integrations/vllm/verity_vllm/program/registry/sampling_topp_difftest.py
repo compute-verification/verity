@@ -27,7 +27,7 @@ from verity.ir.refs import tuple_of
 from verity_vllm.program.registry.prims import BF16, F32, I32
 from verity_vllm.program.registry.b1 import const
 from verity_vllm.program.registry.sampling import I64, GumbelSelectF32, GumbelTopPTokenSelect, TemperatureScale, TopPMask
-from verity_vllm.program.registry.topp_split import splits_for
+from verity_vllm.program.registry.topp_geometry import splits_for
 from verity.ir.types import Array, Tuple
 
 SEMANTIC_ID = "sampling/GumbelTopPTokenSelect@v1"
