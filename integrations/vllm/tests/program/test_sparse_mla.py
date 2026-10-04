@@ -97,6 +97,13 @@ def test_a_token_is_its_heads() -> None:
     assert np.array_equal(got.reshape(NH, DV), np.stack(heads))
 
 
+@pytest.mark.parametrize("first", [True, False])
+def test_only_a_later_block_takes_the_running_state(first: bool) -> None:
+    blk = bind(M.SparseMlaBlock, DR=16, DV=16, NVIS=5, FIRST=first, BN=16, DOT=FA3["DOT"], SCALE=0.0625)
+    names = [n for n, _ in blk.signature()[0]]
+    assert names == ["q", "kv"] + ([] if first else ["m_prev", "l_prev", "o_prev"])
+
+
 def test_statics_are_checked() -> None:
     with pytest.raises(ValueError, match="multiples of 16"):
         bind(M.SparseMlaBlock, DR=8, DV=16, NVIS=4, FIRST=True, BN=16, DOT=FA3["DOT"], SCALE=0.0625).body

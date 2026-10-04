@@ -19,7 +19,8 @@ with O of width 512, the blocks visited last to first; with one query row at the
 * M_LOG2E` in double, narrowed to f32 (flash_api.cpp `set_params_fprop`); GLM-5.3's softmax_scale is (192 + 64)^-0.5 = 1/16.
 
 Registered functions (all `Name_v1`):
-  SparseMlaBlock{DR,DV,NVIS,FIRST,BN,DOT,SCALE}   (q: DR+DV bf16, kv: BN x (DV+DR) bf16, m, l[4], o[DV]) -> (m, l[4], o[DV])
+  SparseMlaBlock{DR,DV,NVIS,FIRST,BN,DOT,SCALE}   (q: DR+DV bf16, kv: BN x (DV+DR) bf16, m, l[4], o[DV]) -> (m, l[4], o[DV]);
+                                                  the first visited block (FIRST) takes q and kv only
   SparseMlaHead{T,DR,DV,BN,DOT,INV,SCALE}         (q_nope: DV bf16, q_rope: DR bf16, kv: T x (DV+DR) bf16) -> DV bf16
   SparseMla{T,NH,DR,DV,BN,DOT,INV,SCALE}          (q_nope: NH x DV, q_rope: NH x DR, kv: T x (DV+DR)) -> NH x DV bf16
 
@@ -89,7 +90,7 @@ def check_block_statics(DR: int, DV: int, NVIS: int, BN: int) -> None:
         raise ValueError(f"SparseMlaBlock: DR={DR}, DV={DV}, BN={BN} must be multiples of 16 and 1 <= NVIS={NVIS} <= BN")
 
 
-def block(st: Steps, S, dot, DOT, q, kv, m_prev, l_prev, o_prev):
+def block(st: Steps, S, dot, DOT, q, kv, m_prev=None, l_prev=None, o_prev=None):
     """`SparseMlaBlock`'s body over ``st``'s steps: ``dot`` the S chain (`DotBf16{K = DR + DV}`), ``DOT`` the P V step."""
     B, DR, DV, NVIS, FIRST, BN = st.B, S.DR, S.DV, S.NVIS, S.FIRST, S.BN
     check_block_statics(DR, DV, NVIS, BN)
@@ -128,13 +129,13 @@ def block(st: Steps, S, dot, DOT, q, kv, m_prev, l_prev, o_prev):
 
 def _block_type(S, bf16=BF16, f32=F32):
     KW = S.DR + S.DV
-    return ((("q", Array(KW, bf16)), ("kv", Array(S.BN, Array(KW, bf16))), ("m_prev", f32), ("l_prev", Array(4, f32)),
-             ("o_prev", Array(S.DV, f32))),
+    state = () if S.FIRST else (("m_prev", f32), ("l_prev", Array(4, f32)), ("o_prev", Array(S.DV, f32)))
+    return ((("q", Array(KW, bf16)), ("kv", Array(S.BN, Array(KW, bf16)))) + state,
             Tuple(f32, Array(4, f32), Array(S.DV, f32)))
 
 
 @composite("SparseMlaBlock", 1, ["DR", "DV", "NVIS", "FIRST", "BN", "DOT", "SCALE"], _block_type, conformance=_CONF)
-def SparseMlaBlock(B, S, q, kv, m_prev, l_prev, o_prev):
+def SparseMlaBlock(B, S, q, kv, m_prev=None, l_prev=None, o_prev=None):
     """One BN-key block of FA3's MLA online softmax for one query row (`AttnBlock_v4`'s steps): S[c] = the bf16 k16 chain over
     [q_rope | q_nope] . [k_pe | kv_c] of row c (`DotBf16_v2{K = DR + DV}`), the row max, the running max guarded
     (`GuardNegInfZero`) only in the first visited block (FIRST: the one `Check_inf` iteration), the rescale, P = `ex2(s * scale -
@@ -158,11 +159,8 @@ def head(st: Steps, S, block_of, INV, q_nope, q_rope, kv):
         if nvis < BN:  # FA3 clears the out-of-bounds rows; their columns are masked and never read
             row = Coll(Array(KW, st.bf16), concat([st.zero16().refs] * KW))
             kvb = Coll(Array(BN, Array(KW, st.bf16)), concat([kvb.refs] + [row.refs] * (BN - nvis)))
-        first = b == nb - 1
-        if first:
-            z = st.word(0)
-            r = B.call(block_of(nvis, True), q, kvb, z, Coll(Array(4, st.f32), concat([z.refs] * 4)),
-                       Coll(Array(DV, st.f32), concat([z.refs] * DV)))
+        if b == nb - 1:
+            r = B.call(block_of(nvis, True), q, kvb)
         else:
             r = B.call(block_of(nvis, False), q, kvb, m, l, o)
         m, l, o = r[0], r[1], r[2]

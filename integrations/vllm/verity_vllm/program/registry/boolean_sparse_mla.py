@@ -34,7 +34,7 @@ def bit_steps(B) -> M.Steps:
     return M.Steps(B, BITS, lambda bits: c.word(bits, 32), lambda: c.word(0, 16), 16, BF16, F32)
 
 
-def _block(B, S, q, kv, m_prev, l_prev, o_prev):
+def _block(B, S, q, kv, m_prev=None, l_prev=None, o_prev=None):
     """`SparseMlaBlock_v1`'s body on bits: the S chain `DotBf16_v3{K = DR + DV, DOT}`, the P V step `DOT`."""
     return M.block(bit_steps(B), S, bind(BG.DotBf16, K=S.DR + S.DV, DOT=S.DOT), S.DOT, q, kv, m_prev, l_prev, o_prev)
 
