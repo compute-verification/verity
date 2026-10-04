@@ -11,6 +11,9 @@ built from others states its guarantee from theirs:
 * `SoundInterleave`: two sound games run side by side, the developer scheduling them, are sound for both claims with the
   errors added;
 * `SoundBatch`: a sound game stays sound for its own output when other games run beside it;
+* `ProbBatchInduced`: the same for a class of strategies, such as the query-bounded ones a computational soundness bound
+  speaks of: a bound for every strategy of the class holds for a batch strategy whose induced strategies on the game are
+  in it;
 * `SoundBind`: a game that continues, after anything, with a game sound with error `δ` is sound with error `δ`.
 -/
 
@@ -44,6 +47,16 @@ def SoundBatch : Prop :=
     Sound g accept E δ →
       Sound (Game.batch (pre ++ g :: post)) (fun outs => accept (outs.getD pre.length d))
         (fun outs => E (outs.getD pre.length d)) δ
+
+/-- **A bound for a class of strategies holds in a batch.** If every strategy in the class `Cls` for `g` ends with an
+output satisfying `Q` with probability at most `ε`, then a strategy `σ` for a batch with `g` at position `pre.length`
+gives that position's output `Q` with probability at most `ε`, provided every strategy `σ` induces on `g` is in `Cls`
+(`Game.InducedAt`: `σ`'s moves in `g`, with the other games' coins fixed at some values). -/
+def ProbBatchInduced : Prop :=
+  ∀ {α : Type} (pre post : List (Game α)) (g : Game α) (d : α) (Q : α → Prop) (Cls : Game.Strategy g → Prop)
+    (ε : ℝ≥0∞), (∀ s, Cls s → Game.prob Q g s ≤ ε) →
+      ∀ σ : Game.Strategy (Game.batch (pre ++ g :: post)), (∀ s, Game.InducedAt g post pre σ s → Cls s) →
+        Game.prob (fun outs => Q (outs.getD pre.length d)) (Game.batch (pre ++ g :: post)) σ ≤ ε
 
 /-- A game that, whatever its first part outputs, continues with a game sound with error `δ` is sound with error `δ`. -/
 def SoundBind : Prop :=
