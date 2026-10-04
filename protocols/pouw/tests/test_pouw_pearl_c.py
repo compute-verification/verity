@@ -16,8 +16,8 @@ import pytest
 import pearl_c_vectors as CV
 import pearl_vectors as PV
 from verity.commitments.turboshake import turboshake128
-from verity.ml.fp32 import F32FmaV2, F32MulV2
-from verity.ml.scalar import F32Fabs
+from verity.ml.fp32 import F32DivV2, F32FmaV2, F32MulV2
+from verity.ml.scalar import F32Fabs, F32Fmaxf, SelectI32
 from verity.ml.tc.models import HOPPER_BF16_WGMMA_K16
 from verity_pouw.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
 from verity_pouw.schemes import get
@@ -338,6 +338,52 @@ def test_a_row_words_sign_of_zero_reaches_neither_its_magnitude_nor_its_square()
     words = specials + [rng.getrandbits(32) for _ in range(4000)]
     assert all(F32Fabs.evaluate(w) == w & 0x7FFFFFFF for w in words)
     assert all(F32FmaV2.evaluate(0x80000000, 0x80000000, c) == F32FmaV2.evaluate(0, 0, c) for c in words)
+
+
+def f32_word(q: Fraction) -> int:
+    """The Lean's `f32Word`: one nearest-even rounding of `q` to FP32, with gradual underflow and overflow to `±inf`;
+    an exact zero is `+0`."""
+    if q == 0:
+        return 0
+    s, a = (0x80000000 if q < 0 else 0), abs(q)
+    e = a.numerator.bit_length() - a.denominator.bit_length()
+    e += (Fraction(2) ** (e + 1) <= a) - (Fraction(2) ** e > a)
+    big_e = max(e, -126)
+    n = round(a / Fraction(2) ** (big_e - 23))
+    if n == 2 ** 24:
+        big_e, n = big_e + 1, 2 ** 23
+    if big_e > 127:
+        return s | 0x7F800000
+    return s | n if n < 2 ** 23 else s | (big_e + 127) << 23 | (n - 2 ** 23)
+
+
+def test_f32_div_fmaxf_and_select_as_the_lean_states():
+    """`F32Div_v2` rounds finite words' exact quotient by a nonzero word as `f32Word` (a zero quotient of equal signs
+    `+0`) and writes a finite word over `+inf` as the zero of its sign; `F32Mul_v2` of a non-finite first factor by a
+    finite word is not finite; `F32Fmaxf` against a finite nonzero word is the first operand where it is `+inf` or
+    larger, else the second (a NaN, `−inf` or a smaller value); and `SelectI32` selects on its condition's low bit. These
+    are the Lean's `Pc8OpsAgree.div`, `.divInf`, `.mulNonfin`, `.fmaxfAny` and `.sel`."""
+    rng = random.Random(11)
+    specials = [0, 0x80000000, 1, 0x80000001, 0x007FFFFF, 0x00800000, 0x7F7FFFFF, 0xFF7FFFFF, 0x7F800000, 0xFF800000,
+                0x7FC00000, 0xFFFFFFFF, 0x7F800001, 0x3F800000, 0xBF800000, 0x2F800000, 0x43E00000, 0x45280000]
+    words = specials + [rng.getrandbits(32) for _ in range(1500)]
+    finite = {w for w in words if (w >> 23) & 0xFF != 0xFF}
+    nonfinite = set(words) - finite
+
+    def val(w: int) -> Fraction:
+        return Fraction(P.f32_of_bits(w))
+
+    pairs = [(a, b) for a in specials for b in specials] + [(rng.choice(words), rng.choice(words)) for _ in range(4000)]
+    divs = [(a, b) for a, b in pairs if a in finite and b in finite and val(b) != 0 and (val(a) != 0 or a >> 31 == b >> 31)]
+    assert len(divs) > 2000
+    assert all(F32DivV2.evaluate(a, b) == f32_word(val(a) / val(b)) for a, b in divs)
+    assert all(F32DivV2.evaluate(a, 0x7F800000) == a & 0x80000000 for a in finite)
+    assert all((F32MulV2.evaluate(a, b) >> 23) & 0xFF == 0xFF for a in nonfinite for b in specials + words[-200:]
+               if b in finite)
+    maxes = [(a, b) for a, b in pairs if b in finite and val(b) != 0]
+    assert all(F32Fmaxf.evaluate(a, b) == (a if a == 0x7F800000 or (a in finite and val(b) < val(a)) else b)
+               for a, b in maxes)
+    assert all(SelectI32.evaluate(c, a, b) == (a if c % 2 == 1 else b) for c in range(4) for a, b in pairs[:500])
 
 
 def test_v1_registry_and_cost():

@@ -8,8 +8,9 @@ import Pouw.SecurityProofs.PearlC.TileGamma
 The row units' words read in the protocol's terms (`pc8Sem`), under the named hypotheses on which the table and the
 protocol's word functions agree only conditionally:
 
-* `Pc8OpsAgree ops`: core's primitives (`F32ToE4m3Sat`, `E4m3ToF32`, `F32Mul`, `F32Fma`, `F32Neg`, `F2fpBf16`,
-  `F32Fabs`) agree with the protocol's word functions where both are defined. Core's Lean semantics will discharge them;
+* `Pc8OpsAgree ops`: core's primitives (`F32ToE4m3Sat`, `E4m3ToF32`, `F32Mul`, `F32Fma`, `F32Div`, `F32Fmaxf`,
+  `F32Neg`, `F2fpBf16`, `F32Fabs`, `SelectI32`) agree with the protocol's word functions where both are defined. Core's
+  Lean semantics will discharge them;
 * `Stats8OK`: a row's `α` and `β` are step words, and `β > 0`. With its words finite it is `Row8OK`, but their
   finiteness is no hypothesis: a credited row's is `PearlCSem.RowOK`'s first clause, and a weight's the domain's
   (`Workload.InDomain`'s `OperandOK`). The table reads a `−0` word, and a word's bits above 32, as `pc8Sem` reads them
@@ -157,9 +158,12 @@ end Words
 /-- **Core's primitives agree with the protocol's word functions** where both are defined: the E4M3 cast is
 `e4m3Word`; the widening of a code other than NaN and `−0` is its value's FP32 word; FP32 multiply and FMA round as
 `f32Word`, `fmaWord?` (a zero product of equal signs is `+0`, of opposite signs `−0`); negation flips the sign bit;
-the BF16 narrowing is `rnBf16?`; the widening of `−0` is FP32's `−0`; `F32Fabs` clears the sign bit; and the FMA of
-`−0` by `−0` is that of `+0` by `+0` on every word, the infinities and NaNs included (both products are `+0`). Each is a
-fact about IEEE binary32 (round to nearest even, gradual underflow), open until core's Lean semantics of the
+the BF16 narrowing is `rnBf16?`; the widening of `−0` is FP32's `−0`; `F32Fabs` clears the sign bit; the FMA of
+`−0` by `−0` is that of `+0` by `+0` on every word, the infinities and NaNs included (both products are `+0`); FP32
+divide by a nonzero word rounds as `f32Word` (an exact zero signed as `F32Mul`'s), and a finite word over `+inf` is the
+zero of its sign; a product whose first factor is not finite is not finite; `F32Fmaxf` against a finite nonzero word
+is the larger, a NaN losing; and `SelectI32` selects on its condition's low bit. Each is a fact about IEEE binary32
+(round to nearest even, gradual underflow) or core's integer primitives, open until core's Lean semantics of the
 primitives. -/
 structure Pc8OpsAgree (ops : RowOps) : Prop where
   cast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val
@@ -175,6 +179,13 @@ structure Pc8OpsAgree (ops : RowOps) : Prop where
   widenNeg0 : ops.e4m3ToF32 0x80 % 2 ^ 32 = 0x80000000
   fabs : ∀ w, ops.f32Fabs w = w % 2 ^ 31
   fmaSq0 : ∀ c < 2 ^ 32, ops.f32FmaV2 0x80000000 0x80000000 c = ops.f32FmaV2 0 0 c
+  div : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ a = some x → wordQ b = some y → y ≠ 0 →
+    (x = 0 → signBit a = signBit b) → ops.f32DivV2 a b % 2 ^ 32 = f32Word (x / y)
+  divInf : ∀ a < 2 ^ 32, (wordQ a).isSome → ops.f32DivV2 a 0x7F800000 % 2 ^ 32 = if signBit a then 0x80000000 else 0
+  mulNonfin : ∀ a b : ℕ, a < 2 ^ 32 → wordQ a = none → (wordQ b).isSome → wordQ (ops.f32MulV2 a b % 2 ^ 32) = none
+  fmaxfAny : ∀ a b : ℕ, ∀ y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ b = some y → y ≠ 0 →
+    ops.f32Fmaxf a b % 2 ^ 32 = if a = 0x7F800000 ∨ ∃ x, wordQ a = some x ∧ y < x then a else b
+  sel : ∀ c a b, ops.selectI32 c a b = if c % 2 = 1 then a else b
 
 /-- A noise line as the table reads it: no NaN code (`0x7F`, `0xFF`). -/
 def Line8OK (e : Fin Params.pi.r → Code) : Prop := ∀ q, (e q).isNaN = false
