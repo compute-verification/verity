@@ -1584,7 +1584,8 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
 def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     """`research cancel`: SIGTERM to the workload's process group on the machine (status.json `pgid`), its intent recorded first in the
     run's events.jsonl (`tele cancel-intent --actor manual`), so the run classifies CANCELLED_MANUAL.  Never the runner and never SIGKILL:
-    the runner records the workload's exit and then publishes custody, and one killed in its upload leaves the run without custody."""
+    the runner records the workload's exit and then publishes custody, and one killed in its upload leaves the run without custody.
+    A run another VM launched (`adopt`) has no shipped tool in its remote.json; the machine's job.json names it (`run.remote.tool`)."""
     rec = fetch(local_dir)
     if err := rec.get("last_fetch_error"):
         raise Refused(f"the machine is unreachable ({err['stderr'].strip() or 'rc ' + str(err['rc'])}); nothing was signalled")
@@ -1594,10 +1595,11 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     pgid = st.get("pgid")
     if not isinstance(pgid, int) or pgid <= 1:
         raise Refused(f"{local_dir.name}'s status.json names no workload process group (pgid {pgid!r})")
-    if not rec.get("tool"):
-        raise Refused(f"{local_dir.name}'s remote.json names no shipped tool to record the cancel with")
+    tool = rec.get("tool") or ((((_read_json(local_dir / "job.json") or {}).get("run") or {}).get("remote") or {}).get("tool"))
+    if not tool:
+        raise Refused(f"neither {local_dir.name}'s remote.json nor its job.json names a shipped tool to record the cancel with")
     rd = rec["remote_run_dir"]
-    tele = ["env", f"PYTHONPATH={rec['tool']}", "python3", "-m", "research.telemetry", "cancel-intent", "--actor", "manual",
+    tele = ["env", f"PYTHONPATH={tool}", "python3", "-m", "research.telemetry", "cancel-intent", "--actor", "manual",
             "--reason", f"{reason} (research cancel by {by})", "--target-pgid", str(pgid), "--expect-nonempty", "--attempt-dir", rd,
             "--deliver"]
     script = f"{shlex.join(tele)}; rc=$?; tail -n 1 {shlex.quote(rd)}/events.jsonl; exit $rc"

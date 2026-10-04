@@ -258,7 +258,8 @@ starts the runner detached; re-delivering a launch after an ssh drop finds
 the claim and reports state. The runner's argv carries the workload's command, so a
 `pkill -f` aimed at the workload matches it too: it logs SIGTERM / SIGHUP to
 launcher.log and keeps supervising, so the run still records its end and
-publishes. Stop a run with `research cancel RUN --reason TEXT` from the launcher: SIGTERM to its workload's process group
+publishes. Stop a run with `research cancel RUN --reason TEXT` from any VM (a run another VM launched is found on its
+machine as `research inspect RUN` finds it, `--on NAME` to ask one machine): SIGTERM to its workload's process group
 (status.json `pgid`), recorded first as a manual cancel in events.jsonl, so the run classifies `CANCELLED_MANUAL`. On the
 machine the same is `kill -TERM -<pgid>`. Never SIGKILL the runner: one killed during its custody upload leaves the run without
 custody and its minted key on disk. `--exclusive` refuses if any run is live, and
