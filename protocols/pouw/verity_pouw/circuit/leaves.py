@@ -25,24 +25,41 @@ id, the word count and the role, and each tree holds exactly one (schema id, wor
                                   bits 1-15 are zero
     tile (pouw/tile-h0/v1)        the 32-byte tile digest (`PearlTileDigest`), two   16                 X
                                   bytes per word, low byte first
+    sd (pouw/row-sd/v1)           a row of A's k/32 salt-dead counts (`cap`), each   k/16               X
+                                  32-bit word as two, low half first
+    cap-word (pouw/cap-word/v1)   a word's C̃ and U as two words each, low half      4                  X
+                                  first (`cap`)
+    cap-flags (pouw/cap-flags/v1) a word's k/32 flag bits sixteen per word, low bit  ⌈k/512⌉ + 5        X
+                                  first, the last word's high bits zero, then its
+                                  flag count and its later +0 promotions as two
+                                  words each, then its good bit's ok word (`cap`)
+    cap-rows (pouw/cap-rows/v1)   a strip's admission bits sixteen per word, low     6                  X
+                                  bit first, 64 bits (TM <= 64, the rest zero),
+                                  then the cap's bound as two words (`cap`)
 
     row        X (per call)    W (registered)
     bf16       row-seg/v1      row/v2
     fp32       row-seg/v1      row/v2
     nvfp4-p    row-seg/v1      row/v2
     fp8-p      row-seg/v1      row/v2
+    sd         row-seg/v1      (none)
     ok         row/v2          row/v2
     tile       row/v2          (none)
+    cap-word   row/v2          (none)
+    cap-flags  row/v2          (none)
+    cap-rows   row/v2          (none)
 
-Every per-call row (role X) but ok and the tile digest is a row-seg row, so decode's serial hash chain is a segment's, not
-the row's (Daniel's ruling, card 637f70c6).  Every other row is a v2 row, the registered ones included, so each (row, role)
+Every per-call row (role X) but ok, the tile digest and the cap's per-word and per-strip rows is a row-seg row, so decode's
+serial hash chain is a segment's, not the row's (Daniel's ruling, card 637f70c6).  The cap's per-word and per-strip rows
+are at most one SHA-512 block at any k up to 2^14 (and one 1 KiB segment at any k), so a segment's chain is the row's and
+v2 hashes it in fewer blocks.  Every other row is a v2 row, the registered ones included, so each (row, role)
 has one leaf schema in the registered tree and in every statement that reads or writes it, and no row is `sha512/row/v1`
 (Daniel's ruling, Slack 1790973124.259289).  A v2 row costs what a v1 row of the same words would, a 128-byte prefix block
 and the row; the role byte that v2 drops is bound by the registration domain.  nvfp4-p's codes and scales are
 `rowleaf.nvfp4_row_bytes`' bytes, and every row's bytes are `rowleaf.bit_row`'s of its elements.
 
-Which unit ports make up each row is `pc4.PORTS` and `pc8.PORTS`, and `statement_rows` gives a unit's C-Flock rows from
-them: META ``row_schemas``, a [schema, bits] per row (the input rows, then the output rows), and ``out_row_ports``, each
+Which unit ports make up each row is `pc4.PORTS`, `pc8.PORTS` and the cap's `cap.PORTS`, and `statement_rows` gives a unit's
+C-Flock rows from them: META ``row_schemas``, a [schema, bits] per row (the input rows, then the output rows), and ``out_row_ports``, each
 output row's run of output ports.  Every output row is a row of exactly its words, as every input row is: the ok word and
 the tile digest each one port's v2 row, not padded to whole blocks, and a row a unit writes as several outputs (A′_i ‖
 P_A,i or B̃_j ‖ P_B,j: the codes, the scales and P) one run's row-seg or v2 row, the row its readers commit.  `words_*`
@@ -79,15 +96,18 @@ OK = Value(16)
 P_WORDS = 64
 #: each row's schema id, which a registration domain binds with the row's word count (`ROW_WORDS`, at depth k) and role
 SCHEMAS = {"bf16": "pouw/row-bf16/v1", "fp32": "pouw/row-fp32/v1", "nvfp4-p": "pouw/row-nvfp4-p/v1",
-           "fp8-p": "pouw/row-fp8-p/v1", "ok": "pouw/row-ok/v1", "tile": "pouw/tile-h0/v1"}
+           "fp8-p": "pouw/row-fp8-p/v1", "ok": "pouw/row-ok/v1", "tile": "pouw/tile-h0/v1", "sd": "pouw/row-sd/v1",
+           "cap-word": "pouw/cap-word/v1", "cap-flags": "pouw/cap-flags/v1", "cap-rows": "pouw/cap-rows/v1"}
 ROW_WORDS = {"bf16": lambda k: k, "fp32": lambda k: 2 * k, "nvfp4-p": lambda k: k // 4 + k // 32 + P_WORDS,
-             "fp8-p": lambda k: k // 2 + P_WORDS, "ok": lambda k: 1, "tile": lambda k: 16}
+             "fp8-p": lambda k: k // 2 + P_WORDS, "ok": lambda k: 1, "tile": lambda k: 16, "sd": lambda k: k // 16,
+             "cap-word": lambda k: 4, "cap-flags": lambda k: -(-k // 512) + 5, "cap-rows": lambda k: 6}
 _V2, _SEG = SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG
 #: each row's frame-leaf schema in a tree of each role it sits in: the per-call rows (role X) segmented, and the registered
-#: rows (role W), the admission bit and the tile digest v2
+#: rows (role W), the admission bit, the tile digest and the cap's per-word and per-strip rows v2
 ROW_SCHEMA = {("bf16", ROLE_X): _SEG, ("bf16", ROLE_W): _V2, ("fp32", ROLE_X): _SEG, ("fp32", ROLE_W): _V2,
               ("nvfp4-p", ROLE_X): _SEG, ("nvfp4-p", ROLE_W): _V2, ("fp8-p", ROLE_X): _SEG, ("fp8-p", ROLE_W): _V2,
-              ("ok", ROLE_X): _V2, ("ok", ROLE_W): _V2, ("tile", ROLE_X): _V2}
+              ("ok", ROLE_X): _V2, ("ok", ROLE_W): _V2, ("tile", ROLE_X): _V2, ("sd", ROLE_X): _SEG,
+              ("cap-word", ROLE_X): _V2, ("cap-flags", ROLE_X): _V2, ("cap-rows", ROLE_X): _V2}
 
 
 def _tile_digest_body(B, S_, c, u):
@@ -160,15 +180,38 @@ def words_tile(digest: bytes) -> list[int]:
     return [int.from_bytes(digest[2 * i:2 * i + 2], "little") for i in range(16)]
 
 
+def words_sd(counts: Sequence[int]) -> list[int]:
+    return words_fp32(counts)
+
+
+def words_cap_word(c: int, u: int) -> list[int]:
+    return words_fp32([c, u])
+
+
+def words_cap_flags(flags: Sequence[int], atoms: int, zeros: int, good: int) -> list[int]:
+    if not flags or any(f not in (0, 1) for f in flags):
+        raise ValueError("a cap-flags row is k/32 flag bits, two 32-bit counts and an ok word")
+    bits = list(flags) + [0] * (-len(flags) % 16)
+    return ([sum(bits[w + q] << q for q in range(16)) for w in range(0, len(bits), 16)] + words_fp32([atoms, zeros])
+            + words_ok(good))
+
+
+def words_cap_rows(oks: Sequence[int], bound: int) -> list[int]:
+    if not 0 < len(oks) <= 64 or any(o not in (0, 1) for o in oks):
+        raise ValueError("a cap-rows row is a strip's 1 to 64 admission bits, then a 32-bit bound")
+    bits = list(oks) + [0] * (64 - len(oks))
+    return [sum(bits[w + q] << q for q in range(16)) for w in range(0, 64, 16)] + words_fp32([bound])
+
+
 def row_digest(row: str, role: int, words: Sequence[int]) -> bytes:
     """x, the digest of a ``row`` row of 16-bit ``words`` in a tree of ``role``, under its schema (`ROW_SCHEMA`): core's
-    `sha512/row-seg/v1` or `sha512/row/v2` digest of the words as a bit row, 16 bits a word; an ok row's words pass
-    `ok_of`."""
+    `sha512/row-seg/v1` or `sha512/row/v2` digest of the words as a bit row, 16 bits a word; an ok row's words, and a
+    cap-flags row's last word, pass `ok_of`."""
     schema = ROW_SCHEMA.get((row, role))
     if schema is None:
         raise ValueError(f"no {row} row sits in a tree of role {role}")
-    if row == "ok":
-        ok_of(words)
+    if row in ("ok", "cap-flags"):
+        ok_of(words[-1:] if row == "cap-flags" else words)
     if not words:
         raise ValueError(f"a {row} row is a positive number of words, not 0")
     if schema == _SEG:
@@ -193,8 +236,16 @@ def statement_rows(unit: dict, k: int, reads: dict[str, int] | None = None) -> d
     rows in their order (``reads[p]`` rows of a row whose ports a tile reads one row of each of, row r of each port its r-th)
     then the output rows, each a row of exactly its words, and ``out_row_ports``, each output row's run of output ports,
     which META names when an output row is a row-seg row or a run of several (else every output row is one port's).  The
-    output rows' ports are the unit's outputs, once each and in order."""
+    output rows' ports, then the public outputs (``unit["public"]``, `cap.PORTS`: the tally's verdict, which the verifier
+    reads), are the unit's outputs, once each and in order, so no row here holds a public output.  An advice port
+    (``unit["advice"]``, `pc8.PORTS`) is a parameter in no row and no public input region (else ValueError), so no row here
+    holds a bit of it."""
     reads = reads or {}
+    advice, public = set(unit.get("advice", ())), list(unit.get("public", ()))
+    bound = {p for _row, _role, ps in unit["rows"] for p in ps} | set(unit.get("regions", {}))
+    if not all(isinstance(p, str) for p in advice) or advice & bound:
+        raise ValueError(f"advice ports {sorted(map(str, advice))} are parameters in no committed row and no public "
+                         f"input region: not {sorted(map(str, advice & bound)) or 'outputs'}")
     ins, outs, runs = [], [], []
     for row, role, ps in unit["rows"]:
         entry = [ROW_SCHEMA[row, role], 16 * ROW_WORDS[row](k)]
@@ -208,13 +259,15 @@ def statement_rows(unit: dict, k: int, reads: dict[str, int] | None = None) -> d
             runs.append(list(ps))
         else:
             raise ValueError(f"a {row} row is input ports or output ports, not {ps}")
-    if [p for run in runs for p in run] != list(range(sum(map(len, runs)))):
-        raise ValueError(f"the output rows' ports {runs} are not the unit's outputs, once each and in order")
+    if [p for run in runs for p in run] + public != list(range(sum(map(len, runs)) + len(public))):
+        raise ValueError(f"the output rows' ports {runs} and public outputs {public} are not the unit's outputs, once each "
+                         f"and in order")
     counts = [len(run) for run in runs]
     named = any(s == _SEG for s, _bits in outs) or max(counts, default=1) > 1
     return {"row_schemas": ins + outs, **({"out_row_ports": counts} if named else {})}
 
 
 __all__ = ["DIGEST", "INST", "KEY", "OK", "PearlTileDigestDef", "P_WORDS", "ROW_SCHEMA", "ROW_WORDS", "SCHEMAS", "commit",
-           "digest_bytes", "ok_of", "row_digest", "statement_rows", "tile_digest", "tree_leaf", "words_bf16", "words_fp32",
-           "words_fp8_p", "words_nvfp4_p", "words_ok", "words_tile"]
+           "digest_bytes", "ok_of", "row_digest", "statement_rows", "tile_digest", "tree_leaf", "words_bf16", "words_cap_flags",
+           "words_cap_rows", "words_cap_word", "words_fp32", "words_fp8_p", "words_nvfp4_p", "words_ok", "words_sd",
+           "words_tile"]

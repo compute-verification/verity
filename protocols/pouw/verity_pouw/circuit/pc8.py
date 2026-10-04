@@ -13,7 +13,8 @@ reading the weight's B̃ and P_B as committed inputs; `Pc8Check` is both in one 
 `Q_template_instances` over the templates (`query`), and every value is computed in exactly one unit.  Forming v0 (#311's
 port) has no circuit here.  The hiding Programs are `pc4`'s (``Shape.hidden``): `Pc8TileHidden` returns its tile digest in
 place of C̃ and U, and the rows are C-Flock-committed ports (`PORTS`), with fp32 input rows, fp8-p rows (A′_i ‖ P_A,i,
-B̃_j ‖ P_B,j; `leaves`) and each row's ``ok`` row, and the anchored inputs public input regions.
+B̃_j ‖ P_B,j; `leaves`) and each row's ``ok`` row, and the anchored inputs public input regions.  ``Shape.cap`` adds the
+per-tile cap to the hiding call, cut into a unit per word, the tile and its tally (`cap`); off, nothing here changes.
 
 ``DEV`` names a device record (`pearl_c_device.DEVICES`): its E4M3 k32 atom (`HopperE4m3QgmmaDot32` on the H100,
 `BlackwellE4m3QmmaDot32` on sm_120) and its promotion period G.  The peel's BF16 k16 step is `HopperBF16WgmmaDot16` on
@@ -131,13 +132,17 @@ def _stats(e: pc4._Emit, x, k: int):
 
 
 def _form(e: pc4._Emit, x, alpha, beta, line, basis, k: int, dev: str):
-    """A row's E′ = e4m3(β·E) (with E′'s FP32 decode) and its codes e4m3(atom(α·x_t, E′, F_t)) (`pearl_c.form_v1`)."""
+    """A row's E′ = e4m3(β·E) (with E′'s FP32 decode), its codes e4m3(atom(α·x_t, E′, F_t)) (`pearl_c.form_v1`) and their
+    accumulators α·x_t."""
     atom = ATOMS[DEVICES[dev].atom.name]
     ep = [e.call(F32ToE4m3Sat, e.call(F32MulV2, beta, e.call(E4m3ToF32, line[p]))) for p in range(R)]
     ew = [e.call(E4m3ToF32, c) for c in ep]
     ep_line = array_of(ep)
-    codes = [e.call(F32ToE4m3Sat, e.call(atom, e.call(F32MulV2, alpha, x[t]), ep_line, basis[t])) for t in range(k)]
-    return array_of(codes), ew
+    accs, codes = [], []
+    for t in range(k):
+        accs.append(e.call(F32MulV2, alpha, x[t]))
+        codes.append(e.call(F32ToE4m3Sat, e.call(atom, accs[t], ep_line, basis[t])))
+    return array_of(codes), ew, accs
 
 
 def _row_sig(S_, second: str, extra: tuple = ()):
@@ -147,12 +152,17 @@ def _row_sig(S_, second: str, extra: tuple = ()):
     return params, Tuple(Array(k, E4M3), P_ROW, OK)
 
 
-def _row_a_body(B, S_, x, line, fa, fb):
-    e, k, dev = pc4._Emit(B), S_.K, S_.DEV
+def _row_a(e: pc4._Emit, k: int, dev: str, x, line, fa, fb):
+    """Row i of A's outputs (`Pc8RowA`), then its forming's accumulators α·x_t and β, which the cap's row reads."""
     alpha, beta, ok = _stats(e, x, k)
-    codes, ew = _form(e, x, alpha, beta, line, fa, k, dev)
+    codes, ew, accs = _form(e, x, alpha, beta, line, fa, k, dev)
     af = [e.call(F2fpBf16, _chain(e, codes, fb.take(1, p), k, dev)) for p in range(R)]
-    return tuple_of(codes, array_of([e.call(F2fpBf16, w) for w in ew] + af), pc4.ok_word(e, ok))
+    return (codes, array_of([e.call(F2fpBf16, w) for w in ew] + af), pc4.ok_word(e, ok)), accs, beta
+
+
+def _row_a_body(B, S_, x, line, fa, fb):
+    outs, _accs, _beta = _row_a(pc4._Emit(B), S_.K, S_.DEV, x, line, fa, fb)
+    return tuple_of(*outs)
 
 
 Pc8RowADef = CompositeDefinition(
@@ -164,7 +174,7 @@ Pc8RowADef = CompositeDefinition(
 def _row_b_body(B, S_, x, line, fb, fa, g):
     e, k, dev = pc4._Emit(B), S_.K, S_.DEV
     alpha, beta, ok = _stats(e, x, k)
-    codes, ew = _form(e, x, alpha, beta, line, fb, k, dev)
+    codes, ew, _accs = _form(e, x, alpha, beta, line, fb, k, dev)
     mid = []
     for q in range(R):
         acc = 0
@@ -225,14 +235,18 @@ Pc8TileHiddenDef = CompositeDefinition(
     doc="`Pc8Tile` with its checked words hidden: their tile digest (`leaves.PearlTileDigest`, `pearl_c.leaf` of C̃ and U).",
     conformance="protocol-defined")
 
-#: each unit's ports under hiding, as `pc4.PORTS`: fp32 input rows, fp8-p rows and ok rows, and the anchors' regions
+#: each unit's ports under hiding, as `pc4.PORTS`: fp32 input rows, fp8-p rows and ok rows, the anchors' regions, and its
+#: advice: parameters the prover supplies that no unit computes and nothing binds (the cap word's certificates,
+#: `cap.ADVICE`), which C-Flock proves as private inputs.  An advice port is in the unit's io and in no read set: in no
+#: committed row (so in no link either) and in no public input region, which `leaves.statement_rows` enforces.  Under the
+#: cap the ports are `cap.PORTS` (``Shape.ports``).
 PORTS = {
     "row_b": {"rows": (("fp32", ROLE_W, ("x",)), ("fp8-p", ROLE_W, (0, 1)), ("ok", ROLE_W, (2,))),
-              "regions": {"e": "eb", "fb": "fb", "fa": "fa", "g": "g"}},
+              "regions": {"e": "eb", "fb": "fb", "fa": "fa", "g": "g"}, "advice": ()},
     "row_a": {"rows": (("fp32", ROLE_X, ("x",)), ("fp8-p", ROLE_X, (0, 1)), ("ok", ROLE_X, (2,))),
-              "regions": {"e": "ea", "fa": "fa", "fb": "fb"}},
+              "regions": {"e": "ea", "fa": "fa", "fb": "fb"}, "advice": ()},
     "tile": {"rows": (("fp8-p", ROLE_X, ("ac", "pa")), ("fp8-p", ROLE_W, ("bc", "pb")), ("tile", ROLE_X, (0,))),
-             "regions": {}},
+             "regions": {}, "advice": ()},
 }
 
 
@@ -294,7 +308,8 @@ def templates(k: int, tile: tuple[int, int] = TILE, dev: str = "sm120",
 @dataclass(frozen=True)
 class Shape:
     """M rows of A and N rows of B at depth k on device ``dev``, cut into tiles of ``tile`` (the scheme's is 64 x 64);
-    ``hidden``, the hiding Programs.  `anchors.TileAnchors` reads its units' ports and its anchors' derivations."""
+    ``hidden``, the hiding Programs; ``cap``, the hiding Programs with the per-tile cap, cut into word, tile and tally
+    units (`cap`).  `anchors.TileAnchors` reads its units' ports and its anchors' derivations."""
 
     m: int
     k: int
@@ -302,9 +317,16 @@ class Shape:
     tile: tuple[int, int] = TILE
     dev: str = "sm120"
     hidden: bool = False
-    ports: ClassVar[dict] = PORTS
+    cap: bool = False
     derivations: ClassVar[dict] = DERIVATIONS
     seeds: ClassVar[dict] = SEEDS
+
+    @property
+    def ports(self) -> dict:
+        if self.cap:
+            from . import cap
+            return cap.PORTS
+        return PORTS
 
     def check(self) -> None:
         d = DEVICES.get(self.dev)
@@ -314,6 +336,9 @@ class Shape:
         if (self.k % d.window or not 0 < self.k <= d.k_max or min(self.m, self.n, tm, tn) <= 0 or self.m % tm
                 or self.n % tn):
             raise DomainError(f"Pearl-C's circuit needs {d.window} | k <= {d.k_max} and whole tiles on each side: {self}")
+        if self.cap:
+            from . import cap
+            cap.check_shape(self)
 
 
 def _weight_units(B, k: int, dev: str, b, eb, fa, fb, g):
@@ -414,12 +439,18 @@ def weight(shape: Shape) -> SpecializedDefinition:
 
 def call(shape: Shape) -> SpecializedDefinition:
     shape.check()
+    if shape.cap:
+        from . import cap
+        return cap.call(shape)
     return bind(Pc8CallHiddenDef if shape.hidden else Pc8CallDef, M=shape.m, K=shape.k, N=shape.n, TM=shape.tile[0],
                 TN=shape.tile[1], DEV=shape.dev)
 
 
 def check(shape: Shape) -> SpecializedDefinition:
     shape.check()
+    if shape.cap:
+        from . import cap
+        return cap.check(shape)
     return bind(Pc8CheckHiddenDef if shape.hidden else Pc8CheckDef, M=shape.m, K=shape.k, N=shape.n, TM=shape.tile[0],
                 TN=shape.tile[1], DEV=shape.dev)
 
@@ -430,20 +461,30 @@ ROLES = pc4.ROLES
 _ROLE_OF = {id(Pc8RowBDef): "row_b", id(Pc8RowADef): "row_a", id(Pc8TileDef): "tile", id(Pc8TileHiddenDef): "tile"}
 
 
+def _role_of() -> dict[int, str]:
+    from . import cap
+    return _ROLE_OF | cap.ROLE_OF
+
+
 def query(shape: Shape, side: str = "check") -> dict[str, Any]:
-    """`Q_template_instances` over the side's unit templates (`ROLES`), in the order its root body first uses them."""
-    tp = templates(shape.k, shape.tile, shape.dev, shape.hidden)
-    return PO.template_instances_query([tp[r] for r in ROLES[side]])
+    """`Q_template_instances` over the side's unit templates (`ROLES`, or under the cap `cap.ROLES`), in the order its root
+    body first uses them."""
+    if shape.cap:
+        from . import cap
+        tp, roles = cap.unit_templates(shape.k, shape.dev, shape.tile, shape.n), cap.ROLES
+    else:
+        tp, roles = templates(shape.k, shape.tile, shape.dev, shape.hidden), ROLES
+    return PO.template_instances_query([tp[r] for r in roles[side]])
 
 
 def units(fn: SpecializedDefinition) -> tuple[pc4.Unit, ...]:
     """Every unit of a Program built from the unit templates (`pc4.units`)."""
-    return pc4.units(fn, _ROLE_OF)
+    return pc4.units(fn, _role_of())
 
 
 def unit_cut(fn: SpecializedDefinition):
     """The whole Program's cut, checked by `cut.check_cut` (`pc4.unit_cut`)."""
-    return pc4.unit_cut(fn, _ROLE_OF)
+    return pc4.unit_cut(fn, _role_of())
 
 
 __all__ = ["ATOMS", "BASIS", "DERIVATIONS", "GRAM", "LINE", "PEELS", "PORTS", "P_ROW", "ROLES", "SEEDS", "TILE", "Shape",

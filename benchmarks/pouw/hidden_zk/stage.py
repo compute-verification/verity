@@ -11,6 +11,18 @@ PoUW's rows (`leaves.statement_rows`) and, for a row unit, its anchors as public
                     ok row and an 'adv' row (sd, cert) -> C~, U and the cap's verdict (one v2 run)
     capword         Pc8CapWord_v1{K,DEV='sm120'}: a word's A' and B~ codes (one v2 row each) and an 'adv' row (cert) -> C~, its
                     flags, its later +0 promotions and good (one v2 run)
+    the cap's split (`cap.unit_templates`, `cap.PORTS`; at tile TMxTN, 1x1 by default, and the unit's n HZ_CAP_N, 16,384;
+    the split's own files from cursor/pouw-cap-scope-e3fa 57798e6c4):
+    splitword       Pc8CapWordUnit_v1{K,DEV='sm120'}: A'_i || P_A,i (fp8-p, row-seg), B~_j || P_B,j (fp8-p, v2) and an 'adv'
+                    row (cert) -> its cap-word row (C~, U) and cap-flags row (flags, count, later +0 promotions, good)
+    splitstrip[TMxTN]  Pc8CapStrip_v1: TM ok rows -> its cap-rows row (admission bits, bound)
+    splittile[TMxTN]   Pc8CapTile_v1{TM,TN}: TM*TN cap-word rows -> the tile digest (its tile row)
+    splittally[TMxTN]  Pc8CapTally_v1: TM*TN cap-flags rows, a cap-rows row and TM sd rows (row-seg) -> the cap's verdict,
+                    staged as one v2 row (a stand-in: in the design it is the tally's public output, in no row)
+  C-Flock's composer refuses splitstrip and splittile at every tile: a unit none of whose rows has a compression before its
+  last block (each a v2 row under 112 bytes) leaves the sha512x3 range empty.  Each row is an hm96 slot of 2^18 bits, a
+  unit's slots the next power of two of its rows, so a unit of more than 256 rows passes 2^27 (K_MAX) in slots alone: the
+  tally's fit up to 15x15 (242 rows, 2^26), and a 64x64 tile's tile unit (4,097 rows) and tally (4,162) fit at no N.
 
 A Pearl-C row's codes are finite E4M3 (the atom has no NaN operand) and its P words BF16 below 2^-15 in magnitude, seeded;
 the certificates are the prover's (`cap.certificates`), and sd a seeded salt-dead count per block.  THE 'adv' ROW IS A
@@ -147,6 +159,71 @@ def main() -> None:
             sr = {"out_row_ports": [2]}
         rows = {name: np.array([V.words("nvfp4-p", V.inputs(f"hidden-zk-{K}-{name}-{i}", "nvfp4-p", K)) for i in range(N)],
                                dtype=np.uint16) for name, *_ in in_rows}
+    elif ROLE.startswith("split"):
+        from verity_pouw.circuit import cap, pc8
+        sys.path.insert(0, str(HERE))
+        import core3_scratch as K3
+        IL.PIECES.update(K3.PIECES)
+        rec["binding"] = "core3 scratch"
+        kind, spec = next((kd, ROLE.removeprefix(f"split{kd}")) for kd in ("word", "strip", "tally", "tile")
+                          if ROLE.startswith(f"split{kd}"))
+        tm, tn = map(int, spec.split("x")) if spec else (1, 1)
+        n_unit = int(os.environ.get("HZ_CAP_N", "16384"))
+        rec.update(tile=[tm, tn], unit_n=n_unit)
+        tp = cap.unit_templates(K, "sm120", (tm, tn), n_unit)
+        d = tp[kind]
+        sr = L.statement_rows(cap.PORTS[kind], K, cap.reads((tm, tn))[kind])
+        schemas = sr["row_schemas"]
+        rng = np.random.default_rng(20261004 + K)
+        finite = np.array([c for c in range(256) if c not in (0x7F, 0xFF)])
+        u16 = lambda ws: np.array(ws, dtype=np.uint16)  # noqa: E731
+        f32_words = lambda vs: [h for v in vs for h in (v & 0xFFFF, v >> 16)]  # noqa: E731
+        v2 = SCHEMA_HM96_SHA512_ROW_V2
+        cells = tm * tn
+        ports = {}
+        if kind == "word":
+            ac = [list(map(int, rng.choice(finite, K))) for _ in range(N)]
+            bc = [list(map(int, rng.choice(finite, K))) for _ in range(N)]
+            pa, pb = ([list(map(int, rng.integers(0, 0x3FFF, pc8.PEEL))) for _ in range(N)] for _ in range(2))
+            cert = [cap.certificates(ac[i], bc[i], "sm120") for i in range(N)]
+            in_rows = [("a", *schemas[0], ["a", "pa"]), ("b", *schemas[1], ["b", "pb"]),
+                       ("adv", v2, 32 * len(cert[0]), ["cert"])]
+            rows = {"a": u16([L.words_fp8_p(ac[i], pa[i]) for i in range(N)]),
+                    "b": u16([L.words_fp8_p(bc[i], pb[i]) for i in range(N)]), "adv": u16([f32_words(c) for c in cert])}
+            outs_ = schemas[2:]
+            rec["advice_stand_in"] = "cert as one committed v2 row 'adv' (C-Flock's composer has no private input; timing only)"
+        elif kind == "strip":
+            in_rows = [(f"ok{r}", *schemas[r], [f"oka[{r}]"]) for r in range(tm)]
+            rows = {f"ok{r}": u16([L.words_ok(int(rng.random() < 0.9)) for _ in range(N)]) for r in range(tm)}
+            outs_ = schemas[tm:]
+        elif kind == "tile":
+            sys.path.insert(0, str(HERE))
+            import hash_scratch as H
+            bad = H.check()
+            assert not any(bad.values()), f"hash_scratch's pieces disagree with their primitives: {bad}"
+            IL.PIECES.update(H.PIECES)
+            rec["binding"] = "core3 scratch + hash scratch"
+            in_rows = [(f"w{w}", *schemas[w], [f"c[{w}]", f"u[{w}]"]) for w in range(cells)]
+            word = lambda: int(np.float32(rng.standard_normal()).view(np.uint32))  # noqa: E731
+            rows = {f"w{w}": u16([L.words_cap_word(word(), word()) for _ in range(N)]) for w in range(cells)}
+            outs_ = schemas[cells:]
+        else:
+            bound = cap._cap_constants(K, tm, tn, n_unit, 1000, "sm120")[-1][tm]
+            in_rows = [(f"f{w}", *schemas[w], [f"flags[{w}]", f"atoms[{w}]", f"zeros[{w}]", f"good[{w}]"]) for w in range(cells)]
+            in_rows.append(("cr", *schemas[cells], ["mask", "bound"]))
+            in_rows += [(f"sd{r}", *schemas[cells + 1 + r], [f"sd[{r}]"]) for r in range(tm)]
+            rows = {}
+            for w in range(cells):
+                fl = [[int(rng.random() < 1 / 64) for _ in range(K // 32)] for _ in range(N)]
+                rows[f"f{w}"] = u16([L.words_cap_flags(f, sum(f), int(rng.integers(0, 3)), 1) for f in fl])
+            rows["cr"] = u16([L.words_cap_rows([1] * tm, bound) for _ in range(N)])
+            for r in range(tm):
+                rows[f"sd{r}"] = u16([L.words_sd([int(rng.choice([0] * 30 + [1, 32])) for _ in range(K // 32)])
+                                      for _ in range(N)])
+            outs_ = [[v2, None]]
+            rec["public_stand_in"] = ("the tally's verdict, a public output in the design (`cap.PORTS`), staged as one v2 "
+                                      "row (C-Flock's composer commits every output)")
+        sr = {"out_row_ports": sr.get("out_row_ports") or [1] * len(outs_)}
     elif ROLE.startswith(("pc8tile", "cap")):
         from verity_pouw.circuit import cap, pc8
         sys.path.insert(0, str(HERE))
@@ -196,8 +273,8 @@ def main() -> None:
                 rows["adv"] = u16([f32_words(sd[i] + cert[i]) for i in range(N)])
             outs_, sr = [[v2, None]], {"out_row_ports": [3 if capped else 2]}
     else:
-        raise SystemExit(f"stage.py: ROLE is row_a, row_b, tile[TMxTN], hidden[TMxTN], pc8tile[TMxTN], cap[TMxTN] or capword, "
-                         f"not {ROLE!r}")
+        raise SystemExit(f"stage.py: ROLE is row_a, row_b, tile[TMxTN], hidden[TMxTN], pc8tile[TMxTN], cap[TMxTN], capword, "
+                         f"splitword or split(strip|tile|tally)[TMxTN], not {ROLE!r}")
     runs = sr.get("out_row_ports") or [1] * len(outs_)
     out_rows, at = [], 0
     for (s, _b), r in zip(outs_, runs):
@@ -226,6 +303,8 @@ def main() -> None:
         (OUT / "pub-chosen.bin").write_bytes(bytes(chosen))
         rec.update(own_bytes=len(own), own_sha256=hashlib.sha256(own).hexdigest(), flipped={"port": FLIP[ROLE], "word": 0,
                    "instance": 0, "bit": 0})
+    if ROLE.startswith("splittally"):
+        rec["verdicts"] = [int(w[0]) for w in got["outs"]["o0"]]
     rec.update(ands=got["ands"], k_log=meta["k_log"], vus_per_block=meta.get("vus_per_block"),
                row_schemas=meta["row_schemas"], out_row_ports=meta.get("out_row_ports"),
                circuit_bytes=fast_stage.size(text) if STAGE == "fast" else len(text),
