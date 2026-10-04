@@ -248,7 +248,8 @@ def _boolean_roots() -> list[Any]:
     `SiluMul_v2` of `registry.act`), the final-logit softcap's tanh row at N = 8 (`boolean_activation`),
     `registry.dense`'s rows on bits at 8 elements with Gemma-2's constants (`boolean_dense`: `gelu_tanh_and_mul` at I = 8, the
     RMSNorm chain's and the logit softcap's element-wise rows at N = 8), and OLMoE's routed sum at TOPK = 8 over 8 columns
-    and its router at 8 experts, 2 slots, 4 values per thread (`boolean_moe`); the steps, the cast, attention's softmax operations (`verity.ml.boolean.attention`), the element-wise
+    and its router at 8 experts, 2 slots, 4 values per thread (`boolean_moe`), and GLM-5.3's sigmoid `noaux_tc` router at 8
+    experts, 2 slots, on both of its kernels, on bits and its word view (`registry.moe.MoeRouterSigmoidBias_v1`); the steps, the cast, attention's softmax operations (`verity.ml.boolean.attention`), the element-wise
     operations (`verity.ml.boolean.elementwise`), the MUFU operations (`verity.ml.boolean.mufu`), the comparator, selects, max /
     min and E4M3 cast (`verity.ml.boolean.scalar`), the argmax step, `SiluMulBf16_v3` and the rows' static-free elements are
     static-free. vLLM's Boolean RoPE (`verity_vllm.program.registry.boolean_rope`) at the kernel rows' `RoPE_v1` binding, which
@@ -281,6 +282,7 @@ def _boolean_roots() -> list[Any]:
     from verity_vllm.program.registry import boolean_softcap as BSC
     from verity_vllm.program.registry import gumbel_boolean as GB
     from verity_vllm.program.registry import mla
+    from verity_vllm.program.registry import moe as M
     from verity_vllm.program.registry import prims as P
     from verity_vllm.program.registry import sampling_boolean as SB
 
@@ -290,6 +292,8 @@ def _boolean_roots() -> list[Any]:
     rows += [bind(BDN.AddScalarF32, N=8, C=1e-6), bind(BDN.AddScalarBf16, N=8, C=1.0), bind(BDN.Bf16DivScalar, N=8, C=30.0),
              bind(BDN.Bf16MulScalar, N=8, C=30.0), bind(BMOE.MoeSum, TOPK=8, H=8),
              bind(BMOE.MoeRouterTopKOrdered, E=8, TOPK=2, VPT=4)]
+    rows += [bind(d, E=8, TOPK=2, SCALE=2.5, KERNEL=k) for d in (BMOE.MoeRouterSigmoidBias, M.MoeRouterSigmoidBias)
+             for k in M.ROUTER_KERNELS]
     return [bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE), bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER),
             bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER),
             bind(BG.Gemm, K=32, N=3, **BG.GEMM_AMPERE), bind(BG.Gemm, K=32, N=3, **BG.GEMM_HOPPER),
@@ -485,13 +489,14 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
     """Every frontend vocabulary kind (the Definitions the torch frontend binds served ops to) at small statics: (label, the bound
     Definition, or the error)."""
     from verity_vllm.program.frontend.rules import vocab as V
+    from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.registry import prims as P
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,
              "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0, "FA2_MASKED_FROM": 0,
              "SCALE": "shared-per-block", "S": 4,
-             "CONSTRUCTION": "shared-greedy"}
+             "CONSTRUCTION": "shared-greedy", "TARGET": TargetProfile.default()}
     wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element blocks and 256-thread quantization
     vocabularies = [v for v in vars(V).values() if isinstance(v, V.Vocabulary)]
     kinds = [(f"{v.name}/{k}", make) for v in vocabularies for k, make in v.kinds.items()]
