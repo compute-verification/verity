@@ -75,6 +75,27 @@ def test_target_mismatches_refuse_a_mislabelled_execution(monkeypatch):
     assert A.target_mismatches(_engine(dev.with_overrides(compilation="piecewise-emu"), _llm(False, emulate=True))) == []
 
 
+def test_observed_flash_attn_version_reads_an_mla_layer_on_its_prefill_backend():
+    class _Mod(torch.nn.Module):
+        def __init__(self, **kw):
+            super().__init__()
+            for k, v in kw.items():
+                object.__setattr__(self, k, v)
+
+    def _model(*layers):
+        m = torch.nn.Module()
+        for i, layer in enumerate(layers):
+            m.add_module(f"l{i}", layer)
+        return m
+
+    fa = types.SimpleNamespace(vllm_flash_attn_version=2)
+    mla = _Mod(impl=types.SimpleNamespace(), prefill_backend=fa)
+    assert B.observed_flash_attn_version(_model(mla, mla)) == 2
+    assert B.observed_flash_attn_version(_model(_Mod(impl=fa), mla)) == 2
+    assert B.observed_flash_attn_version(_model(_Mod(impl=types.SimpleNamespace(vllm_flash_attn_version=3)), mla)) is None
+    assert B.observed_flash_attn_version(_model(_Mod(impl=types.SimpleNamespace()))) is None
+
+
 _WRAPPER = """# AOT ID: ['0_inference']
 from torch._inductor.async_compile import AsyncCompile
 async_compile = AsyncCompile()

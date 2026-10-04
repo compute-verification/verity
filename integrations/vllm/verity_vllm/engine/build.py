@@ -226,10 +226,11 @@ def vllm_has_flashinfer() -> bool | None:
 
 
 def observed_flash_attn_version(model: Any) -> int | None:
-    """[R13 hopper] The `vllm_flash_attn_version` the instantiated attention layers carry (one value over all layers), None if absent / mixed."""
+    """[R13 hopper] The `vllm_flash_attn_version` the instantiated attention layers carry (one value over all layers), None if absent / mixed.
+    An `MLAAttention` layer carries it on its prefill backend (`vllm_meta.mla_attention_impls`): its decode impl (TRITON_MLA) runs no FA."""
     vs: set = set()
     for _, mod in model.named_modules():
-        impl = getattr(mod, "impl", None)
+        impl = getattr(mod, "prefill_backend", None) or getattr(mod, "impl", None)
         if impl is not None and hasattr(impl, "vllm_flash_attn_version"):
             vs.add(getattr(impl, "vllm_flash_attn_version"))
     return int(vs.pop()) if len(vs) == 1 and None not in vs else None
