@@ -1,12 +1,12 @@
 import FlockBridge.Game
 import FlockSoundness.Discharge.Exec.SessionLComplete
-import Pouw.Protocol.Draft.Decisive
+import Verity.Protocol.Game.Decisive
 
 /-!
-# C-Flock's decisive games as PoUW's
+# C-Flock's decisive games as core's
 
 C-Flock states decisiveness over its own games (`FlockSoundness.Discharge.Exec.SessionLComplete`: `Productive`,
-`Reaches`, `Decisive`), clause for clause the definitions PoUW states over core's games (`Pouw.Draft.Game`). `toCore`
+`Reaches`, `Decisive`), clause for clause core's definitions over core's games (`Verity.Game`). `toCore`
 reads a C-Flock game as the same tree, so it keeps each of them (`productive_toCore`, `reaches_toCore`,
 `decisive_toCore`).
 
@@ -27,28 +27,28 @@ variable {α β : Type}
 
 /-- **`toCore` keeps productivity.** -/
 theorem productive_toCore : ∀ g : FlockSoundness.Game α, SessionLComplete.Productive g →
-    Pouw.Draft.Game.Productive (toCore g)
+    Verity.Game.Productive (toCore g)
   | .ret _, _ => trivial
   | .send _ k, ⟨hM, h⟩ => ⟨hM, fun m => productive_toCore (k m) (h m)⟩
   | @FlockSoundness.Game.coin _ _ _ _ k, h => fun c => productive_toCore (k c) (h c)
 
 /-- **`toCore` keeps every reachable output.** -/
 theorem reaches_toCore : ∀ (g : FlockSoundness.Game α) (a : α), SessionLComplete.Reaches g a →
-    Pouw.Draft.Game.Reaches (toCore g) a
+    Verity.Game.Reaches (toCore g) a
   | .ret _, _, h => h
   | .send _ k, a, ⟨m, h⟩ => ⟨m, reaches_toCore (k m) a h⟩
   | @FlockSoundness.Game.coin _ _ _ _ k, a, ⟨c, h⟩ => ⟨c, reaches_toCore (k c) a h⟩
 
 /-- **C-Flock's decisive games are decisive in core.** -/
 theorem decisive_toCore {g : FlockSoundness.Game α} (h : SessionLComplete.Decisive g) :
-    Pouw.Draft.Game.Decisive (toCore g) := by
+    Verity.Game.Decisive (toCore g) := by
   obtain ⟨hP, a, b, hab, ha, hb⟩ := h
   exact ⟨productive_toCore g hP, a, b, hab, reaches_toCore g a ha, reaches_toCore g b hb⟩
 
 /-- **Relabelled, a productive game is decisive** when it reaches two outputs whose labels differ. -/
 theorem decisive_map (f : α → β) {g : FlockSoundness.Game α} {a b : α} (hP : SessionLComplete.Productive g)
     (ha : SessionLComplete.Reaches g a) (hb : SessionLComplete.Reaches g b) (hab : f a ≠ f b) :
-    Pouw.Draft.Game.Decisive ((toCore g).map f) := by
+    Verity.Game.Decisive ((toCore g).map f) := by
   rw [← toCore_map]
   exact decisive_toCore ⟨SessionLComplete.productive_map f hP, f a, f b, hab, SessionLComplete.reaches_map f ha,
     SessionLComplete.reaches_map f hb⟩
@@ -61,7 +61,7 @@ theorem audit_tile_verdict_decisive {D Sl : Type} [Inhabited D] [Inhabited Sl] {
     (E : FlockSoundness.Merkle.Enc (List FlockLevel3.GF128) D)
     (Lf : FlockSoundness.Merkle.Leaf (List FlockLevel3.GF128) Sl D H)
     (T : Finset (Fin n) → Reg → FlockSoundness.TabSpec mPts) :
-    Pouw.Draft.Game.Decisive
+    Verity.Game.Decisive
       ((toCore (FlockSoundness.Audit.audit L Reg (batchedSessionL H E Lf fun S R => [T S R]))).map Prod.fst) := by
   obtain ⟨R⟩ := ‹Nonempty Reg›
   obtain ⟨ω⟩ := L.nonempty

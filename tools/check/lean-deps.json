@@ -18,17 +18,17 @@
    "run": "r20260929-032531-8f07",
    "sha256": "fa99372dfc2eed5e46de196b3ce940c0026271daea7ca2ffa66e2cfd98f69056"
   },
+  "40f92db8c2333f0acd67074d309f9b169a98f356cdac2a2fc7e206247c9ab5a2": {
+   "bytes": 1322546613,
+   "package": "backends/flock/verifier/lean/bridge",
+   "run": "r20261003-220011-b8a2",
+   "sha256": "18773dceea0543a7dfb8d0d1a290a558bf75b1ae9128c105b4ae7bf5c5175f76"
+  },
   "483052f76381b89dc4aa6d56fe0014f33d228cf04ae237cdeadac02ed5c11cb6": {
    "bytes": 706797442,
    "package": "protocols/network_warden/lean",
    "run": "r20261002-013330-8cff",
    "sha256": "6ed219a253d9af409d3f8e06c4843e1f13f0081a9eac96048964d299b7c55836"
-  },
-  "52c4ff61a40dd5de931807450afa24e90d81dd2f9f717ad185ffc3dff1c17ec2": {
-   "bytes": 1322546613,
-   "package": "backends/flock/verifier/lean/bridge",
-   "run": "r20261003-220011-b8a2",
-   "sha256": "18773dceea0543a7dfb8d0d1a290a558bf75b1ae9128c105b4ae7bf5c5175f76"
   },
   "5c2a23bf8634d77a7eb3d07c2d1d82b9a6ceda4eaa0205286857391ba83e863f": {
    "bytes": 700285760,

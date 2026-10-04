@@ -15,10 +15,5 @@ path = "../soundness"
 name = "verity"
 path = "../../../../../packages/verity/lean"
 
-# PoUW's Lean, whose interfaces C-Flock instantiates (backends instantiate protocols, never the reverse).
-[[require]]
-name = "pouw"
-path = "../../../../../protocols/pouw/lean"
-
 [[lean_lib]]
 name = "FlockBridge"
