@@ -225,13 +225,14 @@ def test_the_deployed_sub_tile_is_todays_tile_template_at_2x2():
         assert [nd.fn for nd in fn.body.nodes] == [tile]
 
 
-@pytest.mark.parametrize("mod, args", [(pc8, (128, (2, 2), "h100")), (pc8, (64, (1, 4), "sm120-unpromoted")),
-                                       (pc4, (64, (2, 2))), (pc4, (64, (1, 1)))], ids=["h100-2x2", "unpromoted-1x4", "pc4-2x2",
-                                                                                        "pc4-1x1"])
+@pytest.mark.parametrize("mod, args", [(pc8, (128, (2, 2), "h100")), (pc8, (128, (4, 2), "sm120")),
+                                       (pc8, (64, (1, 4), "sm120-unpromoted")), (pc4, (64, (2, 2))), (pc4, (64, (4, 1))),
+                                       (pc4, (64, (1, 1)))],
+                         ids=["h100-2x2", "sm120-4x2", "unpromoted-1x4", "pc4-2x2", "pc4-4x1", "pc4-1x1"])
 def test_a_sub_tile_is_todays_tile_template_and_wiring(mod, args):
     """A sub-tile is one call of today's tile template at a × b and nothing else, with its parameters: its output r is row r
     of the tile's C̃ then row r of its U, a reference to each word and no gate, so it is 4b words, one sub-cu row a port (at
-    a = 1 too, never a run of two ports); evaluated, it is today's tile's C̃ and U row by row."""
+    a = 1, 2 and 4; at a = 1 never a run of two ports); evaluated, it is today's tile's C̃ and U row by row."""
     fn = (tilesub.sub_tile8 if mod is pc8 else tilesub.sub_tile4)(*args)
     tile, (a, b) = mod.templates(*args)["tile"], args[1]
     (params, ret), (tile_params, _) = fn.signature(), tile.signature()
