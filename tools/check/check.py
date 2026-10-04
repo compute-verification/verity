@@ -64,8 +64,9 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     `--fresh`)
     circuit-check   `circuit-check --cache`, per target: a target's result is reused when every file, directory listing,
                     existence probe and loaded library its own check read or resolved (the Definitions it reached, their builds
-                    and modules' import closures, its `targets.py` bindings and its pins) is unchanged, with the checker's own
-                    version; one after a read the tracer cannot see (a program it starts) is not stored (`circuit_check.cache`)
+                    and modules' import closures, its bindings and its pins, in `targets.py` or a Definition module's sidecar) is
+                    unchanged, with the checker's own version; one after a read the tracer cannot see (a program it starts) is
+                    not stored (`circuit_check.cache`)
     lean-audit      per package (`lean_audit.py`): a pass is reused while the package, its path dependencies, `tools/lean/`
                     and its toolchain and manifest are unchanged; a miss is audited on a scratch tree holding only those, so a
                     read outside them fails there; fetched dependencies stay warm on the machine under manifest + toolchain,

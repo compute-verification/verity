@@ -16,7 +16,7 @@ the task list's build, nor an earlier target's check):
 - what made the Definitions it reached: the recording of each catalog root function, `_model_roots` entry or `TEMPLATE_PARAMS`
   entry while it ran (`producing`), held by every Definition made while it ran (`made_by`: a primitive, composite or
   specialization constructed then, and each specialization of a composite constructed then) and by every target that reaches
-  one; a target holds the `targets.py` units of every binding whose roots reach it (`targets.BINDINGS`) by their digests, but
+  one; a target holds the binding units of every binding whose roots reach it (`targets.BINDINGS`) by their digests, but
   not what a binding ran when it made none of what the target reaches (a registry module a root function imports is no input
   of a primitive it returns);
 - each module among those files with its import closure: the in-tree modules its top-level ``import`` statements name (and its
@@ -24,27 +24,29 @@ the task list's build, nor an earlier target's check):
 - what the process read outside every recording (the registries' imports listing their packages, ``pkgutil`` enumerating
   them): every target holds that.
 
-`targets.py` and `pins.json` are not files of any target: a target holds the parts of `targets.py` it depends on (its binding
-units and the rest of the module with every binding unit cut out, ``common``, each by the digest of its AST, so comments and
-formatting are no input; any `targets.py` code its check ran, by the unit that holds it) and the entries of `pins.json` its check
-looked up (`recorded_pins`), each by its value, or absent.  The checker's own version is the digest of this package's sources less
-those two.  Beside them the key holds the interpreter, the platform, the installed distributions, the request (the target, its
-options, and whether the partition invariant applies to it, as the catalog resolved it) and the ``VERITY_*`` / ``CIRCUIT_CHECK_*``
-environment.  Each target's check runs with a memo of its own, so no result an earlier target computed stands in for its reads.
+The binding files (`targets.py` and each Definition module's sidecar, `sidecars`) and the pins files (`pins.json` and each
+sidecar's) are not files of any target: a target holds the parts of each binding file it depends on (its binding units and the
+rest of that file with every binding unit cut out, ``common``, each by the digest of its AST, so comments and formatting are no
+input; any binding code its check ran, by the unit that holds it) and the pins its check looked up (`recorded_pins`), each in the
+file that holds it or would (`sidecars.pin_file`), by its value, or absent.  The checker's own version is the digest of this
+package's sources less `targets.py` and `pins.json`.  Beside them the key holds the interpreter, the platform, the installed
+distributions, the request (the target, its options, and whether the partition invariant applies to it, as the catalog resolved
+it) and the ``VERITY_*`` / ``CIRCUIT_CHECK_*`` environment.  Each target's check runs with a memo of its own, so no result an
+earlier target computed stands in for its reads.
 
-A hit means every file, listing, probe, library, `targets.py` unit and pin this target's check read or resolved is unchanged
+A hit means every file, listing, probe, library, binding unit and pin this target's check read or resolved is unchanged
 (the tree as git has it, `visible`: bytecode or a build inside the tree counts as absent).  Not covered: a file a C extension
 reads with its own I/O (none here); anything outside the repository, which the interpreter, platform and distribution list stand
 for; a file a module read while it was imported before tracing began (the checker's own imports, ``verity.ir`` and
 ``verity.evaluation`` among them: their sources are inputs, data they opened at import is not); what a function read or imported
 in its body when it did not run in the recording (a value a process-wide cache, ``functools.cache`` and the like, holds from a
 call another target's check made, beyond the function's own file and its module's closure); an edit to a binding that does not
-reach the target, even if it changes which object of the same id the catalog builds (the registry refuses two Definitions of one
-id); and what a binding ran that changes a Definition it did not make, keeping its id: a value it computed (from a module only
-it imported) and left where a Definition made before it, or outside every binding, reads it, closed over or in a module's state,
-rather than passed as a static (a static is in the id).  A new file in a package the registries enumerate changes the listing
-every target holds, so it reruns everything.  What the tracer cannot see (a program it starts: ``subprocess``, ``os.system``,
-``exec``, ``posix_spawn``) makes the process's later results uncacheable (`untraced`).
+reach the target, or a new sidecar, even if it changes which object of the same id the catalog builds (the registry refuses
+two Definitions of one id); and what a binding ran that changes a Definition it did not make, keeping its id: a value it
+computed (from a module only it imported) and left where a Definition made before it, or outside every binding, reads it,
+closed over or in a module's state, rather than passed as a static (a static is in the id).  A new file in a package the
+registries enumerate changes the listing every target holds, so it reruns everything.  What the tracer cannot see (a program it
+starts: ``subprocess``, ``os.system``, ``exec``, ``posix_spawn``) makes the process's later results uncacheable (`untraced`).
 
 Only a verdict is stored, of the tree its check read: not a check that raised (an ImportError says the environment was broken,
 not what the target is), nor one whose reads, digested again by the process that ran it right after, differ from the digests
@@ -75,11 +77,17 @@ _INTERNAL: list[bool] = []
 _HERE = Path(__file__).resolve().parent
 #: the checker's files that are no input of every target: each target holds its own parts of them
 TARGETS, PINS = _HERE / "targets.py", _HERE / "pins.json"
+#: the binding files beside `targets.py` (each Definition module's sidecar, `sidecars`), absolute; the pins files beside
+#: `pins.json`, and where a pin is or would be (`sidecars.pin_file`)
+_SIDECARS: set[str] = set()
+_UNIT_RELS: set[str] = set()
+_PIN_FILES: set[str] = set()
+_PIN_FILE: list = []
 
 
 class Frame:
-    """What one recording saw: reads (relative to the root), the files of the code that ran, the first lines of `targets.py`'s
-    code that ran, the specializations whose body it read, and the pins it looked up."""
+    """What one recording saw: reads (relative to the root), the files of the code that ran, the binding files' code that ran
+    (file, first line), the specializations whose body it read, and the pins it looked up."""
 
     __slots__ = ("files", "dirs", "probes", "libs", "code", "lines", "defs", "pins")
 
@@ -89,7 +97,7 @@ class Frame:
         self.probes: set[str] = set()
         self.libs: set[str] = set()
         self.code: set[str] = set()
-        self.lines: set[int] = set()
+        self.lines: set[tuple[str, int]] = set()
         self.defs: dict[int, Any] = {}
         self.pins: set[str] = set()
 
@@ -200,7 +208,7 @@ def _hook(event: str, args: tuple) -> None:
         if isinstance(mode, str) and any(c in mode for c in "wax+"):
             return
         if isinstance(mode, str) or mode is None:
-            if (rel := _rel(path)) is not None and not (rel == _TARGETS_REL[0] and _for_linecache()):
+            if (rel := _rel(path)) is not None and not ((rel == _TARGETS_REL[0] or rel in _UNIT_RELS) and _for_linecache()):
                 _FRAMES[-1].files.add(rel)
     elif event in ("os.listdir", "os.scandir"):
         if (rel := _rel(args[0] if args and args[0] is not None else ".")) is not None:
@@ -226,11 +234,39 @@ _TARGETS_FILE = str(TARGETS)
 
 def _started(code, offset):
     f = code.co_filename
-    if f == _TARGETS_FILE:
-        _FRAMES[-1].lines.add(code.co_firstlineno)
+    if f == _TARGETS_FILE or f in _SIDECARS:
+        _FRAMES[-1].lines.add((f, code.co_firstlineno))
     else:
         _FRAMES[-1].code.add(f)
     return sys.monitoring.DISABLE
+
+
+def _unit_files() -> set[str]:
+    return {_TARGETS_FILE} | _SIDECARS
+
+
+def unit_files(paths: Iterable[str]) -> None:
+    """Hold these binding files (the sidecars) as `targets.py` is held: by the units of theirs a target depends on."""
+    _SIDECARS.update(os.path.abspath(p) for p in paths)
+    _UNIT_RELS.clear()
+    _UNIT_RELS.update(r for f in _SIDECARS if (r := _rel(f)) is not None)
+
+
+def pin_files(paths: Iterable[str], where: Any) -> None:
+    """The pins files beside `pins.json`, and ``where(kind, key)``: the file that holds a pin, or would."""
+    _PIN_FILES.clear()
+    _PIN_FILES.update(os.path.abspath(p) for p in paths)
+    _PIN_FILE[:] = [where]
+
+
+@contextmanager
+def internal() -> Iterator[None]:
+    """The checker's own reads (finding and reading the sidecars): no input of a check."""
+    _INTERNAL.append(True)
+    try:
+        yield
+    finally:
+        _INTERNAL.pop()
 
 
 @contextmanager
@@ -344,6 +380,7 @@ def trace(root: Path) -> None:
     if not _ROOT:
         _ROOT.append(Path(root).resolve())
         _TARGETS_REL[0] = _rel(TARGETS)
+        unit_files(())
         sys.addaudithook(_hook)
         os.stat, os.lstat = _probing(os.stat), _probing(os.lstat)
         mon = sys.monitoring
@@ -458,7 +495,7 @@ class recorded_pins:
         return len(self._d)
 
 
-# --- targets.py's units -----------------------------------------------------------------------------------------------------
+# --- a binding file's units -------------------------------------------------------------------------------------------------
 
 def _is_binding(name: str) -> bool:
     return name.startswith("_") and name.endswith(("_roots", "_bindings"))
@@ -490,10 +527,11 @@ def _with_list(fn: ast.FunctionDef, keep: list[ast.expr]) -> ast.FunctionDef:
 
 
 def _units_of(source: str) -> tuple[dict[str, str], list[tuple[int, int, str | list[tuple[int, int, str]]]]]:
-    """``targets.py``'s units by name, each the digest of its AST: every binding function (`_is_binding`), each entry of
-    `_model_roots` (the function with its list cut to that entry) and of ``TEMPLATE_PARAMS``, and ``common``: the module with
-    every one of those cut out (a binding function to its name, the list and the dict emptied).  Beside them the line span of
-    each top-level statement and the unit that holds it (for `_model_roots`, the spans of its entries)."""
+    """A binding file's units (``targets.py``'s, a sidecar's) by name, each the digest of its AST: every binding function
+    (`_is_binding`), each entry of `_model_roots` (the function with its list cut to that entry) and of ``TEMPLATE_PARAMS``,
+    and ``common``: the module with every one of those cut out (a binding function to its name, the list and the dict
+    emptied).  Beside them the line span of each top-level statement and the unit that holds it (for `_model_roots`, the
+    spans of its entries)."""
     tree = ast.parse(source)
     units: dict[str, str] = {}
     spans: list[tuple[int, int, Any]] = []
@@ -657,7 +695,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
     outside = _FRAMES[0]
     # an import's own reads count with its module's closure, and the task list's reads of the pins and the catalog with what
     # each target looks up in them
-    sources = {r for r in (_rel(f) for f in [*by_file, PINS, TARGETS]) if r is not None}
+    sources = {r for r in (_rel(f) for f in [*by_file, PINS, *_PIN_FILES, *_unit_files()]) if r is not None}
     acc.files |= outside.files - sources
     acc.dirs |= outside.dirs
     acc.probes |= outside.probes
@@ -707,8 +745,8 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
         if f in done:
             continue
         done.add(f)
-        if f == _TARGETS_FILE or f.startswith(os.path.join(str(_HERE), "")):
-            continue                                   # the checker's version, and `targets.py` by its units
+        if f in _unit_files() or f.startswith(os.path.join(str(_HERE), "")):
+            continue                                   # the checker's version, and the binding files by their units
         if (rel := _rel(f)) is None:
             continue
         acc.files.add(rel)
@@ -722,22 +760,29 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
             m = sys.modules.get(imp)
             if (mf := getattr(m, "__file__", None)) is not None:
                 work.append(mf)
+    # a unit is named by its file: `targets.py`'s bare, a sidecar's as ``<file>#<unit>``; each file's ``common`` comes with it
     trel = _rel(TARGETS)
-    if trel is not None:
-        if acc.lines:
-            _units, spans = _units_cached(TARGETS.read_text())
-            for line in acc.lines:
-                unit_names.update(_unit_at(spans, line))
-        if trel in acc.files:                          # read as a file (a traceback's source line, say): all of it
-            acc.files.discard(trel)
-            unit_names.add("*")
-    prel = _rel(PINS)
-    if prel is not None and prel in acc.files:
-        acc.files.discard(prel)
-        acc.pins.add("*")
+    held = {u if "#" in u else f"{trel}#{u}" for u in unit_names if "#" in u or trel is not None}
+    for f, line in acc.lines:
+        if (r := _rel(f)) is not None:
+            held.update(f"{r}#{u}" for u in _unit_at(_units_cached(Path(f).read_text())[1], line))
+    held |= {f"{u.partition('#')[0]}#common" for u in held}
+    for f in _unit_files():
+        if (r := _rel(f)) is not None and r in acc.files:  # read as a file (a traceback's source line, say): all of it
+            acc.files.discard(r)
+            held.add(f"{r}#*")
+    pin_rels = {r for f in [PINS, *_PIN_FILES] if (r := _rel(f)) is not None}
+    pins = {f"{r}#*" for r in pin_rels & acc.files}
+    acc.files -= pin_rels
+    where = _PIN_FILE[0] if _PIN_FILE else (lambda kind, key: PINS)
+    for p in acc.pins:
+        kind, _, key = p.partition("#")
+        if p == "*" or key == "*":
+            pins |= {f"{r}#{p}" for r in pin_rels}
+        elif (r := _rel(where(kind, key))) is not None:
+            pins.add(f"{r}#{p}")
     return {"files": sorted(acc.files), "dirs": sorted(acc.dirs), "probes": sorted(acc.probes - acc.files - acc.dirs),
-            "libs": sorted(acc.libs), "units": sorted(f"{trel}#{u}" for u in unit_names) if trel is not None else [],
-            "pins": sorted(f"{prel}#{p}" for p in acc.pins) if prel is not None else []}
+            "libs": sorted(acc.libs), "units": sorted(held), "pins": sorted(pins)}
 
 
 def version() -> str:
@@ -882,5 +927,5 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
     return eid
 
 
-__all__ = ["PINS", "SCHEMA", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "key", "lookup", "produced", "recorded_pins",
-           "recording", "seen", "store", "trace", "tracing", "untraced", "version"]
+__all__ = ["PINS", "SCHEMA", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup", "pin_files", "produced",
+           "recorded_pins", "recording", "seen", "store", "trace", "tracing", "unit_files", "untraced", "version"]

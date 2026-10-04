@@ -22,9 +22,9 @@
                      beside it (`q_call`: units, committed bits, values computed in two units; or why it refuses, a warning).
                      Both resolve every parameter leaf, so a Definition over ``partition_max_leaves`` is not partitioned (a
                      warning, ``partition/unchecked``)
-    lowering pins    a lowering's AND/XOR/NOT counts against `pins.json` (a piece's, a Boolean Definition's whole lowering's,
-                     a template unit's; a Boolean Definition's lowering has at most its own And gates), a template unit's
-                     circuit digest against its C-Flock
+    lowering pins    a lowering's AND/XOR/NOT counts against its pin (a piece's, a Boolean Definition's whole lowering's,
+                     a template unit's, in the sidecar of the module that defines it or `pins.json`, `sidecars`; a Boolean
+                     Definition's lowering has at most its own And gates), a template unit's circuit digest against its C-Flock
                      module's `PINS`, and the Boolean export's gate lists checked against the unit circuit
                      (`verity_flock.boolean_export`)
 
@@ -47,6 +47,7 @@ from verity.evaluation.reference import resolve, signature_of, standalone_call
 from verity.ir.boolean import is_boolean
 from verity.ir.defs import PrimitiveDefinition
 
+from . import sidecars as SC
 from .vectors import edge_count, flat, instance_args, vectors
 
 SCHEMA = "verity-circuit-check/v1"
@@ -97,7 +98,8 @@ class Findings:
 
 
 def load_pins() -> dict:
-    return json.loads(PINS.read_text()) if PINS.exists() else {"pieces": {}, "units": {}}
+    """Every pin: `PINS`' and each sidecar's (`sidecars.load_pins`)."""
+    return SC.load_pins(PINS)
 
 
 def _short(x: Any, n: int = 240) -> str:
@@ -669,7 +671,7 @@ def _export_counts(build: Callable[[], Any], name: str) -> dict:
 
 
 def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pins: dict) -> dict:
-    """A subcircuit's C-Flock proof units: the unit circuit's digest against its module's pin, its counts against `pins.json`
+    """A subcircuit's C-Flock proof units: the unit circuit's digest against its module's pin, its counts against their pin
     and the Boolean export, its redundant ANDs, and the laid-out units against the reference on the edge and random vectors."""
     from verity_flock import ir_lower as IL
     from verity_numerical.bench import lowerings

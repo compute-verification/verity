@@ -10,7 +10,9 @@ the suite runs over, every registered Definition and template at small bindings.
 The catalog (`catalog`) is roots at small statics: every primitive, every static-free composite, core's GEMM Definitions and
 silicon references, every vLLM kernel's self-check specialisations, each template, and tiny whole-model configurations; the
 suite checks every specialisation reachable from them (`suite`), and fails by name for a registered Definition family no root
-reaches: a new Definition needs a binding here.
+reaches: a new Definition needs a binding.  A binding lives beside the Definitions it binds, in their module's sidecar
+(`sidecars`), in this module's forms: a root function named in `ROOT_FUNCTIONS`, a `_model_roots` entry, a ``TEMPLATE_PARAMS``
+entry.  This module keeps what no one Definition module owns.
 """
 from __future__ import annotations
 
@@ -183,9 +185,51 @@ TEMPLATE_PARAMS = {
 }
 
 
-#: the binding units (`cache`'s units of this module: a root function, a `_model_roots` entry, a `TEMPLATE_PARAMS` entry) whose
-#: roots reach each suite target, by Definition id (`suite`) or template label (`templates`)
+#: the binding units (`cache`'s units of a binding file: a root function, a `_model_roots` entry, a `TEMPLATE_PARAMS` entry;
+#: this module's by name, a sidecar's as ``<file>#<name>``) whose roots reach each suite target, by Definition id (`suite`) or
+#: template label (`templates`)
 BINDINGS: dict[str, set[str]] = {}
+#: the root functions a binding file may define, in catalog order (each file's in turn, this module first); ``_X_roots`` holds
+#: ``_X_bindings`` beside it as one binding when the file defines both
+ROOT_FUNCTIONS = ("_core_roots", "_boolean_roots", "_boolean_gather_roots", "_universal_roots", "_kernel_roots",
+                  "_vocabulary_roots", "_pouw_roots")
+
+
+def binding_files() -> list[tuple[str, dict[str, Any]]]:
+    """(unit prefix, namespace) of each binding file: this module (its units by name) and each sidecar, by module (``<file>#``).
+    A sidecar binding function this module does not run is an error."""
+    from . import sidecars as SC
+
+    load_registries()
+    out: list[tuple[str, dict[str, Any]]] = [("", globals())]
+    for mod, m in SC.binding_modules():
+        ns = vars(m)
+        known = {*ROOT_FUNCTIONS, *(n.replace("_roots", "_bindings") for n in ROOT_FUNCTIONS), "_model_roots"}
+        if stray := sorted(n for n in ns if CC._is_binding(n) and n not in known):
+            raise ValueError(f"{m.__file__}: {', '.join(stray)} is no binding circuit-check runs (`targets.ROOT_FUNCTIONS`)")
+        out.append((f"{SC.rel(m.__file__)}#", ns))
+    return out
+
+
+def _root_bindings(name: str) -> list[tuple[tuple[str, ...], Callable[[], list[Any]]]]:
+    """(units, root function) of every binding file that defines root function ``name``."""
+    pair = name.replace("_roots", "_bindings")
+    return [(tuple(prefix + n for n in (name, pair) if n in ns), ns[name]) for prefix, ns in binding_files() if name in ns]
+
+
+def template_params() -> dict[str, tuple[str, list[dict]]]:
+    """{template id: (unit, its parameters)} over every binding file's ``TEMPLATE_PARAMS``; a template in two is an error."""
+    out: dict[str, tuple[str, list[dict]]] = {}
+    for prefix, ns in binding_files():
+        for tid, params in ns.get("TEMPLATE_PARAMS", {}).items():
+            if tid in out:
+                raise ValueError(f"template {tid} has parameters in two binding files ({out[tid][0]}, {prefix}TEMPLATE_PARAMS)")
+            out[tid] = (f"{prefix}TEMPLATE_PARAMS:{tid}", params)
+    return out
+
+
+def _template_unit(tid: str) -> str:
+    return template_params().get(tid, (f"TEMPLATE_PARAMS:{tid}",))[0]
 
 
 def _produce(units: tuple[str, ...], make: Callable[[], list[Any]], by_unit: list | None = None) -> list[Any]:
@@ -198,14 +242,16 @@ def _produce(units: tuple[str, ...], make: Callable[[], list[Any]], by_unit: lis
 
 
 def templates() -> list[tuple[str, Any, list[dict]]]:
-    """(label, subcircuit, instance statics) for every template in the catalogue: `TEMPLATE_PARAMS`, else its example."""
+    """(label, subcircuit, instance statics) for every template in the catalogue: its ``TEMPLATE_PARAMS`` (`template_params`),
+    else its example."""
     from verity_numerical.bench import templates as TM
 
     load_registries()
+    params_of = template_params()
     out = []
     for tid, t in sorted(TM.TEMPLATES.items()):
-        unit = (f"TEMPLATE_PARAMS:{tid}",)
-        for params in TEMPLATE_PARAMS.get(tid, [dict(t.example)]):
+        unit = (_template_unit(tid),)
+        for params in params_of.get(tid, ("", [dict(t.example)]))[1]:
             sub, sts = _produce(unit, lambda t=t, params=params: (lambda s: [s, instance_statics(s, params)])(t.bind(**params)))
             BINDINGS.setdefault(sub.id, set()).update(unit)
             out.append((sub.id, sub, sts))
@@ -615,22 +661,21 @@ def catalog(by_unit: list | None = None) -> list[Any]:
         elif isinstance(d, CompositeDefinition) and not d.statics:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
-    for units, make in ((("_core_roots",), _core_roots), (("_boolean_roots",), _boolean_roots),
-                        (("_boolean_gather_roots",), _boolean_gather_roots), (("_universal_roots",), _universal_roots),
-                        (("_kernel_roots",), _kernel_roots), (("_vocabulary_roots", "_vocabulary_bindings"), _vocabulary_roots),
-                        (("_pouw_roots",), _pouw_roots)):
-        roots += _produce(units, make, by_unit)
-    for label, make in _model_roots():
-        def built(make=make):
-            fn = make()
-            _ = fn.body
-            return [fn]
-        try:
-            roots += _produce((f"_model_roots:{label}",), built, by_unit)
-        except Exception as e:  # noqa: BLE001  (named, and the suite fails on it)
-            ROOT_ERRORS.append((label, f"{type(e).__name__}: {str(e)[:200]}"))
+    for name in ROOT_FUNCTIONS:
+        for units, make in _root_bindings(name):
+            roots += _produce(units, make, by_unit)
+    for prefix, ns in binding_files():
+        for label, make in ns["_model_roots"]() if "_model_roots" in ns else []:
+            def built(make=make):
+                fn = make()
+                _ = fn.body
+                return [fn]
+            try:
+                roots += _produce((f"{prefix}_model_roots:{label}",), built, by_unit)
+            except Exception as e:  # noqa: BLE001  (named, and the suite fails on it)
+                ROOT_ERRORS.append((label, f"{type(e).__name__}: {str(e)[:200]}"))
     for _label, sub, sts in templates():
-        roots += _produce((f"TEMPLATE_PARAMS:{sub.template.id}",),
+        roots += _produce((_template_unit(sub.template.id),),
                           lambda sub=sub, sts=sts: [x for st in sts for x in (sub.definition(**st), sub.target(**st))], by_unit)
     return roots
 
@@ -689,7 +734,8 @@ def suite() -> dict[str, Any]:
     window share a family and a gate count, so `select` alone keeps one of them).  Records each one's `BINDINGS`."""
     by_unit: list = []
     out = select(reachable(catalog(by_unit)))
-    out.update({fn.id: fn for fn in _produce(("_pouw_roots",), _pouw_roots, by_unit)})
+    for units, make in _root_bindings("_pouw_roots"):
+        out.update({fn.id: fn for fn in _produce(units, make, by_unit)})
     for units, roots in by_unit:
         for fid in reachable(roots):
             if fid in out:
@@ -697,6 +743,7 @@ def suite() -> dict[str, Any]:
     return dict(sorted(out.items()))
 
 
-__all__ = ["MAX_GATES", "REGISTERED", "ROOT_ERRORS", "TABLE_PROBES", "TEMPLATE_PARAMS", "TINY", "boolean_call_families", "call_families",
-           "catalog", "definition", "family", "instance_statics", "kind_of", "load_registries", "reachable", "select", "subcircuit",
-           "suite", "table_probe", "templates"]
+__all__ = ["MAX_GATES", "REGISTERED", "ROOT_ERRORS", "ROOT_FUNCTIONS", "TABLE_PROBES", "TEMPLATE_PARAMS", "TINY",
+           "binding_files", "boolean_call_families", "call_families", "catalog", "definition", "family", "instance_statics",
+           "kind_of", "load_registries", "reachable", "select", "subcircuit", "suite", "table_probe", "template_params",
+           "templates"]

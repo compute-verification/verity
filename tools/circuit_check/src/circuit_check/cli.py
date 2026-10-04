@@ -22,6 +22,7 @@ from typing import Callable
 
 from . import cache as CC
 from . import checks as CK
+from . import sidecars as SC
 from . import targets as TG
 
 REPO = Path(__file__).resolve().parents[4]
@@ -185,16 +186,16 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
 
 
 def update_pins(rep: dict) -> dict:
-    """The pins file with every unpinned or changed count the report saw set to the count measured now."""
-    pins = CK.load_pins()
+    """Every pin, with each unpinned or changed count the report saw set to the count measured now, in the file that holds the pin
+    or, for a new one, the sidecar of the module that defines its Definition (`sidecars.write_pins`)."""
+    updates = {}
     for t in rep["targets"]:
         for f in t.get("failures", []) + t.get("warnings", []):
             if f["check"] == "lowering" and f["code"] in ("unpinned", "pin-mismatch"):
-                pins.setdefault(f["pins"], {})[f["pin"]] = f["counts"]
-    for kind in pins:
-        pins[kind] = dict(sorted(pins[kind].items()))
-    CK.PINS.write_text(json.dumps(pins, indent=1, sort_keys=True) + "\n")
-    return pins
+                updates[f["pins"], f["pin"]] = f["counts"]
+    CK.load_pins()
+    SC.write_pins(updates)
+    return CK.load_pins()
 
 
 def main(argv: list[str] | None = None) -> int:

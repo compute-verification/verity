@@ -167,10 +167,11 @@ from pathlib import Path
 
 root, repo = Path(sys.argv[1]), Path(sys.argv[2])
 sys.path.insert(0, str(root))
-from circuit_check import cache as CC, checks as CK, cli, targets as TG
+from circuit_check import cache as CC, checks as CK, cli, sidecars as SC, targets as TG
 
 CC.TARGETS, CC.PINS, CC._TARGETS_FILE = root / "targets.py", root / "pins.json", str(root / "targets.py")
 CK.PINS = root / "pins.json"
+SC.REPO, SC.PACKAGES = root, ("syn",)
 cli.REPO = root
 inner = CC._interpreter_dirs
 CC._interpreter_dirs = lambda: (*inner(), str(repo) + "/")      # the checker's own modules come from the repository
@@ -187,6 +188,13 @@ for units, make in catalog.BINDINGS:
         if TG.family(fn) in catalog.FAMILIES:
             suite[fid] = fn
             TG.BINDINGS.setdefault(fid, set()).update(units)
+for _mod, m in SC.binding_modules():                            # each sidecar's `_model_roots` entries, as `catalog` runs them
+    for label, make in m._model_roots():
+        units = (f"{SC.rel(m.__file__)}#_model_roots:{label}",)
+        for fid, fn in TG.reachable(TG._produce(units, lambda make=make: [make()])).items():
+            if TG.family(fn) in catalog.FAMILIES:
+                suite[fid] = fn
+                TG.BINDINGS.setdefault(fid, set()).update(units)
 TG.load_registries = lambda: None
 TG.suite = lambda: dict(sorted(suite.items()))
 TG.templates = lambda: []
@@ -282,6 +290,91 @@ def test_another_binding_or_pin_reuses_every_target_and_its_own_reruns_it(tmp_pa
     pins["pieces"]["SynTop_v1"] = {"and": 4}
     (root / "pins.json").write_text(json.dumps(pins))
     assert _run(root)["hits"] == ["SynOther_v1"]
+
+
+#: SynOther's binding and pin moved out of `targets.py` and `pins.json` into its module's sidecar
+SIDECAR = """
+def _model_roots():
+    from verity.ir.defs import bind
+    from syn import idle, other
+    return [
+        ("SynOther_v1", lambda: bind(other.SynOther)),
+        ("SynIdle_v1", lambda: bind(idle.SynIdle)),
+    ]
+"""
+
+
+def _sidecar(root: Path) -> None:
+    _edit(root, "syn/catalog.py", ', (("_model_roots:SynOther_v1",), model)]', "]")
+    _edit(root, "targets.py", '("SynOther_v1", lambda: "SynOther_v1"),\n', "")
+    (root / "syn/other.circuit-check.py").write_text(SIDECAR.lstrip("\n"))
+    pins = json.loads((root / "pins.json").read_text())
+    (root / "syn/other.circuit-check.json").write_text(json.dumps({"pieces": {"SynOther_v1": pins["pieces"].pop("SynOther_v1")}}))
+    (root / "pins.json").write_text(json.dumps(pins))
+
+
+def test_a_sidecars_binding_and_pin_are_held_as_targets_pys_are(tmp_path):
+    """A binding in a Definition module's sidecar is a unit of that file, ``<file>#<unit>`` with the file's ``common``, and a
+    pin in its pins file is held there: editing another entry of the sidecar or another file's pin reuses the target, its own
+    entry or pin reruns it and nothing else."""
+    root = _tree(tmp_path)
+    _sidecar(root)
+    _run(root)
+    other, top = _entry(root, "SynOther_v1")["reads"], _entry(root, "SynTop_v1")["reads"]
+    side = "syn/other.circuit-check.py"
+    assert set(other["units"]) == {f"{side}#_model_roots:SynOther_v1", f"{side}#common", "targets.py#common"}
+    assert set(other["pins"]) == {"syn/other.circuit-check.json#pieces#SynOther_v1"}
+    assert set(top["pins"]) == {"pins.json#pieces#SynTop_v1"}
+    assert not {side, "syn/other.circuit-check.json"} & set(other["files"])
+    _edit(root, side, '("SynIdle_v1", lambda: bind(idle.SynIdle))', '("SynIdle_v1", lambda: bind(idle.SynIdle, **{}))')
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(root, side, '("SynOther_v1", lambda: bind(other.SynOther))', '("SynOther_v1", lambda: bind(other.SynOther, **{}))')
+    assert _run(root)["hits"] == ["SynTop_v1"]
+    pins = json.loads((root / "syn/other.circuit-check.json").read_text())
+    pins["pieces"]["SynOther_v1"] = {"and": 6}
+    (root / "syn/other.circuit-check.json").write_text(json.dumps(pins))
+    assert _run(root)["hits"] == ["SynTop_v1"]
+
+
+def test_a_new_pin_goes_to_the_sidecar_of_its_definitions_module(tmp_path):
+    """`sidecars.pin_file`: a pin is written where it is, and a new one to the pins file of the module that defines its
+    Definition, a module without a sidecar getting one beside it."""
+    root = _tree(tmp_path)
+    _sidecar(root)
+    code = HARNESS.split("CC.trace(root)")[0] + """
+import syn.kdef, syn.other, syn.top  # noqa: E401
+CK.load_pins()
+SC.write_pins({("pieces", "SynOther_v1"): {"and": 7}, ("pieces", "SynTop_v1"): {"and": 8}, ("pieces", "SynK_v1"): {"and": 9},
+               ("pieces", "Nobody_v1"): {"and": 1}})
+"""
+    r = subprocess.run([sys.executable, "-c", code, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO)
+    assert r.returncode == 0, r.stderr
+    read = lambda rel: json.loads((root / rel).read_text())["pieces"]  # noqa: E731
+    assert read("syn/other.circuit-check.json") == {"SynOther_v1": {"and": 7}}
+    assert read("syn/kdef.circuit-check.json") == {"SynK_v1": {"and": 9}}
+    assert read("pins.json") == {"SynTop_v1": {"and": 8}, "Nobody_v1": {"and": 1}}
+
+
+def test_a_sidecar_whose_module_is_gone_is_an_error(tmp_path, monkeypatch):
+    import pytest
+
+    from circuit_check import sidecars as SC
+
+    (tmp_path / "synorphan").mkdir()
+    (tmp_path / "synorphan/__init__.py").write_text("")
+    (tmp_path / "synorphan/kept.py").write_text("")
+    (tmp_path / "synorphan/kept.circuit-check.json").write_text("{}")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(SC, "PACKAGES", ("synorphan",))
+    SC.discover.cache_clear()
+    try:
+        assert list(SC.discover()) == ["synorphan.kept"]
+        (tmp_path / "synorphan/gone.circuit-check.py").write_text("")
+        SC.discover.cache_clear()
+        with pytest.raises(FileNotFoundError, match="synorphan.gone, which has no module"):
+            SC.discover()
+    finally:
+        SC.discover.cache_clear()
 
 
 def test_a_target_that_would_reuse_a_memoized_result_reruns_when_its_dependency_changes(tmp_path):
