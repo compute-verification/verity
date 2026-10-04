@@ -1,6 +1,6 @@
 import Pouw.Protocol.PearlC.HiddenTileGame
 import Pouw.SecurityProofs.PearlC.HiddenGamma
-import Verity.SecurityProofs.Game
+import VerityProofs.SecurityProofs.Game
 
 /-!
 # The hidden audit's open obligation from what a proof system gives per tile

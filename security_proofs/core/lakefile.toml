@@ -1,0 +1,22 @@
+name = "security_proofs_core"
+defaultTargets = ["VerityProofs"]
+
+[leanOptions]
+autoImplicit = false
+
+# The one Mathlib revision every Lake package in the tree builds with (`tests/test_lean_packages.py`).
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "5ed2965256430c3649e86755f9576b54eca72435"
+
+[[require]]
+name = "verity"
+path = "../../packages/verity/lean"
+
+# The proofs of `packages/verity/lean`'s guarantees and every lemma behind them, untrusted: the spec's lock says
+# what they prove.
+[[lean_lib]]
+name = "VerityProofs"
+roots = ["VerityProofs"]

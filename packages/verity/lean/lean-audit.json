@@ -1,5 +1,14 @@
 {
- "roots": ["Verity"],
+ "roots": [
+  "Verity.Assumptions",
+  "Verity.Guarantees",
+  "Verity.Protocol",
+  "Verity.SecurityProofs.Fp32.Vectors",
+  "Verity.SecurityProofs.Prims.Vectors",
+  "Verity.SecurityProofs.Scalar.Vectors",
+  "Verity.SecurityProofs.TC.Vectors"
+ ],
+ "proved_in": ["../../../security_proofs/core"],
  "assumptions": ["Verity.Assumptions"],
  "meaning": ["Verity.Protocol", "Verity.Assumptions", "Verity.Guarantees"],
  "layers": {
