@@ -11,7 +11,7 @@ A scheme (`protocol.PoUWScheme`) is a named, versioned object, looked up by name
 `tests/vectors`, like `verity.commitments.scheme.CommitmentScheme`. It turns one declared matmul's committed operand
 rows into, for each tile, checked values, a transcript leaf and the useful output. It exposes:
 
-- `name` and `certificate`: what an accepted audit rests on (the conjecture's claim id, γ_0, Ω*, the pinned Lean theorems,
+- `name` and `certificate`: what an accepted audit rests on (the conjecture's claim id, γ_0, Ω*, the Lean guarantees,
   the hypotheses, the allowances);
 - `check(matmul)`: refuses a declaration outside the domain, before any work;
 - `tiles(shape)`: the checked units, a partition of the output cells; a tile is rows of A times rows of B at full k;
@@ -140,7 +140,7 @@ wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves pr
   `tests/test_pouw_word_p.py` certifies all of them exactly at the k the MVP uses (1,088, 2,048, 11,008).
   `ncp-v1-shift24` uses the shift by 24 instead, admissible with independent checkpoints for every k ≥ 1,024 with
   16 ∣ k (Lean `Pouw.SecurityProofs.NCP.ShiftBy24Admissible`, `Pouw.SecurityProofs.NCP.IndependentWitness`).
-- **Lean** (the certificate's pins, all approved by the red team, Phase 13):
+- **Lean** (the certificate's guarantees, all approved by the red team, Phase 13):
   - the reduction: `Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1` (β = 128, f = 24, n₀ ≤ n), from the named assumption
     `Pouw.NCP.Assumptions.TTNCP_U`, with `Pouw.SecurityProofs.NCP.TTNCPUIff` (it is TT_NCP over the route-U checked
     set) and `Pouw.SecurityProofs.NCP.TTNCPUWitness`;
@@ -289,8 +289,8 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
     W_ref per tile and 0 for `digest`, `node`, `key`, `form_x` and `dequant`; `dequant`'s floor is y's (below), and the
     others' 1 unless POUS sets them. A call's work is in one stratum (0 < w_s·n_s in one only) and its tiles are of one
     template: `work_table`, `WorkLaw.budget` and `window_laws` refuse any other (`plan.check_work_strata`), since the
-    window pin takes it as its hypothesis `hone`. Where the cap K_c ≤ N_c binds, a second work stratum is under-drawn:
-    in the red team's window ten wrong units escape with 0.156 against a claimed 2.4·10⁻⁴
+    window guarantee takes it as its hypothesis `hone`. Where the cap K_c ≤ N_c binds, a second work stratum is
+    under-drawn: in the red team's window ten wrong units escape with 0.156 against a claimed 2.4·10⁻⁴
     (`test_the_red_team_s_capped_window_is_refused`).
   - `plan.law_object` is the law `verify` derives from it, each stratum `{template, units, work, floor, k}`.
   - K is a **window's** budget (X-SPC-83): a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units
@@ -301,9 +301,9 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
     cells and N the window's, with K_y = K = 27,713 (`plan.window_laws`). So k_c = min(n_c, f_c) meets k_c·N ≥ K_y·n_c
     or proves the call's y, and a window draws at most K_y + C y cells. δ stays 2⁻⁴⁰: a tile-bad and a y-bad wrong set
     are one family of the one window audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y, not their
-    sum. Per call the floor is pinned (`audit_work_floor`); `flock-verify draw --work` derives the same law from these
-    tables.
-  - **X-SPC-105 and X-SPC-106 are closed by the window pin**, `audit_window_split_of_record` in
+    sum. Per call the floor is a guarantee (`audit_work_floor`); `flock-verify draw --work` derives the same law from
+    these tables.
+  - **X-SPC-105 and X-SPC-106 are closed by the window guarantee**, `audit_window_split_of_record` in
     `FlockSoundness/Audit/Window.lean` ([#418](https://github.com/danielreuter/verity/pull/418), proved at `f06327bd`,
     pending its grant): the per-call law with y's floors at
     K = K_y = 27,713 accepts a window with at least 0.1% of its work unsound or 0.1% of its y cells wrong with probability
@@ -321,7 +321,7 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
       (`__init__.py:97`), which refuses a repeated (forward, position) before anything is drawn (`anchors.py:215–221`),
       and each stratum's context is ("call", forward, position, "stratum", template) (`plan.py:291`). The index is the
       verifier's anchors' (`Anchors`, `anchors.py:42`, which `Anchors.check_call` holds the call's inputs to,
-      `anchors.py:83`). This is the pin's M1.
+      `anchors.py:83`). This is the guarantee's M1.
     - *Every call's commitment precedes the window key* (root's C1). A window's `anchors.Receipt` lists every call with
       its anchors, shape and commitment, and is immutable (`anchors.py:130`); its digest binds each call's full
       anchors (index, salt, weight id, rows and columns), shape and commitment. `Ledger.open` derives the key from it
@@ -342,8 +342,8 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
       source whose draw misses; that is the designated verifier's trust, and a beacon or a commit-and-reveal would be
       needed for a third party to check it. No protocol or beacon timing changes: the key is still the verifier's own
       randomness after the receipt.
-    - *ε_ks and δ_link are the window's.* The pin's are one window `Analysis`'s (M2). The per-call values are not cited
-      as the window's; no statement composes them yet.
+    - *ε_ks and δ_link are the window's.* The guarantee's are one window `Analysis`'s (M2). The per-call values are not
+      cited as the window's; no statement composes them yet.
 - `CountLaw` is `main`'s stratified rule, k_s = max(1, round(K·n_s/N)).
 
 **The draw is per call** (X-SPC-96). Each stratum's subset is drawn from the verifier's key under the call's index,
@@ -354,7 +354,7 @@ window's `anchors.Ledger` is opened from its complete `Receipt` (`Ledger.open`),
 fresh source under the receipt's digest; `Traced.draw` draws only under that key, admits the call first, refusing one
 the receipt doesn't list or the window already holds before anything is drawn, and then keys each stratum's subset
 with ("call", forward, position, "stratum", template). So every call's commitment precedes the key, and each call of a
-window draws under a context of its own, the product law the window pin takes as M1.
+window draws under a context of its own, the product law the window guarantee takes as M1.
 
 **The call's Y is linked to the weight Program** (X-SPC-95). The call reads its weight's Y strips and c₀ as committed
 inputs, so at each drawn tile's column strip (the strips `Plan.proved_y` proves in the weight Program) the plan opens
@@ -559,15 +559,26 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     module docstring).
   - The noise lines and G are verifier-derived public inputs, as in `pc4` (`anchors.TileAnchors`, G on the record's
     chain), and each is a public input region in a unit's proof (`pc8.DERIVATIONS`; one u16 word per E4M3 code).
-  - The Programs evaluate to `pearl_c.json`'s pinned H100 test instance, and to the scheme on sm_120's records. Every
-    partition computes each value in exactly one unit.
+  - The Programs evaluate to `pearl_c.json`'s pinned H100 test instance (and its decode-32 case's B̃, P_B, C̃ and U), and
+    to the scheme on sm_120's records, a short last tile row included. Every partition computes each value in exactly
+    one unit.
+  - **A short last tile row.** `Shape.check` is the scheme's domain down the rows (`Row tiles` above: whole 16-row
+    ticket subtiles), so where 64 ∤ m the last tile row is r = m mod 64 rows, its own batch of `Pc8Tile` (or
+    `Pc8TileHidden`) at r × 64, whose digest is the scheme's leaf over its real rows. So m = 80 is a 64-row tile row and
+    a 16-row one, and decode's m = 32 is one 32-row tile row at the default tile.
+    - `plan.tile_layout` proves a short tile with its r `Pc8RowA` units, in its own stratum at W_ref r/64 of a whole
+      tile's.
+    - A call with both whole and short tile rows is therefore two tile strata, which the work law refuses
+      (`plan.check_work_strata`, the window pin's `hone`). Under the work law such a call is not drawn yet; a call that is
+      all one tile row height is.
   - The hiding Programs are `pc4`'s (``Shape.hidden``; the rows and their vectors are under `circuit.pc4` below):
     `Pc8TileHidden` returns its tile digest in place of C̃ and U, the weight's Program is `Pc8Weight`, and the rows are
     C-Flock's committed ports (`pc8.PORTS`), with `pouw/row-fp32/v1` input rows, `pouw/row-fp8-p/v1` rows and
     `pouw/row-ok/v1` rows. A 64 × 64 tile's digest is 281 Keccak-p[1600, 12] in gates. `plan.tile_layout` draws a tile
     with its rows, as for `pc4`.
   - The row cut along k (``Shape.row_k``, `circuit.rowk`) and the tile cut into sub-tiles (``Shape.tile_sub``,
-    `circuit.tilesub`) are `pc4`'s, below, on each of the three records, with the cap off.
+    `circuit.tilesub`) are `pc4`'s, below, on each of the three records, with the cap off. Both take whole tiles only:
+    `Shape.check` refuses a short last tile row under either cut.
   - Not in it yet: the debit and the cap. Until they land, Pearl-C's runs are checked by its reference audit, a
     development shortcut that opens rows.
 
@@ -865,6 +876,8 @@ useful    U/(α_A·α_B), glue
     - A drawn sub-tile is proved with its whole tile (`plan.tile_layout`): the tile's other sub-tiles, under hiding its
       row digests and its leaf, and its rows of A's and of B's units. The tile stratum is the sub-tiles, each at the W_ref
       the caller gives a sub-tile.
+    - It takes whole tiles only: `pc8`'s short last tile row is refused under it (`tilesub.whole_tiles`), as under the
+      row cut.
     - It composes with the row cut. A shape without ``tile_sub`` builds today's Programs, their digests unchanged;
       `pouw_rows.json` pins the two rows. By the piece pins and `fits`, a (2, 2) sub-tile fits the block up to k = 25,984
       on sm_120 (26,592 unpromoted, 34,048 on the H100, 63,872 for Pearl-C4), and (1, 1) to 65,536 on every record.
@@ -920,12 +933,12 @@ and its `e4m3` is the code wherever `F32ToE4m3Sat_v1` agrees with `e4m3Word` and
   - the lead domain's shapes (k ≥ 1,088) as a recorded run rather than a test;
   - C-Flock pieces for the PoUW primitives;
   - the floors POUS sets for the zero-work templates other than `dequant` (X-SPC-55; 1 until then);
-  - the grant and merge of the window pin, `audit_window_split_of_record`
+  - the grant and merge of the window guarantee, `audit_window_split_of_record`
     ([#418](https://github.com/danielreuter/verity/pull/418));
-  - the audit for a draw that depends on the registration: the key's context is the receipt digest, which the pinned
-    `audit` game (the registration before the coin, `L.draw ω`) can't express. Either apply the pins strategy by
-    strategy, at the context digest(reg σ), or state the audit for a draw `L.draw R ω` with A4 uniform over contexts;
-    the Lean lane's to choose (root's C1);
+  - the audit for a draw that depends on the registration: the key's context is the receipt digest, which the `audit`
+    game the guarantees state (the registration before the coin, `L.draw ω`) can't express. Either apply the guarantees
+    strategy by strategy, at the context digest(reg σ), or state the audit for a draw `L.draw R ω` with A4 uniform over
+    contexts; the Lean lane's to choose (root's C1);
   - a statement composing the calls' ε_ks and δ_link into the window's (M2);
   - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;
   - the vLLM adapter's `traced_as`;

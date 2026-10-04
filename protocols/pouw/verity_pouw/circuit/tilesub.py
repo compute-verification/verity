@@ -1,6 +1,7 @@
 """Tile units under C-Flock's block (``Shape.tile_sub``): each tile unit of Pearl-C's (`pc8`) and Pearl-C4's (`pc4`) tile
 check cut into sub-tiles of a × b words, and under hiding its tile digest into a digest unit per tile row and one over
-them.  It is opt-in: a shape without ``tile_sub`` builds today's Programs, which this module leaves alone.
+them.  It is opt-in: a shape without ``tile_sub`` builds today's Programs, which this module leaves alone.  It takes whole
+tiles only: `pc8`'s short last tile row is refused under it, as under the row cut (`whole_tiles`).
 
 C-Flock proves one instance in at most a 2^27-bit block (`verity_flock.circuit.K_MAX`), and the scheme's 64 × 64 tile is
 4,096 words' chains over k in one instance, past the block at every served k.  A sub-tile is one call of today's tile
@@ -50,11 +51,19 @@ GRID = ("tile", "row_digest", "tile_leaf")
 OK = L.OK
 
 
+def whole_tiles(m: int, tm: int) -> None:
+    """The tile cut takes whole tiles only: a short last tile row (`pc8.Shape.tile_rows`) is refused, as the row cut
+    refuses it."""
+    if m % tm:
+        raise DomainError(f"the tile cut takes whole tiles only, {tm} | m, not a short last tile row of {m % tm}: m = {m}")
+
+
 def check(shape) -> None:
     sub, (tm, tn) = shape.tile_sub, shape.tile
     if not (type(sub) is tuple and len(sub) == 2 and all(type(v) is int and v in SUBS for v in sub)
             and tm % sub[0] == 0 and tn % sub[1] == 0):
         raise DomainError(f"a tile cut is tile_sub = (a, b), a and b each one of {SUBS}, a | TM and b | TN: {shape}")
+    whole_tiles(shape.m, tm)
     if shape.hidden and -(-tn // C.CHUNK) > L.TILE_CHUNKS:
         raise DomainError(f"a hiding tile cut's row digests hold {L.TILE_CHUNKS} chunks (TN <= {C.CHUNK * L.TILE_CHUNKS}): "
                           f"{shape}")
@@ -245,4 +254,4 @@ def ports(shape) -> dict:
 
 
 __all__ = ["GRID", "Pc4SubTileDef", "Pc8SubTileDef", "ROLES", "ROLE_OF", "ROOTS", "SUBS", "TILE_SUB", "check", "outputs",
-           "ports", "root4", "root8", "sub_tile4", "sub_tile8", "unit_templates4", "unit_templates8"]
+           "ports", "root4", "root8", "sub_tile4", "sub_tile8", "unit_templates4", "unit_templates8", "whole_tiles"]

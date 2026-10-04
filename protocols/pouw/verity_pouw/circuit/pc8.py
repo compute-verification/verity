@@ -9,14 +9,16 @@ establish a drawn tile's checked words (C̃ and U) and its rows' admission witho
     Pc8Tile{K,TM,TN,DEV}  tile of TM × TN words   its TM rows A′, P_A and TN rows B̃, P_B   C̃ and U of its words
 
 The roots are `pc4`'s: `Pc8Weight{K,N,DEV}` holds the B rows; `Pc8Call{M,K,N,TM,TN,DEV}` holds the A rows and the tiles,
-reading the weight's B̃ and P_B as committed inputs; `Pc8Check` is both in one root.  The partition is
-`Q_template_instances` over the templates (`query`), and every value is computed in exactly one unit.  Forming v0 (#311's
+reading the weight's B̃ and P_B as committed inputs; `Pc8Check` is both in one root.  Down the rows the domain is the
+scheme's (whole 16-row ticket subtiles), so a short last tile row, r = m mod TM rows, is its own batch of `Pc8Tile` at
+r × TN (`Shape.tile_rows`, `tile_templates`).  The partition is `Q_template_instances` over the templates (`query`), and
+every value is computed in exactly one unit.  Forming v0 (#311's
 port) has no circuit here.  The hiding Programs are `pc4`'s (``Shape.hidden``): `Pc8TileHidden` returns its tile digest in
 place of C̃ and U, and the rows are C-Flock-committed ports (`PORTS`), with fp32 input rows, fp8-p rows (A′_i ‖ P_A,i,
 B̃_j ‖ P_B,j; `leaves`) and each row's ``ok`` row, and the anchored inputs public input regions.  ``Shape.row_k`` cuts
 each row unit along k into a head, a form per segment of row_k positions and a tail (`rowk`), so that a row unit fits
-C-Flock's block at every served k, and ``Shape.tile_sub`` each tile unit into sub-tiles (`tilesub`); off, nothing here
-changes.
+C-Flock's block at every served k, and ``Shape.tile_sub`` each tile unit into sub-tiles (`tilesub`); both take whole tiles
+only (`Shape.check` refuses a short last tile row under either), and off, nothing here changes.
 
 ``DEV`` names a device record (`pearl_c_device.DEVICES`): its E4M3 k32 atom (`HopperE4m3QgmmaDot32` on the H100,
 `BlackwellE4m3QmmaDot32` on sm_120) and its promotion period G.  The peel's BF16 k16 step is `HopperBF16WgmmaDot16` on
@@ -345,19 +347,30 @@ class Shape:
     seeds: ClassVar[dict] = SEEDS
 
     def check(self) -> None:
+        """`PearlC.check`'s rows and columns: whole tiles across, and down the rows whole 16-row ticket subtiles (whole
+        tiles, for a tile under 16 rows), so the last tile row may be short (`tile_rows`).  The row cut (``row_k``,
+        `rowk`) and the tile cut (``tile_sub``, `tilesub.check`) take whole tiles only."""
         d = DEVICES.get(self.dev)
         tm, tn = self.tile
         if d is None or d.atom.name not in ATOMS or d.peel.name not in PEELS:
             raise DomainError(f"Pearl-C's circuit has no device {self.dev!r}: one of {', '.join(DEVICES)}")
-        if (self.k % d.window or not 0 < self.k <= d.k_max or min(self.m, self.n, tm, tn) <= 0 or self.m % tm
-                or self.n % tn):
-            raise DomainError(f"Pearl-C's circuit needs {d.window} | k <= {d.k_max} and whole tiles on each side: {self}")
+        if (self.k % d.window or not 0 < self.k <= d.k_max or min(self.m, self.n, tm, tn) <= 0
+                or self.m % min(tm, P.TILE) or self.n % tn):
+            raise DomainError(f"Pearl-C's circuit needs {d.window} | k <= {d.k_max}, {tn} | n and {min(tm, P.TILE)} | m "
+                              f"(whole tiles across, whole ticket subtiles down): {self}")
         if self.row_k is not None:
+            if self.m % tm:
+                raise DomainError(f"Pearl-C's row cut takes whole tiles only, {tm} | m: {self}")
             from . import rowk
             rowk.check8(self)
         if self.tile_sub is not None:
             from . import tilesub
             tilesub.check(self)
+
+    def tile_rows(self) -> tuple[int, ...]:
+        """Each tile row's height, top to bottom: TM, then the short last one (m mod TM rows) where TM does not divide m."""
+        tm = self.tile[0]
+        return (tm,) * (self.m // tm) + ((self.m % tm,) if self.m % tm else ())
 
 
 def _weight_units(B, k: int, dev: str, b, eb, fa, fb, g, row_k: int | None = None):
@@ -371,7 +384,12 @@ def _weight_units(B, k: int, dev: str, b, eb, fa, fb, g, row_k: int | None = Non
 def _call_units(B, k: int, tile: tuple[int, int], dev: str, a, ea, fa, fb, bc, pb, hidden: bool = False,
                 row_k: int | None = None, sub: tuple[int, int] | None = None):
     """The call's units: (C̃, U, ok), or under hiding (the tile digests by tile row and column, ok); with ``row_k``, each
-    A row's unit cut into `rowk`'s pieces, and with ``sub`` each tile's into `tilesub`'s sub-tiles and digest units."""
+    A row's unit cut into `rowk`'s pieces, and with ``sub`` each tile's into `tilesub`'s sub-tiles and digest units.  A
+    short last tile row (r = m mod TM rows) is its own batch of the tile template at r × TN; ``sub`` takes whole tiles
+    only."""
+    if sub is not None:
+        from . import tilesub
+        tilesub.whole_tiles(len(a), tile[0])
     tm, tn = sub or tile
     tp = templates(k, sub or tile, dev, hidden and sub is None)
     m, n = len(a), len(bc)
@@ -381,17 +399,21 @@ def _call_units(B, k: int, tile: tuple[int, int], dev: str, a, ea, fa, fb, bc, p
     else:
         from . import rowk
         ac, pa, ok = rowk.rows8(B, k, row_k, dev, "a", a, ea, fa, fb)
-    ms, ns = m // tm, n // tn
+    ms, ns, r = m // tm, n // tn, m % tm
     blocks = lambda x, h, t: x.reshape(Array(h, Array(t, x.type.elem)))            # noqa: E731
-    acs, pas, bcs, pbs = blocks(ac, ms, tm), blocks(pa, ms, tm), blocks(bc, ns, tn), blocks(pb, ns, tn)
     if sub is not None:
-        from . import tilesub
+        acs, pas, bcs, pbs = blocks(ac, ms, tm), blocks(pa, ms, tm), blocks(bc, ns, tn), blocks(pb, ns, tn)
         subs = [B.batch(tilesub.sub_tile8(k, sub, dev), acs[rs], bcs, pas[rs], pbs, axes=(None, 0, None, 0))
                 for rs in range(ms)]
         return (*tilesub.outputs(B, subs, m, n, tile, sub, hidden), ok)
+    whole_a, whole_p = (ac[:ms * tm], pa[:ms * tm]) if r else (ac, pa)
+    acs, pas, bcs, pbs = blocks(whole_a, ms, tm), blocks(whole_p, ms, tm), blocks(bc, ns, tn), blocks(pb, ns, tn)
     tiles = [B.batch(tp["tile"], acs[rs], bcs, pas[rs], pbs, axes=(None, 0, None, 0)) for rs in range(ms)]
+    if r:
+        short = templates(k, (r, tn), dev, hidden)["tile"]
+        tiles.append(B.batch(short, ac[ms * tm:], bcs, pa[ms * tm:], pbs, axes=(None, 0, None, 0)))
     if hidden:
-        return array_of([array_of([tiles[rs][cs] for cs in range(ns)]) for rs in range(ms)]), ok
+        return array_of([array_of([tiles[rs][cs] for cs in range(ns)]) for rs in range(len(tiles))]), ok
     cw, uw = (array_of([array_of([tiles[i // tm][j // tn][f][i % tm][j % tn] for j in range(n)]) for i in range(m)])
               for f in range(2))
     return cw, uw, ok
@@ -445,6 +467,10 @@ Pc8CheckDef = CompositeDefinition(
 
 # ---- the hiding Programs (`pc4`'s) ---------------------------------------------------------------------------------------
 
+#: the tile digests by tile row (a short last one included) and tile column
+DIGESTS = lambda S_: Array(-(-S_.M // S_.TM), Array(S_.N // S_.TN, L.DIGEST))       # noqa: E731
+
+
 def _check_hidden_body(B, S_, a, ea, b, eb, fa, fb, g):
     bc, pb, ok_b = _weight_units(B, S_.K, S_.DEV, b, eb, fa, fb, g)
     digests, ok_a = _call_units(B, S_.K, (S_.TM, S_.TN), S_.DEV, a, ea, fa, fb, bc, pb, hidden=True)
@@ -453,14 +479,14 @@ def _check_hidden_body(B, S_, a, ea, b, eb, fa, fb, g):
 
 Pc8CallHiddenDef = CompositeDefinition(
     "Pc8CallHidden", 1, ("M", "K", "N", "TM", "TN", "DEV"),
-    lambda S_: (_call_sig(S_)[0], Tuple(pc4.DIGESTS(S_), Array(S_.M, OK))),
+    lambda S_: (_call_sig(S_)[0], Tuple(DIGESTS(S_), Array(S_.M, OK))),
     lambda B, S_, *a: tuple_of(*_call_units(B, S_.K, (S_.TM, S_.TN), S_.DEV, *a, hidden=True)),
     doc="`Pc8Call` hiding: each tile's digest of C̃ and U by tile row and column, and each A row's admission.",
     conformance="protocol-defined")
 
 Pc8CheckHiddenDef = CompositeDefinition(
     "Pc8CheckHidden", 1, ("M", "K", "N", "TM", "TN", "DEV"),
-    lambda S_: (_check_sig(S_)[0], Tuple(pc4.DIGESTS(S_), Array(S_.M, OK), Array(S_.N, OK))), _check_hidden_body,
+    lambda S_: (_check_sig(S_)[0], Tuple(DIGESTS(S_), Array(S_.M, OK), Array(S_.N, OK))), _check_hidden_body,
     doc="`Pc8Check` hiding: `Pc8CallHidden`'s outputs, then each B row's admission.", conformance="protocol-defined")
 
 
@@ -507,17 +533,24 @@ def _role_of() -> dict[int, str]:
     return _ROLE_OF | rowk.ROLE_OF | tilesub.ROLE_OF
 
 
+def tile_templates(shape: Shape) -> list[SpecializedDefinition]:
+    """The tile template of each distinct tile row height (`Shape.tile_rows`), top to bottom: TM × TN, then r × TN."""
+    return [templates(shape.k, (h, shape.tile[1]), shape.dev, shape.hidden)["tile"] for h in dict.fromkeys(shape.tile_rows())]
+
+
 def query(shape: Shape, side: str = "check") -> dict[str, Any]:
     """`Q_template_instances` over the side's unit templates (`ROLES`, or with a cut `rowk.ROLES` and `tilesub.ROLES`), in
-    the order its root body first uses them."""
+    the order its root body first uses them: a short last tile row's template after the whole tiles'.  The tile cut takes
+    whole tiles only (`tilesub.check`)."""
     if shape.tile_sub is not None:
         from . import tilesub
+        tilesub.check(shape)
         return PO.template_instances_query(tilesub.unit_templates8(shape, side))
     if shape.row_k is not None:
         from . import rowk
         return PO.template_instances_query(rowk.unit_templates8(shape, side))
     tp = templates(shape.k, shape.tile, shape.dev, shape.hidden)
-    return PO.template_instances_query([tp[r] for r in ROLES[side]])
+    return PO.template_instances_query([t for r in ROLES[side] for t in (tile_templates(shape) if r == "tile" else [tp[r]])])
 
 
 def units(fn: SpecializedDefinition) -> tuple[pc4.Unit, ...]:
@@ -530,5 +563,6 @@ def unit_cut(fn: SpecializedDefinition):
     return pc4.unit_cut(fn, _role_of())
 
 
-__all__ = ["ATOMS", "BASIS", "DERIVATIONS", "GRAM", "LINE", "PEELS", "PORTS", "P_ROW", "ROLES", "SEEDS", "TILE", "Shape",
-           "basis_fa", "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "query", "templates", "unit_cut", "units", "weight"]
+__all__ = ["ATOMS", "BASIS", "DERIVATIONS", "DIGESTS", "GRAM", "LINE", "PEELS", "PORTS", "P_ROW", "ROLES", "SEEDS", "TILE",
+           "Shape", "basis_fa", "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "query", "templates",
+           "tile_templates", "unit_cut", "units", "weight"]

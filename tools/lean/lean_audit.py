@@ -1,16 +1,16 @@
-"""`lean_audit`: check's Lean audit step. `tools/lean/audit.py --build` on the packages whose passes can't be reused, with
-dependencies kept warm.
+"""`lean_audit`: Lean's audit job, which `check` runs as its lean-audit step. `tools/lean/audit.py --build` on the packages
+whose passes can't be reused, with dependencies kept warm.
 
-    python tools/check/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR]
-    python tools/check/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
-    python tools/check/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
-    python tools/check/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
+    python tools/lean/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR]
+    python tools/lean/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
+    python tools/lean/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
+    python tools/lean/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
 
 A package's verdict is reused while everything its audit reads is unchanged. Its key hashes:
 - the tracked files of the package, less the Lake packages nested in it (`audit.lean_modules` skips them);
 - the same for each package it requires by path (`audit.path_deps`);
-- `tools/lean/` (the auditor and its controls), this file and `common.py`, the helpers it imports: not `check.py`, which only
-  launches it, so an edit to `check.py` alone keeps every package's verdict;
+- `tools/lean/` (the auditor, its controls and this file) and `tools/check/common.py`, the helpers it imports: not
+  `check.py`, which only launches it, so an edit to `check.py` alone keeps every package's verdict;
 - the package's `lean-toolchain` and `lake-manifest.json`, which pin the toolchain and the fetched dependencies.
 
 When one package misses, the audit runs on a scratch tree holding only the missed packages' inputs, from that tree's own copy of
@@ -72,7 +72,7 @@ def _module(path: Path, name: str):
     return m
 
 
-#: every file this step loads is in `inputs`: this module, `common.py` and `tools/lean/` (`test_lean_audit.py` holds it)
+#: every file this step loads is in `inputs`: `tools/lean/` (this module among them) and `common.py` (`test_lean_audit.py` holds it)
 COMMON = _module(ROOT / "tools" / "check" / "common.py", "check_common_for_lean_audit")
 
 
@@ -112,7 +112,7 @@ def inputs(pkg: str, files: list[str]) -> list[str]:
     """Every tracked file an audit of ``pkg`` can read."""
     own = [f for p in (pkg, *path_deps(pkg)) for f in own_files(p, files)]
     tool = [f for f in files if f.startswith(LEAN_TOOL)]
-    return sorted({*own, *tool, "tools/check/lean_audit.py", "tools/check/common.py"})
+    return sorted({*own, *tool, "tools/check/common.py"})
 
 
 def components(pkg: str, files: list[str], flags: list[str]) -> dict:
@@ -177,7 +177,7 @@ def deps_key(pkg: Path) -> str | None:
     return hashlib.sha256(m.read_bytes() + b"\0" + (pkg / "lean-toolchain").read_bytes()).hexdigest()
 
 
-PIN = "tools/check/lean-deps.json"
+PIN = "tools/lean/lean-deps.json"
 #: the presigned URLs sent with a recorded run, {deps_key: URL}; `check.py` moves the file out of the run directory
 URLS = "lean-deps-urls.json"
 URL_TTL_S = 6 * 3600

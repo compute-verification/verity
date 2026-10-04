@@ -22,6 +22,7 @@ from verity.evaluation import evaluate
 from verity.ir import partition_object as PO
 from verity.ir.codec import descriptor_id
 from verity.ir.cut import CallGraph
+from verity.ir.defs import bind
 from verity.ir.program import Program
 from verity.randomness import derive
 from verity_pouw.circuit import leaves as L
@@ -336,6 +337,29 @@ def test_shapes_off_the_cut_are_refused():
                 build(shape)
     pc4.Shape(1, 64, 192, tile=(1, 192), tile_sub=(1, 16)).check()
     pc4.Shape(1, 64, 128, tile=(1, 128), tile_sub=(1, 16), hidden=True).check()
+
+
+def test_the_tile_cut_refuses_a_short_tile_row():
+    """The tile cut takes whole tiles only, as the row cut does: 80 rows and decode's 32 at 64-row tiles, admitted without
+    it, are refused with it, plain and hiding and with the row cut too, by every root, query and the tile layout; a cut
+    root bound past `Shape.check` refuses them in its body (`_call_units`); and 64 rows are admitted with it."""
+    pc8.Shape(64, 256, 64, tile_sub=(2, 2)).check()
+    for m in (80, 32):
+        pc8.Shape(m, 256, 64).check()
+        for hidden in (False, True):
+            shape = pc8.Shape(m, 256, 64, hidden=hidden, tile_sub=(2, 2))
+            refusers = (pc8.check, pc8.weight, pc8.call, lambda s: plan.tile_layout(s, 4096),
+                        *((lambda s, side=side: pc8.query(s, side)) for side in ("weight", "call", "check")))
+            for refused in refusers:
+                with pytest.raises(DomainError, match="tile cut takes whole tiles only"):
+                    refused(shape)
+            for refused in refusers:
+                with pytest.raises(DomainError, match="takes whole tiles only"):
+                    refused(replace(shape, row_k=128))
+    for (row_k, _side, _hidden), root in tilesub._ROOTS8.items():
+        fn = bind(root, M=80, K=256, N=64, TM=64, TN=64, DEV="sm120", SA=2, SB=2, **({"KS": 128} if row_k else {}))
+        with pytest.raises(DomainError, match="tile cut takes whole tiles only"):
+            Program(fn)
 
 
 def test_off_the_cut_nothing_is_the_cuts():
