@@ -955,13 +955,20 @@ def percentiles_ms(values: Sequence[float]) -> dict:
 def live_program(plan: dict, release: dict[int, int], params: GridParams,
                  path: Path) -> tuple[list[LogicalFrame], list[int]]:
     """The Program a live server served: the shim's events in position order, each anchored at its stream's release,
-    and the ready bucket each was meant for, the one after the bucket it was written in."""
+    and the ready bucket each was meant for, the one after the bucket it was written in. An event longer than a frame
+    is kept unpadded, as a frame of the wrong size, which the Warden faults as malformed just as the proxy did."""
     stream_of = {q["session"] or f"none-{q['stream']}": q["stream"] for q in plan["requests"]}
     events = sorted(read_events(path))
     if [p for p, *_ in events] != list(range(len(events))):
         raise ValueError(f"{path}: the positions aren't 0 … n−1")
-    frames = [LogicalFrame(encode_frame(DATA, stream_of[name], event, params.frame_bytes),
-                           release[stream_of[name]], k) for _, name, k, _, event in events]
+
+    def frame(stream: int, event: bytes) -> bytes:
+        if HEADER.size + len(event) > params.frame_bytes:
+            return HEADER.pack(DATA, stream, len(event)) + event
+        return encode_frame(DATA, stream, event, params.frame_bytes)
+
+    frames = [LogicalFrame(frame(stream_of[name], event), release[stream_of[name]], k)
+              for _, name, k, _, event in events]
     return frames, [b + 1 for *_, b, _ in events]
 
 
