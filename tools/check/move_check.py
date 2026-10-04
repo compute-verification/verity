@@ -19,7 +19,9 @@ Every path git sees changed must be one of:
   proof modules a root of their own while their declarations keep their namespace;
 - an edit to a `lean-audit.json` that keeps `pins` (the guarantees' records; `guarantees` too, if a lock has it) and
   `reads` byte for byte, may change the structural `roots` and `proved_in` (each `proved_in` entry a Lake package at HEAD),
-  and changes any other field only by moved paths and module names;
+  and changes any other field only by moved paths and module names; a `runs` entry may move to another lock the range
+  touches (a proofs package's new one), its runner module renamed and its package-relative paths following the move, and
+  must end up in exactly one, otherwise unchanged (`runs_moved`);
 - a new `lakefile.toml`, `lakefile.lean`, `lake-manifest.json`, `lean-audit.json` or `lean-toolchain` at the root of a new
   Lake package that the range moved `.lean` files into from one source package, which is a copy of the source package's
   file (`copy_change`): a lakefile may differ only in package and library names, `roots`, `globs`, `defaultTargets`,
@@ -378,7 +380,7 @@ def lock_change(old: str, new: str, new_path: str, pmap: dict[str, str], lmods: 
         if not copy and (a.get(k) != b.get(k) or (k in a and json.loads(a[k]) != json.loads(b[k]))):
             return f"`{k}` changed: a pure move keeps the guarantees' records byte for byte", field_hunk(k, a.get(k), b.get(k))
     for k in sorted(set(a) | set(b)):
-        if k in PROTECTED or k in STRUCTURAL:
+        if k in PROTECTED or k in STRUCTURAL or k == "runs":                # `runs` entries are judged across locks
             continue
         if k not in a:
             return f"`{k}` added", field_hunk(k, None, b[k])
@@ -609,8 +611,72 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             report["renames"].append({"old": old, "new": new})
         else:
             report["edits"].append({"path": new, **({"old": old} if old != new else {}), "kind": k})
+    runs_moved(entries, B, H, pmap, lmods, report["refusals"])
     report["certified"] = not report["refusals"]
     return report
+
+
+def lock_runs(tree: Tree, path: str) -> dict:
+    try:
+        runs = json.loads(tree.text(path) or "{}").get("runs", {})
+    except (ValueError, AttributeError):
+        return {}
+    return runs if isinstance(runs, dict) else {}
+
+
+def move_run(entry, old_dir: str, new_dir: str, pmap: dict[str, str], base: Tree):
+    """A `runs` entry as it reads from `new_dir` once its package-relative paths (`scripts/x.py`, `{difftest/a.jsonl}`, `data`'s
+    keys) follow the move map; a path neither moved nor in the tree (a file the run generates) stays as written."""
+    def path(s: str) -> str:
+        braced = s.startswith("{") and s.endswith("}")
+        inner = s[1:-1] if braced else s
+        if "/" not in inner:
+            return s
+        p = posixpath.normpath(posixpath.join(old_dir, inner))
+        m = map_path(p, pmap)
+        if m == p and not (old_dir != new_dir and (p in base.set or base.has_dir(p))):
+            return s
+        r = posixpath.relpath(m, new_dir or ".")
+        return "{" + r + "}" if braced else r
+    if isinstance(entry, str):
+        return path(entry)
+    if isinstance(entry, list):
+        return [move_run(x, old_dir, new_dir, pmap, base) for x in entry]
+    if isinstance(entry, dict):
+        return {path(k): move_run(v, old_dir, new_dir, pmap, base) for k, v in entry.items()}
+    return entry
+
+
+def runs_moved(entries: list[dict], B: Tree, H: Tree, pmap: dict[str, str], lmods: dict[str, str], refusals: list) -> None:
+    """Each `runs` entry of a lock the range touches must be in exactly one touched lock at HEAD, under its runner module's
+    new name, with nothing changed but the paths the move rewrites: a run may move to the proofs package's lock, never vanish,
+    be duplicated or change its data."""
+    olds = [e["old"] for e in entries if e["status"] in "RMD" and posixpath.basename(e["old"]) == "lean-audit.json"]
+    news = [e["new"] for e in entries if e["status"] in "RMA" and posixpath.basename(e["new"]) == "lean-audit.json"]
+    head = {p: lock_runs(H, p) for p in news}
+    claimed = set()
+
+    def refuse(path: str, reason: str, h: str | None = None) -> None:
+        refusals.append({"path": path, "status": "M", "reason": reason, "hunk": h})
+    for lock in olds:
+        for name, entry in lock_runs(B, lock).items():
+            new_name = lmods.get(name, name)
+            hits = [p for p, runs in head.items() if new_name in runs]
+            if not hits:
+                refuse(lock, f"`runs` entry {name} is in no lock at HEAD: a move keeps every run", field_hunk("runs", json.dumps({name: entry}), None))
+            elif len(hits) > 1:
+                refuse(hits[0], f"`runs` entry {name} is in {len(hits)} locks at HEAD ({', '.join(hits)}): a move puts it in one")
+            else:
+                claimed.add((hits[0], new_name))
+                want = move_run(entry, posixpath.dirname(lock), posixpath.dirname(hits[0]), pmap, B)
+                got = head[hits[0]][new_name]
+                if want != got:
+                    refuse(hits[0], f"`runs` entry {name} changed beyond moved paths and its module's name",
+                           field_hunk("runs", json.dumps({new_name: want}), json.dumps({new_name: got})))
+    for p, runs in head.items():
+        for name in runs:
+            if (p, name) not in claimed:
+                refuse(p, f"`runs` entry {name} added: a move only moves runs from a lock it touches")
 
 
 def summary(r: dict) -> str:

@@ -382,3 +382,51 @@ def test_lean_packages_entry_for_an_existing_package_is_refused(tmp_path):
                      files={"tests/test_lean_packages.py": LEAN_PACKAGES.replace("]\n", entry + "]\n")})
     [f] = r["refusals"]
     assert f["path"] == "tests/test_lean_packages.py"
+
+
+RUN = {"why": "random instances", "args": ["{difftest/instances.jsonl}", "10000"],
+       "data": {"difftest/instances.jsonl": "c048"}, "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]}
+
+
+def _runs_split(tmp_path: Path, proofs_runs: dict | None, spec_runs: dict | None = None) -> dict:
+    """The split, with core's lock holding a difftest whose runner module and generator move to the proofs package."""
+    base_files = {**SPEC_FILES, f"{SPEC}/Verity/SecurityProofs/Difftest.lean": "def main : IO Unit := pure ()\n",
+                  f"{SPEC}/scripts/difftest_vectors.py": "print(1)\n",
+                  f"{SPEC}/lean-audit.json": _lock(roots=["Verity"], layers={"Verity.Protocol": []}, pins=PINS, reads=READS,
+                                                   runs={"Verity.SecurityProofs.Difftest": RUN})}
+    repo, base = _repo(tmp_path, base_files)
+    for m in ("Foo", "Bar", "Difftest"):
+        _move(repo, f"{SPEC}/Verity/SecurityProofs/{m}.lean", f"{PROOFS}/CoreProofs/{m}.lean")
+    _move(repo, f"{SPEC}/scripts", f"{PROOFS}/scripts")
+    spec_lock = dict(roots=["Verity.Protocol", "Verity.Guarantees", "Verity.SecurityProofs"], layers={"Verity.Protocol": []},
+                     pins=PINS, reads=READS, proved_in=["../../../security_proofs/core"])
+    _write(repo, {
+        f"{PROOFS}/CoreProofs/Bar.lean": BAR.replace("import Verity.SecurityProofs.Foo", "import CoreProofs.Foo"),
+        f"{SPEC}/Verity/SecurityProofs.lean": "import CoreProofs.Foo\nimport CoreProofs.Bar\n",
+        f"{SPEC}/lean-audit.json": _lock(**spec_lock, **({"runs": spec_runs} if spec_runs is not None else {})),
+        f"{PROOFS}/lakefile.toml": LAKEFILE_PROOFS, f"{PROOFS}/lean-toolchain": "leanprover/lean4:v4.99.0\n",
+        f"{PROOFS}/lake-manifest.json": _manifest("coreproofs", VERITY_PATH, MATHLIB),
+        f"{PROOFS}/lean-audit.json": _lock(roots=["CoreProofs"], layers={"Verity.Protocol": []},
+                                           **({"runs": proofs_runs} if proofs_runs is not None else {})),
+    })
+    return _check(repo, base)
+
+
+def test_runs_entry_moved_to_the_proofs_lock_is_certified(tmp_path):
+    r = _runs_split(tmp_path, {"CoreProofs.Difftest": RUN})
+    assert r["certified"], r["refusals"]
+
+
+def test_runs_entry_that_vanishes_is_refused(tmp_path):
+    [f] = _runs_split(tmp_path, None)["refusals"]
+    assert f["path"] == f"{SPEC}/lean-audit.json" and "is in no lock at HEAD" in f["reason"]
+
+
+def test_runs_entry_with_a_changed_data_hash_is_refused(tmp_path):
+    [f] = _runs_split(tmp_path, {"CoreProofs.Difftest": {**RUN, "data": {"difftest/instances.jsonl": "c049"}}})["refusals"]
+    assert f["path"] == f"{PROOFS}/lean-audit.json" and "changed beyond moved paths" in f["reason"] and "c049" in f["hunk"]
+
+
+def test_runs_entry_duplicated_into_two_locks_is_refused(tmp_path):
+    r = _runs_split(tmp_path, {"CoreProofs.Difftest": RUN}, spec_runs={"CoreProofs.Difftest": RUN})
+    assert any("locks at HEAD" in f["reason"] for f in r["refusals"])
