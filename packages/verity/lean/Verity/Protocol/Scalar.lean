@@ -26,10 +26,12 @@ def order (u width : Nat) : Int :=
 /-- `scalar.F32_NAN_PTX`: the GPU's canonical FP32 NaN, which `max.f32` writes for two NaN operands. -/
 def F32_NAN_PTX : Nat := 0x7FFFFFFF
 
-/-- `F32Fabs_v1` (`fabsf`): the sign bit cleared, a NaN's payload kept. -/
+/-- `F32Fabs_v1` (`fabsf`): the sign bit cleared, a NaN's payload kept. The NaN rule is the Python's, documented but
+unmeasured: no GPU capture runs `fabsf` on a NaN. -/
 def f32Fabs (x : Nat) : Nat := x &&& 0x7FFFFFFF
 
-/-- `F32Neg_v1` (`neg.f32`): the sign bit flipped, so `+0` becomes `-0` and a NaN keeps its payload. -/
+/-- `F32Neg_v1` (`neg.f32`): the sign bit flipped, so `+0` becomes `-0` and a NaN keeps its payload. The NaN rule is the
+Python's, documented but unmeasured: no GPU capture runs `neg.f32` on a NaN. -/
 def f32Neg (a : Nat) : Nat := (a ^^^ 0x80000000) &&& 0xFFFFFFFF
 
 /-- `F32Fmaxf_v1` (`fmaxf`, PTX `max.f32`), `scalar._fmaxmin(a, b, True)`: IEEE maxNum. Two NaN operands give

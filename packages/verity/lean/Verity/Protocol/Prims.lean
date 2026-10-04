@@ -33,8 +33,9 @@ def f2fpBf16 (a : Nat) : Nat := Spec.cvtRnBf16F32 a
 def E4M3_NAN : Nat := 0x7F
 
 /-- `E4m3ToF32_v1` (`float(__nv_fp8_e4m3)`), `cast.e4m3_to_f32_word`: an E4M3 code widened to f32 exactly; both NaN codes
-to `0x7FFFE000` (the f16 canonical NaN `0x7FFF` widened, the sign dropped: the documented conversion chain, not a
-measurement). A subnormal code `m · 2^-9` is `(1 + (m - 2^p) / 2^p) · 2^(p - 9)` with `p = ⌊log₂ m⌋`. -/
+to `0x7FFFE000` (the f16 canonical NaN `0x7FFF` widened, the sign dropped). That NaN word is the Python's, from the
+documented conversion chain and unmeasured: no GPU capture widens `0x7F` or `0xFF`. A subnormal code `m · 2^-9` is
+`(1 + (m - 2^p) / 2^p) · 2^(p - 9)` with `p = ⌊log₂ m⌋`. -/
 def e4m3ToF32 (x : Nat) : Nat :=
   let b := x &&& 0xFF
   if b &&& 0x7F = E4M3_NAN then 0x7FFFE000
