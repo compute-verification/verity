@@ -40,7 +40,7 @@ from verity_vllm.program.registry import boolean_fp8 as BF
 from verity_vllm.program.registry import boolean_fp8_moe as BM
 from verity_vllm.program.registry import fp8 as F
 from verity_vllm.program.registry import fp8_moe as M
-from verity_vllm.program.registry.moe import nv_expf_bits
+from verity_vllm.program.kernels.moe_twins import nv_expf_bits
 from tests.program.test_boolean_fp8 import BF16_SPECIALS, _flat, _inputs
 
 VECTORS = Path(__file__).resolve().parents[4] / "fixtures" / "tc" / "vectors"

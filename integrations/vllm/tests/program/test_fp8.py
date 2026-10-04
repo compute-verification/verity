@@ -27,6 +27,7 @@ from verity.ir import Program, bind  # noqa: E402
 from verity_vllm.correspondence.capture_identities import _coll_range  # noqa: E402
 from verity.ir.evaluate import evaluate_region  # noqa: E402
 from verity_vllm.program.registry import fp8 as F  # noqa: E402
+from verity_vllm.program.kernels import fp8_twins  # noqa: E402
 from verity_vllm.program.registry import prims as P  # noqa: E402
 
 DATA = Path(__file__).parent / "data"
@@ -93,7 +94,7 @@ def test_numpy_twin_matches_scalar_model() -> None:
     rng = np.random.default_rng(3)
     u = rng.integers(0, 1 << 32, 20000, dtype=np.uint64).astype(np.uint32)
     u = np.concatenate([u, (np.arange(0, 1 << 16, 7, dtype=np.uint32) << 16)])  # a spread of bf16-representable words
-    got = F.np_f32_to_e4m3_sat(u.view(np.float32))
+    got = fp8_twins.np_f32_to_e4m3_sat(u.view(np.float32))
     want = np.array([F.F32ToE4m3Sat.evaluate(int(w)) for w in u], dtype=np.uint8)
     assert np.array_equal(got, want)
 
@@ -142,7 +143,7 @@ def test_quant_linear_fp8_on_production_row(t: int) -> None:
 def test_numpy_twin_of_the_quant_kernel_on_production_rows() -> None:
     d = np.load(DATA / "fp8_production_row_l0_qkv.npz")
     for t in (0, 63, 130):
-        xq, sx = F.np_dynamic_per_token_quant(d[f"t{t}_x"][None, :])
+        xq, sx = fp8_twins.np_dynamic_per_token_quant(d[f"t{t}_x"][None, :])
         assert np.array_equal(xq[0], d[f"t{t}_xq"])
         assert int(P.bits_of(sx[0])) == int(d[f"t{t}_sx"][0])
 

@@ -1,6 +1,6 @@
 """GLM-5.3's router (`registry.moe.MoeRouterSigmoidBias_v1`, DeepSeek-V3's `noaux_tc` at one group) against a model of vLLM's
 `single_group_topk_{block,warp}_kernel<float, float, int, SIGMOID, MaxE, 8>` written the way the CUDA source runs it: per expert
-`preprocess_score` with the sigmoid's SASS (`moe.nv_sigmoid_bits`: FSETP.GE, FSEL and the LOP3 sign OR as they are), the 64-bit keys
+`preprocess_score` with the sigmoid's SASS (`moe_twins.nv_sigmoid_bits`: FSETP.GE, FSEL and the LOP3 sign OR as they are), the 64-bit keys
 `(TwiddleIn(score) << 32) | (65535 - expert)` sorted per lane and `reduceTopK`'s rounds over 32 lanes (the winner's list shifted, an
 `InvalidScore` filler at its end), then `write_outputs` with the 32-lane butterfly over every lane.  The Program states the same
 function with each value computed once: the selection's order as comparisons, the sum's +0 lanes dropped, the sign as a select."""
@@ -15,6 +15,7 @@ from verity.ir import codec
 from verity.ir.defs import bind
 from verity.ir.program import Program
 from verity_vllm.program.registry import moe
+from verity_vllm.program.kernels import moe_twins
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import ref_prims as R
 
@@ -34,7 +35,7 @@ def preprocess(x: int, b: int) -> tuple[int, int]:
     """`preprocess_score<float, float, SIGMOID>`: (unbiased, selection)."""
     if not (_finite(x) and _finite(b)):
         return 0, NEG_INF
-    sig = moe.nv_sigmoid_bits(x)
+    sig = moe_twins.nv_sigmoid_bits(x)
     biased = P.F32Add.evaluate(b, sig)
     return sig, 0 if P.f32_of(biased) == 0 else biased
 
@@ -136,13 +137,13 @@ def test_nv_sigmoid_is_the_sass():
     words = SPECIAL + [int(w) for w in rng.integers(0, 1 << 32, 3000, dtype=np.int64)]
     words += _f32(np.concatenate([rng.uniform(-20, 20, 3000), rng.standard_normal(1000) * 1e-3]))
     for w in words:
-        assert evaluate(moe.NvSigmoid, [w]) == (moe.nv_sigmoid_bits(w),), hex(w)
+        assert evaluate(moe.NvSigmoid, [w]) == (moe_twins.nv_sigmoid_bits(w),), hex(w)
 
 
 def test_nv_sigmoid_saturates_and_is_symmetric_where_the_sass_is():
-    assert moe.nv_sigmoid_bits(P.bits_of(18.03)) == P.bits_of(1.0) and moe.nv_sigmoid_bits(P.bits_of(-18.03)) == 0
-    assert moe.nv_sigmoid_bits(0) == P.bits_of(0.5) == moe.nv_sigmoid_bits(0x80000000)
-    assert moe.nv_sigmoid_bits(QNAN) == QNAN
+    assert moe_twins.nv_sigmoid_bits(P.bits_of(18.03)) == P.bits_of(1.0) and moe_twins.nv_sigmoid_bits(P.bits_of(-18.03)) == 0
+    assert moe_twins.nv_sigmoid_bits(0) == P.bits_of(0.5) == moe_twins.nv_sigmoid_bits(0x80000000)
+    assert moe_twins.nv_sigmoid_bits(QNAN) == QNAN
 
 
 @pytest.mark.parametrize("launch", ["block", "warp"])

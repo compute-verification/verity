@@ -90,7 +90,7 @@ def _finite(w) -> np.ndarray:
 
 # ----------------------------------------------------------------------------------------------------------------------- twin
 def sigmoid_words(x) -> np.ndarray:
-    """`moe.nv_sigmoid_bits` (`NvSigmoid_v1`, the SASS of the kernel's sigmoid) on an array of f32 words, in integer arithmetic."""
+    """`moe_twins.nv_sigmoid_bits` (`NvSigmoid_v1`, the SASS of the kernel's sigmoid) on an array of f32 words, in integer arithmetic."""
     x = np.asarray(x, U32)
     h = _mul(x, U32(HALF))
     ah = h & U32(0x7FFFFFFF)

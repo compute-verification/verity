@@ -30,6 +30,7 @@ from verity_vllm.program import boolean as SW
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 from verity_vllm.program.registry import boolean_fp8 as BF
 from verity_vllm.program.registry import fp8 as F
+from verity_vllm.program.registry import fp8_vocab
 from verity_vllm.program.registry import gemm_targets as GT
 from verity_vllm.program.registry import targets as TG
 from tests.program import test_fp8_profile as FP
@@ -90,9 +91,9 @@ def test_at_blackwells_step_the_block_gemm_is_another_function() -> None:
 def test_block_gemm_picks_the_form_by_its_step() -> None:
     for scale, v1, v3 in (("per-coordinate", F.ScaledMmFp8Block, F.ScaledMmFp8BlockV3),
                           ("shared-per-block", F.ScaledMmFp8BlockSharedScale, F.ScaledMmFp8BlockSharedScaleV3)):
-        assert F.block_gemm(256, 384, 128, scale) == bind(v1, K=256, N=384, G=128)
-        assert F.block_gemm(256, 384, 128, scale, BlackwellE4m3QmmaDot32) == bind(v3, K=256, N=384, G=128, DOT=BlackwellE4m3QmmaDot32)
-    assert F.SHARED_SCALE == {"ScaledMmFp8Block_v1": F.ScaledMmFp8BlockSharedScale}
+        assert fp8_vocab.block_gemm(256, 384, 128, scale) == bind(v1, K=256, N=384, G=128)
+        assert fp8_vocab.block_gemm(256, 384, 128, scale, BlackwellE4m3QmmaDot32) == bind(v3, K=256, N=384, G=128, DOT=BlackwellE4m3QmmaDot32)
+    assert fp8_vocab.SHARED_SCALE == {"ScaledMmFp8Block_v1": F.ScaledMmFp8BlockSharedScale}
 
 
 # ---------------------------------------------------------------- the version 4 forms
@@ -216,7 +217,7 @@ def test_the_rule_binds_the_targets_step(monkeypatch, sm120_step, scale) -> None
         finally:
             clear_observations()
         (facts[cc], _emitted), = ctx.records
-        assert ctx.calls == [F.block_gemm(K, N, 128, scale or "shared-per-block", None if cc == (9, 0) else BlackwellE4m3QmmaDot32)] * 2
+        assert ctx.calls == [fp8_vocab.block_gemm(K, N, 128, scale or "shared-per-block", None if cc == (9, 0) else BlackwellE4m3QmmaDot32)] * 2
     assert "dot" not in facts[(9, 0)] and facts[(12, 0)]["dot"] == "BlackwellE4m3QmmaDot32_v1"
 
 
@@ -241,7 +242,7 @@ def test_the_fold_binds_the_targets_step(sm120_step, scale) -> None:
     for tp, dot in ((HOPPER, None), (SM120, BlackwellE4m3QmmaDot32)):
         r = _mm(tp.with_overrides(fp8_scale_construction=scale))
         assert isinstance(r, Compute), r
-        assert spec_label(r.spec) == spec_label(F.block_gemm(K, N, G, scale or "shared-per-block", dot))
+        assert spec_label(r.spec) == spec_label(fp8_vocab.block_gemm(K, N, G, scale or "shared-per-block", dot))
     assert spec_label(r.spec).endswith(",DOT=BlackwellE4m3QmmaDot32_v1}")
 
 

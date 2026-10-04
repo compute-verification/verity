@@ -29,6 +29,7 @@ from verity.ml.boolean.forms import ZERO
 from verity_vllm.program import boolean as SW
 from verity_vllm.program.registry import boolean_moe as BM
 from verity_vllm.program.registry import moe as M
+from verity_vllm.program.kernels import moe_twins
 from verity_vllm.program.registry.prims import F32, I32
 
 #: id -> (And, Xor, Not gates, standalone program digest)
@@ -283,7 +284,7 @@ def _score_words(rng, n: int) -> tuple[np.ndarray, np.ndarray]:
                         rng.uniform(-40, 40, n).astype(np.float32).view(np.uint32), rng.uniform(-1.3, 1.3, n).astype(np.float32).view(np.uint32)])
     b = np.where(rng.integers(0, 4, len(x)) == 0, rng.integers(0, 1 << 32, len(x), dtype=np.uint64).astype(np.uint32),
                  rng.uniform(-1, 1, len(x)).astype(np.float32).view(np.uint32))
-    b[::37] = [M.nv_sigmoid_bits(int(w)) ^ 0x80000000 for w in x[::37]]
+    b[::37] = [moe_twins.nv_sigmoid_bits(int(w)) ^ 0x80000000 for w in x[::37]]
     return x, b
 
 
