@@ -46,7 +46,8 @@ STATICS = dict(K=64, N=64, I=8, H=64, E=8, TOPK=2, VPT=8, T=4, NH=2, KVH=1, D=64
                VS=8, START=0, NHEADS=2, W=32, BITS=0, CAP=50.0, MASKED_FROM=1, FA2_MASKED_FROM=1)
 #: the statics that select among Definitions, at every registered value
 SELECTING = {"DOT": tuple(TG.DOTS.values()), "INV": (P.Fa2InvSum, Fa3InvSum), "SCALE": TargetProfile.FP8_SCALE_CONSTRUCTIONS,
-             "CONSTRUCTION": TargetProfile.SAMPLER_CONSTRUCTIONS}
+             "CONSTRUCTION": TargetProfile.SAMPLER_CONSTRUCTIONS,
+             "TARGET": (TargetProfile.default(), TargetProfile.default().with_overrides(batch_invariant=False))}
 
 _GEMMA2_RV = ("Gemma-2 only: its fold refuses GeluTanhMul_v3 under registered_values by name (gen_dense_gemma2_patterns), so no "
               "registered-values Gemma-2 fold completes")
