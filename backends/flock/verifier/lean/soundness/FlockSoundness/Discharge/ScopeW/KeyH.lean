@@ -1,6 +1,9 @@
+import FlockSoundness.Discharge.ScopeW.OutRuns
 import FlockSoundness.Discharge.HiddenExec.KeyH
 import FlockSoundness.Discharge.ScopeW.RowEnc
 import FlockSoundness.Discharge.ScopeW.Rows
+import FlockSoundness.Discharge.ScopeW.Commit
+import FlockSoundness.Discharge.ScopeW.RowVal
 
 set_option Elab.async false
 
@@ -217,6 +220,154 @@ noncomputable def rowOfHW (outs : Finset (Fin (keyN c hU n))) (g : Fin (keyN c h
   | some r => some r
   | none => outRowOfW c hU n outs g
 
+theorem outRowOfW_wire (outs : Finset (Fin (keyN c hU n))) {u : Fin n} (x : Fin ((keyProg c hU n).rows u).w)
+    (hgu : (keyProg c hU n).unit ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = some u)
+    (hx : ((keyProg c hU n).rows u).nIn ≤ x.val) :
+    outRowOfW c hU n outs ((Const.Prog.instC (keyProg c hU n) outs u).wire x) =
+      outBitRowW c u (outDecode c hU x.val) := by
+  have hc : ∃ x', (Const.Prog.instC (keyProg c hU n) outs u).wire x' =
+      (Const.Prog.instC (keyProg c hU n) outs u).wire x := ⟨x, rfl⟩
+  have hch : Classical.choose hc = x := by
+    rcases (Const.Prog.instC (keyProg c hU n) outs u).shared _ x (Classical.choose_spec hc) with he | ⟨-, h2⟩
+    · exact he
+    · omega
+  unfold outRowOfW
+  rw [hgu]
+  dsimp only
+  rw [dite_eq_left hc, hch]
+
+theorem outRowOfW_wire_some (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n} (x : Fin ((keyProg c hU n).rows u).w)
+    {q : Fin c.ports.size} {k : Fin (portRowW c q)}
+    (h : outRowOfW c hU n outs ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = some (u', ⟨q, k⟩)) :
+    (keyProg c hU n).unit ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = some u ∧
+      ((keyProg c hU n).rows u).nIn ≤ x.val ∧ outBitRowW c u (outDecode c hU x.val) = some (u', ⟨q, k⟩) := by
+  rcases hgu : (keyProg c hU n).unit ((Const.Prog.instC (keyProg c hU n) outs u).wire x) with _ | u''
+  · unfold outRowOfW at h
+    rw [hgu] at h
+    exact absurd h (by simp)
+  · obtain ⟨rfl, hx⟩ := unit_wire outs x hgu
+    exact ⟨rfl, hx, (outRowOfW_wire outs x hgu hx).symm.trans h⟩
+
+theorem rowOfHW_of_key (outs : Finset (Fin (keyN c hU n))) {g : Fin (keyN c hU n)}
+    {r : Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)} (h : keyRowOf c hU n (portRowW c) g = some r) :
+    rowOfHW c hU n outs g = some r := by
+  unfold rowOfHW
+  rw [h]
+
+theorem rowOfHW_of_none (outs : Finset (Fin (keyN c hU n))) {g : Fin (keyN c hU n)}
+    (h : keyRowOf c hU n (portRowW c) g = none) : rowOfHW c hU n outs g = outRowOfW c hU n outs g := by
+  unfold rowOfHW
+  rw [h]
+
+theorem rowOfHW_none (outs : Finset (Fin (keyN c hU n))) {g : Fin (keyN c hU n)}
+    (h : rowOfHW c hU n outs g = none) :
+    keyRowOf c hU n (portRowW c) g = none ∧ outRowOfW c hU n outs g = none := by
+  rcases hk : keyRowOf c hU n (portRowW c) g with _ | r
+  · exact ⟨rfl, (rowOfHW_of_none outs hk).symm.trans h⟩
+  · rw [rowOfHW_of_key outs hk] at h
+    cases h
+
+/-- **A row bit of a unit's own instance is that unit's row**, at runs. -/
+theorem rowOfHW_wire_unit (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n} (x : Fin ((keyProg c hU n).rows u).w)
+    {q : Fin c.ports.size} {k : Fin (portRowW c q)}
+    (h : rowOfHW c hU n outs ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = some (u', ⟨q, k⟩)) :
+    u' = u := by
+  rcases hk : keyRowOf c hU n (portRowW c) ((Const.Prog.instC (keyProg c hU n) outs u).wire x) with _ | r
+  · rw [rowOfHW_of_none outs hk] at h
+    exact (outBitRowW_spec (outRowOfW_wire_some outs x h).2.2).1
+  · rw [rowOfHW_of_key outs hk] at h
+    rw [h] at hk
+    exact (Layout.keyRowOf_wire outs x hk).1
+
+/-! ## Output-row copies at runs -/
+
+section Out
+
+open FlockSoundness.Discharge.Hm (blockBit)
+
+variable {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.UnitFacts tags (Hidden.flatTwin st))
+  {keep : ℕ → Bool} (hΔ : RowDelta st (Hidden.outPairs st.c) keep) (hrows : OutRowsS st.c)
+include L F hΔ hrows
+
+/-- **A returned output's column holds its output-row bit's message bit, at runs** (`out_copyW` at `outBitRowW`): in a
+satisfying witness, at VU `g` of block `o`, the unit slot of copy `u'`'s computed column `Layout.outCol j t` holds what
+the witness holds at the message column of the output-row bit `outBitRowW` gives copy `u'`'s output `j`, bit `t`. -/
+theorem out_copy_bitW (ho : st.c.outNet = st.c.unitNet) (hcr : HmOut.checkRows st.c = .ok ())
+    (hsum : st.c.outRowPorts.foldl (· + ·) 0 = st.c.outPorts.size)
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g : ℕ} (hg : g < st.c.g) {u' j t : ℕ}
+    (hu' : u' < st.c.upv) (hj : j < (st.c.leavesOut.getD u' #[]).size) (ht : t < 16)
+    {u v : Fin n} {q : Fin st.c.ports.size} {k : Fin (portRowW st.c q)}
+    (hb : outBitRowW st.c u (u', j, t) = some (v, ⟨q, k⟩)) :
+    blockBit (L.model regs) z o (Hidden.deltaMsgCol st.c g q.val (k.val / 8) (k.val % 8)) =
+      blockBit (L.model regs) z o (st.c.unitRange.slot (g * st.c.upv + u') + Layout.outCol st.c j t) := by
+  obtain ⟨-, hq, hk⟩ := outBitRowW_spec hb
+  have P : ParseFacts tags st.c := F.parse
+  obtain ⟨ls, hls⟩ := P.check
+  obtain ⟨-, -, hlo⟩ := Layout.check_out P.typed ho hls
+  have hget : st.c.leavesOut.getD u' #[] = st.c.leavesOut[u']! := by
+    rw [Hidden.getElem!_eq_getD']; rfl
+  have hwj : outWordOf st.c (u', j, t) = (st.c.leavesOut.getD u' #[])[j] := getElem!_pos _ j hj
+  have hwlt : outWordOf st.c (u', j, t) < st.c.outWords := by
+    rw [hwj]
+    refine (hlo u' hu').2 _ ?_
+    rw [← hget]
+    exact Array.getElem_mem_toList _
+  obtain ⟨hr, hle, hlt⟩ := outRunOf_spec st.c hsum hwlt
+  have hkk : outWordOf st.c (u', j, t) - (HmOut.outGroup st.c (outRunOf st.c (outWordOf st.c (u', j, t)))).2.2.1 <
+      (HmOut.outGroup st.c (outRunOf st.c (outWordOf st.c (u', j, t)))).2.2.2 := by
+    omega
+  have hw : (HmOut.outGroup st.c (outRunOf st.c (outWordOf st.c (u', j, t)))).2.2.1 +
+      (outWordOf st.c (u', j, t) - (HmOut.outGroup st.c (outRunOf st.c (outWordOf st.c (u', j, t)))).2.2.1) =
+      (st.c.leavesOut.getD u' #[])[j] := by
+    rw [← hwj]
+    omega
+  have := out_copyW L F hΔ hrows ho hcr hz o hg hu' hj ht hr hkk hw
+  dsimp only at hk
+  rw [hq, hk, show ∀ a, (16 * a + t) / 8 = 2 * a + t / 8 from fun a => by omega,
+    show ∀ a, (16 * a + t) % 8 = t % 8 from fun a => by omega]
+  exact this
+
+end Out
+
+/-- **`HiddenExec.out_copy_key` at runs and the widened shapes**: in a satisfying witness of an accepted statement on
+`c` whose unit returns the outputs, at block `o` and VU `g`, the VU's column on copy `u'`'s output `j`, bit `t`
+(`Layout.OutColAt`) holds the witness's bit at the message column of its output-row bit (`outBitRowW`, `out_copyHW`). -/
+theorem out_copy_keyW {T : Model.Statement} (a : AcceptedH T) (hce : a.st.c = c) (ho : c.outNet = c.unitNet)
+    (hW : ∀ p ∈ c.ports.toList, rowShapeW p = true)
+    {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w)
+    {u' j t : ℕ} (hoc : OutColAt c hU x.val u' j t) {u v : Fin n} {q : Fin c.ports.size} {k : Fin (portRowW c q)}
+    (hb : outBitRowW c u (u', j, t) = some (v, ⟨q, k⟩)) :
+    T.block z o (a.col hg x) = z (siteAddrH a o (Typed.msgCol a.st.c g q.val (k.val / 8) (k.val % 8))) := by
+  subst hce
+  obtain ⟨-, hq, hk⟩ := outBitRowW_spec hb
+  obtain ⟨hu', hj, ht, h1, h2, hx⟩ := hoc
+  have P := parse_facts a.parse
+  obtain ⟨ls, hls⟩ := P.check
+  obtain ⟨-, -, hlo⟩ := Layout.check_out P.typed ho hls
+  have hget : a.st.c.leavesOut.getD u' #[] = a.st.c.leavesOut[u']! := by
+    rw [Hidden.getElem!_eq_getD']; rfl
+  have hwj : outWordOf a.st.c (u', j, t) = (a.st.c.leavesOut.getD u' #[])[j] := getElem!_pos _ j hj
+  have hwlt : outWordOf a.st.c (u', j, t) < a.st.c.outWords := by
+    rw [hwj]
+    refine (hlo u' hu').2 _ ?_
+    rw [← hget]
+    exact Array.getElem_mem_toList _
+  obtain ⟨hr, hle, hlt⟩ := outRunOf_spec a.st.c (Hidden.parse_rowPorts a.parse).2 hwlt
+  have hkk : outWordOf a.st.c (u', j, t) -
+      (HmOut.outGroup a.st.c (outRunOf a.st.c (outWordOf a.st.c (u', j, t)))).2.2.1 <
+      (HmOut.outGroup a.st.c (outRunOf a.st.c (outWordOf a.st.c (u', j, t)))).2.2.2 := by
+    omega
+  have hw : (HmOut.outGroup a.st.c (outRunOf a.st.c (outWordOf a.st.c (u', j, t)))).2.2.1 +
+      (outWordOf a.st.c (u', j, t) -
+        (HmOut.outGroup a.st.c (outRunOf a.st.c (outWordOf a.st.c (u', j, t)))).2.2.1) =
+      (a.st.c.leavesOut.getD u' #[])[j] := by
+    rw [← hwj]
+    omega
+  have := out_copyHW a ho hW hz o hg x hu' hj ht h1 h2 hx hr hkk hw
+  rw [hq, hk]
+  exact this
+
 /-! ## The readers -/
 
 section places
@@ -244,19 +395,87 @@ include ho hW houts in
 /-- **Δ's copies at `keyProg`'s sites, at the widened scope**: a column on an input row's bit holds the witness's bit at
 its key's message column (`copy_siteH`); a column on an output row's bit (`outBitRowW`) holds the bit at the output
 row's message column (`out_copyH` at runs of output ports and at the four shapes). -/
-theorem keyProgHW_copies : (keyReadersHW hparse outs popOf).Copies (keyPlaceH hparse outs) := sorry
+theorem keyProgHW_copies : (keyReadersHW hparse outs popOf).Copies (keyPlaceH hparse outs) := by
+  refine Layout.ofRows_copies _ fun S R u hu M hM x hx u' q k hr => ?_
+  have hc := (si.acc S R u hu).c_eq (hparse S R u hu)
+  have hrw := SitesH.rowsOf_keyProg hU hparse S R u hu
+  rcases hk : keyRowOf c hU n (portRowW c) ((Const.Prog.instC (keyProg c hU n) outs u).wire x) with _ | r
+  · have ho' : outRowOfW c hU n outs ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = some (u', ⟨q, k⟩) :=
+      (rowOfHW_of_none outs hk).symm.trans hr
+    obtain ⟨hgu, -, hb⟩ := outRowOfW_wire_some outs x ho'
+    obtain ⟨u'', j, t, hoc⟩ := houts u _ hx hgu x rfl
+    rw [Layout.outDecode_of hoc] at hb
+    have := out_copy_keyW (si.acc S R u hu) hc ho hW hM (si.o S R u hu) (si.hvu S R u hu)
+      (Fin.cast (congrArg FlockSoundness.Rows.w hrw) x) hoc hb
+    simp only [keyRowAddrH, hu, ↓reduceDIte]
+    exact this
+  · have hr' : keyRowOf c hU n (portRowW c) ((Const.Prog.instC (keyProg c hU n) outs u).wire x) =
+        some (u', ⟨q, k⟩) := hk.trans ((rowOfHW_of_key outs hk).symm.trans hr)
+    obtain ⟨-, hxn, hkey⟩ := Layout.keyRowOf_wire outs x hr'
+    have hk' : Aliased.srcKey (si.acc S R u hu).st.c x.val = .msg q.val (k.val / 8) (k.val % 8) := by
+      rw [hc]; exact hkey
+    have hin' : Typed.msgCol (si.acc S R u hu).st.c (si.vu S R u hu) q.val (k.val / 8) (k.val % 8) <
+        2 ^ (si.acc S R u hu).st.c.kLog := by
+      have hv := si.hvu S R u hu
+      rw [hc] at hv ⊢
+      exact Layout.msgCol_lt_of_parse (hparse S R u hu) hv q.isLt _ _ (Nat.mod_lt _ (by norm_num))
+    have := copy_siteH (si.acc S R u hu) hM (si.o S R u hu) (si.hvu S R u hu)
+      (Fin.cast (congrArg FlockSoundness.Rows.w hrw) x) (lt_of_lt_of_eq hxn (congrArg FlockSoundness.Rows.nIn hrw))
+      hk' hin'
+    simp only [keyRowAddrH, hu, ↓reduceDIte]
+    exact this
 
 /-- **The rows' `b ‖ c` at `keyProg`'s sites is the registration's**, as `keyProgH_bcPinned` (`bc_site_ofH`). -/
 theorem keyProgHW_bcPinned
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSiteH (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
-    (keyReadersHW hparse outs popOf).BcPinned (P := (keyProg c hU n).partition outs) := sorry
+    (keyReadersHW hparse outs popOf).BcPinned (P := (keyProg c hU n).partition outs) := by
+  refine Layout.ofRows_bcPinned _ fun S R u hu M hM g hg u' q k hr => ?_
+  obtain ⟨x, rfl⟩ := Layout.exists_col_of_io ((keyPlaceH hparse outs) S R u hu).inst hg
+  rw [rowOfHW_wire_unit outs x hr]
+  have hc := (si.acc S R u hu).c_eq (hparse S R u hu)
+  have hnp : (si.acc S R u hu).st.c.ports.size = c.ports.size := by rw [hc]
+  have := bc_site_ofH (hsite S R u hu M hM) hM (si.hvu S R u hu) (p := q.val) (by rw [hnp]; exact q.isLt)
+  rw [hnp] at this
+  unfold keyBcAddrH
+  simp only [hu, ↓reduceDIte]
+  exact this
 
 include ho hW houts in
 /-- **The single gates at `keyProg`'s sites are the constant and the zero**, as `keyProgH_valPinned`: a computed
 committed gate is a returned output's, so a bit of the output row whose run holds its word (`outBitRowW`). -/
 theorem keyProgHW_valPinned (hkeys : KeysRow c hU (portRowW c)) :
-    (keyReadersHW hparse outs popOf).ValPinned (P := (keyProg c hU n).partition outs) := sorry
+    (keyReadersHW hparse outs popOf).ValPinned (P := (keyProg c hU n).partition outs) := by
+  refine Layout.ofRows_valPinned _ fun S R u hu M hM g hg hr => ?_
+  have hpub := Layout.gate_pub (keyPlaceH hparse outs) (constCols_keyProgH hU hparse outs)
+    (zeroCols_keyProgH hU hparse outs) hu hM hg
+  obtain ⟨x, hx⟩ := Layout.exists_col_of_io ((keyPlaceH hparse outs) S R u hu).inst hg
+  change bit _ = Layout.keyGate (c := c) (hU := hU) (n := n) (fun _ _ => false) R g
+  obtain ⟨hk, hno⟩ := rowOfHW_none outs hr
+  rcases Layout.single_gate outs hkeys ⟨x, hx⟩ hg hk with rfl | rfl | ⟨hm, -, -⟩
+  · rw [hpub.2 (Finset.mem_singleton_self _)]
+    simp only [Layout.keyGate, Layout.zeroG_ne_oneG, ↓reduceIte]
+  · rw [hpub.1 (Finset.mem_singleton_self _)]
+    simp only [Layout.keyGate, ↓reduceIte]
+  · exfalso
+    subst hx
+    obtain ⟨u'', j, t, hoc⟩ := houts u _ hg hm x rfl
+    have hno' : outRowOfW c hU n outs ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = none := hno
+    rw [outRowOfW_wire outs x hm (unit_wire outs x hm).2, Layout.outDecode_of hoc] at hno'
+    have hc := (si.acc S R u hu).c_eq (hparse S R u hu)
+    have hcr : HmOut.checkRows c = .ok () := hc ▸ (si.acc S R u hu).checkRows
+    have P := parse_facts (hparse S R u hu)
+    obtain ⟨ls, hls⟩ := P.check
+    obtain ⟨-, -, hlo⟩ := Layout.check_out P.typed ho hls
+    obtain ⟨hu', hj, ht, -⟩ := hoc
+    have hget : c.leavesOut.getD u'' #[] = c.leavesOut[u'']! := by
+      rw [Hidden.getElem!_eq_getD']; rfl
+    have hwlt : outWordOf c (u'', j, t) < c.outWords := by
+      rw [show outWordOf c (u'', j, t) = (c.leavesOut.getD u'' #[])[j] from getElem!_pos _ j hj]
+      refine (hlo u'' hu').2 _ ?_
+      rw [← hget]
+      exact Array.getElem_mem_toList _
+    exact outBitRowW_ne_none hcr (Hidden.parse_rowPorts (hparse S R u hu)).2 hW u hwlt ht hno'
 
 /-- **`lay` at `keyProg`'s places in hidden-output tables, at the widened scope**: `keyReadersHW`'s layout, with
 `bitCode` for the single gates and Δ's copies from `keyProgHW_copies`. -/
@@ -285,7 +504,53 @@ theorem keyRowsHW_computes
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSiteH (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (hkeys : KeysRow c hU (portRowW c)) :
-    (keyRowsHW hparse outs popOf ho hW houts hsite hkeys).Computes := sorry
+    (keyRowsHW hparse outs popOf ho hW houts hsite hkeys).Computes := by
+  unfold HmRowsP.Computes Assumptions.HmRowComputes
+  rintro ⟨S, R, u, M, g⟩ ⟨hu, hM, -, hrow⟩
+  dsimp only at hu hM hrow ⊢
+  revert hrow
+  generalize (keyLayoutHW hparse outs popOf ho hW houts).pos g = pos
+  rcases pos with ⟨u', q⟩ | g'
+  · intro _
+    have hce := (si.acc S R u hu).c_eq (hparse S R u hu)
+    have hq : q.val < (si.acc S R u hu).st.c.ports.size := by rw [hce]; exact q.isLt
+    have hmem : c.ports[q] ∈ c.ports.toList := Array.getElem_mem_toList q.isLt
+    have hpq : (si.acc S R u hu).st.c.ports[q.val]! = c.ports[q] := by
+      rw [hce, getElem!_pos c.ports q.val q.isLt]
+      rfl
+    have hle : portRowW c q ≤ Finset.univ.sup (portRowW c) + 1 :=
+      (Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _)
+    have hb := bc_site_commitHW (si.acc S R u hu) (by rw [hce]; exact ho) (by rw [hce]; exact hW) hM
+      (si.o S R u hu) (si.hvu S R u hu) hq
+    rw [hpq] at hb
+    show Binding.bytesAt _ (keyBcAddrH si S R u q) = Binding.commitString
+      (rowEncOf c.ports[q] (W := Finset.univ.sup (portRowW c) + 1)
+        (Layout.widthOf (Finset.univ.sup (portRowW c) + 1) (portRowW c q),
+          Layout.padBits (bitsAt (Binding.wit plan tab S R u M) fun k : Fin (portRowW c q) =>
+            keyRowAddrH si S R u q k.val)))
+      (Binding.bytesAt _ (keySaltAddrH si S R u (.inl (u', q)) (hU := hU)))
+    have e1 : keyBcAddrH si S R u q = fun (j : Fin 128) (t : Fin 8) => siteAddrH (si.acc S R u hu) (si.o S R u hu)
+        (Layout.bcAddr (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) := by
+      funext j t
+      simp only [keyBcAddrH, hu, dite_true]
+    have e2 : keySaltAddrH si S R u (.inl (u', q)) (hU := hU) = fun (j : Fin 192) (t : Fin 8) =>
+        siteAddrH (si.acc S R u hu) (si.o S R u hu)
+          (Hm.saltCol (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) := by
+      funext j t
+      simp only [keySaltAddrH, hu, dite_true]
+    rw [rowEncOf_row (hW _ hmem) ((parse_facts (hparse S R u hu)).v1Segs _ hmem) (parse_bits (hparse S R u hu) _ hmem)
+      (show portRowW c q = 16 * c.ports[q].words from rfl) hle, e1, e2, hb]
+    refine congrArg (fun r => Binding.commitString (rowMsgOf c.ports[q] r) _) ?_
+    congr 1
+    funext j
+    congr 1
+    funext t
+    have hj : (8 * j.val + t.val) / 8 = j.val := by omega
+    have ht : (8 * j.val + t.val) % 8 = t.val := by omega
+    show _ = bit (Binding.wit plan tab S R u M (keyRowAddrH si S R u q (8 * j.val + t.val)))
+    simp only [keyRowAddrH, hu, ↓reduceDIte, hj, ht]
+  · intro h
+    exact (Bool.false_ne_true h).elim
 
 end places
 
