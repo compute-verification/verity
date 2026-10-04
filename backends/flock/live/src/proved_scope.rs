@@ -213,6 +213,46 @@ mod tests {
         assert!(cuts_covered(&net(vec![Group { col: 0, words: 1, bits: vec![16] }], 1, vec![]), 4, &[]));
     }
 
+    /// `check` accepts a circuit in the canonical format under `--zk` alone, and refuses each other form with the Lean
+    /// verifier's reason: without `--zk` the v1-row rule's, under it the first canonical conjunct the circuit fails (an
+    /// output row padded past its port's word, a segmented row, VUs per block not a power of two, a unit past `2^32` rows),
+    /// and before either a tail, public input ports and a shared-row public file.
+    #[test]
+    fn the_canonical_format_is_accepted_under_zk_alone() {
+        use crate::circuit::tests::{flat_tail_statement, flat_v2_statement};
+        use crate::circuit::RowTables;
+
+        let mut inst = Instances { header: serde_json::Value::Null, n: 0, rows: None, salts: None, bcs: vec![], public_sha512: [0; 64],
+                                   population: None, tables: None, public: vec![] };
+        let parse = |text: String| Composite::parse(&text, None).unwrap_or_else(|e| panic!("{e}"));
+        let c = parse(flat_v2_statement(16, false));
+        assert_eq!(canonical_why(&c), None);
+        assert_eq!(check(&c, &inst, true, 1), Ok(()));
+        assert_eq!(check(&c, &inst, true, 2), Ok(()));
+        let v1 = "a row that is not a sha512/row/v1 row of 16 · words bits in at least one chunk";
+        assert_eq!(check(&c, &inst, false, 1), Err(refusal(v1)));
+        let refused = |c: &Composite, inst: &Instances| check(c, inst, true, 1).unwrap_err();
+        assert_eq!(refused(&parse(flat_v2_statement(1024, false)), &inst),
+                   refusal("an output row that is not exactly its output ports' bits"));
+        assert_eq!(refused(&parse(flat_v2_statement(16, true)), &inst),
+                   refusal("a row that is not an unsegmented sha512/row/v2 row, in a circuit with sha512/row/v2 rows"));
+        let mut g3 = c.clone();
+        g3.g = 3;
+        assert_eq!(refused(&g3, &inst), refusal("a vus_per_block that is not a power of two"));
+        let mut big = c.clone();
+        big.nets[big.unit_net].1.unit_log = 33;
+        assert_eq!(refused(&big, &inst), refusal("a unit of 2^33 rows"));
+        // a tail of v1 rows: no bit row, so the scope rule's reason, which is also the canonical format's first
+        let tail = parse(flat_tail_statement());
+        assert_eq!(canonical_why(&tail).as_deref(), Some("a circuit whose outputs a tail stage computes (META out_net)"));
+        assert_eq!(refused(&tail, &inst), refusal("a circuit whose outputs a tail stage computes (META out_net)"));
+        let mut public = c.clone();
+        public.public_inputs = vec![("x".into(), 64)];
+        assert_eq!(refused(&public, &inst), refusal("public input ports (--public-inputs)"));
+        inst.tables = Some(RowTables { counts: vec![1, 1], rows: None, salts: None, refs: vec![] });
+        assert_eq!(refused(&c, &inst), refusal("a shared-row public file (header shared_rows)"));
+    }
+
     #[test]
     fn a_canonical_row_is_an_unsegmented_bit_row() {
         let p = |v2, segs: Option<Vec<(usize, usize)>>| Port { name: "p".into(), words: 2, comps: 1, bits: 20, v2, segs };
