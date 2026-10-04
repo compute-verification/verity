@@ -17,6 +17,24 @@
     python tools/check/check.py --preflight                 the preflight alone, for `research merge --train --prepare`
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
                                                             the steps; with --record --on, the pack travels with the run
+    uv run python tools/check/check.py --record --shard K/N --on M
+                                                            shard K of ci.toml's plan with N shards, on machine M (each shard
+                                                            on a pod of the lander's choosing): an Attempt no gate takes alone
+    uv run python tools/check/check.py --record --combine RUN...
+                                                            the shards RUN..., one per K, recorded as one check of this commit
+                                                            when they are together a passing one (`research merge` reads them)
+
+Sharding.  `check.py --shard K/N` runs the preflight and then only shard K's parts of the plan with N shards that `ci.toml`
+declares (`declaration.py`: each job in one shard, `lean-audit` split by Lake package), so one commit's check runs on N pods at
+once and takes about as long as its longest shard. Its result is a `check-shard/v1` (`SHARD_KIND`) that names the shard, the
+commit, the config (the tree of `tools/check/` at that commit), the shard's parts and every part an unsharded check covers, and
+each step the parts it ran. `--record --combine RUN...` records, on the clean commit, a `check/v1` whose steps are the shards'
+parts, each once (the preflight's steps once, passed in every shard), when `research.merge.shard_set` accepts them: the
+shards' Attempts are passing runs of the declared command with `--shard K/N` on that clean commit, their results passed with
+no step failed or stopped, all of one plan (one N, K = 1..N once each) and one config (the commit's), and their parts are
+every part, each once, covering every job the commit's `ci.toml` declares. `research merge` takes the combined Attempt only
+after judging its shards again the same way and finding its steps theirs, so a missing, repeated, failed or mismatched shard
+passes nothing. A step skipped in its shard (lean-agreement without the upstream build) is skipped in the combined check too.
 
 First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`), the repository's wall-clock lint and its
 tree's own tests (`LINTS`: markdown caps, report-genre names, secret-like literals, blob and data budgets). The groups start only
@@ -237,14 +255,15 @@ def lean_deps_url_file(dest: Path) -> Path | None:
 LEAN_SLOT_WRAP = [sys.executable, str(ROOT / "tools" / "check" / "lean_slot.py"), "--pool", "check", "--"]
 
 
-def lean_audit_misses(cache: bool = True) -> bool:
-    """Whether the lean-audit step will audit a package: one whose pass isn't kept here under its key (`lean_audit.run`'s
-    test)."""
+def lean_audit_misses(cache: bool = True, only: list[str] | None = None) -> bool:
+    """Whether the lean-audit step will audit a package (of ``only``, its `--package`s, when given): one whose pass isn't kept
+    here under its key (`lean_audit.run`'s test)."""
     la = _lean_audit()
     files = tracked_files(ROOT)
     if not cache or files is None:
         return True
-    return any(not (cache_dir() / "lean-audit" / f"{la.key(p, files, la.FLAGS)}.json").is_file() for p in la.packages(files))
+    pkgs = [p for p in la.packages(files) if not only or p in only]
+    return any(not (cache_dir() / "lean-audit" / f"{la.key(p, files, la.FLAGS)}.json").is_file() for p in pkgs)
 
 
 def lean_fast(out: Path) -> str | None:
@@ -270,7 +289,8 @@ def lean_fast(out: Path) -> str | None:
 def lean_slot(cmd: list[str]) -> list[str]:
     """`--lean-slot CMD...`, the lean-audit step: CMD in one of the node's Lean audit slots when it will audit a package, as it
     is when it only reuses passes, which would otherwise wait behind an hour-long audit for seconds of work."""
-    return [*LEAN_SLOT_WRAP, *cmd] if lean_audit_misses("--fresh" not in cmd) else cmd
+    only = [cmd[i + 1] for i, x in enumerate(cmd[:-1]) if x == "--package"]
+    return [*LEAN_SLOT_WRAP, *cmd] if lean_audit_misses("--fresh" not in cmd, only) else cmd
 
 
 def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[tuple[str, list[str] | str, Path]]:
@@ -471,6 +491,14 @@ def record(argv: list[str]) -> int:
     spec = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
+    combining = rest[:1] == ["--combine"]
+    parts = None
+    if "--shard" in rest[:-1]:
+        try:
+            parts = shard(rest[rest.index("--shard") + 1])["parts"]
+        except DECLARATION.DeclarationError as e:
+            print(f"check: {e}", file=sys.stderr)
+            return 2
     if base is None:
         subprocess.run(["git", "fetch", "-q", "origin", "+refs/heads/main:refs/remotes/origin/main"], cwd=ROOT, capture_output=True)
         base = "origin/main"
@@ -482,6 +510,8 @@ def record(argv: list[str]) -> int:
     from research.merge import rule_touches
 
     need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)] + ["lean-agreement"] * agreement
+    if combining or parts is not None:                 # a shard gets what its own steps read; a combine runs none
+        need = [s for s in need if parts is not None and s in parts]
     cmd = [sys.executable, "-m", "research", "run", "--tool", "check", "--project", "verity", "--cwd", "source"]
     env = dict(os.environ)
     if "lean-agreement" in need:
@@ -502,7 +532,8 @@ def record(argv: list[str]) -> int:
                 (d / f"{k}.tar.gz").symlink_to(f)
             env[AGREEMENT_DIR_ENV] = str(d)
     d = Path(tempfile.mkdtemp(prefix="check-lean-deps-"))
-    if urls := lean_deps_url_file(d):
+    audits = not combining and (parts is None or any(p.startswith("lean-audit:") for p in parts))
+    if audits and (urls := lean_deps_url_file(d)):
         print(f"check: sending presigned URLs for {len(json.loads(urls.read_text()))} pinned Lean dependency bundle(s)")
         if on:
             cmd += ["--send", str(urls)]
@@ -535,11 +566,17 @@ def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
 AFTER_LEAN = ("verity-flock", "verity-lean-audit")
 
 
-def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None) -> list[list[tuple[str, list[str] | str, Path]]]:
-    """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd)."""
+def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
+           only: list[str] | None = None) -> list[list[tuple[str, list[str] | str, Path]]]:
+    """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd); with ``only``, a
+    shard's parts (`shard`), just the jobs those name, lean-audit on its packages there, and all the cores to pytest or to
+    circuit-check when the other isn't among them."""
     py = sys.executable
     a = max(1, n // 2)
     b = max(1, n - a)
+    if only is not None:
+        names = {p.partition(":")[0] for p in only}
+        a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
     suites = [py, str(ROOT / "tools" / "check" / "suites.py")]
     tail = ["--jobs", str(a), *([] if cache else ["--fresh"])]
     lean = lean_steps(out, cache, urls)
@@ -565,6 +602,14 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None) -> l
         built["lean-build"] = lean[0]                  # no verifier: one skip, named `lean`, where its group starts
     if undeclared := set(built) - {j.name for j in JOBS}:
         raise DECLARATION.DeclarationError(f"check.py builds {', '.join(sorted(undeclared))}, which ci.toml doesn't declare")
+    if only is not None:
+        if unbuilt := sorted({p.partition(":")[0] for p in only} - set(built)):
+            raise DECLARATION.DeclarationError(f"the shard runs {', '.join(unbuilt)}, which check.py doesn't build on this tree")
+        pkgs = [p.partition(":")[2] for p in only if p.startswith("lean-audit:")]
+        if pkgs:
+            name, argv, cwd = built["lean-audit"]
+            built["lean-audit"] = (name, [*argv, *(x for p in pkgs for x in ("--package", p))], cwd)
+        built = {k: v for k, v in built.items() if k in names and (k != "lean-audit" or pkgs)}
     gs: dict[int, list[tuple[str, list[str] | str, Path]]] = {}
     for j in JOBS:
         if j.name in built:
@@ -574,6 +619,65 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None) -> l
 
 def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
     return [s for g in groups(out, n) for s in g]
+
+
+#: a shard's result kind, which the tool doesn't produce: no gate takes a shard alone, only a `--combine` check of its set
+SHARD_KIND = "check-shard/v1"
+
+
+def shard(spec: str) -> dict:
+    """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, "all": every part an unsharded
+    check covers}, on this tree's Lake packages (`declaration.resolve`).  DeclarationError when there is no such plan or shard,
+    or the tree can't be listed."""
+    m = re.fullmatch(r"(\d+)/(\d+)", spec)
+    plans = DECLARATION.plans()
+    if not m or int(m.group(2)) not in plans or not 1 <= int(m.group(1)) <= int(m.group(2)):
+        raise DECLARATION.DeclarationError(f"--shard {spec}: ci.toml's plans are {', '.join(f'K/{n}' for n in sorted(plans))}")
+    k, n = int(m.group(1)), int(m.group(2))
+    files = tracked_files(ROOT)
+    if files is None:
+        raise DECLARATION.DeclarationError("--shard: this tree's files can't be listed, so its Lake packages aren't known")
+    parts_of = {"lean-audit": _lean_audit().packages(files)}
+    return {"k": k, "n": n, "parts": DECLARATION.resolve(plans[n], JOBS, parts_of)[k - 1],
+            "all": DECLARATION.all_parts(JOBS, parts_of)}
+
+
+def _rev(rev: str) -> str | None:
+    r = subprocess.run(["git", "rev-parse", "--verify", "-q", rev], cwd=ROOT, capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def combine(ids: list[str], run_dir: Path | None) -> int:
+    """`--combine RUN...`: whether the shard Attempts ``ids`` are together a passing check of this clean commit, as `research
+    merge` judges them (`research.merge.shard_set`); inside a recorded run (`--record --combine`), its result (`check/v1`): their
+    steps, each part once, which the gate admits after reading the shards again itself."""
+    from research.merge import shard_set
+    from research.store.local import LocalStore
+
+    store = LocalStore()
+    if store.remote is not None:
+        try:
+            store.refresh(attempts_only=True)
+        except Exception as e:  # noqa: BLE001  (the local catalog still answers; say it may be behind)
+            print(f"check: --combine: refresh from the remote failed ({type(e).__name__}: {e}); using the local catalog", flush=True)
+    spec = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    commit = _rev("HEAD") or ""
+    dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    done, why = shard_set(store, ROOT, commit, ids, tool.CHECK.name, tuple(tool.CHECK.command))
+    if dirty:
+        why = "the checkout has uncommitted changes"
+    if run_dir is not None:
+        doc = {"schema": "research/result/v0.1", "kind": "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
+               "workload_fingerprint": {"steps": [s["step"] for s in done or []], "shards": ids},
+               "validation": {"status": "failed" if why else "passed", "checker": "tools/check/check.py --combine",
+                              "detail": why or f"{len(ids)} shards of {commit[:12]}"},
+               "steps": done or [], "shards": ids}
+        (run_dir / "result.json").write_text(json.dumps(doc, indent=1) + "\n")
+    print(f"check: --combine {' '.join(ids)}: " + (f"refused: {why}" if why else f"a passing check of {commit[:12]} "
+                                                    f"({len(done)} steps)"), flush=True)
+    return 1 if why else 0
 
 
 #: What reaches the steps from this process's environment, Turborepo's strict mode being the model: where things are (PATH, HOME,
@@ -850,7 +954,8 @@ PREBUILD = ("try:\n    from verity_vllm.program.kernels import twins\nexcept Imp
             "if twins:\n    twins.preload()\n")
 
 
-def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False) -> tuple[bool, list[dict]]:
+def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False,
+        only: list[str] | None = None) -> tuple[bool, list[dict]]:
     n = n or cores()
     urls = take_lean_deps_urls(out)
     steps = Steps(out, keep_going)
@@ -867,8 +972,8 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
         results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in preflight()]
         if not steps.stopping and all(r["status"] == "passed" for r in results):
             subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
-            gs = groups(out, n, cache, urls)
-            with ThreadPoolExecutor(max_workers=len(gs)) as ex:
+            gs = groups(out, n, cache, urls) if only is None else groups(out, n, cache, urls, only)
+            with ThreadPoolExecutor(max_workers=max(1, len(gs))) as ex:
                 results += [r for rs in ex.map(group, gs) for r in rs]
     finally:
         if urls and urls.name.startswith("lean-deps-urls-"):
@@ -897,8 +1002,14 @@ def contradictions(out: Path, field: str = "contradicts") -> list[dict]:
 
 
 def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None, contradicted: list[dict] = (),
-                 nondeterministic: list[dict] = ()) -> None:
-    doc = {"schema": "research/result/v0.1", "kind": "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
+                 nondeterministic: list[dict] = (), shard: dict | None = None) -> None:
+    """``result.json``: `check/v1`; for a shard (``shard``, from `shard`), `SHARD_KIND`, with the shard's plan, commit and
+    config (the tree of `tools/check/` at HEAD) and each of its steps' parts (the plan's names that step ran)."""
+    if shard is not None:
+        done = [{**s, "parts": got} if (got := [p for p in shard["parts"] if p.partition(":")[0] == s["step"]]) else s
+                for s in done]
+        shard = {**shard, "commit": _rev("HEAD"), "config": _rev("HEAD:tools/check")}
+    doc = {"schema": "research/result/v0.1", "kind": SHARD_KIND if shard else "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
            "workload_fingerprint": {"steps": [s["step"] for s in done]},
            "validation": {"status": "passed" if ok else "failed", "checker": "tools/check/check.py",
                           "detail": "; ".join(f"{s['step']} {s['status']}" for s in done)},
@@ -907,6 +1018,8 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                                                     "verdicts.tar.gz", STEPS_LOG,
                                                     *(s.get("log") for s in done), *agreement_verdicts(run_dir))
                                         if p and (run_dir / p).exists()]}
+    if shard:
+        doc["shard"] = shard
     if verdicts:
         doc["verdicts"] = verdicts
     if contradicted:
@@ -945,6 +1058,8 @@ def main(argv: list[str]) -> int:
         print("check: VERITY_SKIP_STORE=1 inside a recorded run: a recorded check runs the store-backed tests (the module docstring's "
               "\"The evidence store\")", file=sys.stderr)
         return 2
+    if argv[:1] == ["--combine"] and len(argv) > 1:
+        return combine(argv[1:], Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None)
     cache = "--no-cache" not in argv
     keep_going = "--keep-going" in argv
     rest = [a for a in argv if a not in ("--no-cache", "--keep-going")]
@@ -952,6 +1067,16 @@ def main(argv: list[str]) -> int:
     if "--verdicts-in" in rest and rest.index("--verdicts-in") + 1 < len(rest):
         i = rest.index("--verdicts-in")
         pack, rest = Path(rest[i + 1]), rest[:i] + rest[i + 2:]
+    sharded = None
+    if "--shard" in rest and rest.index("--shard") + 1 < len(rest):
+        i = rest.index("--shard")
+        try:
+            sharded = shard(rest[i + 1])
+        except DECLARATION.DeclarationError as e:
+            print(f"check: {e}", file=sys.stderr)
+            return 2
+        rest = rest[:i] + rest[i + 2:]
+        print(f"check: shard {sharded['k']}/{sharded['n']}: {', '.join(sharded['parts'])}", flush=True)
     n = None
     if rest[:1] == ["--cores"] and len(rest) == 2 and rest[1].isdigit():
         n, rest = int(rest[1]), []
@@ -967,7 +1092,7 @@ def main(argv: list[str]) -> int:
     verdicts = {"in": verdicts_in(pack, run_dir)} if pack and cache else {}
     before = VERDICTS.snapshot() if run_dir is not None and cache else None
     t0 = time.monotonic()
-    ok, done = run(out, n, cache, keep_going)
+    ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None)
     bad, flaky = contradictions(out), contradictions(out, "nondeterministic")
     for c in bad:
         print(f"check: CACHE CONTRADICTED in {c['suite']}: {', '.join(c['contradicts'][:5])} failed fresh, and a cached pass answers for it",
@@ -977,7 +1102,7 @@ def main(argv: list[str]) -> int:
     if run_dir is not None:
         if before is not None:
             verdicts["out"] = {"file": "verdicts.tar.gz", "entries": VERDICTS.export(run_dir / "verdicts.tar.gz", before)}
-        write_result(run_dir, ok, done, verdicts, bad, flaky)
+        write_result(run_dir, ok, done, verdicts, bad, flaky, sharded)
     print(f"check: {'passed' if ok else 'FAILED'} in {time.monotonic() - t0:.1f} s ({', '.join(s['step'] + ' ' + s['status'] for s in done)});"
           f" outputs in {out}")
     return 0 if ok else 1

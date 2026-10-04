@@ -26,6 +26,7 @@ group = 2
 name = "flock-rust-tests"
 owner = "proofs"
 group = 2
+needs = ["flock-circuit-build"]
 
 # Group 3: the Lean verifier and every Lake package's audit, then the suites that need the built packages, then the
 # agreement with upstream's Rust verifier.
@@ -38,6 +39,7 @@ group = 3
 name = "lean-unit-cut"
 owner = "proofs"
 group = 3
+needs = ["lean-build"]
 
 [[job]]
 name = "lean-audit"
@@ -48,11 +50,13 @@ group = 3
 name = "lean-suites"
 owner = "ci"
 group = 3
+needs = ["lean-build"]
 
 [[job]]
 name = "lean-agreement"
 owner = "proofs"
 group = 3
+needs = ["lean-build"]
 merge_requires = ["backends/flock/", "!README.md", "!PROTOCOL.md"]
 
 # Group 4: the early Lean check on a merge (stale records, broken builds); its failure stops the whole run.
@@ -61,3 +65,27 @@ name = "lean-changed"
 owner = "lean"
 group = 4
 halts = true
+
+# The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the lander's
+# choosing, and `check.py --record --combine RUN...` records their union as the commit's check (`research merge` re-reads the
+# shards). Balanced on a cold check's costs on one pod (lean-audit 46 min, soundness alone 45-70 of it; pytest 27, lean-suites
+# 22, circuit-check about 48 on half the cores), so the wall time is about the soundness audit's.
+# lean-audit runs on a scratch tree, so a shard audits without lean-build; the jobs that read lean-build's binaries `needs` it.
+
+# 3 pods: the soundness audit beside the suites; the rest of the Lean; the Rust build and the circuits.
+[[plan]]
+shards = [
+    ["lean-audit:backends/flock/verifier/lean/soundness", "pytest"],
+    ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed"],
+    ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
+]
+
+# 5 pods: each of those apart.
+[[plan]]
+shards = [
+    ["lean-audit:backends/flock/verifier/lean/soundness"],
+    ["lean-audit:*", "lean-changed"],
+    ["lean-build", "lean-unit-cut", "lean-suites", "lean-agreement"],
+    ["pytest"],
+    ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
+]

@@ -1,7 +1,8 @@
 """`lean_audit`: check's Lean audit step. `tools/lean/audit.py --build` on the packages whose passes can't be reused, with
 dependencies kept warm.
 
-    python tools/check/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR]
+    python tools/check/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR] [--package PKG]...
+                                                      (only those packages: a shard's share, `check.py --shard`)
     python tools/check/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
     python tools/check/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
     python tools/check/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
@@ -391,14 +392,28 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     return failed, audited
 
 
+def select(pkgs: list[str], only: list[str] | None) -> list[str]:
+    """``pkgs`` less those ``only`` (`--package`, a shard's share) leaves out; ValueError naming one ``only`` has and ``pkgs``
+    lacks."""
+    if not only:
+        return pkgs
+    if unknown := sorted(set(only) - set(pkgs)):
+        raise ValueError(f"no audited package {', '.join(unknown)} on this tree")
+    return [p for p in pkgs if p in only]
+
+
 def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls: dict[str, str] | None = None,
-        export: Path | None = None) -> int:
+        export: Path | None = None, only: list[str] | None = None) -> int:
     files = COMMON.tracked_files(ROOT)
     if files is None:
         log("lean-audit: the tree's files cannot be listed; nothing is cached")
         fresh = True
         files = [str(p.relative_to(ROOT)) for p in ROOT.rglob("*") if p.is_file() and ".lake" not in p.parts]
-    pkgs = packages(files)
+    try:
+        pkgs = select(packages(files), only)
+    except ValueError as e:
+        log(f"lean-audit: FAIL: {e}")
+        return 1
     comps = {p: components(p, files, FLAGS) for p in pkgs}
     keys = {p: key_of(c) for p, c in comps.items()}
     out.mkdir(parents=True, exist_ok=True)
@@ -545,9 +560,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--fresh", action="store_true", help="audit every package and store nothing")
     ap.add_argument("--urls", type=Path, help=f"{URLS}: presigned URLs for the pinned bundles ({PIN})")
     ap.add_argument("--export", type=Path, help="bundle the dependencies of every package that passed into this directory")
+    ap.add_argument("--package", action="append", metavar="PKG", help="audit only this package (repeatable): a shard's share")
     a = ap.parse_args(argv)
     urls = json.loads(a.urls.read_text()) if a.urls and a.urls.is_file() else None
-    return run(a.out, a.cache, a.deps, a.fresh, log=lambda s: print(s, flush=True), urls=urls, export=a.export)
+    return run(a.out, a.cache, a.deps, a.fresh, log=lambda s: print(s, flush=True), urls=urls, export=a.export, only=a.package)
 
 
 if __name__ == "__main__":
