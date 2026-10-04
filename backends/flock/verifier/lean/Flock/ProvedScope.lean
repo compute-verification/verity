@@ -64,7 +64,9 @@ def refusal (why : String) : String := s!"refused: {why}: a statement form the s
 
 /-- **`verify`'s statement is one the soundness proof covers**: every rule of `statementRules`, and on the circuit and public
 file as the proof reads them, no shared-row public file and `scopeOk`. `tags` are the session's (under `--zk`,
-`Zk.tags`'s), `count` its tables and `publicInputs` whether the verifier holds its own public input words. -/
+`Zk.tags`'s), `count` its tables and `publicInputs` whether the verifier holds its own public input words. When this
+check moves from `scopeOk` to a format check (`formatOk`), a tail must stay refused (`c.outNet == c.unitNet`): `formatOk`
+puts no condition on a tail's stage nets, and the session headline's `keyProg` reads the unit nets only. -/
 def check (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray)) (count : Nat)
     (publicInputs : Bool) : Except String Unit :=
   match firstFailure (statementRules tags zk count publicInputs) with
