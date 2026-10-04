@@ -18,6 +18,10 @@ import Pouw.SecurityProofs.PearlC.Block4Sem
 * `pc4` (`row4OK_stats_of_beta`): where `β`'s word is finite and `RowAdmit4` holds, `β > 0`, so `α > 0`: at `α = +0`
   the product `δρ·α` is `±0` or not finite (`mulNonfin`), and `β` with it. `pc4Sem`'s `β` is `0` where `β`'s word is
   not finite, so `RowAdmit4` asks a finite `β`, as the circuit (`β ≤ F32_MAX`) and Python (`pearl_c4.stats`) do.
+* `pc4`'s forming (`alpha4_mul_le`): under `Pc4OpsAgree`, whose `I32Le` orders words below `2³¹`, the running max `s`
+  is the largest `|x_l|` (`rowMax_ge`; word order is value order on finite words with bit 31 clear, `wordQ_mono`). On
+  a `Row4OK` row `ρ` is finite, since `β` is, so `δρ ≥ 0` and `t = s + 4·δρ` is `+inf` (so `α = +0`) or finite and at
+  least `s` up to one rounding: `α·|x_l| ≤ 2689`, under which `formRow`'s noise atoms are finite (`PeelExists4`).
 
 The squares-overflow row (`test_circuit_pc8`'s and `test_circuit_pc4`'s `squares-overflow`: finite words, every 8th one
 `2¹²⁶`) is the vector both refusals are checked on: each sampled square overflows, so `ρ` is `+inf`, and `pc8Sem`
@@ -49,6 +53,52 @@ theorem stepWord_of_lt31 {w : ℕ} {x : ℚ} (hw : w < 2 ^ 31) (h : wordQ w = so
 
 theorem wordVal_of_wordQ {w : ℕ} {x : ℚ} (h : wordQ w = some x) : PearlC.wordVal w = x := by
   simp [PearlC.wordVal, h]
+
+/-- A step word is finite. -/
+theorem stepWord_wordQ {w : ℕ} (h : StepWord w) : ∃ v, wordQ w = some v := by
+  obtain ⟨-, v, hv⟩ := PeelExactProofs.finite?_eq_some h.2.2
+  exact ⟨v, hv⟩
+
+theorem fields_mono {a b : ℕ} (hab : a ≤ b) (hb : b < 2 ^ 31) :
+    ((if (a >>> 23) % 256 = 0 then 0 else 2 ^ 23) + a % 2 ^ 23) * 2 ^ (max ((a >>> 23) % 256) 1) ≤
+      ((if (b >>> 23) % 256 = 0 then 0 else 2 ^ 23) + b % 2 ^ 23) * 2 ^ (max ((b >>> 23) % 256) 1) := by
+  have hea : (a >>> 23) % 256 = a / 2 ^ 23 := by rw [Nat.shiftRight_eq_div_pow]; omega
+  have heb : (b >>> 23) % 256 = b / 2 ^ 23 := by rw [Nat.shiftRight_eq_div_pow]; omega
+  rw [hea, heb]
+  have hle : a / 2 ^ 23 ≤ b / 2 ^ 23 := Nat.div_le_div_right hab
+  rcases hle.lt_or_eq with hlt | heq
+  · have hb1 : 1 ≤ b / 2 ^ 23 := by omega
+    rw [max_eq_left hb1, ite_eq_right (show ¬b / 2 ^ 23 = 0 by omega)]
+    calc _ ≤ 2 ^ 23 * 2 ^ (b / 2 ^ 23) := ?_
+      _ ≤ _ := Nat.mul_le_mul_right _ (by omega)
+    by_cases h0 : a / 2 ^ 23 = 0
+    · rw [h0, ite_eq_left rfl, max_eq_right (by omega)]
+      calc (0 + a % 2 ^ 23) * 2 ^ 1 ≤ 2 ^ 23 * 2 ^ 1 := Nat.mul_le_mul_right _ (by omega)
+        _ ≤ _ := Nat.mul_le_mul_left _ (Nat.pow_le_pow_right (by norm_num) hb1)
+    · rw [ite_eq_right h0, max_eq_left (by omega)]
+      calc (2 ^ 23 + a % 2 ^ 23) * 2 ^ (a / 2 ^ 23) ≤ 2 ^ 24 * 2 ^ (a / 2 ^ 23) := Nat.mul_le_mul_right _ (by omega)
+        _ = 2 ^ 23 * 2 ^ (a / 2 ^ 23 + 1) := by ring
+        _ ≤ _ := Nat.mul_le_mul_left _ (Nat.pow_le_pow_right (by norm_num) (by omega))
+  · rw [heq]
+    apply Nat.mul_le_mul_right
+    have : a % 2 ^ 23 ≤ b % 2 ^ 23 := by omega
+    omega
+
+/-- **Word order is value order** on finite words with the sign bit clear. -/
+theorem wordQ_mono {a b : ℕ} {x y : ℚ} (hab : a ≤ b) (hb : b < 2 ^ 31) (hx : wordQ a = some x)
+    (hy : wordQ b = some y) : x ≤ y := by
+  rw [PeelExactProofs.wordQ_fields (wordQ_exp hx)] at hx
+  rw [PeelExactProofs.wordQ_fields (wordQ_exp hy)] at hy
+  have hsa : (a >>> 31) % 2 = 0 := by rw [Nat.shiftRight_eq_div_pow, Nat.div_eq_of_lt (by omega)]
+  have hsb : (b >>> 31) % 2 = 0 := by rw [Nat.shiftRight_eq_div_pow, Nat.div_eq_of_lt hb]
+  simp only [hsa, hsb, zero_ne_one, ↓reduceIte, one_mul] at hx hy
+  obtain rfl := Option.some.inj hx
+  obtain rfl := Option.some.inj hy
+  have e : ∀ n : ℕ, (2 : ℚ) ^ ((n : ℤ) - 150) = 2 ^ n * 2 ^ (-150 : ℤ) := fun n => by
+    rw [sub_eq_add_neg, zpow_add₀ two_ne_zero, zpow_natCast]
+  rw [e, e, ← mul_assoc, ← mul_assoc]
+  apply mul_le_mul_of_nonneg_right _ (by positivity)
+  exact_mod_cast fields_mono hab hb
 
 /-- A finite word of positive value has sign bit `0`. -/
 theorem lt31_of_pos {w : ℕ} {x : ℚ} (hw : w < 2 ^ 32) (h : wordQ w = some x) (hx : 0 < x) : w < 2 ^ 31 := by
@@ -301,6 +351,65 @@ theorem floor_val (hA : Pc8OpsAgree ops) {ρw αw : ℕ} {r a : ℚ} (hρ32 : ρ
   have := PeelExactProofs.rnWord_err hfl
   rwa [e] at this
 
+/-- A nonnegative value's word: `+inf`, or finite, nonnegative and within one rounding. -/
+theorem f32Word_nonneg_cases {y : ℚ} (hy : 0 ≤ y) : f32Word y < 2 ^ 31 ∧ (f32Word y = 0x7F800000 ∨
+    ∃ v, wordQ (f32Word y) = some v ∧ 0 ≤ v ∧ y - y / 2 ^ 24 - 2 ^ (-150 : ℤ) ≤ v) := by
+  refine ⟨f32Word_lt31 hy, ?_⟩
+  rcases hy.eq_or_lt with h0 | hpos
+  · rw [← h0]
+    right
+    refine ⟨0, by simpa [f32Word] using Freeze.wordQ_zero, le_rfl, ?_⟩
+    have := two_zpow_pos (-150 : ℤ)
+    linarith
+  rcases hq : wordQ (f32Word y) with _ | v
+  · exact Or.inl (f32Word_pos_inf hpos hq)
+  · right
+    have herr := f32Word_err hpos.ne' hq
+    rw [abs_of_pos hpos] at herr
+    exact ⟨v, rfl, wordQ_nonneg (f32Word_lt31 hy) hq, by linarith [(abs_le.1 herr).1]⟩
+
+/-- A product of finite nonnegative values: `+inf`, or finite and nonnegative. -/
+theorem mul_nonneg_cases (hA : Pc8OpsAgree ops) {a b : ℕ} {x y : ℚ} (ha32 : a < 2 ^ 32) (hb32 : b < 2 ^ 32)
+    (ha : wordQ a = some x) (hb : wordQ b = some y) (hx : 0 ≤ x) (hy : 0 ≤ y) :
+    Prim.eval ops .mul [a, b] = 0x7F800000 ∨ ∃ v, wordQ (Prim.eval ops .mul [a, b]) = some v ∧ 0 ≤ v := by
+  rcases (mul_nonneg hx hy).eq_or_lt with h0 | hpos
+  · exact Or.inr ⟨0, mul_zero_val hA ha32 hb32 ha hb h0.symm, le_rfl⟩
+  have hm : Prim.eval ops .mul [a, b] = f32Word (x * y) :=
+    hA.mul a b x y ha32 hb32 ha hb (fun h => absurd h hpos.ne')
+  rw [hm]
+  rcases (f32Word_nonneg_cases hpos.le).2 with h | ⟨v, hv, hv0, -⟩
+  · exact Or.inl h
+  · exact Or.inr ⟨v, hv, hv0⟩
+
+/-- **The running max is the largest of its words**, under `I32Le`'s order on words with the sign bit clear: it is one
+of the words read, and at least each. -/
+theorem rowMax_ge (hA : Pc4OpsAgree ops) {w : Wire} {x : ℕ → ℕ} :
+    ∀ t, (∀ l ≤ t, w.eval ops (x l) < 2 ^ 31) →
+      (∃ l ≤ t, rowMax ops w x t = w.eval ops (x l)) ∧ ∀ l ≤ t, w.eval ops (x l) ≤ rowMax ops w x t
+  | 0, _ => ⟨⟨0, le_rfl, rfl⟩, fun l hl => by rw [Nat.le_zero.1 hl]; rfl⟩
+  | t + 1, hv => by
+    obtain ⟨⟨l0, hl0, h0⟩, hge⟩ := rowMax_ge hA t fun l hl => hv l (by omega)
+    have hm : rowMax ops w x t < 2 ^ 31 := h0 ▸ hv l0 (by omega)
+    have hf := hv (t + 1) le_rfl
+    have hr : rowMax ops w x (t + 1) = max (rowMax ops w x t) (w.eval ops (x (t + 1))) := by
+      rw [rowMax]
+      change ops.selectI32 (Prim.eval ops .le [rowMax ops w x t, w.eval ops (x (t + 1))]) (w.eval ops (x (t + 1)))
+        (rowMax ops w x t) % 2 ^ 32 = _
+      have hl : Prim.eval ops .le [rowMax ops w x t, w.eval ops (x (t + 1))] =
+          ops.i32Le (rowMax ops w x t) (w.eval ops (x (t + 1))) % 2 := rfl
+      rw [hA.sel, hl, Nat.mod_mod, hA.le _ _ hm hf]
+      by_cases h : rowMax ops w x t ≤ w.eval ops (x (t + 1))
+      · rw [ite_eq_left h, ite_eq_left rfl, Nat.mod_eq_of_lt (by omega), max_eq_right h]
+      · rw [ite_eq_right h, ite_eq_right (by norm_num), Nat.mod_eq_of_lt (by omega), max_eq_left (by omega)]
+    rw [hr]
+    refine ⟨?_, fun l hl => ?_⟩
+    · rcases le_total (rowMax ops w x t) (w.eval ops (x (t + 1))) with h | h
+      · exact ⟨t + 1, le_rfl, max_eq_right h⟩
+      · exact ⟨l0, by omega, by rw [max_eq_left h, h0]⟩
+    · rcases Nat.lt_or_ge l (t + 1) with h | h
+      · exact (hge l (by omega)).trans (le_max_left _ _)
+      · rw [show l = t + 1 by omega]; exact le_max_right _ _
+
 end Prims
 
 /-! ## `pc8` -/
@@ -467,6 +576,119 @@ theorem row4OK_stats_of_beta (hA : Pc8OpsAgree ops) {k : ℕ} {x : ℕ → ℕ} 
     · exact (hfin ht).1
   exact ⟨hαS, by rw [wordVal_of_wordQ ha]; exact hapos,
     stepWord_of_lt31 (lt31_of_pos (eval_lt32 .mul rfl _) hb hbpos) hb⟩
+
+/-- **`α·|x_l| ≤ 2689`** on a row that `Row4OK` admits, under `I32Le`'s order: `s` is the largest `|x_l|`
+(`rowMax_ge`), `ρ` is finite since `β` is, so `δρ ≥ 0` and `t = s + 4·δρ` is `+inf` (`α = +0`) or finite and at least
+`s` up to one rounding, while `α ≤ 2688/max(t, 2⁻³²)` up to one. -/
+theorem alpha4_mul_le (hA : Pc4OpsAgree ops) {K : ℕ} {X : Fin K → ℚ} (hR : Row4OK ops K X) (l : Fin K) : wordVal (alpha4 ops (encRow16 K X) K) * |X l| ≤ 2689 := by
+  have hK : 1 ≤ K := by have := l.isLt; omega
+  have hxw : ∀ l' (h : l' < K), wordQ (ops.bf16ToF32 (encRow16 K X l')) = some (X ⟨l', h⟩) := by
+    intro l' h
+    rw [encRow16, dite_eq_left h]
+    obtain ⟨v, hv⟩ := stepWord_wordQ (hR.widen ⟨l', h⟩).1
+    rw [hv, ← wordVal_of_wordQ hv, (hR.widen ⟨l', h⟩).2]
+  have hvw : ∀ l' (h : l' < K), Wire.eval ops .bf16Fabs (encRow16 K X l') < 2 ^ 31 ∧
+      wordQ (Wire.eval ops .bf16Fabs (encRow16 K X l')) = some |X ⟨l', h⟩| := by
+    intro l' h
+    show ops.f32Fabs _ < 2 ^ 31 ∧ wordQ (ops.f32Fabs _) = some _
+    rw [hA.fabs]
+    exact fabs_word (hxw l' h)
+  obtain ⟨⟨l0, hl0, hs0⟩, hge⟩ := rowMax_ge hA (w := .bf16Fabs) (x := encRow16 K X) (K - 1)
+    fun l' hl' => (hvw l' (by omega)).1
+  set s := rowMax ops .bf16Fabs (encRow16 K X) (K - 1) with hs
+  have hs31 : s < 2 ^ 31 := by rw [hs0]; exact (hvw l0 (by omega)).1
+  have hsv : wordQ s = some |X ⟨l0, by omega⟩| := by rw [hs0]; exact (hvw l0 (by omega)).2
+  set sv := |X ⟨l0, by omega⟩|
+  have hsv0 : 0 ≤ sv := abs_nonneg _
+  have hxl : |X l| ≤ sv := wordQ_mono (hge l (by omega)) hs31 (hvw l l.isLt).2 hsv
+  obtain ⟨αv, hαv⟩ := stepWord_wordQ hR.alpha
+  obtain ⟨βv, hβv⟩ := stepWord_wordQ hR.beta
+  have hρ32 : rowRho ops .bf16 (encRow16 K X) K < 2 ^ 32 := eval_lt32 .sqrt rfl _
+  have hd32 : drho4 ops (encRow16 K X) K < 2 ^ 32 := eval_lt32 .mul rfl _
+  rcases hρ : wordQ (rowRho ops .bf16 (encRow16 K X) K) with _ | r
+  · exfalso
+    have hd : wordQ (drho4 ops (encRow16 K X) K) = none :=
+      hA.mulNonfin _ 0x3E800000 hρ32 hρ (by rw [wordQ_cQuarter]; rfl)
+    have hm : wordQ (Prim.eval ops .mul [drho4 ops (encRow16 K X) K, alpha4 ops (encRow16 K X) K]) = none :=
+      hA.mulNonfin (drho4 ops (encRow16 K X) K) (alpha4 ops (encRow16 K X) K) hd32 hd (by rw [hαv]; rfl)
+    have hn : wordQ (beta4 ops (encRow16 K X) K) = none :=
+      hA.mulNonfin _ 0x3EA920A7 (eval_lt32 .mul rfl _) hm (by rw [wordQ_cKbeta]; rfl)
+    rw [hβv] at hn
+    cases hn
+  have hr0 : 0 ≤ r := sqrtWord_nonneg (a := Prim.eval ops .div [sumSq ops .bf16 (encRow16 K X) (K / 8),
+    f32Word ((K / 8 : ℕ) : ℚ)]) hρ
+  have hrlt : r < 2 ^ 128 := lt_of_abs_lt (wordQ_abs_lt hρ)
+  obtain ⟨d, hd, hd0⟩ : ∃ d, wordQ (drho4 ops (encRow16 K X) K) = some d ∧ 0 ≤ d := by
+    rcases (mul_nonneg_cases hA.toPc8OpsAgree hρ32 (by norm_num) hρ wordQ_cQuarter hr0 (by norm_num)) with h | h
+    · exfalso
+      have hpos : 0 < r * (1 / 4) := by
+        rcases hr0.eq_or_lt with h0 | h0
+        · have := mul_zero_val hA.toPc8OpsAgree hρ32 (by norm_num) hρ wordQ_cQuarter (by rw [← h0]; ring)
+          change wordQ (Prim.eval ops .mul [_, _]) = _ at this
+          rw [h, wordQ_pinf] at this
+          cases this
+        · positivity
+      have hm : Prim.eval ops .mul [rowRho ops .bf16 (encRow16 K X) K, 0x3E800000] = f32Word (r * (1 / 4)) :=
+        hA.mul _ _ r (1 / 4) hρ32 (by norm_num) hρ wordQ_cQuarter (fun h => absurd h hpos.ne')
+      obtain ⟨q, hq⟩ := rnWord_finite (v := r * (1 / 4)) false (by rw [abs_of_pos hpos]; linarith)
+      rw [rnWord, ite_eq_right hpos.ne', ← hm, h, wordQ_pinf] at hq
+      cases hq
+    · exact h
+  have hm32 : Prim.eval ops .mul [0x40800000, drho4 ops (encRow16 K X) K] < 2 ^ 32 := eval_lt32 .mul rfl _
+  set t := Prim.eval ops .add [s, Prim.eval ops .mul [0x40800000, drho4 ops (encRow16 K X) K]] with ht
+  have htc : t = 0x7F800000 ∨ ∃ tv, wordQ t = some tv ∧ sv - sv / 2 ^ 24 - 2 ^ (-150 : ℤ) ≤ tv := by
+    rcases mul_nonneg_cases hA.toPc8OpsAgree (by norm_num) hd32 wordQ_c4 hd (by norm_num) hd0 with hinf | ⟨mv, hmv, hmv0⟩
+    · left
+      rw [ht, hinf]
+      change f32Add s 0x7F800000 % 2 ^ 32 = _
+      rw [f32Add_pinf hsv]
+      norm_num
+    obtain ⟨nz, hadd⟩ := f32Add_fin hsv hmv
+    have htw : t = rnWord (sv + mv) nz % 2 ^ 32 := by
+      rw [ht]
+      change f32Add s (Prim.eval ops .mul [0x40800000, drho4 ops (encRow16 K X) K]) % 2 ^ 32 = _
+      rw [hadd]
+    rcases (add_nonneg hsv0 hmv0).eq_or_lt with h0 | hpos
+    · right
+      refine ⟨0, ?_, ?_⟩
+      · rw [htw, rnWord, ite_eq_left h0.symm]
+        cases nz
+        · exact Freeze.wordQ_zero
+        · exact PeelExactProofs.wordQ_negZero
+      · have : sv = 0 := by linarith
+        rw [this]
+        have := two_zpow_pos (-150 : ℤ)
+        linarith
+    rw [htw, rnWord, ite_eq_right hpos.ne', Nat.mod_eq_of_lt (by have := f32Word_lt31 hpos.le; omega)]
+    rcases (f32Word_nonneg_cases hpos.le).2 with h | ⟨tv, htv, -, herr⟩
+    · exact Or.inl h
+    · right
+      refine ⟨tv, htv, ?_⟩
+      have : sv - sv / 2 ^ 24 ≤ (sv + mv) - (sv + mv) / 2 ^ 24 := by linarith
+      linarith
+  obtain ⟨-, a, ha, ha0, hinf, hfin⟩ := alpha_spec hA.toPc8OpsAgree (t := t) (eval_lt32 .add rfl _) wordQ_c2688 (by norm_num)
+    (by norm_num) (by norm_num)
+  change wordQ (alpha4 ops (encRow16 K X) K) = some a at ha
+  rw [wordVal_of_wordQ ha]
+  by_cases hti : t = 0x7F800000
+  · rw [hinf hti, zero_mul]; norm_num
+  obtain ⟨-, dv, hdv32, hdt, herrα⟩ := hfin hti
+  obtain ⟨tv, htv, htvl⟩ := htc.resolve_left hti
+  have htd := hdt tv htv
+  have hdv0 : 0 < dv := lt_of_lt_of_le (two_zpow_pos _) hdv32
+  have hE : (2 : ℚ) ^ (-150 : ℤ) ≤ 2 ^ (-32 : ℤ) / 2 ^ 100 := by norm_num
+  have hx1 : |X l| ≤ dv * (1 + 1 / 8388608) := by
+    have h2 : (2 : ℚ) ^ (-32 : ℤ) / 2 ^ 100 ≤ dv / 2 ^ 100 := div_le_div_of_nonneg_right hdv32 (by positivity)
+    generalize (2 : ℚ) ^ (-150 : ℤ) = E at hE htvl
+    generalize (2 : ℚ) ^ (-32 : ℤ) / 2 ^ 100 = D at hE h2
+    linarith
+  have hale : a ≤ 2688 / dv * (1 + 1 / 16777216) := by
+    have := (abs_le.1 herrα).2
+    linarith
+  calc a * |X l| ≤ (2688 / dv * (1 + 1 / 16777216)) * (dv * (1 + 1 / 8388608)) :=
+        mul_le_mul hale hx1 (abs_nonneg _) (by positivity)
+    _ = 2688 * (1 + 1 / 16777216) * (1 + 1 / 8388608) := by field_simp
+    _ ≤ 2689 := by norm_num
 
 end Pc4
 

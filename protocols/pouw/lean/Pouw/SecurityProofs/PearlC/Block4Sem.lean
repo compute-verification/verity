@@ -11,8 +11,8 @@ largest magnitude and `e2m1Word(f32(D_t·nvf4Recip s))`. Here they agree, under 
 
 * `Pc4OpsAgree ops`: `Pc8OpsAgree`'s agreements (among them `F32Fabs` clears the sign bit and `F32Div` is `f32Word`
   of the quotient by a nonzero divisor), and `F32Fmaxf` of two finite words with the sign bit clear is the one of
-  larger value (`a` at equal values), `F32ToE2m1Sat` of a word that is not NaN is `e2m1Word`'s code, and `Bf16ToF32`
-  of a BF16 word is the word shifted left by 16.
+  larger value (`a` at equal values), `F32ToE2m1Sat` of a word that is not NaN is `e2m1Word`'s code, `Bf16ToF32`
+  of a BF16 word is the word shifted left by 16, and `I32Le` of two words below `2³¹` is their order.
 
 The floors differ in order: the table floors the FP32 value at `2⁻⁹` and then casts, the protocol casts and then
 floors the code at `0x01`. On a non-negative value the two agree (`e4m3_floor`), since `e4m3` is at least `0x01` from
@@ -234,13 +234,15 @@ theorem recip_facts : ∀ c : Code, 1 ≤ c.val → c.val ≤ 126 →
 /-- **Core's primitives agree with the values `pc4`'s blocks read**, beyond `Pc8OpsAgree`'s (which has `F32Fabs`
 clearing the sign bit and `F32Div` of finite words by a nonzero divisor as `f32Word` of the quotient): `F32Fmaxf` of two
 finite words with the sign bit clear is the one of larger value, `a` at equal values (PTX `max.f32`); `F32ToE2m1Sat` of
-a word that is not NaN is `e2m1Word`'s code (it saturates `±inf` to `±6`, as `e2m1Word` does reading them at `±480`).
-Core's Lean semantics will discharge them. -/
+a word that is not NaN is `e2m1Word`'s code (it saturates `±inf` to `±6`, as `e2m1Word` does reading them at `±480`);
+`Bf16ToF32` widens by a 16-bit shift; and `I32Le` (signed 32-bit `a ≤ b`) of two words with bit 31 clear is their
+order, which the running max `s` reads. Core's Lean semantics will discharge them. -/
 structure Pc4OpsAgree (ops : RowOps) : Prop extends WholeCircuit.Pc8OpsAgree ops where
   fmaxf : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ a = some x → wordQ b = some y →
     signBit a = false → signBit b = false → ops.f32Fmaxf a b % 2 ^ 32 = if x < y then b else a
   e2m1 : ∀ w < 2 ^ 32, ((w >>> 23) % 256 = 255 → w % 2 ^ 23 = 0) → ops.f32ToE2m1Sat w % 2 ^ 4 = (e2m1Word w).val
   bf16w : ∀ w < 2 ^ 16, ops.bf16ToF32 w = w <<< 16
+  le : ∀ a b : ℕ, a < 2 ^ 31 → b < 2 ^ 31 → ops.i32Le a b % 2 = if a ≤ b then 1 else 0
 
 /-! ## A block -/
 

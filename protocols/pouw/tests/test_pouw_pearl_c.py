@@ -17,7 +17,7 @@ import pearl_c_vectors as CV
 import pearl_vectors as PV
 from verity.commitments.turboshake import turboshake128
 from verity.ml.fp32 import F32DivV2, F32FmaV2, F32MulV2
-from verity.ml.scalar import F32Fabs, F32Fmaxf, SelectI32
+from verity.ml.scalar import F32Fabs, F32Fmaxf, I32Le, SelectI32
 from verity.ml.tc.models import HOPPER_BF16_WGMMA_K16
 from verity_pouw.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
 from verity_pouw.schemes import get
@@ -384,6 +384,16 @@ def test_f32_div_fmaxf_and_select_as_the_lean_states():
     assert all(F32Fmaxf.evaluate(a, b) == (a if a == 0x7F800000 or (a in finite and val(b) < val(a)) else b)
                for a, b in maxes)
     assert all(SelectI32.evaluate(c, a, b) == (a if c % 2 == 1 else b) for c in range(4) for a, b in pairs[:500])
+
+
+def test_i32_le_of_words_with_bit_31_clear_is_their_order_as_the_lean_states():
+    """`I32Le_v1` (signed 32-bit `a ≤ b`) of two words below `2³¹` is their order, as the Lean's `Pc4OpsAgree.le`
+    states: `pc4`'s running max `s` compares `F32Fabs_v1` words, whose sign bit is clear."""
+    rng = random.Random(13)
+    specials = [0, 1, 0x007FFFFF, 0x00800000, 0x3F800000, 0x3F800001, 0x7F7FFFFF, 0x7F800000, 0x7FC00000, 0x7FFFFFFF]
+    words = specials + [rng.getrandbits(31) for _ in range(1500)]
+    pairs = [(a, b) for a in specials for b in specials] + [(rng.choice(words), rng.choice(words)) for _ in range(4000)]
+    assert all(I32Le.evaluate(a, b) == (1 if a <= b else 0) for a, b in pairs)
 
 
 def test_f32_fma_overflow_and_div_of_a_nonfinite_word_as_the_lean_states():
