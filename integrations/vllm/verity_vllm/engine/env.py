@@ -60,6 +60,12 @@ def apply_target(env: Mapping[str, str]) -> dict[str, str]:
     return {k: os.environ[k] for k in env}
 
 
+def hide_devices() -> None:
+    """No CUDA device is visible to this process (a meta-device build on a GPU host), whatever it inherited.  Takes effect
+    only before torch initialises CUDA."""
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
+
 def snapshot() -> dict[str, str]:
     return dict(os.environ)
 

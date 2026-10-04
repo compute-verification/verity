@@ -6,7 +6,8 @@ Two kinds of local copy can go, and only these:
   `verified_utc` in the catalog (PRESERVED), the local object has the manifest's size, and the blob is at least `min_bytes`.
   Largest first, until the target free space is reached.  `LocalStore._resolve_blob` re-fetches an evicted blob on demand;
   `has_local` / `where` report the eviction honestly, and `index.set_presence(local=...)` is refreshed for every touched artifact.
-  `trees/` (materialised tree copies) is a pure cache and is cleared whole unless `keep_trees`.
+  `trees/` (materialised tree copies) is a pure cache: its entries nobody fetched within `TREE_KEEP_S` go unless `keep_trees`
+  (a fresher one may be open in a run's view; the node's hourly eviction runs below its mark all day).
 * **run-directory files** (`~/.research/runs/<run>/...`, `evict_runs`): the big files of a finished run that appear, with the same
   size (and the same sha256 when the file is <= `hash_max` bytes), in a PRESERVED tree artifact of its attempt: `run_record` /
   `run_files`, or a typed output its `outputs.json` declares, laid out under that output's `tree` path (a Build's `outputs/build`).
@@ -32,6 +33,9 @@ from .local import LocalStore, sha256_file
 from .model import utc_now
 
 MIN_BYTES = 1 << 20          # blobs / files below this are not worth an eviction (and a re-fetch)
+#: a `trees/` entry fetched within this long may still be read (a view a run links into: the vLLM regression's rebuilds read
+#: theirs for most of an hour), so eviction leaves it; `LocalStore.fetch` refreshes an entry's mtime on every fetch
+TREE_KEEP_S = 24 * 3600
 HASH_MAX = 64 << 20          # run files up to this size are sha256-checked against the artifact before eviction
 QUIET_S = 30 * 60            # a run directory touched more recently than this is still being worked on
 TERMINAL_STATES = ("done", "failed", "dead", "timed_out", "exited", "cancelled")
@@ -94,10 +98,28 @@ def plan_store(store: LocalStore, *, min_bytes: int = MIN_BYTES, log: Callable[[
             "skipped": skipped, "verified_artifacts": len(verified)}
 
 
+def stale_trees(store: LocalStore, now: float) -> tuple[list[str], int, int]:
+    """The `trees/` entries nobody fetched within TREE_KEEP_S of ``now``, their bytes, and how many entries are fresher."""
+    trees = store.root / "trees"
+    stale, n, kept = [], 0, 0
+    for entry in os.listdir(trees) if trees.is_dir() else []:
+        try:
+            fresh = os.stat(trees / entry).st_mtime >= now - TREE_KEEP_S
+        except FileNotFoundError:
+            continue
+        if fresh:
+            kept += 1
+            continue
+        stale.append(entry)
+        n += sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(trees / entry) for f in fs)
+    return stale, n, kept
+
+
 def evict_store(store: LocalStore, *, target_free_bytes: int, dry_run: bool = False, min_bytes: int = MIN_BYTES, keep_trees: bool = False,
-                free_fn: Callable[[], int] | None = None, log: Callable[[str], None] | None = None) -> dict[str, Any]:
-    """Evict verified-remote blobs (largest first) and the `trees/` cache until `free_fn()` >= `target_free_bytes`.  The report
-    says what was (or, with `dry_run`, would be) removed; nothing else is touched."""
+                free_fn: Callable[[], int] | None = None, log: Callable[[str], None] | None = None,
+                now: float | None = None) -> dict[str, Any]:
+    """Evict verified-remote blobs (largest first) and the `trees/` entries not fetched within TREE_KEEP_S until `free_fn()` >=
+    `target_free_bytes`.  The report says what was (or, with `dry_run`, would be) removed; nothing else is touched."""
     say = log or (lambda s: None)
     free = free_fn or (lambda: free_bytes(store.root))
     plan = plan_store(store, min_bytes=min_bytes, log=log)
@@ -108,13 +130,15 @@ def evict_store(store: LocalStore, *, target_free_bytes: int, dry_run: bool = Fa
     say(f"free {rep['free_before'] / 1e9:.2f} GB, target {target_free_bytes / 1e9:.2f} GB; {len(plan['candidates'])} evictable blobs "
         f"({plan['evictable_bytes'] / 1e9:.2f} GB), trees/ {plan['trees_bytes'] / 1e9:.2f} GB, held back (remote but unverified) {plan['held_back_bytes'] / 1e9:.2f} GB")
     trees = store.root / "trees"
-    if plan["trees_bytes"] and not keep_trees and free() < target_free_bytes:
+    stale, stale_bytes, rep["trees_kept"] = stale_trees(store, time.time() if now is None else now)
+    if stale and not keep_trees and free() < target_free_bytes:
         if not dry_run:
-            for entry in os.listdir(trees):
+            for entry in stale:
                 shutil.rmtree(trees / entry, ignore_errors=True)
         rep["trees_removed"] = True
-        say(f"trees/ {plan['trees_bytes'] / 1e9:.2f} GB (materialised cache) {'would be' if dry_run else ''} removed")
-    simulated = free() + (plan["trees_bytes"] if dry_run and rep["trees_removed"] else 0)
+        say(f"trees/: {len(stale)} entries not fetched within {TREE_KEEP_S // 3600} h, {stale_bytes / 1e9:.2f} GB (materialised "
+            f"cache), {'would be ' if dry_run else ''}removed; {rep['trees_kept']} kept")
+    simulated = free() + (stale_bytes if dry_run and rep["trees_removed"] else 0)
     touched: set[str] = set()
     for n, h, arts in plan["candidates"]:
         if (simulated if dry_run else free()) >= target_free_bytes:
