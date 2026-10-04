@@ -6,8 +6,9 @@ the task list's build, nor an earlier target's check):
 
 - every file the check opened for reading and every directory it listed (an audit hook on ``open``, ``os.listdir`` and
   ``os.scandir``; not the import system reading a module's source or searching a directory for a module, which the module's
-  name and content stand for), every path it only probed (``os.stat``: whether it was a file, a directory or absent), and every
-  library built in the tree that it loaded (``ctypes.dlopen``: by its bytes);
+  name and content stand for), every path it only probed (``os.stat``: whether it was a file, a directory or absent; when
+  `inspect` or `linecache` probes a loaded module's source file, the module, by its name), and every library built in the tree
+  that it loaded (``ctypes.dlopen``: by its bytes);
 - the module of every function that ran (``sys.monitoring``: the first start or resume of each code object in the recording),
   and every module it imported, already loaded or not (``__import__`` and ``importlib.import_module``: what a module registered
   at import decides a lookup that runs none of its code); a module imported by a name computed at run time (``import_module``,
@@ -34,8 +35,11 @@ input), and, for each import site, the module it resolves to (by the path-based 
 path too.  `targets.py` and `pins.json` are not files of any target: a target holds the parts of `targets.py` it depends on (its
 binding units and the rest of the module with every binding unit cut out, ``common``, each its AST digested as a module's is,
 with its import sites; any `targets.py` code its check ran, by the unit that holds it) and the entries of `pins.json` its check
-looked up (`recorded_pins`), each by its value, or absent.  A package `targets.load_registries` enumerated is held by the
-modules it lists, each by its content (`_children`), rather than by its listing.  The checker's own version is the digest of
+looked up (`recorded_pins`), each by its value, or absent.  A package an enumerator listed (`targets.load_registries`, the
+vLLM registry's ``catalog.load`` and ``boolean._load``, `_ENUMERATORS`: each imports every module it lists and names any that
+fails, nothing else) is held by the modules it lists, each by its content (`_children`), rather than by its listing, and the
+modules it imported are not pinned to their names.  A module whose source `inspect` looked for is held by its name and
+content (``present``).  The checker's own version is the digest of
 this package's sources less those two.  Beside them the key holds the interpreter, the platform, the installed distributions,
 ``sys.path`` (in-tree entries relative to the tree), the request (the target, its options, whether the partition invariant
 applies to it, as the catalog resolved it, and for a Definition the digest of every primitive and specialization it reaches,
@@ -48,24 +52,25 @@ but for where its modules are (`_moved`): following the import sites from its un
 every module it held is found, its content unchanged, at the name the sites now resolve to (one no site leads to: the one module
 of that content this process imported before any check); a module imported by a computed name, that reads its own path or name,
 or an import of which failed, is still at its name; each package a moved module now imports through is one it held, or empty or
-a docstring alone; and each enumerated package lists the same modules, or each it lists no longer is imported anyway and each
-new one it lists is a renamed one or empty.  Not covered: a file a C extension reads with its own I/O (none here); anything
-outside the repository, which the interpreter, platform, distribution list and ``sys.path`` stand for; a file a module read
-while it was imported before tracing began (the checker's own imports, ``verity.ir`` and ``verity.evaluation`` among them: their
-sources are inputs, data they opened at import is not); what a function read or imported in its body when it did not run in the
-recording (a value a process-wide cache, ``functools.cache`` and the like, holds from a call another target's check made, beyond
-the function's own module and its closure); an edit to a binding that does not reach the target, even if it changes which object
-of the same id the catalog builds (the registry refuses two Definitions of one id); what a binding ran that changes, keeping its
-id, what a Definition it did not make does at check time without changing its descriptor: a value it computed (from a module
-only it imported) and left in a module's state, or closed over, where an evaluator reads it; behaviour that depends on a
-module's name or path through another object (an object's ``__module__``, a code object's ``co_filename``, ``inspect.getfile``:
-a moved module's objects report their new name; `targets._authored` reads ``__module__`` for the task list only), and on the
-order in which modules were imported before the check (a moved registry module is imported by its importer rather than by the
-enumeration); report text that names a module or a path is the text of the run that stored it; and a source edited without
-changing its size within the second its bytecode was written, which Python runs as the old bytecode.  A new non-empty module in
-a package the registries enumerate, or one moved where nothing imports it, reruns everything.  What the tracer cannot see (a
-program it starts: ``subprocess``, ``os.system``, ``exec``, ``posix_spawn``) makes the process's later results uncacheable
-(`untraced`).
+a docstring alone; each enumerated package lists the same modules, or each it lists no longer is imported anyway and each new
+one it lists is a renamed one or empty; and each module whose source `inspect` looked for still resolves by its name (its
+content may differ: only where it is was asked), or is the one imported module of its content.  Not covered: a file a C
+extension reads with its own I/O (none here); anything outside the repository, which the interpreter, platform, distribution
+list and ``sys.path`` stand for; a file a module read while it was imported before tracing began (the checker's own imports,
+``verity.ir`` and ``verity.evaluation`` among them: their sources are inputs, data they opened at import is not); what a
+function read or imported in its body when it did not run in the recording (a value a process-wide cache, ``functools.cache``
+and the like, holds from a call another target's check made, beyond the function's own module and its closure); an edit to a
+binding that does not reach the target, even if it changes which object of the same id the catalog builds (the registry refuses
+two Definitions of one id); what a binding ran that changes, keeping its id, what a Definition it did not make does at check
+time without changing its descriptor: a value it computed (from a module only it imported) and left in a module's state, or
+closed over, where an evaluator reads it; behaviour that depends on a module's name or path through another object (an object's
+``__module__``, a code object's ``co_filename``, ``inspect.getfile``: a moved module's objects report their new name;
+`targets._authored` reads ``__module__`` for the task list only), and on the order in which modules were imported before the
+check (a moved registry module is imported by its importer rather than by the enumeration); report text that names a module or a
+path is the text of the run that stored it; and a source edited without changing its size within the second its bytecode was
+written, which Python runs as the old bytecode.  A new non-empty module in a package the registries enumerate, or one moved
+where nothing imports it, reruns everything.  What the tracer cannot see (a program it starts: ``subprocess``, ``os.system``,
+``exec``, ``posix_spawn``) makes the process's later results uncacheable (`untraced`).
 
 Only a verdict is stored, of the tree its check read: not a check that raised (an ImportError says the environment was broken,
 not what the target is), nor one whose reads, digested again by the process that ran it right after, differ from the digests
@@ -104,7 +109,7 @@ class Frame:
     """What one recording saw: reads (relative to the root), the files of the code that ran, the first lines of `targets.py`'s
     code that ran, the specializations whose body it read, and the pins it looked up."""
 
-    __slots__ = ("files", "dirs", "probes", "libs", "code", "lines", "defs", "pins", "enums", "named", "missing")
+    __slots__ = ("files", "dirs", "probes", "libs", "code", "lines", "defs", "pins", "enums", "named", "missing", "sources")
 
     def __init__(self) -> None:
         self.files: set[str] = set()
@@ -115,10 +120,12 @@ class Frame:
         self.lines: set[int] = set()
         self.defs: dict[int, Any] = {}
         self.pins: set[str] = set()
-        #: package directories `targets.load_registries` enumerated, modules imported by a computed name, imports that failed
+        #: package directories an enumerator (`_ENUMERATORS`) listed, modules imported by a computed name, imports that failed,
+        #: and the files `inspect` or `linecache` looked for a module's source at
         self.enums: set[str] = set()
         self.named: set[str] = set()
         self.missing: set[str] = set()
+        self.sources: set[str] = set()
 
     def merge(self, o: "Frame", defs: bool = True) -> None:
         self.files |= o.files
@@ -133,6 +140,7 @@ class Frame:
         self.enums |= o.enums
         self.named |= o.named
         self.missing |= o.missing
+        self.sources |= o.sources
 
 
 #: the open recordings, innermost last; the first holds what the process read outside every recording
@@ -237,15 +245,47 @@ def _importing() -> bool:
     return f is not None and f.f_code.co_filename == _SELF and f.f_code.co_name in _HOOKS
 
 
+#: the functions (module, qualified name) that list a package with ``pkgutil`` only to import each module it lists, naming any
+#: that fails: what they list and import is held by the package's modules (`_children`); one moved is no longer one of them
+_ENUMERATORS = frozenset({("verity_vllm.program.registry.catalog", "load"), ("verity_vllm.program.boolean", "_load")})
+
+
+def _enumerator(f) -> bool:
+    return f is not None and ((f.f_code.co_filename == _TARGETS_FILE and f.f_code.co_name == "load_registries")
+                              or (f.f_globals.get("__name__"), f.f_code.co_qualname) in _ENUMERATORS)
+
+
 def _enumerating() -> bool:
-    """Whether the audited listing is ``pkgutil`` enumerating a package for `targets.load_registries`, whose only effect is
-    importing each module it lists (`_children`)."""
+    """Whether the audited listing is ``pkgutil`` enumerating a package for `targets.load_registries` or another of the
+    `_ENUMERATORS`."""
     import pkgutil
 
     f = sys._getframe(2)
     while f is not None and f.f_code.co_filename == pkgutil.__file__:
         f = f.f_back
-    return f is not None and f.f_code.co_filename == _TARGETS_FILE and f.f_code.co_name == "load_registries"
+    return _enumerator(f)
+
+
+_PATHLIB: list[tuple[str, ...]] = []
+
+
+def _sourcing() -> bool:
+    """Whether the probe is `inspect` or `linecache` looking for a module's source file (torch's import asks `inspect` for the
+    module of a frame, which tries the file of every module loaded): a question about the module, held by its name."""
+    if not _PATHLIB:
+        import genericpath
+        import inspect
+        import linecache
+        import pathlib
+        import posixpath
+
+        _PATHLIB.append(tuple({m.__file__ for m in (genericpath, posixpath, os, pathlib)}
+                              | {"<frozen genericpath>", "<frozen posixpath>", "<frozen os>"}))
+        _PATHLIB.append((inspect.__file__, linecache.__file__))
+    f = sys._getframe(2)
+    while f is not None and f.f_code.co_filename in _PATHLIB[0]:
+        f = f.f_back
+    return f is not None and f.f_code.co_filename in _PATHLIB[1]
 
 
 def _hook(event: str, args: tuple) -> None:
@@ -271,7 +311,7 @@ def _hook(event: str, args: tuple) -> None:
 def _probing(fn):
     def stat(path, *a, **k):
         if not _INTERNAL and (rel := _rel(path)) is not None:
-            _FRAMES[-1].probes.add(rel)
+            (_FRAMES[-1].sources if rel.endswith(".py") and _sourcing() else _FRAMES[-1].probes).add(rel)
         return fn(path, *a, **k)
     return stat
 
@@ -380,7 +420,7 @@ def _instrument() -> None:
                 _FRAMES[-1].missing.add(_absolute(bare, {"__package__": package}, len(name) - len(bare)))
             raise
         if not _INTERNAL:
-            if not (f.f_code.co_filename == _TARGETS_FILE and f.f_code.co_name == "load_registries"):
+            if not _enumerator(f):
                 _FRAMES[-1].named.add(m.__name__)
             if len(_FRAMES) > 1:
                 _imported([m])
@@ -991,6 +1031,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
     acc.enums |= outside.enums
     acc.named |= outside.named
     acc.missing |= outside.missing
+    acc.sources |= outside.sources
     root = _ROOT[0]
     mods: set[str] = set()
 
@@ -1039,6 +1080,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
         acc.enums |= f.enums
         acc.named |= f.named
         acc.missing |= f.missing
+        acc.sources |= f.sources
         work.extend(f.code)
         if defs:
             stack.extend(f.defs.values())
@@ -1087,10 +1129,19 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
             enums.add(name)
         else:
             acc.dirs.add(rel)
+    present: set[str] = set()
+    for rel in acc.sources:                            # a loaded module's source looked for, by the module's name
+        f = os.path.abspath(os.path.join(root, rel))
+        name = by_file.get(f)
+        if name is not None and (p := _resolve(root, name)) is not None and os.path.realpath(p) == os.path.realpath(f):
+            present.add(name)
+        else:
+            acc.probes.add(rel)
     return {"files": sorted(acc.files), "dirs": sorted(acc.dirs), "probes": sorted(acc.probes - acc.files - acc.dirs),
             "libs": sorted(acc.libs), "units": sorted(f"{trel}#{u}" for u in unit_names) if trel is not None else [],
             "pins": sorted(f"{prel}#{p}" for p in acc.pins) if prel is not None else [],
-            "modules": sorted(mods), "named": sorted(acc.named & mods), "missing": sorted(acc.missing), "enums": sorted(enums)}
+            "modules": sorted(mods), "named": sorted(acc.named & mods), "missing": sorted(acc.missing), "enums": sorted(enums),
+            "present": sorted(present - mods)}
 
 
 def version() -> str:
@@ -1231,8 +1282,9 @@ def _digests_of(root: Path, got: dict[str, list[str]], fresh: bool) -> dict[str,
     named = {r: memo("c", r, lambda r=r: _local(root, r)) for r in got.get("named", [])}
     missing = {r: memo("c", r, lambda r=r: _local(root, r)) for r in got.get("missing", [])}
     enums = {r: memo("e", r, lambda r=r: _children(root, r)) for r in got.get("enums", [])}
+    present = {r: memo("c", r, lambda r=r: _local(root, r)) for r in got.get("present", [])}
     return {"files": files, "dirs": dirs, "probes": probes, "libs": libs, "units": units, "pins": pins, "modules": modules,
-            "named": named, "missing": missing, "enums": enums}
+            "named": named, "missing": missing, "enums": enums, "present": present}
 
 
 #: what matches by equality alone: paths and their contents, pins, and the names imports looked up by name
@@ -1247,8 +1299,9 @@ def _moved(root: Path, rec: dict, now: dict) -> bool:
     A module stays at its name when it reads its own path or name, was imported by a name computed at run time, or an import
     of it failed (``named``, ``missing``).  One no site leads to is found among what this process imported before any check,
     when exactly one has its content.  Every package a found module now imports through is one recorded, or empty or a
-    docstring alone.  A package `load_registries` enumerated lists the same modules, or each it no longer lists is imported
-    anyway and each it lists anew was listed under another name or is empty."""
+    docstring alone.  A package an enumerator listed lists the same modules, or each it no longer lists is imported anyway and
+    each it lists anew was listed under another name or is empty.  A module whose source `inspect` looked for (``present``)
+    still resolves by its name, or was found where it moved, or is the one imported module with its content."""
     if any(now.get(k) != rec.get(k) for k in _EXACT):
         return False
     mods: dict[str, dict | None] = rec.get("modules", {})
@@ -1318,6 +1371,10 @@ def _moved(root: Path, rec: dict, now: dict) -> bool:
         for i in range(1, len(parts)):
             p = ".".join(parts[:i])
             if p not in image and (f := _resolve(root, p)) is not None and not _parsed(f)[3]:
+                return False
+    for n, d in rec.get("present", {}).items():
+        if (d is None) != (now["present"].get(n) is None):
+            if d is None or n not in phi and len(_loaded(root).get(d, [])) != 1:
                 return False
     for pkg, kids in rec.get("enums", {}).items():
         cur = _children(root, phi.get(pkg, ""))

@@ -78,8 +78,12 @@ def SynIdle(B, S, a, b):
     # run's targets (computed by `syn.h`)
     "syn/check.py": """
 def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
+    import inspect
+    import sys
+
     from verity.evaluation.reference import evaluate
 
+    inspect.getmodule(sys._getframe())                 # as torch's import does: it looks for every loaded module's source
     if "h" not in memo:
         from syn import h
         memo["h"] = h.compute()
@@ -445,9 +449,11 @@ def _move(root: Path, src: str, dst: str, *rewrites: tuple[str, str, str]) -> No
 def test_a_pure_move_of_a_registry_module_reuses_every_target(tmp_path):
     """`syn/top.py` (SynTop's module, which `load_registries` enumerates) moves to a new package `syn/fam/`, and the one import
     that names it is rewritten, split from the import it shared: no module's content changes, nor any binding unit, and the
-    moved module is imported anyway (by the core binding), so every target is reused, SynTop's included."""
+    moved module is imported anyway (by the core binding), so every target is reused, SynTop's included.  The checks' `inspect`
+    lookups probed `syn/top.py`, which is held as the module, not the path."""
     root = _tree(tmp_path)
     _run(root)
+    assert any("syn.top" in _entry(root, t)["reads"]["present"] for t in ("SynOther_v1", "SynTop_v1"))
     _move(root, "syn/top.py", "syn/fam/top.py",
           ("syn/catalog.py", "from syn import extra, top", "from syn import extra\n    from syn.fam import top"))
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
@@ -510,3 +516,32 @@ def test_the_catalogs_units_are_its_root_functions_and_entries():
     edited = CC._units_of(src.replace('("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16))',
                                       '("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=32))', 1))[0]
     assert {u for u in units if edited.get(u) != units[u]} == {"_model_roots:ResidualAdd_v1"}
+
+
+def test_each_enumerator_only_imports_what_it_lists():
+    """`cache._ENUMERATORS` (and `targets.load_registries`) are held by the modules a package lists rather than by its
+    listing, on a claim about their bodies: each name a ``pkgutil`` listing yields is only compared, imported
+    (``importlib.import_module``) or written into an error."""
+    import ast
+    import importlib
+    import inspect
+    import textwrap
+
+    from circuit_check import cache as CC
+
+    for mod, qual in sorted(CC._ENUMERATORS | {("circuit_check.targets", "load_registries")}):
+        fn = importlib.import_module(mod)
+        for part in qual.split("."):
+            fn = getattr(fn, part)
+        tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
+        loops = [n for n in ast.walk(tree) if isinstance(n, ast.For) and "iter_modules" in ast.unparse(n.iter)]
+        assert loops, (mod, qual)
+        for loop in loops:
+            allowed: set[int] = set()
+            for n in ast.walk(loop):
+                if isinstance(n, ast.Call) and ast.unparse(n.func) in ("importlib.import_module", "errors.append"):
+                    allowed |= {id(x) for a in n.args for x in ast.walk(a)}
+                elif isinstance(n, ast.Compare):
+                    allowed |= {id(x) for x in ast.walk(n)}
+            uses = [n for s in loop.body for n in ast.walk(s) if isinstance(n, ast.Name) and n.id == loop.target.id]
+            assert uses and all(id(n) in allowed for n in uses), (mod, qual, ast.unparse(loop))
