@@ -234,20 +234,23 @@ hm96-sha512 over a uniform key, `CROnly.hm96_sha512_bad_keys`, What is pinned, b
 M1's padding constant (`ZK.padNonvanishing40`: `Ŵ_cols(ω_q)` is 0 or 1, and `PAD_C = x` is neither), so zero knowledge
 takes only `hash-derived-key` for the pinned key. `hash-derived-key` is `Assumptions.HashDerivedKey`: `Hm96Hiding` at `2^-193`, instantiated at hm96-sha512's
 `ZkView.My` and `ZkView.saltHash` (`Composed.zk_session_composed`).
-Zero knowledge's coverage (was open): `Composed.zk_session_view` holds at the coin vectors the honest prover doesn't
-refuse (`refused_coins` in `flock-circuit.rs`; `CoinedSetup.Admits`: `β ≠ 0`, the mask slot's rank `128·k`, `ρ₀, ρ₁`
-independent over F128; the verifier also checks `β` and `ρ`) with no zerocheck outer coin `1` (`CoinedSetup.Covered`),
-and says nothing about the view at the others. `ZkEveryCoin.zk_session_view_all` holds at every coin vector, with the
-coins uniform. At a refused coin the prover stops (`at_open` returns `Err` before any `ŝ` leaves), and the simulator
-outputs the honest prefix on the dummy witness, within `2·|LeafPos|·2^-193` (`ZK.Table.table_abort_hm96`: Lemma A at
-every coin vector and T1 on every pre-final leaf). At an outer coin `1` the prover doesn't refuse (`inv 0 = 0` in the
-residual round) the view is not simulated, and the theorem charges those coins' probability, at most `(m − 13)·2^-128`
-per rep (`uncovered_le`), to its bound: `2·|LeafPos|·2^-193 + 2·(m − 13)·2^-128`, both ways. So that mass is no longer
-outside the statement. That charge is for uniform coins only, so both statements are honest-verifier zero knowledge. A
-malicious verifier can choose an outer coin `1` (the coin tree commits verifier-chosen values, and `refused_coins` doesn't
-refuse it), and there the honest pads miss the inner constraint by a witness-dependent amount (`ZK/Table.lean`), so the view
-leaks. Zero knowledge against a malicious verifier needs the prover to refuse an outer coin `1` too, so that `Admits`
-excludes it and `Covered` is `Admits`.
+Zero knowledge's coverage (closed by the refusal): `Composed.zk_session_view` holds at every coin vector the honest
+prover doesn't refuse (`refused_coins` in `flock-circuit.rs`; `CoinedSetup.Admits`: `β ≠ 0`, the mask slot's rank
+`128·k`, `ρ₀, ρ₁` independent over F128, and no zerocheck outer coin `1`; the verifier also checks `β` and `ρ`), and
+there is no other kind of coin vector. At an outer coin `r_j = 1` (`inv 0 = 0` in the residual round) the honest pads
+miss the inner proof's constraint by a witness-dependent amount that the view would show (`ZK/Table.lean`'s inner
+proof), so the prover refuses it: `zk_veil::Masking` stops as the coin opens, before anything that depends on it is
+sent, reading only the coin. That costs completeness at most `(m − 13)·2^-128` per rep under uniform coins
+(`ZkEveryCoin.outer_one_le`), and no statement charges it. `ZkEveryCoin.zk_session_view_all` holds at every coin vector,
+refused ones included, with the coins uniform: at a refused coin the prover stops and the simulator outputs the honest
+prefix on the dummy witness, within `2·|LeafPos|·2^-193` both ways (`ZK.Table.table_abort_hm96`: Lemma A at every coin
+vector and T1 on every pre-final leaf), and elsewhere Lemma B.
+Which verifiers: at each coin vector `zk_session_view` is honest-verifier zero knowledge for those fixed coins. It covers
+a verifier that chooses its coins only because the coin server commits every coin at `Hello`, before the prover's first
+message (`backends/flock/live/src/coin_tree.rs`), and the prover checks each opening against that commitment before it
+uses the coin; the binding is collision resistance of `x ↦ SHA-512(ν ‖ x)` (`keyed-cr`, watched in `lean-audit.json`).
+No statement models that commitment yet, so this order of messages and the binding assumption are what the
+malicious-verifier claim rests on beyond the theorems.
 - A4 (`Assumptions.KeyedStreamsUniform`), which the PoUW window's keyed draw takes as `hA4`;
 - A5 (`Assumptions.UniformSecret`), which the same draw takes as `hsec`;
 - `Assumptions.HmRowComputes`, not cryptographic: the circuit's row hashing, which the rows' value binding

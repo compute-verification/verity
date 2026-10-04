@@ -11961,25 +11961,13 @@
     "      Eq (FlockSoundness.Discharge.Composed.avoidsMask y.x.st) Bool.true)",
     "  (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) (S : Finset (Fin n)) (R : Reg)",
     "  (y : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S (dj S)) :",
-    "  And",
-    "    (FlockSoundness.Discharge.ZkEveryCoin.ZkViewAll",
-    "      (FlockSoundness.Discharge.Composed.coinedOf (fun {mPts} => P)",
-    "        (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀ S R) y.x.st)",
-    "      (instHPow.hPow 2 (-193)))",
-    "    (ENNReal.instLE.le",
-    "      (FlockSoundness.Game.prCoin fun c =>",
-    "        And",
-    "          ((FlockSoundness.Discharge.Composed.coinedOf (fun {mPts} => P)",
-    "                (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀ S R) y.x.st).Admits",
-    "            c)",
-    "          (Not",
-    "            ((FlockSoundness.Discharge.Composed.coinedOf (fun {mPts} => P)",
-    "                  (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀ S R) y.x.st).Covered",
-    "              c)))",
-    "      (instHMul.hMul (instHMul.hMul 2 (instHSub.hSub y.x.st.m 13).cast) (instHPow.hPow 2 (-128))))"
+    "  FlockSoundness.Discharge.ZkEveryCoin.ZkViewAll",
+    "    (FlockSoundness.Discharge.Composed.coinedOf (fun {mPts} => P) (FlockSoundness.Discharge.ZkLink.tablesAtZK dj y₀ S R)",
+    "      y.x.st)",
+    "    (instHPow.hPow 2 (-193))"
    ],
    "assumptions": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"],
-   "type_hash": "d70a1ed0c93b64edbad1be937d8fe035a0949810773d5b2b3082b2818ce4a017"
+   "type_hash": "49c8b1af3e80adf413697af3261d675805bb9562f8798f61cd25f0231a39d63b"
   },
   "FlockSoundness.Discharge.ZkExec.acceptsZK_one": {
    "signature": ["FlockSoundness.Discharge.ZkExec.acceptsZK_one : FlockSoundness.Discharge.ZkExec.AcceptsZKOne"],
@@ -29245,7 +29233,7 @@
    ]
   },
   "Flock.Zk": {
-   "digest": "719107e6e69dbfba048ad788aa55c1b67943ddf364ee8fcd4a980267e300e8e0",
+   "digest": "f8b666c611ced1bbbac450f169d61aec05b83a303d3651314eab55aa134b3538",
    "definitions": {
     "Flock.Zk.INNER_LOG_INV_RATE": "d6ad9e7298bfa7fda1765c25e4b21bcf2d7ea35b7fb92014546242e462c35658",
     "Flock.Zk.K_PAD": "fb9b4b1b8bba3910fa6eb2a70efdb8cd80445d165fd5bcb81b641f1a8e459b54",
@@ -29296,7 +29284,7 @@
     "Flock.Zk.claimCheck": "0229769c0f97aa8015f36299532fde1139c1bc49abfdeafe4680cfbc6724beec",
     "Flock.Zk.codeAt": "296adca86e164940ffccc2088464c8ac42d47005d49431bbfce42ad75fc8f921",
     "Flock.Zk.coinSpec": "e7a5a238ef64cf48cdbdd64b4695fa468119a289ffb9237c59600e23adc2d7a1",
-    "Flock.Zk.hooks": "46d14174ae94300f166d9e48e1873600978426f5a8c5c3f3a7f8484eba929559",
+    "Flock.Zk.hooks": "4991fc0da0c1194473160d2a434c151d179185c4057f84e646006893ca9c7880",
     "Flock.Zk.instInhabitedLin": "0b883e786d300762ca2880a4349508ddea871df9923e17b6d95338c4babeb276",
     "Flock.Zk.instInhabitedLin.default": "1bb69bf2d2c39a6995627c42b5975600974c7be276b697f9694a2985251ac76e",
     "Flock.Zk.l2add": "88ddc0c8f86169af93616b8261d4c8b9861ae1a529a2ed104c021545dd29a8ee",
@@ -35335,7 +35323,7 @@
    ]
   },
   "FlockSoundness.Discharge.Composed.Coined": {
-   "digest": "6bfe4d73fbacbfc643bc16e1f3f7b5da974c114f64c7b99606399c12a4d7ef0a",
+   "digest": "ad904ac4d1eea3291d5fdcd4154a228f3976924692ca034163d45fb546c8d5d4",
    "definitions": {
     "FlockSoundness.Discharge.Composed.CoinedBody": "adaa55c968735959f29df01f09a66c8315327be90f3672212d0fd6b02babd62e",
     "FlockSoundness.Discharge.Composed.CoinedBody.Hi": "dc2d8124324fa8bbfbcd892870046f6b693a93cb0b081cd2898d12b186467c9e",
@@ -35349,11 +35337,10 @@
     "FlockSoundness.Discharge.Composed.CoinedBody.padQueries": "8eb5f7e7acdb52ac2a69d78bf35d5c00cf4f5995e550613183f3826f2321e92b",
     "FlockSoundness.Discharge.Composed.CoinedBody.queries": "4fc91a307125486682f2402056422efce9b3fe1ef53c1d2457dbf01e253daeeb",
     "FlockSoundness.Discharge.Composed.CoinedBody.sz": "9055b16bcf1c188b4bf48af3bfd1cdc415479346dd612a676ce08085919e451b",
-    "FlockSoundness.Discharge.Composed.CoinedOK": "d93b8318527c93411a606ed2f5ec71575040ad5d089beadbd8b2fdc54b0cc97b",
+    "FlockSoundness.Discharge.Composed.CoinedOK": "075db1bce9aa4e685721036c6d05963bca3ce3aba26c7105507f3545d691dff5",
     "FlockSoundness.Discharge.Composed.CoinedOfSetup": "d968d7b5eb5183b91e2e90f92c2ed1e8d257ef8db4b2621dfd00bdad7fd490af",
     "FlockSoundness.Discharge.Composed.CoinedSetup": "209b753a87d1ecb6f8b97dedea501562dece6dee64350e6882cbc0d8d1b4880a",
-    "FlockSoundness.Discharge.Composed.CoinedSetup.Admits": "7fcb525d221ad94d4536735c2752098f46bb89882ac10338fced83d6f859191a",
-    "FlockSoundness.Discharge.Composed.CoinedSetup.Covered": "a14a966b2e3864f6d3b75db31b7260fb5d1716d71dfe62643e66a2b891b00c1e",
+    "FlockSoundness.Discharge.Composed.CoinedSetup.Admits": "52a5f8e3b25576d4f5de1f104a82efb9ec5ca1ca8c20ffcd8235a04c365277d5",
     "FlockSoundness.Discharge.Composed.CoinedSetup.Hi": "5953990ea538b2ff64059fa336ee0a01157056a80c5f21d56776bc81aadcd70f",
     "FlockSoundness.Discharge.Composed.CoinedSetup.Rest": "08128dbc1f514bb05d80057abf7cf1b5006562a247e77185ed71702826eede74",
     "FlockSoundness.Discharge.Composed.CoinedSetup.S": "2b15651a308352420173e84b957ee6e8ea1e89b87e3bd06e651a50d1b2b4c258",
@@ -35368,7 +35355,7 @@
     "FlockSoundness.Discharge.Composed.CoinedSetup.rOuter": "a39df4365b81bb1e3daa0d4434030c826756c674f616ce89fa24239a968bee91",
     "FlockSoundness.Discharge.Composed.CoinedSetup.z": "9301f66705b455484c8ca1330d8797a95c3d77a1223422dedb1c8b602031ffa3",
     "FlockSoundness.Discharge.Composed.MaskRankOk": "41f4d0b86286b241f380db77d04e076e7c7345bd300b30830e4508b124c974b8",
-    "FlockSoundness.Discharge.Composed.ZkViewAt": "ec9f84a74a1b7a43f2818fb175f24b63d282596e68b5e1ebda89b42d3b795a46",
+    "FlockSoundness.Discharge.Composed.ZkViewAt": "b5c34e21f8e85d2cb139281a8de30b387f9116e11e0cee5450d682c446836e1d",
     "FlockSoundness.Discharge.Composed.bodyOf": "7e2e2d0862c3a1e43a5cb7d4ac7afef733889dcc9179af44bc39b328f5147975",
     "FlockSoundness.Discharge.Composed.coinedOf": "2d95f0abebd8571f6744eda44f6e9055b37cc60d6b26d75f4c5ae6605e93dfe9",
     "FlockSoundness.Discharge.Composed.eqLane": "7ee9909f4cc9370ab7024f3dcca5806aac18f8b3e299f6dc3774895213c88e51",
@@ -38771,9 +38758,9 @@
    ]
   },
   "FlockSoundness.Discharge.ZkEveryCoin.Defs": {
-   "digest": "8c043638ff79f97f849b700ce30dcdbe13f30eb75f615c4d36aa9dde8057ccfa",
+   "digest": "5cd7239f15efa99cf7e3afad2b03a5283385ea76e04bdce0db4227b4cc9b2cf6",
    "definitions": {
-    "FlockSoundness.Discharge.ZkEveryCoin.ZkViewAll": "45b6af4e58726ec21acd53b757420ca3696fe4e9defaaa649d0ae03c473b9f6e",
+    "FlockSoundness.Discharge.ZkEveryCoin.ZkViewAll": "4622afd5b74006bb71ab45da3ce625b5cc552bea9234af1efa16efa2b0fe8f32",
     "FlockSoundness.Discharge.ZkEveryCoin.coinsEquiv": "1dc1df60756632909428e1498a034c4a66cc41b78c5bf372822d8be38c3ba4ac",
     "FlockSoundness.Discharge.ZkEveryCoin.f128Equiv": "95067d8eb0993bebda51b0b125bbd52a1b1d7b182120999fd1cd83bcb68cf4ed",
     "FlockSoundness.Discharge.ZkEveryCoin.f256Equiv": "31288e499a5262b24823c96f1e5ae297fa07acf0543e60d78bffd253f31dae91",
@@ -39262,9 +39249,9 @@
    ]
   },
   "FlockSoundness.Discharge.ZkHidden.View": {
-   "digest": "afde38611229f52e15d51930741a1c244d08e35a22a426e60b7488389b47fc70",
+   "digest": "2d8220912ea6b23d2f7c72408c4d5020c82079399c0db4321ffcfd531256d9f8",
    "definitions": {
-    "FlockSoundness.Discharge.ZkHidden.ZkViewAtJ": "aaf8011528bd1a34cae50f6352fb2e1de144ab2175e8663496532e577295dbfe"
+    "FlockSoundness.Discharge.ZkHidden.ZkViewAtJ": "ad7261c5a4c543a23e04978f5644d7da7122e60116603e1751ecb0d1bb16659e"
    },
    "pins": [
     "FlockSoundness.Discharge.ZkHidden.zk_session_composedHJ",
