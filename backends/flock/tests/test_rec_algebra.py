@@ -3,7 +3,8 @@ session (the fetched fixture `hidden-outputs/flat/gemm-coordinate`: m = 25, k_lo
 are zero on both reps and its intermediates are the Lean verifier's (`fixtures/inner_claims.json`, which
 `tests/lean/InnerClaims.lean` dumps); the circuit's structure, verifier rows and witness give the reference's residuals,
 honest and with a message changed, through `GfResiduals`'s reference and through the IR evaluator; and a changed message
-moves a residual off zero exactly when the Lean verifier rejects the session, for the check that rejects it.
+moves a residual off zero exactly when the Lean verifier rejects the session, for the check that rejects it. And
+`Gf128Mul_v1` lowers to the rows rec-lean's Karatsuba lemma is about (`Recursion/Karatsuba.lean`).
 
 The set is a fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs, so a missing set
 fails these tests rather than skipping them."""
@@ -24,6 +25,8 @@ import pytest
 from verity.evaluation import evaluate_batch
 from verity.ir.defs import bind
 from verity.ml.boolean import gf2k as G
+from verity.ml.boolean.forms import Circuit
+from verity_flock import ir_lower as IL
 from verity_flock import rec_algebra as A
 
 HERE = Path(__file__).resolve().parent
@@ -106,6 +109,45 @@ def _mutated(rep: Rep, k: tuple) -> tuple[bytes, bytes, bytes]:
 
 def _nonzero(xs) -> list[int]:
     return [i for i, x in enumerate(xs) if x]
+
+
+#: SHA-512 of Gf128Mul's rows in the recursion's order (p0, p2, then the sums' product), each [256 + k, a's variables, a's
+#: constant, b's variables, b's constant] over a = variables 0..127 and b = 128..255, as compact JSON
+KARATSUBA_ROWS = ("e6b8a513843b112aefe5b265144cd01747a443ffb42eba34e37e640bd604c816"
+                  "f82db680ff40c5d48e76304d5a7a5df406bb94309540a2eec5cb07f435333634")
+#: SHA-512 of [rows, outputs] in an order-free form: the rows [a's variables, a's constant, b's variables, b's constant] sorted
+#: (lists compared lexicographically), the k-th sorted row numbered 256 + k, and the 128 outputs [variables, constant]
+KARATSUBA_CANONICAL = ("76a54ecc5f8f375228c8f1faf56353d46d3735c4abbcfe1041d3f5d09308e920"
+                       "a7d2ff462046ba8e4e15c71bb6b51a10b3708b167c992950f43c0cbbaf7b2629")
+
+
+def _rows_and_outputs(C: Circuit, out: list) -> tuple[list, list]:
+    ands = [v for v in range(len(C.kind)) if C.kind[v] == "and"]
+    return ([[v, sorted(C.data[v][0].s), C.data[v][0].c, sorted(C.data[v][1].s), C.data[v][1].c] for v in ands],
+            [[sorted(o.s), o.c] for o in out])
+
+
+def _canonical(rows: list, outs: list) -> list:
+    order = sorted(rows, key=lambda r: r[1:])
+    num = {r[0]: 256 + k for k, r in enumerate(order)} | {i: i for i in range(256)}
+    return [[r[1:] for r in order], [[sorted(num[v] for v in o[0]), o[1]] for o in outs]]
+
+
+def _sha512_json(x) -> str:
+    return hashlib.sha512(json.dumps(x, separators=(",", ":")).encode()).hexdigest()
+
+
+def test_gf128mul_lowers_to_the_rows_of_the_karatsuba_lemma():
+    """The recursion (`gf2k.mul_forms`) gives rec-lean's row list, pinned on both sides by one digest; C-Flock's lowering of
+    `Gf128Mul_v1` gives the same rows and outputs in the IR's canonical gate order, so it is pinned order-free."""
+    C = Circuit()
+    rows, outs = _rows_and_outputs(C, G.mul_forms(C, C.input("a", 128), C.input("b", 128)))
+    assert len(rows) == 3 ** 7 and _sha512_json(rows) == KARATSUBA_ROWS
+    C2 = Circuit()
+    a, b = C2.input("a", 128), C2.input("b", 128)
+    low = IL.lower(C2, bind(G.Gf128Mul), [[x] for x in a] + [[x] for x in b])
+    rows2, outs2 = _rows_and_outputs(C2, [w[0] for w in low])
+    assert _sha512_json(_canonical(rows, outs)) == _sha512_json(_canonical(rows2, outs2)) == KARATSUBA_CANONICAL
 
 
 def test_the_dump_is_current():
