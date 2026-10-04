@@ -6,7 +6,9 @@ the task list's build, nor an earlier target's check):
 - every file the check opened for reading and every directory it listed (an audit hook on ``open``, ``os.listdir`` and
   ``os.scandir``), every path it only probed (``os.stat``: whether it was a file, a directory or absent), and every library built
   in the tree that it loaded (``ctypes.dlopen``: by its bytes);
-- the source file of every function that ran (``sys.monitoring``: the first start or resume of each code object in the recording);
+- the source file of every function that ran (``sys.monitoring``: the first start or resume of each code object in the recording),
+  and of every module it imported, already loaded or not (``__import__`` and ``importlib.import_module``: what a module
+  registered at import decides a lookup that runs none of its code);
 - what the Definitions the check reached were built from: each specialization whose body it read (and every one reachable from
   its target through body nodes) brings the recording of its body's build (`verity.ir.defs._build_body`: the code that ran and
   the files read while it was traced, wherever in the process that happened, its nested builds included), and each primitive
@@ -30,9 +32,9 @@ A hit means every file, listing, probe, library, `targets.py` unit and pin this 
 (the tree as git has it, `visible`: bytecode or a build inside the tree counts as absent).  Not covered: a file a C extension
 reads with its own I/O (none here); anything outside the repository, which the interpreter, platform and distribution list stand
 for; a file a module read while it was imported before tracing began (the checker's own imports, ``verity.ir`` and
-``verity.evaluation`` among them: their sources are inputs, data they opened at import is not); the modules a function imports
-inside its body when it did not run in the recording (a value a process-wide cache holds from a function another target ran,
-reached only that way); and an edit to a binding that does not reach the target, even if it changes which object of the same id
+``verity.evaluation`` among them: their sources are inputs, data they opened at import is not); what a function
+read or imported in its body when it did not run in the recording (a value a process-wide cache, ``functools.cache`` and the
+like, holds from a call another target's check made, beyond the function's own file and its module's closure); and an edit to a binding that does not reach the target, even if it changes which object of the same id
 the catalog builds (the registry refuses two Definitions of one id).  A new file in a package the registries enumerate changes
 the listing every target holds, so it reruns everything.  What the tracer cannot see (a program it starts: ``subprocess``,
 ``os.system``, ``exec``, ``posix_spawn``) makes the process's later results uncacheable (`untraced`).
@@ -241,6 +243,12 @@ def recording(merge: bool = True) -> Iterator[Frame]:
             _FRAMES[-1].merge(fr)
 
 
+def _imported(mods: list) -> None:
+    for m in mods:
+        if (f := getattr(m, "__file__", None)) and isinstance(f, str) and isinstance(m, type(sys)):
+            _FRAMES[-1].code.add(f)
+
+
 def _instrument() -> None:
     """The loader hook (what each module's import read and ran, `_MODULES`), and the Definition hooks: each body's build
     recorded on its specialization, each body read noted in the recording that read it."""
@@ -254,6 +262,25 @@ def _instrument() -> None:
         _MODULES[module.__name__] = fr
 
     M.SourceFileLoader.exec_module = exec_module
+    import builtins
+    import importlib
+
+    imp0, by_name0 = builtins.__import__, importlib.import_module
+
+    def __import__(name, globals=None, locals=None, fromlist=(), level=0):
+        m = imp0(name, globals, locals, fromlist, level)
+        if len(_FRAMES) > 1 and not _INTERNAL:
+            # an import of a module already loaded runs nothing of it, yet what it registered may decide the check
+            _imported([m, *(getattr(m, a, None) for a in fromlist or ())] if fromlist or level else [sys.modules.get(name)])
+        return m
+
+    def import_module(name, package=None):
+        m = by_name0(name, package)
+        if len(_FRAMES) > 1 and not _INTERNAL:
+            _imported([m])
+        return m
+
+    builtins.__import__, importlib.import_module = __import__, import_module
     try:
         from verity.ir import defs as D
     except ImportError:

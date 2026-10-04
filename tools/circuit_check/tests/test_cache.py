@@ -70,14 +70,18 @@ def SynIdle(B, S, a, b):
     return B.call(SynAdd, a, a)
 """,
     "syn/h.py": "def compute():\n    return 7\n",
+    # what a check looks up in a module, which runs none of its code: imported by the first target's check, already loaded for
+    # the next one's
+    "syn/reg.py": 'KINDS = {"SynTop_v1": "top"}\n',
     # the checks: a Definition's gate count, its pin, and a value memoized across a run's targets (computed by `syn.h`)
     "syn/check.py": """
 def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
     if "h" not in memo:
         from syn import h
         memo["h"] = h.compute()
+    from syn import reg
     pin = pins.get("pieces", {}).get(fn.id)
-    return {"failures": [], "warnings": [], "gates": fn.gates, "h": memo["h"], "pin": pin}
+    return {"failures": [], "warnings": [], "gates": fn.gates, "h": memo["h"], "pin": pin, "kind": reg.KINDS.get(fn.id)}
 """,
     "targets.py": """
 def _core_roots():
@@ -225,6 +229,16 @@ def test_a_target_that_would_reuse_a_memoized_result_reruns_when_its_dependency_
     _run(root)
     assert "syn/h.py" in _entry(root, "SynTop_v1")["reads"]["files"]
     _edit(root, "syn/h.py", "return 7", "return 8")
+    assert _run(root)["hits"] == []
+
+
+def test_a_module_an_earlier_target_imported_is_held_by_every_check_that_imports_it(tmp_path):
+    """`syn.reg` runs only when the first target's check imports it; the second's import finds it loaded and runs none of it,
+    yet what it looks up there is its verdict."""
+    root = _tree(tmp_path)
+    _run(root)
+    assert "syn/reg.py" in _entry(root, "SynOther_v1")["reads"]["files"] and "syn/reg.py" in _entry(root, "SynTop_v1")["reads"]["files"]
+    _edit(root, "syn/reg.py", '"top"', '"tip"')
     assert _run(root)["hits"] == []
 
 
