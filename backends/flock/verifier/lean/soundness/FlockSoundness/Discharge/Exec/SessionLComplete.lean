@@ -554,6 +554,64 @@ theorem sessionBL_productive (A : Arith F K) (H : List UInt8 → D) (E : Merkle.
 
 end SessionProductive
 
+/-! ## The session can reject -/
+
+section SessionReject
+
+set_option linter.unusedSectionVars false
+
+variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
+variable {D Sl : Type} [Inhabited D] [Inhabited Sl] {mPts : ℕ}
+
+/-- A batch whose games all have runs with `P` has a run whose first output has `P`. -/
+theorem reaches_batch_head {α : Type} {P : α → Prop} (gs : List (Game α)) (hne : gs ≠ [])
+    (hP : ∀ g ∈ gs, ∃ a, Reaches g a ∧ P a) (hprod : ∀ g ∈ gs, Productive g) :
+    ∃ as, Reaches (batch gs) as ∧ ∃ a, as.head? = some a ∧ P a := by
+  obtain ⟨g, gs', rfl⟩ := List.exists_cons_of_ne_nil hne
+  obtain ⟨a, ha, hpa⟩ := hP g (by simp)
+  obtain ⟨as, has⟩ := productive_reaches (batch gs')
+    (productive_batch gs' fun g' hg' => hprod g' (by simp [hg']))
+  exact ⟨a :: as, reaches_map_of (reaches_interleave g (batch gs') a as ha has) rfl, a, rfl, hpa⟩
+
+/-- A rep whose zerocheck sends `final_a_eval = final_b_eval = 1` rejects. -/
+theorem repC_reject (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+    (extra : List (Claim F S.m)) : Reaches (repC A r S sch hm extra : Game (PendL F D)) PendL.reject := by
+  unfold repC
+  exact reaches_bind _ none (zerocheck_reject A S.m) rfl
+
+theorem tabAfterL_reject (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
+    (Lf : Merkle.Leaf (List F) Sl D H) (T : TabSpec mPts) (cap₀ : Cap D) (pts : Fin 2 → Fin mPts → F) :
+    ∃ out, Reaches (tabAfterL A H E Lf T cap₀ pts) out ∧ out.accepted = false := by
+  obtain ⟨p₁, h₁⟩ := productive_reaches _ (repC_productive (D := D) A 1 T.S T.sch T.hm
+    (extraClaims T.S T.ptLocal mPts pts))
+  exact ⟨_, reaches_bind _ (PendL.reject, p₁) (reaches_interleave _ _ _ _ (repC_reject A 0 _ _ _ _) h₁)
+    (reaches_send_iff.2 ⟨default, rfl⟩), rfl⟩
+
+theorem sessionBL_reject (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
+    (Lf : Merkle.Leaf (List F) Sl D H) (ts : List (TabSpec mPts)) (hne : ts ≠ []) :
+    ∃ outs, Reaches (sessionBL A H E Lf ts) outs ∧ ¬ acceptedBL ts outs := by
+  have hpos : 0 < ts.length := List.length_pos_of_ne_nil hne
+  let caps : Fin ts.length → Cap D := fun _ => default
+  obtain ⟨outs, h, a, ha, hrej⟩ := reaches_batch_head (P := fun o : OutCL F D Sl => o.accepted = false)
+    ((gamesBL A H E Lf ts caps).map (· 0))
+    (List.ne_nil_of_length_pos (by simpa [gamesBL] using hpos))
+    (by
+      intro g hg
+      simp only [gamesBL, List.mem_map, List.mem_ofFn] at hg
+      obtain ⟨_, ⟨i, rfl⟩, rfl⟩ := hg
+      exact tabAfterL_reject A H E Lf _ _ _)
+    (games_productive A H E Lf ts caps 0)
+  refine ⟨outs, reaches_send_iff.2 ⟨caps, reaches_coin_iff.2 ⟨0, h⟩⟩, fun hacc => ?_⟩
+  have h0 := hacc ⟨0, hpos⟩
+  cases outs with
+  | nil => simp at ha
+  | cons a' _ =>
+      simp only [List.head?_cons, Option.some.injEq] at ha
+      subst ha
+      simp [hrej] at h0
+
+end SessionReject
+
 local notation "𝔽" => FlockLevel3.GF128
 
 variable {D Sl : Type} [Inhabited D] [Inhabited Sl] {mPts n : ℕ} {Reg : Type}
@@ -595,7 +653,8 @@ theorem batchedSessionL_reaches_false (H : List UInt8 → D) (E : Merkle.Enc (Li
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (S : Finset (Fin n)) (R : Reg) (hne : plan S R ≠ []) :
     Reaches (batchedSessionL H E Lf plan S R) false := by
-  sorry
+  obtain ⟨outs, h, hrej⟩ := sessionBL_reject execArith H E Lf (plan S R) hne
+  exact reaches_map_of h (by simp [hrej])
 
 /-- **Productive.** Every message type the salted batched session asks for is inhabited. -/
 theorem batchedSessionL_productive (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
