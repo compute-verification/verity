@@ -2,7 +2,8 @@
 (`Nci.Protocol` in the main repo). Every isolation unit of the stream has at most `gamma` gates and reads at most
 `alpha` bits of novel information per gate. The stream's isolation units are its executions', joined where one reads
 state another wrote (`registration.isolation_units`), so a session is one unit however many steps it took, and state
-it wrote itself is not novel to it. Any other bit is novel unless it is on the baseline, which is on no isolation
+it wrote itself is not novel to it: a session reads only its prompt, where a step on its own would read its whole KV
+cache. Any other bit is novel unless it is on the baseline, which is on no isolation
 unit's boundary; so the baseline must have been declared up front, before any epoch whose outputs could have shaped
 it, and the registration must name one of the `builders` declared then. Advice is novel too, and reaches a unit
 through the structure the builder gives it rather than through its boundary: the builder reads all of it, so any unit
