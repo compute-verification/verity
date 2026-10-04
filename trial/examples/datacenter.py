@@ -112,7 +112,7 @@ comparison, compares = load("bf16_gt_strict", n=EPOCHS * REQUESTS[1], seed=2)
 ROUTED = Routed((Batched(adder, P.greedy(adder, 16), 3), Batched(comparison, P.greedy(comparison, 16), 3)))
 WEIGHTS = encode(b"weights", BLOCKS)
 
-NCI = Nci(gamma=4096, alpha=0.2, advice=96, headroom=0.2, builders=frozenset({ROUTED.id()}))
+NCI = Nci(gamma=4096, alpha=0.2, headroom=0.2, builders=frozenset({ROUTED.id()}))
 WORK = Work(difficulty=3, delta=0.01)
 REMOTE = Remote(
     integrity=Proofs(law=Weighted(gates=0.03, outputs=1.0), max_width=16, delta=0.01, system=Transparent()),
@@ -177,7 +177,7 @@ SCENARIOS: dict[str, tuple[Site, bool | None, bool | None, str]] = {
     "between-epochs": (Site(gap=3.0), False, False, "3 s of undeclared work between windows; each epoch complies"),
     "skipped-step": (Site(forge=skip), False, False, "one step's transcript made up rather than computed"),
     "flipped-bit": (Site(forge=flip), None, False, "one response bit wrong: priced into remote's bound"),
-    "chatty-scheduler": (Site(batch=1), False, False, "a step per request: 512 bits of advice an epoch"),
+    "unbatched": (Site(batch=1), True, True, "a step per request: each request pays its own step's 4 bits of advice"),
     "training": (Site(builder=Training(ROUTED)), False, False, "an undeclared builder, a step per isolation unit"),
     "evicted-weights": (Site(held=0.7), True, True, "memory holds 70% of the weights: no policy reads memory yet"),
     "exfiltration": (Site(leaked=4096), True, True, "4 KiB leave beside the responses: no policy reads network yet"),

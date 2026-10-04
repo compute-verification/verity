@@ -3,9 +3,10 @@
 reads at most `alpha` bits of novel information per gate. A bit is novel unless it is on the baseline, which is on no
 isolation unit's boundary; so the baseline must have been declared up front, before any epoch whose outputs could have
 shaped it, and the registration must name one of the `builders` declared then. Advice is novel too, and reaches a unit
-through the structure the builder gives it rather than through its boundary, so it has a budget of its own: at most
-`advice` bits across the epoch's executions. And the rule binds only what is in the account: whatever ran in the
-compute that coverage leaves uncovered went unchecked, so at most `headroom` of the capacity may be left.
+through the structure the builder gives it rather than through its boundary: the builder reads all of it, so any unit
+of the execution may depend on all of it, and each is charged it beside its boundary. And the rule binds only what is
+in the account: whatever ran in the compute that coverage leaves uncovered went unchecked, so at most `headroom` of
+the capacity may be left.
 
     verifier    takes the registration, the stream (one epoch) and compute coverage over it; rebuilds each distinct
                 advice's circuit, and records whether the epoch complies
@@ -63,7 +64,6 @@ class Period:
 class Nci:
     gamma: int  # gates per isolation unit
     alpha: float  # novel bits read per gate
-    advice: int  # advice bits per epoch
     headroom: float  # the most of the compute capacity coverage may leave uncovered
     builders: frozenset[str]  # the ids of the builders declared up front
 
@@ -80,9 +80,6 @@ class Nci:
             reasons.append(
                 f"{coverage.headroom / coverage.capacity:.0%} of compute uncovered, over {self.headroom:.0%}"
             )
-        spent = sum(len(e.advice) for e in executions)
-        if spent > self.advice:
-            reasons.append(f"{spent} bits of advice, over the epoch's {self.advice}")
         for advice in dict.fromkeys(e.advice for e in executions):
             try:
                 circuit, partition = built(registration.builder, advice)
@@ -91,7 +88,7 @@ class Nci:
                 continue
             for u, unit in enumerate(partition):
                 gates = P.gates(unit)
-                novel = len(P.boundary(circuit, gates)[0])
+                novel = len(P.boundary(circuit, gates)[0]) + len(advice)
                 if len(gates) > self.gamma or novel > self.alpha * len(gates):
                     reasons.append(
                         f"advice {advice!r} isolation unit {u}: {len(gates)} gates reading {novel} novel bits"

@@ -25,7 +25,7 @@ remote = Remote(
     integrity=Proofs(law=Weighted(gates=0.05, outputs=1.0), max_width=16, delta=0.01, system=Transparent()),
     work=Work(difficulty=3, delta=0.01),
     compute=Compute(peak={"gpu": 1000.0}),
-    nci=Nci(gamma=4096, alpha=0.2, advice=8, headroom=0.4, builders=frozenset({builder.id()})),
+    nci=Nci(gamma=4096, alpha=0.2, headroom=0.4, builders=frozenset({builder.id()})),
 )
 registration, executions, transcripts = executed(
     builder, schedule(requests, (3, 1, 4), builder), remote.integrity.scheme
