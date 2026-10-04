@@ -567,6 +567,20 @@ def test_triage_takes_a_valid_custody_marker_where_the_catalog_cannot_say(tmp_pa
     assert row["state"] == "no-custody"
 
 
+def test_the_custody_temp_file_a_killed_publish_leaves_is_no_file_of_the_run(tmp_path, monkeypatch):
+    """A custody Job stopped at its deadline (its bash exits on SIGTERM, and the kernel SIGKILLs research) can leave the
+    `.custody.tmp.<pid>` write_json_atomic writes before its rename. Counted as a run file, verify found it not in the run record,
+    and n1_custody.sh would hold the run as changed after its record, telling a person to waive logs the record holds."""
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    d, store = _fixture_run(tmp_path / "runs", "r20260925-010003-cccc"), str(tmp_path / "s")
+    assert data_main(["custody", str(d), "--publish", "--keep-local", "--store", store]) == 0
+    (d / f"{CU.MARKER}.tmp.4242").write_text('{"preserved": tr')
+    assert f"{CU.MARKER}.tmp.4242" not in CU.run_files(d) and CU.marker_problem(d) is None
+    assert CU.verify(LocalStore(store), d)["preserved"]
+
+
 def test_a_remote_holding_another_attempt_document_is_a_conflict_that_triage_reports_with_its_repair(tmp_path, monkeypatch, capsys):
     """3 Oct: r20261003-174723-7ea5's attempt was already on R2 with other bytes, and an attempt key is write-once, so a node's custody
     Job failed on it every round. A failed `custody --publish` leaves its verdict in .custody (never over a marker that still vouches

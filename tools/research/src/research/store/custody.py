@@ -72,7 +72,8 @@ TRIAGE_STATES = ("fetched", "r2", "forced-unverified", "attempt-no-record", "att
 # ---- the run dir ------------------------------------------------------------------------------------------------------------------------
 
 def run_files(run_dir: Path) -> list[str]:
-    """Every regular file under the run dir (relative posix paths, sorted), markers excluded; symlinks are not followed (as `fetch --all`)."""
+    """Every regular file under the run dir (relative posix paths, sorted), markers excluded, and the `.custody.tmp.<pid>` a publish
+    killed between write_json_atomic's write and its rename leaves; symlinks are not followed (as `fetch --all`)."""
     d = Path(run_dir)
     out = []
     for base, dirs, files in os.walk(d):
@@ -80,7 +81,7 @@ def run_files(run_dir: Path) -> list[str]:
         for f in files:
             p = Path(base) / f
             rel = p.relative_to(d).as_posix()
-            if rel in EXCLUDED or p.is_symlink() or not p.is_file():
+            if rel in EXCLUDED or rel.startswith(MARKER + ".tmp.") or p.is_symlink() or not p.is_file():
                 continue
             out.append(rel)
     return sorted(out)
