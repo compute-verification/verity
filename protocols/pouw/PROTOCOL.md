@@ -559,7 +559,8 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     C-Flock's committed ports (`pc8.PORTS`), with `pouw/row-fp32/v1` input rows, `pouw/row-fp8-p/v1` rows and
     `pouw/row-ok/v1` rows. A 64 × 64 tile's digest is 281 Keccak-p[1600, 12] in gates. `plan.tile_layout` draws a tile
     with its rows, as for `pc4`.
-  - The row cut along k (``Shape.row_k``, `circuit.rowk`) is `pc4`'s, below, on each of the three records.
+  - The row cut along k (``Shape.row_k``, `circuit.rowk`) and the tile cut into sub-tiles (``Shape.tile_sub``,
+    `circuit.tilesub`) are `pc4`'s, below, on each of the three records, with the cap off.
   - Not in it yet: the debit and the cap. Until they land, Pearl-C's runs are checked by its reference audit, a
     development shortcut that opens rows.
 
@@ -834,6 +835,26 @@ useful    U/(α_A·α_B), glue
     - A shape without ``row_k`` builds today's Programs, their digests unchanged. `pouw_rows.json` pins the six rows and
       `pouw_regions.json` the slice regions (`row_k_cases`). Every form still opens the row of A whole, so a form's SHA
       work grows with k, and past k = 18,432 (Pearl-C's row of A) a form no longer fits.
+  - **The tile cut (`circuit.tilesub`, ``Shape.tile_sub``) is opt-in** too, for both checks. A whole 64 × 64 tile unit is
+    4,096 words' chains over k, 2^32 bits or more at every served k. A shape with ``tile_sub = (a, b)`` (each of a and b
+    one of 1, 2, 4, 8 and 16, dividing the tile; (2, 2) deployed, `tilesub.TILE_SUB`) cuts each tile unit into sub-tiles
+    of a × b words, each today's tile template at a × b (`templates(k, (a, b))["tile"]`), one unit a sub-tile.
+    - Under hiding the tile digest is two more templates: `PearlRowChunks{TN,SB}`, one unit per row of A and tile
+      column, reads the row's TN / b sub-tile rows of C̃ ‖ U and computes its chunk digests (TurboSHAKE128, D = 0x21);
+      `PearlTileLeaf{TM,TN}`, one unit per tile, reads its TM rows' chunk digests and computes the leaf (D = 0x22).
+      Composed they are `PearlTileDigest`, so the leaf writes today's tile-h0 row and the roots return today's outputs.
+      A 64 × 64 tile at (2, 2) is 1,024 sub-tiles, 64 row digests and one leaf; every value is computed in exactly one
+      unit.
+    - They pass their values in two more v2 rows (`tilesub.PORTS8`, `PORTS4`): `leaves`' sub-cu, 4b words, a sub-tile
+      row's b C̃ words then its b U words (short for b ≤ 8, one block at 16); and tile-chunks, 64 words, a tile row's
+      chunk digests (at most four, so a hiding cut takes TN ≤ 128) then zero words to one whole block, so a unit that
+      reads only these rows still compresses a block, as C-Flock's `compose` needs. No piece reads a public input region.
+    - A drawn sub-tile is proved with its whole tile (`plan.tile_layout`): the tile's other sub-tiles, under hiding its
+      row digests and its leaf, and its rows of A's and of B's units. The tile stratum is the sub-tiles, each at the W_ref
+      the caller gives a sub-tile.
+    - It composes with the row cut. A shape without ``tile_sub`` builds today's Programs, their digests unchanged;
+      `pouw_rows.json` pins the two rows. By the piece pins and `fits`, a (2, 2) sub-tile fits the block up to k = 25,984
+      on sm_120 (26,592 unpromoted, 34,048 on the H100, 63,872 for Pearl-C4), and (1, 1) to 65,536 on every record.
   - Not in it yet: the debit and the cap, R1, D-24, and the plan's link checks and paths. Until those land, runs are
     checked by the replay above, a development shortcut that opens rows, and every report says so.
 - **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
