@@ -341,14 +341,10 @@ def environment() -> dict:
 
 
 def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
-    """Its directory, its dependencies' directories, and its declared inputs; a declared input that is a workspace package
-    brings that package's dependencies too."""
-    paths = {suite.path, *closure(suite, pkgs), *suite.inputs}
-    by_path = {p: n for n, p in pkgs.items()}
-    for p in suite.inputs:
-        if p in by_path:
-            paths.update(closure(Suite(by_path[p], p, (by_path[p],), ()), pkgs))
-    return sorted(paths)
+    """Its directory, its dependencies' directories, and its declared inputs. A declared workspace package is its directory
+    alone: the guard allows what this returns, so a test that reads that package's own dependencies fails until they are
+    declared too."""
+    return sorted({suite.path, *closure(suite, pkgs), *suite.inputs})
 
 
 def _under(path: str, prefixes: list[str]) -> bool:

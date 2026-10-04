@@ -235,6 +235,32 @@ def test_changed_selects_the_suites_a_change_touches_by_path_runner_or_lock(tmp_
     assert touched() == ["a", "b"]
 
 
+def test_a_declared_package_is_its_directory_without_its_dependencies(tmp_path, monkeypatch):
+    """A test that reads a declared package's dependency fails the guard, which allows only `inputs_of`, so a change there
+    need not run the suite that declared the package."""
+    _workspace(tmp_path)
+    (tmp_path / "pyproject.toml").write_text((tmp_path / "pyproject.toml").read_text().replace('["a", "b"]', '["a", "b", "c"]'))
+    (tmp_path / "b" / "pyproject.toml").write_text('[project]\nname = "b"\ndependencies = ["a"]\n\n[tool.uv.sources]\n'
+                                                   'a = { workspace = true }\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    (tmp_path / "c" / "tests").mkdir(parents=True)
+    (tmp_path / "c" / "pyproject.toml").write_text('[project]\nname = "c"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n'
+                                                   '[tool.verity.tests]\ninputs = ["b"]\n')
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
+    by = {s.name: s for s in S.discover()}
+    assert S.inputs_of(by["b"], pkgs) == ["a", "b"] and S.inputs_of(by["c"], pkgs) == ["b", "c"]
+
+    def touched():
+        return [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())]
+
+    (tmp_path / "a" / "mod.py").write_text("X = 1\n")
+    assert touched() == ["a", "b"]
+    (tmp_path / "b" / "mod.py").write_text("Y = 1\n")
+    assert touched() == ["a", "b", "c"]
+
+
 def test_a_pass_is_reused_only_while_what_it_used_beside_its_key_holds(tmp_path, monkeypatch):
     _workspace(tmp_path)
     S = _suites(monkeypatch, tmp_path)
