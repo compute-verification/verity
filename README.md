@@ -98,7 +98,7 @@ An integration makes Verity work end to end with a real system. The vLLM integra
 - [`protocols/network_warden/`](protocols/network_warden/README.md): the network warden, network transparency's timing channel
 - [`integrations/vllm/`](integrations/vllm/README.md): the vLLM integration, a hooked vLLM engine that builds each served workload's circuit and commits its values while serving
 - [`tools/research/`](tools/research/README.md): the research harness, for recorded runs on remote pods and the evidence store that keeps their results; it treats every workload as opaque and imports nothing from Verity
-- [`tools/check/`](tools/check/check.py): `check`, the one check a merge requires, and `suites.py`, which runs the test suites
+- [`tools/check/`](tools/check/check.py): `check`, the one check a merge requires, and `suites.py`, which runs the test suites; `rename_merge.py` merges a PR onto a train tip that moved files it edits, applying its changes at the new paths or refusing with the paths
 - `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes ([rules](AGENTS.md#circuits))
 - [`tools/lean/`](tools/lean/README.md): the audit every Lean package passes
 - [`tools/cluster/`](tools/cluster/README.md): `cluster`, the shared machines' description, a pure per-node planner and the allocation ledger
