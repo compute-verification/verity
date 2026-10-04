@@ -183,9 +183,11 @@ def live(setup, tmp_path_factory):
         await asyncio.to_thread(ar.run_virtual, plan, report, run, (host, port))
         server.close()
 
-    asyncio.run(go())
-    yield plan, run, ar.audit_configuration(plan, report, run)
-    mp.undo()
+    try:
+        asyncio.run(go())
+        return plan, run, ar.audit_configuration(plan, report, run)
+    finally:
+        mp.undo()
 
 
 def test_a_live_server_behind_the_shim_is_accepted(live, setup):
