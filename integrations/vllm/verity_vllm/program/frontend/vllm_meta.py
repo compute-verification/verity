@@ -568,6 +568,46 @@ def attention_impls(model: nn.Module) -> dict:
             v = getattr(impl, k, "<absent>")
             obs[k] = list(v) if isinstance(v, tuple) else (None if isinstance(v, torch.Tensor) and v.numel() == 0 else ("tensor" if isinstance(v, torch.Tensor) else v))
         out[getattr(mod, "layer_name", name)] = obs
+    out.update(mla_attention_impls(model))
+    return out
+
+
+def _cls(o) -> str | None:
+    return None if o is None else f"{type(o).__module__}.{type(o).__qualname__}"
+
+
+def mla_attention_impls(model: nn.Module) -> dict:
+    """OBSERVED implementation per `MLAAttention` layer (not an `Attention` subclass): the decode impl and backend, the prefill
+    backend and its FA version, the latent geometry, the scale, and every flag that switches `forward_impl` to another path
+    (sparse, DCP/PCP, AMX/aiter bmm, head padding, non-causal multi-token decode, window).  No `head_size` / `num_kv_heads`: the
+    dense attention's plane declarations do not apply to these layers.  Keyed by `layer_name`, as `unified_mla_*` carry it."""
+    try:
+        from vllm.model_executor.layers.attention.mla_attention import MLAAttention
+    except ImportError:
+        return {}
+    import vllm.envs as envs
+    out = {}
+    for name, mod in model.named_modules():
+        if not isinstance(mod, MLAAttention):
+            continue
+        impl, pb = mod.impl, getattr(mod, "prefill_backend", None)
+        obs = {"attention": "mla", "impl": _cls(impl), "backend": mod.attn_backend.get_name(),
+               "kv_cache_dtype": getattr(impl, "kv_cache_dtype", None), "layer_kv_cache_dtype": getattr(mod, "kv_cache_dtype", None),
+               "num_heads": mod.num_heads, "impl_num_heads": getattr(impl, "num_heads", None),
+               "scale": float(mod.scale), "impl_scale": getattr(impl, "scale", None),
+               "kv_lora_rank": mod.kv_lora_rank, "qk_nope_head_dim": mod.qk_nope_head_dim, "qk_rope_head_dim": mod.qk_rope_head_dim,
+               "v_head_dim": mod.v_head_dim, "q_lora_rank": mod.q_lora_rank,
+               "prefill_backend": _cls(pb), "prefill_scale": getattr(pb, "scale", None),
+               "vllm_flash_attn_version": getattr(pb, "vllm_flash_attn_version", None),
+               "prefill_requires_v_padding": getattr(pb, "requires_v_padding", None),
+               "batch_invariant_enabled": bool(envs.VLLM_BATCH_INVARIANT),
+               "kv_b_proj": f"{name}.kv_b_proj", "kv_b_proj_quant_method": _cls(getattr(mod.kv_b_proj, "quant_method", None))}
+        for k in ("dcp_world_size", "is_sparse"):
+            obs[k] = getattr(impl, k, "<absent>")
+        for k in ("q_pad_num_heads", "is_amx_bmm_enabled", "is_aiter_triton_fp8_bmm_enabled", "is_aiter_triton_fp4_bmm_enabled",
+                  "use_sparse", "use_pcp", "dcp_q_replicate", "sliding_window", "non_causal_multi_token_decode"):
+            obs[k] = getattr(mod, k, "<absent>")
+        out[mod.layer_name] = obs
     return out
 
 

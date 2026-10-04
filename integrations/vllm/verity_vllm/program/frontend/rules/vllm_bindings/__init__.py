@@ -34,6 +34,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import Bf16Sca
 from verity_vllm.program.frontend.rules.vllm_bindings.fp8 import CutlassScaledMmFp8BlockRule, PerTokenGroupFp8QuantRule, SameDtypeCastRule
 from verity_vllm.program.frontend.rules.vllm_bindings.fused_norm import FusedAddRmsNormBIRule
 from verity_vllm.program.frontend.rules.vllm_bindings.layer_norm import LayerNormAtenRule
+from verity_vllm.program.frontend.rules.vllm_bindings.mla_attention import MlaAttentionWithOutputRule, MlaKvCacheUpdateRule
 from verity_vllm.program.frontend.rules.vllm_bindings.norm_chain import (AddScalarRule, AddWidenedRule, MeanDimBIRule, MulF32Rule,
                                                                          NarrowF32ToBf16Rule, RsqrtRule, SquareRule, WidenBf16ToF32Rule)
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (_OBSERVED, active_target_profile, clear_observations,
@@ -53,7 +54,9 @@ VLLM_BINDING_RULES = [TritonRmsNormRule(), TritonGemmRule(), KvCacheUpdateRule()
                       LayerNormAtenRule(),   # GPT-NeoX's nn.LayerNorm (torch's vectorized CUDA kernel)
                       AllReduce2Rule(), AllGather2Rule(), AllReduceRule(), AllGatherRule(), EmbeddingShardRule(),   # [lane vllm-tp-n] WORLD-ary rules after the world-2 ones
                       # [R15 fp8] the block-scaled FP8 linear (Fp8LinearMethod -> CutlassFp8BlockScaledMMKernel) + the same-dtype cast it ends with
-                      PerTokenGroupFp8QuantRule(), CutlassScaledMmFp8BlockRule(), SameDtypeCastRule()]
+                      PerTokenGroupFp8QuantRule(), CutlassScaledMmFp8BlockRule(), SameDtypeCastRule(),
+                      # MLAAttention's latent cache write and read (TRITON_MLA decode, FA2 prefill)
+                      MlaKvCacheUpdateRule(), MlaAttentionWithOutputRule()]
 
 
 def vllm_ruleset():
