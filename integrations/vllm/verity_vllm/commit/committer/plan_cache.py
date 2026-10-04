@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Hashable, Iterable, Iterator, Sequence
+from itertools import chain
 from typing import Any
 
 
@@ -35,9 +36,9 @@ class PlanMetas(Sequence):
 
     def __init__(self, names: Iterable[str], dtypes: Iterable[str], sizes: Iterable[int], offsets: Iterable[int],
                  shapes: Iterable[Iterable[int]], chunk: int) -> None:
-        self.names, self.dtypes, self.sizes, self.offsets = tuple(names), tuple(dtypes), tuple(sizes), tuple(offsets)
-        shapes = [tuple(int(d) for d in s) for s in shapes]
-        self.ranks, self.dims = tuple(len(s) for s in shapes), tuple(d for s in shapes for d in s)
+        shapes = tuple(map(tuple, shapes))
+        self.names, self.dtypes, self.sizes, self.offsets = tuple(names), tuple(dtypes), tuple(map(int, sizes)), tuple(map(int, offsets))
+        self.ranks, self.dims = tuple(map(len, shapes)), tuple(map(int, chain.from_iterable(shapes)))
         self.chunk = chunk
         self.nbytes = sum(self.sizes)
         self.digest: bytes | None = None
@@ -46,9 +47,9 @@ class PlanMetas(Sequence):
     @classmethod
     def of_entries(cls, entries: Iterable[tuple], names: Sequence[str], chunk: int) -> PlanMetas:
         """The record of the collector's exported plan: `(name id, torch dtype, sizes, nbytes, offset, gap)` per tensor."""
-        entries = list(entries)
-        return cls((names[e[0]] for e in entries), (sys.intern(str(e[1]).replace("torch.", "")) for e in entries),
-                   (int(e[3]) for e in entries), (int(e[4]) for e in entries), (e[2] for e in entries), chunk)
+        nids, dtypes, shapes, sizes, offsets, _gaps = tuple(zip(*entries)) or ((),) * 6
+        dtype_names = {d: sys.intern(str(d).replace("torch.", "")) for d in set(dtypes)}
+        return cls(map(names.__getitem__, nids), map(dtype_names.__getitem__, dtypes), sizes, offsets, shapes, chunk)
 
     def shapes(self) -> Iterator[tuple[int, ...]]:
         at = 0

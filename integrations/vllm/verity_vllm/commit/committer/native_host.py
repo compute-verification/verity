@@ -2003,19 +2003,19 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
 
         for step in sorted(self._layouts):
             metas_all = self._layouts[step]
-            metas_all = metas_all.scan() if hasattr(metas_all, "scan") else metas_all   # a cached plan's record: metas for this pass only
+            cols = metas_all.names if hasattr(metas_all, "scan") else None   # a cached plan's record (plan_cache): its names, no TensorMeta built
             ps = self._padding.get(step) if padded_run else None
             # a padding meta: the step has a PaddingStep, the meta sits in the padding block of the step stream (`stream_off >= stream_base`;
             # an executed arena meta reads -1, an executed packed meta < stream_base) and carries the padding name (fix (c))
             is_pad = (lambda m: m.name.endswith("/bot") and m.stream_off >= ps.stream_base) if ps is not None else (lambda m: False)
-            pad_metas = [m for m in metas_all if is_pad(m)]
-            metas = [m for m in metas_all if not is_pad(m)]
+            pad_metas = [m for m in metas_all if is_pad(m)] if cols is None else []
+            metas = [m for m in metas_all if not is_pad(m)] if cols is None else metas_all
             padding_only = bool(pad_metas) and not metas
             padding_tensors_n += len(pad_metas)
             if padding_only:
                 padding_only_steps.append(int(step))
-            names_all = Counter(m.name for m in metas_all)                # fa2 per-layer uniformity reads every plane of the step (rule (a) planes included)
-            names = Counter(m.name for m in metas)
+            names_all = Counter(m.name for m in metas_all) if cols is None else Counter(cols)   # fa2 per-layer uniformity reads every plane of the step (rule (a) planes included)
+            names = Counter(m.name for m in metas) if cols is None else names_all
             mod_names = Counter({n: c for n, c in names.items() if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n)})
             pad_ident = Counter(_identity_of_padding(m.name) for m in pad_metas)
             pad_mod_names = Counter({n: 1 for n in pad_ident if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n)})
@@ -2043,7 +2043,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             fa2_bad: dict[int, int] = {}
             fa2_detail: dict[str, Any] = {}
             if man["fa2_hidden_per_layer"]:
-                seqs = (FP.StepSequences(()) if padding_only else self._step_sequences(step, metas)) if decls else None
+                seqs = (FP.StepSequences(()) if padding_only else self._step_sequences(step, metas if cols is None else metas.scan())) if decls else None
                 if seqs is not None:
                     # [F-r19-int-22] each layer's class is DERIVED from the Program's attention Call statics x the step's active-sequence set
                     # (fa2_plane_classes.plane_class): a windowed layer's decode launch is un-swapped (6 planes x sequences) while a global GQA
