@@ -110,6 +110,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
   enforces it. Developer notes in its `README.md`. Code reaches the Nebius
   nodes only through `research deploy install` from a pushed commit, listed in
   `pods/nebius/deploy.toml`; `research deploy drift` names what isn't `main`'s.
+  Delete data you don't own on a node only with `research retention gc` or `research retention rm --approved-by @OWNER`, never a bare `rm`.
 - `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes (see Circuits below).
 - `tools/check/`: `check`, the one repository check a merge requires (see Checking and merging below).
 - `tools/lean/`: the Lean audit (`audit.py`), which `check` runs on every Lake package (see Lean below).

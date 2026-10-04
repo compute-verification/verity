@@ -778,10 +778,12 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     ``salts`` (``{port: [192-byte salt, ...]}``, every row port's, one per table row, or per instance without tables): the
     committer's own salts.
 
-    ``registered`` (``{port: {"value", "positions", "paths"}}``, input ports, with ``tables``): the ports whose table rows are
-    rows of a registered value, committed with the registration's salts (``salts``), each table row's position and frame-v3
-    path to the registered root (``verity_sampled_proofs.one_stage.registered``); the header's ``registered``. An output row
-    is never registered: it is its instance's own.
+    ``registered`` (``{port: {"value", "positions", "paths"}}``, with ``tables``): the ``sha512/row/v1`` rows whose table rows
+    are rows of a registered value, committed with the registration's salts (``salts``), each table row's position and
+    frame-v3 path to the registered root (``verity_sampled_proofs.one_stage.registered``); the header's ``registered``. A port
+    is an input port (its table's rows) or an output port's row (its table the instances' output rows, one each: instance
+    ``i``'s output is the registered row at ``positions[i]``, under that row's registered salt ``salts[port][i]``). A padding
+    instance's rows keep their zero salts and pinned ``dummy`` either way: the verifier opens only the instances' rows.
 
     A circuit with public inputs (META ``public_inputs``, PROTOCOL.md §16.10): the header names them as META does, and both files
     end with every instance's public words (u16 LE, instance-major, the ports in order): ``public_words``
@@ -802,11 +804,15 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     if (tables is None) != (refs is None) or (tables is not None and not share_rows):
         raise ValueError("tables and refs are given together, with share_rows")
     if registered is not None:
-        if tables is None or salts is None or not registered or not set(registered) <= {p.name for p in ins}:
-            raise ValueError("registered: some input ports' tables, given with their tables, refs and registered salts")
-        words = {p.name: p.words for p in ports}
+        if tables is None or salts is None or not registered or not set(registered) <= {p.name for p in ports}:
+            raise ValueError("registered: some rows' tables (input ports' or output rows'), given with their tables, refs and "
+                             "registered salts")
+        by_name = {p.name: p for p in ports}
         for name, e in registered.items():
-            rows_p = len(np.asarray(tables[name]).reshape(-1, words[name]))
+            if by_name[name].bits is not None:
+                raise ValueError(f"registered port {name}: a {by_name[name].schema} row, and registered rows are "
+                                 f"{ROW_SCHEMA} rows")
+            rows_p = n if by_name[name] in orows else len(np.asarray(tables[name]).reshape(-1, by_name[name].words))
             if set(e) != {"value", "positions", "paths"} or len(e["positions"]) != rows_p or len(e["paths"]) != rows_p:
                 raise ValueError(f"registered port {name}: a value, and one position and path per table row")
     if tables is not None:
