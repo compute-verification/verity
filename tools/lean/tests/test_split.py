@@ -1,9 +1,10 @@
 """`tools/lean/split.py`: a package's spec and its proofs computed from its sources and lock, a spec that imports a proof
-refused, and the split carried out as a pure move on a fixture checkout (the lock's pins and reads byte for byte, the
+refused, and the split carried out as a pure move on a fixture checkout (the lock's guarantees and reads byte for byte, the
 proofs package requiring the spec by path, a dependent requiring the proofs, `lean-deps.json` re-keyed to the same bundles);
 then built with Lake and audited when `lake` is on the PATH."""
 from __future__ import annotations
 
+import ast
 import hashlib
 import importlib.util
 import json
@@ -21,8 +22,7 @@ spec = importlib.util.spec_from_file_location("lean_split", HERE.parent / "split
 S = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(S)
 A = S.A
-REPO = HERE.parents[2]
-TOOLCHAIN = (REPO / "packages" / "verity" / "lean" / "lean-toolchain").read_text()
+TOOLCHAIN = (A.FIXTURES / "control" / "lean-toolchain").read_text()
 LAKE = shutil.which("lake") or (str(Path.home() / ".elan" / "bin" / "lake") if (Path.home() / ".elan" / "bin" / "lake").exists()
                                 else None)
 
@@ -77,9 +77,9 @@ def checkout(tmp: Path, mathlib: bool = False, extra: dict[str, str] | None = No
               "meaning": ["P.Protocol", "P.Guarantees"],
               "layers": {"P.Protocol": {"imports": ["P.Protocol"], "except": [], "why": "trusted text"},
                          "P.SecurityProofs.Lemma": {"imports": ["P.Protocol"], "except": [], "why": "a lemma of the definitions"}},
-              "pins": {"P.SecurityProofs.t": {}}}
+              "guarantees": {"P.SecurityProofs.t": {}}}
     A.dump(root / PKG, policy)
-    (root / "tools" / "check").mkdir(parents=True)
+    (root / "tools" / "lean").mkdir(parents=True)
     (root / "README.md").write_text(f"The lemma: `{PKG}/P/SecurityProofs/Lemma.lean`; the proofs: `{PKG}/P/SecurityProofs/`.\n"
                                     f"In the package: `P/SecurityProofs/Lemma.lean`; `CheckAxioms.lean`.\n")
     (root / "protocols" / "p" / "PROTOCOL.md").write_text("Proved in `lean/P/SecurityProofs/Lemma.lean`, not `lean/P/Protocol.lean`.\n")
@@ -106,7 +106,7 @@ def test_the_partition(tmp_path):
     assert p["spec_roots"] == ["P.Guarantees", "P.Protocol"]
     assert p["dest"] == "security_proofs/p"
     assert p["dependents"] == [{"package": DEPENDENT, "imports": ["P.SecurityProofs.Lemma"]}]
-    assert p["lock_spec"]["pins"] == A.load(root / PKG)["pins"]
+    assert p["lock_spec"]["guarantees"] == A.load(root / PKG)["guarantees"]
     assert "exempt" not in p["lock_spec"] and p["lock_proofs"]["exempt"] == {"CheckAxioms": "the axioms list"}
     assert list(p["lock_spec"]["layers"]) == ["P.Protocol"] and list(p["lock_proofs"]["layers"]) == ["P.SecurityProofs.Lemma"]
 
@@ -143,7 +143,7 @@ def test_the_split_is_a_pure_move(tmp_path):
     assert new_spec["roots"] == ["P.Guarantees", "P.Protocol"]
     assert {k: v for k, v in new_spec.items() if k not in ("roots", "exempt", "layers")} == \
         {k: v for k, v in old.items() if k not in ("roots", "exempt", "layers")}
-    assert json.dumps(new_spec["pins"]) == json.dumps(old["pins"])
+    assert json.dumps(new_spec["guarantees"]) == json.dumps(old["guarantees"])
     cfg = tomllib.loads((dest / "lakefile.toml").read_text())
     assert [(r["name"], r.get("path"), r.get("rev")) for r in cfg["require"]] == \
         [("mathlib", None, FETCHED["rev"]), ("p", "../../protocols/p/lean", None)]
@@ -152,7 +152,7 @@ def test_the_split_is_a_pure_move(tmp_path):
     m = json.loads((dest / "lake-manifest.json").read_text())
     assert m["name"] == "security_proofs_p" and [e["name"] for e in m["packages"]] == ["p", "mathlib"]
     assert A.load(dest) == {"roots": ["P"], "exempt": {"CheckAxioms": "the axioms list"},
-                            "layers": {"P.SecurityProofs.Lemma": old["layers"]["P.SecurityProofs.Lemma"]}, "pins": {}}
+                            "layers": {"P.SecurityProofs.Lemma": old["layers"]["P.SecurityProofs.Lemma"]}, "guarantees": {}}
     assert (root / DEPENDENT / "lakefile.toml").read_text().endswith(
         'path = "../../p/lean"\n\n[[require]]\nname = "security_proofs_p"\npath = "../../../security_proofs/p"\n\n'
         '# Q\'s library.\n[[lean_lib]]\nname = "Q"\n')
@@ -208,12 +208,15 @@ def test_a_manifest_is_written_as_lake_writes_it():
     assert S.lake_json({"version": "1.2.0", "packages": [], "name": "p"}) == '{"version": "1.2.0", "packages": [], "name": "p"}'
 
 
-def test_deps_key_is_check_s(tmp_path):
-    spec_ = importlib.util.spec_from_file_location("check_lean_audit_for_split", REPO / "tools" / "check" / "lean_audit.py")
-    la = importlib.util.module_from_spec(spec_)
-    spec_.loader.exec_module(la)
+def test_deps_key_is_lean_audit_s(tmp_path):
+    """`lean_audit.deps_key`, run from its source (importing `lean_audit` loads `tools/check/common.py`, outside this suite)."""
+    tree = ast.parse((HERE.parent / "lean_audit.py").read_text())
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "deps_key")
+    scope = {"hashlib": hashlib, "json": json, "Path": Path}
+    exec(compile(ast.Module([fn], []), "lean_audit.py", "exec"), scope)
     root = checkout(tmp_path, mathlib=True)
-    assert S.deps_key(root / PKG) == la.deps_key(root / PKG) is not None
+    assert S.deps_key(root / PKG) == scope["deps_key"](root / PKG) is not None
+    assert S.deps_key(root / PKG / "P") is None
 
 
 @pytest.mark.slow

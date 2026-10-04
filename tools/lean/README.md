@@ -237,10 +237,10 @@ instead of asserting a status.
 their own, `security_proofs/NAME/`, that requires the spec by path. The spec is what the lock trusts: the modules under the
 roots' `Protocol`, `Assumptions` and `Guarantees`, the modules `reads` names, any `--keep` names (a spec module under a
 proof's name, kept with its name), and the package's tools that import only those. It refuses when a spec module imports a
-proof module, and prints the edges. Module names are kept, so `pins` and `reads` stay byte for byte; `roots` and the
+proof module, and prints the edges. Module names are kept, so `guarantees` and `reads` stay byte for byte; `roots` and the
 `exempt`, `runs`, `layers` and `upstream` entries about moved modules go to the new package's `lean-audit.json`. Without
 `--apply` it prints the plan. With it, it also gives every package that imports a moved module a require of the new one,
-re-keys `tools/check/lean-deps.json` to the same bundles, rewrites the moved files' repository paths, and lists the mentions
+re-keys `tools/lean/lean-deps.json` to the same bundles, rewrites the moved files' repository paths, and lists the mentions
 it can't rewrite.
 
 The two packages share a root namespace, which Lake builds but Lean's search path does not resolve: a module goes to the

@@ -6,20 +6,20 @@ The spec is what the lock trusts: the modules under `<root>.Protocol`, `<root>.A
 module the lock's `reads` names, and the modules `--keep` names (a spec module under a proof's name, such as a module a
 grader trusts), with the package's tools that import only those (its exempt modules and its other libraries). Everything
 else is the proofs, umbrella roots included, and moves to a new Lake package `security_proofs/NAME/` that requires the spec
-package by path, with the same toolchain and the same Mathlib. Module names are kept, so the lock's `pins` and `reads` stay
-byte for byte; only its package-level sections (`roots`, and the `exempt`, `runs`, `layers` and `upstream` entries about
+package by path, with the same toolchain and the same Mathlib. Module names are kept, so the lock's `guarantees` and `reads`
+stay byte for byte; only its package-level sections (`roots`, and the `exempt`, `runs`, `layers` and `upstream` entries about
 moved modules) are divided between the two packages.
 
 It refuses, printing the edges, when a spec module imports a proof module: either the import goes, or the imported module is
 the spec's too (`--keep`). Without `--apply` it prints the plan and changes nothing. With `--apply` it `git mv`s the proofs,
 writes the new package's `lakefile.toml`, `lake-manifest.json`, `lean-toolchain` and `lean-audit.json`, gives the spec
 package its roots, gives every package that requires the spec and imports a moved module a require of the new package,
-re-keys `tools/check/lean-deps.json` for each manifest it changes (the bundles stay the same: only path dependencies differ),
+re-keys `tools/lean/lean-deps.json` for each manifest it changes (the bundles stay the same: only path dependencies differ),
 rewrites the repository-relative paths of the moved files wherever a tracked file names them, and lists the mentions it
 could not rewrite (a path built from parts, prose) for a person to read.
 
 Until the audit validates a spec's lock against the package that proves its theorems, the spec package's own audit reports
-its pins missing; `audit.py` on the proofs package with the spec's lock checks every record (`--check-lock` here prints how).
+its guarantees missing; `audit.py` on the proofs package with the spec's lock checks every record (`--check-lock` here prints how).
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 SPEC_NAMES = ("Protocol", "Assumptions", "Guarantees")
-LEAN_DEPS = "tools/check/lean-deps.json"
+LEAN_DEPS = "tools/lean/lean-deps.json"
 IMPORT = re.compile(r"^(?:public\s+)?(?:meta\s+)?import\s+(.*)$")
 
 
@@ -71,8 +71,8 @@ def lakefile(pkg: Path) -> dict:
 
 
 def deps_key(pkg: Path) -> str | None:
-    """`tools/check/lean_audit.deps_key`: what a package's fetched dependencies are keyed by in `lean-deps.json` (this directory
-    imports nothing of `tools/check`, so it is restated; a test holds the two equal)."""
+    """`lean_audit.deps_key`: what a package's fetched dependencies are keyed by in `lean-deps.json` (restated, since
+    `lean_audit` loads `tools/check/common.py`; a test holds the two equal)."""
     m = pkg / "lake-manifest.json"
     if not m.exists() or not [d for d in json.loads(m.read_text()).get("packages", []) if d.get("type") != "path"]:
         return None
@@ -186,7 +186,7 @@ def plan(pkg: Path, area: str, keep: list[str], root: Path = ROOT) -> dict:
             lock_proofs["upstream"] = up | {"watch": theirs}
     if "dependencies" in policy:
         lock_proofs["dependencies"] = policy["dependencies"]
-    lock_proofs["pins"] = {}
+    lock_proofs["guarantees"] = {}
 
     moved_runs = [m for m in lock_proofs.get("runs", {})]
     extra = sorted({a for m in moved_runs for a in policy["runs"][m].get("generate", [])
@@ -491,9 +491,9 @@ def describe(p: dict) -> str:
              f"  proofs: {len(p['proofs'])} modules, roots {', '.join(p['proof_roots'])}; {len(p['moves'])} files move",
              f"  requires: spec {p['spec_requires'] or '(no path packages)'}; proofs: "
              + ", ".join(["the spec", *(r for r in p["proofs_requires"] if r not in p["spec_requires"])]),
-             f"  lock: pins {len(p['lock_spec'].get('pins', {}))} and reads {len(p['lock_spec'].get('reads', {}))} stay byte for "
+             f"  lock: guarantees {len(p['lock_spec'].get('guarantees', {}))} and reads {len(p['lock_spec'].get('reads', {}))} stay byte for "
              f"byte; to the proofs: " + (", ".join(f"{k} {list(v) if isinstance(v, dict) and k != 'dependencies' else ''}".strip()
-                                                    for k, v in p["lock_proofs"].items() if k not in ("pins",)) or "nothing")]
+                                                    for k, v in p["lock_proofs"].items() if k != "guarantees") or "nothing")]
     lines += [f"  dependent: {d['package']} imports {', '.join(d['imports'])}: gains a require of {p['dest']}"
               for d in p["dependents"]]
     lines += [f"  mv {a} -> {b}" for a, b in p["moves"].items()]
