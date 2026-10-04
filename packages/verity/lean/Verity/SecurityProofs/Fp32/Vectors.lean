@@ -10,7 +10,7 @@ they reach every case the Python distinguishes, so a change on either side fails
 cannot drift silently. That test, run as a script, writes this file.
 -/
 
-namespace Verity.SecurityProofs.Fp32.Vectors
+namespace Verity.Fp32.Vectors
 
 open Verity.Fp32
 
@@ -3731,4 +3731,4 @@ theorem bf16MulBf16_039 : bf16MulBf16 0xdf9e 0xc2de = 0x6309 := by decide +kerne
 /-- bf16 exact, underflow; +0 result -/
 theorem bf16MulBf16_040 : bf16MulBf16 0x22d4 0x0a17 = 0x0000 := by decide +kernel
 
-end Verity.SecurityProofs.Fp32.Vectors
+end Verity.Fp32.Vectors

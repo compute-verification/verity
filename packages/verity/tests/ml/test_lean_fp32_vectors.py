@@ -357,7 +357,7 @@ def render(vectors: list[tuple[str, tuple[int, ...]]]) -> str:
         "cannot drift silently. That test, run as a script, writes this file.",
         "-/",
         "",
-        "namespace Verity.SecurityProofs.Fp32.Vectors",
+        "namespace Verity.Fp32.Vectors",
         "",
         "open Verity.Fp32",
     ]
@@ -370,7 +370,7 @@ def render(vectors: list[tuple[str, tuple[int, ...]]]) -> str:
         out = f"0x{out:04x}" if bf16 else f"0x{out:08x}"
         theorem = f"theorem {name}_{i:03d} : {name} {words} = {out} := by decide +kernel"
         lines += ["", f"/-- {_describe(name, args)} -/", theorem]
-    return "\n".join(lines + ["", "end Verity.SecurityProofs.Fp32.Vectors", ""])
+    return "\n".join(lines + ["", "end Verity.Fp32.Vectors", ""])
 
 
 if __name__ == "__main__":
