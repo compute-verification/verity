@@ -8,16 +8,35 @@ import FlockSoundness.Discharge.HiddenDec.Statements
 
 `checked_of_acceptsH`: `checked_of_accepts` at hidden outputs. The one table's statement is setupHidden's at the
 record's draw `d` (`HiddenExec.setupTables_okH`), over `HmOut.drawn c pub d` (`Hidden.setupHidden_spec'`), which is
-`HmRow.drawn` at the circuit without its output words. `checkRegistered` first refuses a registered port that is an
-output row, then runs the same `Registered.check` (`checkRegistered_ok`), so the rest is `checked_of_accepts`' proof:
-the drawn instance at `u`'s rank holds the population's row of `u` (`Hidden.drawn_digestW`, from
-`Hidden.loadPublic_nil`), whose leaf is the hidden layout's registered leaf at `(u, q)`.
+`HmRow.drawn` at the circuit without its output words, and the session's registered check is `Registered.check` on it
+at the units `Registered.tableUnits` reads (`check_of_acceptsH`), so the rest is `checked_of_accepts`' proof: the drawn
+instance at `u`'s rank holds the population's row of `u` (`Hidden.drawn_digestW`, from `Hidden.loadPublic_nil`), whose
+leaf is the hidden layout's registered leaf at `(u, q)`.
 -/
 
 namespace FlockSoundness.Discharge.ZkReg
 
 open Flock FlockLevel3 Refine ZkLink ZkExec ZkBind ZkHidden HiddenExec HiddenDec DecodeZL
 open FlockSoundness.Discharge.Exec (Inputs recordDraw)
+
+/-- **The registered check at an accepted hidden-output outcome**: the session's one statement `st` is setupHidden's at
+the record's draw, and `Registered.check` accepts it against `own` at the units `Registered.tableUnits` reads for
+table 0. -/
+theorem check_of_acceptsH {I : Inputs} {own : Array Registered.Port} {t : Exec.Transcript} (hTags : TagsOkH I)
+    (h : AcceptsZKR I own t) :
+    ∃ st, Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (recordDraw t.record) I.partition
+        I.program = .ok st ∧
+      Registered.check st.c st.pub (some own) (Registered.derived st.partition)
+        (fun _ => Registered.tableUnits I.publicFile (recordDraw t.record) I.count 0) = .ok () := by
+  obtain ⟨spec, sts, hs, hreg, -, -⟩ := h
+  have hh : (zkTags I).hiddenOutputs = true := (zkTags_hiddenOutputs I).trans hTags.1
+  rcases setupTables_okH hh hs with ⟨-, st, hst, -, rfl⟩ | ⟨hc', -⟩
+  swap
+  · exact absurd hTags.2.2.2 (by change 1 < I.count at hc'; omega)
+  have hck := Registered.checkSession_ok hreg 0 (by simp)
+  have e : (#[st] : Array Stmt)[0]! = st := rfl
+  rw [e] at hck
+  exact ⟨st, hst, hck⟩
 
 variable {mPts n : ℕ} {Reg : Type}
 
@@ -35,15 +54,9 @@ theorem checked_of_acceptsH (I : Inputs) (ht : I.tags.typed = false) (own : Arra
     (hown : OwnReadsH own c pub o.2.2 rd.isRead rd.port rd.readAt) :
     rd.Checked o.1 (regPathsH c pub o.2.2 rd.port) := by
   intro p hp
-  obtain ⟨u, q, d, D, dp, idx, rfl, hmem, hfind, hd, hD, hdp, hidx, hu, hread⟩ := hown p hp
-  obtain ⟨spec, sts, hs, hreg, -, -⟩ := hacc
-  have hh : (zkTags I).hiddenOutputs = true := (zkTags_hiddenOutputs I).trans hTags.1
-  rcases setupTables_okH hh hs with ⟨-, st, hst, -, rfl⟩ | ⟨hc', -⟩
-  swap
-  · exact absurd hTags.2.2.2 (by change 1 < I.count at hc'; omega)
-  change Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (recordDraw o.2.2.record)
-    I.partition I.program = .ok st at hst
-  rw [hd] at hst
+  obtain ⟨u, q, d, D, units, rfl, hmem, hfind, hd, hD, hu, hun, hread⟩ := hown p hp
+  obtain ⟨st, hst, hck⟩ := check_of_acceptsH hTags hacc
+  rw [hd] at hst hck
   have s := Hidden.setupHidden_spec' hst
   have hcst : st.c = c := by
     have h1 := s.parse
@@ -52,16 +65,19 @@ theorem checked_of_acceptsH (I : Inputs) (ht : I.tags.typed = false) (own : Arra
   obtain ⟨pop', hpop', -, hdr⟩ := s.pub
   rw [hcst, hpub] at hpop'
   cases hpop'
-  have hdr' := hdr d rfl
-  rw [hcst, hdp] at hdr'
-  have hpd : st.pub = dp := (Except.ok.inj hdr').symm
-  have hdpR : HmRow.drawn { c with outPorts := #[] } pub d = .ok dp := hdp
-  have hck := checkRegistered_ok (array_forM_ok hreg 0 (by simp))
-  simp only [List.getElem_toArray, List.getElem_cons_zero] at hck
-  rw [hcst, hpd] at hck
-  obtain ⟨tb, idx', htb, hidx', hports⟩ := check_tables hck
-  rw [hidx] at hidx'
-  cases hidx'
+  have hdp := hdr d rfl
+  rw [hcst] at hdp
+  have hdpR : HmRow.drawn { c with outPorts := #[] } pub d = .ok st.pub := hdp
+  rw [hcst] at hck
+  obtain ⟨tb, idx, htb, hidx, hports⟩ := check_tables hck
+  have hidx' : Registered.tableUnits I.publicFile (some d) I.count 0 = .ok idx := hidx
+  obtain ⟨header', units', D', hh', hun', hD', rfl⟩ := Registered.tableUnits_one hTags.2.2.2 hidx'
+  rw [loadPublic_header (Hidden.loadPublic_nil hpub)] at hh'
+  cases hh'
+  rw [hun] at hun'
+  cases hun'
+  rw [hD] at hD'
+  cases hD'
   obtain ⟨p', positions, paths, hp', hent, hall⟩ := checkPort_at (hports _ hmem)
   rw [hfind] at hp'
   cases hp'
@@ -70,7 +86,7 @@ theorem checked_of_acceptsH (I : Inputs) (ht : I.tags.typed = false) (own : Arra
   cases hD'
   have hi : D.proved.idxOf u.val < D.proved.size := Array.idxOf_lt_length_of_mem hu
   obtain ⟨-, hreads, hopens⟩ := hall _ (by rw [hn]; exact hi)
-  rw [hread] at hreads
+  rw [drawnUnit hu, hread] at hreads
   have hra : rd.readAt (.inl (u, q)) =
       positions.getD (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) 0 := by
     simpa using hreads
@@ -89,7 +105,7 @@ theorem checked_of_acceptsH (I : Inputs) (ht : I.tags.typed = false) (own : Arra
     simp only [beq_iff_eq] at this
     exact this
   have hdig : pub.digest u.val q.val c.ports.size =
-      Registered.tableRow dp tb q.val (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) := by
+      Registered.tableRow st.pub tb q.val (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) := by
     have h1 := Hidden.drawn_digestW (Hidden.loadPublic_nil hpub) hdpR hD (Layout.proved_lt_population hD) hi q.isLt
     rw [hget] at h1
     rw [← h1]
