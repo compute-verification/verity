@@ -92,11 +92,12 @@ bound, all through their committed rows (`PORTS`; the cut is `pc8.unit_cut`'s).
   - A drawn tile's closure holds its A rows, its strip, all TM·TN of its word units, its TM row digests and row
     tallies, its tile and its tally (`plan.tile_layout`): every cap word is proved, never sampled.
   - The cap's rows: A's salt-dead counts (``sd``), each word's ``cap-word`` (C̃ ‖ U) and ``cap-flags`` (flags ‖ their
-    count ‖ the later +0 promotions ‖ good) rows, each tile row's ``cap-chunks`` (its chunk digests) and ``cap-sums``
-    (its sums ‖ good) rows, and each strip's ``cap-rows`` (admission bits ‖ bound) row (`leaves`, which says why the
-    cap-chunks and cap-rows rows are row-seg).  The word unit returns its flags padded to whole 16-bit words with zero
-    bits fixed in gates (as `pc4.ok_word` fixes an ok word's), so no bit of the row is outside its ports at any k; the
-    row tally reads the first k/32.
+    count ‖ the later +0 promotions ‖ good) rows, each tile row's ``cap-chunks`` (its chunk digests ‖ zeros) and
+    ``cap-sums`` (its sums ‖ good) rows, and each strip's ``cap-rows`` (admission bits ‖ bound ‖ zeros) row (`leaves`,
+    which says why the cap-chunks and cap-rows rows are padded to 64 words).  The word unit returns its flags padded to
+    whole 16-bit words with zero bits fixed in gates (as `pc4.ok_word` fixes an ok word's), so no bit of the row is
+    outside its ports at any k; the row tally reads the first k/32.  A row digest and the strip return their rows' zero
+    words the same way, and the tile and the tally leave them unread.
 """
 from __future__ import annotations
 
@@ -527,8 +528,8 @@ Pc8CapWordUnitDef = CompositeDefinition(
     conformance="protocol-defined")
 
 
-#: a tile row's chunk digests in its cap-chunks row: TN <= 64, pc8's tile
-CHUNK_WORDS = 8 * L.CAP_CHUNKS
+#: a tile row's cap-chunks row as 32-bit words: its chunk digests (TN <= 64, pc8's tile), then zeros
+CHUNK_WORDS = L.CAP_ROW_WORDS // 2
 
 
 def _columns(tn: int) -> int:
@@ -548,7 +549,8 @@ Pc8CapRowDigestDef = CompositeDefinition(
     lambda S_: ((("c", Array(_columns(S_.TN), F32)), ("u", Array(S_.TN, F32))), Array(CHUNK_WORDS, W.U32)),
     _row_digest_body,
     doc="The split cap's digests of one tile row: `leaves.PearlTileDigest`'s TurboSHAKE128 (D = 0x21) of each 32-column "
-        "chunk of its TN words' C̃ and U, two digests (the second zero when TN <= 32).", conformance="protocol-defined")
+        "chunk of its TN words' C̃ and U, two digests (the second zero when TN <= 32), then zero words to its cap-chunks "
+        "row's 64.", conformance="protocol-defined")
 
 
 def _tile_sig(S_):
@@ -569,13 +571,16 @@ Pc8CapTileDef = CompositeDefinition(
 
 #: a strip's admission bits in its cap-rows row: the scheme's tile rows, so TM <= 64
 STRIP_BITS = pc8.TILE[0]
+#: the zero words that end a cap-rows row, after its admission bits and its bound's two words
+STRIP_TAIL = L.CAP_ROW_WORDS - STRIP_BITS // 16 - 2
+_TAIL = Array(STRIP_TAIL, Value(16))
 
 
 def _strip_sig(S_):
     _cap_constants(S_.K, S_.TM, S_.TN, S_.N, S_.RHO, S_.DEV)
     if S_.TM > STRIP_BITS:
         raise DomainError(f"Pearl-C's cap circuit takes at most {STRIP_BITS} rows a tile: TM = {S_.TM}")
-    return (("oka", Array(S_.TM, OK)),), Tuple(Array(STRIP_BITS, BIT), I32)
+    return (("oka", Array(S_.TM, OK)),), Tuple(Array(STRIP_BITS, BIT), I32, _TAIL)
 
 
 def _strip_body(B, S_, oka):
@@ -583,13 +588,15 @@ def _strip_body(B, S_, oka):
     table = _cap_constants(S_.K, S_.TM, S_.TN, S_.N, S_.RHO, S_.DEV)[-1]
     oks = [e.call(Bf16GtStrict, oka[i], 0) for i in range(S_.TM)]
     pad = [e.c(1, 0)] * (STRIP_BITS - S_.TM)
-    return tuple_of(array_of(oks + pad), _wire(e, 32, _bound(e, table, _count(e, oks))))
+    return tuple_of(array_of(oks + pad), _wire(e, 32, _bound(e, table, _count(e, oks))),
+                    array_of([e.c(16, 0)] * STRIP_TAIL))
 
 
 Pc8CapStripDef = CompositeDefinition(
     "Pc8CapStrip", 1, ("K", "TM", "TN", "N", "RHO", "DEV"), _strip_sig, _strip_body,
     doc="The split cap's strip of TM rows of A, once for every tile in it: its rows' admission bits, padded to 64 with zero "
-        "bits, and the cap's bound at its passing rows' count, ⌊|R|·|C|·P/(RHO·g)⌋.", conformance="protocol-defined")
+        "bits, the cap's bound at its passing rows' count, ⌊|R|·|C|·P/(RHO·g)⌋, and zero words to its cap-rows row's 64.",
+    conformance="protocol-defined")
 
 
 def _row_tally_sig(S_):
@@ -623,10 +630,10 @@ def _tally_sig(S_):
     tm = S_.TM
     _cap_constants(S_.K, tm, S_.TN, S_.N, S_.RHO, S_.DEV)
     return ((("atoms", Array(tm, I32)), ("zeros", Array(tm, I32)), ("elems", Array(tm, I32)), ("good", Array(tm, OK)),
-             ("mask", Array(STRIP_BITS, BIT)), ("bound", I32)), OK)
+             ("mask", Array(STRIP_BITS, BIT)), ("bound", I32), ("tail", _TAIL)), OK)
 
 
-def _tally_body(B, S_, atoms, zeros, elems, good, mask, bound):
+def _tally_body(B, S_, atoms, zeros, elems, good, mask, bound, _tail):
     e = pc4._Emit(B)
     consts = _cap_constants(S_.K, S_.TM, S_.TN, S_.N, S_.RHO, S_.DEV)
     sums, bad = (0, 0, 0), 0
@@ -641,7 +648,7 @@ Pc8CapTallyDef = CompositeDefinition(
     "Pc8CapTally", 1, ("K", "TM", "TN", "N", "RHO", "DEV"), _tally_sig, _tally_body,
     doc="The split cap's tally: `Pc8TileCap`'s verdict at ρ = 1/RHO on a unit of N columns as an ok word (every passing "
         "row's words are good, and the cap's inequality holds), from its rows' sums (`Pc8CapRowTally`) and its strip's "
-        "admission bits and bound (`Pc8CapStrip`).", conformance="protocol-defined")
+        "admission bits and bound (`Pc8CapStrip`; its row's zero words unread).", conformance="protocol-defined")
 
 
 @lru_cache(maxsize=16)
@@ -679,8 +686,8 @@ def _call_cap_units(B, k: int, tile: tuple[int, int], dev: str, a, ea, fa, fb, b
         by_tile = lambda got, *f: array_of([array_of([got[i][cs][f[0]] if f else got[i][cs] for i in strip])  # noqa: E731
                                             for cs in range(cols)])
         tiles = B.batch(tp["tile"], by_tile(chunks), axes=(0,))
-        tallies = B.batch(tp["tally"], *(by_tile(sums, f) for f in range(4)), strips[rs][0], strips[rs][1],
-                          axes=(0, 0, 0, 0, None, None))
+        tallies = B.batch(tp["tally"], *(by_tile(sums, f) for f in range(4)), *(strips[rs][f] for f in range(3)),
+                          axes=(0, 0, 0, 0, None, None, None))
         digests.append(array_of([tiles[cs] for cs in range(cols)]))
         verdicts.append(array_of([tallies[cs] for cs in range(cols)]))
     return array_of(digests), array_of(verdicts), oka
@@ -725,13 +732,13 @@ PORTS = {
               "regions": {"e": "ea", "fa": "fa", "fb": "fb"}, "advice": ()},
     "word": {"rows": (("fp8-p", ROLE_X, ("a", "pa")), ("fp8-p", ROLE_W, ("b", "pb")), ("cap-word", ROLE_X, (0, 1)),
                       ("cap-flags", ROLE_X, (2, 3, 4, 5))), "regions": {}, "advice": ADVICE},
-    "strip": {"rows": (("ok", ROLE_X, ("oka",)), ("cap-rows", ROLE_X, (0, 1))), "regions": {}, "advice": ()},
+    "strip": {"rows": (("ok", ROLE_X, ("oka",)), ("cap-rows", ROLE_X, (0, 1, 2))), "regions": {}, "advice": ()},
     "row_digest": {"rows": (("cap-word", ROLE_X, ("c", "u")), ("cap-chunks", ROLE_X, (0,))), "regions": {}, "advice": ()},
     "row_tally": {"rows": (("cap-flags", ROLE_X, ("flags", "atoms", "zeros", "good")), ("sd", ROLE_X, ("sd",)),
                            ("cap-sums", ROLE_X, (0, 1, 2, 3))), "regions": {}, "advice": ()},
     "tile": {"rows": (("cap-chunks", ROLE_X, ("d",)), ("tile", ROLE_X, (0,))), "regions": {}, "advice": ()},
-    "tally": {"rows": (("cap-sums", ROLE_X, ("atoms", "zeros", "elems", "good")), ("cap-rows", ROLE_X, ("mask", "bound"))),
-              "regions": {}, "advice": (), "public": (0,)},
+    "tally": {"rows": (("cap-sums", ROLE_X, ("atoms", "zeros", "elems", "good")),
+                       ("cap-rows", ROLE_X, ("mask", "bound", "tail"))), "regions": {}, "advice": (), "public": (0,)},
 }
 #: the split's roles on each side, in the order its root body first uses them
 ROLES = {"weight": ("row_b",), "call": ("row_a", "strip", "word", "row_digest", "row_tally", "tile", "tally"),
@@ -772,5 +779,6 @@ def check(shape) -> SpecializedDefinition:
 
 __all__ = ["ADVICE", "CHUNK_WORDS", "FLAT_E", "PORTS", "Pc8CallCapDef", "Pc8CapRowDigestDef", "Pc8CapRowTallyDef",
            "Pc8CapStripDef", "Pc8CapTallyDef", "Pc8CapTileDef", "Pc8CapWordDef", "Pc8CapWordUnitDef", "Pc8CheckCapDef",
-           "Pc8RowACapDef", "Pc8TileCapDef", "ROLES", "ROLE_OF", "SALT_DEAD", "STRIP_BITS", "WINDOWS", "call", "certificates",
+           "Pc8RowACapDef", "Pc8TileCapDef", "ROLES", "ROLE_OF", "SALT_DEAD", "STRIP_BITS", "STRIP_TAIL", "WINDOWS",
+           "call", "certificates",
            "check", "check_shape", "flag_bits", "reads", "templates", "unit_templates"]

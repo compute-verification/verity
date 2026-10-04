@@ -12,17 +12,17 @@ PoUW's rows (`leaves.statement_rows`) and, for a row unit, its anchors as public
     capword         Pc8CapWord_v1{K,DEV='sm120'}: a word's A' and B~ codes (one v2 row each) and an 'adv' row (cert) -> C~, its
                     flags, its later +0 promotions and good (one v2 run)
     the cap's split, cut per tile row (`cap.unit_templates`, `cap.PORTS`; at tile TMxTN, 1x1 by default, and the unit's n
-    HZ_CAP_N, 16,384; the split's own files from cursor/pouw-cap-scope-e3fa ee2fd982b):
+    HZ_CAP_N, 16,384; the split's own files from cursor/pouw-cap-scope-e3fa 23fb50c9c):
     splitword       Pc8CapWordUnit_v1{K,DEV='sm120'}: A'_i || P_A,i (fp8-p, row-seg), B~_j || P_B,j (fp8-p, v2) and an 'adv'
                     row (cert) -> its cap-word row (C~, U) and cap-flags row (flags, count, later +0 promotions, good)
-    splitstrip[TMxTN]  Pc8CapStrip_v1: TM ok rows -> its cap-rows row (admission bits, bound; row-seg)
+    splitstrip[TMxTN]  Pc8CapStrip_v1: TM ok rows -> its cap-rows row (admission bits, bound, zero words; v2, one block)
     splitrowdigest[TMxTN]  Pc8CapRowDigest_v1{TN}: a tile row's TN cap-word rows -> its cap-chunks row (the TurboSHAKE128
-                    digests of its 32-column chunks; row-seg)
+                    digests of its 32-column chunks, then zero words; v2, one block)
     splitrowtally[TMxTN]  Pc8CapRowTally_v1{K,TN}: a tile row's TN cap-flags rows and its A row's sd row (row-seg) -> its
                     cap-sums row (atoms, zeros, elements, good)
     splittile[TMxTN]   Pc8CapTile_v1{TM,TN}: TM cap-chunks rows -> the tile digest (its tile row)
-    splittally[TMxTN]  Pc8CapTally_v1: TM cap-sums rows and a cap-rows row -> the cap's verdict, staged as one v2 row (a
-                    stand-in: in the design it is the tally's public output, in no row)
+    splittally[TMxTN]  Pc8CapTally_v1: TM cap-sums rows and a cap-rows row (its zero words unread) -> the cap's verdict,
+                    staged as one v2 row (a stand-in: in the design it is the tally's public output, in no row)
   Each row is an hm96 slot of 2^18 bits and a unit's slots the next power of two of its rows, so a unit holds at most 256
   rows (K_MAX 27); and C-Flock's composer refuses a unit none of whose rows has a compression before its last block.  The
   per-row cut keeps every unit of a 64x64 tile at 66 rows or fewer, each with such a row (`cap`'s and `leaves`' docstrings).
@@ -230,7 +230,7 @@ def main() -> None:
         else:
             bound = cap._cap_constants(K, tm, tn, n_unit, 1000, "sm120")[-1][tm]
             in_rows = [(f"s{r}", *schemas[r], [f"atoms[{r}]", f"zeros[{r}]", f"elems[{r}]", f"good[{r}]"]) for r in range(tm)]
-            in_rows.append(("cr", *schemas[tm], ["mask", "bound"]))
+            in_rows.append(("cr", *schemas[tm], ["mask", "bound", "tail"]))
             sums = lambda i: ((0, 0, 0) if i % 2 == 0 else  # noqa: E731
                               (int(rng.integers(0, tn * K // 2048 + 1)), int(rng.integers(0, 3)), int(rng.integers(0, K // 32 + 1))))
             rows = {f"s{r}": u16([L.words_cap_sums(*sums(i), 1) for i in range(N)]) for r in range(tm)}
