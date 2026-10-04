@@ -116,9 +116,9 @@ theorem setupTables_parts (hh : tags.hiddenOutputs = false) (hc1 : 1 < count)
     obtain ⟨hsz, hall⟩ := range_mapM_ok (by assumption)
     obtain ⟨hpos, hmod⟩ := splits_ok (by assumption)
   · obtain ⟨hD1, hD2⟩ := draw_subset (by assumption) (by assumption) (by assumption)
-    exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, hD1, hD2, hpos, hmod, hsz, hall⟩
+    exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, hD1, hD2, hpos, hmod, hsz, fun j hj => ok_of_refuse (hall j hj)⟩
   · have hdn := draw_none (by assumption)
     exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, fun d hd => by simp [hdn] at hd,
-      fun _ => rfl, hpos, hmod, hsz, hall⟩
+      fun _ => rfl, hpos, hmod, hsz, fun j hj => ok_of_refuse (hall j hj)⟩
 
 end FlockSoundness.Discharge.Tables

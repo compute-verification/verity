@@ -49,6 +49,7 @@ def load_registries() -> None:
     import verity.ml.boolean.gemm  # noqa: F401
     import verity.ml.boolean.mufu  # noqa: F401
     import verity.ml.boolean.scalar  # noqa: F401
+    import verity.ml.boolean.universal  # noqa: F401
     import verity.ml.gemm  # noqa: F401
     import verity.ml.kernels  # noqa: F401
     import verity.ml.prims  # noqa: F401
@@ -302,6 +303,15 @@ def _boolean_gather_roots() -> list[Any]:
     return [bind(BGA.Embedding, V=64, H=16), bind(BGA.gather_bf16(1100))]
 
 
+def _universal_roots() -> list[Any]:
+    """Protocol 2's universal unit (`verity.ml.boolean.universal`) at two size classes: G = 16 gates over 16 inputs (W = 32 wires)
+    with 8 outputs, and G = 64 over 64 (W = 128) with 32."""
+    from verity.ir.defs import bind
+    from verity.ml.boolean.universal import UniversalUnit
+
+    return [bind(UniversalUnit, G=16, N_IN=16, N_OUT=8), bind(UniversalUnit, G=64, N_IN=64, N_OUT=32)]
+
+
 def _kernel_roots() -> list[Any]:
     from verity_vllm.program.kernels import kernel_registry as KR
 
@@ -316,9 +326,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.ir.defs import bind
     from verity.ml.boolean import gemm as BG
     from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64
-    from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling, serve3, spec
+    from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, fp8_moe, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling
+    from verity_vllm.program.registry import serve3, spec
     from verity_vllm.program.registry import value_inputs as VI
-    from verity_vllm.program.registry import boolean_attention, boolean_fp8, tables
+    from verity_vllm.program.registry import boolean_attention, boolean_fp8, boolean_fp8_moe, tables
 
     long = {**TINY, "MAX_POS": 16}
     tp2 = {**TINY_NOBIAS, "BIAS": True, "TP": 2}
@@ -372,6 +383,31 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("ScaledMmFp8BlockSharedScale_v2", lambda: bind(boolean_fp8.ScaledMmFp8BlockSharedScaleV2, K=64, N=32, G=32)),
         ("ScaledMmFp8NoSwap_v2", lambda: bind(boolean_fp8.ScaledMmFp8NoSwapV2, K=64, N=2, BIAS=True,
                                               DOT=BG.BlackwellE4m3QmmaDot32)),
+        # a partial last weight block (GLM-5.3's fused_qkv_a_proj, N = 2624 over 21 scale rows)
+        ("ScaledMmFp8Block_v1/ragged", lambda: bind(fp8.ScaledMmFp8Block, K=256, N=192, G=128)),
+        ("ScaledMmFp8BlockSharedScale_v1/ragged", lambda: bind(fp8.ScaledMmFp8BlockSharedScale, K=256, N=192, G=128)),
+        # fused_moe_kernel's block FP8 expert GEMMs: GLM-5.3's served coordinates (w13 K = 6144, w2 K = 256 at TP8), and small ones
+        # that reach two tiles per scale block, two dot steps per tile, SWAP_AB and a partial last weight block
+        ("MoeExpertFp8BlockCoordinate_v1", lambda: bind(fp8_moe.MoeExpertFp8BlockCoordinate, K=6144, G=128, KB=32, SWAP=False)),
+        ("MoeExpertFp8BlockCoordinateW_v1", lambda: bind(fp8_moe.MoeExpertFp8BlockCoordinateW, K=256, G=128, KB=32, SWAP=False)),
+        ("MoeExpertFp8BlockGemm_v1", lambda: bind(fp8_moe.MoeExpertFp8BlockGemm, K=128, N=80, G=64, KB=32, SWAP=False)),
+        ("MoeExpertFp8BlockGemmW_v1", lambda: bind(fp8_moe.MoeExpertFp8BlockGemmW, K=64, N=48, G=32, KB=32, SWAP=True)),
+        ("MoeExpertFp8BlockCoordinate_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateV2, K=64, G=32, KB=32, SWAP=False)),
+        ("MoeExpertFp8BlockCoordinate_v2/swap", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateV2, K=64, G=64, KB=32,
+                                                             SWAP=True)),
+        ("MoeExpertFp8BlockCoordinate_v2/kb64", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateV2, K=64, G=64, KB=64,
+                                                             SWAP=False)),
+        ("MoeExpertFp8BlockCoordinateW_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateWV2, K=64, G=32, KB=32, SWAP=True)),
+        ("MoeExpertFp8BlockGemm_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockGemmV2, K=32, N=40, G=32, KB=32, SWAP=False)),
+        ("MoeExpertFp8BlockGemmW_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockGemmWV2, K=32, N=40, G=32, KB=32, SWAP=True)),
+        # silu_and_mul_per_block_quant between the expert launches: one element, GLM-5.3's served group (G = 128), and rows of
+        # two groups; on bits at G = 4 (each element about 19.6k ANDs)
+        ("SiluMulFp8BlockQuantResult_v1", lambda: bind(fp8_moe.SiluMulFp8BlockQuantResult)),
+        ("SiluMulFp8BlockQuantGroup_v1", lambda: bind(fp8_moe.SiluMulFp8BlockQuantGroup, G=128)),
+        ("SiluMulFp8BlockQuant_v1", lambda: bind(fp8_moe.SiluMulFp8BlockQuant, I=16, G=8)),
+        ("SiluMulFp8BlockQuantResult_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantResultV2)),
+        ("SiluMulFp8BlockQuantGroup_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantGroupV2, G=4)),
+        ("SiluMulFp8BlockQuant_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantV2, I=8, G=4)),
         ("LServe_v2", lambda: lifted.lserve(TINY, 3, 2, (7,), lag=0)),
         ("ServeSpec_v1", lambda: bind(spec.ServeSpec, C=long, CD={**TINY_NOBIAS, "MAX_POS": 16}, LP=3, K=2, A=(2, 2))),
         ("ServeDraft_v1", lambda: bind(spec.ServeDraft, C=long, LP=3, STEPS=2)),
@@ -519,7 +555,7 @@ def catalog() -> list[Any]:
         elif isinstance(d, CompositeDefinition) and not d.statics:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
-    roots += _core_roots() + _boolean_roots() + _boolean_gather_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
+    roots += _core_roots() + _boolean_roots() + _boolean_gather_roots() + _universal_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
     for label, make in _model_roots():
         try:
             fn = make()

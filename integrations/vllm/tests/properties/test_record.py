@@ -24,12 +24,13 @@ def test_seal_binds_ok_and_every_field_to_the_digest():
 
 
 def test_the_registry_names_each_harness_schema_once():
-    from tests.properties import fa2_softcap_capture_gpu, fa2_target_capture_gpu, sigmoid_router_capture_gpu
+    from tests.properties import fa2_softcap_capture_gpu, fa2_target_capture_gpu, glm53_block_fp8_capture_gpu, sigmoid_router_capture_gpu
 
     assert len(BY_SCHEMA) == len(REGISTRY) and all(p.claim for p in REGISTRY.values())
     assert REGISTRY["fa_tap_exactness"].schema == fa_tap_exactness.SCHEMA
     assert REGISTRY["fa2_target_capture"].schema == fa2_target_capture_gpu.SCHEMA
     assert REGISTRY["fa2_softcap_capture"].schema == fa2_softcap_capture_gpu.SCHEMA
+    assert REGISTRY["glm53_block_fp8_capture"].schema == glm53_block_fp8_capture_gpu.SCHEMA
     assert REGISTRY["sigmoid_router_capture"].schema == sigmoid_router_capture_gpu.SCHEMA
 
 
