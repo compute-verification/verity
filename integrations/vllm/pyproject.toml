@@ -50,8 +50,9 @@ markers = [
 ]
 
 [tool.verity.tests]
+# Test-only: tests that check a quarantine lane's re-exports, adapters or collective import `verity_quarantine` (experimental/vllm/quarantine).
 # Test-only: tests/pipeline checks the fixtures this package registers; tests/program/test_fp8_moe.py replays the Hopper e4m3
 # k32 step's pinned vectors through the block-scaled GEMMs.
-inputs = ["fixtures/artifacts.json", ".gitignore", "fixtures/tc/vectors/fp8-hopper-wgmma-k1536.json",
+inputs = ["experimental/vllm/quarantine", "fixtures/artifacts.json", ".gitignore", "fixtures/tc/vectors/fp8-hopper-wgmma-k1536.json",
           "fixtures/tc/vectors/fp8-hopper-wgmma-k32.json"]
 parallel = true

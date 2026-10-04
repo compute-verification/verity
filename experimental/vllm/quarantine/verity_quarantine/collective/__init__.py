@@ -1,4 +1,4 @@
-"""verity_vllm.program.registry.quarantine.collective — lane tp2 (window 2026-09-17): provisional definitions for the cross-rank
+"""verity_quarantine.collective — lane tp2 (window 2026-09-17): provisional definitions for the cross-rank
 collectives of tensor-parallel serving (Qwen2.5-1.5B, `tensor_parallel_size=2`, vLLM d9105ea80, PyNccl path, custom
 all-reduce disabled).
 
@@ -17,7 +17,7 @@ pattern would turn into an instance of this definition whose output is a journal
 """
 from __future__ import annotations
 
-from verity_vllm.program.registry.quarantine.collective import allreduce  # noqa: F401
+from verity_quarantine.collective import allreduce  # noqa: F401
 
 ALL_DEFINITIONS = [allreduce.AllReduceSumBf16Elem, allreduce.AllReduceSumBf16]
 ALL_PRIMITIVES: list = []

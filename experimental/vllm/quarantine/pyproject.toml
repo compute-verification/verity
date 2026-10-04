@@ -1,0 +1,21 @@
+[project]
+name = "verity-quarantine"
+version = "0.1.0"
+description = "Experimental: the vLLM registry's quarantine lanes that core does not bind (provisional Definitions, the re-exports of promoted ones, their difftest adapters)."
+requires-python = ">=3.12"
+dependencies = ["verity", "verity-vllm"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["verity_quarantine"]
+
+[tool.uv.sources]
+verity = { workspace = true }
+verity-vllm = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -p no:cacheprovider"

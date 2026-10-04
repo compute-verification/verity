@@ -250,7 +250,7 @@ def test_rsqrt_of_widened_refused():
 def test_kinds_registered_in_the_pinned_vocabulary_only():
     from verity_vllm.program.frontend.rules.vocab import PROFILES
     from verity_vllm.program.registry import dense as DN
-    from verity_vllm.program.registry.quarantine.dense import mean_triton as q
+    from verity_quarantine.dense import mean_triton as q
     v3 = PROFILES["b1-eager-v3"]
     assert v3.kinds["mean_triton"](N=2304).id == "MeanTriton_v1{N=2304}"
     assert v3.kinds["attention_softcap"](T=5, NH=8, KVH=4, D=256, CAP=50.0).id == "AttentionSoftcap_v1{T=5,NH=8,KVH=4,D=256,BN=64,CAP=50.0}"

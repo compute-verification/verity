@@ -21,7 +21,7 @@ gemma = importlib.import_module("verity_vllm.engine.profiles.derived_GEMMA2_2B")
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Shared, Unsupported, resolve_step, spec_module
 from tests.observe.test_patterns_synthetic import CUDA, Builder, bf, by_spec, context, decode_step, i64
 from verity_vllm.observe.fold.tree import step_events
-from verity_vllm.program.registry.quarantine.dense import ALL_DEFINITIONS, ALL_PRIMITIVES
+from verity_quarantine.dense import ALL_DEFINITIONS, ALL_PRIMITIVES
 
 M, H, I, V = 2, 8, 4, 16
 ADD = "aten::add.Tensor(Tensor self, Tensor other, *, Scalar alpha=1) -> Tensor"

@@ -1,4 +1,4 @@
-"""Lane `ov-moe`: the pair-major MoE definitions (`verity_vllm.program.registry.quarantine.ov_moe.moe`), the `MoEFusedExperts`
+"""Lane `ov-moe`: the pair-major MoE definitions (`verity_quarantine.ov_moe.moe`), the `MoEFusedExperts`
 recognizer (positive and negative cases on synthetic events shaped exactly like the pinned vLLM's `vllm.moe_forward`
 body as recorded in out/gen/lanes/moe/runs/olmoe_3x1_1req), and — when wave 1's real captures are present in the
 worktree — the end-to-end resolve / fold / VU-population facts quoted in out/gen/lanes/ov-moe/REPORT.md."""
@@ -25,7 +25,7 @@ from verity.ir.layout import resolve
 from verity.ir.program import Program
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
+from verity_quarantine.ov_moe import moe as Q
 
 C = OV.C
 H, I, E, TOPK = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"]

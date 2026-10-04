@@ -1,7 +1,7 @@
 """difftest adapter for `act/SiluMul@v2`: production = vLLM `torch.ops._C.silu_and_mul(out, x)` on one bf16 row [gate | up].
 
-    verity-vllm properties-admission produce --adapter verity_vllm.program.registry.quarantine.act.silu_mul_difftest --n 60 --seed 7 --out DIR
-    verity-vllm properties-admission check   --adapter verity_vllm.program.registry.quarantine.act.silu_mul_difftest --dir DIR --out quarantine.json
+    verity-vllm properties-admission produce --adapter verity_quarantine.act.silu_mul_difftest --n 60 --seed 7 --out DIR
+    verity-vllm properties-admission check   --adapter verity_quarantine.act.silu_mul_difftest --dir DIR --out quarantine.json
 
 The row cycles through the generic edge kinds and, every sixth case, explicit words: gates over the red-team's edge classes
 (+-0, +-inf, NaN, -88.5 / -89 / -100 around expf's overflow, subnormals, ordinary) against ups of +-0, +-1, +-inf and NaN.
@@ -45,6 +45,6 @@ def production(statics: dict, inputs: list) -> list:
 
 def spec(statics: dict):
     from verity.ir.defs import bind
-    from verity_vllm.program.registry.quarantine.act.silu_mul import SiluMul
+    from verity_quarantine.act.silu_mul import SiluMul
 
     return bind(SiluMul, I=int(statics["I"]))

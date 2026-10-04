@@ -206,7 +206,7 @@ def test_python_scalar_is_not_this_rule():
 def test_kind_is_registered_in_the_pinned_vocabulary():
     from verity_vllm.program.frontend.rules.vocab import PROFILES
     from verity_vllm.program.registry import b1
-    from verity_vllm.program.registry.quarantine.dense import bf16_mul_scalar_tensor as q
+    from verity_quarantine.dense import bf16_mul_scalar_tensor as q
     fn = PROFILES["b1-eager-v3"].kinds["scale_tensor"](N=2304)
     assert fn.id == "Bf16MulScalarTensor_v1{N=2304}", fn.id
     assert q.Bf16MulScalarTensor is b1.Bf16MulScalarTensor, "quarantine must re-export the registered Definition"

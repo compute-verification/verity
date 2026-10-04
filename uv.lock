@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "sys_platform != 'darwin' and extra != 'extra-10-verity-gkr-torch' and extra != 'extra-11-verity-vllm-torch' and extra != 'extra-13-verity-direct-torch' and extra == 'extra-16-verity-workspace-torch-cpu' and extra != 'extra-18-verity-native-peak-torch'",
@@ -40,6 +40,7 @@ members = [
     "verity-pous",
     "verity-pouw",
     "verity-pouw-benchmarks",
+    "verity-quarantine",
     "verity-sampled-proofs",
     "verity-sp1",
     "verity-tc-probe",
@@ -1660,6 +1661,21 @@ requires-dist = [
 ]
 
 [[package]]
+name = "verity-quarantine"
+version = "0.1.0"
+source = { editable = "experimental/vllm/quarantine" }
+dependencies = [
+    { name = "verity" },
+    { name = "verity-vllm" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "verity", editable = "packages/verity" },
+    { name = "verity-vllm", editable = "integrations/vllm" },
+]
+
+[[package]]
 name = "verity-sampled-proofs"
 version = "0.1.0"
 source = { editable = "protocols/sampled_proofs" }
@@ -1763,6 +1779,7 @@ dependencies = [
     { name = "verity-numerical" },
     { name = "verity-pous" },
     { name = "verity-pouw" },
+    { name = "verity-quarantine" },
     { name = "verity-sampled-proofs" },
     { name = "verity-sp1" },
     { name = "verity-vllm" },
@@ -1794,6 +1811,7 @@ requires-dist = [
     { name = "verity-numerical", editable = "backends/numerical" },
     { name = "verity-pous", editable = "protocols/pous" },
     { name = "verity-pouw", editable = "protocols/pouw" },
+    { name = "verity-quarantine", editable = "experimental/vllm/quarantine" },
     { name = "verity-sampled-proofs", editable = "protocols/sampled_proofs" },
     { name = "verity-sp1", editable = "backends/sp1" },
     { name = "verity-vllm", editable = "integrations/vllm" },

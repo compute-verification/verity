@@ -116,17 +116,17 @@ def layer_norm_aten_program(N: int = 32, EPS: float = 1e-5) -> Program:
 
 
 def moe_router_program(E: int = 8, TOPK: int = 2, VPT: int = 8) -> Program:
-    from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
+    from verity_vllm.program.registry import moe as Q
     return Program(bind(Q.MoeRouterTopK, E=E, TOPK=TOPK, VPT=VPT))
 
 
 def moe_expert_gemm_program(E: int = 4, K: int = 16, N: int = 3) -> Program:
-    from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
+    from verity_vllm.program.registry import moe as Q
     return Program(bind(Q.MoeExpertGemm, E=E, K=K, N=N))
 
 
 def moe_sum_program(TOPK: int = 2, H: int = 4) -> Program:
-    from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
+    from verity_vllm.program.registry import moe as Q
     return Program(bind(Q.MoeSum, TOPK=TOPK, H=H))
 
 

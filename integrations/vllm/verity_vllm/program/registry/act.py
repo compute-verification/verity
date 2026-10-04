@@ -2,7 +2,7 @@
 
   _C.silu_and_mul   act_and_mul_kernel<bf16, silu_kernel>   ->  SiluMul_v2{I} over SiluMulBf16_v2
 
-PROMOTED from `verity_vllm.program.registry.quarantine.act` (the X-08 pattern): each Definition below is the quarantine module's
+PROMOTED from `verity_quarantine.act` (the X-08 pattern): each Definition below is the quarantine module's
 body VERBATIM — same name, same version, same gates — so its specialization ids are the quarantine's. The quarantine modules
 re-export these objects (their difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID`s are unchanged). Bound as the `silu_mul` kind
 of the `b1-eager-v3` vocabulary (`frontend/rules/vocab.py`), asked for by `SiluAndMulRule`; `SiluMul_v1` (b1) stays registered,

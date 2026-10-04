@@ -13,7 +13,7 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels import rows as RK
 from verity_vllm.program.registry import b1, prims as P
 from verity_vllm.program.registry.act import SiluMul, SiluMulBf16
-from verity_vllm.program.registry.quarantine.act import silu_mul_difftest as DT
+from verity_quarantine.act import silu_mul_difftest as DT
 
 V1 = P.SiluMulBf16.evaluate
 V2 = SiluMulBf16.evaluate

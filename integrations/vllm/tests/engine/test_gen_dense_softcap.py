@@ -20,7 +20,7 @@ from verity_vllm.observe.fold.resolver import Compute, Unsupported, resolve_step
 from tests.engine.test_gen_dense2 import FA2, SCOPE, _fa2_edit
 from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
 from verity_vllm.observe.fold.tree import step_events
-from verity_vllm.program.registry.quarantine.dense import softcap as SC
+from verity_quarantine.dense import softcap as SC
 
 BASE = "Attention_v3{T=33,NH=9,KVH=3,D=64,BN=128}"
 CAPPED = "AttentionSoftcap_v1{T=33,NH=9,KVH=3,D=64,BN=128,CAP=50.0}"

@@ -178,7 +178,7 @@ if __name__ == "__main__":
             okc, wc = check(P3, sb, chain, f"    PV chain merge per d ({len(pv)} k-steps)")
     # 4. MoE router: scans (carry 96 bits) and NvExpf calls
     try:
-        from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
+        from verity_vllm.program.registry import moe as Q
         P4 = Program(bind(Q.MoeRouterTopK, E=8, TOPK=2, VPT=8))
         sc4 = P4.circuit.root_scope
         ok4, w4 = check(P4, sc4, body_parts(sc4), "MoeRouterTopK_v1{E=8,TOPK=2} nodes/iterations")
