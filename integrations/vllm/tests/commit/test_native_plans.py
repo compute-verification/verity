@@ -51,6 +51,8 @@ int64_t plans_size(void* h) { return static_cast<Plans*>(h)->size(); }
 int64_t plans_entries(void* h) { return static_cast<Plans*>(h)->entries(); }
 int64_t plans_pending(void* h) { return static_cast<Plans*>(h)->pending(); }
 int64_t plans_pending_entries(void* h) { return static_cast<Plans*>(h)->pending_entries(); }
+int64_t plans_dropped(void* h) { return static_cast<Plans*>(h)->dropped(); }
+int64_t plans_pending_emptied_step(void* h) { return static_cast<Plans*>(h)->pending_emptied_step(); }
 int64_t plans_version(void* h, int64_t key) {
   const Plan* p = static_cast<Plans*>(h)->find(key);
   return p ? p->version : -1;
@@ -93,7 +95,7 @@ def lib(tmp_path_factory):
     lib.plans_frees.restype = ctypes.c_int64
     for fn in ("plans_delete", "plans_end_run", "plans_clear"):
         getattr(lib, fn).argtypes = [ctypes.c_void_p]
-    for fn in ("plans_size", "plans_entries", "plans_pending", "plans_pending_entries"):
+    for fn in ("plans_size", "plans_entries", "plans_pending", "plans_pending_entries", "plans_dropped", "plans_pending_emptied_step"):
         getattr(lib, fn).argtypes, getattr(lib, fn).restype = [ctypes.c_void_p], ctypes.c_int64
     lib.plans_version.argtypes, lib.plans_version.restype = [ctypes.c_void_p, ctypes.c_int64], ctypes.c_int64
     lib.plans_step.argtypes = [ctypes.c_void_p, ctypes.c_int64, ctypes.c_int64, ctypes.c_int64, ctypes.POINTER(ctypes.c_int)]
@@ -130,6 +132,10 @@ class Book:
     def pending(self) -> tuple[int, int]:
         """Dropped plans not freed yet, and their entries."""
         return self.lib.plans_pending(self.h), self.lib.plans_pending_entries(self.h)
+
+    def drained(self) -> tuple[int, int]:
+        """The plans the reset before this run dropped, and the step of this run that freed the last of them (0 none, -1 not yet)."""
+        return self.lib.plans_dropped(self.h), self.lib.plans_pending_emptied_step(self.h)
 
     def version(self, key: int) -> int:
         return self.lib.plans_version(self.h, key)
@@ -277,3 +283,29 @@ def test_the_pending_plans_are_counted_apart_from_the_book_and_never_found(lib):
     assert book.pending() == (left, left * TENSORS)
     book.clear()
     assert (book.size(), *book.pending()) == (0, 0, 0)
+
+
+def test_each_run_reports_the_plans_its_reset_dropped_and_the_step_that_freed_the_last(lib):
+    """`stats()`'s `plans_dropped` and `plans_pending_emptied_step`, which `commits.jsonl` records at each window's end: a run
+    after a reset that dropped nothing reports (0, 0); after a drop, the dropped count and -1 until the step whose release frees
+    the last of them, then that step. A run too short to free them ends at -1."""
+    book = Book(lib)
+    assert book.drained() == (0, 0)
+    drop(book)
+    assert book.drained() == (DROPPED, -1)
+    last = DROPPED // RELEASE_PER_STEP
+    for s in range(last - 1):
+        book.step(1000 + s % KEPT)
+    assert book.drained() == (DROPPED, -1) and book.pending()[0] == RELEASE_PER_STEP
+    book.step(1000)
+    assert book.drained() == (DROPPED, last) and book.pending()[0] == 0
+    book.step(1001)
+    assert book.drained() == (DROPPED, last)
+    book.end_run()
+    assert book.drained() == (0, 0)
+
+    short = Book(lib)
+    drop(short)
+    for s in range(3):
+        short.step(1000 + s % KEPT)
+    assert short.drained() == (DROPPED, -1)

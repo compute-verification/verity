@@ -214,10 +214,12 @@ def test_end_run_keeps_the_plans_the_ended_run_used_and_a_dropped_plan_is_learne
     step(4)
     c.end_run()
     assert c.plan_version(3) == -1 and c.export_plan(3) == [] and (c.stats()["plans"], c.stats()["plan_entries"]) == (1, len(ts))
-    assert (c.stats()["plans_pending"], c.stats()["plan_entries_pending"]) == (1, len(ts))
+    st = c.stats()
+    assert (st["plans_pending"], st["plan_entries_pending"], st["plans_dropped"], st["plans_pending_emptied_step"]) == (1, len(ts), 1, -1)
     used, n, changed, version = step(3)
     torch.cuda.synchronize()
     assert changed and version > 1 and c.export_plan(3) == learned
-    assert (c.stats()["plans_pending"], c.stats()["plan_entries_pending"]) == (0, 0)
+    st = c.stats()
+    assert (st["plans_pending"], st["plan_entries_pending"], st["plans_dropped"], st["plans_pending_emptied_step"]) == (0, 0, 1, 1)
     for t, (off, _, nb) in zip(ts, _reference_layout(ts)[0]):
         assert torch.equal(arena[off:off + nb], _as_bytes(t))

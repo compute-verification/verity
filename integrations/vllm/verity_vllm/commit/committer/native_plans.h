@@ -44,7 +44,11 @@ class Plans {
   // the plan a step of `key` follows or learns (an empty one when none is held), now a plan of the current run; first frees up to
   // RELEASE_PER_STEP dropped plans
   Plan& use(int64_t key) {
-    release(RELEASE_PER_STEP);
+    ++run_steps_;
+    if (!pending_.empty()) {
+      release(RELEASE_PER_STEP);
+      if (pending_.empty()) pending_emptied_step_ = run_steps_;
+    }
     auto ins = by_key_.try_emplace(key);
     Plan& p = ins.first->second;
     if (ins.second) p.version = version_floor_;
@@ -68,6 +72,9 @@ class Plans {
       pending_entries_ += static_cast<int64_t>(it->second.entries.size());
       pending_.push_back(by_key_.extract(it++));
     }
+    dropped_ = static_cast<int64_t>(pending_.size());
+    pending_emptied_step_ = pending_.empty() ? 0 : -1;
+    run_steps_ = 0;
     ++run_;
     run_used_ = false;
   }
@@ -84,6 +91,10 @@ class Plans {
   }
   int64_t pending() const { return static_cast<int64_t>(pending_.size()); }
   int64_t pending_entries() const { return pending_entries_; }
+  // the plans the reset before the current run dropped, and the step of the current run that freed the last of them (0: none were
+  // dropped; -1: not freed yet)
+  int64_t dropped() const { return dropped_; }
+  int64_t pending_emptied_step() const { return pending_emptied_step_; }
 
  private:
   using Map = std::unordered_map<int64_t, Plan>;
@@ -99,6 +110,9 @@ class Plans {
   Map by_key_;
   std::vector<Map::node_type> pending_;  // dropped, out of the book, not yet freed
   int64_t pending_entries_ = 0;
+  int64_t dropped_ = 0;
+  int64_t pending_emptied_step_ = 0;
+  int64_t run_steps_ = 0;      // the current run's steps (`use`)
   int64_t run_ = 0;
   bool run_used_ = false;
   int64_t version_floor_ = 0;  // above every version a dropped plan had: where a plan created after a drop starts

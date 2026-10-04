@@ -570,6 +570,7 @@ struct Collector {
     d["copies"] = tot_copies; d["bytes"] = tot_bytes; d["memsets"] = tot_memsets; d["misses"] = tot_misses;
     d["learn_steps"] = tot_learn_steps; d["issue_s"] = tot_issue_s; d["plans"] = plans.size(); d["plan_entries"] = plans.entries();
     d["plans_pending"] = plans.pending(); d["plan_entries_pending"] = plans.pending_entries();
+    d["plans_dropped"] = plans.dropped(); d["plans_pending_emptied_step"] = plans.pending_emptied_step();
     d["strided_2d"] = tot_strided; d["contiguous_fallback"] = tot_fallback; d["flushes"] = tot_flushes; d["staged"] = tot_staged;
     d["gather_blocks"] = tot_blocks; d["auto_blocks"] = auto_blocks;
     d["expected"] = tot_expected; d["committed"] = tot_committed;
