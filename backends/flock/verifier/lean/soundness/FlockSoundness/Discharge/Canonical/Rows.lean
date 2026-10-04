@@ -185,28 +185,6 @@ theorem parse_bits_lt {tags : Tags} {bytes : ByteArray} {tables : List (String �
 
 variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ}
 
-/-- **A tail that returns the outputs leaves the units none**: `HmRow.check` refuses a nonempty `leavesOut` when the
-out net is not the unit's. -/
-theorem check_tail {tags : Tags} {ls : Lean.Json} (ht : c.typed = none) (ho : c.outNet ≠ c.unitNet)
-    (h : HmRow.check c tags ls = .ok ()) (k : ℕ) : (c.leavesOut.getD k #[]).size = 0 := by
-  unfold HmRow.check at h
-  obtain ⟨_spans, -, h⟩ := except_bind_ok h
-  obtain ⟨_u0, -, h⟩ := except_bind_ok h
-  obtain ⟨-, h⟩ := Layout.ite_throw_cond h
-  obtain ⟨-, h⟩ := Layout.ite_throw_cond h
-  obtain ⟨-, h⟩ := Layout.ite_throw_cond h
-  simp only [ht] at h
-  obtain ⟨-, h⟩ := Layout.ite_throw_cond h
-  obtain ⟨-, h⟩ := Layout.ite_throw_cond h
-  rw [ite_eq_left (bne_iff_ne.2 ho)] at h
-  obtain ⟨hc, -⟩ := Layout.ite_throw_cond h
-  simp only [Bool.or_eq_true, not_or, Array.any_eq_true', not_exists, not_and, Bool.not_eq_true'] at hc
-  by_cases hu : k < c.leavesOut.size
-  · have := hc.2 _ (Array.getElem_mem hu)
-    simp only [Bool.not_eq_false, Array.isEmpty_iff_size_eq_zero] at this
-    simpa [Array.getD, hu] using this
-  · simp [Array.getD, hu]
-
 /-- **A returned output's word is an output word**, with or without a tail. -/
 theorem outWord_lt_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     (h : HmRow.parse tags bytes tables = .ok c) {x u' j t : ℕ} (hoc : OutColAt c hU x u' j t) :
@@ -396,7 +374,8 @@ theorem keyProgC_valPinned (hkeys : KeysRow c hU (rowW c)) :
     rw [outRowOfC_wire outs x hm (unit_wire outs x hm).2, Layout.outDecode_of hoc] at hno'
     have hc := (si.acc S R u hu).c_eq (hparse S R u hu)
     have hcr : HmOut.checkRows c = .ok () := hc ▸ (si.acc S R u hu).checkRows
-    exact outBitRowC_ne_none hcr hfmt u (outWord_lt_of_parse (hparse S R u hu) hoc) hoc.2.2.1 hno'
+    exact outBitRowC_ne_none hcr (Hidden.parse_rowPorts (hparse S R u hu)).2 hfmt u
+      (outWord_lt_of_parse (hparse S R u hu) hoc) hoc.2.2.1 hno'
 
 /-- **`lay` at `keyProg`'s places in canonical tables**: the readers' layout, `bitCode` for the single gates. -/
 noncomputable def keyLayoutC :

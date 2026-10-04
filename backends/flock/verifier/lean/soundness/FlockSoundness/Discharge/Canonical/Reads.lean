@@ -19,9 +19,8 @@ key depends on how many groups the unit has.
 
 `HiddenExec.copy_siteH` (a message-keyed input holds its row's bit at `Typed.msgCol`) already holds for any rows.
 
-**Proof work.** Small: `keysRow_of_parse`'s proof with `Aliased.srcAt_leaf` replaced by a three-way case on `srcAt`
-(leaf, leaf cut, wire or literal) and the width bound read from `srcAt`'s own `if` (`16 (x - start) + t < bits`);
-`q < ports.size` is `Layout.starts_find` as today.
+Every declaration here is proved: `keysRow_of_parse`'s proof with `Aliased.srcAt_leaf` replaced by a case on the key,
+the width bound read from `srcAt`'s own `if` (`srcAt_msg`), and `q < ports.size` because a port past the end has no bits.
 -/
 
 namespace FlockSoundness.Discharge.Canonical
