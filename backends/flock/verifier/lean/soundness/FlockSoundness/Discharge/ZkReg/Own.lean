@@ -76,8 +76,10 @@ def ownReads (own : Array Registered.Port)
     FlockSoundness.Registered.Reads (laySh (Reg := Reg) ht dj y₀ hc hU (pub := pub)) (rowsSh ht dj y₀ hc hU hpub hscope)
     where
   isRead := ownIsRead own c pub
-  read_row p h := match p, h with
-    | .inl _, _ => rfl
+  read_row p h := by
+    rcases p with _ | _
+    · rfl
+    · exact h.elim
   port := ownPortAt own c
   readAt := ownReadAt own c pub
   wv := wv
