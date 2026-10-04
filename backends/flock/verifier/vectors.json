@@ -3686,7 +3686,7 @@
   "dump_plan": "Add `--dump DIR` to the selftest subcommand of flock-pure-gpu, flock-ir-frame and the PR #83 circuit-statement binary so every case writes its session.json and proofs; run once on a CPU pod at 8 VUs (a few minutes); preserve the tree as one artifact; each case's expected verdict is its selftest `pass` line."
  },
  "replayable": {
-  "note": "Replayable (record, proofs) sets for the circuit statement, one per statement version (Flock.Tags), generated with the vectors patch of that PR #83 commit; both verifiers run on the same directories (README.md, agree.py).",
+  "note": "Replayable (record, proofs) sets for the circuit statement, one per statement version (Flock.Tags), generated with the vectors patch of that PR #83 commit; both verifiers run on the same directories (README.md, agree.py). A set with `lean_refuses` is a statement form the soundness proof does not cover (PROTOCOL.md §16.15, D10): the Lean verifier refuses every session with that reason (one that does not set up, for that first), and upstream must give each session its expected verdict (`agree.py --lean-refuses`).",
   "sets": [
    {
     "statement": {
@@ -3906,6 +3906,7 @@
     "pr83": "9294e161",
     "generator": "netlist-vectors.patch",
     "agreement": "art:f1f3c2aa",
+    "lean_refuses": "refused: verity/flock-netlist/v1, a statement before hm96-sha512 rows: a statement form the soundness proof does not cover",
     "lean_statement": "verity/flock-netlist/v1"
    },
    {
@@ -3943,6 +3944,7 @@
      "cases": "as in the first set"
     },
     "agreement": "art:81645236",
+    "lean_refuses": "refused: verity/flock-circuit@19c7269a, a statement before hm96-sha512 rows: a statement form the soundness proof does not cover",
     "lean_statement": "verity/flock-circuit@19c7269a"
    },
    {
@@ -3979,6 +3981,7 @@
      "cases": "as in the first set, plus retained, retained-edited (retained-not-digest: intended divergence, upstream ignores the bytes)"
     },
     "agreement": "art:78ef0a6e (27/27)",
+    "lean_refuses": "refused: verity/flock-circuit@fd02e847, a statement before hm96-sha512 rows: a statement form the soundness proof does not cover",
     "lean_statement": "verity/flock-circuit@fd02e847",
     "forgeries": "art:d306dfbd",
     "forgeries_note": "PR #83 selftest forgeries that run a session (prover-side witness attacks, false output/digest statements with their own pub.bin, coins before y, fast profile, cross-session replay, relabelled circuit, prover file differs): 14 on RoPE, expectations in each case.json; Lean and upstream agree 14/14",
@@ -4022,6 +4025,7 @@
     },
     "lean_statement": "verity/flock-circuit@fd02e847",
     "agreement": "art:f1fd1488 (27/27)",
+    "lean_refuses": "refused: verity/flock-circuit@fd02e847, a statement before hm96-sha512 rows: a statement form the soundness proof does not cover",
     "forgeries": "art:7a526bff",
     "forgeries_note": "15 selftest forgeries incl. the tail cases (private cut word, swapped tail); Lean and upstream agree 15/15"
    },
@@ -4068,7 +4072,8 @@
     "fuzz": {
      "tool": "fuzz.py art:82c73709/honest OUT --seed S --n N --upstream-checks link_sigma,retained_bytes"
     },
-    "agreement": "r20260927-012244-342d (result art:a59f3cb2): 62/62"
+    "agreement": "r20260927-012244-342d (result art:a59f3cb2): 62/62",
+    "lean_refuses": "refused: verity/flock-circuit@631567f7, a statement before hm96-sha512 rows: a statement form the soundness proof does not cover"
    },
    {
     "tags": "verity/flock-circuit (SHA-512 statement)",
@@ -4110,7 +4115,8 @@
     "lean_statement": "verity/flock-circuit@631567f7",
     "forgeries": "art:d13d622c",
     "forgeries_note": "15 selftest forgeries; relabelled_circuit and tail_swapped_circuit_refused need two RMSNorm statements in memory and were OOM-killed on a 15 GB VM (not an abort): M0 recorded them (next set)",
-    "agreement": "r20260927-012244-342d (result art:a59f3cb2): 63/63"
+    "agreement": "r20260927-012244-342d (result art:a59f3cb2): 63/63",
+    "lean_refuses": "refused: verity/flock-circuit@631567f7, a statement before hm96-sha512 rows: a statement form the soundness proof does not cover"
    },
    {
     "tags": "verity/flock-circuit (SHA-512 statement)",
@@ -4135,7 +4141,8 @@
      "art:1100e385/rope-head/records-gpu"
     ],
     "selftest_note": "expectations and upstream's live verdicts in each case.json; aborted cases (refused at Hello) replay with empty proof files; output_claim_false and digest_claim_false ran against a false public file the records do not carry, so both verifiers reject them at S2/R7 (their Hello carries that file's \u03a3)",
-    "agreement": "r20260927-012244-342d (result art:a59f3cb2): 32/32"
+    "agreement": "r20260927-012244-342d (result art:a59f3cb2): 32/32",
+    "lean_refuses": "refused: verity/flock-circuit@631567f7, a statement before hm96-sha512 rows: a statement form the soundness proof does not cover"
    },
    {
     "tags": "verity/flock-circuit (SHA-512 statement)",
@@ -4161,7 +4168,8 @@
      "art:1100e385/rmst128/records-gpu"
     ],
     "selftest_note": "expectations and upstream's live verdicts in each case.json; aborted cases (refused at Hello) replay with empty proof files; output_claim_false and digest_claim_false ran against a false public file the records do not carry, so both verifiers reject them at S2/R7 (their Hello carries that file's \u03a3)",
-    "agreement": "r20260927-012244-342d (result art:a59f3cb2): 38/38"
+    "agreement": "r20260927-012244-342d (result art:a59f3cb2): 38/38",
+    "lean_refuses": "refused: verity/flock-circuit@631567f7, a statement before hm96-sha512 rows: a statement form the soundness proof does not cover"
    },
    {
     "tags": "verity/flock-circuit (hm96-sha512 rows, SHA-512 identity and binding digests)",
@@ -4197,7 +4205,8 @@
      "art:187679d7/rmst128/records-cpu"
     ],
     "selftest_note": "every selftest case that runs a session (23) and the draw cases unit_draw_session (accepted) and unit_draw_ignored_refused; each drawn session replays upstream in its own process (upstream leaks a statement's matrices; two RMSNorm statements exceed 15 GB)",
-    "agreement": "r20260927-064449-6059 (sets 8 and 9): 50/50"
+    "agreement": "r20260927-064449-6059 (sets 8 and 9): 50/50",
+    "lean_refuses": "refused: a unit reading 2 input groups: a statement form the soundness proof does not cover"
    },
    {
     "tags": "verity/flock-circuit (the e2e bindings: verity/partition/v1, program_sha512, per-instance classes)",
@@ -4270,7 +4279,8 @@
     ],
     "forgeries": "art:3104c2f9/gemm-k1024/extra",
     "selftest_note": "every selftest case that runs a session and the draw cases (unit_draw_session, unit_draw_from_file, unit_draw_ignored_refused); m = 26: replay on a machine with more than 15 GB",
-    "agreement": "r20260927-074433-43a6 (on the pod): 27/27"
+    "agreement": "r20260927-074433-43a6 (on the pod): 27/27",
+    "lean_refuses": "refused: a unit reading 2 input groups: a statement form the soundness proof does not cover"
    },
    {
     "tags": "verity/flock-circuit (shared-row public files: header shared_rows, tables and u32 refs)",
@@ -4289,7 +4299,8 @@
      "art:0eea3abf/rope-shared/records-cpu"
     ],
     "selftest_note": "every selftest case that runs a session (row_ref_claim_false: instance 0's x ref names another row; its false statement, like digest_claim_false's and output_claim_false's, is its own pub.bin, so both verifiers reject at the proof's openings), and the draw cases",
-    "agreement": "23/23 (local, 2026-09-27T10:05Z)"
+    "agreement": "23/23 (local, 2026-09-27T10:05Z)",
+    "lean_refuses": "refused: a shared-row public file (header shared_rows): a statement form the soundness proof does not cover"
    },
    {
     "tags": "verity/flock-circuit (68ae79f2's identity text, a per-instance file)",
@@ -4365,7 +4376,8 @@
      }
     ],
     "lean_statement": "verity/flock-circuit@967b8d06+seed-injection",
-    "agreement": "5/5 (local, 2026-10-02T01:42Z): D5, upstream accepts all four negatives (fresh-salts: cs rows under fresh salts with the registered paths; afresh: no registered entry; wrong-position: the verifier's reads moved one row; no-registered: a session-level registered.json of null, no --registered)"
+    "agreement": "5/5 (local, 2026-10-02T01:42Z): D5, upstream accepts all four negatives (fresh-salts: cs rows under fresh salts with the registered paths; afresh: no registered entry; wrong-position: the verifier's reads moved one row; no-registered: a session-level registered.json of null, no --registered)",
+    "lean_refuses": "refused: a shared-row public file (header shared_rows): a statement form the soundness proof does not cover"
    }
   ],
   "recorded_runs": [
@@ -4378,7 +4390,7 @@
   ]
  },
  "live": {
-  "note": "Sets whose upstream verdicts are the live server's, from each case's case.json: main's flock-circuit has no replay subcommand and the vectors patch no longer builds against it, so there is no upstream binary to pin (`pr83` names the build that recorded them). They are not replayable sets: check's agreement step (upstream.json's pinned binaries and inputs) does not run them, and set 1 needs a 128 GB machine. Run them with `ci.py --live`.",
+  "note": "Sets whose upstream verdicts are the live server's, from each case's case.json: main's flock-circuit has no replay subcommand and the vectors patch no longer builds against it, so there is no upstream binary to pin (`pr83` names the build that recorded them). They are not replayable sets: check's agreement step (upstream.json's pinned binaries and inputs) does not run them, and set 1 needs a 128 GB machine. Run them with `ci.py --live`. `lean_refuses` is D10, as in the replayable sets.",
   "sets": [
    {
     "tags": "verity/flock-circuit (main ac412eb8, 967b8d06 identity): attention with T not a multiple of 16",
@@ -4396,7 +4408,8 @@
      "art:9d3d148c/records"
     ],
     "selftest_note": "every selftest case that runs a session and fits 15 GB (22: 3 honest, 19 negatives); unit_draw_from_file and unit_draw_session run out of memory on the CPU VM; upstream's verdicts are its live ones in each case.json (main's flock-circuit has no replay subcommand, and circuit-vectors.patch no longer builds against it)",
-    "agreement": "local ci.py --live --sets 0 (2026-09-28T18:40Z, Lean at main ac412eb8): 22/22, 3 accepted"
+    "agreement": "local ci.py --live --sets 0 (2026-09-28T18:40Z, Lean at main ac412eb8): 22/22, 3 accepted",
+    "lean_refuses": "refused: a unit reading 2 input groups: a statement form the soundness proof does not cover"
    },
    {
     "tags": "verity/flock-circuit (main ac412eb8, 967b8d06 identity): attention with T not a multiple of 16, at the proved range's k_log",
@@ -4414,7 +4427,8 @@
      "art:b1d6f11c/records"
     ],
     "selftest_note": "every selftest case (all_pass; 23 sessions recorded); upstream's verdicts are its live ones in each case.json (main's flock-circuit has no replay subcommand)",
-    "agreement": "local ci.py --live --sets 1 (2026-09-28T20:07Z, Lean at main ac412eb8): 23/23, 3 accepted"
+    "agreement": "local ci.py --live --sets 1 (2026-09-28T20:07Z, Lean at main ac412eb8): 23/23, 3 accepted",
+    "lean_refuses": "refused: a unit reading 2 input groups: a statement form the soundness proof does not cover"
    },
    {
     "tags": "verity/flock-circuit (hidden outputs, PROTOCOL.md §16.13): RoPE, a stage returns its outputs",
@@ -4448,7 +4462,8 @@
      "art:50de1919/flat/gemm-coordinate/records"
     ],
     "selftest_note": "every selftest case that runs a session (21: 3 honest; the false statements each with its own pub.bin); upstream's verdicts are its live ones in each case.json",
-    "agreement": "local ci.py --live --sets 3 (2026-10-02T00:38Z, Lean at ce0e60810): 21/21, 3 accepted"
+    "agreement": "local ci.py --live --sets 3 (2026-10-02T00:38Z, Lean at ce0e60810): 21/21, 3 accepted",
+    "lean_refuses": "refused: a unit reading 2 input groups: a statement form the soundness proof does not cover"
    },
    {
     "tags": "verity/flock-circuit/types (hidden outputs, PROTOCOL.md §16.13): RoPE as a flat class",
@@ -4465,7 +4480,8 @@
      "art:50de1919/typed/rope-head/records"
     ],
     "selftest_note": "every selftest case that runs a session (20: 3 honest; the false statements each with its own pub.bin); upstream's verdicts are its live ones in each case.json",
-    "agreement": "local ci.py --live --sets 4 (2026-10-02T00:38Z, Lean at ce0e60810): 20/20, 3 accepted"
+    "agreement": "local ci.py --live --sets 4 (2026-10-02T00:38Z, Lean at ce0e60810): 20/20, 3 accepted",
+    "lean_refuses": "refused: verity/flock-circuit/types+seed-injection, a typed statement: a statement form the soundness proof does not cover"
    },
    {
     "tags": "verity/flock-circuit/types (hidden outputs, PROTOCOL.md §16.13): one BF16 GEMM coordinate as a template",
@@ -4482,7 +4498,8 @@
      "art:50de1919/typed/gemm-coordinate/records"
     ],
     "selftest_note": "every selftest case that runs a session (21: 3 honest; the false statements each with its own pub.bin); the selftest's host_units_match_witness check fails here and on its base (a host-side unit evaluation, not a session), so all_pass is false; upstream's verdicts are its live ones in each case.json",
-    "agreement": "local ci.py --live --sets 5 (2026-10-02T00:38Z, Lean at ce0e60810): 21/21, 3 accepted"
+    "agreement": "local ci.py --live --sets 5 (2026-10-02T00:38Z, Lean at ce0e60810): 21/21, 3 accepted",
+    "lean_refuses": "refused: verity/flock-circuit/types+seed-injection, a typed statement: a statement form the soundness proof does not cover"
    }
   ]
  }
