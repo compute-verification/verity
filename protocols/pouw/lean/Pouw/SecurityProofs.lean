@@ -122,6 +122,7 @@ import Pouw.SecurityProofs.PearlC.UOnlyLoopGamma
 import Pouw.SecurityProofs.PearlC.WholeCircuit
 import Pouw.SecurityProofs.PearlC.TileCheck8
 import Pouw.SecurityProofs.PearlC.TileCheck8Words
+import Pouw.SecurityProofs.PearlC.TileCheck4
 import Pouw.SecurityProofs.PearlC.Block4Sem
 import Pouw.SecurityProofs.Prob
 import Pouw.SecurityProofs.QTree

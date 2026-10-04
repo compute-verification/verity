@@ -74,6 +74,7 @@ import Pouw.Protocol.PearlC.Tile
 import Pouw.Protocol.PearlC.Tile4Circuit
 import Pouw.Protocol.PearlC.TileCheck
 import Pouw.Protocol.PearlC.TileCheck8
+import Pouw.Protocol.PearlC.TileCheck4
 import Pouw.Protocol.PearlC.TileCircuit
 import Pouw.Protocol.PearlC.WholeCircuit
 import Pouw.Protocol.PearlC.WholeCircuit4
