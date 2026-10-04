@@ -5,12 +5,14 @@
     uv run python integrations/vllm/tools/migrate/split_sampling.py --check      # exit 0 iff the tree is already split
 
 The Definitions stay where they are, in `verity_vllm/program/registry/` (`sampling`, `sampling_boolean`, `gumbel_boolean`,
-`topp_keep_builder`, `topp_split`, `topp_word_gates`, `topp_words`), the directory the catalog move maps to `catalog/`.  What
-moves out of the registry:
+`topp_keep_builder`, `topp_split`, `topp_word_gates`, `topp_words`, and `sampling_topp_difftest`'s Definition with its `spec`
+and `spec_registered`), the directory the catalog move maps to `catalog/`.  What moves out of the registry:
 
-* the twins, to `verity_vllm/program/kernels/` beside the other row twins and the row harness that calls them:
-  `sampling_rows` (numpy twins of the sampler's Definitions) and `sampling_topp_difftest` (the G4 difftest adapter against
-  vLLM's production sampler);
+* the twin, to `verity_vllm/program/kernels/` beside the other row twins (the move map's `verity/kernels/`): `sampling_rows`
+  (numpy twins of the sampler's Definitions);
+* the harness, to `verity_vllm/properties/sampling_topp_admission.py` (the admission difftests' package; the move map's
+  `properties/`): `sampling_topp_difftest`'s G4 adapter, its corpus, `cases` and vLLM's `production` chain, with the module
+  docstring that names the `--adapter`;
 * the vocabulary, to `verity_vllm/program/sampling_vocab.py`: `SHARED_GREEDY` and `select_for`, which Definition a target's
   `sampler_construction` binds for a stochastic select.
 
@@ -18,7 +20,8 @@ Every reference in the tree follows: imports (module-level and function-local, `
 vocabulary through an alias of `registry.sampling`, dotted names and paths in strings, comments, docs and the lint allowlists,
 and `tests/test_backend_boundaries.py`'s `KNOWN` sites.  The script reruns on a later main: an already-split tree is left as it
 is (its references are rewritten again, which finds nothing new unless a later commit added one), and any state it does not
-recognise (a twin in both places, the vocabulary in neither) fails by name, as does a reference it cannot rewrite.
+recognise (a twin in both places, the vocabulary in neither) fails by name, as does a reference it cannot rewrite (an
+attribute use of a harness name through the Definition module, for one).
 
 `--verify` (the default) snapshots, before and after, every canonical descriptor digest of the family's Definitions at every
 statics circuit-check's task list, its pins and the served bindings use, and circuit-check's whole task list (target id,
@@ -45,12 +48,20 @@ REG = "verity_vllm.program.registry"
 KERNELS = "verity_vllm.program.kernels"
 VOCAB_MODULE = "verity_vllm.program.sampling_vocab"
 SAMPLING = f"{REG}.sampling"
+DIFFTEST = f"{REG}.sampling_topp_difftest"
+HARNESS_MODULE = "verity_vllm.properties.sampling_topp_admission"
 
 DEFINITION_MODULES = ("sampling", "sampling_boolean", "gumbel_boolean", "topp_keep_builder", "topp_split", "topp_word_gates",
-                      "topp_words")
+                      "topp_words", "sampling_topp_difftest")
 #: twin module -> the package it moves to
-TWINS = {"sampling_rows": KERNELS, "sampling_topp_difftest": KERNELS}
+TWINS = {"sampling_rows": KERNELS}
 VOCAB = ("SHARED_GREEDY", "select_for")
+#: the G4 admission adapter's own names in `sampling_topp_difftest` (its corpus and vLLM's production chain); the Definition,
+#: `spec` and `spec_registered` stay, and the adapter imports `spec` back (`properties.admission` reads `mod.spec`)
+HARNESS = ("SEMANTIC_ID", "VOCABS", "KINDS", "TEMPS", "TOPPS", "SEEDS", "POSS", "_f32_bits", "_real_rows", "cases", "production")
+HARNESS_REEXPORT = ("spec",)
+#: module -> (names that leave it, the module they go to)
+MOVED_NAMES = {SAMPLING: (VOCAB, VOCAB_MODULE), DIFFTEST: (HARNESS, HARNESS_MODULE)}
 #: Definition ids the family makes on demand (`registry/__init__.py`'s lazy families), not module attributes
 LAZY_IDS = re.compile(r"^(TopPMaskWordx\d+|BitAtx\d+)_v1$")
 #: the vocabulary sizes of the served models (workload configs and manifests) the word-level selects are bound at
@@ -76,9 +87,9 @@ def _git(*args: str) -> str:
 
 # --- state ----------------------------------------------------------------------------------------------------------------------
 
-def _sampling_defines_vocab() -> bool:
-    tree = ast.parse(_path(SAMPLING).read_text(encoding="utf-8"))
-    return any(n in VOCAB for n in _top_names(tree))
+def _defines_any(module: str, names: tuple[str, ...]) -> bool:
+    tree = ast.parse(_path(module).read_text(encoding="utf-8"))
+    return any(n in names for n in _top_names(tree))
 
 
 def _top_names(tree: ast.Module) -> dict[str, ast.stmt]:
@@ -105,19 +116,26 @@ def state() -> dict[str, str]:
         old, new = _path(f"{REG}.{twin}").exists(), _path(f"{dst}.{twin}").exists()
         out[twin] = "before" if old and not new else "after" if new and not old else (
             f"both registry/{twin}.py and {dst}.{twin} exist" if old else f"neither registry/{twin}.py nor {dst}.{twin} exists")
-    old, new = _sampling_defines_vocab(), _path(VOCAB_MODULE).exists()
-    out["vocab"] = "before" if old and not new else "after" if new and not old else (
-        f"registry/sampling.py defines {VOCAB} and {VOCAB_MODULE} exists" if old else f"{VOCAB} are in neither module")
+    for key, src, names, dst in (("vocab", SAMPLING, VOCAB, VOCAB_MODULE), ("harness", DIFFTEST, HARNESS, HARNESS_MODULE)):
+        if not _path(src).exists():
+            continue
+        old, new = _defines_any(src, names), _path(dst).exists()
+        out[key] = "before" if old and not new else "after" if new and not old else (
+            f"{src} defines some of {names} and {dst} exists" if old else f"{names} are in neither {src} nor {dst}")
     return out
 
 
-# --- moving the vocabulary -------------------------------------------------------------------------------------------------------
+# --- moving names out of a module --------------------------------------------------------------------------------------------------
 
-VOCAB_HEAD = '''"""Which sampler Definition a target binds: each stochastic select under the `TargetProfile.sampler_construction` it is bound
+VOCAB_DOC = '''"""Which sampler Definition a target binds: each stochastic select under the `TargetProfile.sampler_construction` it is bound
 under.  The Definitions are `registry.sampling`'s; this is the integration's vocabulary over them (`sampling_event.CONSTRUCTION_OF`
 maps the other way, from a family to its construction)."""
-from __future__ import annotations
+'''
 
+DIFFTEST_DOC = '''"""`GumbelTopPTokenSelectDifftest_v1{V,S}`: `GumbelTopPTokenSelect_v1{V}` returning also the masked fp32 row it samples from, at the
+static split count S a launch used; `spec` binds it and `spec_registered` binds the registered family.  The Match-time stoch
+recompute (`check.replay.stoch_recompute`), the row harness (`kernels.rows`) and the G4 admission adapter
+(`verity_vllm.properties.sampling_topp_admission`) evaluate these."""
 '''
 
 
@@ -129,35 +147,119 @@ def _span(lines: list[str], node: ast.stmt) -> tuple[int, int]:
     return start, node.end_lineno
 
 
-def move_vocab() -> None:
-    src_path = _path(SAMPLING)
+def _loads(tree: ast.AST) -> set[str]:
+    return {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+
+
+def _imported(tree: ast.Module) -> dict[str, tuple[str | None, ast.alias]]:
+    """name -> (module of a `from` import, or None for a plain import; the alias) for each module-level import binding it."""
+    out = {}
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.module != "__future__":
+            if node.level:
+                raise SplitError(f"a relative import at line {node.lineno}: split by hand")
+            out.update({a.asname or a.name: (node.module, a) for a in node.names})
+        elif isinstance(node, ast.Import):
+            out.update({a.asname or a.name.split(".")[0]: (None, a) for a in node.names})
+    return out
+
+
+def _import_block(wanted: list[tuple[str | None, ast.alias]]) -> str:
+    """Import lines for (module, alias) pairs, in the given order: the standard library, then other distributions, then ours."""
+    groups: list[dict[str | None, list[ast.alias]]] = [{}, {}, {}]
+    for mod, a in wanted:
+        top = (mod or a.name).split(".")[0]
+        g = 0 if top in sys.stdlib_module_names else 2 if top.startswith("verity") else 1
+        groups[g].setdefault(mod, []).append(a)
+    out = []
+    for g in groups:
+        lines = [f"import {_alias_text(a)}" for a in g.get(None, [])] + [_from(m, al) for m, al in g.items() if m]
+        if lines:
+            out.append("\n".join(lines) + "\n")
+    return "\n".join(out)
+
+
+def move_names(src_mod: str, names: tuple[str, ...], dst_mod: str, *, dst_doc: str | None = None, src_doc: str | None = None,
+               reexport: tuple[str, ...] = ()) -> None:
+    """Move the top-level statements that define `names` (with their `#:` comment lines) from `src_mod` into a new module `dst_mod`.
+    The new module imports what the moved code reads: the source's own imports of those names, and the source's other top-level
+    names from the source (with `reexport`, names the new module offers that stay in the source).  With `dst_doc` None the
+    source's module docstring moves too and `src_doc` replaces it.  Imports only the moved code read leave the source."""
+    src_path = _path(src_mod)
     src = src_path.read_text(encoding="utf-8")
     tree = ast.parse(src)
     top = _top_names(tree)
-    missing = [n for n in VOCAB if n not in top]
+    missing = [n for n in names if n not in top]
     if missing:
-        raise SplitError(f"registry/sampling.py defines {[n for n in VOCAB if n in top]} but not {missing}: split by hand")
+        raise SplitError(f"{src_mod} defines {[n for n in names if n in top]} but not {missing}: split by hand")
+    nodes = {id(top[n]) for n in names}
+    extra = sorted(k for k, v in top.items() if id(v) in nodes and k not in names)
+    if extra:
+        raise SplitError(f"{src_mod}: a moved statement also binds {extra}: split by hand")
     lines = [ln.decode() for ln in src.encode().splitlines(keepends=True)]
-    spans = sorted({_span(lines, top[n]) for n in VOCAB})
+    spans = sorted({_span(lines, top[n]) for n in names})
     moved = "".join("".join(lines[a:b]).rstrip("\n") + "\n\n\n" for a, b in spans).rstrip("\n") + "\n"
     moved_tree = ast.parse(moved)
-    bound = set(_top_names(moved_tree))
-    free = sorted({n.id for n in ast.walk(moved_tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
-                  & (set(top) - bound))
+    doc = tree.body[0] if tree.body and isinstance(tree.body[0], ast.Expr) and isinstance(tree.body[0].value, ast.Constant) \
+        and isinstance(tree.body[0].value.value, str) else None
+    if dst_doc is None:
+        if doc is None or src_doc is None:
+            raise SplitError(f"{src_mod}: moving its docstring needs both the docstring and its replacement")
+        dst_doc = "".join(lines[doc.lineno - 1:doc.end_lineno])
+        spans.append((doc.lineno - 1, doc.end_lineno))
+    imported = _imported(tree)
+    free = _loads(moved_tree) & (set(top) | set(imported)) - set(names)     # a local shadowing a module name costs one import
+    wanted = [imported[n] for n in imported if n in free]
+    own = [n for n in top if n in free and n not in imported and n not in names] + [n for n in reexport if n not in free]
+    wanted += [(src_mod, ast.alias(n, None)) for n in own]
     keep = [i for i, _ in enumerate(lines) if not any(a <= i < b for a, b in spans)]
     rest = "".join(lines[i] for i in keep)
+    if dst_doc is not None and doc is not None and (doc.lineno - 1, doc.end_lineno) in spans:
+        rest = src_doc + rest
+    rest = _drop_imports(rest, {n for n in imported if n in free})
     rest = re.sub(r"\n{4,}", "\n\n\n", rest)
-    left = ast.parse(rest)
-    still = sorted({n.id for n in ast.walk(left) if isinstance(n, ast.Name) and n.id in VOCAB})
+    still = sorted(_loads(ast.parse(rest)) & set(names))
     if still:
-        raise SplitError(f"registry/sampling.py still reads {still} after the move: a Definition depends on the vocabulary")
-    rest = rest.replace("(`TargetProfile.sampler_construction`, `select_for`)",
-                        "(`TargetProfile.sampler_construction`, `sampling_vocab.select_for`)")
-    imports = f"from {SAMPLING} import {', '.join(free)}\n\n\n" if free else ""
-    body = VOCAB_HEAD + imports + moved + f"\n\n__all__ = {json.dumps(list(VOCAB))}\n"
-    _path(VOCAB_MODULE).write_text(body, encoding="utf-8")
+        raise SplitError(f"{src_mod} still reads {still} after the move: what stays depends on what moves")
+    future = "from __future__ import annotations\n\n" if any(
+        isinstance(n, ast.ImportFrom) and n.module == "__future__" for n in tree.body) else ""
+    public = [n for n in (*names, *reexport) if not n.startswith("_")]
+    body = (dst_doc + future + _import_block(wanted) + "\n\n" + moved + f"\n\n__all__ = {json.dumps(public)}\n")
+    _path(dst_mod).write_text(body, encoding="utf-8")
     src_path.write_text(rest, encoding="utf-8")
-    _git("add", str(_path(VOCAB_MODULE).relative_to(REPO)))
+    _git("add", str(_path(dst_mod).relative_to(REPO)))
+
+
+def _drop_imports(src: str, candidates: set[str]) -> str:
+    """`src` without its module-level import aliases among `candidates` that nothing in it reads any more."""
+    tree = ast.parse(src)
+    unused = candidates - _loads(tree)
+    E = _Edits(src)
+    for node in tree.body:
+        if not isinstance(node, (ast.Import, ast.ImportFrom)) or getattr(node, "module", None) == "__future__":
+            continue
+        bound = lambda a: a.asname or (a.name if isinstance(node, ast.ImportFrom) else a.name.split(".")[0])  # noqa: E731
+        stay = [a for a in node.names if bound(a) not in unused]
+        if len(stay) == len(node.names):
+            continue
+        if stay:
+            E.replace(node, _from(node.module, stay) if isinstance(node, ast.ImportFrom) else
+                      "import " + ", ".join(_alias_text(a) for a in stay))
+        else:
+            E.edits.append((node.lineno, 0, node.end_lineno + 1, 0, ""))
+    return E.apply() if E.edits else src
+
+
+def move_vocab() -> None:
+    move_names(SAMPLING, VOCAB, VOCAB_MODULE, dst_doc=VOCAB_DOC)
+    p = _path(SAMPLING)
+    p.write_text(p.read_text(encoding="utf-8").replace("(`TargetProfile.sampler_construction`, `select_for`)",
+                                                       "(`TargetProfile.sampler_construction`, `sampling_vocab.select_for`)"),
+                 encoding="utf-8")
+
+
+def move_harness() -> None:
+    move_names(DIFFTEST, HARNESS, HARNESS_MODULE, src_doc=DIFFTEST_DOC, reexport=HARNESS_REEXPORT)
 
 
 # --- rewriting references --------------------------------------------------------------------------------------------------------
@@ -217,10 +319,11 @@ def rewrite_python(src: str) -> str:
             elif _twin_of(mod):
                 old, new = _twin_of(mod)
                 E.replace(node, _from(new + mod[len(old):], node.names))
-            elif mod == SAMPLING and any(a.name in VOCAB for a in node.names):
-                stay = [a for a in node.names if a.name not in VOCAB]
-                moved = [a for a in node.names if a.name in VOCAB]
-                stmts = ([_from(SAMPLING, stay)] if stay else []) + [_from(VOCAB_MODULE, moved)]
+            elif mod in MOVED_NAMES and any(a.name in MOVED_NAMES[mod][0] for a in node.names):
+                names, dst = MOVED_NAMES[mod]
+                stay = [a for a in node.names if a.name not in names]
+                moved = [a for a in node.names if a.name in names]
+                stmts = ([_from(mod, stay)] if stay else []) + [_from(dst, moved)]
                 E.replace(node, ("\n" + " " * node.col_offset).join(stmts))
         elif isinstance(node, ast.Import):
             new_names, changed = [], False
@@ -262,6 +365,7 @@ def _text_rules() -> list[tuple[re.Pattern, str]]:
                   (re.compile(rf"(?<![\w.])registry\.{twin}\b"), f"{new_dir}.{twin}")]
     for name in VOCAB:
         rules += [(re.compile(rf"\b(?:verity_vllm\.program\.)?registry\.sampling\.{name}\b"), f"sampling_vocab.{name}")]
+    rules += [(re.compile(rf"(--adapter[ =]){re.escape(DIFFTEST)}\b"), rf"\g<1>{HARNESS_MODULE}")]
     return rules
 
 
@@ -303,7 +407,7 @@ def rewrite_references() -> list[str]:
 
 def leftovers() -> list[str]:
     """References the rewrite could not follow: each fails the split by name."""
-    pats = [re.compile(rf"\bregistry[./]{t}\b") for t in TWINS]
+    pats = [re.compile(rf"\bregistry[./]{t}\b") for t in TWINS] + [re.compile(rf"--adapter[ =]{re.escape(DIFFTEST)}\b")]
     out = []
     for p in _tracked_text_files():
         try:
@@ -329,7 +433,41 @@ def leftovers() -> list[str]:
                     out.append(f"{rel}:{n.lineno}: {ast.unparse(n)} (the vocabulary through registry.sampling)")
                 if isinstance(n, ast.ImportFrom) and n.module == SAMPLING and any(a.name in VOCAB for a in n.names):
                     out.append(f"{rel}:{n.lineno}: imports {VOCAB} from registry.sampling")
+                if isinstance(n, ast.ImportFrom) and n.module == DIFFTEST and any(a.name in HARNESS for a in n.names):
+                    out.append(f"{rel}:{n.lineno}: imports the admission adapter's names from {DIFFTEST}")
+            difftest = {a.asname or a.name for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module == REG
+                        for a in n.names if a.name == "sampling_topp_difftest"}
+            difftest |= {a.asname for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names
+                         if a.name == DIFFTEST and a.asname}
+            for n in ast.walk(tree):
+                if isinstance(n, ast.Attribute) and n.attr in HARNESS and (
+                        (isinstance(n.value, ast.Name) and n.value.id in difftest) or ast.unparse(n.value).endswith(DIFFTEST)):
+                    out.append(f"{rel}:{n.lineno}: {ast.unparse(n)} (the admission adapter through {DIFFTEST}; it is in "
+                               f"{HARNESS_MODULE})")
     return out
+
+
+ALLOWLISTS = VLLM / "tests" / "lint" / "allowlists"
+
+
+def move_allowlist_entries() -> list[str]:
+    """Lint allowlist entries are keyed by file: an entry of a moved harness name (or of the module docstring, which moved
+    with it) follows it to the harness module."""
+    old, new = (_path(m).relative_to(VLLM).as_posix() for m in (DIFFTEST, HARNESS_MODULE))
+    entry = re.compile(r'"file": "' + re.escape(old) + r'", "kind": "(?P<kind>[^"]*)", "symbol": "(?P<symbol>[^"]*)"')
+    changed = []
+    for p in sorted(ALLOWLISTS.glob("*.json")):
+        src = p.read_text(encoding="utf-8")
+        out = []
+        for line in src.splitlines(keepends=True):
+            m = entry.search(line)
+            if m and (m["symbol"] in HARNESS or (m["symbol"] == "<module>" and m["kind"].startswith("doc"))):
+                line = line.replace(f'"file": "{old}"', f'"file": "{new}"', 1)
+            out.append(line)
+        if "".join(out) != src:
+            p.write_text("".join(out), encoding="utf-8")
+            changed.append(p.relative_to(REPO).as_posix())
+    return changed
 
 
 def update_backend_known() -> bool:
@@ -520,6 +658,10 @@ def _compare(before: dict, after: dict) -> list[str]:
 # --- main ----------------------------------------------------------------------------------------------------------------------
 
 def split(verify: bool) -> None:
+    dirty = _git("status", "--porcelain", "--untracked-files=no").strip()
+    if dirty:
+        raise SplitError("the work tree has uncommitted changes; a split that fails part way is undone with `git reset --hard`, "
+                         "so start from a clean one:\n" + dirty)
     st = state()
     broken = {k: v for k, v in st.items() if v not in ("before", "after")}
     if broken:
@@ -533,6 +675,11 @@ def split(verify: bool) -> None:
     if st["vocab"] == "before":
         move_vocab()
         print(f"moved {VOCAB} -> {VOCAB_MODULE}")
+    if st["harness"] == "before":
+        move_harness()
+        print(f"moved the admission adapter {HARNESS} -> {HARNESS_MODULE}")
+        for c in move_allowlist_entries():
+            print(f"  moved its allowlist entries in {c}")
     changed = rewrite_references()
     print(f"rewrote references in {len(changed)} file(s)" + "".join(f"\n  {c}" for c in changed))
     if update_backend_known():
@@ -564,7 +711,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.check:
         st = state()
         print(json.dumps(st, indent=1))
-        return 0 if all(v == "after" for k, v in st.items() if k in TWINS or k == "vocab") and not leftovers() else 1
+        return 0 if all(v == "after" for k, v in st.items() if k in TWINS or k in ("vocab", "harness")) and not leftovers() else 1
     split(verify=not a.no_verify)
     return 0
 
