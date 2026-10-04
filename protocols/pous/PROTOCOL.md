@@ -237,8 +237,8 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     them, with no hypothesis; the certified store is 2^19 blocks (8 segments of 2^16). It is an abstract-M1 result, and
     the SMS-to-M1 instantiation assumption is not accepted (the spec's decision 8).
   - SeqRoot sets `call_ns` (`ROOT_CALL_NS` = 854 µs), half the fastest 16,448-bit root with 8 cores of one chiplet
-    cooperating, which the spec allows. No root may fit within twice `Δ + RTT`. The spec's v1.1 (`p2/PROTOCOL.md`, 4 Oct
-    2026, Daniel's ruling) caps the RTT allowance at `RTT_ALLOWANCE_CAP_NS` = 350 µs, so `Δ + RTT ≤ 850 µs`; the frozen
+    cooperating, which the spec allows. No root may fit within twice `Δ + RTT`. The spec's v1.1 (`p2/PROTOCOL.md`, also
+    art:6eb1be8973e89aa04aa43f91522988a63370e4b6f2034b973fcbe86b2e840276; 4 Oct 2026, Daniel's ruling) caps the RTT allowance at `RTT_ALLOWANCE_CAP_NS` = 350 µs, so `Δ + RTT ≤ 850 µs`; the frozen
     v1's 1 ms cap did not keep the 2× margin. The derivation:
     - The single-core floor is the timing red team's Zen 5 core at 5.7 GHz with full-rate IFMA and its best
       Toom-4/Karatsuba plan: τ_F = 361.55 ns per squaring (`regate.py` at w = 16,448). A root is 16,446 squarings plus
