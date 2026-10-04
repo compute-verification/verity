@@ -1,5 +1,5 @@
 """CPU tests for TP-08: the per-rank sampled-replay record (manbind MAN-06 form (A) run inside each rank's worker) -- the driver's fold over
-ranks/pairs (`tp2_commit._sampled_replay_components`) and the worker's fail-closed paths (`_tp2_sampled_replay`: no map, no Build dir,
+ranks/pairs (`tp.c2.sampled_replay_components`) and the worker's fail-closed paths (`_tp2_sampled_replay`: no map, no Build dir,
 a Program that is not of record is REFUSED by name before any evaluation)."""
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
-from verity_vllm.pipeline.tp.commit import _sampled_replay_components  # noqa: E402
+from verity_vllm.pipeline.tp.c2 import sampled_replay_components  # noqa: E402
 
 
 def _sr(result, grade, vus=10, evaluated=4, why=None, unrep=None):
@@ -36,7 +36,7 @@ VERS = {"sampled_replay": {"of_record": {"0": ["a" * 64], "1": ["b" * 64]}}}
 def test_both_ranks_true_folds_true_and_lists_true_ranks_and_families():
     p = {0: {"sampled_replay": _sr(True, "complete"), "boundary_linkage": {"result": True, "pairs": 9, "linked": 9}},
          1: {"sampled_replay": _sr(True, "complete", vus=12), "boundary_linkage": {"result": True, "pairs": 9, "linked": 9}}}
-    sr, lk = _sampled_replay_components(_rows([p]), VERS)
+    sr, lk = sampled_replay_components(_rows([p]), VERS)
     assert sr["result"] is True and lk["result"] is True
     assert sr["population"]["n"] == 22 and sr["n"] == 8 and sr["strata"]["ranks"] == ["rank 0", "rank 1"]
     assert sr["unreplayable"] == [{"family": "AllReduce2_v1", "n": 6, "why": "no registered evaluator", "ranks": [0, 1]}]
@@ -46,7 +46,7 @@ def test_both_ranks_true_folds_true_and_lists_true_ranks_and_families():
 def test_one_rank_not_evaluated_is_not_true_and_named():
     p = {0: {"sampled_replay": _sr(True, "complete"), "boundary_linkage": {"result": True, "pairs": 9, "linked": 9}},
          1: {"sampled_replay": _sr(None, "not-evaluated", why="rank 1: REFUSED (not the Program of record): r0: dddd"), "boundary_linkage": {"result": None, "why": "rank 1: not run"}}}
-    sr, lk = _sampled_replay_components(_rows([p]), VERS)
+    sr, lk = sampled_replay_components(_rows([p]), VERS)
     assert sr["result"] is False and "rank 1" in sr["why"] and "REFUSED" in sr["why"]
     assert lk["result"] is False and "rank 1" in lk["why"]
 
@@ -55,13 +55,13 @@ def test_earlier_pair_failure_is_not_forgotten():
     good = {r: {"sampled_replay": _sr(True, "complete"), "boundary_linkage": {"result": True, "pairs": 9, "linked": 9}} for r in (0, 1)}
     bad = {0: {"sampled_replay": _sr(False, "mismatch", why="rank 0: mismatch"), "boundary_linkage": {"result": True, "pairs": 9, "linked": 9}},
            1: good[1]}
-    sr, _lk = _sampled_replay_components(_rows([bad, good]), VERS)
+    sr, _lk = sampled_replay_components(_rows([bad, good]), VERS)
     assert sr["result"] is False and sr["per_run"][0]["0"]["sampled_replay"] is False if "0" in sr["per_run"][0] else sr["per_run"][0][0]["sampled_replay"] is False
     assert sr["why"] == "a rank of an earlier pair failed"
 
 
 def test_not_run_shape_when_replay_disabled():
-    sr, lk = _sampled_replay_components(_rows([{0: {"sampled_replay": None}}]), {})
+    sr, lk = sampled_replay_components(_rows([{0: {"sampled_replay": None}}]), {})
     assert sr["result"] is None and "not run" in sr["why"] and lk["result"] is None
 
 
