@@ -27,6 +27,42 @@ open scoped ENNReal
 
 variable {mPts n : ℕ} {Reg : Type} (P : LigProver)
 
+/-- An untyped `setupHidden` statement is a `MaskSetup`: `Layout` (`hidden_layout'`), `HmRow.check` on the circuit
+`HmOut.parse` reads with `HmRow.parse`, and `m`. -/
+theorem maskSetup_of_setupHidden {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt} (ht : tags.typed = false)
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) : MaskSetup st :=
+  ⟨Hidden.hidden_layout' ht h,
+    let ⟨ls, hc⟩ := Refine.hm_parse_check (Hidden.parse_untyped ht (Hidden.setupHidden_spec' h).parse).1; ⟨_, ls, hc⟩,
+    (Hidden.setupHidden_spec' h).m⟩
+
+theorem tableZKH_eq {I : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (y₁ y₂ : DrawSetupZKH I mPts S d) :
+    y₁.table = y₂.table := by
+  obtain ⟨⟨st₁, h₁, D₁, hD₁, hS₁, hg₁, hb₁, m₁, k₁, a₁, b₁, r₁, e₁, hs₁, hm₁, hp₁, w₁⟩, sch₁, t₁, hz₁, _, _, _, _, _, _⟩ :=
+    y₁
+  obtain ⟨⟨st₂, h₂, D₂, hD₂, hS₂, hg₂, hb₂, m₂, k₂, a₂, b₂, r₂, e₂, hs₂, hm₂, hp₂, w₂⟩, sch₂, t₂, hz₂, _, _, _, _, _, _⟩ :=
+    y₂
+  obtain rfl : st₁ = st₂ := Except.ok.inj (h₁.symm.trans h₂)
+  obtain ⟨rfl, rfl⟩ := Prod.ext_iff.1 (Except.ok.inj (hz₁.symm.trans hz₂))
+  rfl
+
+/-- The hidden-output `--zk` tables at a draw `verify --zk` sets up are its table. -/
+theorem tablesAtZKH_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
+    (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZKH I mPts S (dj S)) :
+    tablesAtZKH (Reg := Reg) dj y₀ S R = y.table := by
+  show tableAtZKH dj y₀ S = _
+  rw [tableAtZKH, dif_pos ⟨y⟩]
+  exact tableZKH_eq _ _
+
+/-- Table `j` of the hidden-output plan, at a draw at which `verify --zk` sets table `j` up, is its table. -/
+theorem planZHJ_get_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
+    (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (j : Fin (nTab I))
+    (y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :
+    (planZHJ (Reg := Reg) dj y₀ S R).get (Fin.cast (planZHJ_length dj y₀ S R).symm j) = y.table := by
+  simp only [planZHJ, List.get_ofFn, Fin.cast_cast, Fin.cast_eq_self]
+  rw [tableZHJ, dif_pos ⟨y⟩]
+  exact DrawSetupZHJ.table_eq _ _
+
 /-- **Zero knowledge at `J` `CoinedSetup`s, at `δ₁` per hidden leaf** (`ZkViewAt` at `J` tables): at any covered coin
 vector of each table, for any encoding `enc` of the joint view and any event `E`, the real joint view at valid witnesses
 `w j` whose registered values are the public ones and the simulators' at any `w0 j`, each table's prover randomness
@@ -46,6 +82,59 @@ def ZkViewAtJ {J : ℕ} (C : Fin J → CoinedSetup) (δ₁ : ℝ≥0∞) : Prop 
             E (enc fun j => ((C j).T (c j)).viewExe (w j) (p j).1 (p j).2))
           + ∑ j, 2 * Fintype.card ((C j).T (c j)).tab.Hid * δ₁
 
+section Nonempty
+
+variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] [AddCommGroup B] [AddCommGroup Salt] [AddCommGroup Hi]
+
+set_option synthInstance.maxHeartbeats 1000000 in
+theorem rand_nonempty (T : FlockSoundness.ZK.Table F K W Salt (B × Salt) D Hi VL) : Nonempty T.Rand := by
+  unfold FlockSoundness.ZK.Table.Rand; infer_instance
+
+set_option synthInstance.maxHeartbeats 1000000 in
+theorem simRand_nonempty (T : FlockSoundness.ZK.Table F K W Salt (B × Salt) D Hi VL) : Nonempty T.SimRand := by
+  unfold FlockSoundness.ZK.Table.SimRand; infer_instance
+
+end Nonempty
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 4000000 in
+/-- **Zero knowledge at `J` `CoinedSetup`s from their facts**: Lemma B (`table_shvzk_hm96`) at each table, their leaves'
+hiding `HashDerivedKey`'s, row (ii) `padOnto_M1`'s from `PadNonvanishing`, composed over the tables' independent
+randomness (`prCoin_pi_close`). -/
+theorem zkViewAtJ_of_ok {J : ℕ} (C : Fin J → CoinedSetup) (hC : ∀ j, CoinedOK execArith (fOf Zk.PAD_C) (C j))
+    (hKey : Assumptions.Zk.HashDerivedKeyHm96) (hPad : Assumptions.Zk.PadNonvanishing40) :
+    ZkViewAtJ C ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
+  intro c hc Out enc w w0 hv hreg E
+  have one : ∀ j (E' : ((C j).T (c j)).tab.View → Prop),
+      Game.prCoin (fun p : ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt) =>
+          E' (((C j).T (c j)).viewExe (w j) p.1 p.2))
+        ≤ Game.prCoin (fun p : ((C j).T (c j)).tab.SimRand × (((C j).T (c j)).tab.Hid → ZkView.Salt) =>
+            E' (((C j).T (c j)).simExe (w0 j) p.1 p.2)) + 2 * Fintype.card ((C j).T (c j)).tab.Hid * (2 : ℝ≥0∞) ^ (-193 : ℤ)
+      ∧ Game.prCoin (fun p : ((C j).T (c j)).tab.SimRand × (((C j).T (c j)).tab.Hid → ZkView.Salt) =>
+            E' (((C j).T (c j)).simExe (w0 j) p.1 p.2))
+        ≤ Game.prCoin (fun p : ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt) =>
+            E' (((C j).T (c j)).viewExe (w j) p.1 p.2)) + 2 * Fintype.card ((C j).T (c j)).tab.Hid * (2 : ℝ≥0∞) ^ (-193 : ℤ) := by
+    intro j E'
+    obtain ⟨hL, ht, hS, hT⟩ := hC j
+    obtain ⟨⟨hpos, hlt⟩, -, hrank, hGp, hW, hpads, hβ, hinner⟩ := hT (c j) (hc j)
+    have hpad : ((C j).T (c j)).tab.PadOnto :=
+      FlockSoundness.ZK.padOnto_M1 ((C j).T (c j)).tab execArith execArith_correct (C j).cols hL ht hS (fOf Zk.PAD_C)
+        ((C j).pos (c j)) hpos hlt hGp (hPad _ hL)
+    simp only [ZkView.Coined.viewExe_eq, ZkView.Coined.simExe_eq]
+    exact ((C j).T (c j)).tab.table_shvzk_hm96 ((C j).T (c j)).hm96 hKey hrank hpad hW hpads hβ (w j) (hreg j)
+      (hinner (w j) (hv j) (hreg j)) (w0 j) E'
+  have : Nonempty ZkView.Salt := ⟨0⟩
+  have : ∀ j, Nonempty (((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) :=
+    fun j => ⟨((rand_nonempty ((C j).T (c j)).tab).some, fun _ => 0)⟩
+  have : ∀ j, Nonempty (((C j).T (c j)).tab.SimRand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) :=
+    fun j => ⟨((simRand_nonempty ((C j).T (c j)).tab).some, fun _ => 0)⟩
+  exact ⟨FlockSoundness.ZK.prCoin_pi_close (Ω := fun j => ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) (Ω' := fun j => ((C j).T (c j)).tab.SimRand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) (V := fun j => ((C j).T (c j)).tab.View)
+      (fun j p => ((C j).T (c j)).viewExe (w j) p.1 p.2) (fun j p => ((C j).T (c j)).simExe (w0 j) p.1 p.2)
+      (fun j => 2 * Fintype.card ((C j).T (c j)).tab.Hid * (2 : ℝ≥0∞) ^ (-193 : ℤ)) (fun j E' => (one j E').1) fun v => E (enc v),
+    FlockSoundness.ZK.prCoin_pi_close (Ω := fun j => ((C j).T (c j)).tab.SimRand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) (Ω' := fun j => ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) (V := fun j => ((C j).T (c j)).tab.View)
+      (fun j p => ((C j).T (c j)).simExe (w0 j) p.1 p.2) (fun j p => ((C j).T (c j)).viewExe (w j) p.1 p.2)
+      (fun j => 2 * Fintype.card ((C j).T (c j)).tab.Hid * (2 : ℝ≥0∞) ^ (-193 : ℤ)) (fun j E' => (one j E').2) fun v => E (enc v)⟩
+
 /-- **One hidden-output `--zk` sampled session is zero knowledge, at the covered coin vectors** (`zk_session_view` under
 hidden outputs). -/
 theorem zk_session_viewH (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
@@ -53,8 +142,9 @@ theorem zk_session_viewH (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ 
     (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZKH I mPts S (dj S)), avoidsMask y.x.st = true)
     (hKey : Assumptions.Zk.HashDerivedKeyHm96) (hPad : Assumptions.Zk.PadNonvanishing40) :
     ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZKH I mPts S (dj S)),
-      ZkViewAt (coinedOf P (tablesAtZKH (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
-  sorry
+      ZkViewAt (coinedOf P (tablesAtZKH (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
+  fun S R y => zkViewAt_of_ok _ (coinedOf_setup_of P _ y.x.st y.x.wf.1 (by rw [tablesAtZKH_eq dj y₀ S R y]; rfl)
+    (maskSetup_of_setupHidden ((ZkExec.zkTags_typed I).trans ht) y.x.h) (hdm S y)).2.2.2.2.2 hKey hPad
 
 /-- **One hidden-output `--zk` sampled session of `J` tables is zero knowledge, at the covered coin vectors**: at every
 draw at which `verify --zk` sets every table up (`ys`), the joint view of `zk_session_soundHJ`'s plan `planZHJ`, table
@@ -67,8 +157,11 @@ theorem zk_session_viewHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀
     ∀ (S : Finset (Fin n)) (R : Reg)
       (ys : ∀ j : Fin (nTab I), DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
       ZkViewAtJ (fun j => coinedOf P ((planZHJ (Reg := Reg) dj y₀ S R).get
-        (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
-  sorry
+        (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
+  fun S R ys => zkViewAtJ_of_ok _ (fun j => (coinedOf_setup_of P _ (ys j).x.st (ys j).x.wf.1
+    (by rw [planZHJ_get_eq dj y₀ S R j (ys j)]; rfl)
+    (maskSetup_of_setupHidden ((tagsAt_typed _ _ _).trans ((ZkExec.zkTags_typed I).trans ht)) (ys j).x.h)
+    (hdm S j (ys j))).2.2.2.2.2) hKey hPad
 
 /-- **One hidden-output `--zk` sampled session of `J` tables, sound and zero knowledge**: `zk_session_soundHJ` and
 `zk_session_viewHJ` on the same plan `planZHJ dj y₀`. -/
@@ -119,7 +212,8 @@ theorem zk_session_composedHJ
     ∀ (S : Finset (Fin n)) (R : Reg)
       (ys : ∀ j : Fin (nTab I), DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
       ZkViewAtJ (fun j => coinedOf P ((planZHJ (Reg := Reg) dj y₀ S R).get
-        (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
-  sorry
+        (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
+  ⟨zk_session_soundHJ I ht dj y₀ wr dg N hc hU hpub hpt hscope kd hkd Lb src hA3 hDraw hTags hRec hk hRw hM hρ hr ht'
+      K₀ τ, zk_session_viewHJ P I dj y₀ ht hdm hKey hPad⟩
 
 end FlockSoundness.Discharge.ZkHidden
