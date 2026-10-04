@@ -30,12 +30,12 @@ dev = [
 [package.metadata]
 
 [package.metadata.requires-dev]
-dev = [{ name = "verity-sp1", editable = "verity/protocols/integrity/proofs/sp1" }]
+dev = [{ name = "verity-sp1", editable = "verity/accounting/integrity/proofs/sp1" }]
 
 [[package]]
 name = "verity-sp1"
 version = "0.0.0"
-source = { editable = "verity/protocols/integrity/proofs/sp1" }
+source = { editable = "verity/accounting/integrity/proofs/sp1" }
 dependencies = [
     { name = "tomli-w" },
     { name = "verity" },

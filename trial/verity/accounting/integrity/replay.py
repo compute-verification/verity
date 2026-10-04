@@ -16,8 +16,10 @@ import secrets
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from verity.accounting.integrity.profile import profile
+from verity.accounting.integrity.sampling import Draw, Subset
 from verity.primitives import partition as P
-from verity.primitives.circuit import Circuit, evaluate, trace
+from verity.primitives.circuit import Circuit, evaluate, transcript
 from verity.primitives.commitments import CommitmentScheme, MerkleSha256
 from verity.primitives.events import Actor, Send, collect, gather, receive
 from verity.primitives.randomness import derive
@@ -33,8 +35,6 @@ from verity.primitives.registration import (
     verify_opening,
     wires,
 )
-from verity.protocols.integrity.profile import IntegrityProfile
-from verity.protocols.integrity.sampling import Draw, Subset
 
 
 @dataclass(frozen=True)
@@ -72,7 +72,7 @@ class Replay:
         stream, n = digest(registration, executions), len(executions)
         refused = check(registration, executions, self.scheme)
         if refused:
-            return (Send(IntegrityProfile(stream, "execution", False, n, n, self.delta, refused)),)
+            return (Send(profile(stream, "execution", [0] * n, n, self.delta, refused)),)
 
         law = Subset(self.k)
         drawn = law.draw(derive(secret, "verity/integrity/replay/v1", stream), n)
@@ -89,8 +89,8 @@ class Replay:
             for i in drawn
             if not results.get(i)
         )
-        bound = law.bound(n, self.delta)
-        return (Send(IntegrityProfile(stream, "execution", not reasons, n, bound, self.delta, reasons)),)
+        sizes = [len(built(registration.builder, e.advice)[0].gates) for e in executions]
+        return (Send(profile(stream, "execution", sizes, law.bound(n, self.delta), self.delta, reasons)),)
 
     def replayer(self) -> Actor:
         got = yield from gather({ToReplay: "verifier", Inputs: "prover"})
@@ -109,7 +109,7 @@ class Replay:
         opened = {}
         for i in draw.units:
             circuit, partition = built(registration.builder, executions[i].advice)
-            values = trace(circuit, inputs[i])
+            values = transcript(circuit, inputs[i])
             opened[i] = open_wires(self.scheme, circuit, partition, values, _io(circuit, partition))
         return (Send(Inputs(opened), "replayer"),)
 

@@ -1,8 +1,10 @@
-"""Proof of useful space: a timed audit that the prover still holds an encoding of its data. Answering a random block
-within the deadline needs the block itself, since rebuilding it takes longer.
+"""Space: a lower bound on the memory the prover held when challenged, by a timed audit that it still holds an encoding
+of its data. Answering a random block within the deadline needs the block at hand, since rebuilding it takes longer;
+so the clock must be near the memory, and the challenge comes from the verifier's hardware at the site. One audit
+bounds one instant.
 
     verifier    draws block indices from its secret, checks the answer and its time, and records the bound
-    pinger      at the site: challenges the prover, and reports the answer and how long it took (its clock's reading)
+    pinger      at the site: challenges the prover, and reports the answer and the seconds it took (its clock's reading)
     prover      answers from the encoding it holds
 
 Stands in for `verity_pous`: here a block is a hash of the public seed and its index (`encode`), so rebuilding it is
@@ -39,7 +41,7 @@ class Timed:
     """Pinger to verifier: the prover's answer, and the seconds between challenge and answer."""
 
     blocks: tuple[bytes, ...]
-    elapsed: float
+    seconds: float
 
 
 @dataclass(frozen=True)
@@ -54,7 +56,7 @@ class SpaceBound:
 
 
 @dataclass(frozen=True)
-class Pous:
+class Space:
     seed: bytes
     blocks: int
     k: int  # blocks challenged
@@ -65,19 +67,19 @@ class Pous:
     def verifier(self) -> Actor:
         secret = secrets.token_bytes(32)
         indices = tuple(
-            int.from_bytes(derive(secret, "verity/pous/v0", str(j)), "big") % self.blocks for j in range(self.k)
+            int.from_bytes(derive(secret, "verity/space/v0", str(j)), "big") % self.blocks for j in range(self.k)
         )
         timed = yield from receive(Timed, "pinger", Send(Challenge(indices), "pinger"))
         expected = encode(self.seed, self.blocks)
         reasons = (("wrong blocks",) if timed.blocks != tuple(expected[i] for i in indices) else ()) + (
-            (f"answered in {timed.elapsed}s, over the deadline",) if timed.elapsed > self.deadline else ()
+            (f"answered in {timed.seconds}s, over the deadline",) if timed.seconds > self.deadline else ()
         )
         return (Send(SpaceBound(self.blocks * len(expected[0]), self.rho, self.delta, not reasons, reasons)),)
 
-    def pinger(self, elapsed: float) -> Actor:
+    def pinger(self, seconds: float) -> Actor:
         challenge = yield from receive(Challenge, "verifier")
         answer = yield from receive(Answer, "prover", Send(challenge, "prover"))
-        return (Send(Timed(answer.blocks, elapsed), "verifier"),)
+        return (Send(Timed(answer.blocks, seconds), "verifier"),)
 
     def prover(self, encoding: Sequence[bytes]) -> Actor:
         challenge = yield from receive(Challenge, "pinger")

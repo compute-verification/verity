@@ -9,13 +9,13 @@ prove them, with the transparent proof system or SP1.
 
 import sys
 
-from common import Batched, load, schedule, show
+from common import Batched, executed, load, schedule, show
 
+from verity.accounting.integrity.proofs.construction import Proofs
+from verity.accounting.integrity.proofs.transparent import Transparent
+from verity.accounting.integrity.replay import Replay
 from verity.primitives import partition as P
-from verity.primitives.registration import Registration, execute, serve
-from verity.protocols.integrity.proofs.construction import Proofs
-from verity.protocols.integrity.proofs.transparent import Transparent
-from verity.protocols.integrity.replay import Replay
+from verity.primitives.registration import serve
 from verity.run import run
 
 circuit_name, construction = (sys.argv[1:] + ["f32_add", "replay"][len(sys.argv) - 1 :])[:2]
@@ -27,17 +27,15 @@ if construction == "replay":
     others = {"replayer": [integrity.replayer()]}
 else:
     if construction == "sp1":
-        from verity.protocols.integrity.proofs.sp1.sp1 import Sp1 as system
+        from verity.accounting.integrity.proofs.sp1.sp1 import Sp1 as system
     else:
         system = Transparent
     integrity, others = Proofs(k=64, max_width=16, delta=0.01, system=system()), {}
 
-steps = schedule(requests, (3, 1, 4), builder)
-registration = Registration(builder)
-executions = [execute(builder, advice, inputs, integrity.scheme) for advice, inputs in steps]
+registration, executions, inputs = executed(builder, schedule(requests, (3, 1, 4), builder), integrity.scheme)
 principals = {
     "verifier": [integrity.verifier()],
-    "prover": [serve(registration, executions), integrity.prover(registration, executions, [x for _, x in steps])],
+    "prover": [serve(registration, executions), integrity.prover(registration, executions, inputs)],
     **others,
 }
 for event in run(principals, view="verifier"):

@@ -14,8 +14,11 @@ import secrets
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from verity.accounting.integrity.profile import profile
+from verity.accounting.integrity.proofs.system import ProofSystem, Unit
+from verity.accounting.integrity.sampling import Draw, Subset
 from verity.primitives import partition as P
-from verity.primitives.circuit import trace
+from verity.primitives.circuit import transcript
 from verity.primitives.commitments import CommitmentScheme, MerkleSha256
 from verity.primitives.events import Actor, Send, collect, receive
 from verity.primitives.randomness import derive
@@ -27,9 +30,6 @@ from verity.primitives.registration import (
     check,
     digest,
 )
-from verity.protocols.integrity.profile import IntegrityProfile
-from verity.protocols.integrity.proofs.system import ProofSystem, Unit
-from verity.protocols.integrity.sampling import Draw, Subset
 
 
 @dataclass(frozen=True)
@@ -61,7 +61,7 @@ class Proofs:
         )
         n = len(units)
         if refused:
-            return (Send(IntegrityProfile(stream, "region", False, n, n, self.delta, refused)),)
+            return (Send(profile(stream, "region", [0] * n, n, self.delta, refused)),)
 
         law = Subset(self.k)
         drawn = law.draw(derive(secret, "verity/integrity/proofs/v1", stream), n)
@@ -77,9 +77,8 @@ class Proofs:
             proved = yield from receive(Proved, "prover")
 
         reasons = tuple(f"region {u}: does not verify" for u in drawn if not results[u])
-        return (
-            Send(IntegrityProfile(stream, "region", not reasons, n, law.bound(n, self.delta), self.delta, reasons)),
-        )
+        sizes = [len(u.gates) for u in units]
+        return (Send(profile(stream, "region", sizes, law.bound(n, self.delta), self.delta, reasons)),)
 
     def prover(
         self, registration: Registration, executions: Sequence[Execution], inputs: Sequence[tuple[int, ...]]
@@ -87,7 +86,7 @@ class Proofs:
         draw = yield from receive(Draw, "verifier")
         units = _units(registration, executions)
         drawn = [units[u] for u in draw.units]
-        values = [trace(unit.circuit, inputs[i]) for i, unit in drawn]
+        values = [transcript(unit.circuit, inputs[i]) for i, unit in drawn]
         return (Send(Proved(draw.units, self.system.prove(self.scheme, [u for _, u in drawn], values)), "verifier"),)
 
 

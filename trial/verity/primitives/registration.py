@@ -1,4 +1,4 @@
-"""The registration and the stream: what every protocol over the prover's work reads.
+"""The registration and the stream: what everything over the prover's work reads.
 
 Before any coins, the prover registers its builder: the program that builds each execution's circuit and partition from
 that execution's advice. Advice is a bitstring of at most `advice_bits`, the prover's record of the runtime choices no
@@ -9,8 +9,9 @@ registering the builder registers the baseline.
 Then the prover streams its executions as it runs them, and closes the stream: one epoch. Per execution: its advice,
 and one root over the value of every boundary wire of the partition the builder gave it (one leaf per wire, in wire
 order). The verifier rebuilds each execution's circuit from its advice: integrity opens and proves against the roots,
-PoUW keys each execution's work from its salt and the root, and NCI checks the partitions as isolation units. Today's
-reference for the commitment: `verity_sampled_proofs.one_stage.registration`.
+work keys each execution's work from its salt and root, and NCI checks the partitions as isolation units. Every
+statement over the stream names its digest. Today's reference for the commitment:
+`verity_sampled_proofs.one_stage.registration`.
 
 The builder here is Python, which prover and verifier both run, standing in for a provable program (Rust under SP1, say)
 whose id is its program's; the verifier's rerun stands in for checking a proof that the circuit is its output.
@@ -28,7 +29,7 @@ from dataclasses import asdict, dataclass
 from typing import Protocol
 
 from verity.primitives import partition as P
-from verity.primitives.circuit import Circuit, trace
+from verity.primitives.circuit import Circuit, transcript
 from verity.primitives.commitments import Commitment, CommitmentScheme
 from verity.primitives.events import Actor, Send, receive
 
@@ -87,14 +88,14 @@ def leaf(wire: int, value: int) -> bytes:
 
 
 def execute(builder: Builder, advice: str, inputs: tuple[int, ...], scheme: CommitmentScheme) -> Execution:
-    """Run one execution and commit to its boundary values; the trace is not kept."""
+    """Run one execution and commit to its boundary values; the transcript is not kept."""
     circuit, partition = built(builder, advice)
-    return Execution(advice, scheme.commit(_leaves(circuit, partition, trace(circuit, inputs))))
+    return Execution(advice, scheme.commit(_leaves(circuit, partition, transcript(circuit, inputs))))
 
 
 def serve(registration: Registration, executions: Sequence[Execution], after: type | None = None) -> Actor:
     """The prover's stream: the registration, then each execution and the close, once `after` comes from the verifier
-    (a coin the executions must follow, such as PoUW's salt)."""
+    (a coin the executions must follow, such as work's salt)."""
     first = (Send(registration, "verifier"),)
     if after is not None:
         yield from receive(after, "verifier", *first)

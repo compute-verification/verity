@@ -1,5 +1,6 @@
-"""Sampling: which units are drawn, and what passing every drawn check establishes. Today's references: `verity_sampled_proofs.one_stage.draw` (the laws, and
-`subset`/`stratified`/`work`) and `verity.proofs.profile` (`IntegrityProfile.accept` and `bound`).
+"""Sampling: which units are drawn, and what passing every drawn check establishes. Today's references:
+`verity_sampled_proofs.one_stage.draw` (the laws, and `subset`/`stratified`/`work`) and `verity.proofs.profile`
+(`IntegrityProfile.accept` and `bound`).
 
 `Subset(k)`: k distinct units, uniform over the n registered. A transcript with m wrong units passes every drawn check
 with probability C(n - m, k) / C(n, k); so, except with probability δ, an accepted transcript has at most `bound` wrong.
@@ -37,7 +38,8 @@ class Subset:
         return m
 
     def draw(self, coins: bytes, n: int) -> tuple[int, ...]:
-        """min(k, n) distinct units, exactly uniform: counter-mode SHA-256 with rejection (`verity.randomness.subset`)."""
+        """min(k, n) distinct units, exactly uniform: counter-mode SHA-256 with rejection
+        (`verity.randomness.subset`)."""
         chosen: list[int] = []
         limit = (2**256 // n) * n if n else 0
         counter = 0

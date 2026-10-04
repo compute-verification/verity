@@ -10,10 +10,10 @@ from dataclasses import dataclass
 
 import tomli_w  # the heavy dependency
 
+from verity.accounting.integrity.proofs import transparent
+from verity.accounting.integrity.proofs.system import ProofSystem, Unit
 from verity.primitives.commitments import CommitmentScheme
 from verity.primitives.registration import Opening
-from verity.protocols.integrity.proofs import transparent
-from verity.protocols.integrity.proofs.system import ProofSystem, Unit
 
 
 @dataclass(frozen=True)

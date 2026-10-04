@@ -1,8 +1,15 @@
-"""Proof of useful work: one salt from the verifier, drawn after the registration and before the stream, keys the work
-of every execution the prover streams, however many there turn out to be and whatever their advice.
+"""Work: a lower bound on the compute the prover spent between a salt and a clock's reading. One salt, drawn after the
+registration and before the stream, keys the work of every execution the prover streams, however many there turn out
+to be and whatever their advice.
 
-    verifier    takes the registration, sends a salt drawn from its secret, takes the stream, and bounds the work
+    verifier    takes the registration, sends a salt drawn from its secret, takes the stream, the shares, and the
+                seconds `clock_from`'s clock read between the salt and the shares; records the bound
     prover      once it has the salt, searches each execution's work for shares under that execution's key
+    clock       the reading, by whoever the verifier trusts for it: itself (remote) or a pinger at the site (onsite)
+
+Useful work keys the prover's own declared computation; proof of work would key filler the verifier chose. Both bound
+the same thing, compute busy after the salt and done when the clock was read; usefulness decides only whether the
+compute that work covers was also the declared computation, which is integrity's to say.
 
 Execution i's key is a hash of the salt, i and its root: fixed once the execution is, so nothing about the stream need
 be known when the salt is drawn. What must be fixed before the salt is what the work is reused across: the builder and
@@ -19,11 +26,12 @@ advice adds is keyed like any other. Here a share is a nonce whose hash with its
 from __future__ import annotations
 
 import hashlib
+import math
 import secrets
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from verity.primitives.events import Actor, Send, collect, receive
+from verity.primitives.events import Actor, Send, collect, gather, receive, tell
 from verity.primitives.randomness import derive
 from verity.primitives.registration import (
     Closed,
@@ -45,29 +53,39 @@ class Shares:
 
 
 @dataclass(frozen=True)
-class UsefulWork:
-    """About `work` tries went into the stream's keyed work, except with probability `delta`."""
+class Elapsed:
+    seconds: float
 
-    registration: str  # the stream's digest
+
+@dataclass(frozen=True)
+class WorkBound:
+    """At least `work` tries went into the stream's keyed work in the `seconds` between the salt and the shares, by
+    `clock_from`'s clock; except with probability `delta`."""
+
+    stream: str
     work: int
+    seconds: float
+    clock_from: str
     delta: float
 
 
 @dataclass(frozen=True)
-class Pouw:
+class Work:
     difficulty: int  # leading zero bits a share's hash needs
     delta: float
 
-    def verifier(self) -> Actor:
+    def verifier(self, clock_from: str) -> Actor:
         secret = secrets.token_bytes(32)
         registration = yield from receive(Registration, "prover")
-        salt = derive(secret, "verity/pouw/salt/v0", digest(registration))
+        salt = derive(secret, "verity/work/salt/v0", digest(registration))
         executions = yield from collect(Execution, Closed, "prover", Send(Salt(salt), "prover"))
-        shares = (yield from receive(Shares, "prover")).nonces
+        got = yield from gather({Shares: "prover", Elapsed: clock_from})
+        shares, seconds = got[Shares].nonces, got[Elapsed].seconds
         valid = sum(
             len({n for n in shares.get(i, ()) if self._share(_key(salt, i, e), n)}) for i, e in enumerate(executions)
         )
-        return (Send(UsefulWork(digest(registration, executions), valid << self.difficulty, self.delta)),)
+        bound = WorkBound(digest(registration, executions), self._tries(valid), seconds, clock_from, self.delta)
+        return (Send(bound),)
 
     def prover(self, registration: Registration, executions: Sequence[Execution]) -> Actor:
         salt = (yield from receive(Salt, "verifier")).salt
@@ -77,10 +95,22 @@ class Pouw:
             nonces[i] = tuple(n for n in range(tries) if self._share(key, n))
         return (Send(Shares(nonces), "verifier"),)
 
+    def clock(self, seconds: float) -> Actor:
+        return tell(Send(Elapsed(seconds), "verifier"))
+
     def _share(self, key: bytes, nonce: int) -> bool:
         h = hashlib.sha256(key + nonce.to_bytes(8, "big")).digest()
         return int.from_bytes(h, "big") >> (256 - self.difficulty) == 0
 
+    def _tries(self, shares: int) -> int:
+        """The fewest tries that find `shares` shares with probability above `delta`. Each try is a share with
+        probability p = 2**-difficulty, so by Bernstein's inequality fewer tries, with mean shares m, find
+        m + t with probability at most exp(-t**2 / (2 * (m + t / 3))); this solves for that equal to `delta` at
+        m + t = shares."""
+        log = math.log(1 / self.delta)
+        t = (math.sqrt(16 * log**2 / 9 + 8 * log * shares) - 4 * log / 3) / 2
+        return max(0, int((shares - t) * 2**self.difficulty))
+
 
 def _key(salt: bytes, i: int, execution: Execution) -> bytes:
-    return hashlib.sha256(b"verity/pouw/key/v0\0" + salt + i.to_bytes(8, "big") + execution.root.root).digest()
+    return hashlib.sha256(b"verity/work/key/v0\0" + salt + i.to_bytes(8, "big") + execution.root.root).digest()

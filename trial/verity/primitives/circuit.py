@@ -1,8 +1,9 @@
-"""Circuits: build, name, evaluate and trace them.
+"""Circuits: build, name and evaluate them, and give their transcripts (every wire's value).
 
 What a circuit is and what it computes is stated in `Circuit.lean`, beside this file; this implements it and is held
-to it by conformance vectors. A toy of descriptor v1: one flat list of two-input gates. Word gates (`add`, `mul`) act on wires mod 2**32; the Boolean profile's gates (`and`,
-`xor`, `not`, which ignores its second operand) on bits, as `verity.ir.boolean` does.
+to it by conformance vectors. A toy of descriptor v1: one flat list of two-input gates. Word gates (`add`, `mul`) act
+on wires mod 2**32; the Boolean profile's gates (`and`, `xor`, `not`, which ignores its second operand) on bits, as
+`verity.ir.boolean` does.
 """
 
 from __future__ import annotations
@@ -48,8 +49,8 @@ class Circuit:
         return cls(int(obj["inputs"]), gates, tuple(obj["outputs"]), tuple(obj.get("constants", ())))
 
 
-def trace(circuit: Circuit, inputs: tuple[int, ...]) -> tuple[int, ...]:
-    """Every wire's value, from the inputs after the baseline: the replay's witness."""
+def transcript(circuit: Circuit, inputs: tuple[int, ...]) -> tuple[int, ...]:
+    """Every wire's value, from the inputs after the baseline."""
     wires = [*circuit.baseline, *inputs]
     for op, a, b in circuit.gates:
         wires.append(OPS[op](wires[a], wires[b]))
@@ -57,5 +58,5 @@ def trace(circuit: Circuit, inputs: tuple[int, ...]) -> tuple[int, ...]:
 
 
 def evaluate(circuit: Circuit, inputs: tuple[int, ...]) -> tuple[int, ...]:
-    wires = trace(circuit, inputs)
+    wires = transcript(circuit, inputs)
     return tuple(wires[o] for o in circuit.outputs)

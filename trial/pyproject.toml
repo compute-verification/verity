@@ -1,7 +1,7 @@
 [project]
 name = "verity"
 version = "0.0.0"
-description = "The protocols, their primitives and the runner."
+description = "Accounting, compliance, the products that compose them, their primitives and the runner."
 requires-python = ">=3.12"
 dependencies = []
 
@@ -17,7 +17,7 @@ packages = ["verity"]
 exclude = ["**/*.lean", "**/.lake", "**/pyproject.toml"]
 
 [tool.uv.workspace]
-members = ["verity/protocols/integrity/proofs/sp1"]
+members = ["verity/accounting/integrity/proofs/sp1"]
 
 [tool.uv.sources]
 verity = { workspace = true }

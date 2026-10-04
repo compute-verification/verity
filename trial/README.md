@@ -1,7 +1,7 @@
 # Layout trial
 
-A toy of the proposed layout: every protocol's interface, remote and onsite Verity end to end on a real circuit, with
-integrity implemented and the other protocols standing in for theirs:
+A toy of the proposed layout: remote and onsite Verity end to end on real circuits, with integrity implemented and
+the rest standing in for the main repository's protocols:
 
 ~~~bash
 uv sync
@@ -22,35 +22,56 @@ plays them against each other and yields one principal's view. The auditor trust
 is the output: what its actors establish are records in it. Replayers, wardens and pingers are trusted too but sealed:
 what they see stays their own, and reaches the verifier only as what they send it.
 
-Every protocol over the prover's work reads one stream (`verity.primitives.registration`). First, before any coins,
-the registration: the prover's builder, the program that builds each execution's circuit and partition from a bounded
+Everything over the prover's work reads one stream (`verity.primitives.registration`). First, before any coins, the
+registration: the prover's builder, the program that builds each execution's circuit and partition from a bounded
 bitstring of advice (the runtime choices no one could fix ahead of time: how requests were batched, a preemption, an
 autotune pick), holding the baseline (weights, constants) as every circuit's first inputs. Then per execution its advice
 and a root over the boundary wires of its partition, until the prover closes the stream: one epoch. The verifier
-rebuilds each execution's circuit from its advice. Integrity opens and proves against the roots, PoUW keys each
-execution's work from one salt drawn before the stream, and NCI checks the partitions and the epoch's advice; every
-statement names the stream's digest.
+rebuilds each execution's circuit from its advice. Every statement over the stream names its digest.
+
+What the verifier establishes splits in two. **Accounting** says what happened, in three families, each reading the
+ones before it:
+- **integrity**: the executions are what their circuits compute, up to a bound on wrong units;
+- **utilization**: at least so much compute (work, keyed by a salt) and memory (space, a timed audit of an encoding)
+  was used between a challenge and a clock's reading;
+- **coverage**: of each resource's capacity (from an inventory of devices and the census's facts per device, or from
+  what the warden saw leave), how much the other two account for, and the headroom left, where anything else could
+  have run.
+
+**Compliance** says whether that was allowed: a policy's parameters are its limits, and its statement says whether the
+epoch kept to them. NCI is the first; its limits include how much headroom it tolerates, since whatever ran in the
+headroom went unchecked.
+
+The two products, `remote` and `onsite`, run the same accounting and policies, and differ in who reports each
+reading. Remotely the verifier has nothing at the site: its own clock times the work, and the prover declares its
+inventory, so remote shows that the declared fleet was busy with declared work and never that there was no other.
+Onsite the verifier's hardware counts the fleet, times work and memory challenges, replays executions and watches the
+links, so it also bounds memory and network, and its inventory is a measurement.
 
 A construction is a frozen dataclass of its parameters, with a method per principal it involves that returns that
-principal's actor (`Replay(k, delta).verifier()`). A trusted principal's method takes its readings (`pinger(elapsed)`).
-Choosing a construction is choosing a value. A composite is a construction whose fields are constructions: its methods
-return the lists of its parts' actors, and its guarantee is proved from theirs. Actors have no names and are not wired:
-anyone can send to anyone, so an actor waits for each kind of event only from the principal it trusts for it
-(`receive(kind, sender)`, `gather`, `collect`), and an event keeps in its mailbox until it waits for it. Nothing
-orchestrates the actors: each moves when an event it waits for reaches it, so each protocol keeps its own cadence over
-the log. Order in the log is logical; physical time enters only as trusted
-readouts in what a trusted principal sends.
+principal's actor (`Replay(k, delta).verifier()`). A trusted principal's method takes its readings
+(`pinger(fleet, work_seconds, space_seconds)`), and an actor that reads one takes the principal it trusts for it
+(`Work.verifier(clock_from)`). Choosing a construction is choosing a value. A product is a construction whose fields
+are constructions: its methods return the lists of its parts' actors, and its guarantee is proved from theirs. Actors
+have no names and are not wired: anyone can send to anyone, so an actor waits for each kind of event only from the
+principal it trusts for it (`receive(kind, sender)`, `gather`, `collect`), and an event keeps in its mailbox until it
+waits for it. Nothing orchestrates the actors: each moves when an event it waits for reaches it, so each keeps its own
+cadence over the log. Order in the log is logical; physical time enters only as trusted readouts in what a trusted
+principal sends.
 
 ## Layers
 
 Imports point down only, in Python and in Lean:
 
 ~~~text
-verity/run.py          the runner
-verity/protocols       flat; each establishes its own statement, from the prover (integrity) or from other protocols'
-                       statements and physical facts (accounting, policy); imports another only for the events it
-                       reads, or to compose it (remote, onsite)
-verity/primitives      events, circuits and partitions, commitments, randomness
+verity/run.py              the runner
+verity/remote.py, onsite.py   the products: who reports each reading, and which policies judge the account
+verity/compliance          whether it was allowed: a module per policy (nci)
+verity/accounting          what happened, each family reading the ones below it:
+    coverage               the headroom per resource (compute, memory, network), from the inventory and the warden
+    utilization            work and space used between a challenge and a clock's reading
+    integrity              whether the executions are what their circuits compute (replay, proofs)
+verity/primitives          events, circuits and partitions, commitments, randomness, the registration
 ~~~
 
 `examples/` sit on top. An integration (vLLM) is a prover.

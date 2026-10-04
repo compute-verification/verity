@@ -15,7 +15,15 @@ from pathlib import Path
 
 from verity.primitives import partition as P
 from verity.primitives.circuit import Circuit, evaluate
+from verity.primitives.commitments import CommitmentScheme
 from verity.primitives.events import Event
+from verity.primitives.registration import (
+    Builder,
+    Execution,
+    Registration,
+    built,
+    execute,
+)
 
 
 def load(name: str) -> tuple[Circuit, list[tuple[int, ...]]]:
@@ -81,6 +89,19 @@ def schedule(
         steps.append((format(n - 1, f"0{builder.advice_bits}b"), sum(requests[start : start + n], ())))
         start += n
     return steps
+
+
+def executed(
+    builder: Builder, steps: Sequence[tuple[str, tuple[int, ...]]], scheme: CommitmentScheme
+) -> tuple[Registration, list[Execution], list[tuple[int, ...]]]:
+    """What the prover's runtime leaves: its registration, each step run and committed, and the inputs it keeps."""
+    executions = [execute(builder, advice, inputs, scheme) for advice, inputs in steps]
+    return Registration(builder), executions, [inputs for _, inputs in steps]
+
+
+def tries(registration: Registration, executions: Sequence[Execution]) -> int:
+    """The work the stream holds: one try per gate per execution."""
+    return sum(len(built(registration.builder, e.advice)[0].gates) for e in executions)
 
 
 def show(event: Event) -> None:

@@ -6,10 +6,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from verity.accounting.integrity.proofs.system import ProofSystem, Unit
 from verity.primitives import partition as P
 from verity.primitives.commitments import CommitmentScheme
 from verity.primitives.registration import Opening, open_wires, verify_opening
-from verity.protocols.integrity.proofs.system import ProofSystem, Unit
 
 
 @dataclass(frozen=True)
