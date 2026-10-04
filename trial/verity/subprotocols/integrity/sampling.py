@@ -1,4 +1,4 @@
-"""The draw's law and what it establishes. Today's references: `verity_sampled_proofs.one_stage.draw` (the laws, and
+"""Sampling: which units are drawn, and what passing every drawn check establishes. Today's references: `verity_sampled_proofs.one_stage.draw` (the laws, and
 `subset`/`stratified`/`work`) and `verity.proofs.profile` (`IntegrityProfile.accept` and `bound`).
 
 `Subset(k)`: k distinct units, uniform over the n registered. A transcript with m wrong units passes every drawn check
@@ -11,6 +11,13 @@ import hashlib
 from dataclasses import dataclass
 from fractions import Fraction
 from math import comb
+
+
+@dataclass(frozen=True)
+class Draw:
+    """Verifier to prover: the units it must have checked, numbered at the construction's scale."""
+
+    units: tuple[int, ...]
 
 
 @dataclass(frozen=True)

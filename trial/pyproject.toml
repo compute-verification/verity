@@ -17,7 +17,7 @@ packages = ["verity"]
 exclude = ["**/*.lean", "**/.lake", "**/pyproject.toml"]
 
 [tool.uv.workspace]
-members = ["verity/subprotocols/verification/proofs/sp1"]
+members = ["verity/subprotocols/integrity/proofs/sp1"]
 
 [tool.uv.sources]
 verity = { workspace = true }
