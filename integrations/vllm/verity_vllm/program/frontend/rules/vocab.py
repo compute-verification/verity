@@ -316,7 +316,6 @@ def _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP):
 # this head dim, D54/D57). Used by the export-of-the-real-vLLM-class frontend (`rules/vllm_bindings.py`). ---------------------------
 _PAD_KINDS = {k: PROFILE_B1_EAGER_V2.kinds[k] for k in ("const", "i32_eq", "bit_not", "bit_and", "select_i32", "select_bf16")}
 _PAD_NOTES = {k: PROFILE_B1_EAGER_V2.notes[k] for k in _PAD_KINDS}
-_FP8_SCALE = {"per-coordinate": _fp8.ScaledMmFp8Block, "shared-per-block": _fp8.SHARED_SCALE[_fp8.ScaledMmFp8Block.id]}
 
 PROFILE_B1_EAGER_V3 = Vocabulary(
     "b1-eager-v3", "profile", "b1-eager-v3",
@@ -384,9 +383,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # [R15 fp8] the block-scaled FP8 linear of a pre-quantised checkpoint on Hopper (registry.fp8, pinned bit-exact on the H100 against
            # _C.per_token_group_fp8_quant and the blockwise _C.cutlass_scaled_mm): the dynamic per-128-group activation quant (both outputs
            # computed) and the scaled GEMM over e4m3 weights with f32 128x128 block scales as Inputs. `rules/vllm_bindings.py` asks for them.
-           # SCALE is `TargetProfile.effective_fp8_scale_construction()`.
+           # SCALE is `TargetProfile.effective_fp8_scale_construction()`; FP8_DOT, given on a target whose blockwise step is not Hopper's
+           # (`registry.targets.fp8_block_dot`), binds the version 3 forms over it (the role and its note stay as they were).
            "fp8_group_quant": lambda K, G: ir_bind(_fp8.Fp8GroupQuant, K=K, G=G),
-           "scaled_mm_fp8_block": lambda K, N, G, SCALE: ir_bind(_FP8_SCALE[SCALE], K=K, N=N, G=G),
+           "scaled_mm_fp8_block": lambda K, N, G, SCALE, FP8_DOT=None: _fp8.block_gemm(K, N, G, SCALE, FP8_DOT),
            # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
            # (quarantine lane cov-ln, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
            "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS),

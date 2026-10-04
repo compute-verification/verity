@@ -66,14 +66,14 @@ class Refused(Exception):
 
 
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-    r = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, env=git_env())
+    r = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, errors="surrogateescape", env=git_env())
     if check and r.returncode:
         raise Refused(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()}")
     return r
 
 
 #: result kinds that pass no merge gate, whatever `--tool` recorded them and whatever its declaration says it produces:
-#: `lean-fast/v1` is the Lean fast path's (`tools/check/lean_changed.py --records`), an audit without the kernel replay,
+#: `lean-fast/v1` is the Lean fast path's (`tools/lean/lean_changed.py --records`), an audit without the kernel replay,
 #: which every merge check keeps
 REFUSED_KINDS = frozenset({"lean-fast/v1"})
 #: what `check.py --record --on` puts before the declared command (its `slot_wrap`): one of the machine's check slots, then
@@ -407,7 +407,7 @@ def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, l
     rules = getattr(declaration(repo, tool), "merge_requires", None)
     if not rules:
         return {}
-    changed = [p for p in _git(repo, "diff", "--name-only", base, commit).stdout.splitlines() if p]
+    changed = [p for p in _git(repo, "diff", "--no-renames", "--name-only", "-z", base, commit).stdout.split("\0") if p]   # a rename's source too
     out = {}
     for step, rule in rules.items():
         if hit := rule_touches(rule, changed):
@@ -540,7 +540,7 @@ def _strict_json(text: str) -> bool:
 
 
 def broken_json(tree: Path, theirs: str) -> list[str]:
-    """The JSON files whose text the merge at ``tree``'s HEAD merged (both sides changed them, as two PRs' pins change one
+    """The JSON files whose text the merge at ``tree``'s HEAD merged (both sides changed them, as two PRs' guarantees change one
     `lean-audit.json`) and that don't parse (`_strict_json`) though both sides' did."""
     mb = _git(tree, "merge-base", "HEAD^1", theirs).stdout.strip()
     changed = [set(_git(tree, "diff", "--name-only", "-z", mb, rev).stdout.split("\0")) for rev in ("HEAD^1", theirs)]
@@ -598,8 +598,8 @@ def _chain(tree: Path, pins: list[tuple[str, str]], stamp: str) -> list[str]:
 
 #: the grants of `research queue`'s rules (role: what it attests) a train's pull request must hold at its pinned head before its
 #: check is spent; the lander applies the rules' other grants by hand
-TRAIN_GRANTS = {"statement-reviewer": "a named reviewer read what `tools/lean/audit.py --update` prints for its changed pins and "
-                                      "the definitions they read (lane contract §5)"}
+TRAIN_GRANTS = {"statement-reviewer": "a named reviewer read what `tools/lean/audit.py --update` prints for its changed guarantees "
+                                      "and the definitions they read (lane contract §5)"}
 
 
 def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=print) -> list[str]:

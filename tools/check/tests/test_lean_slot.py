@@ -266,7 +266,7 @@ def test_check_s_lean_audit_takes_a_slot_only_when_it_will_audit_a_package(tmp_p
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path))
     (tmp_path / "lean-audit").mkdir()
     (tmp_path / "lean-audit" / "kp.json").write_text("{}")
-    cmd = [sys.executable, "tools/check/lean_audit.py", "--out", "o"]
+    cmd = [sys.executable, "tools/lean/lean_audit.py", "--out", "o"]
     assert check.lean_slot(cmd)[:len(check.LEAN_SLOT_WRAP)] == check.LEAN_SLOT_WRAP           # q misses
     assert check.LEAN_SLOT_WRAP[1].endswith("tools/check/lean_slot.py") and check.LEAN_SLOT_WRAP[2:4] == ["--pool", "check"]
     (tmp_path / "lean-audit" / "kq.json").write_text("{}")

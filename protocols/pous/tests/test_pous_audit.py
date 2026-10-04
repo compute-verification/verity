@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import itertools
 import random
 
 import pytest
@@ -110,8 +111,8 @@ def test_timed_verifier(world):
     _, _, enc, vk = world
     key = challenge_key(b"audit", vk)
     responder = HonestResponder(enc, tree(enc))
-    assert run_timed(TimedVerifier(vk, key, k=30), responder.block).accepted
-    assert run_timed(TimedVerifier(vk, key, k=30, root_only=True), responder.block, responder.path).accepted
+    assert run_timed(TimedVerifier(vk, key, k=30, clock=itertools.count(0, 1000).__next__), responder.block).accepted
+    assert run_timed(TimedVerifier(vk, key, k=30, root_only=True, clock=itertools.count(0, 1000).__next__), responder.block, responder.path).accepted
 
     assert DEADLINE_NS == 500_000
     clock = FakeClock()

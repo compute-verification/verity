@@ -575,19 +575,67 @@ def test_what_a_child_or_a_fork_reads_joins_the_module_s_reads(tmp_path):
     assert "tests/test_uses.py::test_uses" in reused and not [n for n in reused if n.startswith(("tests/test_child.py", "tests/test_heavy.py"))]
 
 
-def test_what_a_child_reads_outside_the_inputs_keeps_its_module_out_of_the_per_test_cache(tmp_path):
+def _elsewhere(root: Path) -> str:
+    """A repository file outside `pkg`'s inputs, as a test module's expression for its path."""
+    (root / "elsewhere").mkdir()
+    (root / "elsewhere" / "data.txt").write_text("not an input of pkg\n")
+    return "os.path.join(os.path.dirname(__file__), '..', '..', 'elsewhere', 'data.txt')"
+
+
+def test_what_a_child_reads_outside_the_inputs_fails_the_suite_and_names_the_test(tmp_path):
+    """A child's read outside the inputs is its test's own: the suite fails and keeps no pass, as for the test's own read, until
+    the file is declared. The other modules' per-test passes are kept, so the next run re-runs that module alone."""
+    import json
+
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
     _per_test_workspace(root)
     (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
-    (root / "elsewhere").mkdir()
-    (root / "elsewhere" / "data.txt").write_text("not an input of pkg\n")
     (tests / "test_outside.py").write_text(
-        "import os, subprocess, sys\n\ndef test_outside():\n    p = os.path.join(os.path.dirname(__file__), '..', '..', 'elsewhere', 'data.txt')\n"
+        f"import os, subprocess, sys\n\ndef test_outside():\n    p = {_elsewhere(root)}\n"
         "    subprocess.run([sys.executable, '-c', 'import sys; open(sys.argv[1]).read()', p], check=True)\n")
+    out, cache = tmp_path / "suites.json", tmp_path / "cache"
+    p = _run_suite(root, tmp_path, "--json", str(out))
+    assert p.returncode == 1 and "failed  pkg" in p.stdout and "6 passed" in p.stdout, p.stdout
+    assert "elsewhere/data.txt: read by a process that tests/test_outside.py::test_outside started" in p.stdout, p.stdout
+    assert "list each file under [tool.verity.tests] inputs in pkg/pyproject.toml" in p.stdout, p.stdout
+    assert "log:" not in p.stdout, p.stdout                                     # pytest passed: no log tail to read
+    assert json.loads(out.read_text())[0]["child_outside"] == {"pkg/tests/test_outside.py": ["elsewhere/data.txt"]}
+    assert not [f for f in cache.glob("*.json") if json.loads(f.read_text()).get("suite") == "pkg"]
+    assert not list((cache / "per-test" / "pkg").glob("pkg~tests~test_outside.py--*.json"))
+    assert list((cache / "per-test" / "pkg").glob("pkg~tests~test_heavy.py--*.json"))
+
+    p = _run_suite(root, tmp_path)                                              # nothing changed: no pass to reuse
+    assert p.returncode == 1 and "1 passed, 5 reused" in p.stdout and "elsewhere/data.txt: read by" in p.stdout, p.stdout
+
+    pyproject = root / "pkg" / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text().replace("parallel = true", 'parallel = true\ninputs = ["elsewhere"]'))
     p = _run_suite(root, tmp_path)
-    assert p.returncode == 0 and "processes its tests started read 1 files outside its inputs (elsewhere/data.txt)" in p.stdout, p.stdout
-    assert not list((tmp_path / "cache" / "per-test" / "pkg").glob("pkg~tests~test_outside.py--*.json"))
-    assert list((tmp_path / "cache" / "per-test" / "pkg").glob("pkg~tests~test_heavy.py--*.json"))
+    assert p.returncode == 0 and "passed  pkg" in p.stdout and "outside its inputs" not in p.stdout, p.stdout
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "cached  pkg" in p.stdout, p.stdout
+
+
+def test_a_fork_a_collection_or_a_child_whose_tracer_fails_fails_the_suite_under_xdist(tmp_path):
+    """In xdist workers too: a forked child's read (it ends through `os._exit`), one made while a module is collected, and a child
+    Python whose tracer can't start, so that nothing vouches for what it read."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    data = _elsewhere(root)
+    (tests / "test_fork.py").write_text(
+        f"import os\n\ndef test_fork():\n    pid = os.fork()\n    if pid == 0:\n        open({data}).read()\n        os._exit(0)\n"
+        "    assert os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1]) == 0\n")
+    (tests / "test_collected.py").write_text(
+        f"import os, subprocess, sys\n\nsubprocess.run([sys.executable, '-c', 'import sys; open(sys.argv[1]).read()', {data}], check=True)\n\n"
+        "def test_collected():\n    pass\n")
+    (tests / "test_blind.py").write_text(
+        "import os, subprocess, sys\n\ndef test_blind():\n"
+        "    subprocess.run([sys.executable, '-c', 'pass'], env={**os.environ, 'VERITY_SUITE_ALLOW': 'not json'}, check=True)\n")
+    p = _run_suite(root, tmp_path, "--jobs", "2")
+    assert p.returncode == 1 and "on 2 workers" in p.stdout and "8 passed" in p.stdout, p.stdout
+    assert ("elsewhere/data.txt: read by a process that tests/test_collected.py (on import) and tests/test_fork.py::test_fork "
+            "started") in p.stdout, p.stdout
+    assert "a Python that tests/test_blind.py::test_blind started could not start its read guard (JSONDecodeError: " in p.stdout, p.stdout
 
 
 def test_the_child_tracer_hands_on_to_the_interpreter_s_own_sitecustomize(tmp_path):
@@ -776,3 +824,27 @@ def test_a_parallel_suite_starts_the_test_its_kept_pass_says_is_longest(tmp_path
         worker, node = line.split(" ", 1)
         first.setdefault(worker, node)
     assert "tests/test_z.py::test_zz" in first.values(), log.read_text()
+
+
+def test_a_change_under_a_name_git_quotes_selects_the_suite_that_owns_it(tmp_path, monkeypatch):
+    """`git diff --name-only` quotes a name with bytes outside ASCII (`"a/\\303\\251.py"`), which is under no suite's inputs, so
+    `--changed` (the quick tier `research queue ready` runs) skipped the suite owning such a file."""
+    _workspace(tmp_path)
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "a" / "é.py").write_text("x = 1\n")
+    assert [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())] == ["a"]
+
+
+def test_a_package_under_a_name_git_quotes_is_a_suite(tmp_path, monkeypatch):
+    """`git ls-files` quotes a name with bytes outside ASCII (`"pk\\303\\251/pyproject.toml"`), a path to no file, so the package
+    there was no suite and its tests never ran."""
+    (tmp_path / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pké"]\n')
+    (tmp_path / "pké" / "tests").mkdir(parents=True)
+    (tmp_path / "pké" / "pyproject.toml").write_text('[project]\nname = "pke"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    assert S.metadata() == ["pké/pyproject.toml", "pyproject.toml", "uv.lock"]
+    assert [s.path for s in S.discover()] == ["pké"]

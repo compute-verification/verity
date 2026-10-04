@@ -17,8 +17,8 @@ def _g(sig: str, h: str) -> dict:
     return {"signature": [sig], "assumptions": [], "type_hash": h}
 
 
-def _doc(pins: dict, defs: dict | None = None, readers: tuple[str, ...] = ("P.t",)) -> dict:
-    return {"pins": pins, "reads": {"P.Defs": {"digest": "x", "definitions": defs or {}, "pins": list(readers)}}}
+def _doc(guarantees: dict, defs: dict | None = None, readers: tuple[str, ...] = ("P.t",)) -> dict:
+    return {"guarantees": guarantees, "reads": {"P.Defs": {"digest": "x", "definitions": defs or {}, "guarantees": list(readers)}}}
 
 
 class Api:
@@ -44,8 +44,8 @@ def test_new_and_removed_guarantees_are_listed_and_a_move_is_not():
     old = _doc({"P.t": _g("P.t : A", H1), "P.gone": _g("P.gone : B", H2)})
     new = _doc({"Q.t": _g("Q.t : A", H1), "P.new": _g("P.new : C", H3)})
     lines = spec.changes(old, new)
-    assert lines[0].startswith("• new guarantee `P.new`") and "P.new : C" in lines[0]
-    assert lines[1:] == ["• removed guarantee `P.gone`"]                    # P.t -> Q.t has the same type hash: a move
+    assert lines[0] == "• removed guarantee `P.gone`"                       # P.t -> Q.t has the same type hash: a move
+    assert len(lines) == 2 and lines[1].startswith("• new guarantee `P.new`") and "P.new : C" in lines[1]
 
 
 def test_a_reprint_and_a_rehash_send_nothing():
@@ -59,8 +59,17 @@ def test_a_changed_definition_names_the_guarantees_that_read_it():
     old = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H1, "P.E": H2}, readers)
     new = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H3, "P.E": H2}, readers)
     assert spec.changes(old, new) == ["• definition `P.D` changed; read by `P.t`, `P.u`, `P.v`, `P.w` and 2 more"]
-    moved = {"reads": {"P.Other": {"definitions": {"P.D": H1, "P.E": H2}, "pins": ["P.t"]}}, "pins": old["pins"]}
+    moved = {"reads": {"P.Other": {"definitions": {"P.D": H1, "P.E": H2}, "guarantees": ["P.t"]}}, "guarantees": old["guarantees"]}
     assert spec.changes(old, moved) == []                                   # same names and hashes in another module
+
+
+def test_a_record_from_before_the_rename_compares_by_what_it_says():
+    new = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H1}, ("P.t",))
+    old = {"pins": new["guarantees"], "reads": {"P.Defs": {"digest": "x", "definitions": {"P.D": H1}, "pins": ["P.t"]}}}
+    assert spec.changes(old, new) == []
+    assert spec.changes(old, _doc({"P.t": _g("P.t : E", H2)}, {"P.D": H3})) == [
+        "• changed guarantee `P.t`, before:\n```\nP.t : D\n```\nafter:\n```\nP.t : E\n```",
+        "• definition `P.D` changed; read by `P.t`"]
 
 
 def _repo(tmp_path: Path) -> Path:
@@ -96,7 +105,19 @@ def test_a_long_dm_ends_with_the_compare_link_and_closes_its_code_block(tmp_path
     old = _commit(repo, "lean-audit.json", _doc({}), "base")
     new = _commit(repo, "lean-audit.json", _doc({f"P.t{i}": _g(f"P.t{i} : " + "x" * 60, f"{i:064d}") for i in range(20)}), "m")
     text = spec.message(repo, old, new, None)
-    assert len(text) < 500 and text.count("```") % 2 == 0 and text.endswith(f"… the rest is in {old[:9]}..{new[:9]}.")
+    assert len(text) <= 400 and text.count("```") % 2 == 0 and text.endswith(f"… the rest is in {old[:9]}..{new[:9]}.")
+
+
+def test_the_dm_opens_with_a_tally_and_a_cut_loses_new_guarantees_first(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    monkeypatch.setattr(spec, "LIMIT", 600)
+    many = {f"P.n{i}": _g(f"P.n{i} : " + "x" * 60, f"{i:064d}") for i in range(20)}
+    old = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}, {"P.D": H1}), "base")
+    new = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : B", H2), **many}, {"P.D": H3}), "m")
+    text = spec.message(repo, old, new, None)
+    assert text.split("\n")[1] == "• `pkg`: guarantees: 1 changed, 20 new; definitions: 1 changed"
+    assert text.index("changed guarantee `P.t`") < text.index("definition `P.D` changed") < text.index("new guarantee")
+    assert "P.n19" not in text and text.endswith(f"… the rest is in {old[:9]}..{new[:9]}.")
 
 
 def test_alert_dms_daniel_and_sends_nothing_without_a_spec_change(tmp_path):

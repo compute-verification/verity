@@ -19,6 +19,7 @@ import sqlite3
 import subprocess
 import sys
 import tomllib
+import types
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,7 @@ import pytest
 from research import remote
 from research.pods import lease as L
 from research.pods import registry
+from research.store import custody as CU
 
 NEBIUS = Path(registry.__file__).resolve().parent / "nebius"
 GPU_LEASE = Path(registry.__file__).resolve().parent / "sh" / "gpu_lease.sh"
@@ -1276,55 +1278,391 @@ def test_n2_commit_gives_a_long_row_the_long_max_min():
     assert max_min("llama32-1b__bf16__rtxpro6000__tp1__b16__i512__o2__mixed__greedy__bi-eager", VY_N2_COMMIT_MAX_MIN="") == "40"
 
 
-@pytest.mark.skipif(shutil.which("bash") is None or not Path("/proc/self/stat").exists(), reason="n2_custody.sh is bash, and reads /proc")
-def test_n2_custody_takes_every_ended_run_home_and_retries_a_failure(tmp_path):
-    """Node 2's store has no remote: a night of runs there sat on the node (2-3 Oct) until a push loop took them. Every ended run
-    goes to node 1 and its Job, a runner killed before it recorded an end with --force; a live one, one still settling and one its
-    own custody preserved don't; a failed push is never given up, and fails the round until it succeeds."""
-    root, state, bin_, log = tmp_path / "runs", tmp_path / "state", tmp_path / "bin", tmp_path / "calls.log"
-    bin_.mkdir()
-    (bin_ / "rsync").write_text(f'#!/bin/sh\necho "rsync $*" >> {log}\n')
-    (bin_ / "ssh").write_text(f'#!/bin/sh\ncat > /dev/null &\necho "ssh $*" >> {log}\n'
-                              'case "$*" in *"attempt publish"*"$FAIL_RUN"*) [ -n "$FAIL_RUN" ] && exit 1 ;; esac\nexit 0\n')
-    for f in bin_.iterdir():
-        f.chmod(0o755)
-    me = int(open("/proc/self/stat").read().rsplit(")", 1)[1].split()[19])
-    old = 1_000_000_000                         # settled: records last changed in 2001
+#: n2_custody.sh's node 1, faked under N1_FS: rsync copies the run dir there, and ssh answers the round's calls as node 1 would: the
+#: research tree, the Job (its verify writes .custody over node 1's copy; a run JOB_ERR's file names fails with that line instead),
+#: and the cat of that .custody; DURING_JOB=RUN:PATH appends to PATH while RUN's Job runs, LOOP_DURING_JOB=RUN starts the stopgap
+#: loop (STATE/push.sh, its pid in STATE/push.pid) then, TIMED_DURING_JOB=RUN starts a timed window on node 2 then, ACTIVE_JOB=RUN
+#: says RUN's Job has not finished, UNREACHABLE fails every call; CLOCK_AFTER_RSYNC=T sets the clock to T once a run dir is copied.
+#: Every call is a line of FAKE_LOG.
+_N2_RSYNC = r'''
+import os, shutil, sys
+with open(os.environ["FAKE_LOG"], "a") as f:
+    f.write("rsync " + " ".join(sys.argv[1:]) + "\n")
+shutil.copytree(sys.argv[-2], os.environ["N1_FS"] + sys.argv[-1].split(":", 1)[1], symlinks=True, dirs_exist_ok=True)
+if os.environ.get("CLOCK_AFTER_RSYNC"):
+    with open(os.environ["FAKE_CLOCK"], "w") as f:
+        f.write(os.environ["CLOCK_AFTER_RSYNC"])
+'''
+_N2_SSH = r'''
+import hashlib, json, os, re, subprocess, sys
+env, args = os.environ, sys.argv[1:]
+at = args.index(env["VY_N1"])
+cmd, spec = " ".join(args[at + 1:]), "" if "-n" in args[:at] else sys.stdin.read()
+with open(env["FAKE_LOG"], "a") as f:
+    f.write(f"ssh {' '.join(args)} {spec}\n")
+if env.get("UNREACHABLE"):
+    sys.exit(255)
+if "test -f" in cmd:
+    sys.exit(1 if env.get("NO_SRC") else 0)
+if "{.metadata.name}" in cmd:
+    name = re.search(r"get job (\S+)", cmd).group(1)
+    print(name if name == "n2-custody-" + env.get("ACTIVE_JOB", "") else "", end="")
+    sys.exit(0)
+if m := re.search(r"sudo -n cat (\S+)", cmd):
+    try:
+        sys.stdout.write(open(env["N1_FS"] + m.group(1)).read())
+    except FileNotFoundError:
+        sys.exit(1)
+    sys.exit(0)
+d = re.search(r"data custody (\S+) --publish", spec).group(1)
+err = json.load(open(env["JOB_ERR"])).get(os.path.basename(d)) if os.path.exists(env["JOB_ERR"]) else None
+if err:
+    print(err, file=sys.stderr)
+    sys.exit(1)
+run, _, path = env.get("DURING_JOB", "").partition(":")
+if run == os.path.basename(d):
+    with open(path, "a") as f:
+        f.write("a line node 2 wrote after the rsync\n")
+if env.get("LOOP_DURING_JOB") == os.path.basename(d):
+    loop = subprocess.Popen(["bash", env["VY_CUSTODY_STATE"] + "/push.sh"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, start_new_session=True)
+    with open(env["VY_CUSTODY_STATE"] + "/push.pid", "w") as f:
+        f.write(str(loop.pid))
+if env.get("TIMED_DURING_JOB") == os.path.basename(d):
+    status = env["VY_CUSTODY_FILL"] + "/status.txt"
+    with open(status) as f:
+        line = f.read().replace("timed False", "timed True")
+    with open(status, "w") as f:
+        f.write(line)
+copy, files = env["N1_FS"] + d, {}
+for base, _, names in os.walk(copy):
+    for n in names:
+        rel = os.path.relpath(os.path.join(base, n), copy)
+        if rel != ".custody":
+            files[rel] = [os.path.getsize(f"{copy}/{rel}"), hashlib.sha256(open(f"{copy}/{rel}", "rb").read()).hexdigest()]
+with open(f"{copy}/.custody", "w") as f:
+    json.dump({"schema": "research/run-custody/v0.1", "preserved": True, "verified_from": 4102444800.0, "files": files}, f)
+'''
+SETTLED = 1_000_000_000                         # a run dir's files last changed in 2001
+N2_NOW = 1_790_996_400                          # the scripts' clock (2026-10-03T03:00:00Z): `date -u +FORMAT` reads FAKE_CLOCK
+_FAKE_DATE = '#!/bin/sh\nif [ "$1" = -u ] && [ $# = 2 ] && [ "${2#+}" != "$2" ]; then exec %s -u -d "@$(cat "$FAKE_CLOCK")" "$2"; fi\nexec %s "$@"\n'
 
-    def run(rid, status, *, settled=True, custody=None):
+
+def _fill_status(fill: Path, t: int, line: str = "free GPUs 0/8, kept free -, waiters -, timed False, window waiting False") -> None:
+    """Node 2's fill runner's status.txt, as it writes it every 10 s, stamped `t`."""
+    fill.mkdir(exist_ok=True)
+    (fill / "status.txt").write_text(f"{datetime.datetime.fromtimestamp(t, datetime.UTC):%Y-%m-%dT%H:%M:%SZ} {line}\nqueued -\n")
+
+
+def _n2_custody(tmp_path: Path) -> types.SimpleNamespace:
+    """Node 2 for n2_custody.sh: `run` makes a run dir under its runs root, `round_` runs one round against the fake node 1
+    (_N2_SSH) at `clock` (default N2_NOW) with a fresh fill status unless `status=False`, `calls` is what the rounds asked of node 1,
+    `job_err` fails the named runs' Jobs with a line each."""
+    root, state, bin_, n1 = tmp_path / "runs", tmp_path / "state", tmp_path / "bin", tmp_path / "n1"
+    log, errs, clock_file, fill = tmp_path / "calls.log", tmp_path / "job-err.json", tmp_path / "clock", tmp_path / "fill"
+    bin_.mkdir()
+    for name, src in (("rsync", _N2_RSYNC), ("ssh", _N2_SSH)):
+        (bin_ / name).write_text(f"#!{sys.executable}\n{src}")
+        (bin_ / name).chmod(0o755)
+    (bin_ / "date").write_text(_FAKE_DATE % (shutil.which("date"), shutil.which("date")))
+    (bin_ / "date").chmod(0o755)
+
+    def run(rid, status, *, settled=True, custody=None, extra=0):
         d = root / rid
         d.mkdir(parents=True)
         (d / "job.json").write_text(json.dumps({"store": {"campaign": "c1"}}))
         (d / "status.json").write_text(json.dumps(status))
         if custody is not None:
             (d / ".custody").write_text(json.dumps(custody))
+        for i in range(extra):
+            (d / f"row{i}.jsonl").write_text("{}\n")
         for p in d.iterdir():
             if settled:
-                os.utime(p, (old, old))
+                os.utime(p, (SETTLED, SETTLED))
+        return d
 
-    run("r1-done", {"state": "done"})
-    run("r2-dead", {"state": "running", "transitions": [{"pid": 2**22 + 7, "starttime_ticks": 1}]})
-    run("r3-live", {"state": "running", "transitions": [{"pid": os.getpid(), "starttime_ticks": me}]})
-    run("r4-fresh", {"state": "failed"}, settled=False)
-    run("r5-preserved", {"state": "done"}, custody={"preserved": True})
-    run("r6-fails", {"state": "failed"})
+    def round_(*args, clock=N2_NOW, status=True, **env):
+        clock_file.write_text(str(clock))
+        if status:
+            _fill_status(fill, clock - 5)
+        return subprocess.run(["bash", str(NEBIUS / "n2_custody.sh"), *args], capture_output=True, text=True,
+                              env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "VY_N1": "n1.invalid", "FAKE_LOG": str(log),
+                                   "N1_FS": str(n1), "JOB_ERR": str(errs), "VY_CUSTODY_ROOTS": f"{root}=/n1/runs", "FAKE_CLOCK": str(clock_file),
+                                   "VY_CUSTODY_FILL": str(fill), "VY_CUSTODY_STATE": str(state), "VY_CUSTODY_SRC": "/n1/src/abc",
+                                   "VY_CUSTODY_MAX_FILES": "4", **env})
 
-    def round_(**env):
-        return subprocess.run(["bash", str(NEBIUS / "n2_custody.sh")], capture_output=True, text=True,
-                              env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "VY_N1": "n1.invalid",
-                                   "VY_CUSTODY_ROOTS": f"{root}=/n1/runs", "VY_CUSTODY_STATE": str(state),
-                                   "VY_CUSTODY_SRC": "/n1/src/abc", **env})
+    return types.SimpleNamespace(root=root, state=state, n1=n1, fill=fill, run=run, round_=round_,
+                                 calls=lambda: log.read_text() if log.exists() else "",
+                                 job_err=lambda by_run: errs.write_text(json.dumps(by_run)),
+                                 names=lambda sub: sorted(p.name for p in (state / sub).iterdir()))
 
-    first = round_(FAIL_RUN="r6-fails")
-    assert first.returncode == 1 and "r6-fails (c1, failed): push failed (1 so far)" in first.stdout
-    assert sorted(p.name for p in (state / "pushed").iterdir()) == ["r1-done", "r2-dead", "r5-preserved"]
-    calls = log.read_text()
-    assert f"{root}/r1-done/ n1.invalid:/n1/runs/r1-done/" in calls and "r3-live" not in calls and "r4-fresh" not in calls
-    assert "attempt publish --force /n1/runs/r2-dead" in calls and "attempt publish  /n1/runs/r1-done" in calls
-    assert "PYTHONPATH=/n1/src/abc/tools/research/src" in calls and "r5-preserved" not in calls
-    second = round_(FAIL_RUN="")
-    assert second.returncode == 0 and "r6-fails (c1, failed" in second.stdout and not (state / "failures" / "r6-fails").exists()
-    assert (state / "pushed" / "r6-fails").exists() and log.read_text().count("r1-done/ n1.invalid") == 1, "a pushed run is done"
+
+N2_CUSTODY = pytest.mark.skipif(shutil.which("bash") is None or shutil.which("pgrep") is None or not Path("/proc/self/stat").exists(),
+                                reason="n2_custody.sh is bash, and reads /proc and pgrep")
+
+
+@N2_CUSTODY
+def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_rounds(tmp_path):
+    """Node 2's store has no remote: a night of runs there sat on the node (2-3 Oct) until a push loop took them, attempts without
+    their logs, and on 3 Oct that loop's row sync mirrored 1.2M files and overran its window. Every ended run goes to node 1's Job
+    with its run record, a runner killed before it recorded an end with --force, and comes back with the .custody that Job's verify
+    wrote; a live one, one still settling and one its own custody preserved don't. A round pushes at most VY_CUSTODY_MAX_RUNS within
+    VY_CUSTODY_PASS_S, runs that failed before going last; a run dir over the file bound is held, never mirrored, and so is one whose
+    attempt node 1 holds without a run record; a failed push is never given up and fails the round until it succeeds. While the
+    stopgap loop runs, while another round holds the lock (logged, so a round that never ran is seen), or while node 1 lacks the
+    research tree, a round refuses."""
+    n2 = _n2_custody(tmp_path)
+    root, state = n2.root, n2.state
+    R = {k: f"r20261003-{100000 + i}-{i:04x}" for i, k in enumerate(
+        ("done", "dead", "live", "retimed", "unread", "fresh", "preserved", "fails", "big", "legacy", "new"), 1)}
+    me = int(open("/proc/self/stat").read().rsplit(")", 1)[1].split()[19])
+    n2.run(R["done"], {"state": "done"})
+    n2.run(R["dead"], {"state": "running", "transitions": [{"pid": 2**22 + 7, "starttime_ticks": 1}]})
+    n2.run(R["live"], {"state": "running", "transitions": [{"pid": os.getpid(), "starttime_ticks": me}]})
+    n2.run(R["retimed"], {"state": "running", "pid": os.getpid(), "starttime_ticks": me,     # status.json after `tele set-timeout`
+                          "transitions": [{"state": "running", "pid": os.getpid(), "starttime_ticks": me}, {"state": "running", "timeout_s": 60}]})
+    n2.run(R["unread"], {"state": "running", "transitions": [{"state": "running", "pid": "?"}]})
+    n2.run(R["fresh"], {"state": "failed"}, settled=False)
+    n2.run(R["preserved"], {"state": "done"}, custody={"preserved": True})
+    n2.run(R["fails"], {"state": "failed"})
+    n2.run(R["big"], {"state": "done"}, extra=3)
+    n2.run(R["legacy"], {"state": "done"})
+    n2.job_err({R["legacy"]: f"{R['legacy']}: NO custody on the remote: the attempt names no run record"})
+    rogue = n2.run("r20261003-100012-000c; touch pwned", {"state": "done"})       # not a run id: never reaches node 1's shell
+
+    assert n2.round_("--now").returncode == 2
+    dry = n2.round_("--dry-run")
+    assert dry.returncode == 0 and not n2.calls() and not n2.names("pushed")
+    assert f"would push {root}/{R['done']} (c1, done, 2 files" in dry.stdout and f"would push {root}/{R['dead']} (c1, dead" in dry.stdout
+    assert f"would hold {root}/{R['big']} (c1, done): over 4 files" in dry.stdout
+    assert not [k for k in ("live", "retimed", "unread", "fresh", "preserved") if R[k] in dry.stdout] and rogue.name not in dry.stdout
+
+    (state / "push.sh").write_text("read x\n")
+    loop = subprocess.Popen(["bash", str(state / "push.sh")], stdin=subprocess.PIPE)
+    try:
+        refused = n2.round_()
+    finally:
+        loop.stdin.close()
+        loop.wait()
+    assert refused.returncode == 3 and "refused: the stopgap loop" in refused.stdout and not n2.calls()
+    with open(state / ".lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        locked = n2.round_()
+    assert locked.returncode == 3 and f"refused: another round holds {state}/.lock" in (state / "log").read_text()
+    assert not n2.calls()
+    no_src = n2.round_(NO_SRC="1")
+    assert no_src.returncode == 3 and "no research tree at n1.invalid:/n1/src/abc" in no_src.stdout and "rsync" not in n2.calls()
+    unreached = n2.round_(UNREACHABLE="1")
+    assert unreached.returncode == 3 and "refused: node 1 not reached (`ssh n1.invalid` exited 255)" in unreached.stdout
+
+    assert n2.round_(VY_CUSTODY_PASS_S="0").returncode == 0 and "rsync" not in n2.calls()
+    bounded = n2.round_(VY_CUSTODY_MAX_RUNS="1")
+    assert bounded.returncode == 0 and "round bounded (1 push(es)" in bounded.stdout and "9 run dir(s) left" in bounded.stdout
+    assert n2.names("pushed") == [R["done"]]
+    assert json.loads((root / R["done"] / ".custody").read_text())["preserved"] is True
+
+    n2.job_err({R["legacy"]: f"{R['legacy']}: NO custody on the remote: the attempt names no run record", R["fails"]: "Error: boom"})
+    first = n2.round_()
+    assert first.returncode == 1 and f"{R['fails']} (c1, failed): push failed (1 so far): node 1's Job: Error: boom" in first.stdout
+    assert n2.names("pushed") == [R["done"], R["dead"], R["preserved"]]
+    assert n2.names("held") == [R["big"], R["legacy"]] and "2 run(s) held" in first.stdout
+    assert "the attempt names no run record. node 1's store holds its attempt without a run record" in first.stdout
+    calls = n2.calls()
+    assert f"{root}/{R['done']}/ n1.invalid:/n1/runs/{R['done']}/" in calls and R["fresh"] not in calls
+    assert not [k for k in ("live", "retimed", "unread") if R[k] in calls], "a live run is never published as dead"
+    assert f"data custody /n1/runs/{R['dead']} --publish --keep-local --force --runner-gone" in calls
+    assert f'data custody /n1/runs/{R["done"]} --publish --keep-local "]' in calls
+    assert "PYTHONPATH=/n1/src/abc/tools/research/src" in calls and R["preserved"] not in calls and R["big"] not in calls
+    assert "touch pwned" not in calls and rogue.name not in n2.names("pushed") + n2.names("held")
+    keepalive = "ssh -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "
+    assert all(x.startswith(keepalive) for x in calls.splitlines() if x.startswith("ssh ")), "a dropped link ends every call"
+    assert "kubectl --request-timeout=30s create -f -" in calls and "kubectl --request-timeout=30s get job" in calls
+
+    n2.run(R["new"], {"state": "done"})
+    n2.job_err({})
+    newer = n2.round_(VY_CUSTODY_MAX_RUNS="1")
+    assert (state / "pushed" / R["new"]).exists() and not (state / "pushed" / R["fails"]).exists(), "a failing run goes last"
+    assert newer.returncode == 1 and "1 run dir(s) left" in newer.stdout
+    second = n2.round_()
+    assert second.returncode == 1 and f"{R['fails']} (c1, failed" in second.stdout and not (state / "failures" / R["fails"]).exists()
+    assert (state / "pushed" / R["fails"]).exists() and n2.calls().count(f"{R['done']}/ n1.invalid") == 1, "a pushed run is done"
+    for p in (state / "held").iterdir():
+        p.rename(state / "pushed" / p.name)
+    assert n2.round_().returncode == 0
+
+
+@N2_CUSTODY
+def test_n2_custody_holds_what_no_retry_can_mend_each_with_its_reason(tmp_path):
+    """A Job that fails the same way every round is held, with its line and what a person decides, and the rest are retried.
+    r20261003-174723-7ea5's runner pushed its attempt and run record, then lean-audit.log changed, and the stopgap published an
+    attempt without a run record on node 1: R2's write-once key refuses that, so waiving its logs is the wrong advice. An attempt
+    whose run record lacks what the run dir holds now never changes either."""
+    n2 = _n2_custody(tmp_path)
+    legacy, conflict, stale, differs, flaky = (n2.run(f"r20261003-10000{i}-000{i}", {"state": "failed"}) for i in range(1, 6))
+    lines = {legacy.name: f"{legacy.name}: NO custody on the remote: the attempt names no run record (published without custody)",
+             conflict.name: (f"{conflict.name}: NO custody on the remote: the attempt names no run record (published without custody); "
+                             f"push: RemoteConflict: attempts/{conflict.name}.json: remote holds 4171 bytes, local is 2655"),
+             stale.name: f"{stale.name}: NO custody on the remote: 0 file(s) not in the run record, 1 changed since it was taken: x.log",
+             differs.name: (f"{differs.name}: NO custody on the remote: not preserved on the remote: attempts/{differs.name}.json: the "
+                            "remote holds a DIFFERENT attempt document for this run id"),
+             flaky.name: "error: the server was unable to return a response in the time allotted"}
+    n2.job_err(lines)
+    first = n2.round_()
+    assert first.returncode == 1 and n2.names("held") == [legacy.name, conflict.name, stale.name, differs.name]
+    assert n2.names("failures") == [flaky.name] and "4 run(s) held" in first.stdout
+    for d in (legacy, conflict, stale, differs):
+        assert (n2.state / "held" / d.name).read_text() == f"node 1's Job: {lines[d.name]}\n"
+    said = {d.name: next(x for x in first.stdout.splitlines() if f"{d} (c1, failed): held: " in x) for d in (legacy, conflict, stale, differs)}
+    assert "Label it `custody waived`" in said[legacy.name] and "custody waived" not in said[conflict.name] + said[stale.name]
+    assert f"R2 already holds another attempt for {conflict.name}" in said[conflict.name] and f"{conflict}/.custody names its" in said[conflict.name]
+    assert f"`research data reconcile-attempts {conflict.name} --apply` there" in said[conflict.name]
+    assert "R2 already holds another attempt" in said[differs.name] and "lacks what the run dir holds now" in said[stale.name]
+    assert said[legacy.name].endswith(f"then mv {n2.state}/held/{legacy.name} {n2.state}/pushed/")
+    n2.job_err({})
+    again = n2.round_()
+    assert again.returncode == 1 and n2.names("pushed") == [flaky.name] and "4 run(s) held" in again.stdout
+    assert all(n2.calls().count(f"{d}/ n1.invalid") == 1 for d in (legacy, conflict, stale, differs)), "a held run is not retried"
+
+
+@N2_CUSTODY
+def test_n2_custody_leaves_a_run_to_its_runners_own_custody_until_the_runners_key_expires(tmp_path):
+    """A `research run --custody-r2` runner writes nothing into the run dir between the workload's end and its .custody (one took
+    11 min, past the settle time), so a round raced it. While the runner holds its key (<root>/../requests/RUN/custody/cred.json,
+    which forget_credential removes) the run is its runner's; a key a dead runner left counts until it expires, one that doesn't
+    read for 24 h from when it was written."""
+    n2 = _n2_custody(tmp_path)
+    mine, left, garbled, old = (n2.run(f"r20261003-10000{i}-000{i}", {"state": "done"}) for i in range(1, 5))
+    keys = {d: tmp_path / "requests" / d.name / "custody" / "cred.json" for d in (mine, left, garbled, old)}
+    for d, cred in ((mine, '{"expires_utc": "2100-01-01T00:00:00Z"}'), (left, '{"expires_utc": "2001-09-09T01:46:40Z"}'),
+                    (garbled, "{"), (old, "{")):
+        keys[d].parent.mkdir(parents=True)
+        keys[d].write_text(cred)
+    os.utime(keys[old], (SETTLED, SETTLED))
+    dry = n2.round_("--dry-run")
+    assert f"would push {left}" in dry.stdout and f"would push {old}" in dry.stdout
+    assert mine.name not in dry.stdout and garbled.name not in dry.stdout
+    assert n2.round_().returncode == 0 and n2.names("pushed") == [left.name, old.name]
+    keys[mine].unlink()
+    assert n2.round_().returncode == 0 and n2.names("pushed") == [mine.name, left.name, old.name]
+
+
+@N2_CUSTODY
+def test_n2_custody_waits_on_a_job_an_earlier_round_left_running_and_never_deletes_it(tmp_path):
+    """A round whose ssh dropped leaves its Job running on node 1, still pushing node 1's copy. The next round deleted that Job, push
+    and all, and rsynced under it; it waits on it instead, and the marker that Job writes comes home only over node 2's files."""
+    n2 = _n2_custody(tmp_path)
+    d = n2.run("r20261003-100001-0001", {"state": "done"})
+    n2.job_err({d.name: "Job not done in 30 min"})
+    assert n2.round_().returncode == 1 and n2.calls().count(f"delete job n2-custody-{d.name}") == 1
+    n2.job_err({})
+    again = n2.round_(ACTIVE_JOB=d.name)
+    assert again.returncode == 0 and n2.names("pushed") == [d.name] and CU.marker_problem(d) is None
+    assert f"node 1's Job n2-custody-{d.name}, from an earlier round, has not finished: waiting on it" in again.stdout
+    calls = n2.calls()
+    assert calls.count(f"{d}/ n1.invalid") == 1 and calls.count(f"delete job n2-custody-{d.name}") == 1 and " n1.invalid true &&" in calls
+
+
+@N2_CUSTODY
+def test_n2_custody_asks_before_every_push_whether_the_stopgap_loop_runs(tmp_path):
+    """The stopgap loop takes no lock, and a round asked for it once, at its start: a loop started during a round's 20-min pass (tmux
+    custody-push-3 restarted) pushed beside it, both deleting and creating the same Jobs. Every push asks again."""
+    n2 = _n2_custody(tmp_path)
+    first, second = (n2.run(f"r20261003-10000{i}-000{i}", {"state": "done"}) for i in (1, 2))
+    n2.state.mkdir()
+    os.mkfifo(tmp_path / "gate")
+    (n2.state / "push.sh").write_text(f"read x <> {tmp_path / 'gate'}\n")
+    try:
+        refused = n2.round_(LOOP_DURING_JOB=first.name)
+    finally:
+        if (n2.state / "push.pid").exists():
+            os.kill(int((n2.state / "push.pid").read_text()), signal.SIGKILL)
+    assert refused.returncode == 3 and n2.names("pushed") == [first.name] and second.name not in n2.calls()
+    assert f"refused: the stopgap loop {n2.state}/push.sh still runs" in refused.stdout
+
+
+@N2_CUSTODY
+def test_n2_custody_takes_node_1s_marker_home_only_over_the_files_node_1_verified(tmp_path):
+    """Node 1's .custody vouches for the copy the rsync left there, on node 1's clock. A line appended on node 2 after the rsync and
+    before the Job's verify is in no run record, yet the marker listed the file and was dated after the append, so node 2's triage
+    called the run r2. It comes home only over files with the size and sha256 it lists, dated by node 2's clock. A run still writing
+    any file (its sampler, a late log line) is settling, whatever its status.json says."""
+    n2 = _n2_custody(tmp_path)
+    ok, late, busy = (n2.run(f"r20261003-10000{i}-000{i}", {"state": "done"}, extra=1) for i in (1, 2, 3))
+    (busy / "row0.jsonl").write_text("{}\n{}\n")
+    first = n2.round_(DURING_JOB=f"{late.name}:{late / 'row0.jsonl'}")
+    assert first.returncode == 1 and n2.names("pushed") == [ok.name] and busy.name not in n2.calls()
+    assert json.loads((ok / ".custody").read_text())["verified_from"] < 4102444800.0, "dated by node 2's clock, not node 1's"
+    assert CU.marker_problem(ok) is None
+    assert (f"{late} (c1, done): push failed (1 so far): node 1's .custody not taken home: row0.jsonl differs from node 1's copy: "
+            "changed here after the rsync") in first.stdout
+    assert not (late / ".custody").exists() and not (late / ".custody.tmp").exists() and CU.marker_problem(late) == "no .custody"
+    second = n2.round_()
+    assert second.returncode == 0 and n2.calls().count(f"{late}/ n1.invalid") == 1, "a file of it changed: settling again"
+
+
+@N2_CUSTODY
+def test_n2_custody_pauses_for_node_2s_timed_windows(tmp_path):
+    """Node 2's timed windows (PoUW's measurements) run with nothing else on the node, and a round's rsync and hashing ran through
+    them at Nice=19 (#984's red-team finding 13). A round, and each push, starts only while the fill runner's status is under 60 s
+    old and says no window runs or waits, and no booked window is on or starts within the round's bound (PASS_S + PUSH_S: 80 min);
+    a status that is missing, stale or doesn't read is a window. A skipped or paused round is no failure: one log line, exit 0."""
+    n2 = _n2_custody(tmp_path)
+    first, second = (n2.run(f"r20261003-10000{i}-000{i}", {"state": "done"}) for i in (1, 2))
+    skips = []
+    for line in ("free GPUs 0/8, kept free 8, waiters -, timed True, window waiting False",
+                 "free GPUs 2/8, kept free 8, waiters -, timed False, window waiting True"):
+        _fill_status(n2.fill, N2_NOW - 5, line)
+        skips.append(n2.round_(status=False))
+    _fill_status(n2.fill, N2_NOW - 61)
+    skips.append(n2.round_(status=False))
+    (n2.fill / "status.txt").write_text("free GPUs 0/8, kept free -, waiters -, timed False, window waiting False\n")
+    skips.append(n2.round_(status=False))
+    (n2.fill / "status.txt").unlink()
+    skips.append(n2.round_(status=False))
+    (n2.fill / "windows").write_text("# booked windows\n2026-10-03T04:15Z 30 # a measurement, 75 min on\n")
+    skips.append(n2.round_())
+    skips.append(n2.round_("--dry-run"))
+    (n2.fill / "windows").write_text("2026-10-03T02:45Z 30 # on since 02:45\n")
+    skips.append(n2.round_())
+    said = [s.stdout for s in skips]
+    assert all(s.returncode == 0 and "skipped: node 2's timed window: " in s.stdout for s in skips), said
+    assert not n2.calls() and not n2.names("pushed") and "would push" not in said[6]
+    assert "timed True" in said[0] and "window waiting True" in said[1] and "its fill status is 61 s old" in said[2]
+    assert "its fill status doesn't read (ValueError" in said[3] and "its fill status doesn't read (FileNotFoundError" in said[4]
+    assert "a window booked at 2026-10-03T04:15Z for 30 min is on or starts within the round's 80 min" in said[5]
+    assert "a window booked at 2026-10-03T02:45Z" in said[7]
+
+    (n2.fill / "windows").write_text("2026-10-03T02:00Z 30 # ended\n2026-10-03T04:25Z 30 # past the round's bound\n")
+    paused = n2.round_(TIMED_DURING_JOB=first.name)
+    assert paused.returncode == 0 and n2.names("pushed") == [first.name] and second.name not in n2.calls()
+    assert "paused after 1 push(es), for node 2's timed window: its fill status: " in paused.stdout
+    assert "1 run dir(s) left for the next round" in paused.stdout
+    assert n2.round_().returncode == 0 and n2.names("pushed") == [first.name, second.name]
+
+
+@N2_CUSTODY
+def test_n2_custody_starts_no_job_that_could_run_into_node_1s_quiet_hour(tmp_path):
+    """n2_custody.sh's Jobs run on node 1, yet it started them through node 1's daily hold (12:10-13:30Z), which n1_custody.sh
+    keeps, and a Job started at 12:09Z could run to 13:09Z (activeDeadlineSeconds 3600), into node 1's quiet hour. No push starts in
+    the hold, or unless its rsync (20 min) and a Job of 5 min end before 12:30Z, and its Job's deadline ends it before 12:30Z."""
+    n2 = _n2_custody(tmp_path)
+    a, b, c = (n2.run(f"r20261003-10000{i}-000{i}", {"state": "done"}) for i in (1, 2, 3))
+    at = lambda hhmm: N2_NOW + (int(hhmm[:2]) - 3) * 3600 + int(hhmm[2:]) * 60          # N2_NOW is 03:00Z
+    for hhmm in ("1210", "1229", "1230", "1329", "1206"):
+        held = n2.round_(clock=at(hhmm))
+        assert held.returncode == 0 and "skipped: node 1's daily hold (1210-1330 UTC; no Job of it runs past 1230Z" in held.stdout, hhmm
+    assert not n2.calls() and f"would push {a}" in n2.round_("--dry-run", clock=at("1215")).stdout, "a dry run starts no Job"
+
+    assert n2.round_(clock=at("1150"), VY_CUSTODY_MAX_RUNS="1").returncode == 0 and n2.names("pushed") == [a.name]
+    assert '"activeDeadlineSeconds": 2340,' in n2.calls(), "40 min to 12:30Z, less the minute"
+    cut = n2.round_(clock=at("1204"), CLOCK_AFTER_RSYNC=str(at("1226")))
+    assert cut.returncode == 0 and n2.names("pushed") == [a.name] and f"data custody /n1/runs/{b.name}" not in n2.calls()
+    assert ("paused after 0 push(es), for node 1's daily hold (1210-1330 UTC; no Job of it runs past 1230Z, where node 1's quiet hour "
+            "starts): 0s left, the copy waits on node 1: 2 run dir(s) left for the next round") in cut.stdout
+    late = n2.round_(clock=at("1331"))
+    assert late.returncode == 0 and n2.names("pushed") == [a.name, b.name, c.name]
+    assert n2.calls().count('"activeDeadlineSeconds": 3600,') == 2
+    assert n2.round_(clock=at("1215"), VY_CUSTODY_QUIET="").returncode == 0, "VY_CUSTODY_QUIET='' turns the hold off"
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
@@ -1412,7 +1750,11 @@ def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_
     assert rec["question"] == "Does cov-gm149's Commit validate on vy-nebius-2?"
     r = place(src, gpus="9")
     assert r.returncode == 3 and "refuses" in r.stderr and not r.stdout
-    r = place(tmp_path / "no-cluster")
+    silent = tmp_path / "silent-cluster"     # answers nothing; a missing one would fall through to tools/cluster's editable install
+    (silent / "src" / "cluster").mkdir(parents=True)
+    (silent / "src" / "cluster" / "__init__.py").write_text("")
+    (silent / "src" / "cluster" / "__main__.py").write_text("import sys\nsys.exit('no queue here')\n")
+    r = place(silent)
     assert r.returncode == 0 and not r.stdout and "no placement" in r.stderr
 
 
@@ -1589,6 +1931,34 @@ def _n1_lease(monkeypatch, tmp_path, holders=(), **env):
     monkeypatch.setattr(m, "kubectl", kubectl)
     monkeypatch.setattr(m, "gpu_table", lambda: {"GPU-a": 0, "GPU-b": 1, "GPU-c": 2, "GPU-d": 3})
     return m, calls, state
+
+
+def test_n1_lease_setup_makes_lease_files_writable_as_root_but_never_through_a_link(monkeypatch, tmp_path):
+    """The lease dir is 0777 and setup's chmod runs as root, so a job that planted a symlink to a file of root's there (or a hard
+    link, or swapped a listed file for a symlink) had root make that file world-writable."""
+    m, _, _ = _n1_lease(monkeypatch, tmp_path)
+    gl = tmp_path / "gl"
+    gl.chmod(0o777)
+    secret, other = tmp_path / "secret", tmp_path / "other"
+    for p in (secret, other, gl / "0.owner"):
+        p.write_text("x")
+        p.chmod(0o600)
+    (gl / "planted").symlink_to(secret)
+    os.link(other, gl / "hard")
+    real, ran = subprocess.run, []
+    monkeypatch.setattr(m.subprocess, "run", lambda argv, **kw: ran.append(argv) or subprocess.CompletedProcess(argv, 0))
+    m.setup()
+    monkeypatch.setattr(m.subprocess, "run", real)
+    assert {a[-1] for a in ran} == {str(gl / "0.owner"), str(gl / "hard")}          # a symlink is never handed to root
+    for argv in ran:
+        assert argv[:4] == ["sudo", "-n", "python3", "-c"]
+        real([sys.executable, *argv[3:]], check=True)
+    assert (gl / "0.owner").stat().st_mode & 0o777 == 0o666
+    assert secret.stat().st_mode & 0o777 == 0o600 and other.stat().st_mode & 0o777 == 0o600
+    (gl / "0.owner").unlink()
+    (gl / "0.owner").symlink_to(secret)                                                  # swapped after setup listed it
+    assert real([sys.executable, "-c", m.FIX_MODE, str(gl / "0.owner")], capture_output=True).returncode != 0
+    assert secret.stat().st_mode & 0o777 == 0o600
 
 
 @needs_flock
@@ -1836,6 +2206,95 @@ def test_n1_lease_borrows_only_for_preemptible_waiters_before_its_deadline_and_s
     assert [e.get("signal") for e in c.tick(t + 1 + m.KILL_AFTER_S)["events"]] == ["SIGKILL"]
     assert proc.wait() == -9
     os.close(lock)
+
+
+def _policy_lease(monkeypatch, tmp_path, max_: int, policy: str | None = None):
+    """The controller with VY_POOL_MAX=`max_` under a policy command (`cat` of a document, or `policy`), and a waiter that wants
+    3 GPUs, which 3 nominal allow; the waiter's lock fd, and `keys(**kv)`, which writes the document."""
+    import fcntl
+    doc = tmp_path / "policy.json"
+    m, calls, _ = _n1_lease(monkeypatch, tmp_path, VY_POOL_MAX=max_, VY_POOL_POLICY=policy or f"cat {doc}")
+    w = tmp_path / "gl" / "wait.1.4242"
+    w.write_text("pid=4242 n=3 who=adhoc:me since=x\n")
+    fd = os.open(w, os.O_RDONLY)
+    fcntl.flock(fd, fcntl.LOCK_SH)
+
+    def keys(pools=("provers",), **kv):
+        doc.write_text(json.dumps({"schema": "cluster/policy/v1", "keys": [
+            {"key": f"vy-nebius-1.lease-pool.{p}.{k.replace('_', '-')}", "value": v} for p in pools for k, v in kv.items()]}))
+    return m, calls, fd, doc, keys
+
+
+@needs_flock
+def test_n1_lease_takes_its_pool_limits_from_the_policy_command_and_keeps_the_last_while_it_fails(monkeypatch, tmp_path, reap):
+    t = 1_800_000_000.0
+    m, calls, fd, doc, keys = _policy_lease(monkeypatch, tmp_path, 1)
+    c = m.Controller()
+    steps = [(lambda: doc.write_text("Traceback"), t, 1, "JSONDecodeError", "environment"),  # never answered: the environment's 1
+             (lambda: keys(max=3, borrow=0, idle_s=600), t + 1, 1, None, "environment"),     # read again after POLICY_EVERY_S
+             (lambda: None, t + m.POLICY_EVERY_S, 3, None, "policy"),            # 3 wanted, 3 nominal, max 3 by policy
+             (lambda: keys(max=2), t + 2 * m.POLICY_EVERY_S, 2, None, "policy"),
+             (lambda: doc.write_text("Traceback"), t + 3 * m.POLICY_EVERY_S, 2, "JSONDecodeError", "last-policy"),
+             (lambda: keys(max=3, borrow_until="tomorrow"), t + 4 * m.POLICY_EVERY_S, 2, "borrow-until 'tomorrow'", "last-policy"),
+             (lambda: keys(("provers", "circuits"), max=3), t + 5 * m.POLICY_EVERY_S, 2, "two keys give max", "last-policy")]
+    for change, at, want, error, source in steps:
+        change()
+        calls.clear()
+        events = [e for e in c.tick(at)["events"] if e["ev"] == "policy"]
+        assert len([a for a, _ in calls if a[0] == "create"]) == want, (at - t, want)
+        if error:
+            assert len(events) == 1 and error in events[0]["error"] and \
+                (events[0]["limits"]["max"], events[0]["fallback"]) == (want, source)
+        assert (tmp_path / "gl" / "n1-lease.limits").read_text() == f"max={want} borrow=0 borrow-until= from={source}\n"
+    os.close(fd)
+
+
+@needs_flock
+def test_n1_lease_kills_everything_a_policy_command_that_overruns_started(monkeypatch, tmp_path, reap):
+    started, alive, block = tmp_path / "started", tmp_path / "alive", tmp_path / "block"
+    for f in (started, alive, block):
+        os.mkfifo(f)
+    # the shell's child holds `alive` open for writing until it dies, so its read end's EOF is that death (a kill that misses it
+    # leaves the read blocked)
+    hung = f"sh -c 'exec 3>{alive}; echo $$ > {started}; cat {block}'; true"
+    m, calls, fd, _, _ = _policy_lease(monkeypatch, tmp_path, 3, policy=hung)
+    r = os.open(alive, os.O_RDONLY | os.O_NONBLOCK)
+    os.set_blocking(r, True)
+    child: list[int] = []
+
+    def overrun(p, timeout):
+        child.append(int(started.read_text()))
+        raise subprocess.TimeoutExpired(p.args, timeout)
+    monkeypatch.setattr(m, "communicate", overrun)
+    events = [e for e in m.Controller().tick(1_800_000_000.0)["events"] if e["ev"] == "policy"]
+    os.close(fd)
+    assert os.read(r, 1) == b"" and child
+    os.close(r)
+    assert len(events) == 1 and events[0]["error"].startswith("TimeoutExpired") and events[0]["fallback"] == "environment"
+    assert len([a for a, _ in calls if a[0] == "create"]) == 3
+
+
+@needs_flock
+def test_n1_lease_logs_a_limits_file_it_cant_write_and_goes_on(monkeypatch, tmp_path, reap):
+    m, calls, fd, _, keys = _policy_lease(monkeypatch, tmp_path, 1)
+    keys(max=3)
+    (tmp_path / "gl" / "n1-lease.limits").mkdir()
+    events = [e["ev"] for e in m.Controller().tick(1_800_000_000.0)["events"]]
+    os.close(fd)
+    assert events[:2] == ["policy", "limits-write-failed"]
+    assert len([a for a, _ in calls if a[0] == "create"]) == 3
+
+
+@needs_flock
+@pytest.mark.parametrize("value", ["-1", -1, 1.5, float("inf"), "8x", 5, True, None])
+def test_n1_lease_refuses_a_policy_max_that_isnt_a_whole_number_of_its_gpus_and_goes_on(monkeypatch, tmp_path, reap, value):
+    m, calls, fd, _, keys = _policy_lease(monkeypatch, tmp_path, 3)
+    keys(max=value)
+    events = [e for e in m.Controller().tick(1_800_000_000.0)["events"] if e["ev"] == "policy"]
+    os.close(fd)
+    assert len([a for a, _ in calls if a[0] == "create"]) == 3
+    assert len(events) == 1 and events[0]["limits"]["max"] == 3 and events[0]["fallback"] == "environment"
+    assert f"max {value!r} isn't a whole number of GPUs from 0 to 4" in events[0]["error"]
 
 
 @needs_flock

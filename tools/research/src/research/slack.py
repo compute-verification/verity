@@ -12,7 +12,7 @@ Notes are records, never messages.
                     [--verify CMD] [--ships URL#sha256=HEX | git:SHA]...     # prints `<ts> <permalink>`; --kind announce: an announcement
   research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
   research msg list [--as NAME] [--hours H] [--open] [--json]     # threads: when, kind, from, to, state
-  research msg read --thread TS | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: unread doorbells, then the digest
+  research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: unread doorbells, then the digest
   research msg names open|read|close|list [--as NAME] [--forward-to @NAME] [--succeeds]  # the names you answer to (`inbox` too)
   research msg subscribe --as NAME [--filter F [--deliver wake|digest] | --remove F]   # F: all, kind:K, from:@x, to:@x, thread:TS
   research msg traffic [--hours H] [--json]                        # the monitor: doorbells, pauses, dropped names, unanswered asks
@@ -87,6 +87,7 @@ BROKER_METHODS = ("auth.test", "chat.getPermalink", "chat.postMessage", "convers
 DIRECT_ONLY = ("usergroups.create", "usergroups.enable", "usergroups.update")        # `groups sync --apply`: the token itself
 BROKER_MAX_BODY = 65536                                                   # bytes of request JSON; the route refuses more (413)
 ERROR_CODE_RE = re.compile(r"^[a-z0-9_]{1,64}$")
+SCOPES_RE = re.compile(r"^[a-z0-9_.:]{1,64}(,[a-z0-9_.:]{1,64}){0,15}$")      # a not-ok answer's `needed`: chat:write,users:read
 EVERY = "every handle"
 DESCRIPTION_MAX = 140                                            # Slack's user-group description limit (description_too_long)
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
@@ -99,7 +100,7 @@ STATUS_RE = re.compile(rf"^((?:{DONE}|{SHORTCODES[DONE]}) done|(?:{DECLINED}|{SH
 PIN_RE = re.compile(r"^(?:https?://\S+#sha256=[0-9a-f]{64}|git:[0-9a-f]{40})$")
 SHIPS_CODE_RE = re.compile(r"\b(curl|wget|pip install|uv (?:pip|sync|tool)|git (?:pull|merge|checkout|fetch)|install|download|upgrade)\b", re.I)
 SAFE_POINT = "Apply at your next safe point; don't interrupt running jobs."
-EXPIRES_S = 259200
+EXPIRES_S = 2592000                                              # 30 days; a lapsed subscription wakes no one and says nothing
 PAGE = 200
 ASK_DANIEL = "https://website-docs-sage.vercel.app/api/agent-approvals"   # the cards' route, and its OIDC token's audience
 ASK_CHANNEL = "ask-daniel"
@@ -120,7 +121,7 @@ LEAD_RE = re.compile(r"^\s*((?:(?:@[a-z0-9][a-z0-9._-]*|<!subteam\^[A-Z0-9]+(?:\
 BARE_LEAD_RE = re.compile(r"^\s*([a-z0-9][a-z0-9._-]*):\s")
 NAME_TOKEN_RE = re.compile(r"@([a-z0-9][a-z0-9._-]*)|<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
 AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-9a-f]{8}")
-QUIET = "(quiet)"                                                # in a post: ring only the names it starts with
+QUIET = "(quiet)"                                                # ending a post: ring only the names it starts with
 CAP_PER_HOUR = 20                                                # doorbells into one inbox from one author in one thread
 DOORBELL_MAX = 600                                               # characters of the post a doorbell carries
 INBOX_HEAD = "Inbox for @"
@@ -253,10 +254,10 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         raise urllib.error.URLError("redirected; refusing to forward the bearer token")
 
 
-def post(url: str, data: bytes, headers: dict[str, str]) -> dict:
+def post(url: str, data: bytes, headers: dict[str, str], timeout: float = 30) -> dict:
     """The one HTTP exchange: POST `data`, parse the JSON answer. Raises urllib's errors for the caller to map."""
     req = urllib.request.Request(url, data=data, method="POST", headers=headers)
-    with urllib.request.build_opener(_NoRedirect).open(req, timeout=30) as r:
+    with urllib.request.build_opener(_NoRedirect).open(req, timeout=timeout) as r:
         return json.load(r)
 
 
@@ -382,7 +383,9 @@ class Slack:
         if not isinstance(out, dict):
             raise SlackError(f"{method}: the answer is not a JSON object")
         if not out.get("ok"):
-            raise SlackError(f"{method}: {out.get('error', 'not ok')}" + (f" (needed scope {out['needed']})" if out.get("needed") else ""))
+            error, needed = out.get("error"), out.get("needed")     # echoed only when they are codes: an answer is not to be printed
+            raise SlackError(f"{method}: {error if isinstance(error, str) and ERROR_CODE_RE.fullmatch(error) else 'not ok'}"
+                             + (f" (needed scope {needed})" if isinstance(needed, str) and SCOPES_RE.fullmatch(needed) else ""))
         return out
 
     def _broker(self, method: str, args: dict[str, str]) -> dict:
@@ -587,7 +590,7 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
     author, by = poster(msg, reg), poster(root, reg) if reply else None
     if author is None:
         return []                                                    # only our bot and the named humans route
-    if QUIET in text:
+    if is_quiet(text):
         out = [] if is_status(text) else lead_names(text, reg)       # people write (quiet) for "no reply needed"
     elif reply and is_status(text):
         out = [by]
@@ -607,6 +610,14 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
         if n and n != author and n not in seen:
             seen.append(n)
     return seen
+
+
+def is_quiet(text: str) -> bool:
+    """Whether a post carries the quiet marker: as a footer tag, or as `(quiet)` ending its text before any footer.
+    `(quiet)` elsewhere is prose."""
+    text = text or ""
+    body = FOOTER_RE.sub("", OLD_FOOTER_RE.sub("", text)).rstrip()
+    return QUIET in tags_of(text) or body.endswith(QUIET)
 
 
 def tags_of(text: str) -> list[str]:
@@ -654,7 +665,7 @@ def deliveries(msg: dict, root: dict | None, reg: dict, book: dict[str, dict], i
             continue
         for s in r.get("subscriptions") or []:
             mode = s.get("deliver", "digest")
-            if mode in DELIVER and matches(s.get("filter", ""), msg, reg, targets) and not (mode == "wake" and QUIET in text):
+            if mode in DELIVER and matches(s.get("filter", ""), msg, reg, targets) and not (mode == "wake" and is_quiet(text)):
                 out.append({"name": name, "deliver": mode, "why": f"subscribes to {s['filter']}"})
                 break
     return out
@@ -1183,8 +1194,8 @@ def cmd_verify_author(ns: argparse.Namespace, reg: dict) -> int:
 
 
 def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
-    if ns.thread and (ns.since or ns.handle):
-        raise SlackError("read: --thread reads one thread; it takes neither --since nor --as")
+    if ns.thread and ns.handle:
+        raise SlackError("read: --thread reads one thread; it doesn't take --as")
     if not (ns.thread or ns.since or ns.handle):
         raise SlackError("read: one of --thread TS, --since TS or --as NAME is required")
     if ns.handle:
@@ -1195,7 +1206,10 @@ def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
         return inbox_read(ns, reg, r)
     api, ch = client(ns), channel_id(ns, reg)
     if ns.thread:
-        msgs = api.paged("conversations.replies", "messages", ns.limit, channel=ch, ts=ns.thread)
+        since = {"oldest": ns.since} if ns.since else {}
+        msgs = api.paged("conversations.replies", "messages", ns.limit, channel=ch, ts=ns.thread, **since)
+        if ns.since:
+            msgs = [m for m in msgs if float(m["ts"]) > float(ns.since)]     # Slack returns the thread's root whatever `oldest` says
     else:
         msgs = api.paged("conversations.history", "messages", ns.limit, channel=ch, oldest=ns.since)
         msgs = [m for m in msgs if m.get("ts") != ns.since][::-1]                   # oldest first; `oldest` is inclusive at the edge
@@ -1443,7 +1457,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         for n in lead_names(m.get("text") or "", reg):
             if not routes.get_route(n) and n not in handles:
                 dropped.append({"name": n, "ts": m["ts"], "by": poster(m, reg)})
-        is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m) and QUIET not in (m.get("text") or "")
+        is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m) and not is_quiet(m.get("text") or "")
         answered = m.get("reply_count") or any(x.get("name") in ("eyes", "white_check_mark", "x") for x in m.get("reactions", []))
         if is_ask and not answered and now - float(m["ts"]) > ns.stale_h * 3600:
             stale.append({"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)})
@@ -1674,6 +1688,12 @@ def permalink(reg: dict, ch: str, ts: str) -> str:
     return f"https://{reg['workspace']}/archives/{ch}/p{ts.replace('.', '')}"
 
 
+def no_such_card(verb: str, cid: str) -> str:
+    """The route answers 404 only for an ID with no card: a pending card's status is 200."""
+    return (f"ask-daniel {verb} {cid}: HTTP 404: no card has that ID. It is the UUID `ask-daniel` printed first when it posted "
+            "the card, not the card's Slack ts; for a card posted any other way, record Daniel's thread reply as a ruling")
+
+
 def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
     if ns.verb:
         if not ns.id:
@@ -1690,15 +1710,19 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
                 return _show(AskDaniel().call("POST", f"{path}/resolve", body), ns.json)
             except RouteError as e:
                 if e.status == 404:
-                    raise SlackError(f"ask-daniel resolve {ns.id}: HTTP 404: the resolve route isn't deployed yet (console is building it), "
-                                     "or there is no such card; until it is, the thread reply is the answer: record it as a ruling") from None
+                    raise SlackError(no_such_card("resolve", ns.id)) from None
                 raise
         if ns.dry_run:
             print(f"dry-run: GET {ASK_DANIEL}{path}", file=sys.stderr)
             return 0
         route = AskDaniel()
         polls = math.ceil((DEADLINE_MAX + WAIT_GRACE).total_seconds() / ns.every) if ns.wait else 1
-        return _show(wait_for(lambda: route.call("GET", path), sleep=_sleep, every=ns.every, polls=polls), ns.json)
+        try:
+            return _show(wait_for(lambda: route.call("GET", path), sleep=_sleep, every=ns.every, polls=polls), ns.json)
+        except RouteError as e:
+            if e.status == 404:
+                raise SlackError(no_such_card("status", ns.id)) from None
+            raise
 
     now = _now()
     body = card(ns, reg, now)
@@ -1840,7 +1864,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--why", action="store_true", help="print the verdict on stderr")
     p = cmd("read", "a thread, the channel since TS, or (--as) what reached NAME since it last read (or since TS)")
     p.add_argument("--thread", default=None, metavar="TS")
-    p.add_argument("--since", default=None, metavar="TS", help="the channel since TS; with --as, NAME's doorbells and digest since TS")
+    p.add_argument("--since", default=None, metavar="TS",
+                   help="the channel since TS; with --thread, its replies since TS; with --as, NAME's doorbells and digest since TS")
     p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="NAME's unread doorbells, then its digest")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--peek", action="store_true", help="--as: don't mark them read")

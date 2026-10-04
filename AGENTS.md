@@ -79,7 +79,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     Other modules are created when code lands, not before.
   - Tests live in `packages/verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the
- stdlib, `verity` and itself (`tests/test_protocol_boundaries.py`).
+ stdlib, `verity`, itself and the protocols Daniel has allowed it (PoUW imports sampled proofs;
+ `EDGES` in `tests/test_protocol_boundaries.py`).
  The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the one-stage
  audit (`one_stage`: registration, the verifier's draw over a partition's proof units, and the
  audit record with its profile), the two-stage law, its draws from the verifier's own
@@ -114,9 +115,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
 - `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes (see Circuits below).
 - `tools/check/`: `check`, the one repository check a merge requires (see Checking and merging below).
 - `tools/lean/`: the Lean audit (`audit.py`), which `check` runs on every Lake package (see Lean below).
-- `tools/cluster/`: `cluster`, the shared machines' description, a pure per-node planner and the allocation ledger. Stdlib
- only, imports neither `verity` nor `research`. On vy-nebius-2 its agent runs in shadow mode (read-only, beside
- `gpu-lease`); nothing it decides is carried out yet (its `README.md`).
+- `tools/cluster/`: `cluster`, the shared machines' description and policy (`cluster policy diff` names live drift), a pure
+ per-node planner and the allocation ledger. Stdlib only, imports neither `verity` nor `research`. On vy-nebius-2 its agent
+ runs live (`vy-cluster-agent.service`, its `README.md`).
 - `backends/`, `frontends/`, `integrations/`, `benchmarks/`: created when a
   component has real code; there is no `frontends/` yet. `backends/flock`
   (`verity_flock`) is C-Flock, the backend in active development; its verifier
@@ -177,6 +178,10 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
 
 ## Lean
 
+- Soundness is one theorem over everything the compiled Lean verifier accepts, for arbitrary Boolean circuits, with no
+  hypothesis on the circuit file or the statement's form. The verifier refuses any form the proof doesn't cover, and gains
+  no new form ahead of its proof. Circuit inputs and outputs use one canonical format proved in general, so a new workload
+  needs no verifier or proof change (ruling 2026-10-04, `.agents/skills/friction/SKILL.md`).
 - The Lean packages are `backends/flock/verifier/lean/` (the executable verifier, no dependencies), its `level3/` (proofs
   about the executable's definitions, Mathlib) and `soundness/` (the protocol's proofs, ArkLib), and
   `protocols/pous/lean/` (POUS's guarantees, their proofs and grader, Mathlib), `protocols/pouw/lean/` (PoUW's games,
