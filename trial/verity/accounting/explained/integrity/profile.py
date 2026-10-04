@@ -19,7 +19,8 @@ class Count:
 class IntegrityProfile:
     """If `accepted`: of the stream's gates, at most `gates.wrong` are in wrong units at `scale`, and of its output bits
     at most `outputs.wrong`, except with probability `delta`. A unit is wrong when the outputs committed for it are not
-    what its gates compute from the inputs committed for it."""
+    what its gates compute from the inputs committed for it. An output bit is a distinct circuit output a gate
+    computes: an input passed through is no output, however often it is listed."""
 
     stream: str  # its digest
     scale: str  # what a unit is: "execution", "region"

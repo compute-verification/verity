@@ -74,7 +74,8 @@ class Replay:
             return (Send(profile(stream.digest(), "execution", [], [], self.law, self.delta, refused)),)
 
         circuits = [stream.built(i)[0] for i in range(len(stream.executions))]
-        gates, outputs = [len(c.gates) for c in circuits], [len(c.outputs) for c in circuits]
+        gates = [len(c.gates) for c in circuits]
+        outputs = [len({o for o in c.outputs if o >= c.inputs}) for c in circuits]
         coins = derive(secret, "verity/integrity/replay/v2", stream.digest())
         drawn = self.law.draw(coins, gates, outputs, self.delta)
         results = (
