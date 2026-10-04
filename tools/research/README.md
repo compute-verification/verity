@@ -288,8 +288,10 @@ A tool can declare a preflight (`Tool.preflight`: a Python script in the tree
 and its args), which says whether a machine is prepared for it. When a
 `--tool` run's shipped tree declares one, `launch-request` runs it there,
 in the tree, with the runner's environment, before anything else is
-admitted. `RESEARCH_PREFLIGHT_INPUTS` names the run's `--send` files and,
-with custody, `RESEARCH_PREFLIGHT_CUSTODY` the staged key's directory. It
+admitted. `RESEARCH_PREFLIGHT_INPUTS` names the run's `--send` files and
+`RESEARCH_PREFLIGHT_CUSTODY` the staged key's directory (empty without
+custody); the runner sets every `RESEARCH_PREFLIGHT_*` variable a preflight
+sees, whatever the run's `--env` says. It
 runs under the interpreter `research` itself runs on, since it may be
 checking what else is installed. On exit 0 the run starts, and job.json
 records the report (`run.remote.preflight`). Any other exit refuses the run

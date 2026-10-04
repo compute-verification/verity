@@ -26,7 +26,8 @@ inputs = os.environ.get("RESEARCH_PREFLIGHT_INPUTS")
 print("args", *sys.argv[1:])
 print("cwd", os.getcwd())
 print("sent", *sorted(os.listdir(inputs)) if inputs and os.path.isdir(inputs) else ["-"])
-print("custody", os.environ.get("RESEARCH_PREFLIGHT_CUSTODY", "-"))
+print("custody", os.environ.get("RESEARCH_PREFLIGHT_CUSTODY") or "-")
+print("names", *sorted(k for k in os.environ if k.startswith("RESEARCH_PREFLIGHT_")))
 if os.environ.get("PF_FAIL"):
     print("uv is not on the PATH", file=sys.stderr)
     print("prepare the pod: bash tools/check/pod_setup.sh", file=sys.stderr)
@@ -95,7 +96,8 @@ def test_a_passing_preflight_runs_in_the_tree_with_the_runs_inputs_and_is_record
     pf = json.loads((run_dir / "job.json").read_text())["run"]["remote"]["preflight"]
     sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True).stdout.strip()
     assert pf["rc"] == 0 and pf["argv"] == ["pf.py", "--say", "hi"]
-    assert pf["stdout"] == ["args --say hi", f"cwd {machine / 'src' / sha}", "sent sent.txt", "custody -"]
+    assert pf["stdout"] == ["args --say hi", f"cwd {machine / 'src' / sha}", "sent sent.txt", "custody -",
+                            "names RESEARCH_PREFLIGHT_CUSTODY RESEARCH_PREFLIGHT_INPUTS"]
     assert "research: preflight pf.py --say hi on m: passed" in err and "research: preflight: sent sent.txt" in err
     assert (run_dir / "inputs" / "sent.txt").read_text() == "x", "the run still gets its --send files"
     assert LocalStore().get_attempt(rid) is not None
@@ -161,6 +163,27 @@ def test_the_preflight_gets_the_custody_dir_and_a_refusal_deletes_the_key(tmp_pa
     assert not (root / "requests" / "r1" / remote.CUSTODY_DIR / "cred.json").exists(), "nothing will publish: the key goes now"
     again = remote.launch_request(req)                      # the launcher re-delivered after an ssh drop
     assert again["existing"] and again["fault"] == "PreflightFailed" and again["refused"] == out["refused"]
+
+
+@pytest.mark.parametrize("asked", [False, True], ids=["tool", "preflight-TOOL"])
+def test_a_preflights_variables_are_the_runners_whatever_the_runs_env_says(tmp_path, asked):
+    """A run's --env may neither hand its preflight another run's staged key nor steer it through any other RESEARCH_PREFLIGHT_*
+    variable (red team, #1055 F3)."""
+    root = tmp_path / "root"
+    other = root / "requests" / "r0" / remote.CUSTODY_DIR
+    (tmp_path / "elsewhere").mkdir()
+    (tmp_path / "elsewhere" / "theirs.json").write_text("{}")
+    req = _request(root, "r1", _tree(tmp_path), env={"RESEARCH_PREFLIGHT_TOOL": "check", "RESEARCH_PREFLIGHT_CUSTODY": str(other),
+                                                     "RESEARCH_PREFLIGHT_INPUTS": str(tmp_path / "elsewhere")})
+    if asked:
+        doc = json.loads(req.read_text())
+        doc["preflight_tool"], doc["harness_args"] = TOOL, ["--stage", "t", "--no-sampler"]
+        req.write_text(json.dumps(doc))
+    out = remote.launch_request(req)
+    assert out["started"], out
+    wait_runner(root / "runs" / "r1")
+    pf = json.loads((root / "runs" / "r1" / "job.json").read_text())["run"]["remote"]["preflight"]["stdout"]
+    assert pf[2:] == ["sent -", "custody -", "names RESEARCH_PREFLIGHT_CUSTODY RESEARCH_PREFLIGHT_INPUTS"]
 
 
 def test_a_refusal_after_the_preflight_passed_deletes_the_staged_credentials(tmp_path):
