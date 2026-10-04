@@ -9,14 +9,15 @@ reduce K differently, so each is its own dot:
     CublasF32Linear_v1{K, N, TREE}    (x: Array<K, BF16>, w: Array<N, Array<K, F32>>) -> Array<N, F32>
                                       `Bf16ToF32` of x, then TREE's dot (gemv | simt) on each W row
 
-and their word twins (`...Word_v1`, the same bodies on words, for word Programs). The trees are the ones exact LCA queries
-recover (r20261004-070541-1622: x = 1, w = 1 except +-2^60 at a pair, M = 1, 8 and 256 at K = 2048), and the outputs on random
-data, f32 weights included, are the sm_120 kernels' (r20261004-065341-db1b kernel table; `tests/program/test_cublas_f32.py`).
+on words, and each one's v2 the same body on bits (its ``word`` the v1, so `boolean.boolean_version` finds it). The trees are the
+ones exact LCA queries recover (r20261004-070541-1622: x = 1, w = 1 except +-2^60 at a pair, M = 1, 8 and 256 at K = 2048), and
+the outputs on random data, f32 weights included, are the sm_120 kernels' (r20261004-065341-db1b kernel table;
+`tests/program/test_cublas_f32.py`).
 """
 from __future__ import annotations
 
 from verity.ir import boolean as BL
-from verity.ir.defs import CompositeDefinition, bind, composite
+from verity.ir.defs import CompositeDefinition, bind
 from verity.ir.refs import Coll, broadcast
 from verity.ir.types import Array
 from verity.ml import fp32 as W
@@ -75,17 +76,6 @@ def _linear_type(X, T):
     return lambda S: ((("x", Array(S.K, X)), ("w", Array(S.N, Array(S.K, T)))), Array(S.N, T))
 
 
-CublasGemvDot = CompositeDefinition("CublasGemvDot", 1, ("K",), _dot_type(F32),
-                                    lambda B, S, x, w: _gemv(B, S.K, x, w, BS.F32Fma, BS.F32Add, _bits_zero(B)),
-                                    doc="gemv2T_kernel_val / gemmSN_TN_kernel's coordinate: per thread class t = k mod 16 one FMA "
-                                        "chain from +0 per tile of 16, tile sums added in order, class sums added in t order (on bits)",
-                                    conformance=CONFORMANCE)
-CublasSimtDot = CompositeDefinition("CublasSimtDot", 1, ("K",), _dot_type(F32),
-                                    lambda B, S, x, w: _simt(B, S.K, x, w, BS.F32Fma, _bits_zero(B)),
-                                    doc="cutlass_80_simt_sgemm_*'s coordinate: one FMA chain from +0, k ascending (on bits)",
-                                    conformance=CONFORMANCE)
-
-
 def _linear(dots, widen):
     def body(B, S, x, w):
         _check("CublasF32Linear", TREE_known=S.TREE in TREES)
@@ -94,24 +84,30 @@ def _linear(dots, widen):
     return body
 
 
-CublasF32Linear = CompositeDefinition("CublasF32Linear", 1, ("K", "N", "TREE"), _linear_type(BF16, F32),
-                                      _linear({"gemv": CublasGemvDot, "simt": CublasSimtDot}, BS.Bf16ToF32),
-                                      doc="`x[K] (bf16, widened) @ W[N, K]^T` in f32 as cuBLAS's TREE kernel family reduces it (on bits)",
-                                      conformance=CONFORMANCE)
+GEMV_DOC = ("gemv2T_kernel_val / gemmSN_TN_kernel's coordinate: per thread class t = k mod 16 one FMA chain from +0 per tile of 16, "
+            "tile sums added in order, class sums added in t order")
+SIMT_DOC = "cutlass_80_simt_sgemm_*'s coordinate: one FMA chain from +0, k ascending"
+LINEAR_DOC = "`x[K] (bf16, widened) @ W[N, K]^T` in f32 as cuBLAS's TREE kernel family reduces it"
 
-
-@composite("CublasGemvDotWord", 1, ["K"], _dot_type(F32W), conformance=CONFORMANCE)
-def CublasGemvDotWord(B, S, x, w):
-    """`CublasGemvDot_v1` on words."""
-    return _gemv(B, S.K, x, w, W.F32Fma, W.F32Add, B.call(P.ZERO32))
-
-
-@composite("CublasSimtDotWord", 1, ["K"], _dot_type(F32W), conformance=CONFORMANCE)
-def CublasSimtDotWord(B, S, x, w):
-    """`CublasSimtDot_v1` on words."""
-    return _simt(B, S.K, x, w, W.F32Fma, B.call(P.ZERO32))
-
-
-CublasF32LinearWord = CompositeDefinition("CublasF32LinearWord", 1, ("K", "N", "TREE"), _linear_type(BF16W, F32W),
+CublasGemvDotWord = CompositeDefinition("CublasGemvDot", 1, ("K",), _dot_type(F32W),
+                                        lambda B, S, x, w: _gemv(B, S.K, x, w, W.F32Fma, W.F32Add, B.call(P.ZERO32)),
+                                        doc=GEMV_DOC, conformance=CONFORMANCE)
+CublasSimtDotWord = CompositeDefinition("CublasSimtDot", 1, ("K",), _dot_type(F32W),
+                                        lambda B, S, x, w: _simt(B, S.K, x, w, W.F32Fma, B.call(P.ZERO32)),
+                                        doc=SIMT_DOC, conformance=CONFORMANCE)
+CublasF32LinearWord = CompositeDefinition("CublasF32Linear", 1, ("K", "N", "TREE"), _linear_type(BF16W, F32W),
                                           _linear({"gemv": CublasGemvDotWord, "simt": CublasSimtDotWord}, P.Bf16ToF32),
-                                          doc="`CublasF32Linear_v1` on words", conformance=CONFORMANCE)
+                                          doc=LINEAR_DOC, conformance=CONFORMANCE)
+
+CublasGemvDot = CompositeDefinition("CublasGemvDot", 2, ("K",), _dot_type(F32),
+                                    lambda B, S, x, w: _gemv(B, S.K, x, w, BS.F32Fma, BS.F32Add, _bits_zero(B)),
+                                    doc=f"{GEMV_DOC} (on bits)", conformance=CONFORMANCE)
+CublasSimtDot = CompositeDefinition("CublasSimtDot", 2, ("K",), _dot_type(F32),
+                                    lambda B, S, x, w: _simt(B, S.K, x, w, BS.F32Fma, _bits_zero(B)),
+                                    doc=f"{SIMT_DOC} (on bits)", conformance=CONFORMANCE)
+CublasF32Linear = CompositeDefinition("CublasF32Linear", 2, ("K", "N", "TREE"), _linear_type(BF16, F32),
+                                      _linear({"gemv": CublasGemvDot, "simt": CublasSimtDot}, BS.Bf16ToF32),
+                                      doc=f"{LINEAR_DOC} (on bits)", conformance=CONFORMANCE)
+CublasGemvDot.word = lambda b: bind(CublasGemvDotWord, K=b["K"])  # type: ignore[attr-defined]
+CublasSimtDot.word = lambda b: bind(CublasSimtDotWord, K=b["K"])  # type: ignore[attr-defined]
+CublasF32Linear.word = lambda b: bind(CublasF32LinearWord, K=b["K"], N=b["N"], TREE=b["TREE"])  # type: ignore[attr-defined]
