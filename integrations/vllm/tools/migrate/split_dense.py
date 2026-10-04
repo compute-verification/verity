@@ -49,7 +49,6 @@ class Move:
     name: str
     package: str   # the dotted package it moves to
     kind: str      # twin | vocabulary
-    root: str = ""   # its census root's comment: the registry walk reached it, nothing imports it outside the registry
 
     @property
     def old(self) -> str:
@@ -69,8 +68,8 @@ class Move:
 
 
 MOVES = (
-    Move("rope_difftest", f"{PKG}.properties.difftests", "twin", "properties-admission --adapter: imported by name"),
-    Move("rope_gptj_difftest", f"{PKG}.properties.difftests", "twin", "properties-admission --adapter: imported by name"),
+    Move("rope_difftest", f"{PKG}.properties.difftests", "twin"),
+    Move("rope_gptj_difftest", f"{PKG}.properties.difftests", "twin"),
     Move("rmsnorm_fused_sweep", f"{PKG}.program.kernels", "twin"),
     Move("gemm_targets", f"{PKG}.program.frontend", "vocabulary"),
 )
@@ -83,6 +82,9 @@ NEW_PACKAGES = {f"{PKG}.properties.difftests": '"""Difftest adapters (`verity_vl
 EXCLUDE = (f"{VLLM}/tools/migrate/", f"{VLLM}/tests/tools/test_split_dense.py", "CHANGELOG.md")
 FIXTURE = "tools/circuit_check/tests/fixtures/split/dense.json"
 ROOTS = f"{VLLM}/tests/census_roots.txt"
+#: census roots for what only the registry walk (`registry.catalog.load()`) reached: a moved module's own root folds into its
+#: package's
+ROOT_DIRS = {f"{PKG}.properties.difftests": "the difftest adapters, imported by name (properties-admission --adapter)"}
 
 
 class SplitError(RuntimeError):
@@ -152,12 +154,15 @@ def _sort_cycles(text: str) -> str:
 
 
 def _add_roots(text: str) -> str:
-    """A census root for each moved module that only the registry walk (`registry.catalog.load()`) reached."""
     lines = text.splitlines(keepends=True)
-    for m in MOVES:
-        if m.root and not any(ln.split("#")[0].strip() == m.new for ln in lines):
-            at = max((i + 1 for i, ln in enumerate(lines) if ln.startswith(f"{m.package}.")), default=len(lines))
-            lines.insert(at, f"{m.new}     # {m.root}\n")
+    for pkg, why in ROOT_DIRS.items():
+        entry = pkg.replace(".", "/") + "/"
+        own = {m.new for m in MOVES if m.package == pkg}
+        at = [i for i, ln in enumerate(lines) if ln.split("#")[0].strip() in own]
+        if any(ln.split("#")[0].strip() == entry for ln in lines):
+            continue
+        lines = [ln for i, ln in enumerate(lines) if i not in at]
+        lines.insert(at[0] if at else len(lines), f"{entry}      # {why}\n")
     return "".join(lines)
 
 
