@@ -454,14 +454,14 @@ WHOLE = {
     pc8.Shape(128, 128, 128): "42bf79753583e3318a6ee174dc9eecf279eabd011963a715d1fb79028dd445cd",
     pc8.Shape(128, 128, 128, hidden=True): "8df370c86fb0876347efc0efd99aa338656f73d91e3ea6bf7ba511e4e2ac5c67",
     pc8.Shape(2, 384, 2, tile=(1, 1), dev="h100", row_k=128):
-        "6228401cb58f4821db5641e7f715bee96749be33fff6866fb7dfd815de1741de",
+        "6e57e2e6bfa3ac03b0ec43028e24740643e2ad9a1861cc061f8503d31115848f",
     pc8.Shape(2, 384, 2, tile=(1, 1), hidden=True, row_k=128):
-        "9d1cd6c57961e0c23ea27409e3dd24e8e459d025953f0834f360729142d56383",
+        "533372e79842f43f1494b08255cc2ad65b28622bc10fb78b8df79cceee6fe66f",
     pc8.Shape(2, 96, 2, tile=(1, 1), dev="sm120-unpromoted", row_k=32):
-        "01ccf860eea2c006eac54d9fa101e9ad73f67070d031a035758220bdc0153c61",
+        "52dc8f86afba68200cbc9f6e58666de2c52d14d61ccd3df4c033e3dba810b489",
     pc8.Shape(4, 384, 6, tile=(2, 3), hidden=True, row_k=128):
-        "24ad4c912042fdcc97c24f726aa6047a96c57113555af558c7ddb2c330081b29",
-    pc8.Shape(64, 256, 64, hidden=True, row_k=128): "e04ce7faecefe499db5355583f13ea1f890adbaba2adb82a8376b2e3cbf5f9a9",
+        "98527b5e389229acebc30c4dae44d757f666255a7b8ff28b45eb40adba2feda6",
+    pc8.Shape(64, 256, 64, hidden=True, row_k=128): "f7140c9770354efbfd59c4c4db0f1977a04f4fb25942ba6c2ccb5b4a6abf7788",
 }
 
 
