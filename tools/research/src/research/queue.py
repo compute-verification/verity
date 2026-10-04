@@ -665,6 +665,10 @@ class QuickTier:
     `lake`, else elan's; none, or a failed build, refuses).  Passes are cached by input (`suites.py`), so a re-run after a failure
     runs only what failed."""
 
+    #: the worktree's name after the hash of the caller's git common dir: a remote tier ships its own (`-ship`), so a local tier,
+    #: which holds its worktree's lock for the whole tier, never holds up a remote one's checkout from the same repository
+    WORKTREE_SUFFIX = ""
+
     def __init__(self, repo: Path, remote: str, root: Path | None = None):
         self.repo, self.remote = Path(repo), remote
         self.root = Path(root or Path.home() / ".research" / "queue" / "ready")
@@ -682,7 +686,7 @@ class QuickTier:
         """Under the worktree's lock: the worktree at ``pr``'s head, cleaned, and the head's merge base with `main` (None when the
         head isn't on the remote)."""
         common = Path(_out(self.repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
-        wt = self.root / hashlib.sha256(str(common).encode()).hexdigest()[:12]
+        wt = self.root / (hashlib.sha256(str(common).encode()).hexdigest()[:12] + self.WORKTREE_SUFFIX)
         self.root.mkdir(parents=True, exist_ok=True)
         with open(self.root / f"{wt.name}.lock", "w") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
@@ -713,14 +717,16 @@ def _launch(argv: list[str], cwd: Path) -> subprocess.CompletedProcess:
 
 
 class RemoteQuickTier(QuickTier):
-    """The quick tier as a `research run` on machine ``on``: the queue's worktree, checked out and cleaned as `QuickTier` does, is the
-    run's `--source`, and the worktree's lock is held only while it is checked out and shipped, so several PRs' tiers run at once.  On
+    """The quick tier as a `research run` on machine ``on``: a worktree of its own (`WORKTREE_SUFFIX`), checked out and cleaned as
+    `QuickTier` does, is the run's `--source`, and the worktree's lock is held only while it is checked out and shipped, so several PRs' tiers run at once.  On
     the machine the run waits for a free check slot (`tools/check/slot.py` from the caller's checkout, sent with the run, as
     `check.py --record --on` takes one) and runs `quick_tier.py` (sent too) in the shipped tree.  The caller polls the run's records
     (`research fetch`) until it ends and judges the facts in its result.json as the local tier's are judged; a run that ends without
     them, with facts from another run or head, or other than `done` with exit 0, is a failure.  The run itself is bounded on the
     machine (`--timeout`), and the caller's wait by that plus REMOTE_GRACE_S of ``clock`` time (a fetch can take its ssh's own
     timeout, so polls are not counted), past which it ends with the poll under way."""
+
+    WORKTREE_SUFFIX = "-ship"
 
     def __init__(self, repo: Path, remote: str, on: str, *, by: str = "", project: str = "verity", root: Path | None = None,
                  slot: Path | None = None, timeout_s: float = REMOTE_TIMEOUT_S, poll_s: float = REMOTE_POLL_S,
