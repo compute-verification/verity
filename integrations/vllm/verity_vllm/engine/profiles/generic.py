@@ -390,6 +390,11 @@ def make_check_header(cfg: dict[str, Any], C: dict[str, Any], world: int) -> Cal
                 return [f"recorded config cannot be sharded by {world}: {e}"]
             if mk:
                 rk.pop("intermediate_size", None)          # the dense width of no layer here; MOE_I_FULL is checked below
+            if fam["arch"] == "mla-moe":
+                # transformers' MLA configs report head_dim = qk_rope_head_dim (the rotary width), not the attention head width D
+                hd = rk.pop("head_dim", None)
+                if hd is not None and hd != C.get("QK_ROPE"):
+                    out.append(f"head_dim={hd!r} != C[QK_ROPE]={C.get('QK_ROPE')!r}")
             out += base_check(dataclasses.replace(header, model={**(header.model or {}), "config": rk}))
             out += FF.header_checks(cfg, C, hcfg)
             if fam["arch"] == "moe":
