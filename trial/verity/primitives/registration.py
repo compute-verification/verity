@@ -153,7 +153,8 @@ def check(stream: Stream, scheme: CommitmentScheme) -> tuple[str, ...]:
 
 def inference_units(stream: Stream) -> list[list[tuple[int, int]]]:
     """The stream's inference units, each its parts (execution, inference unit of that execution's partition): the
-    executions' own, joined where one reads state another wrote. Raises ValueError where `Stream.locate` does."""
+    executions' own, joined where one reads state another wrote. Raises ValueError where `Stream.locate` does, and
+    where a partition does not hold every gate exactly once."""
     parent: dict[tuple[int, int], tuple[int, int]] = {}
 
     def find(x: tuple[int, int]) -> tuple[int, int]:
@@ -163,6 +164,8 @@ def inference_units(stream: Stream) -> list[list[tuple[int, int]]]:
 
     for i in range(len(stream.executions)):
         circuit, partition = stream.built(i)
+        if not P.covers(circuit, partition):
+            raise ValueError(f"execution {i}: the regions do not cover every gate exactly once")
         for u, unit in enumerate(partition):
             find((i, u))
             for w in P.boundary(circuit, P.gates(unit))[0]:

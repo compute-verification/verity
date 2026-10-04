@@ -73,10 +73,14 @@ def evaluate_region(circuit: Circuit, region: Sequence[int], inputs: Mapping[int
     return {wire_of(circuit, g): wires[wire_of(circuit, g)] for g in region}
 
 
+def covers(circuit: Circuit, partition: Partition) -> bool:
+    """Whether the regions hold every gate exactly once."""
+    return sorted(g for region in regions(partition) for g in region) == list(range(len(circuit.gates)))
+
+
 def validate(circuit: Circuit, partition: Partition, max_width: int) -> tuple[str, ...]:
     why = []
-    seen = sorted(g for region in regions(partition) for g in region)
-    if seen != list(range(len(circuit.gates))):
+    if not covers(circuit, partition):
         why.append("the regions do not cover every gate exactly once")
     for i, region in enumerate(regions(partition)):
         ins, outs = boundary(circuit, region)
