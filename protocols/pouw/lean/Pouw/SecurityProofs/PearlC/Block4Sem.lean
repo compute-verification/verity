@@ -17,7 +17,13 @@ The floors differ in order: the table floors the FP32 value at `2⁻⁹` and the
 floors the code at `0x01`. On a non-negative value the two agree (`e4m3_floor`), since `e4m3` is at least `0x01` from
 `2⁻⁹` up and at most `0x01` below it. A block's words need only be step words (finite, not `−0`): the running max is
 the fold's (`blkMax4_word`), the scale byte is `nvf4Scale`'s (`scale4W_sem`) and the codes are `nvf4Block`'s
-(`code4W_sem`, `block4_sem`).
+(`code4W_sem`, `block4_sem`). A `−0` formed word would not do: its code is `0x8` in the table and `0x0` in
+`nvf4Block`, of one value.
+
+A formed word is `nvf4NoiseElem`'s (`form4_sem`): the accumulator is `f32Word(α·x)` and the operands and scale bytes
+are `noiseOperand`'s and `noiseScales`'. So a row unit's codes and scale bytes are `formRow`'s at `pc4Sem`'s `α` and
+`β` (`formRow_table`, `row4A_form`, `row4B_form`), under `Row4OK` (the row's BF16 words widen to step words of its
+values, `α > 0` and `β` are step words) and where `formRow`'s noise atoms are step words.
 -/
 
 namespace Pouw.PearlC.RowCircuit
@@ -411,5 +417,225 @@ theorem block4_sem (hA : Pc4OpsAgree ops) {d : ℕ → ℕ} (hd : ∀ s < 16, Ac
   simp [nvf4Block, hfold, List.getD_eq_getElem?_getD, hsl]
 
 end Block
+
+/-! ## A formed word -/
+
+/-- A formed word's operands after its accumulator: `e`'s 32 codes and 32 zeros, `f`'s and 32 zeros, then `e`'s
+byte `aE` and `f`'s `24`, four times each. -/
+def formArgs4 (aE : ℕ) (e f : ℕ → ℕ) : List ℕ :=
+  (List.range 32).map e ++ List.replicate 32 0 ++ (List.range 32).map f ++ List.replicate 32 0 ++
+    List.replicate 4 aE ++ List.replicate 4 24
+
+theorem formArgs4_at (aE : ℕ) (e f : ℕ → ℕ) (n : ℕ) (hn : n < 136) :
+    (formArgs4 aE e f).getD n 0 = if n < 32 then e n else if n < 64 then 0 else if n < 96 then f (n - 64)
+      else if n < 128 then 0 else if n < 132 then aE else 24 := by
+  simp only [formArgs4, List.getD_eq_getElem?_getD, List.getElem?_append, List.length_append, List.length_map,
+    List.length_range, List.length_replicate, List.getElem?_map, List.getElem?_replicate]
+  split_ifs <;> first | rfl | omega | (rw [List.getElem?_range (by omega)]; rfl)
+
+theorem formArgs4_getD (aE : ℕ) (e f : ℕ → ℕ) :
+    (∀ i < 64, (formArgs4 aE e f).getD i 0 = (if i < 32 then e i else 0) ∧
+      (formArgs4 aE e f).getD (64 + i) 0 = (if i < 32 then f i else 0)) ∧
+      ∀ i < 4, (formArgs4 aE e f).getD (128 + i) 0 = aE ∧ (formArgs4 aE e f).getD (132 + i) 0 = 24 := by
+  refine ⟨fun i hi => ⟨?_, ?_⟩, fun i hi => ⟨?_, ?_⟩⟩
+  · rw [formArgs4_at aE e f i (by omega)]
+    by_cases h32 : i < 32
+    · rw [ite_eq_left h32, ite_eq_left h32]
+    · rw [ite_eq_right h32, ite_eq_right h32, ite_eq_left hi]
+  · rw [formArgs4_at aE e f (64 + i) (by omega), ite_eq_right (by omega), ite_eq_right (by omega)]
+    by_cases h32 : i < 32
+    · rw [ite_eq_left (by omega), ite_eq_left h32, show 64 + i - 64 = i by omega]
+    · rw [ite_eq_right (by omega), ite_eq_right h32, ite_eq_left (by omega)]
+  · rw [formArgs4_at aE e f (128 + i) (by omega), ite_eq_right (by omega), ite_eq_right (by omega),
+      ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_left (by omega)]
+  · rw [formArgs4_at aE e f (132 + i) (by omega), ite_eq_right (by omega), ite_eq_right (by omega),
+      ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega)]
+
+theorem noise_list {E : ℕ → ℕ} {e : Fin 32 → Nib} (hE : ∀ l : Fin 32, E l = (e l).val) :
+    (List.ofFn fun l : Fin 64 => nib (if (l : ℕ) < 32 then E l else 0)) = noiseOperand sm120Nvf4 e := by
+  apply List.ext_getElem (by simp [noiseOperand, show sm120Nvf4.k = 64 from rfl])
+  intro i h1 h2
+  simp only [List.length_ofFn] at h1
+  simp only [noiseOperand, List.getElem_ofFn, List.getElem_append, List.length_ofFn, List.getElem_replicate]
+  by_cases h32 : i < 32
+  · simp only [h32, ↓reduceIte, ↓reduceDIte]
+    rw [hE ⟨i, h32⟩]; exact Fin.ext (Nat.mod_eq_of_lt (e _).isLt)
+  · simp only [h32, ↓reduceIte, ↓reduceDIte]; rfl
+
+section Form
+
+variable {ops : RowOps}
+
+/-- **A formed word is `nvf4NoiseElem`'s** where the noise atom is in the model: the accumulator `α·x` is
+`f32Word` of the values' product (`α > 0`, `x`'s widening a step word, so a zero product is `+0`), the noise scale byte
+is `e4m3(β)` (`β` a step word), and the operands and scale bytes are `noiseOperand`'s and `noiseScales`'. -/
+theorem form4_sem (hA : WholeCircuit.Pc8OpsAgree ops) {α x β : ℕ} {e f : Fin 32 → Nib} {E F : ℕ → ℕ}
+    (hα : AccumProofs.StepWord α) (hαp : 0 < wordVal α) (hβ : AccumProofs.StepWord β)
+    (hx : AccumProofs.StepWord (ops.bf16ToF32 x)) (hE : ∀ l : Fin 32, E l = (e l).val)
+    (hF : ∀ l : Fin 32, F l = (f l).val) {w : ℕ}
+    (hw : nvf4NoiseElem (wordVal α) (wordVal (ops.bf16ToF32 x)) (wordVal β) e f = some w) :
+    form4 ops α x (Prim.eval ops .toE4m3 [β]) E F = w := by
+  have hαq := WholeCircuit.stepWord_wordQ hα
+  have hxq := WholeCircuit.stepWord_wordQ hx
+  have hacc : Prim.eval ops .mul [α, ops.bf16ToF32 x] = f32Word (wordVal α * wordVal (ops.bf16ToF32 x)) :=
+    hA.mul α (ops.bf16ToF32 x) (wordVal α) (wordVal (ops.bf16ToF32 x)) hα.1 hx.1 hαq hxq fun h0 => by
+      rcases mul_eq_zero.1 h0 with h0 | h0
+      · exact absurd h0 hαp.ne'
+      · rw [WholeCircuit.signBit_of_pos hαq hαp, AccumProofs.wordQ_zero_word hx (by rw [hxq, h0])]; rfl
+  have hbE : Prim.eval ops .toE4m3 [β] = (e4m3 (wordVal β)).val := by
+    show ops.f32ToE4m3Sat β % 2 ^ 8 = _
+    rw [hA.cast, e4m3_wordVal (fun h => absurd h (AccumProofs.finite?_exp hβ.2.2))
+      (fun h0 => by rw [AccumProofs.wordQ_zero_word hβ h0]; rfl)]
+    exact Nat.mod_eq_of_lt (Fin.isLt _)
+  have hs : sm120Nvf4.step (f32Word (wordVal α * wordVal (ops.bf16ToF32 x))) (noiseOperand sm120Nvf4 e)
+      (noiseOperand sm120Nvf4 f) (noiseScales sm120Nvf4 (e4m3 (wordVal β)))
+      (noiseScales sm120Nvf4 (fScale sm120Nvf4.fmt)) = some w := hw
+  obtain ⟨q1, q2⟩ := formArgs4_getD (e4m3 (wordVal β)).val E F
+  unfold form4
+  rw [hacc, hbE]
+  show atom4F false (f32Word (wordVal α * wordVal (ops.bf16ToF32 x)) :: formArgs4 (e4m3 (wordVal β)).val E F) %
+    2 ^ 32 = w
+  simp only [atom4F, Bool.false_eq_true, ↓reduceIte, List.headD_cons, List.tail_cons]
+  set L := formArgs4 (e4m3 (wordVal β)).val E F
+  have a1 : (List.ofFn fun l : Fin 64 => nib (L.getD l 0)) = noiseOperand sm120Nvf4 e := by
+    rw [← noise_list hE]; exact congrArg List.ofFn (funext fun l => by rw [(q1 l l.isLt).1])
+  have a2 : (List.ofFn fun l : Fin 64 => nib (L.getD (64 + l) 0)) = noiseOperand sm120Nvf4 f := by
+    rw [← noise_list hF]; exact congrArg List.ofFn (funext fun l => by rw [(q1 l l.isLt).2])
+  have a3 : (List.ofFn fun l : Fin 4 => byte (L.getD (128 + l) 0)) = noiseScales sm120Nvf4 (e4m3 (wordVal β)) := by
+    rw [show (List.ofFn fun l : Fin 4 => byte (L.getD (128 + l) 0)) = List.ofFn fun _ : Fin 4 => e4m3 (wordVal β)
+      from congrArg List.ofFn (funext fun l => by
+        rw [(q2 l l.isLt).1]; exact Fin.ext (Nat.mod_eq_of_lt (Fin.isLt _))), List.ofFn_const]
+    rfl
+  have a4 : (List.ofFn fun l : Fin 4 => byte (L.getD (132 + l) 0)) =
+      noiseScales sm120Nvf4 (fScale sm120Nvf4.fmt) := by
+    rw [show (List.ofFn fun l : Fin 4 => byte (L.getD (132 + l) 0)) = List.ofFn fun _ : Fin 4 => byte 24
+      from congrArg List.ofFn (funext fun l => by rw [(q2 l l.isLt).2]), List.ofFn_const]
+    rfl
+  rw [a1, a2, a3, a4, nvf4Word_of_step hs, Nat.mod_eq_of_lt (step4_lt hs)]
+
+end Form
+
+/-! ## A formed row -/
+
+theorem take_drop16 {l : List ℕ} {a : ℕ} (h : a + 16 ≤ l.length) :
+    (l.drop a).take 16 = (List.range 16).map fun s => l.getD (a + s) 0 := by
+  apply List.ext_getElem (by simp; omega)
+  intro i h1 h2
+  simp only [List.length_map, List.length_range] at h2
+  rw [List.getElem_take, List.getElem_drop, List.getElem_map, List.getElem_range,
+    List.getD_eq_getElem _ _ (by omega)]
+
+theorem flatten_getD {α : Type} {n : ℕ} (d : α) :
+    ∀ (L : List (List α)), (∀ i (h : i < L.length), L[i].length = n) →
+      ∀ i < L.length, ∀ s < n, L.flatten.getD (n * i + s) d = (L.getD i []).getD s d
+  | [], _, i, hi, _, _ => absurd hi (by simp)
+  | b :: L, hL, i, hi, s, hs => by
+    have hb : b.length = n := hL 0 (by simp)
+    rw [List.flatten_cons]
+    cases i with
+    | zero => rw [Nat.mul_zero, Nat.zero_add, List.getD_append _ _ _ _ (by omega), List.getD_cons_zero]
+    | succ i =>
+      rw [List.getD_append_right _ _ _ _ (by rw [hb, Nat.mul_succ]; omega), hb,
+        show n * (i + 1) + s - n = n * i + s by rw [Nat.mul_succ]; omega, List.getD_cons_succ]
+      exact flatten_getD d L (fun i h => hL (i + 1) (by simp; omega)) i (by simp at hi; omega) s hs
+
+/-- The named conditions on a row `X` of `k` values under which the row units compute `formRow`'s codes and scale
+bytes: each value's BF16 word widens to a step word of that value, and `α` (positive) and `β` are step words. -/
+structure Row4OK (ops : RowOps) (k : ℕ) (X : Fin k → ℚ) : Prop where
+  widen : ∀ t : Fin k, AccumProofs.StepWord (ops.bf16ToF32 (bf16WordOf (X t))) ∧
+    wordVal (ops.bf16ToF32 (bf16WordOf (X t))) = X t
+  alpha : AccumProofs.StepWord (alpha4 ops (encRow16 k X) k)
+  alpha_pos : 0 < wordVal (alpha4 ops (encRow16 k X) k)
+  beta : AccumProofs.StepWord (beta4 ops (encRow16 k X) k)
+
+section Row
+
+variable {ops : RowOps}
+
+/-- **A row unit's codes and scale bytes are `formRow`'s** at `pc4Sem`'s `α` and `β`, where `formRow` is in the model
+and its noise atoms are step words: on a row unit's inputs `x` holding `X`'s BF16 words, `e`'s codes and the form basis
+`F`'s, block `q`'s scale byte is `formRow`'s and position `t`'s code is `formRow`'s. -/
+theorem formRow_table (hA : Pc4OpsAgree ops) {K : ℕ} (hK : 8 ≤ K) (h16 : 16 ∣ K) {X : Fin K → ℚ}
+    {e : Fin 32 → Nib} {F : Fin K → Fin 32 → Nib} {x : ℕ → ℕ} (hR : Row4OK ops K X)
+    (hx : ∀ l < K, x l = encRow16 K X l) (he : ∀ l : Fin 32, x (K + l) = (e l).val)
+    (hf : ∀ (t : Fin K) (l : Fin 32), x (K + 32 + 32 * t + l) = (F t l).val)
+    (hD : ∀ (t : Fin K) (w : ℕ), nvf4NoiseElem (wordVal (alpha4 ops (encRow16 K X) K)) (X t)
+      (wordVal (beta4 ops (encRow16 K X) K)) e (F t) = some w → AccumProofs.StepWord w) {r : Row4}
+    (hr : formRow (wordVal (alpha4 ops (encRow16 K X) K)) (wordVal (beta4 ops (encRow16 K X) K)) X e F = some r) :
+    (∀ q < K / 16, scale4V ops x K q = (r.2.getD q 0).val) ∧ ∀ t < K, code4V ops x K t = (r.1.getD t 0).val := by
+  simp only [formRow, Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hr
+  obtain ⟨ds, hds, rfl⟩ := hr
+  obtain ⟨hlen, hds'⟩ := PeelExactProofs.mapM_ofFn _ 0 hds
+  have hdW : ∀ t (ht : t < K), d4W ops x K t = ds.getD t 0 := by
+    intro t ht
+    have hw : nvf4NoiseElem (wordVal (alpha4 ops (encRow16 K X) K))
+        (wordVal (ops.bf16ToF32 (bf16WordOf (X ⟨t, ht⟩)))) (wordVal (beta4 ops (encRow16 K X) K)) e (F ⟨t, ht⟩) =
+        some (ds.getD t 0) := by
+      rw [(hR.widen ⟨t, ht⟩).2]; exact hds' ⟨t, ht⟩
+    have hxt : x t = bf16WordOf (X ⟨t, ht⟩) := by rw [hx t ht, encRow16, dite_eq_left ht]
+    unfold d4W
+    rw [alpha4_congr hK hx, beta4_congr hK hx, hxt]
+    exact form4_sem hA.toPc8OpsAgree hR.alpha hR.alpha_pos hR.beta (hR.widen ⟨t, ht⟩).1 he (hf ⟨t, ht⟩) hw
+  have h16' : 16 ∣ ds.length := by rw [hlen]; exact h16
+  have hc : (ds.toChunks 16).length = K / 16 := by rw [Freeze.length_toChunks_of_dvd (by omega) h16', hlen]
+  have hblk : ∀ q (hq : q < K / 16), (ds.toChunks 16)[q]'(by omega) =
+      (List.range 16).map fun s => d4W ops x K (16 * q + s) := by
+    intro q hq
+    rw [Freeze.getElem_toChunks (by omega), take_drop16 (by omega)]
+    exact List.map_congr_left fun s hs => (hdW _ (by simp at hs; omega)).symm
+  have hstep : ∀ q < K / 16, ∀ s < 16, AccumProofs.StepWord (d4W ops x K (16 * q + s)) := by
+    intro q hq s hs
+    rw [hdW _ (by omega)]
+    exact hD ⟨16 * q + s, by omega⟩ _ (hds' ⟨16 * q + s, by omega⟩)
+  refine ⟨fun q hq => ?_, fun t ht => ?_⟩
+  · rw [List.getD_eq_getElem _ _ (by simp; omega), List.getElem_map, List.getElem_map, hblk q hq]
+    exact (block4_sem hA (hstep q hq)).1
+  · obtain ⟨q, s, hs, rfl⟩ : ∃ q s, s < 16 ∧ t = 16 * q + s :=
+      ⟨t / 16, t % 16, Nat.mod_lt _ (by omega), (Nat.div_add_mod t 16).symm⟩
+    have hq : q < K / 16 := by omega
+    have hL : ∀ i (h : i < (((ds.toChunks 16).map nvf4Block).map Prod.fst).length),
+        (((ds.toChunks 16).map nvf4Block).map Prod.fst)[i].length = 16 := by
+      intro i h
+      simp only [List.getElem_map, nvf4Block, List.length_map]
+      exact Freeze.length_getElem_toChunks_of_dvd (by omega) h16' i (by simpa using h)
+    rw [flatten_getD 0 _ hL q (by simp; omega) s hs,
+      List.getD_eq_getElem (((ds.toChunks 16).map nvf4Block).map Prod.fst) [] (by simp; omega), List.getElem_map,
+      List.getElem_map, hblk q hq]
+    show code4W ops (d4W ops x K (16 * q + s)) (scale4V ops x K ((16 * q + s) / 16)) = _
+    rw [show (16 * q + s) / 16 = q by omega]
+    exact (block4_sem hA (hstep q hq)).2 s hs
+
+/-- **RowA's codes and scale bytes are `formRow`'s** in a transcript whose one unit is correct, on inputs holding the
+row's BF16 words, `E_A`'s codes and `F_A`'s (`row4A_code`, `row4A_scale`, `formRow_table`). -/
+theorem row4A_form (hA : Pc4OpsAgree ops) {K : ℕ} (hK : 8 ≤ K) (h16 : 16 ∣ K)
+    (T : ((row4A K).spec ops).toCircuit.Transcript) (hT : ((row4A K).spec ops).part.Correct T 0)
+    {X : Fin K → ℚ} {e : Fin 32 → Nib} {F : Fin K → Fin 32 → Nib} (hR : Row4OK ops K X)
+    (hx : ∀ l < K, val T l = encRow16 K X l) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
+    (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val)
+    (hD : ∀ (t : Fin K) (w : ℕ), nvf4NoiseElem (wordVal (alpha4 ops (encRow16 K X) K)) (X t)
+      (wordVal (beta4 ops (encRow16 K X) K)) e (F t) = some w → AccumProofs.StepWord w) {r : Row4}
+    (hr : formRow (wordVal (alpha4 ops (encRow16 K X) K)) (wordVal (beta4 ops (encRow16 K X) K)) X e F = some r) :
+    (∀ q < K / 16, val T (scale4 K (rowIn K false) q) = (r.2.getD q 0).val) ∧
+      ∀ t < K, val T (code4 K (rowIn K false) t) = (r.1.getD t 0).val := by
+  obtain ⟨h1, h2⟩ := formRow_table hA hK h16 hR hx he hf hD hr
+  exact ⟨fun q hq => (row4A_scale hK T hT hq).trans (h1 q hq),
+    fun t ht => (row4A_code hK T hT (by omega)).trans (h2 t ht)⟩
+
+/-- **RowB's codes and scale bytes are `formRow`'s**, as `row4A_form` with `E_B`'s codes and `F_B`'s. -/
+theorem row4B_form (hA : Pc4OpsAgree ops) {K : ℕ} (hK : 8 ≤ K) (h16 : 16 ∣ K)
+    (T : ((row4B K).spec ops).toCircuit.Transcript) (hT : ((row4B K).spec ops).part.Correct T 0)
+    {X : Fin K → ℚ} {e : Fin 32 → Nib} {F : Fin K → Fin 32 → Nib} (hR : Row4OK ops K X)
+    (hx : ∀ l < K, val T l = encRow16 K X l) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
+    (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val)
+    (hD : ∀ (t : Fin K) (w : ℕ), nvf4NoiseElem (wordVal (alpha4 ops (encRow16 K X) K)) (X t)
+      (wordVal (beta4 ops (encRow16 K X) K)) e (F t) = some w → AccumProofs.StepWord w) {r : Row4}
+    (hr : formRow (wordVal (alpha4 ops (encRow16 K X) K)) (wordVal (beta4 ops (encRow16 K X) K)) X e F = some r) :
+    (∀ q < K / 16, val T (scale4 K (rowIn K true) q) = (r.2.getD q 0).val) ∧
+      ∀ t < K, val T (code4 K (rowIn K true) t) = (r.1.getD t 0).val := by
+  obtain ⟨h1, h2⟩ := formRow_table hA hK h16 hR hx he hf hD hr
+  exact ⟨fun q hq => (row4B_scale hK T hT hq).trans (h1 q hq),
+    fun t ht => (row4B_code hK T hT (by omega)).trans (h2 t ht)⟩
+
+end Row
 
 end Pouw.PearlC.RowCircuit
