@@ -86,30 +86,6 @@ def test_under_a_recorded_check_a_skip_for_an_unreachable_store_fails(tmp_path, 
         assert (r.status, r.counts["failed"], r.counts["error"], r.counts["skipped"]) == ("passed", 0, 0, 3), log
 
 
-@pytest.mark.parametrize("workers", [1, 2])
-def test_an_input_that_names_a_module_file_covers_its_bytecode(tmp_path, monkeypatch, workers):
-    """Importing a module reads and writes its `__pycache__` beside it: listing `lib/mod.py` lets the tests import it, in their own
-    process or a Python they start, while its undeclared sibling and that sibling's bytecode are still outside."""
-    if workers > 1:
-        pytest.importorskip("xdist")
-    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
-    monkeypatch.delenv("PYTHONDONTWRITEBYTECODE", raising=False)
-    (tmp_path / "lib").mkdir()
-    (tmp_path / "lib" / "mod.py").write_text("X = 1\n")
-    (tmp_path / "lib" / "sibling.py").write_text("Y = 2\n")
-    (tmp_path / "pkg" / "tests" / "test_imports.py").write_text(
-        "import subprocess, sys\nfrom pathlib import Path\nLIB = str(Path(__file__).resolve().parents[2] / 'lib')\n\n"
-        "def test_in_process(monkeypatch):\n    monkeypatch.syspath_prepend(LIB)\n    import mod, sibling  # noqa: F401\n\n"
-        "def test_in_a_child():\n    subprocess.run([sys.executable, '-c', f'import sys; sys.path.insert(0, {LIB!r}); import mod, sibling'],"
-        " check=True)\n")
-    r = S.run(suite, ["pkg", "lib/mod.py"], [], tmp_path / "logs", workers)
-    assert r.counts["passed"] == 6, r.log.read_text()
-    assert (tmp_path / "lib" / "__pycache__").is_dir() and any(p.name.startswith("mod.") for p in (tmp_path / "lib" / "__pycache__").iterdir())
-    child = sorted({f for fs in r.child_outside.values() for f in fs})
-    assert "lib/sibling.py" in r.outside and child, (r.outside, child)      # a child that finds the bytecode cached reads only that
-    assert all(f == "lib/sibling.py" or f.startswith("lib/__pycache__/sibling.") for f in [*r.outside, *child]), (r.outside, child)
-
-
 def test_a_suite_without_the_guards_report_fails(tmp_path, monkeypatch):
     S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
     r = S.run(suite, ["pkg"], ["-p", "no:verity_suite_guard"], tmp_path / "logs")

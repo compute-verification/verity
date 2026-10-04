@@ -23,18 +23,9 @@ import sys
 
 #: a module's cached bytecode, by its source's directory and name
 _PYC = re.compile(r"^(.*?)(?:^|/)__pycache__/([^/]+?)\.[^/]+\.pyc$")
-#: the same as an absolute path, or the temporary file Python writes it through (`<name>.<tag>.pyc.<id>`)
-_BYTECODE = re.compile(r"^(.*)/__pycache__/([^/.]+)\.[^/]+\.pyc(?:\.\d+)?$")
 _PYTHON = re.compile(r"^python(\d+(\.\d+)?)?$")
 #: programs that read no repository file, whatever they're given: they report on the machine (`platform` runs `uname`)
 PROBES = frozenset({"uname", "true", "false", "nproc", "getconf", "hostname", "id", "whoami", "ldconfig", "lscpu", "nvidia-smi"})
-
-
-def compiled_from(path: str) -> str | None:
-    """The source file whose cached bytecode the absolute ``path`` is, else None. An input that names a module's file covers its
-    bytecode: Python reads and writes it beside the source, derived from it alone."""
-    m = _BYTECODE.match(path)
-    return f"{m.group(1)}/{m.group(2)}.py" if m else None
 
 
 class Reads:
@@ -61,8 +52,7 @@ class Reads:
         name = os.path.basename(path)
         if path.startswith(self.suite) and name.startswith("test_") and name.endswith(".py"):
             return "R", os.path.relpath(path, self.root)
-        if (path.startswith(self.inside) and not path.startswith(self.allowed) and path not in self.allowed_files
-                and compiled_from(path) not in self.allowed_files):
+        if path.startswith(self.inside) and not path.startswith(self.allowed) and path not in self.allowed_files:
             return "O", os.path.relpath(path, self.root)
         return None
 

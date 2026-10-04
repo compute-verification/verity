@@ -73,17 +73,16 @@ _workers_untraced: dict[str, set[str]] | None = None             # in an xdist c
 _pid = os.getpid()
 
 
-def _child_module():
+def _child_reads():
     spec = importlib.util.spec_from_file_location("verity_suite_reads", os.path.join(os.path.dirname(os.path.abspath(__file__)), "child",
                                                                                      "verity_suite_reads.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return mod
+    return mod.Reads()
 
 
-_child = _child_module() if _ACTIVE else None
-_forked = _child.Reads() if _ACTIVE and os.environ.get("VERITY_SUITE_READS") else None
-_tracer = _child.Reads() if _ACTIVE else None
+_forked = _child_reads() if _ACTIVE and os.environ.get("VERITY_SUITE_READS") else None
+_tracer = _child_reads() if _ACTIVE else None
 
 
 def _audit(event: str, args: tuple) -> None:
@@ -113,8 +112,7 @@ def _audit(event: str, args: tuple) -> None:
     path = os.path.normpath(path if os.path.isabs(path) else os.path.join(os.getcwd(), path))
     if path in _watch:
         _watched.add(os.path.relpath(path, _root))
-    if (path.startswith(_inside) and not path.startswith(_allowed) and path not in _allowed_files
-            and _child.compiled_from(path) not in _allowed_files):
+    if path.startswith(_inside) and not path.startswith(_allowed) and path not in _allowed_files:
         _outside.add(os.path.relpath(path, _root))
     name = os.path.basename(path)
     if path.startswith(_suite) and name.startswith("test_") and name.endswith(".py"):
