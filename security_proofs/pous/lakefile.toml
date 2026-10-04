@@ -1,0 +1,40 @@
+name = "pous_security_proofs"
+defaultTargets = ["PousSecurityProofs"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "5ed2965256430c3649e86755f9576b54eca72435"
+
+[[require]]
+name = "pous"
+path = "../../protocols/pous/lean"
+
+# PoUS's proofs, which require its spec (`protocols/pous/lean`). Lake resolves a module to the first package whose library
+# claims it, and a library rooted at `Pous` would claim the spec's modules too, so this one claims its own by glob: a new
+# module directly under `Pous/SecurityProofs/`, or a new directory there, needs a glob here.
+[[lean_lib]]
+name = "PousSecurityProofs"
+roots = []
+globs = [
+  "Pous",
+  "Pous.SecurityProofs",
+  "Pous.SecurityProofs.Audit.+",
+  "Pous.SecurityProofs.B5.+",
+  "Pous.SecurityProofs.Chain.+",
+  "Pous.SecurityProofs.Continuous",
+  "Pous.SecurityProofs.Continuous.+",
+  "Pous.SecurityProofs.Dense.+",
+  "Pous.SecurityProofs.Graded.+",
+  "Pous.SecurityProofs.P2.+",
+  "Pous.SecurityProofs.P3.+",
+  "Pous.SecurityProofs.Pebbling.+",
+  "Pous.SecurityProofs.Rebuild.+",
+  "Pous.SecurityProofs.SecureErasure",
+  "Pous.SecurityProofs.SecureErasure.+",
+  "Pous.SecurityProofs.Thm1.+",
+  "Pous.SecurityProofs.TrackA.+"]

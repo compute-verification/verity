@@ -10,8 +10,10 @@ name = "mathlib"
 git = "https://github.com/leanprover-community/mathlib4"
 rev = "5ed2965256430c3649e86755f9576b54eca72435"
 
+# The spec; its proofs are the package security_proofs/pous.
 [[lean_lib]]
 name = "Pous"
+roots = ["Pous.Protocol", "Pous.Assumptions", "Pous.Guarantees", "Pous.SecurityProofs.Accounting.Numbers", "Pous.SecurityProofs.Sanity"]
 
 # The open targets (`sorry`). Not a default target.
 [[lean_lib]]
