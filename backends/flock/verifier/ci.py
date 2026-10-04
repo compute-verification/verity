@@ -10,7 +10,7 @@ For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an up
 - for a set that names `mutants`, regenerates the proof mutants (`redigest.py`), the retained-bytes sessions
   (`redigest.py --retain`) and `N` fuzz cases (`fuzz.py --seed S`) from its honest session;
 - adds the set's stored forgeries, if it has any;
-- runs `agree.py` on all of them, with `--lean-refuses` for a set marked `lean_refuses` (D10: a statement form the soundness
+- runs `agree.py` on all of them, with `--lean-refuses` for a set marked `lean_refuses` (D12: a statement form the soundness
   proof does not cover, which the Lean verifier refuses whatever the session).
 
 `--live` runs `live.sets` instead: sets with no upstream binary, whose upstream verdicts are the live server's in each

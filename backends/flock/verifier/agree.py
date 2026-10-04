@@ -9,7 +9,7 @@
 `--expect` file is a list of `{"name", "expect": {"accepted", "why"}}` (`redigest.py`'s `mutants.json`); a session's name
 is its directory's basename, and `why` is a prefix of the Lean verifier's reason. An expectation may add
 `upstream_accepted` for an intended divergence (PROTOCOL.md §17.1: D1–D4): upstream must then return that verdict instead
-of the Lean verifier's. `--lean-refuses WHY` is D10, a statement whose form the soundness proof does not cover: the Lean
+of the Lean verifier's. `--lean-refuses WHY` is D12, a statement whose form the soundness proof does not cover: the Lean
 verifier must reject every session, a session expected accepted with a reason starting `WHY` and one expected rejected with
 `WHY` or its expected reason (a statement that does not set up is refused for that first), and upstream must return each
 session's expected verdict; a session with none (a fuzz case) only needs the refusal. A session directory may carry its own
@@ -191,7 +191,7 @@ def main(argv=None, slots=None, quiet=False):
     ap.add_argument("--tables", default=None, help="the pinned MUFU tables, for circuits with lookup slots")
     ap.add_argument("--expect", action="append", default=[])
     ap.add_argument("--lean-refuses", default=None, metavar="WHY",
-                    help="D10: the Lean verifier refuses every session with this reason; upstream gives each its expected verdict")
+                    help="D12: the Lean verifier refuses every session with this reason; upstream gives each its expected verdict")
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--sessions", nargs="+", required=True)
     ap.add_argument("--jobs", type=int, default=1, help="verifier processes at once (each builds its own statement)")

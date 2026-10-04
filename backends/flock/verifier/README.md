@@ -21,7 +21,7 @@ every session with `refused: <why>: a statement form the soundness proof does no
 That refuses every version before `hm96-sha512` rows, the typed statements, public input ports, several tables without
 `--zk`, shared-row public files, and circuits outside `Layout.scopeOk` (a unit reading more than one input group, a tail
 that computes the outputs, among others). Those statements still parse and set up (`statement` prints their digest and
-Σ), and the agreement check expects the refusal of them (D10, `vectors.json`'s `lean_refuses`).
+Σ), and the agreement check expects the refusal of them (D12, `vectors.json`'s `lean_refuses`).
 
 ## Build and run
 
@@ -133,7 +133,7 @@ result `art:294b6cf1`), 25 of 25 sessions agree:
 
 Triton RMSNorm n128 at `eb90718f` (lookup slots; `vectors.json` set 9, `art:187679d7`, recorded on a CPU pod in
 `r20260927-061936-560b`): every selftest case, the draw cases included, 25 of 25. Its unit reads two input groups, so it
-is D10 since §16.15: the Lean verifier refuses every session, and upstream gives each its verdict. `agree.py` replays each
+is D12 since §16.15: the Lean verifier refuses every session, and upstream gives each its verdict. `agree.py` replays each
 drawn session through upstream in its own process (`replay --drawn-only`), since upstream leaks a statement's matrices
 and two RMSNorm statements do not fit in 15 GB.
 
@@ -142,7 +142,7 @@ Recorded runs:
 - `art:81645236` (`19c7269a`): 25 of 25 agree;
 - `art:78ef0a6e` (`fd02e847`): 27 of 27 agree, with the retained-bytes sessions.
 
-These versions are before `hm96-sha512` rows, so their sets (0 to 7) are D10 since §16.15.
+These versions are before `hm96-sha512` rows, so their sets (0 to 7) are D12 since §16.15.
 
 `redigest.py --retain` writes a session with every round's framed bytes retained, and two negatives of it.
 
@@ -175,7 +175,7 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   refusals word for word, the malformed parameters).
 - Set 13 (GEMM k1024, tail outputs, recorded on a CPU pod) agreed 27 of 27, and set 14 (a shared-row RoPE file whose six
   instances repeat three rows) 23 of 23 with upstream on M0's selftest records, `row_ref_claim_false` included, before
-  §16.15; both are D10 now (a unit reading two input groups, a shared-row file), so the Lean verifier refuses every
+  §16.15; both are D12 now (a unit reading two input groups, a shared-row file), so the Lean verifier refuses every
   session. Set 15 (the same instances per instance) agrees 22 of 22. The `967b8d06` vectors patch writes each false
   statement as the verifier's file (`<case>.pub.bin`) under its real public digest, so those negatives reach the proof's
   openings, not the session parameters.
@@ -185,12 +185,12 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   `ci.py --live`: 20/20, 21/21, 20/20, 21/21, reproduced by red-team-proofs-554 in `art:bc6367e3`). On flat RoPE the honest
   sessions are accepted, so digest and Σ are the prover's, and every negative refused, `output_row_committed_false` (an
   output row's `b ‖ c` not the circuit's outputs) included; flat GEMM (a unit reading two input groups) and both typed
-  sets are D10 (§16.15), every session refused for its form. `test_lean_hidden_outputs.py` verifies four of each set's
+  sets are D12 (§16.15), every session refused for its form. `test_lean_hidden_outputs.py` verifies four of each set's
   cases (the honest session and the three false statements) from a fetched fixture
   (`backends/flock/tests/fixtures/hidden-outputs`), so `check` runs it. A replayable set needs a pinned upstream build
   with `flock-circuit replay` (the selftest's `record_replays_offline` already replays in process).
   `test_lean_registered_reads.py` stages its registered-read statements over a hidden-output RoPE circuit (`statement`,
-  and `verify` of each of two tables' setups), and set 16's upstream session covers `@967b8d06` (a shared-row file, D10:
+  and `verify` of each of two tables' setups), and set 16's upstream session covers `@967b8d06` (a shared-row file, D12:
   it sets up under its reads and is refused for its form).
 - `--zk` sessions (§16.14): no pinned upstream build has them, so check's agreement step replays none. `agree.py --zk`
   compares Lean's verdicts with the live build's `replay --zk`, and `test_lean_zk.py` with its server's, on the sessions of

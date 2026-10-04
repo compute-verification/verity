@@ -105,39 +105,61 @@ registered root at the position its unit reads, so the instance's output is that
 def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
   Registered.check st.c st.pub registered (Registered.derived st.partition)
 
+/-- A statement's identifier (§16.10): the public header's `identifier`, a JSON object C-Flock does not read, must be the
+verifier's own `--identifier F` (`own`, its RFC 8785 form) in RFC 8785 form: `canon`'s, on the domain where it is RFC 8785
+(`Program.domainError`). The public digest binds the header, so Σ binds the identifier; a header with one and no `F`, or
+`F` and a header with none, refuses. -/
+def checkIdentifier (st : Stmt) (own : Option String) : V Unit :=
+  match st.pub.header.getObjVal? "identifier", own with
+  | .error _, none => pure ()
+  | .error _, some _ => throw "identifier: the verifier holds an identifier (--identifier F), and the public header names none"
+  | .ok j, own => do
+    let .obj _ := j | throw "identifier: the public header's identifier is not a JSON object"
+    if let some e := Program.domainError j "identifier" then
+      throw s!"identifier: the public header's identifier is outside canonical JSON's RFC 8785 domain: {e}"
+    let some own := own | throw "identifier: the public header names an identifier; pass the verifier's own (--identifier F)"
+    if (← canon j) != own then throw "identifier: the public header's identifier is not the verifier's own (--identifier F)"
+
 /-- The statement of `tags` from its inputs; an `hm96-sha512/row/v1` statement needs no compression circuit and, for a drawn
 session, is the drawn units' statement over the registered population (§7.3). -/
 def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none)
-    (registered : Option (Array Registered.Port) := none) (publicInputs : Option ByteArray := none) : V Stmt :=
+    (registered : Option (Array Registered.Port) := none) (publicInputs : Option ByteArray := none)
+    (identifier : Option String := none) : V Stmt :=
   if publicInputs.isSome && !tags.hiddenOutputs then
     throw s!"--public-inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
   else if tags.hm96Rows then do
     let st ← if tags.hiddenOutputs then Stmt.setupHidden tags circuitB pubB coins tables draw partition program publicInputs
       else Stmt.setupH tags circuitB pubB coins tables draw partition program
     checkRegistered st registered
+    checkIdentifier st identifier
     return st
   else do
     if registered.isSome then throw s!"{tags.name}: registered reads are an hm96-sha512 row statement's"
-    Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
+    let st ← Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
+    checkIdentifier st identifier
+    return st
 
 /-- `buildStmt` for a session of `count` tables (`Stmt.setupTables`): the session and each table's statement. `work` is the
 verifier's own `K` and work table, which a work draw's law is held to, `stratified` its own `K` for a stratified draw,
 `closure` its closure map, and `publicInputs` its own recomputation of the public input words. `registered` is the
-verifier's own registered reads, which every table's statement is held to (`Registered.check`). -/
+verifier's own registered reads, which every table's statement is held to (`Registered.check`), and `identifier` its own
+identifier (`checkIdentifier`). -/
 def buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (count : Nat) (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none)
     (work : Option (Nat × Array (String × Nat × Nat)) := none) (stratified : Option Nat := none)
     (closure : Option (Std.HashMap Nat (Array Nat)) := none) (registered : Option (Array Registered.Port) := none)
-    (publicInputs : Option ByteArray := none) : V (SessionSpec × Array Stmt) :=
+    (publicInputs : Option ByteArray := none) (identifier : Option String := none) : V (SessionSpec × Array Stmt) :=
   if tags.hm96Rows then do
     let (spec, sts) ← Stmt.setupTables tags circuitB pubB coins count tables draw partition program work stratified closure
       publicInputs
-    for st in sts do checkRegistered st registered
+    for st in sts do
+      checkRegistered st registered
+      checkIdentifier st identifier
     return (spec, sts)
   else if count > 1 then throw s!"{tags.name}: one table per session"
   else do
-    let st ← buildStmt tags circuitB pubB compB coins tables draw partition program registered publicInputs
+    let st ← buildStmt tags circuitB pubB compB coins tables draw partition program registered publicInputs identifier
     return (st.spec, #[st])
 
 /-- `--program F`: the verifier's own copy of the program's descriptor bytes (a path, or with `--archive` its SHA-512), from which
@@ -217,6 +239,25 @@ def registeredInput (args : List String) : IO (Except String (Option (Array Regi
       | .ok j => return (Registered.ofJson j).map some
       | .error e => return .error s!"registered reads: not JSON: {e}"
 
+/-- `--identifier F`: the verifier's own identifier, a JSON object (a path, or with `--archive` its SHA-512), and its RFC 8785
+form (`checkIdentifier`). -/
+def identifierInput (args : List String) : IO (Except String (Option (Lean.Json × String))) := do
+  let some f := argOf args "--identifier" | return .ok none
+  let bytes ← match argOf args "--archive" with
+    | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"identifier: {e}"))
+    | some dir => archiveGet dir f
+  match bytes with
+  | .error e => return .error e
+  | .ok b => match String.fromUTF8? b with
+    | none => return .error "identifier: not UTF-8"
+    | some t => match Lean.Json.parse t with
+      | .ok j@(.obj _) =>
+        if let some e := Program.domainError j "identifier" then
+          return .error s!"identifier: --identifier F is outside canonical JSON's RFC 8785 domain: {e}"
+        return (canon j).map fun s => some (j, s)
+      | .ok _ => return .error "identifier: not a JSON object"
+      | .error e => return .error s!"identifier: not JSON: {e}"
+
 /-- A record's `unit_draw`, when it is a draw (not absent, not null). -/
 def recordDraw (record : String) : Option Lean.Json :=
   match Lean.Json.parse record with
@@ -268,14 +309,14 @@ names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-
 pinned compression circuit; `J` (default 1) is the tables of every session (§16.12). A session with a work draw needs the
 verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one with a stratified draw its own
 `--stratified K`, `--program` and `--partition`, a closure draw its own `--closure F`, a statement that reads registered
-values its own `--registered F` (`Registered.check`), and a circuit with public input ports its own `--public-inputs F`
-(§16.10). Each DIR holds `session.json`
+values its own `--registered F` (`Registered.check`), a circuit with public input ports its own `--public-inputs F`, and
+a public file whose header names an identifier its own `--identifier F` (§16.10). Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
 A statement whose form the soundness proof does not cover is refused (`ProvedScope.check`, §16.15), each session with
 the reason. Exit 0 iff every session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
 none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--coins seed|os | --zk] [--session-tables J] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--coins seed|os | --zk] [--session-tables J] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
@@ -316,6 +357,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let publicInputs ← match ← publicInputsInput args with
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
+  let identifier : Option (Lean.Json × String) ← match ← identifierInput args with
+    | .ok i => pure i
+    | .error e => IO.eprintln e; return 2
   let work := match ownK, table with
     | some k, some t => some (k, t)
     | _, _ => none
@@ -329,7 +373,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
         let r ← buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure
-          registered publicInputs
+          registered publicInputs (identifier.map Prod.snd)
         if zk then r.2.forM Zk.shapeOk
         pure r) with
     | .ok (spec, sts) => scope.map fun () => (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
@@ -378,7 +422,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
     let part := match st with | .ok (_, _, p) => p | .error _ => Lean.Json.null
     let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)] ++
       (if part.isNull then [] else [("partition", part)]) ++
-      (match registered with | some r => [("registered", Registered.finding r)] | none => []))
+      (match registered with | some r => [("registered", Registered.finding r)] | none => []) ++
+      (match identifier with | some (j, _) => [("identifier", j)] | none => []))
     IO.println s!"VERDICT {line.compress}"
     IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
   return (if all then 0 else 1)
@@ -386,7 +431,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
 /-- `statement` with `verify`'s statement flags: the derived statement (digest, Σ, `Hello`, shape) as one JSON line. -/
 def statementCmd (args : List String) : IO UInt32 := do
   let (some _, some _) := (argOf args "--circuit", argOf args "--public")
-    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--coins seed|os]"; return 2
+    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--coins seed|os]"; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
@@ -407,7 +452,11 @@ def statementCmd (args : List String) : IO UInt32 := do
   let publicInputs ← match ← publicInputsInput args with
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
-  match buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs with
+  let identifier : Option (Lean.Json × String) ← match ← identifierInput args with
+    | .ok i => pure i
+    | .error e => IO.eprintln e; return 2
+  match buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
+      (identifier.map Prod.snd) with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"
     let j := Lean.Json.mkObj [("statement", Lean.Json.str tags.statement), (s!"circuit_{dk}", Lean.Json.str (hexOf st.c.sha)),
@@ -418,7 +467,8 @@ def statementCmd (args : List String) : IO UInt32 := do
       ("class_sha512", Lean.Json.str (hexOf st.c.classSha)),
       ("program_sha512", (st.c.metaJ.getObjVal? "program_sha512").toOption.getD Lean.Json.null),
       ("partition", (st.c.metaJ.getObjVal? "partition").toOption.getD Lean.Json.null), ("partition_check", st.partition),
-      ("registered", (registered.map Registered.finding).getD Lean.Json.null)]
+      ("registered", (registered.map Registered.finding).getD Lean.Json.null),
+      ("identifier", (identifier.map Prod.fst).getD Lean.Json.null)]
     IO.println j.compress
     return 0
   | .error e => IO.println s!"setup: {e}"; return 1

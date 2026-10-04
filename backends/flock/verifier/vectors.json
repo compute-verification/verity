@@ -3686,7 +3686,7 @@
   "dump_plan": "Add `--dump DIR` to the selftest subcommand of flock-pure-gpu, flock-ir-frame and the PR #83 circuit-statement binary so every case writes its session.json and proofs; run once on a CPU pod at 8 VUs (a few minutes); preserve the tree as one artifact; each case's expected verdict is its selftest `pass` line."
  },
  "replayable": {
-  "note": "Replayable (record, proofs) sets for the circuit statement, one per statement version (Flock.Tags), generated with the vectors patch of that PR #83 commit; both verifiers run on the same directories (README.md, agree.py). A set with `lean_refuses` is a statement form the soundness proof does not cover (PROTOCOL.md §16.15, D10): the Lean verifier refuses every session with that reason (one that does not set up, for that first), and upstream must give each session its expected verdict (`agree.py --lean-refuses`).",
+  "note": "Replayable (record, proofs) sets for the circuit statement, one per statement version (Flock.Tags), generated with the vectors patch of that PR #83 commit; both verifiers run on the same directories (README.md, agree.py). A set with `lean_refuses` is a statement form the soundness proof does not cover (PROTOCOL.md §16.15, D12): the Lean verifier refuses every session with that reason (one that does not set up, for that first), and upstream must give each session its expected verdict (`agree.py --lean-refuses`).",
   "sets": [
    {
     "statement": {
@@ -4390,7 +4390,7 @@
   ]
  },
  "live": {
-  "note": "Sets whose upstream verdicts are the live server's, from each case's case.json: main's flock-circuit has no replay subcommand and the vectors patch no longer builds against it, so there is no upstream binary to pin (`pr83` names the build that recorded them). They are not replayable sets: check's agreement step (upstream.json's pinned binaries and inputs) does not run them, and set 1 needs a 128 GB machine. Run them with `ci.py --live`. `lean_refuses` is D10, as in the replayable sets.",
+  "note": "Sets whose upstream verdicts are the live server's, from each case's case.json: main's flock-circuit has no replay subcommand and the vectors patch no longer builds against it, so there is no upstream binary to pin (`pr83` names the build that recorded them). They are not replayable sets: check's agreement step (upstream.json's pinned binaries and inputs) does not run them, and set 1 needs a 128 GB machine. Run them with `ci.py --live`. `lean_refuses` is D12, as in the replayable sets.",
   "sets": [
    {
     "tags": "verity/flock-circuit (main ac412eb8, 967b8d06 identity): attention with T not a multiple of 16",

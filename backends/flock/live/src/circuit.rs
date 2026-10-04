@@ -1903,6 +1903,66 @@ pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
     Ok(())
 }
 
+pub const LINKS_FORMAT: &str = "verity/flock-links/v1";
+
+/// Linking (PROTOCOL.md §16.13) on the registered population's public file: the verifier's own links file (`--links`,
+/// `verity/flock-links/v1`, derived from its program and query: `verity_flock.class_statement.links_file`) is for this
+/// circuit, its partition and META `links`' ports, and every `(reader, port, writer)` it lists has the reader's link row's
+/// `b || c` equal to the writer's output row's. A circuit with META `links` needs the file; one without takes none. The links
+/// checked. This binds a public topology; it does not hide the topology (the links file is the verifier's view of the circuit).
+pub fn check_links(c: &Composite, inst: &Instances, file: Option<&Value>) -> Result<usize, String> {
+    let ports: Vec<String> = match c.meta.get("links") {
+        None => {
+            return match file {
+                Some(_) => Err("--links: the circuit declares no links (META links)".into()),
+                None => Ok(0),
+            };
+        }
+        Some(ls) => ls.as_array().ok_or("META links is not a list")?.iter()
+            .map(|x| x["port"].as_str().map(String::from).ok_or("META links: a link names no port".to_string())).collect::<Result<_, _>>()?,
+    };
+    let Some(f) = file else {
+        return Err("the circuit declares links (META links): pass the verifier's own links file (--links F)".into());
+    };
+    if f["format"] != LINKS_FORMAT {
+        return Err(format!("--links: not a {LINKS_FORMAT} file"));
+    }
+    if f["circuit_sha512"].as_str() != Some(crate::hex(&c.sha512).as_str()) {
+        return Err("--links: derived for another circuit".into());
+    }
+    if f["partition"] != c.meta["partition"]["digest"] {
+        return Err("--links: derived for another partition than the circuit's".into());
+    }
+    if f["ports"] != json!(ports) {
+        return Err("--links: its ports are not the circuit's link rows (META links)".into());
+    }
+    let np = c.ports.len();
+    if c.ports.len() != c.n_in + 1 {
+        return Err("META links: a statement with links has one output row".into());
+    }
+    if inst.population.is_some() {
+        return Err("links are checked on the registered population's file, before a draw".into());
+    }
+    let (n, out) = (inst.n, np - 1);
+    let links = f["links"].as_array().ok_or("--links: links is not a list")?;
+    for x in links {
+        let bad = || format!("--links: {x} is not [reader, port, writer] over the file's {n} instances and the circuit's link rows");
+        let a = x.as_array().filter(|a| a.len() == 3).ok_or_else(bad)?;
+        let (Some(r), Some(name), Some(w)) = (a[0].as_u64(), a[1].as_str(), a[2].as_u64()) else { return Err(bad()) };
+        let (r, w) = (r as usize, w as usize);
+        let Some(p) = c.ports[..c.n_in].iter().position(|q| q.name == name).filter(|_| ports.iter().any(|q| q == name)) else {
+            return Err(bad());
+        };
+        if r >= n || w >= n {
+            return Err(bad());
+        }
+        if inst.bc(r, p, np) != inst.bc(w, out, np) {
+            return Err(format!("cut wire from instance {w}'s output row to instance {r}'s row {name}: the reader's row is not the writer's committed output row (their b || c differ)"));
+        }
+    }
+    Ok(links.len())
+}
+
 /// The frame-v3-sha512 roots of the file's public part, one row tree per row (input rows, then output rows): over the
 /// registered population (a drawn statement's instances are some of its units), a shared-row file's row trees over its tables.
 pub fn frame_roots(c: &Composite, inst: &Instances) -> Result<Vec<(String, [u8; 64])>, String> {
