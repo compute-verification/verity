@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from verity.subprotocols.sampled_proofs.registration import Registration
+from verity.subprotocols.verification.sampling.registration import Registration
 
 
 @dataclass(frozen=True)
@@ -23,17 +23,10 @@ class Draw:
 
 
 @dataclass(frozen=True)
-class Opening:
-    values: Mapping[int, int]  # every boundary wire of the unit: inputs and outputs
-    proofs: Mapping[int, object]  # each value's opening against the execution's root
-    witness: object  # the construction's: nothing for replay, a proof for a proof system
+class Proved:
+    """Prover to verifier: a proof of each drawn unit."""
 
-
-@dataclass(frozen=True)
-class Opened:
-    """Prover to verifier: each drawn unit, opened and proved."""
-
-    openings: Mapping[int, Opening]
+    proofs: Mapping[int, object]
 
 
 @dataclass(frozen=True)

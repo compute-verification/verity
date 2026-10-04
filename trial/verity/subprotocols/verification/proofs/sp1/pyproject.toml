@@ -1,7 +1,7 @@
 [project]
 name = "verity-sp1"
 version = "0.0.0"
-description = "The SP1 construction's dependencies; its source ships with verity."
+description = "The SP1 proof system's dependencies; its source ships with verity."
 requires-python = ">=3.12"
 dependencies = ["verity", "tomli-w"]
 

@@ -6,6 +6,6 @@ from __future__ import annotations
 import hashlib
 
 
-def derive(secret: bytes, domain: str, context: str) -> bytes:
-    """32 bytes nobody without `secret` can predict, bound to `domain` and `context`."""
-    return hashlib.sha256(b"\0".join((secret, domain.encode(), context.encode()))).digest()
+def derive(secret: bytes, domain: str, context: str, size: int = 32) -> bytes:
+    """`size` bytes nobody without `secret` can predict, bound to `domain` and `context`."""
+    return hashlib.shake_256(b"\0".join((secret, domain.encode(), context.encode()))).digest(size)

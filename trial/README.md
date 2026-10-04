@@ -1,9 +1,9 @@
 # Layout trial
 
-A toy of the proposed layout, with sampled proofs end to end on a real circuit:
+A toy of the proposed layout, with sampled verification end to end on a real circuit:
 
 ~~~bash
-uv sync && uv run python examples/sampled_proofs.py [f32_add|bf16_gt_strict]
+uv sync && uv run python examples/verification.py [f32_add|bf16_gt_strict]
 lake build    # the Lean beside the Python
 ~~~
 
@@ -39,4 +39,4 @@ verity/primitives      events, circuits and partitions, commitments, randomness
 - **`__init__.py` holds only a docstring.** Code goes in named modules, so the files can be dropped (making the
   folders namespace packages) once `packages/verity` is gone and nothing else named `verity` is on the path.
 - **Heavy constructions have their own `pyproject.toml`.** It sits beside the source and declares the dependencies
-  (`sampled_proofs/sp1/`); the source is imported only by whoever asks for it.
+  (`verification/proofs/sp1/`); the source is imported only by whoever asks for it.

@@ -35,7 +35,7 @@ def _h(*parts: bytes) -> bytes:
     return hashlib.sha256(b"".join(parts)).digest()
 
 
-class MerkleSha256:
+class MerkleSha256(CommitmentScheme):
     name = "merkle-sha256"
 
     def _levels(self, leaves: Sequence[bytes]) -> list[list[bytes]]:

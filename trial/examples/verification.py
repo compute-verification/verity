@@ -1,8 +1,8 @@
-"""Sampled proofs end to end on a real circuit: verity's FP32 adder or BF16 comparison, exported as a Boolean circuit
+"""Sampled verification end to end on a real circuit: verity's FP32 adder or BF16 comparison, exported as a Boolean circuit
 with reference vectors from `verity.evaluation.bits.evaluate_bits` (`data/`). The prover serves eight requests, each a
 pair of random floats; `run` plays it against the verifier and prints the verifier's view.
 
-    uv run python examples/sampled_proofs.py [f32_add|bf16_gt_strict]
+    uv run python examples/verification.py [f32_add|bf16_gt_strict]
 """
 
 import json
@@ -15,11 +15,11 @@ from verity.primitives import partition as P
 from verity.primitives.circuit import Circuit, evaluate
 from verity.primitives.commitments import MerkleSha256
 from verity.protocol.run import run
-from verity.subprotocols.sampled_proofs.construction import Replay
-from verity.subprotocols.sampled_proofs.events import Draw, Opened, Registered
-from verity.subprotocols.sampled_proofs.law import Subset
-from verity.subprotocols.sampled_proofs.prover import prover
-from verity.subprotocols.sampled_proofs.verifier import verifier
+from verity.subprotocols.verification.replay import Replay
+from verity.subprotocols.verification.sampling.events import Draw, Proved, Registered
+from verity.subprotocols.verification.sampling.law import Subset
+from verity.subprotocols.verification.sampling.prover import prover
+from verity.subprotocols.verification.sampling.verifier import verifier
 
 data = json.loads((Path(__file__).parent / "data" / f"{sys.argv[1] if len(sys.argv) > 1 else 'f32_add'}.json").read_text())
 circuit = Circuit.from_json(data)
@@ -43,11 +43,11 @@ print(f"{data['source']}: {len(circuit.gates)} gates, agrees with its {len(data[
 rng = random.Random(0)
 requests = [wires(pattern(rng.uniform(-100, 100)), pattern(rng.uniform(-100, 100))) for _ in range(8)]
 partition = P.greedy(circuit, max_width=16)
-scheme, construction = MerkleSha256(), Replay()
+proof_system = Replay(MerkleSha256())
 
 parties = {
-    "prover": prover(circuit, partition, requests, scheme, construction),
-    "verifier": verifier({circuit.id(): circuit}, Subset(k=64), max_width=16, delta=0.01, scheme=scheme, construction=construction),
+    "prover": prover(circuit, partition, requests, proof_system),
+    "verifier": verifier({circuit.id(): circuit}, Subset(k=64), max_width=16, delta=0.01, proof_system=proof_system),
 }
 for event in run(parties, view="verifier"):
     match event.body:
@@ -55,8 +55,8 @@ for event in run(parties, view="verifier"):
             what = f"Registered({len(registration.executions)} executions, {registration.population} units)"
         case Draw(units):
             what = f"Draw({len(units)} units)"
-        case Opened(openings):
-            what = f"Opened({len(openings)} units)"
+        case Proved(proofs):
+            what = f"Proved({len(proofs)} units)"
         case body:
             what = body
     print(f"{event.sender} -> {', '.join(event.to) or 'record'}: {what}")

@@ -1,16 +1,13 @@
 """The registration: everything a drawn unit's statement depends on, fixed before the verifier draws. Today's reference:
 `verity_sampled_proofs.one_stage.registration` (`verity/registration/v1`, checks R1-R7, the receipt).
 
-Per execution, in the order the prover committed them: its circuit, the partition it chose, and the root of a commitment
-to the value of every boundary wire (one leaf per wire, in wire order). Units are numbered across executions: execution
-0's regions, then execution 1's, and so on. A unit is wrong when its committed outputs are not what its region computes
-from its committed inputs; since a wire is committed once, the unit that reads a wire reads what the unit that wrote it
-committed.
+Per execution, in the order the prover committed them: its circuit, the partition it chose, and its root (`units`).
+Units are numbered across executions: execution 0's regions, then execution 1's, and so on. Since a wire is committed
+once, the unit that reads a wire reads what the unit that wrote it committed.
 """
 
 from __future__ import annotations
 
-import functools
 import hashlib
 import json
 from collections.abc import Mapping
@@ -19,6 +16,7 @@ from dataclasses import asdict, dataclass
 from verity.primitives import partition as P
 from verity.primitives.circuit import Circuit
 from verity.primitives.commitments import Commitment
+from verity.subprotocols.verification.units import Unit, wires
 
 
 @dataclass(frozen=True)
@@ -40,7 +38,7 @@ class Registration:
     def population(self) -> int:
         return sum(e.units for e in self.executions)
 
-    def unit(self, u: int) -> tuple[int, int]:
+    def locate(self, u: int) -> tuple[int, int]:
         """(execution, region) of unit u."""
         for i, e in enumerate(self.executions):
             if u < e.units:
@@ -48,18 +46,14 @@ class Registration:
             u -= e.units
         raise IndexError(u)
 
+    def unit(self, u: int, circuits: Mapping[str, Circuit]) -> Unit:
+        i, r = self.locate(u)
+        e = self.executions[i]
+        return Unit(circuits[e.circuit], e.partition, r, e.root)
+
     def digest(self) -> str:
         body = json.dumps(asdict(self), sort_keys=True, separators=(",", ":"), default=lambda b: b.hex())
         return hashlib.sha256(b"verity/registration/v0\0" + body.encode()).hexdigest()
-
-
-@functools.cache
-def boundary_wires(circuit: Circuit, partition: P.Partition) -> tuple[int, ...]:
-    return tuple(sorted({w for region in partition for side in P.boundary(circuit, region) for w in side}))
-
-
-def leaf(wire: int, value: int) -> bytes:
-    return wire.to_bytes(4, "big") + value.to_bytes(4, "big")
 
 
 def check(registration: Registration, circuits: Mapping[str, Circuit], max_width: int, scheme: str) -> tuple[str, ...]:
@@ -72,6 +66,6 @@ def check(registration: Registration, circuits: Mapping[str, Circuit], max_width
             why.append(f"execution {i}: circuit {e.circuit} is not one the verifier holds")
             continue
         why += [f"execution {i}: {r}" for r in P.validate(c, e.partition, max_width)]
-        if e.root.scheme != scheme or e.root.leaves != len(boundary_wires(c, e.partition)):
+        if e.root.scheme != scheme or e.root.leaves != len(wires(c, e.partition)):
             why.append(f"execution {i}: its root is not one {scheme} leaf per boundary wire")
     return tuple(why)
