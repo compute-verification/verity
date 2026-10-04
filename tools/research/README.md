@@ -14,16 +14,16 @@ exists. This file is for people changing the tool.
 ~~~text
 src/research/
 ├── cli.py          research run | fetch | status | inspect | tele | data | launch-request
-├── store/          the evidence store (`research data`): README.md is the spec; canon, ids, model, local, index, remote, remote_s3, kinds, cli
 ├── runs.py         run ids, the local registry (~/.research/runs or $RESEARCH_RUNS), read-time summaries
 ├── record.py       job.json v0.2 = the harness's v0.1 + tool, run, workload_fingerprint.expected, cost; v0.1 stays readable
 ├── result.py       the result.json contract (schema, run_id, fingerprint, validation, measurements, artifacts)
 ├── remote.py       --on: machines file, tool/source snapshots, request, claim-by-run-id, exclusive lock, fetch, preservation manifest
 ├── disk.py         --disk-gb admission (--queue): held on the machine while the disk would pass 80%, released at 75%
 ├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
+├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
-├── store/          the evidence store (README.md there is the contract): tool, tools_registry, derivation, attempt, cli_prov (provenance)
-│                   + canon, local, index, remote, kinds, cli (storage)
+├── store/          the evidence store (`research data`; README.md there is the contract): tool, tools_registry, derivation, attempt,
+│                   cli_prov (provenance) + canon, ids, model, local, index, remote, remote_s3, kinds, cli (storage)
 ├── telemetry/      the recorded-attempt harness: job.json, status.json, events.jsonl, resources.jsonl, failure.json
 └── pods/           RunPod lifecycle (runpod.py), leases (lease.py), budgets.toml and its guard (budgets.py, guard.py), memory guard, pod-side sh/
 tests/              pure-Python; the machine side of --on is exercised locally (launch_request is a plain function)
@@ -62,6 +62,13 @@ the tmux server's global environment, where that login shell gets them
 unset stays unset. If one is still missing, the store, `research queue
 ready`, node ssh and the Nebius scripts fail and say `rerun from a fresh tmux
 login shell` (`secret_hint.py`).
+
+`research doctor [--role lane|coordinator|infra] [--json]` says whether this
+VM can do its job before a run finds out: the role's secret names
+(`doctor.SECRETS`) against what the VM injects, status-only probes (`gh`,
+dry-run pushes, the store's remote, Slack for coordinator and infra, ssh to
+each machine), `uv sync --check`, the disk floor and the clock. Each finding
+names its fix (exit 1). It prints names and verdicts, never a value or body.
 
 ## Commands
 
@@ -260,10 +267,10 @@ starts the runner detached; re-delivering a launch after an ssh drop finds
 the claim and reports state. The runner's argv carries the workload's command, so a
 `pkill -f` aimed at the workload matches it too: it logs SIGTERM / SIGHUP to
 launcher.log and keeps supervising, so the run still records its end and
-publishes. Stop a run with `research cancel RUN --reason TEXT` from the launcher: SIGTERM to its workload's process group
-(status.json `pgid`), recorded first as a manual cancel in events.jsonl, so the run classifies `CANCELLED_MANUAL`. On the
-machine the same is `kill -TERM -<pgid>`. Never SIGKILL the runner: one killed during its custody upload leaves the run without
-custody and its minted key on disk. `--exclusive` refuses if any run is live, and
+publishes. Stop a run with `research cancel RUN --reason TEXT` from any VM: SIGTERM to its workload's process group
+(status.json `pgid`, if a member's env has the run's `RESEARCH_RUN_DIR`), recorded first as a manual cancel, so the run
+classifies `CANCELLED_MANUAL`. On the machine the same is `kill -TERM -<pgid>`. Never SIGKILL the runner: one killed during
+its custody upload leaves the run without custody and its minted key on disk. `--exclusive` refuses if any run is live, and
 any launch refuses if an exclusive holder is live.
 
 The shipped tree is extracted with extraction mtimes (`tar -m`), not the commit time `git archive` stamps: a build dir shared
@@ -309,6 +316,11 @@ and free disk.
 Limitations, stated: until `fetch --all` completes, the only copy of the
 evidence is on the machine. Provisioning is a separate, explicit act; `--on` never creates a pod.
 
+### Standing campaign targets: `research keeper`
+
+`research keeper set|stop|status NAME --on NODE` keeps N chunks of a command leased on a Nebius node until a deadline, the next
+`{seed}` of a counter each, so no agent VM stays awake to relaunch them: `research keeper --help`, and `pods/nebius/keeper.py`.
+
 ### Pods bound themselves: leases, one budget file, one guard
 
 Nothing that bounds spend may depend on an agent VM, which can be suspended at any moment, or on one guard process staying alive.
@@ -335,7 +347,9 @@ Nothing that bounds spend may depend on an agent VM, which can be suspended at a
 The disk floor: `research run` and `research fetch --all` refuse (exit 3) while the runs root's filesystem has less than
 `$RESEARCH_DISK_FLOOR_GB` free (default 1.5; `0` turns it off), naming the eviction that frees it. `research data custody RUN
 --publish` removes the run's files of 1 MiB and more once custody holds (`--keep-local` keeps them); `run-files.evicted.json`
-names the fetch that restores them.
+names the fetch that restores them. `research data evict --src-dir DIR` (node 1's hourly research unit) also deletes, oldest first
+and whatever the mark, each shipped source tree recoverable on the node (exactly a commit on a ref of its `git/verity.git`) that no process, run, request, slot or fill job uses, unchanged for 2 h
+and its runs' clean source; a condition it can't establish keeps them all (`store/evict.py`).
 
 ### research data
 
