@@ -1,0 +1,2339 @@
+{
+ "digests": {
+  "AddScalarBf16Element_v1{K=1065353216}": {
+   "descriptor_id": "AddScalarBf16Element_v1{K=1065353216}",
+   "digest": "0f026fc9b06c0cb23a2fa8d1d80179596f41ba5eef2b64b97597ffcd679bc8ee",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "AddScalarBf16_v1{N=1024,C=1.0}": {
+   "descriptor_id": "AddScalarBf16_v1{N=1024,C={\"f64\":\"0x1.0000000000000p+0\"}}",
+   "digest": "f29261f8373ad492edf94b9ef13d69a68d53d60cae85bb7d102aeaaf39c08776",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "AddScalarBf16_v1{N=16,C=0.5}": {
+   "descriptor_id": "AddScalarBf16_v1{N=16,C={\"f64\":\"0x1.0000000000000p-1\"}}",
+   "digest": "e76a175e3fb9ba032f9d1676ca88c23807d12c0e75ddff5ee62ec7c683e2fefa",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "AddScalarBf16_v1{N=16,C=1.0}": {
+   "descriptor_id": "AddScalarBf16_v1{N=16,C={\"f64\":\"0x1.0000000000000p+0\"}}",
+   "digest": "2b682cf4531a2ec1fb97f8fba8bd2352bd8ec0f5a29350fb77513ba69eef42b7",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "AddScalarBf16_v1{N=2304,C=1.0}": {
+   "descriptor_id": "AddScalarBf16_v1{N=2304,C={\"f64\":\"0x1.0000000000000p+0\"}}",
+   "digest": "1b36433a20dd647e80dc4725a0155aefc65cd22750dc1786c161dae414fe0bdf",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "AddScalarBf16_v1{N=64,C=1.0}": {
+   "descriptor_id": "AddScalarBf16_v1{N=64,C={\"f64\":\"0x1.0000000000000p+0\"}}",
+   "digest": "a769cfe66088ddc11e1587a769298210ac7875be0c62449047ad2c3697cec9bf",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "AddScalarBf16_v2{N=8,C=1.0}": {
+   "descriptor_id": "AddScalarBf16_v2{N=8,C={\"f64\":\"0x1.0000000000000p+0\"}}",
+   "digest": "a5599223869a39c19d0c54964e4f7fbda9d3598779315e5ca57fa11e3724b34a",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "AddScalarF32Element_v1{K=897988541}": {
+   "descriptor_id": "AddScalarF32Element_v1{K=897988541}",
+   "digest": "1f3b94f0b1994cfbfb6ca39bc676a573662039b6c3245b82106d200390fc1e2d",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "AddScalarF32_v1{N=1,C=1.0}": {
+   "descriptor_id": "AddScalarF32_v1{N=1,C={\"f64\":\"0x1.0000000000000p+0\"}}",
+   "digest": "1aa02e2a55a62e11b64902cd68a8d67a582ba357a0d7030bb158f4bc396dc1ab",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "AddScalarF32_v1{N=1,C=1e-06}": {
+   "descriptor_id": "AddScalarF32_v1{N=1,C={\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}}",
+   "digest": "38f3d53be3de17f873e1f0f23fe1dbb8a6c4b614b2625c48ced4dd344ca3a33b",
+   "used_by": [
+    "circuit-check target",
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "AddScalarF32_v1{N=16,C=0.5}": {
+   "descriptor_id": "AddScalarF32_v1{N=16,C={\"f64\":\"0x1.0000000000000p-1\"}}",
+   "digest": "5b4ef1810a9d2483833a32769be04610a328f58b95612d29bcbc784a7cb125e1",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "AddScalarF32_v1{N=16,C=1.0}": {
+   "descriptor_id": "AddScalarF32_v1{N=16,C={\"f64\":\"0x1.0000000000000p+0\"}}",
+   "digest": "d4c0b496c11adef381a9bdb29318996ca87794fb5c68fa5765a97409479faaa7",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "AddScalarF32_v1{N=2304,C=1e-06}": {
+   "descriptor_id": "AddScalarF32_v1{N=2304,C={\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}}",
+   "digest": "9680fd390bcf1e6fb733975d89053bd35dca3549c517ce771d2a331919e30190",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "AddScalarF32_v1{N=64,C=1e-06}": {
+   "descriptor_id": "AddScalarF32_v1{N=64,C={\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}}",
+   "digest": "3e612c88d7a4caaca2eda6fd9596148310bb392029ff6da9eda9d9ac16b7d488",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "AddScalarF32_v2{N=8,C=1e-06}": {
+   "descriptor_id": "AddScalarF32_v2{N=8,C={\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}}",
+   "digest": "7655de893fd0b062a21f0ebfc47e270da86c1630d0c79b8e31282ec70c9bacde",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "AddWidenedBf16Element_v1": {
+   "descriptor_id": "AddWidenedBf16Element_v1",
+   "digest": "48b5814492769ebf6b5b89a3fdf8f89aa18456e63dd5928adbc3206ffde490dc",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "AddWidenedBf16_v1{N=1024}": {
+   "descriptor_id": "AddWidenedBf16_v1{N=1024}",
+   "digest": "2cdf8729b6f112f508753f73f4a32973ea3315c329b3fdd837a285fb80f10d6e",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "AddWidenedBf16_v1{N=16}": {
+   "descriptor_id": "AddWidenedBf16_v1{N=16}",
+   "digest": "b7817662a43a28bb3678d30687432e89c09e7727068c8da38343d3ef8014e7db",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "AddWidenedBf16_v1{N=2304}": {
+   "descriptor_id": "AddWidenedBf16_v1{N=2304}",
+   "digest": "81ad7aae6d21019f1bf08f1941bc469fa9b3e4a512316accc45257abddda68f9",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "AddWidenedBf16_v1{N=64}": {
+   "descriptor_id": "AddWidenedBf16_v1{N=64}",
+   "digest": "a298a45650b335f39fe01a54b7a2aae7dc6a2d5a953c591704613e872d304d49",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "AddWidenedBf16_v2{N=8}": {
+   "descriptor_id": "AddWidenedBf16_v2{N=8}",
+   "digest": "fe5225a88fffaa5e422f4907501abd1d0ac76c0d4077dab95d3db67e9aebb43d",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "AttentionHeadSoftcap_v1{T=5,D=16,BN=128,CAP=30.0}": {
+   "descriptor_id": "AttentionHeadSoftcap_v1{T=5,D=16,BN=128,CAP={\"f64\":\"0x1.e000000000000p+4\"}}",
+   "digest": "cf71027723f06fdd9952cdda9aed2ae2117916f0271baab580f8ba5f1bb61783",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "AttentionSoftcap_v1{T=130,NH=8,KVH=4,D=256,BN=64,CAP=50.0}": {
+   "descriptor_id": "AttentionSoftcap_v1{T=130,NH=8,KVH=4,D=256,BN=64,CAP={\"f64\":\"0x1.9000000000000p+5\"}}",
+   "digest": "17e6776868cab5e73e7e7ed53c5c89a732b86bb99f4ed9b9ff727538aa5c6426",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "AttentionSoftcap_v1{T=17,NH=4,KVH=2,D=128,BN=64,CAP=30.0}": {
+   "descriptor_id": "AttentionSoftcap_v1{T=17,NH=4,KVH=2,D=128,BN=64,CAP={\"f64\":\"0x1.e000000000000p+4\"}}",
+   "digest": "f7456be7d851c8469d5036eb7fba757cd874f6a2dc9d221ab65d2049cabba241",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "AttentionSoftcap_v1{T=5,NH=2,KVH=1,D=16,BN=128,CAP=30.0}": {
+   "descriptor_id": "AttentionSoftcap_v1{T=5,NH=2,KVH=1,D=16,BN=128,CAP={\"f64\":\"0x1.e000000000000p+4\"}}",
+   "digest": "61cd1463f67b003259283a9476e396f28a832deac799a387e3263bdfec92203b",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "AttentionSoftcap_v1{T=5,NH=8,KVH=4,D=256,BN=64,CAP=50.0}": {
+   "descriptor_id": "AttentionSoftcap_v1{T=5,NH=8,KVH=4,D=256,BN=64,CAP={\"f64\":\"0x1.9000000000000p+5\"}}",
+   "digest": "d6caae57e06dccb1f81fd9eba6a21a97525bbf88dfa9eaa2fdad9b8ff5e38f63",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "AttentionSoftcap_v1{T=64,NH=8,KVH=4,D=256,BN=64,CAP=50.0}": {
+   "descriptor_id": "AttentionSoftcap_v1{T=64,NH=8,KVH=4,D=256,BN=64,CAP={\"f64\":\"0x1.9000000000000p+5\"}}",
+   "digest": "6738c34516c01d3bca847cd286b5ddfd6475426743037ece4bab766728a0d4ca",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "AttentionSoftcap_v1{T=65,NH=8,KVH=4,D=256,BN=64,CAP=50.0}": {
+   "descriptor_id": "AttentionSoftcap_v1{T=65,NH=8,KVH=4,D=256,BN=64,CAP={\"f64\":\"0x1.9000000000000p+5\"}}",
+   "digest": "6471b298b6f6cf74d2f41fee18926e2eee98dc36bb6306265741c59cad5e5a23",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "AttnBlockSoftcap_v1{D=16,NVIS=5,FIRST=True,BN=128,CAP=30.0}": {
+   "descriptor_id": "AttnBlockSoftcap_v1{D=16,NVIS=5,FIRST=true,BN=128,CAP={\"f64\":\"0x1.e000000000000p+4\"}}",
+   "digest": "b5379b9d544456bbb80ea243f6c0b048c080c35b65176402077b0555f73dfde3",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "Bf16DivScalar_v1{N=16,C=0.5}": {
+   "descriptor_id": "Bf16DivScalar_v1{N=16,C={\"f64\":\"0x1.0000000000000p-1\"}}",
+   "digest": "882a7fe030dad6bbf72755a26a6a72c41f09da4bae15a87ccc6be82e135a4486",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "Bf16DivScalar_v1{N=16,C=1.0}": {
+   "descriptor_id": "Bf16DivScalar_v1{N=16,C={\"f64\":\"0x1.0000000000000p+0\"}}",
+   "digest": "fa574aea1be4ae0640aee91399037bb9dbd75728a5bdb55bc0fd862086512aba",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "Bf16DivScalar_v1{N=16,C=30.0}": {
+   "descriptor_id": "Bf16DivScalar_v1{N=16,C={\"f64\":\"0x1.e000000000000p+4\"}}",
+   "digest": "65b49147c48698a613f034fd6c6f22f4944530b532567f22da066205ed14c1cb",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "Bf16DivScalar_v1{N=2304,C=30.0}": {
+   "descriptor_id": "Bf16DivScalar_v1{N=2304,C={\"f64\":\"0x1.e000000000000p+4\"}}",
+   "digest": "7231314df33a8d64b48c8302e8ae9ffaa73bd0266fb3a09a8d2da9382e97d32e",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "Bf16DivScalar_v1{N=256000,C=30.0}": {
+   "descriptor_id": "Bf16DivScalar_v1{N=256000,C={\"f64\":\"0x1.e000000000000p+4\"}}",
+   "digest": "ac9b67b411472835a081820f20af14345312b3e0fd8c5c4ed0c59aa9c399e773",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "Bf16DivScalar_v1{N=64,C=30.0}": {
+   "descriptor_id": "Bf16DivScalar_v1{N=64,C={\"f64\":\"0x1.e000000000000p+4\"}}",
+   "digest": "b6e4f31501ea6594c4cc62e71c08de51ad3e642c6b67bddb343ceab2b4e90f7e",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "Bf16DivScalar_v1{N=64,C=7.0}": {
+   "descriptor_id": "Bf16DivScalar_v1{N=64,C={\"f64\":\"0x1.c000000000000p+2\"}}",
+   "digest": "037d5e6154400dd28a041aae112a39a68a594a69f2fd7139c0beea1c5e550b5a",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "Bf16DivScalar_v2{N=8,C=30.0}": {
+   "descriptor_id": "Bf16DivScalar_v2{N=8,C={\"f64\":\"0x1.e000000000000p+4\"}}",
+   "digest": "02134412fa940f94f991904bfb7e7f55d80eea5173236c343fb8bbc9ebbb60c1",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "Bf16MulScalarElement_v1{K=1023969417}": {
+   "descriptor_id": "Bf16MulScalarElement_v1{K=1023969417}",
+   "digest": "89f57ccfe61bcd1dc6d6518918ff1eb4d3a0c6488cda345c261cf61c21be1ae2",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "Bf16MulScalarElement_v1{K=1106247680}": {
+   "descriptor_id": "Bf16MulScalarElement_v1{K=1106247680}",
+   "digest": "fb20cccefa5f200fbddc7386acd00f69ff3f13fb41750cc4735f72348b421dfc",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "Bf16MulScalarTensorElement_v1": {
+   "descriptor_id": "Bf16MulScalarTensorElement_v1",
+   "digest": "c9aa17bdf64e815583902dd1689eef8ccec2f5bbde49cc01c79baf0bbd762a14",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "Bf16MulScalarTensorScalar_v1": {
+   "descriptor_id": "Bf16MulScalarTensorScalar_v1",
+   "digest": "e554c12d114882bcaa407433d378d03b833c7589c0001019a1536ec80924a9e8",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "Bf16MulScalarTensor_v2{N=8}": {
+   "descriptor_id": "Bf16MulScalarTensor_v2{N=8}",
+   "digest": "a42376f111b99a20179a42ebc19c228fb5c51ffd31283906bcfe99b327bde5f4",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "Bf16MulScalar_v1{N=16,C=0.5}": {
+   "descriptor_id": "Bf16MulScalar_v1{N=16,C={\"f64\":\"0x1.0000000000000p-1\"}}",
+   "digest": "4ed96d3d9473d5a64a18fa5bf5ff842e34cc3baef01e79ae154e0dafa133a86a",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "Bf16MulScalar_v1{N=16,C=1.0}": {
+   "descriptor_id": "Bf16MulScalar_v1{N=16,C={\"f64\":\"0x1.0000000000000p+0\"}}",
+   "digest": "d18ec5626d98ccfccde5f75d3e18413b0dbb72c5c895d761a58664305c5ac7a4",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "Bf16MulScalar_v1{N=16,C=30.0}": {
+   "descriptor_id": "Bf16MulScalar_v1{N=16,C={\"f64\":\"0x1.e000000000000p+4\"}}",
+   "digest": "b5cc7cbca8a300f759a805fafc8bf89f93df430c1ad013915a7eccafea046342",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "Bf16MulScalar_v1{N=2304,C=30.0}": {
+   "descriptor_id": "Bf16MulScalar_v1{N=2304,C={\"f64\":\"0x1.e000000000000p+4\"}}",
+   "digest": "af8e978decb03cbf69a8b23b7cc0004b885616af175ce501d808df90b083bb9f",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "Bf16MulScalar_v1{N=256000,C=30.0}": {
+   "descriptor_id": "Bf16MulScalar_v1{N=256000,C={\"f64\":\"0x1.e000000000000p+4\"}}",
+   "digest": "aba65d67af5f53b778062d37acaf53bac35c43462995933fd3a39ffc303921fd",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "Bf16MulScalar_v1{N=64,C=30.0}": {
+   "descriptor_id": "Bf16MulScalar_v1{N=64,C={\"f64\":\"0x1.e000000000000p+4\"}}",
+   "digest": "6866a7b7e1278957f20befffee84c2aeaf1dc5f52d71d4b53345a250332bb92f",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "Bf16MulScalar_v1{N=64,C=7.0}": {
+   "descriptor_id": "Bf16MulScalar_v1{N=64,C={\"f64\":\"0x1.c000000000000p+2\"}}",
+   "digest": "d01984ad44488c40a7dbe0fa38152e81a4480107f3a9a55f49774bd64c74c257",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "Bf16MulScalar_v2{N=8,C=30.0}": {
+   "descriptor_id": "Bf16MulScalar_v2{N=8,C={\"f64\":\"0x1.e000000000000p+4\"}}",
+   "digest": "cf1e9a5ef661f522543bb828b6e0693a2ee9e30667e7a4c71c30d833488c6299",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "Bf16Tanh_v1{N=16}": {
+   "descriptor_id": "Bf16Tanh_v1{N=16}",
+   "digest": "f6fa6f8f1b53ed7bf20844cf68a2c7c74ac14f1531530e0944fe039a850a91d4",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "Bf16Tanh_v1{N=2304}": {
+   "descriptor_id": "Bf16Tanh_v1{N=2304}",
+   "digest": "386583ec971a25fefb80980069394543961d991c8996ee6f78d8fb72f57e5b98",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "Bf16Tanh_v1{N=256000}": {
+   "descriptor_id": "Bf16Tanh_v1{N=256000}",
+   "digest": "19e919c58b4a36ba39def76eeadefb1136b52b42ca1174d161bf38c47a26c9c9",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "Bf16Tanh_v1{N=64}": {
+   "descriptor_id": "Bf16Tanh_v1{N=64}",
+   "digest": "75e20e6ec4434a941ddea86045af5b94ef4dff399f6f3a3e401cbb89a11c5431",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "Bf16Tanh_v2{N=8}": {
+   "descriptor_id": "Bf16Tanh_v2{N=8}",
+   "digest": "a4a497f2aa4ed7cf0bc7ba5890b06fe2755b4ec119e8ceea825757175f53f51d",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "F32AddZero_v1": {
+   "descriptor_id": "F32AddZero_v1",
+   "digest": "4fb60f037f2f7350ab092b94da7a832a3f851d82ac309a5445dbb857fc9c442c",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "GeluTanhMulBf16_v1": {
+   "descriptor_id": "GeluTanhMulBf16_v1",
+   "digest": "2da77da1caad0d5febae0d93d292078c2bc570e7b74e9e4be017cae3ed2a5431",
+   "used_by": [
+    "circuit-check target",
+    "pins.json pieces"
+   ]
+  },
+  "GeluTanhMulBf16_v2": {
+   "descriptor_id": "GeluTanhMulBf16_v2",
+   "digest": "097a55b6181a47e3a3c8ef383a9252bb0366a9b14f9175c783623a7d1326d2aa",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "GeluTanhMul_v1{I=1024}": {
+   "descriptor_id": "GeluTanhMul_v1{I=1024}",
+   "digest": "68d142d9e83818d4bba5ca113ac622a3954f6c93ecd8454cd0b63fa731e2c949",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "GeluTanhMul_v1{I=16}": {
+   "descriptor_id": "GeluTanhMul_v1{I=16}",
+   "digest": "3bf51d4e5c80dd435b5d128ef4768d36a92f3b34e0e2cf0e4d2af0f35a3541fa",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "GeluTanhMul_v1{I=64}": {
+   "descriptor_id": "GeluTanhMul_v1{I=64}",
+   "digest": "2c2e8eb43253f6889df47b97486b6915b97df447bcbdcc10543ad686eb512bf5",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "GeluTanhMul_v1{I=9216}": {
+   "descriptor_id": "GeluTanhMul_v1{I=9216}",
+   "digest": "c28f3bb78505b88a1885dc23108c1d540e98af8b680e41a5b72b017c957cc9c5",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "GeluTanhMul_v2{I=8}": {
+   "descriptor_id": "GeluTanhMul_v2{I=8}",
+   "digest": "73636ef3ad03afbfb6b241cbc5048312eb7b88da622aa504fdb213aa7b742ffd",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "GemmBiasCoordinate_v1{K=32}": {
+   "descriptor_id": "GemmBiasCoordinate_v1{K=32}",
+   "digest": "60ffec3fb81c8c0a49e41714caf5159ee5eba2f2d9591256c0e9830db24d9b87",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "GemmBiasCoordinate_v2{K=32,DOT=AmpereBF16TcDot16_v2}": {
+   "descriptor_id": "GemmBiasCoordinate_v2{K=32,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}",
+   "digest": "d9a6d88c084e93598fd88ed692de5c8f485d6cf536647c5a8a3a357558a435dd",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "GemmBiasCoordinate_v2{K=32,DOT=HopperBF16WgmmaDot16_v1}": {
+   "descriptor_id": "GemmBiasCoordinate_v2{K=32,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+   "digest": "c9ed9c0c0322efc9563b26b2733c9d53d1b3693a63724dfda99754476e771133",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "GemmBias_v1{K=32,N=16}": {
+   "descriptor_id": "GemmBias_v1{K=32,N=16}",
+   "digest": "8883662a4c6ac0b285165023b95f503f869084a6625bd896c8624f2ca5ac6066",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "GemmBias_v1{K=32,N=3}": {
+   "descriptor_id": "GemmBias_v1{K=32,N=3}",
+   "digest": "9d15a4e8f5326a72735d862e52cc83cdcb9d4d38f5424fcac6986fe8347c0b4d",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "GemmBias_v2{K=32,N=16,DOT=AmpereBF16TcDot16_v2}": {
+   "descriptor_id": "GemmBias_v2{K=32,N=16,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}",
+   "digest": "4db68cf4c4b5743abef8f272839d9ffe247ef5700249cc5a28db0d213cf501e4",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "GemmBias_v2{K=32,N=3,DOT=AmpereBF16TcDot16_v2}": {
+   "descriptor_id": "GemmBias_v2{K=32,N=3,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}",
+   "digest": "94c20f975e5808e499d46182a214f214729dae2a2bff940085b6a196b5b36648",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "GemmBias_v2{K=32,N=3,DOT=HopperBF16WgmmaDot16_v1}": {
+   "descriptor_id": "GemmBias_v2{K=32,N=3,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+   "digest": "5be25b741d8e16c061d3f79afe817d4ef127693d48ea2eaa8b578ce89e6fe859",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "MeanCombineTriton_v1{N=1030}": {
+   "descriptor_id": "MeanCombineTriton_v1{N=1030}",
+   "digest": "03fcd69719ce6e2be0e9a07338cfccc79d65ad1b0506c11e717aece5dbb0933d",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "MeanCombineTriton_v1{N=16}": {
+   "descriptor_id": "MeanCombineTriton_v1{N=16}",
+   "digest": "c6d31479032b0b2ec5dbe86a5dd5fcda1e818143bb02e10cfcefa9775966d7fe",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "MeanDivTriton_v1{N=1030}": {
+   "descriptor_id": "MeanDivTriton_v1{N=1030}",
+   "digest": "a14e8a6e7875c9ac36d29bb488a0d9b021d0aea58703ff3f4cbec2eb07697761",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "MeanDivTriton_v1{N=16}": {
+   "descriptor_id": "MeanDivTriton_v1{N=16}",
+   "digest": "cdf60b0fc58efe7b68c2b059c12bca01e0d14150156feddb0286a7212297972b",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "MeanThreadTriton_v1{K=1}": {
+   "descriptor_id": "MeanThreadTriton_v1{K=1}",
+   "digest": "810c88824e136a5c679516daad2ce94e7f2df5e3650248cb8672eff3f434c708",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "MeanThreadTriton_v1{K=4}": {
+   "descriptor_id": "MeanThreadTriton_v1{K=4}",
+   "digest": "66d0c0970d5d0afcb0dcb76498e7e4e17d7c20016f881f80670dd88bd22b8190",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "MeanThreadTriton_v1{K=8}": {
+   "descriptor_id": "MeanThreadTriton_v1{K=8}",
+   "digest": "62e990bcae674177a4efe1e402338f2d2ec58f10df614a01736d252cecd1e509",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "MeanThreadsTriton_v1{N=16}": {
+   "descriptor_id": "MeanThreadsTriton_v1{N=16}",
+   "digest": "5991b7fc2b83b39c21d98c0e8cf5fb908742863356b94fdfd492ce493710ef5a",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "MeanTriton_v1{N=1000}": {
+   "descriptor_id": "MeanTriton_v1{N=1000}",
+   "digest": "a21857b21d33ce71046671cf7df70d48404066f9372a4c60dd3da2e166bd6f67",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "MeanTriton_v1{N=100}": {
+   "descriptor_id": "MeanTriton_v1{N=100}",
+   "digest": "1bf9aea5970b5532d2b06d10c2dd5ae4d023601a65c612ad93463a258638f204",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "MeanTriton_v1{N=1024}": {
+   "descriptor_id": "MeanTriton_v1{N=1024}",
+   "digest": "6f06b1f175229a5bc816a0333fa1c47df94cca16365e54bcaea7c09b23c0f35f",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "MeanTriton_v1{N=1280}": {
+   "descriptor_id": "MeanTriton_v1{N=1280}",
+   "digest": "d6373426ac9ba78449145b3dd3f701b7eb6a08c79824f706e650a9b6ec2b889a",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "MeanTriton_v1{N=16}": {
+   "descriptor_id": "MeanTriton_v1{N=16}",
+   "digest": "630e2e66d8e5bff09100e7a151ddcee1ef9406e398fc31fe952c4fcad4413857",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "MeanTriton_v1{N=2048}": {
+   "descriptor_id": "MeanTriton_v1{N=2048}",
+   "digest": "fc3c96b3ab9a50d11d385ab3cf45e2ef4fa112d72ae22c98d7f4753c7e666f50",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "MeanTriton_v1{N=20}": {
+   "descriptor_id": "MeanTriton_v1{N=20}",
+   "digest": "ca2f20ecf92cad693d913b52a802ea8ed316faad89967c64f7586d97bf0046cc",
+   "used_by": [
+    "circuit-check target",
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "MeanTriton_v1{N=2304}": {
+   "descriptor_id": "MeanTriton_v1{N=2304}",
+   "digest": "847b873742b7f42f4fa760b240e88575cffb3351629271794d05d6749d64ca40",
+   "used_by": [
+    "circuit-check target",
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "MeanTriton_v1{N=256}": {
+   "descriptor_id": "MeanTriton_v1{N=256}",
+   "digest": "443ca90f2ffd8f6b6b6ee29c410601b71b04a144a5faab6c52eae086bbfd33c5",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "MeanTriton_v1{N=2}": {
+   "descriptor_id": "MeanTriton_v1{N=2}",
+   "digest": "5f5862419f854ef26364791d74d19fb7d177dae8878d53fd3ac8d3ede4ac6268",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "MeanTriton_v1{N=4}": {
+   "descriptor_id": "MeanTriton_v1{N=4}",
+   "digest": "272e71a496654b21c5482071286b29494536d65001cc21ad193e89e2cde1d03e",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "MeanTriton_v2{N=16}": {
+   "descriptor_id": "MeanTriton_v2{N=16}",
+   "digest": "17eb2778c00b64b098105702e8991ced76d569e1d66fa86f3f8bc52e55e8cef4",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "MeanWarpTriton_v1{L=32}": {
+   "descriptor_id": "MeanWarpTriton_v1{L=32}",
+   "digest": "ec851a9387097598446978371ad6a0686490c7b683a24b0d965b776e52f6022e",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "MeanWarpTriton_v1{L=4}": {
+   "descriptor_id": "MeanWarpTriton_v1{L=4}",
+   "digest": "a7b484a2908f2036258e8e8a944781599cd9b29474400ac93b8b4c0bbe5b7d9c",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "MeanWarpTriton_v1{L=6}": {
+   "descriptor_id": "MeanWarpTriton_v1{L=6}",
+   "digest": "82a567eb0fbf395ba875ecde9ee02be39be5543477d7a3b2bfba4af86f2bd89c",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "MeanWarpsTriton_v1{N=16}": {
+   "descriptor_id": "MeanWarpsTriton_v1{N=16}",
+   "digest": "3ef98f85da8e56957aceb8d0bbe549925d8ff4acfc8d3c99f72ef8260cbd3f9b",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "MulVecF32_v1{N=1024}": {
+   "descriptor_id": "MulVecF32_v1{N=1024}",
+   "digest": "0d3f22ffe497ee33cd69b5f4a71190813bef6054ab14ed4b140b5e859eb47e37",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "MulVecF32_v1{N=16}": {
+   "descriptor_id": "MulVecF32_v1{N=16}",
+   "digest": "d52a64c02146aa34328631e58f8349ea25cfde87f6b936fbbac5e7ed49618f52",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "MulVecF32_v1{N=2304}": {
+   "descriptor_id": "MulVecF32_v1{N=2304}",
+   "digest": "b0d2e09fa103183d131ead197eca7b26f6c21873263bc81d2469f147d69e7ab9",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "MulVecF32_v1{N=64}": {
+   "descriptor_id": "MulVecF32_v1{N=64}",
+   "digest": "4c3527378cfe8804168610b0d3701817e1551de90989f94c590b6f9f419a6d70",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "MulVecF32_v2{N=8}": {
+   "descriptor_id": "MulVecF32_v2{N=8}",
+   "digest": "d84087684deaf2c23ce225657597dd36d511d39eef2665f42b8be8a30e0fc769",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "NarrowF32ToBf16El_v1": {
+   "descriptor_id": "NarrowF32ToBf16El_v1",
+   "digest": "ca1c198429becfd6b2ce69e0113326245d20854a5c6d120ab472a97fc64e031e",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "NarrowF32ToBf16_v1{N=1024}": {
+   "descriptor_id": "NarrowF32ToBf16_v1{N=1024}",
+   "digest": "ab22aeb0815167b2c927c620316a004837c2955282270746a945129447406c7c",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "NarrowF32ToBf16_v1{N=16}": {
+   "descriptor_id": "NarrowF32ToBf16_v1{N=16}",
+   "digest": "b82d51b81f4c65eff59f3d5eec96f74dc2f8f0bc51bf21b272406e3d28385ac3",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "NarrowF32ToBf16_v1{N=2304}": {
+   "descriptor_id": "NarrowF32ToBf16_v1{N=2304}",
+   "digest": "10ae090a92ec7633b7c61f97ed9cda7401909a0f23a9876b30da729680d30dfd",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "NarrowF32ToBf16_v1{N=64}": {
+   "descriptor_id": "NarrowF32ToBf16_v1{N=64}",
+   "digest": "606e2a20769fd08af42c352ac3c3ca5e615b0bd32fadb101286fb2f3725d225f",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "NarrowF32ToBf16_v2{N=16}": {
+   "descriptor_id": "NarrowF32ToBf16_v2{N=16}",
+   "digest": "5fb6d9f9e3fdff4f44baab422079689febb723890c687381094581bba61d80b7",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "PackF32_v1": {
+   "descriptor_id": "PackF32_v1",
+   "digest": "2cdcc8797bc6f91ab2c2cf5169a7aa08aa1e3727b610afc59d188295e29ed940",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "RMSNormArgCuda_v1{N=16,EPS=1e-05,NW=1}": {
+   "descriptor_id": "RMSNormArgCuda_v1{N=16,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},NW=1}",
+   "digest": "fedaf95a871e8180477bfcc124de5815f0593b0505140df68ba679ea47800b61",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormFusedCuda_v3{N=16,EPS=1e-05,RSQRT=RsqrtApprox_v1}": {
+   "descriptor_id": "RMSNormFusedCuda_v3{N=16,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},RSQRT={\"fn\":\"RsqrtApprox_v1\"}}",
+   "digest": "2c20be591aa15f076de24f8db01aef29c144d3a3cda9438f3bed2226c140158e",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "RMSNormFusedCuda_v3{N=16,EPS=1e-05,RSQRT=RsqrtApprox_v2}": {
+   "descriptor_id": "RMSNormFusedCuda_v3{N=16,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},RSQRT={\"fn\":\"RsqrtApprox_v2\"}}",
+   "digest": "60aa60eff7f7dada8dddfe55d7e1dc1dff5ed881c5bd62689c5a779776ec0f15",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "RMSNormInvTriton_v1": {
+   "descriptor_id": "RMSNormInvTriton_v1",
+   "digest": "058613ea4b0db39e1d5412603fd846c3b7e2dbce559f4c57fb732f22d8a82fcc",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormLaneCuda_v1{J=1}": {
+   "descriptor_id": "RMSNormLaneCuda_v1{J=1}",
+   "digest": "23cd42bd1ce60684860a9bc82a2de0dcbad68862bbc82acbfd99df3060f80bc7",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormLaneCuda_v1{J=2}": {
+   "descriptor_id": "RMSNormLaneCuda_v1{J=2}",
+   "digest": "0007bd0c7ade16a5187055964f5af08ab77fb1fb0f05274ac9b57a1d1c4b7e0b",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormLanesCuda_v1{N=16,BLOCK=1024}": {
+   "descriptor_id": "RMSNormLanesCuda_v1{N=16,BLOCK=1024}",
+   "digest": "43fc1530eac74cf50a9a66614c9e4bd5e3ce7203c1c08510c6a90818ab08f9cb",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormMeanEpsTriton_v1{N=16,EPS=1e-05}": {
+   "descriptor_id": "RMSNormMeanEpsTriton_v1{N=16,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}",
+   "digest": "3957fc8427a00f4fa564abb97cc743665bc2bf769f01e11552e93dc745c4cc92",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormOutCuda_v1": {
+   "descriptor_id": "RMSNormOutCuda_v1",
+   "digest": "6c430ef13c6491d554025d79232203cb91b0379530e0eca773e55c7dcb6af4c1",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormOutRowCuda_v1{N=16}": {
+   "descriptor_id": "RMSNormOutRowCuda_v1{N=16}",
+   "digest": "4d0ef3a84b43bc7401da3db51fc87e17f736a9768d7ccd0de5b0cdae49af6215",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormOutRowTriton_v1{N=16}": {
+   "descriptor_id": "RMSNormOutRowTriton_v1{N=16}",
+   "digest": "31fda6a3222994f3258c4ac3807052409d5054c0717db7318423bc591adf90ae",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormOutTriton_v1": {
+   "descriptor_id": "RMSNormOutTriton_v1",
+   "digest": "d384fd676780d8af976ed4d49cf7ef951a7a59f314d789aba87460a880ceab0f",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormScaleCuda_v1": {
+   "descriptor_id": "RMSNormScaleCuda_v1",
+   "digest": "add5d0fd4a739f86ffbd3d07ea003cd63d559059a4d27bfef477e0ba0f253a51",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormSquareFma_v1": {
+   "descriptor_id": "RMSNormSquareFma_v1",
+   "digest": "2f99a586fbd3ebd3c0daa98159fc01ae57498d45d1172095ea21bc2952621b2f",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormSquare_v1": {
+   "descriptor_id": "RMSNormSquare_v1",
+   "digest": "f7f6d4ac15af558881b245fed8a301831a171feafdd92d32de59253d8ca6ce86",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormThreadTriton_v1": {
+   "descriptor_id": "RMSNormThreadTriton_v1",
+   "digest": "543900b3b54163f5cda3903c0214a628bf5076520ca09fd7bcc2f8a0f28d097a",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormThreadsTriton_v1{N=16}": {
+   "descriptor_id": "RMSNormThreadsTriton_v1{N=16}",
+   "digest": "57e037879a37196193471f83ca877a2dbc11e763b302271cadad4d8124d83363",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormTriton_v2{N=16,EPS=1e-05,SQRT=MufuSqrtFtz_v1,SCALEA=DivFullScaleA_v1,RCP=DivFullRcp_v1}": {
+   "descriptor_id": "RMSNormTriton_v2{N=16,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},SQRT={\"fn\":\"MufuSqrtFtz_v1\"},SCALEA={\"fn\":\"DivFullScaleA_v1\"},RCP={\"fn\":\"DivFullRcp_v1\"}}",
+   "digest": "4f591d45c52d27e0be8ba170e0b3533493314b520c5491cdc4173ef14fffdbff",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "RMSNormTriton_v2{N=16,EPS=1e-05,SQRT=MufuSqrtFtz_v2,SCALEA=DivFullScaleA_v3,RCP=DivFullRcp_v2}": {
+   "descriptor_id": "RMSNormTriton_v2{N=16,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},SQRT={\"fn\":\"MufuSqrtFtz_v2\"},SCALEA={\"fn\":\"DivFullScaleA_v3\"},RCP={\"fn\":\"DivFullRcp_v2\"}}",
+   "digest": "7c1b3a7e1af6bdaba08fc9c21681216139ede4fe85aeef1d6ec82db7668c9d1e",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "RMSNormVarEpsCuda_v1{N=16,EPS=1e-05}": {
+   "descriptor_id": "RMSNormVarEpsCuda_v1{N=16,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}",
+   "digest": "5eed32cb27b533b5dcedba83bf9e84a029314c02d869e0b259ec64105c2311d8",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "RMSNormVarEpsCuda_v2{N=16,EPS=1e-05}": {
+   "descriptor_id": "RMSNormVarEpsCuda_v2{N=16,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}",
+   "digest": "f0e75ab8d86f19e4ed4bbf712d7fc3c0247a379cccd8a00ef921d00da3cc6b7a",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormVarEpsTriton_v1{N=16,EPS=1e-05}": {
+   "descriptor_id": "RMSNormVarEpsTriton_v1{N=16,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}",
+   "digest": "63d4f4f7ed93a3ca0341cfeb083aa51d0c771fe63710789f0590650b9d384e7d",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "RMSNormVarEpsTriton_v2{N=16,EPS=1e-05}": {
+   "descriptor_id": "RMSNormVarEpsTriton_v2{N=16,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}",
+   "digest": "fe771ac46bf84083ff9778011c63c2fc1583930a9cbd113869c00fb052932cc3",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormWarpCuda_v1{L=16}": {
+   "descriptor_id": "RMSNormWarpCuda_v1{L=16}",
+   "digest": "95e86ff956fe737bf0f6cd8e193a7b208ff6075965e8112b30a1e7eaa214e40d",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormWarpTriton_v1{L=2}": {
+   "descriptor_id": "RMSNormWarpTriton_v1{L=2}",
+   "digest": "83bd29f2debd8eff6554de24b6066098d9ab681adb4bbc8871662f525687f3d7",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormWarpsCuda_v1{T=16}": {
+   "descriptor_id": "RMSNormWarpsCuda_v1{T=16}",
+   "digest": "7a58bb752ddb7cd863e79a7ba049d20fd55ddef760003dc8e3020344b43d17f2",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RMSNormWarpsTriton_v1{N=16}": {
+   "descriptor_id": "RMSNormWarpsTriton_v1{N=16}",
+   "digest": "d2f3e03a2ed29ccaaad11b9bce59937017956aa721927f97d7d0938be2a01db5",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RoPEDifftest_v1{NH=12,KVH=2,D=128}": {
+   "descriptor_id": "RoPEDifftest_v1{NH=12,KVH=2,D=128}",
+   "digest": "93ccb7d21fe02d92ef66c7a31144b3486fa436f18b8f8dd3c3740419f99ae730",
+   "used_by": [
+    "difftest spec"
+   ]
+  },
+  "RoPEDifftest_v1{NH=16,KVH=8,D=128}": {
+   "descriptor_id": "RoPEDifftest_v1{NH=16,KVH=8,D=128}",
+   "digest": "a0bae9e1a840115f4ed07b5e27d7e44426dfb42573fe46db4d1613367c259be8",
+   "used_by": [
+    "difftest spec"
+   ]
+  },
+  "RoPEDifftest_v1{NH=32,KVH=32,D=96}": {
+   "descriptor_id": "RoPEDifftest_v1{NH=32,KVH=32,D=96}",
+   "digest": "a04d2a61c9ce4674c89fbbfd77d7a8e6db9b832294c9f449a3c2dd9ff9d3ddf9",
+   "used_by": [
+    "difftest spec"
+   ]
+  },
+  "RoPEDifftest_v1{NH=32,KVH=8,D=128}": {
+   "descriptor_id": "RoPEDifftest_v1{NH=32,KVH=8,D=128}",
+   "digest": "fe46d2c8d47b8afdeb4fbde189f82506fbf5ddaa97df94499f933aea4292ce98",
+   "used_by": [
+    "difftest spec"
+   ]
+  },
+  "RoPEDifftest_v1{NH=32,KVH=8,D=64}": {
+   "descriptor_id": "RoPEDifftest_v1{NH=32,KVH=8,D=64}",
+   "digest": "ef00956a13a5b47f68bffa8ec8354f34cd72d477b32f43622ce75605d1c40d7c",
+   "used_by": [
+    "difftest spec"
+   ]
+  },
+  "RoPEDifftest_v1{NH=8,KVH=4,D=256}": {
+   "descriptor_id": "RoPEDifftest_v1{NH=8,KVH=4,D=256}",
+   "digest": "c859c23364de560a5cabc49d9f67b5c1d2643f43a4b43937a615918d3ced3edc",
+   "used_by": [
+    "difftest spec"
+   ]
+  },
+  "RoPEDifftest_v1{NH=9,KVH=3,D=64}": {
+   "descriptor_id": "RoPEDifftest_v1{NH=9,KVH=3,D=64}",
+   "digest": "fbe857796ed1ab703e9e55aed928dd51e6c18d8ec1887df7091e994a9ad8c003",
+   "used_by": [
+    "difftest spec"
+   ]
+  },
+  "RoPEGptJDifftest_v2{NH=16,KVH=4,D=128}": {
+   "descriptor_id": "RoPEGptJDifftest_v2{NH=16,KVH=4,D=128}",
+   "digest": "93b3e304c7821ea43c540c861b58805503ec5da0eba733c6cf0ac813135bb249",
+   "used_by": [
+    "difftest spec"
+   ]
+  },
+  "RoPEGptJDifftest_v2{NH=20,KVH=1,D=64}": {
+   "descriptor_id": "RoPEGptJDifftest_v2{NH=20,KVH=1,D=64}",
+   "digest": "eac5fa7c40e3d5e0b3fc8e2c256d81a66147309b162c4683b991855aa70bdfac",
+   "used_by": [
+    "difftest spec"
+   ]
+  },
+  "RoPEGptJDifftest_v2{NH=32,KVH=8,D=64}": {
+   "descriptor_id": "RoPEGptJDifftest_v2{NH=32,KVH=8,D=64}",
+   "digest": "a08aa0db15ea6875e9e90b2cc3db2a448d20baf0cad6bca930585d906e377414",
+   "used_by": [
+    "difftest spec"
+   ]
+  },
+  "RoPEGptJDifftest_v2{NH=5,KVH=1,D=64}": {
+   "descriptor_id": "RoPEGptJDifftest_v2{NH=5,KVH=1,D=64}",
+   "digest": "ed01af81cdff433bfc93cb01af808581f6c37f61db424b9b48c8034d40a057b9",
+   "used_by": [
+    "difftest spec"
+   ]
+  },
+  "RoPEGptJDifftest_v2{NH=64,KVH=1,D=64}": {
+   "descriptor_id": "RoPEGptJDifftest_v2{NH=64,KVH=1,D=64}",
+   "digest": "806429666602ac06356a8a8ad13f2ac844aca48e65266306097a707d28311638",
+   "used_by": [
+    "difftest spec"
+   ]
+  },
+  "RoPEGptJDifftest_v2{NH=8,KVH=1,D=64}": {
+   "descriptor_id": "RoPEGptJDifftest_v2{NH=8,KVH=1,D=64}",
+   "digest": "c1b88dad5c0fd82ca9f13a8e41d3890c905e1e9a8df5e00fa3fa2c856309dfbd",
+   "used_by": [
+    "difftest spec"
+   ]
+  },
+  "RoPEGptJDifftest_v2{NH=8,KVH=2,D=32}": {
+   "descriptor_id": "RoPEGptJDifftest_v2{NH=8,KVH=2,D=32}",
+   "digest": "ab38b6e250fa2c25e33b14463451e19a80b69dfa61c685dcc80426fb5c5827a2",
+   "used_by": [
+    "difftest spec"
+   ]
+  },
+  "RoPEGptJ_v2{NHEADS=2,D=16}": {
+   "descriptor_id": "RoPEGptJ_v2{NHEADS=2,D=16}",
+   "digest": "93756f521e7945f2db21dc79dcd711becfc390c9172261dfd3436e7922739a93",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "RoPEGptJ_v3{NHEADS=2,D=8}": {
+   "descriptor_id": "RoPEGptJ_v3{NHEADS=2,D=8}",
+   "digest": "9e2efcb6e731b590b799e86a189c183e837033ac1e914bf8e88033c291c7a641",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RoPEHeadGptJ_v2{D=16}": {
+   "descriptor_id": "RoPEHeadGptJ_v2{D=16}",
+   "digest": "2f306280a50f5d49e3a95e6cf0a7faf11533b1f35247aac618e63a83ad2aef64",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "RoPEHeadGptJ_v3{D=8}": {
+   "descriptor_id": "RoPEHeadGptJ_v3{D=8}",
+   "digest": "d53c851f3c6de4841e69eaff06b79b2a96e4295e90b62c54fa249d2aafabd774",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "RoPEHead_v2{D=8}": {
+   "descriptor_id": "RoPEHead_v2{D=8}",
+   "digest": "3136eaadac5026813c572d17a5ee0b607bf13678dde21057b9301507c2ee1f2a",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RoPE_v2{NHEADS=2,D=8}": {
+   "descriptor_id": "RoPE_v2{NHEADS=2,D=8}",
+   "digest": "2cca028c03cf9ecdd41cb529f4b330edbf188965b69da5032f5603a78a6dbd24",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RopeOutAdd_v2": {
+   "descriptor_id": "RopeOutAdd_v2",
+   "digest": "ec8235370be741a9d4d8fe9420f49d55a5268bea9c29d70412bf180ae5d2df63",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RopeOut_v2": {
+   "descriptor_id": "RopeOut_v2",
+   "digest": "c8294a29d1e90f05b0a0ff610f80388e6d265d6b0a93f2013d7836e9545f4910",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "RsqrtF32_v1{N=1024}": {
+   "descriptor_id": "RsqrtF32_v1{N=1024}",
+   "digest": "53d0a4218025b103f2a17aa206e29f5545bbd953ec2cd0ee8f16de7157d995fb",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "RsqrtF32_v1{N=16}": {
+   "descriptor_id": "RsqrtF32_v1{N=16}",
+   "digest": "bdfa3f2085819ff4e3bd5048436f97bcf91cf2848e56ae17fdbdef1e708ecf56",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "RsqrtF32_v1{N=1}": {
+   "descriptor_id": "RsqrtF32_v1{N=1}",
+   "digest": "600b80859e2053fe6f5c7282e8439dcab2f5f60040e8f548ab69d121575608e0",
+   "used_by": [
+    "circuit-check target",
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "RsqrtF32_v1{N=64}": {
+   "descriptor_id": "RsqrtF32_v1{N=64}",
+   "digest": "f96c9cad9628c9382859c05d4e31c8799705dbb3b3e0ac6ddd7077d40a957c4f",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "RsqrtF32_v2{N=1,RSQRT=RsqrtApprox_v1}": {
+   "descriptor_id": "RsqrtF32_v2{N=1,RSQRT={\"fn\":\"RsqrtApprox_v1\"}}",
+   "digest": "6974fffb3568dd7250481d83e077fc2682c6c7551a8015ac068dffb579a87bde",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "RsqrtF32_v2{N=1,RSQRT=RsqrtApprox_v2}": {
+   "descriptor_id": "RsqrtF32_v2{N=1,RSQRT={\"fn\":\"RsqrtApprox_v2\"}}",
+   "digest": "a94e614f0032123438cdc619c65848ec6ca5105c294f0468b92dfdad01b1c65c",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "ScaleRowBf16Element_v1": {
+   "descriptor_id": "ScaleRowBf16Element_v1",
+   "digest": "f52c4d21563d345b56644707303445547d22fa34ce78d50aba7958ba0be308d5",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "ScaleRowBf16Scalar_v1": {
+   "descriptor_id": "ScaleRowBf16Scalar_v1",
+   "digest": "95714ad065c59426f0d4d856bd0a28fdfba547a42b508044476295d3236378d4",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "ScaleRowBf16_v1{N=1024}": {
+   "descriptor_id": "ScaleRowBf16_v1{N=1024}",
+   "digest": "aa6a434d7155a320050b1e78db280f37f1ccfc212a6a245b842c7e9c1b813b4f",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "ScaleRowBf16_v1{N=16}": {
+   "descriptor_id": "ScaleRowBf16_v1{N=16}",
+   "digest": "58848942af61963c0950a3d72f2d4e022b1e3ff092c4dc6fc7bcc1b5f367f6df",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "ScaleRowBf16_v1{N=2304}": {
+   "descriptor_id": "ScaleRowBf16_v1{N=2304}",
+   "digest": "26c58e81e16dd56a57160cc8ff8327f225cc9f1062c1aedb831f22fe7f10870c",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "ScaleRowBf16_v1{N=64}": {
+   "descriptor_id": "ScaleRowBf16_v1{N=64}",
+   "digest": "e827d9e1148c86ca6604a666274a4c0eb15f04b0b4c5802e1633542785daaf18",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "ScaleRowBf16_v2{N=8}": {
+   "descriptor_id": "ScaleRowBf16_v2{N=8}",
+   "digest": "fcf02390221566387a61b62fece769f30d3749d7b4345fea5cbc9fbed195b4c0",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "ScaleRowF32Element_v1": {
+   "descriptor_id": "ScaleRowF32Element_v1",
+   "digest": "99dd0e02fc93e23cbcf2270cdededddf21f36bbab2a3e695a5cbfb6315265f9f",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "ScaleRowF32Scalar_v1": {
+   "descriptor_id": "ScaleRowF32Scalar_v1",
+   "digest": "622f5c88078a031ad2d0aad2613f195fac478ff2539213283801da23d62781ac",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "ScaleRowF32_v1{N=1024}": {
+   "descriptor_id": "ScaleRowF32_v1{N=1024}",
+   "digest": "68cd1db623befd464a30d9b0dc7c2db7abc978042ad24ce3aa4d2e9d83f1a601",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "ScaleRowF32_v1{N=16}": {
+   "descriptor_id": "ScaleRowF32_v1{N=16}",
+   "digest": "a1b9942e1285c5a027e72263c049f23bb0b4924a7b442cc3f3f4cc9ceac4880f",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "ScaleRowF32_v1{N=2304}": {
+   "descriptor_id": "ScaleRowF32_v1{N=2304}",
+   "digest": "56be22553ab86c96e48d0eb61b4e41ca71adad45da8572276886e04cdaa4e1e4",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "ScaleRowF32_v1{N=64}": {
+   "descriptor_id": "ScaleRowF32_v1{N=64}",
+   "digest": "ec74ad2e0c4348a3669d5af9b910ac7e75f4996e1fcb967e823be79aff90cf5e",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "ScaleRowF32_v2{N=8}": {
+   "descriptor_id": "ScaleRowF32_v2{N=8}",
+   "digest": "6fe43e9a1a64325b971e1e8ab2a36d718d7232cd5dbacbe0fcca3d75edbd89af",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "SiluMulBf16_v2": {
+   "descriptor_id": "SiluMulBf16_v2",
+   "digest": "a926998d9b4cae9192593ecd73b6f04cdc9f96e99593bdf1db944eee938a64ea",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "SiluMulBf16_v3": {
+   "descriptor_id": "SiluMulBf16_v3",
+   "digest": "67dcc25469da1ae006bbeaec5c962536ac252162ddeaef70ad1bc0adc8efdcad",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "SiluMulBf16_v4": {
+   "descriptor_id": "SiluMulBf16_v4",
+   "digest": "b55a58cca53ae873ba284f257fca428b26752e97940103c9c9a1993415148b12",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "SiluMul_v2{I=16}": {
+   "descriptor_id": "SiluMul_v2{I=16}",
+   "digest": "97941f9276e4ddfbc15dd0c672edb41428666160383062c26bceea69a2400f04",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "SiluMul_v2{I=8}": {
+   "descriptor_id": "SiluMul_v2{I=8}",
+   "digest": "4a752253fca9b8c1c19315bad3d815b3ebab8ab64cab46ab1db649b622bba49b",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "SiluMul_v3{I=8}": {
+   "descriptor_id": "SiluMul_v3{I=8}",
+   "digest": "d8cadfc24d8827baaa050e6c3644c344a8702bf34e4ce354b2abf277d389e130",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "SiluMul_v4{I=8}": {
+   "descriptor_id": "SiluMul_v4{I=8}",
+   "digest": "bd1a21248f5cad3ace3298c316c98f8a237242629011bab66e0db9b2d3d0cee0",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "SquareBf16Element_v1": {
+   "descriptor_id": "SquareBf16Element_v1",
+   "digest": "bbbfd5c2fd2475f8cd9233ee5936a6bca58184f90b37c6198c58f759f17b4bad",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "SquareBf16_v1{N=1024}": {
+   "descriptor_id": "SquareBf16_v1{N=1024}",
+   "digest": "6daab577f89c34bb15ee80a5bab6dc035ae999ad91085985be3dd32e2dbc862a",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "SquareBf16_v1{N=16}": {
+   "descriptor_id": "SquareBf16_v1{N=16}",
+   "digest": "53ae43726efa9bedfcd849f5cdb6da14f6efdc1319f299270cca7de8d066d477",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "SquareBf16_v1{N=2304}": {
+   "descriptor_id": "SquareBf16_v1{N=2304}",
+   "digest": "5e1f51504875c33c0c243897f5790df45e9f301477003a365c86d6d3e7c623d3",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "SquareBf16_v1{N=64}": {
+   "descriptor_id": "SquareBf16_v1{N=64}",
+   "digest": "aece6aad584ed1f8737ab04b6fde34fe0c4a8bf7dc310fd5c8e07721e80c2f53",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "SquareBf16_v2{N=8}": {
+   "descriptor_id": "SquareBf16_v2{N=8}",
+   "digest": "6830c9f8c111141d0c574b41309593092696a0535d23421bf0725495415233f1",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "SquareF32Element_v1": {
+   "descriptor_id": "SquareF32Element_v1",
+   "digest": "857f4f029fbe6b819bc6e3325cdd91a6781aa46c2a57a1c5af462f109dc30a65",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "SquareF32_v1{N=1024}": {
+   "descriptor_id": "SquareF32_v1{N=1024}",
+   "digest": "d1037b4b8cac456f976366d7aaf9ed94359ff4bb8511bc5643ea24730d1c1629",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "SquareF32_v1{N=16}": {
+   "descriptor_id": "SquareF32_v1{N=16}",
+   "digest": "c2433585bc1bb0c9356c8791a8c4632ed68ca3ec0982a809ada1cd09cac48a23",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "SquareF32_v1{N=2304}": {
+   "descriptor_id": "SquareF32_v1{N=2304}",
+   "digest": "c1a57cf08ad98f03a1123d1add8c175ff4ae2c1c01e892772aa7e4e1a9494d66",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "SquareF32_v1{N=64}": {
+   "descriptor_id": "SquareF32_v1{N=64}",
+   "digest": "4d9b9d1e6e006b1714b3cb8130fc6995fbc7c6ee1ee9434c5afe77fee4ca00f4",
+   "used_by": [
+    "integrations/vllm/verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json"
+   ]
+  },
+  "SquareF32_v2{N=8}": {
+   "descriptor_id": "SquareF32_v2{N=8}",
+   "digest": "7204d2d7a07f66c1db88563e28e5e7e835cfc5978cd3db3b153cda4aa4aae107",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "TanhBf16_v1": {
+   "descriptor_id": "TanhBf16_v1",
+   "digest": "cd60ecf8fd14b7e2c12e1e57464e366616ff2a766bbbe7d92d14906c758eaea4",
+   "used_by": [
+    "circuit-check target"
+   ]
+  },
+  "TanhBf16_v2": {
+   "descriptor_id": "TanhBf16_v2",
+   "digest": "0447e6c0aa7cdee0b8023fedd9d9624c041d30a54d67da2fadeada27c5a03c24",
+   "used_by": [
+    "circuit-check target",
+    "pins.json definitions"
+   ]
+  },
+  "TanhF32Rn_v1": {
+   "descriptor_id": "TanhF32Rn_v1",
+   "digest": "221373c5fd79f807a13a7dc2aa3f9e389e7c721f408092e53df6060ad3fdadab",
+   "used_by": [
+    "circuit-check target",
+    "pins.json pieces"
+   ]
+  },
+  "UnpackF32_v1": {
+   "descriptor_id": "UnpackF32_v1",
+   "digest": "f1b712068b1f3c41dd246c827d60866afe5dbf7f1b48262ad87b0bede0350e1f",
+   "used_by": [
+    "circuit-check target"
+   ]
+  }
+ },
+ "names": [
+  "AddScalarBf16Element_v1",
+  "AddScalarBf16_v1",
+  "AddScalarBf16_v2",
+  "AddScalarF32Element_v1",
+  "AddScalarF32_v1",
+  "AddScalarF32_v2",
+  "AddWidenedBf16Element_v1",
+  "AddWidenedBf16_v1",
+  "AddWidenedBf16_v2",
+  "AttentionHeadSoftcap_v1",
+  "AttentionSoftcap_v1",
+  "AttnBlockSoftcap_v1",
+  "Bf16DivScalar_v1",
+  "Bf16DivScalar_v2",
+  "Bf16MulScalarElement_v1",
+  "Bf16MulScalarTensorElement_v1",
+  "Bf16MulScalarTensorScalar_v1",
+  "Bf16MulScalarTensor_v2",
+  "Bf16MulScalar_v1",
+  "Bf16MulScalar_v2",
+  "Bf16Tanh_v1",
+  "Bf16Tanh_v2",
+  "F32AddZero_v1",
+  "GeluTanhMulBf16_v1",
+  "GeluTanhMulBf16_v2",
+  "GeluTanhMul_v1",
+  "GeluTanhMul_v2",
+  "GemmBiasCoordinate_v1",
+  "GemmBiasCoordinate_v2",
+  "GemmBias_v1",
+  "GemmBias_v2",
+  "MeanCombineTriton_v1",
+  "MeanDivTriton_v1",
+  "MeanThreadTriton_v1",
+  "MeanThreadsTriton_v1",
+  "MeanTriton_v1",
+  "MeanTriton_v2",
+  "MeanWarpTriton_v1",
+  "MeanWarpsTriton_v1",
+  "MulVecF32_v1",
+  "MulVecF32_v2",
+  "NarrowF32ToBf16El_v1",
+  "NarrowF32ToBf16_v1",
+  "NarrowF32ToBf16_v2",
+  "PackF32_v1",
+  "RMSNormArgCuda_v1",
+  "RMSNormFusedCuda_v3",
+  "RMSNormInvTriton_v1",
+  "RMSNormLaneCuda_v1",
+  "RMSNormLanesCuda_v1",
+  "RMSNormMeanEpsTriton_v1",
+  "RMSNormOutCuda_v1",
+  "RMSNormOutRowCuda_v1",
+  "RMSNormOutRowTriton_v1",
+  "RMSNormOutTriton_v1",
+  "RMSNormScaleCuda_v1",
+  "RMSNormSquareFma_v1",
+  "RMSNormSquare_v1",
+  "RMSNormThreadTriton_v1",
+  "RMSNormThreadsTriton_v1",
+  "RMSNormTriton_v2",
+  "RMSNormVarEpsCuda_v1",
+  "RMSNormVarEpsCuda_v2",
+  "RMSNormVarEpsTriton_v1",
+  "RMSNormVarEpsTriton_v2",
+  "RMSNormWarpCuda_v1",
+  "RMSNormWarpTriton_v1",
+  "RMSNormWarpsCuda_v1",
+  "RMSNormWarpsTriton_v1",
+  "RoPEGptJ_v2",
+  "RoPEGptJ_v3",
+  "RoPEHeadGptJ_v2",
+  "RoPEHeadGptJ_v3",
+  "RoPEHead_v2",
+  "RoPE_v2",
+  "RopeOutAdd_v2",
+  "RopeOut_v2",
+  "RsqrtF32_v1",
+  "RsqrtF32_v2",
+  "ScaleRowBf16Element_v1",
+  "ScaleRowBf16Scalar_v1",
+  "ScaleRowBf16_v1",
+  "ScaleRowBf16_v2",
+  "ScaleRowF32Element_v1",
+  "ScaleRowF32Scalar_v1",
+  "ScaleRowF32_v1",
+  "ScaleRowF32_v2",
+  "SiluMulBf16_v2",
+  "SiluMulBf16_v3",
+  "SiluMulBf16_v4",
+  "SiluMul_v2",
+  "SiluMul_v3",
+  "SiluMul_v4",
+  "SquareBf16Element_v1",
+  "SquareBf16_v1",
+  "SquareBf16_v2",
+  "SquareF32Element_v1",
+  "SquareF32_v1",
+  "SquareF32_v2",
+  "TanhBf16_v1",
+  "TanhBf16_v2",
+  "TanhF32Rn_v1",
+  "UnpackF32_v1"
+ ],
+ "pins": {
+  "definitions": {
+   "AddScalarBf16Element_v1{K=1065353216}": {
+    "and": 621
+   },
+   "AddScalarBf16_v2{N=8,C=1.0}": {
+    "and": 4968
+   },
+   "AddScalarF32Element_v1{K=897988541}": {
+    "and": 742
+   },
+   "AddScalarF32_v2{N=8,C=1e-06}": {
+    "and": 5936
+   },
+   "AddWidenedBf16Element_v1": {
+    "and": 666
+   },
+   "AddWidenedBf16_v2{N=8}": {
+    "and": 5328
+   },
+   "Bf16DivScalar_v2{N=8,C=30.0}": {
+    "and": 6920
+   },
+   "Bf16MulScalarElement_v1{K=1023969417}": {
+    "and": 865
+   },
+   "Bf16MulScalarElement_v1{K=1106247680}": {
+    "and": 629
+   },
+   "Bf16MulScalarTensorElement_v1": {
+    "and": 781
+   },
+   "Bf16MulScalarTensorScalar_v1": {
+    "and": 18
+   },
+   "Bf16MulScalarTensor_v2{N=8}": {
+    "and": 6266
+   },
+   "Bf16MulScalar_v2{N=8,C=30.0}": {
+    "and": 5032
+   },
+   "Bf16Tanh_v2{N=8}": {
+    "and": 3128
+   },
+   "F32AddZero_v1": {
+    "and": 399
+   },
+   "GeluTanhMulBf16_v2": {
+    "and": 1347
+   },
+   "GeluTanhMul_v2{I=8}": {
+    "and": 10776
+   },
+   "MeanCombineTriton_v1{N=1030}": {
+    "and": 5897
+   },
+   "MeanCombineTriton_v1{N=16}": {
+    "and": 1896
+   },
+   "MeanDivTriton_v1{N=1030}": {
+    "and": 1452
+   },
+   "MeanDivTriton_v1{N=16}": {
+    "and": 699
+   },
+   "MeanThreadTriton_v1{K=1}": {
+    "and": 2793
+   },
+   "MeanThreadTriton_v1{K=4}": {
+    "and": 4032
+   },
+   "MeanThreadTriton_v1{K=8}": {
+    "and": 5684
+   },
+   "MeanThreadsTriton_v1{N=16}": {
+    "and": 16128
+   },
+   "MeanTriton_v2{N=16}": {
+    "and": 25248
+   },
+   "MeanWarpTriton_v1{L=32}": {
+    "and": 25172
+   },
+   "MeanWarpTriton_v1{L=4}": {
+    "and": 7224
+   },
+   "MeanWarpTriton_v1{L=6}": {
+    "and": 9646
+   },
+   "MeanWarpsTriton_v1{N=16}": {
+    "and": 7224
+   },
+   "MulVecF32_v2{N=8}": {
+    "and": 19440
+   },
+   "NarrowF32ToBf16El_v1": {
+    "and": 66
+   },
+   "NarrowF32ToBf16_v2{N=16}": {
+    "and": 1056
+   },
+   "RMSNormArgCuda_v1{N=16,EPS=1e-05,NW=1}": {
+    "and": 1673
+   },
+   "RMSNormInvTriton_v1": {
+    "and": 34
+   },
+   "RMSNormLaneCuda_v1{J=1}": {
+    "and": 1345
+   },
+   "RMSNormLaneCuda_v1{J=2}": {
+    "and": 4108
+   },
+   "RMSNormLanesCuda_v1{N=16,BLOCK=1024}": {
+    "and": 21520
+   },
+   "RMSNormMeanEpsTriton_v1{N=16,EPS=1e-05}": {
+    "and": 1982
+   },
+   "RMSNormOutCuda_v1": {
+    "and": 2370
+   },
+   "RMSNormOutRowCuda_v1{N=16}": {
+    "and": 37920
+   },
+   "RMSNormOutRowTriton_v1{N=16}": {
+    "and": 38176
+   },
+   "RMSNormOutTriton_v1": {
+    "and": 2386
+   },
+   "RMSNormScaleCuda_v1": {
+    "and": 50
+   },
+   "RMSNormSquareFma_v1": {
+    "and": 2046
+   },
+   "RMSNormSquare_v1": {
+    "and": 628
+   },
+   "RMSNormThreadTriton_v1": {
+    "and": 14950
+   },
+   "RMSNormThreadsTriton_v1{N=16}": {
+    "and": 29900
+   },
+   "RMSNormVarEpsCuda_v2{N=16,EPS=1e-05}": {
+    "and": 1673
+   },
+   "RMSNormVarEpsTriton_v2{N=16,EPS=1e-05}": {
+    "and": 1982
+   },
+   "RMSNormWarpCuda_v1{L=16}": {
+    "and": 12180
+   },
+   "RMSNormWarpTriton_v1{L=2}": {
+    "and": 812
+   },
+   "RMSNormWarpsCuda_v1{T=16}": {
+    "and": 12180
+   },
+   "RMSNormWarpsTriton_v1{N=16}": {
+    "and": 812
+   },
+   "RoPEGptJ_v3{NHEADS=2,D=8}": {
+    "and": 47456
+   },
+   "RoPEHead_v2{D=8}": {
+    "and": 23728
+   },
+   "RoPE_v2{NHEADS=2,D=8}": {
+    "and": 47456
+   },
+   "RopeOutAdd_v2": {
+    "and": 2966
+   },
+   "RopeOut_v2": {
+    "and": 2966
+   },
+   "RsqrtF32_v2{N=1,RSQRT=RsqrtApprox_v2}": {
+    "and": 1134
+   },
+   "ScaleRowBf16Element_v1": {
+    "and": 1136
+   },
+   "ScaleRowBf16Scalar_v1": {
+    "and": 50
+   },
+   "ScaleRowBf16_v2{N=8}": {
+    "and": 9138
+   },
+   "ScaleRowF32Element_v1": {
+    "and": 2396
+   },
+   "ScaleRowF32Scalar_v1": {
+    "and": 34
+   },
+   "ScaleRowF32_v2{N=8}": {
+    "and": 19202
+   },
+   "SiluMulBf16_v3": {
+    "and": 1372
+   },
+   "SiluMulBf16_v4": {
+    "and": 1380
+   },
+   "SiluMul_v3{I=8}": {
+    "and": 10976
+   },
+   "SiluMul_v4{I=8}": {
+    "and": 11040
+   },
+   "SquareBf16Element_v1": {
+    "and": 628
+   },
+   "SquareBf16_v2{N=8}": {
+    "and": 5024
+   },
+   "SquareF32Element_v1": {
+    "and": 1978
+   },
+   "SquareF32_v2{N=8}": {
+    "and": 15824
+   },
+   "TanhBf16_v2": {
+    "and": 391
+   }
+  },
+  "pieces": {
+   "GeluTanhMulBf16_v1": {
+    "and": 1051
+   },
+   "TanhF32Rn_v1": {
+    "and": 182
+   }
+  },
+  "units": {}
+ },
+ "tasks": [
+  [
+   "definition",
+   "AddScalarBf16Element_v1{K=1065353216}"
+  ],
+  [
+   "definition",
+   "AddScalarBf16_v1{N=16,C=0.5}"
+  ],
+  [
+   "definition",
+   "AddScalarBf16_v1{N=16,C=1.0}"
+  ],
+  [
+   "definition",
+   "AddScalarBf16_v2{N=8,C=1.0}"
+  ],
+  [
+   "definition",
+   "AddScalarF32Element_v1{K=897988541}"
+  ],
+  [
+   "definition",
+   "AddScalarF32_v1{N=1,C=1e-06}"
+  ],
+  [
+   "definition",
+   "AddScalarF32_v1{N=16,C=0.5}"
+  ],
+  [
+   "definition",
+   "AddScalarF32_v1{N=16,C=1.0}"
+  ],
+  [
+   "definition",
+   "AddScalarF32_v2{N=8,C=1e-06}"
+  ],
+  [
+   "definition",
+   "AddWidenedBf16Element_v1"
+  ],
+  [
+   "definition",
+   "AddWidenedBf16_v1{N=16}"
+  ],
+  [
+   "definition",
+   "AddWidenedBf16_v2{N=8}"
+  ],
+  [
+   "definition",
+   "AttentionHeadSoftcap_v1{T=5,D=16,BN=128,CAP=30.0}"
+  ],
+  [
+   "definition",
+   "AttentionSoftcap_v1{T=5,NH=2,KVH=1,D=16,BN=128,CAP=30.0}"
+  ],
+  [
+   "definition",
+   "AttnBlockSoftcap_v1{D=16,NVIS=5,FIRST=True,BN=128,CAP=30.0}"
+  ],
+  [
+   "definition",
+   "Bf16DivScalar_v1{N=16,C=0.5}"
+  ],
+  [
+   "definition",
+   "Bf16DivScalar_v1{N=16,C=1.0}"
+  ],
+  [
+   "definition",
+   "Bf16DivScalar_v1{N=16,C=30.0}"
+  ],
+  [
+   "definition",
+   "Bf16DivScalar_v2{N=8,C=30.0}"
+  ],
+  [
+   "definition",
+   "Bf16MulScalarElement_v1{K=1023969417}"
+  ],
+  [
+   "definition",
+   "Bf16MulScalarElement_v1{K=1106247680}"
+  ],
+  [
+   "definition",
+   "Bf16MulScalarTensorElement_v1"
+  ],
+  [
+   "definition",
+   "Bf16MulScalarTensorScalar_v1"
+  ],
+  [
+   "definition",
+   "Bf16MulScalarTensor_v2{N=8}"
+  ],
+  [
+   "definition",
+   "Bf16MulScalar_v1{N=16,C=0.5}"
+  ],
+  [
+   "definition",
+   "Bf16MulScalar_v1{N=16,C=1.0}"
+  ],
+  [
+   "definition",
+   "Bf16MulScalar_v1{N=16,C=30.0}"
+  ],
+  [
+   "definition",
+   "Bf16MulScalar_v2{N=8,C=30.0}"
+  ],
+  [
+   "definition",
+   "Bf16Tanh_v1{N=16}"
+  ],
+  [
+   "definition",
+   "Bf16Tanh_v2{N=8}"
+  ],
+  [
+   "definition",
+   "F32AddZero_v1"
+  ],
+  [
+   "definition",
+   "GeluTanhMulBf16_v1"
+  ],
+  [
+   "definition",
+   "GeluTanhMulBf16_v2"
+  ],
+  [
+   "definition",
+   "GeluTanhMul_v1{I=16}"
+  ],
+  [
+   "definition",
+   "GeluTanhMul_v2{I=8}"
+  ],
+  [
+   "definition",
+   "GemmBiasCoordinate_v1{K=32}"
+  ],
+  [
+   "definition",
+   "GemmBiasCoordinate_v2{K=32,DOT=AmpereBF16TcDot16_v2}"
+  ],
+  [
+   "definition",
+   "GemmBiasCoordinate_v2{K=32,DOT=HopperBF16WgmmaDot16_v1}"
+  ],
+  [
+   "definition",
+   "GemmBias_v1{K=32,N=16}"
+  ],
+  [
+   "definition",
+   "GemmBias_v1{K=32,N=3}"
+  ],
+  [
+   "definition",
+   "GemmBias_v2{K=32,N=16,DOT=AmpereBF16TcDot16_v2}"
+  ],
+  [
+   "definition",
+   "GemmBias_v2{K=32,N=3,DOT=AmpereBF16TcDot16_v2}"
+  ],
+  [
+   "definition",
+   "GemmBias_v2{K=32,N=3,DOT=HopperBF16WgmmaDot16_v1}"
+  ],
+  [
+   "definition",
+   "MeanCombineTriton_v1{N=1030}"
+  ],
+  [
+   "definition",
+   "MeanCombineTriton_v1{N=16}"
+  ],
+  [
+   "definition",
+   "MeanDivTriton_v1{N=1030}"
+  ],
+  [
+   "definition",
+   "MeanDivTriton_v1{N=16}"
+  ],
+  [
+   "definition",
+   "MeanThreadTriton_v1{K=1}"
+  ],
+  [
+   "definition",
+   "MeanThreadTriton_v1{K=4}"
+  ],
+  [
+   "definition",
+   "MeanThreadTriton_v1{K=8}"
+  ],
+  [
+   "definition",
+   "MeanThreadsTriton_v1{N=16}"
+  ],
+  [
+   "definition",
+   "MeanTriton_v1{N=16}"
+  ],
+  [
+   "definition",
+   "MeanTriton_v1{N=20}"
+  ],
+  [
+   "definition",
+   "MeanTriton_v1{N=2304}"
+  ],
+  [
+   "definition",
+   "MeanTriton_v2{N=16}"
+  ],
+  [
+   "definition",
+   "MeanWarpTriton_v1{L=32}"
+  ],
+  [
+   "definition",
+   "MeanWarpTriton_v1{L=4}"
+  ],
+  [
+   "definition",
+   "MeanWarpTriton_v1{L=6}"
+  ],
+  [
+   "definition",
+   "MeanWarpsTriton_v1{N=16}"
+  ],
+  [
+   "definition",
+   "MulVecF32_v1{N=16}"
+  ],
+  [
+   "definition",
+   "MulVecF32_v2{N=8}"
+  ],
+  [
+   "definition",
+   "NarrowF32ToBf16El_v1"
+  ],
+  [
+   "definition",
+   "NarrowF32ToBf16_v1{N=16}"
+  ],
+  [
+   "definition",
+   "NarrowF32ToBf16_v2{N=16}"
+  ],
+  [
+   "definition",
+   "PackF32_v1"
+  ],
+  [
+   "definition",
+   "RMSNormArgCuda_v1{N=16,EPS=1e-05,NW=1}"
+  ],
+  [
+   "definition",
+   "RMSNormFusedCuda_v3{N=16,EPS=1e-05,RSQRT=RsqrtApprox_v1}"
+  ],
+  [
+   "definition",
+   "RMSNormFusedCuda_v3{N=16,EPS=1e-05,RSQRT=RsqrtApprox_v2}"
+  ],
+  [
+   "definition",
+   "RMSNormInvTriton_v1"
+  ],
+  [
+   "definition",
+   "RMSNormLaneCuda_v1{J=1}"
+  ],
+  [
+   "definition",
+   "RMSNormLaneCuda_v1{J=2}"
+  ],
+  [
+   "definition",
+   "RMSNormLanesCuda_v1{N=16,BLOCK=1024}"
+  ],
+  [
+   "definition",
+   "RMSNormMeanEpsTriton_v1{N=16,EPS=1e-05}"
+  ],
+  [
+   "definition",
+   "RMSNormOutCuda_v1"
+  ],
+  [
+   "definition",
+   "RMSNormOutRowCuda_v1{N=16}"
+  ],
+  [
+   "definition",
+   "RMSNormOutRowTriton_v1{N=16}"
+  ],
+  [
+   "definition",
+   "RMSNormOutTriton_v1"
+  ],
+  [
+   "definition",
+   "RMSNormScaleCuda_v1"
+  ],
+  [
+   "definition",
+   "RMSNormSquareFma_v1"
+  ],
+  [
+   "definition",
+   "RMSNormSquare_v1"
+  ],
+  [
+   "definition",
+   "RMSNormThreadTriton_v1"
+  ],
+  [
+   "definition",
+   "RMSNormThreadsTriton_v1{N=16}"
+  ],
+  [
+   "definition",
+   "RMSNormTriton_v2{N=16,EPS=1e-05,SQRT=MufuSqrtFtz_v1,SCALEA=DivFullScaleA_v1,RCP=DivFullRcp_v1}"
+  ],
+  [
+   "definition",
+   "RMSNormTriton_v2{N=16,EPS=1e-05,SQRT=MufuSqrtFtz_v2,SCALEA=DivFullScaleA_v3,RCP=DivFullRcp_v2}"
+  ],
+  [
+   "definition",
+   "RMSNormVarEpsCuda_v1{N=16,EPS=1e-05}"
+  ],
+  [
+   "definition",
+   "RMSNormVarEpsCuda_v2{N=16,EPS=1e-05}"
+  ],
+  [
+   "definition",
+   "RMSNormVarEpsTriton_v1{N=16,EPS=1e-05}"
+  ],
+  [
+   "definition",
+   "RMSNormVarEpsTriton_v2{N=16,EPS=1e-05}"
+  ],
+  [
+   "definition",
+   "RMSNormWarpCuda_v1{L=16}"
+  ],
+  [
+   "definition",
+   "RMSNormWarpTriton_v1{L=2}"
+  ],
+  [
+   "definition",
+   "RMSNormWarpsCuda_v1{T=16}"
+  ],
+  [
+   "definition",
+   "RMSNormWarpsTriton_v1{N=16}"
+  ],
+  [
+   "definition",
+   "RoPEGptJ_v2{NHEADS=2,D=16}"
+  ],
+  [
+   "definition",
+   "RoPEGptJ_v3{NHEADS=2,D=8}"
+  ],
+  [
+   "definition",
+   "RoPEHeadGptJ_v2{D=16}"
+  ],
+  [
+   "definition",
+   "RoPEHeadGptJ_v3{D=8}"
+  ],
+  [
+   "definition",
+   "RoPEHead_v2{D=8}"
+  ],
+  [
+   "definition",
+   "RoPE_v2{NHEADS=2,D=8}"
+  ],
+  [
+   "definition",
+   "RopeOutAdd_v2"
+  ],
+  [
+   "definition",
+   "RopeOut_v2"
+  ],
+  [
+   "definition",
+   "RsqrtF32_v1{N=16}"
+  ],
+  [
+   "definition",
+   "RsqrtF32_v1{N=1}"
+  ],
+  [
+   "definition",
+   "RsqrtF32_v2{N=1,RSQRT=RsqrtApprox_v1}"
+  ],
+  [
+   "definition",
+   "RsqrtF32_v2{N=1,RSQRT=RsqrtApprox_v2}"
+  ],
+  [
+   "definition",
+   "ScaleRowBf16Element_v1"
+  ],
+  [
+   "definition",
+   "ScaleRowBf16Scalar_v1"
+  ],
+  [
+   "definition",
+   "ScaleRowBf16_v1{N=16}"
+  ],
+  [
+   "definition",
+   "ScaleRowBf16_v2{N=8}"
+  ],
+  [
+   "definition",
+   "ScaleRowF32Element_v1"
+  ],
+  [
+   "definition",
+   "ScaleRowF32Scalar_v1"
+  ],
+  [
+   "definition",
+   "ScaleRowF32_v1{N=16}"
+  ],
+  [
+   "definition",
+   "ScaleRowF32_v2{N=8}"
+  ],
+  [
+   "definition",
+   "SiluMulBf16_v2"
+  ],
+  [
+   "definition",
+   "SiluMulBf16_v3"
+  ],
+  [
+   "definition",
+   "SiluMulBf16_v4"
+  ],
+  [
+   "definition",
+   "SiluMul_v2{I=16}"
+  ],
+  [
+   "definition",
+   "SiluMul_v2{I=8}"
+  ],
+  [
+   "definition",
+   "SiluMul_v3{I=8}"
+  ],
+  [
+   "definition",
+   "SiluMul_v4{I=8}"
+  ],
+  [
+   "definition",
+   "SquareBf16Element_v1"
+  ],
+  [
+   "definition",
+   "SquareBf16_v1{N=16}"
+  ],
+  [
+   "definition",
+   "SquareBf16_v2{N=8}"
+  ],
+  [
+   "definition",
+   "SquareF32Element_v1"
+  ],
+  [
+   "definition",
+   "SquareF32_v1{N=16}"
+  ],
+  [
+   "definition",
+   "SquareF32_v2{N=8}"
+  ],
+  [
+   "definition",
+   "TanhBf16_v1"
+  ],
+  [
+   "definition",
+   "TanhBf16_v2"
+  ],
+  [
+   "definition",
+   "TanhF32Rn_v1"
+  ],
+  [
+   "definition",
+   "UnpackF32_v1"
+  ]
+ ]
+}
