@@ -38,14 +38,14 @@ def stage(n: int, sets: Path, out: Path) -> dict:
             "m": meta["k_log"] + max(3, (blocks - 1).bit_length()), "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
 
 
-def forge(what: str, inner: Path) -> dict:
+def forge(what: str, inner: Path, level: int = 0) -> dict:
     """Flip the low bit of one coin of rep 0, in the session record and in the coin server's public record alike: the first
-    coin after the binding round (``challenge``) or the first query coin of level 0 (``query``)."""
+    coin after the binding round (``challenge``) or the first query coin of Ligerito level ``level`` (``query``)."""
     pub, _, proofs = V.load(inner)
     if what == "challenge":
         k = next(r["k"] for r in V._stream_rounds(pub, STREAM) if r["k"] > 0 and r["n"])
     else:
-        k = V.query_rounds(pub, STREAM, [len(lv.rows) for lv in V.decode(proofs[0])["levels"]])[0]["k"]
+        k = V.query_rounds(pub, STREAM, [len(lv.rows) for lv in V.decode(proofs[0])["levels"]])[level]["k"]
     sess = json.loads((inner / "session" / "session.json").read_text())
     for rd in (next(r for r in next(s for s in sess["streams"] if s["stream"] == STREAM)["rounds"] if r["k"] == k),
                next(r for r in pub["rounds"] if r["stream"] == STREAM and r["k"] == k)):
@@ -53,7 +53,7 @@ def forge(what: str, inner: Path) -> dict:
         rd["coins"][0] = c[:-1] + format(int(c[-1], 16) ^ 1, "x")
     (inner / "session" / "session.json").write_text(json.dumps(sess))
     (inner / "public.json").write_text(json.dumps(pub))
-    return {"forged": what, "stream": STREAM, "k": k, "coin": 0}
+    return {"forged": what, "stream": STREAM, "k": k, "coin": 0, **({"level": level} if what == "query" else {})}
 
 
 def main(argv=None) -> int:
@@ -66,8 +66,9 @@ def main(argv=None) -> int:
     fg = sp.add_parser("forge")
     fg.add_argument("--what", choices=("challenge", "query"), required=True)
     fg.add_argument("--inner", required=True)
+    fg.add_argument("--level", type=int, default=0)
     a = ap.parse_args(argv)
-    res = stage(a.n, Path(a.sets), Path(a.out)) if a.cmd == "stage" else forge(a.what, Path(a.inner))
+    res = stage(a.n, Path(a.sets), Path(a.out)) if a.cmd == "stage" else forge(a.what, Path(a.inner), a.level)
     json.dump(res, sys.stdout, sort_keys=True)
     print()
     return 0
