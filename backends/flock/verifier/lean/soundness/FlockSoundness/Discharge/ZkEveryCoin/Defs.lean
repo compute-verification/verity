@@ -128,8 +128,8 @@ def coinsEquiv (Rest : Type) : CoinsZK Rest ≃ (Fin 2 → F128) × (Fin 2 → F
 instance instFintypeCoinsZK (Rest : Type) [Fintype Rest] : Fintype (CoinsZK Rest) :=
   Fintype.ofEquiv _ (coinsEquiv Rest).symm
 
-instance instFintypeRestCoinedOf {mPts : ℕ} (Tz : ZkSession.TabZK FlockLevel3.GF128 mPts) (st : Stmt) :
-    Fintype (coinedOf Tz st).Rest :=
+instance instFintypeRestCoinedOf (P : LigProver) {mPts : ℕ} (Tz : ZkSession.TabZK FlockLevel3.GF128 mPts) (st : Stmt) :
+    Fintype (coinedOf P Tz st).Rest :=
   inferInstanceAs (Fintype (RestOf Tz st))
 
 end FlockSoundness.Discharge.ZkEveryCoin
