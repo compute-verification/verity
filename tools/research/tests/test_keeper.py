@@ -554,7 +554,9 @@ def test_a_targets_env_is_set_inside_the_lease_where_bash_env_cannot_make_it_tim
     assert chunk["env"] == {"PYTHONPATH": "/mine", "GPU_LEASE_WHO": "keeper:@proofs", "RESEARCH_KEEPER_TARGET": "sweep", "RESEARCH_KEEPER_SEED": "0"}
     env = {key: v for key, v in os.environ.items() if not key.startswith(("GPU_LEASE_", "RESEARCH_RUN", "BASH_ENV"))}
     env.update(GPU_LEASE_DIR=str(tmp_path / "gl"), GPU_LEASE_COUNT="1", GPU_LEASE_UUID_TABLE="GPU-a0", RESEARCH_RUN_ID="r-x",
-               GPU_LEASE_USAGE_LOG=str(tmp_path / "u.jsonl"), GPU_LEASE_UTIL_LOG=str(tmp_path / "util-*.jsonl"), **chunk["env"])
+               GPU_LEASE_USAGE_LOG=str(tmp_path / "u.jsonl"), GPU_LEASE_UTIL_LOG=str(tmp_path / "util-*.jsonl"),
+               GPU_LEASE_ALLOWED_FILE=str(tmp_path / "absent-direct-gpus"), GPU_LEASE_WINDOWS=str(tmp_path / "absent-windows"),
+               **chunk["env"])       # the node's own direct-gpus and windows files would decide the lease (node 1: none)
     r = subprocess.run(chunk["command"], env=env, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     owner = next(x for x in r.stdout.splitlines() if x.startswith("pid="))
