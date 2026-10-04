@@ -13,3 +13,4 @@ import FlockSoundness.Discharge.ZkHidden.DefsJ
 import FlockSoundness.Discharge.ZkHidden.SoundJ
 import FlockSoundness.Discharge.ZkHidden.CustodyJ
 import FlockSoundness.Discharge.ZkHidden.CustodyJJson
+import FlockSoundness.Discharge.ZkHidden.View

@@ -25,14 +25,15 @@ once it passes, so a check that one of them fails ends in seconds, not hours.
 A step that fails stops the others: each running step's processes get SIGINT (Python code runs its `finally`s, so the Lean audit
 removes its scratch tree) and whatever is left of them SIGKILL after `STOP_GRACE_S`, and no group starts another step. Such a
 step's status is `stopped`. `--keep-going` lets every group run to its end instead, keeping the verdicts its passing steps store,
-except after a step in `HALTS`: a Lean module that doesn't compile, or a pin whose record is stale, fails the audit too, so
-nothing still running is worth the slot; likewise a Rust crate that doesn't compile (`HALTS_ON`: flock-circuit-build's log says
-`could not compile`) fails flock-rust-tests.
+except after a failed preflight, which starts no group, or a step in `HALTS`: a Lean module that doesn't compile, or a pin whose
+record is stale, fails the audit too, so nothing still running is worth the slot; likewise a Rust crate that doesn't compile
+(`HALTS_ON`: flock-circuit-build's log says `could not compile`) fails flock-rust-tests.
 The steps stay in this process's group, which a runner's timeout and a manual stop signal as a whole. Each step's record is
 appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run.
 
 Then the independent groups run at once, the cores split between the first two (`--cores N`, default the CPUs this process may
-use):
+use). Which group a step is in, its order there, and whether its failure halts the run come from `tools/check/ci.toml`
+(`declaration.py`); this file builds each step's command, and refuses one the declaration doesn't name:
 
     pytest          every test suite (`tools/check/suites.py`) but those that use Lean, half the cores' worth at once: each
                     package's tests in their own process, a pass reused while its inputs are unchanged; each suite's log and the
@@ -148,6 +149,11 @@ def _load(name: str):
     sys.modules[spec.name] = m                       # dataclasses resolve their module by name
     spec.loader.exec_module(m)
     return m
+
+
+DECLARATION = _load("declaration")
+#: the jobs `tools/check/ci.toml` declares: their groups, order within a group, and what halts the run (`groups`, `HALTS`)
+JOBS = DECLARATION.load()
 
 
 #: the verdict packs (`verdicts.py`)
@@ -471,7 +477,8 @@ def record(argv: list[str]) -> int:
     if not landable(base):
         print(f"check: this commit can't land as is; the train's check is the merge check (merging it into {base} gives a tree "
               f"other than its own, so `research merge` won't take this check)")
-    changed = subprocess.run(["git", "diff", "--name-only", base, "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
+    changed = subprocess.run(["git", "diff", "--no-renames", "--name-only", base, "HEAD"], cwd=ROOT, capture_output=True, text=True,
+                             check=True).stdout.split()                        # a rename names its source too
     from research.merge import rule_touches
 
     need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)] + ["lean-agreement"] * agreement
@@ -546,14 +553,23 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None) -> l
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
     build = ["bash", str(ROOT / "backends" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
-    gs = [[("pytest", pytest, ROOT)], [("flock-circuit-build", build, ROOT), ("circuit-check", cc, ROOT), ("flock-rust-tests", rust, ROOT)],
-          lean]
+    built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
+             "circuit-check": ("circuit-check", cc, ROOT), "flock-rust-tests": ("flock-rust-tests", rust, ROOT)}
     if len(lean) > 1:
+        built |= {s[0]: s for s in lean}
         changed: list[str] | str = ([py, str(ROOT / "tools" / "check" / "lean_changed.py"), "--cache", str(cache_dir() / "lean-audit"),
                                      "--deps", str(cache_dir() / "lean-deps"), "--tree", str(cache_dir() / "lean-changed")]
                                     if cache else "skipped: --no-cache: lean-audit builds every package cold")
-        gs.append([("lean-changed", changed, ROOT)])
-    return gs
+        built["lean-changed"] = ("lean-changed", changed, ROOT)
+    else:
+        built["lean-build"] = lean[0]                  # no verifier: one skip, named `lean`, where its group starts
+    if undeclared := set(built) - {j.name for j in JOBS}:
+        raise DECLARATION.DeclarationError(f"check.py builds {', '.join(sorted(undeclared))}, which ci.toml doesn't declare")
+    gs: dict[int, list[tuple[str, list[str] | str, Path]]] = {}
+    for j in JOBS:
+        if j.name in built:
+            gs.setdefault(j.group, []).append(built[j.name])
+    return [gs[k] for k in sorted(gs)]
 
 
 def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
@@ -735,11 +751,11 @@ def _kill_after_grace(p: subprocess.Popen) -> None:
         _signal_tree(p.pid, signal.SIGKILL)
 
 
-#: the steps whose failure stops the run even under --keep-going
-HALTS = frozenset({"lean-changed"})
-#: ... and those whose failure does when their log has this text; without it (a failed clone or toolchain download) the other
-#: groups keep their verdicts
-HALTS_ON = {"flock-circuit-build": "error: could not compile"}
+#: the steps whose failure stops the run even under --keep-going (`halts` in ci.toml)
+HALTS = frozenset(j.name for j in JOBS if j.halts)
+#: ... and those whose failure does when their log has this text (`halts_on`); without it (a failed clone or toolchain download)
+#: the other groups keep their verdicts
+HALTS_ON = {j.name: j.halts_on for j in JOBS if j.halts_on}
 
 
 class Steps:
@@ -849,7 +865,7 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
 
     try:
         results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in preflight()]
-        if not steps.stopping:
+        if not steps.stopping and all(r["status"] == "passed" for r in results):
             subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
             gs = groups(out, n, cache, urls)
             with ThreadPoolExecutor(max_workers=len(gs)) as ex:
