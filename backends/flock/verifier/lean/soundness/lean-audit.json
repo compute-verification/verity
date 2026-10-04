@@ -692,6 +692,9 @@
    "assumptions": [],
    "type_hash": "976d69f6639cfdf806f5cc359b2520f3c93f9996ad618782053bc4a4d2429413"
   },
+  "FlockSoundness.Discharge.FailClosed.DrawSetupZHJ.avoidsMask": {},
+  "FlockSoundness.Discharge.FailClosed.DrawSetupZK.avoidsMask": {},
+  "FlockSoundness.Discharge.FailClosed.avoidsMask_of_shapeOk": {},
   "FlockSoundness.Discharge.FailClosed.flock_verify_sound": {
    "signature": [
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound (zk : Bool) (I : FlockSoundness.Discharge.Exec.Inputs) :",

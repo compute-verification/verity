@@ -2,6 +2,7 @@ import FlockSoundness.Discharge.Composed.Headline
 import FlockSoundness.Discharge.Composed.Custody
 import FlockSoundness.Discharge.Composed.CustodyJJson
 import FlockSoundness.Discharge.FailClosed.Scope
+import FlockSoundness.Discharge.FailClosed.Mask
 
 /-!
 # The public-output `--zk` headlines, over what flock-verify accepts
@@ -15,7 +16,9 @@ check's circuit (`circZ I`); the event's count and the bound read the check (`�
 check refuses the event is empty and the bound `0`. `prob_scope` carries each `Composed` headline over.
 
 What stays a hypothesis on the statement is which headline applies: public outputs (`hh`) and, for the stratified law,
-one table (`hn`); `zk_session_soundJ` covers every number of tables. The `Composed` headlines remain, as lemmas.
+one table (`hn`); `zk_session_soundJ` covers every number of tables. Zero knowledge's `avoidsMask` comes from the setup
+(`DrawSetupZK.avoidsMask`): `verify --zk` refuses a statement whose Δ or regions meet the mask slot (`Zk.maskFree`, D12).
+The `Composed` headlines remain, as lemmas.
 -/
 
 namespace FlockSoundness.Discharge.FailClosed
@@ -65,8 +68,7 @@ theorem zk_session_composed
         (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I hs.typed dj y₀ wr _ tablesAtZK_live (hs.tagsOk hh hn) hRec hDraw)) τ))) j
       (zcStrat execArith hs512 (planZAt dj y₀)
         (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I hs.typed dj y₀ wr _ tablesAtZK_live (hs.tagsOk hh hn) hRec hDraw)) τ) ω)) qF qS)
-    -- the statement's Δ and regions avoid the mask slot, and hash-derived-key
-    (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), avoidsMask y.x.st = true)
+    -- hash-derived-key
     (hKey : Assumptions.Zk.HashDerivedKeyHm96) :
     (prob (fun o => LiveVerifiesZK I o ∧ ∀ hs : ScopeZ I,
         K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).wrong
@@ -85,8 +87,8 @@ theorem zk_session_composed
     (ScopeZ I → ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)),
       ZkViewAt (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ))) :=
   ⟨prob_scope (A := LiveAcceptsZK I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs =>
-      (FlockSoundness.Discharge.Composed.zk_session_composed P I hs.typed dj y₀ wr dg N (hs.parse hh) hs.built (hs.load hh) hs.tables hs.scope σs ks hks St hS Kd pop Lb src hA3 hDraw (hs.tagsOk hh hn) hRec hk hRw hM hρ hr ht' K₀ τ (hCR hs) hdm hKey).1,
-    fun hs => Composed.zk_session_view P I dj y₀ hs.typed hdm hKey⟩
+      (FlockSoundness.Discharge.Composed.zk_session_composed P I hs.typed dj y₀ wr dg N (hs.parse hh) hs.built (hs.load hh) hs.tables hs.scope σs ks hks St hS Kd pop Lb src hA3 hDraw (hs.tagsOk hh hn) hRec hk hRw hM hρ hr ht' K₀ τ (hCR hs) (fun _ y => DrawSetupZK.avoidsMask y) hKey).1,
+    fun hs => Composed.zk_session_view P I dj y₀ hs.typed (fun _ y => DrawSetupZK.avoidsMask y) hKey⟩
 
 end
 

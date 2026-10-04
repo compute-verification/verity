@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.ZkHidden
 import FlockSoundness.Discharge.FailClosed.Scope
+import FlockSoundness.Discharge.FailClosed.Mask
 
 /-!
 # The hidden-output `--zk` headlines, over what flock-verify accepts
@@ -10,7 +11,9 @@ outputs: the circuit (`circZ I`), the public file and the facts the `ZkHidden` h
 statement check at each statement it passes (`hs : ScopeZ I`), and at a statement the check refuses the event is empty.
 
 What stays a hypothesis on the statement is which headline applies: hidden outputs (`hh`) and, for the stratified law,
-one table (`hn`); `zk_session_soundHJ` covers every number of tables. The `ZkHidden` headlines remain, as lemmas.
+one table (`hn`); `zk_session_soundHJ` covers every number of tables. Zero knowledge's `avoidsMask` comes from each
+table's setup (`DrawSetupZHJ.avoidsMask`): `verify --zk` refuses a statement whose Δ or regions meet the mask slot
+(`Zk.maskFree`, D12). The `ZkHidden` headlines remain, as lemmas.
 -/
 
 namespace FlockSoundness.Discharge.FailClosed
@@ -54,9 +57,7 @@ theorem zk_session_composedHJ
     -- the live prover
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ}
-    -- every table's statement avoids the mask slot, and hash-derived-key
-    (hdm : ∀ (S : Finset (Fin n)) (j : Fin (nTab I))
-      (y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)), avoidsMask y.x.st = true)
+    -- hash-derived-key
     (hKey : Assumptions.Zk.HashDerivedKeyHm96)
     (hCR : ∀ hs : ScopeZ I,
         let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
@@ -89,8 +90,8 @@ theorem zk_session_composedHJ
       ZkViewAtJ (fun j => coinedOf P ((planZHJ (Reg := Reg) dj y₀ S R).get
         (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ))) :=
   ⟨prob_scope (A := LiveAcceptsZK I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs =>
-      ((FlockSoundness.Discharge.ZkHidden.zk_session_composedHJ P I hs.typed dj y₀ wr dg N (hs.parseH hh) hs.built (hs.loadH hh) hs.tables hs.scope kd hkd Lb src hA3 hDraw (hs.tagsOkZHJ hh) hRec hk hRw hM hρ hr ht' K₀ τ hdm hKey).1 (hCR hs)),
-    fun hs => ZkHidden.zk_session_viewHJ P I dj y₀ hs.typed hdm hKey⟩
+      ((FlockSoundness.Discharge.ZkHidden.zk_session_composedHJ P I hs.typed dj y₀ wr dg N (hs.parseH hh) hs.built (hs.loadH hh) hs.tables hs.scope kd hkd Lb src hA3 hDraw (hs.tagsOkZHJ hh) hRec hk hRw hM hρ hr ht' K₀ τ (fun _ _ y => DrawSetupZHJ.avoidsMask y) hKey).1 (hCR hs)),
+    fun hs => ZkHidden.zk_session_viewHJ P I dj y₀ hs.typed (fun _ _ y => DrawSetupZHJ.avoidsMask y) hKey⟩
 
 end
 

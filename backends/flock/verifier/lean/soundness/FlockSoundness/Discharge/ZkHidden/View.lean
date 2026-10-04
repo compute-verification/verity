@@ -141,8 +141,8 @@ hidden outputs).
 Which verifiers: this is honest-verifier zero knowledge at each fixed coin vector, a zerocheck outer coin `1` among the
 refused (`CoinedSetup.Admits`). It covers a verifier that chooses its coins because the coin server commits every coin at
 `Hello`, before the prover's first message (`coin_tree.rs`), under `keyed-cr`, which no statement here models yet
-(`ASSUMPTIONS.md`, zero knowledge's coverage). `avoidsMask` (`hdm`) is a named hypothesis that no check implies yet, until
-the verifier's D11 refusal in `Net.ofRows` discharges it. -/
+(`ASSUMPTIONS.md`, zero knowledge's coverage). `avoidsMask` (`hdm`) holds at every setup `verify --zk` makes: its shape check
+refuses a statement that meets the mask slot (`Zk.maskFree`). -/
 theorem zk_session_viewH (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
     (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZKH I mPts S (dj S)), avoidsMask y.x.st = true)
@@ -159,8 +159,8 @@ draw at which `verify --zk` sets every table up (`ys`), the joint view of `zk_se
 Which verifiers: this is honest-verifier zero knowledge at each fixed coin vector, a zerocheck outer coin `1` among the
 refused (`CoinedSetup.Admits`). It covers a verifier that chooses its coins because the coin server commits every coin at
 `Hello`, before the prover's first message (`coin_tree.rs`), under `keyed-cr`, which no statement here models yet
-(`ASSUMPTIONS.md`, zero knowledge's coverage). `avoidsMask` (`hdm`) is a named hypothesis that no check implies yet, until
-the verifier's D11 refusal in `Net.ofRows` discharges it. -/
+(`ASSUMPTIONS.md`, zero knowledge's coverage). `avoidsMask` (`hdm`) holds at every setup `verify --zk` makes: its shape check
+refuses a statement that meets the mask slot (`Zk.maskFree`, `FailClosed.DrawSetupZHJ.avoidsMask`). -/
 theorem zk_session_viewHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false)
     (hdm : ∀ (S : Finset (Fin n)) (j : Fin (nTab I))
@@ -181,8 +181,8 @@ theorem zk_session_viewHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀
 Which verifiers: this is honest-verifier zero knowledge at each fixed coin vector, a zerocheck outer coin `1` among the
 refused (`CoinedSetup.Admits`). It covers a verifier that chooses its coins because the coin server commits every coin at
 `Hello`, before the prover's first message (`coin_tree.rs`), under `keyed-cr`, which no statement here models yet
-(`ASSUMPTIONS.md`, zero knowledge's coverage). `avoidsMask` (`hdm`) is a named hypothesis that no check implies yet, until
-the verifier's D11 refusal in `Net.ofRows` discharges it. -/
+(`ASSUMPTIONS.md`, zero knowledge's coverage). `avoidsMask` (`hdm`) holds at every setup `verify --zk` makes: its shape check
+refuses a statement that meets the mask slot (`Zk.maskFree`, `FailClosed.DrawSetupZHJ.avoidsMask`). -/
 theorem zk_session_composedHJ
     (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
