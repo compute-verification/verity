@@ -67,10 +67,10 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
     circuit-check   `circuit-check --cache`, per target: a target's result is reused when every file, directory listing,
                     existence probe and loaded library its process read is unchanged, with the checker's own version; one after
                     a read the tracer cannot see (a program it starts) is not stored (`circuit_check.cache`)
-    lean-audit      per package (`lean_audit.py`): a pass is reused while the package, its path dependencies, `tools/lean/`
-                    and its toolchain and manifest are unchanged; a miss is audited on a scratch tree holding only those, so a
-                    read outside them fails there; fetched dependencies stay warm on the machine under manifest + toolchain,
-                    and a machine without them restores the bundle `lean-deps.json` pins from the store, not from GitHub; a
+    lean-audit      per package (`lean_audit.py`): a pass is reused while the content of the package, its path dependencies,
+                    `tools/lean/` and its toolchain and manifest is unchanged, wherever the package is (a move is no miss);
+                    a miss is audited on a scratch tree holding only those, so a read outside them fails there; fetched
+                    dependencies stay warm on the machine under manifest + toolchain, and a machine without them restores the bundle `lean-deps.json` pins from the store, not from GitHub; a
                     step that audits any package first waits for one of the node's Lean audit slots (`lean_slot.py`). The
                     step fails on a fast-path result in its `audit.json`, cached or not (`lean_fast`): no merge check
                     accepts an audit without the kernel replay

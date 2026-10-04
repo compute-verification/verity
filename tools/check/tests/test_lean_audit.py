@@ -109,6 +109,101 @@ def test_verdicts_are_reused_only_while_every_input_is_unchanged(tmp_path, monke
     assert sorted(_run(tmp_path, 5)[1]) == ["pkg/a warm", "pkg/b cold"]     # the auditor is an input of every package
 
 
+def _move(root: Path, monkeypatch, old: str, new: str) -> None:
+    """`git mv old new`: the directory, and the tracked files' paths."""
+    files = LA.COMMON.tracked_files()
+    (root / new).parent.mkdir(parents=True, exist_ok=True)
+    os.rename(root / old, root / new)
+    moved = sorted(new + f[len(old):] if f.startswith(old + "/") else f for f in files)
+    monkeypatch.setattr(LA.COMMON, "tracked_files", lambda r=None: moved)
+
+
+def _requires_a_at(root: Path, b: str, path: str) -> None:
+    (root / b / "lakefile.toml").write_text(f'name = "b"\n\n[[require]]\nname = "a"\npath = "{path}"\n')
+    (root / b / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "a", "type": "path", "dir": path}]}))
+
+
+def test_a_moved_package_reuses_its_pass(tmp_path, monkeypatch):
+    """The key holds each file's path relative to its package, and a package required by path as its content, so a move with
+    the same content is no input change. Keyed by path, the migration's every move audited the moved packages cold
+    (afacde975's check, 60.5 min, lean-audit 59.5 of them)."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    _requires_a_at(root, "pkg/b", "../a")
+    assert _run(tmp_path, 1)[0] == 0
+    _move(root, monkeypatch, "pkg", "lib/lean")                     # both, side by side as before
+    rc, ran, doc = _run(tmp_path, 2)
+    assert rc == 0 and ran == [] and sorted(doc["cached"]) == ["lib/lean/a", "lib/lean/b"]
+    assert sorted(r["package"] for r in doc["packages"]) == ["lib/lean/a", "lib/lean/b"]
+    _move(root, monkeypatch, "lib/lean/a", "core/lean/a")           # a alone, and b's lakefile and manifest follow it
+    _requires_a_at(root, "lib/lean/b", "../../../core/lean/a")
+    rc, ran, doc = _run(tmp_path, 3)
+    assert rc == 0 and ran == [] and sorted(doc["cached"]) == ["core/lean/a", "lib/lean/b"]
+    rc, lines = LA.explain("lib/lean/b", tmp_path / "cache" / "lean-audit")
+    assert rc == 0 and "PASS reused" in lines[0]
+    (root / "core/lean/a/A.lean").write_text("theorem a : True := by trivial\n")
+    rc, ran, doc = _run(tmp_path, 4)                                # then one module changes: a and b, which requires it
+    assert rc == 0 and sorted(ran) == ["core/lean/a warm", "lib/lean/b cold"] and doc["cached"] == {}
+
+
+def test_one_changed_byte_in_any_input_misses(tmp_path, monkeypatch):
+    """Every file of the package, of a package it requires by path, and of the auditor moves the key; so does pointing the
+    dependent at another directory (a package of other content there)."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "pkg/a/Sub").mkdir()
+    (root / "pkg/a/Sub/C.lean").write_text("def c := 1\n")
+    files = sorted([*LA.COMMON.tracked_files(), "pkg/a/Sub/C.lean"])
+    monkeypatch.setattr(LA.COMMON, "tracked_files", lambda r=None: files)
+    _requires_a_at(root, "pkg/b", "../a")
+    keys = lambda: {p: LA.key(p, files, LA.FLAGS) for p in ("pkg/a", "pkg/b")}
+    was = keys()
+    for f in LA.inputs("pkg/b", files):
+        before = (root / f).read_bytes()
+        (root / f).write_bytes(before + b" ")                       # one more byte, still a manifest or a lakefile
+        now = keys()
+        assert now["pkg/b"] != was["pkg/b"], f
+        assert (now["pkg/a"] != was["pkg/a"]) == (f.startswith("pkg/a/") or not f.startswith("pkg/")), f
+        (root / f).write_bytes(before)
+    assert keys() == was
+    for f in ("lakefile.toml", "lean-toolchain", "lake-manifest.json", "lean-audit.json", "A.lean"):
+        (root / "pkg/c" / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / "pkg/c" / f).write_bytes((root / "pkg/a" / f).read_bytes())
+    files += [f"pkg/c/{f}" for f in ("lakefile.toml", "lean-toolchain", "lake-manifest.json", "lean-audit.json", "A.lean")]
+    _requires_a_at(root, "pkg/b", "../c")                           # a copy of a without Sub/C.lean
+    assert keys()["pkg/b"] != was["pkg/b"]
+    (root / "pkg/c/Sub").mkdir()
+    (root / "pkg/c/Sub/C.lean").write_text("def c := 1\n")
+    files.append("pkg/c/Sub/C.lean")
+    assert keys()["pkg/b"] == was["pkg/b"]                          # the same content there: the same key
+    shutil.copytree(root / "pkg/c", root / "pkg/d")
+    files += [f"pkg/d/{f[6:]}" for f in files if f.startswith("pkg/c/")]
+    single = lambda d: (root / "pkg/b/lakefile.toml").write_text(f"name = \"b\"\n\n[[require]]\nname = \"a\"\npath = '../{d}'\n")
+    single("c")
+    k = keys()["pkg/b"]
+    _requires_a_at(root, "pkg/b", "../d")
+    single("d")
+    assert keys()["pkg/b"] != k                                     # a path spelled as the key can't name by content stays a path
+
+
+def test_a_package_that_may_read_beyond_its_directory_is_keyed_by_its_path(tmp_path, monkeypatch):
+    """A relative path out of the package, other than to a package it requires, finds other files once the package moves, and
+    a pass reused by content alone would not see it. Lake's and the audit's own files left with a `..`, or a module with an
+    `include_str`, keep the package's path in its key."""
+    root = _tree(tmp_path, monkeypatch)
+    _requires_a_at(root, "pkg/b", "../a")
+    files = LA.COMMON.tracked_files()
+    assert LA.WHERE not in LA.content("pkg/b", files)                # the paths to a are content, not paths
+    for f, text in (("lakefile.toml", 'name = "a"\nsrcDir = "../shared"\n'), ("A.lean", 'def s := include_str "../x.txt"\n')):
+        was = (root / "pkg/a" / f).read_text()
+        (root / "pkg/a" / f).write_text(text)
+        k = LA.key("pkg/a", LA.COMMON.tracked_files(), LA.FLAGS)
+        assert LA.content("pkg/a", LA.COMMON.tracked_files())[LA.WHERE] == "pkg/a"
+        _move(root, monkeypatch, "pkg/a", "other/a")
+        assert LA.key("other/a", LA.COMMON.tracked_files(), LA.FLAGS) != k
+        _move(root, monkeypatch, "other/a", "pkg/a")
+        (root / "pkg/a" / f).write_text(was)
+
+
 def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
     """b201 (r20261004-150518-b201) audited all 8 packages again, 69 min, partly on edits to `tools/lean/README.md` and
     `tools/lean/tests/`, which no audit reads. They stay out of the scratch tree too, so an audit that read one would fail."""
@@ -244,9 +339,15 @@ def test_explain_names_the_inputs_a_miss_changed(tmp_path, monkeypatch):
     assert "PASS reused" in LA.explain("b", cache)[1][0]                          # a unique part of the path names it too
     (root / "pkg/a/A.lean").write_text("theorem a : True := by trivial\n")
     rc, lines = LA.explain("pkg/b", cache)
-    assert rc == 0 and lines[0].startswith("pkg/b: missed (") and "differs in 1 input(s):" in lines[0]
-    assert lines[1:] == ["  changed: pkg/a/A.lean"]                               # b requires a by path
+    assert rc == 0 and lines[0].startswith("pkg/b: missed (") and "differs in 2 input(s):" in lines[0]
+    assert lines[1:] == ["  changed: pkg/a/A.lean",                               # b requires a by path
+                         "  changed: pkg/b/lake-manifest.json (it names each package it requires by path by that package's content)"]
     assert LA.explain("pkg", cache)[0] == 2                                       # two packages match
+    _move(root, monkeypatch, "pkg/b", "elsewhere/b")
+    (root / "elsewhere/b/lake-manifest.json").write_text(json.dumps({"packages": [{"name": "a", "type": "path", "dir": "../../pkg/a"}]}))
+    (root / "elsewhere/b/B.lean").write_text("-- b changed too\n")
+    rc, lines = LA.explain("elsewhere/b", cache)                                  # its passes were audited at pkg/b
+    assert rc == 0 and "audited at pkg/b) differs in 3 input(s):" in lines[0] and "  changed: elsewhere/b/B.lean" in lines
 
 
 def test_every_file_the_step_loads_is_in_its_key():
