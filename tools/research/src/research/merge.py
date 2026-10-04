@@ -5,8 +5,11 @@
 (`sweep`).
 
 Run in the checkout of the target branch.  It merges the commit REF names (`git merge --no-ff`) only if the evidence store holds
-a passing attempt of the tool (default `check`) for that exact commit: `state` done, rc 0, source commit REF's, tree clean.  With
-a usable remote the catalog's attempts are refreshed first, so an attempt recorded on another machine counts.  Refused as well: a
+a passing attempt of the tool (default `check`) for that exact commit: `state` done, rc 0, source commit REF's, tree clean, and a
+result of a kind the target's declaration of the tool produces (`Tool.produces`: `check/v1` for check; an attempt with no result,
+or one whose attempt or result can't be read, passes no gate) and not in `REFUSED_KINDS` (the Lean fast path's `lean-fast/v1`,
+which skips the kernel replay).  With a usable remote the catalog's attempts are refreshed first, so an attempt recorded on
+another machine counts.  Refused as well: a
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
 ancestor of REF) unless merging REF leaves REF's own tree (`tree_identical`: what the target gained is in REF already, as when a
 train checked on the train ahead of it lands after that one), since otherwise the merged tree is not the one that was checked;
@@ -60,10 +63,55 @@ def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProc
     return r
 
 
-def passing(store, commit: str, tool: str = "check", *, tree: str | None = None, maps=None) -> list[str]:
-    """Ids of the attempts of ``tool`` that passed on the clean tree of ``commit``, newest first.  After a history rewrite
-    (`commitmap`), an attempt of an old commit counts for its image when the map says the rewrite kept the tree and, where the
-    attempt recorded its tree, that tree is ``tree``."""
+#: result kinds that pass no merge gate, whatever `--tool` recorded them and whatever its declaration says it produces:
+#: `lean-fast/v1` is the Lean fast path's (`tools/check/lean_changed.py --records`), an audit without the kernel replay,
+#: which every merge check keeps
+REFUSED_KINDS = frozenset({"lean-fast/v1"})
+
+
+def declaration(repo: Path, tool: str):
+    """The target's own declaration of ``tool``, read from the checkout (not from the commit being merged), or None when the
+    checkout has none."""
+    from .store import tools_registry
+
+    module, _, attr = tools_registry.REGISTRY.get(tool, tool).rpartition(":")
+    try:
+        return tools_registry._from_file(module, attr, repo)
+    except Exception:  # noqa: BLE001  (a declaration that can't be read is none)
+        return None
+
+
+def produced(repo: Path, tool: str) -> frozenset[str]:
+    """The result kinds the target's declaration of ``tool`` produces (`Tool.produces`); none when it has no declaration, so
+    that no attempt passes."""
+    return frozenset(getattr(declaration(repo, tool), "produces", None) or ())
+
+
+def refused(store, run_id: str, kinds: frozenset[str]) -> str | None:
+    """Why the attempt can't pass the gate whatever its exit status, or None: its result is not of a kind in ``kinds`` (the
+    tool's `produced`; an attempt that published no result has none), or is in `REFUSED_KINDS`, or it or its result can't be
+    read."""
+    try:
+        doc = store.get_attempt(run_id)
+        if doc is None:
+            return "its attempt can't be read"
+        art = (doc.get("outputs") or {}).get("result")
+        kind = store.get_manifest(art).kind if art else None
+    except Exception as e:  # noqa: BLE001  (a guard never fails open)
+        return f"its result can't be read ({type(e).__name__}: {e})"
+    if kind in REFUSED_KINDS:
+        return f"its result is a {kind}, which no merge accepts"
+    if kind not in kinds:
+        return ((f"its result is a {kind}" if kind else "it published no result") +
+                f", and the target's declaration of the tool produces {', '.join(sorted(kinds)) or 'nothing'}")
+    return None
+
+
+def passing(store, commit: str, tool: str = "check", *, kinds: frozenset[str], tree: str | None = None, maps=None) -> list[str]:
+    """Ids of the attempts of ``tool`` that passed on the clean tree of ``commit``, newest first, less those `refused` names
+    (``kinds``: the result kinds that may pass, the target's `produced`).  After a history rewrite (`commitmap`), an attempt of
+    an old commit counts for its image when the map says the rewrite kept the tree and, where the attempt recorded its tree,
+    that tree is ``tree``."""
     rows = store.index.sql("SELECT id FROM attempts WHERE tool = ? AND source_commit = ? AND source_dirty = 0 AND state = 'done' "
                            "AND rc = 0 ORDER BY start_utc DESC", (tool, commit))
     ids = [r[0] for r in rows]
@@ -74,7 +122,7 @@ def passing(store, commit: str, tool: str = "check", *, tree: str | None = None,
             recorded = (json.loads(doc).get("source") or {}).get("tree") if doc else None
             if tree is None or recorded in (None, tree):
                 ids.append(rid)
-    return ids
+    return [rid for rid in ids if refused(store, rid, kinds) is None]
 
 
 def tree_identical(repo: Path, commit: str) -> bool:
@@ -107,10 +155,13 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print)
         raise Refused(f"{commit[:12]} holds {len(old)} commit(s) a history rewrite replaced (e.g. {old[0][:12]}): merging it would bring the "
                       f"old history back; move the branch onto the rewritten one with `research git remap` and push that")
     tree = _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
-    ids = passing(store, commit, tool, tree=tree, maps=maps)
+    kinds = produced(repo, tool)
+    ids = passing(store, commit, tool, kinds=kinds, tree=tree, maps=maps)
     if not ids:
         rows = store.index.sql("SELECT id, state, rc, source_dirty FROM attempts WHERE tool = ? AND source_commit = ?", (tool, commit))
-        seen = "; ".join(f"{r[0]} {r[1]} rc={r[2]}{' dirty' if r[3] else ''}" for r in rows) or "none"
+        why = {r[0]: refused(store, r[0], kinds) for r in rows if r[1] == "done" and r[2] == 0 and not r[3]}
+        seen = "; ".join(f"{r[0]} {r[1]} rc={r[2]}{' dirty' if r[3] else ''}{f' refused: {why[r[0]]}' if why.get(r[0]) else ''}"
+                         for r in rows) or "none"
         raise Refused(f"no passing `{tool}` attempt for {commit} in the evidence store (attempts of it: {seen}); "
                       f"record one: `uv run python tools/check/check.py --record` on that commit")
     need = required_steps(repo, "HEAD", commit, tool)
@@ -145,6 +196,7 @@ def unchecked_pushes(repo: Path, lines: list[str], store, into: str = "main", to
     passing ``tool`` attempt of their tree, the merge gate's rule: the tip's own attempt (a `--train` fast-forward), or, as a
     `research merge` commit has, its merged parent's when the two trees are equal."""
     bad = []
+    kinds = produced(repo, tool)
     for line in lines:
         f = line.split()
         if len(f) != 4 or f[2] != f"refs/heads/{into}" or f[1] == ZERO:
@@ -152,7 +204,7 @@ def unchecked_pushes(repo: Path, lines: list[str], store, into: str = "main", to
         tip = f[1]
         tree = _git(repo, "rev-parse", f"{tip}^{{tree}}").stdout.strip()
         parents = _git(repo, "rev-list", "--parents", "-n", "1", tip).stdout.split()[1:]
-        if not any(_git(repo, "rev-parse", f"{x}^{{tree}}").stdout.strip() == tree and passing(store, x, tool, tree=tree)
+        if not any(_git(repo, "rev-parse", f"{x}^{{tree}}").stdout.strip() == tree and passing(store, x, tool, kinds=kinds, tree=tree)
                    for x in [tip, *parents[1:]]):
             bad.append(tip)
     return bad
@@ -175,13 +227,7 @@ def install_push_guard(repo: Path, into: str = "main", tool: str = "check") -> P
 def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, list[str]]:
     """The steps the target's own declaration of ``tool`` (`Tool.merge_requires`, read from the checkout, not from the commit being
     merged) requires for the change ``base``..``commit``: {step: the prefixes it touches}."""
-    from .store import tools_registry
-
-    module, _, attr = tools_registry.REGISTRY.get(tool, tool).rpartition(":")
-    try:
-        rules = tools_registry._from_file(module, attr, repo).merge_requires
-    except Exception:  # noqa: BLE001  (a tool the checkout does not declare has no path rules)
-        return {}
+    rules = getattr(declaration(repo, tool), "merge_requires", None)
     if not rules:
         return {}
     changed = [p for p in _git(repo, "diff", "--name-only", base, commit).stdout.splitlines() if p]
