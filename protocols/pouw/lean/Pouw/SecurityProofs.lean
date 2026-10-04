@@ -1,6 +1,7 @@
 import Pouw.SecurityProofs.Barrier
 import Pouw.SecurityProofs.Barrier.Proofs
 import Pouw.SecurityProofs.Copy
+import Pouw.SecurityProofs.Deadline
 import Pouw.SecurityProofs.Dimension
 import Pouw.SecurityProofs.Dimension.A2WordsProofs
 import Pouw.SecurityProofs.Dimension.CausalProofs
