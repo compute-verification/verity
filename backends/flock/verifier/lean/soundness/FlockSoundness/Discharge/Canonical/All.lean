@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.Canonical.Headline
 import FlockSoundness.Discharge.Canonical.Statements
+import FlockSoundness.Discharge.Canonical.Gaps
 
 /-!
 # The canonical I/O format's binding, frozen
@@ -15,7 +16,11 @@ import FlockSoundness.Discharge.Canonical.Statements
 * `Sites`, `Rows`, `Session`: the sites, `lay` and `rs` at `sha512/row/v2` widths, and `zk_session_soundC`;
 * `Verifier`: `parse_formatOk`, the verifier change V1 as a statement (false at main);
 * `Headline`: `zk_session_sound_canonical`, with no scope hypothesis;
-* `Statements`: `RowsCommittedC`, `OutputsCommittedC`, `OutputsBindingC` at the statement level, tails included.
+* `Statements`: `RowsCommittedC`, `OutputsCommittedC`, `OutputsBindingC` at the statement level, tails included;
+* `Gaps`: what the headline does not yet cover. Tails' outputs (`OutputsComputedC`, after V2), public inputs
+  (`PublicPinnedC`) and registered reads (`RegisteredRowC`, after V3).
 
-Not imported by `FlockSoundness.lean`: the stubs are `sorry`s, and `check`'s audit admits none.
+Every declaration is proved but four, all `sorry`: `parse_formatOk` (V1), `parse_outputsComputed` (V2),
+`public_pinnedC` and `registered_rowC`. So `FlockSoundness.lean` does not import this, since `check`'s audit admits no
+`sorry`.
 -/

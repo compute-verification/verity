@@ -19,7 +19,7 @@ set_option Elab.async false
 * `zk_session_soundC`, `zk_session_soundC_custody_json`: the session's soundness, `zk_session_soundHJ`'s proof at these
   pieces, and at the record's custody and the printed draw file.
 
-**Proof work.** None in this file: every declaration is proved, from the `sorry`s of `Format`, `Chain`, `Commit`,
+**Proof work.** None: every declaration is proved, and so is every lemma it uses from `Format`, `Chain`, `Commit`,
 `Reads`, `Outputs`, `Sites` and `Rows`. `zk_session_soundC`'s bound and its assumptions (A3, `cr/sha-512` through
 `TableCRZ`, the count curve's parameters) are `zk_session_soundHJ`'s; only the circuit's condition changes.
 -/

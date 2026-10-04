@@ -12,9 +12,9 @@ set_option Elab.async false
 untyped circuit) and `hU` (`Built c.unit`, which `ExecSetup.unit_built` gives from any accepted parse) are not scope
 conditions; typed circuits are out of this headline (`DESIGN.md`).
 
-**Proof work.** None in this file: `zk_session_soundC_custody_json` at `parse_formatOk`. Its proof rests on
-`Session.lean`'s stubs and on `parse_formatOk`, which is false until V1 lands; so at this commit the headline is a
-frozen target, not a result.
+**Proof work.** None in this file: `zk_session_soundC_custody_json` at `parse_formatOk`. `Session.lean` is proved, so
+the headline rests on `parse_formatOk` alone, which is false until V1 lands; until then the headline is a frozen target,
+not a result. What it does not yet say (a tail's outputs, public inputs, registered reads) is in `Gaps.lean`.
 -/
 
 namespace FlockSoundness.Discharge.Canonical

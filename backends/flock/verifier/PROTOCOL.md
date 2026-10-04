@@ -1447,8 +1447,9 @@ stays `NON_ZK_PROOF`. **Agreement:** README.
 
 One row format for everything an untyped §16.13 statement registers, so a new workload needs no verifier or proof change.
 It narrows §16.10 and §16.13, and V1 (below) makes the verifier refuse every untyped circuit outside it. The soundness
-package states its binding and the session headline at this format (`FlockSoundness/Discharge/Canonical/`). Those are
-`sorry` stubs outside the root import, so §17.4 is unchanged.
+package states its binding and the session headline at this format (`FlockSoundness/Discharge/Canonical/`), outside the
+root import, so §17.4 is unchanged. The headline is proved from V1's `parse_formatOk`, which is `sorry` until V1 lands, and
+the three statements of `Canonical/Gaps.lean` are `sorry`.
 
 - **Rows.** Every row, input or output, is §16.10's bit row (`hm96-sha512/row/v2`) at its own `ℓ < 2^64`:
   `x = SHA-512(P(ℓ) ‖ bytes)`, `B = ⌈ℓ/8⌉` bytes, bits low first, fill bits zero, then SHA-512's own padding
@@ -1463,9 +1464,10 @@ package states its binding and the session headline at this format (`FlockSoundn
   bits for the run's `w` words. Bit `16k + t` is bit `t` of the run's word `k`, as the returning net (the unit, or a tail's
   last stage) computes it. That is the row a reader of the run as one input port commits (§16.13 linking). There is no
   zero-padded output row.
-- **Shared rows** (§16.10 `shared_rows`) are tables of rows in this form, and nothing changes for them. Public input ports and
-  registered reads (§16.10) are outside the format for now: the session model has neither, and registered reads require `v1`
-  rows.
+- **Shared rows** (§16.10 `shared_rows`) are tables of rows in this form, and nothing changes for them. Public input ports are
+  in the format (a public leaf is a zero leaf of `leaves_in`), but the session headline doesn't cover them yet. Registered
+  reads (§16.10) require `v1` rows until V3. `Canonical/Gaps.lean` states what each of these needs, and what a tail's
+  outputs need.
 - **VUs.** `vus_per_block` is a power of two for every circuit. `Digest(p)` has `⌊log₂ G⌋` free VU bits, so its claim
   reaches only the VUs below `2^⌊log₂ G⌋`. §16.10 checks the power of two only when the unit returns the outputs, so
   today a tail that returns them at `G = 3` is parsed, and VU 2's `b ‖ c` lies outside the region's VUs.
@@ -1484,7 +1486,15 @@ package states its binding and the session headline at this format (`FlockSoundn
   - `readsRows` and `portReadsB`;
   - `unit_log ≤ 32`;
   - `vusPow2`.
-  The format doesn't need three of the parser's limits, and they stay until the verifier lifts them:
+- **V2** (a tail's outputs). The verifier walks each VU's output cone over the block's `A₀`, `B₀` and Δ, and refuses a
+  cycle or a column that is neither pinned (the pin, a region bit), an input row's data bit, nor computed from such
+  columns. Main accepts any wiring of the right widths, so a tail's outputs need not be a function of its inputs. A
+  stage's input row past the net's ports is a self row, which no wire fills. That row is free, so V2 refuses any cone
+  through it (`Gaps.OutputsComputedC`).
+- **V3** (registered reads of canonical rows). `checkPort` accepts an unsegmented `v2` row of the registered width in
+  bits, and `rowLeaf` tags the leaf with the row's schema. Registration commits `hm96-sha512/row/v2` leaves
+  (`Gaps.RegisteredRowC`).
+- **Parser limits.** The format doesn't need three of the parser's limits, and they stay until the verifier lifts them:
   - a `v2` statement whose rows all have no compression is refused (§16.10's pin), so a statement needs one row of
     more than 888 bits;
   - a tail's output words must be a power of two in number;
