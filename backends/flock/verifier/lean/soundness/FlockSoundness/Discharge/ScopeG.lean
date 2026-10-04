@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.ScopeG.Vu
 import FlockSoundness.Discharge.ScopeG.Scope
+import FlockSoundness.Discharge.ScopeG.Keys
 import FlockSoundness.Discharge.ScopeG.Headline
 
 /-!
@@ -21,6 +22,8 @@ This area freezes the VU's program and the hidden-output headline at it; the pro
   `rowShapeW` admits, an untyped circuit, the VU's order, its reads) and `scopeOkG` (`scopeOkGT`, the unit returning the
   outputs), `scopeOkGT_spec`; the VU's program `vuProg` (`Rows.compose vuLogical` on source-indexed input gates) and its
   outputs `vuOutsOf`.
+* `Keys`: the VU program's input gates on Δ's source keys: two inputs of one unit are on one gate exactly when they have
+  one key (`vuProg_wire_key`, `vuProg_wire_of_key`), as `Placed.keyProg_wire_key` at the unit net alone.
 * `Headline`: `VuBindH`, a binding of the VU's program at the hidden tables; `flock_headline_exec_hiddenG_of`, the
   headline at any one; open: `vuBindH_nonempty`, `vuBindHT_nonempty`; `flock_headline_exec_hiddenG` at `scopeOkG` and
   `flock_headline_exec_hiddenGT` at `scopeOkGT`.
