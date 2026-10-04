@@ -826,7 +826,8 @@ useful    U/(α_A·α_B), glue
       exactly one unit.
     - The tail writes the fp8-p or nvfp4-p row today's row unit writes, so a tile reads its rows unchanged. The pieces
       pass their values in six more v2 rows (`leaves`' pc8-head, pc8-carry, fp8-codes, pc4-head, pc4-carry and
-      nvfp4-codes; `rowk.PORTS8`, `PORTS4`).
+      nvfp4-codes; `rowk.PORTS8`, `PORTS4`). At row_k = 2,048 each is short (at most 55 words) or whole SHA-512 blocks,
+      the v2 rows C-Flock's widened scope takes; pc8-carry ends in 62 zero words for that.
     - A form reads its segment of F_A and F_B as a public input region under the anchor's slice rule,
       `verity/pouw/anchor/<scheme>/<anchor>/slice/v1` (`rowk.DERIVATIONS8`, `DERIVATIONS4`,
       `anchors.Derivation.per_segment`), which only the cut's shapes name.

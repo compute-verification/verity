@@ -63,8 +63,10 @@ E4M3, E2M1, U8, BF16 = pc8.E4M3, W.E2M1, W.U8, W.BF16
 #: the head's row, as each form and the tail read it (`leaves`' pc8-head and pc4-head rows)
 HEAD8 = (("alpha", F32), ("ep", pc8.LINE), ("th", Value(64)), ("finite", Value(1)), ("floor", Value(1)), ("pad", Value(14)))
 HEAD4 = (("alpha", F32), ("ae", U8), ("pad", Value(8)))
-#: a form's carry, as the next form and the tail read it (pc8-carry, pc4-carry)
-CARRY8 = (("dead", Value(32)), ("tot", Array(R, F32)))
+#: a form's carry, as the next form and the tail read it (pc8-carry, pc4-carry); pc8-carry's zero fill makes the row whole
+#: SHA-512 blocks (128 words), a row shape C-Flock's widened scope takes, where 66 words would be neither short nor whole
+FILL8 = 62
+CARRY8 = (("dead", Value(32)), ("tot", Array(R, F32)), ("fill", Array(FILL8, Value(16))))
 CARRY4 = (("tot", Array(R, F32)),)
 _NAMES8, _NAMES4 = tuple(n for n, _t in HEAD8), tuple(n for n, _t in HEAD4)
 
@@ -92,11 +94,12 @@ def _seg8_sig(S_, own: str, other: str, carry: bool):
 
 def _seg8(B, S_, j: int, x, alpha, ep, th, _finite, _floor, _pad, *rest):
     e, n, dev = pc4._Emit(B), S_.KS, S_.DEV
-    dead, tot, own, other = rest if len(rest) == 4 else (0, [0] * R, *rest)
+    dead, tot, _fill, own, other = rest if len(rest) == 5 else (0, [0] * R, None, *rest)
     lo = j * n
     codes = array_of(pc8._codes(e, x, alpha, ep, own, lo, lo + n, dev))
     dead = pc8._dead(e, x, th, lo, lo + n, dead)
-    return tuple_of(codes, dead, array_of([pc8._chain(e, codes, other.take(1, p), n, dev, tot[p]) for p in range(R)]))
+    return tuple_of(codes, dead, array_of([pc8._chain(e, codes, other.take(1, p), n, dev, tot[p]) for p in range(R)]),
+                    array_of([e.c(16, 0)] * FILL8))
 
 
 def _tail8_sig(S_, extra: tuple = ()):
@@ -108,14 +111,14 @@ def _ok8(e: pc4._Emit, finite, floor, dead, k: int):
     return pc4.ok_word(e, e.call(BitAnd, finite, e.call(BitAnd, floor, e.call(I32Le, dead, k // 64))))
 
 
-def _tail8a_body(B, S_, alpha, ep, th, finite, floor, pad, cs, dead, tot):
+def _tail8a_body(B, S_, alpha, ep, th, finite, floor, pad, cs, dead, tot, fill):
     e, k = pc4._Emit(B), S_.K
     ew = [e.call(E4m3ToF32, ep[p]) for p in range(R)]
     p_row = [e.call(F2fpBf16, w) for w in ew] + [e.call(F2fpBf16, tot[p]) for p in range(R)]
     return tuple_of(cs.reshape(Array(k, E4M3)), array_of(p_row), _ok8(e, finite, floor, dead, k))
 
 
-def _tail8b_body(B, S_, alpha, ep, th, finite, floor, pad, cs, dead, tot, g):
+def _tail8b_body(B, S_, alpha, ep, th, finite, floor, pad, cs, dead, tot, fill, g):
     e, k = pc4._Emit(B), S_.K
     ew = [e.call(E4m3ToF32, ep[p]) for p in range(R)]
     mid = []
@@ -428,9 +431,9 @@ def _ports(head_row: str, carry_row: str, codes_row: str, data_row: str, input_r
     """One scheme's ports under the cut, as `pc4.PORTS`: each piece's committed rows and public input regions."""
     out = {}
     head8 = scheme == "pc8"
-    names, carry = (_NAMES8, ("dead", "tot")) if head8 else (_NAMES4, ("tot",))
+    names, carry = (_NAMES8, tuple(n for n, _t in CARRY8)) if head8 else (_NAMES4, ("tot",))
     codes_out = (0,) if head8 else (0, 1)
-    carry_out = (1, 2) if head8 else (2,)
+    carry_out = (1, 2, 3) if head8 else (2,)
     tail_codes = ("cs",) if head8 else ("cs", "ss")
     for side, role in (("b", ROLE_W), ("a", ROLE_X)):
         own, other = ("fa", "fb") if side == "a" else ("fb", "fa")
@@ -473,6 +476,6 @@ DERIVATIONS8 = pc8.DERIVATIONS | _slices(pc8.DERIVATIONS, "pearl-c")
 DERIVATIONS4 = pc4.DERIVATIONS | _slices(pc4.DERIVATIONS, "pearl-c4")
 
 
-__all__ = ["CARRY4", "CARRY8", "DERIVATIONS4", "DERIVATIONS8", "FORMS", "HEAD4", "HEAD8", "PORTS4", "PORTS8", "ROLES",
+__all__ = ["CARRY4", "CARRY8", "DERIVATIONS4", "DERIVATIONS8", "FILL8", "FORMS", "HEAD4", "HEAD8", "PORTS4", "PORTS8", "ROLES",
            "ROLE_OF", "ROW_K", "check4", "check8", "pieces4", "pieces8", "root4", "root8", "rows4", "rows8", "segment",
            "unit_templates4", "unit_templates8"]

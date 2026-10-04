@@ -246,7 +246,7 @@ def test_each_piece_is_one_static_circuit_per_segment():
     head, first, forms, _tail = rowk.pieces8(384, 128, "sm120", "a")
     assert [rowk.segment(f) for f in (first, *forms)] == [0, 1, 2] and len({first.id, *(f.id for f in forms)}) == 3
     carried = [n for n, _t in forms[0].signature()[0]]
-    assert [n for n, _t in first.signature()[0]] == [n for n in carried if n not in ("dead", "tot")]
+    assert [n for n, _t in first.signature()[0]] == [n for n in carried if n not in dict(rowk.CARRY8)]
 
 
 def test_the_layout_proves_each_rows_pieces_with_its_tiles():
@@ -295,12 +295,13 @@ def test_the_ports_are_each_pieces_committed_rows(shape):
 
 def test_each_row_is_its_elements_bits():
     """The cut's rows' words (`leaves.words_pc8_head` …) are `rowleaf.bit_row`'s of their elements in their pieces'
-    output order, of the schema's word count, and the head's pad and the ok row are constants in gates."""
+    output order, of the schema's word count, and the head's pad, pc8-carry's zero fill and the ok row are constants in
+    gates."""
     ep, tot, c8 = list(range(1, 33)), [0x3F800000 + i for i in range(32)], [(7 * i) & 0xFF for i in range(128)]
     c4, sc = [i & 0xF for i in range(128)], [(3 * i) & 0xFF for i in range(8)]
     rows = {"pc8-head": (L.words_pc8_head(0x40490FDB, ep, 1 << 63 | 5, 1, 0),
                          bit_row(([0x40490FDB], 32), (ep, 8), ([1 << 63 | 5], 64), ([1], 1), ([0], 1), ([0], 14))),
-            "pc8-carry": (L.words_pc8_carry(17, tot), bit_row(([17], 32), (tot, 32))),
+            "pc8-carry": (L.words_pc8_carry(17, tot), bit_row(([17], 32), (tot, 32), ([0] * rowk.FILL8, 16))),
             "fp8-codes": (L.words_fp8_codes(c8), bit_row((c8, 8))),
             "pc4-head": (L.words_pc4_head(0x3E000000, 0x38), bit_row(([0x3E000000], 32), ([0x38], 8), ([0], 8))),
             "pc4-carry": (L.words_pc4_carry(tot), bit_row((tot, 32))),
@@ -317,6 +318,19 @@ def test_each_row_is_its_elements_bits():
     head = rowk.pieces8(256, 128, "sm120", "a")[0].body
     pad = head.nodes[head.ret[len(head.ret) - 1][1]]
     assert (pad.fn.family, pad.fn.evaluate()) == ("Const", 0)
+    _head, first, forms, _tail = rowk.pieces8(256, 128, "h100", "b")
+    for form in (first, *forms):
+        b = form.body
+        fill = [b.ret[i][1] for i in range(len(b.ret) - rowk.FILL8, len(b.ret))]
+        assert {(b.nodes[n].fn.family, b.nodes[n].fn.evaluate()) for n in fill} == {("Const", 0)}
+
+
+def test_each_cut_row_is_short_or_whole_blocks():
+    """At the deployed row_k each cut row is one SHA-512 block with its padding (at most 55 words) or whole blocks (64 |
+    words), the v2 rows C-Flock's widened scope takes."""
+    for row in ("pc8-head", "pc8-carry", "fp8-codes", "pc4-head", "pc4-carry", "nvfp4-codes"):
+        n = L.ROW_WORDS[row](rowk.ROW_K)
+        assert 2 * n + 17 <= 128 or n % 64 == 0, (row, n)
 
 
 def _anchors(shape):

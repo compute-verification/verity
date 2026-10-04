@@ -34,8 +34,8 @@ of one row's units (k is the segment's length where the row is a segment's):
     pc8-head (pouw/row-pc8-head/v1)       α (two words), E′'s 32 E4M3 codes two per word, θ (four    23
                                           words), then a word whose bit 0 is the finite bit, bit 1
                                           the floor bit and bits 2-15 zero
-    pc8-carry (pouw/row-pc8-carry/v1)     the dead count so far (two words), then the 32 chains'     66
-                                          totals so far (FP32 words, two each)
+    pc8-carry (pouw/row-pc8-carry/v1)     the dead count so far (two words), the 32 chains' totals   128
+                                          so far (FP32 words, two each), then 62 zero words
     fp8-codes (pouw/row-fp8-codes/v1)     a segment's k E4M3 codes two per word                      k/2
     pc4-head (pouw/row-pc4-head/v1)       α (two words), then a word whose low byte is a_E and       3
                                           high byte zero
@@ -43,12 +43,15 @@ of one row's units (k is the segment's length where the row is a segment's):
     nvfp4-codes (pouw/row-nvfp4-codes/v1) a segment's k E2M1 codes four per word, then its k/16      k/4 + k/32
                                           UE4M3 scale bytes two per word
 
+At the deployed row_k (2,048) each of the six is short (one block with SHA-512's padding: at most 55 words) or whole
+blocks (a multiple of 64 words), the v2 rows C-Flock's widened scope takes; pc8-carry's zero words are for that.
+
 nvfp4-p's codes and scales are `rowleaf.nvfp4_row_bytes`' bytes, and every row's bytes are `rowleaf.bit_row`'s of its
 elements.  Which unit ports make up each row is `pc4.PORTS` and `pc8.PORTS`, and `rowk.PORTS4` and `rowk.PORTS8` for the
-cut.  `words_*` are each row's words from its elements, and `commit` and
-`tree_leaf` a row's commit string and tree leaf; ``tests/vectors/pouw_rows.json`` pins them, and C-Flock's tests recompute
-every vector through its ports (``backends/flock/tests/test_pouw_rows.py``).  The anchored inputs are no row: they are
-public input regions (`anchors.region_words`).
+cut.  `words_*` are each row's words from its elements, and `commit` and `tree_leaf` a row's commit string and tree leaf;
+``tests/vectors/pouw_rows.json`` pins them, and C-Flock's tests recompute every vector through its ports
+(``backends/flock/tests/test_pouw_rows.py``).  The anchored inputs are no row: they are public input regions
+(`anchors.region_words`).
 
 An admission value has one ok leaf only while the word's bits 1-15 are zero, and no row check sees them: C-Flock's and the
 Lean verifier's hash a hidden row's bits as given.  So the row unit that writes the row returns the word (`OK`), not the bit,
@@ -84,7 +87,7 @@ SCHEMAS = {"bf16": "pouw/row-bf16/v1", "fp32": "pouw/row-fp32/v1", "nvfp4-p": "p
            "nvfp4-codes": "pouw/row-nvfp4-codes/v1"}
 ROW_WORDS = {"bf16": lambda k: k, "fp32": lambda k: 2 * k, "nvfp4-p": lambda k: k // 4 + k // 32 + P_WORDS,
              "fp8-p": lambda k: k // 2 + P_WORDS, "ok": lambda k: 1, "tile": lambda k: 16,
-             "pc8-head": lambda k: 23, "pc8-carry": lambda k: 66, "fp8-codes": lambda k: k // 2, "pc4-head": lambda k: 3,
+             "pc8-head": lambda k: 23, "pc8-carry": lambda k: 128, "fp8-codes": lambda k: k // 2, "pc4-head": lambda k: 3,
              "pc4-carry": lambda k: 64, "nvfp4-codes": lambda k: k // 4 + k // 32}
 #: each row's frame-leaf schema as C-Flock commits it: rows of 16-bit elements v1, packed rows, the admission bit, the
 #: tile digest and the cut's rows v2
@@ -178,7 +181,8 @@ def words_pc8_head(alpha: int, ep: Sequence[int], th: int, finite: int, floor: i
 def words_pc8_carry(dead: int, tot: Sequence[int]) -> list[int]:
     if len(tot) != C.R:
         raise ValueError("a pc8-carry row is the dead count and 32 FP32 totals")
-    return _halves(dead, 2) + words_fp32(tot)
+    words = _halves(dead, 2) + words_fp32(tot)
+    return words + [0] * (ROW_WORDS["pc8-carry"](0) - len(words))
 
 
 def words_fp8_codes(codes: Sequence[int]) -> list[int]:
