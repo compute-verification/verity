@@ -188,11 +188,14 @@ class KeyedFill:
         """The least time in which any byte of `F_K` can be computed: a page's `page_keccak_f` at `KECCAK_F_NS`."""
         return page_keccak_f(self.page_bytes) * KECCAK_F_NS
 
+    def tweak(self, p: int) -> bytes:
+        """Page `p`'s tweak, `K ‖ u64(p)` little-endian."""
+        return self.key.value + p.to_bytes(8, "little")
+
     def page(self, p: int) -> bytes:
         if not 0 <= p < self.pages:
             raise IndexError(f"page {p} is outside 0..{self.pages - 1}")
-        tweak = self.key.value + p.to_bytes(8, "little")
-        whole = _feistel(self.page_bytes).forward(0, tweak).to_bytes(self.page_bytes, "little")
+        whole = _feistel(self.page_bytes).forward(0, self.tweak(p)).to_bytes(self.page_bytes, "little")
         return whole[:self.size - p * self.page_bytes]
 
     def chunks(self) -> Iterator[bytes]:

@@ -1,17 +1,23 @@
 """The secure-erasure difftest's cases (`test_pous_erasure_difftest.py`): each one a prover's script, the verifier
-`verity_pous.erasure.ErasureVerifier` run on it, and its line for the Lean model's accept rule, `Pous.eraseWins`
+`verity_pous.erasure.ErasureVerifier` run on it, and its line for the Lean model's accept rule over distinct reads of
+the page fill, `Pous.eraseWinsDraw` with `Pous.distinctReads` on `Pous.PageFill`'s fill
 (`tests/lean/PousErasureCheck.lean`).
 
-A case fixes the audit (`M`, `s`, the page size, `T_fill`, `T_read`, the verifier's secret) and what the prover does
-at each step: answer right, answer wrong, or not answer, after a delay on the verifier's clock.  `run` drives the
-verifier through `run_erasure` with the prover computing `F_K` from the fill challenge, over a transport that either
-gives up at each deadline or delivers a late answer anyway (`eager`).  `line` writes the same case as Lean reads it:
+A case fixes the audit (`M`, `s`, the page size, `T_fill`, `T_read`, `T_round`, the verifier's secret) and what the
+prover does at each step: answer right, answer wrong, or not answer, after a delay on the verifier's clock, and how long
+the caller waits after each answer before it reveals the next read.  `run` drives the verifier with the prover
+computing `F_K` from the fill challenge, over a transport that either gives up at each deadline or delivers a late
+answer anyway (`eager`): through `run_erasure` when the caller never waits, else by hand with the waits.  `line` writes
+the same case as Lean reads it:
 
-    Tfill Tread s M pageBytes g z fAnswered fTime n d_1 … d_n F_0 … F_(M−1) (i a v t)×s
+    Tfill Tread Tround s M pageBytes g z fAnswered fTime n d_1 … d_n K_0 … K_31 R (T_0 … T_39 X_0 … X_(pageBytes−1))×R
+      (i a v t r)×s
 
-with `(g, z)` the digest key, `d` the `n` bytes of the prover's digest, `F` the fill, the `s` reads at the indices the
-verifier draws (`spot_indices`), and a missing answer as `a = 0`.  The digest the fill must have is not in the line:
-Lean computes it, with `Pous.Digest.digest`.
+with `(g, z)` the digest key, `d` the `n` bytes of the prover's digest, `K` the fill key, the `R` pages of the fill
+each as its tweak `T` (`KeyedFill.tweak`) and its whole page `X`, the `s` reads at the indices the verifier draws
+(`spot_indices`) with the prover's answer `v` and a missing answer as `a = 0`, and `r` the time from the read before's
+reveal to this one's (0 for the first).  The fill and the digest it must have are not in the line: Lean computes them,
+with `PageFill` from the pages and `Pous.Digest.digest`.
 
 `uv run python tests/pous_erasure_cases.py` (from `protocols/pous`, with Lean's toolchain, elan, on the PATH) builds
 the Lean modules the check imports, runs it on every line, and rewrites `fixtures/lean_erasure_verdicts.json` with
@@ -44,13 +50,15 @@ HERE = Path(__file__).resolve().parent
 FIXTURE = HERE / "fixtures" / "lean_erasure_verdicts.json"
 LEAN_CHECK = HERE / "lean" / "PousErasureCheck.lean"
 LEAN_PACKAGE = HERE.parent / "lean"
-LEAN_MODULES = ("Pous.Protocol.Model.SecureErasure", "Pous.Protocol.Model.Digest")
-"""The modules whose definitions the check evaluates: `eraseWins` and the game's types, and `Digest.digest`."""
+LEAN_MODULES = ("Pous.Protocol.Model.SecureErasure", "Pous.Protocol.Model.ReadDraw", "Pous.Protocol.Model.PageFill",
+                "Pous.Protocol.Model.Digest")
+"""The modules whose definitions the check evaluates: `eraseWinsDraw`, `distinctReads` and the game's types, the page
+fill's `tweak`, `page`, `byte` and `pageScheme`, and `Digest.digest`."""
 LEAN_FILES = (LEAN_CHECK, *(LEAN_PACKAGE / (m.replace(".", "/") + ".lean") for m in LEAN_MODULES))
 """The Lean files that define the verdicts, pinned by digest in the fixture: a change to the rule fails the difftest
 until the verdicts are regenerated."""
 
-SEED = "pous-erasure-difftest/v1"
+SEED = "pous-erasure-difftest/v2"
 COUNT = 12_000
 PAGES = (16, 32, 64, 128)
 
@@ -61,11 +69,13 @@ DIGEST_FLIP, DIGEST_SHORT, DIGEST_LONG, DIGEST_ZERO = 1, 2, 3, 4
 
 @dataclass(frozen=True)
 class Step:
-    """The prover's answer to one step: `RIGHT`, `WRONG` (changed by `wrong`) or `DROP`, `delay` after the send."""
+    """The prover's answer to one step: `RIGHT`, `WRONG` (changed by `wrong`) or `DROP`, `delay` after the send; and
+    for a read after the first, `gap`, how long the caller waits after the read before closes to reveal this one."""
 
     kind: str
     delay: int = 0
     wrong: int = 0
+    gap: int = 0
 
 
 @dataclass(frozen=True)
@@ -76,6 +86,7 @@ class Case:
     page_bytes: int
     fill_deadline: int
     read_deadline: int
+    round_deadline: int
     eager: bool
     fill: Step
     reads: tuple[Step, ...]
@@ -95,6 +106,12 @@ def answer(step: Step, right, change):
     return right if step.kind == RIGHT else change(step.wrong, right)
 
 
+def reveal_gap(case: Case, j: int) -> int:
+    """The time from read `j − 1`'s reveal to read `j`'s, when read `j − 1` was answered in time: its delay and then the
+    caller's wait.  0 for the first read."""
+    return 0 if j == 0 else case.reads[j - 1].delay + case.reads[j].gap
+
+
 def _step(rng: random.Random, deadline: int, faulty: bool, digest: bool) -> Step:
     if not faulty:
         return Step(RIGHT, rng.choice([0, deadline, rng.randrange(deadline + 1)]))
@@ -109,12 +126,27 @@ def _step(rng: random.Random, deadline: int, faulty: bool, digest: bool) -> Step
     return Step(WRONG, rng.choice([0, deadline, rng.randrange(deadline + 1), late]), wrong)
 
 
+def _read(rng: random.Random, t_read: int, t_round: int, faulty: bool, prev: Step | None) -> Step:
+    """A read's step and the caller's wait before its reveal: none, up to, exactly at, or (a fault) past `T_round`."""
+    if prev is None:
+        return _step(rng, t_read, faulty, False)
+    slack = max(0, t_round - prev.delay)
+    if faulty and rng.random() < 0.25:
+        on_time = rng.choice([0, t_read, rng.randrange(t_read + 1)])
+        return Step(RIGHT, on_time, gap=slack + 1 + rng.choice([0, rng.randrange(10**6)]))
+    step = _step(rng, t_read, faulty, False)
+    gap = rng.choice([0, 0, 0, slack, rng.randrange(slack + 1)])
+    return Step(step.kind, step.delay, step.wrong, gap)
+
+
 def _case(rng: random.Random, n: int) -> Case:
     page = rng.choice(PAGES)
-    size = rng.randrange(1, 81)
+    size = rng.randrange(1, 81) if rng.random() < 0.5 else page * rng.randrange(1, 4)
     s = rng.randrange(1, min(size, 8) + 1)
     recompute = page_keccak_f(page) * KECCAK_F_NS
-    t_read = rng.choice([0, 1, recompute - 1, rng.randrange(recompute)])
+    half = (recompute - 1) // 2
+    t_read = rng.choice([0, 1, half, rng.randrange(half + 1)])
+    t_round = rng.choice([t_read, recompute - 1 - t_read, rng.randrange(t_read, recompute - t_read)])
     t_fill = rng.choice([0, 1, t_read, rng.randrange(10**3), rng.randrange(10**7)])
     mode = rng.choices(["honest", "one-fault", "random"], [3, 4, 3])[0]
     bad = rng.randrange(s + 1) if mode == "one-fault" else None
@@ -123,8 +155,10 @@ def _case(rng: random.Random, n: int) -> Case:
         return k == bad if mode == "one-fault" else mode == "random" and rng.random() < 0.15
 
     fill = _step(rng, t_fill, faulty(s), True)
-    reads = tuple(_step(rng, t_read, faulty(j), False) for j in range(s))
-    return Case(b"case-%d" % n, size, s, page, t_fill, t_read, rng.random() < 0.5, fill, reads)
+    reads: list[Step] = []
+    for j in range(s):
+        reads.append(_read(rng, t_read, t_round, faulty(j), reads[-1] if j else None))
+    return Case(b"case-%d" % n, size, s, page, t_fill, t_read, t_round, rng.random() < 0.5, fill, tuple(reads))
 
 
 def cases(count: int = COUNT, seed: str = SEED) -> list[Case]:
@@ -141,13 +175,16 @@ def truth(case: Case) -> tuple[KeyedFill, tuple[int, ...]]:
 
 def line(case: Case) -> str:
     fill, indices = truth(case)
-    memory = b"".join(fill.chunks())
+    whole = KeyedFill(fill.key, fill.pages * fill.page_bytes, fill.page_bytes)
     f = case.fill
     digest = answer(f, fill.digest(), wrong_digest) if f.kind != DROP else b""
-    out = [case.fill_deadline, case.read_deadline, case.spot_reads, case.size, case.page_bytes, *fill.digest_key,
-           int(f.kind != DROP), f.delay, len(digest), *digest, *memory]
-    for i, step in zip(indices, case.reads, strict=True):
-        out += [i, int(step.kind != DROP), answer(step, memory[i], wrong_byte) if step.kind != DROP else 0, step.delay]
+    out = [case.fill_deadline, case.read_deadline, case.round_deadline, case.spot_reads, case.size, case.page_bytes,
+           *fill.digest_key, int(f.kind != DROP), f.delay, len(digest), *digest, *fill.key.value, fill.pages]
+    for p in range(fill.pages):
+        out += [*fill.tweak(p), *whole.page(p)]
+    for j, (i, step) in enumerate(zip(indices, case.reads, strict=True)):
+        v = answer(step, fill.at(i), wrong_byte) if step.kind != DROP else 0
+        out += [i, int(step.kind != DROP), v, step.delay, reveal_gap(case, j)]
     return " ".join(map(str, out))
 
 
@@ -160,12 +197,12 @@ class Clock:
 
 
 def run(case: Case, module: ModuleType = erasure) -> tuple[bool, tuple[int, ...]]:
-    """`module.ErasureVerifier` through `module.run_erasure` on `case`: whether it accepts, and the indices it
-    revealed.  `module` is `verity_pous.erasure` or a mutant of it; the prover's `F_K` is always the real one."""
+    """`module.ErasureVerifier` on `case`: whether it accepts, and the indices it revealed.  `module` is
+    `verity_pous.erasure` or a mutant of it; the prover's `F_K` is always the real one."""
     clock, held, queue = Clock(), [], []
     v = module.ErasureVerifier(case.size, case.spot_reads, fill_deadline_ns=case.fill_deadline,
-                               read_deadline_ns=case.read_deadline, source=case.source, page_bytes=case.page_bytes,
-                               clock=clock)
+                               read_deadline_ns=case.read_deadline, round_deadline_ns=case.round_deadline,
+                               source=case.source, page_bytes=case.page_bytes, clock=clock, research=True)
 
     def send(msg):
         if isinstance(msg, module.FillChallenge):
@@ -186,8 +223,36 @@ def run(case: Case, module: ModuleType = erasure) -> tuple[bool, tuple[int, ...]
         clock.now = max(clock.now, until + 1)
         return None
 
-    result = module.run_erasure(v, send, receive)
-    return result.accepted, tuple(r.index for r in result.reads)
+    if any(r.gap for r in case.reads):
+        result = _run_with_waits(case, v, module, clock, send, receive)
+    else:
+        result = module.run_erasure(v, send, receive)
+    return result.accepted, tuple(r.index for r in result.reads if r.index is not None)
+
+
+def _run_with_waits(case, v, module, clock, send, receive):
+    """`run_erasure`'s loop, with the caller waiting `case.reads[j].gap` before it reveals read `j`."""
+    send(v.fill_challenge())
+    while v.closes_at is not None:
+        reply = receive(v.closes_at)
+        if isinstance(reply, module.DigestReply):
+            v.receive_digest(reply.digest)
+        elif reply is None or v.overdue:
+            v.expire()
+    while not v.done:
+        clock.now += case.reads[len(v.reads)].gap
+        try:
+            j, i = v.challenge()
+        except module.Lapsed:
+            break
+        send(module.ReadChallenge(j, i))
+        while v.pending == j:
+            reply = receive(v.closes_at)
+            if isinstance(reply, module.ReadReply) and reply.j == j:
+                v.respond(j, reply.value)
+            elif reply is None or v.overdue:
+                v.expire()
+    return v.result()
 
 
 def cases_digest(lines: list[str]) -> str:
