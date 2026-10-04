@@ -5,8 +5,7 @@ quant, the w2 launch), at the Qwen3-30B-A3B TP2 rank shapes, on a cc 12.0 target
 It checks that the scope claims every event, binds both quants as `Fp8GroupQuant_v1{K,64}` and both launches as the block-FP8 pair forms
 with the target's e4m3 step, with operand rows the Definitions' parameters fit; and that it refuses, by name, a missing attestation, a
 bf16 launch, another block, another quant group, column-major or 128-grid scales, the fused SiLU-quant, a missing quant, and a target
-with no e4m3 step: cc 12.0 itself until blackwell_consumer records the step (`GemmTarget.fp8_moe_dot`; the `sm120_moe_step` fixture
-records it here).
+with no e4m3 step.
 """
 from __future__ import annotations
 
@@ -23,7 +22,6 @@ from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHea
 from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Shared, StepContext, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import gemm_targets as GT
 from verity_vllm.program.registry import targets as T
 
 Q3 = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN3_30B_A3B_tp2")
@@ -166,13 +164,6 @@ def _ctx(start: StepStart, *, target: TargetProfile | None = SM120, experts: str
     return StepContext(header, start, None, [], roots, C, profile or fp8_profile())
 
 
-@pytest.fixture
-def sm120_moe_step(monkeypatch):
-    """blackwell_consumer with the Triton fused-MoE e4m3 step recorded, as its registration with P1's evidence will record it."""
-    gt = dataclasses.replace(GT.REGISTERED["blackwell_consumer"], fp8_moe_dot="BlackwellE4m3QmmaDot32")
-    monkeypatch.setitem(GT.REGISTERED, "blackwell_consumer", gt)
-
-
 def _resolve(M: int, *, ctx_kw: dict | None = None, **kw):
     start = StepStart(0, [("r0", p) for p in range(M)], list(range(M)), list(range(M)), {"r0": M}, {"r0": 0}, {"r0": [0, 1, 2, 3]}, 16,
                       list(range(M)), [("r0", M - 1)], [M - 1], 1, M, M, None, None, "prefill")
@@ -188,7 +179,7 @@ def _fits(c: Compute) -> bool:
 
 
 @pytest.mark.parametrize("M,naive", [(2, True), (3, False), (32, False)])
-def test_block_fp8_scope_folds_both_quants_and_both_pair_forms_on_the_target_s_e4m3_step(M, naive, sm120_moe_step):
+def test_block_fp8_scope_folds_both_quants_and_both_pair_forms_on_the_target_s_e4m3_step(M, naive):
     res, se = _resolve(M, naive=naive)
     assert len(res) == 1 and isinstance(res[0], Group), res
     g = res[0]
@@ -239,18 +230,10 @@ def test_block_fp8_scope_folds_both_quants_and_both_pair_forms_on_the_target_s_e
     ({}, {"target": TargetProfile(compute_capability=(9, 0), num_sms=132, moe_backend="triton")}, "no registered e4m3 step"),
     ({}, {"target": TargetProfile(compute_capability=(8, 9), num_sms=128, moe_backend="triton")}, "no registered e4m3 step"),
 ])
-def test_block_fp8_scope_refuses_by_name(kw, ctx_kw, needle, sm120_moe_step):
+def test_block_fp8_scope_refuses_by_name(kw, ctx_kw, needle):
     res, _ = _resolve(3, ctx_kw=ctx_kw, **kw)
     bad = [r for r in res if isinstance(r, Unsupported)]
     assert bad and needle in bad[0].reason, [getattr(r, "reason", r) for r in res]
-
-
-def test_cc12_refuses_the_block_fp8_scope_until_its_step_is_recorded():
-    res, _ = _resolve(3)
-    bad = [r for r in res if isinstance(r, Unsupported)]
-    assert bad and "blackwell_consumer (12.0): no registered e4m3 step (GemmTarget.fp8_moe_dot)" in bad[0].reason, \
-        [getattr(r, "reason", r) for r in res]
-    assert not [r for r in res if isinstance(r, Group)]
 
 
 def test_the_bf16_scope_does_not_claim_a_block_fp8_scope():
@@ -258,7 +241,7 @@ def test_the_bf16_scope_does_not_claim_a_block_fp8_scope():
     assert [r for r in res if isinstance(r, Unsupported)] and not [r for r in res if isinstance(r, Group)]
 
 
-def test_the_block_fp8_constructions_are_the_pairwise_ones(sm120_moe_step):
+def test_the_block_fp8_constructions_are_the_pairwise_ones():
     assert MOE_FP8_CONSTRUCTION_PATTERNS == {"indexed-read": MoEFusedExpertsFp8, "indexed-read-ordered": MoEFusedExpertsFp8Ordered}
     res, _ = _resolve(2, naive=True, ctx_kw={"profile": fp8_profile(MoEFusedExpertsFp8)})
     assert isinstance(res[0], Group) and [p.spec.name for p in res[0].parts if isinstance(p, Compute)][0] == "MoeRouterTopKNorm"

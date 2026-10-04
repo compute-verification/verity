@@ -3,7 +3,6 @@
 routed expert's rows, the expert stack and its block scales are weight Inputs with their roles, and every pin refuses by name."""
 from __future__ import annotations
 
-import dataclasses
 import json
 
 import numpy as np
@@ -19,7 +18,6 @@ from verity_vllm.program.frontend.rules.vllm_moe import MOE_GEMM_PINS
 from verity_vllm.program.frontend.rules.vllm_moe_fp8 import MOE_FP8_CONSTEXPRS
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels.fp8_moe_rows import moe_expert_fp8_block_row
-from verity_vllm.program.registry import gemm_targets as GT
 from verity_vllm.program.registry.serve3_reference import materialize
 
 E, M, TOPK, K, N, G = 3, 2, 2, 64, 40, 32
@@ -32,19 +30,11 @@ DOT = "BlackwellE4m3QmmaDot32_v1"
 
 
 @pytest.fixture
-def observing():
+def on_target():
     saved = dict(VB._OBSERVED)
     yield VB.observe_target_profile
     VB._OBSERVED.clear()
     VB._OBSERVED.update(saved)
-
-
-@pytest.fixture
-def on_target(observing, monkeypatch):
-    """`observing`, with blackwell_consumer's Triton fused-MoE e4m3 step recorded as its registration with P1's evidence will record it."""
-    gt = dataclasses.replace(GT.REGISTERED["blackwell_consumer"], fp8_moe_dot="BlackwellE4m3QmmaDot32")
-    monkeypatch.setitem(GT.REGISTERED, "blackwell_consumer", gt)
-    return observing
 
 
 def _e4m3(rng, *shape) -> np.ndarray:
@@ -158,10 +148,9 @@ def test_scales_on_another_block_grid_refuse(on_target):
     assert "FusedMoeKernelFp8[vllm-moe]_v1: scale shapes" in hint and f"want ({E}, {NB}, {KG})" in hint, hint
 
 
-@pytest.mark.parametrize("cc", [(9, 0), (8, 9), (12, 0)])
-def test_a_target_without_an_e4m3_step_refuses_by_name(cc, observing):
-    """cc 12.0 among them until blackwell_consumer records the step (`GemmTarget.fp8_moe_dot`)."""
-    observing(TargetProfile(compute_capability=cc))
+@pytest.mark.parametrize("cc", [(9, 0), (8, 9)])
+def test_a_target_without_an_e4m3_step_refuses_by_name(cc, on_target):
+    on_target(TargetProfile(compute_capability=cc))
     hint = _hint(_derive(_Launch(True), _inputs(True)))
     assert "FusedMoeKernelFp8[vllm-moe]_v1: numerics_unregistered: block-FP8 fused-MoE experts on" in hint and "no registered e4m3 step" in hint, hint
 

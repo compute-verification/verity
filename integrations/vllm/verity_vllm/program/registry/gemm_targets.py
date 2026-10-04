@@ -122,13 +122,15 @@ class GemmTarget:
     fp8_scale_order: str | None = None
     #: the blockwise FP8 linear (`CutlassFp8BlockScaledMMKernel`: `_C.cutlass_scaled_mm` over [.., K/G] x [K/G, cdiv(N, G)] scales), as
     #: measured: its e4m3 k32 step (`targets.FP8_DOTS`; `targets.scaled_mm_fp8_block_spec` binds the GEMM over it).  hopper's is the step
-    #: `ScaledMmFp8Block_v1` and its shared-scale form hard-code, pinned on the H100 (their conformance, `registry.fp8`); None = that
-    #: kernel has no registered Definition on this target, and the blockwise FP8 linear is refused by name.
+    #: `ScaledMmFp8Block_v1` and its shared-scale form hard-code, pinned on the H100 (their conformance, `registry.fp8`); blackwell_consumer's
+    #: is measured by property blackwell_fp8_capture (`evidence`); None = that kernel has no registered Definition on this target, and the
+    #: blockwise FP8 linear is refused by name.
     fp8_block_dot: str | None = None
     #: the block-FP8 fused-MoE experts (`TritonExperts`: `fused_moe_kernel` with `use_fp8_w8a8` over [M, K/G] x [E, cdiv(N, G), K/G]
     #: scales), as measured: the e4m3 k32 step of its `tl.dot` (`targets.FP8_DOTS`; `targets.moe_expert_fp8_gemm_spec` binds each
-    #: (token, slot) pair over it).  None = that kernel has no registered Definition on this target, and the block-FP8 experts are
-    #: refused by name (cc 9.0's GLM-5.3 experts bind the Hopper-step `_v1` forms through their capture map, not this record).
+    #: (token, slot) pair over it); blackwell_consumer's is measured by property blackwell_fp8_capture (`evidence`).  None = that kernel
+    #: has no registered Definition on this target, and the block-FP8 experts are refused by name (cc 9.0's GLM-5.3 experts bind the
+    #: Hopper-step `_v1` forms through their capture map, not this record).
     fp8_moe_dot: str | None = None
     #: the NVFP4 (W4A4) linear (`CutlassNvFp4LinearKernel`: `cvt_fp16_to_fp4` then the block-scaled GEMM), as measured (`evidence`):
     #: its k64 block-scaled step (`targets.FP4_DOTS`); None = not recorded on this target.
@@ -203,7 +205,7 @@ REGISTERED: dict[str, GemmTarget] = {
     "blackwell_consumer": GemmTarget(
         key="blackwell_consumer", compute_capabilities=((12, 0),), vllm_arch_family=None, dot="HopperBF16WgmmaDot16", tuned_table={},
         kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}", fp8_dot="BlackwellE4m3QmmaDot32", fp8_scale_order="no_swap",
-        fp4_dot="BlackwellNvf4OmmaDot64",
+        fp8_block_dot="BlackwellE4m3QmmaDot32", fp8_moe_dot="BlackwellE4m3QmmaDot32", fp4_dot="BlackwellNvf4OmmaDot64",
         evidence=("core verity.ml.tc.instructions: the cc 12.0 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 entry is pinned to "
                   "HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; dossier art:b87e5a5b4dfaa5e4cfc501fa834df2c968e5ce3d53839660e37a42a2525218d2, "
                   "run r20260922-182911-1f10: 204,800/204,800 elements, the Ampere/Ada pipeline fails 48,569 of them)",
@@ -224,7 +226,24 @@ REGISTERED: dict[str, GemmTarget] = {
                   "r20260930-081238-476e); the step is pinned (trust dossier "
                   "art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89)",
                   "the NVFP4 linear: both checkpoint formats run CutlassNvFp4LinearKernel, whose only MMA is OMMA.SF.16864.F32.E2M1.E2M1."
-                  "UE4M3.4X, the pinned block-scaled step (attention lane, art:3bc1b2c4)")),
+                  "UE4M3.4X, the pinned block-scaled step (attention lane, art:3bc1b2c4)",
+                  "the blockwise FP8 linear: property blackwell_fp8_capture (#1000 @ 2fd4e257f) on "
+                  "an RTX PRO 6000 (cc 12.0, 188 SMs, driver 580.173.02), run r20261003-220018-3f6a, record 0d346c79c642a0a1, verdicts "
+                  "out/verdicts.jsonl: its cutlass/* cases, CutlassFp8BlockScaledMMKernel's _C.cutlass_scaled_mm at G 128 on one TP8 rank of the "
+                  "235B-A22B FP8 checkpoint, qkv_proj (K 4096, N 1280) and o_proj (K 1024, N 4096) x M in {1, 2, 64, 65, 256, 257, 300} (cc 12.0's "
+                  "swap-AB, pingpong and cooperative dispatch, three kernels): 5,080,320 words, every one equal to K/128 tiles of 4 chained "
+                  "BlackwellE4m3QmmaDot32_v1 steps from +0, acc = fma(d, s_x * s_w, acc), RN to bf16 (ScaledMmFp8Block_v3{DOT="
+                  "BlackwellE4m3QmmaDot32_v1}); Hopper's step misses 30,354 words, the Triton scale orders 13,159 and 13,278, an unfused mul + "
+                  "add 13,222; the activation quant it reads, quant/K4096/G128 and quant/K1024/G128, exact against Fp8GroupQuant_v1",
+                  "the block-FP8 fused-MoE experts: property blackwell_fp8_capture's run r20261003-220018-3f6a (record 0d346c79c642a0a1), "
+                  "its moe/* cases, fused_experts (E 128, top 8, hidden 4096, I 192) under TritonExperts at block [64, 64], every "
+                  "fused_moe_kernel launch at 64x64x32 without swap-AB: moe/decode, moe/small, "
+                  "moe/block and moe/prefill (1, 8, 64 and 256 tokens) 35,840 + 286,720 + 2,293,760 + 9,175,040 = 11,791,360 words of w13 "
+                  "and w2, every one equal to K/32 tiles of one BlackwellE4m3QmmaDot32_v1 step from +0, acc = fma(d * s_x, s_w, acc), the routed "
+                  "weight's mul on w2, RN to bf16 (MoeExpertFp8BlockGemm(W)_v3{G=64,KB=32,SWAP=False,DOT=BlackwellE4m3QmmaDot32_v1}); Hopper's "
+                  "step misses 3,942 words, the swapped scale order 577, CUTLASS's 568, an unfused mul + add 575; the expert inputs' quant, "
+                  "quant/K4096/G64 and quant/K192/G64 (300 rows each), exact against Fp8GroupQuant_v1{G=64}; the run's 21,952,000 words, "
+                  "0 mismatched")),
 }
 
 
