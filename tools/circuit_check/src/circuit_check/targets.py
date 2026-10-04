@@ -62,6 +62,7 @@ def load_registries() -> None:
     import verity_pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
     import verity_pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
     import verity_pouw.circuit.rowk  # noqa: F401  (both tile checks' row units cut along k)
+    import verity_pouw.circuit.tilesub  # noqa: F401  (both tile checks' tile units cut into sub-tiles)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -205,11 +206,13 @@ def _pouw_roots() -> list[Any]:
     digest, `verity_pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes.  The row units cut along k
     (`verity_pouw.circuit.rowk`, ``Shape.row_k``) in two segments: Pearl-C4's pieces at k = 128 and its roots, Pearl-C's
     pieces at k = 256 on the H100's and sm_120's records and at k = 64 unpromoted, and its roots on sm_120's, plain and
-    hiding."""
+    hiding.  The tile units cut into sub-tiles (`verity_pouw.circuit.tilesub`, ``Shape.tile_sub``): a tile's digest units
+    (`leaves.PearlRowChunks`, `PearlTileLeaf`) at a partial chunk and at two sub-tiles a row, and each scheme's call and
+    check roots on a 1 × 2 tile of 1 × 1 sub-tiles, without and with the row cut, plain and hiding."""
     from dataclasses import replace
 
     from verity.ir.defs import bind
-    from verity_pouw.circuit import ncp2, pc4, pc8, rowk
+    from verity_pouw.circuit import leaves, ncp2, pc4, pc8, rowk
     from verity_vllm.program.registry import pouw_rows
 
     shape = ncp2.Shape(16, 64, 16)
@@ -233,6 +236,12 @@ def _pouw_roots() -> list[Any]:
     for mod, s in ((pc4, pc4.Shape(1, 128, 1, tile=(1, 1), row_k=64)),
                    (pc8, pc8.Shape(1, 256, 1, tile=(1, 1), dev="sm120", row_k=128))):
         cut += [build(replace(s, hidden=h)) for h in (False, True) for build in (mod.weight, mod.call, mod.check)]
+    cut += [leaves.row_chunks(1, 1), leaves.row_chunks(4, 2), leaves.tile_leaf(2, 4)]
+    for mod, s in ((pc4, pc4.Shape(1, 64, 2, tile=(1, 2), tile_sub=(1, 1))),
+                   (pc4, pc4.Shape(1, 128, 2, tile=(1, 2), row_k=64, tile_sub=(1, 1))),
+                   (pc8, pc8.Shape(1, 128, 2, tile=(1, 2), dev="sm120", tile_sub=(1, 1))),
+                   (pc8, pc8.Shape(1, 256, 2, tile=(1, 2), dev="sm120", row_k=128, tile_sub=(1, 1)))):
+        cut += [build(replace(s, hidden=h)) for h in (False, True) for build in (mod.call, mod.check)]
     seen = {t.id for t in out}
     out += [t for t in cut if t.id not in seen and not seen.add(t.id)]
     return out + [bind(pouw_rows.NcpLinearRow, K=64, N=16), bind(pouw_rows.NcpLinearRowBias, K=64, N=16),
