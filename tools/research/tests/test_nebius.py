@@ -1412,7 +1412,11 @@ def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_
     assert rec["question"] == "Does cov-gm149's Commit validate on vy-nebius-2?"
     r = place(src, gpus="9")
     assert r.returncode == 3 and "refuses" in r.stderr and not r.stdout
-    r = place(tmp_path / "no-cluster")
+    silent = tmp_path / "silent-cluster"     # answers nothing; a missing one would fall through to tools/cluster's editable install
+    (silent / "src" / "cluster").mkdir(parents=True)
+    (silent / "src" / "cluster" / "__init__.py").write_text("")
+    (silent / "src" / "cluster" / "__main__.py").write_text("import sys\nsys.exit('no queue here')\n")
+    r = place(silent)
     assert r.returncode == 0 and not r.stdout and "no placement" in r.stderr
 
 
