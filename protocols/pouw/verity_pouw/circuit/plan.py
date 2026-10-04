@@ -6,7 +6,7 @@ each drawn tile together with its **closure**: its X strip's unit, its strip's d
 strip's path to D_A and the call's key unit, each proved once, and its Y strip's unit in the weight's own Program
 (`NcpWeight`), once per plan. Every other template is drawn at its floor, so a wholly wrong one is caught directly
 (`audit_work_whole_stratum`), and a wrong unit beneath no drawn tile is counted through the unsound tiles beneath it (Lean
-`harm_le_unsoundWork`, `closureLaw_escape`).
+`harm_le_unsoundWork`, `closure_escape`).
 
 **The law is a seam** (`TileLaw`), so the plan switches laws without changing:
 * `CountLaw` is the law on `main` today, one_stage's and #167's stratified law: one stratum per template, a uniform k_s-subset

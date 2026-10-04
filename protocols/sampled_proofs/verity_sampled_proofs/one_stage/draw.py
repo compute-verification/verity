@@ -21,7 +21,7 @@ without replacement inside each, independently.
   own expansion, and the draw carries the law's keys plus `population` and `units`.
 
 **The work law** (Daniel approved work-proportional sizing, Sep 28; the Lean verifier's `Flock.Draw.Law.work`, its bound
-`FlockSoundness.Audit.Work.work_escape_le`): the stratified law's strata and sampler, with each stratum's draw sized by the
+`FlockSoundness.Audit.Law.work_escape_le`): the stratified law's strata and sampler, with each stratum's draw sized by the
 PoUW work its units do. The verifier's work table gives each template's work per unit, a natural number in any fixed unit,
 and its floor f_s >= 1 (`work_table`). With W = sum_s w_s n_s >= 1, stratum s draws
 k_s = min(n_s, max(f_s, ceil(K w_s n_s / W))) (`work_k`), and a work stratum is `{"template", "units", "work", "floor",
