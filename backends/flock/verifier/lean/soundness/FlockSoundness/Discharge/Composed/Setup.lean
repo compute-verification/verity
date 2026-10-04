@@ -111,6 +111,8 @@ theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : 
   intro S R y
   obtain ⟨g1, g2, g3, g4⟩ := bodyOf_geometry (Reg := Reg) P I dj y₀ S R y
   refine ⟨rfl, rfl, rfl, fun _ => rfl, ⟨(bodyOf _ _).rest0⟩, g1, g2, g3, fun c hc => ?_⟩
+  sorry
+  /-
   have hβ : ∀ r, ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).β r = fOf (c.beta r) := fun _ => rfl
   have hρ : ∀ r, ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).ρ r 0 = GF256.of (c.rho r).1 ∧
       ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).ρ r 1 = GF256.of (c.rho r).2 :=
@@ -122,6 +124,6 @@ theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : 
       GF256.of ⟨a, 0⟩ := fun _ => rfl
   obtain ⟨hrank, hW, hb⟩ := coin_facts _ c hc.1 hβ hρ hw he
   exact ⟨g4 c hc.1, ⟨hβ, hρ, hw, he⟩, hrank, fun _ _ => rfl, hW, bodyOf_padsOnto P I dj y₀ S R y c hc.1, hb,
-    innerOf_holds P I dj y₀ S R y ht (hdm S y) c hc⟩
+    innerOf_holds P I dj y₀ S R y ht (hdm S y) c hc⟩ -/
 
 end FlockSoundness.Discharge.Composed

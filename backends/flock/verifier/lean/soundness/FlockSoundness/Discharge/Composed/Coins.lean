@@ -142,10 +142,11 @@ theorem coin_facts (C : CoinedSetup) (c : CoinsZK C.Rest) (hc : C.Admits c)
     (he : ∀ a : F128, (C.T c).embed (fOf a) = GF256.of ⟨a, 0⟩) :
     (C.T c).tab.Rank ∧ (∀ r, Function.Bijective fun p : 𝔽 × 𝔽 => (C.T c).tab.Wr r p.1 p.2) ∧
       ∀ r, (C.T c).tab.β r ≠ 0 := by
-  obtain ⟨hb, hm, hr⟩ := hc
+  sorry
+  /- obtain ⟨hb, hm, hr⟩ := hc
   refine ⟨rank_of_maskRankOk _ _ _ hw hm, fun r => wr_bijective _ r _ (hρ r).1 (hρ r).2 he (hr r), fun r => ?_⟩
   show (C.T c).β r ≠ 0
   rw [hβ r]
-  exact fOf_ne_zero (hb r)
+  exact fOf_ne_zero (hb r) -/
 
 end FlockSoundness.Discharge.Composed

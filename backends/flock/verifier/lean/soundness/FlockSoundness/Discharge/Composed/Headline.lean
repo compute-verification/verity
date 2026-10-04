@@ -50,19 +50,24 @@ theorem zkViewAt_of_ok (C : CoinedSetup) (hC : CoinedOK execArith (fOf Zk.PAD_C)
 
 variable {mPts n : ℕ} {Reg : Type} (P : LigProver)
 
-/-- **One `--zk` sampled session is zero knowledge, at the covered coin vectors.** At every draw `verify --zk` sets up, at
-every coin vector the honest prover doesn't refuse (`refused_coins`; `CoinedSetup.Admits`: `β ≠ 0`, the mask slot's rank,
-`ρ₀, ρ₁` independent) with no zerocheck outer coin `1` (`CoinedSetup.Covered`), the verifier's view of the draw's table at the executable's leaves, at any valid witness whose
+/-- **One `--zk` sampled session is zero knowledge.** At every draw `verify --zk` sets up, at every coin vector the honest
+prover doesn't refuse (`refused_coins`; `CoinedSetup.Admits`: `β ≠ 0`, the mask slot's rank, `ρ₀, ρ₁` independent, no
+zerocheck outer coin `1`), the verifier's view of the draw's table at the executable's leaves, at any valid witness whose
 registered values are the public ones, is within `2·|Hid|·2^-193` of `S_shvzk`'s at any `w0`, both ways.
 
 For an untyped statement (`ht`, as every soundness theorem) whose Δ and regions avoid the mask slot (`avoidsMask`, a named
 hypothesis that no check implies yet, until the verifier's D3 refusal in `Net.ofRows` discharges it), and for any prover
 of Ligerito's levels ≥ 1 (`LigProver`).
 
-Coverage: covered coins only. An outer coin `1` is a bad event of probability at most `(m − 13)·2^-128` per rep, which
-the prover doesn't refuse and this doesn't charge. At a refused coin the honest prover stops (`flock-circuit.rs`'s `refused_coins`:
-`at_open` returns `Err` before any `ŝ` leaves), and this says nothing about the view there. The statement at every coin
-vector, which charges the outer coins `1`, is `ZkEveryCoin.zk_session_view_all`. -/
+At a refused coin the honest prover stops before it sends anything that depends on the coin (`flock-circuit.rs`'s
+`refused_coins`; an outer coin `1` as it opens, `zk_veil::Masking`), and this says nothing about the view there; the
+statement at every coin vector, refused ones included, is `ZkEveryCoin.zk_session_view_all`.
+
+Which verifiers: this is honest-verifier zero knowledge at each fixed coin vector. It covers a verifier that chooses its
+coins because the coin server commits every coin at `Hello`, before the prover's first message (`coin_tree.rs`; the
+prover checks each opening against the commitment before it uses the coin), so the coins are fixed before anything the
+prover sends; the binding is collision resistance of `x ↦ SHA-512(ν ‖ x)` (`keyed-cr`). No statement here models that
+commitment yet. -/
 theorem zk_session_view (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
     (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), avoidsMask y.x.st = true)

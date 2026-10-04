@@ -1111,7 +1111,7 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S))
     (ht : I.tags.typed = false) (hdm : avoidsMask y.x.st = true) :
     let C := coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
-    ∀ c, C.Covered c → ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w := by
+    ∀ c, C.Admits c → ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w := by
   intro C c hc w hw hreg ω r
   apply batch_of_rows
   intro k
@@ -1213,7 +1213,7 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
     · exact absurd h2r ‹_›
   rw [hv, hinner]
   refine rows_honest (tablesAtZK dj y₀ S R) y.x.st c r (zWith y.x.st w ω.1) (ω.2.1.2.1 r) _ hE hmS hkS ?hw
-    (rF_ne_one _ _ c r (hc.2 r)) ?hA ?hB _ hs0 hs1 ?hk0 ?hL ?hT ((C.T c).tab.y1' w ω.1 ω.2.1.2.1 r)
+    (rF_ne_one _ _ c r (hc.2.2.2 r)) ?hA ?hB _ hs0 hs1 ?hk0 ?hL ?hT ((C.T c).tab.y1' w ω.1 ω.2.1.2.1 r)
     (fun _ => rfl) hab htw' k
   -- the executable statement's sizes are the table's, and the schedule's lane split
   case hk0 =>
