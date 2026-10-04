@@ -246,7 +246,8 @@ def rewrite_python(src: str) -> str:
         users = {n.value.id for n in uses}
         for alias in sorted(users):
             for stmt in aliases[alias]:
-                E.edits.append((stmt.end_lineno, stmt.end_col_offset, stmt.end_lineno, stmt.end_col_offset,
+                eol = len(E.lines[stmt.end_lineno - 1].rstrip(b"\r\n"))     # after a trailing comment, which stays on its line
+                E.edits.append((stmt.end_lineno, eol, stmt.end_lineno, eol,
                                 "\n" + " " * stmt.col_offset + "from verity_vllm.program import sampling_vocab"))
     return E.apply() if E.edits else src
 
