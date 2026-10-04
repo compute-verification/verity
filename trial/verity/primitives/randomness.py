@@ -8,7 +8,7 @@ bits, whichever asks more: Poisson sampling, the continuous form of the main rep
 (`verity_sampled_proofs.one_stage.draw`), which sizes each stratum's draw by its work. With a = ln(1/δ) / (`gates` ×
 all units' gates) and b likewise for output bits, unit u is drawn with probability p_u = min(1, max(a g_u, b o_u)).
 Bad units S escape every draw with probability Π (1 - p_u) <= exp(-Σ p_u), which is below δ once S holds more than
-`gates` of the gates or `outputs` of the output bits. So the bound is in what the account reads, however unequal the
+`gates` of the gates or `outputs` of the output bits. So the bound is in what reconciling reads, however unequal the
 units (a batch of eight requests beside a batch of one, an adder beside a comparison), and the draw is about
 ln(1/δ) (1/gates + 1/outputs) units, however many there are.
 """

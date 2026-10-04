@@ -43,18 +43,19 @@ its own the same way.
 
 **Accounting** says what happened to each resource: **work** (operations performed in a window), **space** (bits held
 at an instant) and **communication** (bits that cross the site's boundary, through any channel, side channels too).
-Integrity says what ran; each resource's module establishes that resource's line, a cryptographic bound (useful work,
-useful space, the warden's audit) wrapped in the physical facts it rests on; and the account sets the lines side by
-side. Per resource:
+Integrity says what ran; each resource's constructions bound it with no physics (useful work: tries made between the
+salt and the shares; useful space: blocks held, if answered in time; the warden's audit: what left); and `reconcile`
+wraps every bound in the physical facts it rests on (the census, the site, the clock, a deadline, the side channels)
+and records the `Balance`. Per resource, its `Usage`:
 - **capacity**: what the site could have supplied, its devices times their facts;
 - **claimed**: what the stream says went to the declared work;
 - **observed**: what hardware at the site saw used, by anything (today only communication, by the warden);
 - **explained**: the claim as far as verification backs it, a lower bound;
-- **headroom**: `min(capacity, observed) - explained`, where anything else could have run.
+- **unexplained**: `min(capacity, observed) - explained`, where anything else could have run.
 
 **Compliance** says whether that was allowed: a policy's parameters are its limits, and its statement says whether the
-epoch kept to them. NCI is the first: it reads the stream as integrity verified it, and the account, whose headroom it
-limits, since whatever ran there went unchecked. An epoch's verdict says nothing outside its window, so a period of
+epoch kept to them. NCI is the first: it reads the stream as integrity verified it, and the balance, whose unexplained
+work it limits, since whatever ran there went unchecked. An epoch's verdict says nothing outside its window, so a period of
 epochs complies only if each does and their windows leave no gap (`nci.period`).
 
 The two products, `remote` and `onsite`, run the same protocols and differ in who reports each reading. Remotely the
@@ -66,7 +67,7 @@ links, so it also accounts for space and communication, and its device count is 
 A construction is a frozen dataclass of its parameters, with a method per principal it involves that returns that
 principal's actor (`Integrity(Replay(), law, delta).verifier()`). A trusted principal's method takes its readings
 (`pinger(site, work_window, space_window)`), and an actor that reads one takes the principal it trusts for it
-(`Work.verifier(clock_from, site_from)`). Choosing a construction is choosing a value. A product is a construction whose fields
+(`Reconcile.verifier(clock_from, site_from)`). Choosing a construction is choosing a value. A product is a construction whose fields
 are constructions: its methods return the lists of its parts' actors, and its guarantee is proved from theirs. Actors
 have no names and are not wired: anyone can send to anyone, so an actor waits for each kind of event only from the
 principal it trusts for it (`receive(kind, sender)`, `gather`, `collect`), and an event keeps in its mailbox until it
@@ -84,13 +85,13 @@ verity/protocols/             everything with principals
     remote.py, onsite.py      the products: protocols composed, and who reports each reading
     compliance/               whether it was allowed: nci
     accounting/               what happened:
-        account.py            each resource's line, side by side
-        work.py               one module per resource: a bound, wrapped in the physical facts it rests on
-        space.py
-        communication.py
+        reconcile.py          every resource's bound wrapped in the physical facts it rests on: the balance
+        work/                 per resource, the constructions that bound it with no physics: pouw.py
+        space/                pous.py
+        communication.py      the warden, and its audit
         integrity.py          what ran: the stream, and checks of units drawn from it
     verification/             that a computation gave these outputs:
-        claim.py              what both establish: a claim on a region's committed boundary, `Verified`
+        claim.py              what both establish: `circuits.consistent` on committed values, `Verified`
         proofs/               the prover proves it (transparent, sp1/)
         replay.py             trusted hardware runs it again
 verity/primitives/            no principals: events, circuits (with partitions and builders), commitments,
@@ -104,13 +105,16 @@ The rules the layout follows, for the next question it raises:
   protocols.
 - **The tree follows imports.** A layer is a folder only where a split by purpose is also a split by import order:
   verification, then accounting (what happened), then compliance (was it okay). Below a layer, a folder holds several
-  constructions of one statement (`proofs/`: transparent, sp1); anything else is a module.
+  constructions of one statement (`proofs/`: transparent, sp1; `work/` and `space/`, where proof of work and proof of
+  space join useful work and useful space); anything else is a module.
 - **A protocol imports another only for the statement it reads**, never its actors.
 - **Who reports a reading is a product's wiring, never a folder.** A reading from the prover is an assumption, one
   from trusted hardware a measurement; the same protocol takes either (`clock_from`, `site_from`).
-- **Physical assumptions have three homes.** How the physical world is represented is a primitive (`physical`); the
-  facts assumed (the census's, the side channels' bits, a deadline) are a construction's parameters; and the reasoning
-  that wraps a cryptographic bound in them is in the resource's module.
+- **Physics is composed once, at the end.** How the physical world is represented is a primitive (`physical`); a
+  resource's constructions state what they bound with no physics, so a second construction of one resource (proof of
+  work beside useful work) records the same statement; and `reconcile` alone takes the facts assumed (the census's, a
+  deadline, the side channels' bits) as parameters and reads the readings, so the windows are checked against each
+  other there and each statement's probability is counted once.
 
 `examples/` sit on top: a run of each product, integrity alone, and a datacenter over a period of epochs. An
 integration (vLLM) is a prover.

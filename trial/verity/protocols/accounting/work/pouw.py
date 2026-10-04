@@ -1,28 +1,21 @@
-"""Work: operations performed in a window. A lower bound on the work the prover spent between a salt and a clock's
-reading, as much of it as integrity says went to the declared computation, against what the site's devices could do in
-that window at peak.
+"""Proof of useful work: a lower bound on the tries the prover made between a salt and its shares, each keyed by one of
+the stream's executions.
 
-    verifier    takes the registration and sends a salt drawn from its secret; reads the stream and the profile
-                integrity recorded, the shares, the window `clock_from`'s clock read (when the salt went out and the
-                shares came in) and the site `site_from` reported; records work's line
+    verifier    takes the registration and sends a salt drawn from its secret; reads the stream integrity recorded and
+                the shares; records `Worked`
     prover      once it has the salt, searches each execution's work for shares under that execution's key
 
 One salt, drawn after the registration and before the stream, keys the work of every execution the prover streams,
 however many there turn out to be and whatever their advice. Useful work keys the prover's own declared computation;
-proof of work would key filler the verifier chose. Both bound the same thing, compute busy after the salt and done when
-the clock was read; usefulness decides only whether that compute was also the declared computation, which is
-integrity's to say: the line explains the bound less the share of the gates in units integrity could not rule out
-being bad.
+proof of work would key filler the verifier chose. Both bound the same thing, tries made after the salt and before the
+shares; usefulness decides only whether those tries were also the declared computation, which is integrity's to say,
+and how long they took is the clock's: `reconcile` reads both.
 
 Execution i's key is a hash of the salt, i and its root: fixed once the execution is, so nothing about the stream need
 be known when the salt is drawn. What must be fixed before the salt is what the work is reused across: the builder and
 the baseline it holds (in Pearl-C, the weights, whose salted forming is computed once per salt). The prover chooses
 advice and inputs after the salt, so it can grind them for keys it likes; `verity_pouw`'s conjecture's error term holds
 that grinding, and advice adds at most 2**advice_bits choices per execution to it.
-
-Physically, the bound rests on the clock: whoever holds it decides how tight the window is, so the verifier names whom
-it trusts for it (itself remotely, a pinger at the site onsite). Capacity is the site's devices times their peak (the
-census's), over the window; a bound above it means the site or the census is wrong.
 
 Stands in for `verity_pouw`, whose shares are tiles of the streamed matmuls and whose key per matmul is derived the same
 way inside the circuit (`ncp-v2`: a hash of the call's operand digest, the salt and the call's index), so a matmul the
@@ -39,10 +32,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from verity.primitives.events import Actor, Send, gather, receive
-from verity.primitives.physical import Device, Site, Window
 from verity.primitives.randomness import derive
-from verity.protocols.accounting.account import line
-from verity.protocols.accounting.integrity import Execution, IntegrityProfile, Registration, Stream
+from verity.protocols.accounting.integrity import Execution, Registration, Stream
 
 
 @dataclass(frozen=True)
@@ -56,36 +47,31 @@ class Shares:
 
 
 @dataclass(frozen=True)
-class Work:
-    difficulty: int  # leading zero bits a share's hash needs
-    census: Mapping[str, Device]  # device type -> its facts
+class Worked:
+    """After the salt went out and before the shares came in, the prover made at least `tries` tries, each keyed by
+    one of `stream`'s executions; except with probability `delta`."""
+
+    stream: str
+    tries: int
     delta: float
 
-    def verifier(self, clock_from: str, site_from: str) -> Actor:
+
+@dataclass(frozen=True)
+class Pouw:
+    difficulty: int  # leading zero bits a share's hash needs
+    delta: float
+
+    def verifier(self) -> Actor:
         secret = secrets.token_bytes(32)
         registration = yield from receive(Registration, "prover")
         salt = derive(secret, "verity/work/salt/v0", Stream(registration).digest())
-        trusted = {
-            Stream: "verifier",
-            IntegrityProfile: "verifier",
-            Shares: "prover",
-            Window: clock_from,
-            Site: site_from,
-        }
-        got = yield from gather(trusted, Send(Salt(salt), "prover"))
-        stream, profile, window, shares = got[Stream], got[IntegrityProfile], got[Window], got[Shares].nonces
+        got = yield from gather({Stream: "verifier", Shares: "prover"}, Send(Salt(salt), "prover"))
+        stream, shares = got[Stream], got[Shares].nonces
         valid = sum(
             len({n for n in shares.get(i, ()) if 0 <= n < _budget(stream, i) and self._share(_key(salt, i, e), n)})
             for i, e in enumerate(stream.executions)
         )
-        tries, gates = self._tries(valid), profile.gates
-        peak, reasons = got[Site].supply(self.census, "work")
-        if not profile.accepted:
-            reasons += ("integrity not established",)
-        explained = tries * (gates.total - gates.wrong) // max(gates.total, 1)
-        capacity = int(window.seconds * peak)
-        delta = self.delta + profile.delta
-        return (Send(line("work", window, capacity, gates.total, None, explained, tries, delta, reasons)),)
+        return (Send(Worked(stream.digest(), self._tries(valid), self.delta)),)
 
     def prover(self, stream: Stream) -> Actor:
         salt = (yield from receive(Salt, "verifier")).salt

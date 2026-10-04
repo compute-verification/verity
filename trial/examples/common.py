@@ -9,7 +9,7 @@ import hashlib
 import json
 import random
 import struct
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, is_dataclass
 from pathlib import Path
 
@@ -117,9 +117,17 @@ def tries(stream: Stream) -> int:
 
 
 def show(event: Event) -> None:
-    fields = ", ".join(f"{name}={_brief(value)}" for name, value in vars(event.body).items())
+    """An event in a line, and a line more for each entry of a mapping of records it holds (a balance's usage)."""
     to = "record" if event.to == event.sender else event.to
-    print(f"{event.sender} -> {to}: {type(event.body).__name__}({fields})")
+    print(f"{event.sender} -> {to}: {type(event.body).__name__}({_fields(event.body)})")
+    for value in vars(event.body).values():
+        if isinstance(value, Mapping) and value and all(is_dataclass(v) for v in value.values()):
+            for key, v in value.items():
+                print(f"    {key}: {type(v).__name__}({_fields(v)})")
+
+
+def _fields(body: object) -> str:
+    return ", ".join(f"{name}={_brief(value)}" for name, value in vars(body).items())
 
 
 def _brief(value: object) -> str:

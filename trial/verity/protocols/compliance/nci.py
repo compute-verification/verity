@@ -10,11 +10,11 @@ outputs could have shaped it, and the registration must name one of the `builder
 and reaches a unit through the structure the builder gives it rather than through its boundary: the builder reads all
 of it, so any unit of the execution may depend on all of it, and each is charged it beside its boundary.
 
-The rule binds only what is in the account: whatever ran in the work headroom went unchecked, so it may be at most
-`max_headroom` of the work capacity. The account reads integrity, so the policy reads it through the account, and
-holds except with the account's probability.
+The rule binds only what is in the balance: whatever ran in the work left unexplained went unchecked, so it may be at
+most `max_unexplained` of the work capacity. The balance reads integrity, so the policy reads it through the balance,
+and holds except with the balance's probability.
 
-    verifier    reads the stream integrity recorded and the account over it; rebuilds each execution's circuit, and
+    verifier    reads the stream integrity recorded and the balance over it; rebuilds each execution's circuit, and
                 records whether the epoch complies
 
 An epoch's verdict says nothing outside its window, the work's. A period is epochs back to back (`period`): each
@@ -30,8 +30,8 @@ from dataclasses import dataclass
 from verity.primitives import circuits as C
 from verity.primitives.events import Actor, Send, gather
 from verity.primitives.physical import Window
-from verity.protocols.accounting.account import Account
 from verity.protocols.accounting.integrity import Stream
+from verity.protocols.accounting.reconcile import Balance
 
 
 @dataclass(frozen=True)
@@ -62,20 +62,21 @@ class Period:
 class Nci:
     gamma: int  # gates per inference unit
     alpha: float  # novel bits read per gate
-    max_headroom: float  # the most of the work capacity the account may leave as headroom
+    max_unexplained: float  # the most of the work capacity the balance may leave unexplained
     builders: frozenset[str]  # the ids of the builders declared up front
 
     def verifier(self) -> Actor:
-        got = yield from gather({Stream: "verifier", Account: "verifier"})
-        stream, account = got[Stream], got[Account]
-        work, builder = account.lines["work"], stream.registration.builder.id()
+        got = yield from gather({Stream: "verifier", Balance: "verifier"})
+        stream, balance = got[Stream], got[Balance]
+        work, builder = balance["work"], stream.registration.builder.id()
         reasons = []
         if builder not in self.builders:
             reasons.append(f"builder {builder} was not declared up front")
-        if work.reasons or account.stream != stream.digest():
+        if work.reasons or balance.stream != stream.digest():
             reasons.append("work not accounted for")
-        elif work.headroom > self.max_headroom * work.capacity:
-            reasons.append(f"{work.headroom / work.capacity:.0%} of work headroom, over {self.max_headroom:.0%}")
+        elif work.unexplained > self.max_unexplained * work.capacity:
+            share = f"{work.unexplained / work.capacity:.0%}"
+            reasons.append(f"{share} of work unexplained, over {self.max_unexplained:.0%}")
         try:
             units = inference_units(stream)
         except ValueError as error:
@@ -89,7 +90,7 @@ class Nci:
                     f"inference unit {u} of execution {i}, over {steps} executions: {gates} gates reading {novel} novel"
                     " bits"
                 )
-        return (Send(Complies(stream.digest(), work.window, not reasons, account.delta, tuple(reasons))),)
+        return (Send(Complies(stream.digest(), work.window, not reasons, balance.delta, tuple(reasons))),)
 
 
 def inference_units(stream: Stream) -> list[list[tuple[int, int]]]:

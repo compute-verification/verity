@@ -3,7 +3,7 @@ A replayer runs drawn executions again without their values leaving the site; a 
 work, and challenges memory where a deadline can be tight; a warden on the links observes what leaves. So onsite also
 accounts for space and communication, and its site is a count rather than an assumption.
 
-    verifier    integrity and its replay, work, space, communication, the account and NCI
+    verifier    integrity and its replay, work, space, communication, reconciling and NCI
     prover      registers its builder and streams its executions as remotely; opens the drawn ones for the replayer,
                 finds their shares, and answers space's challenges from the encoding it holds
     replayer    replay's
@@ -18,31 +18,31 @@ from dataclasses import dataclass
 
 from verity.primitives.events import Actor, Send, tell
 from verity.primitives.physical import Site, Window
-from verity.protocols.accounting.account import Accounting
 from verity.protocols.accounting.communication import Communication
 from verity.protocols.accounting.integrity import Integrity, Stream, serve
-from verity.protocols.accounting.space import Space
-from verity.protocols.accounting.work import Salt, Work
+from verity.protocols.accounting.reconcile import Reconcile
+from verity.protocols.accounting.space.pous import Pous
+from verity.protocols.accounting.work.pouw import Pouw, Salt
 from verity.protocols.compliance.nci import Nci
 
 
 @dataclass(frozen=True)
 class Onsite:
     integrity: Integrity  # by replay
-    work: Work
-    space: Space
+    work: Pouw
+    space: Pous
     communication: Communication
-    accounting: Accounting
+    reconcile: Reconcile
     nci: Nci
 
     def verifier(self) -> list[Actor]:
         return [
             self.integrity.verifier(),
             self.integrity.verification.verifier(),
-            self.work.verifier(clock_from="pinger", site_from="pinger"),
-            self.space.verifier(site_from="pinger"),
-            self.communication.verifier(site_from="pinger"),
-            self.accounting.verifier(),
+            self.work.verifier(),
+            self.space.verifier(),
+            self.communication.verifier(),
+            self.reconcile.verifier(clock_from="pinger", site_from="pinger"),
             self.nci.verifier(),
         ]
 

@@ -9,7 +9,7 @@ builder, declared before the first epoch, routes each step to a model (`Routed`:
 and each session is one inference unit of the stream however many steps it took. The census's facts per device are
 its peak (tries a second), its memory (bytes) and its egress (bits a second), at toy scale. Each epoch is one run: the
 prover registers, takes the salt, streams the epoch's steps and closes the stream, and the verifier's view holds the
-account and NCI's verdict. A period is the epochs back to back, each window opening where the last closed
+balance and NCI's verdict. A period is the epochs back to back, each window opening where the last closed
 (`nci.period`).
 
 A simulated site produces every reading: how long the epoch took on the devices that ran it, which devices are
@@ -32,11 +32,11 @@ from verity.primitives.circuits import Builder, Circuit, built, transcript
 from verity.primitives.events import Actor, receive
 from verity.primitives.physical import Device, Window
 from verity.primitives.randomness import Weighted
-from verity.protocols.accounting.account import Accounting
 from verity.protocols.accounting.communication import Communication
 from verity.protocols.accounting.integrity import Integrity, Registration, Stream, commit
-from verity.protocols.accounting.space import Space, encode
-from verity.protocols.accounting.work import Salt, Work
+from verity.protocols.accounting.reconcile import Reconcile
+from verity.protocols.accounting.space.pous import Pous, encode
+from verity.protocols.accounting.work.pouw import Pouw, Salt
 from verity.protocols.compliance.nci import Nci, period
 from verity.protocols.onsite import Onsite
 from verity.protocols.remote import Remote
@@ -142,7 +142,7 @@ class Training:
 
 
 @dataclass(frozen=True)
-class Withheld(Work):
+class Withheld(Pouw):
     """A prover's work that keeps its shares: it takes the salt and sends nothing."""
 
     def prover(self, stream: Stream) -> Actor:
@@ -159,20 +159,20 @@ comparison, compares = load("bf16_gt_strict", n=EPOCHS * REQUESTS, seed=2)
 ROUTED = Routed((Sessions(adder, C.greedy(adder, 16)), Batched(comparison, C.greedy(comparison, 16), 3)))
 WEIGHTS = encode(b"weights", BLOCKS)
 
-NCI = Nci(gamma=16384, alpha=0.2, max_headroom=0.2, builders=frozenset({ROUTED.id()}))
-WORK = Work(difficulty=3, census=CENSUS, delta=0.01)
+NCI = Nci(gamma=16384, alpha=0.2, max_unexplained=0.2, builders=frozenset({ROUTED.id()}))
+WORK = Pouw(difficulty=3, delta=0.01)
 REMOTE = Remote(
     integrity=Integrity(Proofs(Transparent()), law=Weighted(gates=0.03, outputs=1.0), delta=0.01, max_width=16),
     work=WORK,
-    accounting=Accounting(resources=("work",)),
+    reconcile=Reconcile(("work",), CENSUS),
     nci=NCI,
 )
 ONSITE = Onsite(
     integrity=Integrity(Replay(), law=Weighted(gates=0.03, outputs=0.03), delta=0.01),
     work=WORK,
-    space=Space(seed=b"weights", blocks=BLOCKS, k=64, deadline=0.001, census=CENSUS, delta=0.01),
-    communication=Communication(census=CENSUS, max_timing_bits=7, side_bits=64),
-    accounting=Accounting(resources=("work", "space", "communication")),
+    space=Pous(seed=b"weights", blocks=BLOCKS, k=64, delta=0.01),
+    communication=Communication(max_timing_bits=7),
+    reconcile=Reconcile(("work", "space", "communication"), CENSUS, deadline=0.001, side_bits=64),
     nci=NCI,
 )
 
@@ -219,7 +219,12 @@ def inject(circuits: Sequence[Circuit], transcripts: list) -> list:
 # it shows); None: either
 SCENARIOS: dict[str, tuple[Conduct, bool | None, bool | None, str]] = {
     "honest": (Conduct(), True, True, "the declared devices serve at 90% of peak"),
-    "idle": (Conduct(busy=0.6), False, False, "honest at 60% of peak: idle time is headroom, as hidden work would be"),
+    "idle": (
+        Conduct(busy=0.6),
+        False,
+        False,
+        "honest at 60% of peak: idle time is unexplained, as hidden work would be",
+    ),
     "idle-filled": (
         Conduct(busy=0.6, fill=0.9),
         True,
@@ -314,7 +319,7 @@ def runtime(conduct: Conduct, epoch: int) -> tuple[Stream, list, float, int]:
 def epoch(product: str, conduct: Conduct, e: int, opened: float) -> dict[str, object]:
     """The verifier's records for one epoch whose window opened at `opened`, by the product's clock."""
     stream, transcripts, seconds, outputs = runtime(conduct, e)
-    work = Withheld(WORK.difficulty, WORK.census, WORK.delta) if conduct.withheld else WORK
+    work = Withheld(WORK.difficulty, WORK.delta) if conduct.withheld else WORK
     if product == "remote":
         principals = {
             "verifier": REMOTE.verifier(Window(opened, opened + seconds + RTT)),
@@ -335,16 +340,16 @@ def epoch(product: str, conduct: Conduct, e: int, opened: float) -> dict[str, ob
 
 
 def line(records: Mapping[str, object]) -> str:
-    """The epoch's account and verdict, in a line."""
+    """The epoch's balance and verdict, in a line."""
     parts = []
-    if account := records.get("Account"):
-        window = account.lines["work"].window
-        parts.append(f"[{window.opened:5.2f}, {window.closed:5.2f}]s headroom")
-        for name, r in account.lines.items():
-            parts.append(f"{name} {_share(r.headroom, r.capacity)}" if not r.reasons else f"{name} unaccounted")
+    if balance := records.get("Balance"):
+        window = balance["work"].window
+        parts.append(f"[{window.opened:5.2f}, {window.closed:5.2f}]s unexplained")
+        for name, u in balance.usage.items():
+            parts.append(f"{name} {_share(u.unexplained, u.capacity)}" if not u.reasons else f"{name} unaccounted")
     verdict = records.get("Complies")
     if verdict is None:
-        missing = [k for k in ("IntegrityProfile", "Line", "Account", "Complies") if k not in records]
+        missing = [k for k in ("IntegrityProfile", "Worked", "Balance", "Complies") if k not in records]
         parts.append(f"NO VERDICT (no {', '.join(missing)})")
     else:
         parts.append("complies" if verdict.complies else f"FAILS: {'; '.join(verdict.reasons[:2])}")

@@ -12,11 +12,11 @@ from common import Batched, executed, load, schedule, show, tries
 from verity.primitives import circuits as C
 from verity.primitives.physical import Device, Window
 from verity.primitives.randomness import Weighted
-from verity.protocols.accounting.account import Accounting
 from verity.protocols.accounting.communication import Communication
 from verity.protocols.accounting.integrity import Integrity
-from verity.protocols.accounting.space import Space, encode
-from verity.protocols.accounting.work import Work
+from verity.protocols.accounting.reconcile import Reconcile
+from verity.protocols.accounting.space.pous import Pous, encode
+from verity.protocols.accounting.work.pouw import Pouw
 from verity.protocols.compliance.nci import Nci
 from verity.protocols.onsite import Onsite
 from verity.protocols.verification.replay import Replay
@@ -28,11 +28,11 @@ census = {"gpu": Device(work=1000.0, memory=32 * 1024), "uplink": Device(egress=
 
 onsite = Onsite(
     integrity=Integrity(Replay(), law=Weighted(gates=0.05, outputs=0.05), delta=0.01),
-    work=Work(difficulty=3, census=census, delta=0.01),
-    space=Space(seed=b"weights", blocks=2048, k=64, deadline=0.001, census=census, delta=0.01),
-    communication=Communication(census=census, max_timing_bits=7, side_bits=1000),
-    accounting=Accounting(resources=("work", "space", "communication")),
-    nci=Nci(gamma=4096, alpha=0.2, max_headroom=0.3, builders=frozenset({builder.id()})),
+    work=Pouw(difficulty=3, delta=0.01),
+    space=Pous(seed=b"weights", blocks=2048, k=64, delta=0.01),
+    communication=Communication(max_timing_bits=7),
+    reconcile=Reconcile(("work", "space", "communication"), census, deadline=0.001, side_bits=1000),
+    nci=Nci(gamma=4096, alpha=0.2, max_unexplained=0.3, builders=frozenset({builder.id()})),
 )
 stream, transcripts = executed(builder, schedule(requests, (3, 1, 4), builder), onsite.integrity.scheme)
 site = {"gpu": 2, "uplink": 1}

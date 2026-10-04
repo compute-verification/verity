@@ -7,7 +7,7 @@ builder gave it (one leaf per wire, in wire order), but its state inputs. An exe
 wrote (a decode step, its KV cache) reads it from the writer's root (`Stream.locate`), so a wire is committed once, by
 the execution that computed it. State links only within the stream: a session that outlives its epoch carries its
 state into the next one as fresh inputs. The verifier rebuilds each execution's circuit and partition from its advice
-and records the `Stream`, which work, the account and NCI read; every statement over the stream names its digest.
+and records the `Stream`, which work, reconciling and NCI read; every statement over the stream names its digest.
 Today's reference: `verity_sampled_proofs.one_stage.registration`.
 
 Then it checks units of the stream: whole executions, or with `max_width` every region of every execution, each of at

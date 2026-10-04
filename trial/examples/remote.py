@@ -11,9 +11,9 @@ from common import Batched, executed, load, schedule, show, tries
 from verity.primitives import circuits as C
 from verity.primitives.physical import Device, Window
 from verity.primitives.randomness import Weighted
-from verity.protocols.accounting.account import Accounting
 from verity.protocols.accounting.integrity import Integrity
-from verity.protocols.accounting.work import Work
+from verity.protocols.accounting.reconcile import Reconcile
+from verity.protocols.accounting.work.pouw import Pouw
 from verity.protocols.compliance.nci import Nci
 from verity.protocols.remote import Remote
 from verity.protocols.verification.proofs.protocol import Proofs
@@ -26,9 +26,9 @@ census = {"gpu": Device(work=1000.0)}
 
 remote = Remote(
     integrity=Integrity(Proofs(Transparent()), law=Weighted(gates=0.05, outputs=1.0), delta=0.01, max_width=16),
-    work=Work(difficulty=3, census=census, delta=0.01),
-    accounting=Accounting(resources=("work",)),
-    nci=Nci(gamma=4096, alpha=0.2, max_headroom=0.4, builders=frozenset({builder.id()})),
+    work=Pouw(difficulty=3, delta=0.01),
+    reconcile=Reconcile(resources=("work",), census=census),
+    nci=Nci(gamma=4096, alpha=0.2, max_unexplained=0.4, builders=frozenset({builder.id()})),
 )
 stream, transcripts = executed(builder, schedule(requests, (3, 1, 4), builder), remote.integrity.scheme)
 site = {"gpu": 2}
