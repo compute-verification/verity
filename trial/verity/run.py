@@ -5,14 +5,26 @@ principal it is sent to (a record's, its sender's own) but the one that sent it.
 event in its mailbox that it waits for, and whatever it sends is appended to the log, until nothing is left to deliver.
 `run` yields one principal's view as the log grows: every event that principal sent or received. The verifier's view
 is the output: what its actors establish are records in it.
+
+An actor that raises (on a body no honest sender would send: a path left out, a nonce that is not an integer) ends
+there, and its principal records that it `Raised`. What it would have established is missing, and whatever reads it
+waits for it forever: a missing statement fails closed, so the actors need check only what could make them wrong, not
+what could make them raise.
 """
 
 from __future__ import annotations
 
 from collections import deque
 from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import dataclass
 
 from verity.primitives.events import Actor, Event
+
+
+@dataclass(frozen=True)
+class Raised:
+    actor: str  # its generator's name
+    error: str
 
 
 def run(principals: Mapping[str, Sequence[Actor]], view: str) -> Iterator[Event]:
@@ -59,4 +71,7 @@ def _resume(
     except StopIteration as stop:
         waiting.pop(actor, None)
         sends = stop.value or ()
+    except Exception as error:
+        waiting.pop(actor, None)
+        return [(Event(principal, principal, Raised(actor.__qualname__, f"{type(error).__name__}: {error}")), actor)]
     return [(Event(principal, s.to or principal, s.body), actor) for s in sends]
