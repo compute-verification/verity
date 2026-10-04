@@ -1,28 +1,42 @@
-"""Secure erasure's verifier (`verity_pous.erasure`): an honest prover accepted, at both deadlines exactly; a prover that
-under-fills, or misses either deadline, rejected; seeded prover bugs rejected; the refusals that keep it fail-closed; and
-the fill's byte formats.  The verifier's clock is injected throughout."""
+"""Secure erasure's verifier (`verity_pous.erasure`): an honest prover accepted, at every deadline exactly; a prover that
+under-fills, or misses a deadline, rejected, and so is a caller that reveals the next read late; seeded prover bugs
+rejected; the refusals that keep it fail-closed, the pins' citing conditions among them; and the fill's byte formats.
+The verifier's clock is injected throughout."""
 
 from __future__ import annotations
 
 import hashlib
+import itertools
+import json
+import math
 import random
+import re
+from collections import Counter
+from pathlib import Path
 
 import pytest
 from verity.randomness import Key, derive
 from verity_pous.erasure import (
+    CALIBRATED_PAGES,
     DIGEST_PRIME,
     FILL_DOMAIN,
     PAGE_BYTES,
     PAGE_DOMAIN,
+    PIN_96112,
+    PIN_FAMILY,
+    PINNED_READS,
     SPOT_DOMAIN,
     DigestReply,
     ErasureVerifier,
     FillChallenge,
     KeyedFill,
+    Lapsed,
     ReadChallenge,
     ReadReply,
     fill_key,
     page_keccak_f,
+    pinned_guarantee,
+    required_reads,
     run_erasure,
     spot_indices,
     spot_key,
@@ -31,8 +45,11 @@ from verity_pous.primitives import KECCAK_F_NS
 
 M, S, PAGE = 4096, 64, 256
 T_FILL = 10**9
-T_READ = page_keccak_f(PAGE) * KECCAK_F_NS - 1
-"""The longest read deadline a 256-byte page allows: 449 ns."""
+RECOMPUTE = page_keccak_f(PAGE) * KECCAK_F_NS
+"""A 256-byte page's recompute: 450 ns."""
+T_READ = (RECOMPUTE - 1) // 2
+"""The longest read deadline a 256-byte page allows, 224 ns, with `T_round` at its default `RECOMPUTE − 1 − T_READ`."""
+T_ROUND = RECOMPUTE - 1 - T_READ
 
 
 class Clock:
@@ -90,7 +107,8 @@ class Wire:
 
 
 def _verifier(clock, source=b"audit", **kw):
-    kw = {"fill_deadline_ns": T_FILL, "read_deadline_ns": T_READ, "page_bytes": PAGE, **kw}
+    """A verifier of a small audit, which no pin covers: `research=True`."""
+    kw = {"fill_deadline_ns": T_FILL, "read_deadline_ns": T_READ, "page_bytes": PAGE, "research": True, **kw}
     return ErasureVerifier(M, S, source=source, clock=clock, **kw)
 
 
@@ -133,11 +151,40 @@ def test_the_indices_are_fresh_distinct_and_shuffled():
     assert sorted(indices) == list(key.subset(S, M, "indices")) and list(indices) != sorted(indices)
 
 
+class _Draws:
+    """A stand-in for the spot key with its draws given: the subset, and `order[j]` for `uniform(j + 1, ("order", j))`."""
+
+    def __init__(self, subset, order):
+        self._subset, self._order = subset, order
+
+    def subset(self, k, n, index):
+        assert index == "indices" and len(self._subset) == k
+        return self._subset
+
+    def uniform(self, n, index):
+        tag, j = index
+        assert tag == "order" and n == j + 1
+        return self._order[j]
+
+
+def test_the_indices_are_lean_s_distinct_reads():
+    """For every `1 ≤ s ≤ B ≤ 6`, each sequence of `s` distinct indices below `B` comes from exactly one subset and one
+    set of shuffle draws.  `Key.subset` and `Key.uniform` are exact, so `spot_indices` is uniform over `Fin s ↪ Fin B`:
+    the Lean model's `Pous.distinctReads`."""
+    for b in range(1, 7):
+        for s in range(1, b + 1):
+            seen = Counter(spot_indices(_Draws(sub, order), s, b)
+                           for sub in itertools.combinations(range(b), s)
+                           for order in itertools.product(*(range(j + 1) for j in range(s))))
+            assert len(seen) == math.perm(b, s) and set(seen.values()) == {1}, (b, s)
+            assert all(len(set(seq)) == s for seq in seen)
+
+
 def test_k_is_fresh_and_bound_to_the_audit():
     """Without a source, each verifier draws its own secret; `K` is bound to `M`, `s` and the caller's context."""
     clock = Clock()
-    assert ErasureVerifier(M, S, fill_deadline_ns=T_FILL, read_deadline_ns=T_READ, page_bytes=PAGE, clock=clock).key != \
-        ErasureVerifier(M, S, fill_deadline_ns=T_FILL, read_deadline_ns=T_READ, page_bytes=PAGE, clock=clock).key
+    kw = {"fill_deadline_ns": T_FILL, "read_deadline_ns": T_READ, "page_bytes": PAGE, "clock": clock, "research": True}
+    assert ErasureVerifier(M, S, **kw).key != ErasureVerifier(M, S, **kw).key
     k = fill_key(b"s", M, S)
     assert k == derive(b"s", FILL_DOMAIN, {"memory": M, "spot-reads": S})
     assert len({k, fill_key(b"s", M + 1, S), fill_key(b"s", M, S + 1), fill_key(b"s", M, S, {"device": "gpu0"})}) == 4
@@ -210,13 +257,197 @@ def test_a_prover_that_recomputes_each_read_misses_its_deadline(eager):
     assert not result.reads[0].on_time and result.reads[0].answered == eager
 
 
-def test_a_read_deadline_that_reaches_a_recompute_is_refused():
-    """`T_read` at a page's recompute time is refused, for the default 1 MiB pages (1.7352 ms) as for small ones."""
+def _deadlines(page, t_read, t_round=None):
+    return ErasureVerifier(M, S, fill_deadline_ns=T_FILL, read_deadline_ns=t_read, round_deadline_ns=t_round,
+                           page_bytes=page, clock=Clock(), research=True)
+
+
+@pytest.mark.parametrize("page", [PAGE, PAGE_BYTES])
+def test_deadlines_that_let_a_page_be_recomputed_are_refused(page):
+    """For the default 1 MiB pages (1.7352 ms) as for small ones: `T_read` at a page's recompute is refused, and so is
+    `T_round + T_read` at it, since two reads' arrivals can be that far apart; `T_round` below `T_read` is refused, and
+    `T_round` defaults to the largest allowed, `recompute − 1 − T_read`."""
     assert page_keccak_f(PAGE_BYTES) == 34_704 and KeyedFill(Key(bytes(32)), 1).recompute_ns == 1_735_200
-    for page, limit in [(PAGE, T_READ + 1), (PAGE_BYTES, 1_735_200)]:
-        with pytest.raises(ValueError, match="a read would not show the byte was held"):
-            ErasureVerifier(M, S, fill_deadline_ns=T_FILL, read_deadline_ns=limit, page_bytes=page, clock=Clock())
-        ErasureVerifier(M, S, fill_deadline_ns=T_FILL, read_deadline_ns=limit - 1, page_bytes=page, clock=Clock())
+    rc = page_keccak_f(page) * KECCAK_F_NS
+    half = (rc - 1) // 2
+    with pytest.raises(ValueError, match="a read would not show the byte was held"):
+        _deadlines(page, rc)
+    for t_read, t_round in [(half, rc - half), (0, rc), (1, rc - 1)]:
+        with pytest.raises(ValueError, match="reaches the .* ns of a page's recompute"):
+            _deadlines(page, t_read, t_round)
+    with pytest.raises(ValueError, match=f"T_round = {half - 1} ns is below T_read"):
+        _deadlines(page, half, half - 1)
+    with pytest.raises(ValueError, match=f"below T_read .*T_read is at most {half} ns"):
+        _deadlines(page, half + 1)
+    assert _deadlines(page, half).round_deadline_ns == rc - 1 - half
+    assert _deadlines(page, 0).round_deadline_ns == rc - 1
+    assert _deadlines(page, half, half).round_deadline_ns == half
+    with pytest.raises(ValueError, match="nonnegative"):
+        _deadlines(page, 0, -1)
+
+
+# The reveal-to-reveal deadline (`T_round`): the Lean model's `D = 0` round runs from one read's arrival to the next's.
+
+def _open_reads(clock, **kw):
+    v = _verifier(clock, **kw)
+    v.fill_challenge()
+    v.receive_digest(v.fill.digest())
+    return v
+
+
+def test_the_next_read_revealed_exactly_at_t_round_is_accepted():
+    """A caller that waits after each answer until exactly `T_round` after the last reveal: every reveal in time, and
+    the audit accepted; `reveal_by` is the last reveal plus `T_round`, None while a read is open and once done."""
+    clock = Clock()
+    v = _open_reads(clock)
+    last = None
+    for k in range(S):
+        assert v.reveal_by == (None if last is None else last + T_ROUND)
+        if last is not None:
+            clock.now = last + T_ROUND
+        j, i = v.challenge()
+        last = clock.now
+        assert j == k and v.reveal_by is None
+        clock.now += T_READ
+        assert v.respond(j, v.fill.at(i)).passed
+    assert v.accepted and v.done and v.reveal_by is None
+
+
+@pytest.mark.parametrize("late", [1, 10**6])
+def test_a_caller_that_reveals_the_next_read_late_is_rejected(late):
+    """Read 3 revealed `T_round + late` after read 2's reveal: `challenge()` raises `Lapsed`, read 3 is closed
+    unrevealed and unanswered, and the audit is rejected with no other index revealed."""
+    clock = Clock()
+    v = _open_reads(clock)
+    for _ in range(3):
+        j, i = v.challenge()
+        v.respond(j, v.fill.at(i))
+    revealed = clock.now
+    clock.now = revealed + T_ROUND + late
+    assert v.overdue
+    with pytest.raises(Lapsed, match=rf"read 3 would be revealed {T_ROUND + late} ns after read 2, past T_round"):
+        v.challenge()
+    lapsed = v.reads[-1]
+    assert (lapsed.j, lapsed.index, lapsed.answered, lapsed.on_time, lapsed.passed) == (3, None, False, False, False)
+    assert lapsed.elapsed_ns == T_ROUND + late and len(v.reads) == 4
+    assert v.rejected and v.done and not v.accepted and v.pending is None and v.reveal_by is None
+    with pytest.raises(RuntimeError, match="the audit is rejected"):
+        v.challenge()
+
+
+def test_expire_closes_a_lapsed_reveal():
+    """With no read open, `expire()` refuses within `T_round` and closes the next read unrevealed past it."""
+    clock = Clock()
+    v = _open_reads(clock)
+    j, i = v.challenge()
+    clock.now += 5
+    v.respond(j, v.fill.at(i))
+    clock.now = T_ROUND
+    assert not v.overdue
+    with pytest.raises(RuntimeError, match="within T_round"):
+        v.expire()
+    clock.now = T_ROUND + 1
+    closed = v.expire()
+    assert (closed.j, closed.index, closed.answered, closed.elapsed_ns) == (1, None, False, T_ROUND + 1)
+    assert v.rejected and not v.accepted
+
+
+class Ticking(Clock):
+    """A clock that moves `tick` on every reading: the verifier's own work between an answer and the next reveal."""
+
+    def __init__(self, tick):
+        super().__init__()
+        self.tick = tick
+
+    def __call__(self):
+        self.now += self.tick
+        return self.now
+
+
+def test_run_erasure_rejects_when_its_own_reveal_comes_late():
+    """`run_erasure` reveals each read as soon as the last closes; with `T_round = T_read`, a prover answering at
+    `T_read` and a verifier whose clock moves on between the answer and the next reveal, read 1's reveal lapses: the
+    driver returns the rejected result rather than raising, and read 1 is never sent."""
+    clock = Ticking(1)
+    v = _verifier(clock, round_deadline_ns=T_READ)
+    wire = Wire(clock, Prover(read_latency=T_READ - 1))
+    result = run_erasure(v, wire.send, wire.receive)
+    assert result.fill.passed and result.reads[0].passed and not result.accepted
+    assert result.reads[1].index is None and not result.reads[1].answered and len(result.reads) == 2
+    assert [m.j for m, _ in wire.sent if isinstance(m, ReadChallenge)] == [0]
+
+
+# The pins: `SecureErasurePages96112` and `SecureErasurePagesFamily`, and what citing them needs.
+
+MIB = PAGE_BYTES
+
+
+def _certified(size, s, **kw):
+    return ErasureVerifier(size, s, fill_deadline_ns=T_FILL, read_deadline_ns=10**5, source=b"pin", clock=Clock(), **kw)
+
+
+def test_the_reads_required_are_the_pins():
+    """3046 reads at 96112 pages, 3430 at any other count."""
+    assert PINNED_READS == {PIN_96112: 3046, PIN_FAMILY: 3430} and CALIBRATED_PAGES == 96_112
+    assert required_reads(96_112) == 3046
+    assert [required_reads(p) for p in (1, 96_111, 96_113, 1 << 64)] == [3430] * 4
+
+
+@pytest.mark.parametrize("pages, pin", [(96_112, PIN_96112), (1, PIN_FAMILY), (96_111, PIN_FAMILY),
+                                        (96_113, PIN_FAMILY), (1 << 64, PIN_FAMILY)])
+def test_a_covered_audit_cites_its_pin_and_one_read_fewer_is_refused(pages, pin):
+    """At the pin's reads the verifier is built, cites the pin and has no gaps; one read fewer is refused, naming the
+    pin and its count, unless `research=True`, which records the gap."""
+    n = PINNED_READS[pin]
+    v = _certified(pages * MIB, n)
+    assert (v.pin, v.gaps) == (pin, ()) and v.result().certified
+    assert _certified(pages * MIB, n + 1).pin == pin
+    with pytest.raises(ValueError, match=rf"outside {pin}: s = {n - 1} reads is below the {n} of {pin} \(research"):
+        _certified(pages * MIB, n - 1)
+    r = _certified(pages * MIB, n - 1, research=True)
+    assert r.pin == pin and r.gaps == (f"s = {n - 1} reads is below the {n} of {pin}",) and not r.result().certified
+
+
+def test_the_calibrated_fill_at_the_family_s_reads_cites_the_calibrated_pin():
+    assert _certified(CALIBRATED_PAGES * MIB, 3430).pin == PIN_96112
+    assert _certified(CALIBRATED_PAGES * MIB, 3045, research=True).gaps == (f"s = 3045 reads is below the 3046 of "
+                                                                            f"{PIN_96112}",)
+
+
+@pytest.mark.parametrize("size", [CALIBRATED_PAGES * MIB - 1, CALIBRATED_PAGES * MIB + 1, MIB + MIB // 2, 4096])
+def test_a_fill_of_part_of_a_page_is_refused(size):
+    """`M` not a whole number of 1 MiB pages: no pin is about it (`pageScheme` has `B = P·page_bytes`), so the verifier
+    refuses it, at 96112 pages less or more one byte too, where the family is what it would cite."""
+    with pytest.raises(ValueError, match=rf"M = {size} bytes is not a whole number of {MIB}-byte pages; "
+                                         rf"{PIN_FAMILY} is about whole pages"):
+        _certified(size, 3430)
+    assert pinned_guarantee(size, 3430)[1] == (f"M = {size} bytes is not a whole number of {MIB}-byte pages; "
+                                               f"{PIN_FAMILY} is about whole pages",)
+
+
+def test_other_page_sizes_and_more_than_2_64_pages_are_refused():
+    with pytest.raises(ValueError, match=rf"pages of {PAGE} bytes; {PIN_FAMILY} is about pages of {MIB}"):
+        ErasureVerifier(M, S, fill_deadline_ns=T_FILL, read_deadline_ns=T_READ, page_bytes=PAGE, clock=Clock())
+    with pytest.raises(ValueError, match=rf"{(1 << 64) + 1} pages; {PIN_FAMILY} is about at most 2\^64"):
+        _certified(((1 << 64) + 1) * MIB, 3430)
+    pin, gaps = pinned_guarantee(CALIBRATED_PAGES * PAGE, 10, PAGE)
+    assert pin == PIN_FAMILY and len(gaps) == 2
+
+
+def test_the_pins_are_lean_s():
+    """The pin names, page counts, page size and reads are the pinned statements' own (`lean-audit.json` and
+    `Pous/Guarantees/SecureErasurePages.lean`), and both are every-arrival claims."""
+    lean = Path(__file__).resolve().parents[1] / "lean"
+    pins = json.loads((lean / "lean-audit.json").read_text())["pins"]
+    text = (lean / "Pous/Guarantees/SecureErasurePages.lean").read_text()
+    for pin, pages in [(PIN_96112, str(CALIBRATED_PAGES)), (PIN_FAMILY, "P")]:
+        name = pin.removeprefix("Pous.Guarantees.")
+        assert pins[f"Pous.SecurityProofs.{name}"]["signature"] == [f"Pous.SecurityProofs.{name} : {pin}"]
+        body = text.split(f"def {name} : Prop :=", 1)[1].split("\n\n", 1)[0]
+        assert re.search(rf"EraseMeetsDistinct \(PageFill\.pageScheme \(2 \^ 20\) {pages} K\) \(1 - Params\.ρ\) 0 Q "
+                         rf"{PINNED_READS[pin]} \(\(2⁻¹ : ℝ≥0∞\) \^ 128\)", body), name
+    assert "P ≤ 2 ^ 64" in text.split("def SecureErasurePagesFamily : Prop :=", 1)[1].split("\n\n", 1)[0]
+    assert PAGE_BYTES == 2 ** 20 and "at every spot read's arrival" in text and "cannot keep" in text
 
 
 # Deadlines, fail-closed.
@@ -348,10 +579,11 @@ def test_bad_parameters_are_refused():
     for (size, s), kw, match in [((0, 1), {}, "from 1 to M"), ((M, 0), {}, "from 1 to M"),
                                  ((M, M + 1), {}, "from 1 to M"), ((M, S), {"fill_deadline_ns": -1}, "nonnegative"),
                                  ((M, S), {"read_deadline_ns": -1}, "nonnegative"),
+                                 ((M, S), {"round_deadline_ns": -1}, "nonnegative"),
                                  ((M, S), {"page_bytes": 3}, "even number of bytes")]:
         with pytest.raises(ValueError, match=match):
             ErasureVerifier(size, s, **{"fill_deadline_ns": T_FILL, "read_deadline_ns": T_READ, "page_bytes": PAGE,
-                                        **kw}, source=b"x", clock=Clock())
+                                        **kw}, source=b"x", clock=Clock(), research=True)
 
 
 # Seeded prover bugs.

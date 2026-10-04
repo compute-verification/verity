@@ -1,33 +1,50 @@
-"""Secure erasure: all `M` bytes of a prover's volatile memory (HBM and host DRAM) hold a fresh fill at one instant.
+"""Secure erasure: a prover whose `M` bytes of volatile memory pass the audit cannot keep other content through all the
+spot reads.
 
-With its disks unplugged, a prover holds only volatile memory, and a fresh fill of all of it at one instant leaves room
-for nothing else: secure erasure, the full-utilization case of a proof of memory utilization.  `ErasureVerifier`
-enforces the accept rule of the Lean model's secure-erasure game (`Pous.eraseWins`,
-`lean/Pous/Protocol/Model/SecureErasure.lean`, which `Pous.Guarantees.SecureErasureMeets` bounds):
+With its disks unplugged, a prover holds only volatile memory, and a fresh fill of all of it, read back fast enough that
+no byte can be recomputed, leaves no room for anything else: secure erasure, the full-utilization case of a proof of
+memory utilization.  `ErasureVerifier` enforces the accept rule of the Lean model's secure-erasure game over distinct
+reads (`Pous.eraseWinsDraw` with `Pous.distinctReads`, `lean/Pous/Protocol/Model/ReadDraw.lean`) on the keyed page fill
+(`Pous.PageFill.pageScheme`, `lean/Pous/Protocol/Model/PageFill.lean`):
 
 1. **A fresh key.**  `K = fill_key(source, M, s)`, derived from the verifier's own fresh secret, is the fill challenge.
 2. **The fill.**  The prover fills its `M` bytes with `F_K` (`KeyedFill`) and returns `h`.  The fill passes iff
    `h = Digest_K(F_K)`, a keyed ε-almost-universal digest of all `M` bytes, and `h` is in within `T_fill` of the send.
 3. **Spot reads.**  Only then does the verifier draw `s` fresh byte indices (`spot_indices`: the subset sampler on a
    second key, which the prover never sees, revealed in a uniformly shuffled order) and reveal them one at a time.
-   Read `j` passes iff its answer is `F_K[i_j]` and is in within `T_read` of index `i_j`'s reveal.
+   Read `j` passes iff its answer is `F_K[i_j]` and is in within `T_read` of index `i_j`'s reveal, and read `j + 1` is
+   revealed within `T_round` of read `j`'s reveal.
 
 The verifier accepts iff the fill and all `s` reads pass (`ErasureResult.accepted`).  It fails closed:
 
 - an answer past its deadline is rejected without being compared;
 - a step with no answer by its deadline is closed as rejected by `expire()`, which `run_erasure` calls by the
   verifier's clock;
+- a read not revealed within `T_round` of the last reveal is closed as rejected, unrevealed (`challenge()` raises
+  `Lapsed`);
 - the first step that fails ends the audit, rejected, and no other index is revealed.
 
 Every deadline runs from the verifier's own clock reading at the send, never from a time the prover reports.  An answer
 names the read it answers (`respond(j, value)`), and one for any other read is refused, so a stale answer is never
 credited to a later read.
 
-A read shows that a byte was held only if the byte cannot be recomputed within `T_read`.  Each page of `F_K` is a
-ten-round Feistel-SHAKE256 permutation (`primitives.Feistel10`) of a zero page under the tweak `K ‖ u64(page)`, so every
-byte of it costs nine rounds' absorbs: `page_keccak_f(page_bytes)` sequential Keccak-f of at least
-`primitives.KECCAK_F_NS` each (`KeyedFill.recompute_ns`, 1.7352 ms for 1 MiB pages).  `ErasureVerifier` refuses a
-`T_read` that reaches it.
+**The deadlines.**  A read shows that a byte was held only if the byte cannot be recomputed in the time the prover has.
+Each page of `F_K` is a ten-round Feistel-SHAKE256 permutation (`primitives.Feistel10`) of a zero page under the tweak
+`K ‖ u64(page)`, so every byte of it costs nine rounds' absorbs: `page_keccak_f(page_bytes)` sequential Keccak-f of at
+least `primitives.KECCAK_F_NS` each (`KeyedFill.recompute_ns`, 1.7352 ms for 1 MiB pages).  The Lean model reads that as
+`D = 0` over a whole round, from one read's arrival at the prover to the next's.  Read `j + 1`'s index reaches the
+prover no earlier than its reveal and, if its answer is in time, no later than `T_read` after it, so two arrivals are at
+most `T_round + T_read` apart on the verifier's clock.  `ErasureVerifier` refuses deadlines unless
+`T_read ≤ T_round` and `T_round + T_read < recompute_ns`; `T_round` defaults to the largest, `recompute_ns − 1 − T_read`.
+
+**The guarantee.**  An audit of `M = P` whole pages of 1 MiB with at least 3046 reads at `P = 96112`, or 3430 at any
+`1 ≤ P ≤ 2^64`, is covered by `Pous.Guarantees.SecureErasurePages96112` or `Pous.Guarantees.SecureErasurePagesFamily`
+(`pinned_guarantee`; `ErasureVerifier.pin`).  Both are every-arrival claims at `ε = 2^-128`: a prover whose memory at
+each read's arrival is at most `⌊(18/19)·8M⌋` bits is accepted with probability at most `ε`, and an accepted prover
+cannot keep `M/19 + 32` bytes of uniform foreign content (independent of the fill, the pages' permutations and the reads,
+and read from its memory alone) through all the reads, except with probability `ε`.  Neither says what a prover holds at any one instant.  `M` must be
+the prover's whole volatile memory: memory outside the fill (the rest of the device, its on-chip SRAM, host DRAM) adds to
+what a prover can keep.  The verifier refuses an audit outside both pins unless `research=True`.
 """
 
 from __future__ import annotations
@@ -71,6 +88,44 @@ DIGEST_WORD_BYTES = 15
 
 DIGEST_BYTES = 16
 
+PIN_96112 = "Pous.Guarantees.SecureErasurePages96112"
+"""The calibrated fill's guarantee: 96112 pages of 1 MiB, 3046 reads."""
+
+PIN_FAMILY = "Pous.Guarantees.SecureErasurePagesFamily"
+"""Every fill of `1 ≤ P ≤ 2^64` pages of 1 MiB, 3430 reads."""
+
+CALIBRATED_PAGES = 96_112
+"""The 4 Oct 2026 node-2 calibration's fill on an RTX PRO 6000 (93.86 GiB, `art:3340ecba`)."""
+
+FAMILY_MAX_PAGES = 1 << 64
+
+PINNED_READS = {PIN_96112: 3046, PIN_FAMILY: 3430}
+"""The spot reads each pin is proved at."""
+
+
+def required_reads(pages: int) -> int:
+    """The fewest spot reads a pin covers at `pages` pages of 1 MiB: 3046 at 96112 pages, 3430 at any other."""
+    return PINNED_READS[PIN_96112 if pages == CALIBRATED_PAGES else PIN_FAMILY]
+
+
+def pinned_guarantee(size: int, spot_reads: int, page_bytes: int = PAGE_BYTES) -> tuple[str, tuple[str, ...]]:
+    """The pin an audit of `size` bytes in pages of `page_bytes` with `spot_reads` reads cites, and why it does not
+    cover the audit (empty: it does).  `SecureErasurePages96112` at exactly 96112 pages of 1 MiB, else
+    `SecureErasurePagesFamily`.  Both are about whole pages of 1 MiB; the deadlines they need, `D = 0` over every round,
+    `ErasureVerifier` enforces for every audit."""
+    pages, cut = divmod(size, page_bytes)
+    pin = PIN_96112 if page_bytes == PAGE_BYTES and not cut and pages == CALIBRATED_PAGES else PIN_FAMILY
+    out = []
+    if page_bytes != PAGE_BYTES:
+        out.append(f"pages of {page_bytes} bytes; {pin} is about pages of {PAGE_BYTES}")
+    if cut:
+        out.append(f"M = {size} bytes is not a whole number of {page_bytes}-byte pages; {pin} is about whole pages")
+    if pages + (cut > 0) > FAMILY_MAX_PAGES:
+        out.append(f"{pages + (cut > 0)} pages; {pin} is about at most 2^64")
+    if spot_reads < PINNED_READS[pin]:
+        out.append(f"s = {spot_reads} reads is below the {PINNED_READS[pin]} of {pin}")
+    return pin, tuple(out)
+
 
 def page_keccak_f(page_bytes: int) -> int:
     """The sequential Keccak-f[1600] below which no byte of a fill page can be computed.  Every byte of a page is an
@@ -108,7 +163,11 @@ class KeyedFill:
     `xs` the `R` pages as blocks of `W = ⌈page_bytes / 15⌉` 15-byte little-endian words (each page zero-padded to
     `15·W` bytes) and `(g, z) = K.uniform(2^127 − 1, "digest-g" | "digest-z")`: `Σ_r P_g(x_r) · z^r` with
     `P_g(x) = Σ_j x_j · g^(W−1−j)`, as 16 little-endian bytes.  Two different `size`-byte strings collide for at most
-    a `((W − 1) + (R − 1)) / (2^127 − 1)` fraction of the keys (`Pous.Guarantees.DigestAU`)."""
+    a `((W − 1) + (R − 1)) / (2^127 − 1)` fraction of the keys (`Pous.Guarantees.DigestAU`).
+
+    With `size` a whole number of pages this is the Lean model's `Pous.PageFill.pageScheme page_bytes R K` with each
+    page's `Feistel10` as an ideal permutation: page `p` is `π_{K ‖ u64(p)}(0)` (`PageFill.page`, `PageFill.tweak`),
+    and byte `i` is byte `i mod page_bytes` of page `⌊i / page_bytes⌋`."""
 
     def __init__(self, key: Key, size: int, page_bytes: int = PAGE_BYTES) -> None:
         if size < 1:
@@ -184,7 +243,9 @@ def spot_key(source: bytes, fill: Key) -> Key:
 
 def spot_indices(key: Key, spot_reads: int, size: int) -> tuple[int, ...]:
     """`s` distinct byte indices, uniform: `key.subset(s, size, "indices")`, shuffled by `key.uniform(j + 1,
-    ("order", j))` for `j` from `s − 1` down to 1, so that no index tells anything about the next but that it differs."""
+    ("order", j))` for `j` from `s − 1` down to 1, so that no index tells anything about the next but that it differs.
+    Every sequence of `s` distinct indices is equally likely: the Lean model's `Pous.distinctReads`, a uniform
+    `Fin s ↪ Fin B`."""
     out = list(key.subset(spot_reads, size, "indices"))
     for j in range(spot_reads - 1, 0, -1):
         k = key.uniform(j + 1, ("order", j))
@@ -226,7 +287,8 @@ class Check:
     """One closed step: the fill (`j` and `index` None) or spot read `j` of byte `index`.  `on_time`: in within the
     step's deadline; `correct`: on time and the expected digest or byte (an answer past the deadline is never
     compared); `answered`: False for a step closed with no answer (`expire()`); `elapsed_ns` on the verifier's clock,
-    from the send to the answer or the close."""
+    from the send to the answer or the close.  A read whose reveal lapsed (`index` None, never revealed) is closed
+    unanswered, with `elapsed_ns` from the last read's reveal."""
 
     j: int | None
     index: int | None
@@ -242,11 +304,14 @@ class Check:
 
 @dataclass(frozen=True, slots=True)
 class ErasureResult:
-    """The fill's check, if the fill was closed, and the reads closed, in order."""
+    """The fill's check, if the fill was closed, and the reads closed, in order.  `pin` is the guarantee the audit
+    cites (`pinned_guarantee`), `gaps` where it does not cover the audit (only with `research=True`)."""
 
     spot_reads: int
     fill: Check | None
     reads: tuple[Check, ...]
+    pin: str | None = None
+    gaps: tuple[str, ...] = ()
 
     @property
     def accepted(self) -> bool:
@@ -254,37 +319,69 @@ class ErasureResult:
         return (self.fill is not None and self.fill.passed and len(self.reads) == self.spot_reads
                 and all(r.passed for r in self.reads))
 
+    @property
+    def certified(self) -> bool:
+        """`pin` covers this audit: an accepted one may cite it."""
+        return self.pin is not None and not self.gaps
+
+
+class Lapsed(RuntimeError):
+    """A step's deadline passed before the call that would have closed it or revealed the next read: the verifier closed
+    the step as rejected, and the audit is rejected."""
+
 
 class ErasureVerifier:
     """The fill, then `s` spot reads, each closed by its answer or its deadline before the next step.
 
     `fill_challenge()` sends `K` and starts `T_fill`; `receive_digest(h)` closes the fill.  `challenge()` reveals read
-    `(j, index)` and starts its `T_read`; `respond(j, value)` closes read `j` and refuses any other.  `expire()` closes
-    the open step as rejected once its deadline has passed (`overdue`).  `done` once all `s` reads are closed or a step
-    has failed; `accepted` iff the fill and all `s` reads passed.
+    `(j, index)` and starts its `T_read`; `respond(j, value)` closes read `j` and refuses any other.  The next read must
+    be revealed by `reveal_by`, `T_round` after the last reveal: past it, `challenge()` closes that read unrevealed as
+    rejected and raises `Lapsed`.  `expire()` closes the open step, or a lapsed reveal, as rejected once its deadline
+    has passed (`overdue`).  `done` once all `s` reads are closed or a step has failed; `accepted` iff the fill and all
+    `s` reads passed.
 
     `source` is the verifier's fresh secret for this audit (32 random bytes by default): reusing one reuses `K` and the
-    indices.  Deadlines are inclusive, in the units of `clock`.  `T_read` must stay below the fill's `recompute_ns`."""
+    indices.  Deadlines are inclusive, in the units of `clock`.  It refuses deadlines unless `T_read ≤ T_round` and
+    `T_round + T_read < recompute_ns`, so that no two reads' arrivals at the prover are a page's recompute apart, and
+    `T_round` defaults to `recompute_ns − 1 − T_read`.  It refuses an audit that neither pin covers
+    (`pinned_guarantee`); `research=True` runs one anyway, and `gaps` says why it is not covered."""
 
     def __init__(self, size: int, spot_reads: int, *, fill_deadline_ns: int, read_deadline_ns: int,
-                 source: bytes | None = None, context: Mapping[str, Part] | None = None, page_bytes: int = PAGE_BYTES,
-                 clock: Callable[[], int] = time.perf_counter_ns) -> None:
+                 round_deadline_ns: int | None = None, source: bytes | None = None,
+                 context: Mapping[str, Part] | None = None, page_bytes: int = PAGE_BYTES,
+                 clock: Callable[[], int] = time.perf_counter_ns, research: bool = False) -> None:
         if size < 1 or not 1 <= spot_reads <= size:
             raise ValueError(f"an audit reads from 1 to M = {size} bytes, not {spot_reads}")
-        if fill_deadline_ns < 0 or read_deadline_ns < 0:
+        if fill_deadline_ns < 0 or read_deadline_ns < 0 or (round_deadline_ns is not None and round_deadline_ns < 0):
             raise ValueError("deadlines are nonnegative")
         source = secrets.token_bytes(32) if source is None else source
         self.key = fill_key(source, size, spot_reads, context)
         self.fill = KeyedFill(self.key, size, page_bytes)
-        if read_deadline_ns >= self.fill.recompute_ns:
-            raise ValueError(f"T_read = {read_deadline_ns} ns reaches the {self.fill.recompute_ns} ns in which any byte "
+        recompute = self.fill.recompute_ns
+        if read_deadline_ns >= recompute:
+            raise ValueError(f"T_read = {read_deadline_ns} ns reaches the {recompute} ns in which any byte "
                              f"of a {page_bytes}-byte page can be recomputed: a read would not show the byte was held")
+        if round_deadline_ns is None:
+            round_deadline_ns = recompute - 1 - read_deadline_ns
+        if round_deadline_ns + read_deadline_ns >= recompute:
+            raise ValueError(f"T_round + T_read = {round_deadline_ns + read_deadline_ns} ns reaches the {recompute} ns of "
+                             f"a page's recompute: two reads' arrivals could be that far apart, and the guarantees' D = 0 "
+                             f"round runs from one arrival to the next")
+        if round_deadline_ns < read_deadline_ns:
+            raise ValueError(f"T_round = {round_deadline_ns} ns is below T_read = {read_deadline_ns} ns: an answer in "
+                             f"time would lapse the next read's reveal (T_read is at most {(recompute - 1) // 2} ns)")
+        pin, gaps = pinned_guarantee(size, spot_reads, page_bytes)
+        if gaps and not research:
+            raise ValueError(f"the audit is outside {pin}: {'; '.join(gaps)} (research=True runs it anyway)")
+        self.pin, self.gaps = pin, gaps
         self.size, self.spot_reads, self.clock = size, spot_reads, clock
         self.fill_deadline_ns, self.read_deadline_ns = fill_deadline_ns, read_deadline_ns
+        self.round_deadline_ns = round_deadline_ns
         self._spot = spot_key(source, self.key)
         self._indices: tuple[int, ...] | None = None
         self._sent = False
         self._open: tuple[int | None, int | None, int] | None = None
+        self._revealed: int | None = None
         self._fill_check: Check | None = None
         self._reads: list[Check] = []
 
@@ -307,9 +404,20 @@ class ErasureVerifier:
         return sent + (self.fill_deadline_ns if j is None else self.read_deadline_ns)
 
     @property
+    def reveal_by(self) -> int | None:
+        """The last read's reveal plus `T_round`: the next read must be revealed by then.  None before the first
+        reveal, with a step open, or once the audit is over."""
+        if self._revealed is None or self._open is not None or self.done:
+            return None
+        return self._revealed + self.round_deadline_ns
+
+    @property
     def overdue(self) -> bool:
-        """The verifier's clock is past `closes_at`, so `expire()` closes the open step."""
-        return self._open is not None and self.clock() > self.closes_at
+        """The verifier's clock is past `closes_at`, or with no step open past `reveal_by`, so `expire()` closes the
+        step as rejected."""
+        if self._open is not None:
+            return self.clock() > self.closes_at
+        return self.reveal_by is not None and self.clock() > self.reveal_by
 
     @property
     def rejected(self) -> bool:
@@ -344,22 +452,28 @@ class ErasureVerifier:
 
     def challenge(self) -> tuple[int, int]:
         """Reveal the next read, `(j, index)`, and start its clock.  A step open within its deadline is refused; one
-        past it is first closed as rejected, as by `expire()`, and the call then refuses because the audit is
-        rejected."""
+        past it is first closed as rejected, as by `expire()`, and the call raises `Lapsed`.  So does a call past
+        `reveal_by`, which closes read `j` unrevealed as rejected."""
         if self._open is not None:
             if not self.overdue:
                 raise RuntimeError("the open step is unanswered")
             self.expire()
+            raise Lapsed("the open step's deadline passed, so it is closed as rejected: the audit is rejected")
         if self._fill_check is None:
             raise RuntimeError("the fill comes first")
         if self.rejected:
             raise RuntimeError("the audit is rejected: no other index is revealed")
         if self.done:
             raise RuntimeError(f"all {self.spot_reads} reads are closed")
+        now, j = self.clock(), len(self._reads)
+        if self._revealed is not None and now - self._revealed > self.round_deadline_ns:
+            self._close(Check(j, None, False, False, False, now - self._revealed))
+            raise Lapsed(f"read {j} would be revealed {now - self._revealed} ns after read {j - 1}, past T_round = "
+                         f"{self.round_deadline_ns} ns: it is closed unrevealed, and the audit is rejected")
         if self._indices is None:
             self._indices = spot_indices(self._spot, self.spot_reads, self.size)
-        j = len(self._reads)
-        self._open = (j, self._indices[j], self.clock())
+        self._revealed = now
+        self._open = (j, self._indices[j], now)
         return j, self._indices[j]
 
     def respond(self, j: int, value: int) -> Check:
@@ -376,10 +490,16 @@ class ErasureVerifier:
         return self._close(Check(j, i, correct, on_time, True, elapsed))
 
     def expire(self) -> Check:
-        """Close the open step unanswered, once its deadline has passed: rejected."""
+        """Close the open step unanswered once its deadline has passed, or with none open the next read unrevealed
+        once `reveal_by` has passed: rejected."""
         now = self.clock()
         if self._open is None:
-            raise RuntimeError("no step is open")
+            by = self.reveal_by
+            if by is None:
+                raise RuntimeError("no step is open")
+            if now <= by:
+                raise RuntimeError("the next read's reveal is within T_round")
+            return self._close(Check(len(self._reads), None, False, False, False, now - self._revealed))
         if now <= self.closes_at:
             raise RuntimeError("the open step is within its deadline")
         j, i, sent = self._open
@@ -394,7 +514,7 @@ class ErasureVerifier:
         return check
 
     def result(self) -> ErasureResult:
-        return ErasureResult(self.spot_reads, self._fill_check, tuple(self._reads))
+        return ErasureResult(self.spot_reads, self._fill_check, tuple(self._reads), self.pin, self.gaps)
 
 
 def run_erasure(verifier: ErasureVerifier, send: Callable[[FillChallenge | ReadChallenge], None],
@@ -405,7 +525,9 @@ def run_erasure(verifier: ErasureVerifier, send: Callable[[FillChallenge | ReadC
 
     A reply that answers the open step closes it; any other is dropped.  Once the deadline has passed the driver closes
     the open step with `expire()`, so a silent or slow prover never holds the audit open.  A transport that returns
-    None before then fails closed: `expire()` refuses, and the audit stops with the step open, not accepted."""
+    None before then fails closed: `expire()` refuses, and the audit stops with the step open, not accepted.  Each read
+    is revealed as soon as the last is closed; if that comes past `reveal_by` anyway (a slow `send` or `receive`), the
+    verifier closes the read unrevealed and the audit is rejected."""
     send(verifier.fill_challenge())
     while verifier.closes_at is not None:
         reply = receive(verifier.closes_at)
@@ -414,7 +536,10 @@ def run_erasure(verifier: ErasureVerifier, send: Callable[[FillChallenge | ReadC
         elif reply is None or verifier.overdue:
             verifier.expire()
     while not verifier.done:
-        j, i = verifier.challenge()
+        try:
+            j, i = verifier.challenge()
+        except Lapsed:
+            break
         send(ReadChallenge(j, i))
         while verifier.pending == j:
             reply = receive(verifier.closes_at)
@@ -425,5 +550,6 @@ def run_erasure(verifier: ErasureVerifier, send: Callable[[FillChallenge | ReadC
     return verifier.result()
 
 
-__all__ = ["Check", "DigestReply", "ErasureResult", "ErasureVerifier", "FillChallenge", "KeyedFill", "ReadChallenge",
-           "ReadReply", "fill_key", "page_keccak_f", "run_erasure", "spot_indices", "spot_key"]
+__all__ = ["CALIBRATED_PAGES", "PINNED_READS", "PIN_96112", "PIN_FAMILY", "Check", "DigestReply", "ErasureResult",
+           "ErasureVerifier", "FillChallenge", "KeyedFill", "Lapsed", "ReadChallenge", "ReadReply", "fill_key",
+           "page_keccak_f", "pinned_guarantee", "required_reads", "run_erasure", "spot_indices", "spot_key"]
