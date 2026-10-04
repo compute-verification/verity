@@ -51,9 +51,9 @@ python tools/lean/audit.py PKG                once, before pushing (seconds; lev
 Build on a CPU machine; the three packages take about nine minutes from scratch on four cores. Never `lake update`, and
 never change a `require`, a revision or `lean-toolchain` in a feature PR.
 
-To check your records, or get the `--update` printout a statement reviewer reads, without a build of your own, use the
-fast path on a shared machine. Don't run `audit.py --build --update` from a fresh tree there: that took about 22 minutes
-unpinned on the check cores.
+To check your records, or get the `--update` printout of what changed (what Daniel's DM carries), without a build of
+your own, use the fast path on a shared machine. Don't run `audit.py --build --update` from a fresh tree there: that took
+about 22 minutes unpinned on the check cores.
 
 ~~~text
 research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- \

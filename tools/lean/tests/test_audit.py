@@ -218,7 +218,7 @@ def test_generated_constants_belong_to_their_declaration():
         "P.f", "P.walk", "P.Enc", "P.instDecidableFits", "mk"]
 
 
-def test_update_prints_what_a_statement_reviewer_reads(tmp_path):
+def test_update_prints_each_changed_guarantee_and_definition(tmp_path):
     (tmp_path / "Defs.lean").write_text("namespace P\n\ndef f (n : Nat) : Nat := n\n\nend P\n")
     old = recorded()
     reads = [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "9" * 32, "lines": [3, 3]},
