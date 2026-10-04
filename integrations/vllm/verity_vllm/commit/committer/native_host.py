@@ -1279,9 +1279,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 job.arena = big
             if padded > used:
                 job.arena[used:padded].zero_()
-            for m in job.metas:
-                m.stream_off = m.dev_off
-                m.dev_block = None
+            for m in () if hasattr(job.metas, "scan") else job.metas:     # a cached plan's record (plan_cache) is placed already
+                m.stream_off, m.dev_block = m.dev_off, None
             stream_i32 = job.arena[:padded].view(torch.int32)
             ev = [torch.cuda.Event(enable_timing=True) for _ in range(3)]
             ev[0].record(side)
@@ -1307,7 +1306,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self._gpu_t["tree_ms"] += ev[1].elapsed_time(ev[2])
         t1 = time.perf_counter()
         n = int(leaves.shape[0])
-        nbytes = sum(m.nbytes for m in job.metas)
+        nbytes = job.metas.nbytes if hasattr(job.metas, "scan") else sum(m.nbytes for m in job.metas)
         layout_dig = self.layout_digest(job.metas)
         root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
         t2 = time.perf_counter()
@@ -1887,7 +1886,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self.spans.add("root_finalisation", t2 - t1)
         last_end = max((s.t_step_end for s in steps), default=t0)
         persistent = sum(32 * len(lv) for lvls in self._levels.values() for lv in lvls) + 32 * len(steps) + sum(map(len, self._salts.values())) + sum(
-            len(json.dumps([[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes] for m in metas])) for metas in self._layouts.values())
+            len(json.dumps(metas.summary() if hasattr(metas, "scan") else [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes] for m in metas])) for metas in self._layouts.values())
         return RunCommitment(run_root=run_root, steps=steps, spans=self.spans.snapshot(), root_ready_delay_s=t2 - last_end,
                              t_finalize_s=t2 - t0, persistent_bytes=persistent, temporary_bytes_peak=self.pool.bytes_in_use,
                              weight_registration=self.weights,
@@ -1922,7 +1921,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         out = []
         for s in steps:
             metas = self._layouts.get(s.step) or []
-            names = [m.name for m in metas]
+            names = metas.names if hasattr(metas, "scan") else [m.name for m in metas]
             fa2 = next((n for n in names if n.startswith(HIDDEN_M1_PREFIXES)), None)
             out.append({"step": s.step, "root": s.root[:8].hex(), "tensors": s.n_tensors, "bytes": s.n_bytes, "leaves": s.n_leaves,
                         "layout": s.layout_digest[:8].hex(), "fa2": fa2})
@@ -1963,8 +1962,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         return {"modules": modules, "attention_layers": attn_layers, "fa2_hidden_per_layer": 1 if fa2 else 0, "sampler_ids": 1 if any(n == "runner.sampler" for n in modules) else 0,
                 "moe_layers": moe_layers, "moe_tensors_per_layer": (getattr(moe_src, "stats", {}).get("tensors_per_layer", 6) if moe_src is not None else 0),
                 "router_softmax_layers": sorted(int(k) for k in rs_src.layers) if rs_src is not None else [], "tp_sites": sorted(tp_src.site_names()) if tp_src is not None else [], "tp_rank": (tp_src.rank if tp_src is not None else None),
-                # [R19 moe F-r19-moe-1] partials per site per step: 1, or a mid-module site's static call count (OlmoeAttention: 2 gathers)
-                "tp_site_counts": (dict(tp_src.site_counts()) if tp_src is not None and hasattr(tp_src, "site_counts") else {})}
+                # [R19 moe F-r19-moe-1] partials per site per step: 1, or a mid-module site's call count (OlmoeAttention: 2 gathers); the calls its instance's flags rule out are listed
+                "tp_site_counts": (dict(tp_src.site_counts()) if tp_src is not None and hasattr(tp_src, "site_counts") else {}), "tp_sites_ruled_out": list(getattr(tp_src, "mid_sites_ruled_out", None) or [])}
 
     def identity_check(self, manifest: dict[str, Any] | None = None) -> dict[str, Any]:
         """X-03 on IDENTITIES.  For every committed step: (1) every module of the expected manifest produced >= 1 committed tensor and no
@@ -2004,18 +2003,19 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
 
         for step in sorted(self._layouts):
             metas_all = self._layouts[step]
+            cols = metas_all.names if hasattr(metas_all, "scan") else None   # a cached plan's record (plan_cache): its names, no TensorMeta built
             ps = self._padding.get(step) if padded_run else None
             # a padding meta: the step has a PaddingStep, the meta sits in the padding block of the step stream (`stream_off >= stream_base`;
             # an executed arena meta reads -1, an executed packed meta < stream_base) and carries the padding name (fix (c))
             is_pad = (lambda m: m.name.endswith("/bot") and m.stream_off >= ps.stream_base) if ps is not None else (lambda m: False)
-            pad_metas = [m for m in metas_all if is_pad(m)]
-            metas = [m for m in metas_all if not is_pad(m)]
+            pad_metas = [m for m in metas_all if is_pad(m)] if cols is None else []
+            metas = [m for m in metas_all if not is_pad(m)] if cols is None else metas_all
             padding_only = bool(pad_metas) and not metas
             padding_tensors_n += len(pad_metas)
             if padding_only:
                 padding_only_steps.append(int(step))
-            names_all = Counter(m.name for m in metas_all)                # fa2 per-layer uniformity reads every plane of the step (rule (a) planes included)
-            names = Counter(m.name for m in metas)
+            names_all = Counter(m.name for m in metas_all) if cols is None else Counter(cols)   # fa2 per-layer uniformity reads every plane of the step (rule (a) planes included)
+            names = Counter(m.name for m in metas) if cols is None else names_all
             mod_names = Counter({n: c for n, c in names.items() if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n)})
             pad_ident = Counter(_identity_of_padding(m.name) for m in pad_metas)
             pad_mod_names = Counter({n: 1 for n in pad_ident if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n)})
@@ -2043,7 +2043,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             fa2_bad: dict[int, int] = {}
             fa2_detail: dict[str, Any] = {}
             if man["fa2_hidden_per_layer"]:
-                seqs = (FP.StepSequences(()) if padding_only else self._step_sequences(step, metas)) if decls else None
+                seqs = (FP.StepSequences(()) if padding_only else self._step_sequences(step, metas if cols is None else metas.scan())) if decls else None
                 if seqs is not None:
                     # [F-r19-int-22] each layer's class is DERIVED from the Program's attention Call statics x the step's active-sequence set
                     # (fa2_plane_classes.plane_class): a windowed layer's decode launch is un-swapped (6 planes x sequences) while a global GQA
@@ -2093,7 +2093,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                    if padded_run else {}),
                 "manifest": {"modules": len(expected_modules), "attention_layers": len(man["attention_layers"]), "fa2_hidden_per_layer": man["fa2_hidden_per_layer"],
                              "sampler_ids": man["sampler_ids"], "moe_layers": len(man.get("moe_layers") or []), "moe_tensors_per_layer": man.get("moe_tensors_per_layer", 0),
-                             "tp_sites": len(man.get("tp_sites") or []), "tp_rank": man.get("tp_rank")},
+                             "tp_sites": len(man.get("tp_sites") or []), "tp_rank": man.get("tp_rank"), "tp_sites_ruled_out": man.get("tp_sites_ruled_out") or []},
                 # [F-r19-int-22] which attention-plane rule each step ran and what it was derived from
                 "fa2_rule": {"steps": dict(fa2_rules_used), "attention_decls": len(decls),
                              "policy": {k: v for k, v in self._plane_policy().__dict__.items() if k != "ms" or v} if decls else None,

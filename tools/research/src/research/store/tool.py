@@ -229,6 +229,9 @@ class Tool:
     #: `research run --on`: an argv run on the machine in the shipped tree before the run is claimed (`remote.run_preflight`);
     #: exit 0 admits the run, anything else refuses it with the preflight's stderr as the reason
     preflight: list[str] = field(default_factory=list)
+    #: `research merge --push`: an argv started in the target's checkout, detached, with the landed commit appended, once a merge
+    #: the tool gated is on the remote (`merge.after_land`); it outlives the merge and never changes its result
+    after_land: list[str] = field(default_factory=list)
 
     def identity(self) -> dict[str, Any]:
         return {"name": self.name, "version": self.version}
