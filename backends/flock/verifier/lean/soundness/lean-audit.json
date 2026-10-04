@@ -11004,6 +11004,17 @@
    "assumptions": [],
    "type_hash": "f4a5ead15d67146f887cff5d8fe7bfc80c6db374faa08784a8ba159f5f549579"
   },
+  "FlockSoundness.Discharge.ScopeW.acceptsZK_acceptedHW": {},
+  "FlockSoundness.Discharge.ScopeW.flock_headline_execW": {},
+  "FlockSoundness.Discharge.ScopeW.flock_headline_exec_decW": {},
+  "FlockSoundness.Discharge.ScopeW.flock_headline_exec_hiddenW": {},
+  "FlockSoundness.Discharge.ScopeW.flock_headline_exec_hidden_decW": {},
+  "FlockSoundness.Discharge.ScopeW.zk_session_soundHJW": {},
+  "FlockSoundness.Discharge.ScopeW.zk_session_soundHJ_custodyW": {},
+  "FlockSoundness.Discharge.ScopeW.zk_session_soundHW": {},
+  "FlockSoundness.Discharge.ScopeW.zk_session_soundH_custodyW": {},
+  "FlockSoundness.Discharge.ScopeW.zk_session_soundW": {},
+  "FlockSoundness.Discharge.ScopeW.zk_session_sound_custodyW": {},
   "FlockSoundness.Discharge.Tables.accepts_tables": {
    "signature": ["FlockSoundness.Discharge.Tables.accepts_tables : FlockSoundness.Discharge.Tables.AcceptsTables"],
    "assumptions": [],
