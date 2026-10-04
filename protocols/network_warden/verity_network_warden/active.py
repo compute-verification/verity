@@ -50,7 +50,14 @@ from collections import deque
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 
-from verity_network_warden.grid import GridParams, Reason, Record, Row, Warden, row_count
+from verity_network_warden.grid import (
+    GridParams,
+    Reason,
+    Record,
+    Row,
+    Warden,
+    row_count,
+)
 from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet, eligible
 
 HEADER = struct.Struct(">BII")
@@ -211,7 +218,8 @@ class Proxy:
     - `publish(record, params)` receives every window's record, egress and ingress, as it closes (by default they are
       kept in `records`);
     - `frames` logs every egress frame read, as (position, stream, index, anchor, ready), and `shaper.hands` its hand
-      bucket by position; `lateness` holds each tick's lateness in seconds, per grid;
+      bucket by position; `lateness` holds each tick's lateness in seconds, per grid; `link_frames_read` and
+      `requests_released` count the ingress frames read and the requests released to the server;
     - `until(predicate)` waits until the proxy's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, upstream: tuple[str, int], egress: GridParams, ingress: GridParams, sync_set: SyncSet,
@@ -232,7 +240,7 @@ class Proxy:
         self.streams: dict[int, _Stream] = {}
         self.frames: list[tuple[int, int, int, int, int]] = []
         self.lateness: dict[str, list[float]] = {"egress": [], "ingress": []}
-        self.link_frames_read = 0
+        self.link_frames_read = self.requests_released = 0
         self._changed = asyncio.Event()
 
     async def until(self, predicate: Callable[[Proxy], bool]) -> None:
@@ -297,6 +305,7 @@ class Proxy:
                 st.out.put_nowait(payload)
                 if kind == LAST and st.anchor is None:
                     st.anchor = anchor
+                    self.requests_released += 1
             if record is not None:
                 self.publish(record, p)
             self._changed.set()

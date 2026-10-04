@@ -7,14 +7,28 @@ import json
 import random
 
 import pytest
-
 from verity_network_warden import active
-from verity_network_warden.active import DATA, LAST, Bucketer, Events, Proxy, Shaper, VirtualClock
+from verity_network_warden.active import (
+    DATA,
+    LAST,
+    Bucketer,
+    Events,
+    Proxy,
+    Shaper,
+    VirtualClock,
+)
 from verity_network_warden.audit import Audit
 from verity_network_warden.calibration import choose_syncs
 from verity_network_warden.commitment import commit
 from verity_network_warden.grid import GridParams, Reason, Warden, row_count
-from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets, run_shaper
+from verity_network_warden.schedule import (
+    ClockSync,
+    LogicalFrame,
+    SyncSet,
+    expected_grids,
+    handing_buckets,
+    run_shaper,
+)
 
 
 def test_frames_round_trip_and_padding_is_zero():
@@ -223,10 +237,10 @@ async def replay(write_buckets: dict[int, int]):
     horizon = WINDOWS * EGRESS.buckets
     for t in range(horizon):
         clock.advance(t * TAU)
-        await proxy.until(lambda p: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
+        await proxy.until(lambda p, t=t: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
         if t == horizon - 1:
             break  # the run ends at its last tick: what is written after it is ready past the horizon
-        await server.until(sum(st.anchor is not None for st in proxy.streams.values()))
+        await server.until(proxy.requests_released)
         clock.advance(t * TAU + TAU / 2)
         for name, stream, a, ds in SESSIONS:
             if a == t:
@@ -235,12 +249,12 @@ async def replay(write_buckets: dict[int, int]):
                 writer.write(b"".join(active.encode_frame(LAST if j == len(chunks) - 1 else DATA, stream, c, B)
                                       for j, c in enumerate(chunks)))
                 sent += len(chunks)
-        await proxy.until(lambda p: p.link_frames_read >= sent)
+        await proxy.until(lambda p, n=sent: p.link_frames_read >= n)
         for p, (_, _, name, k, _, n) in enumerate(rows):
             if write_buckets[p] == t:
                 server.writers[name].write(event(name, k, n, p))
                 written += 1
-        await proxy.until(lambda p: len(p.frames) >= written)
+        await proxy.until(lambda p, n=written: len(p.frames) >= n)
     await running
     await peer
     for w in (writer, *server.writers.values()):
@@ -348,7 +362,7 @@ def test_a_late_tick_fails_closed_and_does_not_slip():
         running = asyncio.create_task(proxy.run(EmptyReader(), writer))
         for t in range(WINDOWS * EGRESS.buckets):
             clock.advance(t * TAU + (2 * proxy.slack if t == 8 else 0))
-            await proxy.until(lambda p: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
+            await proxy.until(lambda p, t=t: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
         await running
         return proxy, writer
 
@@ -372,7 +386,7 @@ def test_an_overrun_link_fails_closed():
         for t in range(WINDOWS * EGRESS.buckets):
             writer.t = t
             clock.advance(t * TAU)
-            await proxy.until(lambda p: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
+            await proxy.until(lambda p, t=t: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
         await running
         return proxy
 
@@ -394,7 +408,7 @@ def test_a_server_that_refuses_a_stream_fails_ingress_closed():
         running = asyncio.create_task(proxy.run(EmptyReader([frame]), NullWriter()))
         for t in range(WINDOWS * EGRESS.buckets):
             clock.advance(t * TAU)
-            await proxy.until(lambda p: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
+            await proxy.until(lambda p, t=t: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
             if proxy.streams:
                 await asyncio.wait([st.task for st in proxy.streams.values()])
         await running
