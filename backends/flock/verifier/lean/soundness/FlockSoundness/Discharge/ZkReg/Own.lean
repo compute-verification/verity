@@ -130,7 +130,11 @@ theorem ownReads_shape {own : Array Registered.Port}
         rw [hreg]; rfl
       refine ⟨u, q, rfl, ?_⟩
       rw [hport]
-      refine ⟨Array.mem_of_find?_eq_some hreg, beq_iff_eq.mp (Array.find?_some hreg), ?_⟩
+      have hreg' : own.find? (fun reg => (List.range c.ports.size).find? (fun j => c.ports[j]!.name == reg.name) ==
+          some q.val) = some reg := hreg
+      have hf : ((List.range c.ports.size).find? (fun j => c.ports[j]!.name == reg.name) == some q.val) = true :=
+        Array.find?_some hreg'
+      refine ⟨Array.mem_of_find?_eq_some hreg', beq_iff_eq.mp hf, ?_⟩
       show reg.reads[(popUnits pub).getD u.val 0]? = some (some ((ownPos own c pub u.val q.val).getD 0))
       rw [hk0]
       exact Option.join_eq_some_iff.mp hk
@@ -143,17 +147,22 @@ theorem laySh_pos_unit {u u' : Fin n} {q : Fin c.ports.size}
     (hg : g ∈ ((keyProg c hU n).partition (Layout.outsOf c hU n)).io u)
     (hpos : (laySh (Reg := Reg) ht dj y₀ hc hU (pub := pub)).pos g = .inl (u', q)) : u' = u := by
   obtain ⟨x, rfl⟩ := (Const.Prog.instC (keyProg c hU n) (Layout.outsOf c hU n) u).exists_wire_of_mem_io hg
-  have e : (laySh (Reg := Reg) ht dj y₀ hc hU (pub := pub)).pos
-      ((Const.Prog.instC (keyProg c hU n) (Layout.outsOf c hU n) u).wire x) =
-      match Layout.keyRowOf c hU n (Layout.portRowW c)
-          ((Const.Prog.instC (keyProg c hU n) (Layout.outsOf c hU n) u).wire x) with
-      | some (u, ⟨q, _⟩) => Sum.inl (u, q)
-      | none => Sum.inr ((Const.Prog.instC (keyProg c hU n) (Layout.outsOf c hU n) u).wire x) := rfl
-  rw [e] at hpos
   rcases hk : Layout.keyRowOf c hU n (Layout.portRowW c)
       ((Const.Prog.instC (keyProg c hU n) (Layout.outsOf c hU n) u).wire x) with _ | ⟨u'', q'', k⟩
-  · rw [hk] at hpos; simp at hpos
-  · rw [hk] at hpos
+  · have h2 : (laySh (Reg := Reg) ht dj y₀ hc hU (pub := pub)).pos
+        ((Const.Prog.instC (keyProg c hU n) (Layout.outsOf c hU n) u).wire x) =
+        .inr ((Const.Prog.instC (keyProg c hU n) (Layout.outsOf c hU n) u).wire x) :=
+      (Layout.ofRows_pos_none _ hk : (Layout.keyReaders (Layout.portRowW c) (sitesSh_parse (Reg := Reg) ht dj y₀ hc)
+        (Layout.outsOf c hU n) Hm.saltCol (fun _ => pub) (Layout.outBitOf c hU n (Layout.outsOf c hU n) fun _ => pub)).pos
+          _ = _)
+    rw [h2] at hpos
+    cases hpos
+  · have h2 : (laySh (Reg := Reg) ht dj y₀ hc hU (pub := pub)).pos
+        ((Const.Prog.instC (keyProg c hU n) (Layout.outsOf c hU n) u).wire x) = .inl (u'', q'') :=
+      (Layout.ofRows_pos_some _ hk : (Layout.keyReaders (Layout.portRowW c) (sitesSh_parse (Reg := Reg) ht dj y₀ hc)
+        (Layout.outsOf c hU n) Hm.saltCol (fun _ => pub) (Layout.outBitOf c hU n (Layout.outsOf c hU n) fun _ => pub)).pos
+          _ = _)
+    rw [h2] at hpos
     simp only [Sum.inl.injEq, Prod.mk.injEq] at hpos
     obtain ⟨rfl, rfl⟩ := hpos
     exact (Layout.keyRowOf_wire _ x hk).1
