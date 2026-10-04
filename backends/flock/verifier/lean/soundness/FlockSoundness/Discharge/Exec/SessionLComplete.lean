@@ -612,6 +612,102 @@ theorem sessionBL_reject (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
 
 end SessionReject
 
+/-! ## Zero openings
+
+Every level's rows are zero rows under the default salt, so every node at a height of the level's tree is one value
+(`unode`), and the siblings `unode 0, …, unode (d − 1)` take any position's leaf to the cap entry `unode d`. -/
+
+section ZeroMerkle
+
+set_option linter.unusedSectionVars false
+
+variable {F : Type} [Field F] {D Sl : Type} [Inhabited Sl]
+variable (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
+
+/-- The lanes of level `ℓ`'s rows: `k0` at level 0, the level's lanes after. -/
+def lanesOf (sch : Schedule) (ℓ : ℕ) : ℕ := if ℓ = 0 then sch.k0 else (sch.levels.getD ℓ default).lanes
+
+/-- The path length of level `ℓ`'s openings. -/
+def depthOf (sch : Schedule) (ℓ : ℕ) : ℕ := pathLen (sch.levels.getD ℓ default)
+
+/-- The node `k` heights above the leaf `x` of a tree whose nodes at each height are equal. -/
+def unode (x : D) : ℕ → D
+  | 0 => x
+  | k + 1 => H (E.dig (unode x k) ++ E.dig (unode x k))
+
+/-- Level `ℓ`'s zero leaf. -/
+def zleaf (sch : Schedule) (ℓ : ℕ) : D := Lf.leaf (List.replicate (2 ^ lanesOf sch ℓ) 0) default
+
+/-- Level `ℓ`'s cap over zero rows. -/
+def zcap (sch : Schedule) (ℓ : ℕ) : Cap D := fun _ => unode H E (zleaf H Lf sch ℓ) (depthOf sch ℓ)
+
+/-- The caps of levels `1 … ℓ`. -/
+def zcaps (sch : Schedule) (ℓ : ℕ) : List (Cap D) := (List.range ℓ).map fun i => zcap H E Lf sch (i + 1)
+
+/-- The zero openings: at every level, the zero row and the path of equal nodes. -/
+def zopens (sch : Schedule) : Opens F D :=
+  fun _ ℓ _ => (List.replicate (2 ^ lanesOf sch ℓ) 0, (List.range' 0 (depthOf sch ℓ)).map (unode H E (zleaf H Lf sch ℓ)))
+
+/-- The default salts. -/
+def zsalts : Salts Sl := fun _ _ _ => default
+
+/-- A rep's caps are the zero caps of its levels, and each request reads a level it has a cap for, with that level's
+lanes and path length. -/
+def Good (sch : Schedule) (caps : List (Cap D)) (reqs : List Req) : Prop :=
+  caps = zcaps H E Lf sch caps.length ∧
+    ∀ req ∈ reqs, req.level ≤ caps.length ∧ req.lanes = lanesOf sch req.level ∧ req.depth = depthOf sch req.level
+
+theorem walk_unode (x : D) : ∀ d k idx : ℕ,
+    Merkle.walk H E idx (unode H E x k) ((List.range' k d).map (unode H E x)) = unode H E x (k + d)
+  | 0, _, _ => rfl
+  | d + 1, k, idx => by
+      have hup : Merkle.up H E idx (unode H E x k) (unode H E x k) = unode H E x (k + 1) := by
+        unfold Merkle.up
+        split_ifs <;> rfl
+      rw [List.range'_succ, List.map_cons, Merkle.walk, hup, walk_unode x d (k + 1) (idx / 2)]
+      congr 1
+      omega
+
+theorem length_zcaps (sch : Schedule) (ℓ : ℕ) : (zcaps H E Lf sch ℓ).length = ℓ := by
+  simp [zcaps]
+
+theorem zcaps_succ (sch : Schedule) (ℓ : ℕ) :
+    zcaps H E Lf sch (ℓ + 1) = zcaps H E Lf sch ℓ ++ [zcap H E Lf sch (ℓ + 1)] := by
+  simp [zcaps, List.range_succ]
+
+theorem capOf_zcaps (sch : Schedule) {ℓ lvl : ℕ} (h : lvl ≤ ℓ) :
+    capOf (zcap H E Lf sch 0) (zcaps H E Lf sch ℓ) lvl = some (zcap H E Lf sch lvl) := by
+  unfold capOf
+  split_ifs with h0
+  · subst h0
+    rfl
+  · rw [zcaps, List.getElem?_map, List.getElem?_range (by omega)]
+    simp only [Option.map_some]
+    congr 2
+    omega
+
+theorem good_zcaps (sch : Schedule) (ℓ : ℕ) (reqs : List Req)
+    (h : ∀ req ∈ reqs, req.level ≤ ℓ ∧ req.lanes = lanesOf sch req.level ∧ req.depth = depthOf sch req.level) :
+    Good H E Lf sch (zcaps H E Lf sch ℓ) reqs := by
+  refine ⟨by rw [length_zcaps], fun req hreq => ?_⟩
+  rw [length_zcaps]
+  exact h req hreq
+
+/-- **The zero openings verify** every request of a rep whose caps and requests are `Good`. -/
+theorem opensOKL_zero (sch : Schedule) (r : ℕ) (p : PendL F D) (hp : Good H E Lf sch p.caps p.reqs) :
+    OpensOKL H E Lf (zcap H E Lf sch 0) r p (zopens H E Lf sch) zsalts := by
+  intro req hreq
+  obtain ⟨hcaps, hreqs⟩ := hp
+  obtain ⟨hl, hlanes, hdepth⟩ := hreqs req hreq
+  refine ⟨zcap H E Lf sch req.level, by rw [hcaps]; exact capOf_zcaps H E Lf sch hl, fun j _ => ⟨?_, ?_, ?_⟩⟩
+  · simp [zopens, hlanes]
+  · simp [zopens, hdepth]
+  · have hw := walk_unode H E (zleaf H Lf sch req.level) (depthOf sch req.level) 0 (req.positions.getD j 0)
+    rw [Nat.zero_add] at hw
+    exact hw
+
+end ZeroMerkle
+
 local notation "𝔽" => FlockLevel3.GF128
 
 variable {D Sl : Type} [Inhabited D] [Inhabited Sl] {mPts n : ℕ} {Reg : Type}
