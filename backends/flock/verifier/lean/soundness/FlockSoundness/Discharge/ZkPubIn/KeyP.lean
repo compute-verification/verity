@@ -347,7 +347,8 @@ theorem keyProgHP_valPinned (hkeys : KeysRow c hU (portRowW c))
       refine (hlo u'' hu').2 _ ?_
       rw [← hget]
       exact Array.getElem_mem_toList _
-    exact outBitRow_ne_none hcr (Hidden.out_rows_v1 (hparse S R u hu) hcr fun p hp => (hv1 p hp).1) u hwlt ht hno'
+    exact outBitRow_ne_none hcr (Hidden.out_rows_v1 (hparse S R u hu) hcr fun p hp => (hv1 p hp).1)
+      (fun p hp => (hv1 p hp).1) u hwlt ht hno'
   · have hrw := SitesHP.rowsOf_keyProgP hU hparse pi S R u hu
     have hc := (si.acc S R u hu).c_eq (hparse S R u hu)
     obtain ⟨⟨q, t⟩, hqt⟩ := Option.isSome_iff_exists.1 hp
