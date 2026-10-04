@@ -5,7 +5,7 @@
 # `mktemp -d` directory the job removes, builds to $HZ_CACHE (kept, keyed by their inputs) or the scratch directory.
 #   1. builds flock-circuit twice from Flock b684b12 and backends/flock's patches (the proving build: sha512, glue; the
 #      selftest build: + seed-injection), the Lean flock-verify, and a venv with numpy and blake3
-#   2. per config ROLE:K in HZ_CONFIGS (ROLE row_a, row_b or tile, stage.py's): stage N instances, one loopback --zk session
+#   2. per config ROLE:K in HZ_CONFIGS (ROLE row_a, row_b, tile, cut_a_<piece>, stage.py's): stage N instances, one loopback --zk session
 #      (HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded controls, and the Lean
 #      verifier on all of them:
 #        honest-own     the honest session, the verifier's own anchors file                         ACCEPT
@@ -14,7 +14,10 @@
 #        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection: honest ACCEPT;
 #                       output_row_committed_false (a tampered output row), output_claim_false, unit_internal_bit_flipped
 #                       and public_input_claim_false (a false anchor claim, the verifier's file agreeing with it) REJECT
-#      A tile has no public input, so it runs honest-own without --public-inputs and none of the anchor controls.
+#      A config without public inputs (a tile, a cut row's head: no public-inputs.bin) runs honest-own without
+#      --public-inputs and none of the anchor controls.
+#      With HZ_LIBRARY=1 (and fast staging), the library stages the config again beside the rest of it, out of memory first
+#      (oom_score_adj 1000): out/<tag>/library.json holds its sha512 against the fast staging's.
 #   3. summarize.py: out/<role>-k<K>/summary.json and out/summary.json
 # A staged config is kept under $HZ_CACHE/stage, keyed by its role, K, N, HZ_STAGE, the venv and every source stage.py
 # reads; a later run with the same key proves the kept files (stage-cache.json says which, stage.json their own staging).
@@ -25,6 +28,7 @@
 #      (prebuilt)  HZ_STAGE (stage.py's: fast, the default, or library)  HZ_STAGE_ONLY=1 (stage and keep, nothing else)
 #      HZ_LEAN (the Lean checks to run, as globs over their tags or <config>/<tag>: "st-* tile-k4096/honest-own"; default
 #      every one)  HZ_PROVE_ONLY=1 (the proving build and the --zk session only: no selftest build, controls or Lean)
+#      HZ_ROW_K (stage.py's: a cut row's segment length, in the stage cache's key)  HZ_LIBRARY=1 (the library check above)
 set -uo pipefail
 SRC=$(pwd)
 J=$SRC/benchmarks/pouw/hidden_zk
@@ -139,11 +143,11 @@ session() {   # session D O: one loopback --zk session with the proving build, t
   return $rc
 }
 
-controls() {  # controls D O ROLE: the selftest build's cases, recorded for the Lean verifier
-  local D=$1 O=$2 role=$3 c rc
+controls() {  # controls D O: the selftest build's cases, recorded for the Lean verifier
+  local D=$1 O=$2 c rc
   mkdir -p "$D/rec"
   for c in $CASES; do
-    [[ $role == tile* || $role == hidden* ]] && [ "$c" = public_input_claim_false ] && continue
+    [ ! -e "$D/public-inputs.bin" ] && [ "$c" = public_input_claim_false ] && continue
     $TIME "$O/selftest-$c.time" bash -c "$(vlimit $PROVE_GB) exec $SBIN selftest --zk --instances $D/inst.bin \
       --circuit $D/circuit.txt --only $c --record-dir $D/rec" > "$O/selftest-$c.out" 2> "$O/selftest-$c.err"
     rc=$?
@@ -152,8 +156,8 @@ controls() {  # controls D O ROLE: the selftest build's cases, recorded for the 
   "$PY" "$SRC/backends/flock/verifier/selftest_records.py" "$D/rec" "$D/st" > /dev/null
 }
 
-lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at once as fit beside each other
-  local D=$1 O=$2 role=$3 each par cap c tag args s case pub own
+lean_jobs() {   # lean_jobs D O: every Lean check of one config, as many at once as fit beside each other
+  local D=$1 O=$2 each par cap c tag args s case pub own
   each=$(( $(stat -L -c %s "$D/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 ))       # GB: its peak is about 5x the circuit text at K=256
   par=$(( STAGE_GB / each )); [ $par -lt 1 ] && par=1; [ $par -gt 8 ] && par=8
   cap=$(( STAGE_GB / par ))
@@ -161,7 +165,7 @@ lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at
   local cmds=()
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tail -1)
   if [ -n "$s" ]; then
-    if [[ $role == tile* || $role == hidden* ]]; then
+    if [ ! -e "$D/public-inputs.bin" ]; then
       cmds+=("honest-own|$base --statement verity/flock-circuit --public $D/pub.bin --session $s")
     else
       cmds+=("honest-own|$base --statement verity/flock-circuit --public $D/pub.bin --public-inputs $D/public-inputs.bin --session $s"
@@ -173,7 +177,7 @@ lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at
     [ -d "$s" ] || continue
     case=$(basename "$s"); pub=$D/pub.bin own=$D/public-inputs.bin
     [ -e "$s/pub.bin" ] && pub=$s/pub.bin
-    if [[ $role == tile* || $role == hidden* ]]; then own=""
+    if [ ! -e "$D/public-inputs.bin" ]; then own=""
     elif [ "$case" = public_input_claim_false ]; then   # the verifier's file agreeing with the false claim
       own=$s/own.bin
       "$PY" -c "import sys; o = open(sys.argv[1], 'rb').read(); h, b = o.split(b'\n', 1); p = open(sys.argv[2], 'rb').read(); \
@@ -212,7 +216,7 @@ stage_config() {   # stage_config ROLE K TAG D O: D holds the config's staged fi
   key=$(tree_key benchmarks/pouw/hidden_zk/stage.py benchmarks/pouw/hidden_zk/fast_stage.py benchmarks/pouw/hidden_zk/core3_scratch.py \
     benchmarks/pouw/hidden_zk/hash_scratch.py backends/flock/python packages/verity/src protocols/pouw/verity_pouw \
     protocols/pouw/tests/pouw_rows_vectors.py)
-  S=${HZ_CACHE:-$W/cache}/stage/$tag-n$N-$HZ_STAGE-$(basename "$(dirname "$(dirname "$PY")")")-$key
+  S=${HZ_CACHE:-$W/cache}/stage/$tag${HZ_ROW_K:+-ks$HZ_ROW_K}-n$N-$HZ_STAGE-$(basename "$(dirname "$(dirname "$PY")")")-$key
   mkdir -p "$(dirname "$S")"
   (
     flock 9
@@ -230,6 +234,27 @@ stage_config() {   # stage_config ROLE K TAG D O: D holds the config's staged fi
   for f in "$S"/*; do [ "$(basename "$f")" = stage.time ] || ln -s "$f" "$D/"; done
 }
 
+library_start() {   # library_start ROLE K D O: with HZ_LIBRARY=1, the library's staging of the config, in the background
+  LIB_PID=
+  [ "${HZ_LIBRARY:-0}" = 1 ] && [ "$HZ_STAGE" = fast ] || return 0
+  rm -rf "$3.lib" && mkdir -p "$3.lib"
+  HZ_STAGE=library $TIME "$4/stage-library.time" bash -c "echo 1000 > /proc/self/oom_score_adj; $(vlimit $PROVE_GB) \
+    exec $PY $J/stage.py $1 $2 $N $3.lib" > "$4/stage-library.out" 2> "$4/stage-library.err" &
+  LIB_PID=$!
+}
+library_end() {     # library_end D O: waits for it; O/library.json, its sha512 against the fast staging's
+  [ -n "${LIB_PID:-}" ] || return 0
+  wait "$LIB_PID"; LIB_PID=
+  log "  library staging: $("$PY" -c "import json, sys; from pathlib import Path; f = json.load(open(sys.argv[1])); \
+p = Path(sys.argv[2]); t = json.load(open(sys.argv[3])); l = json.load(open(p)) if p.exists() else None; \
+r = {'fast_sha512': f['circuit_sha512'], 'library_sha512': l and l['circuit_sha512'], 'equal': bool(l) and l['circuit_sha512'] == f['circuit_sha512'], \
+'exit': t['exit'], 'wall_s': t['wall_s'], 'maxrss_gb': round(t['maxrss_kb'] / 2**20, 1)}; \
+json.dump(r, open(sys.argv[4], 'w'), indent=1); print('sha512 equal' if r['equal'] else 'sha512 NOT equal (or no staging)', \
+r['library_sha512'] and r['library_sha512'][:16], 'exit', r['exit'], r['wall_s'], 's', r['maxrss_gb'], 'GB')" \
+    "$2/stage.json" "$1.lib/stage.json" "$2/stage-library.time" "$2/library.json") $(tail -1 "$2/stage-library.err" | cut -c1-160)"
+  rm -rf "$1.lib"
+}
+
 run_configs() {
   local cfg role k tag D O
   for cfg in $CONFIGS; do
@@ -243,13 +268,15 @@ run_configs() {
     cp "$D/stage.json" "$D/pin.txt" "$O/"
     [ -e "$D/public-inputs.bin" ] && cp "$D/public-inputs.bin" "$D/public-inputs-wrong.bin" "$O/"
     log "$tag: staged: $("$PY" -c "import json; s = json.load(open('$O/stage.json')); c = json.load(open('$O/stage-cache.json')); print(s['definition'], s['ands'], 'ANDs, k_log', s['k_log'], s['circuit_bytes'], 'B, sha512', s['circuit_sha512'][:16], 'peak', s['maxrss_gb'], 'GB,', s['seconds']['total'], 's,', s.get('staging'), 'staging, cache', 'hit' if c['hit'] else 'miss')")"
-    if [ "${HZ_STAGE_ONLY:-0}" = 1 ]; then "$PY" "$J/summarize.py" "$OUT" > /dev/null; rm -rf "$D"; continue; fi
+    library_start "$role" "$k" "$D" "$O"
+    if [ "${HZ_STAGE_ONLY:-0}" = 1 ]; then library_end "$D" "$O"; "$PY" "$J/summarize.py" "$OUT" > /dev/null; rm -rf "$D"; continue; fi
     log "$tag: --zk session ($WARM warm + $RUNS timed)"
     session "$D" "$O" || log "$tag: --zk session FAILED: $(tail -2 "$O/prove.err")"
     if [ "${HZ_PROVE_ONLY:-0}" != 1 ]; then
-      controls "$D" "$O" "$role"
-      lean_jobs "$D" "$O" "$role"
+      controls "$D" "$O"
+      lean_jobs "$D" "$O"
     fi
+    library_end "$D" "$O"
     "$PY" "$J/summarize.py" "$OUT" > /dev/null
     rm -rf "$D"
     [ -n "${HZ_CACHE:-}" ] || rm -rf "$W/cache/stage"   # without a kept cache, a config's staged files go with it
