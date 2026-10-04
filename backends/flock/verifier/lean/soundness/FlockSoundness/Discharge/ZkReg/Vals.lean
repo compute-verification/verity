@@ -3,14 +3,16 @@ import FlockSoundness.Discharge.ZkReg.RegLink
 import FlockSoundness.Registered.Defs
 
 /-!
-# The committed values of a `--zk --registered` session at its registered reads
+# The committed values of a `--zk --registered` session where its leaf is the registrant's
 
 `zk_session_regValsR`: in `flock-verify verify --zk --registered F` sessions, at the committed values
 `zk_session_soundR` reads (`XplurZC` at `simZ … τ`, the rows `rsZAtS`), no drawn unit reads a registered read whose
 session leaf is the registrant's and whose committed value is not the registrant's, except with probability
-`ε_ks + δ_link + δ_reg` (`RegValsSound`'s event, at `laySh`'s registered reads `rd`). The registrant's opening of each
-commit string is its row and salt (`regOpenZ`), whose hm96 leaf is `rd.leaf`; `δ_reg = regTermZC` is `cr/sha-512` for
-the finders that collide an extracted opening with the registrant's (`RegCRZC`, a hypothesis as `hCR` is).
+`ε_ks + δ_link + δ_reg`. At a read whose session leaf is not the registrant's it says nothing. Its event is the bridge's
+`FlockBridge.RegisteredReads.RegValsSound` (`bridge/FlockBridge/RegisteredReads.lean`) at `laySh`'s registered reads
+`rd`, with `Xc` the committed values. The registrant's opening of each commit string is its row and salt (`regOpenZ`),
+whose hm96 leaf is `rd.leaf`; `δ_reg = regTermZC` is `cr/sha-512` for the finders that collide an extracted opening
+with the registrant's (`RegCRZC`, a hypothesis as `hCR` is).
 -/
 
 namespace FlockSoundness.Discharge.ZkReg
@@ -33,11 +35,12 @@ def regOpenZ {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → L
       ((rsZAtS (Reg := Reg) ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtS_computes ht dj y₀ hc hU hpub hscope)).Opening :=
   fun p => (p, rd.wv p, rd.ws p)
 
-/-- **The committed values of a `--zk --registered` session are the registered values at its registered reads**, except
-with probability `ε_ks + δ_link + δ_reg`: for every registered-reads record `rd` of `laySh`, on `zk_session_soundR`'s
-assumptions without A3 and with `cr/sha-512` at budget `qW` for the registered-value finders of `τ`'s simulation (`hW`),
-an accepted session whose draw has a unit reading a wire `g` at a registered read, whose session leaf there is the
-registrant's, and whose committed bit on `g` is not the registrant's value's, has probability at most
+/-- **The committed values of a `--zk --registered` session are the registered values wherever a drawn unit reads the
+registrant's leaf**, except with probability `ε_ks + δ_link + δ_reg`: for every registered-reads record `rd` of
+`laySh`, on `zk_session_soundR`'s assumptions without A3 and with `cr/sha-512` at budget `qW` for the registered-value
+finders of `τ`'s simulation (`hW`), an accepted session whose draw has a unit reading a wire `g` at a registered read,
+whose session leaf there is the registrant's, and whose committed bit on `g` is not the registrant's value's, has
+probability at most
 `ksAvgStrictZ + linkBoundZC + regTermZC`. -/
 theorem zk_session_regValsR
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
