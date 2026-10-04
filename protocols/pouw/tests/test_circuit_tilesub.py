@@ -134,8 +134,12 @@ def _inputs(shape) -> tuple:
             else CF.inputs4(shape.k, shape.m, shape.n, "pc4-tilesub"))
 
 
-@pytest.mark.parametrize("hidden", [False, True], ids=["plain", "hidden"])
-@pytest.mark.parametrize("shape", SHAPES, ids=IDS)
+SLOW_ROOTS = {"pc4-1x1-n33-hidden"}
+ROOT_CASES = [pytest.param(s, h, id=f"{i}-{t}", marks=pytest.mark.slow if f"{i}-{t}" in SLOW_ROOTS else ())
+              for s, i in zip(SHAPES, IDS) for h, t in [(False, "plain"), (True, "hidden")]]
+
+
+@pytest.mark.parametrize("shape, hidden", ROOT_CASES)
 def test_the_cut_roots_give_todays_outputs(shape, hidden):
     """The cut's `call` and `check` give today's roots' outputs on a scheme's honest block (the call reading the weight's
     committed rows), plain and hiding, so a hiding root's tile digests are `PearlTileDigest`'s; the weight is the shape's
