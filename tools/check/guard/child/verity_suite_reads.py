@@ -22,12 +22,16 @@ import os
 import re
 import sys
 
-#: a module's cached bytecode, by its source's directory and name
-_PYC = re.compile(r"^(.*?)(?:^|/)__pycache__/([^/]+?)\.[^/]+\.pyc$")
+#: a module's cached bytecode, or the temporary file an import writes it through, by its source's directory and name
+_PYC = re.compile(r"^(.*?)(?:^|/)__pycache__/([^/]+?)\.[^/]+\.pyc(?:\.\d+)?$")
 _PYTHON = re.compile(r"^python(\d+(\.\d+)?)?$")
 #: programs that read no repository file, whatever they're given: they report on the machine (`platform` runs `uname`)
 PROBES = frozenset({"uname", "true", "false", "nproc", "getconf", "hostname", "id", "whoami", "ldconfig", "lscpu", "nvidia-smi"})
 
+
+def _source(path: str) -> str:
+    m = _PYC.match(path)
+    return os.path.join(m.group(1), f"{m.group(2)}.py") if m else path
 
 class Reads:
     def __init__(self, env=os.environ):
@@ -53,9 +57,15 @@ class Reads:
         name = os.path.basename(path)
         if path.startswith(self.suite) and name.startswith("test_") and name.endswith(".py"):
             return "R", os.path.relpath(path, self.root)
-        if path.startswith(self.inside) and not path.startswith(self.allowed) and path not in self.allowed_files:
+        if self.outside(path):
             return "O", os.path.relpath(path, self.root)
         return None
+
+    def outside(self, path: str) -> bool:
+        """Whether ``path`` (absolute and normalized) is a repository file outside the inputs; a cached module is inside when its
+        source is."""
+        return (path.startswith(self.inside) and not path.startswith(self.allowed) and path not in self.allowed_files
+                and _source(path) not in self.allowed_files)
 
     def traced(self, path: str) -> str | None:
         """The repository path a key narrowed to what the tests use holds for an open of ``path``; None outside the repository,
@@ -63,9 +73,7 @@ class Reads:
         path = self._abs(path)
         if not path.startswith(self.inside) or path.startswith((*self.prefix, self.here)):
             return None
-        rel = os.path.relpath(path, self.root)
-        m = _PYC.match(rel)
-        return f"{m.group(1)}/{m.group(2)}.py".lstrip("/") if m else rel
+        return os.path.relpath(_source(path), self.root)
 
     def seeable(self, argv, env) -> bool:
         """Whether a program started with ``argv`` (and ``env``, None when inherited) is a Python that traces itself here."""

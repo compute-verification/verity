@@ -21,8 +21,9 @@ The path, read from the source:
    under SWAP_AB up to M = 64); the Definitions take KB and SWAP as statics.  Under `VLLM_BATCH_INVARIANT` it is `get_default_config`'s
    fixed tile BLOCK_SIZE_M 64, N 64, K 32 (fused_moe.py:1308-1315): KB 32, SWAP_AB False.  The tuned file's M <= 3 entries,
    BLOCK_SIZE_M 8 x BLOCK_SIZE_N 32, are no wgmma tile (SWAP_AB needs BLOCK_SIZE_N >= 64), and no Definition here models their dot.
-4. Between them, `ops.silu_and_mul_per_block_quant(group_size=128)` (triton_moe.py:471-485; csrc fused_silu_mul_block_quant.cu): its
-   own Definition, not this module's.
+4. Between them, `ops.silu_and_mul_per_block_quant(group_size=128)` (triton_moe.py:471-485), the fused branch every GLM-5.3 layer
+   takes (SiLU, fp8_w8a8, block [128, 128], no LoRA, no e8m0): `SiluMulFp8BlockQuant_v1` below.  Its (q, scale) is the w2 launch's
+   (A, A_scale); no bf16 intermediate exists.
 
 `fused_moe_kernel`'s block-wise branch (fused_moe.py:542-552), per K tile k of BLOCK_SIZE_K = KB:
 
@@ -51,16 +52,34 @@ Registered functions (all `Name_v1`; statics K, N, G = 128 the scale block, KB =
   MoeExpertFp8BlockGemmW{K,N,G,KB,SWAP}       the w2 launch on one pair
 The expert's e4m3 weight rows `w` [N, K] and their f32 block scales `ws` [cdiv(N, G), K/G] (`w13_weight_scale_inv` /
 `w2_weight_scale_inv`, the checkpoint's words) are operands; `xq` / `sx` are the pair's quantised activation and its group scales.
+
+`silu_and_mul_per_block_quant_kernel` (csrc/libtorch_stable/quantization/fused_kernels/fused_silu_mul_block_quant.cu, built with
+VLLM_GPU_FLAGS: no `--use_fast_math`, so `expf` is the math library's sequence and `/` is `div.rn`), one thread block per (row, group),
+one element per thread, on the w13 output viewed [pairs, 2I] = [gate || up]:
+
+    g = f32(gate[e]); u = f32(up[e]); result = (g * (1.0f / (1.0f + expf(-g)))) * u              (cu:54-60)
+    absmax = shared-memory tree of fmaxf over fabsf(result), stride G/2 down to 1                  (cu:63-73)
+    scale = fmaxf(absmax / 448.0f, 1.0f / (448.0f * 512.0f))     (`scale_ub` None at the call site; cu:76-94)
+    q[e] = e4m3(fmaxf(-448, fminf(result / scale, 448)))         (`ScaledQuant<fp8, false>`, quant_conversions.cuh:40-45, 70-74)
+
+The scale is `fp8.Fp8RowScale_v1` and the clamp `fp8.Fp8ActQuant_v1`'s (NaN -> 448); `act.SiluMul_v2` rounds to bf16 and is not this
+function.  `scales` is [pairs, I/G] row-major (`is_scale_transposed` False, _custom_ops.py:493), the w2 launch's A_scale.
+
+  SiluMulFp8BlockQuantResult                  (gate, up: bf16) -> f32: one thread's `result`
+  SiluMulFp8BlockQuantGroup{G}                (gate, up: G bf16) -> (q: G e4m3, scale: f32): one thread block
+  SiluMulFp8BlockQuant{I,G}                   (gu: 2I bf16) -> (q: I e4m3, scale: I/G f32): one (token, slot) row
 """
 from __future__ import annotations
 
 from verity.ir.defs import bind, composite
-from verity.ir.refs import Coll, concat
-from verity.ir.types import Array
-from verity.ml.prims import HopperE4m3QgmmaDot32
+from verity.ir.refs import Coll, concat, tuple_of
+from verity.ir.types import Array, Tuple
+from verity.ml.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
+from verity.ml.scalar import F32Fabs, F32Fmaxf, F32Fminf, F32Neg
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.fp8 import E4M3, weight_blocks
+from verity_vllm.program.registry.fp8 import C448, C_NEG448, E4M3, Fp8RowScale, weight_blocks
+from verity_vllm.program.registry.moe import ONE32, NvExpf
 from verity_vllm.program.registry.prims import BF16, F32
 
 #: `get_default_config` under VLLM_BATCH_INVARIANT (fused_moe.py:1308-1315) clamped by the block (fused_moe.py:844-846)
@@ -147,4 +166,63 @@ def MoeExpertFp8BlockGemmW(B, S, xq, sx, g, w, ws):
     return rows(B, coord, S.N, S.G, w, ws, (xq, sx, g))
 
 
-FP8_MOE_COMPOSITES = [MoeExpertFp8BlockCoordinate, MoeExpertFp8BlockCoordinateW, MoeExpertFp8BlockGemm, MoeExpertFp8BlockGemmW]
+_ACT_CONF = ("model-untested: read from vLLM d9105ea80 fused_silu_mul_block_quant.cu and its build flags; "
+             "tests/properties/glm53_block_fp8_capture_gpu.py is its hardware check")
+
+
+def check_act_statics(I: int, G: int) -> None:
+    if not (G > 0 and G & (G - 1) == 0 and I > 0 and I % G == 0):
+        raise ValueError(f"silu_and_mul_per_block_quant needs a power-of-two G dividing I (I={I}, G={G})")
+
+
+def max_tree(B, vals: list, fmaxf):
+    """The kernel's shared-memory reduction (cu:63-73): for stride G/2, G/4, ..., 1, slot t < stride becomes `fmaxf(v[t], v[t + stride])`."""
+    while len(vals) > 1:
+        h = len(vals) // 2
+        vals = [B.call(fmaxf, vals[t], vals[t + h]) for t in range(h)]
+    return vals[0]
+
+
+def act_row(B, group, I: int, G: int, gu, e4m3=E4M3, f32=F32):
+    """The I/G groups of one row [gate || up]: group g over gate[gG:(g+1)G] and up[gG:(g+1)G], its words and scale in order."""
+    check_act_statics(I, G)
+    parts = [B.call(group, gu[g * G:(g + 1) * G], gu[I + g * G:I + (g + 1) * G]) for g in range(I // G)]
+    return tuple_of(Coll(Array(I, e4m3), concat([p[0].refs for p in parts])), Coll(Array(I // G, f32), concat([p[1].refs for p in parts])))
+
+
+@composite("SiluMulFp8BlockQuantResult", 1, [], lambda S: ((("gate", BF16), ("up", BF16)), F32), conformance=_ACT_CONF)
+def SiluMulFp8BlockQuantResult(B, S, gate, up):
+    """One thread's `result` (cu:54-60): g = f32(gate), `(g * (1.0f / (1.0f + expf(-g)))) * f32(up)`, `expf` = `NvExpf_v1`, the
+    reciprocal an IEEE `rcp.rn` (the value of `div.rn`), each step rounded to nearest with subnormals kept.  A contraction of
+    `1.0f + expf(.)` into an FFMA changes no word: `expf` ends with an exact product by a power of two."""
+    g = B.call(P.Bf16ToF32, gate)
+    one = B.call(ONE32)
+    sig = B.call(P.F32Div, one, B.call(P.F32Add, one, B.call(NvExpf, B.call(F32Neg, g))))
+    return B.call(P.F32Mul, B.call(P.F32Mul, g, sig), B.call(P.Bf16ToF32, up))
+
+
+@composite("SiluMulFp8BlockQuantGroup", 1, ["G"],
+           lambda S: ((("gate", Array(S.G, BF16)), ("up", Array(S.G, BF16))), Tuple(Array(S.G, E4M3), F32)), conformance=_ACT_CONF)
+def SiluMulFp8BlockQuantGroup(B, S, gate, up):
+    """One thread block: the G words r of `SiluMulFp8BlockQuantResult_v1`, absmax = `max_tree` over `fabsf(r)`, scale =
+    `Fp8RowScale_v1`(absmax), and `q[e] = e4m3(fmaxf(-448, fminf(r[e] / scale, 448)))` (a true division; inside the clamp the
+    satfinite and c10's software conversion agree).  A NaN r is dropped by the fmaxf tree and quantises to 448."""
+    check_act_statics(S.G, S.G)
+    r = [B.call(SiluMulFp8BlockQuantResult, gate[e], up[e]) for e in range(S.G)]
+    s = B.call(Fp8RowScale, max_tree(B, [B.call(F32Fabs, x) for x in r], F32Fmaxf))
+    c448, cneg = B.call(C448), B.call(C_NEG448)
+    q = [B.call(F32ToE4m3Sat, B.call(F32Fmaxf, cneg, B.call(F32Fminf, B.call(P.F32Div, x, s), c448))) for x in r]
+    return tuple_of(Coll(Array(S.G, E4M3), concat([w.refs for w in q])), s)
+
+
+@composite("SiluMulFp8BlockQuant", 1, ["I", "G"],
+           lambda S: ((("gu", Array(2 * S.I, BF16)),), Tuple(Array(S.I, E4M3), Array(S.I // S.G, F32))), conformance=_ACT_CONF)
+def SiluMulFp8BlockQuant(B, S, gu):
+    """`ops.silu_and_mul_per_block_quant(intermediate_cache1.view(-1, 2I), group_size=G)` on one (token, slot) row gu = [gate || up]
+    of the w13 launch's output: (q, scale), that row of `qintermediate_cache2` [pairs, I] e4m3 and of `a2q_scale` [pairs, I/G] f32,
+    group g `SiluMulFp8BlockQuantGroup_v1{G}`."""
+    return act_row(B, bind(SiluMulFp8BlockQuantGroup, G=S.G), S.I, S.G, gu)
+
+
+FP8_MOE_COMPOSITES = [MoeExpertFp8BlockCoordinate, MoeExpertFp8BlockCoordinateW, MoeExpertFp8BlockGemm, MoeExpertFp8BlockGemmW,
+                      SiluMulFp8BlockQuantResult, SiluMulFp8BlockQuantGroup, SiluMulFp8BlockQuant]

@@ -186,3 +186,69 @@ def test_the_frontend_rule_binds_the_active_targets_construction(monkeypatch, sc
     assert ctx.calls == [fn] * 2
     (facts, emitted), = ctx.records
     assert facts["scale"] == (scale or "shared-per-block") and emitted == f"{fn.id} x2"
+
+
+def test_the_frontend_rule_binds_a_ragged_n(monkeypatch):
+    """GLM-5.3's `fused_qkv_a_proj` (K = 6144, N = 2048 + 576 = 2624): the rule applies with b_scales [K/G, cdiv(N, G)] = [48, 21],
+    reads `weight_scale_inv` as the [21, 48] matrix b_scales views, and binds the Definition at N = 2624.  A b_scales of N // G = 20
+    columns and a K that ends mid-group are refused."""
+    import torch
+
+    from verity_vllm.program.frontend.derive import Alloc
+    from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
+    from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
+
+    K, N, G = 6144, 2624, 128
+    g = torch.fx.Graph()
+    out, a, b, a_s, b_s = (g.placeholder(n) for n in ("out", "a", "b", "a_s", "b_s"))
+    dtypes = {out: torch.bfloat16, a: R.FP8_E4M3, b: R.FP8_E4M3, a_s: torch.float32, b_s: torch.float32}
+
+    def derive_ctx(k=K, nb=21):
+        shapes = {out: (3, N), a: (3, k), b: (k, N), a_s: (3, k // G), b_s: (k // G, nb)}
+        return types.SimpleNamespace(val=lambda v: Alloc(None, v), dtype_of=dtypes.get, shape_of_node=shapes.get, weight_of=lambda v: "w")
+
+    node, rule = types.SimpleNamespace(args=(out, a, b, a_s, b_s), kwargs={}), R.CutlassScaledMmFp8BlockRule()
+    clear_observations()
+    try:
+        observe_target_profile(DEFAULT_TARGET.with_overrides(compute_capability=(9, 0)))
+        assert rule.applies(node, derive_ctx()) is True
+        assert "b_scales (48, 20) (want [48, 21])" in rule.applies(node, derive_ctx(nb=20))
+        assert "K=6208 is not a multiple" in rule.applies(node, derive_ctx(k=K + 64))
+    finally:
+        clear_observations()
+
+    seen = []
+    monkeypatch.setattr(R, "shape", lambda ctx, v: (K, N))
+    monkeypatch.setattr(R, "_untransposed", lambda ctx, v, k, n, name: seen.append((name.rsplit("/", 1)[1], k, n)) or name)
+    monkeypatch.setattr(R, "rows_of", lambda coll: ([coll, coll], ()))
+    monkeypatch.setattr(R, "from_rows", lambda outs, lead: outs)
+    clear_observations()
+    try:
+        observe_target_profile(DEFAULT_TARGET.with_overrides(compute_capability=(9, 0)))
+        ctx = _Ctx()
+        rule.emit(types.SimpleNamespace(args=("out", "a", "b", "a_s", "b_s")), ctx)
+    finally:
+        clear_observations()
+    assert seen == [("w", K, N), ("ws", K // G, 21)]
+    assert ctx.calls == [bind(fp8.ScaledMmFp8BlockSharedScale, K=K, N=N, G=G)] * 2
+
+
+@pytest.mark.parametrize("cc, family", [((8, 9), "ampere"), ((10, 0), "unregistered:10.0"), ((12, 0), "blackwell_consumer")])
+def test_the_frontend_rule_refuses_every_target_but_hopper(cc, family):
+    """On sm_120, `VLLM_USE_DEEP_GEMM=0` also selects `CutlassFp8BlockScaledMMKernel`, whose `_C.cutlass_scaled_mm` is the sm_120
+    blockwise kernel: the kernel-class read-back cannot tell it from the sm_90 one, so the rule refuses the target, as the fold does."""
+    from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
+    from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
+
+    node = types.SimpleNamespace(args=(), kwargs={})
+    clear_observations()
+    try:
+        observe_target_profile(DEFAULT_TARGET.with_overrides(compute_capability=cc))
+        refused = R.CutlassScaledMmFp8BlockRule().applies(node, None)
+        observe_target_profile(DEFAULT_TARGET.with_overrides(compute_capability=(9, 0)))
+        past_the_gate = R.CutlassScaledMmFp8BlockRule().applies(node, None)
+    finally:
+        clear_observations()
+    assert refused == (f"numerics_unregistered: target {family} (cc {cc[0]}.{cc[1]}); ScaledMmFp8Block_v1 is the hopper family's blockwise "
+                       f"CUTLASS kernel, and this target's `_C.cutlass_scaled_mm` blockwise kernel has no registered Definition")
+    assert past_the_gate == "unexpected operator arity"

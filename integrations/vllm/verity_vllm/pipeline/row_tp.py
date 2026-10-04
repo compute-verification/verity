@@ -1,7 +1,8 @@
 """A tensor-parallel row's stages under `verity-vllm row` (any world size >= 2): precheck -> Build -> Match -> Commit.
 
 * **Build** (CPU): per rank the step Program and one request Program per declared (prompt_len, cap - 1) shape
-  (``build --tp W --rank r``), then GP-01 per rank; ``--build-jobs`` wide (default ranks x (shapes + 1)).  A PASS Build
+  (``build --tp W --rank r``), the requests first, then GP-01 per rank; ``--build-jobs`` wide (auto, the default: as many derives as the
+  memory holds, at most ranks x (shapes + 1), as the single-GPU Build sizes them; the composes likewise, at most one per rank).  A PASS Build
   also builds the required-value manifest over the W ranks (``manifest build-global --programs-root build/rank<r>``), and
   the row stops (exit 21) when it names call boundaries (``Row.call_boundaries``: a TP Commit attaches no call-boundary source).
 * **Match**: the capture under the observer and collective recorder, the ``--no-observer`` control, the collective-level
@@ -14,7 +15,7 @@
   (``row_records.applicable_taps``), as the single-GPU row does.  A leased item's ``tp-commit`` holds the task's GPUs from right
   before its engine to its last run's finalize (``Row.run_gpu``, `pipeline.tp.lease`); such a row has no Match (its processes see no GPU).
 
-A **config run** (``--config-run 1``, world 2 only: ``row.run_row`` refuses a larger one): the Build, the strict word check of its
+A **config run** (``--config-run 1``): the Build, the strict word check of its
 manifest over the W ranks' components, ONE instrumented ``tp-commit`` (``--pairs 1 --warmup 1 --only-arm instrumented --replay-k K``:
 K units over the world, split across the ranks; bounded staging) with no Match directory, no fold Match and no value check, and
 ``config_record.json`` (``pipeline.config_record``, per rank and in total), written however the run ends.
@@ -146,9 +147,14 @@ class TpRow(Row):
         return env.hidden_so or (env.hidden_so_fa2_guarded if self.ck_.guarded_max_tap == "1" else env.hidden_so_fa2)
 
     # ------------------------------------------------------------------------------------------------ Build
-    def jobs(self, default: int) -> int:
-        j = self.cb.build_jobs or ""
-        return int(j) if j.isdigit() and int(j) > 0 else default
+    def derive_jobs(self, shapes: list[tuple[int, int]], derives: int) -> int:
+        """``--build-jobs`` N; unset or auto: as many of the `derives` derives as the memory holds at the largest of `shapes`
+        (`row_records.build_jobs_auto`: the headroom, or ``--build-ram-budget-gb`` when smaller), marked ``build.jobs``."""
+        j = self.cb.build_jobs or "auto"
+        n = int(j) if j.isdigit() and int(j) > 0 else R.build_jobs_auto(shapes, R.model_layers(self.ck), derives=derives,
+                                                                          budget_gb=self.cb.build_ram_budget_gb)
+        self.tl("build.jobs", "mark", ("jobs", n), ("requested", j), ("derives", derives))
+        return n
 
     def rank(self, r: int) -> str:
         return f"{self.bdir}/rank{r}"
@@ -182,7 +188,12 @@ class TpRow(Row):
                     self.cli("global-program", "--workload", self.wl, *der, "--out", f"{self.rank(r)}/build_workload", "--checkpoint-dir", self.ck))
 
     def compose_all(self, ranks: list[int]) -> None:
-        with ThreadPoolExecutor(max_workers=max(1, len(ranks))) as pool:
+        """GP-01 of each of `ranks`, as many at once as the memory holds at `row_records.COMPOSE_PEAK_RATIO` x the largest shape's
+        derive peak (``--build-ram-budget-gb`` when smaller than the headroom), marked ``build.compose_jobs``."""
+        n = R.build_jobs_auto(self.shapes, R.model_layers(self.ck), derives=len(ranks), peak_ratio=R.COMPOSE_PEAK_RATIO,
+                              budget_gb=self.cb.build_ram_budget_gb)
+        self.tl("build.compose_jobs", "mark", ("jobs", n), ("ranks", len(ranks)))
+        with ThreadPoolExecutor(max_workers=n) as pool:
             for f in [pool.submit(self.compose, r) for r in ranks]:
                 f.result()
 
@@ -201,21 +212,24 @@ class TpRow(Row):
                            self.cli("manifest", "build-global", "--fixture", self.wl, *manr, "--ranks", str(self.W), *wds, *R.tap_policy_flags(self.ck_),
                                     "--out", f"{self.d}/manifest.json"))
 
-    def build(self) -> None:
-        nsh = len(self.shapes)
-        jobs = self.jobs(self.W * (nsh + 1))
-        self.to_b = self.cb.build_timeout or 7200
-        t0 = int(time.time())
-        self.tl("stage.build", "start", ("jobs", jobs))
-        todo: list[tuple[Any, ...]] = []
+    def build_todo(self) -> list[tuple[Any, ...]]:
+        """The derives not on disk: every rank's request Programs, the longest shape first (the large derives take the pool's first
+        slots), then the step Programs (small: they fill the slots the requests leave)."""
+        steps: list[tuple[Any, ...]] = []
         for r in range(self.W):
             os.makedirs(self.rank(r), exist_ok=True)
             if not R.derived_ok(f"{self.rank(r)}/build_step"):
-                todo.append((r, f"{self.rank(r)}/build_step", "--wrapper", "step", "--M", str(self.B), "--pos0", "8"))
-            for lp, t in self.shapes:
-                if not R.derived_ok(f"{self.rank(r)}/build_request_LP{lp}_T{t}"):
-                    todo.append(self.request(r, lp, t))
-        self.derive_all(todo, jobs)
+                steps.append((r, f"{self.rank(r)}/build_step", "--wrapper", "step", "--M", str(self.B), "--pos0", "8"))
+        requests = [self.request(r, lp, t) for lp, t in R.longest_first(self.shapes) for r in range(self.W)
+                    if not R.derived_ok(f"{self.rank(r)}/build_request_LP{lp}_T{t}")]
+        return requests + steps
+
+    def build(self) -> None:
+        nsh = len(self.shapes)
+        self.to_b = self.cb.build_timeout or 7200
+        t0 = int(time.time())
+        self.tl("stage.build", "start")
+        self.derive_all(self.build_todo(), self.derive_jobs(self.shapes, self.W * (nsh + 1)))
         for r in range(self.W):
             for f in sorted(glob.glob(f"{self.rank(r)}/*.rc")):
                 self.log(f"derive {os.path.basename(f[:-3])} rank{r} rc={open(f).read().strip()} {_tail_bytes(f[:-3] + '.log')}")
@@ -277,13 +291,10 @@ class TpRow(Row):
             miss = "".join(" " + sh for sh in missing)
             self.verdict("eos-truncated", f"served=[{' '.join(need)}]", f"declared=[{declared}]: request(s) stopped before the cap; deriving the served-shape "
                          f"Program(s) [{miss}] per rank and recomposing GP-01 (MOE-05)", quiet=True)
-            todo = []
-            for sh in sorted(set(missing)):
-                lp, t = map(int, sh.split(","))
-                for r in range(self.W):
-                    if not R.derived_ok(f"{self.rank(r)}/build_request_LP{lp}_T{t}"):
-                        todo.append(self.request(r, lp, t))
-            self.derive_all(todo, self.jobs(16))
+            served = R.longest_first({tuple(map(int, sh.split(","))) for sh in missing})
+            todo = [self.request(r, lp, t) for lp, t in served for r in range(self.W)
+                    if not R.derived_ok(f"{self.rank(r)}/build_request_LP{lp}_T{t}")]
+            self.derive_all(todo, self.derive_jobs(served, len(todo)))
             self.compose_all(list(range(self.W)))
             self.guarded_summary()
             wds = "".join(f"r{r}={R.tp_rank_workload_digest(self.bdir, r)[:16]} " for r in range(self.W))
