@@ -207,12 +207,13 @@ def _pouw_roots() -> list[Any]:
     (`verity_pouw.circuit.rowk`, ``Shape.row_k``) in two segments: Pearl-C4's pieces at k = 128 and its roots, Pearl-C's
     pieces at k = 256 on the H100's and sm_120's records and at k = 64 unpromoted, and its roots on sm_120's, plain and
     hiding.  The tile units cut into sub-tiles (`verity_pouw.circuit.tilesub`, ``Shape.tile_sub``): a tile's digest units
-    (`leaves.PearlRowChunks`, `PearlTileLeaf`) at a partial chunk and at two sub-tiles a row, and each scheme's call and
-    check roots on a 1 × 2 tile of 1 × 1 sub-tiles, without and with the row cut, plain and hiding."""
+    (`leaves.PearlRowChunks`, `PearlTileLeaf`) at a partial chunk and at two sub-tiles a row, the hiding sub-tile
+    (`tilesub.SubTile4Def` at two rows, an output port each, and `SubTile8Def` on sm_120's record), and each scheme's call
+    and check roots on a 1 × 2 tile of 1 × 1 sub-tiles, without and with the row cut, plain and hiding."""
     from dataclasses import replace
 
     from verity.ir.defs import bind
-    from verity_pouw.circuit import leaves, ncp2, pc4, pc8, rowk
+    from verity_pouw.circuit import leaves, ncp2, pc4, pc8, rowk, tilesub
     from verity_vllm.program.registry import pouw_rows
 
     shape = ncp2.Shape(16, 64, 16)
@@ -236,7 +237,8 @@ def _pouw_roots() -> list[Any]:
     for mod, s in ((pc4, pc4.Shape(1, 128, 1, tile=(1, 1), row_k=64)),
                    (pc8, pc8.Shape(1, 256, 1, tile=(1, 1), dev="sm120", row_k=128))):
         cut += [build(replace(s, hidden=h)) for h in (False, True) for build in (mod.weight, mod.call, mod.check)]
-    cut += [leaves.row_chunks(1, 1), leaves.row_chunks(4, 2), leaves.tile_leaf(2, 4)]
+    cut += [leaves.row_chunks(1, 1), leaves.row_chunks(4, 2), leaves.tile_leaf(2, 4), tilesub.sub_tile4(64, (2, 1)),
+            tilesub.sub_tile8(128, (1, 1), "sm120")]
     for mod, s in ((pc4, pc4.Shape(1, 64, 2, tile=(1, 2), tile_sub=(1, 1))),
                    (pc4, pc4.Shape(1, 128, 2, tile=(1, 2), row_k=64, tile_sub=(1, 1))),
                    (pc8, pc8.Shape(1, 128, 2, tile=(1, 2), dev="sm120", tile_sub=(1, 1))),
