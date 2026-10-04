@@ -444,6 +444,11 @@ column storage, whole lower labels as separators, meet in the middle through `Pâ
 - the two-labels-from-one-item attacks (`test_pous_two_for_one.py`), bit-exact on real labels: they succeed on the XOR
   sponge and on Miyaguchiâ€“Preneel over band rows, and fail on the overwrite chain. The designer's state game
   (`pous_state_game.py`, from `internal/p3-instantiation/overwrite-state-game.py`) agrees on dense and band rows;
+- the continuous audit's verifiers against the Lean model (`test_pous_continuous_difftest.py`). `pous_continuous_model.py`
+  transcribes the verifier of `lean/Pous/Protocol/Model/Continuous.lean` definition by definition (a test finds each
+  one word for word in the Lean file) and restates it on the verifier's clock. Fuzzed and scripted traces (answers at
+  and one nanosecond past each deadline, wrong, pipelined, stale and dropped answers) must agree with it action for
+  action, and Lean `ContMachine`s run against the verifier must get `contRecords`' verdicts and `contAccepts`;
 - the Lean vectors (`fixtures/lean_vectors.json`).
 
 The Lean vectors come from `tests/lean/PousRefCheck.lean`, which evaluates Lean's `c1'`, `topLabel'`, `transpose`,

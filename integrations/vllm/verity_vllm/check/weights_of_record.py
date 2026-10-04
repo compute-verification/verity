@@ -49,6 +49,7 @@ import numpy as np
 from dataclasses import dataclass
 
 from verity_vllm.config import UsageError, option
+from verity_vllm.check.tp_shards import replicated_qkv, shard_dim as _shard_dim, shard_dim0 as _shard_dim0
 
 SCHEMA = "verity/commit/weights-of-record/v2"       # v2: host-independent root (analytic entries keyed by their exact inputs)
 SCHEMA_V1 = "verity/commit/weights-of-record/v1"    # v1 roots differ per deriving host for models with a rotary table; verdict unaffected
@@ -228,24 +229,6 @@ def strip_prefix(field: str, prefix: str) -> str:
     return field[len(prefix):] if prefix and field.startswith(prefix) else field
 
 
-def _shard_dim0(a: np.ndarray, world: int, rank: int) -> np.ndarray:
-    n = a.shape[0]
-    if n % world:
-        raise ValueError(f"dim 0 ({n}) not divisible by world {world}")
-    k = n // world
-    return a[rank * k:(rank + 1) * k]
-
-
-def _shard_dim(a: np.ndarray, dim: int, world: int, rank: int) -> np.ndarray:
-    n = a.shape[dim]
-    if n % world:
-        raise ValueError(f"dim {dim} ({n}) not divisible by world {world}")
-    k = n // world
-    idx = [slice(None)] * a.ndim
-    idx[dim] = slice(rank * k, (rank + 1) * k)
-    return a[tuple(idx)]
-
-
 def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, world: int = 1, rank: int = 0) -> tuple[np.ndarray, dict[str, Any]]:
     """The served model's tensor `name` (wrapper prefix already stripped) of `shape` / `bits`, composed from the checkpoint.
     Returns (raw words row-major, note {sources, rule, cast, shard})."""
@@ -337,7 +320,10 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
                 break
     if not parts:
         raise KeyError(f"{name}: no checkpoint tensor and no composition rule")
-    if world > 1:
+    kv = replicated_qkv(name, shape, parts, ck.config, world, rank)
+    if kv:
+        parts, note["shard"] = kv
+    elif world > 1:
         full = [int(sum(p.shape[0] for p in parts))] + list(parts[0].shape[1:])
         if list(shape) == full:
             note["shard"] = f"rank {rank}/{world}: replicated"

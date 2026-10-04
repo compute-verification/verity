@@ -520,7 +520,7 @@ def test_a_tp_row_stops_after_its_build_on_any_call_boundary(tmp_path, monkeypat
         (Path(t.d) / "manifest.json").write_text(json.dumps({**man, "ranks": 2}))
         return 0
 
-    for name, fn in (("jobs", lambda n: 1), ("derive_all", lambda todo, jobs: None), ("compose_all", lambda ranks: None),
+    for name, fn in (("derive_jobs", lambda shapes, derives: 1), ("derive_all", lambda todo, jobs: None), ("compose_all", lambda ranks: None),
                      ("guarded_summary", lambda: "PASS"), ("manifest_global", manifest_global)):
         monkeypatch.setattr(t, name, fn)
     monkeypatch.setattr(R, "tp_build_digests", lambda d: ("d" * 16, []))
