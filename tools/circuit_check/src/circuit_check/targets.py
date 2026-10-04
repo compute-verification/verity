@@ -203,7 +203,8 @@ def _pouw_roots() -> list[Any]:
     one row a side; and Pearl-C's (`verity_pouw.circuit.pc8`) the same way at k = 128 (one promotion window), its templates
     on the H100's and sm_120's records and its roots on sm_120's.  Both checks' hiding tiles and roots (``hidden``: the tile
     digest, `verity_pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes.  The prototype of Pearl-C's
-    per-tile cap (`verity_pouw.circuit.cap`): its word and a one-word tile at k = 256 (two promotion windows) on sm_120."""
+    per-tile cap (`verity_pouw.circuit.cap`): its row (pc8's with the salt-dead counts), its word and a one-word tile at
+    k = 256 (two promotion windows) on sm_120."""
     from dataclasses import replace
 
     from verity.ir.defs import bind
