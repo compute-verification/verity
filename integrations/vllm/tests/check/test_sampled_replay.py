@@ -1649,7 +1649,7 @@ def test_moe_evaluators_equal_the_registered_definitions():
     from verity.ir.defs import bind
     from verity.ir.program import Program
     from verity_vllm.program.registry import moe as R
-    from verity_vllm.program.registry.serve3_reference import materialize
+    from verity_vllm.program.kernels.serve3_reference import materialize
 
     def ref(fn, inputs):
         P = Program(fn)

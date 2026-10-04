@@ -12,7 +12,7 @@ X01_SCRATCH_KEY = "x01_num_sms"
 
 
 def _targets():
-    from verity_vllm.program.registry import targets as T
+    from verity_vllm.program.frontend import targets as T
     return T
 
 

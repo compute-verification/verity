@@ -14,7 +14,7 @@ from verity.ir.defs import bind
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, vllm_ruleset
 from verity_vllm.program.registry.quarantine.ln.layer_norm_aten import LayerNormAten
-from verity_vllm.program.registry.serve3_reference import materialize
+from verity_vllm.program.kernels.serve3_reference import materialize
 
 PROF = dict(mode="profile", profile="b1-eager-v3")
 BF = torch.bfloat16

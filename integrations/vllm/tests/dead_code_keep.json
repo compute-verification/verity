@@ -2,6 +2,9 @@
  "schema": "vllm-dead-code-keep/v1",
  "dynamic_record": "art:a265fc569719ee1a410f0863416416af91c66d02b1ed8703a9f60fd19e614f2f",
  "modules": {
+  "verity_vllm.program.frontend.serve_families": "which Serve family and attention geometry an instance pins, read by tests/program/test_composition.py ahead of a production caller (LIVE registry.b1)",
+  "verity_vllm.program.kernels.ref_prims_twins": "numpy twins of registry.ref_prims, checked against the registered bodies by tests/program/test_ref_prims.py (LIVE registry.ref_prims)",
+  "verity_vllm.program.lifting.lifted_compose": "the lifted fixed workload Program (GP-01's compose over lifted components) of tests/program/test_lifted_mixed.py / test_lifted_r17.py (LIVE registry.lifted)",
   "verity_vllm.program.frontend.derive_examples": "source modules of the derivation tests (LIVE frontend.derive)",
   "verity_vllm.program.frontend.examples": "authored examples of the torch-frontend tests (LIVE frontend.torch_frontend / correspond)",
   "verity_vllm.program.lifting.dump": "complete-assignment dump used by tests/program/test_lifted_tiny.py (LIVE registry.lifted / pad_prims)",

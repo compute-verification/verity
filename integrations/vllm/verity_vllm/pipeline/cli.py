@@ -43,7 +43,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "replay-plan": ("verity_vllm.pipeline.replay_plan", "a slim replay bundle's planner process (started by a `--replay-deferred slim` Commit)"),
     "compiled": ("verity_vllm.acquire.compiled", "required-value manifest of an Execution=compiled row"),
     "compiled-merge": ("verity_vllm.pipeline.compiled_merge", "merge control/treatment outputs of a compiled row"),
-    "conformance": ("verity_vllm.program.registry.conformance", "conformance record of the registered library"),
+    "conformance": ("verity_vllm.program.frontend.conformance", "conformance record of the registered library"),
     "coverage-workloads": ("verity_vllm.pipeline.coverage_workloads", "coverage campaign workloads"),
     "descriptor-equivalence": ("verity_vllm.program.descriptor_equivalence", "correspondence of two encodings of one program"),
     "epoch": ("verity_vllm.pipeline.epoch", "the re-baseline epoch's row job (job, resolve, row-state, word-check, digests, ...)"),

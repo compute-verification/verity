@@ -19,7 +19,7 @@ from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
 from verity_vllm.program.registry import moe as _moe
 from verity_vllm.program.registry import pouw_rows as _pouw_rows
-from verity_vllm.program.registry import targets as _targets
+from verity_vllm.program.frontend import targets as _targets
 from verity_vllm.program.registry import value_inputs as _vi
 from verity_vllm.program.frontend.rules import ref_kinds as R
 
@@ -98,7 +98,7 @@ PROFILE_B1_EAGER = Vocabulary(
         "bias_add": lambda N: ir_bind(b1.BiasAdd, N=N),
         "gemm_bias": lambda K, N: ir_bind(_gemm_bias.GemmBias, K=K, N=N),
         "rmsnorm": lambda N, EPS: ir_bind(b1.RMSNormTriton, N=N, EPS=EPS),
-        # `_C.fused_add_rms_norm` by the declared target (`registry.targets.rmsnorm_fused_spec`, which the fold calls too): the rule
+        # `_C.fused_add_rms_norm` by the declared target (`frontend.targets.rmsnorm_fused_spec`, which the fold calls too): the rule
         # states `TARGET`, and without it the role has no kind
         "rmsnorm_fused": lambda N, EPS, TARGET: _targets.rmsnorm_fused_spec(TARGET, N, EPS),
         "rope": lambda NHEADS, D: ir_bind(b1.RoPE, NHEADS=NHEADS, D=D),
@@ -324,7 +324,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # `_C.silu_and_mul` as `SiluMul_v2` (registry.act): `SiluMul_v1` on every word but the red-team's edge words (expf's overflow,
            # up = -0, gate -inf / -0, NaN 0x7FFF); the older vocabularies keep `SiluMul_v1`
            "silu_mul": lambda I: ir_bind(_act.SiluMul, I=I),
-           # [R13 hopper] the target-keyed variants (`verity_vllm.program.registry.targets`): the same bodies with the k16 tensor-core step and (for
+           # [R13 hopper] the target-keyed variants (`verity_vllm.program.frontend.targets`): the same bodies with the k16 tensor-core step and (for
            # attention) the block size / epilogue as declared statics — bound by the vLLM rules when the active TargetProfile is not the
            # accepted records' (Ampere-family step under FA2); those keep `gemm` / `attention` above, so their digests do not move.
            "gemm_dot": lambda K, N, DOT: ir_bind(b1.GemmV2, K=K, N=N, DOT=DOT),
@@ -352,7 +352,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_expert_gemm": lambda E, K, N: ir_bind(_moe.MoeExpertGemm, E=E, K=K, N=N),
            "moe_expert_gemm_w": lambda E, K, N: ir_bind(_moe.MoeExpertGemmW, E=E, K=K, N=N),
            # the same launches with the k16 step as a static, bound when the active target's fused_moe_kernel runs another step than
-           # the Ampere/Ada one (`registry.targets.moe_expert_dot`); those above keep the `_v1` records' digests
+           # the Ampere/Ada one (`frontend.targets.moe_expert_dot`); those above keep the `_v1` records' digests
            "moe_expert_gemm_dot": lambda E, K, N, DOT: ir_bind(_moe.MoeExpertGemmV2, E=E, K=K, N=N, DOT=DOT),
            "moe_expert_gemm_w_dot": lambda E, K, N, DOT: ir_bind(_moe.MoeExpertGemmWV2, E=E, K=K, N=N, DOT=DOT),
            "moe_sum": lambda TOPK, H: ir_bind(_moe.MoeSum, TOPK=TOPK, H=H),
@@ -384,7 +384,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # _C.per_token_group_fp8_quant and the blockwise _C.cutlass_scaled_mm): the dynamic per-128-group activation quant (both outputs
            # computed) and the scaled GEMM over e4m3 weights with f32 128x128 block scales as Inputs. `rules/vllm_bindings.py` asks for them.
            # SCALE is `TargetProfile.effective_fp8_scale_construction()`; FP8_DOT, given on a target whose blockwise step is not Hopper's
-           # (`registry.targets.fp8_block_dot`), binds the version 3 forms over it (the role and its note stay as they were).
+           # (`frontend.targets.fp8_block_dot`), binds the version 3 forms over it (the role and its note stay as they were).
            "fp8_group_quant": lambda K, G: ir_bind(_fp8.Fp8GroupQuant, K=K, G=G),
            "scaled_mm_fp8_block": lambda K, N, G, SCALE, FP8_DOT=None: _fp8.block_gemm(K, N, G, SCALE, FP8_DOT),
            # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds

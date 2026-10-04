@@ -113,7 +113,7 @@ def variance_v2(z: np.ndarray, block: int = FUSED_RMS_BLOCK) -> np.ndarray:
 
 def rsqrt_approx(x: np.ndarray) -> np.ndarray:
     """`rsqrt.approx.f32` through the registered primitive's table (same model the IR gate evaluates)."""
-    from verity_vllm.program.registry.prims import _rms
+    from verity_vllm.program.kernels.prims_twins import _rms
     rm, t = _rms()
     return np.asarray(rm.rsqrt_f32(np.ascontiguousarray(x, dtype=np.float32), t), dtype=np.float32)
 

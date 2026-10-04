@@ -28,7 +28,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from verity.ir import Program, bind  # noqa: E402
 from verity.ir.defs import REGISTRY  # noqa: E402
 from verity_vllm.program.registry import b1, lifted as L, pad_prims as PP, prims as P  # noqa: E402
-from verity_vllm.program.registry import serve3_reference as ref  # noqa: E402
+from verity_vllm.program.lifting import lifted_records
+from verity_vllm.program.lifting import lifted_compose
+from verity_vllm.program.kernels import serve3_reference as ref  # noqa: E402
 from verity_vllm.program.registry.b1 import weights_type  # noqa: E402
 from tests.program.test_serve3 import D_MAX, LP, TINY, _inputs  # noqa: E402
 from verity.ir.types import Array, Value  # noqa: E402
@@ -331,7 +333,7 @@ def test_a5_lifted_use_document_carries_its_own_kind_and_rules_version_and_gate_
     P1 = Program(L.lift_def(TSEL))
     q = f"default({L.W_MAX_LIFTED})"
     v1 = PT.validate_vu_partition(P1, q, L.W_MAX_LIFTED)
-    qdoc, use = L.lifted_vu_use_document(q, P1, v1)
+    qdoc, use = lifted_records.lifted_vu_use_document(q, P1, v1)
     assert use["schema"] == "verity-ir/query-use/v1" and use["use"]["kind"] == L.USE_KIND_LIFTED == "vu-partition-lifted"
     assert use["use"]["w_max"] == 64 and use["use"]["rules_version"] == "lifted-v1" and use["use"]["w_max_active_reference"] == 32
     assert use["verdict"]["status"] == "ok" and "kind" not in qdoc and "w_max" not in qdoc  # the query document is unchanged in shape
@@ -354,56 +356,56 @@ def test_a5_lifted_use_document_carries_its_own_kind_and_rules_version_and_gate_
 def test_a2_lag_from_header_is_gp01s_rule_on_the_attested_engine_block():
     for knob, want in ((True, 1), (False, 0)):
         hdr = {"$e": "RunHeader", "profile": {"engine_kwargs": {"async_scheduling": knob}}}
-        assert L.lag_from_header(hdr) == (want, L.LAG_FIELD) == (GP.eos_lag_rows_declared(hdr["profile"]["engine_kwargs"]), L.LAG_FIELD)
+        assert lifted_records.lag_from_header(hdr) == (want, lifted_records.LAG_FIELD) == (GP.eos_lag_rows_declared(hdr["profile"]["engine_kwargs"]), lifted_records.LAG_FIELD)
     for bad in (None, 1, 0, "yes"):  # GP-01 returns None for these: refused by name, never defaulted
         hdr = {"$e": "RunHeader", "profile": {"engine_kwargs": {"async_scheduling": bad}}}
         assert GP.eos_lag_rows_declared(hdr["profile"]["engine_kwargs"]) is None
         with pytest.raises(ValueError, match="not the resolved boolean"):
-            L.lag_from_header(hdr)
+            lifted_records.lag_from_header(hdr)
     with pytest.raises(ValueError, match="not attested"):
-        L.lag_from_header({"$e": "RunHeader", "profile": {"engine_kwargs": {}}})
+        lifted_records.lag_from_header({"$e": "RunHeader", "profile": {"engine_kwargs": {}}})
     assert L.DP_PAD_02.endswith("RULED R17-1")
 
 
 def test_a2_declared_lag_of_row_reads_the_builds_declaration_through_the_same_rule():
     # moe's fields first (M-0015), GP-01's pre-M-0015 field as fallback; a bare boolean knob goes through the rule; nothing defaults
-    assert L.declared_lag_of_row({"lag": {"value": 1}, "stop_rule": {"eos_lag_rows": 1}}) == (1, "lag.value")
-    assert L.declared_lag_of_row({"stop_rule": {"lag": 0, "eos_lag_rows": 0}}) == (0, "stop_rule.lag")
-    assert L.declared_lag_of_row({"stop_rule": {"eos_lag_rows": 1}}) == (1, "stop_rule.eos_lag_rows")
-    assert L.declared_lag_of_row({"stop_rule": {"eos_lag_rows": GP.eos_lag_rows_declared({"async_scheduling": True})}}) == (1, "stop_rule.eos_lag_rows")
-    assert L.declared_lag_of_row({"lag": {"value": False}}) == (0, "lag.value")  # the knob, through the one rule
-    assert L.declared_lag_of_row({"stop_rule": {"eos_token_ids": [1]}}) == (None, None)  # a pre-R17-1 Build: declared NOTHING
-    assert L.declared_lag_of_row({"stop_rule": {"eos_lag_rows": None}}) == (None, None)  # GP-01's None (undeclared engine): nothing
-    assert L.declared_lag_of_row(None) == (None, None) and L.declared_lag_of_row({}) == (None, None)
+    assert lifted_records.declared_lag_of_row({"lag": {"value": 1}, "stop_rule": {"eos_lag_rows": 1}}) == (1, "lag.value")
+    assert lifted_records.declared_lag_of_row({"stop_rule": {"lag": 0, "eos_lag_rows": 0}}) == (0, "stop_rule.lag")
+    assert lifted_records.declared_lag_of_row({"stop_rule": {"eos_lag_rows": 1}}) == (1, "stop_rule.eos_lag_rows")
+    assert lifted_records.declared_lag_of_row({"stop_rule": {"eos_lag_rows": GP.eos_lag_rows_declared({"async_scheduling": True})}}) == (1, "stop_rule.eos_lag_rows")
+    assert lifted_records.declared_lag_of_row({"lag": {"value": False}}) == (0, "lag.value")  # the knob, through the one rule
+    assert lifted_records.declared_lag_of_row({"stop_rule": {"eos_token_ids": [1]}}) == (None, None)  # a pre-R17-1 Build: declared NOTHING
+    assert lifted_records.declared_lag_of_row({"stop_rule": {"eos_lag_rows": None}}) == (None, None)  # GP-01's None (undeclared engine): nothing
+    assert lifted_records.declared_lag_of_row(None) == (None, None) and lifted_records.declared_lag_of_row({}) == (None, None)
     with pytest.raises(ValueError, match="must be declared as one of"):
-        L.declared_lag_of_row({"lag": {"value": 2}})
+        lifted_records.declared_lag_of_row({"lag": {"value": 2}})
     with pytest.raises(ValueError, match="disagrees with itself"):  # moe M-0047: lag.value == stop_rule.lag == stop_rule.eos_lag_rows, or refused
-        L.declared_lag_of_row({"lag": {"value": 1}, "stop_rule": {"lag": 0}})
-    assert L.declared_lag_of_row({"lag": {"value": 1}, "stop_rule": {"lag": 1, "eos_lag_rows": 1}}) == (1, "lag.value")
-    assert L.LAG_DECLARED_FIELDS == ("lag.value", "stop_rule.lag", "stop_rule.eos_lag_rows")
+        lifted_records.declared_lag_of_row({"lag": {"value": 1}, "stop_rule": {"lag": 0}})
+    assert lifted_records.declared_lag_of_row({"lag": {"value": 1}, "stop_rule": {"lag": 1, "eos_lag_rows": 1}}) == (1, "lag.value")
+    assert lifted_records.LAG_DECLARED_FIELDS == ("lag.value", "stop_rule.lag", "stop_rule.eos_lag_rows")
     # rev F-r17-02: the static lives in the Program's spec id (`workload_fn` = Workload_v1{...,lag=n}), NOT in a bindings dict of the Root
     # wrapper; it is the digest-bound source, read first, and a sidecar edited against it is refused by name
     fn1 = 'Workload_v1{requests=[{"dict":{"arrive_step":0,"cap":32,"fn":{"fn":"WorkloadRequest_v1{program_fn=\\"Derived[x]{lag=7}\\"}"}}}],shared=0,lag=1}'
-    assert L.declared_lag_of_row({"workload_fn": fn1}) == (1, "workload_fn:lag=")                       # the digest's static alone
-    assert L.declared_lag_of_row({"workload_fn": fn1, "lag": {"value": 1}, "stop_rule": {"lag": 1, "eos_lag_rows": 1}}) == (1, "workload_fn:lag=")
+    assert lifted_records.declared_lag_of_row({"workload_fn": fn1}) == (1, "workload_fn:lag=")                       # the digest's static alone
+    assert lifted_records.declared_lag_of_row({"workload_fn": fn1, "lag": {"value": 1}, "stop_rule": {"lag": 1, "eos_lag_rows": 1}}) == (1, "workload_fn:lag=")
     with pytest.raises(ValueError, match="disagrees with itself"):                                      # sidecar 0, digest 1
-        L.declared_lag_of_row({"workload_fn": fn1, "lag": {"value": 0}, "stop_rule": {"lag": 0, "eos_lag_rows": 0}})
+        lifted_records.declared_lag_of_row({"workload_fn": fn1, "lag": {"value": 0}, "stop_rule": {"lag": 0, "eos_lag_rows": 0}})
     fn0 = fn1[: -len("lag=1}")] + "lag=0}"
-    assert L.declared_lag_of_row({"workload_fn": fn0}) == (0, "workload_fn:lag=")
-    assert L.declared_lag_of_row({"workload_fn": "Workload_v1{requests=[],shared=0}"}) == (None, None)  # a pre-R17-1 id declares NOTHING
-    assert L.declared_lag_of_row({"workload_fn": "Serve_v2{STEPS=31}"}) == (None, None)                 # not a workload id: nothing
+    assert lifted_records.declared_lag_of_row({"workload_fn": fn0}) == (0, "workload_fn:lag=")
+    assert lifted_records.declared_lag_of_row({"workload_fn": "Workload_v1{requests=[],shared=0}"}) == (None, None)  # a pre-R17-1 id declares NOTHING
+    assert lifted_records.declared_lag_of_row({"workload_fn": "Serve_v2{STEPS=31}"}) == (None, None)                 # not a workload id: nothing
     with pytest.raises(ValueError, match="must be declared as one of"):
-        L.declared_lag_of_row({"workload_fn": "Workload_v1{requests=[],shared=0,lag=2}"})
+        lifted_records.declared_lag_of_row({"workload_fn": "Workload_v1{requests=[],shared=0,lag=2}"})
     # the real R16 row artefacts (pre-R17-1 Builds) declare nothing through EVERY source — never a default
     import glob as _glob
     for p in _glob.glob("out/gen/sweep/evidence/pad/*/*/build_workload/workload_program.json"):
         wp = json.load(open(p))
-        assert wp["workload_fn"].startswith("Workload_v1{") and L.declared_lag_of_row(wp) == (None, None), p
+        assert wp["workload_fn"].startswith("Workload_v1{") and lifted_records.declared_lag_of_row(wp) == (None, None), p
     # the compose passes the lag as the Workload_v1 static exactly when the tree's WorkloadProgram takes one (moe a96a2071b); inspected, not guessed
     import inspect
     from verity_vllm.program import workload as W
     takes_lag = "lag" in inspect.signature(W.WorkloadProgram.__init__).parameters
-    assert callable(L.workload_program) and isinstance(takes_lag, bool)
+    assert callable(lifted_compose.workload_program) and isinstance(takes_lag, bool)
 
 
 def test_a2_the_lifted_program_is_a_function_of_the_declared_lag():
