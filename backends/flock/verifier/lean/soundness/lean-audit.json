@@ -27570,7 +27570,7 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "73eabb0012d031a02a352fe2bd86131dc87621e931c1388f1c98152150d03dbf",
+   "digest": "b0bf02fe790f9860beab6bfb3fc222d9a67b37220f6036ce73f4f0614d05e700",
    "definitions": {
     "Flock.Registered.Port": "aade65f635f88322beebf73b54575522406e962788786d682837b0c542626389",
     "Flock.Registered.Port.domain": "59766f0cc4f10430def56f75d58c4ba25d8b353a298127516dfd435ef2349909",
@@ -27585,7 +27585,7 @@
     "Flock.Registered.badInstance": "03932f62b94f8fdcdc0c2b285ed7e2c1eab64c21ef5edd38e49948a21faf7e66",
     "Flock.Registered.badRow": "c702aa7a7cdef880a0d0811966e322facce83d1237b04bf8749c4ae9112249d1",
     "Flock.Registered.check": "4b228ade32bb7e63505ba499fc5023ce7c1ad20c174e074192993e5297df771b",
-    "Flock.Registered.checkPort": "012528371c5394748a6b8317cf18acc05b1dd837d043cdf15f20d39751d67beb",
+    "Flock.Registered.checkPort": "51ad65cfc8c1319588b238ccf0bc4a6e32ac3b7b2bc0f44daf2ac368cbe6a2fb",
     "Flock.Registered.climb": "409e735c27b6bbb1fbec2014a3beb48e70858eeff6e95502f99f10f95e6f56f3",
     "Flock.Registered.climbL": "deeb59c4c0ff09253eaf700ca259e36c92c5c09b5fc142a81d3f076bfe62ff73",
     "Flock.Registered.derived": "0751ce4385fd006c40af04446d935a4b7c9662e4b00d77c14606451776ffcac6",
