@@ -52,7 +52,27 @@ theorem zk_flock_drawnRegValsC_cr_pub (hA : A.Correct) {L : Law n}
         (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
       ksAvgStrictZ planZ L k qF qS (reg σ) + linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) +
         regTermZC A P planZ tab vb L k Rw ρ qW := by
-  sorry
+  classical
+  have hlow := loweringSoundZK_of_place A P planZ tab place
+  have hj := jointZC_ksBound A hA Hs planZ hk
+  have h := extraction_audit_drawn
+    (analysisRegZC A Hs P planZ tab vb wo (fun R τ => Xpub ones zeros (XplurZC A Hs P planZ tab vb R τ k Rw)) k
+      (fun S R j => (hr S R j).trans_lt hρ) hlow _ hj)
+    (reg_knowledgeSoundZC A Hs P planZ tab vb wo _ _ hlow hj)
+    (zk_linkSoundRegC_pub A Hs P planZ tab vb wo ones zeros hpub hlow hRw hM hρ hr hj ht qW) σ
+  have hb : regBoundZC A Hs P planZ tab vb wo k Rw ρ qW (reg σ) (cont σ) =
+      regTermZC A P planZ tab vb L k Rw ρ qW := ite_eq_left hW
+  refine le_trans (prob_mono ?_ _ _) (h.trans ?_)
+  · rintro o ⟨h1, hw | ⟨u, hu, g, hg, hbad⟩⟩
+    · obtain ⟨u, hw, hu⟩ := Finset.not_disjoint_iff.1 hw
+      exact ⟨h1, Finset.not_disjoint_iff.2 ⟨u, Finset.mem_union_left _ hw, hu⟩⟩
+    · exact ⟨h1, Finset.not_disjoint_iff.2 ⟨u, Finset.mem_union_right _
+        (Finset.mem_filter.2 ⟨Finset.mem_univ _, g, hg, hbad⟩), hu⟩⟩
+  · show ksAvgZC A Hs planZ k _ (reg σ) (cont σ) +
+        (linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) +
+          regBoundZC A Hs P planZ tab vb wo k Rw ρ qW (reg σ) (cont σ)) ≤ _
+    rw [hb, ← add_assoc]
+    exact add_le_add (add_le_add (ksAvgZC_le_strict A Hs planZ k (reg σ) (cont σ) hCR) le_rfl) le_rfl
 
 end Generic
 
@@ -131,7 +151,39 @@ theorem zk_session_drawnRegValsHRP
         regTermZC execArith ((keyProgP c hU n pi).partition (Layout.outsOf c hU n)) (planAtZKHP (Reg := Reg) dj y₀)
           (tabAtZKHP dj y₀) ((rsZHP dj y₀ ht hc hscope hU hpi hpub).bindingZ (rsZHP_computes dj y₀ ht hc hscope hU hpi hpub))
           (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k Rw ρ qW := by
-  sorry
+  have hdec := decodesOnZKA_of_runsOnZCA execArith hs512 _ (AcceptsZKP I own) wr _ _ _ _
+    (runsZC_liveHP I own ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKHP_live hTags hRec hDraw)
+  have hc' := zk_flock_drawnRegValsC_cr_pub execArith hs512 ((keyProgP c hU n pi).partition (Layout.outsOf c hU n))
+    (planAtZKHP dj y₀) (tabAtZKHP dj y₀) execArith_correct (placeZHP dj y₀ ht hc hscope hU hpi)
+    ((rsZHP dj y₀ ht hc hscope hU hpi hpub).bindingZ (rsZHP_computes dj y₀ ht hc hscope hU hpi hpub))
+    (regOpenZHP dj y₀ ht hc hscope hU hpi hpub rd)
+    (pubOnes c hU n pi own) (pubZeros c hU n pi own) (pubDecodesZ_placeZHP dj y₀ ht hc hscope hU hpi hpub)
+    hk hRw hM hρ hr ht' (simZA execArith hs512 _ (AcceptsZKP I own) wr _ dg _ _ _ _ N hdec τ) hCR hW
+  refine le_trans (prob_mono (fun o h => ⟨acceptsZKP_of_RP h.1, h.2⟩) _ _)
+    (zk_headline_exec_drawnA execArith hs512 _ (AcceptsZKP I own) wr _ dg _ _ _ _ N hdec τ (fun R S =>
+      ¬ Disjoint (((keyProgP c hU n pi).partition (Layout.outsOf c hU n)).wrong
+          (Xpub (pubOnes c hU n pi own) (pubZeros c hU n pi own)
+            (XplurZC execArith hs512 ((keyProgP c hU n pi).partition (Layout.outsOf c hU n)) (planAtZKHP dj y₀)
+              (tabAtZKHP dj y₀) ((rsZHP dj y₀ ht hc hscope hU hpi hpub).bindingZ (rsZHP_computes dj y₀ ht hc hscope hU hpi hpub))
+              (reg (simZA execArith hs512 _ (AcceptsZKP I own) wr _ dg _ _ _ _ N hdec τ))
+              (cont (simZA execArith hs512 _ (AcceptsZKP I own) wr _ dg _ _ _ _ N hdec τ)) k Rw))) S ∨
+      ∃ u ∈ S, ∃ g ∈ ((keyProgP c hU n pi).partition (Layout.outsOf c hU n)).io u,
+        rd.isRead ((layShHP dj y₀ ht hc hscope hU hpi (pub := pub)).pos g) ∧
+        (layShHP dj y₀ ht hc hscope hU hpi (pub := pub)).regLeaf R ((layShHP dj y₀ ht hc hscope hU hpi (pub := pub)).pos g) = rd.leaf ((layShHP dj y₀ ht hc hscope hU hpi (pub := pub)).pos g) ∧
+        (Xpub (pubOnes c hU n pi own) (pubZeros c hU n pi own)
+          (XplurZC execArith hs512 ((keyProgP c hU n pi).partition (Layout.outsOf c hU n)) (planAtZKHP dj y₀) (tabAtZKHP dj y₀) ((rsZHP dj y₀ ht hc hscope hU hpi hpub).bindingZ (rsZHP_computes dj y₀ ht hc hscope hU hpi hpub))
+            (reg (simZA execArith hs512 _ (AcceptsZKP I own) wr _ dg _ _ _ _ N hdec τ)) (cont (simZA execArith hs512 _ (AcceptsZKP I own) wr _ dg _ _ _ _ N hdec τ)) k Rw)) g ≠
+          (layShHP dj y₀ ht hc hscope hU hpi (pub := pub)).bit (rd.wv ((layShHP dj y₀ ht hc hscope hU hpi (pub := pub)).pos g)) g) _
+      (le_trans (prob_mono ?_ _ _) hc'))
+  rintro o ⟨hacc, hw | ⟨u, hu, g, hg, hread, hleaf, hne⟩⟩
+  · exact ⟨hacc, Or.inl hw⟩
+  refine ⟨hacc, Or.inr ⟨u, hu, g, hg, ?_, hne⟩⟩
+  refine Prod.ext rfl ?_
+  show ((rsZHP dj y₀ ht hc hscope hU hpi hpub).scheme _).leaf (rd.wv _) (rd.ws _) = _
+  unfold HmRowsZ.scheme
+  split_ifs with hrow
+  · exact hleaf.symm
+  · exact absurd (rd.read_row _ hread) hrow
 
 /-- **No drawn unit of a `--zk --registered --public-inputs` session reads a registered read whose leaf is not the
 registrant's**, except with probability `qR²/2^513`: `zk_session_offR` at `zk_session_soundHRP`'s session. -/
@@ -164,7 +216,15 @@ theorem zk_session_offHRP
               ((layShHP dj y₀ ht hc hscope hU hpi (pub := pub)).pos g) ≠
             rd.leaf ((layShHP dj y₀ ht hc hscope hU hpi (pub := pub)).pos g)) G σ ≤
       ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  have hchk : ∀ o : Reg × Finset (Fin n) × Exec.Transcript, LiveAcceptsZKRP I rports own o →
+      (rd.restrict (FlockSoundness.Registered.drawnReads (layShHP dj y₀ ht hc hscope hU hpi (pub := pub)) o.2.1)).Checked
+        o.1 (regPathsHP c pi pub o.2.2 rd.port) := fun o hacc =>
+    checked_of_acceptsHP I ht rports own dj y₀ hc hU hpi hpub hscope hTags o hacc
+      (rd.restrict (FlockSoundness.Registered.drawnReads (layShHP dj y₀ ht hc hscope hU hpi (pub := pub)) o.2.1))
+      (hown o hacc)
+  exact FlockSoundness.Registered.Reads.prob_offDrawn_le (lay := layShHP dj y₀ ht hc hscope hU hpi (pub := pub)) G σ
+    (LiveAcceptsZKRP I rports own) (fun o => o.2.1) (fun o => o.1) (fun o => regPathsHP c pi pub o.2.2 rd.port) rd
+    hchk hR
 
 end Session
 
