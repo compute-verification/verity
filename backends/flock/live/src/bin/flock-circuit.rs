@@ -173,8 +173,12 @@ fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, t
 
 /// M1's hooks identity: what is masked, and what is not yet (the statement is not zero knowledge until the list is empty).
 /// `refused_coins`: the coins at which the prover stops, each before it sends anything that depends on them and reading only
-/// opened coins: `β = 0`, the rank check (§6), `ρ_0, ρ_1` dependent, and a zerocheck outer coin `r_j = 1` (as it opens,
-/// [`zkv::Masking`]). The last costs completeness at most `(#outer coins) · 2^-128` under uniform coins: `m − 13` per rep.
+/// opened coins (live PROTOCOL.md, "Refused coins"):
+/// - `β = 0` (the inner proof);
+/// - mask-slot weights of rank `< 128·k` over the claims so far (the rank check, §6);
+/// - `ρ_0, ρ_1` dependent over F128;
+/// - a zerocheck outer coin `r_j = 1`, as it opens ([`zkv::Masking`]). Completeness: under uniform coins the honest prover
+///   refuses with probability at most `(#outer coins) · 2^-128` per rep, `m − 13` outer coins.
 fn zk_identity(c: &Composite) -> Value {
     json!({"zk": true, "stage": "m2-prototype (committed verifier coins, CPU)", "compiler": "veil (ePrint 2026/683 §4.1, Remark 4.4) over gf(2^128)",
            "verifier_coins": format!("committed before the prover's first message ({}): the prover's fresh nonce in hello; the root and the \

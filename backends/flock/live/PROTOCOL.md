@@ -303,8 +303,9 @@ is the minimum.
   `ρ^r_0, ρ^r_1` dependent over F128 (`W^r` invertible), mask-slot weights of rank `< 128·(claim points)` (§6), and a
   zerocheck outer coin `r_j = 1` (the replay's round `j` divides by zero there, and the honest pads miss the inner proof's
   constraint by a witness-dependent amount). Each stops the prover before it sends anything that depends on the coins it
-  reads, and reads only opened coins; `r_j = 1` is checked as the coin opens, in `zk_veil::Masking`'s draw. Under uniform
-  coins that one refuses with probability at most `(#outer coins)·2^-128`, `m − 13` per rep.
+  reads, and reads only opened coins; `r_j = 1` is checked as the coin opens, in `zk_veil::Masking`'s draw. Its
+  completeness loss: under uniform coins the honest prover refuses with probability at most `(#outer coins)·2^-128` per
+  rep, `m − 13` outer coins.
   The mask slot must have `blocks · 2^(mask_log−7) ≥ 128 · 4` words for the rank to be reachable. Both sides refuse a
   statement, or a table of a split session, with fewer than `128 · 4 + 64` words when it is built, before `Hello`
   (`zk_shape_ok`). RoPE and GEMM have 1024 at every split tried: m ≥ 25 at their `k_log` means at least 8 blocks.

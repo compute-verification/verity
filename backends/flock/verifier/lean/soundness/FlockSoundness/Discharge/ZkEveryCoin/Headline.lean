@@ -203,7 +203,7 @@ covered by the coin server's commitment at `Hello`, before the prover's first me
 `keyed-cr`, which no statement here models yet.
 
 For an untyped statement (`ht`) whose Δ and regions avoid the mask slot (`avoidsMask`, a named hypothesis until the
-verifier's D3 refusal in `Net.ofRows` discharges it), and for any prover of Ligerito's levels ≥ 1 (`LigProver`), as
+verifier's D11 refusal in `Net.ofRows` discharges it), and for any prover of Ligerito's levels ≥ 1 (`LigProver`), as
 `Composed.zk_session_view`. -/
 theorem zk_session_view_all (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
