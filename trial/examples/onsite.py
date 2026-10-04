@@ -24,7 +24,7 @@ builder = Batched(circuit, P.whole(circuit), advice_bits=2)
 onsite = Onsite(
     integrity=Replay(k=2, delta=0.01),
     pouw=Pouw(difficulty=6, delta=0.01),
-    nci=Nci(gamma=4096, alpha=0.2),
+    nci=Nci(gamma=4096, alpha=0.2, advice=8),
     pous=Pous(seed=b"weights", blocks=1024, k=16, deadline=0.001, rho=18 / 19, delta=0.01),
     transparency=Transparency(max_timing_bits=7),
     network=Network(side_bits=1000),

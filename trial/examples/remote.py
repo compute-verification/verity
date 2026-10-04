@@ -22,7 +22,7 @@ builder = Batched(circuit, P.greedy(circuit, 16), advice_bits=2)
 remote = Remote(
     integrity=Proofs(k=64, max_width=16, delta=0.01, system=Transparent()),
     pouw=Pouw(difficulty=6, delta=0.01),
-    nci=Nci(gamma=64, alpha=4.0),
+    nci=Nci(gamma=64, alpha=4.0, advice=8),
 )
 principals = {
     "verifier": remote.verifier(),
