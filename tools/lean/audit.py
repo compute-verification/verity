@@ -35,9 +35,10 @@ environment extension loaded, so none of the package's code runs), and replays t
                  are until `--update` rewrites them)
     replay       the kernel rejects a declaration of an audited module when `Replay.lean` sends them all to it again, on
                  one import of what they import from outside, one declaration per task on Lean's threads
-                 (`LEAN_NUM_THREADS`): a declaration that skipped the kernel shows no axiom, and only this catches it
-                 (the `kernel` control); or the axioms found by walking the replayed environment differ from those the
-                 `.olean` files recorded; a replay killed by a signal is reported as a kill
+                 (`LEAN_NUM_THREADS`, by default the CPUs the audit may use): a declaration that skipped the kernel shows
+                 no axiom, and only this catches it (the `kernel` control); or the axioms found by walking the replayed
+                 environment differ from those the `.olean` files recorded; a replay killed by a signal is reported as a
+                 kill
     upstream     a dependency that the policy's `upstream` section scans proves, at the revision `lake-manifest.json` pins,
                  a theorem about a watched assumption or hand proof that the entry's `ack` does not hold (`upstream.py`):
                  a bump that brings such a proof fails until someone has looked at it
@@ -141,11 +142,25 @@ def sibling(name: str):
     return module
 
 
+def cores() -> int:
+    """The CPUs this process may use: its affinity, bounded by the cgroup quota.  Lean's own default for its threads is
+    every CPU of the machine, which oversubscribes a job pinned to a cpuset."""
+    n = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
+    try:
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()
+        if quota != "max":
+            n = min(n, max(1, int(quota) // int(period)))
+    except (OSError, ValueError):
+        pass
+    return n
+
+
 def lake_env() -> dict[str, str]:
     """The environment of every `lake` and `setup.sh` the audit runs. The audit builds from source: Lake neither reads nor
     writes its local artifact cache, and `setup.sh` restores nothing from the build cache (`cache.py`)."""
     env = dict(os.environ)
     env["PATH"] = f"{Path.home() / '.elan' / 'bin'}{os.pathsep}{env.get('PATH', '')}"
+    env.setdefault("LEAN_NUM_THREADS", str(cores()))
     env["LAKE_ARTIFACT_CACHE"] = "false"
     env["LEAN_CACHE"] = "off"
     return env
@@ -736,7 +751,7 @@ def olean_files(lib: Path) -> list[Path]:
 
 
 def olean_digest(lib: Path, files: list[Path]) -> str:
-    with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as ex:
+    with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
         hashes = list(ex.map(sha256, files))
     h = hashlib.sha256()
     for p, d in zip(files, hashes):
