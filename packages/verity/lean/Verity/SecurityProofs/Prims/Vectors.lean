@@ -4,14 +4,14 @@ import Verity.Protocol.Prims
 # Vectors: the casts of `verity.ml.prims`
 
 Each theorem is one input of a cast of `verity.ml.prims` and the word its Python returns, checked by the kernel against
-`Verity.Protocol.Prims`, except the two exhaustive ones: `e4m3ToF32` on all 256 codes, and `bf16ToF32` on all 65536 words.
+`Verity.Prims`, except the two exhaustive ones: `e4m3ToF32` on all 256 codes, and `bf16ToF32` on all 65536 words.
 `packages/verity/tests/ml/test_lean_scalar_vectors.py` checks the same vectors against the Python, so a change on either
 side fails a build: the transcription cannot drift silently. Every operand is a word of its parameter's width.
 -/
 
-namespace Verity.SecurityProofs.Prims.Vectors
+namespace Verity.Prims.Vectors
 
-open Verity.Protocol.Prims
+open Verity.Prims
 
 /-! ## `e4m3ToF32` and `bf16ToF32`: every input -/
 
@@ -3750,4 +3750,4 @@ theorem f32ToE2m1Sat_r6 : f32ToE2m1Sat 0x73a02a35 = 0x7 := by decide +kernel
 /-- a random word -/
 theorem f32ToE2m1Sat_r7 : f32ToE2m1Sat 0xd0402b6e = 0xf := by decide +kernel
 
-end Verity.SecurityProofs.Prims.Vectors
+end Verity.Prims.Vectors

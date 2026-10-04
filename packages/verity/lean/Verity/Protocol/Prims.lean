@@ -15,7 +15,7 @@ and rounding of those integers (`dyadicLt`, `roundEvenDyadic`). Subtractions of 
 truncate (`p + 127 - 9` for the Python's `p - 9 + 127`).
 -/
 
-namespace Verity.Protocol.Prims
+namespace Verity.Prims
 
 open Verity.TC
 
@@ -118,4 +118,4 @@ def f32ToE2m1Sat (x : Nat) : Nat :=
   if mag > 0x7F800000 then E2M1_NAN_CODE
   else sign ||| E2M1_UP.countP (fun (bound, up) => mag > bound || (up && mag == bound))
 
-end Verity.Protocol.Prims
+end Verity.Prims

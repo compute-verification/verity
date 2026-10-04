@@ -4,14 +4,14 @@ import Verity.Protocol.Scalar
 # Vectors: the scalar primitives of `verity.ml.scalar`
 
 Each theorem is one input of a primitive of `verity.ml.scalar` and the word its Python returns, checked by the kernel
-against `Verity.Protocol.Scalar`. `packages/verity/tests/ml/test_lean_scalar_vectors.py` checks the same vectors against
+against `Verity.Scalar`. `packages/verity/tests/ml/test_lean_scalar_vectors.py` checks the same vectors against
 the Python, so a change on either side fails a build: the transcription cannot drift silently. Every operand is a word of
 its parameter's width.
 -/
 
-namespace Verity.SecurityProofs.Scalar.Vectors
+namespace Verity.Scalar.Vectors
 
-open Verity.Protocol.Scalar
+open Verity.Scalar
 
 /-! ## `bitAnd`: every pair of bits -/
 
@@ -522,4 +522,4 @@ theorem selectBf16_40 : selectBf16 0x0 0x444e 0x855f = 0x855f := by decide +kern
 /-- c = 1 -/
 theorem selectBf16_41 : selectBf16 0x1 0x444e 0x855f = 0x444e := by decide +kernel
 
-end Verity.SecurityProofs.Scalar.Vectors
+end Verity.Scalar.Vectors

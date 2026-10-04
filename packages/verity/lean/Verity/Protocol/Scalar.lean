@@ -10,7 +10,7 @@ its operands' widths. The bit operations are Python's (`&&&` is `&`, `^^^` is `^
 integers.
 -/
 
-namespace Verity.Protocol.Scalar
+namespace Verity.Scalar
 
 /-- `cast.f32_is_nan`: the exponent field all ones and a nonzero fraction. -/
 def f32IsNan (u : Nat) : Bool := (u &&& 0x7F800000 == 0x7F800000) && (u &&& 0x7FFFFF != 0)
@@ -67,4 +67,4 @@ def selectI32 (c a b : Nat) : Nat := if c &&& 1 ≠ 0 then a else b
 /-- `SelectBf16_v1`: `c ? a : b` on the low bit of `c`. -/
 def selectBf16 (c a b : Nat) : Nat := if c &&& 1 ≠ 0 then a else b
 
-end Verity.Protocol.Scalar
+end Verity.Scalar
