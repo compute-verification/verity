@@ -1,4 +1,4 @@
-"""The worker's plan metas in `native_collect` across commitment runs: bounded, and the roots unchanged.
+"""The collector's plans and the worker's plan metas in `native_collect` across commitment runs: bounded, and the roots unchanged.
 
 The collector keys each step's plan by its geometry (`plan_key_of`: every request's KV length and new tokens), so each decode
 step of a growing KV length learns a plan of its own, and the worker builds one `TensorMeta` per staged tensor for it. The
@@ -6,7 +6,9 @@ served committer of the network traces commits one run per window and resets bet
 grows with every committed step for the life of the process, and every full collection of the serving engine's heap walks
 it. Here the committer runs on the CPU: the C++ collector is restated in Python from `native_collect.cpp` (a plan per key,
 4-byte offsets with zeroed gaps, a hit followed entry by entry, a miss truncated and relearned, the version bumped on every
-change), the GPU chunk tree is computed with the scheme's own leaf and fold, and CUDA streams and events are inert. The
+change) and `native_plans.h` (the plans the run that ended did not use dropped at `end_run`, a plan created after a drop
+starting above every dropped version; the header itself is tested in `test_native_plans.py`), the GPU chunk tree is computed
+with the scheme's own leaf and fold, and CUDA streams and events are inert. The
 collector keeps its plans as bytes, out of the cyclic collector's sight, as the C++ keeps them out of Python's heap. Every
 step's root is checked against `commit_block_offline`, the CPU reference of the GPU tree, over the same tensors packed into
 one block, so the bytes, layout and digests are those of a committer with no cache at all.
@@ -123,10 +125,11 @@ class _StepHasher:
 
 
 class _Collector:
-    """`native_collect.cpp`'s `Collector` on the arena path (no gather, no windows)."""
+    """`native_collect.cpp`'s `Collector` on the arena path (no gather, no windows), with `native_plans.h`'s plans."""
 
     def __init__(self) -> None:
-        self.plans: dict[int, tuple[int, int, bytes]] = {}       # key -> (version, used, pickled entries)
+        self.plans: dict[int, tuple[int, int, bytes, int]] = {}  # key -> (version, used, pickled entries, the last run that used it)
+        self.run, self.run_used, self.floor = 0, False, 0
         self.arena_of = None
         self.active = False
         self.check_sizes = True
@@ -140,7 +143,9 @@ class _Collector:
 
     def begin_step(self, key, arena_ptr, nbytes, use_plan, step_id=-1):
         assert not self.active
-        self.plans.setdefault(key, (0, 0, pickle.dumps(())))
+        version, used, blob, _run = self.plans.get(key, (self.floor, 0, pickle.dumps(()), 0))
+        self.plans[key] = (version, used, blob, self.run)
+        self.run_used = True
         self.key, self.cap = key, nbytes
         self.block = self.arena_of(arena_ptr) if arena_ptr else None
         self.planned = self._entries(key)
@@ -187,11 +192,11 @@ class _Collector:
         self.active = False
         if not self.learning and len(self.entries) < len(self.planned):
             self.changed = True
-        version, used, blob = self.plans[self.key]
+        version, used, blob, run = self.plans[self.key]
         if self.changed:
             version += 1
             used = self.entries[-1][4] + self.entries[-1][3] if self.entries else 0
-            self.plans[self.key] = (version, used, pickle.dumps(tuple(self.entries)))
+            self.plans[self.key] = (version, used, pickle.dumps(tuple(self.entries)), run)
             self.learned += 1
         return self.byte_cursor, len(self.entries), self.changed, version
 
@@ -209,13 +214,24 @@ class _Collector:
         return {"bytes": self.step_bytes, "issue_s": 0.0}
 
     def stats(self):
-        return {"plans": len(self.plans), "expected": self.expected, "committed": 0}
+        return {"plans": len(self.plans), "plan_entries": sum(len(self._entries(k)) for k in self.plans), "expected": self.expected,
+                "committed": 0}
 
     def window_stats(self):
         return {}
 
     def reset_stats(self):
         self.expected = 0
+
+    def end_run(self):
+        self.reset_stats()
+        if not self.run_used:
+            return
+        for key, (version, _used, _blob, run) in list(self.plans.items()):
+            if run != self.run:
+                self.floor = max(self.floor, version + 1)
+                del self.plans[key]
+        self.run, self.run_used = self.run + 1, False
 
 
 class _HostPool(PinnedPool):
@@ -307,16 +323,21 @@ def schedule(kv0: int, steps: int, batch: int = 2) -> list[tuple[int, ...]]:
     return [tuple(kv0 + 5 * r + s for r in range(batch)) for s in range(steps)]
 
 
+def serve(com: NC.NativeCollectCommitter, kv: tuple[int, ...]):
+    """The serving thread's side of one decode step; returns the job it hands the worker."""
+    so = _Sched(kv)
+    com.runner.tensors = step_tensors(kv)
+    com.runner.input_batch = SimpleNamespace(req_ids=so.req_ids, num_reqs=len(kv), num_scheduled_tokens=None)
+    com.runner.execute_model(so)
+    com._end_step()
+    return com._q.get_nowait()
+
+
 def run(com: NC.NativeCollectCommitter, sched: list[tuple[int, ...]]):
     """One commitment run, as the network traces' window loop runs it: install, the steps, finalize, uninstall, reset."""
     com.install()
     for kv in sched:
-        so = _Sched(kv)
-        com.runner.tensors = step_tensors(kv)
-        com.runner.input_batch = SimpleNamespace(req_ids=so.req_ids, num_reqs=len(kv), num_scheduled_tokens=None)
-        com.runner.execute_model(so)
-        com._end_step()
-        com._commit_step(com._q.get_nowait())
+        com._commit_step(serve(com, kv))
     rc = com.finalize()
     com.uninstall()
     com.reset()
@@ -373,28 +394,35 @@ def rising() -> list[list[tuple[int, ...]]]:
     return [schedule(40 + r * STEPS, STEPS) for r in range(RUNS)]
 
 
-@pytest.mark.parametrize("native_worker", [False, True], ids=["python-worker", "native-worker"])
+WORKERS = pytest.mark.parametrize("native_worker", [False, True], ids=["python-worker", "native-worker"])
+
+
+@WORKERS
 def test_the_plan_caches_stay_bounded_while_every_step_learns_a_new_plan(monkeypatch, native_worker):
-    """Over runs whose every decode step learns a new plan, the worker keeps the metas of the two latest runs' plans, not of every
-    step since the process started, and the heap a full collection walks stops growing after the second run."""
+    """Over runs whose every decode step learns a new plan, the collector holds the plans of the run that just ended and the
+    worker the metas of the two latest runs' plans, not every step's since the process started, and the heap a full collection
+    walks stops growing after the second run."""
     com = committer(monkeypatch, native_worker=native_worker)
-    sizes, kept, heaps = [], [], []
+    sizes, kept, heaps, plans = [], [], [], []
     for sched in rising():
         run(com, sched)
         sizes.append(len(com._metas_cache))
         kept.append(retained(com))
         heaps.append(heap())
+        plans.append((com._nc.stats()["plans"], com._nc.stats()["plan_entries"]))
     assert com._nc.learned == RUNS * STEPS and com.errors == []
+    assert plans == [(STEPS, STEPS * TENSORS)] * RUNS, f"the collector's plans and entries after each run: {plans}"
     assert max(sizes) <= 2 * STEPS, f"plans cached after each run: {sizes}"
     per_plan = TENSORS + 1                                     # the metas list and one TensorMeta per tensor
     assert max(kept) <= 2 * STEPS * per_plan + 8, f"objects the caches keep alive after each run: {kept}"
     assert max(heaps[2:]) - heaps[1] <= STEPS * per_plan // 2, f"heap after each run: {heaps}"
 
 
-def test_every_root_is_the_root_of_the_same_step_committed_from_one_block(monkeypatch):
+@WORKERS
+def test_every_root_is_the_root_of_the_same_step_committed_from_one_block(monkeypatch, native_worker):
     """Every step's root equals the one-block CPU reference over the same tensors, and the run roots are those main's committer
     produced on the same schedule."""
-    com = committer(monkeypatch)
+    com = committer(monkeypatch, native_worker=native_worker)
     roots = []
     for sched in rising():
         rc = run(com, sched)
@@ -403,48 +431,65 @@ def test_every_root_is_the_root_of_the_same_step_committed_from_one_block(monkey
     assert hashlib.sha256(b"".join(roots)).hexdigest() == MAIN_RUN_ROOTS
 
 
-def test_a_record_run_follows_the_warm_up_plans_without_exporting_them_again(monkeypatch):
-    """The warm-up learns every plan; the record run of the same schedule hits each one, the serving thread exports nothing and
-    the worker commits from the warm-up's metas."""
+def test_a_record_run_follows_the_warm_up_plans_without_learning_or_exporting_them_again(monkeypatch):
+    """commit.py: the warm-up learns every plan, the committer is reset again before the instrumented arm, and the record run of
+    the same schedule hits each plan: the collector learns none again, the serving thread exports nothing and the worker commits
+    from the warm-up's metas."""
     com = committer(monkeypatch)
     sched = schedule(100, STEPS)
     warm = run(com, sched)
+    com.reset()
     exports, learned = com._nc.exports, com._nc.learned
     rec = run(com, sched)
     assert com._nc.learned == learned == STEPS and com._nc.exports == exports == STEPS
     assert [s.root for s in rec.steps] == [s.root for s in warm.steps]
 
 
-def test_a_plan_the_worker_dropped_is_exported_again_and_commits_the_same_roots(monkeypatch):
-    """A schedule, two runs of others, then the first schedule again: the collector still holds its plans and hits them, the worker
-    no longer does, so the serving thread exports each plan again and the steps commit the roots of the first run."""
+def test_a_plan_dropped_two_runs_back_is_learned_again_and_commits_the_same_roots(monkeypatch):
+    """A schedule, two runs of others, then the first schedule again: the collector and the worker have both dropped its plans, so
+    the collector learns each one again, at a version above the dropped one, the serving thread exports it, and the steps commit
+    the bytes and roots of the first run."""
     com = committer(monkeypatch)
     first, other = schedule(200, STEPS), [schedule(300 + 20 * r, STEPS) for r in range(2)]
     a = run(com, first)
     for sched in other:
         run(com, sched)
-    learned = com._nc.learned
+    learned, exports = com._nc.learned, com._nc.exports
     again = run(com, first)
-    assert com._nc.learned == learned and com.errors == []
-    assert [s.root for s in again.steps] == [s.root for s in a.steps] and again.run_root == a.run_root
+    assert com._nc.learned == learned + STEPS and com._nc.exports == exports + STEPS and com.errors == []
+    assert com._nc.plan_version(NC.plan_key_of(_Sched(first[0]), 2, 2)[0]) > 1
+    assert [(s.n_bytes, s.root) for s in again.steps] == [(s.n_bytes, s.root) for s in a.steps] and again.run_root == a.run_root
 
 
-def test_a_windowed_hit_step_exports_the_hinted_plan_the_worker_dropped(monkeypatch):
-    """Bounded windowed staging with excluded families places its retained ranges from the metas of the plan a hit step is
-    predicted to follow, before the step ends: when the worker no longer holds that plan, the serving thread exports it at step
-    begin, and the worker builds the same metas from it."""
+def test_a_plan_learned_after_a_drop_never_takes_a_version_the_worker_still_holds(monkeypatch):
+    """The collector can drop a plan the worker still holds: a run whose steps the collector began and the worker never absorbed
+    (they failed) retires the collector's generation and not the worker's. A later step of the same key with other tensors learns
+    a plan above the dropped version, so the worker builds its metas from the export, and the step commits its own tensors."""
+    monkeypatch.setattr(NC, "plan_key_of", lambda *a: (1, "geometry"))
     com = committer(monkeypatch)
-    sched = schedule(400, 1)
-    run(com, sched)
-    key, _mode = NC.plan_key_of(_Sched(sched[0]), 2, 2)
-    want = [(m.name, m.dev_off, m.nbytes) for m in com._metas_for(SimpleNamespace(plan=(key, 1, com._nc.export_plan(key))))]
-    for sched in [schedule(500, 1), schedule(600, 1)]:
-        run(com, sched)
-    assert (key, 1) not in com._metas_cache
+    run(com, schedule(700, 1))
+    assert (1, 1) in com._metas_cache
+    com._nc.begin_step(2, 0, 0, True)
+    com._nc.end_step()
+    com._nc.end_run()
+    kv = schedule(900, 1)[0]
+    rc = run(com, [kv])
+    assert rc.steps[0].root == one_block_root(0, step_tensors(kv)) and com.errors == []
+    assert com._nc.plan_version(1) > 1
+
+
+def test_a_windowed_hit_step_exports_the_hinted_plan_the_worker_has_not_absorbed(monkeypatch):
+    """Bounded windowed staging with excluded families places its retained ranges from the metas of the plan a hit step is
+    predicted to follow, before the step ends. When the serving thread runs ahead of the worker, the step that learned that plan
+    may not be absorbed yet: the serving thread exports the plan at step begin, and the worker builds the same metas from it."""
+    com = committer(monkeypatch)
+    com.install()
+    learn = serve(com, schedule(400, 1)[0])
+    key, _version, entries = learn.plan
     com.windowed, com.retain_exclude, com._plan_key = True, {"fa2"}, key
     com._begin_step()
     job = com._q.get_nowait()
     com._nc.active = False
-    assert job.plan_hint == (key, 1) and job.hint_entries is not None
+    assert (key, 1) not in com._metas_cache and job.plan_hint == (key, 1) and job.hint_entries is not None
     got = com._metas_for(job, (*job.plan_hint, job.hint_entries))
-    assert [(m.name, m.dev_off, m.nbytes) for m in got] == want
+    assert [(m.name, m.dev_off, m.nbytes) for m in got] == [(com._names[nid], off, nb) for nid, _dt, _sz, nb, off, _gap in entries]
