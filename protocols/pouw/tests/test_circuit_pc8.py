@@ -4,7 +4,8 @@ the row's admission bit admits, its units evaluate to `schemes.pearl_c`'s formin
 (finiteness, the noise floor and `live_row`, each at its boundary), and its partition computes every value in exactly one
 unit; its hiding Programs publish only admission bits and tile digests, their units' ports are `PORTS`, and the verifier
 derives the anchored inputs (`anchors.TileAnchors`).  A short last tile row (m = 80, 112, and decode's 32 at the scheme's
-tile, the pinned decode-32 case among them) is the scheme's too, and whole-tile Programs and layouts are pinned."""
+tile, the pinned decode-32 case among them) is the scheme's too, the row cut refuses it, and whole-tile Programs and layouts
+are pinned."""
 from __future__ import annotations
 
 import hashlib
@@ -439,7 +440,7 @@ def test_a_short_tile_is_proved_with_its_rows_in_its_own_stratum():
 
 
 #: each whole-tile shape's Programs (their ids, queries and, up to 4,096 words, digests) and tile layout, pinned: a short
-#: last tile row leaves every whole-tile shape as it is
+#: last tile row leaves every whole-tile shape as it is, with the row cut (``row_k``) or without
 WHOLE = {
     pc8.Shape(1, 128, 1, tile=(1, 1)): "c906341a1377f29d1d03abda8cd10f9e45e0c5df4fc76e9c8418a7503e25f076",
     pc8.Shape(1, 128, 1, tile=(1, 1), hidden=True): "bfcdf4bda1ae9cec62b2184b5fb3f0794e7a48b3186963c7b850c31522160f22",
@@ -452,11 +453,21 @@ WHOLE = {
     pc8.Shape(64, 128, 64, hidden=True): "46bbd94ebd4d295805b18aa3900d902a10dab58029f4a616d96a757a61469ccf",
     pc8.Shape(128, 128, 128): "42bf79753583e3318a6ee174dc9eecf279eabd011963a715d1fb79028dd445cd",
     pc8.Shape(128, 128, 128, hidden=True): "8df370c86fb0876347efc0efd99aa338656f73d91e3ea6bf7ba511e4e2ac5c67",
+    pc8.Shape(2, 384, 2, tile=(1, 1), dev="h100", row_k=128):
+        "6228401cb58f4821db5641e7f715bee96749be33fff6866fb7dfd815de1741de",
+    pc8.Shape(2, 384, 2, tile=(1, 1), hidden=True, row_k=128):
+        "9d1cd6c57961e0c23ea27409e3dd24e8e459d025953f0834f360729142d56383",
+    pc8.Shape(2, 96, 2, tile=(1, 1), dev="sm120-unpromoted", row_k=32):
+        "01ccf860eea2c006eac54d9fa101e9ad73f67070d031a035758220bdc0153c61",
+    pc8.Shape(4, 384, 6, tile=(2, 3), hidden=True, row_k=128):
+        "24ad4c912042fdcc97c24f726aa6047a96c57113555af558c7ddb2c330081b29",
+    pc8.Shape(64, 256, 64, hidden=True, row_k=128): "e04ce7faecefe499db5355583f13ea1f890adbaba2adb82a8376b2e3cbf5f9a9",
 }
 
 
 @pytest.mark.parametrize("shape", list(WHOLE), ids=[f"{s.m}x{s.k}x{s.n}-tile{s.tile[0]}x{s.tile[1]}-{s.dev}"
-                                                    f"{'-hidden' * s.hidden}" for s in WHOLE])
+                                                    f"{'-hidden' * s.hidden}{f'-rowk{s.row_k}' * (s.row_k is not None)}"
+                                                    for s in WHOLE])
 def test_whole_tile_programs_and_layouts_are_pinned(shape):
     """`Pc8Weight`, `Pc8Call` and `Pc8Check` (or their hiding forms), their queries and `plan.tile_layout` at W_ref 4,096
     are the pinned ones on every whole-tile shape."""
@@ -483,3 +494,17 @@ def test_shapes_outside_the_circuit_are_refused():
         for build in (pc8.check, pc8.weight, pc8.call):
             with pytest.raises(DomainError):
                 build(shape)
+
+
+def test_the_row_cut_refuses_a_short_tile_row():
+    """The row cut (``row_k``) takes whole tiles only: 80 rows and decode's 32 at 64-row tiles, admitted without it, are
+    refused with it by every root and by the tile layout, and 64 rows are admitted with it."""
+    pc8.Shape(64, 256, 64, row_k=128).check()
+    for m in (80, 32):
+        pc8.Shape(m, 256, 64).check()
+        shape = pc8.Shape(m, 256, 64, row_k=128)
+        for refused in (pc8.check, pc8.weight, pc8.call, lambda s: plan.tile_layout(s, 4096)):
+            with pytest.raises(DomainError, match="row cut takes whole tiles only"):
+                refused(shape)
+        with pytest.raises(DomainError, match="row cut takes whole tiles only"):
+            plan.tile_layout(replace(shape, hidden=True), 4096)

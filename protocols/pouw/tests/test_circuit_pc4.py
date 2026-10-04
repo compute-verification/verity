@@ -318,7 +318,7 @@ def test_the_tile_layout_proves_each_drawn_tile_with_its_rows():
 
 
 #: `CF.layout_sha` of each layout, pinned: Pearl-C4's tiles are whole, so `tile_layout`'s short tile row (`pc8`'s) never
-#: applies to them, at the test shapes and at the scheme's 64 × 64 tile
+#: applies to them, at the test shapes and at the scheme's 64 × 64 tile, with the row cut (``row_k``) or without
 LAYOUTS = {
     (pc4.Shape(4, 64, 6, tile=(2, 3)), 1000): "7626b8af4961b45fcc15a0a55748f0ff869200ca9488edfb7a929c2202bfe0fd",
     (pc4.Shape(4, 64, 6, tile=(2, 3), hidden=True), 1000): "a2e3a223aa2512b710dec2565d59b55426096a95276b5c96efb0e312239c07e0",
@@ -328,11 +328,18 @@ LAYOUTS = {
     (pc4.Shape(64, 64, 64, hidden=True), 4096): "9af149f7bb00e68b3bc89b01cc5cf5de79546d5ebe8f2bcd47657299de59d188",
     (pc4.Shape(128, 64, 192), 4096): "738d302c72a565ccb98e17494dbed82d5652c3a4aebe1e4a70fe67ccb86e7df1",
     (pc4.Shape(128, 64, 192, hidden=True), 4096): "04f82c2ed78e2c034d4ef66bb90b9c7b8ee49f326e02238a8d5c38a9aac8f8b2",
+    (pc4.Shape(2, 256, 2, tile=(1, 1), row_k=64), 1): "c2b79019d69d8e8ae9f180288cf28a50d8fde3db667b08da01fe21e9282be9da",
+    (pc4.Shape(2, 256, 2, tile=(1, 1), hidden=True, row_k=64), 1):
+        "2292dec28f55deadf8617ba5cebea6b7a7457720b5130ff55ddbc92cf950dee6",
+    (pc4.Shape(4, 256, 6, tile=(2, 3), row_k=64), 1000): "10f710a8a147066dbd4679f5f577cf7c7d0e4dffd6069c0131af68e4b87d436f",
+    (pc4.Shape(4, 256, 6, tile=(2, 3), hidden=True, row_k=64), 1000):
+        "6dd9a12615328cd675a363d01ed926338d81b8c1d874fd9b8b1ace6b0f035a7f",
 }
 
 
 @pytest.mark.parametrize("shape, w_ref", list(LAYOUTS),
-                         ids=[f"{s.m}x{s.n}-tile{s.tile[0]}x{s.tile[1]}{'-hidden' * s.hidden}" for s, _w in LAYOUTS])
+                         ids=[f"{s.m}x{s.n}-tile{s.tile[0]}x{s.tile[1]}{'-hidden' * s.hidden}"
+                              f"{f'-rowk{s.row_k}' * (s.row_k is not None)}" for s, _w in LAYOUTS])
 def test_the_tile_layouts_are_pinned(shape, w_ref):
     """Every unit, stratum, closure, B row and W_ref of `plan.tile_layout` on Pearl-C4's shapes is the pinned one."""
     assert CF.layout_sha(plan.tile_layout(shape, w_ref)) == LAYOUTS[shape, w_ref]
