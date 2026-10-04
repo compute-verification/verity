@@ -82,7 +82,10 @@ class Work:
         got = yield from gather({Shares: "prover", Elapsed: clock_from})
         shares, seconds = got[Shares].nonces, got[Elapsed].seconds
         valid = sum(
-            len({n for n in shares.get(i, ()) if self._share(_key(salt, i, e), n)}) for i, e in enumerate(executions)
+            len(
+                {n for n in shares.get(i, ()) if 0 <= n < _budget(registration, e) and self._share(_key(salt, i, e), n)}
+            )
+            for i, e in enumerate(executions)
         )
         bound = WorkBound(digest(registration, executions), self._tries(valid), seconds, clock_from, self.delta)
         return (Send(bound),)
@@ -91,8 +94,8 @@ class Work:
         salt = (yield from receive(Salt, "verifier")).salt
         nonces = {}
         for i, e in enumerate(executions):
-            key, tries = _key(salt, i, e), len(built(registration.builder, e.advice)[0].gates)
-            nonces[i] = tuple(n for n in range(tries) if self._share(key, n))
+            key = _key(salt, i, e)
+            nonces[i] = tuple(n for n in range(_budget(registration, e)) if self._share(key, n))
         return (Send(Shares(nonces), "verifier"),)
 
     def clock(self, seconds: float) -> Actor:
@@ -110,6 +113,14 @@ class Work:
         log = math.log(1 / self.delta)
         t = (math.sqrt(16 * log**2 / 9 + 8 * log * shares) - 4 * log / 3) / 2
         return max(0, int((shares - t) * 2**self.difficulty))
+
+
+def _budget(registration: Registration, execution: Execution) -> int:
+    """The tries an execution's work has: one per gate it ran, and none for advice that builds nothing."""
+    try:
+        return len(built(registration.builder, execution.advice)[0].gates)
+    except ValueError:
+        return 0
 
 
 def _key(salt: bytes, i: int, execution: Execution) -> bytes:
