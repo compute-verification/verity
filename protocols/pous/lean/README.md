@@ -28,10 +28,15 @@ Pous/Protocol/Model/{Digest,SecureErasure}.lean
                                     the keyed digest of a region (from PR #1010, without its bandwidth
                                     assumption); the secure-erasure audit: a keyed fill of all volatile memory,
                                     timed spot reads, and the foreign content the prover keeps (4 Oct model)
-Pous/Protocol/Accounting/{Params,LemmaA,PubMeets,GradedMeets,EraseMeets}.lean
+Pous/Protocol/Model/{ReadDraw,PageFill}.lean
+                                    the sequential audit and secure erasure over any read draw, and the draw of
+                                    `s` distinct reads; the keyed page fill (Feistel10-SHAKE256 pages, each page's
+                                    permutation ideal under its own tweak, as P3 idealizes Π₂) read a byte at a time
+Pous/Protocol/Accounting/{Params,LemmaA,PubMeets,GradedMeets,EraseMeets,EraseMeetsDistinct}.lean
                                     ρ, δ, expansion, `Meets`; Lemma A's bound and A7′'s rows;
                                     `PubMeets`, the requirement with a public encoder; `GradedMeets`, with grace `t`;
-                                    `EraseMeets`, the secure-erasure requirement
+                                    `EraseMeets`, the secure-erasure requirement; `EraseMeetsDistinct`, the same
+                                    with `s` distinct reads
 Pous/Protocol/P2/Cost.lean          P2's cost model, the generic ring over `Z/p` with random odd labels
                                     and the junk label (`ringRO`), the bound `RingBounded D Q L` beside `Bounded`,
                                     `MeetsOn`, `MeetsWithSlack`, and P2 in it (`p2ring`)
@@ -47,6 +52,13 @@ Pous/Guarantees/SecureErasure.lean  four statements, which grade.sh also grades 
                                     (`SecureErasureMeets`), and on the band at every `N` and at 96 GiB
                                     (`SecureErasureMeetsFamily`, `SecureErasureMeets96GiB`); no named assumption,
                                     no bandwidth-separation premise
+Pous/Guarantees/SecureErasurePages.lean
+                                    four statements, which grade.sh also grades against: secure erasure from an
+                                    audit bound over any read draw (`SecureErasureMeetsDraw`), the keyed page
+                                    fill's audit at `D = 0` with distinct byte reads (`PageFillAuditSecure`), and
+                                    its `EraseMeetsDistinct` at every `P` and at `P = 96112`
+                                    (`SecureErasurePagesFamily`, `SecureErasurePages96112`); no named assumption,
+                                    each page's Feistel10 an ideal permutation as in P3
 Pous/SecurityProofs.lean            proved, the SecurityProofs layer: imports every proof module, and proves
                                     Pous.SecurityProofs.X : Pous.Guarantees.X for each proved guarantee
 Pous/SecurityProofs/{Sanity,Accounting/Numbers}.lean
@@ -67,7 +79,9 @@ Pous/SecurityProofs/Graded/         proved: the tail rule (`Tail.lean`), Theorem
                                     `BandGradedMeetsFamily`)
 Pous/SecurityProofs/SecureErasure/  proved: `DigestAU` (Digest), secure erasure from the audit by counting
                                     (Reduction), and the band's audit at 2152 reads with `EraseMeets` at
-                                    `f = 1/19`, `ε = 2^-128` (Band)
+                                    `f = 1/19`, `ε = 2^-128` (Band); the reduction over any read draw
+                                    (ReductionDraw), the page fill's audit (PagesAudit), and its
+                                    `EraseMeetsDistinct` at 3430 reads for every `P`, 3046 at `P = 96112` (Pages)
 lean-audit.json                     the policy and pin records for tools/lean/audit.py
 CheckAxioms.lean                    one #print axioms line per headline theorem
 PousTargets.lean                    untrusted, not in the default build: the open statements as sorry targets
