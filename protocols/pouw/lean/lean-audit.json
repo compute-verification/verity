@@ -36,7 +36,9 @@
   "Pouw.Assumptions.PearlC.TTOutFp4",
   "Pouw.Assumptions.PearlC.TTOutFp4ChainOnly",
   "Pouw.Assumptions.PearlC.HiddenTile",
-  "Pouw.Assumptions.PearlC.HonestCap"
+  "Pouw.Assumptions.PearlC.HonestCap",
+  "Pouw.Assumptions.Deadline",
+  "Pouw.Assumptions.PearlC.Deadline"
  ],
  "meaning": ["Pouw.Protocol", "Pouw.Assumptions", "Pouw.Guarantees", "Verity.Protocol"],
  "layers": {
@@ -7970,11 +7972,18 @@
    "assumptions": [],
    "type_hash": "07e56fe9f88102f6281f1a4a536410aae27868252a8f1755aaf703c795446802"
   },
+  "Pouw.SecurityProofs.PearlCSampledByDeadline": {},
+  "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384": {},
+  "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192": {},
+  "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": {},
+  "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": {},
+  "Pouw.SecurityProofs.SpareCapacityAtDeadline": {},
   "Pouw.SecurityProofs.Theorem1": {
    "signature": ["Pouw.SecurityProofs.Theorem1 : Pouw.Guarantees.Theorem1"],
    "assumptions": [],
    "type_hash": "e6732e29262cf85d911761ff4fe2600b68d006d5f040ac74e4c98ca358d8e8f5"
   },
+  "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline": {},
   "Pouw.SecurityProofs.WorkWeightedSampling": {
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
