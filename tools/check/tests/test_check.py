@@ -322,6 +322,57 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
         launched.clear()
 
 
+def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path, monkeypatch, capsys):
+    """git reports a rename by its destination alone unless asked not to, which would leave out the step the file's old path
+    requires."""
+    import json
+    import subprocess
+    import sys
+    import tempfile
+
+    import research.store.local
+
+    def git(*args):
+        subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=tmp_path,
+                       check=True, capture_output=True)
+
+    (tmp_path / "tools" / "check").mkdir(parents=True)
+    (tmp_path / "tools" / "check" / "tool.py").write_text(
+        "from research.store.tool import Tool\nCHECK = Tool(name='check', version='1', command=['true'], "
+        "merge_requires={'lean-agreement': ['backends/flock/', '!README.md']})\n")
+    (tmp_path / "backends" / "flock").mkdir(parents=True)
+    (tmp_path / "backends" / "flock" / "verify.rs").write_text("fn main() {}\n")
+    git("init", "-q", "-b", "main")
+    git("add", "-A")
+    git("commit", "-q", "-m", "base")
+    git("mv", "backends/flock/verify.rs", "verify.rs")
+    git("commit", "-q", "-m", "move")
+    (tmp_path / "upstream.json").write_text(json.dumps({"upstream": {"art": "art:u"}, "inputs": {"art": "art:i"}}))
+
+    class Store:
+        def fetch(self, art):
+            (tmp_path / art[4:]).write_text("")
+            return tmp_path / art[4:]
+
+    real, launched = subprocess.run, []
+
+    def run(cmd, *a, **k):
+        if cmd[:4] == [sys.executable, "-m", "research", "run"]:
+            launched.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0)
+        return real(cmd, *a, **k)
+
+    monkeypatch.setattr(CHECK, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECK, "UPSTREAM_PIN", tmp_path / "upstream.json")
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(research.store.local, "LocalStore", Store)
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(subprocess, "run", run)
+    assert CHECK.record(["--base", "HEAD^"]) == 0
+    [cmd] = launched
+    assert "flock_upstream=art:u" in cmd and "sending the pinned upstream build" in capsys.readouterr().out
+
+
 def test_check_refuses_a_python_that_imports_the_trees_packages_from_elsewhere(monkeypatch, capsys):
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
     monkeypatch.setenv("PYTHONPATH", f"/tmp/s1350/packages/verity/src:{ROOT / 'tools/research/src'}")
@@ -610,6 +661,18 @@ def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_pa
     assert done[1]["detail"] == "not started: preflight-lock failed" and not marker.exists()
     _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
     assert CHECK.run(tmp_path, 2)[0] and marker.exists()
+
+
+def test_a_failed_preflight_starts_nothing_else_even_under_keep_going(tmp_path, monkeypatch):
+    """Every train's check runs with --keep-going: a failed preflight must still end it in seconds, not hold its slot."""
+    marker = tmp_path / "ran"
+    touch = _py("open(__import__('sys').argv[1], 'w')", marker)
+    for failing in ("preflight-lock", "preflight-lints"):
+        pre = [(n, _py("raise SystemExit(1)") if n == failing else _py("pass"), tmp_path) for n in ("preflight-lock", "preflight-lints")]
+        _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=pre)
+        ok, done = CHECK.run(tmp_path, 2, keep_going=True)
+        assert not ok and "pytest" not in {s["step"] for s in done} and not marker.exists(), failing
+        assert {s["step"]: s["status"] for s in done}[failing] == "failed"
 
 
 def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
