@@ -149,6 +149,21 @@ def pearlCDomainDev (d : PearlCDevice) (L : Layout) : Prop :=
 def pearlCDomainDevAt (d : PearlCDevice) (s : Shape) (L : Layout) : Prop :=
   pearlCDomainDev d L ∧ ∀ u < L.N, L.shape u = s
 
+/-- The domain restricted to one linear, `n` and `k` fixed and `m` free: its units at any mix of batch sizes. -/
+def pearlCDomainDevNK (d : PearlCDevice) (n k : ℕ) (L : Layout) : Prop :=
+  pearlCDomainDev d L ∧ ∀ u < L.N, (L.shape u).n = n ∧ (L.shape u).k = k
+
+/-- The domain restricted to a set of linears: every unit's `(n, k)` in `nks`, `m` free. A served step's layout holds
+every linear of its model at once, each at any mix of batch sizes. -/
+def pearlCDomainDevShapes (d : PearlCDevice) (nks : Finset (ℕ × ℕ)) (L : Layout) : Prop :=
+  pearlCDomainDev d L ∧ ∀ u < L.N, ((L.shape u).n, (L.shape u).k) ∈ nks
+
+/-- Llama-3.1-8B's linears `(n, k)`: qkv, o, gate_up, down. -/
+def llama31_8bLinears : Finset (ℕ × ℕ) := {(6144, 4096), (4096, 4096), (28672, 4096), (4096, 14336)}
+
+/-- Qwen3-8B's linears `(n, k)`: qkv, o, gate_up, down. -/
+def qwen3_8bLinears : Finset (ℕ × ℕ) := {(6144, 4096), (4096, 4096), (24576, 4096), (4096, 12288)}
+
 open Classical in
 /-- A tile's replayed debit at a device, as `PearlCSem.tileDebit` with the device's flags, salt-dead predicate and prices.
 The forming part is P3's per-tile rule (`internal/pouw-fp8/pearl-c-forming.md`, "The per-tile cap"). -/
