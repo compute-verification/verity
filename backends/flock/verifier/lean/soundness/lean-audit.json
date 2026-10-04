@@ -12118,6 +12118,7 @@
    "assumptions": [],
    "type_hash": "c4245fd39bc3953871b19de8a97db340d01205c31efe9008309f47e02a9a7f42"
   },
+  "FlockSoundness.Discharge.ZkReg.zk_flock_drawnRegValsC_cr": {},
   "FlockSoundness.Discharge.ZkReg.zk_flock_regValsC_cr": {
    "signature": [
     "FlockSoundness.Discharge.ZkReg.zk_flock_regValsC_cr {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
@@ -12471,6 +12472,8 @@
    "assumptions": [],
    "type_hash": "dfed0cb540d97611da93aa15888c1c631cb726f767404c1282db41a66c228438"
   },
+  "FlockSoundness.Discharge.ZkReg.zk_session_drawnRegValsR": {},
+  "FlockSoundness.Discharge.ZkReg.zk_session_offR": {},
   "FlockSoundness.Discharge.ZkReg.zk_session_regValsHR": {
    "signature": [
     "FlockSoundness.Discharge.ZkReg.zk_session_regValsHR {mPts n : Nat} {Reg : Type}",
@@ -15617,6 +15620,7 @@
    "assumptions": [],
    "type_hash": "4090999ceac6d1bfcd62747565186991b4e433b00a048bd9dbc582304ac3e507"
   },
+  "FlockSoundness.Registered.Reads.prob_offDrawn_le": {},
   "FlockSoundness.Registered.Reads.prob_off_le": {
    "signature": [
     "FlockSoundness.Registered.Reads.prob_off_le {C : FlockSoundness.Audit.Circuit} {n : Nat}",
@@ -15636,6 +15640,7 @@
    "assumptions": [],
    "type_hash": "7670e51b3a8379f623c8c0d93cf4a133499ea3a23e998888a61f0fb7b5ea1708"
   },
+  "FlockSoundness.Registered.Reads.prob_off_le_run": {},
   "FlockSoundness.Registered.Reads.regLeaf_eq": {
    "signature": [
     "FlockSoundness.Registered.Reads.regLeaf_eq {C : FlockSoundness.Audit.Circuit} {n : Nat}",
