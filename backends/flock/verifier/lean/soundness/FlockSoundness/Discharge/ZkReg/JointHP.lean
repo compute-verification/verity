@@ -222,7 +222,18 @@ theorem zk_session_offHRP
             rd.leaf ((layShHP dj y₀ ht hc hscope hU hpi (pub := pub)).pos g))
         (auditLive L Reg (liveOf dg mPts N wr)) σ ≤
       ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  have hchk : ∀ o, Game.Out (auditLive L Reg (liveOf dg mPts N wr)) o → LiveAcceptsZKRP I rports own o →
+      (rd.restrict (FlockSoundness.Registered.drawnReads (layShHP dj y₀ ht hc hscope hU hpi (pub := pub)) o.2.1)).Checked
+        o.1 (regPathsHP c pi pub o.2.2 rd.port) := by
+    intro o ho hacc
+    obtain ⟨R, ω, lo, rfl⟩ := auditLive_outcome ho
+    exact checked_of_acceptsHP I ht rports own dj y₀ hc hU hpi hpub hscope hTags _ hacc
+      (rd.restrict
+        (FlockSoundness.Registered.drawnReads (layShHP dj y₀ ht hc hscope hU hpi (pub := pub)) (L.draw ω)))
+      (hown R ω lo hacc)
+  exact FlockSoundness.Registered.Reads.prob_offDrawn_le (lay := layShHP dj y₀ ht hc hscope hU hpi (pub := pub)) _ σ
+    (LiveAcceptsZKRP I rports own) (fun o => o.2.1) (fun o => o.1) (fun o => regPathsHP c pi pub o.2.2 rd.port) rd
+    hchk hR
 
 end Session
 
