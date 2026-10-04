@@ -958,7 +958,7 @@ rejects (more than `f₀` rounds are not hits) with probability at most the bino
 `α = P[Bin(n, q) > f₀] = Σ_{f₀ < m ≤ n} C(n, m)·q^m·(1 − q)^(n − m)`.
 
 `q` is a parameter, not an assumption, and the statement holds for every machine, but a `q` is a rate in one
-configuration. A tighter deadline admits a larger `q`: at a fixed hard deadline the rounds and the histories do not
+configuration. A tighter deadline needs a larger `q`: at a fixed hard deadline the rounds and the histories do not
 depend on `(D, Q)`, and a smaller `(D, Q)` turns some hits into late answers. A machine is deterministic, so the only
 randomness the theorem bounds is the setup and the index draw, and `q` is the worst miss rate over the next index, at
 the worst setup and after the worst history. The model's honest responder, which keeps `C` and answers by lookup, hits
