@@ -40,6 +40,7 @@ import resource
 import subprocess
 import threading
 import time
+import weakref
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -460,33 +461,38 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     return Program(root), calls, prov
 
 
-_BINDINGS: dict = {}
+#: keyed by the `PartitionUnits` object itself, never its id: a freed object's id is reused by a later one, which would then
+#: read the freed partition's binding
+_BINDINGS: weakref.WeakKeyDictionary[PartitionUnits, dict[str, tuple[str, str]]] = weakref.WeakKeyDictionary()
 
 
 def partition_binding(units: PartitionUnits, spec: str) -> tuple[str, str]:
     """(partition digest, program SHA-512) the statement binds, computed once per partition."""
-    if (id(units), spec) in _BINDINGS:
-        return _BINDINGS[id(units), spec]
+    cached = _BINDINGS.setdefault(units, {})
+    if spec in cached:
+        return cached[spec]
     program = PO.program_sha512(units.program)
     if units.query is not None:
         out = PO.digest(PO.build(units.program, units.query)), program
     else:
         out = hashlib.sha512(EXPERIMENTAL.encode() + b"\0" + json.dumps({"program": program, "owners": spec}, sort_keys=True).encode()).hexdigest(), program
-    _BINDINGS[id(units), spec] = out
+    cached[spec] = out
     return out
 
 
-_OWNERS: dict = {}
+#: one entry, keyed by the object as `_BINDINGS` is
+_OWNERS: weakref.WeakKeyDictionary[PartitionUnits, tuple[str, dict[int, str]]] = weakref.WeakKeyDictionary()
 
 
 def owners_of(units: PartitionUnits, fn_id: str) -> dict[int, str]:
     """Computing gate -> its unit's shape, in the flat Definition's cut (structure gates, copied into every reader, have none)."""
-    if (id(units), fn_id) not in _OWNERS:
+    hit = _OWNERS.get(units)
+    if hit is None or hit[0] != fn_id:
         act = units.activation_of(fn_id)
         keep = set(act.graph.keep)
         _OWNERS.clear()
-        _OWNERS[id(units), fn_id] = {j: uc.shape for uc in units._flat[fn_id][1] for j in uc.gates if j in keep}
-    return _OWNERS[id(units), fn_id]
+        hit = _OWNERS[units] = fn_id, {j: uc.shape for uc in units._flat[fn_id][1] for j in uc.gates if j in keep}
+    return hit[1]
 
 
 def broadcast_params(units: PartitionUnits) -> dict[str, tuple[set[int], int]]:

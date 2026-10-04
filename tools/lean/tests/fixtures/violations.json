@@ -25,11 +25,11 @@
  },
  "closed_hypothesis": {
   "replace": {"Control/Thms.lean": ["(h : Control.Hyp)", "(h : ∀ m : Nat, m + 0 = m)"]},
-  "fails": "pins: Control.main_thm assumes (h : "
+  "fails": "guarantees: Control.main_thm assumes (h : "
  },
  "statement": {
   "replace": {"Control/Thms.lean": ["double n = n + n", "double n ≥ n + n"]},
-  "fails": "pins: Control.main_thm's signature changed"
+  "fails": "guarantees: Control.main_thm's signature changed"
  },
  "layer": {
   "replace": {"Control/Defs.lean": ["/-! What", "import Control.Assumptions\n/-! What"]},
@@ -37,7 +37,7 @@
  },
  "meaning": {
   "replace": {"Control/Defs.lean": ["2 * n", "n + n"]},
-  "fails": "pins: definitions in Control.Defs that Control.main_thm read changed"
+  "fails": "guarantees: definitions in Control.Defs that Control.main_thm read changed"
  },
  "kernel_option": {
   "write": {"Control/Bad.lean": "set_option debug.skipKernelTC true in\ntheorem Control.unchecked : True := trivial\n"},
@@ -97,10 +97,10 @@
    "digest": "b54ec46ab467ff38b269b2ba53cc855be194b88dde03a4d7e374186a197e7ea3"}}},
   "fails": "compile-time: the listing of Control.Bad was reviewed against another version of Control/Bad.lean"
  },
- "compile_time_pinned": {
-  "policy": {"compile_time": {"Control.Defs": {"why": "a listing where a pin reads",
+ "compile_time_guaranteed": {
+  "policy": {"compile_time": {"Control.Defs": {"why": "a listing where a guarantee reads",
    "digest": "fabe4581b46bc415cac5ac6fbd8cbba3c7bd4c497031f984cb49effabdfdf556"}}},
-  "fails": "compile-time: Control.Defs is listed under `compile_time`, and pins are declared or read there"
+  "fails": "compile-time: Control.Defs is listed under `compile_time`, and guarantees are declared or read there"
  },
  "run_exit": {
   "replace": {"RunOk.lean": ["then 0 else 1", "then 3 else 1"]},
