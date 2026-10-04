@@ -22,7 +22,7 @@ Every declaration here is proved.
 
 namespace FlockSoundness.Discharge.Canonical
 
-open Flock
+open Flock Exec
 
 /-- **At a cut port a leaf cut names, Δ's key is a row bit or the zero**, never a wire's or a fixed column's. -/
 theorem srcAt_cut {c : Circuit} {k p t : ℕ} (hp : (c.unit.inGroups.getD 0 default).bits.size ≤ p)
@@ -79,10 +79,6 @@ theorem readsRows_of_cutsCovered {c : Circuit} (hU : Built c.unit) (h : ProvedSc
   unfold readsRows
   refine List.all_eq_true.2 fun x hx => ?_
   have hx := List.mem_range.1 hx
-  have hW : 0 < c.unit.inWords * WORD := by
-    rcases Nat.eq_zero_or_pos (c.unit.inWords * WORD) with h0 | h0
-    · rw [h0, Nat.mul_zero] at hx; omega
-    · exact h0
   have hk : x / (c.unit.inWords * WORD) < c.upv := Nat.div_lt_of_lt_mul (by rwa [Nat.mul_comm] at hx)
   have hkey : (∀ net slot col, Aliased.srcKey c x ≠ .wire net slot col) ∧ ∀ col, Aliased.srcKey c x ≠ .lit col := by
     unfold Aliased.srcKey
@@ -123,6 +119,8 @@ theorem parse_formatOk {t : Tags} {zk : Bool} {I : Inputs} (h : FailClosed.Check
 end FlockSoundness.Discharge.Canonical
 
 namespace FlockSoundness.Discharge.FailClosed
+
+open Flock Exec ZkExec
 
 /-- **A `--zk` circuit the check passes outside `Layout.scopeOk` is canonical** (`Canonical.parse_formatOk`). -/
 theorem ScopeZ.formatOk {I : Inputs} (h : ScopeZ I) (hv : Layout.scopeOk (circZ I) = false) :

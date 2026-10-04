@@ -4537,6 +4537,9 @@
    "assumptions": [],
    "type_hash": "8be091f3d95f07de4c7cf133faf6b65a369b2a05104e15ff0d23d66aafcea58e"
   },
+  "FlockSoundness.Discharge.Canonical.parse_formatOk": {},
+  "FlockSoundness.Discharge.Canonical.zk_session_soundC_verifies": {},
+  "FlockSoundness.Discharge.Canonical.zk_session_sound_canonical": {},
   "FlockSoundness.Discharge.Composed.Lincheck.foldAll_lcV": {
    "signature": [
     "FlockSoundness.Discharge.Composed.Lincheck.foldAll_lcV (S : FlockSoundness.Model.Statement)",
