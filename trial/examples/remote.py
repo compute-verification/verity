@@ -8,24 +8,26 @@ import sys
 
 from common import Batched, executed, load, schedule, show, tries
 
-from verity.accounting.capacity import Device
-from verity.accounting.coverage import Coverage
-from verity.accounting.explained.integrity.proofs.construction import Proofs
-from verity.accounting.explained.integrity.proofs.transparent import Transparent
-from verity.accounting.explained.integrity.sampling import Weighted
-from verity.accounting.explained.work import Window, Work
-from verity.compliance.nci import Nci
-from verity.primitives import partition as P
-from verity.remote import Remote
+from verity.primitives import circuits as C
+from verity.primitives.physical import Device, Window
+from verity.primitives.randomness import Weighted
+from verity.protocols.accounting.account import Accounting
+from verity.protocols.accounting.integrity import Integrity
+from verity.protocols.accounting.work import Work
+from verity.protocols.compliance.nci import Nci
+from verity.protocols.remote import Remote
+from verity.protocols.verification.proofs.protocol import Proofs
+from verity.protocols.verification.proofs.transparent import Transparent
 from verity.run import run
 
 circuit, requests = load(sys.argv[1] if len(sys.argv) > 1 else "f32_add")
-builder = Batched(circuit, P.greedy(circuit, 16), advice_bits=2)
+builder = Batched(circuit, C.greedy(circuit, 16), advice_bits=2)
+census = {"gpu": Device(work=1000.0)}
 
 remote = Remote(
-    integrity=Proofs(law=Weighted(gates=0.05, outputs=1.0), max_width=16, delta=0.01, system=Transparent()),
-    work=Work(difficulty=3, delta=0.01),
-    coverage=Coverage(census={"gpu": Device(work=1000.0)}, resources=("compute",)),
+    integrity=Integrity(Proofs(Transparent()), law=Weighted(gates=0.05, outputs=1.0), delta=0.01, max_width=16),
+    work=Work(difficulty=3, census=census, delta=0.01),
+    accounting=Accounting(resources=("work",)),
     nci=Nci(gamma=4096, alpha=0.2, max_headroom=0.4, builders=frozenset({builder.id()})),
 )
 stream, transcripts = executed(builder, schedule(requests, (3, 1, 4), builder), remote.integrity.scheme)

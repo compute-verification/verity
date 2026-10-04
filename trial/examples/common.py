@@ -9,15 +9,15 @@ import hashlib
 import json
 import random
 import struct
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, is_dataclass
 from pathlib import Path
 
-from verity.primitives import partition as P
-from verity.primitives.circuit import Circuit, evaluate, transcript
+from verity.primitives import circuits as C
+from verity.primitives.circuits import Builder, Circuit, built, evaluate, transcript
 from verity.primitives.commitments import CommitmentScheme
 from verity.primitives.events import Event
-from verity.primitives.registration import Builder, Registration, Stream, built, commit
+from verity.protocols.accounting.integrity import Registration, Stream, commit
 
 
 def load(name: str, n: int = 8, seed: int = 0) -> tuple[Circuit, list[tuple[int, ...]]]:
@@ -48,14 +48,14 @@ class Batched:
     the batch size less one, since how the scheduler batches is a runtime choice no one fixes ahead of time."""
 
     circuit: Circuit
-    partition: P.Partition
+    partition: C.Partition
     advice_bits: int  # so at most 2**advice_bits requests a step
 
     def id(self) -> str:
         body = json.dumps(["examples/Batched/v0", self.circuit.id(), self.partition, self.advice_bits])
         return hashlib.sha256(body.encode()).hexdigest()[:16]
 
-    def build(self, advice: str) -> tuple[Circuit, P.Partition]:
+    def build(self, advice: str) -> tuple[Circuit, C.Partition]:
         c, n = self.circuit, int(advice or "0", 2) + 1
         b, own = len(c.baseline), c.inputs - len(c.baseline)  # baseline inputs, and each request's own
         total = b + n * own
@@ -120,10 +120,6 @@ def show(event: Event) -> None:
     fields = ", ".join(f"{name}={_brief(value)}" for name, value in vars(event.body).items())
     to = "record" if event.to == event.sender else event.to
     print(f"{event.sender} -> {to}: {type(event.body).__name__}({fields})")
-    for value in vars(event.body).values():
-        if isinstance(value, Mapping) and value and all(is_dataclass(v) for v in value.values()):
-            for key, v in value.items():
-                print(f"    {key}: " + ", ".join(f"{name}={_brief(x)}" for name, x in vars(v).items()))
 
 
 def _brief(value: object) -> str:

@@ -1,0 +1,146 @@
+"""Novel communication intensity: the policy that throttles frontier training and leaves inference alone
+(`Nci.Protocol` in the main repo). Every inference unit of the stream has at most `gamma` gates and reads at most
+`alpha` bits of novel information per gate.
+
+The stream's inference units are its executions', joined where one reads state another wrote (`inference_units`), so a
+session is one unit however many steps it took, and state it wrote itself is not novel to it: a session reads only its
+prompt, where a step on its own would read its whole KV cache. Any other bit is novel unless it is on the baseline,
+which is on no inference unit's boundary; so the baseline must have been declared up front, before any epoch whose
+outputs could have shaped it, and the registration must name one of the `builders` declared then. Advice is novel too,
+and reaches a unit through the structure the builder gives it rather than through its boundary: the builder reads all
+of it, so any unit of the execution may depend on all of it, and each is charged it beside its boundary.
+
+The rule binds only what is in the account: whatever ran in the work headroom went unchecked, so it may be at most
+`max_headroom` of the work capacity. The account reads integrity, so the policy reads it through the account, and
+holds except with the account's probability.
+
+    verifier    reads the stream integrity recorded and the account over it; rebuilds each execution's circuit, and
+                records whether the epoch complies
+
+An epoch's verdict says nothing outside its window, the work's. A period is epochs back to back (`period`): each
+complies, and each window opens no later than the one before it closed, so no time between them goes unaccounted.
+`period` takes every epoch's verdict; an epoch with none leaves the period with none, which fails closed.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+
+from verity.primitives import circuits as C
+from verity.primitives.events import Actor, Send, gather
+from verity.primitives.physical import Window
+from verity.protocols.accounting.account import Account
+from verity.protocols.accounting.integrity import Stream
+
+
+@dataclass(frozen=True)
+class Complies:
+    """Whether the stream kept to the policy over the work's `window`; except with probability `delta`, it did if
+    `complies`."""
+
+    stream: str
+    window: Window
+    complies: bool
+    delta: float
+    reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class Period:
+    """Whether the epochs over `streams`, back to back over `window`, kept to the policy; except with probability
+    `delta`, they did if `complies`."""
+
+    streams: tuple[str, ...]
+    window: Window
+    complies: bool
+    delta: float
+    reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class Nci:
+    gamma: int  # gates per inference unit
+    alpha: float  # novel bits read per gate
+    max_headroom: float  # the most of the work capacity the account may leave as headroom
+    builders: frozenset[str]  # the ids of the builders declared up front
+
+    def verifier(self) -> Actor:
+        got = yield from gather({Stream: "verifier", Account: "verifier"})
+        stream, account = got[Stream], got[Account]
+        work, builder = account.lines["work"], stream.registration.builder.id()
+        reasons = []
+        if builder not in self.builders:
+            reasons.append(f"builder {builder} was not declared up front")
+        if work.reasons or account.stream != stream.digest():
+            reasons.append("work not accounted for")
+        elif work.headroom > self.max_headroom * work.capacity:
+            reasons.append(f"{work.headroom / work.capacity:.0%} of work headroom, over {self.max_headroom:.0%}")
+        try:
+            units = inference_units(stream)
+        except ValueError as error:
+            units = []
+            reasons.append(str(error))
+        for parts in units:
+            gates, novel = _reads(stream, parts)
+            if gates > self.gamma or novel > self.alpha * gates:
+                (i, u), steps = parts[0], len({i for i, _ in parts})
+                reasons.append(
+                    f"inference unit {u} of execution {i}, over {steps} executions: {gates} gates reading {novel} novel"
+                    " bits"
+                )
+        return (Send(Complies(stream.digest(), work.window, not reasons, account.delta, tuple(reasons))),)
+
+
+def inference_units(stream: Stream) -> list[list[tuple[int, int]]]:
+    """The stream's inference units, each its parts (execution, inference unit of that execution's partition): the
+    executions' own, joined where one reads state another wrote. Raises ValueError where `Stream.locate` does, and
+    where a partition does not hold every gate exactly once."""
+    parent: dict[tuple[int, int], tuple[int, int]] = {}
+
+    def find(x: tuple[int, int]) -> tuple[int, int]:
+        while parent.setdefault(x, x) != x:
+            x = parent[x]
+        return x
+
+    for i in range(len(stream.executions)):
+        circuit, partition = stream.built(i)
+        if not C.covers(circuit, partition):
+            raise ValueError(f"execution {i}: the regions do not cover every gate exactly once")
+        for u, unit in enumerate(partition):
+            find((i, u))
+            for w in C.boundary(circuit, C.gates(unit))[0]:
+                if circuit.carried(w) is not None:
+                    j, written = stream.locate(i, w)
+                    writer, cut = stream.built(j)
+                    parent[find((i, u))] = find((j, C.unit_of(cut)[written - writer.inputs]))
+    units: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    for part in parent:
+        units.setdefault(find(part), []).append(part)
+    return sorted(units.values())
+
+
+def _reads(stream: Stream, parts: Sequence[tuple[int, int]]) -> tuple[int, int]:
+    """An inference unit of the stream's gates, and the novel bits it reads: each part's boundary but the state the
+    unit wrote itself, and the advice of each execution it is part of."""
+    gates = novel = 0
+    for i, u in parts:
+        circuit, partition = stream.built(i)
+        unit = C.gates(partition[u])
+        gates += len(unit)
+        novel += sum(circuit.carried(w) is None for w in C.boundary(circuit, unit)[0])
+    return gates, novel + sum(len(stream.executions[i].advice) for i in {i for i, _ in parts})
+
+
+def period(epochs: Sequence[Complies]) -> Period:
+    """The verdicts of a period's epochs, in order, by one clock. Windows that overlap only count capacity twice; a gap
+    between two is time nothing accounts for. The deltas add, by a union bound."""
+    reasons = [f"epoch {i}: {why}" for i, epoch in enumerate(epochs) for why in epoch.reasons]
+    reasons += [
+        f"{b.window.opened - a.window.closed:.2f}s unaccounted between epochs {i} and {i + 1}"
+        for i, (a, b) in enumerate(zip(epochs, epochs[1:]))
+        if b.window.opened > a.window.closed
+    ]
+    window = Window(epochs[0].window.opened, epochs[-1].window.closed)
+    delta = sum(epoch.delta for epoch in epochs)
+    return Period(tuple(epoch.stream for epoch in epochs), window, not reasons, delta, tuple(reasons))

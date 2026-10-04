@@ -1,4 +1,4 @@
-/-! What a circuit is and what it computes, beside `circuit.py`, which implements it. A placeholder: the real
+/-! What a circuit is and what it computes, beside `circuits.py`, which implements it. A placeholder: the real
 statement is today's `packages/verity/lean/Verity/Protocol/Circuit.lean`. -/
 
 namespace Verity.Primitives
@@ -21,7 +21,7 @@ def Op.apply : Op → Nat → Nat → Nat
   | .and, a, b => a &&& b
   | .not, a, _ => a ^^^ 1
 
-/-- Every wire's value, from the inputs after the baseline: what `transcript` in `circuit.py` returns. -/
+/-- Every wire's value, from the inputs after the baseline: what `transcript` in `circuits.py` returns. -/
 def transcript (c : Circuit) (inputs : List Nat) : List Nat :=
   c.gates.foldl (fun wires (op, a, b) => wires ++ [op.apply (wires.getD a 0) (wires.getD b 0)]) (c.baseline ++ inputs)
 

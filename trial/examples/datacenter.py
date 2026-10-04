@@ -27,22 +27,22 @@ from dataclasses import dataclass, field, replace
 
 from common import Batched, load, transcribe
 
-from verity.accounting.capacity import Device
-from verity.accounting.coverage import Coverage
-from verity.accounting.explained.integrity.proofs.construction import Proofs
-from verity.accounting.explained.integrity.proofs.transparent import Transparent
-from verity.accounting.explained.integrity.replay import Replay
-from verity.accounting.explained.integrity.sampling import Weighted
-from verity.accounting.explained.space import Space, encode
-from verity.accounting.explained.work import Salt, Window, Work
-from verity.accounting.observed import Network
-from verity.compliance.nci import Nci, period
-from verity.onsite import Onsite
-from verity.primitives import partition as P
-from verity.primitives.circuit import Circuit, transcript
+from verity.primitives import circuits as C
+from verity.primitives.circuits import Builder, Circuit, built, transcript
 from verity.primitives.events import Actor, receive
-from verity.primitives.registration import Builder, Registration, Stream, built, commit
-from verity.remote import Remote
+from verity.primitives.physical import Device, Window
+from verity.primitives.randomness import Weighted
+from verity.protocols.accounting.account import Accounting
+from verity.protocols.accounting.communication import Communication
+from verity.protocols.accounting.integrity import Integrity, Registration, Stream, commit
+from verity.protocols.accounting.space import Space, encode
+from verity.protocols.accounting.work import Salt, Work
+from verity.protocols.compliance.nci import Nci, period
+from verity.protocols.onsite import Onsite
+from verity.protocols.remote import Remote
+from verity.protocols.verification.proofs.protocol import Proofs
+from verity.protocols.verification.proofs.transparent import Transparent
+from verity.protocols.verification.replay import Replay
 from verity.run import run
 
 CENSUS = {
@@ -66,7 +66,7 @@ class Sessions:
     (its state) and the rest fresh."""
 
     circuit: Circuit
-    partition: P.Partition
+    partition: C.Partition
     batch_bits: int = 3
     back_bits: int = 3
 
@@ -77,7 +77,7 @@ class Sessions:
     def id(self) -> str:
         return _id(["examples/Sessions/v0", self.circuit.id(), self.partition, self.batch_bits, self.back_bits])
 
-    def build(self, advice: str) -> tuple[Circuit, P.Partition]:
+    def build(self, advice: str) -> tuple[Circuit, C.Partition]:
         if len(advice) != self.advice_bits:
             raise ValueError(f"advice {advice!r} is not {self.advice_bits} bits")
         n, back = int(advice[: self.batch_bits], 2) + 1, int(advice[self.batch_bits :], 2)
@@ -115,7 +115,7 @@ class Routed:
     def id(self) -> str:
         return _id(["examples/Routed/v0", [m.id() for m in self.models]])
 
-    def build(self, advice: str) -> tuple[Circuit, P.Partition]:
+    def build(self, advice: str) -> tuple[Circuit, C.Partition]:
         route = int(advice[: self.route_bits] or "0", 2)
         if len(advice) < self.route_bits or route >= len(self.models):
             raise ValueError(f"advice {advice!r} routes to no model")
@@ -136,9 +136,9 @@ class Training:
     def id(self) -> str:
         return _id(["examples/Training/v0", self.routed.id()])
 
-    def build(self, advice: str) -> tuple[Circuit, P.Partition]:
+    def build(self, advice: str) -> tuple[Circuit, C.Partition]:
         circuit, partition = built(self.routed, advice)
-        return circuit, (P.regions(partition),)
+        return circuit, (C.regions(partition),)
 
 
 @dataclass(frozen=True)
@@ -156,23 +156,23 @@ def _id(body: object) -> str:
 
 adder, adds = load("f32_add", n=EPOCHS * SESSIONS * STEPS, seed=1)
 comparison, compares = load("bf16_gt_strict", n=EPOCHS * REQUESTS, seed=2)
-ROUTED = Routed((Sessions(adder, P.greedy(adder, 16)), Batched(comparison, P.greedy(comparison, 16), 3)))
+ROUTED = Routed((Sessions(adder, C.greedy(adder, 16)), Batched(comparison, C.greedy(comparison, 16), 3)))
 WEIGHTS = encode(b"weights", BLOCKS)
 
 NCI = Nci(gamma=16384, alpha=0.2, max_headroom=0.2, builders=frozenset({ROUTED.id()}))
-WORK = Work(difficulty=3, delta=0.01)
+WORK = Work(difficulty=3, census=CENSUS, delta=0.01)
 REMOTE = Remote(
-    integrity=Proofs(law=Weighted(gates=0.03, outputs=1.0), max_width=16, delta=0.01, system=Transparent()),
+    integrity=Integrity(Proofs(Transparent()), law=Weighted(gates=0.03, outputs=1.0), delta=0.01, max_width=16),
     work=WORK,
-    coverage=Coverage(CENSUS, resources=("compute",)),
+    accounting=Accounting(resources=("work",)),
     nci=NCI,
 )
 ONSITE = Onsite(
-    integrity=Replay(law=Weighted(gates=0.03, outputs=0.03), delta=0.01),
+    integrity=Integrity(Replay(), law=Weighted(gates=0.03, outputs=0.03), delta=0.01),
     work=WORK,
-    space=Space(seed=b"weights", blocks=BLOCKS, k=64, deadline=0.001, delta=0.01),
-    network=Network(max_timing_bits=7, side_bits=64),
-    coverage=Coverage(CENSUS, resources=("compute", "memory", "network")),
+    space=Space(seed=b"weights", blocks=BLOCKS, k=64, deadline=0.001, census=CENSUS, delta=0.01),
+    communication=Communication(census=CENSUS, max_timing_bits=7, side_bits=64),
+    accounting=Accounting(resources=("work", "space", "communication")),
     nci=NCI,
 )
 
@@ -314,22 +314,22 @@ def runtime(conduct: Conduct, epoch: int) -> tuple[Stream, list, float, int]:
 def epoch(product: str, conduct: Conduct, e: int, opened: float) -> dict[str, object]:
     """The verifier's records for one epoch whose window opened at `opened`, by the product's clock."""
     stream, transcripts, seconds, outputs = runtime(conduct, e)
-    work = Withheld(WORK.difficulty, WORK.delta) if conduct.withheld else WORK
+    work = Withheld(WORK.difficulty, WORK.census, WORK.delta) if conduct.withheld else WORK
     if product == "remote":
         principals = {
             "verifier": REMOTE.verifier(Window(opened, opened + seconds + RTT)),
             "prover": replace(REMOTE, work=work).prover(stream, transcripts, SITE),
         }
     else:
-        held = int(conduct.held * BLOCKS)
+        held, window = int(conduct.held * BLOCKS), Window(opened, opened + seconds)
         principals = {
             "verifier": ONSITE.verifier(),
             "prover": replace(ONSITE, work=work).prover(
                 stream, transcripts, WEIGHTS[:held] + (bytes(32),) * (BLOCKS - held)
             ),
             "replayer": ONSITE.replayer(),
-            "pinger": ONSITE.pinger(conduct.devices, Window(opened, opened + seconds), space_seconds=0.0004),
-            "warden": ONSITE.warden(bytes_out=math.ceil(outputs / 8) + conduct.leaked, timing_bits=7),
+            "pinger": ONSITE.pinger(conduct.devices, window, space_window=Window(opened, opened + 0.0004)),
+            "warden": ONSITE.warden(math.ceil(outputs / 8) + conduct.leaked, timing_bits=7, window=window),
         }
     return {type(ev.body).__name__: ev.body for ev in run(principals, "verifier") if ev.sender == ev.to}
 
@@ -338,12 +338,13 @@ def line(records: Mapping[str, object]) -> str:
     """The epoch's account and verdict, in a line."""
     parts = []
     if account := records.get("Account"):
-        parts.append(f"[{account.window.opened:5.2f}, {account.window.closed:5.2f}]s headroom")
-        for name, r in account.resources.items():
+        window = account.lines["work"].window
+        parts.append(f"[{window.opened:5.2f}, {window.closed:5.2f}]s headroom")
+        for name, r in account.lines.items():
             parts.append(f"{name} {_share(r.headroom, r.capacity)}" if not r.reasons else f"{name} unaccounted")
     verdict = records.get("Complies")
     if verdict is None:
-        missing = [k for k in ("WorkBound", "IntegrityProfile", "Account", "Complies") if k not in records]
+        missing = [k for k in ("IntegrityProfile", "Line", "Account", "Complies") if k not in records]
         parts.append(f"NO VERDICT (no {', '.join(missing)})")
     else:
         parts.append("complies" if verdict.complies else f"FAILS: {'; '.join(verdict.reasons[:2])}")
