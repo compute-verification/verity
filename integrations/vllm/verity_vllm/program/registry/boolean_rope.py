@@ -6,8 +6,8 @@ function on bits.
                                                                                           word view: RoPEHead_v1{D}
     RoPE_v2{NHEADS, D}          (x: Array<NHEADS, Array<D, Array<16, Value<1>>>>, cs: Array<D, Array<16, Value<1>>>)
                                 -> Array<NHEADS, Array<D, Array<16, Value<1>>>>           word view: RoPE_v1{NHEADS, D}
-    RoPEHeadGptJ_v2{D}, RoPEGptJ_v2{NHEADS, D}   the same signatures, the interleaved pairing (`is_neox=False`)
-                                                                    word views: RoPEHeadGptJ_v1{D}, RoPEGptJ_v1{NHEADS, D}
+    RoPEHeadGptJ_v3{D}, RoPEGptJ_v3{NHEADS, D}   the same signatures, the interleaved pairing (`is_neox=False`)
+                                                                    word views: RoPEHeadGptJ_v2{D}, RoPEGptJ_v2{NHEADS, D}
 
 The rotations are traced from core's f32 builders (`verity.ml.boolean.fp`, `trace.definition`), the pieces C-Flock's lowering
 runs for the word primitives: ``t = RN32(y * s)`` (FMUL, subnormals kept), ``RN32(x * c - t)`` with one FFMA rounding, then
@@ -15,7 +15,8 @@ bf16_rn with aten's NaN 0x7FC0. Every NaN of the f32 steps ends in that cast, so
 composites are `b1`'s bodies on bits: `RoPEHead_v2` batches `RopeOut_v2` and `RopeOutAdd_v2` over the D/2 coordinate pairs and
 `RoPE_v2` batches `RoPEHead_v2` over the heads with one shared cos/sin row, so both are separable and each output element is
 one proof unit under `Q_word` v1, as in the word Program. The GPT-J versions are the same gates on the pairs (2i, 2i+1),
-the kernel's `IS_NEOX=false` branch (DeepSeek-V2 MLA's q_pe and k_pe: GLM-4.7-Flash, GLM-5.3).
+the kernel's `IS_NEOX=false` branch (DeepSeek-V2 MLA's q_pe and k_pe: GLM-4.7-Flash, GLM-5.3), with the odd half's operands
+swapped as nvcc contracts that instantiation: ``RopeOutAdd_v2(y, x, s, c) = bf16_rn(RN32(x * s + RN32(y * c)))``.
 """
 from __future__ import annotations
 
@@ -33,8 +34,9 @@ __all__ = ["RoPE", "RoPEGptJ", "RoPEHead", "RoPEHeadGptJ", "RopeOut", "RopeOutAd
 
 BF16 = Array(16, BL.BIT)
 _XYCS = (("x", BF16), ("y", BF16), ("c", BF16), ("s", BF16))
-GPTJ_CONFORMANCE = ("model-untested; RoPEHead_v2's gates with the pairing (2i, 2i+1) in place of (i, i+D/2), read from vLLM "
-                    "`apply_token_rotary_embedding<IS_NEOX=false>`; qualification: " + b1.COS_SIN_QUALIFICATION)
+GPTJ_CONFORMANCE = ("exact-model-tested; RoPEHeadGptJ_v2 on bits (test_boolean_rope.py), which matches vLLM d9105ea80's "
+                    "`rotary_embedding(is_neox=False)` on sm_120 in 60 of 60 difftest cases (run r20261004-060203-ba52); "
+                    "qualification: " + b1.COS_SIN_QUALIFICATION)
 
 
 def rope_out(C, x, y, c, s):
@@ -85,28 +87,28 @@ RoPE.word = lambda b: bind(b1.RoPE, NHEADS=b["NHEADS"], D=b["D"])  # type: ignor
 
 
 def _rope_head_gptj(B, S, x, cs):
-    """`RoPEHeadGptJ_v1`'s body on bits (`_C.rotary_embedding(..., is_neox=False)`), ``cs = [cos[0:R] | sin[0:R]]``:
-    ``out[2i] = RopeOut_v2(x[2i], x[2i+1], cos[i], sin[i])``, ``out[2i+1] = RopeOutAdd_v2(...)`` on the same operands."""
+    """`RoPEHeadGptJ_v2`'s body on bits (`_C.rotary_embedding(..., is_neox=False)`), ``cs = [cos[0:R] | sin[0:R]]``:
+    ``out[2i] = RopeOut_v2(x[2i], x[2i+1], cos[i], sin[i])``, ``out[2i+1] = RopeOutAdd_v2(x[2i+1], x[2i], sin[i], cos[i])``."""
     R = S.D // 2
     cos, sin = cs[0:R], cs[R:S.D]
     xe = Coll(Array(R, BF16), strided_view(x, 0, 16, 32, 1, 16 * R))
     xo = Coll(Array(R, BF16), strided_view(x, 16, 16, 32, 1, 16 * R))
     lo = B.batch(RopeOut, xe, xo, cos, sin, axes=(0, 0, 0, 0))
-    hi = B.batch(RopeOutAdd, xe, xo, cos, sin, axes=(0, 0, 0, 0))
+    hi = B.batch(RopeOutAdd, xo, xe, sin, cos, axes=(0, 0, 0, 0))
     return Coll(Array(S.D, BF16), concat([concat([lo[i].refs, hi[i].refs]) for i in range(R)]))
 
 
 def _rope_gptj(B, S, x, cs):
-    """`RoPEGptJ_v1`'s body on bits: `RoPEHeadGptJ_v2{D}` on each head, the cos/sin row shared."""
+    """`RoPEGptJ_v2`'s body on bits: `RoPEHeadGptJ_v3{D}` on each head, the cos/sin row shared."""
     return B.batch(bind(RoPEHeadGptJ, D=S.D), x, cs, axes=(0, None))
 
 
-RoPEHeadGptJ = CompositeDefinition("RoPEHeadGptJ", 2, ("D",),
+RoPEHeadGptJ = CompositeDefinition("RoPEHeadGptJ", 3, ("D",),
                                    lambda S: ((("x", Array(S.D, BF16)), ("cs", Array(S.D, BF16))), Array(S.D, BF16)),
                                    _rope_head_gptj, doc=_rope_head_gptj.__doc__, conformance=GPTJ_CONFORMANCE)
-RoPEHeadGptJ.word = lambda b: bind(ref_prims.RoPEHeadGptJ, D=b["D"])  # type: ignore[attr-defined]
-RoPEGptJ = CompositeDefinition("RoPEGptJ", 2, ("NHEADS", "D"),
+RoPEHeadGptJ.word = lambda b: bind(ref_prims.RoPEHeadGptJV2, D=b["D"])  # type: ignore[attr-defined]
+RoPEGptJ = CompositeDefinition("RoPEGptJ", 3, ("NHEADS", "D"),
                                lambda S: ((("x", Array(S.NHEADS, Array(S.D, BF16))), ("cs", Array(S.D, BF16))),
                                           Array(S.NHEADS, Array(S.D, BF16))),
                                _rope_gptj, doc=_rope_gptj.__doc__, conformance=GPTJ_CONFORMANCE)
-RoPEGptJ.word = lambda b: bind(ref_prims.RoPEGptJ, NHEADS=b["NHEADS"], D=b["D"])  # type: ignore[attr-defined]
+RoPEGptJ.word = lambda b: bind(ref_prims.RoPEGptJV2, NHEADS=b["NHEADS"], D=b["D"])  # type: ignore[attr-defined]

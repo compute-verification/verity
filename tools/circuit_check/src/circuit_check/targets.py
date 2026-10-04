@@ -442,6 +442,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("EmbeddingShard_v1", lambda: bind(b1_tp2.EmbeddingShard, VS=16, H=16, START=16)),
         ("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16)),
         ("RoPEGptJ_v1", lambda: bind(ref_prims.RoPEGptJ, NHEADS=2, D=16)),
+        ("RoPEGptJ_v2", lambda: bind(ref_prims.RoPEGptJV2, NHEADS=2, D=16)),
         ("RoPEInterleavedRef_v1", lambda: bind(ref_prims.RoPEInterleavedRef, D=16, DT="bf16")),
     ]
 

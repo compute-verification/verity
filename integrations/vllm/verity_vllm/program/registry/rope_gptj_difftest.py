@@ -1,5 +1,5 @@
-"""Differential-test adapter (`verity_vllm.properties.admission`) for `RoPEGptJ_v1{NHEADS,D}` (the word view of
-`boolean_rope.RoPEGptJ_v2`) against vLLM d9105ea80's CUDA `_C.rotary_embedding(..., is_neox=False)` (bf16 query / key /
+"""Differential-test adapter (`verity_vllm.properties.admission`) for `RoPEGptJ_v2{NHEADS,D}` (the word view of
+`boolean_rope.RoPEGptJ_v3`) against vLLM d9105ea80's CUDA `_C.rotary_embedding(..., is_neox=False)` (bf16 query / key /
 cos-sin cache), one token per case:
 
     # node, torch venv:  verity-vllm properties-admission produce --adapter verity_vllm.program.registry.rope_gptj_difftest --n 60 --seed 13 --out DIR
@@ -17,7 +17,7 @@ from verity.ir.types import Array, Tuple
 from verity_vllm.program.registry import ref_prims
 from verity_vllm.program.registry.prims import BF16
 
-SEMANTIC_ID = "ref_prims/RoPEGptJ@v1"
+SEMANTIC_ID = "ref_prims/RoPEGptJ@v2"
 
 SHAPES = ((20, 1, 64), (5, 1, 64), (64, 1, 64), (8, 1, 64), (32, 8, 64), (16, 4, 128), (8, 2, 32))
 KINDS = ("random", "zeros", "max", "subnormal", "alternating")
@@ -47,13 +47,13 @@ def production(statics: dict, inputs: list) -> list:
 
 
 def _difftest_body(B, S, q, k, cs):
-    """The query's and the key's `RoPEGptJ_v1` on the one cache row: the two outputs `_C.rotary_embedding` writes in place."""
-    return tuple_of(B.call(bind(ref_prims.RoPEGptJ, NHEADS=S.NH, D=S.D), q, cs),
-                    B.call(bind(ref_prims.RoPEGptJ, NHEADS=S.KVH, D=S.D), k, cs))
+    """The query's and the key's `RoPEGptJ_v2` on the one cache row: the two outputs `_C.rotary_embedding` writes in place."""
+    return tuple_of(B.call(bind(ref_prims.RoPEGptJV2, NHEADS=S.NH, D=S.D), q, cs),
+                    B.call(bind(ref_prims.RoPEGptJV2, NHEADS=S.KVH, D=S.D), k, cs))
 
 
 RoPEGptJDifftest = CompositeDefinition(
-    "RoPEGptJDifftest", 1, ("NH", "KVH", "D"),
+    "RoPEGptJDifftest", 2, ("NH", "KVH", "D"),
     lambda S: ((("q", Array(S.NH, Array(S.D, BF16))), ("k", Array(S.KVH, Array(S.D, BF16))), ("cs", Array(S.D, BF16))),
                Tuple(Array(S.NH, Array(S.D, BF16)), Array(S.KVH, Array(S.D, BF16)))),
     _difftest_body, doc=_difftest_body.__doc__ or "", conformance="derived: difftest", register=False)
