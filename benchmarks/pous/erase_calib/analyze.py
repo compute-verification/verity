@@ -119,7 +119,10 @@ def soak_summary(soaks: list[dict], probes: list[dict]) -> dict:
         cols["gpu"] += c["gpu_ms"]
         cols["fill"] += c["fill_ms"]
         cols["digest"] += c["digest_ms"]
-        cols["idle"] += c["idle"]
+        if isinstance(s.get("idle_s"), (int, float)):  # a 0/1 flag beside one idle length
+            cols["idle"] += [float(s["idle_s"]) if v else 0.0 for v in c["idle"]]
+        else:
+            cols["idle"] += [float(v) for v in c["idle"]]
         cols["order"] += [s["orders"][o] for o in c["order"]]
         cols["t_epoch"] += [t0 + t for t in c["t"]]
         cols["bytes"] += [s["bytes"]] * n
@@ -152,6 +155,7 @@ def soak_summary(soaks: list[dict], probes: list[dict]) -> dict:
         "all": dist(a["wall"]), "busy": dist(a["wall"][~idle]), "after_idle": dist(a["wall"][idle]),
         "gpu_ms": dist(a["gpu"]), "fill_ms": dist(a["fill"]), "digest_ms": dist(a["digest"]), "host_ms": dist(host),
         "by_order": {o: dist(a["wall"][a["order"] == o]) for o in sorted(set(cols["order"]))},
+        "by_idle_s": {f"{x:g}": dist(a["wall"][a["idle"] == x]) for x in sorted(set(cols["idle"]))},
         "per_gpu": {g: {"chunks": v["chunks"], "hours": v["seconds"] / 3600, "busy": dist(v["busy"]),
                         "after_idle": dist(v["after_idle"])} for g, v in sorted(per_gpu.items())},
         "over_p999": {"count": len(matched), "with_probe_stall": sum(m["probe_stall_ms"] is not None for m in matched),
@@ -258,6 +262,10 @@ def to_markdown(a: dict) -> str:
                 if d.get("n"):
                     L.append(f"| {g} {k} | {d['n']} | {d['p50']:.2f} | {d['p99']:.2f} | {d['p999']:.2f} | "
                              f"{d['max']:.2f} |")
+        L.append("\n| idle before the run (s) | n | p50 ms | p99 ms | p99.9 ms | max ms |")
+        L.append("|---:|---:|---:|---:|---:|---:|")
+        for x, d in soak["by_idle_s"].items():
+            L.append(f"| {x} | {d['n']} | {d['p50']:.2f} | {d['p99']:.2f} | {d['p999']:.2f} | {d['max']:.2f} |")
         o = soak["over_p999"]
         L.append(f"\nRuns over the p99.9: {o['count']}; with a probe stall > 2 ms inside them: {o['with_probe_stall']}; "
                  f"with a host share over 1 ms: {o['host_share_over_1ms']}.\n")

@@ -640,16 +640,20 @@ def cmd_soak(args, meta):
     t0p = time.perf_counter()
     doc["t0_epoch"] = time.time()  # cols["t"] is seconds after this, so runs line up with the probe's events
     last_flush = last_psi = time.perf_counter()
-    i = 0
+    idle_list = [float(x) for x in args.idle_s.split(",")]
+    i = n_idle = 0
     while not STOP.is_set() and time.time() < stop_at:
-        idle = args.idle_every > 0 and i > 0 and i % args.idle_every == 0
-        if idle:
-            time.sleep(args.idle_s)
+        idle = 0.0
+        if args.idle_every > 0 and i > 0 and i % args.idle_every == 0:
+            idle = idle_list[n_idle % len(idle_list)]
+            n_idle += 1
+            if STOP.wait(idle) or time.time() >= stop_at:
+                break
         order = orders[i % len(orders)]
         r = ctx.run(args.gen, args.layout, order, n_max, args.seed, args.seed_run + i)
         cols["t"].append(round(r["t0"] - t0p, 4))
         cols["order"].append(orders.index(order))
-        cols["idle"].append(int(idle))
+        cols["idle"].append(idle)  # seconds idle before this run; 0 back to back
         for k in ("fill_ms", "digest_ms", "gpu_ms", "wall_ms"):
             cols[k].append(round(r[k], 4))
         i += 1
@@ -744,7 +748,7 @@ def main():
     ap.add_argument("--minutes", type=float, default=25)
     ap.add_argument("--stop-epoch", type=float, default=float("inf"))
     ap.add_argument("--idle-every", type=int, default=50)
-    ap.add_argument("--idle-s", type=float, default=1.5)
+    ap.add_argument("--idle-s", default="1.5", help="idle seconds before every --idle-every'th run, a list cycled")
     ap.add_argument("--tag", default="0")
     ap.add_argument("--name", default="probe.json")
     args = ap.parse_args()
