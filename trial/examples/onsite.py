@@ -27,7 +27,7 @@ builder = Batched(circuit, P.whole(circuit), advice_bits=2)
 onsite = Onsite(
     integrity=Replay(law=Weighted(gates=0.05, outputs=0.05), delta=0.01),
     work=Work(difficulty=3, delta=0.01),
-    space=Space(seed=b"weights", blocks=2048, k=16, deadline=0.001, rho=18 / 19, delta=0.01),
+    space=Space(seed=b"weights", blocks=2048, k=64, deadline=0.001, delta=0.01),
     compute=Compute(peak={"gpu": 1000.0}),
     memory=Memory(size={"gpu": 32 * 1024}),
     network=Network(max_timing_bits=7, side_bits=1000),

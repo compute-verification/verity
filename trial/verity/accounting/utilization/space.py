@@ -57,11 +57,13 @@ class SpaceBound:
 
 @dataclass(frozen=True)
 class Space:
+    """A prover holding a share f of the blocks answers k uniform challenges within the deadline with probability f**k,
+    so one that passes held more than rho = delta**(1/k) of them, except with probability delta."""
+
     seed: bytes
     blocks: int
     k: int  # blocks challenged
     deadline: float  # seconds
-    rho: float
     delta: float
 
     def verifier(self) -> Actor:
@@ -74,7 +76,8 @@ class Space:
         reasons = (("wrong blocks",) if timed.blocks != tuple(expected[i] for i in indices) else ()) + (
             (f"answered in {timed.seconds}s, over the deadline",) if timed.seconds > self.deadline else ()
         )
-        return (Send(SpaceBound(self.blocks * len(expected[0]), self.rho, self.delta, not reasons, reasons)),)
+        rho = self.delta ** (1 / self.k)
+        return (Send(SpaceBound(self.blocks * len(expected[0]), rho, self.delta, not reasons, reasons)),)
 
     def pinger(self, seconds: float) -> Actor:
         challenge = yield from receive(Challenge, "verifier")
