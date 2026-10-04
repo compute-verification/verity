@@ -99,7 +99,7 @@ STATUS_RE = re.compile(rf"^((?:{DONE}|{SHORTCODES[DONE]}) done|(?:{DECLINED}|{SH
 PIN_RE = re.compile(r"^(?:https?://\S+#sha256=[0-9a-f]{64}|git:[0-9a-f]{40})$")
 SHIPS_CODE_RE = re.compile(r"\b(curl|wget|pip install|uv (?:pip|sync|tool)|git (?:pull|merge|checkout|fetch)|install|download|upgrade)\b", re.I)
 SAFE_POINT = "Apply at your next safe point; don't interrupt running jobs."
-EXPIRES_S = 259200
+EXPIRES_S = 2592000                                              # 30 days; a lapsed subscription wakes no one and says nothing
 PAGE = 200
 ASK_DANIEL = "https://website-docs-sage.vercel.app/api/agent-approvals"   # the cards' route, and its OIDC token's audience
 ASK_CHANNEL = "ask-daniel"

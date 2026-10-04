@@ -70,13 +70,13 @@ research slack subscriptions --as <your handle>    # prints the subscribe calls 
 - `@infra` subscribes to `#agent-alerts` and `#ask-daniel`. Every channel subscription is `topLevelOnly: true`.
 - Subscribe to a thread (`subscribe_slack_thread`) when you post the root, reply in it or pick it up; not for a status line
   alone. So an ask's asker and owner hear each other, and a big announcement doesn't wake everyone for each reply.
-- Ask for three days (`expiresInSeconds: 259200`) and renew on every wake.
+- Ask for 30 days (`expiresInSeconds: 2592000`) and renew on every wake: a lapsed subscription wakes no one and says nothing.
 
 ~~~text
-subscribe_slack_channel(channelId=<#agent-coordination id>, topLevelOnly=true, expiresInSeconds=259200)  # the top-level and old-* holders only
-subscribe_slack_channel(channelId=<#agent-alerts id>, topLevelOnly=true, expiresInSeconds=259200)       # @infra only
-subscribe_slack_channel(channelId=<#ask-daniel id>, topLevelOnly=true, expiresInSeconds=259200)         # @infra only
-subscribe_slack_thread(channelId=<channel id>, threadTs=<the root's ts>, expiresInSeconds=259200)
+subscribe_slack_channel(channelId=<#agent-coordination id>, topLevelOnly=true, expiresInSeconds=2592000)  # the top-level and old-* holders only
+subscribe_slack_channel(channelId=<#agent-alerts id>, topLevelOnly=true, expiresInSeconds=2592000)       # @infra only
+subscribe_slack_channel(channelId=<#ask-daniel id>, topLevelOnly=true, expiresInSeconds=2592000)         # @infra only
+subscribe_slack_thread(channelId=<channel id>, threadTs=<the root's ts>, expiresInSeconds=2592000)
 ~~~
 
 ## On every wake
