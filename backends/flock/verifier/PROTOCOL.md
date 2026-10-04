@@ -1314,10 +1314,12 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   is `as stated`, with the reason in `note`, which an audit reports as a gap.
 - **Registered reads**. A shared-row header may name `registered`, `{port: {value, positions, paths}}`: registered rows.
   The verifier needs its own `--registered F` (`verity/registered-reads/v0`: per port the value, root, leaves, domain,
-  read positions, `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows); the port's rows must be their
-  u16 words, padded. Each table row's `hm96-sha512/row/v1` leaf must climb its path to the root at its position, each
-  instance's ref name its unit's read position in the verifier's program (units `derived`). A port on one side only
-  refuses; verdicts report `registered`.
+  read positions, `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows); the port's rows must be
+  `sha512/row/v1` rows of their u16 words, padded. A port is any row of the circuit: an input port's, or (§16.13) an
+  output port's row, whose table is the instances' output rows, instance `i`'s ref `i`, so instance `i`'s output is the
+  registered row at `positions[i]`. Each table row's `hm96-sha512/row/v1` leaf must climb its path to the root at its
+  position, each instance's ref name its unit's read position in the verifier's program (units `derived`). A port on
+  one side only refuses; verdicts report `registered`.
 - **Public input ports** (`Flock.HmIn`, §16.13's statements). META may name `public_inputs` (`[{port, words, seed,
   derivation}]`) and `leaves_public` (per unit, each leaf's public word or −1): unit inputs the verifier recomputes from
   public data, not rows. The words of an unpacked unit range's leaf group holding them hold no row leaf; each run of
@@ -1456,8 +1458,11 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
   row value, it reveals `b₁ ⊕ b₂ = x₁ ⊕ x₂`; a link row holds its writer's value, so the shared salt reveals `b₁ = b₂`,
   that the two rows are equal: the wire itself, which a hidden topology would have to hide too. A link is as good
   as both proofs (under a draw, an undrawn writer's output is unproven: the check binds the reader's input to the writer's
-  committed output, not to a correct one).
-- **Registered reads** are §16.10's, of `v1` rows. A registered port is an input row: an output row is its instance's own.
+  committed output, not to a correct one), and a deduplicated reader table (`shared_rows`) links at most one producer
+  instance per row.
+- **Registered reads** are §16.10's, of `v1` rows. A registered port is an input row or an output row: a registered output
+  row opens the registered root at its unit's read position, under the registered row's salt, so the instance's output is
+  that row (a `row-seg/v1` or `v2` row is refused: its leaf is not the registration's `row/v1` leaf).
 - **Agreement:** README.
 
 ### 16.14 `--zk` sessions
