@@ -95,8 +95,16 @@ into a question for Daniel.
 
 ## Rulings so far
 
-Newest first. Each is Daniel's.
+Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-03: a test tier too slow for `check` (the vLLM reference regression's manifest rebuilds, about an hour) runs as a
+  detached job after each train lands on `main` (`tools/check/post_train.py`, started by `research merge --push`) and labels
+  the landing's check attempt `note=regression pass` or `fail:<rows>`, which circuits sweeps daily; `check` blocks on the
+  cheap tier only (its T0 checks, about four minutes), and under `VERITY_STORE_REQUIRED=1` a fixture or input that doesn't
+  resolve fails rather than skips.
+- 2026-10-03 (the coordinator's): data you don't own on a node is deleted only with `research retention gc` or `research
+  retention rm --approved-by @OWNER`, which refuses unless every retention record on the path names that owner; never a bare
+  `rm`, and never on another lane's word about who owns it.
 - 2026-10-02 (10:27 PM PDT): a statement review or red-team grant on a PR carries across a restack or a merge of `main`
   when the restacked head's `lean-audit.json` change against its base is byte-identical to the one that was granted.
   Any other change to `lean-audit.json` needs a new grant.
@@ -134,8 +142,6 @@ Newest first. Each is Daniel's.
 - 2026-10-01 (9:50 AM PDT): lane notes are records (reports, checkpoints, findings, drafts, friction), never a channel.
   A handoff, an order or an ask goes on Slack (`research msg`), or to your own Cursor workers as a follow-up; a note
   written as a message reaches nobody.
-- 2026-10-01 (9:24 AM PDT): a top-level record of Daniel's approval of a changed `lean-audit.json` pin, citing his
-  message, counts as the named statement reviewer's sign-off for `research merge`.
 - 2026-10-01 (9:12 AM PDT): agents message each other directly, without a coordinator relaying, and adding a handle
   needs no Slack admin. Comms owns the routing (`@<name>` at the start of a post wakes that lead's agent).
 
