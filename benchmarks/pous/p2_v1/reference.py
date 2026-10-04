@@ -34,8 +34,9 @@ K_AUDIT = 105
 """The deployment audit's challenges (spec §5, F6)."""
 DELTA_NS = 500_000
 MAX_RTT_ALLOWANCE_NS = 350_000
-"""Δ and the most round-trip allowance the operating point permits (spec §6): v1.1's cap, so that `Δ + RTT ≤ 850 µs`
-keeps SeqRoot's 2× margin with 8 cores of one chiplet cooperating (`verity_pous.schemes.p2.RTT_ALLOWANCE_CAP_NS`)."""
+"""Δ and the most round-trip allowance the operating point permits (spec §6): option A of the proposed v1.1, pending
+Daniel's ruling, so that `Δ + RTT ≤ 850 µs` keeps SeqRoot's 2× margin with 8 cores of one chiplet cooperating
+(`verity_pous.schemes.p2.RTT_ALLOWANCE_CAP_NS`; v1 permitted 1 ms)."""
 
 try:
     import gmpy2

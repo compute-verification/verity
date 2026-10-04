@@ -509,8 +509,8 @@ def test_p2_is_experimental_and_says_so():
     """P2 (`p2-16448/v3`, and `p2-16448/v2` with ChaCha8 keys) is registered but experimental: the verifier refuses it
     unless asked, never makes it the default, and its profile states why.  The certificate is the pinned
     `P2SlackFamilyUncond` at the spec's k = 105, and the manifest names the payload profile.  Its call is half the
-    fastest cooperating root, 854 µs: the spec v1.1's cap, `Δ + RTT ≤ 850 µs`, is inside it, and the frozen v1's 1 ms is
-    not."""
+    fastest cooperating root, 854 µs: the proposed v1.1's option A cap, `Δ + RTT ≤ 850 µs`, is inside it, and v1's
+    1 ms is not."""
     for name in ("p2-16448/v3", "p2-16448/v2"):
         sch = schemes.get(name, segments=8)
         v2 = name.endswith("v2")
