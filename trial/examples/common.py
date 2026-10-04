@@ -14,7 +14,7 @@ from dataclasses import dataclass, is_dataclass
 from pathlib import Path
 
 from verity.primitives import partition as P
-from verity.primitives.circuit import Circuit, evaluate
+from verity.primitives.circuit import Circuit, evaluate, transcript
 from verity.primitives.commitments import CommitmentScheme
 from verity.primitives.events import Event
 from verity.primitives.registration import (
@@ -22,12 +22,12 @@ from verity.primitives.registration import (
     Execution,
     Registration,
     built,
-    execute,
+    commit,
 )
 
 
-def load(name: str) -> tuple[Circuit, list[tuple[int, ...]]]:
-    """The circuit (its baseline is its constants) and the requests."""
+def load(name: str, n: int = 8, seed: int = 0) -> tuple[Circuit, list[tuple[int, ...]]]:
+    """The circuit (its baseline is its constants) and `n` requests."""
     data = json.loads((Path(__file__).parent / "data" / f"{name}.json").read_text())
     circuit = Circuit.from_json(data)
     bits = (circuit.inputs - len(circuit.baseline)) // 2  # per operand
@@ -43,8 +43,8 @@ def load(name: str) -> tuple[Circuit, list[tuple[int, ...]]]:
     for v in data["vectors"]:
         assert sum(bit << i for i, bit in enumerate(evaluate(circuit, inputs(v["a"], v["b"])))) == v["out"], v
     print(f"{data['source']}: {len(circuit.gates)} gates, agrees with its {len(data['vectors'])} reference vectors")
-    rng = random.Random(0)
-    return circuit, [inputs(pattern(rng.uniform(-100, 100)), pattern(rng.uniform(-100, 100))) for _ in range(8)]
+    rng = random.Random(seed)
+    return circuit, [inputs(pattern(rng.uniform(-100, 100)), pattern(rng.uniform(-100, 100))) for _ in range(n)]
 
 
 @dataclass(frozen=True)
@@ -98,9 +98,10 @@ def schedule(
 def executed(
     builder: Builder, steps: Sequence[tuple[str, tuple[int, ...]]], scheme: CommitmentScheme
 ) -> tuple[Registration, list[Execution], list[tuple[int, ...]]]:
-    """What the prover's runtime leaves: its registration, each step run and committed, and the inputs it keeps."""
-    executions = [execute(builder, advice, inputs, scheme) for advice, inputs in steps]
-    return Registration(builder), executions, [inputs for _, inputs in steps]
+    """What the prover's runtime leaves: its registration, each step run and committed, and the transcripts it keeps."""
+    transcripts = [transcript(built(builder, advice)[0], inputs) for advice, inputs in steps]
+    executions = [commit(builder, advice, values, scheme) for (advice, _), values in zip(steps, transcripts)]
+    return Registration(builder), executions, transcripts
 
 
 def tries(registration: Registration, executions: Sequence[Execution]) -> int:

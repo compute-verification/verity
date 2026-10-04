@@ -1,10 +1,12 @@
-"""What every integrity construction establishes, whatever scale it samples at, and what coverage reads: a bound on
-how many units are wrong, and so on how much of the stream's work and output they could hold."""
+"""What every integrity construction establishes, whatever scale it samples at, and what coverage reads: how much of
+the stream's work and output could be in wrong units."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+
+from verity.accounting.integrity.sampling import Weighted
 
 
 @dataclass(frozen=True)
@@ -15,14 +17,14 @@ class Count:
 
 @dataclass(frozen=True)
 class IntegrityProfile:
-    """If `accepted`: of the stream's units at `scale`, at most `units.wrong` are wrong, and they hold at most
-    `gates.wrong` of its gates and `outputs.wrong` of its output bits (the most the heaviest wrong units could hold
-    of each), except with probability `delta`."""
+    """If `accepted`: of the stream's gates, at most `gates.wrong` are in wrong units at `scale`, and of its output bits
+    at most `outputs.wrong`, except with probability `delta`. A unit is wrong when the outputs committed for it are not
+    what its gates compute from the inputs committed for it."""
 
     stream: str  # its digest
     scale: str  # what a unit is: "execution", "region"
     accepted: bool
-    units: Count
+    units: int
     gates: Count
     outputs: Count
     delta: float
@@ -34,16 +36,20 @@ def profile(
     scale: str,
     gates: Sequence[int],
     outputs: Sequence[int],
-    wrong: int,
+    law: Weighted,
     delta: float,
     reasons: tuple[str, ...],
 ) -> IntegrityProfile:
-    """The profile of a stream whose units hold `gates` gates and `outputs` output bits each, at most `wrong` of them
-    wrong: accepted if there are no `reasons`."""
-
-    def count(sizes: Sequence[int]) -> Count:
-        return Count(sum(sizes), sum(sorted(sizes, reverse=True)[:wrong]))
-
+    """The profile of units holding `gates` gates and `outputs` output bits each, drawn under `law`: accepted if no
+    check failed (no `reasons`), with the law's bound; and if one did, everything could be wrong."""
+    wrong = law.bound(gates, outputs, delta) if not reasons else (sum(gates), sum(outputs))
     return IntegrityProfile(
-        stream, scale, not reasons, Count(len(gates), wrong), count(gates), count(outputs), delta, reasons
+        stream,
+        scale,
+        not reasons,
+        len(gates),
+        Count(sum(gates), wrong[0]),
+        Count(sum(outputs), wrong[1]),
+        delta,
+        reasons,
     )

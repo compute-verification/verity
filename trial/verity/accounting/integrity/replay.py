@@ -1,8 +1,10 @@
 """Replay: sample whole executions, and have a sealed replayer run each drawn one again.
 
-    verifier    takes the registration and the stream, draws executions from its secret once the stream closes, and
-                sends the draw to the prover and the registration with the drawn executions to the replayer
-    prover      opens each drawn execution's inputs and outputs against its root, and sends them to the replayer
+    verifier    takes the registration and the stream, draws executions from its secret once the stream closes, each
+                as likely as its gates and output bits ask (`sampling.Weighted`), and sends the draw to the prover and
+                the registration with the drawn executions to the replayer
+    prover      opens each drawn execution's inputs and outputs from its transcript against its root, and sends them to
+                the replayer
     replayer    rebuilds each drawn execution's circuit from its advice, runs it again from the opened inputs, and tells
                 the verifier whether it gave the opened outputs; it is trusted and sealed: it sees the values, and the
                 verifier and the auditor do not
@@ -17,9 +19,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from verity.accounting.integrity.profile import profile
-from verity.accounting.integrity.sampling import Draw, Subset
+from verity.accounting.integrity.sampling import Draw, Weighted
 from verity.primitives import partition as P
-from verity.primitives.circuit import Circuit, evaluate, transcript
+from verity.primitives.circuit import Circuit, evaluate
 from verity.primitives.commitments import CommitmentScheme, MerkleSha256
 from verity.primitives.events import Actor, Send, collect, gather, receive
 from verity.primitives.randomness import derive
@@ -61,7 +63,7 @@ class Replayed:
 
 @dataclass(frozen=True)
 class Replay:
-    k: int  # executions drawn
+    law: Weighted
     delta: float
     scheme: CommitmentScheme = MerkleSha256()
 
@@ -69,13 +71,14 @@ class Replay:
         secret = secrets.token_bytes(32)
         registration = yield from receive(Registration, "prover")
         executions = yield from collect(Execution, Closed, "prover")
-        stream, n = digest(registration, executions), len(executions)
+        stream = digest(registration, executions)
         refused = check(registration, executions, self.scheme)
         if refused:
-            return (Send(profile(stream, "execution", [0] * n, [0] * n, n, self.delta, refused)),)
+            return (Send(profile(stream, "execution", [], [], self.law, self.delta, refused)),)
 
-        law = Subset(self.k)
-        drawn = law.draw(derive(secret, "verity/integrity/replay/v1", stream), n)
+        circuits = [built(registration.builder, e.advice)[0] for e in executions]
+        gates, outputs = [len(c.gates) for c in circuits], [len(c.outputs) for c in circuits]
+        drawn = self.law.draw(derive(secret, "verity/integrity/replay/v2", stream), gates, outputs, self.delta)
         results = (
             yield from receive(
                 Replayed,
@@ -89,9 +92,7 @@ class Replay:
             for i in drawn
             if not results.get(i)
         )
-        circuits = [built(registration.builder, e.advice)[0] for e in executions]
-        gates, outputs = [len(c.gates) for c in circuits], [len(c.outputs) for c in circuits]
-        return (Send(profile(stream, "execution", gates, outputs, law.bound(n, self.delta), self.delta, reasons)),)
+        return (Send(profile(stream, "execution", gates, outputs, self.law, self.delta, reasons)),)
 
     def replayer(self) -> Actor:
         got = yield from gather({ToReplay: "verifier", Inputs: "prover"})
@@ -104,14 +105,13 @@ class Replay:
         return (Send(Replayed(results), "verifier"),)
 
     def prover(
-        self, registration: Registration, executions: Sequence[Execution], inputs: Sequence[tuple[int, ...]]
+        self, registration: Registration, executions: Sequence[Execution], transcripts: Sequence[Sequence[int]]
     ) -> Actor:
         draw = yield from receive(Draw, "verifier")
         opened = {}
         for i in draw.units:
             circuit, partition = built(registration.builder, executions[i].advice)
-            values = transcript(circuit, inputs[i])
-            opened[i] = open_wires(self.scheme, circuit, partition, values, _io(circuit, partition))
+            opened[i] = open_wires(self.scheme, circuit, partition, transcripts[i], _io(circuit, partition))
         return (Send(Inputs(opened), "replayer"),)
 
 

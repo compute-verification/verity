@@ -13,6 +13,7 @@ from verity.accounting.coverage.compute import Compute
 from verity.accounting.coverage.memory import Memory
 from verity.accounting.coverage.network import Network
 from verity.accounting.integrity.replay import Replay
+from verity.accounting.integrity.sampling import Weighted
 from verity.accounting.utilization.space import Space, encode
 from verity.accounting.utilization.work import Work
 from verity.compliance.nci import Nci
@@ -24,7 +25,7 @@ circuit, requests = load(sys.argv[1] if len(sys.argv) > 1 else "f32_add")
 builder = Batched(circuit, P.whole(circuit), advice_bits=2)
 
 onsite = Onsite(
-    integrity=Replay(k=3, delta=0.01),
+    integrity=Replay(law=Weighted(gates=0.05, outputs=0.05), delta=0.01),
     work=Work(difficulty=3, delta=0.01),
     space=Space(seed=b"weights", blocks=2048, k=16, deadline=0.001, rho=18 / 19, delta=0.01),
     compute=Compute(peak={"gpu": 1000.0}),
@@ -32,11 +33,13 @@ onsite = Onsite(
     network=Network(max_timing_bits=7, side_bits=1000),
     nci=Nci(gamma=4096, alpha=0.2, advice=8, headroom=0.3, builders=frozenset({builder.id()})),
 )
-registration, executions, inputs = executed(builder, schedule(requests, (3, 1, 4), builder), onsite.integrity.scheme)
+registration, executions, transcripts = executed(
+    builder, schedule(requests, (3, 1, 4), builder), onsite.integrity.scheme
+)
 fleet = {"gpu": 2}
 principals = {
     "verifier": onsite.verifier(),
-    "prover": onsite.prover(registration, executions, inputs, encode(b"weights", 2048)),
+    "prover": onsite.prover(registration, executions, transcripts, encode(b"weights", 2048)),
     "replayer": onsite.replayer(),
     "pinger": onsite.pinger(fleet, work_seconds=tries(registration, executions) / (2 * 1000.0), space_seconds=0.0004),
     "warden": onsite.warden(bytes_out=len(requests) * len(circuit.outputs) // 8, timing_bits=7),

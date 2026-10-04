@@ -29,7 +29,7 @@ from dataclasses import asdict, dataclass
 from typing import Protocol
 
 from verity.primitives import partition as P
-from verity.primitives.circuit import Circuit, transcript
+from verity.primitives.circuit import Circuit
 from verity.primitives.commitments import Commitment, CommitmentScheme
 from verity.primitives.events import Actor, Send, receive
 
@@ -87,10 +87,11 @@ def leaf(wire: int, value: int) -> bytes:
     return wire.to_bytes(4, "big") + value.to_bytes(4, "big")
 
 
-def execute(builder: Builder, advice: str, inputs: tuple[int, ...], scheme: CommitmentScheme) -> Execution:
-    """Run one execution and commit to its boundary values; the transcript is not kept."""
+def commit(builder: Builder, advice: str, values: Sequence[int], scheme: CommitmentScheme) -> Execution:
+    """Commit to an execution's boundary values, from its transcript (every wire's value, as the prover's runtime ran
+    it: `circuit.transcript` if it ran honestly)."""
     circuit, partition = built(builder, advice)
-    return Execution(advice, scheme.commit(_leaves(circuit, partition, transcript(circuit, inputs))))
+    return Execution(advice, scheme.commit(_leaves(circuit, partition, values)))
 
 
 def serve(registration: Registration, executions: Sequence[Execution], after: type | None = None) -> Actor:

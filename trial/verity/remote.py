@@ -45,12 +45,12 @@ class Remote:
         self,
         registration: Registration,
         executions: Sequence[Execution],
-        inputs: Sequence[tuple[int, ...]],
+        transcripts: Sequence[Sequence[int]],
         fleet: Mapping[str, int],
     ) -> list[Actor]:
         return [
             serve(registration, executions, after=Salt),
-            self.integrity.prover(registration, executions, inputs),
+            self.integrity.prover(registration, executions, transcripts),
             self.work.prover(registration, executions),
             inventory(fleet),
         ]

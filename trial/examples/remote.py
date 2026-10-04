@@ -11,6 +11,7 @@ from common import Batched, executed, load, schedule, show, tries
 from verity.accounting.coverage.compute import Compute
 from verity.accounting.integrity.proofs.construction import Proofs
 from verity.accounting.integrity.proofs.transparent import Transparent
+from verity.accounting.integrity.sampling import Weighted
 from verity.accounting.utilization.work import Work
 from verity.compliance.nci import Nci
 from verity.primitives import partition as P
@@ -21,16 +22,18 @@ circuit, requests = load(sys.argv[1] if len(sys.argv) > 1 else "f32_add")
 builder = Batched(circuit, P.greedy(circuit, 16), advice_bits=2)
 
 remote = Remote(
-    integrity=Proofs(k=64, max_width=16, delta=0.01, system=Transparent()),
+    integrity=Proofs(law=Weighted(gates=0.05, outputs=1.0), max_width=16, delta=0.01, system=Transparent()),
     work=Work(difficulty=3, delta=0.01),
     compute=Compute(peak={"gpu": 1000.0}),
     nci=Nci(gamma=4096, alpha=0.2, advice=8, headroom=0.4, builders=frozenset({builder.id()})),
 )
-registration, executions, inputs = executed(builder, schedule(requests, (3, 1, 4), builder), remote.integrity.scheme)
+registration, executions, transcripts = executed(
+    builder, schedule(requests, (3, 1, 4), builder), remote.integrity.scheme
+)
 fleet = {"gpu": 2}
 principals = {
     "verifier": remote.verifier(seconds=tries(registration, executions) / (2 * 1000.0)),
-    "prover": remote.prover(registration, executions, inputs, fleet),
+    "prover": remote.prover(registration, executions, transcripts, fleet),
 }
 for event in run(principals, view="verifier"):
     show(event)

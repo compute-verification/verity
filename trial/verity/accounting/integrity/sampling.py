@@ -1,17 +1,22 @@
 """Sampling: which units are drawn, and what passing every drawn check establishes. Today's references:
-`verity_sampled_proofs.one_stage.draw` (the laws, and `subset`/`stratified`/`work`) and `verity.proofs.profile`
-(`IntegrityProfile.accept` and `bound`).
+`verity_sampled_proofs.one_stage.draw` (the laws `subset`, `stratified` and `work`) and `verity.proofs.profile`.
 
-`Subset(k)`: k distinct units, uniform over the n registered. A transcript with m wrong units passes every drawn check
-with probability C(n - m, k) / C(n, k); so, except with probability δ, an accepted transcript has at most `bound` wrong.
+`Weighted(gates, outputs)`: each unit independently, with probability proportional to its gates or to its output bits,
+whichever asks more: Poisson sampling, the continuous form of the main repo's `work` law, which sizes each stratum's
+draw by its work. With a = ln(1/δ) / (`gates` × the stream's gates) and b likewise for output bits, unit u is drawn
+with probability p_u = min(1, max(a g_u, b o_u)). Wrong units S escape every draw with probability
+Π (1 - p_u) <= exp(-Σ p_u), which is below δ once S holds more than `gates` of the gates or `outputs` of the output
+bits. So the bound is in what coverage reads, however unequal the units (a batch of eight requests beside a batch of
+one, an adder beside a comparison), and the draw is about ln(1/δ) (1/gates + 1/outputs) units, whatever the stream's
+size.
 """
 
 from __future__ import annotations
 
 import hashlib
+import math
+from collections.abc import Sequence
 from dataclasses import dataclass
-from fractions import Fraction
-from math import comb
 
 
 @dataclass(frozen=True)
@@ -22,30 +27,30 @@ class Draw:
 
 
 @dataclass(frozen=True)
-class Subset:
-    k: int
+class Weighted:
+    gates: float  # the share of the stream's gates the bound allows in wrong units, in (0, 1]
+    outputs: float  # and of its output bits
 
-    def accept(self, n: int, m: int) -> Fraction:
-        """The exact probability that a transcript with m wrong of n units passes."""
-        return Fraction(comb(n - m, self.k), comb(n, self.k))
+    def rates(self, gates: Sequence[int], outputs: Sequence[int], delta: float) -> list[float]:
+        log = math.log(1 / delta)
+        a = log / (self.gates * sum(gates)) if sum(gates) else 0.0
+        b = log / (self.outputs * sum(outputs)) if sum(outputs) else 0.0
+        return [min(1.0, max(a * g, b * o)) for g, o in zip(gates, outputs)]
 
-    def bound(self, n: int, delta: float) -> int:
-        """The most wrong units an accepted transcript has, except with probability δ: the largest m that passes with
-        probability above δ."""
-        m = 0
-        while m < n and self.accept(n, m + 1) > delta:
-            m += 1
-        return m
+    def draw(self, coins: bytes, gates: Sequence[int], outputs: Sequence[int], delta: float) -> tuple[int, ...]:
+        rates = self.rates(gates, outputs, delta)
+        return tuple(u for u, p in enumerate(rates) if _coin(coins, u) < p * 2**256)
 
-    def draw(self, coins: bytes, n: int) -> tuple[int, ...]:
-        """min(k, n) distinct units, exactly uniform: counter-mode SHA-256 with rejection
-        (`verity.randomness.subset`)."""
-        chosen: list[int] = []
-        limit = (2**256 // n) * n if n else 0
-        counter = 0
-        while len(chosen) < min(self.k, n):
-            x = int.from_bytes(hashlib.sha256(coins + counter.to_bytes(8, "big")).digest(), "big")
-            counter += 1
-            if x < limit and x % n not in chosen:
-                chosen.append(x % n)
-        return tuple(sorted(chosen))
+    def bound(self, gates: Sequence[int], outputs: Sequence[int], delta: float) -> tuple[int, int]:
+        """The most gates and output bits in wrong units of an accepted stream, except with probability δ: the law's
+        shares, and never more than the units it might not have drawn hold, since a unit drawn surely was checked."""
+        unsure = [u for u, p in enumerate(self.rates(gates, outputs, delta)) if p < 1]
+        return (
+            min(int(self.gates * sum(gates)), sum(gates[u] for u in unsure)),
+            min(int(self.outputs * sum(outputs)), sum(outputs[u] for u in unsure)),
+        )
+
+
+def _coin(coins: bytes, unit: int) -> int:
+    """The unit's coin, uniform over [0, 2**256): counter-mode SHA-256 (`verity.randomness`)."""
+    return int.from_bytes(hashlib.sha256(coins + unit.to_bytes(8, "big")).digest(), "big")
