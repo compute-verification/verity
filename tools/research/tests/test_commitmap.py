@@ -12,7 +12,7 @@ from research import commitmap as CM
 from research.cli import main as research_main
 from research.merge import main as merge_main
 from research.store.local import LocalStore
-from test_merge_gate import CHECKED, DECL
+from test_merge_gate import CHECK_FILES, CHECKED
 
 ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
        "GIT_AUTHOR_DATE": "2026-09-29T00:00:00Z", "GIT_COMMITTER_DATE": "2026-09-29T00:00:00Z"}
@@ -58,7 +58,8 @@ def _gate_repo(tmp_path: Path) -> tuple[Path, Path, str]:
     (main / "mytools").mkdir(parents=True)
     (main / "mytools" / "decl_check.py").write_text("from research.store.tool import Tool\nT = Tool(name='check', version='1')\n")
     (main / "tools" / "check").mkdir(parents=True)
-    (main / "tools" / "check" / "tool.py").write_text(DECL.format(""))
+    for rel, text in CHECK_FILES.items():
+        (main / rel).write_text(text)
     (main / ".gitignore").write_text("__pycache__/\n")
     (main / "a.txt").write_text("a\n")
     _git(main, "init", "-q", "-b", "main")
@@ -91,14 +92,14 @@ def test_an_attempt_of_an_old_commit_counts_for_its_image_only_through_an_accept
     _git(main, "branch", "feat2", y)
     _git(main, "branch", "feat3", z)
     monkeypatch.chdir(main)
-    assert merge_main(["feat2", "--dry-run"]) == 1 and "no passing `check` attempt" in capsys.readouterr().err
+    assert merge_main(["feat2", "--dry-run"]) == 3 and "no passing `check` attempt" in capsys.readouterr().err
     st = LocalStore()
     art = _publish(st, tmp_path, f"{x} {y} 1\n{'e' * 40} {z} 0\n", [("some-lane", CM.ACCEPTED)])
-    assert merge_main(["feat2", "--dry-run"]) == 1                     # accepted by someone who may not accept a map
+    assert merge_main(["feat2", "--dry-run"]) == 3                     # accepted by someone who may not accept a map
     st.add_label(art, CM.LABEL, CM.ACCEPTED, by="daniel")
     assert merge_main(["feat2", "--dry-run"]) == 0 and "may be merged" in capsys.readouterr().out
     st.add_label(art, CM.LABEL, CM.RETRACTED, by="daniel", ts="2099-01-01T00:00:00Z")
-    assert merge_main(["feat2", "--dry-run"]) == 1                     # retracted: the map no longer applies
+    assert merge_main(["feat2", "--dry-run"]) == 3                     # retracted: the map no longer applies
     st2 = tmp_path / "store2"
     monkeypatch.setenv("RESEARCH_STORE", str(st2))
     _record(tmp_path, feat, monkeypatch)
@@ -106,7 +107,7 @@ def test_an_attempt_of_an_old_commit_counts_for_its_image_only_through_an_accept
     other = LocalStore()
     _publish(other, tmp_path, f"{x} {z} 1\n", [("daniel", CM.ACCEPTED)])      # a map claiming the tree held, where it did not
     capsys.readouterr()
-    assert merge_main(["feat3", "--dry-run"]) == 1 and "no passing `check` attempt" in capsys.readouterr().err
+    assert merge_main(["feat3", "--dry-run"]) == 3 and "no passing `check` attempt" in capsys.readouterr().err
 
 
 def test_the_gate_refuses_a_ref_that_holds_old_history(tmp_path, monkeypatch, capsys):
@@ -115,7 +116,7 @@ def test_the_gate_refuses_a_ref_that_holds_old_history(tmp_path, monkeypatch, ca
     y = _image(main, x, [_git(main, "rev-parse", "main")])
     _publish(LocalStore(), tmp_path, f"{x} {y} 1\n", [("daniel", CM.ACCEPTED)])
     monkeypatch.chdir(main)
-    assert merge_main(["feat", "--dry-run"]) == 1
+    assert merge_main(["feat", "--dry-run"]) == 3
     err = capsys.readouterr().err
     assert "1 commit(s) a history rewrite replaced" in err and "research git remap" in err
 

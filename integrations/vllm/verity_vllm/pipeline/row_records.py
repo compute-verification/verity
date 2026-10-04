@@ -68,8 +68,12 @@ def extra_shapes(wl: str, lp: int, t: int) -> list[tuple[int, int]]:
     request wrapper was derived for, largest first (a derive's cost grows with LP + T, so parallel derives start with the
     longest)."""
     main = (int(lp), int(t))
-    pairs = sorted(request_shapes(wl), key=lambda pc: (-(pc[0] + pc[1]), -pc[0]))
-    return [(p, c) for p, c in pairs if (p, c) != main]
+    return [(p, c) for p, c in longest_first(request_shapes(wl)) if (p, c) != main]
+
+
+def longest_first(shapes: Any) -> list[tuple[int, int]]:
+    """(prompt length, decode steps) shapes, the longest LP + T first (then the longest prompt): a derive's cost grows with LP + T."""
+    return sorted(shapes, key=lambda pc: (-(pc[0] + pc[1]), -pc[0]))
 
 
 def derived_ok(d: str) -> bool:
@@ -89,6 +93,10 @@ DERIVE_BYTES_PER_CALL = 6950
 DERIVE_BYTES_PER_LAYER_TOKEN2 = 362
 DERIVE_CALLS_PER_TOKEN_LAYER = 60
 DERIVE_MARGIN = 1.2
+#: a TP rank's GP-01 compose (`global-program`) peaks above its rank's largest request derive while it decodes that descriptor:
+#: fitted on one Build only, Qwen3-235B-A22B TP8 with one shape (LP256 T31, run r20261003-070729-359b): 20.8 GiB per compose
+#: against 14.1 GiB per derive (1.48x); a compose's planned peak is this multiple of its largest shape's `derive_bytes`
+COMPOSE_PEAK_RATIO = 1.5
 
 
 def derive_bytes(lp: int, t: int, layers: int) -> int:
@@ -128,19 +136,21 @@ def _cpus() -> int:
     return len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
 
 
-def build_jobs_auto(shapes: list[tuple[int, int]] | None = None, layers: int | None = None, *, headroom: int | None = None,
-                    cpus: int | None = None, budget_gb: float | None = None) -> int:
+def build_jobs_auto(shapes: list[tuple[int, int]] | None = None, layers: int | None = None, *, derives: int | None = None,
+                    peak_ratio: float = 1.0, headroom: int | None = None, cpus: int | None = None, budget_gb: float | None = None) -> int:
     """``--build-jobs auto`` (the default): as many concurrent derives as 80% of the memory headroom (or of `budget_gb`, when smaller)
-    holds at the largest shape's `derive_bytes`, at most one per CPU this process may use and one per derive (the step's and each
-    shape's).  Without the shapes or the model's layers: that memory / 20 GiB, 1..8.  A derive that dies of OOM is rc 137, a Build FAIL
-    by rc, never a wrong Program."""
+    holds at `peak_ratio` x the largest shape's `derive_bytes`, at most one per CPU this process may use and one per derive (`derives`:
+    by default the step's and each shape's; a TP Build's are every rank's).  Without the shapes or the model's layers: that memory /
+    (`peak_ratio` x 20 GiB), 1..8 (and at most `derives`).  A derive that dies of OOM is rc 137, a Build FAIL by rc, never a wrong
+    Program."""
     head = _memory_headroom() if headroom is None else headroom
     if budget_gb is not None:
         head = min(head, int(budget_gb * (1 << 30)))
     if not shapes or not layers:
-        return max(1, min(8, head // (20 << 30)))
-    per = max(derive_bytes(lp, t, layers) for lp, t in shapes)
-    return max(1, min(_cpus() if cpus is None else cpus, len(shapes) + 1, int(0.8 * head) // per))
+        return max(1, min(8, derives or 8, head // int(peak_ratio * (20 << 30))))
+    per = int(peak_ratio * max(derive_bytes(lp, t, layers) for lp, t in shapes))
+    n = len(shapes) + 1 if derives is None else derives
+    return max(1, min(_cpus() if cpus is None else cpus, n, int(0.8 * head) // per))
 
 
 def build_summary(d: str) -> str:

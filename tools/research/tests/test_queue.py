@@ -22,7 +22,7 @@ from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, credenti
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
 from research.store.model import Label
-from test_merge_gate import CHECKED, DECL
+from test_merge_gate import CHECK_FILES, CHECKED
 
 RULES = """\
 hold_label = "hold"
@@ -72,7 +72,7 @@ class World:
         for rel, text in {"a.txt": "a\n", "b.txt": "b\n", "c.txt": "c\n", "ci/queue.toml": RULES, ".gitignore": "__pycache__/\n",
                           "pkg/lean-audit.json": json.dumps({"pins": {"T": "1"}, "reads": {}, "dependencies": {"M": "1"}}),
                           "mytools/decl_check.py": "from research.store.tool import Tool\nT = Tool(name='check', version='1')\n",
-                          "tools/check/tool.py": DECL.format("")}.items():
+                          **CHECK_FILES}.items():
             (self.dev / rel).parent.mkdir(parents=True, exist_ok=True)
             (self.dev / rel).write_text(text)
         _git(self.dev, "init", "-q", "-b", "main")
@@ -822,8 +822,9 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     """On the machine the workload's environment holds no store credential, so `check.py` hands its steps the run's custody key
     (CHECK_STORE_CUSTODY) and VERITY_STORE_REQUIRED=1.  The tier handed neither: C-Flock's store-backed tests skipped as "the
     evidence store is not reachable", and the skip passed (red team, #989).  It hands both as check.py does, never the caller's,
-    and nothing of the recording run's own, nor the machine's PYTHONPYCACHEPREFIX; with no key staged, the store is still
-    required."""
+    and nothing of the recording run's own; with no key staged, the store is still required.  The machine's PYTHONPYCACHEPREFIX
+    reached the suites, so test_remote_cwd.py's runs wrote their bytecode there instead of under their own root and every PR whose
+    tier ran tools/research on vy-nebius-1 failed it (#985, #1021)."""
     from research import queue as Q
 
     main = world.change({"tools/check/suites.py": FAKE_SUITES})
@@ -831,8 +832,8 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
     monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen := world.tmp / "seen.json"))
-    monkeypatch.setenv("CHECK_STORE_CUSTODY", str(world.tmp / "the-callers-custody"))
     monkeypatch.setenv("PYTHONPYCACHEPREFIX", str(world.tmp / "the-machines-pycache"))
+    monkeypatch.setenv("CHECK_STORE_CUSTODY", str(world.tmp / "the-callers-custody"))
     monkeypatch.delenv("VERITY_STORE_REQUIRED", raising=False)
     monkeypatch.delenv("FAKE_FAIL", raising=False)
     machine = Machine(world.tmp, custody_r2=True)
@@ -842,8 +843,7 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     key = machine.root / "requests" / flags[flags.index("--id") + 1] / "custody"
     env = json.loads(seen.read_text())["env"]
     assert env["VERITY_STORE_REQUIRED"] == "1" and env["CHECK_STORE_CUSTODY"] == str(key.resolve())
-    assert env["RESEARCH_RUN_ID"] is None and env["GIT_AUTHOR_EMAIL"]
-    assert env["PYTHONPYCACHEPREFIX"] is None, "research's own tests check where their runs' bytecode goes (r20261004-054042-e833)"
+    assert env["RESEARCH_RUN_ID"] is None and env["PYTHONPYCACHEPREFIX"] is None and env["GIT_AUTHOR_EMAIL"]
     machine.custody_r2 = False
     assert tier(world.gh.prs[1]) is None
     env = json.loads(seen.read_text())["env"]

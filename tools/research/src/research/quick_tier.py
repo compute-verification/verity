@@ -26,6 +26,8 @@ CALLER_ENV = ("PYTHONPATH", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT")
 ROW_KEYS = ("name", "suite", "status", "failed_tests", "log")
 #: what check.py sets for its steps inside a recorded run (its CUSTODY_ENV and STORE_REQUIRED_ENV), never inherited
 CUSTODY_ENV, STORE_REQUIRED_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED"
+#: what a machine's runner gives every run besides `RESEARCH_*` (remote.py), which check.py's steps don't get either
+RUNNER_ENV = ("PYTHONPYCACHEPREFIX",)
 
 
 def _git(tree: Path, *args: str) -> subprocess.CompletedProcess:
@@ -34,13 +36,12 @@ def _git(tree: Path, *args: str) -> subprocess.CompletedProcess:
 
 def run_env(environ, run_dir: str, run_id: str) -> dict:
     """What the tier's builds and suites see inside a recorded run, as check.py's `env()` gives its steps: nothing of the recording
-    run's own (`RESEARCH_*` and the machine's PYTHONPYCACHEPREFIX: the tests start runs of their own, which would inherit them, and
-    research's own tests check where a run's bytecode goes); the evidence store required (a
+    run's own (`RESEARCH_*`, the machine's PYTHONPYCACHEPREFIX: the tests start runs of their own, which would inherit them, and a
+    run's bytecode would not go to its own root's cache); the evidence store required (a
     store-backed test that can't reach it fails instead of skipping) and reached through the run's custody dir, `<root>/requests/<run
     id>/custody/` beside `<root>/runs/<run id>/`, when it holds the key (on a machine the workload's environment holds no store
     credential); and a git identity for the tests that commit in throwaway repositories."""
-    out = {k: v for k, v in environ.items()
-           if not k.startswith("RESEARCH_") and k not in (CUSTODY_ENV, STORE_REQUIRED_ENV, "PYTHONPYCACHEPREFIX")}
+    out = {k: v for k, v in environ.items() if not k.startswith("RESEARCH_") and k not in (CUSTODY_ENV, STORE_REQUIRED_ENV, *RUNNER_ENV)}
     out[STORE_REQUIRED_ENV] = "1"
     custody = Path(run_dir).resolve().parent.parent / "requests" / run_id / "custody"
     if (custody / "store.toml").is_file() and (custody / "cred.json").is_file():
