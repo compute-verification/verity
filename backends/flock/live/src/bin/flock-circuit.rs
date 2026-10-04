@@ -2843,6 +2843,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("output_row_committed_false", false, true),
     ("digest_claim_false", false, true),
     ("row_ref_claim_false", false, true),
+    ("public_input_claim_false", false, true),
     ("message_byte_differs_from_the_committed_row", false, true),
     ("unit_input_differs_from_its_message_bits", false, true),
     ("unit_internal_bit_flipped", false, true),
@@ -2921,6 +2922,7 @@ fn skipped(st: &Stmt, name: &str) -> bool {
         || (!is_zk(st) && name.starts_with("zk_"))
         || (forged_same && ["tail_swapped", "tail_swapped_circuit_refused"].contains(&name))
         || (name == "tail_swapped" && st.c.typed.is_some() && forged_instance(st).is_none())
+        || (name == "public_input_claim_false" && st.c.public_inputs.is_empty())
 }
 
 fn plan_of(name: &str, gpu: bool) -> Plan {
@@ -2998,6 +3000,10 @@ fn false_statement(st: &Stmt, what: &str) -> Instances {
             let k = v.bc_index(0, st.c.n_in, np);
             v.bcs[k][0] ^= 1
         }
+        "public" => {
+            let q = st.c.leaves_public.iter().flatten().copied().find(|&q| q >= 0).expect("a public leaf") as usize;
+            v.public[q] ^= 1;
+        }
         "ref" => {
             let t = v.tables.as_mut().expect("a shared-row file");
             let p = (0..st.c.n_in).find(|&p| t.counts[p] > 1).expect("an input table of two rows or more");
@@ -3020,6 +3026,7 @@ fn false_statement(st: &Stmt, what: &str) -> Instances {
             "output" => "output_claim_false",
             "ref" => "row_ref_claim_false",
             "row" => "output_row_committed_false",
+            "public" => "public_input_claim_false",
             _ => "digest_claim_false",
         };
         let mut bytes = serde_json::to_vec(&v.header).unwrap();
@@ -3031,6 +3038,9 @@ fn false_statement(st: &Stmt, what: &str) -> Instances {
             for r in &t.refs {
                 bytes.extend_from_slice(&r.to_le_bytes());
             }
+        }
+        for w in &v.public {
+            bytes.extend_from_slice(&w.to_le_bytes());
         }
         std::fs::create_dir_all(&dir).unwrap();
         let p = std::path::Path::new(&dir).join(format!("{case}.pub.bin"));
@@ -3451,8 +3461,8 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         plan.substitute = Some(session(st, inst, shared(InProc(s0)), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os()).1);
     }
     let (pst, pinst, vinst) = match name {
-        "output_claim_false" | "digest_claim_false" | "row_ref_claim_false" => {
-            let what = match name { "output_claim_false" => "output", "row_ref_claim_false" => "ref", _ => "digest" };
+        "output_claim_false" | "digest_claim_false" | "row_ref_claim_false" | "public_input_claim_false" => {
+            let what = match name { "output_claim_false" => "output", "row_ref_claim_false" => "ref", "public_input_claim_false" => "public", _ => "digest" };
             let v = Arc::new(false_statement(st, what));
             let mut p = Instances::load(&arg("--instances", ""), &st.c).unwrap();
             p.public_sha512 = v.public_sha512;

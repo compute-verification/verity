@@ -74,6 +74,12 @@ def test_weights_record_carries_e4m3_weights_block_scales_and_head_norms():
     assert str(f["qkv_w"]) == "Array<6144,Array<2560,Value<8>>>" and str(f["qkv_ws"]) == "Array<48,Array<20,Value<32>>>"
     assert str(f["down_w"]) == "Array<2560,Array<9728,Value<8>>>" and str(f["down_ws"]) == "Array<20,Array<76,Value<32>>>"
     assert str(f["q_norm"]) == "Array<128,Value<16>>" and str(f["ln1"]) == "Array<2560,Value<16>>"     # norms stay bf16
+    # D = 68: qkv's N = 48 * 68 = 3264 ends mid-block (cdiv = 26 scale rows); o_proj's K = 32 * 68 = 2176 = 17 groups
+    f = dict(dict(analytic.weights_type(dict(C, D=68, QKV=48 * 68)).fields)["layers"].elem.fields)
+    assert str(f["qkv_w"]) == "Array<3264,Array<2560,Value<8>>>" and str(f["qkv_ws"]) == "Array<26,Array<20,Value<32>>>"
+    assert str(f["o_ws"]) == "Array<20,Array<17,Value<32>>>"
+    with pytest.raises(ValueError, match="K is not a multiple"):                # D = 66: o_proj's K = 2112 is not
+        analytic.weights_type(dict(C, D=66, QKV=48 * 66))
     # a bf16 Llama-architecture configuration is untouched by the two facts
     C0 = dict(C)
     C0.pop("QK_NORM"), C0.pop("FP8_BLOCK")
@@ -120,9 +126,9 @@ QUANT_SCHEMA = ("_C::per_token_group_fp8_quant(Tensor input, Tensor! output_q, T
 MM_SCHEMA = "_C::cutlass_scaled_mm(Tensor! out, Tensor a, Tensor b, Tensor a_scales, Tensor b_scales, Tensor? bias) -> ()"
 
 
-def _roots():
-    return [Root(view(A_W, (N, K), "float8_e4m3fn"), "weight", "model.layers.0.self_attn.qkv_proj.weight"),
-            Root(view(A_WS, (N // G, K // G), "float32"), "weight", "model.layers.0.self_attn.qkv_proj.weight_scale_inv")]
+def _roots(n: int = N):
+    return [Root(view(A_W, (n, K), "float8_e4m3fn"), "weight", "model.layers.0.self_attn.qkv_proj.weight"),
+            Root(view(A_WS, (-(-n // G), K // G), "float32"), "weight", "model.layers.0.self_attn.qkv_proj.weight_scale_inv")]
 
 
 def _ctx(cc=(9, 0), roots=None, kernel="CutlassFp8BlockScaledMMKernel", target=None):
@@ -196,6 +202,27 @@ def test_cutlass_scaled_mm_blockwise_resolves_with_both_weights_named_per_operan
     assert r.roots == (None, None, "model.layers.0.self_attn.qkv_proj.weight", "model.layers.0.self_attn.qkv_proj.weight_scale_inv")
     assert r.hint.endswith("/model.layers.0.self_attn.qkv_proj.weight")
     assert isinstance(r.outputs[0], PerRow) and r.outputs[0].view.dtype == "bfloat16"
+
+
+def test_cutlass_scaled_mm_blockwise_resolves_over_a_ragged_n():
+    """GLM-5.3's `fused_qkv_a_proj`: N = 2048 + 576 = 2624 output rows over cdiv(2624, 128) = 21 weight-scale rows, the last block
+    64 rows.  A [K/G, N // G] = [.., 20] b_scales is not that weight's scale tensor, and K must still be a multiple of the group."""
+    n, nb = 2624, 21
+    ragged = dict(out=view(A_OUT, (M, n), "bfloat16"), b=view(A_W, (K, n), "float8_e4m3fn", strides=(1, K)))
+    args = mm_args(**ragged, bs=view(A_WS, (K // G, nb), "float32", strides=(1, K // G)))
+    r = CutlassScaledMmFp8Block(group=G).match(_node("_C.cutlass_scaled_mm.default", MM_SCHEMA, args), _ctx(roots=_roots(n)))
+    assert isinstance(r, Compute), r
+    assert spec_label(r.spec) == f"ScaledMmFp8BlockSharedScale_v1{{K={K},N={n},G={G}}}" and r.rows == M
+    w, ws = r.operands[2].view, r.operands[3].view
+    assert w.shape == (n, K) and ws.shape == (nb, K // G) and ws.strides == (K // G, 1)
+    assert r.roots[2:] == ("model.layers.0.self_attn.qkv_proj.weight", "model.layers.0.self_attn.qkv_proj.weight_scale_inv")
+    floor = mm_args(**ragged, bs=view(A_WS, (K // G, n // G), "float32", strides=(1, K // G)))
+    r = CutlassScaledMmFp8Block(group=G).match(_node("_C.cutlass_scaled_mm.default", MM_SCHEMA, floor), _ctx(roots=_roots(n)))
+    assert isinstance(r, Unsupported) and "as_weight_view" in r.reason
+    k = K + 64
+    ragged_k = mm_args(xq=view(A_XQ, (M, k), "float8_e4m3fn"), b=view(A_W, (k, N), "float8_e4m3fn", strides=(1, k)))
+    r = CutlassScaledMmFp8Block(group=G).match(_node("_C.cutlass_scaled_mm.default", MM_SCHEMA, ragged_k), _ctx())
+    assert isinstance(r, Unsupported) and "K is not a multiple" in r.reason
 
 
 def test_cutlass_scaled_mm_binds_the_declared_scale_construction():

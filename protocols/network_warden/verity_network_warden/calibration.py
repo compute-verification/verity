@@ -51,6 +51,20 @@ def percentile(xs: Sequence[float], p: float) -> float:
     return s[min(len(s) - 1, max(0, math.ceil(p / 100 * len(s)) - 1))]
 
 
+def weighted_percentile(xs: Sequence[Fraction], weights: Sequence[int], p: float) -> Fraction:
+    """The nearest-rank percentile of `xs` with each `xs[i]` repeated `weights[i]` times: of W = Σ weights, the least x
+    whose cumulative weight reaches rank ⌈p/100 · W⌉ (at least 1). With unit weights it is `percentile`."""
+    if len(xs) != len(weights) or any(w < 0 for w in weights) or sum(weights) == 0:
+        raise ValueError("weighted percentile needs one non-negative weight per value and a positive total")
+    total = sum(weights)
+    rank, acc = min(total, max(1, math.ceil(p / 100 * total))), 0
+    for x, w in sorted(zip(xs, weights, strict=True)):
+        acc += w
+        if acc >= rank:
+            return x
+    raise AssertionError("unreachable: the cumulative weight reaches the total")
+
+
 def first_frame_latencies(frames: Sequence[dict]) -> list[int]:
     """Ready bucket minus anchor, for every session's first frame."""
     return [f["ready"] - f["anchor"] for f in frames if f["index"] == 0]
@@ -80,20 +94,25 @@ def fraction_at_most(x: Fraction | float, max_denominator: int = MAX_RHO_DENOMIN
 
 
 def choose_sync_set(latencies: Sequence[int], low_rates: Sequence[Fraction], typical_rates: Sequence[Fraction],
-                    n_delta: int = 16, n_rho: int = 8) -> SyncSet:
+                    n_delta: int = 16, n_rho: int = 8, typical_weights: Sequence[int] | None = None) -> SyncSet:
     """Σ_sync:
     - **δ** runs from 0 up to the p99.99 first-frame latency, in `n_delta` steps;
-    - **ρ** runs geometrically from the p0.01 of `low_rates` up to the p50 of `typical_rates`, in `n_rho` values, each
-      rounded down to a fraction with denominator at most 1024. ρ is below 1 for sessions slower than one frame per
-      bucket.
+    - **ρ** runs geometrically from the p0.01 of `low_rates` up to the p50 of `typical_rates` weighted by
+      `typical_weights`, in `n_rho` values, each rounded down to a fraction with denominator at most 1024. ρ is below 1
+      for sessions slower than one frame per bucket.
 
-    `calibrate` passes one rate per configuration in each: its sessions' p0.01 production rate in `low_rates`, and
-    their p50 rate in `typical_rates`."""
+    `calibrate` passes one rate per configuration in each: its sessions' p0.01 production rate in `low_rates`, their
+    p50 rate in `typical_rates`, and its windows in `typical_weights`, which is 1 + its largest anchor // T, the windows
+    its egress frames span. The top ρ is then the median over windows (`weighted_percentile`): the least typical rate t
+    such that the configurations with a typical rate at most t span at least ⌈W/2⌉ of all W windows. A configuration of
+    n windows counts as n configurations of one window each, so cutting a run into more configurations (at a dropped
+    window, say) doesn't move it. Without `typical_weights`, every configuration counts once."""
     hi = math.ceil(percentile(latencies, 99.99)) if latencies else 0
     step = max(1, math.ceil(hi / max(1, n_delta - 1)))
     deltas = tuple(i * step for i in range(n_delta))
     lo_r = fraction_at_most(percentile(low_rates, 0.01)) if low_rates else Fraction(1)
-    hi_r = max(lo_r, Fraction(percentile(typical_rates, 50))) if typical_rates else lo_r
+    weights = [1] * len(typical_rates) if typical_weights is None else typical_weights
+    hi_r = max(lo_r, Fraction(weighted_percentile(typical_rates, weights, 50))) if typical_rates else lo_r
     if n_rho == 1 or hi_r == lo_r:
         return SyncSet(deltas, (lo_r,))
     ratio = float(hi_r / lo_r)
@@ -101,53 +120,68 @@ def choose_sync_set(latencies: Sequence[int], low_rates: Sequence[Fraction], typ
     return SyncSet(deltas, tuple(sorted(rhos)))
 
 
-def choose_syncs(frames: Sequence[LogicalFrame], ready: Sequence[int], sync_set: SyncSet,
-                 window_buckets: int) -> tuple[list[ClockSync], list[int], int]:
-    """Replay the honest prover's choice, window by window. It declares the met sync with the least total hand time over
-    the window's frames, which is their total shaping delay; ties go to the smaller δ, then the larger ρ. (Taking the
+def choose_syncs(links: Sequence[tuple[Sequence[LogicalFrame], Sequence[int]]], sync_set: SyncSet,
+                 window_buckets: int) -> tuple[list[ClockSync], list[list[int]], int]:
+    """Replay the honest prover's choice for one configuration, window by window. `links` holds each egress link's
+    frames and their ready buckets. Under one clock per spatial unit every egress link reads the window's sync, so the
+    prover declares one value per window: the value met on every link with the least total hand time over the window's
+    frames on all links, which is their total shaping delay; ties go to the smaller δ, then the larger ρ. (Taking the
     smallest δ first would pick a slow ρ to save one bucket, and hold every later frame for seconds.) A window that no
-    value meets is a miss, which is a violation; the replay continues with the most lenient value. Returns the chosen
-    syncs, the actual hand times (a late frame goes when ready, delaying those behind it) and the number of misses.
+    value meets on every link is a miss, which is a violation; the replay continues with the most lenient value. Returns
+    the chosen syncs, each link's actual hand times (a late frame goes when ready, delaying those behind it) and the
+    number of missed windows.
 
-    The frames are in the Program's canonical order. For a batching engine that order is step-major, so a long session
-    anchored in one window interleaves with sessions anchored in later ones, and anchors need not be monotone. Each
-    window's first frame must come after the first frame of every earlier window (requests are admitted in order).
-    While window w is chosen, later windows take their most eager value (least δ, largest ρ). That only lowers hand
-    times, so a window found met stays met once later windows are fixed."""
-    if not frames:
-        return [], [], 0
-    win = [f.anchor // window_buckets for f in frames]
-    first: dict[int, int] = {}
-    last: dict[int, int] = {}
-    for k, w in enumerate(win):
-        first.setdefault(w, k)
-        last[w] = k
-    if any(first[a] > first[b] for a, b in zip(sorted(first), sorted(first)[1:])):
-        raise ValueError("each window's first frame must follow the first frame of every earlier window")
-    windows = max(win) + 1
+    Each link's frames are in the Program's canonical order. For a batching engine that order is step-major, so a long
+    session anchored in one window interleaves with sessions anchored in later ones, and anchors need not be monotone.
+    On each link, each window's first frame must come after the first frame of every earlier window (requests are
+    admitted in order). While window w is chosen, later windows take their most eager value (least δ, largest ρ). That
+    only lowers hand times, so a window found met stays met once later windows are fixed. A larger δ or a smaller ρ
+    only raises hand times, so a value met on every link exists exactly when the most lenient one is met on each."""
+    wins = [[f.anchor // window_buckets for f in frames] for frames, _ in links]
+    firsts: list[dict[int, int]] = []
+    lasts: list[dict[int, int]] = []
+    for win in wins:
+        first: dict[int, int] = {}
+        last: dict[int, int] = {}
+        for k, w in enumerate(win):
+            first.setdefault(w, k)
+            last[w] = k
+        if any(first[a] > first[b] for a, b in zip(sorted(first), sorted(first)[1:])):
+            raise ValueError("each window's first frame must follow the first frame of every earlier window")
+        firsts.append(first)
+        lasts.append(last)
+    if not any(wins):
+        return [], [[] for _ in links], 0
+    windows = max(max(win) for win in wins if win) + 1
     deltas, rhos = sorted(set(sync_set.deltas)), sorted(set(sync_set.rhos))
     eager, lenient = ClockSync(deltas[0], rhos[-1]), ClockSync(deltas[-1], rhos[0])
     syncs = [eager] * windows
-    misses, h_prefix, k0 = 0, 0, 0
+    misses, h_prefix, k0 = 0, [0] * len(links), [0] * len(links)
 
     def cost(w: int, sync: ClockSync) -> int | None:
-        """The window's total hand time under `sync`, or None if a frame of the window is late."""
+        """The window's total hand time on every link under `sync`, or None if a frame of the window is late."""
         syncs[w] = sync
-        h, total = h_prefix, 0
-        for k in range(first[w], last[w] + 1):
-            h = max(eligible(frames[k], syncs[win[k]]), h)
-            if win[k] == w:
-                if ready[k] > h:
-                    return None
-                total += h
+        total = 0
+        for i, (frames, ready) in enumerate(links):
+            if w not in firsts[i]:
+                continue
+            h, win = h_prefix[i], wins[i]
+            for k in range(firsts[i][w], lasts[i][w] + 1):
+                h = max(eligible(frames[k], syncs[win[k]]), h)
+                if win[k] == w:
+                    if ready[k] > h:
+                        return None
+                    total += h
         return total
 
     for w in range(windows):
-        if w not in first:
+        if not any(w in first for first in firsts):
             continue
-        for k in range(k0, first[w]):
-            h_prefix = max(eligible(frames[k], syncs[win[k]]), h_prefix)
-        k0 = first[w]
+        for i, (frames, _) in enumerate(links):
+            if w in firsts[i]:
+                for k in range(k0[i], firsts[i][w]):
+                    h_prefix[i] = max(eligible(frames[k], syncs[wins[i][k]]), h_prefix[i])
+                k0[i] = firsts[i][w]
         best: tuple[int, int, int, ClockSync] | None = None
         for i_rho, rho in enumerate(rhos):
             # a larger δ only raises hand times, so the least met δ for this ρ is found by bisection
@@ -168,11 +202,14 @@ def choose_syncs(frames: Sequence[LogicalFrame], ready: Sequence[int], sync_set:
             syncs[w] = lenient
         else:
             syncs[w] = best[3]
-    hands, h, actual = [], 0, 0
-    for k, f in enumerate(frames):
-        h = max(eligible(f, syncs[win[k]]), h)
-        actual = max(h, ready[k], actual)
-        hands.append(actual)
+    hands = []
+    for (frames, ready), win in zip(links, wins):
+        link_hands, h, actual = [], 0, 0
+        for k, f in enumerate(frames):
+            h = max(eligible(f, syncs[win[k]]), h)
+            actual = max(h, ready[k], actual)
+            link_hands.append(actual)
+        hands.append(link_hands)
     return syncs, hands, misses
 
 
@@ -285,16 +322,15 @@ def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n
     q = trace.get("queue_capacity", 1 << 16)
     configs = trace["configurations"]
 
-    per_link_frames: dict[str, list[list[dict]]] = defaultdict(list)
     per_link_arrivals: dict[str, list[list[int]]] = defaultdict(list)
     per_link_arrival_ms: dict[str, list[list[float]]] = defaultdict(list)
-    latencies, low_rates, typical_rates = [], [], []
+    latencies, low_rates, typical_rates, typical_weights = [], [], [], []
     for cfg in configs:
-        cfg_rates = []
+        cfg_rates, cfg_windows = [], 0
         for link in cfg.get("egress", []):
-            per_link_frames[link["link"]].append(link["frames"])
             latencies += first_frame_latencies(link["frames"])
             cfg_rates += session_rates(link["frames"])
+            cfg_windows = max(cfg_windows, max((f["anchor"] // T + 1 for f in link["frames"]), default=0))
         for link in cfg.get("ingress", []):
             if "arrival_ms" in link:
                 per_link_arrival_ms[link["link"]].append(link["arrival_ms"])
@@ -303,18 +339,30 @@ def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n
         if cfg_rates:
             low_rates.append(percentile(cfg_rates, 0.01))
             typical_rates.append(percentile(cfg_rates, 50))
-    sync_set = choose_sync_set(latencies, low_rates, typical_rates, n_delta, n_rho)
+            typical_weights.append(cfg_windows)
+    sync_set = choose_sync_set(latencies, low_rates, typical_rates, n_delta, n_rho, typical_weights)
 
-    egress, windows_total, misses_total, chosen = [], 0, 0, []
-    for name, runs in per_link_frames.items():
+    # one clock per spatial unit: a window, and a miss, belong to the configuration, shared by its egress links
+    windows_total, misses_total, chosen = 0, 0, []
+    per_link_runs: dict[str, list[tuple[list[dict], list[int], int, int]]] = defaultdict(list)
+    for cfg in configs:
+        links = cfg.get("egress", [])
+        lfs = [[LogicalFrame(b"", f["anchor"], f["index"]) for f in link["frames"]] for link in links]
+        syncs, hands, misses = choose_syncs([(lf, [f["ready"] for f in link["frames"]]) for lf, link in zip(lfs, links)],
+                                            sync_set, T)
+        windows_total += len(syncs)
+        misses_total += misses
+        chosen += [syncs[w] for w in sorted({f.anchor // T for lf in lfs for f in lf})]
+        for link, link_hands in zip(links, hands, strict=True):
+            per_link_runs[link["link"]].append((link["frames"], link_hands, len(syncs), misses))
+
+    egress = []
+    for name, runs in per_link_runs.items():
         hands_all, link_windows, link_misses, held = [], 0, 0, []
         offset = 0
-        for frames in runs:
-            lf = [LogicalFrame(b"", f["anchor"], f["index"]) for f in frames]
-            syncs, hands, misses = choose_syncs(lf, [f["ready"] for f in frames], sync_set, T)
-            link_windows += len(syncs)
+        for frames, hands, windows, misses in runs:
+            link_windows += windows
             link_misses += misses
-            chosen += [syncs[w] for w in sorted({f.anchor // T for f in lf})]
             held += [h - f["ready"] for h, f in zip(hands, frames, strict=True)]
             hands_all += [h + offset for h in hands]
             offset = (max(hands_all) + 1) if hands_all else offset
@@ -331,8 +379,6 @@ def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n
             "shaping_delay_ms": ({p: percentile(held, q) * bucket_ms for p, q in (("p50", 50), ("p99", 99))}
                                  | {"max": max(held) * bucket_ms}) if held else {},
         })
-        windows_total += link_windows
-        misses_total += link_misses
 
     ingress = []
     for name, runs in per_link_arrivals.items():
