@@ -3,7 +3,7 @@
 A toy of the proposed layout. Run an epoch:
 
 ~~~bash
-uv sync && uv run python -m toy_serving [--integrity replay|sp1] [--mode honest|lazy|rollout] [--no-space]
+uv sync && uv run python -m toy_serving [--integrity replay|sp1] [--mode honest|lazy|rollout] [--no-space] [--k K] [--verbose]
 lake build    # the Lean beside the Python
 ~~~
 

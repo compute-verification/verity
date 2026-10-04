@@ -1,66 +1,96 @@
-"""The audit: the units are fixed (committed) before the challenger draws which to verify.
+"""The one-stage audit (the 3-pager's protocol):
 
-The prover answers `executions()`: per unit, in order, its circuit, inputs and witness (a trace for replay, a proof for a
-proof construction).
+    1. the prover commits to its computation as units: per execution, the circuit and a partition it chose
+    2. it commits to every unit's inputs and outputs (`registration`), and the verifier checks the registration
+    3. the verifier draws units, with coins drawn after the registration exists
+    4. the prover opens each drawn unit's boundary and proves it (rematerializing what it needs by an untrusted replay)
+    5. if every drawn unit verifies, at most `bound` units are wrong, except with probability δ
+
+The prover's side answers `register()` (the registration and the circuits it names) and `open_unit(u)` (the drawn
+unit's boundary values with their openings, and the construction's witness). Today's references:
+`verity_sampled_proofs.one_stage` (registration, draw, audit record) and `verity.proofs.profile.IntegrityProfile`.
 """
 
 from __future__ import annotations
 
 import hashlib
-import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from verity.circuits import partition as P
 from verity.primitives import registry
+from verity.primitives.commitments import CommitmentScheme
 from verity.primitives.randomness import Challenger
+from verity.subprotocols.sampled_proofs import registration as R
+from verity.subprotocols.sampled_proofs.law import Subset
 from verity.subprotocols.sampled_proofs.replay import Replay
 
 SHIPPED = {Replay.name: Replay}
 
 
 @dataclass(frozen=True)
+class Opening:
+    values: Mapping[int, int]  # every boundary wire of the unit: inputs and outputs
+    proofs: Mapping[int, object]  # each value's opening against the execution's root
+    witness: object  # the construction's: nothing for replay, a proof for a proof system
+
+
+@dataclass(frozen=True)
 class IntegrityProfile:
     accepted: bool
-    delta: float  # the probability of accepting while more than `wrong_units` units are wrong
+    delta: float  # the probability of accepting with more than `wrong_units` wrong units
     covered: frozenset[str]  # the circuits whose units the draw was over
     units: int
     wrong_units: int
-    record: Mapping[str, object]
-
-
-def draw(coins: bytes, units: int, k: int) -> list[int]:
-    """k distinct unit indices, uniform, from the coins."""
-    chosen: list[int] = []
-    counter = 0
-    while len(chosen) < min(k, units):
-        x = int.from_bytes(hashlib.sha256(coins + counter.to_bytes(8, "big")).digest(), "big") % units
-        counter += 1
-        if x not in chosen:
-            chosen.append(x)
-    return chosen
+    record: Mapping[str, object]  # the audit record: registration digest, draw, verdict per drawn unit
 
 
 class Audit:
-    def __init__(self, construction: str, parameters: Mapping[str, object]):
+    def __init__(self, construction: str, parameters: Mapping[str, object], delta: float, scheme: CommitmentScheme):
         self.construction = registry.load("sampled_proofs", construction, SHIPPED)
-        self.k = int(parameters.get("k", 8))
-        self.fraction = float(parameters.get("fraction", 0.25))  # the wrong fraction the bound is stated at
+        self.law = Subset(int(parameters.get("k", 8)))
+        self.max_width = int(parameters.get("max_width", 4))
+        self.delta, self.scheme = delta, scheme
 
     def open(self, challenger: Challenger) -> None:
         self.challenger = challenger
 
-    def close(self, units: Sequence[str], units_digest: str, prover: object) -> IntegrityProfile:
-        """`units`: each unit's circuit id, as committed; `units_digest` binds the draw to them."""
-        executions = prover.executions()
-        n = len(units)
-        drawn = draw(self.challenger.draw("units", units=units_digest), n, self.k)
-        failed = [i for i in drawn if executions[i][0].id() != units[i] or not self.construction.verify_unit(*executions[i])]
-        exhaustive = len(drawn) == n
+    def close(self, declared: Sequence[str], prover: object) -> IntegrityProfile:
+        """`declared`: the circuit of each execution the account declares, in order."""
+        registration, circuits = prover.register()
+        refused = R.check(registration, circuits, declared, self.law, self.max_width, self.scheme.name)
+        digest = registration.digest()
+        if refused:
+            return self._profile(False, registration, {"registration": digest, "refused": list(refused)})
+
+        drawn = self.law.draw(self.challenger.draw("units", registration=digest), registration.population)
+        verdicts = {u: self._verify(registration, circuits, u, prover.open_unit(u)) for u in drawn}
+        record = {"registration": digest, "drawn": list(drawn), "verdicts": verdicts}
+        return self._profile(all(verdicts.values()), registration, record)
+
+    def _verify(self, registration: R.Registration, circuits: Mapping[str, object], u: int, opening: Opening) -> bool:
+        i, r = registration.unit(u)
+        execution = registration.executions[i]
+        circuit = circuits[execution.circuit]
+        region = execution.partition[r]
+        ins, outs = P.boundary(circuit, region)
+        index = {w: j for j, w in enumerate(R.boundary_wires(circuit, execution.partition))}
+        if set(opening.values) != set(ins) | set(outs):
+            return False
+        for w, v in opening.values.items():
+            if not self.scheme.verify(execution.root, index[w], R.leaf(w, v), opening.proofs[w]):
+                return False
+        inputs = {w: opening.values[w] for w in ins}
+        outputs = {w: opening.values[w] for w in outs}
+        return self.construction.verify_unit(circuit, region, inputs, outputs, opening.witness)
+
+    def _profile(self, accepted: bool, registration: R.Registration, record: Mapping[str, object]) -> IntegrityProfile:
+        n = registration.population
         return IntegrityProfile(
-            accepted=not failed,
-            delta=0.0 if exhaustive else (1 - self.fraction) ** len(drawn),
-            covered=frozenset(units),
+            accepted=accepted,
+            delta=self.delta,
+            covered=frozenset(e.circuit for e in registration.executions),
             units=n,
-            wrong_units=0 if exhaustive else math.floor(self.fraction * n),
-            record={"drawn": drawn, "failed": failed},
+            wrong_units=self.law.bound(n, self.delta),
+            record=record,
         )

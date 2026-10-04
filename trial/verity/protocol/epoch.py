@@ -18,7 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Protocol
 
@@ -94,28 +94,31 @@ class EpochRecord:
     account: Commitment | None
     profiles: Mapping[str, str]  # subprotocol -> digest of what it established
     reasons: tuple[str, ...]
+    evidence: Evidence | None = field(default=None, compare=False)  # what `profiles` digests, kept by the auditor devices
 
     def digest(self) -> str:
-        return _digest(asdict(self))
+        return _digest({k: v for k, v in asdict(self).items() if k != "evidence"})
 
 
 def run(config: Configuration, developer: Developer, inventory: Inventory, epoch: int) -> tuple[EpochReport, EpochRecord]:
     why = list(refusals(config))
+    if why:
+        raise Refused(tuple(why))
+    scheme, source = SCHEMES[config.commitments](), SOURCES[config.challenges]()
     audits: dict[str, object] = {}
-    for name, module, choice in (
-        ("sampled_proofs", sampled_proofs, config.sampled_proofs),
-        ("pouw", pouw, config.pouw),
-        ("pous", pous, config.pous),
-        ("network_warden", network_warden, config.network_warden),
+    for name, make, choice in (
+        ("sampled_proofs", lambda c: sampled_proofs.Audit(c.construction, c.parameters, c.delta, scheme), config.sampled_proofs),
+        ("pouw", lambda c: pouw.Audit(c.construction, c.parameters), config.pouw),
+        ("pous", lambda c: pous.Audit(c.construction, c.parameters), config.pous),
+        ("network_warden", lambda c: network_warden.Audit(c.construction, c.parameters), config.network_warden),
     ):
         if choice is not None:
             try:
-                audits[name] = module.Audit(choice.construction, choice.parameters)
+                audits[name] = make(choice)
             except NotInstalled as e:
                 why.append(f"{name}: {e}")
     if why:
         raise Refused(tuple(why))
-    scheme, source = SCHEMES[config.commitments](), SOURCES[config.challenges]()
 
     weights = baseline = account_commitment = None
     evidence = None
@@ -131,21 +134,20 @@ def run(config: Configuration, developer: Developer, inventory: Inventory, epoch
             audits["pous"].open(weights, challenger["pous"])
         developer.serve(start)
         account_commitment, account, nonce = developer.close(epoch)
-        units = [e.circuit for e in account.executions]
         evidence = Evidence(
-            integrity=audits["sampled_proofs"].close(units, account_commitment.root.hex(), developer.prover("sampled_proofs")),
+            integrity=audits["sampled_proofs"].close([e.circuit for e in account.executions], developer.prover("sampled_proofs")),
             work=audits["pouw"].close(developer.prover("pouw")) if "pouw" in audits else None,
             space=audits["pous"].close(developer.prover("pous")) if "pous" in audits else None,
             channel=audits["network_warden"].close([u.id for u in account.units]) if "network_warden" in audits else None,
         )
     except NoAnswer as e:
-        record = EpochRecord(epoch, config.digest(), weights, baseline, account_commitment, _profiles(evidence), (f"no answer: {e}",))
+        record = EpochRecord(epoch, config.digest(), weights, baseline, account_commitment, _profiles(evidence), (f"no answer: {e}",), evidence)
         return EpochReport(Verdict.SILENT, Verdict.SILENT), record
 
     opened = () if scheme.commit([account.encode(), nonce]) == account_commitment else ("account: does not open its commitment",)
     validated, reasons = check(account, account_commitment, inventory, evidence, config.delta)
     reasons = opened + reasons
-    record = EpochRecord(epoch, start.configuration, weights, baseline, account_commitment, _profiles(evidence), reasons)
+    record = EpochRecord(epoch, start.configuration, weights, baseline, account_commitment, _profiles(evidence), reasons, evidence)
     if reasons:
         return EpochReport(Verdict.REJECT, Verdict.REJECT), record
     ok = complies(validated, config.policy, config.nci.construction, scheme, developer.disclose())
