@@ -7,7 +7,8 @@
 #     MODE timed:     gpu-lease 8 --wait --timed --max-min MAX_MIN
 #   SHIP_TAR is ship.sh's ship.tar; HARNESS_BUILD the harness build jobs/env.sh takes (node2-gpus.md beside it unless
 #   SERVER_MD names the table).  env: SCHEDULES (default serial; each gets its own window), DRAWS (60), JOBS (the audit's
-#   processes, default nproc), MAX_MIN (45), SCRATCH_ROOT (where the rows and the ship are unpacked, default /tmp).
+#   processes, default nproc), MAX_MIN (45), MEM_GB (the lease's memory cap, default 32 for one card, 160 for eight), SCRATCH_ROOT (where the rows
+#   and the ship are unpacked, default /tmp).
 # Writes under OUT (default $RESEARCH_RUN_DIR/out): ship.sha256; bench-before/card<g>/ (bench.py with the Pearl-C arm: the
 # baselines' and the arm's times, its gates and transcript); <schedule>/ (window.py's OUT and audit.json); bench-after/card<g>/
 # (the baselines alone); verify-before/card<g>.json.  Exit: the first window's audit's, else the first failure.
@@ -19,8 +20,8 @@ export HERE ROOT DURATION=${4:-1800} OUT=${OUT:-$RESEARCH_RUN_DIR/out} SCHEDULES
 export MD=${SERVER_MD:-$build/node2-gpus.md} LABEL=m8192-n8192-k8192 SHAPE="8192 8192 8192"
 JOBS=${JOBS:-$(nproc)}; MAX_MIN=${MAX_MIN:-45}
 case $mode in
-  rehearsal) LEASE=(gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN") ;;
-  timed) LEASE=(gpu-lease 8 --wait --timed --max-min "$MAX_MIN") ;;
+  rehearsal) LEASE=(gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN" --mem-gb "${MEM_GB:-32}") ;;
+  timed) LEASE=(gpu-lease 8 --wait --timed --max-min "$MAX_MIN" --mem-gb "${MEM_GB:-160}") ;;
   *) echo "MODE $mode: rehearsal or timed" >&2; exit 2 ;;
 esac
 SCR=$(mktemp -d -p "${SCRATCH_ROOT:-/tmp}" exhaustion.XXXXXX)
