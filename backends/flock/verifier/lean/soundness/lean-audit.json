@@ -7426,6 +7426,23 @@
    "assumptions": [],
    "type_hash": "607a4a9eaee30e48aec21d8fb83f079600f24e67df47b6a7bd73e81444d3d4d6"
   },
+  "FlockSoundness.Discharge.FailClosed.flock_headline_exec": {},
+  "FlockSoundness.Discharge.FailClosed.flock_headline_exec_dec": {},
+  "FlockSoundness.Discharge.FailClosed.flock_headline_exec_hidden": {},
+  "FlockSoundness.Discharge.FailClosed.flock_headline_exec_hidden_dec": {},
+  "FlockSoundness.Discharge.FailClosed.scopeOk_eq": {},
+  "FlockSoundness.Discharge.FailClosed.zk_session_composed": {},
+  "FlockSoundness.Discharge.FailClosed.zk_session_composedHJ": {},
+  "FlockSoundness.Discharge.FailClosed.zk_session_sound": {},
+  "FlockSoundness.Discharge.FailClosed.zk_session_soundH": {},
+  "FlockSoundness.Discharge.FailClosed.zk_session_soundHJ": {},
+  "FlockSoundness.Discharge.FailClosed.zk_session_soundHJ_custody": {},
+  "FlockSoundness.Discharge.FailClosed.zk_session_soundHJ_custody_json": {},
+  "FlockSoundness.Discharge.FailClosed.zk_session_soundH_custody": {},
+  "FlockSoundness.Discharge.FailClosed.zk_session_soundJ": {},
+  "FlockSoundness.Discharge.FailClosed.zk_session_soundJ_custody": {},
+  "FlockSoundness.Discharge.FailClosed.zk_session_soundJ_custody_json": {},
+  "FlockSoundness.Discharge.FailClosed.zk_session_sound_custody": {},
   "FlockSoundness.Discharge.HdecCor.flock_headline_exec_dec": {
    "signature": [
     "FlockSoundness.Discharge.HdecCor.flock_headline_exec_dec {c : Flock.Circuit} (hU : FlockSoundness.Built c.unit)",
