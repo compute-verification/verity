@@ -13,7 +13,8 @@ One line per fact on stdout, one per failure on stderr. It checks:
   for its manifest and toolchain and the run carries its presigned URL (`check.py --lean-deps-files`), so the audit never
   clones them from GitHub;
 - that the store answers: every bundle still to restore, or else one pinned object, is read with the run's custody key
-  (RESEARCH_PREFLIGHT_CUSTODY), else through its sent URL;
+  (RESEARCH_PREFLIGHT_CUSTODY), and one byte through each URL the run carries for a bundle this tree pins, warm here or not:
+  the audit restores only through a URL, and a running audit can take the one warm copy;
 - that the CPU has `avx512f` when the run carries the pinned upstream build (so lean-agreement runs) and its RUSTFLAGS need it;
 - that the tree's and the cache's filesystems have the space a check takes: 45 GB, or 1.25 times the most the recent checks
   recorded on this machine took (their `resources.jsonl`) when that is more, plus 1.25 times each dependency tree to restore.
@@ -131,7 +132,8 @@ def lean_deps(root: Path, packages: list[str], cache: Path, urls: dict[str, str]
                          f"would clone them from GitHub: pin one (`lean_audit.py --pin RUN` after a cold `--export` run)")
         elif k not in urls:
             fails.append(f"{p}: its Lean dependencies ({k[:12]}) are not warm here and the run carries no URL for their bundle: send "
-                         f"`$(uv run python tools/check/check.py --lean-deps-files)`")
+                         f"`$(uv run python tools/check/check.py --lean-deps-files)` from a launcher holding the store's parent key, "
+                         f"which mints a key for those GETs alone")
         else:
             restore.append({"name": f"{p}'s Lean bundle {k[:12]}", "key": k, "sha256": pin["sha256"], "bytes": pin["bytes"]})
             facts.append(f"{p}: Lean dependencies restorable from the store ({k[:12]}, {pin['bytes'] >> 20} MiB)")
@@ -150,13 +152,25 @@ def probe(root: Path, packages: list[str]) -> list[dict]:
     return []
 
 
-def store(targets: list[dict], urls: dict[str, str], custody: Path | None) -> tuple[list[str], list[str]]:
-    """Read each of ``targets`` from the store's remote: with the run's custody key (a HEAD, its size checked against the pin),
-    else through its sent URL (one byte). A URL is never printed: it grants a read until it expires."""
+def handed_over(root: Path, packages: list[str], urls: dict[str, str]) -> list[dict]:
+    """The bundles of this tree's packages whose URL the run carries, warm here or not."""
+    keys = {LA.deps_key(root / p) for p in packages}
+    return [{"name": f"{v['package']}'s Lean bundle {k[:12]}", "key": k} for k, v in sorted(pins(root).items()) if k in keys and k in urls]
+
+
+def store(targets: list[dict], sent: list[dict], urls: dict[str, str], custody: Path | None) -> tuple[list[str], list[str]]:
+    """Read each of ``targets`` from the store's remote with the run's custody key (a HEAD, its size checked against the pin), and
+    one byte of each of ``sent`` through its URL, with the key or without. A URL is never printed: it grants a read until it
+    expires."""
     if not targets:
         return [], ["store: this tree pins nothing to read, so nothing shows the store answers here"]
     facts, fails = [], []
-    if custody is not None and (custody / "cred.json").is_file():
+    if custody is None or not (custody / "cred.json").is_file():
+        if not sent:
+            return [], ["store: the run carries neither a custody key nor a URL for what it must read, so nothing shows the store "
+                        "answers here: launch with custody (the default with --on) or send `$(uv run python tools/check/check.py "
+                        "--lean-deps-files)`"]
+    else:
         from research.store.custody import custody_env
         from research.store.local import object_key
         from research.store.remote import load_remote
@@ -165,8 +179,8 @@ def store(targets: list[dict], urls: dict[str, str], custody: Path | None) -> tu
             with custody_env(custody):
                 remote = load_remote()
                 if remote is None:
-                    return [], [f"store: the run's custody dir {custody} names no remote"]
-                for t in targets:
+                    fails.append(f"store: the run's custody dir {custody} names no remote")
+                for t in targets if remote is not None else []:
                     h = remote.head(object_key(t["sha256"]))
                     if h is None or (t.get("bytes") and h["bytes"] != t["bytes"]):
                         fails.append(f"store: {t['name']} is not on the remote as pinned")
@@ -174,11 +188,6 @@ def store(targets: list[dict], urls: dict[str, str], custody: Path | None) -> tu
                         facts.append(f"store: {t['name']} read with the run's custody key")
         except Exception as e:  # noqa: BLE001
             fails.append(f"store: a read with the run's custody key failed ({type(e).__name__}: {e})")
-        return facts, fails
-    sent = [t for t in targets if t.get("key") in urls]
-    if not sent:
-        return [], ["store: the run carries neither a custody key nor a URL for what it must read, so nothing shows the store answers "
-                    "here: launch with custody (the default with --on) or send `$(uv run python tools/check/check.py --lean-deps-files)`"]
     for t in sent:
         try:
             with urllib.request.urlopen(urllib.request.Request(urls[t["key"]], headers={"Range": "bytes=0-0"}), timeout=PROBE_TIMEOUT_S) as r:
@@ -325,7 +334,8 @@ def run(root: Path, inputs: Path | None, custody: Path | None, cache: Path, cpui
         fails.append(f"prepare the pod: `{POD_SETUP}`")
     f, x, restore = lean_deps(root, packages, cache, urls)
     facts, fails = facts + f, fails + x
-    for f, x in (store(restore or probe(root, packages), urls, custody), cpu(root, inputs, cpuinfo), disk(root, cache, restore, usage, runs, shared)):
+    for f, x in (store(restore or probe(root, packages), handed_over(root, packages, urls), urls, custody), cpu(root, inputs, cpuinfo),
+                 disk(root, cache, restore, usage, runs, shared)):
         facts, fails = facts + f, fails + x
     return facts, fails
 

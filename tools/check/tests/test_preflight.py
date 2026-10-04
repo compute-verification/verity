@@ -156,11 +156,15 @@ def test_the_uv_pin_is_read_from_pod_setup_sh():
 
 
 def test_lean_dependencies_come_from_the_store_or_nowhere(tmp_path, path):
+    """The custody key could sign the missing URL, but a URL carries its key (red team, #1055 F1): the launcher signs, never this."""
     tree = _tree(tmp_path)
     k = _key(tree)
-    _, fails = _run(tmp_path, tree, inputs=_inputs(tmp_path), custody=_custody(tmp_path, BUNDLE), warm=False)
+    inputs = _inputs(tmp_path)
+    _, fails = _run(tmp_path, tree, inputs=inputs, custody=_custody(tmp_path, BUNDLE), warm=False)
     assert fails == [f"pkg/a: its Lean dependencies ({k[:12]}) are not warm here and the run carries no URL for their bundle: send "
-                     f"`$(uv run python tools/check/check.py --lean-deps-files)`"]
+                     f"`$(uv run python tools/check/check.py --lean-deps-files)` from a launcher holding the store's parent key, "
+                     f"which mints a key for those GETs alone"]
+    assert os.listdir(inputs) == [], "nothing signed here"
 
 
 def test_an_unpinned_manifest_would_clone_from_github_and_is_refused(tmp_path, path):
@@ -179,6 +183,23 @@ def test_a_bundle_to_restore_is_read_through_its_url_and_counts_on_disk(tmp_path
     assert any("needs 58 GB (1 Lean dependency tree(s) to restore)" in f for f in facts), "45 GB and 1.25 x a 10 GB tree"
     _, fails = _run(tmp_path / "gone", _tree(tmp_path / "gone"), warm=False,
                     inputs=_inputs(tmp_path / "gone", {k: (tmp_path / "missing").as_uri()}))
+    assert fails == [f"store: pkg/a's Lean bundle {k[:12]} could not be read through its URL (URLError)"]
+
+
+@pytest.mark.parametrize("warm", [True, False])
+def test_every_url_it_hands_over_is_read_custody_or_not(tmp_path, path, warm):
+    """The audit restores only through a URL (`lean_audit.restore`), a warm copy can be taken by a running audit, and the custody
+    key's HEAD says nothing of whether the remote takes the URL (red team, #1055 F2): a URL it refuses would build cold."""
+    tree = _tree(tmp_path)
+    k = _key(tree)
+    (tmp_path / "bundle").write_bytes(BUNDLE)
+    other = {"0" * 64: (tmp_path / "not-this-trees").as_uri()}               # a pin this tree doesn't have: never handed to its audit
+    facts, fails = _run(tmp_path, tree, inputs=_inputs(tmp_path, {k: (tmp_path / "bundle").as_uri(), **other}),
+                        custody=_custody(tmp_path, BUNDLE), warm=warm)
+    assert fails == [] and f"store: pkg/a's Lean bundle {k[:12]} read through its URL" in facts
+    assert f"store: pkg/a's Lean bundle {k[:12]} read with the run's custody key" in facts
+    _, fails = _run(tmp_path / "403", _tree(tmp_path / "403"), inputs=_inputs(tmp_path / "403", {k: (tmp_path / "missing").as_uri()}),
+                    custody=_custody(tmp_path / "403", BUNDLE), warm=warm)
     assert fails == [f"store: pkg/a's Lean bundle {k[:12]} could not be read through its URL (URLError)"]
 
 
