@@ -29,9 +29,11 @@ A train's ref may be pinned: `N@SHA` (pull request N; quote `#N@SHA`, or the she
 from the remote and refused unless its head there is still SHA, so what merges is the head that was reviewed (`pinned`).
 A ref whose merge onto the train so far conflicts only on import lines (two PRs adding modules to one root import list) keeps
 both sides, ours first; a conflict on any other line refuses it, and so does a JSON file whose lines git merged into something
-that doesn't parse (`_merge`).  Before a train is built, each ref whose change needs the statement-reviewer grant under
-`research queue`'s rules (a change to the `pins` or `reads` of a `lean-audit.json`) is refused until pull request N holds it at
-that head (`ungranted`).
+that doesn't parse (`_merge`).  Before a train is built, each ref whose change needs a TRAIN_GRANTS grant under
+`research queue`'s rules is refused until pull request N holds it at that head (`ungranted`).
+
+A push that lands a change to what a guarantee says (a `lean-audit.json`'s guarantees or the definitions they read) DMs Daniel
+what changed, and nothing waits on him (`spec_alert`; his ruling, 3 Oct). A DM that fails is printed and goes to #agent-alerts.
 """
 from __future__ import annotations
 
@@ -599,12 +601,21 @@ def _push_and_sweep(repo: Path, into: str, remote: str, push: bool) -> int:
     only what is on the remote; a refused push sweeps nothing and fails. Without ``push`` the sweep finds nothing the merge
     landed, says so, and `research merge --sweep` after the push does it."""
     if push:
+        was = _git(repo, "rev-parse", "-q", "--verify", f"refs/remotes/{remote}/{into}^{{commit}}", check=False).stdout.strip()
         r = _git(repo, "push", "-q", remote, f"refs/heads/{into}:refs/heads/{into}", check=False)
         if r.returncode:
             print(f"research merge: push of {into} to {remote} refused, nothing swept: {(r.stderr or r.stdout).strip()[-300:]}",
                   file=sys.stderr)
             return 1
         print(f"research merge: pushed {into} to {remote}")
+        if into == "main":
+            from .spec_alert import alert
+
+            if was:
+                alert(repo, was, _git(repo, "rev-parse", f"refs/heads/{into}").stdout.strip(), remote=remote)
+            else:
+                print(f"research merge: no {remote}/{into} before the push to compare with; no spec change was looked for, "
+                      f"so read this push's lean-audit.json changes yourself", file=sys.stderr)
     _sweep_after(repo, into, remote)
     return 0
 
