@@ -99,10 +99,10 @@ end Nonempty
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 4000000 in
 /-- **Zero knowledge at `J` `CoinedSetup`s from their facts**: Lemma B (`table_shvzk_hm96`) at each table, their leaves'
-hiding `HashDerivedKey`'s, row (ii) `padOnto_M1`'s from `PadNonvanishing`, composed over the tables' independent
+hiding `HashDerivedKey`'s, row (ii) `padOnto_M1`'s from `PadNonvanishing` (`ZK.padNonvanishing40`), composed over the tables' independent
 randomness (`prCoin_pi_close`). -/
 theorem zkViewAtJ_of_ok {J : ℕ} (C : Fin J → CoinedSetup) (hC : ∀ j, CoinedOK execArith (fOf Zk.PAD_C) (C j))
-    (hKey : Assumptions.Zk.HashDerivedKeyHm96) (hPad : Assumptions.Zk.PadNonvanishing40) :
+    (hKey : Assumptions.Zk.HashDerivedKeyHm96) :
     ZkViewAtJ C ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
   intro c hc Out enc w w0 hv hreg E
   have one : ∀ j (E' : ((C j).T (c j)).tab.View → Prop),
@@ -119,7 +119,7 @@ theorem zkViewAtJ_of_ok {J : ℕ} (C : Fin J → CoinedSetup) (hC : ∀ j, Coine
     obtain ⟨⟨hpos, hlt⟩, -, hrank, hGp, hW, hpads, hβ, hinner⟩ := hT (c j) (hc j)
     have hpad : ((C j).T (c j)).tab.PadOnto :=
       FlockSoundness.ZK.padOnto_M1 ((C j).T (c j)).tab execArith execArith_correct (C j).cols hL ht hS (fOf Zk.PAD_C)
-        ((C j).pos (c j)) hpos hlt hGp (hPad _ hL)
+        ((C j).pos (c j)) hpos hlt hGp (FlockSoundness.ZK.padNonvanishing40 _ hL)
     simp only [ZkView.Coined.viewExe_eq, ZkView.Coined.simExe_eq]
     exact ((C j).T (c j)).tab.table_shvzk_hm96 ((C j).T (c j)).hm96 hKey hrank hpad hW hpads hβ (w j) (hreg j)
       (hinner (w j) (hv j) (hreg j)) (w0 j) E'
@@ -136,24 +136,34 @@ theorem zkViewAtJ_of_ok {J : ℕ} (C : Fin J → CoinedSetup) (hC : ∀ j, Coine
       (fun j => 2 * Fintype.card ((C j).T (c j)).tab.Hid * (2 : ℝ≥0∞) ^ (-193 : ℤ)) (fun j E' => (one j E').2) fun v => E (enc v)⟩
 
 /-- **One hidden-output `--zk` sampled session is zero knowledge, at the covered coin vectors** (`zk_session_view` under
-hidden outputs). -/
+hidden outputs).
+
+The zero knowledge is honest-verifier: it holds at uniform coins, at the coin vectors the honest prover covers. At a
+verifier-chosen outer coin `1` the view leaks (`ASSUMPTIONS.md`, zero knowledge's coverage) until the prover refuses that
+coin. `avoidsMask` (`hdm`) is a named hypothesis that no check implies yet, until the verifier's D3 refusal in
+`Net.ofRows` discharges it. -/
 theorem zk_session_viewH (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
     (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZKH I mPts S (dj S)), avoidsMask y.x.st = true)
-    (hKey : Assumptions.Zk.HashDerivedKeyHm96) (hPad : Assumptions.Zk.PadNonvanishing40) :
+    (hKey : Assumptions.Zk.HashDerivedKeyHm96) :
     ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZKH I mPts S (dj S)),
       ZkViewAt (coinedOf P (tablesAtZKH (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
   fun S R y => zkViewAt_of_ok _ (coinedOf_setup_of P _ y.x.st y.x.wf.1 (by rw [tablesAtZKH_eq dj y₀ S R y]; rfl)
-    (maskSetup_of_setupHidden ((ZkExec.zkTags_typed I).trans ht) y.x.h) (hdm S y)).2.2.2.2.2 hKey hPad
+    (maskSetup_of_setupHidden ((ZkExec.zkTags_typed I).trans ht) y.x.h) (hdm S y)).2.2.2.2.2 hKey
 
 /-- **One hidden-output `--zk` sampled session of `J` tables is zero knowledge, at the covered coin vectors**: at every
 draw at which `verify --zk` sets every table up (`ys`), the joint view of `zk_session_soundHJ`'s plan `planZHJ`, table
-`j` at its executable statement, at any covered coin vector per table. -/
+`j` at its executable statement, at any covered coin vector per table.
+
+The zero knowledge is honest-verifier: it holds at uniform coins, at the coin vectors the honest prover covers. At a
+verifier-chosen outer coin `1` the view leaks (`ASSUMPTIONS.md`, zero knowledge's coverage) until the prover refuses that
+coin. `avoidsMask` (`hdm`) is a named hypothesis that no check implies yet, until the verifier's D3 refusal in
+`Net.ofRows` discharges it. -/
 theorem zk_session_viewHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
     (hdm : ∀ (S : Finset (Fin n)) (j : Fin (nTab I))
       (y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)), avoidsMask y.x.st = true)
-    (hKey : Assumptions.Zk.HashDerivedKeyHm96) (hPad : Assumptions.Zk.PadNonvanishing40) :
+    (hKey : Assumptions.Zk.HashDerivedKeyHm96) :
     ∀ (S : Finset (Fin n)) (R : Reg)
       (ys : ∀ j : Fin (nTab I), DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
       ZkViewAtJ (fun j => coinedOf P ((planZHJ (Reg := Reg) dj y₀ S R).get
@@ -161,10 +171,15 @@ theorem zk_session_viewHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀
   fun S R ys => zkViewAtJ_of_ok _ (fun j => (coinedOf_setup_of P _ (ys j).x.st (ys j).x.wf.1
     (by rw [planZHJ_get_eq dj y₀ S R j (ys j)]; rfl)
     (maskSetup_of_setupHidden ((tagsAt_typed _ _ _).trans ((ZkExec.zkTags_typed I).trans ht)) (ys j).x.h)
-    (hdm S j (ys j))).2.2.2.2.2) hKey hPad
+    (hdm S j (ys j))).2.2.2.2.2) hKey
 
 /-- **One hidden-output `--zk` sampled session of `J` tables, sound and zero knowledge**: `zk_session_soundHJ` and
-`zk_session_viewHJ` on the same plan `planZHJ dj y₀`. -/
+`zk_session_viewHJ` on the same plan `planZHJ dj y₀`.
+
+The zero knowledge is honest-verifier: it holds at uniform coins, at the coin vectors the honest prover covers. At a
+verifier-chosen outer coin `1` the view leaks (`ASSUMPTIONS.md`, zero knowledge's coverage) until the prover refuses that
+coin. `avoidsMask` (`hdm`) is a named hypothesis that no check implies yet, until the verifier's D3 refusal in
+`Net.ofRows` discharges it. -/
 theorem zk_session_composedHJ
     (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
@@ -187,10 +202,10 @@ theorem zk_session_composedHJ
     -- the live prover
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ}
-    -- every table's statement avoids the mask slot, and hash-derived-key and PadNonvanishing
+    -- every table's statement avoids the mask slot, and hash-derived-key
     (hdm : ∀ (S : Finset (Fin n)) (j : Fin (nTab I))
       (y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)), avoidsMask y.x.st = true)
-    (hKey : Assumptions.Zk.HashDerivedKeyHm96) (hPad : Assumptions.Zk.PadNonvanishing40) :
+    (hKey : Assumptions.Zk.HashDerivedKeyHm96) :
     (let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
@@ -214,6 +229,6 @@ theorem zk_session_composedHJ
       ZkViewAtJ (fun j => coinedOf P ((planZHJ (Reg := Reg) dj y₀ S R).get
         (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
   ⟨zk_session_soundHJ I ht dj y₀ wr dg N hc hU hpub hpt hscope kd hkd Lb src hA3 hDraw hTags hRec hk hRw hM hρ hr ht'
-      K₀ τ, zk_session_viewHJ P I dj y₀ ht hdm hKey hPad⟩
+      K₀ τ, zk_session_viewHJ P I dj y₀ ht hdm hKey⟩
 
 end FlockSoundness.Discharge.ZkHidden
