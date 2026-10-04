@@ -1,10 +1,12 @@
 # tools/lean: the Lean audit
 
 One audit for every Lake package (`python tools/lean/audit.py --all --build`), which `check` runs on the packages whose inputs
-changed (`audit.py --build PKG...`, `tools/check/lean_audit.py`). It needs the standard
-library, `lake` and the toolchain's `lean`; nothing here imports Verity, so another repository can copy the directory
-(`audit.py`, `Facts.lean`, `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `cache.py`,
-`tests/`) and point it at its own packages.
+changed (`audit.py --build PKG...`). Lean's jobs in `check` are here too: `lean_audit.py` (the lean-audit step: which
+packages miss, their scratch tree, warm dependencies), `lean_changed.py` (the lean-changed step, and a lane's fast path to its
+records) and `lean-deps.json` (the pinned dependency bundles). The audit needs the standard library, `lake` and the
+toolchain's `lean`; nothing here imports Verity, so another repository can copy the auditor (`audit.py`, `Facts.lean`,
+`Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) and point it at its
+own packages. The two jobs use `check`'s helpers (`tools/check/common.py`, `lean_slot.py`), so they stay with this repository.
 
 No package code runs where the audit decides anything. The facts come from the `.olean` files read as data (`Facts.lean`
 imports with initializers disabled and no environment extension loaded), and the kernel replay (`Replay.lean`) loads them

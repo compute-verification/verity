@@ -1,4 +1,4 @@
-"""`tools/check/lean_changed.py --records`: a lane's records audited without the kernel replay in a Lean slot of pool `build`, on
+"""`tools/lean/lean_changed.py --records`: a lane's records audited without the kernel replay in a Lean slot of pool `build`, on
 that slot's tree, with its own copy of the audit's dependencies; its result is of kind `lean-fast/v1`, which check and research
 merge refuse."""
 from __future__ import annotations
@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-spec = importlib.util.spec_from_file_location("check_lean_changed_records", ROOT / "tools" / "check" / "lean_changed.py")
+spec = importlib.util.spec_from_file_location("check_lean_changed_records", ROOT / "tools" / "lean" / "lean_changed.py")
 LC = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(LC)
 spec = importlib.util.spec_from_file_location("check_for_lean_records", ROOT / "tools" / "check" / "check.py")
@@ -310,4 +310,4 @@ def test_it_takes_no_check_slot(repo, tmp_path, monkeypatch):
     assert seen == [("a", None, (True, None, None))]
     with pytest.raises(SystemExit):
         LC.main(["--update"])
-    assert not hasattr(LC, "SLOT") and '"slot.py"' not in (ROOT / "tools" / "check" / "lean_changed.py").read_text()
+    assert not hasattr(LC, "SLOT") and '"slot.py"' not in (ROOT / "tools" / "lean" / "lean_changed.py").read_text()
