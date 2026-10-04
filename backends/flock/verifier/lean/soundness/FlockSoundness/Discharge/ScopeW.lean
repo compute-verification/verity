@@ -9,6 +9,10 @@ import FlockSoundness.Discharge.ScopeW.HeadlineExec
 import FlockSoundness.Discharge.ScopeW.HdecCor
 import FlockSoundness.Discharge.ScopeW.Delta
 import FlockSoundness.Discharge.ScopeW.Copies
+import FlockSoundness.Discharge.ScopeW.ZkHidden
+import FlockSoundness.Discharge.ScopeW.ZkHiddenSound
+import FlockSoundness.Discharge.ScopeW.ZkHiddenJ
+import FlockSoundness.Discharge.ScopeW.ZkAccepted
 
 /-!
 # The headlines' scope widened to PoUW's rows: frozen statements
@@ -35,6 +39,9 @@ their own lanes before anything here reaches `main`.
   `HmRow.chainStart` give at each shape, with the final block in the `hm96` slot (`tailBit`; open: each shape's lemmas).
 * `Copies`: Δ's copies at the rows, once at `RowDelta` (setupH's, setupHidden's and `HmIn.delta`'s Δ) with the plain
   forms as corollaries; open: `inBit_copyLW`, `row_copies_flatW` and its three shapes, `msg_copyW`, the instances.
+* `ZkHidden`, `ZkHiddenSound`, `ZkHiddenJ`: the hidden-output `--zk` headlines at `scopeOkW` (`zk_session_soundHW`,
+  `zk_session_soundH_custodyW`, `zk_session_soundHJW`, `zk_session_soundHJ_custodyW`), their rows `rsZHW`, `rsZHJW`.
+* `ZkAccepted`: `AcceptsZKAcceptedHW`, `ZkHidden.AcceptsZKAcceptedH` at the widened rows.
 
 Each headline is proved from the obligations through the base headline's own chain, at `HmRowsP.toHmRows`.
 -/
