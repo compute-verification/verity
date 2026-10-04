@@ -313,7 +313,35 @@ theorem inBit_copyLW {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {
         wireCopiesOf st.c (HmRow.rowWires st.c.ports st.c.shaNet st.c.hmNet).toList).filter
       (fun e => e.1 = x) = [(x, src)]) :
     blockBit (L.model regs) z o x = blockBit (L.model regs) z o src := by
-  sorry
+  have R := RowRanges.ofL L F.parse F.check
+  have P : ParseFacts tags st.c := F.parse
+  have hF : ∀ j, (flatPairsW st.c st.pin).count (x, j) = (if j = x then 1 else 0) + (if j = src then 1 else 0) :=
+    fun j => by
+      rw [flatW_count L F hn hat hl hoff, hf]
+      simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
+  have hkeep : keep x = true := hΔ.2.2 hn hat
+  have hext : ∀ j, extra.count (x, j) = 0 := fun j => List.count_eq_zero.2 fun hm => by
+    have h0 : (HmRow.delta st.c st.pin).1.toList.count (x, x) = 0 := hΔ.2.1 _ hm x
+    rw [delta_flat_eqW _ _ P.typed, hF] at h0
+    simp at h0
+  have hδ : ∀ j, deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) ∧
+      deltaEntry st.db x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) := by
+    intro j
+    rw [L.delta_b, deltaEntry_eq_count, rowDelta_count hΔ hkeep, hext, Nat.add_zero, delta_flat_eqW _ _ P.typed, hF]
+    exact ⟨rfl, rfl⟩
+  have hx : x < 2 ^ (L.model regs).kLog := hat.lt R.bound (R.range (R.rowNet_lt hn)).1
+  exact block_of_rows hz o hx fun j => inBit_rows R hn hat hl hself hx hδ j
+
+/-- `inBit_copyLW` at a row's input position (`inPos`). -/
+theorem inBit_inPos {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p k off src : ℕ} (hg : g < st.c.g)
+    (hp : p < st.c.ports.size) (hk : k ≤ st.c.ports[p]!.chunks) (ho : off < 1536)
+    (hf : (rowCopiesW st.c st.pin ++
+        wireCopiesOf st.c (HmRow.rowWires st.c.ports st.c.shaNet st.c.hmNet).toList).filter
+      (fun e => e.1 = inPos st.c g p k off) = [(inPos st.c g p k off, src)]) :
+    blockBit (L.model regs) z o (inPos st.c g p k off) = blockBit (L.model regs) z o src :=
+  inPos_cases (RowRanges.ofL L F.parse F.check) (off := off) hg hp hk ho
+    fun {_ _ _} hn hat {_ _} hl hoff hself => inBit_copyLW L F hΔ hz o hn hat hl hoff hself hf
 
 variable (Lf : Layout (Hidden.flatTwin st))
 include Lf
@@ -332,7 +360,32 @@ theorem row_copies_flatW (hupv : 0 < st.c.upv) {regs : List (Model.Region st.c.k
       blockBit (L.model regs) z o (msgAt st.c g p k + t) = v) ∧
     (∀ k ≤ st.c.ports[p]!.chunks, ∀ t < 1024, ∀ kk col, HmRow.msgBit st.c.ports[p]! k t = .digest kk col →
       blockBit (L.model regs) z o (msgAt st.c g p k + t) = blockBit (L.model regs) z o (outAt st.c g p kk + col)) := by
-  sorry
+  have R := RowRanges.ofL L F.parse F.check
+  have hpin := Hm.pin_bit L hz o
+  have hs₀ : 0 < st.c.unitRange.count := by rw [L.unit_count]; exact Nat.mul_pos (by omega) hupv
+  have hzero : blockBit (L.model regs) z o (zeroCol st.c) = false := by
+    have h0 := HiddenExec.zeroPos_blockH L Lf regs F hs₀ hz o
+    unfold zeroCol
+    rw [blockBit_of_lt _ z o (y := st.c.unitRange.slot 0 + st.c.unit.useful) (Aliased.zeroPos Lf regs F hs₀).isLt]
+    show FlockSoundness.bit ((L.model regs).block z o (Aliased.zeroPos Lf regs F hs₀)) = false
+    rw [h0]
+    rfl
+  refine ⟨fun k hk j hj t ht => ?_, fun k h0 hk hj t ht => ?_, fun k hk t ht v hv => ?_,
+    fun k hk t ht kk col hv => ?_⟩
+  · rw [cvAt_pos R hp, inBit_inPos L F hΔ hz o hg hp hk (by omega) (filter_cv_start R hg hp hk ht hj)]
+    exact blockBit_constSrc _ _ hpin hzero
+  · rw [cvAt_pos R hp, inBit_inPos L F hΔ hz o hg hp hk (by omega) (filter_cv_chain R hg hp h0 hk ht hj)]
+  · have hf := filter_msgW R (pin := st.pin) hg hp hk ht
+    rw [hv] at hf
+    simp only [msgCopy] at hf
+    rw [msgAt_pos R hp] at hf ⊢
+    rw [inBit_inPos L F hΔ hz o hg hp hk (by omega) hf]
+    cases v <;> simp [hpin, hzero]
+  · have hf := filter_msgW R (pin := st.pin) hg hp hk ht
+    rw [hv] at hf
+    simp only [msgCopy] at hf
+    rw [msgAt_pos R hp] at hf ⊢
+    exact inBit_inPos L F hΔ hz o hg hp hk (by omega) hf
 
 /-- **The four copies into a row of whole blocks** (`RowWhole`), as `Hidden.row_copies_tgt`'s for any rows: the first
 compression's `cv` the row prefix's midstate, each later one's the previous output, the `hm96` slot's `cv` the last
