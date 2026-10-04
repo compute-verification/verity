@@ -4,7 +4,9 @@ verdict is rev1's capOK (`pearlCTilesDevRev1`) on `chain_debit` and `debit_units
 `credit_of`, on random tiles and adversarial ones (zero rows, absorbed groups, a total cancelled to zero, refused rows,
 and the cap's boundary).  Codes are finite E4M3: the atom has no NaN operand (`verity.ml.tc` raises), and neither does
 the replay.  A row's salt-dead counts are its elements whose code has one value over a sample of P3's support, by the
-scheme's own forming, and its other outputs `Pc8RowA`'s."""
+scheme's own forming, and its other outputs `Pc8RowA`'s.  The split (`pc8.Shape.cap`) composes to the one-unit cap, its
+units' rows are their ports' words, it computes every value in one unit, and a drawn tile's closure holds its strip,
+every word and its tally."""
 from __future__ import annotations
 
 import random
@@ -14,10 +16,16 @@ from fractions import Fraction
 
 import pytest
 
+import circuit_fixtures as CF
 import pearl_c_vectors as V
+from verity.commitments.rowleaf import bit_row, row_bytes
 from verity.evaluation import evaluate
+from verity.ir import partition_object as PO
+from verity.ir.program import Program
 from verity.ml.tc import fp32
-from verity_pouw.circuit import cap, pc8
+from verity.randomness import derive
+from verity_pouw.circuit import cap, pc8, plan
+from verity_pouw.circuit import leaves as L
 from verity_pouw.protocol import DomainError, Shape
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c_debit as D
@@ -150,11 +158,12 @@ def test_the_row_is_pc8s_row_with_its_salt_dead_counts(dev):
 
 
 def test_the_certificates_are_each_templates_advice():
-    """`ADVICE` (`pc8.PORTS`' class) names a parameter of the word and of the tile: the certificates are in the cap tile
-    unit's io, which C-Flock proves as private inputs."""
+    """`ADVICE` (`pc8.PORTS`' class) names a parameter of the word, of the tile and of the split's word unit, and is the
+    word unit's advice in `PORTS`: the certificates are in the unit's io, which C-Flock proves as private inputs."""
     tp = cap.templates(256, "sm120", (2, 2))
-    for t in (tp["word"], tp["tile"]):
+    for t in (tp["word"], tp["tile"], cap.unit_templates(256, "sm120", (2, 2))["word"]):
         assert set(cap.ADVICE) <= {name for name, _t in t.signature()[0]}, t.id
+    assert cap.PORTS["word"]["advice"] == cap.ADVICE
 
 
 def _keyed(w: int, dk: int) -> int:
@@ -212,12 +221,18 @@ def _reference(dev: str, k: int, n: int, rho: int, ac, bc, ok, sd) -> bool:
     return debit <= _rev1_cap(dev, k, n, rho, len(rows), len(bc))
 
 
-def _tile(k: int, tile, n: int, rho: int, ac, bc, ok, sd, cert=None, dev: str = "sm120"):
-    """(C̃, U, verdict) of `Pc8TileCap`, and `Pc8Tile`'s (C̃, U) on the same rows (P_A, P_B random BF16 words)."""
+def _peel_rows(k: int, tile):
+    """P_A and P_B: random BF16 words."""
     tm, tn = tile
     rng = random.Random(f"cap-peel-{k}-{tile}")
     pa = [[rng.getrandbits(16) & 0x3FFF for _ in range(pc8.PEEL)] for _ in range(tm)]
-    pb = [[rng.getrandbits(16) & 0x3FFF for _ in range(pc8.PEEL)] for _ in range(tn)]
+    return pa, [[rng.getrandbits(16) & 0x3FFF for _ in range(pc8.PEEL)] for _ in range(tn)]
+
+
+def _tile(k: int, tile, n: int, rho: int, ac, bc, ok, sd, cert=None, dev: str = "sm120"):
+    """(C̃, U, verdict) of `Pc8TileCap`, and `Pc8Tile`'s (C̃, U) on the same rows (P_A, P_B random BF16 words)."""
+    tm, tn = tile
+    pa, pb = _peel_rows(k, tile)
     if cert is None:
         cert = [[cap.certificates(ac[i], bc[j], dev) for j in range(tn)] for i in range(tm)]
     flat = lambda rows: [x for r in rows for x in r]  # noqa: E731
@@ -314,3 +329,222 @@ def test_the_deployed_shape_fits_and_a_larger_one_is_refused():
         cap._cap_constants(8192, 64, 64, 64 * (2 ** 20 + 1), 1000, "sm120")
     with pytest.raises(DomainError):
         cap.templates(128, "sm120")["word"].signature()
+
+
+# ---- the split ------------------------------------------------------------------------------------------------------------
+
+SPLIT = pc8.Shape(4, 256, 4, tile=(2, 2), dev="sm120", hidden=True, cap=True)
+
+
+def _split(k: int, tile, n: int, rho: int, ac, bc, ok, sd, cert=None, dev: str = "sm120"):
+    """The split's units on one tile, composed as `Pc8CallCap` composes them: (each word unit's outputs by row and column,
+    the strip's, the tile digest, the tally's verdict); P_A and P_B are `_tile`'s."""
+    tm, tn = tile
+    tp, (pa, pb) = cap.unit_templates(k, dev, tile, n, rho), _peel_rows(k, tile)
+    if cert is None:
+        cert = [[cap.certificates(ac[i], bc[j], dev) for j in range(tn)] for i in range(tm)]
+    words = [[evaluate(tp["word"], ac[i], pa[i], bc[j], pb[j], cert[i][j]) for j in range(tn)] for i in range(tm)]
+    fb = cap.flag_bits(k)
+    field = lambda lo, hi: [x for row in words for w in row for x in w[lo:hi]]    # noqa: E731
+    strip = evaluate(tp["strip"], [int(o) for o in ok])
+    digest = evaluate(tp["tile"], field(0, 1), field(1, 2))
+    verdict, = evaluate(tp["tally"], field(2, 2 + fb), field(2 + fb, 3 + fb), field(3 + fb, 4 + fb), field(4 + fb, 5 + fb),
+                        list(strip[:cap.STRIP_BITS]), strip[-1], [x for r in sd for x in r])
+    return words, strip, digest, verdict
+
+
+def _cu(words) -> list[int]:
+    return [w[0] for row in words for w in row] + [w[1] for row in words for w in row]
+
+
+@pytest.mark.parametrize("k, tile, n, rho", [(256, (2, 2), 2, 1000), (256, (2, 2), 6, 3), (256, (3, 1), 4, 40)])
+def test_the_split_units_are_the_tile_cap(k, tile, n, rho):
+    """On `test_the_tile_is_pc8s_and_its_verdict_rev1s_cap`'s tiles, the split's units composed: the word units' C̃ and U
+    are `Pc8Tile`'s, the tile unit's digest is `pearl_c.leaf` of them, and the tally's verdict is `Pc8TileCap`'s and
+    rev1's capOK on the replay; both verdicts occur."""
+    rng = random.Random(f"cap-tile-{k}-{tile}-{n}-{rho}")
+    tm, tn = tile
+    seen = set()
+    for trial in range(10):
+        pool = (FINITE, SMALL)[trial % 2]
+        ac, bc = _random_tile(rng, k, tm, tn, pool)
+        if trial % 3 == 2:
+            ac[0] = [0] * k
+        if trial % 5 == 4:
+            bc[-1] = [rng.choice(SMALL) if t >= 32 else 0x7E for t in range(k)]
+        ok = [rng.random() < 0.8 for _ in range(tm)]
+        sd = [[rng.choice([0] * 30 + [1, 32]) if trial % 4 == 3 else 0 for _ in range(k // 32)] for _ in range(tm)]
+        words, _strip, digest, verdict = _split(k, tile, n, rho, ac, bc, ok, sd)
+        _cu_cap, plain, want = _tile(k, tile, n, rho, ac, bc, ok, sd)
+        assert _cu(words) == list(plain)
+        assert tuple(digest) == CF.tile_digests(tile, [plain[i * tn:(i + 1) * tn] for i in range(tm)],
+                                                [plain[(tm + i) * tn:(tm + i + 1) * tn] for i in range(tm)])
+        assert verdict == want == _reference("sm120", k, n, rho, ac, bc, ok, sd), trial
+        seen.add(want)
+    assert seen == {True, False}
+
+
+def test_the_split_tally_leaves_a_refused_row_out_and_fails_a_wrong_certificate():
+    """`test_a_refused_row_is_left_out` and `test_a_wrong_certificate_fails_the_tile` on the split: a refused zero row
+    with junk certificates leaves the verdict as it is, admitted it is over the cap, and one certificate moved by one FP32
+    value fails the tally of a tile that passes with the prover's."""
+    k, tile, n, rho = 256, (2, 2), 2, 1000
+    rng = random.Random("cap-refused")
+    ac, bc = _random_tile(rng, k, *tile)
+    sd = [[0] * (k // 32) for _ in range(2)]
+    assert _split(k, tile, n, rho, ac, bc, [True, False], sd)[3] == 1
+    rows = [ac[0], [0] * k]
+    junk = [[cap.certificates(r, b) if i == 0 else [0, 0] for b in bc] for i, r in enumerate(rows)]
+    assert _split(k, tile, n, rho, rows, bc, [True, False], sd, cert=junk)[3] == 1
+    assert _split(k, tile, n, rho, rows, bc, [True, True], sd)[3] == 0
+    cert = [[cap.certificates(ac[i], bc[j]) for j in range(2)] for i in range(2)]
+    cert[1][0] = [_keyed(cert[1][0][0], 1), cert[1][0][1]]
+    assert _split(k, tile, n, rho, ac, bc, [True, True], sd, cert=cert)[3] == 0
+
+
+def test_the_split_units_rows_are_their_ports_words():
+    """Each output row of the split's units is its ports' bits (`rowleaf.bit_row`) and its schema's words (`leaves`):
+    the word unit's C̃ ‖ U and flags (padded with zero bits) ‖ count ‖ later +0 promotions ‖ good, and the strip's
+    admission bits (padded to 64) ‖ bound, which is `_cap_constants`' table at the passing rows' count."""
+    k, tile, n, rho = 256, (2, 2), 2, 1000
+    rng = random.Random("cap-split-rows")
+    ac, bc = _random_tile(rng, k, *tile)
+    words, strip, _digest, _verdict = _split(k, tile, n, rho, ac, bc, [True, False], [[0] * (k // 32)] * 2)
+    fb = cap.flag_bits(k)
+    for w in (x for row in words for x in row):
+        c, u, flags, atoms, zeros, good = w[0], w[1], list(w[2:2 + fb]), w[2 + fb], w[3 + fb], w[4 + fb]
+        assert flags[k // 32:] == [0] * (fb - k // 32) and atoms == sum(flags) and good == 1
+        for row, cols, want in (("cap-word", (([c, u], 32),), L.words_cap_word(c, u)),
+                                ("cap-flags", ((flags, 1), ([atoms, zeros], 32), ([good], 16)),
+                                 L.words_cap_flags(flags[:k // 32], atoms, zeros, good))):
+            assert bit_row(*cols) == (row_bytes(want, 16), 16 * L.ROW_WORDS[row](k)), row
+    mask, bound = list(strip[:cap.STRIP_BITS]), strip[-1]
+    assert mask == [1, 0] + [0] * (cap.STRIP_BITS - 2) and bound == cap._cap_constants(k, *tile, n, rho, "sm120")[-1][1]
+    assert bit_row((mask, 1), ([bound], 32)) == (row_bytes(L.words_cap_rows([1, 0], bound), 16), 16 * L.ROW_WORDS["cap-rows"](k))
+
+
+@pytest.mark.parametrize("role", ["row_b", "row_a", "strip", "word", "tile", "tally"])
+def test_the_ports_are_each_split_units_committed_rows(role):
+    """`PORTS` lists every parameter and output of each split unit once: its rows, the anchored inputs' regions, the word
+    unit's certificates as advice and the tally's verdict as its one public output, in no row; its statement rows are
+    its rows, inputs as many as it reads, outputs once each."""
+    tp = cap.unit_templates(SPLIT.k, SPLIT.dev, SPLIT.tile, SPLIT.n)
+    ports, reads = cap.PORTS[role], cap.reads(SPLIT.tile)[role]
+    CF.check_ports(tp[role], ports, pc8.DERIVATIONS, SPLIT.k, reads)
+    rows = L.statement_rows(ports, SPLIT.k, reads)
+    outs = [r for r, _role, ps in ports["rows"] if all(isinstance(p, int) for p in ps)]
+    assert len(rows["row_schemas"]) == sum(reads.get(ps[0], 1) for _r, _role, ps in ports["rows"]
+                                           if all(isinstance(p, str) for p in ps)) + len(outs)
+    assert ports.get("public", ()) == ((0,) if role == "tally" else ())
+
+
+@pytest.mark.parametrize("side", ["check", "weight", "call"])
+def test_the_split_computes_every_value_in_exactly_one_unit(side):
+    """Under ``cap`` the call is one unit per row of A, per strip, per word, per tile and per tally (and the check adds a
+    unit per row of B); `validate_unit_cut` certifies every gate once with no recompute, and the partition object over
+    the split's templates verifies.  Each strip's admission bits and bound are its own unit's, since a strip's tallies
+    all read them."""
+    fn = {"check": pc8.check, "weight": pc8.weight, "call": pc8.call}[side](SPLIT)
+    prog, q = Program(fn), pc8.query(SPLIT, side)
+    us = pc8.units(fn)
+    m, n, (tm, tn) = SPLIT.m, SPLIT.n, SPLIT.tile
+    full = {"row_b": n, "row_a": m, "strip": m // tm, "word": m * n, "tile": m * n // (tm * tn), "tally": m * n // (tm * tn)}
+    assert Counter(u.role for u in us) == {r: full[r] for r in cap.ROLES[side]}
+    tp = cap.unit_templates(SPLIT.k, SPLIT.dev, SPLIT.tile, SPLIT.n)
+    assert [u.template for u in us] == [PO.template_id(tp[u.role]) for u in us]
+    assert PO.verify(PO.build(prog, q), prog).ok
+    _g, _owner, verdict = pc8.unit_cut(fn)
+    assert verdict.ok, verdict.codes
+    assert verdict.detail["certified"] == verdict.detail["computed_gates"]
+
+
+def _call_inputs(shape: pc8.Shape, name: str):
+    """A call's and its weight's inputs: the vectors' honest rows and the anchors from fixed seeds."""
+    m, k, n = shape.m, shape.k, shape.n
+    seed_a, seed_b = bytes(range(32)), bytes(range(32, 64))
+    words = lambda side, count: [w for r in V.rows_f32(name, side, count, k) for w in C.parse_f32_row(r, k)]  # noqa: E731
+    ea = [c for i in range(m) for c in pc8.line_ea(shape, seed_a, i)]
+    eb = [c for j in range(n) for c in pc8.line_eb(shape, seed_b, j)]
+    return (words("A", m), ea, words("B", n), eb, pc8.basis_fa(shape, seed_b), pc8.basis_fb(shape, seed_b),
+            pc8.gram_g(shape, seed_b))
+
+
+def test_the_split_call_is_the_hiding_call_with_each_tiles_cap():
+    """`Pc8CallCap` returns `Pc8CallHidden`'s tile digests and admission bits, and per tile `Pc8TileCap`'s verdict on its
+    rows; `Pc8CheckCap` is the weight's units then the call's.  One word's certificate moved fails its tile's verdict
+    alone."""
+    m, k, n, (tm, tn) = SPLIT.m, SPLIT.k, SPLIT.n, SPLIT.tile
+    hidden = replace(SPLIT, cap=False)
+    a, ea, b, eb, fa, fb, g = _call_inputs(SPLIT, "pc8-cap-split")
+    wout = evaluate(pc8.weight(hidden), b, eb, fa, fb, g)
+    bc, pb, ok_b = list(wout[:n * k]), list(wout[n * k:-n]), list(wout[-n:])
+    want = evaluate(pc8.call(hidden), a, ea, fa, fb, bc, pb)
+    rows = [evaluate(cap.templates(k, SPLIT.dev)["row_a"], a[i * k:(i + 1) * k], ea[32 * i:32 * (i + 1)], fa, fb)
+            for i in range(m)]
+    ac, pa, oka, sd = ([list(r[:k]) for r in rows], [list(r[k:k + 64]) for r in rows], [r[k + 64] for r in rows],
+                       [list(r[k + 65:]) for r in rows])
+    bcs, pbs = [bc[j * k:(j + 1) * k] for j in range(n)], [pb[64 * j:64 * (j + 1)] for j in range(n)]
+    cert = [[cap.certificates(ac[i], bcs[j]) for j in range(n)] for i in range(m)]
+    tiles = (m // tm) * (n // tn)
+    blk = lambda x, rs, h: x[rs * h:(rs + 1) * h]                                   # noqa: E731
+    flat = lambda rows: [x for r in rows for x in r]                                # noqa: E731
+    caps = [evaluate(cap.templates(k, SPLIT.dev, SPLIT.tile, n)["tile"], flat(blk(ac, rs, tm)), flat(blk(bcs, cs, tn)),
+                     flat(blk(pa, rs, tm)), flat(blk(pbs, cs, tn)), blk(oka, rs, tm), flat(blk(sd, rs, tm)),
+                     [w for r in blk(cert, rs, tm) for c in blk(r, cs, tn) for w in c])[-1]
+            for rs in range(m // tm) for cs in range(n // tn)]
+    assert oka == [1] * m
+    for moved in (None, (1, 2)):
+        cs_ = [[list(c) for c in r] for r in cert]
+        if moved:
+            i, j = moved
+            cs_[i][j][0] = _keyed(cs_[i][j][0], 1)
+        got = evaluate(pc8.call(SPLIT), a, ea, fa, fb, bc, pb, [w for r in cs_ for c in r for w in c])
+        assert got[:8 * tiles] == want[:8 * tiles] and got[-m:] == want[-m:]
+        verdicts = list(got[8 * tiles:-m])
+        assert verdicts == (caps if moved is None else [v if t != 1 else 0 for t, v in enumerate(caps)])
+        if moved is None:
+            assert evaluate(pc8.check(SPLIT), a, ea, b, eb, fa, fb, g, [w for r in cs_ for c in r for w in c]) == \
+                tuple(got) + tuple(ok_b)
+    assert caps == [1] * tiles
+
+
+def test_a_drawn_tile_proves_its_strip_every_word_and_its_tally():
+    """`plan.tile_layout` under ``cap``: a tile's closure is itself, its TM `RowA` units, its strip, its TM·TN word units
+    row by row and its tally, so a draw proves every cap word of each drawn tile (`Plan.proved`), never sampling one; the
+    tile stratum alone carries W_ref.  With the cap off the layout is pc8's."""
+    tm, tn = SPLIT.tile
+    lay = plan.tile_layout(SPLIT, 1000)
+    lay.check()
+    us = lay.units
+    tiles = [u for u in us if u.role == "tile"]
+    assert len(tiles) == 4 and set(lay.closure) == {t.index for t in tiles}
+    for t in tiles:
+        rs, cs = t.where
+        got = [(us[i].role, us[i].where) for i in lay.closure[t.index][1:]]
+        assert got == ([("row_a", (rs * tm + i,)) for i in range(tm)] + [("strip", (rs,))]
+                       + [("word", (rs * tm + i, cs * tn + j)) for i in range(tm) for j in range(tn)] + [("tally", (rs, cs))])
+    assert [(s.role, s.work) for s in lay.strata] == [("row_a", 0), ("strip", 0), ("word", 0), ("tile", 4 * 1000),
+                                                       ("tally", 0)]
+    for law in (plan.CountLaw(2), plan.WorkLaw(2)):
+        p = plan.draw(derive(bytes(32), plan.DRAW_DOMAIN, {"test": "cap"}), lay, law)
+        drawn = [u for u in p.drawn if us[u].role == "tile"]
+        assert drawn and set(p.proved) == set(p.drawn) | {i for t in drawn for i in lay.closure[t]}
+        for t in drawn:
+            assert sum(us[i].role == "word" for i in lay.closure[t]) == tm * tn
+    off = plan.tile_layout(replace(SPLIT, cap=False), 1000)
+    assert all(len(c) == 1 + tm for c in off.closure.values())
+
+
+def test_the_cap_flag_is_off_by_default_and_refuses_shapes_outside_the_split():
+    """``cap`` is off by default, so a shape's ports and Programs are pc8's; on, the ports are `cap.PORTS`.  A cap shape
+    that is not hiding, has more than 64 rows a tile, a unit of columns too large for 31-bit sums, or fewer than two
+    promotion windows is refused."""
+    plain = pc8.Shape(4, 256, 4, tile=(2, 2), dev="sm120", hidden=True)
+    assert not plain.cap and plain.ports is pc8.PORTS and SPLIT.ports is cap.PORTS
+    assert pc8.call(plain).id != pc8.call(SPLIT).id and pc8.weight(plain).id == pc8.weight(SPLIT).id
+    for shape in (replace(SPLIT, hidden=False), pc8.Shape(65, 256, 1, tile=(65, 1), hidden=True, cap=True),
+                  pc8.Shape(64, 8192, 64 * (2 ** 20 + 1), tile=(64, 64), hidden=True, cap=True),
+                  pc8.Shape(1, 128, 1, tile=(1, 1), hidden=True, cap=True)):
+        for build in (pc8.check, pc8.weight, pc8.call):
+            with pytest.raises(DomainError):
+                build(shape)

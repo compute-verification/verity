@@ -13,7 +13,8 @@ reading the weight's B̃ and P_B as committed inputs; `Pc8Check` is both in one 
 `Q_template_instances` over the templates (`query`), and every value is computed in exactly one unit.  Forming v0 (#311's
 port) has no circuit here.  The hiding Programs are `pc4`'s (``Shape.hidden``): `Pc8TileHidden` returns its tile digest in
 place of C̃ and U, and the rows are C-Flock-committed ports (`PORTS`), with fp32 input rows, fp8-p rows (A′_i ‖ P_A,i,
-B̃_j ‖ P_B,j; `leaves`) and each row's ``ok`` row, and the anchored inputs public input regions.
+B̃_j ‖ P_B,j; `leaves`) and each row's ``ok`` row, and the anchored inputs public input regions.  ``Shape.cap`` adds the
+per-tile cap to the hiding call, cut into a unit per word, the tile and its tally (`cap`); off, nothing here changes.
 
 ``DEV`` names a device record (`pearl_c_device.DEVICES`): its E4M3 k32 atom (`HopperE4m3QgmmaDot32` on the H100,
 `BlackwellE4m3QmmaDot32` on sm_120) and its promotion period G.  The peel's BF16 k16 step is `HopperBF16WgmmaDot16` on
@@ -235,9 +236,10 @@ Pc8TileHiddenDef = CompositeDefinition(
     conformance="protocol-defined")
 
 #: each unit's ports under hiding, as `pc4.PORTS`: fp32 input rows, fp8-p rows and ok rows, the anchors' regions, and its
-#: advice: parameters the prover supplies that no unit computes and nothing binds (the cap tile's certificates,
+#: advice: parameters the prover supplies that no unit computes and nothing binds (the cap word's certificates,
 #: `cap.ADVICE`), which C-Flock proves as private inputs.  An advice port is in the unit's io and in no read set: in no
-#: committed row (so in no link either) and in no public input region, which `leaves.statement_rows` enforces.
+#: committed row (so in no link either) and in no public input region, which `leaves.statement_rows` enforces.  Under the
+#: cap the ports are `cap.PORTS` (``Shape.ports``).
 PORTS = {
     "row_b": {"rows": (("fp32", ROLE_W, ("x",)), ("fp8-p", ROLE_W, (0, 1)), ("ok", ROLE_W, (2,))),
               "regions": {"e": "eb", "fb": "fb", "fa": "fa", "g": "g"}, "advice": ()},
@@ -306,7 +308,8 @@ def templates(k: int, tile: tuple[int, int] = TILE, dev: str = "sm120",
 @dataclass(frozen=True)
 class Shape:
     """M rows of A and N rows of B at depth k on device ``dev``, cut into tiles of ``tile`` (the scheme's is 64 x 64);
-    ``hidden``, the hiding Programs.  `anchors.TileAnchors` reads its units' ports and its anchors' derivations."""
+    ``hidden``, the hiding Programs; ``cap``, the hiding Programs with the per-tile cap, cut into word, tile and tally
+    units (`cap`).  `anchors.TileAnchors` reads its units' ports and its anchors' derivations."""
 
     m: int
     k: int
@@ -314,9 +317,16 @@ class Shape:
     tile: tuple[int, int] = TILE
     dev: str = "sm120"
     hidden: bool = False
-    ports: ClassVar[dict] = PORTS
+    cap: bool = False
     derivations: ClassVar[dict] = DERIVATIONS
     seeds: ClassVar[dict] = SEEDS
+
+    @property
+    def ports(self) -> dict:
+        if self.cap:
+            from . import cap
+            return cap.PORTS
+        return PORTS
 
     def check(self) -> None:
         d = DEVICES.get(self.dev)
@@ -326,6 +336,9 @@ class Shape:
         if (self.k % d.window or not 0 < self.k <= d.k_max or min(self.m, self.n, tm, tn) <= 0 or self.m % tm
                 or self.n % tn):
             raise DomainError(f"Pearl-C's circuit needs {d.window} | k <= {d.k_max} and whole tiles on each side: {self}")
+        if self.cap:
+            from . import cap
+            cap.check_shape(self)
 
 
 def _weight_units(B, k: int, dev: str, b, eb, fa, fb, g):
@@ -426,12 +439,18 @@ def weight(shape: Shape) -> SpecializedDefinition:
 
 def call(shape: Shape) -> SpecializedDefinition:
     shape.check()
+    if shape.cap:
+        from . import cap
+        return cap.call(shape)
     return bind(Pc8CallHiddenDef if shape.hidden else Pc8CallDef, M=shape.m, K=shape.k, N=shape.n, TM=shape.tile[0],
                 TN=shape.tile[1], DEV=shape.dev)
 
 
 def check(shape: Shape) -> SpecializedDefinition:
     shape.check()
+    if shape.cap:
+        from . import cap
+        return cap.check(shape)
     return bind(Pc8CheckHiddenDef if shape.hidden else Pc8CheckDef, M=shape.m, K=shape.k, N=shape.n, TM=shape.tile[0],
                 TN=shape.tile[1], DEV=shape.dev)
 
@@ -442,20 +461,30 @@ ROLES = pc4.ROLES
 _ROLE_OF = {id(Pc8RowBDef): "row_b", id(Pc8RowADef): "row_a", id(Pc8TileDef): "tile", id(Pc8TileHiddenDef): "tile"}
 
 
+def _role_of() -> dict[int, str]:
+    from . import cap
+    return _ROLE_OF | cap.ROLE_OF
+
+
 def query(shape: Shape, side: str = "check") -> dict[str, Any]:
-    """`Q_template_instances` over the side's unit templates (`ROLES`), in the order its root body first uses them."""
-    tp = templates(shape.k, shape.tile, shape.dev, shape.hidden)
-    return PO.template_instances_query([tp[r] for r in ROLES[side]])
+    """`Q_template_instances` over the side's unit templates (`ROLES`, or under the cap `cap.ROLES`), in the order its root
+    body first uses them."""
+    if shape.cap:
+        from . import cap
+        tp, roles = cap.unit_templates(shape.k, shape.dev, shape.tile, shape.n), cap.ROLES
+    else:
+        tp, roles = templates(shape.k, shape.tile, shape.dev, shape.hidden), ROLES
+    return PO.template_instances_query([tp[r] for r in roles[side]])
 
 
 def units(fn: SpecializedDefinition) -> tuple[pc4.Unit, ...]:
     """Every unit of a Program built from the unit templates (`pc4.units`)."""
-    return pc4.units(fn, _ROLE_OF)
+    return pc4.units(fn, _role_of())
 
 
 def unit_cut(fn: SpecializedDefinition):
     """The whole Program's cut, checked by `cut.check_cut` (`pc4.unit_cut`)."""
-    return pc4.unit_cut(fn, _ROLE_OF)
+    return pc4.unit_cut(fn, _role_of())
 
 
 __all__ = ["ATOMS", "BASIS", "DERIVATIONS", "GRAM", "LINE", "PEELS", "PORTS", "P_ROW", "ROLES", "SEEDS", "TILE", "Shape",

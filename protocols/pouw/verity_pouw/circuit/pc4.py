@@ -498,7 +498,11 @@ class Unit:
     node: int                   # its root-body node
     member: int                 # its member of that batch node
     template: str = ""          # its template's descriptor id (`plan.template_strata`'s stratum)
-    where: tuple[int, ...] = field(default=())    # a row unit's row; a tile unit's (tile row, tile column)
+    where: tuple[int, ...] = field(default=())    # a row unit's row; a tile or tally unit's (tile row, tile column); a
+                                                  # word unit's (row, column)
+
+#: the roles whose units sit on a grid, one batch node per grid row (`cap`'s word and tally units beside the tile)
+GRID_ROLES = ("tile", "word", "tally")
 
 
 def units(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -> tuple[Unit, ...]:
@@ -506,12 +510,13 @@ def units(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -> t
     ``role_of`` maps each template's Definition (by id) to its role, Pearl-C4's by default."""
     role_of = _ROLE_OF if role_of is None else role_of
     out: list[Unit] = []
-    tile_rows = 0
+    grid_rows = dict.fromkeys(GRID_ROLES, 0)
     for j, nd in enumerate(fn.body.nodes):
         role, tid = role_of[id(nd.fn.defn)], descriptor_id(nd.fn)
         for m in range(nd.n if nd.form == "batch" else 1):
-            out.append(Unit(len(out), role, j, m, tid, (tile_rows, m) if role == "tile" else (m,)))
-        tile_rows += role == "tile"
+            out.append(Unit(len(out), role, j, m, tid, (grid_rows[role], m) if role in grid_rows else (m,)))
+        if role in grid_rows:
+            grid_rows[role] += 1
     return tuple(out)
 
 
@@ -535,6 +540,6 @@ def unit_cut(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -
     return g, owner, check_cut(g, owner, limits=None)
 
 
-__all__ = ["BASIS", "DERIVATIONS", "GRAM", "LINE", "PORTS", "P_ROW", "ROLES", "SEEDS", "TILE", "Shape", "Unit", "basis_fa",
-           "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "ok_word", "query", "templates", "unit_cut", "units",
-           "weight"]
+__all__ = ["BASIS", "DERIVATIONS", "GRAM", "GRID_ROLES", "LINE", "PORTS", "P_ROW", "ROLES", "SEEDS", "TILE", "Shape", "Unit",
+           "basis_fa", "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "ok_word", "query", "templates", "unit_cut",
+           "units", "weight"]

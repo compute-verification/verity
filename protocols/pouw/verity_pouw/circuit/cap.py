@@ -1,6 +1,7 @@
-"""Pearl-C's per-tile cap on a circuit (a prototype at small shapes; no Program calls it yet): the tile unit `Pc8Tile` with
-rev1's ``capOK`` (`DeviceRev1.lean`'s `pearlCTilesDevRev1`) decided on one more output, so the verifier reads the
-verdict and never the tile's codes, and the row unit `Pc8RowA` with the salt-dead counts that the cap reads.
+"""Pearl-C's per-tile cap on a circuit: rev1's ``capOK`` (`DeviceRev1.lean`'s `pearlCTilesDevRev1`) decided in gates on
+public ok words, so the verifier reads the verdict and never the tile's codes, with the row unit `Pc8RowA`'s salt-dead
+counts that the cap reads.  `pc8.Shape.cap` cuts the hiding call into a unit per word, the tile and its tally
+(`Pc8CallCap`; the split below); `Pc8TileCap` is the cap in one tile unit, the split's reference.
 
     template                          reads                                            computes and returns
     Pc8RowACap{K,DEV}                 `Pc8RowA`'s inputs                               `Pc8RowA`'s outputs, and the
@@ -9,6 +10,19 @@ verdict and never the tile's codes, and the row unit `Pc8RowA` with the salt-dea
                                                                                        promotions, and good
     Pc8TileCap{K,TM,TN,N,RHO,DEV}     `Pc8Tile`'s inputs, the A rows' ok words, their  `Pc8Tile`'s C̃ and U, and the
                                       salt-dead counts, every word's certificates      verdict (an ok word)
+
+    the split's units (`unit_templates`)
+    Pc8CapWordUnit{K,DEV}             A′_i ‖ P_A,i, B̃_j ‖ P_B,j, the word's            `Pc8CapWord`'s C̃ and U (the
+      (one per word)                  certificates                                     peel); its flags, their count,
+                                                                                       the later +0 promotions and
+                                                                                       good's ok word
+    Pc8CapStrip{K,TM,TN,N,RHO,DEV}    its TM A rows' ok words                          their admission bits (padded
+      (one per strip of TM rows)                                                       to 64) and the cap's bound at
+                                                                                       their passing count
+    Pc8CapTile{TM,TN}                 its words' C̃ and U                              the tile digest
+    Pc8CapTally{K,TM,TN,N,RHO,DEV}    its words' flags, counts, promotions and good,   the cap's verdict (an ok word)
+                                      its strip's admission bits and bound, its A
+                                      rows' salt-dead counts
 
 **The row** (`Pc8RowACap`) is `Pc8RowA`, node for node, plus ``sd``: per block of 32 elements, the count of elements whose
 support's two ends agree (`words.PouwBlackwellE4m3SaltDead`, `PouwHopperE4m3SaltDead`: the codes e4m3(atom(f32(α·x),
@@ -51,6 +65,25 @@ column C of the tile, Lean's per-tile cap at the device's prices, ρ = 1/RHO and
     gcd(N, G·fs·|C|), a table over |R| (`_cap_constants`, which refuses a shape whose sums could leave 31 bits);
   - the verdict: every passing row's words are good, and the inequality holds.
 The certificates (``cert``) are the prover's, from `pearl_c_debit`'s own bisection; any other certificate fails ``good``.
+
+**The split** (`pc8.Shape.cap`, `Pc8CallCap`): a word is the cap's proof unit, since a cap word is about 7.8M ANDs at
+K = 8,192 and a 64 × 64 tile of them does not stage.  The root holds the A rows (`Pc8RowACap`) and a strip unit per TM
+of them (`Pc8CapStrip`), then per strip its word units row by row, its tile units and their tallies.  Each value is
+computed once: a word unit computes its own chain (the window's unmasked words, which `Pc8CapWord` promotes into C̃) and
+its peel, so the tile reads C̃ and U and computes only their digest; the strip reads its rows' ok words and computes
+their admission bits and the bound at their passing count, once for every tile in the strip; and the tally reads each
+word's flags, their count, its later +0 promotions and good, the strip's bits and bound, and its rows' salt-dead counts,
+through their committed rows (`PORTS`; the cut is `pc8.unit_cut`'s).
+  - The tally's verdict is `Pc8TileCap`'s: every passing row's words are good, and the inequality holds.  It is the
+    tally's public output (``public`` in `PORTS`: the verifier reads it; no row holds it), beside the tile digest, and
+    the verifier accepts a drawn tile only when its tile check passes (the digest is the miner's h0) and the verdict is
+    ok.
+  - A drawn tile's closure holds its A rows, its strip, all TM·TN of its word units and its tally (`plan.tile_layout`):
+    every cap word is proved, never sampled.
+  - The cap's rows: A's salt-dead counts (``sd``), each word's ``cap-word`` (C̃ ‖ U) and ``cap-flags`` (flags ‖ their
+    count ‖ the later +0 promotions ‖ good) rows, and each strip's ``cap-rows`` (admission bits ‖ bound) row (`leaves`).  The word unit returns its flags padded to whole 16-bit
+    words with zero bits fixed in gates (as `pc4.ok_word` fixes an ok word's), so no bit of the row is outside its
+    ports at any k; the tally reads the first k/32.
 """
 from __future__ import annotations
 
@@ -59,6 +92,7 @@ from fractions import Fraction
 from functools import lru_cache
 from math import gcd
 
+from verity.commitments.rowleaf import ROLE_W, ROLE_X
 from verity.ir.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ir.refs import array_of, tuple_of
 from verity.ir.types import Array, Tuple, Value
@@ -71,6 +105,7 @@ from ..schemes import pearl_c as C
 from ..schemes import pearl_c_debit as D
 from ..schemes.pearl_c_device import DEVICES
 from . import boolean as _boolean  # noqa: F401  registers the windows' _v2 Definitions C-Flock's lowering falls back to
+from . import leaves as L
 from . import pc4, pc8
 from . import words as W
 
@@ -185,8 +220,8 @@ def _finite(e: pc4._Emit, ok, x):
     return _and(e, ok, e.call(F32IsFinite, x))
 
 
-#: the cap templates' advice (`pc8.PORTS`' class): Freeze's certificates, which the prover supplies and nothing binds; the
-#: cap tile's `pc8.PORTS` entry, with RowA's ``sd`` row and the public verdict, comes with its hiding form
+#: the cap templates' advice (`pc8.PORTS`' class): Freeze's certificates, which the prover supplies and nothing binds; in
+#: the split, the word unit's (`PORTS`)
 ADVICE = ("cert",)
 
 #: each core atom's window of masked words (`words.WINDOW`: G = 4)
@@ -332,14 +367,58 @@ def _tile_cap_sig(S_):
     return params, Tuple(Array(tm, Array(tn, F32)), Array(tm, Array(tn, F32)), OK)
 
 
+def _peel(e: pc4._Emit, dev: str, c, pa, pb):
+    """U: the device's four BF16 k16 steps from C̃ over P_A,i·P_B,j (`Pc8Tile`'s)."""
+    peel = pc8.PEELS[DEVICES[dev].peel.name]
+    u = c
+    for s in range(0, pc8.PEEL, 16):
+        u = e.call(peel, u, pa[s:s + 16], pb[s:s + 16])
+    return u
+
+
+def _row_elems(e: pc4._Emit, flags, sd, k: int):
+    """A row's forming elements: per atom block, 32 when every word of the row (``flags``, one per column) flags it, else
+    its salt-dead count."""
+    out = 0
+    for t in range(k // SLICE):
+        every = flags[0][t]
+        for f in flags[1:]:
+            every = _and(e, every, f[t])
+        out = _add(e, out, e.call(SelectI32, every, SLICE, sd[t]))
+    return out
+
+
+def _masked_add(e: pc4._Emit, sums, ok, row):
+    """``sums`` plus ``row``'s terms where ``ok``."""
+    return tuple(_add(e, s, e.call(SelectI32, ok, r, 0)) for s, r in zip(sums, row))
+
+
+def _bound(e: pc4._Emit, table, rows):
+    """⌊|R|·|C|·P/(RHO·g)⌋ at |R| = ``rows``: the table's entry (`_cap_constants`)."""
+    bound = table[0]
+    for r, t in enumerate(table[1:], 1):
+        bound = e.call(SelectI32, e.call(I32Eq, rows, r), t, bound)
+    return bound
+
+
+def _within(e: pc4._Emit, consts, sums, bound=None):
+    """The cap's inequality on the tile's sums (atoms, zeros, elems and, without ``bound``, rows), in its integer form
+    (module docstring), as a bit."""
+    atom, zero, n_g, elem_g, l_max, table = consts
+    atoms, zeros, elems = sums[:3]
+    debit = _add(e, _mul(e, atom, atoms), _mul(e, zero, zeros))
+    if bound is None:
+        bound = _bound(e, table, sums[3])
+    lhs = _add(e, _mul(e, n_g, debit), _mul(e, elem_g, elems))
+    return _and(e, e.call(I32Le, debit, l_max), e.call(I32Le, lhs, bound))
+
+
 def _tile_cap_body(B, S_, ac, bc, pa, pb, oka, sd, cert):
     e, k, dev = pc4._Emit(B), S_.K, S_.DEV
-    atom, zero, n_g, elem_g, l_max, table = _cap_constants(k, S_.TM, S_.TN, S_.N, S_.RHO, dev)
-    peel = pc8.PEELS[DEVICES[dev].peel.name]
+    consts = _cap_constants(k, S_.TM, S_.TN, S_.N, S_.RHO, dev)
     word = templates(k, dev)["word"]
     cs, us = [], []
-    atoms = zeros = elems = rows = 0
-    good = 1
+    sums, good = (0, 0, 0, 0), 1
     for i in range(S_.TM):
         ok = e.call(Bf16GtStrict, oka[i], 0)
         crow, urow, flags = [], [], []
@@ -347,35 +426,18 @@ def _tile_cap_body(B, S_, ac, bc, pa, pb, oka, sd, cert):
         row_good = 1
         for j in range(S_.TN):
             out = B.call(word, ac[i], bc[j], cert[i][j])
-            u = out[0]
-            for s in range(0, pc8.PEEL, 16):
-                u = e.call(peel, u, pa[i][s:s + 16], pb[j][s:s + 16])
             crow.append(out[0])
-            urow.append(u)
+            urow.append(_peel(e, dev, out[0], pa[i], pb[j]))
             flags.append(out[1])
             row_atoms = _add(e, row_atoms, _count(e, [out[1][t] for t in range(k // SLICE)]))
             row_zeros = _add(e, row_zeros, out[2])
             row_good = _and(e, row_good, out[3])
-        row_elems = 0
-        for t in range(k // SLICE):
-            every = flags[0][t]
-            for f in flags[1:]:
-                every = _and(e, every, f[t])
-            row_elems = _add(e, row_elems, e.call(SelectI32, every, SLICE, sd[i][t]))
-        atoms = _add(e, atoms, e.call(SelectI32, ok, row_atoms, 0))
-        zeros = _add(e, zeros, e.call(SelectI32, ok, row_zeros, 0))
-        elems = _add(e, elems, e.call(SelectI32, ok, row_elems, 0))
-        rows = _add(e, rows, e.call(SelectI32, ok, 1, 0))
+        sums = (*_masked_add(e, sums[:3], ok, (row_atoms, row_zeros, _row_elems(e, flags, sd[i], k))),
+                _add(e, sums[3], e.call(SelectI32, ok, 1, 0)))
         good = _and(e, good, _or(e, _not(e, ok), row_good))
         cs.append(array_of(crow))
         us.append(array_of(urow))
-    debit = _add(e, _mul(e, atom, atoms), _mul(e, zero, zeros))
-    bound = table[0]
-    for r, t in enumerate(table[1:], 1):
-        bound = e.call(SelectI32, e.call(I32Eq, rows, r), t, bound)
-    lhs = _add(e, _mul(e, n_g, debit), _mul(e, elem_g, elems))
-    within = _and(e, e.call(I32Le, debit, l_max), e.call(I32Le, lhs, bound))
-    return tuple_of(array_of(cs), array_of(us), pc4.ok_word(e, _and(e, good, within)))
+    return tuple_of(array_of(cs), array_of(us), pc4.ok_word(e, _and(e, good, _within(e, consts, sums))))
 
 
 Pc8TileCapDef = CompositeDefinition(
@@ -404,17 +466,240 @@ def certificates(a: Sequence[int], b: Sequence[int], dev: str = "sm120") -> list
     return out
 
 
+def _rho(dev: str, rho: int | None) -> int:
+    cap = DEVICES[dev].cap if rho is None else Fraction(1, rho)
+    if cap.numerator != 1:
+        raise DomainError(f"Pearl-C's cap circuit needs ρ = 1/RHO: not {cap}")
+    return cap.denominator
+
+
 @lru_cache(maxsize=16)
 def templates(k: int, dev: str = "sm120", tile: tuple[int, int] = (1, 1), n: int | None = None,
               rho: int | None = None) -> dict[str, SpecializedDefinition]:
     """The row of A with its salt-dead counts and the word at depth ``k`` on ``dev``, and the tile with its cap at
     ``tile``, the unit's ``n`` (the tile's columns by default) and ρ = 1/``rho`` (the device's `cap` by default)."""
-    cap = DEVICES[dev].cap if rho is None else Fraction(1, rho)
-    if cap.numerator != 1:
-        raise DomainError(f"Pearl-C's cap circuit needs ρ = 1/RHO: not {cap}")
     return {"row_a": bind(Pc8RowACapDef, K=k, DEV=dev), "word": bind(Pc8CapWordDef, K=k, DEV=dev),
-            "tile": bind(Pc8TileCapDef, K=k, TM=tile[0], TN=tile[1], N=n or tile[1], RHO=cap.denominator, DEV=dev)}
+            "tile": bind(Pc8TileCapDef, K=k, TM=tile[0], TN=tile[1], N=n or tile[1], RHO=_rho(dev, rho), DEV=dev)}
 
 
-__all__ = ["ADVICE", "FLAT_E", "Pc8CapWordDef", "Pc8RowACapDef", "Pc8TileCapDef", "SALT_DEAD", "WINDOWS", "certificates",
-           "templates"]
+# ---- the split ------------------------------------------------------------------------------------------------------------
+
+def flag_bits(k: int) -> int:
+    """A word unit's flags port: its k/32 flags padded to whole 16-bit words (the cap-flags row's)."""
+    return -(-k // (16 * SLICE)) * 16
+
+
+def _word_unit_sig(S_):
+    _d, ng = _promoted(S_.DEV, S_.K)
+    k = S_.K
+    return ((("a", Array(k, pc8.E4M3)), ("pa", pc8.P_ROW), ("b", Array(k, pc8.E4M3)), ("pb", pc8.P_ROW),
+             ("cert", Array(ng - 1, Array(2, F32)))),
+            Tuple(F32, F32, Array(flag_bits(k), BIT), I32, I32, OK))
+
+
+def _word_unit_body(B, S_, a, pa, b, pb, cert):
+    e, k = pc4._Emit(B), S_.K
+    out = B.call(templates(k, S_.DEV)["word"], a, b, cert)
+    flags = [out[1][t] for t in range(k // SLICE)]
+    pad = [e.c(1, 0)] * (flag_bits(k) - len(flags))
+    return tuple_of(out[0], _peel(e, S_.DEV, out[0], pa, pb), array_of(flags + pad), _wire(e, 32, _count(e, flags)),
+                    out[2], pc4.ok_word(e, out[3]))
+
+
+Pc8CapWordUnitDef = CompositeDefinition(
+    "Pc8CapWordUnit", 1, ("K", "DEV"), _word_unit_sig, _word_unit_body,
+    doc="One word of the split cap: `Pc8CapWord`'s C̃ and U (`Pc8Tile`'s peel from C̃), its flags padded to whole 16-bit "
+        "words with zero bits, their count, its later +0 promotions, and good as an ok word.",
+    conformance="protocol-defined")
+
+
+def _grid(tm: int, tn: int, t):
+    return Array(tm, Array(tn, t))
+
+
+Pc8CapTileDef = CompositeDefinition(
+    "Pc8CapTile", 1, ("TM", "TN"),
+    lambda S_: ((("c", _grid(S_.TM, S_.TN, F32)), ("u", _grid(S_.TM, S_.TN, F32))), L.DIGEST),
+    lambda B, S_, c, u: B.call(L.tile_digest(S_.TM, S_.TN), c, u),
+    doc="The split cap's tile: its words' tile digest (`leaves.PearlTileDigest` of their C̃ and U).",
+    conformance="protocol-defined")
+
+
+#: a strip's admission bits in its cap-rows row: the scheme's tile rows, so TM <= 64
+STRIP_BITS = pc8.TILE[0]
+
+
+def _strip_sig(S_):
+    _cap_constants(S_.K, S_.TM, S_.TN, S_.N, S_.RHO, S_.DEV)
+    if S_.TM > STRIP_BITS:
+        raise DomainError(f"Pearl-C's cap circuit takes at most {STRIP_BITS} rows a tile: TM = {S_.TM}")
+    return (("oka", Array(S_.TM, OK)),), Tuple(Array(STRIP_BITS, BIT), I32)
+
+
+def _strip_body(B, S_, oka):
+    e = pc4._Emit(B)
+    table = _cap_constants(S_.K, S_.TM, S_.TN, S_.N, S_.RHO, S_.DEV)[-1]
+    oks = [e.call(Bf16GtStrict, oka[i], 0) for i in range(S_.TM)]
+    pad = [e.c(1, 0)] * (STRIP_BITS - S_.TM)
+    return tuple_of(array_of(oks + pad), _wire(e, 32, _bound(e, table, _count(e, oks))))
+
+
+Pc8CapStripDef = CompositeDefinition(
+    "Pc8CapStrip", 1, ("K", "TM", "TN", "N", "RHO", "DEV"), _strip_sig, _strip_body,
+    doc="The split cap's strip of TM rows of A, once for every tile in it: its rows' admission bits, padded to 64 with zero "
+        "bits, and the cap's bound at its passing rows' count, ⌊|R|·|C|·P/(RHO·g)⌋.", conformance="protocol-defined")
+
+
+def _tally_sig(S_):
+    k, tm, tn = S_.K, S_.TM, S_.TN
+    _cap_constants(k, tm, tn, S_.N, S_.RHO, S_.DEV)
+    return ((("flags", _grid(tm, tn, Array(flag_bits(k), BIT))), ("atoms", _grid(tm, tn, I32)),
+             ("zeros", _grid(tm, tn, I32)), ("good", _grid(tm, tn, OK)), ("mask", Array(STRIP_BITS, BIT)),
+             ("bound", I32), ("sd", Array(tm, Array(k // SLICE, I32)))), OK)
+
+
+def _tally_body(B, S_, flags, atoms, zeros, good, mask, bound, sd):
+    e, k = pc4._Emit(B), S_.K
+    consts = _cap_constants(k, S_.TM, S_.TN, S_.N, S_.RHO, S_.DEV)
+    sums, bad = (0, 0, 0), 0
+    for i in range(S_.TM):
+        ok = mask[i]
+        row_atoms = row_zeros = 0
+        row_good = 1
+        for j in range(S_.TN):
+            row_atoms = _add(e, row_atoms, atoms[i][j])
+            row_zeros = _add(e, row_zeros, zeros[i][j])
+            row_good = _and(e, row_good, e.call(Bf16GtStrict, good[i][j], 0))
+        sums = _masked_add(e, sums, ok, (row_atoms, row_zeros, _row_elems(e, [flags[i][j] for j in range(S_.TN)], sd[i], k)))
+        bad = _or(e, bad, _and(e, ok, _not(e, row_good)))
+    return pc4.ok_word(e, _and(e, _not(e, bad), _within(e, consts, sums, bound)))
+
+
+Pc8CapTallyDef = CompositeDefinition(
+    "Pc8CapTally", 1, ("K", "TM", "TN", "N", "RHO", "DEV"), _tally_sig, _tally_body,
+    doc="The split cap's tally: `Pc8TileCap`'s verdict at ρ = 1/RHO on a unit of N columns as an ok word (every passing "
+        "row's words are good, and the cap's inequality holds), from its words' flags, flag counts, later +0 promotions "
+        "and good, its strip's admission bits and bound (`Pc8CapStrip`), and its rows' salt-dead counts.",
+    conformance="protocol-defined")
+
+
+@lru_cache(maxsize=16)
+def unit_templates(k: int, dev: str = "sm120", tile: tuple[int, int] = (1, 1), n: int | None = None,
+                   rho: int | None = None) -> dict[str, SpecializedDefinition]:
+    """The split's unit templates by role (`ROLES`): pc8's row of B, the row of A with its salt-dead counts and the word
+    unit at depth ``k`` on ``dev``, and the strip, the tile and its tally at ``tile``, the unit's ``n`` (the tile's
+    columns by default) and ρ = 1/``rho`` (the device's `cap` by default)."""
+    tm, tn = tile
+    capped = dict(K=k, TM=tm, TN=tn, N=n or tn, RHO=_rho(dev, rho), DEV=dev)
+    return {"row_b": pc8.templates(k, pc8.TILE, dev)["row_b"], "row_a": bind(Pc8RowACapDef, K=k, DEV=dev),
+            "strip": bind(Pc8CapStripDef, **capped), "word": bind(Pc8CapWordUnitDef, K=k, DEV=dev),
+            "tile": bind(Pc8CapTileDef, TM=tm, TN=tn), "tally": bind(Pc8CapTallyDef, **capped)}
+
+
+def _call_cap_units(B, k: int, tile: tuple[int, int], dev: str, a, ea, fa, fb, bc, pb, cert):
+    """The split call's units: (the tile digests and the tallies' verdicts, by tile row and column; ok)."""
+    tm, tn = tile
+    m, n = len(a), len(bc)
+    tp = unit_templates(k, dev, tile, n)
+    rows = B.batch(tp["row_a"], a, ea, fa, fb, axes=(0, 0, None, None))
+    ac, pa, oka, sd = (array_of([rows[i][f] for i in range(m)]) for f in range(4))
+    blocks = lambda x: x.reshape(Array(m // tm, Array(tm, x.type.elem)))           # noqa: E731
+    sds = blocks(sd)
+    strips = B.batch(tp["strip"], blocks(oka), axes=(0,))
+    digests, verdicts = [], []
+    for rs in range(m // tm):
+        words = [B.batch(tp["word"], ac[i], pa[i], bc, pb, cert[i], axes=(None, None, 0, 0, 0))
+                 for i in range(rs * tm, (rs + 1) * tm)]
+        grid = lambda f: array_of([array_of([array_of([words[i][cs * tn + j][f] for j in range(tn)])  # noqa: E731
+                                             for i in range(tm)]) for cs in range(n // tn)])
+        tiles = B.batch(tp["tile"], grid(0), grid(1), axes=(0, 0))
+        tallies = B.batch(tp["tally"], grid(2), grid(3), grid(4), grid(5), strips[rs][0], strips[rs][1], sds[rs],
+                          axes=(0, 0, 0, 0, None, None, None))
+        digests.append(array_of([tiles[cs] for cs in range(n // tn)]))
+        verdicts.append(array_of([tallies[cs] for cs in range(n // tn)]))
+    return array_of(digests), array_of(verdicts), oka
+
+
+def _verdicts(S_):
+    return Array(S_.M // S_.TM, Array(S_.N // S_.TN, OK))
+
+
+def _cert(S_):
+    _d, ng = _promoted(S_.DEV, S_.K)
+    return ("cert", Array(S_.M, Array(S_.N, Array(ng - 1, Array(2, F32)))))
+
+
+Pc8CallCapDef = CompositeDefinition(
+    "Pc8CallCap", 1, ("M", "K", "N", "TM", "TN", "DEV"),
+    lambda S_: (pc8._call_sig(S_)[0] + (_cert(S_),), Tuple(pc4.DIGESTS(S_), _verdicts(S_), Array(S_.M, OK))),
+    lambda B, S_, *a: tuple_of(*_call_cap_units(B, S_.K, (S_.TM, S_.TN), S_.DEV, *a)),
+    doc="`Pc8CallHidden` with the per-tile cap, cut into a unit per word, the tile and its tally: each tile's digest of C̃ "
+        "and U and its cap verdict by tile row and column (the verifier accepts a tile only when its digest is the "
+        "miner's and its verdict is ok), and each A row's admission; every word's certificates are the prover's.",
+    conformance="protocol-defined")
+
+
+def _check_cap_body(B, S_, a, ea, b, eb, fa, fb, g, cert):
+    bc, pb, ok_b = pc8._weight_units(B, S_.K, S_.DEV, b, eb, fa, fb, g)
+    return tuple_of(*_call_cap_units(B, S_.K, (S_.TM, S_.TN), S_.DEV, a, ea, fa, fb, bc, pb, cert), ok_b)
+
+
+Pc8CheckCapDef = CompositeDefinition(
+    "Pc8CheckCap", 1, ("M", "K", "N", "TM", "TN", "DEV"),
+    lambda S_: (pc8._check_sig(S_)[0] + (_cert(S_),),
+                Tuple(pc4.DIGESTS(S_), _verdicts(S_), Array(S_.M, OK), Array(S_.N, OK))),
+    _check_cap_body, doc="`Pc8CheckHidden` with the per-tile cap: `Pc8CallCap`'s outputs, then each B row's admission.",
+    conformance="protocol-defined")
+
+#: each split unit's ports (`pc8.PORTS`' classes), and ``public``: outputs the verifier reads, in no row (the tally's
+#: verdict)
+PORTS = {
+    "row_b": pc8.PORTS["row_b"],
+    "row_a": {"rows": (("fp32", ROLE_X, ("x",)), ("fp8-p", ROLE_X, (0, 1)), ("ok", ROLE_X, (2,)), ("sd", ROLE_X, (3,))),
+              "regions": {"e": "ea", "fa": "fa", "fb": "fb"}, "advice": ()},
+    "word": {"rows": (("fp8-p", ROLE_X, ("a", "pa")), ("fp8-p", ROLE_W, ("b", "pb")), ("cap-word", ROLE_X, (0, 1)),
+                      ("cap-flags", ROLE_X, (2, 3, 4, 5))), "regions": {}, "advice": ADVICE},
+    "strip": {"rows": (("ok", ROLE_X, ("oka",)), ("cap-rows", ROLE_X, (0, 1))), "regions": {}, "advice": ()},
+    "tile": {"rows": (("cap-word", ROLE_X, ("c", "u")), ("tile", ROLE_X, (0,))), "regions": {}, "advice": ()},
+    "tally": {"rows": (("cap-flags", ROLE_X, ("flags", "atoms", "zeros", "good")), ("cap-rows", ROLE_X, ("mask", "bound")),
+                       ("sd", ROLE_X, ("sd",))), "regions": {}, "advice": (), "public": (0,)},
+}
+#: the split's roles on each side, in the order its root body first uses them
+ROLES = {"weight": ("row_b",), "call": ("row_a", "strip", "word", "tile", "tally"),
+         "check": ("row_b", "row_a", "strip", "word", "tile", "tally")}
+ROLE_OF = {id(Pc8RowACapDef): "row_a", id(Pc8CapStripDef): "strip", id(Pc8CapWordUnitDef): "word",
+           id(Pc8CapTileDef): "tile", id(Pc8CapTallyDef): "tally"}
+
+
+def reads(tile: tuple[int, int]) -> dict[str, dict[str, int]]:
+    """Each split unit's rows read per port (`leaves.statement_rows`' ``reads``) at ``tile``."""
+    tm, tn = tile
+    cells = tm * tn
+    return {"row_b": {}, "row_a": {}, "strip": {"oka": tm}, "word": {}, "tile": {"c": cells, "u": cells},
+            "tally": {"flags": cells, "atoms": cells, "zeros": cells, "good": cells, "sd": tm}}
+
+
+def check_shape(shape) -> None:
+    """Refuse a `pc8.Shape` with ``cap`` outside the split: the cap is in the hiding Programs, on a device with a salt-dead
+    bit and a window of 4 atoms, at most 64 rows a tile, and its integer form fits 31 bits at the shape's tile and n."""
+    if not shape.hidden:
+        raise DomainError(f"Pearl-C's cap is in the hiding Programs: {shape} has cap and not hidden")
+    if DEVICES[shape.dev].atom.name not in SALT_DEAD:
+        raise DomainError(f"Pearl-C's cap circuit has no salt-dead bit for {shape.dev!r}'s atom")
+    if shape.tile[0] > STRIP_BITS:
+        raise DomainError(f"Pearl-C's cap circuit takes at most {STRIP_BITS} rows a tile: {shape}")
+    _cap_constants(shape.k, *shape.tile, shape.n, _rho(shape.dev, None), shape.dev)
+
+
+def call(shape) -> SpecializedDefinition:
+    return bind(Pc8CallCapDef, M=shape.m, K=shape.k, N=shape.n, TM=shape.tile[0], TN=shape.tile[1], DEV=shape.dev)
+
+
+def check(shape) -> SpecializedDefinition:
+    return bind(Pc8CheckCapDef, M=shape.m, K=shape.k, N=shape.n, TM=shape.tile[0], TN=shape.tile[1], DEV=shape.dev)
+
+
+__all__ = ["ADVICE", "FLAT_E", "PORTS", "Pc8CallCapDef", "Pc8CapStripDef", "Pc8CapTallyDef", "Pc8CapTileDef",
+           "Pc8CapWordDef", "Pc8CapWordUnitDef", "Pc8CheckCapDef", "Pc8RowACapDef", "Pc8TileCapDef", "ROLES", "ROLE_OF",
+           "SALT_DEAD", "STRIP_BITS", "WINDOWS", "call", "certificates", "check", "check_shape", "flag_bits", "reads",
+           "templates", "unit_templates"]
