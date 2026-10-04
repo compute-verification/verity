@@ -168,3 +168,4 @@ import FlockSoundness.Discharge.Hidden
 import FlockSoundness.Discharge.ZkCoins
 import FlockSoundness.Discharge.PrivateCircuit
 import FlockSoundness.Discharge.ZkHidden
+import FlockSoundness.Discharge.ScopeW
