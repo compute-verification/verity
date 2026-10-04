@@ -1,11 +1,11 @@
 """Novel communication intensity: the policy that throttles frontier training and leaves inference alone
-(`Nci.Protocol` in the main repo). Every isolation unit of the stream has at most `gamma` gates and reads at most
-`alpha` bits of novel information per gate. The stream's isolation units are its executions', joined where one reads
-state another wrote (`registration.isolation_units`), so a session is one unit however many steps it took, and state
+(`Nci.Protocol` in the main repo). Every inference unit of the stream has at most `gamma` gates and reads at most
+`alpha` bits of novel information per gate. The stream's inference units are its executions', joined where one reads
+state another wrote (`registration.inference_units`), so a session is one unit however many steps it took, and state
 it wrote itself is not novel to it: a session reads only its prompt, where a step on its own would read its whole KV
-cache. Any other bit is novel unless it is on the baseline, which is on no isolation
-unit's boundary; so the baseline must have been declared up front, before any epoch whose outputs could have shaped
-it, and the registration must name one of the `builders` declared then. Advice is novel too, and reaches a unit
+cache. Any other bit is novel unless it is on the baseline, which is on no inference unit's boundary; so the baseline
+must have been declared up front, before any epoch whose outputs could have shaped it, and the registration must name
+one of the `builders` declared then. Advice is novel too, and reaches a unit
 through the structure the builder gives it rather than through its boundary: the builder reads all of it, so any unit
 of the execution may depend on all of it, and each is charged it beside its boundary. And the rule binds only what is
 in the account: whatever ran in the compute that coverage leaves uncovered went unchecked, so at most `headroom` of
@@ -30,7 +30,7 @@ from verity.accounting.coverage.compute import ComputeCoverage
 from verity.accounting.utilization.work import Window
 from verity.primitives import partition as P
 from verity.primitives.events import Actor, Send, collect, receive
-from verity.primitives.registration import Closed, Execution, Registration, Stream, isolation_units
+from verity.primitives.registration import Closed, Execution, Registration, Stream, inference_units
 
 
 @dataclass(frozen=True)
@@ -59,7 +59,7 @@ class Period:
 
 @dataclass(frozen=True)
 class Nci:
-    gamma: int  # gates per isolation unit
+    gamma: int  # gates per inference unit
     alpha: float  # novel bits read per gate
     headroom: float  # the most of the compute capacity coverage may leave uncovered
     builders: frozenset[str]  # the ids of the builders declared up front
@@ -78,7 +78,7 @@ class Nci:
                 f"{coverage.headroom / coverage.capacity:.0%} of compute uncovered, over {self.headroom:.0%}"
             )
         try:
-            units = isolation_units(stream)
+            units = inference_units(stream)
         except ValueError as error:
             units = []
             reasons.append(str(error))
@@ -87,14 +87,14 @@ class Nci:
             if gates > self.gamma or novel > self.alpha * gates:
                 (i, u), steps = parts[0], len({i for i, _ in parts})
                 reasons.append(
-                    f"isolation unit {u} of execution {i}, over {steps} executions: {gates} gates reading {novel} novel"
+                    f"inference unit {u} of execution {i}, over {steps} executions: {gates} gates reading {novel} novel"
                     " bits"
                 )
         return (Send(Complies(stream.digest(), coverage.window, not reasons, coverage.delta, tuple(reasons))),)
 
 
 def _reads(stream: Stream, parts: Sequence[tuple[int, int]]) -> tuple[int, int]:
-    """An isolation unit of the stream's gates, and the novel bits it reads: each part's boundary but the state the
+    """An inference unit of the stream's gates, and the novel bits it reads: each part's boundary but the state the
     unit wrote itself, and the advice of each execution it is part of."""
     gates = novel = 0
     for i, u in parts:

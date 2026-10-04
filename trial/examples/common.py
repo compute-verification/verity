@@ -44,7 +44,7 @@ def load(name: str, n: int = 8, seed: int = 0) -> tuple[Circuit, list[tuple[int,
 @dataclass(frozen=True)
 class Batched:
     """The builder of a scheduler step: as many requests as the step's advice says, side by side through `circuit`,
-    sharing its baseline, each partitioned as `partition` (so each request is its own isolation units). The advice is
+    sharing its baseline, each partitioned as `partition` (so each request is its own inference units). The advice is
     the batch size less one, since how the scheduler batches is a runtime choice no one fixes ahead of time."""
 
     circuit: Circuit

@@ -6,7 +6,7 @@ The site is a fleet of six H100s and two A100s serving two models behind one sch
 several steps each and carry their state from step to step, as a decode step reads its KV cache (verity's FP32 adder,
 keeping a running sum: `Sessions`); a classifier's requests take one step each (verity's BF16 comparison). The
 builder, declared before the first epoch, routes each step to a model (`Routed`: a route bit, then the model's advice),
-and each session is one isolation unit of the stream however many steps it took. The census's facts per device are
+and each session is one inference unit of the stream however many steps it took. The census's facts per device are
 its peak (tries a second) and its memory (bytes), at toy scale. Each epoch is one run: the prover registers, takes the
 salt, streams the epoch's steps and closes the stream, and the verifier's view holds the account and NCI's verdict. A
 period is the epochs back to back, each window opening where the last closed (`nci.period`).
@@ -120,7 +120,7 @@ class Routed:
 
 @dataclass(frozen=True)
 class Training:
-    """A training step's builder: the step's requests as one isolation unit, as a batch's examples are once their
+    """A training step's builder: the step's requests as one inference unit, as a batch's examples are once their
     gradients are summed."""
 
     routed: Routed
@@ -230,7 +230,7 @@ SCENARIOS: dict[str, tuple[Site, bool | None, bool | None, str]] = {
     "flipped-bit": (Site(forge=flip), None, False, "one response bit wrong: priced into remote's bound"),
     "injected-state": (Site(forge=inject), False, False, "every continuing step reads state its session never wrote"),
     "unbatched": (Site(batch=1), True, True, "a step per session or request, each paying its own step's advice"),
-    "training": (Site(builder=Training(ROUTED)), False, False, "an undeclared builder, a step per isolation unit"),
+    "training": (Site(builder=Training(ROUTED)), False, False, "an undeclared builder, a step per inference unit"),
     "evicted-weights": (Site(held=0.7), True, True, "memory holds 70% of the weights: no policy reads memory yet"),
     "exfiltration": (Site(leaked=4096), True, True, "4 KiB leave beside the responses: no policy reads network yet"),
     "withheld-shares": (Site(withheld=True), False, False, "the shares never arrive: no verdict, which fails closed"),

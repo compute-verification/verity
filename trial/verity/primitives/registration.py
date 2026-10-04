@@ -12,11 +12,11 @@ wire, in wire order), but its state inputs. An execution that reads what an earl
 cache) reads it from the writer's root (`Stream.locate`), so a wire is committed once, by the execution that computed
 it, and the region that reads a wire reads what the region that wrote it committed. The verifier rebuilds each
 execution's circuit from its advice (`Stream`): integrity opens and proves against the roots, work keys each
-execution's work from its salt and root, and NCI checks the stream's isolation units. Every statement over the stream
+execution's work from its salt and root, and NCI checks the stream's inference units. Every statement over the stream
 names its digest. Today's reference for the commitment: `verity_sampled_proofs.one_stage.registration`.
 
-The stream is one circuit, cut into executions as the prover ran them. Its isolation units are the executions', joined
-where one reads state another wrote (`isolation_units`), so a session's steps are one isolation unit, as NCI's
+The stream is one circuit, cut into executions as the prover ran them. Its inference units are the executions', joined
+where one reads state another wrote (`inference_units`), so a session's steps are one inference unit, as NCI's
 inference guarantee has it. State links only within the stream: a session that outlives its epoch carries its state
 into the next one as fresh inputs.
 
@@ -151,8 +151,8 @@ def check(stream: Stream, scheme: CommitmentScheme) -> tuple[str, ...]:
     return tuple(why)
 
 
-def isolation_units(stream: Stream) -> list[list[tuple[int, int]]]:
-    """The stream's isolation units, each its parts (execution, isolation unit of that execution's partition): the
+def inference_units(stream: Stream) -> list[list[tuple[int, int]]]:
+    """The stream's inference units, each its parts (execution, inference unit of that execution's partition): the
     executions' own, joined where one reads state another wrote. Raises ValueError where `Stream.locate` does."""
     parent: dict[tuple[int, int], tuple[int, int]] = {}
 

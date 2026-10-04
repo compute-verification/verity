@@ -1,8 +1,9 @@
-"""Partitions: a circuit's gates split into isolation units, and each isolation unit into regions.
+"""Partitions: a circuit's gates split into inference units, and each inference unit into regions.
 
-Two readers need the circuit cut at two scales. NCI bounds each isolation unit: its gates, and the novel bits it reads.
+Two readers need the circuit cut at two scales. NCI bounds each inference unit (IU; `Nci.Protocol` calls it an
+isolation unit): its gates, and the novel bits it reads.
 Sampled proofs draw regions, the proof units, which must be narrow enough to commit and prove one at a time. Every
-region lies in one isolation unit, so a wire that crosses an isolation unit's boundary crosses a region's, and the
+region lies in one inference unit, so a wire that crosses an inference unit's boundary crosses a region's, and the
 commitment to the regions' boundaries holds every wire NCI reads (in the main repo, a `verity.ir.partition.Hierarchy`
 of two levels, the finer refining the coarser).
 
@@ -21,22 +22,22 @@ from collections.abc import Mapping, Sequence
 from verity.primitives.circuit import OPS, Circuit
 
 Region = tuple[int, ...]  # gate indices
-Partition = tuple[tuple[Region, ...], ...]  # isolation units, each split into regions
+Partition = tuple[tuple[Region, ...], ...]  # inference units, each split into regions
 
 
 def regions(partition: Partition) -> tuple[Region, ...]:
-    """Every region, isolation unit by isolation unit."""
+    """Every region, inference unit by inference unit."""
     return tuple(region for unit in partition for region in unit)
 
 
 def gates(unit: Sequence[Region]) -> Region:
-    """An isolation unit's gates."""
+    """An inference unit's gates."""
     return tuple(g for region in unit for g in region)
 
 
 @functools.cache
 def unit_of(partition: Partition) -> dict[int, int]:
-    """Each gate's isolation unit."""
+    """Each gate's inference unit."""
     return {g: u for u, unit in enumerate(partition) for g in gates(unit)}
 
 
@@ -85,12 +86,12 @@ def validate(circuit: Circuit, partition: Partition, max_width: int) -> tuple[st
 
 
 def whole(circuit: Circuit) -> Partition:
-    """The circuit as one isolation unit of one region: enough for replay, which needs no finer partition."""
+    """The circuit as one inference unit of one region: enough for replay, which needs no finer partition."""
     return ((tuple(range(len(circuit.gates))),),)
 
 
 def greedy(circuit: Circuit, max_width: int) -> Partition:
-    """The circuit as one isolation unit of consecutive regions, each grown while its boundary stays within
+    """The circuit as one inference unit of consecutive regions, each grown while its boundary stays within
     `max_width` wires."""
     unit: list[Region] = []
     start = 0

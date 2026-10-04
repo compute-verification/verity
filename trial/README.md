@@ -28,10 +28,10 @@ registration: the prover's builder, the program that builds each execution's cir
 bitstring of advice (the runtime choices no one could fix ahead of time: how requests were batched, which step a
 session continues, a preemption, an autotune pick), holding the baseline (weights, constants) as every circuit's first
 inputs. Then per execution its advice and a root over the boundary wires of its partition's regions, until the prover
-closes the stream: one epoch. A partition has two levels (`verity.primitives.partition`): isolation units, which NCI
+closes the stream: one epoch. A partition has two levels (`verity.primitives.partition`): inference units, which NCI
 bounds, each split into regions, which proofs sample. An execution may read state an earlier one wrote (as a decode
 step reads its KV cache): that wire is committed once, in the writer's root, so the step that reads it reads what the
-step that wrote it committed, and the stream's isolation units join through it: a session is one isolation unit, which
+step that wrote it committed, and the stream's inference units join through it: a session is one inference unit, which
 reads only its prompt however many steps it took. The verifier rebuilds each execution's circuit from its advice
 (`Stream`). Every statement over the stream names its digest.
 
