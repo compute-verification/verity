@@ -2,6 +2,11 @@ import FlockSoundness.Discharge.ZkReg.Defs
 import FlockSoundness.Discharge.ZkReg.Bind
 import FlockSoundness.Discharge.ZkReg.Checked
 import FlockSoundness.Discharge.ZkReg.Sound
+import FlockSoundness.Discharge.ZkReg.DefsH
+import FlockSoundness.Discharge.ZkReg.BindH
+import FlockSoundness.Discharge.ZkReg.CheckedH
+import FlockSoundness.Discharge.ZkReg.SoundH
+import FlockSoundness.Discharge.ZkReg.SoundHCustody
 import FlockSoundness.Discharge.ZkReg.Own
 
 /-!
@@ -12,4 +17,9 @@ draw (`OwnReads`, `regPaths`). `Bind`: the `--zk` rows without `pub.tables = non
 check at an accepted outcome (`checked_of_accepts`). `Sound`: `zk_session_soundR`. `Own`: the reads the verifier builds
 from F (`ownReads`, `drawnOwn`), its own at every accepted live outcome (`ownAtDraws_of_check`), and
 `zk_session_soundR_own`.
+
+At hidden outputs (`Stmt.setupHidden`): `DefsH`, the registered reads at setupHidden's drawn statement (`OwnReadsH`,
+`regPathsH`); `BindH`, the hidden-output `--zk` rows without `pub.tables = none` (`rsZHS`); `CheckedH`,
+`checked_of_acceptsH`; `SoundH`: `zk_session_soundHR`; `SoundHCustody`: `zk_session_soundHR_custody`, under
+`live-verifier`.
 -/
