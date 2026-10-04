@@ -93,9 +93,9 @@ def finding (own : Array Port) : Json :=
 `HmRow.PartitionFinding`), rather than taking them as stated. -/
 def derived (partition : Json) : Bool := (partition.getObjValAs? String "units").toOption == some "derived"
 
-/-- The unit each of the public file's instances is (its header's `units.indices`). -/
-def unitIndices (pub : Public) : V (Array Nat) := do
-  (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
+/-- The unit each of a public file's instances is, as its header `header` names them (`units.indices`). -/
+def unitIndices (header : Json) : V (Array Nat) := do
+  (← J.arr (← J.get header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
 
 /-- Port `reg`'s entry in the header's `registered`: the position and the path of each row of its table. -/
 def entry (pub : Public) (reg : Port) : V (Array Nat × Array ByteArray) := do
@@ -124,13 +124,16 @@ def badInstance (reg : Port) (t : Tables) (np p rows n : Nat) (positions indices
   (List.range n).find? fun i =>
     !(decide (ref t np p i < rows) && decide (reg.reads[indices.getD i 0]? = some (some (positions.getD (ref t np p i) 0))))
 
-/-- One port of the verifier's registered reads: a port of the circuit, whose rows are the registered rows (`Port.fits`),
-whose table rows all open the registered root, and whose instances each read the row at the position the verifier's
-program reads for their unit. -/
+/-- One port of the verifier's registered reads: a row of the circuit (an input port's, or a hidden-output statement's
+output row, §16.13, whose table is its instances' own rows, instance `i`'s ref `i`), an `hm96-sha512/row/v1` row as the
+registration commits one, whose rows are the registered rows (`Port.fits`), whose table rows all open the registered
+root, and whose instances each read the row at the position the verifier's program reads for their unit. -/
 def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (reg : Port) : V Unit := do
   let np := c.ports.size
   let some p := (List.range np).find? (fun p => c.ports[p]!.name == reg.name)
-    | throw s!"registered reads: {reg.name} is not an input port of the circuit"
+    | throw s!"registered reads: {reg.name} is not a row of the circuit (an input port, or an output port's row)"
+  if c.ports[p]!.v2 then
+    throw s!"registered reads: port {reg.name} is a {if c.ports[p]!.segs.isSome then HmRow.ROW_SCHEMA_SEG else HmRow.ROW_SCHEMA_V2} row, and {reg.value}'s registered rows are {HmRow.ROW_SCHEMA} rows"
   if !reg.fits c.ports[p]!.words then
     throw s!"registered reads: port {reg.name}'s rows are {c.ports[p]!.words} u16 words, not {reg.value}'s registered rows of {reg.words.getD 0} {reg.wordBits}-bit leaves"
   let (positions, paths) ← entry pub reg
@@ -151,14 +154,38 @@ def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (r
         throw s!"registered reads: port {reg.name}: unit {u} reads position {positions.getD (ref t np p i) 0}, and the verifier's program reads {want}"
       | _ => throw s!"registered reads: port {reg.name}: the verifier's program reads no row of {reg.value} in unit {u}"
 
+/-- A public file's header line, as `HmRow.loadPublic` reads it. -/
+def publicHeader (file : ByteArray) : V Json := do
+  let some nl := findByte file 10 | throw "public file: no header line"
+  let text ← match String.fromUTF8? (file.extract 0 nl) with
+    | some s => pure s
+    | none => throw "public file: header is not UTF-8"
+  match Json.parse text with
+  | .ok j => pure j
+  | .error e => throw s!"public file: header: {e}"
+
+/-- The unit of each instance of table `j` of a session of `count` tables over the registered population `publicFile`
+at the draw `draw`: the population's units (its header's `units.indices`) at the instances the table's statement holds,
+as `Stmt.setupTables` splits them. One table holds the draw's proved units (the whole population without a draw);
+of several, table `j` holds the `j`-th of `count` equal parts of the draw's units (of the population's without a draw). -/
+def tableUnits (publicFile : ByteArray) (draw : Option Json) (count j : Nat) : V (Array Nat) := do
+  let units ← unitIndices (← publicHeader publicFile)
+  let u? ← draw.mapM Draw.UnitDraw.ofJson
+  let insts := if count ≤ 1 then (u?.map (·.proved)).getD (Array.range units.size) else
+    let all := (u?.map (·.units)).getD (Array.range units.size)
+    let k := all.size / count
+    all.extract (j * k) (j * k + k)
+  return insts.map (units.getD · 0)
+
 /-- The statement's registered reads against the verifier's own `own` (`--registered`). The header's `registered` must
 name exactly `own`'s ports, each a port of the circuit and a table of a shared-row file: every table row's `b ‖ c`, as the
 value's row at its stated position, opens the registered root through its path, and every instance reads, by its ref,
-the position the verifier's program reads for its unit (`checkPort`; `FlockProofs.Registered`: `check_ok`). Without
-`own`, a statement that names registered reads is refused: its rows would be checked against no root. With `own`, the
-units must be `derived`: a unit's position is the verifier's, but which unit an instance is comes from its label, which
-binds nothing unless the verifier derived it. -/
-def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bool) : V Unit := do
+the position the verifier's program reads for its unit, instance `i`'s unit the `i`-th of `units ()` (`checkPort`;
+`FlockProofs.Registered`: `check_ok`). Without `own`, a statement that names registered reads is refused: its rows would
+be checked against no root. With `own`, the units must be `derived`: a unit's position is the verifier's, but which unit
+an instance is comes from its label, which binds nothing unless the verifier derived it. -/
+def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bool) (units : Unit → V (Array Nat)) :
+    V Unit := do
   let hdr := pub.header.getObjVal? "registered"
   let some own := own
     | if hdr.isOk then throw "registered reads: the statement reads registered values, and the verifier holds no registered roots (--registered)"
@@ -169,8 +196,22 @@ def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bo
   for (name, _) in kvs.toArray do
     if !own.any (·.name == name) then throw s!"registered reads: the statement names port {name} registered, and the verifier's registered reads do not"
   let some t := pub.tables | throw "registered reads: a registered port is a table of a shared-row file"
-  let indices ← unitIndices pub
+  let indices ← units ()
   own.toList.forM (checkPort c pub t indices)
+
+/-- An hm96 statement's registered reads (`check`): `st` is table `j` of a session of `count` tables over the registered
+population `publicFile` at the draw `draw`, its instances' units `tableUnits`, which the verifier reads from the
+population's own header rather than from the drawn statement's. A hidden-output statement's registered ports may be its
+output rows as well as its input rows (§16.13): an output row's table is its instances' own rows, each opened against the
+registered root at the position its unit reads, so the instance's output is that row of the registered value. -/
+def checkStmt (st : Stmt) (publicFile : ByteArray) (draw : Option Json) (count j : Nat) (own : Option (Array Port)) :
+    V Unit :=
+  check st.c st.pub own (derived st.partition) fun _ => tableUnits publicFile draw count j
+
+/-- A session's registered reads: each of its tables' statements `sts`, in order (`checkStmt`). -/
+def checkSession (sts : Array Stmt) (publicFile : ByteArray) (draw : Option Json) (count : Nat)
+    (own : Option (Array Port)) : V Unit :=
+  (List.range sts.size).forM fun j => checkStmt sts[j]! publicFile draw count j own
 
 end Registered
 end Flock

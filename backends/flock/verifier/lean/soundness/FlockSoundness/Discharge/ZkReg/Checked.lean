@@ -8,8 +8,9 @@ import FlockSoundness.Discharge.DecodeZL.Statements
 
 `checked_of_accepts`: at an outcome `verify --zk --registered F` accepts, the shadow layout's registered reads that are
 the verifier's own at the outcome's draw (`OwnReads`) are `Checked` at the outcome's registration, through `regPaths`.
-The one table's statement is setupH's at the record's draw `d`, over `HmRow.drawn c pub d` (`setupH_drawn`);
-`checkRegistered` accepting it is `Registered.check` accepting it (`checkRegistered_ok`), which opens each drawn
+The one table's statement is setupH's at the record's draw `d`, over `HmRow.drawn c pub d` (`setupH_drawn`), and the
+session's registered check is `Registered.check` on it at the units `Registered.tableUnits` reads (`check_of_accepts`):
+the population header's units at the draw's proved units (`FlockProofs.Registered.tableUnits_one`). It opens each drawn
 instance's row of each of `own`'s ports at the position `own` gives for its unit, through the path the header gives
 (`check_tables`, `checkPort_at`: `FlockProofs.Registered.check_ok` keeping the positions and paths). The drawn
 instance at `u`'s rank holds the population's row of `u` (`Hidden.drawn_digestW`), whose leaf is the layout's
@@ -27,22 +28,29 @@ theorem acceptsZK_of_R {I : Inputs} {own : Array Registered.Port} {t : Exec.Tran
   obtain ⟨spec, sts, hs, -, hshape, hv⟩ := h
   exact ⟨spec, sts, hs, hshape, hv⟩
 
-/-- `checkRegistered` accepting a statement is `Registered.check` accepting it. -/
-theorem checkRegistered_ok {st : Stmt} {r : Option (Array Registered.Port)} (h : checkRegistered st r = .ok ()) :
-    Registered.check st.c st.pub r (Registered.derived st.partition) = .ok () := by
-  unfold checkRegistered at h
-  split at h
-  · simp only at h
-    split at h
-    · exact absurd h (Registered.throw_ne_ok _ _)
-    · simpa using h
-  · simpa using h
+/-- **The registered check at an accepted outcome**: the session's one statement `st` is setupH's at the record's draw,
+and `Registered.check` accepts it against `own` at the units `Registered.tableUnits` reads for table 0. -/
+theorem check_of_accepts {I : Inputs} {own : Array Registered.Port} {t : Exec.Transcript} (hTags : TagsOk I)
+    (h : AcceptsZKR I own t) :
+    ∃ st, Stmt.setupH (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (recordDraw t.record) I.partition
+        I.program = .ok st ∧
+      Registered.check st.c st.pub (some own) (Registered.derived st.partition)
+        (fun _ => Registered.tableUnits I.publicFile (recordDraw t.record) I.count 0) = .ok () := by
+  obtain ⟨spec, sts, hs, hreg, -, -⟩ := h
+  have hh' : (zkTags I).hiddenOutputs = false := (zkTags_hiddenOutputs I).trans hTags.1
+  rcases Exec.setupTables_ok hh' hs with ⟨-, st, hst, -, rfl⟩ | ⟨hc', -⟩
+  swap
+  · exact absurd hTags.2.2.2 (by change 1 < I.count at hc'; omega)
+  have hck := Registered.checkSession_ok hreg 0 (by simp)
+  have e : (#[st] : Array Stmt)[0]! = st := rfl
+  rw [e] at hck
+  exact ⟨st, hst, hck⟩
 
-/-- `Registered.check` accepting with the verifier's own `own`: the public file has tables `t`, its header names the
-units `idx`, and `checkPort` accepts each of `own`'s ports. -/
+/-- `Registered.check` accepting with the verifier's own `own`: the public file has tables `t`, the units are `idx`, and
+`checkPort` accepts each of `own`'s ports. -/
 theorem check_tables {c : Circuit} {pub : Public} {own : Array Registered.Port} {derived : Bool}
-    (h : Registered.check c pub (some own) derived = .ok ()) :
-    ∃ t idx, pub.tables = some t ∧ Registered.unitIndices pub = .ok idx ∧
+    {units : Unit → V (Array Nat)} (h : Registered.check c pub (some own) derived units = .ok ()) :
+    ∃ t idx, pub.tables = some t ∧ units () = .ok idx ∧
       ∀ reg ∈ own, Registered.checkPort c pub t idx reg = .ok () := by
   unfold Registered.check at h
   simp only at h
@@ -76,6 +84,8 @@ theorem checkPort_at {c : Circuit} {pub : Public} {t : Tables} {indices : Array 
   · rename_i p hp
     split at h
     · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
+    split at h
+    · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
     · obtain ⟨⟨positions, paths⟩, hent, h⟩ := Registered.except_bind_ok h
       simp only at h
       split at h
@@ -97,6 +107,44 @@ theorem checkPort_at {c : Circuit} {pub : Public} {t : Tables} {indices : Array 
             · split at h <;> exact absurd h (Registered.throw_ne_ok _ _)
   · exact absurd h (Registered.throw_ne_ok _ _)
 
+set_option maxHeartbeats 2000000 in
+/-- **The population's header is the public file's first line**: `HmRow.loadPublic` keeps the header it parses, which
+is `Registered.publicHeader`'s. -/
+theorem loadPublic_header {tags : Flock.Tags} {c : Circuit} {file : ByteArray} {pop : Public}
+    (h : HmRow.loadPublic tags c file = .ok pop) : Registered.publicHeader file = .ok pop.header := by
+  unfold HmRow.loadPublic at h
+  unfold Registered.publicHeader
+  cases hf : findByte file 10 with
+  | none => simp only [hf] at h; exact absurd h (Refine.throw_ne_ok _ _)
+  | some nl =>
+    simp only [hf] at h ⊢
+    cases hs : String.fromUTF8? (file.extract 0 nl) with
+    | none => simp only [hs, throw_bind'] at h; exact absurd h (Refine.throw_ne_ok _ _)
+    | some s =>
+      simp only [hs, pure_bind] at h ⊢
+      cases hp : Lean.Json.parse s with
+      | error e => simp only [hp, throw_bind'] at h; exact absurd h (Refine.throw_ne_ok _ _)
+      | ok j =>
+        simp only [hp] at h ⊢
+        try dsimp only at h
+        try simp only [throw_bind'] at h
+        repeat' walk_step
+        all_goals
+          simp only [pure, Except.pure, Except.ok.injEq] at h
+          subst h
+          rfl
+
+/-- The drawn statement's unit at `u`'s rank among the draw's proved units is the population's unit of `u`. -/
+theorem drawnUnit {proved units : Array ℕ} {u : ℕ} (hu : u ∈ proved) :
+    (proved.map (units.getD · 0)).getD (proved.idxOf u) 0 = units.getD u 0 := by
+  have hi : proved.idxOf u < proved.size := Array.idxOf_lt_length_of_mem hu
+  have hget : proved[proved.idxOf u]'hi = u := by
+    have := Array.findIdx_getElem (xs := proved) (p := (· == u)) (w := hi)
+    simp only [beq_iff_eq] at this
+    exact this
+  rw [Array.getD_eq_getD_getElem? (xs := proved.map (units.getD · 0)), Array.getElem?_map,
+    Array.getElem?_eq_getElem hi, Option.map_some, Option.getD_some, hget]
+
 variable {mPts n : ℕ} {Reg : Type}
 
 /-- **The registered reads are checked at every accepted outcome.** At an outcome `verify --zk --registered F`
@@ -112,15 +160,9 @@ theorem checked_of_accepts (I : Inputs) (ht : I.tags.typed = false) (own : Array
     (hown : OwnReads own c pub o.2.2 rd.isRead rd.port rd.readAt) :
     rd.Checked o.1 (regPaths c pub o.2.2 rd.port) := by
   intro p hp
-  obtain ⟨u, q, d, D, dp, idx, rfl, hmem, hfind, hd, hD, hdp, hidx, hu, hread⟩ := hown p hp
-  obtain ⟨spec, sts, hs, hreg, -, -⟩ := hacc
-  have hh' : (zkTags I).hiddenOutputs = false := (zkTags_hiddenOutputs I).trans hTags.1
-  rcases Exec.setupTables_ok hh' hs with ⟨-, st, hst, -, rfl⟩ | ⟨hc', -⟩
-  swap
-  · exact absurd hTags.2.2.2 (by change 1 < I.count at hc'; omega)
-  change Stmt.setupH (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (recordDraw o.2.2.record) I.partition
-    I.program = .ok st at hst
-  rw [hd] at hst
+  obtain ⟨u, q, d, D, units, rfl, hmem, hfind, hd, hD, hu, hun, hread⟩ := hown p hp
+  obtain ⟨st, hst, hck⟩ := check_of_accepts hTags hacc
+  rw [hd] at hst hck
   have hcst : st.c = c := by
     have h1 := (setupH_spec ((zkTags_typed I).trans ht) hst).1
     rw [hc] at h1
@@ -128,29 +170,31 @@ theorem checked_of_accepts (I : Inputs) (ht : I.tags.typed = false) (own : Array
   obtain ⟨pop', hpop', hdr⟩ := Layout.setupH_drawn hst
   rw [hcst, hpub] at hpop'
   cases hpop'
-  rw [hcst, hdp] at hdr
-  have hpd : st.pub = dp := (Except.ok.inj hdr).symm
-  have hck := checkRegistered_ok (array_forM_ok hreg 0 (by simp))
-  simp only [List.getElem_toArray, List.getElem_cons_zero] at hck
-  rw [hcst, hpd] at hck
-  obtain ⟨tb, idx', htb, hidx', hports⟩ := check_tables hck
-  rw [hidx] at hidx'
-  cases hidx'
+  rw [hcst] at hdr hck
+  obtain ⟨tb, idx, htb, hidx, hports⟩ := check_tables hck
+  have hidx' : Registered.tableUnits I.publicFile (some d) I.count 0 = .ok idx := hidx
+  obtain ⟨header', units', D', hh', hun', hD', rfl⟩ := Registered.tableUnits_one hTags.2.2.2 hidx'
+  rw [loadPublic_header hpub] at hh'
+  cases hh'
+  rw [hun] at hun'
+  cases hun'
+  rw [hD] at hD'
+  cases hD'
   obtain ⟨p', positions, paths, hp', hent, hall⟩ := checkPort_at (hports _ hmem)
   rw [hfind] at hp'
   cases hp'
-  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.drawn_spec hdp
+  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.drawn_spec hdr
   rw [hD] at hD'
   cases hD'
   have hi : D.proved.idxOf u.val < D.proved.size := Array.idxOf_lt_length_of_mem hu
   obtain ⟨-, hreads, hopens⟩ := hall _ (by rw [hn]; exact hi)
-  rw [hread] at hreads
+  rw [drawnUnit hu, hread] at hreads
   have hra : rd.readAt (.inl (u, q)) =
       positions.getD (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) 0 := by
     simpa using hreads
   have hpath : regPaths c pub o.2.2 rd.port (.inl (u, q)) =
       paths.getD (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) ByteArray.empty := by
-    simp [regPaths, hd, hD, hdp, htb, hent, Except.toOption]
+    simp [regPaths, hd, hD, hdr, htb, hent, Except.toOption]
   have hleaf : ((laySh (Reg := Reg) ht dj y₀ hc hU (pub := pub)).regLeaf o.1 (.inl (u, q))).1 =
       Hm96.Default512.treeLeaf (pub.digest u.val q.val c.ports.size) := by
     show (H512 (K512.leafPrefix ++ (pub.digest u.val q.val c.ports.size).data.toList)).1 = _
@@ -163,8 +207,8 @@ theorem checked_of_accepts (I : Inputs) (ht : I.tags.typed = false) (own : Array
     simp only [beq_iff_eq] at this
     exact this
   have hdig : pub.digest u.val q.val c.ports.size =
-      Registered.tableRow dp tb q.val (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) := by
-    have h1 := Hidden.drawn_digestW hpub hdp hD (Layout.proved_lt_population hD) hi q.isLt
+      Registered.tableRow st.pub tb q.val (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) := by
+    have h1 := Hidden.drawn_digestW hpub hdr hD (Layout.proved_lt_population hD) hi q.isLt
     rw [hget] at h1
     rw [← h1]
     simp only [Public.digest, htb, Registered.tableRow, Registered.ref]

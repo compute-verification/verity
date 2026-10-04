@@ -177,9 +177,10 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
 ## Lean
 
 - The Lean packages are `backends/flock/verifier/lean/` (the executable verifier, no dependencies), its `level3/` (proofs
-  about the executable's definitions, Mathlib) and `soundness/` (the protocol's proofs, ArkLib), and
-  `protocols/pous/lean/` (POUS's guarantees, their proofs and grader, Mathlib), `protocols/pouw/lean/` (PoUW's games,
-  named assumptions and the proofs behind its γ, Mathlib), `protocols/network_warden/lean/` (the network
+  about the executable's definitions, Mathlib), `soundness/` (the protocol's proofs, ArkLib) and `bridge/` (C-Flock's
+  games, circuits and partitions as core's, and soundness against registered values in core's terms; `soundness/` and
+  core's), and `protocols/pous/lean/` (POUS's guarantees, their proofs and grader, Mathlib), `protocols/pouw/lean/` (PoUW's games,
+  named assumptions and the proofs behind its γ, Mathlib and core's), `protocols/network_warden/lean/` (the network
   warden's timing-channel guarantees and their proofs, Mathlib), `protocols/nci/lean/` (NCI's policy and guarantees, on
   core's), and `packages/verity/lean/` (the model every protocol states its guarantees in: circuits, partitions,
   declarations and games; and core's own proofs about `verity`'s definitions, such as `verity.ml.tc`'s step relation;
@@ -247,6 +248,10 @@ A guard never fails open, and an agent VM can be suspended at any moment, so
 nothing that bounds spend or preserves results may depend on one: pods bound
 themselves (`research pods create --max-hours`, under a line of the notes repo's
 `budgets.toml`), and runs preserve their results from the pod.
+
+Never print a secret's value. List environment variable names with `compgen -e` (or `env -0 | cut -z -d= -f1 | tr '\0' '\n'`),
+never `env | cut`, `env | grep` or `printenv | …`: a multi-line value's later lines print as if they were names. A secret
+is stored as one line (a key as base64, `NAME_B64`), and `tools/agent-guard/install.sh` puts a redacting `env` on the VM.
 
 Architectural rationale and human-facing reports belong in Notion;
 experimental evidence belongs in artifact storage. Temporary working notes
