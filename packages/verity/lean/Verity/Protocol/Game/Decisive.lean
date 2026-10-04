@@ -1,12 +1,11 @@
 import Verity.Protocol.Game
 
 /-!
-# Decisive games: decisiveness, not completeness (provisional; trusted)
+# Decisive games: decisiveness, not completeness
 
-**Provisional.** Core-only definitions about `Verity.Game`, held here beside `BatchSeq` until they move to core's
-package. A game is decisive (`Decisive`) when every message type it asks for is inhabited (`Productive`), so that every
-position has a run to the end, and two of its runs end differently (`Reaches`): for a verdict, some run accepts and some
-run rejects. A batch of decisive games reads as no other list of games (`Unambiguous`,
+A game is decisive (`Decisive`) when every message type it asks for is inhabited (`Productive`), so that every position
+has a run to the end, and two of its runs end differently (`Reaches`): for a verdict, some run accepts and some run
+rejects. A batch of decisive games reads as no other list of games (PoUW's `Pouw.Draft.Game.Unambiguous`, by
 `Pouw.Draft.Game.unambiguous_of_decisive`). Non-constancy is asked of the whole game only: a position from which every
 run rejects is allowed. A game with a constant verdict is not enough: its moves and the schedule's choices can be folded
 into another game of the batch.
@@ -17,9 +16,7 @@ accepts every table, satisfiable or not. So decisiveness gives `Unambiguous` and
 often the honest prover, or any prover, is accepted; that is the reference prover's completeness, which stays open.
 -/
 
-namespace Pouw.Draft.Game
-
-open Verity
+namespace Verity.Game
 
 variable {α : Type}
 
@@ -40,4 +37,4 @@ relabelled to its verdict: some run accepts and some run rejects. -/
 def Decisive (g : Game α) : Prop :=
   Productive g ∧ ∃ a b, a ≠ b ∧ Reaches g a ∧ Reaches g b
 
-end Pouw.Draft.Game
+end Verity.Game
