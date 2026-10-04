@@ -7,6 +7,9 @@ import Pouw.Protocol.D1
 import Pouw.Protocol.Dimension.Causal
 import Pouw.Protocol.Dimension.Defs
 import Pouw.Protocol.Dimension.Lift
+import Pouw.Protocol.Draft.BatchSeq
+import Pouw.Protocol.Draft.Decisive
+import Pouw.Protocol.Draft.SampledProofs
 import Pouw.Protocol.Fp8Atom.Atom
 import Pouw.Protocol.Fp8Atom.E4M3
 import Pouw.Protocol.Fp8Atom.Fp32
@@ -54,6 +57,7 @@ import Pouw.Protocol.PearlC.Fp4Skip
 import Pouw.Protocol.PearlC.Fp4Vectors
 import Pouw.Protocol.PearlC.Game
 import Pouw.Protocol.PearlC.Hidden
+import Pouw.Protocol.PearlC.HiddenSystem
 import Pouw.Protocol.PearlC.HiddenTileGame
 import Pouw.Protocol.PearlC.Instance
 import Pouw.Protocol.PearlC.PeelExact
@@ -66,6 +70,7 @@ import Pouw.Protocol.PearlC.SkipP
 import Pouw.Protocol.PearlC.Sm120
 import Pouw.Protocol.PearlC.Sm120Vectors
 import Pouw.Protocol.PearlC.Tile
+import Pouw.Protocol.PearlC.TileCheck
 import Pouw.Protocol.TileBound.AlignedExactDefs
 import Pouw.Protocol.TileBound.Defs
 import Pouw.Protocol.TileBound.Fp8Defs
@@ -123,10 +128,19 @@ inputs. P1, freezing under promotion (`Freeze`), and P3, the forming credit (`Fo
 cheap-binding lane's game (`Game`), named protocol (`Instance`), named assumption TT_OUT (`TTOut`) and γ from it
 (`Gamma`). The hidden audit, the tile check as a proof over core's `Verity.Game` (`Hidden`), its open obligation that a
 drawn tile's proof is sound (`HiddenTile`), what a proof system gives per tile to meet it (`HiddenTileGame`, met in
-`SecurityProofs` through core's batch lemma) and the sampled audit's γ under it (`HiddenGamma`). The sampled audit's
+`SecurityProofs` through core's batch lemma), the hidden audit of tile checks sound against registered values, which
+meets it under L3 (`HiddenSystem`), and the sampled audit's γ under it (`HiddenGamma`). The sampled audit's
 completeness on a population of activations (`Completeness`), its one assumption, the honest tiles' measured cap rate
 (`HonestCap`, empirical), the proof that every honest word is an FP32 word's (`HonestWords`) and completeness from the
 two (`Completeness`).
+
+## `Draft`: provisional text owned elsewhere
+
+The draft of sampled proofs' trusted text that `HiddenSystem` reads (`SampledProofs`: a proof system's data, its
+soundness against registered values and the honest prover's membership in its class), held until lean's sampled-proofs
+package lands, a batch played one game after another (`BatchSeq`), core-only, held until it moves to core, and
+decisive games (`Decisive`: every message type inhabited, two runs ending differently), whose batches read as no other
+list, core-only too.
 
 ## `TileBound`: the FP4-tile model (`docs/pouw/fp4-tile-model.md`, bc-d9842080)
 

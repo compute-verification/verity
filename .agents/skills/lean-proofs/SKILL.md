@@ -83,10 +83,20 @@ While proving, check one file at a time, and leave the whole package and the aud
   edit re-elaborates little.
 - **Push after every commit.** Work that lives only in a VM's worktree is lost when the VM is suspended.
 
-The replay refuses `X.congr_simp is declared by a replayed module and by one it imports`. `simp` realizes a structure
-constructor's congruence lemma (`ZeroHom.mk.congr_simp`) in your module when it rewrites under an unfolded bundled map,
-and Mathlib has realized it already. Don't unfold a `→+` or `→*` inside `simp`: prove its `_apply` lemma by `rfl` and
-simp with that.
+The replay refuses `X is declared by a replayed module and by one it imports from outside the set` when your module
+realizes a lemma that a package it requires has realized already. `lake build` doesn't catch this. There are two causes:
+
+- **Rewriting under a bundled map.** `simp` realizes a structure constructor's congruence lemma (`ZeroHom.mk.congr_simp`)
+  in your module when it rewrites under an unfolded bundled map, and Mathlib has realized it already. Don't unfold a `→+`
+  or `→*` inside `simp`: prove its `_apply` lemma by `rfl` and simp with that.
+- **Unfolding another package's definition.** `simp only [f]`, `unfold f` or `rw [f]` on another package's definition
+  realizes `f.eq_1` and `f.eq_def`. `simp` under a constructor with instance arguments (core's `Game.coin`) realizes
+  `Game.coin.congr_simp`. Use the owning package's lemmas, or close the step by `rfl`, `congrArg` or
+  `congrArg iInf (funext h)`.
+
+Before queueing an audit, check that each of your modules has an empty
+`env.header.moduleData[i].constNames.filter (!(`Pkg).isPrefixOf ·)`: run `lake env lean` on a scratch file that imports
+your modules.
 
 ## Assumptions and pins
 
