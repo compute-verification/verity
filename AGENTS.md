@@ -264,7 +264,8 @@ rather than accumulating them.
 - Qualitative writing that anyone else may need goes in the research notes, where it can be shared, and data goes in the
   evidence store (Daniel, 4 Oct). A Cursor agent store is its agent's scratch: nothing another agent or a person needs
   lives only there, and nothing cites a `store:` path, which no other VM can read. Copy such a file into the notes or the
-  store and cite its `note:` or `art:` id.
+  store and cite its `note:` or `art:` id. `research notes sync --path lanes/<lane>` publishes notes from any VM with
+  `RESEARCH_NOTES_TOKEN` set; `research notes push` pushes a lane's code branch, not its notes.
 - Evidence and generated output (explore JSON, plots, gate outputs, logs, run results, rendered tables and reports): the evidence store only, never Git, neither this repo nor the notes. `research run` publishes a run's outputs; anything else goes in with `research data put --kind K --file|--tree P --preserve`; cite it as `art:<id>`. Tables and reports are rendered on demand from code plus the store. An old `notes-asset:<path>` resolves through the notes README.
 - Architecture decisions: Notion (the coordinator publishes); no `docs/adr/` in the repo.
 - Evidence goes through `research run --tool … --campaign …`: every completed or failed run is auto-published as an Attempt in the evidence store (`~/.research/store`, `research data …`; contract in `tools/research/src/research/store/README.md`).
