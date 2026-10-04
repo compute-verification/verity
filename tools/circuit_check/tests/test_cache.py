@@ -450,13 +450,18 @@ def test_a_pure_move_of_a_registry_module_reuses_every_target(tmp_path):
     """`syn/top.py` (SynTop's module, which `load_registries` enumerates) moves to a new package `syn/fam/`, and the one import
     that names it is rewritten, split from the import it shared: no module's content changes, nor any binding unit, and the
     moved module is imported anyway (by the core binding), so every target is reused, SynTop's included.  The checks' `inspect`
-    lookups probed `syn/top.py`, which is held as the module, not the path."""
+    lookups probed `syn/top.py`, which is held as the module, not the path.  Each reused entry is stored again where its modules
+    are now, so a later edit of the moved module reruns SynTop alone, not every target that held the enumeration."""
     root = _tree(tmp_path)
     _run(root)
     assert any("syn.top" in _entry(root, t)["reads"]["present"] for t in ("SynOther_v1", "SynTop_v1"))
     _move(root, "syn/top.py", "syn/fam/top.py",
           ("syn/catalog.py", "from syn import extra, top", "from syn import extra\n    from syn.fam import top"))
+    out = _run(root)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["stored"] == 0
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(root, "syn/fam/top.py", "*operands(a, b)", "*operands(b, a)")
+    assert _run(root)["hits"] == ["SynOther_v1"]
 
 
 def test_a_move_that_is_not_pure_reruns_what_it_changes(tmp_path):

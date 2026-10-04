@@ -78,7 +78,7 @@ the entry would record (the tree changed during the run: a concurrent run rewrot
 outside the tree (another tree's copy, which no recorded read covers).
 
 Entries are files ``<dir>/<version>/<sha256 of the key>/<sha256 of the entry>.json``; there is no expiry and no path or time
-shortcut.
+shortcut.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
 """
 from __future__ import annotations
 
@@ -1291,8 +1291,9 @@ def _digests_of(root: Path, got: dict[str, list[str]], fresh: bool) -> dict[str,
 _EXACT = ("files", "dirs", "probes", "libs", "pins", "named", "missing")
 
 
-def _moved(root: Path, rec: dict, now: dict) -> bool:
-    """Whether the tree differs from what entry ``rec`` recorded only by where its modules are: each recorded module found, with
+def _moved(root: Path, rec: dict, now: dict, renamed: dict[str, str] | None = None) -> bool:
+    """Whether the tree differs from what entry ``rec`` recorded only by where its modules are (each module's name now in
+    ``renamed``, when one is given and it holds): each recorded module found, with
     the same content, at the name the recorded import sites resolve to now, starting from the `targets.py` units and the
     modules that still resolve by name, and propagating along each found module's own sites.
 
@@ -1372,10 +1373,12 @@ def _moved(root: Path, rec: dict, now: dict) -> bool:
             p = ".".join(parts[:i])
             if p not in image and (f := _resolve(root, p)) is not None and not _parsed(f)[3]:
                 return False
+    found: dict[str, str] = {}
     for n, d in rec.get("present", {}).items():
         if (d is None) != (now["present"].get(n) is None):
-            if d is None or n not in phi and len(_loaded(root).get(d, [])) != 1:
+            if d is None or len(names := _loaded(root).get(d, [])) != 1:
                 return False
+            found[n] = names[0]
     for pkg, kids in rec.get("enums", {}).items():
         cur = _children(root, phi.get(pkg, ""))
         if cur is None or kids is None:
@@ -1389,6 +1392,9 @@ def _moved(root: Path, rec: dict, now: dict) -> bool:
         for c, d in cur.items():
             if c not in kids and d not in was and ((f := _resolve(root, f"{phi[pkg]}.{c}")) is None or not _parsed(f)[3]):
                 return False
+    if renamed is not None:
+        renamed.update(phi)
+        renamed.update(found)
     return True
 
 
@@ -1399,8 +1405,14 @@ def _dir(cache: Path, k: dict) -> Path:
     return Path(cache) / k["version"] / hashlib.sha256(json.dumps(k, sort_keys=True, default=str).encode()).hexdigest()[:32]
 
 
+#: the reads that name modules, which a move renames
+_RENAMED = ("modules", "enums", "present")
+
+
 def lookup(cache: Path, k: dict, root: Path) -> tuple[dict, str] | None:
-    """(report, entry id) of an entry with key ``k`` whose every recorded read is unchanged under ``root``, else None."""
+    """(report, entry id) of an entry with key ``k`` whose every recorded read is unchanged under ``root``, else None.  An entry
+    found only where its modules moved (`_moved`) is stored again with its reads renamed to where they are, digested now (what
+    a run would record), so that a later edit of a moved module is told from a move."""
     d = _dir(cache, k)
     if not d.is_dir():
         return None
@@ -1418,12 +1430,15 @@ def lookup(cache: Path, k: dict, root: Path) -> tuple[dict, str] | None:
         now = _digests(root, {k: list(v) for k, v in rec.items()})
         if now == rec:
             return e["report"], p.stem
+        renamed: dict[str, str] = {}
         _INTERNAL.append(True)
         try:
-            if _moved(root, rec, now):
-                return e["report"], p.stem
+            hit = _moved(root, rec, now, renamed)
         finally:
             _INTERNAL.pop()
+        if hit:
+            got = {r: [renamed.get(n, n) for n in v] if r in _RENAMED else list(v) for r, v in rec.items()}
+            return e["report"], store(cache, k, root, got, e["report"]) or p.stem
     return None
 
 
