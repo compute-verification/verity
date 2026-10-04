@@ -63,7 +63,7 @@ from verity.ir.refs import Coll, concat, strided_view
 from verity.ir.types import Array
 
 from . import trace as TR
-from .forms import ONE, ZERO, Circuit
+from .forms import ONE, ZERO, Circuit, L
 
 __all__ = ["BLOCK_WORDS", "EVERY", "MOD", "CombChunk", "CombColumn", "CombEntry", "Point", "Shape", "and_count", "build_chunk",
            "build_column", "build_entry", "chunk", "chunk_circuit", "chunk_definition", "column", "column_circuit",
@@ -457,6 +457,15 @@ def _sum(fs):
     return reduce(xor, fs) if fs else ZERO
 
 
+def _lin(fs):
+    """The XOR of many forms in one pass (an untracked form: the trace writes it as a balanced tree over its bits)."""
+    s, c = set(), 0
+    for f in fs:
+        s ^= f.s
+        c ^= f.c
+    return L(frozenset(s), c)
+
+
 def _commit(C, X):
     return [x if x.is_const() or (len(x.s) == 1 and x.c == 0) else C._new("and", (x, ONE)) for x in X]
 
@@ -524,7 +533,7 @@ def build_column(C, SL: int, ps: Sequence[Point], COL: int, a: Sequence, b: Sequ
         e, ae, er = _tables(p)
         w = er[COL >> SKIP]
         ew, aew = [gmul(w, v) for v in e], [gmul(w, v) for v in ae]
-        out.append([_sum([a[i] for i in range(1 << SL) if (aew[i] >> k) & 1] + [b[i] for i in range(1 << SL) if (ew[i] >> k) & 1])
+        out.append([_lin([a[i] for i in range(1 << SL) if (aew[i] >> k) & 1] + [b[i] for i in range(1 << SL) if (ew[i] >> k) & 1])
                     for k in range(128)])
     return out
 
