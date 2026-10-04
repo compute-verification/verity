@@ -494,7 +494,12 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
     a.add_argument("--dry-run", action="store_true")
     for p in (d, i, a):
         p.add_argument("--no-fetch", action="store_true", help="don't `git fetch origin main` first")
-    ns = ap.parse_args(argv)
+    # argparse ends a subcommand's positionals at its first option, so paths after --by or --ref come back unrecognized
+    ns, extra = ap.parse_known_args(argv)
+    if extra and ns.cmd != "drift" and not any(x.startswith("-") for x in extra):
+        ns.paths += extra
+    elif extra:
+        ap.error(f"unrecognized arguments: {' '.join(extra)}")
     if not ns.no_fetch:
         subprocess.run(["git", "-C", str(repo), "fetch", "-q", "origin", "main"], capture_output=True)
     nodes = load(manifest, manifest_at(ns.ref, repo) if manifest == MANIFEST else None)

@@ -1,19 +1,27 @@
-"""`lean_audit`: check's Lean audit step. `tools/lean/audit.py --all --build`, with passes reused and dependencies kept warm.
+"""`lean_audit`: Lean's audit job, which `check` runs as its lean-audit step. `tools/lean/audit.py --build` on the packages
+whose passes can't be reused, with dependencies kept warm.
 
-    python tools/check/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR]
-    python tools/check/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
-    python tools/check/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
+    python tools/lean/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR]
+    python tools/lean/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
+    python tools/lean/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
+    python tools/lean/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
 
 A package's verdict is reused while everything its audit reads is unchanged. Its key hashes:
 - the tracked files of the package, less the Lake packages nested in it (`audit.lean_modules` skips them);
 - the same for each package it requires by path (`audit.path_deps`);
-- `tools/lean/` (the auditor and its controls), this file and `common.py`, the helpers it imports: not `check.py`, which only
-  launches it, so an edit to `check.py` alone keeps every package's verdict;
+- `tools/lean/` (the auditor and this file) and `tools/check/common.py`, the helpers it imports: not `check.py`, which only
+  launches it, so an edit to `check.py` alone keeps every package's verdict. Nor `tools/lean/tests/` (the controls, which the
+  `tools/lean` suite runs) or its `*.md`, which the audit never reads: the scratch tree leaves them out too, so a read of one
+  would fail there;
 - the package's `lean-toolchain` and `lake-manifest.json`, which pin the toolchain and the fetched dependencies.
 
 When one package misses, the audit runs on a scratch tree holding only the missed packages' inputs, from that tree's own copy of
 `tools/lean`. So a read of anything outside a key finds nothing, and the audit fails there instead of a stale pass being kept
-(the counterpart of `suites.py`'s read guard). Every package in the scratch tree is audited, without the controls: they test
+(the counterpart of `suites.py`'s read guard). Only the missed packages are audited. A package one of them requires by path is
+in the tree and built as far as it imports it, but not audited again: what vouches for its modules is its own pass, under its
+own key, and the run passes only when every package has one. The dependent's axiom walk follows its declarations into those
+modules, but its replay and its record's `dependencies` (fetched packages and the toolchain) don't cover them. The controls
+don't run here: they test
 the auditor, so the `tools/lean` suite runs them, cached on `tools/lean/`, not again on every package's miss. Each pass is
 stored under its key, and a failure is never stored. One read is outside the scratch tree: a package test's `generate` (`runs`
 in `lean-audit.json`) reads this checkout (`audit.py --repo`). Its output is used only with the SHA-256 the record holds for
@@ -66,7 +74,7 @@ def _module(path: Path, name: str):
     return m
 
 
-#: every file this step loads is in `inputs`: this module, `common.py` and `tools/lean/` (`test_lean_audit.py` holds it)
+#: every file this step loads is in `inputs`: `tools/lean/` (this module among them) and `common.py` (`test_lean_audit.py` holds it)
 COMMON = _module(ROOT / "tools" / "check" / "common.py", "check_common_for_lean_audit")
 
 
@@ -99,14 +107,14 @@ def path_deps(pkg: str) -> list[str]:
 
 
 #: How the audit runs, and so part of every key
-FLAGS = ["--all", "--no-controls", "--build"]
+FLAGS = ["--build"]
 
 
 def inputs(pkg: str, files: list[str]) -> list[str]:
     """Every tracked file an audit of ``pkg`` can read."""
     own = [f for p in (pkg, *path_deps(pkg)) for f in own_files(p, files)]
-    tool = [f for f in files if f.startswith(LEAN_TOOL)]
-    return sorted({*own, *tool, "tools/check/lean_audit.py", "tools/check/common.py"})
+    tool = [f for f in files if f.startswith(LEAN_TOOL) and not f.startswith(LEAN_TOOL + "tests/") and not f.endswith(".md")]
+    return sorted({*own, *tool, "tools/check/common.py"})
 
 
 def components(pkg: str, files: list[str], flags: list[str]) -> dict:
@@ -171,7 +179,7 @@ def deps_key(pkg: Path) -> str | None:
     return hashlib.sha256(m.read_bytes() + b"\0" + (pkg / "lean-toolchain").read_bytes()).hexdigest()
 
 
-PIN = "tools/check/lean-deps.json"
+PIN = "tools/lean/lean-deps.json"
 #: the presigned URLs sent with a recorded run, {deps_key: URL}; `check.py` moves the file out of the run directory
 URLS = "lean-deps-urls.json"
 URL_TTL_S = 6 * 3600
@@ -340,7 +348,7 @@ def transient(rep: dict) -> bool:
 
 def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: Path, cache: Path, deps: Path, fresh: bool,
            log, urls: dict[str, str] | None = None, comps: dict | None = None) -> tuple[list[str], list[str]]:
-    """Audit ``missed`` (and the packages they require by path) on a scratch tree of their inputs, and store each pass.
+    """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), and store each pass.
     Returns (the failed, the audited)."""
     deps.mkdir(parents=True, exist_ok=True)
     # beside the dependencies: moves, not copies. Resolved, because audit.py names each package by its resolved path, and a
@@ -353,13 +361,13 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     try:
         union = sorted({f for p in missed for f in inputs(p, files)})
         scratch_tree(work, union)
-        audited = packages(union)
+        audited = sorted(missed)
         with ThreadPoolExecutor(max_workers=max(1, len(audited))) as ex:
             list(ex.map(lambda p: warm.take(work / p, log), audited))
         env = {**os.environ, "LEAN_NUM_THREADS": str(COMMON.cores())}
         t0 = time.monotonic()
         (out / "audit.json").unlink(missing_ok=True)
-        r = subprocess.run([sys.executable, str(work / "tools" / "lean" / "audit.py"), *FLAGS, "--root", str(work),
+        r = subprocess.run([sys.executable, str(work / "tools" / "lean" / "audit.py"), *FLAGS, *(str(work / p) for p in audited),
                             "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
         doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["audit.py"]}
@@ -488,12 +496,45 @@ def pin(run_id: str) -> int:
     return 0
 
 
+def restore_into(pkg: str, log=print) -> int:
+    """`--restore PKG` (`tools/lean/setup.sh`): PKG's pinned bundle from the store as its `.lake/packages`, when it has none.
+    0 also when there is nothing to restore (no pin for its manifest and toolchain, or no store remote here): `lake` then
+    fetches them itself."""
+    from research.store.local import object_key
+    from research.store.remote import ConfigError, load_remote
+
+    d = (ROOT / pkg).resolve()
+    if (k := deps_key(d)) is None or (d / ".lake" / "packages").exists():
+        return 0
+    if (p := pins().get(k)) is None:
+        log(f"lean-audit: {pkg}: no bundle is pinned for its manifest and toolchain ({k[:12]}); lake fetches them")
+        return 0
+    try:
+        r = load_remote()
+    except ConfigError:
+        r = None
+    if not hasattr(r, "presign"):
+        log(f"lean-audit: {pkg}: no store remote here to fetch its pinned bundle from; lake fetches them")
+        return 0
+    (d / ".lake").mkdir(exist_ok=True)
+    store = Path(tempfile.mkdtemp(prefix="deps-", dir=d / ".lake"))
+    try:
+        if not restore(store, k, r.presign(object_key(p["sha256"]), 3600), p, pkg, log):
+            return 1
+        os.replace(store / k, d / ".lake" / "packages")
+    finally:
+        shutil.rmtree(store, ignore_errors=True)
+    return 0
+
+
 def main(argv: list[str]) -> int:
     # a manual stop or a runner's timeout sends SIGTERM to check.py's whole process group: as SIGINT, it runs `_audit`'s finally,
     # which removes the scratch tree (about 60 GB on a node, left behind by every stopped check otherwise)
     signal.signal(signal.SIGTERM, signal.default_int_handler)
     if argv[:1] == ["--pin"] and len(argv) == 2:
         return pin(argv[1])
+    if argv[:1] == ["--restore"] and len(argv) == 2:
+        return restore_into(argv[1])
     if argv[:1] == ["--explain"] and len(argv) in (2, 4):
         cache = Path(argv[3]) if len(argv) == 4 and argv[2] == "--cache" else COMMON.cache_dir() / "lean-audit"
         rc, lines = explain(argv[1], cache)

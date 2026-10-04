@@ -226,17 +226,56 @@ The report has the per-link bandwidth, the utilization and padding share, the cl
 range the honest prover declared, the first-frame latency it declared (the p50 and p99 of its declared δ, in ms), the
 shaping delay (hand time minus ready time, over every frame), the capacity per day, and the K charge by span.
 
+## The active warden (`active`)
+
+`active.Proxy` runs the wardens on one boundary link of a live byte stream. It is an asyncio TCP proxy, the I/O shell
+around `grid.Warden`, `schedule`'s handing rule, `commitment` and `audit`, and it adds no format. Its records are
+`grid.Record`s, published raw or through `commitment.commit`, and `Audit.check_link` and `check_ingress_link` read
+them.
+
+- **The link** is one TCP connection to the peer outside. Every frame on it is B bytes: a header (kind u8, stream u32,
+  length u32), the payload, then zero fill. Padding is B zero bytes. Inside, each stream has its own connection to the
+  server.
+- **Egress:**
+  - **Framing.** The server's bytes on a stream are cut after every `\n\n`, the end of a server-sent event, so a
+    frame's content is fixed by the bytes and never by how they were read. Its `id:` is its position in the Program's
+    canonical order.
+  - **Anchor, index and ready bucket.** A frame is anchored at the egress bucket in which ingress released its
+    request's last frame. Its logical index is its position in its stream. Read at time s, it is ready at ⌊s/τ_b⌋ + 1.
+  - **Handing.** `Shaper` hands it at `max(h(k), ready(k), last)`, `run_shaper`'s rule under the declared sync of its
+    anchor's window. The egress `Warden` releases min(queue, r) frames per bucket, left-packed, and r − n padding
+    frames follow them on the wire.
+- **Ingress:** a frame read at time s is enqueued at bucket ⌈s/τ_in⌉ and released by the ingress `Warden` at r_in
+  (`Bucketer`, `calibration.size_ingress_ms`'s model).
+- **Advice:** the declared syncs, one per window, are given before the run.
+- **Faults fail closed** (W6). Each one maps to a status:
+
+  | Fault | Status |
+  |---|---|
+  | A tick that runs more than `slack` after its boundary. Its bucket is still emitted, as padding, so no bucket slips into the next | `monitor-unavailable` |
+  | More than a bucket left unwritten on the link at a tick | `delivery-refused` |
+  | A server that refuses a stream | `delivery-refused` (ingress) |
+  | The shaper's buffer or the queue past Q | `overflow` |
+  | A declared sync outside Σ_sync | `coverage-never-established` |
+  | An event without a position, with one already seen, longer than a frame, or on a stream with no released request; bytes left unframed at a stream's end | `malformed` |
+- **The slack** bounds how late a tick may run: 25 ms by default, a quarter bucket. A deployment sets it from the jitter
+  its timing bounds assume (J).
+
+The clock and the sleep are injected (`VirtualClock` serves a run driven event by event). `Shaper` and `Bucketer` do no
+I/O, so the tests drive real sockets without reading the wall clock. `benchmarks/network_traces/active_replay.py`
+replays recorded traces through the proxy in real time, and on an injected clock.
+
 ## Tests
 
 `uv run tools/check/suites.py verity-network-warden`. The tests enumerate small horizons, so they check the Lean
-statements on examples and prove nothing. By name, they mirror 19 of the Lean package's 51 pins, each a guarantee
-`NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, and its three proved but unpinned lemmas:
+statements on examples and prove nothing. By name, they mirror 19 of the Lean package's 51 guarantees, each
+`NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, and its three proved lemmas without a record:
 - **`test_network_warden_grid.py`:**
-  - Proposition 2's ten pins, by enumeration: `SecurityProofs.CardFree`, `SecurityProofs.CardLeftPacked`,
+  - Proposition 2's ten guarantees, by enumeration: `SecurityProofs.CardFree`, `SecurityProofs.CardLeftPacked`,
     `SecurityProofs.FillInjective`, `SecurityProofs.ExistsFillOfLeftPacked`, `SecurityProofs.CardCountsEqLe`,
     `SecurityProofs.CardCountsLeLe`, `SecurityProofs.ReleasedSelf`, `SecurityProofs.SumReleasedLe`,
     `SecurityProofs.EncardFifoGrids` and `SecurityProofs.EncardFifoGridsLeOfAvailable`;
-  - the unpinned `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid` (`NetTiming.SecurityProofs.Occupancy`);
+  - the lemmas `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid` (`NetTiming.SecurityProofs.Occupancy`);
   - the warden's semantics, which Lean takes as hypotheses (W4 packing, W5's untimed status, W6 fail-closed);
 - **`test_network_warden_capacity.py`:**
   - `SecurityProofs.EncardLeProdOfBranching`, the tree lemma;
@@ -260,8 +299,14 @@ statements on examples and prove nothing. By name, they mirror 19 of the Lean pa
   - the committed audit's verdicts equal the raw audit's;
 - **`test_network_warden_calibration.py`:** the calibration tool, and the honest prover's choice against its rule by
   brute force, on one link and on several under one clock;
+- **`test_network_warden_active.py`:** the active warden over localhost sockets on an injected clock:
+  - `Shaper` is `run_shaper`'s rule on random instances;
+  - an honest run's records, hand times and wire are the Program's, accepted raw and committed;
+  - senders that burst, spread, or pick their write times at random or by bits give the same wire, byte for byte;
+  - a frame held past every sync is a mismatch;
+  - a late tick, an overrun, a refused stream and out-of-set advice each fail closed;
 
-No test mirrors the other eight pins of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
+No test mirrors the other eight guarantees of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
 `SecurityProofs.EncardDecodableLe`, `SecurityProofs.NoFaultOfAccepted`, `SecurityProofs.RecordedRowEqFill`,
 `SecurityProofs.EncardAccSeqsLeAdvice`, `SecurityProofs.EncardAccSeqsLeBlocksCounts`,
 `SecurityProofs.EncardDecodableLeBlocks`, `SecurityProofs.EncardDecodableLeConstantRate`), nor the ingress bound's four
@@ -272,3 +317,11 @@ per-window forms (`SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`,
 `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow`), and the sixteen witnesses (thirteen in
 `NetTiming.SecurityProofs.Sanity`, three in `NetTiming.SecurityProofs.Schedule`) have no
 Python counterpart.
+
+**The difftest** checks the definitions those statements are about, not the statements. On 10,000 random instances,
+`NetTiming`'s definitions, evaluated, give what this package gives. The Lean side is `expectedRow`, with `Accepted` of
+`constantRate` and `StatusComplete` decided per prefix of whole windows. The Python side is `expected_grids`,
+`check_link`'s verdicts with the first differing bucket, `check_ingress_link`, and each prefix's acceptance.
+`lean/scripts/difftest_vectors.py` writes the instances and this package's results, and the Lean audit runs
+`lean/NetTimingDifftest.lean` on them (`runs` in `lean/lean-audit.json`). `test_network_warden_lean_difftest.py`
+checks that the data the record pins is still this package's.
