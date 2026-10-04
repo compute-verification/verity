@@ -7,6 +7,11 @@ import FlockSoundness.Discharge.ZkReg.BindH
 import FlockSoundness.Discharge.ZkReg.CheckedH
 import FlockSoundness.Discharge.ZkReg.SoundH
 import FlockSoundness.Discharge.ZkReg.SoundHCustody
+import FlockSoundness.Discharge.ZkReg.DefsHJ
+import FlockSoundness.Discharge.ZkReg.BindHJ
+import FlockSoundness.Discharge.ZkReg.CheckedHJ
+import FlockSoundness.Discharge.ZkReg.SoundHJ
+import FlockSoundness.Discharge.ZkReg.SoundHJCustody
 
 /-!
 # One `--zk` sampled session with registered reads
@@ -19,4 +24,9 @@ At hidden outputs (`Stmt.setupHidden`): `DefsH`, the registered reads at setupHi
 `regPathsH`); `BindH`, the hidden-output `--zk` rows without `pub.tables = none` (`rsZHS`); `CheckedH`,
 `checked_of_acceptsH`; `SoundH`: `zk_session_soundHR`; `SoundHCustody`: `zk_session_soundHR_custody`, under
 `live-verifier`.
+
+At hidden outputs and `J` tables (the production configuration): `DefsHJ`, the registered reads at the table each unit
+is drawn into (`OwnReadsHJ`, `regPathsHJ`); `BindHJ`, the `J`-table rows without `pub.tables = none` (`rsZHJS`);
+`CheckedHJ`, `checked_of_acceptsHJ`; `SoundHJ`: `zk_session_soundHJR`; `SoundHJCustody`: `drawOkZKHJ_of_file` and
+`zk_session_soundHJR_custody`, under `live-verifier`.
 -/
