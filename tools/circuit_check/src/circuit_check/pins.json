@@ -429,6 +429,9 @@
   "MoeRouterSigmoidScore_v2": {
    "and": 30795
   },
+  "MoeSharedCombine_v1{H=8,RSF=1072064102}": {
+   "and": 12632
+  },
   "MoeSumCoordinate_v2{TOPK=8}": {
    "and": 5222
   },
@@ -530,6 +533,9 @@
   },
   "RMSNormWarpsTriton_v1{N=16}": {
    "and": 812
+  },
+  "RoPEGptJ_v3{NHEADS=2,D=8}": {
+   "and": 47456
   },
   "RoPEHead_v2{D=8}": {
    "and": 23728

@@ -33,7 +33,8 @@ where the torch op materialises a `DT` tensor.  With `DT="f32"` the widen/narrow
   `RoPEInterleavedRef{D,DT}` (GPT-J pairing), `EagerAttentionHeadRef{T,D,DT,SCALE_OP}` / `EagerAttentionRef{T,NH,KVH,D,DT,SCALE_OP}`,
   `EmbeddingRef{V,H,DT}`, `AddRef{N,DT}`, `MulRef{N,DT}`, `ReluRef{N,DT}`, `ArgmaxStepF32` / `ArgmaxRef{V,DT}`.
   Profile-mode additions at DERIVE's request, NOT in the reference digest: `RoPEHeadGptJ{D}` / `RoPEGptJ{NHEADS,D}` (vLLM
-  `rotary_embedding(is_neox=False)`, one bf16 rounding, proof-supported through the `RopeOut`/`RopeOutAdd` twins).
+  `rotary_embedding(is_neox=False)`, one bf16 rounding, proof-supported through the `RopeOut`/`RopeOutAdd` twins; v2 is the
+  kernel's contraction, v1 superseded).
 
 **Loader note.**  Decoding a descriptor that names a reference kind requires `import verity_vllm.program.registry.ref_prims` first
 (as for `hopper`/`fp8`).  `GatherF32x{V}_v1` is an on-demand family like `GatherBf16x{V}`; the codec's lazy-family table
@@ -675,10 +676,13 @@ def RoPEInterleavedRef(B, S, x, cos, sin):
 # --- profile-mode addition requested by DERIVE (R3): vLLM's GPT-J rotary kernel, built only from exact-model-tested
 #     primitives that have Rust twins (RRopeOut/RRopeOutAdd) — so it is proof-supported, unlike the reference kinds. ---
 
-_GPTJ_CONF = ("model-untested; a pairing permutation of RoPEHead_v1 (exact-model-tested): the same RopeOut_v1/RopeOutAdd_v1 "
-              "gates with (2i, 2i+1) in place of (i, i+D/2), read from vLLM `apply_token_rotary_embedding<IS_NEOX=false>`; "
-              "test_ref_prims.py checks RoPEHeadGptJ(x) == unpermute(RoPEHead(permute(x))) gate-for-gate; no CUDA run of "
-              "`rotary_embedding(is_neox=False)` was made (lane NUMERIC, 2026-09-09)")
+_GPTJ_CONF = ("superseded by RoPEHeadGptJ_v2 / RoPEGptJ_v2: a pairing permutation of RoPEHead_v1, the same RopeOut_v1/"
+              "RopeOutAdd_v1 gates with (2i, 2i+1) in place of (i, i+D/2); vLLM d9105ea80's `rotary_embedding(is_neox=False)` "
+              "(bf16, sm_120, run r20261004-060203-ba52) differs in 513 words of 17 of 60 difftest cases, every one an odd output "
+              "whose products overflow f32: the kernel rounds y*cos and fuses x*sin, where NeoX's instantiation rounds x*sin")
+_GPTJ_V2_CONF = ("exact-model-tested; 60 of 60 difftest cases (101,696 words) of vLLM d9105ea80's CUDA `rotary_embedding("
+                 "is_neox=False)` (bf16 query, key and cache, sm_120, run r20261004-060203-ba52), q_pe/k_pe at GLM-4.7-Flash's "
+                 "and GLM-5.3's shapes; qualification: " + b1.COS_SIN_QUALIFICATION)
 
 
 @composite("RoPEHeadGptJ", 1, ["D"], lambda S: ((("x", Array(S.D, BF16)), ("cs", Array(S.D, BF16))), Array(S.D, BF16)),
@@ -703,6 +707,32 @@ def RoPEHeadGptJ(B, S, x, cs):
 def RoPEGptJ(B, S, x, cs):
     """`RoPEHeadGptJ_v1{D}` over NHEADS heads sharing one cache row (the `RoPE_v1` shape)."""
     return B.batch(bind(RoPEHeadGptJ, D=S.D), x, cs, axes=(0, None))
+
+
+@composite("RoPEHeadGptJ", 2, ["D"], lambda S: ((("x", Array(S.D, BF16)), ("cs", Array(S.D, BF16))), Array(S.D, BF16)),
+           conformance=_GPTJ_V2_CONF)
+def RoPEHeadGptJV2(B, S, x, cs):
+    """vLLM `rotary_embedding(..., is_neox=False)` on one head with the bf16 cache row `cs = [cos[0:R] | sin[0:R]]`, R = D/2,
+    as nvcc contracts `pos_encoding_kernels.cu`'s `x_f * cos_f - y_f * sin_f` and `y_f * cos_f + x_f * sin_f` for that
+    instantiation (x = x[2i], y = x[2i+1]): `out[2i] = RopeOut_v1(x, y, cos[i], sin[i]) = bf16(RN32(x*cos - RN32(y*sin)))`,
+    `out[2i+1] = RopeOutAdd_v1(y, x, sin[i], cos[i]) = bf16(RN32(x*sin + RN32(y*cos)))`. The odd half's rounded product is
+    y*cos, not `RoPEHeadGptJ_v1`'s x*sin. A product of two bf16 words is exact in f32 unless it overflows or falls below
+    f32's normal range, so the two differ only there."""
+    R = S.D // 2
+    cos, sin = cs[0:R], cs[R:S.D]
+    xe = _Coll(Array(R, BF16), strided_view(x, 0, R, 0, 2, R))
+    xo = _Coll(Array(R, BF16), strided_view(x, 1, R, 0, 2, R))
+    lo = B.batch(P.RopeOut, xe, xo, cos, sin, axes=(0, 0, 0, 0))  # x[2i]*cos - RN(x[2i+1]*sin)
+    hi = B.batch(P.RopeOutAdd, xo, xe, sin, cos, axes=(0, 0, 0, 0))  # x[2i]*sin + RN(x[2i+1]*cos)
+    return _Coll(Array(S.D, BF16), Explicit(tuple(r for i in range(R) for r in (lo.refs[i], hi.refs[i]))))
+
+
+@composite("RoPEGptJ", 2, ["NHEADS", "D"],
+           lambda S: ((("x", Array(S.NHEADS, Array(S.D, BF16))), ("cs", Array(S.D, BF16))), Array(S.NHEADS, Array(S.D, BF16))),
+           conformance=_GPTJ_V2_CONF)
+def RoPEGptJV2(B, S, x, cs):
+    """`RoPEHeadGptJ_v2{D}` over NHEADS heads sharing one cache row (the `RoPE_v1` shape)."""
+    return B.batch(bind(RoPEHeadGptJV2, D=S.D), x, cs, axes=(0, None))
 
 
 I64 = Value(64)
@@ -748,7 +778,7 @@ REF_COMPOSITES = [DotRef, LinearRef, RMSNormRef, LayerNormRef, GeluRefElem, Gelu
                   RoPEInterleavedRef, ArgmaxStepF32, ArgmaxRef]
 #: profile-mode kinds registered here at DERIVE's request (vLLM GPT-J rotary); NOT part of the reference vocabulary digest —
 #: they belong to the profile vocabulary (`b1.py` conventions, bf16 cache row, one rounding) and are proof-supported.
-PROFILE_ADDITIONS = [RoPEHeadGptJ, RoPEGptJ]
+PROFILE_ADDITIONS = [RoPEHeadGptJ, RoPEGptJ, RoPEHeadGptJV2, RoPEGptJV2]
 
 #: `prims.py` / `b1.py` primitives a reference body may call (shared with the profile-mode vocabulary; pinned in the digest).
 SHARED_PRIMITIVES = [P.Bf16ToF32, P.F32ToBf16Rn, P.F32Add, P.F32Mul, P.F32Fma, P.F32Div, P.Bf16Add, P.SelectF32, P.SelectBf16,
