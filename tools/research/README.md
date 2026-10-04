@@ -96,6 +96,7 @@ research merge --train --prepare BRANCH [--onto BASE] N@SHA ...      # build a t
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
 research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
+research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research slack ask|announce|reply|pickup|done|decline|roster|match|verify-author|read|handles|subscriptions|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
@@ -471,18 +472,8 @@ verify-author in private channels; `channels:history` for a public one), `reacti
 `groups sync` `usergroups:read` and `usergroups:write`. It must be a member of both channels (`chat:write.public` does not
 reach private channels), and Cursor's Slack app must be in both too: Cursor delivers the wakes, this bot posts.
 
-**Scaling past wake-on-everything (a design, not built).** Cursor's `subscribe_slack_channel` wakes every subscriber on every
-top-level message and has no mention filter, so each handle holder pays one wake (and one `match`) per ask anyone makes, and
-that cost grows with (handles × asks). Threads already scope replies to their participants, and workers never subscribe;
-what grows is `#agent-coordination`'s top level. The fix is a relay: a small service subscribed to the Slack Events API
-(`message.groups`) for `#agent-coordination`, which reads the registry, finds the handles a message addresses, and posts a
-one-line pointer (the permalink, the asker, the first line) into each addressed handle's own inbox channel
-(`#inbox-<handle>`, one per registry handle, created by the relay). Each holder then subscribes only to its inbox, top-level
-only, and never wakes for someone else's ask; `match` stays as the check on the one message it is woken for, and a thread's
-participants still subscribe to the thread itself. The relay holds only a bot token with `groups:history`, `chat:write` and
-`groups:write`, is idempotent per event id (Slack retries deliveries), sends what it can't route to `@infra`, and must fail
-visibly, not silently: when it is down, holders fall back to subscribing to `#agent-coordination` itself. Build it when
-wakes per holder per day make the top level a measurable cost, not before.
+Routing: each handle holder subscribes to its own inbox, not to the top level; the sending CLI rings the doorbells of the
+handles a post addresses (`route_targets`) until the console site's events route does (`slack.py`'s docstring).
 
 ### Notes and evidence over MCP
 

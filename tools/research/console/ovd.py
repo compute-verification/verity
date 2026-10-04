@@ -202,7 +202,7 @@ def result_meta(idx, doc: dict) -> dict:
 
 def superseded(idx) -> set[str]:
     """Runs and targets a lane has retired with `superseded_by <run>` (labels are append-only); only the replacement is shown."""
-    return {t for (t,) in idx.sql("SELECT DISTINCT target FROM labels WHERE key = 'superseded_by'")}
+    return {t for (t,) in idx.sql("SELECT DISTINCT target FROM labels WHERE key = 'superseded_by' AND value != target")}
 
 
 def label_groups(idx, problems: Problems, retired: set[str]) -> list[tuple[str, str, dict[str, str]]]:
