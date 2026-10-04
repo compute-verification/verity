@@ -31,6 +31,7 @@ import FlockSoundness.Discharge.Exec.Shape
 import FlockSoundness.Discharge.Exec.Pts
 import FlockSoundness.Discharge.Exec.LiveOn
 import FlockSoundness.Discharge.Exec.LawDraw
+import FlockSoundness.Discharge.Exec.SessionLDecisive
 
 /-!
 # R11: flock-verify's acceptance and the audit as Lean defines it
@@ -95,5 +96,9 @@ since with hidden outputs flock-verify sets up its tables with `setupHidden`, ab
   `Prog.flock_headline_live_on`), which `DecodesAll` implies (`decodesOn_of_all`, `simAudit_eq_on`);
 * `LawDraw`: every draw of the live stratified law has `∑ s, k s` units, or is every unit where the run reads past the
   source's bytes (`execOS_draw_card`, `execOS_draw_card_or`), so a draw file with no closure sets up at
-  `mPtsOf c.g (∑ s, k s)` or `mPtsOf c.g n` (`setupH_mPts_execOS`, `setupH_mPts_execOS_or`).
+  `mPtsOf c.g (∑ s, k s)` or `mPtsOf c.g n` (`setupH_mPts_execOS`, `setupH_mPts_execOS_or`);
+* `SessionLDecisive`: some run of the salted batched session accepts (the all-zero run) and, on a plan with a table,
+  some run rejects, and every message type is inhabited, so the session and the audit over it are decisive
+  (`batchedSessionL_decisive`, `audit_tile_decisive`, `audit_tile_decisive_verdict`). These are existential over the
+  coins; completeness of the reference prover stays open.
 -/

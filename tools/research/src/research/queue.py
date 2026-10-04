@@ -37,7 +37,7 @@ which files conflict and which queued PRs touched them.
 
 Landing.  `land` walks `next` down from its tip and fast-forwards `main` to the first commit the gate accepts: `main` gets exactly
 the tree that was checked, with no new merge commit.  A push refused because `main` moved leaves `main` alone; the next sync rebuilds
-`next` on the new `main`.
+`next` on the new `main`.  A landing that changes what a guarantee says DMs Daniel what changed (`spec_alert`).
 
 Notices.  A refusal (a conflict, an ejection) is sent once per PR head: a handoff in the owner's lane directory of the notes, or in
 `lanes/coordinator/` for an owner known only by agent id.
@@ -560,6 +560,10 @@ class Queue:
             if dry_run or self.shadow:
                 self.log(f"research queue: would land {prs} ({m.commit[:12]}, check {attempt})" + (" [shadow]" if self.shadow else ""))
                 return m
+            from .spec_alert import alert, remote_head
+
+            was = (remote_head(self.workdir, "origin", "main", self.auth)
+                   or _git(self.workdir, "rev-parse", "refs/heads/main").stdout.strip())
             _git(self.workdir, "merge", "-q", "--ff-only", m.commit)
             r = self._remote(self.workdir, "push", "-q", "origin", "main:refs/heads/main", ok=None)
             if r.returncode:
@@ -568,6 +572,7 @@ class Queue:
                          f"the next sync rebuilds `{self.branch}` on the new `main`")
                 return None
             self.log(f"research queue: landed {prs} on `main` at {m.commit[:12]} (check {attempt})")
+            alert(self.workdir, was, m.commit, prs=[x.pr for x in chain[: chain.index(m) + 1]], log=self.log)
             return m
         self.log(f"research queue: no commit on `{self.branch}` has a passing check yet (newest: {newest})")
         return None
