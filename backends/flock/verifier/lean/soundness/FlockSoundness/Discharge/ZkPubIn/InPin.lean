@@ -408,4 +408,73 @@ theorem in_region {c : Circuit} {pi : HmIn.Ports} {pub : Public} {ri : Array Reg
 
 end bytes
 
+/-! ## What a satisfying witness holds at an `in` region -/
+
+section pinned
+
+/-- **The bits a satisfying witness holds at an `in` region**: at block `o`, unit slot `k`, the bit at column
+`w · 128 + m` of the slot (`m < 128 · 2^s`) is bit `m % 16` of leaf `m / 16` of the region's words (`inVal`). It holds
+in the model's statement at a layout whose regions contain `HmIn.regions`'. -/
+theorem in_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
+    (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
+    {pi : HmIn.Ports} {ri : Array Region} (hri : HmIn.regions st.c pi st.pub = .ok ri)
+    (hsub : ∀ r ∈ ri.toList, r ∈ st.regions.toList) (hp : pi.ports.isEmpty = false) {w s : ℕ}
+    (hR : (w, s) ∈ (HmIn.inRegions st.c pi).toList)
+    {z : Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
+    {k m : ℕ} (hk : k < st.c.unitRange.count) (hm : m < 128 * 2 ^ s) :
+    bit ((L.model regs).block z o (Layout.inBlockOr st.c.kLog (st.c.unitRange.slot k + w * WORD + m))) =
+      (inVal st.c pi st.pub w o.val k (m / 16)).testBit (m % 16) := by
+  obtain ⟨R, hRm, name, hmk⟩ := in_region hri hp hR
+  have hmem : Refine.regionOf (L.model regs).kLog ((L.model regs).m - (L.model regs).kLog) R ∈
+      (L.model regs).regions := hregs R (hsub R hRm)
+  obtain ⟨hrf, -, -, hnd, -, hlt⟩ := Layout.mkRegion_spec hmk
+  have hfreeA := congrArg Flock.Region.free hrf
+  simp only at hfreeA
+  set sb := log2ceil st.c.unitRange.count with hsb
+  have hlen : (Refine.regionOf st.c.kLog (st.m - st.c.kLog) R).free.length = (7 + s) + sb := by
+    rw [← List.length_map (f := Fin.val), Layout.regionOf_free_map _ _ _ (fun b hb => hlt b (by
+      rw [hfreeA] at hb; exact Array.mem_toList_iff.1 hb)), hfreeA]
+    simp [inFree, hsb]
+  have hP : 2 ^ (7 + s) = 128 * 2 ^ s := by rw [pow_add]; norm_num
+  have hksb : k < 2 ^ sb := lt_of_lt_of_le hk (le_two_pow_log2ceil _)
+  have hi : k * 2 ^ (7 + s) + m < 2 ^ (Refine.regionOf st.c.kLog (st.m - st.c.kLog) R).free.length := by
+    rw [hlen, pow_add (2 : ℕ) (7 + s) sb, hP]
+    calc k * (128 * 2 ^ s) + m < k * (128 * 2 ^ s) + 128 * 2 ^ s := by omega
+      _ = (k + 1) * (128 * 2 ^ s) := by ring
+      _ ≤ 2 ^ sb * (128 * 2 ^ s) := Nat.mul_le_mul_right _ hksb
+      _ = 128 * 2 ^ s * 2 ^ sb := by ring
+  have hib : (Refine.regionOf st.c.kLog (st.m - st.c.kLog) R).inBlock (k * 2 ^ (7 + s) + m) =
+      st.c.unitRange.slot k + w * WORD + m := by
+    rw [Layout.inBlock_mkRegion hmk]
+    simp only [inFree, Array.toList_append, Array.toList_map, Array.toList_range, Layout.spread_append,
+      Layout.spread_range, List.length_map, List.length_range, pow_zero, mul_one]
+    have hP0 : 0 < 2 ^ (7 + s) := Nat.two_pow_pos _
+    have hm' : m < 2 ^ (7 + s) := by rw [hP]; exact hm
+    have h1 : (k * 2 ^ (7 + s) + m) % 2 ^ (7 + s) = m := by
+      rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hm']
+    have h2 : (k * 2 ^ (7 + s) + m) / 2 ^ (7 + s) = k := by
+      rw [Nat.add_comm, Nat.add_mul_div_right _ _ hP0, Nat.div_eq_of_lt hm', zero_add]
+    rw [h1, h2, Nat.mod_eq_of_lt hksb]
+    simp only [Range.slot, Range.start]
+    ring
+  have hnd' : (Refine.regionOf st.c.kLog (st.m - st.c.kLog) R).free.Nodup := by
+    unfold Refine.regionOf
+    rw [hfreeA]
+    exact Refine.filterMap_fin_nodup _ _ hnd
+  have ha : (Refine.regionOf st.c.kLog (st.m - st.c.kLog) R).inBlock (k * 2 ^ (7 + s) + m) < 2 ^ st.c.kLog :=
+    Layout.inBlock_lt _ hnd' _
+  have hread := Layout.region_read hz hmem o _ hi ha
+  have hfin : Layout.inBlockOr st.c.kLog (st.c.unitRange.slot k + w * WORD + m) = ⟨_, ha⟩ := by
+    simp only [Layout.inBlockOr, ← hib, ha, ↓reduceDIte]
+  rw [hfin]
+  refine hread.trans ?_
+  rw [hrf]
+  dsimp only
+  have e8 : k * 2 ^ (7 + s) = 8 * (k * (2 * (8 * 2 ^ s))) := by rw [hP]; ring
+  rw [show (k * 2 ^ (7 + s) + m) / 8 = k * (2 * (8 * 2 ^ s)) + (2 * (m / 16) + m % 16 / 8) by rw [e8]; omega,
+    show (k * 2 ^ (7 + s) + m) % 8 = m % 16 % 8 by rw [e8]; omega]
+  exact u16Bytes_bit _ hksb (by omega) (Nat.mod_lt _ (by norm_num))
+
+end pinned
+
 end FlockSoundness.Discharge.ZkPubIn
