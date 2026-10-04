@@ -229,14 +229,14 @@ shaping delay (hand time minus ready time, over every frame), the capacity per d
 ## Tests
 
 `uv run tools/check/suites.py verity-network-warden`. The tests enumerate small horizons, so they check the Lean
-statements on examples and prove nothing. By name, they mirror 19 of the Lean package's 51 pins, each a guarantee
-`NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, and its three proved but unpinned lemmas:
+statements on examples and prove nothing. By name, they mirror 19 of the Lean package's 51 guarantees, each
+`NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, and its three proved lemmas without a record:
 - **`test_network_warden_grid.py`:**
-  - Proposition 2's ten pins, by enumeration: `SecurityProofs.CardFree`, `SecurityProofs.CardLeftPacked`,
+  - Proposition 2's ten guarantees, by enumeration: `SecurityProofs.CardFree`, `SecurityProofs.CardLeftPacked`,
     `SecurityProofs.FillInjective`, `SecurityProofs.ExistsFillOfLeftPacked`, `SecurityProofs.CardCountsEqLe`,
     `SecurityProofs.CardCountsLeLe`, `SecurityProofs.ReleasedSelf`, `SecurityProofs.SumReleasedLe`,
     `SecurityProofs.EncardFifoGrids` and `SecurityProofs.EncardFifoGridsLeOfAvailable`;
-  - the unpinned `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid` (`NetTiming.SecurityProofs.Occupancy`);
+  - the lemmas `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid` (`NetTiming.SecurityProofs.Occupancy`);
   - the warden's semantics, which Lean takes as hypotheses (W4 packing, W5's untimed status, W6 fail-closed);
 - **`test_network_warden_capacity.py`:**
   - `SecurityProofs.EncardLeProdOfBranching`, the tree lemma;
@@ -261,7 +261,7 @@ statements on examples and prove nothing. By name, they mirror 19 of the Lean pa
 - **`test_network_warden_calibration.py`:** the calibration tool, and the honest prover's choice against its rule by
   brute force, on one link and on several under one clock;
 
-No test mirrors the other eight pins of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
+No test mirrors the other eight guarantees of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
 `SecurityProofs.EncardDecodableLe`, `SecurityProofs.NoFaultOfAccepted`, `SecurityProofs.RecordedRowEqFill`,
 `SecurityProofs.EncardAccSeqsLeAdvice`, `SecurityProofs.EncardAccSeqsLeBlocksCounts`,
 `SecurityProofs.EncardDecodableLeBlocks`, `SecurityProofs.EncardDecodableLeConstantRate`), nor the ingress bound's four
