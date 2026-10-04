@@ -9,10 +9,10 @@ set_option Elab.async false
 the data, and the `hm96` slot reads the padding block `HmRow.padWords`, all constants. A canonical row (`PROTOCOL.md`
 §16.15) has `B = ⌈ℓ / 8⌉` bytes for any `ℓ < 2^64`. After the 128-byte prefix `P(ℓ)` its message is
 `data ‖ padTail(128 + B)` (SHA-512's own padding), `n + 1 = ⌈(B + 17) / 128⌉` blocks: the first `n = chunks` are the
-`sha512x3` slots', and the last, the `hm96` slot's, holds the row's last `B mod 128` bytes (if any) then the padding, or
-the padding alone. `row_commitC` is `row_commitP` at that message: the same chain, the last block read bit by bit from
-`data ‖ padTail` instead of as `padWords`, and `n = 0` allowed (a row of fewer than 111 bytes is hashed by its `hm96`
-slot alone, `row_commit0P`'s case with data).
+`sha512x3` slots', the last the `hm96` slot's. The data ends in one of the last two blocks (in block `n − 1` when
+`B > 0` and `B mod 128` is 0 or at least 112), so either may be partial, its rest padding. `row_commitC` is `row_commitP` at that message: the same
+chain, every block read bit by bit from `data ‖ padTail` (the last instead of as `padWords`), and `n = 0` allowed (a row
+of at most 111 bytes is hashed by its `hm96` slot alone, `row_commit0P`'s case with data).
 
 This is the one genuinely new hashing fact the canonical format needs; everything else generalizes existing lemmas.
 
