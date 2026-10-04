@@ -18,6 +18,10 @@
   research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json]
                                                  # a full run id another VM launched (no local dir): found on --on NAME, else on
                                                  # each ssh machine, and its records fetched here (remote.adopt)
+  research keeper set NAME --on NODE --project P --n N --until UTC [--gpus G] [--max-min M] [--source GITDIR] [...] -- CMD... {seed}
+  research keeper stop NAME --on NODE [--cancel] | status [NAME] --on NODE [--json]
+                                                 # a standing campaign target: the node keeps N chunks leased, a fresh seed each,
+                                                 # until UTC (<= 48 h), preemptible; no VM stays awake (research/keeper.py)
   research compare <baseline> <candidate> [--json]   # differences and candidate/baseline ratios; the workload contract judges them
   research tele <telemetry subcommand...>        # the full harness surface (init, event, sample, cancel-intent, classify, ...)
   research data <store subcommand...>            # the evidence store: put show where fetch verify select snapshot labels label reindex sql
@@ -373,6 +377,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     from .telemetry.run import run as harness_run
 
     write_json_atomic(run_dir / "job.json", job)
+    if ns.claimed and remote_info and remote_info.get("request"):
+        remote.ack_launch(Path(remote_info["request"]).parent / remote.LAUNCH_ACK, remote.FIRST_RECORD)
     os.environ.update(result.env_for(run_id, run_dir, source_sha=getattr(a, "tree_sha", None)))
     os.environ.update(prep["env"])
     # --env is the workload's: set for the harness (which spawns it with this environment), then restored so the store publish below
@@ -939,6 +945,11 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         print(f"research: run {run_id} refused on {ns.on} ({launch.get('fault') or 'Refused'}): {launch.get('refused')}  (recorded in {run_dir})", file=sys.stderr)
         return 3
     print(f"research: run {run_id} launched on {ns.on} ({rec['pod_id']}) pid={launch.get('runner_pid')} -> {rec['remote_run_dir']}", file=sys.stderr)
+    if launch.get("unconfirmed"):
+        print(f"research: {ns.on} could not confirm its runner is up ({launch['unconfirmed']}); `research fetch {run_id}` says how it went",
+              file=sys.stderr)
+    if launch.get("first_record") == "disk-hold":
+        print(f"research: {ns.on} holds it for disk before its runner starts (research disk-hold, in its launcher.log)", file=sys.stderr)
     print(f"research: workload cwd: {rec.get('workload_cwd') or remote.WORKLOAD_CWD_DEFAULT}", file=sys.stderr)
     print(f"research: observe with `research fetch {run_id}`; the workload does not depend on this session staying alive", file=sys.stderr)
     return 0
@@ -1294,6 +1305,10 @@ def main(argv: list[str] | None = None) -> int:
         from .retention import main as retention_main
 
         return retention_main(rest)
+    if cmd == "keeper":
+        from .keeper import main as keeper_main
+
+        return keeper_main(rest)
     if cmd == "pods":
         from .pods.part import main as pods_main
 

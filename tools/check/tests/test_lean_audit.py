@@ -1,4 +1,4 @@
-"""`tools/check/lean_audit.py`: audit verdicts reused only while every input is unchanged, the hermetic scratch tree as the read
+"""`tools/lean/lean_audit.py`: audit verdicts reused only while every input is unchanged, the hermetic scratch tree as the read
 guard, and dependencies kept warm across runs."""
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-spec = importlib.util.spec_from_file_location("check_lean_audit", ROOT / "tools" / "check" / "lean_audit.py")
+spec = importlib.util.spec_from_file_location("check_lean_audit", ROOT / "tools" / "lean" / "lean_audit.py")
 LA = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(LA)
 spec = importlib.util.spec_from_file_location("check_for_test_lean_audit", ROOT / "tools" / "check" / "check.py")
@@ -61,7 +61,7 @@ def _tree(tmp: Path, monkeypatch) -> Path:
     root = tmp / "repo"
     files = {
         "tools/lean/audit.py": FAKE_AUDIT,
-        "tools/check/lean_audit.py": "", "tools/check/common.py": "", "tools/check/check.py": "",
+        "tools/lean/lean_audit.py": "", "tools/check/common.py": "", "tools/check/check.py": "",
         "pkg/a/lakefile.toml": "", "pkg/a/lean-toolchain": "v1\n", "pkg/a/A.lean": "theorem a : True := trivial\n",
         "pkg/a/lake-manifest.json": json.dumps({"packages": [{"name": "dep", "type": "git", "rev": "abc"}]}),
         "pkg/a/lean-audit.json": "{}",
@@ -148,7 +148,7 @@ def test_a_stopped_audit_removes_its_scratch_tree(tmp_path, monkeypatch):
     root = _tree(tmp_path, monkeypatch)
     (root / "tools/lean/audit.py").write_text('import sys\nprint("auditing", flush=True)\nsys.stdin.read()\n')
     cache = tmp_path / "cache"
-    p = subprocess.Popen([sys.executable, "-c", DRIVER, str(ROOT / "tools/check/lean_audit.py"), str(root),
+    p = subprocess.Popen([sys.executable, "-c", DRIVER, str(ROOT / "tools/lean/lean_audit.py"), str(root),
                           json.dumps(LA.COMMON.tracked_files()), "--out", str(tmp_path / "out"),
                           "--cache", str(cache / "lean-audit"), "--deps", str(cache / "lean-deps")],
                          stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, text=True)
@@ -211,7 +211,7 @@ def test_every_file_the_step_loads_is_in_its_key():
 
     files = LA.COMMON.tracked_files()
     got = LA.inputs("backends/flock/verifier/lean/soundness", files)
-    loaded = re.findall(r'_module\(ROOT / "tools" / "check" / "([a-z_]+\.py)"', (ROOT / "tools/check/lean_audit.py").read_text())
+    loaded = re.findall(r'_module\(ROOT / "tools" / "check" / "([a-z_]+\.py)"', (ROOT / "tools/lean/lean_audit.py").read_text())
     assert loaded == ["common.py"] and all(f"tools/check/{m}" in got for m in loaded)
     assert "tools/check/check.py" not in got
     for node in ast.walk(ast.parse((ROOT / "tools/check/common.py").read_text())):
