@@ -13,8 +13,9 @@ registered gate at which the extracted transcript is off `a`.
 
 The reduction patches the extracted transcript to `a` on `Rg` (`patch`). The patched transcript is on `a` on `Rg` by
 construction, and a unit wrong in it is wrong in the extracted one or shows a patched gate in its opening
-(`wrong_patch_subset`, since a unit's correctness reads only its opening). `registered_core` puts the two bounds together
-and carries them to the core game of the same tree, for every core strategy.
+(`wrong_patch_subset`, since a unit's correctness reads only its opening). `registered_core_joint` carries one bound on
+the two events together to the core game of the same tree, for every core strategy; `registered_core` is it at the
+union bound of the two, from C-Flock's end-to-end theorem and `RegReadSound` taken separately.
 -/
 
 namespace FlockBridge
@@ -65,25 +66,41 @@ def RegReadSound (G : FlockSoundness.Game Out) (s : FlockSoundness.Game.Strategy
     (drawn : Out → Finset (Fin n)) (X a : Fin C.N → Bool) (Rg : Finset (Fin C.N)) (δ : ℝ≥0∞) : Prop :=
   FlockSoundness.Game.prob (fun o => acc o ∧ ¬ Disjoint (offAt P X a Rg) (drawn o)) G s ≤ δ
 
-/-- The union bound behind the patch: an accepting run that draws a wrong unit of the patched transcript draws a wrong
-unit of `X` or a unit that shows `X` off the registered values. -/
-theorem prob_patch_le (G : FlockSoundness.Game Out) (s : FlockSoundness.Game.Strategy G) (acc : Out → Prop)
-    (drawn : Out → Finset (Fin n)) (X a : Fin C.N → Bool) (Rg : Finset (Fin C.N)) :
-    FlockSoundness.Game.prob (fun o => acc o ∧ ¬ Disjoint (P.wrong (patch X a Rg)) (drawn o)) G s ≤
-      FlockSoundness.Game.prob (fun o => acc o ∧ ¬ Disjoint (P.wrong X) (drawn o)) G s +
-        FlockSoundness.Game.prob (fun o => acc o ∧ ¬ Disjoint (offAt P X a Rg) (drawn o)) G s := by
-  refine (FlockSoundness.Game.prob_mono (fun o ho => ?_) G s).trans (FlockSoundness.Game.prob_or_le _ _ G s)
-  obtain ⟨hacc, hd⟩ := ho
-  obtain ⟨u, hu, hdu⟩ := Finset.not_disjoint_iff.1 hd
-  rcases Finset.mem_union.1 (wrong_patch_subset P X a Rg hu) with h | h
-  · exact Or.inl ⟨hacc, Finset.not_disjoint_iff.2 ⟨u, h, hdu⟩⟩
-  · exact Or.inr ⟨hacc, Finset.not_disjoint_iff.2 ⟨u, h, hdu⟩⟩
+/-- **Soundness against registered values in the core game, from one joint bound.** Let `G` be a C-Flock game, `σ` any
+strategy of its core game, and `X` a transcript for which C-Flock bounds, at `σ`'s C-Flock strategy, an accepting run
+that draws a wrong unit of `X` or a unit whose opening shows `X` off the registered values `a` on `Rg`, by `η`. Then some
+core transcript makes an accepting run draw a wrong unit or be off `a` on `Rg` with probability at most `η` at `σ`:
+PoUW's `RegisteredSound` at `σ`. The patched transcript's wrong units are `X`'s or show it off `a`
+(`wrong_patch_subset`), so the event is the joint one, with no union bound. -/
+theorem registered_core_joint (G : FlockSoundness.Game Out) (acc : Out → Prop) (drawn : Out → Finset (Fin n))
+    (Rg : Finset (Fin C.N)) (a : (Circuit.toCore C).Transcript) (σ : Verity.Game.Strategy (Game.toCore G))
+    (X : Fin C.N → Bool) {η : ℝ≥0∞}
+    (hjoint : FlockSoundness.Game.prob (fun o => acc o ∧ (¬ Disjoint (P.wrong X) (drawn o) ∨
+        ¬ Disjoint (offAt P X (Circuit.Transcript.ofCore a) Rg) (drawn o))) G (Game.Strategy.ofCore G σ) ≤ η) :
+    ∃ X' : (Circuit.toCore C).Transcript,
+      Verity.Game.prob (fun o => acc o ∧
+          (¬ Disjoint ((Partition.toCore P).wrong X') (drawn o) ∨ ∃ g ∈ Rg, X' g ≠ a g))
+        (Game.toCore G) σ ≤ η := by
+  refine ⟨Circuit.Transcript.toCore (patch X (Circuit.Transcript.ofCore a) Rg), ?_⟩
+  rw [← Game.prob_ofCore]
+  refine le_trans (FlockSoundness.Game.prob_mono (fun o ho => ?_) _ _) hjoint
+  obtain ⟨hacc, h | ⟨g, hg, hne⟩⟩ := ho
+  · rw [Partition.wrong_toCore] at h
+    obtain ⟨u, hu, hdu⟩ := Finset.not_disjoint_iff.1 h
+    rcases Finset.mem_union.1 (wrong_patch_subset P X _ Rg hu) with h' | h'
+    · exact ⟨hacc, Or.inl (Finset.not_disjoint_iff.2 ⟨u, h', hdu⟩)⟩
+    · exact ⟨hacc, Or.inr (Finset.not_disjoint_iff.2 ⟨u, h', hdu⟩)⟩
+  · refine absurd ?_ hne
+    show BitVec.ofBool (patch X (Circuit.Transcript.ofCore a) Rg g) = a g
+    rw [patch_of_mem hg]
+    exact congrFun (Circuit.Transcript.toCore_ofCore a) g
 
 /-- **Soundness against registered values in the core game.** Let `G` be a C-Flock game, `σ` any strategy of its core
 game, and `X` a transcript for which C-Flock bounds, at `σ`'s C-Flock strategy, an accepting run that draws a wrong
 unit of `X` (or meets some other event `Off`, as C-Flock's end-to-end theorem states it) by `ε`, and registered reads
 by `δ` (`RegReadSound`). Then some core transcript makes an accepting run draw a wrong unit or be off the registered
-values `a` on `Rg` with probability at most `ε + δ` at `σ`: PoUW's `RegisteredSound` at `σ`, with `η = ε + δ`. -/
+values `a` on `Rg` with probability at most `ε + δ` at `σ`: PoUW's `RegisteredSound` at `σ`, with `η = ε + δ`.
+`registered_core_joint` at the union bound of the two. -/
 theorem registered_core (G : FlockSoundness.Game Out) (acc : Out → Prop) (drawn : Out → Finset (Fin n))
     (Rg : Finset (Fin C.N)) (a : (Circuit.toCore C).Transcript) (σ : Verity.Game.Strategy (Game.toCore G))
     (X : Fin C.N → Bool) (Off : Prop) {ε δ : ℝ≥0∞}
@@ -94,19 +111,15 @@ theorem registered_core (G : FlockSoundness.Game Out) (acc : Out → Prop) (draw
       Verity.Game.prob (fun o => acc o ∧
           (¬ Disjoint ((Partition.toCore P).wrong X') (drawn o) ∨ ∃ g ∈ Rg, X' g ≠ a g))
         (Game.toCore G) σ ≤ ε + δ := by
-  refine ⟨Circuit.Transcript.toCore (patch X (Circuit.Transcript.ofCore a) Rg), ?_⟩
-  rw [← Game.prob_ofCore]
   have hw : FlockSoundness.Game.prob (fun o => acc o ∧ ¬ Disjoint (P.wrong X) (drawn o)) G
       (Game.Strategy.ofCore G σ) ≤ ε :=
     (FlockSoundness.Game.prob_mono (fun o ho => ⟨ho.1, Or.inl ho.2⟩) _ _).trans hwrong
-  refine le_trans (FlockSoundness.Game.prob_mono (fun o ho => ?_) _ _)
-    ((prob_patch_le P G _ acc drawn X _ Rg).trans (add_le_add hw hreg))
-  obtain ⟨hacc, h | ⟨g, hg, hne⟩⟩ := ho
-  · exact ⟨hacc, by rwa [Partition.wrong_toCore] at h⟩
-  · refine absurd ?_ hne
-    show BitVec.ofBool (patch X (Circuit.Transcript.ofCore a) Rg g) = a g
-    rw [patch_of_mem hg]
-    exact congrFun (Circuit.Transcript.toCore_ofCore a) g
+  refine registered_core_joint P G acc drawn Rg a σ X
+    (le_trans (FlockSoundness.Game.prob_mono (fun o ho => ?_) _ _)
+      ((FlockSoundness.Game.prob_or_le _ _ _ _).trans (add_le_add hw hreg)))
+  obtain ⟨hacc, h | h⟩ := ho
+  · exact Or.inl ⟨hacc, h⟩
+  · exact Or.inr ⟨hacc, h⟩
 
 end Registered
 
