@@ -110,7 +110,7 @@ def test_profile_module_for_case_is_derived_not_looked_up():
     from verity_vllm.engine import profiles
     assert not hasattr(profiles, "PROFILE_BY_CASE")
     refused = {"QWEN15_AWQ": "awq", "QWEN3_30B_A3B_FP8": "mixed-precision",      # shipped configs the constructor refuses by name
-               "QWEN3_235B_A22B_FP8": "mixed-precision", "GLM47_FLASH": "multi-head latent attention"}
+               "QWEN3_235B_A22B_FP8": "mixed-precision"}
     for role, world in ROLES:
         if role in refused:
             continue
@@ -225,11 +225,13 @@ def test_structural_refusals_are_stated():
     assert "mlp_only_layers" in G.structural_refusal({**m, "mlp_only_layers": [0]})
     assert "awq" in G.structural_refusal(json.loads((dg.HF_CONFIG_DIR / "QWEN15_AWQ.config.json").read_text()))
     glm = json.loads((dg.HF_CONFIG_DIR / "GLM47_FLASH.config.json").read_text())
-    assert "multi-head latent attention" in G.structural_refusal(glm) and "kv_lora_rank=512" in G.structural_refusal(glm)
+    assert G.structural_refusal(glm) is None
+    assert "n_group" in G.structural_refusal({**glm, "n_group": 8, "topk_group": 4})
+    assert "rope_scaling" in G.structural_refusal({**glm, "rope_scaling": {"rope_type": "yarn", "factor": 4.0}})
 
 
 def test_mla_moe_facts_resolve_to_the_checkpoints_values():
-    """GLM-4.7-Flash's family facts (refused by the constructor) resolve to what vLLM builds for its config.json."""
+    """GLM-4.7-Flash's family facts resolve to what vLLM builds for its config.json."""
     glm = json.loads((dg.HF_CONFIG_DIR / "GLM47_FLASH.config.json").read_text())
     vals, prov = FF.resolve_facts(glm, {})
     assert vals["MLA"] is True and vals["ROPE_NEOX"] is False and vals["SCORING"] == "sigmoid" and vals["ROUTER_DTYPE"] == "float32"
