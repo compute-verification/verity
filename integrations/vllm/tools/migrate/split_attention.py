@@ -683,8 +683,9 @@ def family_modules(root: Path) -> list[str]:
 
 
 def owned_ids(root: Path) -> set[str]:
-    """The ids of the Definitions the family's modules define: those whose body (or evaluator) is the module's own code, and those
-    a core factory (`verity.ml.boolean.trace.definition`, `elementwise.specialized`, ...) built for the module."""
+    """The ids of the Definitions the family's modules define: bound at a module's top level (not imported), with a body (or
+    evaluator) that is the module's own code or that a core factory (`verity.ml.boolean.trace.definition`,
+    `elementwise.specialized`, ...) built for the module."""
     import importlib
 
     from verity.ir.defs import FunctionDefinition
@@ -694,7 +695,8 @@ def owned_ids(root: Path) -> set[str]:
     out = set()
     for m in family_modules(root):
         mod = importlib.import_module(f"{REGISTRY}.{m}")
-        for v in vars(mod).values():
+        for name in top_level(mod_path(root, f"{REGISTRY}.{m}")):
+            v = getattr(mod, name, None)
             if isinstance(v, FunctionDefinition):
                 d = getattr(v, "defn", v)
                 where = getattr(getattr(d, "body", None) or getattr(d, "evaluate", None), "__module__", "") or ""
@@ -776,12 +778,21 @@ def compare(before: dict, after: dict) -> list[str]:
     return bad
 
 
+def family_tasks(snap: dict) -> list[list[str]]:
+    """circuit-check's tasks over the family's Definitions: a definition task on a family target, a template task whose
+    Definitions are the family's."""
+    family = snap["family"]
+    templates = {label.split(":", 1)[1].rsplit("#", 1)[0] for label in family if label.startswith("template:")}
+    return [[k, label] for k, label in snap["tasks"] if (label in family if k == "definition" else label in templates)]
+
+
 def write_pin(root: Path, snap: dict) -> Path:
     path = root / PIN
     body = {"about": "The attention family's circuit-check targets and pins as the tree before the split built them: each one's "
-                     "Definition id, descriptor entry digest and, for a specialisation, its Program's canonical descriptor digest. "
-                     "Written by integrations/vllm/tools/migrate/split_attention.py; test_split_attention.py regenerates them.",
-            "targets": snap["family"]}
+                     "Definition id, descriptor entry digest and, for a specialisation, its Program's canonical descriptor digest; "
+                     "and circuit-check's tasks over them. Written by integrations/vllm/tools/migrate/split_attention.py; "
+                     "tools/circuit_check/tests/test_split_attention.py regenerates them.",
+            "targets": snap["family"], "tasks": family_tasks(snap)}
     path.write_text(json.dumps(body, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     return path
 
