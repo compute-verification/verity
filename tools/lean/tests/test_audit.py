@@ -46,7 +46,7 @@ def facts(**over):
 
 
 FILES = {"P": "P.lean", "P.Assumptions": "P/Assumptions.lean", "P.Defs": "P/Defs.lean", "P.Thms": "P/Thms.lean"}
-POLICY = {"roots": ["P"], "assumptions": ["P.Assumptions"], "guarantees": {"P.t": {}}}
+POLICY = {"roots": ["P"], "assumptions": ["P.Assumptions"], "guarantees": {"P.t": {"owner": "@lean"}}}
 
 
 def recorded(f=None):
@@ -57,8 +57,8 @@ def recorded(f=None):
 
 def test_a_recorded_package_passes_and_its_record_is_the_statement():
     pol = recorded()
-    assert pol["guarantees"]["P.t"] == {"signature": ["P.t (h : P.Hyp) (n : Nat) : P.f n = n"], "assumptions": ["P.Hyp"],
-                                        "type_hash": sha("00000000000000aa")}
+    assert pol["guarantees"]["P.t"] == {"owner": "@lean", "signature": ["P.t (h : P.Hyp) (n : Nat) : P.f n = n"],
+                                        "assumptions": ["P.Hyp"], "type_hash": sha("00000000000000aa")}
     assert len(pol["reads"]["P.Defs"]["digest"]) == 64 and len(pol["reads"]["P.Defs"]["definitions"]["P.f"]) == 64
     assert list(pol["reads"]["P.Defs"]["definitions"]) == ["P.f"] and pol["reads"]["P.Defs"]["guarantees"] == ["P.t"]
     assert all(g["digest"] == A.module_digest(g["definitions"]) for g in pol["reads"].values())
@@ -75,6 +75,80 @@ def test_every_field_of_a_reads_record_is_checked():
     readers = pol | {"reads": pol["reads"] | {"P.Defs": group | {"guarantees": ["P.t", "P.u"]}}}
     assert A.judge(readers, facts(), FILES)[0] == ["guarantees: those that read P.Defs are P.t; the record lists "
                                                    "P.t, P.u; run `audit.py --update`"]
+
+
+def test_every_guarantee_has_an_owner_and_an_update_keeps_it():
+    pol = recorded()
+    bare = {**POLICY, "guarantees": {"P.t": {}}}
+    no_owner = ('guarantees: P.t has no owner: write "owner": "@lane" in its entry, the handle of the lane that answers for '
+                'it, or run `audit.py --update --owner @lane`')
+    fails, written = A.judge(bare, facts(), FILES, update=True)
+    assert fails == [no_owner] and written["guarantees"] == {"P.t": {}}, "no record is written for a guarantee without an owner"
+    assert A.judge(bare, facts(), FILES, update=True, owner="@proofs")[1]["guarantees"]["P.t"]["owner"] == "@proofs"
+    assert A.judge(pol, facts(), FILES, update=True, owner="@proofs")[1] == pol, "an entry's owner is kept"
+    assert A.judge({**pol, "guarantees": {"P.t": A.unowned(pol["guarantees"]["P.t"])}}, facts(), FILES)[0] == [no_owner]
+    odd = {**pol, "guarantees": {"P.t": pol["guarantees"]["P.t"] | {"owner": "proofs"}}}
+    assert A.judge(odd, facts(), FILES)[0] == ["guarantees: P.t's owner 'proofs' is not a handle such as @proofs"]
+    handed = {**pol, "guarantees": {"P.t": pol["guarantees"]["P.t"] | {"owner": "@compute-accounting"}}}
+    text = A.review(pol, handed, facts(), {})
+    assert text == [f"guarantee P.t: owner @lean -> @compute-accounting: {A.OWNED}"] and A.statement_changes(text) == []
+
+
+def spec_facts(reads=None, outside=(), spec=()):
+    """``facts()`` whose guarantee reads ``reads`` under `meaning` and stops at ``outside`` ([name, module] pairs) outside it,
+    in a package whose spec modules declare ``spec`` ({name, module, kind})."""
+    f = facts(pins={"P.t": fact(reads=reads) | {"outside": [list(o) for o in outside]},
+                    "P.lemma": fact(kind="def")}, spec_definitions=list(spec))
+    return f
+
+
+def test_a_guarantee_reads_only_spec_definitions_and_pinned_dependencies():
+    """The reads check: `P.Defs` and `P.Assumptions` are the spec, `P.Proofs` is not, `Q.Spec` is the spec of a package `P`
+    requires by path and `Q.Math` is not, and `Nat` is a pinned dependency's."""
+    pol = recorded() | {"layers": {"P.Defs": {"imports": []}, "P.Assumptions": {"imports": []}},
+                        "meaning": ["P.Defs", "P.Assumptions", "Q.Spec"]}
+    home = dict.fromkeys(["P", "P.Defs", "P.Assumptions", "P.Proofs", "P.Thms"], A.spec_of(pol)) | \
+        dict.fromkeys(["Q.Spec", "Q.Math"], ["Q.Spec"])
+    assert A.spec_reads(pol, spec_facts(outside=[("Nat", "Init.Prelude"), ("Q.g", "Q.Spec")]), home) == []
+    extra = [{"name": "P.aux", "module": "P.Proofs", "kind": "def", "hash": "5" * 32},
+             {"name": "P.aux.match_1", "module": "P.Proofs", "kind": "def", "hash": "6" * 32}]
+    assert A.spec_reads(pol, spec_facts(reads=fact()["reads"] + extra), home) == [
+        "reads: P.t read P.aux in P.Proofs, outside the spec (P.Assumptions, P.Defs): a guarantee's statement reads only the "
+        "spec of its package and of the packages it requires by path, and pinned dependencies; move the definitions into the "
+        "spec, or list P.Proofs under `reads_exempt` with the reason"]
+    assert A.spec_reads(pol, spec_facts(outside=[("Q.h", "Q.Math")]), home)[0].startswith(
+        "reads: P.t read Q.h in Q.Math, outside the spec (Q.Spec)")
+    unlocked = pol | {"meaning": ["P.Assumptions"]}
+    assert A.spec_reads(unlocked, spec_facts(outside=[("P.f", "P.Defs")]), home) == [
+        "reads: P.t read P.f in P.Defs, a spec module outside `meaning`, so the record holds nothing of them: add P.Defs to "
+        "`meaning` and run `audit.py --update`"]
+    exempt = pol | {"reads_exempt": {"P.Proofs": "until its spec is extracted", "P.Old": "stale"}}
+    assert A.spec_reads(exempt, spec_facts(reads=fact()["reads"] + extra), home) == [
+        "reads: `reads_exempt` lists P.Old, under which no guarantee reads outside the spec; remove the entry"]
+    assert A.spec_reads(recorded(), spec_facts(), dict.fromkeys(FILES, []))[0].startswith(
+        "reads: P.t read P.Hyp in P.Assumptions, outside the spec (none: no `layers`)"), "a package without layers has no spec"
+
+
+def test_spec_definitions_no_guarantee_reads_are_reported():
+    spec = [{"name": n, "module": m, "kind": "def"} for n, m in (
+        ("P.f", "P.Defs"), ("P.f.match_1", "P.Defs"), ("P.unused", "P.Defs"), ("P.Hyp", "P.Assumptions"), ("P.Old", "P.Assumptions"),
+        ("P.grid", "P.Lifting"), ("P.elsewhere", "P.Defs"))]
+    f = spec_facts(outside=[("P.grid", "P.Lifting")], spec=spec)
+    assert A.unread_spec(f, {"P.elsewhere"}) == {"P.Assumptions": ["P.Old"], "P.Defs": ["P.unused"]}
+
+
+def test_homes_give_each_module_its_package_s_spec(tmp_path):
+    core, pkg = tmp_path / "core", tmp_path / "pkg"
+    for d, files in ((core, ("Q/Spec.lean", "Q/Math.lean")), (pkg, ("P/Defs.lean", "P/Thms.lean"))):
+        for rel in files:
+            (d / rel).parent.mkdir(parents=True, exist_ok=True)
+            (d / rel).write_text("")
+    (core / A.POLICY).write_text(json.dumps({"roots": ["Q"], "layers": {"Q.Spec": {"imports": []}}}))
+    (pkg / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": "core", "dir": "../core"}]}))
+    pol = {"roots": ["P"], "layers": {"P.Defs": {"imports": []}}}
+    assert A.homes(pkg, pol) == {"P.Defs": ["P.Defs"], "P.Thms": ["P.Defs"], "Q.Spec": ["Q.Spec"], "Q.Math": ["Q.Spec"]}
+    (pkg / A.POLICY).write_text(json.dumps(pol | {"guarantees": {}, "reads": {"Q.Spec": {"definitions": {"Q.g": "1" * 64}}}}))
+    assert A.read_by_dependents(core, tmp_path) == {"Q.g"} and A.read_by_dependents(pkg, tmp_path) == set()
 
 
 def test_sorry_native_decide_and_other_axioms_are_named():
@@ -153,7 +227,7 @@ def test_the_sha256_hash_is_expr_hash_s_equivalence(tmp_path):
         "theorem c {x : Nat} : x + 0 = x := rfl\ntheorem d (x : Nat) : 0 + x = x := Nat.zero_add x\nend Control\n")
     (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Alpha\n")
     subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    f = A.facts_of(pkg, {"roots": ["Control"], "guarantees": {f"Control.{n}": {} for n in "abcd"}}, tmp_path)
+    f = A.facts_of(pkg, {"roots": ["Control"], "guarantees": {f"Control.{n}": {"owner": "@lean"} for n in "abcd"}}, tmp_path)
     got = {n: f["pins"][f"Control.{n}"]["type_sha256"] for n in "abcd"}
     assert got["a"] == got["b"] == got["c"] != got["d"] and len(got["a"]) == 64 and not (tmp_path / "canon.jsonl").exists()
 
@@ -172,7 +246,9 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     moves.write_text("namespace Control\ndef f (n : Nat) : Nat := n + 0\ndef g (n : Nat) : Nat := n\n"
                      "theorem a (n : Nat) : f n = n := rfl\ntheorem b (n : Nat) : g n = n := rfl\n"
                      f"theorem c (n : Nat) : {fin} := rfl\nend Control\n")
-    A.dump(pkg, A.load(pkg) | {"guarantees": {"Control.main_thm": {}, "Control.a": {}, "Control.b": {}, "Control.c": {}}})
+    pol = A.load(pkg)
+    A.dump(pkg, pol | {"layers": pol["layers"] | {"Control.Moves": {"imports": []}},
+                       "guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.a", "Control.b", "Control.c")}})
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
     audit = lambda **kw: A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None, **kw)
     build()
@@ -420,7 +496,7 @@ def test_a_package_without_a_policy_gets_a_template(tmp_path):
     assert A.packages(tmp_path) == [pkg]
     rep = A.audit(pkg, tmp_path / "out")
     assert rep["failures"][0].startswith(f"policy: {pkg} has no lean-audit.json")
-    assert rep["failures"][0].endswith('{"roots": ["Alpha", "Beta"], "guarantees": {}}')
+    assert rep["failures"][0].endswith('{"roots": ["Alpha", "Beta"], "guarantees": {}}') and '{"owner": "@lane"}' in rep["failures"][0]
 
 
 def test_a_record_from_before_the_rename_is_read_as_guarantees_and_one_holding_both_is_refused(tmp_path):

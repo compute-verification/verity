@@ -21,6 +21,7 @@ python tools/lean/cache.py get [PKG...]           main's cached build of each pa
 python tools/lean/audit.py [--build] PKG...       audit these packages (--build: setup.sh and lake build first)
 python tools/lean/audit.py --update PKG...        write the guarantees' records from the build; commit the diff (a copy of
                                                   each record goes beside its reports, which a recorded run publishes)
+python tools/lean/audit.py --update --owner @lane PKG...   the same, with @lane as the owner of each new guarantee
 python tools/lean/audit.py --all [--root DIR]     the controls, then every package under DIR with a lean-audit.json
 python tools/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
 python tools/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
@@ -53,7 +54,8 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   built or not. Lean's `.olean` files are reproducible, so the record holds on any machine. It changes when the package's
   imports change (run `--update`) or at a bump; checking it takes seconds;
 - each `layers` rule holds: the modules under a prefix import only the listed prefixes;
-- the guarantees say what their records say (below);
+- the guarantees say what their records say, and each names its owner (below);
+- every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
 - the kernel accepts every declaration again (`Replay.lean`, on one import of the package's dependencies, each
@@ -106,7 +108,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
  "compile_time": {"Pkg.Tactic": {"why": "why this module must run code while it compiles", "digest": "…"}},
  "dependency_unchecked": {"Dep.Loader": "why the package imports a dependency module that names a kernel bypass"},
  "layers": {"Pkg.Model": {"imports": ["Mathlib", "Pkg.Model"], "except": [], "why": "definitions import no proofs"}},
- "guarantees": {"Pkg.main_theorem": {}}
+ "reads_exempt": {"Pkg.Exe": "why a guarantee may read these definitions though they are not spec"},
+ "guarantees": {"Pkg.main_theorem": {"owner": "@lane"}}
 }
 ~~~
 
@@ -140,6 +143,19 @@ installs it first, so a machine without elan works), must pass clean and fail on
   with allowed axioms replaces it. A record written before guarantees were called that holds them (and each module's
   readers) under `pins`: the audit reads it so, `--update` rewrites it under today's names, and a record holding both
   is refused.
+- `owner`, in each guarantee's entry: the handle of the lane that answers for it (`@proofs`, `@compute-accounting`), whom
+  a broken or restated guarantee goes to. The audit fails an entry without one. Write it by hand, or pass
+  `--update --owner @lane`, which gives it to the new entries only: `--update` keeps an entry's owner, and writes no
+  entry without one. A changed owner is one line in the review and no change of the statement.
+- **The spec**, the trusted text a guarantee is stated over, is the `layers` prefixes: the modules whose imports the
+  policy rules. Every definition a guarantee's statement reads (theorems are not read: a statement means what it means
+  whatever proves the propositions inside it), followed through `meaning` and where the walk leaves it, must lie in the
+  spec of its package or of a package it requires by path (by that package's own `layers`), or in a pinned dependency
+  (the toolchain, Mathlib, ArkLib). A definition in a spec module must also be under `meaning`, or the record would hold
+  nothing of it. `reads_exempt` lists, each with the reason, module prefixes a guarantee may read outside the spec (a
+  package whose statements are about its executable, not about a model of it); an entry that exempts nothing fails.
+  The report also lists, without failing, the spec definitions that no guarantee reads, its own or a dependent
+  package's (`unread_spec` in `report.json`).
 - **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
   which keeps what Lean's `Expr.hash` keeps (constant names, universe levels, bound variable indices, projections,
   literals) and drops what it drops (binder names and binder info, `let` names, metadata). A renamed hypothesis is
@@ -181,7 +197,8 @@ it in the clone's git config. It merges entry by entry: each side's change to a 
 or a policy entry applies. Within a module both sides changed, the definitions merge the same way, the readers as sets, and
 the digest is recomputed. Guarantees arrive byte for byte from their branches, and a hand-written section one side extends
 (a module added to `meaning`) is kept. A side written before guarantees were called that (`pins`) is read under today's
-names.
+names. A guarantee's `owner` merges apart from the rest of its entry, so one side's new owner and the other side's
+restatement both apply.
 
 It refuses when both sides changed one entry differently: a guarantee restated on both, a definition whose content both changed,
 a dependency both bumped. It also refuses when one side stops reading a definition in a module the other side changed,
