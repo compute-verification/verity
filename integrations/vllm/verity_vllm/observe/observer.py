@@ -32,12 +32,17 @@ from .events import DispatchEnter, DispatchExit, Event, Note
 from .storage import StorageAdapter
 
 # custom ops whose registered Python body is re-entered under a nested mode (children recorded)
-REENTER_OPS = {"vllm.unified_attention_with_output", "vllm.unified_kv_cache_update"}
+REENTER_OPS = {"vllm.unified_attention_with_output", "vllm.unified_kv_cache_update",
+               "vllm.unified_mla_attention_with_output", "vllm.unified_mla_kv_cache_update"}
 REENTER_PREFIXES = ("vllm.moe_forward",)
 
 # where vLLM defines the functions it registered as the CUDA implementation of those ops
 # (`direct_register_custom_op(op_name=..., op_func=<this function>)`); first hit wins, verified on the pinned wheel
 REENTER_IMPL_PATHS: dict[str, list[tuple[str, str]]] = {
+    # MLA (d9105ea80): without re-entry only the body's Triton launches are seen, not its aten glue (the absorb's output
+    # transpose, the `cat` of the decode query) nor `_C_cache_ops.concat_and_cache_mla`, the latent cache write
+    "vllm.unified_mla_attention_with_output": [("vllm.model_executor.layers.attention.mla_attention", "unified_mla_attention_with_output")],
+    "vllm.unified_mla_kv_cache_update": [("vllm.model_executor.layers.attention.mla_attention", "unified_mla_kv_cache_update")],
     "vllm.unified_attention_with_output": [
         ("vllm.model_executor.layers.attention.attention", "unified_attention_with_output"),  # d9105ea80
         ("vllm.attention.layer", "unified_attention_with_output"),                              # older layouts
