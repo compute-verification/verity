@@ -30,6 +30,12 @@
    "run": "r20261002-013330-8cff",
    "sha256": "c9a35455c168955a68a87fb6e8301e84114ef79c032ae4efdb14f3be669af603"
   },
+  "6fddd43b7f478f902a2c9f82f093aad2114b14e50fc1d468a97adc4e8f321d7b": {
+   "bytes": 701550733,
+   "package": "security_proofs/nci",
+   "run": "r20261002-013330-8cff",
+   "sha256": "8a3e532f4f17d138d528e5281bba5a294dd2a66b2692234700073f6ab92ea827"
+  },
   "7f695ff36f2ff2aa61d16775fab5ba1e738b38ca9369552ba8f14cdeee7c70f2": {
    "bytes": 701650941,
    "package": "packages/verity/lean",

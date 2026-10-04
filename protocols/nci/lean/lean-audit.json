@@ -1,5 +1,5 @@
 {
- "roots": ["Nci"],
+ "roots": ["Nci.Assumptions", "Nci.Guarantees", "Nci.Protocol"],
  "assumptions": ["Nci.Assumptions", "Verity.Assumptions"],
  "meaning": [
   "Nci.Protocol",
@@ -32,20 +32,6 @@
    ],
    "except": [],
    "why": "a guarantee is a Prop over the protocol and the assumptions, never a proof"
-  }
- },
- "upstream": {
-  "imports": ["Mathlib"],
-  "watch": {
-   "loomis-whitney": {
-    "about": "Nci.SecurityProofs.loomis_whitney: the discrete Loomis-Whitney inequality, proved by hand",
-    "mentions": ["Finset.card", "Finset.image", "HPow.hPow"],
-    "ack": [
-     "Finset.card_pow_quotient_mul_pow_inter_subgroup_le",
-     "Finset.le_card_quotient_mul_sq_inter_subgroup",
-     "Finset.prod_comp"
-    ]
-   }
   }
  },
  "pins": {
