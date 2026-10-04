@@ -119,8 +119,6 @@ def run_row(o: Run | Stage, stages: str) -> int:
         world = o.world if o.world is not None else R.tp_world(_workload(o.row))
         if world < 2:
             raise UsageError(f"--world {world}: a tensor-parallel row needs a world of at least 2 ranks")
-        if o.commit.config_run == "1" and world > 2:
-            raise UsageError(f"--config-run 1: {o.row} runs at world {world}; the config run covers single-GPU and TP2 rows for now")
         if o.commit.group:
             raise UsageError(f"--commit-group: {o.row} is a tensor-parallel row; a grouped Commit is a single-GPU row's")
         if o.commit.replay_deferred == "slim":

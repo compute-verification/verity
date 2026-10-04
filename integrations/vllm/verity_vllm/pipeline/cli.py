@@ -34,6 +34,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "build": ("verity_vllm.pipeline.build", "derive one request wrapper's Program (Build step)"),
     "canonical-profiles": ("verity_vllm.engine.profiles.canonical", "check or rewrite the canonical profile pins"),
     "capture-identities": ("verity_vllm.correspondence.capture_identities", "capture identities vs the canonical B1 circuit"),
+    "capture-map": ("verity_vllm.check.capture_map", "a capture map against a module inventory (check), its tap counts and value ids"),
     "census": ("verity_vllm.properties.census", "kernel census of a bare run"),
     "commit": ("verity_vllm.pipeline.commit", "Commit stage: pairs protocol, commitment root and overhead"),
     "commit-group": ("verity_vllm.pipeline.commit_group", "the Commits of several rows of one engine, in one process under one GPU lease"),
@@ -66,6 +67,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "manifest": ("verity_vllm.pipeline.manifest", "the required-value manifest (build, build-global, compare)"),
     "manifest-verify": ("verity_vllm.query.manifest.verify", "is manifest.json the manifest of record"),
     "match": ("verity_vllm.pipeline.match", "Match stage driver of one configuration"),
+    "meta-inventory": ("verity_vllm.engine.meta_inventory", "a checkpoint's modules on the meta device, from its config.json alone"),
     "noninterference": ("verity_vllm.properties.noninterference", "observer non-interference check"),
     "norm-tap-build": ("verity_vllm.acquire.norm_tap_src.build_ext", "build or check the norm-scale tap's CUDA op"),
     "operand-provenance": ("verity_vllm.check.operand_provenance", "exhaustive operand provenance check"),
@@ -226,7 +228,8 @@ def set_environment(environ: Mapping[str, str], keep: tuple[str, ...] = ()) -> N
 
 def process_settings(environ: MutableMapping[str, str]) -> None:
     """The process-wide settings every command takes from the environment: a leased Commit's lease (`gpu_lease.acquire` reads and
-    sets this environment)."""
+    sets this environment).  The dense chain's threads are not among them: `dense_rows` reads `VERITY_DENSE_THREADS` when it is
+    imported, and importing it here would need the core, which a Build's top-level process does not have on its path."""
     if environ.get("VERITY_LEASE_STARTED"):
         from verity_vllm.pipeline import gpu_lease
         gpu_lease.use_environ(environ)
