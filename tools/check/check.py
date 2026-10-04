@@ -392,7 +392,7 @@ def slots_block(name: str, doc: dict | str) -> list[str]:
 
 def slots_view(argv: list[str], read=None) -> int:
     """`--slots [--json] [--priority] [MACHINE ...]`: `slots_block` for each machine (default AUTO), then the machine
-    `--on auto` would take now; --json, the documents themselves. 1 when no machine could be read."""
+    `--on auto` (or `--on M1,M2`) would take now; --json, the documents themselves. 1 when no machine could be read."""
     names = [a for a in argv if a not in ("--json", "--priority")] or list(AUTO)
     if any(a.startswith("-") for a in names):
         print("usage: check.py --slots [--json] [--priority] [MACHINE ...]", file=sys.stderr)
@@ -404,7 +404,8 @@ def slots_view(argv: list[str], read=None) -> int:
         for name in names:
             print("\n".join(slots_block(name, docs[name])))
         got, why, _ = choose(names, docs, "--priority" in argv)
-        print(f"--on auto{' --priority' if '--priority' in argv else ''} would " + (f"take {got}: {why}" if got else f"refuse: {why}"))
+        on = "auto" if names == list(AUTO) else ",".join(names)
+        print(f"--on {on}{' --priority' if '--priority' in argv else ''} would " + (f"take {got}: {why}" if got else f"refuse: {why}"))
     return 0 if any(isinstance(d, dict) for d in docs.values()) else 1
 
 

@@ -235,5 +235,5 @@ def test_the_view_shows_each_machine_s_slots_windows_lean_slots_and_waiters_then
     assert CHECK.slots_view(["--json", N2], read=lambda names: {n: n2 for n in names}) == 0
     assert json.loads(capsys.readouterr().out) == {N2: n2}
     assert CHECK.slots_view(["m"], read=lambda names: {"m": "exit 255: ssh"}) == 1
-    assert capsys.readouterr().out.splitlines() == ["m: can't be read: exit 255: ssh", "--on auto would refuse: no machine's slots could be read"]
+    assert capsys.readouterr().out.splitlines() == ["m: can't be read: exit 255: ssh", "--on m would refuse: no machine's slots could be read"]
     assert CHECK.slots_view(["--bogus"]) == 2
