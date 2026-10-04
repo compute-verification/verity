@@ -101,58 +101,48 @@ research git old2new|remap|check|build ...                              # after 
 research slack ask|announce|reply|pickup|done|decline|roster|match|verify-author|read|handles|subscriptions|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
 
-After a history rewrite, a `commit-map/v1` artifact records each old commit's image and whether its tree was kept; it applies once
-its approver labels it `commit_map=accepted`. The gate then reads an attempt of an old commit for its image when the tree is the
-same (as the attempt recorded it), and refuses a REF that holds a commit the rewrite replaced. `research git remap` moves a
-clone's local branches onto the rewritten history (local commits re-created over the images, trees unchanged), `research git
-old2new SHA` names an image, `research git check REF` is the old-history guard, and `research git build PRE POST` writes the
-map's payload from the two mirrors.
+After a history rewrite, an accepted `commit-map/v1` (labelled `commit_map=accepted`) lets an attempt of an old commit count for
+its image when the tree is unchanged, and the gate refuses a REF holding a commit the rewrite replaced. `research git remap`,
+`old2new SHA`, `check REF` and `build PRE POST` move clones onto it, name images, guard and build the map (`commitmap.py`).
 
 `research merge` is how `main` receives a merge: in the target's checkout it runs `git merge --no-ff REF` only when the store
 (refreshed from the remote first, when one is usable) holds an attempt of the tool, default `check`, with `state` done, rc 0,
 and a clean source at REF's exact commit, and when the target's tip is an ancestor of REF, so the merged tree is the checked one.
-The attempt's own record must agree, its command be the one the target's declaration names (`Tool.command`, in a check slot or
-not, followed by nothing but check.py's own flags), and its own result be of a kind that declaration produces (`check/v1`) and
-not the Lean fast path's `lean-fast/v1`, with the verdict passed and no step listed twice: no result, or an unreadable record or
-result, passes no gate. The merge commit carries a `Check: <attempt id>` trailer. The tool is the repository's (`tools/check`);
-`research` only reads its attempts. A refusal exits 3. `--canary` checks, in scratch stores, that the gate, the push guard and the
-train gate refuse each bad attempt `CANARY` lists (no result, another or a refused kind, a record that can't be read or disagrees,
-another command, a failed verdict, a step listed twice) and admit a good one.
+The attempt's own record and result must agree with the target's declaration: its command (`Tool.command`, in a check slot or
+not, plus check.py's own flags only), a result kind it produces (`check/v1`, never `lean-fast/v1`), a passed verdict and no step
+listed twice. Anything else, unreadable included, passes no gate, and a refusal exits 3. The merge commit carries a `Check:
+<attempt id>` trailer; `research` only reads the attempts of the repository's tool (`tools/check`). `--canary` checks, in scratch
+stores, that every gate refuses each bad attempt in `CANARY` and admits a good one.
 
 `research merge --train A B C` merges the refs in order onto the target's tip in a scratch worktree (one `--no-ff` merge each,
 so the chain's commits are the train's prefixes), records the tool on the last (`research run --tool`, `--on` a machine and
 polled there), and fast-forwards the target to it when it passes: the exact tree checked is the one that lands. When it fails,
 the prefixes are bisected (each checked the same way) to the first ref whose merge breaks it, and the target fast-forwards to
-the longest prefix that passed. A `--command` the gate would refuse (not the declared one) is refused before anything is checked.
+the longest prefix that passed.
 
-`research merge --train --prepare BRANCH [--onto BASE] N@SHA ...` is the lander's train build: the same chain of merges, onto
-the remote's `--into` or the prep branch of a train ahead (`--onto`), in a scratch worktree, so the checkout it runs from is never
-touched. Each `N@SHA` (pull request N) or `BRANCH@SHA` is fetched and refused unless its head is still SHA. The build stops at
-the first ref that doesn't merge. Then check's preflight runs on the result (`check.py --preflight`: `uv.lock`, the wall-clock
-lint and the repository's tests, among them the markdown caps), and the tip is pushed as BRANCH, never forced, and read back.
-Nothing is recorded or landed: `tools/check/train.sh BRANCH MACHINE` checks it, and `research merge BRANCH` lands it.
+`research merge --train --prepare BRANCH [--onto BASE] N@SHA ...` is the lander's train build: the same chain, in a scratch
+worktree, onto the remote's `--into` or a train ahead's prep branch (`--onto`). An `N@SHA` or `BRANCH@SHA` whose head moved is
+refused, and the build stops at the first ref that doesn't merge. check's preflight (`check.py --preflight`, the markdown caps
+among its tests) runs on the tip, which is pushed as BRANCH, never forced. Nothing is recorded or landed:
+`tools/check/train.sh BRANCH MACHINE` checks it, and `research merge BRANCH` lands it.
 
-After a merge or a train lands, `research merge` sweeps the pull requests (`gh`), and `research merge --sweep` does only that.
-It fetches the remote's copy of the target, closes every open pull request whose head is on it with a one-line comment naming
-the commit it landed in, and retargets onto the target every open pull request whose base branch's tip is on it. That covers
-the stacked pull requests GitHub never closes because their base isn't the target. The remote's branch is the truth, not the
-checkout. With `--push`, a merge that lands is pushed (never forced) and then swept, and a refused push sweeps nothing and exits
-1; without it the sweep runs before anyone pushes and closes nothing the merge landed, so after `git push`, run `research merge
---sweep`. Whoever lands a train passes `--push` (Daniel, 1 Oct). Once origin has `main`, the same commit goes to node 1's bare
-repository (`vy-lean-sandbox checkout` builds from its `main`) over the ssh `research run --on vy-nebius-1` uses, a plain push
-cut off after 120 s; one that fails logs a line naming the failure and the `research merge --mirror SHA` that reruns it, and the
-merge still exits 0 (`RESEARCH_MERGE_MIRROR` names another machine; empty skips it). The sweep also deletes each closed pull request's head branch
-unless an open pull request still uses it. It is idempotent, and `--dry-run` prints what it would close and retarget. Without the remote the sweep is skipped, and a
-failure (no `gh`, no network) is reported without changing the merge's exit code.
+After a merge or a train lands, `research merge` sweeps the pull requests (`gh`; `--sweep` does only that, `--dry-run` prints
+it). From the remote's copy of the target, the truth rather than the checkout, it closes each open pull request whose head is on
+it, naming the commit, retargets each whose base branch's tip is on it (stacks GitHub never closes), and deletes a closed one's
+head branch unless an open one uses it. With `--push`, which whoever lands a train passes (Daniel, 1 Oct), a merge that lands is
+pushed, never forced, before the sweep, and a refused push sweeps nothing and exits 1; without it, run `research merge --sweep`
+after `git push`. No remote skips the sweep, and its failure leaves the exit code alone. Once origin has `main`, the commit also
+goes to node 1's bare repository (`vy-lean-sandbox checkout` builds from its `main`), a plain push over ssh cut off after 120 s;
+a failure logs the `research merge --mirror SHA` that reruns it, and the merge stands (`RESEARCH_MERGE_MIRROR` names another
+machine; empty skips it).
 
 A tool's declaration may name result steps a merge needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
 `passed` admits it; `!` patterns leave paths out (`!README.md`: every file of that name under the prefixes). `check` requires
 `lean-agreement` for `backends/flock/`, less its README.md and PROTOCOL.md files; `--train --send FILE` ships what such a step
-needs. It may also name what runs after a landing (`Tool.after_land`, an argv, read from the target's checkout too): once
-`--push` has pushed a merge or a train, that argv is started in the checkout, in a session of its own, with the landed commit
-appended, and nothing it does changes the merge's exit code. `check`'s is `tools/check/post_train.py`, the vLLM reference
-regression's manifest rebuilds, which label the landing's check attempt when they end.
+needs. It may also name what runs after a landing (`Tool.after_land`, an argv): once `--push` has pushed, it starts detached in
+the checkout with the landed commit appended, and can't change the exit code; `check`'s is `tools/check/post_train.py`, the vLLM
+regression's manifest rebuilds, which label the landing's check attempt.
 
 **Not live yet:** `main` still moves only by the trains the research coordinator lands with `research merge`, so a `ready`
 label alone lands nothing; ask the train runner on Slack as well until the queue lands a full train.
