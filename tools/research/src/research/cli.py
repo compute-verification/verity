@@ -766,18 +766,23 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
     return 0
 
 
-def _run_dir(root: Path, ref: str, on: str | None) -> Path:
+def _run_dir(root: Path, ref: str, on: str | None, *, unique: bool = False) -> Path:
     """`ref` under the local runs root, else, for a full run id, the run another VM launched, adopted from the machine that holds
-    it (`remote.adopt`).  FileNotFoundError names each machine's answer, and the store's attempt when it has one."""
+    it (`remote.adopt`; `unique`: refused when two machines hold it).  FileNotFoundError names each machine's answer, and the store's
+    attempt when it has one; LookupError when `on` names another machine than the local run dir's."""
     try:
-        return R.resolve(root, ref)
+        d = R.resolve(root, ref)
     except FileNotFoundError:
         from .store import ids
 
         if not ids.is_run_id(ref):
             raise
+    else:
+        if on and (held := (remote._read_json(d / "remote.json") or {}).get("machine")) != on:
+            raise LookupError(f"{d.name} is {f'on {held}' if held else 'a local run'} (its local run dir), not on {on}")
+        return d
     try:
-        return remote.adopt(root, ref, on=on)
+        return remote.adopt(root, ref, on=on, unique=unique)
     except remote.Refused as e:
         raise FileNotFoundError(f"no run {ref!r} under {root}, and {e}{_attempt_hint(ref)}") from None
 
@@ -837,7 +842,7 @@ def cmd_cancel(argv: list[str]) -> int:
     ap.add_argument("--on", default=None, metavar="NAME", help="a run another VM launched: look for it on this machine only")
     ns = ap.parse_args(argv)
     try:
-        run_dir = _run_dir(R.runs_root(ns.runs_dir), ns.ref, ns.on)
+        run_dir = _run_dir(R.runs_root(ns.runs_dir), ns.ref, ns.on, unique=True)
         out = remote.cancel(run_dir, reason=ns.reason, by=ns.by)
     except (FileNotFoundError, LookupError, remote.Refused) as e:
         print(f"research cancel: {e}", file=sys.stderr)

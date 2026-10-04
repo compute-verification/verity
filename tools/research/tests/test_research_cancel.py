@@ -187,3 +187,33 @@ def test_a_tool_outside_the_machines_tool_snapshots_is_refused(tmp_path, monkeyp
         assert not marker.exists() and workload.poll() is None
     finally:
         _end(workload)
+
+
+def test_on_naming_another_machine_than_the_local_dirs_is_refused(tmp_path, monkeypatch, capsys):
+    """C3: once `research status RUN` adopted the run from vy-b, `cancel RUN --on vy-a` must not cancel it on vy-b."""
+    here, d, workload = _launched_elsewhere(tmp_path, monkeypatch)
+    try:
+        assert cli.main(["status", RUN, "--runs-dir", str(here)]) == 0
+        assert cli.main(["cancel", RUN, "--on", "vy-a", "--reason", "x", "--runs-dir", str(here)]) == 1
+        assert f"{RUN} is on vy-b (its local run dir), not on vy-a" in capsys.readouterr().err and workload.poll() is None
+    finally:
+        _end(workload)
+
+
+def test_a_run_id_two_machines_hold_is_refused_without_on(tmp_path, monkeypatch, capsys):
+    """C4: adopt takes the first machine in name order; a cancel asks every machine and refuses an id two of them hold."""
+    here, d, workload_b = _launched_elsewhere(tmp_path, monkeypatch)
+    da = tmp_path / "a" / "runs" / RUN
+    da.mkdir(parents=True)
+    workload_a = _workload(da)
+    (da / "status.json").write_text(json.dumps({"state": "running", "pid": workload_a.pid, "pgid": workload_a.pid}))
+    (da / "job.json").write_text(json.dumps({"run": {"remote": {"machine": "vy-a", "tool": _snapshot(tmp_path / "a")}}}))
+    (da / "events.jsonl").write_text("")
+    try:
+        assert cli.main(["cancel", RUN, "--reason", "x", "--runs-dir", str(here)]) == 1
+        assert f"vy-a and vy-b each hold a run {RUN}: name one with --on" in capsys.readouterr().err
+        assert workload_a.poll() is None and workload_b.poll() is None and not (here / RUN).exists()
+        assert cli.main(["cancel", RUN, "--on", "vy-a", "--reason", "x", "--runs-dir", str(here)]) == 0
+        assert workload_a.wait() == -signal.SIGTERM and workload_b.poll() is None
+    finally:
+        _end(workload_a, workload_b)

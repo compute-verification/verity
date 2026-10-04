@@ -1486,10 +1486,12 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         raise
 
 
-def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict[str, dict[str, Any]] | None = None) -> Path:
+def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict[str, dict[str, Any]] | None = None,
+          unique: bool = False) -> Path:
     """The local run dir of a run another VM launched: find <root>/runs/<run_id> on machine `on`, else on each ssh machine, write
     the remote.json `launch` would have (phase `adopted`), and fetch its records.  Refused when the id is not a full run id, when no
-    machine holds it (each machine's answer in the reason), or when the local dir already exists."""
+    machine holds it (each machine's answer in the reason), or when the local dir already exists; with `unique` (a cancel), every
+    machine is asked and an id more than one holds is refused rather than taken from the first."""
     from .store import ids
 
     if not ids.is_run_id(run_id):
@@ -1499,7 +1501,7 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
         raise Refused(f"{local} exists already")
     ms = load_machines() if machines is None else machines
     names = [on] if on else sorted(n for n, m in ms.items() if m.get("provider") == "ssh")
-    answers = []
+    answers, held = [], []
     for name in names:
         m = ms.get(name)
         if m is None:
@@ -1519,6 +1521,13 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
         if r.returncode != 0:
             answers.append(f"{name}: " + (f"no {rd}" if r.returncode == 1 else f"ssh rc {r.returncode}: {r.stderr.decode(errors='replace').strip()[-160:]}"))
             continue
+        held.append((name, m, tgt, rd))
+        if not unique:
+            break
+    if len(held) > 1:
+        raise Refused(f"{' and '.join(h[0] for h in held)} each hold a run {run_id}: name one with --on")
+    if held:
+        name, m, tgt, rd = held[0]
         local.mkdir(parents=True, exist_ok=False)
         write_json_atomic(local / "remote.json", {
             "schema": "research/remote/v0.1", "run_id": run_id, "machine": name, "project": m.get("project"), "phase": "adopted",
