@@ -124,8 +124,12 @@ def co_tenants(lease_dir: str = "/run/gpu-lease") -> list[str]:
         for p in sorted(Path(lease_dir).glob("*.owner")):
             line = p.read_text(errors="replace").strip().replace("\n", " ")
             head, _, cmd = line.partition("cmd=")
-            keep = [w for w in head.split() if w.split("=")[0] in ("run", "who", "since", "until", "preempt", "timed")]
-            out.append(" ".join([p.stem, *keep, f"cmd={cmd[:80]}"]) if line else f"{p.stem} free")
+            fields = dict(w.split("=", 1) for w in head.split() if "=" in w)
+            keep = [f"{k}={fields[k]}" for k in ("run", "who", "since", "until", "preempt", "timed") if k in fields]
+            # an owner file outlives its lease; a holder whose pid is gone is stale
+            live = fields.get("pid", "").isdigit() and Path(f"/proc/{fields['pid']}").exists()
+            out.append(" ".join([p.stem, "held" if live else "stale", *keep, f"cmd={cmd[:80]}"]) if line
+                       else f"{p.stem} free")
     except OSError:
         pass
     return out
@@ -500,8 +504,38 @@ def host_d2h(args) -> dict:
     check = pinned[:64].clone()
     want = F.logical_words("chacha8", F.fill_key(args.seed, 7), 1)[:16].view(np.uint8)
     res["first_bytes_ok"] = bool(np.array_equal(check.numpy(), want))
-    del pinned, stages
+    del stages
+    try:
+        res["uva_digest"] = host_uva_digest(torch, args, pinned)
+    except Exception as e:  # UVA host access may be unsupported; record it rather than lose the fill numbers
+        res["uva_digest"] = {"error": repr(e)}
+    del pinned
     torch.cuda.empty_cache()
+    return res
+
+
+def host_uva_digest(torch, args, pinned) -> dict:
+    """The digest of the pinned host buffer read by the GPU over PCIe (UVA zero-copy, no staging), in sequential order:
+    the host-DRAM half of an erasure answer when the GPU computes it. Checked against the same blocks copied to the device."""
+    n = pinned.numel() // F.BLOCK_BYTES
+    host2d = pinned.view(torch.int32).view(n, F.WORDS)
+    ar = torch.arange(n, dtype=torch.int64, device="cuda")
+    hbuf = torch.empty(n, dtype=torch.int64, device="cuda")
+    zbuf = torch.empty(n, dtype=torch.int64, device="cuda")
+    cbuf = torch.empty(F.D.INTERLEAVE, dtype=torch.int64, device="cuda")
+    g, z, _ = F.digest_key(args.seed, 8)
+    k = min(64, n)
+    uva = int(F.device_digest(torch, host2d[:k], ar[:k], g, z, hbuf, zbuf, cbuf).item())
+    dev = int(F.device_digest(torch, host2d[:k].cuda(), ar[:k], g, z, hbuf, zbuf, cbuf).item())
+    res = {"bytes": n * F.BLOCK_BYTES, "check_ok": uva == dev, "reps": []}
+    for _ in range(args.host_reps + 1):
+        torch.cuda.synchronize()
+        t = time.perf_counter()
+        int(F.device_digest(torch, host2d, ar, g, z, hbuf, zbuf, cbuf).item())
+        s = time.perf_counter() - t
+        res["reps"].append({"seconds": s, "gbps": n * F.BLOCK_BYTES / s / 1e9})
+    res["reps"] = res["reps"][1:]
+    print(f"host uva digest: {res['reps'][-1]['gbps']:.1f} GB/s, check {'OK' if res['check_ok'] else 'FAILED'}", flush=True)
     return res
 
 
@@ -563,6 +597,7 @@ def cmd_soak(args, meta):
            "t_start": t_start, "idle_every": args.idle_every, "idle_s": args.idle_s, "co_tenants_start": co_tenants(),
            "pressure": [], "cols": cols}
     t0p = time.perf_counter()
+    doc["t0_epoch"] = time.time()  # cols["t"] is seconds after this, so runs line up with the probe's events
     last_flush = last_psi = time.perf_counter()
     i = 0
     while not STOP.is_set() and time.time() < stop_at:
