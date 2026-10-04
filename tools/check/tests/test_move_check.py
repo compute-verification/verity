@@ -184,3 +184,112 @@ def test_explicit_map_and_cli(tmp_path, capsys, monkeypatch):
     assert not json.loads(capsys.readouterr().out)["certified"]
     assert MC.main([base, "HEAD", "--map", "protocols/pous/lean=elsewhere"]) == 0
     assert capsys.readouterr().out.startswith("move-check: certified")
+
+
+SPEC = "packages/verity/lean"
+PROOFS = "security_proofs/core"
+LAKEFILE_SPEC = ('name = "verity"\ndefaultTargets = ["Verity"]\n\n[[require]]\nname = "mathlib"\n'
+                 'git = "https://github.com/leanprover-community/mathlib4"\nrev = "abc"\n\n# Verity core\'s Lean.\n'
+                 '[[lean_lib]]\nname = "Verity"\n')
+LAKEFILE_PROOFS = ('name = "coreproofs"\ndefaultTargets = ["CoreProofs"]\n\n[[require]]\nname = "mathlib"\n'
+                   'git = "https://github.com/leanprover-community/mathlib4"\nrev = "abc"\n\n[[require]]\nname = "verity"\n'
+                   'path = "../../packages/verity/lean"\n\n# The proofs of core\'s guarantees.\n[[lean_lib]]\nname = "CoreProofs"\n'
+                   'globs = ["CoreProofs.+"]\n')
+MATHLIB = {"url": "https://github.com/leanprover-community/mathlib4", "type": "git", "name": "mathlib", "rev": "abc",
+           "inherited": False, "configFile": "lakefile.lean"}
+VERITY_PATH = {"type": "path", "scope": "", "name": "verity", "manifestFile": "lake-manifest.json", "inherited": False,
+               "dir": "../../packages/verity/lean", "configFile": "lakefile.toml"}
+PINS = {"Verity.SecurityProofs.G": {"signature": ["Verity.SecurityProofs.G : Verity.G"], "assumptions": [], "type_hash": "aa"}}
+READS = {"Verity.Guarantees": {"digest": "dd", "definitions": {"Verity.G": "ee"}}}
+FOO = "import Verity.Guarantees\n\nnamespace Verity.SecurityProofs\n\ntheorem G : Verity.G := rfl\n\nend Verity.SecurityProofs\n"
+BAR = ("import Verity.SecurityProofs.Foo\nimport Mathlib.Tactic\n\nnamespace Verity.SecurityProofs\n\n"
+       "theorem H : 1 = 1 := rfl\n\nend Verity.SecurityProofs\n")
+
+
+def _manifest(name: str, *packages: dict) -> str:
+    return json.dumps({"version": "1.2.0", "packagesDir": ".lake/packages", "packages": list(packages), "name": name}, indent=1)
+
+
+def _lock(**fields) -> str:
+    return json.dumps(fields, indent=2) + "\n"
+
+
+SPEC_FILES = {
+    f"{SPEC}/lakefile.toml": LAKEFILE_SPEC, f"{SPEC}/lean-toolchain": "leanprover/lean4:v4.99.0\n",
+    f"{SPEC}/lake-manifest.json": _manifest("verity", MATHLIB),
+    f"{SPEC}/lean-audit.json": _lock(roots=["Verity"], layers={"Verity.Protocol": []}, pins=PINS, reads=READS),
+    f"{SPEC}/Verity.lean": "import Verity.Protocol\nimport Verity.Guarantees\nimport Verity.SecurityProofs\n",
+    f"{SPEC}/Verity/Protocol.lean": "def Verity.p := 1\n",
+    f"{SPEC}/Verity/Guarantees.lean": "import Verity.Protocol\n\ndef Verity.G : Prop := Verity.p = 1\n",
+    f"{SPEC}/Verity/SecurityProofs.lean": "import Verity.SecurityProofs.Foo\nimport Verity.SecurityProofs.Bar\n",
+    f"{SPEC}/Verity/SecurityProofs/Foo.lean": FOO,
+    f"{SPEC}/Verity/SecurityProofs/Bar.lean": BAR,
+}
+
+
+def _split(tmp_path: Path, bar: str | None = None, pins: dict | None = None, files: dict | None = None) -> tuple[Path, str, dict]:
+    """Core's proofs split out to `security_proofs/core` under the module root `CoreProofs`; the spec and its umbrella stay."""
+    repo, base = _repo(tmp_path, SPEC_FILES)
+    for m in ("Foo", "Bar"):
+        _move(repo, f"{SPEC}/Verity/SecurityProofs/{m}.lean", f"{PROOFS}/CoreProofs/{m}.lean")
+    split = {
+        f"{PROOFS}/CoreProofs/Bar.lean": bar if bar is not None else BAR.replace("import Verity.SecurityProofs.Foo", "import CoreProofs.Foo"),
+        f"{SPEC}/Verity/SecurityProofs.lean": "import CoreProofs.Foo\nimport CoreProofs.Bar\n",
+        f"{SPEC}/lean-audit.json": _lock(roots=["Verity.Protocol", "Verity.Guarantees", "Verity.SecurityProofs"],
+                                         layers={"Verity.Protocol": []}, pins=pins or PINS, reads=READS,
+                                         proved_in=["../../../security_proofs/core"]),
+        f"{PROOFS}/lakefile.toml": LAKEFILE_PROOFS, f"{PROOFS}/lean-toolchain": "leanprover/lean4:v4.99.0\n",
+        f"{PROOFS}/lake-manifest.json": _manifest("coreproofs", VERITY_PATH, MATHLIB),
+        f"{PROOFS}/lean-audit.json": _lock(roots=["CoreProofs"], layers={"Verity.Protocol": []}),
+    }
+    _write(repo, {**split, **(files or {})})
+    return repo, base, _check(repo, base)
+
+
+def test_lean_split_is_certified(tmp_path):
+    _, _, r = _split(tmp_path)
+    assert r["certified"], r["refusals"]
+    assert r["lean_modules"] == {"Verity.SecurityProofs.Bar": "CoreProofs.Bar", "Verity.SecurityProofs.Foo": "CoreProofs.Foo"}
+    assert r["renames"] == [{"old": f"{SPEC}/Verity/SecurityProofs/Foo.lean", "new": f"{PROOFS}/CoreProofs/Foo.lean"}]
+    kinds = {e["path"]: e["kind"] for e in r["edits"]}
+    assert kinds == {f"{PROOFS}/CoreProofs/Bar.lean": "lean", f"{SPEC}/Verity/SecurityProofs.lean": "lean",
+                     f"{SPEC}/lean-audit.json": "lock", **{f"{PROOFS}/{n}": "copy" for n in sorted(MC.LAKE_COPIES)
+                                                             if n != "lakefile.lean"}}
+
+
+def test_lean_split_that_changes_a_proof_line_is_refused(tmp_path):
+    bar = BAR.replace("import Verity.SecurityProofs.Foo", "import CoreProofs.Foo").replace(":= rfl", ":= by rfl")
+    [f] = _split(tmp_path, bar=bar)[2]["refusals"]
+    assert f["path"] == f"{PROOFS}/CoreProofs/Bar.lean" and "+theorem H : 1 = 1 := by rfl" in f["hunk"]
+
+
+def test_lean_split_that_changes_a_guarantee_record_is_refused(tmp_path):
+    pins = {"Verity.SecurityProofs.G": {**PINS["Verity.SecurityProofs.G"], "type_hash": "ab"}}
+    [f] = _split(tmp_path, pins=pins)[2]["refusals"]
+    assert f["path"] == f"{SPEC}/lean-audit.json" and f["reason"].startswith("`pins` changed")
+    assert '"type_hash": "aa"' in f["hunk"] and '"type_hash": "ab"' in f["hunk"]
+
+
+def test_lean_import_of_a_module_that_did_not_move_is_refused(tmp_path):
+    bar = BAR.replace("import Verity.SecurityProofs.Foo", "import CoreProofs.Other")
+    [f] = _split(tmp_path, bar=bar)[2]["refusals"]
+    assert f["path"] == f"{PROOFS}/CoreProofs/Bar.lean" and "+import CoreProofs.Other" in f["hunk"]
+
+
+def test_proofs_package_lakefile_with_a_new_git_dependency_is_refused(tmp_path):
+    lakefile = LAKEFILE_PROOFS + '\n[[require]]\nname = "extra"\ngit = "https://example.com/extra"\n'
+    [f] = _split(tmp_path, files={f"{PROOFS}/lakefile.toml": lakefile})[2]["refusals"]
+    assert f["path"] == f"{PROOFS}/lakefile.toml" and '+git = "https://example.com/extra"' in f["hunk"]
+
+
+def test_proofs_package_lock_that_lists_guarantees_is_refused(tmp_path):
+    [f] = _split(tmp_path, files={f"{PROOFS}/lean-audit.json": _lock(roots=["CoreProofs"], pins=PINS)})[2]["refusals"]
+    assert f["path"] == f"{PROOFS}/lean-audit.json" and "lists no guarantees" in f["reason"]
+
+
+def test_spec_lock_proved_in_that_names_no_package_is_refused(tmp_path):
+    repo, base = _repo(tmp_path, SPEC_FILES)
+    _write(repo, {f"{SPEC}/lean-audit.json": _lock(roots=["Verity"], layers={"Verity.Protocol": []}, pins=PINS, reads=READS,
+                                                   proved_in=["../../security_proofs/core"])})
+    [f] = _check(repo, base)["refusals"]
+    assert "`proved_in` entry" in f["reason"]

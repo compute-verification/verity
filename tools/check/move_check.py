@@ -7,15 +7,28 @@ Every path git sees changed must be one of:
 - a rename with byte-identical content and mode (git's 100% rename);
 - an edit, in place or with a rename, to an allowlisted path-bearing file (`PATH_FILES`, `PATH_NAMES`, a skill's `SKILL.md`)
   that leaves it unchanged once each old path in it is rewritten to its new one, a quoted relative path (`".."`,
-  `"../level3"`) being resolved against the file's own directory first. This covers each `lean-audit.json`, whose pins
-  are then unchanged;
+  `"../level3"`) being resolved against the file's own directory first;
 - an edit to a `*.py` file whose changed lines only rewrite the module of an `import M` / `from M import` line, from where
-  a renamed module was to where it is now.
-Anything else is refused, with its first offending hunk. Exit 0 certified, 1 refused, 2 on a usage or git error.
+  a renamed module was to where it is now;
+- an edit to a `*.lean` file whose changed lines only rewrite an `import M` to the new module of a `.lean` file renamed in
+  the range (a module is its path below its Lake package, `/` as `.`, without `.lean`), as when a Lean split gives the
+  proof modules a root of their own while their declarations keep their namespace;
+- an edit to a `lean-audit.json` that keeps `pins` (the guarantees' records; `guarantees` too, if a lock has it) and
+  `reads` byte for byte, may change the structural `roots` and `proved_in` (each `proved_in` entry a Lake package at HEAD),
+  and changes any other field only by moved paths and module names;
+- a new `lakefile.toml`, `lakefile.lean`, `lake-manifest.json`, `lean-audit.json` or `lean-toolchain` at the root of a new
+  Lake package that the range moved `.lean` files into from one source package, which is a copy of the source package's
+  file (`copy_change`): a lakefile may differ only in package and library names, `roots`, `globs`, `defaultTargets`,
+  comments and `require`s by relative path to a Lake package at HEAD; a manifest only in its name, the moved paths of
+  its path packages, and new path packages; a lock lists no guarantees and keeps each field it keeps; a toolchain is
+  identical.
+Anything else is refused, with what differed and its first offending hunk. Exit 0 certified, 1 refused, 2 on a usage or
+git error.
 
-The path map comes from the exact renames. Each rename contributes the shortest prefix pair (old directory, new directory)
-whose whole subtree in BASE moved there file by file. When only `protocols/pous` moved, `protocols -> security_proofs` is
-never inferred. `--map OLD=NEW` adds an entry, and a dotted one (no `/`) also maps a module.
+The path map comes from the renames. Each rename contributes the shortest prefix pair (old directory, new directory) whose
+whole subtree in BASE moved there file by file. When only `protocols/pous` moved, `protocols -> security_proofs` is never
+inferred. Renames are git's exact ones, and its similar ones (`-M`) as candidates, each edit then judged as above.
+`--map OLD=NEW` adds an entry, and a dotted one (no `/`) also maps a Python or Lean module and those below it.
 """
 from __future__ import annotations
 
@@ -29,29 +42,48 @@ import subprocess
 import sys
 
 PATH_FILES = {"tools/check/ci.toml", "tests/test_lean_packages.py", "AGENTS.md", "fixtures/artifacts.json"}
-PATH_NAMES = {"pyproject.toml", "lakefile.lean", "lakefile.toml", "lake-manifest.json", "lean-audit.json", ".gitignore"}
+PATH_NAMES = {"pyproject.toml", "lakefile.lean", "lakefile.toml", "lake-manifest.json", ".gitignore"}
 #: files whose quoted relative paths name another directory of the tree (a Lake `require`, a manifest's `dir`, a uv source)
 RELATIVE_NAMES = {"pyproject.toml", "lakefile.lean", "lakefile.toml", "lake-manifest.json"}
+LAKEFILES = ("lakefile.toml", "lakefile.lean")
+LAKE_COPIES = {*LAKEFILES, "lake-manifest.json", "lean-audit.json", "lean-toolchain"}
+#: a lock's records of what its guarantees say, and its structural fields, which a split changes
+PROTECTED, STRUCTURAL = ("pins", "guarantees", "reads"), ("roots", "proved_in")
 IMPORT = re.compile(r"^(\s*from\s+)([\w.]+)(\s+import\b.*)$|^(\s*import\s+)([\w.]+)(.*)$")
+LEAN_IMPORT = re.compile(r"^(\s*(?:(?:public|private|meta)\s+)*import\s+(?:all\s+)?)([\w.]+)(\s*(?:--.*)?)$")
 RELATIVE = re.compile(r"""(["'])(\.\.?(?:/[^"'\s]*)?)\1""")
+#: the lines a destination package's lakefile may change from the source package's
+LAKE_LINE = re.compile(r"""^\s*(
+    | \#.* | --.*
+    | \[\[(require|lean_lib)\]\]
+    | (name|roots|globs|defaultTargets|path) \s*=.*
+    | package \s+\S+ (\s+where)?
+    | (@\[default_target\]\s*)? lean_lib \s+\S+ (\s+where)?
+    | require \s+\S+ \s+from\s+"[^"]*"
+    | (roots|globs|defaultTargets|name) \s*:=.*
+    )\s*$""", re.X)
+REQUIRE_PATH = re.compile(r"^\s*(path\s*=|require\s)")
+MANIFEST_PATH_KEYS = {"type", "scope", "name", "manifestFile", "inherited", "dir", "configFile"}
 HUNK_LINES = 8
 
 
 def git(*args: str, cwd: str | None = None) -> bytes:
-    return subprocess.run(["git", "-c", "diff.renameLimit=0", *args], cwd=cwd, check=True, capture_output=True).stdout
+    return subprocess.run(["git", "-c", "diff.renameLimit=1000000", *args], cwd=cwd, check=True, capture_output=True).stdout
 
 
 def kind(path: str) -> str | None:
     name = posixpath.basename(path)
+    if name == "lean-audit.json":
+        return "lock"
     if path in PATH_FILES or name in PATH_NAMES or (path.startswith(".agents/skills/") and name == "SKILL.md"):
         return "path"
-    return "import" if path.endswith(".py") else None
+    return {".py": "import", ".lean": "lean"}.get(posixpath.splitext(path)[1])
 
 
-def raw_diff(base: str, head: str, cwd: str | None) -> list[dict]:
-    """`git diff --raw -z -M100%`, parsed: only byte-identical renames are paired; a moved file with an edit is a delete and an
-    add, which `certify` pairs through the path map."""
-    fields = git("diff", "--raw", "-z", "-M100%", "--no-abbrev", base, head, cwd=cwd).split(b"\0")
+def raw_diff(base: str, head: str, cwd: str | None, renames: str = "-M100%") -> list[dict]:
+    """`git diff --raw -z`, parsed. At `-M100%` only byte-identical renames are paired; a moved file with an edit is a
+    delete and an add, which `certify` pairs through the path map or git's similar renames."""
+    fields = git("diff", "--raw", "-z", renames, "--no-abbrev", base, head, cwd=cwd).split(b"\0")
     out, i = [], 0
     while i < len(fields) and fields[i]:
         src_mode, dst_mode, src_sha, dst_sha, status = fields[i].decode()[1:].split(" ")
@@ -63,8 +95,42 @@ def raw_diff(base: str, head: str, cwd: str | None) -> list[dict]:
     return out
 
 
+class Tree:
+    """One side of the range: its files, its Lake packages and its Lean modules."""
+
+    def __init__(self, rev: str, cwd: str | None):
+        self.rev, self.cwd = rev, cwd
+        self.files = sorted(p.decode("utf-8", "surrogateescape")
+                            for p in git("ls-tree", "-r", "-z", "--name-only", rev, cwd=cwd).split(b"\0") if p)
+        self.set = set(self.files)
+
+    def is_package(self, d: str) -> bool:
+        return any(posixpath.join(d, f) in self.set for f in LAKEFILES)
+
+    def package(self, path: str) -> str | None:
+        d = posixpath.dirname(path)
+        while True:
+            if self.is_package(d):
+                return d
+            if not d:
+                return None
+            d = posixpath.dirname(d)
+
+    def module(self, path: str) -> str | None:
+        pkg = self.package(path)
+        if pkg is None:
+            return None
+        return (path[len(pkg) + 1:] if pkg else path)[:-len(".lean")].replace("/", ".")
+
+    def text(self, path: str) -> str | None:
+        try:
+            return git("cat-file", "blob", f"{self.rev}:{path}", cwd=self.cwd).decode("utf-8")
+        except (subprocess.CalledProcessError, UnicodeDecodeError):
+            return None
+
+
 def derive_map(renames: list[tuple[str, str]], base_files: list[str], deleted: set[str], added: set[str]) -> dict[str, str]:
-    """Each exact rename's shortest (old prefix, new prefix), sharing the rest of the path, whose subtree all moved there: each
+    """Each rename's shortest (old prefix, new prefix), sharing the rest of the path, whose subtree all moved there: each
     file in it renamed there, or deleted with its counterpart there added (a moved file with an edit, judged on its own)."""
     moved = dict(renames)
     sound: dict[tuple[str, str], bool] = {}
@@ -95,6 +161,13 @@ def derive_map(renames: list[tuple[str, str]], base_files: list[str], deleted: s
     return out
 
 
+def map_path(p: str, pmap: dict[str, str]) -> str:
+    for old in sorted(pmap, key=len, reverse=True):
+        if p == old or p.startswith(old + "/"):
+            return pmap[old] + p[len(old):]
+    return p
+
+
 def substitute(text: str, pmap: dict[str, str]) -> str:
     if not pmap:
         return text
@@ -103,11 +176,12 @@ def substitute(text: str, pmap: dict[str, str]) -> str:
     return pattern.sub(lambda m: pmap[m.group(1)], text)
 
 
-def map_path(p: str, pmap: dict[str, str]) -> str:
-    for old in sorted(pmap, key=len, reverse=True):
-        if p == old or p.startswith(old + "/"):
-            return pmap[old] + p[len(old):]
-    return p
+def module_sub(text: str, mods: dict[str, str]) -> str:
+    """Each whole moved module name rewritten: `A.B` but not a declaration `A.B.c` below it, which keeps its namespace."""
+    if not mods:
+        return text
+    pattern = re.compile(r"(?<![\w.])(" + "|".join(map(re.escape, sorted(mods, key=len, reverse=True))) + r")(?![\w.])")
+    return pattern.sub(lambda m: mods[m.group(1)], text)
 
 
 def resolve_relative(text: str, path: str, pmap: dict[str, str]) -> str:
@@ -120,8 +194,12 @@ def resolve_relative(text: str, path: str, pmap: dict[str, str]) -> str:
     return RELATIVE.sub(repl, text)
 
 
+def by_extra(a: str, b: str, extra: dict[str, str]) -> bool:
+    return any((a == o or a.startswith(o + ".")) and b == n + a[len(o):] for o, n in extra.items())
+
+
 class Modules:
-    """Whether a renamed module justifies rewriting `import A` to `import B`."""
+    """Whether a renamed module justifies rewriting a Python `import A` to `import B`."""
 
     def __init__(self, renames: list[tuple[str, str]], extra: dict[str, str]):
         self.files = [(self._mod(o), self._mod(n)) for o, n in renames if o.endswith(".py") and n.endswith(".py")]
@@ -133,9 +211,8 @@ class Modules:
         return parts[:-1] if parts[-1] == "__init__" else parts
 
     def moved(self, a: str, b: str) -> bool:
-        for old, new in self.extra.items():
-            if (a == old or a.startswith(old + ".")) and b == new + a[len(old):]:
-                return True
+        if by_extra(a, b, self.extra):
+            return True
         A, B = a.split("."), b.split(".")
         for o, n in self.files:
             for r in range(min(len(o), len(n)) + 1):
@@ -158,64 +235,236 @@ def import_rewrite(old: str, new: str, modules: Modules) -> bool:
     return go[i] == gn[i] and go[i + 2] == gn[i + 2] and modules.moved(go[i + 1], gn[i + 1])
 
 
+def lean_import_rewrite(old: str, new: str, lmods: dict[str, str], extra: dict[str, str]) -> bool:
+    mo, mn = LEAN_IMPORT.match(old), LEAN_IMPORT.match(new)
+    if not (mo and mn) or mo.group(1) != mn.group(1) or mo.group(3) != mn.group(3):
+        return False
+    a, b = mo.group(2), mn.group(2)
+    return lmods.get(a) == b or by_extra(a, b, extra)
+
+
 def hunk(a: list[str], b: list[str], i1: int, i2: int, j1: int, j2: int) -> str:
     lines = [f"@@ -{i1 + 1},{i2 - i1} +{j1 + 1},{j2 - j1} @@"]
     lines += ["-" + x for x in a[i1:i2][:HUNK_LINES]] + ["+" + x for x in b[j1:j2][:HUNK_LINES]]
     return "\n".join(lines)
 
 
-def first_hunk(old_text: str, new_text: str, old_path: str, new_path: str, pmap: dict[str, str], modules: Modules,
-               k: str | None) -> str | None:
-    """The first hunk not explained by the move, in the file's own lines, or None when every changed line is."""
-    a, b = old_text.splitlines(), new_text.splitlines()
-    na, nb = a, b
-    if k == "path":
-        rel = posixpath.basename(new_path) in RELATIVE_NAMES
-        na_text = resolve_relative(old_text, old_path, pmap) if rel else old_text
-        na = (na_text if old_text == new_text else substitute(na_text, pmap)).splitlines()
-        nb = (resolve_relative(new_text, new_path, {}) if rel else new_text).splitlines()
-    py = new_path.endswith(".py")
+def first_unexplained(a: list[str], b: list[str], na: list[str], nb: list[str], pair=None, line=None) -> str | None:
+    """The first hunk of `na` -> `nb` (normalized, line for line `a` and `b`) whose changed lines are neither each a `pair`
+    rewrite nor each a `line`, in the file's own lines; None when every change is explained."""
     for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, na, nb, autojunk=False).get_opcodes():
         if tag == "equal":
             continue
-        if py and tag == "replace" and i2 - i1 == j2 - j1 and all(
-                import_rewrite(x, y, modules) for x, y in zip(na[i1:i2], nb[j1:j2])):
+        if pair and tag == "replace" and i2 - i1 == j2 - j1 and all(pair(x, y) for x, y in zip(na[i1:i2], nb[j1:j2])):
+            continue
+        if line and all(line(x) for x in na[i1:i2] + nb[j1:j2]):
             continue
         return hunk(a, b, i1, i2, j1, j2)
     return None
 
 
-def blob(sha: str, cwd: str | None) -> str | None:
+def top_level(text: str) -> dict[str, str] | None:
+    """A JSON object's top-level fields as their raw text, or None when the text is not one."""
+    dec, out = json.JSONDecoder(), {}
+    ws = re.compile(r"\s*")
     try:
-        return git("cat-file", "blob", sha, cwd=cwd).decode("utf-8")
-    except UnicodeDecodeError:
+        i = ws.match(text, 0).end()
+        if text[i] != "{":
+            return None
+        i = ws.match(text, i + 1).end()
+        while text[i] != "}":
+            key, i = dec.raw_decode(text, i)
+            i = ws.match(text, i).end()
+            if text[i] != ":":
+                return None
+            start = ws.match(text, i + 1).end()
+            _, i = dec.raw_decode(text, start)
+            out[key] = text[start:i]
+            i = ws.match(text, i).end()
+            if text[i] == ",":
+                i = ws.match(text, i + 1).end()
+            elif text[i] != "}":
+                return None
+        return out
+    except (ValueError, IndexError):
         return None
+
+
+def field_hunk(k: str, old: str | None, new: str | None) -> str:
+    """The first entry of field `k` that differs, as `-`/`+` lines."""
+    try:
+        a, b = json.loads(old) if old else None, json.loads(new) if new else None
+    except ValueError:
+        a = b = None
+    if isinstance(a, dict) and isinstance(b, dict):
+        for e in sorted(set(a) | set(b)):
+            if e not in a or e not in b or a[e] != b[e] or json.dumps(a[e]) != json.dumps(b[e]):
+                return "\n".join(f"{s}{k}.{e}: {json.dumps(v[e])[:200]}" for s, v in (("-", a), ("+", b)) if e in v)
+    return "\n".join(f"{s}{k}: {v[:200]}" for s, v in (("-", old), ("+", new)) if v is not None)
+
+
+def lock_change(old: str, new: str, new_path: str, pmap: dict[str, str], lmods: dict[str, str], head: Tree,
+                copy: bool = False) -> tuple[str, str | None] | None:
+    """Why a `lean-audit.json` edit (or, `copy`, a destination package's new lock copied from `old`) is more than a move."""
+    a, b = top_level(old), top_level(new)
+    if a is None or b is None:
+        return "not a JSON object", None
+    for k in PROTECTED:
+        if copy and k in b:
+            return f"`{k}` in a new package's lock: a proofs package's lock lists no guarantees, the spec's keeps them", field_hunk(k, None, b[k])
+        if not copy and (a.get(k) != b.get(k) or (k in a and json.loads(a[k]) != json.loads(b[k]))):
+            return f"`{k}` changed: a pure move keeps the guarantees' records byte for byte", field_hunk(k, a.get(k), b.get(k))
+    for k in sorted(set(a) | set(b)):
+        if k in PROTECTED or k in STRUCTURAL:
+            continue
+        if k not in a:
+            return f"`{k}` added", field_hunk(k, None, b[k])
+        if k not in b:
+            if copy:
+                continue
+            return f"`{k}` removed", field_hunk(k, a[k], None)
+        if module_sub(substitute(a[k], pmap), lmods) != b[k]:
+            return f"`{k}` changed beyond moved paths and module names", field_hunk(k, a[k], b[k])
+    here = posixpath.dirname(new_path)
+    for k in STRUCTURAL:
+        if k in b:
+            v = json.loads(b[k])
+            if not (isinstance(v, list) and all(isinstance(x, str) for x in v)):
+                return f"`{k}` is not a list of strings", field_hunk(k, a.get(k), b[k])
+            if k == "proved_in":
+                for p in v:
+                    d = posixpath.normpath(posixpath.join(here, p))
+                    if d.startswith("..") or not head.is_package(d):
+                        return f"`proved_in` entry {p!r} is not a Lake package at HEAD ({d})", field_hunk(k, a.get(k), b[k])
+    return None
+
+
+def manifest_change(old: str, new: str, src_path: str, new_path: str, pmap: dict[str, str], head: Tree) -> tuple[str, str | None] | None:
+    """Why a destination package's new `lake-manifest.json` is more than a copy of the source package's."""
+    try:
+        a, b = json.loads(old), json.loads(new)
+        pa, pb = {p["name"]: p for p in a["packages"]}, {p["name"]: p for p in b["packages"]}
+    except (ValueError, KeyError, TypeError):
+        return "not a Lake manifest", None
+    for k in sorted(set(a) | set(b)):
+        if k not in ("name", "packages") and a.get(k) != b.get(k):
+            return f"manifest field `{k}` differs from the source package's", field_hunk(k, json.dumps(a.get(k)), json.dumps(b.get(k)))
+    src_dir, new_dir = posixpath.dirname(src_path), posixpath.dirname(new_path)
+    for name, p in pa.items():
+        q = pb.get(name)
+        if q is None:
+            return f"manifest drops package `{name}`", field_hunk("packages", json.dumps(p), None)
+        if p.get("type") == "path" and q.get("type") == "path":
+            pd = map_path(posixpath.normpath(posixpath.join(src_dir, p.get("dir", ""))), pmap)
+            if pd != posixpath.normpath(posixpath.join(new_dir, q.get("dir", ""))):
+                return f"manifest package `{name}`'s dir names another directory", field_hunk("packages", json.dumps(p), json.dumps(q))
+            p, q = {**p, "dir": None}, {**q, "dir": None}
+        if p != q:
+            return f"manifest package `{name}` differs from the source package's", field_hunk("packages", json.dumps(p), json.dumps(q))
+    for name in pb.keys() - pa.keys():
+        q = pb[name]
+        d = posixpath.normpath(posixpath.join(new_dir, str(q.get("dir", ""))))
+        if q.get("type") != "path" or set(q) - MANIFEST_PATH_KEYS or d.startswith("..") or not head.is_package(d):
+            return f"manifest adds package `{name}`, not a path package at HEAD", field_hunk("packages", None, json.dumps(q))
+    return None
+
+
+def lakefile_change(old: str, new: str, src_path: str, new_path: str, pmap: dict[str, str], lmods: dict[str, str],
+                    head: Tree) -> tuple[str, str | None] | None:
+    """Why a destination package's new lakefile is more than a copy of the source package's."""
+    na = module_sub(substitute(resolve_relative(old, src_path, pmap), pmap), lmods).splitlines()
+    nb = resolve_relative(new, new_path, {}).splitlines()
+
+    def allowed(line: str) -> bool:
+        if not LAKE_LINE.match(line):
+            return False
+        if REQUIRE_PATH.match(line):
+            targets = re.findall(r"<root>/([^\"']*)", line)
+            return bool(targets) and all(head.is_package(t) for t in targets)
+        return True
+    h = first_unexplained(old.splitlines(), new.splitlines(), na, nb, line=allowed)
+    if h is None:
+        return None
+    return ("differs from the source package's lakefile beyond package and library names, roots, globs, defaultTargets, "
+            "comments and requires by relative path to a Lake package at HEAD"), h
+
+
+def copy_change(name: str, old: str, new: str, src_path: str, new_path: str, pmap: dict[str, str], lmods: dict[str, str],
+                head: Tree) -> tuple[str, str | None] | None:
+    if name == "lean-toolchain":
+        return None if old == new else ("differs from the source package's lean-toolchain", f"-{old.strip()}\n+{new.strip()}")
+    if name == "lean-audit.json":
+        return lock_change(old, new, new_path, pmap, lmods, head, copy=True)
+    if name == "lake-manifest.json":
+        return manifest_change(old, new, src_path, new_path, pmap, head)
+    return lakefile_change(old, new, src_path, new_path, pmap, lmods, head)
 
 
 def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str | None = None) -> dict:
     extra = extra or {}
+    dotted = {o: n for o, n in extra.items() if "/" not in o}
+    B, H = Tree(base, cwd), Tree(head, cwd)
     entries = raw_diff(base, head, cwd)
     exact = [(e["old"], e["new"]) for e in entries
              if e["status"] == "R" and e["score"] == 100 and e["modes"][0] == e["modes"][1]]
-    base_files = sorted(p.decode("utf-8", "surrogateescape") for p in git("ls-tree", "-r", "-z", "--name-only", base, cwd=cwd).split(b"\0") if p)
     dels = {e["old"]: e for e in entries if e["status"] == "D"}
     adds = {e["new"]: e for e in entries if e["status"] == "A"}
-    pmap = {**derive_map(exact, base_files, set(dels), set(adds)), **extra}
+    similar = {e["old"]: e["new"] for e in raw_diff(base, head, cwd, "-M")
+               if e["status"] == "R" and e["old"] in dels and e["new"] in adds} if dels and adds else {}
+    pmap = {**derive_map(exact + list(similar.items()), B.files, set(dels), set(adds)), **extra}
     for old, d in list(dels.items()):
         new = map_path(old, pmap)
-        if new != old and new in adds:
+        if new == old or new not in adds:
+            new = similar.get(old)
+        if new in adds:
             a = adds.pop(new)
             entries.remove(a)
             d.update(status="R", score=0, new=new, modes=(d["modes"][0], a["modes"][1]), shas=(d["shas"][0], a["shas"][1]))
-    modules = Modules(exact, {o: n for o, n in extra.items() if "/" not in o})
-    report = {"base": base, "head": head, "map": dict(sorted(pmap.items())), "renames": [], "edits": [], "refusals": []}
+    renamed = [(e["old"], e["new"]) for e in entries if e["status"] == "R"]
+    modules = Modules(renamed, dotted)
+    lmods, dests = {}, {}
+    for old, new in renamed:
+        if old.endswith(".lean") and new.endswith(".lean"):
+            mo, mn = B.module(old), H.module(new)
+            if mo and mn and mo != mn:
+                lmods[mo] = mn
+            bp, hp = B.package(old), H.package(new)
+            if bp is not None and hp is not None and not B.is_package(hp):
+                dests.setdefault(hp, set()).add(bp)
+    report = {"base": base, "head": head, "map": dict(sorted(pmap.items())), "lean_modules": dict(sorted(lmods.items())),
+              "renames": [], "edits": [], "refusals": []}
 
     def refuse(e: dict, reason: str, h: str | None = None) -> None:
         report["refusals"].append({"path": e["new"], **({"old": e["old"]} if e["old"] != e["new"] else {}),
                                    "status": e["status"], "reason": reason, "hunk": h})
 
+    def text(e: dict, i: int) -> str | None:
+        try:
+            return git("cat-file", "blob", e["shas"][i], cwd=cwd).decode("utf-8")
+        except UnicodeDecodeError:
+            return None
+
     for e in entries:
         st, old, new = e["status"], e["old"], e["new"]
+        name = posixpath.basename(new)
+        if st == "A" and name in LAKE_COPIES:
+            d = posixpath.dirname(new)
+            srcs = dests.get(d, set())
+            if len(srcs) != 1:
+                refuse(e, "added: not at the root of a new Lake package that the range moved .lean files into from one "
+                          f"source package (sources: {sorted(srcs) or 'none'})")
+                continue
+            src_path = posixpath.join(next(iter(srcs)), name)
+            a, b = B.text(src_path), text(e, 1)
+            if a is None or b is None:
+                refuse(e, f"added: the source package has no {name} to copy ({src_path})" if a is None else "not UTF-8 text")
+                continue
+            why = copy_change(name, a, b, src_path, new, pmap, lmods, H)
+            if why:
+                refuse(e, f"not a copy of {src_path}: {why[0]}", why[1])
+            else:
+                report["edits"].append({"path": new, "copy_of": src_path, "kind": "copy"})
+            continue
         if st not in "RM":
             refuse(e, {"A": "added", "D": "deleted", "C": "copied", "T": "type changed"}.get(st, f"status {st}"))
             continue
@@ -223,21 +472,34 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             refuse(e, f"mode {e['modes'][0]} -> {e['modes'][1]}")
             continue
         k = kind(new)
-        if k is None or kind(old) != k:
-            if st == "R" and e["score"] == 100:
-                report["renames"].append({"old": old, "new": new})
-            else:
-                a, b = blob(e["shas"][0], cwd), blob(e["shas"][1], cwd)
-                refuse(e, "edited, not an allowlisted path-only file",
-                       None if a is None or b is None else first_hunk(a, b, old, new, {}, modules, None))
+        if (k is None or kind(old) != k) and st == "R" and e["score"] == 100:
+            report["renames"].append({"old": old, "new": new})
             continue
-        a, b = blob(e["shas"][0], cwd), blob(e["shas"][1], cwd)
+        a, b = text(e, 0), text(e, 1)
         if a is None or b is None:
-            refuse(e, "not UTF-8 text")
+            refuse(e, "edited, not UTF-8 text")
             continue
-        h = first_hunk(a, b, old, new, pmap, modules, k)
-        if h is not None:
-            refuse(e, "relative path now resolves elsewhere" if a == b else f"edit beyond {'path strings' if k == 'path' else 'import lines'}", h)
+        al, bl = a.splitlines(), b.splitlines()
+        why: tuple[str, str | None] | None = None
+        if k is None or kind(old) != k:
+            why = "edited, not an allowlisted path-only file", first_unexplained(al, bl, al, bl)
+        elif k == "lock":
+            why = None if a == b else lock_change(a, b, new, pmap, lmods, H)
+        elif k == "lean":
+            h = first_unexplained(al, bl, al, bl, pair=lambda x, y: lean_import_rewrite(x, y, lmods, dotted))
+            why = h and ("edit beyond import lines that name a module renamed in the range", h)
+        else:
+            na, nb = al, bl
+            if k == "path":
+                rel = name in RELATIVE_NAMES
+                na_text = resolve_relative(a, old, pmap) if rel else a
+                na = (na_text if a == b else substitute(na_text, pmap)).splitlines()
+                nb = (resolve_relative(b, new, {}) if rel else b).splitlines()
+            h = first_unexplained(al, bl, na, nb, pair=(lambda x, y: import_rewrite(x, y, modules)) if new.endswith(".py") else None)
+            why = h and ("relative path now resolves elsewhere" if a == b
+                         else f"edit beyond {'path strings' if k == 'path' else 'import lines'}", h)
+        if why:
+            refuse(e, *why)
         elif a == b:
             report["renames"].append({"old": old, "new": new})
         else:
