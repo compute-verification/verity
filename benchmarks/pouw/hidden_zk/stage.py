@@ -3,6 +3,15 @@ PoUW's rows (`leaves.statement_rows`) and, for a row unit, its anchors as public
 
     row_a  Pc4RowA_v1{K}: x (bf16, row-seg) -> A'_i's codes, scales, P_A,i (nvfp4-p, v2) and ok; public e, fa, fb
     row_b  Pc4RowB_v1{K}: x (bf16, v2) -> B~_j's codes, scales, P_B,j and ok; public e, fb, fa, g
+    the row of A cut along k (`rowk`, row_k HZ_ROW_K, 2,048 by default; `rowk.PORTS4`; registered lowerings, no scratch):
+    cut_a_head      Pc4RowAHead_v1{K}: x (bf16, row-seg) -> its pc4-head row (alpha, a_E) and ok; no public input
+    cut_a_first     Pc4RowAFirst_v1{K,KS}: x and the head row -> segment 0's nvfp4-codes row and its pc4-carry row; public
+                    e and segment 0 of fa and fb (the slice rule)
+    cut_a_form<J>   Pc4RowAForm_v1{K,KS,J}: the same and segment J-1's carry -> segment J's codes and carry; public e and
+                    segment J of fa and fb
+    cut_a_tail      Pc4RowATail_v1{K,KS}: the head row, every segment's codes row and the last carry -> A'_i's codes,
+                    scales and P_A,i (nvfp4-p, row-seg); public e
+                    each row's inputs its honest chain (the head on x, then the forms in order) by the IR reference
     tile   Pc4Tile_v1{K,TM=1,TN=1}: an A row and a B row (nvfp4-p) -> C~ and U (one v2 run); no public input
     tileTMxTN   the same over TM A rows and TN B rows
     hidden[TMxTN]   Pc4TileHidden_v1{K,TM,TN}: the same rows -> the tile digest (its tile row)
@@ -74,7 +83,8 @@ from verity_pouw.schemes import pearl_c4 as F
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 ROLE, K, N, OUT = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), Path(sys.argv[4])
-FLIP = {"row_a": "fa", "row_b": "g"}      # the anchor whose word 0, instance 0, bit 0 the controls flip
+#: the anchor whose word 0, instance 0, bit 0 the controls flip
+FLIP = {"row_a": "fa", "row_b": "g", "row_a_first": "fa", "row_a_form": "fa", "row_a_tail": "e"}
 STAGE = os.environ.get("HZ_STAGE", "fast")
 
 
@@ -108,6 +118,72 @@ def flip_at(data: bytes, ports: list[dict], port: str, tail: bool) -> int:
     return len(data.split(b"\n", 1)[0]) + 1 + 2 * before
 
 
+def _cut_a(piece: str):
+    """One class of Pearl-C4's row of A cut along k (`rowk`; row_k ``HZ_ROW_K``, `rowk.ROW_K` by default) over N rows:
+    ``piece`` head, first, form<J> (1 <= J < k/row_k) or tail.  Each row's inputs are its honest chain by the IR reference
+    (the head on x, then each form from the carry the one before it returned); a form's regions are its segment's."""
+    from verity.evaluation import evaluate
+    from verity_pouw.circuit import rowk
+
+    ks = int(os.environ.get("HZ_ROW_K", rowk.ROW_K))
+    segs = K // ks
+    head, first, forms, tail = rowk.pieces4(K, ks, "a")
+    if piece in ("head", "first", "tail"):
+        unit_role, d, seg = f"row_a_{piece}", {"head": head, "first": first, "tail": tail}[piece], 0 if piece == "first" else None
+    elif piece.startswith("form") and piece[4:].isdigit() and 1 <= int(piece[4:]) < segs:
+        unit_role, seg = "row_a_form", int(piece[4:])
+        d = forms[seg - 1]
+    else:
+        raise SystemExit(f"stage.py: a cut_a_ piece is head, first, form<J> with 1 <= J < {segs}, or tail, not {piece!r}")
+    shape = pc4.Shape(N, K, 1, tile=(1, 1), row_k=ks)
+    shape.check()
+    ctx = Context(part("salt"), Matmul(3, Shape(shape.m, shape.k, shape.n), 9), part("root_a"), part("root_b"))
+    ta = TileAnchors.of(F.PearlC4("nvfp4"), ctx, shape)
+    der, seeds = shape.derivations, {"seed_a": ta.seed_a, "seed_b": ta.seed_b}
+    unit = shape.ports[unit_role]
+    reads = {"cs": segs, "ss": segs} if piece == "tail" else {}
+    sr = L.statement_rows(unit, K, reads, {"nvfp4-codes": ks})
+    rng = np.random.default_rng(20261003 + K)
+    x = np.stack([bf16(rng.standard_normal(K)) for _ in range(N)])
+    fa, fb = (list(der[a].fn(shape, seeds[der[a].seed], None)) for a in ("fa", "fb"))
+    upto = segs if piece == "tail" else (seg or 0)
+    heads, carries, codes = [], [], []
+    for i in range(N):
+        xi = [int(v) for v in x[i]]
+        h = list(evaluate(head, xi))
+        e = list(der["ea"].fn(shape, seeds[der["ea"].seed], ta.rows[i]))
+        carry, cs = [], []
+        for j, fn in enumerate((first, *forms)[:upto]):
+            lo, hi = rowk.R * ks * j, rowk.R * ks * (j + 1)
+            out = list(evaluate(fn, xi, *h[:3], *([carry] if j else []), e, fa[lo:hi], fb[lo:hi]))
+            cs.append((out[:ks], out[ks:ks + ks // 16]))
+            carry = out[ks + ks // 16:]
+        heads.append(h)
+        carries.append(carry)
+        codes.append(cs)
+    names = {"bf16": "x", "pc4-head": "head", "pc4-carry": "carry", "nvfp4-codes": "codes"}
+    u16 = lambda ws: np.array(ws, dtype=np.uint16)  # noqa: E731
+    schemas, at, in_rows, rows = sr["row_schemas"], 0, [], {}
+    for row, _role, ps in unit["rows"]:
+        if not all(isinstance(p, str) for p in ps):
+            continue
+        n = reads.get(ps[0], 1)
+        for r in range(n):
+            name = f"{names[row]}{r}" if n > 1 else names[row]
+            in_rows.append((name, *schemas[at], [f"{p}[{r}]" for p in ps] if n > 1 else list(ps)))
+            at += 1
+            rows[name] = (x if row == "bf16" else u16([L.words_pc4_head(h[0], h[1]) for h in heads]) if row == "pc4-head"
+                          else u16([L.words_pc4_carry(c) for c in carries]) if row == "pc4-carry"
+                          else u16([L.words_nvfp4_codes(*codes[i][r]) for i in range(N)]))
+    ports = public_ports(shape, unit_role)
+    regs = [ta.regions(unit_role, i, seg) for i in range(N)]
+    for p in ports:
+        rows[p] = np.array([g[p] for g in regs], dtype=np.uint16)
+    rec = {"binding": "registered", "row_k": ks, "piece": piece, "unit_role": unit_role, "segment": seg,
+           "ok": [int(h[-1]) for h in heads], "chain": "honest, by the IR reference"}
+    return d, unit_role, seg, ta, ports, in_rows, schemas[at:], sr, rows, rec
+
+
 def main() -> None:
     t0 = time.time()
     if STAGE not in ("fast", "library"):
@@ -118,6 +194,7 @@ def main() -> None:
         fast_stage.install(OUT)
     salt_key = hashlib.sha256(b"verity/pouw/hidden-zk/salts\0" + str(K).encode()).digest()
     rec: dict = {"role": ROLE, "k": K, "n": N, "staging": STAGE}
+    unit_role, seg = ROLE, None
     if ROLE in ("row_a", "row_b"):
         sys.path.insert(0, str(HERE))
         import core3_scratch as K3
@@ -136,6 +213,9 @@ def main() -> None:
         regs = [ta.regions(ROLE, i) for i in range(N)]
         for p in ports:
             rows[p] = np.array([r[p] for r in regs], dtype=np.uint16)
+    elif ROLE.startswith("cut_a_"):
+        d, unit_role, seg, ta, ports, in_rows, outs_, sr, rows, rec_cut = _cut_a(ROLE.removeprefix("cut_a_"))
+        rec.update(rec_cut)
     elif ROLE.startswith(("tile", "hidden")):
         V = _load("pouw_rows_vectors", ROOT / "protocols" / "pouw" / "tests" / "pouw_rows_vectors.py")
         hidden = ROLE.startswith("hidden")
@@ -288,8 +368,9 @@ def main() -> None:
                 rows["adv"] = u16([f32_words(sd[i] + cert[i]) for i in range(N)])
             outs_, sr = [[v2, None]], {"out_row_ports": [3 if capped else 2]}
     else:
-        raise SystemExit(f"stage.py: ROLE is row_a, row_b, tile[TMxTN], hidden[TMxTN], pc8tile[TMxTN], cap[TMxTN], capword, "
-                         f"splitword or split(strip|rowdigest|rowtally|tile|tally)[TMxTN], not {ROLE!r}")
+        raise SystemExit(f"stage.py: ROLE is row_a, row_b, cut_a_(head|first|form<J>|tail), tile[TMxTN], hidden[TMxTN], "
+                         f"pc8tile[TMxTN], cap[TMxTN], capword, splitword or split(strip|rowdigest|rowtally|tile|tally)[TMxTN], "
+                         f"not {ROLE!r}")
     runs = sr.get("out_row_ports") or [1] * len(outs_)
     out_rows, at = [], 0
     for (s, _b), r in zip(outs_, runs):
@@ -303,21 +384,21 @@ def main() -> None:
     meta = got["meta"]
     pin = FC.digest(text)
     (OUT / "pin.txt").write_text(pin)
-    if ports and ROLE in FLIP:
-        own = ta.public_inputs(ROLE, range(N))
-        ta.check_public_inputs(ROLE, range(N), own)
+    if ports and unit_role in FLIP:
+        own = ta.public_inputs(unit_role, range(N), seg)
+        ta.check_public_inputs(unit_role, range(N), own, seg)
         (OUT / "public-inputs.bin").write_bytes(own)
         head = json.loads(own.split(b"\n", 1)[0])
         pub = (OUT / "pub.bin").read_bytes()
         assert pub.endswith(own.split(b"\n", 1)[1]), "the public file's tail is not the verifier's own words"
         wrong = bytearray(own)
-        wrong[flip_at(own, head["ports"], FLIP[ROLE], tail=False)] ^= 1
+        wrong[flip_at(own, head["ports"], FLIP[unit_role], tail=False)] ^= 1
         (OUT / "public-inputs-wrong.bin").write_bytes(bytes(wrong))
         chosen = bytearray(pub)
-        chosen[flip_at(pub, head["ports"], FLIP[ROLE], tail=True)] ^= 1
+        chosen[flip_at(pub, head["ports"], FLIP[unit_role], tail=True)] ^= 1
         (OUT / "pub-chosen.bin").write_bytes(bytes(chosen))
-        rec.update(own_bytes=len(own), own_sha256=hashlib.sha256(own).hexdigest(), flipped={"port": FLIP[ROLE], "word": 0,
-                   "instance": 0, "bit": 0})
+        rec.update(own_bytes=len(own), own_sha256=hashlib.sha256(own).hexdigest(),
+                   flipped={"port": FLIP[unit_role], "word": 0, "instance": 0, "bit": 0})
     if ROLE.startswith("splittally"):
         rec["verdicts"] = [int(w[0]) for w in got["outs"]["o0"]]
     rec.update(ands=got["ands"], k_log=meta["k_log"], vus_per_block=meta.get("vus_per_block"),
