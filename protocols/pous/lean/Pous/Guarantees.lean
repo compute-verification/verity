@@ -898,7 +898,8 @@ def ContinuousAudit : Prop :=
 
 /-! ### The background-rebuild exclusion (`Pous.Protocol.Accounting.Rebuild`)
 
-Added on 3 Oct 2026. Statement reviewer: not yet named; a new pin, which also needs a red-team grant before merge. -/
+Added on 3 Oct 2026. Statement reviewer: @lean (`bc-19c498a8`), granted at `f6aaddc36` on 4 Oct 2026, 06:16Z (Slack
+post ts 1791094669.362169); the red team granted the same head. -/
 
 /-- **Under the verifier's cap on an audit's duration: no graded audit lasts long enough to re-encode a whole band
 segment from `W` alone**, with no state about `Π₂`. It is the deployment condition of `BandGradedMeetsFamily`
@@ -940,6 +941,56 @@ def BackgroundRebuildExcluded : Prop :=
           ∀ i, (A i).run ((Pous.Sponge.idealPerm (524288 + (524288 + 512))).answer π) =
             ((Pous.BandChain.chainBand (2 ^ 9) d 524288 512 dom).enc W π ()).2 i)
         ≤ (2⁻¹ : ℝ≥0∞) ^ 128
+
+/-! ### Completeness of the continuous audit
+
+Added on 3 Oct 2026. Statement reviewer: needed. Red team: needed. `ContinuousAudit` bounds what the verifier of
+`Pous/Protocol/Model/Continuous.lean` accepts; `ContinuousComplete` bounds what the same verifier rejects, for a
+responder whose rounds miss at a bounded rate. It takes no named assumption: the miss rate `q` is a parameter.
+-/
+
+/-- **Completeness of the continuous audit.** Fix a configuration first: the scheme, the data `W`, the machine, the
+number of challenges `n`, the arrival schedule `arr`, the deadline `(D, Q)` and the hard deadline `(D_late, Q_late)`.
+Suppose that in this configuration the machine's rounds miss at rate at most `q`: at every setup and after every
+history `h` of fewer than `n` indices, the round after `h` is not a hit (it is rejected, late or wrong) for at most a
+`q` fraction of its uniform index. Then for every tolerance `f₀`, over the setup and `n` uniform indices, the verifier
+rejects (more than `f₀` rounds are not hits) with probability at most the binomial upper tail
+`α = P[Bin(n, q) > f₀] = Σ_{f₀ < m ≤ n} C(n, m)·q^m·(1 − q)^(n − m)`.
+
+`q` is a parameter, not an assumption, and the statement holds for every machine, but a `q` is a rate in one
+configuration. A tighter deadline needs a larger `q`: at a fixed hard deadline the rounds and the histories do not
+depend on `(D, Q)`, and a smaller `(D, Q)` turns some hits into late answers. A machine is deterministic, so the only
+randomness the theorem bounds is the setup and the index draw, and `q` is the worst miss rate over the next index, at
+the worst setup and after the worst history. The model's honest responder, which keeps `C` and answers by lookup, hits
+every round: `q = 0` (`PousContinuous.honest_complete`).
+
+A real responder also misses on its host's clock (scheduling, pauses, the network), which the model leaves out. Those
+misses do not depend on the indices, so conditioning on the challenges before only gives back their run-average rate,
+which is not a valid `q`. A valid `q` is the worst per-round miss probability over the histories the clock can
+produce, such as the rate right after a miss. Bursty or correlated misses set the two far apart: a host that misses 1%
+of its rounds in bursts of mean length 10 (a miss follows a miss with probability `0.9`) has run-average rate `0.01`,
+but at `n = 1000` and `f₀ = 25` it is rejected with probability `0.123`, against `α = 1.56·10⁻⁵` at `q = 0.01`; its
+valid `q` is about `0.9`. Carrying the tail bound from the index draw to the clock's miss process is the same tail
+rule applied outside the Lean model, and is not proved here.
+
+`1 − q` is truncated at `0`, so above `q = 1` the bound is `q^n ≥ 1` when `f₀ < n`, and `0` otherwise, where the
+verifier cannot reject. Proof: `PousContinuous.continuous_complete`; here `Pous.SecurityProofs.ContinuousComplete`. -/
+def ContinuousComplete : Prop :=
+  ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late n : ℕ) (q : ℝ≥0∞) (W : Bits sch.n) (mach : ContMachine sch)
+    (arr : ℕ → ℕ),
+    (∀ (a : M.Ω × sch.Coins) (h : List (Fin sch.B)), h.length < n →
+      let pp := (sch.enc W a.1 a.2).1
+      let C := (sch.enc W a.1 a.2).2
+      pr (fun i =>
+          (contRecord mach D Q D_late Q_late W pp C a.1 arr (contAfter mach D_late W pp C a.1 arr h) i).verdict ≠ .hit)
+        ≤ q) →
+    ∀ f₀ : ℝ,
+      pr (fun x : Outcome sch n =>
+          let pp := (sch.enc W x.1 x.2.1).1
+          let C := (sch.enc W x.1 x.2.1).2
+          ¬ contAccepts f₀ (contRecords mach D Q D_late Q_late W pp C x.1 arr .start (List.ofFn x.2.2)))
+        ≤ ∑ m ∈ (Finset.range (n + 1)).filter (fun m : ℕ => f₀ < m),
+            (n.choose m : ℝ≥0∞) * q ^ m * (1 - q) ^ (n - m)
 
 /-! ### Proved results cited outside the package
 
