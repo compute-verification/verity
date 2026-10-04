@@ -27,6 +27,22 @@ The Lean model is `chainDense` (POUS `lean/submissions/sponge-dense/SpongeModel.
 | D4 | Pinned numbers | **Re-pinned at `k = 111`** (29 Sep 2026): `Pous.SecurityProofs.ChainDenseMeets111`, proved, is `chainDense` at `B = 2^16`, `ℓ = 8192` bits, `D = 64`, `Q = 2^20`, `k = 111`. The lane's `ChainDenseMeetsPinned` at `k = 107` stays an open target, which the ex post facto argument does not reach. The random-oracle `denseScheme` is **re-certified** at the memo's point in `lean/submissions/dense/DenseReCert.lean`: `dense_meets_64` (`B = 512`, `ℓ = 524288` bits, `D = 5`, `Q = 2^20`, `k = 106`) and `seg_meets_14` (14 GB of such segments), confirmed by the red team (§30). Both are for the random-oracle `denseScheme`, not `chainDense` | `B = 512`, 64 KB labels (`ℓ = 65,560` B, P3's width), `D = 5`, `k = 106` | the certificate's point: `SECURE_FIRST` has `ℓ = 524288` bits (65,536 B), not the memo's 65,560 B, which only P3 needs, and **`k = 111`**, not the memo's 106. The 106 holds only for a random-oracle `H`; over the overwrite chain the code uses, `chain_meets_64` (`lean/submissions/sponge-dense/ChainEPF.lean`) certifies `k = 111` at the same `B`, `ℓ`, `D = 5`, `Q = 2^20`, now with no hypothesis (`Pous.SecurityProofs.ChainDenseMeets64`) |
 | D5 | The chain's security | `ChainExPostFacto` is proved (`chainExPostFacto_v6`, `lean/Pous/SecurityProofs/Chain/Flat.lean`; red team §52); `chainHard_of_pebblingHard` is proved; `chain_meets_64` derives `Meets` at `k = 111` from it (`Pous.SecurityProofs.ChainDenseMeets64`) | "in progress" | `POINT_64K`'s `k = 111` is `ChainDenseMeets64`'s, the certificate's theorem, with no hypothesis; the two-for-one tests exercise the same chaining mode on P3's rows, not on the dense rows |
 
+## Secure erasure (`erasure.py`, Lean `eraseWins`)
+
+The Lean model is the secure-erasure game (`lean/Pous/Protocol/Model/SecureErasure.lean`), its requirement `EraseMeets`
+and the guarantees `SecureErasureMeets`, `SecureErasureMeetsFamily` and `SecureErasureMeets96GiB`
+(`lean/Pous/Guarantees/SecureErasure.lean`), stated on 4 Oct 2026. The prose is the 4 Oct contract for the verifier: a
+fresh `K`, a keyed ε-almost-universal digest of all `M` bytes of `F_K` within `T_fill`, then `s` fresh byte indices,
+each read within `T_read`.
+
+| # | Topic | Lean model | Prose | This code |
+|---|---|---|---|---|
+| E1 | The fill | `C` is a scheme's codeword with the verifier's fresh key as its salt. The family is proved for the band, `chainBandSeg N (2^9) d 524288 512 (segDom salt)`; the general `SecureErasureMeets` holds for any scheme given its `AuditSecure` | `F_K`, a keyed fill of all `M` bytes | `F_K` is Feistel10 pages of zero under `K ‖ u64(p)`, not the band. Nothing proves `AuditSecure` for it, so no Lean guarantee covers this audit yet |
+| E2 | What a read returns | a whole block `C(i_j)` of `ℓ` bits (64 KiB in the family) | a byte `F_K[i_j]` | a byte |
+| E3 | The indices | `s` uniform indices, with replacement | the subset sampler | `s` distinct uniform indices (`Key.subset`), shuffled. Distinct indices are the with-replacement draw conditioned on no repeat, so a bound `ε` on the with-replacement audit gives at most `ε / (1 − s(s − 1)/(2M))` here |
+| E4 | The read deadline | `(D, Q)`-bounded responders; `T_read` is a symbol, "its hardware calibration is separate". The family is at `D = 5`, `Q = 2^20`, `s = 2152` | a short `T_read` | `T_read` must stay below `page_keccak_f · KECCAK_F_NS`, the sequential cost of recomputing a byte of a page (1.7352 ms at 1 MiB pages). That is a recompute bound, not a `(D, Q)` calibration, and `s` is the caller's |
+| E5 | The accept rule and the digest | `eraseWins`: `h = dig κ C` and every read correct, for any `dig`; `DigestAU` bounds `Pous.Digest.digest` | the same, within `T_fill` and `T_read` | matches. `test_pous_erasure_difftest.py` checks `ErasureVerifier` against Lean's `eraseWins` on 12,000 cases, with `dig = Pous.Digest.digest` over `GF(2^127 − 1)`, which is `KeyedFill`'s digest. Lean's game has no clock, so the check reads a missed deadline as an answer no digest or block is. `T_fill` bounds nothing in the guarantees: the fill is unbounded there |
+
 ## P3 (`scheme.py`, Lean `p3Scheme`)
 
 The Lean model is `p3Scheme` (POUS `lean/submissions/p3-meets/P3Meets.lean`) over `p3Model'`
