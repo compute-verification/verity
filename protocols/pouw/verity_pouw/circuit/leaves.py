@@ -44,8 +44,8 @@ of one row's units (k is the segment's length where the row is a segment's):
                                           UE4M3 scale bytes two per word
 
 nvfp4-p's codes and scales are `rowleaf.nvfp4_row_bytes`' bytes, and every row's bytes are `rowleaf.bit_row`'s of its
-elements.  Which unit
-ports make up each row is `pc4.PORTS` and `pc8.PORTS`.  `words_*` are each row's words from its elements, and `commit` and
+elements.  Which unit ports make up each row is `pc4.PORTS` and `pc8.PORTS`, and `rowk.PORTS4` and `rowk.PORTS8` for the
+cut.  `words_*` are each row's words from its elements, and `commit` and
 `tree_leaf` a row's commit string and tree leaf; ``tests/vectors/pouw_rows.json`` pins them, and C-Flock's tests recompute
 every vector through its ports (``backends/flock/tests/test_pouw_rows.py``).  The anchored inputs are no row: they are
 public input regions (`anchors.region_words`).
