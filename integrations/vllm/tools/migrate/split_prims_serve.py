@@ -824,7 +824,8 @@ def _dotted_rules() -> list[tuple[re.Pattern, str]]:
         for n in p.names:
             rules.append((re.compile(rf"(?<![\w.]){re.escape(p.old)}([.:]){re.escape(n)}\b"), rf"{p.dst}\g<1>{n}"))
     for w in WHOLE:
-        rules.append((re.compile(rf"(?<![\w./]){re.escape(w.old_path[len(VLLM) + 1:])}"), w.new_path[len(VLLM) + 1:]))
+        rules.append((re.compile(rf"(?<![\w./])((?:{re.escape(VLLM)}/)?){re.escape(w.old_path[len(VLLM) + 1:])}"),
+                      rf"\g<1>{w.new_path[len(VLLM) + 1:]}"))
         rules.append((re.compile(rf"(?<![\w.]){re.escape(w.old)}\b"), w.new))
     return rules
 
