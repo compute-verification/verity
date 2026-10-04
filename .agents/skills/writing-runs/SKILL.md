@@ -1,7 +1,8 @@
 ---
 name: writing-runs
 description: >
-  How to write a job for `research run` in Verity so its custody stays small: pick the working directory (`--cwd source`),
+  How to write a job for `research run` in Verity so its custody stays small: pick the working directory (`--cwd source`, or
+  `--cwd clone` for a job that writes into the tree),
   write results under one output directory, declare them with `--declared-output GLOB`, and keep scratch, caches and build
   trees in a `mktemp -d` directory outside the run dir. Custody uploads the run's own logs and records, the declared files, and undeclared
   files only up to 256 MiB; the rest it lists by path, size and sha256 without bytes. Use when writing or launching a
@@ -15,6 +16,10 @@ description: >
 store's remote once the workload exits. Every byte the workload leaves there is a byte custody reads, and it may upload it
 too. Run `r20260930-080414-bae0` started a build in its run dir, and custody spent 54 minutes on 9.5 GiB before it was
 killed. Whoever writes the job decides what to keep.
+
+A local `research run` (no `--on`, as in a pod) publishes only its telemetry and the files its `result.json` lists, unless it
+passes `--run-record`. With it, the attempt carries the same selection custody's run record does. The Nebius Sky templates
+with a free-form `CMD` (`port-capture`, `prover-bench`, `prover-dev`) pass it.
 
 ## What custody keeps
 
@@ -31,8 +36,12 @@ rule keep working. Once lanes declare their outputs it drops to 0, and undeclare
 
 ## The norms
 
-1. **Run from a directory you chose.** Use `--cwd source` (or `source/SUB`) for a command that reads the checkout, or pass an
-   absolute `--cwd`. A relative path in the command that resolves against the run dir is the failure above.
+1. **Run from a directory you chose.** Use `--cwd source` (or `source/SUB`) for a command that reads the checkout, `--cwd clone`
+   (or `clone/SUB`) for one that writes into it (a build, a Lean `.lake`): on a machine every run of the commit shares the
+   source tree, and a clone is the run's own, removed when it ends; the workload imports the tree's Python from it too. Locally
+   only the cwd moves: an editable install still imports from, and writes beside `__file__` in, the invoking checkout. Or pass
+   an absolute `--cwd`. A relative path in the command
+   that resolves against the run dir is the failure above.
 2. **Put results in one directory and declare it.** The workload finds its run dir in `$RESEARCH_RUN_DIR` whatever its cwd
    is. For example, it writes to `$RESEARCH_RUN_DIR/out/` and the launch passes `--declared-output 'out/*'`. Quote the glob so
    your shell doesn't expand it.

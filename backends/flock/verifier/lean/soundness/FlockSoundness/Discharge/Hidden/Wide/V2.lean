@@ -19,7 +19,7 @@ namespace FlockSoundness.Discharge.Hidden
 open Hm Compose Flock.DeriveAll Types.Dag
 
 /-- Unsegmented rows, one output row per output port, each after the input rows, of `2 · words = 128 · chunks` bytes
-and `16 · words` bits (`out_rows_unseg`). -/
+and `16 · words` bits (`out_rows_whole`). -/
 def OutRowsW (c : Circuit) : Prop :=
   OutRows c ∧ ∀ j < c.outPorts.size,
     (c.ports.getD (HmOut.nIn c + j) default).bits = 16 * (c.ports.getD (HmOut.nIn c + j) default).words
@@ -35,9 +35,10 @@ theorem OutRowsW.kb {c : Circuit} (h : OutRowsW c) {j : ℕ} (hj : j < c.outPort
 
 theorem outRowsW_of {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ())
-    (hu : ∀ p ∈ c.ports.toList, p.segs = none) : OutRowsW c :=
-  have h := out_rows_unseg hp hc hu
-  ⟨⟨hu, h.1, fun j hj => ⟨(h.2 j hj).1, (h.2 j hj).2.1⟩⟩, fun j hj => (h.2 j hj).2.2⟩
+    (hu : ∀ p ∈ c.ports.toList, p.segs = none) (hr : c.outRowPorts = Array.replicate c.outPorts.size 1)
+    (h64 : ∀ j < c.outPorts.size, (c.ports.getD (HmOut.nIn c + j) default).words % 64 = 0) : OutRowsW c :=
+  have h := out_rows_whole hp hc hu hr h64
+  ⟨⟨hu, hr, fun j hj => ⟨(h j hj).1, (h j hj).2.1⟩⟩, fun j hj => (h j hj).2.2⟩
 
 /-! ## The flat Δ at an output row's message bit -/
 
@@ -182,16 +183,11 @@ theorem msg_bytesAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {
     bytesOf (blockBit (L.model regs) z o) (2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words)
         (Typed.msgCol st.c g (HmOut.nIn st.c + j)) =
       outBytes (blockBit (L.model regs) z o) st.c g j := by
-  obtain ⟨hp, hw⟩ := hrows.1.2.2 j hj
   have hG := outGroup_single hrows.1.2.1 hj
   unfold bytesOf outBytes
   congr 1
   funext b
   have hb := b.isLt
-  have hks : (HmRow.byteAt (st.c.ports.getD (HmOut.nIn st.c + j) default) b.val).1 <
-      ((HmRow.rowSlots st.c.ports).2[HmOut.nIn st.c + j]!).size := by
-    rw [Typed.byteAt_none (segs_getD hrows.1.1 hp), rowSlots_size hp, getElem!_eq_getD']
-    omega
   have hcopy : ∀ t : Fin 8,
       blockBit (L.model regs) z o (Typed.msgCol st.c g (HmOut.nIn st.c + j) b.val t.val) =
         blockBit (L.model regs) z o (outSrc st.c g j (b.val / 2) (8 * (b.val % 2) + t.val)) := fun t => by
@@ -201,7 +197,7 @@ theorem msg_bytesAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {
     have := msg_copyAll L L0 F0 hda hrows hz o hg hj (k := b.val / 2) (t := 8 * (b.val % 2) + t.val) (by omega)
       (by omega)
     rw [e1, e2] at this
-    rw [msgCol_delta hks]
+    rw [msgCol_delta]
     exact this
   by_cases hk : b.val / 2 < (st.c.outPorts.getD j default).2
   · simp only [hk, ↓reduceIte]
@@ -221,8 +217,8 @@ theorem msg_bytesAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {
 end Hidden
 
 theorem outputs_committed_v2' : OutputsCommittedV2 := by
-  intro tags cf pf coins tables d partition program st ht h pop hpop hpt D hD hlt hupv hu L regs hregs z hz o g j hg
-    hg2 hj hr
+  intro tags cf pf coins tables d partition program st ht h pop hpop hpt D hD hlt hupv hu hor h64 L regs hregs z hz o g
+    j hg hg2 hj hr
   have s := setupHidden_spec' h
   obtain ⟨hp, hcr⟩ := parse_untyped ht s.parse
   have P := parse_facts hp
@@ -230,7 +226,7 @@ theorem outputs_committed_v2' : OutputsCommittedV2 := by
   have F0 : Aliased.UnitFacts tags (flatTwin st) := unitFacts_of_parse (st := flatTwin st) hp rfl
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
   have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray := by rw [s.da, hidden_delta']
-  have hrows : OutRowsW st.c := outRowsW_of hp hcr hu
+  have hrows : OutRowsW st.c := outRowsW_of hp hcr hu hor h64
   have hz0 := sat_flatAll L L0 F0 hda hrows hz
   have hzero : blockBit (L.model regs) z o (zeroCol st.c) = false :=
     zero_bit L0 F0 hupv (show 0 < st.c.g by omega) hz0 o
@@ -252,14 +248,17 @@ theorem outputs_committed_v2' : OutputsCommittedV2 := by
 /-- **`OutputsBindingV2` from `OutputsCommittedV2`**. -/
 theorem outputs_binding_v2_of (hC : OutputsCommittedV2) : OutputsBindingV2 := by
   intro tags cf pf coins coins' tables d d' partition partition' program program' st st' ht hs hs' pop hpop hpt D D' hD
-    hDp hD' hDp' hupv hu L regs hregs L' regs' hregs' z hz z' hz' o o' g g' j hg hg2 hg' hg2' hj hr hr' hidx hne
+    hDp hD' hDp' hupv hu hor h64 L regs hregs L' regs' hregs' z hz z' hz' o o' g g' j hg hg2 hg' hg2' hj hr hr' hidx hne
   have hcc : st.c = st'.c := setupHidden_c hs hs'
   have hpop' : HmOut.loadPublic tags st'.c pf = .ok pop := by rw [← hcc]; exact hpop
   have hupv' : 0 < st'.c.upv := by rw [← hcc]; exact hupv
   have hj' : j < st'.c.outPorts.size := by rw [← hcc]; exact hj
   have hu' : ∀ p ∈ st'.c.ports.toList, p.segs = none := by rw [← hcc]; exact hu
-  have e1 := hC ht hs hpop hpt hD hDp hupv hu L regs hregs hz o hg hg2 hj hr
-  have e2 := hC ht hs' hpop' hpt hD' hDp' hupv' hu' L' regs' hregs' hz' o' hg' hg2' hj' hr'
+  have hor' : st'.c.outRowPorts = Array.replicate st'.c.outPorts.size 1 := by rw [← hcc]; exact hor
+  have h64' : ∀ j < st'.c.outPorts.size, (st'.c.ports.getD (HmOut.nIn st'.c + j) default).words % 64 = 0 := by
+    rw [← hcc]; exact h64
+  have e1 := hC ht hs hpop hpt hD hDp hupv hu hor h64 L regs hregs hz o hg hg2 hj hr
+  have e2 := hC ht hs' hpop' hpt hD' hDp' hupv' hu' hor' h64' L' regs' hregs' hz' o' hg' hg2' hj' hr'
   have hp : HmRow.prefixOf (st.c.ports.getD (HmOut.nIn st.c + j) default) =
       HmRow.prefixOf (st'.c.ports.getD (HmOut.nIn st'.c + j) default) := by rw [hcc]
   refine commitPair_spec' _ _ _ _ (fun e => ?_) (e1.symm.trans (Eq.trans ?_ e2))

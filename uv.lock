@@ -34,6 +34,7 @@ members = [
     "verity-gkr",
     "verity-lean-audit",
     "verity-native-peak",
+    "verity-network-traces",
     "verity-network-warden",
     "verity-numerical",
     "verity-pous",
@@ -1571,6 +1572,17 @@ requires-dist = [
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
 ]
 provides-extras = ["torch"]
+
+[[package]]
+name = "verity-network-traces"
+version = "0.0.0"
+source = { virtual = "benchmarks/network_traces" }
+dependencies = [
+    { name = "verity-network-warden" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-network-warden", editable = "protocols/network_warden" }]
 
 [[package]]
 name = "verity-network-warden"
