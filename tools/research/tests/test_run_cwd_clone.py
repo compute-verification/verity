@@ -216,7 +216,7 @@ def test_a_clone_that_cannot_be_removed_is_reported_and_the_run_keeps_its_status
     assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--no-sampler", "--cwd", "clone", "--", PY, "-c", wl]) == 0
     [left] = _clones(tmp_path)
     err = capsys.readouterr().err
-    assert f"could not remove {left} (OSError: Cannot call rmtree on a symbolic link); remove it by hand" in err
+    assert f"could not remove {left} (it is a symbolic link); remove it by hand" in err
     assert left.is_symlink() and (victim / "keep").is_dir()
     [run_dir] = (tmp_path / "runs").iterdir()
     assert R.summarize(run_dir)["state"] == "done"

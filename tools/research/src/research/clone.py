@@ -167,6 +167,8 @@ REMOVE_ATTEMPTS = 3
 def remove(path: Path, attempts: int = REMOVE_ATTEMPTS) -> str | None:
     """Remove a run's clone directory: None once it is gone, else why not (the caller reports it; it never fails a run).  A
     directory the workload left read-only is made writable first (`_Unprotect`); a symlink is never followed."""
+    if os.path.islink(path):
+        return "it is a symbolic link"
     why = None
     for _ in range(attempts):
         try:
