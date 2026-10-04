@@ -628,7 +628,9 @@ def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = 
     what is on the remote; a refused push sweeps nothing and fails. Without ``push`` the sweep finds nothing the merge landed,
     says so, and `research merge --sweep` after the push does it."""
     if push:
-        was = _git(repo, "rev-parse", "-q", "--verify", f"refs/remotes/{remote}/{into}^{{commit}}", check=False).stdout.strip()
+        from .spec_alert import alert, remote_head
+
+        was = remote_head(repo, remote, into) if into == "main" else ""
         r = _git(repo, "push", "-q", remote, f"refs/heads/{into}:refs/heads/{into}", check=False)
         if r.returncode:
             print(f"research merge: push of {into} to {remote} refused, nothing swept: {(r.stderr or r.stdout).strip()[-300:]}",
@@ -636,8 +638,6 @@ def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = 
             return 1
         print(f"research merge: pushed {into} to {remote}")
         if into == "main":
-            from .spec_alert import alert
-
             if was:
                 alert(repo, was, _git(repo, "rev-parse", f"refs/heads/{into}").stdout.strip(), remote=remote)
             else:

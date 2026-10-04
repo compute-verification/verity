@@ -559,7 +559,10 @@ class Queue:
             if dry_run or self.shadow:
                 self.log(f"research queue: would land {prs} ({m.commit[:12]}, check {attempt})" + (" [shadow]" if self.shadow else ""))
                 return m
-            was = _git(self.workdir, "rev-parse", "refs/heads/main").stdout.strip()
+            from .spec_alert import alert, remote_head
+
+            was = (remote_head(self.workdir, "origin", "main", self.auth)
+                   or _git(self.workdir, "rev-parse", "refs/heads/main").stdout.strip())
             _git(self.workdir, "merge", "-q", "--ff-only", m.commit)
             r = self._remote(self.workdir, "push", "-q", "origin", "main:refs/heads/main", ok=None)
             if r.returncode:
@@ -568,8 +571,6 @@ class Queue:
                          f"the next sync rebuilds `{self.branch}` on the new `main`")
                 return None
             self.log(f"research queue: landed {prs} on `main` at {m.commit[:12]} (check {attempt})")
-            from .spec_alert import alert
-
             alert(self.workdir, was, m.commit, prs=[x.pr for x in chain[: chain.index(m) + 1]], log=self.log)
             return m
         self.log(f"research queue: no commit on `{self.branch}` has a passing check yet (newest: {newest})")

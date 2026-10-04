@@ -22,14 +22,15 @@ def _doc(pins: dict, defs: dict | None = None, readers: tuple[str, ...] = ("P.t"
 
 
 class Api:
-    def __init__(self, fail: str | None = None):
+    def __init__(self, fail: str | None = None, error: Exception | None = None):
         self.calls: list[dict] = []
         self.fail = fail
+        self.error = error
 
     def call(self, method: str, **params):
         self.calls.append({"method": method, **params})
         if self.fail and params.get("channel") == self.fail:
-            raise SlackError(f"{method}: channel_not_found")
+            raise self.error or SlackError(f"{method}: channel_not_found")
         return {"ok": True}
 
 
@@ -121,6 +122,23 @@ def test_a_failed_dm_is_printed_and_posted_to_agent_alerts(tmp_path, capsys):
     assert "the DM to Daniel failed" in capsys.readouterr().err
 
 
+def test_any_failure_after_the_push_is_reported_and_never_raised(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path)
+    old = _commit(repo, "lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}), "base")
+    new = _commit(repo, "lean-audit.json", _doc({"P.t": _g("P.t : B", H2)}), "m")
+    api = Api(fail="U0DANIEL", error=RuntimeError("socket closed"))
+    assert not spec.alert(repo, old, new, api=api, reg=REG, log=lambda *_: None)
+    assert [c["channel"] for c in api.calls] == ["U0DANIEL", "C0ALERTS"]
+    assert "the DM to Daniel failed: RuntimeError: socket closed" in api.calls[1]["text"]
+    api = Api(fail="U0DANIEL")
+    assert not spec.alert(repo, old, new, api=api, reg={"humans": REG["humans"]}, log=lambda *_: None)
+    assert "posting that to #agent-alerts failed too: KeyError" in capsys.readouterr().err
+    monkeypatch.setattr(spec, "message", lambda *a: {}["pins"])
+    api = Api()
+    assert spec.alert(repo, old, new, api=api, reg=REG, log=lambda *_: None)
+    assert "reading its `lean-audit.json` records failed: KeyError: 'pins'" in api.calls[0]["text"]
+
+
 def test_a_push_to_main_alerts_on_what_it_moved_main_across(tmp_path, monkeypatch):
     remote = tmp_path / "remote.git"
     subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(remote)], check=True)
@@ -128,12 +146,15 @@ def test_a_push_to_main_alerts_on_what_it_moved_main_across(tmp_path, monkeypatc
     subprocess.run(["git", "-C", str(repo), "remote", "set-url", "origin", str(remote)], check=True)
     old = _commit(repo, "lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}), "base")
     subprocess.run(["git", "-C", str(repo), "push", "-q", "origin", "main"], check=True)
-    new = _commit(repo, "lean-audit.json", _doc({"P.t": _g("P.t : B", H2)}), "Merge #9 (abc)")
+    mid = _commit(repo, "lean-audit.json", _doc({"P.t": _g("P.t : B", H2)}), "Merge #8 (abc)")
+    subprocess.run(["git", "-C", str(repo), "push", "-q", "origin", "main"], check=True)
+    subprocess.run(["git", "-C", str(repo), "update-ref", "refs/remotes/origin/main", old], check=True)  # a stale fetch
+    new = _commit(repo, "lean-audit.json", _doc({"P.t": _g("P.t : C", H3)}), "Merge #9 (abc)")
     seen = []
     monkeypatch.setattr(spec, "alert", lambda repo, was, now, **kw: seen.append((was, now)) or True)
     monkeypatch.setattr(merge, "_sweep_after", lambda *a: None)
     assert merge._push_and_sweep(repo, "main", "origin", True) == 0
-    assert seen == [(old, new)]
+    assert seen == [(mid, new)]
 
 
 def test_the_queue_names_the_pull_requests_it_landed(tmp_path):

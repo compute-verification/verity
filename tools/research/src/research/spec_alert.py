@@ -120,13 +120,15 @@ def message(repo: Path, old: str, new: str, url: str | None = None, prs: list[in
 def alert(repo: Path, old: str, new: str, *, remote: str = "origin", prs: list[int] | None = None, api=None,
           reg: dict | None = None, log=print) -> bool:
     """DM Daniel what the push from ``old`` to ``new`` changed in the spec; True when it was sent or there was nothing to
-    send. A failure is printed and posted to #agent-alerts, and returns False."""
+    send. A failure is printed and posted to #agent-alerts, and returns False; nothing raises, since the push has happened
+    and the caller still has its own steps after a landing to run."""
     from .slack import Slack, SlackError, human_entry, load_registry, registry_path
 
     try:
         text = message(repo, old, new, web(repo, remote), prs)
-    except (subprocess.CalledProcessError, ValueError) as e:
-        text = f"A change landed on main ({old[:9]}..{new[:9]}), and reading its `lean-audit.json` records failed: {e}"
+    except Exception as e:
+        text = (f"A change landed on main ({old[:9]}..{new[:9]}), and reading its `lean-audit.json` records failed: "
+                f"{type(e).__name__}: {e}")
     if text is None:
         return True
     try:
@@ -138,13 +140,25 @@ def alert(repo: Path, old: str, new: str, *, remote: str = "origin", prs: list[i
         api.call("chat.postMessage", channel=who["slack_user"], text=text, username="research merge", unfurl_links=False)
         log(f"research merge: the spec change went to Daniel as a DM ({len(text)} characters)")
         return True
-    except SlackError as e:
-        why = f"research merge: a spec change landed on main ({old[:12]}..{new[:12]}), and the DM to Daniel failed: {e}"
+    except Exception as e:
+        why = (f"research merge: a spec change landed on main ({old[:12]}..{new[:12]}), and the DM to Daniel failed: "
+               + (str(e) if isinstance(e, SlackError) else f"{type(e).__name__}: {e}"))
         print(why, file=sys.stderr)
         try:
             api = api if api is not None else Slack(os.environ.get("SLACK_BOT_TOKEN"))
             api.call("chat.postMessage", channel=((reg or {}).get("channels") or {})["agent-alerts"]["id"],
                      text=why + "\n\n" + text[:LIMIT // 2], username="research merge", unfurl_links=False)
-        except (SlackError, KeyError, TypeError) as e2:
-            print(f"research merge: posting that to #agent-alerts failed too: {e2}", file=sys.stderr)
+        except Exception as e2:
+            print(f"research merge: posting that to #agent-alerts failed too: {type(e2).__name__}: {e2}", file=sys.stderr)
         return False
+
+
+def remote_head(repo: Path, remote: str, branch: str, auth: tuple[str, ...] = ()) -> str:
+    """``branch`` as ``remote`` has it now (`git ls-remote`), so a stale tracking ref can't make a DM repeat what an earlier
+    landing sent; the tracking ref when the remote can't be asked, and "" when there is neither."""
+    r = subprocess.run(["git", "-C", str(repo), *auth, "ls-remote", remote, f"refs/heads/{branch}"],
+                       capture_output=True, text=True)
+    if r.returncode == 0:
+        return r.stdout.split()[0] if r.stdout.strip() else ""
+    return subprocess.run(["git", "-C", str(repo), "rev-parse", "-q", "--verify", f"refs/remotes/{remote}/{branch}^{{commit}}"],
+                          capture_output=True, text=True).stdout.strip()
