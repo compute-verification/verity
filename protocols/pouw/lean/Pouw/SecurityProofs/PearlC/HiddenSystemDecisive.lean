@@ -8,7 +8,9 @@ import Pouw.SecurityProofs.Draft.Unambiguous
 (`Unambiguous`). That holds when each tile's proof game is decisive on its own (`Decisive`: every message type
 inhabited, some run accepting and some rejecting), by `Pouw.Draft.Game.unambiguous_of_decisive`:
 `HiddenSystem.unambiguous_of_decisive` gives the hypothesis, and `HiddenSystem.honestProver_bounded_of_decisive` is
-`honestProver_bounded` with it.
+`honestProver_bounded` with it. `HiddenSystem.decisive_of_sys_decisive` gives that lemma's `hDec` from one fact per kind
+of tile check: its game, relabelled to its verdict, is decisive on every root. Decisiveness is existential (some run
+accepts, for messages and coins of its choosing), not completeness.
 -/
 
 namespace Pouw.PearlC
@@ -42,5 +44,20 @@ theorem HiddenSystem.honestProver_bounded_of_decisive (HS : HiddenSystem Q R S) 
       Pouw.Draft.Game.Decisive (HS.game H s U (HS.root U (τ H s) (HS.honestOpening U salts H s)) j)) :
     (HiddenAudit.ofSystem HS).ProverBounded (HS.honestProver TR U τ salts w t) q :=
   HS.honestProver_bounded hHon TR U τ salts w t q hD (HS.unambiguous_of_decisive TR U τ salts w t hDec)
+
+/-- **Decisive tile checks give decisive tile games.** When every kind of tile check's game, relabelled to its verdict,
+is decisive on every root, so is every tile's proof game on the honest commitment, which names the verifier's oracle,
+salt and workload: `honestProver_bounded_of_decisive`'s `hDec`. -/
+theorem HiddenSystem.decisive_of_sys_decisive (HS : HiddenSystem Q R S) (TR : TileRules Q R S) (U : Workload)
+    (τ : (Q → R) → S → Transcript) (salts : (Q → R) → S → ℕ → HS.O)
+    (hSys : ∀ (k : HS.K) (r : HS.Rt), Pouw.Draft.Game.Decisive (((HS.sys k).game r).map (HS.sys k).accept)) :
+    ∀ (H : Q → R) (s : S) (j : ℕ), j < (TR.tiling U.layout).NT →
+      Pouw.Draft.Game.Decisive (HS.game H s U (HS.root U (τ H s) (HS.honestOpening U salts H s)) j) := by
+  intro H s j _
+  have e : HS.game H s U (HS.root U (τ H s) (HS.honestOpening U salts H s)) j =
+      ((HS.sys (HS.kind U j)).game (HS.root U (τ H s) (HS.honestOpening U salts H s) H s j).2).map
+        (HS.sys (HS.kind U j)).accept := ite_eq_left rfl
+  rw [e]
+  exact hSys _ _
 
 end Pouw.PearlC
