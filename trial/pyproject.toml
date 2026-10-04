@@ -1,0 +1,34 @@
+[project]
+name = "verity"
+version = "0.0.0"
+description = "The protocol, the circuit library, the primitives and the light subprotocols."
+requires-python = ">=3.12"
+dependencies = []
+
+[project.entry-points."verity.constructions"]
+"sampled_proofs/replay" = "verity.subprotocols.sampled_proofs.replay:Replay"
+"pous/band-chain" = "verity.subprotocols.pous:BandChain"
+"pouw/pearl-c" = "verity.subprotocols.pouw:PearlC"
+"network_warden/constant-rate" = "verity.subprotocols.network_warden:ConstantRate"
+"nci/disclosed" = "verity.subprotocols.nci:Disclosed"
+"commitments/sha256-leaves" = "verity.primitives.hashing:Sha256Leaves"
+"challenges/auditor-secret" = "verity.primitives.hashing:AuditorSecret"
+
+[dependency-groups]
+dev = ["verity-sp1", "toy-serving"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["verity"]
+exclude = ["**/lean", "**/.lake", "**/pyproject.toml"]
+
+[tool.uv.workspace]
+members = ["verity/subprotocols/sampled_proofs/sp1", "integrations/toy_serving"]
+
+[tool.uv.sources]
+verity = { workspace = true }
+verity-sp1 = { workspace = true }
+toy-serving = { workspace = true }
