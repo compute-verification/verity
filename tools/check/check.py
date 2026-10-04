@@ -44,13 +44,15 @@ use):
                     its report beside the run's result; then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
     lean            `lake build` of the Lean verifier (`backends/flock/verifier/lean`), then its partition check against
-                    `verity.ir.partition` (`unit_cut_agree.py`), then the audit of every Lake package with a `lean-audit.json`
-                    (`tools/lean/audit.py --all --build`: axioms, sorry, declared axioms, escapes, files, kernel bypasses, code
-                    run while compiling, dependency .olean digests, the guarantees' records, a kernel replay; its reports under
-                    `lean-audit/`), then the suites that use Lean (`AFTER_LEAN`, outcomes in `suites-lean.json`) on what those
-                    steps built, then its agreement with upstream's Rust verifier (`ci.py`) on the upstream build stored once
-                    and pinned by hash (`backends/flock/verifier/upstream.json`), when the run has it; skipped by name without
-                    it.  `research merge` requires it for a change under backends/flock/ (`tool.py`)
+                    `verity.ir.partition` (`unit_cut_agree.py`), then the suites that use Lean (`AFTER_LEAN`, outcomes in
+                    `suites-lean.json`) on what those steps built, then its agreement with upstream's Rust verifier (`ci.py`) on
+                    the upstream build stored once and pinned by hash (`backends/flock/verifier/upstream.json`), when the run has
+                    it; skipped by name without it.  `research merge` requires it for a change under backends/flock/ (`tool.py`)
+    lean-audit      at once with the lean group: the audit of every Lake package with a `lean-audit.json` (`lean_audit.py`,
+                    which runs `tools/lean/audit.py` on scratch trees of its own: axioms, sorry, declared axioms, escapes,
+                    files, kernel bypasses, code run while compiling, dependency .olean digests, the guarantees' records, a
+                    kernel replay; its reports under `lean-audit/`).  It reads only the source tree and builds nothing in the
+                    checkout, so the lean group's steps never wait on it, nor it on them
     lean-changed    at once with the lean group: `lake build` of each Lake package whose audit misses, on a tree this machine
                     keeps built (`lean_changed.py`), then the audit's judgment of its guarantees on that build without the
                     kernel replay, so a module that no longer compiles or a guarantee's record a merge left stale ends the
@@ -521,10 +523,10 @@ def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
     return {"pack": pack.name, "sha256": _sha256(pack), "added": added, "already": kept}
 
 
-#: The suites whose tests run `lake` or what the Lean steps build under `.lake/`: a step of the Lean group once `lean-audit` has
-#: built every Lake package, with elan's `lake` on the PATH, so what they run or skip never depends on how far a concurrent
-#: `lake build` has got, and no test's `lake build` shares a build directory with one (tests/test_no_wall_clock.py holds every
-#: other suite to not skipping on them).
+#: The suites whose tests run `lake` or what the Lean steps build under `.lake/`: a step of the Lean group once `lean-build` has
+#: built the verifier, with elan's `lake` on the PATH, so what they run or skip never depends on how far a concurrent
+#: `lake build` has got, and no test's `lake build` shares a build directory with one: lean-audit and lean-changed, which run
+#: beside them, build only in trees of their own (tests/test_no_wall_clock.py holds every other suite to not skipping on them).
 AFTER_LEAN = ("verity-flock", "verity-lean-audit")
 
 
@@ -537,10 +539,12 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None) -> l
     tail = ["--jobs", str(a), *([] if cache else ["--fresh"])]
     lean = lean_steps(out, cache, urls)
     after_lean: list[str] = []
+    audit: list[tuple[str, list[str] | str, Path]] = []
     if len(lean) > 1:
         after_lean = [x for s in AFTER_LEAN for x in ("--skip", s)]
         lean_suites = [*suites, *AFTER_LEAN, "--json", str(out / "suites-lean.json"), "--logs", str(out / "suites"), *tail]
-        lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
+        audit = [lean.pop(2)]
+        lean.insert(2, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
@@ -552,7 +556,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None) -> l
         changed: list[str] | str = ([py, str(ROOT / "tools" / "check" / "lean_changed.py"), "--cache", str(cache_dir() / "lean-audit"),
                                      "--deps", str(cache_dir() / "lean-deps"), "--tree", str(cache_dir() / "lean-changed")]
                                     if cache else "skipped: --no-cache: lean-audit builds every package cold")
-        gs.append([("lean-changed", changed, ROOT)])
+        gs += [audit, [("lean-changed", changed, ROOT)]]
     return gs
 
 
