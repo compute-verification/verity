@@ -9,8 +9,8 @@ The row units' words read in the protocol's terms (`pc8Sem`), under the named hy
 protocol's word functions agree only conditionally:
 
 * `Pc8OpsAgree ops`: core's primitives (`F32ToE4m3Sat`, `E4m3ToF32`, `F32Mul`, `F32Fma`, `F32Div`, `F32Fmaxf`,
-  `F32Neg`, `F2fpBf16`, `F32Fabs`, `SelectI32`) agree with the protocol's word functions where both are defined. Core's
-  Lean semantics will discharge them;
+  `F32Neg`, `F2fpBf16`, `F32Fabs`, `SelectI32`) agree with the protocol's word functions where both are defined. They
+  are open at core's instance `coreOps`;
 * `Row8OK`: a row's words are finite and its `α` and `β` step words, with `β > 0` (`Stats8OK`). It is no hypothesis
   of L3: a credited row's follows from `PearlCSem.RowOK`, and a weight's from the domain (`Workload.InDomain`'s
   `OperandOK`), by magnitudes (`RowStats`, `TileCheckWords`). The table reads a `−0` word, and a word's bits above 32, as `pc8Sem` reads them
@@ -162,8 +162,8 @@ divide by a nonzero word rounds as `f32Word` (an exact zero signed as `F32Mul`'s
 zero of its sign; a product whose first factor is not finite is not finite; `F32Fmaxf` against a finite nonzero word
 is the larger, a NaN losing; `SelectI32` selects on its condition's low bit; an FMA of finite words whose exact value
 overflows writes its `f32Word` (`±inf`); and a quotient of a non-finite word by a finite one is not finite. Each is a
-fact about IEEE binary32 (round to nearest even, gradual underflow) or core's integer primitives, open until core's
-Lean semantics of the primitives. -/
+fact about IEEE binary32 (round to nearest even, gradual underflow) or core's integer primitives, open at core's
+instance `coreOps`. -/
 structure Pc8OpsAgree (ops : RowOps) : Prop where
   cast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val
   widen : ∀ c : Code, c.isNaN = false → c.val ≠ 0x80 → ops.e4m3ToF32 c.val % 2 ^ 32 = f32Word (codeVal c)
