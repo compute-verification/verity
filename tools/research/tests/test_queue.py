@@ -20,6 +20,7 @@ from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, credenti
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
 from research.store.model import Label
+from test_merge_gate import CHECKED, DECL
 
 RULES = """\
 hold_label = "hold"
@@ -68,7 +69,8 @@ class World:
         _git(tmp, "init", "-q", "--bare", "-b", "main", str(self.origin))
         for rel, text in {"a.txt": "a\n", "b.txt": "b\n", "c.txt": "c\n", "ci/queue.toml": RULES, ".gitignore": "__pycache__/\n",
                           "pkg/lean-audit.json": json.dumps({"pins": {"T": "1"}, "reads": {}, "dependencies": {"M": "1"}}),
-                          "mytools/decl_check.py": "from research.store.tool import Tool\nT = Tool(name='check', version='1')\n"}.items():
+                          "mytools/decl_check.py": "from research.store.tool import Tool\nT = Tool(name='check', version='1')\n",
+                          "tools/check/tool.py": DECL.format("")}.items():
             (self.dev / rel).parent.mkdir(parents=True, exist_ok=True)
             (self.dev / rel).write_text(text)
         _git(self.dev, "init", "-q", "-b", "main")
@@ -372,13 +374,13 @@ def test_land_fast_forwards_main_to_the_newest_commit_with_a_passing_check_and_s
     assert _git(world.origin, "rev-parse", f"refs/heads/{SHADOW_BRANCH}") and world.on_next(shadow) == [1, 2, 3]
     members, _ = world.queue().sync()
     monkeypatch.setenv("RESEARCH_STORE", str(world.tmp / "store"))
-    for m, command in ((members[1], "true"), (members[2], "false")):
+    for m, command in ((members[1], CHECKED), (members[2], ("false",))):
         tree = world.tmp / f"check-{m.pr}"
         _git(world.dev, "fetch", "-q", "origin")
         _git(world.dev, "worktree", "add", "-q", "--detach", str(tree), m.commit)
         monkeypatch.chdir(tree)
         research_main(["run", "--runs-dir", str(world.tmp / "runs"), "--project", "t", "--no-sampler", "--tool", "mytools.decl_check:T",
-                       "--cwd", "source", "--", command])
+                       "--cwd", "source", "--", *command])
     shadow.land()                                               # whatever it finds, a shadow queue never moves `main`
     assert _git(world.origin, "rev-parse", "main") == main_before
     q = world.queue()

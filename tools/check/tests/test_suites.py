@@ -666,12 +666,16 @@ def test_the_tracer_names_what_a_key_narrowed_to_the_tests_reads_must_hold(tmp_p
     spec.loader.exec_module(R)
     child = str(HERE / "guard" / "child")
     env = {"VERITY_SUITE_ROOT": str(tmp_path), "VERITY_SUITE_READS": str(tmp_path / "reads"), "VERITY_SUITE_MODULE": "pkg/tests/test_x.py",
-           "PYTHONPATH": child}
+           "PYTHONPATH": child, "VERITY_SUITE_ALLOW": '["lib/used.py"]'}
     for k, v in env.items():
         monkeypatch.setenv(k, v)
     r = R.Reads()
     assert r.traced(str(tmp_path / "lib" / "__pycache__" / "used.cpython-314.pyc")) == "lib/used.py"
+    assert r.traced(str(tmp_path / "lib" / "__pycache__" / "used.cpython-314.pyc.140214632246000")) == "lib/used.py"
     assert r.traced(str(tmp_path / "__pycache__" / "top.cpython-314.opt-1.pyc")) == "top.py"
+    for cached in ("used.cpython-314.pyc", "used.cpython-314.pyc.140214632246000"):    # an input file's import, and its write
+        assert r.classify(str(tmp_path / "lib" / "__pycache__" / cached)) is None
+    assert r.classify(str(tmp_path / "lib" / "__pycache__" / "other.cpython-314.pyc")) == ("O", "lib/__pycache__/other.cpython-314.pyc")
     assert r.traced(str(tmp_path / "lib" / "data.json")) == "lib/data.json" and r.traced("/elsewhere/x") is None
     assert r.traced(str(Path(child) / "sitecustomize.py")) is None
     assert r.trace("open", (str(tmp_path / "lib" / "a.py"), "r", 0)) == ("F", "lib/a.py")
