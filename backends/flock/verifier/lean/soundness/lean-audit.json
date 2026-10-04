@@ -25060,7 +25060,7 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "73eabb0012d031a02a352fe2bd86131dc87621e931c1388f1c98152150d03dbf",
+   "digest": "b0bf02fe790f9860beab6bfb3fc222d9a67b37220f6036ce73f4f0614d05e700",
    "definitions": {
     "Flock.Registered.Port": "aade65f635f88322beebf73b54575522406e962788786d682837b0c542626389",
     "Flock.Registered.Port.domain": "59766f0cc4f10430def56f75d58c4ba25d8b353a298127516dfd435ef2349909",
@@ -25075,7 +25075,7 @@
     "Flock.Registered.badInstance": "03932f62b94f8fdcdc0c2b285ed7e2c1eab64c21ef5edd38e49948a21faf7e66",
     "Flock.Registered.badRow": "c702aa7a7cdef880a0d0811966e322facce83d1237b04bf8749c4ae9112249d1",
     "Flock.Registered.check": "4b228ade32bb7e63505ba499fc5023ce7c1ad20c174e074192993e5297df771b",
-    "Flock.Registered.checkPort": "012528371c5394748a6b8317cf18acc05b1dd837d043cdf15f20d39751d67beb",
+    "Flock.Registered.checkPort": "51ad65cfc8c1319588b238ccf0bc4a6e32ac3b7b2bc0f44daf2ac368cbe6a2fb",
     "Flock.Registered.climb": "409e735c27b6bbb1fbec2014a3beb48e70858eeff6e95502f99f10f95e6f56f3",
     "Flock.Registered.climbL": "deeb59c4c0ff09253eaf700ca259e36c92c5c09b5fc142a81d3f076bfe62ff73",
     "Flock.Registered.derived": "0751ce4385fd006c40af04446d935a4b7c9662e4b00d77c14606451776ffcac6",
@@ -35676,12 +35676,12 @@
    "pins": ["FlockSoundness.Discharge.ZkReg.zk_session_soundR"]
   },
   "FlockSoundness.Discharge.ZkReg.Defs": {
-   "digest": "42c86ad7a772185fb1b15dc82d148a838409419e1126984792d4f13605f06673",
+   "digest": "c31e6fa62f6afe535af9a7cc637f6231e5e1805a48fc9a5bfeac9156d63b4bc3",
    "definitions": {
     "FlockSoundness.Discharge.ZkReg.AcceptsZKR": "dd3e6f0573cea7acdb20726188642ed0db7476781125cbd157fb7c469ce203b2",
     "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569",
     "FlockSoundness.Discharge.ZkReg.OwnReads": "63afdb8c86471f962ec5537985abda2af738111456c4f73cc59c01848b1346a7",
-    "FlockSoundness.Discharge.ZkReg.checkRegistered": "56a237e02e091db9e7c4ba719506abbab938125d2752d18c343ccb9cc21b7df6",
+    "FlockSoundness.Discharge.ZkReg.checkRegistered": "5d16ecf80b73e1c43c2c893de9979b23bd1c6565a8a8b788cc2c93c6898874b1",
     "FlockSoundness.Discharge.ZkReg.regPaths": "b944e319b40e60721b3d1563861fcdb802c8a8eb46d33cb46eac08c8735a9a1e"
    },
    "pins": ["FlockSoundness.Discharge.ZkReg.zk_session_soundR"]
