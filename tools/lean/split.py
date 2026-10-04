@@ -288,13 +288,14 @@ def proofs_lakefile(spec_pkg: Path, dest: Path, p: dict) -> str:
     head = [f'name = "{p["name"]}"', f'defaultTargets = {json.dumps([p["proofs_lib"]])}', ""]
     if opts := re.search(r"(?ms)^\[leanOptions\]\n.*?(?=^\[|\Z)", text):
         head.append(opts.group(0).rstrip() + "\n")
-    reqs = [b.rstrip() + "\n" for t, b, c in blocks(text) if t == "require" and "path" not in c]
+    reqs = [re.sub(r"(?:\n[ \t]*(?:#[^\n]*)?)+\Z", "", b.rstrip()) + "\n" for t, b, c in blocks(text)
+            if t == "require" and "path" not in c]
     reqs.append(f'[[require]]\nname = "{cfg["name"]}"\npath = "{rel(dest, spec_pkg)}"\n')
     for name, d in path_requires(spec_pkg):
         if name in p["proofs_requires"] and name not in p["spec_requires"]:
             reqs.append(f'[[require]]\nname = "{name}"\npath = "{rel(dest, d)}"\n')
-    libs = (f'# The proofs of `{p["package"]}`\'s guarantees and every lemma behind them, untrusted: the spec\'s lock says what '
-            f'they prove.\n[[lean_lib]]\nname = "{p["proofs_lib"]}"\nroots = {json.dumps(p["proof_roots"])}\n')
+    libs = (f'# The proofs of `{p["package"]}`\'s guarantees and every lemma behind them, untrusted: the spec\'s lock says\n'
+            f'# what they prove.\n[[lean_lib]]\nname = "{p["proofs_lib"]}"\nroots = {json.dumps(p["proof_roots"])}\n')
     return "\n".join(head) + "\n" + "\n".join(reqs) + "\n" + libs
 
 
