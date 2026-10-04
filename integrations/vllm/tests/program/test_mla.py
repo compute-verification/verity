@@ -220,6 +220,25 @@ def test_combine_agrees_with_the_model(rsf: float) -> None:
         assert np.array_equal(got, np.where(MK.is_nan(s), U16(0x7FFF), MK.bf16_of(s)))
 
 
+def test_check_bits_replays_bmm_and_combine_captures(tmp_path) -> None:
+    """`mla_capture.check_bits` on a capture directory whose outputs are the models' words: every row agrees, and one flipped
+    combine word is the first mismatch it names."""
+    import json
+
+    cases = [{"op": "bmm", "NH": 2, "M": 3, "K": 64, "N": 2, "kind": "special", "seed": 7},
+             {"op": "combine", "T": 3, "HD": 16, "rsf": 1.8, "kind": "special", "seed": 8}]
+    (tmp_path / "manifest.json").write_text(json.dumps({"suite": "t", "cases": cases}))
+    np.savez(tmp_path / "case_0.npz", c=MK.bmm_rows(*MC.bmm_inputs(cases[0])))
+    out = MK.combine_rows(*MC.combine_inputs(cases[1]), 1.8, 0x7FFF)
+    np.savez(tmp_path / "case_1.npz", out=out)
+    rep = MC.check_bits(tmp_path)
+    assert (rep["rows"], rep["mismatched_rows"]) == (2 * 3 + 3, 0)
+    out[1, 3] ^= 1
+    np.savez(tmp_path / "case_1.npz", out=out)
+    first = [r["first_mismatch"] for r in (MC.check_bits(tmp_path, workers=2, worker=w) for w in (0, 1)) if r["mismatched_rows"]]
+    assert first == [{"case": 1, "token": 1, "column": 3, "got": int(out[1, 3] ^ 1), "want": int(out[1, 3])}]
+
+
 @pytest.mark.parametrize("target", PINNED, ids=[t.id for t in PINNED])
 def test_pinned_counts_and_digests(target) -> None:
     pin = PINS[target.id]
