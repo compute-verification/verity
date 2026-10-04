@@ -150,6 +150,8 @@ def test_a_request_inside_a_slot_takes_no_second_one(slots, monkeypatch):
 def test_a_pool_the_file_doesn_t_list_takes_from_any_or_is_refused_by_name(slots, monkeypatch, capsys):
     LS.SLOTS.write_text("any 1\n")
     assert LS.resolve(LS.parse(LS.SLOTS.read_text()), "audit") == ("any", 1)
+    with pytest.raises(LS.Refused, match="lists no pool 'build', the only one this request takes; the steward adds `build N`"):
+        LS.hold("build", or_any=False)
     LS.SLOTS.write_text("check 2\n")
     with pytest.raises(LS.Refused, match="lists neither pool 'audit' nor 'any'; the steward adds `audit N`"):
         LS.hold("audit")
