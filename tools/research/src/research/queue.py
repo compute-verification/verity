@@ -28,7 +28,7 @@ on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules f
 `main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs, read from what merging
 it into `main` would land (`main`'s tree against the one `git merge-tree` writes; a head that conflicts needs every grant): a role for changed files
 under listed paths (`merge_requires`' syntax, `!` patterns included), or for a change to listed sections of any `lean-audit.json`
-(`pins`, `reads`), and who gives each (`by`, which `status` prints with the label command to a PR waiting on it).  A grant is a
+(`guarantees`, `reads`), and who gives each (`by`, which `status` prints with the label command to a PR waiting on it).  A grant is a
 store label `grant = {role}` on the target `pr:{number}@{head sha}`.  It carries to a new head of the PR that only restacks it or
 merges `main` into it: one whose change against `main` is the granted head's, every file from the same bytes to the same bytes, its
 `lean-audit.json` change included (`carry`, Daniel's ruling of 2 Oct); the queue prints the head each grant carried from, or why one

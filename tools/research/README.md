@@ -315,6 +315,11 @@ and free disk.
 Limitations, stated: until `fetch --all` completes, the only copy of the
 evidence is on the machine. Provisioning is a separate, explicit act; `--on` never creates a pod.
 
+### Standing campaign targets: `research keeper`
+
+`research keeper set|stop|status NAME --on NODE` keeps N chunks of a command leased on a Nebius node until a deadline, the next
+`{seed}` of a counter each, so no agent VM stays awake to relaunch them: `research keeper --help`, and `pods/nebius/keeper.py`.
+
 ### Pods bound themselves: leases, one budget file, one guard
 
 Nothing that bounds spend may depend on an agent VM, which can be suspended at any moment, or on one guard process staying alive.
