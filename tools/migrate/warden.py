@@ -198,8 +198,9 @@ EDITS: list[Edit] = [
          f" `{CAL}` (`warden_calibration`), and its Lean package `{LEAN}/`.\n", "the map"),
     Edit("README.md", "- [`protocols/network_warden/`](protocols/network_warden/README.md)", f"- [`{W}/`]({W}/README.md)", "a link"),
     Edit("README.md", "[the network warden](protocols/network_warden/PROTOCOL.md)", f"[the network warden]({W}/PROTOCOL.md)", "a link"),
-    Edit(".agents/skills/using-slack/registry.json", "the network warden (protocols/network_warden)",
-         f"the network warden ({W}, {CAL}, {LEAN}, benchmarks/network_traces)", "network-accounting's paths"),
+    # a remit is its Slack user group's description: at most 140 characters (`research slack` refuses more)
+    Edit(".agents/skills/using-slack/registry.json", "the network warden (protocols/network_warden)", f"the network warden ({W})",
+         "network-accounting's path"),
 ]
 
 #: an old path (not the Lean package, which stays), or calibration's old import name
