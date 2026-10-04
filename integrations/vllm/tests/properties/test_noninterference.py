@@ -50,6 +50,33 @@ def test_missing_arm_wrong_world_and_boundary_hashes(tmp_path):
     assert doc["ok"] is False and doc["boundary_hashes"]["hash_equal"] == 3 and doc["tokens"]["equal"] is True
 
 
+def test_shared_expert_layer_output_is_the_add_after_moe_forward_shared(tmp_path):
+    from verity_vllm.observe.events import DispatchEnter, DispatchExit, StepEnd, StepStart, ViewDesc
+    from verity_vllm.observe.log import LogWriter
+
+    v = ViewDesc(1, 0, (1, 8), (8, 1), "bfloat16", "cuda:0")
+    exp = "model.layers.{}.mlp.experts".format
+
+    def op(i, parent, name, mod):
+        return [DispatchEnter(i, parent, 0, "forward", name, "sig", [v], {}, 7, mod), DispatchExit(i, v)]
+
+    evs = [StepStart(0, [("r0", 3)], [42], [3], {"r0": 4}, {"r0": 3}, {"r0": [0]}, 16, [3], [("r0", 3)], [0], 1, 1, 1),
+           DispatchEnter(10, None, 0, "forward", "vllm.moe_forward_shared.default", "sig", [v], {}, 7, exp(1)),
+           *op(11, 10, "aten.add.Tensor", exp(1)), DispatchExit(10, [v, v]),
+           *op(12, None, "aten.mul_.Tensor", exp(1)), *op(13, None, "aten.add.Tensor", exp(1)),
+           *op(20, None, "vllm.moe_forward_shared.default", exp(2)),
+           *op(30, None, "_C.fused_add_rms_norm.default", "model.norm"), StepEnd(0)]
+    with LogWriter(tmp_path / "log.jsonl.gz") as w:
+        for ev in evs:
+            w.write(ev)
+    snaps = {(13, "outs"): "routed+shared", (11, "outs"): "nested", (10, "outs[0]"): "shared", (30, "args[0]"): "final"}
+    (tmp_path / "snapshots.json").write_text(json.dumps({"entries": [{"step": 0, "event": e, "path": p, "sha256": h}
+                                                                     for (e, p), h in snaps.items()]}))
+    got, problems = NI.observer_boundary_hashes(tmp_path)
+    assert got["steps"][0]["hidden"] == {1: "routed+shared"} and got["steps"][0]["final"] == "final"
+    assert problems == ["step 0: moe_forward_shared id 20 (layer 2) has no shared + routed add after it"]
+
+
 def test_the_record_is_the_registered_property():
     assert REGISTRY["noninterference"].schema == NI.SCHEMA and NI.WORLDS == (1, 2)
 

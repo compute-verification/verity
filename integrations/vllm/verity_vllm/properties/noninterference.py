@@ -23,7 +23,9 @@ Tensors compared, per step s and layer L (values are bf16 row-major `[M, H]`, M 
                    (a): snapshot of the `matmul_kernel_persistent` launch with module hint `model.layers.L.mlp.down_proj`
                    (phase forward), argument `c_ptr`, taken after the launch;  (b): hook output[0] of `model.layers.L`.
                    MoE layers (OLMoE): (a) is the `vllm.moe_forward*` custom op's `outs` snapshot (module hint
-                   `model.layers.L.mlp.experts`) — the layer has no `down_proj` launch.
+                   `model.layers.L.mlp.experts`) — the layer has no `down_proj` launch.  With shared experts
+                   (GLM-4.7-Flash) the op is `vllm.moe_forward_shared`, which returns (shared, routed); the layer's output is
+                   the `aten.add.Tensor` of the two after the routed scale, under the same module hint, and (a) is its `outs`.
   residual[s, L] = `LlamaDecoderLayer.forward` return[1] = `post_attention_layernorm`'s in-place residual (x + residual).
                    (a): snapshot of `_C.fused_add_rms_norm` with module hint `model.layers.L.post_attention_layernorm`,
                    argument `args[1]` after the call;  (b): hook output[1] of `model.layers.L`.
@@ -320,6 +322,7 @@ def observer_boundary_hashes(a_dir: Path) -> tuple[dict, list[str]]:
         se = step_events(step)
         s = se.start.step
         rec = {"hidden": {}, "residual": {}, "final": None, "logits": None, "rows": len(se.start.rows)}
+        shared_pending: dict[int, int] = {}      # layer -> its `moe_forward_shared` id, until the shared + routed add
         if se.sample is not None:
             sample_ids[s] = list(se.sample.sampled_token_ids)
             sample_rows[s] = [str(r) for r, _ in se.start.logits_rows]
@@ -344,6 +347,23 @@ def observer_boundary_hashes(a_dir: Path) -> tuple[dict, list[str]]:
                     rec["logits"] = sha
                     if sha is None:
                         problems.append(f"step {s}: no snapshot for the lm_head launch id {ev.id}")
+            elif isinstance(ev, DispatchEnter) and ev.op.startswith("vllm.moe_forward_shared") and ev.phase == "forward":
+                m = _MOE_RE.match(mod)
+                if m:
+                    shared_pending[int(m.group(1))] = ev.id
+            elif (isinstance(ev, DispatchEnter) and ev.op == "aten.add.Tensor" and ev.phase == "forward" and ev.parent is None
+                  and shared_pending):
+                m = _MOE_RE.match(mod)
+                if m and int(m.group(1)) in shared_pending:
+                    L = int(m.group(1))
+                    shared_pending.pop(L)
+                    sha = by_key.get((s, ev.id, "outs"))
+                    if sha is None:
+                        problems.append(f"step {s}: no snapshot for the shared + routed add id {ev.id} outs (layer {L})")
+                    elif L in rec["hidden"]:
+                        problems.append(f"step {s}: two MoE block outputs for layer {L}")
+                    else:
+                        rec["hidden"][L] = sha
             elif isinstance(ev, DispatchEnter) and ev.op.startswith("vllm.moe_forward") and ev.phase == "forward":
                 m = _MOE_RE.match(mod)
                 if m:
@@ -369,6 +389,8 @@ def observer_boundary_hashes(a_dir: Path) -> tuple[dict, list[str]]:
                     if sha is None:
                         problems.append(f"step {s}: no snapshot for model.norm id {ev.id} args[0]")
                     rec["final"] = sha
+        for L, i in sorted(shared_pending.items()):
+            problems.append(f"step {s}: moe_forward_shared id {i} (layer {L}) has no shared + routed add after it")
         if not rec["residual"] and rec["final"] is None:
             unfused_norm_boundaries(se, by_key, s, rec, problems)
         if not rec["hidden"] and rec["final"] is None:
