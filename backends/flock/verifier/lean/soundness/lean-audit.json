@@ -8,6 +8,18 @@
    "digest": "c86a84bed584d07dde045f113c2e8937b7d5887fb9cda37aebe771db55960a14"
   }
  },
+ "layers": {
+  "FlockSoundness.Spec": {
+   "imports": ["Mathlib", "Flock", "FlockSoundness.Spec"],
+   "except": [],
+   "why": "the spec is trusted text: it reads the executable verifier and Mathlib, never a proof"
+  },
+  "FlockSoundness.Spec.Protocol": {
+   "imports": ["Mathlib", "Flock"],
+   "except": [],
+   "why": "what flock-verify accepts and the interaction model: the executable verifier and Mathlib alone"
+  }
+ },
  "upstream": {
   "scan": {
    "Arklib": {

@@ -174,3 +174,4 @@ import FlockSoundness.Discharge.ZkReg
 import FlockSoundness.Discharge.ZkEveryCoin
 import FlockSoundness.Discharge.FailClosed
 import FlockSoundness.ZK.PadNonvanishing40
+import FlockSoundness.Spec
