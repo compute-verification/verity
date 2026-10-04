@@ -34,7 +34,7 @@
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
   }
  },
- "pins": {},
+ "guarantees": {},
  "reads": {},
  "dependencies": {
   "LeanSearchClient": "10aad9bd3954ead737fba8bd3b55709e5171edda2656068ad330158e6ad622c9",
