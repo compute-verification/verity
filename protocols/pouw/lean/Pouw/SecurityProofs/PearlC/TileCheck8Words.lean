@@ -25,9 +25,12 @@ gates hold the anchors (`anchors8`) and the registered gates `rows8`'s values, a
 device's (`entry8_accepts`). `tileCheck8_computesWords` is L3's words for the plain `pc8` Program, with `Collides` never
 used: on tile rules whose tiles lie in their unit and a domain of whole-tile shapes (`Shape8`), under `Pc8OpsAgree` and
 the named hypotheses at each entry of a credited row (`Pc8EntryOK`, which includes that the peel's factor rows exist);
-`tileCheck8_computesWords_pearlC` is it on the audit's tiles. `D_dev` (`pearlCDomainDev`) gives `Shape8`'s `k` but
-leaves `m` and `n` free (`shape8_of_pearlCDomainDev`), so `tileCheck8_computesWords_domain` is it on `D_dev`'s layouts
-of whole tiles. The cap is not part of it: its verdict is a separate conjunct, decided by units of its own.
+`tileCheck8_computesWords_pearlC` is it on the audit's tiles. The Program's tile at a unit's shape is the audit grid's
+there (`tileSide`: `64`, or the side itself below 64, so decode's `32 × 64`), and whole-tile means that it divides the
+shape: each of `m` and `n` at most 64 or a multiple of 64 (`tileSide_dvd_iff`). `D_dev` (`pearlCDomainDev`) gives
+`Shape8`'s `k` but leaves `m` and `n` free (`shape8_of_pearlCDomainDev`), so `tileCheck8_computesWords_domain` is it on
+`D_dev`'s layouts of whole tiles. A last tile narrower than the others (`m = 80`) is outside the Program. The cap is not
+part of it: its verdict is a separate conjunct, decided by units of its own.
 -/
 
 namespace Pouw.PearlC.WholeCircuit
@@ -906,8 +909,17 @@ end Widths8
 
 /-! ## An accepted entry -/
 
-/-- A whole-tile `pc8` shape: `64 ∣ m`, `64 ∣ n` (`pc8.Shape.check`), and `k` a positive multiple of 128. -/
-def Shape8 (sh : Shape) : Prop := 64 ∣ sh.m ∧ 64 ∣ sh.n ∧ ∃ nw, 0 < nw ∧ sh.k = 128 * nw
+/-- A whole-tile `pc8` shape: the tile at its own shape divides it, `tileSide m ∣ m` and `tileSide n ∣ n`
+(`pc8.Shape.check`), and `k` is a positive multiple of 128. -/
+def Shape8 (sh : Shape) : Prop := tileSide sh.m ∣ sh.m ∧ tileSide sh.n ∣ sh.n ∧ ∃ nw, 0 < nw ∧ sh.k = 128 * nw
+
+/-- The tile at a shape divides it where the dimension is at most `64` or a multiple of `64`. -/
+theorem tileSide_dvd_iff (d : ℕ) : tileSide d ∣ d ↔ d ≤ 64 ∨ 64 ∣ d := by
+  unfold tileSide
+  rcases le_total d 64 with h | h
+  · rw [min_eq_left h]; exact ⟨fun _ => Or.inl h, fun _ => dvd_refl d⟩
+  · rw [min_eq_right h]
+    exact ⟨Or.inr, fun h' => h'.elim (fun _ => ⟨1, by omega⟩) id⟩
 
 /-- **The named hypotheses at entry `(i, j)`** of a unit with noise `z`, activations `act` and weights `wt`: `Row8OK` at
 row `i` of `act` and row `j` of `wt`, `Line8OK` at their noise lines, `CastWord` at their formed words, and the peel's
@@ -935,19 +947,19 @@ every unit in the cone of a set `T` holding entry `(i, j)`'s `C̃` and `U` is co
 of the noise `z` and the registered gates the activations `act`, the weights `wt` and the words `tk`, `us`, then under
 the named hypotheses at `(i, j)` the registered words `tk i j` and `us i j` read as the device's ticket and useful words
 on `pc8Sem`'s operands. -/
-theorem entry8_accepts (p : Pipeline) (pr : Prices) {M K N nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw)
-    (hM : 64 ∣ M) (hN : 64 ∣ N) (X : (whole8 ops p M K N 64 64).spec.toCircuit.Transcript)
+theorem entry8_accepts (p : Pipeline) (pr : Prices) {M K N TM TN nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw)
+    (hM : TM ∣ M) (hN : TN ∣ N) (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript)
     (z : Noise M N K Params.pi.r) (act wt tk us : Codes) (i : Fin M) (j : Fin N)
-    {T : Finset (Fin (whole8 ops p M K N 64 64).spec.toCircuit.N)}
-    (hT : ∀ g : Fin (whole8 ops p M K N 64 64).spec.toCircuit.N,
-      (g.val = cGlob8 p M N K 64 64 i j ∨ g.val = uGlob8 p M N K 64 64 i j) → g ∈ T)
-    (hcone : ∀ v ∈ (whole8 ops p M K N 64 64).part.cone T, (whole8 ops p M K N 64 64).part.Correct X v)
-    (hpub : ∀ g (hg : g < (whole8 ops p M K N 64 64).spec.toCircuit.N),
+    {T : Finset (Fin (whole8 ops p M K N TM TN).spec.toCircuit.N)}
+    (hT : ∀ g : Fin (whole8 ops p M K N TM TN).spec.toCircuit.N,
+      (g.val = cGlob8 p M N K TM TN i j ∨ g.val = uGlob8 p M N K TM TN i j) → g ∈ T)
+    (hcone : ∀ v ∈ (whole8 ops p M K N TM TN).part.cone T, (whole8 ops p M K N TM TN).part.Correct X v)
+    (hpub : ∀ g (hg : g < (whole8 ops p M K N TM TN).spec.toCircuit.N),
       ((eaAt M K ≤ g ∧ g < bAt M K) ∨ (ebAt M N K ≤ g ∧ g < in8 M N K)) → X ⟨g, hg⟩ = BitVec.ofNat _ (anchors8 p z g))
-    (hreg : ∀ g (hg : g < (whole8 ops p M K N 64 64).spec.toCircuit.N),
+    (hreg : ∀ g (hg : g < (whole8 ops p M K N TM TN).spec.toCircuit.N),
       (g < eaAt M K ∨ (bAt M K ≤ g ∧ g < ebAt M N K) ∨
-        ∃ i < M, ∃ j < N, g = cGlob8 p M N K 64 64 i j ∨ g = uGlob8 p M N K 64 64 i j) →
-      X ⟨g, hg⟩ = BitVec.ofNat _ (rows8 p M N K 64 64 act wt tk us g))
+        ∃ i < M, ∃ j < N, g = cGlob8 p M N K TM TN i j ∨ g = uGlob8 p M N K TM TN i j) →
+      X ⟨g, hg⟩ = BitVec.ofNat _ (rows8 p M N K TM TN act wt tk us g))
     (hE : Pc8EntryOK ops p z act wt i j) :
     wordQ (tk i j) = (devAt p 4 pr).ticket (quant8A ops p z act) (quant8B ops p z wt) i j ∧
       wordQ (us i j) = (devAt p 4 pr).useful (quant8A ops p z act) (quant8B ops p z wt)
@@ -957,7 +969,7 @@ theorem entry8_accepts (p : Pipeline) (pr : Prices) {M K N nw : ℕ} (hnw : 0 < 
   obtain ⟨⟨c, pa, pb⟩, hr⟩ := Option.isSome_iff_exists.1 hP
   have hK0 : 0 < K / 128 := by subst hK; omega
   obtain ⟨h1, h2, h3, h4, h5, h6⟩ := layout8 M N K
-  have hNin := in8_le_N ops p (M := M) (K := K) (N := N) (TM := 64) (TN := 64)
+  have hNin := in8_le_N ops p (M := M) (K := K) (N := N) (TM := TM) (TN := TN)
   have hea0 : eaAt M K = M * K := rfl
   have hxa : ∀ l < K, val X ((i : ℕ) * K + l) = act i l := fun l hl => by
     have := mul_add_lt i.isLt hl
@@ -988,25 +1000,25 @@ theorem entry8_accepts (p : Pipeline) (pr : Prices) {M K N nw : ℕ} (hnw : 0 < 
     rw [val_in8 ops p X (by omega) (by omega) (hpub _ _ (Or.inr ⟨by omega, by omega⟩)), anchors8_g p z hs hq,
       inW8_g (by omega), Nat.mod_eq_of_lt (gram8_lt p z s q)]
   obtain ⟨w1, w2⟩ := entry8_words hops p pr hnw hK hM hN X z act wt i j
-    (hcone _ (cone8T ops p M K N 64 64 hM hN i.isLt j.isLt hK0 fun g hg => hT g (Or.inl hg)))
-    (hcone _ (cone8A ops p M K N 64 64 hM hN i.isLt j.isLt fun g hg => hT g (Or.inr hg)))
-    (hcone _ (cone8B ops p M K N 64 64 hM hN i.isLt j.isLt fun g hg => hT g (Or.inr hg)))
+    (hcone _ (cone8T ops p M K N TM TN hM hN i.isLt j.isLt hK0 fun g hg => hT g (Or.inl hg)))
+    (hcone _ (cone8A ops p M K N TM TN hM hN i.isLt j.isLt fun g hg => hT g (Or.inr hg)))
+    (hcone _ (cone8B ops p M K N TM TN hM hN i.isLt j.isLt fun g hg => hT g (Or.inr hg)))
     hxa hea hxb heb hfa hfb hg hA hB hLA hLB hDA hDB hr
   obtain ⟨he, -, -⟩ := tile_index hM hN i.isLt j.isLt
-  have hti := Nat.mod_lt (i : ℕ) (show 0 < 64 by norm_num)
-  have htj := Nat.mod_lt (j : ℕ) (show 0 < 64 by norm_num)
+  have hti := Nat.mod_lt (i : ℕ) (Nat.pos_of_dvd_of_pos hM (Nat.zero_lt_of_lt i.isLt))
+  have htj := Nat.mod_lt (j : ℕ) (Nat.pos_of_dvd_of_pos hN (Nat.zero_lt_of_lt j.isLt))
   have hc := cGate_bounds (K := K) hti htj hK0
   have hu := uGate_bounds (K := K) hti htj
-  have vC : val X (cGlob8 p M N K 64 64 i j) = tk i j % 2 ^ 32 := by
+  have vC : val X (cGlob8 p M N K TM TN i j) = tk i j % 2 ^ 32 := by
     unfold cGlob8
     rw [val_tile8 ops p X he hc.1 hc.2 (hreg _ _ (Or.inr (Or.inr ⟨i, i.isLt, j, j.isLt, Or.inl rfl⟩)))]
-    rw [show tile8 p M N K 64 64 (i / 64 * (N / 64) + j / 64) (cGate K 64 64 (i % 64) (j % 64)) =
-      cGlob8 p M N K 64 64 i j from rfl, rows8_C p act wt tk us hM hN i.isLt j.isLt hK0]
-  have vU : val X (uGlob8 p M N K 64 64 i j) = us i j % 2 ^ 32 := by
+    rw [show tile8 p M N K TM TN (i / TM * (N / TN) + j / TN) (cGate K TM TN (i % TM) (j % TN)) =
+      cGlob8 p M N K TM TN i j from rfl, rows8_C p act wt tk us hM hN i.isLt j.isLt hK0]
+  have vU : val X (uGlob8 p M N K TM TN i j) = us i j % 2 ^ 32 := by
     unfold uGlob8
     rw [val_tile8 ops p X he hu.1 hu.2 (hreg _ _ (Or.inr (Or.inr ⟨i, i.isLt, j, j.isLt, Or.inr rfl⟩)))]
-    rw [show tile8 p M N K 64 64 (i / 64 * (N / 64) + j / 64) (uGate K 64 64 (i % 64) (j % 64)) =
-      uGlob8 p M N K 64 64 i j from rfl, rows8_U p act wt tk us hM hN i.isLt j.isLt]
+    rw [show tile8 p M N K TM TN (i / TM * (N / TN) + j / TN) (uGate K TM TN (i % TM) (j % TN)) =
+      uGlob8 p M N K TM TN i j from rfl, rows8_U p act wt tk us hM hN i.isLt j.isLt]
   rw [vC, wordQ_mod32] at w1
   rw [vU, wordQ_mod32] at w2
   exact ⟨w1, w2⟩
@@ -1077,14 +1089,16 @@ theorem tileCheck8_computesWords_pearlC {ops : RowOps} (hops : Pc8OpsAgree ops) 
     (auditTiling_rows_lt 64 64) (auditTiling_cols_lt 64 64) hent
 
 /-- `D_dev`'s `k` is whole-tile for `pc8`, a positive multiple of 128. Its `m` and `n` are free, so `Shape8` also needs
-`64 ∣ m` and `64 ∣ n`. -/
+the tile at the unit's shape to divide it. -/
 theorem shape8_of_pearlCDomainDev {d : PearlCDevice} {L : Layout} (h : pearlCDomainDev d L) {u : ℕ} (hu : u < L.N)
-    (hm : 64 ∣ (L.shape u).m) (hn : 64 ∣ (L.shape u).n) : Shape8 (L.shape u) := by
+    (hm : tileSide (L.shape u).m ∣ (L.shape u).m) (hn : tileSide (L.shape u).n ∣ (L.shape u).n) :
+    Shape8 (L.shape u) := by
   obtain ⟨-, -, hk0, ⟨c, hc⟩, -, -⟩ := h u hu
   exact ⟨hm, hn, c, by omega, hc⟩
 
-/-- **L3's words for the plain `pc8` Program on `D_dev`'s whole-tile layouts** and the audit's tiles:
-`tileCheck8_computesWords_pearlC` with `Shape8`'s `k` from `D_dev` (`shape8_of_pearlCDomainDev`). -/
+/-- **L3's words for the plain `pc8` Program on `D_dev`'s whole-tile layouts** and the audit's tiles, those whose every
+unit's tile divides its shape (served decode's `m = 32` among them): `tileCheck8_computesWords_pearlC` with `Shape8`'s
+`k` from `D_dev` (`shape8_of_pearlCDomainDev`). -/
 theorem tileCheck8_computesWords_domain {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pipeline) (pr : Prices)
     (c : Costs) (ρ : ℚ) (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r)
@@ -1093,7 +1107,7 @@ theorem tileCheck8_computesWords_domain {ops : RowOps} (hops : Pc8OpsAgree ops) 
         Pc8EntryOK ops p (noise H s U u act) act (U.weight (U.layout.wid u)) i j) :
     (tileCheck8 ops p noise).ComputesWords (pearlCProtocolDev (devAt p 4 pr) (pc8Sem ops p noise) ρ)
       (pearlCTiles (pc8Sem ops p noise) c ρ) (fun L => pearlCDomainDev (devAt p 4 pr) L ∧
-        ∀ u < L.N, 64 ∣ (L.shape u).m ∧ 64 ∣ (L.shape u).n) :=
+        ∀ u < L.N, tileSide (L.shape u).m ∣ (L.shape u).m ∧ tileSide (L.shape u).n ∣ (L.shape u).n) :=
   tileCheck8_computesWords_pearlC hops p pr c ρ noise _
     (fun _ hL u hu => shape8_of_pearlCDomainDev hL.1 hu (hL.2 u hu).1 (hL.2 u hu).2) hent
 
