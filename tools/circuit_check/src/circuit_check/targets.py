@@ -18,7 +18,9 @@ import ast
 import importlib
 import pkgutil
 import re
+import sys
 import zlib
+from pathlib import Path
 from typing import Any, Callable, Iterable
 
 import numpy as np
@@ -29,11 +31,25 @@ _LOADED = False
 REGISTERED: list[str] = []
 
 
+#: the repository's root: a Definition is this tree's when the module defining it is a file under it
+REPO = Path(__file__).resolve().parents[4]
+
+
 def _authored(d: Any) -> bool:
-    """A Definition the core, the vLLM registry or PoUW's circuit defines (not one a test module registered in the same
-    session)."""
+    """A Definition this tree's code defines, decided by the file of the module that defines it: under the repository and
+    outside every `tests/` directory and conftest, not one a test module registered in the same session. A Definition whose
+    module has no file here to judge by raises, naming it, rather than drop out of `REGISTERED` unchecked."""
     fn = getattr(d, "evaluate", None) or getattr(d, "body", None)
-    return getattr(fn, "__module__", "").partition(".")[0] in ("verity", "verity_vllm", "verity_pouw")
+    name = getattr(fn, "__module__", None)
+    file = getattr(sys.modules.get(name or ""), "__file__", None)
+    if not file:
+        raise LookupError(f"{getattr(d, 'id', d)!r}: its defining module {name!r} has no file, so circuit-check can't tell "
+                          f"whether this tree authored it")
+    path = Path(file).resolve()
+    if not path.is_relative_to(REPO):
+        return False
+    rel = path.relative_to(REPO)
+    return "tests" not in rel.parts[:-1] and rel.name != "conftest.py"
 
 
 def load_registries() -> None:
