@@ -1,11 +1,11 @@
-"""[R13 ampere] The GEMM target registry (`verity_vllm.program.registry.gemm_targets`): Definition selection per arch family through the ONE
+"""[R13 ampere] The GEMM target registry (`verity_vllm.program.frontend.gemm_targets`): Definition selection per arch family through the ONE
 `TargetProfile`, fail-closed refusal of unregistered geometry/targets, and Bet A's pins following the registry."""
 from __future__ import annotations
 
 import pytest
 
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile, profile_mismatches
-from verity_vllm.program.registry import gemm_targets as GT
+from verity_vllm.program.frontend import gemm_targets as GT
 
 AMPERE_TP = TargetProfile(compute_capability=(8, 0), num_sms=108)
 HOPPER_TP = TargetProfile(compute_capability=(9, 0), num_sms=132)

@@ -260,7 +260,7 @@ def _fused_rms_epilogue(B, S, r, rf, var, w, eps=None):
            conformance="superseded by RMSNormFusedCuda_v2: models fused_add_rms_norm_kernel<bf16, 8>, which vLLM d9105ea80 does not "
                        "launch under VLLM_BATCH_INVARIANT=1 (layernorm_kernels.cu: `!batch_invariant_launch` guards the width-8 "
                        "path); its variance tree differs from production's in 1218 of the 2340 fused-norm rows of the B0 store and "
-                       "the bf16 output in 13 of them (B0 store sweep, `verity_vllm.program.registry.rmsnorm_fused_sweep`); the B1 divergence "
+                       "the bf16 output in 13 of them (B0 store sweep, `verity_vllm.program.kernels.rmsnorm_fused_sweep`); the B1 divergence "
                        "(layer 27, t=1, word 629; typed-b1.md §5.1) is the same class")
 def RMSNormFusedCudaV1(B, S, x, res, w):
     """Superseded (kept registered so that TA1's B0/B1 records `Serve_v1{...}` with this body remain decodable):
@@ -292,7 +292,7 @@ FUSED_RMS_BLOCK = 1024  # `max_block_size = batch_invariant_launch ? 1024 : ...`
            lambda S: ((("x", Array(S.N, BF16)), ("res", Array(S.N, BF16)), ("w", Array(S.N, BF16))),
                       Tuple(Array(S.N, BF16), Array(S.N, BF16))),
            conformance="exact-model-tested; evidence: reproduces production on 2,340/2,340 fused-norm rows (1,347,840 words) of "
-                       "the B0 store (SmolLM2-135M, N=576, incl. the 13 rows v1 misses; `verity_vllm.program.registry.rmsnorm_fused_sweep`) "
+                       "the B0 store (SmolLM2-135M, N=576, incl. the 13 rows v1 misses; `verity_vllm.program.kernels.rmsnorm_fused_sweep`) "
                        "and on the B1 (N=1536) L27/t=1 row that v1 missed (typed-b1.md §5.1, closed 2026-09-08: "
                        "`results/TA1-typed-b1-20260907/corr-B1-L27t1-rmsv2.json`, 14/14 exact)")
 def RMSNormFusedCuda(B, S, x, res, w, eps=None):

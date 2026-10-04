@@ -29,7 +29,7 @@ class GemmLaunch:
 
     Constexpr pins (`constexprs`, `num_warps`, `num_stages`) must match exactly.  [R13 ampere] The TILING pinned is the
     record target's launch geometry for (M, N, K) — `gemm_target_of(ctx)`: the registered GEMM specialization of the
-    header's capability (`verity_vllm.program.registry.gemm_targets`; `ada` = vLLM's sm_89 tuned table rows else the default, `ampere`
+    header's capability (`verity_vllm.program.frontend.gemm_targets`; `ada` = vLLM's sm_89 tuned table rows else the default, `ampere`
     = the default for every shape); `constexprs` / `num_warps` / `num_stages` given at construction are the profile's default
     expectation for the fields the target does not decide.  A target without a registered specialization is Unsupported
     (`numerics_unregistered`) whatever the launch shows.  The `NUM_SMS` pin is the record target's SM count ([X-01]
@@ -66,7 +66,7 @@ class GemmLaunch:
         a = bound_args(launch)
         consts = dict(launch.enter.constexprs)
         # [R13 ampere] the tiling (BLOCK_SIZE_*, num_warps, num_stages) a launch must show is the record TARGET's launch geometry for
-        # (M, N, K) — the registered GEMM specialization's `launch_config` (verity_vllm.program.registry.gemm_targets: vLLM's tuned-table row for the
+        # (M, N, K) — the registered GEMM specialization's `launch_config` (verity_vllm.program.frontend.gemm_targets: vLLM's tuned-table row for the
         # target's arch family, else the default), the same source Bet A pins.  An unregistered target is refused whatever the launch shows.
         gt, refusal = gemm_target_of(ctx)
         if gt is None:

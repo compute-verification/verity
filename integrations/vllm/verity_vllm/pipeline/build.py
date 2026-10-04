@@ -313,8 +313,8 @@ def applicability_conditions(profile, applied: dict, attention_impls: dict, expo
     """The facts READ BACK from the environment/model/export that the Program's Definition selection rests on — the conditions under
     which the artifact may be reused (`target_profile.check_reuse`). Every value is observed, none is a literal."""
     from verity_vllm.program.frontend.rules.vllm_bindings import GEMM_PINS, RMS_PINS, tuned_gemm_table_sha256
-    from verity_vllm.program.registry.gemm_targets import try_gemm_target_for
-    # [R13 ampere] the registered GEMM specialization the construction pinned (verity_vllm.program.registry.gemm_targets, selected by the target's
+    from verity_vllm.program.frontend.gemm_targets import try_gemm_target_for
+    # [R13 ampere] the registered GEMM specialization the construction pinned (verity_vllm.program.frontend.gemm_targets, selected by the target's
     # capability + the arch family vLLM applied): its key and k16 step are conditions of reuse; None (with the refusal) when unregistered.
     gt, gt_refusal = try_gemm_target_for(profile.compute_capability, applied.get("tuned_gemm_arch_family"))
     from verity_vllm.program.registry import targets as TG

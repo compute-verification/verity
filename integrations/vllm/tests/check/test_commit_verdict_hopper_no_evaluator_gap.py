@@ -66,7 +66,7 @@ def test_the_mechanism_is_in_the_registry_and_the_evaluator_table():
         def effective_flash_attn_version(self):
             return 3
     assert not T.uses_accepted_kinds(_P())                                      # a cc 9.0 step binds the statics-lifted kinds (gemm_spec -> b1.GemmV2)
-    from verity_vllm.program.registry.gemm_targets import REGISTERED
+    from verity_vllm.program.frontend.gemm_targets import REGISTERED
     assert REGISTERED["hopper"].kind.startswith("Gemm_v2{") and "HopperBF16WgmmaDot16" in REGISTERED["hopper"].kind
     assert "Gemm_v2" in EVALUATORS and "Gemm_v2" not in NOT_YET               # [R17 dense] the evaluator landed: HopperBF16WgmmaDot16 k16 chain
     assert "HopperBF16WgmmaDot16_v1" in EVALUATORS["Gemm_v2"] and "dot_bf16_for(DOT)" in EVALUATORS["Gemm_v2"]

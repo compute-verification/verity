@@ -30,7 +30,7 @@ from verity_vllm.program import boolean as SW
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 from verity_vllm.program.registry import boolean_fp8 as BF
 from verity_vllm.program.registry import fp8 as F
-from verity_vllm.program.registry import gemm_targets as GT
+from verity_vllm.program.frontend import gemm_targets as GT
 from verity_vllm.program.registry import targets as TG
 from tests.program import test_fp8_profile as FP
 from tests.program.test_boolean_fp8 import BF16_SPECIALS, _flat, _inputs

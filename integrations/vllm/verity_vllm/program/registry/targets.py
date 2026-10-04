@@ -3,7 +3,7 @@
 [R13 lane hopper, on lane ampere's mechanism.]  Two facts of the `TargetProfile` decide a launch's Definition, and the two registries
 split along them:
 
-* the GEMM *launch geometry* (tiling table / default tiling, the k16 step the Triton kernel lowers to) is `verity_vllm.program.registry.gemm_targets`
+* the GEMM *launch geometry* (tiling table / default tiling, the k16 step the Triton kernel lowers to) is `verity_vllm.program.frontend.gemm_targets`
   (lane ampere): `TargetProfile.gemm_target()` -> `GemmTarget{key, vllm_arch_family, tuned_table, dot, kind, evidence}`; `ada` / `ampere` /
   `hopper` / `blackwell_consumer` are registered there, anything else is `UnregisteredGemmTarget` (fail closed).  This module holds NO table copy: it resolves the
   record's `dot` NAME to the registered step primitive (`DOTS`) and binds the Definition;
@@ -37,7 +37,7 @@ from verity_vllm.program.registry import fa3_check_inf as F3
 from verity_vllm.program.registry import fp8, nvfp4
 from verity_vllm.program.registry import gemm_bias as GB
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.gemm_targets import UnregisteredGemmTarget
+from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
 from verity_vllm.program.registry.hopper import Fa3InvSum
 
 

@@ -88,7 +88,7 @@ def moe_expert_refusal(padded: bool = False) -> str | None:
 def gemm_pins_for(M: int, N: int, K: int) -> tuple[dict, str]:
     """The pins a bf16 `[M,K] x [K,N]` launch must match on the active target: vLLM's `_get_matmul_config` picks a tabled (N, K) row's
     M-bucket tiling when the target's arch family has a tuned table, else the default — `GemmTarget.launch_config` of the registered
-    target (`verity_vllm.program.registry.gemm_targets`), the SAME record the eager resolver (`patterns.GemmLaunch`) pins. Same `Gemm_v1{K,N}`
+    target (`verity_vllm.program.frontend.gemm_targets`), the SAME record the eager resolver (`patterns.GemmLaunch`) pins. Same `Gemm_v1{K,N}`
     body either way (per-coordinate f32 accumulator over ascending k16 steps): that the target's geometry keeps it is the record's
     correspondence evidence, not this docstring. Returns (pins, source); raises `UnregisteredGemmTarget` for an unregistered target.
 
