@@ -975,7 +975,7 @@ class Result:
     traced: set | None = None        # "F<tab>file" / "L<tab>directory" every process of the run read (None: the guard traced nothing)
     untraced: dict | None = None     # test module (or "*") -> programs its tests started that no tracer sees into
     ran_all: bool = False            # pytest itself passed: every test it ran passed
-    child_reads: list | None = None  # (O: a file read / E: a tracer that did not start, the file or why, the tests) per child read
+    child_reads: list | None = None  # (kind, file or why, tests): "O" a file a child read outside the inputs, "E" a child untraced
 
 
 #: pytest with the guard loaded by name (`-p`), which xdist repeats in each worker, from `guard/`: appended to sys.path, and
@@ -1206,10 +1206,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{r.status:7} {s.name:28} {_count(r)} in {r.seconds:.0f} s" + (f" on {r.workers} workers" if r.workers > 1 else "")
               + (f"; {kept} per-test passes kept" if kept and per[s].narrow else f"; {kept} outcomes recorded" if kept else ""))
         if r.child_reads:
-            def by(w: list[str]) -> str:
+            def who(w: list[str]) -> str:
                 return " and ".join(w) if len(w) < 3 else f"{w[0]}, {w[1]} and {len(w) - 2} more"
-            files = [f"{rel}: read by a process that {by(w)} started" for k, rel, w in r.child_reads if k == "O"]
-            blind = [f"a Python that {by(w)} started could not start its read guard ({why.removeprefix('the tracer did not start: ')})"
+            files = [f"{rel}: read by a process that {who(w)} started" for k, rel, w in r.child_reads if k == "O"]
+            blind = [f"a Python that {who(w)} started could not start its read guard ({why.removeprefix('the tracer did not start: ')})"
                      for k, why, w in r.child_reads if k == "E"]
             lines = files + blind
             print(f"        processes its tests started read outside its inputs, so nothing vouches for its pass:\n          "
