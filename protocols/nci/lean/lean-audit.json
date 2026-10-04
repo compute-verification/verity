@@ -50,26 +50,31 @@
  },
  "guarantees": {
   "Nci.SecurityProofs.Inference": {
+   "owner": "@compute-accounting",
    "signature": ["Nci.SecurityProofs.Inference : Nci.Guarantees.Inference"],
    "assumptions": [],
    "type_hash": "9577814bc7cda3860fee9d3428ecde7e11d7299009a1d3bfb405e11c92e5c600"
   },
   "Nci.SecurityProofs.ReadBound": {
+   "owner": "@compute-accounting",
    "signature": ["Nci.SecurityProofs.ReadBound : Nci.Guarantees.ReadBound"],
    "assumptions": [],
    "type_hash": "5aba3326c25c0abfefc6969e6eac4e93768b23b0600102b7ecbec0504e979548"
   },
   "Nci.SecurityProofs.Training": {
+   "owner": "@compute-accounting",
    "signature": ["Nci.SecurityProofs.Training : Nci.Guarantees.Training"],
    "assumptions": [],
    "type_hash": "b3e344c8c136829d0a3a4130fa3fc8a8d5bb34e0a0fe3f5673183e5e7cd2cf3a"
   },
   "Nci.SecurityProofs.UpdatedMatMul": {
+   "owner": "@compute-accounting",
    "signature": ["Nci.SecurityProofs.UpdatedMatMul : Nci.Guarantees.UpdatedMatMul"],
    "assumptions": [],
    "type_hash": "159e7399036e8f45f9a0af577ce7677b603914d42b48a260efc4b24f7b46c55b"
   },
   "Nci.SecurityProofs.full_positions": {
+   "owner": "@compute-accounting",
    "signature": [
     "Nci.SecurityProofs.full_positions {D : Verity.Circuit} (c : Nci.Chain D) (R : Finset (Fin D.N)) (d : Nat)",
     "  (hd : ∀ (ℓ : Fin c.L), instLENat.le d (c.d ℓ)) :",
@@ -89,6 +94,7 @@
    "type_hash": "0be1f142229f412b399a736e39e8d50f020462af3b5666531fafe52754deb854"
   },
   "Nci.SecurityProofs.iu_reads": {
+   "owner": "@compute-accounting",
    "signature": [
     "Nci.SecurityProofs.iu_reads (D : Verity.Declaration) (c : Nci.Chain D.D) (Γ : Nat) (K b_w b_a : Real) (d : Nat)",
     "  (hd : ∀ (ℓ : Fin c.L), instLENat.le d (c.d ℓ)) (hb_a : Real.instLE.le 0 b_a)",
@@ -106,6 +112,7 @@
    "type_hash": "d5d11e43644ce9e4ad964bfcda1cf765924fc720b505c56993f236f058d9d693"
   },
   "Nci.SecurityProofs.loomis_whitney": {
+   "owner": "@compute-accounting",
    "signature": [
     "Nci.SecurityProofs.loomis_whitney.{u_1, u_2, u_3} {α : Type u_1} {β : Type u_2} {γ : Type u_3} [DecidableEq α]",
     "  [DecidableEq β] [DecidableEq γ] (T : Finset (Prod α (Prod β γ))) :",
@@ -119,6 +126,7 @@
    "type_hash": "699c0e8c25ebd5e02db7990880c2aab5edf63a3a632f092488b8826906380abe"
   },
   "Nci.SecurityProofs.other_positions": {
+   "owner": "@compute-accounting",
    "signature": [
     "Nci.SecurityProofs.other_positions {D : Verity.Circuit} (c : Nci.Chain D) {n : Nat} (P : Verity.Partition D n)",
     "  (u : Fin n) :",

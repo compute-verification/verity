@@ -3,6 +3,7 @@
  "meaning": ["FlockLevel3", "Flock"],
  "pins": {
   "FlockLevel3.F128.poly_add": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.F128.poly_add (a b : Flock.F128) :",
     "  Eq (FlockLevel3.F128.poly (instHAdd.hAdd a b)) (instHAdd.hAdd (FlockLevel3.F128.poly a) (FlockLevel3.F128.poly b))"
@@ -11,11 +12,13 @@
    "type_hash": "78532b08c361f1b8a283aaca43b05d5208dedc1f84939a3410a4dae7b96e337f"
   },
   "FlockLevel3.F128.poly_injective": {
+   "owner": "@proofs",
    "signature": ["FlockLevel3.F128.poly_injective : Function.Injective FlockLevel3.F128.poly"],
    "assumptions": [],
    "type_hash": "0d2f9d7a1b4a3a5bc35c0906186f2eb474c0f897238244439f3301c65d66b8b6"
   },
   "FlockLevel3.F128.poly_mul": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.F128.poly_mul (a b : Flock.F128) :",
     "  Eq (FlockLevel3.F128.poly (instHMul.hMul a b))",
@@ -25,6 +28,7 @@
    "type_hash": "23d3074e5f4d989cc73900b341ae37294ee2bb33701d723c9beb0e17e4bc8622"
   },
   "FlockLevel3.GF128.add_eq": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.GF128.add_eq (a b : Flock.F128) :",
     "  Eq (instHAdd.hAdd (FlockLevel3.GF128.of a) (FlockLevel3.GF128.of b)) (FlockLevel3.GF128.of (instHAdd.hAdd a b))"
@@ -33,6 +37,7 @@
    "type_hash": "15c125fdfe033f417e851af918a8224edf4e9426ebf6377352a5aee8a794a258"
   },
   "FlockLevel3.GF128.inv_eq": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.GF128.inv_eq (a : Flock.F128) :",
     "  Eq (DivisionMonoid.toDivInvOneMonoid.toInvOneClass.inv (FlockLevel3.GF128.of a)) (FlockLevel3.GF128.of a.inv)"
@@ -41,6 +46,7 @@
    "type_hash": "d08e4d62f868c55acb4b734a279d29eb337c0bbb2737c9e02aee3dc00405d5a2"
   },
   "FlockLevel3.GF128.mul_eq": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.GF128.mul_eq (a b : Flock.F128) :",
     "  Eq (instHMul.hMul (FlockLevel3.GF128.of a) (FlockLevel3.GF128.of b)) (FlockLevel3.GF128.of (instHMul.hMul a b))"
@@ -49,6 +55,7 @@
    "type_hash": "0c52848db9548bf9cc0a47227058c385bf6be454a896742f3544000501014636"
   },
   "FlockLevel3.GF128.xinv_mul_x": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.GF128.xinv_mul_x :",
     "  Eq (instHMul.hMul (FlockLevel3.GF128.of Flock.F256.xinv) (FlockLevel3.GF128.of (Flock.F128.monomial 1))) 1"
@@ -57,6 +64,7 @@
    "type_hash": "0805a3ba76b568d1c36634e1bb728e1f9651f9b44cc3e71e6a6eb6f5b085786a"
   },
   "FlockLevel3.GF256.add_eq": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.GF256.add_eq (a b : Flock.F256) :",
     "  Eq (instHAdd.hAdd (FlockLevel3.GF256.of a) (FlockLevel3.GF256.of b)) (FlockLevel3.GF256.of (instHAdd.hAdd a b))"
@@ -65,6 +73,7 @@
    "type_hash": "2ed4db2f4f5872aeacadc77a1fa839a34d61997eced0785d3fa05bef3aa1754c"
   },
   "FlockLevel3.GF256.mul_eq": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.GF256.mul_eq (a b : Flock.F256) :",
     "  Eq (instHMul.hMul (FlockLevel3.GF256.of a) (FlockLevel3.GF256.of b)) (FlockLevel3.GF256.of (instHMul.hMul a b))"
@@ -73,21 +82,25 @@
    "type_hash": "1a38ae44c027a1fa99ccd807a970e8d08273aa82ab0ba3f3ff14738b1f76aaa9"
   },
   "FlockLevel3.G_irreducible": {
+   "owner": "@proofs",
    "signature": ["FlockLevel3.G_irreducible : Irreducible FlockLevel3.G"],
    "assumptions": [],
    "type_hash": "c04b46cbbc8a37cf80fc4b3fc4436d53b846b58c3a2df2c9933659075227c128"
   },
   "FlockLevel3.Q_irreducible": {
+   "owner": "@proofs",
    "signature": ["FlockLevel3.Q_irreducible : Irreducible FlockLevel3.Q"],
    "assumptions": [],
    "type_hash": "ee014b79708a48d123ada1fabd7045af3e7f99eceb015b486b49506b378311ab"
   },
   "FlockLevel3.RowV2.enc_inj": {
+   "owner": "@proofs",
    "signature": ["FlockLevel3.RowV2.enc_inj : Function.Injective fun r => FlockLevel3.RowV2.enc r.val"],
    "assumptions": [],
    "type_hash": "eb485a237d27b3e8fd83e415b6c5e255f449a0db43713a3100f5869ccf775455"
   },
   "FlockLevel3.RowV2.packBits_length": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.RowV2.packBits_length (bs : List Bool) :",
     "  Eq (Flock.HmRow.packBits bs).length (instHDiv.hDiv (instHAdd.hAdd bs.length 7) 8)"
@@ -96,16 +109,19 @@
    "type_hash": "42235c01d6d3171dd03c6d6f625a8b54b12bae8a5373c70a0de0c6f65584f2cd"
   },
   "FlockLevel3.RowV2.prefix_size": {
+   "owner": "@proofs",
    "signature": ["FlockLevel3.RowV2.prefix_size (l : Nat) : Eq (Flock.HmRow.rowPrefixV2 l).size 128"],
    "assumptions": [],
    "type_hash": "1450d2499d3fca0680fdae44619236a165fd1ad601cd9eb2c5035c522b41502c"
   },
   "FlockLevel3.T_xK": {
+   "owner": "@proofs",
    "signature": ["FlockLevel3.T_xK : Eq (FlockLevel3.T FlockLevel3.xK) 1"],
    "assumptions": [],
    "type_hash": "a271381b335e91f2eda2ee2323fd6fe702e0d66b09c0d884a35136e6512b6a00"
   },
   "FlockLevel3.addDelta_get": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.addDelta_get (w : Nat → Flock.F128) (pairs : List (Prod Nat Nat)) (out : Array Flock.F128) (c : Nat) :",
     "  instLTNat.lt c out.size →",
@@ -118,6 +134,7 @@
    "type_hash": "81be0a96857834878e5d9db5e625973973c3cd9e32c5aea888bfffdaabc7b008"
   },
   "FlockLevel3.baseOf_get": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.baseOf_get (alpha : Flock.F128) (eLo : Array Flock.F128) (a b : Flock.Sparse)",
     "  (lk : Option Flock.LookupTable) (sl i' : Nat) (hi : instLTNat.lt i' (instHPow.hPow 2 sl))",
@@ -132,6 +149,7 @@
    "type_hash": "f43a5e9ff9e1605b435f7d381c076711a0b3ab1179f274be7fa221eb9f2850f6"
   },
   "FlockLevel3.build_computes": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.build_computes.{u_1} {K : Type u_1} [Field K] [CharP K 2] [DecidableEq K] {name : String}",
     "  {table : ByteArray} {n lo bits : Nat} {net : Flock.Net}",
@@ -178,21 +196,25 @@
    "type_hash": "4fded1ec0fe44ec276dd7bc8703447a64f1bbd2a361515093e1bdcb072c3ed0f"
   },
   "FlockLevel3.card_F": {
+   "owner": "@proofs",
    "signature": ["FlockLevel3.card_F : Eq (Fintype.card FlockLevel3.GF128) (instHPow.hPow 2 128)"],
    "assumptions": [],
    "type_hash": "62e691abcdcb0809005c1e4d120038fc7b5a1e8e4b504ac6eac45ec1201676e0"
   },
   "FlockLevel3.card_K": {
+   "owner": "@proofs",
    "signature": ["FlockLevel3.card_K : Eq (Fintype.card FlockLevel3.GF256) (instHPow.hPow 2 256)"],
    "assumptions": [],
    "type_hash": "4c19db0cd1e637292353ac5b01551cec52725f0bbf7c9eec8b76baf4cf0924d4"
   },
   "FlockLevel3.charTwoK": {
+   "owner": "@proofs",
    "signature": ["FlockLevel3.charTwoK : CharP FlockLevel3.GF256 2"],
    "assumptions": [],
    "type_hash": "fa32d51ae8692d4f9ef2d9186fb025f310b9a47ec4e0c7f8c08e6244f3a6c037"
   },
   "FlockLevel3.clmul_spec": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.clmul_spec (a b : UInt64) :",
     "  Eq (FlockLevel3.natPoly (FlockLevel3.w128 (Flock.F128.clmul a b).fst (Flock.F128.clmul a b).snd))",
@@ -202,6 +224,7 @@
    "type_hash": "602b57585be1b04d2b57bb68cb4ba4f283adb4b0a824e36ec1721951f84fbaee"
   },
   "FlockLevel3.eqAt_split": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.eqAt_split {R : Type} [CommRing R] (a b : Nat) (r : Fin (instHAdd.hAdd a b) → R) (u : Nat) :",
     "  Eq (FlockLevel3.eqAt r u)",
@@ -212,6 +235,7 @@
    "type_hash": "430d71c4a8adde85a6abcfa1f5f93320735f30110ec06f41a3b05cdd8f2f84db"
   },
   "FlockLevel3.eqTable_get": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.eqTable_get (r : Array Flock.F128) (b : Nat) (hb : instLTNat.lt b (Flock.eqTable r).size) :",
     "  Eq (FlockLevel3.GF128.of (Array.instGetElemNatLtSize.getElem (Flock.eqTable r) b hb))",
@@ -221,11 +245,13 @@
    "type_hash": "abe2371ceddfc667950bd78740a392670bc3729133be38a27eca09b96171e221"
   },
   "FlockLevel3.eqTable_size": {
+   "owner": "@proofs",
    "signature": ["FlockLevel3.eqTable_size (r : Array Flock.F128) : Eq (Flock.eqTable r).size (instHPow.hPow 2 r.size)"],
    "assumptions": [],
    "type_hash": "e1df451d3eae74609122e03560126e914e1c8e438906f03da790fe199a9e3c48"
   },
   "FlockLevel3.foldB_get": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.foldB_get (lk : Flock.LookupTable) (e acc0 : Array Flock.F128) (c : Nat) (hc : instLTNat.lt c acc0.size) :",
     "  Eq (FlockLevel3.GF128.of (Array.instGetElem?NatLtSize.getElem! (Flock.Lookup.foldB lk e acc0) c))",
@@ -241,6 +267,7 @@
    "type_hash": "5a85e430a23078bc0e8e76de7f4d58e16626ef34f097a2feb05667e88fe3e0e1"
   },
   "FlockLevel3.foldRanges_get": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.foldRanges_get (st : Flock.Stmt) (alpha : Flock.F128) (lw rho : Array Flock.F128) (rs : List Flock.Range)",
     "  (bases : Array (Prod (Prod Flock.Kind Nat) (Array Flock.F128))) (out res : Array Flock.F128) :",
@@ -257,6 +284,7 @@
    "type_hash": "374830696dd03beb8a2e50d321a437cd01e43ea109badba5526d89fdf8932a1c"
   },
   "FlockLevel3.foldT_get": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.foldT_get (m : Flock.Sparse) (e : Array Flock.F128) (c : Nat) (hc : instLTNat.lt c m.width) :",
     "  Eq (FlockLevel3.GF128.of (Array.instGetElem?NatLtSize.getElem! (m.foldT e) c))",
@@ -268,6 +296,7 @@
    "type_hash": "49d580153d5165463b7c1b4def4b93165fa3475acb0a2737e6f0502ab4f9b045"
   },
   "FlockLevel3.fold_get": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.fold_get (st : Flock.Stmt) (alpha : Flock.F128) (lw rho out : Array Flock.F128)",
     "  (h : Eq (st.fold alpha lw rho) (Except.ok out)) (c : Nat) (hc : instLTNat.lt c (instHPow.hPow 2 st.c.kLog)) :",
@@ -286,6 +315,7 @@
    "type_hash": "8b58c5299be820ea3ddaf1d0e1942d8d2bf24dcd647802218591faf101758a54"
   },
   "FlockLevel3.foldedPartial_eq": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.foldedPartial_eq (st : Flock.Stmt) (alpha beta : Flock.F128) (lw rho ts w : Array Flock.F128)",
     "  (hst : Eq st.structured Bool.true) (hts : Eq (instHAdd.hAdd ts.size 6) st.c.kLog)",
@@ -298,6 +328,7 @@
    "type_hash": "e40c82ac41724a3d9dc08b019a1a56354cd0b0125ffe5667d66454f3269af627"
   },
   "FlockLevel3.folded_eq": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.folded_eq (st : Flock.Stmt) (alpha beta : Flock.F128) (lw rho ts w : Array Flock.F128)",
     "  (h : Eq (st.folded alpha beta lw rho ts) (Except.ok w)) :",
@@ -309,6 +340,7 @@
    "type_hash": "0c7977a1424158f6da1745deda3456352a45eaa7da29ca0570363dc8623fdf0c"
   },
   "FlockLevel3.lo_balanced": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.lo_balanced (b : Nat) :",
     "  instLENat.le b 64 →",
@@ -321,6 +353,7 @@
    "type_hash": "5c9130bdc67c092b2d91b3e1eaf359f60b4bfdffa5c7b1616a36abe0b725580a"
   },
   "FlockLevel3.mask_term": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.mask_term (lw rho : Array Flock.F128) (hlw : Eq lw.size 64) (sl : Nat) (hsl : instLENat.le 6 sl)",
     "  (hslr : instLENat.le (instHSub.hSub sl 6) rho.size) (alpha : Flock.F128) (c : Nat)",
@@ -342,6 +375,7 @@
    "type_hash": "c8cf8ea3875fdcf1a5c9b16ff2885ccc2fb22aeac0955c83416c90577f669103"
   },
   "FlockLevel3.nodes": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.nodes :",
     "  Exists fun nS =>",
@@ -372,6 +406,7 @@
    "type_hash": "6e221c3b23c2f81b86d0222f3f4ff9c658d01b4a6bd1f0bceb50d7a8b16bafa3"
   },
   "FlockLevel3.ofLimbs": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.ofLimbs (c0 c1 : Flock.F128) :",
     "  Eq (FlockLevel3.GF256.of { c0 := c0, c1 := c1 })",
@@ -382,6 +417,7 @@
    "type_hash": "0354af44c67b681897c761f9fad7bb0ae49e6c2eff5231e98f76a41b45499c29"
   },
   "FlockLevel3.ofLimbs_bijective": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.ofLimbs_bijective :",
     "  Function.Bijective fun w =>",
@@ -392,6 +428,7 @@
    "type_hash": "a561bd9f20be36bc6724bf67b8aa1c8e14ce71286e0d5ae673198b3a8dcc46a5"
   },
   "FlockLevel3.omega_injective": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.omega_injective (d : Nat) :",
     "  instLENat.le d 64 → Set.InjOn FlockLevel3.omega (Set.ofPred fun q => instLTNat.lt q (instHPow.hPow 2 d))"
@@ -400,11 +437,13 @@
    "type_hash": "880a755ed823a277877fa8e052860a258ae8cb1a20cec813a514ee36c9bfb764"
   },
   "FlockLevel3.pack_unpack": {
+   "owner": "@proofs",
    "signature": ["FlockLevel3.pack_unpack (a : FlockLevel3.GF128) : Eq (FlockLevel3.pack (FlockLevel3.unpack a)) a"],
    "assumptions": [],
    "type_hash": "2ebb989f5391c859d6cce017e11cf48386715e6073ba1b0eeb7ac4993dd280d0"
   },
   "FlockLevel3.partial_eq_halve_fold": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.partial_eq_halve_fold (l : List Flock.F128) (v : Array Flock.F128) :",
     "  Eq v.size (instHMul.hMul (instHPow.hPow 2 l.length) 64) →",
@@ -420,16 +459,19 @@
    "type_hash": "46bc27d43242a4bd56fc4b74706d7163805906796d7134a8781797c84b51205a"
   },
   "FlockLevel3.phi_injective": {
+   "owner": "@proofs",
    "signature": ["FlockLevel3.phi_injective : Function.Injective FlockLevel3.phi"],
    "assumptions": [],
    "type_hash": "e4f152e84340c88efc5a4630ad7afda0d6580a0faddafda852e9471625c13117"
   },
   "FlockLevel3.phi_surjective": {
+   "owner": "@proofs",
    "signature": ["FlockLevel3.phi_surjective : Function.Surjective FlockLevel3.phi"],
    "assumptions": [],
    "type_hash": "baa1203c767872af9a63bc7ade323a4fd2d6676f076bb15562e8221e82e4daba"
   },
   "FlockLevel3.pinned_indep": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.pinned_indep (c : Fin 128 → ZMod 2) :",
     "  Eq (Finset.univ.sum fun b => instHMul.hMul (c b).val.cast (FlockLevel3.eqAtPinned b.val)) 0 → Eq c 0"
@@ -438,11 +480,13 @@
    "type_hash": "0b958599aa21456454ea4af9023a917dd46607854a6942c1b73b0d34721b0934"
   },
   "FlockLevel3.pinned_ne_one": {
+   "owner": "@proofs",
    "signature": ["FlockLevel3.pinned_ne_one (i : Fin 7) : Ne (FlockLevel3.pinnedF i) 1"],
    "assumptions": [],
    "type_hash": "d294ede866b86e33ae7c182278c27e695f8fe12552f7d82e0c19aef6b41ae317"
   },
   "FlockLevel3.placeRange_get": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.placeRange_get (r : Flock.Range) (eHi base : Array Flock.F128) (fuel k : Nat) (out : Array Flock.F128)",
     "  (c : Nat) :",
@@ -459,6 +503,7 @@
    "type_hash": "af3b4736e0f287472429f769c6b66f0df43b8107457eb71e4af093694143ec41"
   },
   "FlockLevel3.placeSlot_get": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.placeSlot_get (s : Flock.F128) (base : Array Flock.F128) (at_ fuel i : Nat) (out : Array Flock.F128)",
     "  (c : Nat) :",
@@ -472,6 +517,7 @@
    "type_hash": "1def2999dcef9f02efb673f6d8ed542dded4903c8cc3077f5ce59d90c4380071"
   },
   "FlockLevel3.reduce_spec": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.reduce_spec (r0 r1 r2 r3 : UInt64) :",
     "  Eq (FlockLevel3.F128.poly (Flock.F128.reduce r0 r1 r2 r3))",
@@ -487,6 +533,7 @@
    "type_hash": "6fa67f3c264d5fde8e59017ce3026d41f3e0c204db0c654ad14e05e288e5b2f3"
   },
   "FlockLevel3.slot_factor": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.slot_factor (lw rho : Array Flock.F128) (hlw : Eq lw.size 64) (sl : Nat) (hsl : instLENat.le 6 sl)",
     "  (hslr : instLENat.le (instHSub.hSub sl 6) rho.size) (q c : Nat)",
@@ -509,6 +556,7 @@
    "type_hash": "54ec5c0d17f2c5daeb6e6a5619ad41e45fe6521eab3e2dc74c0ccfb996ba15a6"
   },
   "FlockLevel3.slot_term": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.slot_term (st : Flock.Stmt) (alpha : Flock.F128) (lw rho : Array Flock.F128) (r : Flock.Range)",
     "  (a b : Flock.Sparse) (lk : Option Flock.LookupTable)",
@@ -542,6 +590,7 @@
    "type_hash": "f128d6a45015cd6b72e14363e1a4927ff8c5dd9050abdc263298ae83b5345e0e"
   },
   "FlockLevel3.sparseT_scale": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.sparseT_scale (lw rho : Array Flock.F128) (hlw : Eq lw.size 64) (sl : Nat) (hsl : instLENat.le 6 sl)",
     "  (hslr : instLENat.le (instHSub.hSub sl 6) rho.size) (q : Nat)",
@@ -559,6 +608,7 @@
    "type_hash": "8340d525f52e07806c7d9efec647486cb56a986a9a5b3aa4ab75bf2088d32e4f"
   },
   "FlockLevel3.subsetTab_get": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.subsetTab_get (f : Nat → Flock.F128) (y : Nat) (hy : instLTNat.lt y 256) :",
     "  Eq (FlockLevel3.GF128.of (Array.instGetElem?NatLtSize.getElem! (Flock.Lookup.subsetTab f) y))",
@@ -568,16 +618,19 @@
    "type_hash": "4324c2f6381f618781d41155bca35c520c408b091d2788f66add2492056c005f"
   },
   "FlockLevel3.toAdj_injective": {
+   "owner": "@proofs",
    "signature": ["FlockLevel3.toAdj_injective : Function.Injective FlockLevel3.toAdj"],
    "assumptions": [],
    "type_hash": "2c4ff1817907979fd86176124dd388ca2577a69b628ed5730da9614a1c31d8e3"
   },
   "FlockLevel3.toAdj_surjective": {
+   "owner": "@proofs",
    "signature": ["FlockLevel3.toAdj_surjective : Function.Surjective FlockLevel3.toAdj"],
    "assumptions": [],
    "type_hash": "a3271bcf84e9654d864763a6194d0b654740565e0b101b5d301477afc3e9725c"
   },
   "FlockLevel3.u_root": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.u_root :",
     "  Eq",
@@ -589,6 +642,7 @@
    "type_hash": "2d3e04a7159b35fdd1f7cb751395f0ec92739a7167a4c30ae86bc83db7729feb"
   },
   "FlockLevel3.unpack_add": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.unpack_add (a a' : FlockLevel3.GF128) :",
     "  Eq (FlockLevel3.unpack (instHAdd.hAdd a a')) (instHAdd.hAdd (FlockLevel3.unpack a) (FlockLevel3.unpack a'))"
@@ -597,11 +651,13 @@
    "type_hash": "902722fac8588c4f0ab78ed9d501beec339cd55ff2da73e89010c518b962a462"
   },
   "FlockLevel3.unpack_pack": {
+   "owner": "@proofs",
    "signature": ["FlockLevel3.unpack_pack (b : Fin 128 → ZMod 2) : Eq (FlockLevel3.unpack (FlockLevel3.pack b)) b"],
    "assumptions": [],
    "type_hash": "722449f8924b9f6f30f0753582e741496711e61229cab82767aa3d03ea8e04a6"
   },
   "FlockLevel3.xhat_poly": {
+   "owner": "@proofs",
    "signature": [
     "FlockLevel3.xhat_poly (L : Nat) :",
     "  instLENat.le L 40 →",
