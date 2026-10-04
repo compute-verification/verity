@@ -121,7 +121,7 @@ LEAD_RE = re.compile(r"^\s*((?:(?:@[a-z0-9][a-z0-9._-]*|<!subteam\^[A-Z0-9]+(?:\
 BARE_LEAD_RE = re.compile(r"^\s*([a-z0-9][a-z0-9._-]*):\s")
 NAME_TOKEN_RE = re.compile(r"@([a-z0-9][a-z0-9._-]*)|<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
 AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-9a-f]{8}")
-QUIET = "(quiet)"                                                # in a post: ring only the names it starts with
+QUIET = "(quiet)"                                                # ending a post: ring only the names it starts with
 CAP_PER_HOUR = 20                                                # doorbells into one inbox from one author in one thread
 DOORBELL_MAX = 600                                               # characters of the post a doorbell carries
 INBOX_HEAD = "Inbox for @"
@@ -590,7 +590,7 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
     author, by = poster(msg, reg), poster(root, reg) if reply else None
     if author is None:
         return []                                                    # only our bot and the named humans route
-    if QUIET in text:
+    if is_quiet(text):
         out = [] if is_status(text) else lead_names(text, reg)       # people write (quiet) for "no reply needed"
     elif reply and is_status(text):
         out = [by]
@@ -610,6 +610,14 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
         if n and n != author and n not in seen:
             seen.append(n)
     return seen
+
+
+def is_quiet(text: str) -> bool:
+    """Whether a post carries the quiet marker: as a footer tag, or as `(quiet)` ending its text before any footer.
+    `(quiet)` elsewhere is prose."""
+    text = text or ""
+    body = FOOTER_RE.sub("", OLD_FOOTER_RE.sub("", text)).rstrip()
+    return QUIET in tags_of(text) or body.endswith(QUIET)
 
 
 def tags_of(text: str) -> list[str]:
@@ -657,7 +665,7 @@ def deliveries(msg: dict, root: dict | None, reg: dict, book: dict[str, dict], i
             continue
         for s in r.get("subscriptions") or []:
             mode = s.get("deliver", "digest")
-            if mode in DELIVER and matches(s.get("filter", ""), msg, reg, targets) and not (mode == "wake" and QUIET in text):
+            if mode in DELIVER and matches(s.get("filter", ""), msg, reg, targets) and not (mode == "wake" and is_quiet(text)):
                 out.append({"name": name, "deliver": mode, "why": f"subscribes to {s['filter']}"})
                 break
     return out
@@ -1446,7 +1454,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         for n in lead_names(m.get("text") or "", reg):
             if not routes.get_route(n) and n not in handles:
                 dropped.append({"name": n, "ts": m["ts"], "by": poster(m, reg)})
-        is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m) and QUIET not in (m.get("text") or "")
+        is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m) and not is_quiet(m.get("text") or "")
         answered = m.get("reply_count") or any(x.get("name") in ("eyes", "white_check_mark", "x") for x in m.get("reactions", []))
         if is_ask and not answered and now - float(m["ts"]) > ns.stale_h * 3600:
             stale.append({"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)})

@@ -97,6 +97,7 @@ NON_KEY_FLAGS = (
     "retain",
     "sweep_dir",
     "build_jobs",
+    "build_relabel",
     "match_impl",
     "match_phase",
     "gpu_util",

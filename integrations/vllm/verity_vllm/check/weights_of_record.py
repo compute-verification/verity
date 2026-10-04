@@ -13,7 +13,7 @@ This module derives, ENGINE-FREE and on CPU, one digest per weight field the Pro
     FusedMoE layer or on its `routed_experts` submodule, vLLM 0.28; Mixtral's `w1|w3 -> w13`, `w2 -> w2`); a tied
     `lm_head.weight` is `embed_tokens.weight`; everything else is 1:1 under the export wrapper prefix); a rank Program of a TP world
     gets the rank's shard (per-part dim-0 slices for the fused column-parallel fields, the dim-1 slice for row-parallel fields,
-    replicated norms unchanged);
+    replicated norms unchanged; FP8 expert scales on vLLM's refined grid first, `fp8_moe_scales`);
   * in the SERVED element width the Program declares (`Value<16>` = bf16): a checkpoint stored in another dtype is cast with the
     implementation's round-to-nearest-even (`torch.Tensor.to(bfloat16)` semantics), and the cast is recorded by name;
   * digest = sha256 of the composed row-major bytes; root_of_record = sha256 over the ordered (field, digest) list, an ANALYTIC field
@@ -48,7 +48,9 @@ from typing import Any
 import numpy as np
 from dataclasses import dataclass
 
+from verity_vllm.check import fp8_moe_scales
 from verity_vllm.config import UsageError, option
+from verity_vllm.check.tp_shards import replicated_qkv, shard_dim as _shard_dim, shard_dim0 as _shard_dim0
 
 SCHEMA = "verity/commit/weights-of-record/v2"       # v2: host-independent root (analytic entries keyed by their exact inputs)
 SCHEMA_V1 = "verity/commit/weights-of-record/v1"    # v1 roots differ per deriving host for models with a rotary table; verdict unaffected
@@ -228,24 +230,6 @@ def strip_prefix(field: str, prefix: str) -> str:
     return field[len(prefix):] if prefix and field.startswith(prefix) else field
 
 
-def _shard_dim0(a: np.ndarray, world: int, rank: int) -> np.ndarray:
-    n = a.shape[0]
-    if n % world:
-        raise ValueError(f"dim 0 ({n}) not divisible by world {world}")
-    k = n // world
-    return a[rank * k:(rank + 1) * k]
-
-
-def _shard_dim(a: np.ndarray, dim: int, world: int, rank: int) -> np.ndarray:
-    n = a.shape[dim]
-    if n % world:
-        raise ValueError(f"dim {dim} ({n}) not divisible by world {world}")
-    k = n // world
-    idx = [slice(None)] * a.ndim
-    idx[dim] = slice(rank * k, (rank + 1) * k)
-    return a[tuple(idx)]
-
-
 def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, world: int = 1, rank: int = 0) -> tuple[np.ndarray, dict[str, Any]]:
     """The served model's tensor `name` (wrapper prefix already stripped) of `shape` / `bits`, composed from the checkpoint.
     Returns (raw words row-major, note {sources, rule, cast, shard})."""
@@ -316,9 +300,8 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
                 srcs = [f"{container}.{e}.{p}.{suffix}" for p in parts_of[which]]
                 if not all(ck.has(s) for s in srcs):
                     raise KeyError(f"{name}: expert {e} sources missing: {[s for s in srcs if not ck.has(s)]}")
-                ps = [served(s) for s in srcs]
+                ps = fp8_moe_scales.on_rank_grid([served(s) for s in srcs], srcs, which, ck, world, note)
                 if world > 1:
-                    # column-parallel w13: per-part dim-0 slice; row-parallel w2: dim-1 slice
                     ps = [_shard_dim0(p, world, rank) for p in ps] if which == "w13" else [_shard_dim(p, 1, world, rank) for p in ps]
                     note["shard"] = f"rank {rank}/{world} ({'per-part dim 0' if which == 'w13' else 'dim 1'})"
                 stack.append(np.concatenate(ps, axis=0) if len(ps) > 1 else ps[0])
@@ -337,7 +320,10 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
                 break
     if not parts:
         raise KeyError(f"{name}: no checkpoint tensor and no composition rule")
-    if world > 1:
+    kv = replicated_qkv(name, shape, parts, ck.config, world, rank)
+    if kv:
+        parts, note["shard"] = kv
+    elif world > 1:
         full = [int(sum(p.shape[0] for p in parts))] + list(parts[0].shape[1:])
         if list(shape) == full:
             note["shard"] = f"rank {rank}/{world}: replicated"
