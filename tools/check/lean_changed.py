@@ -11,16 +11,18 @@ taken under their lock while the tree has none for its manifest and toolchain; t
 (`tools/lean/sandbox.sh`), where they are mounted read-only, so it cannot write what the audit reads, and a concurrent audit can
 move them away without touching the links. The first build of a package here is cold; later ones are not.
 
-A package with pins then has its roots built (`lake build +ROOT`, as the audit does) and its pins' records compared with that
-build (`records`): `audit.py`'s own reading of the `.olean` files (`Facts.lean`, in the sandbox) and its judgment of the pins,
-without the kernel replay, so a record two merges left stale (a statement or a definition a pin reads changed, a pin gone, a
-`reads` digest no longer its definitions') fails the run before the audit's cold build reaches it.
+A package with guarantees then has its roots built (`lake build +ROOT`, as the audit does) and its guarantees' records
+compared with that build (`records`): `audit.py`'s own reading of the `.olean` files (`Facts.lean`, in the sandbox) and its
+judgment of the guarantees, without the kernel replay, so a record two merges left stale (a statement or a definition a
+guarantee reads changed, a guarantee gone, a `reads` digest no longer its definitions') fails the run before the audit's cold
+build reaches it.
 
 The audit still builds and audits every package cold and decides the run: a pass here vouches for nothing. So this step fails
-only on a Lean error at a position in one of the tree's own `.lean` files, or on a pin the audit fails (`judge`'s `pins:`
-failures). Anything else that stops a build (no sandbox or `lake` here, dependencies this machine doesn't keep yet, another
-check holding the tree, a dependency the links lack) skips the package by name and drops its links, so the next run takes the
-audit's again; anything that stops a reading (a policy that can't be read, `Facts.lean` failing) skips its pins by name.
+only on a Lean error at a position in one of the tree's own `.lean` files, or on a guarantee the audit fails (`judge`'s
+`guarantees:` failures). Anything else that stops a build (no sandbox or `lake` here, dependencies this machine doesn't keep
+yet, another check holding the tree, a dependency the links lack) skips the package by name and drops its links, so the next
+run takes the audit's again; anything that stops a reading (a policy that can't be read, `Facts.lean` failing) skips its
+guarantees by name.
 `check.py` ends the run when this step fails, even under `--keep-going`. Delete the tree to start it over.
 """
 from __future__ import annotations
@@ -165,18 +167,18 @@ def errors(text: str, pkg: str, files: list[str]) -> list[str]:
     return [line for line in text.splitlines() if (m := ERROR.match(line)) and m.group(1) in own]
 
 
-def pinned_roots(pkg: str, tree: Path) -> list[str]:
-    """The roots of ``tree/pkg``'s policy when it pins a theorem, which `records` reads; none otherwise."""
+def guarantee_roots(pkg: str, tree: Path) -> list[str]:
+    """The roots of ``tree/pkg``'s policy when it lists a guarantee, which `records` reads; none otherwise."""
     policy = AUDIT.load(tree / pkg)
-    return list(policy["roots"]) if policy.get("pins") else []
+    return list(policy["roots"]) if policy.get("guarantees") else []
 
 
 def records(pkg: str, tree: Path, lake: str) -> list[str]:
-    """The audit's failures about the pins on the tree's build of ``pkg`` (`audit.py`'s `facts_of` and `judge`, without the
-    kernel replay): a pin missing, no longer a theorem or with no record, using an axiom the policy does not allow or assuming
-    an unnamed `Prop`, whose statement or the definitions it reads no longer match its record, or a `reads` entry that no
-    longer lists the modules the pins read, the pins that read them or their definitions' digest. Raises RuntimeError when
-    `Facts.lean` cannot read the build."""
+    """The audit's failures about the guarantees on the tree's build of ``pkg`` (`audit.py`'s `facts_of` and `judge`, without
+    the kernel replay): a guarantee missing, no longer a theorem or with no record, using an axiom the policy does not allow or
+    assuming an unnamed `Prop`, whose statement or the definitions it reads no longer match its record, or a `reads` entry
+    that no longer lists the modules the guarantees read, the guarantees that read them or their definitions' digest. Raises
+    RuntimeError when `Facts.lean` cannot read the build."""
     policy = AUDIT.load(tree / pkg)
     work = tree / pkg / FACTS
     work.mkdir(parents=True, exist_ok=True)
@@ -195,7 +197,7 @@ def records(pkg: str, tree: Path, lake: str) -> list[str]:
     finally:
         AUDIT.run, AUDIT.TOOL = plain, tool
     fails, _ = AUDIT.judge(policy, facts, AUDIT.lean_modules(tree / pkg))
-    return [f for f in fails if f.startswith("pins:")]
+    return [f for f in fails if f.startswith("guarantees:")]
 
 
 def sandboxed() -> bool:
@@ -239,10 +241,10 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
                     log(f"lean-changed: {pkg}: skipped; lean-audit builds it")
                     continue
                 try:
-                    roots = pinned_roots(pkg, tree)
+                    roots = guarantee_roots(pkg, tree)
                 except (OSError, ValueError, KeyError) as e:
                     roots = []
-                    log(f"lean-changed: {pkg}: its {AUDIT.POLICY} cannot be read ({e!r}); its pins are not compared here")
+                    log(f"lean-changed: {pkg}: its {AUDIT.POLICY} cannot be read ({e!r}); its guarantees are not compared here")
                 t0 = time.monotonic()
                 rc, text = build(pkg, tree, lake)
                 if rc == 0 and roots:
@@ -267,20 +269,20 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
                 try:
                     stale = records(pkg, tree, lake)
                 except (RuntimeError, OSError, ValueError, KeyError, TypeError, AttributeError) as e:
-                    log(f"lean-changed: {pkg}: its pins are not compared here: {str(e)[-2000:]}")
+                    log(f"lean-changed: {pkg}: its guarantees are not compared here: {str(e)[-2000:]}")
                     continue
                 took = time.monotonic() - t0
                 if stale:
                     failed.append(pkg)
-                    log(f"lean-changed: {pkg}: FAILED in {took:.0f} s: the audit fails its pins on this build:")
+                    log(f"lean-changed: {pkg}: FAILED in {took:.0f} s: the audit fails its guarantees on this build:")
                     log("\n".join(f"  {line}" for f in stale[:20] for line in f.splitlines()))
                     break
                 compared.append(pkg)
-                log(f"lean-changed: {pkg}: its pins match their records ({took:.0f} s)")
+                log(f"lean-changed: {pkg}: its guarantees match their records ({took:.0f} s)")
         finally:
             (tree / LINKS).write_text(json.dumps(links, indent=1, sort_keys=True) + "\n")
     log(f"lean-changed: {'FAIL (' + ', '.join(failed) + ')' if failed else 'PASS'}: built {len(built)} of the {len(todo)} "
-        f"package(s) whose audit misses; compared the pins of {len(compared)}")
+        f"package(s) whose audit misses; compared the guarantees of {len(compared)}")
     return 1 if failed else 0
 
 

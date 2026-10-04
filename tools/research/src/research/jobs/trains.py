@@ -42,8 +42,8 @@ HOLD = "hold"
 RECORD = "lean-audit.json"
 #: audit.py's ORDER and merge.py's SORTED / NESTED, for the stand-in record merge
 ORDER = ("roots", "exempt", "axioms", "assumptions", "meaning", "escapes", "compile_time", "dependency_unchecked", "layers",
-         "upstream", "pins", "reads", "dependencies")
-SORTED = {"pins", "reads", "dependencies", "compile_time"}
+         "upstream", "guarantees", "reads", "dependencies")
+SORTED = {"guarantees", "reads", "dependencies", "compile_time"}
 NESTED = {"upstream"}
 _MISSING = object()
 REBUILDS = 3
