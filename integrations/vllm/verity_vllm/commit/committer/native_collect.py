@@ -1106,7 +1106,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                 self.errors.extend(str(e)[:300] for e in errs)
         job.cursor = int(used)
         key = self._plan_key
-        # a learning step, or a hit on a plan the worker no longer holds (plan_cache: the collector keeps every plan, the worker two runs')
+        # a learning step, or a hit on a plan the worker does not hold (not yet absorbed, or its step failed: plan_cache)
         entries = self._nc.export_plan(key) if changed or (key, int(version)) not in self._metas_cache else None
         job.plan = (key, int(version), entries)                         # type: ignore[attr-defined]
         st = self._nc.step_stats()
@@ -1791,9 +1791,9 @@ class NativeCollectCommitter(NativeHostCommitter):
     def reset(self) -> None:
         super().reset()
         self._py_committed = 0
-        self._nc.reset_stats()          # plans are kept across runs (the same shape classes recur)
-        self._metas_cache.end_run()     # the worker's metas only for this run's and the previous run's plans (plan_cache)
-        self.learned_only_steps = []    # [R17 fp8] per-run bounded-staging counters (the plans learned stay)
+        self._nc.end_run()              # the collector's run totals, and the plans this run did not use (native_plans.h)
+        self._metas_cache.end_run()     # the worker's metas, by the same rule (plan_cache)
+        self.learned_only_steps = []    # [R17 fp8] per-run bounded-staging counters (the plans learned stay for the next run)
         self.learned_only_bytes = 0
         self.transient_peak_bytes = 0
         self.excluded_bytes = 0
