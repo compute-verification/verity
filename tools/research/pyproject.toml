@@ -20,7 +20,12 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Test-only, and to move: test_store_vllm_tools, test_repo_replicas, test_pythonpath and one test each in test_notes and
-# test_store_prov exercise this repository's Tools, workspace and fixtures rather than the tool itself.
-inputs = [".agents/skills", ".gitignore", "backends/direct", "fixtures", "integrations/vllm", "packages/verity", "tools/tc_probe"]
+# Test-only, and to move: some tests exercise this repository's Tools, workspace and fixtures rather than the tool itself.
+# test_store_vllm_tools loads the vLLM stage Tools and hashes their closure (integrations/vllm, packages/verity/src);
+# test_store_prov loads the tc_probe and bench_vu declarations (tools/tc_probe, backends/direct), content-resolves a golden
+# fixture (packages/verity/tests/ml/fixtures) and git-archives tools/tc_probe and packages/verity/src/verity/ml/tc;
+# test_repo_replicas hashes every tracked fixture fixtures/artifacts.json registers (today under fixtures, integrations/vllm
+# and packages/verity/tests/ml/fixtures).
+inputs = [".agents/skills", ".gitignore", "backends/direct", "fixtures", "integrations/vllm", "packages/verity/src",
+          "packages/verity/tests/ml/fixtures", "tools/tc_probe"]
 parallel = true
