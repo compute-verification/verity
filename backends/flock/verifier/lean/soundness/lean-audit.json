@@ -17271,6 +17271,14 @@
    "assumptions": [],
    "type_hash": "c01354d83dcca47255a0c822b1c7ecb57e0cfaafcc971e6bc8b34245409dd1da"
   },
+  "FlockSoundness.SpecBridge.accepts_iff": {},
+  "FlockSoundness.SpecBridge.hashDerivedKeyHm96_iff": {},
+  "FlockSoundness.SpecBridge.hashDerivedKey_iff": {},
+  "FlockSoundness.SpecBridge.hm96Hiding_iff": {},
+  "FlockSoundness.SpecBridge.hmRowComputes_iff": {},
+  "FlockSoundness.SpecBridge.sha512CRExpected_iff": {},
+  "FlockSoundness.SpecBridge.sha512CRStrict_iff": {},
+  "FlockSoundness.SpecBridge.uniformRandomBytes_iff": {},
   "FlockSoundness.StrictCR.TreeRewind.le": {
    "signature": [
     "FlockSoundness.StrictCR.TreeRewind.le {D : Type} {H : List UInt8 → D} {β : Type} {G : FlockSoundness.Game β}",
