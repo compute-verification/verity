@@ -1,12 +1,13 @@
-# P2 specification v1.1
+# P2 specification v1.1, proposed
 
-> v1.1 is frozen v1 (`art:a7a29e84eef9d2584482b7f3e9722af6b579e2984a9633352564c562ce9e2021`, relayed in
+> Proposed v1.1, pending Daniel's ruling, is frozen v1
+> (`art:a7a29e84eef9d2584482b7f3e9722af6b579e2984a9633352564c562ce9e2021`, relayed in
 > `note:20261004T1836Z-report-relay-p2-spec-v1-frozen` from `store:pous/docs/efficient-crypto/p2-spec-draft.md`,
-> sha256 `3f49c34bb065af9c11b92935d1460e6f3caf7b12caf6d89560d5c8a7e2725267`) with the RTT allowance capped at
-> 0.35 ms (§12). Relative and `/cursor/stores/…` links point into that store, which is also in
-> `art:8bd64630bc06c23d5095996d2f198ce4bd557413722ad94bd3ca3c1a949e42e9`.
+> sha256 `3f49c34bb065af9c11b92935d1460e6f3caf7b12caf6d89560d5c8a7e2725267`) with option A of §12, the RTT
+> allowance capped at 0.35 ms, written in; §12 also states options A′ and B. Relative and `/cursor/stores/…` links
+> point into that store, which is also in `art:8bd64630bc06c23d5095996d2f198ce4bd557413722ad94bd3ca3c1a949e42e9`.
 
-Status: frozen specification, 2026-09-29, amended to v1.1 on 2026-10-04 (§12: the RTT allowance is capped at 0.35 ms). This is not deployment approval: P2 remains experimental because the P2–M1-SGI instantiation assumption is not accepted (default, Daniel deferred, 2026-09-29).
+Status: frozen specification, 2026-09-29; this is a **proposed** v1.1 of 2026-10-04, pending Daniel's ruling (§12: the body states option A, the RTT allowance capped at 0.35 ms; option B keeps v1's 1 ms and widens w). This is not deployment approval: P2 remains experimental because the P2–M1-SGI instantiation assumption is not accepted (default, Daniel deferred, 2026-09-29).
 
 ## 1. Parameter set
 
@@ -345,7 +346,7 @@ The on-time condition is:
 elapsed_ns ≤ delta_ns + rtt_allowance_ns
 ```
 
-Equality is on time; one nanosecond above the sum is late. The verifier measures the RTT allowance on the same authenticated transport and records the method and samples. The frozen deployment sets Δ = 0.5 ms with an on-node verifier and permits a measured RTT allowance of at most 0.35 ms (350,000 ns), so `Δ + RTT ≤ 0.85 ms`, under the hardware/cooperation class in §6 (v1.1, §12). A late, malformed, unauthenticated, replayed, wrong-index, wrong-block or wrong-path response fails the whole audit. There is no partial acceptance.
+Equality is on time; one nanosecond above the sum is late. The verifier measures the RTT allowance on the same authenticated transport and records the method and samples. The frozen deployment sets Δ = 0.5 ms with an on-node verifier and permits a measured RTT allowance of at most 0.35 ms (350,000 ns), so `Δ + RTT ≤ 0.85 ms`, under the hardware/cooperation class in §6 (proposed v1.1, option A, §12; v1: at most 1 ms). A late, malformed, unauthenticated, replayed, wrong-index, wrong-block or wrong-path response fails the whole audit. There is no partial acceptance.
 
 Only a frame reported as delivered at a transport frame boundary enters the exact frame sequence. A delivered frame whose header declares more or fewer bytes than that delivered frame contains is malformed code 1; its exact delivered bytes are hashed, including the `truncated-response` vector. If the transport ends or reports loss after a challenge without reporting any complete response-frame delivery event, that round fails with transport code 6; unframed partial bytes are not hashed.
 
@@ -480,13 +481,13 @@ This harness makes the file/process boundary executable for the included toy Pyt
 
 - B = 2^19 blocks, arranged as 8 segments of 65,536 blocks.
 - k = 105 challenges, revealed and answered sequentially.
-- Each answer has Δ = 0.5 ms plus a measured RTT allowance of at most 0.35 ms (Δ + RTT ≤ 0.85 ms), with the verifier on-node.
+- Each answer has Δ = 0.5 ms plus a measured RTT allowance of at most 0.35 ms (Δ + RTT ≤ 0.85 ms; proposed v1.1, option A, §12), with the verifier on-node.
 - Q = 2^20 complete forward decodes per answer in the abstract model.
 - The prover's retained state is at most `floor((18/19)·|C|)` bits, where `|C| = B·w`; it is not `(18/19)` of the payload. The state cap applies between answers.
 - `P2SlackFamilyUncond` certifies that k = 105 absorbs 128 bits per block of bounded, reusable structural leakage for every B from 2^8 through 2^23.
 - Partial, batched, cross-block and expander work is in scope. “No inverse” means no modular root, nor another computation with the same effect on the challenged target, finishes within the answer window.
 
-These values are the frozen F2 and F6 defaults (default, Daniel deferred, 2026-09-29), with F2's RTT allowance amended by Daniel's ruling of 2026-10-04 (§12). The audit remains conditional on P2–M1-SGI, SeqRoot, perfect isolation, the exact `[0,p)` model and the allowed hardware.
+These values are the frozen F2 and F6 defaults (default, Daniel deferred, 2026-09-29), with F2's RTT allowance as proposed in v1.1's option A, pending Daniel's ruling (§12). The audit remains conditional on P2–M1-SGI, SeqRoot, perfect isolation, the exact `[0,p)` model and the allowed hardware.
 
 ### Normative error total
 
@@ -514,9 +515,9 @@ The frozen F5 decision pins `P2SlackB19Uncond`, `P2SlackFamilyUncond` and `P2Err
 
 ## 6. Operating point and allowed hardware
 
-The frozen operating point is B = 2^19 blocks, Q = 2^20, w = 16,448, Δ = 0.5 ms with an on-node verifier, and a measured RTT allowance of at most 0.35 ms, so Δ + RTT ≤ 0.85 ms (default, Daniel deferred, 2026-09-29; the cap is Daniel's ruling of 2026-10-04, §12). The adversary may use a CPU or GPU core with cooperation within one chiplet. ASICs and FPGAs are excluded. The verifier and responder are pinned on the same chiplet. The verifier records the CPU/GPU model, clocks, topology, cooperating cores and measured RTT.
+The frozen operating point is B = 2^19 blocks, Q = 2^20, w = 16,448, Δ = 0.5 ms with an on-node verifier, and a measured RTT allowance of at most 0.35 ms, so Δ + RTT ≤ 0.85 ms (default, Daniel deferred, 2026-09-29; the 0.35 ms cap is proposed v1.1's option A, pending Daniel's ruling, §12). The adversary may use a CPU or GPU core with cooperation within one chiplet. ASICs and FPGAs are excluded. The verifier and responder are pinned on the same chiplet. The verifier records the CPU/GPU model, clocks, topology, cooperating cores and measured RTT.
 
-SeqRoot evidence is artifact `art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed`, run `r20260929-060834-0ec4`. The fastest measured 16,448-bit root took 12.8 ms with eight cooperating cores. The on-node RTT p99.9 was 10–22 µs. Against the architectural floor with eight cores of one chiplet cooperating, 5,960.5 µs ÷ 3.490 = 1,708.0 µs (*est.*, §12), the 2× margin holds through `Δ + RTT = 854.0 µs`, which the at-most-0.35-ms RTT allowance stays inside. v1's "through approximately 1.9 ms" used a floor about 2.2× too slow (§12). These estimates do not admit cross-chiplet, multi-GPU, FPGA or ASIC cooperation.
+SeqRoot evidence is artifact `art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed`, run `r20260929-060834-0ec4`. The fastest measured 16,448-bit root took 12.8 ms with eight cooperating cores. The on-node RTT p99.9 was 10–22 µs. Against the architectural floor with eight cores of one chiplet cooperating, 5,960.5 µs ÷ 3.490 = 1,708.1 µs (*est.*, §12), the 2× margin holds through `Δ + RTT = 854.0 µs`, which option A's at-most-0.35-ms RTT allowance stays inside. v1's "through approximately 1.9 ms" used a floor about 2.2× too slow (§12). These estimates do not admit cross-chiplet, multi-GPU, FPGA or ASIC cooperation.
 
 ## 7. Test vectors
 
@@ -568,7 +569,7 @@ Compared with `origin/cursor/pous-mvp-interface-c934` at fetched revision `13b30
 | Audit messages | canonical framed network messages; response always includes path | in-process Python calls; block alone by default, optional path for root-only verifier | New wire format; MVP has no serialization |
 | Negative wire behavior | 31 byte-exact cases pin setup failures, parsing, k bounds, flag dependencies, sibling counts, replay, post-k frames, authentication, deadlines and transport failures | no serialized negative corpus or `FINAL` failure-code implementation | New executable conformance layer |
 | Sequential timing | first challenge byte sent through last response byte received | in-process `challenge()` through `respond()` | Same strict sequencing; clock boundary is newly frozen |
-| Hardware and deadline | Δ = 0.5 ms, RTT allowance ≤ 0.35 ms (v1.1), cooperation within one chiplet allowed, same-chiplet pinning | Δ = 0.5 ms, `ROOT_CALL_NS=2.9 ms`, cooperating cores excluded | Deviation; migrate calibration and topology policy |
+| Hardware and deadline | Δ = 0.5 ms, RTT allowance ≤ 0.35 ms (proposed v1.1, option A), cooperation within one chiplet allowed, same-chiplet pinning | Δ = 0.5 ms, `ROOT_CALL_NS=2.9 ms`, cooperating cores excluded | Deviation; migrate calibration and topology policy |
 
 The branch names `p2-16448/v2`, uses `p2-2054B`, big-endian P2 values, exact tweak rejection and B = 2^19. It still uses ChaCha8, k = 88, stale pin status, the generic 24-byte salt/Merkle framing, an unnecessary second exponentiation in ρ's nonresidue branch, the old hardware calibration and in-process audit objects rather than the v1 network wire format.
 
@@ -594,7 +595,7 @@ Every item below is normative. A policy choice is not a substitute for the corre
 ## 10. Decisions (frozen)
 
 1. F1: `p2-2054B` is the sole deployment payload profile (default, Daniel deferred, 2026-09-29).
-2. F2: B = 2^19, Q = 2^20, w = 16,448, Δ = 0.5 ms, RTT allowance at most 0.35 ms, and same-chiplet cooperation and pinning as §6 (default, Daniel deferred, 2026-09-29; the RTT cap, at most 1 ms in v1, is Daniel's ruling of 2026-10-04, §12).
+2. F2: B = 2^19, Q = 2^20, w = 16,448, Δ = 0.5 ms, RTT allowance at most 0.35 ms, and same-chiplet cooperation and pinning as §6 (default, Daniel deferred, 2026-09-29; the RTT cap, at most 1 ms in v1, is proposed v1.1's option A, pending Daniel's ruling, §12).
 3. F3: the normative error total and allocation in §5 (default, Daniel deferred, 2026-09-29).
 4. F4: accept P2-EXP-IO, realized by SHAKE256 with v1 framing; ChaCha8 is nonconforming (default, Daniel deferred, 2026-09-29).
 5. F5: pin `P2SlackB19Uncond`, `P2SlackFamilyUncond` and `P2ErrorSplitB19Uncond` (default, Daniel deferred, 2026-09-29).
@@ -609,58 +610,120 @@ Every item below is normative. A policy choice is not a substitute for the corre
 - Accept P2–M1-SGI.
 - Synchronize the trusted-layer pins into the repository after PRs #162/#183.
 
-## 12. Amendment v1.1 (2026-10-04)
+## 12. Proposed amendment v1.1 (2026-10-04), pending Daniel's ruling
 
-**v1.1, 4 Oct 2026: Daniel's 2:21 PM PDT (21:21Z) ruling.** "P2: cap the RTT allowance near 0.35 ms (Δ + RTT ≤ about
-0.85 ms) and keep w = 16,448. Write it into the spec and `ROOT_CALL_NS`, with the exact cap that keeps 2× on the Zen 5
-floor."
+**Status: a proposal, not a ruling.** The response window and w stay Daniel's call, pending his ruling on the
+coordinator's close-out of 2026-10-04, 2:45 PM PDT. Daniel's 2:21 PM PDT message asked for option A: "P2: cap the RTT
+allowance near 0.35 ms (Δ + RTT ≤ about 0.85 ms) and keep w = 16,448. Write it into the spec and `ROOT_CALL_NS`, with
+the exact cap that keeps 2× on the Zen 5 floor." This document's body (the section "Sequential reveal and deadlines",
+and §§5, 6, 8 and 10) states option A, and so does the code on the branch that carries it:
+- `verity_pous.schemes.p2.ROOT_CALL_NS = 854_000`;
+- `RTT_ALLOWANCE_CAP_NS = 350_000`;
+- `benchmarks/pous/p2_v1/reference.py`'s `MAX_RTT_ALLOWANCE_NS = 350_000`.
 
-**What changed.** F2's RTT allowance, from at most 1 ms to at most **0.35 ms (350,000 ns)**, so `Δ + RTT ≤ 0.85 ms`
-("Sequential reveal and deadlines" and §§5, 6, 8 and 10). Nothing else changed: w, p, B, Q, k, the hardware class, the
-protocol version `p2/v1`, the byte formats and every vector. Every `AUDIT_OPEN` in `audit-vectors.json` and
-`audit-negative-vectors.json` carries `delta_ns = 500,000` and `rtt_allowance_ns = 0`, which is inside the cap, so the
-hashes in §7 still hold.
+Option B is specified here only. Under every option, w's prime, B, Q, k, the hardware class, the protocol version
+`p2/v1` and the byte formats change only where the option says so. Every `AUDIT_OPEN` in `audit-vectors.json` and
+`audit-negative-vectors.json` carries `delta_ns = 500,000` and `rtt_allowance_ns = 0`, inside every option's cap, so
+the hashes in §7 hold under A and A′.
 
-**Why.** v1's "2× through about 1.9 ms" (§6) divided a one-core floor of about 13.2 ms by the measured 3.5×, then halved
-it. 13.2 ms appears to be the measured Zen 4 root (44.68 ms) divided by 3.38, the ratio of measured to best-plan floor
-at 5,504 bits (this source is inferred: 44.68 ÷ 3.38 = 13.2, ÷ 3.49 = 3.79 ms, ÷ 2 = 1.89 ms). At 16,448 bits, the
-timing red team's own floor is 5.96 ms, 7.5× below the measured kernel rather than 3.38×. Against it, v1's
-`Δ + RTT = 1.5 ms` kept only 1.14× (1,708.0 ÷ 1,500). The P2 assumption review found the frozen cap unsafe on the same
+**Why v1 needs amending.** v1's "2× through about 1.9 ms" (§6) divided a one-core floor of about 13.2 ms by the measured
+3.5×, then halved it. 13.2 ms appears to be the measured Zen 4 root (44.68 ms) divided by 3.38, the ratio of measured to
+best-plan floor at 5,504 bits (this source is inferred: 44.68 ÷ 3.38 = 13.2, ÷ 3.49 = 3.79 ms, ÷ 2 = 1.89 ms). At 16,448
+bits, the timing red team's own floor is 5.96 ms, 7.5× below the measured kernel rather than 3.38×. Against it, v1's
+`Δ + RTT = 1.5 ms` keeps only 1.14× (1,708.1 ÷ 1,500). The P2 assumption review found the frozen cap unsafe on the same
 grounds (`art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c`, §4).
 
-**The cap, derived.**
-- The single-core floor is the timing red team's best case for the adversary: a Zen 5 desktop core at 5.7 GHz with the
-  full 512-bit datapath. It issues 2 IFMA and 4 vector operations per cycle at 100% efficiency, with the best plan of
-  Toom-4, Karatsuba and Karatsuba over 317 limbs of 52 bits, including normalisation, Toom evaluation and
-  interpolation, the fold by c0 and the carry passes, plus 25 cycles of latency. That is 2,060.8 cycles, so
-  **τ_F = 361.55 ns per squaring** (`regate.py` at w = 16,448).
-- One root is (w − 2) squarings plus about 20 multiplications, counted as 40 squaring-equivalents: 16,486 × 361.55 ns =
-  **5,960.5 µs**. The red team's 5.97 ms rounds τ_F up to 362 ns first.
+**The method, common to every option.**
+- The single-core floor is the timing red team's best case for the adversary (`regate.py`): a Zen 5 desktop core at
+  5.7 GHz with the full 512-bit datapath. It issues 2 IFMA and 4 vector operations per cycle at 100% efficiency, with
+  the best Toom/Karatsuba plan over 52-bit limbs, including normalisation, Toom evaluation and interpolation, the fold
+  by c0, the carry passes and 25 cycles of latency. That gives τ_F(w).
+- One root is (w − 2) squarings plus about 20 multiplications, counted as 40 squaring-equivalents: `(w + 38)·τ_F(w)`.
 - The cooperation speedup is the measured one on one 8-core Zen 4 chiplet at 5.475 GHz: 2,716.7 ns per squaring on one
-  core against 778.5 ns on eight, **3.490×**. The roots agree: 44.68 ms ÷ 12.80 ms = 3.49×.
-- The fastest cooperating root is 5,960.5 ÷ 3.490 = **1,708.0 µs**. The 2× margin needs `Δ + RTT ≤ 854.0 µs`, so
-  `RTT ≤ 854.0 − 500 = 354.0 µs`. The cap is that, rounded down to **350 µs**, and it holds at every rounding of the
-  speedup: with 3.5× flat, `Δ + RTT ≤ 851.5 µs`.
-- The implementation: `verity_pous.schemes.p2.ROOT_CALL_NS = 854_000`, half the fastest cooperating root. With
-  `rounds = 0`, the certificate refuses `Δ + RTT ≥ 854 µs`. `RTT_ALLOWANCE_CAP_NS = 350_000` and
-  `benchmarks/pous/p2_v1/reference.py`'s `MAX_RTT_ALLOWANCE_NS = 350_000` record this cap.
+  core against 778.5 ns on eight, 3.490× (the roots agree: 44.68 ms ÷ 12.80 ms).
+- SeqRoot's 2× margin needs the cooperating root to be at least `2·(Δ + RTT)`.
 
-**What the cap rests on.**
-- **The floor is a model, not a measurement.** No kernel reaches it: the campaign's best measured kernel is 3.38× slower
-  at 5,504 bits. A core with twice the IFMA throughput halves the root, and so the cap.
-- **The speedup comes from an untuned kernel.** It was measured at 2,717 ns per squaring. If the exchange costs a fixed
-  number of ns, a kernel at the floor gains less, so applying 3.49× to the floor favours the adversary.
-- **The red team's exchange model gives more than was measured.** It assumes 20–40 ns of synchronisation per squaring
-  (`coop.log`, `regate.py`) and gives 4.24–5.55× at 8 cores and 16,448 bits. Under that model, 2× at
-  `Δ + RTT = 0.85 ms` fails, and the cap would be 202 µs at 4.24× or 37 µs at 5.55×. The measured exchange inside one
-  chiplet is a 33 ns core-to-core round trip. The cap rests on the measured speedup, not on this model.
-- **Only 8-core cooperation is measured.** A 16-core Zen 5c CCD, or a larger die counted as "one chiplet", is not.
-- **Honest answers fit.** The measured on-node RTT is 6.8–16 µs at the median and 10–22 µs at p99.9. Honest timed
-  answers reached at most 161–256 µs (review §4). Both sit inside `Δ + RTT = 0.85 ms`.
+**Option A: keep w = 16,448 and cap the RTT allowance at 0.35 ms (implemented on this branch).**
+- At w = 16,448 there are 317 limbs, and the plan is Toom-4, Karatsuba, Karatsuba: 2,060.8 cycles, so τ_F = 361.55 ns.
+  The root is 16,486 × 361.55 ns = 5,960.5 µs; the red team's 5.97 ms rounds τ_F up to 362 ns first.
+- The cooperating root is 5,960.5 ÷ 3.490 = 1,708.1 µs. The 2× margin needs `Δ + RTT ≤ 854.0 µs`, so
+  `RTT ≤ 354.0 µs`. Rounded down, the cap is **350 µs**, `Δ + RTT ≤ 850 µs`. It holds at 3.5× flat too (851.5 µs).
+- In code, `ROOT_CALL_NS = 854_000` is half the cooperating root. With `rounds = 0` the certificate refuses
+  `Δ + RTT ≥ 854 µs`.
+- **Open choice: a 4 µs gap between code and spec.** The certificate admits `Δ + RTT` up to 853,999 ns, so RTT up to
+  353,999 ns, while option A caps RTT at 350 µs. `protocol.Verifier` does not enforce the 350 µs; the benchmark only
+  records `rtt_allowance_within_spec`. The gap can stay (the certificate states what the margin covers, the spec what
+  deployment may use), or `ROOT_CALL_NS` could be set to 850,001 so the two coincide. This proposal does not choose.
+
+**Option A′: cap the RTT allowance at 0.1 ms** (the review's suggestion, `art:f33b450f…`, "What must change", item
+4a). Keep w = 16,448, so `Δ + RTT ≤ 0.6 ms`. Not implemented.
+
+**Option B: keep v1's RTT allowance of at most 1 ms (`Δ + RTT = 1.5 ms`) and widen w.** Specified here only; not
+implemented.
+- **Admissible widths.**
+  - `schemes/p2.py`: w a multiple of 8 above 16, with `p = 2^w − c0` prime and `c0 ≡ 1 mod 4`, `c0 < 2^16` (one small
+    fold).
+  - The reference port (`benchmarks/pous/p2_v1/reference.py`): w a multiple of 32.
+  - The tuned GPU path (`P2_PARTS = 2`, two CGBN halves of `w/2` bits): w a multiple of 64.
+  - §1's rule: the least such c0.
+  - The wire format: `p2-audit-wire/v1` accepts only `w ≤ 16,448` ("Audit protocol and wire formats"), so
+    option B also needs a wire revision.
+- **The smallest width that keeps 2×.** In steps of 8 it is 20,984; the first multiple of 32 and of 64 is
+  **w = 20,992**.
+  - There are 404 limbs, and the plan is Toom-4, Karatsuba, Karatsuba: τ_F = 498.18 ns.
+  - The one-core root is 21,030 × 498.18 ns = **10,476.7 µs**, and the cooperating root 10,476.7 ÷ 3.490 =
+    **3,002.2 µs**, which is 2.001× of 1.5 ms. That clears 2× by 0.07%.
+  - With 3.5× flat it is 1.996×, short of 2×, and the smallest multiple of 64 that holds is **w = 21,056** (root
+    10,509.1 µs, 2.002×).
+  - Primes, by `find_primes.py` (a sieve, then 30 Miller–Rabin rounds; ECPP not yet run):
+    `p = 2^20992 − 27177` and `p = 2^21056 − 21813`.
+- **Honest-prover cost against w = 16,448, at w = 20,992** (all modelled):
+  - **Encode** (two roots per block): the floor root is 1.76× per block, and 1.38× per payload byte.
+  - **Decode** (two squarings per block): τ_F is 1.38× per block, but only 1.08× per payload byte. Under `decode.py`'s
+    schoolbook GPU pricing, `X = 2w/128 + 1.25` int32/B goes from 258 to 329, which is 1.27× per byte.
+  - **Blocks:** a block is 2,624 bytes, and its payload 2,622 bytes (profile `p2-2622B`), so the rate is 1.0008.
+  - **State and store:** the state bound at B = 2^19 is ⌊(18/19)·2^19·20,992⌋ = 10,426,598,238 bits, the same fraction
+    per byte as before (8,169,621,180 at w = 16,448). The B = 2^19 store grows from 1.078 GB to 1.376 GB, or W needs
+    0.78× the blocks.
+  - **Response and keys:** each RESPONSE grows by 568 bytes. The SHAKE256 key bytes per block are 1.28×, about the same
+    per payload byte.
+  - **Prime:** the new prime needs its own ECPP certificate.
+- **Lean: option B needs new pins.**
+  - Every P2 pin is stated at `w = 16448`, `p = 2^16448 − 21065`: `P2MeetsM1pB19Uncond`, `P2MeetsM1pFamilyUncond`,
+    `P2SlackB19Uncond`, `P2SlackFamilyUncond` and `P2ErrorSplitB19Uncond`. `P2MeetsM1pW8192Uncond` is at 8,192.
+  - So are the row lemmas they rest on: `row_uniform` in `SecurityProofs/P2/Domain.lean` and `row_uniform_gen` in
+    `Margin.lean` have 16448 in their statements, and so do `hyps_16448` and the assumption `PrimeP16448`.
+  - `meets_m1p_of_row` is generic in w. So option B needs the rows restated at the new width or generalised over w, new
+    instance theorems, a new named primality assumption, and new pins in `lean-audit.json` with a named statement
+    reviewer.
+  - k must be re-derived. `row_uniform_gen`'s per-block margin grows with w when `c > 18/19`, so k = 105 is expected to
+    still suffice, but that is not proved.
+
+**The options compared.** The margin is the cooperating root ÷ `(Δ + RTT)`; 2× is required. It is given at the
+measured 3.490×, at 3.5× flat, and at the red team's modelled 8-core speedups at w = 16,448: 4.24× and 5.55×
+(`coop.log`, t_sync = 40 and 20 ns per squaring). At w = 20,992 the same model gives 4.87× and 6.06×, which
+put option B at 1.43× and 1.15×.
+
+| Option | w | RTT cap | Δ + RTT | One-core root | 3.490× | 3.5× | 4.24× | 5.55× |
+|---|---|---|---|---|---|---|---|---|
+| v1 as frozen | 16,448 | 1 ms | 1.5 ms | 5,960.5 µs | 1.139× | 1.135× | 0.936× | 0.716× |
+| **A** (implemented) | 16,448 | 0.35 ms | 0.85 ms | 5,960.5 µs | **2.009×** | 2.004× | 1.652× | 1.264× |
+| A′ (review) | 16,448 | 0.1 ms | 0.6 ms | 5,960.5 µs | 2.847× | 2.838× | 2.341× | 1.791× |
+| B | 20,992 | 1 ms | 1.5 ms | 10,476.7 µs | **2.001×** | 1.996× | 1.646× | 1.259× |
+
+What each option costs:
+- **A:** no honest compute changes. The verifier must answer within 0.35 ms of RTT, so it must be on the node or close
+  to it. The measured RTT on one node is 10–22 µs at p99.9.
+- **A′:** no honest compute changes. RTT is limited to 0.1 ms, which leaves a margin of 2× even at the modelled 4.24×.
+  It still fits the measured on-node RTT, and the honest timed answers (161–256 µs at the most, review §4).
+- **B:** keeps a 1 ms RTT allowance, which admits a verifier one network hop away. It costs about 1.38× in encode and
+  1.08–1.27× in decode per payload byte, plus a new prime and ECPP certificate, a revised wire format and new Lean
+  pins. Under the modelled speedup it holds no more than A does.
 
 **Sources.**
 - The timing red team: `note:20261004T2102Z-report-relay-p2-redteam-timing`, with its scripts and logs (`regate.py`,
-  `regate.log`, `coop.log`, `seqroot.py`) in `art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57`.
+  `regate.log`, `coop.log`, `decode.py`, `find_primes.py`) in
+  `art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57`.
 - The SeqRoot and RTT measurement: run `r20260929-060834-0ec4`,
   `art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed`.
 - F2's 1.9 ms derivation: `note:20261004T2102Z-report-relay-p2-deployment-decisions`.
