@@ -1,7 +1,9 @@
 """Inputs for the circuit tests: a seeded `ncp-v2` call at a small shape, and for the tile checks' hiding Programs (`pc4`,
-`pc8`) the tile digests `pearl_c.leaf` gives them and the check of their units' ports."""
+`pc8`) the tile digests `pearl_c.leaf` gives them, the check of their units' ports and a tile layout's digest."""
 from __future__ import annotations
 
+import hashlib
+import json
 import random
 import struct
 import types
@@ -46,6 +48,15 @@ def tile_digests(tile: tuple[int, int], c, u) -> tuple[int, ...]:
             digest = C.leaf(types.SimpleNamespace(c=part(c), u=part(u)))
             out += [int.from_bytes(digest[4 * w:4 * w + 4], "little") for w in range(8)]
     return tuple(out)
+
+
+def layout_sha(lay) -> str:
+    """SHA-256 of a tile layout (`plan.tile_layout`): its units, strata, closures, B rows and W_ref, as canonical JSON."""
+    obj = {"units": [[u.index, u.role, u.node, u.member, u.template, list(u.where)] for u in lay.units],
+           "strata": [[s.name, s.role, list(s.units), s.work] for s in lay.strata],
+           "closure": sorted([k, list(v)] for k, v in lay.closure.items()),
+           "b_rows": sorted([k, list(v)] for k, v in (lay.b_rows or {}).items()), "w_ref": lay.w_ref}
+    return hashlib.sha256(json.dumps(obj, sort_keys=True).encode()).hexdigest()
 
 
 def check_ports(fn, ports: dict, derivations: dict, k: int, reads: dict[str, int]) -> None:
