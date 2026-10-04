@@ -267,15 +267,16 @@ theorem sitesAt_inj {S : Finset (Fin n)} (hS : Nonempty (DrawSetup I mPts S (dj 
 
 variable {pop : Public}
 
-/-- **The site fact at the draw's table**: at a draw flock-verify sets up, each drawn unit's site is `BcSite`: the
-acceptance's draw is `dj S`, which decodes to `D`, and the unit's block and VU index its rank in `D.proved`. -/
-theorem table_bcSite (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
-    (hpop : HmRow.loadPublic I.tags c I.publicFile = .ok pop) (hpt : pop.tables = none)
+/-- **The site fact at the draw's table**, with or without shared rows: at a draw flock-verify sets up, each drawn
+unit's site is `BcSite`: the acceptance's draw is `dj S`, which decodes to `D`, and the unit's block and VU index its
+rank in `D.proved`. -/
+theorem table_bcSiteS (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
+    (hpop : HmRow.loadPublic I.tags c I.publicFile = .ok pop)
     {S : Finset (Fin n)} (x : DrawSetup I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     Layout.BcSite (x.table ht).acc pop ((x.table ht).o u h) ((x.table ht).vu u h) u.val := by
   have hcc : (x.table ht).acc.st.c = c := (x.table ht).acc.c_eq hc
   have hcx : x.st.c = c := hcc
-  refine ⟨dj S, x.D, rfl, x.hD, Layout.proved_lt_population x.hD, fun r hr => List.mem_map_of_mem hr, ?_, hpt, ?_, ?_⟩
+  refine ⟨dj S, x.D, rfl, x.hD, Layout.proved_lt_population x.hD, fun r hr => List.mem_map_of_mem hr, ?_, ?_, ?_⟩
   · show HmRow.loadPublic I.tags x.st.c I.publicFile = .ok pop
     rw [hcx]; exact hpop
   · show x.rank u % x.st.c.g < 2 ^ x.st.c.g.log2
@@ -284,6 +285,14 @@ theorem table_bcSite (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (h
   · show x.D.proved[x.rank u / x.st.c.g * x.st.c.g + x.rank u % x.st.c.g]? = some u.val
     rw [Nat.div_add_mod']
     exact x.proved_rank h
+
+set_option linter.unusedVariables false in
+/-- **The site fact at the draw's table** (`table_bcSiteS`). -/
+theorem table_bcSite (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
+    (hpop : HmRow.loadPublic I.tags c I.publicFile = .ok pop) (hpt : pop.tables = none)
+    {S : Finset (Fin n)} (x : DrawSetup I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
+    Layout.BcSite (x.table ht).acc pop ((x.table ht).o u h) ((x.table ht).vu u h) u.val :=
+  table_bcSiteS ht dj hc ho hpop x h
 
 /-- **`BcSite` at every satisfiable site** of the one-table plan: at a draw flock-verify sets up by `table_bcSite`; at a
 refused draw no message satisfies the table (`refused_unsat`). -/
