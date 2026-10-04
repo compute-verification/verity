@@ -40,7 +40,8 @@ LAKEFILE = 'name = "p"\ndefaultTargets = ["P"]\n\n[leanOptions]\nautoImplicit = 
 DEPENDENT = "protocols/q/lean"
 DEP_FILES = {"Q.lean": "import P.SecurityProofs.Lemma\nimport P.Guarantees\n"
                        "theorem Q.q : P.Guarantees.G := fun n => P.SecurityProofs.Lemma.l n\n"}
-DEP_LAKEFILE = 'name = "q"\ndefaultTargets = ["Q"]\n\n[[require]]\nname = "p"\npath = "../../p/lean"\n\n[[lean_lib]]\nname = "Q"\n'
+DEP_LAKEFILE = ('name = "q"\ndefaultTargets = ["Q"]\n\n[[require]]\nname = "p"\npath = "../../p/lean"\n\n# Q\'s library.\n'
+                '[[lean_lib]]\nname = "Q"\n')
 MATHLIB = ('[[require]]\nname = "mathlib"\ngit = "https://github.com/leanprover-community/mathlib4"\n'
            'rev = "5ed2965256430c3649e86755f9576b54eca72435"\n\n')
 FETCHED = {"type": "git", "subDir": None, "scope": "", "name": "mathlib", "manifestFile": "lake-manifest.json",
@@ -149,6 +150,9 @@ def test_the_split_is_a_pure_move(tmp_path):
     assert m["name"] == "security_proofs_p" and [e["name"] for e in m["packages"]] == ["p", "mathlib"]
     assert A.load(dest) == {"roots": ["P"], "exempt": {"CheckAxioms": "the axioms list"},
                             "layers": {"P.SecurityProofs.Lemma": old["layers"]["P.SecurityProofs.Lemma"]}, "pins": {}}
+    assert (root / DEPENDENT / "lakefile.toml").read_text().endswith(
+        'path = "../../p/lean"\n\n[[require]]\nname = "security_proofs_p"\npath = "../../../security_proofs/p"\n\n'
+        '# Q\'s library.\n[[lean_lib]]\nname = "Q"\n')
     q = tomllib.loads((root / DEPENDENT / "lakefile.toml").read_text())
     assert [(r["name"], r.get("path")) for r in q["require"]][1:] == [("p", "../../p/lean"),
                                                                        ("security_proofs_p", "../../../security_proofs/p")]
@@ -166,6 +170,37 @@ def test_the_split_is_a_pure_move(tmp_path):
         '"""Proved in `security_proofs/p/P/SecurityProofs/` and `security_proofs/p/P/SecurityProofs.lean`."""\n'
     assert (root / PKG / "README.md").read_text().endswith("\nP/SecurityProofs/Lemma.lean   the lemma\n")
     assert [n for n in notes if n.startswith("read: ")] == [f"read: {PKG}/README.md:2: P/SecurityProofs/Lemma.lean   the lemma"]
+
+
+LAKE_WRITTEN = """{"version": "1.2.0",
+ "packagesDir": ".lake/packages",
+ "packages":
+ [{"type": "path",
+   "scope": "",
+   "name": "verity",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../../../packages/verity/lean",
+   "configFile": "lakefile.toml"},
+  {"url": "https://github.com/leanprover-community/mathlib4",
+   "type": "git",
+   "subDir": null,
+   "scope": "",
+   "rev": "5ed2965256430c3649e86755f9576b54eca72435",
+   "name": "mathlib",
+   "manifestFile": "lake-manifest.json",
+   "inputRev": "5ed2965256430c3649e86755f9576b54eca72435",
+   "inherited": false,
+   "configFile": "lakefile.lean"}],
+ "name": "nci",
+ "lakeDir": ".lake",
+ "fixedToolchain": false}
+"""
+
+
+def test_a_manifest_is_written_as_lake_writes_it():
+    assert S.lake_json(json.loads(LAKE_WRITTEN)) + "\n" == LAKE_WRITTEN
+    assert S.lake_json({"version": "1.2.0", "packages": [], "name": "p"}) == '{"version": "1.2.0", "packages": [], "name": "p"}'
 
 
 def test_deps_key_is_check_s(tmp_path):

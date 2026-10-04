@@ -298,8 +298,36 @@ def with_path_deps(manifest: dict, direct: list[tuple[str, str, Path]], name: st
     return manifest | ({"name": name} if name else {}) | {"packages": out}
 
 
+def lake_json(v, indent: int = 0, col: int = 0, trail: int = 0, width: int = 120) -> str:
+    """``v`` as Lean's `Json.pretty` lays it out (how Lake writes a manifest): a bracket on one line when it fits, else one
+    item per line nested one deeper than its parent; a key whose value does not fit puts the value on the next line."""
+    flat = json.dumps(v, ensure_ascii=False, separators=(", ", ": "))
+    if not isinstance(v, (dict, list)) or not v or col + len(flat) + trail <= width:
+        return flat
+    pad, items = "\n" + " " * (indent + 1), list(v.items()) if isinstance(v, dict) else list(v)
+    out, c = [], col + 1
+    for i, it in enumerate(items):
+        t = 1 if i < len(items) - 1 else 1 + trail
+        if isinstance(v, dict):
+            k = json.dumps(it[0], ensure_ascii=False) + ":"
+            one = json.dumps(it[1], ensure_ascii=False, separators=(", ", ": "))
+            if c + len(k) + 1 + len(one) + t <= width:
+                s = f"{k} {one}"
+            else:
+                s = k + pad + lake_json(it[1], indent + 1, indent + 1, t, width)
+        else:
+            s = lake_json(it, indent + 1, c, t, width)
+        out.append(s)
+        c = indent + 1
+    return ("{" if isinstance(v, dict) else "[") + ("," + pad).join(out) + ("}" if isinstance(v, dict) else "]")
+
+
+def write_manifest(path: Path, doc: dict) -> None:
+    path.write_text(lake_json(doc) + "\n")
+
+
 def write_json(path: Path, doc: dict) -> None:
-    path.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
+    path.write_text(json.dumps(doc, indent=1, sort_keys=True, ensure_ascii=False) + "\n")
 
 
 def set_path_deps(pkg: Path) -> None:
@@ -307,7 +335,7 @@ def set_path_deps(pkg: Path) -> None:
     m = json.loads((pkg / "lake-manifest.json").read_text())
     new = with_path_deps(m, [(n, rel(pkg, d), d) for n, d in path_requires(pkg)])
     if new != m:
-        write_json(pkg / "lake-manifest.json", new)
+        write_manifest(pkg / "lake-manifest.json", new)
 
 
 def rekey(pins: dict, old: str | None, new: str | None, package: str, keep_old: bool) -> list[str]:
@@ -337,8 +365,8 @@ def apply(p: dict, root: Path = ROOT) -> list[str]:
     (dest / "lakefile.toml").write_text(proofs_lakefile(pkg, dest, p))
     direct = [(spec_name, rel(dest, pkg), pkg)]
     direct += [(n, rel(dest, d), d) for n, d in path_requires(pkg) if n in p["proofs_requires"] and n not in p["spec_requires"]]
-    write_json(dest / "lake-manifest.json",
-               with_path_deps(json.loads((pkg / "lake-manifest.json").read_text()), direct, p["name"]))
+    write_manifest(dest / "lake-manifest.json",
+                   with_path_deps(json.loads((pkg / "lake-manifest.json").read_text()), direct, p["name"]))
     A.dump(dest, p["lock_proofs"])
     (pkg / "lakefile.toml").write_text(spec_lakefile((pkg / "lakefile.toml").read_text(), p))
     set_path_deps(pkg)
@@ -346,7 +374,8 @@ def apply(p: dict, root: Path = ROOT) -> list[str]:
     for dep, d in zip(dependents, p["dependents"]):
         lf = (dep / "lakefile.toml").read_text()
         block = next(b for t, b, c in blocks(lf) if t == "require" and c.get("name") == spec_name)
-        lf = lf.replace(block, block.rstrip() + f'\n\n[[require]]\nname = "{p["name"]}"\npath = "{rel(dep, dest)}"\n\n', 1)
+        own = re.match(r"(?s)(.*?\n)((?:[ \t]*(?:#[^\n]*)?\n)*)\Z", block)
+        lf = lf.replace(block, own[1] + f'\n[[require]]\nname = "{p["name"]}"\npath = "{rel(dep, dest)}"\n' + own[2], 1)
         (dep / "lakefile.toml").write_text(re.sub(r"\n{3,}", "\n\n", lf))
         set_path_deps(dep)
         notes.append(f"dependent: {d['package']} requires {p['dest']} (it imports {', '.join(d['imports'])})")
