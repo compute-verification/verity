@@ -143,8 +143,12 @@ class TPPartialSource:
         # (shared with the Match recorder); this source hooks the modules for attribution, patches their modules' collective names, binds
         # each call's rank-local input (`<module>/shard_rank<r>` | `/part_rank<r>`) AND received output (`<module>/out`; no layer module
         # hook binds it) -- the k-th call of the step is the binder's occurrence k = the manifest's invocation k (`collective_site_aliases`).
-        from verity_vllm.collectives.collective_sites import mid_module_sites
-        self.mid_sites: dict[str, dict[str, Any]] = {s["name"]: s for s in mid_module_sites(model, self.world)}
+        # A call its instance's flags rule out (Qwen3MoeSparseMoeBlock's sequence-parallel all_gather) is no expected partial; it is listed
+        # (`mid_sites_ruled_out`, the identity report's `tp_sites_ruled_out`) and its module stays patched, so a call that runs is named.
+        from verity_vllm.collectives.collective_sites import mid_module_site_census
+        census = mid_module_site_census(model, self.world)
+        self.mid_sites: dict[str, dict[str, Any]] = {s["name"]: s for s in census["sites"]}
+        self.mid_sites_ruled_out: list[dict[str, Any]] = census["ruled_out"]
         self.sites += [(s["name"], s["cls"]) for s in self.mid_sites.values() if s["name"] not in {n for n, _c in self.sites}]
         self._occ: dict[tuple[int, str], int] = {}                       # (step, member) -> calls bound so far (mid-module sites commit a member twice)
         self.modules = [(n, m) for n, m in model.named_modules() if n in {s[0] for s in self.sites}]
@@ -238,9 +242,9 @@ class TPPartialSource:
                 targets.append((importlib.import_module(modname), attr, kind))
             except Exception:  # noqa: BLE001
                 continue
-        if self.mid_sites:
+        if self.mid_sites or self.mid_sites_ruled_out:
             from verity_vllm.collectives.collective_sites import patch_targets
-            targets += patch_targets(list(self.mid_sites.values()))               # [R19 moe] the model classes' own imports of the names
+            targets += patch_targets(list(self.mid_sites.values()) + self.mid_sites_ruled_out)   # [R19 moe] the model classes' own imports
         done: set[tuple[int, str]] = set()
         for mod, attr, kind in targets:
             if (id(mod), attr) in done or not hasattr(mod, attr):
@@ -571,6 +575,7 @@ class TPPartialSource:
                  "sites": len(self.sites), "site_names": self.site_names(),
                  "received_site_names": self.received_site_names(), "nested_moe_sites_dropped": self.nested_moe_sites_dropped,
                  "mid_module_sites": {n: {"cls": s["cls"], "calls": s["calls"]} for n, s in self.mid_sites.items()},          # [R19 moe F-r19-moe-1]
+                 "mid_module_sites_ruled_out": self.mid_sites_ruled_out,
                  "evidence": ("TP-03 source: wraps tensor_model_parallel_all_reduce (linear, vocab_parallel_embedding) and "
                               "tensor_model_parallel_all_gather/gather (logits_processor) in THIS rank's process, plus the same names in the "
                               "python module of every model class that calls one directly (mid-module sites, R19 moe: OlmoeAttention's q/k "
