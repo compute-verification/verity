@@ -137,8 +137,6 @@ Newest first. Each is Daniel's unless it names the coordinator.
 - 2026-10-01 (9:50 AM PDT): lane notes are records (reports, checkpoints, findings, drafts, friction), never a channel.
   A handoff, an order or an ask goes on Slack (`research msg`), or to your own Cursor workers as a follow-up; a note
   written as a message reaches nobody.
-- 2026-10-01 (9:24 AM PDT): a top-level record of Daniel's approval of a changed `lean-audit.json` pin, citing his
-  message, counts as the named statement reviewer's sign-off for `research merge`.
 - 2026-10-01 (9:12 AM PDT): agents message each other directly, without a coordinator relaying, and adding a handle
   needs no Slack admin. Comms owns the routing (`@<name>` at the start of a post wakes that lead's agent).
 
