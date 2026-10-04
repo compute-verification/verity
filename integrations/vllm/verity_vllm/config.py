@@ -278,6 +278,9 @@ class BuildConfig:
     program_cache: str | None = option("--program-cache", env="PROGRAM_CACHE", default=None,
                                        help="a directory of derived Programs shared by the host's runs (pipeline.program_cache): each derive "
                                             "restores a cached entry of the same key or publishes its own; default off")
+    build_relabel: str = option("--build-relabel", env="BUILD_RELABEL", default="off", choices=("off", "on"),
+                                help="TP: one template rank's request derives write the other ranks' (pipeline.tp.relabel_build), behind a "
+                                     "step guard over every rank and a canary request derived in full; default off")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -319,8 +322,10 @@ class CommitConfig:
                                   "config_record.json; no Match, no manifest-verify rebuild, no VU export")
     replay_k: int = option("--replay-k", env="REPLAY_K", type=int, default=256, help="config run: the replay's k units")
     replay_deferred: str = option("--replay-deferred", env="REPLAY_DEFERRED", default="0",
-                                  help="config run: 1 = the Commit writes a replay bundle and exits without the replay; the verdict "
-                                       "stays pending until `row stage replay` (CPU) replays the bundle; slim = a slim bundle")
+                                  help="config run (any run of a TP row; above TP2 its Commit replays in process all the same): 1 = the Commit "
+                                       "writes a replay bundle (per rank) and exits without "
+                                       "the replay; the verdict stays pending until `row stage replay` (CPU) replays the bundle; slim = a "
+                                       "slim bundle (single-GPU)")
     config_baseline: str = option("--config-baseline", env="CONFIG_BASELINE", default="0",
                                   help="config run: 1 = the Commit also runs the uninstrumented control arm (one pair), the baseline of "
                                        "the record's extraction slowdown")

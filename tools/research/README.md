@@ -96,6 +96,7 @@ research merge --train --prepare BRANCH [--onto BASE] N@SHA ...      # build a t
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
 research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
+research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research slack ask|announce|reply|pickup|done|decline|roster|match|verify-author|read|handles|subscriptions|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
@@ -152,7 +153,7 @@ conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `
 
 The workload receives `RESEARCH_RUN_ID` and `RESEARCH_RUN_DIR` and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
-workload runs in its run directory unless `--cwd` says otherwise (`--cwd source` = the invoking directory), so a relative
+workload runs in its run directory unless `--cwd` says otherwise (`--cwd source` = the invoking directory, `clone` = a clone of it), so a relative
 `result.json` lands there and never in the checkout; `--env K=V` is set for the
 workload only and recorded as the attempt's `params.env` (values of
 secret-named keys redacted). Four facts
@@ -206,6 +207,7 @@ that no entry lists (`stray`); the hourly preflight probe posts its findings whe
 loop or script goes into the repository and the manifest before it runs; a backup of a replaced file is
 `.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ...
 --by WHO` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
+A Lean build kept from node 1's credentials (the Lean cache's daily one) runs in `vy-lean-sandbox` (`lean_sandbox.py`).
 
 An unlisted or foreign machine is refused before anything is contacted. The
 tool ships as a content-addressed source snapshot under `<root>/tool/` and
@@ -227,8 +229,7 @@ directory is renamed into place carrying `READY.json` (identity, archive
 sha256, file count, launcher). A failed or truncated transfer removes its
 partial directory and the run is refused (`SourceNotReady`); the machine
 refuses to execute from a source directory without a `READY.json` naming the
-requested identity (the legacy `.complete` marker is verified per file once,
-then adopted or quarantined). The attempt records `execution.remote.source_sha`
+requested identity. The attempt records `execution.remote.source_sha`
 and `source_archive_sha256`.
 
 The commit travels as git objects when it can: the launcher `git push`es it
@@ -247,8 +248,9 @@ of push (15.6 s end to end, mostly ssh handshakes), against about 28 s for the
 stream. The shipped tree is the runner's source root, not
 the workload's cwd: the workload runs in its own run directory, as locally,
 because every run of one commit shares `<root>/src/<sha>/` and relative outputs
-used to race there. `--cwd source` (or `source/SUB`) is the explicit opt-in to
-run inside the tree; job.json records `run.cwd` and `run.cwd_basis`. The
+used to race there. `--cwd source` (or `source/SUB`) runs it in the tree, and
+`--cwd clone` (`clone/SUB`), for a workload that writes there, in its own clone
+of it, removed when it exits (`research/clone.py`); job.json records `run.cwd` and `run.cwd_basis`. The
 runner and the workload get the tree's `PYTHONPATH` derived from its root
 `pyproject.toml` workspace members and each member's build config
 (`src/`, `python/`, flat), with a user `--env PYTHONPATH` appended; job.json
@@ -355,9 +357,7 @@ research data label ART verified accepted --by red-team-1 [--ref RUN]           
 research data reindex [--remote]             research data sql "SELECT ..."       # read-only connection
 ~~~
 
-Python: `research.store.local.LocalStore` (`put_artifact`, `get_manifest`,
-`fetch`, `where`, `put_attempt`, `get_attempt`, `add_label`, `labels`,
-`snapshot`, `verify`, `push`, `reindex`, `.index`, `.remote`). Nothing is
+Python: `research.store.local.LocalStore`, its methods listed in the contract. Nothing is
 called PRESERVED without a remote; nothing in the store is ever overwritten.
 
 ### The evidence store: `--tool`, `--scratch`, and the publish step
@@ -474,18 +474,8 @@ verify-author in private channels; `channels:history` for a public one), `reacti
 `groups sync` `usergroups:read` and `usergroups:write`. It must be a member of both channels (`chat:write.public` does not
 reach private channels), and Cursor's Slack app must be in both too: Cursor delivers the wakes, this bot posts.
 
-**Scaling past wake-on-everything (a design, not built).** Cursor's `subscribe_slack_channel` wakes every subscriber on every
-top-level message and has no mention filter, so each handle holder pays one wake (and one `match`) per ask anyone makes, and
-that cost grows with (handles × asks). Threads already scope replies to their participants, and workers never subscribe;
-what grows is `#agent-coordination`'s top level. The fix is a relay: a small service subscribed to the Slack Events API
-(`message.groups`) for `#agent-coordination`, which reads the registry, finds the handles a message addresses, and posts a
-one-line pointer (the permalink, the asker, the first line) into each addressed handle's own inbox channel
-(`#inbox-<handle>`, one per registry handle, created by the relay). Each holder then subscribes only to its inbox, top-level
-only, and never wakes for someone else's ask; `match` stays as the check on the one message it is woken for, and a thread's
-participants still subscribe to the thread itself. The relay holds only a bot token with `groups:history`, `chat:write` and
-`groups:write`, is idempotent per event id (Slack retries deliveries), sends what it can't route to `@infra`, and must fail
-visibly, not silently: when it is down, holders fall back to subscribing to `#agent-coordination` itself. Build it when
-wakes per holder per day make the top level a measurable cost, not before.
+Routing: each handle holder subscribes to its own inbox, not to the top level; the sending CLI rings the doorbells of the
+handles a post addresses (`route_targets`) until the console site's events route does (`slack.py`'s docstring).
 
 ### Notes and evidence over MCP
 

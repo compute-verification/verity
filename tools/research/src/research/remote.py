@@ -43,9 +43,14 @@
     cwd             the request's `cwd` is the RUNNER's: the shipped tree (the store reads the closure and tool declarations there).  The
                     WORKLOAD runs in its run dir <root>/runs/<run-id>/ (WORKLOAD_CWD_DEFAULT): every run of one commit shares
                     <root>/src/<sha>/, so a relative `result.json` written there raced between concurrent runs.  `--cwd source` (or
-                    `source/SUB`, or a relative SUB) runs it inside the tree instead, an explicit opt-in; job.json records run.cwd and
-                    run.cwd_basis.  Python bytecode goes to <root>/cache/pycache (PYTHONPYCACHEPREFIX), not into the tree.  A tree whose
-                    own research package predates this runs its workloads in the tree; the launcher says so (remote.json workload_cwd).
+                    `source/SUB`, or a relative SUB) runs it inside the tree instead, an explicit opt-in; `--cwd clone` (or `clone/SUB`)
+                    in the run's own `git clone --shared` of the tree at <root>/scratch/<run-id>/tree, checked to be the shipped commit
+                    and removed when the workload exits (research/clone.py), so nothing one run does there reaches another's; its
+                    PYTHONPATH entries under the tree move into the clone too (cli._clone_imports); job.json records run.cwd and
+                    run.cwd_basis (and run.cwd_clone).  The launcher refuses `--cwd clone` for a tree shipped without git or a package
+                    that predates it.  Python bytecode goes to <root>/cache/pycache (PYTHONPYCACHEPREFIX), not into the tree; a clone's
+                    goes beside the clone.  A tree whose own research package predates this runs its workloads in the tree; the launcher says
+                    so (remote.json workload_cwd).
     claim           `research launch-request` on the machine does mkdir(<root>/runs/<run-id>) as the claim, then starts the detached
                     runner.  Re-delivering the same request finds the directory and reports its state; it never starts a second workload.
                     Each delivery holds flock(<root>/requests/<run-id>/.launch.lock) until it has answered, so a re-delivery (an ssh drop,
@@ -116,6 +121,7 @@ import tomllib
 from pathlib import Path
 from typing import IO, Any, Callable
 
+from . import clone
 from .telemetry.events import utc_now_ms
 from .telemetry.job import write_json_atomic
 
@@ -460,6 +466,12 @@ def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> d
     return out
 
 
+def knows_clone(pkg: Path | None) -> bool:
+    """Whether the research package that will run on the machine gives `--cwd clone` a clone (one that predates it would look for a
+    directory named `clone` in the shared tree)."""
+    return pkg is None or (Path(pkg) / "clone.py").is_file()
+
+
 def knows_preflight(pkg: Path | None) -> bool:
     """Whether the research package that will run on the machine runs `--preflight TOOL` (one that predates it would ignore it)."""
     if pkg is None:
@@ -468,6 +480,37 @@ def knows_preflight(pkg: Path | None) -> bool:
         return "preflight_tool" in (Path(pkg) / "remote.py").read_text()
     except OSError:
         return False
+
+
+def knows_pss_bound(pkg: Path | None) -> bool:
+    """Whether the research package that will run on the machine knows `--pss-every 0` (PSS off) and `--pss-max-rss-gb`."""
+    if pkg is None:
+        return True
+    try:
+        return "pss_max_rss_gb" in (Path(pkg) / "telemetry" / "sample.py").read_text()
+    except OSError:
+        return False
+
+
+def pss_bound_problem(harness_args: list[str], source: Path | None) -> str | None:
+    """Why the machine must not get these sampler flags, or None: `--pss-every` <= 0 or `--pss-max-rss-gb` for a --source tree whose
+    research package predates them. On that package `--pss-every 0` reads every process's smaps_rollup every round, and an unknown
+    `--pss-max-rss-gb` fails the run on the machine."""
+    asked = []
+    every = flag_value(harness_args, "--pss-every")
+    try:
+        if every is not None and float(every) <= 0:
+            asked.append(f"--pss-every {every}")
+    except ValueError:
+        pass                                    # the harness's own parser rejects it by name
+    if (bound := flag_value(harness_args, "--pss-max-rss-gb")) is not None:
+        asked.append(f"--pss-max-rss-gb {bound}")
+    if not asked or knows_pss_bound(pkg := source_tool_package(source)):
+        return None
+    return (f"{' and '.join(asked)}: the research package in {source} predates them ({pkg}/telemetry/sample.py has no "
+            f"--pss-max-rss-gb), and it is what the machine runs: there --pss-every 0 means a PSS round (smaps_rollup of every process, "
+            f"under its mmap lock) every round, about once a second, and --pss-max-rss-gb fails the run.  Rebase the --source tree onto "
+            f"main, or drop the flag")
 
 
 def check_tool(expected: str | None) -> dict[str, str]:
@@ -815,7 +858,7 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
          nothing or a complete tree with its marker); the marker is read back and its identity checked.
     Any failure (transport rc != 0, the launcher's timeout, digest or manifest mismatch) removes the partial directory and raises
     SourceNotReady; `<identity>/` is never created by a failed ship.  The machine side (`launch_request`) enforces `require_ready_source`."""
-    st = subprocess.run(["git", "status", "--porcelain"], cwd=git_dir, capture_output=True, text=True)
+    st = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"], cwd=git_dir, capture_output=True, text=True)
     if st.returncode != 0:
         raise Refused(f"{git_dir} is not a git checkout")
     if st.stdout.strip():
@@ -943,6 +986,14 @@ def _read_json(p: Path) -> dict[str, Any] | None:
         return d if isinstance(d, dict) else None
     except (OSError, ValueError):
         return None
+
+
+def _json_line(line: str) -> dict[str, Any]:
+    try:
+        d = json.loads(line)
+    except ValueError:
+        return {}
+    return d if isinstance(d, dict) else {}
 
 
 def _holder_live(runs_root: Path, holder: str) -> bool:
@@ -1489,6 +1540,8 @@ def workload_cwd(harness_args: list[str], tool_pkg: Path | None) -> str:
     """What the machine will use as the workload's cwd, for remote.json: the `--cwd` asked for, else the run dir -- unless the package
     that runs on the machine (the shipped tree's, `tool_pkg`) predates WORKLOAD_CWD_DEFAULT and so still runs in the shared tree."""
     asked = flag_value(harness_args, "--cwd")
+    if asked is not None and clone.sub(asked) is not None:
+        return f"--cwd {asked} (the run's own clone of the shipped tree, <root>/scratch/<run-id>/tree, removed when the workload exits)"
     if asked is not None:
         return f"--cwd {asked}"
     if tool_pkg is not None:
@@ -1546,6 +1599,10 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if queue and not knows_queue(tool_pkg):
             raise Refused(f"--queue: the research package in {source} predates it, so the machine would run the job outside its "
                           f"allocation.  Commit a tree that has it")
+        cwd_clone = clone.sub(flag_value(harness_args, "--cwd")) is not None
+        if cwd_clone and not knows_clone(tool_pkg):
+            raise Refused(f"--cwd clone: the research package in {source} predates it (no research/clone.py), so the machine would look "
+                          f"for a directory named clone in the shared tree.  Commit a tree that has it, or pass --cwd source")
         tool_dir = ship_tool(ssh, m["root"], tool_pkg)
         rec["tool_from"] = str(tool_pkg) if tool_pkg else "launcher"
         rec["tool_identity"] = tool_identity(tool_pkg)
@@ -1562,6 +1619,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         remote_cwd = cwd
         if source is not None:
             tree_sha, src_dir, ready = ship_source(ssh, m["root"], source)
+            if cwd_clone and not ready.get("checkout"):
+                raise Refused(f"--cwd clone: {src_dir} was shipped without git (transport {ready.get('transport') or 'unrecorded'}), so it "
+                              f"has no .git to clone.  Pass --cwd source to run in it as it is, shared with other runs of the commit")
             remote_cwd = src_dir if cwd is None else str(Path(src_dir) / cwd)
             if "--tree-sha" not in harness_args:
                 harness_args = [*harness_args, "--tree-sha", tree_sha]
@@ -1748,14 +1808,14 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     tele = ["env", f"PYTHONPATH={rec['tool']}", "python3", "-m", "research.telemetry", "cancel-intent", "--actor", "manual",
             "--reason", f"{reason} (research cancel by {by})", "--target-pgid", str(pgid), "--expect-nonempty", "--attempt-dir", rd,
             "--deliver"]
-    script = f"{shlex.join(tele)}; rc=$?; tail -n 1 {shlex.quote(rd)}/events.jsonl; exit $rc"
+    # every line appended since the cancel began: the runner records the workload's exit there as soon as the signal lands
+    script = (f"f={shlex.quote(rd)}/events.jsonl; n=$(wc -l < \"$f\" 2>/dev/null || echo 0); {shlex.join(tele)}; rc=$?; "
+              f"tail -n +$((n + 1)) \"$f\"; exit $rc")
     r = ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["sh", "-c", script], timeout=120)
-    try:
-        res = json.loads(r.stdout.decode(errors="replace").splitlines()[-1])
-    except (IndexError, ValueError):
-        res = {}
-    if res.get("kind") != "cancel_result":
-        raise Refused(f"the cancel did not run on the machine (rc {r.returncode}): {r.stderr.decode(errors='replace').strip()[-300:]}")
+    res = next((x for x in map(_json_line, r.stdout.decode(errors="replace").splitlines())
+                if x.get("kind") == "cancel_result" and (x.get("target") or {}).get("pgid") == pgid), None)
+    if res is None:
+        raise Refused(f"the cancel recorded no result on the machine (rc {r.returncode}): {r.stderr.decode(errors='replace').strip()[-300:]}")
     return {"pgid": pgid, "processes": len((res.get("target") or {}).get("members") or []), "delivered": bool(res.get("delivered")),
             "why": res.get("reason")}
 

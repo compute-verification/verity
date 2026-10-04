@@ -5,7 +5,8 @@
 `vy-disk-guard` uses; then it execs CMD in its own process, so the run's pid is unchanged. The launch doesn't wait: the hold
 happens in the detached process the machine starts, and its lines go to the run's launcher.log. With `--ack FIFO` (the launch's,
 remote.LAUNCH_ACK) a hold acknowledges the launch as it starts, since the runner's own acknowledgement comes only after it.
-Requests other runs have declared but not yet used aren't counted (a follow-up).
+Requests other runs have declared but not yet used aren't counted (a follow-up). A machine whose guard holds at another level sets
+RESEARCH_DISK_HOLD_PCT in the run's environment.
 """
 from __future__ import annotations
 
@@ -64,7 +65,8 @@ def main(argv: list[str], *, usage: Callable[[Path], tuple[int, int, int]] = shu
 
             ack_launch(ns.ack, "disk-hold")
 
-    hold(ns.gb, Path(ns.path), usage=usage, sleep=sleep, on_hold=on_hold)
+    pct = float(os.environ.get("RESEARCH_DISK_HOLD_PCT", HOLD_PCT))
+    hold(ns.gb, Path(ns.path), hold_pct=pct, release_pct=min(RELEASE_PCT, pct), usage=usage, sleep=sleep, on_hold=on_hold)
     execvp(cmd[0], cmd)
     return 127
 

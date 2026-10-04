@@ -235,25 +235,42 @@ def bind_vocab_parallel_embeddings(model: torch.nn.Module, into: hooks.Hooks) ->
     import types
 
     from vllm.distributed import tensor_model_parallel_all_reduce
-    from vllm.model_executor.layers.vocab_parallel_embedding import VocabParallelEmbedding
 
     ensure_ops()
     bound = []
-    for name, m in model.named_modules():
-        if type(m) is not VocabParallelEmbedding or getattr(m, "tp_size", 1) <= 1:
-            continue
-        si = m.shard_indices
-        if si.num_org_vocab_padding != 0 or si.added_vocab_end_index != si.added_vocab_start_index:
-            raise ValueError(f"{name}: padded ({si.num_org_vocab_padding}) or added-vocab shard; EmbeddingShard{{VS,H,START}} binds plain contiguous shards only")
-        start, end, H = int(si.org_vocab_start_index), int(si.org_vocab_end_index), int(m.embedding_dim)
+    for name, m in vocab_parallel_embeddings(model):
+        d = embedding_shard_of(m, int(m.tp_rank), name)
+        start, end, H = d["START"], d["END"], d["H"]
 
         def fwd(self, input_, _start=start, _end=end, _H=H):
             part = torch.ops.verity_tp.embedding_shard(input_.reshape(-1), self.weight, _start, _end)
             return tensor_model_parallel_all_reduce(part.view(*input_.shape, _H))
 
         into.patch(m, "forward", types.MethodType(fwd, m))
-        bound.append({"module": name, "START": start, "END": end, "VS": end - start, "H": H, "tp_rank": int(m.tp_rank), "tp_size": int(m.tp_size)})
+        bound.append(d)
     return bound
 
 
-__all__ = ["ensure_ops", "CollectiveBus", "TPStub", "tp_group_override", "bind_vocab_parallel_embeddings"]
+def vocab_parallel_embeddings(model: torch.nn.Module) -> list[tuple[str, torch.nn.Module]]:
+    """The model's `VocabParallelEmbedding`s (exact class) with tp_size > 1, in module order: the ones `bind_vocab_parallel_embeddings` binds."""
+    from vllm.model_executor.layers.vocab_parallel_embedding import VocabParallelEmbedding
+    return [(name, m) for name, m in model.named_modules() if type(m) is VocabParallelEmbedding and getattr(m, "tp_size", 1) > 1]
+
+
+def embedding_shard_of(m: torch.nn.Module, rank: int, name: str = "") -> dict:
+    """Rank `rank`'s shard of `VocabParallelEmbedding` `m`, by vLLM's own vocab-range function (`_get_indices`, which the layer's
+    constructor calls for its rank).  Refuses padded / added-vocab shards (not what `EmbeddingShard` states)."""
+    si = type(m)._get_indices(m.num_embeddings_padded, m.org_vocab_size_padded, m.num_embeddings, m.org_vocab_size, int(rank), m.tp_size)
+    if si.num_org_vocab_padding != 0 or si.added_vocab_end_index != si.added_vocab_start_index:
+        raise ValueError(f"{name}: padded ({si.num_org_vocab_padding}) or added-vocab shard; EmbeddingShard{{VS,H,START}} binds plain contiguous shards only")
+    start, end = int(si.org_vocab_start_index), int(si.org_vocab_end_index)
+    return {"module": name, "START": start, "END": end, "VS": end - start, "H": int(m.embedding_dim), "tp_rank": int(rank), "tp_size": int(m.tp_size)}
+
+
+def rank_embedding_shards(model: torch.nn.Module, rank: int) -> list[dict]:
+    """The `embedding_shards` record rank `rank`'s construction writes (`bind_vocab_parallel_embeddings` at that rank), read off this rank's model."""
+    return [embedding_shard_of(m, rank, name) for name, m in vocab_parallel_embeddings(model)]
+
+
+__all__ = ["ensure_ops", "CollectiveBus", "TPStub", "tp_group_override", "bind_vocab_parallel_embeddings", "embedding_shard_of",
+           "rank_embedding_shards", "vocab_parallel_embeddings"]
