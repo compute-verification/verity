@@ -800,12 +800,16 @@ def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
     }
 
     released, real, slots = {}, 0, 0
+    comparisons["released_not_the_programs"] = 0
     for rec in out_records:
         for t, row in enumerate(rec.grid):
             n = row_count(row)
             real, slots = real + n, slots + len(row)
             for slot in row[:n]:
-                released[position[slot]] = rec.window * T + t
+                if (p := position.get(slot)) is None:
+                    comparisons["released_not_the_programs"] += 1
+                else:
+                    released[p] = rec.window * T + t
     send_ms = {q["stream"]: q["trace_ms"] for q in plan["requests"]}
     hist = {k: Counter() for k in ("shaping", "queueing", "first_frame", "first_frame_from_send")}
     for p, f in enumerate(frames):
@@ -920,7 +924,8 @@ def summarize(results: Sequence[dict], models: Sequence[dict]) -> dict:
     out["comparisons"] |= {k: max((r["comparisons"][k] for r in results), default=0)
                            for k in ("hands_max_diff_from_rule", "hands_max_diff_from_model")}
     out["comparisons"] |= {k: sum(r["comparisons"][k] for r in results)
-                           for k in ("ready_off_meant", "releases_off_model", "model_misses")}
+                           for k in ("ready_off_meant", "releases_off_model", "model_misses",
+                                     "released_not_the_programs")}
     if models:
         mt, mrows = replay.new_tally(), []
         for m in models:

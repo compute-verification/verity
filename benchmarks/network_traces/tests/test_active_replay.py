@@ -6,6 +6,7 @@ its wire byte for byte, and one that holds a session past every sync is rejected
 from __future__ import annotations
 
 import importlib.util
+import shutil
 import sys
 from pathlib import Path
 
@@ -117,7 +118,31 @@ def test_an_honest_run_is_accepted_and_is_run_shapers(runs):
     assert c["wire_is_the_records"]
     assert c["frames_read"] == c["frames_meant"] == 36
     assert c["ready_off_meant"] == c["releases_off_model"] == c["hands_max_diff_from_model"] == 0
+    assert c["released_not_the_programs"] == 0
     assert audit["timing"]["tick_late_ms"]["egress"]["max"] < 0.001
+
+
+def test_a_released_frame_that_isnt_the_programs_is_counted_not_a_crash(setup, runs, tmp_path):
+    """The records of an honest run with one released frame replaced, as a server that numbers an event other than
+    the Program does: the audit counts it, and its window is a mismatch raw (the committed records are the run's)."""
+    _, report, s = setup
+    plan, results = runs
+    run = tmp_path / "honest"
+    shutil.copytree(results["honest"][0], run)
+    e = s.egress_params
+    records = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    (run / "responses.records").unlink()
+    for r in records:
+        if r.window == 1:
+            t = next(t for t, row in enumerate(r.grid) if row[0] is not None)
+            row = (encode_frame(DATA, 99, b"id: 999\n\n", e.frame_bytes), *r.grid[t][1:])
+            r = Record(r.link, r.window, r.grid[:t] + (row,) + r.grid[t + 1 :], r.status)
+        ar.write_blobs(run / "responses.records", ar.pack_record(r))
+    audit = ar.audit_configuration(plan, report, run)
+    assert audit["comparisons"]["released_not_the_programs"] == 1
+    assert [(r["link"], r["window"], r["raw"], r["committed"]) for r in audit["rows"]] == \
+        [("responses", w, "mismatch" if w == 1 else None, None) for w in range(3)] + \
+        [("requests", w, None, None) for w in range(3)]
 
 
 @pytest.mark.parametrize("strategy", ["burst", "spread", "bits"])
