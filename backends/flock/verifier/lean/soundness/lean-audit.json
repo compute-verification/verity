@@ -10482,6 +10482,8 @@
    "assumptions": [],
    "type_hash": "661210ab35be36ef9a689ea663aae69061ca012e3c7e2852dafb76240ef01e69"
   },
+  "FlockSoundness.Discharge.Recursion.ZkOuter.candTransfer": {},
+  "FlockSoundness.Discharge.Recursion.ZkOuter.openingsOf_vb": {},
   "FlockSoundness.Discharge.Recursion.candTermZC_le": {
    "signature": [
     "FlockSoundness.Discharge.Recursion.candTermZC_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
@@ -10599,6 +10601,7 @@
    "assumptions": [],
    "type_hash": "eb57d93580090594e2cf8ae96735a28f24b09c1c9c4372660babdf5294e512a2"
   },
+  "FlockSoundness.Discharge.Recursion.execOS_full_mem": {},
   "FlockSoundness.Discharge.Recursion.flock_inner_sound": {
    "signature": [
     "FlockSoundness.Discharge.Recursion.flock_inner_sound {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
@@ -11306,6 +11309,8 @@
    "assumptions": [],
    "type_hash": "3588e3fdda8af6be2162db314c08178ff4ed65a97a29b447a9877aa38efc6b7c"
   },
+  "FlockSoundness.Discharge.Recursion.zk_session_recursive_full": {},
+  "FlockSoundness.Discharge.Recursion.zk_session_recursive_stages": {},
   "FlockSoundness.Discharge.Recursion.zk_session_recursive_upto": {
    "signature": [
     "FlockSoundness.Discharge.Recursion.zk_session_recursive_upto {n : Nat} {L : FlockSoundness.Audit.Law n} {Reg : Type}",
