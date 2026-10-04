@@ -1,5 +1,13 @@
 {
  "roots": ["FlockSoundness"],
+ "exempt": {
+  "KaratsubaRows": "the Karatsuba gadget's row digest, under `runs`: compiled evaluation of the rows mul128 builds, a test and not a proof"
+ },
+ "runs": {
+  "KaratsubaRows": {
+   "why": "sound_mul128 is about the rows mul128 builds; C-Flock's Gf128Mul_v1 must lower to the same rows for it to be about V*'s gadget. The SHA-512 of mul128's rows is the one test_rec_algebra.py pins on the Definition's recursion (KARATSUBA_ROWS)"
+  }
+ },
  "assumptions": ["FlockSoundness.Assumptions"],
  "meaning": ["FlockSoundness", "FlockLevel3", "Flock"],
  "compile_time": {
@@ -10473,6 +10481,7 @@
    "assumptions": [],
    "type_hash": "661210ab35be36ef9a689ea663aae69061ca012e3c7e2852dafb76240ef01e69"
   },
+  "FlockSoundness.Discharge.Recursion.candTermZC_le": {},
   "FlockSoundness.Discharge.Recursion.commit_and_prove": {
    "signature": [
     "FlockSoundness.Discharge.Recursion.commit_and_prove {n : Nat} {L : FlockSoundness.Audit.Law n} {Reg : Type}",
@@ -10513,6 +10522,7 @@
    "assumptions": [],
    "type_hash": "f4fbd0827375197305e38b286090819fcaa6ec71adfa1dfa8a8a27d1eff97760"
   },
+  "FlockSoundness.Discharge.Recursion.commit_and_prove_upto": {},
   "FlockSoundness.Discharge.Recursion.flock_inner_sound": {
    "signature": [
     "FlockSoundness.Discharge.Recursion.flock_inner_sound {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
@@ -10722,6 +10732,7 @@
    "assumptions": [],
    "type_hash": "f129c5315146b730e8aeedcd570edce4499778d934c688db42fec52af5165216"
   },
+  "FlockSoundness.Discharge.Recursion.recursive_sound_upto": {},
   "FlockSoundness.Discharge.Recursion.sched_sound": {
    "signature": [
     "FlockSoundness.Discharge.Recursion.sched_sound {nT r : Nat} (T : Fin nT → Type) (CT : Fin r → Type)",
@@ -10772,6 +10783,9 @@
    "assumptions": [],
    "type_hash": "0be1b7d5e5681e6417265c1269c209650d35c697870f7bd430c925dbf9851714"
   },
+  "FlockSoundness.Discharge.Recursion.zk_flock_candTransferC": {},
+  "FlockSoundness.Discharge.Recursion.zk_flock_candValsC": {},
+  "FlockSoundness.Discharge.Recursion.zk_session_candValsR": {},
   "FlockSoundness.Discharge.Recursion.zk_session_recursive": {
    "signature": [
     "FlockSoundness.Discharge.Recursion.zk_session_recursive {n : Nat} {L : FlockSoundness.Audit.Law n} {Reg : Type}",
@@ -10861,6 +10875,7 @@
    "assumptions": [],
    "type_hash": "3588e3fdda8af6be2162db314c08178ff4ed65a97a29b447a9877aa38efc6b7c"
   },
+  "FlockSoundness.Discharge.Recursion.zk_session_recursive_upto": {},
   "FlockSoundness.Discharge.Tables.accepts_tables": {
    "signature": ["FlockSoundness.Discharge.Tables.accepts_tables : FlockSoundness.Discharge.Tables.AcceptsTables"],
    "assumptions": [],

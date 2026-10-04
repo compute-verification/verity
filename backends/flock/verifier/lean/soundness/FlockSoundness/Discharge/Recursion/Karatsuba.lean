@@ -15,6 +15,9 @@ bit `k` being bit `k` of `2^64·hi + lo` (`Flock.F128`):
 
 `sound_mul128`: whenever every row holds and the input forms carry the bits of `x` and `y`, the output forms carry the
 bits of `x * y`, the executable's product, which is level 3's GF(2^128) product (`F128.poly_mul`).
+
+The audit's `KaratsubaRows` test checks that `mul128`'s rows are the ones C-Flock's `Gf128Mul_v1` lowers to: both
+hash to the digest `test_rec_algebra.py` pins (`KARATSUBA_ROWS`).
 -/
 
 namespace FlockSoundness.Discharge.Recursion.Karatsuba
