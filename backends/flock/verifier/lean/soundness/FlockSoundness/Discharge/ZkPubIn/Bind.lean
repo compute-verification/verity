@@ -140,14 +140,14 @@ noncomputable abbrev rsShHP : Binding.HmRows (layShHP dj y₀ ht hc hscope hU hp
     (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope) (Layout.outsOut_outsOf c hU n)
     (sitesShHP_bcSite dj y₀ ht hc hscope hU hpi hpub)
     (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOk_spec hU hscope).1
-      (Layout.scopeOk_spec hU hscope).2.2)
+      (Layout.scopeOk_spec hU hscope).2.2) fun _ _ _ _ => rfl
 
 theorem rsShHP_computes : (rsShHP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).Computes :=
   keyRowsHP_computes (sitesShHP_parse dj y₀ ht hc hscope) pi hpi own (Layout.outsOf c hU n) (fun _ => pub)
     (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope) (Layout.outsOut_outsOf c hU n)
     (sitesShHP_bcSite dj y₀ ht hc hscope hU hpi hpub)
     (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOk_spec hU hscope).1
-      (Layout.scopeOk_spec hU hscope).2.2)
+      (Layout.scopeOk_spec hU hscope).2.2) fun _ _ _ _ => rfl
 
 /-- **Each drawn unit's place in its `--zk` table**: `keyPlaceHP`'s place in the public table, along
 `planAtZKHP_S`. -/
