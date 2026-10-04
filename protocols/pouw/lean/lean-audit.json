@@ -79,7 +79,7 @@
    "why": "the lifting worker's grid-density and slice lemmas (L2, L3) stand alone on Mathlib"
   }
  },
- "pins": {
+ "guarantees": {
   "Pouw.AlignedExact.card_block_le": {
    "signature": [
     "Pouw.AlignedExact.card_block_le.{u_1, u_2} {m n : Nat} {ρ : Type u_1} {κ : Type u_2} [Fintype ρ] [Fintype κ]",
@@ -8753,7 +8753,7 @@
    "definitions": {
     "Pouw.Assumptions.HonestClock": "b834a5b2456ac78c2c5b98a872a1ee0d833cfb9b8f26a63e562596e7ff5bbd1a"
    },
-   "pins": ["Pouw.SecurityProofs.SpareCapacityAtDeadline", "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline"]
+   "guarantees": ["Pouw.SecurityProofs.SpareCapacityAtDeadline", "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline"]
   },
   "Pouw.Assumptions.Dimension.A2Words": {
    "digest": "7e6d34bdc38faea2c9ca5bce75c06081189f0b6643489420abf5942cd7737321",
@@ -8765,7 +8765,7 @@
     "Pouw.Dimension.A2Words.extraMachine": "3dc985634563c60079e672aa4742af1fd5de8f0e9e87908daa7876da0c20ba8d",
     "Pouw.Dimension.A2Words.withExtra": "bdc98ccafd501b743d675ab1b97283fd1528437bf32e4bb2bc791939c695404a"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.A2Words.a2ExtraOutputs",
     "Pouw.Dimension.A2Words.a2Separation",
     "Pouw.Dimension.A2Words.a2WitnessExtra",
@@ -8786,7 +8786,7 @@
     "Pouw.Dimension.Assumptions.targetSpan": "8370b7702857c1809ca4f3f74dca7913670bf323ce984f5582b4aa53df39442f",
     "Pouw.Dimension.Assumptions.wordSet": "eb91440586d6aa9ea8e63cd68c85bd3a2b323e91e039bca6aa8ecaaa710e53fc"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.A2Words.a2ExtraOutputs",
     "Pouw.Dimension.A2Words.a2Separation",
     "Pouw.Dimension.A2Words.a2WitnessExtra",
@@ -8870,7 +8870,7 @@
     "Pouw.Dimension.Embed.nonQuad": "ff2425711bd220725d8158e5efa8fc02e2ff970eb5b278085a0d05fa00246f5e",
     "Pouw.Dimension.Embed.regs": "e71731d138c80b0efd37937729a32036b4501244a0f06976dd958ffd1f1e52ff"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.Embed.a1fpFadd",
     "Pouw.Dimension.Embed.a1fpHalf",
     "Pouw.Dimension.Embed.a1fpIff",
@@ -8931,7 +8931,7 @@
     "Pouw.Dimension.Embed.faddSem": "97d4f263f518c91bf00d291b6369a91c976916ebc10dd4aade0a42afe205c295",
     "Pouw.Dimension.Embed.fpExact": "250b3203698acfaeaa6bdb923e2a7893a2cc0957eca5ff8d1368a28b793b213e"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.Embed.a1fpFadd",
     "Pouw.Dimension.Embed.a1fpHalf",
     "Pouw.Dimension.Embed.a1fpIff",
@@ -8969,7 +8969,7 @@
     "Pouw.Dimension.Forest.familyQ": "db74bb6e17c3d29a3731afa1ba56db8d8e1bcca71b0d68b968cd58cb0b9cb8cd",
     "Pouw.Dimension.Forest.wordsQ": "c8367caf238bec0cc209bc0c10b2b37535b81c65fae6f52ae281631534e9a0d7"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.Forest.a1CostOfNonquad",
     "Pouw.Dimension.Forest.a1CostQuadHolds",
     "Pouw.Dimension.Forest.a1CostQuadNear",
@@ -9009,7 +9009,7 @@
     "Pouw.Dimension.Fp8Mma.ShapeWF4090": "f923eca5d81b82688c16c7bf088b0b8e5ae975c6e9a50f043cefc1c5ff6f222f",
     "Pouw.Dimension.Fp8Mma.mmaOp": "e381e9415ecbe647e6cb10610cdf45b23ef023511e7f8b4741bc6d32eb7a1d3d"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.Fp8Mma.ceiling4090",
     "Pouw.Dimension.Fp8Mma.shapeTable4090",
     "Pouw.Dimension.Fp8Mma.shapeWF4090"
@@ -9045,7 +9045,7 @@
     "Pouw.Dimension.H100.runWords": "ed327e8394399d72ff7983568eeb44f0b0fd490d6adf8618587633bc8edd0bb6",
     "Pouw.Dimension.H100.splitK": "a34ab1a8f32ddfc09a49bb33e9e5d87fe513cd834002df330adfd6a2c18738d7"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.H100.accInOfFrag",
     "Pouw.Dimension.H100.c2DistinctWords",
     "Pouw.Dimension.H100.c2FirstRunCopy",
@@ -9109,7 +9109,7 @@
     "Pouw.Dimension.H100.h100Nominal": "3420f1eb7fb4aab404a23aa5b864dd31e17033ae285f43e18d61f1731ce83607",
     "Pouw.Dimension.H100.nominalMac": "ff0014d94244d94d379487b71d43cce7fb17cc4f341402b2d2b8c32d1843eb46"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.H100.accInOfFrag",
     "Pouw.Dimension.H100.c2DistinctWords",
     "Pouw.Dimension.H100.denseWritesFrag",
@@ -9155,7 +9155,7 @@
     "Pouw.Dimension.H100.DistinctWritesPacked": "f6ba77bd85f852d5e8174fd50c820daf7563c79c9ea317e47eddc0913c38d99b",
     "Pouw.Dimension.H100.FragLanesSat": "10b923bef23a45c036a62ea93326ecb326d42af7d992d806805b920791e9de20"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.H100.denseWritesFragLanes",
     "Pouw.Dimension.H100.distinctWritesMeasured",
     "Pouw.Dimension.H100.distinctWritesPacked",
@@ -9180,7 +9180,7 @@
     "Pouw.Dimension.H100.SeparatedOn": "d92e210ed63b0a426d849c01984a9e8710bcf2bd5caff9b4af16787d995c902d",
     "Pouw.Dimension.H100.sumCoords": "787049a729cf04efea1adcb7f3dd3c6de783473cff846ec75dfec8138d880d41"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.H100.accInOfFrag",
     "Pouw.Dimension.H100.apartCert",
     "Pouw.Dimension.H100.denseCert",
@@ -9200,7 +9200,7 @@
     "Pouw.Dimension.H100.DistinctWritesLoopFree": "cb96b7573a9181b8287517127e83158ec8d81a601a3e39215464d06c5805c553",
     "Pouw.Dimension.H100.h100Floor": "fa43668902dc4c2a388723dcf95ff5ac9ea130a53bdf3301659837ea971a878c"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.H100.distinctWritesFloor",
     "Pouw.Dimension.H100.distinctWritesLoopFree",
     "Pouw.Dimension.H100.distinctWritesPeakTc",
@@ -9218,7 +9218,7 @@
     "Pouw.Dimension.H100.FragShareGain": "50313758cb8dccc796ddb500c0c116eb027048b68c4ffd096c4e3422fbe1a233",
     "Pouw.Dimension.H100.Op100.FragOK": "5c27195f32cb03bb7b7c595e891cd79edc751d945a7606dc5f779f9bf66ac4c8"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.H100.accInOfFrag",
     "Pouw.Dimension.H100.denseWritesFrag",
     "Pouw.Dimension.H100.denseWritesFragLanes",
@@ -9230,7 +9230,7 @@
    "definitions": {
     "Pouw.Dimension.H100.h100LoopFree": "d41f33a1770c7666258b0e6a031cc207f1fc8419e589191e5092b457a790e82a"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.H100.distinctWritesFloor",
     "Pouw.Dimension.H100.distinctWritesLoopFree",
     "Pouw.Dimension.H100.distinctWritesPeakTc",
@@ -9244,7 +9244,7 @@
    "definitions": {
     "Pouw.Dimension.H100.h100Measured": "85e1ca1fb60cf09a89b5ba2af90061c7317d739d2581d6799849b443234f1ef3"
    },
-   "pins": ["Pouw.Dimension.H100.distinctWritesMeasured", "Pouw.Dimension.H100.h32Measured"]
+   "guarantees": ["Pouw.Dimension.H100.distinctWritesMeasured", "Pouw.Dimension.H100.h32Measured"]
   },
   "Pouw.Assumptions.Dimension.H100PeakTc": {
    "digest": "6422f17044ff0ebfb56afacc1d6b3b62995422803ed0cee77a4ccb1efbf109a8",
@@ -9252,7 +9252,7 @@
     "Pouw.Dimension.H100.DistinctWritesPeakTc": "08a9e954a33cac291f59f41d1aa032b1e273fff87a22d3a1ea08d99f40f35abc",
     "Pouw.Dimension.H100.h100PeakTc": "5c44b128f0e97c180c384131f2779633a4dab170e9a0dcdc8a31d0913f3d1367"
    },
-   "pins": ["Pouw.Dimension.H100.distinctWritesPeakTc", "Pouw.Dimension.H100.floorTcPeakTc"]
+   "guarantees": ["Pouw.Dimension.H100.distinctWritesPeakTc", "Pouw.Dimension.H100.floorTcPeakTc"]
   },
   "Pouw.Assumptions.Dimension.H100W": {
    "digest": "34b4c5bcb95bf9a7e1fb1534a13c7453e2aef68697366a8563564797ea350575",
@@ -9273,7 +9273,7 @@
     "Pouw.Dimension.H100.OutputsOn": "1a0f317152cb533e338886bbe680b409335537eb42219f370fd865f31302a2f9",
     "Pouw.Dimension.H100.h100Legacy": "21bbe6bd782b220fc987c01fd70adf87ab4d60e800d4aeda008d2e3a79d999a9"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.H100.c2DistinctWords",
     "Pouw.Dimension.H100.c2FirstRunCopy",
     "Pouw.Dimension.H100.denseWritesFrag",
@@ -9316,7 +9316,7 @@
     "Pouw.Dimension.bigOuts": "5cd2d6df5d4b3e335f771eaace9c1c12475bba84f6cfc8a97f2220b40e894cb4",
     "Pouw.Dimension.prodOuts": "6896906d08fe219b07dd66384f0093bc9ff941c63168a8aa8a6894db7576c83f"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.A2Words.a2Separation",
     "Pouw.Dimension.A2Words.a2WitnessExtra",
     "Pouw.Dimension.A2Words.emptyQuadPipe",
@@ -9377,7 +9377,7 @@
     "Pouw.Dimension.OpenPipe.Theorem1Open": "1f0d4bd4fb1927dc1da7db240becab6acccdc6a3b15b6a3c690c6abe330268b4",
     "Pouw.Dimension.OpenPipe.openMachine": "4a4ab840fe34b20043069f5c11207bc5cacb1bc1462135c8d75f8852b7c38f2c"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.Embed.a1fpIff",
     "Pouw.Dimension.Embed.embedM4090",
     "Pouw.Dimension.Embed.perWordOfA1fp",
@@ -9402,7 +9402,7 @@
     "Pouw.Dimension.TTNCPOfA2": "ba8751f640c332f97ad5388b7e42e3a4c45c442f8901ddcdb0bfb0216b4e3c6c",
     "Pouw.Dimension.algMachine": "e5fe8d1a0985183e3b211976fa3a4b24a001a6538db354500a768f2c241a9613"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.a1MinRank",
     "Pouw.Dimension.a1Witness",
     "Pouw.Dimension.a2Witness",
@@ -9431,7 +9431,7 @@
     "Pouw.Dimension.quadMachine": "5b97099f6df627e8e8d999a2a4b03e9ed93bec8f2e687cb21c7c57863e09cd5d",
     "Pouw.Dimension.shift24": "b88de908419d562e5ba28b414009e149bd194299baf237643c2a1063af4e8433"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.A2Words.a2Separation",
     "Pouw.Dimension.A2Words.a2WitnessExtra",
     "Pouw.Dimension.Forest.quadChainConsistent",
@@ -9461,7 +9461,7 @@
     "Pouw.Dimension.A1_nonquad": "a5d6e3b161d0931fec8cb9f27fb29c932ccc97a01167c3e0152e01d8465cc72b",
     "Pouw.Dimension.LiftMinRank": "80c4d03881b99a08890e0fa0d86705ba63777147d219baa992af1437f58dad80"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.Forest.a1CostOfNonquad",
     "Pouw.Dimension.Forest.a1CostQuadHolds",
     "Pouw.Dimension.a1CostOfSplit",
@@ -9486,7 +9486,7 @@
     "Pouw.Dimension.QuadPipe": "98368c4ef1cb0adaa9f318d4b13eaabbd6697af42e309d10450cc311435d710b",
     "Pouw.Dimension.QuadStep": "3877ae2427b36e30b8a5ebb55b120c88a96de4933c2477b23fedf48cc2f540c9"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.A2Words.a2Separation",
     "Pouw.Dimension.A2Words.a2WitnessExtra",
     "Pouw.Dimension.A2Words.emptyQuadPipe",
@@ -9562,7 +9562,7 @@
     "Pouw.Dimension.wordCU": "e19fa58b9ae25eaa06662a4af4405ddaa4f00570e390bb1f71a9a1093d4e8ef7",
     "Pouw.Dimension.wordU": "ef830e9dcccf60357745e87b8301020b5c97356dad6801eebcdc4c148884d888"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.RouteUProofs.a1CostQuadUHolds",
     "Pouw.Dimension.RouteUProofs.a1CostWitnessU",
     "Pouw.Dimension.RouteUProofs.a1U",
@@ -9611,7 +9611,7 @@
     "Pouw.Dimension.TTNCPOfQuadA2U": "0d5434f95a41b11ec7eb977bdba4ee6e5533f3dfc10e4409ebaa91833946a2ba",
     "Pouw.Dimension.TTNCPQuadOfA2U": "a744be850818b8e80221dc7a07e913aff91ed048c93264b78f9bede7210041f8"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.RouteUProofs.a1CostQuadUHolds",
     "Pouw.Dimension.RouteUProofs.a1CostWitnessU",
     "Pouw.Dimension.RouteUProofs.algBoundPipeU",
@@ -9631,7 +9631,7 @@
     "Pouw.Dimension.A1_cost_U": "dba2848bc90272354391306793612aabe3313628918d5d2d1dc5d106146428c1",
     "Pouw.Dimension.A1_cost_quad_U": "2cf108c868c110da0e1ddc1c66f2922797e7263597242ed83e70607129315c38"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.RouteUProofs.a1CostQuadUHolds",
     "Pouw.Dimension.RouteUProofs.a1CostWitnessU",
     "Pouw.Dimension.RouteUProofs.algBoundPipeU",
@@ -9646,7 +9646,7 @@
    "definitions": {
     "Pouw.Fp8Atom.H1T.DistinctLiveH1T": "ef3e5acc5423c8a6eab3ad67be8ddc3fa6c5ae38afe8f5784630ea198756c785"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tDistinctLive",
     "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
     "Pouw.Fp8Atom.H1T.Proofs.h1tRunningOfDistinct",
@@ -9663,7 +9663,7 @@
     "Pouw.Fp8Atom.H1T.mfree": "7806affbfb6f43c50b8f65afb0022e771f8040529b178529a5674307a5fc7489",
     "Pouw.Fp8Atom.H1T.mword": "c25621334a999fdeb8e5d7031a0e57e84206382be7b9b1d8b34d815e3de14d48"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
     "Pouw.Fp8Atom.H1T.Proofs.h1tGammaRunning",
     "Pouw.Fp8Atom.H1T.Proofs.h1tUnitsDistinct",
@@ -9676,7 +9676,7 @@
    "definitions": {
     "Pouw.Fp8Atom.H1T.H1TRunningWords": "eafb0e80c67ef3aa501104844165034cbfa916d13ac5b3361cae5e15fbe989ff"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tDistinctLive",
     "Pouw.Fp8Atom.H1T.Proofs.h1tGammaRunning",
     "Pouw.Fp8Atom.H1T.Proofs.h1tRunningOfDistinct",
@@ -9695,21 +9695,21 @@
     "Pouw.Fp8Atom.H1T.rightWords": "5853034af127323d90f597fbd34d69cc8fff254f09bcded2ba2cd2483613fdb3",
     "Pouw.Fp8Atom.H1T.slotVal": "051e6d665d72e749afaed943dd52fc81469ab04601a588a3757577f94d748a3c"
    },
-   "pins": ["Pouw.Fp8Atom.H1T.Proofs.tth1tAllRight", "Pouw.Fp8Atom.H1T.Proofs.tth1tSat"]
+   "guarantees": ["Pouw.Fp8Atom.H1T.Proofs.tth1tAllRight", "Pouw.Fp8Atom.H1T.Proofs.tth1tSat"]
   },
   "Pouw.Assumptions.Fp8Atom.H1TTileAssumptions": {
    "digest": "c2422ea38581543cd83a2bb9ca31dbbe6496f49339594c27400a784b2963e7b3",
    "definitions": {
     "Pouw.Fp8Atom.H1T.TTH1T": "e95d21a549b51492c150df5251d7a30dd415cf75a611c98ce751eebe3b4afa34"
    },
-   "pins": ["Pouw.Fp8Atom.H1T.Proofs.tth1tSat"]
+   "guarantees": ["Pouw.Fp8Atom.H1T.Proofs.tth1tSat"]
   },
   "Pouw.Assumptions.Game": {
    "digest": "3036474982355bba4894fa1c3d29ce24bcf678c32616f7bf5fb7b09ef53f756a",
    "definitions": {
     "Pouw.Assumptions.TT": "6fc4a19042b6bbf0c1774bcd962e5804ae3d01752eea790c9954960ef3b7c2b7"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Proofs.gammaFromTT",
     "Pouw.Proofs.milestoneExhaustion",
     "Pouw.Proofs.milestoneRequirement",
@@ -9730,7 +9730,7 @@
    "definitions": {
     "Pouw.NCP.Assumptions.TTNCP": "f57ea45f32f4773a7572663c546adeb5c05461712de223326efd3afb73a813fb"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.NCP.ChainProofs.leadIndWitness",
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.NCP.GameProofs.leadWitness",
@@ -9753,7 +9753,7 @@
     "Pouw.NCP.Chain.ZeroInputInt32": "c7411171a5f999493308c1fbd512d73f7ba70a385b172b5fae2812a39b8e2a33",
     "Pouw.NCP.Chain.wrapped": "02e8d9f873bf42060c9d03f469a4c048d61d5143d6d8947e17b95ce0d9510e65"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.algBoundWrapped",
     "Pouw.NCP.ChainProofs.int7Int32",
     "Pouw.NCP.ChainProofs.leadDepth",
@@ -9778,7 +9778,7 @@
     "Pouw.NCP.GamePinned.TTNCPWitness": "ed461d3a23a6533fb96c1128e268b90336d51a918be88f7864a10a730b23cc26",
     "Pouw.NCP.GamePinned.ThreeBlock": "dac630bf354c6dc7d2334ae826dfa04ee04f76237104516a40eeee00f285831f"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.NCP.GameProofs.lastChecked",
     "Pouw.NCP.GameProofs.leadComplete",
@@ -9795,7 +9795,7 @@
    "definitions": {
     "Pouw.NCP.Assumptions.TTNCP_U": "8a747ab5b169a0aebbead909c55f11867690c76654bffe5a2a0125164a2a1305"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U",
     "Pouw.NCP.RouteUProofs.leadUWitness",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
@@ -9809,7 +9809,7 @@
    "definitions": {
     "Pouw.NCP.RouteU.LeadUWitness": "e9dc4d9412f25835b42de83e534ec490b2b1dd518ab8dc0644326393c0348f68"
    },
-   "pins": ["Pouw.NCP.RouteUProofs.leadUWitness"]
+   "guarantees": ["Pouw.NCP.RouteUProofs.leadUWitness"]
   },
   "Pouw.Assumptions.NCP.RouteUWord": {
    "digest": "a006387b11a8e2b2183965af99fbd9af584452bc4af5e549886d1bd43278d03f",
@@ -9819,7 +9819,7 @@
     "Pouw.NCP.checkedUPos": "03be5013b32c157f7ba76e6ba17d7726e21ec8600677bac69149a1d2d2ebd23b",
     "Pouw.NCP.wrappedU": "d70a9745378df31aa3f37d93cb46c3a3e525a9a7e7d00e2fa437481aea5c9bad"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.RouteUProofs.a1CostQuadUHolds",
     "Pouw.Dimension.RouteUProofs.a1CostWitnessU",
     "Pouw.Dimension.RouteUProofs.a1U",
@@ -9864,7 +9864,7 @@
    "definitions": {
     "Pouw.PearlC.Assumptions.HonestClock": "1a8887962f5cb3a27b40e5ac7e29aea164b786ecaaeb358379f617e50b3be2ba"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.SecurityProofs.PearlCSampledByDeadline",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
@@ -9881,7 +9881,7 @@
     "Pouw.PearlC.pearlCProtocolDevChainCap": "693866e02c5d1ba3a3156bdd97c55c599ccc7e22210d39e9eaef0ec3b9b49083",
     "Pouw.PearlC.pearlCTilesDevChainCap": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.chainCap_flagged_le",
     "Pouw.PearlC.pearlCGammaDevChainCapKAt",
     "Pouw.PearlC.pearlCGammaSm120v2ChainCap1000_16384",
@@ -9917,7 +9917,7 @@
     "Pouw.PearlC.pearlCProtocolDevChainCapK": "8389932935799b3a71bc5680180fc0f6f1cc6fbfc860824efb16ae39a9a44f18",
     "Pouw.PearlC.pearlCTilesDevChainCapK": "5f830e316309a3b16c729e694b108dc7d94bc7202f460abb23f0b610f7c9fe55"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.pearlCGammaDevChainCapKAt",
     "Pouw.PearlC.pearlCGammaSm120v2LoopCast8ChainCap1000_16384",
     "Pouw.PearlC.pearlCGammaSm120v2LoopCast8ChainCap1000_8192",
@@ -9932,7 +9932,7 @@
     "Pouw.PearlC.Assumptions.TileProofSound": "639f98447f6c6c587e14a0d6086e06a990570d57a3bd22beac2ff989bf2f0040",
     "Pouw.PearlC.Assumptions.TileProofSoundAll": "68fa374e6e32105f7e0fb6ac933a3494270054495536d060d6015fc6a3e4a6d5"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.gammaHidden_of_sampled_all",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.tileProofSoundAll_of_tileGame"
@@ -9943,7 +9943,7 @@
    "definitions": {
     "Pouw.PearlC.Assumptions.HonestTileCapRate": "cc40b5d910a6fbc1c45a1064daa4fd019ce6b37cccbf32de412027b4a294a191"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.completeSampledDevRev1K",
     "Pouw.PearlC.pearlCCompleteSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
     "Pouw.PearlC.pearlCCompleteSm120v1LoopCast8p72Rev1Cap1000_qwen3_8b"
@@ -9954,7 +9954,7 @@
    "definitions": {
     "Pouw.PearlC.Assumptions.FragDraw": "1e7679106dac7fcb7fa8b2cd5b55a82cbb02eb71faed86f18b4880a535d49c00"
    },
-   "pins": ["Pouw.PearlC.ttOutRowSeed_skipClass"]
+   "guarantees": ["Pouw.PearlC.ttOutRowSeed_skipClass"]
   },
   "Pouw.Assumptions.PearlC.TTOut": {
    "digest": "a78be0de89a574835f571ddcdad742e0707afd990bdbfa61eea8f4115584c77c",
@@ -9966,7 +9966,7 @@
     "Pouw.PearlC.Assumptions.TTOutTilePearlC": "eae8b884f1f2b56447c5018e0ca88fc6befbdbf52aaed93a9bf4799a45a38f6f",
     "Pouw.PearlC.Assumptions.TTOutTilePearlCDev": "6b1bff5df662d00b6d187db3143e77905fa46edcd5773bc5535eda66ff500ce2"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.pearlCGamma16384",
     "Pouw.PearlC.pearlCGamma8192",
     "Pouw.PearlC.pearlCGammaDevChainCapKAt",
@@ -10297,7 +10297,7 @@
     "Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainOnly": "ef9cb1faadc1de8b8faa3dee8d9d6e2d47854390d99b2317472e486c81252c09",
     "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1ChainOnly": "6220ec31c41c87a8b13032a91ddd14b41e0fd0151057a879d4ec864aaed0cc17"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.pearlCGammaDevKChainOnlyAt",
     "Pouw.PearlC.pearlCGammaDevRev1KChainOnlyAt",
     "Pouw.PearlC.pearlCGammaSm120v1Cast16ChainOnlyRev1_16384",
@@ -10366,7 +10366,7 @@
     "Pouw.PearlC.Assumptions.TTOutTileFp4": "3f01d35b25c96efdd63d869ad744d72cc5d76ed13172b7e1122171ff50bc1832",
     "Pouw.PearlC.Assumptions.TTOutTileFp4Sm120": "410262a867ac04e096d90bdb8406bdc13624af07dbdd3214940169548662e033"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.pearlCGammaFp4At",
     "Pouw.PearlC.pearlCGammaFp4Sm120At_16384",
     "Pouw.PearlC.pearlCGammaFp4Sm120At_8192",
@@ -10391,7 +10391,7 @@
     "Pouw.PearlC.Assumptions.TTOutFp4ChainOnly": "bd82f9e49c43f6e50701daa05d8d3ab3095cc8efaaad77797c2c63a3a489dccd",
     "Pouw.PearlC.Assumptions.TTOutTileFp4ChainOnly": "c5c1fb6eba1ec0bc55195176ac51d28ca16f5aba7e99fa198758535793a9758b"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.pearlCGammaFp4ChainOnlyAt",
     "Pouw.PearlC.pearlCGammaFp4Sm120ChainOnlyAt_16384",
     "Pouw.PearlC.pearlCGammaFp4Sm120ChainOnlyAt_8192",
@@ -10410,7 +10410,7 @@
     "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1": "986751020ed75289c24caeb2cd903f4ecba561c9c00de96fd5d500df1d945046",
     "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1": "3c0b6df708354f428a46f68dd5d38dfa7d4a22ddb5e35a3047fe915fd1d56103"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.pearlCGammaDevRev1At",
     "Pouw.PearlC.pearlCGammaDevRev1KAt",
     "Pouw.PearlC.pearlCGammaH100Rev1_16384",
@@ -10598,7 +10598,7 @@
     "Pouw.PearlC.unitOfRow": "e51d799b7f3c9c79c7647a03c7c8c91da5c332c638998f81f07a3addae19ff16",
     "Pouw.QTree.hits": "0433088c3f6aed4d9a36c8354f8d52da117a196b1963933f645e46d508169b82"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.devAt_rowLocal",
     "Pouw.PearlC.fragSkip_count_le",
     "Pouw.PearlC.fragSkip_saving_le",
@@ -10633,7 +10633,7 @@
     "Pouw.PearlC.Assumptions.TTOutTilePearlCDevUOnly": "655665c7723f071c841c91abb9c0140009171a428349ba09640ab72f9bdf05bc",
     "Pouw.PearlC.Assumptions.TTOutTileU": "1ae3980037e952185e774acfbbc04d17bf7cc7a24e3397de650369696d33933c"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.pearlCSampledUOnlySm120LoopRev1_8192",
     "Pouw.PearlC.pearlCSampledUOnlySm120Rev1_8192",
     "Pouw.PearlC.pearlCSampledUOnlySm120v1LoopRev1_8192",
@@ -10656,7 +10656,7 @@
     "Pouw.PearlC.WinsU": "2d6a53fb682ba4e3aae06aa2223195b8414c5864167c317a09b9d6931436462c",
     "Pouw.PearlC.correctSetU": "19ce334a79474ff6821aff36d3e0ee5d39495fad9f2f73827aea74cfc2e3ecb8"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.gammaU_implies_gamma",
     "Pouw.PearlC.pearlCGammaUOnlySm120LoopRev1_8192",
     "Pouw.PearlC.pearlCGammaUOnlySm120Rev1_8192",
@@ -10691,7 +10691,7 @@
     "Pouw.Pinned.TTWitness": "d84e35439089294c73c13faa1be129e9cafc1e27e5d9a812c1bd374649082c59",
     "Pouw.Pinned.Usefulness": "72101586da20a11f2fcc8fb4f5ead5c0dca29807de1597ac34210d849f40fd14"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Proofs.copyBound",
     "Pouw.Proofs.copyNzWitness",
     "Pouw.Proofs.d1Complete",
@@ -10716,7 +10716,7 @@
    "definitions": {
     "Pouw.Guarantees.Barrier.Generic": "c3286787af46287c31fe8438bcf600817cf1c1848f3339188d36de8947b83ea7"
    },
-   "pins": ["Pouw.SecurityProofs.Barrier.Generic"]
+   "guarantees": ["Pouw.SecurityProofs.Barrier.Generic"]
   },
   "Pouw.Guarantees.Deadline": {
    "digest": "e79145f5fee4b2ec8f89a049051ddf3e5640603df74f696dda584fc52ced4d09",
@@ -10729,7 +10729,7 @@
     "Pouw.Guarantees.SpareCapacityAtDeadline": "fce79a1b3a99f37d1c77ca7e75afdd39bcf01d5aca010d24d79196206e28fd4b",
     "Pouw.Guarantees.WorkBetweenSaltAndDeadline": "3788462f2fdf84cd3f392455f2a420582c649e83cbe274c773123fee66e690df"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.SecurityProofs.PearlCSampledByDeadline",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
@@ -10744,7 +10744,7 @@
    "definitions": {
     "Pouw.Guarantees.Dimension.A2WordsIff": "65557c05346ef70d00fbdfaf94ca2b86991dfe1ab5a4b857de5edb22d362e8d5"
    },
-   "pins": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
+   "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
   },
   "Pouw.Guarantees.Game": {
    "digest": "846ac0ba0158c9d5507fcb777b3ac5a86ec2e27c1e58838e72ec55a83cbcfe78",
@@ -10753,7 +10753,7 @@
     "Pouw.Guarantees.Theorem1": "d84099f4bd953907102ee6a29855d8a77bf368b5624b5bba929af6318015a15e",
     "Pouw.Guarantees.WorkWeightedSampling": "b37ef510928501da7b0e271322b75a66d815f22612540edfd6892d93d117e7f2"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.SecurityProofs.EndToEnd",
     "Pouw.SecurityProofs.Theorem1",
     "Pouw.SecurityProofs.WorkWeightedSampling"
@@ -10784,7 +10784,7 @@
     "Pouw.Guarantees.NCP.YUChecked": "b27908d27a7947b8f55b3d7e3c6965afa85a2b6475ee20dd01dee53f1ac3b6a2",
     "Pouw.NCP.RouteU.GammaFromTTNCP_U": "72c6154e6ece8ab1208142a09ecab8405c1b6ce449aa1fa167691332a5e4e015"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.BiasU8Iff",
     "Pouw.SecurityProofs.NCP.Cancel",
@@ -10844,7 +10844,7 @@
     "Pouw.Barrier.stackNoise": "be6977eb8df92a3f41812e2a5e71e112754bdf6c966ff074714a64d89253a048",
     "Pouw.Barrier.wtOf": "f239b6c3e4a247d7e418df76005e4160cf6f943dd7ed3f97c0aba34538bbe9f6"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Barrier.Proofs.additive",
     "Pouw.Barrier.Proofs.additiveWitness",
     "Pouw.Barrier.Proofs.genericWitness",
@@ -10871,7 +10871,7 @@
     "Pouw.Barrier.Pinned.TablesAffine": "9f90e5ebe3e7b6ac343e7c8476c63d9d93264e57d20e44c15713562216448d06",
     "Pouw.Barrier.Pinned.TablesAffineWitness": "ae41704896dd176404b72dee2f49daa9aa5aa0ce7edb9d6c9eb32408d2e9e6b6"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Barrier.Proofs.additive",
     "Pouw.Barrier.Proofs.additiveWitness",
     "Pouw.Barrier.Proofs.genericPr",
@@ -10897,7 +10897,7 @@
     "Pouw.mmW": "27341876f674b34c17e543d53fc41eb769c72a7c0c4ab0c14ffb153e97808d25",
     "Pouw.wrap32": "f2e71ec4f30a62b860aa526ab374d16f75c70eefc0e4ed3f59753dae4c9814db"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Barrier.Proofs.additive",
     "Pouw.Barrier.Proofs.additiveWitness",
     "Pouw.Barrier.Proofs.genericPr",
@@ -11110,7 +11110,7 @@
    "definitions": {
     "Pouw.pr": "c72cdec579500ec37c510210e22769c63de3d3f4f7e39a9f243452a0b22e4134"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Barrier.Proofs.additive",
     "Pouw.Barrier.Proofs.genericPr",
     "Pouw.Barrier.Proofs.relation",
@@ -11520,7 +11520,7 @@
     "Pouw.QTree.eval": "a435abdd371e9afb9c436b5d0c2677b4abc36882286e26e402bc677f4802ce5c",
     "Pouw.QTree.query": "224a72208c86ee3bf3cc65311ae0b2aa075f369619e3b9ffbba376680d7ec5dc"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Barrier.Proofs.additive",
     "Pouw.Barrier.Proofs.genericPr",
     "Pouw.Barrier.Proofs.genericWitness",
@@ -11936,7 +11936,7 @@
     "Pouw.D1.blockEnd": "43d6c3af5b9cad12e2e57d3a054a3c3dca5f63cd27211e7cfa91be76c700f00f",
     "Pouw.D1.nBlocks": "580a6fb3c491a58fded90ec9457fe4404d443d91990516be89e0a87763112ce4"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.NCP.ChainProofs.leadDepth",
     "Pouw.NCP.ChainProofs.leadIndWitness",
     "Pouw.NCP.ChainProofs.paramsYLink",
@@ -11982,7 +11982,7 @@
     "Pouw.Dimension.CausalWitness": "2e2fedc4a1dfbfd4ac18ceba6eb8bf95c1bbdd37b3a8caadb7063d66684e0daa",
     "Pouw.Dimension.wordC": "4ceadadc81102acd563cbe24a56a3cf4de792c2688b9b69c25d49f26fae22906"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.RouteUProofs.algBoundCausalU",
     "Pouw.Dimension.RouteUProofs.wordCUSubV0",
     "Pouw.Dimension.algBoundCausal",
@@ -12019,7 +12019,7 @@
     "Pouw.Dimension.span1": "6030bbb032d9c54a6a326df61b2aa2d155d14723983f9de6c7326141926895df",
     "Pouw.Dimension.word": "44c6b9726ded75c3e8380f3587c9c6c2bd678204c3139184b98975a14b537683"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.A2Words.a2ExtraOutputs",
     "Pouw.Dimension.A2Words.a2Separation",
     "Pouw.Dimension.A2Words.a2WitnessExtra",
@@ -12141,7 +12141,7 @@
     "Pouw.Dimension.MinRankGeWitness": "c8b5cb9b2beae6c528862cfa3bba16d9e9273611df3dde31a99402d23ad77eb4",
     "Pouw.Dimension.epsL5e": "ed69b1bfbadd36cd235dae0225f347b6a97b0b6bf8fc9f568f6cd9702e56cae5"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.Embed.a1fpFadd",
     "Pouw.Dimension.Embed.a1fpHalf",
     "Pouw.Dimension.Embed.a1fpIff",
@@ -12239,7 +12239,7 @@
     "Pouw.Fp8Atom.productTotal": "7c16edacf821c2e0b3576f643e6c7c2f14c33f073489a19340c0d90f1f057de1",
     "Pouw.Fp8Atom.toAdder": "7cca6dae786a59469327bc2aa6032363b2a1bdcd7511f2c4acbdf378ad2326cf"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tAtomValue",
     "Pouw.Fp8Atom.H1T.Proofs.h1tChainConformance",
     "Pouw.Fp8Atom.H1T.Proofs.h1tChainMono",
@@ -12649,7 +12649,7 @@
     "Pouw.Fp8Atom.Code.sign": "cf760c22a2af4941b064130544befec6d82287474252e0bc4bafeca5c58aeb4a",
     "Pouw.Fp8Atom.decode": "961a08fb469def3000eb6aa9d8ad0a30df4176a4259c48373aab4a8b40f4fe51"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tAtomValue",
     "Pouw.Fp8Atom.H1T.Proofs.h1tChainConformance",
     "Pouw.Fp8Atom.H1T.Proofs.h1tChainMono",
@@ -13052,7 +13052,7 @@
     "Pouw.Fp8Atom.ulp": "92f4072da1f4e2775735f7533d4f8e61e94e022495fbe16181952695f0398e46",
     "Pouw.Fp8Atom.wordQ": "9ee27b990d0e72f11d265812837b74b8f725d76bc5731473248c43e952e65d1f"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tAtomValue",
     "Pouw.Fp8Atom.H1T.Proofs.h1tChainConformance",
     "Pouw.Fp8Atom.H1T.Proofs.h1tChainMono",
@@ -13499,7 +13499,7 @@
     "Pouw.Fp8Atom.H1T.val": "443d367beee5439c61d57fc7cbad669971ccc3eb277b43592e43ce9ba0e9027d",
     "Pouw.Fp8Atom.H1T.wordVal": "92b5878fdc51ff58cf766d38fc3d37d7042dbd39721ba433415a08993738821f"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tAtomValue",
     "Pouw.Fp8Atom.H1T.Proofs.h1tChainConformance",
     "Pouw.Fp8Atom.H1T.Proofs.h1tChainMono",
@@ -13551,7 +13551,7 @@
     "Pouw.Fp8Atom.H1T.trunc14": "d312a812ca0d48cfefa28196456e25a3e2a41a7b47d56e6340df9e6e8e3d8abf",
     "Pouw.Fp8Atom.H1T.truncTo": "70ad65d415e01d54f4a2d0f1cf6803c361e8e8d9473341ea47b133cc8c7e130e"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tAtomValue",
     "Pouw.Fp8Atom.H1T.Proofs.h1tChainMono",
     "Pouw.Fp8Atom.H1T.Proofs.h1tDistinctLive",
@@ -13584,7 +13584,7 @@
     "Pouw.Fp8Atom.H1T.RnAddMovesHalf": "f2ce2ff0d09d135dc56c4fe7994cbb74e433f1fe59f5515ba979b2f628a69896",
     "Pouw.Fp8Atom.H1T.RnErr": "df04f65f45804f7e17a7e0d8e6493d654f9b50b4651fa80fce9279aa46c3818c"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tChainConformance",
     "Pouw.Fp8Atom.H1T.Proofs.h1tFormTable",
     "Pouw.Fp8Atom.H1T.Proofs.h1tNonVacuous",
@@ -13640,7 +13640,7 @@
     "Pouw.Fp8Atom.H1T.rawOf": "8a7385a8272c7469f4377362984f850a834691d4c210dc1e3b88fec1b5095115",
     "Pouw.Fp8Atom.H1T.tagKeys": "def390709c19f91c799dc2d9dc0aa9e83d46989dac85300afb79cf1326b78d6e"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tChainConformance",
     "Pouw.Fp8Atom.H1T.Proofs.h1tFormCover",
     "Pouw.Fp8Atom.H1T.Proofs.h1tFormTable",
@@ -13692,7 +13692,7 @@
     "Pouw.Fp8Atom.H1T.saltVectors": "adea7dec98ab86cd263c864c5893c6ab7aa12ec171eedacdf891ed9f85341dd8",
     "Pouw.Fp8Atom.H1T.tagTable": "5fcd6f8ec071ae1d8d2af259cdd0ba994f13255390436c9028896005e24aadc3"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tChainConformance",
     "Pouw.Fp8Atom.H1T.Proofs.h1tFormTable",
     "Pouw.Fp8Atom.H1T.Proofs.h1tSaltConformance",
@@ -13715,7 +13715,7 @@
     "Pouw.Fp8Atom.RnAddMoves": "522fd8915294a2a51e98ad59aa0cc975ab612b8de35d21ae587f1400293695dd",
     "Pouw.Fp8Atom.WordsRepresentable": "72d4b75c0df3794deb04b6a359a8571f7496659a3a3d98f1b6330dbd52df99ae"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Fp8Atom.Proofs.adaCaptures",
     "Pouw.Fp8Atom.Proofs.addConformance",
     "Pouw.Fp8Atom.Proofs.alignedMono",
@@ -13735,7 +13735,7 @@
    "definitions": {
     "Pouw.Fp8Atom.vectors": "0b893f8ca2d0af8fb9ca087ea8e5757ea73038071daf21beda7927c361b96cc3"
    },
-   "pins": ["Pouw.Fp8Atom.Proofs.conformance"]
+   "guarantees": ["Pouw.Fp8Atom.Proofs.conformance"]
   },
   "Pouw.Protocol.Fp8Atom.Vectors.Ada": {
    "digest": "8be93e8845ebea11a831173b5d481c7cdbdc1cfa9921ec525b0c4983bea45583",
@@ -13746,7 +13746,7 @@
     "Pouw.Fp8Atom.Vectors.adap2": "403d936fb08935dc051e9a385568c585653f5577c8606a6c9d5289912384aaed",
     "Pouw.Fp8Atom.Vectors.adap3": "df1b7af2e0671f2a73732c781d30d3b9596c8dd263d9413981be088043d20da5"
    },
-   "pins": ["Pouw.Fp8Atom.Proofs.adaCaptures"]
+   "guarantees": ["Pouw.Fp8Atom.Proofs.adaCaptures"]
   },
   "Pouw.Protocol.Fp8Atom.Vectors.Add": {
    "digest": "c610f25b636193313eb5f86d96a12ea7f646770b5a305e59b944c94e9acc52c5",
@@ -13764,7 +13764,7 @@
     "Pouw.Fp8Atom.Vectors.addp8": "1f7051c7d8fbb123c4eb40067976651885af6a1c93b2fd4f5006aec9f32a96f5",
     "Pouw.Fp8Atom.Vectors.addp9": "40aab75bcf14a926602dbd8672fcc92abaecd17ecc04787f452c4c96bf86b44a"
    },
-   "pins": ["Pouw.Fp8Atom.Proofs.addConformance"]
+   "guarantees": ["Pouw.Fp8Atom.Proofs.addConformance"]
   },
   "Pouw.Protocol.Fp8Atom.Vectors.C00": {
    "digest": "1df03f6cc1be1b475da590e28dd38e6b55d9da1a45bf1d3eb6319ea3b19e8703",
@@ -13776,7 +13776,7 @@
     "Pouw.Fp8Atom.Vectors.c00p3": "f16809544e2c1fcfc971638af39e8c3029f205f32fd475ebcf20257aaf9b4dee",
     "Pouw.Fp8Atom.Vectors.c00p4": "60f948239372f4893ac93a5972434352f2aaa930ce4f7d75df9c26e83a48407f"
    },
-   "pins": ["Pouw.Fp8Atom.Proofs.conformance"]
+   "guarantees": ["Pouw.Fp8Atom.Proofs.conformance"]
   },
   "Pouw.Protocol.Fp8Atom.Vectors.C01": {
    "digest": "ace93a37fcb7f745750cd9b85e9c869f2f3710bfb9a56f5eca874380cd9add29",
@@ -13785,7 +13785,7 @@
     "Pouw.Fp8Atom.Vectors.c01p0": "8314f6f17459c10665d32d64329ff099568cca601e40aa4f42c022594ed860e4",
     "Pouw.Fp8Atom.Vectors.c01p1": "bd0a134ab7d1ee1d092160e0c5306a09646ae626a758366e2610a65cd7c61d9d"
    },
-   "pins": ["Pouw.Fp8Atom.Proofs.conformance"]
+   "guarantees": ["Pouw.Fp8Atom.Proofs.conformance"]
   },
   "Pouw.Protocol.Game.Deadline": {
    "digest": "5536c2433ec0cf835b20e6ee638e233db5052b022359c9c6d3f4bbf2c1f50e40",
@@ -13798,7 +13798,7 @@
     "Pouw.TimedRun.tr": "a5bad4b8942944dbaf69e86e30029b571091990fded18b1f0a415848dd433b2f",
     "Pouw.TimedRun.ts": "40f75470edae3373b3b01069f7c534314a1fee16b56ea16bc0b51866618cbc74"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.SecurityProofs.PearlCSampledByDeadline",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
@@ -13869,7 +13869,7 @@
     "Pouw.milestoneShape": "eaf4ea5c7e91e8cef41c48c7118529f707c43d776303af12d6b8b0720fc15014",
     "Pouw.totalWref": "3d8335db3ac54640710d963c0f384ba2b1873c754407a631506112891ea4f35a"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Barrier.Proofs.additive",
     "Pouw.Barrier.Proofs.additiveWitness",
     "Pouw.Barrier.Proofs.genericPr",
@@ -14106,7 +14106,7 @@
     "Pouw.Salt": "1d89d4728e172eeae4b216578f95b719a0451b427edc5c955519fe9e1ca9a05d",
     "Pouw.reductionGamma": "f4c4c8494ba03422caeca93740f2096e22be8f2cf1f7caafb253ef31a5e79560"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.NCP.ChainProofs.leadIndWitness",
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.NCP.GameProofs.leadWitness",
@@ -14160,7 +14160,7 @@
     "Pouw.D1.m1Wref": "9514067c4e197ce692773ff695b45e0c336803da19d9e9ae60fb46f5458f92b7",
     "Pouw.D1.rowShare": "de494d229b1052b5d7f592bee13ef1c872d04a5775eb0fc696a6b0c502d0f5f1"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Proofs.gameCanBeLost",
     "Pouw.Proofs.milestoneERSeparated",
     "Pouw.Proofs.milestoneExhaustion",
@@ -14188,7 +14188,7 @@
     "Pouw.NCP.stackY": "408c642520f7e065754476ce6512138358eed2b4b5e1b8c314cd6d23e5576e79",
     "Pouw.NCP.vcat3": "0143edc4d6ad3d09594d02e54469ad91f684dc92ff273b83405dd6a9d0037579"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Barrier.Proofs.relationAdmits",
     "Pouw.Barrier.Proofs.relationWitness",
     "Pouw.Dimension.A2Words.a2Separation",
@@ -14350,7 +14350,7 @@
    "definitions": {
     "Pouw.NCP.ExtraIdentity.AdmissibleExtraIdentity": "1a899f204c21aaad42f8721d034c1c6e4f106efa3a5e13b80ca9f50c05f8f657"
    },
-   "pins": ["Pouw.NCP.ExtraIdentityProofs.admissibleExtraIdentity"]
+   "guarantees": ["Pouw.NCP.ExtraIdentityProofs.admissibleExtraIdentity"]
   },
   "Pouw.Protocol.NCP.Pinned": {
    "digest": "b415becb80636a06c342c813c781ce1aae9480c8438afc0503f2773cd59eedee",
@@ -14359,7 +14359,7 @@
     "Pouw.NCP.Pinned.Wrap": "e87749de44b4ba9c0dfca11f83f4fbd09f447ab3063833c8c8f792cdf0c6403b",
     "Pouw.NCP.Pinned.WrapInt7": "0fc7d7f3bacf3a88acbb09e4b47c7a8328ff450ff26cc83919e30b32604d3ef6"
    },
-   "pins": ["Pouw.NCP.Proofs.signedPermWitness", "Pouw.NCP.Proofs.wrap", "Pouw.NCP.Proofs.wrapInt7"]
+   "guarantees": ["Pouw.NCP.Proofs.signedPermWitness", "Pouw.NCP.Proofs.wrap", "Pouw.NCP.Proofs.wrapInt7"]
   },
   "Pouw.Protocol.NCP.Protocol": {
    "digest": "6010f965156c53eb41804566759a04e2a6dedd08e051738cb31671e59564e85e",
@@ -14392,7 +14392,7 @@
     "Pouw.NCP.Params.wtNoise": "7737a6d249e20beeb03f1fb9f3fab58952040648a400486dee272da5eec4df4b",
     "Pouw.NCP.leadDomain": "80e8cb7e1c5f27efffbf9a9188821397dd020e83d929a1b6e6ee209441f2a96c"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.OpenPipe.openPipeWitness",
     "Pouw.Dimension.RouteUProofs.alg4090WitnessU",
     "Pouw.Dimension.RouteUProofs.algWitnessU",
@@ -14458,7 +14458,7 @@
     "Pouw.NCP.Relation.positions": "3fb89c41dd202aa1f6bf510aa9ba7151ac474f05dd402c970d96d4b0c88c8ed6",
     "Pouw.NCP.Relation.unitAt": "663c2a1fdcf7b506916f028ee28ed997e836b6ecc0e62a77e8ecd17b821497f7"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.A2Words.a2ExtraOutputs",
     "Pouw.Dimension.A2Words.a2Separation",
     "Pouw.Dimension.A2Words.a2WitnessExtra",
@@ -14616,7 +14616,7 @@
     "Pouw.NCP.stackXU": "dc374302755f06bde1df6d5ab35d4ae9968c0d6e78604b8a26322067b71fccbb",
     "Pouw.NCP.wrefU": "b33a66afbfc48b7a9360059eddcf3cd9bc6496fb8b87a3c5ba2ca2f0883400c8"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Dimension.RouteUProofs.a1CostQuadUHolds",
     "Pouw.Dimension.RouteUProofs.a1CostWitnessU",
     "Pouw.Dimension.RouteUProofs.a1U",
@@ -14678,7 +14678,7 @@
    "definitions": {
     "Pouw.NCP.outputPriced3": "8a8d0eabd4a8724aa1da59ec92aa350f27026473f8826c492b9a229bf9ffafe4"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.NCP.ChainProofs.leadIndWitness",
     "Pouw.NCP.GameProofs.leadWitness",
     "Pouw.NCP.GameProofs.ttncpWitness",
@@ -14718,7 +14718,7 @@
     "Pouw.NCP.Word.sgn": "c7c7f2612ebd0d8057684a3b9116d677a2f9fbee0a2065fd79788226bcf90b2c",
     "Pouw.NCP.Word.unitCost": "20eeb2f9c447cee9421b1ac0198fcf65d6c790497010198a21a7f185dff6a65e"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.NCP.ChainProofs.wrapFinalOnlyInd",
     "Pouw.NCP.ChainProofs.wrapIdentity",
     "Pouw.NCP.ChainProofs.wrapWordFloorInd",
@@ -14750,7 +14750,7 @@
     "Pouw.PearlC.Accum.pureChain": "be18c03db3add05536c8dcb4e4b5a0de163450e4cf5b4e8626c70f5bc0ef61e3",
     "Pouw.PearlC.Accum.totalP": "34b8b8424d3ef36f8f3e5b0b8faff47cd235c6c4718ad5fbc4e9fd7d1e20d188"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.completeSampledDevRev1K",
     "Pouw.PearlC.devAt_hopper",
     "Pouw.PearlC.devAt_rowLocal",
@@ -15004,7 +15004,7 @@
    "definitions": {
     "Pouw.PearlC.CompleteSampled": "7ed970d793c0f18f16acd6998d6af43c59f6877fd578e8895198e60376dab312"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.completeSampledDevRev1K",
     "Pouw.PearlC.pearlCCompleteSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
     "Pouw.PearlC.pearlCCompleteSm120v1LoopCast8p72Rev1Cap1000_qwen3_8b"
@@ -15015,7 +15015,7 @@
    "definitions": {
     "Pouw.PearlC.Adversary.BoundedBy": "a5b5bff4710605b5b183730c17860dfaf922415160258b902d1d7244133e3a73"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.SecurityProofs.PearlCSampledByDeadline",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
@@ -15070,7 +15070,7 @@
     "Pouw.PearlC.total": "2275e24e1c8b11053920720b904d4086df1950ed4ff50c3905b88c345c80d630",
     "Pouw.PearlC.wordVal": "a2e5399aa2db7544e1caf61440fc2441d0b789d9ce1f10a1caa3e9e8824c9840"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.chainCap_flagged_le",
     "Pouw.PearlC.completeSampledDevRev1K",
     "Pouw.PearlC.creditDevRev1_h100",
@@ -15511,7 +15511,7 @@
     "Pouw.PearlC.qwen3_8bLinears": "e25b770eeb457e844d90861406541e27a7f86b9b6de54aecbf0e3be954c0fc31",
     "Pouw.PearlC.wrefDev": "122d664caedfadd83fb8bdb36749da7e283172c9bfb7c98db59652e72191d649"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.chainCap_flagged_le",
     "Pouw.PearlC.completeSampledDevRev1K",
     "Pouw.PearlC.creditDevRev1_h100",
@@ -15849,7 +15849,7 @@
     "Pouw.PearlC.pearlCTilesDevKChainOnly": "8d398df66f7dd978e7e87b60c5d812ab56efd0f940ebe7a8f01578c937aa601e",
     "Pouw.PearlC.pearlCTilesDevRev1KChainOnly": "fc99f6dc24e4d57d233d41eb422e8534d6d4b8cad8c47de9e9539ae880beea5e"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.pearlCGammaDevKChainOnlyAt",
     "Pouw.PearlC.pearlCGammaDevRev1KChainOnlyAt",
     "Pouw.PearlC.pearlCGammaSm120v1Cast16ChainOnlyRev1_16384",
@@ -16006,7 +16006,7 @@
     "Pouw.PearlC.pearlCTilesFp4": "8d92cb185b1dda2aa616025fd8bb2d1bee6ea74373e5c512da81e6b73e26948c",
     "Pouw.PearlC.wrefFp4": "956e630ec94ddb752dcb1fa45f2de970df26fb8c99063b96faf581751b7f5309"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.Fp4Prices.sm120Issue_eq",
     "Pouw.PearlC.gammaFp4ChainOnly_sm120Issue_lut256_16384",
     "Pouw.PearlC.gammaFp4ChainOnly_sm120Issue_lut256_8192",
@@ -16083,7 +16083,7 @@
     "Pouw.PearlC.pearlCProtocolFp4ChainOnly": "311cb0d3d657e17b79c4d74166b5205d72c4e2d094164f213dc9a09cd7ccdec3",
     "Pouw.PearlC.pearlCTilesFp4ChainOnly": "ecce160ff20f98f1eef9bfbf14d6a78d847e2352b32e94d81e6540382bee66a6"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.gammaFp4ChainOnly_sm120Issue_lut256_16384",
     "Pouw.PearlC.gammaFp4ChainOnly_sm120Issue_lut256_8192",
     "Pouw.PearlC.gammaFp4ChainOnly_sm120Issue_rcpApprox_16384",
@@ -16113,7 +16113,7 @@
     "Pouw.PearlC.gammaFp4HotChainOnly": "98696dbf9e60017fc3d7b0d6b1b113f1323d1635f5b8ba4af33420aad0964496",
     "Pouw.PearlC.wrefFp4Hot": "3219f68e08213fa3eba82c05c5ef22993cedfeb2568db65da37a0d221a2a2fb9"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.gammaFp4HotChainOnly_sm120Issue_lut256_16384",
     "Pouw.PearlC.gammaFp4HotChainOnly_sm120Issue_lut256_8192",
     "Pouw.PearlC.gammaFp4HotChainOnly_sm120Issue_rcpApprox_16384",
@@ -16154,7 +16154,7 @@
     "Pouw.PearlC.Fp4ScalePath.rcpApprox": "5b6b26c221bf863c7f6dbf0bb64c0ecaf6bc91d1f4539ffb4bc3becfa38b3ef7",
     "Pouw.PearlC.gammaFp4": "66d680e7c78d81a251a9d076ef8afd87f5890c556273a81cf682aa72a4860f71"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.Fp4Prices.sm120Issue_eq",
     "Pouw.PearlC.gammaFp4ChainOnly_sm120Issue_lut256_16384",
     "Pouw.PearlC.gammaFp4ChainOnly_sm120Issue_lut256_8192",
@@ -16220,7 +16220,7 @@
     "Pouw.PearlC.wrefDevK": "425638b05f9fc1aaa754d10d6cf92e93ef5c42aa519ad0509379c21f8b291b6e",
     "Pouw.PearlC.wrefDevRev1K": "879d0a21ff2119bde3087d1782bdd96e57d954cd44c008bde79373993cdbe272"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.completeSampledDevRev1K",
     "Pouw.PearlC.pearlCCompleteSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
     "Pouw.PearlC.pearlCCompleteSm120v1LoopCast8p72Rev1Cap1000_qwen3_8b",
@@ -16429,7 +16429,7 @@
    "definitions": {
     "Pouw.PearlC.Prices.sm120": "5d9e367dec517eddde018b601410df43f3e19e473cc59c7d7a4056b066931164"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.devSm120v1_domain",
     "Pouw.PearlC.devSm120v1_domain_row",
     "Pouw.PearlC.devSm120v2_domain",
@@ -16553,7 +16553,7 @@
    "definitions": {
     "Pouw.PearlC.Prices.sm120Loop": "c274ad5e3a32dea662df603ef30218cafec614c6f5a1084a25c491f3b975f009"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.devSm120v1Loop_domain",
     "Pouw.PearlC.devSm120v2Loop_domain",
     "Pouw.PearlC.pearlCCompleteSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
@@ -16732,7 +16732,7 @@
     "Pouw.PearlC.prefixCols": "3d2f6160477b8290eb7b68a17f646b7d44bf7a4e1c6054e25b4f1bebd5f96697",
     "Pouw.PearlC.wrefDevRev1": "82090ae714a525de44db217cfd62d293cf628d4e03e99c22b990179b706dd0ab"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.completeSampledDevRev1K",
     "Pouw.PearlC.creditDevRev1_h100",
     "Pouw.PearlC.pearlCCompleteSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
@@ -16935,7 +16935,7 @@
     "Pouw.PearlC.FormingP.atomMixP": "faf5b2119376f277e768d4b4bc986ea406981d3b50f0cbef8e9a6b7bf09d7d7e",
     "Pouw.PearlC.FormingP.saltDeadP": "ae6055a650ce2f53340ace3fcb32980cadb87340c9ac5768b0369942281c65af"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.completeSampledDevRev1K",
     "Pouw.PearlC.devAt_hopper",
     "Pouw.PearlC.devAt_rowLocal",
@@ -17221,7 +17221,7 @@
     "Pouw.PearlC.Fp4.toF32RZ": "aab0b6551f78ab631f63caf149de991d2d631a82c0a98c0f01815fee3902ac55",
     "Pouw.PearlC.Fp4.truncRZ": "9371ceea673ed9f3f4ffbe5edc635aeab8fc053aaa66799b5f7e4dfb68088156"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.gammaFp4ChainOnly_sm120Issue_lut256_16384",
     "Pouw.PearlC.gammaFp4ChainOnly_sm120Issue_lut256_8192",
     "Pouw.PearlC.gammaFp4ChainOnly_sm120Issue_rcpApprox_16384",
@@ -17304,7 +17304,7 @@
     "Pouw.PearlC.Fp4.noiseScales": "65f706078df53c4909355e786f97773047afa22b37408f0dc9f81dca34eec3e3",
     "Pouw.PearlC.Fp4.nvf4NoiseElem": "8b782f56ae9727854d0ab90b625629593ab7368cd147838449951b00c08d0bb7"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.pearlCGammaFp4At",
     "Pouw.PearlC.pearlCGammaFp4ChainOnlyAt",
     "Pouw.PearlC.pearlCGammaFp4Sm120At_16384",
@@ -17338,7 +17338,7 @@
     "Pouw.PearlC.Fp4Skip.loneMask": "ae7436d5bf1c5b5ebc30a2c99e8d07751f02e2929264c79cde3877f30922545d",
     "Pouw.PearlC.Fp4Skip.skipOne": "dfce3bf53884b455640ce314a0d8b8e1445cc2418684e072d11dedbed4021996"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.pearlCGammaFp4Sm120_16384",
     "Pouw.PearlC.pearlCGammaFp4Sm120_8192",
     "Pouw.PearlC.pearlCSampledFp4Sm120_16384",
@@ -17406,7 +17406,7 @@
     "Pouw.PearlC.wordOf": "b234896fc3dc1659fc450ed2e2c8e58de6ead9b714f06f62847410c639bb59ac",
     "Pouw.PearlC.wrefOf": "34fa9ef2ab26abef4f26430ad543c58a3daf5a2d42ca575a84adc681c3847fbc"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.chainCap_flagged_le",
     "Pouw.PearlC.completeSampledDevRev1K",
     "Pouw.PearlC.creditDevRev1_h100",
@@ -17827,7 +17827,7 @@
     "Pouw.PearlC.HiddenAudit.winProb": "8a8ed0ab1f45bdd02092e754fc112b6891b56f66f21eb7d250e4e5b7ad0132a9",
     "Pouw.PearlC.ex": "a91da7689685599e9ee24d99101cefdaf01d8b45d8d5ac5e8f65b22c16c10a3f"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.gammaHidden_of_sampled_all",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.tileProofSoundAll_of_tileGame"
@@ -17839,7 +17839,7 @@
     "Pouw.PearlC.BoundedByInduced": "acc65a495421e4974619395d20f727dede5be53d4a22a4358b07b221aa17e270",
     "Pouw.PearlC.TileGame": "297e14c7f054dff64d5bf4b46b590a5c5609cc57ca5463e0b591ddb4dc85adbc"
    },
-   "pins": ["Pouw.PearlC.tileProofSoundAll_of_tileGame"]
+   "guarantees": ["Pouw.PearlC.tileProofSoundAll_of_tileGame"]
   },
   "Pouw.Protocol.PearlC.Instance": {
    "digest": "b7fabed7448f5d299d77909e9999b127b72309cbe36bd98e8bc2e1faa1663b43",
@@ -17862,7 +17862,7 @@
     "Pouw.PearlC.wordsVal": "c07093b8796e6dea8ecb3cc698b370726f6f6e31a450d1527e86540072036a46",
     "Pouw.PearlC.εPearlC": "e7fd1130d611b00c205cb15802f486a9dcb7ea6c0eacaacf34181cd2f430ff80"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.completeSampledDevRev1K",
     "Pouw.PearlC.pearlCCompleteSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
     "Pouw.PearlC.pearlCCompleteSm120v1LoopCast8p72Rev1Cap1000_qwen3_8b",
@@ -18247,7 +18247,7 @@
     "Pouw.PearlC.PeelExact.uWord?": "d46fa5307e9e2eb575c5a255d61b6f786552e6a67bb875ce03225ccfcf6f2188",
     "Pouw.PearlC.PeelExact.windowWord?": "614a46158508b90d7a00a69737e4d81e5570527e420dcb400cd70c0ba7b86e7a"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.completeSampledDevRev1K",
     "Pouw.PearlC.creditDevRev1_h100",
     "Pouw.PearlC.devAt_hopper",
@@ -18517,7 +18517,7 @@
     "Pouw.PearlC.PeelExactP.peelExactValP": "3e969144859da7f70314a707af443e9fc1f27c7def21e81fcb64b4efdf245789",
     "Pouw.PearlC.PeelExactP.windowWordP?": "1b0d740afc871a479bf166a279d14717327d11446f3d9b017fc7eea59275ef3b"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.completeSampledDevRev1K",
     "Pouw.PearlC.devAt_hopper",
     "Pouw.PearlC.devAt_rowLocal",
@@ -18771,7 +18771,7 @@
     "Pouw.PearlC.SaltDead.saltDead": "aa0dd7028410506810ad03a3df016f1ad3c067e4b1be72e0312d2df76b5ac9f1",
     "Pouw.PearlC.SaltDead.support": "71c6cd8adffa516c0915f737cb48a45928fad6f2cfad8432e03e27a71913257c"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.completeSampledDevRev1K",
     "Pouw.PearlC.creditDevRev1_h100",
     "Pouw.PearlC.devAt_hopper",
@@ -19047,7 +19047,7 @@
     "Pouw.PearlC.Skip.wordFlags": "a7162b59d88388ba517b1b64fcc3f09e4c06e04200e097726d6be341a74b08b6",
     "Pouw.PearlC.Skip.wordIn": "4f51088ba0fc28f1783217f29405ba7a5f6335257f7ebb9daaf4aafd33f4fd20"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.completeSampledDevRev1K",
     "Pouw.PearlC.creditDevRev1_h100",
     "Pouw.PearlC.devAt_hopper",
@@ -19393,7 +19393,7 @@
     "Pouw.PearlC.SkipP.wordFlagsP": "24e73e3b6b29ff7e84cbdfd0df6634e2ec236d24f19093aac53154e026390948",
     "Pouw.PearlC.SkipP.wordInP": "c697b7d4e2cc606f39b88e08fdeb3cd001cc6dd722127b28fbc8d70bf035c152"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.completeSampledDevRev1K",
     "Pouw.PearlC.devAt_hopper",
     "Pouw.PearlC.devAt_rowLocal",
@@ -19648,7 +19648,7 @@
     "Pouw.PearlC.sm120E4m3": "46fe445a03ea01e961de594d17fd2e537e12bfaf764f296745ced647bd757797",
     "Pouw.PearlC.sm120E4m3K32": "313fc54181e0834aed11b24d2ec50dfa0b5a2bfbd2dce390c2c6660068845b0a"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.devAt_sm120_floor",
     "Pouw.PearlC.devSm120v1Loop_domain",
     "Pouw.PearlC.devSm120v1_domain",
@@ -19923,7 +19923,7 @@
     "Pouw.PearlC.tileShare": "e5769f881eba3e3067186ea9b70725c392bec6e7311827aa077a78e44fcb20fa",
     "Pouw.PearlC.tileWrefTotal": "386e9e51f5f23870c7a84efb172d3d877a87a0b0ee2b51bb608c59c1a613f9be"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.completeSampledDevRev1K",
     "Pouw.PearlC.gammaHidden_of_sampled_all",
     "Pouw.PearlC.gammaSampledU_implies_gammaSampled",
@@ -20121,7 +20121,7 @@
     "Pouw.AlignedExact.HasRegion": "f4e588167d51853ad5e3b4f7a3db5f412bf352de694f71a8e998fac939018456",
     "Pouw.AlignedExact.RowCompat": "3eb89e2e9a3706fd87f753a700aa98f907ef83f20a201bd04e0af72160c96939"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.AlignedExact.card_block_le",
     "Pouw.AlignedExact.region_count_given_le",
     "Pouw.AlignedExact.region_count_le"
@@ -20200,7 +20200,7 @@
     "Pouw.TileBound.unitForm": "161c28043bb7eea8ff959a4c01e953713e624ee3fc0ed3a519a4be130785866c",
     "Pouw.TileBound.wordValue": "bc2339789bfaf39126de866f2d3fa7a6155981ca591145622ed2c84b58a15b98"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.TileBound.bf16_closed_upto8",
     "Pouw.TileBound.bf16_open_at8",
     "Pouw.TileBound.bf16_pays_iff",
@@ -20272,7 +20272,7 @@
     "Pouw.TileBound.capacity8": "bbee29575a2fd5f122e409cb5aafd6eca07669d4bf863934a0799263b8aacea5",
     "Pouw.TileBound.honest8": "10dde01148c914409d761f7469e967b9b905117649acd3a42557a80651f88eed"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.TileBound.cost_ge8",
     "Pouw.TileBound.fmt8_closed_iff",
     "Pouw.TileBound.honest8_cost",
@@ -20292,7 +20292,7 @@
     "Pouw.Copy.correctSet": "3a1f6b2d487ab9ce7bfaa69fa25b01f062f1a2c62bdcaad8da7bc4b3bde68938",
     "Pouw.Copy.cost": "8a11d6f1f912e5a5920a9c572b3ab9256d893e9ca2aa18934e792964fdfc3fba"
    },
-   "pins": ["Pouw.Proofs.copyBound", "Pouw.Proofs.copyNzWitness", "Pouw.Sanity.copy_zero_noise"]
+   "guarantees": ["Pouw.Proofs.copyBound", "Pouw.Proofs.copyNzWitness", "Pouw.Sanity.copy_zero_noise"]
   },
   "Pouw.Protocol.Witness.Model": {
    "digest": "4367ec1de82ab9139cf5dba2809487615215f234d4e6bc79fe1ddd6dc17044c4",
@@ -20300,7 +20300,7 @@
     "Pouw.freeModel": "625eec1288d97936ff52aaed7cb725cfa046e5cccf0f5fc457b403f1fc3a2a3b",
     "Pouw.outputPriced": "ec246de9b5e2acf89428271e09db874e164fdee5e63cd6167816378638834790"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.Proofs.freeModel_queries",
     "Pouw.Proofs.gameCanBeLost",
     "Pouw.Proofs.outputPriced_queries",
@@ -20332,7 +20332,7 @@
     "Verity.Game.ret": "36d51e203dc27816f87118662a944dfd4726229a8d44c08551ba14dd7fc69649",
     "Verity.Game.send": "8d24c747132730510c15eb71bd4e887838687cee9b7d9e59f46a29a712c01efc"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.PearlC.gammaHidden_of_sampled_all",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.tileProofSoundAll_of_tileGame"

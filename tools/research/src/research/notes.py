@@ -7,7 +7,8 @@
   research notes status [--root DIR] [--repo DIR] [--pods] [--stale-min 30] [--since-hours 24] [--all] [--lane GLOB] [--exclude GLOB] [--json]
   research notes watch [--every 10] [--idle-min 5] [--runway-h 3] [--reap] [--reap-stale-min 30] [--guardian-log PATH] [status options]   # alert lines, below
   research notes gc-worktrees [--apply] [--wt-root DIR]     # clean worktrees of finished lanes whose branch tip is on origin
-  research notes push LANE [--repo DIR]                     # after every commit: the lane's branch -> origin (never main, never --force)
+  research notes push LANE [--repo DIR]                     # after every commit: the lane's branch -> origin (never main, never --force);
+                                                            #   in the notes clone: lanes/LANE/ -> the notes' main (`sync`)
   research notes branches [--fetch] [--all] [--lane GLOB] [--json]   # lane branches vs origin; exit 1 if an open lane's work is not there
   research notes sync [--path P]... [-m MSG] | scan          # notes_sync.py: commit, rebase, push with retries | history audit
   research notes archive LANE [--older-days 3] [--by month|day] [--apply]   # notes_archive.py: older notes into month folders
@@ -1805,9 +1806,25 @@ def sync_state(repo: Path, branch: str) -> dict:
     return {**res, "ahead": a, "behind": b, "sync": "ahead" if a and not b else "behind" if b and not a else "diverged"}
 
 
+def _same_repo(a: Path, b: Path) -> bool:
+    def top(p: Path) -> str:
+        p = Path(p).expanduser()
+        return (_git(p, "rev-parse", "--show-toplevel") or "").strip() if p.is_dir() else ""
+
+    ta, tb = top(a), top(b)
+    return bool(ta and tb) and Path(ta).resolve() == Path(tb).resolve()
+
+
 def push_branch(root: Path, lane: str, repo: Path | None) -> tuple[str, int]:
     """`git push origin <branch>` for the lane's branch, from its worktree when there is one.  Never `main` (one merger), never
-    --force: a rejected push says to integrate origin's commits first.  -> (one line, exit code)."""
+    --force: a rejected push says to integrate origin's commits first.  Run in the notes clone itself, it lands `lanes/<lane>/`
+    on the notes' main with `notes_sync.sync` instead (RESEARCH_NOTES_TOKEN's route): a lane branch of the notes is read by
+    nobody.  -> (one line, exit code)."""
+    if repo is not None and _same_repo(repo, root):
+        from . import notes_sync  # noqa: PLC0415
+
+        rep = notes_sync.sync(root, paths=[f"lanes/{lane}"], message=f"notes: {lane}")
+        return "\n".join([notes_sync.render_sync(rep), *notes_sync.refused_lines(rep)]), rep["rc"]
     branch, wt = lane_branch(root, lane)
     if branch in NEVER_PUSH:
         return f"REFUSED {lane}: its branch is {branch}; lanes push lane/* and never {branch} (the research coordinator merges)", 2
@@ -2004,7 +2021,7 @@ def _main(argv: list[str]) -> int:
     gc.add_argument("--wt-root", type=Path, default=None, help="default: the parent of --repo's worktree")
     gc.add_argument("--root", type=Path, default=None)
     gc.add_argument("--repo", type=Path, default=None)
-    ps = sub.add_parser("push", help="push the lane's branch to origin (after every commit); never main, never --force")
+    ps = sub.add_parser("push", help="push the lane's branch to origin (after every commit); never main, never --force; in the notes clone, sync lanes/LANE/ to the notes' main")
     ps.add_argument("lane")
     ps.add_argument("--root", type=Path, default=None)
     ps.add_argument("--repo", type=Path, default=None)

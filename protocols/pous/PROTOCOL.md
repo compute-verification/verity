@@ -1,10 +1,12 @@
 # Proof of useful space (POUS)
 
 A GPU keeps an encoding `C` of model weights `W` in its memory and decodes `W` from it on every use. A timed audit must
-certify that the GPU still holds more than a `ρ` fraction of `C`: answering a random block within the deadline requires
-the block itself, because rebuilding it from a smaller state takes more sequential oracle rounds than the deadline
-allows. This directory holds the reference implementation, `verity_pous` ("Codecs" through "Tests" below), and the Lean
-formalization, `lean/` (from "In Lean" on): the definitions, the guarantees and the proofs so far.
+certify that the GPU still holds more than a `ρ` fraction of `C`. In the ideal-permutation model, answering a random
+block within the deadline requires the block itself, because rebuilding it from a smaller state takes more sequential
+oracle rounds than the deadline allows. At the reference Feistel-SHAKE256 `Π₂` this does not hold: a prover rebuilds a
+label from 1.53% of `C` in 481 Keccak-f (red team, 4 Oct 2026, art:7617c8017e80; "Main caveat"). This directory
+holds the reference implementation, `verity_pous` ("Codecs" through "Tests" below), and the Lean formalization,
+`lean/` (from "In Lean" on): the definitions, the guarantees and the proofs so far.
 
 ## Main caveat: H is a monolithic random oracle (narrow-state H)
 
@@ -18,10 +20,24 @@ ideal-hash result transfers to a concrete hash by citation. So "no named assumpt
 ideal-hash model only, and so do the dense scheme's deployment results below. The chosen fix is H as the overwrite chain
 over an ideal permutation `Π₂` of width `2m + 512`, proved in the ideal-permutation model. Its pebbling side and its ex
 post facto bounds are proved in this package (`Pous/SecurityProofs/Chain/Flat.lean`): `ChainExPostFacto` (B5 for `Π₂`)
-for dense, and its DAG-generic form `ChainExPostFactoG` for the band, with the pinned finals below (P3 with the concrete
+for dense, and its DAG-generic form `ChainExPostFactoG` for the band, with the guarantees below (P3 with the concrete
 `H`, the band, and the dense chain scheme). They hold in the ideal-permutation model only. `Π₂` itself (Feistel-SHAKE)
-is a heuristic ideal permutation. Sources: the POUS store's `docs/p3-cryptanalysis.md`, "Narrow-state H", and
+was taken as a heuristic ideal permutation. Sources: the POUS store's `docs/p3-cryptanalysis.md`, "Narrow-state H", and
 `docs/band-vs-dense.md`.
+
+**The reference `Π₂` breaks the same way (red team, 4 Oct 2026, art:7617c8017e80).** The overwrite chain fixes the
+narrow-state attack only over an ideal `Π₂`; the reference Feistel-SHAKE256 `Π₂` has the weakness inside it. Each
+round function `F_i` is a long SHAKE256 squeeze from a 200-byte post-absorb state, and a chain key, the first `m`
+bits of the pad call's output, is the first `m` bits of `pad ⊕ F_1 ⊕ F_3 ⊕ F_5 ⊕ F_7 ⊕ F_9` (each `F_i` at its
+round's input), with `pad` a known constant. A
+prover that keeps the five odd rounds' post-absorb states of each block's pad call (1000 B per 64 KiB block, 1.53% of
+`C`) rebuilds any whole label by squeezing them in parallel: 481 sequential Keccak-f (24 µs at 50 ns), with no `Π₂`
+call and no chain walk, 20 to 130 times inside every deployed deadline. The attack replays bit-exactly against the
+band (`band-chain/d12/v1`) and dense (`dense-chain/v1`) encoders, and P3's key floor breaks identically. The Lean
+statements (`Meets`, `GradedMeets`, `ContinuousAudit`, `BandPub*`, `P3Concrete*`) stay sound in their models; what
+fails is the `feistel-indifferentiability` claim, now refuted, and every sentence below that converts a wall-clock
+deadline into a count of whole `Π₂` calls (`call_ns`, the effective `D`, the cliff, the cap): each holds in the
+ideal-permutation model only, and none bounds an adversary at the reference `Π₂`.
 
 ## The problem: timed audit, perfect isolation
 
@@ -66,7 +82,8 @@ The secure-first scheme is the band graph with in-degree `d = 12` (Daniel, 28 Se
 
 `band.SECURE_FIRST` is `BandParams(512, 524288, d = 12)`: 512 blocks of 65,536 B per segment (32 MiB), audited with
 `k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 241.5 µs
-(`Pous.SecurityProofs.BandMultiMeetsFamily`, for every `d ≥ 5` and every segment count, with no hypothesis). Segment `s`
+(`Pous.SecurityProofs.BandMultiMeetsFamily`, for every `d ≥ 5` and every segment count, with no hypothesis, in the
+ideal-permutation model; the reference `Π₂` does not meet it: "Main caveat"). Segment `s`
 is exactly `chainBand B d ℓ 512 (dom tag_s)`. It is the dense scheme
 below with one change: block `v` absorbs only its `d` newest parents, `C_{v-1}, ..., C_{max(0, v-d)}` (Lean
 `parentsDesc (bandDAG B d) v`), then the pad.
@@ -76,7 +93,9 @@ each round function absorbs a 2-byte prefix and a 65,568-byte half: 65,570 bytes
 136. Round `i + 1`'s absorb block `k` needs only round `i`'s squeeze block `k`, so the rounds stream, and in the
 overwrite chain a call boundary is a round boundary. A call in a chain costs 10 × 483 = 4,830 sequential Keccak-f,
 241.5 µs at 50 ns per Keccak-f; counting each round's 482 further squeeze blocks in sequence too would give 9,650
-(482.5 µs). The band's and dense's `call_ns` is 241,500 ns, so `D = 5` covers `Δ + RTT < 6 × 241.5 µs = 1.449` ms.
+(482.5 µs). The band's and dense's `call_ns` is 241,500 ns, so in the ideal-permutation model `D = 5` covers
+`Δ + RTT < 6 × 241.5 µs = 1.449` ms. At the reference Feistel-SHAKE256 `Π₂` this does not hold: a prover answers
+without completing a call, rebuilding a label from 1.53% of `C` in 481 Keccak-f ("Main caveat").
 
 - Block `v` costs `min(v, d) + 1` calls: 6,578 per segment at `d = 12`, 20 times fewer than dense's 131,328. Decoding
   is `d + 1 = 13` rounds deep, and a segment decodes in 24.6 s on one core in Python (dense: 493.9 s).
@@ -84,8 +103,9 @@ overwrite chain a call boundary is a round boundary. A call in a chain costs 10 
   `Δ + RTT`, must not exceed `d`. With `d ≥ D′` the band is exactly as hard as dense at `D′` (`band_chain_hard`). At
   `D′ = d + 1` the gap attack (`band_gap_attack`, `band_cliff_d12`) holds every block but each `(d + 1)`-th: every
   dropped row has all its parents held, and the audit accepts with probability 1. At 241.5 µs per call, `d = 12`
-  holds while `Δ + RTT < 13 × 241.5 µs ≈ 3.14` ms. `audit.TimedVerifier` refuses a deadline past it
-  (`band.check_deployment`), and `test_gap_attack_at_the_cliff` replays the attack on real labels.
+  holds while `Δ + RTT < 13 × 241.5 µs ≈ 3.14` ms, in the ideal-permutation model (at the reference `Π₂` a prover
+  answers in 24 µs from 1.53% of `C`, inside every deployed deadline: "Main caveat"). `audit.TimedVerifier` refuses
+  a deadline past it (`band.check_deployment`), and `test_gap_attack_at_the_cliff` replays the attack on real labels.
 - `band.codec_for(d)` gives the codec for any in-degree; with `d ≥ B − 1` the band is the complete DAG, dense.
 
 ## The dense scheme (selectable)
@@ -93,7 +113,8 @@ overwrite chain a call boundary is a round boundary. A call in a chain costs 10 
 `dense.POINT_64K` has `B = 512` blocks of `ℓ = 65,536` B (524,288 bits) per segment, so a segment is 32 MiB: the
 point `dense_meets_64` certifies. P3 keeps 65,560 B, the multiple of `n = 220` it needs. The audit runs with
 `k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 241.5 µs. The 111 is what
-`Pous.SecurityProofs.ChainDenseMeets64` certifies for this overwrite-chain `H`, for one segment, with no hypothesis; a
+`Pous.SecurityProofs.ChainDenseMeets64` certifies for this overwrite-chain `H` over an ideal `Π₂` (not the reference
+one: "Main caveat"), for one segment, with no hypothesis; a
 random-oracle `H` needs only 106 (`dense_meets_64`). Segment `s` is exactly
 `chainDense B ℓ 512 (dom tag_s)`, where `tag_s = salt || u64(s)` plays the role of Lean's 256-bit salt:
 
@@ -135,8 +156,8 @@ P3 has no certificate. `Pous.SecurityProofs.P3ConcreteMeets64` (one segment), `P
 `P3ConcreteMeets64D12` (`B(220, 16)` at `D = 12`) are proved, with no hypothesis, for P3 over the overwrite chain in
 the ideal two-permutation model, at the operating point's parameters, `D = 10`, `Q = 2^20` and `k = 106`. But Lean's
 chain starts from `iv(domP3 tag L v)`: zeros, then `tag_s ‖ u256(2v + L)` in the 512-bit capacity part. The code's
-`h_0` is the instantiation's 48-byte header ("Backends") in the low bytes, with the capacity part zero. The pins are
-about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 item 16).
+`h_0` is the instantiation's 48-byte header ("Backends") in the low bytes, with the capacity part zero. The guarantees
+are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 item 16).
 
 ## Lifecycle
 
@@ -168,7 +189,7 @@ about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 item 
      `D = 2`, `k = 97` and at `D = 1`, `k = 93`;
    - dense: `dense_pub_meets_64` and `seg_pub_meets_14` (a random-oracle `H`), and `chain_pub_meets_64` (the overwrite
      chain), given `ChainExPostFacto`, which `chainExPostFacto_v6` proves (`lean/Pous/SecurityProofs/Chain/Flat.lean`;
-     not pinned).
+     not a guarantee).
 
    An accept-all check provably fails (`acceptAll_fails_dense`). P3 goes through the same code, but its
    encode-after-decode lemma is not proved.
@@ -204,7 +225,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `theorem`, and its open `hypotheses`;
   - `claims`: ids in `verity.claims`' format.
 
-  Each `theorem` is the pinned proof `Pous.SecurityProofs.X` it rests on, of the guarantee `Pous.Guarantees.X`. At
+  Each `theorem` is the recorded proof `Pous.SecurityProofs.X` it rests on, of the guarantee `Pous.Guarantees.X`. At
   the frozen point, the band's certificate is `Pous.SecurityProofs.BandMultiMeetsFamily`, with no hypothesis: k 111,
   D 5, Q 2^20, 241.5 µs, cliff at `d`, for every segment count N from 1 to `2^64` (all that `BandParams` allows), so no
   segment count is a gap. It is one `Meets` for the whole
@@ -226,18 +247,19 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     for these keys. SHAKE256 would cost about 12% of device throughput (an estimate). The choice goes to Daniel with P2
     Decision 1.
   - Its certificate is `P2MeetsM1pB19Uncond`: k 88 at 2^19 blocks (8 segments of 2^16), for every payload width in
-    range, `p2-2054B`'s among them, with no hypothesis. It is a **proposed** pin, graded PASS but not yet in the
+    range, `p2-2054B`'s among them, with no hypothesis. It is a **proposed** guarantee, graded PASS but not yet in the
     trusted set. It is an abstract-M1 result, and the SMS-to-M1 instantiation assumption is pending Daniel.
   - SeqRoot sets `call_ns`, half the fastest 16,448-bit root, and no root may fit within `Δ + RTT`.
   - `Scheme.experimental` carries that reason. The verifier audits an experimental scheme only with
     `experimental=True`, and its profile's statement begins with it. No experimental scheme is ever the default.
 
-  P3 has no certificate: the concrete-`H` pins have its parameters, but their chain starts from a different `h_0`
+  P3 has no certificate: the concrete-`H` guarantees have its parameters, but their chain starts from a different `h_0`
   ("P3 (research)").
 - **`protocol.Verifier`** is `audit.TimedVerifier` at the certificate's `k`. It refuses:
   - a `k` below the certificate's;
   - a deadline whose effective D (calls of `call_ns` within `Δ + RTT`) exceeds the certificate's `rounds`: for the
-    band and dense, `Δ + RTT` must stay under 1.449 ms. `TimedVerifier` alone refuses only past the band's cliff, at
+    band and dense, `Δ + RTT` must stay under 1.449 ms (a model-level bound: at the reference `Π₂` a prover answers
+    from 1.53% of `C` well inside it, "Main caveat"). `TimedVerifier` alone refuses only past the band's cliff, at
     about 3.14 ms (3,139,500 ns at `d = 12`);
   - a scheme with no certificate at its parameters.
 
@@ -269,8 +291,8 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `tests/test_pous_protocol.py` checks it for every scheme, and replays the attack on real labels.
   - `benchmarks/pous` gates every implementation's tags against `salt ‖ u64 s` over 448 segments.
 - **Claims.** `protocol.claim(id)` resolves an id from `verity.claims`, or from `protocol.LOCAL_CLAIMS` until core holds
-  it: `ideal-permutation`, `perfect-isolation`, `sequential-step-floor`, `feistel-indifferentiability`, and P2's
-  `m1-ideal-permutations`, `sms-m1-instantiation`, `seq-root`.
+  it: `ideal-permutation`, `perfect-isolation`, `sequential-step-floor`, `feistel-indifferentiability` (refuted at the
+  reference `Π₂`: "Main caveat"), and P2's `m1-ideal-permutations`, `sms-m1-instantiation`, `seq-root`.
 - **Tests.** `tests/test_pous_protocol.py` runs one conformance suite over every scheme, plus a toy that implements
   only the two methods. Each registered scheme's vectors are pinned in `tests/fixtures/schemes/<name>.json`, written
   by `tests/pous_scheme_vectors.py`: the certificate at the registered point, and a small instance's segment digests
@@ -412,7 +434,8 @@ rather than `verity.commitments`' frame v3.
 ## Rounds
 
 A program's rounds are counted by `oracle.run`, never claimed. `audit.simulate` sets the round budget per answer at
-`(Δ + rtt_allowance) / call_ns`. Here `call_ns` is the adversary's fastest oracle call, and its 242 µs default is
+`(Δ + rtt_allowance) / call_ns`. Here `call_ns` is the fastest whole oracle call, the ideal-permutation model's unit
+and not an adversary's floor at the reference `Π₂` ("Main caveat"), and its 242 µs default is
 `P_T`'s Feistel-SHAKE256 floor at 64 KB (a `Π₂` call is at least 480 µs), so the budget is 2 rounds at Δ = 0.5 ms.
 `CERTIFIED_ROUNDS = 10` is what P3 is certified for at the operating point, counted in `P` and `Π₂` calls:
 `Pous.SecurityProofs.P3ConcreteMeets64` holds at `D = 10` on `B(220, 12)`, and `P3ConcreteMeets64D12` at 12 on
@@ -523,7 +546,8 @@ The game assumes three requirements on the protocol, and the certificate says no
    runs from its own challenge's send time.
 2. **A hard deadline.** An answer past `Δ_late` rejects, and a wrong or missing answer rejects. `D_late` is the
    sequential `Π₂` calls an adversary completes within `Δ_late + RTT`, as `D` is within `Δ + RTT`: `D_late ≤ 12` at
-   241.5 µs per call is `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14` ms, the band's cliff at `d = 12`.
+   241.5 µs per call is `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14` ms, the band's cliff at `d = 12`, in the
+   ideal-permutation model (not at the reference `Π₂`: "Main caveat").
 3. **Every answer past `Δ` is counted late.**
 
 **Isolation over the whole graded window.** Perfect isolation ("The problem") is assumed for the whole graded audit, not
@@ -546,7 +570,10 @@ It excludes only re-encoding a *whole* segment from `W` with *no* state about `�
 is possible. Within the cap, `W` alone rebuilds a segment's first 253 labels (49%) at `d = 5` and its first 121 (24%) at
 `d = 12`. `d` consecutive held labels restart the chain, so two held runs (10 labels, 2.0% of the segment) at `d = 5`,
 or four (48 labels, 9.4%) at `d = 12`, let a prover re-encode a whole segment within the cap. That gap between the
-storage held at rest and what is present when a challenge arrives is not bounded by this guarantee.
+storage held at rest and what is present when a challenge arrives is not bounded by this guarantee. The window argument,
+and the cap's conversion into wall-clock time, count whole `Π₂` calls and so hold in the ideal-permutation model only:
+at the reference Feistel-SHAKE256 `Π₂` a prover re-encodes nothing, answering each challenge from 1.53% of `C` in 481
+Keccak-f, less than one call ("Main caveat").
 
 No graded verifier exists yet: `audit.TimedVerifier` and `protocol.Verifier` accept only when every answer is correct
 and on time, the `t = 0` rule (`DISCREPANCIES.md` B5).
