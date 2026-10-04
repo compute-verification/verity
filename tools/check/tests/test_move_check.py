@@ -32,7 +32,7 @@ def _write(repo: Path, files: dict[str, str]) -> None:
 
 def _repo(tmp_path: Path, files: dict[str, str]) -> tuple[Path, str]:
     repo = tmp_path / "repo"
-    repo.mkdir()
+    repo.mkdir(parents=True)
     _git(repo, "init", "-q")
     _write(repo, files)
     _git(repo, "add", "-A")
@@ -227,9 +227,10 @@ SPEC_FILES = {
 }
 
 
-def _split(tmp_path: Path, bar: str | None = None, pins: dict | None = None, files: dict | None = None) -> tuple[Path, str, dict]:
+def _split(tmp_path: Path, bar: str | None = None, pins: dict | None = None, files: dict | None = None,
+           base: dict | None = None) -> tuple[Path, str, dict]:
     """Core's proofs split out to `security_proofs/core` under the module root `CoreProofs`; the spec and its umbrella stay."""
-    repo, base = _repo(tmp_path, SPEC_FILES)
+    repo, base = _repo(tmp_path, {**SPEC_FILES, **(base or {})})
     for m in ("Foo", "Bar"):
         _move(repo, f"{SPEC}/Verity/SecurityProofs/{m}.lean", f"{PROOFS}/CoreProofs/{m}.lean")
     split = {
@@ -293,3 +294,91 @@ def test_spec_lock_proved_in_that_names_no_package_is_refused(tmp_path):
                                                    proved_in=["../../security_proofs/core"])})
     [f] = _check(repo, base)["refusals"]
     assert "`proved_in` entry" in f["reason"]
+
+
+REGISTRY = 'REGISTRY = {\n    "flock_pure": "backends.flock.tool:FLOCK_PURE",\n    "pouw_gemm": "benchmarks.pouw.tool:POUW_GEMM",\n}\n'
+REGISTRY_FILES = {"backends/flock/tool.py": "FLOCK_PURE = 1\n", "backends/flock/prove.py": "",
+                  "benchmarks/pouw/tool.py": "POUW_GEMM = 1\n",
+                  "tools/research/src/research/store/tools_registry.py": REGISTRY,
+                  "backends/numerical/python/verity_numerical/bench/lowerings.py":
+                      'DIRECTORIES = {\n    "C-Flock": REPO / "backends" / "flock" / "templates",\n}\n',
+                  "tools/research/src/research/store/parity.py":
+                      'argv = [sys.executable, "-m", f"backends.flock.{mod}", "--root", str(root)]\n'}
+
+
+def test_tools_registry_dotted_rewrite_is_certified(tmp_path):
+    repo, base = _repo(tmp_path, REGISTRY_FILES)
+    _move(repo, "backends/flock", "catalog/flock")
+    _write(repo, {"tools/research/src/research/store/tools_registry.py": REGISTRY.replace("backends.flock", "catalog.flock"),
+                  "backends/numerical/python/verity_numerical/bench/lowerings.py":
+                      'DIRECTORIES = {\n    "C-Flock": REPO / "catalog" / "flock" / "templates",\n}\n',
+                  "tools/research/src/research/store/parity.py":
+                      'argv = [sys.executable, "-m", f"catalog.flock.{mod}", "--root", str(root)]\n'})
+    r = _check(repo, base)
+    assert r["certified"], r["refusals"]
+    assert {e["path"] for e in r["edits"]} == {"tools/research/src/research/store/tools_registry.py",
+                                               "backends/numerical/python/verity_numerical/bench/lowerings.py",
+                                               "tools/research/src/research/store/parity.py"}
+
+
+def test_tools_registry_non_path_change_is_refused(tmp_path):
+    repo, base = _repo(tmp_path, REGISTRY_FILES)
+    _move(repo, "backends/flock", "catalog/flock")
+    _write(repo, {"tools/research/src/research/store/tools_registry.py":
+                  REGISTRY.replace("backends.flock", "catalog.flock").replace("FLOCK_PURE", "FLOCK_FAST")})
+    [f] = _check(repo, base)["refusals"]
+    assert f["path"] == "tools/research/src/research/store/tools_registry.py" and "FLOCK_FAST" in f["hunk"]
+
+
+def test_module_argument_outside_a_dash_m_line_is_refused(tmp_path):
+    repo, base = _repo(tmp_path, {**REGISTRY_FILES, "tools/research/src/research/x.py": 'NAME = "backends.flock.tool"\n'})
+    _move(repo, "backends/flock", "catalog/flock")
+    _write(repo, {"tools/research/src/research/x.py": 'NAME = "catalog.flock.tool"\n'})
+    [f] = _check(repo, base)["refusals"]
+    assert f["path"] == "tools/research/src/research/x.py"
+
+
+WORKSPACE = '[tool.uv.workspace]\nmembers = ["protocols/pous", "protocols/pouw"]\n\n[tool.uv.sources]\npous = { workspace = true }\n'
+
+
+def _new_member(tmp_path: Path, members: str, sources: str = "") -> dict:
+    repo, base = _repo(tmp_path, {**BASE_FILES, "pyproject.toml": WORKSPACE})
+    _move(repo, "protocols/pous", "security_proofs/pous")
+    _write(repo, {"pyproject.toml": WORKSPACE.replace('"protocols/pous"', '"security_proofs/pous"')
+                  .replace('"protocols/pouw"]', members + "]") + sources})
+    return _check(repo, base)
+
+
+def test_workspace_member_for_a_new_package_is_certified(tmp_path):
+    r = _new_member(tmp_path, '"protocols/pouw", "security_proofs/pous/src"')
+    assert r["certified"], r["refusals"]
+
+
+def test_workspace_member_for_an_old_or_missing_directory_is_refused(tmp_path):
+    for i, extra in enumerate(('"protocols/pouw", "tests"', '"protocols/pouw", "nowhere"')):
+        [f] = _new_member(tmp_path / str(i), extra)["refusals"]
+        assert f["path"] == "pyproject.toml"
+
+
+def test_uv_source_for_a_package_not_created_by_the_range_is_refused(tmp_path):
+    [f] = _new_member(tmp_path, '"protocols/pouw"', "other = { workspace = true }\n")["refusals"]
+    assert f["path"] == "pyproject.toml" and "+other = { workspace = true }" in f["hunk"]
+
+
+LEAN_PACKAGES = 'PACKAGES = [\n    ROOT / "packages" / "verity" / "lean",\n]\n'
+
+
+def test_lean_packages_entry_for_a_new_lake_package_is_certified(tmp_path):
+    entry = '    ROOT / "security_proofs" / "core",\n'
+    _, _, r = _split(tmp_path, base={"tests/test_lean_packages.py": LEAN_PACKAGES},
+                     files={"tests/test_lean_packages.py": LEAN_PACKAGES.replace("]\n", entry + "]\n")})
+    assert r["certified"], r["refusals"]
+    assert {"path": "tests/test_lean_packages.py", "kind": "path"} in r["edits"]
+
+
+def test_lean_packages_entry_for_an_existing_package_is_refused(tmp_path):
+    entry = '    ROOT / "packages" / "verity" / "lean",\n'
+    _, _, r = _split(tmp_path, base={"tests/test_lean_packages.py": LEAN_PACKAGES},
+                     files={"tests/test_lean_packages.py": LEAN_PACKAGES.replace("]\n", entry + "]\n")})
+    [f] = r["refusals"]
+    assert f["path"] == "tests/test_lean_packages.py"

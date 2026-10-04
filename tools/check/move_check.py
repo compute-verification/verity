@@ -9,7 +9,11 @@ Every path git sees changed must be one of:
   that leaves it unchanged once each old path in it is rewritten to its new one, a quoted relative path (`".."`,
   `"../level3"`) being resolved against the file's own directory first;
 - an edit to a `*.py` file whose changed lines only rewrite the module of an `import M` / `from M import` line, from where
-  a renamed module was to where it is now;
+  a renamed module was to where it is now; in `PY_PATH_FILES`, also a path (a pathlib chain `ROOT / "a" / "b"` read as
+  `"a/b"`) or a dotted name (`backends.flock.tool:FLOCK_PURE`); in `research`'s sources, also the module of a `-m` line;
+- an added line in `REGISTRIES` that registers exactly a package the range created: a root `pyproject.toml` workspace
+  member (or its `tool.uv.sources` entry) for a directory that is new at HEAD, a `tests/test_lean_packages.py` entry for a
+  new Lake package with its `lean-audit.json`;
 - an edit to a `*.lean` file whose changed lines only rewrite an `import M` to the new module of a `.lean` file renamed in
   the range (a module is its path below its Lake package, `/` as `.`, without `.lean`), as when a Lean split gives the
   proof modules a root of their own while their declarations keep their namespace;
@@ -40,8 +44,21 @@ import posixpath
 import re
 import subprocess
 import sys
+import tomllib
 
-PATH_FILES = {"tools/check/ci.toml", "tests/test_lean_packages.py", "AGENTS.md", "fixtures/artifacts.json"}
+PATH_FILES = {"tools/check/ci.toml", "AGENTS.md", "fixtures/artifacts.json", "tools/research/src/research/pods/nebius/deploy.toml"}
+#: Python files that name the tree in strings: each may rewrite a path (a `ROOT / "a" / "b"` chain read as `"a/b"`) or a
+#: dotted name (`backends.flock.tool:FLOCK_PURE`, a module) to where it moved, besides its imports
+PY_PATH_FILES = {
+    "tests/test_lean_packages.py",                                        # the Lean packages
+    "tools/research/src/research/store/tools_registry.py",                # REGISTRY: tool -> dotted repo path
+    "tools/research/src/research/store/vocab.py",                         # its mirror of PROOF_CLASSES names their source
+    "backends/numerical/python/verity_numerical/bench/lowerings.py",      # DIRECTORIES
+}
+#: `research`'s sources, whose `python -m M` / `"-m", "M"` lines may rewrite M to where the module moved
+MODULE_ARG_PREFIX = "tools/research/src/research/"
+#: the files where a new package is registered by an added line (`registration`)
+REGISTRIES = {"pyproject.toml": "workspace", "tests/test_lean_packages.py": "lean"}
 PATH_NAMES = {"pyproject.toml", "lakefile.lean", "lakefile.toml", "lake-manifest.json", ".gitignore"}
 #: files whose quoted relative paths name another directory of the tree (a Lake `require`, a manifest's `dir`, a uv source)
 RELATIVE_NAMES = {"pyproject.toml", "lakefile.lean", "lakefile.toml", "lake-manifest.json"}
@@ -75,7 +92,7 @@ def kind(path: str) -> str | None:
     name = posixpath.basename(path)
     if name == "lean-audit.json":
         return "lock"
-    if path in PATH_FILES or name in PATH_NAMES or (path.startswith(".agents/skills/") and name == "SKILL.md"):
+    if path in PATH_FILES or path in PY_PATH_FILES or name in PATH_NAMES or (path.startswith(".agents/skills/") and name == "SKILL.md"):
         return "path"
     return {".py": "import", ".lean": "lean"}.get(posixpath.splitext(path)[1])
 
@@ -103,6 +120,10 @@ class Tree:
         self.files = sorted(p.decode("utf-8", "surrogateescape")
                             for p in git("ls-tree", "-r", "-z", "--name-only", rev, cwd=cwd).split(b"\0") if p)
         self.set = set(self.files)
+
+    def has_dir(self, d: str) -> bool:
+        i = bisect.bisect_left(self.files, d + "/")
+        return i < len(self.files) and self.files[i].startswith(d + "/")
 
     def is_package(self, d: str) -> bool:
         return any(posixpath.join(d, f) in self.set for f in LAKEFILES)
@@ -235,6 +256,44 @@ def import_rewrite(old: str, new: str, modules: Modules) -> bool:
     return go[i] == gn[i] and go[i + 2] == gn[i + 2] and modules.moved(go[i + 1], gn[i + 1])
 
 
+CHAIN = re.compile(r'"[\w.\-]+"(?:\s*/\s*"[\w.\-]+")+')
+DOTTED = re.compile(r"([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+)")
+MODULE_ARG = re.compile(r"""python3?\s+-m\s|["']-m["']\s*,""")
+
+
+def join_chains(text: str) -> str:
+    """Each pathlib chain of string parts (`ROOT / "a" / "b"`) as one path string (`ROOT / "a/b"`)."""
+    return CHAIN.sub(lambda m: '"' + "/".join(re.findall(r'"([^"]+)"', m.group(0))) + '"', text)
+
+
+def dotted_rewrite(old: str, new: str, modules: Modules) -> bool:
+    """Whether `new` is `old` with dotted names (modules, or repository paths with `.` for `/`) rewritten to where they moved."""
+    a, b = DOTTED.split(old), DOTTED.split(new)
+    if len(a) != len(b) or a[0::2] != b[0::2]:
+        return False
+    return all(x == y or modules.moved(x, y) for x, y in zip(a[1::2], b[1::2]))
+
+
+def list_addition(old: str, new: str, entry) -> bool:
+    """Whether `new` is the one-line list `old` with entries added, each a string that `entry` accepts."""
+    xs, ys = re.findall(r'"([^"]*)"', old), re.findall(r'"([^"]*)"', new)
+    it = iter(ys)
+    if not all(x in it for x in xs) or len(ys) <= len(xs):            # `old`'s entries, in order, within `new`'s
+        return False
+    rest = list(ys)
+    for x in xs:
+        rest.remove(x)
+    stripped = new
+    for e in rest:
+        if not entry(e):
+            return False
+        for form in (f'"{e}", ', f', "{e}"', f'"{e}",', f'"{e}"'):
+            if form in stripped:
+                stripped = stripped.replace(form, "", 1)
+                break
+    return stripped == old
+
+
 def lean_import_rewrite(old: str, new: str, lmods: dict[str, str], extra: dict[str, str]) -> bool:
     mo, mn = LEAN_IMPORT.match(old), LEAN_IMPORT.match(new)
     if not (mo and mn) or mo.group(1) != mn.group(1) or mo.group(3) != mn.group(3):
@@ -249,15 +308,19 @@ def hunk(a: list[str], b: list[str], i1: int, i2: int, j1: int, j2: int) -> str:
     return "\n".join(lines)
 
 
-def first_unexplained(a: list[str], b: list[str], na: list[str], nb: list[str], pair=None, line=None) -> str | None:
+def first_unexplained(a: list[str], b: list[str], na: list[str], nb: list[str], pair=None, line=None,
+                      added=None) -> str | None:
     """The first hunk of `na` -> `nb` (normalized, line for line `a` and `b`) whose changed lines are neither each a `pair`
-    rewrite nor each a `line`, in the file's own lines; None when every change is explained."""
+    rewrite, nor each a `line`, nor (lines only added) each an `added` line, in the file's own lines; None when every change
+    is explained."""
     for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, na, nb, autojunk=False).get_opcodes():
         if tag == "equal":
             continue
         if pair and tag == "replace" and i2 - i1 == j2 - j1 and all(pair(x, y) for x, y in zip(na[i1:i2], nb[j1:j2])):
             continue
         if line and all(line(x) for x in na[i1:i2] + nb[j1:j2]):
+            continue
+        if added and tag == "insert" and all(added(y) for y in nb[j1:j2]):
             continue
         return hunk(a, b, i1, i2, j1, j2)
     return None
@@ -444,6 +507,47 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
         except UnicodeDecodeError:
             return None
 
+    def new_dir(p: str) -> bool:
+        return H.has_dir(p) and not B.has_dir(p)
+
+    def new_lake(p: str) -> bool:
+        return new_dir(p) and H.is_package(p) and posixpath.join(p, "lean-audit.json") in H.set
+
+    new_projects = set()
+    for e in entries:
+        if e["status"] == "A" and posixpath.basename(e["new"]) == "pyproject.toml" and new_dir(posixpath.dirname(e["new"])):
+            try:
+                new_projects.add(tomllib.loads(H.text(e["new"]) or "").get("project", {}).get("name"))
+            except tomllib.TOMLDecodeError:
+                pass
+
+    def py_pair(path: str, x: str, y: str) -> bool:
+        if not path.endswith(".py"):
+            return False
+        return (import_rewrite(x, y, modules) or (path in PY_PATH_FILES and dotted_rewrite(x, y, modules))
+                or (path.startswith(MODULE_ARG_PREFIX) and bool(MODULE_ARG.search(x)) and bool(MODULE_ARG.search(y))
+                    and dotted_rewrite(x, y, modules)))
+
+    def registry_pair(path: str, x: str, y: str) -> bool:
+        reg = REGISTRIES.get(path)
+        return bool(reg) and list_addition(x, y, new_dir if reg == "workspace" else new_lake)
+
+    def registered(path: str, y: str) -> bool:
+        """Whether an added line registers exactly a package the range created: a workspace member or its uv source, or a
+        Lake package with its lock."""
+        reg = REGISTRIES.get(path)
+        if reg == "lean":
+            m = re.match(r'^\s*(?:\w+\s*/\s*)?"([^"]+)"\s*,?\s*(#.*)?$', y)
+            return bool(m) and new_lake(m.group(1))
+        if reg == "workspace":
+            if m := re.match(r'^\s*"([^"]+)"\s*,?\s*$', y):
+                return new_dir(m.group(1))
+            if m := re.match(r'^\s*([\w.\-]+)\s*=\s*\{\s*workspace\s*=\s*true\s*\}\s*$', y):
+                return m.group(1) in new_projects
+            if m := re.match(r'^\s*[\w.\-]+\s*=\s*\{\s*path\s*=\s*"([^"]+)"\s*\}\s*$', y):
+                return new_dir(m.group(1))
+        return False
+
     for e in entries:
         st, old, new = e["status"], e["old"], e["new"]
         name = posixpath.basename(new)
@@ -491,11 +595,12 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
         else:
             na, nb = al, bl
             if k == "path":
-                rel = name in RELATIVE_NAMES
-                na_text = resolve_relative(a, old, pmap) if rel else a
+                rel, chains = name in RELATIVE_NAMES, new in PY_PATH_FILES
+                na_text = resolve_relative(a, old, pmap) if rel else join_chains(a) if chains else a
                 na = (na_text if a == b else substitute(na_text, pmap)).splitlines()
-                nb = (resolve_relative(b, new, {}) if rel else b).splitlines()
-            h = first_unexplained(al, bl, na, nb, pair=(lambda x, y: import_rewrite(x, y, modules)) if new.endswith(".py") else None)
+                nb = (resolve_relative(b, new, {}) if rel else join_chains(b) if chains else b).splitlines()
+            h = first_unexplained(al, bl, na, nb, pair=lambda x, y: py_pair(new, x, y) or registry_pair(new, x, y),
+                                  added=lambda y: registered(new, y))
             why = h and ("relative path now resolves elsewhere" if a == b
                          else f"edit beyond {'path strings' if k == 'path' else 'import lines'}", h)
         if why:
