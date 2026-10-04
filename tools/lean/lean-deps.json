@@ -41,6 +41,12 @@
    "package": "backends/flock/verifier/lean/soundness",
    "run": "r20260929-032531-8f07",
    "sha256": "ab583debd99442d229191651497f784b71050bb57dd0384fb528bc74e24c75d8"
+  },
+  "dd11cf1b38844effc96baa804fbb766b711927034623b08d4ec219aecd649c9b": {
+   "bytes": 700285760,
+   "package": "security_proofs/pous",
+   "run": "r20261002-013330-8cff",
+   "sha256": "c9a35455c168955a68a87fb6e8301e84114ef79c032ae4efdb14f3be669af603"
   }
  },
  "schema": "lean-deps-pin/v1"
