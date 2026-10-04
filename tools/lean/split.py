@@ -278,7 +278,8 @@ def spec_lakefile(text: str, p: dict) -> str:
                 new = re.sub(r'(?m)^(name\s*=.*)$', lambda m: m.group(1) + "\nroots = " + json.dumps(p["spec_roots"]), block, 1)
             out = out.replace(block, new)
         if table == "require" and "path" in cfg and cfg["name"] not in p["spec_requires"]:
-            out = out.replace(block, "")
+            below = re.search(r"(?:\n[ \t]*(?:#[^\n]*)?)*\Z", block.rstrip("\n"))
+            out = out.replace(block, below.group(0).lstrip("\n") + "\n" if below.group(0).strip() else "")
     return out
 
 
