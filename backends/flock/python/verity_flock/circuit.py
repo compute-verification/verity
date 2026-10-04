@@ -299,24 +299,27 @@ def out_rows(outs: dict, out_ports: list[tuple[str, int]], rows: list[Port], cou
     return out
 
 
-def _out_ports(outs: list, bit_rows: bool, seg_out_rows) -> tuple[list[Port], list[int]]:
-    """The output rows and each one's run of output ports: one row per port (``out_row``), and each run in ``seg_out_rows``
-    (consecutive output ports, in order) one ``sha512/row-seg/v1`` row of exactly their words, named after its first."""
+def _out_ports(outs: list, bit_rows: bool, seg_out_rows, v2_out_rows=()) -> tuple[list[Port], list[int]]:
+    """The output rows and each one's run of output ports: one row per port (``out_row``), each run in ``seg_out_rows``
+    (consecutive output ports, in order) one ``sha512/row-seg/v1`` row of exactly their words, and each run in ``v2_out_rows``
+    (one port or several) one ``sha512/row/v2`` row of exactly their words, each named after its first."""
     names = [nm for nm, _ in outs]
     starts, covered = {}, set()
-    for run in seg_out_rows:
-        i = names.index(run[0]) if run and run[0] in names else -1
-        if i < 0 or list(run) != names[i:i + len(run)] or covered & set(run):
-            raise ValueError(f"segmented output row {list(run)}: a run of consecutive output ports, each in one row")
-        starts[i] = len(run)
-        covered |= set(run)
+    for seg, runs in ((True, seg_out_rows), (False, v2_out_rows)):
+        for run in runs:
+            i = names.index(run[0]) if run and run[0] in names else -1
+            if i < 0 or list(run) != names[i:i + len(run)] or covered & set(run):
+                raise ValueError(f"output row {list(run)}: a run of consecutive output ports, each in one row")
+            starts[i] = (len(run), seg)
+            covered |= set(run)
     rows, counts, j = [], [], 0
     while j < len(outs):
         if j in starts:
-            w = sum(x for _, x in outs[j:j + starts[j]])
-            rows.append(Port(outs[j][0], w, 16 * w, True))
-            counts.append(starts[j])
-            j += starts[j]
+            k, seg = starts[j]
+            w = sum(x for _, x in outs[j:j + k])
+            rows.append(Port(outs[j][0], w, 16 * w, seg))
+            counts.append(k)
+            j += k
         else:
             rows.append(out_row(*outs[j], bit_row=bit_rows))
             counts.append(1)
@@ -539,9 +542,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     if pins:
         public_blocks(low.layout.in_groups[0], leaves_in, leaves_public)
     outs = [[p.name, w] for p, (w, _) in zip(sub.outputs, lv["out_ports"])]
-    if seg_out_rows and port_bits is None:
-        raise ValueError(f"{low.name}: segmented output rows are bit rows (row_schemas)")
-    orows, counts = _out_ports(outs, bool(port_bits), seg_out_rows)
+    if (seg_out_rows or v2_out_rows) and port_bits is None:
+        raise ValueError(f"{low.name}: output rows of exactly their words are bit rows (row_schemas)")
+    orows, counts = _out_ports(outs, bool(port_bits), seg_out_rows, v2_out_rows)
     ports = ins + orows
     ul = _slot_log(low.layout.useful)
     if low.layout.useful == 1 << ul:

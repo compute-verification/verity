@@ -907,9 +907,10 @@ def _bit_row_toy(bits: list[int], d: Path, edit=None, n: int = 4, seg: frozenset
     return text
 
 
-def _seg_writer_toy(out_words: list[int], d: Path, n: int = 4) -> tuple[str, dict, dict]:
+def _seg_writer_toy(out_words: list[int], d: Path, n: int = 4, seg: bool = True) -> tuple[str, dict, dict]:
     """A statement whose one unit writes output ports ``a0, a1, …`` of ``out_words`` words, committed as one
-    `hm96-sha512/row-seg/v1` row ``a0`` of exactly their words (META ``out_row_ports``), staged in ``d`` like `_bit_row_toy`:
+    `hm96-sha512/row-seg/v1` row ``a0`` of exactly their words (META ``out_row_ports``; ``seg`` false: one exact-length
+    `hm96-sha512/row/v2` row, META ``out_row_ports`` only for a run of several), staged in ``d`` like `_bit_row_toy`:
     one 1024-bit input row ``p0`` (seed 1), output word ``o`` the XOR of input word ``o mod 64`` and input word ``o + 1 mod
     64`` rotated by ``o mod 16``, with AND(bit 0, bit 1) of the first added at word 0's bit 0; a lone 1-word output is that
     AND alone, zero above, so an admission value like PoUW's ok word. The salts are SHAKE-256 of
@@ -949,7 +950,7 @@ def _seg_writer_toy(out_words: list[int], d: Path, n: int = 4) -> tuple[str, dic
                           program_digests=lambda statics: {"unit-class/seg-writer": hashlib.sha256(content).hexdigest()})
     iset = SimpleNamespace(subcircuit=sub, name="unit-class-seg-writer", content_digest=hashlib.sha256(content).hexdigest())
     names = tuple(f"a{i}" for i in range(len(out_words)))
-    text = FC.compose(low, sub, port_bits=[1024], seg_out_rows=(names,))
+    text = FC.compose(low, sub, port_bits=[1024], **({"seg_out_rows": (names,)} if seg else {"v2_out_rows": (names,)}))
     rows = {"p0": np.random.default_rng(1).integers(0, 1 << 16, (n, 64), dtype=np.uint64).astype(np.uint16)}
     got, _cut, ok = low.evaluate(rows["p0"].astype(np.uint64))
     assert int(ok) == (1 << n) - 1
