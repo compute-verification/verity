@@ -396,7 +396,7 @@ theorem setupZ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) (h
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : VerifiesZK I t)
     (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZK I dj mPts S) :
     Nonempty (DrawSetupZK I mPts S (dj S)) := by
-  obtain ⟨st, hst, -, hv⟩ := acceptsZK_one I _ hh hn h.1
+  obtain ⟨st, hst, hsh, hv⟩ := acceptsZK_one I _ hh hn h.1
   rw [hd] at hst
   obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs, c, hz, -⟩ := hall 0 (by simp)
@@ -408,7 +408,7 @@ theorem setupZ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) (h
   obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
   obtain ⟨x, rfl⟩ := drawSetup_of_setupH_g (I := zkInputs I) (S := S) ht' hst hf hD (hok.1 D hD) (hok.2 _ hst)
-  obtain ⟨y, -, -, -⟩ := drawSetupZK_of h.2.typed x hz'
+  obtain ⟨y, -, -, -⟩ := drawSetupZK_of h.2.typed x hsh hz'
   exact ⟨y⟩
 
 /-- **`SoundZJ`'s setup exists at every accepted draw, at every number of tables**: where flock-verify `--zk` accepts a
@@ -441,14 +441,13 @@ set_option linter.unusedVariables false in
 def ViewZ (I : Inputs) : Prop :=
   ∀ (P : LigProver) {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
-    -- the statement's Δ and regions avoid the mask slot, and hash-derived-key
-    (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), avoidsMask y.x.st = true)
+    -- hash-derived-key
     (hKey : Assumptions.Zk.HashDerivedKeyHm96),
     ScopeZ I → ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)),
       ZkViewAt (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ))
 
 theorem viewZ (I : Inputs) : ViewZ I :=
-  @fun P _ _ _ dj _ y₀ hdm hKey hs => Composed.zk_session_view P I dj y₀ hs.typed hdm hKey
+  @fun P _ _ _ dj _ y₀ hKey hs => Composed.zk_session_view P I dj y₀ hs.typed (fun _ y => DrawSetupZK.avoidsMask y) hKey
 
 end
 
@@ -666,9 +665,7 @@ passes: `zk_session_composedHJ`'s second half. -/
 def ViewZHJ (I : Inputs) : Prop :=
   ∀ (P : LigProver) {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
-    -- every table's statement avoids the mask slot, and hash-derived-key
-    (hdm : ∀ (S : Finset (Fin n)) (j : Fin (nTab I))
-      (y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)), avoidsMask y.x.st = true)
+    -- hash-derived-key
     (hKey : Assumptions.Zk.HashDerivedKeyHm96),
     ScopeZ I → ∀ (S : Finset (Fin n)) (R : Reg)
       (ys : ∀ j : Fin (nTab I), DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
@@ -676,7 +673,8 @@ def ViewZHJ (I : Inputs) : Prop :=
         (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ))
 
 theorem viewZHJ (I : Inputs) : ViewZHJ I :=
-  @fun P _ _ _ dj _ _ y₀ hdm hKey hs => ZkHidden.zk_session_viewHJ P I dj y₀ hs.typed hdm hKey
+  @fun P _ _ _ dj _ _ y₀ hKey hs =>
+    ZkHidden.zk_session_viewHJ P I dj y₀ hs.typed (fun _ _ y => DrawSetupZHJ.avoidsMask y) hKey
 
 end
 

@@ -7433,6 +7433,9 @@
    "assumptions": [],
    "type_hash": "607a4a9eaee30e48aec21d8fb83f079600f24e67df47b6a7bd73e81444d3d4d6"
   },
+  "FlockSoundness.Discharge.FailClosed.DrawSetupZHJ.avoidsMask": {},
+  "FlockSoundness.Discharge.FailClosed.DrawSetupZK.avoidsMask": {},
+  "FlockSoundness.Discharge.FailClosed.avoidsMask_of_shapeOk": {},
   "FlockSoundness.Discharge.FailClosed.exists_k": {},
   "FlockSoundness.Discharge.FailClosed.exists_k_rateB": {},
   "FlockSoundness.Discharge.FailClosed.exists_k_rateZ": {},

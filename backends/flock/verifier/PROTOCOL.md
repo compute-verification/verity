@@ -1483,6 +1483,12 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
 PROTOCOL.md's masked protocol on §7.4's coin tree (`Flock.Zk*`). `hooks` is upstream's `zk_identity`; `proof_class`
 stays `NON_ZK_PROOF`. **Agreement:** README.
 
+Each table's statement must have upstream's mask shape (`Zk.shapeOk`), and, which upstream does not check, its Δ and its
+regions avoid the mask slot (`Zk.maskFree`, D12): no pair of `da` or `db` has a row or a column in the mask range's
+word-aligned span, and every region fixes, at each of the span's words, an in-block word bit (`i + 7 < k_log`, not
+free) that differs from the word's bit `i`. Otherwise the verifier refuses: `zk: a pair of Δ or a region meets the mask
+slot`. The zero-knowledge proof covers no such statement: a region or a wire there would read the masks.
+
 ### 16.15 The forms the soundness proof covers
 
 `verify` fails closed (Daniel, Oct 4): soundness is one theorem over every session it accepts, with no condition on the
@@ -1650,7 +1656,9 @@ expectation):
   by a law no soundness claim draws by (§16.15: a bernoulli draw, a work draw with or without a closure, and a subset
   draw without `--zk`), which the Lean verifier alone refuses (the live server and upstream verify it): a set marked
   `lean_refuses_drawn` expects that refusal of every drawn session (`agree.py --lean-refuses-drawn`).
-  `backends/flock/tests/test_lean_draw_laws.py` runs each law on the Lean verifier.
+  `backends/flock/tests/test_lean_draw_laws.py` runs each law on the Lean verifier. So, too, under `--zk`, a statement
+  whose Δ or regions meet the mask slot (§16.14, `Zk.maskFree`), which the Lean verifier alone refuses (the live server
+  and upstream verify it); honest `--zk` statements avoid it, and no vector exercises it; `backends/flock/tests/test_lean_zk_mask.py` runs it on the Lean verifier.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).

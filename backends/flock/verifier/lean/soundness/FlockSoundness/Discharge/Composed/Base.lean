@@ -137,8 +137,7 @@ def maskColB (st : Stmt) (i : ℕ) : Bool :=
   | some r => decide (r.start / 128 ≤ i / 128 ∧ i / 128 < r.start / 128 + 2 ^ (r.slotLog - 7))
 
 /-- **Δ avoids the mask slot**: no pair of Δ (`da`, `db`) has a row or a column in the mask range's span. A condition on
-the parsed statement, which nothing checks yet (`avoidsMask`): `HmRow.check` does not imply it, since `Net.ofRows` bounds
-no output group's column, so a wire's source can lie in the mask range. -/
+the parsed statement (`avoidsMask`), which `HmRow.check` does not imply: `verify --zk` checks it (`Zk.maskFree`). -/
 def deltaAvoidsMask (st : Stmt) : Bool :=
   (st.da.toList ++ st.db.toList).all fun p => !maskColB st p.1 && !maskColB st p.2
 
@@ -154,15 +153,18 @@ def regionWordsOff (st : Stmt) : Bool :=
       ((reg.mask >>> (i + 7)) % 2 == 1 && (reg.fixed >>> (i + 7)) % 2 == 1) != x.testBit i
 
 /-- **The regions avoid the mask slot**, by cell and by word: `HmRow.check` does not imply it, since `Circuit.outRegion`
-and `HmRow.regions`' tail region sit at an output group's column, which `Net.ofRows` does not bound. -/
+and `HmRow.regions`' tail region sit at an output group's column, which `Net.ofRows` bounds by the unit's slot (D11) but
+not away from the mask range; `verify --zk` checks it (`Zk.maskFree`). -/
 def regionsAvoidMask (st : Stmt) : Bool := regionCellsOff st && regionWordsOff st
 
 /-- **The statement avoids the mask slot**: its Δ (`deltaAvoidsMask`) and its regions (`regionsAvoidMask`). A condition on
-the parsed statement that neither the verifier nor the honest prover checks. The prover's `Stmt::new`
-(`backends/flock/live/src/circuit.rs:2422`) refuses only a column that shares a word with a partial region's bits and isn't
-forced to zero (`region_word_violation`), and checks no Δ pair or region cell against the mask span. So the zero-knowledge
-statements take it as a named hypothesis (`hdm`) until the verifier's D11 refusal in `Net.ofRows`, which bounds an output
-group's columns by its unit (`g.col + g.words ≤ 2 ^ unitLog / WORD`, #1062, not yet in this tree), discharges it. -/
+the parsed statement that the honest prover doesn't check: its `Stmt::new` (`backends/flock/live/src/circuit.rs`) refuses
+only a column that shares a word with a partial region's bits and isn't forced to zero (`region_word_violation`), and
+checks no Δ pair or region cell against the mask span. `verify --zk` refuses a statement that fails it (`Zk.shapeOk`'s
+`Zk.maskFree`, D12), so it holds at every `--zk` setup (`FailClosed.avoidsMask_of_shapeOk`). The zero-knowledge
+statements here take it as a hypothesis (`hdm`); `FailClosed.ViewZ` and `ViewZHJ` take it from the setup. No proof
+derives it from D11's bound on output groups and the layout checks (Δ's forced-zero column `ur.slot 0 + useful` can lie
+past the unit's slot); the check makes it a fact of every `--zk` setup. -/
 def avoidsMask (st : Stmt) : Bool := deltaAvoidsMask st && regionsAvoidMask st
 
 /-- **A region's public bit at witness index `idx`** (`regionValue`): bit `i` of the region's bytes at block `b`, `i` the

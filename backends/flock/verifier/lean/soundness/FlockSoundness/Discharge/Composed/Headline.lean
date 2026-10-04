@@ -59,8 +59,8 @@ prover doesn't refuse (`refused_coins`; `CoinedSetup.Admits`: `β ≠ 0`, the ma
 zerocheck outer coin `1`), the verifier's view of the draw's table at the executable's leaves, at any valid witness whose
 registered values are the public ones, is within `2·|Hid|·2^-193` of `S_shvzk`'s at any `w0`, both ways.
 
-For an untyped statement (`ht`, as every soundness theorem) whose Δ and regions avoid the mask slot (`avoidsMask`, a named
-hypothesis that no check implies yet, until the verifier's D11 refusal in `Net.ofRows` discharges it), and for any prover
+For an untyped statement (`ht`, as every soundness theorem) whose Δ and regions avoid the mask slot (`avoidsMask`, which
+`verify --zk`'s shape check implies at every setup, `FailClosed.DrawSetupZK.avoidsMask`), and for any prover
 of Ligerito's levels ≥ 1 (`LigProver`).
 
 At a refused coin the honest prover stops before it sends anything that depends on the coin (`flock-circuit.rs`'s
