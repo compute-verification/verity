@@ -254,6 +254,158 @@ theorem blocks_cover (ws : Array ℕ) {y : ℕ} (hy : y ∈ ws) : BCovers (HmIn.
     · exact .inl (hk.2 y hr1 (by simp only at hr1 hr2 ⊢; omega))
     · exact .inr ⟨r, hr, hr1, hr2⟩
 
+theorem pushes_mono {α : Type} (f : ℕ → α) : ∀ (L : List ℕ) (acc : Array α) {x : α}, x ∈ acc →
+    x ∈ L.foldl (fun acc r => acc.push (f r)) acc :=
+  foldl_mem_mono _ fun _ _ _ h => Array.mem_push_of_mem _ h
+
+/-- **Every word of a block is in one of the `in` regions over it** (`HmIn.inRegions`): region `(w', s)`, `2^s` words
+from `w'`, cut from a block `(w, e)` of `HmIn.blocks`, `w ≤ w'`. -/
+theorem inRegions_cover (c : Circuit) (pi : HmIn.Ports) {y : ℕ} (hy : BCovers (HmIn.blocks (HmIn.words c pi)) y) :
+    ∃ R ∈ (HmIn.inRegions c pi).toList, ∃ b ∈ (HmIn.blocks (HmIn.words c pi)).toList,
+      b.1 ≤ R.1 ∧ R.1 ≤ y ∧ y < R.1 + 2 ^ R.2 := by
+  obtain ⟨⟨w, e⟩, hb, h1, h2⟩ := hy
+  simp only at h1 h2
+  set s := min e (PT_LOCAL - (7 + log2ceil c.unitRange.count)) with hs
+  have hse : s ≤ e := min_le_left _ _
+  have hP : 0 < 2 ^ s := Nat.two_pow_pos _
+  have hes : 2 ^ e = 2 ^ (e - s) * 2 ^ s := by rw [← pow_add, Nat.sub_add_cancel hse]
+  set r := (y - w) / 2 ^ s with hr
+  have hr1 : r * 2 ^ s ≤ y - w := Nat.div_mul_le_self _ _
+  have hr2 : y - w < r * 2 ^ s + 2 ^ s := by
+    have := Nat.lt_div_mul_add (a := y - w) hP
+    rw [hr]; linarith
+  have hrlt : r < 2 ^ (e - s) := by
+    rw [hr, Nat.div_lt_iff_lt_mul hP, ← hes]; omega
+  refine ⟨(w + r * 2 ^ s, s), ?_, (w, e), hb, by simp, by simp only; omega, by simp only; omega⟩
+  unfold HmIn.inRegions
+  rw [Array.mem_toList_iff, ← Array.foldl_toList]
+  refine foldl_mem_of _ (fun acc b => ?_) hb (fun acc => ?_) #[]
+  · obtain ⟨w', e'⟩ := b
+    intro x hx
+    dsimp only
+    rw [← Array.foldl_toList]
+    exact pushes_mono _ _ _ hx
+  · dsimp only
+    rw [← Array.foldl_toList]
+    exact foldl_mem_of (fun (acc : Array (ℕ × ℕ)) r => acc.push (w + r * 2 ^ s, s))
+      (fun _ _ _ h => Array.mem_push_of_mem _ h) (L := (Array.range (2 ^ (e - s))).toList) (b := r) (by simpa using hrlt)
+      (fun _ => Array.mem_push_self) acc
+
 end cover
+
+/-! ## The `in` regions' bytes -/
+
+section bytes
+
+/-- **Leaf `j` of unit slot `k` at block `b`, as region `in` over words from `w` packs it** (`HmIn.regions`): a public
+leaf of a slot's instance its public word, else 0. -/
+def inVal (c : Circuit) (pi : HmIn.Ports) (pub : Public) (w b k j : ℕ) : ℕ :=
+  match (if k < c.unitRange.count then c.instOf pub.n b (k / c.upv) else none) with
+  | some i =>
+    if (pi.leaves.getD (k % c.upv) #[]).getD (8 * (w - (c.unit.inGroups.getD 0 default).col) + j) (-1) ≥ 0 then
+      pub.outputs.getD (i * pi.words +
+        ((pi.leaves.getD (k % c.upv) #[]).getD (8 * (w - (c.unit.inGroups.getD 0 default).col) + j) (-1)).toNat) 0
+    else 0
+  | none => 0
+
+/-- Region `in`'s bytes at block `b`: `K` slots of `J` 16-bit values `V k j`, u16 LE. -/
+def u16Bytes (K J : ℕ) (V : ℕ → ℕ → ℕ) : ByteArray :=
+  (Array.range K).foldl (fun acc k => (Array.range J).foldl (fun acc j =>
+    (acc.push (V k j % 256).toUInt8).push (V k j / 256).toUInt8) acc) ByteArray.empty
+
+theorem u16_data (V : ℕ → ℕ) : ∀ (L : List ℕ) (acc : ByteArray),
+    (L.foldl (fun acc j => (acc.push (V j % 256).toUInt8).push (V j / 256).toUInt8) acc).data.toList =
+      acc.data.toList ++ (L.map fun j => [(V j % 256).toUInt8, (V j / 256).toUInt8]).flatten
+  | [], acc => by simp
+  | j :: L, acc => by
+      rw [List.foldl_cons, u16_data V L]
+      simp [ByteArray.push]
+
+theorem u16Slots_data (J : ℕ) (V : ℕ → ℕ → ℕ) : ∀ (L : List ℕ) (acc : ByteArray),
+    (L.foldl (fun acc k => (Array.range J).foldl (fun acc j =>
+      (acc.push (V k j % 256).toUInt8).push (V k j / 256).toUInt8) acc) acc).data.toList =
+      acc.data.toList ++ (L.map fun k =>
+        ((List.range J).map fun j => [(V k j % 256).toUInt8, (V k j / 256).toUInt8]).flatten).flatten
+  | [], acc => by simp
+  | k :: L, acc => by
+      rw [List.foldl_cons, u16Slots_data J V L, ← Array.foldl_toList, u16_data, Array.toList_range]
+      simp
+
+/-- **A u16 LE byte's bit**: bit `t % 8` of byte `t / 8` of `v`'s two bytes is bit `t` of `v`. -/
+theorem u16_bit (v : ℕ) {t : ℕ} (ht : t < 16) :
+    (([(v % 256).toUInt8, (v / 256).toUInt8].getD (t / 8) default).toNat).testBit (t % 8) = v.testBit t := by
+  by_cases h8 : t < 8
+  · have e1 : t / 8 = 0 := by omega
+    have e2 : t % 8 = t := by omega
+    rw [e1, e2]
+    simp only [List.getD_cons_zero, Nat.toUInt8, UInt8.toNat_ofNat']
+    rw [show (256 : ℕ) = 2 ^ 8 from rfl, Nat.mod_mod, Nat.testBit_mod_two_pow]
+    simp [h8]
+  · have e1 : t / 8 = 1 := by omega
+    rw [e1]
+    simp only [List.getD_cons_succ, List.getD_cons_zero, Nat.toUInt8, UInt8.toNat_ofNat']
+    rw [show (256 : ℕ) = 2 ^ 8 from rfl, Nat.testBit_mod_two_pow, Nat.testBit_div_two_pow]
+    have : t % 8 < 8 := Nat.mod_lt _ (by norm_num)
+    simp only [this, decide_true, Bool.true_and]
+    congr 1
+    omega
+
+theorem length_flatten_two {α : Type} (f g : ℕ → α) : ∀ L : List ℕ, (L.map fun j => [f j, g j]).flatten.length = 2 * L.length
+  | [] => rfl
+  | j :: L => by
+      rw [List.map_cons, List.flatten_cons, List.length_append, length_flatten_two f g L, List.length_cons]
+      simp only [List.length_cons, List.length_nil]
+      ring
+
+/-- **Region `in`'s bit at slot `k`'s leaf `j`, bit `t`**: bit `t % 8` of byte `k · 2J + 2j + t / 8` is bit `t` of
+`V k j`. -/
+theorem u16Bytes_bit {K J : ℕ} (V : ℕ → ℕ → ℕ) {k j t : ℕ} (hk : k < K) (hj : j < J) (ht : t < 16) :
+    ((u16Bytes K J V).get! (k * (2 * J) + (2 * j + t / 8))).toNat.testBit (t % 8) = (V k j).testBit t := by
+  rw [Layout.get!_eq_getD, u16Bytes, ← Array.foldl_toList, Array.toList_range, u16Slots_data]
+  rw [show ByteArray.empty.data.toList = [] from rfl, List.nil_append]
+  have ht8 : t / 8 < 2 := by omega
+  rw [Layout.getD_flatten_const default k _ (fun l hl => by
+      obtain ⟨k', -, rfl⟩ := List.mem_map.1 hl
+      rw [length_flatten_two, List.length_range]) (by simpa using hk) (by omega)]
+  have hslot : ((List.range K).map fun k =>
+      ((List.range J).map fun j => [(V k j % 256).toUInt8, (V k j / 256).toUInt8]).flatten).getD k [] =
+      ((List.range J).map fun j => [(V k j % 256).toUInt8, (V k j / 256).toUInt8]).flatten := by
+    rw [List.getD_eq_getElem _ _ (by simpa using hk)]
+    simp
+  rw [hslot, show 2 * j + t / 8 = j * 2 + t / 8 by ring, Layout.getD_flatten_const default j _ (fun l hl => by
+      obtain ⟨j', -, rfl⟩ := List.mem_map.1 hl
+      rfl) (by simpa using hj) ht8]
+  have hw : ((List.range J).map fun j => [(V k j % 256).toUInt8, (V k j / 256).toUInt8]).getD j [] =
+      [(V k j % 256).toUInt8, (V k j / 256).toUInt8] := by
+    rw [List.getD_eq_getElem _ _ (by simpa using hj)]
+    simp
+  rw [hw]
+  exact u16_bit _ ht
+
+/-- The free bits of region `in` over `2^s` words: a slot's `7 + s` column bits, and the slot bits. -/
+def inFree (c : Circuit) (s : ℕ) : Array ℕ :=
+  (Array.range (7 + s)).map (0 + ·) ++ (Array.range (log2ceil c.unitRange.count)).map (c.unitRange.slotLog + ·)
+
+/-- **Each `in` region is a region of `HmIn.regions`**: region `(w, s)` of `HmIn.inRegions` is `mkRegion`'s, at the
+words from `w` of every unit slot, with bytes `u16Bytes` of `inVal`. -/
+theorem in_region {c : Circuit} {pi : HmIn.Ports} {pub : Public} {ri : Array Region}
+    (h : HmIn.regions c pi pub = .ok ri) (hp : pi.ports.isEmpty = false) {w s : ℕ}
+    (hR : (w, s) ∈ (HmIn.inRegions c pi).toList) :
+    ∃ R ∈ ri.toList, ∃ name, mkRegion c.kLog name (inFree c s) (c.unitRange.start + w * WORD)
+      (fun b => u16Bytes (2 ^ log2ceil c.unitRange.count) (8 * 2 ^ s) (inVal c pi pub w b)) = .ok R := by
+  obtain ⟨r, hr, hrw⟩ := List.getElem_of_mem hR
+  unfold HmIn.regions at h
+  simp only [hp, Bool.false_eq_true, ↓reduceIte] at h
+  obtain ⟨hsz, hall⟩ := Exec.range_mapM_ok h
+  have hr' : r < ri.size := by rw [hsz]; simpa using hr
+  refine ⟨ri[r], Array.getElem_mem_toList hr', ?_⟩
+  have := hall r hr'
+  have hget : (HmIn.inRegions c pi)[r]! = (w, s) := by
+    rw [getElem!_pos _ _ (by simpa using hr)]
+    simpa using hrw
+  rw [hget] at this
+  exact ⟨_, this⟩
+
+end bytes
 
 end FlockSoundness.Discharge.ZkPubIn
