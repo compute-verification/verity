@@ -2,9 +2,11 @@
 # The window's cubin ship from this tree, on a machine with CUDA >= 12.8 but no workspace venv (node 2): pearl_c_sm120/build.sh
 # with the harness's python (jobs/env.sh) standing in for its `uv run python`, then the tree as OUT/ship.tar (one directory,
 # ship/) and its SHA-256 in OUT/ship.sha256.
-#   bash benchmarks/pouw/exhaustion/ship.sh OUT HARNESS_BUILD        (env CUDA, default /usr/local/cuda-13.0)
+#   bash benchmarks/pouw/exhaustion/ship.sh HARNESS_BUILD [OUT]   (OUT default $RESEARCH_RUN_DIR/out; env CUDA, default
+#                                                                  /usr/local/cuda-13.0)
 set -euo pipefail
-OUT=${1:?OUT}; BUILD=${2:?HARNESS_BUILD}
+exec < /dev/null
+BUILD=${1:?HARNESS_BUILD}; OUT=${2:-$RESEARCH_RUN_DIR/out}
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
 export CUDA=${CUDA:-/usr/local/cuda-13.0}
 . "$ROOT/benchmarks/pouw/harness/jobs/env.sh" "$BUILD"

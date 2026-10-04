@@ -12,6 +12,7 @@
 # baselines' and the arm's times, its gates and transcript); <schedule>/ (window.py's OUT and audit.json); bench-after/card<g>/
 # (the baselines alone); verify-before/card<g>.json.  Exit: the first window's audit's, else the first failure.
 set -uo pipefail
+exec < /dev/null
 mode=${1:?rehearsal|timed}; ship_tar=${2:?SHIP_TAR}; build=${3:?HARNESS_BUILD}
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
 export HERE ROOT DURATION=${4:-1800} OUT=${OUT:-$RESEARCH_RUN_DIR/out} SCHEDULES=${SCHEDULES:-serial} DRAWS=${DRAWS:-60}
