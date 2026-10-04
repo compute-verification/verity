@@ -11,7 +11,7 @@
                                                             (`tools/check/slot.py`), the lock and cores the train checks take;
                                                             --priority takes the next free slot ahead of waiting lane checks;
                                                             --agreement sends the upstream build whatever the commit changes
-                                                            (a train that changes a pinned guarantee elsewhere: `train.sh`);
+                                                            (a train that changes a guarantee elsewhere: `train.sh`);
                                                             a warning first when the commit can't land on REF as it is
     uv run python tools/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
     python tools/check/check.py --preflight                 the preflight alone, for `research merge --train --prepare`
@@ -25,7 +25,7 @@ once it passes, so a check that one of them fails ends in seconds, not hours.
 A step that fails stops the others: each running step's processes get SIGINT (Python code runs its `finally`s, so the Lean audit
 removes its scratch tree) and whatever is left of them SIGKILL after `STOP_GRACE_S`, and no group starts another step. Such a
 step's status is `stopped`. `--keep-going` lets every group run to its end instead, keeping the verdicts its passing steps store,
-except after a failed preflight, which starts no group, or a step in `HALTS`: a Lean module that doesn't compile, or a pin whose
+except after a failed preflight, which starts no group, or a step in `HALTS`: a Lean module that doesn't compile, or a guarantee whose
 record is stale, fails the audit too, so nothing still running is worth the slot; likewise a Rust crate that doesn't compile
 (`HALTS_ON`: flock-circuit-build's log says `could not compile`) fails flock-rust-tests.
 The steps stay in this process's group, which a runner's timeout and a manual stop signal as a whole. Each step's record is
@@ -47,16 +47,16 @@ use). Which group a step is in, its order there, and whether its failure halts t
     lean            `lake build` of the Lean verifier (`backends/flock/verifier/lean`), then its partition check against
                     `verity.ir.partition` (`unit_cut_agree.py`), then the audit of every Lake package with a `lean-audit.json`
                     (`tools/lean/audit.py --all --build`: axioms, sorry, declared axioms, escapes, files, kernel bypasses, code
-                    run while compiling, dependency .olean digests, the pins' records, a kernel replay; its reports under
+                    run while compiling, dependency .olean digests, the guarantees' records, a kernel replay; its reports under
                     `lean-audit/`), then the suites that use Lean (`AFTER_LEAN`, outcomes in `suites-lean.json`) on what those
                     steps built, then its agreement with upstream's Rust verifier (`ci.py`) on the upstream build stored once
                     and pinned by hash (`backends/flock/verifier/upstream.json`), when the run has it; skipped by name without
                     it.  `research merge` requires it for a change under backends/flock/ (`tool.py`)
     lean-changed    at once with the lean group: `lake build` of each Lake package whose audit misses, on a tree this machine
-                    keeps built (`lean_changed.py`), then the audit's judgment of its pins on that build without the kernel
-                    replay, so a module that no longer compiles or a pinned record a merge left stale ends the run in minutes,
-                    not when the audit's cold build reaches it; it skips what it can't build or read here and vouches for
-                    nothing: the audit decides
+                    keeps built (`lean_changed.py`), then the audit's judgment of its guarantees on that build without the
+                    kernel replay, so a module that no longer compiles or a guarantee's record a merge left stale ends the
+                    run in minutes, not when the audit's cold build reaches it; it skips what it can't build or read here and
+                    vouches for nothing: the audit decides
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run), each a hit only on identical inputs:
 

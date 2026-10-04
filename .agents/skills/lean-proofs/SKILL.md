@@ -120,7 +120,7 @@ simp with that.
   guarantee easier: don't strengthen an input relation, weaken an output relation, shrink the challenge space, add an
   unmotivated hypothesis, or move a verifier check into an assumption. That list is also what Daniel looks for when a change reaches him.
 - **List what you cite.** When a ledger row, a table or a PR description cites a guarantee as proved, add its theorem
-  (`SecurityProofs.G` under the four names) to `pins` and run `python tools/lean/audit.py --update PKG`. Commit the
+  (`SecurityProofs.G` under the four names) to `guarantees` and run `python tools/lean/audit.py --update PKG`. Commit the
   record with the proof.
 - **Watch upstream for what you assume.** A new named assumption or a lemma you prove by hand that a pinned dependency
   (Mathlib, ArkLib, VCVio, CompPoly) could prove gets an entry under `upstream.watch` in the package's `lean-audit.json`.

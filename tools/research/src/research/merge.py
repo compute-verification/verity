@@ -540,7 +540,7 @@ def _strict_json(text: str) -> bool:
 
 
 def broken_json(tree: Path, theirs: str) -> list[str]:
-    """The JSON files whose text the merge at ``tree``'s HEAD merged (both sides changed them, as two PRs' pins change one
+    """The JSON files whose text the merge at ``tree``'s HEAD merged (both sides changed them, as two PRs' guarantees change one
     `lean-audit.json`) and that don't parse (`_strict_json`) though both sides' did."""
     mb = _git(tree, "merge-base", "HEAD^1", theirs).stdout.strip()
     changed = [set(_git(tree, "diff", "--name-only", "-z", mb, rev).stdout.split("\0")) for rev in ("HEAD^1", theirs)]
@@ -598,8 +598,8 @@ def _chain(tree: Path, pins: list[tuple[str, str]], stamp: str) -> list[str]:
 
 #: the grants of `research queue`'s rules (role: what it attests) a train's pull request must hold at its pinned head before its
 #: check is spent; the lander applies the rules' other grants by hand
-TRAIN_GRANTS = {"statement-reviewer": "a named reviewer read what `tools/lean/audit.py --update` prints for its changed pins and "
-                                      "the definitions they read (lane contract §5)"}
+TRAIN_GRANTS = {"statement-reviewer": "a named reviewer read what `tools/lean/audit.py --update` prints for its changed guarantees "
+                                      "and the definitions they read (lane contract §5)"}
 
 
 def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=print) -> list[str]:
