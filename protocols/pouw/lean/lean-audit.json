@@ -10476,16 +10476,16 @@
    ]
   },
   "Pouw.Assumptions.PearlC.TTOutRowSeed": {
-   "digest": "b4c671af4cc56b8dbbe733e1af0af31552b4a621192d89edad8f21ff7be131bc",
+   "digest": "c40f2b158cceab79041718771ef720df3608ffca093ea26c308d2a12d2edf9d4",
    "definitions": {
     "Pouw.PearlC.CodeSeedNoise": "f9ab26e6d4dd33af4ded83eab6b937847d746e41ca534f195aaf1a9ca80cc644",
     "Pouw.PearlC.CostModel.FragmentPriced": "46c5c6211840ae96f468b2846af32a1544af96857be08a5876783df01cc8fc72",
     "Pouw.PearlC.CostModel.RelabelClosed": "b52e8fbb4d7625dd73c0cedee733d387c31182fb93335e760a0d8e2f210ed0e2",
     "Pouw.PearlC.CostModel.SplitClosed": "353aa6d0f5fed29774fd1a91d648f6af80abe49bd07e307d3d8bd0fad9c37e26",
     "Pouw.PearlC.PearlCDevice.RowLocal": "bf7cc876bbcb229a31876a51e3995da1528c00cd5fec8d9037a7c95982d9157e",
-    "Pouw.PearlC.PearlCSem.RowDrawn": "f5382bc77313f189c8418e773640738d1131600806538b225ad163c3efc7b839",
+    "Pouw.PearlC.PearlCSem.RowDrawn": "d3c5d9f4c1cde4eff0f330a45dd05c5c29aba53786a94b7e51bd4d8ee7a1c5c0",
     "Pouw.PearlC.PearlCSem.splitNoise": "2df55e654ca27e6b1bada04a9595a066f1368356a179fd611b23cdf8d9295425",
-    "Pouw.PearlC.RowSeedNoise": "5b8948343c11f3fc7eb59296ca88f3d1d1e74aeaca2ef74e016006ea079a64ff",
+    "Pouw.PearlC.RowSeedNoise": "9be706a50086a718e23dc64ac89ed8b810905d3abb907a91cb52c4c4bc35045b",
     "Pouw.PearlC.SkipEmbed": "0ceff1696d890a9d09e667f90bff5ccbba6d1b1a3e11eabd3cacac2f25ebff57",
     "Pouw.PearlC.SkipEmbed.embed": "b6b2ac848d0161fa6c6886aae06fd6e7bd3a81225e32ea32bf39dbb53b5223c0",
     "Pouw.PearlC.SkipEmbed.honest": "7410f6c383e1fb3085fb9eb9927557b082b8bf0ebad9bdaed570f94d1056da47",
@@ -12870,6 +12870,7 @@
     "Pouw.PearlC.pearlCSampledUnpromotedChainCap1000_8192",
     "Pouw.PearlC.pearlCTilesDevRev1_total",
     "Pouw.PearlC.rowCap_agg",
+    "Pouw.PearlC.rowDrawn_satisfiable",
     "Pouw.PearlC.ttOutFp4ChainOnly_of_ttOut",
     "Pouw.PearlC.ttOutPearlCDevChainCap_of_cap",
     "Pouw.PearlC.ttOutPearlCDevChainCap_sm120v2_loop",
@@ -14848,23 +14849,23 @@
    ]
   },
   "Pouw.Protocol.PearlC.Defs": {
-   "digest": "23dbab2a950ed9c30c6d5afa288929af8b5cab0266a42c58c9b38d9c69e24554",
+   "digest": "dc2ac041f0e2961366fd07d5c92621c1ff0d6b667da0a206ba3dbafe23d25f9b",
    "definitions": {
     "Pouw.PearlC.AtomIn": "e03f4bafc750c0f6d4578e67ec34924dca3698ed3ee961822b032675b3ce5fb0",
     "Pouw.PearlC.Bf16Vec.holds": "123a73d6eaa64749d5cdcafe9b72b78392cf4a914b61373ebd2950fac5b5a195",
-    "Pouw.PearlC.FormChain": "108cdb4ae05f6a4d84686debbd3fded44a7a8d0908a087efbde6a20ffc3c7eba",
-    "Pouw.PearlC.FormChain.atomMix": "03d17652e550cf3d2985949bef7fb02cb3fb72de6d6146b708ad7d832691648e",
-    "Pouw.PearlC.FormChain.elem": "e3f7320018d0a77fd87b8aace190c1742e3d7617485a496379f3e7dff1fbc6ba",
-    "Pouw.PearlC.FormChain.quant": "1fb881861416bf408e3b9224d857212f83ab32a3ca58d7c8a49c5e1e0341db10",
+    "Pouw.PearlC.FormChain": "8bbf20f4a6edc84151755d1bd0e2038ec23aa963263ac51397c6ba7bf41c053d",
+    "Pouw.PearlC.FormChain.atomMix": "5dc665d6a108e7148dbbb4a059285fd6cb5d0de8e0dc98a4b5edb0c556524629",
+    "Pouw.PearlC.FormChain.elem": "19765c6c4e4379f9e13fc6fbcf0b697f9ee0e1b8a9c02351ec584394851a4e80",
+    "Pouw.PearlC.FormChain.quant": "36a2fc1b9a98129b838f717b49732d29f5b0282ac2b74f4657f6f7732f2ab4d3",
     "Pouw.PearlC.FormChain.quantA": "7d17a53012bee5c45ec493577a94be30864484dd366f20728859984b6d84990d",
     "Pouw.PearlC.FormChain.quantB": "075491f906c6c9860250f25a284dfc35aa568fc1a230d75509c5f10196d468ff",
-    "Pouw.PearlC.FormChain.value": "7b6f1ffb5bce03c5113c52bedba95de13604d482073dbc2fd3ad75e84a56e9bd",
+    "Pouw.PearlC.FormChain.value": "dd4a3abe061a516f3a94686dd9b68144dfd48b70f5dc1529281796701b887d65",
     "Pouw.PearlC.LiveRow": "40b15353e9a66d686553f3d075eb2185e50e3e116e9881057baedc04bf77591c",
-    "Pouw.PearlC.Noise": "edb2db81648db97548f8bc279dd58bd2f1383a7d4f851b19a0658a13c8843e12",
-    "Pouw.PearlC.Noise.EA": "e3ee9464e4a88d1814aba836b2c35b8cc084e4dc97f7208644e825c57cb4dcdc",
-    "Pouw.PearlC.Noise.EB": "07d0a5ca438d4a1525513b14cd295960240807305e4c5b4130f00d4992dbb3bd",
-    "Pouw.PearlC.Noise.FA": "a5c14a48e0d3d9af32f63b82793755bf37f5d4d1e96c2ef95e92eb2ae25e6ada",
-    "Pouw.PearlC.Noise.FB": "fb3f9945655c71dfd9e0afd0332cffef003447c6326dfe47c2361e578f4d1014",
+    "Pouw.PearlC.Noise": "ae7232d30e82945737cf2a48c84ee344ca4bc367b005332dc360ec2a812835b7",
+    "Pouw.PearlC.Noise.EA": "59672c8d786e315e9d91511f4559f388037eaf9075b61e1b781faa70724bb67a",
+    "Pouw.PearlC.Noise.EB": "32b8732aa313b3b1c98f5c4944b7bba7cd2d1805f80afcb426d0264193408f8a",
+    "Pouw.PearlC.Noise.FA": "926016519a6816b100752b63534f2c492d6c385eac93879a68b68e65c3bcda07",
+    "Pouw.PearlC.Noise.FB": "e0ba5bcc9a196ca323d7d267676321b2b97f67ca70181d16d66790af28bbbd37",
     "Pouw.PearlC.Params": "029bfd9457e3e47f09f2708265770209ee227af96212ad2274266f34d2b8db5a",
     "Pouw.PearlC.Params.G": "60f7bab6231b1b495b857f7202a888244b2962101416eb2e8a25f00c6c92c849",
     "Pouw.PearlC.Params.pi": "a0c76c5bb3a827057dc3891fc358700a66a120b50de2c9e1f78e1ce84abaf0c8",
@@ -14886,8 +14887,9 @@
     "Pouw.PearlC.e4m3Word": "262f89dc6d0a9755f1aa13096a20086fe027f61f02f49f30d28636861400c18c",
     "Pouw.PearlC.f32Word": "ce30d533a69d11d0d02f1f8a72d983275a4de4a1a60fc72cada1a3a228b626d4",
     "Pouw.PearlC.groupWord": "2edeed3a0027c6cb6c25ace1e0466168190be32c77094b27efd5f23e9ddd64ac",
-    "Pouw.PearlC.lineCodes": "313f73cd0db7c542c0d13eed269ab58e01f417bc37cb1d17e714594ed6da6c11",
+    "Pouw.PearlC.lineCodes": "47a38ab6d0507d60e6e900dbacec88f6af5fc9440ed87339b1edb48804e0cf09",
     "Pouw.PearlC.meanSq": "9343f209a48591523afdc330e83edc3dae68a5e03e48a5fe82371a84971a9804",
+    "Pouw.PearlC.mulCode": "1d6b7b3dcb2ee06319b4e010aeb78fccf642a5627e2a552bd27ef6e23dbec075",
     "Pouw.PearlC.promote": "e7993cd7b482ea0306fcd39b062c0e2af3b9cacb0f7236b37072e39761418c64",
     "Pouw.PearlC.rowAtoms": "ad1c83a0803bdf46c5713076468b34796da8b4f01c6d7965eb59817789faee03",
     "Pouw.PearlC.total": "2275e24e1c8b11053920720b904d4086df1950ed4ff50c3905b88c345c80d630",
@@ -15296,7 +15298,7 @@
    ]
   },
   "Pouw.Protocol.PearlC.Device": {
-   "digest": "38fabfed01c1f506e35c9f95f6e42e3f8b52736458fbbd9e175ccb1119b89af8",
+   "digest": "c1f31632303caf10e5a6aee5c87d2eb535b2232ab121f49d3b8fbe958db718e9",
    "definitions": {
     "Pouw.PearlC.PearlCDevice": "49b0746e634512b0ba15501dae4a8e1e7f5a92906eccf6db5291f7ed68f2dfd0",
     "Pouw.PearlC.PearlCDevice.G": "dbfc86330607b7c4760f02bf16a71635ec8b1b7775a76ee3bb4ebfcdf645e58b",
@@ -15307,7 +15309,7 @@
     "Pouw.PearlC.PearlCDevice.useful": "2bff315b64a2de69e8ba06bfd2bd3f254f99e7a6e199bafb11343948e42b791d",
     "Pouw.PearlC.PearlCSem.tileDebitDev": "cce0a81174974d4c5a3917c2666f44c5efb9b4d81d3a284b9266d96d8993d1ff",
     "Pouw.PearlC.PearlCSem.unitDebitDev": "0905e415108f9a6c6627b2a5329a708fc2420f2ed68be83d59cf0bcc357ead01",
-    "Pouw.PearlC.PearlCSem.unitUsefulDev": "3c269fd8fd02528dcc37e5e5cc03cc1ed7abeb6da4c6d167b992de9df0e5f24d",
+    "Pouw.PearlC.PearlCSem.unitUsefulDev": "fc7cf4b1b125525fdae1fddc6caf60d1190f58aef57a9e28be5c6fe7b6bab36b",
     "Pouw.PearlC.Prices": "e7dc1fa821c3aa9486516f7ed67d5045dd6472bf40df5fa5015b443234253f95",
     "Pouw.PearlC.Prices.add": "1dafe7c660398166bf6af347e43e69d324341f6dcb530ad44fa993ac1a7ac015",
     "Pouw.PearlC.Prices.bf16": "0fa6711404e6117909176b090564e8b07f6a46acfdc89907f884b34b40278aeb",
@@ -16732,10 +16734,10 @@
    ]
   },
   "Pouw.Protocol.PearlC.FormingPDefs": {
-   "digest": "162ca10ce8aae1282691e25c087993bb705f70bc28964cffbfb9b2cc2eb7ce32",
+   "digest": "444032d5a50b1852582aa3d329e32f1ee4b42b55bba6a0f92a93016c81560918",
    "definitions": {
-    "Pouw.PearlC.FormingP.atomMixP": "423274a85e36ccc0f01dd501cd863b46b1a09757922eb4fbe9c926f245d0e946",
-    "Pouw.PearlC.FormingP.saltDeadP": "e6a82e8384fa574f96dc793ae63e5763c03c939db002c18b4c7e829961ac7cdb"
+    "Pouw.PearlC.FormingP.atomMixP": "faf5b2119376f277e768d4b4bc986ea406981d3b50f0cbef8e9a6b7bf09d7d7e",
+    "Pouw.PearlC.FormingP.saltDeadP": "ae6055a650ce2f53340ace3fcb32980cadb87340c9ac5768b0369942281c65af"
    },
    "pins": [
     "Pouw.PearlC.completeSampledDevRev1K",
@@ -17635,7 +17637,7 @@
    "pins": ["Pouw.PearlC.tileProofSoundAll_of_tileGame"]
   },
   "Pouw.Protocol.PearlC.Instance": {
-   "digest": "705be6a0c4f57f5b2f8945d3bfc26d25c4c6d028d992e2e8951fa90c0efa3d51",
+   "digest": "2548cb9199e7528387858ce685162c38d016bc25f5a2e9fc19fb8e46927d53ab",
    "definitions": {
     "Pouw.PearlC.PearlCSem": "c879a2d9120f1622fccc70dbca3eb9ad653bd52d2511c2a269ce1a89098975e8",
     "Pouw.PearlC.PearlCSem.OperandOK": "9b34bda51413f8d7ecf157d950aa789eafb2095bfb64303ef6b52eef0b098421",
@@ -17646,7 +17648,7 @@
     "Pouw.PearlC.PearlCSem.noise": "d281d444fcabbab3bb1cf51b841a75714776d2099bcfd8fbdca58b19b1d23df1",
     "Pouw.PearlC.PearlCSem.unitChain": "7c4c4df3576593bf45e05167be71c823a0b49088dd5ce38b6c03bca3db64c96d",
     "Pouw.PearlC.PearlCSem.unitDebit": "f995a382530b9c298e24ffe30251a147fd03a4959566d3a6594b37e84bfc540c",
-    "Pouw.PearlC.PearlCSem.unitUseful": "8c9f13352c3e3fc945fc43a8321cbce30045add36d4e4e9a10b8a3f4d4cc4d59",
+    "Pouw.PearlC.PearlCSem.unitUseful": "0feed00bbf8089da00827a2122f03ff62b6530f89f0277f4b49f25f47e06cb97",
     "Pouw.PearlC.atNat": "d90516aabfff5fbcc35541989b6c64995f1fa61cef5aedf6309999d5ac6fda16",
     "Pouw.PearlC.bf16WordOf": "4c16502cb2ebfd22ba6bddacc3094f3772ec1f945025147c6efbc97cf23ae0fb",
     "Pouw.PearlC.codeBf16": "96682a0c5faec47aac555c7c01bb2cb5e2e778c5e9334a2dc6785a5021a2bfcd",
@@ -18544,12 +18546,12 @@
    ]
   },
   "Pouw.Protocol.PearlC.SaltDead": {
-   "digest": "b83888a856aca4fdbac7e979006e3e2978a5aa5ef4765cedd0c383eeb37ccd56",
+   "digest": "3b91d506e7fe396375e7f7fe063a2688fb52991232438fbb84b34e2bba2e5e97",
    "definitions": {
-    "Pouw.PearlC.SaltDead.flatLine": "5d866e26a04b5aff39e4f55f45a3dcd7460e4e422d28f8b7a1fa39b56944d413",
-    "Pouw.PearlC.SaltDead.flatLineF": "7ab27d8f98c9866c6efa57d3ddf50fc9a1a8707f0d35c75bba5a0d5c82b726c5",
-    "Pouw.PearlC.SaltDead.saltDead": "60aa568fd830725ec18d64c5d24e0cb4aeef6043bfe563904f46f2c64f9f5977",
-    "Pouw.PearlC.SaltDead.support": "31dc26f7e1e018517c17bd9e54410c19acff3906590001558365a78ed64b59ed"
+    "Pouw.PearlC.SaltDead.flatLine": "267bbe7e750270749c07dd1513e5d7e4ae282412a8811e6e5d8690acbecacd48",
+    "Pouw.PearlC.SaltDead.flatLineF": "a9e6b57c7977ced1e9c178e582129cce694acdc0026ece3f8f9e70b167e9decb",
+    "Pouw.PearlC.SaltDead.saltDead": "aa0dd7028410506810ad03a3df016f1ad3c067e4b1be72e0312d2df76b5ac9f1",
+    "Pouw.PearlC.SaltDead.support": "71c6cd8adffa516c0915f737cb48a45928fad6f2cfad8432e03e27a71913257c"
    },
    "pins": [
     "Pouw.PearlC.completeSampledDevRev1K",
