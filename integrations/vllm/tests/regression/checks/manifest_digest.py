@@ -21,12 +21,14 @@ boundary, flagged `promoted: true`) -- the facts a labelled decision on the fixt
     promoted_member     the one `op_path/output_member` those rows are named as (a sorted list if several, None if none)
     promoted_member_class  the same with the layer index folded to `<k>` (`model.layers.<k>.mlp.experts/out`): one string when the
                         promoted rows are one member per layer (#67 / #68), else the sorted list / None -- what a decision names
+    promoted_class_counts  on a query manifest (`query.engine` q-word or v2-query), the rows beyond v1 per member class
     only_new            how many identities the manifest has BEYOND the v1 manifest of record with none of v1's removed -- the
                         IDENTITY_KEY set difference against the row's `manifest.json` when it resolves here (None when a v1 identity is
                         missing: not an additive difference), else the manifest's own account (= promoted); `only_new_basis` says which
 """
 from __future__ import annotations
 
+import collections
 import hashlib
 import json
 import subprocess
@@ -38,6 +40,7 @@ from .. import resolver
 NAME = "manifest_digest"
 TIER = "T0"          # inputs: Programs 50-300 MB + workload; the rebuild itself is CPU-minutes (run it on a pod tonight)
 STRENGTH = "strong"
+REBUILD = True       # 94% of the T0 wall (2-26 min a row): skipped unless VERITY_REGRESSION_REBUILD=1, the post-train job's switch
 INPUTS = ("manifest.json", "commit/manifest_verify.json", "build_summary.json", "build_request*/instances.json.gz", "workloads/<row>.json")
 
 
@@ -78,6 +81,10 @@ def _member_class(member: str) -> str:
     return ".".join("<k>" if p.isdigit() else p for p in op.split(".")) + "/" + mem
 
 
+#: `query.engine` of a manifest the query path built (`verity_vllm.query.required`): Q_word v1 since S1, Q_module_body_v1 before
+QUERY_ENGINES = ("q-word", "v2-query")
+
+
 def _one_or_list(members: list[str]):
     return members[0] if len(members) == 1 else (members or None)
 
@@ -86,7 +93,7 @@ def _promotion(row: resolver.Row, man: dict) -> dict:
     """[F-r19-int-20] The promotion facts of a built manifest (see the module docstring): `promoted`, `promoted_member`,
     `promoted_member_class`, `only_new` (+ `only_new_basis`, and the set arithmetic against v1 when its manifest.json resolves)."""
     rows = man.get("identities") or []
-    v2 = (man.get("query") or {}).get("engine") == "v2-query"
+    v2 = (man.get("query") or {}).get("engine") in QUERY_ENGINES
     promoted = [r for r in rows if r.get("promoted")]
     members = sorted({f"{r.get('op_path')}/{r.get('output_member')}" for r in promoted})
     out: dict = {"promoted": len(promoted), "promoted_member": _one_or_list(members),
@@ -104,6 +111,8 @@ def _promotion(row: resolver.Row, man: dict) -> dict:
             members = sorted({f"{new_rows[k].get('op_path')}/{new_rows[k].get('output_member')}" for k in new - old})
             out.update(promoted=added, promoted_member=_one_or_list(members),
                        promoted_member_class=_one_or_list(sorted({_member_class(m) for m in members})), promoted_basis="v2-query: rows beyond v1")
+            out["promoted_class_counts"] = dict(sorted(collections.Counter(_member_class(f"{new_rows[k].get('op_path')}/{new_rows[k].get('output_member')}")
+                                                                           for k in new - old).items()))
     else:
         out.update(only_new=len(promoted), only_new_basis="promoted rows (v1 manifest.json not resolvable here)")
     return out
@@ -126,6 +135,12 @@ BUILDER = "verity_vllm.pipeline.cli"         # Q_module_body_v1 over the Program
 POLICIES_OFF = ["--no-norm-scales", "--no-guarded-max", "--no-router-softmax", "--no-vocab-range"]    # the manifests of record predate them
 
 
+def _flags(row: resolver.Row) -> list[str]:
+    """The builder flags the row's manifest of record was built with: `manifest_flags` of its fixtures.toml table (#73's epoch record:
+    `[]`, every policy on), else POLICIES_OFF."""
+    return list(row.spec.get("manifest_flags", POLICIES_OFF))
+
+
 def _rebuild_argv(row: resolver.Row, programs_root: Path, out: Path) -> list[str]:
     wl = row.workload()
     fx = json.load(open(wl))
@@ -134,11 +149,11 @@ def _rebuild_argv(row: resolver.Row, programs_root: Path, out: Path) -> list[str
     if b > 1:
         bs = row.json("build_summary.json")
         wd = ((bs.get("workload") or {}).get("workload_digest")) or None
-        argv = base + ["build-global", "--fixture", str(wl), "--programs-root", str(programs_root), "--out", str(out), *POLICIES_OFF]
+        argv = base + ["build-global", "--fixture", str(wl), "--programs-root", str(programs_root), "--out", str(out), *_flags(row)]
         if wd:
             argv += ["--workload-digest", wd]
         return argv
-    return base + ["build", "--program", str(programs_root / "build_request"), "--workload", str(wl), "--out", str(out), *POLICIES_OFF]
+    return base + ["build", "--program", str(programs_root / "build_request"), "--workload", str(wl), "--out", str(out), *_flags(row)]
 
 
 def actual(row: resolver.Row) -> dict:

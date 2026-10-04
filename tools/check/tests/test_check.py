@@ -250,13 +250,14 @@ def test_a_recorded_runs_steps_require_the_store_and_get_its_custody_dir(tmp_pat
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     env = CHECK.env()
     assert env[CHECK.STORE_REQUIRED_ENV] == "1" and CHECK.CUSTODY_ENV not in env, "no key staged: required, nothing to pass"
+    assert env[CHECK.REGRESSION_ENV] == "1", "a recorded check blocks on the vLLM reference regression's T0 tier"
     (custody / "store.toml").write_text("[remote]\n")
     (custody / "cred.json").write_text("{}")
     env = CHECK.env()
     assert env[CHECK.CUSTODY_ENV] == str(custody.resolve()) and not any(k.startswith("RESEARCH_") for k in env)
     assert CHECK.CUSTODY_ENV not in CHECK._env_key(env), "the per-run path must not change what a pass is keyed on"
     monkeypatch.delenv("RESEARCH_RUN_ID")
-    assert CHECK.STORE_REQUIRED_ENV not in CHECK.env() and CHECK.CUSTODY_ENV not in CHECK.env()
+    assert not {CHECK.STORE_REQUIRED_ENV, CHECK.CUSTODY_ENV, CHECK.REGRESSION_ENV} & set(CHECK.env())
 
 
 def _repo(root: Path):
@@ -553,6 +554,37 @@ def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_
     steps = CHECK.Steps(tmp_path)
     steps.end({"step": "pytest", "status": "failed"})
     assert steps.stopping and steps.halted == "pytest"
+
+
+def test_the_lean_audit_step_refuses_a_fast_path_result(tmp_path):
+    """A lean-audit step that exits 0 passes only on an `audit.json` whose every package had the full audit: one with the kernel
+    replay. A fast-path result (`lean_changed.py --records`, of kind `FAST_KIND`, or any pass without the replay) fails it, and
+    so does an `audit.json` that can't be read."""
+    import json
+
+    kind = CHECK._load("lean_changed").FAST_KIND
+    write = "import pathlib, sys\np = pathlib.Path(sys.argv[1])\np.parent.mkdir(exist_ok=True)\np.write_text(sys.argv[2])"
+    full = {"package": "a", "failures": [], "seconds": {"build": 1.0, "audit": 1.0, "replay": 1.0}}
+
+    def step(doc: dict | None) -> dict:
+        (tmp_path / "lean-audit" / "audit.json").unlink(missing_ok=True)
+        argv = _py(write, tmp_path / "lean-audit" / "audit.json", json.dumps(doc)) if doc is not None else _py("pass")
+        return CHECK._step("lean-audit", argv, tmp_path, tmp_path, True, CHECK.Steps(tmp_path, keep_going=True))
+
+    assert step({"passed": True, "failed": [], "packages": [full]})["status"] == "passed"
+    for b in ({"package": "b", "failures": [], "seconds": {"build": 1.0, "audit": 1.0}},
+              {**full, "package": "b", "kind": kind}):
+        rec = step({"passed": True, "failed": [], "packages": [full, b]})
+        assert rec["status"] == "failed" and rec["rc"] == 0 and rec["detail"].startswith(f"refused: b: a {kind} result"), rec
+    rec = step({"passed": True, "failed": [], "kind": kind, "packages": []})
+    assert rec["status"] == "failed" and f"a {kind} result" in rec["detail"]
+    rec = step(None)
+    assert rec["status"] == "failed" and rec["detail"].startswith("refused: no readable")
+    for bad in ([], {"packages": {"a": full}}, {"packages": ["a"]}):     # JSON, not an audit's report: it crashed check (#966)
+        rec = step(bad)
+        assert rec["status"] == "failed" and "is not an audit's report" in rec["detail"], rec
+    rec = step({"passed": True, "failed": [], "packages": [{**full, "seconds": ["replay"]}]})
+    assert rec["status"] == "failed" and rec["detail"].startswith(f"refused: a: a {kind} result"), rec
 
 
 def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_path, monkeypatch):

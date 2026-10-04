@@ -36,6 +36,7 @@ def test_a_cpu_job_goes_home_in_a_capped_pinned_scope_with_cuda_hidden():
     assert "AllowedCPUs=96-127" in w and w[w.index("--"):][1:6] == ["sh", "-c", submit.CPUSET_CHECK, "cpuset-check", "96-127"], \
         "the scope holds the pin, so a workload's own taskset can't leave it, and the wrapper checks that it does"
     assert w[-3:] == ["taskset", "-c", "96-127"], "the owner runs outside node 1's checks and provers pools, at its own priority"
+    assert "CPUWeight=idle" in w, "on node 1 a CPU job yields its CPUs to the GPU jobs' host threads that share them"
     assert out["workload_wrap"] == []
     guest = submit.resolve(model.load(NEBIUS), _job(project="pous", cpus=4, memory_gib=16, node="vy-nebius-1"), "r1", T)
     assert guest["wrap"][-6:] == ["taskset", "-c", "96-127", "nice", "-n", "19"], "a guest's share narrows to the unpooled CPUs"
@@ -83,7 +84,8 @@ def test_refusals_name_every_nodes_reason():
 
 def test_a_pinned_node_is_the_only_one_tried():
     c = model.load(NEBIUS)
-    assert submit.resolve(c, _job(cpus=4, node="vy-nebius-2"), "r1", T)["node"] == "vy-nebius-2"
+    n2 = submit.resolve(c, _job(cpus=4, node="vy-nebius-2"), "r1", T)
+    assert n2["node"] == "vy-nebius-2" and "CPUWeight=idle" not in n2["wrap"], "node 2's guest CPU jobs run at nice 19 instead"
     with pytest.raises(submit.Refused) as e:
         submit.resolve(c, _job(gpus=1, quiet=True, node="vy-nebius-1"), "r1", T)
     assert "vy-nebius-2" not in str(e.value)
@@ -96,6 +98,7 @@ def test_node_1s_gpus_take_a_pinned_job_through_its_own_gpu_lease_only_with_the_
         submit.resolve(_n1_executor(c, ""), _job(gpus=1, node="vy-nebius-1"), "r1", T)
     out = submit.resolve(c, _job(gpus=1, cpus=4, memory_gib=64, node="vy-nebius-1"), "r1", T)
     assert out["node"] == "vy-nebius-1" and "systemd-run" in out["wrap"] and submit.GPU_LEASE_N1 not in out["wrap"]
+    assert "CPUWeight=idle" not in out["wrap"], "a GPU job's host threads take the CPUs a CPU job yields"
     assert out["workload_wrap"] == ["env", "GPU_LEASE_DIR=/run/gpu-lease", "GPU_LEASE_ALLOWED_FILE=/run/gpu-lease/pool.gpus",
                                     submit.GPU_LEASE_N1, "1", "--wait", "--max-min", "10", "--mem-gb", "64", "--preemptible", "--"]
     with pytest.raises(submit.Refused, match="no timed windows"):
