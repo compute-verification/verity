@@ -172,22 +172,20 @@ def bound_ports(fn, unit, template, tin: int) -> dict[int, int]:
 CASES = [("sm120", 2, 128, 3, (1, 1)), ("sm120", 4, 128, 4, (2, 2)), ("h100", 2, 256, 2, (1, 2))]
 
 
-def check_layout(dev: str, m: int, k: int, n: int, tile: tuple[int, int]) -> None:
-    tm, tn = tile
-    shape = pc8.Shape(m, k, n, tile, dev)
-    fn = pc8.check(shape)
-    g, owner, verdict = pc8.unit_cut(fn)
+def check_whole(fn, unit_cut, units, tp, layout) -> None:
+    """`fn`, a Program of unit templates `tp` (by role) with `unit_cut` and `units` its scheme's, against a Lean
+    layout (`lean_layout`'s four parts)."""
+    g, owner, verdict = unit_cut(fn)
     assert verdict.ok, verdict
-    nin, widths, blocks, outs = lean_layout(m, k, n, tm, tn)
+    nin, widths, blocks, outs = layout
     assert sorted(g.input_ids) == list(range(nin))
     c, call = call_scope(fn)
     assert call.offset == nin
     assert [c.gate(r).prim.ret.w for r in range(nin)] == widths
-    tp = pc8.templates(k, tile, dev)
     whole = reads_of(g, nin)
     names = {v: s for s, v in g.prims.items()}
     compact = {j: nin + i for i, j in enumerate(g.keep)}
-    us = pc8.units(fn)
+    us = units(fn)
     assert [u.role for u in us] == [r for r, cnt, *_ in blocks for _ in range(cnt)]
     at, unit = 0, 0
     for role, cnt, tin, ln, port in blocks:
@@ -212,6 +210,11 @@ def check_layout(dev: str, m: int, k: int, n: int, tile: tuple[int, int]) -> Non
         unit += cnt
     assert at == g.n
     assert [nin + x for x in g.outputs] == outs
+
+
+def check_layout(dev: str, m: int, k: int, n: int, tile: tuple[int, int]) -> None:
+    check_whole(pc8.check(pc8.Shape(m, k, n, tile, dev)), pc8.unit_cut, pc8.units, pc8.templates(k, tile, dev),
+                lean_layout(m, k, n, *tile))
 
 
 @pytest.mark.parametrize("dev,m,k,n,tile", CASES)

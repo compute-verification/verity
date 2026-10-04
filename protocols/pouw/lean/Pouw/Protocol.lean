@@ -76,6 +76,7 @@ import Pouw.Protocol.PearlC.TileCheck
 import Pouw.Protocol.PearlC.TileCheck8
 import Pouw.Protocol.PearlC.TileCircuit
 import Pouw.Protocol.PearlC.WholeCircuit
+import Pouw.Protocol.PearlC.WholeCircuit4
 import Pouw.Protocol.TileBound.AlignedExactDefs
 import Pouw.Protocol.TileBound.Defs
 import Pouw.Protocol.TileBound.Fp8Defs
