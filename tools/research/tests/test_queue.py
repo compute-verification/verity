@@ -195,6 +195,20 @@ def test_grants_follow_paths_and_lean_audit_sections_at_the_exact_head(world):
     assert 1 not in [m.pr for m in members] and entries[1].state == "waiting"     # a new head needs a new grant
 
 
+def test_a_file_renamed_out_of_a_grants_paths_needs_the_grant(tmp_path):
+    """git reports a rename by its destination alone unless asked not to, which would leave out the grant the file's old path
+    needs."""
+    (tmp_path / "integrations" / "vllm").mkdir(parents=True)
+    (tmp_path / "integrations" / "vllm" / "x.py").write_text("x = 1\n")
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "mv", "integrations/vllm/x.py", "x.py")
+    _git(tmp_path, "commit", "-q", "-m", "move")
+    assert Rules.parse(RULES).needs(tmp_path, base, _git(tmp_path, "rev-parse", "HEAD")) == {"vllm-coordinator"}
+
+
 def test_a_lean_review_covers_only_the_change_it_printed_as_the_same_statements():
     """`reviewed`: an `audit.py --update` report stands in for the statement reviewer only on its own package, only when it printed
     nothing a reviewer must read, and only for entries it saw change: one another PR changed on `main` meanwhile isn't covered."""
