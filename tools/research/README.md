@@ -235,7 +235,9 @@ checks again before the workload starts. On a mismatch the run is refused
 with `ResearchVersionMismatch`, naming the running package's path. A package
 too old to know the check fails closed. The one exception: a `--source`
 tree's own older package runs unverified, and the launcher says so. job.json
-records `run.remote.tool_running`. `--source` ships
+records `run.remote.tool_running`. `launched` is said only once the runner has
+written job.json (it tells `launch-request` on a FIFO); a runner that exits
+first is refused (`RunnerFailed`, its log's tail, exit 3). `--source` ships
 `git archive HEAD` of a clean checkout to `<root>/src/<sha>/` (a dirty tree is
 refused, not mislabeled). The ship is verified before anything may run from
 it: the archive lands in `<sha>.partial-<nonce>/`, its sha256 is compared on
