@@ -27,8 +27,7 @@ name = "flock-rust-tests"
 owner = "proofs"
 group = 2
 
-# Group 3: the Lean verifier and every Lake package's audit, then the suites that need the built packages, then the
-# agreement with upstream's Rust verifier.
+# Group 3: the Lean verifier, then the suites that need it built, then the agreement with upstream's Rust verifier.
 [[job]]
 name = "lean-build"
 owner = "proofs"
@@ -37,11 +36,6 @@ group = 3
 [[job]]
 name = "lean-unit-cut"
 owner = "proofs"
-group = 3
-
-[[job]]
-name = "lean-audit"
-owner = "lean"
 group = 3
 
 [[job]]
@@ -55,9 +49,15 @@ owner = "proofs"
 group = 3
 merge_requires = ["backends/flock/", "!README.md", "!PROTOCOL.md"]
 
-# Group 4: the early Lean check on a merge (stale records, broken builds); its failure stops the whole run.
+# Group 4: every Lake package's audit. It builds only in scratch trees of its own, so nothing in group 3 waits on it.
+[[job]]
+name = "lean-audit"
+owner = "lean"
+group = 4
+
+# Group 5: the early Lean check on a merge (stale records, broken builds); its failure stops the whole run.
 [[job]]
 name = "lean-changed"
 owner = "lean"
-group = 4
+group = 5
 halts = true

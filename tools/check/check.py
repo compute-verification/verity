@@ -11,7 +11,7 @@
                                                             (`tools/check/slot.py`), the lock and cores the train checks take;
                                                             --priority takes the next free slot ahead of waiting lane checks;
                                                             --agreement sends the upstream build whatever the commit changes
-                                                            (a train that changes a pinned guarantee elsewhere: `train.sh`);
+                                                            (a train that changes a guarantee elsewhere: `train.sh`);
                                                             a warning first when the commit can't land on REF as it is
     uv run python tools/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
     python tools/check/check.py --preflight                 the preflight alone, for `research merge --train --prepare`
@@ -25,9 +25,9 @@ once it passes, so a check that one of them fails ends in seconds, not hours.
 A step that fails stops the others: each running step's processes get SIGINT (Python code runs its `finally`s, so the Lean audit
 removes its scratch tree) and whatever is left of them SIGKILL after `STOP_GRACE_S`, and no group starts another step. Such a
 step's status is `stopped`. `--keep-going` lets every group run to its end instead, keeping the verdicts its passing steps store,
-except after a step in `HALTS`: a Lean module that doesn't compile, or a pin whose record is stale, fails the audit too, so
-nothing still running is worth the slot; likewise a Rust crate that doesn't compile (`HALTS_ON`: flock-circuit-build's log says
-`could not compile`) fails flock-rust-tests.
+except after a failed preflight, which starts no group, or a step in `HALTS`: a Lean module that doesn't compile, or a guarantee whose
+record is stale, fails the audit too, so nothing still running is worth the slot; likewise a Rust crate that doesn't compile
+(`HALTS_ON`: flock-circuit-build's log says `could not compile`) fails flock-rust-tests.
 The steps stay in this process's group, which a runner's timeout and a manual stop signal as a whole. Each step's record is
 appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run.
 
@@ -45,18 +45,20 @@ use). Which group a step is in, its order there, and whether its failure halts t
                     its report beside the run's result; then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
     lean            `lake build` of the Lean verifier (`backends/flock/verifier/lean`), then its partition check against
-                    `verity.ir.partition` (`unit_cut_agree.py`), then the audit of every Lake package with a `lean-audit.json`
-                    (`tools/lean/audit.py --all --build`: axioms, sorry, declared axioms, escapes, files, kernel bypasses, code
-                    run while compiling, dependency .olean digests, the pins' records, a kernel replay; its reports under
-                    `lean-audit/`), then the suites that use Lean (`AFTER_LEAN`, outcomes in `suites-lean.json`) on what those
-                    steps built, then its agreement with upstream's Rust verifier (`ci.py`) on the upstream build stored once
-                    and pinned by hash (`backends/flock/verifier/upstream.json`), when the run has it; skipped by name without
-                    it.  `research merge` requires it for a change under backends/flock/ (`tool.py`)
+                    `verity.ir.partition` (`unit_cut_agree.py`), then the suites that use Lean (`AFTER_LEAN`, outcomes in
+                    `suites-lean.json`) on what those steps built, then its agreement with upstream's Rust verifier (`ci.py`) on
+                    the upstream build stored once and pinned by hash (`backends/flock/verifier/upstream.json`), when the run has
+                    it; skipped by name without it.  `research merge` requires it for a change under backends/flock/ (`tool.py`)
+    lean-audit      at once with the lean group: the audit of every Lake package with a `lean-audit.json` (`lean_audit.py`,
+                    which runs `tools/lean/audit.py` on scratch trees of its own: axioms, sorry, declared axioms, escapes,
+                    files, kernel bypasses, code run while compiling, dependency .olean digests, the guarantees' records, a
+                    kernel replay; its reports under `lean-audit/`).  It reads only the source tree and builds nothing in the
+                    checkout, so the lean group's steps never wait on it, nor it on them
     lean-changed    at once with the lean group: `lake build` of each Lake package whose audit misses, on a tree this machine
-                    keeps built (`lean_changed.py`), then the audit's judgment of its pins on that build without the kernel
-                    replay, so a module that no longer compiles or a pinned record a merge left stale ends the run in minutes,
-                    not when the audit's cold build reaches it; it skips what it can't build or read here and vouches for
-                    nothing: the audit decides
+                    keeps built (`lean_changed.py`), then the audit's judgment of its guarantees on that build without the
+                    kernel replay, so a module that no longer compiles or a guarantee's record a merge left stale ends the
+                    run in minutes, not when the audit's cold build reaches it; it skips what it can't build or read here and
+                    vouches for nothing: the audit decides
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run), each a hit only on identical inputs:
 
@@ -143,8 +145,8 @@ def custody_dir() -> Path | None:
     return d if (d / "store.toml").is_file() and (d / "cred.json").is_file() else None
 
 
-def _load(name: str):
-    spec = importlib.util.spec_from_file_location(f"check_{name}", Path(__file__).resolve().parent / f"{name}.py")
+def _load(name: str, d: Path | None = None):
+    spec = importlib.util.spec_from_file_location(f"check_{name}", (d or Path(__file__).resolve().parent) / f"{name}.py")
     m = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = m                       # dataclasses resolve their module by name
     spec.loader.exec_module(m)
@@ -221,8 +223,12 @@ def take_lean_deps_urls(out: Path) -> Path | None:
     return Path(tmp)
 
 
+#: Lean's job code, which the lean-audit and lean-changed steps run (`lean_audit.py`, `lean_changed.py`)
+LEAN_JOBS = ROOT / "tools" / "lean"
+
+
 def _lean_audit():
-    spec = importlib.util.spec_from_file_location("check_lean_audit_urls", ROOT / "tools" / "check" / "lean_audit.py")
+    spec = importlib.util.spec_from_file_location("check_lean_audit_urls", LEAN_JOBS / "lean_audit.py")
     la = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(la)
     return la
@@ -258,7 +264,7 @@ def lean_fast(out: Path) -> str | None:
     reports = doc.get("packages", []) if isinstance(doc, dict) else None
     if not isinstance(reports, list) or not all(isinstance(r, dict) for r in reports):
         return f"refused: {p} is not an audit's report (an object whose packages are a list of objects)"
-    kind = _load("lean_changed").FAST_KIND
+    kind = _load("lean_changed", LEAN_JOBS).FAST_KIND
     replayed = [isinstance(r.get("seconds"), dict) and "replay" in r["seconds"] for r in reports]
     fast = [str(r.get("package")) for r, rep in zip(reports, replayed) if r.get("kind") == kind or (not r.get("failures") and not rep)]
     if fast or doc.get("kind") == kind:
@@ -295,7 +301,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
             ("lean-unit-cut", [sys.executable, str(FLOCK_VERIFIER / "unit_cut_agree.py"), "--lean", str(verify),
                                "--out", str(out / "lean-unit-cut")], ROOT),
             ("lean-audit", [sys.executable, str(Path(__file__).resolve()), "--lean-slot",
-                            sys.executable, str(ROOT / "tools" / "check" / "lean_audit.py"), "--out", str(out / "lean-audit"),
+                            sys.executable, str(LEAN_JOBS / "lean_audit.py"), "--out", str(out / "lean-audit"),
                             "--cache", str(cache_dir() / "lean-audit"), "--deps", str(cache_dir() / "lean-deps"),
                             *([] if cache else ["--fresh"]), *(["--urls", str(urls)] if urls else [])], ROOT),
             ("lean-agreement", agreement, ROOT)]
@@ -528,10 +534,10 @@ def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
     return {"pack": pack.name, "sha256": _sha256(pack), "added": added, "already": kept}
 
 
-#: The suites whose tests run `lake` or what the Lean steps build under `.lake/`: a step of the Lean group once `lean-audit` has
-#: built every Lake package, with elan's `lake` on the PATH, so what they run or skip never depends on how far a concurrent
-#: `lake build` has got, and no test's `lake build` shares a build directory with one (tests/test_no_wall_clock.py holds every
-#: other suite to not skipping on them).
+#: The suites whose tests run `lake` or what the Lean steps build under `.lake/`: a step of the Lean group once `lean-build` has
+#: built the verifier, with elan's `lake` on the PATH, so what they run or skip never depends on how far a concurrent
+#: `lake build` has got, and no test's `lake build` shares a build directory with one: lean-audit and lean-changed, which run
+#: beside them, build only in trees of their own (tests/test_no_wall_clock.py holds every other suite to not skipping on them).
 AFTER_LEAN = ("verity-flock", "verity-lean-audit")
 
 
@@ -557,7 +563,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None) -> l
              "circuit-check": ("circuit-check", cc, ROOT), "flock-rust-tests": ("flock-rust-tests", rust, ROOT)}
     if len(lean) > 1:
         built |= {s[0]: s for s in lean}
-        changed: list[str] | str = ([py, str(ROOT / "tools" / "check" / "lean_changed.py"), "--cache", str(cache_dir() / "lean-audit"),
+        changed: list[str] | str = ([py, str(LEAN_JOBS / "lean_changed.py"), "--cache", str(cache_dir() / "lean-audit"),
                                      "--deps", str(cache_dir() / "lean-deps"), "--tree", str(cache_dir() / "lean-changed")]
                                     if cache else "skipped: --no-cache: lean-audit builds every package cold")
         built["lean-changed"] = ("lean-changed", changed, ROOT)
@@ -865,7 +871,7 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
 
     try:
         results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in preflight()]
-        if not steps.stopping:
+        if not steps.stopping and all(r["status"] == "passed" for r in results):
             subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
             gs = groups(out, n, cache, urls)
             with ThreadPoolExecutor(max_workers=len(gs)) as ex:

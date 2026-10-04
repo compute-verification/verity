@@ -23,7 +23,7 @@ the ready label is what says one is done.  The hold label keeps a PR out whateve
 on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
 `main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs: a role for changed files
 under listed paths (`merge_requires`' syntax, `!` patterns included), or for a change to listed sections of any `lean-audit.json`
-(`pins`, `reads`), and who gives each (`by`, which `status` prints with the label command to a PR waiting on it).  A grant is a
+(`guarantees`, `reads`), and who gives each (`by`, which `status` prints with the label command to a PR waiting on it).  A grant is a
 store label `grant = {role}` on the target `pr:{number}@{head sha}`, so a new push needs new grants.  A `lean-audit.json` change needs no grant when a `lean_review` label on the target names the audit.json of an
 `audit.py --update` (`--moved` for a move) that printed that whole change as the same statements (`reviewed`).  Grants and ready are read after pulling the target's labels from the store's remote; when that pull can't happen (no
 remote here, one that's unusable, a failed pull) the command fails with `STALE`, never answering from this machine's labels alone.
