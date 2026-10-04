@@ -110,6 +110,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
   enforces it. Developer notes in its `README.md`. Code reaches the Nebius
   nodes only through `research deploy install` from a pushed commit, listed in
   `pods/nebius/deploy.toml`; `research deploy drift` names what isn't `main`'s.
+  Delete data you don't own on a node only with `research retention gc` or `research retention rm --approved-by @OWNER`, never a bare `rm`.
 - `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes (see Circuits below).
 - `tools/check/`: `check`, the one repository check a merge requires (see Checking and merging below).
 - `tools/lean/`: the Lean audit (`audit.py`), which `check` runs on every Lake package (see Lean below).
@@ -180,7 +181,7 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
   about the executable's definitions, Mathlib), `soundness/` (the protocol's proofs, ArkLib) and `bridge/` (C-Flock's
   games, circuits and partitions as core's, and soundness against registered values in core's terms; `soundness/` and
   core's), and `protocols/pous/lean/` (POUS's guarantees, their proofs and grader, Mathlib), `protocols/pouw/lean/` (PoUW's games,
-  named assumptions and the proofs behind its γ, Mathlib), `protocols/network_warden/lean/` (the network
+  named assumptions and the proofs behind its γ, Mathlib and core's), `protocols/network_warden/lean/` (the network
   warden's timing-channel guarantees and their proofs, Mathlib), `protocols/nci/lean/` (NCI's policy and guarantees, on
   core's), and `packages/verity/lean/` (the model every protocol states its guarantees in: circuits, partitions,
   declarations and games; and core's own proofs about `verity`'s definitions, such as `verity.ml.tc`'s step relation;
@@ -248,6 +249,10 @@ A guard never fails open, and an agent VM can be suspended at any moment, so
 nothing that bounds spend or preserves results may depend on one: pods bound
 themselves (`research pods create --max-hours`, under a line of the notes repo's
 `budgets.toml`), and runs preserve their results from the pod.
+
+Never print a secret's value. List environment variable names with `compgen -e` (or `env -0 | cut -z -d= -f1 | tr '\0' '\n'`),
+never `env | cut`, `env | grep` or `printenv | …`: a multi-line value's later lines print as if they were names. A secret
+is stored as one line (a key as base64, `NAME_B64`), and `tools/agent-guard/install.sh` puts a redacting `env` on the VM.
 
 Architectural rationale and human-facing reports belong in Notion;
 experimental evidence belongs in artifact storage. Temporary working notes

@@ -3,6 +3,7 @@ import Verity.SecurityProofs.Game.Basic
 import Verity.SecurityProofs.Game.Interleave
 import Verity.SecurityProofs.Game.Union
 import Verity.SecurityProofs.Game.Batch
+import Verity.SecurityProofs.Game.BatchInduced
 
 /-! # Proofs that sound games compose (`Verity.Guarantees.Game`) -/
 
@@ -58,6 +59,9 @@ theorem SoundInterleave : Guarantees.SoundInterleave := by
 theorem SoundBatch : Guarantees.SoundBatch := by
   intro α pre post g d accept E δ h
   exact (value_batch_getD_le (fun a => accept a ∧ ¬ E a) d g post pre).trans h
+
+theorem ProbBatchInduced : Guarantees.ProbBatchInduced :=
+  fun pre post g d Q Cls ε hg σ hσ => prob_batch_getD_le_of_induced Q d g post pre Cls ε hg σ hσ
 
 theorem SoundBind : Guarantees.SoundBind := by
   intro α β g f accept E δ h
