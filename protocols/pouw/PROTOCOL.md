@@ -40,7 +40,9 @@ Everything else is the protocol's (`audit`), the same for every scheme.
      W_ref(tile)/W, a tile's work being its cells' share of its matmul's W_ref (Lean `WorkWeightedSampling`).
    - `Lottery(target)`, Pearl's mining rule: the tiles whose digest, read little-endian, is at most target·|rows|·|cols|·k.
 6. **Check.** For each selected tile the prover opens A's rows, B's rows and the leaf. The verifier checks the openings,
-   recomputes the tile through the scheme (`encode`, `admissible`, `checked`, `digest`) and compares the leaf.
+   recomputes the tile through the scheme (`encode`, `admissible`, `checked`, `digest`) and compares the leaf. It refuses
+   a tile any of whose opened rows fails the scheme's rules (`encode`'s parse, then `admissible`); Lean's
+   `TileCheck.Accepts` asks the same of the tile's weight rows (the protocol's `weightOK`).
 The row and tile trees are framed SHA-256 unless the scheme names another frame hash (`commitment_hash`). `"blake3"` is
 `frame-b3` (`verity.commitments.merkle`), BLAKE3 keyed by the domain id. A leaf's header fills one 64-byte block, so a row
 leaf streams through BLAKE3's chunk tree, for rows that must be committed within a decode step. A node is one compression

@@ -362,7 +362,8 @@ theorem ttOutPearlCWitness :
         nlinarith
       unfold Adversary.transcript at hx
       linarith
-  · refine ⟨by norm_num [witnessWorkload], ?_, fun u _ => witness_operandOK 1⟩
+  · refine ⟨by norm_num [witnessWorkload], ?_, fun u _ j hj =>
+      ⟨fun l hl => (witness_operandOK 1).1 j hj l hl, fun hj' => (witness_operandOK 1).2 ⟨j, hj'⟩⟩⟩
     intro u _
     refine ⟨by norm_num [witnessWorkload], by norm_num [witnessWorkload], by norm_num [witnessWorkload], ?_,
       by norm_num [witnessWorkload], rfl⟩

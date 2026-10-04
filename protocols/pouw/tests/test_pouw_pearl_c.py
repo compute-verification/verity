@@ -627,6 +627,50 @@ def test_v1_liveness_is_per_row_on_the_exact_statistic():
     assert not s.admissible(ctx, ops)
 
 
+def tolerant_kernel(scheme, ctx, noise, a, b, tiles):
+    """`reference_kernel`, with a zero digest for a tile the scheme does not encode, so a weight with a refused row
+    still commits."""
+    out = []
+    for t in tiles:
+        ops = scheme.encode(ctx, noise, [a[i] for i in t.rows], [b[j] for j in t.cols], t)
+        if ops is None:
+            out.append((bytes(32), [[0.0] * len(t.cols) for _ in t.rows]))
+            continue
+        c = scheme.checked(ctx, ops)
+        out.append((scheme.digest(ctx, noise, c), scheme.useful(ctx, noise, ops, c)))
+    return out
+
+
+@pytest.mark.parametrize("clause", [None, "finite", "live", "floor"])
+def test_check_tile_refuses_a_weight_row_outside_the_rules(clause):
+    """`check_tile` refuses a tile one of whose weight rows fails a clause of `OperandOK`, as Lean's `TileCheck.Accepts`
+    asks each of the tile's weight rows to pass the protocol's `weightOK` (`PearlCSem.RowOK`). One row per clause: a
+    non-finite word (Lean's `rowOK8_nonFinite`), three of 128 words `8.0` among `1.0`s (`rowOK8_notLive`), and every 8th
+    word `2¹²⁶`, so ρ is not finite and the floor is 0 (`pc8Sem_squaresOverflow`). The tile beside it, whose weight rows
+    pass, is accepted, and so are both on the honest weight."""
+    from verity_pouw.audit import Epoch, Prover, Verifier, Workload
+
+    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1"), 128
+    rows_a, rows_b = CV.rows_f32("weight-rule", "A", 16, k), CV.rows_f32("weight-rule", "B", 32, k)
+    row = list(C.parse_f32_row(rows_b[0], k))
+    if clause == "finite":
+        row[1] = 0x7F800000
+    elif clause == "live":
+        row = [f32w(8.0) if t in (1, 2, 3) else f32w(1.0) for t in range(k)]
+    elif clause == "floor":
+        row = [0x7E800000 if t % 8 == 0 else w for t, w in enumerate(row)]
+    rows_b[0] = C.f32_row(row)
+    work = Workload((Matmul(3, Shape(16, k, 32), 9),))
+    prover = Prover(s, {9: rows_b}, tolerant_kernel)
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
+    tr = prover.prove(epoch, {3: rows_a})
+    v = Verifier(s, epoch)
+    assert [0 in r.tile.cols for r in v.refs] == [True, False]
+    verdicts = [v.check_tile(tr, prover.open(epoch, r.id)) for r in v.refs]
+    assert [(x.ok, x.reason) for x in verdicts] == [(clause is None, "" if clause is None else "inadmissible inputs"),
+                                                    (True, "")]
+
+
 def test_domain_needs_whole_promotion_groups():
     s = get("pearl-c-h100-v1")
     s.check(Matmul(0, Shape(64, 1152, 64), 1))

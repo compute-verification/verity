@@ -61,6 +61,11 @@ def PearlCSem.OperandOK (sem : PearlCSem Q R S) (p q : ℕ) (W : Codes) : Prop :
   (∀ i < p, ∀ l < q, (wordQ (W i l)).isSome) ∧
     ∀ i : Fin p, LiveRow Params.pi.δ (wordsVal p q W i) Stat.every8 ∧ 1 ≤ sem.floor q (wordsVal p q W i)
 
+/-- Row `i` of a committed operand of `p` rows and `q` columns passes Π's rules: `PearlCSem.OperandOK`, one row. -/
+def PearlCSem.RowOK (sem : PearlCSem Q R S) (p q : ℕ) (W : Codes) (i : ℕ) : Prop :=
+  (∀ l < q, (wordQ (W i l)).isSome) ∧ ∀ h : i < p,
+    LiveRow Params.pi.δ (wordsVal p q W ⟨i, h⟩) Stat.every8 ∧ 1 ≤ sem.floor q (wordsVal p q W ⟨i, h⟩)
+
 /-- The unit's noisy operands and ticket chain. -/
 noncomputable def PearlCSem.unitChain (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) :
     Matrix (Fin (U.layout.shape u).m) (Fin (U.layout.shape u).k) Code ×
@@ -111,7 +116,7 @@ noncomputable def pearlCProtocol (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) 
     atNat (ctChain Params.pi.G (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2)
   useful := fun H s U u act => atNat (sem.unitUseful H s U u act)
   actOK := fun sh act => sem.OperandOK sh.m sh.k act
-  weightOK := fun sh w => sem.OperandOK sh.n sh.k w
+  weightOK := fun sh w j => sem.RowOK sh.n sh.k w j
   credit := fun H s U u act =>
     ((creditOf Params.pi c (U.layout.shape u) - debitOf Params.pi c (sem.unitDebit H s U u act) : ℚ) : ℝ)
   capOK := fun H s U u act =>

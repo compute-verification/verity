@@ -279,6 +279,47 @@ def test_row_passes_asks_finite_widened_bf16_words(fmt):
     assert not F.row_passes(f, [0x7F800000 if p == 1 else w for p, w in enumerate(x)])
 
 
+def tolerant_kernel(scheme, ctx, noise, a, b, tiles):
+    """`reference_kernel`, with a zero digest for a tile the scheme does not encode, so a weight with a refused row
+    still commits."""
+    out = []
+    for t in tiles:
+        ops = scheme.encode(ctx, noise, [a[i] for i in t.rows], [b[j] for j in t.cols], t)
+        if ops is None:
+            out.append((bytes(32), [[0.0] * len(t.cols) for _ in t.rows]))
+            continue
+        c = scheme.checked(ctx, ops)
+        out.append((scheme.digest(ctx, noise, c), scheme.useful(ctx, noise, ops, c)))
+    return out
+
+
+@pytest.mark.parametrize("clause", [None, "finite", "admit"])
+def test_check_tile_refuses_a_weight_row_outside_the_rules(clause):
+    """`check_tile` refuses a tile one of whose weight rows fails a clause of `OperandOK`, as Lean's `TileCheck.Accepts`
+    asks each of the tile's weight rows to pass the protocol's `weightOK` (`Fp4Sem.RowOK`). One row per clause: a
+    non-finite word (Lean's `rowOK4_nonFinite`), and every 8th word `2¹²⁶`, which `RowAdmit4` refuses since β is not
+    finite (`pc4Sem_squaresOverflow`). The word clause's widened-BF16 half holds of every opened row, which is BF16 words
+    (`parse_row`); `test_row_passes_asks_finite_widened_bf16_words` checks it on `row_passes`. The tile beside it, whose
+    weight rows pass, is accepted, and so are both on the honest weight."""
+    from verity_pouw.audit import Verifier
+
+    s = V.scheme("nvfp4", True)
+    rows_a, rows_b = V.rows("weight-rule", "A", 16, K), V.rows("weight-rule", "B", 32, K)
+    w = [x >> 16 for x in F.parse_row(rows_b[0], K)]
+    if clause == "finite":
+        rows_b[0] = F.bf16_row([0x7F80 if t == 1 else v for t, v in enumerate(w)])
+    elif clause == "admit":
+        rows_b[0] = F.bf16_row([0x7E80 if t % 8 == 0 else v for t, v in enumerate(w)])
+    prover = Prover(s, {9: rows_b}, tolerant_kernel)
+    epoch = Epoch.unverified(Workload((Matmul(3, Shape(16, K, 32), 9),)), prover.weight_roots, b"beacon")
+    tr = prover.prove(epoch, {3: rows_a})
+    v = Verifier(s, epoch)
+    assert [0 in r.tile.cols for r in v.refs] == [True, False]
+    verdicts = [v.check_tile(tr, prover.open(epoch, r.id)) for r in v.refs]
+    assert [(x.ok, x.reason) for x in verdicts] == [(clause is None, "" if clause is None else "inadmissible inputs"),
+                                                    (True, "")]
+
+
 @pytest.mark.parametrize("fmt", FMTS)
 def test_dead_screen_is_90_rho_squared(fmt):
     """ρ = 1 (every 8th position at 1.0): a block whose |max| is 9.4375 is live, 9.5 (just past √90) and 10 (live under the

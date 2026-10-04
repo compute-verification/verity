@@ -14,7 +14,7 @@ protocol's word functions agree only conditionally:
 * `Row4OK`: a row's BF16 words widen to step words of its values, and its `α` (positive) and `β` are step words. It
   is no hypothesis of L3: the widening follows from the rules' word clause (every word a finite widened BF16 word,
   `widen_of_word`), and `α` and `β` from `RowAdmit4` by magnitudes (`RowStats`, `TileCheckWords`), at a credited row
-  by `Fp4Sem.RowOK` and a weight row by `OperandOK`.
+  by `Fp4Sem.RowOK`, which an accepted tile's check also asks of each of its weight rows.
 
 On these a row unit's codes and scale bytes are `formRow`'s at `pc4Sem`'s `α` and `β` (`row4A_form`, `row4B_form`, so
 `form4A`/`form4B` are `unitForm`'s `A′`/`B̃`), and its `P_A` and `P_B` rows are the FP4 peel's (`row4A_paWords`,
@@ -308,7 +308,7 @@ theorem zeroSign16_of_wordQ {w : ℕ} (h : (wordQ w).isSome) :
 
 /-- **A finite widened BF16 word widens back to itself**: its low 16 bits are zero, so its value's `f32Word` is its
 value's BF16 word shifted left by 16 (`bf16w`), a step word of that value. This is `Row4OK`'s `widen` at a row that
-`Fp4Sem.RowOK` or `OperandOK` passes. -/
+`Fp4Sem.RowOK` passes. -/
 theorem widen_of_word {ops : RowOps} (hops : Pc4OpsAgree ops) {w : ℕ} (hq : (wordQ w).isSome) (h16 : w % 2 ^ 16 = 0) :
     AccumProofs.StepWord (ops.bf16ToF32 (bf16WordOf ((wordQ w).getD 0))) ∧
       wordVal (ops.bf16ToF32 (bf16WordOf ((wordQ w).getD 0))) = (wordQ w).getD 0 := by

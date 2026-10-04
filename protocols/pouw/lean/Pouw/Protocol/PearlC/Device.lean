@@ -132,7 +132,7 @@ noncomputable def pearlCProtocolDev (d : PearlCDevice) (sem : PearlCSem Q R S) (
   ticket := fun H s U u act => atNat (d.ticket (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2)
   useful := fun H s U u act => atNat (sem.unitUsefulDev d H s U u act)
   actOK := fun sh act => sem.OperandOK sh.m sh.k act
-  weightOK := fun sh w => sem.OperandOK sh.n sh.k w
+  weightOK := fun sh w j => sem.RowOK sh.n sh.k w j
   credit := fun H s U u act =>
     ((creditDev d (U.layout.shape u) - debitDev d (sem.unitDebitDev d H s U u act) : ℚ) : ℝ)
   capOK := fun H s U u act => debitDev d (sem.unitDebitDev d H s U u act) ≤ ρ * creditDev d (U.layout.shape u)

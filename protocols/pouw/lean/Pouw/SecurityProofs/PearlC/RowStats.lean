@@ -23,7 +23,9 @@ The squares-overflow row (`test_circuit_pc8`'s and `test_circuit_pc4`'s `squares
 `2¹²⁶`) is the vector both refusals are checked on: each sampled square overflows, so `ρ` is `+inf`, and `pc8Sem`
 (`pc8Sem_squaresOverflow`) and `pc4Sem` (`pc4Sem_squaresOverflow`) refuse the row, as Python and the circuit do.
 `Fp4Sem.RowOK` also refuses a word that is not a widened BF16 word and a non-finite word (`rowOK4_notBf16`,
-`rowOK4_nonFinite`), as `pearl_c4.row_passes` does.
+`rowOK4_nonFinite`), as `pearl_c4.row_passes` does. `PearlCSem.RowOK` refuses a non-finite word and a row that is not
+live (`rowOK8_nonFinite`, `rowOK8_notLive`): with the squares-overflow row, one weight row per clause of the rule a
+tile's check asks of its weight rows, as `check_tile` does (`test_check_tile_refuses_a_weight_row_outside_the_rules`).
 -/
 
 namespace Pouw.PearlC.RowCircuit
@@ -598,6 +600,33 @@ theorem rowOK4_nonFinite {Q R S : Type} (sem : Fp4Sem Q R S) {m K i l : ℕ} {W 
   have hf := (h.1 l hl).1
   rw [hW] at hf
   exact absurd hf (by decide +kernel)
+
+/-- **`PearlCSem.RowOK` refuses a non-finite word** (`test_pouw_pearl_c`'s weight row with `+inf`, `0x7F800000`,
+which `check_tile` refuses). -/
+theorem rowOK8_nonFinite {Q R S : Type} (sem : PearlCSem Q R S) {m K i l : ℕ} {W : Codes} (hl : l < K)
+    (hW : W i l = 0x7F800000) : ¬ sem.RowOK m K W i := by
+  intro h
+  have hf := h.1 l hl
+  rw [hW] at hf
+  exact absurd hf (by decide +kernel)
+
+/-- **`PearlCSem.RowOK` refuses a row that is not live** (`test_pouw_pearl_c`'s weight row, which `check_tile` and
+`live_row` refuse): of `128` words `1.0`, the three at `1`, `2` and `3` are `8.0`. The every-8th positions are all
+`1.0`, so `ρ = 1`, and three entries reach `8ρ`, more than `128/64`. -/
+theorem rowOK8_notLive {Q R S : Type} (sem : PearlCSem Q R S) {m i : ℕ} {W : Codes} (hi : i < m)
+    (hW : ∀ l, W i l = if l = 1 ∨ l = 2 ∨ l = 3 then 0x41000000 else 0x3F800000) : ¬ sem.RowOK m 128 W i := by
+  intro h
+  have hl := (h.2 hi).1
+  have hx : wordsVal m 128 W ⟨i, hi⟩ = fun l : Fin 128 => if l.val = 1 ∨ l.val = 2 ∨ l.val = 3 then 8 else 1 := by
+    funext l
+    simp only [wordsVal, hW]
+    split_ifs
+    · decide +kernel
+    · decide +kernel
+  rw [hx] at hl
+  revert hl
+  unfold LiveRow Stat.every8 Params.pi
+  decide +kernel
 
 end Overflow
 

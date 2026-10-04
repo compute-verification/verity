@@ -495,9 +495,9 @@ section Reduction
 
 variable {Q R S : Type} {sem sem' : PearlCSem Q R S}
 
-theorem operandOK_of_floor (h : sem'.floor = sem.floor) {p q : ℕ} {W : Codes} (hW : sem'.OperandOK p q W) :
-    sem.OperandOK p q W :=
-  ⟨hW.1, fun i => ⟨(hW.2 i).1, h ▸ (hW.2 i).2⟩⟩
+theorem rowOK_of_floor (h : sem'.floor = sem.floor) {p q i : ℕ} {W : Codes} (hW : sem'.RowOK p q W i) :
+    sem.RowOK p q W i :=
+  ⟨hW.1, fun hi => ⟨(hW.2 hi).1, h ▸ (hW.2 hi).2⟩⟩
 
 /-- A row of admissible activations is admissible as its own unit. -/
 theorem split_actOK (hN : RowSeedNoise sem sem') {U : Workload} {u i : ℕ} (hu : u < U.layout.N)
@@ -648,7 +648,7 @@ theorem ttOutRowSeed_of_ttOut [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S
     ⟨(hrun H (A.pre.eval H) s).2.1.trans (hA H s).1,
       le_trans (Nat.add_le_add_left (hrun H (A.pre.eval H) s).2.2 _) (hA H s).2⟩
   have hU' : (splitWorkload U).InDomain (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) :=
-    ⟨hR, pearlCDomainDev_split hU.2.1, fun v hv => operandOK_of_floor hN.2.2.2.1 (hU.2.2 _ (unitOfRow_lt hv))⟩
+    ⟨hR, pearlCDomainDev_split hU.2.1, fun v hv j hj => rowOK_of_floor hN.2.2.2.1 (hU.2.2 _ (unitOfRow_lt hv) j hj)⟩
   refine le_trans (Pouw.pr_mono fun x hx => lt_of_lt_of_le hx ?_)
     (hTT.2 (splitWorkload U) hU' T hT q hq ⟨A.pre, prog', act'⟩ hA')
   have htr : (⟨A.pre, prog', act'⟩ : Adversary CM).transcript (splitWorkload U) x.1 x.2 =
@@ -1024,7 +1024,7 @@ theorem ttOutTileRowSeed_of_ttOutTile [Fintype Q] [DecidableEq Q] [Fintype R] [F
     ⟨(hrun H (A.pre.eval H) s).2.1.trans (hA H s).1,
       le_trans (Nat.add_le_add_left (hrun H (A.pre.eval H) s).2.2 _) (hA H s).2⟩
   have hU' : (splitWorkload U).InDomain (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) :=
-    ⟨hR, pearlCDomainDev_split hU.2.1, fun v hv => operandOK_of_floor hN.2.2.2.1 (hU.2.2 _ (unitOfRow_lt hv))⟩
+    ⟨hR, pearlCDomainDev_split hU.2.1, fun v hv j hj => rowOK_of_floor hN.2.2.2.1 (hU.2.2 _ (unitOfRow_lt hv) j hj)⟩
   refine le_trans (Pouw.pr_mono fun x hx => lt_of_lt_of_le hx ?_)
     (hTT.2 (splitWorkload U) hU' T hT q hq ⟨A.pre, prog', act'⟩ hA')
   have htr : (⟨A.pre, prog', act'⟩ : Adversary CM).transcript (splitWorkload U) x.1 x.2 =

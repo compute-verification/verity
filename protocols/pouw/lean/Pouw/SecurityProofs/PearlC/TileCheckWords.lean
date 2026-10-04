@@ -7,8 +7,9 @@ import Pouw.SecurityProofs.PearlC.TileCheck4Words
 L3's words for the plain `pc8` and `pc4` Programs: on tile rules whose tiles lie in their unit and a domain of
 whole-tile shapes (`Shape8`, `Shape4`), an accepted tile's ticket and useful words have the reference values on every
 credited row, with `Collides` never used. Each composes its table's accepted entry (`entry8_accepts`, `entry4_accepts`)
-with the rows' statistics from the rules. A credited row passes `RowOK` (the tile rules' `rowOK`, `hrow`), and a weight
-row the domain's `OperandOK` (`Workload.InDomain`). By magnitudes (`RowStats`) these give
+with the rows' statistics from the rules. A credited row passes `RowOK` (the tile rules' `rowOK`, `hrow`), and each of
+the tile's weight rows passes it too, since the check accepts only then (`TileCheck.Accepts`, the protocol's
+`weightOK`). By magnitudes (`RowStats`) these give
 
 * `pc8`: `Row8OK` (`row8OK_of_floor`), since `pc8Sem`'s floor is at least `1` only where `ρ`'s word is finite and
   `φ ≥ 0` (`stats8OK_of_rho`);
@@ -87,21 +88,20 @@ theorem tileCheck8_computesWords {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pi
       (j : Fin (U.layout.shape u).n), D U.layout → u < U.layout.N → TR.rowOK (U.layout.shape u) act i →
         Pc8EntryOK ops p (noise H s U u act) act (U.weight (U.layout.wid u)) i j) :
     (tileCheck8 ops p noise).ComputesWords (pearlCProtocolDev (devAt p 4 pr) (pc8Sem ops p noise) ρ) TR D := by
-  intro U hU H s g hg c X ⟨hcone, hpub, hreg⟩
+  intro U hU H s g hg c X ⟨hcone, hpub, hreg, hwt⟩
   left
   intro i hi hok j hj
   have him := hrows U.layout g i hi
   have hjn := hcols U.layout g j hj
   obtain ⟨hM, hN, nw, hnw, hK⟩ := hsh U.layout hU.2.1 g hg
-  have hW : (pc8Sem ops p noise).OperandOK _ _ (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) :=
-    hU.2.2 _ (hunit _ g hg)
+  have hW : (pc8Sem ops p noise).RowOK _ _ (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j := hwt j hj
   have hR := hrow _ c.act i hok
   obtain ⟨w1, w2⟩ := entry8_accepts hops p pr hnw hK hM hN X _ c.act _ c.ticket c.useful ⟨i, him⟩ ⟨j, hjn⟩
     (fun v hv => Finset.mem_filter.2 ⟨Finset.mem_univ _, i, hi, j, hj, him, hjn, hv⟩) hcone
     (fun v hv h => hpub ⟨v, hv⟩ (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩))
     (fun v hv h => hreg ⟨v, hv⟩ (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩))
     (row8OK_of_floor hops p noise him hR.1 (hR.2 him).2)
-    (row8OK_of_floor hops p noise hjn (hW.1 j hjn) (hW.2 ⟨j, hjn⟩).2)
+    (row8OK_of_floor hops p noise hjn hW.1 (hW.2 hjn).2)
     (hnoise H s U _ c.act) (hent H s U _ c.act ⟨i, him⟩ ⟨j, hjn⟩ hU.2.1 (hunit _ g hg) hok)
   refine ⟨w1.trans ?_, w2.trans ?_⟩
   · show _ = atNat _ i j
@@ -174,7 +174,6 @@ theorem tileCheck4_computesWords {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : �
       Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k)
     (TR : TileRules Q R S) (D : Layout → Prop)
     (hsh : ∀ L, D L → ∀ g < (TR.tiling L).NT, Shape4 (L.shape ((TR.tiling L).unit g)))
-    (hunit : ∀ L, ∀ g < (TR.tiling L).NT, (TR.tiling L).unit g < L.N)
     (hrows : ∀ L g, ∀ i ∈ (TR.tiling L).rows g, i < (L.shape ((TR.tiling L).unit g)).m)
     (hcols : ∀ L g, ∀ j ∈ (TR.tiling L).cols g, j < (L.shape ((TR.tiling L).unit g)).n)
     (hrow : ∀ (sh : Shape) (act : Codes) (i : ℕ), TR.rowOK sh act i → (pc4Sem ops lines).RowOK sh.m sh.k act i)
@@ -182,23 +181,22 @@ theorem tileCheck4_computesWords {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : �
       (j : Fin (U.layout.shape u).n), TR.rowOK (U.layout.shape u) act i →
         Pc4EntryOK ops (lines H s U u act) act (U.weight (U.layout.wid u)) i j) :
     (tileCheck4 ops lines).ComputesWords (pearlCProtocolFp4 devFp4Sm120 (pc4Sem ops lines) ρ) TR D := by
-  intro U hU H s g hg c X ⟨hcone, hpub, hreg⟩
+  intro U hU H s g hg c X ⟨hcone, hpub, hreg, hwt⟩
   left
   intro i hi hok j hj
   have him := hrows U.layout g i hi
   have hjn := hcols U.layout g j hj
   obtain ⟨hM, hN, nw, hnw, hK⟩ := hsh U.layout hU.2.1 g hg
-  have hW : (pc4Sem ops lines).OperandOK _ _ (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) :=
-    hU.2.2 _ (hunit _ g hg)
+  have hW : (pc4Sem ops lines).RowOK _ _ (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j := hwt j hj
   have hE := hent H s U _ c.act ⟨i, him⟩ ⟨j, hjn⟩ hok
   have hR := hrow _ c.act i hok
   obtain ⟨w1, w2⟩ := entry4_accepts hops hnw hK hM hN X _ c.act _ c.ticket c.useful ⟨i, him⟩ ⟨j, hjn⟩
     (fun v hv => Finset.mem_filter.2 ⟨Finset.mem_univ _, i, hi, j, hj, him, hjn, hv⟩) hcone
     (fun v hv h => hpub ⟨v, hv⟩ (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩))
     (fun v hv h => hreg ⟨v, hv⟩ (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩))
-    (fun l hl => (hR.1 l hl).1) (fun l hl => (hW.1 j hjn l hl).1)
+    (fun l hl => (hR.1 l hl).1) (fun l hl => (hW.1 l hl).1)
     (row4OK_of_admit hops lines him hR.1 (hR.2 him))
-    (row4OK_of_admit hops lines hjn (hW.1 j hjn) (hW.2 ⟨j, hjn⟩)) hE.peel
+    (row4OK_of_admit hops lines hjn hW.1 (hW.2 hjn)) hE.peel
   refine ⟨w1.trans ?_, w2.trans ?_⟩
   · show _ = atNat _ i j
     unfold atNat
@@ -221,8 +219,7 @@ theorem tileCheck4_computesWords_pearlC {ops : RowOps} (hops : Pc4OpsAgree ops) 
     (tileCheck4 ops lines).ComputesWords (pearlCProtocolFp4 devFp4Sm120 (pc4Sem ops lines) ρ)
       (pearlCTilesFp4 devFp4Sm120 (pc4Sem ops lines) ρ) D :=
   tileCheck4_computesWords hops ρ lines _ D
-    (fun L hL _ hg => hsh L hL _ (auditTiling_unit_lt 64 64 L hg)) (fun L _ hg => auditTiling_unit_lt 64 64 L hg)
-    (auditTiling_rows_lt 64 64) (auditTiling_cols_lt 64 64) (fun _ _ _ h => h) hent
+    (fun L hL _ hg => hsh L hL _ (auditTiling_unit_lt 64 64 L hg)) (auditTiling_rows_lt 64 64) (auditTiling_cols_lt 64 64) (fun _ _ _ h => h) hent
 
 /-- **L3's words for the plain `pc4` Program on D₄** (`pearlCDomainFp4`) and the audit's tiles:
 `tileCheck4_computesWords_pearlC` with `Shape4` from D₄'s shapes. -/

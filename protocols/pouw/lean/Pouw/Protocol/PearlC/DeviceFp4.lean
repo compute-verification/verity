@@ -850,7 +850,7 @@ noncomputable def pearlCProtocolFp4 (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : �
   ticket := fun H s U u act => atNat (d.ticket (sem.unitForm d H s U u act).1 (sem.unitForm d H s U u act).2)
   useful := fun H s U u act => atNat (sem.unitUseful d H s U u act)
   actOK := fun sh act => sem.OperandOK sh.m sh.k act
-  weightOK := fun sh w => sem.OperandOK sh.n sh.k w
+  weightOK := fun sh w j => sem.RowOK sh.n sh.k w j
   credit := fun H s U u act => ((creditFp4 d (U.layout.shape u) - sem.unitDebit d H s U u act : ℚ) : ℝ)
   capOK := fun H s U u act => sem.unitDebit d H s U u act ≤ ρ * creditFp4 d (U.layout.shape u)
   Wref := fun L u => (wrefFp4 d (L.shape u) : ℝ)
