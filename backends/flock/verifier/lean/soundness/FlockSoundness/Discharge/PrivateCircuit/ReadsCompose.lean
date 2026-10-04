@@ -16,6 +16,8 @@ store's values at `j`'s output rows (`UnitOk`).
 * `classRel_bad`: at a unit wrong against the store, the class relation's reads (`ClassRel`) cannot all be the registered
   ones: given the registered entry, some input read or output write holds a value other than the store's. The reads are
   the layout's (`ReadLayout.tabOf`, `xOf`, `yOf`), so this is the step `read_binding` turns into a collision.
+* `classWrongOn_of_computes`: where the class net computes the class relation (`ClassComputes`), its wrong units are the
+  relation's failures (`ClassWrongOn`).
 -/
 
 namespace FlockSoundness.Discharge.PrivateCircuit.Reads
@@ -89,5 +91,22 @@ theorem classRel_bad {G M : ℕ} (L : ReadLayout P G) (lfT : ExplicitLeaf (Entry
   have hok : UnitOk P T w u := ⟨by rw [← hT]; exact hac, fun l => by rw [← hy l, ← hblk l, hT, hx]⟩
   unfold bad at hbad
   exact (Finset.mem_filter.1 hbad).2 hok
+
+/-- **The class net's wrong units are the class relation's**: where the class net computes `rel` (`ClassComputes`), a
+unit is wrong at a good assignment exactly when `rel` fails there, so `ClassWrongOn` is a fact about the net and not a
+free hypothesis. A unit's only committed gate of its own is its check, set at the good assignments, so the unit is
+correct exactly when its gates evaluate the check to `true`. -/
+theorem classWrongOn_of_computes {C : Audit.Circuit} {n : ℕ} {Reg : Type} {Pt : Audit.Partition C n}
+    {good : Reg → (Fin C.N → Bool) → Prop} {rel : Reg → (Fin C.N → Bool) → Fin n → Prop} {ok : Fin n → Fin C.N}
+    (h : ClassComputes Pt good rel ok) : ClassWrongOn Pt good rel := by
+  intro R v hg u
+  rw [Audit.Partition.mem_wrong]
+  refine not_congr ⟨fun hc => ?_, fun hr g hg' hu => ?_⟩
+  · have e := hc (ok u) (Pt.mem_committed_of_output (h.out_ok u)) (h.unit_ok u)
+    rw [h.set_ok R v hg u] at e
+    exact (h.computes R v hg u).1 e.symm
+  · obtain rfl := h.only_ok g hg' u hu
+    rw [h.set_ok R v hg u]
+    exact ((h.computes R v hg u).2 hr).symm
 
 end FlockSoundness.Discharge.PrivateCircuit.Reads

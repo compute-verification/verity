@@ -27,12 +27,20 @@ inputs and weights.
      outputs are right, and part 2's bound otherwise.
   The inputs condition is explicit: the model runs on the committed cells, and the delivered public inputs are bound to
   them (`pubIn`); every other registered cell (the weights, any private input) is the registrant's.
-* `private_circuit_private_reads`: `circuit_private` at the program commitment `hm96Scheme` with the topology table's
-  entries as its rows: the verifier's view at the registered table and the simulator's, which reads the class and the
-  owed outputs only, are within `2·N·δ₁ + zkGap`.
+* `private_circuit_private_reads`, `private_circuit_indist_reads`: privacy at a public class list `cl` (`ClassList`:
+  template, dimension class and padded count per block). The program commitment is `readsScheme`, the topology table's
+  `cl.units` entries registered as hm96 rows. The verifier's view at the registered table is within
+  `2·cl.units·δ₁ + zkGap` of the simulator's, which reads the class list `cl` and the owed outputs `o` only; so two
+  models of one class list, for the same owed outputs, give every event of the view probabilities within twice that.
+  What is public is exactly the class list and the owed outputs (with the session's public parameters, the class
+  circuit `U cl`): the view's distribution is a function of them, nothing more. The class list is not hidden, and at
+  census granularity it identifies the model (no two census workloads share one), so these theorems hide the table's
+  contents (dimensions within a class, read positions) among the models of one class list, not the model.
 
-Protocol 1's drawn bound (`ZkSessionDrawn`, `zk_session_drawnR`'s form) and the class circuit's relation
-(`ClassWrongOn`, the gadget's lowering) are hypotheses, as `ZkSessionSound` and `UnitWrong` were.
+Protocol 1's drawn bound (`ZkSessionDrawn`, `zk_session_drawnR`'s form) is a hypothesis, as `ZkSessionSound` was. The
+class circuit enters as a fact about its net (`ClassComputes`: each unit's check gate computes `ClassRel`), not as its
+wrong units; `private_circuit_sound_reads_nonvacuous` (`ReadsNonVacuous.lean`) meets every hypothesis of the soundness
+headline at once at a concrete instance that accepts with probability one.
 -/
 
 namespace FlockSoundness.Discharge.PrivateCircuit
@@ -66,8 +74,9 @@ noncomputable def tabFill (L : ReadLayout P C.N) (s : UnitSession Pt Reg) (τ : 
   if j ∈ drawn o ∧ j ∉ Pt.wrong (s.vals τ o) then (L.ent j).read (s.vals τ o) else tr j
 
 open Classical in
-/-- **Protocol 2 with hidden reads is sound at the drawn units.** The class circuit's wrong units are its relation's
-(`hwr`, at the good assignments, which the committed values of an accepted outcome are, `hgood`); the registrant's
+/-- **Protocol 2 with hidden reads is sound at the drawn units.** The class net computes its relation at each unit's check
+gate `ok u` (`hcomp`, at the good assignments, which the committed values of an accepted outcome are, `hgood`), so its
+wrong units are the relation's (`classWrongOn_of_computes`); the registrant's
 openings of the table and the store check against its roots (`htr`, `hwo`); the session meets protocol 1's drawn bound
 (`hD`) and escapes sets fixed before the draw with at most the law's escape (`hE`); the verifier checks the delivered
 outputs and public inputs against the registration's store root (`hdel`); and the store's and the table's finders meet
@@ -80,7 +89,8 @@ end on the committed cells is at most `q_S²/2^513` plus, when the registered mo
 theorem private_circuit_sound_reads
     (L : ReadLayout P C.N) (lfT : ExplicitLeaf (Entry P)) (lfS : ExplicitLeaf V) (idx : Cell → Fin M)
     (rootT rootS : Reg → Flock.Registered.Port) (good : Reg → (Fin C.N → Bool) → Prop)
-    (hwr : ClassWrongOn Pt good fun R v u => ClassRel L lfT lfS idx (rootT R) (rootS R) v u)
+    (ok : Fin P.N → Fin C.N)
+    (hcomp : ClassComputes Pt good (fun R v u => ClassRel L lfT lfS idx (rootT R) (rootS R) v u) ok)
     (rtT₀ rtS₀ : Flock.Registered.Port) (tr : Fin P.N → ReadVal (Entry P)) (wo : Fin M → ReadVal V)
     (htr : ∀ j : Fin P.N, ReadOk lfT rtT₀ j (tr j)) (hwo : ∀ i : Fin M, ReadOk lfS rtS₀ i (wo i))
     (s : UnitSession Pt Reg) (drawn : s.Out → Finset (Fin P.N)) (hD : ZkSessionDrawn s drawn)
@@ -113,6 +123,7 @@ theorem private_circuit_sound_reads
         ENNReal.ofReal (qS ^ 2 / 2 ^ (513 : ℝ)) := by
   intro w T₀
   classical
+  have hwr := classWrongOn_of_computes hcomp
   have hRB := reads_bind_le s.G τ lfS rtS₀ Fin.val wo hwo (storeReads L idx s τ drawn owed pubIn yD xD) costS qS hcS hS
   have hrel : ∀ o, s.Accepts o → ∀ u, u ∉ Pt.wrong (s.vals τ o) →
       ClassRel L lfT lfS idx (rootT (s.regOf o)) (rootS (s.regOf o)) (s.vals τ o) u := fun o ha u hu => by
@@ -208,33 +219,65 @@ theorem private_circuit_sound_reads
 
 end Sound
 
-/-- **Protocol 2 with hidden reads is circuit-private.** The program of class `c` is its topology table, `Nc c` entries
-(`tab C c` the table circuit `C` becomes at class `c`, `encE c e` an entry's bytes), registered as their hm96 commit strings
-under the registrant's uniform salts (`hm96Scheme`); the class circuit's `--zk` tables `U c o v` read the class, the owed
-outputs `o` and that registration `v` only. Under `hash-derived-key` at `δ₁` (`hKey`), where the tables at every
-registration of `tab C c` meet `ZkWireFixed`'s conditions (`hZk`) and the honest witness satisfies them (`hSat`): for every
-dummy table `p₀` and dummy witness `w₀`, every encoding of the session's views and every event of the registration's view
-and that encoding, the real view and the simulator's are within `2·Nc c·δ₁ + zkGap (zs c)`, both ways. `circuit_private`
-at that scheme. -/
+/-- **The program commitment at a class list**: `hm96Scheme` with the class list as the class and the topology table of
+`cl.units` entries as the program, each entry registered as its hm96 commit string (`encE`). -/
+abbrev readsScheme {Circ Out Ent : Type} {K W Hi VL : Type} [Field K] (fits : Circ → ClassList → Prop)
+    (tab : Circ → (cl : ClassList) → Fin cl.units → Ent) (encE : Ent → List UInt8) (J : ClassList → ℕ)
+    (zs : (cl : ClassList) → Fin (J cl) → Sizes)
+    (U : (cl : ClassList) → Out → (Fin cl.units → Bits × ByteArray) → ∀ j, Coined K W Hi VL (zs cl j)) :=
+  hm96Scheme fits tab ClassList.units (fun _ T j => encE (T j)) J zs U
+
+/-- **Protocol 2 with hidden reads is private at a public class list.** The public view is the class list `cl`
+(template, dimension class and padded count per block) and the owed outputs `o`; the program is the topology table of
+`cl.units` entries (`tab C cl`), each registered as its hm96 commit string (`encE`) under the registrant's uniform salts
+(`readsScheme`), and the class circuit's `--zk` tables `U cl o v` read the class list, the owed outputs and that
+registration `v` only. Under `hash-derived-key` at `δ₁` (`hKey`), where the tables at every registration of `tab C cl`
+meet `ZkWireFixed`'s conditions (`hZk`) and the honest witness satisfies them (`hSat`): for every dummy table `p₀` and
+dummy witness `w₀`, every encoding of the session's views and every event of the registration's view and that encoding,
+the real view and the simulator's, which reads `cl` and `o` and nothing of `C`, are within `2·cl.units·δ₁ +
+zkGap (zs cl)`, both ways. The class list is public; this hides the table among the models of class list `cl`.
+`circuit_private` at `readsScheme`. -/
 theorem private_circuit_private_reads
-    {Cls Circ Out : Type} {Ent : Cls → Type} {K W Hi VL : Type} [Field K] [Fintype K] [DecidableEq K]
-    [AddCommGroup Hi] [Fintype Hi] [DecidableEq Hi] (fits : Circ → Cls → Prop) (Nc : Cls → ℕ)
-    (tab : Circ → (c : Cls) → Fin (Nc c) → Ent c) (encE : (c : Cls) → Ent c → List UInt8) (J : Cls → ℕ)
-    (zs : (c : Cls) → Fin (J c) → Sizes)
-    (U : (c : Cls) → Out → (Fin (Nc c) → Bits × ByteArray) → ∀ j, Coined K W Hi VL (zs c j))
+    {Circ Out Ent : Type} {K W Hi VL : Type} [Field K] [Fintype K] [DecidableEq K]
+    [AddCommGroup Hi] [Fintype Hi] [DecidableEq Hi] (fits : Circ → ClassList → Prop)
+    (tab : Circ → (cl : ClassList) → Fin cl.units → Ent) (encE : Ent → List UInt8) (J : ClassList → ℕ)
+    (zs : (cl : ClassList) → Fin (J cl) → Sizes)
+    (U : (cl : ClassList) → Out → (Fin cl.units → Bits × ByteArray) → ∀ j, Coined K W Hi VL (zs cl j))
     (δ₁ : ℝ≥0∞) (hKey : Assumptions.Hm96Hiding My saltHash δ₁)
-    (c : Cls) (o : Out) (C : Circ) (w : (Fin (Nc c) → Salt) → Fin (J c) → W)
-    (hZk : ∀ r, ZkOk (U c o (hm96Reg (fun T j => rowBits (encE c (T j))) (tab C c) r)))
-    (hSat : ∀ r, Sat (U c o (hm96Reg (fun T j => rowBits (encE c (T j))) (tab C c) r)) (w r))
-    (p₀ : Fin (Nc c) → Ent c) (w₀ : Fin (J c) → W) {Obs : Type}
-    (encV : ∀ v, (∀ j, (U c o v j).tab.View) → Obs) (E : (Fin (Nc c) → Bits × ByteArray) → Obs → Prop) :
-    realPr (hm96Scheme fits tab Nc (fun c T j => encE c (T j)) J zs U) c o (tab C c) w encV E
-        ≤ simPr (hm96Scheme fits tab Nc (fun c T j => encE c (T j)) J zs U) c o p₀ w₀ encV E +
-          (2 * Nc c * δ₁ + zkGap (zs c)) ∧
-      simPr (hm96Scheme fits tab Nc (fun c T j => encE c (T j)) J zs U) c o p₀ w₀ encV E
-        ≤ realPr (hm96Scheme fits tab Nc (fun c T j => encE c (T j)) J zs U) c o (tab C c) w encV E +
-          (2 * Nc c * δ₁ + zkGap (zs c)) :=
-  circuit_private (hm96Scheme fits tab Nc (fun c T j => encE c (T j)) J zs U) c (2 * Nc c * δ₁)
-    (hm96Reg_hides _ hKey) o C w hZk hSat p₀ w₀ encV E
+    (cl : ClassList) (o : Out) (C : Circ) (w : (Fin cl.units → Salt) → Fin (J cl) → W)
+    (hZk : ∀ r, ZkOk (U cl o (hm96Reg (fun T j => rowBits (encE (T j))) (tab C cl) r)))
+    (hSat : ∀ r, Sat (U cl o (hm96Reg (fun T j => rowBits (encE (T j))) (tab C cl) r)) (w r))
+    (p₀ : Fin cl.units → Ent) (w₀ : Fin (J cl) → W) {Obs : Type}
+    (encV : ∀ v, (∀ j, (U cl o v j).tab.View) → Obs) (E : (Fin cl.units → Bits × ByteArray) → Obs → Prop) :
+    realPr (readsScheme fits tab encE J zs U) cl o (tab C cl) w encV E
+        ≤ simPr (readsScheme fits tab encE J zs U) cl o p₀ w₀ encV E + (2 * cl.units * δ₁ + zkGap (zs cl)) ∧
+      simPr (readsScheme fits tab encE J zs U) cl o p₀ w₀ encV E
+        ≤ realPr (readsScheme fits tab encE J zs U) cl o (tab C cl) w encV E + (2 * cl.units * δ₁ + zkGap (zs cl)) :=
+  circuit_private (readsScheme fits tab encE J zs U) cl (2 * cl.units * δ₁) (hm96Reg_hides _ hKey) o C w hZk hSat p₀ w₀
+    encV E
+
+/-- **The view is a function of the public class list and the owed outputs**: any two models `C`, `C'` registered at
+one class list `cl` (template, dimension class and padded count per block), with honest witnesses for the same owed
+outputs `o`, give every event of the verifier's view probabilities within `2·(2·cl.units·δ₁ + zkGap (zs cl))`, under
+`hash-derived-key` at `δ₁`. Nothing is claimed for models of different class lists: the class list is public.
+`circuit_indist` at `readsScheme`. -/
+theorem private_circuit_indist_reads
+    {Circ Out Ent : Type} {K W Hi VL : Type} [Field K] [Fintype K] [DecidableEq K]
+    [AddCommGroup Hi] [Fintype Hi] [DecidableEq Hi] (fits : Circ → ClassList → Prop)
+    (tab : Circ → (cl : ClassList) → Fin cl.units → Ent) (encE : Ent → List UInt8) (J : ClassList → ℕ)
+    (zs : (cl : ClassList) → Fin (J cl) → Sizes)
+    (U : (cl : ClassList) → Out → (Fin cl.units → Bits × ByteArray) → ∀ j, Coined K W Hi VL (zs cl j))
+    (δ₁ : ℝ≥0∞) (hKey : Assumptions.Hm96Hiding My saltHash δ₁)
+    (cl : ClassList) (o : Out) (C C' : Circ) (w w' : (Fin cl.units → Salt) → Fin (J cl) → W)
+    (hZk : ∀ r, ZkOk (U cl o (hm96Reg (fun T j => rowBits (encE (T j))) (tab C cl) r)))
+    (hZk' : ∀ r, ZkOk (U cl o (hm96Reg (fun T j => rowBits (encE (T j))) (tab C' cl) r)))
+    (hSat : ∀ r, Sat (U cl o (hm96Reg (fun T j => rowBits (encE (T j))) (tab C cl) r)) (w r))
+    (hSat' : ∀ r, Sat (U cl o (hm96Reg (fun T j => rowBits (encE (T j))) (tab C' cl) r)) (w' r)) {Obs : Type}
+    (encV : ∀ v, (∀ j, (U cl o v j).tab.View) → Obs) (E : (Fin cl.units → Bits × ByteArray) → Obs → Prop) :
+    realPr (readsScheme fits tab encE J zs U) cl o (tab C cl) w encV E
+      ≤ realPr (readsScheme fits tab encE J zs U) cl o (tab C' cl) w' encV E +
+        2 * (2 * cl.units * δ₁ + zkGap (zs cl)) :=
+  circuit_indist (readsScheme fits tab encE J zs U) cl (2 * cl.units * δ₁) (hm96Reg_hides _ hKey) o C C' w w' hZk hZk'
+    hSat hSat' encV E
 
 end FlockSoundness.Discharge.PrivateCircuit

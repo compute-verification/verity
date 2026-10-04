@@ -26,6 +26,10 @@ the circuit (`Flock.Registered.opensLeaf`, hm96 leaves).
   read, its input reads and its output writes at fixed gates of the session's circuit; `tabOf`, `xOf`, `yOf` read them.
   `ClassRel` is the class circuit's relation at those reads under the registration's roots, and `ClassWrongOn` is
   `UnitWrongOn`'s form for it: at the good assignments a unit of the partition is wrong exactly when `ClassRel` fails.
+  `ClassComputes` is the class-net fact it follows from (`classWrongOn_of_computes`): each unit's one committed gate is
+  its check, set at the good assignments, which the unit's gates compute as the relation.
+* **The public class list** (`BlockClass`, `ClassList`): template, dimension class and padded count per
+  block, public; the topology table is hidden only among the models of one class list.
 * **The session's headlines, as Props** (`ZkSessionDrawn`, `DrawEscapes`): protocol 1's drawn bound (no drawn unit wrong
   except with `ε_ks + δ_link`, `zk_session_drawnR`'s form) and the draw's escape at a set fixed before it.
 -/
@@ -189,6 +193,37 @@ form, with the class circuit's relation in place of the universal unit's. -/
 def ClassWrongOn {C : Audit.Circuit} {n : ℕ} {Reg : Type} (Pt : Audit.Partition C n)
     (good : Reg → (Fin C.N → Bool) → Prop) (rel : Reg → (Fin C.N → Bool) → Fin n → Prop) : Prop :=
   ∀ R v, good R v → ∀ u, u ∈ Pt.wrong v ↔ ¬ rel R v u
+
+/-- **The class net computes the class relation**, unit by unit (`UniversalComputes`' role for the class circuit). Each
+unit `u` holds one committed gate of its own, its check `ok u`, a circuit output: every other gate of `u` is internal.
+At the assignments `good R` holds of, every check is set (`v (ok u) = true`, the verifier's public output) and `u`'s
+gates applied to the committed values evaluate its check to `true` exactly when `rel R v u` holds. -/
+structure ClassComputes {C : Audit.Circuit} {n : ℕ} {Reg : Type} (Pt : Audit.Partition C n)
+    (good : Reg → (Fin C.N → Bool) → Prop) (rel : Reg → (Fin C.N → Bool) → Fin n → Prop) (ok : Fin n → Fin C.N) :
+    Prop where
+  unit_ok : ∀ u, Pt.unit (ok u) = some u
+  out_ok : ∀ u, ok u ∈ C.outputs
+  only_ok : ∀ g ∈ Pt.committed, ∀ u, Pt.unit g = some u → g = ok u
+  set_ok : ∀ R v, good R v → ∀ u, v (ok u) = true
+  computes : ∀ R v, good R v → ∀ u, (Pt.localEval v u (ok u) = true ↔ rel R v u)
+
+/-! ## The public class list -/
+
+/-- **A block's public class**: its library template, its dimension class and its padded count (the units of that
+class in the padded population). -/
+structure BlockClass where
+  template : ℕ
+  dimClass : ℕ
+  padded : ℕ
+  deriving DecidableEq
+
+/-- **The public class list**, one `BlockClass` per block. The verifier sees it: at pow2 per-template granularity it
+identifies the model among the census workloads (no two share one), so the protocol hides the topology table's contents
+among the models of one class list, not the class list itself. -/
+abbrev ClassList := List BlockClass
+
+/-- The topology table's length at a class list: the padded population, every block's padded count. -/
+def ClassList.units (cl : ClassList) : ℕ := (cl.map BlockClass.padded).sum
 
 /-! ## The session's headlines, as Props -/
 
