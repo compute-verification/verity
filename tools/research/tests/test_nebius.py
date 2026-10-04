@@ -1591,6 +1591,34 @@ def _n1_lease(monkeypatch, tmp_path, holders=(), **env):
     return m, calls, state
 
 
+def test_n1_lease_setup_makes_lease_files_writable_as_root_but_never_through_a_link(monkeypatch, tmp_path):
+    """The lease dir is 0777 and setup's chmod runs as root, so a job that planted a symlink to a file of root's there (or a hard
+    link, or swapped a listed file for a symlink) had root make that file world-writable."""
+    m, _, _ = _n1_lease(monkeypatch, tmp_path)
+    gl = tmp_path / "gl"
+    gl.chmod(0o777)
+    secret, other = tmp_path / "secret", tmp_path / "other"
+    for p in (secret, other, gl / "0.owner"):
+        p.write_text("x")
+        p.chmod(0o600)
+    (gl / "planted").symlink_to(secret)
+    os.link(other, gl / "hard")
+    real, ran = subprocess.run, []
+    monkeypatch.setattr(m.subprocess, "run", lambda argv, **kw: ran.append(argv) or subprocess.CompletedProcess(argv, 0))
+    m.setup()
+    monkeypatch.setattr(m.subprocess, "run", real)
+    assert {a[-1] for a in ran} == {str(gl / "0.owner"), str(gl / "hard")}          # a symlink is never handed to root
+    for argv in ran:
+        assert argv[:4] == ["sudo", "-n", "python3", "-c"]
+        real([sys.executable, *argv[3:]], check=True)
+    assert (gl / "0.owner").stat().st_mode & 0o777 == 0o666
+    assert secret.stat().st_mode & 0o777 == 0o600 and other.stat().st_mode & 0o777 == 0o600
+    (gl / "0.owner").unlink()
+    (gl / "0.owner").symlink_to(secret)                                                  # swapped after setup listed it
+    assert real([sys.executable, "-c", m.FIX_MODE, str(gl / "0.owner")], capture_output=True).returncode != 0
+    assert secret.stat().st_mode & 0o777 == 0o600
+
+
 @needs_flock
 def test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_holders_gpu(monkeypatch, tmp_path, reap):
     m, calls, _ = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-1", "gpu-pool-1-x", "GPU-c")])
