@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The node-side jobs of the erase calibration, run by `research run --on vy-nebius-2 --cwd source/benchmarks/pous/erase_calib`.
 # Each driver step takes its own preemptible `gpu-lease 1` on GPUs $ERASE_GPUS with its host threads on cores $ERASE_CPUS of
-# NUMA node 0 (off node 2's merge-check slot, cores 0-47), and writes small JSON to $RESEARCH_RUN_DIR/out. No lease is held
+# NUMA node 0 (off node 2's merge-check slot, cores 0-47; the research user may run on 0-91), and writes small JSON to $RESEARCH_RUN_DIR/out. No lease is held
 # past $ERASE_STOP_EPOCH. A validate, sweep or host step that is preempted (143) or reaches its --max-min (124) is taken up
 # again and resumes from its JSON; a soak takes a fresh lease (and a fresh tag) per chunk until the stop epoch.
 #
@@ -16,7 +16,7 @@ OUT=${RESEARCH_RUN_DIR:?}/out
 STOP=${ERASE_STOP_EPOCH:?seconds since the epoch after which no lease is held}
 STOP=${STOP%.*}
 GPUS=${ERASE_GPUS:-0,1,2,3}
-CPUS=${ERASE_CPUS:-48-95}
+CPUS=${ERASE_CPUS:-48-91}
 export TRITON_CACHE_DIR=${TRITON_CACHE_DIR:-/tmp/erase-calib-triton-cache}
 export GPU_LEASE_WHO=${GPU_LEASE_WHO:-memory-accounting:erase-calib}
 PIN=()
