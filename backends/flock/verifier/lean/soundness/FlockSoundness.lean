@@ -170,5 +170,7 @@ import FlockSoundness.Discharge.ZkCoins
 import FlockSoundness.Discharge.PrivateCircuit
 import FlockSoundness.Discharge.ZkHidden
 import FlockSoundness.Discharge.Composed
+import FlockSoundness.Discharge.ZkEveryCoin
+import FlockSoundness.ZK.PadNonvanishing40
 import FlockSoundness.Discharge.ZkReg
 import FlockSoundness.Discharge.ZkPubIn
