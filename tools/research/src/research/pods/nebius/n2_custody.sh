@@ -32,7 +32,7 @@
 # (PASS_S + PUSH_S); else it stops there, with one log line and exit 0, and the next round asks again. Its Jobs run on node 1, so it
 # keeps node 1's daily hold (VY_CUSTODY_QUIET, 12:10-13:30Z, as n1_custody.sh does) the same way, and no Job of it runs into node 1's
 # quiet hour: a push starts only while its rsync and a Job of at least JOB_MIN_S end before 12:30Z, and the Job's
-# activeDeadlineSeconds and the grace a stopped pod has (GRACE_S; its main process exits on SIGTERM) end it a minute before.
+# activeDeadlineSeconds and the grace a stopped pod has (GRACE_S; on SIGTERM its bash exits, and research is killed) end it a minute before.
 set -u
 ROOTS=${VY_CUSTODY_ROOTS:-/workspace/jobs/runs=/workspace/jobs/runs,/workspace/research/runs=/workspace/jobs/runs-n2}
 STATE=${VY_CUSTODY_STATE:-/workspace/research/custody-push}
@@ -256,8 +256,8 @@ push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 he
     why="$HOLD: ${deadline}s left, the copy waits on node 1"
     return 6
   fi
-  # a failed Job never completes: wait for either condition, then name the failure from its log. The Job's bash is its container's
-  # init, which ignores a signal it has no handler for: it traps SIGTERM, and research runs under its wait
+  # a failed Job never completes: wait for either condition, then name the failure from its log. The Job's bash, its container's init,
+  # exits on SIGTERM (trapped) and the kernel SIGKILLs research; a rerun repeats it, as every write is a temp file, then a rename
   if ! timeout 2100 "${SSH[@]}" "$N1" "$start &&
     end=\$((\$(date +%s) + 1800)) && while [ \$(date +%s) -lt \$end ]; do
     c=\$($KUBE get job $name -o jsonpath='{range .status.conditions[*]}{.type}={.status} {end}'); case \$c in

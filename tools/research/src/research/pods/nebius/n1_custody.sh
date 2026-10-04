@@ -31,8 +31,8 @@
 # needing action (a label, a fetch, --reconcile); remove it by hand to have the next round try again.
 # No Job starts in node 1's daily hold, VY_CUSTODY_QUIET (UTC; dispatch.py's PACK_HOLD to the quiet hour's end), and none runs into
 # the quiet hour (QUIET_AT, 12:30Z, which measurements own): each Job's activeDeadlineSeconds and the grace a stopped pod has (GRACE_S;
-# its main process exits on SIGTERM) end it a minute before, to the second, and a Job that would get less than JOB_MIN_S isn't started
-# (as n2_custody.sh's).
+# on SIGTERM its bash exits, and research is killed) end it a minute before, to the second, and a Job that would get less than
+# JOB_MIN_S isn't started (as n2_custody.sh's).
 # Each store also gets `research data push --pending` in a Job of its own whenever none is left (a finished one stays
 # VY_CUSTODY_PENDING_S): the labels, and the artifacts no run names, that no run's custody pushes. It is the store-push template's
 # push on a schedule, for both stores.
@@ -140,7 +140,8 @@ job() {
 import json, re, sys
 
 image, src, py, grace, name, uid, ttl, deadline, store, root, kind, *args = sys.argv[1:]
-# bash is the container's init, which ignores a signal it has no handler for: it traps SIGTERM, and research runs under its wait
+# bash is the container's init, which ignores SIGTERM unless trapped: on it bash exits and the kernel SIGKILLs research. A rerun
+# repeats what that cuts short: .custody and every store write go to a temp file, then a rename
 run = ('trap "exit 143" TERM; cd / && export HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$1/tools/research/src" RESEARCH_STORE="$3" '
        'RESEARCH_RUNS="$4" || exit 1; { ')
 run += {"custody": '"$2" -m research data custody "$5" --publish --keep-local "${@:6}"',
