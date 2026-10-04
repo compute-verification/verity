@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from functools import cache
 from pathlib import Path
 from types import SimpleNamespace
@@ -186,43 +187,57 @@ def rep_inputs(inner: Path, claims: dict, rep: int, shape: A.Shape) -> tuple[lis
     return w, v
 
 
-def stage(inner: Path, claims: dict, out_dir: Path, verifier_inner: Path | None = None, evaluate: bool = True) -> dict:
-    """The statement over both reps (instance r = rep r), the verifier's own files beside the prover's (``out_dir``), and what
-    it costs. ``verifier_inner``: the session whose coins the verifier's v is for, when the prover's witness comes from another
-    (a forged transcript: the honest messages at changed coins)."""
+def stage(inner: Path, claims: dict, out_dir: Path, forged: Path | None = None, evaluate: bool = True) -> dict:
+    """The statement over both reps (instance r = rep r), the verifier's own files beside the prover's (``out_dir/honest``),
+    and what it costs. ``forged``: a session whose coins differ from ``inner``'s (a forged transcript), staged too
+    (``out_dir/forged``, the same circuit): the honest prover's w beside the verifier's v at the forged coins."""
     shape = A.Shape(int(claims["m"]), int(claims["k_log"]), 2 + len(claims["reps"][0]["extras"]))
     S, _layout = A.structure(shape)
     reps = [rep_inputs(inner, claims, r, shape) for r in range(2)]
-    if verifier_inner is not None:
-        reps = [(w, rep_inputs(verifier_inner, claims, r, shape)[1]) for r, (w, _v) in enumerate(reps)]
-    s = write_statement(S, f"rec-residuals/m{shape.m}-k{shape.k_log}-c{shape.claims}", [w for w, _ in reps], [v for _, v in reps],
-                        out_dir, evaluate)
-    return {"shape": [shape.m, shape.k_log, shape.claims], **s}
+    st = statement(S, f"rec-residuals/m{shape.m}-k{shape.k_log}-c{shape.claims}", len(reps))
+    out = {"shape": [shape.m, shape.k_log, shape.claims], "build_s": st.build_s,
+           "honest": write_statement(st, [w for w, _ in reps], [v for _, v in reps], Path(out_dir) / "honest", evaluate)}
+    if forged is not None:
+        vs = [rep_inputs(forged, claims, r, shape)[1] for r in range(2)]
+        out["forged"] = write_statement(st, [w for w, _ in reps], vs, Path(out_dir) / "forged", evaluate)
+    return out
 
 
-def write_statement(S: dict, name: str, ws: list[list[int]], vs: list[list[int]], out_dir: Path, evaluate: bool = True) -> dict:
-    """``GfResiduals_v1{S}`` over one instance per (w, v), its outputs registered as zero, written to ``out_dir``: the circuit,
-    the prover's ``inst.bin``, the verifier's ``pub.bin``, ``public-inputs.bin`` (v), ``program.json``, ``partition.json`` and
-    the reads file ``registered.json``."""
+def statement(S: dict, name: str, n: int) -> SimpleNamespace:
+    """``GfResiduals_v1{S}`` over ``n`` instances: its Program, partition, unit and circuit text, which only ``n`` and ``S``
+    decide."""
     from verity_sampled_proofs.one_stage import partition as P
-    from verity_sampled_proofs.one_stage import registered as RG
 
+    t0 = time.perf_counter()
     defn = bind(G.GfResiduals, S=S)
-    n = len(ws)
-    wrows = np.array([words(w, w_words(S)) for w in ws], np.uint16)
-    vrows = np.array([words(v, v_words(S)) for v in vs], np.uint16)
-    ref = [residual_words(S, w, v) for w, v in zip(ws, vs, strict=True)]
     program = P.population_program(defn, n)
     part = P.partition(program, P.template_instance_query(defn))
     prog = P.program_sha512(program)
     low = lowering(S, name)
+    sub = subcircuit(defn, name)
+    public = {"v": {"seed": "the inner session's public record (rec/inner-transcript/v0), rep = instance", "derivation": DERIVATION}}
+    text = FC.compose(low, sub, partition=P.digest(part), program=prog, public_inputs=public)
+    return SimpleNamespace(S=S, n=n, defn=defn, program=program, part=part, prog=prog, low=low, sub=sub, text=text,
+                           build_s=round(time.perf_counter() - t0, 1))
+
+
+def write_statement(st: SimpleNamespace, ws: list[list[int]], vs: list[list[int]], out_dir: Path, evaluate: bool = True) -> dict:
+    """The statement (:func:`statement`) on one instance per (w, v), its outputs registered as zero, written to ``out_dir``: the
+    circuit, the prover's ``inst.bin``, the verifier's ``pub.bin``, ``public-inputs.bin`` (v), ``program.json``,
+    ``partition.json`` and the reads file ``registered.json``."""
+    from verity_sampled_proofs.one_stage import partition as P
+    from verity_sampled_proofs.one_stage import registered as RG
+
+    S, n, low, sub, text, prog, program, part = st.S, st.n, st.low, st.sub, st.text, st.prog, st.program, st.part
+    if len(ws) != n or len(vs) != n:
+        raise ValueError(f"{len(ws)} witnesses and {len(vs)} coefficient rows for a statement of {n} instances")
+    wrows = np.array([words(w, w_words(S)) for w in ws], np.uint16)
+    vrows = np.array([words(v, v_words(S)) for v in vs], np.uint16)
+    ref = [residual_words(S, w, v) for w, v in zip(ws, vs, strict=True)]
     agrees = None
     if evaluate:
         got, _cut, ok = low.evaluate(np.concatenate([wrows, vrows], axis=1).astype(np.uint64))
         agrees = [bool((int(ok) >> i) & 1) and got[i].astype(np.uint16).tolist() == ref[i] for i in range(n)]
-    sub = subcircuit(defn, name)
-    public = {"v": {"seed": "the inner session's public record (rec/inner-transcript/v0), rep = instance", "derivation": DERIVATION}}
-    text = FC.compose(low, sub, partition=P.digest(part), program=prog, public_inputs=public)
     value = "rec-residuals-zero"
     reg = RG.Registered.commit(prog, value, [[0] * OUT_WORDS for _ in range(n)], salts=zero_salts(value, n))
     out_rows, out_salts, entry = reg.statement(range(n))
@@ -239,7 +254,7 @@ def write_statement(S: dict, name: str, ws: list[list[int]], vs: list[list[int]]
              share_rows=True, outs={"out": np.asarray(out_rows, np.uint16)}, tables={"w": wrows}, refs={"w": list(range(n))},
              salts=salts, registered={"out": entry}, public_words={"v": vrows})
     meta = json.loads(text.split("\n", 2)[1][5:])
-    return {"template": defn.id, "instances": n, "nw": S["nw"], "nv": S["nv"], "products": sum(len(r["mul"]) for r in S["res"]),
+    return {"template": st.defn.id, "instances": n, "nw": S["nw"], "nv": S["nv"], "products": sum(len(r["mul"]) for r in S["res"]),
             "residuals": len(S["res"]), "holds": [not any(x) for x in ref],
             "nonzero_residuals": [[i for i in range(len(S["res"])) if any(x[8 * i:8 * i + 8])] for x in ref],
             "unit_agrees": agrees, "unit_rows": low.layout.useful, "unit_log": meta["unit_log"], "k_log": meta["k_log"],
@@ -252,15 +267,17 @@ def main(argv=None) -> int:
 
     ap = argparse.ArgumentParser()
     ap.add_argument("inner", help="the inner session (session/, claims.json: 80-rec-inner.sh's out/inner)")
-    ap.add_argument("out")
-    ap.add_argument("--verifier-inner", default=None, help="the session the verifier's coins come from (default: inner)")
+    ap.add_argument("out", help="honest/ and, with --forged, forged/")
+    ap.add_argument("--forged", default=None, help="a forged copy of the inner session (rec_inner.py forge): its coins for v")
     ap.add_argument("--no-evaluate", action="store_true", help="skip evaluating the unit against the reference")
     a = ap.parse_args(argv)
     inner = Path(a.inner)
     claims = json.loads((inner / "claims.json").read_text())
-    s = stage(inner, claims, Path(a.out), Path(a.verifier_inner) if a.verifier_inner else None, not a.no_evaluate)
+    s = stage(inner, claims, Path(a.out), Path(a.forged) if a.forged else None, not a.no_evaluate)
     print(json.dumps(s, sort_keys=True), flush=True)
-    return 0 if all(s["holds"]) and s["unit_agrees"] in (None, [True] * s["instances"]) else 1
+    agrees = lambda x: x["unit_agrees"] in (None, [True] * x["instances"])
+    ok = all(s["honest"]["holds"]) and agrees(s["honest"])
+    return 0 if ok and ("forged" not in s or (not all(s["forged"]["holds"]) and agrees(s["forged"]))) else 1
 
 
 if __name__ == "__main__":

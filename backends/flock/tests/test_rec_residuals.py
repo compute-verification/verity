@@ -96,7 +96,7 @@ def test_the_statement_reads_v_as_public_words_and_registers_its_outputs_as_zero
     g = random.Random(11)
     (w0, v0), (w1, v1) = _holding(g), _holding(g)
     v1[2] ^= 1
-    s = RR.write_statement(SMALL, "rec-residuals/small", [w0, w1], [v0, v1], tmp_path)
+    s = RR.write_statement(RR.statement(SMALL, "rec-residuals/small", 2), [w0, w1], [v0, v1], tmp_path)
     assert s["holds"] == [True, False] and s["nonzero_residuals"] == [[], [0]] and s["unit_agrees"] == [True, True]
     meta = json.loads((tmp_path / "circuit.txt").read_text().split("\n", 2)[1][5:])
     assert [p[0] for p in meta["ports"]] == ["w", "out"]
