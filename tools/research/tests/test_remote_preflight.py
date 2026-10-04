@@ -27,6 +27,11 @@ print("args", *sys.argv[1:])
 print("cwd", os.getcwd())
 print("sent", *sorted(os.listdir(inputs)) if inputs and os.path.isdir(inputs) else ["-"])
 print("custody", os.environ.get("RESEARCH_PREFLIGHT_CUSTODY", "-"))
+print("tool", os.environ.get("RESEARCH_PREFLIGHT_TOOL") or "-")
+if os.environ.get("PF_ADD"):
+    os.makedirs(inputs, exist_ok=True)
+    with open(os.path.join(inputs, "added.json"), "w") as f:
+        f.write("{}")
 if os.environ.get("PF_FAIL"):
     print("uv is not on the PATH", file=sys.stderr)
     print("prepare the pod: bash tools/check/pod_setup.sh", file=sys.stderr)
@@ -95,7 +100,7 @@ def test_a_passing_preflight_runs_in_the_tree_with_the_runs_inputs_and_is_record
     pf = json.loads((run_dir / "job.json").read_text())["run"]["remote"]["preflight"]
     sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True).stdout.strip()
     assert pf["rc"] == 0 and pf["argv"] == ["pf.py", "--say", "hi"]
-    assert pf["stdout"] == ["args --say hi", f"cwd {machine / 'src' / sha}", "sent sent.txt", "custody -"]
+    assert pf["stdout"] == ["args --say hi", f"cwd {machine / 'src' / sha}", "sent sent.txt", "custody -", f"tool {TOOL}"]
     assert "research: preflight pf.py --say hi on m: passed" in err and "research: preflight: sent sent.txt" in err
     assert (run_dir / "inputs" / "sent.txt").read_text() == "x", "the run still gets its --send files"
     assert LocalStore().get_attempt(rid) is not None
@@ -110,6 +115,7 @@ def test_preflight_names_a_tools_preflight_for_a_run_of_anything_else(tmp_path, 
     wait_runner(machine / "runs" / rid)
     job = json.loads((machine / "runs" / rid / "job.json").read_text())
     assert job["run"]["remote"]["preflight"]["rc"] == 0 and job["store"]["tool"]["name"] != "fake", "not recorded as a run of the tool"
+    assert "tool -" in job["run"]["remote"]["preflight"]["stdout"], "the run is not its tool's, so the preflight may not hand it files"
 
 
 def test_preflight_refuses_what_it_cannot_run(tmp_path, repo, machine, capsys):
@@ -161,6 +167,17 @@ def test_the_preflight_gets_the_custody_dir_and_a_refusal_deletes_the_key(tmp_pa
     assert not (root / "requests" / "r1" / remote.CUSTODY_DIR / "cred.json").exists(), "nothing will publish: the key goes now"
     again = remote.launch_request(req)                      # the launcher re-delivered after an ssh drop
     assert again["existing"] and again["fault"] == "PreflightFailed" and again["refused"] == out["refused"]
+
+
+def test_what_the_preflight_adds_to_its_inputs_is_the_runs_even_when_nothing_was_sent(tmp_path):
+    """check's preflight hands a check run the Lean bundles' URLs it signed with the custody key this way."""
+    root = tmp_path / "root"
+    req = _request(root, "r1", _tree(tmp_path), env={"PF_ADD": "1"})
+    assert not (req.parent / "inputs").exists()
+    out = remote.launch_request(req)
+    assert out["started"] and "sent -" in out["preflight"]["stdout"] and f"tool {TOOL}" in out["preflight"]["stdout"]
+    wait_runner(root / "runs" / "r1")
+    assert (root / "runs" / "r1" / "inputs" / "added.json").read_text() == "{}" and not (req.parent / "inputs").exists()
 
 
 def test_an_unreadable_declaration_refuses_and_none_means_no_preflight(tmp_path):

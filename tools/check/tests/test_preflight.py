@@ -104,12 +104,13 @@ def _usage(free_gb: float):
     return lambda p: types.SimpleNamespace(free=int(free_gb * PF.GB))
 
 
-def _run(tmp_path, tree, *, inputs=None, custody=None, warm=True, cpu=NO_AVX, free_gb=100.0, sha=None, runs=None, shared=False):
+def _run(tmp_path, tree, *, inputs=None, custody=None, warm=True, cpu=NO_AVX, free_gb=100.0, sha=None, runs=None, shared=False,
+         tool=None):
     cache = tmp_path / "cache"
     if warm:
         (cache / "lean-deps" / _key(tree)).mkdir(parents=True, exist_ok=True)
     (tmp_path / "cpuinfo").write_text(cpu)
-    return PF.run(tree, inputs, custody, cache, tmp_path / "cpuinfo", _usage(free_gb), sha=sha, runs=runs, shared=shared)
+    return PF.run(tree, inputs, custody, cache, tmp_path / "cpuinfo", _usage(free_gb), sha=sha, runs=runs, shared=shared, tool=tool)
 
 
 def test_a_prepared_pod_passes(tmp_path, path):
@@ -155,12 +156,83 @@ def test_the_uv_pin_is_read_from_pod_setup_sh():
     assert PF.pinned_uv(ROOT) and PF.pinned_uv(ROOT)[0].isdigit()
 
 
-def test_lean_dependencies_come_from_the_store_or_nowhere(tmp_path, path):
+SIGNED = "https://r2.example/objects/sha256/x?X-Amz-Signature=sentinel"
+
+
+@pytest.fixture
+def signs(monkeypatch):
+    """The custody key's remote signs: [(object key, ttl)] of each GET it signed, each URL `SIGNED` and the key."""
+    from research.store.remote import FsRemote
+
+    asked = []
+
+    def presign(self, key, expires_s, method="GET"):
+        asked.append((key, expires_s))
+        return f"{SIGNED}#{key}"
+
+    monkeypatch.setattr(FsRemote, "presign", presign, raising=False)
+    return asked
+
+
+def _refused(k: str, why: str = "") -> str:
+    return (f"pkg/a: its Lean dependencies ({k[:12]}) are not warm here and the run carries no URL for their bundle{why}: send "
+            f"`$(uv run python tools/check/check.py --lean-deps-files)` from a launcher whose store remote signs, or record the check "
+            f"with custody (the default with --on), whose key signs one here")
+
+
+def test_lean_dependencies_come_from_the_store_or_nowhere(tmp_path, path, signs):
+    tree = _tree(tmp_path)
+    k, inputs = _key(tree), _inputs(tmp_path)
+    _, fails = _run(tmp_path, tree, inputs=inputs, warm=False, tool="check")
+    assert fails[0] == _refused(k) and fails[1].startswith("store: the run carries neither"), "no custody key: nothing signs one"
+    _, fails = _run(tmp_path, tree, inputs=inputs, custody=_custody(tmp_path, BUNDLE), warm=False)
+    assert fails == [_refused(k)] and signs == [] and not (inputs / PF.CHECK.LEAN_DEPS_URLS).exists(), \
+        "`--preflight check` before a run of anything else: nothing would take a signed URL out of that run's record"
+
+
+@pytest.mark.parametrize("sent", [None, {"elsewhere": "https://sent/elsewhere"}])
+def test_a_check_run_with_custody_signs_the_url_it_lacks(tmp_path, path, signs, sent):
+    """vy-nebius-1, 4 Oct: proofs' check was refused four times, its launcher's store signing no URLs and the node's one warm
+    copy held by another Lean slot, though the run carried a custody key that may read the bundle."""
+    from research.store.local import object_key
+
+    tree = _tree(tmp_path)
+    k, custody = _key(tree), _custody(tmp_path, BUNDLE)
+    inputs = _inputs(tmp_path, sent) if sent else tmp_path / "request" / "inputs"         # nothing sent: no inputs dir yet
+    f = inputs / PF.CHECK.LEAN_DEPS_URLS
+    _, fails = _run(tmp_path, tree, inputs=inputs, custody=custody, warm=False, tool="check", free_gb=1)
+    assert len(fails) == 1 and fails[0].startswith("disk: ")
+    assert (json.loads(f.read_text()) if f.exists() else None) == sent, "a refused run is given no URL"
+    facts, fails = _run(tmp_path, tree, inputs=inputs, custody=custody, warm=False, tool="check")
+    assert fails == []
+    assert f"pkg/a: Lean dependencies restorable from the store ({k[:12]}, 0 MiB), through a URL signed with the run's custody key" in facts
+    assert f"store: pkg/a's Lean bundle {k[:12]} read with the run's custody key" in facts
+    assert signs == [(object_key(_sha(BUNDLE)), PF.LA.URL_TTL_S)] * 2, "the one missing pinned bundle, in each run"
+    assert json.loads(f.read_text()) == {**(sent or {}), k: f"{SIGNED}#{object_key(_sha(BUNDLE))}"}
+    assert f.stat().st_mode & 0o777 == 0o600 and [p.name for p in inputs.iterdir()] == [PF.CHECK.LEAN_DEPS_URLS], "no temporary left"
+    assert not any(SIGNED in line for line in facts + fails), "a URL is never printed"
+
+
+def test_a_sent_url_is_kept_and_a_signing_failure_keeps_the_refusal(tmp_path, path, signs, monkeypatch):
+    from research.store.remote import FsRemote
+
     tree = _tree(tmp_path)
     k = _key(tree)
-    _, fails = _run(tmp_path, tree, inputs=_inputs(tmp_path), custody=_custody(tmp_path, BUNDLE), warm=False)
-    assert fails == [f"pkg/a: its Lean dependencies ({k[:12]}) are not warm here and the run carries no URL for their bundle: send "
-                     f"`$(uv run python tools/check/check.py --lean-deps-files)`"]
+    inputs = _inputs(tmp_path, {k: "https://sent/by-the-launcher"})
+    facts, fails = _run(tmp_path, tree, inputs=inputs, custody=_custody(tmp_path, BUNDLE), warm=False, tool="check")
+    assert fails == [] and f"pkg/a: Lean dependencies restorable from the store ({k[:12]}, 0 MiB)" in facts and signs == []
+    assert json.loads((inputs / PF.CHECK.LEAN_DEPS_URLS).read_text()) == {k: "https://sent/by-the-launcher"}
+
+    def broken(self, key, expires_s, method="GET"):
+        raise RuntimeError(f"no signature for {SIGNED}")
+
+    monkeypatch.setattr(FsRemote, "presign", broken)
+    other = tmp_path / "broken"
+    tree = _tree(other)
+    inputs = _inputs(other)
+    _, fails = _run(other, tree, inputs=inputs, custody=_custody(other, BUNDLE), warm=False, tool="check")
+    assert fails == [_refused(k, ", nor could its custody key sign one (RuntimeError)")], "the type only: a message may hold a URL"
+    assert list(inputs.iterdir()) == []
 
 
 def test_an_unpinned_manifest_would_clone_from_github_and_is_refused(tmp_path, path):
