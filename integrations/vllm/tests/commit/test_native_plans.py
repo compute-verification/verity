@@ -49,6 +49,8 @@ void plans_end_run(void* h) { static_cast<Plans*>(h)->end_run(); }
 void plans_clear(void* h) { static_cast<Plans*>(h)->clear(); }
 int64_t plans_size(void* h) { return static_cast<Plans*>(h)->size(); }
 int64_t plans_entries(void* h) { return static_cast<Plans*>(h)->entries(); }
+int64_t plans_pending(void* h) { return static_cast<Plans*>(h)->pending(); }
+int64_t plans_pending_entries(void* h) { return static_cast<Plans*>(h)->pending_entries(); }
 int64_t plans_version(void* h, int64_t key) {
   const Plan* p = static_cast<Plans*>(h)->find(key);
   return p ? p->version : -1;
@@ -91,7 +93,7 @@ def lib(tmp_path_factory):
     lib.plans_frees.restype = ctypes.c_int64
     for fn in ("plans_delete", "plans_end_run", "plans_clear"):
         getattr(lib, fn).argtypes = [ctypes.c_void_p]
-    for fn in ("plans_size", "plans_entries"):
+    for fn in ("plans_size", "plans_entries", "plans_pending", "plans_pending_entries"):
         getattr(lib, fn).argtypes, getattr(lib, fn).restype = [ctypes.c_void_p], ctypes.c_int64
     lib.plans_version.argtypes, lib.plans_version.restype = [ctypes.c_void_p, ctypes.c_int64], ctypes.c_int64
     lib.plans_step.argtypes = [ctypes.c_void_p, ctypes.c_int64, ctypes.c_int64, ctypes.c_int64, ctypes.POINTER(ctypes.c_int)]
@@ -125,6 +127,10 @@ class Book:
     def entries(self) -> int:
         return self.lib.plans_entries(self.h)
 
+    def pending(self) -> tuple[int, int]:
+        """Dropped plans not freed yet, and their entries."""
+        return self.lib.plans_pending(self.h), self.lib.plans_pending_entries(self.h)
+
     def version(self, key: int) -> int:
         return self.lib.plans_version(self.h, key)
 
@@ -138,14 +144,15 @@ RUNS, STEPS = 200, 50
 
 def test_the_plans_stay_bounded_when_no_plan_recurs(lib):
     """200 runs of 50 steps, every step a plan of its own (network traces' decode windows): after each run the collector holds that
-    run's plans, during one at most two runs' worth. Without `end_run` (main's collector) it holds every plan it ever learned."""
+    run's plans, during one at most two runs' worth, counting the plans a reset dropped that the steps have not freed yet. Without
+    `end_run` (main's collector) it holds every plan it ever learned."""
     book, kept = Book(lib), Book(lib)
     peak, after = 0, set()
     for r in range(RUNS):
         for s in range(STEPS):
             assert book.step(r * STEPS + s)[1]
             kept.step(r * STEPS + s)
-        peak = max(peak, book.size())
+            peak = max(peak, book.size() + book.pending()[0])
         book.end_run()
         after.add((book.size(), book.entries()))
     assert after == {(STEPS, STEPS * TENSORS)} and peak == 2 * STEPS
@@ -249,3 +256,24 @@ def test_a_run_too_short_to_free_the_plans_dropped_before_it_frees_the_rest_at_i
         book.step(1000 + s % KEPT)
     book.end_run()
     assert book.frees() - f >= DROPPED * TENSORS, f"{book.frees() - f} blocks freed by the end of the run after the drop"
+    assert book.pending() == (0, 0)
+
+
+def test_the_pending_plans_are_counted_apart_from_the_book_and_never_found(lib):
+    """`stats()` reports the dropped plans the steps have not freed yet (`plans_pending`, `plan_entries_pending`) apart from the
+    book's (`plans`, `plan_entries`). A pending plan is not found: a step of its key learns a plan of its own, at a version above
+    the dropped one. Each step frees RELEASE_PER_STEP of them, and `clear` frees the rest."""
+    book = Book(lib)
+    drop(book)
+    assert (book.size(), book.entries()) == (KEPT, KEPT * TENSORS)
+    assert book.pending() == (DROPPED, DROPPED * TENSORS)
+    assert all(book.version(k) == -1 for k in range(DROPPED))
+    assert book.step(0) == (3, True) and book.version(0) == 3
+    left = DROPPED - RELEASE_PER_STEP
+    assert book.pending() == (left, left * TENSORS)
+    for s in range(10):
+        book.step(1000 + s % KEPT)
+    left -= 10 * RELEASE_PER_STEP
+    assert book.pending() == (left, left * TENSORS)
+    book.clear()
+    assert (book.size(), *book.pending()) == (0, 0, 0)
