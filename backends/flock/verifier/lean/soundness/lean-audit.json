@@ -12472,7 +12472,9 @@
    "assumptions": [],
    "type_hash": "dfed0cb540d97611da93aa15888c1c631cb726f767404c1282db41a66c228438"
   },
+  "FlockSoundness.Discharge.ZkReg.zk_session_drawnRegValsHR": {},
   "FlockSoundness.Discharge.ZkReg.zk_session_drawnRegValsR": {},
+  "FlockSoundness.Discharge.ZkReg.zk_session_offHR": {},
   "FlockSoundness.Discharge.ZkReg.zk_session_offR": {},
   "FlockSoundness.Discharge.ZkReg.zk_session_regValsHR": {
    "signature": [
