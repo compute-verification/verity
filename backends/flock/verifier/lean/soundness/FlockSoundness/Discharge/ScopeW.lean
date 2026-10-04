@@ -9,6 +9,9 @@ import FlockSoundness.Discharge.ScopeW.HeadlineExec
 import FlockSoundness.Discharge.ScopeW.HdecCor
 import FlockSoundness.Discharge.ScopeW.Delta
 import FlockSoundness.Discharge.ScopeW.Copies
+import FlockSoundness.Discharge.ScopeW.Chain
+import FlockSoundness.Discharge.ScopeW.Commit
+import FlockSoundness.Discharge.ScopeW.RowVal
 
 /-!
 # The headlines' scope widened to PoUW's rows: frozen statements
@@ -35,6 +38,12 @@ their own lanes before anything here reaches `main`.
   `HmRow.chainStart` give at each shape, with the final block in the `hm96` slot (`tailBit`; open: each shape's lemmas).
 * `Copies`: Δ's copies at the rows, once at `RowDelta` (setupH's, setupHidden's and `HmIn.delta`'s Δ) with the plain
   forms as corollaries; open: `inBit_copyLW`, `row_copies_flatW` and its three shapes, `msg_copyW`, the instances.
+* `Chain`: the bytes a row's digest hashes (`rowMsgOf`) and its commit string from its slots at a short and a segmented
+  row; open: `chain_bits`, `sha_stepW`, `hm_commitW`, `port_commit_shortW`, `port_commit_segW`.
+* `Commit`: a row's `b ‖ c` at every shape (`row_bc_flatW`, at `RowDelta`) and at the public and hidden sites
+  (`bc_site_commitW`, `bc_site_commitHW`); open: `row_bc_flatW`, `outRowsS_of_checkRows`, `AcceptedH.row_bcW`.
+* `RowVal`: a row's value's encoding is its row's message (`rowEncOf_row`); open: `rowPorts_bits`, `parse_bits`,
+  `bitShaped_row`, `rowEncOf_row`.
 
 Each headline is proved from the obligations through the base headline's own chain, at `HmRowsP.toHmRows`.
 -/

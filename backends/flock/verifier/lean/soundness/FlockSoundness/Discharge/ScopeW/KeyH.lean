@@ -2,6 +2,8 @@ import FlockSoundness.Discharge.ScopeW.OutRuns
 import FlockSoundness.Discharge.HiddenExec.KeyH
 import FlockSoundness.Discharge.ScopeW.RowEnc
 import FlockSoundness.Discharge.ScopeW.Rows
+import FlockSoundness.Discharge.ScopeW.Commit
+import FlockSoundness.Discharge.ScopeW.RowVal
 
 set_option Elab.async false
 
@@ -502,7 +504,53 @@ theorem keyRowsHW_computes
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSiteH (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (hkeys : KeysRow c hU (portRowW c)) :
-    (keyRowsHW hparse outs popOf ho hW houts hsite hkeys).Computes := sorry
+    (keyRowsHW hparse outs popOf ho hW houts hsite hkeys).Computes := by
+  unfold HmRowsP.Computes Assumptions.HmRowComputes
+  rintro ⟨S, R, u, M, g⟩ ⟨hu, hM, -, hrow⟩
+  dsimp only at hu hM hrow ⊢
+  revert hrow
+  generalize (keyLayoutHW hparse outs popOf ho hW houts).pos g = pos
+  rcases pos with ⟨u', q⟩ | g'
+  · intro _
+    have hce := (si.acc S R u hu).c_eq (hparse S R u hu)
+    have hq : q.val < (si.acc S R u hu).st.c.ports.size := by rw [hce]; exact q.isLt
+    have hmem : c.ports[q] ∈ c.ports.toList := Array.getElem_mem_toList q.isLt
+    have hpq : (si.acc S R u hu).st.c.ports[q.val]! = c.ports[q] := by
+      rw [hce, getElem!_pos c.ports q.val q.isLt]
+      rfl
+    have hle : portRowW c q ≤ Finset.univ.sup (portRowW c) + 1 :=
+      (Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _)
+    have hb := bc_site_commitHW (si.acc S R u hu) (by rw [hce]; exact ho) (by rw [hce]; exact hW) hM
+      (si.o S R u hu) (si.hvu S R u hu) hq
+    rw [hpq] at hb
+    show Binding.bytesAt _ (keyBcAddrH si S R u q) = Binding.commitString
+      (rowEncOf c.ports[q] (W := Finset.univ.sup (portRowW c) + 1)
+        (Layout.widthOf (Finset.univ.sup (portRowW c) + 1) (portRowW c q),
+          Layout.padBits (bitsAt (Binding.wit plan tab S R u M) fun k : Fin (portRowW c q) =>
+            keyRowAddrH si S R u q k.val)))
+      (Binding.bytesAt _ (keySaltAddrH si S R u (.inl (u', q)) (hU := hU)))
+    have e1 : keyBcAddrH si S R u q = fun (j : Fin 128) (t : Fin 8) => siteAddrH (si.acc S R u hu) (si.o S R u hu)
+        (Layout.bcAddr (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) := by
+      funext j t
+      simp only [keyBcAddrH, hu, dite_true]
+    have e2 : keySaltAddrH si S R u (.inl (u', q)) (hU := hU) = fun (j : Fin 192) (t : Fin 8) =>
+        siteAddrH (si.acc S R u hu) (si.o S R u hu)
+          (Hm.saltCol (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) := by
+      funext j t
+      simp only [keySaltAddrH, hu, dite_true]
+    rw [rowEncOf_row (hW _ hmem) ((parse_facts (hparse S R u hu)).v1Segs _ hmem) (parse_bits (hparse S R u hu) _ hmem)
+      (show portRowW c q = 16 * c.ports[q].words from rfl) hle, e1, e2, hb]
+    refine congrArg (fun r => Binding.commitString (rowMsgOf c.ports[q] r) _) ?_
+    congr 1
+    funext j
+    congr 1
+    funext t
+    have hj : (8 * j.val + t.val) / 8 = j.val := by omega
+    have ht : (8 * j.val + t.val) % 8 = t.val := by omega
+    show _ = bit (Binding.wit plan tab S R u M (keyRowAddrH si S R u q (8 * j.val + t.val)))
+    simp only [keyRowAddrH, hu, ↓reduceDIte, hj, ht]
+  · intro h
+    exact (Bool.false_ne_true h).elim
 
 end places
 
