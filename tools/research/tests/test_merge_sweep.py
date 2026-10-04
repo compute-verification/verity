@@ -182,20 +182,42 @@ def _checked_c(tmp_path, monkeypatch, gh, repo):
 
 def test_a_merge_with_push_lands_on_the_remote_then_sweeps(tmp_path, monkeypatch, capsys):
     """Trains landed through `research merge` and a push by hand, so the sweep ran before the push and closed nothing: with --push
-    the merge is on the remote before the sweep reads it."""
+    the merge is on the remote before the sweep reads it, and what the tool runs after a landing starts on the commit pushed."""
     repo, gh, _tips, _merge = _world(tmp_path)
     _checked_c(tmp_path, monkeypatch, gh, repo)
+    landed: list[tuple] = []
+    monkeypatch.setattr(M, "after_land", lambda *a, **_k: landed.append(a))
     capsys.readouterr()
     assert M.main(["C", "--push", "-m", "Merge train TC (c)"]) == 0
     out = capsys.readouterr().out
     assert "pushed main to origin" in out and "push it, then" not in out
     assert _git(repo, "rev-parse", "origin/main") == _git(repo, "rev-parse", "main")
+    assert landed == [(repo, "check", _git(repo, "rev-parse", "origin/main"))]
     assert sorted(gh.open) == [4, 5] and gh.open[4]["baseRefName"] == "main" and "C" not in _heads(repo)
+
+
+def test_after_a_landing_the_declarations_command_starts_detached_on_the_commit(tmp_path):
+    """`Tool.after_land`, read from the target's checkout: started in a session of its own (it outlives the merge) with the landed
+    commit appended; a declaration without one, or a tool the checkout doesn't declare, starts nothing."""
+    (tmp_path / "mytools").mkdir()
+    (tmp_path / "mytools" / "decl.py").write_text("from research.store.tool import Tool\n"
+                                                  "T = Tool(name='check', after_land=['python', 'post.py', '--x'])\n"
+                                                  "U = Tool(name='other')\n")
+    started: list[tuple] = []
+    spawn = lambda argv, **kw: started.append((argv, kw["cwd"], kw["start_new_session"], kw["stdin"]))  # noqa: E731
+    lines: list[str] = []
+    assert M.after_land(tmp_path, "mytools.decl:T", "abc123def4567", log=lines.append, spawn=spawn) == ["python", "post.py", "--x",
+                                                                                                         "abc123def4567"]
+    assert started == [(["python", "post.py", "--x", "abc123def4567"], tmp_path, True, subprocess.DEVNULL)]
+    assert "started `python post.py --x abc123def4567`" in lines[0]
+    assert M.after_land(tmp_path, "mytools.decl:U", "abc", spawn=spawn) is None
+    assert M.after_land(tmp_path, "nothere.decl:T", "abc", spawn=spawn) is None and len(started) == 1
 
 
 def test_a_refused_push_sweeps_nothing_and_fails(tmp_path, monkeypatch, capsys):
     repo, gh, _tips, _merge = _world(tmp_path)
     _checked_c(tmp_path, monkeypatch, gh, repo)
+    monkeypatch.setattr(M, "after_land", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("nothing landed on the remote")))
     other = tmp_path / "other"
     _git(tmp_path, "clone", "-q", str(tmp_path / "origin.git"), str(other))
     (other / "x.txt").write_text("x\n")

@@ -25,7 +25,8 @@ with a comment naming the commit it landed in, and every open pull request whose
 A closed pull request's head branch is deleted from the remote unless an open pull request still uses it, or it moved past the
 head that landed (GitHub's "delete head branch" fires only on merges made on GitHub, and trains merge locally).
 The remote's branch, fetched first, is the truth, never the checkout. With --push, a merge that lands is pushed to the remote
-(never forced) and then swept; without it the sweep runs before anyone pushes, finds nothing the merge landed, and
+(never forced), what the tool's declaration runs after a landing (`Tool.after_land`) is started, detached, on the landed commit,
+and then it is swept; without it the sweep runs before anyone pushes, finds nothing the merge landed, and
 `research merge --sweep` after the push does it. Whoever lands a train passes --push (Daniel, 1 Oct).
 
 A train's ref may be pinned: `N@SHA` (pull request N; quote `#N@SHA`, or the shell reads a comment) or `BRANCH@SHA` is fetched
@@ -640,10 +641,35 @@ def _sweep_after(repo: Path, into: str, remote: str) -> None:
               file=sys.stderr)
 
 
-def _push_and_sweep(repo: Path, into: str, remote: str, push: bool) -> int:
-    """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced) and sweep, since the sweep closes
-    only what is on the remote; a refused push sweeps nothing and fails. Without ``push`` the sweep finds nothing the merge
-    landed, says so, and `research merge --sweep` after the push does it."""
+def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.Popen) -> list[str] | None:
+    """Start what the target's own declaration of ``tool`` runs after a landing (`Tool.after_land`, read from the checkout as
+    `required_steps` reads `merge_requires`) on ``commit``, in a session of its own, so it outlives this process and nothing it
+    does changes the merge's result.  Returns the argv started, None when the declaration names none."""
+    from .store import tools_registry
+
+    module, _, attr = tools_registry.REGISTRY.get(tool, tool).rpartition(":")
+    try:
+        argv = [*tools_registry._from_file(module, attr, repo).after_land]
+    except Exception:  # noqa: BLE001  (a tool the checkout does not declare runs nothing after a landing)
+        return None
+    if not argv:
+        return None
+    argv.append(commit)
+    out = Path(tempfile.gettempdir()) / f"research-after-land-{commit[:12]}.log"
+    try:
+        with open(out, "ab") as f:
+            spawn(argv, cwd=repo, stdin=subprocess.DEVNULL, stdout=f, stderr=subprocess.STDOUT, start_new_session=True)
+    except OSError as e:
+        log(f"research merge: after the landing, `{shlex.join(argv)}` did not start ({e}); run it by hand")
+        return argv
+    log(f"research merge: after the landing, started `{shlex.join(argv)}` (log {out})")
+    return argv
+
+
+def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = "check") -> int:
+    """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced), start what ``tool`` runs after a
+    landing (`after_land`) and sweep, since the sweep closes only what is on the remote; a refused push sweeps nothing and fails.
+    Without ``push`` the sweep finds nothing the merge landed, says so, and `research merge --sweep` after the push does it."""
     if push:
         r = _git(repo, "push", "-q", remote, f"refs/heads/{into}:refs/heads/{into}", check=False)
         if r.returncode:
@@ -651,6 +677,7 @@ def _push_and_sweep(repo: Path, into: str, remote: str, push: bool) -> int:
                   file=sys.stderr)
             return 1
         print(f"research merge: pushed {into} to {remote}")
+        after_land(repo, tool, _git(repo, "rev-parse", "HEAD").stdout.strip())
     _sweep_after(repo, into, remote)
     return 0
 
@@ -732,7 +759,7 @@ def main(argv: list[str]) -> int:
             return 1
         moved = f"{a.into} fast-forwarded to {land[:12]}" if land else f"{a.into} unchanged"
         print(f"research merge: train {' '.join(a.ref)}: " + (f"`{decl.name}` passed; {moved}" if bad is None else f"{bad} breaks it; {moved}"))
-        pushed = _push_and_sweep(repo, a.into, a.remote, a.push) if land else 0
+        pushed = _push_and_sweep(repo, a.into, a.remote, a.push, a.tool) if land else 0
         return 0 if bad is None and not pushed else 1
     if len(a.ref) != 1:
         ap.error("several refs need --train")
@@ -756,7 +783,7 @@ def main(argv: list[str]) -> int:
     if not same:
         _sweep_after(repo, a.into, a.remote)
         return 1
-    return _push_and_sweep(repo, a.into, a.remote, a.push)
+    return _push_and_sweep(repo, a.into, a.remote, a.push, a.tool)
 
 
 if __name__ == "__main__":

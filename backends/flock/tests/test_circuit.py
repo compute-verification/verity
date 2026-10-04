@@ -189,9 +189,14 @@ def test_shared_rows_as_given_keep_equal_rows_apart(tmp_path):
     with pytest.raises(ValueError, match="registered salts"):
         FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", registered=reg, **shared)
     out = next(iter(outs))
-    with pytest.raises(ValueError, match="some input ports' tables"):
-        FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", salts=salts, registered={out: {**reg["cs"], "positions": [0] * 4,
-                                                                                          "paths": ["00" * 64] * 4}}, **shared)
+    reg_out = {**reg, out: {"value": "o", "positions": [3, 1, 0, 2], "paths": ["22" * 64] * 4}}
+    head = FC.write(text, s, 0, 4, None, tmp_path / "reg-out.bin", salts=salts, registered=reg_out, **shared)
+    assert head["registered"] == reg_out, "an output row registers with one position and path per instance"
+    with pytest.raises(ValueError, match=f"registered port {out}: a value, and one position and path per table row"):
+        FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", salts=salts, registered={out: {**reg_out[out], "positions": [0, 1]}},
+                 **shared)
+    with pytest.raises(ValueError, match="some rows' tables"):
+        FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", salts=salts, registered={"nope": reg["cs"]}, **shared)
 
 
 PUBLIC_CS = {"cs": {"seed": "rope/positions", "derivation": "verity/rope/neox-bf16/cos-sin/v1"}}

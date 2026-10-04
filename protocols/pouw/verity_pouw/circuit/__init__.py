@@ -1,15 +1,21 @@
 """`ncp-v2`: NCP-INT's noised GEMM as a `verity.ir` Program, verified by sampled proofs (design note
 `docs/pouw/sampled-proofs-circuit.md`; `PROTOCOL.md` §`ncp-v2`).
 
-* `words`: PoUW's word primitives (every output at most 32 bits).
-* `hashes`: SHA-512 and SHAKE256 in gates (`Sha512Compress`, `KeccakF1600`).
+* `words`: PoUW's word primitives (every output at most 32 bits but `pc8`'s exact squares, which stay inside a row unit).
+* `hashes`: SHA-512, SHAKE256 and TurboSHAKE128 in gates (`Sha512Compress`, `KeccakF1600`, `KeccakP1600R12`).
+* `leaves`: the tile checks' committed row schemas (C-Flock's ports), Pearl-C's tile digest in gates, and the rows' native
+  reference.
 * `ncp2`: the unit templates; `weight(shape, kind)`, a weight's Y units once per run; `linear(shape, kind)`, one call's
   Program, reading them; `window(shape, calls, kind)`, calls on one weight in one root.
 * `reference`: the native reference those must evaluate to.
 * `partition`: the `Q_template_instances` partition, the whole-call cut (no value computed in two units), the Z separator and
   the width rule with the separator port pinned by the protocol.
-* `anchors`: the anchored inputs' anchors, which the verifier builds, and the window's refusal of a repeated call index.
-* `plan`: closure draws behind a draw-law seam (`CountLaw`, and `WorkLaw`, root's #362 law).
+* `anchors`: the anchored inputs' anchors, which the verifier builds (the tile checks' derived noise too, `TileAnchors`, with
+  each unit's public input regions), and the window's refusal of a repeated call index.
+* `plan`: closure draws behind a draw-law seam (`CountLaw`, and `WorkLaw`, root's #362 law), and the tile checks' layout.
+* `pc4`, `pc8`: Pearl-C4's and Pearl-C's (FP8, forming v1) tile checks as Programs, cut into row and tile units, and
+  their hiding Programs (``Shape.hidden``), whose tiles return only their tile digest; the rows are C-Flock-committed
+  ports and the anchored inputs public input regions (`PORTS`).  No scheme of theirs is in `SCHEMES` yet.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs
