@@ -40,7 +40,8 @@
 # --preemptible marks a lease that may be stopped for a waiter (fill work: a quality run, a sweep that resumes from its checkpoints).
 # The oldest waiter, when the free GPUs and the preemptible leases together cover what it needs, stops the newest preemptible
 # leases: SIGTERM to the whole scope (else the pid), SIGKILL 30 s later, each logged to $GPU_LEASE_DIR/preempted.log.  The stopped
-# job exits 143 and restarts however its launcher restarts it.  A request without --wait preempts nothing.
+# job exits 143 and restarts however its launcher restarts it.  A request without --wait preempts nothing, and neither does a
+# --preemptible one: fill work waits for fill work, or a queue of it would stop its own leases in turn.
 #
 # --timed (or GPU_LEASE_TIMED=1) tags a timed window: the lease records timed=1, and the server's ops daemon keeps the machine quiet
 # while it is held (it pauses other CPU-heavy work; on vy-nebius-2, node_ops.py).  A lease of every GPU by one holder counts as one
@@ -433,7 +434,7 @@ while :; do
     fi
     exit 75
   fi
-  [ -n "$(ahead)" ] || preempt_for "$n"
+  [ -n "$(ahead)" ] || [ -n "$preempt" ] || preempt_for "$n"
   [ -n "$MYWAIT" ] || queue_me ""
   sleep "${GPU_LEASE_POLL_S:-15}"
 done
