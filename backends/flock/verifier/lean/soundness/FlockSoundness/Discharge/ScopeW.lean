@@ -8,6 +8,7 @@ import FlockSoundness.Discharge.ScopeW.Headline
 import FlockSoundness.Discharge.ScopeW.HeadlineExec
 import FlockSoundness.Discharge.ScopeW.HdecCor
 import FlockSoundness.Discharge.ScopeW.Delta
+import FlockSoundness.Discharge.ScopeW.CopiesAt
 import FlockSoundness.Discharge.ScopeW.Copies
 
 /-!
@@ -32,7 +33,8 @@ their own lanes before anything here reaches `main`.
 * `HeadlineExec`: `flock_headline_exec_hiddenW`, `HiddenExec.flock_headline_exec_hidden` at `scopeOkW`.
 * `HdecCor`: `flock_headline_exec_decW`, `flock_headline_exec_hidden_decW`, `HdecCor`'s corollaries at `scopeOkW`.
 * `Delta`: Δ at rows of any shape (`flatPairsW`; open: `delta_flat_eqW`), and what `HmRow.msgBit` and
-  `HmRow.chainStart` give at each shape, with the final block in the `hm96` slot (`tailBit`; open: each shape's lemmas).
+  `HmRow.chainStart` give at each shape, with the final block in the `hm96` slot (`tailBit`).
+* `CopiesAt`: a row's input positions (`inPos`), their cases, and the copies Δ's flat pairs hold at each.
 * `Copies`: Δ's copies at the rows, once at `RowDelta` (setupH's, setupHidden's and `HmIn.delta`'s Δ) with the plain
   forms as corollaries; open: `inBit_copyLW`, `row_copies_flatW` and its three shapes, `msg_copyW`, the instances.
 
