@@ -319,7 +319,7 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
     from verity_vllm.program.registry import b1, hopper
     from verity_vllm.program.registry import fa2_check_inf as F2
     from verity_vllm.program.registry import prims as P
-    from verity_vllm.program.registry import targets as TG
+    from verity_vllm.program.vocabulary import targets as TG
 
     c, D, q, k, v, o, bt = job["case"], job["D"], job["q"], job["k"], job["v"], job["out"], job["block_table"]
     tp = TargetProfile.default().with_overrides(compute_capability=tuple(job["cc"]), num_sms=int(job["sms"])) if job.get("cc") else None

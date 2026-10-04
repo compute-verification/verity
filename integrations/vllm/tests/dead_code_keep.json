@@ -20,6 +20,8 @@
   "verity_vllm.program.registry.quarantine.act.silu_mul_bf16": "see quarantine.act",
   "verity_vllm.program.registry.quarantine.act.silu_mul_difftest": "properties-admission adapter of SiluMul_v2, loaded by --adapter name",
   "verity_vllm.program.registry.quarantine.dense.softcap": "re-exports registry.dense's AttentionSoftcap_v1 (promoted) with its quarantine SEMANTIC_ID; tests/engine/test_gen_dense_softcap.py",
-  "verity_vllm.program.registry.quarantine.ln.layer_norm_aten_difftest": "properties-admission adapter of LayerNormAten_v1, loaded by --adapter name"
+  "verity_vllm.program.registry.quarantine.ln.layer_norm_aten_difftest": "properties-admission adapter of LayerNormAten_v1, loaded by --adapter name",
+  "verity_vllm.program.twins.ref_prims": "numpy twins of registry.ref_prims, a testing aid checked by tests/program/test_ref_prims.py",
+  "verity_vllm.program.vocabulary.serve": "the B1 identity -> Serve binding (registry.b1's vocabulary until the split); tests/program/test_composition.py"
  }
 }

@@ -122,7 +122,7 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
     from verity_vllm.program.registry import b1, hopper
     from verity_vllm.program.registry import fa2_softcap as F2S
     from verity_vllm.program.registry import prims as P
-    from verity_vllm.program.registry import targets as TG
+    from verity_vllm.program.vocabulary import targets as TG
 
     table = np.memmap(job["tanh_table"], dtype="<u4", mode="r")
     tanh = lambda x: mufu_tanh(x, table, job["tanh_lo"])  # noqa: E731

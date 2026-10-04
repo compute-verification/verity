@@ -124,7 +124,7 @@ def test_a_registered_values_derivation_registers_the_gelu_table():
 
     from verity_vllm.program.frontend.derive import derive_report
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
-    from verity_vllm.program.registry.serve3_reference import materialize
+    from verity_vllm.program.twins.serve3_reference import materialize
 
     class GeGLU(torch.nn.Module):
         def __init__(self, I: int) -> None:

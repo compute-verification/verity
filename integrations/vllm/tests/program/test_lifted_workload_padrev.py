@@ -13,6 +13,7 @@ from verity_vllm.program import workload as W
 from verity.ir.codec import encode_program
 from verity.ir.defs import REGISTRY, bind
 from verity_vllm.program.registry import b1, lifted as L
+from verity_vllm.program.lifting import workload as lifting_workload
 from tests.program import test_lifted_mixed as PM
 from tests.program.test_lifted_mixed import BOUNDARY, CAP, EOS, LP, SMS, TINY, _inputs, _inputs_for, _prompt_b, _request_outs, _requests, _run
 from tests.program.test_lifted_tiny_padrev import padrev_live_ref
@@ -43,7 +44,7 @@ def test_r1_the_lifted_workload_root_is_one_partitioned_namespace_and_every_guar
     [0, gates) (no gap, no overlap, no empty interval); the shared lifted weights are ONE interval every request maps onto; and each
     request's guard gates (the lifting's only additions) lie inside THAT request's interval — a guard gate outside its request, or shared
     between two, would be a second identity / a cross-request edge."""
-    wl = L.lifted_workload(_requests(component, (0, 2)), EOS, lag=lag, boundary_prefix=BOUNDARY)
+    wl = lifting_workload.lifted_workload(_requests(component, (0, 2)), EOS, lag=lag, boundary_prefix=BOUNDARY)
     am = wl.address_map()
     intervals = sorted([tuple(i["gates"]) for i in am["inputs"]] + [tuple(r["gates"]) for r in am["requests"]])
     assert intervals[0][0] == 0 and intervals[-1][1] == am["gates"] == wl.program.gates
@@ -84,7 +85,7 @@ def test_a1_a5_b_is_word_for_word_invariant_to_whether_a_stops_and_the_program_o
     (stops at a_A = 4) and A with B's never-stopping prompt — and require every word of B's call range AND of the shared weights range to
     be identical.  Any ⊥ that crossed a batch dimension (A1) or any state B reads that depends on A's activity would show as a differing
     word.  The Program is one object: no structure of it depends on what will be served (A5)."""
-    wl = L.lifted_workload(_requests(component), EOS, lag=0, boundary_prefix=BOUNDARY)
+    wl = lifting_workload.lifted_workload(_requests(component), EOS, lag=0, boundary_prefix=BOUNDARY)
     wl_u = W.WorkloadProgram(_requests(component), lag=0)  # R17-1: lag is a required static of Workload_v1 (moe a96a2071b); wl_u is used for fn/inputs
     pa, pb = list(_inputs()[0]), _prompt_b()
     t_stop, o_stop = _run(wl.program, _inputs_for(wl_u.fn, {"A": pa, "B": pb}, True))
@@ -163,7 +164,7 @@ def _mixed_requests(component, component_small, arrivals=(0, 0)):
 
 
 def test_t4_a_mixed_cap_population_composes_with_every_request_programmed_for_its_own_cap(component, component_small):
-    wl = L.lifted_workload(_mixed_requests(component, component_small), EOS, lag=0, boundary_prefix=BOUNDARY)
+    wl = lifting_workload.lifted_workload(_mixed_requests(component, component_small), EOS, lag=0, boundary_prefix=BOUNDARY)
     ch = wl.chronology()
     assert [r["programmed_steps"]["count"] for r in ch["requests"]] == [CAP, CAP_B] and ch["programmed_horizon_steps"] == CAP
     assert [len(e["members"]) for e in ch["engine_steps"]] == [2] * CAP_B + [1] * (CAP - CAP_B)
@@ -178,7 +179,7 @@ def test_f_pad_19_the_hook_on_a_mixed_cap_population_takes_each_requests_own_cap
     from verity.ir.refs import array_of, coll_concat, tuple_of
     from verity.ir.types import Tuple
     reqs = _mixed_requests(component, component_small)
-    wl = L.lifted_workload(reqs, EOS, lag=0, boundary_prefix=BOUNDARY)
+    wl = lifting_workload.lifted_workload(reqs, EOS, lag=0, boundary_prefix=BOUNDARY)
     wl_u = W.WorkloadProgram(reqs, lag=0)
     prompts = {"A": list(_inputs()[0]), "B": _prompt_b()}
 
@@ -238,7 +239,7 @@ def test_f_pad_19_per_request_caps_the_hook_equals_the_independent_reference_on_
     of [a_B, a_B + 4) ONLY -- a row of B outside its own cap would be an invented member), S = SplitsFor of that count and ⊥ exactly at 0;
     and the same call with ONE cap for both is refused by name in both directions (9 for B's 4 words, 4 for A's 9)."""
     reqs = _mixed_requests(component, component_small, arrivals)
-    wl = L.lifted_workload(reqs, EOS, lag=lag, boundary_prefix=BOUNDARY)
+    wl = lifting_workload.lifted_workload(reqs, EOS, lag=lag, boundary_prefix=BOUNDARY)
     wl_u = W.WorkloadProgram(reqs, lag=lag)
     prompts = {"A": list(_inputs()[0]), "B": _prompt_b()}
     caps = [CAP, CAP_B]

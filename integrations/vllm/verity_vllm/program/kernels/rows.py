@@ -115,7 +115,7 @@ EVALUATORS = {
     "MoeExpertGemmW_v1": "dot_bf16 over W2[e] gathered by the committed router_ids word, the committed routed weight multiplied into the f32 "
                          "accumulator (one F32Mul) before the single f2fp_bf16 (MoeExpertCoordinateW_v1: the w2 launch, MUL_ROUTED_WEIGHT=True) -> down",
     # the same rows with the k16 step read from the DOT static (registry.moe MoeExpertGemm_v2 / MoeExpertGemmW_v2: a target whose
-    # fused_moe_kernel tl.dot is not the Ampere/Ada step, registry.targets.moe_expert_dot); an unregistered DOT is declined by name
+    # fused_moe_kernel tl.dot is not the Ampere/Ada step, vocabulary.targets.moe_expert_dot); an unregistered DOT is declined by name
     "MoeExpertGemm_v2": "derived_rows.dot_bf16_for(DOT) (DotBf16_v2{K,DOT}) over W13[e] gathered by the committed router_ids word + f2fp_bf16 "
                         "(MoeExpertCoordinate_v2) -> up",
     "MoeExpertGemmW_v2": "derived_rows.dot_bf16_for(DOT) over W2[e], the committed routed weight into the f32 accumulator (one F32Mul), then "

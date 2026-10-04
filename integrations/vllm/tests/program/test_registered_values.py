@@ -95,7 +95,7 @@ def test_derive_registered_values_evaluates_like_the_constants_program():
 
     from verity_vllm.program.frontend import derive_examples as ex
     from verity_vllm.program.frontend.derive import derive_report
-    from verity_vllm.program.registry.serve3_reference import materialize
+    from verity_vllm.program.twins.serve3_reference import materialize
 
     C = {**b1.B0_CONFIG, "H": 64, "NH": 4, "KVH": 2, "D": 16, "I": 128, "QKV": 128, "GU": 256, "NL": 1, "V": 32, "MAX_POS": 64}
     with torch.device("meta"):

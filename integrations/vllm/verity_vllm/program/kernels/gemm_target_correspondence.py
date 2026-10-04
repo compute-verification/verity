@@ -247,7 +247,7 @@ def step_model(dot: str):
     from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16
     from verity.ml.tc.total import HOPPER_BF16_WGMMA_K16
     from verity_vllm.program.kernels.mma import TCModel
-    from verity_vllm.program.registry.targets import DOTS
+    from verity_vllm.program.vocabulary.targets import DOTS
 
     groupsum = {"AmpereBF16TcDot16": AMPERE_BF16_M16N8K16, "HopperBF16WgmmaDot16": HOPPER_BF16_WGMMA_K16}.get(dot)
     if dot not in DOTS or groupsum is None:
