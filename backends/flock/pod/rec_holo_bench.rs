@@ -3,17 +3,46 @@
 //! - `mul`: F128 multiplications per second, one dependent chain per thread (latency) and over 2^24-element vectors (memory)
 //! - `gkr`: product_gkr::prove_batched (the wiring permutation argument) at 2^mu cells: prove/verify seconds, proof bytes
 //! - `sumcheck3`: a degree-3 sumcheck over 2^mu terms of v*e1*e2 (a sparse matrix evaluation's core), seconds
-//! env: GKR_MUS="20 22 24" SC_MUS="20 22 24" RUNS=3
-use std::{env::var, hint::black_box, time::Instant};
+//! - `lincheck`: upstream's lincheck prover at 2^m rows with blocks of 2^k_log rows (k_log = m: one block, no repetition),
+//!   LC_D random nonzeros per row in each of A_0 and B_0, seconds
+//! env: GKR_MUS="20 22 24" SC_MUS="20 22 24" LC_CASES="20:11 20:20" LC_D=15 RUNS=3
+use std::{env::var, fs::read_to_string, hint::black_box, time::Instant};
 
 use flock_core::{
     challenger::FsChallenger,
     field::F128,
+    lincheck::{QuirkyPoint, SkipPoint, SparseMatrixCircuit, prove},
     product_gkr::{prove_batched, verify_batched},
+    r1cs::SparseBinaryMatrix,
     test_rng::Rng,
 };
 use flock_prover::init_perf_thread_pool;
 use rayon::prelude::*;
+
+fn peak_rss_mb() -> u64 {
+    read_to_string("/proc/self/status")
+        .ok()
+        .and_then(|s| s.lines().find(|l| l.starts_with("VmHWM:")).and_then(|l| l.split_whitespace().nth(1)?.parse().ok()))
+        .map_or(0, |kb: u64| kb / 1024)
+}
+
+fn random_rows(k_log: usize, d: usize, seed: u64) -> SparseBinaryMatrix {
+    let k = 1usize << k_log;
+    let rows = (0..k)
+        .into_par_iter()
+        .map(|r| {
+            let mut g = Rng::new(seed ^ ((r as u64) << 1 | 1));
+            let mut v: Vec<usize> = Vec::with_capacity(d + 4);
+            while v.len() < d.min(k) {
+                v.push(g.below(k));
+                v.sort_unstable();
+                v.dedup();
+            }
+            v
+        })
+        .collect();
+    SparseBinaryMatrix::new(k, k, rows)
+}
 
 fn mus(key: &str, default: &str) -> Vec<usize> {
     var(key).unwrap_or_else(|_| default.into()).split([' ', ',']).filter(|t| !t.is_empty()).map(|t| t.parse().unwrap()).collect()
@@ -105,9 +134,40 @@ fn main() {
         }
         let p = median(tp);
         println!(
-            r#"{{"kind":"gkr","mu":{mu},"threads":{threads},"prove_s":{p:.6},"ns_per_cell":{:.3},"verify_s":{:.6},"proof_bytes":{bytes}}}"#,
+            r#"{{"kind":"gkr","mu":{mu},"threads":{threads},"prove_s":{p:.6},"ns_per_cell":{:.3},"verify_s":{:.6},"proof_bytes":{bytes},"peak_rss_mb":{}}}"#,
             p * 1e9 / cells as f64,
-            median(tv)
+            median(tv),
+            peak_rss_mb()
+        );
+    }
+
+    let d: usize = var("LC_D").ok().and_then(|s| s.parse().ok()).unwrap_or(15);
+    for case in var("LC_CASES").unwrap_or_else(|_| "20:11 20:20".into()).split([' ', ',']).filter(|t| !t.is_empty()) {
+        let (m, k_log) = case.split_once(':').map(|(a, b)| (a.parse::<usize>().unwrap(), b.parse::<usize>().unwrap())).unwrap();
+        let (a_0, b_0) = (random_rows(k_log, d, 0xA0 ^ m as u64), random_rows(k_log, d, 0xB0 ^ m as u64));
+        let circuit = SparseMatrixCircuit::new(&a_0, &b_0);
+        let mut ts = Vec::new();
+        for run in 0..=runs {
+            let mut z = vec![0u8; (1usize << m) / 8];
+            rng.fill_bytes(&mut z);
+            let x = QuirkyPoint {
+                z_skip: SkipPoint::Phi8(rng.f128()),
+                x_inner_rest: rng.f128_vec(k_log - 6),
+                x_outer: rng.f128_vec(m - k_log),
+            };
+            let mut ch = FsChallenger::new(b"rec-holo-lincheck");
+            let t = Instant::now();
+            black_box(prove(&z, m, k_log, 6, &circuit, &x, &mut ch));
+            if run > 0 {
+                ts.push(t.elapsed().as_secs_f64());
+            }
+        }
+        let s = median(ts);
+        println!(
+            r#"{{"kind":"lincheck","m":{m},"k_log":{k_log},"nnz_per_row":{},"threads":{threads},"prove_s":{s:.6},"ns_per_row":{:.3},"peak_rss_mb":{}}}"#,
+            2 * d,
+            s * 1e9 / (1usize << m) as f64,
+            peak_rss_mb()
         );
     }
 
