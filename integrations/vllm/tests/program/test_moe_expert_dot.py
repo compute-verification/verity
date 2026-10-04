@@ -1,5 +1,5 @@
 """The fused-MoE expert GEMMs with the target's k16 step (`registry.moe` `MoeExpertGemm_v2` / `MoeExpertGemmW_v2{E,K,N,DOT}`, bound
-through `vocabulary.targets.moe_expert_dot`): only the families whose fused_moe_kernel correspondence ran bind them (cc 12.0; cc 8.x and
+through `registry.targets.moe_expert_dot`): only the families whose fused_moe_kernel correspondence ran bind them (cc 12.0; cc 8.x and
 9.0 keep the `_v1` ids), with the Ampere step they are the `_v1` Definitions, with the sm_120 step they are that step's ascending chain
 (and the step is observable), and the vocabulary, the replay rows, the VU export and GP-01 read the same families."""
 from __future__ import annotations
@@ -18,7 +18,7 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import moe as M
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.vocabulary import targets as T
+from verity_vllm.program.registry import targets as T
 
 E, K, N = 3, 64, 5
 

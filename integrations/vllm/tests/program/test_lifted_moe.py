@@ -32,7 +32,7 @@ from verity.ir.codec import _spec_id, encode_program, program_digest
 from verity.ir.defs import composite
 from verity.ir.refs import Coll, array_of, coll_concat, tuple_of
 from verity_vllm.program.registry import b1, lifted as L, moe, prims as P
-from verity_vllm.program.twins import serve3_reference as ref
+from verity_vllm.program.registry import serve3_reference as ref
 from verity_vllm.program.registry.prims import BF16, F32, I32
 from verity.ir.types import Array, Tuple
 

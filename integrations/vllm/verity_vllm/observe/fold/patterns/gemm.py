@@ -122,7 +122,7 @@ class GemmLaunch:
         roots = ctx.roots_of(w)
         wname = roots[0].name if roots else ""
         rows = M
-        # [R13 hopper] the registered GEMM Definition of the record's target (`vocabulary.targets.gemm_spec`: Gemm_v1 on the accepted
+        # [R13 hopper] the registered GEMM Definition of the record's target (`registry.targets.gemm_spec`: Gemm_v1 on the accepted
         # Ampere-family target, Gemm_v2{DOT=<target step>} otherwise) — the same selection the Bet A builder makes
         try:
             spec = _targets().gemm_spec(target_of(ctx)[0], K, N)
@@ -203,7 +203,7 @@ def fuse_bias_adds(resolutions: list, ctx: StepContext, roots: list[TreeNode]) -
 
 
 def _gemm_bias_of(g: Compute, ctx: StepContext):
-    """The record target's one-Call Definition of a biased linear whose launch is `g` (`vocabulary.targets.gemm_bias_spec`: `GemmBias_v1`
+    """The record target's one-Call Definition of a biased linear whose launch is `g` (`registry.targets.gemm_bias_spec`: `GemmBias_v1`
     or `GemmBias_v2{DOT}`), or None: `g` is not the target's GEMM Definition of its (K, N), or the target keeps the pair as two Calls."""
     T = _targets()
     statics = getattr(g.spec, "bindings", None) or {}

@@ -37,7 +37,6 @@ from verity.ir.program import Program  # noqa: E402
 from verity_vllm.program.registry import b1  # noqa: E402
 from verity_vllm.program.registry import prims as P  # noqa: E402
 from verity_vllm.program.registry import ref_prims as R  # noqa: E402
-from verity_vllm.program.twins import ref_prims as ref_prims_twins
 
 torch = pytest.importorskip("torch")
 F = torch.nn.functional
@@ -85,7 +84,7 @@ def tdt(DT: str):
 
 def rand_words(rng, shape, DT: str, scale: float = 1.0) -> np.ndarray:
     x = (rng.standard_normal(shape) * scale).astype(np.float32)
-    return ref_prims_twins.np_narrow(x, DT)
+    return R.np_narrow(x, DT)
 
 
 def _ordered(w: np.ndarray, DT: str) -> np.ndarray:
@@ -128,7 +127,7 @@ def compare(ref: np.ndarray, got: np.ndarray, DT: str, *, tol: np.ndarray | None
     hist = {str(k): int(v) for k, v in zip(*np.unique(np.minimum(ulp, 8), return_counts=True))}
     out = {"words": int(ref.size), "exact_words": exact, "exact_fraction": exact / ref.size, "max_ulp": int(ulp.max()),
            "ulp_histogram_capped_8": hist}
-    rv, gv = ref_prims_twins.np_widen(ref, DT).astype(np.float64), ref_prims_twins.np_widen(got, DT).astype(np.float64)
+    rv, gv = R.np_widen(ref, DT).astype(np.float64), R.np_widen(got, DT).astype(np.float64)
     err = np.abs(rv - gv)
     err[both_nan] = 0.0
     out["max_abs_err"] = float(err.max())
@@ -145,13 +144,13 @@ def compare(ref: np.ndarray, got: np.ndarray, DT: str, *, tol: np.ndarray | None
 def reassoc_tol(ref_words: np.ndarray, DT: str, K: int, scale: np.ndarray, c: float = 2.0) -> np.ndarray:
     """`c*(K+2)*u32*scale + ulp_DT(ref)`: two K-term f32 accumulations in different orders differ by at most
     2*gamma_K*scale (scale = sum of |terms|, or a row scale for composed reductions) before the final rounding."""
-    rv = ref_prims_twins.np_widen(np.asarray(ref_words).ravel(), DT)
+    rv = R.np_widen(np.asarray(ref_words).ravel(), DT)
     return c * (K + 2) * U32 * np.asarray(scale, dtype=np.float64).ravel() + ulp_dt(rv, DT)
 
 
 def row_scale(ref_words: np.ndarray, DT: str, shape: tuple) -> np.ndarray:
     """max |ref| over each row, broadcast back to the elements (a composed-reduction row's magnitude scale)."""
-    rv = np.abs(ref_prims_twins.np_widen(np.asarray(ref_words).reshape(shape), DT).astype(np.float64))
+    rv = np.abs(R.np_widen(np.asarray(ref_words).reshape(shape), DT).astype(np.float64))
     return np.broadcast_to(rv.max(axis=-1, keepdims=True), shape)
 
 
@@ -216,28 +215,28 @@ def test_twins_equal_gates(DT):
     K, N, D, T, NH, KVH, V, H = 16, 3, 8, 5, 2, 1, 7, 4
     x, w, b = rand_words(rng, K, DT), rand_words(rng, (N, K), DT), rand_words(rng, N, DT)
     out, _ = gates(bind(R.LinearRef, K=K, N=N, DT=DT, BIAS=True), x, w, b)
-    assert (out == ref_prims_twins.np_linear_ref(x[None], w, b, DT)[0]).all()
+    assert (out == R.np_linear_ref(x[None], w, b, DT)[0]).all()
     out, _ = gates(bind(R.LinearRef, K=K, N=N, DT=DT, BIAS=False), x, w)
-    assert (out == ref_prims_twins.np_linear_ref(x[None], w, None, DT)[0]).all()
+    assert (out == R.np_linear_ref(x[None], w, None, DT)[0]).all()
     wv, g = rand_words(rng, K, DT), rand_words(rng, K, DT)
     out, _ = gates(bind(R.RMSNormRef, N=K, EPS=1e-6, DT=DT), x, wv)
-    assert (out == ref_prims_twins.np_rmsnorm_ref(x[None], wv, 1e-6, DT)[0]).all()
+    assert (out == R.np_rmsnorm_ref(x[None], wv, 1e-6, DT)[0]).all()
     out, _ = gates(bind(R.LayerNormRef, N=K, EPS=1e-5, DT=DT), x, g, wv)
-    assert (out == ref_prims_twins.np_layernorm_ref(x[None], g, wv, 1e-5, DT)[0]).all()
+    assert (out == R.np_layernorm_ref(x[None], g, wv, 1e-5, DT)[0]).all()
     for ap in R.GELU_APPROX:
         out, _ = gates(bind(R.GeluRef, N=K, DT=DT, APPROX=ap), x)
-        assert (out == ref_prims_twins.np_gelu_ref(x[None], DT, ap)[0]).all()
+        assert (out == R.np_gelu_ref(x[None], DT, ap)[0]).all()
     out, _ = gates(bind(R.SiluRef, N=K, DT=DT), x)
-    assert (out == ref_prims_twins.np_silu_ref(x[None], DT)[0]).all()
+    assert (out == R.np_silu_ref(x[None], DT)[0]).all()
     out, _ = gates(bind(R.SoftmaxRef, N=K, DT=DT), x)
-    assert (out == ref_prims_twins.np_softmax_ref(x[None], DT)[0]).all()
+    assert (out == R.np_softmax_ref(x[None], DT)[0]).all()
     xr, c, s = rand_words(rng, D, DT), rand_words(rng, D, DT), rand_words(rng, D, DT)
     out, _ = gates(bind(R.RoPERef, D=D, DT=DT), xr, c, s)
-    assert (out == ref_prims_twins.np_rope_ref(xr[None], c, s, DT)[0]).all()
+    assert (out == R.np_rope_ref(xr[None], c, s, DT)[0]).all()
     q, kc, vc = rand_words(rng, (NH, D), DT), rand_words(rng, (T, KVH, D), DT), rand_words(rng, (T, KVH, D), DT)
     for op in R.SCALE_OPS:
         out, _ = gates(bind(R.EagerAttentionRef, T=T, NH=NH, KVH=KVH, D=D, DT=DT, SCALE_OP=op), q, kc, vc)
-        ref = np.stack([ref_prims_twins.np_eager_attention_head_ref(q[h:h + 1], kc[None, :, h // (NH // KVH), :], vc[None, :, h // (NH // KVH), :], DT, op)[0]
+        ref = np.stack([R.np_eager_attention_head_ref(q[h:h + 1], kc[None, :, h // (NH // KVH), :], vc[None, :, h // (NH // KVH), :], DT, op)[0]
                         for h in range(NH)])
         assert (out.reshape(NH, D) == ref).all()
     tab = rand_words(rng, (V, H), DT)
@@ -245,7 +244,7 @@ def test_twins_equal_gates(DT):
     assert (out == tab[3]).all()
     lg = rand_words(rng, V, DT)
     out, _ = gates(bind(R.ArgmaxRef, V=V, DT=DT), lg)
-    assert int(out[0]) == int(np.argmax(ref_prims_twins.np_widen(lg, DT)))
+    assert int(out[0]) == int(np.argmax(R.np_widen(lg, DT)))
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -266,10 +265,10 @@ def test_linear_ref_vs_torch(DT):
             x = rand_words(rng, (rows, K), DT)
             w = rand_words(rng, (N, K), DT, scale=K ** -0.5)
             b = rand_words(rng, N, DT, scale=0.1) if bias else None
-            ref = ref_prims_twins.np_linear_ref(x, w, b, DT)
+            ref = R.np_linear_ref(x, w, b, DT)
             got = t_words(F.linear(words_t(x, DT), words_t(w, DT), None if b is None else words_t(b, DT)))
-            xa, wa = np.abs(ref_prims_twins.np_widen(x, DT).astype(np.float64)), np.abs(ref_prims_twins.np_widen(w, DT).astype(np.float64))
-            scale = xa @ wa.T + (0.0 if b is None else np.abs(ref_prims_twins.np_widen(b, DT).astype(np.float64)))
+            xa, wa = np.abs(R.np_widen(x, DT).astype(np.float64)), np.abs(R.np_widen(w, DT).astype(np.float64))
+            scale = xa @ wa.T + (0.0 if b is None else np.abs(R.np_widen(b, DT).astype(np.float64)))
             tol = reassoc_tol(ref, DT, K, scale)
             total_ref.append(ref.ravel()), total_got.append(got.ravel()), total_tol.append(tol)
             stats.append({"K": K, "N": N, "BIAS": bias, **compare(ref, got, DT, tol=tol, tol_formula=formula)})
@@ -277,7 +276,7 @@ def test_linear_ref_vs_torch(DT):
     K, N = 16, 8
     x, w, b = rand_words(rng, K, DT), rand_words(rng, (N, K), DT, scale=0.25), rand_words(rng, N, DT, scale=0.1)
     out, n_gates = gates(bind(R.LinearRef, K=K, N=N, DT=DT, BIAS=True), x, w, b)
-    assert (out == ref_prims_twins.np_linear_ref(x[None], w, b, DT)[0]).all()
+    assert (out == R.np_linear_ref(x[None], w, b, DT)[0]).all()
     res = compare(np.concatenate(total_ref), np.concatenate(total_got), DT, tol=np.concatenate(total_tol), tol_formula=formula)
     res["per_shape"] = stats
     # torch's GEMM is blocked (oneDNN/MKL/cpublas); the reference is the sequential fma chain: a-priori bound, not equality
@@ -299,14 +298,14 @@ def test_rmsnorm_ref_vs_torch(DT):
     for N in Ns:
         for sc in scales:
             x, w = rand_words(rng, (rows, N), DT, scale=sc), rand_words(rng, N, DT)
-            ref = ref_prims_twins.np_rmsnorm_ref(x, w, eps, DT)
+            ref = R.np_rmsnorm_ref(x, w, eps, DT)
             got = t_words(hf_rmsnorm(words_t(x, DT), words_t(w, DT), eps))
             tol = reassoc_tol(ref, DT, N, row_scale(ref, DT, (rows, N)), c=4.0)
             refs.append(ref.ravel()), gots.append(got.ravel()), tols.append(tol)
             per.append({"N": N, "scale": sc, **compare(ref, got, DT, tol=tol, tol_formula=formula)})
     x, w = rand_words(rng, 16, DT), rand_words(rng, 16, DT)
     out, n_gates = gates(bind(R.RMSNormRef, N=16, EPS=eps, DT=DT), x, w)
-    assert (out == ref_prims_twins.np_rmsnorm_ref(x[None], w, eps, DT)[0]).all()
+    assert (out == R.np_rmsnorm_ref(x[None], w, eps, DT)[0]).all()
     res = compare(np.concatenate(refs), np.concatenate(gots), DT, tol=np.concatenate(tols), tol_formula=formula)
     res["per_shape"] = per
     assert res["max_normalised_err"] <= 1.0, res
@@ -327,14 +326,14 @@ def test_layernorm_ref_vs_torch(DT):
         for sc in (1.0, 10.0):
             x = rand_words(rng, (rows, N), DT, scale=sc)
             g, b = rand_words(rng, N, DT), rand_words(rng, N, DT, scale=0.1)
-            ref = ref_prims_twins.np_layernorm_ref(x, g, b, eps, DT)
+            ref = R.np_layernorm_ref(x, g, b, eps, DT)
             got = t_words(F.layer_norm(words_t(x, DT), (N,), words_t(g, DT), words_t(b, DT), eps))
             tol = reassoc_tol(ref, DT, N, row_scale(ref, DT, (rows, N)), c=8.0)
             refs.append(ref.ravel()), gots.append(got.ravel()), tols.append(tol)
             per.append({"N": N, "scale": sc, **compare(ref, got, DT, tol=tol, tol_formula=formula)})
     x, g, b = rand_words(rng, 16, DT), rand_words(rng, 16, DT), rand_words(rng, 16, DT)
     out, n_gates = gates(bind(R.LayerNormRef, N=16, EPS=eps, DT=DT), x, g, b)
-    assert (out == ref_prims_twins.np_layernorm_ref(x[None], g, b, eps, DT)[0]).all()
+    assert (out == R.np_layernorm_ref(x[None], g, b, eps, DT)[0]).all()
     res = compare(np.concatenate(refs), np.concatenate(gots), DT, tol=np.concatenate(tols), tol_formula=formula)
     res["per_shape"] = per
     assert res["max_normalised_err"] <= 1.0, res
@@ -363,20 +362,20 @@ def _elementwise_domain(rng, DT: str) -> np.ndarray:
 def test_gelu_ref_vs_torch(DT, approx):
     rng = np.random.default_rng(SEED)
     x = _elementwise_domain(rng, DT)
-    ref = ref_prims_twins.np_gelu_ref(x, DT, approx)
+    ref = R.np_gelu_ref(x, DT, approx)
     xt = words_t(x, DT)
     got_vec = t_words(F.gelu(xt, approximate=approx))  # contiguous: ATen's vectorised kernel (Vectorized erf/tanh)
     got_sca = t_words(F.gelu(torch.stack([xt, xt], 1)[:, 0], approximate=approx))  # strided: ATen's scalar std::erf/std::tanh path
     # gelu = 0.5*x*(1 + f(.)) with f = erf or tanh: a d-difference in f becomes 0.5*|x|*d absolutely, and for x < 0
     # 1 + f cancels (factor |f|/(1+f): 2 at x=-1, unbounded in the tail) so that becomes many *ulps*; the bound is absolute.
-    xv = np.abs(ref_prims_twins.np_widen(x, DT).astype(np.float64))
+    xv = np.abs(R.np_widen(x, DT).astype(np.float64))
     formula = "0.5*|x|*2^-21 + 4*ulp_DT(ref)   (oracle's erf/tanh within 4.8e-7 absolute of correctly rounded; measured worst 3.5e-7)"
-    tol = 0.5 * xv * 2.0 ** -21 + 4 * ulp_dt(ref_prims_twins.np_widen(ref, DT), DT)
+    tol = 0.5 * xv * 2.0 ** -21 + 4 * ulp_dt(R.np_widen(ref, DT), DT)
     res_vec = compare(ref, got_vec, DT, tol=tol, tol_formula=formula)
     res_sca = compare(ref, got_sca, DT, tol=tol, tol_formula=formula)
     xs = x[rng.integers(0, x.size, 16)]
     out, n_gates = gates(bind(R.GeluRef, N=16, DT=DT, APPROX=approx), xs)
-    assert (out == ref_prims_twins.np_gelu_ref(xs, DT, approx)).all()
+    assert (out == R.np_gelu_ref(xs, DT, approx)).all()
     assert res_vec["max_normalised_err"] <= 1.0, res_vec
     assert res_sca["max_normalised_err"] <= 1.0, res_sca
     if DT == "bf16":  # exhaustive domain: measured 3 (erf) / 4 (tanh) differing words of 65,280 on the vectorised path
@@ -405,13 +404,13 @@ def test_gelu_ref_vs_torch(DT, approx):
 def test_silu_ref_vs_torch(DT):
     rng = np.random.default_rng(SEED)
     x = _elementwise_domain(rng, DT)
-    ref = ref_prims_twins.np_silu_ref(x, DT)
+    ref = R.np_silu_ref(x, DT)
     xt = words_t(x, DT)
     res_vec = compare(ref, t_words(F.silu(xt)), DT)
     res_sca = compare(ref, t_words(F.silu(torch.stack([xt, xt], 1)[:, 0])), DT)
     xs = x[rng.integers(0, x.size, 16)]
     out, n_gates = gates(bind(R.SiluRef, N=16, DT=DT), xs)
-    assert (out == ref_prims_twins.np_silu_ref(xs, DT)).all()
+    assert (out == R.np_silu_ref(xs, DT)).all()
     assert res_vec["max_ulp"] <= (1 if DT == "bf16" else 4), res_vec
     assert res_sca["max_ulp"] <= (1 if DT == "bf16" else 4), res_sca
     res = {"torch_vectorised_path_contiguous": res_vec, "torch_scalar_path_strided": res_sca,
@@ -432,14 +431,14 @@ def test_softmax_ref_vs_torch(DT):
     for N in Ns:
         for sc in scales:
             x = rand_words(rng, (rows, N), DT, scale=sc)
-            ref = ref_prims_twins.np_softmax_ref(x, DT)
+            ref = R.np_softmax_ref(x, DT)
             got = t_words(F.softmax(words_t(x, DT), dim=-1, dtype=torch.float32).to(tdt(DT)))
-            tol = reassoc_tol(ref, DT, N, np.abs(ref_prims_twins.np_widen(ref, DT).astype(np.float64)), c=4.0)
+            tol = reassoc_tol(ref, DT, N, np.abs(R.np_widen(ref, DT).astype(np.float64)), c=4.0)
             refs.append(ref.ravel()), gots.append(got.ravel()), tols.append(tol)
             per.append({"N": N, "scale": sc, **compare(ref, got, DT, tol=tol, tol_formula=formula)})
     x = rand_words(rng, 16, DT)
     out, n_gates = gates(bind(R.SoftmaxRef, N=16, DT=DT), x)
-    assert (out == ref_prims_twins.np_softmax_ref(x[None], DT)[0]).all()
+    assert (out == R.np_softmax_ref(x[None], DT)[0]).all()
     res = compare(np.concatenate(refs), np.concatenate(gots), DT, tol=np.concatenate(tols), tol_formula=formula)
     res["per_shape"] = per
     assert res["max_normalised_err"] <= 1.0, res
@@ -462,14 +461,14 @@ def test_rope_ref_vs_torch(DT):
         freqs = pos * inv[None, :]
         emb = torch.cat([freqs, freqs], dim=-1)
         cos, sin = emb.cos().to(tdt(DT)), emb.sin().to(tdt(DT))  # the model's derived cos/sin rows (Inputs of the kind)
-        ref = ref_prims_twins.np_rope_ref(x, t_words(cos), t_words(sin), DT)
+        ref = R.np_rope_ref(x, t_words(cos), t_words(sin), DT)
         got = t_words(hf_rope(words_t(x, DT), cos, sin))
         refs.append(ref.ravel()), gots.append(got.ravel())
         per.append({"D": D, **compare(ref, got, DT)})
     D = 8
     x, c, s = rand_words(rng, D, DT), rand_words(rng, D, DT), rand_words(rng, D, DT)
     out, n_gates = gates(bind(R.RoPERef, D=D, DT=DT), x, c, s)
-    assert (out == ref_prims_twins.np_rope_ref(x[None], c, s, DT)[0]).all()
+    assert (out == R.np_rope_ref(x[None], c, s, DT)[0]).all()
     res = compare(np.concatenate(refs), np.concatenate(gots), DT)
     res["per_shape"] = per
     # three DT tensor ops, each a single IEEE rounding in torch as in the reference: bit equality expected
@@ -491,16 +490,16 @@ def test_eager_attention_head_ref_vs_torch(DT, scale_op):
         q = rand_words(rng, (rows, D), DT)
         k = rand_words(rng, (rows, T, D), DT)
         v = rand_words(rng, (rows, T, D), DT)
-        ref = ref_prims_twins.np_eager_attention_head_ref(q, k, v, DT, scale_op)
+        ref = R.np_eager_attention_head_ref(q, k, v, DT, scale_op)
         got = t_words(hf_eager_attention_head(words_t(q, DT), words_t(k, DT), words_t(v, DT), scale_op))
-        vmax = np.abs(ref_prims_twins.np_widen(v, DT).astype(np.float64)).reshape(rows, -1).max(axis=1)  # |out| <= max|v| (convex combination)
+        vmax = np.abs(R.np_widen(v, DT).astype(np.float64)).reshape(rows, -1).max(axis=1)  # |out| <= max|v| (convex combination)
         tol = reassoc_tol(ref, DT, T + D, np.broadcast_to(vmax[:, None], (rows, D)), c=16.0)
         refs.append(ref.ravel()), gots.append(got.ravel()), tols.append(tol)
         per.append({"T": T, "D": D, **compare(ref, got, DT, tol=tol, tol_formula=formula)})
     T, D = 5, 8
     q, k, v = rand_words(rng, D, DT), rand_words(rng, (T, D), DT), rand_words(rng, (T, D), DT)
     out, n_gates = gates(bind(R.EagerAttentionHeadRef, T=T, D=D, DT=DT, SCALE_OP=scale_op), q, k, v)
-    assert (out == ref_prims_twins.np_eager_attention_head_ref(q[None], k[None], v[None], DT, scale_op)[0]).all()
+    assert (out == R.np_eager_attention_head_ref(q[None], k[None], v[None], DT, scale_op)[0]).all()
     res = compare(np.concatenate(refs), np.concatenate(gots), DT, tol=np.concatenate(tols), tol_formula=formula)
     res["per_shape"] = per
     assert res["max_normalised_err"] <= 1.0, res
@@ -536,7 +535,7 @@ def test_gqa_attention_ref_vs_torch_repeat_kv(DT):
     k_rep = kt.permute(1, 0, 2).repeat_interleave(G, dim=0)  # (NH, T, D)
     v_rep = vt.permute(1, 0, 2).repeat_interleave(G, dim=0)
     got = t_words(hf_eager_attention_head(qt, k_rep, v_rep, "mul"))
-    vmax = float(np.abs(ref_prims_twins.np_widen(vc, DT).astype(np.float64)).max())
+    vmax = float(np.abs(R.np_widen(vc, DT).astype(np.float64)).max())
     tol = reassoc_tol(out.reshape(NH, D), DT, T + D, np.full((NH, D), vmax), c=16.0)
     res = compare(out.reshape(NH, D), got, DT, tol=tol, tol_formula="16*(T+D+2)*u32*max|v| + ulp_DT(ref)")
     assert res["max_normalised_err"] <= 1.0, res
@@ -598,14 +597,14 @@ def test_rope_interleaved_ref_vs_torch_gptj(DT):
         inv = 1.0 / (10000.0 ** (torch.arange(0, D, 2, dtype=torch.float32) / D))
         freqs = pos * inv[None, :]
         cos, sin = freqs.cos().to(tdt(DT)), freqs.sin().to(tdt(DT))  # (rows, D/2)
-        ref = ref_prims_twins.np_rope_interleaved_ref(x, t_words(cos), t_words(sin), DT)
+        ref = R.np_rope_interleaved_ref(x, t_words(cos), t_words(sin), DT)
         got = t_words(gptj_apply_rotary(words_t(x, DT), sin, cos))
         refs.append(ref.ravel()), gots.append(got.ravel())
         per.append({"D": D, **compare(ref, got, DT)})
     D = 8
     x, c, s = rand_words(rng, D, DT), rand_words(rng, D // 2, DT), rand_words(rng, D // 2, DT)
     out, n_gates = gates(bind(R.RoPEInterleavedRef, D=D, DT=DT), x, c, s)
-    assert (out == ref_prims_twins.np_rope_interleaved_ref(x[None], c, s, DT)[0]).all()
+    assert (out == R.np_rope_interleaved_ref(x[None], c, s, DT)[0]).all()
     res = compare(np.concatenate(refs), np.concatenate(gots), DT)
     res["per_shape"] = per
     assert res["exact_fraction"] == 1.0, res
@@ -642,7 +641,7 @@ def test_rope_gptj_profile_head_is_a_pairing_permutation_of_rope_head():
 def test_relu_ref_vs_torch(DT):
     rng = np.random.default_rng(SEED)
     x = _elementwise_domain(rng, DT)
-    ref = ref_prims_twins.np_relu_ref(x, DT)
+    ref = R.np_relu_ref(x, DT)
     xt = words_t(x, DT)
     got_vec = t_words(F.relu(xt))
     got_sca = t_words(F.relu(torch.stack([xt, xt], 1)[:, 0]))
@@ -654,7 +653,7 @@ def test_relu_ref_vs_torch(DT):
     xs = x[rng.integers(0, x.size, 16)]
     xs[0] = 0x8000 if DT == "bf16" else 0x80000000
     out, n_gates = gates(bind(R.ReluRef, N=16, DT=DT), xs)
-    assert (out == ref_prims_twins.np_relu_ref(xs, DT)).all() and out[0] == xs[0]
+    assert (out == R.np_relu_ref(xs, DT)).all() and out[0] == xs[0]
     write_record("ReluRef_v1", DT, statics={"N": "element-wise"}, oracle_op="torch.nn.functional.relu (contiguous and strided)",
                  domain={"x": "every finite bf16 word (exhaustive, incl. -0.0)" if DT == "bf16" else "65,536 x N(0,4) f32 + 16 edge words (incl. ±0)"},
                  result={"vectorised": res_vec, "scalar": res_sca, "relu(-0.0)": nz,

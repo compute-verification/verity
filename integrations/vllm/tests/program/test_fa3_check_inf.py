@@ -14,7 +14,7 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.registry import b1, hopper
 from verity_vllm.program.registry import fa3_check_inf as F3
-from verity_vllm.program.vocabulary import targets as TG
+from verity_vllm.program.registry import targets as TG
 
 NEG_INF, NAN = 0xFF800000, 0x7FFFFFFF
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}

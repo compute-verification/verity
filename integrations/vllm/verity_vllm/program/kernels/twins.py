@@ -52,8 +52,8 @@ from verity.evaluation import self_check
 from verity.ir.defs import SpecializedDefinition, bind
 from verity_vllm.config import UsageError, option
 from verity_vllm.program.kernels.kernel_registry import Declined, covers, instance, register
-from verity_vllm.program.registry import b1, prims as P
-from verity_vllm.program.twins import prims as prims_twins
+from verity_vllm.program.registry import b1
+from verity_vllm.program.registry import prims as P
 
 SCHEMA = "verity-gen/twins/v1"
 U16, U32, U64, F32, F64 = np.uint16, np.uint32, np.uint64, np.float32, np.float64
@@ -124,13 +124,13 @@ def _tc_lib() -> ctypes.CDLL:
 
 
 def _fa2():
-    fa2, tabs = prims_twins._fa2()
+    fa2, tabs = P._fa2()
     LIBRARIES["fa2_model"] = str(fa2.LIB)
     return fa2, tabs
 
 
 def _rms():
-    rm, tabs = prims_twins._rms()
+    rm, tabs = P._rms()
     LIBRARIES["rms_triton_model"] = str(rm.LIB)
     return rm, tabs
 

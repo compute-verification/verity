@@ -4,7 +4,7 @@ The Build (`pipeline.build`) traces vLLM's model class on meta with torch.export
 this module writes the same Program down directly from φ (`phi.Phi`: the checkpoint's `config.json`, the declared target, the
 wrapper shape and the sampling policy), with the same IR calls the derive makes: one `Builder` over the wrapper's user inputs and
 the weights record (vLLM's parameters in module order, then its buffers), one call per row of each launch, the vocabulary's kinds
-(`rules.vocab.PROFILE_B1_EAGER_V3.kind`) with the statics the rules select through `vocabulary.targets`, the flat body wrapped as
+(`rules.vocab.PROFILE_B1_EAGER_V3.kind`) with the statics the rules select through `registry.targets`, the flat body wrapped as
 `Derived[<wrapper>[<model class>]]_v1{SRC}` and inlined by `Program`.  Nothing here traces, loads vLLM or reads a Build output.
 
 Vocabulary (v1, Llama-family decoders, dense or fused-MoE, under the bi-eager profile): Embedding, RMSNormTriton (layer-0 input
@@ -274,7 +274,7 @@ class _Specs:
 
     def __init__(self, C: ModelShape, target, world: int = 1, rank: int = 0) -> None:
         from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as VOC
-        from verity_vllm.program.vocabulary import targets as TG
+        from verity_vllm.program.registry import targets as TG
         VS, C = C.V // world, rank_shape(C, world)
         self.C, self.tp, self.TG, self.voc = C, target, TG, VOC
         self.accepted = TG.uses_accepted_kinds(target)
@@ -322,7 +322,7 @@ class _Specs:
     def moe(self) -> None:
         """The fused-MoE block's kinds under the target's declared construction (`rules.vllm_moe`): the router GEMM, the top-k
         softmax (in selection order under `indexed-read-ordered`; the renormalizing form when the family renormalizes), the per-pair
-        expert GEMMs (the target's k16 step as `DOT` where `vocabulary.targets.moe_expert_dot` names one) and the routed sum."""
+        expert GEMMs (the target's k16 step as `DOT` where `registry.targets.moe_expert_dot` names one) and the routed sum."""
         from verity_vllm.program.frontend.rules.vllm_moe import INDEXED_READ, INDEXED_READ_ORDERED, TOPK_SOFTMAX_VPT
         import torch
         C = self.C
@@ -368,7 +368,7 @@ class _Specs:
 
     def gemm_bias_role(self) -> tuple[str, dict] | None:
         """The biased linear's one-Call kind as `TritonGemmRule` picks it (the bias add the GEMM's only reader): `GemmBias_v1` under
-        the accepted kinds, `GemmBias_v2{DOT}` where the target's record names a biased-linear step (`vocabulary.targets.gemm_bias_dot`,
+        the accepted kinds, `GemmBias_v2{DOT}` where the target's record names a biased-linear step (`registry.targets.gemm_bias_dot`,
         on the trees that have it), else None: the GEMM, then `BiasAdd_v1` per row."""
         if self.accepted:
             return "gemm_bias", {}

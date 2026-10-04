@@ -11,7 +11,7 @@ import pytest
 
 from verity.ir import Program
 from verity_vllm.program.registry import lifted as L
-from verity_vllm.program.twins import serve3_reference as ref
+from verity_vllm.program.registry import serve3_reference as ref
 from tests.program import test_lifted_moe as PMOE
 from tests.program.test_lifted_moe import E, FFN, K, N, T_W13, T_W2, T_WR, T_X, TOPK, TWO, _bf16, _split, _walk
 

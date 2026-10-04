@@ -17,8 +17,7 @@ import pytest
 from verity.ir.codec import encode_program, program_digest
 from verity.ir.defs import bind
 from verity.ir.program import Program
-from verity_vllm.program.kernels import conformance as CF
-from verity_vllm.program.registry import b1
+from verity_vllm.program.registry import b1, conformance as CF
 from verity_vllm.program.registry import prims as P
 
 from verity.ml.tc.cast import f32_is_nan as is_nan_f32_word, f32_to_bf16_hw_word, f32_to_bf16_word

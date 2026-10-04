@@ -14,7 +14,7 @@ from verity.ml.tc.models import BLACKWELL_SM120_NVF4
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.registry import nvfp4 as N4
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.vocabulary import targets as TG
+from verity_vllm.program.registry import targets as TG
 from verity_vllm.query import word as W
 
 DOT = BlackwellNvf4OmmaDot64

@@ -14,7 +14,7 @@ from verity_vllm.program.registry import b1, hopper
 from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import fa3_check_inf as F3
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.vocabulary import targets as TG
+from verity_vllm.program.registry import targets as TG
 
 NEG_INF, NAN = 0xFF800000, 0x7FFFFFFF
 FA2 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": P.Fa2InvSum}

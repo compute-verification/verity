@@ -36,7 +36,7 @@ from verity.ir import Program, bind  # noqa: E402
 from verity.ir.codec import decode_program, encode_program, program_digest  # noqa: E402
 from verity.ir.defs import REGISTRY, PrimitiveDefinition  # noqa: E402
 from verity_vllm.program.registry import b1, lifted as L, pad_prims as PP, prims as P, serve3  # noqa: E402
-from verity_vllm.program.twins import serve3_reference as ref  # noqa: E402
+from verity_vllm.program.registry import serve3_reference as ref  # noqa: E402
 from verity_vllm.program.registry.b1 import weights_type  # noqa: E402
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs, _v1  # noqa: E402
 from verity.ir.types import Array, Record, Tuple, Value  # noqa: E402

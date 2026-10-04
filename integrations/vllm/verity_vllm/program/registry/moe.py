@@ -671,7 +671,7 @@ def MoeExpertGemmW(B, S, x, e, g, w):
 
 # ---------------------------------------------------------------------------------------------------------
 # the expert GEMMs with the k16 tensor-core step as a static: `fused_moe_kernel`'s `tl.dot` on a target whose step is not the
-# Ampere/Ada one (`vocabulary.targets.moe_expert_dot`); the bodies are the `_v1` ones with `DotBf16_v2{K,DOT}` for `DotBf16_v1`
+# Ampere/Ada one (`registry.targets.moe_expert_dot`); the bodies are the `_v1` ones with `DotBf16_v2{K,DOT}` for `DotBf16_v1`
 # ---------------------------------------------------------------------------------------------------------
 
 SM120_EVIDENCE = ("RTX PRO 6000 (cc 12.0, 188 SMs), vLLM d9105ea80 fused_experts under VLLM_BATCH_INVARIANT=1 (BLOCK 64/64/32, GROUP_SIZE_M 8): "
