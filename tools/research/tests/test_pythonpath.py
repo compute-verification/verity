@@ -19,7 +19,8 @@ REPO = Path(__file__).resolve().parents[3]
 SRC = str(Path(remote.__file__).resolve().parents[1])
 PY = sys.executable
 REAL_ROOTS = ["tools/research/src", "tools/cluster/src", "packages/verity/src", "backends/sp1/python", "backends/numerical/python", "integrations/vllm",
-              "protocols/sampled_proofs", "protocols/pous", "protocols/network_warden", "protocols/pouw", "backends/flock/python", "tools/circuit_check/src"]
+              "protocols/sampled_proofs", "protocols/pous", "protocols/network_warden", "protocols/pouw", "backends/flock/python", "tools/circuit_check/src",
+              "experimental/vllm/quarantine"]
 
 
 def test_this_repository_resolves_every_workspace_package_inside_the_tree(tmp_path):
