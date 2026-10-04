@@ -322,8 +322,8 @@ evidence is on the machine. Provisioning is a separate, explicit act; `--on` nev
 
 ### Standing campaign targets: `research keeper`
 
-`research keeper set|stop|status NAME --on NODE` keeps N chunks of a command leased on a Nebius node until a deadline, the next
-`{seed}` of a counter each, so no agent VM stays awake to relaunch them: `research keeper --help`, and `pods/nebius/keeper.py`.
+`research keeper set|stop|status NAME --on NODE` keeps N chunks of a command leased on a Nebius node until a deadline, so no agent
+VM stays awake to relaunch them (`pods/nebius/keeper.py`).
 
 ### Pods bound themselves: leases, one budget file, one guard
 
