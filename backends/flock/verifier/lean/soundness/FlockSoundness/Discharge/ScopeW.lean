@@ -13,6 +13,7 @@ import FlockSoundness.Discharge.ScopeW.ZkHidden
 import FlockSoundness.Discharge.ScopeW.ZkHiddenSound
 import FlockSoundness.Discharge.ScopeW.ZkHiddenJ
 import FlockSoundness.Discharge.ScopeW.ZkAccepted
+import FlockSoundness.Discharge.ScopeW.ZkComposed
 
 /-!
 # The headlines' scope widened to PoUW's rows: frozen statements
@@ -42,6 +43,8 @@ their own lanes before anything here reaches `main`.
 * `ZkHidden`, `ZkHiddenSound`, `ZkHiddenJ`: the hidden-output `--zk` headlines at `scopeOkW` (`zk_session_soundHW`,
   `zk_session_soundH_custodyW`, `zk_session_soundHJW`, `zk_session_soundHJ_custodyW`), their rows `rsZHW`, `rsZHJW`.
 * `ZkAccepted`: `AcceptsZKAcceptedHW`, `ZkHidden.AcceptsZKAcceptedH` at the widened rows.
+* `ZkComposed`: the public-output `--zk` headlines at `scopeOkW` (`zk_session_soundW`, `zk_session_sound_custodyW`),
+  their rows `rsZAtW`.
 
 Each headline is proved from the obligations through the base headline's own chain, at `HmRowsP.toHmRows`.
 -/
