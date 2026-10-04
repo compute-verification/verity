@@ -1737,8 +1737,8 @@ def _n1_custody(tmp_path: Path) -> types.SimpleNamespace:
     shutil.copy(src_root.parent / "store.pod.toml", tmp_path / "src" / "tools" / "research" / "store.pod.toml")
     (tmp_path / "py" / "bin" / "python3").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
     (tmp_path / "py" / "bin" / "python3").chmod(0o755)
-    for p in (tmp_path / "src", *(tmp_path / "src").rglob("*"), tmp_path / "py", *(tmp_path / "py").rglob("*")):
-        p.chmod(p.stat().st_mode & ~0o022)
+    for p in (tmp_path, tmp_path / "src", *(tmp_path / "src").rglob("*"), tmp_path / "py", *(tmp_path / "py").rglob("*")):
+        p.chmod(p.stat().st_mode & ~0o022)       # tmp_path too: a subdirectory a test makes takes the node's umask (002 on node 1)
     n.src, n.py = tmp_path / "src", tmp_path / "py" / "bin" / "python3"
     n.remote.write_text(f'[remote]\ntype = "fs"\npath = "{n.vault}"\n')
     (bin_ / "kubectl").write_text(f"#!{sys.executable}\n{FAKE_KUBECTL}")
