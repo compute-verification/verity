@@ -11,10 +11,10 @@ protocol's word functions agree only conditionally:
 
 * `Pc4OpsAgree ops`: core's primitives agree with the protocol's word functions where both are defined. Core's Lean
   semantics will discharge them;
-* `Row4OK`: a row's BF16 words widen to step words of its values, and its `α` (positive) and `β` are step words;
-* `Atoms4OK`: `formRow`'s noise atoms at the row are step words (no `−0`).
+* `Row4OK`: a row's BF16 words widen to step words of its values, and its `α` (positive) and `β` are step words.
 
-On them a row unit's codes and scale bytes are `formRow`'s at `pc4Sem`'s `α` and `β` (`row4A_form`, `row4B_form`, so
+`formRow`'s noise atoms are step words at every row (`atoms4OK`, so no `−0` atom), since every word a firing writes is
+one (`step_stepWord`, `toF32RZ_stepWord`). On these a row unit's codes and scale bytes are `formRow`'s at `pc4Sem`'s `α` and `β` (`row4A_form`, `row4B_form`, so
 `form4A`/`form4B` are `unitForm`'s `A′`/`B̃`), and its `P_A` and `P_B` rows are the FP4 peel's (`row4A_paWords`,
 `row4B_pbWords`). `entry4_words` chains RowA `i` and RowB `j` into their tile (`TileCheck4`'s `chain4_*`): where the
 three units are correct and the peel's rows exist, entry `(i, j)`'s `C̃` and `U` are `devFp4Sm120`'s ticket and useful
@@ -87,6 +87,66 @@ theorem gram4_lt {m n k : ℕ} (z : Lines4 m n k) (s q : ℕ) : gram4 z s q < 2 
 
 theorem nib_lt4 (c : Nib) : c.val < 2 ^ 4 := lt_of_lt_of_eq c.isLt (by norm_num)
 
+/-! ## A firing writes step words -/
+
+/-- **`toF32RZ` writes step words**: `+0` where the magnitude truncates to zero, otherwise a nonzero magnitude at an
+exponent field below 255 with the sign bit beside it, so never `−0`. -/
+theorem toF32RZ_stepWord {n lsb : ℤ} {w : ℕ} (h : toF32RZ n lsb = some w) : AccumProofs.StepWord w := by
+  unfold toF32RZ at h
+  dsimp only at h
+  generalize hg : (if -126 ≤ (bitLength n.natAbs : ℤ) - 1 + lsb then (bitLength n.natAbs : ℤ) - 1 + lsb - 23
+    else -149) = grid at h
+  have hgrid : -149 ≤ grid := by rw [← hg]; split_ifs <;> omega
+  generalize (if 0 < grid - lsb then n.natAbs >>> (grid - lsb).toNat else n.natAbs <<< (-(grid - lsb)).toNat) = q at h
+  split at h
+  · cases h; exact Fp4Freeze.stepWord_zero
+  next hq0 =>
+  split at h
+  · cases h
+  next h127 =>
+  obtain rfl := Option.some.inj h
+  have hsb : (if n < 0 then 1 else 0) ≤ 1 := by split_ifs <;> omega
+  by_cases he : -126 ≤ (bitLength q : ℤ) - 1 + grid
+  · rw [ite_eq_left he, Fp4Freeze.shift_or]
+    have hE : ((bitLength q : ℤ) - 1 + grid + 127).toNat < 255 := by omega
+    have hE1 : 1 ≤ ((bitLength q : ℤ) - 1 + grid + 127).toNat := by omega
+    have hr : q % 2 ^ 23 < 2 ^ 23 := Nat.mod_lt _ (by norm_num)
+    have hlt : ((bitLength q : ℤ) - 1 + grid + 127).toNat * 2 ^ 23 + q % 2 ^ 23 < 2 ^ 31 := by
+      calc ((bitLength q : ℤ) - 1 + grid + 127).toNat * 2 ^ 23 + q % 2 ^ 23 < 254 * 2 ^ 23 + 2 ^ 23 := by
+            have := Nat.mul_le_mul_right (2 ^ 23) (show ((bitLength q : ℤ) - 1 + grid + 127).toNat ≤ 254 by omega)
+            omega
+        _ ≤ 2 ^ 31 := by norm_num
+    rw [Fp4Freeze.or_sign hlt, ← Nat.add_assoc]
+    exact Fp4Freeze.stepWord_fields hsb hE hr (by have := Nat.mul_le_mul_right (2 ^ 23) hE1; omega)
+  · have hb : bitLength q ≤ 23 := by omega
+    have hq : q < 2 ^ 23 := lt_of_lt_of_le (AccumProofs.bitLength_spec q) (Nat.pow_le_pow_right (by norm_num) hb)
+    rw [ite_eq_right he, Fp4Freeze.or_sign (lt_trans hq (by norm_num)),
+      show (if n < 0 then 1 else 0) * 2 ^ 31 + q = (if n < 0 then 1 else 0) * 2 ^ 31 + 0 * 2 ^ 23 + q by ring]
+    exact Fp4Freeze.stepWord_fields hsb (by norm_num) hq (by omega)
+
+/-- **Every word a firing writes is a step word** (below `2^32`, not `−0`, finite): `+0` where nothing anchors the grid
+or the total is zero, `toF32RZ`'s word otherwise. -/
+theorem step_stepWord (p : Fp4Atom) {acc w : ℕ} {a b : List Nib} {sa sb : List (Fin 256)}
+    (h : p.step acc a b sa sb = some w) : AccumProofs.StepWord w := by
+  unfold Fp4Atom.step at h
+  obtain ⟨ts, -, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain ⟨cv, -, h⟩ := Option.bind_eq_some_iff.1 h
+  dsimp only at h
+  generalize ts.filterMap (fun t => if t.live then some (t.unit - p.fracBits) else none) ++
+    (if cv.mag = 0 then [] else [cv.exp - ((p.accWindow - 1 : ℕ) : ℤ)]) = L at h
+  cases L with
+  | nil => cases h; exact Fp4Freeze.stepWord_zero
+  | cons x xs =>
+    dsimp only at h
+    split_ifs at h <;> first | exact toF32RZ_stepWord h | (cases h; exact Fp4Freeze.stepWord_zero)
+
+/-- **`formRow`'s noise atoms are step words** at every row, line and basis: each is a firing's word. So a formed row
+never reads a `−0` noise atom. -/
+theorem atoms4OK (ops : RowOps) (k : ℕ) (X : Fin k → ℚ) (e : Fin 32 → Nib) (F : Fin k → Fin 32 → Nib) :
+    Atoms4OK ops k X e F := fun _ _ h => by
+  unfold nvf4NoiseElem noiseAtom at h
+  exact step_stepWord _ h
+
 /-! ## An entry's words -/
 
 section Entry4
@@ -96,7 +156,7 @@ include hops
 
 /-- **Entry `(i, j)`'s words are the record's.** Where RowA `i`, RowB `j` and their tile are correct and the inputs
 hold the BF16 words of row `i` of the activations and row `j` of the weights, their noise lines, the bases and `G`:
-under the named hypotheses at the two rows, and where the peel's rows exist, `C̃_ij` and `U_ij` are `devFp4Sm120`'s
+under `Row4OK` at the two rows, and where the peel's rows exist, `C̃_ij` and `U_ij` are `devFp4Sm120`'s
 ticket and useful value on `pc4Sem`'s `A′` and `B̃` (`form4A`, `form4B`), the bases and the rows' `Ẽ`. -/
 theorem entry4_words {M K N TM TN nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
     (hTM : TM ∣ M) (hTN : TN ∣ N) (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript)
@@ -115,8 +175,6 @@ theorem entry4_words {M K N TM TN nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
     (hfb : ∀ (t : Fin K) (l : Fin 32), val X (fbAt M N K + 32 * (t : ℕ) + l) = (z.FB t l).val)
     (hg : ∀ s < 32, ∀ q < 32, val X (gAt M N K + 32 * s + q) = gram4 z s q)
     (hA : Row4OK ops K (wordsVal M K act i)) (hB : Row4OK ops K (wordsVal N K wt j))
-    (hDA : Atoms4OK ops K (wordsVal M K act i) (z.EA i) z.FA)
-    (hDB : Atoms4OK ops K (wordsVal N K wt j) (z.EB j) z.FB)
     {c : ℕ} {pa pb : List ℕ}
     (hr : peelRows4 sm120Nvf4 (form4A ops z act) (form4B ops z wt) z.FA z.FB
       (fun i => be4 ops (wordsVal M K act i) (z.EA i)) (fun j => be4 ops (wordsVal N K wt j) (z.EB j)) i j =
@@ -129,6 +187,8 @@ theorem entry4_words {M K N TM TN nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
   have h16 : 16 ∣ K := ⟨4 * nw, by omega⟩
   have hk : 64 ∣ K := ⟨nw, hK⟩
   have h8 : 8 ≤ K := by omega
+  have hDA := atoms4OK ops K (wordsVal M K act i) (z.EA i) z.FA
+  have hDB := atoms4OK ops K (wordsVal N K wt j) (z.EB j) z.FB
   have hinA : ∀ a < rowIn K false,
       val ((whole4 ops M K N TM TN).cut X (blockA4 ops M K N) i) a = val X (portA8 M N K i a) :=
     fun a ha => cutA4_input ops M K N TM TN X i.isLt ha
@@ -422,14 +482,12 @@ end Widths4
 def Shape4 (sh : Shape) : Prop := 64 ∣ sh.m ∧ 64 ∣ sh.n ∧ ∃ nw, 0 < nw ∧ sh.k = 64 * nw
 
 /-- **The named hypotheses at entry `(i, j)`** of a unit with lines `z`, activations `act` and weights `wt`: `Row4OK`
-at row `i` of `act`'s values and row `j` of `wt`'s, `Atoms4OK` at their forming, and the peel's rows exist (`peelRows4`,
-which `devFp4Sm120`'s useful value reads; where it fails the useful value is `none`). -/
+at row `i` of `act`'s values and row `j` of `wt`'s, and the peel's rows exist (`peelRows4`, which `devFp4Sm120`'s
+useful value reads; where it fails the useful value is `none`). Their forming's noise atoms need none (`atoms4OK`). -/
 structure Pc4EntryOK (ops : RowOps) {m n k : ℕ} (z : Lines4 m n k) (act wt : Codes) (i : Fin m) (j : Fin n) :
     Prop where
   rowA : Row4OK ops k (wordsVal m k act i)
   rowB : Row4OK ops k (wordsVal n k wt j)
-  atomsA : Atoms4OK ops k (wordsVal m k act i) (z.EA i) z.FA
-  atomsB : Atoms4OK ops k (wordsVal n k wt j) (z.EB j) z.FB
   peel : (peelRows4 sm120Nvf4 (form4A ops z act) (form4B ops z wt) z.FA z.FB
     (fun i => be4 ops (wordsVal m k act i) (z.EA i)) (fun j => be4 ops (wordsVal n k wt j) (z.EB j)) i j).isSome
 
@@ -460,7 +518,7 @@ theorem entry4_accepts {M K N nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
     wordQ (tk i j) = devFp4Sm120.ticket (form4A ops z act) (form4B ops z wt) i j ∧
       wordQ (us i j) = devFp4Sm120.useful (form4A ops z act) (form4B ops z wt) z.FA z.FB
         (fun i => be4 ops (wordsVal M K act i) (z.EA i)) (fun j => be4 ops (wordsVal N K wt j) (z.EB j)) i j := by
-  obtain ⟨hA, hB, hDA, hDB, hP⟩ := hE
+  obtain ⟨hA, hB, hP⟩ := hE
   obtain ⟨⟨c, pa, pb⟩, hr⟩ := Option.isSome_iff_exists.1 hP
   have hK0 : 0 < K / 64 := by subst hK; omega
   obtain ⟨h1, h2, h3, h4, h5, h6⟩ := layout8 M N K
@@ -505,7 +563,7 @@ theorem entry4_accepts {M K N nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
     (hcone _ (cone4T ops M K N 64 64 hM hN i.isLt j.isLt hK0 fun g hg => hT g (Or.inl hg)))
     (hcone _ (cone4A ops M K N 64 64 hM hN i.isLt j.isLt fun g hg => hT g (Or.inr hg)))
     (hcone _ (cone4B ops M K N 64 64 hM hN i.isLt j.isLt fun g hg => hT g (Or.inr hg)))
-    hxa hea hxb heb hfa hfb hg hA hB hDA hDB hr
+    hxa hea hxb heb hfa hfb hg hA hB hr
   obtain ⟨he, -, -⟩ := tile_index hM hN i.isLt j.isLt
   have hti := Nat.mod_lt (i : ℕ) (show 0 < 64 by norm_num)
   have htj := Nat.mod_lt (j : ℕ) (show 0 < 64 by norm_num)
