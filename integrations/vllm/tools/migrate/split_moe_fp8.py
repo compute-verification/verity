@@ -8,7 +8,8 @@ The Definitions stay where they are, so every Definition keeps its module, id an
 modules (`MOVES`): the scalar and numpy reference twins of the MoE router and the FP8 kernels, and the NVFP4 device-layout helpers,
 to `verity_vllm.program.kernels` beside the other twins; the FP8 vocabulary (which Definition a scale construction binds, the capture
 mapping's call names, the batch-invariant MoE config), to `registry.fp8_vocab`.  `EDITS` are the exact text changes that go with it:
-numpy-free spellings of the Definition modules' constants (the same f32 words) and docstrings that name a moved function.
+numpy-free spellings of the Definition modules' constants (the same f32 words) and docstrings that name a moved function; `KEEP`
+holds the dead-code keep entries of the twins only tests reach.
 
 Rerunnable on a later main.  A move whose names are all still in the source applies; one whose names are all in the destination is
 already done; anything else (a name in neither, or in both) fails, as does a moved name the remaining source still uses, a free name of
@@ -23,6 +24,7 @@ import argparse
 import ast
 import builtins
 import io
+import json
 import re
 import subprocess
 import sys
@@ -91,6 +93,12 @@ EDITS = [
          "`cvt_quant_to_fp4_get_sf_out_offset`.\n",
          "The device layouts the Commit opens (`sf_offset`, `unpack_codes`) are `kernels.nvfp4_twins`.\n"),
 ]
+
+#: modules a move leaves reachable from the tests alone (`tests/test_no_dead_modules.py`), with the reason each stays
+KEEP_FILE = "integrations/vllm/tests/dead_code_keep.json"
+KEEP = {f"{KER}.nvfp4_twins": "the NVFP4 linear's device layouts (scale swizzle, packed E2M1 codes), whose offsets and packing "
+                              "tests/program/test_nvfp4.py checks (LIVE registry.nvfp4, its Definitions); live once a Commit opens "
+                              "an NVFP4 linear"}
 
 
 class SplitError(RuntimeError):
@@ -306,6 +314,32 @@ def apply_edits(plan: Plan) -> None:
         external = external_uses(plan, mod) if mod else set()
         unused = {n for n in import_bindings(tree, mod or "") if uses.get(n) and not after.get(n) and n not in external}
         plan.put(p, prune_imports(plan.text(p), unused))
+
+
+def keep_modules(plan: Plan, keep: dict[str, str]) -> None:
+    """Add the entries of ``keep`` that `KEEP_FILE` lacks, after its last `kernels` entry (else first in its `modules`)."""
+    if not keep:
+        return
+    p = plan.root / KEEP_FILE
+    text = plan.text(p)
+    new = {m: r for m, r in keep.items() if m not in json.loads(text)["modules"]}
+    if not new:
+        return
+    lines = text.splitlines(keepends=True)
+    anchors = [i for i, s in enumerate(lines) if s == ' "modules": {\n']
+    if len(anchors) != 1:
+        raise SplitError(f"{KEEP_FILE}: expected one ` \"modules\": {{` line, found {len(anchors)}")
+    at = max([i for i, s in enumerate(lines) if s.startswith(f'  "{KER}.')], default=anchors[0]) + 1
+    add = [f"  {json.dumps(m)}: {json.dumps(r)},\n" for m, r in new.items()]
+    if at - 1 != anchors[0] and not lines[at - 1].endswith(",\n"):          # after the last entry
+        lines[at - 1] = lines[at - 1].rstrip("\n") + ",\n"
+        add[-1] = add[-1].removesuffix(",\n") + "\n"
+    lines[at:at] = add
+    out = "".join(lines)
+    if {**json.loads(text)["modules"], **new} != json.loads(out)["modules"]:
+        raise SplitError(f"{KEEP_FILE}: the added entries do not parse back")
+    plan.put(p, out)
+    plan.log.append(f"keep {', '.join(new)} in {KEEP_FILE}")
 
 
 def moved_index(moves: list[Move]) -> dict[tuple[str, str], str]:
@@ -757,7 +791,8 @@ def external_uses(plan: Plan, src: str) -> set[str]:
     return out
 
 
-def run(root: Path = REPO, moves: list[Move] = MOVES, destinations: dict[str, str] = DESTINATIONS, edits: list[Edit] = EDITS) -> Plan:
+def run(root: Path = REPO, moves: list[Move] = MOVES, destinations: dict[str, str] = DESTINATIONS, edits: list[Edit] = EDITS,
+        keep: dict[str, str] = KEEP) -> Plan:
     """Plan the split of this checkout (`Plan.changed`; `Plan.write` applies it).  Raises `SplitError` on anything unexpected."""
     python_files.cache_clear()
     package_root.cache_clear()
@@ -768,6 +803,7 @@ def run(root: Path = REPO, moves: list[Move] = MOVES, destinations: dict[str, st
         raise SplitError(f"no docstring for the destinations {missing}")
     apply_edits(plan)
     split_modules(plan)
+    keep_modules(plan, keep)
     files = sorted(set(python_files(root)) | {p for p in plan.changed if p.suffix == ".py"})
     for p in files:
         text = plan.text(p)
