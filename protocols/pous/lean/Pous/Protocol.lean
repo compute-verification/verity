@@ -8,6 +8,7 @@ import Pous.Protocol.Model.Audit
 import Pous.Protocol.Model.BandChain
 import Pous.Protocol.Model.BandGraph
 import Pous.Protocol.Model.ColumnGame
+import Pous.Protocol.Model.Continuous
 import Pous.Protocol.Model.Dense
 import Pous.Protocol.Model.Graded
 import Pous.Protocol.Model.HashChain
