@@ -47,8 +47,10 @@ unit's ANDs include that row's hashing.  The cap's roles lower BitAnd_v1 through
 x is a seeded N(0, 1) row in BF16; a tile's rows are `pouw_rows_vectors`' seeded nvfp4-p rows. The anchors are the
 verifier's own (`TileAnchors.of` the scheme's seeds). Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under
 OUT, and for a row unit the verifier's own file public-inputs.bin (`TileAnchors.public_inputs`) and the controls' files:
-public-inputs-wrong.bin (one anchor bit flipped, the verifier's file wrong) and pub-chosen.bin (the same bit flipped in the
-public file's tail, an anchor the prover chose).
+    public-inputs-wrong.bin (one anchor bit flipped, the verifier's file wrong) and pub-chosen.bin (the same bit flipped in the
+public file's tail, an anchor the prover chose).  stage.json holds each input and output row's SHA-256 over its instances
+(``in_row_sha256``, ``out_row_sha256``), and for a piece of a cut A row its pc4-head row's as every reader reads it
+(``head_row_sha256``, `leaves.words_pc4_head`); the head's staging stops unless the pc4-head row it commits is that row.
 
 `HZ_STAGE` (``fast``, the default, or ``library``): whether `fast_stage` patches the library first, for the same bytes in
 less time and memory; stage.json records which.
@@ -106,6 +108,11 @@ def bf16(v: np.ndarray) -> np.ndarray:
 
 def gb() -> float:
     return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)
+
+
+def _sha(words: np.ndarray) -> str:
+    """The SHA-256 of a row's words over its instances, little-endian u16."""
+    return hashlib.sha256(np.ascontiguousarray(words, dtype="<u2").tobytes()).hexdigest()
 
 
 def flip_at(data: bytes, ports: list[dict], port: str, tail: bool) -> int:
@@ -180,7 +187,9 @@ def _cut_a(piece: str):
     for p in ports:
         rows[p] = np.array([g[p] for g in regs], dtype=np.uint16)
     rec = {"binding": "registered", "row_k": ks, "piece": piece, "unit_role": unit_role, "segment": seg,
-           "ok": [int(h[-1]) for h in heads], "chain": "honest, by the IR reference"}
+           "ok": [int(h[-1]) for h in heads], "chain": "honest, by the IR reference",
+           "head_row_sha256": _sha(u16([L.words_pc4_head(h[0], h[1]) for h in heads])),
+           "out_row_names": [row for row, _role, ps in unit["rows"] if not all(isinstance(p, str) for p in ps)]}
     return d, unit_role, seg, ta, ports, in_rows, schemas[at:], sr, rows, rec
 
 
@@ -379,6 +388,12 @@ def main() -> None:
     rec.update(definition=d.id, in_rows=[[r, s, b] for r, s, b, _ in in_rows], out_rows=[[s, list(ps)] for s, ps in out_rows],
                public_inputs=ports)
     got = CS.stage_unit(d, f"unit/pouw-pc4-{ROLE}", in_rows, out_rows, rows, OUT, salt_key, public_inputs=ports or None)
+    rec["in_row_sha256"] = {r: _sha(rows[r]) for r, *_ in in_rows}
+    rec["out_row_sha256"] = [_sha(np.concatenate([got["outs"][f"o{p}"] for p in ps], axis=1)) for _s, ps in out_rows]
+    named = dict(zip(rec.get("out_row_names", ()), rec["out_row_sha256"]))
+    if "pc4-head" in named and named["pc4-head"] != rec["head_row_sha256"]:
+        raise SystemExit("stage.py: the head's committed pc4-head row is not the row the forms and tail read "
+                         "(leaves.words_pc4_head)")
     t_stage = time.time() - t0
     text = fast_stage.composed() if STAGE == "fast" else (OUT / "circuit.txt").read_text()
     meta = got["meta"]
