@@ -310,13 +310,17 @@ def _universal_roots() -> list[Any]:
 
 
 def _merkle_roots() -> list[Any]:
-    """The hidden-index Merkle read (`verity.ml.boolean.merkle`), binary and 4-ary, at one level (a level is two or three
-    SHA-512 compressions: deeper reads repeat it). About two minutes each; the 4-ary one checks the slot multiplexers among
-    three siblings that the binary swap does not have."""
+    """The hidden-index Merkle reads (`verity.ml.boolean.merkle`). The read, binary and 4-ary, at one level (a level is two or
+    three SHA-512 compressions: deeper reads repeat it); about two minutes each; the 4-ary one checks the slot multiplexers among
+    three siblings that the binary swap does not have. The subtree read binary over a run of two cells one level below the root,
+    the smallest with every part (the cells' hm96 leaves, a run node over them in cell order, a level above it: eight
+    compressions), and 4-ary over one cell (its leaf under a 4-ary level); its 4-ary run node is the 4-ary level's node without
+    the slots, which the unit tests check against the reference at J = 1."""
     from verity.ir.defs import bind
-    from verity.ml.boolean.merkle import MerkleRead
+    from verity.ml.boolean.merkle import MerkleRead, MerkleSubtreeRead
 
-    return [bind(MerkleRead, ARITY=2, D=1), bind(MerkleRead, ARITY=4, D=1)]
+    return [bind(MerkleRead, ARITY=2, D=1), bind(MerkleRead, ARITY=4, D=1),
+            bind(MerkleSubtreeRead, ARITY=2, D=2, J=1), bind(MerkleSubtreeRead, ARITY=4, D=1, J=0)]
 
 
 def _kernel_roots() -> list[Any]:
