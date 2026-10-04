@@ -21208,7 +21208,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "3deea88eda700c541b1c9ed486ed99223712364eab397ab60591a82ee86a7fc2",
+   "digest": "b386d1f30c25b5a6c6439a27f84d25d10a0c479b9aeccc671ef1f6e098b23259",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -21227,7 +21227,7 @@
     "Flock.HmIn.regions": "6e8fcf78252cd40d750f95b741e0e792156633a2c25b2933dfb4f513b759552e",
     "Flock.HmIn.words": "aa45cdf856ae6425d897c5d01c00eb6d6eb0d44e305eee9d08b7c81a955042d0",
     "Flock.HmOut.checkPublic": "2adeefd817818e4305440a2fe4b13fac2f3b0809948a4944f110a07052092c0c",
-    "Flock.HmOut.checkRows": "42fbf66c6ab89fba1cb8345cee42eb1bc1c42aba224689dca9a1299e233ed0ee",
+    "Flock.HmOut.checkRows": "43398a5aa7be370e83f442a4fa8c791ebe2aedff62c2e457279c5636ec9f24ec",
     "Flock.HmOut.delta": "c1faeb3568eaf49144284ccfa3d6191732c294f61bca18c9c30050c6af0dba32",
     "Flock.HmOut.drawn": "090a440eae96cadac82a4e5d8d8c3bc02130d2a7c8e133e5c2963ebc1dab98c6",
     "Flock.HmOut.dummyRow": "fb417c608f6f03de5cd4dee79b93927fe47f0aff47dcc20c063d1ba5cc7a0131",
@@ -22780,7 +22780,7 @@
    ]
   },
   "Flock.Net": {
-   "digest": "1c95c8c1994b3334690b40f56cfb9b8e61846b174a583c792cbbcd4d35dad241",
+   "digest": "2f03f9eef73a4bef09bcb52c907a6997df8f866de9ea5744d9eb31fe375c3cb1",
    "definitions": {
     "Flock.Group": "68462ee6c67749c67839adbcf041ebcd1a6d0fce2b8e2d719557c533b9a2d540",
     "Flock.Group.bits": "5dfe45faac9951c1393b030ed28c79b4f07fbd8e8025c8f8d1ca786771ac2c88",
@@ -22803,7 +22803,7 @@
     "Flock.Net.inputsOk": "83db13d1ae54f8e4401c056d45f435fb0e8669fa9e3d740dea46a32dc8961a56",
     "Flock.Net.lookup": "705e7b36dd6a6d46d4dbeb1feacf8bd40ecf135bf574432363d21ce6a0a7f5db",
     "Flock.Net.name": "d760a24deec4bfae8a60719a270f05b1110390aafadb7bedc9018ff1d0eb1a13",
-    "Flock.Net.ofRows": "bbc38718665cc9879f3e72a4591d924392ca31a25447c66e0bf792cf11ff089d",
+    "Flock.Net.ofRows": "4ca21b277761f048db0db608fed2bc9b8cc1454ff736784435905ffce9b543e7",
     "Flock.Net.outGroups": "835dc2cf48f9ec0bde02d1618d57ac41953ee5148dca13fb69c4f631c9e2d13c",
     "Flock.Net.parse": "16d2af561f9550cfc0362db6fe9390becc9084a33c9e6616a25f03e05dc8b4a6",
     "Flock.Net.unitLog": "b8d944ea6036146905e2e33d31b25f372af116eb67fc34e52b1361601e9b1388",
