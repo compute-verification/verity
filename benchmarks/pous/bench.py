@@ -34,7 +34,8 @@ Implementations (`IMPLS`), each adding one class:
 * `p2-v1-gpu`: P2 v1, the frozen specification (`p2_v1/`): its reference pinned by the P2 kit's vectors, its GPU library
   (decode with v1 keys on `p2_gpu/p2dec.cu`'s tuned squaring, encode by two roots) and the same harness steps as `band-gpu`
   at k = 105, so the two compare side by side (`side_by_side.py`). It is its own scheme (`--scheme` is ignored): P2 v1 is not a
-  `verity_pous` registered scheme, whose P2 is the MVP's `p2-16448/v2`.
+  `verity_pous` registered scheme, whose P2 is the MVP's `p2-16448/v3` (the spec's SHAKE256 keys, its 24-byte salt and leaves)
+  and `p2-16448/v2` (ChaCha8 keys).
 * `band-gpu`: the same kernels, moved into `band_gpu/` with no vLLM dependency, the whole-chain decode on lane pairs
   (`harness.KERNELS`), run by the POUS-only harness (`band_gpu/harness.py`): kernel gates that stop the run when they fail,
   encode GB/s, `C` resident, decode overhead on a synthetic loop of the weight set's GEMMs (CUDA-graphed where capturable),
@@ -348,7 +349,7 @@ class P2Gpu:
     - `-DP2_DERIVE`, the scheme's own key schedule (M1: fresh per-block `K_j, t_j`), whose rate is the result. The keys
       are expanded in the timed kernel, by ChaCha8 from one 32-byte seed per segment, so only the seeds cross from the
       host and nothing key-sized is stored (the 1.05× space bound).
-    - The campaign's shared-key build (M2, not covered by `P2MeetsM1Uncond`), for comparison only.
+    - The campaign's shared-key build (M2, not covered by the pinned P2 theorems), for comparison only.
 
     C is random blocks below p, with four blocks encoded by the reference planted in it. The kernel's sampled outputs
     (the first 1,024 blocks, 1,024 pseudo-random ones, the last, and the planted ones) are checked against the
@@ -365,8 +366,8 @@ class P2Gpu:
         from verity_pous.verifier import VerifierKey, leaf_hash
 
         base = schemes.get(a.scheme)
-        if not isinstance(base, schemes.P2):
-            raise SystemExit(f"p2-gpu runs a P2 scheme, not {a.scheme}")
+        if not isinstance(base, schemes.P2) or base.params.expander != p2.CHACHA8:
+            raise SystemExit(f"p2-gpu's kernel expands ChaCha8 keys: it runs p2-16448/v2, not {a.scheme}")
         pb, nb, bps = base.params.payload_bytes, base.params.block_bytes, base.params.blocks_per_segment
         n = -(-ws["bytes"] // pb)
         if a.max_segments:
@@ -430,7 +431,7 @@ class P2Gpu:
                     "mismatches": bad, "planted": sum(g in seen for g in expect), "planted_of": len(expect)}
 
         def m1_decode(g: int, cv: int) -> int:
-            k, tj = p2.expand_keys(params, seeds[g // bps], g % bps)
+            k, tj = p2.chacha_keys(params, seeds[g // bps], g % bps)
             return (f.sq(f.sigma(f.sq(cv), k)) - tj) % f.p
 
         def m2_decode(g: int, cv: int) -> int:

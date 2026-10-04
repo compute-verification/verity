@@ -74,10 +74,10 @@ Implementations:
   The transport is the harness's responder wire, not `p2-audit-wire/v1`'s frames.
 
 - `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**
-  `p2-16448/v2`.
+  `p2-16448/v2`, whose ChaCha8 keys the spec does not allow (its F4 names SHAKE256). The registered P2 with the spec's
+  keys is `p2-16448/v3`; `p2-v1-gpu` measures those keys on the device.
   - The measured build expands fresh per-block keys in the timed kernel, by ChaCha8 from one 32-byte seed per
-    segment. That is M1's schedule, the one `P2MeetsM1pB19Uncond` is about, and inside the 1.05× space bound. The
-    spec's setup assumption names SHAKE256, not ChaCha8, for these keys.
+    segment. That is M1's schedule, the one the pinned P2 theorems are about, and inside the 1.05× space bound.
   - A tweak candidate at or above p (probability c0/2^w per block) stops the kernel with an error instead of drawing
     the next candidate.
   - The campaign's shared-key build (M2) runs on the same C for comparison.

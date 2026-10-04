@@ -18,7 +18,7 @@ from verity_pous import band, dense, primitives, protocol, schemes
 from verity_pous.codec import Geometry
 from verity_pous.layout import Layout
 from verity_pous.params import Params
-from verity_pous.schemes.p2 import EXPERIMENTAL, P2Params
+from verity_pous.schemes.p2 import CHACHA8, CHACHA8_NONCONFORMING, EXPERIMENTAL, P2Params
 from verity_pous.verifier import VerifierKey
 
 SALT = bytes(range(24))
@@ -27,6 +27,7 @@ SMALL = {
     "dense": lambda segments=3: schemes.Dense(dense.DenseParams(8, 64, segments)),
     "p3": lambda segments=2: schemes.P3(Params(8, 64, 3, segments)),
     "p2": lambda segments=2: schemes.P2(P2Params(128, 173, 8, segments)),   # 2^128 − 173 is prime, ≡ 3 mod 4
+    "p2v2": lambda segments=2: schemes.P2ChaCha(P2Params(128, 173, 8, segments, CHACHA8)),
 }
 
 
@@ -112,7 +113,7 @@ def test_audit_through_the_interface(name):
         wrong.profile()
 
 
-@pytest.mark.parametrize("name", ["band", "dense", "p3", "p2"])
+@pytest.mark.parametrize("name", ["band", "dense", "p3", "p2", "p2v2"])
 def test_decode_tensor(name):
     base = SMALL[name]()
     layout = Layout.of(base.params.with_segments(1), [("embed", 150), ("norm", 3), ("proj", 170)])
@@ -135,9 +136,9 @@ def test_band_through_the_interface_is_the_pinned_band_codec():
 
 
 def test_registry():
-    assert set(schemes.REGISTRY) == {"band-chain/d12/v1", "dense-chain/v1", "p3/v1", "p2-16448/v2"}
+    assert set(schemes.REGISTRY) == {"band-chain/d12/v1", "dense-chain/v1", "p3/v1", "p2-16448/v3", "p2-16448/v2"}
     assert schemes.DEFAULT == band.BAND12.name
-    assert schemes.EXPERIMENTAL == {"p2-16448/v2"} and schemes.DEFAULT not in schemes.EXPERIMENTAL
+    assert schemes.EXPERIMENTAL == {"p2-16448/v3", "p2-16448/v2"} and schemes.DEFAULT not in schemes.EXPERIMENTAL
     assert schemes.get().experimental is None
     b = schemes.get()
     assert isinstance(b, schemes.Band) and b.params == band.SECURE_FIRST and b.name == "band-chain/d12/v1"
@@ -289,23 +290,23 @@ def test_certificates_at_their_points():
 
 def test_certificates_name_proved_pins():
     """A certificate's `theorem` is the pinned proof `Pous.SecurityProofs.X` it rests on (in `lean/lean-audit.json`), of
-    the guarantee `Pous.Guarantees.X` (`lean/Pous/Guarantees.lean`).  Experimental schemes are exempt: P2's pin is
-    proposed."""
+    the guarantee `Pous.Guarantees.X` (`lean/Pous/Guarantees.lean` and the files under `lean/Pous/Guarantees/`),
+    experimental schemes' included."""
     lean = Path(__file__).parents[1] / "lean"
-    statements = set(re.findall(r"^def (\w+) : Prop", (lean / "Pous" / "Guarantees.lean").read_text(), re.M))
+    texts = [(lean / "Pous" / "Guarantees.lean").read_text()] + [f.read_text() for f in
+                                                                  sorted((lean / "Pous" / "Guarantees").glob("*.lean"))]
+    statements = {x for t in texts for x in re.findall(r"^def (\w+) : Prop", t, re.M)}
     pins = json.loads((lean / "lean-audit.json").read_text())["pins"]
     checked = 0
     for name in schemes.REGISTRY:
         sch = schemes.get(name)
-        if sch.experimental:
-            continue
         assert sch.certificates[:1] == (() if sch.certificate is None else (sch.certificate,)), name
         for cert in sch.certificates:
             x = cert.theorem.removeprefix("Pous.SecurityProofs.")
             assert cert.theorem == f"Pous.SecurityProofs.{x}" and x in statements, name
             assert cert.theorem in pins, name
             checked += 1
-    assert checked == 5
+    assert checked == 7
 
 
 def test_p3_has_no_certificate_because_its_chain_does_not_start_from_leans():
@@ -505,34 +506,41 @@ def test_claims_resolve_and_local_ones_are_not_in_core():
 
 
 def test_p2_is_experimental_and_says_so():
-    """P2 (`p2-16448/v2`) is registered but experimental: the verifier refuses it unless asked, never makes it the
-    default, and its profile states that it is an abstract-M1 result under a proposed pin, pending Daniel.  The
-    certificate is the proposed 2^19-block pin on P2's exact domain, and the manifest names the payload profile."""
-    sch = schemes.get("p2-16448/v2", segments=8)
-    assert sch.experimental == EXPERIMENTAL == ("abstract-M1 result; its pin P2MeetsM1pB19Uncond is proposed, not yet "
-                                                "trusted; instantiation assumption pending Daniel")
-    assert sch.params.profile == sch.params.manifest()["profile"] == "p2-2054B"
-    cert = sch.certificate
-    assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.segments, cert.hypotheses) == ("P2MeetsM1pB19Uncond", 88,
-                                                                                              0, 1 << 20, 8, ())
-    assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root"} <= set(cert.claims)
-    one = schemes.get("p2-16448/v2")
-    vk = VerifierKey.from_leaves(one.params, SALT, [bytes(32)] * one.params.blocks)
-    key = protocol.challenge_key(b"\x00" * 32, vk)
-    with pytest.raises(ValueError, match="experimental"):
-        protocol.Verifier(one, vk, key)
-    v = protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=36_800)
-    assert v.k == 88 and v.gaps == ("W has 1 segments; P2MeetsM1pB19Uncond is about 8",)
-    with pytest.raises(ValueError, match="covers 0"):
-        protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=2_400_000)
-    p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 88, 536_800, cert,
-                                experimental=sch.experimental)
-    assert p.certified and p.statement().startswith(f"EXPERIMENTAL ({EXPERIMENTAL}). ")
-    assert "P2MeetsM1pB19Uncond" in p.statement() and p.to_json()["experimental"] == EXPERIMENTAL
-    assert p.state_bound_bits == (1 << 19) * 16448 * 18 // 19
+    """P2 (`p2-16448/v3`, and `p2-16448/v2` with ChaCha8 keys) is registered but experimental: the verifier refuses it
+    unless asked, never makes it the default, and its profile states why.  The certificate is the pinned
+    `P2SlackFamilyUncond` at the spec's k = 105, and the manifest names the payload profile."""
+    for name in ("p2-16448/v3", "p2-16448/v2"):
+        sch = schemes.get(name, segments=8)
+        v2 = name.endswith("v2")
+        assert sch.experimental == (f"{EXPERIMENTAL}; {CHACHA8_NONCONFORMING}" if v2 else EXPERIMENTAL)
+        assert sch.params.profile == sch.params.manifest()["profile"] == "p2-2054B"
+        assert ("expander" in sch.params.manifest()) is not v2
+        cert = sch.certificate
+        assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.segments, cert.hypotheses) == (
+            "Pous.SecurityProofs.P2SlackFamilyUncond", 105, 0, 1 << 20, 8, ())
+        assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root"} <= set(cert.claims)
+        one = schemes.get(name)
+        vk = VerifierKey.from_leaves(one.params, SALT, [bytes(32)] * one.params.blocks)
+        key = protocol.challenge_key(b"\x00" * 32, vk)
+        with pytest.raises(ValueError, match="experimental"):
+            protocol.Verifier(one, vk, key)
+        v = protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=36_800)
+        assert v.k == 105 and v.gaps == ("W has 1 segments; Pous.SecurityProofs.P2SlackFamilyUncond is about 8",)
+        with pytest.raises(ValueError, match="covers 0"):
+            protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=2_400_000)
+        p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 105, 536_800, cert,
+                                    experimental=sch.experimental)
+        assert p.certified and p.statement().startswith(f"EXPERIMENTAL ({sch.experimental}). ")
+        assert "P2SlackFamilyUncond" in p.statement() and p.to_json()["experimental"] == sch.experimental
+        assert p.state_bound_bits == (1 << 19) * 16448 * 18 // 19
+    with pytest.raises(ValueError, match="chacha8"):
+        schemes.get("p2-16448/v3", params=P2Params(16448, 21065, 1 << 16, 1, CHACHA8))
+    with pytest.raises(ValueError, match="expander"):
+        P2Params(128, 173, 8, 1, "chacha20")
 
 
-def test_p2_arithmetic():
+@pytest.mark.parametrize("expander", ["shake256-v1", CHACHA8])
+def test_p2_arithmetic(expander):
     """sq inverts the parity-canonical root, σ is an involution on [0, p), blocks and payloads are big-endian integers
     (the spec's wire format), and a block that is not a codeword is refused."""
     from verity_pous.schemes.p2 import _Field, block_keys
@@ -541,9 +549,9 @@ def test_p2_arithmetic():
     for _ in range(300):
         y, k = rng.randrange(f.p), rng.getrandbits(128)
         assert f.sq(f.rho(y)) == y and f.sigma(f.sigma(y, k), k) == y < f.p
-    params = P2Params(128, 173, 8, 2)
+    params = P2Params(128, 173, 8, 2, expander)
     assert block_keys(params, SALT, 0, 1) != block_keys(params, SALT, 1, 1) != block_keys(params, SALT, 0, 2)
-    sch = schemes.P2(params)
+    sch = (schemes.P2ChaCha if expander == CHACHA8 else schemes.P2)(params)
     w_seg = bytes(range(112))
     c = sch.encode_segment(SALT, 1, w_seg)
     for j in (0, 5):
@@ -557,30 +565,56 @@ def test_p2_arithmetic():
     assert sch.decode_segment(SALT, 1, c) == w_seg
 
 
-def test_p2_keys_are_chacha8_from_a_segment_seed():
-    """P2's per-block keys expand where they are used, on the device, from one 32-byte seed per segment (ChaCha8 with
+def test_p2_v3_keys_are_the_specs():
+    """v3's keys are the frozen spec's §4 SHAKE256 streams: given the spec's base, `shake_keys` gives every pinned K and
+    t of the P2 kit's `vectors.json` (`fixtures/p2-v1-keys.json`, copied with that file's hash), at w = 64, 96, 128 and
+    16,448.  The protocol's base frames its 24-byte salt where the spec frames the model commitment and its 32-byte
+    setup salt, and nothing else differs."""
+    from verity.randomness import frame
+
+    from verity_pous.schemes.p2 import EXPAND_LABEL, PROTOCOL_ID, expand_prefix, shake_keys
+
+    doc = json.loads((Path(__file__).parent / "fixtures" / "p2-v1-keys.json").read_text())
+    assert doc["source_sha256"] == "781fec77f4fcadb45f10673457ecd9b63d26cf826a2ebaed5da795539d8a5fab"
+    for v in doc["vectors"]:
+        params = P2Params(v["w"], v["c0"], 1 << 16, 8)
+        spec_base = (frame("verity/pous/p2/expand/v1") + frame("p2/v1") + frame(f"p2-p{v['w']}-c{v['c0']}")
+                     + frame(bytes.fromhex(v["model_commitment"])) + frame(bytes.fromhex(v["setup_salt"])))
+        k, t = shake_keys(params, spec_base, v["segment"], v["block"])
+        n = params.block_bytes
+        assert (k.to_bytes(n, "big").hex(), t.to_bytes(n, "big").hex()) == (v["K"], v["t"]), v["id"]
+    assert len(doc["vectors"]) == 4 and {v["w"] for v in doc["vectors"]} == {64, 96, 128, 16448}
+    params = P2Params(16448, 21065, 4)
+    assert (EXPAND_LABEL, PROTOCOL_ID, params.prime_id) == ("verity/pous/p2/expand/v1", "p2/v1", "p2-p16448-c21065")
+    assert expand_prefix(params, SALT) == frame(EXPAND_LABEL) + frame(PROTOCOL_ID) + frame(params.prime_id) + frame(SALT)
+    with pytest.raises(ValueError, match="24 bytes"):
+        expand_prefix(params, bytes(32))
+
+
+def test_p2_v2_keys_are_chacha8_from_a_segment_seed():
+    """v2's per-block keys expand where they are used, on the device, from one 32-byte seed per segment (ChaCha8 with
     the block index as nonce), so no key-sized state is stored and the 1.05× space bound holds."""
-    from verity_pous.schemes.p2 import chacha_block, expand_keys, segment_seed
+    from verity_pous.schemes.p2 import chacha_block, chacha_keys, segment_seed
 
     # the ChaCha block function against RFC 8439 §2.3.2 (20 rounds, the same word layout), ChaCha8 against the published
     # zero-key, zero-nonce vector
     assert chacha_block(bytes(range(32)), 1 | 0x09000000 << 32, 0x4A000000, 20)[:16].hex() == "10f1e7e4d13b5915500fdd1fa32071c4"
     assert chacha_block(bytes(32), 0, 0)[:32].hex() == "3e00ef2f895f40d67f5bb8e81f09a5a12c840ec3ce9a7f3b181be188ef711a1e"
-    params = P2Params(16448, 21065, 4)
+    params = P2Params(16448, 21065, 4, 1, CHACHA8)
     seed = segment_seed(SALT, 3)
     assert len(seed) == 32 and seed != segment_seed(SALT, 2)
-    k, t = expand_keys(params, seed, 5)
+    k, t = chacha_keys(params, seed, 5)
     z = b"".join(chacha_block(seed, i, 5) for i in range(65))
     assert k == int.from_bytes(z[:2056], "big") and t == int.from_bytes(z[2056:4112], "big") < params.p
-    assert expand_keys(params, seed, 6) != (k, t)
+    assert chacha_keys(params, seed, 6) != (k, t)
 
 
 def test_p2_tweak_is_rejection_sampled():
     """A tweak candidate at or above p is skipped for the next one, as the spec requires; it is never reduced by one
-    subtraction of p, which would give the values below c0 twice the weight of the rest."""
+    subtraction of p, which would give the values below c0 twice the weight of the rest.  Both expanders."""
     from verity_pous.schemes import p2
 
-    params = P2Params(128, 173, 4)
+    params = P2Params(128, 173, 4, 1, CHACHA8)
     assert p2.below(params.p, iter([params.p, params.p + 5, (1 << 128) - 1, 7])) == 7
     assert p2.below(params.p, iter([params.p - 1])) == params.p - 1
     real = p2.chacha_block
@@ -591,8 +625,17 @@ def test_p2_tweak_is_rejection_sampled():
 
     try:
         p2.chacha_block = first_candidate_high
-        k, t = p2.expand_keys(params, bytes(32), 0)
+        k, t = p2.chacha_keys(params, bytes(32), 0)
     finally:
         p2.chacha_block = real
     assert k == (1 << 128) - 1 and t == int.from_bytes(real(bytes(32), 0, 0)[32:48], "big") < params.p
     assert t != (1 << 128) - 1 - params.p
+
+    # v3 at w = 24, c0 = 65,533, where a candidate is ≥ p about once in 256: the first block whose first one is
+    small = P2Params(24, 65533, 4)
+    prefix = p2.expand_prefix(small, SALT)
+    j = next(j for j in range(10_000) if int.from_bytes(hashlib.shake_256(
+        prefix + bytes(8) + j.to_bytes(8, "big") + b"t").digest(3), "big") >= small.p)
+    words = hashlib.shake_256(prefix + bytes(8) + j.to_bytes(8, "big") + b"t").digest(9)
+    first, second, third = (int.from_bytes(words[i:i + 3], "big") for i in (0, 3, 6))
+    assert p2.shake_keys(small, prefix, 0, j)[1] == (second if second < small.p else third) != first - small.p
