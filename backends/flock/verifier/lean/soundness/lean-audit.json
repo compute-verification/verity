@@ -590,6 +590,7 @@
    "assumptions": [],
    "type_hash": "6546b6c89d3d2a2ff02a4aa2f881aa4601822708516f6145c056e0d3d03aab72"
   },
+  "FlockSoundness.Audit.audit_profile": {},
   "FlockSoundness.Audit.audit_window_split_of_record": {
    "signature": [
     "FlockSoundness.Audit.audit_window_split_of_record {n m : Nat} {σ : Fin n → Fin m} {cl : Fin n → Finset (Fin n)}",
