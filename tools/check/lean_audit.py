@@ -1,4 +1,5 @@
-"""`lean_audit`: check's Lean audit step. `tools/lean/audit.py --all --build`, with passes reused and dependencies kept warm.
+"""`lean_audit`: check's Lean audit step. `tools/lean/audit.py --build` on the packages whose passes can't be reused, with
+dependencies kept warm.
 
     python tools/check/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR]
     python tools/check/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
@@ -13,7 +14,11 @@ A package's verdict is reused while everything its audit reads is unchanged. Its
 
 When one package misses, the audit runs on a scratch tree holding only the missed packages' inputs, from that tree's own copy of
 `tools/lean`. So a read of anything outside a key finds nothing, and the audit fails there instead of a stale pass being kept
-(the counterpart of `suites.py`'s read guard). Every package in the scratch tree is audited, without the controls: they test
+(the counterpart of `suites.py`'s read guard). Only the missed packages are audited. A package one of them requires by path is
+in the tree and built as far as it imports it, but not audited again: what vouches for its modules is its own pass, under its
+own key, and the run passes only when every package has one. The dependent's axiom walk follows its declarations into those
+modules, but its replay and its record's `dependencies` (fetched packages and the toolchain) don't cover them. The controls
+don't run here: they test
 the auditor, so the `tools/lean` suite runs them, cached on `tools/lean/`, not again on every package's miss. Each pass is
 stored under its key, and a failure is never stored. One read is outside the scratch tree: a package test's `generate` (`runs`
 in `lean-audit.json`) reads this checkout (`audit.py --repo`). Its output is used only with the SHA-256 the record holds for
@@ -44,6 +49,7 @@ import importlib.util
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tarfile
@@ -98,7 +104,7 @@ def path_deps(pkg: str) -> list[str]:
 
 
 #: How the audit runs, and so part of every key
-FLAGS = ["--all", "--no-controls", "--build"]
+FLAGS = ["--build"]
 
 
 def inputs(pkg: str, files: list[str]) -> list[str]:
@@ -339,7 +345,7 @@ def transient(rep: dict) -> bool:
 
 def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: Path, cache: Path, deps: Path, fresh: bool,
            log, urls: dict[str, str] | None = None, comps: dict | None = None) -> tuple[list[str], list[str]]:
-    """Audit ``missed`` (and the packages they require by path) on a scratch tree of their inputs, and store each pass.
+    """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), and store each pass.
     Returns (the failed, the audited)."""
     deps.mkdir(parents=True, exist_ok=True)
     # beside the dependencies: moves, not copies. Resolved, because audit.py names each package by its resolved path, and a
@@ -352,13 +358,13 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     try:
         union = sorted({f for p in missed for f in inputs(p, files)})
         scratch_tree(work, union)
-        audited = packages(union)
+        audited = sorted(missed)
         with ThreadPoolExecutor(max_workers=max(1, len(audited))) as ex:
             list(ex.map(lambda p: warm.take(work / p, log), audited))
         env = {**os.environ, "LEAN_NUM_THREADS": str(COMMON.cores())}
         t0 = time.monotonic()
         (out / "audit.json").unlink(missing_ok=True)
-        r = subprocess.run([sys.executable, str(work / "tools" / "lean" / "audit.py"), *FLAGS, "--root", str(work),
+        r = subprocess.run([sys.executable, str(work / "tools" / "lean" / "audit.py"), *FLAGS, *(str(work / p) for p in audited),
                             "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
         doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["audit.py"]}
@@ -488,6 +494,9 @@ def pin(run_id: str) -> int:
 
 
 def main(argv: list[str]) -> int:
+    # a manual stop or a runner's timeout sends SIGTERM to check.py's whole process group: as SIGINT, it runs `_audit`'s finally,
+    # which removes the scratch tree (about 60 GB on a node, left behind by every stopped check otherwise)
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
     if argv[:1] == ["--pin"] and len(argv) == 2:
         return pin(argv[1])
     if argv[:1] == ["--explain"] and len(argv) in (2, 4):

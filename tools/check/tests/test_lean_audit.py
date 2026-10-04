@@ -5,7 +5,10 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import re
+import signal
+import subprocess
 import sys
 import tarfile
 import types
@@ -21,21 +24,23 @@ spec = importlib.util.spec_from_file_location("check_for_test_lean_audit", ROOT 
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 
-#: a stand-in for tools/lean/audit.py --all --build --root R --out O: each package fails when a file its policy names under
-#: "reads" is missing (an input the key would not cover), fetches its git dependencies into .lake/packages, and notes what ran
+#: a stand-in for tools/lean/audit.py --build PKG... --out O, run in the scratch tree: each named package fails when a file its
+#: policy names under "reads" is missing (an input the key would not cover) or a package it requires by path is not in the tree,
+#: fetches its git dependencies into .lake/packages, and notes what ran
 FAKE_AUDIT = r'''
 import json, sys
 from pathlib import Path
 a = sys.argv[1:]
-root, out = Path(a[a.index("--root") + 1]), Path(a[a.index("--out") + 1])
+root, out = Path.cwd(), Path(a[a.index("--out") + 1])
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo"))]
 out.mkdir(parents=True, exist_ok=True)
 (out / "repo.txt").write_text(a[a.index("--repo") + 1] if "--repo" in a else "")
 reps, failed = [], []
-for pol in sorted(root.rglob("lean-audit.json")):
-    pkg = pol.parent
-    if "tools/lean" in str(pkg):
-        continue
+for pkg in named:
+    pol = pkg / "lean-audit.json"
     missing = [r for r in json.loads(pol.read_text()).get("reads", []) if not (root / r).exists()]
+    missing += [d["dir"] for d in json.loads((pkg / "lake-manifest.json").read_text())["packages"]
+                if d["type"] == "path" and not (pkg / d["dir"] / "lean-audit.json").exists()]
     deps = pkg / ".lake" / "packages" / "dep"
     warm = (deps / "built").exists()
     if json.loads((pkg / "lake-manifest.json").read_text())["packages"]:
@@ -86,8 +91,8 @@ def test_verdicts_are_reused_only_while_every_input_is_unchanged(tmp_path, monke
     rc, ran, doc = _run(tmp_path, 1)
     assert rc == 1 and sorted(ran) == ["pkg/a cold", "pkg/b cold"] and doc["failed"] == ["pkg/b"] and doc["cached"] == {}
     (root / "pkg/b/lean-audit.json").write_text("{}")
-    rc, ran, doc = _run(tmp_path, 2)                   # a reused; b (and a, its path dependency) audited, a's dependencies warm
-    assert rc == 0 and sorted(ran) == ["pkg/a warm", "pkg/b cold"] and list(doc["cached"]) == ["pkg/a"]
+    rc, ran, doc = _run(tmp_path, 2)                   # a reused; only b audited, with a, its path dependency, in its tree
+    assert rc == 0 and ran == ["pkg/b cold"] and list(doc["cached"]) == ["pkg/a"]
     rc, ran, doc = _run(tmp_path, 3)                   # nothing changed: nothing runs
     assert rc == 0 and ran == [] and sorted(doc["cached"]) == ["pkg/a", "pkg/b"] and doc["passed"]
     (root / "pkg/a/A.lean").write_text("theorem a : True := by trivial\n")
@@ -118,6 +123,40 @@ def test_a_packages_test_generates_its_data_from_the_checkout_not_the_scratch_tr
     root = _tree(tmp_path, monkeypatch)
     _run(tmp_path, 1)
     assert (tmp_path / "out1" / "repo.txt").read_text() == str(root)
+
+
+#: runs lean_audit.py's main on the tree `_tree` wrote, as check.py's step does: argv is the module, the root, the tracked files
+#: (JSON) and main's arguments
+DRIVER = r'''
+import importlib.util, json, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("lean_audit_driven", sys.argv[1])
+LA = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(LA)
+LA.ROOT, files = Path(sys.argv[2]), json.loads(sys.argv[3])
+LA.COMMON.tracked_files = lambda r=None: files
+LA.COMMON.cores = lambda: 2
+sys.exit(LA.main(sys.argv[4:]))
+'''
+
+
+def test_a_stopped_audit_removes_its_scratch_tree(tmp_path, monkeypatch):
+    """A manual stop (`research cancel`) sends SIGTERM to the check's whole process group. The audit died of it without
+    running its finally, and left its scratch tree, about 60 GB, in `~/.cache/verity-check`: two of them filled node 2's root
+    disk until a check refused to start (3 Oct, r20261003-055703-86e3 and r20261003-030801-94eb)."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "tools/lean/audit.py").write_text('import sys\nprint("auditing", flush=True)\nsys.stdin.read()\n')
+    cache = tmp_path / "cache"
+    p = subprocess.Popen([sys.executable, "-c", DRIVER, str(ROOT / "tools/check/lean_audit.py"), str(root),
+                          json.dumps(LA.COMMON.tracked_files()), "--out", str(tmp_path / "out"),
+                          "--cache", str(cache / "lean-audit"), "--deps", str(cache / "lean-deps")],
+                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, text=True)
+    while "auditing" not in (line := p.stdout.readline()):
+        assert line, p.communicate()[1]
+    assert len(list(cache.glob("lean-audit-scratch-*"))) == 1
+    os.killpg(p.pid, signal.SIGTERM)
+    p.communicate()
+    assert p.returncode != 0 and list(cache.glob("lean-audit-scratch-*")) == []
 
 
 def test_a_check_py_edit_keeps_every_verdict_and_a_pack_carries_them_to_another_machine(tmp_path, monkeypatch):

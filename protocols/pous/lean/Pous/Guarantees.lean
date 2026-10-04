@@ -5,6 +5,7 @@ import Pous.Protocol.Accounting.LemmaA
 import Pous.Protocol.Accounting.Params
 import Pous.Protocol.Accounting.PubMeets
 import Pous.Protocol.Accounting.GradedMeets
+import Pous.Protocol.Accounting.Rebuild
 import Pous.Assumptions
 import Pous.Protocol.Model.HashChain
 import Pous.Protocol.Model.Dense
@@ -19,6 +20,7 @@ import Pous.Protocol.Model.SampledAudit
 import Pous.Guarantees.P2
 import Pous.Protocol.Model.BandGraph
 import Pous.Protocol.Model.SegLift
+import Pous.Protocol.Model.Continuous
 
 /-!
 # Guarantees
@@ -645,11 +647,12 @@ def ChainDenseMeets64 : Prop :=
     Meets (Pous.Sponge.chainDense (2 ^ 9) 524288 512 (Pous.Sponge.dom salt)) .sequential 5 (2 ^ 20) 111
       ((2⁻¹ : ℝ≥0∞) ^ 128)
 
-/-! ### The band at `D = 2` and `D = 1` rounds
+/-! ### The band at `D = 2`, `D = 1` and `D = 0` rounds
 
-Added on 3 Oct 2026, approved by Daniel (3 Oct 2026, 05:27Z). Statement reviewer: @lean, to be confirmed. Each
-statement is a band pin above with only the round budget `D`, the challenge count `k` and the bound on the in-degree
-`d` changed; the model, the scope and `d ≥ D` (`BandGapAttack`) are as there. The proofs are
+Added on 3 Oct 2026, approved by Daniel (3 Oct 2026, 05:27Z; `D = 0` approved 3 Oct 2026). Statement reviewer: @lean,
+to be confirmed. Each statement is a band pin above with only the round budget `D`, the challenge count `k` and the
+bound on the in-degree `d` changed; the model, the scope and `d ≥ D` (`BandGapAttack`) are as there (`D = 0` puts no
+bound on `d`, since the responder makes no `Π₂` call). The proofs are
 `Pous/SecurityProofs/Chain/FamilyRounds.lean`'s (`Pous.BandMulti.Rounds`): `Family.lean`'s certificate with `D` and
 `k` as parameters. -/
 
@@ -678,6 +681,20 @@ def BandMultiMeetsFamilyD1 : Prop :=
         1 (2 ^ 20) 93 ((2⁻¹ : ℝ≥0∞) ^ 128)) ∧
     (∀ salt : Bits 256,
       Meets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) .sequential 1 (2 ^ 20) 93
+        ((2⁻¹ : ℝ≥0∞) ^ 128))
+
+/-- **Unconditional: the band store at `D = 0` rounds and `k = 89`, at every segment count from 1 to 2^64.**
+`BandMultiMeetsFamily` at `D = 0` and `k = 89`, for every `d` with no bound on the in-degree: at `D = 0` the responder
+makes no `Π₂` call and answers from its state alone, so the band needs no bound on `d`. Both domain layouts. Approved
+by Daniel (3 Oct 2026). Proof: `Pous.BandMulti.Rounds.band_meets_family_d0`; here
+`Pous.SecurityProofs.BandMultiMeetsFamilyD0`. -/
+def BandMultiMeetsFamilyD0 : Prop :=
+  ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ,
+    (∀ salt : Bits 192,
+      Meets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.BandMulti.segDom salt (2 ^ 9))) .sequential
+        0 (2 ^ 20) 89 ((2⁻¹ : ℝ≥0∞) ^ 128)) ∧
+    (∀ salt : Bits 256,
+      Meets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) .sequential 0 (2 ^ 20) 89
         ((2⁻¹ : ℝ≥0∞) ^ 128))
 
 /-- **Unconditional: the band scheme at 64 KiB, `D = 2` rounds and `k = 97`.** `BandChainMeets64` at `D = 2` and
@@ -814,9 +831,11 @@ band `chainBandSeg N (2^9) d` at `D = 5`, `Q = 2^20`, `ε = 2^-128`, both with t
 
 The hypotheses on `D_late` are the deployment condition, necessary for the game's `S`-bit state to be a model of
 storage at rest: the audit's window must be too short to re-encode `C`. Re-encoding a segment from `W` takes
-`R(d) = Σ_{v < 2^9} (min(v, d) + 1) ≥ R(5) = 3,057` sequential `Π₂` calls, and every row's window, `k − t` rounds at
-`D = 5` and `t` at `D_late`, is at most `240·5 + 3·12 = 1,236`. `D_late ≤ d` is the band's cliff applied to
-`Δ_late`; at the deployed `d = 12` both caps are `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14 ms`. Proof:
+`R(d) = Σ_{v < 2^9} (min(v, d) + 1) ≥ R(5) = 3,057` sequential `Π₂` calls. Every row's rounds, `k − t` at `D = 5` and
+`t` at `D_late`, last under `240·6 + 3·13 = 1,479` call-times, and the verifier's gaps between them add to the window,
+so it is bounded by the verifier's limit on the audit's duration that `BackgroundRebuildExcluded` requires, `1,505`
+call-times. `D_late ≤ d` is the band's cliff applied to `Δ_late`; at the deployed `d = 12` both caps on `D_late` are
+`Δ_late + RTT < 13 × 241.5 µs ≈ 3.14 ms`. Proof:
 `PousGraded.band_graded_meets_family` (`Pous/SecurityProofs/Graded/Band.lean`); here
 `Pous.SecurityProofs.BandGradedMeetsFamily`. -/
 def BandGradedMeetsFamily : Prop :=
@@ -829,6 +848,149 @@ def BandGradedMeetsFamily : Prop :=
       (∀ salt : Bits 256,
         GradedMeets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) 5 (2 ^ 20) D_late
           Q_late tk.2 tk.1 ((2⁻¹ : ℝ≥0∞) ^ 128))
+
+/-! ### The continuous audit (`Pous.Protocol.Model.Continuous`)
+
+Added on 3 Oct 2026. Statement reviewer: needed. Red team: needed. The verifier enforces the three timing rules: it
+reveals the next index only after the last round closed, rejects an answer past the hard deadline, and counts every
+answer past `Δ` as a miss, with every rejected or wrong one. Neither statement takes a hypothesis about them, and both
+hold at every hard deadline `(D_late, Q_late)` and every arrival schedule `arr` (`Pous/Protocol/Model/Continuous.lean`).
+-/
+
+/-- **The per-answer bound in the continuous audit.** From `TimedINC sch D Q β π`, for every machine, every arrival
+schedule, every hard deadline `(D_late, Q_late)` and every history `h` (the indices sent before): off a setup event of
+probability at most `(β + 1)·π`, the round after `h` is a hit with probability at most `1 − ε + ε_proof` over its
+uniform index, where `ε` is the freed fraction of the responder's memory at that round's send time. The `β + 1` is a
+union over the memory's length. Proof: `PousContinuous.per_answer`; here `Pous.SecurityProofs.PerAnswer`. -/
+def PerAnswer : Prop :=
+  ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late β : ℕ) (π : ℝ≥0∞), TimedINC sch D Q β π →
+    ∀ (W : Bits sch.n) (mach : ContMachine sch) (arr : ℕ → ℕ) (h : List (Fin sch.B)),
+      pr (fun a : M.Ω × sch.Coins =>
+          let pp := (sch.enc W a.1 a.2).1
+          let C := (sch.enc W a.1 a.2).2
+          let s := contAfter mach D_late W pp C a.1 arr h
+          ¬ pr (fun i => (contRecord mach D Q D_late Q_late W pp C a.1 arr s i).verdict = .hit) ≤
+            ENNReal.ofReal (1 - contFreed sch (contMem mach W pp C a.1 arr s).length + epsProof sch β))
+        ≤ (β + 1) * π
+
+/-- **The continuous audit's guarantee** (the explorer note, §1). From `TimedINC sch D Q β π`, for every machine,
+every arrival schedule, every hard deadline `(D_late, Q_late)`, every `f` and every `βe > 0` (the explorer's `β`), over
+the setup and `n` uniform indices: the verifier accepts with tolerance `f` and `Σ_j max(ε_j − ε_proof, 0)` exceeds
+`G(f) = inf_{θ > 0} (θ·f + ln(1/βe)) / (1 − e^−θ)` with probability at most `βe + n·(β + 1)·π`. Here `ε_j` is the
+freed fraction of the responder's memory at challenge `j`'s send time. The positive part keeps a memory above `|C|` at
+one challenge (`ε_j < 0`) from offsetting a shortfall at another. Dividing by `n`:
+`Pr[accept(f₀) ∧ ε̄ > g(f₀)] ≤ βe + n·(β + 1)·π`, with `ε̄ = (1/n)·Σ_j max(ε_j − ε_proof, 0)` and `g = G/n`. When
+`ε_proof ≥ 0` (whenever the bound is not vacuous), `max(ε_j − ε_proof, 0) ≥ max(ε_j, 0) − ε_proof`, so the same bound
+holds for the average of `max(ε_j, 0)` exceeding `ε_proof + g(f₀)`. The scope is the module docstring's: conditional
+on the arrivals, storage at send times, and `g` normalized by the realized number of challenges, never by `λT`. Proof:
+`PousContinuous.continuous_audit`; here `Pous.SecurityProofs.ContinuousAudit`. -/
+def ContinuousAudit : Prop :=
+  ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late β n : ℕ) (π : ℝ≥0∞), TimedINC sch D Q β π →
+    ∀ (W : Bits sch.n) (mach : ContMachine sch) (arr : ℕ → ℕ) (f βe : ℝ), 0 < βe →
+      pr (fun x : Outcome sch n =>
+          let pp := (sch.enc W x.1 x.2.1).1
+          let C := (sch.enc W x.1 x.2.1).2
+          let rs := contRecords mach D Q D_late Q_late W pp C x.1 arr .start (List.ofFn x.2.2)
+          contAccepts f rs ∧
+            (⨅ θ : Set.Ioi (0 : ℝ), ((θ : ℝ) * f + Real.log (1 / βe)) / (1 - Real.exp (-(θ : ℝ)))) <
+              (rs.map fun r => max (contFreed sch r.held - epsProof sch β) 0).sum)
+        ≤ ENNReal.ofReal βe + n * (β + 1) * π
+
+/-! ### The background-rebuild exclusion (`Pous.Protocol.Accounting.Rebuild`)
+
+Added on 3 Oct 2026. Statement reviewer: @lean (`bc-19c498a8`), granted at `f6aaddc36` on 4 Oct 2026, 06:16Z (Slack
+post ts 1791094669.362169); the red team granted the same head. -/
+
+/-- **Under the verifier's cap on an audit's duration: no graded audit lasts long enough to re-encode a whole band
+segment from `W` alone**, with no state about `Π₂`. It is the deployment condition of `BandGradedMeetsFamily`
+(`PROTOCOL.md`, "Isolation over the whole graded window"), as counts and as a bound.
+1. **The counts.** Re-encoding a segment of `chainBand (2^9) d` from `W` costs `R(d) = rebuildCalls (2^9) d` sequential
+   `Π₂` calls: `R(5) = 3,057`, `R(12) = 6,578`, and `R(d) ≥ 3,057` for every `d ≥ 5`. The rounds of each row `(t, k)`
+   of `BandGradedMeetsFamily` last under `gradedRoundSpan 5 D_late k t ≤ 240·6 + 3·13 = 1,479` call-times when
+   `D_late ≤ 12`: a round answered at its deadline lasts just under `D + 1` call-times, not `D`.
+2. **The bound.** For every `d ≥ 5`, every domain map injective on the segment's `2^9` indices, every `W`, `Q ≤ 2^128`
+   and every `T ≤ auditCap = 1,505`, programs that know `W` and the domains but nothing about `Π₂` beyond their own
+   queries, each within `T` rounds and `Q` queries, output all `2^9` labels of `chainBand (2^9) d 524288 512 dom` with
+   probability at most `2^-128` over `Π₂`. Segment `s` of the deployed store is such a segment, with domains `dom tag_s`
+   under the per-segment tags and `j ↦ dom salt (s·2^9 + j)` under one global salt (`Pous.BandMulti.segFaithfulCode`,
+   `Pous.BandMulti.segFaithful`).
+
+**The precondition is the verifier's.** A rebuild runs beside the audit on the wall clock, through the rounds and the
+verifier's gaps between them, and no round deadline bounds the gaps. So the bound covers a graded audit only if the
+verifier aborts, without accepting, every audit that lasts more than `auditCap · call_ns` (≈ 363.5 ms at 241.5 µs per
+call) from its first challenge's send to its last answer's receipt. If every round of the worst row answers at its
+deadline, that leaves its 242 gaps `1,505 − 1,479 = 26` call-times (≈ 6.3 ms). The bound rests on the cap, which is the
+proof's reach, not on `R(d)`, which exceeds it.
+
+**What it does not exclude.** It excludes only re-encoding a whole segment from `W` with no state about `Π₂`. Within the
+cap, `W` alone rebuilds a segment's first 253 labels (49%) at `d = 5` and its first 121 (24%) at `d = 12`. `d`
+consecutive held labels restart the chain, so two held runs (10 labels, 2.0% of the segment) at `d = 5`, or four
+(48 labels, 9.4%) at `d = 12`, let a prover re-encode a whole segment within the cap. That gap between the storage held
+at rest and what is present when a challenge arrives is not bounded here. Proof: `PousRebuild.background_rebuild_excluded`
+(`Pous/SecurityProofs/Rebuild/`); here `Pous.SecurityProofs.BackgroundRebuildExcluded`. -/
+def BackgroundRebuildExcluded : Prop :=
+  Pous.Rebuild.rebuildCalls (2 ^ 9) 5 = 3057 ∧ Pous.Rebuild.rebuildCalls (2 ^ 9) 12 = 6578 ∧
+  (∀ d : ℕ, 5 ≤ d → 3057 ≤ Pous.Rebuild.rebuildCalls (2 ^ 9) d) ∧
+  (∀ D_late : ℕ, D_late ≤ 12 → ∀ tk ∈ ([(0, 111), (1, 160), (2, 203), (3, 243)] : List (ℕ × ℕ)),
+    Pous.Rebuild.gradedRoundSpan 5 D_late tk.2 tk.1 ≤ 1479) ∧
+  ∀ d : ℕ, 5 ≤ d → ∀ dom : ℕ → Bits 512, Function.Injective (fun i : Fin (2 ^ 9) => dom i) →
+    ∀ (W : Bits (2 ^ 9 * 524288)) (Q : ℕ), Q ≤ 2 ^ 128 → ∀ T : ℕ, T ≤ Pous.Rebuild.auditCap →
+    ∀ A : Fin (2 ^ 9) → Prog (Pous.Sponge.idealPerm (524288 + (524288 + 512))) (Bits 524288),
+      (∀ i, (A i).Bounded T Q) →
+      pr (fun π : Equiv.Perm (Bits (524288 + (524288 + 512))) =>
+          ∀ i, (A i).run ((Pous.Sponge.idealPerm (524288 + (524288 + 512))).answer π) =
+            ((Pous.BandChain.chainBand (2 ^ 9) d 524288 512 dom).enc W π ()).2 i)
+        ≤ (2⁻¹ : ℝ≥0∞) ^ 128
+
+/-! ### Completeness of the continuous audit
+
+Added on 3 Oct 2026. Statement reviewer: needed. Red team: needed. `ContinuousAudit` bounds what the verifier of
+`Pous/Protocol/Model/Continuous.lean` accepts; `ContinuousComplete` bounds what the same verifier rejects, for a
+responder whose rounds miss at a bounded rate. It takes no named assumption: the miss rate `q` is a parameter.
+-/
+
+/-- **Completeness of the continuous audit.** Fix a configuration first: the scheme, the data `W`, the machine, the
+number of challenges `n`, the arrival schedule `arr`, the deadline `(D, Q)` and the hard deadline `(D_late, Q_late)`.
+Suppose that in this configuration the machine's rounds miss at rate at most `q`: at every setup and after every
+history `h` of fewer than `n` indices, the round after `h` is not a hit (it is rejected, late or wrong) for at most a
+`q` fraction of its uniform index. Then for every tolerance `f₀`, over the setup and `n` uniform indices, the verifier
+rejects (more than `f₀` rounds are not hits) with probability at most the binomial upper tail
+`α = P[Bin(n, q) > f₀] = Σ_{f₀ < m ≤ n} C(n, m)·q^m·(1 − q)^(n − m)`.
+
+`q` is a parameter, not an assumption, and the statement holds for every machine, but a `q` is a rate in one
+configuration. A tighter deadline needs a larger `q`: at a fixed hard deadline the rounds and the histories do not
+depend on `(D, Q)`, and a smaller `(D, Q)` turns some hits into late answers. A machine is deterministic, so the only
+randomness the theorem bounds is the setup and the index draw, and `q` is the worst miss rate over the next index, at
+the worst setup and after the worst history. The model's honest responder, which keeps `C` and answers by lookup, hits
+every round: `q = 0` (`PousContinuous.honest_complete`).
+
+A real responder also misses on its host's clock (scheduling, pauses, the network), which the model leaves out. Those
+misses do not depend on the indices, so conditioning on the challenges before only gives back their run-average rate,
+which is not a valid `q`. A valid `q` is the worst per-round miss probability over the histories the clock can
+produce, such as the rate right after a miss. Bursty or correlated misses set the two far apart: a host that misses 1%
+of its rounds in bursts of mean length 10 (a miss follows a miss with probability `0.9`) has run-average rate `0.01`,
+but at `n = 1000` and `f₀ = 25` it is rejected with probability `0.123`, against `α = 1.56·10⁻⁵` at `q = 0.01`; its
+valid `q` is about `0.9`. Carrying the tail bound from the index draw to the clock's miss process is the same tail
+rule applied outside the Lean model, and is not proved here.
+
+`1 − q` is truncated at `0`, so above `q = 1` the bound is `q^n ≥ 1` when `f₀ < n`, and `0` otherwise, where the
+verifier cannot reject. Proof: `PousContinuous.continuous_complete`; here `Pous.SecurityProofs.ContinuousComplete`. -/
+def ContinuousComplete : Prop :=
+  ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late n : ℕ) (q : ℝ≥0∞) (W : Bits sch.n) (mach : ContMachine sch)
+    (arr : ℕ → ℕ),
+    (∀ (a : M.Ω × sch.Coins) (h : List (Fin sch.B)), h.length < n →
+      let pp := (sch.enc W a.1 a.2).1
+      let C := (sch.enc W a.1 a.2).2
+      pr (fun i =>
+          (contRecord mach D Q D_late Q_late W pp C a.1 arr (contAfter mach D_late W pp C a.1 arr h) i).verdict ≠ .hit)
+        ≤ q) →
+    ∀ f₀ : ℝ,
+      pr (fun x : Outcome sch n =>
+          let pp := (sch.enc W x.1 x.2.1).1
+          let C := (sch.enc W x.1 x.2.1).2
+          ¬ contAccepts f₀ (contRecords mach D Q D_late Q_late W pp C x.1 arr .start (List.ofFn x.2.2)))
+        ≤ ∑ m ∈ (Finset.range (n + 1)).filter (fun m : ℕ => f₀ < m),
+            (n.choose m : ℝ≥0∞) * q ^ m * (1 - q) ^ (n - m)
 
 /-! ### Proved results cited outside the package
 
