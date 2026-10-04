@@ -42,7 +42,8 @@ Everything else is the protocol's (`audit`), the same for every scheme.
 6. **Check.** For each selected tile the prover opens A's rows, B's rows and the leaf. The verifier checks the openings,
    recomputes the tile through the scheme (`encode`, `admissible`, `checked`, `digest`) and compares the leaf. It refuses
    a tile any of whose opened rows fails the scheme's rules (`encode`'s parse, then `admissible`); Lean's
-   `TileCheck.Accepts` asks the same of the tile's weight rows (the protocol's `weightOK`).
+   `TileCheck.Accepts` asks the same of the tile's weight rows (the protocol's `weightOK`), and a good tile
+   (`TileGood`) has every one passing.
 The row and tile trees are framed SHA-256 unless the scheme names another frame hash (`commitment_hash`). `"blake3"` is
 `frame-b3` (`verity.commitments.merkle`), BLAKE3 keyed by the domain id. A leaf's header fills one 64-byte block, so a row
 leaf streams through BLAKE3's chunk tree, for rows that must be committed within a decode step. A node is one compression
@@ -466,6 +467,11 @@ useful    U/(α_A·α_B), glue
     and its excluded rows. `records_root` binds the records and the splits.
   - One exclusion rule, per row: a row that fails the per-row rules stays in the unit, bound as any other, and its cells
     earn no credit. Tiles with credited cells stay drawable, and the audit also opens one tile per excluded row.
+    - A known difference from Lean: the work law excludes a failing weight row and accepts its tiles, while Lean's good
+      tile (`TileGood`) and correct unit (`Correct`) never exclude one, so `TileCheck.Accepts` refuses the tile as
+      `check_tile` does. The work law stays credit-sound there only while an excluded column earns nothing
+      (`test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted`); approaches registry
+      `pouw/work-law-weight-row-exclusion`.
   - **Voluntary rows (V-EX;** research store `theory-pearl-c4-domain.md` §6.13, the assessor's B at 17:32Z**):** the
     record may also give up up to ⌈m/64⌉ A rows (`voluntary_a`), and each weight up to ⌈n/64⌉ B rows (`voluntary_b`,
     the same in every unit of the weight).
