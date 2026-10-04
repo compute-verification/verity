@@ -1685,6 +1685,12 @@ def permalink(reg: dict, ch: str, ts: str) -> str:
     return f"https://{reg['workspace']}/archives/{ch}/p{ts.replace('.', '')}"
 
 
+def no_such_card(verb: str, cid: str) -> str:
+    """The route answers 404 only for an ID with no card: a pending card's status is 200."""
+    return (f"ask-daniel {verb} {cid}: HTTP 404: no card has that ID. It is the UUID `ask-daniel` printed first when it posted "
+            "the card, not the card's Slack ts; for a card posted any other way, record Daniel's thread reply as a ruling")
+
+
 def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
     if ns.verb:
         if not ns.id:
@@ -1701,15 +1707,19 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
                 return _show(AskDaniel().call("POST", f"{path}/resolve", body), ns.json)
             except RouteError as e:
                 if e.status == 404:
-                    raise SlackError(f"ask-daniel resolve {ns.id}: HTTP 404: the resolve route isn't deployed yet (console is building it), "
-                                     "or there is no such card; until it is, the thread reply is the answer: record it as a ruling") from None
+                    raise SlackError(no_such_card("resolve", ns.id)) from None
                 raise
         if ns.dry_run:
             print(f"dry-run: GET {ASK_DANIEL}{path}", file=sys.stderr)
             return 0
         route = AskDaniel()
         polls = math.ceil((DEADLINE_MAX + WAIT_GRACE).total_seconds() / ns.every) if ns.wait else 1
-        return _show(wait_for(lambda: route.call("GET", path), sleep=_sleep, every=ns.every, polls=polls), ns.json)
+        try:
+            return _show(wait_for(lambda: route.call("GET", path), sleep=_sleep, every=ns.every, polls=polls), ns.json)
+        except RouteError as e:
+            if e.status == 404:
+                raise SlackError(no_such_card("status", ns.id)) from None
+            raise
 
     now = _now()
     body = card(ns, reg, now)
