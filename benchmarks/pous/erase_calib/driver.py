@@ -556,7 +556,7 @@ def cmd_soak(args, meta):
     orders = args.orders.split(",")
     for o in orders:
         for w in range(args.warmup):
-            ctx.run(args.gen, args.layout, o, n_max, args.seed, args.seed_run + 10_000_000 + w)
+            ctx.run(args.gen, args.layout, o, n_max, args.seed, args.seed_run + 900_000 + w)
     cols = {k: [] for k in ("t", "order", "idle", "fill_ms", "digest_ms", "gpu_ms", "wall_ms")}
     doc = {"kind": "soak", "meta": meta, "tag": args.tag, "gen": args.gen, "layout": args.layout, "orders": orders,
            "n_blocks": n_max, "bytes": nbytes, "hbm": {"free_bytes_before": free, "total_bytes": total},
