@@ -1,0 +1,1270 @@
+{
+ "entries": {
+  "ArgmaxLeaf_v1{G=50,FIRST=1,FINAL=1}": {
+   "bindings": {
+    "FINAL": 1,
+    "FIRST": 1,
+    "G": 50
+   },
+   "digest": "50c3bf2cc1f31a6018817fa7b9bc251ed657914796fcc9d9d93aa76472b63758",
+   "id": "ArgmaxLeaf_v1"
+  },
+  "ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": {
+   "bindings": {
+    "FINAL": 0,
+    "FIRST": 0,
+    "G": 64
+   },
+   "digest": "50a404a0d6d71876023d14bb096d927693e68839e6fcb0b0a96a2b6f95079a8f",
+   "id": "ArgmaxLeaf_v1"
+  },
+  "ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": {
+   "bindings": {
+    "FINAL": 0,
+    "FIRST": 1,
+    "G": 64
+   },
+   "digest": "da625e2c789c04c394717cbcd778d57455abf846d459f3e27f959797ff976074",
+   "id": "ArgmaxLeaf_v1"
+  },
+  "ArgmaxLeaf_v1{G=8,FIRST=0,FINAL=0}": {
+   "bindings": {
+    "FINAL": 0,
+    "FIRST": 0,
+    "G": 8
+   },
+   "digest": "11ed63474339aa1aa9420fae80aacf605350f45dc083fc25cbf1f2a84f7f3cf0",
+   "id": "ArgmaxLeaf_v1"
+  },
+  "ArgmaxMerge_v1{G=2,IW=12,FINAL=1}": {
+   "bindings": {
+    "FINAL": 1,
+    "G": 2,
+    "IW": 12
+   },
+   "digest": "9399cceb69d2e795c7c247363c0a6d6bceebe7f9bb014168a12ca614eb6647dd",
+   "id": "ArgmaxMerge_v1"
+  },
+  "ArgmaxMerge_v1{G=2,IW=6,FINAL=0}": {
+   "bindings": {
+    "FINAL": 0,
+    "G": 2,
+    "IW": 6
+   },
+   "digest": "6d7133213de68fd04106c3366e668baaa34a85b9b7898c4c209e364e8c7c6699",
+   "id": "ArgmaxMerge_v1"
+  },
+  "ArgmaxMerge_v1{G=20,IW=6,FINAL=0}": {
+   "bindings": {
+    "FINAL": 0,
+    "G": 20,
+    "IW": 6
+   },
+   "digest": "1cab6b7e49b74043e87a98b0302d125c1a5a23a64d6b72f40bd3ffc57d9afac1",
+   "id": "ArgmaxMerge_v1"
+  },
+  "ArgmaxMerge_v1{G=32,IW=12,FINAL=1}": {
+   "bindings": {
+    "FINAL": 1,
+    "G": 32,
+    "IW": 12
+   },
+   "digest": "0e31ae1f386587f2fbc3a50d85c832d1a53c8240599f669850f63952b1a067c0",
+   "id": "ArgmaxMerge_v1"
+  },
+  "ArgmaxMerge_v1{G=38,IW=12,FINAL=1}": {
+   "bindings": {
+    "FINAL": 1,
+    "G": 38,
+    "IW": 12
+   },
+   "digest": "948ca25f6c3109650eeef80a45cabeef4ec88e86215d026a624a9f6e8474b0b4",
+   "id": "ArgmaxMerge_v1"
+  },
+  "ArgmaxMerge_v1{G=4,IW=6,FINAL=1}": {
+   "bindings": {
+    "FINAL": 1,
+    "G": 4,
+    "IW": 6
+   },
+   "digest": "38506a4fec2f331e7d1466ad7c03a440fb6fdd8f8d462787fc3188e546d29279",
+   "id": "ArgmaxMerge_v1"
+  },
+  "ArgmaxMerge_v1{G=6,IW=6,FINAL=0}": {
+   "bindings": {
+    "FINAL": 0,
+    "G": 6,
+    "IW": 6
+   },
+   "digest": "7f24492ee5a115925ddd367a6c5a64d23ad097588f63e26a4aad99c73c1a1864",
+   "id": "ArgmaxMerge_v1"
+  },
+  "ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": {
+   "bindings": {
+    "FINAL": 0,
+    "G": 64,
+    "IW": 6
+   },
+   "digest": "f257c25d73d32b4270d2de63631b2f1a55efdf3113ecfe6fa8b17c892de3750e",
+   "id": "ArgmaxMerge_v1"
+  },
+  "BitAtx1024_v1": {
+   "bindings": {},
+   "digest": "5c5b112d1130ea537ef45d888bb10e833c728bd807bffc566a32a798957b517b",
+   "id": "BitAtx1024_v1"
+  },
+  "BitAtx1025_v1": {
+   "bindings": {},
+   "digest": "50e519d36b44008b5a37c60d3f2ffdd29026c069a41908ad9c90693d5fa4beed",
+   "id": "BitAtx1025_v1"
+  },
+  "BitAtx128256_v1": {
+   "bindings": {},
+   "digest": "725c9aa02f3369881806134c2622a43d3322508ace60d53b71d0b8c8b4c572ed",
+   "id": "BitAtx128256_v1"
+  },
+  "BitAtx151936_v1": {
+   "bindings": {},
+   "digest": "28232513511c3981d62d4523c75fbe7aa52d0d4ae288a786388f57224ae364ba",
+   "id": "BitAtx151936_v1"
+  },
+  "BitAtx152064_v1": {
+   "bindings": {},
+   "digest": "2ca0ca8af45978091657d4feb83840caf59eae335e2543a68ab913fdaaf8a604",
+   "id": "BitAtx152064_v1"
+  },
+  "BitAtx154880_v1": {
+   "bindings": {},
+   "digest": "f1bc9afda3b764515982ec2b505dbe468bac7b6eae858fe203a677f28eecdc3e",
+   "id": "BitAtx154880_v1"
+  },
+  "BitAtx16_v1": {
+   "bindings": {},
+   "digest": "b4de614fe49b503a31ce1ec4dbfba6e80b4efb27bec613c243ee496d21a24573",
+   "id": "BitAtx16_v1"
+  },
+  "BitAtx256000_v1": {
+   "bindings": {},
+   "digest": "1524e0fdcc05174762cfbb4de6e61096ba250bffab5022ccf2a0fc15f6ce4b9d",
+   "id": "BitAtx256000_v1"
+  },
+  "BitAtx3000_v1": {
+   "bindings": {},
+   "digest": "4d1c61f34e7bd1ab881ac41495f32166c5aa1d51bf4018cbf8e13bc4ac546574",
+   "id": "BitAtx3000_v1"
+  },
+  "BitAtx32000_v1": {
+   "bindings": {},
+   "digest": "af102629de8e27996c559ca45e126f49b306d5585e40aa87dbff13fa864b141e",
+   "id": "BitAtx32000_v1"
+  },
+  "BitAtx32064_v1": {
+   "bindings": {},
+   "digest": "1dbb4c4bc220ec1c3cf2fe1adbdd09c1a743f18864696ae9fd8337ee4c4a4825",
+   "id": "BitAtx32064_v1"
+  },
+  "BitAtx32768_v1": {
+   "bindings": {},
+   "digest": "f48e7d73c39ca4d91c535de38be6bfa5695bc720bf06d97465c87f4c5ff61e99",
+   "id": "BitAtx32768_v1"
+  },
+  "BitAtx32_v1": {
+   "bindings": {},
+   "digest": "5b69c7a909ea5b4e0348d135e08caa5cd6e026326a1e4782d4d411fecd38c344",
+   "id": "BitAtx32_v1"
+  },
+  "BitAtx49152_v1": {
+   "bindings": {},
+   "digest": "1bdc33ea6667221ba2a222c592fd0fa3c3a2e0b99fbf5a181c794f0f1533aee4",
+   "id": "BitAtx49152_v1"
+  },
+  "BitAtx50304_v1": {
+   "bindings": {},
+   "digest": "aef6b6cd8f581fd979ea52a54cd0b418a8adb20e6c5192fd812e9bbf6660550c",
+   "id": "BitAtx50304_v1"
+  },
+  "BitAtx64_v1": {
+   "bindings": {},
+   "digest": "39b19c2aaa8d8d11210a4acdfcfa3c9f457dff5e76883e94cffe8b0baf9f953a",
+   "id": "BitAtx64_v1"
+  },
+  "BitXor_v1": {
+   "bindings": {},
+   "digest": "03df5be201ef797c9c41264f1e08b119e9db28cc6b4d16c5ca156fd0a49267ce",
+   "id": "BitXor_v1"
+  },
+  "F32ArgmaxLeaf_v1{G=1,FIRST=0,FINAL=0}": {
+   "bindings": {
+    "FINAL": 0,
+    "FIRST": 0,
+    "G": 1
+   },
+   "digest": "37d20ae89efc12afe938c6c98bfde3d7e46c437601cb4dc3adedf7d18a4d4cf3",
+   "id": "F32ArgmaxLeaf_v1"
+  },
+  "F32ArgmaxLeaf_v1{G=2,FIRST=1,FINAL=1}": {
+   "bindings": {
+    "FINAL": 1,
+    "FIRST": 1,
+    "G": 2
+   },
+   "digest": "3747d379f638576e0176edcd8dbbf2106bc944e7c0b1c53e21e179dde27d4848",
+   "id": "F32ArgmaxLeaf_v1"
+  },
+  "F32ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": {
+   "bindings": {
+    "FINAL": 0,
+    "FIRST": 0,
+    "G": 64
+   },
+   "digest": "eef5266609a3fb8cbd0b087ab0333b90ead98a9227e124f5258c79fcad357533",
+   "id": "F32ArgmaxLeaf_v1"
+  },
+  "F32ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": {
+   "bindings": {
+    "FINAL": 0,
+    "FIRST": 1,
+    "G": 64
+   },
+   "digest": "259cae22b944b3283d50bd479b73b289cbed349b6d3333e8ea4e0ee498eb9997",
+   "id": "F32ArgmaxLeaf_v1"
+  },
+  "F32ArgmaxLeaf_v1{G=8,FIRST=0,FINAL=0}": {
+   "bindings": {
+    "FINAL": 0,
+    "FIRST": 0,
+    "G": 8
+   },
+   "digest": "674c504a05d2f4055a270b8c81dd7b6a471570e92c6532c20f48854e90ce6b20",
+   "id": "F32ArgmaxLeaf_v1"
+  },
+  "F32ArgmaxMerge_v1{G=2,IW=12,FINAL=1}": {
+   "bindings": {
+    "FINAL": 1,
+    "G": 2,
+    "IW": 12
+   },
+   "digest": "c68efbc243e1177845ac5a14cb25e711ff2aa27e770f90f62ba81fa81fe8f718",
+   "id": "F32ArgmaxMerge_v1"
+  },
+  "F32ArgmaxMerge_v1{G=2,IW=6,FINAL=0}": {
+   "bindings": {
+    "FINAL": 0,
+    "G": 2,
+    "IW": 6
+   },
+   "digest": "21213c90baff4637e33bd2de70bd9baf04d3fd2c40396716e37f505a5107eefd",
+   "id": "F32ArgmaxMerge_v1"
+  },
+  "F32ArgmaxMerge_v1{G=2,IW=6,FINAL=1}": {
+   "bindings": {
+    "FINAL": 1,
+    "G": 2,
+    "IW": 6
+   },
+   "digest": "976a5816d88faf884fa2cadf562cb19e1a03e40e951a25f727cbfc10b89d077a",
+   "id": "F32ArgmaxMerge_v1"
+  },
+  "F32ArgmaxMerge_v1{G=20,IW=6,FINAL=0}": {
+   "bindings": {
+    "FINAL": 0,
+    "G": 20,
+    "IW": 6
+   },
+   "digest": "e5db3123588463ffdc2cf2567f38e301a70211a30bf67dbc4f93ae7e35dba1e7",
+   "id": "F32ArgmaxMerge_v1"
+  },
+  "F32ArgmaxMerge_v1{G=32,IW=12,FINAL=1}": {
+   "bindings": {
+    "FINAL": 1,
+    "G": 32,
+    "IW": 12
+   },
+   "digest": "375cb2ae44d218d0b70b5abb90ca81164799a1a8fb9dec7855a560865594094c",
+   "id": "F32ArgmaxMerge_v1"
+  },
+  "F32ArgmaxMerge_v1{G=4,IW=6,FINAL=1}": {
+   "bindings": {
+    "FINAL": 1,
+    "G": 4,
+    "IW": 6
+   },
+   "digest": "0feae63adea84600c2ad5fed420d9acc78aa1689001bc521ef976e8c0f622805",
+   "id": "F32ArgmaxMerge_v1"
+  },
+  "F32ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": {
+   "bindings": {
+    "FINAL": 0,
+    "G": 64,
+    "IW": 6
+   },
+   "digest": "1ef0fa141875332d49108f6a191d46efc455e8c5fd8364ac2b3ac97199786884",
+   "id": "F32ArgmaxMerge_v1"
+  },
+  "F32ArgmaxStage_v1{V=128256,L=0}": {
+   "bindings": {
+    "L": 0,
+    "V": 128256
+   },
+   "digest": "295210c503c41742f7ec642717f8ccb03747c21fa9a71d49f8018a2d0f942a0b",
+   "id": "F32ArgmaxStage_v1"
+  },
+  "F32ArgmaxStage_v1{V=128256,L=1}": {
+   "bindings": {
+    "L": 1,
+    "V": 128256
+   },
+   "digest": "80a3c61172ddfc3052e144f7a3bb0c414ccd28b8d9b757cb6e6bb675e0d03693",
+   "id": "F32ArgmaxStage_v1"
+  },
+  "F32ArgmaxStage_v1{V=128256,L=2}": {
+   "bindings": {
+    "L": 2,
+    "V": 128256
+   },
+   "digest": "64f46d49f41838337dfed1d4b7bf4804cf6fda50f41daa2e3dcfad797917cdc5",
+   "id": "F32ArgmaxStage_v1"
+  },
+  "F32ArgmaxStage_v1{V=2,L=0}": {
+   "bindings": {
+    "L": 0,
+    "V": 2
+   },
+   "digest": "c431eaab3d5422cba18bc60e03909844e2c1c3c6a2d9028ee0d2f6dbf471d511",
+   "id": "F32ArgmaxStage_v1"
+  },
+  "GumbelLaneHead_v1": {
+   "bindings": {},
+   "digest": "827d372650687dc1c6c3fa3c46dda64850ca31f5177398db7e5a2d5aed5331cb",
+   "id": "GumbelLaneHead_v1"
+  },
+  "GumbelLaneRounds_v1": {
+   "bindings": {},
+   "digest": "2a999a122f7c89338ae456fbc0a66b236cd1ac6a0f5e1393221c0ae93788692b",
+   "id": "GumbelLaneRounds_v1"
+  },
+  "GumbelLaneTail_v1": {
+   "bindings": {},
+   "digest": "02794c0140306dd65745e9b79c4f63198612267a0a7f4bfdecd3d0112355b562",
+   "id": "GumbelLaneTail_v1"
+  },
+  "GumbelLane_v1": {
+   "bindings": {},
+   "digest": "a7ae330a5820485870fa7a7d1eb45aa1710f0d330044bd5c8eaf6aa37394205b",
+   "id": "GumbelLane_v1"
+  },
+  "GumbelNoiseGroup_v1{G=2}": {
+   "bindings": {
+    "G": 2
+   },
+   "digest": "d1a9cbfbb5eddad32d4e23e4333fbc260549905d969020469d378737dd8471b4",
+   "id": "GumbelNoiseGroup_v1"
+  },
+  "GumbelNoiseGroup_v1{G=64}": {
+   "bindings": {
+    "G": 64
+   },
+   "digest": "7cc3a2ba9e4d0f50e6b33977bc93580498ae994ffbf33b745fc5e34080a497e3",
+   "id": "GumbelNoiseGroup_v1"
+  },
+  "GumbelNoiseLane_v1": {
+   "bindings": {},
+   "digest": "3dcdc5dfc30b0c1ac127d167648b1071400e103550996ac32b2e7f751b3c6c29",
+   "id": "GumbelNoiseLane_v1"
+  },
+  "GumbelNoiseLane_v2": {
+   "bindings": {},
+   "digest": "3274004d6f39c3ddb338c125f66b04c7a30251413eae1cb6633915547c7ba0a2",
+   "id": "GumbelNoiseLane_v2"
+  },
+  "GumbelNoise_v1{V=128256}": {
+   "bindings": {
+    "V": 128256
+   },
+   "digest": "c88552c869f8fb5b833e1227f1883379451d29ab9b347d7c5916eda0f2199383",
+   "id": "GumbelNoise_v1"
+  },
+  "GumbelNoise_v1{V=2}": {
+   "bindings": {
+    "V": 2
+   },
+   "digest": "51d81e105b48c40ddde67af251b2c635f2dadd61181de7790b4a69cd0f4cbeac",
+   "id": "GumbelNoise_v1"
+  },
+  "GumbelSelectF32GivenGreedy_v1{V=128256}": {
+   "bindings": {
+    "V": 128256
+   },
+   "digest": "8fd5246ed225180d19b6d92ae289aed3514c0b97ba152ad81966b5bfda020561",
+   "id": "GumbelSelectF32GivenGreedy_v1"
+  },
+  "GumbelSelectF32GivenGreedy_v1{V=151936}": {
+   "bindings": {
+    "V": 151936
+   },
+   "digest": "626683f2571faed4c66fbc1292d5daf6c5081d88644a068530054892ab169fd7",
+   "id": "GumbelSelectF32GivenGreedy_v1"
+  },
+  "GumbelSelectF32GivenGreedy_v1{V=152064}": {
+   "bindings": {
+    "V": 152064
+   },
+   "digest": "1b11f282a29846d2b581145e852e9540cc919b93534d5a0c298e7612086ad539",
+   "id": "GumbelSelectF32GivenGreedy_v1"
+  },
+  "GumbelSelectF32GivenGreedy_v1{V=154880}": {
+   "bindings": {
+    "V": 154880
+   },
+   "digest": "18660351b0a3fde13674e23ea02daa3d3a73150188b9b5953123f27d4dbc394e",
+   "id": "GumbelSelectF32GivenGreedy_v1"
+  },
+  "GumbelSelectF32GivenGreedy_v1{V=16}": {
+   "bindings": {
+    "V": 16
+   },
+   "digest": "f6648472fd278fc6fa362b3c3d965ce7edd262c9d2cfa3787e53758f7250bc29",
+   "id": "GumbelSelectF32GivenGreedy_v1"
+  },
+  "GumbelSelectF32GivenGreedy_v1{V=256000}": {
+   "bindings": {
+    "V": 256000
+   },
+   "digest": "cd36440d7e8dd146040abdf16335df844e829516921b4fc3db092955fac47c63",
+   "id": "GumbelSelectF32GivenGreedy_v1"
+  },
+  "GumbelSelectF32GivenGreedy_v1{V=32000}": {
+   "bindings": {
+    "V": 32000
+   },
+   "digest": "cdc669d762264e445d891fd152fb4f4122995fb136d296463b9c612bf2898d31",
+   "id": "GumbelSelectF32GivenGreedy_v1"
+  },
+  "GumbelSelectF32GivenGreedy_v1{V=32064}": {
+   "bindings": {
+    "V": 32064
+   },
+   "digest": "e6f9e25956a848c7a02175e0f476b4d25678dee08dcaa4a4a7d1a66747753720",
+   "id": "GumbelSelectF32GivenGreedy_v1"
+  },
+  "GumbelSelectF32GivenGreedy_v1{V=32768}": {
+   "bindings": {
+    "V": 32768
+   },
+   "digest": "3dc5b8879513e99b21c43f6425b5a846c522b857756365b429779d0b1794566e",
+   "id": "GumbelSelectF32GivenGreedy_v1"
+  },
+  "GumbelSelectF32GivenGreedy_v1{V=49152}": {
+   "bindings": {
+    "V": 49152
+   },
+   "digest": "e6f5150b0d542fdea5877fdb53469c4cf83971a7509cda9f4475e810ff1b479d",
+   "id": "GumbelSelectF32GivenGreedy_v1"
+  },
+  "GumbelSelectF32GivenGreedy_v1{V=50304}": {
+   "bindings": {
+    "V": 50304
+   },
+   "digest": "57b75fdabcbb09f45c64ea5d7e2e183d61e1b2e6817b8d7917c585887931f767",
+   "id": "GumbelSelectF32GivenGreedy_v1"
+  },
+  "GumbelSelectF32_v1{V=1024}": {
+   "bindings": {
+    "V": 1024
+   },
+   "digest": "e9bd5c82a0f628f310c4cdea453944411dbcc837f42e71f15870e3a858bc48ca",
+   "id": "GumbelSelectF32_v1"
+  },
+  "GumbelSelectF32_v1{V=1025}": {
+   "bindings": {
+    "V": 1025
+   },
+   "digest": "4e01cd416abbcbb6060c9056e42ffd94fed09d1d67b871e674ac7811d67d2131",
+   "id": "GumbelSelectF32_v1"
+  },
+  "GumbelSelectF32_v1{V=128256}": {
+   "bindings": {
+    "V": 128256
+   },
+   "digest": "92a26b786c14ab82f484097b16b78e7f64341201bcc6f18e45f29c34221df6e1",
+   "id": "GumbelSelectF32_v1"
+  },
+  "GumbelSelectF32_v1{V=151936}": {
+   "bindings": {
+    "V": 151936
+   },
+   "digest": "d4fe312d81bdb913041880c06f973dfd13c751f57ba67fe0e1c1d792bc9af426",
+   "id": "GumbelSelectF32_v1"
+  },
+  "GumbelSelectF32_v1{V=152064}": {
+   "bindings": {
+    "V": 152064
+   },
+   "digest": "03db07e03bd0c76253aed172b50294f1bd9870f7cdd974691d4449d2a674bb36",
+   "id": "GumbelSelectF32_v1"
+  },
+  "GumbelSelectF32_v1{V=154880}": {
+   "bindings": {
+    "V": 154880
+   },
+   "digest": "e44ba8b2b4b73282b4311a3161bd3007caeade84c6c5b3d492d391e9ee22e6e0",
+   "id": "GumbelSelectF32_v1"
+  },
+  "GumbelSelectF32_v1{V=16}": {
+   "bindings": {
+    "V": 16
+   },
+   "digest": "8572dabeba2446702c6935ec30422b5b36f846e100d7e53c91f6d79f02ad7410",
+   "id": "GumbelSelectF32_v1"
+  },
+  "GumbelSelectF32_v1{V=256000}": {
+   "bindings": {
+    "V": 256000
+   },
+   "digest": "66b2f4bd9d7753e00e7b7d5faeab75982c92a3a6d7a713999c50b24f211dbcae",
+   "id": "GumbelSelectF32_v1"
+  },
+  "GumbelSelectF32_v1{V=3000}": {
+   "bindings": {
+    "V": 3000
+   },
+   "digest": "4803eab0f2abf2bf8a98e8b003acd793f65762fceb1865f0a2288ef4f9e178c4",
+   "id": "GumbelSelectF32_v1"
+  },
+  "GumbelSelectF32_v1{V=32000}": {
+   "bindings": {
+    "V": 32000
+   },
+   "digest": "369af14479e37ebe71fac4289735ce472441cf64a3339453959256420afc5cb6",
+   "id": "GumbelSelectF32_v1"
+  },
+  "GumbelSelectF32_v1{V=32064}": {
+   "bindings": {
+    "V": 32064
+   },
+   "digest": "309ebae24b9cc90704ace7a22dada77d5e8c9b8fe468af6235d15c1305f96c87",
+   "id": "GumbelSelectF32_v1"
+  },
+  "GumbelSelectF32_v1{V=32768}": {
+   "bindings": {
+    "V": 32768
+   },
+   "digest": "a4bd89534e7cb3ddbe2785f66e67ddf2a61fd0ccc68a62ea8528daf55d4b0aa5",
+   "id": "GumbelSelectF32_v1"
+  },
+  "GumbelSelectF32_v1{V=49152}": {
+   "bindings": {
+    "V": 49152
+   },
+   "digest": "d9e66525d4d8500eb141e201e85c58df22d4dd88175227686026f752028e1e62",
+   "id": "GumbelSelectF32_v1"
+  },
+  "GumbelSelectF32_v1{V=50304}": {
+   "bindings": {
+    "V": 50304
+   },
+   "digest": "12376f41cc329693e30fe0a3de0f651f6ed585c5476d43f7e5d18922e2753492",
+   "id": "GumbelSelectF32_v1"
+  },
+  "GumbelSelectF32_v1{V=64}": {
+   "bindings": {
+    "V": 64
+   },
+   "digest": "477ac30812f0891081dfb68de4b4fb0c0e7f7ffc99ea27b420b4ff303f6f1671",
+   "id": "GumbelSelectF32_v1"
+  },
+  "GumbelSelectStep_v1": {
+   "bindings": {},
+   "digest": "e2966f8af355f262181e0f3e570f42ccfbd720fe5fbacc0f7316aa0dc0429afa",
+   "id": "GumbelSelectStep_v1"
+  },
+  "GumbelSetup_v1{N=2}": {
+   "bindings": {
+    "N": 2
+   },
+   "digest": "b12ff48c97e981d2aa344a20238b3c2154a71d5c50763458d03870f3d24d45fe",
+   "id": "GumbelSetup_v1"
+  },
+  "GumbelSetup_v1{N=64}": {
+   "bindings": {
+    "N": 64
+   },
+   "digest": "7304c7d2be547d9994812bb65c111653d392e56e2b04999197e26f128048c86a",
+   "id": "GumbelSetup_v1"
+  },
+  "GumbelStreamKeyHead_v1": {
+   "bindings": {},
+   "digest": "035cc7407540c3b736b649b698fd78df7ffcefdf66f9829af0fac8fd68a72f61",
+   "id": "GumbelStreamKeyHead_v1"
+  },
+  "GumbelStreamKeyTail_v1": {
+   "bindings": {},
+   "digest": "bd14d09d019a03c6a50da9a37b6fe585d0fe55269528cde9ea8f667a2c5789d4",
+   "id": "GumbelStreamKeyTail_v1"
+  },
+  "GumbelStreamKey_v1": {
+   "bindings": {},
+   "digest": "dfa19f1f89962f387f832596b342a7b6622cf09e43ae0a3b4f8e4d39e9353a91",
+   "id": "GumbelStreamKey_v1"
+  },
+  "GumbelStreamKey_v2": {
+   "bindings": {},
+   "digest": "f7770b94e8530a32f5652181bb5111fb3cb5ec246a21cd25b9eb5e6f1d210a25",
+   "id": "GumbelStreamKey_v2"
+  },
+  "I32ToF32_v1": {
+   "bindings": {},
+   "digest": "e17faec9085820cc8e06cfbc00efa5d8129fb9320da6f7e8c30ed8df17a7ea85",
+   "id": "I32ToF32_v1"
+  },
+  "NvLogf_v1": {
+   "bindings": {},
+   "digest": "69ed834166b564c9d3bb3da7bff91d3c985fc0fc4e1afe5dc32e17c64155f28a",
+   "id": "NvLogf_v1"
+  },
+  "NvLogf_v2": {
+   "bindings": {},
+   "digest": "5a07cc4259eabff5730dc407b620a67b34acced32d82b553318ebd6398869bcf",
+   "id": "NvLogf_v2"
+  },
+  "SelectBit_v1": {
+   "bindings": {},
+   "digest": "79868f1fd5ac37f4452d9326edf54e2b65a36ec6896b23f87b4e8dcf7646f2bf",
+   "id": "SelectBit_v1"
+  },
+  "TemperatureLane_v1": {
+   "bindings": {},
+   "digest": "8726927d6f1a2fd9818a5680b2912a37e07e2a7e99338b44ea46897d41bbbbcd",
+   "id": "TemperatureLane_v1"
+  },
+  "TemperatureScaleGivenGreedy_v1{V=128256}": {
+   "bindings": {
+    "V": 128256
+   },
+   "digest": "3f3fb34524cd43e3b24a9c6da8b7e43d80c6a794a97fae6098afc64251f0d9d2",
+   "id": "TemperatureScaleGivenGreedy_v1"
+  },
+  "TemperatureScaleGivenGreedy_v1{V=151936}": {
+   "bindings": {
+    "V": 151936
+   },
+   "digest": "fce0954234f41a36379c489e0275f32091fa1baa23b063bd4a0eb1c6e74d872a",
+   "id": "TemperatureScaleGivenGreedy_v1"
+  },
+  "TemperatureScaleGivenGreedy_v1{V=152064}": {
+   "bindings": {
+    "V": 152064
+   },
+   "digest": "89d20000a585e151f99712e98494963484a434e790ee3817218b08b56ec8c1a7",
+   "id": "TemperatureScaleGivenGreedy_v1"
+  },
+  "TemperatureScaleGivenGreedy_v1{V=154880}": {
+   "bindings": {
+    "V": 154880
+   },
+   "digest": "18c344eacc56b869f762063720608d144b155908246f805e451bf40e3792b318",
+   "id": "TemperatureScaleGivenGreedy_v1"
+  },
+  "TemperatureScaleGivenGreedy_v1{V=16}": {
+   "bindings": {
+    "V": 16
+   },
+   "digest": "b04c8d1edcfe5fa78faea80b52467df06e399e280b24d33fda6fbe9db4d596ea",
+   "id": "TemperatureScaleGivenGreedy_v1"
+  },
+  "TemperatureScaleGivenGreedy_v1{V=256000}": {
+   "bindings": {
+    "V": 256000
+   },
+   "digest": "be4b1c43bbba8a4aec64ba2c64a7dd532d83fafb42c3911397a4231834e50682",
+   "id": "TemperatureScaleGivenGreedy_v1"
+  },
+  "TemperatureScaleGivenGreedy_v1{V=32000}": {
+   "bindings": {
+    "V": 32000
+   },
+   "digest": "5205237d062d496b5e49c5e073690f293300e3ac6d4d20025077a96c19f9f877",
+   "id": "TemperatureScaleGivenGreedy_v1"
+  },
+  "TemperatureScaleGivenGreedy_v1{V=32064}": {
+   "bindings": {
+    "V": 32064
+   },
+   "digest": "55bb64e4de542bdbfeddb32f79fbef55cee796c87622434dcd0473be8448b42c",
+   "id": "TemperatureScaleGivenGreedy_v1"
+  },
+  "TemperatureScaleGivenGreedy_v1{V=32768}": {
+   "bindings": {
+    "V": 32768
+   },
+   "digest": "a38e804665d0bb9682fb4f1c7e809479ab5eaa2a6a5204ffbac9ffb0b483dcdd",
+   "id": "TemperatureScaleGivenGreedy_v1"
+  },
+  "TemperatureScaleGivenGreedy_v1{V=49152}": {
+   "bindings": {
+    "V": 49152
+   },
+   "digest": "78467197522c1876ed69b3f91f45a8a22fbc9fe84d7d25a5dd911aef4aa94cff",
+   "id": "TemperatureScaleGivenGreedy_v1"
+  },
+  "TemperatureScaleGivenGreedy_v1{V=50304}": {
+   "bindings": {
+    "V": 50304
+   },
+   "digest": "4c4a8721053604481f0ba8c23dcf157f485d95993476074fc05842f538a2e231",
+   "id": "TemperatureScaleGivenGreedy_v1"
+  },
+  "TemperatureScale_v1{V=1024}": {
+   "bindings": {
+    "V": 1024
+   },
+   "digest": "86de3c9425caaa2c5a936ef3cfe53a45e1403e2a30049dedc3ef6e2a92309965",
+   "id": "TemperatureScale_v1"
+  },
+  "TemperatureScale_v1{V=1025}": {
+   "bindings": {
+    "V": 1025
+   },
+   "digest": "d68690f1d24040d0786836e4ef384ece83f62a23887cc6b1e541a60d0631b571",
+   "id": "TemperatureScale_v1"
+  },
+  "TemperatureScale_v1{V=128256}": {
+   "bindings": {
+    "V": 128256
+   },
+   "digest": "e23764fa6314c92fc5295a32d52168932616b4870860d4e7a78dabe591404b5a",
+   "id": "TemperatureScale_v1"
+  },
+  "TemperatureScale_v1{V=151936}": {
+   "bindings": {
+    "V": 151936
+   },
+   "digest": "60056bb47ec64a430c11acbadaa60854e4b47cc6ded5ff34a24138d11d1293c0",
+   "id": "TemperatureScale_v1"
+  },
+  "TemperatureScale_v1{V=152064}": {
+   "bindings": {
+    "V": 152064
+   },
+   "digest": "e66fb7c63be076cef796bc44d54220dd24add9070499519e44849093837c2572",
+   "id": "TemperatureScale_v1"
+  },
+  "TemperatureScale_v1{V=154880}": {
+   "bindings": {
+    "V": 154880
+   },
+   "digest": "842ea06b4beae415d0dd9456020744407cf453411fdfcb06e13e7a8bbc8d698d",
+   "id": "TemperatureScale_v1"
+  },
+  "TemperatureScale_v1{V=16}": {
+   "bindings": {
+    "V": 16
+   },
+   "digest": "758f9188aa4bbb0dbc3b3d3bcd53ac3bbee8b4de723b452cb902bbc6d536c3c9",
+   "id": "TemperatureScale_v1"
+  },
+  "TemperatureScale_v1{V=256000}": {
+   "bindings": {
+    "V": 256000
+   },
+   "digest": "8c81e2da19043528b54a68b74156dd2d64b1e50352ff6540b91b4ad1c477f581",
+   "id": "TemperatureScale_v1"
+  },
+  "TemperatureScale_v1{V=3000}": {
+   "bindings": {
+    "V": 3000
+   },
+   "digest": "6bdacae22ddfefb50796e0b39de3face98f51e6a8aadbd90c9287fc76463d474",
+   "id": "TemperatureScale_v1"
+  },
+  "TemperatureScale_v1{V=32000}": {
+   "bindings": {
+    "V": 32000
+   },
+   "digest": "545fa269c6dccd52b2425d89c1000f606e91ae52f43c0aecc31792f184818d11",
+   "id": "TemperatureScale_v1"
+  },
+  "TemperatureScale_v1{V=32064}": {
+   "bindings": {
+    "V": 32064
+   },
+   "digest": "9277d0c0b69f6c7b05183ea61684d7a9fbd66a79da88d9a0f309cf6d262e44b5",
+   "id": "TemperatureScale_v1"
+  },
+  "TemperatureScale_v1{V=32768}": {
+   "bindings": {
+    "V": 32768
+   },
+   "digest": "7f57ab37ef6fc0cf389a3d12ee657213d1c4bd231135e6f7bc262eee5fda4532",
+   "id": "TemperatureScale_v1"
+  },
+  "TemperatureScale_v1{V=49152}": {
+   "bindings": {
+    "V": 49152
+   },
+   "digest": "d290bbab519416bc96252ce54222558585b4907c9aa425831039c20ca9896c73",
+   "id": "TemperatureScale_v1"
+  },
+  "TemperatureScale_v1{V=50304}": {
+   "bindings": {
+    "V": 50304
+   },
+   "digest": "f73d985fb1925510142eae134103b926b2ec585f68d655de819a12d06474dd08",
+   "id": "TemperatureScale_v1"
+  },
+  "TemperatureScale_v1{V=64}": {
+   "bindings": {
+    "V": 64
+   },
+   "digest": "eabeebee8ff870d9c8b50cbad4601797c4ab9af71d9848c2f9e8b54a4db19819",
+   "id": "TemperatureScale_v1"
+  },
+  "TokenSelectStage_v1{V=128256,L=0}": {
+   "bindings": {
+    "L": 0,
+    "V": 128256
+   },
+   "digest": "648718d0e20352e7a98a21348105e904cbcc4af18358a6b1a73b1d15e25e17e1",
+   "id": "TokenSelectStage_v1"
+  },
+  "TokenSelectStage_v1{V=128256,L=1}": {
+   "bindings": {
+    "L": 1,
+    "V": 128256
+   },
+   "digest": "a04bbc2682f788b6935b54cfb67d414b58f4cc5305820050a89873f726857b86",
+   "id": "TokenSelectStage_v1"
+  },
+  "TokenSelectStage_v1{V=128256,L=2}": {
+   "bindings": {
+    "L": 2,
+    "V": 128256
+   },
+   "digest": "a0d0163c27d39f6458710f5433807f758afa31daf36c2351a46ecc67b807ca7f",
+   "id": "TokenSelectStage_v1"
+  },
+  "TokenSelectStage_v1{V=151936,L=0}": {
+   "bindings": {
+    "L": 0,
+    "V": 151936
+   },
+   "digest": "f7d76136c93aabc080b160b8c72300f0751d2a6ae3e5a8ff75bd70e51679606d",
+   "id": "TokenSelectStage_v1"
+  },
+  "TokenSelectStage_v1{V=151936,L=1}": {
+   "bindings": {
+    "L": 1,
+    "V": 151936
+   },
+   "digest": "1b77cb4eb05c5722f11da2dc090b643a65789bb34a0bf474a73c621a1380aae2",
+   "id": "TokenSelectStage_v1"
+  },
+  "TokenSelectStage_v1{V=151936,L=2}": {
+   "bindings": {
+    "L": 2,
+    "V": 151936
+   },
+   "digest": "df6e89fe825b6d36c19edc8a12547bd1064a31b5805dee482951c1420a0344bc",
+   "id": "TokenSelectStage_v1"
+  },
+  "TokenSelectStage_v1{V=200,L=0}": {
+   "bindings": {
+    "L": 0,
+    "V": 200
+   },
+   "digest": "d7ac1a5ea73701013665b447bfade5837de406b2bfba318ba5a2d2f0ef151cff",
+   "id": "TokenSelectStage_v1"
+  },
+  "TokenSelectStage_v1{V=200,L=1}": {
+   "bindings": {
+    "L": 1,
+    "V": 200
+   },
+   "digest": "2c20a30fafbe38f746964d76d9668840a88d5e50697a8865014df7963d64fca5",
+   "id": "TokenSelectStage_v1"
+  },
+  "TokenSelectStage_v1{V=50,L=0}": {
+   "bindings": {
+    "L": 0,
+    "V": 50
+   },
+   "digest": "9ba6167d2b2f8774c15d5a30876a1e8f0be3bf46dca4f072c6ac51fbb97490f2",
+   "id": "TokenSelectStage_v1"
+  },
+  "TopPKeepWord_v1{V=128256,S=32}": {
+   "bindings": {
+    "S": 32,
+    "V": 128256
+   },
+   "digest": "3805204b5982305d2fd32f920a53b36ca78d4940205e5ffaaa0b1e0b9b52ed62",
+   "id": "TopPKeepWord_v1"
+  },
+  "TopPKeepWord_v1{V=16,S=4}": {
+   "bindings": {
+    "S": 4,
+    "V": 16
+   },
+   "digest": "2a256747cfcc448ccd16c0135b53d417a98bec56d09a804eef1f0ebfa5bdf3d2",
+   "id": "TopPKeepWord_v1"
+  },
+  "TopPMaskStep_v1{V=1024}": {
+   "bindings": {
+    "V": 1024
+   },
+   "digest": "a0ffec5f40737b3f76d2300ff7204dbfb03bbf9c112e7fcf88fe7a2858e7de23",
+   "id": "TopPMaskStep_v1"
+  },
+  "TopPMaskStep_v1{V=1025}": {
+   "bindings": {
+    "V": 1025
+   },
+   "digest": "f4f4ea7eff153728f4244fea75fc76086323bd3a2f554ecba76ddc5260b6e0a0",
+   "id": "TopPMaskStep_v1"
+  },
+  "TopPMaskStep_v1{V=128256}": {
+   "bindings": {
+    "V": 128256
+   },
+   "digest": "6b5bbc28d7181bfb9e41bb4f7b572867f443df007dadc0efea741dce1e838b9d",
+   "id": "TopPMaskStep_v1"
+  },
+  "TopPMaskStep_v1{V=151936}": {
+   "bindings": {
+    "V": 151936
+   },
+   "digest": "51e2d30082ec56d4cc5862709cabf556b584e31b0781f2f84781c48040094af8",
+   "id": "TopPMaskStep_v1"
+  },
+  "TopPMaskStep_v1{V=152064}": {
+   "bindings": {
+    "V": 152064
+   },
+   "digest": "ef81315a2ddbd50a14f4162235172c57010c4cee9e2a3b8a37b8f6eacd5a66e6",
+   "id": "TopPMaskStep_v1"
+  },
+  "TopPMaskStep_v1{V=154880}": {
+   "bindings": {
+    "V": 154880
+   },
+   "digest": "0eae02c579fe153fd858dedc8adccff989e1a2366644a52550fe42e842fb419a",
+   "id": "TopPMaskStep_v1"
+  },
+  "TopPMaskStep_v1{V=16}": {
+   "bindings": {
+    "V": 16
+   },
+   "digest": "2c0383b83254caba2bf107da6f100b0f08d978cc2430b1ec430e300fcafbba2d",
+   "id": "TopPMaskStep_v1"
+  },
+  "TopPMaskStep_v1{V=256000}": {
+   "bindings": {
+    "V": 256000
+   },
+   "digest": "750df8e92d820742531d43ef340627a7a0d25355945471a0e9d431115045248d",
+   "id": "TopPMaskStep_v1"
+  },
+  "TopPMaskStep_v1{V=3000}": {
+   "bindings": {
+    "V": 3000
+   },
+   "digest": "714064789dda132fa0c998b0bce3989437c7d553eace9aecc5bcc0531c59535a",
+   "id": "TopPMaskStep_v1"
+  },
+  "TopPMaskStep_v1{V=32000}": {
+   "bindings": {
+    "V": 32000
+   },
+   "digest": "b59791b4624fa123e13c5af3030b415b3c9cbe2389fc596171831e045da55c54",
+   "id": "TopPMaskStep_v1"
+  },
+  "TopPMaskStep_v1{V=32064}": {
+   "bindings": {
+    "V": 32064
+   },
+   "digest": "1f7da2c1e2c7087a91cfcf1d72138f586cacd369546d357fdfbf762eea03ec44",
+   "id": "TopPMaskStep_v1"
+  },
+  "TopPMaskStep_v1{V=32768}": {
+   "bindings": {
+    "V": 32768
+   },
+   "digest": "d46e5014681e29f82f0950253f73fb3a0d014a53119fee92d846369b744e80e0",
+   "id": "TopPMaskStep_v1"
+  },
+  "TopPMaskStep_v1{V=49152}": {
+   "bindings": {
+    "V": 49152
+   },
+   "digest": "1ec021002f1f90525a82d935c9663ea0771fd85d4a1c687868f45c17586b77a3",
+   "id": "TopPMaskStep_v1"
+  },
+  "TopPMaskStep_v1{V=50304}": {
+   "bindings": {
+    "V": 50304
+   },
+   "digest": "1eef61771ec3a91ddffb5e89d68aa1dfe6cacda638b19faf051a76a2aea4f7b5",
+   "id": "TopPMaskStep_v1"
+  },
+  "TopPMaskStep_v1{V=64}": {
+   "bindings": {
+    "V": 64
+   },
+   "digest": "d46aae2094bcd710e7f1366ee990273124a1ce2f61bc6e367c69e31c9a74c34a",
+   "id": "TopPMaskStep_v1"
+  },
+  "TopPMaskWordx1024_v1": {
+   "bindings": {},
+   "digest": "fc44c76f943259a094f47eefe0ab270d6a3b2c87c0ddb6c6438fabde434bda0c",
+   "id": "TopPMaskWordx1024_v1"
+  },
+  "TopPMaskWordx1025_v1": {
+   "bindings": {},
+   "digest": "374d2aa99f12a1dd943af30c239973a564d402106157a23266aa47e7a07add47",
+   "id": "TopPMaskWordx1025_v1"
+  },
+  "TopPMaskWordx128256_v1": {
+   "bindings": {},
+   "digest": "ee45e1d38ad9e265e7751d6e8afd338ada01f2fce5fba71ebe45f9443dcdf871",
+   "id": "TopPMaskWordx128256_v1"
+  },
+  "TopPMaskWordx151936_v1": {
+   "bindings": {},
+   "digest": "be0a57e723a8ca70382f09092303827f4934d75f64943435ee62cc92ff14dd54",
+   "id": "TopPMaskWordx151936_v1"
+  },
+  "TopPMaskWordx152064_v1": {
+   "bindings": {},
+   "digest": "5788b2d0cd6494a83f4c18848f3a5f62db6d8028c86017fb842fdaccf0227ecd",
+   "id": "TopPMaskWordx152064_v1"
+  },
+  "TopPMaskWordx154880_v1": {
+   "bindings": {},
+   "digest": "34c5dfd92eebe422177564cecb1178ed16e25d6a9d9c39a1b861d5e9aa363c29",
+   "id": "TopPMaskWordx154880_v1"
+  },
+  "TopPMaskWordx16_v1": {
+   "bindings": {},
+   "digest": "2cd917f27161e75ad24885a90c07947341441993ab734ca80589315ca639a972",
+   "id": "TopPMaskWordx16_v1"
+  },
+  "TopPMaskWordx256000_v1": {
+   "bindings": {},
+   "digest": "d01d5fb0db64c67086b1992438045d27ca69aff51d525027bb23068e23335c1a",
+   "id": "TopPMaskWordx256000_v1"
+  },
+  "TopPMaskWordx3000_v1": {
+   "bindings": {},
+   "digest": "fe92c80a9b33bc0e88bbb2fec770373834d710a0c96cc5657e73a0a5b5e44a93",
+   "id": "TopPMaskWordx3000_v1"
+  },
+  "TopPMaskWordx32000_v1": {
+   "bindings": {},
+   "digest": "76ec21e557f577b0a94279dd5103eb0f6b3926b710e265403810778451e4cd15",
+   "id": "TopPMaskWordx32000_v1"
+  },
+  "TopPMaskWordx32064_v1": {
+   "bindings": {},
+   "digest": "adda8d51e5468fca018ff3f02fe98e6a1b383084f4fd98b881d5843a99418267",
+   "id": "TopPMaskWordx32064_v1"
+  },
+  "TopPMaskWordx32768_v1": {
+   "bindings": {},
+   "digest": "8152e36bc8da66bdb6375748d751e9321b841431819906910e49d5f41375fd45",
+   "id": "TopPMaskWordx32768_v1"
+  },
+  "TopPMaskWordx49152_v1": {
+   "bindings": {},
+   "digest": "6258d2345e5038f4afbc3040364d0449f49ec3035533f457f71336272d4ec413",
+   "id": "TopPMaskWordx49152_v1"
+  },
+  "TopPMaskWordx50304_v1": {
+   "bindings": {},
+   "digest": "38203468ff37190e462ed91995ae89c58eee08649cd6f343d6e6fac2635cbb69",
+   "id": "TopPMaskWordx50304_v1"
+  },
+  "TopPMaskWordx64_v1": {
+   "bindings": {},
+   "digest": "8dbb53851177c489a69f4507780f3ed911549a1a572013a2cd0d7056bed58c5a",
+   "id": "TopPMaskWordx64_v1"
+  },
+  "TopPMask_v1{V=1024}": {
+   "bindings": {
+    "V": 1024
+   },
+   "digest": "39e2c8385ab461021d7b4ace60c913afb6fe4670ad4921782b579e8fc9354120",
+   "id": "TopPMask_v1"
+  },
+  "TopPMask_v1{V=1025}": {
+   "bindings": {
+    "V": 1025
+   },
+   "digest": "39d4c33e8090a1f998aac7f1fb32754dd872792338f5f34a634722fc392209f4",
+   "id": "TopPMask_v1"
+  },
+  "TopPMask_v1{V=128256}": {
+   "bindings": {
+    "V": 128256
+   },
+   "digest": "7a907a1fc93f641a5e031b54709b62f0178f490d52c941cf6ead9f3965955073",
+   "id": "TopPMask_v1"
+  },
+  "TopPMask_v1{V=151936}": {
+   "bindings": {
+    "V": 151936
+   },
+   "digest": "1904fdda3ed6346a8c9ece87a39bb699a6885eea511660e234a58a0ad78064af",
+   "id": "TopPMask_v1"
+  },
+  "TopPMask_v1{V=152064}": {
+   "bindings": {
+    "V": 152064
+   },
+   "digest": "3e7b659c9eecf6689a9c245b613fc239bd3a9c2c75194ac2652bbbdfd336436f",
+   "id": "TopPMask_v1"
+  },
+  "TopPMask_v1{V=154880}": {
+   "bindings": {
+    "V": 154880
+   },
+   "digest": "4190176bafb421a09714a4d9b8da672ef91fef5ccc6afd81a9d14af743f1b21b",
+   "id": "TopPMask_v1"
+  },
+  "TopPMask_v1{V=16}": {
+   "bindings": {
+    "V": 16
+   },
+   "digest": "521a4954bcac2d305a602c67cde85ac29455409415264d90ebdf1ee997f0dc7f",
+   "id": "TopPMask_v1"
+  },
+  "TopPMask_v1{V=256000}": {
+   "bindings": {
+    "V": 256000
+   },
+   "digest": "574832238c6267b8210753e95c349b3d33593d8198dc4206a4879fb2c47bba81",
+   "id": "TopPMask_v1"
+  },
+  "TopPMask_v1{V=3000}": {
+   "bindings": {
+    "V": 3000
+   },
+   "digest": "a6e9635221a24fa90a350b19b7f314dc3ab6d0f29f50715e721b51d2df365d07",
+   "id": "TopPMask_v1"
+  },
+  "TopPMask_v1{V=32000}": {
+   "bindings": {
+    "V": 32000
+   },
+   "digest": "9d315b48fa5821d63f1c17da84f48f00d9473520eab29f2cd8b2f6634f4795dd",
+   "id": "TopPMask_v1"
+  },
+  "TopPMask_v1{V=32064}": {
+   "bindings": {
+    "V": 32064
+   },
+   "digest": "e99bf0c34a8c4baa30cb8202bdfbd48c17a2961804c6031f005f3f4f1d443b58",
+   "id": "TopPMask_v1"
+  },
+  "TopPMask_v1{V=32768}": {
+   "bindings": {
+    "V": 32768
+   },
+   "digest": "2fd6d0dad372084efeac68e3a16ed991bcfa745e9b2e1affd83e13b82c883586",
+   "id": "TopPMask_v1"
+  },
+  "TopPMask_v1{V=49152}": {
+   "bindings": {
+    "V": 49152
+   },
+   "digest": "bb35de0fbef6706aea9f470335f3db65018d1d20888185d5bda65ba35bc8492c",
+   "id": "TopPMask_v1"
+  },
+  "TopPMask_v1{V=50304}": {
+   "bindings": {
+    "V": 50304
+   },
+   "digest": "62fe3d8482bb4b337cb6d3fe38d415704efc2aa52637c6f19e225f85534a9434",
+   "id": "TopPMask_v1"
+  },
+  "TopPMask_v1{V=64}": {
+   "bindings": {
+    "V": 64
+   },
+   "digest": "29c5652a39b012f1d5da31c9b14fc27710d93b0fb746f79440b1bb9af0c4b92c",
+   "id": "TopPMask_v1"
+  },
+  "TopPMask_v2{V=128256,S=32}": {
+   "bindings": {
+    "S": 32,
+    "V": 128256
+   },
+   "digest": "6d0a66308aad58c1ccf5f725edb4a51c5a071883a7b1e0d10999dc253e9c3b83",
+   "id": "TopPMask_v2"
+  },
+  "TopPMask_v2{V=16,S=4}": {
+   "bindings": {
+    "S": 4,
+    "V": 16
+   },
+   "digest": "fcb2c112f3a953245192dc3a22a2f52eaf02bb48786615e1683acfb4393cde9a",
+   "id": "TopPMask_v2"
+  },
+  "TopPNumkeep_v1": {
+   "bindings": {},
+   "digest": "3a273af5f5b230cddf285f579c708e7b92cce1f11ad325fe95df7e67246a8943",
+   "id": "TopPNumkeep_v1"
+  },
+  "U32Xor_v1": {
+   "bindings": {},
+   "digest": "6352250a9a57448d91d99f4616f994d41a6d8852e832bfbd74c929a8788ff533",
+   "id": "U32Xor_v1"
+  }
+ },
+ "owned": [
+  "ArgmaxLeaf_v1",
+  "ArgmaxMerge_v1",
+  "ArgmaxStep_v2",
+  "BitXor_v1",
+  "F32ArgmaxLeaf_v1",
+  "F32ArgmaxMerge_v1",
+  "F32ArgmaxStage_v1",
+  "GumbelLaneHead_v1",
+  "GumbelLaneRounds_v1",
+  "GumbelLaneTail_v1",
+  "GumbelLane_v1",
+  "GumbelNoiseGroup_v1",
+  "GumbelNoiseLane_v1",
+  "GumbelNoiseLane_v2",
+  "GumbelNoise_v1",
+  "GumbelSelectF32GivenGreedy_v1",
+  "GumbelSelectF32_v1",
+  "GumbelSelectF32_v2",
+  "GumbelSelectStep_v1",
+  "GumbelSetup_v1",
+  "GumbelStreamKeyHead_v1",
+  "GumbelStreamKeyTail_v1",
+  "GumbelStreamKey_v1",
+  "GumbelStreamKey_v2",
+  "GumbelTokenSelectSharedGreedy_v1",
+  "GumbelTokenSelect_v1",
+  "GumbelTopPTokenSelectDifftest_v1",
+  "GumbelTopPTokenSelectSharedGreedy_v1",
+  "GumbelTopPTokenSelect_v1",
+  "GumbelTopPTokenSelect_v2",
+  "I32ToF32_v1",
+  "NvLogf_v1",
+  "NvLogf_v2",
+  "NvLogf_v3",
+  "SelectBit_v1",
+  "TemperatureLane_v1",
+  "TemperatureScaleGivenGreedy_v1",
+  "TemperatureScale_v1",
+  "TokenSelectStage_v1",
+  "TokenSelect_v2",
+  "TopPKeepWord_v1",
+  "TopPMaskStep_v1",
+  "TopPMask_v1",
+  "TopPMask_v2",
+  "TopPNumkeep_v1",
+  "U32Xor_v1"
+ ]
+}

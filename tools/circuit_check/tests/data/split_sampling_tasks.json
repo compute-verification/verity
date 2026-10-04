@@ -1,0 +1,266 @@
+{
+ "definitions": [
+  "ArgmaxLeaf_v1{G=1,FIRST=0,FINAL=0}",
+  "ArgmaxLeaf_v1{G=50,FIRST=1,FINAL=1}",
+  "ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}",
+  "ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}",
+  "ArgmaxLeaf_v1{G=8,FIRST=0,FINAL=0}",
+  "ArgmaxMerge_v1{G=2,IW=12,FINAL=1}",
+  "ArgmaxMerge_v1{G=2,IW=6,FINAL=0}",
+  "ArgmaxMerge_v1{G=4,IW=6,FINAL=1}",
+  "ArgmaxMerge_v1{G=64,IW=6,FINAL=0}",
+  "ArgmaxStep_v2",
+  "BitAtx16_v1",
+  "BitAtx32_v1",
+  "BitAtx64_v1",
+  "BitXor_v1",
+  "F32ArgmaxLeaf_v1{G=1,FIRST=0,FINAL=0}",
+  "F32ArgmaxLeaf_v1{G=2,FIRST=1,FINAL=1}",
+  "F32ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}",
+  "F32ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}",
+  "F32ArgmaxLeaf_v1{G=8,FIRST=0,FINAL=0}",
+  "F32ArgmaxMerge_v1{G=2,IW=12,FINAL=1}",
+  "F32ArgmaxMerge_v1{G=2,IW=6,FINAL=0}",
+  "F32ArgmaxMerge_v1{G=2,IW=6,FINAL=1}",
+  "F32ArgmaxMerge_v1{G=4,IW=6,FINAL=1}",
+  "F32ArgmaxMerge_v1{G=64,IW=6,FINAL=0}",
+  "F32ArgmaxStage_v1{V=2,L=0}",
+  "F32ArgmaxStage_v1{V=200,L=0}",
+  "F32ArgmaxStage_v1{V=200,L=1}",
+  "F32ArgmaxStage_v1{V=4161,L=1}",
+  "F32ArgmaxStage_v1{V=4161,L=2}",
+  "F32ArgmaxStage_v1{V=65,L=0}",
+  "F32ArgmaxStage_v1{V=65,L=1}",
+  "GumbelLaneHead_v1",
+  "GumbelLaneRounds_v1",
+  "GumbelLaneTail_v1",
+  "GumbelLane_v1",
+  "GumbelNoiseGroup_v1{G=1}",
+  "GumbelNoiseLane_v1",
+  "GumbelNoiseLane_v2",
+  "GumbelNoise_v1{V=2}",
+  "GumbelSelectF32GivenGreedy_v1{V=16}",
+  "GumbelSelectF32_v1{V=16}",
+  "GumbelSelectF32_v1{V=64}",
+  "GumbelSelectF32_v2{V=2}",
+  "GumbelSelectStep_v1",
+  "GumbelSetup_v1{N=2}",
+  "GumbelSetup_v1{N=64}",
+  "GumbelStreamKeyHead_v1",
+  "GumbelStreamKeyTail_v1",
+  "GumbelStreamKey_v1",
+  "GumbelStreamKey_v2",
+  "GumbelTokenSelectSharedGreedy_v1{V=16}",
+  "GumbelTokenSelect_v1{V=16}",
+  "GumbelTopPTokenSelectSharedGreedy_v1{V=16}",
+  "GumbelTopPTokenSelect_v1{V=16}",
+  "GumbelTopPTokenSelect_v1{V=64}",
+  "GumbelTopPTokenSelect_v2{V=16,S=4}",
+  "I32ToF32_v1",
+  "NvLogf_v1",
+  "NvLogf_v2",
+  "NvLogf_v3",
+  "SelectBit_v1",
+  "TemperatureLane_v1",
+  "TemperatureScaleGivenGreedy_v1{V=16}",
+  "TemperatureScale_v1{V=16}",
+  "TemperatureScale_v1{V=64}",
+  "TokenSelectStage_v1{V=200,L=0}",
+  "TokenSelectStage_v1{V=200,L=1}",
+  "TokenSelectStage_v1{V=4161,L=1}",
+  "TokenSelectStage_v1{V=4161,L=2}",
+  "TokenSelectStage_v1{V=50,L=0}",
+  "TokenSelect_v2{V=200}",
+  "TokenSelect_v2{V=50}",
+  "TopPKeepWord_v1{V=16,S=4}",
+  "TopPMaskStep_v1{V=16}",
+  "TopPMaskStep_v1{V=64}",
+  "TopPMaskWordx16_v1",
+  "TopPMaskWordx64_v1",
+  "TopPMask_v1{V=16}",
+  "TopPMask_v1{V=64}",
+  "TopPMask_v2{V=16,S=4}",
+  "TopPNumkeep_v1",
+  "U32Xor_v1"
+ ],
+ "pins": {
+  "definitions": {
+   "ArgmaxLeaf_v1{G=1,FIRST=0,FINAL=0}": {
+    "and": 19
+   },
+   "ArgmaxLeaf_v1{G=50,FIRST=1,FINAL=1}": {
+    "and": 2661
+   },
+   "ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": {
+    "and": 3415
+   },
+   "ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": {
+    "and": 3431
+   },
+   "ArgmaxLeaf_v1{G=8,FIRST=0,FINAL=0}": {
+    "and": 394
+   },
+   "ArgmaxMerge_v1{G=2,IW=12,FINAL=1}": {
+    "and": 29
+   },
+   "ArgmaxMerge_v1{G=2,IW=6,FINAL=0}": {
+    "and": 40
+   },
+   "ArgmaxMerge_v1{G=4,IW=6,FINAL=1}": {
+    "and": 104
+   },
+   "ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": {
+    "and": 2577
+   },
+   "ArgmaxStep_v2": {
+    "and": 134
+   },
+   "F32ArgmaxLeaf_v1{G=1,FIRST=0,FINAL=0}": {
+    "and": 35
+   },
+   "F32ArgmaxLeaf_v1{G=2,FIRST=1,FINAL=1}": {
+    "and": 135
+   },
+   "F32ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": {
+    "and": 6455
+   },
+   "F32ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": {
+    "and": 6487
+   },
+   "F32ArgmaxLeaf_v1{G=8,FIRST=0,FINAL=0}": {
+    "and": 746
+   },
+   "F32ArgmaxMerge_v1{G=2,IW=12,FINAL=1}": {
+    "and": 45
+   },
+   "F32ArgmaxMerge_v1{G=2,IW=6,FINAL=0}": {
+    "and": 72
+   },
+   "F32ArgmaxMerge_v1{G=2,IW=6,FINAL=1}": {
+    "and": 39
+   },
+   "F32ArgmaxMerge_v1{G=4,IW=6,FINAL=1}": {
+    "and": 184
+   },
+   "F32ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": {
+    "and": 4593
+   },
+   "F32ArgmaxStage_v1{V=2,L=0}": {
+    "and": 135
+   },
+   "F32ArgmaxStage_v1{V=200,L=0}": {
+    "and": 20143
+   },
+   "F32ArgmaxStage_v1{V=200,L=1}": {
+    "and": 184
+   },
+   "F32ArgmaxStage_v1{V=4161,L=1}": {
+    "and": 4665
+   },
+   "F32ArgmaxStage_v1{V=4161,L=2}": {
+    "and": 45
+   },
+   "F32ArgmaxStage_v1{V=65,L=0}": {
+    "and": 6522
+   },
+   "F32ArgmaxStage_v1{V=65,L=1}": {
+    "and": 39
+   },
+   "GumbelLaneHead_v1": {
+    "and": 1556
+   },
+   "GumbelLaneRounds_v1": {
+    "and": 5035
+   },
+   "GumbelSetup_v1{N=2}": {
+    "and": 911
+   },
+   "GumbelSetup_v1{N=64}": {
+    "and": 3859
+   },
+   "GumbelStreamKeyHead_v1": {
+    "and": 4960
+   },
+   "GumbelStreamKeyTail_v1": {
+    "and": 4285
+   },
+   "GumbelStreamKey_v2": {
+    "and": 9245
+   },
+   "NvLogf_v3": {
+    "and": 43280
+   },
+   "TokenSelectStage_v1{V=200,L=0}": {
+    "and": 10655
+   },
+   "TokenSelectStage_v1{V=200,L=1}": {
+    "and": 104
+   },
+   "TokenSelectStage_v1{V=4161,L=1}": {
+    "and": 2617
+   },
+   "TokenSelectStage_v1{V=4161,L=2}": {
+    "and": 29
+   },
+   "TokenSelectStage_v1{V=50,L=0}": {
+    "and": 2661
+   },
+   "TokenSelect_v2{V=200}": {
+    "and": 10759
+   },
+   "TokenSelect_v2{V=50}": {
+    "and": 2661
+   }
+  },
+  "pieces": {
+   "BitAtx16_v1": {
+    "and": 43
+   },
+   "BitAtx32_v1": {
+    "and": 58
+   },
+   "BitAtx64_v1": {
+    "and": 89
+   },
+   "BitXor_v1": {
+    "and": 0
+   },
+   "GumbelNoiseLane_v1": {
+    "and": 109421
+   },
+   "GumbelNoiseLane_v2": {
+    "and": 109391
+   },
+   "GumbelStreamKey_v1": {
+    "and": 9758
+   },
+   "I32ToF32_v1": {
+    "and": 368
+   },
+   "NvLogf_v1": {
+    "and": 48646
+   },
+   "NvLogf_v2": {
+    "and": 48616
+   },
+   "SelectBit_v1": {
+    "and": 1
+   },
+   "TopPNumkeep_v1": {
+    "and": 425
+   },
+   "U32Xor_v1": {
+    "and": 0
+   }
+  }
+ },
+ "templates": [
+  {
+   "instance_statics": [
+    {}
+   ],
+   "label": "gumbel-top-p-token-select/v64/fp32",
+   "template": "GumbelTopPTokenSelect_v1"
+  }
+ ]
+}
