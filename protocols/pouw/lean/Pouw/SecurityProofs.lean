@@ -120,6 +120,7 @@ import Pouw.SecurityProofs.PearlC.UOnlyGamma
 import Pouw.SecurityProofs.PearlC.UOnlyLoopGamma
 import Pouw.SecurityProofs.PearlC.WholeCircuit
 import Pouw.SecurityProofs.PearlC.TileCheck8
+import Pouw.SecurityProofs.PearlC.TileCheck8Words
 import Pouw.SecurityProofs.Prob
 import Pouw.SecurityProofs.QTree
 import Pouw.SecurityProofs.Reduction
