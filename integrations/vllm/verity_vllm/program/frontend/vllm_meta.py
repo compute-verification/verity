@@ -581,10 +581,7 @@ def mla_attention_impls(model: nn.Module) -> dict:
     backend and its FA version, the latent geometry, the scale, and every flag that switches `forward_impl` to another path
     (sparse, DCP/PCP, AMX/aiter bmm, head padding, non-causal multi-token decode, window).  No `head_size` / `num_kv_heads`: the
     dense attention's plane declarations do not apply to these layers.  Keyed by `layer_name`, as `unified_mla_*` carry it."""
-    try:
-        from vllm.model_executor.layers.attention.mla_attention import MLAAttention
-    except ImportError:
-        return {}
+    from vllm.model_executor.layers.attention.mla_attention import MLAAttention
     import vllm.envs as envs
     out = {}
     for name, mod in model.named_modules():

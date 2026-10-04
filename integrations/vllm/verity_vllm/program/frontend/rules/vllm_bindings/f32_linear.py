@@ -52,7 +52,7 @@ class CublasF32LinearRule(OpRule):
                                    "no bias", f"the target is sm_{CUBLAS_CC[0]}{CUBLAS_CC[1]} under batch invariance (cuBLAS, split-K off)",
                                    f"the derive's stack is {CUBLAS_STACK} (the kernel selection the table records)",
                                    "x's row count M has a measured kernel for (K, N) (`F32_LINEAR_KERNELS`)"),
-                    evidence_domain="numerics: CublasF32Linear_v1 (registry.cublas_f32), its trees exact on the sm_120 probe")
+                    evidence_domain=f"numerics: CublasF32Linear_v1 (registry.cublas_f32), its trees exact on the sm_{CUBLAS_CC[0]}{CUBLAS_CC[1]} probe")
 
     def targets(self):
         return {aten.linear.default}

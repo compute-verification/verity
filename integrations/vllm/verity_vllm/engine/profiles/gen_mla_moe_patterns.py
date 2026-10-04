@@ -1,7 +1,7 @@
 """The `mla-moe` κ patterns (GLM-4.7-Flash, `Glm4MoeLiteForCausalLM` on vLLM d9105ea80, TRITON_MLA decode / FA2 prefill).
 
 The fold-side twins of the Build's MLA, router and shared-expert rules (`rules/vllm_bindings/mla_attention.py`, `f32_linear.py`,
-`rules/vllm_moe.GroupedTopkRule`), one per custom op or launch the base list does not know:
+`rules/vllm_moe_router.GroupedTopkRule`), one per custom op or launch the base list does not know:
 
   `vllm.unified_mla_kv_cache_update` ⊃ `_C_cache_ops.concat_and_cache_mla`   two moves: kv_c -> slot[:L], k_pe -> slot[L:L+DR]
   `vllm.unified_mla_attention_with_output`, decode (Triton MLA)            `MlaAbsorb{NH,DN,L}` (bmm vs W_UK_T), the `[ql | q_pe]` cat
@@ -39,7 +39,7 @@ from verity_vllm.program.registry import ref_prims as _RP
 from verity_vllm.program.registry import targets as T
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns import (RotaryEmbedding, SiluAndMul, _positions_ok, as_float, attribution_for, base_op, bound_args,
+from verity_vllm.observe.fold.patterns import (SiluAndMul, _positions_ok, as_float, attribution_for, base_op, bound_args,
                                                classify_transparent, find_descendants, first, hint_of, is_int, is_row_major, op_name,
                                                target_of, triton_name, unsupported, widened_source)
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, rows_operand
@@ -572,7 +572,7 @@ class Bf16MulScalarInPlace:
 
 
 @dataclass
-class SiluAndMulV2:
+class SiluAndMulAsBuilt:
     """`_C.silu_and_mul` as `SiluMul_v2{I}` (`registry.act`), the Build's `silu_mul` kind."""
 
     name: str = "act.silu_and_mul.v2"
@@ -595,7 +595,7 @@ class MoEFusedSharedExperts(MoEFusedExperts):
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or op_name(node.op) != "moe_forward_shared":
             return None
-        from verity_vllm.program.frontend.rules.vllm_moe import grouped_topk_kernel  # noqa: PLC0415
+        from verity_vllm.program.frontend.rules.vllm_moe_router import grouped_topk_kernel  # noqa: PLC0415
         C = self.config
         E, TOPK, H, I = C.get("NUM_EXPERTS"), C.get("TOPK"), C["H"], C["I"]
         sa = bound_args(node)
@@ -633,7 +633,7 @@ class MoEFusedSharedExperts(MoEFusedExperts):
             parts.append((gl.id, c))
         if (bound_args(g_up).get("a_ptr") or hidden).alloc != hidden.alloc:
             return unsupported(node, "the shared gate_up GEMM does not read hidden_states", a=repr(bound_args(g_up).get("a_ptr")))
-        sr = SiluAndMulV2().match(s_silu, ctx)
+        sr = SiluAndMulAsBuilt().match(s_silu, ctx)
         if not isinstance(sr, Compute) or sr.rows != M:
             return unsupported(node, "the shared expert's silu_and_mul did not resolve on the M token rows", detail=getattr(sr, "detail", None))
         parts.append((s_silu.id, dataclasses.replace(sr, hint=f"{hint}/shared/silu_and_mul")))
@@ -683,7 +683,7 @@ class MoEFusedSharedExperts(MoEFusedExperts):
         parts.append((up.id, Compute(up_spec, P, (Gather(x_up, tuple(p // TOPK for p in range(P))), PerRow(ids_flat), Shared(w13)),
                                      (PerRow(_as_rows(c1, P, 2 * I)),), (up.id,), hint=f"{hint}/{_root_name(ctx, w13, 'w13')}", kernels=(K_FUSED,),
                                      pattern=self.name)))
-        rr = SiluAndMulV2().match(r_silu, ctx)
+        rr = SiluAndMulAsBuilt().match(r_silu, ctx)
         if not isinstance(rr, Compute) or rr.rows != P:
             return unsupported(node, "the routed silu_and_mul did not resolve on the M*TOPK pair rows", detail=getattr(rr, "detail", None))
         parts.append((r_silu.id, dataclasses.replace(rr, hint=f"{hint}/silu_and_mul")))
@@ -728,7 +728,7 @@ def with_mla_moe_patterns(patterns: list, C: dict[str, Any]) -> list:
     out: list = []
     for p in patterns:
         if type(p) is SiluAndMul:
-            p = SiluAndMulV2()
+            p = SiluAndMulAsBuilt()
         out.append(p)
     at = next((i + 1 for i, p in enumerate(out) if type(p).__name__ == "GemmLaunchTuned"), 0)
     out[at:at] = mla_moe_patterns(C)

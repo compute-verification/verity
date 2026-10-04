@@ -244,7 +244,7 @@
    "num_splits": 1
   },
   {
-   "__type__": "SiluAndMulV2",
+   "__type__": "SiluAndMulAsBuilt",
    "name": "act.silu_and_mul.v2"
   },
   {

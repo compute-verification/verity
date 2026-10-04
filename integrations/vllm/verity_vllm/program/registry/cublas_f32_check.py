@@ -147,11 +147,11 @@ def probe_digest(kind: str, tree: str) -> str:
     return digest_of(_digests(tree, [probe_inputs(M)[probe_rows(M)] for M in PROBE_MS[tree]], kind))
 
 
-def probe_m1_digest(kind: str) -> str:
+def probe_single_row_digest(kind: str) -> str:
     """`PROBE_M1_DIGESTS[kind]` as the gemv model computes it."""
     return digest_of(_digests("gemv", [probe_single(j) for j in range(32)], kind))
 
 
-def probe_m3151_digest(kind: str) -> str:
+def probe_prefill_digest(kind: str) -> str:
     """`PROBE_M3151_DIGESTS[kind]` as the simt model computes it."""
     return _digests("simt", [probe_inputs(3151)[probe_rows(3151)]], kind)[0]

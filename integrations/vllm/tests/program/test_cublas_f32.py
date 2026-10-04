@@ -68,8 +68,8 @@ def test_models_reproduce_the_sm120_probe(kind: str) -> None:
     """Each tree's model gives the GPU's outputs at every M the probes saw it serve (`cublas_f32_check.PROBE_RUN`, `PROBE_RUN_2`)."""
     for tree in C.TREES:
         assert CK.probe_digest(kind, tree) == CK.PROBE_DIGESTS[(kind, tree)], (kind, tree)
-    assert CK.probe_m1_digest(kind) == CK.PROBE_M1_DIGESTS[kind]
-    assert CK.probe_m3151_digest(kind) == CK.PROBE_M3151_DIGESTS[kind]
+    assert CK.probe_single_row_digest(kind) == CK.PROBE_M1_DIGESTS[kind]
+    assert CK.probe_prefill_digest(kind) == CK.PROBE_M3151_DIGESTS[kind]
 
 
 def test_bad_statics_are_refused() -> None:

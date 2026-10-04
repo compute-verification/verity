@@ -49,7 +49,7 @@ def _mla_pins_ok(layer_name: str) -> str | None:
                 "(observe_attention_impls(vllm_meta.attention_impls(model)) before derive) — refusing rather than assuming a backend")
     obs = mla_obs(layer_name)
     if obs is None:
-        return f"layer {layer_name!r} has no observed MLAAttention implementation"
+        return f"layer {layer_name!r} has no observed MLA attention implementation"
     from verity_vllm.program.registry import targets as T
     tp = active_target_profile()
     try:
@@ -150,7 +150,7 @@ class MlaAttentionWithOutputRule(StateRule):
     modes = frozenset({"profile"})
     info = RuleInfo("MlaAttentionWithOutput[vllm]", 1, "state",
                     applies_to="vllm.unified_mla_attention_with_output(q, kv_c_normed, k_pe, Tensor! output, layer_name: str, output_scale=None, output_block_scale=None, kv_cache_dummy_dep=None)",
-                    preconditions=("the layer's OBSERVED MLAAttention implementation (decode impl + backend, prefill backend + FA version, kv dtype, "
+                    preconditions=("the layer's OBSERVED MLA attention implementation (decode impl + backend, prefill backend + FA version, kv dtype, "
                                    "batch invariance, and every flag that selects another forward path) equals MLA_PINS",
                                    "q [T, NH, DN+DR], kv_c_normed [T, L], k_pe [T, 1, DR] bf16 with the observed NH, L, DN, DR",
                                    "output is an unwritten allocation [T, NH*DV]; output_scale and output_block_scale are None",

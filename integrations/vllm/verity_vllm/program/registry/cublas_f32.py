@@ -35,7 +35,7 @@ BF16, F32 = Array(16, BL.BIT), Array(32, BL.BIT)
 BF16W, F32W = P.BF16, P.F32
 CLASSES = TILE = 16
 TREES = ("gemv", "simt")
-CONFORMANCE = "exact-model-tested: the sm_120 kernels' outputs (tests/program/test_cublas_f32.py)"
+CONFORMANCE = "exact-model-tested: the probed GPU kernels' outputs (tests/program/test_cublas_f32.py)"
 
 
 def _check(name: str, **ok: bool) -> None:
