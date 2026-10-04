@@ -79,7 +79,9 @@ def checkout(tmp: Path, mathlib: bool = False, extra: dict[str, str] | None = No
     A.dump(root / PKG, policy)
     (root / "tools" / "check").mkdir(parents=True)
     (root / "README.md").write_text(f"The lemma: `{PKG}/P/SecurityProofs/Lemma.lean`; the proofs: `{PKG}/P/SecurityProofs/`.\n"
-                                    f"In the package: `P/SecurityProofs/Lemma.lean`.\n")
+                                    f"In the package: `P/SecurityProofs/Lemma.lean`; `CheckAxioms.lean`.\n")
+    (root / "protocols" / "p" / "PROTOCOL.md").write_text("Proved in `lean/P/SecurityProofs/Lemma.lean`, not `lean/P/Protocol.lean`.\n")
+    (root / PKG / "README.md").write_text("P/Protocol.lean               the definitions\nP/SecurityProofs/Lemma.lean   the lemma\n")
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
     if mathlib:
         pins = {S.deps_key(root / p): {"package": p, "sha256": n * 64, "bytes": 1, "run": "r0"}
@@ -156,7 +158,10 @@ def test_the_split_is_a_pure_move(tmp_path):
     assert pins[S.deps_key(root / DEPENDENT)]["sha256"] == "b" * 64 and len(pins) == 3
     readme = (root / "README.md").read_text()
     assert "`security_proofs/p/P/SecurityProofs/Lemma.lean`" in readme and "`security_proofs/p/P/SecurityProofs/`" in readme
-    assert any(n.startswith("read: README.md:2:") for n in notes)
+    assert (root / "protocols" / "p" / "PROTOCOL.md").read_text() == \
+        "Proved in `security_proofs/p/P/SecurityProofs/Lemma.lean`, not `lean/P/Protocol.lean`.\n"
+    assert (root / PKG / "README.md").read_text().endswith("\nP/SecurityProofs/Lemma.lean   the lemma\n")
+    assert [n for n in notes if n.startswith("read: ")] == [f"read: {PKG}/README.md:2: P/SecurityProofs/Lemma.lean   the lemma"]
 
 
 def test_deps_key_is_check_s(tmp_path):

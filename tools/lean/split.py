@@ -380,13 +380,24 @@ def moved_dirs(p: dict, tracked: set[str]) -> dict[str, str]:
 
 
 def rewrite_paths(p: dict, root: Path) -> list[str]:
-    """Every tracked text file's mention of a moved file or directory by its repository path, rewritten; and mentions of a
-    moved file or directory by its path inside the package elsewhere, listed for a person (a path built from parts, prose)."""
+    """Every tracked text file's mention of a moved file or directory by its repository path, or by its path from the
+    mentioning file's directory above the package (`lean/P/SecurityProofs/X.lean` in `protocols/p/PROTOCOL.md`), rewritten
+    to the repository path; and, in the package's area (the package's parent directory), mentions of one by its path inside
+    the package, listed for a person (a layout table, a path built from parts)."""
     tracked = git_files(root)
     dirs = moved_dirs(p, tracked)
     subs = dict(sorted({**p["moves"], **dirs}.items(), key=lambda kv: -len(kv[0])))
-    pat = re.compile("|".join(re.escape(a) + r"(?![\w.-])" for a in subs)) if subs else None
-    n = len(p["package"]) + 1
+    pkg, dest = p["package"], p["dest"]
+    area = pkg.rsplit("/", 1)[0] if "/" in pkg else ""
+
+    def mention(prefix: str) -> re.Pattern | None:
+        n = len(prefix)
+        alts = [re.escape(a[n:]) for a in subs if a.startswith(prefix)]
+        before = r"(?<![\w./-])" if prefix else r"(?<![\w.-])"
+        return re.compile(before + "(?:" + "|".join(alts) + r")(?![\w.-])") if alts else None
+
+    pats = {"": mention("")}
+    n = len(pkg) + 1
     inner = sorted({a[n:] for a in subs}, key=len, reverse=True)
     parts = [r"""["']\s*/\s*["']""".join(re.escape(x) for x in i.split("/")) for i in inner if "/" in i]
     loose = re.compile("|".join([*(re.escape(i) for i in inner), *parts]))
@@ -399,11 +410,18 @@ def rewrite_paths(p: dict, root: Path) -> list[str]:
             text = path.read_text()
         except UnicodeDecodeError:
             continue
-        new = pat.sub(lambda m: subs[m.group(0)], text) if pat else text
+        here = f.rsplit("/", 1)[0] + "/" if "/" in f else ""
+        prefixes = [""] + ([here] if here and pkg.startswith(here) and not f.startswith(dest + "/") else [])
+        new, count = text, 0
+        for prefix in prefixes:
+            pat = pats.setdefault(prefix, mention(prefix))
+            if pat:
+                new, k = pat.subn(lambda m: subs[prefix + m.group(0)], new)
+                count += k
         if new != text:
             path.write_text(new)
-            notes.append(f"rewrote: {f} ({len(pat.findall(text))} path(s))")
-        if f.startswith((p["package"] + "/", p["dest"] + "/")) or f.endswith(".lean"):
+            notes.append(f"rewrote: {f} ({count} path(s))")
+        if (area and not f.startswith(area + "/")) or f.startswith(dest + "/") or f.endswith(".lean"):
             continue
         for i, line in enumerate(new.splitlines(), 1):
             if loose.search(line) and not any(b in line for b in subs.values()):
