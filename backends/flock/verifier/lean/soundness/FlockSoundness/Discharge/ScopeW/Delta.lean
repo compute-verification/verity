@@ -4,7 +4,7 @@ import FlockSoundness.Discharge.Hidden.Wide.RowBc
 set_option Elab.async false
 
 /-!
-# Δ at the widened scope's rows: frozen statements
+# Δ at the widened scope's rows
 
 `HmRow.delta` without a typed template, pair by pair, for rows of any shape (`delta_flat_eqW`, no shape hypothesis):
 the slot constants, each row's copies (`rowCopiesW`: a segmented row's by `rowCopiesSeg`, every other row's by

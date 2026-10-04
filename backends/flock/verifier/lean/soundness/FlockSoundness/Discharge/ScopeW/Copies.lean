@@ -5,7 +5,7 @@ import FlockSoundness.Discharge.HiddenExec.Copies
 set_option Elab.async false
 
 /-!
-# Δ's copies at the widened scope's rows: frozen statements
+# Δ's copies at the widened scope's rows
 
 The row lemmas read Δ only at a row net's slot's bits, and there every statement the headlines take has the same Δ:
 `HmRow.delta`'s pairs, plus pairs (`extra`) only at bits `HmRow.delta` never writes, filtered only at bits outside the
@@ -526,7 +526,32 @@ theorem msg_copyW {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z :
     (hj : j < st.c.outRowPorts.size) (hk : k < (st.c.ports.getD (HmOut.nIn st.c + j) default).words) (ht : t < 16) :
     blockBit (L.model regs) z o (Hidden.deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) =
       blockBit (L.model regs) z o (Hidden.outSrc st.c g j k t) := by
-  sorry
+  have R := RowRanges.ofL L F.parse F.check
+  have P : ParseFacts tags st.c := F.parse
+  have hp := hrows.2 j hj
+  have hs := hrows.1 _ (getElem_mem_toList' hp)
+  have hw : (st.c.ports.getD (HmOut.nIn st.c + j) default).words = st.c.ports[HmOut.nIn st.c + j]!.words := by
+    rw [Hidden.getElem!_eq_getD']
+  have hb : 2 * k + t / 8 < 2 * st.c.ports[HmOut.nIn st.c + j]!.words := by rw [← hw]; omega
+  have ht8 : t % 8 < 8 := Nat.mod_lt _ (by omega)
+  obtain ⟨kk, tb, hkk, htb, hd, -⟩ := deltaMsgCol_at P (g := g) hp hs hb ht8
+  have hX := hd.trans (msgAt_pos R hp tb)
+  refine inPos_cases R (off := 512 + tb) hg hp hkk (by omega) fun {_ _ _} hn hat {_ _} hl _ hself => ?_
+  rw [← hX] at hat
+  have hkeep := hΔ.2.2 hn hat
+  have hδ : ∀ i, deltaEntry st.da (Hidden.deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) i =
+        (((if i = Hidden.deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8) then 1 else 0) +
+          (if i = Hidden.outSrc st.c g j k t then 1 else 0) : ℕ) : ZMod 2) ∧
+      deltaEntry st.db (Hidden.deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) i =
+        (((if i = Hidden.deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8) then 1 else 0) +
+          (if i = Hidden.outSrc st.c g j k t then 1 else 0) : ℕ) : ZMod 2) := by
+    intro i
+    rw [L.delta_b, deltaEntry_eq_count, rowDelta_count hΔ hkeep, delta_flat_eqW _ _ P.typed,
+      flat_count_msgW L F hg hp hs hb ht8 i, Nat.zero_add, outPairs_eqR, count_pair2,
+      filter_outCopiesR R P hrows hg hj hk ht]
+    simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero, and_self]
+  have hx := hat.lt R.bound (R.range (R.rowNet_lt hn)).1
+  exact block_of_rows hz o hx fun i => inBit_rows R hn hat hl hself hx hδ i
 
 end Out
 
