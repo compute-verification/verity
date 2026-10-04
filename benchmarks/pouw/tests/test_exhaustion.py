@@ -224,6 +224,25 @@ def honest(tmp_path_factory, request):
     return out
 
 
+@pytest.mark.slow
+def test_audit_sh_audits_a_window_sh_out_from_its_tar(tmp_path):
+    """audit.sh, the CPU half window.sh runs after its lease (or elsewhere, with AUDIT=0): unpacked from a tar of a window.sh
+    OUT, it audits each window in place and runs the harness's verify on each card's bench (this one's is synthetic, so verify
+    fails; without a γ twin at the test's shape, the audit fails on γ alone)."""
+    src = tmp_path / "src"
+    honest_window(src / "overlap", {0: 1})
+    for when in ("before", "after"):
+        shutil.move(src / "overlap" / f"bench-{when}", src / f"bench-{when}")
+    subprocess.run(["tar", "-cf", str(tmp_path / "out.tar"), "-C", str(src), "."], check=True)
+    out = tmp_path / "out"
+    r = subprocess.run(["bash", str(HERE / "audit.sh"), str(tmp_path / "out.tar"), str(out)], capture_output=True, text=True,
+                       env={"PATH": "/usr/bin:/bin", "PY": sys.executable, "JOBS": "2"}, stdin=subprocess.DEVNULL)
+    assert r.returncode == 1 and "audit overlap rc=1" in r.stdout and "verify card0 rc=" in r.stdout, r.stdout + r.stderr
+    res = json.loads((out / "overlap" / "audit.json").read_text())
+    assert failed(res) == {"gamma"} and len(res["tiles"]) == 60 and all(t["ok"] for t in res["tiles"])
+    assert (out / "verify-before" / "card0.log").is_file()
+
+
 def failed(res: dict) -> set[str]:
     return {c["check"] for c in res["checks"] if not c["ok"]}
 
