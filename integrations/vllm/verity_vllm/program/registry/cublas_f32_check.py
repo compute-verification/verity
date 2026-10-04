@@ -106,5 +106,10 @@ def probe_inputs(M: int) -> np.ndarray:
     return x
 
 
+def probe_single(j: int) -> np.ndarray:
+    """x [1, K_GATE] of the j-th M = 1 probe (`probe_inputs(1)` is its zero row alone): bf16-exact, odd j magnitudes 2^-20..2^20."""
+    return _floats(2000 + j, (1, K_GATE), 107, 147, 7) if j % 2 else _floats(2000 + j, (1, K_GATE), 123, 128, 7)
+
+
 def output_digest(y_rows: np.ndarray) -> str:
     return hashlib.sha256(np.ascontiguousarray(y_rows, dtype=F32).view(U32).astype("<u4").tobytes()).hexdigest()[:16]
