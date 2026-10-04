@@ -11,7 +11,8 @@ largest magnitude and `e2m1Word(f32(D_t·nvf4Recip s))`. Here they agree, under 
 
 * `Pc4OpsAgree ops`: `Pc8OpsAgree`'s agreements, and `F32Fabs` clears the sign bit, `F32Fmaxf` of two finite words
   with the sign bit clear is the one of larger value (`a` at equal values), `F32Div` is `f32Word` of the quotient by
-  a nonzero divisor, and `F32ToE2m1Sat` of a word that is not NaN is `e2m1Word`'s code.
+  a nonzero divisor, `F32ToE2m1Sat` of a word that is not NaN is `e2m1Word`'s code, and `Bf16ToF32` of a BF16 word
+  is the word shifted left by 16.
 
 The floors differ in order: the table floors the FP32 value at `2⁻⁹` and then casts, the protocol casts and then
 floors the code at `0x01`. On a non-negative value the two agree (`e4m3_floor`), since `e4m3` is at least `0x01` from
@@ -24,6 +25,12 @@ A formed word is `nvf4NoiseElem`'s (`form4_sem`): the accumulator is `f32Word(α
 are `noiseOperand`'s and `noiseScales`'. So a row unit's codes and scale bytes are `formRow`'s at `pc4Sem`'s `α` and
 `β` (`formRow_table`, `row4A_form`, `row4B_form`), under `Row4OK` (the row's BF16 words widen to step words of its
 values, `α > 0` and `β` are step words) and where `formRow`'s noise atoms are step words.
+
+On those codes and scale bytes, RowA's `Ẽ` and `P_A` outputs are `peelFp4`'s `P_A` row, `paRow?` of the line's
+`eTilde` at `e4m3(β)` and the chain words against `F_B`'s columns (`row4A_paWords`), and RowB's `P_B` and `−Ẽ`
+outputs are its `P_B` row, `pbRow?` of the line's `eTilde`, the chain words against `F_A`'s columns and `G`
+(`row4B_pbWords`), wherever the peel's words exist. `PouwETilde_v1` is `eTilde` at a scale byte that is not NaN
+(`eTilde_prim`), and `e4m3` of a value never is (`e4m3_notNaN`).
 -/
 
 namespace Pouw.PearlC.RowCircuit
@@ -285,6 +292,7 @@ structure Pc4OpsAgree (ops : RowOps) : Prop extends WholeCircuit.Pc8OpsAgree ops
   div : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ a = some x → wordQ b = some y → y ≠ 0 →
     (x = 0 → signBit a = signBit b) → ops.f32DivV2 a b % 2 ^ 32 = f32Word (x / y)
   e2m1 : ∀ w < 2 ^ 32, ((w >>> 23) % 256 = 255 → w % 2 ^ 23 = 0) → ops.f32ToE2m1Sat w % 2 ^ 4 = (e2m1Word w).val
+  bf16w : ∀ w < 2 ^ 16, ops.bf16ToF32 w = w <<< 16
 
 /-! ## A block -/
 
@@ -466,6 +474,13 @@ section Form
 
 variable {ops : RowOps}
 
+theorem toE4m3_step (hA : WholeCircuit.Pc8OpsAgree ops) {β : ℕ} (hβ : AccumProofs.StepWord β) :
+    Prim.eval ops .toE4m3 [β] = (e4m3 (wordVal β)).val := by
+  show ops.f32ToE4m3Sat β % 2 ^ 8 = _
+  rw [hA.cast, e4m3_wordVal (fun h => absurd h (AccumProofs.finite?_exp hβ.2.2))
+    (fun h0 => by rw [AccumProofs.wordQ_zero_word hβ h0]; rfl)]
+  exact Nat.mod_eq_of_lt (Fin.isLt _)
+
 /-- **A formed word is `nvf4NoiseElem`'s** where the noise atom is in the model: the accumulator `α·x` is
 `f32Word` of the values' product (`α > 0`, `x`'s widening a step word, so a zero product is `+0`), the noise scale byte
 is `e4m3(β)` (`β` a step word), and the operands and scale bytes are `noiseOperand`'s and `noiseScales`'. -/
@@ -482,11 +497,7 @@ theorem form4_sem (hA : WholeCircuit.Pc8OpsAgree ops) {α x β : ℕ} {e f : Fin
       rcases mul_eq_zero.1 h0 with h0 | h0
       · exact absurd h0 hαp.ne'
       · rw [WholeCircuit.signBit_of_pos hαq hαp, AccumProofs.wordQ_zero_word hx (by rw [hxq, h0])]; rfl
-  have hbE : Prim.eval ops .toE4m3 [β] = (e4m3 (wordVal β)).val := by
-    show ops.f32ToE4m3Sat β % 2 ^ 8 = _
-    rw [hA.cast, e4m3_wordVal (fun h => absurd h (AccumProofs.finite?_exp hβ.2.2))
-      (fun h0 => by rw [AccumProofs.wordQ_zero_word hβ h0]; rfl)]
-    exact Nat.mod_eq_of_lt (Fin.isLt _)
+  have hbE := toE4m3_step hA hβ
   have hs : sm120Nvf4.step (f32Word (wordVal α * wordVal (ops.bf16ToF32 x))) (noiseOperand sm120Nvf4 e)
       (noiseOperand sm120Nvf4 f) (noiseScales sm120Nvf4 (e4m3 (wordVal β)))
       (noiseScales sm120Nvf4 (fScale sm120Nvf4.fmt)) = some w := hw
@@ -637,5 +648,201 @@ theorem row4B_form (hA : Pc4OpsAgree ops) {K : ℕ} (hK : 8 ≤ K) (h16 : 16 ∣
     fun t ht => (row4B_code hK T hT (by omega)).trans (h2 t ht)⟩
 
 end Row
+
+theorem length_flatten_const {α : Type} {n : ℕ} :
+    ∀ (L : List (List α)), (∀ b ∈ L, b.length = n) → L.flatten.length = n * L.length
+  | [], _ => by simp
+  | b :: L, h => by
+    rw [List.flatten_cons, List.length_append, h b (by simp),
+      length_flatten_const L (fun b' hb' => h b' (by simp [hb'])), List.length_cons]
+    ring
+
+/-- A formed row of `K` positions, `16 ∣ K`, has `K` codes and `K/16` scale bytes. -/
+theorem formRow_length {K : ℕ} (h16 : 16 ∣ K) {α β : ℚ} {X : Fin K → ℚ} {e : Fin 32 → Nib}
+    {F : Fin K → Fin 32 → Nib} {r : Row4} (hr : formRow α β X e F = some r) : r.1.length = K ∧ r.2.length = K / 16 := by
+  simp only [formRow, Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hr
+  obtain ⟨ds, hds, rfl⟩ := hr
+  obtain ⟨hlen, -⟩ := PeelExactProofs.mapM_ofFn _ 0 hds
+  have h16' : 16 ∣ ds.length := by rw [hlen]; exact h16
+  have hc : (ds.toChunks 16).length = K / 16 := by rw [Freeze.length_toChunks_of_dvd (by omega) h16', hlen]
+  refine ⟨?_, by simp [hc]⟩
+  rw [length_flatten_const (n := 16) _ ?_]
+  · simp only [List.length_map, hc]; omega
+  · intro b hb
+    simp only [List.map_map, List.mem_map] at hb
+    obtain ⟨c, hcm, rfl⟩ := hb
+    obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hcm
+    simp [nvf4Block, Freeze.length_getElem_toChunks_of_dvd (by omega) h16' i hi]
+
+/-! ## `P_A` and `P_B` -/
+
+theorem chainN4_lt : ∀ (n c : ℕ) (a b : List Nib) (sa sb : List (Fin 256)) {w : ℕ}, c < 2 ^ 32 →
+    sm120Nvf4.chainN n c a b sa sb = some w → w < 2 ^ 32
+  | 0, c, _, _, _, _, w, hc, h => by
+    simp only [Fp4Atom.chainN, Option.some.injEq] at h
+    exact h ▸ hc
+  | n + 1, c, a, b, sa, sb, w, hc, h => by
+    simp only [Fp4Atom.chainN] at h
+    obtain ⟨d, hd, h⟩ := Option.bind_eq_some_iff.1 h
+    exact chainN4_lt n d _ _ _ _ (step4_lt hd) h
+
+theorem cTilde4_lt {a b : List Nib} {sa sb : List (Fin 256)} {w : ℕ} (h : cTilde sm120Nvf4 a b sa sb = some w) :
+    w < 2 ^ 32 := by
+  unfold cTilde Fp4Atom.chain at h
+  split_ifs at h
+  exact chainN4_lt _ 0 _ _ _ _ (by norm_num) h
+
+/-- `e4m3` of a value is never the E4M3 NaN. -/
+theorem e4m3_notNaN (v : ℚ) : (e4m3 v).val % 128 ≠ 127 := by
+  have h := e4m3Mag_le (abs_nonneg v)
+  unfold e4m3
+  dsimp only
+  split_ifs <;> omega
+
+/-- `PouwETilde_v1` at a scale byte that is not NaN is `DeviceFp4`'s `Ẽ`. -/
+theorem eTilde_prim (ops : RowOps) (e : Fin 32 → Nib) (a : Fin 256) (ha : a.val % 128 ≠ 127) (q : Fin 32) :
+    Prim.eval ops .eTilde [(e q).val, a.val] = eTilde e a q := by
+  simp only [Prim.eval, Prim.w, List.getD_cons_zero, List.getD_cons_succ, eTildeWord, ha, ↓reduceIte, nib_val,
+    code_val]
+  refine Nat.mod_eq_of_lt (Nat.or_lt_two_pow (WholeCircuit.bf16WordOf_lt _) ?_)
+  split <;> norm_num
+
+section Sides
+
+variable {ops : RowOps}
+
+/-- **RowA's `P_A` row is the FP4 peel's**: at depth `K = 64·nw`, a correct RowA transcript holding a row `X`, its `E_A`
+line `e`, the form basis `F` and the chain basis `F_B`, where `formRow` forms `X` to `r` (`row4A_form`'s conditions),
+has on its `Ẽ` outputs and its `P_A` outputs the row `paRow?` forms from the line's `Ẽ` at `e4m3(β)` and the chain
+words `af` of `r` against `F_B`'s columns, wherever they exist (`peelFp4`'s `P_A,i`). -/
+theorem row4A_paWords (hA : Pc4OpsAgree ops) {K nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
+    (T : ((row4A K).spec ops).toCircuit.Transcript) (hT : ((row4A K).spec ops).part.Correct T 0)
+    {X : Fin K → ℚ} {e : Fin 32 → Nib} {F FB : Matrix (Fin K) (Fin 32) Nib} (hR : Row4OK ops K X)
+    (hx : ∀ l < K, val T l = encRow16 K X l) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
+    (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val)
+    (hb : ∀ (t : Fin K) (q : Fin 32), val T (33 * K + 32 + 32 * t + q) = (FB t q).val)
+    (hD : ∀ (t : Fin K) (w : ℕ), nvf4NoiseElem (wordVal (alpha4 ops (encRow16 K X) K)) (X t)
+      (wordVal (beta4 ops (encRow16 K X) K)) e (F t) = some w → AccumProofs.StepWord w) {r : Row4}
+    (hr : formRow (wordVal (alpha4 ops (encRow16 K X) K)) (wordVal (beta4 ops (encRow16 K X) K)) X e F = some r)
+    {af pa : List ℕ}
+    (haf : (List.ofFn fun q => (cTilde sm120Nvf4 r.1 (colF FB q) r.2 (onesScales sm120Nvf4 K)).bind
+      PeelExact.finite?).mapM id = some af)
+    (hpa : PeelExact.paRow? (List.ofFn (eTilde e (e4m3 (wordVal (beta4 ops (encRow16 K X) K))))) af = some pa) :
+    ∀ q < 32, val T (post4At K (rowIn K false) + 32 * (K / 64 + 1) + q) = pa.getD q 0 ∧
+      val T (post4At K (rowIn K false) + q * (K / 64 + 1) + K / 64) = pa.getD (32 + q) 0 := by
+  have h8 : 8 ≤ K := by omega
+  have h16 : 16 ∣ K := ⟨4 * nw, by omega⟩
+  obtain ⟨hS, hC⟩ := row4A_form hA h8 h16 T hT hR hx he hf hD hr
+  have hlen := (formRow_length h16 hr).1
+  obtain ⟨hpa1, hpa2⟩ := PeelExactProofs.paRow_spec hpa List.length_ofFn
+  obtain ⟨hafl, hafq⟩ := PeelExactProofs.mapM_ofFn _ 0 haf
+  intro q hq
+  refine ⟨?_, ?_⟩
+  · have he' : val T (K + q) = (e ⟨q, hq⟩).val := he ⟨q, hq⟩
+    rw [row4A_et h8 T hT hq, he', beta4_congr h8 hx, toE4m3_step hA.toPc8OpsAgree hR.beta,
+      eTilde_prim ops e _ (e4m3_notNaN _) ⟨q, hq⟩, hpa1 q hq, WholeCircuit.getD_ofFn32 _ hq]
+  · obtain ⟨c, hc1, hc2⟩ := Option.bind_eq_some_iff.1 (hafq ⟨q, hq⟩)
+    have hcw : c = af.getD q 0 := by
+      unfold PeelExact.finite? at hc2
+      split_ifs at hc2
+      exact Option.some.inj hc2
+    have hB : ∀ t < K, val T (33 * K + 32 + 32 * t + q) = ((colF FB ⟨q, hq⟩).getD t 0).val := by
+      intro t ht
+      refine (hb ⟨t, ht⟩ ⟨q, hq⟩).trans ?_
+      unfold colF
+      rw [PeelExactProofs.getD_ofFn (fun t => FB t ⟨q, hq⟩) 0 ⟨t, ht⟩]
+    rw [row4A_pa hnw hK T hT r hlen hC hS hq (colF FB ⟨q, hq⟩) hB hc1]
+    exact WholeCircuit.bf16_word hA.toPc8OpsAgree (cTilde4_lt hc1) (by rw [hcw]; exact hpa2 q (by omega))
+
+theorem eTilde_lt (e : Fin 32 → Nib) (a : Fin 256) (q : Fin 32) : eTilde e a q < 2 ^ 16 :=
+  Nat.or_lt_two_pow (WholeCircuit.bf16WordOf_lt _) (by split <;> norm_num)
+
+/-- **RowB's `P_B` row is the FP4 peel's**: as `row4A_paWords`, a correct RowB transcript holding a row `X`, its `E_B`
+line `e`, the form basis `F`, the chain basis `F_A` and `G`'s rows `gL` has on its `P_B` outputs and its `−Ẽ` outputs
+the row `pbRow?` forms from the line's `Ẽ` at `e4m3(β)`, the chain words `bf` of `r` against `F_A`'s columns and `gL`,
+wherever they exist (`peelFp4`'s `P_B,j`). -/
+theorem row4B_pbWords (hA : Pc4OpsAgree ops) {K nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
+    (T : ((row4B K).spec ops).toCircuit.Transcript) (hT : ((row4B K).spec ops).part.Correct T 0)
+    {X : Fin K → ℚ} {e : Fin 32 → Nib} {F FA : Matrix (Fin K) (Fin 32) Nib} (hR : Row4OK ops K X)
+    (hx : ∀ l < K, val T l = encRow16 K X l) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
+    (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val)
+    (hb : ∀ (t : Fin K) (q : Fin 32), val T (33 * K + 32 + 32 * t + q) = (FA t q).val)
+    (hD : ∀ (t : Fin K) (w : ℕ), nvf4NoiseElem (wordVal (alpha4 ops (encRow16 K X) K)) (X t)
+      (wordVal (beta4 ops (encRow16 K X) K)) e (F t) = some w → AccumProofs.StepWord w) {r : Row4}
+    (hr : formRow (wordVal (alpha4 ops (encRow16 K X) K)) (wordVal (beta4 ops (encRow16 K X) K)) X e F = some r)
+    {bf pb : List ℕ} {gL : List (List ℕ)}
+    (hbf : (List.ofFn fun q => (cTilde sm120Nvf4 r.1 (colF FA q) r.2 (onesScales sm120Nvf4 K)).bind
+      PeelExact.finite?).mapM id = some bf)
+    (hgl : gL.length = 32)
+    (hg : ∀ s < 32, ∀ q < 32, val T (65 * K + 32 + 32 * s + q) = (gL.getD s []).getD q 0 % 2 ^ 32)
+    (hpb : PeelExact.pbRow? (List.ofFn (eTilde e (e4m3 (wordVal (beta4 ops (encRow16 K X) K))))) bf gL = some pb) :
+    ∀ q < 32, val T (post4At K (rowIn K true) + 32 + q * (K / 64 + 35) + K / 64 + 34) = pb.getD q 0 ∧
+      val T (post4At K (rowIn K true) + 32 + 32 * (K / 64 + 35) + q) = pb.getD (32 + q) 0 := by
+  have h8 : 8 ≤ K := by omega
+  have h16 : 16 ∣ K := ⟨4 * nw, by omega⟩
+  obtain ⟨hS, hC⟩ := row4B_form hA h8 h16 T hT hR hx he hf hD hr
+  have hlen := (formRow_length h16 hr).1
+  obtain ⟨hpb1, hpb2⟩ := PeelExactProofs.pbRow_spec hpb List.length_ofFn
+  obtain ⟨-, hbfq⟩ := PeelExactProofs.mapM_ofFn _ 0 hbf
+  have hET : ∀ s (hs : s < 32), Prim.eval ops .eTilde [val T (K + s), Prim.eval ops .toE4m3 [beta4 ops (val T) K]] =
+      eTilde e (e4m3 (wordVal (beta4 ops (encRow16 K X) K))) ⟨s, hs⟩ := by
+    intro s hs
+    have he' : val T (K + s) = (e ⟨s, hs⟩).val := he ⟨s, hs⟩
+    rw [he', beta4_congr h8 hx, toE4m3_step hA.toPc8OpsAgree hR.beta, eTilde_prim ops e _ (e4m3_notNaN _) ⟨s, hs⟩]
+  intro q hq
+  refine ⟨?_, ?_⟩
+  · obtain ⟨acc, s, hacc, hs, hrn⟩ := hpb1 q hq
+    obtain ⟨c, hc1, hc2⟩ := Option.bind_eq_some_iff.1 (hbfq ⟨q, hq⟩)
+    have hcw : c = bf.getD q 0 := by
+      unfold PeelExact.finite? at hc2
+      split_ifs at hc2
+      exact Option.some.inj hc2
+    have hB : ∀ t < K, val T (33 * K + 32 + 32 * t + q) = ((colF FA ⟨q, hq⟩).getD t 0).val := by
+      intro t ht
+      refine (hb ⟨t, ht⟩ ⟨q, hq⟩).trans ?_
+      unfold colF
+      rw [PeelExactProofs.getD_ofFn (fun t => FA t ⟨q, hq⟩) 0 ⟨t, ht⟩]
+    have hlist : ((List.range (31 + 1)).map fun s =>
+        ((List.ofFn (eTilde e (e4m3 (wordVal (beta4 ops (encRow16 K X) K))))).getD s 0, (gL.getD s []).getD q 0)) =
+          List.ofFn fun p : Fin 32 =>
+            (eTilde e (e4m3 (wordVal (beta4 ops (encRow16 K X) K))) p, (gL.getD p []).getD q 0) := by
+      apply List.ext_getElem
+      · simp
+      · intro n h1 h2
+        simp only [List.getElem_map, List.getElem_range, List.getElem_ofFn]
+        rw [WholeCircuit.getD_ofFn32 _ (by simpa using h2)]
+    have hacc' : pbAcc ops (fun s => ops.bf16ToF32 (Prim.eval ops .eTilde
+          [val T (K + s), Prim.eval ops .toE4m3 [beta4 ops (val T) K]]))
+        (fun s => val T (65 * K + 32 + 32 * s + q)) 31 = acc := by
+      refine WholeCircuit.pbAcc_fold hA.toPc8OpsAgree
+        (be := fun s => (List.ofFn (eTilde e (e4m3 (wordVal (beta4 ops (encRow16 K X) K))))).getD s 0)
+        (G := fun s => (gL.getD s []).getD q 0) (fun s hs => ?_) (fun s hs => ?_) (fun s hs => hg s hs q hq) 31
+        (by norm_num) acc ?_
+      · dsimp only
+        rw [hET s hs, WholeCircuit.getD_ofFn32 _ hs]
+        exact hA.bf16w _ (eTilde_lt _ _ _)
+      · dsimp only
+        rw [hET s hs, hA.bf16w _ (eTilde_lt _ _ _), Nat.shiftLeft_eq]
+        have := eTilde_lt e (e4m3 (wordVal (beta4 ops (encRow16 K X) K))) ⟨s, hs⟩
+        calc _ < 2 ^ 16 * 2 ^ 16 := Nat.mul_lt_mul_of_pos_right this (by norm_num)
+          _ = 2 ^ 32 := by norm_num
+      · rw [hlist]
+        unfold PeelExact.accChain? at hacc
+        rwa [PeelExactProofs.zip_col hgl q] at hacc
+    have hneg : Prim.eval ops .neg [c] = negWord (bf.getD q 0) := by
+      simp only [Prim.eval, Prim.w, List.getD_cons_zero]
+      rw [← hcw]
+      exact hA.neg _ (cTilde4_lt hc1)
+    have hadd : Prim.eval ops .add [acc, negWord (bf.getD q 0)] = s := by
+      simp only [Prim.eval, Prim.w, List.getD_cons_zero, List.getD_cons_succ]
+      rw [f32Add_of_addWord hs]
+      exact Nat.mod_eq_of_lt (WholeCircuit.addWord?_lt hs)
+    rw [row4B_pb hnw hK T hT r hlen hC hS hq (colF FA ⟨q, hq⟩) hB hc1, hacc', hneg, hadd]
+    exact WholeCircuit.bf16_word hA.toPc8OpsAgree (WholeCircuit.addWord?_lt hs) hrn
+  · rw [row4B_net h8 T hT hq, hET q hq, hpb2 q hq, WholeCircuit.getD_ofFn32 _ hq]
+    simp only [Prim.eval, Prim.w, List.getD_cons_zero, bf16NegWord, Nat.mod_mod]
+    exact Nat.mod_eq_of_lt (Nat.xor_lt_two_pow (eTilde_lt _ _ _) (by norm_num))
+
+end Sides
 
 end Pouw.PearlC.RowCircuit
