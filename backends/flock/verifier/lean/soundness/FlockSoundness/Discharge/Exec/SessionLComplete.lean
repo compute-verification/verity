@@ -708,6 +708,216 @@ theorem opensOKL_zero (sch : Schedule) (r : ℕ) (p : PendL F D) (hp : Good H E 
 
 end ZeroMerkle
 
+/-! ## The zero run of a rep accepts -/
+
+section ZeroLigerito
+
+set_option linter.unusedSectionVars false
+
+variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
+variable {D Sl : Type} [Inhabited D] [Inhabited Sl]
+
+theorem rx_pure_bind {α β : Type} {a : α} {f : α → Game β} {Q : β → Prop} (h : ∃ b, Reaches (f a) b ∧ Q b) :
+    ∃ b, Reaches (pure a >>= f) b ∧ Q b :=
+  h
+
+theorem foldRoundsC_zero (A : Arith F K) : ∀ (k : ℕ) (s : Opens F D → K) (q : Opens F D → Quad K),
+    (∀ o, s o = 0) → (∀ o, q o = 0) →
+    ∃ x, Reaches (foldRoundsC A k s q) x ∧ x.1.length = k ∧ (∀ o, x.2.1 o = 0) ∧ ∀ o, x.2.2 o = 0
+  | 0, _, _, hs, hq => ⟨_, rfl, rfl, hs, hq⟩
+  | k + 1, s, q, _, hq => by
+      rw [foldRoundsC]
+      refine rx_bind (rx_any (drawK_productive A)) fun r _ => rx_recv (0, 0)
+        (rx_bind (foldRoundsC_zero A k _ _ (fun o => ?_) (fun o => ?_)) fun x hx => ?_)
+      · simp [Quad.eval, hq o]
+      · simp [fromMsg, Quad.eval, hq o]
+      obtain ⟨rs, s'', q'⟩ := x
+      exact rx_pure ⟨by simp [hx.1], hx.2⟩
+
+theorem twoOodC_zero (A : Arith F K) (dim split : ℕ) (s : Opens F D → K) (q : Opens F D → Quad K)
+    (hs : ∀ o, s o = 0) (hq : ∀ o, q o = 0) :
+    ∃ x, Reaches (twoOodC A dim split s q) x ∧ (∀ o, x.1 o = 0) ∧ ∀ o, x.2.1 o = 0 := by
+  unfold twoOodC
+  exact rx_draw 0 (rx_recv 0 (rx_recv (0, 0) (rx_draw 0 (rx_draw 0 (rx_recv 0 (rx_recv (0, 0) (rx_draw 0
+    (rx_pure ⟨fun o => by simp [hs o], fun o => by simp [Quad.addScaled, fromMsg, hq o]⟩))))))))
+
+theorem queryAndBatchC_zero (A : Arith F K) (r : ℕ) (lv : Level) (ch : List K) (start : ℕ)
+    (st : LigStateC F K D) (wm : Bool) (hs : ∀ o, st.s o = 0) (hq : ∀ o, st.q o = 0) :
+    ∃ st', Reaches (queryAndBatchC A r lv ch start st wm) st' ∧ (∀ o, st'.s o = 0) ∧ (∀ o, st'.q o = 0) ∧
+      st'.levels = st.levels ∧ st'.level = st.level ∧ st'.caps = st.caps ∧
+      ∃ pos, st'.reqs = st.reqs ++ [⟨st.level, pos, ch.length, pathLen lv⟩] := by
+  unfold queryAndBatchC
+  refine rx_draw 0 (rx_draw 0 ?_)
+  dsimp only
+  split
+  · exact rx_recv (0, 0) (rx_pure_bind (rx_draw 0 (rx_pure ⟨fun o => by simp [hs o],
+      fun o => by simp [Quad.addScaled, hq o], rfl, rfl, rfl, _, rfl⟩)))
+  · exact rx_pure_bind (rx_draw 0 (rx_pure ⟨fun o => by simp [hs o], hq, rfl, rfl, rfl, _, rfl⟩))
+
+theorem flatten_tail_length (L : List (List K)) :
+    (L.map List.tail).flatten.length = (L.map fun l => l.length - 1).sum := by
+  induction L with
+  | nil => rfl
+  | cons l L ih => simp [ih]
+
+/-- A zero residual answers a zero claim, once the folds have the schedule's length. -/
+theorem finalCheck_zero (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K) (levels : List (List K))
+    (oods : List (OodCtx F)) (cons : List (ConsCtx F)) (ext : ℕ)
+    (h : (initial ++ (levels.map List.tail).flatten).length + ext = n) :
+    finalCheck A n b initial levels oods cons ext 0 0 = true := by
+  subst h
+  simp [finalCheck]
+
+theorem getD_of_drop {l t : List Level} {i : ℕ} {a : Level} (h : l.drop i = a :: t) : l.getD i default = a := by
+  have h' := congrArg List.head? h
+  rw [List.head?_drop] at h'
+  simp [List.getD_eq_getElem?_getD, h']
+
+variable (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
+
+/-- The zero run of the recursive rounds: cap messages the zero caps, zero messages and coins, a zero residual. -/
+theorem recC_accept (A : Arith F K) (r : ℕ) (sch : Schedule) (b : ℕ → F) (initial : List K)
+    (hlen : initial.length + ((sch.levels.drop 1).map fun lv => lv.lanes - 1).sum + sch.ext = sch.m - 7) :
+    ∀ (lvs : List Level) (st : LigStateC F K D), lvs ≠ [] → sch.levels.drop st.level = lvs → 1 ≤ st.level →
+      (∀ o, st.s o = 0) → (∀ o, st.q o = 0) → st.caps = zcaps H E Lf sch st.level →
+      (∀ req ∈ st.reqs, req.level ≤ st.level ∧ req.lanes = lanesOf sch req.level ∧
+        req.depth = depthOf sch req.level) →
+      st.levels.map List.length ++ lvs.map Level.lanes = (sch.levels.drop 1).map Level.lanes →
+      ∃ p, Reaches (recursiveRoundsC A r (sch.m - 7) b initial sch.ext lvs st) p ∧ (∀ o, p.verdict o = true) ∧
+        Good H E Lf sch p.caps p.reqs
+  | [], _, h, _, _, _, _, _, _, _ => absurd rfl h
+  | [lv], st, _, hdrop, hl1, hs, hq, hcaps, hreqs, hlv => by
+      rw [recursiveRoundsC]
+      refine rx_bind (foldRoundsC_zero A _ _ _ hs hq) fun x hx => ?_
+      obtain ⟨ch, s, q⟩ := x
+      obtain ⟨hch, hs', hq'⟩ := hx
+      refine rx_recv 0 (rx_bind (queryAndBatchC_zero A _ _ _ _ _ _ hs' hq') fun st' hst => ?_)
+      obtain ⟨hs'', -, hlevels, hlevel, hcaps', pos, hreqs'⟩ := hst
+      dsimp only at hlevels hlevel hcaps' hreqs'
+      refine rx_pure ⟨fun o => ?_, ?_⟩
+      · dsimp only
+        rw [hs'' o]
+        apply finalCheck_zero
+        have hL : (st'.levels).map List.length = (sch.levels.drop 1).map Level.lanes := by
+          rw [hlevels, ← hlv]
+          simp [hch]
+        have hsum : List.map (fun l => l.length - 1) st'.levels = (sch.levels.drop 1).map fun lv => lv.lanes - 1 := by
+          rw [show (fun l : List K => l.length - 1) = (fun n => n - 1) ∘ List.length from rfl, ← List.map_map, hL,
+            List.map_map]
+          rfl
+        rw [List.length_append, flatten_tail_length, hsum]
+        exact hlen
+      · dsimp only
+        rw [hcaps', hcaps, hreqs']
+        refine good_zcaps H E Lf sch _ _ fun req hreq => ?_
+        rcases List.mem_append.1 hreq with hreq | hreq
+        · exact hreqs req hreq
+        · simp only [List.mem_singleton] at hreq
+          subst hreq
+          have hl0 : st.level ≠ 0 := by omega
+          refine ⟨le_rfl, ?_, ?_⟩
+          · simp only [lanesOf, hl0, ↓reduceIte]
+            rw [getD_of_drop hdrop]
+            exact hch
+          · rw [depthOf, getD_of_drop hdrop]
+  | lv :: lv' :: rest, st, _, hdrop, hl1, hs, hq, hcaps, hreqs, hlv => by
+      rw [recursiveRoundsC]
+      refine rx_bind (foldRoundsC_zero A _ _ _ hs hq) fun x hx => ?_
+      obtain ⟨ch, s, q⟩ := x
+      obtain ⟨hch, hs', hq'⟩ := hx
+      refine rx_recv (zcap H E Lf sch (st.level + 1)) (rx_bind (twoOodC_zero A _ _ _ _ hs' hq') fun y hy => ?_)
+      obtain ⟨s₂, q₂, oods⟩ := y
+      obtain ⟨hs₂, hq₂⟩ := hy
+      refine rx_bind (queryAndBatchC_zero A _ _ _ _ _ _ hs₂ hq₂) fun st' hst => ?_
+      obtain ⟨hs₃, hq₃, hlevels, hlevel, hcaps', pos, hreqs'⟩ := hst
+      dsimp only at hlevels hlevel hcaps' hreqs'
+      refine recC_accept A r sch b initial hlen (lv' :: rest) _ (List.cons_ne_nil _ _) ?_ (Nat.le_add_left 1 _) hs₃ hq₃ ?_ ?_ ?_
+      · dsimp only
+        rw [hlevel, ← List.tail_drop, hdrop]
+        rfl
+      · dsimp only
+        rw [hcaps', hlevel, hcaps, zcaps_succ]
+      · dsimp only
+        rw [hreqs', hlevel]
+        intro req hreq
+        rcases List.mem_append.1 hreq with hreq | hreq
+        · obtain ⟨h1, h2, h3⟩ := hreqs req hreq
+          exact ⟨by omega, h2, h3⟩
+        · simp only [List.mem_singleton] at hreq
+          subst hreq
+          have hl0 : st.level ≠ 0 := by omega
+          refine ⟨by dsimp only; omega, ?_, ?_⟩
+          · simp only [lanesOf, hl0, ↓reduceIte]
+            rw [getD_of_drop hdrop]
+            exact hch
+          · rw [depthOf, getD_of_drop hdrop]
+      · dsimp only
+        rw [hlevels, ← hlv]
+        simp [hch]
+
+/-- The zero run of Ligerito on a zero target. -/
+theorem ligeritoC_accept (A : Arith F K) (r : ℕ) (sch : Schedule) (T : F) (b : ℕ → F) (hT : T = 0)
+    {l₀ l₁ : Level} {rest : List Level} (hlev : sch.levels = l₀ :: l₁ :: rest)
+    (hlen : sch.k0 + ((sch.levels.drop 1).map fun lv => lv.lanes - 1).sum + sch.ext = sch.m - 7) :
+    ∃ p, Reaches (ligeritoC A r sch T b : Game (PendL F D)) p ∧ (∀ o, p.verdict o = true) ∧
+      Good H E Lf sch p.caps p.reqs := by
+  subst hT
+  unfold ligeritoC
+  dsimp only
+  rw [hlev]
+  dsimp only
+  refine rx_draw 0 (rx_recv 0 (rx_draw 0 (rx_recv (0, 0)
+    (rx_bind (foldRoundsC_zero A _ _ _ (fun _ => ?_) (fun _ => ?_)) fun x hx => ?_))))
+  · simp
+  · simp [fromMsg]
+  obtain ⟨initial, s, q⟩ := x
+  obtain ⟨hinit, hs, hq⟩ := hx
+  refine rx_recv (zcap H E Lf sch 1) (rx_bind (twoOodC_zero A _ _ _ _ hs hq) fun y hy => ?_)
+  obtain ⟨s₂, q₂, oods⟩ := y
+  obtain ⟨hs₂, hq₂⟩ := hy
+  refine rx_bind (queryAndBatchC_zero A _ _ _ _ _ _ hs₂ hq₂) fun st hst => ?_
+  obtain ⟨hs₃, hq₃, hlevels, hlevel, hcaps, pos, hreqs⟩ := hst
+  dsimp only at hlevels hlevel hcaps hreqs
+  refine recC_accept H E Lf A r sch b initial (by rw [hinit]; exact hlen) (l₁ :: rest) _ (List.cons_ne_nil _ _)
+    ?_ le_rfl hs₃ hq₃ ?_ ?_ ?_
+  · simp [hlev]
+  · simp [zcaps]
+  · dsimp only
+    rw [hreqs]
+    intro req hreq
+    simp only [List.nil_append, List.mem_singleton] at hreq
+    subst hreq
+    refine ⟨Nat.zero_le _, ?_, ?_⟩
+    · simp [lanesOf, hinit]
+    · simp [depthOf, hlev]
+  · dsimp only
+    rw [hlevels]
+    simp [hlev]
+
+/-- **The zero run of a rep accepts**: zero PIOP messages and coins, the extra claims' ring-switch messages solved,
+then the zero run of Ligerito. -/
+theorem repC_accept (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+    (extra : List (Claim F S.m))
+    (hextra : ∀ c ∈ extra, ∃ s : Fin 128 → F, ∑ v, packedWeight c (by omega) v * s v = c.value)
+    {l₀ l₁ : Level} {rest : List Level} (hlev : sch.levels = l₀ :: l₁ :: rest)
+    (hlen : sch.k0 + ((sch.levels.drop 1).map fun lv => lv.lanes - 1).sum + sch.ext = sch.m - 7) :
+    ∃ p, Reaches (repC A r S sch hm extra : Game (PendL F D)) p ∧ (∀ o, p.verdict o = true) ∧
+      Good H E Lf sch p.caps p.reqs := by
+  unfold repC
+  obtain ⟨x, hx, zc, rfl, ha, hb, hc⟩ := zerocheck_zero A S.m
+  obtain ⟨y, hy, ab, rfl, hab⟩ := lincheck_zero A S zc ha hb
+  obtain ⟨z, hz, op, rfl, hT⟩ := opening_zero A (by omega) (ab :: cClaim A zc :: extra) (by
+    intro c hc'
+    simp only [List.mem_cons] at hc'
+    rcases hc' with rfl | rfl | hc'
+    · exact solve_of_value_zero _ _ hab
+    · exact solve_of_value_zero _ _ hc
+    · exact hextra c hc')
+  obtain ⟨p, hp, hv, hg⟩ := ligeritoC_accept H E Lf A r sch op.T op.b hT hlev hlen
+  exact ⟨p, reaches_bind _ _ hx (reaches_bind _ _ hy (reaches_bind _ _ hz hp)), hv, hg⟩
+
+end ZeroLigerito
+
 local notation "𝔽" => FlockLevel3.GF128
 
 variable {D Sl : Type} [Inhabited D] [Inhabited Sl] {mPts n : ℕ} {Reg : Type}
