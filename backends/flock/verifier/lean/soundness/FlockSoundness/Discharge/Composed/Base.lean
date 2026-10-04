@@ -161,8 +161,8 @@ def regionsAvoidMask (st : Stmt) : Bool := regionCellsOff st && regionWordsOff s
 the parsed statement that neither the verifier nor the honest prover checks. The prover's `Stmt::new`
 (`backends/flock/live/src/circuit.rs:2422`) refuses only a column that shares a word with a partial region's bits and isn't
 forced to zero (`region_word_violation`), and checks no Δ pair or region cell against the mask span. So the zero-knowledge
-statements take it as a named hypothesis (`hdm`) until the verifier's D3 refusal in `Net.ofRows`, which bounds an output
-group's column by its unit (pc-wire's bundle, not yet in this tree), discharges it. -/
+statements take it as a named hypothesis (`hdm`) until the verifier's D11 refusal in `Net.ofRows`, which bounds an output
+group's columns by its unit (`g.col + g.words ≤ 2 ^ unitLog / WORD`, #1062, not yet in this tree), discharges it. -/
 def avoidsMask (st : Stmt) : Bool := deltaAvoidsMask st && regionsAvoidMask st
 
 /-- **A region's public bit at witness index `idx`** (`regionValue`): bit `i` of the region's bytes at block `b`, `i` the

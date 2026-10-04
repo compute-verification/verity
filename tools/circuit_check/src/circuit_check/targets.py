@@ -47,6 +47,7 @@ def load_registries() -> None:
     import verity.ml.boolean.cast  # noqa: F401
     import verity.ml.boolean.elementwise  # noqa: F401
     import verity.ml.boolean.gemm  # noqa: F401
+    import verity.ml.boolean.merkle  # noqa: F401
     import verity.ml.boolean.mufu  # noqa: F401
     import verity.ml.boolean.scalar  # noqa: F401
     import verity.ml.boolean.universal  # noqa: F401
@@ -58,6 +59,7 @@ def load_registries() -> None:
         if m.name != "quarantine":
             importlib.import_module(f"{R.__name__}.{m.name}")
     from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
+    import verity_pouw.circuit.boolean  # noqa: F401  (PoUW's own primitives on bits, the six `pc4` and `pc8` rows call)
     import verity_pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
     import verity_pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
     import verity_pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
@@ -276,7 +278,10 @@ def _boolean_roots() -> list[Any]:
     about 600,000 gates each, every lane about 300,000) and at a full group plus a remainder; the stream key, setup, lane and
     their pieces are static-free; the f32 argmax tree's stages at two and three levels reach its other shapes. FA2 with logit
     soft-capping on bits (`boolean_softcap`) at one head of 17 keys, two blocks (a full one and a partial one) with Check_inf in
-    both, its ``TANH`` and ``EX2`` at mufu's Boolean versions, which reaches its head and blocks."""
+    both, its ``TANH`` and ``EX2`` at mufu's Boolean versions, which reaches its head and blocks. vLLM's GPT-J RoPE on bits at
+    two heads of 8. MLA (`registry.mla`): Triton's one-split decode at one head of two keys over a 16 + 16 latent (a partial
+    block, so its masked columns), which reaches the head, the block, the score and every element; the absorb bmm at two heads,
+    K = 32, N = 3; the shared-expert combine at 8 elements with GLM-4.7-Flash's routed_scaling_factor."""
     from verity.ir.defs import bind
     from verity.ml.boolean import attention as BAT
     from verity.ml.boolean import gemm as BG
@@ -291,10 +296,12 @@ def _boolean_roots() -> list[Any]:
     from verity_vllm.program.registry import boolean_silu as BSL
     from verity_vllm.program.registry import boolean_softcap as BSC
     from verity_vllm.program.registry import gumbel_boolean as GB
+    from verity_vllm.program.registry import mla
     from verity_vllm.program.registry import moe as M
     from verity_vllm.program.registry import prims as P
     from verity_vllm.program.registry import sampling_boolean as SB
 
+    HOP = BG.HopperBF16WgmmaDot16
     rows = [bind(d, N=8) for d in (BDN.SquareBf16, BDN.SquareF32, BDN.AddWidenedBf16, BDN.ScaleRowBf16, BDN.ScaleRowF32,
                                    BDN.MulVecF32, BDN.Bf16MulScalarTensor)]
     rows += [bind(BDN.AddScalarF32, N=8, C=1e-6), bind(BDN.AddScalarBf16, N=8, C=1.0), bind(BDN.Bf16DivScalar, N=8, C=30.0),
@@ -321,7 +328,10 @@ def _boolean_roots() -> list[Any]:
             bind(BSC.AttentionSoftcap, T=17, NH=1, KVH=1, D=16, BN=16, CAP=50.0, DOT=BG.HopperBF16WgmmaDot16, INV=BAT.Fa2InvSum,
                  MASKED_FROM=0, TANH=BM.MufuTanh, EX2=BM.MufuEx2Ftz),
             bind(GB.GumbelSelectF32, V=2), bind(GB.GumbelSelectF32, V=65),
-            *SB.stages(200, SB.F32ArgmaxStage), *SB.stages(4161, SB.F32ArgmaxStage)] + rows
+            *SB.stages(200, SB.F32ArgmaxStage), *SB.stages(4161, SB.F32ArgmaxStage),
+            bind(boolean_rope.RoPEGptJ, NHEADS=2, D=8),
+            bind(mla.TritonMlaDecode, H=1, T=2, DL=16, DR=16, BN=32, SPLITS=1, SCALE=0x3D800000, DOT=HOP),
+            bind(mla.MlaBmm, NHEADS=2, K=32, N=3, DOT=HOP), bind(mla.MoeSharedCombine, H=8, RSF=0x3FE66666)] + rows
 
 
 def _boolean_gather_roots() -> list[Any]:
@@ -342,6 +352,16 @@ def _universal_roots() -> list[Any]:
     return [bind(UniversalUnit, G=16, N_IN=16, N_OUT=8), bind(UniversalUnit, G=64, N_IN=64, N_OUT=32)]
 
 
+def _merkle_roots() -> list[Any]:
+    """The hidden-index Merkle read (`verity.ml.boolean.merkle`), binary and 4-ary, at one level (a level is two or three
+    SHA-512 compressions: deeper reads repeat it). About two minutes each; the 4-ary one checks the slot multiplexers among
+    three siblings that the binary swap does not have."""
+    from verity.ir.defs import bind
+    from verity.ml.boolean.merkle import MerkleRead
+
+    return [bind(MerkleRead, ARITY=2, D=1), bind(MerkleRead, ARITY=4, D=1)]
+
+
 def _kernel_roots() -> list[Any]:
     from verity_vllm.program.kernels import kernel_registry as KR
 
@@ -359,8 +379,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, fp8_moe, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling
     from verity_vllm.program.registry import serve3, spec
     from verity_vllm.program.registry import value_inputs as VI
-    from verity_vllm.program.registry import boolean_attention, boolean_dsa, boolean_fp8, boolean_fp8_moe, boolean_sparse_mla, dsa
-    from verity_vllm.program.registry import sparse_mla, tables
+    from verity_vllm.program.registry import boolean_attention, boolean_dsa, boolean_fp8, boolean_fp8_moe, boolean_rope
+    from verity_vllm.program.registry import boolean_sparse_mla, dsa, sparse_mla, tables
 
     long = {**TINY, "MAX_POS": 16}
     tp2 = {**TINY_NOBIAS, "BIAS": True, "TP": 2}
@@ -488,6 +508,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("EmbeddingShard_v1", lambda: bind(b1_tp2.EmbeddingShard, VS=16, H=16, START=16)),
         ("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16)),
         ("RoPEGptJ_v1", lambda: bind(ref_prims.RoPEGptJ, NHEADS=2, D=16)),
+        ("RoPEGptJ_v2", lambda: bind(boolean_rope.RoPEGptJV2, NHEADS=2, D=16)),
         ("RoPEInterleavedRef_v1", lambda: bind(ref_prims.RoPEInterleavedRef, D=16, DT="bf16")),
     ]
 
@@ -624,7 +645,7 @@ def catalog() -> list[Any]:
         elif isinstance(d, CompositeDefinition) and not d.statics:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
-    roots += _core_roots() + _boolean_roots() + _boolean_gather_roots() + _universal_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
+    roots += _core_roots() + _boolean_roots() + _boolean_gather_roots() + _universal_roots() + _merkle_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
     for label, make in _model_roots():
         try:
             fn = make()

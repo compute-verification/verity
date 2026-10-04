@@ -569,6 +569,8 @@ struct Collector {
     py::dict d;
     d["copies"] = tot_copies; d["bytes"] = tot_bytes; d["memsets"] = tot_memsets; d["misses"] = tot_misses;
     d["learn_steps"] = tot_learn_steps; d["issue_s"] = tot_issue_s; d["plans"] = plans.size(); d["plan_entries"] = plans.entries();
+    d["plans_pending"] = plans.pending(); d["plan_entries_pending"] = plans.pending_entries();
+    d["plans_dropped"] = plans.dropped(); d["plans_pending_emptied_step"] = plans.pending_emptied_step();
     d["strided_2d"] = tot_strided; d["contiguous_fallback"] = tot_fallback; d["flushes"] = tot_flushes; d["staged"] = tot_staged;
     d["gather_blocks"] = tot_blocks; d["auto_blocks"] = auto_blocks;
     d["expected"] = tot_expected; d["committed"] = tot_committed;
@@ -578,8 +580,8 @@ struct Collector {
 
   void reset_stats() { tot_copies = tot_bytes = tot_memsets = tot_misses = tot_learn_steps = tot_strided = tot_fallback = 0; tot_issue_s = 0.0; tot_flushes = 0; tot_staged = 0; tot_blocks = 0; tot_expected = tot_committed = 0; }
   void clear_plans() { plans.clear(); plan = nullptr; }
-  void end_run() {             // the committer's reset between runs: the run totals, and the plans the run that ended did not use
-    reset_stats();
+  void end_run() {             // the committer's reset between runs: the run totals, and the plans the run that ended did not use (freed by
+    reset_stats();             // the next run's steps, native_plans.h)
     plans.end_run();
     if (!active) plan = nullptr;
   }
