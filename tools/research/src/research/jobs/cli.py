@@ -140,7 +140,7 @@ def needs_avx512(commit: str, base: str, cwd: Path | None = None) -> bool:
     rule = (_literal(_show(commit, "tools/check/tool.py", cwd), "merge_requires") or {}).get("lean-agreement")
     from ..merge import rule_touches
 
-    changed = [p for p in _git("diff", "--name-only", "-z", base, commit, cwd=cwd).split("\0") if p]
+    changed = [p for p in _git("diff", "--no-renames", "--name-only", "-z", base, commit, cwd=cwd).split("\0") if p]   # a rename's source too
     return bool(rule and rule_touches(rule, changed))
 
 

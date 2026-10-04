@@ -20,8 +20,8 @@ import FlockSoundness.Discharge.Hidden.Wide.Theorems
 * `Binding`: the row commitment's extractor (`commitPair_spec'`) and `OutputsBinding` from `OutputsCommitted`;
 * `Public`: what the statement takes from the public file (`public_exposes'`);
 * `Delta`: Δ as `HmRow.delta`'s, then `outPairs` (`hidden_delta'`);
-* `Rows`: an output row's message bytes are in its compressions (`out_bytes`: `HmRow.rowPorts`' bit rows, `HmOut.checkRows`),
-  and `sha512/row/v1` output rows are one per output port (`out_rows_v1`);
+* `Rows`: an output row is a padded lone port or an exact run of ports (`checkRows_out`: `HmOut.checkRows`), and
+  `sha512/row/v1` output rows are one per output port (`out_rows_v1`);
 * `Layout`: an untyped statement's layout (`hidden_layout'`), `layout_of`'s with `outPairs` past its Δ;
 * `Flat`: the flat twin (`HmRow.delta`'s Δ alone), which a satisfying witness also satisfies (`sat_flat`), and an output
   row's message bits as copies of `outSrc` (`msg_copy`);
