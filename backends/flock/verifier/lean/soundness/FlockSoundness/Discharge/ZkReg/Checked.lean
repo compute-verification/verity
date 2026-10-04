@@ -42,7 +42,7 @@ theorem check_of_accepts {I : Inputs} {own : Array Registered.Port} {t : Exec.Tr
   swap
   · exact absurd hTags.2.2.2 (by change 1 < I.count at hc'; omega)
   have hck := Registered.checkSession_ok hreg 0 (by simp)
-  have e : (#[st] : Array Stmt)[0]! = st := by first | rfl | simp
+  have e : (#[st] : Array Stmt)[0]! = st := rfl
   rw [e] at hck
   exact ⟨st, hst, hck⟩
 
@@ -142,10 +142,8 @@ theorem drawnUnit {proved units : Array ℕ} {u : ℕ} (hu : u ∈ proved) :
     have := Array.findIdx_getElem (xs := proved) (p := (· == u)) (w := hi)
     simp only [beq_iff_eq] at this
     exact this
-  first
-    | rw [Array.getD_eq_getD_getElem? (xs := proved.map (units.getD · 0)), Array.getElem?_map,
-        Array.getElem?_eq_getElem hi, Option.map_some, Option.getD_some, hget]
-    | simp [hi, hget]
+  rw [Array.getD_eq_getD_getElem? (xs := proved.map (units.getD · 0)), Array.getElem?_map,
+    Array.getElem?_eq_getElem hi, Option.map_some, Option.getD_some, hget]
 
 variable {mPts n : ℕ} {Reg : Type}
 
