@@ -18,7 +18,7 @@ from verity_network_warden.active import (
     VirtualClock,
 )
 from verity_network_warden.audit import Audit
-from verity_network_warden.calibration import choose_syncs
+from warden_calibration import choose_syncs
 from verity_network_warden.commitment import commit
 from verity_network_warden.grid import GridParams, Reason, Warden, row_count
 from verity_network_warden.schedule import (

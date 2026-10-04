@@ -5,12 +5,19 @@ from __future__ import annotations
 
 import ast
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1] / "protocols"
-PROTOCOLS = sorted(p.name for p in ROOT.iterdir() if (p / "pyproject.toml").exists())
+REPO = Path(__file__).resolve().parents[1]
+ROOT = REPO / "protocols"
+#: each protocol's directory, by the name its package imports as (`verity_<name>`): under protocols/, and under
+#: verity/protocols/ once it has moved
+DIRS = {tomllib.loads(p.read_text())["project"]["name"].removeprefix("verity-").replace("-", "_"): p.parent
+        for p in [*ROOT.glob("*/pyproject.toml"), *(REPO / "verity" / "protocols").rglob("pyproject.toml")]
+        if not any(x.startswith(".") for x in p.relative_to(REPO).parts)}
+PROTOCOLS = sorted(DIRS)
 
 # The protocol -> protocol imports Daniel has allowed, each with its ruling (`.agents/skills/friction/SKILL.md`).
 EDGES = {
@@ -29,14 +36,14 @@ def _imports(path: Path) -> list[tuple[str, int]]:
 
 
 def test_every_protocol_is_checked():
-    assert "sampled_proofs" in PROTOCOLS
+    assert {"sampled_proofs", "network_warden"} <= set(PROTOCOLS)
 
 
 def _sources(name: str) -> list[Path]:
     """A protocol's own Python files: not its tests, not a Lean package's tooling (the scripts beside a lakefile write
     the package's data, as tests do), and nothing under a dot-directory (a Lean package's `.lake`, a `.venv`), where only
     build outputs and fetched dependencies live."""
-    base = ROOT / name
+    base = DIRS[name]
     return [p for p in sorted(base.rglob("*.py"))
             if "tests" not in (parts := p.relative_to(base).parts) and not any(x.startswith(".") for x in parts)
             and not any((base.joinpath(*parts[:i]) / "lakefile.toml").exists() for i in range(1, len(parts)))]
@@ -69,7 +76,7 @@ def test_an_edge_grants_one_direction_to_one_protocol():
 @pytest.mark.parametrize("name", PROTOCOLS)
 def test_protocol_imports_only_the_core_and_its_edges(name):
     allowed = _allowed(name)
-    offenders = [f"{path.relative_to(ROOT)}:{line}: {mod}"
+    offenders = [f"{path.relative_to(REPO)}:{line}: {mod}"
                  for path in _sources(name)
                  for mod, line in _imports(path) if mod.split(".")[0] not in allowed]
     assert not offenders, "\n".join(offenders)

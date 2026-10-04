@@ -3,7 +3,7 @@ name = "verity-network-traces"
 version = "0.0.0"
 description = "Per-token timing traces of vLLM serving, for the network warden's calibration."
 requires-python = ">=3.12"
-dependencies = ["verity-network-warden"]
+dependencies = ["verity-network-warden", "verity-warden-calibration"]
 
 # Not an installable package: a workspace member so that its tests run in the workspace environment.
 [tool.uv]
@@ -11,6 +11,7 @@ package = false
 
 [tool.uv.sources]
 verity-network-warden = { workspace = true }
+verity-warden-calibration = { workspace = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -123,7 +123,7 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
     for name in ("verity_from_tree", "verity_vllm_from_tree", "research_telemetry_from_tree", "sampled_proofs_from_tree", "protocols_from_tree",
                  "numpy_import"):
         assert checks[name]["ok"], (name, checks[name])
-    assert set(checks["protocols_from_tree"]["value"]) == {"network_warden", "pous", "pouw", "sampled_proofs"}
+    assert set(checks["protocols_from_tree"]["value"]) == {"pous", "pouw", "sampled_proofs"}
     assert rec["ok"] == all(c["ok"] for c in checks.values())
     assert (r.returncode == 0) == rec["ok"]
     meas = rec["measurements"]
@@ -181,8 +181,7 @@ def test_bootstrap_writes_a_pth_for_every_other_protocol(tmp_path: Path) -> None
     assert r.returncode == 0, r.stdout + r.stderr
     protocols = (TREE / "protocols").resolve()
     assert {p.name: p.read_text() for p in tmp_path.glob("*.pth")} == {
-        "verity-pous.pth": f"{protocols / 'pous'}\n", "verity-pouw.pth": f"{protocols / 'pouw'}\n",
-        "verity-network-warden.pth": f"{protocols / 'network_warden'}\n"}
+        "verity-pous.pth": f"{protocols / 'pous'}\n", "verity-pouw.pth": f"{protocols / 'pouw'}\n"}
 
 
 def test_gpu_mode_record_shape_is_unchanged() -> None:

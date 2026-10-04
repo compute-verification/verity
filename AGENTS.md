@@ -95,8 +95,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme, Pearl-C), each with
  pinned vectors, `circuit`, `ncp-v2` as a Program that sampled proofs verifies, and its Lean
  package (`lean/`, whose `Pouw.SecurityProofs.EndToEnd` is the guarantee); see its `PROTOCOL.md`.
- `protocols/network_warden` (`verity_network_warden`) is network transparency's timing
- channel: the warden, its audit and calibration, and its Lean package (`lean/`).
+ `verity/protocols/accounting/communication/warden` (`verity_network_warden`) is network transparency's
+ timing channel: the warden, its audit and its active enforcer; its calibration is
+ `tools/catalog/warden` (`warden_calibration`), and its Lean package `protocols/network_warden/lean/`.
  `protocols/nci` is novel communication intensity, the policy that throttles frontier training
  and leaves inference alone; so far only its Lean package (`lean/`).
  Applications (vLLM) compose protocols.

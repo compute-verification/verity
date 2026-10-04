@@ -6,12 +6,11 @@ A spec-level reference for network transparency's timing channel:
 - the exact audit with record-and-reject, on raw records or records committed by hash (padding elided), and the
   ingress links' status check;
 - the capacity counts;
-- the calibration of honest runs;
 - the active warden (`active`): an asyncio TCP proxy that runs the wardens on a live link and publishes their records.
 
 It is pure Python. It imports only the standard library and `verity`, for the record digest's `tagged_sha256` and
 `canonical_json_bytes`.
-`PROTOCOL.md` has the semantics and the correspondence to the Lean package.
+`PROTOCOL.md` has the semantics and the correspondence to the Lean package (`protocols/network_warden/lean/`).
 
 ~~~python
 from verity_network_warden.audit import Audit
@@ -28,10 +27,10 @@ audit.check_link("responses", records, frames, syncs, sync_set, params)
 assert audit.accepted
 ~~~
 
-Calibration, from a JSON trace of honest runs:
+Calibration (`warden_calibration`, in `tools/catalog/warden`), from a JSON trace of honest runs:
 
 ~~~text
 uv run network-warden-calibrate trace.json --ingress-bucket-ms 100
 ~~~
 
-Tests: `uv run tools/check/suites.py verity-network-warden`.
+Tests: `uv run tools/check/suites.py verity-network-warden verity-warden-calibration`.

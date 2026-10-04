@@ -67,7 +67,7 @@ from verity_network_warden.active import (
     encode_frame,
 )
 from verity_network_warden.audit import Audit
-from verity_network_warden.calibration import choose_syncs
+from warden_calibration import choose_syncs
 from verity_network_warden.commitment import CommittedRecord, commit
 from verity_network_warden.grid import (
     COMPLETE,

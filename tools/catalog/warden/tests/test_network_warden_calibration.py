@@ -9,7 +9,8 @@ from fractions import Fraction
 
 import pytest
 
-from verity_network_warden import calibration, capacity
+import warden_calibration as calibration
+from verity_network_warden import capacity
 from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet, eligible
 
 

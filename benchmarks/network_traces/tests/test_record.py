@@ -14,7 +14,7 @@ import types
 from pathlib import Path
 
 import pytest
-from verity_network_warden import calibration
+import warden_calibration as calibration
 
 HERE = Path(__file__).resolve().parents[1]
 

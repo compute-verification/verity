@@ -35,7 +35,8 @@ inputs = [".agents/skills", ".gitignore", "backends/direct", "fixtures", "integr
           "tools/tc_probe",
           "pyproject.toml", "backends/flock/pyproject.toml", "backends/gkr/pyproject.toml", "backends/numerical/pyproject.toml",
           "backends/sp1/pyproject.toml", "benchmarks/commitments/pyproject.toml", "benchmarks/network_traces/pyproject.toml",
-          "benchmarks/pouw/pyproject.toml", "packages/verity/pyproject.toml", "protocols/network_warden/pyproject.toml",
+          "benchmarks/pouw/pyproject.toml", "packages/verity/pyproject.toml", "verity/protocols/accounting/communication/warden/pyproject.toml",
+          "tools/catalog/warden/pyproject.toml",
           "protocols/pous/pyproject.toml", "protocols/pouw/pyproject.toml", "protocols/sampled_proofs/pyproject.toml",
           "tools/check/pyproject.toml", "tools/circuit_check/pyproject.toml", "tools/cluster/pyproject.toml",
           "tools/lean/pyproject.toml", "tools/native_peak/pyproject.toml", "tools/tc_probe_fp4/pyproject.toml"]

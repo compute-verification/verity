@@ -1,8 +1,8 @@
 """The difftest of the Python audit against `NetTiming`'s Lean definitions: the Python half.
 
-`lean/scripts/difftest_vectors.py` writes 10,000 random instances and this package's results on each
+`protocols/network_warden/lean/scripts/difftest_vectors.py` writes 10,000 random instances and this package's results on each
 (`schedule.expected_grids`, `Audit.check_link` with the first differing bucket, `Audit.check_ingress_link`, and each
-prefix's acceptance). `check` runs the Lean half in its Lean audit (`runs` in `lean/lean-audit.json`):
+prefix's acceptance). `check` runs the Lean half in its Lean audit (`runs` in `protocols/network_warden/lean/lean-audit.json`):
 `NetTimingDifftest.lean` evaluates every instance with `NetTiming`'s definitions (`expectedRow`, and `Accepted` of
 `constantRate` and `StatusComplete` by `decide`) and fails on any difference. The audit checks that data against the
 record's SHA-256, and its pass is cached on the Lean package's files alone, so the test here is what says the data is
@@ -24,7 +24,7 @@ import pytest
 from verity_network_warden.grid import released
 from verity_network_warden.schedule import ClockSync, LogicalFrame, handing_buckets
 
-LEAN = Path(__file__).resolve().parents[1] / "lean"
+LEAN = Path(__file__).resolve().parents[6] / "protocols" / "network_warden" / "lean"
 _spec = importlib.util.spec_from_file_location("difftest_vectors", LEAN / "scripts" / "difftest_vectors.py")
 vectors = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vectors)

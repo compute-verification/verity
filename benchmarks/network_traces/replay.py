@@ -48,7 +48,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity_network_warden.audit import Audit
-from verity_network_warden.calibration import choose_syncs
+from warden_calibration import choose_syncs
 from verity_network_warden.commitment import commit
 from verity_network_warden.grid import GridParams, Record, Warden
 from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets, run_shaper

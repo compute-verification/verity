@@ -95,7 +95,7 @@ An integration makes Verity work end to end with a real system. The vLLM integra
 - [`protocols/sampled_proofs/`](protocols/sampled_proofs/README.md): sampled proofs, as the one-stage audit and the two-stage law
 - [`protocols/pous/`](protocols/pous/README.md): proofs of useful space
 - [`protocols/pouw/`](protocols/pouw/PROTOCOL.md): proofs of useful work
-- [`protocols/network_warden/`](protocols/network_warden/README.md): the network warden, network transparency's timing channel
+- [`verity/protocols/accounting/communication/warden/`](verity/protocols/accounting/communication/warden/README.md): the network warden, network transparency's timing channel
 - [`integrations/vllm/`](integrations/vllm/README.md): the vLLM integration, a hooked vLLM engine that builds each served workload's circuit and commits its values while serving
 - [`tools/research/`](tools/research/README.md): the research harness, for recorded runs on remote pods and the evidence store that keeps their results; it treats every workload as opaque and imports nothing from Verity
 - [`tools/check/`](tools/check/check.py): `check`, the one check a merge requires, and `suites.py`, which runs the test suites
@@ -154,7 +154,7 @@ There is no GitHub Actions CI. `check` is the one check, and a merge into `main`
 
 ## Documentation
 
-- Specifications: the [program format](packages/verity/src/verity/ir/PROTOCOL.md), the commitment schemes ([frame-v3](packages/verity/src/verity/commitments/frame_v3/PROTOCOL.md), [vllm-v1](packages/verity/src/verity/commitments/vllm_v1/PROTOCOL.md)), the protocols ([sampled proofs](protocols/sampled_proofs/README.md), stated in Lean, [proofs of useful space](protocols/pous/PROTOCOL.md), [proofs of useful work](protocols/pouw/PROTOCOL.md), [the network warden](protocols/network_warden/PROTOCOL.md)) and [C-Flock's verifier](backends/flock/verifier/PROTOCOL.md)
+- Specifications: the [program format](packages/verity/src/verity/ir/PROTOCOL.md), the commitment schemes ([frame-v3](packages/verity/src/verity/commitments/frame_v3/PROTOCOL.md), [vllm-v1](packages/verity/src/verity/commitments/vllm_v1/PROTOCOL.md)), the protocols ([sampled proofs](protocols/sampled_proofs/README.md), stated in Lean, [proofs of useful space](protocols/pous/PROTOCOL.md), [proofs of useful work](protocols/pouw/PROTOCOL.md), [the network warden](verity/protocols/accounting/communication/warden/PROTOCOL.md)) and [C-Flock's verifier](backends/flock/verifier/PROTOCOL.md)
 - Each component's README, linked under Repository structure
 - [AGENTS.md](AGENTS.md) for contributors and agents, and the skills under [`.agents/skills/`](.agents/skills/) for recurring workflows such as Lean proofs
 

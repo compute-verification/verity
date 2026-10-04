@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity_network_warden import calibration
+import warden_calibration as calibration
 from verity_network_warden.active import DATA, LAST, encode_frame
 from verity_network_warden.grid import COMPLETE, GridParams, Reason, Record, Status, Warden
 

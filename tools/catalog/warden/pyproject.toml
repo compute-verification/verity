@@ -1,0 +1,22 @@
+[project]
+name = "verity-warden-calibration"
+version = "0.1.0"
+description = "The network warden's calibration: sizing its parameters (the egress allocation r, the clock-sync set and the ingress grid) from honest timing traces."
+requires-python = ">=3.12"
+dependencies = ["verity-network-warden"]
+
+[project.scripts]
+network-warden-calibrate = "warden_calibration:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["warden_calibration.py"]
+
+[tool.uv.sources]
+verity-network-warden = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
