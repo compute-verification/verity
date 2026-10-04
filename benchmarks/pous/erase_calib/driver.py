@@ -92,6 +92,11 @@ def node_meta() -> dict:
         m["affinity"] = sorted(os.sched_getaffinity(0))
     except (AttributeError, OSError):
         pass
+    try:
+        kb = next(ln for ln in Path("/proc/meminfo").read_text().splitlines() if ln.startswith("MemTotal:"))
+        m["mem_total_bytes"] = int(kb.split()[1]) * 1024
+    except (OSError, StopIteration, ValueError, IndexError):
+        pass
     return m
 
 
