@@ -6,7 +6,8 @@
 #     MODE rehearsal: gpu-lease 1 --wait --preemptible --max-min MAX_MIN (untimed)
 #     MODE timed:     gpu-lease 8 --wait --timed --max-min MAX_MIN
 #   SHIP_TAR is ship.sh's ship.tar; HARNESS_BUILD the harness build jobs/env.sh takes (node2-gpus.md beside it unless
-#   SERVER_MD names the table).  env: SCHEDULES (default serial; each gets its own window), DRAWS (60), JOBS (the audit's
+#   SERVER_MD names the table).  env: SCHEDULES (default serial; each gets its own window), HASHING (h1 or h2, default h1),
+#   DRAWS (60), JOBS (the audit's
 #   processes, default nproc), MAX_MIN (45), MEM_GB (the lease's memory cap, default 32 for one card, 160 for eight), SCRATCH_ROOT (where the rows
 #   and the ship are unpacked, default /tmp).
 # Writes under OUT (default $RESEARCH_RUN_DIR/out): ship.sha256; bench-before/card<g>/ (bench.py with the Pearl-C arm: the
@@ -16,7 +17,7 @@ set -uo pipefail
 exec < /dev/null
 mode=${1:?rehearsal|timed}; ship_tar=${2:?SHIP_TAR}; build=${3:?HARNESS_BUILD}
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
-export HERE ROOT DURATION=${4:-1800} OUT=${OUT:-$RESEARCH_RUN_DIR/out} SCHEDULES=${SCHEDULES:-serial} DRAWS=${DRAWS:-60}
+export HERE ROOT DURATION=${4:-1800} OUT=${OUT:-$RESEARCH_RUN_DIR/out} SCHEDULES=${SCHEDULES:-serial} HASHING=${HASHING:-h1} DRAWS=${DRAWS:-60}
 export MD=${SERVER_MD:-$build/node2-gpus.md} LABEL=m8192-n8192-k8192 SHAPE="8192 8192 8192"
 JOBS=${JOBS:-$(nproc)}; MAX_MIN=${MAX_MIN:-45}
 case $mode in
@@ -53,7 +54,7 @@ bench() {   # bench WHEN ARGS...: one bench.py per card, all at once
 bench before --arm-path "$ROOT/benchmarks/pouw/pearl_c_sm120" --arm pearlc_arm:PearlCSm120
 for s in $SCHEDULES; do
   "$PY" "$HERE/window.py" run --out "$OUT/$s" --server-md "$MD" --duration "$DURATION" --draws "$DRAWS" --schedule "$s" \
-    --shape $SHAPE < /dev/null
+    --hashing "$HASHING" --shape $SHAPE < /dev/null
   echo "window $s rc=$? at $(date -u +%FT%T.%3NZ)"
 done
 bench after
