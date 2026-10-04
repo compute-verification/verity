@@ -775,7 +775,7 @@ def write_public_inputs(text: str, words: dict, n: int, path) -> None:
 def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
           share_rows: bool = False, rows: dict | None = None, outs: dict | None = None, tables: dict | None = None,
           refs: dict | None = None, salts: dict | None = None, registered: dict | None = None,
-          public_words: dict | None = None) -> dict:
+          public_words: dict | None = None, identifier: dict | None = None) -> dict:
     """``flock-circuit-inputs``: one JSON header line (the set's name, the range, each block's unit indices, the composite
     circuit's sha512, the frame-v3-sha512 statement; never the set's content digest, an unsalted hash of its values), then, for
     the prover only, every instance's rows (its input rows, then its output rows: ports in order, u16 LE) and every row's salt
@@ -804,7 +804,17 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
 
     A circuit with public inputs (META ``public_inputs``, PROTOCOL.md §16.10): the header names them as META does, and both files
     end with every instance's public words (u16 LE, instance-major, the ports in order): ``public_words``
-    (``{port: (n, words)}``), else the set's."""
+    (``{port: (n, words)}``), else the set's.
+
+    ``identifier``: the header's ``identifier`` (PROTOCOL.md §16.10), a JSON object C-Flock does not read, on which canonical JSON
+    is RFC 8785 (``verity.ir.codec.jcs_domain_error``). The public digest binds it, and the verifier holds it to its own
+    (``--identifier F``)."""
+    from verity.ir.codec import jcs_domain_error
+
+    if identifier is not None:
+        bad = jcs_domain_error(identifier, "identifier") if isinstance(identifier, dict) else "identifier: not a JSON object"
+        if bad:
+            raise ValueError(f"{bad} (the header's identifier is a JSON object on which canonical JSON is RFC 8785)")
     meta = json.loads(text.split("\n", 2)[1][5:])
     sub = input_set.subcircuit
     n = hi - lo
@@ -865,6 +875,8 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
             "range": [lo, hi], "instances": n, "circuit_sha512": digest(text), "units": units, "frame_v3": fv, "rows": True}
     if pins:
         head["public_inputs"] = pins
+    if identifier is not None:
+        head["identifier"] = identifier
     if registered is not None:
         head["registered"] = {name: {"value": e["value"], "positions": [int(x) for x in e["positions"]], "paths": list(e["paths"])}
                               for name, e in registered.items()}
@@ -893,13 +905,13 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
 
 def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False, salt_key: bytes | None = None,
           indices: list | None = None, partition: str | None = None, program: str | None = None, share_rows: bool = False,
-          public_inputs: dict | None = None) -> Path:
+          public_inputs: dict | None = None, identifier: dict | None = None) -> Path:
     """``<out_dir>/circuit.txt`` (the composite circuit), the prover's ``<out_dir>/inst-<n>.bin`` and the verifier's own
     ``pub-<n>.bin`` from the same salts (``share_rows``: shared-row files, :func:`write`); returns the prover's path, or
     (``public_only``: a verifier staging its own public file, which needs the prover's ``salt_key``) writes and returns only
     ``pub-<n>.bin``. ``public_inputs`` (:func:`compose`): also the verifier's ``public-inputs-<n>.bin``, from the set's words, which
     stand in for the verifier's own recomputation (a caller that holds the derivation writes it with
-    :func:`write_public_inputs`)."""
+    :func:`write_public_inputs`). ``identifier``: both files' header ``identifier`` (:func:`write`)."""
     if public_only and salt_key is None:
         raise ValueError("a verifier stages its own public file only from the prover's staging salt key (salts are otherwise fresh)")
     out = Path(out_dir)
@@ -913,7 +925,7 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: b
             (out / "circuit-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True, partition=partition, program=program,
                                                             statics=statics, public_inputs=public_inputs))
     inst, pub = out / f"inst-{hi - lo}.bin", out / f"pub-{hi - lo}.bin"
-    write(text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices, share_rows=share_rows)
+    write(text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices, share_rows=share_rows, identifier=identifier)
     if public_inputs:
         write_public_inputs(text, {nm: input_set.port(nm, lo, hi) for nm in public_inputs}, hi - lo, out / f"public-inputs-{hi - lo}.bin")
     return pub if public_only else inst
