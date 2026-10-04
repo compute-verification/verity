@@ -25,9 +25,9 @@ once it passes, so a check that one of them fails ends in seconds, not hours.
 A step that fails stops the others: each running step's processes get SIGINT (Python code runs its `finally`s, so the Lean audit
 removes its scratch tree) and whatever is left of them SIGKILL after `STOP_GRACE_S`, and no group starts another step. Such a
 step's status is `stopped`. `--keep-going` lets every group run to its end instead, keeping the verdicts its passing steps store,
-except after a step in `HALTS`: a Lean module that doesn't compile, or a pin whose record is stale, fails the audit too, so
-nothing still running is worth the slot; likewise a Rust crate that doesn't compile (`HALTS_ON`: flock-circuit-build's log says
-`could not compile`) fails flock-rust-tests.
+except after a step in `HALTS`: a failed preflight starts no group; a Lean module that doesn't compile, or a pin whose record
+is stale, fails the audit too, so nothing still running is worth the slot; likewise a Rust crate that doesn't compile
+(`HALTS_ON`: flock-circuit-build's log says `could not compile`) fails flock-rust-tests.
 The steps stay in this process's group, which a runner's timeout and a manual stop signal as a whole. Each step's record is
 appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run.
 
@@ -736,7 +736,7 @@ def _kill_after_grace(p: subprocess.Popen) -> None:
 
 
 #: the steps whose failure stops the run even under --keep-going
-HALTS = frozenset({"lean-changed"})
+HALTS = frozenset({"preflight-lock", "preflight-lints", "lean-changed"})
 #: ... and those whose failure does when their log has this text; without it (a failed clone or toolchain download) the other
 #: groups keep their verdicts
 HALTS_ON = {"flock-circuit-build": "error: could not compile"}
