@@ -52,8 +52,7 @@ from verity.evaluation import self_check
 from verity.ir.defs import SpecializedDefinition, bind
 from verity_vllm.config import UsageError, option
 from verity_vllm.program.kernels.kernel_registry import Declined, covers, instance, register
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import prims as P
+from verity_vllm.program.registry import b1, prims as P
 from verity_vllm.program.twins import prims as prims_twins
 
 SCHEMA = "verity-gen/twins/v1"

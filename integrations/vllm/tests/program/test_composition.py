@@ -47,7 +47,7 @@ from verity.ir import Program, bind  # noqa: E402
 from verity.ir.evaluate import evaluate_call  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond, correspond_rebound  # noqa: E402
 from verity_vllm.program.registry import b1, hopper as H, prims as P  # noqa: E402
-from verity_vllm.program.vocabulary import b1 as b1_vocabulary
+from verity_vllm.program.vocabulary import serve as serve_vocabulary
 from tests.program.crosscheck import _standalone  # noqa: E402
 
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
@@ -464,25 +464,25 @@ def test_serve_v1_is_untouched_and_serve_v4_is_registered_beside_it():
     for d, ver in ((b1.AttnBlock, 1), (b1.AttentionHead, 1), (b1.Attention, 1), (b1.Serve, 1),
                    (b1.AttnBlockV3, 3), (b1.AttentionHeadV3, 3), (b1.AttentionV3, 3), (b1.ServeV4, 4)):
         assert REGISTRY[d.id] is d and d.version == ver
-    assert b1_vocabulary.serve_family(None) is b1.Serve and b1_vocabulary.serve_family("Serve_v1") is b1.Serve and b1_vocabulary.serve_family("Serve_v4") is b1.ServeV4
+    assert serve_vocabulary.serve_family(None) is b1.Serve and serve_vocabulary.serve_family("Serve_v1") is b1.Serve and serve_vocabulary.serve_family("Serve_v4") is b1.ServeV4
     with pytest.raises(KeyError):
-        b1_vocabulary.serve_family("Serve_v9")
+        serve_vocabulary.serve_family("Serve_v9")
     # the v1 block takes 64 K rows at any head dim; the v3 block takes the DECLARED BN
     assert dict(bind(b1.AttnBlock, D=64, NVIS=1, FIRST=True).signature()[0])["k"].n == 64
     assert dict(bind(b1.AttnBlockV3, D=64, NVIS=1, FIRST=True, BN=128).signature()[0])["k"].n == 128
     assert dict(bind(b1.AttnBlockV3, D=64, NVIS=1, FIRST=True, BN=64).signature()[0])["k"].n == 64
     # the identity binder (D57): no geometry -> Serve_v1; a geometry -> Serve_v4{..., BN}; mismatched pairs refused
     G = {"kernel": "fa2-splitkv-align", "kBlockM": 64, "kBlockN": 128, "num_splits": 1}
-    assert b1_vocabulary.serve_program(TINY, 3, 2).id == bind(b1.Serve, C=TINY, LP=3, STEPS=2).id
-    assert b1_vocabulary.serve_program(TINY, 3, 2, family="Serve_v4", attention=G).id == bind(b1.ServeV4, C=TINY, LP=3, STEPS=2, BN=128).id
-    assert b1_vocabulary.serve_program(TINY, 3, 2, family="Serve_v4", attention=G).id.endswith(",BN=128}")
+    assert serve_vocabulary.serve_program(TINY, 3, 2).id == bind(b1.Serve, C=TINY, LP=3, STEPS=2).id
+    assert serve_vocabulary.serve_program(TINY, 3, 2, family="Serve_v4", attention=G).id == bind(b1.ServeV4, C=TINY, LP=3, STEPS=2, BN=128).id
+    assert serve_vocabulary.serve_program(TINY, 3, 2, family="Serve_v4", attention=G).id.endswith(",BN=128}")
     for bad in ({**G, "kBlockN": 100}, {**G, "num_splits": 2}, {**G, "kernel": "fa3"}, {**G, "kBlockM": 128}):
         with pytest.raises(ValueError):
-            b1_vocabulary.serve_program(TINY, 3, 2, family="Serve_v4", attention=bad)
+            serve_vocabulary.serve_program(TINY, 3, 2, family="Serve_v4", attention=bad)
     with pytest.raises(ValueError):
-        b1_vocabulary.serve_program(TINY, 3, 2, family="Serve_v4")  # no geometry
+        serve_vocabulary.serve_program(TINY, 3, 2, family="Serve_v4")  # no geometry
     with pytest.raises(ValueError):
-        b1_vocabulary.serve_program(TINY, 3, 2, attention=G)  # Serve_v1 with a foreign geometry
+        serve_vocabulary.serve_program(TINY, 3, 2, attention=G)  # Serve_v1 with a foreign geometry
 
 
 def test_serve_v4_differs_from_serve_v1_only_in_the_attention_chain():
@@ -524,14 +524,14 @@ def test_fa2_geometry_is_derived_from_the_pinned_profiles_declared_kernel():
     if not root.exists():
         pytest.skip("semantic profiles not in this checkout")
     for name, D in (("llama-eager-batch-invariant-v3.json", 64), ("qwen2-eager-batch-invariant-v2.json", 64), ("llama-eager-batch-invariant-v3.json", 128)):
-        consts = b1_vocabulary.profile_attention_consts(_json.loads((root / name).read_text()))
+        consts = serve_vocabulary.profile_attention_consts(_json.loads((root / name).read_text()))
         assert consts["fa_version"] == 2 and consts["num_splits"] == 1
-        g = b1_vocabulary.fa2_kernel_geometry(consts, D)
+        g = serve_vocabulary.fa2_kernel_geometry(consts, D)
         assert g["kBlockM"] == 64 and g["kBlockN"] == b1.fa2_kblock_n(D) == (128 if D <= 64 else 64)
-        assert b1_vocabulary.attention_geometry_static(g) == g["kBlockN"]  # the pin E6 writes binds as BN
+        assert serve_vocabulary.attention_geometry_static(g) == g["kBlockN"]  # the pin E6 writes binds as BN
     hopper = root / "qwen2-eager-batch-invariant-hopper-v1.json"
     if hopper.exists():
         with pytest.raises(ValueError):
-            b1_vocabulary.fa2_kernel_geometry(b1_vocabulary.profile_attention_consts(_json.loads(hopper.read_text())), 128)  # FA3: not this rule
+            serve_vocabulary.fa2_kernel_geometry(serve_vocabulary.profile_attention_consts(_json.loads(hopper.read_text())), 128)  # FA3: not this rule
     with pytest.raises(ValueError):
-        b1_vocabulary.fa2_kernel_geometry({"backend": "FlashAttentionBackend", "fa_version": 2, "num_splits": 0}, 64)  # the 256-key path: refused
+        serve_vocabulary.fa2_kernel_geometry({"backend": "FlashAttentionBackend", "fa_version": 2, "num_splits": 0}, 64)  # the 256-key path: refused
