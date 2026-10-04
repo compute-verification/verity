@@ -71,6 +71,7 @@ def test_the_command_is_on_the_cli_and_takes_its_spec_and_the_environment(tmp_pa
 def test_each_row_runs_in_its_own_environment_with_the_leased_devices_kept(monkeypatch):
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "5")
     monkeypatch.setenv("GPU_LEASE_UUID", "GPU-5")
+    monkeypatch.delenv("CUDA_DEVICE_ORDER", raising=False)       # leased too (GL.LEASED); a GPU pod's shell sets it
     monkeypatch.setenv("ONLY_BEFORE", "1")
     was = dict(os.environ)
     try:

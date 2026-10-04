@@ -22,7 +22,10 @@ sits in encodes. `prob p g s` is the exact probability, over the verifier's unif
 mixture of deterministic ones, so every bound on `value` bounds it too.
 
 `interleave g₁ g₂` runs two interactions side by side, the prover choosing at every step which one advances, and
-`batch` runs a list of them so.
+`batch` runs a list of them so. A strategy for a batch plays each of its games, and `InducedAt` names the strategies it
+induces on one of them: the batch strategy's moves in that game, with the other games' coins fixed at some values. A
+bound for a class of strategies of the game holds at its position in the batch for every batch strategy whose induced
+strategies are in the class (`Guarantees.ProbBatchInduced`).
 
 Every protocol's guarantee has one form (`Sound`): whatever the developer does, the probability that the verifier
 accepts while the claim `E` about the committed world is false is at most `δ`. Protocols differ only in their game,
@@ -110,6 +113,83 @@ def interleave : Game α → Game β → Game (α × β)
 def batch : List (Game α) → Game (List α)
   | [] => .ret []
   | g :: gs => (g.interleave (batch gs)).map fun x => x.1 :: x.2
+
+/-- A strategy for the relabelled game is a strategy for the game: the same message at every node. -/
+def Strategy.ofMap (f : α → β) : (g : Game α) → Strategy (g.map f) → Strategy g
+  | .ret _, _ => PUnit.unit
+  | .send _ k, s => ⟨s.1, Strategy.ofMap f (k s.1) s.2⟩
+  | @Game.coin _ _ _ _ k, s => fun c => Strategy.ofMap f (k c) (s c)
+
+/-- A strategy for the game is a strategy for the relabelled game, the inverse of `ofMap`. -/
+def Strategy.toMap (f : α → β) : (g : Game α) → Strategy g → Strategy (g.map f)
+  | .ret _, _ => PUnit.unit
+  | .send _ k, s => ⟨s.1, Strategy.toMap f (k s.1) s.2⟩
+  | @Game.coin _ _ _ _ k, s => fun c => Strategy.toMap f (k c) (s c)
+
+/-- The strategies for the first interaction that a strategy `σ` for `interleaveWith adv₁ fin₁ h` induces, given those
+that `σ` induces where it advances the first interaction (`advR`) and once the second has ended with `b` (`finR b`).
+Where `σ` advances the second interaction, the induced strategy follows `σ`'s message there, and the second's coin is
+fixed at some value. -/
+def InducedWithL (adv₁ : Game β → Game (α × β)) (fin₁ : β → Game (α × β))
+    (advR : (h : Game β) → Strategy (adv₁ h) → Prop) (finR : (b : β) → Strategy (fin₁ b) → Prop) :
+    (h : Game β) → Strategy (interleaveWith adv₁ fin₁ h) → Prop
+  | .ret b, σ => finR b σ
+  | .send M k, σ => match σ with
+    | ⟨true, σ'⟩ => advR (.send M k) σ'
+    | ⟨false, σ'⟩ => InducedWithL adv₁ fin₁ advR finR (k σ'.1) σ'.2
+  | @Game.coin _ C iF iN k, σ => match σ with
+    | ⟨true, σ'⟩ => advR (@Game.coin _ C iF iN k) σ'
+    | ⟨false, σ'⟩ => ∃ c, InducedWithL adv₁ fin₁ advR finR (k c) (σ' c)
+
+/-- **A strategy that `σ` induces on the first interaction.** `InducedL g h σ s`: `s` plays `g` as the strategy `σ` for
+`interleave g h` does, with `h`'s coins fixed at some values and `h`'s messages `σ`'s. At `g`'s message `s` sends `σ`'s,
+and at `g`'s coin `s` follows `σ` for every value. -/
+def InducedL : (g : Game α) → (h : Game β) → Strategy (interleave g h) → Strategy g → Prop
+  | .ret _, _, _, _ => True
+  | .send M k, h, σ, s => InducedWithL
+      (fun g₂ => .send M fun m => interleave (k m) g₂) (fun b => (Game.send M k).map fun a => (a, b))
+      (fun h' σ' => ∃ s', s = ⟨σ'.1, s'⟩ ∧ InducedL (k σ'.1) h' σ'.2 s')
+      (fun b σ' => s = Strategy.ofMap (fun a => (a, b)) (.send M k) σ') h σ
+  | @Game.coin _ C iF iN k, h, σ, s => InducedWithL
+      (fun g₂ => @Game.coin _ C iF iN fun c => interleave (k c) g₂)
+      (fun b => (@Game.coin _ C iF iN k).map fun a => (a, b))
+      (fun h' σ' => ∀ c, InducedL (k c) h' (σ' c) (s c))
+      (fun b σ' => s = Strategy.ofMap (fun a => (a, b)) (@Game.coin _ C iF iN k) σ') h σ
+
+/-- The strategies for the second interaction that a strategy `σ` for `interleaveWith adv₁ fin₁ h` induces, given those
+that `σ` induces where it advances the first interaction (`advR`). Where `σ` advances the second, the induced strategy
+sends `σ`'s message and follows `σ` for every value of the second's coin. -/
+def InducedWithR (adv₁ : Game β → Game (α × β)) (fin₁ : β → Game (α × β))
+    (advR : (h : Game β) → Strategy (adv₁ h) → Strategy h → Prop) :
+    (h : Game β) → Strategy (interleaveWith adv₁ fin₁ h) → Strategy h → Prop
+  | .ret _, _, _ => True
+  | .send M k, σ, s => match σ with
+    | ⟨true, σ'⟩ => advR (.send M k) σ' s
+    | ⟨false, σ'⟩ => ∃ s', s = ⟨σ'.1, s'⟩ ∧ InducedWithR adv₁ fin₁ advR (k σ'.1) σ'.2 s'
+  | @Game.coin _ C iF iN k, σ, s => match σ with
+    | ⟨true, σ'⟩ => advR (@Game.coin _ C iF iN k) σ' s
+    | ⟨false, σ'⟩ => ∀ c, InducedWithR adv₁ fin₁ advR (k c) (σ' c) (s c)
+
+/-- **A strategy that `σ` induces on the second interaction.** `InducedR g h σ s`: `s` plays `h` as the strategy `σ` for
+`interleave g h` does, with `g`'s coins fixed at some values and `g`'s messages `σ`'s. -/
+def InducedR : (g : Game α) → (h : Game β) → Strategy (interleave g h) → Strategy h → Prop
+  | .ret a, h, σ, s => s = Strategy.ofMap (fun b => (a, b)) h σ
+  | .send M k, h, σ, s => InducedWithR
+      (fun g₂ => .send M fun m => interleave (k m) g₂) (fun b => (Game.send M k).map fun a => (a, b))
+      (fun h' σ' s' => InducedR (k σ'.1) h' σ'.2 s') h σ s
+  | @Game.coin _ C iF iN k, h, σ, s => InducedWithR
+      (fun g₂ => @Game.coin _ C iF iN fun c => interleave (k c) g₂)
+      (fun b => (@Game.coin _ C iF iN k).map fun a => (a, b))
+      (fun h' σ' s' => ∃ c, InducedR (k c) h' (σ' c) s') h σ s
+
+/-- **A strategy that `σ` induces on one game of a batch.** `InducedAt g post pre σ s`: `s` plays `g`, at position
+`pre.length` of `batch (pre ++ g :: post)`, as the strategy `σ` for the batch does, with every other game's coins fixed
+at some values and its messages `σ`'s. -/
+def InducedAt (g : Game α) (post : List (Game α)) :
+    (pre : List (Game α)) → Strategy (batch (pre ++ g :: post)) → Strategy g → Prop
+  | [], σ, s => InducedL g (batch post) (Strategy.ofMap (fun x : α × List α => x.1 :: x.2) _ σ) s
+  | h :: pre, σ, s => ∃ σ', InducedR h (batch (pre ++ g :: post))
+      (Strategy.ofMap (fun x : α × List α => x.1 :: x.2) _ σ) σ' ∧ InducedAt g post pre σ' s
 
 end Game
 
