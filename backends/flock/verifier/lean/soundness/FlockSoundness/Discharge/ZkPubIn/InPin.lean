@@ -477,4 +477,77 @@ theorem in_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model
 
 end pinned
 
+/-! ## The words the `in` regions read: the verifier's own -/
+
+section own
+
+open FlockSoundness.Refine (throw_bind')
+
+set_option maxHeartbeats 2000000 in
+/-- **`HmRow.drawn` draws from a registered population**, not from a drawn statement. -/
+theorem drawn_population {c : Circuit} {pop pub : Public} {d : Lean.Json} (h : HmRow.drawn c pop d = .ok pub) :
+    pop.population = none := by
+  unfold HmRow.drawn at h
+  dsimp only at h
+  simp only [throw_bind'] at h
+  repeat' walk_step
+  all_goals
+    have hpop := ‹¬(_ != pop.n || pop.population.isSome) = true›
+    simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, not_not, Option.isSome_eq_false_iff,
+      Bool.not_eq_true] at hpop
+    exact Option.isNone_iff_eq_none.1 hpop.2
+
+theorem outWords_inPorts (c : Circuit) (np : ℕ) :
+    ({ c with outPorts := #[("public inputs", np)] } : Circuit).outWords = np := by
+  simp [Circuit.outWords]
+
+/-- **Leaf `j` of a proved unit's slot in an `in` region over words from `w`**: at a public leaf `q` of copy `u'` of
+VU `g` in block `o`, the drawn statement's public word `q` of the slot's instance `o · c.g + g`. -/
+theorem inVal_pub {c : Circuit} {pi : HmIn.Ports} {pub : Public} {w o g u' j : ℕ} (hu' : u' < c.upv)
+    (hk : g * c.upv + u' < c.unitRange.count) (hr : o * c.g + g < pub.n) {q : ℤ}
+    (hq : (pi.leaves.getD u' #[]).getD (8 * (w - (c.unit.inGroups.getD 0 default).col) + j) (-1) = q) (h0 : 0 ≤ q) :
+    inVal c pi pub w o (g * c.upv + u') j = pub.outputs.getD ((o * c.g + g) * pi.words + q.toNat) 0 := by
+  have hm : (g * c.upv + u') % c.upv = u' := by
+    rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hu']
+  have hdv : (g * c.upv + u') / c.upv = g := by
+    rw [Nat.add_comm, Nat.add_mul_div_right _ _ (by omega), Nat.div_eq_of_lt hu', zero_add]
+  unfold inVal
+  simp only [hk, ↓reduceIte, hdv, hm, Circuit.instOf, hr, hq, ge_iff_le, h0]
+
+/-- **The drawn statement's public words are the verifier's own**: word `q` of instance `r` of `HmIn.drawn`'s statement
+is the population's word `q` of proved unit `D.proved[r]`, which `OwnWords` says is the verifier's own. -/
+theorem drawn_own {c : Circuit} {pi : HmIn.Ports} {tags : Tags} {pf own : ByteArray} {pop pub : Public} {d : Lean.Json}
+    (hp : pi.ports.isEmpty = false) (hload : HmIn.loadPublic tags c pi pf = .ok pop) (hown : OwnWords own pi pop)
+    (h : HmIn.drawn c pi pop d = .ok pub) {D : Draw.UnitDraw} (hD : Draw.UnitDraw.ofJson d = .ok D)
+    (hlt : ∀ v ∈ D.proved, v < D.population) {r u q : ℕ} (hu : D.proved[r]? = some u) (hq : q < pi.words) :
+    pub.outputs.getD (r * pi.words + q) 0 = ownWord own (u * pi.words + q) := by
+  have hdr : HmRow.drawn { c with outPorts := #[("public inputs", pi.words)] } pop d = .ok pub := by
+    unfold HmIn.drawn at h
+    simpa only [hp, Bool.false_eq_true, ↓reduceIte] using h
+  have hl : HmRow.loadPublic tags { c with outPorts := #[("public inputs", pi.words)] } pf = .ok pop := by
+    simpa only [hp, Bool.false_eq_true, ↓reduceIte] using loadPublic_nilP hload
+  obtain ⟨D', hD', hpopn, -⟩ := Layout.drawn_spec hdr
+  obtain ⟨D'', hD'', hout⟩ := Layout.drawn_outputs hdr
+  rw [hD] at hD' hD''
+  cases hD'
+  cases hD''
+  obtain ⟨hsz, -⟩ := Layout.loadPublic_outputs hl
+  rw [outWords_inPorts] at hsz hout
+  obtain ⟨hr, rfl⟩ := Array.getElem?_eq_some_iff.1 hu
+  rw [hout, Layout.foldl_extract_getD pop.outputs D.proved (fun v hv => by
+    have := hlt v hv
+    rw [hsz, ← hpopn]
+    nlinarith) 0 hr hq]
+  have hu' := hlt _ (Array.getElem_mem hr)
+  rw [hpopn] at hu'
+  have hpn := drawn_population hdr
+  have := hown (D.proved[r] * pi.words + q) (by
+    rw [hpn]
+    simp only [Option.map_none, Option.getD_none]
+    nlinarith)
+  rw [hpn] at this
+  simpa using this
+
+end own
+
 end FlockSoundness.Discharge.ZkPubIn
