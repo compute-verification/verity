@@ -34,6 +34,12 @@ def gates(unit: Sequence[Region]) -> Region:
     return tuple(g for region in unit for g in region)
 
 
+@functools.cache
+def unit_of(partition: Partition) -> dict[int, int]:
+    """Each gate's isolation unit."""
+    return {g: u for u, unit in enumerate(partition) for g in gates(unit)}
+
+
 def wire_of(circuit: Circuit, gate: int) -> int:
     return circuit.inputs + gate
 

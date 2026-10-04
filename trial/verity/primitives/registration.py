@@ -12,11 +12,13 @@ wire, in wire order), but its state inputs. An execution that reads what an earl
 cache) reads it from the writer's root (`Stream.locate`), so a wire is committed once, by the execution that computed
 it, and the region that reads a wire reads what the region that wrote it committed. The verifier rebuilds each
 execution's circuit from its advice (`Stream`): integrity opens and proves against the roots, work keys each
-execution's work from its salt and root, and NCI checks each execution's isolation units. Every statement over the
-stream names its digest. Today's reference for the commitment: `verity_sampled_proofs.one_stage.registration`.
+execution's work from its salt and root, and NCI checks the stream's isolation units. Every statement over the stream
+names its digest. Today's reference for the commitment: `verity_sampled_proofs.one_stage.registration`.
 
-The stream is one circuit, cut into executions as the prover ran them, and its partition is theirs. State links only
-within the stream: a session that outlives its epoch carries its state into the next one as fresh inputs.
+The stream is one circuit, cut into executions as the prover ran them. Its isolation units are the executions', joined
+where one reads state another wrote (`isolation_units`), so a session's steps are one isolation unit, as NCI's
+inference guarantee has it. State links only within the stream: a session that outlives its epoch carries its state
+into the next one as fresh inputs.
 
 The builder here is Python, which prover and verifier both run, standing in for a provable program (Rust under SP1, say)
 whose id is its program's; the verifier's rerun stands in for checking a proof that the circuit is its output.
@@ -147,6 +149,31 @@ def check(stream: Stream, scheme: CommitmentScheme) -> tuple[str, ...]:
         if e.root.scheme != scheme.name or e.root.leaves != len(wires(circuit, partition)):
             why.append(f"execution {i}: its root is not one {scheme.name} leaf per committed wire")
     return tuple(why)
+
+
+def isolation_units(stream: Stream) -> list[list[tuple[int, int]]]:
+    """The stream's isolation units, each its parts (execution, isolation unit of that execution's partition): the
+    executions' own, joined where one reads state another wrote. Raises ValueError where `Stream.locate` does."""
+    parent: dict[tuple[int, int], tuple[int, int]] = {}
+
+    def find(x: tuple[int, int]) -> tuple[int, int]:
+        while parent.setdefault(x, x) != x:
+            x = parent[x]
+        return x
+
+    for i in range(len(stream.executions)):
+        circuit, partition = stream.built(i)
+        for u, unit in enumerate(partition):
+            find((i, u))
+            for w in P.boundary(circuit, P.gates(unit))[0]:
+                if circuit.carried(w) is not None:
+                    j, written = stream.locate(i, w)
+                    writer, cut = stream.built(j)
+                    parent[find((i, u))] = find((j, P.unit_of(cut)[written - writer.inputs]))
+    units: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    for part in parent:
+        units.setdefault(find(part), []).append(part)
+    return sorted(units.values())
 
 
 @dataclass(frozen=True)
