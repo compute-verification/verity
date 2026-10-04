@@ -16,7 +16,7 @@ The private-circuit instance takes protocol 1's soundness and zero knowledge at 
 * `zkSessionSound_real`: `ZkSessionSound realSession` from `zk_session_sound`, under the count curve's side conditions.
 * `zkSessionView_of_zkViewAt`, `zkSessionView_real`: `ZkSessionView` at one table, from `ZkViewAt` at a covered coin
   vector and a valid witness whose registered values are the public ones; at a draw's `coinedOf` tables
-  (`zk_session_view`), under `hash-derived-key` and `PadNonvanishing`, at `δ₁ = 2^-193`.
+  (`zk_session_view`), under `hash-derived-key`, at `δ₁ = 2^-193`.
 -/
 
 namespace FlockSoundness.Discharge.PrivateCircuit
@@ -109,13 +109,12 @@ theorem zkSessionView_of_zkViewAt (C : CoinedSetup) {δ₁ : ℝ≥0∞} (h : Zk
   fun w₀ _ enc E => h c hc enc (fun _ => w) w₀ (fun _ => hw) (fun _ => hreg) E
 
 /-- **`ZkSessionView` at a draw's `--zk` table**, from `zk_session_view` (the zero-knowledge half of
-`zk_session_composed`), for an untyped statement whose Δ and regions avoid the mask slot, under `hash-derived-key` and
-`PadNonvanishing`, at `δ₁ = 2^-193`. -/
+`zk_session_composed`), for an untyped statement whose Δ and regions avoid the mask slot, under `hash-derived-key`, at
+`δ₁ = 2^-193`. -/
 theorem zkSessionView_real (P : LigProver) (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
     (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), avoidsMask y.x.st = true)
-    (hKey : Assumptions.Zk.HashDerivedKeyHm96) (hPad : Assumptions.Zk.PadNonvanishing40)
-    (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S))
+    (hKey : Assumptions.Zk.HashDerivedKeyHm96) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S))
     (c : CoinsZK (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).Rest)
     (hc : (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).Covered c)
     (w : Witness (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).S.m)
@@ -124,6 +123,6 @@ theorem zkSessionView_real (P : LigProver) (I : Inputs) (dj : Finset (Fin n) →
       ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).tab.pubReg) :
     ZkSessionView (fun _ : Fin 1 => (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c) (fun _ => w)
       ((2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
-  zkSessionView_of_zkViewAt _ (zk_session_view P I dj y₀ ht hdm hKey hPad S R y) c hc w hw hreg
+  zkSessionView_of_zkViewAt _ (zk_session_view P I dj y₀ ht hdm hKey S R y) c hc w hw hreg
 
 end FlockSoundness.Discharge.PrivateCircuit
