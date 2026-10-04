@@ -197,7 +197,12 @@ def move_names(src_mod: str, names: tuple[str, ...], dst_mod: str, *, dst_doc: s
     if extra:
         raise SplitError(f"{src_mod}: a moved statement also binds {extra}: split by hand")
     lines = [ln.decode() for ln in src.encode().splitlines(keepends=True)]
-    spans = sorted({_span(lines, top[n]) for n in names})
+    spans: list[tuple[int, int]] = []
+    for a, b in sorted({_span(lines, top[n]) for n in names}):
+        if spans and all(not ln.strip() for ln in lines[spans[-1][1]:a]):
+            spans[-1] = (spans[-1][0], b)               # only blank lines between: the source's own spacing stays
+        else:
+            spans.append((a, b))
     moved = "".join("".join(lines[a:b]).rstrip("\n") + "\n\n\n" for a, b in spans).rstrip("\n") + "\n"
     moved_tree = ast.parse(moved)
     doc = tree.body[0] if tree.body and isinstance(tree.body[0], ast.Expr) and isinstance(tree.body[0].value, ast.Constant) \
@@ -247,7 +252,16 @@ def _drop_imports(src: str, candidates: set[str]) -> str:
                       "import " + ", ".join(_alias_text(a) for a in stay))
         else:
             E.edits.append((node.lineno, 0, node.end_lineno + 1, 0, ""))
-    return E.apply() if E.edits else src
+    if not E.edits:
+        return src
+    out = E.apply()
+    imports = [n for n in ast.parse(out).body if isinstance(n, (ast.Import, ast.ImportFrom))]
+    if not imports:
+        return out
+    lines = out.splitlines(keepends=True)
+    a, b = imports[0].lineno - 1, imports[-1].end_lineno
+    block = re.sub(r"\n{3,}", "\n\n", "".join(lines[a:b]))     # a removed import leaves no run of blank lines among the rest
+    return "".join(lines[:a]) + block + "".join(lines[b:])
 
 
 def move_vocab() -> None:
