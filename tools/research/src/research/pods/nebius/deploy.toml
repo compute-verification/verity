@@ -285,6 +285,12 @@ by = "tools/research/src/research/pods/nebius/sky/cluster_up.sh"
 nodes = ["vy-nebius-1"]
 
 [[file]]
+path = "/etc/systemd/system/vy-store-evict-research.service.d/src.conf"
+src = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"
+nodes = ["vy-nebius-1"]
+run = ["systemd:vy-store-evict-research.timer"]
+
+[[file]]
 path = "/etc/systemd/system/vy-usage.service"
 by = "tools/research/src/research/pods/nebius/sky/cluster_up.sh"
 nodes = ["vy-nebius-1"]
