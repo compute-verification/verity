@@ -27,18 +27,19 @@ def test_the_steps_get_only_what_the_allowlist_names(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "environ", {**MACHINE, "RESEARCH_RUN_DIR": str(tmp_path / "runs" / "r0")})
     env = CHECK.env()
     assert set(env) == {"PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "XDG_CACHE_HOME", "UV_CACHE_DIR", "VIRTUAL_ENV", "CARGO_HOME",
-                        "https_proxy", "VERITY_SLOW", "FLOCK_CHECKOUT", CHECK.STORE_REQUIRED_ENV, "GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME",
-                        "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"}, sorted(env)
+                        "https_proxy", "VERITY_SLOW", "FLOCK_CHECKOUT", CHECK.STORE_REQUIRED_ENV, CHECK.REGRESSION_ENV, "GIT_AUTHOR_NAME",
+                        "GIT_COMMITTER_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"}, sorted(env)
     assert {k: env[k] for k in ("PATH", "VERITY_SLOW", "FLOCK_CHECKOUT")} == {"PATH": "/usr/bin", "VERITY_SLOW": "1", "FLOCK_CHECKOUT": "/root/flock"}
 
 
 def test_a_step_never_inherits_what_check_set_for_it(tmp_path, monkeypatch):
     """A step of a recorded check has the run's custody dir and the store required, and no RESEARCH_*: a check it starts (its
     own tests call `env()`) is not a recorded run, so it passes neither on.  A recorded run of its own passes its own."""
-    step = {"PATH": "/usr/bin", "HOME": "/root", CHECK.STORE_REQUIRED_ENV: "1", CHECK.CUSTODY_ENV: "/w/requests/r0/custody"}
+    step = {"PATH": "/usr/bin", "HOME": "/root", CHECK.STORE_REQUIRED_ENV: "1", CHECK.CUSTODY_ENV: "/w/requests/r0/custody",
+            CHECK.REGRESSION_ENV: "1"}
     monkeypatch.setattr(os, "environ", dict(step))
     env = CHECK.env()
-    assert CHECK.STORE_REQUIRED_ENV not in env and CHECK.CUSTODY_ENV not in env
+    assert CHECK.STORE_REQUIRED_ENV not in env and CHECK.CUSTODY_ENV not in env and CHECK.REGRESSION_ENV not in env
     run, custody = tmp_path / "research" / "runs" / "r1", tmp_path / "research" / "requests" / "r1" / "custody"
     run.mkdir(parents=True)
     custody.mkdir(parents=True)
@@ -46,7 +47,7 @@ def test_a_step_never_inherits_what_check_set_for_it(tmp_path, monkeypatch):
     (custody / "cred.json").write_text("{}")
     monkeypatch.setattr(os, "environ", {**step, "RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_DIR": str(run)})
     env = CHECK.env()
-    assert env[CHECK.STORE_REQUIRED_ENV] == "1" and env[CHECK.CUSTODY_ENV] == str(custody.resolve())
+    assert env[CHECK.STORE_REQUIRED_ENV] == "1" and env[CHECK.CUSTODY_ENV] == str(custody.resolve()) and env[CHECK.REGRESSION_ENV] == "1"
 
 
 def test_checks_own_tests_pass_inside_a_recorded_checks_step():

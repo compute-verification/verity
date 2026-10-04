@@ -13,7 +13,7 @@ What changes vs the frozen R9 complete path (`native_host_fast+hidden_m1_gputree
     TensorMeta(...) construction, first_leaf     nbytes, arena offset, zero-gap) was PRECOMPUTED on the first step of this step-shape class
     arithmetic, dtype dict, perf_counter x2      and is checked, not rebuilt; then one cudaMemcpyAsync (D2D) on the PRODUCER's current
   ctypes cudaMemcpyAsync (+ memset for gaps)     stream (+ the same memset for the same gaps)
-  per-step Python list of TensorMeta           per-plan cached TensorMeta list + cached layout digest, built on the WORKER thread once per
+  per-step Python list of TensorMeta           per-plan cached record (plan_cache) + cached layout digest, built on the WORKER thread once per
                                                  plan version (identical fields => identical layout digest => identical step root)
 
 Ordering: the copy is enqueued on the producer's current stream at the hook, i.e. after the kernel that produced the value and before any
@@ -552,13 +552,14 @@ def _excluded_chunk_ranges(metas: list, exclude: set[str], chunk: int = GPU_CHUN
     (the neighbour opens from host); a tensor shorter than one chunk contributes nothing."""
     from verity_vllm.commit.committer.native_host import value_family
     out: list[tuple[int, int, str]] = []
-    for m in metas:
-        fam = value_family(m.name)
+    spans = zip(metas.names, metas.offsets, metas.sizes) if isinstance(metas, PlanMetas) else (   # name, byte offset in the step stream, nbytes
+        (m.name, int(m.dev_off) if int(getattr(m, "dev_off", -1)) >= 0 else int(m.stream_off), int(m.nbytes)) for m in metas)
+    for name, off, nbytes in spans:
+        fam = value_family(name)
         if fam not in exclude:
             continue
-        off = int(m.dev_off) if int(getattr(m, "dev_off", -1)) >= 0 else int(m.stream_off)   # the tensor's byte offset in the step stream
         lo = -(-off // chunk) * chunk
-        hi = ((off + int(m.nbytes)) // chunk) * chunk
+        hi = ((off + nbytes) // chunk) * chunk
         if hi <= lo:
             continue
         if out and out[-1][1] == lo and out[-1][2] == fam:
@@ -1144,26 +1145,15 @@ class NativeCollectCommitter(NativeHostCommitter):
         if metas is None:
             if entries is None:
                 raise RuntimeError(f"plan ({key}, {version}) not seen by the worker before a step that uses it")
-            metas = []
-            first_leaf = 0
-            chunk = self.chunk
-            for i, (nid, dtype, sizes, nbytes, off, _gap) in enumerate(entries):
-                n_leaves = (nbytes + chunk - 1) // chunk
-                m = TensorMeta(i, self._names[nid], str(dtype).replace("torch.", ""), tuple(int(x) for x in sizes), int(nbytes), chunk, first_leaf, n_leaves)
-                m.dev_off = int(off)
-                m.stream_off = m.dev_off             # what R9's _commit_step_gpu sets per step (idempotent; feeds the layout digest + identity)
-                m.dev_block = None
-                metas.append(m)
-                first_leaf += n_leaves
-            self._metas_cache[(key, version)] = metas = PlanMetas(metas)
+            self._metas_cache[(key, version)] = metas = PlanMetas.of_entries(entries, self._names, self.chunk)
         return metas
 
     def layout_digest(self, metas: list[TensorMeta]) -> bytes:  # type: ignore[override]
-        """The base class's function, computed once per plan: nothing changes a field it reads once the plan's metas are built."""
+        """The base class's function, computed once per plan: nothing changes a field it reads once the plan's record is built."""
         if not isinstance(metas, PlanMetas):
             return NativeHostCommitter.layout_digest(metas)
         if metas.digest is None:
-            metas.digest = NativeHostCommitter.layout_digest(metas)
+            metas.digest = NativeHostCommitter.layout_digest(metas.scan())
         return metas.digest
 
     def _commit_step(self, job: _StepJob) -> None:
@@ -1502,7 +1492,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             self.spans.add("hashing", t2 - t0, step=job.step, nbytes=0)
             if self.footprint is not None:
                 self.footprint.event("learned_only", step=job.step, used=used, padded=padded)
-            self._done[job.step] = StepCommitment(job.step, b"", b"", 0, sum(m.nbytes for m in metas), len(metas), b"", job.t_step_end, t2, job.backlog)
+            self._done[job.step] = StepCommitment(job.step, b"", b"", 0, metas.nbytes, len(metas), b"", job.t_step_end, t2, job.backlog)
             return
         if bounded and learning:
             host_wins = [(kk, hv, n) for kk, _hb, hv, n in tblocks]          # the re-hash source (transient blocks; given back below)
