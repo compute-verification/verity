@@ -8,7 +8,8 @@
 # records go under FLOCK_WORK/scratch/<run id>, removed at exit.
 # env: CASES="today-2304 reads2-2304 reads4-2304 today-4096 reads2-4096" (today-K: --reads none; reads2-K: two binary reads of
 #      depth 33, three levels a slot; reads4-K: two 4-ary reads of depth 17)  N=8 (instances; the prover pads to 8 blocks)
-#      CPUS=48  WARM=1 RUNS=2  LEAN=1  FLOCK_WORK=/workspace (the prover build, its venv and cached binaries, as 70-class-sweep.sh)
+#      CPUS=48  WARM=1 RUNS=2  LEAN=1  FLOCK_WORK=/workspace, or /workspace/jobs/pc-read-gadget where /workspace isn't writable
+#      (node 1) (the prover build, its venv and cached binaries, as 70-class-sweep.sh)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 if [ -z "${RG_PINNED:-}" ]; then
@@ -19,9 +20,11 @@ if [ -z "${RG_PINNED:-}" ]; then
 fi
 export FC_COINS=${FC_COINS:-os}
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/read-gadget}/out; mkdir -p $O
-FW=${FLOCK_WORK:-/workspace}; W=$FW/flock-circuit; mkdir -p $W
-S=$FW/scratch/${RESEARCH_RUN_ID:-local-$$}; rm -rf $S; mkdir -p $S
-L=$FW/cache/pc-read-gadget; mkdir -p $L
+[ -z "${FLOCK_WORK:-}" ] && [ ! -w /workspace ] && export FLOCK_WORK=/workspace/jobs/pc-read-gadget
+FW=${FLOCK_WORK:-/workspace}; W=$FW/flock-circuit; mkdir -p $W || exit 1
+[ -w "$HOME" ] || { export HOME=$FW/home; mkdir -p $HOME; }
+S=$FW/scratch/${RESEARCH_RUN_ID:-local-$$}; rm -rf $S; mkdir -p $S || exit 1
+L=$FW/cache/pc-read-gadget; mkdir -p $L || exit 1
 unset CARGO_TARGET_DIR
 { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "pinned=$RG_PINNED rayon=$RAYON_NUM_THREADS slices=${SLICES:-} slice_wait_s=${SLICE_WAIT_S:-}"
   free -g | head -2; cat /proc/loadavg; } > $O/host.txt 2>&1
