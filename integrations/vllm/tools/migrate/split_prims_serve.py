@@ -520,6 +520,9 @@ def rewrite_importers(rel: str, text: str) -> str:
                     a0, b0 = off(node.lineno, node.col_offset), off(node.end_lineno, node.end_col_offset)
                     edits.append((a0, b0, re.sub(re.escape(a.name) + r"(?![\w])", moves[a.name], text[a0:b0])))
                 elif a.name in split_srcs:
+                    if not a.asname and not any(re.search(re.escape(f"{a.name}.{n}") + r"(?![\w])", text)
+                                                for (src, n) in names if src == a.name):
+                        continue
                     if not a.asname:
                         raise Refused(f"{rel} line {node.lineno}: `import {a.name}` without an alias; rewrite it by hand")
                     bindings.setdefault((scope_of[node], a.asname), []).append((a.name, node))
@@ -599,13 +602,34 @@ def _apply(text: str, rules, prose: bool) -> str:
     return text
 
 
+def _embedded_program(rel: str, token: str, value: str) -> str | None:
+    """A string literal that is a Python program importing a moved module or name (a test's subprocess source): the token
+    with its imports rewritten, or None when it imports none."""
+    if "import" not in value:
+        return None
+    try:
+        t = ast.parse(value)
+    except SyntaxError:
+        return None
+    if not any(isinstance(n, (ast.Import, ast.ImportFrom)) for n in ast.walk(t)):
+        return None
+    new = rewrite_importers(rel, value)
+    if new == value:
+        return None
+    body = token.lstrip("rRuU")
+    q = body[:3] if body[:3] in ('"""', "'''") else body[:1]
+    if body[len(q):-len(q)] != value:
+        raise Refused(f"{rel}: a string literal's program imports a moved name, and its source text is not its value; rewrite it by hand")
+    return token[:len(token) - len(body)] + q + new + q
+
+
 def rewrite_text(rel: str, text: str, rules, unsure: list[str] | None = None) -> str:
     """A non-Python file: every rule (the prose ones in Markdown only).  A Python file: its comments and statement strings
     (docstrings), and a string literal that is exactly a moved module or name; any other literal naming one is left as it is
     and reported in `unsure` (a string can be data a digest reads: a Vocabulary's notes are)."""
     if not rel.endswith(".py"):
         return _apply(text, rules, rel.endswith(".md"))
-    if not any(pat.search(text) for pat, _, _ in rules):
+    if "verity_vllm" not in text and not any(pat.search(text) for pat, _, _ in rules):
         return text
     try:
         t = ast.parse(text)
@@ -632,6 +656,8 @@ def rewrite_text(rel: str, text: str, rules, unsure: list[str] | None = None) ->
                 value = None
             if isinstance(value, str) and value in exact:
                 new = tok.string.replace(value, exact[value])
+            elif isinstance(value, str) and (code := _embedded_program(rel, tok.string, value)) is not None:
+                new = code
             else:
                 new = tok.string
                 if unsure is not None and _apply(tok.string, rules, True) != tok.string:
@@ -800,7 +826,8 @@ def definition_imports(tree: Tree) -> list[str]:
 
 
 def leftovers(tree: Tree, files: list[str]) -> list[str]:
-    """Imports of a moved name from its old module, or `A.name` through an alias of the old module, anywhere."""
+    """Imports of a moved name from its old module, or `A.name` through an alias of the old module, anywhere, in a file or in
+    a string literal that is a program."""
     out = []
     for rel in files:
         if not rel.endswith(".py") or rel.startswith(EXCLUDE):
@@ -808,6 +835,20 @@ def leftovers(tree: Tree, files: list[str]) -> list[str]:
         text = tree.read(rel)
         if rewrite_importers(rel, text) != text:
             out.append(rel)
+        elif "verity_vllm" in text:
+            try:
+                t = ast.parse(text)
+            except SyntaxError:
+                continue
+            for n in ast.walk(t):
+                if isinstance(n, ast.Constant) and isinstance(n.value, str) and "import" in n.value:
+                    try:
+                        ast.parse(n.value)
+                    except SyntaxError:
+                        continue
+                    if rewrite_importers(rel, n.value) != n.value:
+                        out.append(f"{rel}:{n.lineno}")
+                        break
     return out
 
 
