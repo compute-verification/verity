@@ -491,7 +491,7 @@ def describe(p: dict) -> str:
              f"  proofs: {len(p['proofs'])} modules, roots {', '.join(p['proof_roots'])}; {len(p['moves'])} files move",
              f"  requires: spec {p['spec_requires'] or '(no path packages)'}; proofs: "
              + ", ".join(["the spec", *(r for r in p["proofs_requires"] if r not in p["spec_requires"])]),
-             f"  lock: guarantees {len(A.as_guarantees(dict(p['lock_spec'])).get('guarantees', {}))} and reads {len(p['lock_spec'].get('reads', {}))} stay byte for "
+             f"  lock: guarantees {len(p['lock_spec'].get('guarantees', p['lock_spec'].get('pins', {})))} and reads {len(p['lock_spec'].get('reads', {}))} stay byte for "
              f"byte; to the proofs: " + (", ".join(f"{k} {list(v) if isinstance(v, dict) and k != 'dependencies' else ''}".strip()
                                                     for k, v in p["lock_proofs"].items() if k != "guarantees") or "nothing")]
     lines += [f"  dependent: {d['package']} imports {', '.join(d['imports'])}: gains a require of {p['dest']}"

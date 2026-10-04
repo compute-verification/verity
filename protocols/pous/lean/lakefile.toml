@@ -12,7 +12,6 @@ rev = "5ed2965256430c3649e86755f9576b54eca72435"
 
 [[lean_lib]]
 name = "Pous"
-roots = ["Pous.Assumptions", "Pous.Guarantees", "Pous.Protocol", "Pous.SecurityProofs.Accounting.Numbers", "Pous.SecurityProofs.Sanity"]
 
 # The open targets (`sorry`). Not a default target.
 [[lean_lib]]
