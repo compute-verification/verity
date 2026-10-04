@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.Exec.SessionL
 import FlockSoundness.Discharge.Exec.StrictCRL
+import FlockSoundness.Discharge.Recursion.Schedule
 import FlockSoundness.Refine.Run
 
 /-!
@@ -24,6 +25,9 @@ block statement on the inner messages and the inner coins.
   `tableError`, at most `2^-205` for `22 ≤ m ≤ 33`. Statistical: no assumption, so it is `InnerSound`'s kind of bound.
 * `hidden_sound`: the compiled theorem (`table_sound_compiled_strictL`) for every hidden statement of the class, at its
   finders' budgets.
+* `flockInner`, `flock_inner_sound`, `flock_inner_sound_fast100`: the interactive table as the recursion's inner protocol
+  (`Inner`) on a fixed schedule with live coins (`schedInner`), its statements the hidden templates of the class, and its
+  `InnerSound`: at most `tableError`, at most `2^-205` for `22 ≤ m ≤ 33`.
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -180,6 +184,36 @@ theorem hidden_sound (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited S
   (expect_mono (ind_mono fun _ h => ⟨h, fun hc => hno (satisfiable_of_committed hc)⟩) _ σ).trans
     (table_sound_compiled_strictL A hA H E Lf (M.toStatement regs) m k0 l₀ l₁ rest ext hsch cls.hm cls.ptLocal
       cls.mPts hlay σ hCR)
+
+variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
+
+/-- **C-Flock's inner protocol on the class**: the statement is a hidden template of the class, the verifier the
+interactive table (`Model.table`: the oracles sent whole) on its block statement, played on the schedule `(T, CT)` with
+live coins (`schedInner`), and the statement holds when a witness satisfies it. -/
+def flockInner (A : Arith F K) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Schedule) :
+    Inner :=
+  schedInner T CT (Hidden cls) (fun M => table A (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts)
+    (fun _ out => out.1 = true) (fun M => ∃ z, (M.toStatement regs).Satisfies z)
+
+/-- **C-Flock's `InnerSound` at live coins, over the class**: on every hidden template of the class whose statement no
+witness satisfies, every prover on the schedule makes the inner verifier accept with probability at most the table's
+error, which is the same for the whole class. Statistical: no assumption. -/
+theorem flock_inner_sound (A : Arith F K) (hA : A.Correct) (cls : HClass)
+    (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Schedule) (hsch : fast100 cls.m = some sch)
+    (hlay : ∀ M : Hidden cls, (M.toStatement regs).LinkLayout cls.ptLocal cls.mPts) :
+    InnerSound (flockInner T CT A cls regs sch) (ENNReal.ofReal (tableError sch ⟨cls.kLog, regs.length, cls.mPts⟩)) :=
+  sched_sound T CT _ _ _ fun M hno =>
+    (value_mono (fun _ h => ⟨h, fun hc => hno (satisfiable_of_committed hc)⟩) _).trans
+      (table_value_sound A hA (M.toStatement regs) sch hsch cls.hm cls.ptLocal cls.mPts (hlay M))
+
+/-- **`flock_inner_sound` with the numbers**: at most `2^-205` for `22 ≤ m ≤ 33` and a shape in range. -/
+theorem flock_inner_sound_fast100 (A : Arith F K) (hA : A.Correct) (cls : HClass)
+    (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Schedule) (hsch : fast100 cls.m = some sch)
+    (hm1 : 22 ≤ cls.m) (hm2 : cls.m ≤ 33) (hshape : (⟨cls.kLog, regs.length, cls.mPts⟩ : Accounting.Stmt).InRange)
+    (hlay : ∀ M : Hidden cls, (M.toStatement regs).LinkLayout cls.ptLocal cls.mPts) :
+    InnerSound (flockInner T CT A cls regs sch) (ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ)))) := fun M hno s =>
+  (flock_inner_sound T CT A hA cls regs sch hsch hlay M hno s).trans
+    (ENNReal.ofReal_le_ofReal (tableError_le_of_le_33 hm1 hm2 hsch _ hshape))
 
 end Target
 
