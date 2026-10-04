@@ -318,6 +318,12 @@ nodes = ["vy-nebius-1"]
 owner = "infra"
 
 [[file]]
+path = "/etc/systemd/system/vy-store-evict-research.service.d/src.conf"
+src = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"
+nodes = ["vy-nebius-1"]
+run = ["systemd:vy-store-evict-research.timer"]
+
+[[file]]
 path = "/etc/systemd/system/vy-usage.service"
 by = "tools/research/src/research/pods/nebius/sky/cluster_up.sh"
 nodes = ["vy-nebius-1"]
@@ -435,6 +441,18 @@ path = "/home/research/.config/systemd/user/n2-custody.timer"
 src = "tools/research/src/research/pods/nebius/n2-custody.timer"
 nodes = ["vy-nebius-2"]
 owner = "infra"
+
+[[tree]]  # the research node 1's Jobs publish and push node 2's runs with (n2_custody.sh's VY_CUSTODY_SRC), and each node's
+# `research data custody --triage` runs, laid out as in the repository: store.remote reads the bucket's pin, store.pod.toml, three
+# directories up
+path = "/workspace/jobs/custody/tools/research/src/research"
+src = "tools/research/src/research"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+
+[[file]]
+path = "/workspace/jobs/custody/tools/research/store.pod.toml"
+src = "tools/research/store.pod.toml"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
 
 [[file]]
 path = "/workspace/pouw/infra/bin/backup.sh"

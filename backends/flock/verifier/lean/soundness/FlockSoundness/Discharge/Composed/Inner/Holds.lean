@@ -1127,12 +1127,12 @@ theorem tablesAtZK_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : F
   exact tableZK_eq _ _
 
 /-- **The inner relation at a `--zk` table of a setup** (`innerOf_holds` at any table `Tz` over `st`'s statement at its
-regions, `st` a `MaskSetup` that avoids the mask slot): at every covered coin vector, every valid witness whose
-registered values are the public ones satisfies `Table.InnerHolds`. -/
+regions, `st` a `MaskSetup` that avoids the mask slot): at every coin vector the honest prover doesn't refuse, every valid
+witness whose registered values are the public ones satisfies `Table.InnerHolds`. -/
 theorem innerOf_holds_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hwf : StmtWF st) (hS : Tz.S = stmtOf st hwf (regionsOf st))
     (M : MaskSetup st) (hdm : avoidsMask st = true) :
     let C := coinedOf P Tz st
-    ∀ c, C.Covered c → ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w := by
+    ∀ c, C.Admits c → ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w := by
   intro C c hc w hw hreg ω r
   apply batch_of_rows
   intro k
@@ -1234,7 +1234,7 @@ theorem innerOf_holds_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hwf : 
     · exact absurd h2r ‹_›
   rw [hv, hinner]
   refine rows_honest (Tz) st c r (zWith st w ω.1) (ω.2.1.2.1 r) _ hE hmS hkS ?hw
-    (rF_ne_one _ _ c r (hc.2 r)) ?hA ?hB _ hs0 hs1 ?hk0 ?hL ?hT ((C.T c).tab.y1' w ω.1 ω.2.1.2.1 r)
+    (rF_ne_one _ _ c r (hc.2.2.2 r)) ?hA ?hB _ hs0 hs1 ?hk0 ?hL ?hT ((C.T c).tab.y1' w ω.1 ω.2.1.2.1 r)
     (fun _ => rfl) hab htw' k
   -- the executable statement's sizes are the table's, and the schedule's lane split
   case hk0 =>
@@ -1331,7 +1331,7 @@ theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : F
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S))
     (ht : I.tags.typed = false) (hdm : avoidsMask y.x.st = true) :
     let C := coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
-    ∀ c, C.Covered c → ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w :=
+    ∀ c, C.Admits c → ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w :=
   innerOf_holds_of P _ y.x.st y.x.wf.1 (by rw [tablesAtZK_eq dj y₀ S R y]; rfl)
     (maskSetup_of_setupH ((ZkExec.zkTags_typed I).trans ht) y.x.h) hdm
 
