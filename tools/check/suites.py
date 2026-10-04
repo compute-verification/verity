@@ -196,23 +196,33 @@ def tests_pythonpath() -> str:
                                           if p and Path(p).resolve().is_relative_to(ROOT))])
 
 
-#: prints where each top-level module named on its command line would be imported from, without importing any of them
-_ORIGINS = ("import importlib.util as u, json, sys; "
-            "print(json.dumps({n: getattr(u.find_spec(n), 'origin', None) for n in sys.argv[1:]}))")
+#: prints where each top-level package named on its command line would be imported from, without importing any of them: a
+#: regular package's `__init__.py`, or every portion of a namespace package (PEP 420), which has no origin of its own
+_ORIGINS = ("import importlib.util as u, json, sys; s = {n: u.find_spec(n) for n in sys.argv[1:]}; "
+            "print(json.dumps({n: [x.origin] if x.origin not in (None, 'namespace') else list(x.submodule_search_locations or []) "
+            "for n, x in s.items() if x}))")
+
+
+def _packages(member: Path) -> set[str]:
+    """The `verity*` import packages a member's directory holds: a regular package (its `__init__.py`), or a portion of a
+    namespace package, a directory of packages with no `__init__.py` of its own (`src/verity/`, which several members ship)."""
+    return {p.name for g in ("verity*", "*/verity*") for p in member.glob(g)
+            if p.is_dir() and ((p / "__init__.py").is_file() or any(p.glob("*/__init__.py")))}
 
 
 def foreign(pkgs: dict[str, str], env: dict[str, str], python: str = sys.executable) -> str | None:
     """The members' `verity*` packages that `python` under `env` would import from outside this tree, each with where from, or
-    None. A virtualenv installed from another checkout runs this tree's tests against that checkout's code."""
-    names = sorted({p.parent.name for d in pkgs.values() for g in ("verity*/__init__.py", "*/verity*/__init__.py")
-                    for p in (ROOT / d).glob(g)})
+    None. A virtualenv installed from another checkout runs this tree's tests against that checkout's code. `-P` leaves the
+    working directory off the path: there a directory named like a namespace package would join it as a portion."""
+    names = sorted({n for d in pkgs.values() for n in _packages(ROOT / d)})
     if not names:
         return None
-    r = subprocess.run([python, "-c", _ORIGINS, *names], env=env, capture_output=True, text=True)
+    r = subprocess.run([python, "-P", "-c", _ORIGINS, *names], env=env, capture_output=True, text=True)
     if r.returncode:
         return f"{python} can't say where it imports them from: {r.stderr.strip()[-300:]}"
-    away = {n: o for n, o in json.loads(r.stdout.splitlines()[-1]).items() if o and not Path(o).resolve().is_relative_to(ROOT)}
-    return ", ".join(f"{n} from {o}" for n, o in sorted(away.items())) or None
+    away = {n: [o for o in found if not Path(o).resolve().is_relative_to(ROOT)]
+            for n, found in json.loads(r.stdout.splitlines()[-1]).items()}
+    return ", ".join(f"{n} from {', '.join(o)}" for n, o in sorted(away.items()) if o) or None
 
 
 def metadata() -> list[str]:

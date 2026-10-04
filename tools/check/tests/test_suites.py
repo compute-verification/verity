@@ -76,6 +76,23 @@ def test_a_python_that_imports_the_trees_packages_from_another_checkout_is_named
     assert S.foreign(pkgs, env) is None
 
 
+def test_a_namespace_package_with_a_portion_from_another_checkout_is_named(tmp_path, monkeypatch):
+    """A namespace package (PEP 420) has no `__init__.py` to find and no origin of its own: each member ships a portion, and a
+    portion from another checkout runs that checkout's modules beside this tree's."""
+    tree, other = tmp_path / "tree", tmp_path / "other"
+    for root in (tree, other):
+        # not `verity`: the portions this environment installs would join it
+        for member, module in (("core", "ml"), ("circuits", "ir")):
+            (root / member / "src" / "verity_ns" / module).mkdir(parents=True)
+            (root / member / "src" / "verity_ns" / module / "__init__.py").write_text("")
+    S = _suites(monkeypatch, tree)
+    pkgs = {"core": "core", "circuits": "circuits"}
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(tree / "core" / "src"), str(other / "circuits" / "src")]))
+    assert S.foreign(pkgs, env) == f"verity_ns from {other / 'circuits' / 'src' / 'verity_ns'}"
+    env["PYTHONPATH"] = os.pathsep.join([str(tree / "core" / "src"), str(tree / "circuits" / "src")])
+    assert S.foreign(pkgs, env) is None
+
+
 def test_suites_refuse_a_python_that_imports_the_trees_packages_from_elsewhere(tmp_path, monkeypatch, capsys):
     (tmp_path / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
     (tmp_path / "pkg" / "tests").mkdir(parents=True)
