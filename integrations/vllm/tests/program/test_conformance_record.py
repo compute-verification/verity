@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from verity_vllm.correspondence import capture_identities as CO
+from verity_vllm.program.registry import boolean_rope, ref_prims  # noqa: F401  (registration: the GPT-J RoPE v1 and v2)
 from verity_vllm.program.registry import conformance as CF
 
 REPO = Path(__file__).resolve().parents[2]
