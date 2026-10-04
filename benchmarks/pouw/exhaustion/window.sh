@@ -9,10 +9,10 @@
 #   SERVER_MD names the table).  env: SCHEDULES (default serial; each gets its own window), HASHING (h1 or h2, default h1),
 #   DRAWS (60), JOBS (the audit's
 #   processes, default nproc), MAX_MIN (45), MEM_GB (the lease's memory cap, default 32 for one card, 160 for eight), SCRATCH_ROOT (where the rows
-#   and the ship are unpacked, default /tmp).
+#   and the ship are unpacked, default /tmp), MPSTAT_CPUS (when set, `mpstat -P MPSTAT_CPUS 5` beside each timed segment).
 # Writes under OUT (default $RESEARCH_RUN_DIR/out): ship.sha256; bench-before/card<g>/ (bench.py with the Pearl-C arm: the
 # baselines' and the arm's times, its gates and transcript); <schedule>/ (window.py's OUT and audit.json); bench-after/card<g>/
-# (the baselines alone); verify-before/card<g>.json.  Exit: the first window's audit's, else the first failure.
+# (the baselines alone); verify-before/card<g>.json; mpstat-<segment>.txt.  Exit: the first window's audit's, else the first failure.
 set -uo pipefail
 exec < /dev/null
 mode=${1:?rehearsal|timed}; ship_tar=${2:?SHIP_TAR}; build=${3:?HARNESS_BUILD}
@@ -51,13 +51,21 @@ bench() {   # bench WHEN ARGS...: one bench.py per card, all at once
   for p in "${pids[@]}"; do wait "$p" || rc=1; done
   echo "bench $when rc=$rc at $(date -u +%FT%T.%3NZ)"
 }
-bench before --arm-path "$ROOT/benchmarks/pouw/pearl_c_sm120" --arm pearlc_arm:PearlCSm120
+mp=
+mpwatch() {   # mpwatch SEGMENT: mpstat on MPSTAT_CPUS every 5 s into OUT/mpstat-SEGMENT.txt until mpunwatch
+  [ -n "${MPSTAT_CPUS:-}" ] || return 0
+  mpstat -P "$MPSTAT_CPUS" 5 > "$OUT/mpstat-$1.txt" 2>&1 < /dev/null & mp=$!
+}
+mpunwatch() { [ -n "$mp" ] || return 0; kill "$mp" 2>/dev/null; wait "$mp" 2>/dev/null; mp=; }
+mpwatch bench-before; bench before --arm-path "$ROOT/benchmarks/pouw/pearl_c_sm120" --arm pearlc_arm:PearlCSm120; mpunwatch
 for s in $SCHEDULES; do
+  mpwatch "$s"
   "$PY" "$HERE/window.py" run --out "$OUT/$s" --server-md "$MD" --duration "$DURATION" --draws "$DRAWS" --schedule "$s" \
     --hashing "$HASHING" --shape $SHAPE < /dev/null
   echo "window $s rc=$? at $(date -u +%FT%T.%3NZ)"
+  mpunwatch
 done
-bench after
+mpwatch bench-after; bench after; mpunwatch
 EOF
 "${LEASE[@]}" -- timeout $((MAX_MIN * 60 - 60)) bash "$SCR/lease.sh" < /dev/null
 echo "lease rc=$? at $(date -u +%FT%T.%3NZ)"
