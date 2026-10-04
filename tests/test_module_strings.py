@@ -19,6 +19,7 @@ from functools import cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+SELF = Path(__file__).resolve().relative_to(ROOT).as_posix()
 
 #: the files scanned: code, scripts, and the data a tool reads a spec from
 SCANNED = ("*.py", "*.sh", "*.bash", "*.toml", "*.json", "*.yaml", "*.yml", "*.cfg", "*.ini")
@@ -176,7 +177,7 @@ def candidates() -> list[str]:
     forms = ["import_module\\(", f"-m[\"',[:space:]]+({names})\\b", f"[\"']({names})(\\.[A-Za-z_0-9]+)*:[A-Za-z_]"]
     out = subprocess.run(["git", "grep", "-lE", *(a for f in forms for a in ("-e", f)), "--", *SCANNED], cwd=ROOT,
                          capture_output=True, text=True, check=True).stdout.split()
-    return [p for p in out if not _history(p)]
+    return [p for p in out if not _history(p) and p != SELF]   # this file's strings are examples
 
 
 @cache
