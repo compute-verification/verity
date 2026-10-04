@@ -65,7 +65,7 @@ for form in ${FORMS:-full sampled}; do
     for md in ${MODES:-m0 zk}; do
       for i in $(seq ${GATE_REPS:-3}); do run cmp $BZ gate $D-0 $md; run cmp $BZ gate $D-1 $md; done
     done
-    for md in ${MODES:-m0 zk}; do run cmp $BZ acyc $D-1 $md $U; done
+    for kl in ${ACYC_UNIT_KLOGS:-16}; do for md in ${MODES:-m0 zk}; do ACYC_KLOG=$kl run cmp $BZ acyc $D-1 $md $U; done; done
     rm -rf $D-0 $D-1
     continue
   fi
