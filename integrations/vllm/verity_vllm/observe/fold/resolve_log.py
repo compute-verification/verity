@@ -170,6 +170,11 @@ def short_label(r: Resolution) -> str:
     return f"Unsupported: {r.reason}"
 
 
+def quarantined(module: str | None) -> bool:
+    """Whether a spec's module holds provisional numerical semantics (gate G4): core's quarantine, or the experimental lanes."""
+    return ".quarantine." in (module or "") or (module or "").startswith("verity_quarantine.")
+
+
 def merge_hist(into: dict[str, Counter], h: dict[str, Counter]) -> None:
     for op, c in h.items():
         into.setdefault(op, Counter()).update(c)
@@ -262,7 +267,7 @@ def build_report(header: RunHeader | None, results: list[StepResult], roots: dic
                    "compute_rows": sum(rows.values()), "transparent": sum(effects.values())},
         "by_spec": {k: {"computes": computes[k], "rows": rows[k], "module": spec_modules.get(k)} for k in sorted(computes)},
         "spec_modules": dict(sorted(spec_modules.items())),
-        "quarantine_specs": sorted(k for k, m in spec_modules.items() if ".quarantine." in (m or "")),
+        "quarantine_specs": sorted(k for k, m in spec_modules.items() if quarantined(m)),
         "transparent_effects": dict(sorted(effects.items())),
         "op_histogram": {op: dict(c.most_common()) for op, c in hist.items()},
         "unsupported_examples": unsupported_examples,
