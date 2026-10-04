@@ -9996,6 +9996,7 @@
    "assumptions": [],
    "type_hash": "f4a5ead15d67146f887cff5d8fe7bfc80c6db374faa08784a8ba159f5f549579"
   },
+  "FlockSoundness.Discharge.Recursion.Karatsuba.sound_mul128": {},
   "FlockSoundness.Discharge.Recursion.ZkOuter.accepts_le": {},
   "FlockSoundness.Discharge.Recursion.commit_and_prove": {},
   "FlockSoundness.Discharge.Recursion.fork_ref": {},
