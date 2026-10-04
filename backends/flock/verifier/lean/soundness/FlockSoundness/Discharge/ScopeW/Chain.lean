@@ -356,7 +356,7 @@ theorem bitL_segData (p : Port) (data : List UInt8) (j : ℕ) {x b : ℕ} (hx : 
     (hb : b < 8) : bitL (segData p data j) (8 * x + b) = bitL data (8 * (1024 * j + x) + b) := by
   rw [bitL, bitL, show (8 * x + b) / 8 = x by omega, show (8 * x + b) % 8 = b by omega,
     show (8 * (1024 * j + x) + b) / 8 = 1024 * j + x by omega, show (8 * (1024 * j + x) + b) % 8 = b by omega,
-    segData, List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_take, if_pos hx,
+    segData, List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_take_of_lt hx,
     List.getElem?_drop]
 
 /-- **Segment `j`'s chain outputs its digest**: its compressions' inputs holding `port_commit_segW`'s copies, the output
@@ -482,6 +482,70 @@ theorem port_commit_segW (c : Circuit) (w : ℕ → Bool) (g p : ℕ) (hp : p < 
         tailBit (HmRow.tailOf c.ports[p]!) (64 * (segsOf c.ports[p]!).size % 128) t) :
     bytesOf w 128 (bcCol c g p) = Binding.commitString
       (rowMsgOf c.ports[p]! (bytesOf w (2 * c.ports[p]!.words) (Typed.msgCol c g p))) (bytesOf w 192 (saltCol c g p)) := by
-  sorry
+  obtain ⟨-, hs, -, -, -, -⟩ := id h
+  have hn := seg_chunks h
+  have hpre : (HmRow.prefixOf c.ports[p]!).data.toList.length = 128 := by
+    rw [Array.length_toList, ByteArray.size_data, Hidden.size_prefixOf]
+  have hr : rowMsgOf c.ports[p]! (bytesOf w (2 * c.ports[p]!.words) (Typed.msgCol c g p)) =
+      (HmRow.prefixOf c.ports[p]!).data.toList ++ (List.range (segsOf c.ports[p]!).size).flatMap fun j =>
+        Binding.digBytes (Refine.H512 (segMsgOf c.ports[p]! (bytesOf w (2 * c.ports[p]!.words) (Typed.msgCol c g p)) j)) := by
+    rw [rowMsgOf, hs]
+    rfl
+  have hrl : (rowMsgOf c.ports[p]! (bytesOf w (2 * c.ports[p]!.words) (Typed.msgCol c g p))).length =
+      128 + 64 * (segsOf c.ports[p]!).size := by
+    rw [hr, List.length_append, hpre, RowBytes.length_flatMap_range fun j => Refine.hL512 _]
+    rfl
+  have hlast : (padData ⟨(rowMsgOf c.ports[p]! (bytesOf w (2 * c.ports[p]!.words)
+      (Typed.msgCol c g p))).toArray⟩).size / 128 - 1 = (segsOf c.ports[p]!).size / 2 + 1 := by
+    rw [size_padData_list, hrl]; omega
+  have hbyte : ∀ e < 64 * (segsOf c.ports[p]!).size, ∀ b < 8,
+      bitL (rowMsgOf c.ports[p]! (bytesOf w (2 * c.ports[p]!.words) (Typed.msgCol c g p))) (8 * (128 + e) + b) =
+        w (msgAt c g p (segFirst c.ports[p]! (segsOf c.ports[p]!).size + e / 128) +
+          (64 * (e % 128 / 8) + 56 - 8 * (e % 128 % 8) + b)) := by
+    intro e he b hb
+    rw [hr, bitL_append_right (by rw [hpre]; omega), hpre, show 8 * (128 + e) + b - 8 * 128 = 8 * e + b by omega,
+      seg_digests c w g p hp h hck hsha hscv hschain hspad he hb, hdig e he b hb]
+  have hout := chain_bits w (fun i => cvAt c g p (segFirst c.ports[p]! (segsOf c.ports[p]!).size + i))
+    (fun i => msgAt c g p (segFirst c.ports[p]! (segsOf c.ports[p]!).size + i))
+    (fun i => outAt c g p (segFirst c.ports[p]! (segsOf c.ports[p]!).size + i))
+    (padData ⟨(rowMsgOf c.ports[p]! (bytesOf w (2 * c.ports[p]!.words) (Typed.msgCol c g p))).toArray⟩)
+    ((segsOf c.ports[p]!).size / 2)
+    (fun i hi A B hA hB hcv hmsg => sha_stepW c w g p _ hp (by omega) hck (hsha _ (by omega)) hA hB hcv hmsg)
+    (fun q hq => by rw [Nat.add_zero, hocv q hq, hr, wordsBit_mid hpre _ hq])
+    (fun i hi q hq => by
+      rw [← Nat.add_assoc]
+      exact hochain _ (by omega) (by omega) q hq)
+    (fun i hi q hq => by
+      obtain ⟨ho, hb⟩ := blockBit_lt hq
+      rw [wbit_blockV _ _ hq, padData_list, bitL_append_left (by rw [hrl]; omega),
+        show 8 * (128 * (i + 1) + (HmRow.blockBit q).1) + (HmRow.blockBit q).2 =
+          8 * (128 + (128 * i + (HmRow.blockBit q).1)) + (HmRow.blockBit q).2 by ring,
+        hbyte _ (by omega) _ hb, show (128 * i + (HmRow.blockBit q).1) / 128 = i by omega,
+        show (128 * i + (HmRow.blockBit q).1) % 128 = (HmRow.blockBit q).1 by omega, blockBit_col hq])
+  refine hm_commitW c w g p hck hhm _ (fun q hq => ?_) (fun q hq => ?_)
+  · rw [lastCv_eq, hlast, ← cvAt_hm hp]
+    rcases Nat.eq_zero_or_pos ((segsOf c.ports[p]!).size / 2) with h0 | h0
+    · rw [show c.ports[p]!.chunks = segFirst c.ports[p]! (segsOf c.ports[p]!).size by omega, hocv q hq, h0,
+        Nat.zero_add, hr, wordsBit_mid hpre _ hq]
+    · rw [show c.ports[p]!.chunks = segFirst c.ports[p]! (segsOf c.ports[p]!).size +
+          ((segsOf c.ports[p]!).size / 2 - 1) + 1 by omega,
+        hochain (segFirst c.ports[p]! (segsOf c.ports[p]!).size + ((segsOf c.ports[p]!).size / 2 - 1))
+          (by omega) (by omega) q hq,
+        hout _ (by omega) q hq, show (segsOf c.ports[p]!).size / 2 - 1 + 2 = (segsOf c.ports[p]!).size / 2 + 1 by omega]
+  · obtain ⟨ho, hb⟩ := blockBit_lt hq
+    rw [lastBlock_eq, hlast, wbit_blockV _ _ hq, padData_list, ← msgAt_hm hp]
+    by_cases hd : (HmRow.blockBit q).1 < 64 * (segsOf c.ports[p]!).size % 128
+    · rw [bitL_append_left (by rw [hrl]; omega),
+        show 8 * (128 * ((segsOf c.ports[p]!).size / 2 + 1) + (HmRow.blockBit q).1) + (HmRow.blockBit q).2 =
+          8 * (128 + (128 * ((segsOf c.ports[p]!).size / 2) + (HmRow.blockBit q).1)) + (HmRow.blockBit q).2 by ring,
+        hbyte _ (by omega) _ hb,
+        show (128 * ((segsOf c.ports[p]!).size / 2) + (HmRow.blockBit q).1) / 128 = (segsOf c.ports[p]!).size / 2 by
+          omega,
+        show (128 * ((segsOf c.ports[p]!).size / 2) + (HmRow.blockBit q).1) % 128 = (HmRow.blockBit q).1 by omega,
+        blockBit_col hq, show segFirst c.ports[p]! (segsOf c.ports[p]!).size + (segsOf c.ports[p]!).size / 2 =
+          c.ports[p]!.chunks by omega]
+    · rw [htail q hq (by omega), tailBit_eq, tailOf_seg h, bitL_append_right (by rw [hrl]; omega), hrl]
+      congr 1
+      omega
 
 end FlockSoundness.Discharge.ScopeW
