@@ -3,7 +3,7 @@ import FlockSoundness.Discharge.Canonical.Statements
 import FlockSoundness.Discharge.Canonical.Gaps
 
 /-!
-# The canonical I/O format's binding, frozen
+# The canonical I/O format's binding
 
 `PROTOCOL.md` §16.16's format, and the binding statements and session headline at it:
 
@@ -14,13 +14,13 @@ import FlockSoundness.Discharge.Canonical.Gaps
 * `Reads`, `Outputs`: unit inputs as row bits (`keysRowC_of_parse`), output rows of runs of output ports
   (`outBitRowC_ne_none`, `out_copyC`);
 * `Sites`, `Rows`, `Session`: the sites, `lay` and `rs` at `sha512/row/v2` widths, and `zk_session_soundC`;
-* `Verifier`: `parse_formatOk`, the verifier change V1 as a statement (false at main);
-* `Headline`: `zk_session_sound_canonical`, with no scope hypothesis;
+* `Verifier`: `parse_formatOk`, what verifier change V1's statement check gives (`ProvedScope.canonicalOk`);
+* `Headline`: `zk_session_sound_canonical`, over what flock-verify accepts;
 * `Statements`: `RowsCommittedC`, `OutputsCommittedC`, `OutputsBindingC` at the statement level, tails included;
 * `Gaps`: what the headline does not yet cover. Tails' outputs (`OutputsComputedC`, after V2), public inputs
   (`PublicPinnedC`) and registered reads (`RegisteredRowC`, after V3).
 
-Every declaration is proved but four, all `sorry`: `parse_formatOk` (V1), `parse_outputsComputed` (V2),
-`public_pinnedC` and `registered_rowC`. So `FlockSoundness.lean` does not import this, since `check`'s audit admits no
-`sorry`.
+Every declaration is proved but three, all `sorry` and all in `Gaps`: `parse_outputsComputed` (V2), `public_pinnedC`
+and `registered_rowC`. So `FlockSoundness.lean` imports every module here but `Gaps` and this one, since `check`'s
+audit admits no `sorry`.
 -/

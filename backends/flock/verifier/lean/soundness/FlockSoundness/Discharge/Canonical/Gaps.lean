@@ -6,9 +6,11 @@ set_option Elab.async false
 /-!
 # The three gaps between the canonical headline and every canonical workload
 
-`zk_session_sound_canonical` (`Headline.lean`) is the one theorem. Three kinds of canonical circuit are outside what it
-says today. For each, here is the statement it still needs, frozen, with what the verifier and the other lanes must
-change.
+`zk_session_sound_canonical` (`Headline.lean`, and `FailClosed.flock_verify_sound`'s `SoundZHJC`) is the canonical
+headline. Three kinds of canonical circuit are outside what it says today, and the verifier refuses all three
+(`ProvedScope.check`): a tail (`canonicalOk`'s `outNet = unitNet`), public inputs (`--public-inputs`) and registered
+reads (`checkRegistered`, and the shared-row public file `Registered.check` needs). For each, here is the statement it
+still needs, frozen, with what the verifier and the other lanes must change.
 
 **Tails (the biggest).** When a tail's last stage returns the outputs (`outNet ≠ unitNet`), `HmRow.check` makes every
 `leavesOut` empty, so the headline's program `keyProg` (the unit net's rows, `Placed.circuitRows`) computes no output
@@ -61,8 +63,8 @@ side is mostly ready: `Registered.Reads` and `registered_weights` take any `HmRo
   `checkPort` refuses the `v2` row; after V3 it says something.
 
 **Proof work.** `block_determined` and `outputs_determinedC` are proved. `parse_outputsComputed` waits for V2, and
-`public_pinnedC` and `registered_rowC` are frozen targets: `sorry`. Like `Verifier.lean`, this file is outside the root
-import.
+`public_pinnedC` and `registered_rowC` are frozen targets: `sorry`. This file (and `All.lean`, which imports it) is the
+only one under `Canonical/` outside the root import.
 -/
 
 namespace FlockSoundness.Discharge.Canonical
