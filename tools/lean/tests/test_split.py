@@ -81,6 +81,8 @@ def checkout(tmp: Path, mathlib: bool = False, extra: dict[str, str] | None = No
     (root / "README.md").write_text(f"The lemma: `{PKG}/P/SecurityProofs/Lemma.lean`; the proofs: `{PKG}/P/SecurityProofs/`.\n"
                                     f"In the package: `P/SecurityProofs/Lemma.lean`; `CheckAxioms.lean`.\n")
     (root / "protocols" / "p" / "PROTOCOL.md").write_text("Proved in `lean/P/SecurityProofs/Lemma.lean`, not `lean/P/Protocol.lean`.\n")
+    (root / "protocols" / "p" / "py").mkdir()
+    (root / "protocols" / "p" / "py" / "m.py").write_text('"""Proved in `lean/P/SecurityProofs/` and `p/lean/P/SecurityProofs.lean`."""\n')
     (root / PKG / "README.md").write_text("P/Protocol.lean               the definitions\nP/SecurityProofs/Lemma.lean   the lemma\n")
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
     if mathlib:
@@ -160,6 +162,8 @@ def test_the_split_is_a_pure_move(tmp_path):
     assert "`security_proofs/p/P/SecurityProofs/Lemma.lean`" in readme and "`security_proofs/p/P/SecurityProofs/`" in readme
     assert (root / "protocols" / "p" / "PROTOCOL.md").read_text() == \
         "Proved in `security_proofs/p/P/SecurityProofs/Lemma.lean`, not `lean/P/Protocol.lean`.\n"
+    assert (root / "protocols" / "p" / "py" / "m.py").read_text() == \
+        '"""Proved in `security_proofs/p/P/SecurityProofs/` and `security_proofs/p/P/SecurityProofs.lean`."""\n'
     assert (root / PKG / "README.md").read_text().endswith("\nP/SecurityProofs/Lemma.lean   the lemma\n")
     assert [n for n in notes if n.startswith("read: ")] == [f"read: {PKG}/README.md:2: P/SecurityProofs/Lemma.lean   the lemma"]
 

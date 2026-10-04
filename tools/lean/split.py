@@ -380,8 +380,8 @@ def moved_dirs(p: dict, tracked: set[str]) -> dict[str, str]:
 
 
 def rewrite_paths(p: dict, root: Path) -> list[str]:
-    """Every tracked text file's mention of a moved file or directory by its repository path, or by its path from the
-    mentioning file's directory above the package (`lean/P/SecurityProofs/X.lean` in `protocols/p/PROTOCOL.md`), rewritten
+    """Every tracked text file's mention of a moved file or directory by its repository path, or by its path from a
+    directory above the package that holds the file (`lean/P/SecurityProofs/X.lean` in `protocols/p/docs/A.md`), rewritten
     to the repository path; and, in the package's area (the package's parent directory), mentions of one by its path inside
     the package, listed for a person (a layout table, a path built from parts)."""
     tracked = git_files(root)
@@ -397,6 +397,7 @@ def rewrite_paths(p: dict, root: Path) -> list[str]:
         return re.compile(before + "(?:" + "|".join(alts) + r")(?![\w.-])") if alts else None
 
     pats = {"": mention("")}
+    above = [pkg[:i + 1] for i in range(len(pkg) - 1, 0, -1) if pkg[i] == "/"]
     n = len(pkg) + 1
     inner = sorted({a[n:] for a in subs}, key=len, reverse=True)
     parts = [r"""["']\s*/\s*["']""".join(re.escape(x) for x in i.split("/")) for i in inner if "/" in i]
@@ -410,8 +411,8 @@ def rewrite_paths(p: dict, root: Path) -> list[str]:
             text = path.read_text()
         except UnicodeDecodeError:
             continue
-        here = f.rsplit("/", 1)[0] + "/" if "/" in f else ""
-        prefixes = [""] + ([here] if here and pkg.startswith(here) and not f.startswith(dest + "/") else [])
+        prefixes = [""] + ([] if f.startswith((pkg + "/", dest + "/")) else
+                           [a for a in above if f.startswith(a)])
         new, count = text, 0
         for prefix in prefixes:
             pat = pats.setdefault(prefix, mention(prefix))
@@ -441,8 +442,8 @@ def describe(p: dict) -> str:
              f"that import only them){'; kept under proof names: ' + ', '.join(p['keep']) if p['keep'] else ''}",
              f"  spec roots: {', '.join(p['spec_roots'])}",
              f"  proofs: {len(p['proofs'])} modules, roots {', '.join(p['proof_roots'])}; {len(p['moves'])} files move",
-             f"  requires: spec {p['spec_requires'] or '(no path packages)'}; proofs: the spec"
-             + (f", {', '.join(r for r in p['proofs_requires'] if r not in p['spec_requires'])}" if p['proofs_requires'] else ""),
+             f"  requires: spec {p['spec_requires'] or '(no path packages)'}; proofs: "
+             + ", ".join(["the spec", *(r for r in p["proofs_requires"] if r not in p["spec_requires"])]),
              f"  lock: pins {len(p['lock_spec'].get('pins', {}))} and reads {len(p['lock_spec'].get('reads', {}))} stay byte for "
              f"byte; to the proofs: " + (", ".join(f"{k} {list(v) if isinstance(v, dict) and k != 'dependencies' else ''}".strip()
                                                     for k, v in p["lock_proofs"].items() if k not in ("pins",)) or "nothing")]
