@@ -10,6 +10,7 @@
   zeros, and the rule and the fold bind it."""
 from __future__ import annotations
 
+import dataclasses
 import types
 
 import numpy as np
@@ -150,6 +151,16 @@ def test_blackwell_consumer_records_its_blockwise_step_with_its_own_measurement(
                    "ScaledMmFp8Block_v3{DOT=BlackwellE4m3QmmaDot32_v1}"):
         assert needle in ev, needle
     assert {k for k, t in GT.REGISTERED.items() if t.fp8_block_dot} == {"hopper", "blackwell_consumer"}
+
+
+def test_the_blockwise_step_is_keyed_on_its_own_field(monkeypatch) -> None:
+    """Without `fp8_block_dot`, cc 12.0 is refused by name although its per-tensor and fused-MoE steps (`fp8_dot`, `fp8_moe_dot`)
+    are the same step."""
+    gt = dataclasses.replace(GT.REGISTERED["blackwell_consumer"], fp8_block_dot=None)
+    monkeypatch.setitem(GT.REGISTERED, "blackwell_consumer", gt)
+    assert gt.fp8_dot == gt.fp8_moe_dot == "BlackwellE4m3QmmaDot32"
+    with pytest.raises(TG.UnregisteredTarget, match=r"blockwise FP8 linear on blackwell_consumer \(12\.0\): .* no registered Definition"):
+        TG.scaled_mm_fp8_block_spec(SM120, 6144, 2624, 128)
 
 
 @pytest.mark.parametrize("scale", ["shared-per-block", "per-coordinate"])

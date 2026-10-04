@@ -9,9 +9,11 @@ expert-indexed pair forms (`fp8_moe_experts` `MoeExpertFp8Gemm(W)_v1{E,K,N,G,KB,
 * their Boolean versions (`boolean_fp8_moe`: `_v4` of the `_v3` forms, `_v2` of the pair forms and gathers) agree with their word
   views, routed ids in range and out of it, and the switch maps each word view to them;
 * cc 12.0 binds them with `BlackwellE4m3QmmaDot32_v1`, the step blackwell_consumer records from the cc 12.0 fused-MoE capture
-  (property blackwell_fp8_capture), and the targets that record no e4m3 step refuse by name.
+  (property blackwell_fp8_capture) in its own field, and the targets that record no e4m3 step there refuse by name.
 """
 from __future__ import annotations
+
+import dataclasses
 
 import numpy as np
 import pytest
@@ -210,6 +212,16 @@ def test_blackwell_consumer_records_the_moe_step_with_its_own_measurement() -> N
                    "moe/prefill", "11,791,360 words", "MoeExpertFp8BlockGemm(W)_v3{G=64,KB=32,SWAP=False,DOT=BlackwellE4m3QmmaDot32_v1}"):
         assert needle in ev, needle
     assert all(GT.REGISTERED[k].fp8_moe_dot is None for k in GT.REGISTERED if k != "blackwell_consumer")
+
+
+def test_the_moe_step_is_keyed_on_its_own_field(monkeypatch) -> None:
+    """Without `fp8_moe_dot`, cc 12.0 refuses by name although its per-tensor and blockwise steps (`fp8_dot`, `fp8_block_dot`) are
+    the same step."""
+    gt = dataclasses.replace(GT.REGISTERED["blackwell_consumer"], fp8_moe_dot=None)
+    monkeypatch.setitem(GT.REGISTERED, "blackwell_consumer", gt)
+    assert gt.fp8_dot == gt.fp8_block_dot == "BlackwellE4m3QmmaDot32"
+    with pytest.raises(T.UnregisteredTarget, match=r"blackwell_consumer \(12\.0\): no registered e4m3 step \(GemmTarget.fp8_moe_dot\)"):
+        T.moe_expert_fp8_gemm_spec(_tp((12, 0)), 128, 4096, 384, 64, 32, False, routed=False)
 
 
 def test_cc12_binds_the_sm120_step_and_the_others_refuse() -> None:
