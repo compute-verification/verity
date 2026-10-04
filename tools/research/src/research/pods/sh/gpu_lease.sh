@@ -47,6 +47,13 @@
 # while it is held (it pauses other CPU-heavy work; on vy-nebius-2, node_ops.py).  A lease of every GPU by one holder counts as one
 # too.
 #
+# Booked windows: $GPU_LEASE_WINDOWS (default /workspace/pouw/fill/windows, node 2's bookings, which its fill runner reads too) has
+# one window per line, `START MINUTES # note`, START in UTC (2026-10-04T11:15Z) and MINUTES 30 when left out.  A request that isn't
+# --timed and whose lease would overlap one is refused (75, holding nothing): the lease runs from now to its --max-min, and without
+# --max-min it has no end, so while a window lies ahead a request needs a --max-min that ends by the window's start.  With --wait
+# it waits instead, unqueued (so it holds up no other request), until its lease clears every window.  GPU_LEASE_NOW overrides the
+# time it reads, epoch seconds (tests).
+#
 # Usage, report only: when CMD exits (any status), gpu-lease releases the GPUs and then tells the holder on stderr, per GPU, how long
 # it held it and how much of that the node's utilisation sampler saw busy (util > 0 or SM activity >= 1%), with a hint to prepare
 # on the CPU outside the lease when the GPU was busy under half of at least 5 sampled minutes.  It appends a gpu-lease/usage/v1
@@ -71,6 +78,7 @@ set -u
 dir=${GPU_LEASE_DIR:-/run/gpu-lease}
 
 allowed_file=${GPU_LEASE_ALLOWED_FILE:-/etc/vy/direct-gpus}
+windows_file=${GPU_LEASE_WINDOWS:-/workspace/pouw/fill/windows}
 
 gpu_indices() {
   # the indices gpu-lease may use, one per line: the allowed file's list, else 0..count-1
@@ -186,6 +194,28 @@ may_backfill() {
   [ -n "$need" ] || return 1
   t_head=$(free_by | sort -n | sed -n "${need}p")
   [ -n "$t_head" ] && [ $(($(date -u +%s) + 60 * maxmin)) -le "$t_head" ]
+}
+
+window_clash() {
+  # the first line of $windows_file whose window this request's lease (now to its --max-min, else no end) would overlap; 1 if none
+  local now line m s e
+  local -a f
+  [ -r "$windows_file" ] || return 1
+  now=${GPU_LEASE_NOW:-$(date -u +%s)}
+  while IFS= read -r line || [ -n "$line" ]; do
+    read -r -a f <<< "${line%%#*}"
+    [ "${#f[@]}" -ge 1 ] || continue
+    s=$(date -u -d "${f[0]}" +%s 2>/dev/null) || continue
+    m=${f[1]:-30}
+    [[ $m =~ ^[0-9]+(\.[0-9]+)?$ ]] || continue
+    e=$((s + 60 * 10#${m%%.*}))
+    [ "${m%%.*}" = "$m" ] || e=$((e + 60))
+    if [ "$now" -lt "$e" ] && { [ -z "$maxmin" ] || [ "$s" -lt $((now + 60 * maxmin)) ]; }; then
+      echo "$line"
+      return 0
+    fi
+  done < "$windows_file"
+  return 1
 }
 
 agent_up() {
@@ -410,7 +440,22 @@ ALL=("${CANDIDATES[@]}")
 MYWAIT=""
 rm -f "$dir/grant.$$"
 asked=$(date -u +%s)
+said=""
 while :; do
+  if [ -z "$timed" ] && clash=$(window_clash); then
+    if [ -n "$MYWAIT" ]; then rm -f "$MYWAIT"; exec {wfd}>&-; MYWAIT=""; fi
+    span="from now with no --max-min"
+    [ -z "$maxmin" ] || span="of up to $maxmin min from now"
+    why="a lease $span overlaps the window booked in $windows_file: $clash"
+    if [ "$wait" != 1 ]; then
+      echo "gpu-lease: $why (add a --max-min that ends by its start, or --wait to start once the lease clears it)" >&2
+      exit 75
+    fi
+    [ "$said" = "$clash" ] || echo "gpu-lease: $why; waiting, unqueued, until the lease clears it" >&2
+    said=$clash
+    sleep "${GPU_LEASE_POLL_S:-15}"
+    continue
+  fi
   if agent_up; then
     [ -n "$MYWAIT" ] || queue_me " from the node's agent"
     take_grant && break
