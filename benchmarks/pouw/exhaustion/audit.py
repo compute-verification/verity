@@ -125,7 +125,7 @@ def check(job: dict) -> dict:
     """One tile through `Verifier.check_tile` from the dumps (module docstring, step 3); `job` names the dumps and the epoch."""
     out, shape = Path(job["out"]), tuple(job["shape"])
     m, n, k = shape
-    sch = W.scheme()
+    sch = W.scheme(job["hashing"])
     card, i, tid = job["card"], job["i"], job["tile"]
     mm = W.matmul(card, i, shape)
     try:
@@ -163,7 +163,9 @@ def audit(out: Path, before: Path | None, after: Path | None, jobs: int, commit:
     def note(name: str, ok: bool, detail: str = "") -> None:
         checks.append({"check": name, "ok": bool(ok), "detail": detail})
 
-    sch = W.scheme()
+    hashing = start.get("hashing", "h1")
+    sch = W.scheme(hashing)
+    note("scheme", start.get("scheme", sch.name) == sch.name, sch.name)
     uuids = [c["uuid"] for c in start["cards"]]
     root_b = bytes.fromhex(start["root_b"])
     salt = W.salt_of(W.window_seed(bytes.fromhex(start["source"]), start["t_s_ns"], uuids), root_b, shape)
@@ -208,7 +210,8 @@ def audit(out: Path, before: Path | None, after: Path | None, jobs: int, commit:
              f"card {d['card']} GEMM {d['i']}: root_A {man['root_a'][:16]}…, root_T {man['root_t'][:16]}…")
         wd, ws = weights[d["card"]]
         work.append({"label": f"draw {j}", "out": str(out), "shape": shape, "card": d["card"], "i": d["i"], "tile": d["tile"],
-                     "dir": rel, "manifest": man, "weights_dir": wd, "weights": ws, "salt": salt.hex(), "root_b": start["root_b"]})
+                     "dir": rel, "manifest": man, "weights_dir": wd, "weights": ws, "salt": salt.hex(), "root_b": start["root_b"],
+                     "hashing": hashing})
     controls = []
     tam = out / "controls" / "tampered" / "manifest.json"
     if work and tam.exists():

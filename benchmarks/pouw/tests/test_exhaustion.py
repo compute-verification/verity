@@ -142,12 +142,12 @@ def put(path: Path, obj) -> None:
     path.write_text(json.dumps(obj, indent=1) + "\n")
 
 
-def honest_window(out: Path, gemms: dict[int, int], shape=SMALL) -> None:
+def honest_window(out: Path, gemms: dict[int, int], shape=SMALL, hashing: str = "h1") -> None:
     """window.py's OUT for cards `gemms` ({card: credited GEMMs}), each GEMM proved by the scheme's reference prover and its
     trees laid out as the device's, the tampered control's leaves and tile tree a re-run's with one leaf byte flipped, and
     a cuBLASLt baseline of 1 ms a GEMM before and after."""
     m, n, k = shape
-    sch, t_d = W.scheme(), T_S + int(DURATION * 1e9)
+    sch, t_d = W.scheme(hashing), T_S + int(DURATION * 1e9)
     h = sch.commitment_hash
     b_rows = W.rows(W.SEED_B, 0, n, k)
     prover = Prover(sch, {W.WEIGHT: b_rows})
@@ -157,7 +157,7 @@ def honest_window(out: Path, gemms: dict[int, int], shape=SMALL) -> None:
     source = b"\x5a" * 32
     salt = W.salt_of(W.window_seed(source, T_S, [UUIDS[g] for g in sorted(gemms)]), root_b, shape)
     tiles = len(sch.tiles(W.mshape(shape)))
-    put(out / "start.json", {"schema": W.SCHEMA, "shape": {"m": m, "n": n, "k": k}, "source": source.hex(), "t_s_ns": T_S,
+    put(out / "start.json", {"schema": W.SCHEMA, "scheme": sch.name, "hashing": hashing, "shape": {"m": m, "n": n, "k": k}, "source": source.hex(), "t_s_ns": T_S,
                              "t_s": W.utc(T_S), "t_d_ns": t_d, "t_d": W.utc(t_d), "duration_s": DURATION, "salt": salt.hex(),
                              "root_b": root_b.hex(), "cards": [{"card": g, "uuid": UUIDS[g]} for g in sorted(gemms)]})
     runs, closes = {}, []
@@ -213,10 +213,10 @@ def honest_window(out: Path, gemms: dict[int, int], shape=SMALL) -> None:
                                        "ms_per_call": 1.0}]})
 
 
-@pytest.fixture(scope="module")
-def honest(tmp_path_factory):
-    out = tmp_path_factory.mktemp("exhaustion-window")
-    honest_window(out, {0: 2, 1: 1})
+@pytest.fixture(scope="module", params=W.HASHINGS)
+def honest(tmp_path_factory, request):
+    out = tmp_path_factory.mktemp(f"exhaustion-window-{request.param}")
+    honest_window(out, {0: 2, 1: 1}, hashing=request.param)
     return out
 
 
@@ -315,16 +315,18 @@ def test_window_dry_run(ship, tmp_path):  # noqa: F811
     clock, roots and draw in order and rejects every tile (the stand-in computes nothing)."""
     md = tmp_path / "server.md"
     md.write_text(f"| 3 | `{UUID}` |\n| 5 | `{UUID}` |\n")
-    for schedule in ("serial", "overlap"):
-        log, out = tmp_path / f"launches-{schedule}.jsonl", tmp_path / f"one-{schedule}"
+    for schedule, hashing in (("serial", "h1"), ("overlap", "h1"), ("overlap", "h2")):
+        log, out = tmp_path / f"launches-{schedule}-{hashing}.jsonl", tmp_path / f"one-{schedule}-{hashing}"
         env = dry_env(ship, log, CUDA_VISIBLE_DEVICES="3", EXH_CLOCK=f"fake:{T_S}:{10**8}", PEARLC_SHIP=str(ship))
         r = subprocess.run([sys.executable, str(HERE / "window.py"), "run", "--out", str(out), "--server-md", str(md),
                             "--duration", "2", "--guard", "1", "--draws", "8", "--shape", "128", "128", "1024",
-                            "--schedule", schedule], env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+                            "--schedule", schedule, "--hashing", hashing], env=env, capture_output=True, text=True,
+                           stdin=subprocess.DEVNULL)
         assert r.returncode == 0, r.stderr
         start, win = json.loads((out / "start.json").read_text()), json.loads((out / "window.json").read_text())
         dr = json.loads((out / "draws.json").read_text())
         assert start["t_d_ns"] == start["t_s_ns"] + 2 * 10**9 and start["schedule"] == schedule
+        assert start["scheme"] == f"pearl-c-sm120-v1-{hashing}"
         assert win["on_time"] and not win["late"] and len(win["cards"]) == 1
         (c,) = win["cards"]
         assert c["count"] > 0 and c["count"] % W.BATCH == 0 and c["late"] == 0 and c["t_close_ns"] <= start["t_d_ns"]
@@ -338,7 +340,8 @@ def test_window_dry_run(ship, tmp_path):  # noqa: F811
                 track(ev, allocs, maps)
             if ev["op"] == "launch":
                 seen.add(ev["name"])
-        assert {"gemm_pearlc_b", "hash_rows_w", "seed_line_a", "hash_leaf_p", "hash_tree_leaves"} <= seen
+        rows, leaves = ("hash_rows_w", "hash_tree_leaves") if hashing == "h1" else ("hash_rows_b3s", "hash_leaves_b3s")
+        assert {"gemm_pearlc_b", "seed_line_a", "hash_leaf_p", rows, leaves} <= seen
         assert not seen & {"gemm_pearlc", "hash_msg_v", "gemm_ct", "gemm_plain"}
 
     out = tmp_path / "two"

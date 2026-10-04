@@ -30,6 +30,7 @@ The window.
      all on the CPU.
 
   python window.py run --out DIR --server-md GPUS.md [--duration 1800] [--guard 4] [--schedule serial|overlap] [--draws 60]
+                        [--hashing h1|h2]
   python window.py worker ...   (the parent's; one card)
 
 Every card in CUDA_VISIBLE_DEVICES (a lease's comma-separated indices) is a worker.  PEARLC_SHIP names build.sh's output (the
@@ -86,10 +87,11 @@ SHAPE = (8192, 8192, 8192)                   # (m, n, k)
 POISON = 0xA5
 #: run.Pipeline's buffers the weight side writes (one copy a card); every other buffer the call touches is the set's
 WEIGHT_BUFS = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b",
-               "epb_codes", "bt", "bf", "pb_t", "tree_b", "keys_b")
+               "epb_codes", "bt", "bf", "pb_t", "tree_b", "keys_b", "skeys_b")
 SET_BUFS = ("keys_a", "keys_t", "ea_codes", "line_a", "seed_a", "alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "at", "af",
-            "pa_t", "c", "u", "y", "digests", "leaves", "tree_a", "tree_t")
+            "pa_t", "c", "u", "y", "digests", "leaves", "tree_a", "tree_t", "skeys_a")
 CONST_KEYS = ("line_b", "dom_b", "dom_t", "k_msg", "k_leaf")
+HASHINGS = ("h1", "h2")
 DOM, UNIT = 32, 104                          # a GEMM's keys: dom_a's id, then seed_line_a's unit block
 SLOT = DOM + UNIT
 BATCH, DEPTH, RING = 16, 2, 8                # GEMMs a batch; batches in flight past the one being read; batches a ring holds
@@ -98,8 +100,9 @@ EXIT_USAGE, EXIT_IDENTITY, EXIT_ROOTS, EXIT_LATE = 2, 3, 6, 5
 
 # ---- the window's pure parts (tested on the CPU) -------------------------------------------------------------------------
 
-def scheme() -> C.PearlC:
-    return C.PearlC(forming="v1", device=DEVICES[VARIANT], hashing="h1")
+def scheme(hashing: str = "h1") -> C.PearlC:
+    """`pearl-c-sm120-v1-h1` or `-h2`: rev1 forming on sm_120, its rows and tile leaves hashed as -h1 or -h2 hashes them."""
+    return C.PearlC(forming="v1", device=DEVICES[VARIANT], hashing=hashing)
 
 
 def mshape(shape) -> MShape:
@@ -282,11 +285,11 @@ EXTRA = {"cuStreamCreate": [ctypes.POINTER(ctypes.c_void_p), ctypes.c_uint],
 class Card:
     """One card's window: its device, operand sets, pipelines, streams and rings (module docstring, steps 1, 3 and 5)."""
 
-    def __init__(self, card: int, uuid: str | None, cubin: bytes, shape=SHAPE, schedule: str = "serial"):
+    def __init__(self, card: int, uuid: str | None, cubin: bytes, shape=SHAPE, schedule: str = "serial", hashing: str = "h1"):
         if schedule not in ("serial", "overlap"):
             raise ValueError(f"schedule {schedule!r}: serial or overlap")
-        self.card, self.shape, self.schedule = card, shape, schedule
-        self.sch = scheme()
+        self.card, self.shape, self.schedule, self.hashing = card, shape, schedule, hashing
+        self.sch = scheme(hashing)
         self.dev = R.Dev(cubin)
         self.refused = self.dev.identity(uuid)
         self.uuid = self.dev.uuid
@@ -301,6 +304,7 @@ class Card:
         size = self.size = R.Pipeline.sizes(m, n, k, m)
         shared = {name: d.alloc(size[name]) for name in WEIGHT_BUFS}
         self.const = {name: d.alloc(32) for name in CONST_KEYS}
+        self.const.update(t_row=d.put(R.b3s_template(R.ROW_SCHEMA)), t_tile=d.put(R.b3s_template(R.TILE_SCHEMA)))
         self.kring = d.alloc(SLOT * RING * BATCH)
         self.log = d.alloc(64 * RING * BATCH)
         self.xb = self.upload(SEED_B, n)
@@ -310,7 +314,8 @@ class Card:
             own = {name: d.alloc(size[name]) for name in SET_BUFS}
             keys = {**self.const, "dom_a": self.kring, "unit": self.kring + DOM}
             self.sets.append(own)
-            self.pipes.append(R.Pipeline(d, m, n, k, VARIANT, keys, self.xa[s], self.xb, bufs={**shared, **own}, hashing="h1"))
+            self.pipes.append(R.Pipeline(d, m, n, k, VARIANT, keys, self.xa[s], self.xb, bufs={**shared, **own},
+                                         hashing=self.hashing))
         self.steps = [{name: (phase, f) for name, phase, f in p.steps()} for p in self.pipes]
         names = [(name, phase) for name, phase, _ in self.pipes[0].steps()]
         self.weight_epoch = [nm for nm, ph in names if ph == "epoch"]
@@ -492,7 +497,7 @@ def worker(a) -> int:
     ship = Path(os.environ.get("PEARLC_SHIP", KERNEL))
     cubin = (ship / "pearl_c_sm120.cubin").read_bytes()
     shape = tuple(a.shape)
-    card = Card(a.card, os.environ.get("PEARLC_EXPECT_UUID"), cubin, shape, a.schedule)
+    card = Card(a.card, os.environ.get("PEARLC_EXPECT_UUID"), cubin, shape, a.schedule, a.hashing)
     if card.refused:
         say({"op": "refused", "card": a.card, "reasons": card.refused})
         return EXIT_IDENTITY
@@ -594,7 +599,7 @@ def parent(a) -> int:
     for g in cards:
         env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(g), CUDA_DEVICE_ORDER="PCI_BUS_ID", PEARLC_EXPECT_UUID=table[g])
         argv = [sys.executable, str(Path(__file__).resolve()), "worker", "--card", str(g), "--out", str(out), "--shape", *shape,
-                "--schedule", a.schedule]
+                "--schedule", a.schedule, "--hashing", a.hashing]
         workers.append(Worker(g, table[g], argv, env))
     ready = [w.get() for w in workers]
     bad = [r for r in ready if r.get("op") != "ready"]
@@ -613,8 +618,8 @@ def parent(a) -> int:
     seed = window_seed(source, t_s, uuids)
     salt = salt_of(seed, root_b, tuple(a.shape))
     t_d = t_s + int(a.duration * 1e9)
-    start = {"schema": SCHEMA, "scheme": scheme().name, "shape": {"m": a.shape[0], "n": a.shape[1], "k": a.shape[2]},
-             "schedule": a.schedule, "batch": BATCH, "guard_s": a.guard, "duration_s": a.duration,
+    start = {"schema": SCHEMA, "scheme": scheme(a.hashing).name, "hashing": a.hashing,
+             "shape": {"m": a.shape[0], "n": a.shape[1], "k": a.shape[2]}, "schedule": a.schedule, "batch": BATCH, "guard_s": a.guard, "duration_s": a.duration,
              "source": source.hex(), "t_s_ns": t_s, "t_s": utc(t_s), "t_d_ns": t_d, "t_d": utc(t_d), "seed": seed.hex(),
              "salt": salt.hex(), "root_b": root_b.hex(), "seed_b": SEED_B, "a_seeds": {str(g): [a_seed(g, 0), a_seed(g, 1)] for g in cards},
              "cards": [{"card": w.card, "uuid": w.uuid} for w in workers], "ready": ready}
@@ -640,7 +645,7 @@ def parent(a) -> int:
           + ", ".join(f"card {c['card']} {c['count']} GEMMs" for c in closes) + (f"; late {late}" if late else ""),
           file=sys.stderr, flush=True)
     source2 = os.urandom(32)
-    tiles = len(scheme().tiles(mshape(tuple(a.shape))))
+    tiles = len(scheme(a.hashing).tiles(mshape(tuple(a.shape))))
     picked = draws(source2, root, salt, [(c["card"], c["count"]) for c in closes], tiles, a.draws) if on_time else []
     tamper = picked[0] if picked else None
     for w in workers:
@@ -665,11 +670,13 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--guard", type=float, default=4.0)
     r.add_argument("--draws", type=int, default=60)
     r.add_argument("--schedule", choices=("serial", "overlap"), default="serial")
+    r.add_argument("--hashing", choices=HASHINGS, default="h1")
     r.add_argument("--shape", type=int, nargs=3, default=list(SHAPE), metavar=("M", "N", "K"))
     w = sub.add_parser("worker")
     w.add_argument("--card", type=int, required=True)
     w.add_argument("--out", required=True)
     w.add_argument("--schedule", choices=("serial", "overlap"), default="serial")
+    w.add_argument("--hashing", choices=HASHINGS, default="h1")
     w.add_argument("--shape", type=int, nargs=3, default=list(SHAPE))
     a = p.parse_args(argv)
     return parent(a) if a.cmd == "run" else worker(a)
