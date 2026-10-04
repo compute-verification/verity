@@ -198,15 +198,17 @@ def rank_shape(C: ModelShape, world: int) -> ModelShape:
     if world == 1:
         return C
     facts = []
-    if C.NH % world or C.KVH % world:
-        facts.append(f"{C.NH} query and {C.KVH} key/value heads over {world} ranks (an even split, no replicated key/value heads)")
+    replicated_kv = C.KVH < world and world % C.KVH == 0          # QKVParallelLinear: a key/value head on world // KVH ranks
+    if C.NH % world or (C.KVH % world and not replicated_kv):
+        facts.append(f"{C.NH} query and {C.KVH} key/value heads over {world} ranks (an even split, or each key/value head on "
+                     f"world // KVH ranks)")
     if C.I % world:
         facts.append(f"an MLP width of {C.I} over {world} ranks")
     if C.V % VOCAB_PADDING or C.V % world:
         facts.append(f"a vocabulary of {C.V} over {world} ranks (padded to a multiple of {VOCAB_PADDING}: the padding rows' trim)")
     if facts:
         raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
-    return replace(C, NH=C.NH // world, KVH=C.KVH // world, I=C.I // world)
+    return replace(C, NH=C.NH // world, KVH=1 if replicated_kv else C.KVH // world, I=C.I // world)
 
 
 def _arr(shape: tuple[int, ...], w: int) -> Type:
@@ -284,7 +286,7 @@ class _Specs:
             self.embedding = self.kind("embedding_shard", VS=VS, H=C.H, START=rank * VS)
             self.all_reduce, self.all_gather = self.kind("all_reduce2", N=C.H), self.kind("all_gather2", N=VS)
         self.norm0 = self.kind("rmsnorm", N=C.H, EPS=C.EPS)
-        self.fused = self.kind("rmsnorm_fused", N=C.H, EPS=C.EPS)
+        self.fused = self.kind("rmsnorm_fused", N=C.H, EPS=C.EPS, TARGET=target)
         self.qkv, self.o = self.gemm(C.H, C.QKV), self.gemm(C.NH * C.D, C.H)
         self.qkv_bias = self.qkv_fused = None
         if C.qkv_bias:
@@ -353,7 +355,10 @@ class _Specs:
         return self._const[key]
 
     def kind(self, role: str, **statics):
-        fn = self.voc.kind(role, **statics)
+        try:
+            fn = self.voc.kind(role, **statics)
+        except self.TG.UnregisteredTarget as e:
+            raise Unexpressible(f"numerics_unregistered: {e}") from None
         if fn is None:
             raise Unexpressible(f"vocabulary {self.voc.name!r} has no kind for role {role!r} with {statics}")
         return fn
