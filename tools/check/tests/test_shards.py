@@ -155,11 +155,16 @@ def test_lean_audit_audits_only_the_packages_it_is_given():
 
 
 def test_a_shards_lean_slot_counts_only_its_own_packages(tmp_path, monkeypatch):
+    class Audit:
+        FLAGS = ()
+        packages = staticmethod(lambda files: PACKAGES)
+        key = staticmethod(lambda p, files, flags: p.replace("/", "-"))
+
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path))
-    files = CHECK.tracked_files(ROOT)
+    monkeypatch.setattr(CHECK, "_lean_audit", Audit)
     (tmp_path / "lean-audit").mkdir()
     for p in PACKAGES[1:]:
-        (tmp_path / "lean-audit" / f"{LA.key(p, files, LA.FLAGS)}.json").write_text("{}")
+        (tmp_path / "lean-audit" / f"{Audit.key(p, (), ())}.json").write_text("{}")
     assert CHECK.lean_audit_misses() and CHECK.lean_audit_misses(only=PACKAGES[:1])
     assert not CHECK.lean_audit_misses(only=PACKAGES[1:])
     cmd = ["python", "lean_audit.py", "--package", PACKAGES[1]]
@@ -184,6 +189,50 @@ def test_a_shards_result_names_its_plan_commit_config_and_each_steps_parts(tmp_p
     assert [s.get("parts") for s in r.doc["steps"]] == [None, [p for p in sh["parts"] if p.startswith("lean-audit:")], ["lean-changed"]]
     CHECK.write_result(tmp_path, True, done[:1])
     assert json.loads((tmp_path / "result.json").read_text())["kind"] == "check/v1", "an unsharded check is as it was"
+
+
+def test_combine_records_the_steps_the_gates_reading_of_the_shards_gives_and_fails_what_it_refuses(tmp_path, monkeypatch):
+    """Inside a recorded run, a `check/v1` of `shard_set`'s steps (which the gate compares with its own reading); a failed one when
+    the set is refused or the checkout is dirty; outside a run it only says."""
+    import research.merge
+    import research.store.local
+    from research import result as RES
+
+    tree = tmp_path / "tree"
+    (tree / "tools" / "check").mkdir(parents=True)
+    (tree / "tools" / "check" / "tool.py").write_text(
+        "from research.store.tool import Tool\nCHECK = Tool(name='check', version='1', command=['run', 'check'])\n")
+    for args in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-q", "-m", "t"]):
+        subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=tree, check=True,
+                       capture_output=True)
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tree, capture_output=True, text=True).stdout.strip()
+    steps = [{"step": "preflight-lock", "status": "passed", "shards": ["r1", "r2"]},
+             {"step": "pytest", "status": "passed", "shard": 1, "run_id": "r1", "seconds": 1.0}]
+    asked = []
+
+    def shard_set(store, repo, commit, ids, tool, command):
+        asked.append((repo, commit, ids, tool, command))
+        return (steps, None) if ids == ["r1", "r2"] else (None, "shard 2/2 is not among them")
+
+    class Store:
+        remote = None
+
+    monkeypatch.setattr(CHECK, "ROOT", tree)
+    monkeypatch.setattr(research.merge, "shard_set", shard_set)
+    monkeypatch.setattr(research.store.local, "LocalStore", Store)
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261004-000000-ffff")
+    run = tmp_path / "run"
+    run.mkdir()
+    assert CHECK.combine(["r1", "r2"], run) == 0
+    assert asked == [(tree, head, ["r1", "r2"], "check", ("run", "check"))]
+    r = RES.check(run, "r20261004-000000-ffff")
+    assert r.valid, r.errors
+    assert (r.doc["kind"], r.validation_status, r.doc["steps"], r.doc["shards"]) == ("check/v1", "passed", steps, ["r1", "r2"])
+    assert CHECK.combine(["r1"], run) == 1
+    doc = json.loads((run / "result.json").read_text())
+    assert doc["validation"] == {"status": "failed", "checker": "tools/check/check.py --combine", "detail": "shard 2/2 is not among them"}
+    (tree / "tools" / "check" / "tool.py").write_text("# dirty\n" + (tree / "tools" / "check" / "tool.py").read_text())
+    assert CHECK.combine(["r1", "r2"], None) == 1
 
 
 def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch):

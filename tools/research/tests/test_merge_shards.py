@@ -4,7 +4,6 @@ with a shard missing, repeated, failed or of another commit, config or plan, pas
 from __future__ import annotations
 
 import copy
-import json
 import os
 import subprocess
 import sys
@@ -74,9 +73,9 @@ def _attempt(store, commit: str, argv: list[str], kind: str | None, meta: dict, 
 def _shard_meta(k: int, n: int, commit: str, config: str, parts=None, steps=None, every=EVERY) -> dict:
     parts = SHARDS[k][0] if parts is None else parts
     steps = SHARDS[k][1] if steps is None else steps
-    return {"shard": {"k": k, "n": n, "parts": parts, "all": every, "commit": commit, "config": config},
-            "steps": [{"step": "preflight-lock", "status": "passed"},
-                      *({"step": s, "status": st, "parts": p, "seconds": 1.0} for s, st, p in steps)]}
+    return copy.deepcopy({"shard": {"k": k, "n": n, "parts": parts, "all": every, "commit": commit, "config": config},
+                          "steps": [{"step": "preflight-lock", "status": "passed"},
+                                    *({"step": s, "status": st, "parts": p, "seconds": 1.0} for s, st, p in steps)]})
 
 
 def _shards(world, edit=None) -> list[str]:
@@ -234,35 +233,3 @@ def test_a_combine_without_the_targets_checkout_passes_nothing(world):
         "it combines shards, which this gate reads only in the target's checkout, for a commit")
     assert passing(store, tip, kinds=frozenset({"check/v1"}), command=tuple(COMMAND)) == []
 
-
-def test_check_py_combine_records_what_the_gate_reads(world, tmp_path, monkeypatch):
-    """`check.py --combine` inside a recorded run writes `shard_set`'s steps as a `check/v1` the gate then admits, and a failed
-    one when the set is refused; outside a run it only says."""
-    import importlib.util
-
-    import research.store.local
-    from research import result as RES
-
-    main, tip, _config, store = world
-    ids = _shards(world)
-    root = Path(__file__).resolve().parents[3]
-    spec = importlib.util.spec_from_file_location("repo_check_for_combine", root / "tools" / "check" / "check.py")
-    check = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = check
-    spec.loader.exec_module(check)
-    tree = tmp_path / "tree"
-    _git(main, "worktree", "add", "-q", "--detach", str(tree), tip)
-    monkeypatch.setattr(check, "ROOT", tree)
-    monkeypatch.setattr(research.store.local, "LocalStore", lambda: store)
-    run_dir = tmp_path / "run"
-    run_dir.mkdir()
-    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261004-000000-ffff")
-    assert check.combine(ids, run_dir) == 0
-    r = RES.check(run_dir, "r20261004-000000-ffff")
-    assert r.valid, r.errors
-    steps, _ = shard_set(store, main, tip, ids, "check", tuple(COMMAND))
-    assert r.doc["kind"] == "check/v1" and r.validation_status == "passed" and r.doc["steps"] == steps and r.doc["shards"] == ids
-    assert check.combine(ids[:1], run_dir) == 1
-    assert json.loads((run_dir / "result.json").read_text())["validation"]["status"] == "failed"
-    (tree / "a.txt").write_text("dirty\n")
-    assert check.combine(ids, None) == 1
