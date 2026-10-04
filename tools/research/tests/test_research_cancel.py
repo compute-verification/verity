@@ -21,6 +21,13 @@ def _workload(d: Path) -> subprocess.Popen:
     return subprocess.Popen(["cat"], stdin=subprocess.PIPE, start_new_session=True, env={**os.environ, "RESEARCH_RUN_DIR": str(d.resolve())})
 
 
+def _snapshot(root: Path, name: str = "t1") -> str:
+    """The shipped tool where the machine keeps it, <root>/tool/<snapshot>: a link to this checkout's research package."""
+    (root / "tool").mkdir(parents=True, exist_ok=True)
+    (root / "tool" / name).symlink_to(TOOL)
+    return str(root / "tool" / name)
+
+
 def _run(tmp_path: Path, monkeypatch, state: str = "running"):
     """A launched run on a 'machine' reached through `sh -c`: its workload and a stand-in runner, each `cat` on a pipe the test holds,
     in process groups of their own."""
@@ -33,7 +40,7 @@ def _run(tmp_path: Path, monkeypatch, state: str = "running"):
     local = tmp_path / "local" / "r-x"
     local.mkdir(parents=True)
     (local / "remote.json").write_text(json.dumps({"run_id": "r-x", "phase": "launched", "host": "h", "port": 22, "remote_run_dir": str(d),
-                                                   "tool": str(TOOL)}))
+                                                   "root": str(root), "tool": _snapshot(root)}))
     monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **k: ["sh", "-c"])
     return local, d, workload, runner
 
@@ -71,7 +78,7 @@ def _launched_elsewhere(tmp_path: Path, monkeypatch, *, tool: bool = True):
     d.mkdir(parents=True)
     workload = _workload(d)
     (d / "status.json").write_text(json.dumps({"state": "running", "pid": workload.pid, "pgid": workload.pid}))
-    (d / "job.json").write_text(json.dumps({"run": {"remote": {"machine": "vy-b", "tool": str(TOOL) if tool else None}}}))
+    (d / "job.json").write_text(json.dumps({"run": {"remote": {"machine": "vy-b", "tool": _snapshot(tmp_path / "b") if tool else None}}}))
     (d / "events.jsonl").write_text("")
     ms = {name: {"provider": "ssh", "host": name, "user": "research", "root": str(tmp_path / name[-1]), "project": "verity"}
           for name in ("vy-a", "vy-b")}
@@ -159,5 +166,24 @@ def test_a_run_whose_tool_predates_the_workload_check_is_refused_not_signalled_u
     try:
         assert cli.main(["cancel", RUN, "--on", "vy-b", "--reason", "x", "--runs-dir", str(here)]) == 1
         assert "predates the workload check, so nothing was signalled" in capsys.readouterr().err and workload.poll() is None
+    finally:
+        _end(workload)
+
+
+def test_a_tool_outside_the_machines_tool_snapshots_is_refused(tmp_path, monkeypatch, capsys):
+    """C2: job.json's run.remote.tool becomes PYTHONPATH on the machine, so it must be one of the machine's <root>/tool/ snapshots."""
+    here, d, workload = _launched_elsewhere(tmp_path, monkeypatch)
+    evil = tmp_path / "elsewhere"
+    (evil / "research" / "telemetry").mkdir(parents=True)
+    (evil / "research" / "__init__.py").write_text("")
+    (evil / "research" / "telemetry" / "__init__.py").write_text("")
+    marker = tmp_path / "ran"
+    (evil / "research" / "telemetry" / "__main__.py").write_text(f"open({str(marker)!r}, 'w').write('x')\n")
+    try:
+        for tool in (str(evil), f"{tmp_path / 'b' / 'tool' / 't1'}:{evil}", str(tmp_path / "b" / "tool" / "..")):
+            (d / "job.json").write_text(json.dumps({"run": {"remote": {"machine": "vy-b", "tool": tool}}}))
+            assert cli.main(["cancel", RUN, "--on", "vy-b", "--reason", "x", "--runs-dir", str(here)]) == 1
+            assert "is not a snapshot under" in capsys.readouterr().err
+        assert not marker.exists() and workload.poll() is None
     finally:
         _end(workload)

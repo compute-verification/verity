@@ -100,7 +100,7 @@ import tempfile
 import threading
 import time
 import tomllib
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import IO, Any, Callable
 
 from .telemetry.events import utc_now_ms
@@ -1585,10 +1585,10 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     """`research cancel`: SIGTERM to the workload's process group on the machine (status.json `pgid`), its intent recorded first in the
     run's events.jsonl (`tele cancel-intent --actor manual`), so the run classifies CANCELLED_MANUAL.  Never the runner and never SIGKILL:
     the runner records the workload's exit and then publishes custody, and one killed in its upload leaves the run without custody.
-    A run another VM launched (`adopt`) has no shipped tool in its remote.json; the machine's job.json names it (`run.remote.tool`).
-    The group is signalled only if one of its members is this run's workload (`--expect-run-dir`: RESEARCH_RUN_DIR in its environment),
-    since a runner that died leaves status.json `running` and pids wrap; a run whose shipped tool predates that check is refused, not
-    signalled unchecked."""
+    A run another VM launched (`adopt`) has no shipped tool in its remote.json; the machine's job.json names it (`run.remote.tool`), and
+    it must be a snapshot under the machine's <root>/tool/.  The group is signalled only if one of its members is this run's workload
+    (`--expect-run-dir`: RESEARCH_RUN_DIR in its environment), since a runner that died leaves status.json `running` and pids wrap; a
+    run whose shipped tool predates that check is refused, not signalled unchecked."""
     rec = fetch(local_dir)
     if err := rec.get("last_fetch_error"):
         raise Refused(f"the machine is unreachable ({err['stderr'].strip() or 'rc ' + str(err['rc'])}); nothing was signalled")
@@ -1601,6 +1601,9 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     tool = rec.get("tool") or ((((_read_json(local_dir / "job.json") or {}).get("run") or {}).get("remote") or {}).get("tool"))
     if not tool:
         raise Refused(f"neither {local_dir.name}'s remote.json nor its job.json names a shipped tool to record the cancel with")
+    snap, root = PurePosixPath(tool), rec.get("root")
+    if not root or snap.parent != PurePosixPath(root) / "tool" or ":" in tool or snap.name in ("", ".", ".."):
+        raise Refused(f"{local_dir.name}'s tool {tool!r} is not a snapshot under {root}/tool/; nothing was signalled")
     rd = rec["remote_run_dir"]
     tele = ["env", f"PYTHONPATH={tool}", "python3", "-m", "research.telemetry", "cancel-intent", "--actor", "manual",
             "--reason", f"{reason} (research cancel by {by})", "--target-pgid", str(pgid), "--expect-run-dir", rd, "--attempt-dir", rd,
