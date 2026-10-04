@@ -1,4 +1,4 @@
-"""The worker's `TensorMeta` lists of `native_collect`'s plans, kept only for the plans a step can still reuse.
+"""The worker's records of `native_collect`'s plans, kept only for the plans a step can still reuse.
 
 The collector keys a plan by the step's geometry (`native_collect.plan_key_of`), so every decode step of a growing KV length
 learns a plan of its own. A cache that kept every plan's metas for the life of the process grows by one list per committed
@@ -14,19 +14,79 @@ appears missing while it moves. `end_run` runs between runs, when the worker has
 """
 from __future__ import annotations
 
-from collections.abc import Hashable, Iterable
+import sys
+from collections.abc import Hashable, Iterable, Iterator, Sequence
 from typing import Any
 
 
-class PlanMetas(list):
-    """One plan's metas, with their byte total and (computed once, on first use) layout digest."""
+class PlanMetas(Sequence):
+    """One plan's metas as columns, one flat tuple of names, dtypes, byte counts, offsets, ranks and dimensions each. A tuple
+    of strs and ints leaves the cyclic collector's sight after its first pass, so a cached plan is one tracked object whatever
+    its tensor count. Every step that follows the plan has the same metas, and no step changes them: a tensor's offset is
+    both its `dev_off` and its `stream_off`, and `host` and `dev_block` are `None`. `nbytes` is their byte total, `digest`
+    their layout digest.
 
-    __slots__ = ("nbytes", "digest")
+    Iterating or indexing builds the plan's `TensorMeta`s once and keeps them, so every reader sees the same objects
+    (`opened.read_meta` checks a meta by identity). The worker's steps read `nbytes`, the digest and `len`, and `finalize`
+    reads the columns, `summary()` and `scan()`, so neither builds them: a plan kept with its `TensorMeta`s costs every full
+    collection one more object to walk per tensor."""
 
-    def __init__(self, metas: Iterable[Any]) -> None:
-        super().__init__(metas)
-        self.nbytes = sum(m.nbytes for m in self)
+    __slots__ = ("names", "dtypes", "sizes", "offsets", "ranks", "dims", "chunk", "nbytes", "digest", "_metas")
+
+    def __init__(self, names: Iterable[str], dtypes: Iterable[str], sizes: Iterable[int], offsets: Iterable[int],
+                 shapes: Iterable[Iterable[int]], chunk: int) -> None:
+        self.names, self.dtypes, self.sizes, self.offsets = tuple(names), tuple(dtypes), tuple(sizes), tuple(offsets)
+        shapes = [tuple(int(d) for d in s) for s in shapes]
+        self.ranks, self.dims = tuple(len(s) for s in shapes), tuple(d for s in shapes for d in s)
+        self.chunk = chunk
+        self.nbytes = sum(self.sizes)
         self.digest: bytes | None = None
+        self._metas: list | None = None
+
+    @classmethod
+    def of_entries(cls, entries: Iterable[tuple], names: Sequence[str], chunk: int) -> PlanMetas:
+        """The record of the collector's exported plan: `(name id, torch dtype, sizes, nbytes, offset, gap)` per tensor."""
+        entries = list(entries)
+        return cls((names[e[0]] for e in entries), (sys.intern(str(e[1]).replace("torch.", "")) for e in entries),
+                   (int(e[3]) for e in entries), (int(e[4]) for e in entries), (e[2] for e in entries), chunk)
+
+    def shapes(self) -> Iterator[tuple[int, ...]]:
+        at = 0
+        for r in self.ranks:
+            yield self.dims[at:at + r]
+            at += r
+
+    def _build(self) -> list:
+        from verity_vllm.commit.committer.native_host import TensorMeta
+
+        out, first_leaf, chunk = [], 0, self.chunk
+        for i, (name, dtype, shape, nbytes, off) in enumerate(zip(self.names, self.dtypes, self.shapes(), self.sizes, self.offsets)):
+            n_leaves = (nbytes + chunk - 1) // chunk
+            out.append(TensorMeta(i, name, dtype, shape, nbytes, chunk, first_leaf, n_leaves, dev_off=off, stream_off=off))
+            first_leaf += n_leaves
+        return out
+
+    def scan(self) -> list:
+        """The `TensorMeta`s for one pass: the kept ones if a reader built them, else new ones that die with the pass."""
+        return self._metas if self._metas is not None else self._build()
+
+    def summary(self) -> list[list]:
+        """`[ordinal, name, dtype, shape, nbytes]` per tensor, as `finalize` sizes a layout."""
+        return [[i, n, dt, list(sh), nb] for i, (n, dt, sh, nb) in enumerate(zip(self.names, self.dtypes, self.shapes(), self.sizes))]
+
+    def _kept(self) -> list:
+        if self._metas is None:
+            self._metas = self._build()
+        return self._metas
+
+    def __len__(self) -> int:
+        return len(self.names)
+
+    def __iter__(self) -> Iterator[Any]:
+        return iter(self._kept())
+
+    def __getitem__(self, i):
+        return self._kept()[i]
 
 
 class PlanCache:

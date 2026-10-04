@@ -1279,9 +1279,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 job.arena = big
             if padded > used:
                 job.arena[used:padded].zero_()
-            for m in job.metas:
-                m.stream_off = m.dev_off
-                m.dev_block = None
+            for m in () if hasattr(job.metas, "scan") else job.metas:     # a cached plan's record (plan_cache) is placed already
+                m.stream_off, m.dev_block = m.dev_off, None
             stream_i32 = job.arena[:padded].view(torch.int32)
             ev = [torch.cuda.Event(enable_timing=True) for _ in range(3)]
             ev[0].record(side)
@@ -1307,7 +1306,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self._gpu_t["tree_ms"] += ev[1].elapsed_time(ev[2])
         t1 = time.perf_counter()
         n = int(leaves.shape[0])
-        nbytes = sum(m.nbytes for m in job.metas)
+        nbytes = job.metas.nbytes if hasattr(job.metas, "scan") else sum(m.nbytes for m in job.metas)
         layout_dig = self.layout_digest(job.metas)
         root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
         t2 = time.perf_counter()
@@ -1887,7 +1886,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self.spans.add("root_finalisation", t2 - t1)
         last_end = max((s.t_step_end for s in steps), default=t0)
         persistent = sum(32 * len(lv) for lvls in self._levels.values() for lv in lvls) + 32 * len(steps) + sum(map(len, self._salts.values())) + sum(
-            len(json.dumps([[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes] for m in metas])) for metas in self._layouts.values())
+            len(json.dumps(metas.summary() if hasattr(metas, "scan") else [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes] for m in metas])) for metas in self._layouts.values())
         return RunCommitment(run_root=run_root, steps=steps, spans=self.spans.snapshot(), root_ready_delay_s=t2 - last_end,
                              t_finalize_s=t2 - t0, persistent_bytes=persistent, temporary_bytes_peak=self.pool.bytes_in_use,
                              weight_registration=self.weights,
@@ -1922,7 +1921,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         out = []
         for s in steps:
             metas = self._layouts.get(s.step) or []
-            names = [m.name for m in metas]
+            names = metas.names if hasattr(metas, "scan") else [m.name for m in metas]
             fa2 = next((n for n in names if n.startswith(HIDDEN_M1_PREFIXES)), None)
             out.append({"step": s.step, "root": s.root[:8].hex(), "tensors": s.n_tensors, "bytes": s.n_bytes, "leaves": s.n_leaves,
                         "layout": s.layout_digest[:8].hex(), "fa2": fa2})
@@ -2004,6 +2003,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
 
         for step in sorted(self._layouts):
             metas_all = self._layouts[step]
+            metas_all = metas_all.scan() if hasattr(metas_all, "scan") else metas_all   # a cached plan's record: metas for this pass only
             ps = self._padding.get(step) if padded_run else None
             # a padding meta: the step has a PaddingStep, the meta sits in the padding block of the step stream (`stream_off >= stream_base`;
             # an executed arena meta reads -1, an executed packed meta < stream_base) and carries the padding name (fix (c))
