@@ -57,7 +57,7 @@ Pous/SecurityProofs/Continuous/     proved: the continuous audit's counting step
                                     rules its verifier enforces (`Verifier.lean`), `PerAnswer` and
                                     `ContinuousAudit` (`PerAnswer.lean`), the 64 KiB band at `D = 5`
                                     (`Band.lean`, not pinned), completeness, `ContinuousComplete`
-                                    (`Complete.lean`), the time-averaged bound `ContinuousTimeAverage`
+                                    (`Complete.lean`), the idle-slot time average `ContinuousTimeAverage`
                                     (`TimeAverage.lean`) and its band family at `D = 0, 1, 2, 5`
                                     (`BandTimeAverage.lean`, `BandFamilyContinuousTimeAverage`)
 Pous/SecurityProofs/Graded/         proved: the tail rule (`Tail.lean`), Theorem 1(ii) for the graded audit

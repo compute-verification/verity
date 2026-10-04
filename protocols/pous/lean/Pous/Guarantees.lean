@@ -1008,8 +1008,16 @@ the freed fraction of the responder's memory at slot `t` (`contHeldAt`), read at
 earlier arrival has closed) whether or not a challenge arrives there, and a busy slot counts as `0`. Dividing by
 `pT`, the expected number of challenges (`λ·T` in seconds):
 `Pr[accept(f₀) ∧ (1/T)·Σ_{t idle} max(ε_t − ε_proof, 0) > g(f₀)] ≤ βe + T·(β + 1)·π` with `g = G/(pT)`, the explorer's
-`g` at `n = λT`. Off that event, the idle slots with `ε_t > X` are at most a `g/(X − ε_proof)` fraction of the `T`
-slots (Markov). `a ≤ b` keeps `a/b` a probability, and `0 < b` makes the draw space nonempty. The
+`g` at `n = λT`. In an accepted run off that event, the idle slots with `ε_t > X` are at most a `g/(X − ε_proof)`
+fraction of the `T` slots (Markov).
+
+This is an average over the idle slots, not over the whole period: it does not bound the explorer's
+`ε̄ = (1/T)·Σ_t ε_t`. The memory is not read at a busy slot, and the responder chooses which slots are busy
+(`Pous/Protocol/Model/Continuous.lean`, "The responder chooses the busy slots"). In an accepted run off the
+event, with `0 < a` and `ε_proof ≥ 0`, `ε̄ ≤ ε_proof + g + (busy slots)/T` whatever the memory at a busy slot, and
+a responder that pads every hit to `D` units makes about 2.5% of the slots busy at `D = 2` and 9.9% at `D = 5`
+(100 challenges/s on 241.5 µs slots) without a miss. Neither is proved here. `a ≤ b` keeps `a/b` a probability,
+and `0 < b` makes the draw space nonempty. The
 scope is the model's: the arrival coins are the verifier's own randomness, independent of the setup and the answers;
 memory is read once per slot, so a dip shorter than one slot is not seen; time is in units of one round, which the
 step floor converts to seconds. Proof: `PousContinuous.continuous_time_average`; here
@@ -1046,6 +1054,10 @@ compression width of the sequential certificate at `(D, k)` (`BandMultiMeetsFami
 | 1 | 93 | 0.4043% | 0.3689% | 0.2702% | 0.2698% |
 | 2 | 97 | 0.5996% | 0.5641% | 0.4654% | 0.4650% |
 | 5 | 111 | 1.1855% | 1.1496% | 1.0509% | 1.0505% |
+
+These slacks are for the idle slots only (`ContinuousTimeAverage`). At `D = 2` and `D = 5` a responder that pads its
+hits to `D` units makes about 2.5% and 9.9% of the slots busy without a miss (100 challenges/s), and the bound reads
+nothing there; at `D_late ≤ 1` no slot is busy.
 
 Proof: `PousContinuous.band_family_continuous_time_average`; here
 `Pous.SecurityProofs.BandFamilyContinuousTimeAverage`. -/

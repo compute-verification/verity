@@ -84,7 +84,9 @@ did before. No cap like the graded audit's `D_late ≤ 12` (`audit.LATE_ROUNDS`)
 * **Storage at send times, not a time average,** in `PerAnswer` and `ContinuousAudit`. `ε_j` is read at the send
   times. Between them a machine may hold less, down to nothing, and rebuild before the next send (`rest` sees `C` and
   `ω`), so those bounds say nothing about the time average. `ContinuousTimeAverage` reads the memory at every idle
-  slot, and the memory at a slot cannot depend on whether a challenge arrives there.
+  slot, and the memory at a slot cannot depend on whether a challenge arrives there. It reads nothing at a busy slot,
+  and the responder chooses which slots are busy (the last section), so it bounds an average over the idle slots, not
+  over the whole period.
 * **No messages in flight.** A round's answer is computed from the memory at the send time and the round's queries.
   Data the responder keeps outside its memory, on the wire say, and reads back during a round is outside help, which
   the deployment must exclude from each send to its close.
@@ -223,8 +225,10 @@ Added on 3 Oct 2026, with `Pous.Guarantees.ContinuousTimeAverage`. Statement rev
 
 The verifier draws the arrivals itself. Time is cut into `T` slots of one unit each, the unit of `Prog.depth` and of
 `arr` above. At slot `t` the verifier draws `x t = (c, i) ∈ Fin b × Fin B`, uniform and independent of everything
-else. A challenge arrives at `t` iff `c < a` (probability `a/b`): a Bernoulli process, the discretized Poisson process
-at `λ = (a/b)/call_ns`. The `j`-th arrival's index is the `i` drawn at its slot (`histAt`), and its arrival time is
+else. A challenge arrives at `t` iff `c < a` (probability `a/b`): a Bernoulli process, at most one arrival per slot,
+standing in for a Poisson process at `λ = (a/b)/call_ns`. A deployment is inside the statements only if it draws its
+arrivals this way, one coin per slot from its own randomness. The `j`-th arrival's index is the `i` drawn at its slot
+(`histAt`), and its arrival time is
 `arrAt a x j`. Rules 1–5 are unchanged: `contRecords` with `arr := arrAt a x` runs the verifier on these arrivals.
 
 **Arrivals queue.** Rule 1 sends challenge `j` at `max(arrAt a x j, c_{j−1})`, so a challenge that arrives while a
@@ -233,7 +237,18 @@ so far are `histAt a x t`, a function of the verifier's draws alone. A verifier 
 round would send a history that depends on the rounds' depths, and so on the primitive.
 
 **Idle slots.** Slot `t` is idle (`contIdle`) when every challenge that arrived before `t` has closed by `t`, so a
-challenge arriving at `t` is sent at `t`. At a busy slot a round is open or a challenge is queued.
+challenge arriving at `t` is sent at `t`. At a busy slot a round is open or a challenge is queued, and
+`ContinuousTimeAverage` does not read the memory there.
+
+**The responder chooses the busy slots.** A round lasts as many units as its program takes: at most `D` for a hit or
+a wrong answer (`contVerdict`, `PousContinuous.hit_on_time`), at most `D_late` otherwise
+(`PousContinuous.closed_le`). A busy slot lies inside some round, so over `n` challenges of which `F` miss, at most
+`D·n + (D_late − D)·F` slots are busy when `D ≤ D_late` (not proved here). The responder may make them busy at no
+cost but those misses: one that pads every hit to `D` units, answering at the deadline, misses nothing, and at
+`a/b = 0.02415` (100 challenges/s on 241.5 µs slots) it makes about 2.5% of the slots busy at `D = 2` and 9.9% at
+`D = 5`. At `D_late ≤ 1` no slot is busy: a round closes by the next slot. During a round the memory is not
+measured: the responder may keep only what the round's answer needs, and `rest`, which sees `C` and `ω`, restores
+the rest by the next idle slot.
 
 **The memory at time `t`** (`contHeldAt`) is `rest W pp C ω h t m` after the challenges that arrived before `t`: what
 the responder would present if a challenge were sent at `t`. At an idle slot it is the memory a challenge arriving at
