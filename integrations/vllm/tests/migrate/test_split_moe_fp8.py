@@ -85,8 +85,8 @@ def _tree(root: Path, files: dict[str, str]) -> Path:
     return root
 
 
-def _run(root: Path, moves=MOVES, edits=EDITS) -> S.Plan:
-    return S.run(root, moves, DESTINATIONS, edits)
+def _run(root: Path, moves=MOVES, edits=EDITS, keep=None) -> S.Plan:
+    return S.run(root, moves, DESTINATIONS, edits, keep or {})
 
 
 def _apply(root: Path, **kw) -> S.Plan:
@@ -140,10 +140,7 @@ def test_a_rerun_changes_nothing(tmp_path):
 
 def test_check_reports_without_writing(tmp_path, monkeypatch):
     root = _tree(tmp_path, FILES)
-    monkeypatch.setattr(S, "MOVES", MOVES)
-    monkeypatch.setattr(S, "DESTINATIONS", DESTINATIONS)
-    monkeypatch.setattr(S, "EDITS", EDITS)
-    monkeypatch.setattr(S.run, "__defaults__", (root, MOVES, DESTINATIONS, EDITS))
+    monkeypatch.setattr(S.run, "__defaults__", (root, MOVES, DESTINATIONS, EDITS, {}))
     assert S.main(["--root", str(root), "--check"]) == 1
     assert _read(root, f"{REG}/fam.py") == FAM
     assert S.main(["--root", str(root)]) == 0
@@ -156,6 +153,18 @@ def test_a_late_reference_on_a_split_tree_is_rewritten(tmp_path):
     _tree(root, {"pkg/tests/test_e.py": f"from {OLD}.fam import twin\n"})
     _apply(root)
     assert _read(root, "pkg/tests/test_e.py") == f"from {NEW}.fam_twins import twin\n"
+
+
+@pytest.mark.parametrize("last", [False, True])
+def test_the_keep_entry_goes_after_the_kernels_entries_once(tmp_path, last):
+    after = "" if last else ',\n  "verity_vllm.x": "x"'
+    keep_file = ('{\n "schema": "vllm-dead-code-keep/v1",\n "modules": {\n  "verity_vllm.a": "a",\n'
+                 f'  "{NEW}.k": "k"{after}\n }}\n}}\n')
+    root = _tree(tmp_path, {**FILES, S.KEEP_FILE: keep_file})
+    _apply(root, keep={f"{NEW}.fam_twins": "the twins"})
+    lines = _read(root, S.KEEP_FILE).splitlines()
+    assert lines[4:6] == [f'  "{NEW}.k": "k",', f'  "{NEW}.fam_twins": "the twins"' + ("" if last else ",")]
+    assert _run(root, keep={f"{NEW}.fam_twins": "the twins"}).changed == {}
 
 
 def _refused(root: Path, match: str, **kw) -> None:
