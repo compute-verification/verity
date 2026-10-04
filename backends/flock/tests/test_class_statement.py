@@ -592,3 +592,92 @@ def test_serve_wait_accepts_only_every_session_served_and_accepted(tmp_path: Pat
                           served("none", [])], 1.0)
     assert [(r["served"], r["accepted"]) for r in recs] == [(3, True), (2, False), (3, False), (0, False)]
     assert not any((tmp_path / n / "addrs.json").exists() for n in ("all", "short", "rejected", "none"))
+
+
+LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
+
+
+def _stand_in(name, extra=()):
+    """A unit that copies its 128-word row ``x`` to its one output, beside parameters ``extra`` it ignores."""
+    from verity.ir.defs import CompositeDefinition
+    from verity.ir.types import Array, Value
+
+    X = Array(128, Value(16))
+    return bind(CompositeDefinition(name, 1, (), lambda S: ((("x", X), *extra), X),
+                                    lambda B, S, x, *_: x, register=False))
+
+
+def _lean_statement(d: Path, own: Path | None = None):
+    import subprocess
+
+    return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit", "--circuit",
+                           str(d / "circuit.txt"), "--public", str(d / "pub.bin"), *(["--public-inputs", str(own)] if own else [])],
+                          capture_output=True, text=True)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(__import__("shutil").which("lake") is None, reason="no Lean toolchain")
+def test_stage_unit_stages_a_unit_on_named_rows_with_an_exact_v2_output_row(tmp_path):
+    """`stage_unit` lowers a unit on its named input rows (a v2 bit row of exactly its words), checks every instance's
+    outputs against the IR reference, commits the output port as one exact-length v2 row, and the Lean verifier builds the
+    statement from the public file it writes; rows that are not the unit's parameters once each are refused."""
+    import subprocess
+
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
+
+    d = _stand_in("StageUnitRows")
+    rows = {"x": np.arange(512, dtype=np.uint16).reshape(4, 128)}
+    got = CS.stage_unit(d, "unit/stand-in", [("x", SCHEMA_HM96_SHA512_ROW_V2, 2048, ["x"])], [(SCHEMA_HM96_SHA512_ROW_V2, (0,))],
+                        rows, tmp_path, b"k" * 32)
+    assert got["meta"]["row_schemas"] == [[SCHEMA_HM96_SHA512_ROW_V2, 2048], [SCHEMA_HM96_SHA512_ROW_V2, 2048]]
+    assert "out_row_ports" not in got["meta"] and (got["outs"]["o0"] == rows["x"]).all()
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = _lean_statement(tmp_path)
+    assert p.returncode == 0, p.stdout + p.stderr
+    with pytest.raises(ValueError, match="not the parameters"):
+        CS.stage_unit(d, "unit/stand-in", [("x", SCHEMA_HM96_SHA512_ROW_V2, 2048, ["x", "x"])], [(SCHEMA_HM96_SHA512_ROW_V2, (0,))],
+                      rows, tmp_path / "twice", b"k" * 32)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(__import__("shutil").which("lake") is None, reason="no Lean toolchain")
+def test_stage_unit_stages_public_input_ports_that_the_verifier_holds_to_its_own_recomputation(tmp_path):
+    """A parameter `stage_unit` takes as a public input port (PoUW's anchors: verifier randomness from public seeds) is no
+    row: META names it in ``public_inputs`` with its seed and derivation and maps its leaves in ``leaves_public``, each 4-bit
+    value in its own u16 word.  The Lean verifier builds the statement with the verifier's own ``--public-inputs`` file, and
+    refuses that file with a wrong word, and a public file whose public word the prover chose."""
+    import subprocess
+
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
+    from verity.ir.types import Array, Value
+
+    d = _stand_in("StageUnitPublic", (("e", Array(32, Value(4))),))
+    public = {"e": {"seed": "test/seed-a", "derivation": "test/e-line"}}
+    e = np.array([[(3 * i + j) % 16 for j in range(32)] for i in range(4)], dtype=np.uint16)
+    rows = {"x": np.arange(512, dtype=np.uint16).reshape(4, 128), "e": e}
+    in_rows = [("x", SCHEMA_HM96_SHA512_ROW_V2, 2048, ["x"])]
+
+    def stage(sub, rows):
+        CS.stage_unit(d, "unit/stand-in", in_rows, [(SCHEMA_HM96_SHA512_ROW_V2, (0,))], rows, tmp_path / sub, b"k" * 32,
+                      public_inputs=public)
+        return tmp_path / sub
+
+    honest = stage("honest", rows)
+    text = (honest / "circuit.txt").read_text()
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    assert meta["public_inputs"] == [{"port": "e", "words": 32, **public["e"]}] and [p[0] for p in meta["ports"]] == ["x", "o0"]
+    own = tmp_path / "public-inputs.bin"
+    FC.write_public_inputs(text, {"e": e}, 4, own)
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = _lean_statement(honest, own)
+    assert p.returncode == 0, p.stdout + p.stderr
+
+    wrong = bytearray(own.read_bytes())
+    wrong[-2] ^= 1
+    (tmp_path / "wrong.bin").write_bytes(bytes(wrong))
+    p = _lean_statement(honest, tmp_path / "wrong.bin")
+    assert p.returncode != 0 and "public input e: word 31 of instance 3 is not the verifier's own recomputation" in p.stdout + p.stderr
+
+    chosen = stage("chosen", dict(rows, e=e ^ np.uint16(1)))
+    p = _lean_statement(chosen, own)
+    assert p.returncode != 0 and "public input e: word 0 of instance 0 is not the verifier's own recomputation" in p.stdout + p.stderr

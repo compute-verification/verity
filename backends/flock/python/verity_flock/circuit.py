@@ -487,7 +487,8 @@ def public_blocks(group: tuple, li: list[list[int]], lp: list[list[int]]) -> lis
 
 def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: bool = False, partition: str | None = None,
             program: str | None = None, statics: dict | None = None, port_bits: list | None = None,
-            public_inputs: dict | None = None, seg_ports: frozenset[str] = frozenset(), seg_out_rows: tuple = ()) -> str:
+            public_inputs: dict | None = None, seg_ports: frozenset[str] = frozenset(), seg_out_rows: tuple = (),
+            v2_out_rows: tuple = ()) -> str:
     """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
     (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
     ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
@@ -496,7 +497,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     in place of the one ``row_schema``; ``seg_ports``: the input ports among them that are segmented rows (``sha512/row-seg/v1``,
     PoUW's per-call role-X rows); ``seg_out_rows``: runs of consecutive output ports each committed as one segmented row of
     exactly their words, named after its first (META ``out_row_ports``), so that a unit reading the row as one input port
-    has the writer's leaf.
+    has the writer's leaf; ``v2_out_rows``: runs (one port or several) each committed as one ``sha512/row/v2`` row of exactly
+    their words (PoUW's ok, tile digest and role-W rows), in place of a lone port's row zero-padded to whole blocks.
 
     ``public_inputs`` (``{port: {"seed": ..., "derivation": ...}}``): input ports that are not rows but public words the verifier
     recomputes from public data, each naming its seed and derivation (PROTOCOL.md §16.10). The units read them from ``in``
@@ -526,10 +528,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     for nm, v in public_inputs.items():
         if set(v) != {"seed", "derivation"} or not all(isinstance(v[k], str) and v[k] for k in v):
             raise ValueError(f"public input {nm}: it names its recomputation, a non-empty seed and derivation")
-    if port_bits is not None and None in port_bits:
-        raise ValueError(f"{low.name}: bit rows on every input port or on none")
-    if port_bits and public_inputs:
-        raise NotImplementedError(f"{low.name}: public input ports beside bit rows (a public leaf is a 16-bit word)")
+    if port_bits is not None and None in [b for (nm, _w), b in zip(in_ports, port_bits) if nm not in public_inputs]:
+        raise ValueError(f"{low.name}: bit rows on every input row or on none")
     bits_of = port_bits or [None] * len(sub.inputs)
     if seg_ports and (port_bits is None or not seg_ports <= {p.name for p in sub.inputs}):
         raise ValueError(f"{low.name}: segmented rows are bit rows of input ports: {sorted(seg_ports)}")
@@ -596,7 +596,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             "rows": [_row_consts(p) for p in ports], "units_per_vu": U.n, "unit_log": ul, "leaves_in": leaves_in, "leaves_out": lv["out"],
             **({"public_inputs": pins, "leaves_public": leaves_public} if pins else {}),
             "row_key_sha512": LEAF_SCHEME["key_sha512"], "dummy": _dummy(low, in_ports, ins, outs, orows, sub, counts), "leaf_scheme": LEAF_SCHEME,
-            **({"out_row_ports": counts} if seg_out_rows else {}),
+            **({"out_row_ports": counts} if seg_out_rows or max(counts, default=1) > 1 else {}),
             # only for a template that needs them (attention, GEMM): absent means the unit returns the outputs and no leaf cut
             **({"out_net": out_net, "out_net_ports": out_net_ports} if U.tail_rets else {}), **({"leaf_cuts": leaf_cuts} if leaf_cuts else {}), "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
             "wires": _row_wires(ports) + tail_wires, "program_digests": programs,
