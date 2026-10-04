@@ -19,6 +19,8 @@
                                                  # a full run id another VM launched (no local dir): found on --on NAME, else on
                                                  # each ssh machine, and its records fetched here (remote.adopt)
   research compare <baseline> <candidate> [--json]   # differences and candidate/baseline ratios; the workload contract judges them
+  research replay SET... --dry-run [--at REV] [--on M] [--fetch] [--json]   # each attempt of a replay set (replay_set=SET) as
+                                                 # replayable / needs window / not replayable, with its relaunch (research/replay.py)
   research tele <telemetry subcommand...>        # the full harness surface (init, event, sample, cancel-intent, classify, ...)
   research data <store subcommand...>            # the evidence store: put show where fetch verify select snapshot labels label reindex sql
   research keep PATH --owner @LANE --expires DATE|never --priority low|normal|high|keep [--regenerate CMD] [--art ART | --preserve] [--why T]
@@ -1320,6 +1322,10 @@ def main(argv: list[str] | None = None) -> int:
         from .jobs.cli import worker_main
 
         return worker_main(rest)
+    if cmd == "replay":
+        from .replay import main as replay_main
+
+        return replay_main(rest)
     if cmd == "git":
         from .commitmap import main as git_main
 

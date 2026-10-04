@@ -89,6 +89,7 @@ research status [RUN] [--refresh] [--all] [--json]
 research inspect RUN [--json]            # fetch, status RUN and inspect take a run another VM launched (a full id): found on
                                          # --on NAME, else on each ssh machine, and its records fetched here
 research data SUBCOMMAND ...             # the store: put/show/fetch/select/... and lookup / pull / attempt publish
+research replay SET... --dry-run [--at REV] [--on M] [--fetch] [--json]   # replay_set=SET's attempts: replayable / needs window / not replayable, and each relaunch (replay.py)
 research pods create --name N --max-hours H ... | list | terminate | check-part    # RunPod lifecycle (pods/runpod.py, pods/part.py)
 research pods extend TARGET --hours H | lease TARGET                               # the pod's lease (pods/lease.py)
 research pods guard [--budgets NOTES|FILE] [--detach] | status | stop               # the one budgets guard (pods/guard.py, pods/budgets.py)
