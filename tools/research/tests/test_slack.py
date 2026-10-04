@@ -38,6 +38,7 @@ class FakeSlack:
         self.calls: list[tuple[str, dict]] = []
         self._ts = itertools.count(1)
         self.page = 200
+        self.replies_keep_root = False
 
     def add(self, channel: str, **msg) -> dict:
         msg.setdefault("ts", f"1700000000.{next(self._ts):06d}")
@@ -67,7 +68,8 @@ class FakeSlack:
             else:
                 msgs = [m for m in msgs if not m.get("thread_ts") or m["thread_ts"] == m["ts"]][::-1]     # newest first, like Slack
             if "oldest" in p:
-                msgs = [m for m in msgs if float(m["ts"]) >= float(p["oldest"])]
+                keep = p["ts"] if method == "conversations.replies" and self.replies_keep_root else None   # as Slack does
+                msgs = [m for m in msgs if float(m["ts"]) >= float(p["oldest"]) or m["ts"] == keep]
             if "latest" in p:
                 msgs = [m for m in msgs if float(m["ts"]) <= float(p["latest"])]
             start = int(p.get("cursor") or 0)
@@ -597,6 +599,21 @@ def test_read_since_and_thread_oldest_first_across_pages(fake, registry, capsys)
     assert [m["text"] for m in json.loads(out)] == ["first", "reply"]
 
 
+def test_read_thread_since_reads_only_the_replies_after_ts(fake, registry, capsys):
+    """`--since` with `--thread` was refused, so a lane following a thread re-read all of it each time."""
+    fake.page = 2
+    root = fake.add(COORD, text="question", user="U1")
+    seen = fake.add(COORD, text="first answer", user="U2", thread_ts=root["ts"])
+    fake.add(COORD, text="elsewhere", user="U2")
+    fake.add(COORD, text="second answer", user="U3", thread_ts=root["ts"])
+    fake.add(COORD, text="third answer", username="console", bot_id=BOT, thread_ts=root["ts"])
+    rc, out, _ = run(capsys, "read", "--thread", root["ts"], "--since", seen["ts"])
+    assert rc == 0 and [line.split(": ", 1)[1] for line in out.splitlines()] == ["second answer", "third answer"]
+    fake.replies_keep_root = True
+    rc, out, _ = run(capsys, "read", "--thread", root["ts"], "--since", seen["ts"], "--json")
+    assert rc == 0 and [m["text"] for m in json.loads(out)] == ["second answer", "third answer"]
+
+
 def test_a_post_carries_slack_date_tokens_and_read_shows_both_zones(fake, registry, capsys):
     text = "freeze 2026-11-01T09:30Z, see note:20260930T2020Z-handoff-infra and `--since 2026-11-01T09:30Z`"
     assert run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", text)[0] == 0
@@ -869,9 +886,15 @@ def test_status_reads_the_decision_and_exits_0_only_once_decided(route, registry
     assert run(capsys, "ask-daniel", "status")[0] == 2
 
 
-def test_resolve_records_a_thread_answer_and_says_clearly_when_the_route_is_missing(route, registry, capsys):
+def test_status_404_says_no_card_has_that_id(route, registry, capsys):
+    route.answer = (404, {"error": "not_found"})
+    rc, _, err = run(capsys, "ask-daniel", "status", "1790800000.000100")
+    assert rc == 2 and "HTTP 404: no card has that ID" in err and "not the card's Slack ts" in err
+
+
+def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_card(route, registry, capsys):
     rc, _, err = run(capsys, "ask-daniel", "resolve", "42", "--choice", "no", "--note", "Daniel in the thread: needs changes")
-    assert rc == 2 and "HTTP 404: the resolve route isn't deployed yet" in err and "record it as a ruling" in err
+    assert rc == 2 and "HTTP 404: no card has that ID" in err and "record Daniel's thread reply as a ruling" in err
     route.resolve = True
     rc, out, _ = run(capsys, "ask-daniel", "resolve", "42", "--choice", "no", "--note", "needs changes")
     assert rc == 0 and out == "decided no thread -\n"
@@ -1103,8 +1126,8 @@ def test_read_as_since_rereads_the_doorbells_after_ts_and_never_moves_the_mark_b
     assert slack.seen_path("vllm-epoch-run").read_text().strip() == third["ts"]
     slack.mark_read("vllm-epoch-run", [second])
     assert slack.seen_path("vllm-epoch-run").read_text().strip() == third["ts"]
-    rc, _, err = run(capsys, "read", "--thread", first["ts"], "--since", first["ts"])
-    assert rc == 2 and "neither --since nor --as" in err
+    rc, _, err = run(capsys, "read", "--thread", first["ts"], "--as", "vllm-epoch-run")
+    assert rc == 2 and "--thread reads one thread; it doesn't take --as" in err
     rc, _, err = run(capsys, "read")
     assert rc == 2 and "one of --thread TS, --since TS or --as NAME" in err
 

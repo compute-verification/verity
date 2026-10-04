@@ -22,6 +22,7 @@ import Pouw.Protocol.Fp8Atom.Vectors.Ada
 import Pouw.Protocol.Fp8Atom.Vectors.Add
 import Pouw.Protocol.Fp8Atom.Vectors.C00
 import Pouw.Protocol.Fp8Atom.Vectors.C01
+import Pouw.Protocol.Game.Deadline
 import Pouw.Protocol.Game.Defs
 import Pouw.Protocol.Game.Params
 import Pouw.Protocol.M1
@@ -35,6 +36,7 @@ import Pouw.Protocol.NCP.Witness
 import Pouw.Protocol.NCP.Word
 import Pouw.Protocol.PearlC.Accum
 import Pouw.Protocol.PearlC.Completeness
+import Pouw.Protocol.PearlC.Deadline
 import Pouw.Protocol.PearlC.Defs
 import Pouw.Protocol.PearlC.Device
 import Pouw.Protocol.PearlC.DeviceChainOnly

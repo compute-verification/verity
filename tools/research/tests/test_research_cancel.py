@@ -4,8 +4,10 @@ custody (1-2 Oct)."""
 from __future__ import annotations
 
 import json
+import os
 import signal
 import subprocess
+import sys
 from pathlib import Path
 
 from research import cli, remote
@@ -45,6 +47,24 @@ def test_cancel_terms_the_workloads_group_records_a_manual_cancel_and_leaves_the
         assert intent["target"]["pgid"] == workload.pid and intent["reason"] == "train superseded (research cancel by lander)"
         assert result["kind"] == "cancel_result" and result["delivered"] is True
         assert f"process group {workload.pid} (1 process(es))" in capsys.readouterr().out
+    finally:
+        _end(workload, runner)
+
+
+def test_a_cancel_is_reported_delivered_when_the_runner_records_the_exit_right_after_it(tmp_path, monkeypatch, capsys):
+    """The cancel read only the last line of events.jsonl, which by then was the runner's record of the workload's exit, so runs it
+    stopped (exit 143) were reported as "the cancel did not run on the machine (rc 0)"."""
+    local, d, workload, runner = _run(tmp_path, monkeypatch)
+    (bin_ := tmp_path / "bin").mkdir()
+    (bin_ / "python3").write_text(f'#!/bin/sh\n"{sys.executable}" "$@"; rc=$?\n'
+                                  f"echo '{json.dumps({'kind': 'proc_end', 'rc': 143})}' >> {d}/events.jsonl\nexit $rc\n")
+    (bin_ / "python3").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
+    try:
+        assert cli.main(["cancel", str(local), "--reason", "x", "--by", "lander", "--runs-dir", str(local.parent)]) == 0
+        assert workload.wait() == -signal.SIGTERM and runner.poll() is None
+        assert json.loads((d / "events.jsonl").read_text().splitlines()[-1])["kind"] == "proc_end"
+        assert f"SIGTERM to its workload's process group {workload.pid} (1 process(es))" in capsys.readouterr().out
     finally:
         _end(workload, runner)
 

@@ -476,11 +476,18 @@ useful    U/(α_A·α_B), glue
     - The tile cap and R1 read the credited rows only. Past the count caps the audit rejects.
     - `volunteer` is an honest prover's remedy for a tile over the cap: it gives up the rows whose removal brings each
       tile under, before the beacon.
-  - A cell's draw weight is its row's share of `wref` at the kept width. An accepted unit is credited
-    (1 − ρ)·`credit_of` over its credited cells.
+  - A cell's draw weight is its row's share of `W_ref` at the kept width, the `W_ref` of the Lean statement the draw
+    cites (`draw_wref`). On sm_120 at its cap that is `wrefDevRev1K` at `Prices.sm120Loop` and the honest cast at 8.72
+    (`SM120_LOOP_CAST_8P72`), the statement of the served γ and ε. Its ratio to `wref` differs between linears, so a
+    served step's mixed layout drawn by `wref` would not be work-weighted in its sense (red team #919 F1). Elsewhere it
+    is `wref`. A tile's draw weight is the sum over its credited cells. Where every cell is credited, that is the cited
+    statement's ticket (the tile's `Wref`). The statements weigh every cell, so a tile with filler, excluded or
+    voluntary rows gets less than its `Wref`'s ticket, and unless every tile's credited share is the same, the draw is
+    not yet the one they state (Not here yet). An accepted unit is credited (1 − ρ)·`credit_of` over its credited
+    cells.
   - **The sampling guarantee is per credited cell.** A drawn tile's uncredited cells (filler, excluded or voluntary)
-    never count as coverage. Volunteering a tile's other rows only lowers that tile's draw weight to its credited cells,
-    which is exactly the bound claimed.
+    never count as coverage. Volunteering a tile's other rows lowers that tile's draw weight to its credited cells.
+    Lean's statements don't model that yet: their draw weight is the whole tile's `Wref`, whatever is volunteered.
   - On an opened tile the verifier checks that filler rows are zero, that every row is zero past the kept width, that
     credited rows pass the per-row rules and excluded rows fail them, and that the replayed debit over the credited words
     is at most ρ times those cells' credit. ρ is the device record's cap (`Device.cap`): 1/400 on the H100.
@@ -561,6 +568,7 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     C-Flock's committed ports (`pc8.PORTS`), with `pouw/row-fp32/v1` input rows, `pouw/row-fp8-p/v1` rows and
     `pouw/row-ok/v1` rows. A 64 × 64 tile's digest is 281 Keccak-p[1600, 12] in gates. `plan.tile_layout` draws a tile
     with its rows, as for `pc4`.
+  - The row cut along k (``Shape.row_k``, `circuit.rowk`) is `pc4`'s, below, on each of the three records.
   - Not in it yet: the debit and the cap. Until they land, Pearl-C's runs are checked by its reference audit, a
     development shortcut that opens rows.
 
@@ -814,9 +822,32 @@ useful    U/(α_A·α_B), glue
     commit string and tree leaf at k = 64 and 4,096, and the digest of two tiles, which the gates compute. C-Flock's
     ports commit them byte for byte: `backends/flock/tests/test_pouw_rows.py` recomputes every vector through C-Flock's
     port for the row, and one v1 row, one v2 row and a tile through the Lean verifier's row constants.
+  - The six PoUW primitives the row units call (`PouwF32SqrtRn`, `PouwETilde`, `PouwBf16Neg`, `PouwSqAcc`, `PouwSqCeil`,
+    `PouwSqGe`) have Boolean versions, the same functions on bits (`circuit.boolean`, `_v2`, traced from `forms` builders;
+    their AND counts are pinned in circuit-check's `pins.json`). C-Flock's lowering maps a primitive id to a piece of its own
+    (`ir_lower.PIECES`), which has entries for core's `E4m3ToF32`, `F32ToE2m1Sat` and `BitAnd` but none for these six yet.
   - The draw is `plan.tile_layout` (beside `ncp-v2`'s `plan.layout`, which is unchanged): one stratum per template,
     each tile at the W_ref it is given, and a drawn tile proved with its closure, its TM `Pc4RowA` units, and with its
     TN `Pc4RowB` units in the weight's Program, each once per plan (`Plan.proved_b`). It opens nothing.
+  - **The row cut (`circuit.rowk`, ``Shape.row_k``) is opt-in**, for both checks. C-Flock proves one instance in at most
+    a 2^27-bit block (`verity_flock.circuit.K_MAX`), and a whole row unit outgrows it before the served k (Pearl-C's row
+    of A on sm_120 past k = 2,560; Pearl-C4's fills it at 4,096). A shape with ``row_k`` (2,048 deployed, `rowk.ROW_K`)
+    cuts each row unit along k into a head (the row's statistics and E′, or a_E), one form per segment of row_k positions
+    (its codes, and the clean-up's 32 chains over it started from the previous form's carry) and a tail (P, from the
+    chains and, on B, E′·G). Pearl-C's ok is the tail's (the dead count is carried), Pearl-C4's the head's.
+    - A segment is whole device windows and whole 32-position blocks, so each form adds the same atoms in the same order
+      as the whole row, and the carry is exact: the pieces' outputs are the whole row's, and every value is computed in
+      exactly one unit.
+    - The tail writes the fp8-p or nvfp4-p row today's row unit writes, so a tile reads its rows unchanged. The pieces
+      pass their values in six more v2 rows (`leaves`' pc8-head, pc8-carry, fp8-codes, pc4-head, pc4-carry and
+      nvfp4-codes; `rowk.PORTS8`, `PORTS4`). At row_k = 2,048 each is short (at most 55 words) or whole SHA-512 blocks,
+      the v2 rows C-Flock's widened scope takes; pc8-carry ends in 62 zero words for that.
+    - A form reads its segment of F_A and F_B as a public input region under the anchor's slice rule,
+      `verity/pouw/anchor/<scheme>/<anchor>/slice/v1` (`rowk.DERIVATIONS8`, `DERIVATIONS4`,
+      `anchors.Derivation.per_segment`), which only the cut's shapes name.
+    - A shape without ``row_k`` builds today's Programs, their digests unchanged. `pouw_rows.json` pins the six rows and
+      `pouw_regions.json` the slice regions (`row_k_cases`). Every form still opens the row of A whole, so a form's SHA
+      work grows with k, and past k = 18,432 (Pearl-C's row of A) a form no longer fits.
   - Not in it yet: the debit and the cap, R1, D-24, and the plan's link checks and paths. Until those land, runs are
     checked by the replay above, a development shortcut that opens rows, and every report says so.
 - **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
@@ -864,6 +895,9 @@ and its `e4m3` is the code wherever `F32ToE4m3Sat_v1` agrees with `e4m3Word` and
   are gated by these vectors when they land. Pearl-C's H100 kernel is `benchmarks/pouw/pearl_c/`, its sm_120 kernel
   `benchmarks/pouw/pearl_c_sm120/`.
 - The per-weight share of the honest reference's work in `wref`, and a `TargetProfile` Definition of the NCP GEMM.
+- For Pearl-C's draw: `GγSampled`, `HonestTileCapRate` and `CompleteSampled` take tickets proportional to the whole
+  tile's `Wref`, while the audit weighs a tile by its credited cells. The two agree on fully credited tiles. Closing it
+  means Lean statements over credited-cell tickets, or tickets over every cell; lean's to choose (red team #1014).
 - C-Flock's side of the proof's identifier: the header's `identifier`, its binding through `pub.sha`, and the verifier's
   `--identifier` (proofs' lane).
 - For `ncp-v2`:

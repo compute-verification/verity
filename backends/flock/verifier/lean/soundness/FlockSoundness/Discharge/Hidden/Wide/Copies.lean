@@ -296,7 +296,7 @@ theorem msgColOf_pos {g p k : ℕ} (hp : p < c.ports.size) (hk : k < c.ports[p]!
 
 theorem deltaMsgCol_pos {g p b t : ℕ} (hp : p < c.ports.size) (hk : b / 128 < c.ports[p]!.chunks) :
     deltaMsgCol c g p b t = shaPos c g p (b / 128) (512 + msgOff b t) := by
-  rw [deltaMsgCol_eq _ _ _ _ _ (segs_getD hu hp), (shaIn_eq R.rowNets (shaSub c p (b / 128)) (rowSlot_lt hp hk).2).2, shaPos]
+  rw [deltaMsgCol_eq _ _ _ _ _ (segs_getD hu hp) hp hk, (shaIn_eq R.rowNets (shaSub c p (b / 128)) (rowSlot_lt hp hk).2).2, shaPos]
   omega
 
 theorem cvColOf_pos {g p : ℕ} (hp : p < c.ports.size) (h0 : 0 < c.ports[p]!.chunks) (t : ℕ) :
