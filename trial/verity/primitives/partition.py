@@ -56,6 +56,11 @@ def digest(circuit: Circuit, partition: Partition) -> str:
     return hashlib.sha256(json.dumps([circuit.id(), partition], separators=(",", ":")).encode()).hexdigest()[:16]
 
 
+def whole(circuit: Circuit) -> Partition:
+    """The circuit as one region: replay's, which needs no finer partition."""
+    return (tuple(range(len(circuit.gates))),)
+
+
 def greedy(circuit: Circuit, max_width: int) -> Partition:
     """A prover's partition: consecutive gates, each region grown while its boundary stays within `max_width` wires."""
     readers: dict[int, list[int]] = {}

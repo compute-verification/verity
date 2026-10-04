@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Iterator, Mapping
 
-from verity.primitives.events import Actor, Event
+from verity.primitives.events import Actor, Event, within
 
 
 def run(actors: Mapping[str, Actor], view: str) -> Iterator[Event]:
@@ -22,17 +22,13 @@ def run(actors: Mapping[str, Actor], view: str) -> Iterator[Event]:
         log.extend(_advance(live, name, None))
     while log:
         event = log.popleft()
-        if any(_of(name, view) for name in (event.sender, *event.to)):
+        if any(within(name, view) for name in (event.sender, *event.to)):
             yield event
         for name in event.to:
             if name not in actors:
                 raise KeyError(f"{event.sender} sent {type(event.body).__name__} to {name}, who is not an actor")
             if name in live:
                 log.extend(_advance(live, name, event))
-
-
-def _of(name: str, principal: str) -> bool:
-    return name == principal or name.startswith(principal + "/")
 
 
 def _advance(live: dict[str, Actor], name: str, event: Event | None) -> list[Event]:

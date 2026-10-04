@@ -15,12 +15,12 @@ from dataclasses import dataclass
 
 from verity.primitives import partition as P
 from verity.primitives.circuit import Circuit, trace
-from verity.primitives.commitments import CommitmentScheme
+from verity.primitives.commitments import CommitmentScheme, MerkleSha256
 from verity.primitives.events import Actor, Send, receive
 from verity.primitives.randomness import derive
 from verity.protocols.integrity.profile import IntegrityProfile
 from verity.protocols.integrity.proofs.system import ProofSystem, Unit
-from verity.protocols.integrity.registration import Registered, Registration, check, register
+from verity.protocols.integrity.registration import Registered, Registration, check
 from verity.protocols.integrity.sampling import Draw, Subset
 
 
@@ -38,47 +38,48 @@ class Proofs:
     max_width: int  # boundary wires per region
     delta: float
     system: ProofSystem
+    scheme: CommitmentScheme = MerkleSha256()
     name: str = "integrity"
 
-    def verifier(self, scheme: CommitmentScheme) -> dict[str, Actor]:
-        return {f"verifier/{self.name}": self._verifier(scheme)}
+    def verifier(self, to: tuple[str, ...] = ()) -> dict[str, Actor]:
+        """`to`: the actors that read the registration it accepts and the profile it establishes."""
+        return {f"verifier/{self.name}": self._verifier(to)}
 
-    def prover(self, scheme: CommitmentScheme, circuit: Circuit, partition: P.Partition, inputs: Sequence[tuple[int, ...]]) -> dict[str, Actor]:
-        return {f"prover/{self.name}": self._prover(scheme, circuit, partition, inputs)}
+    def prover(self, circuit: Circuit, inputs: Sequence[tuple[int, ...]], registration: Registration) -> dict[str, Actor]:
+        return {f"prover/{self.name}": self._prover(circuit, inputs, registration)}
 
-    def _verifier(self, scheme: CommitmentScheme) -> Actor:
+    def _verifier(self, to: tuple[str, ...]) -> Actor:
         secret = secrets.token_bytes(32)
-        registered = (yield from receive(Registered)).body
+        registered = yield from receive(Registered, "prover")
         registration, circuits = registered.registration, registered.circuits
         digest, n = registration.digest(), sum(len(e.partition) for e in registration.executions)
-        refused = check(registered, scheme) or tuple(
+        refused = check(registered, self.scheme) or tuple(
             f"execution {i}: {why}" for i, e in enumerate(registration.executions)
             for why in P.validate(circuits[e.circuit], e.partition, self.max_width)
         )
         if refused:
-            return (Send(IntegrityProfile(digest, "region", False, n, n, self.delta, refused)),)
+            return (Send(IntegrityProfile(digest, "region", False, n, n, self.delta, refused), to=to),)
 
         law = Subset(self.k)
         drawn = law.draw(derive(secret, "verity/integrity/proofs/v1", digest), n)
         results: dict[int, bool] = {}
-        proved = (yield from receive(Proved, Send(Draw(drawn), to=(f"prover/{self.name}",)))).body
+        proved = yield from receive(Proved, "prover", Send(registered, to=to), Send(Draw(drawn), to=(f"prover/{self.name}",)))
         while True:
-            ok = set(proved.units) <= set(drawn) and self.system.verify(scheme, [_unit(registration, circuits, u) for u in proved.units], proved.proof)
+            ok = set(proved.units) <= set(drawn) and self.system.verify(self.scheme, [_unit(registration, circuits, u) for u in proved.units], proved.proof)
             results.update((u, ok) for u in proved.units)
             if set(drawn) <= results.keys():
                 break
-            proved = (yield from receive(Proved)).body
+            proved = yield from receive(Proved, "prover")
 
         reasons = tuple(f"region {u}: does not verify" for u in drawn if not results[u])
-        return (Send(IntegrityProfile(digest, "region", not reasons, n, law.bound(n, self.delta), self.delta, reasons)),)
+        return (Send(IntegrityProfile(digest, "region", not reasons, n, law.bound(n, self.delta), self.delta, reasons), to=to),)
 
-    def _prover(self, scheme: CommitmentScheme, circuit: Circuit, partition: P.Partition, inputs: Sequence[tuple[int, ...]]) -> Actor:
-        registration = register(circuit, partition, inputs, scheme)
+    def _prover(self, circuit: Circuit, inputs: Sequence[tuple[int, ...]], registration: Registration) -> Actor:
         circuits = {circuit.id(): circuit}
-        draw = (yield from receive(Draw, Send(Registered(registration, circuits), to=(f"verifier/{self.name}",)))).body
+        draw = yield from receive(Draw, "verifier", Send(Registered(registration, circuits), to=(f"verifier/{self.name}",)))
         units = [_unit(registration, circuits, u) for u in draw.units]
         values = [trace(circuit, inputs[_locate(registration, u)[0]]) for u in draw.units]
-        return (Send(Proved(draw.units, self.system.prove(scheme, units, values)), to=(f"verifier/{self.name}",)),)
+        return (Send(Proved(draw.units, self.system.prove(self.scheme, units, values)), to=(f"verifier/{self.name}",)),)
 
 
 def _locate(registration: Registration, u: int) -> tuple[int, int]:

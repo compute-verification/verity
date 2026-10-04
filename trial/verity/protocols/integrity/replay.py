@@ -6,8 +6,8 @@
     replayer    runs each execution again from its opened inputs and tells the verifier whether it gave the opened
                 outputs; it is trusted and sealed: it sees the values, and the verifier and the auditor do not
 
-Replay needs no fine partition (the prover may register each execution as one region), and the execution to be
-reproducible bit for bit on the replayer, which the circuit's exact semantics give.
+Replay needs no fine partition (the prover may register each execution as one region, `partition.whole`), and the
+execution to be reproducible bit for bit on the replayer, which the circuit's exact semantics give.
 """
 
 from __future__ import annotations
@@ -18,12 +18,12 @@ from dataclasses import dataclass
 
 from verity.primitives import partition as P
 from verity.primitives.circuit import Circuit, evaluate, trace
-from verity.primitives.commitments import CommitmentScheme
-from verity.primitives.events import Actor, Send, receive
+from verity.primitives.commitments import CommitmentScheme, MerkleSha256
+from verity.primitives.events import Actor, Send, gather, receive
 from verity.primitives.randomness import derive
 from verity.protocols.integrity.profile import IntegrityProfile
 from verity.protocols.integrity.registration import (
-    Execution, Opening, Registered, check, open_wires, register, verify_opening, wires,
+    Execution, Opening, Registered, Registration, check, open_wires, verify_opening, wires,
 )
 from verity.protocols.integrity.sampling import Draw, Subset
 
@@ -53,57 +53,51 @@ class Replayed:
 class Replay:
     k: int  # executions drawn
     delta: float
+    scheme: CommitmentScheme = MerkleSha256()
     name: str = "integrity"
 
-    def verifier(self, scheme: CommitmentScheme) -> dict[str, Actor]:
-        return {f"verifier/{self.name}": self._verifier(scheme)}
+    def verifier(self, to: tuple[str, ...] = ()) -> dict[str, Actor]:
+        """`to`: the actors that read the registration it accepts and the profile it establishes."""
+        return {f"verifier/{self.name}": self._verifier(to)}
 
-    def replayer(self, scheme: CommitmentScheme) -> dict[str, Actor]:
-        return {f"replayer/{self.name}": self._replayer(scheme)}
+    def replayer(self) -> dict[str, Actor]:
+        return {f"replayer/{self.name}": self._replayer()}
 
-    def prover(
-        self, scheme: CommitmentScheme, circuit: Circuit, inputs: Sequence[tuple[int, ...]], partition: P.Partition | None = None
-    ) -> dict[str, Actor]:
-        whole = (tuple(range(len(circuit.gates))),)
-        return {f"prover/{self.name}": self._prover(scheme, circuit, partition or whole, inputs)}
+    def prover(self, circuit: Circuit, inputs: Sequence[tuple[int, ...]], registration: Registration) -> dict[str, Actor]:
+        return {f"prover/{self.name}": self._prover(circuit, inputs, registration)}
 
-    def _verifier(self, scheme: CommitmentScheme) -> Actor:
+    def _verifier(self, to: tuple[str, ...]) -> Actor:
         secret = secrets.token_bytes(32)
-        registered = (yield from receive(Registered)).body
+        registered = yield from receive(Registered, "prover")
         registration = registered.registration
         digest, n = registration.digest(), len(registration.executions)
-        refused = check(registered, scheme)
+        refused = check(registered, self.scheme)
         if refused:
-            return (Send(IntegrityProfile(digest, "execution", False, n, n, self.delta, refused)),)
+            return (Send(IntegrityProfile(digest, "execution", False, n, n, self.delta, refused), to=to),)
 
         law = Subset(self.k)
         drawn = law.draw(derive(secret, "verity/integrity/replay/v1", digest), n)
         results = (yield from receive(
-            Replayed,
+            Replayed, "replayer",
+            Send(registered, to=to),
             Send(Draw(drawn), to=(f"prover/{self.name}",)),
             Send(ToReplay({i: registration.executions[i] for i in drawn}), to=(f"replayer/{self.name}",)),
-        )).body.results
+        )).results
         reasons = tuple(f"execution {i}: " + ("not replayed" if i not in results else "replays differently") for i in drawn if not results.get(i))
-        return (Send(IntegrityProfile(digest, "execution", not reasons, n, law.bound(n, self.delta), self.delta, reasons)),)
+        return (Send(IntegrityProfile(digest, "execution", not reasons, n, law.bound(n, self.delta), self.delta, reasons), to=to),)
 
-    def _replayer(self, scheme: CommitmentScheme) -> Actor:
-        expected: Mapping[int, Execution] | None = None
-        provided: Mapping[int, tuple[Circuit, Opening]] | None = None
-        while expected is None or provided is None:
-            event = yield ()
-            match event.body:
-                case ToReplay(executions):
-                    expected = executions
-                case Inputs(executions):
-                    provided = executions
-        results = {i: i in provided and _replays(scheme, e, *provided[i]) for i, e in expected.items()}
+    def _replayer(self) -> Actor:
+        got = yield from gather({ToReplay: "verifier", Inputs: "prover"})
+        expected, provided = got[ToReplay].executions, got[Inputs].executions
+        results = {i: i in provided and _replays(self.scheme, e, *provided[i]) for i, e in expected.items()}
         return (Send(Replayed(results), to=(f"verifier/{self.name}",)),)
 
-    def _prover(self, scheme: CommitmentScheme, circuit: Circuit, partition: P.Partition, inputs: Sequence[tuple[int, ...]]) -> Actor:
-        registration = register(circuit, partition, inputs, scheme)
-        draw = (yield from receive(Draw, Send(Registered(registration, {circuit.id(): circuit}), to=(f"verifier/{self.name}",)))).body
-        io = _io(circuit, partition)
-        opened = {i: (circuit, open_wires(scheme, circuit, partition, trace(circuit, inputs[i]), io)) for i in draw.units}
+    def _prover(self, circuit: Circuit, inputs: Sequence[tuple[int, ...]], registration: Registration) -> Actor:
+        draw = yield from receive(Draw, "verifier", Send(Registered(registration, {circuit.id(): circuit}), to=(f"verifier/{self.name}",)))
+        opened = {}
+        for i in draw.units:
+            partition = registration.executions[i].partition
+            opened[i] = (circuit, open_wires(self.scheme, circuit, partition, trace(circuit, inputs[i]), _io(circuit, partition)))
         return (Send(Inputs(opened), to=(f"replayer/{self.name}",)),)
 
 
