@@ -667,6 +667,18 @@ def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_pa
     assert CHECK.run(tmp_path, 2)[0] and marker.exists()
 
 
+def test_a_failed_preflight_starts_nothing_else_even_under_keep_going(tmp_path, monkeypatch):
+    """Every train's check runs with --keep-going: a failed preflight must still end it in seconds, not hold its slot."""
+    marker = tmp_path / "ran"
+    touch = _py("open(__import__('sys').argv[1], 'w')", marker)
+    for failing in ("preflight-lock", "preflight-lints"):
+        pre = [(n, _py("raise SystemExit(1)") if n == failing else _py("pass"), tmp_path) for n in ("preflight-lock", "preflight-lints")]
+        _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=pre)
+        ok, done = CHECK.run(tmp_path, 2, keep_going=True)
+        assert not ok and "pytest" not in {s["step"] for s in done} and not marker.exists(), failing
+        assert {s["step"]: s["status"] for s in done}[failing] == "failed"
+
+
 def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
     """Without bytecode or pytest's cache; every lint it names exists, so a rename can't turn it into a failure of
     every check. Without uv, the lockfile step fails by name."""
