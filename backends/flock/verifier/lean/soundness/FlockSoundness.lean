@@ -167,3 +167,5 @@ import FlockSoundness.Discharge.HiddenDec
 import FlockSoundness.Discharge.Hidden
 import FlockSoundness.Discharge.ZkCoins
 import FlockSoundness.Discharge.Composed
+import FlockSoundness.Discharge.ZkEveryCoin
+import FlockSoundness.ZK.PadNonvanishing40

@@ -137,8 +137,8 @@ def maskColB (st : Stmt) (i : ℕ) : Bool :=
   | some r => decide (r.start / 128 ≤ i / 128 ∧ i / 128 < r.start / 128 + 2 ^ (r.slotLog - 7))
 
 /-- **Δ avoids the mask slot**: no pair of Δ (`da`, `db`) has a row or a column in the mask range's span. A condition on
-the parsed statement, which the honest prover checks on the statement it builds: `HmRow.check` does not imply it, since
-`Net.ofRows` bounds no output group's column, so a wire's source can lie in the mask range. -/
+the parsed statement, which nothing checks yet (`avoidsMask`): `HmRow.check` does not imply it, since `Net.ofRows` bounds
+no output group's column, so a wire's source can lie in the mask range. -/
 def deltaAvoidsMask (st : Stmt) : Bool :=
   (st.da.toList ++ st.db.toList).all fun p => !maskColB st p.1 && !maskColB st p.2
 
@@ -158,7 +158,11 @@ and `HmRow.regions`' tail region sit at an output group's column, which `Net.ofR
 def regionsAvoidMask (st : Stmt) : Bool := regionCellsOff st && regionWordsOff st
 
 /-- **The statement avoids the mask slot**: its Δ (`deltaAvoidsMask`) and its regions (`regionsAvoidMask`). A condition on
-the parsed statement, which the honest prover checks on the statement it builds. -/
+the parsed statement that neither the verifier nor the honest prover checks. The prover's `Stmt::new`
+(`backends/flock/live/src/circuit.rs:2422`) refuses only a column that shares a word with a partial region's bits and isn't
+forced to zero (`region_word_violation`), and checks no Δ pair or region cell against the mask span. So the zero-knowledge
+statements take it as a named hypothesis (`hdm`) until the verifier's D3 refusal in `Net.ofRows`, which bounds an output
+group's column by its unit (pc-wire's bundle, not yet in this tree), discharges it. -/
 def avoidsMask (st : Stmt) : Bool := deltaAvoidsMask st && regionsAvoidMask st
 
 /-- **A region's public bit at witness index `idx`** (`regionValue`): bit `i` of the region's bytes at block `b`, `i` the
