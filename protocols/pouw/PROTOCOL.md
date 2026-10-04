@@ -534,7 +534,9 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
   - **The cap** (`circuit.cap`; opt-in, `pc8.Shape.cap`, off by default, on the hiding Programs only) decides rev1's
     `capOK` (`pearlCTilesDevRev1`: `tileDebitRev1 ≤ ρ·creditDevRev1·tileShare` over a tile's passing rows and all its
     columns, at the record's `cap`) in gates, the debit with it. The call is `Pc8CallCap` (the check `Pc8CheckCap`), cut
-    into a unit per word, since a cap word is about 7.8M ANDs at K = 8,192 and a whole cap tile does not stage:
+    into a unit per word, since a cap word is about 7.8M ANDs at K = 8,192 and a whole cap tile does not stage, and its
+    tile digest and tally cut per tile row, since C-Flock gives each row a unit reads or writes a 2^18-bit hm96 slot in
+    a block of at most 2^27 bits (at most 256 rows) and a 64 × 64 tile has 4,096 words:
 
     ~~~text
     template                        per           reads                                 returns
@@ -542,10 +544,13 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     Pc8CapStrip{K,TM,TN,N,RHO,DEV}  TM rows of A  their ok words                        their admission bits, the bound
     Pc8CapWordUnit{K,DEV}           word (i, j)   A′_i ‖ P_A,i, B̃_j ‖ P_B,j, its cert  C̃, U, flags, their count, later
                                                                                         +0 promotions, good
-    Pc8CapTile{TM,TN}               tile          its words' C̃ and U                   the tile digest
-    Pc8CapTally{K,TM,TN,N,RHO,DEV}  tile          its words' flags, counts, promotions  the cap's verdict (an ok word)
-                                                  and good, its strip's bits and
-                                                  bound, its rows' sd
+    Pc8CapRowDigest{TN}             tile row      its TN words' C̃ and U                 its chunk digests
+    Pc8CapRowTally{K,TN}            tile row      its TN words' flags, counts,          its flag count, later +0
+                                                  promotions and good, its A row's sd   promotions, forming elements,
+                                                                                        good
+    Pc8CapTile{TM,TN}               tile          its TM rows' chunk digests            the tile digest
+    Pc8CapTally{K,TM,TN,N,RHO,DEV}  tile          its TM rows' sums, its strip's bits   the cap's verdict (an ok word)
+                                                  and bound
     ~~~
 
     - sd_i is row i's salt-dead count per block of 32 elements (P3's `saltDeadP`, decided at its support's two ends:
@@ -556,9 +561,11 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
       `Pc8TileCap`'s (the cap in one tile unit, the split's reference): every passing row's words are good, and the
       cap's inequality holds in its integer form on 31-bit words (`cap._cap_constants`).
     - Every cap word is proved, never sampled: a drawn tile's closure (`plan.tile_layout`) holds its TM A rows, its
-      strip, all TM·TN of its word units and its tally. Every partition still computes each value in exactly one unit:
-      the strip computes its rows' admission bits once for all the tiles in it.
-    - The cap's rows are `sd`, `cap-word`, `cap-flags` and `cap-rows` (under `circuit.pc4` below).
+      strip, all TM·TN of its word units, its TM row digests and row tallies, and its tally (4,291 units at 64 × 64, none
+      with more than 66 rows). Every partition still computes each value in exactly one unit: the strip computes its
+      rows' admission bits once for all the tiles in it.
+    - The cap's rows are `sd`, `cap-word`, `cap-flags`, `cap-chunks`, `cap-sums` and `cap-rows` (under `circuit.pc4`
+      below).
   - Not in it yet: the cap in a run. Until it is, Pearl-C's runs are checked by its reference audit, a development
     shortcut that opens rows.
 
@@ -805,15 +812,25 @@ useful    U/(α_A·α_B), glue
     pouw/cap-flags/v1    a cap word's k/32 flag bits 16 a word, low bit first      ⌈k/512⌉ + 5       X                  v2
                          (the last word's high bits 0), its flag count and later
                          +0 promotions as two words each, then good's ok word
-    pouw/cap-rows/v1     a strip's admission bits 16 a word, 64 bits (TM ≤ 64,     6                 X                  v2
+    pouw/cap-chunks/v1   a tile row's chunk digests, TurboSHAKE128 (D = 0x21) of   32                X                  seg
+                         each 32 columns' C̃ and U (`pearl_c.message_digest`), two
+                         bytes a word, low byte first (TN ≤ 64; the second 0 at
+                         TN ≤ 32)
+    pouw/cap-sums/v1     a tile row's flag count, later +0 promotions and forming  7                 X                  v2
+                         elements as two words each, then its words' good as an ok
+                         word
+    pouw/cap-rows/v1     a strip's admission bits 16 a word, 64 bits (TM ≤ 64,     6                 X                  seg
                          the rest 0), then the cap's bound as two words
     ~~~
 
-    Every per-call row (role X) but ok, the tile digest and the cap's per-word and per-strip rows is a row-seg row, so
+    Every per-call row (role X) but ok, the tile digest and the cap's per-word and per-row-sum rows is a row-seg row, so
     decode's serial hash chain is a segment's, not the row's (Daniel's ruling, card 637f70c6): A_i (bf16, 8 KiB at
     k = 4,096, 8 segments), A′_i ‖ P_A,i (3 segments), and Pearl-C's FP32 A_i (16 KiB, 16 segments), fp8-p row
-    (5 segments) and salt-dead counts (1 KiB at k = 8,192, 1 segment). The cap's per-word and per-strip rows are at most
-    one SHA-512 block at k ≤ 2^14, so a segment's chain is the row's, and v2 hashes them in fewer blocks. Every other
+    (5 segments), salt-dead counts (1 KiB at k = 8,192, 1 segment), and the cap's chunk digests and strip row. The cap's
+    per-word and per-row-sum rows are at most one SHA-512 block at k ≤ 2^14, so a segment's chain is the row's, and v2
+    hashes them in fewer blocks. The chunk digests and the strip row are as short, and row-seg because C-Flock's
+    composer refuses a unit none of whose rows hashes a block before its last, which a row-seg row always does: without
+    them the strip, a row digest, the tile and the tally would read and write only one-block v2 rows. Every other
     row is a v2 row, the registered rows (role W) included, in the registered tree and in every statement that reads or
     writes them, so each (row, role) has one leaf schema wherever it appears and no row is `sha512/row/v1` (Daniel's
     ruling, Slack 1790973124.259289). A v2 row costs what a v1 row of the same words would, a 128-byte prefix block and
@@ -832,7 +849,8 @@ useful    U/(α_A·α_B), glue
   - In gates the hiding adds only the tile digest: 281 Keccak-p[1600, 12] a 64 × 64 tile.
   - Vectors: `tests/vectors/pouw_rows.json` (`tests/pouw_rows_vectors.py`) pins each schema's row bytes, row digest,
     commit string and tree leaf in each role at k = 64 and 4,096 (a row-seg row's with each segment's length and digest),
-    the cap's rows at the k where their words change (sd in one segment and two, cap-flags with and without padding), and
+    the cap's rows at the k where their words change (sd in one segment and two, cap-flags with and without padding,
+    cap-chunks with one digest and two), and
     the digest of two tiles, which the gates compute. `test_circuit_leaves.py` rebuilds every row-seg vector from the
     spec by hand and reads core's own row-seg vectors as PoUW's rows. C-Flock's ports commit every row byte for byte:
     `backends/flock/tests/test_pouw_rows.py` recomputes each one's vector through C-Flock's port for the row, and two v2
