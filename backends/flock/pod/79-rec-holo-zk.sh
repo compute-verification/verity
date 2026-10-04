@@ -4,9 +4,13 @@
 # flock-gpu-link, the live crate, sha512, glue, zk, vtime), CPU only. Per form: the gate table, σ's commitment and opening
 # (and, under --zk, a re-registration), the acyclicity table, and the circuit's C-Flock rows tiled COPIES times. Each
 # measurement is its own process; JSON lines in out/zk-<form>.jsonl, the load before each in out/load.txt.
+# Form `cmp`: the sampled circuit built twice, without and with each block's CMP_D-bit read comparator (READ_D), their gate
+# tables alternated GATE_REPS times per mode, then the per-unit acyclicity table of the comparator build.
 # Run from the verity tree (research run --cwd source --declared-output 'out/*'); builds and circuits under W, outside the run.
 # env: THREADS=32 RUNS=2 FORMS="full sampled" BASE_KLOG=23 FILL=0.9 UNITS=8 UNIT_LOG=22 COPIES="8 16 32" MODES="m0 zk"
-#      ACYC_FULL=1 (the full form's acyclicity table as one table)  W=$FLOCK_WORK/rec-holo-zk-b684b12
+#      STEPS="gate sigma acyc base" (full and sampled) ACYC_FULL=1 (the full form's acyclicity table as one table, at each
+#      block of ACYC_FULL_KLOGS="23"; the per-unit table's block is ACYC_KLOG, default 16) CMP_D=33 GATE_REPS=3
+#      W=$FLOCK_WORK/rec-holo-zk-b684b12
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); R=${RESEARCH_RUN_DIR:-/tmp/rec-holo-zk}; O=$R/out; mkdir -p $O
@@ -50,8 +54,21 @@ run() {  # run FORM BIN ARGS...: one process, its JSON lines appended to out/zk-
   RAYON_NUM_THREADS=$T $b "$@" | tee -a $O/zk-$f.jsonl
   [ ${PIPESTATUS[0]} = 0 ] || { echo "FAILED $f $*" | tee -a $O/failed.txt; fail=1; }
 }
+has() { case " ${STEPS:-gate sigma acyc base} " in *" $1 "*) return 0 ;; esac; return 1; }
 for form in ${FORMS:-full sampled}; do
   D=$S/$form
+  if [ $form = cmp ]; then
+    U=${UNIT_LOG:-22}
+    READ_D=0 UNITS=${UNITS:-8} UNIT_LOG=$U run cmp $BK build $D-0 $S/net sampled || continue
+    READ_D=${CMP_D:-33} UNITS=${UNITS:-8} UNIT_LOG=$U run cmp $BK build $D-1 $S/net sampled || continue
+    cp $D-1/meta.json $O/meta-cmp.json
+    for md in ${MODES:-m0 zk}; do
+      for i in $(seq ${GATE_REPS:-3}); do run cmp $BZ gate $D-0 $md; run cmp $BZ gate $D-1 $md; done
+    done
+    for md in ${MODES:-m0 zk}; do run cmp $BZ acyc $D-1 $md $U; done
+    rm -rf $D-0 $D-1
+    continue
+  fi
   if [ $form = full ]; then
     BASE_KLOG=${BASE_KLOG:-23} FILL=${FILL:-0.9} run $form $BK build $D $S/net full || continue
     U=
@@ -62,13 +79,15 @@ for form in ${FORMS:-full sampled}; do
   [ -f $D/meta.json ] || { echo "FAILED $form build" | tee -a $O/failed.txt; fail=1; continue; }
   cp $D/meta.json $O/meta-$form.json
   for md in ${MODES:-m0 zk}; do
-    run $form $BZ gate $D $md
-    run $form $BZ sigma $D $md
-    [ -n "$U" ] && run $form $BZ sigma $D $md $U && run $form $BZ acyc $D $md $U
+    has gate && run $form $BZ gate $D $md
+    has sigma && run $form $BZ sigma $D $md
+    [ -n "$U" ] && { has sigma && run $form $BZ sigma $D $md $U; has acyc && run $form $BZ acyc $D $md $U; }
   done
-  for c in ${COPIES:-8 16 32}; do for md in ${MODES:-m0 zk}; do run $form $BZ base $D $c $md; done; done
-  if [ $form = full ] && [ "${ACYC_FULL:-1}" = 1 ]; then
-    for md in ${MODES:-m0 zk}; do run $form $BZ acyc $D $md; done
+  if has base; then
+    for c in ${COPIES:-8 16 32}; do for md in ${MODES:-m0 zk}; do run $form $BZ base $D $c $md; done; done
+  fi
+  if [ $form = full ] && [ "${ACYC_FULL:-1}" = 1 ] && has acyc; then
+    for kl in ${ACYC_FULL_KLOGS:-23}; do for md in ${MODES:-m0 zk}; do ACYC_KLOG=$kl run $form $BZ acyc $D $md; done; done
   fi
   rm -rf $D
 done
