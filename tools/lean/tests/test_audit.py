@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import threading
 from pathlib import Path
 
@@ -485,6 +486,25 @@ def test_a_file_changed_during_the_run_is_reported(tmp_path):
     late.write_text("y")
     assert A.tampered(seals, [late]) == [str(tool), str(late)]
     assert A.killed(-9) and A.killed(137) and not A.killed(1)
+
+
+def test_lean_runs_on_the_cpus_the_audit_may_use_unless_told_otherwise(monkeypatch):
+    monkeypatch.delenv("LEAN_NUM_THREADS", raising=False)
+    assert A.lake_env()["LEAN_NUM_THREADS"] == str(A.cores())
+    monkeypatch.setenv("LEAN_NUM_THREADS", "3")
+    assert A.lake_env()["LEAN_NUM_THREADS"] == "3"
+
+
+@pytest.mark.skipif(not hasattr(os, "sched_setaffinity"), reason="no CPU affinity on this platform")
+def test_a_job_pinned_to_one_cpu_runs_lean_on_one_thread(monkeypatch):
+    """Lean's own default is every CPU of the machine, however few the job's cpuset holds."""
+    monkeypatch.delenv("LEAN_NUM_THREADS", raising=False)
+    cpu = min(os.sched_getaffinity(0))
+    code = (f"import importlib.util, os\nos.sched_setaffinity(0, {{{cpu}}})\n"
+            f"spec = importlib.util.spec_from_file_location('lean_audit', {str(HERE.parent / 'audit.py')!r})\n"
+            "A = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(A)\nprint(A.lake_env()['LEAN_NUM_THREADS'])\n")
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert r.stdout.strip() == "1"
 
 
 def test_packages_are_audited_side_by_side_and_a_build_waits_for_the_builds_it_requires(tmp_path, monkeypatch):
