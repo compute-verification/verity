@@ -49,7 +49,7 @@ def _marker(attempt_dir: Path, actor: str, target_pid: int | None, target_pgid: 
             deliver: bool, job: str | None) -> int:
     ns = argparse.Namespace(actor=actor, reason=reason, signal=sig, target_pid=target_pid, target_pgid=target_pgid, target_pod=None,
                             attempt_dir=str(attempt_dir), fallback=None, expect_starttime=starttime, expect_comm=None, expect_nonempty=False,
-                            deliver=deliver, confirm_exit_s=0.0, project=None, job=job, attempt=None, controller="tele-run")
+                            expect_run_dir=None, deliver=deliver, confirm_exit_s=0.0, project=None, job=job, attempt=None, controller="tele-run")
     return cancel_run(ns)
 
 
