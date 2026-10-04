@@ -1,6 +1,7 @@
 """A module move leaves the circuits alone: every Definition id and canonical descriptor digest, circuit-check's task list
 (target, statics, pin) and the frontend vocabularies' digests are those of the snapshot taken on `main` before the split
-(`fixtures/migration/`, written by `migration_snapshot.py`).
+(`fixtures/migration/`, written by `migration_snapshot.py`).  The ``reference-ref-prims`` vocabulary is the exception its
+pin makes: it hashes `ref_prims.py`'s bytes, so there the reference kinds' sources must stay (``ref_vocab_kinds``).
 
 A Definition, target or vocabulary added after the snapshot does not fail this; one that moved, changed its digest or
 dropped out of what `circuit-check --all` checks does.  At the split itself the two snapshots are equal (the PR shows it).
@@ -47,6 +48,11 @@ def test_circuit_check_keeps_every_task(pair):
     assert sorted(set(now["unresolved_pieces"]) - set(before["unresolved_pieces"])) == []
 
 
+SOURCE_PINNED = ("reference-ref-prims",)   # its version hashes ref_prims.py's bytes: `ref_vocab_kinds` holds what stays
+
+
 def test_every_vocabulary_keeps_its_digest(pair):
     before, now = pair
-    assert {k: v for k, v in now["vocabularies"].items() if k in before["vocabularies"]} == before["vocabularies"]
+    keep = {k: v for k, v in before["vocabularies"].items() if k not in SOURCE_PINNED}
+    assert {k: v for k, v in now["vocabularies"].items() if k in keep} == keep
+    assert now["ref_vocab_kinds"] == before["ref_vocab_kinds"], "a reference kind's evaluator, body or family source changed"

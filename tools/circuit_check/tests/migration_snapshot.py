@@ -7,7 +7,10 @@ snapshot `test_migration_invariants.py` compares with the one taken before a spl
   `templates()`), each with the pin `pins.json` holds for it;
 - ``definitions``: the canonical descriptor digest (sha256 of `canonical_json(definition_entry(fn))`, 32 hex digits) of every
   Definition the catalog's roots reach, and of every Definition `pins.json` names, by descriptor id;
-- ``vocabularies``: each frontend `Vocabulary`'s `version`, the digest an instance record pins.
+- ``vocabularies``: each frontend `Vocabulary`'s `version`, the digest an instance record pins;
+- ``ref_vocab_kinds``: the digest of `ref_prims.ref_vocab_manifest()` without ``module_sha256``.  The ``reference-ref-prims``
+  vocabulary's version pins the whole manifest, which hashes `ref_prims.py`'s bytes, so any edit to that file moves it; this
+  digest is what stays when no reference kind's evaluator, body or family changed.
 
 The order is fixed because it matters: tracing the roots registers lazy families' members, so a second `catalog()` reaches
 more than the first.
@@ -55,16 +58,20 @@ def snapshot() -> dict:
         definitions.setdefault(descriptor_id(fn), digest(fn))
 
     from verity_vllm.program.frontend.rules import vocab
+    from verity_vllm.program.registry import ref_prims
     vocabularies = {v.name: v.version for _n, v in inspect.getmembers(vocab) if isinstance(v, vocab.Vocabulary)}
+    kinds = {k: v for k, v in ref_prims.ref_vocab_manifest().items() if k != "module_sha256"}
     return {"tasks": tasks, "definitions": dict(sorted(definitions.items())), "references": sorted(references),
-            "registered": sorted(TG.REGISTERED), "unresolved_pieces": unresolved, "vocabularies": dict(sorted(vocabularies.items()))}
+            "registered": sorted(TG.REGISTERED), "unresolved_pieces": unresolved, "vocabularies": dict(sorted(vocabularies.items())),
+            "ref_vocab_kinds": hashlib.sha256(json.dumps(kinds, sort_keys=True).encode()).hexdigest()}
 
 
 def write(snap: dict, out: Path) -> None:
     """Two files, each under the repository's 256 KiB cap: the task list (with the vocabularies) and the digests."""
     out.mkdir(parents=True, exist_ok=True)
     (out / "tasks.json").write_text(json.dumps({"tasks": snap["tasks"], "references": snap["references"],
-                                                "unresolved_pieces": snap["unresolved_pieces"], "vocabularies": snap["vocabularies"]}, indent=0, sort_keys=True) + "\n")
+                                                "unresolved_pieces": snap["unresolved_pieces"], "vocabularies": snap["vocabularies"],
+                                                "ref_vocab_kinds": snap["ref_vocab_kinds"]}, indent=0, sort_keys=True) + "\n")
     (out / "definitions.json").write_text(json.dumps({"definitions": snap["definitions"], "registered": snap["registered"]},
                                                      indent=0, sort_keys=True) + "\n")
 
