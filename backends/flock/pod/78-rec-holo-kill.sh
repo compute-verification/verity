@@ -7,7 +7,8 @@
 # its own process (peak memory per process); JSON lines in out/kill-<form>.jsonl, the load before each in out/load.txt.
 # Run from the verity tree (research run --cwd source --declared-output 'out/*'); builds and circuits under W, outside the run.
 # env: THREADS=32 RUNS=3 FORMS="full sampled" BASE_KLOG=23 FILL=0.9 UNITS=8 UNIT_LOG=22 COPIES="8 16 32"
-#      GKRS="dense:0:0 stream:1:0 stream:1:1 stream:2:0 stream:2:1" (how:unstored:double)  W=$FLOCK_WORK/rec-holo-kill-b684b12
+#      GKRS="dense:0:0 stream:1:0 stream:1:1 stream:2:0 stream:2:1 fast:1:1 fast:2:1" (how:unstored:double)
+#      W=$FLOCK_WORK/rec-holo-kill-b684b12
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); R=${RESEARCH_RUN_DIR:-/tmp/rec-holo-kill}; O=$R/out; mkdir -p $O
@@ -47,7 +48,7 @@ for form in ${FORMS:-full sampled}; do
   [ -f $D/meta.json ] || { echo "FAILED $form build" | tee -a $O/failed.txt; fail=1; continue; }
   cp $D/meta.json $O/meta-$form.json
   run $form gate $D
-  for g in ${GKRS:-dense:0:0 stream:1:0 stream:1:1 stream:2:0 stream:2:1}; do
+  for g in ${GKRS:-dense:0:0 stream:1:0 stream:1:1 stream:2:0 stream:2:1 fast:1:1 fast:2:1}; do
     IFS=: read how unstored double <<< "$g"; run $form gkr $D $how $unstored $double
   done
   run $form sigma $D
