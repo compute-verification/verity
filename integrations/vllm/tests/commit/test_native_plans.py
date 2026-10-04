@@ -2,9 +2,11 @@
 
 The header is the C++ collector's own plan book, compiled here on its own with a C shim (no torch, no CUDA). A step drives its
 plan as `native_collect.cpp` does: `begin_step` takes it with `Plans::use`, a step whose tensors the plan does not hold learns it
-(entries at 4-byte offsets) and `end_step` bumps its version, and the committer's `reset` calls `end_run` between runs. The
-committer over these plans, its exports and its roots, is tested on a restatement of the collector in
-`test_native_collect_plan_cache.py`; the collector itself, with its copies, in `test_native_collect.py` on a GPU.
+(entries at 4-byte offsets) and `end_step` bumps its version, and the committer's `reset` calls `end_run` between runs. The shim
+has its own `operator new` and `delete` (bound inside it, `-Bsymbolic`), which count the blocks the header frees on the calling
+thread, so a test can tell what a reset frees from what a step frees. The committer over these plans, its exports and its roots,
+is tested on a restatement of the collector in `test_native_collect_plan_cache.py`; the collector itself, with its copies, in
+`test_native_collect.py` on a GPU.
 """
 from __future__ import annotations
 
@@ -22,13 +24,25 @@ IN_CHECK = bool(os.environ.get("VERITY_SUITE_ROOT"))
 TENSORS, DIMS = 9, 2
 
 SHIM = r"""
+#include <cstdlib>
+#include <new>
+
 #include "native_plans.h"
 
 using native_plans::Entry;
 using native_plans::Plan;
 using native_plans::Plans;
 
+static thread_local int64_t frees_here = 0;
+void* operator new(std::size_t n) {
+  if (void* p = std::malloc(n ? n : 1)) return p;
+  throw std::bad_alloc();
+}
+void operator delete(void* p) noexcept { if (p) { ++frees_here; std::free(p); } }
+void operator delete(void* p, std::size_t) noexcept { if (p) { ++frees_here; std::free(p); } }
+
 extern "C" {
+int64_t plans_frees() { return frees_here; }
 void* plans_new() { return new Plans(); }
 void plans_delete(void* h) { delete static_cast<Plans*>(h); }
 void plans_end_run(void* h) { static_cast<Plans*>(h)->end_run(); }
@@ -69,11 +83,12 @@ def lib(tmp_path_factory):
     d = tmp_path_factory.mktemp("native_plans")
     (d / "shim.cpp").write_text(SHIM)
     so = d / "libplans.so"
-    r = subprocess.run([CXX or "g++", "-std=c++17", "-O1", "-shared", "-fPIC", f"-I{native_jit.HERE}", str(d / "shim.cpp"), "-o", str(so)],
-                       capture_output=True, text=True)
+    r = subprocess.run([CXX or "g++", "-std=c++17", "-O1", "-shared", "-fPIC", "-Wl,-Bsymbolic", f"-I{native_jit.HERE}", str(d / "shim.cpp"),
+                        "-o", str(so)], capture_output=True, text=True)
     assert r.returncode == 0, f"native_plans.h does not build:\n{r.stderr}"
     lib = ctypes.CDLL(str(so))
     lib.plans_new.restype = ctypes.c_void_p
+    lib.plans_frees.restype = ctypes.c_int64
     for fn in ("plans_delete", "plans_end_run", "plans_clear"):
         getattr(lib, fn).argtypes = [ctypes.c_void_p]
     for fn in ("plans_size", "plans_entries"):
@@ -112,6 +127,10 @@ class Book:
 
     def version(self, key: int) -> int:
         return self.lib.plans_version(self.h, key)
+
+    def frees(self) -> int:
+        """Blocks the shim's code has freed on this thread so far."""
+        return self.lib.plans_frees()
 
 
 RUNS, STEPS = 200, 50
@@ -173,3 +192,60 @@ def test_a_plan_learned_again_after_a_drop_takes_a_version_above_every_dropped_o
     assert book.step(9) == (4, True)
     book.clear()
     assert book.size() == 0 and book.step(8) == (6, True)
+
+
+DROPPED, KEPT = 50, 3
+RELEASE_PER_STEP = 2            # dropped plans a step frees at most: twice the rate a run of one new plan per step drops them
+PLAN_BLOCKS = TENSORS + 2       # a plan's blocks: its node, its entries and each entry's sizes
+
+
+def drop(book: Book) -> int:
+    """Run A learns DROPPED plans, run B learns KEPT others, and B's reset drops A's: the blocks that reset freed."""
+    for k in range(DROPPED):
+        book.step(k)
+    book.end_run()
+    for k in range(KEPT):
+        book.step(1000 + k)
+    f = book.frees()
+    book.end_run()
+    return book.frees() - f
+
+
+def test_a_reset_leaves_the_plans_it_drops_to_the_steps_of_the_next_run(lib):
+    """The committer's reset runs between windows, where the served engine waits for it, and on a served chunk every plan of a
+    window is dropped two resets later: a reset that frees them pays one block per committed tensor of a window. `end_run` takes
+    the dropped plans out of the book at once and frees fewer blocks than it drops plans; the next run's steps free them, at most
+    RELEASE_PER_STEP plans' worth per step, and all of them before that run ends."""
+    probe = Book(lib)
+    for k in range(DROPPED):
+        probe.step(k)
+    f = probe.frees()
+    probe.clear()
+    assert probe.frees() - f >= DROPPED * TENSORS, "the shim does not count the header's frees"
+
+    book = Book(lib)
+    at_reset = drop(book)
+    assert book.size() == KEPT and book.version(0) == -1
+    assert at_reset < DROPPED, f"end_run freed {at_reset} blocks on the resetting thread, dropping {DROPPED} plans"
+    per_step = []
+    for s in range(STEPS):
+        f = book.frees()
+        assert book.step(1000 + s % KEPT) == (1, False)
+        per_step.append(book.frees() - f)
+    assert max(per_step) <= RELEASE_PER_STEP * PLAN_BLOCKS, per_step
+    assert sum(per_step) >= DROPPED * TENSORS, f"the next run's steps freed {sum(per_step)} blocks of {DROPPED * PLAN_BLOCKS} dropped"
+    f = book.frees()
+    book.end_run()
+    assert book.frees() - f < DROPPED
+
+
+def test_a_run_too_short_to_free_the_plans_dropped_before_it_frees_the_rest_at_its_end(lib):
+    """A window with fewer steps than it takes to free the drop before it (an idle stretch after a busy one): its reset frees what
+    is left, so every dropped plan is freed by the end of the run after the drop."""
+    book = Book(lib)
+    drop(book)
+    f = book.frees()
+    for s in range(3):
+        book.step(1000 + s % KEPT)
+    book.end_run()
+    assert book.frees() - f >= DROPPED * TENSORS, f"{book.frees() - f} blocks freed by the end of the run after the drop"
