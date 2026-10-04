@@ -15,9 +15,11 @@ Code:
 **Status.** CPU prototype, one template (RoPE d64), lane flock-zk. Every message a session sends is masked, committed or
 public, and the audit (`zkaudit`) attributes every byte. The target notion is VEIL's special honest-verifier zero
 knowledge for the whole session (both repetitions), meaning one simulator for every fixed coin sequence (DESIGN.md §11),
-statistical in the common-reference-string model under the assumptions of §7. Malicious-verifier zero knowledge comes from
-M2's coin commitment and single rewind (§9). The first red-team review (red-team-m1-zk) found that the two reps shared
-level 0's extra lanes; §7 now gives each rep its own pair, and the re-review grants M1 with conditions. The proof class
+statistical in the common-reference-string model under the assumptions of §7. Malicious-verifier zero knowledge is M2's
+goal, from its coin commitment and single rewind (§9). It does not hold yet: a verifier that commits a zerocheck outer coin
+`r_j = 1` gets an answer that depends on the witness, until the prover refuses that coin. The first red-team review
+(red-team-m1-zk) found that the two reps shared level 0's extra lanes; §7 now gives each rep its own pair, and the
+re-review grants M1 with conditions. The proof class
 stays `NON_ZK_PROOF` until the Lean proof covers it.
 
 Conventions. The field is GF(2^128) (`F128`, characteristic 2, so `+` is `−`). F256 is `F128 ⊕ F128·U`, written by
@@ -378,9 +380,10 @@ the statistics' relation classes.
 
 ## 9. M2: the verifier's coin commitment and the single-rewind simulator
 
-Malicious-verifier zero knowledge for one batched session, in the soundness lane's model (ASSUMPTIONS.md §2 and §6,
-DESIGN.md §11.1): the verifier commits to every coin before the prover's first message, then opens them round by round,
-and a Goldreich–Kahan simulator rewinds once, to just after that commitment.
+The design for malicious-verifier zero knowledge for one batched session, in the soundness lane's model (ASSUMPTIONS.md
+§2 and §6, DESIGN.md §11.1): the verifier commits to every coin before the prover's first message, then opens them round
+by round, and a Goldreich–Kahan simulator rewinds once, to just after that commitment. It is not yet zero knowledge
+against every committed coin sequence: the prover must also refuse a zerocheck outer coin `r_j = 1` (see Status).
 
 **The coin commitment** (`src/coin_tree.rs`, scheme `coin-tree/hm96-sha512/v1`, `SessionConfig::coin_tree`).
 - The schedule is pinned in `Hello` (`coins: {scheme, streams, rounds_log, block}`): streams `session`, `circuit/rep0`,

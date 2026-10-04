@@ -234,7 +234,9 @@ fn identity(c: &Composite) -> Value {
     }
     // only with runs of output ports (META `out_row_ports`): a statement of one output row per port keeps its digest
     if c.meta.get("out_row_ports").is_some() {
-        id["outputs"] = json!(OUT_ROWS_SEG_IDENTITY);
+        // a run committed as a v2 row names both leaves; runs of segmented rows alone keep their digest
+        let v2_run = c.out_rows().iter().enumerate().any(|(j, p)| p.segs.is_none() && c.out_group(j).1 > 1);
+        id["outputs"] = json!(if v2_run { OUT_ROWS_V2_IDENTITY } else { OUT_ROWS_SEG_IDENTITY });
     }
     id
 }

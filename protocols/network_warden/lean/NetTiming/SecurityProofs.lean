@@ -4,6 +4,7 @@ import NetTiming.SecurityProofs.Counting
 import NetTiming.SecurityProofs.Advice
 import NetTiming.SecurityProofs.Ingress
 import NetTiming.SecurityProofs.Schedule
+import NetTiming.SecurityProofs.PerWindow
 import NetTiming.SecurityProofs.Sanity
 
 /-!
@@ -11,8 +12,8 @@ import NetTiming.SecurityProofs.Sanity
 
 One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee, each the theorem of the same statement
 in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3), `Schedule` (Theorem 3 for the
-constant-rate Program) or `Ingress` (the ingress bound), and every lemma behind them. `Sanity` shows every named
-assumption satisfiable.
+constant-rate Program), `Ingress` (the ingress bound) or `PerWindow` (the last two over whole windows), and every lemma
+behind them. `Sanity` shows every named assumption satisfiable.
 -/
 
 namespace NetTiming.SecurityProofs
@@ -64,5 +65,15 @@ theorem EncardIngressObsDecodableLeContents : NetTiming.Guarantees.EncardIngress
   @NetTiming.encard_ingress_obsDecodable_le_contents
 theorem EncardIngressDecodableLeContents : NetTiming.Guarantees.EncardIngressDecodableLeContents :=
   @NetTiming.encard_ingress_decodable_le_contents
+
+theorem EncardAccSeqsLeConstantRatePerWindow : NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerWindow :=
+  fun T W ss frames op m D _ => NetTiming.encard_accSeqs_le_constantRate_perWindow T W ss frames op m D
+theorem EncardDecodableLeConstantRatePerWindow : NetTiming.Guarantees.EncardDecodableLeConstantRatePerWindow :=
+  fun I T W ss frames m D _ => NetTiming.encard_decodable_le_constantRate_perWindow I T W ss frames m D
+theorem EncardIngressObsDecodableLePerWindow : NetTiming.Guarantees.EncardIngressObsDecodableLePerWindow :=
+  @NetTiming.encard_ingress_obsDecodable_le_perWindow
+theorem EncardIngressObsDecodableLeContentsPerWindow :
+    NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerWindow :=
+  @NetTiming.encard_ingress_obsDecodable_le_contents_perWindow
 
 end NetTiming.SecurityProofs
