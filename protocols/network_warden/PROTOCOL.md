@@ -317,3 +317,11 @@ per-window forms (`SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`,
 `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow`), and the sixteen witnesses (thirteen in
 `NetTiming.SecurityProofs.Sanity`, three in `NetTiming.SecurityProofs.Schedule`) have no
 Python counterpart.
+
+**The difftest** checks the definitions those statements are about, not the statements. On 10,000 random instances,
+`NetTiming`'s definitions, evaluated, give what this package gives. The Lean side is `expectedRow`, with `Accepted` of
+`constantRate` and `StatusComplete` decided per prefix of whole windows. The Python side is `expected_grids`,
+`check_link`'s verdicts with the first differing bucket, `check_ingress_link`, and each prefix's acceptance.
+`lean/scripts/difftest_vectors.py` writes the instances and this package's results, and the Lean audit runs
+`lean/NetTimingDifftest.lean` on them (`runs` in `lean/lean-audit.json`). `test_network_warden_lean_difftest.py`
+checks that the data the record pins is still this package's.

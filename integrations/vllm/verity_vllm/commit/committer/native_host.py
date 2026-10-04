@@ -166,8 +166,8 @@ class _DeviceArena:
         return blk
 
     # P0 (R13) backpressure: the ring never grows past its preallocation while a fitting block is merely BUSY; the serving thread waits for
-    # the worker to release one (the engine stalls instead of the collector OOMing).  Growth is allowed only when NO block of the ring can
-    # ever fit the request (a step larger than every block), or when VERITY_ARENA_GROW=1 restores the R12 behaviour.
+    # the worker to release one (the engine stalls instead of the collector OOMing).  Growth only when NO block of the ring can ever fit (a
+    # step larger than every block), with VERITY_ARENA_GROW=1 (R12), or `wait=False`: the worker, the only releaser, must not wait on itself.
     GROW = os.environ.get("VERITY_ARENA_GROW", "0").strip() in ("1", "true", "yes")
     WAIT_TIMEOUT_S = float(os.environ.get("VERITY_ARENA_WAIT_S", "600"))
 
@@ -178,14 +178,13 @@ class _DeviceArena:
                 best = i
         return best
 
-    def take(self, min_bytes: int = 0) -> Any:
+    def take(self, min_bytes: int = 0, *, wait: bool = True) -> Any:
         # best fit: the SMALLEST free block that holds the step (X-02: decode steps must not consume the prefill-sized block)
         with self._cv:
             best = self._best_free(min_bytes)
             if best >= 0:
                 return self.free.pop(best)
-            fits_any = any(b.numel() >= min_bytes for b in self.all)
-            if fits_any and not self.GROW:
+            if wait and not self.GROW and any(b.numel() >= min_bytes for b in self.all):
                 t0 = time.perf_counter()
                 while best < 0:
                     if not self._cv.wait(timeout=1.0):
@@ -1095,6 +1094,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             if dummy or getattr(scheduler_output, "total_num_scheduled_tokens", 0) == 0:
                 return orig_exec(scheduler_output, *a, **kw)
             me._end_step()                       # a step whose sample() we never saw
+            me._step_min_bytes = 0 if me.arena_explicit else me.step_min_bytes(   # X-02 as native_collect; an explicit ring is one size
+                int(scheduler_output.total_num_scheduled_tokens), len(getattr(scheduler_output, "num_scheduled_tokens", ()) or ()))
             me._begin_step()
             return orig_exec(scheduler_output, *a, **kw)
 
@@ -1166,8 +1167,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             src.on_step_begin()
         if self.arena is not None:
             t0 = time.perf_counter()
-            self._cur.arena = self.arena.take()
-            self._cur.cursor = 0
+            self._cur.arena = self.arena.take(int(getattr(self, "_step_min_bytes", 0) or 0))
             self.spans.add("acquisition", time.perf_counter() - t0, step=self._cur.step)
         if self.footprint is not None:
             self.footprint.event("begin_step", step=self._cur.step, arena_block_bytes=int(self._cur.arena.numel()) if self._cur.arena is not None else None,
@@ -1258,7 +1258,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             blocks = job.overflow + [(job.arena, job.cursor)]
             if len(blocks) > 1:                                   # overflow: concatenate the used parts into one block (rare; counted)
                 total = sum(u for _b, u in blocks)
-                cat = self.arena.take(total)
+                cat = self.arena.take(total, wait=False)          # the block that fits may be one this step holds
                 base = 0
                 for blk, used in blocks:
                     if used:
@@ -1273,7 +1273,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             used = job.cursor
             padded = -(-used // GPU_CHUNK_BYTES) * GPU_CHUNK_BYTES
             if padded > job.arena.numel():
-                big = self.arena.take(padded)
+                big = self.arena.take(padded, wait=False)
                 big[:used].copy_(job.arena[:used])
                 self.arena.release(job.arena)
                 job.arena = big
@@ -1973,7 +1973,9 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         differ), else the R13 rule "every layer the same positive count"; (3) exactly one sampled-ids tensor; (4) the multiset of
         module-tensor NAMES (with multiplicity: a shared RotaryEmbedding is legitimately called once per layer) is the same in every step of
         the run -- the per-step call structure of the model does not depend on the token count.  A step that drops one tensor and
-        duplicates another keeps its count and FAILS (1) or (4).  -> `RunCommitment.extra['identity_check']`."""
+        duplicates another keeps its count and FAILS (1) or (4).  With a route source (`acquire.sources.route_source`: the capture map's
+        model), the names the map lists are held to the map's names for the step's routes (`routes_bad`) instead of (1) and (4), and (1)
+        covers the hooked modules the map has no entry for.  -> `RunCommitment.extra['identity_check']`."""
         from collections import Counter
 
         from verity_vllm.acquire import fa2_plane_classes as FP
@@ -1996,7 +1998,9 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         padded_run = bool(getattr(self, "_padding", None))
         padding_only_steps: list[int] = []
         padding_tensors_n = 0
-        cb_src = next((s for s in self.sources if hasattr(s, "split_step_names")), None)   # per-step fx names: its targets, not rule (4)
+        # per-step names held to the source's own rule, not rule (4): the call-boundary targets; the capture map's names on the step's routes
+        rt_src = next((s for s in self.sources if hasattr(s, "step_modules")), None)
+        cb_src = next((s for s in self.sources if hasattr(s, "split_step_names") and s is not rt_src), None)
 
         def _identity_of_padding(n: str) -> str:                     # "<executed name>/<rid>/bot" -> "<executed name>"
             return n[:-len("/bot")].rsplit("/", 1)[0] if n.endswith("/bot") and "/" in n[:-len("/bot")] else n
@@ -2034,10 +2038,12 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                     tp_bad["<foreign rank tag>"] = sum(c for n, c in names.items() if TP_PARTIAL_RE.search(n) and not n.endswith(f"_rank{rk}"))
             elif tp_counts:
                 tp_bad = {"<undeclared tp source>": sum(tp_counts.values())}
+            mod_names, rt_bad = rt_src.split_step_names(mod_names, step, padding_only) if rt_src is not None else (mod_names, {})
             by_module = Counter()
             for n, c in mod_names.items():
                 by_module[self._module_of(n)] += c
-            missing = sorted(expected_modules - set(by_module))
+            step_expected = rt_src.step_modules(expected_modules) if rt_src is not None else expected_modules
+            missing = sorted(step_expected - set(by_module))
             unknown = sorted(set(by_module) - expected_modules)
             fa2_layers = FP.counts_by_layer(names_all.elements())
             fa2_bad: dict[int, int] = {}
@@ -2074,16 +2080,17 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             n_ids = (1 if "runner.sampler/sampled_token_ids" in pad_ident else 0) if padding_only else names.get("runner.sampler/sampled_token_ids", 0)
             sampler_bad = bool(man["sampler_ids"]) and n_ids != man["sampler_ids"]
             mod_names, cb_bad = cb_src.split_step_names(mod_names, step, padding_only) if cb_src is not None else (mod_names, {})
+            split_bad = {k: bad for k, bad in (("call_boundaries", cb_bad), ("routes", rt_bad)) if bad}
             ref_names = mod_names if ref_names is None else ref_names
             if padding_only:                                              # (b): set equality of identity names with step 0, not multiplicity
                 diff = {n: (mod_names.get(n, 0), ref_names.get(n, 0)) for n in set(mod_names) ^ set(ref_names)}
             else:
                 diff = {n: (mod_names.get(n, 0), ref_names.get(n, 0)) for n in set(mod_names) | set(ref_names) if mod_names.get(n, 0) != ref_names.get(n, 0)}
-            if missing or unknown or fa2_bad or moe_bad or tp_bad or sampler_bad or diff or cb_bad:
+            if missing or unknown or fa2_bad or moe_bad or tp_bad or sampler_bad or diff or split_bad:
                 violations.append({"step": step, "missing_modules": missing[:8], "unknown_modules": unknown[:8], "fa2_layers_bad": fa2_bad,
                                    "moe_layers_bad": moe_bad, "tp_sites_bad": dict(list(tp_bad.items())[:8]), "tp_sites_bad_n": len(tp_bad),
                                    "sampler_ids": n_ids, "multiplicity_vs_step0": dict(sorted(diff.items())[:8]),
-                                   **({"call_boundaries_bad": dict(sorted(cb_bad.items())[:8]), "call_boundaries_bad_n": len(cb_bad)} if cb_bad else {}),
+                                   **{k: v for sn, bad in split_bad.items() for k, v in ((f"{sn}_bad", dict(sorted(bad.items())[:8])), (f"{sn}_bad_n", len(bad)))},
                                    **({"fa2_detail": fa2_detail} if fa2_detail else {}),
                                    **({"padding_only": padding_only, "padding_tensors": len(pad_metas)} if pad_metas else {})})
         return {"ok": not violations, "steps_checked": len(self._layouts),
@@ -2139,20 +2146,6 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if n_seq is None or tokens is None:
             return None
         return FP.StepSequences.from_counts(n_seq, tokens)
-
-    def layouts_dump(self) -> dict[int, list[dict[str, Any]]]:
-        """[R14 MAN-01] the committed identities per step, in layout order -- the input of `required_manifest.coverage_check`
-        ({step: [{name, numel, dtype, shape, nbytes, ordinal}]}); also written to the evidence so the check is reproducible offline."""
-        out: dict[int, list[dict[str, Any]]] = {}
-        for step in sorted(self._layouts):
-            rows = []
-            for m in self._layouts[step]:
-                n = 1
-                for d in m.shape:
-                    n *= int(d)
-                rows.append({"name": m.name, "numel": n, "dtype": m.dtype, "shape": list(m.shape), "nbytes": m.nbytes, "ordinal": m.ordinal})
-            out[int(step)] = rows
-        return out
 
     def layouts_dump(self) -> dict[int, list[dict[str, Any]]]:
         """R14: the published per-step layouts as plain dicts ({step: [{name, dtype, shape, nbytes, numel, first_leaf, n_leaves, stream_off}]}) --

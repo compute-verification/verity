@@ -2,6 +2,7 @@
 `docs/pouw/sampled-proofs-circuit.md`; `PROTOCOL.md` §`ncp-v2`).
 
 * `words`: PoUW's word primitives (every output at most 32 bits but `pc8`'s exact squares, which stay inside a row unit).
+* `boolean`: the six of them `pc4`'s and `pc8`'s row units call as Boolean Definitions (`_v2`, the same functions on bits).
 * `hashes`: SHA-512, SHAKE256 and TurboSHAKE128 in gates (`Sha512Compress`, `KeccakF1600`, `KeccakP1600R12`).
 * `leaves`: the tile checks' committed row schemas (C-Flock's ports), Pearl-C's tile digest in gates, and the rows' native
   reference.
@@ -16,6 +17,8 @@
 * `pc4`, `pc8`: Pearl-C4's and Pearl-C's (FP8, forming v1) tile checks as Programs, cut into row and tile units, and
   their hiding Programs (``Shape.hidden``), whose tiles return only their tile digest; the rows are C-Flock-committed
   ports and the anchored inputs public input regions (`PORTS`).  No scheme of theirs is in `SCHEMES` yet.
+* `rowk`: their row units cut along k into a head, one form per segment and a tail (``Shape.row_k``, opt-in), so each
+  piece fits C-Flock's block.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs
