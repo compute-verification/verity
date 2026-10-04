@@ -11,7 +11,10 @@ protocol's word functions agree only conditionally:
 
 * `Pc4OpsAgree ops`: core's primitives agree with the protocol's word functions where both are defined. Core's Lean
   semantics will discharge them;
-* `Row4OK`: a row's BF16 words widen to step words of its values, and its `α` (positive) and `β` are step words.
+* `Row4OK`: a row's BF16 words widen to step words of its values, and its `α` (positive) and `β` are step words. Its
+  `α` and `β` are no hypothesis of L3: they follow from `RowAdmit4` (a credited row's by `Fp4Sem.RowOK`, a weight's
+  by the domain's `OperandOK`) by magnitudes (`RowStats`, `TileCheckWords`), so only the widening stays named
+  (`Pc4EntryOK`).
 
 On these a row unit's codes and scale bytes are `formRow`'s at `pc4Sem`'s `α` and `β` (`row4A_form`, `row4B_form`, so
 `form4A`/`form4B` are `unitForm`'s `A′`/`B̃`), and its `P_A` and `P_B` rows are the FP4 peel's (`row4A_paWords`,
@@ -21,11 +24,9 @@ value (`tile4_devFp4`).
 
 On the whole table a gate holds its assignment's low bits at its width (`val_in4`, `val_tile4`), so where the public
 gates hold the anchors (`anchors4`) and the registered gates `rows4`'s values, an entry's registered words are the
-record's (`entry4_accepts`). `tileCheck4_computesWords` is L3's words for the plain `pc4` Program, with `Collides` never
-used: on tile rules whose tiles lie in their unit and a domain of whole-tile shapes (`Shape4`), under `Pc4OpsAgree` and
-the named hypotheses at each entry of a credited row (`Pc4EntryOK`, which includes that the peel's rows exist);
-`tileCheck4_computesWords_pearlC` is it on the audit's tiles, and `tileCheck4_computesWords_domain` on D₄, whose
-shapes are whole-tile (`shape4_of_pearlCShapeFp4`). The cap is not part of it.
+record's (`entry4_accepts`), at two `Row4OK` rows where the peel's rows exist. `TileCheckWords` composes these into
+L3's words for the plain `pc4` Program on a domain of whole-tile shapes (`Shape4`); D₄'s are
+(`shape4_of_pearlCShapeFp4`). The cap is not part of it.
 -/
 
 namespace Pouw.PearlC.WholeCircuit
@@ -427,13 +428,16 @@ end Widths4
 /-- A whole-tile `pc4` shape: `64 ∣ m`, `64 ∣ n` (`pc4.Shape.check`), and `k` a positive multiple of 64. -/
 def Shape4 (sh : Shape) : Prop := 64 ∣ sh.m ∧ 64 ∣ sh.n ∧ ∃ nw, 0 < nw ∧ sh.k = 64 * nw
 
-/-- **The named hypotheses at entry `(i, j)`** of a unit with lines `z`, activations `act` and weights `wt`: `Row4OK`
-at row `i` of `act`'s values and row `j` of `wt`'s, and the peel's rows exist (`peelRows4`, which `devFp4Sm120`'s
-useful value reads; where it fails the useful value is `none`). -/
+/-- **The named hypotheses at entry `(i, j)`** of a unit with lines `z`, activations `act` and weights `wt`: the values
+of row `i` of `act` and row `j` of `wt` widen from their BF16 words to step words of themselves (`Row4OK`'s `widen`),
+and the peel's rows exist (`peelRows4`, which `devFp4Sm120`'s useful value reads; where it fails the useful value is
+`none`). -/
 structure Pc4EntryOK (ops : RowOps) {m n k : ℕ} (z : Lines4 m n k) (act wt : Codes) (i : Fin m) (j : Fin n) :
     Prop where
-  rowA : Row4OK ops k (wordsVal m k act i)
-  rowB : Row4OK ops k (wordsVal n k wt j)
+  widenA : ∀ t : Fin k, AccumProofs.StepWord (ops.bf16ToF32 (bf16WordOf (wordsVal m k act i t))) ∧
+    wordVal (ops.bf16ToF32 (bf16WordOf (wordsVal m k act i t))) = wordsVal m k act i t
+  widenB : ∀ t : Fin k, AccumProofs.StepWord (ops.bf16ToF32 (bf16WordOf (wordsVal n k wt j t))) ∧
+    wordVal (ops.bf16ToF32 (bf16WordOf (wordsVal n k wt j t))) = wordsVal n k wt j t
   peel : (peelRows4 sm120Nvf4 (form4A ops z act) (form4B ops z wt) z.FA z.FB
     (fun i => be4 ops (wordsVal m k act i) (z.EA i)) (fun j => be4 ops (wordsVal n k wt j) (z.EB j)) i j).isSome
 
@@ -444,9 +448,9 @@ include hops
 
 /-- **An accepted entry's registered words are the record's.** On `pc4`'s whole table at a whole-tile shape: where
 every unit in the cone of a set `T` holding entry `(i, j)`'s `C̃` and `U` is correct, the public gates hold the anchors
-of the lines `z` and the registered gates the activations `act`, the weights `wt` and the words `tk`, `us`, then under
-the named hypotheses at `(i, j)` the registered words `tk i j` and `us i j` read as `devFp4Sm120`'s ticket and useful
-value on `pc4Sem`'s operands. -/
+of the lines `z` and the registered gates the activations `act`, the weights `wt` and the words `tk`, `us`, then at
+`Row4OK` rows `i` of `act`'s values and `j` of `wt`'s, where the peel's rows exist at `(i, j)`, the registered words
+`tk i j` and `us i j` read as `devFp4Sm120`'s ticket and useful value on `pc4Sem`'s operands. -/
 theorem entry4_accepts {M K N nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
     (hM : 64 ∣ M) (hN : 64 ∣ N) (X : (whole4 ops M K N 64 64).spec.toCircuit.Transcript)
     (z : Lines4 M N K) (act wt tk us : Codes) (i : Fin M) (j : Fin N)
@@ -460,11 +464,12 @@ theorem entry4_accepts {M K N nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
       (g < eaAt M K ∨ (bAt M K ≤ g ∧ g < ebAt M N K) ∨
         ∃ i < M, ∃ j < N, g = cGlob4 M N K 64 64 i j ∨ g = uGlob4 M N K 64 64 i j) →
       X ⟨g, hg⟩ = BitVec.ofNat _ (rows4 M N K 64 64 act wt tk us g))
-    (hE : Pc4EntryOK ops z act wt i j) :
+    (hA : Row4OK ops K (wordsVal M K act i)) (hB : Row4OK ops K (wordsVal N K wt j))
+    (hP : (peelRows4 sm120Nvf4 (form4A ops z act) (form4B ops z wt) z.FA z.FB
+      (fun i => be4 ops (wordsVal M K act i) (z.EA i)) (fun j => be4 ops (wordsVal N K wt j) (z.EB j)) i j).isSome) :
     wordQ (tk i j) = devFp4Sm120.ticket (form4A ops z act) (form4B ops z wt) i j ∧
       wordQ (us i j) = devFp4Sm120.useful (form4A ops z act) (form4B ops z wt) z.FA z.FB
         (fun i => be4 ops (wordsVal M K act i) (z.EA i)) (fun j => be4 ops (wordsVal N K wt j) (z.EB j)) i j := by
-  obtain ⟨hA, hB, hP⟩ := hE
   obtain ⟨⟨c, pa, pb⟩, hr⟩ := Option.isSome_iff_exists.1 hP
   have hK0 : 0 < K / 64 := by subst hK; omega
   obtain ⟨h1, h2, h3, h4, h5, h6⟩ := layout8 M N K
@@ -531,76 +536,11 @@ theorem entry4_accepts {M K N nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
 
 end Accept4
 
-/-! ## `pc4`'s tile check computes the words -/
-
-variable {Q R S : Type}
-
-/-- **L3's words for the plain `pc4` Program** (`tileCheck4`) at the record `devFp4Sm120` and `pc4Sem`: on tile rules
-whose tiles lie in their unit and whose domain has whole-tile shapes (`Shape4`), an accepted tile's ticket and useful
-words have the reference values on every credited row, under `Pc4OpsAgree` and the named hypotheses at each entry of a
-credited row (`Pc4EntryOK`). `Collides` is `False` and never needed. -/
-theorem tileCheck4_computesWords {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : ℚ)
-    (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
-      Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k)
-    (TR : TileRules Q R S) (D : Layout → Prop)
-    (hsh : ∀ L, D L → ∀ g < (TR.tiling L).NT, Shape4 (L.shape ((TR.tiling L).unit g)))
-    (hrows : ∀ L g, ∀ i ∈ (TR.tiling L).rows g, i < (L.shape ((TR.tiling L).unit g)).m)
-    (hcols : ∀ L g, ∀ j ∈ (TR.tiling L).cols g, j < (L.shape ((TR.tiling L).unit g)).n)
-    (hent : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) (i : Fin (U.layout.shape u).m)
-      (j : Fin (U.layout.shape u).n), TR.rowOK (U.layout.shape u) act i →
-        Pc4EntryOK ops (lines H s U u act) act (U.weight (U.layout.wid u)) i j) :
-    (tileCheck4 ops lines).ComputesWords (pearlCProtocolFp4 devFp4Sm120 (pc4Sem ops lines) ρ) TR D := by
-  intro U hU H s g hg c X ⟨hcone, hpub, hreg⟩
-  left
-  intro i hi hok j hj
-  have him := hrows U.layout g i hi
-  have hjn := hcols U.layout g j hj
-  obtain ⟨hM, hN, nw, hnw, hK⟩ := hsh U.layout hU.2.1 g hg
-  obtain ⟨w1, w2⟩ := entry4_accepts hops hnw hK hM hN X _ c.act _ c.ticket c.useful ⟨i, him⟩ ⟨j, hjn⟩
-    (fun v hv => Finset.mem_filter.2 ⟨Finset.mem_univ _, i, hi, j, hj, him, hjn, hv⟩) hcone
-    (fun v hv h => hpub ⟨v, hv⟩ (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩))
-    (fun v hv h => hreg ⟨v, hv⟩ (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩))
-    (hent H s U _ c.act ⟨i, him⟩ ⟨j, hjn⟩ hok)
-  refine ⟨w1.trans ?_, w2.trans ?_⟩
-  · show _ = atNat _ i j
-    unfold atNat
-    rw [dite_eq_left ⟨him, hjn⟩]
-    rfl
-  · show _ = atNat _ i j
-    unfold atNat
-    rw [dite_eq_left ⟨him, hjn⟩]
-    rfl
-
-/-- **L3's words for the plain `pc4` Program on the audit's tiles** (`pearlCTilesFp4`, the `64 × 64` grid): on a
-domain whose every unit has a whole-tile shape, `tileCheck4_computesWords` with the grid's tiles in their units. -/
-theorem tileCheck4_computesWords_pearlC {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : ℚ)
-    (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
-      Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k)
-    (D : Layout → Prop) (hsh : ∀ L, D L → ∀ u < L.N, Shape4 (L.shape u))
-    (hent : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) (i : Fin (U.layout.shape u).m)
-      (j : Fin (U.layout.shape u).n), (pc4Sem ops lines).RowOK (U.layout.shape u).m (U.layout.shape u).k act i →
-        Pc4EntryOK ops (lines H s U u act) act (U.weight (U.layout.wid u)) i j) :
-    (tileCheck4 ops lines).ComputesWords (pearlCProtocolFp4 devFp4Sm120 (pc4Sem ops lines) ρ)
-      (pearlCTilesFp4 devFp4Sm120 (pc4Sem ops lines) ρ) D :=
-  tileCheck4_computesWords hops ρ lines _ D
-    (fun L hL _ hg => hsh L hL _ (auditTiling_unit_lt 64 64 L hg))
-    (auditTiling_rows_lt 64 64) (auditTiling_cols_lt 64 64) hent
+/-! ## D₄ -/
 
 /-- D₄'s shapes are whole-tile: `64 ∣ m`, `64 ∣ n`, and `k ≥ 1024` a multiple of 128. -/
 theorem shape4_of_pearlCShapeFp4 {sh : Shape} (h : pearlCShapeFp4 sh) : Shape4 sh := by
   obtain ⟨-, -, hm, -, -, hn, hk1, -, ⟨c, hc⟩⟩ := h
   exact ⟨hm, hn, 2 * c, by omega, by omega⟩
-
-/-- **L3's words for the plain `pc4` Program on D₄** (`pearlCDomainFp4`) and the audit's tiles:
-`tileCheck4_computesWords_pearlC` with `Shape4` from D₄'s shapes. -/
-theorem tileCheck4_computesWords_domain {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : ℚ)
-    (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
-      Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k)
-    (hent : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) (i : Fin (U.layout.shape u).m)
-      (j : Fin (U.layout.shape u).n), (pc4Sem ops lines).RowOK (U.layout.shape u).m (U.layout.shape u).k act i →
-        Pc4EntryOK ops (lines H s U u act) act (U.weight (U.layout.wid u)) i j) :
-    (tileCheck4 ops lines).ComputesWords (pearlCProtocolFp4 devFp4Sm120 (pc4Sem ops lines) ρ)
-      (pearlCTilesFp4 devFp4Sm120 (pc4Sem ops lines) ρ) (pearlCDomainFp4 (pc4Sem ops lines)) :=
-  tileCheck4_computesWords_pearlC hops ρ lines _ (fun _ hL u hu => shape4_of_pearlCShapeFp4 (hL.2 u hu)) hent
 
 end Pouw.PearlC.WholeCircuit
