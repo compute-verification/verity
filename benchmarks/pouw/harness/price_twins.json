@@ -28,7 +28,7 @@
 },
 {
 "path": "protocols/pouw/lean/lean-audit.json",
-"sha256": "7eb625fcab11907910f2c71c4a08adf6e31b127756220514ec99e9a677e86b61",
+"sha256": "9de43f4a452ccd13a2e6047935bcdf7ab6365dd9449214960daadc218e77edad",
 "twins": 176
 }
 ],
@@ -2419,21 +2419,6 @@
 "type_hash": "1f464c41d8528dbdc400d97447dbf55e2df4d285ce362871ae1cde5bf304d321"
 },
 {
-"cap": "1/1000",
-"fadd": "1047/125",
-"gamma": "1648180439/446072750000",
-"kind": "unit",
-"path": "cast-8.72",
-"pin": "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192",
-"reading": "forming-credited",
-"shape": 8192,
-"sizing": null,
-"source": "protocols/pouw/lean/lean-audit.json",
-"statement": "pearl-c-sm120/v1",
-"status": "pinned",
-"type_hash": "95516b62b14baf5514ce09151c1c3a93d2ee3cd4a1e4796a81346501921350d6"
-},
-{
 "cap": "1/400",
 "fadd": "1047/125",
 "gamma": "599303077/117663460000",
@@ -4112,6 +4097,21 @@
 "statement": "pearl-c-sm120/v2",
 "status": "staged",
 "type_hash": "0000000074694b9c"
+},
+{
+"cap": "1/1000",
+"fadd": "1047/125",
+"gamma": "1648180439/446072750000",
+"kind": "unit",
+"path": "cast-8.72",
+"pin": "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
+"reading": "forming-credited",
+"shape": 8192,
+"sizing": null,
+"source": "protocols/pouw/lean/lean-audit.json",
+"statement": "pearl-c-sm120/v1",
+"status": "pinned",
+"type_hash": "aadbaa10cfa180cdbb5fba09578a3b59990714ffbd9c3f499e12c75fa621f016"
 }
 ]
 }
