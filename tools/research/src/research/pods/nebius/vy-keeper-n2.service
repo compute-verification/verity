@@ -11,4 +11,6 @@ Environment=KEEPER_NODE=vy-nebius-2
 Environment=KEEPER_GPU_LEASE=/workspace/pouw/infra/bin/gpu-lease
 # the timed windows booked on node 2, fill_runner.py's file
 Environment=KEEPER_WINDOWS=/workspace/pouw/fill/windows
+# node_ops reads one holder of all 8 GPUs as a timed window and pauses research's CPU-heavy work for it
+Environment=KEEPER_MAX_GPUS=7
 ExecStart=/usr/bin/python3 /usr/local/bin/vy-keeper tick

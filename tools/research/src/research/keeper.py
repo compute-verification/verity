@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shlex
 import sys
 import time
@@ -109,6 +110,10 @@ def cmd_set(argv: list[str]) -> int:
         return 2
     env = cli._parse_env(ns.env)
     if env is None:
+        return 2
+    if bad := sorted(k for k in env if re.fullmatch(r"GPU_LEASE_\w*|CUDA_VISIBLE_DEVICES", k)):
+        print(f"research keeper set: --env {', '.join(bad)}: gpu-lease reads its own knobs from the env, and the chunks' lease is the "
+              "keeper's", file=sys.stderr)
         return 2
     try:
         harness_opts = cli._normalize_timeout(harness_opts)

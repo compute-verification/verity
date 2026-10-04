@@ -9,9 +9,11 @@ to stay awake to top them up (stdlib only; /usr/local/bin/vy-keeper, pods/nebius
     vy-keeper hold REQUEST.json            a chunk's own transient unit: start its runner, then wait for it to exit
 
 A target is KEEPER_DIR/targets/<name>.json (research/keeper-target/v0): its owner (a lane), this node (KEEPER_NODE), `n`, `until`
-(UTC, at most KEEPER_MAX_AHEAD_H, 48, after it was set), `gpus` (default 1), `max_min` per chunk, `command` (an argv in which
-`{seed}` stands for the chunk's seed) and `request`: the launch request `research run --on` stages (the shipped tool snapshot and
-source tree, the runner's cwd, the env and the `research run` flags), which `research keeper set` builds. Its state,
+(UTC, at most KEEPER_MAX_AHEAD_H, 48, after it was set), `gpus` (default 1, at most KEEPER_MAX_GPUS: 7 on node 2, where one holder
+of all 8 is a timed window to node_ops), `max_min` per chunk, `command` (an argv in which `{seed}` stands for the chunk's seed)
+and `request`: the launch request `research run --on` stages (the shipped tool snapshot and source tree, the runner's cwd, the env
+and the `research run` flags), which `research keeper set` builds. Its env may not set GPU_LEASE_* or CUDA_VISIBLE_DEVICES, nor
+its flags --env: gpu-lease reads its own knobs from the environment, and the lease is the keeper's. Its state,
 KEEPER_DIR/state/<name>.json, holds the seed counter, the live chunks, the failures in a row and why it starts nothing; every
 change is a line of KEEPER_DIR/events.jsonl. `set` keeps the counter (it only rises, to `seed_from` if that is higher) and clears
 a stop, a pause and the failure count; a target another owner set is refused.
@@ -70,10 +72,12 @@ WINDOWS = os.environ.get("KEEPER_WINDOWS", "")
 DAILY_HOLD = os.environ.get("KEEPER_DAILY_HOLD", "")
 MAX_FAILURES = int(os.environ.get("KEEPER_MAX_FAILURES", "3"))
 MAX_N = int(os.environ.get("KEEPER_MAX_N", "8"))
+MAX_GPUS = int(os.environ.get("KEEPER_MAX_GPUS", "8"))
 MAX_AHEAD_H = float(os.environ.get("KEEPER_MAX_AHEAD_H", "48"))
 HOLD_POLL_S = float(os.environ.get("KEEPER_HOLD_POLL_S", "5"))
 NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
 OWNER = re.compile(r"[@\w.:-]{1,64}")
+LEASE_ENV = re.compile(r"GPU_LEASE_\w*|CUDA_VISIBLE_DEVICES")
 DELIVERED = "SIGTERM delivered"
 LIVE = {"active", "activating", "deactivating", "reloading", "refreshing"}
 ENDED = {"inactive", "failed"}
@@ -122,7 +126,7 @@ def parse_target(doc: Any, name: str) -> dict[str, Any]:
     if not NODE or doc.get("node") != NODE:
         raise ValueError(f"node {doc.get('node')!r} is not this node ({NODE or 'KEEPER_NODE unset'})")
     n = whole(doc, "n", 1, MAX_N)
-    gpus = whole(doc, "gpus", 1, 8, default=1)
+    gpus = whole(doc, "gpus", 1, MAX_GPUS, default=1)
     max_min = whole(doc, "max_min", 1, int(MAX_AHEAD_H * 60))
     whole(doc, "seed_from", 0, 2**62, default=0)
     until, set_at = utc(doc.get("until"), "until"), utc(doc.get("set_utc"), "set_utc")
@@ -143,6 +147,10 @@ def parse_target(doc: Any, name: str) -> dict[str, Any]:
     if not isinstance(req.get("python"), str) or not isinstance(req.get("env") or {}, dict) \
             or not isinstance(req.get("harness_args") or [], list) or not isinstance(req.get("remote") or {}, dict):
         raise ValueError("request's python, env, harness_args or remote is malformed")
+    if bad := sorted(k for k in req.get("env") or {} if LEASE_ENV.fullmatch(str(k))):
+        raise ValueError(f"request's env sets {', '.join(bad)}: gpu-lease reads its own knobs from the env, and the lease is the keeper's")
+    if any(str(a) == "--env" or str(a).startswith("--env=") for a in req.get("harness_args") or []):
+        raise ValueError("request's harness_args carry --env: a target's environment is its request's env")
     return {**doc, "n": n, "gpus": gpus, "max_min": max_min, "until_t": until}
 
 

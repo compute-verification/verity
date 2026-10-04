@@ -301,7 +301,7 @@ def test_set_refuses_a_bad_target_and_another_owners_name(node):
     for over, why in (({"until": "2026-10-06T00:01Z"}, "more than 48 h"), ({"until": "2026-10-03T23:00Z"}, "has passed"),
                       ({"until": "2026-10-05T00:00"}, "not in UTC"), ({"command": ["x", "--seed", "1"]}, "no {seed}"),
                       ({"n": 0}, "n 0 is not a whole number"), ({"node": "vy-nebius-1"}, "not this node"),
-                      ({"max_min": None}, "max_min is missing"),
+                      ({"max_min": None}, "max_min is missing"), ({"gpus": 9}, "gpus 9 is not a whole number from 1 to 8"),
                       ({"request": {**target(k)["request"], "tool": "/tmp/tool"}}, "not a snapshot under")):
         with pytest.raises(ValueError, match=re.escape(why)):
             k.set_target("sweep", target(k, **over))
@@ -403,6 +403,8 @@ def test_research_keeper_set_status_and_stop_reach_the_nodes_keeper_over_ssh(tmp
     assert cli.main([*s, "--until", "2099-01-03T00:00Z", "--owner", "@proofs", "--", "x", "{seed}"]) == 2
     assert "is not in the next 48 h" in capsys.readouterr().err
     assert cli.main([*s, "--until", "2099-01-01T00:00Z", "--owner", "@proofs", "--", "x", "1"]) == 2
+    assert cli.main([*s, "--until", "2099-01-01T00:00Z", "--owner", "@proofs", "--env", "GPU_LEASE_TIMED=1", "--", "x", "{seed}"]) == 2
+    assert "--env GPU_LEASE_TIMED: gpu-lease reads its own knobs" in capsys.readouterr().err
     with pytest.raises(SystemExit):               # a chunk without max_min would run through every hold it is granted into
         cli.main(["keeper", "set", "sweep", *on, "--project", "verity", "--n", "2", "--until", "2099-01-01T00:00Z", "--owner", "@proofs",
                   "--", "x", "{seed}"])
@@ -499,6 +501,32 @@ def test_an_exit_143_frees_the_place_only_with_a_cancel_or_a_preemption_on_recor
         k.tick()
     assert [e["outcome"] for e in events(k, "exit")] == ["preempted", "cancelled", "failed", "failed", "failed"]
     assert len(sd.started) == 5 and k.status("sweep")[0]["paused"].startswith("3 failures in a row, the last: seed 4")
+
+
+@pytest.mark.parametrize("over", [{"env": {"GPU_LEASE_TIMED": "1"}}, {"env": {"GPU_LEASE_DIR": "/tmp/my-own-leases"}},
+                                  {"env": {"GPU_LEASE_ALLOWED_FILE": "/tmp/all"}}, {"env": {"CUDA_VISIBLE_DEVICES": "0"}},
+                                  {"harness_args": ["--stage", "run", "--env", "GPU_LEASE_TIMED=1"]},
+                                  {"harness_args": ["--env=GPU_LEASE_TIMED=1"]}])
+def test_a_targets_env_cannot_reach_the_lease(node, over):
+    """gpu-lease reads its knobs from the environment: GPU_LEASE_TIMED=1 would make every chunk a timed window to node_ops,
+    GPU_LEASE_DIR a lease no waiter can see."""
+    k, sd, now, _ = node
+    with pytest.raises(ValueError, match="gpu-lease reads its own knobs|harness_args carry --env"):
+        k.set_target("sweep", target(k, n=1, request={**target(k)["request"], **over}))
+    k.tick()
+    assert sd.started == []
+
+
+def test_node_2_keeps_a_chunk_off_all_8_gpus(node, monkeypatch):
+    """node_ops reads one holder of every lock on node 2 as a timed window and pauses research's CPU-heavy work for it."""
+    k, sd, now, _ = node
+    assert "Environment=KEEPER_MAX_GPUS=7" in (KEEPER.parent / "vy-keeper-n2.service").read_text().splitlines()
+    monkeypatch.setattr(k, "MAX_GPUS", 7)
+    with pytest.raises(ValueError, match="gpus 8 is not a whole number from 1 to 7"):
+        k.set_target("sweep", target(k, gpus=8))
+    k.set_target("sweep", target(k, n=1, gpus=7))
+    k.tick()
+    assert sd.started[0][1]["command"][:2] == ["/bin/gpu-lease", "7"]
 
 
 def test_cancel_chunk_refuses_a_stale_pgid_that_is_now_another_groups(tmp_path):
