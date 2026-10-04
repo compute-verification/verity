@@ -157,6 +157,9 @@ theorem ContinuousAudit : Pous.Guarantees.ContinuousAudit := PousContinuous.cont
 theorem BackgroundRebuildExcluded : Pous.Guarantees.BackgroundRebuildExcluded :=
   PousRebuild.background_rebuild_excluded
 theorem ContinuousComplete : Pous.Guarantees.ContinuousComplete := PousContinuous.continuous_complete
+theorem ContinuousTimeAverage : Pous.Guarantees.ContinuousTimeAverage := PousContinuous.continuous_time_average
+theorem BandFamilyContinuousTimeAverage : Pous.Guarantees.BandFamilyContinuousTimeAverage :=
+  PousContinuous.band_family_continuous_time_average
 
 theorem P2MeetsM1pB19Uncond : Pous.Guarantees.P2MeetsM1pB19Uncond := PousP2p.p2_meets_m1p_b19
 theorem P2MeetsM1pFamilyUncond : Pous.Guarantees.P2MeetsM1pFamilyUncond := PousP2p.family

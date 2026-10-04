@@ -992,6 +992,86 @@ def ContinuousComplete : Prop :=
         ≤ ∑ m ∈ (Finset.range (n + 1)).filter (fun m : ℕ => f₀ < m),
             (n.choose m : ℝ≥0∞) * q ^ m * (1 - q) ^ (n - m)
 
+/-! ### The continuous audit, time-averaged, with arrivals drawn by the verifier
+
+Added on 3 Oct 2026. Statement reviewer: needed. Red team: needed. The verifier of `ContinuousAudit`, unchanged, run on
+arrivals it draws itself: one coin per slot of one unit (`Pous/Protocol/Model/Continuous.lean`, "Arrivals drawn by
+the verifier"). Arrivals queue behind an open round (rule 1). The memory is read at every idle slot, not only at send
+times, and the bound is normalized by the expected number of challenges `λT`, not the realized one. -/
+
+/-- **The continuous audit's time-averaged bound.** From `TimedINC sch D Q β π`, for every machine, every hard
+deadline `(D_late, Q_late)`, every `f` and every `βe > 0`, over the setup and the verifier's `T` slot draws
+`x t ∈ Fin b × Fin B` (a challenge arrives at slot `t` iff its coin is below `a`, probability `p = a/b`; its index is
+the slot's): the verifier, run on these arrivals, accepts with tolerance `f` and `p·Σ_{t idle} max(ε_t − ε_proof, 0)`
+exceeds `G(f) = inf_{θ > 0} (θ·f + ln(1/βe)) / (1 − e^−θ)` with probability at most `βe + T·(β + 1)·π`. Here `ε_t` is
+the freed fraction of the responder's memory at slot `t` (`contHeldAt`), read at every idle slot (`contIdle`: every
+earlier arrival has closed) whether or not a challenge arrives there, and a busy slot counts as `0`. Dividing by
+`pT`, the expected number of challenges (`λ·T` in seconds):
+`Pr[accept(f₀) ∧ (1/T)·Σ_{t idle} max(ε_t − ε_proof, 0) > g(f₀)] ≤ βe + T·(β + 1)·π` with `g = G/(pT)`, the explorer's
+`g` at `n = λT`. Off that event, the idle slots with `ε_t > X` are at most a `g/(X − ε_proof)` fraction of the `T`
+slots (Markov). `a ≤ b` keeps `a/b` a probability, and `0 < b` makes the draw space nonempty. The
+scope is the model's: the arrival coins are the verifier's own randomness, independent of the setup and the answers;
+memory is read once per slot, so a dip shorter than one slot is not seen; time is in units of one round, which the
+step floor converts to seconds. Proof: `PousContinuous.continuous_time_average`; here
+`Pous.SecurityProofs.ContinuousTimeAverage`. -/
+def ContinuousTimeAverage : Prop :=
+  ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late β T a b : ℕ) (π : ℝ≥0∞), 0 < b → a ≤ b →
+    TimedINC sch D Q β π →
+    ∀ (W : Bits sch.n) (mach : ContMachine sch) (f βe : ℝ), 0 < βe →
+      pr (fun x : M.Ω × sch.Coins × (Fin T → Fin b × Fin sch.B) =>
+          let pp := (sch.enc W x.1 x.2.1).1
+          let C := (sch.enc W x.1 x.2.1).2
+          let rs := contRecords mach D Q D_late Q_late W pp C x.1 (arrAt a x.2.2) .start (histAt a x.2.2 T)
+          contAccepts f rs ∧
+            (⨅ θ : Set.Ioi (0 : ℝ), ((θ : ℝ) * f + Real.log (1 / βe)) / (1 - Real.exp (-(θ : ℝ)))) <
+              ((a : ℝ) / b) * ∑ t : Fin T,
+                if contIdle mach D_late W pp C x.1 a x.2.2 t then
+                  max (contFreed sch (contHeldAt mach D_late W pp C x.1 a x.2.2 t) - epsProof sch β) 0
+                else 0)
+        ≤ ENNReal.ofReal βe + T * (β + 1) * π
+
+/-- **Unconditional: the continuous audit's time-averaged bound on the band store at `D = 0, 1, 2, 5` rounds, at
+every segment count from 1 to 2^64.** `ContinuousTimeAverage` instantiated on the `N`-segment band
+`chainBandSeg N (2^9) d 524288 512 dom`, for every `N` with `1 ≤ N ≤ 2^64`, both domain layouts (the
+implementation's per-segment tags `segDom salt`, any 192-bit salt, and one global salt `dom salt`), every `d ≥ D`
+(every `d` at `D = 0`), at `Q = 2^20` and each `(D, k)` of `(0, 89)`, `(1, 93)`, `(2, 97)`, `(5, 111)`. `β` is the
+compression width of the sequential certificate at `(D, k)` (`BandMultiMeetsFamilyD0`, `D1`, `D2`,
+`BandMultiMeetsFamily`): `524288·(511 − D) − 69·(512 − D) − 1 − (9k + 129)` at `N = 1` and
+`523898·(512 − D)·N − 532588` at `N ≥ 2`. The tail is at most `2^-(9k + 99)` per slot: `2^-900`, `2^-936`, `2^-972`,
+`2^-1098` (at `N ≥ 2` it is below `2^-8206`). So `ε_proof = 1 − (β − 512·N)/(N·2^28)` (`epsProof`) is
+
+| `D` | `k` | `N = 1` | `N = 2` | `N = 448` | `N = 2240` |
+|---|---|---|---|---|---|
+| 0 | 89 | 0.2090% | 0.1738% | 0.0750% | 0.0747% |
+| 1 | 93 | 0.4043% | 0.3689% | 0.2702% | 0.2698% |
+| 2 | 97 | 0.5996% | 0.5641% | 0.4654% | 0.4650% |
+| 5 | 111 | 1.1855% | 1.1496% | 1.0509% | 1.0505% |
+
+Proof: `PousContinuous.band_family_continuous_time_average`; here
+`Pous.SecurityProofs.BandFamilyContinuousTimeAverage`. -/
+def BandFamilyContinuousTimeAverage : Prop :=
+  ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ Dk ∈ ([(0, 89), (1, 93), (2, 97), (5, 111)] : List (ℕ × ℕ)), ∀ d : ℕ,
+    Dk.1 ≤ d →
+    ∀ dom : ℕ → Bits 512,
+      ((∃ salt : Bits 192, dom = Pous.BandMulti.segDom salt (2 ^ 9)) ∨ ∃ salt : Bits 256, dom = Pous.Sponge.dom salt) →
+    let sch := Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 dom
+    let β := if N = 1 then 524288 * (511 - Dk.1) - 69 * (512 - Dk.1) - 1 - (9 * Dk.2 + 129)
+      else 523898 * ((512 - Dk.1) * N) - 532588
+    ∀ (D_late Q_late T a b : ℕ), 0 < b → a ≤ b →
+    ∀ (W : Bits sch.n) (mach : ContMachine sch) (f βe : ℝ), 0 < βe →
+      pr (fun x : (Pous.Sponge.idealPerm (524288 + (524288 + 512))).Ω × sch.Coins × (Fin T → Fin b × Fin sch.B) =>
+          let pp := (sch.enc W x.1 x.2.1).1
+          let C := (sch.enc W x.1 x.2.1).2
+          let rs := contRecords mach Dk.1 (2 ^ 20) D_late Q_late W pp C x.1 (arrAt a x.2.2) .start
+            (histAt a x.2.2 T)
+          contAccepts f rs ∧
+            (⨅ θ : Set.Ioi (0 : ℝ), ((θ : ℝ) * f + Real.log (1 / βe)) / (1 - Real.exp (-(θ : ℝ)))) <
+              ((a : ℝ) / b) * ∑ t : Fin T,
+                if contIdle mach D_late W pp C x.1 a x.2.2 t then
+                  max (contFreed sch (contHeldAt mach D_late W pp C x.1 a x.2.2 t) - epsProof sch β) 0
+                else 0)
+        ≤ ENNReal.ofReal βe + T * (2⁻¹ : ℝ≥0∞) ^ (9 * Dk.2 + 99)
+
 /-! ### Proved results cited outside the package
 
 The types of ten theorems that the protocol's documents and code cite, written out so that each citation names a

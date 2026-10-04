@@ -25,7 +25,8 @@ Pous/Protocol/Model/{BandGraph,SegLift}.lean
                                     segment's parents at their global positions, which the tagged transfer reads
 Pous/Protocol/Model/Graded.lean     the graded audit: up to `t` late rounds, each within a hard `(D_late, Q_late)`
 Pous/Protocol/Model/Continuous.lean the continuous audit: an explicit timed verifier (sequential reveal, a hard
-                                    deadline, every answer past `Δ` counted) and a responder on its clock
+                                    deadline, every answer past `Δ` counted) and a responder on its clock; the
+                                    arrivals the verifier draws (queued, never dropped) and the memory at each time
 Pous/Protocol/Accounting/{Params,LemmaA,PubMeets,GradedMeets,Rebuild}.lean
                                     ρ, δ, expansion, `Meets`; Lemma A's bound and A7′'s rows;
                                     `PubMeets`, the requirement with a public encoder; `GradedMeets`, with grace `t`;
@@ -36,7 +37,7 @@ Pous/Protocol/P2/Cost.lean          P2's cost model, the generic ring over `Z/p`
                                     `MeetsOn`, `MeetsWithSlack`, and P2 in it (`p2ring`)
 Pous/Assumptions.lean               trusted, the Assumptions layer: named hypotheses (Lemma A, Conjecture B1′)
 Pous/Assumptions/P2.lean            P2's named open step `PrimeP16448`, the primality of its modulus
-Pous/Guarantees.lean                trusted, the Guarantees layer: 71 statements, the 60 grade.sh grades against,
+Pous/Guarantees.lean                trusted, the Guarantees layer: 73 statements, the 62 grade.sh grades against,
                                     `InvExPostFactoTwoLayer`, which `N10Refuted` negates, and ten proved results
                                     cited outside the package
 Pous/Guarantees/P2.lean             six statements about the abstract model `m1p` at P2's parameters,
@@ -55,8 +56,10 @@ Pous/SecurityProofs/Chain/Flat.lean proved, generated: P3 with a concrete `H`, t
 Pous/SecurityProofs/Continuous/     proved: the continuous audit's counting step (`MissCount.lean`), the three
                                     rules its verifier enforces (`Verifier.lean`), `PerAnswer` and
                                     `ContinuousAudit` (`PerAnswer.lean`), the 64 KiB band at `D = 5`
-                                    (`Band.lean`, not pinned), and completeness, `ContinuousComplete`
-                                    (`Complete.lean`)
+                                    (`Band.lean`, not pinned), completeness, `ContinuousComplete`
+                                    (`Complete.lean`), the time-averaged bound `ContinuousTimeAverage`
+                                    (`TimeAverage.lean`) and its band family at `D = 0, 1, 2, 5`
+                                    (`BandTimeAverage.lean`, `BandFamilyContinuousTimeAverage`)
 Pous/SecurityProofs/Graded/         proved: the tail rule (`Tail.lean`), Theorem 1(ii) for the graded audit
                                     (`Theorem.lean`) and the band with grace `t` at `D = 5` (`Band.lean`,
                                     `BandGradedMeetsFamily`)
