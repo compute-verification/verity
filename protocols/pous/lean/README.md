@@ -32,7 +32,7 @@ Pous/Protocol/P2/Cost.lean          P2's cost model, the generic ring over `Z/p`
                                     `MeetsOn`, `MeetsWithSlack`, and P2 in it (`p2ring`)
 Pous/Assumptions.lean               trusted, the Assumptions layer: named hypotheses (Lemma A, Conjecture B1′)
 Pous/Assumptions/P2.lean            P2's named open step `PrimeP16448`, the primality of its modulus
-Pous/Guarantees.lean                trusted, the Guarantees layer: 66 statements, the 55 grade.sh grades against,
+Pous/Guarantees.lean                trusted, the Guarantees layer: 67 statements, the 56 grade.sh grades against,
                                     `InvExPostFactoTwoLayer`, which `N10Refuted` negates, and ten proved results
                                     cited outside the package
 Pous/Guarantees/P2.lean             six statements about the abstract model `m1p` at P2's parameters,

@@ -71,6 +71,8 @@ INSTANCES: dict[str, Instance] = {i.id: i for i in (
     Instance("blake3", "BLAKE3"),
     Instance("blake2b", "BLAKE2b"),
     Instance("shake-256", "SHAKE-256"),
+    # PoUW's hiding tile leaf (row pouw/tile-h0/v1): TurboSHAKE128 at L = 32 bytes, domains 0x21 (chunks) and 0x22 (chunk digests)
+    Instance("turboshake128", "TurboSHAKE128"),
     Instance("poseidon2-babybear", "Poseidon2-BabyBear", algebraic=True),
     Instance("poseidon2-koalabear", "Poseidon2-KoalaBear", algebraic=True),
     Instance("ajtai-n64", "Ajtai n = 64", algebraic=True),
