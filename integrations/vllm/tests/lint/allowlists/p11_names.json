@@ -79,7 +79,7 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "doc-round", "symbol": "NativeHostCommitter._step_sequences", "detail": "R1N"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "doc-round", "symbol": "NativeHostCommitter.flush_after_plane", "detail": "R1N"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "doc-round", "symbol": "NativeHostCommitter.identity_check", "detail": "R1N"},
-    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "doc-round", "symbol": "NativeHostCommitter.layouts_dump", "detail": "R1N", "count": 2},
+    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "doc-round", "symbol": "NativeHostCommitter.layouts_dump", "detail": "R1N"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "doc-round", "symbol": "NativeHostCommitter.leaf_retained", "detail": "R1N"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "doc-round", "symbol": "NativeHostCommitter.open", "detail": "R1N"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "doc-round", "symbol": "NativeHostCommitter.release_staging", "detail": "R1N"},
