@@ -425,12 +425,15 @@ def cmd_host(args, meta):
     procs_list = [int(x) for x in args.procs.split(",")]
     ctx = mp.get_context("fork")
 
-    def point(pool, gen, procs, phase, rep):
+    def one_pass(pool, gen, procs, nbytes) -> float:
         t0 = time.perf_counter()
         # bounded: a worker that dies mid-task leaves `starmap` waiting forever
-        pool.starmap_async(_host_region, [(gen, key, o, ln) for o, ln in _parts(size, procs)], chunksize=1).get(
-            timeout=max(120.0, size / 0.2e9))
-        s = time.perf_counter() - t0
+        pool.starmap_async(_host_region, [(gen, key, o, ln) for o, ln in _parts(nbytes, procs)], chunksize=1).get(
+            timeout=max(120.0, nbytes / 0.2e9))
+        return time.perf_counter() - t0
+
+    def point(pool, gen, procs, phase, rep):
+        s = one_pass(pool, gen, procs, size)
         out["points"].append({"gen": gen, "procs": procs, "phase": phase, "rep": rep, "seconds": s,
                               "gbps": size / s / 1e9, "pressure": pressure()})
         write(args.out, "host.json", out)
@@ -459,6 +462,37 @@ def cmd_host(args, meta):
                 out.setdefault("errors", []).append({"procs": procs, "error": repr(e)})
                 write(args.out, "host.json", out)
                 print(f"host procs={procs} failed: {e!r}", flush=True)
+        soak_bytes = min(size, int(args.host_soak_gib * GIB) // MIB * MIB)
+        for spec in filter(None, args.host_soak.split(",")):
+            if STOP.is_set():
+                break
+            gen, procs, reps = spec.split(":")
+            procs, reps = int(procs), int(reps)
+            rec = {"gen": gen, "procs": procs, "bytes": soak_bytes, "t_start": time.time(), "seconds": [],
+                   "pressure": [], "co_tenants": co_tenants()}
+            out.setdefault("soak", {})[spec] = rec
+            barrier = ctx.Barrier(procs + 1)
+            try:
+                with ctx.Pool(procs, initializer=_worker_init, initargs=(barrier,)) as pool:
+                    barrier.wait(timeout=600)
+                    one_pass(pool, gen, procs, soak_bytes)
+                    last = time.perf_counter()
+                    for i in range(reps):
+                        if STOP.is_set():
+                            break
+                        rec["seconds"].append(round(one_pass(pool, gen, procs, soak_bytes), 6))
+                        if time.perf_counter() - last > 10:
+                            rec["pressure"].append([round(time.time() - rec["t_start"], 1), pressure()])
+                            write(args.out, "host.json", out)
+                            last = time.perf_counter()
+            except Exception as e:
+                out.setdefault("errors", []).append({"soak": spec, "error": repr(e)})
+            rec["t_end"] = time.time()
+            rec["summary"] = dist([s * 1e3 for s in rec["seconds"]])
+            write(args.out, "host.json", out)
+            print(f"host soak {spec}: {len(rec['seconds'])} passes of {soak_bytes / GIB:.1f} GiB, p50 "
+                  f"{rec['summary'].get('p50', float('nan')):.1f} ms p999 {rec['summary'].get('p999', float('nan')):.1f} ms",
+                  flush=True)
         _MM.close()
         _MM = None
     if "d2h" in gens and not STOP.is_set():
@@ -497,10 +531,12 @@ def host_d2h(args) -> dict:
         return time.perf_counter() - t
 
     once()
-    for _ in range(args.host_reps):
+    for _ in range(args.d2h_reps):
         s = once()
         res["reps"].append({"seconds": s, "gbps": size / s / 1e9})
-        print(f"host d2h: {size / s / 1e9:.1f} GB/s ({s:.2f} s for {size / GIB:.0f} GiB)", flush=True)
+    r = res["reps"]
+    print(f"host d2h: {len(r)} passes, median {sorted(x['gbps'] for x in r)[len(r) // 2]:.1f} GB/s ({size / GIB:.0f} GiB)",
+          flush=True)
     check = pinned[:64].clone()
     want = F.logical_words("chacha8", F.fill_key(args.seed, 7), 1)[:16].view(np.uint8)
     res["first_bytes_ok"] = bool(np.array_equal(check.numpy(), want))
@@ -528,7 +564,7 @@ def host_uva_digest(torch, args, pinned) -> dict:
     uva = int(F.device_digest(torch, host2d[:k], ar[:k], g, z, hbuf, zbuf, cbuf).item())
     dev = int(F.device_digest(torch, host2d[:k].cuda(), ar[:k], g, z, hbuf, zbuf, cbuf).item())
     res = {"bytes": n * F.BLOCK_BYTES, "check_ok": uva == dev, "reps": []}
-    for _ in range(args.host_reps + 1):
+    for _ in range(args.d2h_reps + 1):
         torch.cuda.synchronize()
         t = time.perf_counter()
         int(F.device_digest(torch, host2d, ar, g, z, hbuf, zbuf, cbuf).item())
@@ -695,6 +731,9 @@ def main():
     ap.add_argument("--procs", default="1,4,8,16")
     ap.add_argument("--host-gens", default="memset,aesctr,chacha20,d2h")
     ap.add_argument("--host-reps", type=int, default=3)
+    ap.add_argument("--host-soak", default="", help="repeated warm passes after the sweep, GEN:PROCS:REPS,...")
+    ap.add_argument("--host-soak-gib", type=float, default=16)
+    ap.add_argument("--d2h-reps", type=int, default=3)
     ap.add_argument("--gen", default="chacha8")
     ap.add_argument("--layout", default="seq")
     ap.add_argument("--minutes", type=float, default=25)
