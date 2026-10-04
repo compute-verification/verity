@@ -72,7 +72,8 @@ def test_dense_jobs_take_the_kernel_words_and_sample_the_special_rows(tmp_path) 
     assert sorted(r for j in jobs for r in j["reference_rows"]) == [0, 2, 3, 4]
     t = _total([X.compare(j) for j in jobs])
     assert t == {"words": 5 * N, "mismatch": 0, "unresolved": 0, "quant_rows": 5, "quant_mismatch": 0,
-                 "reference_coords": _sampled_columns((0, 2, 3, 4)), "reference_quant_rows": 4, "twin_mismatch": 0}
+                 "reference_coords": _sampled_columns((0, 2, 3, 4)), "reference_quant_rows": 4, "twin_mismatch": 0, "act_rows": 0,
+                 "act_mismatch": 0, "reference_act_rows": 0}
 
 
 def test_a_flipped_word_or_quant_byte_is_found(tmp_path) -> None:
@@ -83,8 +84,9 @@ def test_a_flipped_word_or_quant_byte_is_found(tmp_path) -> None:
     assert _total(res)["quant_mismatch"] == 1
 
 
-def _moe_job(tmp_path, kind: str, *, KB: int = 32, swap: bool = False, flip: bool = False) -> list[dict]:
-    """A w13-like launch (3 tokens x 8 slots over 5 used experts) or a w2-like one (24 rows, one slot each, the routed weight)."""
+def _moe_job(tmp_path, kind: str, *, KB: int = 32, swap: bool = False, flip: bool = False, flip_act: bool = False) -> list[dict]:
+    """A w13-like launch (3 tokens x 8 slots over 5 used experts), a w2-like one (24 rows, one slot each, the routed weight), or the
+    served w2 (the w2-like launch whose A and A_scale are `silu_and_mul_per_block_quant` of 24 [gate || up] rows)."""
     rng = np.random.default_rng(2)
     M, used = 3, np.array([3, 17, 40, 41, 255])
     ids = np.stack([rng.permutation(used)[:5].tolist() + rng.permutation(used)[:3].tolist() for _ in range(M)]).reshape(-1)
@@ -94,31 +96,45 @@ def _moe_job(tmp_path, kind: str, *, KB: int = 32, swap: bool = False, flip: boo
     rows = M if kind == "w13" else M * X.TOP_K
     top_k, mul = (X.TOP_K, False) if kind == "w13" else (1, True)
     x = _bf16_rows(rng, max(rows, 4))[:rows]
-    A, As = _quant(x)
+    gu = np.concatenate([x, _bf16_rows(rng, max(rows, 4))[:rows]], axis=1)
+    A, As = MR.silu_mul_fp8_block_quant_rows(gu, G=GQ) if kind == "served_w2" else _quant(x)
     B, Bs = _e4m3(rng, used.size, N, K), _scales(rng, used.size, X.cdiv(N, GQ), K // GQ)
     C = np.stack([MR.moe_expert_fp8_block_row(A[p // top_k], As[p // top_k], B[umap[ids[p]]], Bs[umap[ids[p]]], G=GQ, KB=KB, swap=swap,
                                               g=int(tw[p]) if mul else None)[0] for p in range(M * X.TOP_K)])
     if flip:
         C[13, 7] ^= 0x8000
-    arrays = {"A": A, "As": As, "B": B, "Bs": Bs, "ids": ids, "umap": umap, "tw": tw, "C": C, **({"x": x} if kind == "w13" else {})}
+    if flip_act:
+        gu[19, 300] ^= 0x0100
+    arrays = {"A": A, "As": As, "B": B, "Bs": Bs, "ids": ids, "umap": umap, "tw": tw, "C": C, **({"x": x} if kind == "w13" else {}),
+              **({"gu": gu} if kind == "served_w2" else {})}
     job = {"phase": "moe", "case": "small", "launch": kind, "K": K, "N": N, "KB": KB, "SWAP": swap, "mul": mul, "top_k": top_k,
            "pairs": M * X.TOP_K, "statics_known": True, "paths": X._save(tmp_path / kind, **arrays)}
     return [{**job, "pair_range": [0, M * X.TOP_K], "reference": True, "quant_rows": list(range(M)) if kind == "w13" else []}]
 
 
-@pytest.mark.parametrize("kind,KB,swap", [("w13", 32, False), ("w2", 32, False), ("w2", 64, True)])
+@pytest.mark.parametrize("kind,KB,swap", [("w13", 32, False), ("w2", 32, False), ("w2", 64, True), ("served_w2", 32, False)])
 def test_moe_jobs_take_the_kernel_words(tmp_path, kind: str, KB: int, swap: bool) -> None:
     t = _total([X.compare(j) for j in _moe_job(tmp_path, kind, KB=KB, swap=swap)])
-    assert t["words"] == 24 * N and t["mismatch"] == t["unresolved"] == t["twin_mismatch"] == t["quant_mismatch"] == 0
+    assert t["words"] == 24 * N and t["mismatch"] == t["unresolved"] == t["twin_mismatch"] == t["quant_mismatch"] == t["act_mismatch"] == 0
     assert t["reference_coords"] == _sampled_columns((0, 23)) and t["quant_rows"] == t["reference_quant_rows"] * 3 == (3 if kind == "w13" else 0)
+    assert (t["act_rows"], t["reference_act_rows"]) == ((24, 1) if kind == "served_w2" else (0, 0))
     flipped = [X.compare(j) for j in _moe_job(tmp_path, kind, KB=KB, swap=swap, flip=True)]
     assert _total(flipped)["mismatch"] == 1 and flipped[0]["first_mismatch"]["pair"] == 13
+
+
+def test_a_served_w2_input_that_is_not_the_activation_is_found(tmp_path) -> None:
+    """A w13 output word flipped after the activation ran: the served w2 launch's A no longer is `SiluMulFp8BlockQuant_v1` of it."""
+    (res,) = [X.compare(j) for j in _moe_job(tmp_path, "served_w2", flip_act=True)]
+    assert (res["act_rows"], res["act_mismatch"], res["mismatch"]) == (24, 1, 0) and res["first_mismatch"] == {"act_pair": 19}
 
 
 def test_a_launch_at_statics_no_program_binds_is_unresolved(tmp_path) -> None:
     (job,) = _moe_job(tmp_path, "w13")
     res = X.compare({**job, "statics_known": False})
     assert res["unresolved"] == res["words"] == 24 * N
+    (job,) = _moe_job(tmp_path, "served_w2")
+    res = X.compare({**job, "statics_known": False})
+    assert res["unresolved"] == res["words"] == 24 * N and (res["act_rows"], res["act_mismatch"]) == (24, 0)
 
 
 def test_the_assignment_check_reads_the_launch_blocks() -> None:
@@ -166,12 +182,13 @@ def test_the_h200_decode_tile_is_no_wgmma_and_the_widened_configs_are() -> None:
 
 def test_the_programs_bind_at_every_glm53_shape() -> None:
     got = X.bind_check({(32, False)})
-    assert got["ok"] and got["bindings"]["ScaledMmFp8Block_v1{K=6144,N=2624,G=128}"]
-    assert len(got["bindings"]) == len(X.DENSE) + len({K for _, K, _ in X.DENSE}) + 2 * len({c[1] for c in X.MOE})
+    assert got["ok"] and got["bindings"]["ScaledMmFp8Block_v1{K=6144,N=2624,G=128}"] and got["bindings"]["SiluMulFp8BlockQuant_v1{I=256,G=128}"]
+    assert len(got["bindings"]) == len(X.DENSE) + len({K for _, K, _ in X.DENSE}) + 3 * len({c[1] for c in X.MOE})
 
 
 TOTALS = {"words": 10, "mismatch": 0, "unresolved": 0, "quant_rows": 2, "quant_mismatch": 0, "reference_coords": 3,
-          "reference_quant_rows": 1, "twin_mismatch": 0}
+          "reference_quant_rows": 1, "twin_mismatch": 0, "act_rows": 0, "act_mismatch": 0, "reference_act_rows": 0}
+ACT = {"act_rows": 4, "reference_act_rows": 1}
 
 
 def _doc() -> dict:
@@ -183,13 +200,15 @@ def _doc() -> dict:
             "launches": [{**launch, "phase": "dense", "case": "o_proj", "M": 1, "operands_ok": True}, {**moe, "launch": "w13"},
                          {**moe, "launch": "w2"}],
             "comparisons": [{"phase": "dense", "case": "o_proj", "launch": None, "M": 1, **TOTALS},
-                            {"phase": "moe", "case": "tp8_decode", "launch": "w13", "M": None, **TOTALS}],
-            "totals": dict(TOTALS)}
+                            {"phase": "moe", "case": "tp8_decode", "launch": "w13", "M": None, **TOTALS},
+                            {"phase": "moe", "case": "tp8_decode", "launch": "served_w2", "M": None, **TOTALS, **ACT}],
+            "totals": {**TOTALS, **ACT}}
 
 
 @pytest.mark.parametrize("path,value", [(("gate", "ok"), False), (("errors", "moe/x"), "boom"), (("selection", "moe_ok"), False),
                                         (("ptx", "ok"), None), (("totals", "mismatch"), 1), (("totals", "unresolved"), 2),
                                         (("totals", "reference_coords"), 0), (("totals", "twin_mismatch"), 1),
+                                        (("totals", "act_rows"), 0), (("totals", "act_mismatch"), 1), (("totals", "reference_act_rows"), 0),
                                         (("launches", 1, "statics_ok"), False), (("launches", 1, "assignment_ok"), False),
                                         (("launches", 2, "wgmma_tile"), False), (("errors", "moe_configs"), "boom"),
                                         (("launches", 0, "deterministic"), False), (("launches", 0, "operands_ok"), False)])
@@ -215,6 +234,9 @@ def test_each_case_has_its_own_verdict() -> None:
     got = X.cases(doc)
     assert {k: c["ok"] for k, c in got.items()} == {"dense/o_proj/M1": False, "moe/tp8_decode": False, "dense/q_b_proj/M4": False}
     assert got["moe/tp8_decode"]["tiles"][1] == "w2:8x64x128/swap/no-wgmma"
+    doc = _doc()
+    doc["comparisons"].pop()                                                    # a MoE case whose act rows nobody compared
+    assert {k: c["ok"] for k, c in X.cases(doc).items()} == {"dense/o_proj/M1": True, "moe/tp8_decode": False}
 
 
 def test_the_dense_cases_are_glm53s_nine_fp8_linears() -> None:
@@ -253,7 +275,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
 
     def moe(work, name, inter, M, hot, seed, batch_invariant):
         launches, jobs = [], []
-        for kind in ("w13", "w2"):
+        for kind in ("w13", "w2", "served_w2"):
             launches.append({"phase": "moe", "case": name, "launch": kind, "K": K, "N": N, "pairs": 24, "KB": 64, "SWAP": True,
                              "config": cfg, "deterministic": True, "statics_ok": True, "assignment_ok": True,
                              "wgmma_tile": X.wgmma_tile(cfg, True)})
@@ -267,6 +289,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     assert doc["digest"] == digest_of(doc) and doc["ok"] is False and not doc["errors"]
     assert {k: c["ok"] for k, c in doc["cases"].items()} == {"dense/ragged/M5": True, "moe/small": False}
     assert doc["totals"]["mismatch"] == 1 and doc["env"]["VLLM_TUNED_CONFIG_FOLDER"] == str(out / "moe_configs")
+    assert (doc["totals"]["act_rows"], doc["totals"]["act_mismatch"], doc["totals"]["reference_act_rows"]) == (24, 0, 1)
     assert doc["env"]["VLLM_BATCH_INVARIANT"] == "0" and doc["env"]["VLLM_USE_DEEP_GEMM"] == "0"
     printed = capsys.readouterr().out
     assert "case moe/small" in printed and "GLM53-BLOCK-FP8 NO-GO" in printed and "no-go cases=['moe/small']" in printed

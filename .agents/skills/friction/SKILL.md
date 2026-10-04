@@ -97,6 +97,11 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-03: a test tier too slow for `check` (the vLLM reference regression's manifest rebuilds, about an hour) runs as a
+  detached job after each train lands on `main` (`tools/check/post_train.py`, started by `research merge --push`) and labels
+  the landing's check attempt `note=regression pass` or `fail:<rows>`, which circuits sweeps daily; `check` blocks on the
+  cheap tier only (its T0 checks, about four minutes), and under `VERITY_STORE_REQUIRED=1` a fixture or input that doesn't
+  resolve fails rather than skips.
 - 2026-10-03 (the coordinator's): data you don't own on a node is deleted only with `research retention gc` or `research
   retention rm --approved-by @OWNER`, which refuses unless every retention record on the path names that owner; never a bare
   `rm`, and never on another lane's word about who owns it.
