@@ -19,7 +19,9 @@ published on the machine that ran it with a minted key, so custody no longer dep
 The record uploads the run's own files, the files matching its `--declared-output` globs, and undeclared files up to
 UNDECLARED_CAP_BYTES; every other file is listed (path, bytes, sha256) without bytes (`select`; how jobs declare outputs:
 .agents/skills/writing-runs/SKILL.md).  The listing is the record's `meta.trimmed` when it fits in TRIMMED_INLINE_BYTES, else the
-file TRIMMED_LISTING in the record's own tree, named by `meta.trimmed_listing` (`trimmed_of`).
+file TRIMMED_LISTING in the record's own tree, named by `meta.trimmed_listing` (`trimmed_of`).  A credential a run may be sent
+(CREDENTIALS) is deleted from the run dir before its record is taken, whatever the run's tool and however it ended, so no record
+holds one; a refused launch deletes it from the request dir (remote.py).
 
 `.custody` (research/run-custody/v0.1) is written only when the attempt is PRESERVED on the remote, names a run record, and every
 file now in the run dir is in that record with the same size and sha256 (hashed after `verified_from`, the clock read before
@@ -159,9 +161,31 @@ def stage(run_dir: Path, into: Path, rels: list[str] | None = None) -> list[str]
     return rels
 
 
+#: What a run may be sent that grants access until it expires, as globs relative to its run dir and its request dir: check's presigned
+#: URLs of the Lean dependency bundles (`tools/check/check.py` LEAN_DEPS_URLS), which a run of anything else never takes out of inputs/,
+#: and the temporary name a shipped tree's preflight writes that file under before replacing it
+CREDENTIALS = ("inputs/lean-deps-urls.json", "inputs/.lean-deps-urls.json.*")
+
+
+def drop_credentials(d: Path) -> None:
+    """Delete each file (or symlink) under ``d`` that CREDENTIALS names; whatever else a workload left at those paths, a directory or a
+    file where inputs/ should be, stays, and a symlinked inputs/ is not followed, as `run_files` doesn't follow it."""
+    for pattern in CREDENTIALS:
+        parent, name = pattern.rsplit("/", 1)
+        where = Path(d) / parent
+        if where.is_symlink() or not where.is_dir():
+            continue
+        with os.scandir(where) as entries:
+            found = [e.path for e in entries if fnmatch.fnmatchcase(e.name, name) and not e.is_dir(follow_symlinks=False)]
+        for p in found:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(p)
+
+
 def put_run_record(st: Any, run_dir: Path, run_id: str) -> str | None:
     """The `run-record/v1` artifact of the run dir (None when it holds no file): the files `select` keeps, and the listing of the trimmed
-    ones (module docstring)."""
+    ones (module docstring).  CREDENTIALS are deleted from the run dir first: `verify` needs the record to hold every file left there."""
+    drop_credentials(run_dir)
     root = Path(getattr(st, "root", None) or Path(run_dir).parent) / "scratch"
     tmp = root / f".custody-{run_id}-{secrets.token_hex(4)}"
     tmp.mkdir(parents=True)
@@ -727,6 +751,6 @@ def triage_report(st: Any, roots: list[Path], *, older_min: float | None = None,
             "rows": rows, "needs_action": len(todo), "settling": sum(1 for r in rows if r["settling"])}
 
 
-__all__ = ["ACTIONS", "EXCLUDED", "KIND", "MARKER", "PUBLISH_LOG", "SCHEMA", "custody_env", "divert_output", "force_refusal", "has_custody",
-           "mark_failed", "marker_problem", "mint_for_machine", "push_run", "put_run_record", "ran_evidence", "run_files", "runner_publish",
-           "trimmed_of", "triage", "triage_row", "verify"]
+__all__ = ["ACTIONS", "CREDENTIALS", "EXCLUDED", "KIND", "MARKER", "PUBLISH_LOG", "SCHEMA", "custody_env", "divert_output",
+           "drop_credentials", "force_refusal", "has_custody", "mark_failed", "marker_problem", "mint_for_machine", "push_run",
+           "put_run_record", "ran_evidence", "run_files", "runner_publish", "trimmed_of", "triage", "triage_row", "verify"]

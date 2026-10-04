@@ -2,7 +2,8 @@
 
 Writes scoped samples to `resources.jsonl` (schema telemetry/resources/v0.1) and a heartbeat `sampler.json`.  Every record has
 `kind`, `scope`, `t_utc`, `t_mono`, `seq`, `stream`.  Bounded: fixed reads, --max-pids, --max-bytes (cadence doubles, never stops the
-workload), errors rate-limited and counted.  Survivable: SIGHUP ignored, SIGTERM/SIGINT -> final readings + `sampler_end`, workload death
+workload), errors rate-limited and counted; smaps_rollup, which holds a process's mmap lock while it is read, never for a process over
+--pss-max-rss-gb and at most 1/PSS_HOLD_FACTOR of any process's time.  Survivable: SIGHUP ignored, SIGTERM/SIGINT -> final readings + `sampler_end`, workload death
 -> final readings + linger.  It never signals the workload.
 """
 from __future__ import annotations
@@ -22,6 +23,15 @@ from .cgroup import Cgroup, scope_for
 from .events import Emitter, append, stream_id, utc_now_ms
 from .job import write_json_atomic
 from .procs import diskstats, gpu_sample, pss, snapshot_tree, statvfs
+
+#: The clock (seconds) that decides which readings are due within a round and times the smaps_rollup reads; a test replaces it.
+#: The loop's sleeps, gaps and linger, and the records' t_mono, stay on time.monotonic.
+clock = time.monotonic
+#: The RSS breakdown that /proc/<pid>/status gave the process snapshot: what a process whose smaps_rollup is not read records instead.
+STATUS_RSS = ("rss_bytes", "rss_anon_bytes", "rss_file_bytes", "rss_shmem_bytes")
+#: A process's smaps_rollup is read again no sooner than this many times its last read took, so that the reads hold its mmap lock
+#: at most 1/PSS_HOLD_FACTOR of its time.
+PSS_HOLD_FACTOR = 200
 
 
 class Sampler:
@@ -52,6 +62,7 @@ class Sampler:
         self.known_outsiders: dict[int, tuple[int, str]] = {}
         self.topology_changed_at = 0.0
         self.last_pss = 0.0
+        self.pss_hold: dict[tuple[int, int | None], tuple[float, float]] = {}   # (pid, starttime) -> (no read before, last read's s)
         self.last_gpu = 0.0
         self.last_storage = 0.0
         self.last_self = 0.0
@@ -88,7 +99,7 @@ class Sampler:
     # ---- one round ------------------------------------------------------------------------------------------------------------------
     def round(self, final: bool = False) -> bool:
         """Take one round of readings.  Returns False when the workload root has gone."""
-        now = time.monotonic()
+        now = clock()
         alive = True
         # cgroup
         try:
@@ -96,6 +107,7 @@ class Sampler:
         except Exception as e:  # noqa: BLE001 -- the sampler must not die on a reading
             self.err("cgroup", repr(e))
         # process tree
+        snapped = True
         try:
             rows, truncated, total, outsiders = snapshot_tree(self.a.root_pid, self.a.pgid, self.a.max_pids)
             cur = {r["pid"]: r["starttime_ticks"] for r in rows}
@@ -115,16 +127,22 @@ class Sampler:
             self.known_outsiders = {o["pid"]: (o["starttime_ticks"], o["comm"]) for o in outsiders}
         except Exception as e:  # noqa: BLE001
             self.err("process", repr(e))
-            rows = []
-        # PSS every pss_every s, plus a bounded extra round on topology change (at most one per 5 s)
-        if final or now - self.last_pss >= self.a.pss_every or (self.topology_changed_at and now - self.topology_changed_at < self.cadence and now - self.last_pss >= 5.0):
+            rows, snapped = [], False
+        # PSS every pss_every s, plus a bounded extra round on topology change (at most one per 5 s); pss_every 0 turns it off
+        if self.a.pss_every > 0 and (final or now - self.last_pss >= self.a.pss_every
+                                     or (self.topology_changed_at and now - self.topology_changed_at < self.cadence and now - self.last_pss >= 5.0)):
             try:
-                out = [pss(r["pid"]) for r in rows[: self.a.max_pids]]
+                out = [self._pss(r) for r in rows[: self.a.max_pids]]
+                if snapped:                       # a failed snapshot says nothing about which processes are gone
+                    live = {(r["pid"], r.get("starttime_ticks")) for r in rows}
+                    self.pss_hold = {k: v for k, v in self.pss_hold.items() if k in live}
                 tot = sum(x["pss_bytes"] for x in out if x.get("pss_bytes") is not None)
                 rss_sum = sum(r.get("rss_bytes") or 0 for r in rows)
+                skipped = sum(1 for x in out if x.get("skipped"))
                 self.write("pss", "process", {"processes": out, "pss_sum_bytes": tot, "rss_sum_bytes": rss_sum,
-                                              "denied": sum(1 for x in out if x.get("pss_bytes") is None),
-                                              "note": "pss shares pages proportionally; rss_sum counts shared pages once per process"})
+                                              "denied": sum(1 for x in out if x.get("pss_bytes") is None) - skipped, "skipped": skipped,
+                                              "note": "pss shares pages proportionally; rss_sum counts shared pages once per process; pss_sum "
+                                                      "leaves out the denied and the skipped (not read; their status RSS is recorded instead)"})
             except Exception as e:  # noqa: BLE001
                 self.err("pss", repr(e))
             self.last_pss = now
@@ -157,6 +175,29 @@ class Sampler:
         self.samples += 1
         return alive
 
+    def _pss(self, row: dict[str, Any]) -> dict[str, Any]:
+        """The process's smaps_rollup, unless its RSS is over --pss-max-rss-gb or its last read was less than PSS_HOLD_FACTOR times
+        that read's length ago: the read walks the whole address space under the process's mmap lock, which stalls a large process
+        for seconds."""
+        rss = row.get("rss_bytes", row.get("rss_bytes_stat"))
+        skipped = {"pid": row["pid"], "pss_bytes": None, "skipped": True, **{k: row.get(k) for k in STATUS_RSS},
+                   **({} if "rss_bytes" in row else {"rss_bytes_stat": row.get("rss_bytes_stat")})}
+        if rss is not None and rss > self.a.pss_max_rss_gb * 1e9:
+            return {**skipped, "reason": f"skipped: rss {rss / 1e9:.2f} GB over --pss-max-rss-gb {self.a.pss_max_rss_gb:g} "
+                                         "(smaps_rollup holds the process's mmap lock for seconds)"}
+        key = (row["pid"], row.get("starttime_ticks"))
+        t0 = clock()
+        not_before, took = self.pss_hold.get(key, (t0, 0.0))
+        if t0 < not_before:
+            return {**skipped, "reason": f"skipped: its last smaps_rollup read took {took:.3f} s, so the next waits {PSS_HOLD_FACTOR}x "
+                                         f"that ({not_before - t0:.1f} s more): reads hold its mmap lock at most 1/{PSS_HOLD_FACTOR} "
+                                         "of its time"}
+        out = pss(row["pid"])
+        took = clock() - t0
+        self.pss_hold[key] = (t0 + PSS_HOLD_FACTOR * took, took)
+        out["read_s"] = round(took, 4)
+        return out
+
     def write_self(self) -> None:
         ru = resource.getrusage(resource.RUSAGE_SELF)
         body = {"cpu_s": (ru.ru_utime + ru.ru_stime), "maxrss_bytes": ru.ru_maxrss * (1024 if sys.platform != "darwin" else 1),
@@ -176,7 +217,8 @@ class Sampler:
         signal.signal(signal.SIGHUP, signal.SIG_IGN)
         for s in (signal.SIGTERM, signal.SIGINT):
             signal.signal(s, self._on_signal)
-        self.emitter.emit("sampler_start", pid=os.getpid(), cadence_s=self.cadence, pss_every_s=self.a.pss_every, gpu_every_s=self.a.gpu_every,
+        self.emitter.emit("sampler_start", pid=os.getpid(), cadence_s=self.cadence, pss_every_s=self.a.pss_every,
+                          pss_max_rss_gb=self.a.pss_max_rss_gb, gpu_every_s=self.a.gpu_every,
                           root_pid=self.a.root_pid, pgid=self.a.pgid, scope=self.scope, scope_reason=self.scope_reason, resources=str(self.path.name),
                           collector_version=COLLECTOR_VERSION)
         rc = 0
@@ -226,7 +268,10 @@ def add_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--cadence", type=float, default=1.0, help="seconds between cheap rounds (default 1.0)")
     ap.add_argument("--root-pid", type=int, default=None, help="workload root; the tree = its descendants; exit after --linger once it is gone")
     ap.add_argument("--pgid", type=int, default=None, help="alternatively: every process of this process group")
-    ap.add_argument("--pss-every", type=float, default=5.0)
+    ap.add_argument("--pss-every", type=float, default=5.0, help="seconds between PSS rounds (smaps_rollup reads; default 5); 0 turns PSS off")
+    ap.add_argument("--pss-max-rss-gb", type=float, default=8.0,
+                    help="never read smaps_rollup of a process whose RSS (/proc/<pid>/status) is over this many GB (default 8): the read "
+                         "holds the process's mmap lock for seconds. Its status RSS is recorded instead")
     ap.add_argument("--gpu-every", type=float, default=5.0)
     ap.add_argument("--gpu-timeout", type=float, default=3.0)
     ap.add_argument("--storage-every", type=float, default=5.0)
