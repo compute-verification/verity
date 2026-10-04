@@ -33,14 +33,14 @@ variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : 
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
 
-variable (lay : Layout P plan tab decode) in
+variable (lay : Binding.Layout P plan tab decode) in
 /-- The commit strings the units of `S` read: those holding one of their wires. -/
 def drawnReads (S : Finset (Fin n)) (p : lay.Pos) : Prop :=
   ∃ u ∈ S, ∃ g ∈ P.io u, lay.pos g = p
 
 namespace Reads
 
-variable {lay : Layout P plan tab decode} {rs : HmRows lay}
+variable {lay : Binding.Layout P plan tab decode} {rs : Binding.HmRows lay}
 
 /-- `rd`'s reads where `S` holds, with the registrant's openings unchanged. -/
 def restrict (rd : Reads lay rs) (S : lay.Pos → Prop) : Reads lay rs where
@@ -62,7 +62,18 @@ theorem prob_off_le_run {β : Type} (G : Game β) (σ : Strategy G) (accept : β
     (hchk : ∀ o, accept o → (rdo o).Checked (R o) (path o)) {qR : ℝ}
     (hR : (StrictCR.oneRun G σ fun o => (rdo o).pick (R o) (path o)).CR H512 qR) :
     prob (fun o => accept o ∧ (rdo o).Off (R o)) G σ ≤ ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  have hle : prob (fun o => accept o ∧ (rdo o).Off (R o)) G σ ≤
+      prob (fun o => StrictCR.IsColl H512 ((rdo o).pick (R o) (path o))) G σ :=
+    prob_mono (fun o ⟨ha, hoff⟩ =>
+      ((rdo o).openings (R o) (path o) ((rdo o).offAt (R o))).isColl ((rdo o).offAt_conflict (hchk o ha) hoff)) G σ
+  have hev : (prob (fun o => StrictCR.IsColl H512 ((rdo o).pick (R o) (path o))) G σ).toReal ≤
+      qR ^ 2 / 2 ^ (513 : ℝ) := by
+    rw [prob_toReal]
+    have := StrictCR.Finder.CR.le hR
+    rwa [StrictCR.oneRun_ev] at this
+  have hfin : prob (fun o => StrictCR.IsColl H512 ((rdo o).pick (R o) (path o))) G σ ≠ ⊤ :=
+    ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _)
+  exact hle.trans ((ENNReal.le_ofReal_iff_toReal_le hfin (by positivity)).2 hev)
 
 /-- **No drawn unit reads a registered read whose leaf is not the registrant's**, except with probability
 `qR²/2^513` under `SHA512CRStrict` (`cr/sha-512`): in a game `G` played by `σ`, with drawn units `drawn o` and
@@ -75,7 +86,10 @@ theorem prob_offDrawn_le {β : Type} (G : Game β) (σ : Strategy G) (accept : �
     prob (fun o => accept o ∧ ∃ u ∈ drawn o, ∃ g ∈ P.io u, rd.isRead (lay.pos g) ∧
         lay.regLeaf (R o) (lay.pos g) ≠ rd.leaf (lay.pos g)) G σ ≤
       ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  refine le_trans (prob_mono (fun o ho => ?_) G σ)
+    (prob_off_le_run G σ accept R (fun o => rd.restrict (drawnReads lay (drawn o))) path hchk hR)
+  obtain ⟨ha, u, hu, g, hg, hrd, hl⟩ := ho
+  exact ⟨ha, lay.pos g, ⟨hrd, u, hu, g, hg, rfl⟩, hl⟩
 
 end Reads
 
@@ -120,6 +134,12 @@ theorem zk_session_offR
           (laySh ht dj y₀ hc hU (pub := pub)).regLeaf o.1 ((laySh ht dj y₀ hc hU (pub := pub)).pos g) ≠
             rd.leaf ((laySh ht dj y₀ hc hU (pub := pub)).pos g)) G σ ≤
       ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  have hchk : ∀ o : Reg × Finset (Fin n) × Exec.Transcript, LiveAcceptsZKR I own o →
+      (rd.restrict (FlockSoundness.Registered.drawnReads (laySh ht dj y₀ hc hU (pub := pub)) o.2.1)).Checked o.1
+        (regPaths c pub o.2.2 rd.port) := fun o hacc =>
+    checked_of_accepts I ht own dj y₀ hc hU hpub hscope hTags o hacc
+      (rd.restrict (FlockSoundness.Registered.drawnReads (laySh ht dj y₀ hc hU (pub := pub)) o.2.1)) (hown o hacc)
+  exact FlockSoundness.Registered.Reads.prob_offDrawn_le (lay := laySh ht dj y₀ hc hU (pub := pub)) G σ
+    (LiveAcceptsZKR I own) (fun o => o.2.1) (fun o => o.1) (fun o => regPaths c pub o.2.2 rd.port) rd hchk hR
 
 end FlockSoundness.Discharge.ZkReg
