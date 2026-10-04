@@ -19,7 +19,8 @@ binding to reference openings fixed before each coin, and inner soundness (`comm
 (`zk_session_recursive`), with a stage's transfer from the session's committed values against a candidate
 (`Recursion.Transfer`: `zk_flock_candTransferC`, `zk_session_candValsR`), and with that transfer as the stages' at V*'s
 openings, which are the same at every history (`Recursion.Stage`: `obK`, `ZkOuter.candTransfer`,
-`zk_session_recursive_stages`, on `VCommits` and `VReads`). An inner protocol from a verifier written as a
+`zk_session_recursive_stages`, on `VCommits` and `VReads`; `zk_session_recursive_full`, with `VReads` from V*'s circuit
+decoding each stage, `VDecodes`, and V*'s law drawing its units in full). An inner protocol from a verifier written as a
 `Game`, on a fixed schedule of messages and live coins (`Recursion.Schedule`: `schedInner`, `sched_sound`). What V*
 computes: the compiled table's acceptance of a hidden block statement (`Recursion.Target`: `InnerAccepts`,
 `hidden_sound`); C-Flock's inner protocol on the class and its `InnerSound` (`flockInner`, `flock_inner_sound`); and
