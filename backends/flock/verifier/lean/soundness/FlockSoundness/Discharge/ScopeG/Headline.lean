@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.HiddenExec.HeadlineExec
 import FlockSoundness.Discharge.ScopeG.Scope
+import FlockSoundness.Discharge.ScopeG.Bind
 
 set_option Elab.async false
 
@@ -15,8 +16,10 @@ come from the tail's last stage.
   the hidden tables: the places (`pp`), the constant and zero columns (on `vuOneG`, `vuZeroG`), and the binding of each
   drawn unit's committed wires to registered rows (`lay`, `rs`, `hHm`).
 * `flock_headline_exec_hiddenG_of`: the headline at any such binding (`flock_headline_hidden` at `vuProg`).
-* Open, each a named obligation on a `sorry` stub: `vuBindH_nonempty` (a unit that returns the outputs) and
-  `vuBindHT_nonempty` (a tail's last stage that returns them), that the circuit has such a binding.
+* `vuBindH_nonempty` (a unit that returns the outputs) and `vuBindHT_nonempty` (a tail's last stage that returns them),
+  that the circuit has such a binding: from `Bind.lean`'s obligations, a placement of the VU's rows with its inputs on
+  their unit slots and a binding of registered rows there (`vuBindH_of`: the places, constant and zero columns are
+  `Places.lean`'s).
 * `flock_headline_exec_hiddenG`, `flock_headline_exec_hiddenGT`: the headline at `scopeOkG` and at `scopeOkGT`, at the
   binding the obligation gives (`vuBindG`, `vuBindGT`).
 
@@ -53,6 +56,18 @@ structure VuBindH {n : ℕ} {I : Inputs} {mPts : ℕ} {c : Flock.Circuit} (hs : 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} {c : Flock.Circuit}
   (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
 
+/-- **A binding of the VU's program from a placement and a binding of rows there**: the places, constant and zero
+columns of `VuPlace.pp` (`Places.lean`), the rows' `lay`, `rs` and `hHm`. -/
+noncomputable def vuBindH_of (ht : I.tags.typed = false) (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
+    (hs : scopeOkGT c = true) (P : VuPlace c hs (sitesG (Reg := Reg) dj x₀ ht hc hs))
+    (R : VuRowsH hs (ppG dj x₀ ht hc hs P)) : VuBindH hs dj x₀ Reg where
+  pp := ppG dj x₀ ht hc hs P
+  hConst := P.hConst (sitesG_parse dj x₀ ht hc hs) (vuOutsOf c hs n)
+  hZero := P.hZero (sitesG_parse dj x₀ ht hc hs) (vuOutsOf c hs n)
+  lay := R.lay
+  rs := R.rs
+  hHm := R.hHm
+
 /-! ## The obligations -/
 
 /-- **A binding of the VU's program exists, when the unit returns the outputs**: at a hidden-output session's tables
@@ -60,13 +75,17 @@ of an untyped circuit at `scopeOkG` whose public file has no public tables, the 
 zero columns and a binding of registered rows (`VuBindH`). -/
 theorem vuBindH_nonempty (ht : I.tags.typed = false) (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
     (hscope : scopeOkG c = true) {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub)
-    (hpt : pub.tables = none) : Nonempty (VuBindH (scopeOkG_GT hscope) dj x₀ Reg) := sorry
+    (hpt : pub.tables = none) : Nonempty (VuBindH (scopeOkG_GT hscope) dj x₀ Reg) := by
+  obtain ⟨⟨P, R⟩⟩ := vuPlaceRowsH_nonempty dj x₀ (Reg := Reg) ht hc hscope hpub hpt
+  exact ⟨vuBindH_of dj x₀ ht hc (scopeOkG_GT hscope) P R⟩
 
 /-- **A binding of the VU's program exists, a tail's last stage returning the outputs included**: `vuBindH_nonempty`
 at `scopeOkGT`, the output rows' copies from `HmOut.outCol`'s stage columns. -/
 theorem vuBindHT_nonempty (ht : I.tags.typed = false) (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
     (hs : scopeOkGT c = true) {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub)
-    (hpt : pub.tables = none) : Nonempty (VuBindH hs dj x₀ Reg) := sorry
+    (hpt : pub.tables = none) : Nonempty (VuBindH hs dj x₀ Reg) := by
+  obtain ⟨⟨P, R⟩⟩ := vuPlaceRowsHT_nonempty dj x₀ (Reg := Reg) ht hc hs hpub hpt
+  exact ⟨vuBindH_of dj x₀ ht hc hs P R⟩
 
 /-- The binding at `scopeOkG` (`vuBindH_nonempty`). -/
 noncomputable def vuBindG (ht : I.tags.typed = false) (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)

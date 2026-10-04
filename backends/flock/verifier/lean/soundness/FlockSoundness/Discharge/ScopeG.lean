@@ -2,6 +2,7 @@ import FlockSoundness.Discharge.ScopeG.Vu
 import FlockSoundness.Discharge.ScopeG.Scope
 import FlockSoundness.Discharge.ScopeG.Keys
 import FlockSoundness.Discharge.ScopeG.Places
+import FlockSoundness.Discharge.ScopeG.Bind
 import FlockSoundness.Discharge.ScopeG.Headline
 
 /-!
@@ -28,9 +29,12 @@ This area freezes the VU's program and the hidden-output headline at it; the pro
 * `Places`: `VuPlace`, the VU's rows placed at each drawn unit's site with its inputs on their unit slots (`vuInPos`),
   and from any one `ProgPlaces` for `vuProg` (`VuPlace.pp`, aliased from keys at every input group: `acc_key_block`),
   `VuPlace.hConst` and `VuPlace.hZero`.
+* `Bind`: the sites (`sitesG`, `ScopeW.sitesAtHW`), a binding of registered rows at places (`VuRowsH`); open:
+  `vuPlaceRowsH_nonempty` (at `scopeOkG`) and `vuPlaceRowsHT_nonempty` (at `scopeOkGT`), a `VuPlace` at the sites with a
+  `VuRowsH` at its places.
 * `Headline`: `VuBindH`, a binding of the VU's program at the hidden tables; `flock_headline_exec_hiddenG_of`, the
-  headline at any one; open: `vuBindH_nonempty`, `vuBindHT_nonempty`; `flock_headline_exec_hiddenG` at `scopeOkG` and
-  `flock_headline_exec_hiddenGT` at `scopeOkGT`.
+  headline at any one; `vuBindH_nonempty`, `vuBindHT_nonempty` from `Bind`'s obligations (`vuBindH_of`);
+  `flock_headline_exec_hiddenG` at `scopeOkG` and `flock_headline_exec_hiddenGT` at `scopeOkGT`.
 
 Not here: a gemm coordinate also reads shared-row public tables, which every hidden-output headline excludes
 (`pub.tables = none`).
