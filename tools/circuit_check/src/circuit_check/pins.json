@@ -120,6 +120,9 @@
   "BlackwellNvf4OmmaDot64_v2": {
    "and": 6864
   },
+  "CublasFmaFromZero_v2": {
+   "and": 3516
+  },
   "DivFullRcp_v2": {
    "and": 1152
   },
