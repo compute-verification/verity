@@ -448,7 +448,7 @@ _HIDDEN_ZK = ("No: NON_ZK_PROOF; no privacy claim (M0's transcript is a function
 FLOCK_CIRCUIT_HIDDEN_CONFIG = dataclasses.replace(
     FLOCK_CIRCUIT_CONFIG, id="C-Flock, generic circuit, hidden outputs, SHA-512 in-circuit commitments", ports=_HIDDEN_PORTS,
     zk=_HIDDEN_ZK, pin="verity/flock-circuit pinned circuit file with hidden outputs (PR #757); the Lean verifier of record "
-                       "(Stmt.setupHidden: no soundness theorem yet)")
+                       "(Stmt.setupHidden: FailClosed.flock_headline_exec_hidden, in the forms the proof covers)")
 FLOCK_CIRCUIT_TYPED_HIDDEN_CONFIG = dataclasses.replace(
     FLOCK_CIRCUIT_TYPED_CONFIG, id="C-Flock, typed circuit (verity/flock-circuit/types), hidden outputs, SHA-512 in-circuit commitments",
     ports=_HIDDEN_PORTS, zk=_HIDDEN_ZK + FLOCK_CIRCUIT_TYPED_CONFIG.zk[len(FLOCK_CIRCUIT_CONFIG.zk):],

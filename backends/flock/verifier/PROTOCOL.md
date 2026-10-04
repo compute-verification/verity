@@ -1413,7 +1413,8 @@ statements define such a session; any other statement refuses `J > 1`.
 ### 16.13 Hidden outputs (the default `verity/flock-circuit` and `verity/flock-circuit/types`)
 
 `@967b8d06` (§16.10) and `types@210d32e1` (§16.11) with their outputs as rows (Daniel, Oct 1); `+seed-injection` is the
-selftest build. `Flock.HmOut` (`Stmt.setupHidden`, no soundness theorem yet: §17.4) applies §16.10's definitions to every
+selftest build. `Flock.HmOut` (`Stmt.setupHidden`; its soundness is `FailClosed.flock_headline_exec_hidden`, and under
+`--zk` `zk_session_soundH` and `zk_session_soundHJ`, within the one theorem of §16.15) applies §16.10's definitions to every
 row. The public file holds roots, hiding leaves and structure only, under M0 and `--zk`. M0's transcript is not hiding
 (`NON_ZK_PROOF`, zero mask slots); only `--zk` targets that.
 
@@ -1467,7 +1468,9 @@ first rule it fails:
    `sha512/row/v1` row of `16 · words` bits in at least one chunk.
 
 The soundness package proves `scopeOk` the computable check (`FailClosed.scopeOk_eq`), and `FailClosed.*`'s headlines
-are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. The live server refuses the same
+are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. `FailClosed.flock_verify_sound` is
+the one theorem: at every statement, with or without `--zk`, it states the headline of the statement's case (public or
+hidden outputs, `setupH` or `Stmt.setupHidden`; under `--zk`, one table or several). The live server refuses the same
 statements with the same reason (`backends/flock/live`'s `proved_scope`): its verdict is the refusal, and
 `without_refusal` keeps the session's verdict otherwise.
 
@@ -1572,7 +1575,7 @@ is the article's recursion caveat, applied to the slots of one block.
 | 1b PCS binding | Ligerito, with the paper's proximity and correlated-agreement results as named axioms; Merkle binding under the scheme's collision resistance (SHA-256, or SHA-512 on the target statement; an explicit collision extractor) | 4a; Merkle 3 |
 | 1c Fiat–Shamir | not used (interactive coins). Replaced by **session binding**: every coin is issued only after the framed bytes it answers are fixed by their SHA-256 digest (R2); both reps bind one root (S13, S16, S18); Σ, the digest and the link points precede every Flock coin (S4, S14, §9.1) | 3 |
 | 1d constraint system = semantics | the lowering theorem for every pinned circuit against its reference function (soundness and totality), and the assembly: the fold equals the multilinear extension of `I ⊗ A_0 + Δ`, the region values equal the extension of the known bytes, and Δ makes the stated copies | 3 |
-| 1e glue | one theorem, for the `setupH` statements (not `Stmt.setupHidden`'s, §16.13): `verify` accepts ⇒ every instance's outputs are its reference function of its inputs, and the rows hash to the public roots, except with probability δ. No zero-knowledge claim (`NON_ZK_PROOF`) | 4a |
+| 1e glue | one theorem, `FailClosed.flock_verify_sound`, over every statement `verify` accepts, `setupH`'s and `Stmt.setupHidden`'s (§16.13, §16.15): `verify` accepts ⇒ every instance's outputs are its reference function of its inputs, and the rows hash to the public roots, except with probability δ. Without `--zk`, no zero-knowledge claim (`NON_ZK_PROOF`) | 4a |
 | 2 implementation = protocol | the executable is the definition the theorems are about, so no second implementation has to be matched. The field code is proved to be GF(2^128) and K (level 3, below). What remains: the decoders implement §8 and §5.1; the hash code meets FIPS 180-4 and the BLAKE3 spec (tested against vectors, used as assumptions); compiler and runtime trust (§17.3) | 3 |
 | 3 prover completeness | out of scope (upstream's prover). Every honest session in the corpus is accepted | tests |
 

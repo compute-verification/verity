@@ -33,8 +33,9 @@ flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public 
 
 `ID` names a version:
 - `verity/flock-circuit`: the default, and the statement M0 stages today: `@967b8d06`'s with every output a hidden row
-  (§16.13), so the public file holds roots, hiding leaves and structure only (M0's transcript is not hiding; no soundness
-  theorem covers `Stmt.setupHidden` yet). Before #757 the name meant `@e51e2b86`, and `/types` meant `types@210d32e1`.
+  (§16.13), so the public file holds roots, hiding leaves and structure only (M0's transcript is not hiding; the soundness
+  theorem covers `Stmt.setupHidden`'s statements in the forms of §16.15, `FailClosed.flock_headline_exec_hidden`). Before
+  #757 the name meant `@e51e2b86`, and `/types` meant `types@210d32e1`.
   It needs no `--comp`, and it pins
   `seed_injection: false`, as a proving build does. A circuit that binds a `verity/partition/v1` digest needs
   `--partition F`, the verifier's own copy of the partition object (§16.10).
