@@ -7,6 +7,7 @@ Everyone who opens a commitment must use the same scheme. `MerkleSha256` stands 
 
 from __future__ import annotations
 
+import functools
 import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -35,25 +36,27 @@ def _h(*parts: bytes) -> bytes:
     return hashlib.sha256(b"".join(parts)).digest()
 
 
+@functools.lru_cache(maxsize=4)  # an opening opens many leaves of one tree
+def _levels(leaves: tuple[bytes, ...]) -> list[list[bytes]]:
+    level = [_h(b"\x00", x) for x in leaves] or [_h(b"\x00")]
+    levels = [level]
+    while len(level) > 1:
+        if len(level) % 2:
+            level = level + [level[-1]]
+        level = [_h(b"\x01", level[i], level[i + 1]) for i in range(0, len(level), 2)]
+        levels.append(level)
+    return levels
+
+
 class MerkleSha256(CommitmentScheme):
     name = "merkle-sha256"
 
-    def _levels(self, leaves: Sequence[bytes]) -> list[list[bytes]]:
-        level = [_h(b"\x00", x) for x in leaves] or [_h(b"\x00")]
-        levels = [level]
-        while len(level) > 1:
-            if len(level) % 2:
-                level = level + [level[-1]]
-            level = [_h(b"\x01", level[i], level[i + 1]) for i in range(0, len(level), 2)]
-            levels.append(level)
-        return levels
-
     def commit(self, leaves: Sequence[bytes]) -> Commitment:
-        return Commitment(self.name, self._levels(leaves)[-1][0], len(leaves))
+        return Commitment(self.name, _levels(tuple(leaves))[-1][0], len(leaves))
 
     def open(self, leaves: Sequence[bytes], index: int) -> list[bytes]:
         path = []
-        for level in self._levels(leaves)[:-1]:
+        for level in _levels(tuple(leaves))[:-1]:
             sibling = index ^ 1
             path.append(level[sibling] if sibling < len(level) else level[index])
             index //= 2
