@@ -869,9 +869,15 @@ def test_status_reads_the_decision_and_exits_0_only_once_decided(route, registry
     assert run(capsys, "ask-daniel", "status")[0] == 2
 
 
-def test_resolve_records_a_thread_answer_and_says_clearly_when_the_route_is_missing(route, registry, capsys):
+def test_status_404_says_no_card_has_that_id(route, registry, capsys):
+    route.answer = (404, {"error": "not_found"})
+    rc, _, err = run(capsys, "ask-daniel", "status", "1790800000.000100")
+    assert rc == 2 and "HTTP 404: no card has that ID" in err and "not the card's Slack ts" in err
+
+
+def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_card(route, registry, capsys):
     rc, _, err = run(capsys, "ask-daniel", "resolve", "42", "--choice", "no", "--note", "Daniel in the thread: needs changes")
-    assert rc == 2 and "HTTP 404: the resolve route isn't deployed yet" in err and "record it as a ruling" in err
+    assert rc == 2 and "HTTP 404: no card has that ID" in err and "record Daniel's thread reply as a ruling" in err
     route.resolve = True
     rc, out, _ = run(capsys, "ask-daniel", "resolve", "42", "--choice", "no", "--note", "needs changes")
     assert rc == 0 and out == "decided no thread -\n"
