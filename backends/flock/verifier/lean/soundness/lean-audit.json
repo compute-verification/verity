@@ -11009,6 +11009,7 @@
    "assumptions": [],
    "type_hash": "b1c591e81fda8b8613c11491870caa1d687fcdd2e2698185245d82e148831057"
   },
+  "FlockSoundness.Discharge.PrivateCircuit.private_circuit_indist_hidden": {},
   "FlockSoundness.Discharge.PrivateCircuit.private_circuit_indist_reads": {
    "signature": [
     "FlockSoundness.Discharge.PrivateCircuit.private_circuit_indist_reads {Circ Out Ent K W Hi VL : Type} [Field K]",
@@ -11122,6 +11123,7 @@
    "assumptions": [],
    "type_hash": "fd72e957b4fcdcf39c72ebb8344dd7c13792464ed21d28025cdaca4602e69443"
   },
+  "FlockSoundness.Discharge.PrivateCircuit.private_circuit_private_hidden": {},
   "FlockSoundness.Discharge.PrivateCircuit.private_circuit_private_reads": {
    "signature": [
     "FlockSoundness.Discharge.PrivateCircuit.private_circuit_private_reads {Circ Out Ent K W Hi VL : Type} [Field K]",
@@ -11534,6 +11536,7 @@
    "assumptions": [],
    "type_hash": "5a5333cb3a9dcf99416443b31cbd5e702a598eb214a18cff429b65386590e0ab"
   },
+  "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound_hidden": {},
   "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound_reads": {
    "signature": [
     "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound_reads {V : Type} [Inhabited V]",

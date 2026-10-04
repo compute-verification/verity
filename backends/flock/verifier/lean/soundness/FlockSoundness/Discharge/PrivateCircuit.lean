@@ -17,6 +17,7 @@ import FlockSoundness.Discharge.PrivateCircuit.InstanceRealH
 import FlockSoundness.Discharge.PrivateCircuit.ReadsDraw
 import FlockSoundness.Discharge.PrivateCircuit.ReadsSound
 import FlockSoundness.Discharge.PrivateCircuit.ReadsNonVacuous
+import FlockSoundness.Discharge.PrivateCircuit.ReadsHidden
 
 /-!
 # Protocol 2, the private circuit
@@ -33,14 +34,19 @@ reads "fewer than `K` wrong units" of the padded program as the same of the circ
 of the class (`PrivateCircuit/Wiring.lean`): `wired_eval` composes correct units along it into `C` end to end, and
 `wired_wrong` reads an owed output off it as a wrong unit.
 
-With hidden reads (`PrivateCircuit/Reads*.lean`) the units are public library blocks and the program is a committed
-topology table: each unit reads its inputs from a committed row store at positions the table holds, through openings its
+With hidden reads (`PrivateCircuit/Reads*.lean`) each proof unit runs its class's unit circuit (a template) and the
+program is a committed topology table: each unit reads its inputs from a committed row store at positions the table holds, through openings its
 own circuit checks. `read_binding` makes a read off the registered store or table a SHA-512 collision, the registered
-model's wrong units are judged against the store (`store_cone`), the draw's escape is taken at that one set
+circuit's wrong units are judged against the store (`store_cone`), the draw's escape is taken at that one set
 (`drawEscapes_realR`), and `private_circuit_sound_reads` is `ran_registered` at the class circuit and the table, with the
 class circuit entering as a fact about its net (`ClassComputes`; `private_circuit_sound_reads_nonvacuous` meets every
 hypothesis at once). `private_circuit_private_reads` and `private_circuit_indist_reads` are `circuit_private` and
 `circuit_indist` at a public class list (`ClassList`: template, dimension class and padded count per block): the view is
-a function of the class list and the owed outputs. The class list is public and identifies the model among the census
-workloads, so the table's contents are hidden among the models of one class list, not the model.
+a function of the class list and the owed outputs. The class list is public: it can tell apart circuits whose class lists
+differ, and within one class list only the committed contents (dimensions within a class, read positions) are hidden.
+No part of the full circuit is public under recursion: at hidden unit circuits (`PrivateCircuit/ReadsHidden.lean`) each
+unit circuit is a committed witness in its topology entry, the class list is size-only (`SizeList`: gate bound, input and
+output widths and padded unit count per class), and `private_circuit_sound_hidden` is the read binding at a committed
+unit circuit, checked by the outer verifier circuit V*; `private_circuit_private_hidden` and
+`private_circuit_indist_hidden` give a view that is a function of the size-only class list and the owed outputs.
 -/
