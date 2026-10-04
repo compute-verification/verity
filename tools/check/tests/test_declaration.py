@@ -36,7 +36,7 @@ def test_the_declaration_names_check_pys_jobs_in_their_groups_and_order(tmp_path
 def test_check_runs_the_groups_order_and_halts_as_they_were_before_ci_toml_held_them(tmp_path):
     runs = [[name for name, _argv, _cwd in g] for g in CHECK.groups(tmp_path, 2)]
     assert runs == [["pytest"], ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
-                    ["lean-build", "lean-unit-cut", "lean-audit", "lean-suites", "lean-agreement"], ["lean-changed"]]
+                    ["lean-build", "lean-unit-cut", "lean-suites", "lean-agreement"], ["lean-audit"], ["lean-changed"]]
     assert CHECK.HALTS == {"lean-changed"} and CHECK.HALTS_ON == {"flock-circuit-build": "error: could not compile"}
 
 
