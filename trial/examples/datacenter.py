@@ -333,13 +333,12 @@ def _share(part: int, whole: int) -> str:
     return f"{part / whole:.0%}" if whole else "-"
 
 
-def scenario(name: str) -> list[str]:
-    """Run a scenario's epochs under both products, and say how its period came out; any outcome other than
-    described."""
-    site, *expected, shows = SCENARIOS[name]
+def scenario(name: str) -> dict[str, bool]:
+    """Run a scenario's epochs under both products, say how each period came out, and whether it complied."""
+    site, *_, shows = SCENARIOS[name]
     print(f"\n{name}: {shows}")
-    surprises = []
-    for product, expect in zip(("remote", "onsite"), expected):
+    complied = {}
+    for product in ("remote", "onsite"):
         verdicts, opened = [], 0.0
         for e in range(EPOCHS):
             records = epoch(product, site, e, opened)
@@ -354,14 +353,21 @@ def scenario(name: str) -> list[str]:
             outcome = "complies" if result.complies else f"FAILS: {'; '.join(result.reasons[:2])}"
             window = f"[{result.window.opened:.2f}, {result.window.closed:.2f}]s"
             print(f"  {product}  period {window}, delta {result.delta:.2f}: {outcome}")
-        complied = result is not None and result.complies
-        if expect is not None and complied != expect:
-            surprises.append(f"{name} under {product}: expected the period {'to comply' if expect else 'not to'}")
-    return surprises
+        complied[product] = result is not None and result.complies
+    return complied
 
 
 if __name__ == "__main__":
     names = sys.argv[1:] or list(SCENARIOS)
     print(f"fleet {FLEET}; builder {ROUTED.id()}; {EPOCHS} epochs; NCI {NCI}")
-    surprises = [s for name in names for s in scenario(name)]
-    print("\n" + ("\n".join(surprises) if surprises else "every scenario came out as described"))
+    outcomes = {name: scenario(name) for name in names}
+    print(f"\n{'the period':18}{'remote':12}onsite        (! where not as described)")
+    surprised = False
+    for name, complied in outcomes.items():
+        cells = []
+        for ok, expect in zip(complied.values(), SCENARIOS[name][1:3]):
+            off = expect is not None and ok != expect
+            surprised |= off
+            cells.append(("complies" if ok else "fails") + (" !" if off else ""))
+        print(f"{name:18}{cells[0]:12}{cells[1]}")
+    print("\nsome scenarios did not come out as described" if surprised else "\nevery scenario came out as described")
