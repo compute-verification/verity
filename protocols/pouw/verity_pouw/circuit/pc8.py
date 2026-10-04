@@ -131,13 +131,17 @@ def _stats(e: pc4._Emit, x, k: int):
 
 
 def _form(e: pc4._Emit, x, alpha, beta, line, basis, k: int, dev: str):
-    """A row's E′ = e4m3(β·E) (with E′'s FP32 decode) and its codes e4m3(atom(α·x_t, E′, F_t)) (`pearl_c.form_v1`)."""
+    """A row's E′ = e4m3(β·E) (with E′'s FP32 decode), its codes e4m3(atom(α·x_t, E′, F_t)) (`pearl_c.form_v1`) and their
+    accumulators α·x_t."""
     atom = ATOMS[DEVICES[dev].atom.name]
     ep = [e.call(F32ToE4m3Sat, e.call(F32MulV2, beta, e.call(E4m3ToF32, line[p]))) for p in range(R)]
     ew = [e.call(E4m3ToF32, c) for c in ep]
     ep_line = array_of(ep)
-    codes = [e.call(F32ToE4m3Sat, e.call(atom, e.call(F32MulV2, alpha, x[t]), ep_line, basis[t])) for t in range(k)]
-    return array_of(codes), ew
+    accs, codes = [], []
+    for t in range(k):
+        accs.append(e.call(F32MulV2, alpha, x[t]))
+        codes.append(e.call(F32ToE4m3Sat, e.call(atom, accs[t], ep_line, basis[t])))
+    return array_of(codes), ew, accs
 
 
 def _row_sig(S_, second: str, extra: tuple = ()):
@@ -147,12 +151,17 @@ def _row_sig(S_, second: str, extra: tuple = ()):
     return params, Tuple(Array(k, E4M3), P_ROW, OK)
 
 
-def _row_a_body(B, S_, x, line, fa, fb):
-    e, k, dev = pc4._Emit(B), S_.K, S_.DEV
+def _row_a(e: pc4._Emit, k: int, dev: str, x, line, fa, fb):
+    """Row i of A's outputs (`Pc8RowA`), then its forming's accumulators α·x_t and β, which the cap's row reads."""
     alpha, beta, ok = _stats(e, x, k)
-    codes, ew = _form(e, x, alpha, beta, line, fa, k, dev)
+    codes, ew, accs = _form(e, x, alpha, beta, line, fa, k, dev)
     af = [e.call(F2fpBf16, _chain(e, codes, fb.take(1, p), k, dev)) for p in range(R)]
-    return tuple_of(codes, array_of([e.call(F2fpBf16, w) for w in ew] + af), pc4.ok_word(e, ok))
+    return (codes, array_of([e.call(F2fpBf16, w) for w in ew] + af), pc4.ok_word(e, ok)), accs, beta
+
+
+def _row_a_body(B, S_, x, line, fa, fb):
+    outs, _accs, _beta = _row_a(pc4._Emit(B), S_.K, S_.DEV, x, line, fa, fb)
+    return tuple_of(*outs)
 
 
 Pc8RowADef = CompositeDefinition(
@@ -164,7 +173,7 @@ Pc8RowADef = CompositeDefinition(
 def _row_b_body(B, S_, x, line, fb, fa, g):
     e, k, dev = pc4._Emit(B), S_.K, S_.DEV
     alpha, beta, ok = _stats(e, x, k)
-    codes, ew = _form(e, x, alpha, beta, line, fb, k, dev)
+    codes, ew, _accs = _form(e, x, alpha, beta, line, fb, k, dev)
     mid = []
     for q in range(R):
         acc = 0

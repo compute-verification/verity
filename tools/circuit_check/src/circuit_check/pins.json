@@ -441,11 +441,17 @@
   "PouwBf16Neg_v2": {
    "and": 0
   },
+  "PouwBlackwellE4m3SaltDead_v2": {
+   "and": 2493
+  },
   "PouwETilde_v2": {
    "and": 88
   },
   "PouwF32SqrtRn_v2": {
    "and": 937
+  },
+  "PouwHopperE4m3SaltDead_v2": {
+   "and": 1806
   },
   "PouwSqAcc_v2": {
    "and": 2511

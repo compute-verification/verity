@@ -10,6 +10,8 @@ Pearl-C's (`pc8`) row units call, the same function on bits.
     PouwBlackwellE4m3Window_v2  (a, b: Array<128, Array<8, Value<1>>>) -> Array<480, Value<1>>     word view: PouwBlackwellE4m3Window_v1
     PouwHopperE4m3Window_v2     the same signature                                                word view: PouwHopperE4m3Window_v1
     PouwWindowWord_v2  (x: Array<480, Value<1>>, m: Array<4, Value<1>>) -> Array<32, Value<1>>      word view: PouwWindowWord_v1
+    PouwBlackwellE4m3SaltDead_v2  (acc: Array<32, Value<1>>, cb: Array<8, Value<1>>) -> Value<1>   word view: PouwBlackwellE4m3SaltDead_v1
+    PouwHopperE4m3SaltDead_v2     the same signature                                               word view: PouwHopperE4m3SaltDead_v1
 
 Each is traced from a builder over core's `forms` (`verity.ml.boolean.trace.definition`), so its And gates are the builder's
 live ANDs; a backend whose lowering takes `forms` builders (C-Flock's pieces) can run the builder itself (``.build``).
@@ -19,6 +21,10 @@ live ANDs; a backend whose lowering takes `forms` builders (C-Flock's pieces) ca
   doesn't read the accumulator, are built once for its 2^j words on any circuit, C-Flock's (which has no common-subexpression
   pass) included: on sm_120 102,409 ANDs where the 15 calls are 145,651.
 * `window_word`: a 4-to-16 decode and one AND per bit and mask, so a constant m (each of the cap word's reads) costs none.
+* the salt-dead bits: the atom's builder at the support's two ends (E′ the one code c_β at all 32 positions, F the
+  constant ±0x43) and the cast, on an `_Shared` view, so the 32 equal products are built once and the two ends share
+  every AND that doesn't read F's sign: on sm_120 2,493 ANDs where two atom calls and casts are 20,062 (1,806 against
+  15,230 on the H100).
 
 * `f32_sqrt_rn`: the significand normalized, the exponent made even by doubling it, and a digit-by-digit root (`isqrt`) of
   the 50-bit radicand to 25 bits; the last bit rounds, since no square root of a float lies halfway between two (the
@@ -37,15 +43,16 @@ from verity.ir import boolean as BL
 from verity.ir.types import Array
 from verity.ml.boolean import fp
 from verity.ml.boolean import gemm as BG
+from verity.ml.boolean import scalar as BS
 from verity.ml.boolean.forms import (NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, multiply, mux,
                                      or_reduce, shl_window, sub)
 from verity.ml.boolean.trace import definition
 
 from . import words as W
 
-__all__ = ["PouwBf16Neg", "PouwBlackwellE4m3Window", "PouwETilde", "PouwF32SqrtRn", "PouwHopperE4m3Window", "PouwSqAcc",
-           "PouwSqCeil", "PouwSqGe", "PouwWindowWord", "e_tilde", "f32_sqrt_rn", "isqrt", "sq_acc", "sq_ceil", "sq_ge", "square",
-           "up48", "window", "window_word"]
+__all__ = ["PouwBf16Neg", "PouwBlackwellE4m3SaltDead", "PouwBlackwellE4m3Window", "PouwETilde", "PouwF32SqrtRn",
+           "PouwHopperE4m3SaltDead", "PouwHopperE4m3Window", "PouwSqAcc", "PouwSqCeil", "PouwSqGe", "PouwWindowWord", "e_tilde",
+           "f32_sqrt_rn", "isqrt", "salt_dead", "sq_acc", "sq_ceil", "sq_ge", "square", "up48", "window", "window_word"]
 
 BIT = BL.BIT
 F32 = U32 = Array(32, BIT)
@@ -207,6 +214,19 @@ def window(atom):
     return build
 
 
+def salt_dead(atom):
+    """The builder of an element's salt-dead bit (`words.ends_agree`) under the Boolean atom ``atom``: the two ends' casts
+    on a view with its own AND memo, then their comparison by value (equal, or both zeros)."""
+
+    def build(C, acc, cb):
+        S = _Shared(C)
+        ends = [BS.f32_to_e4m3_sat(S, atom.build(S, list(acc), *[list(cb)] * 32, *[const_bits(f, 8)] * 32))
+                for f in W.F_ENDS]
+        d = [x ^ y for x, y in zip(*ends)]
+        return [S.AND(NOT(or_reduce(S, d[:7])), OR(S, NOT(d[7]), NOT(or_reduce(S, ends[0][:7]))))]
+    return build
+
+
 def window_word(C, x, m):
     """``PouwWindowWord_v1``: mask m's 32 bits of x, 0 for m = 15."""
     sel = fp.decode(C, list(m))
@@ -244,3 +264,13 @@ PouwHopperE4m3Window = definition(
         "PouwHopperE4m3Window_v1")
 PouwWindowWord = definition("PouwWindowWord", 2, window_word, (("x", MASKED), ("m", U4)), F32, word=W.PouwWindowWord,
                             conformance=W.PouwWindowWord.conformance, doc="Mask m's word of a window on bits: PouwWindowWord_v1")
+PouwBlackwellE4m3SaltDead = definition(
+    "PouwBlackwellE4m3SaltDead", 2, salt_dead(BG.BlackwellE4m3QmmaDot32), (("acc", F32), ("cb", U8)), BIT,
+    word=W.PouwBlackwellE4m3SaltDead, conformance=W.PouwBlackwellE4m3SaltDead.conformance,
+    doc="An element's salt-dead bit under sm_120's atom on bits, the two ends' common parts built once: "
+        "PouwBlackwellE4m3SaltDead_v1")
+PouwHopperE4m3SaltDead = definition(
+    "PouwHopperE4m3SaltDead", 2, salt_dead(BG.HopperE4m3QgmmaDot32), (("acc", F32), ("cb", U8)), BIT,
+    word=W.PouwHopperE4m3SaltDead, conformance=W.PouwHopperE4m3SaltDead.conformance,
+    doc="An element's salt-dead bit under the H100's atom on bits, the two ends' common parts built once: "
+        "PouwHopperE4m3SaltDead_v1")

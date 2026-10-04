@@ -3,16 +3,20 @@
 verdict is rev1's capOK (`pearlCTilesDevRev1`) on `chain_debit` and `debit_units` against the device's `cap` times
 `credit_of`, on random tiles and adversarial ones (zero rows, absorbed groups, a total cancelled to zero, refused rows,
 and the cap's boundary).  Codes are finite E4M3: the atom has no NaN operand (`verity.ml.tc` raises), and neither does
-the replay."""
+the replay.  A row's salt-dead counts are its elements whose code has one value over a sample of P3's support, by the
+scheme's own forming, and its other outputs `Pc8RowA`'s."""
 from __future__ import annotations
 
 import random
+from collections import Counter
 from dataclasses import replace
 from fractions import Fraction
 
 import pytest
 
+import pearl_c_vectors as V
 from verity.evaluation import evaluate
+from verity.ml.tc import fp32
 from verity_pouw.circuit import cap, pc8
 from verity_pouw.protocol import DomainError, Shape
 from verity_pouw.schemes import pearl_c as C
@@ -73,10 +77,83 @@ def test_the_window_is_the_debits_masked_words(dev):
         assert masked[15] == 0 and window.evaluate(*a, *b) == sum(masked[m] << 32 * m for m in range(15)), name
 
 
+# ---- the row's salt-dead counts -------------------------------------------------------------------------------------------
+
+#: E4M3 44 and −44: the flat E line's entries at Pearl's norm 256 (`SaltDead.flatLine`)
+FLAT_E = (0x63, 0xE3)
+
+
+def _one_value_over_the_support(d, acc: int, beta: int, rng: random.Random, pairs: int = 4) -> bool:
+    """P3's `saltDeadP` on a sample of its support, by the scheme's own forming (`eprime` of the flat line, the device's
+    atom on f32(α·x), Pearl's cast): the code has one value at every signed count (E′ flat, F's signs) and at random pairs
+    whose E and F signs are both mixed."""
+    plus, minus = (C.eprime(beta, [e])[0] for e in FLAT_E)
+    code = lambda ep, f: P.fp8_to_f32(P.f32_to_fp8(P.f32_of_bits(d.atom.step(acc, ep, f))))  # noqa: E731
+    vals = {code([plus] * 32, [0xC3] * neg + [0x43] * (32 - neg)) for neg in range(33)}
+    for _ in range(pairs):
+        vals.add(code([rng.choice((plus, minus)) for _ in range(32)], [rng.choice((0x43, 0xC3)) for _ in range(32)]))
+    return len(vals) == 1
+
+
+@pytest.mark.parametrize("dev", ["sm120", "h100"])
+def test_the_salt_dead_bit_is_one_value_over_the_support(dev):
+    """The device's bit, on random accumulators and flat codes of β of either sign (the code is monotone in the count only
+    for β >= 0, `atomMixP_flat_mono`, and antitone for β <= 0, `atomMixP_flat_anti`; the bit reads neither), on ±0
+    accumulators and β = 0: 1 iff the code has one value over the sampled support."""
+    d, rng = DEVICES[dev], random.Random(f"cap-salt-dead-{dev}")
+    bit = cap.SALT_DEAD[d.atom.name]
+    cases = [(P.f32_bits(x), P.f32_bits(b)) for x, b in ((0.0, 0.0), (-0.0, 1.0), (0.0, -1.0), (448.0, -2.0 ** -20))]
+    for _ in range(150):
+        x = (-1) ** rng.randrange(2) * 2.0 ** rng.uniform(-24, 8.8)
+        cases.append((P.f32_bits(x), P.f32_bits((-1) ** rng.randrange(2) * 2.0 ** rng.uniform(-24, 8))))
+    seen = Counter()
+    for acc, beta in cases:
+        want = _one_value_over_the_support(d, acc, beta, rng)
+        assert bit.evaluate(acc, C.eprime(beta, [FLAT_E[0]])[0]) == want, (hex(acc), hex(beta))
+        seen[want, beta >> 31] += 1
+    assert set(seen) == {(True, 0), (True, 1), (False, 0), (False, 1)}
+
+
+def _row_case(k: int) -> dict[str, list[int]]:
+    """The vectors' honest rows (every element salt-live: the noise is sized to make it so), one negated, one at a small
+    scale, one spike of 1024 times its word at an unsampled position (admitted, the spike salt-dead), and two spikes of 2^20
+    (refused, every element salt-dead)."""
+    base = [C.parse_f32_row(r, k) for r in V.rows_f32("pc8-circuit", "A", 2, k)]
+    scaled = lambda x, at, f: [P.f32_bits(P.f32_of_bits(w) * f) if t in at else w for t, w in enumerate(x)]  # noqa: E731
+    return {"honest-0": base[0], "honest-1": base[1], "negated": [w ^ 0x80000000 for w in base[1]],
+            "small": scaled(base[1], range(k), 2.0 ** -40), "spike": scaled(base[0], (1,), 1024.0),
+            "spikes-refused": scaled(base[0], (1, 61), 2.0 ** 20)}
+
+
+@pytest.mark.parametrize("dev", ["sm120", "h100"])
+def test_the_row_is_pc8s_row_with_its_salt_dead_counts(dev):
+    """`Pc8RowACap`'s codes, peel row and ok word are `Pc8RowA`'s, and each block's count is the number of its elements whose
+    code has one value over the sampled support at the scheme's α and β (`form_v1`), on admitted rows and on a refused one
+    (whose counts the cap never reads); dead elements occur on an admitted row."""
+    k, d, rng = 128, DEVICES[dev], random.Random(f"cap-row-{dev}")
+    seed = bytes(range(32))
+    fa, fb = C._basis(seed, 0, k, C.LINE_NORM_V1), C._basis(seed, 1, k, C.LINE_NORM_V1)
+    e = P.sample_line(seed, 0, 0, 5)
+    flat = lambda lines: [c for ln in lines for c in ln]  # noqa: E731
+    dead = {}
+    for name, x in _row_case(k).items():
+        out = evaluate(cap.templates(k, dev)["row_a"], x, e, flat(fa), flat(fb))
+        plain = evaluate(pc8.templates(k, pc8.TILE, dev)["row_a"], x, e, flat(fa), flat(fb))
+        assert out[:len(plain)] == plain, name
+        formed = C.form_v1([x], [e], fa, d)
+        alpha, beta = formed.alpha[0], formed.beta[0]
+        bits = [_one_value_over_the_support(d, fp32.mul(alpha, x[t]), beta, rng) for t in range(k)]
+        assert list(out[len(plain):]) == [sum(bits[s:s + 32]) for s in range(0, k, 32)], name
+        dead[name, plain[-1]] = sum(bits)
+    assert dead == {("honest-0", 1): 0, ("honest-1", 1): 0, ("negated", 1): 0, ("small", 1): 0, ("spike", 1): 1,
+                    ("spikes-refused", 0): k}
+
+
 def test_the_certificates_are_each_templates_advice():
     """`ADVICE` (`pc8.PORTS`' class) names a parameter of the word and of the tile: the certificates are in the cap tile
     unit's io, which C-Flock proves as private inputs."""
-    for t in cap.templates(256, "sm120", (2, 2)).values():
+    tp = cap.templates(256, "sm120", (2, 2))
+    for t in (tp["word"], tp["tile"]):
         assert set(cap.ADVICE) <= {name for name, _t in t.signature()[0]}, t.id
 
 

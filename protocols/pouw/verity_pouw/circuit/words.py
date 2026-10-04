@@ -1,6 +1,7 @@
 """PoUW's IR primitives: the word operations `ncp-v2`'s circuit is built from, the three Pearl-C4's tile check (`pc4`)
 adds to core's FP32, cast and tensor-core primitives, the three exact sums of squares Pearl-C's (`pc8`) liveness
-reads, and the masked words of a promotion window that the prototype of Pearl-C's cap (`cap`) reads.
+reads, and the masked words of a promotion window and an element's salt-dead bit that the prototype of Pearl-C's cap
+(`cap`) reads.
 
 Every primitive but `PouwSqAcc` (576 bits), `PouwSqCeil` (64) and the two windows (480) returns one value of at most 32
 bits, so every unit of any `Q_word` cut of these Definitions meets the width rule, and a 64-bit hash word is carried as two
@@ -339,5 +340,33 @@ def PouwWindowWord(x: int, m: int) -> int:
     return (x >> 32 * m) & M32 if m < MASKS else 0
 
 
-__all__ = ["A16", "BETA", "BF16", "E2M1", "F32", "I7", "M32", "MASKED", "MASKS", "U32", "U8", "WINDOW", "sx", "i32_to_f32_rn",
-           "masked_words", *sorted(n for n in list(globals()) if n.startswith("Pouw"))]
+# ---- Pearl-C's cap (`cap`): an element's salt-dead bit ---------------------------------------------------------------------
+
+#: the salt-dead support's two ends (P3's `SaltDead.support`, #1013's `plusEnd` and `minusEnd`): E′ is c_β at every
+#: position, and the F codes are e4m3(+11/4) at every position, or e4m3(−11/4) at every position
+F_ENDS = (0x43, 0xC3)
+
+
+def ends_agree(atom, acc: int, cb: int) -> int:
+    """1 iff the codes of the support's two ends under the atom primitive ``atom``, e4m3(atom(acc, [cb]^32, [±0x43]^32)),
+    have one value: they are equal, or both are zeros (#1013's `EndsAgree`, compared as its `codeVal_eq_iff` says)."""
+    c = [_prims.F32ToE4m3Sat.evaluate(atom.evaluate(acc, *[cb] * 32, *[f] * 32)) for f in F_ENDS]
+    return 1 if c[0] == c[1] or not (c[0] | c[1]) & 0x7F else 0
+
+
+@primitive("PouwBlackwellE4m3SaltDead", 1, [("acc", F32), ("cb", U8)], Value(1), conformance="protocol-defined")
+def PouwBlackwellE4m3SaltDead(acc: int, cb: int) -> int:
+    """An element's salt-dead bit under sm_120's atom `BlackwellE4m3QmmaDot32_v1` (`ends_agree`): ``acc`` is the forming's
+    accumulator f32(α·x) and ``cb`` the row's flat noise code e4m3(f32(β·44)); by #1013's `saltDeadP_iff_ends`, which has no
+    hypothesis on α, x or β, it is 1 iff the element is salt-dead (`saltDeadP`)."""
+    return ends_agree(_prims.BlackwellE4m3QmmaDot32, acc, cb)
+
+
+@primitive("PouwHopperE4m3SaltDead", 1, [("acc", F32), ("cb", U8)], Value(1), conformance="protocol-defined")
+def PouwHopperE4m3SaltDead(acc: int, cb: int) -> int:
+    """An element's salt-dead bit under the H100's atom `HopperE4m3QgmmaDot32_v1`, as `PouwBlackwellE4m3SaltDead` says."""
+    return ends_agree(_prims.HopperE4m3QgmmaDot32, acc, cb)
+
+
+__all__ = ["A16", "BETA", "BF16", "E2M1", "F32", "F_ENDS", "I7", "M32", "MASKED", "MASKS", "U32", "U8", "WINDOW", "sx",
+           "ends_agree", "i32_to_f32_rn", "masked_words", *sorted(n for n in list(globals()) if n.startswith("Pouw"))]

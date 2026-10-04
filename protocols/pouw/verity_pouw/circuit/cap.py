@@ -1,12 +1,21 @@
 """Pearl-C's per-tile cap on a circuit (a prototype at small shapes; no Program calls it yet): the tile unit `Pc8Tile` with
 rev1's ``capOK`` (`DeviceRev1.lean`'s `pearlCTilesDevRev1`) decided on one more output, so the verifier reads the
-verdict and never the tile's codes.
+verdict and never the tile's codes, and the row unit `Pc8RowA` with the salt-dead counts that the cap reads.
 
     template                          reads                                            computes and returns
+    Pc8RowACap{K,DEV}                 `Pc8RowA`'s inputs                               `Pc8RowA`'s outputs, and the
+                                                                                       row's k/32 salt-dead counts
     Pc8CapWord{K,DEV}                 a word's A′ and B̃ rows, its certificates        C̃, its k/32 flags, its later +0
                                                                                        promotions, and good
     Pc8TileCap{K,TM,TN,N,RHO,DEV}     `Pc8Tile`'s inputs, the A rows' ok words, their  `Pc8Tile`'s C̃ and U, and the
                                       salt-dead counts, every word's certificates      verdict (an ok word)
+
+**The row** (`Pc8RowACap`) is `Pc8RowA`, node for node, plus ``sd``: per block of 32 elements, the count of elements whose
+support's two ends agree (`words.PouwBlackwellE4m3SaltDead`, `PouwHopperE4m3SaltDead`: the codes e4m3(atom(f32(α·x),
+[c_β]^32, [±0x43]^32)) are equal or both zeros), on the forming's own accumulator f32(α·x) and the row's flat code
+c_β = e4m3(f32(β·44)).  On a one-group step (sm_120's and the H100's atoms) that count is P3's `saltDeadP` count: #1013's
+(E) `saltDeadP_iff_ends` and (C) `saltDeadP_card_ends`, with no hypothesis on α, x or β.  Nothing here reads the code's
+order in the signed count, which is monotone only for β >= 0 and antitone for β <= 0.
 
 **The word** (`Pc8CapWord`) is `pearl_c_debit.word_flags` and rev1's `laterZeroPromos` on the chain the tile already
 computes, so C̃ is `pc8`'s word for word:
@@ -35,8 +44,7 @@ column C of the tile, Lean's per-tile cap at the device's prices, ρ = 1/RHO and
 
   - atoms and zeros: the flags and the later +0 promotions summed over the words of R × C;
   - elems: per row of R and atom block t (32 elements), 32 when every word of the row flags atom t, else the block's
-    salt-dead count (``sd``, P3's `saltDeadP`; in the deployed design the row unit `Pc8RowA` computes it, since it reads
-    α, β and x);
+    salt-dead count (``sd``, P3's `saltDeadP`; the row unit `Pc8RowACap` computes it, since it reads α, β and x);
   - m cancels; multiplied by G·N, the inequality is RHO·(N·L + G·fs·|C|·elems) <= |R|·|C|·P over integers, with
     L = (32·G + add)·atoms + G·add·zeros and P = G·N·(credit per cell of the unit), and it is decided on 32-bit words: L
     against its largest passing value, then (N/g)·L + (G·fs·|C|/g)·elems against ⌊|R|·|C|·P/(RHO·g)⌋, g =
@@ -54,7 +62,8 @@ from math import gcd
 from verity.ir.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ir.refs import array_of, tuple_of
 from verity.ir.types import Array, Tuple, Value
-from verity.ml.fp32 import F32AddV2
+from verity.ml.fp32 import F32AddV2, F32MulV2
+from verity.ml.prims import F32ToE4m3Sat
 from verity.ml.scalar import Bf16GtStrict, BitAnd, BitNot, BitOr, F32Fabs, F32IsFinite, I32Add, I32Eq, I32Le, SelectI32
 
 from ..protocol import DomainError, Shape
@@ -182,6 +191,36 @@ ADVICE = ("cert",)
 
 #: each core atom's window of masked words (`words.WINDOW`: G = 4)
 WINDOWS = {"blackwell_sm120_e4m3_m16n8k32": W.PouwBlackwellE4m3Window, "hopper_e4m3_wgmma_k32": W.PouwHopperE4m3Window}
+#: each core atom's salt-dead bit (`words.ends_agree`); both atoms are one-group steps, where #1013's (E) holds
+SALT_DEAD = {"blackwell_sm120_e4m3_m16n8k32": W.PouwBlackwellE4m3SaltDead,
+             "hopper_e4m3_wgmma_k32": W.PouwHopperE4m3SaltDead}
+#: the flat E line's entry, 44 at Pearl's norm 256 (`SaltDead.flatLine`), as an FP32 word: c_β = e4m3(f32(β·44))
+FLAT_E = 0x42300000
+
+
+# ---- the row --------------------------------------------------------------------------------------------------------------
+
+def _row_a_cap_sig(S_):
+    if DEVICES[S_.DEV].atom.name not in SALT_DEAD:
+        raise DomainError(f"Pearl-C's cap circuit has no salt-dead bit for {S_.DEV!r}'s atom")
+    params, _ret = pc8._row_sig(S_, "fb")
+    return params, Tuple(Array(S_.K, pc8.E4M3), pc8.P_ROW, OK, Array(S_.K // SLICE, I32))
+
+
+def _row_a_cap_body(B, S_, x, line, fa, fb):
+    e, k, dev = pc4._Emit(B), S_.K, S_.DEV
+    outs, accs, beta = pc8._row_a(e, k, dev, x, line, fa, fb)
+    dead = SALT_DEAD[DEVICES[dev].atom.name]
+    cb = e.call(F32ToE4m3Sat, e.call(F32MulV2, beta, FLAT_E))
+    bits = [e.call(dead, acc, cb) for acc in accs]
+    return tuple_of(*outs, array_of([_wire(e, 32, _count(e, bits[s:s + SLICE])) for s in range(0, k, SLICE)]))
+
+
+Pc8RowACapDef = CompositeDefinition(
+    "Pc8RowACap", 1, ("K", "DEV"), _row_a_cap_sig, _row_a_cap_body,
+    doc="`Pc8RowA`'s outputs, and per block of 32 elements the count of salt-dead elements: those whose support's two ends "
+        "agree on the forming's accumulator f32(α·x) and the row's flat code e4m3(f32(β·44)) (#1013's `EndsAgree`).",
+    conformance="protocol-defined")
 
 
 def _promoted(dev: str, k: int):
@@ -368,13 +407,14 @@ def certificates(a: Sequence[int], b: Sequence[int], dev: str = "sm120") -> list
 @lru_cache(maxsize=16)
 def templates(k: int, dev: str = "sm120", tile: tuple[int, int] = (1, 1), n: int | None = None,
               rho: int | None = None) -> dict[str, SpecializedDefinition]:
-    """The word at depth ``k`` on ``dev``, and the tile with its cap at ``tile``, the unit's ``n`` (the tile's columns by
-    default) and ρ = 1/``rho`` (the device's `cap` by default)."""
+    """The row of A with its salt-dead counts and the word at depth ``k`` on ``dev``, and the tile with its cap at
+    ``tile``, the unit's ``n`` (the tile's columns by default) and ρ = 1/``rho`` (the device's `cap` by default)."""
     cap = DEVICES[dev].cap if rho is None else Fraction(1, rho)
     if cap.numerator != 1:
         raise DomainError(f"Pearl-C's cap circuit needs ρ = 1/RHO: not {cap}")
-    return {"word": bind(Pc8CapWordDef, K=k, DEV=dev),
+    return {"row_a": bind(Pc8RowACapDef, K=k, DEV=dev), "word": bind(Pc8CapWordDef, K=k, DEV=dev),
             "tile": bind(Pc8TileCapDef, K=k, TM=tile[0], TN=tile[1], N=n or tile[1], RHO=cap.denominator, DEV=dev)}
 
 
-__all__ = ["ADVICE", "Pc8CapWordDef", "Pc8TileCapDef", "WINDOWS", "certificates", "templates"]
+__all__ = ["ADVICE", "FLAT_E", "Pc8CapWordDef", "Pc8RowACapDef", "Pc8TileCapDef", "SALT_DEAD", "WINDOWS", "certificates",
+           "templates"]

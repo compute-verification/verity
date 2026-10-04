@@ -51,7 +51,8 @@ def test_each_names_its_word_primitive_and_is_boolean():
     for d, w in ((B.PouwF32SqrtRn, W.PouwF32SqrtRn), (B.PouwETilde, W.PouwETilde), (B.PouwBf16Neg, W.PouwBf16Neg),
                  (B.PouwSqAcc, W.PouwSqAcc), (B.PouwSqCeil, W.PouwSqCeil), (B.PouwSqGe, W.PouwSqGe),
                  (B.PouwBlackwellE4m3Window, W.PouwBlackwellE4m3Window), (B.PouwHopperE4m3Window, W.PouwHopperE4m3Window),
-                 (B.PouwWindowWord, W.PouwWindowWord)):
+                 (B.PouwWindowWord, W.PouwWindowWord), (B.PouwBlackwellE4m3SaltDead, W.PouwBlackwellE4m3SaltDead),
+                 (B.PouwHopperE4m3SaltDead, W.PouwHopperE4m3SaltDead)):
         assert word_of(d) is w and d.id == w.id.replace("_v1", "_v2")
         assert d in (B.PouwSqCeil, B.PouwBlackwellE4m3Window, B.PouwHopperE4m3Window) or is_boolean(d.bind())
 
@@ -66,13 +67,13 @@ def test_the_windows_are_boolean():
 
 def test_building_a_tile_check_registers_them():
     """C-Flock's lowering finds a primitive's Boolean Definition only in core's registry, so importing `pc4` (and `pc8`,
-    which imports it) must register all nine, in a fresh interpreter where nothing else imported `boolean`."""
+    which imports it) must register all eleven, in a fresh interpreter where nothing else imported `boolean`."""
     import subprocess
     import sys
 
     ids = [w.id.replace("_v1", "_v2") for w in (W.PouwF32SqrtRn, W.PouwETilde, W.PouwBf16Neg, W.PouwSqAcc, W.PouwSqCeil,
                                                 W.PouwSqGe, W.PouwBlackwellE4m3Window, W.PouwHopperE4m3Window,
-                                                W.PouwWindowWord)]
+                                                W.PouwWindowWord, W.PouwBlackwellE4m3SaltDead, W.PouwHopperE4m3SaltDead)]
     code = ("import sys, verity_pouw.circuit.pc8\nfrom verity.ir.defs import REGISTRY\n"
             f"missing = [i for i in {ids!r} if i not in REGISTRY]\nsys.exit(','.join(missing) if missing else 0)")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
@@ -111,6 +112,26 @@ def test_window_on_finite_cancelling_edge_and_nan_codes(name, ands):
     assert not bad, bad[:5]
     words = [[(w >> 32 * m) & M32 for m in range(W.MASKS)] for w in want]
     assert any(0x7FFFFFFF in ws for ws in words) and any(0 in ws for ws in words[16:32])
+
+
+@pytest.mark.parametrize("name, ands", [("PouwBlackwellE4m3SaltDead", 2_493), ("PouwHopperE4m3SaltDead", 1_806)])
+def test_salt_dead_on_every_code_and_each_accumulators_edges(name, ands):
+    """Every flat code (both signs of β, ±0, subnormals, ±448 and the NaNs) against FP32's edges and random accumulators of
+    the forming's range, and every binade's ends against random codes.  The builder runs on a plain circuit, as C-Flock's
+    lowering does, and has exactly the traced Definition's ANDs: the two ends share their 32 equal products and everything
+    that doesn't read F's sign, where two atom calls and casts are 20,062 ANDs on sm_120 and 15,230 on the H100."""
+    rng = random.Random(f"salt-dead-{name}")
+    d, w = getattr(B, name), getattr(W, name)
+    C = Circuit()
+    C.output("out", d.build(C, C.input("acc", 32), C.input("cb", 8)))
+    assert C.counts()["ands"] == ands
+    accs = F32_EDGES + [int(np.float32(rng.uniform(-448, 448)).view(np.uint32)) for _ in range(30)]
+    acc = [a for a in accs for _ in range(256)] + F32_BINADES
+    cb = [c for _ in accs for c in range(256)] + [rng.getrandbits(8) for _ in F32_BINADES]
+    got = evaluate_words(d, *[np.asarray(c, dtype=np.uint64).reshape(-1, 1) for c in (acc, cb)]).reshape(-1).tolist()
+    bad = [i for i in range(len(acc)) if got[i] != w.evaluate(acc[i], cb[i])]
+    assert not bad, [(hex(acc[i]), hex(cb[i])) for i in bad[:5]]
+    assert 0 < sum(got) < len(got)
 
 
 def test_window_word_on_every_mask():
