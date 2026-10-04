@@ -1,3 +1,4 @@
+import FlockSoundness.Discharge.ScopeW.OutRuns
 import FlockSoundness.Discharge.HiddenExec.KeyH
 import FlockSoundness.Discharge.ScopeW.RowEnc
 import FlockSoundness.Discharge.ScopeW.Rows
@@ -75,6 +76,99 @@ noncomputable def rowOfHW (outs : Finset (Fin (keyN c hU n))) (g : Fin (keyN c h
   match keyRowOf c hU n (portRowW c) g with
   | some r => some r
   | none => outRowOfW c hU n outs g
+
+theorem outBitRowW_spec {u u' : Fin n} {d : ℕ × ℕ × ℕ} {q : Fin c.ports.size} {k : Fin (portRowW c q)}
+    (h : outBitRowW c u d = some (u', ⟨q, k⟩)) :
+    u' = u ∧ q.val = HmOut.nIn c + outRunOf c (outWordOf c d) ∧
+      k.val = 16 * (outWordOf c d - (HmOut.outGroup c (outRunOf c (outWordOf c d))).2.2.1) + d.2.2 := by
+  sorry
+
+/-- **Output word `o` is word `o - at` of run `outRunOf c o`**, which starts at output word `at`, for `o < outWords`,
+when the runs cover the output ports (`run_holds`). -/
+theorem outRunOf_spec (hsum : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size) {o : ℕ} (ho : o < c.outWords) :
+    outRunOf c o < c.outRowPorts.size ∧ (HmOut.outGroup c (outRunOf c o)).2.2.1 ≤ o ∧
+      o - (HmOut.outGroup c (outRunOf c o)).2.2.1 < (HmOut.outGroup c (outRunOf c o)).2.2.2 := by
+  sorry
+
+/-- **An output word's bit is an output row's, at runs**: at an output word of the circuit, in a circuit whose runs cover
+its output ports and whose output rows, of the widened shapes, hold their runs' words (`HmOut.checkRows`), each of its
+16 bits is a bit of the row of the run holding it. -/
+theorem outBitRowW_ne_none (hsum : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size)
+    (hcr : HmOut.checkRows c = .ok ()) (hW : ∀ p ∈ c.ports.toList, rowShapeW p = true) (u : Fin n)
+    {d : ℕ × ℕ × ℕ} (hw : outWordOf c d < c.outWords) (ht : d.2.2 < 16) : outBitRowW c u d ≠ none := by
+  sorry
+
+theorem outRowOfW_wire (outs : Finset (Fin (keyN c hU n))) {u : Fin n} (x : Fin ((keyProg c hU n).rows u).w)
+    (hgu : (keyProg c hU n).unit ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = some u)
+    (hx : ((keyProg c hU n).rows u).nIn ≤ x.val) :
+    outRowOfW c hU n outs ((Const.Prog.instC (keyProg c hU n) outs u).wire x) =
+      outBitRowW c u (outDecode c hU x.val) := by
+  sorry
+
+theorem outRowOfW_wire_some (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n} (x : Fin ((keyProg c hU n).rows u).w)
+    {q : Fin c.ports.size} {k : Fin (portRowW c q)}
+    (h : outRowOfW c hU n outs ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = some (u', ⟨q, k⟩)) :
+    (keyProg c hU n).unit ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = some u ∧
+      ((keyProg c hU n).rows u).nIn ≤ x.val ∧ outBitRowW c u (outDecode c hU x.val) = some (u', ⟨q, k⟩) := by
+  sorry
+
+theorem rowOfHW_of_key (outs : Finset (Fin (keyN c hU n))) {g : Fin (keyN c hU n)}
+    {r : Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)} (h : keyRowOf c hU n (portRowW c) g = some r) :
+    rowOfHW c hU n outs g = some r := by
+  sorry
+
+theorem rowOfHW_of_none (outs : Finset (Fin (keyN c hU n))) {g : Fin (keyN c hU n)}
+    (h : keyRowOf c hU n (portRowW c) g = none) : rowOfHW c hU n outs g = outRowOfW c hU n outs g := by
+  sorry
+
+theorem rowOfHW_none (outs : Finset (Fin (keyN c hU n))) {g : Fin (keyN c hU n)}
+    (h : rowOfHW c hU n outs g = none) :
+    keyRowOf c hU n (portRowW c) g = none ∧ outRowOfW c hU n outs g = none := by
+  sorry
+
+/-- **A row bit of a unit's own instance is that unit's row**, at runs. -/
+theorem rowOfHW_wire_unit (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n} (x : Fin ((keyProg c hU n).rows u).w)
+    {q : Fin c.ports.size} {k : Fin (portRowW c q)}
+    (h : rowOfHW c hU n outs ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = some (u', ⟨q, k⟩)) :
+    u' = u := by
+  sorry
+
+/-! ## Output-row copies at runs -/
+
+section Out
+
+open FlockSoundness.Discharge.Hm (blockBit)
+
+variable {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.UnitFacts tags (Hidden.flatTwin st))
+  {keep : ℕ → Bool} (hΔ : RowDelta st (Hidden.outPairs st.c) keep) (hrows : OutRowsS st.c)
+include L F hΔ hrows
+
+/-- **A returned output's column holds its output-row bit's message bit, at runs** (`out_copyW` at `outBitRowW`): in a
+satisfying witness, at VU `g` of block `o`, the unit slot of copy `u'`'s computed column `Layout.outCol j t` holds what
+the witness holds at the message column of the output-row bit `outBitRowW` gives copy `u'`'s output `j`, bit `t`. -/
+theorem out_copy_bitW (ho : st.c.outNet = st.c.unitNet) (hcr : HmOut.checkRows st.c = .ok ())
+    (hsum : st.c.outRowPorts.foldl (· + ·) 0 = st.c.outPorts.size)
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g : ℕ} (hg : g < st.c.g) {u' j t : ℕ}
+    (hu' : u' < st.c.upv) (hj : j < (st.c.leavesOut.getD u' #[]).size) (ht : t < 16)
+    {u v : Fin n} {q : Fin st.c.ports.size} {k : Fin (portRowW st.c q)}
+    (hb : outBitRowW st.c u (u', j, t) = some (v, ⟨q, k⟩)) :
+    blockBit (L.model regs) z o (Hidden.deltaMsgCol st.c g q.val (k.val / 8) (k.val % 8)) =
+      blockBit (L.model regs) z o (st.c.unitRange.slot (g * st.c.upv + u') + Layout.outCol st.c j t) := by
+  sorry
+
+end Out
+
+/-- **`HiddenExec.out_copy_key` at runs and the widened shapes**: in a satisfying witness of an accepted statement on
+`c` whose unit returns the outputs, at block `o` and VU `g`, the VU's column on copy `u'`'s output `j`, bit `t`
+(`Layout.OutColAt`) holds the witness's bit at the message column of its output-row bit (`outBitRowW`, `out_copyHW`). -/
+theorem out_copy_keyW {T : Model.Statement} (a : AcceptedH T) (hce : a.st.c = c) (ho : c.outNet = c.unitNet)
+    (hW : ∀ p ∈ c.ports.toList, rowShapeW p = true)
+    {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w)
+    {u' j t : ℕ} (hoc : OutColAt c hU x.val u' j t) {u v : Fin n} {q : Fin c.ports.size} {k : Fin (portRowW c q)}
+    (hb : outBitRowW c u (u', j, t) = some (v, ⟨q, k⟩)) :
+    T.block z o (a.col hg x) = z (siteAddrH a o (Typed.msgCol a.st.c g q.val (k.val / 8) (k.val % 8))) := by
+  sorry
 
 /-! ## The readers -/
 
