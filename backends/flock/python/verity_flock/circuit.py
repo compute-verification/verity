@@ -491,7 +491,7 @@ def public_blocks(group: tuple, li: list[list[int]], lp: list[list[int]]) -> lis
 def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: bool = False, partition: str | None = None,
             program: str | None = None, statics: dict | None = None, port_bits: list | None = None,
             public_inputs: dict | None = None, seg_ports: frozenset[str] = frozenset(), seg_out_rows: tuple = (),
-            v2_out_rows: tuple = ()) -> str:
+            v2_out_rows: tuple = (), links: list | None = None, definition: str | None = None) -> str:
     """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
     (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
     ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
@@ -506,7 +506,13 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     ``public_inputs`` (``{port: {"seed": ..., "derivation": ...}}``): input ports that are not rows but public words the verifier
     recomputes from public data, each naming its seed and derivation (PROTOCOL.md §16.10). The units read them from ``in``
     regions (META ``public_inputs``, ``leaves_public``), which must be whole words of the unit's leaf group (:func:`public_blocks`).
-    The data guard counts a port whose derivation it does not list as data (``verity.ml.operations.public_data``)."""
+    The data guard counts a port whose derivation it does not list as data (``verity.ml.operations.public_data``).
+
+    ``links`` (``[{"port", "leaves": [lo, hi]}]``, META ``links``, PROTOCOL.md §16.13): input rows that hold template parameter
+    leaves ``[lo, hi)`` as an output row holds outputs (a word per leaf), so that a reader whose leaves are another unit's outputs
+    commits its writer's output row; the verifiers compare the two rows' ``b || c``. ``definition``: META ``definition``, the
+    descriptor id of the Definition the unit lowers, which a template query may list (a unit class's own template id is
+    ``unit-class/...``)."""
     for name, v in (("partition", partition), ("program", program)):
         if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
             raise ValueError(f"{name}: a SHA-512 digest is 128 lowercase hex digits")
@@ -548,6 +554,16 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         raise ValueError(f"{low.name}: output rows of exactly their words are bit rows (row_schemas)")
     orows, counts = _out_ports(outs, bool(port_bits), seg_out_rows, v2_out_rows)
     ports = ins + orows
+    if links:
+        named = {p.name: p for p in ins}
+        seen: list[tuple[int, int]] = []
+        for x in links:
+            p, lohi = named.get(x.get("port")), x.get("leaves")
+            if set(x) != {"port", "leaves"} or p is None or not (isinstance(lohi, list) and len(lohi) == 2 and 0 <= lohi[0] < lohi[1]):
+                raise ValueError(f"link {x}: an input row and a leaf range [lo, hi)")
+            if len(orows) != 1 or p.bits is not None or p.words != orows[0].words or any(a < lohi[1] and lohi[0] < b for a, b in seen):
+                raise ValueError(f"link {x}: a u16 row of the one output row's words, its leaves disjoint from every other link's")
+            seen.append(tuple(lohi))
     ul = _slot_log(low.layout.useful)
     if low.layout.useful == 1 << ul:
         raise ValueError(f"{low.name}: a unit fills its slot; a zero leaf needs a forced-zero row")
@@ -602,6 +618,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             **({"public_inputs": pins, "leaves_public": leaves_public} if pins else {}),
             "row_key_sha512": LEAF_SCHEME["key_sha512"], "dummy": _dummy(low, in_ports, ins, outs, orows, sub, counts), "leaf_scheme": LEAF_SCHEME,
             **({"out_row_ports": counts} if seg_out_rows or max(counts, default=1) > 1 else {}),
+            **({"links": links} if links else {}), **({"definition": definition} if definition else {}),
             # only for a template that needs them (attention, GEMM): absent means the unit returns the outputs and no leaf cut
             **({"out_net": out_net, "out_net_ports": out_net_ports} if U.tail_rets else {}), **({"leaf_cuts": leaf_cuts} if leaf_cuts else {}), "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
             "wires": _row_wires(ports) + tail_wires, "program_digests": programs,
