@@ -3,15 +3,19 @@ import FlockSoundness.Audit.OneStage
 import FlockSoundness.Game.Union
 
 /-!
-# Weak completeness of the salted batched session
+# Decisiveness of the salted batched session
 
 A game is decisive (`Decisive`) when every message type it asks for is inhabited (`Productive`) and two of its runs,
 for some messages and some coins (`Reaches`), end differently. These are PoUW's `Pouw.Draft.Game.Decisive`,
 `Productive` and `Reaches`, restated over `FlockSoundness.Game`.
 
+The facts here are existential: `Reaches` picks the prover's messages and the verifier's coins alike. They say the
+all-zero run accepts every table, not that an honest prover's run on a satisfying witness accepts under every coin;
+completeness of the reference prover stays open.
+
 The salted batched session `batchedSessionL` is decisive on every plan with a table, and so is the one-stage audit
-over it (`audit_tile_decisive`, for the one-table plans of a tiling). No table needs to be satisfiable and no schedule
-needs a side condition:
+over it (`audit_tile_decisive`, and its verdict alone, `audit_tile_decisive_verdict`, for the one-table plans of a
+tiling). No table needs to be satisfiable and no schedule needs a side condition:
 
 * **acceptance** (`batchedSessionL_reaches_true`): the all-zero run accepts every table. With zero messages and zero
   coins every running claim stays `0` (zerocheck, lincheck, every Ligerito fold, out-of-domain sample and consistency
@@ -19,13 +23,13 @@ needs a side condition:
   claim's weight is `1` (at zero link points the region points are `0/1`). A zero residual `yr` makes the final sum
   `0`. `finalCheck`'s length conjunct `orig.length + ext = m − 7` is `Schedule.WellShaped`'s shape identity, which
   `TabSpec.hsch` gives through `fast100`. Every level's rows are zero rows under the default salt, so one value per
-  level reaches every cap entry, whatever the positions;
+  height reaches every cap entry, whatever the positions;
 * **rejection** (`batchedSessionL_reaches_false`): a rep whose zerocheck sends `final_a_eval = final_b_eval = 1` on
   the zero claim rejects, and with it the table and the session;
 * **productivity** (`batchedSessionL_productive`): every message type of the session is inhabited.
 -/
 
-namespace FlockSoundness.Discharge.Exec.SessionLComplete
+namespace FlockSoundness.Discharge.Exec.SessionLDecisive
 
 open Game Model Accounting Audit
 
@@ -1057,4 +1061,14 @@ theorem audit_tile_decisive [Nonempty Reg] (L : Law n) (H : List UInt8 → D) (E
     Decisive (audit L Reg (batchedSessionL H E Lf fun S R => [T S R])) :=
   audit_decisive L H E Lf _ fun _ _ => List.cons_ne_nil _ _
 
-end FlockSoundness.Discharge.Exec.SessionLComplete
+/-- **A tile's audit verdict is decisive**: `audit_tile_decisive` on the verdict alone. -/
+theorem audit_tile_decisive_verdict [Nonempty Reg] (L : Law n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
+    (Lf : Merkle.Leaf (List 𝔽) Sl D H) (T : Finset (Fin n) → Reg → TabSpec mPts) :
+    Decisive ((audit L Reg (batchedSessionL H E Lf fun S R => [T S R])).map Prod.fst) := by
+  obtain ⟨R⟩ := ‹Nonempty Reg›
+  obtain ⟨ω⟩ := L.nonempty
+  exact ⟨productive_map _ (audit_tile_decisive L H E Lf T).1, true, false, by decide,
+    reaches_map _ (audit_reaches_accept L H E Lf _ R ω),
+    reaches_map _ (audit_reaches_reject L H E Lf _ R ω (List.cons_ne_nil _ _))⟩
+
+end FlockSoundness.Discharge.Exec.SessionLDecisive

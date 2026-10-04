@@ -15847,7 +15847,13 @@
    ],
    "assumptions": [],
    "type_hash": "7e0c11a4d90441db227b441f593fc687e9eca34586574971bc5863213962da4a"
-  }
+  },
+  "FlockSoundness.Discharge.Exec.SessionLDecisive.audit_tile_decisive": {},
+  "FlockSoundness.Discharge.Exec.SessionLDecisive.audit_tile_decisive_verdict": {},
+  "FlockSoundness.Discharge.Exec.SessionLDecisive.batchedSessionL_decisive": {},
+  "FlockSoundness.Discharge.Exec.SessionLDecisive.batchedSessionL_reaches_true": {},
+  "FlockSoundness.Discharge.Exec.SessionLDecisive.batchedSessionL_reaches_false": {},
+  "FlockSoundness.Discharge.Exec.SessionLDecisive.batchedSessionL_productive": {}
  },
  "reads": {
   "Flock.Bytes": {
