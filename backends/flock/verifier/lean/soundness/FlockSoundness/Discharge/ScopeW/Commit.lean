@@ -201,7 +201,24 @@ theorem row_bc_flatW (hupv : 0 < st.c.upv) {regs : List (Model.Region st.c.kLog 
       (rowMsgOf st.c.ports[p]!
         (bytesOf (blockBit (L.model regs) z o) (2 * st.c.ports[p]!.words) (Typed.msgCol st.c g p)))
       (bytesOf (blockBit (L.model regs) z o) 192 (saltCol st.c g p)) := by
-  sorry
+  have R := RowRanges.ofL L F.parse F.check
+  have hhm := Slot.hmSlot L F hz o hg (by rw [R.perVu_hm]; exact lt_of_lt_of_le hp (le_nextPow2 _))
+  have hsha : ∀ k < st.c.ports[p]!.chunks, LaidRows (Flock.HmNets.shaLaid ()) 8192
+      fun j => blockBit (L.model regs) z o (shaBase st.c g p k + j) :=
+    fun k hk => Slot.shaSlot L F hz o hg (by rw [R.perVu_sha]; exact (rowSlot_lt hp hk).1)
+  obtain hw | hsh | hsg : RowWhole st.c.ports[p]! ∨ RowV2Short st.c.ports[p]! ∨ RowSegWhole st.c.ports[p]! := by
+    rcases rowShapeW_spec hs with h | h | h | h
+    exacts [Or.inl (rowWhole_of_v1 F.parse (getElem_mem_toList' hp) h), Or.inl (rowWhole_of_v2 h),
+      Or.inr (Or.inl h), Or.inr (Or.inr h)]
+  · obtain ⟨hcv0, hchain, hcvh, hpad⟩ := row_copies_wholeW L F hΔ Lf hupv hz o hg hp hw
+    obtain ⟨hu, -, hn, hw2⟩ := hw
+    rw [rowMsgOf_unseg hu]
+    exact Hidden.port_commit_rowsP st.c _ g p (Hidden.size_prefixOf _) hu hn hw2 (rowSlots_size hp).ge R.rowNets
+      (fun k hk => (rowSlot_lt hp hk).2) hsha hhm hcv0 hchain hcvh hpad
+  · obtain ⟨hcvh, hpad⟩ := row_copies_shortW L F hΔ Lf hupv hz o hg hp hsh
+    exact port_commit_shortW st.c _ g p hp hsh R.rowNets hhm hcvh hpad
+  · obtain ⟨hscv, hschain, hspad, hocv, hochain, hdig, htail⟩ := row_copies_segW L F hΔ Lf hupv hz o hg hp hsg
+    exact port_commit_segW st.c _ g p hp hsg R.rowNets hsha hhm hscv hschain hspad hocv hochain hdig htail
 
 end Bc
 
@@ -308,8 +325,8 @@ end Site
 /-- **`OutRowsS` from the parse**: the rows of the widened shapes (`hW`), and the output rows after the input rows
 (`HmOut.checkRows`). -/
 theorem outRowsS_of_checkRows {c : Circuit} (hW : ∀ p ∈ c.ports.toList, rowShapeW p = true)
-    (h : HmOut.checkRows c = .ok ()) : OutRowsS c := by
-  sorry
+    (h : HmOut.checkRows c = .ok ()) : OutRowsS c :=
+  ⟨hW, fun _ hj => (Hidden.checkRows_out h hj).1⟩
 
 section SiteH
 
@@ -326,7 +343,15 @@ theorem _root_.FlockSoundness.Discharge.HiddenExec.AcceptedH.row_bcW (a : Accept
     bytesOf (blockBit T z o) 128 (bcCol a.st.c g p) = Binding.commitString
       (rowMsgOf a.st.c.ports[p]! (bytesOf (blockBit T z o) (2 * a.st.c.ports[p]!.words) (Typed.msgCol a.st.c g p)))
       (bytesOf (blockBit T z o) 192 (saltCol a.st.c g p)) := by
-  sorry
+  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, h, L, hR, regs, hT⟩ := a
+  subst hT
+  dsimp only at ho hW hg hp ⊢
+  have s := Hidden.setupHidden_spec' h
+  have F0 := flat_unitFacts ht h
+  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
+    rw [s.da, Hidden.hidden_delta']
+  exact row_bc_flatW L F0 (rowDelta_hidden L F0 (outRowsS_of_checkRows hW (Hidden.parse_untyped ht s.parse).2) hda)
+    (flat_layout ht h) (Hm.upv_pos F0.check ho) hz o hg hp (hW _ (getElem_mem_toList' hp))
 
 /-- **A row's `b ‖ c` at a drawn unit's site in a hidden-output table**, for rows of the widened shapes (`hW`): at block
 `o`, VU `g` and row `p`, the 128 bytes at the `hm96` slot's output (`bcCol`) are the commit string of `rowMsgOf` of the
