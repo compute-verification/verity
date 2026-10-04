@@ -62,6 +62,7 @@ import Pouw.SecurityProofs.NCP.RouteUWordProofs
 import Pouw.SecurityProofs.NCP.WordProofs
 import Pouw.SecurityProofs.PearlC.AccumProofs
 import Pouw.SecurityProofs.PearlC.AtomErr
+import Pouw.SecurityProofs.PearlC.Cap
 import Pouw.SecurityProofs.PearlC.CapLoopGamma
 import Pouw.SecurityProofs.PearlC.ChainCapKernelGamma
 import Pouw.SecurityProofs.PearlC.ChainCapLoopGamma
