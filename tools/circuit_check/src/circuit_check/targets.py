@@ -30,10 +30,10 @@ REGISTERED: list[str] = []
 
 
 def _authored(d: Any) -> bool:
-    """A Definition the core, the vLLM registry or PoUW's circuit defines (not one a test module registered in the same
-    session)."""
+    """A Definition the core, the vLLM registry, PoUW's circuit or C-Flock defines (not one a test module registered in the
+    same session)."""
     fn = getattr(d, "evaluate", None) or getattr(d, "body", None)
-    return getattr(fn, "__module__", "").partition(".")[0] in ("verity", "verity_vllm", "verity_pouw")
+    return getattr(fn, "__module__", "").partition(".")[0] in ("verity", "verity_vllm", "verity_pouw", "verity_flock")
 
 
 def load_registries() -> None:
@@ -62,6 +62,7 @@ def load_registries() -> None:
     import verity_pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
     import verity_pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
     import verity_pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
+    import verity_flock.rec_open  # noqa: F401  (V*'s opening check: recursion's inner Ligerito openings)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -336,6 +337,14 @@ def _merkle_roots() -> list[Any]:
     return [bind(MerkleRead, ARITY=2, D=1), bind(MerkleRead, ARITY=4, D=1)]
 
 
+def _rec_roots() -> list[Any]:
+    """V*'s opening check (`verity_flock.rec_open`) at its smallest shape: a row of 8 lanes (one SHA-512 block) and one level,
+    six compressions. Wider rows add message blocks and higher openings repeat the level, both at the same compression."""
+    from verity_flock.rec_open import definition
+
+    return [definition(8, 1)]
+
+
 def _kernel_roots() -> list[Any]:
     from verity_vllm.program.kernels import kernel_registry as KR
 
@@ -579,7 +588,7 @@ def catalog() -> list[Any]:
         elif isinstance(d, CompositeDefinition) and not d.statics:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
-    roots += _core_roots() + _boolean_roots() + _boolean_gather_roots() + _universal_roots() + _merkle_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
+    roots += _core_roots() + _boolean_roots() + _boolean_gather_roots() + _universal_roots() + _merkle_roots() + _rec_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
     for label, make in _model_roots():
         try:
             fn = make()
