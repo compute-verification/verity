@@ -109,6 +109,39 @@ def test_a_partitions_binding_and_owners_are_its_own_when_a_freed_partitions_add
         assert gone() is None and len(CS._BINDINGS) == bindings and not CS._OWNERS
 
 
+def test_kept_evaluations_are_those_of_the_words_they_evaluated(monkeypatch):
+    """A kept evaluation (a flat Definition above `KEEP_EVALUATIONS_ABOVE`) is keyed by its Definition and the words it evaluated,
+    so lanes drawn under another key, or with other broadcast parameters, read their own evaluation, never one kept for an earlier
+    draw at the same instance and Call. With every Definition kept, each draw's lanes are an uncached run's."""
+    units, _s, cl, _act, _uc, _groups = _fp_class("e4m3", 128)
+    draws = [(PU.derive(PU.SOURCE, PU.DOMAIN, {"program": "test", "seed": s}), shared)
+             for s, shared in ((0, {}), (1, {}), (0, {cl.definition.id: ({0}, 2)}))]
+    fresh = [CS.class_lanes(units, cl, key, 2, shared) for key, shared in draws]   # two evaluations: the cache keeps two
+    assert fresh[0] != fresh[1] and fresh[0] != fresh[2]
+    monkeypatch.setattr(CS, "KEEP_EVALUATIONS_ABOVE", -1)
+    monkeypatch.setattr(CS, "_EVALUATIONS", {})
+    assert [CS.class_lanes(units, cl, key, 2, shared) for key, shared in draws] == fresh
+
+
+def test_a_slot_netlist_is_expanded_once(monkeypatch):
+    """`cache_slot_circuits` keeps each slot layout's netlist: a lookup that hits returns the kept text and expands nothing (the
+    cache once expanded the layout on every lookup and kept only the first text, about 0.4 s a compose)."""
+    from verity_flock import ir_lower as IL
+    from verity_flock import sha512_circuit as S
+
+    calls = []
+    expand = FC._expanded
+    monkeypatch.setattr(FC, "_expanded", lambda lay, name: calls.append(name) or expand(lay, name))
+    for mod, attr in ((IL, "layout"), (S, "compression3"), (S, "hm96_row")):
+        monkeypatch.setattr(mod, attr, getattr(mod, attr))
+    monkeypatch.setattr(CS, "_SLOTS", {})
+    CS.cache_slot_circuits()
+    expanded = len(calls)
+    c3, ports = S.compression3(), (["cv0", "msg0", "cv1", "msg1", "cv2", "msg2"], ["out0", "out1", "out2"])
+    texts = [FC._expanded(IL.layout(c3, *ports), FC.SHA_NET) for _ in range(3)]
+    assert expanded >= 1 and len(calls) == expanded and texts[0] == texts[1] == texts[2]
+
+
 @pytest.mark.parametrize("dtype", ["e4m3", "nvf4", "mxf4"])
 def test_packed_rows_are_the_packed_tensor_bytes_and_the_unit_is_the_definition(dtype, tmp_path: Path):
     """FLOCK_PACK_WORDS's layout on an sm_120 FP coordinate: four FP4 or two FP8 elements a u16 leaf, so a row's little-endian

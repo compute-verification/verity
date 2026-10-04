@@ -395,7 +395,9 @@ def cache_slot_circuits() -> None:
 
     def cached_expanded(lay, name):
         if any(lay is v for v in lays.values()):
-            return texts.setdefault((id(lay), name), expanded(lay, name))
+            if (id(lay), name) not in texts:
+                texts[id(lay), name] = expanded(lay, name)
+            return texts[id(lay), name]
         return expanded(lay, name)
 
     S.compression3, S.hm96_row = (lambda: c3), (lambda: hm)
@@ -518,14 +520,16 @@ def broadcast_params(units: PartitionUnits) -> dict[str, tuple[set[int], int]]:
 
 
 #: evaluations of flat Definitions this large are kept for the next shape of the same Definition (the sampler's keep word is one flat
-#: Definition of about 10^8 gates, and all of its ~86 shapes read the same evaluations)
+#: Definition of about 10^8 gates, and all of its ~86 shapes read the same evaluations), keyed by the Definition and the words it
+#: evaluated: the words depend on the draw's key and the Call's broadcast parameters as well as the instance
 KEEP_EVALUATIONS_ABOVE = 1 << 20
 _EVALUATIONS: dict = {}
 
 
-def _evaluation(act: Activation, key: tuple, words: list[int]) -> dict[int, int]:
+def _evaluation(act: Activation, words: list[int]) -> dict[int, int]:
     if act.fn.gates <= KEEP_EVALUATIONS_ABOVE:
         return PU.evaluate(act, words)
+    key = (act.fn.id, tuple(words))
     if key not in _EVALUATIONS:
         if len(_EVALUATIONS) >= 2:
             _EVALUATIONS.pop(next(iter(_EVALUATIONS)))
@@ -558,7 +562,7 @@ def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[
         raw = PU.synthetic_words(key, f"{act.fn.id}#{t}", widths, 1)[0]
         grp = PU.synthetic_words(key, f"{act.fn.id}#call{call}", widths, 1)[0]
         words = [grp[p] if leaf_param[p] in bcast else raw[p] for p in range(len(raw))]
-        run = _evaluation(act, (act.fn.id, t, call), words)
+        run = _evaluation(act, words)
         for uc, per in zip(mine, reads):
             if have >= n:
                 break
