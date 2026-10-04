@@ -85,7 +85,7 @@ def owned_dirs(top: Path, leaf: Path) -> None:
 
 
 def deps_key(pkg: Path) -> str:
-    """`tools/check/lean_audit.py`'s: what a package's fetched dependencies are a function of."""
+    """`tools/lean/lean_audit.py`'s: what a package's fetched dependencies are a function of."""
     return hashlib.sha256((pkg / "lake-manifest.json").read_bytes() + b"\0" + (pkg / "lean-toolchain").read_bytes()).hexdigest()
 
 
