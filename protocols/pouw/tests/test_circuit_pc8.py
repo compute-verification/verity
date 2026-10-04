@@ -384,7 +384,7 @@ def test_the_decode_32_case_is_one_short_tile_row():
 SHORT = pc8.Shape(80, K, 2, tile=(64, 1), dev="sm120")
 
 
-@pytest.mark.parametrize("hidden", [False, True], ids=["plain", "hidden"])
+@pytest.mark.parametrize("hidden", [False, pytest.param(True, marks=pytest.mark.slow)], ids=["plain", "hidden"])
 @pytest.mark.parametrize("side", ["check", "call"])
 def test_a_short_tile_row_is_its_own_template_instance(side, hidden):
     """At m = 80 the call's tiles are two template instances of one Definition, `Pc8Tile` (or `Pc8TileHidden`) at
