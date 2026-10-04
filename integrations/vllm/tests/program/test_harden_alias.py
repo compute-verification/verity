@@ -382,7 +382,7 @@ def test_A_disjoint_aliases_program_matches_eager():
     inputs = _inputs(2, QKV, 1)
     rep = _derive(m, inputs)
     assert rep.ok, _reason(rep)
-    assert "RotaryEmbedding[vllm]_v1" in rep.provenance["rules_applied"] and "ResidualAdd[profile]_v1" in rep.provenance["rules_applied"]
+    assert "RotaryEmbedding[vllm]_v2" in rep.provenance["rules_applied"] and "ResidualAdd[profile]_v1" in rep.provenance["rules_applied"]
     want = _eager(m, inputs)
     # the wrong reading of v would be... there is none (v is never written); the wrong reading of q,k is the un-rotated qkv
     qkv0 = (inputs[0] + inputs[1]).float()
@@ -409,7 +409,7 @@ def test_G_two_mutations_of_the_same_operand_compose():
     inputs = _inputs(2, QKV, 3)
     rep = _derive(m, inputs)
     assert rep.ok, _reason(rep)
-    assert sum(1 for a in rep.provenance["applications"] if a["rule"] == "RotaryEmbedding[vllm]_v1") == 2
+    assert sum(1 for a in rep.provenance["applications"] if a["rule"] == "RotaryEmbedding[vllm]_v2") == 2
     want = _eager(m, inputs)
     once = _eager(A_Disjoint(), inputs)[:2]  # the wrong reading: only one rotation applied
     diffs = _check_program_matches("G", rep, m, inputs, want, once)

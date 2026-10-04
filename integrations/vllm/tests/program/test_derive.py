@@ -327,7 +327,7 @@ def test_s2_decoder_layer_b0_matches_hand_built_layer(first, T, pos0):
     assert rep.flat_digest != rep.digest
     assert rep.provenance["rules_applied"]  # versions recorded per application
     kinds = {a["rule"] for a in rep.provenance["applications"]}
-    assert {"RmsNorm[vllm]_v1" if first else "FusedAddRmsNorm[vllm]_v1", "RotaryEmbedding[vllm]_v1", "UnifiedAttention[vllm]_v1",
+    assert {"RmsNorm[vllm]_v1" if first else "FusedAddRmsNorm[vllm]_v1", "RotaryEmbedding[vllm]_v2", "UnifiedAttention[vllm]_v1",
             "SiluAndMul[vllm]_v1", "Linear[profile]_v1"} <= kinds
 
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import torch
 
-from verity.ir.refs import Coll, array_of
+from verity.ir.refs import Coll, array_of, concat, runs
 from verity.ir.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
@@ -311,17 +311,45 @@ class FusedAddRmsNormRule(InPlaceRule):
         ctx.record(self, node, {"N": N, "EPS": eps, "rows": len(xr)}, emitted=f"{fn.id} x{len(xr)}")
 
 
+def _last_axis_slice(ctx, t):
+    """`(base, lo, hi)` when `t` is `aten.slice.Tensor(base, last axis, lo, hi)` of a value collection `base` sharing its storage and
+    `t`'s value is still exactly those columns of `base`'s; else None."""
+    if not (isinstance(t, torch.fx.Node) and t.target is aten.slice.Tensor) or len(t.args) < 2:
+        return None
+    base = t.args[0]
+    if not isinstance(base, torch.fx.Node) or not isinstance(ctx.env.get(base), Coll) or base in ctx.stale or not shape(ctx, base):
+        return None
+    bs = shape(ctx, base)
+    if t.args[1] not in (-1, len(bs) - 1) or (len(t.args) > 4 and t.args[4] != 1) or ctx.storage_base(t) is not ctx.storage_base(base):
+        return None
+    W = bs[-1]
+    lo = t.args[2] if len(t.args) > 2 and t.args[2] is not None else 0
+    hi = min(t.args[3] if len(t.args) > 3 and t.args[3] is not None else W, W)
+    if not 0 <= lo < hi <= W:
+        return None
+    bc = ctx.coll(base)
+    rows = bc.reshape(Array(bc.type.leaves // W, Array(W, Value(shape_of(bc.type)[1]))))
+    if runs(ctx.coll(t).refs) != runs(concat([r[lo:hi].refs for r in rows])):
+        return None
+    return base, lo, hi
+
+
 class RotaryEmbeddingRule(InPlaceRule):
-    """`rotary_embedding(positions, q!, k!, head_size, cos_sin_cache, is_neox)` -> `RoPE{NHEADS,D}` per row for q
-    and for k, with the cos/sin row `cos_sin_cache[positions[t]]` (static positions) as the table Input."""
+    """`rotary_embedding(positions, q!, k!, head_size, cos_sin_cache, is_neox)` -> `RoPE{NHEADS,D}` (NeoX) or `RoPEGptJ{NHEADS,D}`
+    (GPT-J, interleaved pairs) per row for q and for k, with the cos/sin row `cos_sin_cache[positions[t]]` (static positions) as the
+    table Input.  A rotated operand that is a last-axis slice of a live tensor (DeepSeek-V2 MLA: `q[..., qk_nope:]`, then
+    `copy_` back onto the same columns) is written through: the base tensor is rebound to its own columns with the rotated ones in
+    place, so the base stays readable."""
     modes = frozenset({"profile"})
-    info = RuleInfo("RotaryEmbedding[vllm]", 1, "in-place-binding",
+    info = RuleInfo("RotaryEmbedding[vllm]", 2, "in-place-binding",
                     applies_to="_C.rotary_embedding(positions, Tensor! query, Tensor!? key, head_size, cos_sin_cache, is_neox)",
                     preconditions=("positions is static structure (StaticIndex): the computation never depends on data",
                                    "q, k are bf16 [T, NHEADS*D] (or [T, NHEADS, D]) with D == head_size",
                                    "cos_sin_cache is a bf16 value [MAX_POS, D] — a registered buffer (Input with recorded derivation) or a value",
-                                   "is_neox is True (RoPEHead is the NeoX rotation)", "every position < MAX_POS"),
-                    evidence_domain="structural; numerics: RoPE_v1 (vLLM _C.rotary_embedding NeoX), cos/sin row as Input (COS_SIN_QUALIFICATION)")
+                                   "is_neox True binds RoPE (NeoX); False binds the vocabulary's rope_gptj (GPT-J)", "every position < MAX_POS",
+                                   "an operand that is a last-axis slice of a live tensor writes through to it"),
+                    evidence_domain="structural; numerics: RoPE_v1 (vLLM _C.rotary_embedding NeoX) / RoPEGptJ_v2 (GPT-J), cos/sin row as Input "
+                                    "(COS_SIN_QUALIFICATION)")
 
     def targets(self):
         return targets_for("rotary_embedding")
@@ -337,8 +365,8 @@ class RotaryEmbeddingRule(InPlaceRule):
             r = _row_tensor(ctx, k, "key")
             if r:
                 return r
-        if not is_neox:
-            return "numerics_unregistered: GPT-J (interleaved) rotation has no registered kind"
+        if not is_neox and not ctx.vocab.has("rope_gptj"):
+            return "numerics_unregistered: GPT-J (interleaved) rotation has no registered kind in this vocabulary"
         cs = shape(ctx, cache)
         if len(cs) != 2 or cs[1] != head_size:
             return f"cos_sin_cache {cs} vs head_size {head_size}"
@@ -360,6 +388,7 @@ class RotaryEmbeddingRule(InPlaceRule):
                 refuse("shape", node, ctx.module_path(node), f"position {p} outside the cos/sin table ({MAX_POS} rows)")
         D = head_size
         w_cache = ctx.weight_of(cache)
+        through = []
 
         def rotate(t, what):
             c = ctx.coll(t)
@@ -367,16 +396,33 @@ class RotaryEmbeddingRule(InPlaceRule):
             T = shp[0]
             nh = (shp[1] * (shp[2] if len(shp) > 2 else 1)) // D if len(shp) > 1 else shp[-1] // D
             flat = c.reshape(Array(T, Array(nh, Array(D, Value(wd)))))
-            fn = ctx.kind("rope", node, NHEADS=nh, D=D)
+            fn = ctx.kind("rope" if is_neox else "rope_gptj", node, NHEADS=nh, D=D)
             outs = [ctx.call(fn, flat[i], table[positions[i]], node=node, rule=self, name=f"{ctx.hint_name(node)}/{what}[{i}]") for i in range(T)]
-            ctx.rebind(t, array_of(outs).reshape(c.type), self, what=what)
+            new = array_of(outs).reshape(c.type)
+            sl = _last_axis_slice(ctx, t)
+            if sl is None:
+                ctx.rebind(t, new, self, what=what)
+                return fn.id, T, nh
+            base, lo, hi = sl
+            bc = ctx.coll(base)
+            W = shape(ctx, base)[-1]
+            rows = bc.reshape(Array(bc.type.leaves // W, Array(W, Value(wd))))
+            cols = new.reshape(Array(bc.type.leaves // W, Array(hi - lo, Value(wd))))
+            parts = []
+            for r, n in zip(rows, cols):
+                parts += [p for p in (r[0:lo].refs, n.refs, r[hi:W].refs) if len(p)]
+            ctx.rebind(base, Coll(bc.type, concat(parts)), self, what=f"{what} through {t.name}")
+            ctx.define(t, new, view_of=base)
+            ctx.stale.pop(t, None)
+            through.append({"operand": what, "base": base.name, "columns": [lo, hi]})
             return fn.id, T, nh
 
         qi = rotate(q, "query")
         ki = rotate(k, "key") if k is not None else None
         if w_cache is not None:
             ctx.bind_weight_role(cache, self, "rope.cos_sin_cache", D=D, MAX_POS=MAX_POS)
-        ctx.record(self, node, {"positions": positions[:64], "n_positions": len(positions), "D": D, "is_neox": True,
+        ctx.record(self, node, {"positions": positions[:64], "n_positions": len(positions), "D": D, "is_neox": bool(is_neox),
+                                **({"written_through": through} if through else {}),
                                 "cos_sin_is_buffer": w_cache.name if w_cache else None,
                                 "cos_sin_derivation": "module buffer computed at init (vLLM _compute_cos_sin_cache); COS_SIN_QUALIFICATION applies"},
                    emitted=f"{qi[0]} x{qi[1]}" + (f" + {ki[0]} x{ki[1]}" if ki else ""))
