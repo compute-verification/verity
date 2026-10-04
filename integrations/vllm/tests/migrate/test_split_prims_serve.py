@@ -81,6 +81,12 @@ def g():
 
 
 VALUES = (D.X, D.twin(), D.TWIN_CONST, X, twin(), vocab_mod.THING, THING, f(), g())
+
+PROGRAM = """
+from verity_vllm.program.registry import defs, vocab_mod as V
+from verity_vllm.program.registry.defs import X, twin
+print(V.THING, twin(), X)
+"""
 '''
 
 INSIDE = '''from . import defs
@@ -118,9 +124,10 @@ def family(tmp_path, monkeypatch):
 
 
 def _values(root: Path) -> str:
-    """`user.VALUES` and `inside.Y`, computed by a Python whose `verity_vllm` is the synthetic tree's."""
+    """`user.VALUES`, `inside.Y` and what `user.PROGRAM` prints, computed by a Python whose `verity_vllm` is the synthetic
+    tree's."""
     env = dict(os.environ, PYTHONPATH=str(root / "integrations/vllm"))
-    code = "import verity_vllm.user as u, verity_vllm.program.registry.inside as i; print(u.VALUES, i.Y)"
+    code = "import verity_vllm.user as u, verity_vllm.program.registry.inside as i; print(u.VALUES, i.Y); exec(u.PROGRAM)"
     return subprocess.run([sys.executable, "-c", code], env=env, check=True, capture_output=True, text=True, cwd=root).stdout
 
 
@@ -154,6 +161,8 @@ def test_split_moves_the_names_and_every_importer_follows(family):
             "    return defs_twins.twin() + D2.X  # see twins.vocab_mod") in user
     assert "`verity_vllm.program.twins.defs.twin` through twins.vocab_mod" in user
     assert 'PATH = "verity_vllm.program.twins.vocab_mod"' in user
+    assert ('PROGRAM = """\nfrom verity_vllm.program.twins import vocab_mod as V\nfrom verity_vllm.program.registry import defs\n'
+            "from verity_vllm.program.twins.defs import twin\nfrom verity_vllm.program.registry.defs import X\n") in user
     inside = _read(family, "program/registry/inside.py")
     assert "from verity_vllm.program.twins.vocab_mod import THING" in inside and "defs_twins.twin()" in inside
     assert (family / "README.md").read_text() == "See `twins.vocab_mod` and `verity_vllm.program.twins.defs.twin`.\n"
@@ -194,6 +203,13 @@ def test_refuses_a_definition_module_importing_outside_the_definitions(family, m
     monkeypatch.setattr(S, "DEFINITION_IMPORTS", (f"{REG}.defs", f"{REG}.inside", REG))
     with pytest.raises(S.Refused, match=r"inside line 2: imports verity_vllm.program.twins.vocab_mod"):
         S.run(family, log=lambda _m: None)
+
+
+def test_refuses_a_program_in_a_string_whose_source_is_not_its_value(family):
+    value = "from verity_vllm.program.registry import vocab_mod\n"
+    assert S._embedded_program("x.py", '"""' + value + '"""', value) == '"""from verity_vllm.program.twins import vocab_mod\n"""'
+    with pytest.raises(S.Refused, match="source text is not its value"):
+        S._embedded_program("x.py", repr(value), value)
 
 
 def test_refuses_an_alias_the_importer_binds_already(family):
@@ -248,7 +264,8 @@ def test_an_importer_grown_past_its_size_cap_joins_its_imports():
 
 def test_this_tree_has_the_split_applied():
     """Every moved name is in its new module and not in its old one, every moved module is gone from the registry, and no
-    import anywhere reaches a moved name through its old module (what `--check` would rewrite)."""
+    import in the integration reaches a moved name through its old module (what `--check` would rewrite; the suite reads
+    only its own inputs, and `--check` covers the rest of the tree)."""
     tree = S.Tree(REPO)
     for sp in S.SPLITS:
         src = {n for s in ast.parse(tree.read(S.path_of(sp.src))).body for n in S._bound(s)}
@@ -257,5 +274,5 @@ def test_this_tree_has_the_split_applied():
         assert set(sp.names) <= dst, f"{sp.dst} lacks {sorted(set(sp.names) - dst)}"
     for m in S.MOVES:
         assert not tree.exists(S.path_of(m.src)) and tree.exists(S.path_of(m.dst)), m
-    assert S.leftovers(tree, tree.files()) == []
+    assert S.leftovers(tree, [rel for rel in tree.files() if rel.startswith(f"{S.VLLM}/")]) == []
     assert S.definition_imports(tree) == []
