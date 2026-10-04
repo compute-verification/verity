@@ -147,3 +147,72 @@ def test_a_session_held_past_every_sync_is_rejected(runs):
     assert all(raw == committed for _, raw, committed in egress)
     assert all(r["raw"] is None for r in audit["rows"] if r["link"] == "requests")
     assert not ar.against_honest(run, results["honest"][0])["wire_is_honests"]
+
+
+TOKENS = 4
+
+
+async def _fake_vllm(reader, writer):
+    """A streaming completions endpoint that answers at once: `max_tokens` chunk events and `[DONE]`, chunked, one event
+    split across two chunks."""
+    head = await reader.readuntil(b"\r\n\r\n")
+    body = __import__("json").loads(await reader.readexactly(int(head.lower().split(b"content-length: ")[1].split(b"\r\n")[0])))
+    assert head.startswith(b"POST /v1/completions ") and "user" not in body
+    events = [b'data: {"choices":[{"text":" t%d","token_ids":[%d]}]}\n\n' % (k, k) for k in range(body["max_tokens"])]
+    pieces = [events[0][:7], events[0][7:], *events[1:], b"data: [DONE]\n\n"]
+    writer.write(b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ntransfer-encoding: chunked\r\n\r\n"
+                 + b"".join(b"%x\r\n%s\r\n" % (len(p), p) for p in pieces) + b"0\r\n\r\n")
+    await writer.drain()
+    writer.close()
+
+
+@pytest.fixture(scope="module")
+def live(setup, tmp_path_factory):
+    import asyncio
+
+    doc, report, s = setup
+    mp = pytest.MonkeyPatch()
+    mp.setattr(ar, "live_body", lambda session, model: {"model": model, "prompt": [1, 2, 3], "max_tokens": TOKENS,
+                                                        "stream": True})
+    plan = ar.plan_configuration(doc["configurations"][0], s, "served", "envelope")
+    run = tmp_path_factory.mktemp("live")
+
+    async def go():
+        server = await asyncio.start_server(_fake_vllm, "127.0.0.1", 0)
+        host, port = server.sockets[0].getsockname()[:2]
+        await asyncio.to_thread(ar.run_virtual, plan, report, run, (host, port))
+        server.close()
+
+    asyncio.run(go())
+    yield plan, run, ar.audit_configuration(plan, report, run)
+    mp.undo()
+
+
+def test_a_live_server_behind_the_shim_is_accepted(live, setup):
+    plan, run, audit = live
+    _, _, s = setup
+    assert plan["syncs"] == [[s.envelope.delta, str(s.envelope.rho)]] * 3
+    assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"]) and len(audit["rows"]) == 6
+    c = audit["comparisons"]
+    assert c["records_are_run_shapers"] and c["hands_are_the_rules"] and c["frames_log_is_the_programs"]
+    assert c["wire_is_the_records"]
+    # every request's TOKENS events and its [DONE], numbered in write order
+    assert c["frames_read"] == c["frames_meant"] == len(plan["requests"]) * (TOKENS + 1)
+    events = ar.read_events(run / "server.events.gz")
+    assert [p for p, *_ in events] == list(range(len(events)))
+    assert [e for p, _, _, _, e in events if e.endswith(b"data: [DONE]\n\n")] == \
+        [b"id: %d\ndata: [DONE]\n\n" % p for p, _, k, _, _ in events if k == TOKENS]
+    assert audit["timing"]["server_failed"] == 0 and audit["timing"]["server_cut_at_horizon"] == 0
+    assert c["hindsight"]["misses"] == 0
+
+
+def test_a_live_request_takes_the_frames_asked_for():
+    body = {"model": "served", "prompt": list(range(1000, 3000)), "max_tokens": 128}
+    fewest = ar.live_request_bytes("b64.3.7", body, None, 4096)
+    n = -(-len(fewest) // (4096 - 9))
+    for frames in (n, n + 1):
+        out = ar.live_request_bytes("b64.3.7", body, frames, 4096)
+        assert -(-len(out) // (4096 - 9)) == frames
+        head, _, raw = out.partition(b"\r\n\r\n")
+        assert int(head.split(b"content-length: ")[1]) == len(raw)
+        assert __import__("json").loads(raw) == body | {"user": "b64.3.7"}
