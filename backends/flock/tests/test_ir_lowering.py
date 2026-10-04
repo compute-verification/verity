@@ -108,6 +108,22 @@ def test_pieces_match_the_ir_primitives(name, widths, out, piece, ref):
     assert bad == []                                  # exact bits: a NaN's sign and payload too
 
 
+def test_a_primitive_without_a_piece_lowers_through_the_boolean_definition_of_its_word():
+    """A primitive C-Flock has no piece for, computed by a registered Boolean Definition (``.word`` the primitive), lowers by
+    running that Definition's ``build``: found through core's registry, not imported from its owner."""
+    from types import SimpleNamespace
+
+    from verity.ir import boolean as BL
+    from verity.ir.types import Array
+    from verity.ml.boolean.forms import NOT
+    from verity.ml.boolean.trace import definition
+
+    U4, word = Array(4, BL.BIT), SimpleNamespace(id="FlockTestNot4_v1")
+    assert word.id not in IL.PIECES
+    definition("FlockTestNot4Bits", 1, lambda C, a: [NOT(b) for b in a], (("a", U4),), U4, word=word)
+    assert run_piece(IL.PIECES[word.id], (4,), 4, [[a] for a in range(16)]) == [~a & 15 for a in range(16)]
+
+
 @pytest.mark.parametrize("name", sorted(V2))
 def test_the_v2_pieces_are_their_primitives_on_every_special_word(name):
     """Every pair of the special words (every triple of every other one): a NaN operand of either sign and any payload, an

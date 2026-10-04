@@ -102,7 +102,7 @@ def _harness_parser(prog: str) -> argparse.ArgumentParser:
 def build_job_from(a: argparse.Namespace, command: list[str]) -> dict:
     """Mirror of the job the harness would build for this namespace (telemetry.run.run), so that pre-writing job.json changes
     nothing the harness records.  Kept in one place; if the harness's call changes upstream, change this."""
-    from .telemetry.job import build_job, input_ref, sha256_file
+    from .telemetry.job import build_job, input_ref, sampler_instruments, sha256_file
 
     policy_sha = sha256_file(a.policy)[0] if a.policy and Path(a.policy).exists() else None
     policy_version = a.policy_version
@@ -118,7 +118,7 @@ def build_job_from(a: argparse.Namespace, command: list[str]) -> dict:
                      profile={k: os.environ.get(k) for k in a.profile_key if k in os.environ}, command=command, declared_outputs=a.declared_output,
                      timeout_s=a.timeout, reservation={"gpu": a.reservation_gpu, "host_memory_bytes": a.reservation_host_memory_bytes},
                      policy_version=policy_version, policy_sha256=policy_sha,
-                     instruments=["cgroup", "process", "pss", "gpu", "storage"] if not a.no_sampler else [], cadence_s=a.cadence, pss_every_s=a.pss_every)
+                     instruments=sampler_instruments(a.pss_every) if not a.no_sampler else [], cadence_s=a.cadence, pss_every_s=a.pss_every)
 
 
 def _parse_expect(items: list[str]) -> dict | None:
@@ -220,6 +220,9 @@ def cmd_run(argv: list[str]) -> int:
         print("research run: --run-record is for a local run; --on MACHINE and --queue keep every run file through their custody "
               "(--custody-r2, the default there)", file=sys.stderr)
         return 2
+    if (ns.on or ns.queue) and (why := remote.pss_bound_problem(harness_opts, Path(ns.source).expanduser() if ns.source else None)):
+        print(f"research run: refused: {why}", file=sys.stderr)
+        return 3
     if ns.queue:
         try:
             harness_opts = _normalize_timeout(harness_opts)
