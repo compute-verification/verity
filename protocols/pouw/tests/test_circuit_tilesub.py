@@ -135,7 +135,7 @@ def _inputs(shape) -> tuple:
             else CF.inputs4(shape.k, shape.m, shape.n, "pc4-tilesub"))
 
 
-SLOW_ROOTS = {"pc4-1x1-n33-hidden"}
+SLOW_ROOTS = {"pc4-1x1-n33-hidden", "sm120-1x1-rowk-n4-hidden"}
 ROOT_CASES = [pytest.param(s, h, id=f"{i}-{t}", marks=pytest.mark.slow if f"{i}-{t}" in SLOW_ROOTS else ())
               for s, i in zip(SHAPES, IDS) for h, t in [(False, "plain"), (True, "hidden")]]
 
