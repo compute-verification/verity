@@ -12173,6 +12173,7 @@
    "type_hash": "e41eb4904e8659197f9adee776d145d7fd930d0a5285920d4892e7f09d211e3f"
   },
   "FlockSoundness.Discharge.ZkReg.zk_flock_drawnRegValsC_cr": {},
+  "FlockSoundness.Discharge.ZkReg.zk_flock_drawnRegValsC_cr_pub": {},
   "FlockSoundness.Discharge.ZkReg.zk_flock_regValsC_cr": {
    "signature": [
     "FlockSoundness.Discharge.ZkReg.zk_flock_regValsC_cr {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
@@ -12773,8 +12774,10 @@
    "type_hash": "dfed0cb540d97611da93aa15888c1c631cb726f767404c1282db41a66c228438"
   },
   "FlockSoundness.Discharge.ZkReg.zk_session_drawnRegValsHR": {},
+  "FlockSoundness.Discharge.ZkReg.zk_session_drawnRegValsHRP": {},
   "FlockSoundness.Discharge.ZkReg.zk_session_drawnRegValsR": {},
   "FlockSoundness.Discharge.ZkReg.zk_session_offHR": {},
+  "FlockSoundness.Discharge.ZkReg.zk_session_offHRP": {},
   "FlockSoundness.Discharge.ZkReg.zk_session_offR": {},
   "FlockSoundness.Discharge.ZkReg.zk_session_regValsHR": {
    "signature": [

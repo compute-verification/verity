@@ -3,6 +3,7 @@ import FlockSoundness.Discharge.ZkReg.RegLink
 import FlockSoundness.Discharge.ZkReg.Vals
 import FlockSoundness.Discharge.ZkReg.ValsH
 import FlockSoundness.Discharge.ZkReg.ValsHP
+import FlockSoundness.Discharge.ZkReg.JointHP
 import FlockSoundness.Discharge.ZkReg.JointH
 import FlockSoundness.Discharge.ZkReg.Joint
 import FlockSoundness.Discharge.ZkReg.Off
