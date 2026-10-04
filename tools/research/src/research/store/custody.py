@@ -16,7 +16,9 @@ published on the machine that ran it with a minted key, so custody no longer dep
 The record uploads the run's own files, the files matching its `--declared-output` globs, and undeclared files up to
 UNDECLARED_CAP_BYTES; every other file is listed (path, bytes, sha256) without bytes (`select`; how jobs declare outputs:
 .agents/skills/writing-runs/SKILL.md).  The listing is the record's `meta.trimmed` when it fits in TRIMMED_INLINE_BYTES, else the
-file TRIMMED_LISTING in the record's own tree, named by `meta.trimmed_listing` (`trimmed_of`).
+file TRIMMED_LISTING in the record's own tree, named by `meta.trimmed_listing` (`trimmed_of`).  A credential a run may be sent
+(CREDENTIALS) is deleted from the run dir before its record is taken, whatever the run's tool and however it ended, so no record
+holds one.
 
 `.custody` (research/run-custody/v0.1) is written only when the attempt is PRESERVED on the remote, names a run record, and every
 file now in the run dir is in that record with the same size and sha256 (hashed after `verified_from`, the clock read before
@@ -152,9 +154,21 @@ def stage(run_dir: Path, into: Path, rels: list[str] | None = None) -> list[str]
     return rels
 
 
+#: What a run may be sent that grants access until it expires, relative to its run dir and its request dir: check's presigned URLs
+#: of the Lean dependency bundles (`tools/check/check.py` LEAN_DEPS_URLS), which a run of anything else never takes out of inputs/
+CREDENTIALS = ("inputs/lean-deps-urls.json",)
+
+
+def drop_credentials(d: Path) -> None:
+    for rel in CREDENTIALS:
+        with contextlib.suppress(FileNotFoundError):
+            (Path(d) / rel).unlink()
+
+
 def put_run_record(st: Any, run_dir: Path, run_id: str) -> str | None:
     """The `run-record/v1` artifact of the run dir (None when it holds no file): the files `select` keeps, and the listing of the trimmed
-    ones (module docstring)."""
+    ones (module docstring).  CREDENTIALS are deleted from the run dir first: `verify` needs the record to hold every file left there."""
+    drop_credentials(run_dir)
     root = Path(getattr(st, "root", None) or Path(run_dir).parent) / "scratch"
     tmp = root / f".custody-{run_id}-{secrets.token_hex(4)}"
     tmp.mkdir(parents=True)
@@ -509,5 +523,6 @@ def triage(st: Any, runs_dir: Path, *, verify_remote: bool = False) -> list[dict
     return [triage_row(st, d, verify_remote=verify_remote) for d in dirs]
 
 
-__all__ = ["ACTIONS", "EXCLUDED", "KIND", "MARKER", "PUBLISH_LOG", "SCHEMA", "custody_env", "divert_output", "has_custody", "marker_problem",
-           "mint_for_machine", "push_run", "put_run_record", "run_files", "runner_publish", "trimmed_of", "triage", "triage_row", "verify"]
+__all__ = ["ACTIONS", "CREDENTIALS", "EXCLUDED", "KIND", "MARKER", "PUBLISH_LOG", "SCHEMA", "custody_env", "divert_output", "drop_credentials",
+           "has_custody", "marker_problem", "mint_for_machine", "push_run", "put_run_record", "run_files", "runner_publish", "trimmed_of",
+           "triage", "triage_row", "verify"]

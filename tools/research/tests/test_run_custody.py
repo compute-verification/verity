@@ -156,6 +156,50 @@ def test_a_stray_sigterm_to_the_runner_does_not_cost_the_run_its_record_or_custo
     assert "runner got SIGTERM" in log and "runner got SIGHUP" in log
 
 
+URLS = '{"k": "https://r2.example/objects/sha256/k?X-Amz-Signature=sent-url-that-must-not-leak"}'
+
+
+def _no_url_anywhere(vault: Path) -> None:
+    assert not any(b"sent-url-that-must-not-leak" in p.read_bytes() for p in vault.rglob("*") if p.is_file()), "a URL reached the remote"
+
+
+@pytest.mark.parametrize("command", [
+    ["true"],                                                                       # what the hourly preflight probe runs
+    [PY, "-c", "import os, signal; os.kill(os.getpid(), signal.SIGTERM)"],          # a check cancelled while slot.py waits
+], ids=["probe", "cancelled-before-check"])
+def test_a_sent_credential_is_deleted_before_the_record_is_taken_whatever_the_workload(tmp_path, command):
+    """Only `check.py` takes the Lean bundles' URLs out of inputs/: a run of anything else, or a check that ends before `check.py`
+    starts, leaves them there for custody, which must neither upload them nor fail to vouch for the run dir."""
+    vault = tmp_path / "vault"
+    req, runs = _request(tmp_path, RID, command, vault)
+    (req.parent / "inputs").mkdir()
+    (req.parent / "inputs" / "lean-deps-urls.json").write_text(URLS)
+    (req.parent / "inputs" / "sent.txt").write_text("x")
+    assert remote.launch_request(req)["started"]
+    d = runs / RID
+    marker = _wait_marker(d)
+    assert marker["preserved"] is True and CU.marker_problem(d) is None
+    assert not (d / "inputs" / "lean-deps-urls.json").exists() and "inputs/sent.txt" in marker["files"]
+    assert not any(f.startswith("inputs/lean-deps-urls") for f in marker["files"])
+    _no_url_anywhere(vault)
+
+
+def test_a_repair_publish_deletes_a_sent_credential_too(tmp_path, monkeypatch, capsys):
+    """A runner killed before it published leaves the run dir as the workload left it; `research data custody --publish` takes its
+    record later."""
+    vault = tmp_path / "vault"
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    runs = tmp_path / "runs"
+    d = _fixture_run(runs)
+    (d / "inputs").mkdir()
+    (d / "inputs" / "lean-deps-urls.json").write_text(URLS)
+    assert data_main(["custody", FIXTURE_RID, "--runs-dir", str(runs), "--publish"]) == 0
+    assert not (d / "inputs" / "lean-deps-urls.json").exists() and CU.has_custody(d) == (True, "on the remote (.custody)")
+    _no_url_anywhere(vault)
+
+
 def test_a_failed_publish_leaves_a_negative_marker_forgets_the_key_and_the_guard_refuses(tmp_path, capsys, monkeypatch):
     from research.store import remote_s3
 

@@ -3,7 +3,10 @@ infra's 6th user interview: on 30 Sep node 1's preflight refused #326's check, b
 elan, lake and cargo were gone).
 
 Each pass updates a clean checkout of origin/main and, for each machine, launches what `check.py --record --on` launches, with
-`true` for the check: `research run --on M --preflight check --send <the Lean bundles' URLs> -- true`. The preflight refusing it
+`true` for the check: `research run --on M --preflight check --send <the Lean bundles' URLs> -- true`. Its preflight needs the URLs
+wherever a check holds the node's one warm copy of the Lean dependencies (2 Oct: refused without them, passed with them), and it
+can't sign them with the run's custody key, which a check's own preflight does; the runner deletes them before taking the run's
+record (`store.custody.CREDENTIALS`), since `true` leaves them in its inputs. The preflight refusing it
 (PreflightFailed) is an incident: one post in #agent-alerts naming the machine and the failure, and a "cleared" reply in that
 thread once the preflight passes there again. Infra is the only reader, so each also goes in infra's inbox thread, which wakes it.
 Any other refusal (the machine held exclusively, ssh down) is only logged. A pass that passes leaves one Attempt (campaign
