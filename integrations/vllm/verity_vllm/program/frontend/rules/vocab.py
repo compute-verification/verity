@@ -19,6 +19,7 @@ from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
 from verity_vllm.program.registry import moe as _moe
 from verity_vllm.program.registry import pouw_rows as _pouw_rows
+from verity_vllm.program.registry import targets as _targets
 from verity_vllm.program.registry import value_inputs as _vi
 from verity_vllm.program.frontend.rules import ref_kinds as R
 
@@ -69,7 +70,7 @@ def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM):
 # the registered `values` parameter (`Ctx.supplied`); the rules ask for them instead of the constant-holding kinds under the switch
 _VALUE_KINDS = {
     "rmsnorm_value": lambda N: ir_bind(_vi.RMSNormTritonV3, N=N),
-    "rmsnorm_fused_value": lambda N: ir_bind(_vi.RMSNormFusedCudaV4, N=N),
+    "rmsnorm_fused_value": lambda N, TARGET: _targets.rmsnorm_fused_spec(TARGET, N, eps_input=True),
     "attention_value": lambda T, NH, KVH, D: ir_bind(_vi.AttentionV10, T=T, NH=NH, KVH=KVH, D=D, BN=b1.fa2_kblock_n(D)),
     "attention_dot_value": _attention_dot_value,
     "attention_dot_plain_value": lambda T, NH, KVH, D, BN, DOT, INV: ir_bind(_vi.AttentionV12, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV),
@@ -97,7 +98,9 @@ PROFILE_B1_EAGER = Vocabulary(
         "bias_add": lambda N: ir_bind(b1.BiasAdd, N=N),
         "gemm_bias": lambda K, N: ir_bind(_gemm_bias.GemmBias, K=K, N=N),
         "rmsnorm": lambda N, EPS: ir_bind(b1.RMSNormTriton, N=N, EPS=EPS),
-        "rmsnorm_fused": lambda N, EPS: ir_bind(b1.RMSNormFusedCuda, N=N, EPS=EPS),
+        # `_C.fused_add_rms_norm` by the declared target (`registry.targets.rmsnorm_fused_spec`, which the fold calls too): the rule
+        # states `TARGET`, and without it the role has no kind
+        "rmsnorm_fused": lambda N, EPS, TARGET: _targets.rmsnorm_fused_spec(TARGET, N, EPS),
         "rope": lambda NHEADS, D: ir_bind(b1.RoPE, NHEADS=NHEADS, D=D),
         "attention": lambda T, NH, KVH, D: ir_bind(b1.Attention, T=T, NH=NH, KVH=KVH, D=D),
         "silu_mul": lambda I: ir_bind(b1.SiluMul, I=I),
@@ -198,7 +201,7 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
         "pouw_linear_row_bias": lambda K, N: ir_bind(_pouw_rows.NcpLinearRowBias, K=K, N=N),
         "bias_add": lambda N: ir_bind(b1.BiasAdd, N=N),
         "rmsnorm": _norm_v2("L0"),
-        "rmsnorm_fused": _norm_v2("FUSED"),
+        "rmsnorm_fused": lambda N, EPS, TARGET: _targets.rmsnorm_fused_spec(TARGET, N, EPS),
         "rope": lambda NHEADS, D: ir_bind(b1.RoPE, NHEADS=NHEADS, D=D),
         "attention": lambda T, NH, KVH, D: ir_bind(b1.AttentionV2, T=T, NH=NH, KVH=KVH, D=D, **b1.ATTENTION_FA2),
         "silu_mul": lambda I: ir_bind(b1.SiluMul, I=I),

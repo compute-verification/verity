@@ -1,0 +1,367 @@
+{
+ "schema": "verity-pouw/regions-vectors/v1",
+ "word_bits": 16,
+ "region_word_bits": 128,
+ "cases": [
+  {
+   "case": "pc4-64",
+   "circuit": "pc4",
+   "k": 64,
+   "dev": null,
+   "salt": "1afe95383f8ea3c98d18500c4dd1235ea6e46bfc2361cdf04e0e1311410d1010",
+   "root_a": "7e5f569c237559f1e44fd1b9b10674f757959161d61c040d6077e3cfa0c60f1e",
+   "root_b": "f0a5caa1e8d9c77cd12837b687e967ed3102f0dc5cde4e27e2dc8985c45fed37",
+   "matmul": 3,
+   "weight": 9,
+   "seed_a": "eebc5bfc55ed135b5efbdbc92ebd52a367792ab591e88e8e5876f0254d61b17d",
+   "seed_b": "5be13ac3b416c6e026c2c61b8bb1294bc913e15e9c9eb3549adabcbb1d3ff0b2",
+   "rows": [
+    7,
+    300
+   ],
+   "cols": [
+    2,
+    41
+   ],
+   "units": [
+    {
+     "role": "row_a",
+     "index": 1,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "ea",
+       "seed": "seed_a",
+       "derive": "verity/pouw/anchor/pearl-c4/ea/v1",
+       "bits": 4,
+       "n_words": 32,
+       "bytes_sha256": "5bad9d26cb741ae4026a30eea2c08e26b0c5a0fe2527635ec7018d2c20ac317b",
+       "bytes": "0d000b0000000c0001000300080009000a00030002000c0002000b00030001000d00070003000900010008000d0008000e000600050007000a00080003000100"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/fa/v1",
+       "bits": 4,
+       "n_words": 2048,
+       "bytes_sha256": "087f7b0bf8e3dafd84bac6ab34b3f6112d1cd812066ed08bc9b766887c1286fe"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/fb/v1",
+       "bits": 4,
+       "n_words": 2048,
+       "bytes_sha256": "a622d99611df3bbda91bb931df607746510b0c1adfa6bfc35ecd5aa269a96ac9"
+      }
+     ]
+    },
+    {
+     "role": "row_b",
+     "index": 0,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "eb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/eb/v1",
+       "bits": 4,
+       "n_words": 32,
+       "bytes_sha256": "15a3bd7067abe9abd2c5c4f966d00a6225f4da0b5689e39d6f2d7280e0aa4df6",
+       "bytes": "030001000e000000070008000900020001000c000400020005000b00090007000b0000000d000b000500060001000b00090001000a000200020007000d000100"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/fb/v1",
+       "bits": 4,
+       "n_words": 2048,
+       "bytes_sha256": "a622d99611df3bbda91bb931df607746510b0c1adfa6bfc35ecd5aa269a96ac9"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/fa/v1",
+       "bits": 4,
+       "n_words": 2048,
+       "bytes_sha256": "087f7b0bf8e3dafd84bac6ab34b3f6112d1cd812066ed08bc9b766887c1286fe"
+      },
+      {
+       "port": "g",
+       "anchor": "g",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/g/v1",
+       "bits": 32,
+       "n_words": 2048,
+       "bytes_sha256": "626e6bd2c0c08e7fe1733e369a33b52c70ada9f645401247368384c479f490b5"
+      }
+     ]
+    }
+   ],
+   "public_inputs": [
+    {
+     "role": "row_a",
+     "indexes": [
+      0,
+      1
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c4/ea/v1\", \"port\": \"e\", \"seed\": \"pearl-c4/v0/seed-A\", \"words\": 32}, {\"derivation\": \"verity/pouw/anchor/pearl-c4/fa/v1\", \"port\": \"fa\", \"seed\": \"pearl-c4/v0/seed-B\", \"words\": 2048}, {\"derivation\": \"verity/pouw/anchor/pearl-c4/fb/v1\", \"port\": \"fb\", \"seed\": \"pearl-c4/v0/seed-B\", \"words\": 2048}]}",
+     "body_sha256": "d39c9bc96d62e75a3508115e1ff8fa7407485d9819bad3712ff30f333feb0947"
+    },
+    {
+     "role": "row_b",
+     "indexes": [
+      1,
+      0
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c4/eb/v1\", \"port\": \"e\", \"seed\": \"pearl-c4/v0/seed-B\", \"words\": 32}, {\"derivation\": \"verity/pouw/anchor/pearl-c4/fb/v1\", \"port\": \"fb\", \"seed\": \"pearl-c4/v0/seed-B\", \"words\": 2048}, {\"derivation\": \"verity/pouw/anchor/pearl-c4/fa/v1\", \"port\": \"fa\", \"seed\": \"pearl-c4/v0/seed-B\", \"words\": 2048}, {\"derivation\": \"verity/pouw/anchor/pearl-c4/g/v1\", \"port\": \"g\", \"seed\": \"pearl-c4/v0/seed-B\", \"words\": 2048}]}",
+     "body_sha256": "29d2c422b03c89beb526cc962ef9c95d57c6d8e62ee2498af0cb92df032ed7a4"
+    }
+   ]
+  },
+  {
+   "case": "pc8-h100-128",
+   "circuit": "pc8",
+   "k": 128,
+   "dev": "h100",
+   "salt": "d6a65b89bf89d680cdba8ae229239d40f4005db596aab46612b301c8f3c2f8af",
+   "root_a": "e5387ec9e709720dfcc92185e35014a6f090af1499ac0f8e1738be3fc7dbc03f",
+   "root_b": "8b39511d408d8b27509ee89c4dc65a57abc18f51bb857cf86f1135b999e65b06",
+   "matmul": 3,
+   "weight": 9,
+   "seed_a": "f601fc1c3817d784ade6e9c20368a8fb0f837f9a0986f247c9ca1ad4dd2d0740",
+   "seed_b": "2b876e5f7506be1115a66c1692e0df5c2f8ac4e26acb22c4a6e14209f1a741da",
+   "rows": [
+    7,
+    300
+   ],
+   "cols": [
+    2,
+    41
+   ],
+   "units": [
+    {
+     "role": "row_a",
+     "index": 1,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "ea",
+       "seed": "seed_a",
+       "derive": "verity/pouw/anchor/pearl-c/ea/v1",
+       "bits": 8,
+       "n_words": 32,
+       "bytes_sha256": "ed642a1d833573d7b265e2148951a3002b33ab3eb9c070600177b75725175673",
+       "bytes": "6800ce005700e800cd0050006200e8005e005c006000cc00e00063005d00e900e200e500e4005b00610054006800680067006900e800da006200e200e900db00"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fa/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "9019805fe6f930bdac4a69da6ba80daad2d834492c0e204472b21805071eb867"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fb/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "d0c66f8b72560c3b4530fb5e9d2e9274ad1ee7d495707a16b4440bf199cf12b2"
+      }
+     ]
+    },
+    {
+     "role": "row_b",
+     "index": 0,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "eb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/eb/v1",
+       "bits": 8,
+       "n_words": 32,
+       "bytes_sha256": "5a447ba40fd15476b1d411bd444d70598b13b518cdbdec585566778c59f9571d",
+       "bytes": "6600e50050005000e7006600e400c70062006800e4006600630067004a00e4006400580066005a00e400c800e700e2005a00d1006800e700e80068005c00d500"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fb/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "d0c66f8b72560c3b4530fb5e9d2e9274ad1ee7d495707a16b4440bf199cf12b2"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fa/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "9019805fe6f930bdac4a69da6ba80daad2d834492c0e204472b21805071eb867"
+      },
+      {
+       "port": "g",
+       "anchor": "g",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/g/v1",
+       "bits": 32,
+       "n_words": 2048,
+       "bytes_sha256": "4e959fe411d0120f98ce0a521a237b665998d598526814a520b929cf3625a7ae"
+      }
+     ]
+    }
+   ],
+   "public_inputs": [
+    {
+     "role": "row_a",
+     "indexes": [
+      0,
+      1
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c/ea/v1\", \"port\": \"e\", \"seed\": \"pearl-c/v0/seed-A\", \"words\": 32}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fa/v1\", \"port\": \"fa\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fb/v1\", \"port\": \"fb\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}]}",
+     "body_sha256": "2a185110b2b5552265ce9e7693afece92e457444aab3afaf53fec1a5a826f45f"
+    },
+    {
+     "role": "row_b",
+     "indexes": [
+      1,
+      0
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c/eb/v1\", \"port\": \"e\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 32}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fb/v1\", \"port\": \"fb\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fa/v1\", \"port\": \"fa\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}, {\"derivation\": \"verity/pouw/anchor/pearl-c/g/v1\", \"port\": \"g\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 2048}]}",
+     "body_sha256": "f5ff94a3966e8d06eb4ec77a13aa7a093519c0dbecc4d3e64cde22f65b2be274"
+    }
+   ]
+  },
+  {
+   "case": "pc8-sm120-128",
+   "circuit": "pc8",
+   "k": 128,
+   "dev": "sm120",
+   "salt": "cc72c391c0aedf1fc1484a7210e5dfb0da70d6305b6068841b2bb627a5bd5bb7",
+   "root_a": "c2fa3d768a97f11b163d5c7e5138813660489bb9330111138803e171f8f23810",
+   "root_b": "bbee52453179e05fe6ad332007790b5d76d337496d1426fd673abe8e344b1cbb",
+   "matmul": 3,
+   "weight": 9,
+   "seed_a": "6bfa7f6d76dcc3db0379680288c4287dd5af927d48518035cb6e89814d08d4ac",
+   "seed_b": "bce74556c90c0b2ddeb9c34abd5e13249aa5aa5c9004bc40692f311abc2ca5d3",
+   "rows": [
+    7,
+    300
+   ],
+   "cols": [
+    2,
+    41
+   ],
+   "units": [
+    {
+     "role": "row_a",
+     "index": 1,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "ea",
+       "seed": "seed_a",
+       "derive": "verity/pouw/anchor/pearl-c/ea/v1",
+       "bits": 8,
+       "n_words": 32,
+       "bytes_sha256": "236127211f36f9e38e557672d7f333e7d40a7a4dbba15884b3e852073cf15615",
+       "bytes": "e2004200e300680063005c005d00e4003e006900e8003e00d700e700e500e300ea00e200e900600061005200c2004b0069006200e6006800dc00e7005a005d00"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fa/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "14dafca1b3d064c54274cb1dfe37dc5286c744aa13a544a1f4e5ac0eed2fb137"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fb/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "9b9bbc120f85e61d68dee1284e43baa999f97f10a8b022520f5d0478f8c41e2f"
+      }
+     ]
+    },
+    {
+     "role": "row_b",
+     "index": 0,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "eb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/eb/v1",
+       "bits": 8,
+       "n_words": 32,
+       "bytes_sha256": "7b99d3c4fdd2518ee5a764e886e5aa9f001d7e263e6d99e7dad8aaa79b377685",
+       "bytes": "69005b006a00e500e100de004900530061005b00d100d1006200e6006400bc00d600e9006a00e000e6005e00ea0055005100660063005700d8006400eb006100"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fb/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "9b9bbc120f85e61d68dee1284e43baa999f97f10a8b022520f5d0478f8c41e2f"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fa/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "14dafca1b3d064c54274cb1dfe37dc5286c744aa13a544a1f4e5ac0eed2fb137"
+      },
+      {
+       "port": "g",
+       "anchor": "g",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/g/v1",
+       "bits": 32,
+       "n_words": 2048,
+       "bytes_sha256": "e5d3bfbff9579e20c3bb39db7c6c3356dbfc5ff5ded7f0cf63ef40980ef89d1b"
+      }
+     ]
+    }
+   ],
+   "public_inputs": [
+    {
+     "role": "row_a",
+     "indexes": [
+      0,
+      1
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c/ea/v1\", \"port\": \"e\", \"seed\": \"pearl-c/v0/seed-A\", \"words\": 32}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fa/v1\", \"port\": \"fa\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fb/v1\", \"port\": \"fb\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}]}",
+     "body_sha256": "8ad4663f17f46a91349bd534d1172e5ed752d147bc1fcb0be36f26dbd02728e2"
+    },
+    {
+     "role": "row_b",
+     "indexes": [
+      1,
+      0
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c/eb/v1\", \"port\": \"e\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 32}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fb/v1\", \"port\": \"fb\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fa/v1\", \"port\": \"fa\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}, {\"derivation\": \"verity/pouw/anchor/pearl-c/g/v1\", \"port\": \"g\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 2048}]}",
+     "body_sha256": "fcc7e88924c33f0f49536d74cd4d790af163e1cdec9e12a1f9e90f07d69c8270"
+    }
+   ]
+  }
+ ]
+}
