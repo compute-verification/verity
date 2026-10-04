@@ -73,10 +73,10 @@ from verity_vllm.program.registry.topp_word_gates import I32ToF32
 
 M32 = 0xFFFFFFFF
 
-_CONF = ("model-untested: read from vLLM d9105ea80 deepseek_v32/common/kernels.py and Triton 3.7.1's sm_90 PTX; "
+_CONF = ("model-untested: read from the Triton kernels and their PTX at the commits the module docstring pins; "
          "tests/properties/glm53_dsa_capture_gpu.py is its hardware check")
-_LOGIT_CONF = ("model-untested: read from DeepGEMM 8b1392b9 sm90_fp8_mqa_logits.cuh and sm90_fp8_paged_mqa_logits.cuh (nvcc without "
-               "fast-math, so `sum += relu * w` is an FFMA); tests/properties/glm53_dsa_capture_gpu.py is its hardware check")
+_LOGIT_CONF = ("model-untested: read from the two DeepGEMM epilogues the module docstring pins (nvcc without fast-math, so "
+               "`sum += relu * w` is an FFMA); tests/properties/glm53_dsa_capture_gpu.py is its hardware check")
 _TOPK_CONF = ("model-untested: read from vLLM d9105ea80 sampler.cu:388-412 and cooperative_topk.cuh:494-501; "
               "tests/properties/glm53_dsa_capture_gpu.py is its hardware check")
 

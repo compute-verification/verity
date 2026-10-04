@@ -39,8 +39,8 @@ from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.b1 import _lane
 from verity_vllm.program.registry.prims import A16, BF16, F32
 
-_CONF = ("model-untested: read from vllm-flash-attn 506341a1 hopper/ (mainloop_fwd_sm90_tma_gmma_ws.hpp, softmax.h) at hdim 64 / "
-         "hdimv 512; tests/properties/glm53_dsa_capture_gpu.py is its hardware check")
+_CONF = ("model-untested: read from vllm-flash-attn 506341a1's FA3 mainloop and softmax.h (the module docstring's files) at hdim "
+         "64 / hdimv 512; tests/properties/glm53_dsa_capture_gpu.py is its hardware check")
 
 #: GLM-5.3 at TP8: 8 of the 64 heads per rank, rope 64, latent 512, FA3's kBlockN at hdim 64 / hdimv 512, scale 1/16
 SPARSE_MLA_GLM53 = {"NH": 8, "DR": 64, "DV": 512, "BN": 64, "DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum,
