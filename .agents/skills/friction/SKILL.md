@@ -105,6 +105,13 @@ Newest first. Each is Daniel's unless it names the coordinator.
 - 2026-10-03 (the coordinator's): data you don't own on a node is deleted only with `research retention gc` or `research
   retention rm --approved-by @OWNER`, which refuses unless every retention record on the path names that owner; never a bare
   `rm`, and never on another lane's word about who owns it.
+- 2026-10-03 (card `d9eb2f28`): PoUW may import sampled proofs, in Python (`EDGES` in
+  `tests/test_protocol_boundaries.py`) as in Lean. Any other protocol → protocol import is still Daniel's call, and the
+  edges stay acyclic. The layout that follows (lean with compute-accounting): a protocol guarantee that needs a proof
+  system (PoUW's `TileProofSoundAll`) is stated over sampled proofs' statements of what a backend proves (its soundness on
+  registered inputs, and the honest prover's membership in the backend's class), which the backend's own package proves
+  for itself. No package requires both a protocol and a backend, there is no `bridges/` layer, and a citation names both
+  guarantees.
 - 2026-10-02 (10:27 PM PDT): a statement review or red-team grant on a PR carries across a restack or a merge of `main`
   when the restacked head's `lean-audit.json` change against its base is byte-identical to the one that was granted.
   Any other change to `lean-audit.json` needs a new grant.
@@ -150,6 +157,10 @@ Newest first. Each is Daniel's unless it names the coordinator.
   the Lean catches up), and the PR whose Lean covers it deletes the file.
 - 2026-10-01: whoever lands a train runs `research merge --sweep` after each push, which closes the landed PRs, retargets
   their children and deletes landed branches. `research merge --push` pushes the merge and then sweeps, so a lander passes it.
+- 2026-09-30 (2:52 PM PDT; at all hours since the coordinator's 06:33Z Oct 4): GPU work runs only as items its lane owner
+  said yes to, each naming its research question (`--question`, or a `question` label on its run). There is no filler:
+  idle GPUs beat padded ones, a steward reports idle GPUs instead of offering them as backfill, and approved backfill runs
+  on preemptible leases.
 - 2026-09-30: the Lean infrastructure lane changes `tools/lean`, the `lean-proofs` skill, `check`'s Lean steps, shared
   Lean foundations and Lean or Mathlib bumps (in a PR of their own, announced first) without asking. It speeds up another
   lane's proofs when no pinned record changes; a changed record in another lane's package goes through that lane. What a

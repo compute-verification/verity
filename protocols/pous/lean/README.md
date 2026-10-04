@@ -24,19 +24,34 @@ Pous/Protocol/Model/{BandGraph,SegLift}.lean
                                     the band graph the column game's band certificates are stated over; a
                                     segment's parents at their global positions, which the tagged transfer reads
 Pous/Protocol/Model/Graded.lean     the graded audit: up to `t` late rounds, each within a hard `(D_late, Q_late)`
-Pous/Protocol/Accounting/{Params,LemmaA,PubMeets,GradedMeets}.lean
+Pous/Protocol/Model/Continuous.lean the continuous audit: an explicit timed verifier (sequential reveal, a hard
+                                    deadline, every answer past `Δ` counted) and a responder on its clock; the
+                                    arrivals the verifier draws (queued, never dropped) and the memory at each time
+Pous/Protocol/Model/{Digest,SecureErasure}.lean
+                                    the keyed digest of a region (from PR #1010, without its bandwidth
+                                    assumption); the secure-erasure audit: a keyed fill of all volatile memory,
+                                    timed spot reads, and the foreign content the prover keeps (4 Oct model)
+Pous/Protocol/Accounting/{Params,LemmaA,PubMeets,GradedMeets,Rebuild,EraseMeets}.lean
                                     ρ, δ, expansion, `Meets`; Lemma A's bound and A7′'s rows;
-                                    `PubMeets`, the requirement with a public encoder; `GradedMeets`, with grace `t`
+                                    `PubMeets`, the requirement with a public encoder; `GradedMeets`, with grace `t`;
+                                    a band segment's re-encode cost `R(d)`, a graded row's round span and
+                                    the verifier's cap on an audit's duration; `EraseMeets`,
+                                    the secure-erasure requirement
 Pous/Protocol/P2/Cost.lean          P2's cost model, the generic ring over `Z/p` with random odd labels
                                     and the junk label (`ringRO`), the bound `RingBounded D Q L` beside `Bounded`,
                                     `MeetsOn`, `MeetsWithSlack`, and P2 in it (`p2ring`)
 Pous/Assumptions.lean               trusted, the Assumptions layer: named hypotheses (Lemma A, Conjecture B1′)
 Pous/Assumptions/P2.lean            P2's named open step `PrimeP16448`, the primality of its modulus
-Pous/Guarantees.lean                trusted, the Guarantees layer: 67 statements, the 56 grade.sh grades against,
+Pous/Guarantees.lean                trusted, the Guarantees layer: 73 statements, the 62 grade.sh grades against,
                                     `InvExPostFactoTwoLayer`, which `N10Refuted` negates, and ten proved results
                                     cited outside the package
 Pous/Guarantees/P2.lean             six statements about the abstract model `m1p` at P2's parameters,
                                     which grade.sh also grades against; none is about the concrete P2
+Pous/Guarantees/SecureErasure.lean  four statements, which grade.sh also grades against: the digest is almost
+                                    universal (`DigestAU`), secure erasure from any sequential audit bound
+                                    (`SecureErasureMeets`), and on the band at every `N` and at 96 GiB
+                                    (`SecureErasureMeetsFamily`, `SecureErasureMeets96GiB`); no named assumption,
+                                    no bandwidth-separation premise
 Pous/SecurityProofs.lean            proved, the SecurityProofs layer: imports every proof module, and proves
                                     Pous.SecurityProofs.X : Pous.Guarantees.X for each proved guarantee
 Pous/SecurityProofs/{Sanity,Accounting/Numbers}.lean
@@ -48,13 +63,22 @@ Pous/SecurityProofs/P2/             proved: the `m1p` pins (Count, Rows, Domain,
                                     bits breaks `k = 88` from `L = 2^30`)
 Pous/SecurityProofs/Chain/Flat.lean proved, generated: P3 with a concrete `H`, the band, the dense chain scheme and
                                     the public encoder over the overwrite chain (the graded lanes, flattened)
-Pous/SecurityProofs/Continuous/     the continuous audit: MissCount (proved, pinned: the bound on misses whose
-                                    conditional probabilities are at least q_j); Game (draft, unreviewed: the
-                                    variable-state responder and two statements), PerAnswer (their proofs) and
-                                    Band (the guarantee on the 64 KiB band at D = 5)
+Pous/SecurityProofs/Continuous/     proved: the continuous audit's counting step (`MissCount.lean`), the three
+                                    rules its verifier enforces (`Verifier.lean`), `PerAnswer` and
+                                    `ContinuousAudit` (`PerAnswer.lean`), the 64 KiB band at `D = 5`
+                                    (`Band.lean`, not pinned), completeness, `ContinuousComplete`
+                                    (`Complete.lean`), the idle-slot time average `ContinuousTimeAverage`
+                                    (`TimeAverage.lean`) and its band family at `D = 0, 1, 2, 5`
+                                    (`BandTimeAverage.lean`, `BandFamilyContinuousTimeAverage`)
 Pous/SecurityProofs/Graded/         proved: the tail rule (`Tail.lean`), Theorem 1(ii) for the graded audit
                                     (`Theorem.lean`) and the band with grace `t` at `D = 5` (`Band.lean`,
                                     `BandGradedMeetsFamily`)
+Pous/SecurityProofs/Rebuild/        proved: under the verifier's duration cap, no audit re-encodes a whole band
+                                    segment from `W` alone (`Clock.lean`, the cumulative chain clock;
+                                    `Window.lean`, the counts; `Exclusion.lean`, `BackgroundRebuildExcluded`)
+Pous/SecurityProofs/SecureErasure/  proved: `DigestAU` (Digest), secure erasure from the audit by counting
+                                    (Reduction), and the band's audit at 2152 reads with `EraseMeets` at
+                                    `f = 1/19`, `ε = 2^-128` (Band)
 lean-audit.json                     the policy and pin records for tools/lean/audit.py
 CheckAxioms.lean                    one #print axioms line per headline theorem
 PousTargets.lean                    untrusted, not in the default build: the open statements as sorry targets
