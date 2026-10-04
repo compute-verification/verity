@@ -27,7 +27,7 @@ name = "flock-rust-tests"
 owner = "proofs"
 group = 2
 
-# Group 3: the Lean verifier, then the suites that need it built, then the agreement with upstream's Rust verifier.
+# Group 3: the Lean verifier, its partition check, then the agreement with upstream's Rust verifier.
 [[job]]
 name = "lean-build"
 owner = "proofs"
@@ -36,11 +36,6 @@ group = 3
 [[job]]
 name = "lean-unit-cut"
 owner = "proofs"
-group = 3
-
-[[job]]
-name = "lean-suites"
-owner = "ci"
 group = 3
 
 [[job]]
@@ -61,3 +56,10 @@ name = "lean-changed"
 owner = "lean"
 group = 5
 halts = true
+
+# Group 6: the suites that use Lean, on the verifier lean-build built, beside the partition check and the agreement.
+[[job]]
+name = "lean-suites"
+owner = "ci"
+group = 6
+after = "lean-build"
