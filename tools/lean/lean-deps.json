@@ -1,5 +1,11 @@
 {
  "deps": {
+  "1a8ace22c6830951c2cce0343b8451ded20d72e6c52e9fe252d27687f63a653b": {
+   "bytes": 701550733,
+   "package": "protocols/nci/lean",
+   "run": "r20261002-013330-8cff",
+   "sha256": "8a3e532f4f17d138d528e5281bba5a294dd2a66b2692234700073f6ab92ea827"
+  },
   "32c884ee1ea441eab1e6cfd146bc53d281c2e1411f03abd7d55bce6f4d88a985": {
    "bytes": 700275204,
    "package": "backends/flock/verifier/lean/level3",
@@ -42,9 +48,9 @@
    "run": "r20261003-152421-a7fe",
    "sha256": "78ebf43752e745c04c962d52f132fb063ea3a0ede75eb2973afabdc5ebd57120"
   },
-  "da2cd448e886ce548e0c62f05da25cc45569efe9e25419e57216c4aca24848f9": {
+  "e160c5c17ee3eab614cc70b10e233b647d12a17eb539884c2917632c3de966d1": {
    "bytes": 701550733,
-   "package": "protocols/nci/lean",
+   "package": "security_proofs/nci",
    "run": "r20261002-013330-8cff",
    "sha256": "8a3e532f4f17d138d528e5281bba5a294dd2a66b2692234700073f6ab92ea827"
   }
