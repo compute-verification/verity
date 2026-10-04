@@ -466,20 +466,51 @@ def test_a_static_a_binding_computed_from_a_module_reruns_its_definition(tmp_pat
 
 
 def test_the_catalogs_units_are_its_root_functions_and_entries():
-    """The real `targets.py` splits into the units the cache keys on: each root function, each `_model_roots` entry, each
-    `TEMPLATE_PARAMS` entry, and ``common``; a comment changes none, an entry's edit only its own."""
+    """The real binding files (`targets.py` and each sidecar) split into the units the cache keys on: each root function, each
+    `_model_roots` entry, each `TEMPLATE_PARAMS` entry, and each file's ``common``; a comment changes none, an entry's edit
+    only its own."""
     import re
 
     from circuit_check import cache as CC
+    from circuit_check import sidecars as SC
     from circuit_check import targets as TG
 
-    src = CC.TARGETS.read_text()
-    units, _spans = CC._units_of(src)
-    labels = re.findall(r'^ +\("([^"]+)", lambda', src, re.M)
-    assert {f"_model_roots:{label}" for label in labels} <= set(units) and len(labels) > 50
-    assert {f"TEMPLATE_PARAMS:{tid}" for tid in TG.TEMPLATE_PARAMS} <= set(units)
-    assert {"_core_roots", "_boolean_roots", "_pouw_roots", "_kernel_roots", "_vocabulary_bindings", "common"} <= set(units)
-    assert CC._units_of(src.replace("\ndef catalog(", "\n# a comment\ndef catalog(", 1))[0] == units
-    edited = CC._units_of(src.replace('("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16))',
-                                      '("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=32))', 1))[0]
-    assert {u for u in units if edited.get(u) != units[u]} == {"_model_roots:ResidualAdd_v1"}
+    srcs = {p: p.read_text() for p in (CC.TARGETS, *(f["py"] for f in SC.discover().values() if "py" in f))}
+    units = {p: CC._units_of(src)[0] for p, src in srcs.items()}
+    every = {u for us in units.values() for u in us}
+    labels = [label for src in srcs.values() for label in re.findall(r'^ +\("([^"]+)", lambda', src, re.M)]
+    assert {f"_model_roots:{label}" for label in labels} <= every and len(labels) > 50
+    assert {f"TEMPLATE_PARAMS:{tid}" for tid in TG.template_params()} <= every
+    assert {"_core_roots", "_boolean_roots", "_pouw_roots", "_kernel_roots", "_vocabulary_bindings", "common"} <= every
+    assert {"_kernel_roots", "_vocabulary_bindings", "common"} <= set(units[CC.TARGETS])
+    src = srcs[CC.TARGETS]
+    assert CC._units_of(src.replace("\ndef catalog(", "\n# a comment\ndef catalog(", 1))[0] == units[CC.TARGETS]
+    b1 = SC.path_of("verity_vllm.program.registry.b1", "py")
+    edited = CC._units_of(srcs[b1].replace('("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16))',
+                                           '("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=32))', 1))[0]
+    assert {u for u in units[b1] if edited.get(u) != units[b1][u]} == {"_model_roots:ResidualAdd_v1"}
+
+
+def test_every_binding_and_pin_is_in_the_module_it_binds():
+    """The tree is migrated (`migrate_bindings.py`): it would move no binding out of `targets.py` and no pin out of the file
+    that holds it, so a binding or pin added in the wrong place fails here."""
+    import importlib.util
+
+    from circuit_check import checks as CK
+    from circuit_check import sidecars as SC
+    from circuit_check import targets as TG
+
+    spec = importlib.util.spec_from_file_location("migrate_bindings", REPO / "tools/circuit_check/migrate_bindings.py")
+    MB = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(MB)
+    moved, _text, summary = MB.plan(strict=True)
+    assert not moved and not summary["stays"], (sorted(moved), summary["stays"])
+    TG.catalog()
+    misplaced = []
+    for kind, pins in CK.load_pins().items():
+        for key in pins:
+            mod = SC.pin_owner(kind, key)
+            want = (SC.path_of(mod, "json") if mod else None) or SC.SHARED_PINS
+            if (have := SC.pin_file(kind, key)) != want:
+                misplaced.append(f"{kind} {key}: in {SC.rel(have)}, owned by {SC.rel(want)}")
+    assert not misplaced, misplaced
