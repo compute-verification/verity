@@ -1,7 +1,10 @@
 {
  "roots": ["FlockBridge"],
  "meaning": ["FlockBridge", "FlockSoundness", "Verity.Protocol", "Verity.Assumptions", "Verity.Guarantees"],
- "pins": {},
+ "pins": {
+  "FlockBridge.Game.audit_tile_verdict_decisive": {},
+  "FlockBridge.Game.decisive_toCore": {}
+ },
  "dependencies": {
   "Arklib": "a100ce185a5f9f8e2a6e1d3b0f1782f006d7e280c602619a98cee5c970de0331",
   "CompPoly": "b35d6047fbdd4decc997b0e37de48c0a528d8b11b2d77c370bbc98b691cf572d",
