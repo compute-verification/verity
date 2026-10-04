@@ -761,7 +761,8 @@ def run_snapshot(root: Path, out: Path) -> dict:
     r = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--snapshot", str(out), "--root", str(root)], env=env, cwd=root,
                        capture_output=True, text=True)
     if r.returncode:
-        raise SplitError(f"the snapshot of {root} failed:\n{r.stderr[-4000:]}")
+        how = f"killed by signal {-r.returncode}" if r.returncode < 0 else f"exit status {r.returncode}"
+        raise SplitError(f"the snapshot of {root} failed ({how}):\n{r.stderr[-4000:]}")
     return json.loads(out.read_text())
 
 
