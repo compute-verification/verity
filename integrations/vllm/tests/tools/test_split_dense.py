@@ -36,6 +36,8 @@ def f():
     from verity_vllm.program.kernels import rmsnorm_fused_sweep
     return rmsnorm_fused_sweep, "verity_vllm.properties.difftests.rope_gptj_difftest"
 '''
+CYCLE = '{"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "%s"}'
+P09 = CYCLE % "program.frontend.target_profile <-> program.registry.gemm_targets" + "\n"
 
 
 def _tree(root: Path) -> Path:
@@ -48,6 +50,7 @@ def _tree(root: Path) -> Path:
     (v / "verity_vllm/consumer.py").write_text(CONSUMER)
     (v / "tests").mkdir()
     (v / "tests/allow.json").write_text('[{"file": "verity_vllm/program/registry/gemm_targets.py"}]\n')
+    (v / "tests/p09_layering.json").write_text(P09)
     (root / "CHANGELOG.md").write_text("- moved verity_vllm.program.registry.gemm_targets\n")
     return v
 
@@ -62,6 +65,7 @@ def test_the_split_moves_rewrites_and_reruns_as_a_no_op(tmp_path):
     assert (v / "tests/allow.json").read_text() == '[{"file": "verity_vllm/program/frontend/gemm_targets.py"}]\n'
     assert (v / "verity_vllm/properties/difftests/rope_difftest.py").read_text() == (
         "from verity_vllm.program.registry import b1\nfrom verity_vllm.program.registry.prims import BF16\n")
+    assert (v / "tests/p09_layering.json").read_text() == CYCLE % "program.frontend.gemm_targets <-> program.frontend.target_profile" + "\n"
     assert (v / "verity_vllm/properties/difftests/__init__.py").exists()
     assert "registry.gemm_targets" in (tmp_path / "CHANGELOG.md").read_text()
     again = SD.plan(tmp_path)

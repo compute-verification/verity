@@ -141,8 +141,17 @@ def _absolute_relative_imports(text: str) -> str:
     return re.sub(r"^([ \t]*)from \.(\w)", rf"\1from {REGISTRY}.\2", text, flags=re.M)
 
 
+_CYCLE = re.compile(r'("kind": "(?:module|package)-cycle", "symbol": "<package>", "detail": ")([^"]+)(")')
+
+
+def _sort_cycles(text: str) -> str:
+    """P9 names a cycle by its members in sorted order, so a renamed member can move within its entry."""
+    return _CYCLE.sub(lambda mt: mt[1] + " <-> ".join(sorted(mt[2].split(" <-> "))) + mt[3], text)
+
+
 def rewrite(text: str, where: str = "<text>") -> str:
-    return _rewrite_names(_rewrite_imports(text, where))
+    text = _rewrite_names(_rewrite_imports(text, where))
+    return _sort_cycles(text) if where.endswith("p09_layering.json") else text
 
 
 # --- the tree ---------------------------------------------------------------------------------------------------------------
