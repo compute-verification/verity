@@ -152,7 +152,7 @@ conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `
 
 The workload receives `RESEARCH_RUN_ID` and `RESEARCH_RUN_DIR` and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
-workload runs in its run directory unless `--cwd` says otherwise (`--cwd source` = the invoking directory), so a relative
+workload runs in its run directory unless `--cwd` says otherwise (`--cwd source` = the invoking directory, `clone` = a clone of it), so a relative
 `result.json` lands there and never in the checkout; `--env K=V` is set for the
 workload only and recorded as the attempt's `params.env` (values of
 secret-named keys redacted). Four facts
@@ -225,8 +225,7 @@ directory is renamed into place carrying `READY.json` (identity, archive
 sha256, file count, launcher). A failed or truncated transfer removes its
 partial directory and the run is refused (`SourceNotReady`); the machine
 refuses to execute from a source directory without a `READY.json` naming the
-requested identity (the legacy `.complete` marker is verified per file once,
-then adopted or quarantined). The attempt records `execution.remote.source_sha`
+requested identity. The attempt records `execution.remote.source_sha`
 and `source_archive_sha256`.
 
 The commit travels as git objects when it can: the launcher `git push`es it
@@ -245,8 +244,9 @@ of push (15.6 s end to end, mostly ssh handshakes), against about 28 s for the
 stream. The shipped tree is the runner's source root, not
 the workload's cwd: the workload runs in its own run directory, as locally,
 because every run of one commit shares `<root>/src/<sha>/` and relative outputs
-used to race there. `--cwd source` (or `source/SUB`) is the explicit opt-in to
-run inside the tree; job.json records `run.cwd` and `run.cwd_basis`. The
+used to race there. `--cwd source` (or `source/SUB`) runs it in the tree, and
+`--cwd clone` (`clone/SUB`), for a workload that writes there, in its own clone
+of it, removed when it exits (`research/clone.py`); job.json records `run.cwd` and `run.cwd_basis`. The
 runner and the workload get the tree's `PYTHONPATH` derived from its root
 `pyproject.toml` workspace members and each member's build config
 (`src/`, `python/`, flat), with a user `--env PYTHONPATH` appended; job.json
