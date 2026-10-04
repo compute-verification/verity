@@ -944,6 +944,48 @@ theorem TabSpec.orig_length (T : TabSpec mPts) :
     T.k0 + ((T.l₁ :: T.rest).map fun lv => lv.lanes - 1).sum + T.ext = T.m - 7 :=
   fast100_orig_length T.S.m T.sch T.hsch
 
+/-! ## The session can accept -/
+
+section SessionAccept
+
+set_option linter.unusedSectionVars false
+
+variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
+
+/-- A table's zero run accepts: the zero level-0 cap, the zero link points, both reps' zero runs, the zero openings. -/
+theorem tabAfterL_accept (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
+    (Lf : Merkle.Leaf (List F) Sl D H) (T : TabSpec mPts) :
+    ∃ out, Reaches (tabAfterL A H E Lf T (zcap H E Lf T.sch 0) 0) out ∧ out.accepted = true := by
+  have hm7 : 7 ≤ T.S.m := by have := T.hm; omega
+  have hextra : ∀ c ∈ extraClaims T.S T.ptLocal mPts (0 : Fin 2 → Fin mPts → F),
+      ∃ s : Fin 128 → F, ∑ v, packedWeight c hm7 v * s v = c.value := by
+    intro c hc
+    simp only [extraClaims, List.mem_flatMap, List.mem_cons, List.not_mem_nil, or_false] at hc
+    obtain ⟨R, -, hc | hc⟩ := hc <;> subst hc <;>
+      exact (regionClaim_weight T.S R T.ptLocal mPts hm7).elim fun v hv => solve_of_weight _ _ v hv
+  obtain ⟨p₀, h₀, hv₀, hg₀⟩ := repC_accept (D := D) H E Lf A 0 T.S T.sch T.hm _ hextra rfl (TabSpec.orig_length T)
+  obtain ⟨p₁, h₁, hv₁, hg₁⟩ := repC_accept (D := D) H E Lf A 1 T.S T.sch T.hm _ hextra rfl (TabSpec.orig_length T)
+  refine ⟨_, reaches_bind _ (p₀, p₁) (reaches_interleave _ _ _ _ h₀ h₁)
+    (reaches_send_iff.2 ⟨(zopens H E Lf T.sch, zsalts), rfl⟩), ?_⟩
+  simp [hv₀, hv₁, opensOKL_zero H E Lf T.sch 0 p₀ hg₀, opensOKL_zero H E Lf T.sch 1 p₁ hg₁]
+
+theorem sessionBL_accept (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
+    (Lf : Merkle.Leaf (List F) Sl D H) (ts : List (TabSpec mPts)) :
+    ∃ outs, Reaches (sessionBL A H E Lf ts) outs ∧ acceptedBL ts outs := by
+  let caps : Fin ts.length → Cap D := fun i => zcap H E Lf (ts.get i).sch 0
+  obtain ⟨outs, h, hl, hp⟩ := reaches_batch (P := fun o : OutCL F D Sl => o.accepted = true)
+    ((gamesBL A H E Lf ts caps).map (· 0)) (by
+      intro g hg
+      simp only [gamesBL, List.mem_map, List.mem_ofFn] at hg
+      obtain ⟨_, ⟨i, rfl⟩, rfl⟩ := hg
+      exact tabAfterL_accept A H E Lf _)
+  refine ⟨outs, reaches_send_iff.2 ⟨caps, reaches_coin_iff.2 ⟨0, h⟩⟩, fun i => ?_⟩
+  have hi : i.val < outs.length := by simp [hl, gamesBL]
+  rw [List.getD_eq_getElem _ _ hi]
+  exact hp _ (List.getElem_mem hi)
+
+end SessionAccept
+
 /-! ## The session -/
 
 /-- **Can accept.** For every hash, encoding, leaf scheme, plan, draw and registration, some run of the salted batched
@@ -952,7 +994,8 @@ theorem batchedSessionL_reaches_true (H : List UInt8 → D) (E : Merkle.Enc (Lis
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (S : Finset (Fin n)) (R : Reg) :
     Reaches (batchedSessionL H E Lf plan S R) true := by
-  sorry
+  obtain ⟨outs, h, hacc⟩ := sessionBL_accept execArith H E Lf (plan S R)
+  exact reaches_map_of h (by simp [hacc])
 
 /-- **Can reject.** When the plan has a table on the draw, some run of the salted batched session rejects. -/
 theorem batchedSessionL_reaches_false (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
