@@ -3,7 +3,7 @@ name: lean-proofs
 description: >
   How to work on Lean in Verity: where a new Lean file or package goes, the inner loop (lake env lean on one file,
   scratch probes with #print axioms, exact? and trace_state, profiling a slow proof), building and auditing with
-  tools/lean/audit.py, stating assumptions as named Props, freezing and pinning the guarantees a ledger or PR cites in
+  tools/lean/audit.py, stating assumptions as named Props, freezing and listing the guarantees a ledger or PR cites in
   lean-audit.json, moving them without a statement review (--moved), watching ArkLib and other dependencies for proofs
   of what we assume (tools/lean/upstream.py), keeping parallel Lean lanes out of each other's files and build
   directories, and Daniel's Lean rulings (guarantees proved under their assumptions, Lean as the source of truth for
@@ -51,6 +51,26 @@ python tools/lean/audit.py PKG                once, before pushing (seconds; lev
 Build on a CPU machine; the three packages take about nine minutes from scratch on four cores. Never `lake update`, and
 never change a `require`, a revision or `lean-toolchain` in a feature PR.
 
+To check your records, or get the `--update` printout a statement reviewer reads, without a build of your own, use the
+fast path on a shared machine. Don't run `audit.py --build --update` from a fresh tree there: that took about 22 minutes
+unpinned on the check cores.
+
+~~~text
+research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- \
+  python3 tools/check/lean_changed.py --records PKG --update
+~~~
+
+It waits for one of the node's Lean slots of pool `build` (`lean_slot.py`; a node whose slot file lists no `build` pool
+refuses it, exit 2, even with an `any` pool), never behind merge checks or hour-long audits, rebuilds only what changed since
+that slot's last run, and audits without the kernel replay: on `soundness/` with nothing to rebuild that was 6.5 minutes, and a
+slot's first run, a cold build, 31. The record is in the run's `lean-audit/audit-*/`, with `review.txt` when it changed; commit
+the record. It vouches for nothing: its result is of kind `lean-fast/v1`, which `check`'s lean-audit step and `research merge`
+refuse.
+
+To regenerate a record on a pod, run `research run --on POD --project verity --source . --cwd source -- python
+tools/lean/audit.py --build --update PKG` with no wrapper around it. It exits 0 when the audit passes, whether or not the
+record changed, and the record is among the run's outputs, at `lean-audit/audit-TAG/lean-audit.json`.
+
 While proving, check one file at a time, and leave the whole package and the audit for the end:
 
 - **`lake env lean FILE`** prints that file's errors and warnings, and writes nothing. Core's slowest file takes about 10 s
@@ -84,7 +104,7 @@ constructor's congruence lemma (`ZeroHom.mk.congr_simp`) in your module when it 
 and Mathlib has realized it already. Don't unfold a `→+` or `→*` inside `simp`: prove its `_apply` lemma by `rfl` and
 simp with that.
 
-## Assumptions and pins
+## Assumptions and guarantees
 
 - **An assumption is a named `Prop`** in the package's assumptions module (`FlockSoundness.Assumptions`), taken as a
   hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512CRExpected …)`). Its docstring opens with its
@@ -93,11 +113,11 @@ simp with that.
   `main`, never `native_decide`, never an option that skips the kernel. A statement you can't prove yet is an
   assumption, or a theorem in a lane branch, not on `main`.
 - **Freeze the statement, then prove it.** In your lane branch, state the guarantee on a `sorry` stub, check it against
-  the paper or the spec, pin it and run `--update`, and have the statement reviewed before the proof. The record holds the
-  statement, so it passes once the proof lands, and the pin shows if the statement moved on the way. Never make a
+  the paper or the spec, list it in `lean-audit.json` and run `--update`. The record holds the statement, so it passes once
+  the proof lands, and the record shows if the statement moved on the way. Never make a
   guarantee easier: don't strengthen an input relation, weaken an output relation, shrink the challenge space, add an
-  unmotivated hypothesis, or move a verifier check into an assumption. That list is also what the statement reviewer checks.
-- **Pin what you cite.** When a ledger row, a table or a PR description cites a guarantee as proved, add its theorem
+  unmotivated hypothesis, or move a verifier check into an assumption. That list is also what Daniel looks for when a change reaches him.
+- **List what you cite.** When a ledger row, a table or a PR description cites a guarantee as proved, add its theorem
   (`SecurityProofs.G` under the four names) to `pins` and run `python tools/lean/audit.py --update PKG`. Commit the
   record with the proof.
 - **Watch upstream for what you assume.** A new named assumption or a lemma you prove by hand that a pinned dependency
@@ -113,23 +133,20 @@ simp with that.
   Cite the output in `ASSUMPTIONS.md`'s upstream status rather than writing one.
 - **A changed record is a changed claim.** If `--update` changes a record or `reads` for a guarantee you didn't mean to
   change, your edit changed what that guarantee says: undo it, or say so in the PR and update the ledger.
-- **A changed record needs a named statement reviewer.** The axiom checks and the replay pass a weakened definition
-  (a vacuous theorem is still a theorem), so paste what `--update` printed into the PR, and ask someone other than the
-  author to read it. The PR description names that reviewer.
-- **A move is not a change.** When you rename pins or move what they read (a package moving to the four names), write
+- **A changed record reaches Daniel.** The axiom checks and the replay pass a weakened definition (a vacuous theorem is
+  still a theorem), so paste what `--update` printed into the PR. When it lands on `main`, Daniel gets a DM showing the
+  change; nobody signs off and nothing waits on it.
+- **A move is not a change.** When you rename guarantees or move what they read (a package moving to the four names), write
   the moves as a JSON object of old names to new ones, a declaration or a namespace each, and run
-  `audit.py --update --moved MOVES.json PKG` on the record as it was before the move. A pin that says what its record
-  says, renamed or restated as a `Guarantees` definition, and the definitions the same under their old names, each get
-  one line that needs no reviewer; the rest prints in full. Moving a definition to another module needs no map. For the
-  merge gates (`research merge --train`, `research queue`), a run that printed nothing a reviewer must read stands in for
-  the grant: `research data put --kind lean-review/v1 --file OUT/audit.json`, then `research data label pr:N@SHA
-  lean_review art:ID --by LANE` (a new push needs a new label).
+  `audit.py --update --moved MOVES.json PKG` on the record as it was before the move. A guarantee that says what its
+  record says, renamed or restated as a `Guarantees` definition, and the definitions the same under their old names, each
+  get one line and send no DM; the rest prints in full. Moving a definition to another module needs no map.
 
 ## Before the PR
 
 - `python tools/lean/audit.py PKG` passes for every package you touched, and `pytest backends/flock/tests
   tools/lean/tests tests/test_lean_packages.py` passes.
-- The PR says which pins changed, if any, and why; the ledger's status rows match the pins.
+- The PR says which guarantees changed, if any, and why; the ledger's status rows match `lean-audit.json`.
 - Merge `main` into your branch rather than rebasing someone else's work; conflicts in a ledger are resolved by keeping
   both sides' rows. Run `python tools/lean/merge.py --install` once per clone: `lean-audit.json` then merges without a
   rebuild, and only a conflict it refuses needs `audit.py --update` on the merged tree.
@@ -138,6 +155,9 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
+- 2026-10-03 (6:46 PM PDT): a change to what a guarantee says needs no reviewer and no approval: when it lands on `main`,
+  Daniel gets a DM showing it. Approval may come back for chosen packages (a grant in `tools/check/queue.toml`). "Pin" is
+  retired: say guarantee.
 - 2026-10-01: a pinned theorem is called a **guarantee** (security guarantee): a proved `Prop`, assumptions implying a
   conclusion, where an assumption is a named `Prop` (README "Glossary").
 - 2026-10-01: a guarantee that only moved, renamed or restated as a `Guarantees` definition, needs no statement reviewer

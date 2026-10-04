@@ -34,11 +34,21 @@ theorem size_rowPrefixV2 (l : ℕ) : (HmRow.rowPrefixV2 l).size = 128 := by
   rw [ByteArray.size_append, h0, h1]
   omega
 
+theorem size_rowPrefixSeg (l : ℕ) : (HmRow.rowPrefixSeg l).size = 128 := by
+  have h0 : ("verity/sha512-row-seg/v1".toUTF8.push 0).size = 25 := by decide +kernel
+  have h8 : ∀ x, (HmRow.be64 x).size = 8 := fun x => by simp [HmRow.be64, ByteArray.size]
+  have h4 : (be32 1024).size = 4 := by decide +kernel
+  refine size_pad ?_
+  rw [ByteArray.size_append, ByteArray.size_append, ByteArray.size_append, h0, h8, h8, h4]
+  omega
+
 theorem size_prefixOf (p : Port) : (HmRow.prefixOf p).size = 128 := by
   unfold HmRow.prefixOf
   split
-  · exact size_rowPrefixV2 _
-  · exact size_rowPrefix _
+  · exact size_rowPrefixSeg _
+  · split
+    · exact size_rowPrefixV2 _
+    · exact size_rowPrefix _
 
 /-! ## The row's bytes after a prefix -/
 
@@ -201,7 +211,7 @@ end Pre
 
 /-- **`Hm.port_commit` under the prefix `pre`.** -/
 theorem port_commitP (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {pre : ByteArray} (hpre : pre.size = 128) {words n : ℕ}
-    (hn : 0 < n) (hw : 2 * words = 128 * n)
+    (hs : c.ports[p]!.segs = none) (hn : 0 < n) (hw : 2 * words = 128 * n)
     (hslots : n ≤ ((HmRow.rowSlots c.ports).2[p]!).size) (hsub : ∀ k < n, shaSub c p k < 3)
     (hsin : ∀ s < 3, shaIn c (2 * s) = 1536 * s ∧ shaIn c (2 * s + 1) = 1536 * s + 512)
     (hhin : hmIn c 0 = 0 ∧ hmIn c 1 = 512 ∧ hmIn c 2 = 1536)
@@ -234,7 +244,7 @@ theorem port_commitP (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {pre : ByteArr
       have hwb : wordBit (8 * o + t) < 1024 := by unfold wordBit; omega
       rw [hzs k hk _ (by have := hsub k hk; omega), bitL_bytesOf _ _ (by omega),
         show (8 * (128 * k + o) + t) / 8 = 128 * k + o by omega, show (8 * (128 * k + o) + t) % 8 = t by omega,
-        msgCol_eq c g p k (by omega) ho ht, (hsin _ (hsub k hk)).2]
+        msgCol_eq c g p k hs (by omega) ho ht, (hsin _ (hsub k hk)).2]
       exact congrArg w (by omega))
     zh hh
     (fun q hq => by
@@ -296,7 +306,7 @@ end Nets
 /-- **`Hm.port_commit_rows` under the prefix `pre`**: the slots hold their nets' rows and the block holds Δ's copies,
 the first `cv` the prefix's midstate. -/
 theorem port_commit_rowsP (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {pre : ByteArray} (hpre : pre.size = 128)
-    {words n : ℕ} (hn : 0 < n)
+    {words n : ℕ} (hs : c.ports[p]!.segs = none) (hn : 0 < n)
     (hw : 2 * words = 128 * n) (hslots : n ≤ ((HmRow.rowSlots c.ports).2[p]!).size) (hck : HmNets.check c = .ok ())
     (hsub : ∀ k < n, shaSub c p k < 3)
     (hsha : ∀ k < n, LaidRows (shaLaid ()) 8192 fun j => w (shaBase c g p k + j))
@@ -339,7 +349,7 @@ theorem port_commit_rowsP (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {pre : By
       (by rw [List.size_toArray, hflat]; decide) (hshaL k hk) _ hj
     rw [shaOut_eq hck hs, Nat.add_assoc, Nat.add_assoc, this, List.getElem_toArray,
       ← bit_of_lt (by rw [hflat]; omega), bit_flatten_of_len (zs k) hlens ht]
-  exact port_commitP c w g p hpre hn hw hslots hsub (shaIn_eq hck) (hmIn_eq hck) zs hzs hrows hout _
+  exact port_commitP c w g p hpre hs hn hw hslots hsub (shaIn_eq hck) (hmIn_eq hck) zs hzs hrows hout _
     (hm_zh_in c w g p) (hm_zh c w g p hhm) (hm_bc c w g p hck hhm) hcv0 hchain hcvh hpad
 
 /-- **A row of no compression at its columns**: its `hm96` slot holds its net's rows, its `cv` the prefix's midstate

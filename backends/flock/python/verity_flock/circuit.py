@@ -6,7 +6,9 @@ Rows are ``frame-v3-sha512`` leaves under ``hm96-sha512/row/v1`` (``verity.commi
 ``c = SHA-512(salt_prefix || y)`` for a 192-byte salt ``y`` (``hm96.SHA512``, key its ``default_key``), and the frame leaf binds
 ``hm96.SHA512.tree_leaf(key, b || c)``. Both hashes are proved here: the rows and their salts are private. A port may instead
 hold a bit row of any ``Port.bits`` bits below 2^64 (``sha512/row/v2``, its leaf ``hm96-sha512/row/v2``; META names each port's
-schema and length in ``row_schemas``): its ``ceil(bits / 16)`` u16 leaves the row's bits low first, its message after the
+schema and length in ``row_schemas``), or a segmented bit row (``sha512/row-seg/v1``, its leaf ``hm96-sha512/row-seg/v1``: each
+1 KiB segment its own chain from its own prefix's midstate, the outer message's bytes copies of the segments' digests, its
+last block the hm96 slot's): its ``ceil(bits / 16)`` u16 leaves the row's bits low first, its message after the
 prefix ``P(bits)`` the row's ``ceil(bits / 8)`` bytes then SHA-512's padding. The verifiers derive from the length the
 prefix, the blocks, and every message bit at or past it (the last byte's fill bits, then the padding: a whole padding block,
 a last block of the row's bytes and padding, or an extra block of padding alone) as Δ constants.
@@ -162,6 +164,8 @@ class Port:
     name: str
     words: int
     bits: int | None = None
+    #: a segmented bit row (``sha512/row-seg/v1``), its schema in place of ``sha512/row/v2``
+    seg: bool = False
 
     @property
     def n_bits(self) -> int:
@@ -177,7 +181,26 @@ class Port:
     def comps(self) -> int:
         """Compressions after the constant first block: the message's blocks but its last, which the hm96 slot compresses (the
         row's last bytes, if any, then SHA-512's padding: ``ceil((bytes + 17) / 128)`` blocks in all)."""
+        if self.seg:
+            from verity.commitments.rowleaf import sha512_row_seg_segments
+
+            segs = sha512_row_seg_segments(self.bits)
+            return sum(-(-((m + 7) // 8 + 17) // 128) for m in segs) + -(-(64 * len(segs) + 17) // 128) - 1
         return -(-(self.bytes + 17) // 128) - 1
+
+    def chain_start(self, k: int) -> bool:
+        """Whether compression ``k`` (``comps``: the hm96 slot's) starts a chain from a constant midstate: a row's first, or a
+        segmented row's segment's or outer message's first. Every other reads the previous compression's output."""
+        if not self.seg:
+            return k == 0
+        from verity.commitments.rowleaf import sha512_row_seg_segments
+
+        first = 0
+        for m in sha512_row_seg_segments(self.bits):
+            if k <= first:
+                return k == first
+            first += -(-((m + 7) // 8 + 17) // 128)
+        return k == first
 
     def message(self) -> bytes:
         """The message after the prefix with every row bit zero: ``bytes`` zero bytes, then SHA-512's padding. A message bit is
@@ -189,10 +212,32 @@ class Port:
 
     @property
     def schema(self) -> str:
-        """The frame leaf's schema: ``hm96-sha512/row/v1``, or a bit row's ``hm96-sha512/row/v2``."""
-        from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
+        """The frame leaf's schema: ``hm96-sha512/row/v1``, a bit row's ``hm96-sha512/row/v2``, a segmented row's
+        ``hm96-sha512/row-seg/v1``."""
+        from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
 
-        return ROW_SCHEMA if self.bits is None else SCHEMA_HM96_SHA512_ROW_V2
+        return ROW_SCHEMA if self.bits is None else SCHEMA_HM96_SHA512_ROW_SEG if self.seg else SCHEMA_HM96_SHA512_ROW_V2
+
+    def digest(self, row: bytes) -> bytes:
+        """The row's inner digest of its ``bytes`` row bytes (``sha512/row/v1``, ``/v2`` or ``sha512/row-seg/v1``)."""
+        from verity.commitments.rowleaf import sha512_row_seg_digest
+
+        return sha512_row_seg_digest(row, self.bits) if self.seg else self.layout().digest(row)
+
+    def prefix(self) -> bytes:
+        """The row's first block: core's prefix, or a segmented row's outer ``Q(bits)``."""
+        from verity.commitments.rowleaf import sha512_row_seg_prefix
+
+        return sha512_row_seg_prefix(self.bits) if self.seg else self.layout().prefix
+
+    @property
+    def tail_bytes(self) -> int:
+        """The bytes the padding follows: the row's, or a segmented row's outer message's (its segments' digests)."""
+        if self.seg:
+            from verity.commitments.rowleaf import sha512_row_seg_segments
+
+            return 64 * len(sha512_row_seg_segments(self.bits))
+        return self.bytes
 
     def leaf(self):
         from verity.commitments.frame_v3 import BitRowLeaf, RowLeaf
@@ -201,11 +246,13 @@ class Port:
         return RowLeaf("sha512", ROLE_X, 16, self.words) if self.bits is None else BitRowLeaf(self.bits)
 
     def layout(self):
-        """The row's inner digest layout (core's: its prefix, and its length, which is the row's own)."""
+        """The row's inner digest layout (core's: its prefix, and its length, which is the row's own); a segmented row has none."""
+        if self.seg:
+            raise ValueError(f"port {self.name}: a segmented row's digest is two levels of SHA-512, not one layout")
         return self.leaf().layout()
 
 
-def _port(name: str, words: int, bits: int | None = None) -> Port:
+def _port(name: str, words: int, bits: int | None = None, seg: bool = False) -> Port:
     """A ``sha512/row/v1`` port of whole SHA-512 blocks, or a bit row of any u64 length in its ``ceil(bits / 16)`` leaves (the
     verifiers derive its fill bits and padding as Δ constants)."""
     if bits is None:
@@ -216,18 +263,19 @@ def _port(name: str, words: int, bits: int | None = None) -> Port:
         raise ValueError(f"port {name}: a row's length is a u64 number of bits, not {bits!r}")
     if words != -(-bits // 16):
         raise ValueError(f"port {name}: a row of {bits} bits is {-(-bits // 16)} u16 leaves, not {words}")
-    return Port(name, words, bits)
+    return Port(name, words, bits, seg)
 
 
 def _meta_ports(meta: dict) -> list[Port]:
-    """META's rows, each a bit row of the length its ``row_schemas`` entry names (absent: ``sha512/row/v1`` rows)."""
-    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
+    """META's rows, each a bit row (or a segmented one) of the length its ``row_schemas`` entry names (absent: ``sha512/row/v1``
+    rows)."""
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
 
     if "row_schemas" not in meta:
         return [Port(nm, w) for nm, w, _ in meta["ports"]]
-    if any(s != SCHEMA_HM96_SHA512_ROW_V2 for s, _bits in meta["row_schemas"]):
-        raise ValueError(f"row_schemas: each port's is {SCHEMA_HM96_SHA512_ROW_V2}")
-    return [_port(nm, w, bits) for (nm, w, _), (_s, bits) in zip(meta["ports"], meta["row_schemas"], strict=True)]
+    if any(s not in (SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG) for s, _bits in meta["row_schemas"]):
+        raise ValueError(f"row_schemas: each port's is {SCHEMA_HM96_SHA512_ROW_V2} or {SCHEMA_HM96_SHA512_ROW_SEG}")
+    return [_port(nm, w, bits, s == SCHEMA_HM96_SHA512_ROW_SEG) for (nm, w, _), (s, bits) in zip(meta["ports"], meta["row_schemas"], strict=True)]
 
 
 def out_row(name: str, words: int, bit_row: bool = False) -> Port:
@@ -237,14 +285,43 @@ def out_row(name: str, words: int, bit_row: bool = False) -> Port:
     return Port(name, w, 16 * w if bit_row else None)
 
 
-def out_rows(outs: dict, out_ports: list[tuple[str, int]], rows: list[Port]) -> dict:
-    """Each output port's words ``{port: (n, words)}`` as its output row's (zero past the port's words)."""
-    out = {}
-    for (nm, w), p in zip(out_ports, rows):
-        v = np.asarray(outs[nm], dtype=np.uint16).reshape(-1, w)
-        out[nm] = np.zeros((len(v), p.words), dtype=np.uint16)
-        out[nm][:, :w] = v
+def out_rows(outs: dict, out_ports: list[tuple[str, int]], rows: list[Port], counts: list[int] | None = None) -> dict:
+    """Each output port's words ``{port: (n, words)}`` as its output row's (zero past the port's words); ``counts`` (META
+    ``out_row_ports``): each row's run of output ports, their words concatenated in port order."""
+    counts = counts or [1] * len(out_ports)
+    out, at = {}, 0
+    for k, p in zip(counts, rows, strict=True):
+        run = out_ports[at:at + k]
+        v = np.concatenate([np.asarray(outs[nm], dtype=np.uint16).reshape(-1, w) for nm, w in run], axis=1)
+        out[p.name] = np.zeros((len(v), p.words), dtype=np.uint16)
+        out[p.name][:, :v.shape[1]] = v
+        at += k
     return out
+
+
+def _out_ports(outs: list, bit_rows: bool, seg_out_rows) -> tuple[list[Port], list[int]]:
+    """The output rows and each one's run of output ports: one row per port (``out_row``), and each run in ``seg_out_rows``
+    (consecutive output ports, in order) one ``sha512/row-seg/v1`` row of exactly their words, named after its first."""
+    names = [nm for nm, _ in outs]
+    starts, covered = {}, set()
+    for run in seg_out_rows:
+        i = names.index(run[0]) if run and run[0] in names else -1
+        if i < 0 or list(run) != names[i:i + len(run)] or covered & set(run):
+            raise ValueError(f"segmented output row {list(run)}: a run of consecutive output ports, each in one row")
+        starts[i] = len(run)
+        covered |= set(run)
+    rows, counts, j = [], [], 0
+    while j < len(outs):
+        if j in starts:
+            w = sum(x for _, x in outs[j:j + starts[j]])
+            rows.append(Port(outs[j][0], w, 16 * w, True))
+            counts.append(starts[j])
+            j += starts[j]
+        else:
+            rows.append(out_row(*outs[j], bit_row=bit_rows))
+            counts.append(1)
+            j += 1
+    return rows, counts
 
 
 def _row_consts(p: Port) -> dict:
@@ -252,8 +329,8 @@ def _row_consts(p: Port) -> dict:
     bytes (a whole block for ``sha512/row/v1``)."""
     from . import sha512_circuit as S
 
-    prefix = p.layout().prefix
-    return {"prefix": prefix.hex(), "midstate": [f"{w:016x}" for w in S.midstate(prefix)], "pad": S.pad_tail(128 + p.bytes).hex()}
+    prefix = p.prefix()
+    return {"prefix": prefix.hex(), "midstate": [f"{w:016x}" for w in S.midstate(prefix)], "pad": S.pad_tail(128 + p.tail_bytes).hex()}
 
 
 def _ranges(items: list[tuple[str, int, int, dict]]) -> tuple[list[dict], int]:
@@ -345,25 +422,86 @@ def _row_slots(ports: list[Port]) -> tuple[int, list[list[tuple[int, int]]]]:
 
 def _row_wires(ports: list[Port]) -> list:
     """Each row's chain (compression k's ``cv`` from compression k-1's ``out``) and its hm96 slot's ``cv`` (from the last; a
-    row of no compression gives its hm96 slot the midstate, a Δ constant)."""
+    row of no compression gives its hm96 slot the midstate, a Δ constant). A segmented row's chains restart at each chain start
+    (``Port.chain_start``), whose midstate is a Δ constant, and the outer message's digest bits are Δ's copies, not wires."""
     _, where = _row_slots(ports)
     wires = []
     for p, w in enumerate(where):
         for k in range(1, len(w)):
-            wires.append([SHA_NET, w[k][0], 2 * w[k][1], SHA_NET, w[k - 1][0], w[k - 1][1]])
-        if w:
+            if not ports[p].chain_start(k):
+                wires.append([SHA_NET, w[k][0], 2 * w[k][1], SHA_NET, w[k - 1][0], w[k - 1][1]])
+        if w and not ports[p].chain_start(len(w)):
             wires.append([HM_NET, p, 0, SHA_NET, w[-1][0], w[-1][1]])
     return wires
 
 
+def _split_leaves(leaves: list[list[int]], in_ports: list[tuple[str, int]], public: dict) -> tuple[list, list, list]:
+    """Each flat input leaf as ``(public, index)``: a row word's index among the rows' words, or a public word's among the public
+    ports' words; then the units' ``leaves_in`` (a public leaf there a zero leaf, -1) and ``leaves_public``."""
+    owner, r, p = [], 0, 0
+    for nm, w in in_ports:
+        owner += [(nm in public, (p if nm in public else r) + k) for k in range(w)]
+        p, r = (p + w, r) if nm in public else (p, r + w)
+    li = [[-1 if x < 0 or owner[x][0] else owner[x][1] for x in u] for u in leaves]
+    lp = [[owner[x][1] if x >= 0 and owner[x][0] else -1 for x in u] for u in leaves]
+    return owner, li, lp
+
+
+def aligned_blocks(words: list[int]) -> list[tuple[int, int]]:
+    """Distinct words as aligned power-of-two blocks ``(w, e)`` (``w`` a multiple of ``2^e``), in order: each maximal run of
+    consecutive words cut from its start, every block the largest aligned one that fits in what is left of the run."""
+    out, ws = [], sorted(set(words))
+    i = 0
+    while i < len(ws):
+        a = b = ws[i]
+        while i < len(ws) and ws[i] == b:
+            i, b = i + 1, b + 1
+        while a < b:
+            e = (b - a).bit_length() - 1
+            while a % (1 << e):
+                e -= 1
+            out.append((a, e))
+            a += 1 << e
+    return out
+
+
+def public_blocks(group: tuple, li: list[list[int]], lp: list[list[int]]) -> list[tuple[int, int]]:
+    """The ``in`` regions' words in a unit slot (PROTOCOL.md §16.10): the 128-bit words holding a public leaf in some unit, as
+    :func:`aligned_blocks`, inside the leaf group, every leaf in them a public or a zero leaf in every unit."""
+    col, words, bits = group
+    if any(b != 16 for b in bits):
+        raise ValueError("public inputs: the unit's leaves are not 16-bit words")
+    pub = {col + 16 * j // 128 for u in lp for j, x in enumerate(u) if x >= 0}
+    if not pub:
+        raise ValueError("public inputs: no unit reads a public word")
+    blocks = aligned_blocks(list(pub))
+    for w, e in blocks:
+        if w < col or w + (1 << e) > col + words:
+            raise ValueError(f"public inputs: the in region's words {w}..{w + (1 << e)} leave the unit's leaf group")
+    for j in range(len(bits)):
+        if col + 16 * j // 128 in pub and any(lp[u][j] < 0 and li[u][j] >= 0 for u in range(len(li))):
+            raise ValueError(f"public inputs: leaf {j} reads a row word inside word {col + 16 * j // 128}, which holds a public "
+                             f"word: lay the public ports out as whole words")
+    return blocks
+
+
 def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: bool = False, partition: str | None = None,
-            program: str | None = None, statics: dict | None = None, port_bits: list | None = None) -> str:
+            program: str | None = None, statics: dict | None = None, port_bits: list | None = None,
+            public_inputs: dict | None = None, seg_ports: frozenset[str] = frozenset(), seg_out_rows: tuple = ()) -> str:
     """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
     (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
     ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
     partition names, else :func:`program_sha512` of the subcircuit. ``port_bits``: each input port's bit row length (its
     ``sha512/row/v2`` rows; the output rows then bit rows of all their words), which META names per port (``row_schemas``)
-    in place of the one ``row_schema``."""
+    in place of the one ``row_schema``; ``seg_ports``: the input ports among them that are segmented rows (``sha512/row-seg/v1``,
+    PoUW's per-call role-X rows); ``seg_out_rows``: runs of consecutive output ports each committed as one segmented row of
+    exactly their words, named after its first (META ``out_row_ports``), so that a unit reading the row as one input port
+    has the writer's leaf.
+
+    ``public_inputs`` (``{port: {"seed": ..., "derivation": ...}}``): input ports that are not rows but public words the verifier
+    recomputes from public data, each naming its seed and derivation (PROTOCOL.md §16.10). The units read them from ``in``
+    regions (META ``public_inputs``, ``leaves_public``), which must be whole words of the unit's leaf group (:func:`public_blocks`).
+    The data guard counts a port whose derivation it does not list as data (``verity.ml.operations.public_data``)."""
     for name, v in (("partition", partition), ("program", program)):
         if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
             raise ValueError(f"{name}: a SHA-512 digest is 128 lowercase hex digits")
@@ -381,12 +519,30 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     for table, _ in (tail.lookups if tail else []):
         lookups[table] = lookups.get(table, 0) + 1
     lv = low.leaves
+    public_inputs = dict(public_inputs or {})
+    in_ports = [(p.name, w) for p, (w, _) in zip(sub.inputs, lv["in_ports"])]
+    if set(public_inputs) - {nm for nm, _ in in_ports}:
+        raise ValueError(f"public inputs {sorted(set(public_inputs) - {nm for nm, _ in in_ports})}: not input ports")
+    for nm, v in public_inputs.items():
+        if set(v) != {"seed", "derivation"} or not all(isinstance(v[k], str) and v[k] for k in v):
+            raise ValueError(f"public input {nm}: it names its recomputation, a non-empty seed and derivation")
     if port_bits is not None and None in port_bits:
         raise ValueError(f"{low.name}: bit rows on every input port or on none")
+    if port_bits and public_inputs:
+        raise NotImplementedError(f"{low.name}: public input ports beside bit rows (a public leaf is a 16-bit word)")
     bits_of = port_bits or [None] * len(sub.inputs)
-    ins = [_port(p.name, w, b) for p, (w, _), b in zip(sub.inputs, lv["in_ports"], bits_of, strict=True)]
+    if seg_ports and (port_bits is None or not seg_ports <= {p.name for p in sub.inputs}):
+        raise ValueError(f"{low.name}: segmented rows are bit rows of input ports: {sorted(seg_ports)}")
+    ins = [_port(nm, w, b, nm in seg_ports) for (nm, w), b in zip(in_ports, bits_of, strict=True) if nm not in public_inputs]
+    pins = [{"port": nm, "words": w, **public_inputs[nm]} for nm, w in in_ports if nm in public_inputs]
+    owner, leaves_in, leaves_public = _split_leaves(lv["in"], in_ports, public_inputs)
+    if pins:
+        public_blocks(low.layout.in_groups[0], leaves_in, leaves_public)
     outs = [[p.name, w] for p, (w, _) in zip(sub.outputs, lv["out_ports"])]
-    ports = ins + [out_row(nm, w, bit_row=bool(port_bits)) for nm, w in outs]
+    if seg_out_rows and port_bits is None:
+        raise ValueError(f"{low.name}: segmented output rows are bit rows (row_schemas)")
+    orows, counts = _out_ports(outs, bool(port_bits), seg_out_rows)
+    ports = ins + orows
     ul = _slot_log(low.layout.useful)
     if low.layout.useful == 1 << ul:
         raise ValueError(f"{low.name}: a unit fills its slot; a zero leaf needs a forced-zero row")
@@ -400,7 +556,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     def fits(G: int):
         # a range no region reads is packed (the compressions, the lookups, and the units when the tail returns the outputs)
         items = [("unit", SHA_LOG, G * n_sha, {"net": SHA_NET, "packed": True}), ("unit", HM_LOG, G * n_hm, {"net": HM_NET}),
-                 ("unit", ul, G * U.n, {"net": "unit", **({"packed": True} if U.tail_rets else {})})]
+                 ("unit", ul, G * U.n, {"net": "unit", **({"packed": True} if U.tail_rets and not pins else {})})]
         for i, lay in enumerate(stages):
             items.append(("unit", _slot_log(lay.useful), G, {"net": f"stage{i}"}))
         for t, c in lookups.items():
@@ -424,6 +580,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     public = dict(getattr(U, "public", []))
     # a public cut word (attention's query) is a row word: its unit input copies the row's message bits, zero above 16
     leaf_cuts = [["unit", u, j, public[k]] for u, src in enumerate(U.in_src) for j, (kind, k) in enumerate(src) if kind == "cut" and k in public]
+    if any(owner[x[3]][0] for x in leaf_cuts):
+        raise NotImplementedError(f"{low.name}: a cut input read from a public input port")
+    leaf_cuts = [[*x[:3], owner[x[3]][1]] for x in leaf_cuts]
     out_net = f"stage{len(stages) - 1}" if U.tail_rets else "unit"
     out_net_ports = [j for j, tag in enumerate(tail.stages[-1].outs) if tag[0] == "ret"] if U.tail_rets else []
     programs = program_digests(sub, statics)
@@ -434,8 +593,10 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     meta = {"format": FORMAT, "statement": STATEMENT, "scheme": SCHEME, **row_schema, "template": sub.template.id,
             "subcircuit": sub.id, "unit": low.name, "unit_sha256": low.sha256, "vus_per_block": G, "k_log": k_log,
             "ports": [[p.name, p.words, p.comps] for p in ports], "input_ports": len(ins), "out_ports": outs, "ranges": ranges,
-            "rows": [_row_consts(p) for p in ports], "units_per_vu": U.n, "unit_log": ul, "leaves_in": lv["in"], "leaves_out": lv["out"],
-            "row_key_sha512": LEAF_SCHEME["key_sha512"], "dummy": _dummy(low, ins, outs, ports[len(ins):], sub), "leaf_scheme": LEAF_SCHEME,
+            "rows": [_row_consts(p) for p in ports], "units_per_vu": U.n, "unit_log": ul, "leaves_in": leaves_in, "leaves_out": lv["out"],
+            **({"public_inputs": pins, "leaves_public": leaves_public} if pins else {}),
+            "row_key_sha512": LEAF_SCHEME["key_sha512"], "dummy": _dummy(low, in_ports, ins, outs, orows, sub, counts), "leaf_scheme": LEAF_SCHEME,
+            **({"out_row_ports": counts} if seg_out_rows else {}),
             # only for a template that needs them (attention, GEMM): absent means the unit returns the outputs and no leaf cut
             **({"out_net": out_net, "out_net_ports": out_net_ports} if U.tail_rets else {}), **({"leaf_cuts": leaf_cuts} if leaf_cuts else {}), "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
             "wires": _row_wires(ports) + tail_wires, "program_digests": programs,
@@ -457,37 +618,37 @@ def _expanded(lay: IL.Layout, name: str) -> str:
 
 
 def _commit_strings(ports: list[Port], rows: dict, salts: dict) -> dict[str, list[bytes]]:
-    """Each row's ``b || c`` (``hm96.SHA512`` over its row digest, ``sha512/row/v1`` or ``sha512/row/v2`` of the leaves' first
+    """Each row's ``b || c`` (``hm96.SHA512`` over its row digest, ``sha512/row/v1``, ``/v2`` or ``row-seg/v1`` of the leaves' first
     ``Port.bytes`` bytes, and its salt). Refuses a bit row whose leaves have a bit set past its length."""
     from verity.commitments import hm96
 
     inst = hm96.SHA512
     out = {}
     for p in ports:
-        lay = p.layout()
         r = np.ascontiguousarray(rows[p.name], dtype="<u2")
         if p.bits is not None and 16 * p.words > p.bits:
             if np.any(r[:, -1] >> np.uint16(p.bits - 16 * (p.words - 1))):
                 raise ValueError(f"port {p.name}: a row of {p.bits} bits has a bit set past its length")
-        out[p.name] = [inst.commit_string(inst.default_key, lay.digest(r[i].tobytes()[:p.bytes]), salts[p.name][i]) for i in range(len(r))]
+        out[p.name] = [inst.commit_string(inst.default_key, p.digest(r[i].tobytes()[:p.bytes]), salts[p.name][i]) for i in range(len(r))]
     return out
 
 
-def _dummy(low: IL.Lowering, ins: list[Port], out_ports: list, orows: list[Port], sub=None) -> dict:
+def _dummy(low: IL.Lowering, in_ports: list[tuple[str, int]], ins: list[Port], out_ports: list, orows: list[Port], sub=None,
+           counts: list[int] | None = None) -> dict:
     """The all-zero instance's output words (every output leaf) and every row's ``b || c`` under zero salts (its zero input rows,
     then its output rows), as the padding instances hold (a tail that returns the outputs: the template's reference evaluation of
-    the zero instance)."""
-    n_in = sum(p.words for p in ins)
+    the zero instance). Its public inputs are zero too."""
+    n_in = sum(w for _, w in in_ports)
     zero = np.zeros((1, n_in), dtype=np.uint64)
     outs, _, ok = low.evaluate(zero, IL.cut_words(low, zero) if low.units.cut else None)
     assert int(ok) & 1, "the all-zero instance does not satisfy the unit rows"
     if low.units.tail_rets:
-        ev = sub.evaluate({p.name: [np.zeros(w, dtype=np.uint16)] for p, w in zip(sub.inputs, [q.words for q in ins])})
+        ev = sub.evaluate({nm: [np.zeros(w, dtype=np.uint16)] for nm, w in in_ports})
         outs = np.concatenate([np.asarray(ev[p.name][0], dtype=np.uint64) for p in sub.outputs])[None, :]
     words = [int(x) for x in outs[0]]
     at = np.cumsum([0] + [w for _, w in out_ports])
     rows = {p.name: np.zeros((1, p.words), np.uint16) for p in ins}
-    rows.update(out_rows({nm: words[at[j]:at[j + 1]] for j, (nm, _) in enumerate(out_ports)}, [tuple(x) for x in out_ports], orows))
+    rows.update(out_rows({nm: words[at[j]:at[j + 1]] for j, (nm, _) in enumerate(out_ports)}, [tuple(x) for x in out_ports], orows, counts))
     ports = ins + orows
     bc = _commit_strings(ports, rows, {p.name: [bytes(SALT_BYTES)] for p in ports})
     return {"bc": [bc[p.name][0].hex() for p in ports], "outputs": words}
@@ -515,7 +676,7 @@ def statement(ports: list[Port], input_set, lo: int, hi: int, rows: dict, salts:
     each under a domain bound to the set, the range, the port and its schema. Returns the header's ``frame_v3`` entry and
     every row's ``b || c``."""
     from verity.commitments import hm96
-    from verity.commitments.frame_v3 import FrameV3
+    from verity.commitments.frame_v3 import BitRowLeaf, FrameV3
     from verity.commitments.frame_v3 import Port as FPort
     from verity.commitments.identity import identity_digest
     from verity.commitments.indexed import RangeIndexedDomain
@@ -531,7 +692,8 @@ def statement(ports: list[Port], input_set, lo: int, hi: int, rows: dict, salts:
         bind[p.name] = bytes.fromhex(identity_digest(ir_frame.BINDING_TAG, {"set": input_set.name, "lo": int(lo), "hi": int(hi), "port": p.name,
                                                                             "schema": p.schema}))
         doms[p.name] = CommitmentDomain(bind[p.name], ir_frame.OWNER, RangeIndexedDomain(0, len(rows[p.name])), hash="sha512")
-    fv = FrameV3({p.name: FPort(doms[p.name], p.leaf()) for p in ports})
+    # the roots read only the domains: a segmented row's port is configured with its bit row's leaf, which binds no schema here
+    fv = FrameV3({p.name: FPort(doms[p.name], BitRowLeaf(p.bits) if p.seg else p.leaf()) for p in ports})
     bcs = _commit_strings(ports, rows, salts)
     roots = {}
     for p in ports:
@@ -568,9 +730,30 @@ def share(rows: dict) -> tuple[dict, dict]:
     return tables, refs
 
 
+PUBLIC_INPUTS_FORMAT = "verity/flock-public-inputs/v1"
+
+
+def _public_bytes(pins: list[dict], words: dict, n: int) -> bytes:
+    """Every instance's public words, u16 LE, instance-major, the ports in META order."""
+    if not pins:
+        return b""
+    w = np.concatenate([np.asarray(words[pp["port"]], dtype=np.uint16).reshape(n, pp["words"]) for pp in pins], axis=1)
+    return np.ascontiguousarray(w.astype("<u2")).tobytes()
+
+
+def write_public_inputs(text: str, words: dict, n: int, path) -> None:
+    """The verifier's own ``--public-inputs`` file (PROTOCOL.md §16.10): a header line ``{format, instances, ports}``, its ports
+    META's ``public_inputs`` (each with its seed and derivation), then ``words`` (``{port: (n, words)}``, the verifier's own
+    recomputation of the population's public words) as the public file holds them."""
+    pins = json.loads(text.split("\n", 2)[1][5:]).get("public_inputs", [])
+    head = {"format": PUBLIC_INPUTS_FORMAT, "instances": n, "ports": pins}
+    Path(path).write_bytes(json.dumps(head, sort_keys=True).encode() + b"\n" + _public_bytes(pins, words, n))
+
+
 def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
           share_rows: bool = False, rows: dict | None = None, outs: dict | None = None, tables: dict | None = None,
-          refs: dict | None = None, salts: dict | None = None, registered: dict | None = None) -> dict:
+          refs: dict | None = None, salts: dict | None = None, registered: dict | None = None,
+          public_words: dict | None = None) -> dict:
     """``flock-circuit-inputs``: one JSON header line (the set's name, the range, each block's unit indices, the composite
     circuit's sha512, the frame-v3-sha512 statement; never the set's content digest, an unsalted hash of its values), then, for
     the prover only, every instance's rows (its input rows, then its output rows: ports in order, u16 LE) and every row's salt
@@ -590,13 +773,24 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     ``salts`` (``{port: [192-byte salt, ...]}``, every row port's, one per table row, or per instance without tables): the
     committer's own salts.
 
-    ``registered`` (``{port: {"value", "positions", "paths"}}``, input ports, with ``tables``): the ports whose table rows are
-    rows of a registered value, committed with the registration's salts (``salts``), each table row's position and frame-v3
-    path to the registered root (``verity_sampled_proofs.one_stage.registered``); the header's ``registered``. An output row
-    is never registered: it is its instance's own."""
+    ``registered`` (``{port: {"value", "positions", "paths"}}``, with ``tables``): the ``sha512/row/v1`` rows whose table rows
+    are rows of a registered value, committed with the registration's salts (``salts``), each table row's position and
+    frame-v3 path to the registered root (``verity_sampled_proofs.one_stage.registered``); the header's ``registered``. A port
+    is an input port (its table's rows) or an output port's row (its table the instances' output rows, one each: instance
+    ``i``'s output is the registered row at ``positions[i]``, under that row's registered salt ``salts[port][i]``). A padding
+    instance's rows keep their zero salts and pinned ``dummy`` either way: the verifier opens only the instances' rows.
+
+    A circuit with public inputs (META ``public_inputs``, PROTOCOL.md §16.10): the header names them as META does, and both files
+    end with every instance's public words (u16 LE, instance-major, the ports in order): ``public_words``
+    (``{port: (n, words)}``), else the set's."""
     meta = json.loads(text.split("\n", 2)[1][5:])
     sub = input_set.subcircuit
     n = hi - lo
+    pins = meta.get("public_inputs", [])
+    if public_words is None:
+        public_words = {pp["port"]: (rows[pp["port"]] if rows is not None and pp["port"] in rows else input_set.port(pp["port"], lo, hi))
+                        for pp in pins}
+    pub_tail = _public_bytes(pins, public_words, n)
     ports = _meta_ports(meta)
     ins, orows = ports[:meta["input_ports"]], ports[meta["input_ports"]:]
     out_ports = [tuple(x) for x in meta["out_ports"]]
@@ -605,11 +799,15 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     if (tables is None) != (refs is None) or (tables is not None and not share_rows):
         raise ValueError("tables and refs are given together, with share_rows")
     if registered is not None:
-        if tables is None or salts is None or not registered or not set(registered) <= {p.name for p in ins}:
-            raise ValueError("registered: some input ports' tables, given with their tables, refs and registered salts")
-        words = {p.name: p.words for p in ports}
+        if tables is None or salts is None or not registered or not set(registered) <= {p.name for p in ports}:
+            raise ValueError("registered: some rows' tables (input ports' or output rows'), given with their tables, refs and "
+                             "registered salts")
+        by_name = {p.name: p for p in ports}
         for name, e in registered.items():
-            rows_p = len(np.asarray(tables[name]).reshape(-1, words[name]))
+            if by_name[name].bits is not None:
+                raise ValueError(f"registered port {name}: a {by_name[name].schema} row, and registered rows are "
+                                 f"{ROW_SCHEMA} rows")
+            rows_p = n if by_name[name] in orows else len(np.asarray(tables[name]).reshape(-1, by_name[name].words))
             if set(e) != {"value", "positions", "paths"} or len(e["positions"]) != rows_p or len(e["paths"]) != rows_p:
                 raise ValueError(f"registered port {name}: a value, and one position and path per table row")
     if tables is not None:
@@ -627,7 +825,7 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
         refs = None
         if share_rows:
             rows, refs = share({p.name: rows[p.name] for p in ins})
-    rows = {**{p.name: rows[p.name] for p in ins}, **out_rows(outs, out_ports, orows)}
+    rows = {**{p.name: rows[p.name] for p in ins}, **out_rows(outs, out_ports, orows, meta.get("out_row_ports"))}
     if refs is not None:
         refs.update({p.name: np.arange(n) for p in orows})
     if salts is None:
@@ -643,6 +841,8 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
              "blocks": [indices[b:b + G] for b in range(0, n, G)], "classes": [class_digest(text)] * n}
     head = {"format": INST_FORMAT, "statement": meta.get("statement", STATEMENT), "scheme": SCHEME, "set": input_set.name, "subcircuit": sub.id,
             "range": [lo, hi], "instances": n, "circuit_sha512": digest(text), "units": units, "frame_v3": fv, "rows": True}
+    if pins:
+        head["public_inputs"] = pins
     if registered is not None:
         head["registered"] = {name: {"value": e["value"], "positions": [int(x) for x in e["positions"]], "paths": list(e["paths"])}
                               for name, e in registered.items()}
@@ -652,6 +852,7 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
         public += np.ascontiguousarray(np.stack([refs[p.name] for p in ports], axis=1).astype("<u4")).tobytes()
     else:
         public = b"".join(bcs[p.name][i] for i in range(n) for p in ports)
+    public += pub_tail
     if path is not None:
         if refs is not None:
             private = b"".join(np.ascontiguousarray(rows[p.name].astype("<u2")).tobytes() for p in ports)
@@ -669,24 +870,30 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
 
 
 def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False, salt_key: bytes | None = None,
-          indices: list | None = None, partition: str | None = None, program: str | None = None, share_rows: bool = False) -> Path:
+          indices: list | None = None, partition: str | None = None, program: str | None = None, share_rows: bool = False,
+          public_inputs: dict | None = None) -> Path:
     """``<out_dir>/circuit.txt`` (the composite circuit), the prover's ``<out_dir>/inst-<n>.bin`` and the verifier's own
     ``pub-<n>.bin`` from the same salts (``share_rows``: shared-row files, :func:`write`); returns the prover's path, or
     (``public_only``: a verifier staging its own public file, which needs the prover's ``salt_key``) writes and returns only
-    ``pub-<n>.bin``."""
+    ``pub-<n>.bin``. ``public_inputs`` (:func:`compose`): also the verifier's ``public-inputs-<n>.bin``, from the set's words, which
+    stand in for the verifier's own recomputation (a caller that holds the derivation writes it with
+    :func:`write_public_inputs`)."""
     if public_only and salt_key is None:
         raise ValueError("a verifier stages its own public file only from the prover's staging salt key (salts are otherwise fresh)")
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     statics = set_statics(input_set)
-    text = compose(low, input_set.subcircuit, partition=partition, program=program, statics=statics)
+    text = compose(low, input_set.subcircuit, partition=partition, program=program, statics=statics, public_inputs=public_inputs)
     (out / "circuit.txt").write_text(text)
     if low.units.cut:
         IL.write_tables(out / "tables")
         if not (out / "circuit-forged.txt").exists():
-            (out / "circuit-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True, partition=partition, program=program, statics=statics))
+            (out / "circuit-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True, partition=partition, program=program,
+                                                            statics=statics, public_inputs=public_inputs))
     inst, pub = out / f"inst-{hi - lo}.bin", out / f"pub-{hi - lo}.bin"
     write(text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices, share_rows=share_rows)
+    if public_inputs:
+        write_public_inputs(text, {nm: input_set.port(nm, lo, hi) for nm in public_inputs}, hi - lo, out / f"public-inputs-{hi - lo}.bin")
     return pub if public_only else inst
 
 
@@ -704,7 +911,8 @@ def main(argv=None) -> int:
     """``python -m verity_flock.circuit --input-set DIR --n N [N ...] --out DIR [--partition H --program H --unit-indices FILE]``:
     the composite circuit, then for each N the prover's ``inst-N.bin`` and the verifier's own ``pub-N.bin`` (instances [0, N),
     their global unit indices from FILE's JSON list, else [0, N)); prints the pin and the class. ``--class-only``: compose and
-    print only (the class a partition names). ``--typed``: the typed statement instead."""
+    print only (the class a partition names). ``--typed``: the typed statement instead. ``--public-input PORT SEED DERIVATION``
+    (repeatable): an input port the verifier recomputes from public data (:func:`compose`'s ``public_inputs``)."""
     import argparse
 
     from verity_numerical.bench.input_sets import InputSet
@@ -719,11 +927,16 @@ def main(argv=None) -> int:
     ap.add_argument("--class-only", action="store_true")
     ap.add_argument("--share-rows", action="store_true", help="each input port's distinct rows as one committed table, refs per instance")
     ap.add_argument("--typed", action="store_true", help="the typed statement (verity_flock.typed_statement.stage)")
+    ap.add_argument("--public-input", nargs=3, action="append", default=[], metavar=("PORT", "SEED", "DERIVATION"),
+                    help="an input port the verifier recomputes from public data, naming its seed and derivation (PROTOCOL.md §16.10)")
     a = ap.parse_args(argv)
+    public_inputs = {p: {"seed": sd, "derivation": d} for p, sd, d in a.public_input} or None
+    if public_inputs and a.typed:
+        ap.error("--public-input: a typed statement's instance reads only rows")
     s = InputSet.open(a.input_set)
     low = lowering_for_set(s)
     if a.class_only:
-        text = compose(low, s.subcircuit, partition=a.partition, program=a.program, statics=set_statics(s))
+        text = compose(low, s.subcircuit, partition=a.partition, program=a.program, statics=set_statics(s), public_inputs=public_inputs)
         print(json.dumps({"subcircuit": s.subcircuit.id, "unit": low.name, "class_sha512": class_digest(text),
                           "program_sha512": program_sha512(s.subcircuit, set_statics(s))}))
         return 0
@@ -733,7 +946,7 @@ def main(argv=None) -> int:
     stage_ = typed_statement.stage if a.typed else stage
     for n in a.n:
         stage_(low, s, 0, n, a.out, indices=idx[:n] if idx is not None else None, partition=a.partition, program=a.program,
-               share_rows=a.share_rows)
+               share_rows=a.share_rows, **({"public_inputs": public_inputs} if public_inputs else {}))
     text = (Path(a.out) / "circuit.txt").read_text()
     print(json.dumps({"subcircuit": s.subcircuit.id, "unit": low.name, "pin": digest(text), "class_sha512": class_digest(text), "n": a.n}))
     return 0

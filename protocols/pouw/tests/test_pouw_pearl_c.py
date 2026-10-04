@@ -188,7 +188,8 @@ def test_registry_and_domain():
         with pytest.raises(DomainError):
             s.check(Matmul(0, bad, 1))
     sh = Shape(128, 2048, 256)
-    assert s.wref(sh) == 128 * 256 * (2048 + 32 * 16) + 128 * 2048 * 32 + 2 * 64 * 128 * 256 + 320 * 128 * 2048
+    assert s.wref(sh) == 128 * 256 * (2048 + 32 * 15) + 128 * 2048 * 32 + 2 * 64 * 128 * 256 + 320 * 128 * 2048
+    assert s.first_adds(sh) == 32 * 128 * 256
 
 
 @pytest.mark.parametrize("case", [c["case"] for c in PINNED["cases"]])
@@ -315,10 +316,11 @@ def test_v1_registry_and_cost():
 
 
 def wref_of(m: int, k: int, n: int, fs: int = 64, qa: int = 4, add: int = 32, bf16: int = 2) -> Fraction:
-    """`Game.lean`'s `wrefOf Params.pi Costs.adopted` (r = 32, G = 4), `creditOf` + qa·m·k; at other prices the device
-    statement's `wrefDev`: mkn + mkn·add/(32·G) + m·k·r + 2·bf16·r·m·n + fs·m·k + qa·m·k."""
+    """`DeviceRev1.lean`'s `wrefOfRev1 Params.pi Costs.adopted` (r = 32, G = 4), `creditOfRev1` + qa·m·k; at other prices
+    the device statement's `wrefDevRev1`: mkn + mkn·add/(32·G) − add·m·n + m·k·r + 2·bf16·r·m·n + fs·m·k + qa·m·k, the
+    promotion adds less the first of every word (`firstAddDev`)."""
     mkn = Fraction(m * k * n)
-    return mkn + mkn * add / 128 + m * k * 32 + 2 * bf16 * 32 * m * n + fs * m * k + qa * m * k
+    return mkn + mkn * add / 128 - add * m * n + m * k * 32 + 2 * bf16 * 32 * m * n + fs * m * k + qa * m * k
 
 
 #: sm_120's measured W1 rates (node 2, locked 2,100 MHz; `r20260930-063213-c94a`, `r20260930-061717-3e84`; research store
@@ -332,8 +334,8 @@ SM120_MEASURED = {"fp8_mac": 1023.98, "fadd_loop": 122.26, "fadd_alone": 128, "f
 def test_prices_are_per_device_and_sm120s_are_the_measured_ones():
     """sm_90's prices are the H100's (`Prices.h100`); sm_120's are the device statement's `Prices.sm120`, each step at its
     cheapest bit-exact form on the card, and none above what the card measures in the loop.  Crediting sm_120 at the
-    H100's FADD of 32 (and forming of 64 + 4) overstates the credit; at sm_120's prices the scheme is `wrefDev`, and the
-    debit per flagged atom-word and element follows the same record."""
+    H100's FADD of 32 (and forming of 64 + 4) overstates the credit; at sm_120's prices the scheme is `wrefDevRev1`, and
+    the debit per flagged atom-word, element and later +0 promotion follows the same record."""
     h, s, m = C.PRICES["sm_90"], C.PRICES["sm_120"], SM120_MEASURED
     assert (h, s) == (C.H100_PRICES, C.SM120_PRICES)
     assert (h.fadd, h.bf16_mac, h.forming_credited, h.forming_a_only) == (32, 2, 64, 4)
@@ -348,7 +350,9 @@ def test_prices_are_per_device_and_sm120s_are_the_measured_ones():
     for sh in (Shape(32, 1024, 64), Shape(2048, 3584, 18944), Shape(8192, 8192, 8192)):
         assert sm120.wref(sh) == wref_of(sh.m, sh.k, sh.n, fs=40, qa=1, add=8, bf16=2)
         assert sm120.credit_of(sh) == sm120.wref(sh) - sh.m * sh.k < get("pearl-c-h100-v1").credit_of(sh)
-    assert D.debit_units(1, 0, s) == 34 and D.debit_units(0, 1, s) == 40 and D.debit_units(1, 1) == 40 + 64
+    assert D.debit_units(1, 0, s, zeros=0) == 34 and D.debit_units(0, 1, s, zeros=0) == 40
+    assert D.debit_units(1, 1, zeros=0) == 40 + 64 and D.debit_units(0, 0, s, zeros=1) == 8
+    assert D.debit_units(0, 0, zeros=1) == 32
     with pytest.raises(ValueError):
         C.PearlC(forming="v0", prices=s)
 
@@ -356,8 +360,8 @@ def test_prices_are_per_device_and_sm120s_are_the_measured_ones():
 @pytest.mark.parametrize("m", [1, 32, 128, 2048])
 @pytest.mark.parametrize("k,n", [(128, 128), (1024, 64), (3584, 4608), (3584, 37888), (18944, 3584), (65536, 16)])
 def test_wref_is_leans_wref_of(m, k, n):
-    """Red team F2: W_ref is Lean's `wrefOf` on every unit shape, and the credit its `creditOf`; the weight side is not in
-    either, at any m."""
+    """Red team F2: W_ref is Lean's `wrefOfRev1` on every unit shape, and the credit its `creditOfRev1`; the weight side
+    is not in either, at any m."""
     s = get("pearl-c-h100-v1")
     sh = Shape(m, k, n)
     assert s.wref(sh) == wref_of(m, k, n) and s.credit_of(sh) == wref_of(m, k, n) - 4 * m * k
@@ -365,7 +369,7 @@ def test_wref_is_leans_wref_of(m, k, n):
 
 
 def test_lifecycle_work_has_no_weight_side():
-    """Red team F2: two calls on one weight give W = the two units' `wrefOf`; the weight side is `job_cost`, apart."""
+    """Red team F2: two calls on one weight give W = the two units' `wrefOfRev1`; the weight side is `job_cost`, apart."""
     from verity_pouw.audit import Epoch, Prover, Verifier, Workload
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1"), 128

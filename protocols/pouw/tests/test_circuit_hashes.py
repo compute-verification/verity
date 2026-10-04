@@ -55,6 +55,32 @@ def test_shake256_matches_hashlib(nlanes, nbytes):
     assert b"".join(v.to_bytes(4, "little") for v in out)[:nbytes] == hashlib.shake_256(data).digest(nbytes)
 
 
+@pytest.mark.parametrize("nlanes,nbytes,domain", [(1, 32, 0x21), (20, 32, 0x22), (21, 32, 0x1F), (22, 200, 0x01),
+                                                  (64, 32, 0x7F)])
+def test_turboshake128_matches_core(nlanes, nbytes, domain):
+    """Core's TurboSHAKE128 (`verity.commitments.turboshake`): the domain byte and the final bit in one lane (20 lanes), a
+    whole padding block (21), a second absorbed block, squeezing past one rate block, and Pearl-C's message (32 words of C̃
+    and 32 of U, 64 lanes)."""
+    from verity.commitments.turboshake import turboshake128 as native
+
+    from verity_pouw.circuit.hashes import turboshake128
+    rng = random.Random(nlanes * 1000 + domain)
+    data = bytes(rng.randrange(256) for _ in range(8 * nlanes))
+    lanes = keccak_lanes(data)
+    ins = list(range(0, nlanes, 2))
+
+    def body(B, S, x):
+        e = Emit(B)
+        return e.array(turboshake128(e, [(x[2 * ins.index(i)], x[2 * ins.index(i) + 1]) if i in ins else p
+                                         for i, p in enumerate(lanes)], nbytes, domain))
+
+    out = evaluate(_definition(f"TTs{nlanes}_{nbytes}_{domain}", 2 * len(ins), (nbytes + 3) // 4, body),
+                   [h for i in ins for h in lanes[i]])
+    assert b"".join(v.to_bytes(4, "little") for v in out)[:nbytes] == native(data, domain, nbytes)
+    with pytest.raises(ValueError):
+        turboshake128(Emit(None), lanes, nbytes, 0x80)
+
+
 def test_i32_to_f32_matches_the_float_cast():
     rng = random.Random(3)
     cases = [0, 1, -1, 2 ** 24, 2 ** 24 + 1, 2 ** 24 + 3, 2 ** 31 - 1, -2 ** 31, 16777217, -16777219]
