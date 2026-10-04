@@ -133,6 +133,32 @@ src = "tools/research/src/research/pods/nebius/n2_commit.sh"
 nodes = ["vy-nebius-2"]
 owner = "infra"
 
+# ---- both nodes: standing campaign targets (`research keeper`); after installing, `sudo systemctl enable --now vy-keeper.timer`
+
+[[file]]
+path = "/usr/local/bin/vy-keeper"
+src = "tools/research/src/research/pods/nebius/keeper.py"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-keeper.service"
+src = "tools/research/src/research/pods/nebius/vy-keeper-n1.service"
+nodes = ["vy-nebius-1"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-keeper.service"
+src = "tools/research/src/research/pods/nebius/vy-keeper-n2.service"
+nodes = ["vy-nebius-2"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-keeper.timer"
+src = "tools/research/src/research/pods/nebius/vy-keeper.timer"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+owner = "infra"
+
 # ---- node 1: the Kueue cluster's host (pods/nebius/sky/cluster_up.sh, monitoring/host_up.sh)
 
 [[tree]]
@@ -154,6 +180,14 @@ path = "/workspace/verity-guest/bin/n1_lease.py"
 src = "tools/research/src/research/pods/nebius/n1_lease.py"
 nodes = ["vy-nebius-1"]
 run = ["systemd:vy-n1-lease@provers", "systemd:vy-n1-lease@circuits"]
+owner = "infra"
+
+# the description and code n1_lease.py's $VY_POOL_POLICY command runs (`cluster policy show`), apart from cluster-src, which
+# the dispatcher's `cluster submit` reads; no `run`: n1_lease.py runs it afresh every POLICY_EVERY_S
+[[tree]]
+path = "/workspace/verity-guest/cluster-policy"
+src = "tools/cluster"
+nodes = ["vy-nebius-1"]
 owner = "infra"
 
 [[file]]
