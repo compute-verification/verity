@@ -44,11 +44,9 @@ def slotRowG (c : Circuit) (g k i x : ℕ) : Option (List ℕ × List ℕ) :=
   let net := (c.nets.getD k default).2
   let base := c.slotCol k g i
   if x = net.constPos then none
-  else if x < netIn net then
-    match wireSrcG c g k i x with
+  else match (if x < netIn net then wireSrcG c g k i x else none) with
     | some s => some ([s], [s])
-    | none => some ([], [])
-  else some ((net.a.row x).toList.map (base + ·), ((net.b.row x).toList ++ lookupCols net.lookup x).map (base + ·))
+    | none => some ((net.a.row x).toList.map (base + ·), ((net.b.row x).toList ++ lookupCols net.lookup x).map (base + ·))
 
 theorem slotRowG_zero (c : Circuit) : slotRowG c 0 = slotRow c := rfl
 

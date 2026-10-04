@@ -19,9 +19,9 @@ The block has an order of single columns, though: Δ makes a wired input row `ds
 Δ's `(dst, dst)` cancel, `HmRow.delta`), and a slot's constant read the pin. This file is that order:
 
 * `vuRowList`: every column of the VU's slots of every net but the row circuits (`vuNets`), at VU 0, with its row
-  (`slotRow`): the constant copies `one`, a wired input copies its wire's output column (`wireSrc`), another input
-  reads nothing, a computed row reads its net's `A` and `B` rows in its slot (a lookup slot's `B` also its table's
-  entries, `lookupCols`);
+  (`slotRow`): the constant copies `one`, a wired input copies its wire's output column (`wireSrc`), every other row
+  reads its net's `A` and `B` rows in its slot (a lookup slot's `B` also its table's entries, `lookupCols`), so an
+  unwired input row outside `vuIns` must read nothing for `orderedB` to hold;
 * `vuIns`: the VU's inputs, the VU-stacked unit inputs no wire copies (row words, leaf cuts, forced zeros, padding);
 * `vuOrder`: the inputs, then Kahn's order of the other columns (`kahn`); `vuLogical` is the `Compose.Logical`;
 * `orderedB`: a check of `Compose.Ordered` (`ordered_of_orderedB`);
@@ -63,17 +63,16 @@ def lookupCols : Option LookupTable → ℕ → List ℕ
     ((List.range (2 ^ t.lo)).filter fun l => decide (lookupEntry (some t) x (t.loTop + l) = 1)).map (t.loTop + ·)
 
 /-- **Net `k`'s slot `i`, column `x`, as the block holds it at VU 0**: the constant copies `one` (`none`, Δ's copy of
-the pin); a wired input copies its wire's output column; another input reads nothing (an input the VU's program takes,
-or a padding row); a computed row reads the net's `A` and `B` rows in the slot. -/
+the pin); a wired input copies its wire's output column; every other row reads the net's `A` and `B` rows in the slot.
+An unwired input row is then empty (a padding row), or reads itself (a port bit, or a padding row `Net.ofRows` let read
+itself), which `orderedB` refuses unless the column is an input the VU's program takes (`vuIns`). -/
 def slotRow (c : Circuit) (k i x : ℕ) : Option (List ℕ × List ℕ) :=
   let net := (c.nets.getD k default).2
   let base := c.slotCol k 0 i
   if x = net.constPos then none
-  else if x < netIn net then
-    match wireSrc c k i x with
+  else match (if x < netIn net then wireSrc c k i x else none) with
     | some s => some ([s], [s])
-    | none => some ([], [])
-  else some ((net.a.row x).toList.map (base + ·), ((net.b.row x).toList ++ lookupCols net.lookup x).map (base + ·))
+    | none => some ((net.a.row x).toList.map (base + ·), ((net.b.row x).toList ++ lookupCols net.lookup x).map (base + ·))
 
 /-- **The VU's columns and their rows**: every slot the VU holds of every net of `vuNets`, each slot's columns up to its
 constant. -/

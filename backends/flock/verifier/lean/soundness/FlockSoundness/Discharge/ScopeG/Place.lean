@@ -36,30 +36,41 @@ theorem slotRow_none {c : Circuit} {k i x : ℕ} (h : slotRow c k i x = none) :
   revert h
   unfold slotRow
   simp only [if_neg hne]
-  split_ifs
-  · split <;> simp
-  · simp
+  split <;> simp
 
-/-- `slotRowG` at an input row: `wireSrcG`'s column, or nothing. -/
-theorem slotRowG_in {c : Circuit} {g k i x : ℕ} {p1 p2 : List ℕ} (hne : x ≠ (c.nets.getD k default).2.constPos)
-    (hlt : x < netIn (c.nets.getD k default).2) (h : slotRowG c g k i x = some (p1, p2)) :
-    p1 = (wireSrcG c g k i x).toList ∧ p2 = (wireSrcG c g k i x).toList := by
+/-- `slotRowG` at a wired input row: the wire's source column. -/
+theorem slotRowG_wired {c : Circuit} {g k i x s : ℕ} {p1 p2 : List ℕ} (hne : x ≠ (c.nets.getD k default).2.constPos)
+    (hw : (if x < netIn (c.nets.getD k default).2 then wireSrcG c g k i x else none) = some s)
+    (h : slotRowG c g k i x = some (p1, p2)) : p1 = [s] ∧ p2 = [s] := by
   unfold slotRowG at h
-  simp only [if_neg hne, if_pos hlt] at h
-  cases hw : wireSrcG c g k i x with
-  | none => simp only [hw, Option.some.injEq, Prod.mk.injEq] at h; exact ⟨h.1.symm, h.2.symm⟩
-  | some s => simp only [hw, Option.some.injEq, Prod.mk.injEq] at h; exact ⟨h.1.symm, h.2.symm⟩
+  simp only [if_neg hne, hw, Option.some.injEq, Prod.mk.injEq] at h
+  exact ⟨h.1.symm, h.2.symm⟩
 
-/-- `slotRowG` at a computed row: the net's rows moved to the slot, a lookup slot's table columns on `B`. -/
-theorem slotRowG_comp {c : Circuit} {g k i x : ℕ} {p1 p2 : List ℕ}
-    (hne : x ≠ (c.nets.getD k default).2.constPos) (hlt : ¬x < netIn (c.nets.getD k default).2)
+/-- `slotRowG` at every other row: the net's rows moved to the slot, a lookup slot's table columns on `B`. -/
+theorem slotRowG_own {c : Circuit} {g k i x : ℕ} {p1 p2 : List ℕ} (hne : x ≠ (c.nets.getD k default).2.constPos)
+    (hw : (if x < netIn (c.nets.getD k default).2 then wireSrcG c g k i x else none) = none)
     (h : slotRowG c g k i x = some (p1, p2)) :
     p1 = ((c.nets.getD k default).2.a.row x).toList.map (c.slotCol k g i + ·) ∧
       p2 = (((c.nets.getD k default).2.b.row x).toList ++ lookupCols (c.nets.getD k default).2.lookup x).map
         (c.slotCol k g i + ·) := by
   unfold slotRowG at h
-  simp only [if_neg hne, if_neg hlt, Option.some.injEq, Prod.mk.injEq] at h
+  simp only [if_neg hne, hw, Option.some.injEq, Prod.mk.injEq] at h
   exact ⟨h.1.symm, h.2.symm⟩
+
+/-- An input row `slotRowG` reads its net's rows at is unwired, and, if `hw` holds of it, not the unit's. -/
+theorem own_unwired {c : Circuit} {g k i x : ℕ}
+    (hws : (if x < netIn (c.nets.getD k default).2 then wireSrcG c g k i x else none) = none)
+    (hw : k = c.unitNet → x < netIn (c.nets.getD k default).2 → (wireSrcG c g k i x).isSome) :
+    x < netIn (c.nets.getD k default).2 → wireSrcG c g k i x = none ∧ k ≠ c.unitNet := fun hlt => by
+  simp only [hlt, ite_true] at hws
+  exact ⟨hws, fun hu => by have := hw hu hlt; rw [hws] at this; cases this⟩
+
+theorem wired_lt {c : Circuit} {g k i x s : ℕ}
+    (hws : (if x < netIn (c.nets.getD k default).2 then wireSrcG c g k i x else none) = some s) :
+    x < netIn (c.nets.getD k default).2 ∧ wireSrcG c g k i x = some s := by
+  by_cases hlt : x < netIn (c.nets.getD k default).2
+  · simp only [hlt, ite_true] at hws; exact ⟨hlt, hws⟩
+  · simp only [hlt, ite_false] at hws; cases hws
 
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
@@ -107,12 +118,15 @@ theorem vuRealizes (ht : tags.typed = false)
     show rangesEntry (Hidden.flatTwin st) (slotEntryA (Hidden.flatTwin st)) r.val j.val +
       deltaEntry (Hidden.flatTwin st).da r.val j.val = (((pr.1.map (vuPos st.c g)).count j.val : ℕ) : ZMod 2)
     rw [hS]
-    by_cases hlt : x < netIn (st.c.nets.getD k default).2
-    · rw [(slotRowG_in hne hlt hG).1]
-      exact delta_inA Lf F hk hg hi hlt (fun hu => hw (vuOrder_comp_notin hs hk') hu hlt) r j hr'
-    · have h0 : deltaEntry (Hidden.flatTwin st).da r.val j.val = 0 :=
-        (delta_comp Lf F hk hg hi (not_lt.1 hlt) (lt_of_le_of_ne hx hne) r j hr').1
-      rw [h0, add_zero, (slotRowG_comp hne hlt hG).1]
+    cases hws : (if x < netIn (st.c.nets.getD k default).2 then wireSrcG st.c g k i x else none) with
+    | some s =>
+      rw [(slotRowG_wired hne hws hG).1]
+      exact delta_inA Lf F hk hg hi (wired_lt hws).1 (wired_lt hws).2 r j hr'
+    | none =>
+      have h0 : deltaEntry (Hidden.flatTwin st).da r.val j.val = 0 :=
+        (delta_own Lf F hk hg hi (lt_of_le_of_ne hx hne) (own_unwired hws (hw (vuOrder_comp_notin hs hk'))) r j
+          hr').1
+      rw [h0, add_zero, (slotRowG_own hne hws hG).1]
   · obtain ⟨k, hk, i, hi, x, hx, -, hrow, hpos, hw⟩ := hdec (hcomp k' hk')
     have hpr' : slotRow st.c k i x = some pr := hrow.symm.trans hpr
     have hG : slotRowG st.c g k i x = some (pr.1.map (vuPos st.c g), pr.2.map (vuPos st.c g)) :=
@@ -129,16 +143,19 @@ theorem vuRealizes (ht : tags.typed = false)
     show rangesEntry (Hidden.flatTwin st) (slotEntryB (Hidden.flatTwin st)) r.val j.val +
       deltaEntry (Hidden.flatTwin st).db r.val j.val = (((pr.2.map (vuPos st.c g)).count j.val : ℕ) : ZMod 2)
     rw [hS]
-    by_cases hlt : x < netIn (st.c.nets.getD k default).2
-    · rw [(slotRowG_in hne hlt hG).2]
-      exact delta_inB Lf F hk hg hi hlt (fun hu => hw (vuOrder_comp_notin hs hk') hu hlt) r j hr'
-    · have h0 : deltaEntry (Hidden.flatTwin st).db r.val j.val = 0 :=
-        (delta_comp Lf F hk hg hi (not_lt.1 hlt) (lt_of_le_of_ne hx hne) r j hr').2
+    cases hws : (if x < netIn (st.c.nets.getD k default).2 then wireSrcG st.c g k i x else none) with
+    | some s =>
+      rw [(slotRowG_wired hne hws hG).2]
+      exact delta_inB Lf F hk hg hi (wired_lt hws).1 (wired_lt hws).2 r j hr'
+    | none =>
+      have h0 : deltaEntry (Hidden.flatTwin st).db r.val j.val = 0 :=
+        (delta_own Lf F hk hg hi (lt_of_le_of_ne hx hne) (own_unwired hws (hw (vuOrder_comp_notin hs hk'))) r j
+          hr').2
       have hl : lookupAt st.c k g i x j.val =
           ((((lookupCols (st.c.nets.getD k default).2.lookup x).map (st.c.slotCol k g i + ·)).count j.val : ℕ) :
             ZMod 2) :=
         lookup_rowB Lf F hk hg hi (lt_of_le_of_ne hx hne) j.val
-      rw [h0, add_zero, hl, (slotRowG_comp hne hlt hG).2, List.map_append, List.count_append, Nat.cast_add]
+      rw [h0, add_zero, hl, (slotRowG_own hne hws hG).2, List.map_append, List.count_append, Nat.cast_add]
   · obtain ⟨k, hk, i, hi, x, hx, -, hrow, hpos, -⟩ := hdec (hcomp k' hk')
     have hx' := slotRow_none (hrow.symm.trans hpr)
     have hr' : r.val = st.c.slotCol k g i + (st.c.nets.getD k default).2.constPos := by

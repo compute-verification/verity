@@ -20,8 +20,9 @@ This area freezes the VU's program and the hidden-output headline at it; the pro
 `sorry` stubs, to be proved in their own lanes before anything here reaches `main`.
 
 * `Vu`: the VU's columns at VU 0 (its units', stages' and lookup slots' slots), each column's block row (`slotRow`: a
-  wired input copies its wire's source, a slot's constant copies `one`), the VU's inputs (`vuIns`: the unit inputs no
-  wire copies), Kahn's order (`vuOrder`), `vuLogical`, and `orderedB` with `ordered_of_orderedB`.
+  wired input copies its wire's source, a slot's constant copies `one`, every other row reads its net's rows), the VU's
+  inputs (`vuIns`: the unit inputs no wire copies), Kahn's order (`vuOrder`), `vuLogical`, and `orderedB` with
+  `ordered_of_orderedB`.
 * `Scope`: `scopeOkGT` (one or two input groups, the outputs from the unit or the tail's last stage, the four row shapes
   `rowShapeW` admits, an untyped circuit, the VU's order, its reads) and `scopeOkG` (`scopeOkGT`, the unit returning the
   outputs), `scopeOkGT_spec`; the VU's program `vuProg` (`Rows.compose vuLogical` on source-indexed input gates) and its
