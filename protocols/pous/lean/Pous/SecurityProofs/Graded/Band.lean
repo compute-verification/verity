@@ -56,6 +56,12 @@ takes `min(v mod 2^9, d) + 1` sequential `Π₂` calls even with every parent he
   (`Pous.Guarantees.BackgroundRebuildExcluded`), below `3,057 ≤ R(d)` for every `d ≥ 5`: too short to re-encode a
   whole segment from `W` alone.
 - `Q_late` is any work bound at least `Q`: re-encoding is limited by its depth, not its width.
+
+**This rationale holds in the ideal-permutation model only.** Every count above is of whole `Π₂` calls, and the
+conversions to wall-clock time take a call to be at least 241.5 µs. At the reference Feistel-SHAKE256 `Π₂` this does
+not hold: a prover rebuilds a label from 1.53% of `C` in 481 Keccak-f, less than one call, by keeping five 200-byte
+round states per block, so it never re-encodes a segment (red team, 4 Oct 2026, art:7617c8017e80). The theorem is
+about the ideal model and is unaffected.
 -/
 
 namespace PousGraded

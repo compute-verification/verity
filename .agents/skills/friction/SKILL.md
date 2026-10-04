@@ -97,6 +97,14 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-04 (8:42 AM PDT): the proof system proves batches of arbitrary Boolean circuits, so soundness is **one
+  theorem over everything the compiled Lean verifier accepts**, with no hypothesis on the circuit file or the statement's
+  form (no `scopeOk`, no `pub.tables = none`). The verifier fails closed: it refuses every form the proof doesn't cover,
+  and rejecting an unproved form is a completeness limit, never a soundness gap. A circuit's inputs and outputs use one
+  canonical format, proved once in general (any row length, any input groups, any output placement), and frontends
+  normalize to it. Adding a workload never needs a verifier or proof change. The verifier gains no new form ahead of its
+  proof, and progress is never measured by which workloads' files fall inside a proof's scope. Pushback is welcome:
+  send it to Daniel through @proofs.
 - 2026-10-03: a test tier too slow for `check` (the vLLM reference regression's manifest rebuilds, about an hour) runs as a
   detached job after each train lands on `main` (`tools/check/post_train.py`, started by `research merge --push`) and labels
   the landing's check attempt `note=regression pass` or `fail:<rows>`, which circuits sweeps daily; `check` blocks on the
@@ -160,7 +168,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   on preemptible leases.
 - 2026-09-30: the Lean infrastructure lane changes `tools/lean`, the `lean-proofs` skill, `check`'s Lean steps, shared
   Lean foundations and Lean or Mathlib bumps (in a PR of their own, announced first) without asking. It speeds up another
-  lane's proofs when no pinned record changes; a changed record in another lane's package goes through that lane. What a
+  lane's proofs when no guarantee's record changes; a changed record in another lane's package goes through that lane. What a
   headline theorem may rest on, what "proved" means, retiring a theorem a table cites, spend past a budget line and any
   new human gate go to Daniel.
 - 2026-09-30: a lane fixes a bug it hits in `tools/research` in a small PR of its own, and the research coordinator only

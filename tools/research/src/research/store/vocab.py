@@ -88,6 +88,8 @@ SAME_DEVICE = "same_device"
 BELOW_BAR = "below_bar"                               # verified, but its whole-proof bound misses the tables' 2^-128 bar
 OUTCOME = "outcome"
 COMMIT_MAP = "commit_map"                             # on a commit-map/v1 artifact: whether the history rewrite it records applies
+CUSTODY = "custody"                                   # on a run id: whether `research data custody --triage` needs more of it
+CUSTODY_VALUES = ("waived", "never-ran", "needed")
 
 # ---- evidence labels: probe captures and input sets --------------------------------------------------------------------------------
 
@@ -292,6 +294,11 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        status=IGNORED),
     _k(FINDING, GROUP_VERIFICATION, TEXT, "a red-team or audit finding in prose (DOWNGRADE / EARNED / HOLDS ...), beside the proof_class verdict it explains"),
     _k(SAME_DEVICE, GROUP_VERIFICATION, BOOL, "whether the verifier ran on the prover's machine"),
+    _k(CUSTODY, GROUP_VERIFICATION, ENUM, "on a run id, by whoever looked at its records: whether custody triage needs more of it (waived: "
+       "nothing more, its logs stay where they are, or are gone; never-ran: it never ran its workload, so it holds no evidence, which "
+       "triage believes only while the run dir shows no sign of a start: no pid in status.json, no started, span_start or sampler_start "
+       "event, no sampler reading, no output; needed: triage reads its records again, which withdraws an earlier waived or never-ran); "
+       "the latest label wins", CUSTODY_VALUES),
     _k(BELOW_BAR, GROUP_VERIFICATION, BOOL, "the verified proof's whole-proof bound is below the tables' 2^-128 bar: shown in the below-bar drill-down, never a Table 2 cell"),
     _k(OUTCOME, GROUP_VERIFICATION, TEXT, "an Attempt's failure class as judged (CGROUP_OOM, UNKNOWN_EXIT, ...), restating or correcting the classifier's"),
     _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head (the merge queue admits on it)",
