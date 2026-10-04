@@ -297,6 +297,88 @@ def dense_layer_weights_type(C: dict[str, Any]) -> Record:
     return Record(*(_fp8_fields(fields, G, G) if G else fields))
 
 
+def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> Record:
+    """One decoder layer of a multi-head-latent-attention MoE family (GLM-4.7-Flash or GLM-5.3 DSA): the attention's
+    vLLM parameters (`fused_qkv_a_proj [Q_LORA + KV_LORA + QK_ROPE][H]`, the two latent norms, `q_b_proj`, `kv_b_proj`, `o_proj`), then
+    the dense MLP of a layer below `FIRST_DENSE` (`I_DENSE`) or the MoE block: the f32 router gate and its f32 `e_score_correction_bias`,
+    the shared experts' fused gate/up and down projections, and the routed experts' `w13 [E][2I][H]` / `w2 [E][H][I]`.
+    A block-FP8 checkpoint stores every linear except the router and the DSA indexer's replicated key/weight projection as e4m3 followed
+    by its f32 block scales.  A bf16 checkpoint retains the original GLM-4.7 layout."""
+    from verity_vllm.program.registry.prims import F32
+    from verity_vllm.program.registry.fp8 import E4M3, weight_blocks
+    H, NH, QL, L, DN, DR, DV = (int(C[k]) for k in ("H", "NH", "Q_LORA", "KV_LORA", "QK_NOPE", "QK_ROPE", "V_HEAD"))
+    G = int(C.get("FP8_BLOCK") or 0)
+
+    def mat(n: int, k: int, t: Any = BF16) -> Array:
+        return Array(n, Array(k, t))
+
+    def linear(name: str, n: int, k: int) -> list[tuple[str, Any]]:
+        if not G:
+            return [(name, mat(n, k))]
+        if k % G:
+            raise ValueError(f"{name}: [{n}][{k}]: K is not a multiple of the FP8 block {G}")
+        return [(name, mat(n, k, E4M3)), (f"{name}s", mat(weight_blocks(n, G), k // G, F32))]
+
+    fields: list[tuple[str, Any]] = [("ln1", Array(H, BF16))]
+    fields += linear("qkv_a_w", QL + L + DR, H)
+    fields += [("q_a_ln", Array(QL, BF16))]
+    fields += linear("q_b_w", NH * (DN + DR), QL)
+    fields += [("kv_a_ln", Array(L, BF16))]
+    fields += linear("kv_b_w", NH * (DN + DV), L)
+    fields += linear("o_w", H, NH * DV)
+    fields += [("ln2", Array(H, BF16))]
+    if dense:
+        I = int(C["I_DENSE"])
+        fields += linear("gate_up_w", 2 * I, H)
+        fields += linear("down_w", H, I)
+        return Record(*fields)
+    E, I, S = int(C["NUM_EXPERTS"]), int(C["I"]), int(C["SHARED_EXPERTS"])
+    fields += [("gate_w", mat(E, H, BF16 if G else F32)), ("gate_bias", Array(E, F32))]
+    fields += linear("sh_gate_up_w", 2 * I * S, H)
+    fields += linear("sh_down_w", H, I * S)
+    if G:
+        g = fp8_moe_block(G, I, H)
+        fields += [("w13", Array(E, mat(2 * I, H, E4M3))),
+                   ("w13_ws", Array(E, mat(-(-(2 * I) // g), -(-H // g), F32))),
+                   ("w2", Array(E, mat(H, I, E4M3))),
+                   ("w2_ws", Array(E, mat(-(-H // g), -(-I // g), F32)))]
+    else:
+        fields += [("w13", Array(E, mat(2 * I, H))), ("w2", Array(E, mat(H, I)))]
+    return Record(*fields)
+
+
+def mla_indexer_weights_type(C: dict[str, Any]) -> Record:
+    """One full GLM-5.3 DSA indexer.  Shared indexer layers have no parameters and therefore no entry in the top-level indexer array."""
+    from verity_vllm.program.registry.fp8 import E4M3, weight_blocks
+    from verity_vllm.program.registry.prims import F32
+
+    H, QL, IH, ID, G = (int(C[k]) for k in ("H", "Q_LORA", "INDEX_HEADS", "INDEX_HEAD_DIM", "FP8_BLOCK"))
+    return Record(
+        ("wq_b_w", Array(IH * ID, Array(QL, E4M3))),
+        ("wq_b_ws", Array(weight_blocks(IH * ID, G), Array(QL // G, F32))),
+        ("wk_w", Array(ID + IH, Array(H, BF16))),
+        ("k_norm_w", Array(ID, F32)),
+        ("k_norm_b", Array(ID, F32)),
+    )
+
+
+def mla_weights_type(C: dict[str, Any]) -> Record:
+    """The weights Record of an MLA-MoE configuration: layers below `FIRST_DENSE` as `dense_layers`, MoE layers as `layers`
+    (index = layer - FIRST_DENSE), DSA's parameter-owning full indexers as `indexers`, the untied `lm_head`, and the rotary table."""
+    H, V, NL, FD = int(C["H"]), int(C["V"]), int(C["NL"]), int(C["FIRST_DENSE"])
+    fields: list[tuple[str, Any]] = [
+        ("embed", Array(V, Array(H, BF16))),
+        ("dense_layers", Array(FD, mla_layer_weights_type(C, dense=True))),
+        ("layers", Array(NL - FD, mla_layer_weights_type(C, dense=False))),
+    ]
+    indexers = tuple(C.get("INDEXER_LAYERS") or ())
+    if indexers:
+        fields.append(("indexers", Array(len(indexers), mla_indexer_weights_type(C))))
+    fields += [("norm", Array(H, BF16)), ("cos_sin", Array(int(C["MAX_POS"]), Array(int(C["QK_ROPE"]), BF16))),
+               ("lm_head", Array(V, Array(H, BF16)))]
+    return Record(*fields)
+
+
 def weights_type(C: dict[str, Any]) -> Record:
     """`b1.weights_type(C)` (embed, layers, norm, cos_sin) plus an `lm_head` field `[V][H]` when the checkpoint does not tie
     the output projection to the embedding.  `b1.py` is frozen (D57); tied configurations get the identical Record.
@@ -307,7 +389,10 @@ def weights_type(C: dict[str, Any]) -> Record:
     `norm`, and a `cos_sin` table of width `rotary_dim(C)` (partial rotary); RMSNorm configurations are unchanged.
     [R15 fp8] `C["QK_NORM"] == "head"` (Qwen3) and/or `C["FP8_BLOCK"]` (block-scaled FP8 checkpoint) get
     `dense_layer_weights_type(C)` as the `layers` element (per-head norm weights; e4m3 weights + f32 block scales); a fused-MoE one
-    takes `moe_layer_weights_type(C)`, which states both itself."""
+    takes `moe_layer_weights_type(C)`, which states both itself.  A configuration with `KV_LORA` (multi-head latent attention)
+    gets `mla_weights_type(C)`."""
+    if C.get("KV_LORA"):
+        return mla_weights_type(C)
     base = b1.weights_type(C)
     fields = list(base.fields)
     if not C.get("NUM_EXPERTS") and (C.get("QK_NORM") == "head" or C.get("FP8_BLOCK")):
