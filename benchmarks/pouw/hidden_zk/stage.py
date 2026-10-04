@@ -11,21 +11,25 @@ PoUW's rows (`leaves.statement_rows`) and, for a row unit, its anchors as public
                     ok row and an 'adv' row (sd, cert) -> C~, U and the cap's verdict (one v2 run)
     capword         Pc8CapWord_v1{K,DEV='sm120'}: a word's A' and B~ codes (one v2 row each) and an 'adv' row (cert) -> C~, its
                     flags, its later +0 promotions and good (one v2 run)
-    the cap's split (`cap.unit_templates`, `cap.PORTS`; at tile TMxTN, 1x1 by default, and the unit's n HZ_CAP_N, 16,384;
-    the split's own files from cursor/pouw-cap-scope-e3fa 57798e6c4):
+    the cap's split, cut per tile row (`cap.unit_templates`, `cap.PORTS`; at tile TMxTN, 1x1 by default, and the unit's n
+    HZ_CAP_N, 16,384; the split's own files from cursor/pouw-cap-scope-e3fa ee2fd982b):
     splitword       Pc8CapWordUnit_v1{K,DEV='sm120'}: A'_i || P_A,i (fp8-p, row-seg), B~_j || P_B,j (fp8-p, v2) and an 'adv'
                     row (cert) -> its cap-word row (C~, U) and cap-flags row (flags, count, later +0 promotions, good)
-    splitstrip[TMxTN]  Pc8CapStrip_v1: TM ok rows -> its cap-rows row (admission bits, bound)
-    splittile[TMxTN]   Pc8CapTile_v1{TM,TN}: TM*TN cap-word rows -> the tile digest (its tile row)
-    splittally[TMxTN]  Pc8CapTally_v1: TM*TN cap-flags rows, a cap-rows row and TM sd rows (row-seg) -> the cap's verdict,
-                    staged as one v2 row (a stand-in: in the design it is the tally's public output, in no row)
-  C-Flock's composer refuses splitstrip and splittile at every tile: a unit none of whose rows has a compression before its
-  last block (each a v2 row under 112 bytes) leaves the sha512x3 range empty.  Each row is an hm96 slot of 2^18 bits, a
-  unit's slots the next power of two of its rows, so a unit of more than 256 rows passes 2^27 (K_MAX) in slots alone: the
-  tally's fit up to 15x15 (242 rows, 2^26), and a 64x64 tile's tile unit (4,097 rows) and tally (4,162) fit at no N.
+    splitstrip[TMxTN]  Pc8CapStrip_v1: TM ok rows -> its cap-rows row (admission bits, bound; row-seg)
+    splitrowdigest[TMxTN]  Pc8CapRowDigest_v1{TN}: a tile row's TN cap-word rows -> its cap-chunks row (the TurboSHAKE128
+                    digests of its 32-column chunks; row-seg)
+    splitrowtally[TMxTN]  Pc8CapRowTally_v1{K,TN}: a tile row's TN cap-flags rows and its A row's sd row (row-seg) -> its
+                    cap-sums row (atoms, zeros, elements, good)
+    splittile[TMxTN]   Pc8CapTile_v1{TM,TN}: TM cap-chunks rows -> the tile digest (its tile row)
+    splittally[TMxTN]  Pc8CapTally_v1: TM cap-sums rows and a cap-rows row -> the cap's verdict, staged as one v2 row (a
+                    stand-in: in the design it is the tally's public output, in no row)
+  Each row is an hm96 slot of 2^18 bits and a unit's slots the next power of two of its rows, so a unit holds at most 256
+  rows (K_MAX 27); and C-Flock's composer refuses a unit none of whose rows has a compression before its last block.  The
+  per-row cut keeps every unit of a 64x64 tile at 66 rows or fewer, each with such a row (`cap`'s and `leaves`' docstrings).
 
 A Pearl-C row's codes are finite E4M3 (the atom has no NaN operand) and its P words BF16 below 2^-15 in magnitude, seeded;
-the certificates are the prover's (`cap.certificates`), and sd a seeded salt-dead count per block.  THE 'adv' ROW IS A
+the certificates are the prover's (`cap.certificates`), and sd a seeded salt-dead count per block.  The split tally's even
+instances read zero sums (so its verdict is ok) and its odd ones seeded sums.  THE 'adv' ROW IS A
 TIMING STAND-IN: in the design sd is RowA's committed port and cert the tile unit's private advice, neither a row of the
 tile's; here they are one committed v2 row (public input ports must fill whole 128-bit words, which they don't), so the
 unit's ANDs include that row's hashing.  The cap's roles lower BitAnd_v1 through `core3_scratch` and are labelled
@@ -165,8 +169,9 @@ def main() -> None:
         import core3_scratch as K3
         IL.PIECES.update(K3.PIECES)
         rec["binding"] = "core3 scratch"
-        kind, spec = next((kd, ROLE.removeprefix(f"split{kd}")) for kd in ("word", "strip", "tally", "tile")
-                          if ROLE.startswith(f"split{kd}"))
+        kinds = {"word": "word", "strip": "strip", "rowdigest": "row_digest", "rowtally": "row_tally", "tally": "tally",
+                 "tile": "tile"}
+        kind, spec = next((kinds[kd], ROLE.removeprefix(f"split{kd}")) for kd in kinds if ROLE.startswith(f"split{kd}"))
         tm, tn = map(int, spec.split("x")) if spec else (1, 1)
         n_unit = int(os.environ.get("HZ_CAP_N", "16384"))
         rec.update(tile=[tm, tn], unit_n=n_unit)
@@ -179,8 +184,14 @@ def main() -> None:
         u16 = lambda ws: np.array(ws, dtype=np.uint16)  # noqa: E731
         f32_words = lambda vs: [h for v in vs for h in (v & 0xFFFF, v >> 16)]  # noqa: E731
         v2 = SCHEMA_HM96_SHA512_ROW_V2
-        cells = tm * tn
         ports = {}
+        if kind in ("row_digest", "tile"):
+            sys.path.insert(0, str(HERE))
+            import hash_scratch as H
+            bad = H.check()
+            assert not any(bad.values()), f"hash_scratch's pieces disagree with their primitives: {bad}"
+            IL.PIECES.update(H.PIECES)
+            rec["binding"] = "core3 scratch + hash scratch"
         if kind == "word":
             ac = [list(map(int, rng.choice(finite, K))) for _ in range(N)]
             bc = [list(map(int, rng.choice(finite, K))) for _ in range(N)]
@@ -196,30 +207,34 @@ def main() -> None:
             in_rows = [(f"ok{r}", *schemas[r], [f"oka[{r}]"]) for r in range(tm)]
             rows = {f"ok{r}": u16([L.words_ok(int(rng.random() < 0.9)) for _ in range(N)]) for r in range(tm)}
             outs_ = schemas[tm:]
-        elif kind == "tile":
-            sys.path.insert(0, str(HERE))
-            import hash_scratch as H
-            bad = H.check()
-            assert not any(bad.values()), f"hash_scratch's pieces disagree with their primitives: {bad}"
-            IL.PIECES.update(H.PIECES)
-            rec["binding"] = "core3 scratch + hash scratch"
-            in_rows = [(f"w{w}", *schemas[w], [f"c[{w}]", f"u[{w}]"]) for w in range(cells)]
+        elif kind == "row_digest":
+            in_rows = [(f"w{j}", *schemas[j], [f"c[{j}]", f"u[{j}]"]) for j in range(tn)]
             word = lambda: int(np.float32(rng.standard_normal()).view(np.uint32))  # noqa: E731
-            rows = {f"w{w}": u16([L.words_cap_word(word(), word()) for _ in range(N)]) for w in range(cells)}
-            outs_ = schemas[cells:]
+            rows = {f"w{j}": u16([L.words_cap_word(word(), word()) for _ in range(N)]) for j in range(tn)}
+            outs_ = schemas[tn:]
+        elif kind == "row_tally":
+            in_rows = [(f"f{j}", *schemas[j], [f"flags[{j}]", f"atoms[{j}]", f"zeros[{j}]", f"good[{j}]"]) for j in range(tn)]
+            in_rows.append(("sd", *schemas[tn], ["sd"]))
+            rows = {}
+            for j in range(tn):
+                fl = [[int(rng.random() < 1 / 64) for _ in range(K // 32)] for _ in range(N)]
+                rows[f"f{j}"] = u16([L.words_cap_flags(f, sum(f), int(rng.integers(0, 3)), 1) for f in fl])
+            rows["sd"] = u16([L.words_sd([int(rng.choice([0] * 30 + [1, 32])) for _ in range(K // 32)]) for _ in range(N)])
+            outs_ = schemas[tn + 1:]
+        elif kind == "tile":
+            chunks = -(-tn // 32)
+            in_rows = [(f"d{r}", *schemas[r], [f"d[{r}]"]) for r in range(tm)]
+            rows = {f"d{r}": u16([L.words_cap_chunks([rng.bytes(32) for _ in range(chunks)]) for _ in range(N)])
+                    for r in range(tm)}
+            outs_ = schemas[tm:]
         else:
             bound = cap._cap_constants(K, tm, tn, n_unit, 1000, "sm120")[-1][tm]
-            in_rows = [(f"f{w}", *schemas[w], [f"flags[{w}]", f"atoms[{w}]", f"zeros[{w}]", f"good[{w}]"]) for w in range(cells)]
-            in_rows.append(("cr", *schemas[cells], ["mask", "bound"]))
-            in_rows += [(f"sd{r}", *schemas[cells + 1 + r], [f"sd[{r}]"]) for r in range(tm)]
-            rows = {}
-            for w in range(cells):
-                fl = [[int(rng.random() < 1 / 64) for _ in range(K // 32)] for _ in range(N)]
-                rows[f"f{w}"] = u16([L.words_cap_flags(f, sum(f), int(rng.integers(0, 3)), 1) for f in fl])
+            in_rows = [(f"s{r}", *schemas[r], [f"atoms[{r}]", f"zeros[{r}]", f"elems[{r}]", f"good[{r}]"]) for r in range(tm)]
+            in_rows.append(("cr", *schemas[tm], ["mask", "bound"]))
+            sums = lambda i: ((0, 0, 0) if i % 2 == 0 else  # noqa: E731
+                              (int(rng.integers(0, tn * K // 2048 + 1)), int(rng.integers(0, 3)), int(rng.integers(0, K // 32 + 1))))
+            rows = {f"s{r}": u16([L.words_cap_sums(*sums(i), 1) for i in range(N)]) for r in range(tm)}
             rows["cr"] = u16([L.words_cap_rows([1] * tm, bound) for _ in range(N)])
-            for r in range(tm):
-                rows[f"sd{r}"] = u16([L.words_sd([int(rng.choice([0] * 30 + [1, 32])) for _ in range(K // 32)])
-                                      for _ in range(N)])
             outs_ = [[v2, None]]
             rec["public_stand_in"] = ("the tally's verdict, a public output in the design (`cap.PORTS`), staged as one v2 "
                                       "row (C-Flock's composer commits every output)")
@@ -274,7 +289,7 @@ def main() -> None:
             outs_, sr = [[v2, None]], {"out_row_ports": [3 if capped else 2]}
     else:
         raise SystemExit(f"stage.py: ROLE is row_a, row_b, tile[TMxTN], hidden[TMxTN], pc8tile[TMxTN], cap[TMxTN], capword, "
-                         f"splitword or split(strip|tile|tally)[TMxTN], not {ROLE!r}")
+                         f"splitword or split(strip|rowdigest|rowtally|tile|tally)[TMxTN], not {ROLE!r}")
     runs = sr.get("out_row_ports") or [1] * len(outs_)
     out_rows, at = [], 0
     for (s, _b), r in zip(outs_, runs):
