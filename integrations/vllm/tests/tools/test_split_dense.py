@@ -51,6 +51,7 @@ def _tree(root: Path) -> Path:
     (v / "tests").mkdir()
     (v / "tests/allow.json").write_text('[{"file": "verity_vllm/program/registry/gemm_targets.py"}]\n')
     (v / "tests/p09_layering.json").write_text(P09)
+    (v / "tests/census_roots.txt").write_text("verity_vllm.program.registry.rope_difftest     # adapter\nverity_vllm.pipeline\n")
     (root / "CHANGELOG.md").write_text("- moved verity_vllm.program.registry.gemm_targets\n")
     return v
 
@@ -66,6 +67,10 @@ def test_the_split_moves_rewrites_and_reruns_as_a_no_op(tmp_path):
     assert (v / "verity_vllm/properties/difftests/rope_difftest.py").read_text() == (
         "from verity_vllm.program.registry import b1\nfrom verity_vllm.program.registry.prims import BF16\n")
     assert (v / "tests/p09_layering.json").read_text() == CYCLE % "program.frontend.gemm_targets <-> program.frontend.target_profile" + "\n"
+    assert (v / "tests/census_roots.txt").read_text() == (
+        "verity_vllm.properties.difftests.rope_difftest     # adapter\n"
+        "verity_vllm.properties.difftests.rope_gptj_difftest     # properties-admission --adapter: imported by name\n"
+        "verity_vllm.pipeline\n")
     assert (v / "verity_vllm/properties/difftests/__init__.py").exists()
     assert "registry.gemm_targets" in (tmp_path / "CHANGELOG.md").read_text()
     again = SD.plan(tmp_path)

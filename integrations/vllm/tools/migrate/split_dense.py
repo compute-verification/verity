@@ -49,6 +49,7 @@ class Move:
     name: str
     package: str   # the dotted package it moves to
     kind: str      # twin | vocabulary
+    root: str = ""   # its census root's comment: the registry walk reached it, nothing imports it outside the registry
 
     @property
     def old(self) -> str:
@@ -68,8 +69,8 @@ class Move:
 
 
 MOVES = (
-    Move("rope_difftest", f"{PKG}.properties.difftests", "twin"),
-    Move("rope_gptj_difftest", f"{PKG}.properties.difftests", "twin"),
+    Move("rope_difftest", f"{PKG}.properties.difftests", "twin", "properties-admission --adapter: imported by name"),
+    Move("rope_gptj_difftest", f"{PKG}.properties.difftests", "twin", "properties-admission --adapter: imported by name"),
     Move("rmsnorm_fused_sweep", f"{PKG}.program.kernels", "twin"),
     Move("gemm_targets", f"{PKG}.program.frontend", "vocabulary"),
 )
@@ -81,6 +82,7 @@ NEW_PACKAGES = {f"{PKG}.properties.difftests": '"""Difftest adapters (`verity_vl
 #: never rewritten: this tool and its test name the old modules on purpose, and history stays as it was written
 EXCLUDE = (f"{VLLM}/tools/migrate/", f"{VLLM}/tests/tools/test_split_dense.py", "CHANGELOG.md")
 FIXTURE = "tools/circuit_check/tests/fixtures/split/dense.json"
+ROOTS = f"{VLLM}/tests/census_roots.txt"
 
 
 class SplitError(RuntimeError):
@@ -149,9 +151,23 @@ def _sort_cycles(text: str) -> str:
     return _CYCLE.sub(lambda mt: mt[1] + " <-> ".join(sorted(mt[2].split(" <-> "))) + mt[3], text)
 
 
+def _add_roots(text: str) -> str:
+    """A census root for each moved module that only the registry walk (`registry.catalog.load()`) reached."""
+    lines = text.splitlines(keepends=True)
+    for m in MOVES:
+        if m.root and not any(ln.split("#")[0].strip() == m.new for ln in lines):
+            at = max((i + 1 for i, ln in enumerate(lines) if ln.startswith(f"{m.package}.")), default=len(lines))
+            lines.insert(at, f"{m.new}     # {m.root}\n")
+    return "".join(lines)
+
+
 def rewrite(text: str, where: str = "<text>") -> str:
     text = _rewrite_names(_rewrite_imports(text, where))
-    return _sort_cycles(text) if where.endswith("p09_layering.json") else text
+    if where.endswith("p09_layering.json"):
+        text = _sort_cycles(text)
+    if where.endswith(ROOTS):
+        text = _add_roots(text)
+    return text
 
 
 # --- the tree ---------------------------------------------------------------------------------------------------------------
