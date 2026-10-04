@@ -8,7 +8,8 @@ whose passes can't be reused, with dependencies kept warm.
 
 A package's verdict is reused while everything its audit reads is unchanged. Its key hashes:
 - the tracked files of the package, less the Lake packages nested in it (`audit.lean_modules` skips them);
-- the same for each package it requires by path (`audit.path_deps`);
+- the same for each package it requires by path (`audit.path_deps`), and for each package its `proved_in` names (`provers`),
+  whose build the audit reads its guarantees from, with the packages that one requires;
 - `tools/lean/` (the auditor and this file) and `tools/check/common.py`, the helpers it imports: not `check.py`, which only
   launches it, so an edit to `check.py` alone keeps every package's verdict. Nor `tools/lean/tests/` (the controls, which the
   `tools/lean` suite runs) or its `*.md`, which the audit never reads: the scratch tree leaves them out too, so a read of one
@@ -20,7 +21,8 @@ When one package misses, the audit runs on a scratch tree holding only the misse
 (the counterpart of `suites.py`'s read guard). Only the missed packages are audited. A package one of them requires by path is
 in the tree and built as far as it imports it, but not audited again: what vouches for its modules is its own pass, under its
 own key, and the run passes only when every package has one. The dependent's axiom walk follows its declarations into those
-modules, but its replay and its record's `dependencies` (fetched packages and the toolchain) don't cover them. The controls
+modules, but its replay and its record's `dependencies` (fetched packages and the toolchain) don't cover them. A spec and a
+package its `proved_in` names, which requires it, read the same files, so they miss together and are audited together. The controls
 don't run here: they test
 the auditor, so the `tools/lean` suite runs them, cached on `tools/lean/`, not again on every package's miss. Each pass is
 stored under its key, and a failure is never stored. One read is outside the scratch tree: a package test's `generate` (`runs`
@@ -106,13 +108,24 @@ def path_deps(pkg: str) -> list[str]:
     return sorted(set(out))
 
 
+def provers(pkg: str) -> list[str]:
+    """The packages ``pkg``'s `lean-audit.json` names under `proved_in` (`audit.provers`): the audit reads their builds."""
+    p = ROOT / pkg / "lean-audit.json"
+    try:
+        named = json.loads(p.read_text()).get("proved_in", []) if p.is_file() else []
+    except (OSError, ValueError, AttributeError):
+        return []                                       # the audit fails the policy
+    return sorted({os.path.relpath(os.path.normpath(ROOT / pkg / d), ROOT) for d in named if isinstance(d, str)})
+
+
 #: How the audit runs, and so part of every key
 FLAGS = ["--build"]
 
 
 def inputs(pkg: str, files: list[str]) -> list[str]:
     """Every tracked file an audit of ``pkg`` can read."""
-    own = [f for p in (pkg, *path_deps(pkg)) for f in own_files(p, files)]
+    pkgs = [pkg, *path_deps(pkg), *(d for q in provers(pkg) for d in (q, *path_deps(q)))]
+    own = [f for p in dict.fromkeys(pkgs) for f in own_files(p, files)]
     tool = [f for f in files if f.startswith(LEAN_TOOL) and not f.startswith(LEAN_TOOL + "tests/") and not f.endswith(".md")]
     return sorted({*own, *tool, "tools/check/common.py"})
 
