@@ -8,8 +8,13 @@ The executors, as they stand:
   below. Under the node agent's live mode, gpu-lease's wait file is the brain's queue and its grant is the brain's
   decision; with the agent down, gpu-lease's own rules decide.
 - **vy-nebius-2, CPUs only:** a systemd scope with the memory cap, pinned to the project's CPUs, CUDA hidden. A guest runs at
-  nice 19 on its share's CPUs, and node 2's ops daemon pauses it through a timed window.
-- **vy-nebius-1, CPUs only:** the same scope on the CPUs outside the reserved pools.
+  nice 19 on its share's CPUs, and node 2's ops daemon pauses it through a timed window. The scope holds the CPUs itself
+  (`AllowedCPUs=`), so a workload's own `taskset` can't leave them; systemd drops that without a word where user@.service
+  doesn't delegate cpuset (research's pods/nebius/user-cpuset.conf), so the wrapper starts nothing (exit 70) unless the
+  scope's cpuset is the pin.
+- **vy-nebius-1, CPUs only:** the same scope on the CPUs outside the reserved pools, idle (`CPUWeight=idle`): GPU jobs' host
+  threads share those CPUs, and network's timing chunks among them stalled for seconds behind Lean audits' replays
+  (network-accounting, art:894c0447). An idle scope runs only on CPU time its siblings leave.
 - **vy-nebius-1, GPUs:** Kueue's, lent per process by `n1_lease.py` (infra/nebius): node 1's `gpu-lease` copy waits on
   `/run/gpu-lease`, the controller grows its pool of 1-GPU holder Jobs in `provers` for the waiter, and the lease takes a holder's
   GPU. Only with `gpu_executor = "n1-lease"` on the node in the description (the cutover's one-line switch); without it such
@@ -37,6 +42,9 @@ GPU_LEASE_N1 = "/workspace/verity-guest/bin/gpu-lease"
 N1_LEASE_ENV = ["GPU_LEASE_DIR=/run/gpu-lease", "GPU_LEASE_ALLOWED_FILE=/run/gpu-lease/pool.gpus"]
 NODE1, NODE2 = "vy-nebius-1", "vy-nebius-2"
 UNSEEN_POOL = f"{NODE1} lends GPUs only to a job pinned there (--on {NODE1}): the submit path can't see its lease pool"
+CPUSET_CHECK = ('c=$(cut -d: -f3 /proc/self/cgroup); '
+                '[ "$(cat "/sys/fs/cgroup$c/cpuset.cpus" 2>/dev/null)" = "$1" ] && shift && exec "$@"; '
+                'echo "cluster: scope $c does not hold CPUs $1 (is cpuset delegated to user@.service?)" >&2; exit 70')
 
 
 class Refused(Exception):
@@ -65,8 +73,9 @@ def wrappers(cluster: Cluster, j: Job, node: str, run_id: str, kind: str | None 
     pin = cpuset.format(allowed_cpus(cluster, cluster.nodes[node], j))
     runner = ["env", f"GPU_LEASE_WHO={f'{kind}:' if kind else ''}{j.submitter}", f"RESEARCH_RUN_ID={run_id}", "CUDA_VISIBLE_DEVICES=",
               "systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", f"cluster-{run_id}",
-              "-p", f"MemoryMax={j.memory_gib}G", "-p", "MemorySwapMax=0", "--",
-              "taskset", "-c", pin, *(["nice", "-n", "19"] if guest else [])]
+              "-p", f"MemoryMax={j.memory_gib}G", "-p", "MemorySwapMax=0", "-p", f"AllowedCPUs={pin}",
+              *(["-p", "CPUWeight=idle"] if node == NODE1 and not j.gpus else []), "--",
+              "sh", "-c", CPUSET_CHECK, "cpuset-check", pin, "taskset", "-c", pin, *(["nice", "-n", "19"] if guest else [])]
     if not j.gpus:
         return runner, []
     lease = ["env", *N1_LEASE_ENV, GPU_LEASE_N1] if node == NODE1 else [GPU_LEASE]
@@ -126,4 +135,4 @@ def submit(cluster: Cluster, registry: dict[str, Kind], *, run_id: str, now: int
     return out
 
 
-__all__ = ["GPU_LEASE", "GPU_LEASE_N1", "UNSEEN_POOL", "Refused", "job", "wrappers", "resolve", "submit"]
+__all__ = ["CPUSET_CHECK", "GPU_LEASE", "GPU_LEASE_N1", "UNSEEN_POOL", "Refused", "job", "wrappers", "resolve", "submit"]

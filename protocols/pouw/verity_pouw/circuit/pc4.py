@@ -323,13 +323,19 @@ def gram_g(shape, seed_b: bytes, _i=None) -> list[int]:
 
 _LINE = f"TurboSHAKE128(seed ‖ role ‖ index u32 LE, D = {S.D_LINE:#04x}), 16 bytes, low nibble first; role "
 #: each anchor's recomputation from `pearl_c4`'s seeds (`noise`: seed_A = BLAKE3 keyed by blake3("pearl-c4/v0/seed-A") over
-#: salt ‖ root_A ‖ root_B ‖ matmul u64 LE, seed_B keyed by blake3("pearl-c4/v0/seed-B") over salt ‖ root_B)
+#: salt ‖ root_A ‖ root_B ‖ matmul u64 LE, seed_B keyed by blake3("pearl-c4/v0/seed-B") over salt ‖ root_B), each under its
+#: rule's versioned id
 DERIVATIONS = {
-    "ea": A.Derivation("seed_a", _LINE + f"{S.ROLE_EA:#04x} (ROLE_EA), index A's global row", line_ea, 4, per_row=True),
-    "eb": A.Derivation("seed_b", _LINE + f"{S.ROLE_EB:#04x} (ROLE_EB), index B's global row", line_eb, 4, per_row=True),
-    "fa": A.Derivation("seed_b", _LINE + f"{S.ROLE_FA:#04x} (ROLE_FA), index the position t < k", basis_fa, 4),
-    "fb": A.Derivation("seed_b", _LINE + f"{S.ROLE_FB:#04x} (ROLE_FB), index the position t < k", basis_fb, 4),
-    "g": A.Derivation("seed_b", f"G_pq = the NVF4 atom chained from +0 over F_B[:, p]·F_A[:, q], k/64 steps, every scale "
+    "ea": A.Derivation("verity/pouw/anchor/pearl-c4/ea/v1", "seed_a",
+                       _LINE + f"{S.ROLE_EA:#04x} (ROLE_EA), index A's global row", line_ea, 4, per_row=True),
+    "eb": A.Derivation("verity/pouw/anchor/pearl-c4/eb/v1", "seed_b",
+                       _LINE + f"{S.ROLE_EB:#04x} (ROLE_EB), index B's global row", line_eb, 4, per_row=True),
+    "fa": A.Derivation("verity/pouw/anchor/pearl-c4/fa/v1", "seed_b",
+                       _LINE + f"{S.ROLE_FA:#04x} (ROLE_FA), index the position t < k", basis_fa, 4),
+    "fb": A.Derivation("verity/pouw/anchor/pearl-c4/fb/v1", "seed_b",
+                       _LINE + f"{S.ROLE_FB:#04x} (ROLE_FB), index the position t < k", basis_fb, 4),
+    "g": A.Derivation("verity/pouw/anchor/pearl-c4/g/v1", "seed_b",
+                      f"G_pq = the NVF4 atom chained from +0 over F_B[:, p]·F_A[:, q], k/64 steps, every scale "
                       f"byte UE4M3 1.0 ({S.NVFP4.one:#04x}); FP32 words", gram_g, 32),
 }
 #: each seed as a public input port names it: the scheme's label for it

@@ -11,9 +11,10 @@
 * **Commit**: the manifest over the W ranks, complete, then ``tp-commit`` with the windowed staging in its environment
   (``VERITY_WINDOW_MB`` / ``VERITY_WINDOW_SLOTS`` / ``VERITY_RETAIN``, and a config run's ``VERITY_STAGING_BOUNDED``: flags it does not have) and ``--require-fold-match``
   when a fold Match is on disk.  The ranks run the guarded-max FA2 tap build and every tap the manifest names the family of
-  (``row_records.applicable_taps``), as the single-GPU row does.
+  (``row_records.applicable_taps``), as the single-GPU row does.  A leased item's ``tp-commit`` holds the task's GPUs from right
+  before its engine to its last run's finalize (``Row.run_gpu``, `pipeline.tp.lease`); such a row has no Match (its processes see no GPU).
 
-A **config run** (``--config-run 1``, world 2 only: ``row.run_row`` refuses a larger one): the Build, the strict word check of its
+A **config run** (``--config-run 1``): the Build, the strict word check of its
 manifest over the W ranks' components, ONE instrumented ``tp-commit`` (``--pairs 1 --warmup 1 --only-arm instrumented --replay-k K``:
 K units over the world, split across the ranks; bounded staging) with no Match directory, no fold Match and no value check, and
 ``config_record.json`` (``pipeline.config_record``, per rank and in total), written however the run ends.
@@ -248,6 +249,9 @@ class TpRow(Row):
     # ------------------------------------------------------------------------------------------------ Match
     def match(self) -> None:
         cm, M = self.cm, self.M
+        if self.leased:
+            self.verdict("match", "FAIL", "a leased TP row's processes see no GPU outside its Commit's lease: its Match runs unleased (a config run has none)")
+            raise Stop(11)
         to_m, to_f = cm.match_timeout or 3600, cm.fold_timeout or 7200
         self.to_b = self.cb.build_timeout or 7200
         for r in range(self.W):
@@ -353,7 +357,7 @@ class TpRow(Row):
         if self.config_run:
             self.child_env["VERITY_STAGING_BOUNDED"] = "1"
         self.log(f"commit staging: window_mb={ck.window_mb} slots={ck.window_slots} retain={ck.retain}{' bounded' if self.config_run else ''}")
-        rc_k = self.run_tl("commit.tp_commit", to_k, f"{d}/commit.log", self.commit_cmd(taps))
+        rc_k = self.run_gpu("commit.tp_commit", to_k, f"{d}/commit.log", self.commit_cmd(taps))
         keys = ("PASS", "FAIL", "sampled replay", "match oracle", "weights pin", "cross-rank collectives", "fold-Match", "C2 population", "coverage")
         tagged = _grep(f"{d}/commit.log", lambda s: s.startswith("[tp2commit] ") and s[12:].lstrip(" ").startswith(keys))
         with open(f"{d}/row.log", "a") as f:

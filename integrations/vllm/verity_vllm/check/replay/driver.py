@@ -73,11 +73,11 @@ from verity_vllm.check.replay.population import (executed_prefix_of_record, moe_
                                                 split_not_executed)
 from verity_vllm.check.replay.coverage import _uncovered_mechanisms, controller_rows_of, query_population
 from verity_vllm.check.replay.sample import _catch_probability, challenge_seed, sample
-from verity_vllm.check.replay.linkage import arrivals_of_record, boundary_linkage, linkage_horizon
+from verity_vllm.check.replay.linkage import arrivals_of_record, boundary_linkage, linkage_horizon, splits_of_record
 
 
 __all__ = ["arrivals_of_record", "boundary_linkage", "challenge_seed", "engine_facts_of_record", "executed_prefix_of_record",
-           "linkage_horizon", "model_weights_provider", "ProgramIndex", "sampled_replay", "SCHEMA", "V2_QUERY"]
+           "linkage_horizon", "model_weights_provider", "ProgramIndex", "sampled_replay", "SCHEMA", "splits_of_record", "V2_QUERY"]
 
 
 SCHEMA = "verity-sweep/sampled-replay/v1"
@@ -145,7 +145,7 @@ def _prewarm_weights(indices: dict, picked: list[dict], weights: Callable[[str, 
 
 
 #: spec family -> the C++ twin libraries its evaluator dlopens (built JIT on first use)
-_FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormFusedCuda_v2": ("rms",), "Gemm_v1": (), "Gemm_v2": (), "RoPE_v1": (), "SiluMul_v1": (), "BiasAdd_v1": (),
+_FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormFusedCuda_v2": ("rms",), "Gemm_v1": (), "Gemm_v2": (), "RoPE_v1": (), "SiluMul_v1": (), "SiluMul_v2": (), "BiasAdd_v1": (),
                 "Embedding_v1": (), "TokenSelect_v1": (), "GumbelTopPTokenSelect_v1": (),
                 # [R17 dense, ruling R17-11] the attention rows' softmax reads the measured MUFU.EX2 / MUFU.RCP tables: loaded in the parent
                 "Attention_v3": ("fa2",), "Attention_v2": ("fa2",), "Attention_v4": ("fa2",), "Attention_v5": ("fa2",),

@@ -6,6 +6,9 @@ cov-k03-8 (its biased q/k/v linear one `GemmBias_v2{K,N,DOT}` Call), Phi-3-mini 
 Gemma-2-2B's from cov-p058-2, Qwen3-30B-A3B's from cov-p081 and OLMoE's from cov-p069.
 A library change that moves a Definition moves the traced digest too: re-trace the unit (`verity-vllm build --wrapper
 step --M 1 --pos0 8`, CPU only) and pin the new digest with the predictor's.
+`SiluMul_v2{I}` as the `silu_mul` kind moved every pin but Gemma-2's (GeGLU): each is the Build's re-trace of its unit from the
+same checkpoints on the declared rtxpro6000 target (run r20261002-123618-cee3, CPU only), and with `SiluMul_v1{I}` in its place
+the predictor gives the rows' traced digests.
 """
 
 from __future__ import annotations
@@ -35,14 +38,14 @@ def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
 
 
 @pytest.mark.parametrize("model,digest", [
-    ("smollm2-135m", "53aa6ed20e8dd0c1e74a0a332f359bda5dc36c40da38383d3a2e0a54a9c2a9c4"),
-    ("llama32-1b", "e0b060772e8179fcab09da11adc3998c7fcca7d124111d50a02be73bbf123408"),
-    ("tinyllama-11b", "c0a2fef1966af8284024e60603d3f63929903fd9ddcbd4349e184e7842b27a48"),
-    ("qwen25-05b", "421d0b9a08507c2ddea45cc78fc973615b637207e57b621f012923549e5237d0"),
-    ("phi3-mini", "4ed042b63f2bee015bf60be7b44b0eb29be3251ecf51c4cc199182584a14c21b"),
-    ("qwen3-4b", "0af57f58fe6aa8df3f878faac16ad2b03b7295f01a82cc9d6dfbd7652613cfcd"),
-    ("olmoe-1b-7b", "84fb48c7110b00c236474e7cb97f14e79c65937c41bf1339bc8e4df335153ebb"),
-    ("qwen3-30b-a3b", "e4e7975d885c51f6c7c046cec02b483ffd2eed8b0697266bff54a80d2357362a"),
+    ("smollm2-135m", "3c792f4807b296f1d7a372cd246aa80eed6b8b929f927900da5059155e2af697"),
+    ("llama32-1b", "3b438e0e35d365105b36d0697023dad70da86ecd27b27d476f2445a5641fabeb"),
+    ("tinyllama-11b", "c12cd8cc914bda1fb13136fe0a8ead108e4c1721fe4e9ab05714a4f41a1be19f"),
+    ("qwen25-05b", "221e97b683f184f265c4baf1f2e490f674c59ec86490c91fa61fe69d2235c28c"),
+    ("phi3-mini", "9ac4fc245509b18c08e6a8e091748a415bb0b7dbb220fcbd3353e2841d3a3fc9"),
+    ("qwen3-4b", "69ebe6af722d17985687e59aa529902771aaa8d323ae4931999b3fcf8a676108"),
+    ("olmoe-1b-7b", "99d789b704be9c42bdb429d5e45baa71380de3226b622b2c37dc9d521ebf1887"),
+    ("qwen3-30b-a3b", "e3655459083291eafb440a562e38ed9b5ae5addfbde2f0e39114e89277021d78"),
     ("gemma2-2b", "c062d1b305e1bcf5fb614dbfd70c7686e73df57dd7c9c23671a66b8107c10ddd"),
 ])
 def test_step_program_equals_the_traced_build(model, digest):
@@ -60,20 +63,20 @@ def test_request_and_workload_programs_equal_the_traced_build():
     phi = _phi(json.loads((FIX / "smollm2-135m.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}])
     r = build_program(phi, "request", LP=256, T=31)
-    assert r.digest == "6ea7c413566473925be36c355ee9c3d84fa3db87d7d7e13e52c87bb6f50ac786"
+    assert r.digest == "c18f32dba2ceef5c38caf64c9348cbc498f9fe5122edfe55f61cb15e20278824"
     assert r.n_root_nodes == 86738
-    assert S.predict_workload(phi)["digest"] == "393e9228260663df610abdd41960ee1c861d2e9cec50d9184494b939a489e4e1"
+    assert S.predict_workload(phi)["digest"] == "5a03914457d2b2d9597a620a285566e7649b00537acb13994a67963bff016636"
 
 
 @pytest.mark.parametrize("model,function,rank,digest", [
-    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={ffedfc14b0e0}}", 0, "d29ee587b4f288e8bed1f24c92b7c0d1247054662de61d0e0f50a70ae09730c8"),
-    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={ffedfc14b0e0}}", 1, "c3765e958ca00e3838c30f4b744670d28833fcab785450ef2f88fac7ae177b62"),
+    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={ffedfc14b0e0}}", 0, "b61d007ab219e9161a8c16e7854af7cbd3b7deda267930fe236038f1170f1459"),
+    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={ffedfc14b0e0}}", 1, "7c37593eda24d3ebe09527b33c27516a5d290c92d83d015ac4e842d2d28928b5"),
     ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={33928f49cee7}}", 0, "7ca0319a25893edc2bccf7866f25cd29cc28f58b6eef3158b0c2b04feda0c753"),
     ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={33928f49cee7}}", 1, "7da1ceee0fc64bbd16aa0267c5c283708eb75740ac532659a6e7c64c2bac05db"),
-    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={3f2e2f30d60d}}", 0, "a298bf4de283b18b99007f68c1350291cf06f2455d553db473a11bc8239df33a"),
-    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={3f2e2f30d60d}}", 1, "17ae54266d9be49f7609996873457eab0f1a44c3bf64fe4efa6a791c36320cda"),
-    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={32f6bda2809e}}", 0, "d9c274169bd67e88d416f8ec1affae93f5d927b5971c8881a099ad5fae250e80"),
-    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={32f6bda2809e}}", 1, "372ee2bfdfecd5d6718f70fb738f96033a758697a95d5a282888bf2ba0f078af"),
+    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={3f2e2f30d60d}}", 0, "de6d9f143bc8a485a3ec4dcdeb6ecbe43013ea87d444dfa167cb1143921e8ef3"),
+    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={3f2e2f30d60d}}", 1, "40da70bce2941f84f5d149ca70f69194b24e60240e998e5ca4cb0e17fc7356e0"),
+    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={32f6bda2809e}}", 0, "c4ebc70a471394983db8ba424cbb2ce35851bd9dc71a485fb6f4187865bb3626"),
+    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={32f6bda2809e}}", 1, "3e9c7925d46c5b0d2748762abe840b802e8a741cb1a3194ec8aedc06ffd89dcd"),
 ])
 def test_tensor_parallel_rank_step_equals_the_traced_build(model, function, rank, digest):
     """Llama-3.2-1B (cov-p000), Gemma-2-2B (cov-p058-2), Qwen3-30B-A3B (cov-p081) and OLMoE (cov-p069) at TP2: each rank's step
@@ -92,12 +95,12 @@ def test_tensor_parallel_rank_workload_equals_the_traced_build():
     `peers_*` Inputs GP-01 keeps request-local.  About 15 s."""
     phi = _phi(json.loads((FIX / "llama32-1b.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}], tp={"world": 2, "rank": 1})
-    assert S.predict_workload(phi)["digest"] == "6ceecbaf0ec167ccf519b23f3b2645e7f9b107dbd0a80a88289a5567df23d286"
+    assert S.predict_workload(phi)["digest"] == "e2d93ebe35e1ee77d568ade81b93a79e1a39cd1ca3caf7ca91d2aeb8b6758351"
 
 
 @pytest.mark.parametrize("sampling,M,digest", [
-    ({**STOCH}, 8, "a97e89213fd137f36028291e2c50f2f5f4695fd2799a3777525d8f69a7839e2a"),
-    ({**STOCH, "top_p": 1.0, "splits": 32}, 1, "e07dc1b25bbe401a4f1aaadbfc50a60b9515f8d5188abed7dc1e2ca7d77bb45f"),
+    ({**STOCH}, 8, "68a5d8274937c6d89c63bcb509ee5c97818485af19cbf13d99a6577bc8241493"),
+    ({**STOCH, "top_p": 1.0, "splits": 32}, 1, "902f910d8ad69adf3c2dec4f88f17e53b25833be68043c664c5de5cf8eaa770f"),
 ])
 def test_stochastic_step_program_equals_the_traced_build(sampling, M, digest):
     """SmolLM2-135M under the seeded top-p policy: a B8 row's step (the split count a `splits` Input, cov-g230) and a B1 row's (the
@@ -173,7 +176,8 @@ def test_the_biased_linear_follows_the_targets_rule(target, kind):
     (TINY, {"sampling": {**STOCH, "splits": None}}, "without a split count"),
     (TINY, {"sampling": {"kind": "mixed"}}, "sampling 'mixed'"),
     (TINY, {"tp": {"world": 4, "rank": 0}}, "tensor parallel world 4"),
-    ({**TINY, "num_key_value_heads": 1}, {"tp": {"world": 2, "rank": 0}}, "4 query and 1 key/value heads over 2 ranks"),
+    ({**TINY, "hidden_size": 96, "num_attention_heads": 6, "num_key_value_heads": 3}, {"tp": {"world": 2, "rank": 0}},
+     "6 query and 3 key/value heads over 2 ranks"),
     ({**TINY, "vocab_size": 250}, {"tp": {"world": 2, "rank": 1}}, "a vocabulary of 250 over 2 ranks"),
     (TINY, {"tp": {"world": 2, "rank": 0}, "sampling": dict(STOCH)}, "stochastic sampling under tensor parallelism"),
 ])

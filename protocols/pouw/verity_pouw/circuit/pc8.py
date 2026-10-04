@@ -281,13 +281,19 @@ _LINE = ("BLAKE3 keyed by keyed(seed, \"pearl/v4/FP8/noise-line\") over side ‖
          "bytes; byte b is ±((b & 0x7F) + 1), bit 7 the sign; scaled in BF16 to L2 norm {} and cast to E4M3 "
          "(`pearl_kw.sample_line`); ")
 #: each anchor's recomputation from `pearl_c`'s seeds (`noise`: seed_A = BLAKE3 keyed by blake3("pearl-c/v0/seed-A") over
-#: salt ‖ root_A ‖ root_B ‖ matmul u64 LE, seed_B keyed by blake3("pearl-c/v0/seed-B") over salt ‖ root_B)
+#: salt ‖ root_A ‖ root_B ‖ matmul u64 LE, seed_B keyed by blake3("pearl-c/v0/seed-B") over salt ‖ root_B), each under its
+#: rule's versioned id (G's chain is the device's, which the unit's ``DEV`` binds)
 DERIVATIONS = {
-    "ea": A.Derivation("seed_a", _LINE.format(256) + "side 0, factor 0, index A's global row", line_ea, 8, per_row=True),
-    "eb": A.Derivation("seed_b", _LINE.format(256) + "side 1, factor 0, index B's global row", line_eb, 8, per_row=True),
-    "fa": A.Derivation("seed_b", _LINE.format(16) + "side 0, factor 1, index the position t < k", basis_fa, 8),
-    "fb": A.Derivation("seed_b", _LINE.format(16) + "side 1, factor 1, index the position t < k", basis_fb, 8),
-    "g": A.Derivation("seed_b", "G_pq = the record's chain (`pearl_c.chain`: its atom and promotion) over F_B[:, p]·F_A[:, q]; "
+    "ea": A.Derivation("verity/pouw/anchor/pearl-c/ea/v1", "seed_a",
+                       _LINE.format(256) + "side 0, factor 0, index A's global row", line_ea, 8, per_row=True),
+    "eb": A.Derivation("verity/pouw/anchor/pearl-c/eb/v1", "seed_b",
+                       _LINE.format(256) + "side 1, factor 0, index B's global row", line_eb, 8, per_row=True),
+    "fa": A.Derivation("verity/pouw/anchor/pearl-c/fa/v1", "seed_b",
+                       _LINE.format(16) + "side 0, factor 1, index the position t < k", basis_fa, 8),
+    "fb": A.Derivation("verity/pouw/anchor/pearl-c/fb/v1", "seed_b",
+                       _LINE.format(16) + "side 1, factor 1, index the position t < k", basis_fb, 8),
+    "g": A.Derivation("verity/pouw/anchor/pearl-c/g/v1", "seed_b",
+                      "G_pq = the record's chain (`pearl_c.chain`: its atom and promotion) over F_B[:, p]·F_A[:, q]; "
                       "FP32 words", gram_g, 32),
 }
 #: each seed as a public input port names it: the scheme's label for it

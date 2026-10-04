@@ -219,14 +219,6 @@ def outRowsIdentity (id : Json) : Json :=
       "out_row_ports one hm96-sha512/row-seg/v1 row of their words, hashed in the circuit; the public file has no output word"))
   else id
 
-/-- `outRowsIdentity` with a run committed as an `hm96-sha512/row/v2` row: `outputs` names both leaves, as the prover's does. -/
-def outRowsV2Identity (id : Json) : Json :=
-  if (id.getObjVal? "outputs").toOption.isSome then
-    id.setObjVal! "outputs" (s ("hidden: each output port an hm96-sha512/row/v2 row, or each run of output ports in META " ++
-      "out_row_ports one hm96-sha512/row/v2 or hm96-sha512/row-seg/v1 row of their words (its row_schemas entry), hashed in " ++
-      "the circuit; the public file has no output word"))
-  else id
-
 /-- `verity/flock-circuit` (PR #83 from `eb90718f`): serving rows are `hm96-sha512/row/v1` leaves proved in the circuit,
 every identity and binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and the unit draw is live. -/
 def circuitEb90718f : Tags :=

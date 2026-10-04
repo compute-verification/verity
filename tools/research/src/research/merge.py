@@ -5,8 +5,11 @@
 (`sweep`).
 
 Run in the checkout of the target branch.  It merges the commit REF names (`git merge --no-ff`) only if the evidence store holds
-a passing attempt of the tool (default `check`) for that exact commit: `state` done, rc 0, source commit REF's, tree clean.  With
-a usable remote the catalog's attempts are refreshed first, so an attempt recorded on another machine counts.  Refused as well: a
+a passing attempt of the tool (default `check`) for that exact commit: `state` done, rc 0, source commit REF's, tree clean, and a
+result of a kind the target's declaration of the tool produces (`Tool.produces`: `check/v1` for check; an attempt with no result,
+or one whose attempt or result can't be read, passes no gate) and not in `REFUSED_KINDS` (the Lean fast path's `lean-fast/v1`,
+which skips the kernel replay).  With a usable remote the catalog's attempts are refreshed first, so an attempt recorded on
+another machine counts.  Refused as well: a
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
 ancestor of REF) unless merging REF leaves REF's own tree (`tree_identical`: what the target gained is in REF already, as when a
 train checked on the train ahead of it lands after that one), since otherwise the merged tree is not the one that was checked;
@@ -22,11 +25,17 @@ with a comment naming the commit it landed in, and every open pull request whose
 A closed pull request's head branch is deleted from the remote unless an open pull request still uses it, or it moved past the
 head that landed (GitHub's "delete head branch" fires only on merges made on GitHub, and trains merge locally).
 The remote's branch, fetched first, is the truth, never the checkout. With --push, a merge that lands is pushed to the remote
-(never forced) and then swept; without it the sweep runs before anyone pushes, finds nothing the merge landed, and
+(never forced), what the tool's declaration runs after a landing (`Tool.after_land`) is started, detached, on the landed commit,
+and then it is swept; without it the sweep runs before anyone pushes, finds nothing the merge landed, and
 `research merge --sweep` after the push does it. Whoever lands a train passes --push (Daniel, 1 Oct).
 
 A train's ref may be pinned: `N@SHA` (pull request N; quote `#N@SHA`, or the shell reads a comment) or `BRANCH@SHA` is fetched
 from the remote and refused unless its head there is still SHA, so what merges is the head that was reviewed (`pinned`).
+A ref whose merge onto the train so far conflicts only on import lines (two PRs adding modules to one root import list) keeps
+both sides, ours first; a conflict on any other line refuses it, and so does a JSON file whose lines git merged into something
+that doesn't parse (`_merge`).  Before a train is built, each ref whose change needs the statement-reviewer grant under
+`research queue`'s rules (a change to the `pins` or `reads` of a `lean-audit.json`) is refused until pull request N holds it at
+that head (`ungranted`).
 """
 from __future__ import annotations
 
@@ -52,10 +61,55 @@ def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProc
     return r
 
 
-def passing(store, commit: str, tool: str = "check", *, tree: str | None = None, maps=None) -> list[str]:
-    """Ids of the attempts of ``tool`` that passed on the clean tree of ``commit``, newest first.  After a history rewrite
-    (`commitmap`), an attempt of an old commit counts for its image when the map says the rewrite kept the tree and, where the
-    attempt recorded its tree, that tree is ``tree``."""
+#: result kinds that pass no merge gate, whatever `--tool` recorded them and whatever its declaration says it produces:
+#: `lean-fast/v1` is the Lean fast path's (`tools/check/lean_changed.py --records`), an audit without the kernel replay,
+#: which every merge check keeps
+REFUSED_KINDS = frozenset({"lean-fast/v1"})
+
+
+def declaration(repo: Path, tool: str):
+    """The target's own declaration of ``tool``, read from the checkout (not from the commit being merged), or None when the
+    checkout has none."""
+    from .store import tools_registry
+
+    module, _, attr = tools_registry.REGISTRY.get(tool, tool).rpartition(":")
+    try:
+        return tools_registry._from_file(module, attr, repo)
+    except Exception:  # noqa: BLE001  (a declaration that can't be read is none)
+        return None
+
+
+def produced(repo: Path, tool: str) -> frozenset[str]:
+    """The result kinds the target's declaration of ``tool`` produces (`Tool.produces`); none when it has no declaration, so
+    that no attempt passes."""
+    return frozenset(getattr(declaration(repo, tool), "produces", None) or ())
+
+
+def refused(store, run_id: str, kinds: frozenset[str]) -> str | None:
+    """Why the attempt can't pass the gate whatever its exit status, or None: its result is not of a kind in ``kinds`` (the
+    tool's `produced`; an attempt that published no result has none), or is in `REFUSED_KINDS`, or it or its result can't be
+    read."""
+    try:
+        doc = store.get_attempt(run_id)
+        if doc is None:
+            return "its attempt can't be read"
+        art = (doc.get("outputs") or {}).get("result")
+        kind = store.get_manifest(art).kind if art else None
+    except Exception as e:  # noqa: BLE001  (a guard never fails open)
+        return f"its result can't be read ({type(e).__name__}: {e})"
+    if kind in REFUSED_KINDS:
+        return f"its result is a {kind}, which no merge accepts"
+    if kind not in kinds:
+        return ((f"its result is a {kind}" if kind else "it published no result") +
+                f", and the target's declaration of the tool produces {', '.join(sorted(kinds)) or 'nothing'}")
+    return None
+
+
+def passing(store, commit: str, tool: str = "check", *, kinds: frozenset[str], tree: str | None = None, maps=None) -> list[str]:
+    """Ids of the attempts of ``tool`` that passed on the clean tree of ``commit``, newest first, less those `refused` names
+    (``kinds``: the result kinds that may pass, the target's `produced`).  After a history rewrite (`commitmap`), an attempt of
+    an old commit counts for its image when the map says the rewrite kept the tree and, where the attempt recorded its tree,
+    that tree is ``tree``."""
     rows = store.index.sql("SELECT id FROM attempts WHERE tool = ? AND source_commit = ? AND source_dirty = 0 AND state = 'done' "
                            "AND rc = 0 ORDER BY start_utc DESC", (tool, commit))
     ids = [r[0] for r in rows]
@@ -66,7 +120,7 @@ def passing(store, commit: str, tool: str = "check", *, tree: str | None = None,
             recorded = (json.loads(doc).get("source") or {}).get("tree") if doc else None
             if tree is None or recorded in (None, tree):
                 ids.append(rid)
-    return ids
+    return [rid for rid in ids if refused(store, rid, kinds) is None]
 
 
 def tree_identical(repo: Path, commit: str) -> bool:
@@ -99,10 +153,13 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print)
         raise Refused(f"{commit[:12]} holds {len(old)} commit(s) a history rewrite replaced (e.g. {old[0][:12]}): merging it would bring the "
                       f"old history back; move the branch onto the rewritten one with `research git remap` and push that")
     tree = _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
-    ids = passing(store, commit, tool, tree=tree, maps=maps)
+    kinds = produced(repo, tool)
+    ids = passing(store, commit, tool, kinds=kinds, tree=tree, maps=maps)
     if not ids:
         rows = store.index.sql("SELECT id, state, rc, source_dirty FROM attempts WHERE tool = ? AND source_commit = ?", (tool, commit))
-        seen = "; ".join(f"{r[0]} {r[1]} rc={r[2]}{' dirty' if r[3] else ''}" for r in rows) or "none"
+        why = {r[0]: refused(store, r[0], kinds) for r in rows if r[1] == "done" and r[2] == 0 and not r[3]}
+        seen = "; ".join(f"{r[0]} {r[1]} rc={r[2]}{' dirty' if r[3] else ''}{f' refused: {why[r[0]]}' if why.get(r[0]) else ''}"
+                         for r in rows) or "none"
         raise Refused(f"no passing `{tool}` attempt for {commit} in the evidence store (attempts of it: {seen}); "
                       f"record one: `uv run python tools/check/check.py --record` on that commit")
     need = required_steps(repo, "HEAD", commit, tool)
@@ -137,6 +194,7 @@ def unchecked_pushes(repo: Path, lines: list[str], store, into: str = "main", to
     passing ``tool`` attempt of their tree, the merge gate's rule: the tip's own attempt (a `--train` fast-forward), or, as a
     `research merge` commit has, its merged parent's when the two trees are equal."""
     bad = []
+    kinds = produced(repo, tool)
     for line in lines:
         f = line.split()
         if len(f) != 4 or f[2] != f"refs/heads/{into}" or f[1] == ZERO:
@@ -144,7 +202,7 @@ def unchecked_pushes(repo: Path, lines: list[str], store, into: str = "main", to
         tip = f[1]
         tree = _git(repo, "rev-parse", f"{tip}^{{tree}}").stdout.strip()
         parents = _git(repo, "rev-list", "--parents", "-n", "1", tip).stdout.split()[1:]
-        if not any(_git(repo, "rev-parse", f"{x}^{{tree}}").stdout.strip() == tree and passing(store, x, tool, tree=tree)
+        if not any(_git(repo, "rev-parse", f"{x}^{{tree}}").stdout.strip() == tree and passing(store, x, tool, kinds=kinds, tree=tree)
                    for x in [tip, *parents[1:]]):
             bad.append(tip)
     return bad
@@ -167,13 +225,7 @@ def install_push_guard(repo: Path, into: str = "main", tool: str = "check") -> P
 def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, list[str]]:
     """The steps the target's own declaration of ``tool`` (`Tool.merge_requires`, read from the checkout, not from the commit being
     merged) requires for the change ``base``..``commit``: {step: the prefixes it touches}."""
-    from .store import tools_registry
-
-    module, _, attr = tools_registry.REGISTRY.get(tool, tool).rpartition(":")
-    try:
-        rules = tools_registry._from_file(module, attr, repo).merge_requires
-    except Exception:  # noqa: BLE001  (a tool the checkout does not declare has no path rules)
-        return {}
+    rules = getattr(declaration(repo, tool), "merge_requires", None)
     if not rules:
         return {}
     changed = [p for p in _git(repo, "diff", "--name-only", base, commit).stdout.splitlines() if p]
@@ -260,17 +312,151 @@ def pinned(repo: Path, ref: str, remote: str) -> tuple[str, str]:
     return label, head
 
 
+#: a line a train's merge takes from both sides of a conflict: a Lean or Python import
+IMPORT_LINE = re.compile(r"\s*(import\s|from\s+\S+\s+import\s)")
+
+
+def keep_both_imports(text: str) -> str | None:
+    """``text``, a file git left with conflict markers (`merge` style), with each conflict resolved to both sides, ours and then
+    the lines of theirs ours lacks, when every line on either side of every conflict is an import or blank; None when one holds
+    anything else, or there is no conflict to resolve."""
+    out: list[str] = []
+    ours: list[str] = []
+    theirs: list[str] = []
+    side, hunks = None, 0
+    for line in text.splitlines(keepends=True):
+        if side is None and line.startswith("<<<<<<< "):
+            side, ours, theirs = "ours", [], []
+        elif side == "ours" and line.rstrip("\r\n") == "=======":
+            side = "theirs"
+        elif side == "theirs" and line.startswith(">>>>>>> "):
+            if not all(IMPORT_LINE.match(x) or not x.strip() for x in ours + theirs):
+                return None
+            out += ours
+            seen = {x.rstrip() for x in ours}
+            for x in theirs:
+                if x.rstrip() not in seen:
+                    seen.add(x.rstrip())
+                    out.append(x)
+            side, hunks = None, hunks + 1
+        elif side is None:
+            out.append(line)
+        else:
+            (ours if side == "ours" else theirs).append(line)
+    return "".join(out) if hunks and side is None else None
+
+
+def _strict_json(text: str) -> bool:
+    """Whether ``text`` parses as JSON with no key twice in one object (a text merge of two added records can repeat a key)."""
+    def pairs(kv: list) -> dict:
+        if len({k for k, _ in kv}) != len(kv):
+            raise ValueError("a key repeats")
+        return dict(kv)
+
+    try:
+        json.loads(text, object_pairs_hook=pairs)
+        return True
+    except ValueError:
+        return False
+
+
+def broken_json(tree: Path, theirs: str) -> list[str]:
+    """The JSON files whose text the merge at ``tree``'s HEAD merged (both sides changed them, as two PRs' pins change one
+    `lean-audit.json`) and that don't parse (`_strict_json`) though both sides' did."""
+    mb = _git(tree, "merge-base", "HEAD^1", theirs).stdout.strip()
+    changed = [set(_git(tree, "diff", "--name-only", "-z", mb, rev).stdout.split("\0")) for rev in ("HEAD^1", theirs)]
+
+    def text(rev: str, path: str) -> str | None:
+        r = _git(tree, "show", f"{rev}:{path}", check=False)
+        return None if r.returncode else r.stdout
+
+    bad = []
+    for p in sorted(x for x in changed[0] & changed[1] if x.endswith(".json")):
+        merged = text("HEAD", p)
+        if merged is not None and not _strict_json(merged) and all(
+                _strict_json(t) for t in (text("HEAD^1", p), text(theirs, p)) if t is not None):
+            bad.append(p)
+    return bad
+
+
+def _merge(tree: Path, label: str, sha: str, msg: str) -> None:
+    """Merge ``sha`` onto the worktree ``tree``'s HEAD (`--no-ff`).  A conflict made only of import lines keeps both sides
+    (`keep_both_imports`), named in the commit's `Imports:` trailer; any other refuses.  A merged JSON file must parse
+    (`broken_json`)."""
+    r = _git(tree, "-c", "merge.conflictStyle=merge", "merge", "--no-ff", "-m", msg, sha, check=False)
+    if r.returncode:
+        conflicted = [p for p in _git(tree, "diff", "--name-only", "-z", "--diff-filter=U").stdout.split("\0") if p]
+        resolved = {}
+        for p in conflicted:
+            try:
+                resolved[p] = keep_both_imports((tree / p).read_text())
+            except (OSError, UnicodeDecodeError):
+                resolved[p] = None
+        if not conflicted or None in resolved.values():
+            _git(tree, "merge", "--abort", check=False)
+            other = [p for p, v in resolved.items() if v is None]
+            raise Refused(f"{label} does not merge onto the train so far"
+                          + (f" (a conflict in {', '.join(other)} holds more than import lines)" if other else "")
+                          + f": {(r.stderr or r.stdout).strip()[-300:]}")
+        for p, new in resolved.items():
+            (tree / p).write_text(new)
+        _git(tree, "add", "--", *resolved)
+        _git(tree, "commit", "-q", "-m", f"{msg}\nImports: {', '.join(resolved)}")
+    if bad := broken_json(tree, sha):
+        raise Refused(f"merging {label} onto the train leaves {', '.join(bad)} unparseable as JSON (or with a key twice in one "
+                      "object), though both sides parse: git merged their lines; merge the train so far into it and fix that by hand")
+
+
 def _chain(tree: Path, pins: list[tuple[str, str]], stamp: str) -> list[str]:
-    """Merge each (label, commit) in order onto the worktree ``tree``'s HEAD, one `--no-ff` merge each; the chain's commits, which
-    are the train's prefixes.  Refused at the first that doesn't merge."""
+    """Merge each (label, commit) in order onto the worktree ``tree``'s HEAD, one `--no-ff` merge each (`_merge`); the chain's
+    commits, which are the train's prefixes.  Refused at the first that doesn't merge."""
     chain = []
     for label, sha in pins:
-        r = _git(tree, "merge", "--no-ff", "-m", f"Merge {label} ({sha[:8]})\n\nTrain: {stamp}", sha, check=False)
-        if r.returncode:
-            _git(tree, "merge", "--abort", check=False)
-            raise Refused(f"{label} does not merge onto the train so far: {(r.stderr or r.stdout).strip()[-300:]}")
+        _merge(tree, label, sha, f"Merge {label} ({sha[:8]})\n\nTrain: {stamp}")
         chain.append(_git(tree, "rev-parse", "HEAD").stdout.strip())
     return chain
+
+
+#: the grants of `research queue`'s rules (role: what it attests) a train's pull request must hold at its pinned head before its
+#: check is spent; the lander applies the rules' other grants by hand
+TRAIN_GRANTS = {"statement-reviewer": "a named reviewer read what `tools/lean/audit.py --update` prints for its changed pins and "
+                                      "the definitions they read (lane contract §5)"}
+
+
+def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=print) -> list[str]:
+    """Why each train ref whose change from ``base`` needs a TRAIN_GRANTS grant under the queue's rules (as ``base`` has them;
+    none when it has no rules file) can't go in: pull request N lacks the `grant` label on `pr:N@SHA` at its pinned head (and,
+    for a lean-audit.json change, a `lean_review` that printed it whole as the same statements: `research.queue.reviewed`), or
+    the ref isn't a pinned pull request, which is all a grant can be on."""
+    from .queue import RULES, RULES_BEFORE_MOVE, QueueError, Rules, StoreGrants, grant_target
+
+    for path in (RULES, RULES_BEFORE_MOVE):
+        r = _git(repo, "show", f"{base}:{path}", check=False)
+        if r.returncode == 0:
+            break
+    else:
+        return []
+    grants = StoreGrants(store, lambda s: log(s.replace("research queue:", "research merge:", 1)))
+    out = []
+    try:
+        rules = Rules.parse(r.stdout, path)
+        lean = {g.role for g in rules.grants if g.lean_audit}
+        for label, sha in pins:
+            pr = int(label[1:]) if label.startswith("#") else None
+            need = sorted(rules.needs(repo, base, sha, (lambda: grants.reviews(pr, sha)) if pr else list) & set(TRAIN_GRANTS))
+            if need and pr is None:
+                out.append(f"{label} needs the {', '.join(need)} grant ({path}), which only a pull request's pinned head can hold: "
+                           f"name it as N@SHA")
+            elif missing := [g for g in need if g not in grants(pr, sha)]:
+                target = grant_target(pr, sha)
+                out += [f"{label} needs the {g} grant at {sha[:12]} ({path}: {TRAIN_GRANTS[g]}); once it has it, "
+                        f"`research data label {target} grant {g} --by REVIEWER` (a new push needs a new one)" + (
+                            f". A change `audit.py --update` (`--moved MOVES.json` for a move) prints only as the same statements "
+                            f"needs none: `research data put --kind lean-review/v1 --file OUT/audit.json`, then `research data "
+                            f"label {target} lean_review ART --by LANE`" if g in lean else "") for g in missing]
+    except QueueError as e:
+        raise Refused(f"the queue's rules ({path}): {e}") from e
+    return out
 
 
 #: what `prepare` runs on a train before pushing it: check's preflight (`uv.lock`, the repository's lints)
@@ -289,14 +475,17 @@ def preflight_argv() -> list[str]:
     return [uv, "run", "--locked", "python", *PREFLIGHT]
 
 
-def prepare(repo: Path, refs: list[str], branch: str, onto: str, remote: str, lint: list[str]) -> tuple[str, str]:
-    """Build a train for its check without recording or landing anything: ``refs`` (`pinned`) merged in order onto ``onto`` as
-    ``remote`` has it (the target, or the prep branch of a train ahead, to stack on it) in a scratch worktree, refused at the first
-    that doesn't merge; ``lint`` run on the result there; its tip pushed to ``remote`` as ``branch``, never forced, and read back.
-    Every step names the scratch worktree or ``repo``'s object store, never its checkout.  Returns (the tip, its tree)."""
+def prepare(repo: Path, refs: list[str], branch: str, onto: str, remote: str, lint: list[str], store) -> tuple[str, str]:
+    """Build a train for its check without recording or landing anything: ``refs`` (`pinned`), refused while one lacks a grant
+    (`ungranted`), merged in order onto ``onto`` as ``remote`` has it (the target, or the prep branch of a train ahead, to stack
+    on it) in a scratch worktree, refused at the first that doesn't merge; ``lint`` run on the result there; its tip pushed to
+    ``remote`` as ``branch``, never forced, and read back.  Every step names the scratch worktree or ``repo``'s object store,
+    never its checkout.  Returns (the tip, its tree)."""
     r = _git(repo, "fetch", "-q", remote, onto, check=False)
     base = _git(repo, "rev-parse", "--verify", f"{'FETCH_HEAD' if r.returncode == 0 else onto}^{{commit}}").stdout.strip()
     pins = [pinned(repo, ref, remote) for ref in refs]
+    if why := ungranted(repo, pins, base, store):
+        raise Refused("; ".join(why) + "; nothing was built")
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     tree = Path(tempfile.mkdtemp(prefix="research-train-"))
     _git(repo, "worktree", "add", "-q", "--detach", str(tree), base)
@@ -325,6 +514,8 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
     if head != into or _git(repo, "status", "--porcelain", "--untracked-files=no").stdout.strip():
         raise Refused(f"the checkout must be a clean {into}")
     pins = [pinned(repo, ref, remote) for ref in refs]
+    if why := ungranted(repo, pins, "HEAD", store, log):
+        raise Refused("; ".join(why) + "; nothing was checked")
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     tree = Path(tempfile.mkdtemp(prefix="research-train-"))
     branch = f"research-train/{stamp}"
@@ -450,10 +641,35 @@ def _sweep_after(repo: Path, into: str, remote: str) -> None:
               file=sys.stderr)
 
 
-def _push_and_sweep(repo: Path, into: str, remote: str, push: bool) -> int:
-    """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced) and sweep, since the sweep closes
-    only what is on the remote; a refused push sweeps nothing and fails. Without ``push`` the sweep finds nothing the merge
-    landed, says so, and `research merge --sweep` after the push does it."""
+def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.Popen) -> list[str] | None:
+    """Start what the target's own declaration of ``tool`` runs after a landing (`Tool.after_land`, read from the checkout as
+    `required_steps` reads `merge_requires`) on ``commit``, in a session of its own, so it outlives this process and nothing it
+    does changes the merge's result.  Returns the argv started, None when the declaration names none."""
+    from .store import tools_registry
+
+    module, _, attr = tools_registry.REGISTRY.get(tool, tool).rpartition(":")
+    try:
+        argv = [*tools_registry._from_file(module, attr, repo).after_land]
+    except Exception:  # noqa: BLE001  (a tool the checkout does not declare runs nothing after a landing)
+        return None
+    if not argv:
+        return None
+    argv.append(commit)
+    out = Path(tempfile.gettempdir()) / f"research-after-land-{commit[:12]}.log"
+    try:
+        with open(out, "ab") as f:
+            spawn(argv, cwd=repo, stdin=subprocess.DEVNULL, stdout=f, stderr=subprocess.STDOUT, start_new_session=True)
+    except OSError as e:
+        log(f"research merge: after the landing, `{shlex.join(argv)}` did not start ({e}); run it by hand")
+        return argv
+    log(f"research merge: after the landing, started `{shlex.join(argv)}` (log {out})")
+    return argv
+
+
+def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = "check") -> int:
+    """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced), start what ``tool`` runs after a
+    landing (`after_land`) and sweep, since the sweep closes only what is on the remote; a refused push sweeps nothing and fails.
+    Without ``push`` the sweep finds nothing the merge landed, says so, and `research merge --sweep` after the push does it."""
     if push:
         r = _git(repo, "push", "-q", remote, f"refs/heads/{into}:refs/heads/{into}", check=False)
         if r.returncode:
@@ -461,6 +677,7 @@ def _push_and_sweep(repo: Path, into: str, remote: str, push: bool) -> int:
                   file=sys.stderr)
             return 1
         print(f"research merge: pushed {into} to {remote}")
+        after_land(repo, tool, _git(repo, "rev-parse", "HEAD").stdout.strip())
     _sweep_after(repo, into, remote)
     return 0
 
@@ -522,7 +739,7 @@ def main(argv: list[str]) -> int:
         onto = a.onto or a.into
         lint = shlex.split(a.lint) if a.lint else preflight_argv()
         try:
-            tip, tree = prepare(repo, a.ref, a.prepare, onto, a.remote, lint)
+            tip, tree = prepare(repo, a.ref, a.prepare, onto, a.remote, lint, LocalStore(a.store))
         except Refused as e:
             print(f"research merge: refused: {e}", file=sys.stderr)
             return 1
@@ -542,7 +759,7 @@ def main(argv: list[str]) -> int:
             return 1
         moved = f"{a.into} fast-forwarded to {land[:12]}" if land else f"{a.into} unchanged"
         print(f"research merge: train {' '.join(a.ref)}: " + (f"`{decl.name}` passed; {moved}" if bad is None else f"{bad} breaks it; {moved}"))
-        pushed = _push_and_sweep(repo, a.into, a.remote, a.push) if land else 0
+        pushed = _push_and_sweep(repo, a.into, a.remote, a.push, a.tool) if land else 0
         return 0 if bad is None and not pushed else 1
     if len(a.ref) != 1:
         ap.error("several refs need --train")
@@ -566,7 +783,7 @@ def main(argv: list[str]) -> int:
     if not same:
         _sweep_after(repo, a.into, a.remote)
         return 1
-    return _push_and_sweep(repo, a.into, a.remote, a.push)
+    return _push_and_sweep(repo, a.into, a.remote, a.push, a.tool)
 
 
 if __name__ == "__main__":

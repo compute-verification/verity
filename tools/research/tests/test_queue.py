@@ -3,19 +3,26 @@ with a passing `check` of that exact commit.  Every test runs on a throwaway bar
 PRs and writes their `refs/pull/{n}/head`."""
 from __future__ import annotations
 
+import base64
 import json
 import os
+import re
+import shlex
+import shutil
 import subprocess
 import sys
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
 
 from research.cli import main as research_main
-from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, grant_target
+from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, credential_args, grant_target
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
 from research.store.model import Label
+from test_merge_gate import CHECKED, DECL
 
 RULES = """\
 hold_label = "hold"
@@ -23,6 +30,7 @@ hold_label = "hold"
 [[grant]]
 role = "vllm-coordinator"
 paths = ["integrations/vllm/"]
+by = "the vLLM coordinator"
 
 [[grant]]
 role = "statement-reviewer"
@@ -63,7 +71,8 @@ class World:
         _git(tmp, "init", "-q", "--bare", "-b", "main", str(self.origin))
         for rel, text in {"a.txt": "a\n", "b.txt": "b\n", "c.txt": "c\n", "ci/queue.toml": RULES, ".gitignore": "__pycache__/\n",
                           "pkg/lean-audit.json": json.dumps({"pins": {"T": "1"}, "reads": {}, "dependencies": {"M": "1"}}),
-                          "mytools/decl_check.py": "from research.store.tool import Tool\nT = Tool(name='check', version='1')\n"}.items():
+                          "mytools/decl_check.py": "from research.store.tool import Tool\nT = Tool(name='check', version='1')\n",
+                          "tools/check/tool.py": DECL.format("")}.items():
             (self.dev / rel).parent.mkdir(parents=True, exist_ok=True)
             (self.dev / rel).write_text(text)
         _git(self.dev, "init", "-q", "-b", "main")
@@ -86,6 +95,11 @@ class World:
         sha = _git(self.dev, "rev-parse", "HEAD")
         _git(self.dev, "push", "-q", "origin", f"{sha}:refs/dev/{sha}")         # the object on the origin, as a PR's head is
         return sha
+
+    def with_store_remote(self) -> None:
+        """Give `store` a remote (a directory): `StoreGrants` answers only from labels it pulled from one."""
+        (self.tmp / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{self.tmp / "vault"}"\n')
+        self.store = LocalStore(self.tmp / "store", config_path=self.tmp / "store.toml")
 
     def queue(self, **kw) -> Queue:
         return Queue(self.tmp / "q" / "verity", remote=str(self.origin), github=self.gh, grants=lambda n, h: self.grants.get((n, h), set()),
@@ -116,7 +130,7 @@ def test_ready_prs_merge_onto_next_in_number_order_drafts_too_and_held_ownerless
     assert [m.pr for m in members] == [1, 2, 3, 6] == world.on_next(q)
     assert members[3].owner == AGENT and members[0].owner == "lane-1"
     assert entries[4].why == entries[7].why == "held (`hold` label)" and entries[5].why.startswith("no owner")
-    assert entries[8].why == f"not marked ready at {h8[:8]}: `research queue ready 8`"
+    assert entries[8].why == f"not marked ready at {h8[:8]}: `research queue ready 8 --on MACHINE` (or --local)"
     tip = _git(world.origin, "rev-parse", "refs/heads/next")
     assert _git(world.origin, "rev-parse", f"{tip}^1^1^1^1") == _git(world.origin, "rev-parse", "main")    # one merge commit each
     msg = _git(world.origin, "log", "-1", "--format=%B", tip)
@@ -157,7 +171,9 @@ def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world
     world.gh.put(4, world.change({"c.txt": "stacked\n"}, base=parent))
     q = world.queue()
     members, entries = q.sync()
-    assert members == [] and entries[5].why == f"waiting for the vllm-coordinator grant at {parent[:8]}"
+    assert members == [] and entries[5].why == (
+        f"waiting for the vllm-coordinator grant at {parent[:8]}: vllm-coordinator from the vLLM coordinator; granted with "
+        f"`research data label pr:5@{parent} grant ROLE --by LANE` (ci/queue.toml)"), "who gives it, and the label that does"
     assert entries[4].state == "waiting" and entries[4].after == (5,)      # it carries #5's change, grant included
     world.grants[(5, parent)] = {"vllm-coordinator"}
     world.grants[(4, world.gh.prs[4].head)] = {"vllm-coordinator"}     # #4 carries #5's change, so it needs the grant too
@@ -174,12 +190,30 @@ def test_grants_follow_paths_and_lean_audit_sections_at_the_exact_head(world):
     _, entries = q.sync()
     assert entries[1].why.startswith("waiting for the vllm-coordinator grant")
     assert entries[2].why.startswith("waiting for the statement-reviewer grant")
+    assert "statement-reviewer (no `by` in ci/queue.toml)" in entries[2].why
     assert entries[3].state == "queued"                         # a dependency digest isn't a statement
     world.grants[(1, world.gh.prs[1].head)] = {"vllm-coordinator"}
     assert 1 in [m.pr for m in q.sync()[0]]
     world.gh.put(1, world.change({"integrations/vllm/x.py": "x = 2\n"}))
     members, entries = q.sync()
     assert 1 not in [m.pr for m in members] and entries[1].state == "waiting"     # a new head needs a new grant
+
+
+def test_a_lean_review_covers_only_the_change_it_printed_as_the_same_statements():
+    """`reviewed`: an `audit.py --update` report stands in for the statement reviewer only on its own package, only when it printed
+    nothing a reviewer must read, and only for entries it saw change: one another PR changed on `main` meanwhile isn't covered."""
+    from research.queue import reviewed
+
+    old, new = {"pins": {"P.t": "1", "P.u": "5"}, "reads": None}, {"pins": {"Q.t": "1q", "P.u": "5"}, "reads": {"Q": "d"}}
+    rep = {"package": "lean", "statement_changes": False, "before": {"pins": {"P.t": "1", "P.u": "5"}, "reads": {}},
+           "pins": {"Q.t": "1q", "P.u": "5"}, "reads": {"Q": "d"}}
+    assert reviewed("lean/lean-audit.json", old, new, rep)
+    assert reviewed("lean/lean-audit.json", old, new, rep | {"package": "/w/verity/lean/"})
+    assert not reviewed("other/lean/lean-audit.json", old, new, rep) and not reviewed("lean-audit.json", old, new, rep)
+    assert not reviewed("lean/lean-audit.json", old, new, rep | {"statement_changes": True})
+    assert not reviewed("lean/lean-audit.json", old, new, {k: v for k, v in rep.items() if k != "before"})
+    assert not reviewed("lean/lean-audit.json", {**old, "pins": {"P.t": "1", "P.u": "6"}}, new, rep), "P.u changed on main since"
+    assert not reviewed("lean/lean-audit.json", old, {**new, "reads": "{not json"}, rep)
 
 
 def test_an_ejected_head_stays_out_until_its_pr_is_pushed_again(world):
@@ -220,6 +254,108 @@ def test_the_clone_follows_the_callers_origin_so_a_url_that_stopped_working_does
     assert _git(world.tmp / "q" / "verity", "remote", "get-url", "origin") == str(moved)
 
 
+HTTP_BACKEND = Path(subprocess.run(["git", "--exec-path"], capture_output=True, text=True).stdout.strip()) / "git-http-backend"
+
+
+class _GitHTTP(BaseHTTPRequestHandler):
+    """`git http-backend` over `root` behind Basic auth as `u:p`, as GitHub serves a private repository: without credentials, a 401."""
+    root: Path
+
+    def do_GET(self):
+        if self.headers.get("Authorization") != "Basic " + base64.b64encode(b"u:p").decode():
+            self.send_response(401)
+            self.send_header("WWW-Authenticate", 'Basic realm="origin"')
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        path, _, query = self.path.partition("?")
+        body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        env = {"PATH": os.environ["PATH"], "GIT_PROJECT_ROOT": str(self.root), "GIT_HTTP_EXPORT_ALL": "1", "REMOTE_USER": "u",
+               "PATH_INFO": path, "QUERY_STRING": query, "REQUEST_METHOD": self.command, "CONTENT_LENGTH": str(len(body)),
+               "CONTENT_TYPE": self.headers.get("Content-Type", ""), "HTTP_CONTENT_ENCODING": self.headers.get("Content-Encoding", ""),
+               "GIT_PROTOCOL": self.headers.get("Git-Protocol", "")}
+        cgi = subprocess.run([str(HTTP_BACKEND)], input=body, env=env, capture_output=True, check=True).stdout
+        head, _, out = cgi.partition(b"\r\n\r\n")
+        headers = [line.split(": ", 1) for line in head.decode().split("\r\n") if line]
+        self.send_response(int(next((v for k, v in headers if k == "Status"), "200").split()[0]))
+        for k, v in headers:
+            if k != "Status":
+                self.send_header(k, v)
+        self.send_header("Content-Length", str(len(out)))
+        self.end_headers()
+        self.wfile.write(out)
+
+    do_POST = do_GET
+
+    def log_message(self, *args):
+        pass
+
+
+def _no_machine_git_config(tmp: Path, monkeypatch) -> None:
+    """A cloud VM's view: no credential helper (nor prompt) from git's global or system config, only from a checkout's own."""
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp / "global.gitconfig"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    for k in ("GIT_ASKPASS", "SSH_ASKPASS"):
+        monkeypatch.delenv(k, raising=False)
+
+
+@pytest.fixture
+def served(world, monkeypatch):
+    """`world`'s origin over http behind a password; its URL."""
+    _no_machine_git_config(world.tmp, monkeypatch)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), type("Handler", (_GitHTTP,), {"root": world.tmp}))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{srv.server_address[1]}/{world.origin.name}"
+    srv.shutdown()
+    srv.server_close()
+
+
+@pytest.mark.skipif(not HTTP_BACKEND.exists(), reason="no git-http-backend in this git")
+def test_the_clone_authenticates_as_the_callers_checkout_does_and_fails_rather_than_prompt_or_answer_stale(world, served):
+    """A cloud VM's credential helper is in its checkout's own config (one that needs the path, as the VMs' broker does), which the
+    queue's own clone never read, so `status` failed there at the clone.  It takes the checkout's settings for the remote now; and
+    with no credentials git fails at once instead of prompting, also once the clone has fetched before."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    _git(world.dev, "config", f"credential.{served}.helper", "")
+    _git(world.dev, "config", "--add", f"credential.{served}.helper",
+         "!f() { test \"$1\" = get && grep -qx path=origin.git && printf 'username=u\\npassword=p\\n'; }; f")
+    _git(world.dev, "config", f"credential.{served}.useHttpPath", "true")
+
+    def queue(auth: tuple[str, ...]) -> Queue:
+        return Queue(world.tmp / "q" / "verity", remote=served, github=world.gh, grants=lambda n, h: set(), ready=lambda n, h: True,
+                     notes=world.tmp / "notes", log=world.logs.append, auth=auth)
+
+    with pytest.raises(QueueError, match=r"git clone .*terminal prompts disabled; no credential helper applies to the remote"):
+        queue(()).status()
+    auth = credential_args(world.dev, served)
+    members, _ = queue(auth).sync()
+    assert [m.pr for m in members] == [1] and _git(world.origin, "rev-parse", "refs/heads/next") == members[0].commit
+    assert [(n, e.state) for n, e in queue(auth).status().items()] == [(1, "queued")]
+    with pytest.raises(QueueError, match=r"git fetch .*could not read Username"):
+        queue(()).status()
+
+
+def test_credential_args_take_the_checkouts_own_settings_else_gh_where_no_helper_applies(tmp_path, monkeypatch):
+    _no_machine_git_config(tmp_path, monkeypatch)
+    url, repo, bin_dir = "https://verity-agent@github.com/o/r", tmp_path / "checkout", tmp_path / "bin"
+    _git(tmp_path, "init", "-q", str(repo))
+    bin_dir.mkdir()
+    (bin_dir / "gh").write_text("#!/bin/sh\n")
+    (bin_dir / "gh").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    gh = ("-c", "credential.helper=", "-c", f"credential.helper=!{shlex.quote(str(bin_dir / 'gh'))} auth git-credential")
+    assert credential_args(repo, url) == credential_args(tmp_path, url) == gh, "no helper anywhere, in a checkout or not: gh's"
+    assert credential_args(repo, "/srv/origin.git") == credential_args(repo, "git@github.com:o/r") == (), "not http: no credentials"
+    _git(repo, "config", "credential.https://verity-agent@github.com.helper", "")
+    _git(repo, "config", "--add", "credential.https://verity-agent@github.com.helper", "!broker credential")
+    _git(repo, "config", "credential.https://verity-agent@github.com.useHttpPath", "true")
+    _git(repo, "config", "credential.https://elsewhere.example.helper", "!not-this-one")
+    assert credential_args(repo, url) == ("-c", "credential.helper=", "-c", "credential.helper=!broker credential",
+                                          "-c", "credential.usehttppath=true")
+    (tmp_path / "global.gitconfig").write_text("[credential]\n\thelper = store\n")
+    assert credential_args(tmp_path, url) == (), "a helper from git's global config serves the clone as it is"
+
+
 def test_a_rewritten_pr_head_is_fetched_by_force_and_merged(world):
     old = world.change({"a.txt": "1\n"})
     world.gh.put(1, old)
@@ -240,13 +376,13 @@ def test_land_fast_forwards_main_to_the_newest_commit_with_a_passing_check_and_s
     assert _git(world.origin, "rev-parse", f"refs/heads/{SHADOW_BRANCH}") and world.on_next(shadow) == [1, 2, 3]
     members, _ = world.queue().sync()
     monkeypatch.setenv("RESEARCH_STORE", str(world.tmp / "store"))
-    for m, command in ((members[1], "true"), (members[2], "false")):
+    for m, command in ((members[1], CHECKED), (members[2], ("false",))):
         tree = world.tmp / f"check-{m.pr}"
         _git(world.dev, "fetch", "-q", "origin")
         _git(world.dev, "worktree", "add", "-q", "--detach", str(tree), m.commit)
         monkeypatch.chdir(tree)
         research_main(["run", "--runs-dir", str(world.tmp / "runs"), "--project", "t", "--no-sampler", "--tool", "mytools.decl_check:T",
-                       "--cwd", "source", "--", command])
+                       "--cwd", "source", "--", *command])
     shadow.land()                                               # whatever it finds, a shadow queue never moves `main`
     assert _git(world.origin, "rev-parse", "main") == main_before
     q = world.queue()
@@ -285,7 +421,9 @@ class _Unreachable:
         return fail
 
 
-def test_grants_read_through_to_the_remote_and_a_failed_pull_grants_nothing(tmp_path, monkeypatch):
+def test_grants_read_through_to_the_remote_and_without_that_pull_the_queue_refuses_to_answer(tmp_path, monkeypatch):
+    """A failed pull, an unusable remote, or none at all (a cloud VM's shell that lost its store secrets) used to leave the queue
+    answering from this machine's labels, with a warning at most, so its ready marks could be stale.  Each is `STALE` now."""
     from research.queue import StoreGrants
 
     head = "0123456789abcdef0123456789abcdef01234567"
@@ -300,27 +438,23 @@ def test_grants_read_through_to_the_remote_and_a_failed_pull_grants_nothing(tmp_
     grants = StoreGrants(queue_host, log=logs.append)
     real = LocalStore.remote.fget
     monkeypatch.setattr(LocalStore, "remote", property(lambda self: _Unreachable()))
-    assert grants(12, head) == set() and grants.ready(12, head) is False, "a failed pull is never a grant"
-    assert len(logs) == 2 and all(x.startswith(f"research queue: labels of pr:12@{head}: pulling from fs:/unreachable failed (OSError")
-                                  for x in logs)
+    for read in (grants, grants.ready):
+        with pytest.raises(QueueError, match=rf"^STALE: the labels of pr:12@{head} weren't pulled from the store's remote "
+                                             r"\(pulling from fs:/unreachable failed \(OSError: injected"):
+            read(12, head)
     monkeypatch.setattr(LocalStore, "remote", property(real))
-    assert grants(12, head) == {"red-team"} and grants.ready(12, head) is True and len(logs) == 2
-
-
-def test_grants_with_no_remote_configured_say_so_once(tmp_path, monkeypatch):
-    """A machine with no store remote sees only its own marks: `not marked ready` there may be a mark made elsewhere."""
-    from research.queue import StoreGrants
-
-    head = "0123456789abcdef0123456789abcdef01234567"
-    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "absent.toml"))
-    store = LocalStore(tmp_path / "store")
-    assert store.remote is None
-    logs: list[str] = []
-    grants = StoreGrants(store, log=logs.append)
-    assert grants.ready(12, head) is False and grants(12, head) == set() and grants.ready(13, head) is False
-    assert len(logs) == 1 and logs[0].startswith("research queue: no evidence-store remote is configured here")
-    store.add_label(grant_target(12, head), vocab.READY, True, "lane-12", ts="2026-10-02T13:00:00Z")
-    assert grants.ready(12, head) is True and len(logs) == 1
+    assert grants(12, head) == {"red-team"} and grants.ready(12, head) is True and logs == []
+    # the labels are on this machine now, and still don't answer without a pull
+    absent, unusable = tmp_path / "absent.toml", tmp_path / "s3.toml"
+    unusable.write_text('[remote]\ntype = "s3"\nbucket = "b"\nendpoint = "https://acct.r2.cloudflarestorage.com"\n'
+                        'access_key_id_env = "Q_AK_ABSENT"\nsecret_access_key_env = "Q_SK_ABSENT"\n')
+    with pytest.raises(QueueError, match=r"^STALE: .*\(no remote configured"):
+        StoreGrants(LocalStore(tmp_path / "queue", config_path=absent)).ready(12, head)
+    with pytest.raises(QueueError, match=r"^STALE: .*Q_AK_ABSENT"):
+        StoreGrants(LocalStore(tmp_path / "queue", config_path=unusable)).ready(12, head)
+    monkeypatch.setenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", "R2_ENDPOINT,R2_BUCKET")
+    with pytest.raises(QueueError, match=r"^STALE: .*R2_ENDPOINT, R2_BUCKET not in this shell .*fresh tmux login shell"):
+        StoreGrants(LocalStore(tmp_path / "queue", config_path=absent)).ready(12, head)
 
 
 def test_rules_refuse_what_they_cannot_place():
@@ -346,6 +480,7 @@ def test_until_the_move_the_rules_are_read_from_tools_check(world):
 def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(world, capsys):
     from research.queue import StoreGrants, ready
 
+    world.with_store_remote()
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
     labels = StoreGrants(world.store, log=world.logs.append)
@@ -360,7 +495,7 @@ def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(wor
     h2 = world.change({"a.txt": "a2\n"})
     world.gh.put(1, h2, ready=False)                           # a new push: the label was for the old head
     members, entries = q.sync()
-    assert members == [] and entries[1].why == f"not marked ready at {h2[:8]}: `research queue ready 1`"
+    assert members == [] and entries[1].why == f"not marked ready at {h2[:8]}: `research queue ready 1 --on MACHINE` (or --local)"
     world.gh.put(1, h2, labels=("hold",), ready=False)
     assert ready(world.gh, world.store, 1, "lane-1", PASS) == 0
     members, entries = q.sync()
@@ -371,11 +506,15 @@ def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(wor
 #: a `suites.py` that says what it was asked and what it found, and fails one test when FAKE_FAIL names it
 FAKE_SUITES = """\
 # it knows "--changed"
-import json, os, sys
+import json, os, shutil, sys
 from pathlib import Path
 a = sys.argv[1:]
 Path(os.environ["FAKE_SEEN"]).write_text(json.dumps({"argv": a, "files": sorted(p.name for p in Path.cwd().iterdir()),
-                                                     "pythonpath": os.environ.get("PYTHONPATH")}))
+                                                     "pythonpath": os.environ.get("PYTHONPATH"),
+                                                     "built": Path("backends/flock/verifier/lean/.lake/built").is_file(),
+                                                     "lake": shutil.which("lake"),
+                                                     "env": {k: os.environ.get(k) for k in ("VERITY_STORE_REQUIRED",
+                                                             "CHECK_STORE_CUSTODY", "RESEARCH_RUN_ID", "GIT_AUTHOR_EMAIL")}}))
 fail = os.environ.get("FAKE_FAIL")
 Path(a[a.index("--json") + 1]).write_text(json.dumps([{"name": "pkg", "suite": "pkg", "status": "failed" if fail else "passed",
                                                        "failed_tests": [fail] if fail else None}]))
@@ -386,6 +525,7 @@ sys.exit(1 if fail else 0)
 def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_its_head_and_a_failure_refuses(world, monkeypatch, capsys):
     from research import queue as Q
 
+    world.with_store_remote()
     main = world.change({"tools/check/suites.py": FAKE_SUITES})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
@@ -421,3 +561,333 @@ def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_it
     world.gh.put(1, h3, ready=False)
     assert tier(world.gh.prs[1]) is None
     assert json.loads(seen.read_text())["argv"][:2] == ["--quick", "--json"]     # a runner from before --changed: every suite
+
+
+def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that_build_warm(world, monkeypatch):
+    """The flock suite's workers each run `lake build` in the verifier; from the cold checkout `git clean` leaves, they collided."""
+    from research import queue as Q
+
+    world.with_store_remote()
+    main = world.change({"tools/check/suites.py": FAKE_SUITES, "backends/flock/verifier/lean/lakefile.toml": "name = \"flock\"\n"})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    h1 = world.change({"a.txt": "a1\n"})
+    world.gh.put(1, h1, ready=False)
+    bin_, seen, ran = world.tmp / "bin", world.tmp / "seen.json", world.tmp / "lake.log"
+    bin_.mkdir()
+    (bin_ / "lake").write_text('#!/bin/sh\necho "$PWD $*" >> "$FAKE_LAKE_LOG"\n[ -z "$FAKE_LAKE_FAIL" ] || exit 1\n'
+                               'mkdir -p .lake && echo built > .lake/built\n')
+    (bin_ / "lake").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setenv("FAKE_SEEN", str(seen))
+    monkeypatch.setenv("FAKE_LAKE_LOG", str(ran))
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+    monkeypatch.delenv("FAKE_LAKE_FAIL", raising=False)
+    tier = Q.QuickTier(world.dev, str(world.origin), root=world.tmp / "ready")
+
+    assert tier(world.gh.prs[1]) is None and json.loads(seen.read_text())["built"]
+    [wt] = [p for p in (world.tmp / "ready").iterdir() if p.is_dir() and p.name != "logs"]
+    lean = wt / "backends" / "flock" / "verifier" / "lean"
+    assert ran.read_text().split("\n") == [f"{lean} build", ""]
+    (lean / ".lake" / "built").write_text("from the last PR\n")
+    (lean / "stray.olean").write_text("left by the last PR\n")
+    monkeypatch.setenv("FAKE_LAKE_FAIL", "1")
+    assert tier(world.gh.prs[1]) == "`lake build` in backends/flock/verifier/lean exited 1 (its output is above)"
+    assert (lean / ".lake" / "built").read_text() == "from the last PR\n" and not (lean / "stray.olean").exists()
+
+
+#: a check slot's `slot.py` as the machine runs it: says how it was asked, then runs CMD
+FAKE_SLOT = """\
+import json, os, sys
+from pathlib import Path
+a = sys.argv[1:]
+Path(os.environ["FAKE_SLOT_SEEN"]).write_text(json.dumps(a))
+cmd = a[a.index("--") + 1:]
+os.execvp(cmd[0], cmd)
+"""
+
+
+class Machine:
+    """`research run --on` and `research fetch` against a directory, as a machine serves them: the launch ships the `--source`
+    checkout's HEAD (a shared clone of its repository, detached there; a dirty checkout is refused), puts each `--send` file in the
+    run's inputs and runs the command in the shipped tree with RESEARCH_RUN_DIR and RESEARCH_RUN_ID, then writes status.json; a
+    fetch copies the records into the local run dir.  ``outcome(run_dir, run_id, head)``, when given, stands in for the command.
+    With ``custody_r2``, the launch stages the run's custody key under `<root>/requests/<run id>/custody/` first, as `--custody-r2`
+    (the default with --on) does."""
+
+    def __init__(self, tmp: Path, outcome=None, fetched: dict | None = None, reachable: bool = True, custody_r2: bool = False):
+        self.root, self.outcome, self.fetched, self.reachable = tmp / "machine", outcome, fetched or {}, reachable
+        self.custody_r2 = custody_r2
+        self.launched: list[list[str]] = []
+
+    def launch(self, argv: list[str], cwd: Path) -> subprocess.CompletedProcess:
+        self.launched.append(argv)
+        flags = argv[:argv.index("--")]
+        rid, src = flags[flags.index("--id") + 1], Path(flags[flags.index("--source") + 1])
+        assert _git(src, "status", "--porcelain") == "", "`research run --on` ships only a clean checkout"
+        head = _git(src, "rev-parse", "HEAD")
+        tree, run = self.root / "src" / head, self.root / "runs" / rid
+        if not tree.exists():
+            tree.parent.mkdir(parents=True, exist_ok=True)
+            repo = _git(src, "rev-parse", "--path-format=absolute", "--git-common-dir")
+            _git(tree.parent, "clone", "-q", "--shared", "--no-checkout", repo, str(tree))
+            _git(tree, "checkout", "-q", "--detach", head)
+        (run / "inputs").mkdir(parents=True)
+        for i, x in enumerate(flags):
+            if x == "--send":
+                shutil.copy(flags[i + 1], run / "inputs")
+        if self.custody_r2:
+            (key := self.root / "requests" / rid / "custody").mkdir(parents=True)
+            (key / "store.toml").write_text('[remote]\nkind = "s3"\n')
+            (key / "cred.json").write_text("{}\n")
+        (Path(os.environ["RESEARCH_RUNS"]) / rid).mkdir(parents=True)
+        if self.outcome is not None:
+            self.outcome(run, rid, head)
+        else:
+            env = {**os.environ, "RESEARCH_RUN_DIR": str(run), "RESEARCH_RUN_ID": rid}
+            rc = subprocess.run(argv[argv.index("--") + 1:], cwd=tree, env=env).returncode
+            (run / "status.json").write_text(json.dumps({"state": "done" if rc == 0 else "failed", "rc": rc}))
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    def fetch(self, local: Path) -> dict:
+        if not self.reachable:
+            raise OSError("injected: the machine is unreachable")
+        for f in ("status.json", "result.json"):
+            if (self.root / "runs" / local.name / f).exists():
+                shutil.copy(self.root / "runs" / local.name / f, local / f)
+        return dict(self.fetched)
+
+
+def _remote_tier(world, monkeypatch, machine: Machine, **kw):
+    """A `RemoteQuickTier` on machine `vy-test` for `world`, its slot.py the fake one and its clock the time its sleeps took; and
+    those sleeps."""
+    from research import queue as Q
+
+    world.with_store_remote()
+    (world.tmp / "bin").mkdir(exist_ok=True)
+    (slot := world.tmp / "bin" / "slot.py").write_text(FAKE_SLOT)
+    monkeypatch.setenv("RESEARCH_RUNS", str(world.tmp / "runs"))
+    monkeypatch.setenv("FAKE_SLOT_SEEN", str(world.tmp / "slot-seen.json"))
+    sleeps: list[float] = []
+    return Q.RemoteQuickTier(world.dev, str(world.origin), "vy-test", by="lane-1", root=world.tmp / "ready", sleep=sleeps.append,
+                             **{"clock": lambda: sum(sleeps), "slot": slot, "launch": machine.launch, "fetch": machine.fetch,
+                                **kw}), sleeps
+
+
+def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_as_the_local_one_is(world, monkeypatch, capsys):
+    """The quick tier ran on the caller's VM, so a lane waited for its own tier and several PRs' tiers ran one at a time; `--on`
+    runs it as a run on the machine, in a check slot, from the PR head's shipped tree, and the worktree's lock is free while it runs."""
+    import fcntl
+
+    from research import queue as Q
+
+    main = world.change({"tools/check/suites.py": FAKE_SUITES})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    h1 = world.change({"a.txt": "a1\n"})
+    world.gh.put(1, h1, ready=False)
+    seen = world.tmp / "seen.json"
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setenv("FAKE_SEEN", str(seen))
+    monkeypatch.setenv("PYTHONPATH", str(world.tmp / "the-callers-tree"))
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+    machine = Machine(world.tmp)
+    free_while_waiting = []
+
+    def fetch(d: Path) -> dict:
+        with open(next((world.tmp / "ready").glob("*.lock")), "w") as f:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)        # raises while the tier holds the worktree
+            free_while_waiting.append(d.name)
+        return machine.fetch(d)
+
+    tier, sleeps = _remote_tier(world, monkeypatch, machine)
+    tier.fetch = fetch
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0
+    [argv] = machine.launched
+    flags = argv[:argv.index("--")]
+    rid = flags[flags.index("--id") + 1]
+    assert flags[:4] == [sys.executable, "-m", "research", "run"] and "--require-result" in flags
+    assert [flags[flags.index(k) + 1] for k in ("--on", "--project", "--cwd", "--declared-output")] == ["vy-test", "verity", "source", "out/*"]
+    assert float(flags[flags.index("--timeout") + 1]) == Q.REMOTE_TIMEOUT_S
+    assert sorted(Path(flags[i + 1]).name for i, x in enumerate(flags) if x == "--send") == ["quick_tier.py", "slot.py"]
+    assert json.loads((world.tmp / "slot-seen.json").read_text())[:4] == ["--by", "lane-1", "--", "python3"]
+    s = json.loads(seen.read_text())
+    assert s["argv"][:3] == ["--quick", "--changed", main] and s["pythonpath"] is None
+    assert Path(s["argv"][s["argv"].index("--json") + 1]) == machine.root / "runs" / rid / "out" / "suites.json"
+    assert free_while_waiting == [rid] and sleeps == [Q.REMOTE_POLL_S]
+    assert f"the quick tier runs as {rid} on vy-test, in a check slot" in capsys.readouterr().out
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is True
+
+    monkeypatch.setenv("FAKE_FAIL", "tests/test_a.py::test_a")
+    h2 = world.change({"b.txt": "b2\n"})
+    world.gh.put(1, h2, ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 1
+    assert "the quick tier failed: pkg: tests/test_a.py::test_a." in capsys.readouterr().err
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h2) is False
+
+
+def _reports(status: dict | None = None, result=lambda doc: doc, raw: str | None = None):
+    """A run's outcome on the machine: status.json `status` (done, exit 0, unless given) and the result.json of a pass at the head as
+    quick_tier.py writes it, through `result` (None: no result.json), or `raw` as the file."""
+    def outcome(run: Path, rid: str, head: str) -> None:
+        (run / "status.json").write_text(json.dumps(status or {"state": "done", "rc": 0}))
+        facts = {"kind": "quick-tier/v1", "head": head, "base": "0" * 40, "dirty": [], "lean": [], "changed": True, "rc": 0, "rows": [],
+                 "logs": "out/logs", "error": None}
+        doc = result({"schema": "research/result/v0.1", "kind": "quick-tier/v1", "run_id": rid, "validation": {"status": "passed"},
+                      "tier": facts})
+        if raw is not None:
+            (run / "result.json").write_text(raw)
+        elif doc is not None:
+            (run / "result.json").write_text(json.dumps(doc))
+    return outcome
+
+
+REMOTE_OUTCOMES = {
+    "a pass": ({}, None),
+    "no result": ({"result": lambda d: None}, r"ended done \(exit 0\) without a result\.json"),
+    "an unreadable result": ({"raw": "{not json"}, r"result\.json is unreadable: not valid JSON"),
+    "another run's result": ({"result": lambda d: {**d, "run_id": "r20260101-000000-0000"}},
+                             r"result\.json is unreadable: run_id 'r20260101-000000-0000' does not match this run"),
+    "another kind": ({"result": lambda d: {**d, "kind": "check/v1"}}, r"result is a check/v1, not a quick-tier/v1 report"),
+    "no kind": ({"result": lambda d: {k: v for k, v in d.items() if k != "kind"}}, r"result is a result with no kind, not a quick-tier/v1"),
+    "no facts": ({"result": lambda d: {k: v for k, v in d.items() if k != "tier"}}, r"it reported no quick-tier/v1 facts"),
+    "another head": ({"result": lambda d: {**d, "tier": {**d["tier"], "head": "f" * 40}}}, r"it ran at ffffffffffff, not at "),
+    "a dirty tree": ({"result": lambda d: {**d, "tier": {**d["tier"], "dirty": ["?? stray.txt"]}}},
+                     r"the checkout differed from \w{12} before anything ran: \?\? stray\.txt"),
+    "a run that failed": ({"status": {"state": "failed", "rc": 1}}, r"facts show a pass, but it ended failed \(exit 1\)"),
+    "a failed validation": ({"result": lambda d: {**d, "validation": {"status": "failed"}}}, r"ended done \(exit 0\) with validation failed"),
+}
+
+
+@pytest.mark.parametrize("case", list(REMOTE_OUTCOMES))
+def test_a_remote_quick_tier_passes_only_on_a_readable_report_of_a_pass_at_the_head_from_a_run_that_ended_done(world, monkeypatch, capsys, case):
+    from research import queue as Q
+
+    kw, refusal = REMOTE_OUTCOMES[case]
+    tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp, outcome=_reports(**kw)))
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == (0 if refusal is None else 1)
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is (refusal is None)
+    if refusal is not None:
+        assert re.search(r"the quick tier failed: .*" + refusal, capsys.readouterr().err)
+
+
+def test_a_remote_quick_tier_that_cannot_launch_or_is_never_seen_to_end_fails_after_a_bounded_wait(world, monkeypatch):
+    from research import queue as Q
+
+    monkeypatch.setattr(Q, "REMOTE_GRACE_S", 30)
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    pr = world.gh.prs[1]
+    refused = lambda argv, cwd: subprocess.CompletedProcess(argv, 3, "", "research run: refused: vy-test isn't in machines.toml\n")
+    tier, sleeps = _remote_tier(world, monkeypatch, Machine(world.tmp), launch=refused)
+    assert tier(pr) == "`research run --on vy-test` failed (exit 3): research run: refused: vy-test isn't in machines.toml" and sleeps == []
+    tier, sleeps = _remote_tier(world, monkeypatch, Machine(world.tmp, outcome=_reports({"state": "running"})), timeout_s=60)
+    assert re.fullmatch(r"run r\S+ on vy-test didn't end within 90 s \(last seen running\): `research inspect r\S+`", tier(pr))
+    assert sleeps == [Q.REMOTE_POLL_S] * 3, "the run's timeout and the grace, at one fetch per poll"
+    tier, sleeps = _remote_tier(world, monkeypatch, Machine(world.tmp, outcome=_reports(), reachable=False), timeout_s=60)
+    assert re.fullmatch(r"run r\S+ on vy-test didn't end within 90 s \(last seen without a status\): .*", tier(pr)) and len(sleeps) == 3
+    exited = Machine(world.tmp, outcome=lambda run, rid, head: None, fetched={"launcher_exited": {"last_line": "Traceback: boom"}})
+    tier, sleeps = _remote_tier(world, monkeypatch, exited)
+    assert re.fullmatch(r"run r\S+'s runner on vy-test exited before the run ended \(Traceback: boom\)", tier(pr)) and len(sleeps) == 1
+    tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp), slot=world.tmp / "no-slot.py")
+    assert tier(pr).endswith("no-slot.py isn't there to take a check slot on vy-test with (run it from a checkout of the repository)")
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False
+
+
+def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_takes(tmp_path):
+    """The wait counted polls as if a fetch took no time, and `remote.fetch` may take its ssh's 900 s each poll: against a machine
+    that takes the ssh and then hangs, the caller waited 180 polls of 930 s, about two days, not the run's timeout and the grace
+    (red team, #989).  Simulated time only."""
+    from research import queue as Q
+
+    clock = [0.0]
+
+    def advance(s: float) -> None:
+        clock[0] += s
+
+    def hung_fetch(d: Path) -> dict:
+        clock[0] += 900
+        return {}
+
+    tier = Q.RemoteQuickTier(tmp_path, "origin", "vy-test", timeout_s=3600, poll_s=30, fetch=hung_fetch, sleep=advance,
+                             clock=lambda: clock[0])
+    (d := tmp_path / "runs" / "r1").mkdir(parents=True)
+    _, why = tier._wait(d)
+    bound = 3600 + Q.REMOTE_GRACE_S
+    assert why == f"run r1 on vy-test didn't end within {bound:g} s (last seen without a status): `research inspect r1`"
+    assert bound <= clock[0] <= bound + 30 + 900, "it ends with the poll under way at the deadline"
+
+
+def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does(world, monkeypatch):
+    """On the machine the workload's environment holds no store credential, so `check.py` hands its steps the run's custody key
+    (CHECK_STORE_CUSTODY) and VERITY_STORE_REQUIRED=1.  The tier handed neither: C-Flock's store-backed tests skipped as "the
+    evidence store is not reachable", and the skip passed (red team, #989).  It hands both as check.py does, never the caller's,
+    and nothing of the recording run's own; with no key staged, the store is still required."""
+    from research import queue as Q
+
+    main = world.change({"tools/check/suites.py": FAKE_SUITES})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setenv("FAKE_SEEN", str(seen := world.tmp / "seen.json"))
+    monkeypatch.setenv("CHECK_STORE_CUSTODY", str(world.tmp / "the-callers-custody"))
+    monkeypatch.delenv("VERITY_STORE_REQUIRED", raising=False)
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+    machine = Machine(world.tmp, custody_r2=True)
+    tier, _ = _remote_tier(world, monkeypatch, machine)
+    assert tier(world.gh.prs[1]) is None
+    flags = machine.launched[-1]
+    key = machine.root / "requests" / flags[flags.index("--id") + 1] / "custody"
+    env = json.loads(seen.read_text())["env"]
+    assert env["VERITY_STORE_REQUIRED"] == "1" and env["CHECK_STORE_CUSTODY"] == str(key.resolve())
+    assert env["RESEARCH_RUN_ID"] is None and env["GIT_AUTHOR_EMAIL"]
+    machine.custody_r2 = False
+    assert tier(world.gh.prs[1]) is None
+    env = json.loads(seen.read_text())["env"]
+    assert env["VERITY_STORE_REQUIRED"] == "1" and env["CHECK_STORE_CUSTODY"] is None
+
+
+def test_a_quick_tier_with_no_lake_on_the_path_builds_with_elans_and_with_none_refuses(world, monkeypatch):
+    """On a machine the run's PATH is a non-login shell's, without elan's bin, which check.py puts first itself.  The tier built
+    the verifier only with `lake` on the PATH, so its Lean-dependent tests skipped and the PR was labelled ready (red team, #989).
+    It takes `lake` from ~/.elan/bin, first on the suites' PATH too, and with neither refuses."""
+    from research import queue as Q
+
+    main = world.change({"tools/check/suites.py": FAKE_SUITES, "backends/flock/verifier/lean/lakefile.toml": 'name = "flock"\n'})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setenv("FAKE_SEEN", str(seen := world.tmp / "seen.json"))
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+    tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp))
+    (bare := world.tmp / "no-lake-bin").mkdir()
+    for t in ("git", "python3", "sh", "mkdir"):
+        (bare / t).symlink_to(shutil.which(t))
+    monkeypatch.setenv("PATH", str(bare))
+    monkeypatch.setenv("HOME", str(home := world.tmp / "home"))
+    lean = "backends/flock/verifier/lean"
+    assert tier(world.gh.prs[1]) == f"no `lake` on the PATH or in {home}/.elan/bin to build {lean} with, and without that build its tests skip"
+    (elan := home / ".elan" / "bin").mkdir(parents=True)
+    (elan / "lake").write_text("#!/bin/sh\nmkdir -p .lake && echo built > .lake/built\n")
+    (elan / "lake").chmod(0o755)
+    assert tier(world.gh.prs[1]) is None
+    s = json.loads(seen.read_text())
+    assert s["built"] and s["lake"] == str(elan / "lake")
+
+
+def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, capsys):
+    monkeypatch.chdir(world.dev)
+    for argv in (["queue", "ready", "1"], ["queue", "ready", "1", "--on", "vy-test", "--local"]):
+        with pytest.raises(SystemExit) as e:
+            research_main(argv)
+        assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
+
+
+def test_quick_tier_py_refuses_a_call_it_cannot_place(tmp_path, monkeypatch):
+    from research import quick_tier
+
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    for argv in ([], ["--head", "h", "--base", "b"], ["--head", "h", "--"], ["--head", "h", "--base", "b", "--what", "x", "--", "c"]):
+        assert quick_tier.main(argv) == 2
+    monkeypatch.delenv("RESEARCH_RUN_DIR")
+    assert quick_tier.main(["--head", "h", "--base", "b", "--", "c"]) == 2 and not (tmp_path / "result.json").exists()

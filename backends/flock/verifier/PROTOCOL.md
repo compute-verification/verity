@@ -1211,6 +1211,11 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   aligned to its power-of-two span. Every range's slots are at least a word, as on the BLAKE3 path, and at most the block
   (`7 ≤ slot_log ≤ k_log`): a slot below 64 bits makes the fold no `αA₀ᵀe + B₀ᵀe` of any matrices, and a packed range of
   no slots would escape the block bound.
+- **Units.** `units_per_vu ≥ 1` (D8, §17.1). The unit range's `vus_per_block × units_per_vu` slots are a power of two only
+  when the unit returns the outputs, so a tail that returns them would otherwise pass with no unit in a VU.
+- **Blocks.** `vus_per_block ≥ 1` (D9, §17.1). Every range's count is `vus_per_block` times its per-VU count, and the
+  unit range's power-of-two bound binds only when the unit returns the outputs, so a tail that returns them would otherwise
+  pass with no VU in a block.
 - **Wires.** META `wires` begins with the row wires, which the verifier derives and compares: compression `k`'s `cv` from
   compression `k − 1`'s `out`, and hm96 slot `p`'s `cv` from the row's last compression. No other wire touches a row slot.
 - **The pin** is the constant column of the first slot of the first range that is not the mask (`HmRow.pin`). That range
@@ -1305,10 +1310,12 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   is `as stated`, with the reason in `note`, which an audit reports as a gap.
 - **Registered reads**. A shared-row header may name `registered`, `{port: {value, positions, paths}}`: registered rows.
   The verifier needs its own `--registered F` (`verity/registered-reads/v0`: per port the value, root, leaves, domain,
-  read positions, `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows); the port's rows must be their
-  u16 words, padded. Each table row's `hm96-sha512/row/v1` leaf must climb its path to the root at its position, each
-  instance's ref name its unit's read position in the verifier's program (units `derived`). A port on one side only
-  refuses; verdicts report `registered`.
+  read positions, `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows); the port's rows must be
+  `sha512/row/v1` rows of their u16 words, padded. A port is any row of the circuit: an input port's, or (§16.13) an
+  output port's row, whose table is the instances' output rows, instance `i`'s ref `i`, so instance `i`'s output is the
+  registered row at `positions[i]`. Each table row's `hm96-sha512/row/v1` leaf must climb its path to the root at its
+  position, each instance's ref name its unit's read position in the verifier's program (units `derived`). A port on
+  one side only refuses; verdicts report `registered`.
 - **Public input ports** (`Flock.HmIn`, §16.13's statements). META may name `public_inputs` (`[{port, words, seed,
   derivation}]`) and `leaves_public` (per unit, each leaf's public word or −1): unit inputs the verifier recomputes from
   public data, not rows. The words of an unpacked unit range's leaf group holding them hold no row leaf; each run of
@@ -1425,7 +1432,9 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
   salt has the producer's `b ‖ c` as its input leaf. A salt commits one row value: reused for another row, it reveals
   `b₁ ⊕ b₂ = x₁ ⊕ x₂`. A link is as good as both proofs (under a draw, an undrawn producer instance's output is unproven),
   and a deduplicated reader table (`shared_rows`) links at most one producer instance per row.
-- **Registered reads** are §16.10's, of `v1` rows. A registered port is an input row: an output row is its instance's own.
+- **Registered reads** are §16.10's, of `v1` rows. A registered port is an input row or an output row: a registered output
+  row opens the registered root at its unit's read position, under the registered row's salt, so the instance's output is
+  that row (a `row-seg/v1` or `v2` row is refused: its leaf is not the registration's `row/v1` leaf).
 - **Agreement:** README.
 
 ### 16.14 `--zk` sessions
@@ -1470,6 +1479,11 @@ expectation):
   refuses a row that does not open its registered root.
 - **D6:** a `--zk` record's `coin_tree` (§7.4); upstream ignores it.
 - **D7:** the `sha512x3` and `hm96` nets are the verifier's (`Flock.HmNets`); upstream checks only their port widths.
+- **D8:** at least one unit per VU (§16.10). Upstream's `Composite::check` in the pinned builds that have tails (`25519ba1`,
+  `967b8d06`) lets `units_per_vu = 0` through when a tail returns the outputs; the spec refuses it, as
+  `backends/flock/live`'s now does. No vector exercises it.
+- **D9:** at least one VU per block (§16.10). Upstream's `Composite::check` in the same builds lets `vus_per_block = 0`
+  through when a tail returns the outputs; the spec refuses it, as `backends/flock/live`'s now does. No vector exercises it.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).

@@ -1963,8 +1963,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         return {"modules": modules, "attention_layers": attn_layers, "fa2_hidden_per_layer": 1 if fa2 else 0, "sampler_ids": 1 if any(n == "runner.sampler" for n in modules) else 0,
                 "moe_layers": moe_layers, "moe_tensors_per_layer": (getattr(moe_src, "stats", {}).get("tensors_per_layer", 6) if moe_src is not None else 0),
                 "router_softmax_layers": sorted(int(k) for k in rs_src.layers) if rs_src is not None else [], "tp_sites": sorted(tp_src.site_names()) if tp_src is not None else [], "tp_rank": (tp_src.rank if tp_src is not None else None),
-                # [R19 moe F-r19-moe-1] partials per site per step: 1, or a mid-module site's static call count (OlmoeAttention: 2 gathers)
-                "tp_site_counts": (dict(tp_src.site_counts()) if tp_src is not None and hasattr(tp_src, "site_counts") else {})}
+                # [R19 moe F-r19-moe-1] partials per site per step: 1, or a mid-module site's call count (OlmoeAttention: 2 gathers); the calls its instance's flags rule out are listed
+                "tp_site_counts": (dict(tp_src.site_counts()) if tp_src is not None and hasattr(tp_src, "site_counts") else {}), "tp_sites_ruled_out": list(getattr(tp_src, "mid_sites_ruled_out", None) or [])}
 
     def identity_check(self, manifest: dict[str, Any] | None = None) -> dict[str, Any]:
         """X-03 on IDENTITIES.  For every committed step: (1) every module of the expected manifest produced >= 1 committed tensor and no
@@ -2093,7 +2093,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                    if padded_run else {}),
                 "manifest": {"modules": len(expected_modules), "attention_layers": len(man["attention_layers"]), "fa2_hidden_per_layer": man["fa2_hidden_per_layer"],
                              "sampler_ids": man["sampler_ids"], "moe_layers": len(man.get("moe_layers") or []), "moe_tensors_per_layer": man.get("moe_tensors_per_layer", 0),
-                             "tp_sites": len(man.get("tp_sites") or []), "tp_rank": man.get("tp_rank")},
+                             "tp_sites": len(man.get("tp_sites") or []), "tp_rank": man.get("tp_rank"), "tp_sites_ruled_out": man.get("tp_sites_ruled_out") or []},
                 # [F-r19-int-22] which attention-plane rule each step ran and what it was derived from
                 "fa2_rule": {"steps": dict(fa2_rules_used), "attention_decls": len(decls),
                              "policy": {k: v for k, v in self._plane_policy().__dict__.items() if k != "ms" or v} if decls else None,
@@ -2311,7 +2311,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
     # module (class-name) -> census root families whose NATURALLY-MATERIALIZED outputs the hook on that module binds
     FAMILY_OF_MODULE = {
         "Linear": ("Gemm_v1",), "RMSNorm": ("RMSNormFusedCuda_v2", "RMSNormTriton_v1"), "GemmaRMSNorm": ("RMSNormFusedCuda_v2", "RMSNormTriton_v1"),
-        "SiluAndMul": ("SiluMul_v1",), "GeluAndMul": ("GeluMul_v1",), "RotaryEmbedding": ("RoPE_v1",), "Attention": ("Attention_v3",),
+        "SiluAndMul": ("SiluMul_v1", "SiluMul_v2"), "GeluAndMul": ("GeluMul_v1",), "RotaryEmbedding": ("RoPE_v1",), "Attention": ("Attention_v3",),
         "VocabParallelEmbedding": ("Embedding_v1",), "LogitsProcessor": ("Gemm_v1",), "Sampler": ("TokenSelect_v1",),
     }
 

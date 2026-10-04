@@ -51,6 +51,26 @@ python tools/lean/audit.py PKG                once, before pushing (seconds; lev
 Build on a CPU machine; the three packages take about nine minutes from scratch on four cores. Never `lake update`, and
 never change a `require`, a revision or `lean-toolchain` in a feature PR.
 
+To check your records, or get the `--update` printout a statement reviewer reads, without a build of your own, use the
+fast path on a shared machine. Don't run `audit.py --build --update` from a fresh tree there: that took about 22 minutes
+unpinned on the check cores.
+
+~~~text
+research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- \
+  python3 tools/check/lean_changed.py --records PKG --update
+~~~
+
+It waits for one of the node's Lean slots of pool `build` (`lean_slot.py`; a node whose slot file lists no `build` pool
+refuses it, exit 2, even with an `any` pool), never behind merge checks or hour-long audits, rebuilds only what changed since
+that slot's last run, and audits without the kernel replay: on `soundness/` with nothing to rebuild that was 6.5 minutes, and a
+slot's first run, a cold build, 31. The record is in the run's `lean-audit/audit-*/`, with `review.txt` when it changed; commit
+the record. It vouches for nothing: its result is of kind `lean-fast/v1`, which `check`'s lean-audit step and `research merge`
+refuse.
+
+To regenerate a record on a pod, run `research run --on POD --project verity --source . --cwd source -- python
+tools/lean/audit.py --build --update PKG` with no wrapper around it. It exits 0 when the audit passes, whether or not the
+record changed, and the record is among the run's outputs, at `lean-audit/audit-TAG/lean-audit.json`.
+
 While proving, check one file at a time, and leave the whole package and the audit for the end:
 
 - **`lake env lean FILE`** prints that file's errors and warnings, and writes nothing. Core's slowest file takes about 10 s
@@ -120,7 +140,10 @@ simp with that.
   the moves as a JSON object of old names to new ones, a declaration or a namespace each, and run
   `audit.py --update --moved MOVES.json PKG` on the record as it was before the move. A pin that says what its record
   says, renamed or restated as a `Guarantees` definition, and the definitions the same under their old names, each get
-  one line that needs no reviewer; the rest prints in full. Moving a definition to another module needs no map.
+  one line that needs no reviewer; the rest prints in full. Moving a definition to another module needs no map. For the
+  merge gates (`research merge --train`, `research queue`), a run that printed nothing a reviewer must read stands in for
+  the grant: `research data put --kind lean-review/v1 --file OUT/audit.json`, then `research data label pr:N@SHA
+  lean_review art:ID --by LANE` (a new push needs a new label).
 
 ## Before the PR
 
