@@ -363,9 +363,17 @@ transport as `run_continuous` does, revealing each read as soon as the last is c
 `Digest_K` is the model's `Pous.Digest.digest g z` over `GF(2^127 − 1)`, with the pages as blocks of 15-byte words, so
 `Pous.Guarantees.DigestAU` bounds a collision by `((W − 1) + (R − 1)) / (2^127 − 1)`.
 
-**The deadlines.** A read shows a byte was held only if it cannot be recomputed in the time the prover has. Any byte of
-a page needs nine rounds' absorbs, `page_keccak_f(page_bytes)` sequential Keccak-f (`KeyedFill.recompute_ns`, 1.7352 ms
-at 1 MiB). The Lean model reads that as `D = 0` over a whole round, from one read's arrival at the prover to the next's.
+**This fill does not meet the guarantee below (red team, 4 Oct 2026, art:1ec39f34fa55).** From the zero input, each
+Feistel round's output is the squeeze stream of one 200-byte sponge state that is fixed by the fill. A prover that keeps
+the ten states of a page (0.19% of it) answers any byte of it in at most 3855 sequential Keccak-f, about 193 µs. With
+squeeze checkpoints it keeps 92% of the page and answers in at most 7 Keccak-f. So no read deadline the verifier accepts
+makes `D = 0` true, and the pins below are not about this fill. Until the fill is replaced, every result of this
+verifier is a research result.
+
+**The deadlines.** A read shows a byte was held only if it cannot be recomputed in the time the prover has. The code
+charges a byte `page_keccak_f(page_bytes)` sequential Keccak-f (`KeyedFill.recompute_ns`, 1.7352 ms at 1 MiB), the
+absorbs of nine rounds. A prover that kept sponge states pays far less (above). The Lean model reads the deadline as
+`D = 0` over a whole round, from one read's arrival at the prover to the next's.
 Read `j + 1`'s index arrives no earlier than its reveal and, if its answer is in time, no later than `T_read` after it,
 so two arrivals are at most `T_round + T_read` apart. The verifier refuses deadlines unless `T_read ≤ T_round` and
 `T_round + T_read < recompute_ns` (so `T_read` is at most 867.6 µs at 1 MiB), and `round_deadline_ns` defaults to
