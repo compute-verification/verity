@@ -30,8 +30,9 @@
 # its one Job. A hold (STATE/held/RUN says why) fails the round, and lifts itself once triage no longer lists the run as
 # needing action (a label, a fetch, --reconcile); remove it by hand to have the next round try again.
 # No Job starts in node 1's daily hold, VY_CUSTODY_QUIET (UTC; dispatch.py's PACK_HOLD to the quiet hour's end), and none runs into
-# the quiet hour (QUIET_AT, 12:30Z, which measurements own): each Job's activeDeadlineSeconds ends it a minute before, and a Job that would
-# get less than JOB_MIN_S isn't started (as n2_custody.sh's).
+# the quiet hour (QUIET_AT, 12:30Z, which measurements own): each Job's activeDeadlineSeconds and the grace a stopped pod has (GRACE_S;
+# its main process exits on SIGTERM) end it a minute before, to the second, and a Job that would get less than JOB_MIN_S isn't started
+# (as n2_custody.sh's).
 # Each store also gets `research data push --pending` in a Job of its own whenever none is left (a finished one stays
 # VY_CUSTODY_PENDING_S): the labels, and the artifacts no run names, that no run's custody pushes. It is the store-push template's
 # push on a schedule, for both stores.
@@ -55,6 +56,7 @@ PY=${VY_CUSTODY_PY:-$PYHOME/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12}
 QUIET=${VY_CUSTODY_QUIET-1210-1330}
 QUIET_AT=1230   # node 1's quiet hour, which no Job runs into
 JOB_MIN_S=300   # a Job left less time before it isn't started
+GRACE_S=10      # a Job's pod stopped at its deadline: SIGTERM, then SIGKILL after this (terminationGracePeriodSeconds)
 BOOT=${VY_CUSTODY_BOOT:-$(cat /proc/sys/kernel/random/boot_id)}
 usage() { echo "usage: n1_custody.sh [--dry-run] | --reconcile RUN --by WHO" >&2; exit 2; }
 DRY=0 REC= BY=
@@ -74,15 +76,14 @@ if ! flock -n 9; then
 fi
 log() { echo "$(date -u +%FT%TZ) $*" | tee -a "$STATE/log"; }
 kube() { KUBECONFIG=$HOME/.kube/config kubectl "$@"; }
-# deadline MAX_S: the seconds a Job started now may run, at most MAX_S: to a minute before the quiet hour (QUIET_AT), to the minute,
-# so a minute less; 0 in the daily hold
+# deadline MAX_S: the seconds a Job started now may run, at most MAX_S: to a minute before the quiet hour (QUIET_AT), less its grace,
+# to the second; 0 in the daily hold
 deadline() {
   [ -n "$QUIET" ] || { echo "$1"; return; }
   local t q0 q1 at s
-  t=$(date -u +%H%M)
-  t=$((10#${t:0:2} * 60 + 10#${t:2:2})) at=$((10#${QUIET_AT:0:2} * 60 + 10#${QUIET_AT:2:2}))
-  q0=$((10#${QUIET:0:2} * 60 + 10#${QUIET:2:2})) q1=$((10#${QUIET:5:2} * 60 + 10#${QUIET:7:2}))
-  if [ "$t" -ge "$q0" ] && [ "$t" -lt "$q1" ]; then s=0; else s=$(( (at - t + 1440) % 1440 * 60 - 60 )); fi
+  t=$(( $(date -u +%s) % 86400 )) at=$((10#${QUIET_AT:0:2} * 3600 + 10#${QUIET_AT:2:2} * 60))
+  q0=$((10#${QUIET:0:2} * 3600 + 10#${QUIET:2:2} * 60)) q1=$((10#${QUIET:5:2} * 3600 + 10#${QUIET:7:2} * 60))
+  if [ "$t" -ge "$q0" ] && [ "$t" -lt "$q1" ]; then s=0; else s=$(( (at - t + 86400) % 86400 - 60 - GRACE_S )); fi
   echo $(( s < $1 ? s : $1 ))
 }
 HOLD="node 1's daily hold ($QUIET UTC; no Job runs past ${QUIET_AT}Z, where its quiet hour starts)"
@@ -135,14 +136,17 @@ fi
 job() {
   kube delete job "$1" --ignore-not-found > /dev/null || return 1
   PYTHONDONTWRITEBYTECODE=1 python3 - "${VY_DISPATCH_IMAGE:-us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216}" \
-    "$SRC" "$PY" "$@" << 'EOF' | kube create -f - > /dev/null
+    "$SRC" "$PY" "$GRACE_S" "$@" << 'EOF' | kube create -f - > /dev/null
 import json, re, sys
 
-image, src, py, name, uid, ttl, deadline, store, root, kind, *args = sys.argv[1:]
-run = 'cd / && export HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$1/tools/research/src" RESEARCH_STORE="$3" RESEARCH_RUNS="$4" && '
-run += {"custody": 'exec "$2" -m research data custody "$5" --publish --keep-local "${@:6}"',
-        "reconcile": '"$2" -m research data reconcile-attempts "$5" --apply && exec "$2" -m research data custody "$6" --publish --keep-local',
-        "push": 'exec "$2" -m research data push --pending --jobs 8 "${@:5}"'}[kind]
+image, src, py, grace, name, uid, ttl, deadline, store, root, kind, *args = sys.argv[1:]
+# bash is the container's init, which ignores a signal it has no handler for: it traps SIGTERM, and research runs under its wait
+run = ('trap "exit 143" TERM; cd / && export HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$1/tools/research/src" RESEARCH_STORE="$3" '
+       'RESEARCH_RUNS="$4" || exit 1; { ')
+run += {"custody": '"$2" -m research data custody "$5" --publish --keep-local "${@:6}"',
+        "reconcile": '"$2" -m research data reconcile-attempts "$5" --apply && "$2" -m research data custody "$6" --publish --keep-local',
+        "push": '"$2" -m research data push --pending --jobs 8 "${@:5}"'}[kind]
+run += '; } & wait $!'
 # each kind's arguments, where _ is a run or a run dir, never an option
 shapes = {"custody": [["_"], ["_", "--force", "--runner-gone"]], "reconcile": [["_", "_"]], "push": [["--skip-record-less"]]}[kind]
 fits = any(len(s) == len(args) and all(a == w or (w == "_" and a[:1] not in ("", "-")) for a, w in zip(args, s)) for s in shapes)
@@ -152,7 +156,7 @@ labels = {"verity.dev/lane": "n1-custody"}
 json.dump({"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": name, "labels": {**labels, "verity.dev/kind": "custody"}},
            "spec": {"backoffLimit": 0, "activeDeadlineSeconds": int(deadline), "ttlSecondsAfterFinished": int(ttl), "template": {
                "metadata": {"labels": labels}, "spec": {
-                   "restartPolicy": "Never", "nodeSelector": {"verity.dev/server": "vy-nebius-1"},
+                   "restartPolicy": "Never", "terminationGracePeriodSeconds": int(grace), "nodeSelector": {"verity.dev/server": "vy-nebius-1"},
                    "tolerations": [{"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}],
                    "securityContext": {"runAsUser": int(uid), "runAsGroup": int(uid)},
                    "containers": [{"name": "main", "image": image, "imagePullPolicy": "IfNotPresent",

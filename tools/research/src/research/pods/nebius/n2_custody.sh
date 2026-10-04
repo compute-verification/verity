@@ -32,7 +32,7 @@
 # (PASS_S + PUSH_S); else it stops there, with one log line and exit 0, and the next round asks again. Its Jobs run on node 1, so it
 # keeps node 1's daily hold (VY_CUSTODY_QUIET, 12:10-13:30Z, as n1_custody.sh does) the same way, and no Job of it runs into node 1's
 # quiet hour: a push starts only while its rsync and a Job of at least JOB_MIN_S end before 12:30Z, and the Job's
-# activeDeadlineSeconds ends it by then.
+# activeDeadlineSeconds and the grace a stopped pod has (GRACE_S; its main process exits on SIGTERM) end it a minute before.
 set -u
 ROOTS=${VY_CUSTODY_ROOTS:-/workspace/jobs/runs=/workspace/jobs/runs,/workspace/research/runs=/workspace/jobs/runs-n2}
 STATE=${VY_CUSTODY_STATE:-/workspace/research/custody-push}
@@ -50,6 +50,7 @@ FILL=${VY_CUSTODY_FILL:-/workspace/pouw/fill}
 PUSH_S=3600     # the most one push takes: rsync 20 min, the Job's wait 35 min, the calls around them
 RSYNC_S=1200
 JOB_MIN_S=300   # a Job left less time before node 1's quiet hour isn't started
+GRACE_S=10      # a Job's pod stopped at its deadline: SIGTERM, then SIGKILL after this (terminationGracePeriodSeconds)
 QUIET=${VY_CUSTODY_QUIET-1210-1330}     # node 1's daily hold, HHMM-HHMM UTC (dispatch's PACK_HOLD through its quiet hour's end)
 BY=1230                                 # its quiet hour, which no Job runs into
 N1=${VY_N1:-vy-n1}
@@ -122,15 +123,14 @@ if ! why=$(window 2>&1); then
   log "skipped: node 2's timed window: $why; the next round asks again"
   exit 0
 fi
-# n1_left: the seconds a Job started on node 1 now may run before its quiet hour (BY), 0 in its daily hold; to the minute, so a minute
-# less
+# n1_left: the seconds a Job started on node 1 now may run, to a minute before its quiet hour (BY) less its grace, to the second; 0 in
+# its daily hold
 n1_left() {
   [ -n "$QUIET" ] || { echo 86400; return; }
   local t q0 q1 by
-  t=$(date -u +%H%M)
-  t=$((10#${t:0:2} * 60 + 10#${t:2:2})) by=$((10#${BY:0:2} * 60 + 10#${BY:2:2}))
-  q0=$((10#${QUIET:0:2} * 60 + 10#${QUIET:2:2})) q1=$((10#${QUIET:5:2} * 60 + 10#${QUIET:7:2}))
-  if [ "$t" -ge "$q0" ] && [ "$t" -lt "$q1" ]; then echo 0; else echo $(( (by - t + 1440) % 1440 * 60 - 60 )); fi
+  t=$(( $(date -u +%s) % 86400 )) by=$((10#${BY:0:2} * 3600 + 10#${BY:2:2} * 60))
+  q0=$((10#${QUIET:0:2} * 3600 + 10#${QUIET:2:2} * 60)) q1=$((10#${QUIET:5:2} * 3600 + 10#${QUIET:7:2} * 60))
+  if [ "$t" -ge "$q0" ] && [ "$t" -lt "$q1" ]; then echo 0; else echo $(( (by - t + 86400) % 86400 - 60 - GRACE_S )); fi
 }
 HOLD="node 1's daily hold ($QUIET UTC; no Job of it runs past ${BY}Z, where node 1's quiet hour starts)"
 if [ "$DRY" = 0 ] && [ "$(n1_left)" -lt $((RSYNC_S + JOB_MIN_S)) ]; then
@@ -256,7 +256,8 @@ push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 he
     why="$HOLD: ${deadline}s left, the copy waits on node 1"
     return 6
   fi
-  # a failed Job never completes: wait for either condition, then name the failure from its log
+  # a failed Job never completes: wait for either condition, then name the failure from its log. The Job's bash is its container's
+  # init, which ignores a signal it has no handler for: it traps SIGTERM, and research runs under its wait
   if ! timeout 2100 "${SSH[@]}" "$N1" "$start &&
     end=\$((\$(date +%s) + 1800)) && while [ \$(date +%s) -lt \$end ]; do
     c=\$($KUBE get job $name -o jsonpath='{range .status.conditions[*]}{.type}={.status} {end}'); case \$c in
@@ -264,12 +265,12 @@ push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 he
     echo 'Job not done in 30 min' >&2; exit 1" 2> "$STATE/.job.err" << EOF; then
 {"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": "$name", "labels": {"verity.dev/lane": "n2-custody", "verity.dev/kind": "custody"}},
  "spec": {"backoffLimit": 1, "activeDeadlineSeconds": $deadline, "ttlSecondsAfterFinished": 3600, "template": {"metadata": {"labels": {"verity.dev/lane": "n2-custody"}}, "spec": {
-  "restartPolicy": "Never", "nodeSelector": {"verity.dev/server": "vy-nebius-1"},
+  "restartPolicy": "Never", "terminationGracePeriodSeconds": $GRACE_S, "nodeSelector": {"verity.dev/server": "vy-nebius-1"},
   "tolerations": [{"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}],
   "securityContext": {"runAsUser": 1000, "runAsGroup": 1000},
   "containers": [{"name": "main", "image": "${VY_DISPATCH_IMAGE:-us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216}",
    "imagePullPolicy": "IfNotPresent",
-   "command": ["taskset", "-c", "96-127", "bash", "-c", "cd / && HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$SRC/tools/research/src RESEARCH_STORE=/workspace/jobs/store RESEARCH_RUNS=$dst $PY -m research data custody $dst/$r --publish --keep-local $force"],
+   "command": ["taskset", "-c", "96-127", "bash", "-c", "trap 'exit 143' TERM; cd / || exit 1; HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$SRC/tools/research/src RESEARCH_STORE=/workspace/jobs/store RESEARCH_RUNS=$dst $PY -m research data custody $dst/$r --publish --keep-local $force & wait \$!"],
    "envFrom": [{"secretRef": {"name": "research-r2"}}],
    "resources": {"requests": {"cpu": "1", "memory": "2Gi"}},
    "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}]}],

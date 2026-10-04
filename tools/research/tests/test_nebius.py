@@ -1439,9 +1439,9 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     assert f"{root}/{R['done']}/ n1.invalid:/n1/runs/{R['done']}/" in calls and R["fresh"] not in calls
     assert not [k for k in ("live", "retimed", "unread") if R[k] in calls], "a live run is never published as dead"
     assert f"data custody /n1/runs/{R['dead']} --publish --keep-local --force --runner-gone" in calls
-    assert f'data custody /n1/runs/{R["done"]} --publish --keep-local "]' in calls
+    assert f'data custody /n1/runs/{R["done"]} --publish --keep-local  & wait $!"]' in calls
     assert "PYTHONPATH=/n1/src/abc/tools/research/src" in calls and R["preserved"] not in calls and R["big"] not in calls
-    assert ('"bash", "-c", "cd / && HOME=/tmp PYTHONDONTWRITEBYTECODE=1 ' in calls and "uv run" not in calls
+    assert ('"bash", "-c", "trap \'exit 143\' TERM; cd / || exit 1; HOME=/tmp PYTHONDONTWRITEBYTECODE=1 ' in calls and "uv run" not in calls
             and " /workspace/custody/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12 -m research data custody " in calls)
     assert "touch pwned" not in calls and rogue.name not in n2.names("pushed") + n2.names("held")
     keepalive = "ssh -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "
@@ -1625,8 +1625,8 @@ def test_n2_custody_starts_no_job_that_could_run_into_node_1s_quiet_hour(tmp_pat
     assert not n2.calls() and f"would push {a}" in n2.round_("--dry-run", clock=at("1215")).stdout, "a dry run starts no Job"
 
     assert n2.round_(clock=at("1150"), VY_CUSTODY_MAX_RUNS="1").returncode == 0 and n2.names("pushed") == [a.name]
-    assert '"activeDeadlineSeconds": 2340,' in n2.calls(), "40 min to 12:30Z, less the minute"
-    cut = n2.round_(clock=at("1204"), CLOCK_AFTER_RSYNC=str(at("1226")))
+    assert '"activeDeadlineSeconds": 2330,' in n2.calls(), "40 min to 12:30Z, less the minute and the grace"
+    cut = n2.round_(clock=at("1203"), CLOCK_AFTER_RSYNC=str(at("1226")))
     assert cut.returncode == 0 and n2.names("pushed") == [a.name] and f"data custody /n1/runs/{b.name}" not in n2.calls()
     assert ("paused after 0 push(es), for node 1's daily hold (1210-1330 UTC; no Job of it runs past 1230Z, where node 1's quiet hour "
             "starts): 0s left, the copy waits on node 1: 2 run dir(s) left for the next round") in cut.stdout
@@ -1847,7 +1847,7 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
     assert (spec["backoffLimit"], spec["activeDeadlineSeconds"], pod["nodeSelector"]) == (0, 1800, {"verity.dev/server": "vy-nebius-1"})
     assert pod["securityContext"]["runAsUser"] == 1000 and pod["containers"][0]["envFrom"] == [{"secretRef": {"name": "research-r2"}}]
     assert command(n1["done"])[:5] == ["taskset", "-c", "96-127", "bash", "-c"]
-    assert command(n1["done"])[5].endswith('exec "$2" -m research data custody "$5" --publish --keep-local "${@:6}"')
+    assert command(n1["done"])[5].endswith('{ "$2" -m research data custody "$5" --publish --keep-local "${@:6}"; } & wait $!')
     assert command(n1["done"])[6:] == ["n1-custody", str(node.src), str(node.py), f"{jobs}/store", f"{jobs}/runs", str(J["done"])]
     assert (state / "boots").read_text() == "boot-n1\n"
 
@@ -1983,8 +1983,8 @@ def test_n1_custody_holds_as_never_ran_only_a_run_that_shows_no_sign_it_started(
 def test_n1_custody_starts_no_job_that_could_run_into_node_1s_quiet_hour(tmp_path):
     """#1004's red-team F4: the daily hold only kept Jobs from starting at 12:10Z, so a custody Job started at 12:09 could run to
     12:39 (activeDeadlineSeconds 1800) and the pending push (7200; the research store's first one uploads 22.3 GiB) to 14:09, through
-    node 1's quiet hour (12:30-13:30Z), which measurements own. Every Job's deadline ends it a minute before 12:30Z, none starts
-    with under 5 min left, and a round in the daily hold starts nothing."""
+    node 1's quiet hour (12:30-13:30Z), which measurements own. Every Job's deadline and its grace (10 s) end it a minute before
+    12:30Z, none starts with under 5 min left, and a round in the daily hold starts nothing."""
     at = lambda hhmm: N2_NOW + (int(hhmm[:2]) - 3) * 3600 + int(hhmm[2:]) * 60          # N2_NOW is 03:00Z
     rid = "r20261003-200000-0e01"
     deadlines = {}
@@ -1995,7 +1995,7 @@ def test_n1_custody_starts_no_job_that_could_run_into_node_1s_quiet_hour(tmp_pat
         assert out.returncode == 0, out.stdout + out.stderr
         deadlines[hhmm] = [node.job(n)["job"]["spec"]["activeDeadlineSeconds"] for n in node.created()]
         assert node.created() == [f"n1-custody-{rid}", "n1-store-push-jobs", "n1-store-push-research"], hhmm
-    assert deadlines == {"1209": [1200, 1200, 1200], "1150": [1800, 2340, 2340], "1331": [1800, 7200, 7200]}
+    assert deadlines == {"1209": [1190, 1190, 1190], "1150": [1800, 2330, 2330], "1331": [1800, 7200, 7200]}
     node = _n1_custody(tmp_path / "held")
     node.run(node.jobs, rid, "done")
     for hhmm, quiet in (("1210", "1210-1330"), ("1329", "1210-1330"), ("1226", "1228-1330")):
@@ -2004,6 +2004,54 @@ def test_n1_custody_starts_no_job_that_could_run_into_node_1s_quiet_hour(tmp_pat
         rec = node.round_("--reconcile", rid, "--by", "test", clock=at(hhmm), VY_CUSTODY_QUIET=quiet)
         assert rec.returncode == 3 and "--reconcile after it" in rec.stderr
     assert node.created() == [] and not node.log.exists()
+
+
+def _sigterm_while_research_runs(argv: list[str], research: Path) -> int:
+    """A Job's command (taskset aside) with `research`, the Python it names, a stand-in that says it runs and blocks: SIGTERM then,
+    and the command's exit status. The stand-in is let go after."""
+    r, w = os.pipe()
+    research.write_text(f"#!{sys.executable}\nimport os\nprint('research runs', flush=True)\nos.read({r}, 1)\n")
+    research.chmod(0o755)
+    p = subprocess.Popen(argv, stdout=subprocess.PIPE, text=True, pass_fds=(r,))
+    os.close(r)
+    try:
+        assert p.stdout.readline() == "research runs\n", "research never ran"
+        p.send_signal(signal.SIGTERM)
+        return p.wait()
+    finally:
+        os.close(w)
+        p.stdout.close()
+        p.wait()
+
+
+@N1_CUSTODY
+@N2_CUSTODY
+def test_n1_custody_no_job_outlives_its_deadline_into_the_quiet_hour(tmp_path):
+    """#1004's red-team recheck N3: the deadline was read to the minute (a Job created at 12:07:45Z got 1320 s, to 12:29:45), and a
+    Job stopped at its deadline has its pod's grace (30 s unless set) before SIGKILL, which its main process, a PID namespace's init
+    that ignores SIGTERM without a handler, used up: to 12:30:15. Each Job of n1_custody.sh and n2_custody.sh gets a deadline to the
+    second that, with its grace (10 s), ends it a minute before 12:30Z, and its bash, the container's init, traps SIGTERM and exits
+    while research runs."""
+    at = lambda h, m, s: N2_NOW + (h - 3) * 3600 + m * 60 + s                         # N2_NOW is 03:00Z
+    node = _n1_custody(tmp_path / "n1")
+    node.run(node.jobs, "r20261003-200000-2301", "done")
+    out = node.round_(clock=at(12, 7, 45), VY_CUSTODY_QUIET="1210-1330")
+    assert out.returncode == 0 and len(node.created()) == 3, out.stdout + out.stderr
+    for name in node.created():
+        spec = node.job(name)["job"]["spec"]
+        assert spec["activeDeadlineSeconds"] + spec["template"]["spec"]["terminationGracePeriodSeconds"] == 22 * 60 + 15 - 60, name
+        cmd = node.command(name)
+        assert _sigterm_while_research_runs([*cmd[3:8], str(tmp_path / "research"), *cmd[9:]], tmp_path / "research") == 143, name
+
+    (tmp_path / "n2").mkdir()
+    n2 = _n2_custody(tmp_path / "n2")
+    n2.run("r20261003-100001-0001", {"state": "done"})
+    assert n2.round_(clock=at(11, 50, 30), VY_CUSTODY_PY=str(tmp_path / "research")).returncode == 0
+    calls = n2.calls()
+    job = json.JSONDecoder().raw_decode(calls[calls.index('{"apiVersion"'):])[0]
+    assert job["spec"]["activeDeadlineSeconds"] + job["spec"]["template"]["spec"]["terminationGracePeriodSeconds"] == 39 * 60 + 30 - 60
+    cmd = job["spec"]["template"]["spec"]["containers"][0]["command"]
+    assert _sigterm_while_research_runs(cmd[3:], tmp_path / "research") == 143
 
 
 @N1_CUSTODY
