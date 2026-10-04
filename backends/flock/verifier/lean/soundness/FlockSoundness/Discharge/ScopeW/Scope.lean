@@ -138,4 +138,21 @@ example : rowShapeW (bitPort (16 * 16) false) = true := by decide
 /-- Out of scope: a `sha512/row/v2` row of 65 words, its last data block partial. -/
 example : rowShapeW (bitPort (16 * 65) false) = false := by decide
 
+/-- A row unit cut along `k` (`rowk`, segments of 2048): the pc8-head (23 words) and pc4-head (3) rows one short block,
+the pc4-carry row (64) one whole block, a segment's fp8-codes (1024) and nvfp4-codes (576) rows whole blocks or
+whole-block segments. -/
+example : rowShapeW (bitPort (16 * 23) false) = true := by decide +kernel
+example : rowShapeW (bitPort (16 * 3) false) = true := by decide +kernel
+example : rowShapeW (bitPort (16 * 64) false) = true := by decide +kernel
+example : rowShapeW (bitPort (16 * 1024) false) = true := by decide +kernel
+example : rowShapeW (bitPort (16 * 576) false) = true := by decide +kernel
+example : rowShapeW (bitPort (16 * 1024) true) = true := by decide +kernel
+example : rowShapeW (bitPort (16 * 576) true) = true := by decide +kernel
+
+/-- Out of scope: the pc8-carry row (66 words, 132 bytes: a whole block, then 4 bytes in the `hm96` slot's block), as a
+`sha512/row/v2` row or a segmented one; at 128 words it would be two whole blocks. -/
+example : rowShapeW (bitPort (16 * 66) false) = false := by decide +kernel
+example : rowShapeW (bitPort (16 * 66) true) = false := by decide +kernel
+example : rowShapeW (bitPort (16 * 128) false) = true := by decide +kernel
+
 end FlockSoundness.Discharge.ScopeW
