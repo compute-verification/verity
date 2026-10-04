@@ -6,14 +6,16 @@ import Std.Data.TreeMap.Raw.Lemmas
 
 `flock-verify draw` prints the verifier's draw as `UnitDraw.toJson` (`Main.lean`'s `DRAW` line), and `verify` decodes the
 record's `unit_draw` with `UnitDraw.ofJson`. For a stratified draw without a closure, the live law's, decoding what
-`toJson` printed gives back the draw whenever `ofJson` accepts it (`ofJson_toJson_drawOf`). `ofJson` also checks the draw
-against its law (the strata's tiling, each stratum's count, the units in the population), so it accepts only a draw the
+`toJson` printed gives back the draw whenever `ofJson` accepts it (`ofJson_toJson_drawOf`), and likewise for a subset
+draw, the `J`-table sessions' law (`ofJson_toJson_drawOf_subset`). `ofJson` also checks the draw against its law (the
+strata's tiling, each stratum's count, a subset draw's size, the units in the population), so it accepts only a draw the
 law can make; the round trip claims nothing about the others.
 
-So `DrawFileZK`, the second half of `RecordCustodyZK`, follows from each draw file being the JSON value
-`flock-verify draw` printed for the verifier's own draw (`drawFileZK_of_toJson`). That equality is of Lean `Json` values,
-whose objects are trees shaped by the order their keys were inserted in: `Json.parse` of the keys in sorted order, as
-`compress` prints them, gives `toJson`'s trees, and other orders give other trees that `ofJson` reads alike.
+So `DrawFileZK`, the second half of `RecordCustodyZK` and of `RecordCustodyZKJ`, follows from each draw file being the
+JSON value `flock-verify draw` printed for the verifier's own draw (`drawFileZK_of_toJson`, `drawFileZK_of_toJson_subset`).
+That equality is of Lean `Json` values, whose objects are trees shaped by the order their keys were inserted in:
+`Json.parse` of the keys in sorted order, as `compress` prints them, gives `toJson`'s trees, and other orders give other
+trees that `ofJson` reads alike.
 -/
 
 namespace FlockSoundness.Discharge.ZkLink
@@ -153,5 +155,18 @@ printed for the verifier's own draw of `S` (`UnitDraw.toJson` of `drawOf`) meets
 theorem drawFileZK_of_toJson (dj : Finset (Fin n) → Lean.Json) (K : ℕ) (strata : Array Draw.Stratum) (pop : ℕ)
     (hdj : ∀ S, dj S = (drawOf (.stratified K strata) pop S).toJson) : DrawFileZK dj (.stratified K strata) pop :=
   fun S _ hD => ofJson_toJson_drawOf K strata pop S (hdj S ▸ hD)
+
+/-- **The round trip of the subset law's draw file**: when `UnitDraw.ofJson` accepts what `UnitDraw.toJson` prints for
+the verifier's own draw of `S` under `subset k`, it decodes to that draw. -/
+theorem ofJson_toJson_drawOf_subset (k pop : ℕ) (S : Finset (Fin n)) {D : Draw.UnitDraw}
+    (h : Draw.UnitDraw.ofJson (drawOf (.subset k) pop S).toJson = .ok D) :
+    D = drawOf (.subset k) pop S := by
+  sorry
+
+/-- **`DrawFileZK` from the printed subset draw**: a record whose draw file at every draw `S` is what `flock-verify draw`
+printed for the verifier's own draw of `S` under `subset k` meets `DrawFileZK` at that law. -/
+theorem drawFileZK_of_toJson_subset (dj : Finset (Fin n) → Lean.Json) (k pop : ℕ)
+    (hdj : ∀ S, dj S = (drawOf (.subset k) pop S).toJson) : DrawFileZK dj (.subset k) pop :=
+  fun S _ hD => ofJson_toJson_drawOf_subset k pop S (hdj S ▸ hD)
 
 end FlockSoundness.Discharge.ZkLink

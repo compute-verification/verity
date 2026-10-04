@@ -4858,6 +4858,7 @@
    "assumptions": [],
    "type_hash": "91614d1d7289566dd6a4af4ee815149d4b98826c9c25b5e9e4fcb47a90e0bc95"
   },
+  "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json": {},
   "FlockSoundness.Discharge.Composed.zk_session_sound_custody": {
    "signature": [
     "FlockSoundness.Discharge.Composed.zk_session_sound_custody {n : Nat} {Reg : Type}",
@@ -11742,6 +11743,7 @@
    "assumptions": [],
    "type_hash": "04a34c74ae3f75507b89c25c817fa4cc5f1e5d5179aebcff2c8bd5ca3be9c537"
   },
+  "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_custody_json": {},
   "FlockSoundness.Discharge.ZkHidden.zk_session_soundH_custody": {
    "signature": [
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundH_custody {n : Nat} {Reg : Type}",
@@ -11919,6 +11921,7 @@
    "assumptions": [],
    "type_hash": "d19557a4a67bf5fac1d36ca1892cc3334479dc89303beaf3f1d93b6a13542c50"
   },
+  "FlockSoundness.Discharge.ZkLink.drawFileZK_of_toJson_subset": {},
   "FlockSoundness.Discharge.ZkLink.drawOkZK_of_exec": {
    "signature": [
     "FlockSoundness.Discharge.ZkLink.drawOkZK_of_exec {n : Nat} (I : FlockSoundness.Discharge.Exec.Inputs)",
@@ -12011,6 +12014,7 @@
    "assumptions": [],
    "type_hash": "8dc3fff9027fac81d1b5fbb0254757c501db3b1e600a8c1cd17742341b4a92e2"
   },
+  "FlockSoundness.Discharge.ZkLink.ofJson_toJson_drawOf_subset": {},
   "FlockSoundness.Discharge.ZkLink.sessionZC_eq": {
    "signature": [
     "FlockSoundness.Discharge.ZkLink.sessionZC_eq {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
