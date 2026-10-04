@@ -15,5 +15,10 @@ path = "../../../packages/verity/lean"
 
 # Novel communication intensity: the policy that throttles frontier training and leaves inference alone, stated over
 # core's circuits and declarations under the four names (`Protocol`, `Assumptions`, `Guarantees`, `SecurityProofs`).
+
+[[require]]
+name = "security_proofs_core"
+path = "../../../security_proofs/core"
+
 [[lean_lib]]
 name = "Nci"
