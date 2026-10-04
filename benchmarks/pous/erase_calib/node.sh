@@ -2,8 +2,9 @@
 # The node-side jobs of the erase calibration, run by `research run --on vy-nebius-2 --cwd source/benchmarks/pous/erase_calib`.
 # Each driver step takes its own preemptible `gpu-lease 1` on GPUs $ERASE_GPUS with its host threads on cores $ERASE_CPUS of
 # NUMA node 0 (off node 2's merge-check slot, cores 0-47; the research user may run on 0-91), and writes small JSON to $RESEARCH_RUN_DIR/out. No lease is held
-# past $ERASE_STOP_EPOCH. A validate, sweep or host step that is preempted (143) or reaches its --max-min (124) is taken up
-# again and resumes from its JSON; a soak takes a fresh lease (and a fresh tag) per chunk until the stop epoch.
+# past $ERASE_STOP_EPOCH. A validate or sweep step that is preempted (143) or reaches its --max-min (124) is taken up again and
+# resumes from its JSON; a host step does not resume, so it takes one lease and is sized to fit it; a soak takes a fresh
+# lease (and a fresh tag) per chunk until the stop epoch.
 #
 #   bash node.sh smoke                          validate, a 1 GiB + max sweep of chacha8/seq, a 1 GiB host pass
 #   bash node.sh sweep SEED_RUN [driver args]   the size x generator x layout x order sweep
@@ -65,7 +66,7 @@ case $phase in
         step 10 validate && step 28 sweep --seed-run "$seed_run" "$@"
         ;;
     host)
-        step 28 host "$@"
+        lease 28 host "$@"
         ;;
     soak)
         tag=${1:?TAG}

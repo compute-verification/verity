@@ -185,8 +185,8 @@ def host_summary(hosts: list[dict]) -> dict:
     rates = defaultdict(list)
     for h in hosts:
         for p in h.get("points", []):
-            rates[(p["gen"], p["procs"], p["phase"])].append(p["gbps"])
-        out["host_bytes"] = h.get("host_bytes")
+            rates[(p["gen"], p["procs"], p["phase"], h["host_bytes"])].append(p["gbps"])
+        out.setdefault("host_bytes", []).append(h.get("host_bytes"))
         out["mem_total_bytes"] = h["meta"].get("mem_total_bytes")
         out["affinity"] = h["meta"].get("affinity")
         out["errors"] += h.get("errors", [])
@@ -208,8 +208,9 @@ def host_summary(hosts: list[dict]) -> dict:
                                           "gbps_p50": gbps(u["bytes"], dist(ms).get("p50")), "check_ok": u["check_ok"]})
             elif u:
                 out["uva_digest"].append(u)
-    for (gen, procs, phase), v in sorted(rates.items(), key=lambda kv: (kv[0][0], kv[0][2], kv[0][1])):
-        out["rates"].append({"gen": gen, "procs": procs, "phase": phase, "n": len(v), "gbps_median": float(np.median(v)),
+    for (gen, procs, phase, nbytes), v in sorted(rates.items(), key=lambda kv: (kv[0][0], kv[0][2], kv[0][3], kv[0][1])):
+        out["rates"].append({"gen": gen, "procs": procs, "phase": phase, "bytes": nbytes, "n": len(v),
+                             "gbps_median": float(np.median(v)),
                              "gbps_min": float(min(v)), "gbps_max": float(max(v))})
     return out
 
@@ -219,7 +220,10 @@ def recommend(soak: dict, sweep_rows: list[dict], gpu_total_bytes: int | None, m
         w, nbytes, src, n = soak["all"], soak["bytes"], "soak (busy and after-idle)", soak["runs"]
         walls = soak["_wall"]
     else:
-        r = max((r for r in sweep_rows if r["size"] == "max" and r["layout"] == "seq"), key=lambda r: r["wall_ms"]["p999"])
+        rows = [r for r in sweep_rows if r["size"] == "max" and r["layout"] == "seq"]
+        if not rows:
+            return {}
+        r = max(rows, key=lambda r: r["wall_ms"]["p999"])
         w, nbytes, src, n = r["wall_ms"], r["bytes"], f"sweep {r['gen']}/{r['layout']}/{r['order']}", r["runs"]
         walls = None
     t = max(w["p999"] * (1 + margin), w["max"] * (1 + max_guard))
@@ -284,11 +288,12 @@ def to_markdown(a: dict) -> str:
                  + ".\n")
     L.append("## Host DRAM\n")
     if host.get("rates"):
-        L.append(f"Buffer {host['host_bytes'] / GIB:.0f} GiB; cores {_cpus(host.get('affinity'))}.\n")
-        L.append("| gen | phase | procs | n | GB/s median | min | max |")
-        L.append("|---|---|---:|---:|---:|---:|---:|")
+        L.append(f"Cores {_cpus(host.get('affinity'))}.\n")
+        L.append("| gen | phase | buffer | procs | n | GB/s median | min | max |")
+        L.append("|---|---|---:|---:|---:|---:|---:|---:|")
         for r in host["rates"]:
-            L.append(f"| {r['gen']} | {r['phase']} | {r['procs']} | {r['n']} | {r['gbps_median']:.1f} | "
+            L.append(f"| {r['gen']} | {r['phase']} | {r['bytes'] / GIB:.0f} GiB | {r['procs']} | {r['n']} | "
+                     f"{r['gbps_median']:.1f} | "
                      f"{r['gbps_min']:.1f} | {r['gbps_max']:.1f} |")
     if host.get("soak"):
         L.append("\n| repeated passes | bytes | n | p50 ms | p99 ms | p99.9 ms | max ms | GB/s p50 | GB/s at p99.9 |")
@@ -354,13 +359,14 @@ def main():
               "sweep_runs": sum(r["runs"] for r in sweep_rows), "soak_runs": soak.get("runs", 0), "gpus": gpus,
               "runs": sorted({d["_run"] for k in docs for d in docs[k]})}
     counts["fill_digest_runs"] = counts["sweep_runs"] + counts["soak_runs"]
-    one = (f"T_HBM = M / BW = {rec['bytes'] / 1e9:.2f} GB ({rec['bytes'] / GIB:.2f} GiB) / {rec['bw_T_gbps']:.0f} GB/s "
-           f"= {rec['T_ms']} ms per GPU "
-           f"(fill+digest end to end; p99.9 {rec['p999_ms']:.2f} ms over {rec['runs']} runs, +{rec['margin_over_p999']:.0%}; "
-           f"max {rec['max_ms']:.2f} ms, +{rec['margin_over_max']:.0%}"
-           + (f"; {rec['runs_over_T']} runs over T" if rec.get("runs_over_T") is not None else "")
-           + (f"; {rec['T_full_device_ms']:.0f} ms for the whole {rec['gpu_total_bytes'] / 1e9:.1f} GB device at that rate"
-              if rec.get("T_full_device_ms") else "") + ")")
+    one = "no HBM fill+digest runs"
+    if rec:
+        one = (f"T_HBM = M / BW = {rec['bytes'] / 1e9:.2f} GB ({rec['bytes'] / GIB:.2f} GiB) / {rec['bw_T_gbps']:.0f} GB/s "
+               f"= {rec['T_ms']} ms per GPU (fill+digest end to end; p99.9 {rec['p999_ms']:.2f} ms over {rec['runs']} runs, "
+               f"+{rec['margin_over_p999']:.0%}; max {rec['max_ms']:.2f} ms, +{rec['margin_over_max']:.0%}"
+               + (f"; {rec['runs_over_T']} runs over T" if rec.get("runs_over_T") is not None else "")
+               + (f"; {rec['T_full_device_ms']:.0f} ms for the whole {rec['gpu_total_bytes'] / 1e9:.1f} GB device at "
+                  "that rate" if rec.get("T_full_device_ms") else "") + ")")
     soak.pop("_wall", None)
     a = {"schema": "verity/erase-calib/v0", "params": {"margin": args.margin, "max_guard": args.max_guard},
          "one_line": one, "host_line": host_line(host), "recommendation": rec, "counts": counts, "soak": soak,
