@@ -205,7 +205,7 @@ def _recorded(facts: dict) -> dict:
         p["type_sha256"] = sha[f"pin:{name}"]
         for r in p["reads"]:
             r["sha256"] = sha[f"read:{r['name']}"]
-    return LC.AUDIT.judge({"roots": ["C"], "guarantees": {"C.c_eq": {}}}, f, {}, update=True)[1]
+    return LC.AUDIT.judge({"roots": ["C"], "guarantees": {"C.c_eq": {"owner": "@lean"}}}, f, {}, update=True)[1]
 
 
 def test_a_guarantee_s_record_a_merge_left_stale_fails_it_and_an_unreadable_build_skips_it(tmp_path, monkeypatch, capsys):
@@ -255,7 +255,7 @@ def test_only_the_guarantees_failures_fail_it(tmp_path, monkeypatch):
     (tree / "c" / "lean-audit.json").write_text(json.dumps(policy))
     (tree / "c" / "Orphan.lean").write_text("def o := 1\n")
     assert LC.records("c", tree, str(lake)) == []
-    (tree / "c" / "lean-audit.json").write_text(json.dumps(policy | {"guarantees": {**policy["guarantees"], "C.gone": {}}}))
+    (tree / "c" / "lean-audit.json").write_text(json.dumps(policy | {"guarantees": {**policy["guarantees"], "C.gone": {"owner": "@lean"}}}))
     assert LC.records("c", tree, str(lake)) == ["guarantees: C.gone is missing"]
 
 
