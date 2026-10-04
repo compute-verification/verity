@@ -963,7 +963,7 @@ impl Composite {
             return Err("the rows' slots per VU are not the ports' compressions (three per slot) and one hm96 slot per port".into());
         }
         let out_names: Vec<&str> = self.meta["out_ports"].as_array().map(|a| a.iter().map(|p| p[0].as_str().unwrap_or("")).collect()).unwrap_or_default();
-        let mut names: Vec<&str> = self.ports.iter().map(|p| p.name.as_str()).collect();
+        let mut names: Vec<&str> = self.ports.iter().take(self.n_in).map(|p| p.name.as_str()).chain(out_names.iter().copied()).collect();
         names.sort_unstable();
         if self.n_in > self.ports.len() || self.ports.len() - self.n_in != self.out_row_ports.len() || names.windows(2).any(|w| w[0] == w[1])
             || self.out_rows().iter().enumerate().any(|(j, p)| {

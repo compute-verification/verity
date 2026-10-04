@@ -1129,8 +1129,8 @@ def test_a_segmented_row_written_as_several_output_ports_is_the_row_its_reader_c
     `sha512_row_seg_word_digest`), commitment ``b || c`` and hm96 tree leaf, so their frame leaves agree under one domain; each
     side's statement digest is the one `flock-circuit statement` gives it, seeded and under `FC_COINS=os`. A writer's META
     that the statement can't link is refused with the Rust verifier's message: runs that don't cover the output ports once or
-    don't match the row's length, no runs (one row per port), a row named after another port, and its length or schema
-    changed. The composer refuses a run that isn't consecutive output ports."""
+    don't match the row's length, no runs (one row per port), a row named after another port, a later port of its run named
+    after an input row, and its length or schema changed. The composer refuses a run that isn't consecutive output ports."""
     from verity.commitments import hm96
     from verity.commitments.rowleaf import sha512_row_seg_word_digest
     from verity_flock import circuit as FC
@@ -1169,6 +1169,7 @@ def test_a_segmented_row_written_as_several_output_ports_is_the_row_its_reader_c
         "an empty run": (lambda m: m.__setitem__("out_row_ports", [0, 3]), runs_bad),
         "no runs": (lambda m: m.pop("out_row_ports"), rows_bad),
         "named after another port": (lambda m: m["ports"][1].__setitem__(0, "a1"), rows_bad),
+        "a later port of the run named after an input row": (lambda m: m["out_ports"][1].__setitem__(0, "p0"), rows_bad),
         "its length": (lambda m: m["row_schemas"][1].__setitem__(1, 19440),
                        "port a0: a row of 19440 bits is 1215 u16 leaves and 23 compressions, not META's 1216 and 23"),
         "read as v2": (lambda m: m["row_schemas"][1].__setitem__(0, "hm96-sha512/row/v2"),
