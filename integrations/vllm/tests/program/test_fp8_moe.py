@@ -7,7 +7,9 @@ BLOCK_SIZE_K 32) and its Boolean versions (`boolean_fp8_moe`), and `fp8`'s block
 * the step's pinned vectors (`fixtures/tc/vectors/fp8-hopper-wgmma-k{32,1536}.json`, model replays) through both GEMMs'
   coordinates;
 * operands on which the per-tile promotion, SWAP_AB and CUTLASS's per-block promotion give different words;
-* the numpy twins in `derived_rows` that the H200 capture compares the kernels with, against the Definitions;
+* the numpy twins in `derived_rows` and `fp8_moe_rows` that the H200 capture compares the kernels with, against the Definitions;
+* `SiluMulFp8BlockQuant_v1` (`silu_and_mul_per_block_quant` between the launches) against a model of the kernel's f32 steps, its NaN,
+  overflow and zero groups, and the bf16 `SiluMul_v2` + `Fp8GroupQuant_v1` it is not;
 * the Boolean versions against their word views on random and special words, the switch, and pinned counts and digests.
 """
 from __future__ import annotations
@@ -28,15 +30,18 @@ from verity.ir import boolean as BL
 from verity.ir import codec
 from verity.ir.defs import bind
 from verity.ml.boolean import trace as TR
+from verity.ml.prims import F32ToE4m3Sat
 from verity.ml.prims import HopperE4m3QgmmaDot32 as DOT
 from verity_vllm.program import boolean as SW
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.kernels import fp8_moe_rows as MR
+from verity_vllm.program.registry import act as A
 from verity_vllm.program.registry import boolean_fp8 as BF
 from verity_vllm.program.registry import boolean_fp8_moe as BM
 from verity_vllm.program.registry import fp8 as F
 from verity_vllm.program.registry import fp8_moe as M
-from tests.program.test_boolean_fp8 import _flat, _inputs
+from verity_vllm.program.registry.moe import nv_expf_bits
+from tests.program.test_boolean_fp8 import BF16_SPECIALS, _flat, _inputs
 
 VECTORS = Path(__file__).resolve().parents[4] / "fixtures" / "tc" / "vectors"
 SIGN, ONE = 1 << 31, 0x3F800000
@@ -308,6 +313,115 @@ def test_the_twins_keep_the_promotions_apart() -> None:
         assert MR.moe_expert_fp8_block_row(x, sx, w[None], sw, G=32, KB=32, swap=swap)[0].tolist() == [want]
 
 
+# --- silu_and_mul_per_block_quant -------------------------------------------------------------------------------------------------
+
+F448 = 0x43E00000
+
+
+def act_result_model(gate: int, up: int) -> int:
+    """fused_silu_mul_block_quant.cu:54-60 on finite words whose exponential is finite: e = expf(-g) (the math library's sequence),
+    then RN(1 + e), RN(1 / that), RN(g * sig) and RN(that * u), each rounded once from the exact rational."""
+    g, u = gate << 16, up << 16
+    e = nv_expf_bits(g ^ SIGN)
+    sig = _rn(1 / _q(_rn(1 + _q(e), 0)), 0)
+    return _fmul(_fmul(g, sig), u)
+
+
+def act_group_model(gate: list[int], up: list[int]) -> list[int]:
+    """One thread block on finite results: scale = fmaxf(RN(max |r| / 448), 1 / (448 * 512)), q = e4m3(clamp(RN(r / scale), +-448))."""
+    r = [act_result_model(g, u) for g, u in zip(gate, up)]
+    s = _rn(max(abs(_q(x)) for x in r) / 448, 0)
+    s = s if _q(s) > _q(F.MIN_SCALE_BITS) else F.MIN_SCALE_BITS
+    def quant(x: int) -> int:
+        v = _q(x) / _q(s)
+        return F32ToE4m3Sat.evaluate(_rn(max(-448, min(448, v)), x & SIGN))
+    return [quant(x) for x in r] + [s]
+
+
+def _bf16_rows(rng: np.random.Generator, rows: int, n: int, lo: float = -4, hi: float = 4) -> np.ndarray:
+    s = np.exp2(rng.uniform(lo, hi, (rows, 1))).astype(np.float32)
+    return ((rng.standard_normal((rows, n)).astype(np.float32) * s).view(np.uint32) >> 16).astype(np.uint16)
+
+
+def test_act_result_matches_the_kernel_model() -> None:
+    """Gates from -88 to 88 (expf(-g) from 2^-127 to 2^127), bf16 subnormals and zeros, ups at every scale."""
+    rng = np.random.default_rng(11)
+    gates = np.concatenate([(np.float32(v) * np.ones(1, np.float32)).view(np.uint32) >> 16 for v in np.linspace(-88, 88, 241)]).tolist()
+    gates += [0x0000, 0x8000, 0x0001, 0x8001, 0x0080, 0x8080] + _bf16_rows(rng, 1, 200, -8, 6)[0].tolist()
+    ups = _bf16_rows(rng, 1, len(gates), -20, 20)[0].tolist()
+    fn = bind(M.SiluMulFp8BlockQuantResult)
+    for g, u in zip(gates, ups):
+        assert evaluate(fn, g, u) == (act_result_model(g, u),), (hex(g), hex(u))
+
+
+def test_act_groups_match_the_kernel_model() -> None:
+    rng = np.random.default_rng(12)
+    I, G = 32, 16
+    fn = bind(M.SiluMulFp8BlockQuant, I=I, G=G)
+    for p, gu in enumerate(_bf16_rows(rng, 6, 2 * I, -6, 4)):
+        gu = gu.tolist()
+        if p == 5:
+            gu[I:I + G] = [0x0001] * G                       # a group whose results are subnormal: the floor scale
+        want = []
+        for g in range(I // G):
+            want.append(act_group_model(gu[g * G:(g + 1) * G], gu[I + g * G:I + (g + 1) * G]))
+        got = evaluate(fn, gu)
+        assert list(got) == sum((w[:-1] for w in want), []) + [w[-1] for w in want]
+    assert want[0][-1] == F.MIN_SCALE_BITS
+
+
+def test_act_nan_overflow_and_zero_words() -> None:
+    """A NaN result quantises to 448 and leaves the scale to the others; an all-NaN group takes the floor scale; expf(-g) overflowing
+    at g = -100 makes the result -0 (g * 0) and at g = -inf NaN (-inf * 0); a zero group is the floor scale and signed zeros."""
+    grp = bind(M.SiluMulFp8BlockQuantGroup, G=4)
+    up = [0x3F80, 0x4000, 0xC040, 0x3F00]
+    gate = [0x3F80, 0x4100, 0xC0A0, 0x4000]
+    nan = evaluate(grp, [0x7FC0] + gate[1:], up)
+    zero = evaluate(grp, [0x0000] + gate[1:], up)
+    assert nan[0] == 0x7E and nan[1:] == zero[1:] and zero[4] != F.MIN_SCALE_BITS
+    assert evaluate(grp, [0x7FC0, 0xFFC1, 0x7F81, 0x7FC0], up) == (0x7E,) * 4 + (F.MIN_SCALE_BITS,)
+    assert evaluate(bind(M.SiluMulFp8BlockQuantResult), 0xC2C8, 0x3F80) == (SIGN,)
+    assert (evaluate(bind(M.SiluMulFp8BlockQuantResult), 0xFF80, 0x3F80)[0] & 0x7FFFFFFF) > 0x7F800000
+    assert evaluate(grp, [0x0000, 0x8000, 0x0000, 0x8000], up) == (0x00, 0x80, 0x80, 0x80, F.MIN_SCALE_BITS)
+
+
+def test_act_is_not_bf16_silu_then_group_quant() -> None:
+    """The fused kernel keeps `result` in f32; `SiluMul_v2` (silu_and_mul's bf16 output) then `Fp8GroupQuant_v1` rounds it to bf16
+    first, and the two give different words on ordinary rows."""
+    rng = np.random.default_rng(13)
+    I, G = 64, 32
+    differ = 0
+    for gu in _bf16_rows(rng, 4, 2 * I):
+        fused = evaluate(bind(M.SiluMulFp8BlockQuant, I=I, G=G), gu.tolist())
+        two = evaluate(bind(F.Fp8GroupQuant, K=I, G=G), list(evaluate(bind(A.SiluMul, I=I), gu.tolist())))
+        differ += fused != two
+    assert differ == 4
+
+
+def test_act_statics_the_kernel_cannot_launch_are_refused() -> None:
+    for I, G in ((192, 96), (200, 128), (64, 128)):
+        with pytest.raises(ValueError, match="silu_and_mul_per_block_quant needs"):
+            _ = bind(M.SiluMulFp8BlockQuant, I=I, G=G).body
+    with pytest.raises(ValueError, match="silu_and_mul_per_block_quant needs"):
+        MR.silu_mul_fp8_block_quant_rows(np.zeros((1, 400), np.uint16), G=128)
+
+
+@pytest.mark.parametrize("I,G,specials", [(64, 16, False), (64, 16, True), (256, 128, True)])
+def test_the_act_twin_is_the_definition(I: int, G: int, specials: bool) -> None:
+    """`fp8_moe_rows.silu_mul_fp8_block_quant_rows` against `SiluMulFp8BlockQuant_v1` row by row, on rows with the bf16 special words
+    (zeros, subnormals, infinities, NaNs) planted at random places when `specials`."""
+    rng = np.random.default_rng(I + specials)
+    gu = _bf16_rows(rng, 6 if I < 256 else 2, 2 * I, -8, 10)
+    if specials:
+        m = rng.random(gu.shape) < 0.08
+        gu[m] = rng.choice(BF16_SPECIALS, int(m.sum()))
+        gu[0, :G] = 0x7FC0
+    q, s = MR.silu_mul_fp8_block_quant_rows(gu, G=G)
+    fn = bind(M.SiluMulFp8BlockQuant, I=I, G=G)
+    for p in range(gu.shape[0]):
+        assert list(evaluate(fn, gu[p].tolist())) == q[p].tolist() + s[p].tolist(), p
+
+
 # --- on bits ---------------------------------------------------------------------------------------------------------------------
 
 #: id -> (And, Xor, Not gates, standalone program digest)
@@ -322,11 +436,16 @@ PINS = {
         (551200, 992480, 56400, "4712c394556bdf70301a0b131d8875349a98e017362da895011442a2b5f12ce8"),
     "ScaledMmFp8BlockSharedScale_v2{K=32,N=40,G=32}":
         (458860, 815780, 52220, "2d1026d10adfb618f5085d1c72600dc8bd2c2d9cf9f5f380c87c0bfdf0b20186"),
+    "SiluMulFp8BlockQuantResult_v2":
+        (19561, 38091, 1468, "6bec32e8f9b69b5a1e5553bc756c246723c4cc52c7abfd47e00f1032cac05a17"),
+    "SiluMulFp8BlockQuant_v2{I=8,G=4}":
+        (191042, 377416, 16984, "73286c9132e36dc65431695158824acfa71c8d7ee3e20a5e77cf77c2ee04cc17"),
 }
 PINNED = [bind(BM.MoeExpertFp8BlockCoordinateV2, K=256, G=128, KB=32, SWAP=False),
           bind(BM.MoeExpertFp8BlockCoordinateWV2, K=256, G=128, KB=32, SWAP=False),
           bind(BM.MoeExpertFp8BlockGemmV2, K=32, N=40, G=32, KB=32, SWAP=False),
-          bind(BF.ScaledMmFp8BlockV2, K=32, N=40, G=32), bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=40, G=32)]
+          bind(BF.ScaledMmFp8BlockV2, K=32, N=40, G=32), bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=40, G=32),
+          bind(BM.SiluMulFp8BlockQuantResultV2), bind(BM.SiluMulFp8BlockQuantV2, I=8, G=4)]
 
 #: two tiles over two scale blocks, two tiles in one block, two steps in one tile, SWAP_AB; the GEMMs and the ragged CUTLASS GEMM
 #: over a whole and a partial weight block, and over a partial block alone
@@ -337,7 +456,8 @@ AGREEMENT = [bind(BM.MoeExpertFp8BlockCoordinateV2, K=64, G=32, KB=32, SWAP=Fals
              bind(BM.MoeExpertFp8BlockGemmV2, K=32, N=40, G=32, KB=32, SWAP=False),
              bind(BM.MoeExpertFp8BlockGemmWV2, K=32, N=40, G=32, KB=32, SWAP=True),
              bind(BF.ScaledMmFp8BlockV2, K=32, N=40, G=32), bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=40, G=32),
-             bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=8, G=32)]
+             bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=8, G=32),
+             bind(BM.SiluMulFp8BlockQuantResultV2), bind(BM.SiluMulFp8BlockQuantGroupV2, G=4), bind(BM.SiluMulFp8BlockQuantV2, I=8, G=4)]
 
 
 @pytest.mark.parametrize("target", PINNED, ids=lambda t: t.id)
