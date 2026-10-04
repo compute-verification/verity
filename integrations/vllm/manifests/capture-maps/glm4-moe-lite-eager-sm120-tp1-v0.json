@@ -204,10 +204,10 @@
   "rope-gptj": {
    "status": "port",
    "definitions": [
-    "RoPEHeadGptJ_v1",
-    "RoPEGptJ_v1"
+    "RoPEGptJ_v2",
+    "RoPEGptJ_v3"
    ],
-   "note": "_C.rotary_embedding with is_neox false (apply_token_rotary_embedding<IS_NEOX=false>) on the 64 rope dims, from the bf16 cos_sin_cache row at the token's position. The word view is registered; the Boolean RoPEHeadGptJ_v2 / RoPEGptJ_v2 come from the MLA lane (cursor/mla-programs-8c79), and no CUDA capture has pinned the kernel's operation order yet"
+   "note": "_C.rotary_embedding with is_neox false (apply_token_rotary_embedding<IS_NEOX=false>) on the 64 rope dims, from the bf16 cos_sin_cache row at the token's position: RoPEGptJ_v2 (word, the Build's rope_gptj kind and the fold's RotaryGptJ) and its Boolean twin RoPEGptJ_v3 (registry/boolean_rope.py, the MLA lane's); no CUDA capture has pinned the kernel's operation order yet"
   },
   "fa2-prefill-attention": {
    "status": "port",
