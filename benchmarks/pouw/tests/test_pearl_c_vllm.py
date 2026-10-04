@@ -38,6 +38,7 @@ from verity_pouw.audit import (
 from verity_pouw.protocol import Context, Matmul, Shape
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c_work as PW
+from verity_pouw.schemes import pearl_kw as P
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
 KERNEL = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
@@ -685,6 +686,54 @@ def test_forming_headroom_on_a_recorded_line(tmp_path):
     path.write_text(json.dumps(line | {"debit_exact": "477"}) + "\n")
     with pytest.raises(ValueError, match="not Prices.sm120"):
         FH.main([str(path), "--out", str(out)])
+
+
+FD = load("pearl_c_vllm_forming_domain", KERNEL.parent / "pearl_c_vllm" / "forming_domain.py")
+
+
+def test_forming_domain_on_a_synthetic_pass(tmp_path):
+    """The domain check's numpy rows agree with s5_stats and an all-Fraction count on every credited row, skip filler and
+    excluded rows, and find a row with α·s > 444 (no stride energy: ρ = 0, α·s = 448, so every element of it is loud and its
+    unit fails liveness too), a row through the subnormal fallback, and a unit whose loud elements break liveness at 8ρ_max."""
+    rng = np.random.default_rng(7)
+    k = 256
+    bf16 = lambda a: (np.asarray(a, np.float32).view(np.uint32) >> 16).astype("<u2")
+    a = rng.normal(0, 1, (64, k)).astype(np.float32)
+    a[5, ::8] = 0
+    a[7, 8] = 2.0 ** -70
+    b = rng.normal(0, 1, (4, k)).astype(np.float32)
+    b[:, 1:80:8] = 40.0
+    split = tmp_path / "decode"
+    (split / "calls").mkdir(parents=True)
+    mats = []
+    for i, (rows, real, excl) in enumerate([(a, 60, [3, 5 + 64]), (b, 4, [])]):
+        data = bf16(rows).tobytes()
+        (split / "calls" / f"{i}.rows.bf16").write_bytes(data)
+        mats.append({"index": i, "m": rows.shape[0], "k": k, "n": 64, "real_rows": real, "excluded_a": excl,
+                     "rows": {"path": f"calls/{i}.rows.bf16", "bytes": len(data)}})
+    (split / "manifest.json").write_text(json.dumps({"matmuls": mats}))
+
+    def by_fractions(words):
+        s_w, _, alpha_w, _ = C.s5_stats(words)
+        alpha, s = Fraction(P.f32_of_bits(alpha_w)), Fraction(P.f32_of_bits(s_w))
+        loud = sum(1 for w in words if abs(Fraction(P.f32_of_bits(w))) * alpha >= 2 * (448 - alpha * s))
+        return alpha * s, loud
+
+    want = []
+    for rows, real, excl in [(a, 60, {3}), (b, 4, set())]:
+        words = (bf16(rows).astype(np.uint32) << 16)
+        want.append([by_fractions(words[i].tolist()) for i in range(real) if i not in excl])
+    unit = FD.check_matmul((str(split), mats[0], list(range(64))))
+    assert unit["m_cred"] == 59 and unit["sampled"] == 59 and unit["fallback"] == 1 and unit["exact"] >= 1
+    assert unit["rows_out"] == sum(1 for a_s, _ in want[0] if a_s > 444) == 1 and unit["min_margin_row"] == 5
+    assert unit["loud"] == sum(n for _, n in want[0]) and unit["max_out_per_tile"] == 1
+    out = tmp_path / "fd.json"
+    assert FD.main([str(tmp_path), "--splits", "decode", "--jobs", "2", "--out", str(out)]) == 0
+    doc = json.loads(out.read_text())
+    r = doc["splits"]["decode"]
+    assert r["rows_checked"] == 63 and r["rows_out_of_domain"] == 1 and r["units_failing_live"] == 2
+    assert r["min_slack"] == 4 * k - 64 * sum(n for _, n in want[1]) < 0
+    assert r["hn_fail"] == 1 and not (doc["hfloor_holds"] or doc["hlive_holds"] or doc["hn_holds"])
 
 
 def test_clopper_pearson_upper():
