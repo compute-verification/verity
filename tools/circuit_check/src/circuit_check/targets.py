@@ -373,6 +373,15 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         # a partial last weight block (GLM-5.3's fused_qkv_a_proj, N = 2624 over 21 scale rows)
         ("ScaledMmFp8Block_v1/ragged", lambda: bind(fp8.ScaledMmFp8Block, K=256, N=192, G=128)),
         ("ScaledMmFp8BlockSharedScale_v1/ragged", lambda: bind(fp8.ScaledMmFp8BlockSharedScale, K=256, N=192, G=128)),
+        # the blockwise linear over a GEMM target's step (cc 12.0's), at the v1 and v2 forms' shapes
+        ("ScaledMmFp8Block_v3", lambda: bind(fp8.ScaledMmFp8BlockV3, K=256, N=192, G=128, DOT=BlackwellE4m3QmmaDot32)),
+        ("ScaledMmFp8BlockSharedScale_v3", lambda: bind(fp8.ScaledMmFp8BlockSharedScaleV3, K=256, N=192, G=128,
+                                                        DOT=BlackwellE4m3QmmaDot32)),
+        ("ScaledMmFp8Block_v4", lambda: bind(boolean_fp8.ScaledMmFp8BlockV4, K=32, N=32, G=32, DOT=BG.BlackwellE4m3QmmaDot32)),
+        ("ScaledMmFp8BlockSharedScale_v4", lambda: bind(boolean_fp8.ScaledMmFp8BlockSharedScaleV4, K=64, N=32, G=32,
+                                                        DOT=BG.BlackwellE4m3QmmaDot32)),
+        # the activation quant at fused_moe's group (fp8.QUANT_GROUPS)
+        ("Fp8GroupQuant_v1/g64", lambda: bind(fp8.Fp8GroupQuant, K=128, G=64)),
         # fused_moe_kernel's block FP8 expert GEMMs: GLM-5.3's served coordinates (w13 K = 6144, w2 K = 256 at TP8), and small ones
         # that reach two tiles per scale block, two dot steps per tile, SWAP_AB and a partial last weight block
         ("MoeExpertFp8BlockCoordinate_v1", lambda: bind(fp8_moe.MoeExpertFp8BlockCoordinate, K=6144, G=128, KB=32, SWAP=False)),
@@ -487,7 +496,7 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,
              "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0, "FA2_MASKED_FROM": 0,
-             "SCALE": "shared-per-block", "S": 4, "KB": 32, "SWAP": False,
+             "SCALE": "shared-per-block", "S": 4, "KB": 32, "SWAP": False, "FP8_DOT": BlackwellE4m3QmmaDot32,
              "CONSTRUCTION": "shared-greedy"}
     wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element blocks and 256-thread quantization
     e4m3 = {**small, "G": 32, "DOT": BlackwellE4m3QmmaDot32}  # the block-FP8 MoE pair forms: an e4m3 step, one K tile per scale block

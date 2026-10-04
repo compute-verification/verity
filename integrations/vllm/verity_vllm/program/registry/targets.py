@@ -364,6 +364,26 @@ def scaled_mm_fp8_spec(profile, K: int, N: int, bias: bool):
     raise UnregisteredTarget(f"per-tensor FP8 linear on {gt.key} ({profile.capability_str}): no registered binding")
 
 
+def fp8_block_dot(profile):
+    """The e4m3 k32 step the blockwise FP8 linear (`CutlassFp8BlockScaledMMKernel`) binds on the declared target, as the version 3
+    Definitions' `DOT`; None on a target whose step is Hopper's (`ScaledMmFp8Block_v1` and its shared-scale form are that step's chain,
+    and the recorded Programs bind them).  Refused by name where the GEMM target records no blockwise step (`GemmTarget.fp8_block_dot`):
+    `_C.cutlass_scaled_mm` reaches another blockwise kernel there under the same op and kernel class."""
+    gt = gemm_target(profile)
+    dot = FP8_DOTS.get(gt.fp8_block_dot) if gt.fp8_block_dot else None
+    if dot is None:
+        raise UnregisteredTarget(f"blockwise FP8 linear on {gt.key} ({profile.capability_str}): this target's _C.cutlass_scaled_mm "
+                                 f"blockwise kernel has no registered Definition")
+    return None if dot is HopperE4m3QgmmaDot32 else dot
+
+
+def scaled_mm_fp8_block_spec(profile, K: int, N: int, G: int, scale: str | None = None):
+    """The registered Definition of the blockwise FP8 linear on one token row on the declared target, under the scale construction
+    `scale` (default the target's `effective_fp8_scale_construction()`): `ScaledMmFp8BlockSharedScale_v1{K,N,G}` / `ScaledMmFp8Block_v1`
+    on hopper, the version 3 forms `{K,N,G,DOT}` over the target's `fp8_block_dot` elsewhere; refused by name where there is none."""
+    return fp8.block_gemm(K, N, G, scale or profile.effective_fp8_scale_construction(), fp8_block_dot(profile))
+
+
 def _fp4_dot(profile):
     gt = gemm_target(profile)
     dot = FP4_DOTS.get(gt.fp4_dot) if gt.fp4_dot else None
@@ -453,5 +473,5 @@ def describe(profile) -> dict[str, Any]:
 __all__ = ["TARGETS", "DOTS", "FP8_DOTS", "FP4_DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
            "moe_expert_dot", "moe_expert_gemm_spec", "moe_expert_fp8_dot", "moe_expert_fp8_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
-           "scaled_mm_fp8_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "attention_spec", "describe",
+           "scaled_mm_fp8_spec", "fp8_block_dot", "scaled_mm_fp8_block_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]
