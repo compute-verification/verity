@@ -28,7 +28,7 @@ record's (`entry4_accepts`), at two rows of finite words with `Row4OK` values wh
 gates hold its words' high halves, `pc4Sem`'s BF16 words up to the sign of zero (`zeroSign16_of_wordQ`), which no row
 unit reads (`formRow_table`). `TileCheckWords` composes these into
 L3's words for the plain `pc4` Program on a domain of whole-tile shapes (`Shape4`); D₄'s are
-(`shape4_of_pearlCShapeFp4`). The cap is not part of it.
+(`shape4_of_pearlCShapeFp4`). The peel's rows exist at two `Row4OK` rows (`PeelExists4`). The cap is not part of it.
 -/
 
 namespace Pouw.PearlC.WholeCircuit
@@ -468,8 +468,9 @@ end Widths4
 /-- A whole-tile `pc4` shape: `64 ∣ m`, `64 ∣ n` (`pc4.Shape.check`), and `k` a positive multiple of 64. -/
 def Shape4 (sh : Shape) : Prop := 64 ∣ sh.m ∧ 64 ∣ sh.n ∧ ∃ nw, 0 < nw ∧ sh.k = 64 * nw
 
-/-- **The named hypothesis at entry `(i, j)`** of a unit with lines `z`, activations `act` and weights `wt`: the peel's
-rows exist (`peelRows4`, which `devFp4Sm120`'s useful value reads; where it fails the useful value is `none`). -/
+/-- **The peel's rows exist at entry `(i, j)`** of a unit with lines `z`, activations `act` and weights `wt`
+(`peelRows4`, which `devFp4Sm120`'s useful value reads; where it fails the useful value is `none`). It holds at two
+`Row4OK` rows with `64 ∣ k ≤ 2^16` (`PeelExists.pc4EntryOK_of_rows`), so it is no hypothesis of L3. -/
 structure Pc4EntryOK (ops : RowOps) {m n k : ℕ} (z : Lines4 m n k) (act wt : Codes) (i : Fin m) (j : Fin n) :
     Prop where
   peel : (peelRows4 sm120Nvf4 (form4A ops z act) (form4B ops z wt) z.FA z.FB

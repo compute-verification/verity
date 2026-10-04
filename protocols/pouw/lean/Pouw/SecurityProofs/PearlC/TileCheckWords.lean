@@ -1,4 +1,5 @@
 import Pouw.SecurityProofs.PearlC.PeelExists
+import Pouw.SecurityProofs.PearlC.PeelExists4
 import Pouw.SecurityProofs.PearlC.TileCheck4Words
 
 /-!
@@ -18,9 +19,11 @@ the tile's weight rows passes it too, since the check accepts only then (`TileCh
   at least code `8` (`row4OK_stats_of_beta`).
 
 What stays named: `Pc8OpsAgree` and `Pc4OpsAgree` (core's primitives), `Noise8OK` (no NaN code in `pc8`'s noise),
-and at each entry of a credited row `Pc8EntryOK` or `Pc4EntryOK` (the peel's rows exist). `_pearlC` is each on the audit's tiles, and `_domain` on `D_dev`'s whole-tile
-layouts and on D₄. At a step `⟨[32], w, z⟩` with `w ≥ 24` (`sm120E4m3`), `D_dev`'s `k ≤ 2^16` and `Noise8OK` give
-`Pc8EntryOK` (`PeelExists`), so `tileCheck8_computesWords_wide` names no hypothesis at an entry.
+and, for `pc8`, `Pc8EntryOK` at each entry of a credited row (the peel's rows exist). `_pearlC` is each on the audit's
+tiles, and `_domain` on `D_dev`'s whole-tile layouts and on D₄. At a step `⟨[32], w, z⟩` with `w ≥ 24` (`sm120E4m3`),
+`D_dev`'s `k ≤ 2^16` and `Noise8OK` give `Pc8EntryOK` (`PeelExists`), so `tileCheck8_computesWords_wide` names no
+hypothesis at an entry. `pc4` names none at an entry: the two rows' `Row4OK` and `k ≤ 2^16` give `Pc4EntryOK`
+(`PeelExists.pc4EntryOK_of_rows`), and D₄'s shapes have `k ≤ 2^16`.
 -/
 
 namespace Pouw.PearlC.WholeCircuit
@@ -166,20 +169,18 @@ theorem tileCheck8_computesWords_wide {ops : RowOps} (hops : Pc8OpsAgree ops) {w
 
 /-- **L3's words for the plain `pc4` Program** (`tileCheck4`) at the record `devFp4Sm120` and `pc4Sem`: on tile rules
 whose tiles lie in their unit, whose credited rows pass `pc4Sem`'s rules (`hrow`) and whose domain has whole-tile
-shapes (`Shape4`), an accepted tile's ticket and useful words have the reference values on every credited row, under
-`Pc4OpsAgree` and the named hypothesis at each entry of a credited row (`Pc4EntryOK`). `Collides` is `False` and never
-needed. -/
+shapes (`Shape4`) with `k ≤ 2^16` (`hk16`), an accepted tile's ticket and useful words have the reference values on
+every credited row, under `Pc4OpsAgree`. The peel's rows exist at each entry of a credited row, since both rows are
+`Row4OK` (`PeelExists.pc4EntryOK_of_rows`). `Collides` is `False` and never needed. -/
 theorem tileCheck4_computesWords {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : ℚ)
     (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k)
     (TR : TileRules Q R S) (D : Layout → Prop)
     (hsh : ∀ L, D L → ∀ g < (TR.tiling L).NT, Shape4 (L.shape ((TR.tiling L).unit g)))
+    (hk16 : ∀ L, D L → ∀ g < (TR.tiling L).NT, (L.shape ((TR.tiling L).unit g)).k ≤ 2 ^ 16)
     (hrows : ∀ L g, ∀ i ∈ (TR.tiling L).rows g, i < (L.shape ((TR.tiling L).unit g)).m)
     (hcols : ∀ L g, ∀ j ∈ (TR.tiling L).cols g, j < (L.shape ((TR.tiling L).unit g)).n)
-    (hrow : ∀ (sh : Shape) (act : Codes) (i : ℕ), TR.rowOK sh act i → (pc4Sem ops lines).RowOK sh.m sh.k act i)
-    (hent : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) (i : Fin (U.layout.shape u).m)
-      (j : Fin (U.layout.shape u).n), TR.rowOK (U.layout.shape u) act i →
-        Pc4EntryOK ops (lines H s U u act) act (U.weight (U.layout.wid u)) i j) :
+    (hrow : ∀ (sh : Shape) (act : Codes) (i : ℕ), TR.rowOK sh act i → (pc4Sem ops lines).RowOK sh.m sh.k act i) :
     (tileCheck4 ops lines).ComputesWords (pearlCProtocolFp4 devFp4Sm120 (pc4Sem ops lines) ρ) TR D := by
   intro U hU H s g hg c X ⟨hcone, hpub, hreg, hwt⟩
   left
@@ -188,15 +189,16 @@ theorem tileCheck4_computesWords {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : �
   have hjn := hcols U.layout g j hj
   obtain ⟨hM, hN, nw, hnw, hK⟩ := hsh U.layout hU.2.1 g hg
   have hW : (pc4Sem ops lines).RowOK _ _ (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j := hwt j hj
-  have hE := hent H s U _ c.act ⟨i, him⟩ ⟨j, hjn⟩ hok
   have hR := hrow _ c.act i hok
+  have hRa := row4OK_of_admit hops lines him hR.1 (hR.2 him)
+  have hRb := row4OK_of_admit hops lines hjn hW.1 (hW.2 hjn)
+  have hE := PeelExists.pc4EntryOK_of_rows hops ⟨nw, hK⟩ (hk16 U.layout hU.2.1 g hg) (lines H s U _ c.act) c.act _
+    ⟨i, him⟩ ⟨j, hjn⟩ hRa hRb
   obtain ⟨w1, w2⟩ := entry4_accepts hops hnw hK hM hN X _ c.act _ c.ticket c.useful ⟨i, him⟩ ⟨j, hjn⟩
     (fun v hv => Finset.mem_filter.2 ⟨Finset.mem_univ _, i, hi, j, hj, him, hjn, hv⟩) hcone
     (fun v hv h => hpub ⟨v, hv⟩ (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩))
     (fun v hv h => hreg ⟨v, hv⟩ (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩))
-    (fun l hl => (hR.1 l hl).1) (fun l hl => (hW.1 l hl).1)
-    (row4OK_of_admit hops lines him hR.1 (hR.2 him))
-    (row4OK_of_admit hops lines hjn hW.1 (hW.2 hjn)) hE.peel
+    (fun l hl => (hR.1 l hl).1) (fun l hl => (hW.1 l hl).1) hRa hRb hE.peel
   refine ⟨w1.trans ?_, w2.trans ?_⟩
   · show _ = atNat _ i j
     unfold atNat
@@ -208,29 +210,29 @@ theorem tileCheck4_computesWords {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : �
     rfl
 
 /-- **L3's words for the plain `pc4` Program on the audit's tiles** (`pearlCTilesFp4`, the `64 × 64` grid): on a
-domain whose every unit has a whole-tile shape, `tileCheck4_computesWords` with the grid's tiles in their units. -/
+domain whose every unit has a whole-tile shape with `k ≤ 2^16`, `tileCheck4_computesWords` with the grid's tiles in
+their units. -/
 theorem tileCheck4_computesWords_pearlC {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : ℚ)
     (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k)
     (D : Layout → Prop) (hsh : ∀ L, D L → ∀ u < L.N, Shape4 (L.shape u))
-    (hent : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) (i : Fin (U.layout.shape u).m)
-      (j : Fin (U.layout.shape u).n), (pc4Sem ops lines).RowOK (U.layout.shape u).m (U.layout.shape u).k act i →
-        Pc4EntryOK ops (lines H s U u act) act (U.weight (U.layout.wid u)) i j) :
+    (hk16 : ∀ L, D L → ∀ u < L.N, (L.shape u).k ≤ 2 ^ 16) :
     (tileCheck4 ops lines).ComputesWords (pearlCProtocolFp4 devFp4Sm120 (pc4Sem ops lines) ρ)
       (pearlCTilesFp4 devFp4Sm120 (pc4Sem ops lines) ρ) D :=
   tileCheck4_computesWords hops ρ lines _ D
-    (fun L hL _ hg => hsh L hL _ (auditTiling_unit_lt 64 64 L hg)) (auditTiling_rows_lt 64 64) (auditTiling_cols_lt 64 64) (fun _ _ _ h => h) hent
+    (fun L hL _ hg => hsh L hL _ (auditTiling_unit_lt 64 64 L hg))
+    (fun L hL _ hg => hk16 L hL _ (auditTiling_unit_lt 64 64 L hg))
+    (auditTiling_rows_lt 64 64) (auditTiling_cols_lt 64 64) (fun _ _ _ h => h)
 
 /-- **L3's words for the plain `pc4` Program on D₄** (`pearlCDomainFp4`) and the audit's tiles:
-`tileCheck4_computesWords_pearlC` with `Shape4` from D₄'s shapes. -/
+`tileCheck4_computesWords_pearlC` with `Shape4` and `k ≤ 2^16` from D₄'s shapes, so it names no hypothesis beyond
+`Pc4OpsAgree`. -/
 theorem tileCheck4_computesWords_domain {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : ℚ)
     (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
-      Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k)
-    (hent : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) (i : Fin (U.layout.shape u).m)
-      (j : Fin (U.layout.shape u).n), (pc4Sem ops lines).RowOK (U.layout.shape u).m (U.layout.shape u).k act i →
-        Pc4EntryOK ops (lines H s U u act) act (U.weight (U.layout.wid u)) i j) :
+      Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k) :
     (tileCheck4 ops lines).ComputesWords (pearlCProtocolFp4 devFp4Sm120 (pc4Sem ops lines) ρ)
       (pearlCTilesFp4 devFp4Sm120 (pc4Sem ops lines) ρ) (pearlCDomainFp4 (pc4Sem ops lines)) :=
-  tileCheck4_computesWords_pearlC hops ρ lines _ (fun _ hL u hu => shape4_of_pearlCShapeFp4 (hL.2 u hu)) hent
+  tileCheck4_computesWords_pearlC hops ρ lines _ (fun _ hL u hu => shape4_of_pearlCShapeFp4 (hL.2 u hu))
+    fun _ hL u hu => (hL.2 u hu).2.2.2.2.2.2.2.1
 
 end Pouw.PearlC.WholeCircuit
