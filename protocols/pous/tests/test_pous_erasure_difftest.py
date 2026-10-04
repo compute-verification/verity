@@ -5,9 +5,9 @@ about: `Pous.eraseWinsDraw` with `Pous.distinctReads` (`lean/Pous/Protocol/Model
 the fill check's digest `Pous.Digest.digest` (`lean/Pous/Protocol/Model/Digest.lean`).
 
 `pous_erasure_cases.py` draws 12,000 cases, half of them whole pages, each a prover's script for the fill and every
-read: right, wrong (a flipped or cut digest, a flipped byte, a byte off by a multiple of 256) or no answer, after a delay
-at, one nanosecond past, or anywhere around the deadline, over a transport that gives up at the deadline or delivers late
-answers anyway; and a caller that reveals each read at once, up to, exactly at, or past `T_round` after the last reveal.
+read: right, wrong (a flipped or cut digest, a flipped byte, a byte off by a multiple of 256) or no answer, after a
+delay at, one nanosecond past, or anywhere around the deadline, over a transport that gives up at the deadline or
+delivers late answers anyway; and a caller that reveals each read at once, up to, exactly at, or past `T_round` after the last reveal.
 Lean evaluated `eraseWinsDraw` on every case once: it builds the fill from each page's tweak and bytes with
 `PageFill.tweak`, `page` and `byte`, so a page reaches the fill only if `KeyedFill.tweak` is Lean's `tweak K p`; it
 refuses a case whose indices repeat (`distinctReads` is an embedding); and it computes the digest the fill must have

@@ -34,17 +34,18 @@ Each page of `F_K` is a ten-round Feistel-SHAKE256 permutation (`primitives.Feis
 least `primitives.KECCAK_F_NS` each (`KeyedFill.recompute_ns`, 1.7352 ms for 1 MiB pages).  The Lean model reads that as
 `D = 0` over a whole round, from one read's arrival at the prover to the next's.  Read `j + 1`'s index reaches the
 prover no earlier than its reveal and, if its answer is in time, no later than `T_read` after it, so two arrivals are at
-most `T_round + T_read` apart on the verifier's clock.  `ErasureVerifier` refuses deadlines unless
-`T_read ≤ T_round` and `T_round + T_read < recompute_ns`; `T_round` defaults to the largest, `recompute_ns − 1 − T_read`.
+most `T_round + T_read` apart on the verifier's clock.  `ErasureVerifier` refuses deadlines unless `T_read ≤ T_round`
+and `T_round + T_read < recompute_ns`; `T_round` defaults to the largest, `recompute_ns − 1 − T_read`.
 
 **The guarantee.**  An audit of `M = P` whole pages of 1 MiB with at least 3046 reads at `P = 96112`, or 3430 at any
 `1 ≤ P ≤ 2^64`, is covered by `Pous.Guarantees.SecureErasurePages96112` or `Pous.Guarantees.SecureErasurePagesFamily`
 (`pinned_guarantee`; `ErasureVerifier.pin`).  Both are every-arrival claims at `ε = 2^-128`: a prover whose memory at
 each read's arrival is at most `⌊(18/19)·8M⌋` bits is accepted with probability at most `ε`, and an accepted prover
-cannot keep `M/19 + 32` bytes of uniform foreign content (independent of the fill, the pages' permutations and the reads,
-and read from its memory alone) through all the reads, except with probability `ε`.  Neither says what a prover holds at any one instant.  `M` must be
-the prover's whole volatile memory: memory outside the fill (the rest of the device, its on-chip SRAM, host DRAM) adds to
-what a prover can keep.  The verifier refuses an audit outside both pins unless `research=True`.
+cannot keep `M/19 + 32` bytes of uniform foreign content (independent of the fill, the pages' permutations and the
+reads, and read from its memory alone) through all the reads, except with probability `ε`.  Neither says what a prover
+holds at any one instant.  `M` must be the prover's whole volatile memory: memory outside the fill (the rest of the
+device, its on-chip SRAM, host DRAM) adds to what a prover can keep.  The verifier refuses an audit outside both pins
+unless `research=True`.
 """
 
 from __future__ import annotations
@@ -367,9 +368,9 @@ class ErasureVerifier:
         if round_deadline_ns is None:
             round_deadline_ns = recompute - 1 - read_deadline_ns
         if round_deadline_ns + read_deadline_ns >= recompute:
-            raise ValueError(f"T_round + T_read = {round_deadline_ns + read_deadline_ns} ns reaches the {recompute} ns of "
-                             f"a page's recompute: two reads' arrivals could be that far apart, and the guarantees' D = 0 "
-                             f"round runs from one arrival to the next")
+            raise ValueError(f"T_round + T_read = {round_deadline_ns + read_deadline_ns} ns reaches the {recompute} ns "
+                             f"of a page's recompute: two reads' arrivals could be that far apart, and the guarantees' "
+                             f"D = 0 round runs from one arrival to the next")
         if round_deadline_ns < read_deadline_ns:
             raise ValueError(f"T_round = {round_deadline_ns} ns is below T_read = {read_deadline_ns} ns: an answer in "
                              f"time would lapse the next read's reveal (T_read is at most {(recompute - 1) // 2} ns)")

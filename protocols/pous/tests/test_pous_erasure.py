@@ -1,6 +1,7 @@
-"""Secure erasure's verifier (`verity_pous.erasure`): an honest prover accepted, at every deadline exactly; a prover that
-under-fills, or misses a deadline, rejected, and so is a caller that reveals the next read late; seeded prover bugs
-rejected; the refusals that keep it fail-closed, the pins' citing conditions among them; and the fill's byte formats.
+"""Secure erasure's verifier (`verity_pous.erasure`): an honest prover accepted, at every deadline exactly; a prover
+that under-fills, or misses a deadline, rejected, and so is a caller that reveals the next read late; seeded prover
+bugs rejected; the refusals that keep it fail-closed, the pins' citing conditions among them; and the fill's byte
+formats.
 The verifier's clock is injected throughout."""
 
 from __future__ import annotations
@@ -152,7 +153,8 @@ def test_the_indices_are_fresh_distinct_and_shuffled():
 
 
 class _Draws:
-    """A stand-in for the spot key with its draws given: the subset, and `order[j]` for `uniform(j + 1, ("order", j))`."""
+    """A stand-in for the spot key with its draws given: the subset, and `order[j]` for
+    `uniform(j + 1, ("order", j))`."""
 
     def __init__(self, subset, order):
         self._subset, self._order = subset, order

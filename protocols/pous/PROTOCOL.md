@@ -337,34 +337,53 @@ unchanged, the single audit's verifier. `tests/test_pous_continuous.py` tests ea
 
 ## Secure erasure (`erasure`)
 
-With the disks unplugged, a prover's memory is volatile only (HBM and host DRAM), and a fresh fill of all `M` bytes of
-it at one instant leaves room for nothing else. `erasure.ErasureVerifier(M, s, fill_deadline_ns=T_fill,
-read_deadline_ns=T_read)` enforces the accept rule of the Lean model's secure-erasure game (`Pous.eraseWins`,
-`lean/Pous/Protocol/Model/SecureErasure.lean`; `Pous.Guarantees.SecureErasureMeets` bounds it):
+With the disks unplugged, a prover's memory is volatile only (HBM and host DRAM). A fresh fill of all `M` bytes of it,
+read back faster than any byte can be recomputed, leaves no room to keep anything else through the reads.
+`erasure.ErasureVerifier(M, s, fill_deadline_ns=T_fill, read_deadline_ns=T_read)` enforces the accept rule of the Lean
+model's secure-erasure game over distinct reads of the keyed page fill (`Pous.eraseWinsDraw` with `Pous.distinctReads`,
+`lean/Pous/Protocol/Model/ReadDraw.lean`, on `Pous.PageFill.pageScheme`, `lean/Pous/Protocol/Model/PageFill.lean`):
 
 1. **A fresh key.** `K = fill_key(source, M, s, context)`, from the verifier's own fresh secret (`verity.randomness`),
    is the fill challenge (`fill_challenge()`).
 2. **The fill.** The prover fills its `M` bytes with `F_K` (`KeyedFill`) and returns `h` (`receive_digest(h)`). The fill
    passes iff `h = Digest_K(F_K)` and `h` is in within `T_fill`.
 3. **Spot reads.** Only then are `s` fresh byte indices drawn (`spot_indices`: the subset sampler on a second key,
-   bound to `K` and never sent, in a shuffled order) and revealed one at a time (`challenge()`). Read `j` passes iff
-   its answer is `F_K[i_j]` and is in within `T_read` of the reveal (`respond(j, value)`).
+   bound to `K` and never sent, in a shuffled order, so a uniform sequence of distinct indices) and revealed one at a
+   time (`challenge()`). Read `j` passes iff its answer is `F_K[i_j]` and is in within `T_read` of the reveal
+   (`respond(j, value)`), and read `j + 1` is revealed within `T_round` of read `j`'s reveal (`reveal_by`).
 
 It accepts iff the fill and all `s` reads pass (`accepted`, `ErasureResult.accepted`), and it fails closed: an answer
-past its deadline is rejected uncompared, a step unanswered by its deadline is closed as rejected (`expire()`), the
-first failed step ends the audit with no other index revealed, an answer counts only for the open read, and every
-deadline runs from the verifier's clock at the send. `run_erasure(verifier, send, receive)` drives it over a transport
-as `run_continuous` does.
+past its deadline is rejected uncompared, a step unanswered by its deadline is closed as rejected (`expire()`), a read
+not revealed by `reveal_by` is closed unrevealed as rejected (`challenge()` raises `Lapsed`, and `expire()` closes it
+too), the first failed step ends the audit with no other index revealed, an answer counts only for the open read, and
+every deadline runs from the verifier's clock at the send. `run_erasure(verifier, send, receive)` drives it over a
+transport as `run_continuous` does, revealing each read as soon as the last is closed.
 
 **The fill.** Page `p` of `F_K` is `primitives.Feistel10(page_bytes, 0x45).forward(0, K ‖ u64(p))`, 1 MiB by default.
-A read shows a byte was held only if it cannot be recomputed within `T_read`. Any byte of a page needs nine rounds'
-absorbs, `page_keccak_f(page_bytes)` sequential Keccak-f (1.7352 ms at 1 MiB), so the verifier refuses a `T_read` that
-reaches it. `Digest_K` is the model's `Pous.Digest.digest g z` over `GF(2^127 − 1)`, with the pages as blocks of
-15-byte words, so `Pous.Guarantees.DigestAU` bounds a collision by `((W − 1) + (R − 1)) / (2^127 − 1)`.
+`Digest_K` is the model's `Pous.Digest.digest g z` over `GF(2^127 − 1)`, with the pages as blocks of 15-byte words, so
+`Pous.Guarantees.DigestAU` bounds a collision by `((W − 1) + (R − 1)) / (2^127 − 1)`.
 
-**Against the Lean statements.** The accept rule is the model's, checked case by case (Tests below), but the proved
-guarantees are for another instance of the game: the band's codeword, whole 64 KiB blocks, indices drawn with
-replacement, a `(D, Q)` read bound. `DISCREPANCIES.md` (E1 to E4) says where this audit differs.
+**The deadlines.** A read shows a byte was held only if it cannot be recomputed in the time the prover has. Any byte of
+a page needs nine rounds' absorbs, `page_keccak_f(page_bytes)` sequential Keccak-f (`KeyedFill.recompute_ns`, 1.7352 ms
+at 1 MiB). The Lean model reads that as `D = 0` over a whole round, from one read's arrival at the prover to the next's.
+Read `j + 1`'s index arrives no earlier than its reveal and, if its answer is in time, no later than `T_read` after it,
+so two arrivals are at most `T_round + T_read` apart. The verifier refuses deadlines unless `T_read ≤ T_round` and
+`T_round + T_read < recompute_ns` (so `T_read` is at most 867.6 µs at 1 MiB), and `round_deadline_ns` defaults to
+`recompute_ns − 1 − T_read`.
+
+**The guarantee.** An audit of `M = P` whole pages of 1 MiB cites `Pous.Guarantees.SecureErasurePages96112` at
+`P = 96112` (93.86 GiB, the 4 Oct node-2 calibration) with at least 3046 reads, and
+`Pous.Guarantees.SecureErasurePagesFamily` at any `1 ≤ P ≤ 2^64` with at least 3430 (`pinned_guarantee`,
+`required_reads`; `ErasureVerifier.pin`, `ErasureResult.certified`). Both are every-arrival claims at `ε = 2^-128`:
+a prover whose memory at each read's arrival is at most `⌊(18/19)·8M⌋` bits is accepted with probability at most `ε`,
+and an accepted prover cannot keep `M/19 + 32` bytes of uniform foreign content (independent of the fill, the pages'
+permutations and the reads, and read from its memory alone) through all the reads, except with probability `ε`.
+Neither says what a prover holds at any one instant. They rest on each page's `Feistel10` being an ideal permutation
+and on the `D = 0` deadline, with no named assumption. `M` must be the prover's whole volatile memory: memory outside
+the fill (the rest of the device, its on-chip SRAM, host DRAM) adds to what a prover can keep. The verifier refuses an
+audit that neither pin covers (fewer reads, part of a page, other page sizes, more than `2^64` pages);
+`research=True` runs it anyway and lists the gaps (`ErasureResult.gaps`). `DISCREPANCIES.md` (E1 to E7) says where the
+code and the statements still differ.
 
 ## API
 
@@ -383,7 +402,7 @@ replacement, a `(D, Q)` read bound. `DISCREPANCIES.md` (E1 to E4) says where thi
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`), `leaf_hash` (whole or chunked blocks), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
 | `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `TimedVerifier` refuses a band deadline past the cliff |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
-| `erasure` | secure erasure: `ErasureVerifier` (enforced, fail-closed) and `run_erasure`, `ErasureResult`, `Check`; `KeyedFill` (`F_K`, `Digest_K`); `fill_key`, `spot_key`, `spot_indices`, `page_keccak_f` |
+| `erasure` | secure erasure: `ErasureVerifier` (enforced, fail-closed; `Lapsed`) and `run_erasure`, `ErasureResult`, `Check`; `pinned_guarantee`, `required_reads`, `PIN_96112`, `PIN_FAMILY`, `PINNED_READS`; `KeyedFill` (`F_K`, `Digest_K`, `tweak`); `fill_key`, `spot_key`, `spot_indices`, `page_keccak_f` |
 | `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `Verifier` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
 | `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
 
@@ -484,14 +503,18 @@ column storage, whole lower labels as separators, meet in the middle through `P�
   one word for word in the Lean file) and restates it on the verifier's clock. Fuzzed and scripted traces (answers at
   and one nanosecond past each deadline, wrong, pipelined, stale and dropped answers) must agree with it action for
   action, and Lean `ContMachine`s run against the verifier must get `contRecords`' verdicts and `contAccepts`;
-- secure erasure (`test_pous_erasure.py`): honest provers at both deadlines exactly, under-fill, recompute, every
-  deadline and ordering refusal, ten bugged provers, the fill and digest from the spec's text, and pinned vectors;
+- secure erasure (`test_pous_erasure.py`): honest provers at every deadline exactly, under-fill, recompute, a caller
+  that reveals the next read past `T_round`, every deadline and ordering refusal, each pin's reads and one fewer, part
+  of a page, other page sizes, the pins read from `lean-audit.json` and the Lean statements, `spot_indices` as an exact
+  bijection onto distinct sequences, ten bugged provers, the fill and digest from the spec's text, and pinned vectors;
 - secure erasure against the Lean model (`test_pous_erasure_difftest.py`). `tests/lean/PousErasureCheck.lean` evaluates
-  `Pous.eraseWins` with `dig = Pous.Digest.digest` on 12,000 prover scripts (`pous_erasure_cases.py`: right, wrong
-  and dropped answers, at and one past each deadline). Lean's game has no clock, so the check reads a missed deadline
-  as an answer no digest or block is. `fixtures/lean_erasure_verdicts.json` pins the verdicts with the digests of the
-  cases, the check, `SecureErasure.lean` and `Digest.lean`. `ErasureVerifier` must reach every verdict, and ten
-  mutants of its decisions must each miss one. `VERITY_POUS_LEAN=1` reruns Lean (about 20 s);
+  `Pous.eraseWinsDraw` with `distinctReads` on `PageFill`'s fill, built by `PageFill.tweak`, `page` and `byte` from the
+  code's tweaks and pages, with `dig = Pous.Digest.digest`, on 12,000 prover scripts (`pous_erasure_cases.py`: half
+  whole pages; right, wrong and dropped answers, at and one past each deadline; reveals up to, at and past `T_round`).
+  Lean's game has no clock, so the check reads a missed deadline as an answer no digest or block is.
+  `fixtures/lean_erasure_verdicts.json` pins the verdicts with the digests of the cases, the check and the Lean files it
+  evaluates. `ErasureVerifier` must reach every verdict, and fourteen mutants of its decisions must each miss one.
+  `VERITY_POUS_LEAN=1` reruns Lean (about a minute);
 - the Lean vectors (`fixtures/lean_vectors.json`).
 
 The Lean vectors come from `tests/lean/PousRefCheck.lean`, which evaluates Lean's `c1'`, `topLabel'`, `transpose`,
