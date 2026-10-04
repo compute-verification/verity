@@ -28,7 +28,8 @@
 #      (prebuilt)  HZ_STAGE (stage.py's: fast, the default, or library)  HZ_STAGE_ONLY=1 (stage and keep, nothing else)
 #      HZ_LEAN (the Lean checks to run, as globs over their tags or <config>/<tag>: "st-* tile-k4096/honest-own"; default
 #      every one)  HZ_PROVE_ONLY=1 (the proving build and the --zk session only: no selftest build, controls or Lean)
-#      HZ_ROW_K (stage.py's: a cut row's segment length, in the stage cache's key)  HZ_LIBRARY=1 (the library check above)
+#      HZ_ROW_K (stage.py's: a cut row's segment length, in the stage cache's key)  HZ_LIBRARY=1 (the library check above;
+#      or globs over config tags, "cut_a_head-* cut_a_tail-*", for those configs only)
 #      HZ_OVERLAP=1 (a config's Lean checks run beside the next config's staging, session and controls; one config's at a time)
 set -uo pipefail
 SRC=$(pwd)
@@ -235,9 +236,12 @@ stage_config() {   # stage_config ROLE K TAG D O: D holds the config's staged fi
   for f in "$S"/*; do [ "$(basename "$f")" = stage.time ] || ln -s "$f" "$D/"; done
 }
 
-library_start() {   # library_start ROLE K D O: with HZ_LIBRARY=1, the library's staging of the config, in the background
+library_start() {   # library_start ROLE K D O: under HZ_LIBRARY, the library's staging of the config, in the background
+  local g globs on=0
   LIB_PID=
-  [ "${HZ_LIBRARY:-0}" = 1 ] && [ "$HZ_STAGE" = fast ] || return 0
+  read -ra globs <<< "${HZ_LIBRARY:-0}"
+  for g in "${globs[@]}"; do [[ $g == 1 || $(basename "$3") == $g ]] && on=1; done
+  [ $on = 1 ] && [ "$HZ_STAGE" = fast ] || return 0
   rm -rf "$3.lib" && mkdir -p "$3.lib"
   HZ_STAGE=library $TIME "$4/stage-library.time" bash -c "echo 1000 > /proc/self/oom_score_adj; $(vlimit $PROVE_GB) \
     exec $PY $J/stage.py $1 $2 $N $3.lib" > "$4/stage-library.out" 2> "$4/stage-library.err" &
