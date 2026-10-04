@@ -250,6 +250,36 @@ def dense_layer_weights_type(C: dict[str, Any]) -> Record:
     return Record(*fields)
 
 
+def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> Record:
+    """One decoder layer of a multi-head-latent-attention MoE family (family facts arch `mla-moe`, GLM-4.7-Flash): the attention's
+    vLLM parameters (`fused_qkv_a_proj [Q_LORA + KV_LORA + QK_ROPE][H]`, the two latent norms, `q_b_proj`, `kv_b_proj`, `o_proj`), then
+    the dense MLP of a layer below `FIRST_DENSE` (`I_DENSE`) or the MoE block: the f32 router gate and its f32 `e_score_correction_bias`,
+    the shared experts' fused gate/up and down projections, and the routed experts' `w13 [E][2I][H]` / `w2 [E][H][I]`."""
+    from verity_vllm.program.registry.prims import F32
+    H, NH, QL, L, DN, DR, DV = (int(C[k]) for k in ("H", "NH", "Q_LORA", "KV_LORA", "QK_NOPE", "QK_ROPE", "V_HEAD"))
+
+    def mat(n: int, k: int, t: Any = BF16) -> Array:
+        return Array(n, Array(k, t))
+
+    fields = [("ln1", Array(H, BF16)), ("qkv_a_w", mat(QL + L + DR, H)), ("q_a_ln", Array(QL, BF16)), ("q_b_w", mat(NH * (DN + DR), QL)),
+              ("kv_a_ln", Array(L, BF16)), ("kv_b_w", mat(NH * (DN + DV), L)), ("o_w", mat(H, NH * DV)), ("ln2", Array(H, BF16))]
+    if dense:
+        I = int(C["I_DENSE"])
+        return Record(*fields, ("gate_up_w", mat(2 * I, H)), ("down_w", mat(H, I)))
+    E, I, S = int(C["NUM_EXPERTS"]), int(C["I"]), int(C["SHARED_EXPERTS"])
+    return Record(*fields, ("gate_w", mat(E, H, F32)), ("gate_bias", Array(E, F32)), ("sh_gate_up_w", mat(2 * I * S, H)),
+                  ("sh_down_w", mat(H, I * S)), ("w13", Array(E, mat(2 * I, H))), ("w2", Array(E, mat(H, I))))
+
+
+def mla_weights_type(C: dict[str, Any]) -> Record:
+    """The weights Record of an `mla-moe` configuration: the layers below `FIRST_DENSE` as `dense_layers`, the MoE layers as `layers`
+    (index = layer - FIRST_DENSE), the untied `lm_head`, and the rotary table at the rope width `QK_ROPE`."""
+    H, V, NL, FD = int(C["H"]), int(C["V"]), int(C["NL"]), int(C["FIRST_DENSE"])
+    return Record(("embed", Array(V, Array(H, BF16))), ("dense_layers", Array(FD, mla_layer_weights_type(C, dense=True))),
+                  ("layers", Array(NL - FD, mla_layer_weights_type(C, dense=False))), ("norm", Array(H, BF16)),
+                  ("cos_sin", Array(int(C["MAX_POS"]), Array(int(C["QK_ROPE"]), BF16))), ("lm_head", Array(V, Array(H, BF16))))
+
+
 def weights_type(C: dict[str, Any]) -> Record:
     """`b1.weights_type(C)` (embed, layers, norm, cos_sin) plus an `lm_head` field `[V][H]` when the checkpoint does not tie
     the output projection to the embedding.  `b1.py` is frozen (D57); tied configurations get the identical Record.
@@ -259,7 +289,10 @@ def weights_type(C: dict[str, Any]) -> Record:
     `layernorm_layer_weights_type(C)` as its `layers` element, a `norm_b` `[H]` field (the final LayerNorm's bias) after
     `norm`, and a `cos_sin` table of width `rotary_dim(C)` (partial rotary); RMSNorm configurations are unchanged.
     [R15 fp8] `C["QK_NORM"] == "head"` (Qwen3) and/or `C["FP8_BLOCK"]` (block-scaled FP8 checkpoint) get
-    `dense_layer_weights_type(C)` as the `layers` element (per-head norm weights; e4m3 weights + f32 block scales)."""
+    `dense_layer_weights_type(C)` as the `layers` element (per-head norm weights; e4m3 weights + f32 block scales).
+    A configuration with `KV_LORA` (multi-head latent attention) gets `mla_weights_type(C)`."""
+    if C.get("KV_LORA"):
+        return mla_weights_type(C)
     base = b1.weights_type(C)
     fields = list(base.fields)
     if C.get("QK_NORM") == "head" or C.get("FP8_BLOCK"):

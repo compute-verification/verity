@@ -143,9 +143,10 @@ def structural_refusal(cfg: dict[str, Any]) -> str | None:
         return f"model_type {fam!r} is not in the family facts table {FF.FAMILIES} (needs its own mechanism record)"
     arch = FF.FAMILY_FACTS[fam]["arch"]
     if arch == "mla-moe":
-        return (f"{fam}: multi-head latent attention (kv_lora_rank={cfg.get('kv_lora_rank')!r}, interleaved RoPE over qk_rope_head_dim="
-                f"{cfg.get('qk_rope_head_dim')!r}) with a sigmoid grouped-top-k router and shared experts: the κ fold has no MLA attention, "
-                f"interleaved-RoPE or shared-expert patterns")
+        if int(cfg.get("n_group", 1) or 1) != 1 or int(cfg.get("topk_group", 1) or 1) != 1:
+            return f"{fam}: n_group={cfg.get('n_group')!r} topk_group={cfg.get('topk_group')!r}: the sigmoid router is stated over one expert group"
+        if (cfg.get("rope_scaling") or {}).get("rope_type", "default") not in ("default", None):
+            return f"{fam}: rope_scaling={cfg.get('rope_scaling')!r}: the MLA profile states the default (unscaled) rotary table"
     if effective_sliding_window(cfg) and "dense2" not in (FF.FAMILY_FACTS[fam].get("patterns") or ()):
         # only families whose vLLM code hands the window to FA2 as an inert `window_size_left >= max_seqlen_k` (Phi-3, Gemma-2: the
         # inert-window scope decides from the LAUNCH) are served; any other windowed configuration is outside the pinned splitkv patterns
@@ -193,8 +194,20 @@ def derive_config(cfg: dict[str, Any], *, repo: str | None, revision: str | None
     C, prov = analytic.config_of(rcfg, model=repo, revision=revision, family_rules={FF.family_of(cfg): fam["rules"]}, hand=hand)
     prov.update({k: v for k, v in hprov.items() if k in C})
     C["ROPE_THETA"] = float(C["ROPE_THETA"])                            # config.json writes 100000 or 100000.0; the profiles always said float
+    if fam["arch"] == "mla-moe":
+        # the prefill FA2 call sees q / k at qk_nope + qk_rope and v padded to it; the decode path never reads D
+        C["D"], prov["D"] = int(C["QK_NOPE"]) + int(C["QK_ROPE"]), "derived"
+        C["ROT"], prov["ROT"] = int(C["QK_ROPE"]), "derived"
+        C["QKV"], prov["QKV"] = int(C["Q_LORA"]) + int(C["KV_LORA"]) + int(C["QK_ROPE"]), "derived"
+        C["I_DENSE"], prov["I_DENSE"] = int(cfg["intermediate_size"]), "hf-config"
     C = base.with_geometry(C)
-    if fam["arch"] == "moe":
+    if fam["arch"] == "mla-moe":
+        C["MOE_I_FULL"], prov["MOE_I_FULL"] = int(cfg[moe_width_key(cfg)]), "hf-config"
+        if C["V_HEAD"] > C["D"]:
+            raise ValueError(f"V_HEAD={C['V_HEAD']} > D={C['D']}: the prefill pads v up to the q/k width, never down")
+        if C["H"] % 64 or C["I"] % 32 or C["I_DENSE"] % 64:
+            raise ValueError(f"H={C['H']} I={C['I']} I_DENSE={C['I_DENSE']}: the pinned GEMM tilings need K a multiple of 64 / 32 (fused_moe_kernel)")
+    elif fam["arch"] == "moe":
         mk = moe_width_key(cfg)
         if mk:
             C["MOE_I_FULL"], prov["MOE_I_FULL"] = int(cfg[mk]), "hf-config"
@@ -210,10 +223,57 @@ def derive_config(cfg: dict[str, Any], *, repo: str | None, revision: str | None
 
 # ------------------------------------------------------------------------------------------------------------------------------ weights
 
+#: vLLM parameter names of a multi-head-latent-attention MoE decoder layer (`Glm4MoeLite*` / `DeepseekV2*`) -> `analytic.mla_layer_weights_type`
+#: fields; layers below FIRST_DENSE carry the dense MLP names, the rest the MoE ones
+_MLA_LAYER_FIELDS = {
+    "input_layernorm.weight": "ln1", "post_attention_layernorm.weight": "ln2",
+    "self_attn.fused_qkv_a_proj.weight": "qkv_a_w", "self_attn.q_a_layernorm.weight": "q_a_ln", "self_attn.q_b_proj.weight": "q_b_w",
+    "self_attn.kv_a_layernorm.weight": "kv_a_ln", "self_attn.kv_b_proj.weight": "kv_b_w", "self_attn.o_proj.weight": "o_w",
+}
+_MLA_DENSE_FIELDS = {"mlp.gate_up_proj.weight": "gate_up_w", "mlp.down_proj.weight": "down_w"}
+_MLA_MOE_FIELDS = {
+    "mlp.gate.weight": "gate_w", "mlp.gate.e_score_correction_bias": "gate_bias",
+    "mlp.shared_experts.gate_up_proj.weight": "sh_gate_up_w", "mlp.shared_experts.down_proj.weight": "sh_down_w",
+    "mlp.experts.routed_experts.w13_weight": "w13", "mlp.experts.routed_experts.w2_weight": "w2",
+}
+#: `MLAAttention`'s absorbed up-projections: views of `kv_b_proj.weight`'s own storage (W_UK_T = the k_nope rows transposed, W_UV the v
+#: rows), so they are no Record field; and its kv/q scale placeholders (`kv_cache_dtype=auto`: never read by a modelled kernel)
+MLA_KV_B_VIEWS = re.compile(r"^model\.layers\.(\d+)\.self_attn\.mla_attn\.mla_attn\.(W_UK_T|W_UV)$")
+_MLA_SCALES = re.compile(rf"^model\.layers\.\d+\.self_attn\.mla_attn\.mla_attn\.{_ATTN_SCALES}$")
+
+
+def _mla_weight_field(C: dict[str, Any]) -> Callable[[str], tuple[str | int, ...] | None]:
+    FD, NL = int(C["FIRST_DENSE"]), int(C["NL"])
+
+    def weight_field(name: str) -> tuple[str | int, ...] | None:
+        if name == "model.embed_tokens.weight":
+            return ("embed",)
+        if name == "lm_head.weight":
+            return ("lm_head",)
+        if name == "model.norm.weight":
+            return ("norm",)
+        m = base._LAYER_RE.match(name)
+        if not m:
+            return None
+        layer, rest = int(m.group(1)), m.group(2)
+        if layer >= NL:
+            return None
+        if rest == base.COS_SIN_BUFFER:
+            return ("cos_sin",) if layer == 0 else None
+        f = _MLA_LAYER_FIELDS.get(rest) or (_MLA_DENSE_FIELDS if layer < FD else _MLA_MOE_FIELDS).get(rest)
+        if f is None:
+            return None
+        return ("dense_layers", layer, f) if layer < FD else ("layers", layer - FD, f)
+
+    return weight_field
+
+
 def make_weight_field(cfg: dict[str, Any], C: dict[str, Any]) -> Callable[[str], tuple[str | int, ...] | None]:
     """`Root.name` -> path into `analytic.weights_type(C)`: the base Llama map plus the family's parameter names, each bound only when the
     Record has the field (a name the Record has no field for stays unbound -- never silently mapped)."""
     fam = FF.facts_for(cfg)
+    if fam["arch"] == "mla-moe":
+        return _mla_weight_field(C)
     params = fam.get("params") or {}
     layer_type = analytic.weights_type(C).fields[analytic.weights_type(C).index("layers")][1].elem
     layer_fields = frozenset(n for n, _ in layer_type.fields)
@@ -269,6 +329,18 @@ def make_root_class(cfg: dict[str, Any], weight_field: Callable[[str], Any]) -> 
     """'weight' / 'alias-of-cos_sin' / 'ignored' / 'unknown' as the base module, over the family's module tree; MoE families add
     'unbound-moe-weight' (a MoE parameter the Record has no field for) and 'unmodelled-moe-variant' (shared experts, EP maps, router bias)."""
     fam = FF.facts_for(cfg)
+    if fam["arch"] == "mla-moe":
+        def mla_root_class(name: str) -> str:
+            if weight_field(name) is not None:
+                return "weight"
+            if base.ALIAS_OF_COS_SIN.match(name):
+                return "alias-of-cos_sin"
+            if MLA_KV_B_VIEWS.match(name):
+                return "alias-of-kv_b"
+            if _MLA_SCALES.match(name):
+                return "ignored"
+            return "unknown"
+        return mla_root_class
     params = fam.get("params") or {}
     prefix = params.get("layer_prefix")
     if prefix:
@@ -328,6 +400,10 @@ def make_check_header(cfg: dict[str, Any], C: dict[str, Any], world: int) -> Cal
                     out.append(f"{mk}={hcfg[mk]!r} != C[MOE_I_FULL]={C.get('MOE_I_FULL')!r}")
                 if hcfg.get("mlp_only_layers"):
                     out.append(f"mlp_only_layers={hcfg['mlp_only_layers']!r}: the MoE profile states every layer as a fused-MoE layer")
+            if fam["arch"] == "mla-moe":
+                for hf, key in (("intermediate_size", "I_DENSE"), ("moe_intermediate_size", "MOE_I_FULL"), ("num_experts_per_tok", "TOPK")):
+                    if hf in hcfg and hcfg[hf] != C.get(key):
+                        out.append(f"{hf}={hcfg[hf]!r} != C[{key}]={C.get(key)!r}")
         tp = (header.model or {}).get("tp") or (header.model or {}).get("tensor_parallel_size")
         if tp is not None and int(tp) != world:
             out.append(f"tensor_parallel_size={tp!r} != WORLD={world}")
@@ -406,6 +482,9 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
     if arch == "moe":
         patterns = _moe_patterns(C, list(prof.patterns), world=world, moe_construction=moe_construction, fused_pins=fused_moe_pins,
                                  fused_num_warps=fused_moe_num_warps, fused_num_stages=fused_moe_num_stages)
+    elif arch == "mla-moe":
+        from verity_vllm.engine.profiles.gen_mla_moe_patterns import with_mla_moe_patterns
+        patterns = with_mla_moe_patterns(with_tuned_gemm(list(prof.patterns)), C)
     else:
         patterns = _dense_patterns(cfg, C, list(prof.patterns))       # [R15 fp8] the fp8 patterns are the base list's own (make_patterns)
     if world > 1:
