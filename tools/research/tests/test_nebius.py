@@ -2133,6 +2133,33 @@ def test_n1_custody_pushes_no_record_less_attempt_that_never_left_node_1(tmp_pat
     assert len(node.created()) == 3
 
 
+def test_store_push_template_pushes_no_record_less_attempt(tmp_path, monkeypatch, capsys):
+    """#1004's red-team recheck N1: the store-push template's MODE=push (one ready file on node 1 starts it; it pushed 146 objects
+    on 2 Oct) ran `research data push --pending` on node 1's job store without --skip-record-less, so it would have put every
+    attempt n1_custody.sh holds record-less on R2's write-once keys before a person rules. Every template's pending push skips them,
+    and still pushes the rest. `push --pending` itself still takes them: a local `research run` without --run-record publishes one,
+    and `push --pending` is what the store says preserves it."""
+    from research.store import attempt as A
+    from research.store.cli import main as data_main
+    from research.store.local import LocalStore, attempt_key
+
+    lines = [ln for t in (NEBIUS / "sky" / "jobs").glob("*.yaml") for ln in t.read_text().splitlines()
+             if "data push --pending" in ln and not ln.lstrip().startswith("#")]
+    assert lines and all("--skip-record-less" in ln for ln in lines), lines
+    line = next(ln for ln in lines if ln.strip().startswith("push)"))
+    argv = shlex.split(re.search(r"research data (push [^>]*)", line).group(1).replace('"$PUSH_JOBS"', "1"))
+    node = _n1_custody(tmp_path)
+    less, full = "r20261003-200000-2101", "r20261003-200000-2102"
+    for rid in (less, full):
+        assert A.publish(node.run(node.jobs, rid, "done"), store=LocalStore(node.jobs / "store", config_path=node.absent),
+                         remote_push=False, run_record=rid == full)["published"]
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(node.remote))
+    monkeypatch.setenv("RESEARCH_STORE", str(node.jobs / "store"))
+    assert data_main(argv) == 0
+    assert f"1 attempt(s) without a run record not pushed (--skip-record-less): {less}" in capsys.readouterr().err
+    assert not (node.vault / attempt_key(less)).exists() and (node.vault / attempt_key(full)).exists()
+
+
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
 def test_n2_commit_fetches_only_missing_manifests_that_hash_to_their_id(tmp_path):
     """Node 2's store has no remote, so a cited Build's manifest missing there failed cov-g217's precheck after a 19-min bootstrap:
