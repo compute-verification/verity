@@ -32,6 +32,11 @@ names the first reason (W6). They are:
   still emitted, as padding, so every window keeps its T rows and no bucket slips into the next;
 - an overrun: the link still holds a whole bucket unwritten at a tick (`delivery-refused`), or the queue or the
   shaper's buffer passes Q (`overflow`); a server that refuses a stream's connection is `delivery-refused` on ingress;
+- a late forward (`delivery-refused`): a released request not written to its server connection by `slack` after its
+  release tick, nor by the end of its anchor's egress bucket. The server answers it late, so its events, and those
+  the server numbers after them, aren't the Program's. Its ingress window is faulted if still open, and every egress
+  window from the check, at an egress tick before handing, until the stream has ended upstream and every frame that
+  arrived before its end is handed;
 - an advice violation: a window's declared sync outside Σ_sync (`coverage-never-established`), checked at the window's
   start; the grid still follows the declared sync, as the audit's expected grid does;
 - a malformed frame (`malformed`): an event longer than a frame, without a position or with one already seen, on a
@@ -209,6 +214,10 @@ class _Stream:
     out: asyncio.Queue = field(default_factory=asyncio.Queue)
     events: Events = field(default_factory=Events)
     task: asyncio.Task | None = None
+    window: int | None = None  # the ingress window of its release
+    deadline: float | None = None  # when its request must be written upstream
+    delivered: float | None = None  # when it was
+    ended: int | None = None  # the ready bucket of its end upstream
 
 
 class Proxy:
@@ -241,6 +250,8 @@ class Proxy:
         self.frames: list[tuple[int, int, int, int, int]] = []
         self.lateness: dict[str, list[float]] = {"egress": [], "ingress": []}
         self.link_frames_read = self.requests_released = 0
+        self._released: list[_Stream] = []
+        self._late: list[_Stream] = []
         self._changed = asyncio.Event()
 
     async def until(self, predicate: Callable[[Proxy], bool]) -> None:
@@ -283,6 +294,7 @@ class Proxy:
             backlog = writer.transport.get_write_buffer_size()
             if backlog > bucket_bytes:
                 self.shaper.warden.fault(Reason.DELIVERY_REFUSED)
+            self._check_forwarding()
             row, record = self.shaper.tick()
             n = row_count(row)
             if backlog <= 4 * bucket_bytes:
@@ -292,8 +304,30 @@ class Proxy:
             self._changed.set()
         await writer.drain()
 
+    def _check_forwarding(self) -> None:
+        """Fault every window a late forward can reach: a released request not written upstream by its deadline makes
+        its ingress window delivery-refused, if still open, and the egress windows too until the stream has ended and
+        every frame that arrived before its end is handed, since the server's events can't be the Program's before."""
+        now, waiting = self.clock(), []
+        for st in self._released:
+            if st.delivered is None and now < st.deadline:
+                waiting.append(st)
+            elif st.delivered is None or st.delivered > st.deadline:
+                if self.bucketer.warden.window == st.window:
+                    self.bucketer.warden.fault(Reason.DELIVERY_REFUSED)
+                self._late.append(st)
+        self._released = waiting
+        self._late = [st for st in self._late if not self._settled(st)]
+        if self._late:
+            self.shaper.warden.fault(Reason.DELIVERY_REFUSED)
+
+    def _settled(self, st: _Stream) -> bool:
+        return st.ended is not None and self.shaper.t >= st.ended and \
+            all(ready > st.ended for _, ready in self.shaper.pending.values())
+
     async def _ingress(self) -> None:
         p = self.ingress
+        tau, tau_e = p.bucket_ms / 1000, self.egress.bucket_ms / 1000
         async for t in self._ticks(p, self.lateness["ingress"], self.bucketer.warden):
             row, record = self.bucketer.tick()
             anchor = t * p.bucket_ms // self.egress.bucket_ms
@@ -302,9 +336,11 @@ class Proxy:
                 if kind not in (DATA, LAST):
                     continue
                 st = self._stream(s)
-                st.out.put_nowait(payload)
+                st.out.put_nowait((payload, kind == LAST))
                 if kind == LAST and st.anchor is None:
-                    st.anchor = anchor
+                    st.anchor, st.window = anchor, t // p.buckets
+                    st.deadline = self.origin + min(t * tau + self.slack, (anchor + 1) * tau_e)
+                    self._released.append(st)
                     self.requests_released += 1
             if record is not None:
                 self.publish(record, p)
@@ -333,11 +369,17 @@ class Proxy:
             reader, writer = await asyncio.open_connection(*self.upstream)
         except OSError:
             self.bucketer.warden.fault(Reason.DELIVERY_REFUSED)
+            st.ended = self._bucket_ready(self.clock())
             return
+        writer.transport.set_write_buffer_limits(0)
 
         async def pump() -> None:
             while True:
-                writer.write(await st.out.get())
+                payload, last = await st.out.get()
+                writer.write(payload)
+                if last and st.delivered is None:
+                    await writer.drain()
+                    st.delivered = self.clock()
 
         pumping = asyncio.create_task(pump())
         try:
@@ -349,6 +391,7 @@ class Proxy:
             if st.events.buffer:
                 self.shaper.warden.fault(Reason.MALFORMED)
         finally:
+            st.ended = self._bucket_ready(self.clock())
             pumping.cancel()
             writer.close()
 
