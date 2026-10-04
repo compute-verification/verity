@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from verity_vllm.correspondence import capture_identities as CO
+from verity_vllm.program.registry import boolean_rope, ref_prims  # noqa: F401  (registration: the GPT-J RoPE v1 and v2)
 from verity_vllm.program.registry import conformance as CF
 
 REPO = Path(__file__).resolve().parents[2]
@@ -21,6 +22,8 @@ def test_registry_record_has_the_qualifications():
     assert defs["RMSNormFusedCuda_v2"]["status"] == "exact-model-tested"
     assert defs["RMSNormFusedCuda_v1"]["status"] == "superseded"
     assert "captured" in defs["RMSNormFusedCuda_v1"]["divergences"][0]
+    for fid in ("RoPEHeadGptJ_v1", "RoPEGptJ_v1"):
+        assert defs[fid]["status"] == "superseded"
     for fid in ("RoPEHead_v1", "RoPE_v1"):
         assert defs[fid]["input_qualifications"] == ["weights.cos_sin"]
         assert "GPU only" in defs[fid]["conformance"]
@@ -31,7 +34,7 @@ def test_registry_record_has_the_qualifications():
     assert rec["summary"].startswith("not universally exact")
     # other tests may register extra definitions in the same process; the library's own counts are lower bounds
     c = rec["counts"]
-    assert c["superseded"] == 1 and c["exact-model-tested"] >= 51 and c["model-untested"] >= 5
+    assert c["superseded"] == 3 and c["exact-model-tested"] >= 51 and c["model-untested"] >= 5
 
 
 def test_requalify_is_explicit_and_idempotent(tmp_path):
