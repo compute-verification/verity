@@ -36,7 +36,7 @@ Pous/Protocol/P2/Cost.lean          P2's cost model, the generic ring over `Z/p`
                                     `MeetsOn`, `MeetsWithSlack`, and P2 in it (`p2ring`)
 Pous/Assumptions.lean               trusted, the Assumptions layer: named hypotheses (Lemma A, Conjecture B1′)
 Pous/Assumptions/P2.lean            P2's named open step `PrimeP16448`, the primality of its modulus
-Pous/Guarantees.lean                trusted, the Guarantees layer: 70 statements, the 59 grade.sh grades against,
+Pous/Guarantees.lean                trusted, the Guarantees layer: 71 statements, the 60 grade.sh grades against,
                                     `InvExPostFactoTwoLayer`, which `N10Refuted` negates, and ten proved results
                                     cited outside the package
 Pous/Guarantees/P2.lean             six statements about the abstract model `m1p` at P2's parameters,
@@ -54,8 +54,9 @@ Pous/SecurityProofs/Chain/Flat.lean proved, generated: P3 with a concrete `H`, t
                                     the public encoder over the overwrite chain (the graded lanes, flattened)
 Pous/SecurityProofs/Continuous/     proved: the continuous audit's counting step (`MissCount.lean`), the three
                                     rules its verifier enforces (`Verifier.lean`), `PerAnswer` and
-                                    `ContinuousAudit` (`PerAnswer.lean`), and the 64 KiB band at `D = 5`
-                                    (`Band.lean`, not pinned)
+                                    `ContinuousAudit` (`PerAnswer.lean`), the 64 KiB band at `D = 5`
+                                    (`Band.lean`, not pinned), and completeness, `ContinuousComplete`
+                                    (`Complete.lean`)
 Pous/SecurityProofs/Graded/         proved: the tail rule (`Tail.lean`), Theorem 1(ii) for the graded audit
                                     (`Theorem.lean`) and the band with grace `t` at `D = 5` (`Band.lean`,
                                     `BandGradedMeetsFamily`)

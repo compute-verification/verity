@@ -156,6 +156,7 @@ theorem PerAnswer : Pous.Guarantees.PerAnswer := PousContinuous.per_answer
 theorem ContinuousAudit : Pous.Guarantees.ContinuousAudit := PousContinuous.continuous_audit
 theorem BackgroundRebuildExcluded : Pous.Guarantees.BackgroundRebuildExcluded :=
   PousRebuild.background_rebuild_excluded
+theorem ContinuousComplete : Pous.Guarantees.ContinuousComplete := PousContinuous.continuous_complete
 
 theorem P2MeetsM1pB19Uncond : Pous.Guarantees.P2MeetsM1pB19Uncond := PousP2p.p2_meets_m1p_b19
 theorem P2MeetsM1pFamilyUncond : Pous.Guarantees.P2MeetsM1pFamilyUncond := PousP2p.family
