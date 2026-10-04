@@ -16,11 +16,14 @@ OWN = ("seconds", "maxrss_gb", "staging")
 
 
 @pytest.mark.slow
-def test_fast_staging_writes_the_library_bytes(tmp_path):
-    """About 20 s: the (1,1) tile at K=64 staged both ways, each in its own process, since fast_stage patches the library in
-    place. Nothing cheaper catches a library change under one of those patches that makes fast staging write other bytes."""
-    runs = {mode: subprocess.Popen([sys.executable, str(STAGE), "tile", "64", "2", str(tmp_path / mode)], text=True,
-                                   env={**os.environ, "HZ_STAGE": mode}, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+@pytest.mark.parametrize("role, k, env", [("tile", 64, {}), ("cut_a_head", 128, {"HZ_ROW_K": "64"}),
+                                          ("cut_a_tail", 128, {"HZ_ROW_K": "64"})])
+def test_fast_staging_writes_the_library_bytes(tmp_path, role, k, env):
+    """About 20 s each: the (1,1) tile at K=64, and a cut A row's head and tail at K=128 in segments of 64, staged both ways,
+    each in its own process, since fast_stage patches the library in place. Nothing cheaper catches a library change under one
+    of those patches that makes fast staging write other bytes."""
+    runs = {mode: subprocess.Popen([sys.executable, str(STAGE), role, str(k), "2", str(tmp_path / mode)], text=True,
+                                   env={**os.environ, **env, "HZ_STAGE": mode}, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             for mode in ("fast", "library")}
     for mode, p in runs.items():
         _, err = p.communicate()
