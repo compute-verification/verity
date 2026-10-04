@@ -266,7 +266,8 @@ def _boolean_roots() -> list[Any]:
     both, its ``TANH`` and ``EX2`` at mufu's Boolean versions, which reaches its head and blocks. vLLM's GPT-J RoPE on bits at
     two heads of 8. MLA (`registry.mla`): Triton's one-split decode at one head of two keys over a 16 + 16 latent (a partial
     block, so its masked columns), which reaches the head, the block, the score and every element; the absorb bmm at two heads,
-    K = 32, N = 3; the shared-expert combine at 8 elements with GLM-4.7-Flash's routed_scaling_factor."""
+    K = 32, N = 3; the shared-expert combine at 8 elements with GLM-4.7-Flash's routed_scaling_factor. cuBLAS's f32 router gate
+    (`cublas_f32`): the gemv dot at its one-group K = 256 (16 classes of one tile), the SIMT dot and the linear over it at K = 32."""
     from verity.ir.defs import bind
     from verity.ml.boolean import attention as BAT
     from verity.ml.boolean import gemm as BG
@@ -280,6 +281,7 @@ def _boolean_roots() -> list[Any]:
     from verity_vllm.program.registry import boolean_rope
     from verity_vllm.program.registry import boolean_silu as BSL
     from verity_vllm.program.registry import boolean_softcap as BSC
+    from verity_vllm.program.registry import cublas_f32 as CUB
     from verity_vllm.program.registry import gumbel_boolean as GB
     from verity_vllm.program.registry import mla
     from verity_vllm.program.registry import moe as M
@@ -316,7 +318,8 @@ def _boolean_roots() -> list[Any]:
             *SB.stages(200, SB.F32ArgmaxStage), *SB.stages(4161, SB.F32ArgmaxStage),
             bind(boolean_rope.RoPEGptJ, NHEADS=2, D=8),
             bind(mla.TritonMlaDecode, H=1, T=2, DL=16, DR=16, BN=32, SPLITS=1, SCALE=0x3D800000, DOT=HOP),
-            bind(mla.MlaBmm, NHEADS=2, K=32, N=3, DOT=HOP), bind(mla.MoeSharedCombine, H=8, RSF=0x3FE66666)] + rows
+            bind(mla.MlaBmm, NHEADS=2, K=32, N=3, DOT=HOP), bind(mla.MoeSharedCombine, H=8, RSF=0x3FE66666),
+            bind(CUB.CublasGemvDot, K=256), bind(CUB.CublasSimtDot, K=32), bind(CUB.CublasF32Linear, K=32, N=2, TREE="simt")] + rows
 
 
 def _boolean_gather_roots() -> list[Any]:
@@ -352,7 +355,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.ml.boolean import gemm as BG
     from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64
     from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, fp8_moe, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling
-    from verity_vllm.program.registry import mla_word, serve3, spec
+    from verity_vllm.program.registry import cublas_f32, mla_word, serve3, spec
     from verity_vllm.program.registry import value_inputs as VI
     from verity_vllm.program.registry import boolean_attention, boolean_fp8, boolean_fp8_moe, tables
 
@@ -452,6 +455,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("TritonMlaDecodeWord_v1", lambda: bind(mla_word.TritonMlaDecodeWord, H=1, T=65, DL=16, DR=16, BN=32, SPLITS=1,
                                                 SCALE=0x3D800000, DOT=hopper.HopperBF16WgmmaDot16)),
         ("MlaBmmWord_v1", lambda: bind(mla_word.MlaBmmWord, NHEADS=2, K=32, N=3, DOT=hopper.HopperBF16WgmmaDot16)),
+        # the router gate's gemv tree (the vocabulary's sample binds the SIMT one at K = 32): one group of 16 classes
+        ("CublasF32Linear_v1/gemv", lambda: bind(cublas_f32.CublasF32LinearWord, K=256, N=2, TREE="gemv")),
     ]
 
 
@@ -499,7 +504,8 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,
              "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0, "FA2_MASKED_FROM": 0,
              "SCALE": "shared-per-block", "S": 4,
-             "CONSTRUCTION": "shared-greedy", "RSF": 2.5, "KERNEL": "block", "DL": 16, "DR": 16, "SPLITS": 1, "SM_SCALE": 0x3D800000}
+             "CONSTRUCTION": "shared-greedy", "RSF": 2.5, "KERNEL": "block", "DL": 16, "DR": 16, "SPLITS": 1, "SM_SCALE": 0x3D800000,
+             "TREE": "simt"}
     wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element blocks and 256-thread quantization
     vocabularies = [v for v in vars(V).values() if isinstance(v, V.Vocabulary)]
     kinds = [(f"{v.name}/{k}", make) for v in vocabularies for k, make in v.kinds.items()]

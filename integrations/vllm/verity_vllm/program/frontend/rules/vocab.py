@@ -14,6 +14,7 @@ from typing import Callable
 from verity.ir.defs import bind as ir_bind
 from verity_vllm.program.registry import act as _act
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
+from verity_vllm.program.registry import cublas_f32 as _cub
 from verity_vllm.program.registry import fa2_check_inf as _f2
 from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
@@ -356,6 +357,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_expert_gemm_w_dot": lambda E, K, N, DOT: ir_bind(_moe.MoeExpertGemmWV2, E=E, K=K, N=N, DOT=DOT),
            "moe_sum": lambda TOPK, H: ir_bind(_moe.MoeSum, TOPK=TOPK, H=H),
            "moe_router_sigmoid_bias": lambda E, TOPK, RSF, KERNEL: ir_bind(_moe.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=RSF, KERNEL=KERNEL),
+           # the f32 router gate (`nn.Linear(dtype=float32)` on the widened hidden): cuBLAS's kernel family for M is TREE
+           # (`rules/vllm_bindings/f32_linear.py`)
+           "f32_linear_cublas": lambda K, N, TREE: ir_bind(_cub.CublasF32LinearWord, K=K, N=N, TREE=TREE),
            "rope_gptj": lambda NHEADS, D: ir_bind(RP.RoPEGptJV2, NHEADS=NHEADS, D=D),
            # MLA (`rules/vllm_bindings/mla_attention.py`): the absorb / V-up bmms and Triton's one-split MLA decode, the word twins of
            # `registry.mla`'s Boolean Definitions
@@ -430,6 +434,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_router_sigmoid_bias": "MoeRouterSigmoidBias_v1{E,TOPK,SCALE=RSF,KERNEL}: _moe_C.grouped_topk(n_group=1, topk_group=1, renormalize=True, "
                                       "SIGMOID) per token row of f32 logits with the f32 selection bias -> (weights f32[TOPK], ids i32[TOPK]); "
                                       "KERNEL the launch (block / warp kernel, registry.moe)",
+           "f32_linear_cublas": "CublasF32Linear_v1{K,N,TREE}: cuBLAS's f32 GEMM (split-K off) of one widened bf16 row x[K] with f32 W[N,K]: "
+                                "TREE gemv (gemv2T / gemmSN: 16 thread classes of 16-term FMA tiles) or simt (CUTLASS SIMT sgemm: one "
+                                "ascending FMA chain), each from +0 (registry.cublas_f32)",
            "rope_gptj": "RoPEGptJ_v2{NHEADS,D}: vLLM _C.rotary_embedding GPT-J (interleaved pairs 2i, 2i+1; the odd output's y*cos rounded, "
                         "x*sin fused), bf16 cos/sin cache row as Input",
            "mla_bmm": "MlaBmmWord_v1{NHEADS,K,N,DOT}: vLLM's batch-invariant bmm_kernel for one token row, Gemm_v2{K,N,DOT} per head "

@@ -31,6 +31,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.cache_pad import CachePadR
 from verity_vllm.program.frontend.rules.vllm_bindings.collectives import (AllGather2Rule, AllGatherRule, AllReduce2Rule, AllReduceRule,
                                                                           EmbeddingShardRule)
 from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import Bf16ScalarChainRule, Bf16ScalarMulInPlaceRule, GeluTanhAndMulRule, ScalarTensorMulRule
+from verity_vllm.program.frontend.rules.vllm_bindings.f32_linear import CublasF32LinearRule
 from verity_vllm.program.frontend.rules.vllm_bindings.fp8 import CutlassScaledMmFp8BlockRule, PerTokenGroupFp8QuantRule, SameDtypeCastRule
 from verity_vllm.program.frontend.rules.vllm_bindings.fused_norm import FusedAddRmsNormBIRule
 from verity_vllm.program.frontend.rules.vllm_bindings.layer_norm import LayerNormAtenRule
@@ -56,7 +57,8 @@ VLLM_BINDING_RULES = [TritonRmsNormRule(), TritonGemmRule(), KvCacheUpdateRule()
                       # [R15 fp8] the block-scaled FP8 linear (Fp8LinearMethod -> CutlassFp8BlockScaledMMKernel) + the same-dtype cast it ends with
                       PerTokenGroupFp8QuantRule(), CutlassScaledMmFp8BlockRule(), SameDtypeCastRule(),
                       # MLAAttention's latent cache write and read (TRITON_MLA decode, FA2 prefill)
-                      MlaKvCacheUpdateRule(), MlaAttentionWithOutputRule()]
+                      MlaKvCacheUpdateRule(), MlaAttentionWithOutputRule(),
+                      CublasF32LinearRule()]   # the f32 router gate on the widened hidden (cuBLAS)
 
 
 def vllm_ruleset():
