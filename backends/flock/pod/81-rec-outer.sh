@@ -8,7 +8,8 @@
 # Run from the verity tree (research run --cwd source). Outputs under out/: host.txt, L<l>/ and forged-L<l>/ (stage.json,
 # time-stage.txt, time-prove.txt, prove.txt/.err, serve.log, lean.log, replay.txt), summary.json.
 # env: INNER=DIR (required: public.json, private.json, session/)  LEVELS=0,1,2,3 (default: every level)  NEG_LEVEL (default:
-#      the last)  CPUS=32  FLOCK_WORK (as 80-rec-inner.sh)
+#      the last)  LINK=1 (the opened rows read from the prover's registration of them: rec_outer --link-rows)  CPUS=32
+#      FLOCK_WORK (as 80-rec-inner.sh)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 if [ -z "${RI_PINNED:-}" ]; then
@@ -25,6 +26,7 @@ ALL=$(python3 -c "
 import sys; from pathlib import Path; from verity_flock import rec_outer as O, rec_vstar as V
 pub, _, proofs = V.load(Path(sys.argv[1])); print(','.join(str(l['level']) for l in O.levels(V.queries(pub, proofs))))" $INNER)
 LEVELS=${LEVELS:-$ALL}; NEG_LEVEL=${NEG_LEVEL:-${ALL##*,}}
+LINK_ROWS=; [ "${LINK:-0}" = 1 ] && LINK_ROWS=--link-rows
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
 
@@ -32,7 +34,7 @@ free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1
 outer() {
   local I=$1 l=$2 D=$O/$3 st=$S/stage-$3
   mkdir -p $D
-  /usr/bin/time -v -o $D/time-stage.txt python3 -m verity_flock.rec_outer $I $st --levels $l > $D/stage.json 2> $D/stage.err
+  /usr/bin/time -v -o $D/time-stage.txt python3 -m verity_flock.rec_outer $I $st --levels $l $LINK_ROWS > $D/stage.json 2> $D/stage.err
   echo "$3 stage exit $?"
   local C=$st/L$l
   [ -f $C/inst.bin ] || { tail -20 $D/stage.err; return 1; }

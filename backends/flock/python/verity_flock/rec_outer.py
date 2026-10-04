@@ -14,6 +14,12 @@ keep each row's ``b || c`` its own), and its reads file puts instance ``i``'s ou
 "Registered reads", `verity_sampled_proofs.one_stage.registered`). An instance is satisfiable only if its private rows open
 to that registered row, so the statement holds only if every opening climbs to the cap node its coin names.
 
+With ``link_rows``, the opened rows are not fresh: the prover registers them first, as the value ``rec-rows-L<level>`` under
+its own salts (what it would send before the outer coins), and the statement's ``row`` port reads row ``i`` of that value in
+instance ``i``. The verifier then checks every opened row against that root, which is how another statement (the inner
+verifier's algebra) can read the same rows, and how V* reads rows the prover committed earlier (the inner messages under
+their c_k, com_P).
+
 `stage` writes one level's ``circuit.txt``, the prover's ``inst.bin``, the verifier's ``pub.bin``, ``program.json``,
 ``partition.json`` and the reads file ``registered.json``; ``python -m verity_flock.rec_outer INNER OUT`` stages every level
 of an inner session (`verity_flock.rec_vstar.load`'s directory).
@@ -78,7 +84,7 @@ def expected_salts(value: str, n: int) -> list[bytes]:
             for i in range(n)]
 
 
-def stage(level: dict, out_dir: Path) -> dict:
+def stage(level: dict, out_dir: Path, link_rows: bool = False) -> dict:
     """One level's statement, the verifier's own files beside the prover's (``out_dir``), and what it costs."""
     from verity_sampled_proofs.one_stage import partition as P
     from verity_sampled_proofs.one_stage import registered as G
@@ -103,23 +109,29 @@ def stage(level: dict, out_dir: Path) -> dict:
     reg = G.Registered.commit(prog, value, want, salts=expected_salts(value, n))
     out_rows, out_salts, entry = reg.statement(range(n))
     own = {"format": G.READS, "ports": {"out": {**reg.entry(), "word_bits": 16, "reads": list(range(n))}}}
+    fresh = lambda: [hm96.SHA512.fresh_salt() for _ in range(n)]
+    salts, registered = {"row": fresh(), "aux": fresh(), "out": out_salts}, {"out": entry}
+    linked = None
+    if link_rows:
+        linked = G.Registered.commit(prog, f"rec-rows-L{level['level']}", rows.tolist())
+        _rows, salts["row"], registered["row"] = linked.statement(range(n))
+        own["ports"]["row"] = {**linked.entry(), "word_bits": 16, "reads": list(range(n))}
     d = Path(out_dir)
     d.mkdir(parents=True, exist_ok=True)
     (d / "circuit.txt").write_text(text)
     (d / "program.json").write_bytes(canonical_json(encode_program(program)))
     (d / "partition.json").write_text(json.dumps(part))
     (d / "registered.json").write_text(json.dumps(own))
-    fresh = lambda: [hm96.SHA512.fresh_salt() for _ in range(n)]
     FC.write(text, SimpleNamespace(name=value, subcircuit=sub), 0, n, d / "inst.bin", d / "pub.bin", None, list(range(n)),
              share_rows=True, outs={"out": np.asarray(out_rows, np.uint16)}, tables={"row": rows, "aux": aux},
-             refs={"row": list(range(n)), "aux": list(range(n))}, salts={"row": fresh(), "aux": fresh(), "out": out_salts},
-             registered={"out": entry})
+             refs={"row": list(range(n)), "aux": list(range(n))}, salts=salts, registered=registered)
     meta = json.loads(text.split("\n", 2)[1][5:])
     return {"level": level["level"], "value": value, "template": defn.id, "LANES": LANES, "H": H, "instances": n,
             "opened": sum(opened), "not_opened": [(q.rep, q.j) for q, o in zip(qs, opened) if not o],
             "unit_rows": low.layout.useful, "unit_log": meta["unit_log"], "k_log": meta["k_log"], "vus_per_block": meta["vus_per_block"],
             "per_vu": meta["per_vu"], "compressions": LANES // 8 + 5 + 2 * H, "circuit_sha512": FC.digest(text),
-            "program_sha512": prog, "partition_digest": P.digest(part), "registered_root": reg.root.hex()}
+            "program_sha512": prog, "partition_digest": P.digest(part), "registered_root": reg.root.hex(),
+            "rows_root": linked.root.hex() if linked else None}
 
 
 def main(argv=None) -> int:
@@ -129,13 +141,14 @@ def main(argv=None) -> int:
     ap.add_argument("inner", help="an inner session directory (public.json, private.json, session/)")
     ap.add_argument("out", help="one directory per level, L<level>/")
     ap.add_argument("--levels", default=None, help="comma-separated levels (default: every level)")
+    ap.add_argument("--link-rows", action="store_true", help="the opened rows read from the prover's registration of them")
     a = ap.parse_args(argv)
     public, _private, proofs = V.load(Path(a.inner))
     want = None if a.levels is None else {int(x) for x in a.levels.split(",")}
     res = []
     for lv in levels(V.queries(public, proofs)):
         if want is None or lv["level"] in want:
-            res.append(stage(lv, Path(a.out) / f"L{lv['level']}"))
+            res.append(stage(lv, Path(a.out) / f"L{lv['level']}", a.link_rows))
             print(json.dumps(res[-1], sort_keys=True), flush=True)
     return 0 if all(not r["not_opened"] for r in res) else 1
 
