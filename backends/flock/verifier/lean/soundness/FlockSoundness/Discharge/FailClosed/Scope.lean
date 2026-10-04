@@ -235,9 +235,60 @@ theorem ScopeZ.loadH {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = tr
     HmOut.loadPublic (zkTags I) (circZ I) I.publicFile = .ok (pubZ I) :=
   Checks.loadH h (by rw [zkTags_hiddenOutputs]; exact hh)
 
+theorem ScopeZ.built {I : Inputs} (h : ScopeZ I) : Built (circZ I).unit := Checks.built h
+
+theorem ScopeZ.tables {I : Inputs} (h : ScopeZ I) : (pubZ I).tables = none := Checks.tables h
+
+theorem ScopeZ.scope {I : Inputs} (h : ScopeZ I) : Layout.scopeOk (circZ I) = true := Checks.scope h
+
+theorem Scope.typed {I : Inputs} (h : Scope I) : I.tags.typed = false := Checks.typed h
+
+theorem Scope.retainRounds {I : Inputs} (h : Scope I) : I.tags.retainRounds = true := Checks.retainRounds h
+
+theorem Scope.merkleLeaf {I : Inputs} (h : Scope I) : I.tags.merkleLeaf = "hm96-sha512/v1" := Checks.merkleLeaf h
+
+theorem Scope.parse {I : Inputs} (h : Scope I) (hh : I.tags.hiddenOutputs = false) :
+    HmRow.parse I.tags I.circuitFile I.tables = .ok (circS I) := Checks.parse h hh
+
+theorem Scope.parseH {I : Inputs} (h : Scope I) (hh : I.tags.hiddenOutputs = true) :
+    HmOut.parse I.tags I.circuitFile I.tables = .ok (circS I) := Checks.parseH h hh
+
+theorem Scope.load {I : Inputs} (h : Scope I) (hh : I.tags.hiddenOutputs = false) :
+    HmRow.loadPublic I.tags (circS I) I.publicFile = .ok (pubS I) := Checks.load h hh
+
+theorem Scope.loadH {I : Inputs} (h : Scope I) (hh : I.tags.hiddenOutputs = true) :
+    HmOut.loadPublic I.tags (circS I) I.publicFile = .ok (pubS I) := Checks.loadH h hh
+
+theorem Scope.built {I : Inputs} (h : Scope I) : Built (circS I).unit := Checks.built h
+
+theorem Scope.tables {I : Inputs} (h : Scope I) : (pubS I).tables = none := Checks.tables h
+
+theorem Scope.scope {I : Inputs} (h : Scope I) : Layout.scopeOk (circS I) = true := Checks.scope h
+
+theorem Scope.outNet {I : Inputs} (h : Scope I) : (circS I).outNet = (circS I).unitNet := Checks.outNet h
+
 theorem Scope.count {I : Inputs} (h : Scope I) : I.count ≤ 1 := by
   rcases (check_ok h).1.2.2.2.2 with h' | h'
   · cases h'
   · exact h'
+
+/-! ## A bound under the statement check -/
+
+/-- **A bound at every statement the check passes, lifted to the event that implies the check.** When the event `V`
+implies `A` and the statement fact `Q`, and `A ∧ E q` has probability at most `B q` for every proof `q` of `Q`, then
+`V ∧ ∀ q, E q` has probability at most `⨆ q, B q`: at a statement without `Q`, `V` is empty and the bound is `0`. -/
+theorem prob_scope {α : Type} {V A : α → Prop} {Q : Prop} (hA : ∀ o, V o → A o) (hQ : ∀ o, V o → Q)
+    (E : Q → α → Prop) (B : Q → ENNReal) (g : FlockSoundness.Game α) (s : Game.Strategy g)
+    (h : ∀ q, Game.prob (fun o => A o ∧ E q o) g s ≤ B q) :
+    Game.prob (fun o => V o ∧ ∀ q, E q o) g s ≤ ⨆ q, B q := by
+  by_cases hq : Q
+  · calc Game.prob (fun o => V o ∧ ∀ q, E q o) g s ≤ Game.prob (fun o => A o ∧ E hq o) g s :=
+          Game.prob_mono (fun o ho => ⟨hA o ho.1, ho.2 hq⟩) g s
+      _ ≤ B hq := h hq
+      _ ≤ ⨆ q, B q := le_iSup B hq
+  · calc Game.prob (fun o => V o ∧ ∀ q, E q o) g s ≤ Game.prob (fun _ => False) g s :=
+          Game.prob_mono (fun o ho => hq (hQ o ho.1)) g s
+      _ = 0 := Game.prob_false g s
+      _ ≤ ⨆ q, B q := zero_le
 
 end FlockSoundness.Discharge.FailClosed

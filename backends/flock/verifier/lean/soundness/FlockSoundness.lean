@@ -171,4 +171,5 @@ import FlockSoundness.Discharge.PrivateCircuit
 import FlockSoundness.Discharge.ZkHidden
 import FlockSoundness.Discharge.Composed
 import FlockSoundness.Discharge.ZkEveryCoin
+import FlockSoundness.Discharge.FailClosed
 import FlockSoundness.ZK.PadNonvanishing40
