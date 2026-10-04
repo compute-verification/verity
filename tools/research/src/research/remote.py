@@ -922,6 +922,14 @@ def _read_json(p: Path) -> dict[str, Any] | None:
         return None
 
 
+def _json_line(line: str) -> dict[str, Any]:
+    try:
+        d = json.loads(line)
+    except ValueError:
+        return {}
+    return d if isinstance(d, dict) else {}
+
+
 def _holder_live(runs_root: Path, holder: str) -> bool:
     d = runs_root / holder
     st = _read_json(d / "status.json")
@@ -1617,18 +1625,18 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     tele = ["env", f"PYTHONPATH={tool}", "python3", "-m", "research.telemetry", "cancel-intent", "--actor", "manual",
             "--reason", f"{reason} (research cancel by {by})", "--target-pgid", str(pgid), "--expect-run-dir", rd, "--attempt-dir", rd,
             "--deliver"]
-    script = f"{shlex.join(tele)}; rc=$?; tail -n 1 {shlex.quote(rd)}/events.jsonl; exit $rc"
+    # every line appended since the cancel began: the runner records the workload's exit there as soon as the signal lands
+    script = (f"f={shlex.quote(rd)}/events.jsonl; n=$(wc -l < \"$f\" 2>/dev/null || echo 0); {shlex.join(tele)}; rc=$?; "
+              f"tail -n +$((n + 1)) \"$f\"; exit $rc")
     r = ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["sh", "-c", script], timeout=120)
-    try:
-        res = json.loads(r.stdout.decode(errors="replace").splitlines()[-1])
-    except (IndexError, ValueError):
-        res = {}
     stderr = r.stderr.decode(errors="replace").strip()
     if r.returncode == 2 and "--expect-run-dir" in stderr:
         raise Refused(f"{local_dir.name}'s research package ({tool}) predates the workload check, so nothing was signalled; on the machine, "
                       f"`kill -TERM -{pgid}` once /proc/<pid>/environ of a group member names RESEARCH_RUN_DIR={rd}")
-    if r.returncode == 2 or res.get("kind") != "cancel_result":
-        raise Refused(f"the cancel did not run on the machine (rc {r.returncode}): {stderr[-300:]}")
+    res = next((x for x in map(_json_line, r.stdout.decode(errors="replace").splitlines())
+                if x.get("kind") == "cancel_result" and (x.get("target") or {}).get("pgid") == pgid), None)
+    if res is None:
+        raise Refused(f"the cancel recorded no result on the machine (rc {r.returncode}): {stderr[-300:]}")
     return {"pgid": pgid, "processes": len((res.get("target") or {}).get("members") or []), "delivered": bool(res.get("delivered")),
             "why": res.get("reason")}
 
