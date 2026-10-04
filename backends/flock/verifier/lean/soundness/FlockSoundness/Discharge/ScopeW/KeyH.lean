@@ -21,13 +21,13 @@ set_option Elab.async false
 The readers' addresses are `keyReadersH`'s: `Typed.msgCol` places a row's byte in its chain's compression
 (`HmRow.byteAt`, segment by segment) or, past them, in its `hm96` slot's block, so they hold at every shape.
 
-What is left open, each a named obligation on a `sorry` stub:
-* `keyProgHW_copies`: Δ's copies, at input rows (`copy_siteH`, unchanged) and at output rows of runs (`out_copyH` at
-  `outBitRowW`);
+What `keyRowsHW` needs is proved here:
+* `keyProgHW_copies`: Δ's copies, at input rows (`copy_siteH`, unchanged) and at output rows of runs (`out_copy_keyW`
+  at `outBitRowW`);
 * `keyProgHW_bcPinned`: `keyProgH_bcPinned` at `rowOfHW` (no row's shape is read);
 * `keyProgHW_valPinned`: every computed committed gate is an output row's bit (`outBitRowW`, at runs);
 * `keyRowsHW_computes`: `HmRowComputes` at each row's schema: the `b ‖ c` at the row's `hm96` output is the commit
-  string of `rowEncOf` of the row's value (`bc_site_commitH` at `sha512/row/v2` and `sha512/row-seg/v1` rows).
+  string of `rowEncOf` of the row's value (`bc_site_commitHW` at every shape, with `rowEncOf_row`).
 -/
 
 namespace FlockSoundness.Discharge.ScopeW

@@ -16,8 +16,8 @@ the same expression at:
   segmented row through its segments' digests, a SHA-512 collision when two of its values share an outer message
   (`segPair_spec`).
 
-Its proof is `flock_headline_hidden` at `HmRowsP.toHmRows`, which binds as `rsAtHW` does (`HmRowsP.toHmRows_binding`):
-what is open is the obligations `KeyH.lean`, `Sites.lean` and `RowEnc.lean` name on `sorry` stubs.
+Its proof is `flock_headline_hidden` at `HmRowsP.toHmRows`, which binds as `rsAtHW` does (`HmRowsP.toHmRows_binding`),
+from what `KeyH.lean`, `Sites.lean` and `RowEnc.lean` prove.
 -/
 
 namespace FlockSoundness.Discharge.ScopeW

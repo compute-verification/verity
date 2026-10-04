@@ -15,9 +15,8 @@ set_option Elab.async false
 `keyedRowsOuts`' copies and pins: `Layout.keyProg_copies`, `keyProg_bcPinned` and `keyProg_valPinned` read no row's
 shape. Its layout is `Layout.keyedLayout`, unchanged.
 
-What is left open is `hHm` at the four shapes (`keyedRowsOutsW_computes`, on a `sorry` stub): the `b ‖ c` at a row's
-`hm96` output is the commit string of `rowEncOf` of the row's value (`Hm.bc_site_commit` at `sha512/row/v2` and
-`sha512/row-seg/v1` rows).
+`hHm` at the four shapes is `keyedRowsOutsW_computes`: the `b ‖ c` at a row's `hm96` output is the commit string of
+`rowEncOf` of the row's value (`bc_site_commitW` at every shape, with `rowEncOf_row`).
 -/
 
 namespace FlockSoundness.Discharge.ScopeW

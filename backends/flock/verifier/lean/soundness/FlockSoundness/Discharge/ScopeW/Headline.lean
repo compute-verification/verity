@@ -10,7 +10,7 @@ set_option Elab.async false
 public sites' rows each under its own schema (`rsAtW`, `keyedRowsOutsW`). The statement is the same expression at
 `rsAtW`; `layAt`, `planAt`, `sitesAt` and every other hypothesis are `flock_headline_exec`'s, which read no row's shape.
 Its proof is `Prog.flock_headline_live_on` at `HmRowsP.toHmRows`, which binds as `rsAtW` does
-(`HmRowsP.toHmRows_binding`): what is open is `keyedRowsOutsW_computes` and the encodings' obligations (`RowEnc.lean`).
+(`HmRowsP.toHmRows_binding`), from `keyedRowsOutsW_computes` and the encodings' lemmas (`RowEnc.lean`).
 -/
 
 namespace FlockSoundness.Discharge.ScopeW
