@@ -42,10 +42,10 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (_OBSE
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, MEAN_PINS, RMS_PINS, _pins_ok, gemm_pins_for, lookup_key,
                                                                    tuned_gemm_table_sha256)
 from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import TritonGemmRule, TritonRmsNormRule
-from verity_vllm.program.frontend.rules.vllm_bindings.views import AllocViewRule, IntIdWidenRule
+from verity_vllm.program.frontend.rules.vllm_bindings.views import AllocViewRule, CopyIntoRule, IntIdWidenRule
 
 
-VLLM_BINDING_RULES = [TritonRmsNormRule(), TritonGemmRule(), KvCacheUpdateRule(), UnifiedAttentionWithOutputRule(), AllocViewRule(), IntIdWidenRule(),
+VLLM_BINDING_RULES = [TritonRmsNormRule(), TritonGemmRule(), KvCacheUpdateRule(), UnifiedAttentionWithOutputRule(), AllocViewRule(), IntIdWidenRule(), CopyIntoRule(),
                       CachePadRule(), FusedAddRmsNormBIRule(), ScalarTensorMulRule(), GeluTanhAndMulRule(), Bf16ScalarChainRule(),
                       # [R15 dense] the unfused norm chain (forward_native norms as ATen on an f32 copy)
                       WidenBf16ToF32Rule(), NarrowF32ToBf16Rule(), SquareRule(), MeanDimBIRule(), RsqrtRule(), AddScalarRule(), AddWidenedRule(),

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import torch
 
-from verity.ir.refs import Coll
+from verity.ir.refs import Coll, runs
 from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.torch_frontend import shape_of, width_of
-from verity_vllm.program.frontend.rules.base import RuleInfo, ViewRule
+from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import aten
 
 
@@ -40,6 +40,38 @@ class AllocViewRule(ViewRule):
     def emit(self, node, ctx):
         from verity_vllm.program.frontend.torch_frontend import type_of_tensor
         ctx.define(node, Alloc(type_of_tensor(node.meta["val"]), node), view_of=node.args[0])
+
+
+class CopyIntoRule(InPlaceRule):
+    """`aten.copy_(dst!, src)` of two value collections of one dtype and shape: `dst` now holds `src`'s words (no gate).  When `dst`
+    already denotes exactly `src`'s words (DeepSeek-V2 MLA's `q[..., nope:] = q_pe` after a RoPE that wrote the same columns
+    through), nothing is rebound."""
+    info = RuleInfo("CopyInto[aten]", 1, "in-place-binding", applies_to="aten.copy_(Tensor! dst, src) same dtype, same shape",
+                    preconditions=("dst and src are value collections of the same dtype and shape", "non_blocking is ignored (a stream fact)"),
+                    evidence_domain="structural (data movement, no gates)")
+
+    def targets(self):
+        return {aten.copy_.default}
+
+    def applies(self, node, ctx):
+        dst, src = node.args[:2]
+        for nm, a in (("dst", dst), ("src", src)):
+            if not isinstance(a, torch.fx.Node) or not isinstance(ctx.val(a), Coll):
+                return f"{nm} is not a value collection"
+        if ctx.dtype_of(dst) != ctx.dtype_of(src):
+            return f"dtype {ctx.dtype_of(src)} -> {ctx.dtype_of(dst)} is a conversion, not a copy"
+        if ctx.shape_of_node(dst) != ctx.shape_of_node(src):
+            return f"shape {ctx.shape_of_node(src)} -> {ctx.shape_of_node(dst)} is a broadcast, not a copy"
+        return True
+
+    def emit(self, node, ctx):
+        dst, src = node.args[:2]
+        d, s = ctx.coll(dst), ctx.coll(src)
+        same = runs(d.refs) == runs(s.refs)
+        if not same:
+            ctx.rebind(dst, Coll(d.type, s.refs), self, what="dst")
+        ctx.define(node, ctx.coll(dst), view_of=dst)
+        ctx.record(self, node, {"shape": list(ctx.shape_of_node(dst)), "identity": same}, emitted="(no gates)")
 
 
 # -- token-id widening ------------------------------------------------------------------------------------------------------
