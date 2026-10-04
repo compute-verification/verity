@@ -34,9 +34,10 @@ A construction is a frozen dataclass of its parameters, with a method per princi
 principal's actor (`Replay(k, delta).verifier()`). A trusted principal's method takes its readings (`pinger(elapsed)`).
 Choosing a construction is choosing a value. A composite is a construction whose fields are constructions: its methods
 return the lists of its parts' actors, and its guarantee is proved from theirs. Actors have no names and are not wired:
-anyone can send to anyone, so an actor takes each kind of event only from the principal it trusts for it
-(`receive(kind, sender)`, `gather`). Nothing orchestrates the actors: each moves when an event reaches it, so each
-protocol keeps its own cadence over the log. Order in the log is logical; physical time enters only as trusted
+anyone can send to anyone, so an actor waits for each kind of event only from the principal it trusts for it
+(`receive(kind, sender)`, `gather`, `collect`), and an event keeps in its mailbox until it waits for it. Nothing
+orchestrates the actors: each moves when an event it waits for reaches it, so each protocol keeps its own cadence over
+the log. Order in the log is logical; physical time enters only as trusted
 readouts in what a trusted principal sends.
 
 ## Layers

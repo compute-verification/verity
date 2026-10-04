@@ -2,7 +2,7 @@
 of every execution the prover streams, however many there turn out to be and whatever their advice.
 
     verifier    takes the registration, sends a salt drawn from its secret, takes the stream, and bounds the work
-    prover      once its stream is closed, searches each execution's work for shares under that execution's key
+    prover      once it has the salt, searches each execution's work for shares under that execution's key
 
 Execution i's key is a hash of the salt, i and its root: fixed once the execution is, so nothing about the stream need
 be known when the salt is drawn. What must be fixed before the salt is what the work is reused across: the builder and
@@ -23,7 +23,7 @@ import secrets
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from verity.primitives.events import Actor, Send, collect, gather, receive
+from verity.primitives.events import Actor, Send, collect, receive
 from verity.primitives.randomness import derive
 from verity.primitives.registration import (
     Closed,
@@ -70,7 +70,7 @@ class Pouw:
         return (Send(UsefulWork(digest(registration, executions), valid << self.difficulty, self.delta)),)
 
     def prover(self, registration: Registration, executions: Sequence[Execution]) -> Actor:
-        salt = (yield from gather({Salt: "verifier", Closed: "prover"}))[Salt].salt
+        salt = (yield from receive(Salt, "verifier")).salt
         nonces = {}
         for i, e in enumerate(executions):
             key, tries = _key(salt, i, e), len(built(registration.builder, e.advice)[0].gates)

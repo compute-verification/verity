@@ -6,14 +6,14 @@ one could fix ahead of time (how the scheduler batched and chunked requests, a p
 builder knows how to read. Every circuit it builds holds the baseline (weights, constants) as its first inputs, so
 registering the builder registers the baseline.
 
-Then the prover streams its executions as it runs them, and closes the stream. Per execution: its advice, and one root
-over the value of every boundary wire of the partition the builder gave it (one leaf per wire, in wire order). The
-verifier rebuilds each execution's circuit from its advice: integrity opens and proves against the roots, PoUW keys each
-execution's work from its salt and the root, and NCI checks the partitions as isolation units. Today's reference for the
-commitment: `verity_sampled_proofs.one_stage.registration`.
+Then the prover streams its executions as it runs them, and closes the stream: one epoch. Per execution: its advice,
+and one root over the value of every boundary wire of the partition the builder gave it (one leaf per wire, in wire
+order). The verifier rebuilds each execution's circuit from its advice: integrity opens and proves against the roots,
+PoUW keys each execution's work from its salt and the root, and NCI checks the partitions as isolation units. Today's
+reference for the commitment: `verity_sampled_proofs.one_stage.registration`.
 
 The builder here is Python, which prover and verifier both run, standing in for a provable program (Rust under SP1, say)
-whose id is its program's.
+whose id is its program's; the verifier's rerun stands in for checking a proof that the circuit is its output.
 
 Since a wire is committed once, the region that reads a wire reads what the region that wrote it committed.
 """
@@ -94,13 +94,12 @@ def execute(builder: Builder, advice: str, inputs: tuple[int, ...], scheme: Comm
 
 def serve(registration: Registration, executions: Sequence[Execution], after: type | None = None) -> Actor:
     """The prover's stream: the registration, then each execution and the close, once `after` comes from the verifier
-    (a coin the executions must follow, such as PoUW's salt). The close is also a record, for the prover's actors that
-    answer for the whole stream."""
+    (a coin the executions must follow, such as PoUW's salt)."""
     first = (Send(registration, "verifier"),)
     if after is not None:
         yield from receive(after, "verifier", *first)
         first = ()
-    return (*first, *(Send(e, "verifier") for e in executions), Send(Closed(), "verifier"), Send(Closed()))
+    return (*first, *(Send(e, "verifier") for e in executions), Send(Closed(), "verifier"))
 
 
 def check(registration: Registration, executions: Sequence[Execution], scheme: CommitmentScheme) -> tuple[str, ...]:

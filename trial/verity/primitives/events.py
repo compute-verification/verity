@@ -1,13 +1,16 @@
 """Events: what one principal's actors send to another's, in one ordered log.
 
 An actor is one principal's (a prover's, a verifier's, a replayer's, a pinger's, a warden's) part in one protocol: a
-transducer over the events that reach its principal. Written as a generator: it yields what it sends, receives the
-next event, and returns its last sends when it is done. What it saw and did in between is its own state and never
-enters the log. An event's body is a frozen dataclass whose class is its kind, defined by the module that owns it.
+transducer over the events that reach its principal. Written as a generator: it yields a `Wait`, what it sends and the
+kinds it waits for, each with the principal it takes that kind from (anyone can send to anyone); it is resumed with the
+earliest event it waits for, and returns its last sends when it is done. An event it is not waiting for keeps until it
+is, so the order it waits in loses nothing, and one it never waits for never reaches it. What it saw and did in
+between is its own state and never enters the log. An event's body is a frozen dataclass whose class is its kind,
+defined by the module that owns it.
 
-A send goes to a principal, and every actor of that principal receives it, in log order; a send to no one is a record,
-which the sender's own principal receives. So actors need no names: an actor reads the kinds it reads, and takes each
-only from the principal it trusts for it (`receive`, `gather`), since anyone can send to anyone.
+A send goes to a principal, and every actor of that principal receives it; a send to no one is a record, which the
+sender's own principal receives. So actors need no names: an actor reads the kinds it reads, each from the principal
+it trusts for it (`receive`, `gather`, `collect`).
 """
 
 from __future__ import annotations
@@ -29,40 +32,43 @@ class Event:
     body: object
 
 
-Actor = Generator[tuple[Send, ...], Event, tuple[Send, ...]]
+@dataclass(frozen=True)
+class Wait:
+    sends: tuple[Send, ...]
+    kinds: Mapping[type, str]  # each kind waited for -> the principal it is taken from
 
 
-def gather(trusted: Mapping[type, str], *sends: Send) -> Generator[tuple[Send, ...], Event, dict[type, object]]:
-    """Send `sends`, then wait until a body of each kind in `trusted` has come from the principal it names, in any
-    order; return the first of each, passing over everything else."""
-    out, got = sends, {}
+Actor = Generator[Wait, Event, tuple[Send, ...]]
+
+
+def gather(trusted: Mapping[type, str], *sends: Send) -> Generator[Wait, Event, dict[type, object]]:
+    """Send `sends`, then wait until a body of each kind in `trusted` has come from the principal it names; return the
+    first of each."""
+    got: dict[type, object] = {}
     while len(got) < len(trusted):
-        event = yield out
-        out = ()
-        kind = type(event.body)
-        if kind in trusted and kind not in got and event.sender == trusted[kind]:
-            got[kind] = event.body
+        event = yield Wait(sends, {kind: sender for kind, sender in trusted.items() if kind not in got})
+        sends = ()
+        got[type(event.body)] = event.body
     return got
 
 
-def receive(kind: type, sender: str, *sends: Send) -> Generator[tuple[Send, ...], Event, object]:
+def receive(kind: type, sender: str, *sends: Send) -> Generator[Wait, Event, object]:
     """Send `sends`, then wait for a `kind` from `sender`."""
     return (yield from gather({kind: sender}, *sends))[kind]
 
 
-def collect(kind: type, until: type, sender: str, *sends: Send) -> Generator[tuple[Send, ...], Event, tuple]:
+def collect(kind: type, until: type, sender: str, *sends: Send) -> Generator[Wait, Event, tuple]:
     """Send `sends`, then take every `kind` from `sender`, in order, until an `until` from it: a stream."""
-    out, got = sends, []
+    got = []
     while True:
-        event = yield out
-        out = ()
-        if event.sender == sender and isinstance(event.body, until):
+        event = yield Wait(sends, {kind: sender, until: sender})
+        sends = ()
+        if isinstance(event.body, until):
             return tuple(got)
-        if event.sender == sender and isinstance(event.body, kind):
-            got.append(event.body)
+        got.append(event.body)
 
 
 def tell(*sends: Send) -> Actor:
     """An actor that sends `sends` and nothing more: a declaration, or a reading."""
-    yield sends
-    return ()
+    yield from ()
+    return sends
