@@ -12,12 +12,12 @@ row the domain's `OperandOK` (`Workload.InDomain`). By magnitudes (`RowStats`) t
 
 * `pc8`: `Row8OK` (`row8OK_of_floor`), since `pc8Sem`'s floor is at least `1` only where `ρ`'s word is finite and
   `φ ≥ 0` (`stats8OK_of_rho`);
-* `pc4`: `Row4OK`'s `α` and `β` (`row4OK_of_admit`), since `RowAdmit4` holds only where `β`'s word is finite, with
-  `0 ≤ β` and `e4m3(β)` at least code `8` (`row4OK_stats_of_beta`).
+* `pc4`: `Row4OK` (`row4OK_of_admit`): the rules' word clause asks finite widened BF16 words, which widen back to
+  their values (`widen_of_word`), and `RowAdmit4` holds only where `β`'s word is finite, with `0 ≤ β` and `e4m3(β)`
+  at least code `8` (`row4OK_stats_of_beta`).
 
 What stays named: `Pc8OpsAgree` and `Pc4OpsAgree` (core's primitives), `Noise8OK` (no NaN code in `pc8`'s noise),
-and at each entry of a credited row `Pc8EntryOK` or `Pc4EntryOK` (the peel's rows exist; for `pc4` also that the rows'
-values widen from their BF16 words). `_pearlC` is each on the audit's tiles, and `_domain` on `D_dev`'s whole-tile
+and at each entry of a credited row `Pc8EntryOK` or `Pc4EntryOK` (the peel's rows exist). `_pearlC` is each on the audit's tiles, and `_domain` on `D_dev`'s whole-tile
 layouts and on D₄. At a step `⟨[32], w, z⟩` with `w ≥ 24` (`sm120E4m3`), `D_dev`'s `k ≤ 2^16` and `Noise8OK` give
 `Pc8EntryOK` (`PeelExists`), so `tileCheck8_computesWords_wide` names no hypothesis at an entry.
 -/
@@ -48,20 +48,19 @@ theorem row8OK_of_floor (hops : Pc8OpsAgree ops) (p : Pipeline)
     exact stats8OK_of_rho hops hw hρ (by linarith)
   · norm_num at hf
 
-/-- **A `pc4` row that `RowAdmit4` admits has `Row4OK`'s `α` and `β`**: `pc4Sem`'s `β` is `0` where `β`'s word is not
-finite, and `RowAdmit4` refuses it (`e4m3(0)` is code `0`). -/
+/-- **A `pc4` row of finite widened BF16 words that `RowAdmit4` admits is `Row4OK`**: its words widen back to their
+values (`widen_of_word`), and `pc4Sem`'s `β` is `0` where `β`'s word is not finite, which `RowAdmit4` refuses
+(`e4m3(0)` is code `0`). -/
 theorem row4OK_of_admit (hops : Pc4OpsAgree ops)
     (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k)
-    {K : ℕ} {X : Fin K → ℚ}
-    (hw : ∀ t : Fin K, AccumProofs.StepWord (ops.bf16ToF32 (bf16WordOf (X t))) ∧
-      wordVal (ops.bf16ToF32 (bf16WordOf (X t))) = X t)
-    (h : RowAdmit4 (pc4Sem ops lines).beta K X) : Row4OK ops K X := by
+    {m K i : ℕ} {W : Codes} (hi : i < m) (hw : ∀ l < K, (wordQ (W i l)).isSome ∧ W i l % 2 ^ 16 = 0)
+    (h : RowAdmit4 (pc4Sem ops lines).beta K (wordsVal m K W ⟨i, hi⟩)) : Row4OK ops K (wordsVal m K W ⟨i, hi⟩) := by
   obtain ⟨h0, h8, -⟩ := h
   simp only [pc4Sem] at h0 h8
   split_ifs at h0 h8 with hβ
   · obtain ⟨ha, hap, hb⟩ := row4OK_stats_of_beta hops.toPc8OpsAgree hβ h0 h8
-    exact ⟨hw, ha, hap, hb⟩
+    exact ⟨fun t => widen_of_word hops (hw t t.isLt).1 (hw t t.isLt).2, ha, hap, hb⟩
   · have h00 : (e4m3 0).val = 0 := by decide +kernel
     omega
 
@@ -168,7 +167,7 @@ theorem tileCheck8_computesWords_wide {ops : RowOps} (hops : Pc8OpsAgree ops) {w
 /-- **L3's words for the plain `pc4` Program** (`tileCheck4`) at the record `devFp4Sm120` and `pc4Sem`: on tile rules
 whose tiles lie in their unit, whose credited rows pass `pc4Sem`'s rules (`hrow`) and whose domain has whole-tile
 shapes (`Shape4`), an accepted tile's ticket and useful words have the reference values on every credited row, under
-`Pc4OpsAgree` and the named hypotheses at each entry of a credited row (`Pc4EntryOK`). `Collides` is `False` and never
+`Pc4OpsAgree` and the named hypothesis at each entry of a credited row (`Pc4EntryOK`). `Collides` is `False` and never
 needed. -/
 theorem tileCheck4_computesWords {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : ℚ)
     (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
@@ -192,12 +191,14 @@ theorem tileCheck4_computesWords {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : �
   have hW : (pc4Sem ops lines).OperandOK _ _ (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) :=
     hU.2.2 _ (hunit _ g hg)
   have hE := hent H s U _ c.act ⟨i, him⟩ ⟨j, hjn⟩ hok
+  have hR := hrow _ c.act i hok
   obtain ⟨w1, w2⟩ := entry4_accepts hops hnw hK hM hN X _ c.act _ c.ticket c.useful ⟨i, him⟩ ⟨j, hjn⟩
     (fun v hv => Finset.mem_filter.2 ⟨Finset.mem_univ _, i, hi, j, hj, him, hjn, hv⟩) hcone
     (fun v hv h => hpub ⟨v, hv⟩ (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩))
     (fun v hv h => hreg ⟨v, hv⟩ (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩))
-    (row4OK_of_admit hops lines hE.widenA ((hrow _ c.act i hok).2 him))
-    (row4OK_of_admit hops lines hE.widenB (hW.2 ⟨j, hjn⟩)) hE.peel
+    (fun l hl => (hR.1 l hl).1) (fun l hl => (hW.1 j hjn l hl).1)
+    (row4OK_of_admit hops lines him hR.1 (hR.2 him))
+    (row4OK_of_admit hops lines hjn (hW.1 j hjn) (hW.2 ⟨j, hjn⟩)) hE.peel
   refine ⟨w1.trans ?_, w2.trans ?_⟩
   · show _ = atNat _ i j
     unfold atNat

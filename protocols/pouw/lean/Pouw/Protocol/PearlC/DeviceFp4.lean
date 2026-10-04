@@ -733,14 +733,16 @@ def Fp4Sem.SaltKeyedB (sem : Fp4Sem Q R S) : Prop :=
       ((sem.lines H s U u act).EB, (sem.lines H s U u act).FB) =
         drawB (U.layout.shape u) (H (seedB s (U.weight (U.layout.wid u))))
 
-/-- A committed operand of `p` rows and `q` columns passes Pearl-C4's rules: every word finite, every row passing
-`RowAdmit4`. -/
+/-- A committed operand of `p` rows and `q` columns passes Pearl-C4's rules: every word a widened BF16 word (its low
+16 bits zero) and finite, every row passing `RowAdmit4`. -/
 def Fp4Sem.OperandOK (sem : Fp4Sem Q R S) (p q : ℕ) (W : Codes) : Prop :=
-  (∀ i < p, ∀ l < q, (wordQ (W i l)).isSome) ∧ ∀ i : Fin p, RowAdmit4 sem.beta q (wordsVal p q W i)
+  (∀ i < p, ∀ l < q, (wordQ (W i l)).isSome ∧ W i l % 2 ^ 16 = 0) ∧
+    ∀ i : Fin p, RowAdmit4 sem.beta q (wordsVal p q W i)
 
 /-- Row `i` of a committed operand passes Pearl-C4's rules: `Fp4Sem.OperandOK` on one row. -/
 def Fp4Sem.RowOK (sem : Fp4Sem Q R S) (p q : ℕ) (W : Codes) (i : ℕ) : Prop :=
-  (∀ l < q, (wordQ (W i l)).isSome) ∧ ∀ h : i < p, RowAdmit4 sem.beta q (wordsVal p q W ⟨i, h⟩)
+  (∀ l < q, (wordQ (W i l)).isSome ∧ W i l % 2 ^ 16 = 0) ∧
+    ∀ h : i < p, RowAdmit4 sem.beta q (wordsVal p q W ⟨i, h⟩)
 
 open Classical in
 /-- A tile's credited rows: those whose activation row passes Pearl-C4's rules. -/

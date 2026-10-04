@@ -620,9 +620,10 @@ useful    U/(α_A·α_B), glue
     discount.
   - Honest cost, from shapes alone: 0.54% of credit on Qwen2.5-0.5B, 0.24% on 1.5B, about 0.1% on 3B, 7B and
     Llama-3.2-1B/3B, and at most 0.019% from 8B up.
-- **Admission, per row and salt-free (`row_passes`):** D-NF, a_E is a normal UE4M3 (one a_E per row, so the noise is
-  strictly row-relative). It reads (`dnf`) 0 ≤ β and v in 0x08–0x7E, where v is β's E4M3 byte with its sign; these
-  are the bytes Lean accepts. The pinned stats never make β negative or NaN, but the rule states both cases:
+- **Admission, per row and salt-free (`row_passes`):** every word a finite widened BF16 word (its low 16 bits zero, the
+  only words `parse_row` writes; Lean's `Fp4Sem.RowOK` and `OperandOK`), and D-NF, a_E is a normal UE4M3 (one a_E per
+  row, so the noise is strictly row-relative). It reads (`dnf`) 0 ≤ β and v in 0x08–0x7E, where v is β's E4M3 byte
+  with its sign; these are the bytes Lean accepts. The pinned stats never make β negative or NaN, but the rule states both cases:
   - A negative β would cast to a byte with bit 7 set. At β = −1/4096 the byte 0x80 passes 8 ≤ v alone, and sm_120
     reads it from its low 7 bits as a zero scale, so the row would carry no noise (bc-824e54a2's post-M4 rebuild).
   - A NaN β with its sign clear would cast to 0x7F (bc-22298e90's review).
@@ -848,7 +849,9 @@ scales and codes by the following primitive calls, in this order. Each result is
 The Lean names are `rowMax`, `rowRho`, `alpha8`, `beta8`, `floor8`, `eTilde8`, `code8W`, `alpha4` and `beta4`
 (`Pouw/Protocol/PearlC/RowSem.lean`, namespace `PearlC.RowCircuit`). Pearl-C's and Pearl-C4's semantics at them are `pc8Sem` and
 `pc4Sem`, on the row's words re-encoded (`f32Word`; `pc4`: `bf16WordOf`). Their `α` and `β` are those words read back as
-values. `pc8Sem`'s floor is `φ`'s value plus 1 where `ρ`'s word is finite and `0` where it is not, so the rule
+values. `pc4`'s rules ask finite widened BF16 words, so `bf16WordOf` of a word's value is the word's high half with `−0`
+written `+0`. The `pc4` table registers the high half itself (`rows4`), and a row unit reads `−0` as `+0`
+(`formRow_table`). `pc8Sem`'s floor is `φ`'s value plus 1 where `ρ`'s word is finite and `0` where it is not, so the rule
 `1 ≤ floor` is `ρ` finite and `φ ≥ 0`, the circuit's flag. `pc4Sem`'s `β` is `0` where `β`'s word is not finite, so
 `RowAdmit4` refuses the row, as the circuit's flag (`β ≤ F32_MAX`) does. `pc8Sem`'s forming value is `D_t`'s,
 and its `e4m3` is the code wherever `F32ToE4m3Sat_v1` agrees with `e4m3Word` and `D_t` is not NaN.

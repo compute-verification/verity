@@ -11,10 +11,10 @@ protocol's word functions agree only conditionally:
 
 * `Pc4OpsAgree ops`: core's primitives agree with the protocol's word functions where both are defined. Core's Lean
   semantics will discharge them;
-* `Row4OK`: a row's BF16 words widen to step words of its values, and its `α` (positive) and `β` are step words. Its
-  `α` and `β` are no hypothesis of L3: they follow from `RowAdmit4` (a credited row's by `Fp4Sem.RowOK`, a weight's
-  by the domain's `OperandOK`) by magnitudes (`RowStats`, `TileCheckWords`), so only the widening stays named
-  (`Pc4EntryOK`).
+* `Row4OK`: a row's BF16 words widen to step words of its values, and its `α` (positive) and `β` are step words. It
+  is no hypothesis of L3: the widening follows from the rules' word clause (every word a finite widened BF16 word,
+  `widen_of_word`), and `α` and `β` from `RowAdmit4` by magnitudes (`RowStats`, `TileCheckWords`), at a credited row
+  by `Fp4Sem.RowOK` and a weight row by `OperandOK`.
 
 On these a row unit's codes and scale bytes are `formRow`'s at `pc4Sem`'s `α` and `β` (`row4A_form`, `row4B_form`, so
 `form4A`/`form4B` are `unitForm`'s `A′`/`B̃`), and its `P_A` and `P_B` rows are the FP4 peel's (`row4A_paWords`,
@@ -24,7 +24,9 @@ value (`tile4_devFp4`).
 
 On the whole table a gate holds its assignment's low bits at its width (`val_in4`, `val_tile4`), so where the public
 gates hold the anchors (`anchors4`) and the registered gates `rows4`'s values, an entry's registered words are the
-record's (`entry4_accepts`), at two `Row4OK` rows where the peel's rows exist. `TileCheckWords` composes these into
+record's (`entry4_accepts`), at two rows of finite words with `Row4OK` values where the peel's rows exist. A row's
+gates hold its words' high halves, `pc4Sem`'s BF16 words up to the sign of zero (`zeroSign16_of_wordQ`), which no row
+unit reads (`formRow_table`). `TileCheckWords` composes these into
 L3's words for the plain `pc4` Program on a domain of whole-tile shapes (`Shape4`); D₄'s are
 (`shape4_of_pearlCShapeFp4`). The cap is not part of it.
 -/
@@ -111,9 +113,9 @@ theorem entry4_words {M K N TM TN nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
       ⟨_, (whole4 ops M K N TM TN).unit_lt (whole4_A ops M K N TM TN) i.isLt⟩)
     (hXB : (whole4 ops M K N TM TN).part.Correct X
       ⟨_, (whole4 ops M K N TM TN).unit_lt (whole4_B ops M K N TM TN) j.isLt⟩)
-    (hxa : ∀ l < K, val X ((i : ℕ) * K + l) = encRow16 K (wordsVal M K act i) l)
+    (hxa : ∀ l < K, ZeroSign16 (val X ((i : ℕ) * K + l)) (encRow16 K (wordsVal M K act i) l))
     (hea : ∀ l : Fin 32, val X (eaAt M K + 32 * (i : ℕ) + l) = (z.EA i l).val)
-    (hxb : ∀ l < K, val X (bAt M K + (j : ℕ) * K + l) = encRow16 K (wordsVal N K wt j) l)
+    (hxb : ∀ l < K, ZeroSign16 (val X (bAt M K + (j : ℕ) * K + l)) (encRow16 K (wordsVal N K wt j) l))
     (heb : ∀ l : Fin 32, val X (ebAt M N K + 32 * (j : ℕ) + l) = (z.EB j l).val)
     (hfa : ∀ (t : Fin K) (l : Fin 32), val X (faAt M N K + 32 * (t : ℕ) + l) = (z.FA t l).val)
     (hfb : ∀ (t : Fin K) (l : Fin 32), val X (fbAt M N K + 32 * (t : ℕ) + l) = (z.FB t l).val)
@@ -144,9 +146,9 @@ theorem entry4_words {M K N TM TN nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
     fun a ha => cutB4_input ops M K N TM TN X j.isLt ha
   have hrA := rowIn_false K
   have hrB := rowIn_true K
-  have hxA : ∀ l < K, val ((whole4 ops M K N TM TN).cut X (blockA4 ops M K N) i) l =
-      encRow16 K (wordsVal M K act i) l :=
-    fun l hl => (hinA l (by omega)).trans (by rw [portA8_x hl, hxa l hl])
+  have hxA : ∀ l < K, ZeroSign16 (val ((whole4 ops M K N TM TN).cut X (blockA4 ops M K N) i) l)
+      (encRow16 K (wordsVal M K act i) l) :=
+    fun l hl => by rw [hinA l (by omega), portA8_x hl]; exact hxa l hl
   have heA : ∀ l : Fin 32, val ((whole4 ops M K N TM TN).cut X (blockA4 ops M K N) i) (K + l) = (z.EA i l).val :=
     fun l => (hinA _ (by have := l.isLt; omega)).trans (by rw [portA8_e l.isLt, hea l])
   have hfA : ∀ (t : Fin K) (l : Fin 32),
@@ -156,9 +158,9 @@ theorem entry4_words {M K N TM TN nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
   have hbA : ∀ (t : Fin K) (q : Fin 32),
       val ((whole4 ops M K N TM TN).cut X (blockA4 ops M K N) i) (33 * K + 32 + 32 * t + q) = (z.FB t q).val :=
     fun t q => (hinA _ (by have := t.isLt; have := q.isLt; omega)).trans (by rw [portA8_b q.isLt, hfb t q])
-  have hxB : ∀ l < K, val ((whole4 ops M K N TM TN).cut X (blockB4 ops M K N) j) l =
-      encRow16 K (wordsVal N K wt j) l :=
-    fun l hl => (hinB l (by omega)).trans (by rw [portB8_x hl, hxb l hl])
+  have hxB : ∀ l < K, ZeroSign16 (val ((whole4 ops M K N TM TN).cut X (blockB4 ops M K N) j) l)
+      (encRow16 K (wordsVal N K wt j) l) :=
+    fun l hl => by rw [hinB l (by omega), portB8_x hl]; exact hxb l hl
   have heB : ∀ l : Fin 32, val ((whole4 ops M K N TM TN).cut X (blockB4 ops M K N) j) (K + l) = (z.EB j l).val :=
     fun l => (hinB _ (by have := l.isLt; omega)).trans (by rw [portB8_e l.isLt, heb l])
   have hfB : ∀ (t : Fin K) (l : Fin 32),
@@ -273,7 +275,7 @@ section Rows4
 variable {M N K TM TN : ℕ} (act wt tk us : Codes)
 
 theorem rows4_a {i l : ℕ} (hi : i < M) (hl : l < K) :
-    rows4 M N K TM TN act wt tk us (i * K + l) = bf16WordOf ((wordQ (act i l)).getD 0) := by
+    rows4 M N K TM TN act wt tk us (i * K + l) = act i l / 2 ^ 16 := by
   have hK : 0 < K := by omega
   unfold rows4
   rw [ite_eq_left (show i * K + l < eaAt M K from mul_add_lt hi hl),
@@ -281,7 +283,7 @@ theorem rows4_a {i l : ℕ} (hi : i < M) (hl : l < K) :
     show (i * K + l) % K = l by rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hl]]
 
 theorem rows4_b {j l : ℕ} (hj : j < N) (hl : l < K) :
-    rows4 M N K TM TN act wt tk us (bAt M K + j * K + l) = bf16WordOf ((wordQ (wt j l)).getD 0) := by
+    rows4 M N K TM TN act wt tk us (bAt M K + j * K + l) = wt j l / 2 ^ 16 := by
   have hK : 0 < K := by omega
   obtain ⟨h1, h2, -⟩ := layout8 M N K
   have := mul_add_lt hj hl
@@ -290,6 +292,44 @@ theorem rows4_b {j l : ℕ} (hj : j < N) (hl : l < K) :
     show bAt M K + j * K + l - bAt M K = j * K + l by omega,
     show (j * K + l) / K = j by rw [Nat.add_comm, Nat.add_mul_div_right _ _ hK, Nat.div_eq_of_lt hl, Nat.zero_add],
     show (j * K + l) % K = l by rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hl]]
+
+/-- **A finite word's high half is its value's BF16 word**, or `−0` (`0x8000`) where the value is `0` (`ZeroSign16`):
+a finite word is its value's `f32Word` or `−0` (`zeroSign_of_wordQ`), and a gate holds the low 16 bits. -/
+theorem zeroSign16_of_wordQ {w : ℕ} (h : (wordQ w).isSome) :
+    ZeroSign16 (w / 2 ^ 16 % 2 ^ 16) (bf16WordOf ((wordQ w).getD 0)) := by
+  obtain ⟨x, hx⟩ := Option.isSome_iff_exists.1 h
+  rw [← wordQ_mod32] at hx
+  have hd : w / 2 ^ 16 % 2 ^ 16 = w % 2 ^ 32 / 2 ^ 16 := by
+    rw [show (2 : ℕ) ^ 32 = 2 ^ 16 * 2 ^ 16 by norm_num, Nat.mod_mul_right_div_self]
+  rw [hd, ← wordQ_mod32, hx, Option.getD_some, bf16WordOf]
+  rcases (zeroSign_of_wordQ (Nat.mod_lt _ (by norm_num)) hx).1 with h1 | ⟨h1, h2⟩
+  · exact Or.inl (by rw [h1, Nat.shiftRight_eq_div_pow])
+  · exact Or.inr ⟨by rw [h1]; rfl, by rw [h2]; rfl⟩
+
+/-- **A finite widened BF16 word widens back to itself**: its low 16 bits are zero, so its value's `f32Word` is its
+value's BF16 word shifted left by 16 (`bf16w`), a step word of that value. This is `Row4OK`'s `widen` at a row that
+`Fp4Sem.RowOK` or `OperandOK` passes. -/
+theorem widen_of_word {ops : RowOps} (hops : Pc4OpsAgree ops) {w : ℕ} (hq : (wordQ w).isSome) (h16 : w % 2 ^ 16 = 0) :
+    AccumProofs.StepWord (ops.bf16ToF32 (bf16WordOf ((wordQ w).getD 0))) ∧
+      wordVal (ops.bf16ToF32 (bf16WordOf ((wordQ w).getD 0))) = (wordQ w).getD 0 := by
+  obtain ⟨x, hx⟩ := Option.isSome_iff_exists.1 hq
+  rw [← wordQ_mod32] at hx
+  obtain ⟨hz, hs⟩ := zeroSign_of_wordQ (Nat.mod_lt _ (by norm_num)) hx
+  rw [← wordQ_mod32, hx, Option.getD_some]
+  have hlow : f32Word x % 2 ^ 16 = 0 := by
+    rcases hz with h1 | ⟨-, h2⟩
+    · rw [← h1, Nat.mod_mod_of_dvd _ (by norm_num), h16]
+    · rw [h2, Nat.zero_mod]
+  have hw : ops.bf16ToF32 (bf16WordOf x) = f32Word x := by
+    rw [hops.bf16w _ (bf16WordOf_lt x), bf16WordOf, Nat.shiftLeft_eq, Nat.shiftRight_eq_div_pow]
+    exact Nat.div_mul_cancel (Nat.dvd_of_mod_eq_zero hlow)
+  rw [hw]
+  refine ⟨hs, ?_⟩
+  rcases hz with h1 | ⟨h1, h2⟩
+  · rw [← h1]; simp only [wordVal, hx]
+  · rw [h1, PeelExactProofs.wordQ_negZero] at hx
+    obtain rfl := (Option.some.inj hx).symm
+    rw [h2]; simp [wordVal, Freeze.wordQ_zero]
 
 /-- The registered value on a tile gate of entry `(i, j)`'s block: its ticket word at `C̃`, its useful word at `U`. -/
 theorem rows4_block {i j r : ℕ} (hTM : TM ∣ M) (hTN : TN ∣ N) (hi : i < M) (hj : j < N) (hr : r < block4Len K) :
@@ -428,16 +468,10 @@ end Widths4
 /-- A whole-tile `pc4` shape: `64 ∣ m`, `64 ∣ n` (`pc4.Shape.check`), and `k` a positive multiple of 64. -/
 def Shape4 (sh : Shape) : Prop := 64 ∣ sh.m ∧ 64 ∣ sh.n ∧ ∃ nw, 0 < nw ∧ sh.k = 64 * nw
 
-/-- **The named hypotheses at entry `(i, j)`** of a unit with lines `z`, activations `act` and weights `wt`: the values
-of row `i` of `act` and row `j` of `wt` widen from their BF16 words to step words of themselves (`Row4OK`'s `widen`),
-and the peel's rows exist (`peelRows4`, which `devFp4Sm120`'s useful value reads; where it fails the useful value is
-`none`). -/
+/-- **The named hypothesis at entry `(i, j)`** of a unit with lines `z`, activations `act` and weights `wt`: the peel's
+rows exist (`peelRows4`, which `devFp4Sm120`'s useful value reads; where it fails the useful value is `none`). -/
 structure Pc4EntryOK (ops : RowOps) {m n k : ℕ} (z : Lines4 m n k) (act wt : Codes) (i : Fin m) (j : Fin n) :
     Prop where
-  widenA : ∀ t : Fin k, AccumProofs.StepWord (ops.bf16ToF32 (bf16WordOf (wordsVal m k act i t))) ∧
-    wordVal (ops.bf16ToF32 (bf16WordOf (wordsVal m k act i t))) = wordsVal m k act i t
-  widenB : ∀ t : Fin k, AccumProofs.StepWord (ops.bf16ToF32 (bf16WordOf (wordsVal n k wt j t))) ∧
-    wordVal (ops.bf16ToF32 (bf16WordOf (wordsVal n k wt j t))) = wordsVal n k wt j t
   peel : (peelRows4 sm120Nvf4 (form4A ops z act) (form4B ops z wt) z.FA z.FB
     (fun i => be4 ops (wordsVal m k act i) (z.EA i)) (fun j => be4 ops (wordsVal n k wt j) (z.EB j)) i j).isSome
 
@@ -449,8 +483,9 @@ include hops
 /-- **An accepted entry's registered words are the record's.** On `pc4`'s whole table at a whole-tile shape: where
 every unit in the cone of a set `T` holding entry `(i, j)`'s `C̃` and `U` is correct, the public gates hold the anchors
 of the lines `z` and the registered gates the activations `act`, the weights `wt` and the words `tk`, `us`, then at
-`Row4OK` rows `i` of `act`'s values and `j` of `wt`'s, where the peel's rows exist at `(i, j)`, the registered words
-`tk i j` and `us i j` read as `devFp4Sm120`'s ticket and useful value on `pc4Sem`'s operands. -/
+rows `i` of `act` and `j` of `wt` of finite words whose values are `Row4OK`, where the peel's rows exist at `(i, j)`,
+the registered words `tk i j` and `us i j` read as `devFp4Sm120`'s ticket and useful value on `pc4Sem`'s operands. A
+row's gates hold its words' high halves, `pc4Sem`'s BF16 words up to the sign of zero (`zeroSign16_of_wordQ`). -/
 theorem entry4_accepts {M K N nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
     (hM : 64 ∣ M) (hN : 64 ∣ N) (X : (whole4 ops M K N 64 64).spec.toCircuit.Transcript)
     (z : Lines4 M N K) (act wt tk us : Codes) (i : Fin M) (j : Fin N)
@@ -464,6 +499,7 @@ theorem entry4_accepts {M K N nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
       (g < eaAt M K ∨ (bAt M K ≤ g ∧ g < ebAt M N K) ∨
         ∃ i < M, ∃ j < N, g = cGlob4 M N K 64 64 i j ∨ g = uGlob4 M N K 64 64 i j) →
       X ⟨g, hg⟩ = BitVec.ofNat _ (rows4 M N K 64 64 act wt tk us g))
+    (hwa : ∀ l < K, (wordQ (act i l)).isSome) (hwb : ∀ l < K, (wordQ (wt j l)).isSome)
     (hA : Row4OK ops K (wordsVal M K act i)) (hB : Row4OK ops K (wordsVal N K wt j))
     (hP : (peelRows4 sm120Nvf4 (form4A ops z act) (form4B ops z wt) z.FA z.FB
       (fun i => be4 ops (wordsVal M K act i) (z.EA i)) (fun j => be4 ops (wordsVal N K wt j) (z.EB j)) i j).isSome) :
@@ -475,18 +511,18 @@ theorem entry4_accepts {M K N nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
   obtain ⟨h1, h2, h3, h4, h5, h6⟩ := layout8 M N K
   have hNin := in4_le_N ops (M := M) (K := K) (N := N) (TM := 64) (TN := 64)
   have hea0 : eaAt M K = M * K := rfl
-  have hxa : ∀ l < K, val X ((i : ℕ) * K + l) = encRow16 K (wordsVal M K act i) l := fun l hl => by
+  have hxa : ∀ l < K, ZeroSign16 (val X ((i : ℕ) * K + l)) (encRow16 K (wordsVal M K act i) l) := fun l hl => by
     have := mul_add_lt i.isLt hl
     have hg : (i : ℕ) * K + l < eaAt M K := by omega
     rw [val_in4 ops X (by omega) (by omega) (hreg _ _ (Or.inl hg)), rows4_a act wt tk us i.isLt hl, inW4_a hg,
-      Nat.mod_eq_of_lt (bf16WordOf_lt _), encRow16, dite_eq_left hl]
-    rfl
-  have hxb : ∀ l < K, val X (bAt M K + (j : ℕ) * K + l) = encRow16 K (wordsVal N K wt j) l := fun l hl => by
+      encRow16, dite_eq_left hl]
+    exact zeroSign16_of_wordQ (hwa l hl)
+  have hxb : ∀ l < K, ZeroSign16 (val X (bAt M K + (j : ℕ) * K + l)) (encRow16 K (wordsVal N K wt j) l) :=
+    fun l hl => by
     have := mul_add_lt j.isLt hl
     rw [val_in4 ops X (by omega) (by omega) (hreg _ _ (Or.inr (Or.inl ⟨by omega, by omega⟩))),
-      rows4_b act wt tk us j.isLt hl, inW4_b (by omega) (by omega), Nat.mod_eq_of_lt (bf16WordOf_lt _), encRow16,
-      dite_eq_left hl]
-    rfl
+      rows4_b act wt tk us j.isLt hl, inW4_b (by omega) (by omega), encRow16, dite_eq_left hl]
+    exact zeroSign16_of_wordQ (hwb l hl)
   have hea : ∀ l : Fin 32, val X (eaAt M K + 32 * (i : ℕ) + l) = (z.EA i l).val := fun l => by
     have := i.isLt
     have := l.isLt

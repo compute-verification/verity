@@ -22,6 +22,8 @@ import Pouw.SecurityProofs.PearlC.Block4Sem
 The squares-overflow row (`test_circuit_pc8`'s and `test_circuit_pc4`'s `squares-overflow`: finite words, every 8th one
 `2¹²⁶`) is the vector both refusals are checked on: each sampled square overflows, so `ρ` is `+inf`, and `pc8Sem`
 (`pc8Sem_squaresOverflow`) and `pc4Sem` (`pc4Sem_squaresOverflow`) refuse the row, as Python and the circuit do.
+`Fp4Sem.RowOK` also refuses a word that is not a widened BF16 word and a non-finite word (`rowOK4_notBf16`,
+`rowOK4_nonFinite`), as `pearl_c4.row_passes` does.
 -/
 
 namespace Pouw.PearlC.RowCircuit
@@ -578,6 +580,24 @@ theorem pc4Sem_squaresOverflow (hA : Pc4OpsAgree ops) {Q R S : Type}
   have h0 : (e4m3 0).val = 0 := by decide +kernel
   simp only [hβ, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, h0] at h8
   omega
+
+/-- **`Fp4Sem.RowOK` refuses a word that is not a widened BF16 word** (`test_pouw_pearl_c4`'s
+`test_row_passes_asks_finite_widened_bf16_words`, which Python's `row_passes` refuses): `0x3F800001` (`1 + 2⁻²³`) is
+finite, but its low 16 bits are not zero. -/
+theorem rowOK4_notBf16 {Q R S : Type} (sem : Fp4Sem Q R S) {m K i l : ℕ} {W : Codes} (hl : l < K)
+    (hW : W i l = 0x3F800001) : ¬ sem.RowOK m K W i := by
+  intro h
+  have h16 := (h.1 l hl).2
+  rw [hW] at h16
+  exact absurd h16 (by decide)
+
+/-- **`Fp4Sem.RowOK` refuses a non-finite word** (the same test's `+inf`, `0x7F800000`). -/
+theorem rowOK4_nonFinite {Q R S : Type} (sem : Fp4Sem Q R S) {m K i l : ℕ} {W : Codes} (hl : l < K)
+    (hW : W i l = 0x7F800000) : ¬ sem.RowOK m K W i := by
+  intro h
+  have hf := (h.1 l hl).1
+  rw [hW] at hf
+  exact absurd hf (by decide +kernel)
 
 end Overflow
 

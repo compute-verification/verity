@@ -268,6 +268,18 @@ def test_dnf_rejects_a_negative_beta_whose_byte_would_be_zero_noise():
 
 
 @pytest.mark.parametrize("fmt", FMTS)
+def test_row_passes_asks_finite_widened_bf16_words(fmt):
+    """`row_passes` refuses a row with a word whose low 16 bits are not zero (`0x3F800001`, 1 + 2⁻²³, finite and not a
+    widened BF16 word) and a row with a non-finite word, which `parse_row` never writes, as the Lean's
+    `Fp4Sem.RowOK` and `OperandOK` refuse them (`rowOK4_notBf16`, `rowOK4_nonFinite`); the honest row passes."""
+    f = F.FORMATS[fmt]
+    x = F.parse_row(V.rows("rules", "A", 1, 1024)[0], 1024)
+    assert F.row_passes(f, x)
+    assert not F.row_passes(f, [0x3F800001 if p == 1 else w for p, w in enumerate(x)])
+    assert not F.row_passes(f, [0x7F800000 if p == 1 else w for p, w in enumerate(x)])
+
+
+@pytest.mark.parametrize("fmt", FMTS)
 def test_dead_screen_is_90_rho_squared(fmt):
     """ρ = 1 (every 8th position at 1.0): a block whose |max| is 9.4375 is live, 9.5 (just past √90) and 10 (live under the
     earlier 10ρ) screened."""
