@@ -17,7 +17,7 @@ import FlockSoundness.Discharge.Composed.Headline
   simulated, and the statement charges the probability of those coins, at most `(m − 13)·2^-128` per rep
   (`uncovered_le`).
 
-* `zkViewAll_of_ok`: `ZkViewAll` at a `CoinedSetup` from `CoinedOK`, `hash-derived-key` and `PadNonvanishing`.
+* `zkViewAll_of_ok`: `ZkViewAll` at a `CoinedSetup` from `CoinedOK` and `hash-derived-key`.
 * `uncovered_le`: at a draw's tables, `Pr_c[Admits c ∧ ¬Covered c] ≤ 2·(m − 13)·2^-128`.
 * `zk_session_view_all`: at every draw `verify --zk` sets up, `ZkViewAll` at `2^-193` with that bound.
 -/
@@ -65,7 +65,7 @@ open Classical in
 /-- **One coin vector**: the prover's and the simulator's probabilities at `c` are within `2·|LeafPos|·2^-193`, and `1`
 more where the prover doesn't refuse `c` but `c` isn't covered. -/
 theorem coin_close (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C)
-    (hKey : Assumptions.Zk.HashDerivedKeyHm96) (hPad : Assumptions.Zk.PadNonvanishing40)
+    (hKey : Assumptions.Zk.HashDerivedKeyHm96)
     (w w0 : Witness C.S.m) (hv : C.Valid w) (hreg : ∀ c, (C.T c).tab.sReg w = (C.T c).tab.pubReg)
     (E : ∀ c : CoinsZK C.Rest, (C.T c).tab.View ⊕ (C.T c).tab.Cut → Prop) (c : CoinsZK C.Rest) :
     prCoin (fun p : (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) => E c (outExe C c w p.1 p.2))
@@ -79,7 +79,7 @@ theorem coin_close (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.
   by_cases hA : C.Admits c
   · by_cases hcov : C.Covered c
     · simp only [outExe, simAll, hA, hcov, not_true_eq_false, and_false, ite_true, ite_false, add_zero]
-      obtain ⟨h1, h2⟩ := zkViewAt_of_ok C hC hKey hPad c hcov
+      obtain ⟨h1, h2⟩ := zkViewAt_of_ok C hC hKey c hcov
         (fun v => (Sum.inl (v 0) : (C.T c).tab.View ⊕ (C.T c).tab.Cut)) (fun _ => w) (fun _ => w0) (fun _ => hv)
         (fun _ => hreg c) (E c)
       have eR := ZK.prCoin_congr_equiv (Equiv.funUnique (Fin 1) ((C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt)))
@@ -112,11 +112,11 @@ theorem coin_close (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.
 the coins it doesn't refuse with an outer coin `1` charged. -/
 theorem zkViewAll_of_ok (C : CoinedSetup) [Fintype (CoinsZK C.Rest)]
     (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C)
-    (hKey : Assumptions.Zk.HashDerivedKeyHm96) (hPad : Assumptions.Zk.PadNonvanishing40) :
+    (hKey : Assumptions.Zk.HashDerivedKeyHm96) :
     ZkViewAll C ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
   classical
   intro w w0 hv hreg E
-  have hc := coin_close C hC hKey hPad w w0 hv hreg E
+  have hc := coin_close C hC hKey w w0 hv hreg E
   have hu : avg (fun c => if C.Admits c ∧ ¬ C.Covered c then (1 : ℝ≥0∞) else 0)
       = prCoin (fun c => C.Admits c ∧ ¬ C.Covered c) := by
     unfold prCoin
@@ -215,14 +215,14 @@ levels ≥ 1 (`LigProver`), as `Composed.zk_session_view`. -/
 theorem zk_session_view_all (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
     (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), avoidsMask y.x.st = true)
-    (hKey : Assumptions.Zk.HashDerivedKeyHm96) (hPad : Assumptions.Zk.PadNonvanishing40) :
+    (hKey : Assumptions.Zk.HashDerivedKeyHm96) :
     ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)),
       ZkViewAll (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) ∧
       prCoin (fun c : CoinsZK (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).Rest =>
           (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).Admits c ∧
             ¬ (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).Covered c)
         ≤ 2 * (y.x.st.m - 13 : ℕ) * (2 : ℝ≥0∞) ^ (-128 : ℤ) :=
-  fun S R y => ⟨zkViewAll_of_ok _ (coinedOf_setup (Reg := Reg) P I dj y₀ ht hdm S R y).2.2.2.2.2 hKey hPad,
+  fun S R y => ⟨zkViewAll_of_ok _ (coinedOf_setup (Reg := Reg) P I dj y₀ ht hdm S R y).2.2.2.2.2 hKey,
     uncovered_le P _ _⟩
 
 end FlockSoundness.Discharge.ZkEveryCoin
