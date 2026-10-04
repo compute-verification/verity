@@ -81,7 +81,16 @@ theorem zk_session_drawnHR
           ((rsZHS dj y₀ ht hc hscope hU hpub).bindingZ (rsZHS_computes dj y₀ ht hc hscope hU hpub))
           k Rw M ρ t' (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hRec hDraw)) τ))
           (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hRec hDraw)) τ)) := by
-  sorry
+  have hdec := decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
+    (runsZC_liveH I ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hRec hDraw)
+  have hc' := zk_flock_drawnC_cr execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH dj y₀)
+    (tabAtZKH dj y₀) execArith_correct (placeZH dj y₀ ht hc hscope hU) ((rsZHS dj y₀ ht hc hscope hU hpub).bindingZ (rsZHS_computes dj y₀ ht hc hscope hU hpub)) hk hRw hM hρ hr ht'
+    (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ) hCR
+  exact le_trans (prob_mono (fun o h => ⟨acceptsZK_of_R h.1, h.2⟩) _ _)
+    (zk_headline_exec_drawn execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ (fun _ S => ¬ Disjoint
+      (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH dj y₀) (tabAtZKH dj y₀) ((rsZHS dj y₀ ht hc hscope hU hpub).bindingZ (rsZHS_computes dj y₀ ht hc hscope hU hpub))
+          (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ)) (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ)) k Rw)) S) _ hc')
 
 /-- **The committed values of a hidden-output `--zk --registered` session are the registered values wherever a drawn
 unit reads the registrant's leaf**, except with probability `ε_ks + δ_link + δ_reg`: `zk_session_regValsR` at
@@ -144,6 +153,27 @@ theorem zk_session_regValsHR
         regTermZC execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH (Reg := Reg) dj y₀)
           (tabAtZKH dj y₀) ((rsZHS dj y₀ ht hc hscope hU hpub).bindingZ (rsZHS_computes dj y₀ ht hc hscope hU hpub))
           (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k Rw ρ qW := by
-  sorry
+  have hdec := decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
+    (runsZC_liveH I ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hRec hDraw)
+  have hc' := zk_flock_regValsC_cr execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH dj y₀)
+    (tabAtZKH dj y₀) execArith_correct (placeZH dj y₀ ht hc hscope hU) ((rsZHS dj y₀ ht hc hscope hU hpub).bindingZ (rsZHS_computes dj y₀ ht hc hscope hU hpub))
+    (regOpenZH dj y₀ ht hc hscope hU hpub rd) hk hRw hM hρ hr ht' (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ) hCR hW
+  refine le_trans (prob_mono (fun o h => ⟨acceptsZK_of_R h.1, h.2⟩) _ _)
+    (zk_headline_exec_drawn execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ (fun R S => ∃ u ∈ S,
+      ∃ g ∈ ((keyProg c hU n).partition (Layout.outsOf c hU n)).io u,
+        rd.isRead ((layShH dj y₀ ht hc hscope hU (pub := pub)).pos g) ∧
+        (layShH dj y₀ ht hc hscope hU (pub := pub)).regLeaf R ((layShH dj y₀ ht hc hscope hU (pub := pub)).pos g) = rd.leaf ((layShH dj y₀ ht hc hscope hU (pub := pub)).pos g) ∧
+        XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH dj y₀) (tabAtZKH dj y₀) ((rsZHS dj y₀ ht hc hscope hU hpub).bindingZ (rsZHS_computes dj y₀ ht hc hscope hU hpub))
+            (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ)) (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ)) k Rw g ≠
+          (layShH dj y₀ ht hc hscope hU (pub := pub)).bit (rd.wv ((layShH dj y₀ ht hc hscope hU (pub := pub)).pos g)) g) _
+      (le_trans (prob_mono ?_ _ _) hc'))
+  rintro o ⟨hacc, u, hu, g, hg, hread, hleaf, hne⟩
+  refine ⟨hacc, u, hu, g, hg, ?_, hne⟩
+  refine Prod.ext rfl ?_
+  show ((rsZHS dj y₀ ht hc hscope hU hpub).scheme _).leaf (rd.wv _) (rd.ws _) = _
+  unfold HmRowsZ.scheme
+  split_ifs with hrow
+  · exact hleaf.symm
+  · exact absurd (rd.read_row _ hread) hrow
 
 end FlockSoundness.Discharge.ZkReg
