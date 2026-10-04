@@ -141,17 +141,21 @@ _WORKLOADS: dict[str, dict[int, dict]] = {}
 
 def live_body(session: str | None, model: str) -> dict:
     """The request `record.py` sent for a session named `workload.instance.index`, its first prompt token drawn from the
-    session's name; one token of a one-token prompt for a request no session names."""
+    session's name; one token of a one-token prompt for a request no session names. Without `return_token_ids`, with
+    which vLLM puts the prompt's token ids in the first event, past a frame."""
     import record
 
     if session is None:
-        return json.loads(record.request_body(model, {"prompt": [1], "max_tokens": 1}))
-    name, _, index = session.split(".")
-    if name not in _WORKLOADS:
-        _WORKLOADS[name] = {r["index"]: r for r in record.load_workload(name)}
-    r = _WORKLOADS[name][int(index)]
-    prompt = [random.Random(session).randrange(1000, 100_000), *r["prompt"][1:]]
-    return json.loads(record.request_body(model, {"prompt": prompt, "max_tokens": r["max_tokens"]}))
+        q = {"prompt": [1], "max_tokens": 1}
+    else:
+        name, _, index = session.split(".")
+        if name not in _WORKLOADS:
+            _WORKLOADS[name] = {r["index"]: r for r in record.load_workload(name)}
+        r = _WORKLOADS[name][int(index)]
+        q = {"prompt": [random.Random(session).randrange(1000, 100_000), *r["prompt"][1:]], "max_tokens": r["max_tokens"]}
+    body = json.loads(record.request_body(model, q))
+    del body["return_token_ids"]
+    return body
 
 
 def live_request_bytes(session: str, body: dict, frames: int | None, frame_bytes: int) -> bytes:

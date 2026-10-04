@@ -206,6 +206,12 @@ def test_a_live_server_behind_the_shim_is_accepted(live, setup):
     assert c["hindsight"]["misses"] == 0
 
 
+def test_a_live_request_asks_for_no_token_ids():
+    # vLLM puts the prompt's token ids in the first event with `return_token_ids`, longer than a frame
+    body = ar.live_body(None, "served")
+    assert body["stream"] and body["ignore_eos"] and "return_token_ids" not in body
+
+
 def test_a_live_request_takes_the_frames_asked_for():
     body = {"model": "served", "prompt": list(range(1000, 3000)), "max_tokens": 128}
     fewest = ar.live_request_bytes("b64.3.7", body, None, 4096)
