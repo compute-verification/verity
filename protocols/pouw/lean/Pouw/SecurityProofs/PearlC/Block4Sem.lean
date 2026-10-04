@@ -16,15 +16,15 @@ largest magnitude and `e2m1Word(f32(D_t·nvf4Recip s))`. Here they agree, under 
 
 The floors differ in order: the table floors the FP32 value at `2⁻⁹` and then casts, the protocol casts and then
 floors the code at `0x01`. On a non-negative value the two agree (`e4m3_floor`), since `e4m3` is at least `0x01` from
-`2⁻⁹` up and at most `0x01` below it. A block's words need only be step words (finite, not `−0`): the running max is
-the fold's (`blkMax4_word`), the scale byte is `nvf4Scale`'s (`scale4W_sem`) and the codes are `nvf4Block`'s
-(`code4W_sem`, `block4_sem`). A `−0` formed word would not do: its code is `0x8` in the table and `0x0` in
-`nvf4Block`, of one value.
+`2⁻⁹` up and at most `0x01` below it. On a block of step words (finite, not `−0`) the running max is the fold's
+(`blkMax4_word`), the scale byte is `nvf4Scale`'s (`scale4W_sem`) and the codes are `nvf4Block`'s (`code4W_sem`,
+`block4_sem`).
 
 A formed word is `nvf4NoiseElem`'s (`form4_sem`): the accumulator is `f32Word(α·x)` and the operands and scale bytes
-are `noiseOperand`'s and `noiseScales`'. So a row unit's codes and scale bytes are `formRow`'s at `pc4Sem`'s `α` and
-`β` (`formRow_table`, `row4A_form`, `row4B_form`), under `Row4OK` (the row's BF16 words widen to step words of its
-values, `α > 0` and `β` are step words) and where `formRow`'s noise atoms are step words.
+are `noiseOperand`'s and `noiseScales`'. Every word a firing writes is a step word (`step_stepWord`,
+`toF32RZ_stepWord`), so `formRow`'s noise atoms are (`noiseElem_stepWord`). So a row unit's codes and scale bytes are
+`formRow`'s at `pc4Sem`'s `α` and `β` (`formRow_table`, `row4A_form`, `row4B_form`), under `Row4OK` (the row's BF16
+words widen to step words of its values, `α > 0` and `β` are step words).
 
 On those codes and scale bytes, RowA's `Ẽ` and `P_A` outputs are `peelFp4`'s `P_A` row, `paRow?` of the line's
 `eTilde` at `e4m3(β)` and the chain words against `F_B`'s columns (`row4A_paWords`), and RowB's `P_B` and `−Ẽ`
@@ -422,7 +422,7 @@ theorem block4_sem (hA : Pc4OpsAgree ops) {d : ℕ → ℕ} (hd : ∀ s < 16, Ac
   obtain ⟨hb1, hb2⟩ := nvf4Scale_bounds ha
   refine ⟨by rw [hs]; simp only [nvf4Block, hfold], fun s hsl => ?_⟩
   rw [hs, code4W_sem hA (hd s hsl) hb1 hb2]
-  simp [nvf4Block, hfold, List.getD_eq_getElem?_getD, hsl]
+  simp [nvf4Block, hfold, List.getD_eq_getElem?_getD, hsl, (hd s hsl).2.1]
 
 end Block
 
@@ -550,6 +550,66 @@ theorem flatten_getD {α : Type} {n : ℕ} (d : α) :
         show n * (i + 1) + s - n = n * i + s by rw [Nat.mul_succ]; omega, List.getD_cons_succ]
       exact flatten_getD d L (fun i h => hL (i + 1) (by simp; omega)) i (by simp at hi; omega) s hs
 
+/-! ## A firing writes step words -/
+
+/-- **`toF32RZ` writes step words**: `+0` where the magnitude truncates to zero, otherwise a nonzero magnitude at an
+exponent field below 255 with the sign bit beside it, so never `−0`. -/
+theorem toF32RZ_stepWord {n lsb : ℤ} {w : ℕ} (h : toF32RZ n lsb = some w) : AccumProofs.StepWord w := by
+  unfold toF32RZ at h
+  dsimp only at h
+  generalize hg : (if -126 ≤ (bitLength n.natAbs : ℤ) - 1 + lsb then (bitLength n.natAbs : ℤ) - 1 + lsb - 23
+    else -149) = grid at h
+  have hgrid : -149 ≤ grid := by rw [← hg]; split_ifs <;> omega
+  generalize (if 0 < grid - lsb then n.natAbs >>> (grid - lsb).toNat else n.natAbs <<< (-(grid - lsb)).toNat) = q at h
+  split at h
+  · cases h; exact Fp4Freeze.stepWord_zero
+  next hq0 =>
+  split at h
+  · cases h
+  next h127 =>
+  obtain rfl := Option.some.inj h
+  have hsb : (if n < 0 then 1 else 0) ≤ 1 := by split_ifs <;> omega
+  by_cases he : -126 ≤ (bitLength q : ℤ) - 1 + grid
+  · rw [ite_eq_left he, Fp4Freeze.shift_or]
+    have hE : ((bitLength q : ℤ) - 1 + grid + 127).toNat < 255 := by omega
+    have hE1 : 1 ≤ ((bitLength q : ℤ) - 1 + grid + 127).toNat := by omega
+    have hr : q % 2 ^ 23 < 2 ^ 23 := Nat.mod_lt _ (by norm_num)
+    have hlt : ((bitLength q : ℤ) - 1 + grid + 127).toNat * 2 ^ 23 + q % 2 ^ 23 < 2 ^ 31 := by
+      calc ((bitLength q : ℤ) - 1 + grid + 127).toNat * 2 ^ 23 + q % 2 ^ 23 < 254 * 2 ^ 23 + 2 ^ 23 := by
+            have := Nat.mul_le_mul_right (2 ^ 23) (show ((bitLength q : ℤ) - 1 + grid + 127).toNat ≤ 254 by omega)
+            omega
+        _ ≤ 2 ^ 31 := by norm_num
+    rw [Fp4Freeze.or_sign hlt, ← Nat.add_assoc]
+    exact Fp4Freeze.stepWord_fields hsb hE hr (by have := Nat.mul_le_mul_right (2 ^ 23) hE1; omega)
+  · have hb : bitLength q ≤ 23 := by omega
+    have hq : q < 2 ^ 23 := lt_of_lt_of_le (AccumProofs.bitLength_spec q) (Nat.pow_le_pow_right (by norm_num) hb)
+    rw [ite_eq_right he, Fp4Freeze.or_sign (lt_trans hq (by norm_num)),
+      show (if n < 0 then 1 else 0) * 2 ^ 31 + q = (if n < 0 then 1 else 0) * 2 ^ 31 + 0 * 2 ^ 23 + q by ring]
+    exact Fp4Freeze.stepWord_fields hsb (by norm_num) hq (by omega)
+
+/-- **Every word a firing writes is a step word** (below `2^32`, not `−0`, finite): `+0` where nothing anchors the grid
+or the total is zero, `toF32RZ`'s word otherwise. -/
+theorem step_stepWord (p : Fp4Atom) {acc w : ℕ} {a b : List Nib} {sa sb : List (Fin 256)}
+    (h : p.step acc a b sa sb = some w) : AccumProofs.StepWord w := by
+  unfold Fp4Atom.step at h
+  obtain ⟨ts, -, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain ⟨cv, -, h⟩ := Option.bind_eq_some_iff.1 h
+  dsimp only at h
+  generalize ts.filterMap (fun t => if t.live then some (t.unit - p.fracBits) else none) ++
+    (if cv.mag = 0 then [] else [cv.exp - ((p.accWindow - 1 : ℕ) : ℤ)]) = L at h
+  cases L with
+  | nil => cases h; exact Fp4Freeze.stepWord_zero
+  | cons x xs =>
+    dsimp only at h
+    split_ifs at h <;> first | exact toF32RZ_stepWord h | (cases h; exact Fp4Freeze.stepWord_zero)
+
+/-- **`formRow`'s noise atoms are step words**: each is a firing's word. So a formed row never reads a `−0` noise
+atom. -/
+theorem noiseElem_stepWord {α x β : ℚ} {e f : Fin 32 → Nib} {w : ℕ} (h : nvf4NoiseElem α x β e f = some w) :
+    AccumProofs.StepWord w := by
+  unfold nvf4NoiseElem noiseAtom at h
+  exact step_stepWord _ h
+
 /-- The named conditions on a row `X` of `k` values under which the row units compute `formRow`'s codes and scale
 bytes: each value's BF16 word widens to a step word of that value, and `α` (positive) and `β` are step words. -/
 structure Row4OK (ops : RowOps) (k : ℕ) (X : Fin k → ℚ) : Prop where
@@ -563,15 +623,13 @@ section Row
 
 variable {ops : RowOps}
 
-/-- **A row unit's codes and scale bytes are `formRow`'s** at `pc4Sem`'s `α` and `β`, where `formRow` is in the model
-and its noise atoms are step words: on a row unit's inputs `x` holding `X`'s BF16 words, `e`'s codes and the form basis
-`F`'s, block `q`'s scale byte is `formRow`'s and position `t`'s code is `formRow`'s. -/
+/-- **A row unit's codes and scale bytes are `formRow`'s** at `pc4Sem`'s `α` and `β`, where `formRow` is in the model:
+on a row unit's inputs `x` holding `X`'s BF16 words, `e`'s codes and the form basis `F`'s, block `q`'s scale byte is
+`formRow`'s and position `t`'s code is `formRow`'s. -/
 theorem formRow_table (hA : Pc4OpsAgree ops) {K : ℕ} (hK : 8 ≤ K) (h16 : 16 ∣ K) {X : Fin K → ℚ}
     {e : Fin 32 → Nib} {F : Fin K → Fin 32 → Nib} {x : ℕ → ℕ} (hR : Row4OK ops K X)
     (hx : ∀ l < K, x l = encRow16 K X l) (he : ∀ l : Fin 32, x (K + l) = (e l).val)
-    (hf : ∀ (t : Fin K) (l : Fin 32), x (K + 32 + 32 * t + l) = (F t l).val)
-    (hD : ∀ (t : Fin K) (w : ℕ), nvf4NoiseElem (wordVal (alpha4 ops (encRow16 K X) K)) (X t)
-      (wordVal (beta4 ops (encRow16 K X) K)) e (F t) = some w → AccumProofs.StepWord w) {r : Row4}
+    (hf : ∀ (t : Fin K) (l : Fin 32), x (K + 32 + 32 * t + l) = (F t l).val) {r : Row4}
     (hr : formRow (wordVal (alpha4 ops (encRow16 K X) K)) (wordVal (beta4 ops (encRow16 K X) K)) X e F = some r) :
     (∀ q < K / 16, scale4V ops x K q = (r.2.getD q 0).val) ∧ ∀ t < K, code4V ops x K t = (r.1.getD t 0).val := by
   simp only [formRow, Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hr
@@ -597,7 +655,7 @@ theorem formRow_table (hA : Pc4OpsAgree ops) {K : ℕ} (hK : 8 ≤ K) (h16 : 16 
   have hstep : ∀ q < K / 16, ∀ s < 16, AccumProofs.StepWord (d4W ops x K (16 * q + s)) := by
     intro q hq s hs
     rw [hdW _ (by omega)]
-    exact hD ⟨16 * q + s, by omega⟩ _ (hds' ⟨16 * q + s, by omega⟩)
+    exact noiseElem_stepWord (hds' ⟨16 * q + s, by omega⟩)
   refine ⟨fun q hq => ?_, fun t ht => ?_⟩
   · rw [List.getD_eq_getElem _ _ (by simp; omega), List.getElem_map, List.getElem_map, hblk q hq]
     exact (block4_sem hA (hstep q hq)).1
@@ -622,13 +680,11 @@ theorem row4A_form (hA : Pc4OpsAgree ops) {K : ℕ} (hK : 8 ≤ K) (h16 : 16 ∣
     (T : ((row4A K).spec ops).toCircuit.Transcript) (hT : ((row4A K).spec ops).part.Correct T 0)
     {X : Fin K → ℚ} {e : Fin 32 → Nib} {F : Fin K → Fin 32 → Nib} (hR : Row4OK ops K X)
     (hx : ∀ l < K, val T l = encRow16 K X l) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
-    (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val)
-    (hD : ∀ (t : Fin K) (w : ℕ), nvf4NoiseElem (wordVal (alpha4 ops (encRow16 K X) K)) (X t)
-      (wordVal (beta4 ops (encRow16 K X) K)) e (F t) = some w → AccumProofs.StepWord w) {r : Row4}
+    (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val) {r : Row4}
     (hr : formRow (wordVal (alpha4 ops (encRow16 K X) K)) (wordVal (beta4 ops (encRow16 K X) K)) X e F = some r) :
     (∀ q < K / 16, val T (scale4 K (rowIn K false) q) = (r.2.getD q 0).val) ∧
       ∀ t < K, val T (code4 K (rowIn K false) t) = (r.1.getD t 0).val := by
-  obtain ⟨h1, h2⟩ := formRow_table hA hK h16 hR hx he hf hD hr
+  obtain ⟨h1, h2⟩ := formRow_table hA hK h16 hR hx he hf hr
   exact ⟨fun q hq => (row4A_scale hK T hT hq).trans (h1 q hq),
     fun t ht => (row4A_code hK T hT (by omega)).trans (h2 t ht)⟩
 
@@ -637,13 +693,11 @@ theorem row4B_form (hA : Pc4OpsAgree ops) {K : ℕ} (hK : 8 ≤ K) (h16 : 16 ∣
     (T : ((row4B K).spec ops).toCircuit.Transcript) (hT : ((row4B K).spec ops).part.Correct T 0)
     {X : Fin K → ℚ} {e : Fin 32 → Nib} {F : Fin K → Fin 32 → Nib} (hR : Row4OK ops K X)
     (hx : ∀ l < K, val T l = encRow16 K X l) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
-    (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val)
-    (hD : ∀ (t : Fin K) (w : ℕ), nvf4NoiseElem (wordVal (alpha4 ops (encRow16 K X) K)) (X t)
-      (wordVal (beta4 ops (encRow16 K X) K)) e (F t) = some w → AccumProofs.StepWord w) {r : Row4}
+    (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val) {r : Row4}
     (hr : formRow (wordVal (alpha4 ops (encRow16 K X) K)) (wordVal (beta4 ops (encRow16 K X) K)) X e F = some r) :
     (∀ q < K / 16, val T (scale4 K (rowIn K true) q) = (r.2.getD q 0).val) ∧
       ∀ t < K, val T (code4 K (rowIn K true) t) = (r.1.getD t 0).val := by
-  obtain ⟨h1, h2⟩ := formRow_table hA hK h16 hR hx he hf hD hr
+  obtain ⟨h1, h2⟩ := formRow_table hA hK h16 hR hx he hf hr
   exact ⟨fun q hq => (row4B_scale hK T hT hq).trans (h1 q hq),
     fun t ht => (row4B_code hK T hT (by omega)).trans (h2 t ht)⟩
 
@@ -720,9 +774,7 @@ theorem row4A_paWords (hA : Pc4OpsAgree ops) {K nw : ℕ} (hnw : 0 < nw) (hK : K
     {X : Fin K → ℚ} {e : Fin 32 → Nib} {F FB : Matrix (Fin K) (Fin 32) Nib} (hR : Row4OK ops K X)
     (hx : ∀ l < K, val T l = encRow16 K X l) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
     (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val)
-    (hb : ∀ (t : Fin K) (q : Fin 32), val T (33 * K + 32 + 32 * t + q) = (FB t q).val)
-    (hD : ∀ (t : Fin K) (w : ℕ), nvf4NoiseElem (wordVal (alpha4 ops (encRow16 K X) K)) (X t)
-      (wordVal (beta4 ops (encRow16 K X) K)) e (F t) = some w → AccumProofs.StepWord w) {r : Row4}
+    (hb : ∀ (t : Fin K) (q : Fin 32), val T (33 * K + 32 + 32 * t + q) = (FB t q).val) {r : Row4}
     (hr : formRow (wordVal (alpha4 ops (encRow16 K X) K)) (wordVal (beta4 ops (encRow16 K X) K)) X e F = some r)
     {af pa : List ℕ}
     (haf : (List.ofFn fun q => (cTilde sm120Nvf4 r.1 (colF FB q) r.2 (onesScales sm120Nvf4 K)).bind
@@ -732,7 +784,7 @@ theorem row4A_paWords (hA : Pc4OpsAgree ops) {K nw : ℕ} (hnw : 0 < nw) (hK : K
       val T (post4At K (rowIn K false) + q * (K / 64 + 1) + K / 64) = pa.getD (32 + q) 0 := by
   have h8 : 8 ≤ K := by omega
   have h16 : 16 ∣ K := ⟨4 * nw, by omega⟩
-  obtain ⟨hS, hC⟩ := row4A_form hA h8 h16 T hT hR hx he hf hD hr
+  obtain ⟨hS, hC⟩ := row4A_form hA h8 h16 T hT hR hx he hf hr
   have hlen := (formRow_length h16 hr).1
   obtain ⟨hpa1, hpa2⟩ := PeelExactProofs.paRow_spec hpa List.length_ofFn
   obtain ⟨hafl, hafq⟩ := PeelExactProofs.mapM_ofFn _ 0 haf
@@ -766,9 +818,7 @@ theorem row4B_pbWords (hA : Pc4OpsAgree ops) {K nw : ℕ} (hnw : 0 < nw) (hK : K
     {X : Fin K → ℚ} {e : Fin 32 → Nib} {F FA : Matrix (Fin K) (Fin 32) Nib} (hR : Row4OK ops K X)
     (hx : ∀ l < K, val T l = encRow16 K X l) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
     (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val)
-    (hb : ∀ (t : Fin K) (q : Fin 32), val T (33 * K + 32 + 32 * t + q) = (FA t q).val)
-    (hD : ∀ (t : Fin K) (w : ℕ), nvf4NoiseElem (wordVal (alpha4 ops (encRow16 K X) K)) (X t)
-      (wordVal (beta4 ops (encRow16 K X) K)) e (F t) = some w → AccumProofs.StepWord w) {r : Row4}
+    (hb : ∀ (t : Fin K) (q : Fin 32), val T (33 * K + 32 + 32 * t + q) = (FA t q).val) {r : Row4}
     (hr : formRow (wordVal (alpha4 ops (encRow16 K X) K)) (wordVal (beta4 ops (encRow16 K X) K)) X e F = some r)
     {bf pb : List ℕ} {gL : List (List ℕ)}
     (hbf : (List.ofFn fun q => (cTilde sm120Nvf4 r.1 (colF FA q) r.2 (onesScales sm120Nvf4 K)).bind
@@ -780,7 +830,7 @@ theorem row4B_pbWords (hA : Pc4OpsAgree ops) {K nw : ℕ} (hnw : 0 < nw) (hK : K
       val T (post4At K (rowIn K true) + 32 + 32 * (K / 64 + 35) + q) = pb.getD (32 + q) 0 := by
   have h8 : 8 ≤ K := by omega
   have h16 : 16 ∣ K := ⟨4 * nw, by omega⟩
-  obtain ⟨hS, hC⟩ := row4B_form hA h8 h16 T hT hR hx he hf hD hr
+  obtain ⟨hS, hC⟩ := row4B_form hA h8 h16 T hT hR hx he hf hr
   have hlen := (formRow_length h16 hr).1
   obtain ⟨hpb1, hpb2⟩ := PeelExactProofs.pbRow_spec hpb List.length_ofFn
   obtain ⟨-, hbfq⟩ := PeelExactProofs.mapM_ofFn _ 0 hbf

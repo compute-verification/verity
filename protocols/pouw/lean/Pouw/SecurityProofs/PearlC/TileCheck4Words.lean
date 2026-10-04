@@ -13,8 +13,7 @@ protocol's word functions agree only conditionally:
   semantics will discharge them;
 * `Row4OK`: a row's BF16 words widen to step words of its values, and its `α` (positive) and `β` are step words.
 
-`formRow`'s noise atoms are step words at every row (`atoms4OK`, so no `−0` atom), since every word a firing writes is
-one (`step_stepWord`, `toF32RZ_stepWord`). On these a row unit's codes and scale bytes are `formRow`'s at `pc4Sem`'s `α` and `β` (`row4A_form`, `row4B_form`, so
+On these a row unit's codes and scale bytes are `formRow`'s at `pc4Sem`'s `α` and `β` (`row4A_form`, `row4B_form`, so
 `form4A`/`form4B` are `unitForm`'s `A′`/`B̃`), and its `P_A` and `P_B` rows are the FP4 peel's (`row4A_paWords`,
 `row4B_pbWords`). `entry4_words` chains RowA `i` and RowB `j` into their tile (`TileCheck4`'s `chain4_*`): where the
 three units are correct and the peel's rows exist, entry `(i, j)`'s `C̃` and `U` are `devFp4Sm120`'s ticket and useful
@@ -54,12 +53,6 @@ def form4B {m n k : ℕ} (z : Lines4 m n k) (wt : Codes) : Op4 n := fun j =>
 def be4 {k : ℕ} (X : Fin k → ℚ) (e : Fin 32 → Nib) : Fin 32 → ℕ :=
   eTilde e (e4m3 (wordVal (beta4 ops (encRow16 k X) k)))
 
-/-- `formRow`'s noise atoms at a row `X` of `k` values, its line `e` and the form basis `F` are step words, as
-`row4A_form` reads them. -/
-def Atoms4OK (k : ℕ) (X : Fin k → ℚ) (e : Fin 32 → Nib) (F : Fin k → Fin 32 → Nib) : Prop :=
-  ∀ (t : Fin k) (w : ℕ), nvf4NoiseElem (wordVal (alpha4 ops (encRow16 k X) k)) (X t)
-    (wordVal (beta4 ops (encRow16 k X) k)) e (F t) = some w → AccumProofs.StepWord w
-
 end Sem4
 
 theorem getD_lt32 {o : Option ℕ} (h : ∀ w, o = some w → w < 2 ^ 32) : o.getD 0 < 2 ^ 32 := by
@@ -86,66 +79,6 @@ theorem gram4_lt {m n k : ℕ} (z : Lines4 m n k) (s q : ℕ) : gram4 z s q < 2 
   · norm_num
 
 theorem nib_lt4 (c : Nib) : c.val < 2 ^ 4 := lt_of_lt_of_eq c.isLt (by norm_num)
-
-/-! ## A firing writes step words -/
-
-/-- **`toF32RZ` writes step words**: `+0` where the magnitude truncates to zero, otherwise a nonzero magnitude at an
-exponent field below 255 with the sign bit beside it, so never `−0`. -/
-theorem toF32RZ_stepWord {n lsb : ℤ} {w : ℕ} (h : toF32RZ n lsb = some w) : AccumProofs.StepWord w := by
-  unfold toF32RZ at h
-  dsimp only at h
-  generalize hg : (if -126 ≤ (bitLength n.natAbs : ℤ) - 1 + lsb then (bitLength n.natAbs : ℤ) - 1 + lsb - 23
-    else -149) = grid at h
-  have hgrid : -149 ≤ grid := by rw [← hg]; split_ifs <;> omega
-  generalize (if 0 < grid - lsb then n.natAbs >>> (grid - lsb).toNat else n.natAbs <<< (-(grid - lsb)).toNat) = q at h
-  split at h
-  · cases h; exact Fp4Freeze.stepWord_zero
-  next hq0 =>
-  split at h
-  · cases h
-  next h127 =>
-  obtain rfl := Option.some.inj h
-  have hsb : (if n < 0 then 1 else 0) ≤ 1 := by split_ifs <;> omega
-  by_cases he : -126 ≤ (bitLength q : ℤ) - 1 + grid
-  · rw [ite_eq_left he, Fp4Freeze.shift_or]
-    have hE : ((bitLength q : ℤ) - 1 + grid + 127).toNat < 255 := by omega
-    have hE1 : 1 ≤ ((bitLength q : ℤ) - 1 + grid + 127).toNat := by omega
-    have hr : q % 2 ^ 23 < 2 ^ 23 := Nat.mod_lt _ (by norm_num)
-    have hlt : ((bitLength q : ℤ) - 1 + grid + 127).toNat * 2 ^ 23 + q % 2 ^ 23 < 2 ^ 31 := by
-      calc ((bitLength q : ℤ) - 1 + grid + 127).toNat * 2 ^ 23 + q % 2 ^ 23 < 254 * 2 ^ 23 + 2 ^ 23 := by
-            have := Nat.mul_le_mul_right (2 ^ 23) (show ((bitLength q : ℤ) - 1 + grid + 127).toNat ≤ 254 by omega)
-            omega
-        _ ≤ 2 ^ 31 := by norm_num
-    rw [Fp4Freeze.or_sign hlt, ← Nat.add_assoc]
-    exact Fp4Freeze.stepWord_fields hsb hE hr (by have := Nat.mul_le_mul_right (2 ^ 23) hE1; omega)
-  · have hb : bitLength q ≤ 23 := by omega
-    have hq : q < 2 ^ 23 := lt_of_lt_of_le (AccumProofs.bitLength_spec q) (Nat.pow_le_pow_right (by norm_num) hb)
-    rw [ite_eq_right he, Fp4Freeze.or_sign (lt_trans hq (by norm_num)),
-      show (if n < 0 then 1 else 0) * 2 ^ 31 + q = (if n < 0 then 1 else 0) * 2 ^ 31 + 0 * 2 ^ 23 + q by ring]
-    exact Fp4Freeze.stepWord_fields hsb (by norm_num) hq (by omega)
-
-/-- **Every word a firing writes is a step word** (below `2^32`, not `−0`, finite): `+0` where nothing anchors the grid
-or the total is zero, `toF32RZ`'s word otherwise. -/
-theorem step_stepWord (p : Fp4Atom) {acc w : ℕ} {a b : List Nib} {sa sb : List (Fin 256)}
-    (h : p.step acc a b sa sb = some w) : AccumProofs.StepWord w := by
-  unfold Fp4Atom.step at h
-  obtain ⟨ts, -, h⟩ := Option.bind_eq_some_iff.1 h
-  obtain ⟨cv, -, h⟩ := Option.bind_eq_some_iff.1 h
-  dsimp only at h
-  generalize ts.filterMap (fun t => if t.live then some (t.unit - p.fracBits) else none) ++
-    (if cv.mag = 0 then [] else [cv.exp - ((p.accWindow - 1 : ℕ) : ℤ)]) = L at h
-  cases L with
-  | nil => cases h; exact Fp4Freeze.stepWord_zero
-  | cons x xs =>
-    dsimp only at h
-    split_ifs at h <;> first | exact toF32RZ_stepWord h | (cases h; exact Fp4Freeze.stepWord_zero)
-
-/-- **`formRow`'s noise atoms are step words** at every row, line and basis: each is a firing's word. So a formed row
-never reads a `−0` noise atom. -/
-theorem atoms4OK (ops : RowOps) (k : ℕ) (X : Fin k → ℚ) (e : Fin 32 → Nib) (F : Fin k → Fin 32 → Nib) :
-    Atoms4OK ops k X e F := fun _ _ h => by
-  unfold nvf4NoiseElem noiseAtom at h
-  exact step_stepWord _ h
 
 /-! ## An entry's words -/
 
@@ -187,8 +120,6 @@ theorem entry4_words {M K N TM TN nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
   have h16 : 16 ∣ K := ⟨4 * nw, by omega⟩
   have hk : 64 ∣ K := ⟨nw, hK⟩
   have h8 : 8 ≤ K := by omega
-  have hDA := atoms4OK ops K (wordsVal M K act i) (z.EA i) z.FA
-  have hDB := atoms4OK ops K (wordsVal N K wt j) (z.EB j) z.FB
   have hinA : ∀ a < rowIn K false,
       val ((whole4 ops M K N TM TN).cut X (blockA4 ops M K N) i) a = val X (portA8 M N K i a) :=
     fun a ha => cutA4_input ops M K N TM TN X i.isLt ha
@@ -230,10 +161,10 @@ theorem entry4_words {M K N TM TN nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
     rfl
   have cA := (whole4 ops M K N TM TN).cut_correct X (blockA4 ops M K N) i
   have cB := (whole4 ops M K N TM TN).cut_correct X (blockB4 ops M K N) j
-  obtain ⟨hSA, hCA⟩ := row4A_form hops h8 h16 _ cA hA hxA heA hfA hDA ha
-  obtain ⟨hSB, hCB⟩ := row4B_form hops h8 h16 _ cB hB hxB heB hfB hDB hb
-  have paA := row4A_paWords hops hnw hK _ cA hA hxA heA hfA hbA hDA ha haf hpa
-  have pbB := row4B_pbWords hops hnw hK _ cB hB hxB heB hfB hbB hDB hb hbf hgl hgB hpb
+  obtain ⟨hSA, hCA⟩ := row4A_form hops h8 h16 _ cA hA hxA heA hfA ha
+  obtain ⟨hSB, hCB⟩ := row4B_form hops h8 h16 _ cB hB hxB heB hfB hb
+  have paA := row4A_paWords hops hnw hK _ cA hA hxA heA hfA hbA ha haf hpa
+  have pbB := row4B_pbWords hops hnw hK _ cB hB hxB heB hfB hbB hb hbf hgl hgB hpb
   have hPA : ∀ q < 64, val ((whole4 ops M K N TM TN).cut X (blockA4 ops M K N) i) (paOut4 K q) = pa.getD q 0 := by
     intro q hq
     unfold paOut4
@@ -483,7 +414,7 @@ def Shape4 (sh : Shape) : Prop := 64 ∣ sh.m ∧ 64 ∣ sh.n ∧ ∃ nw, 0 < nw
 
 /-- **The named hypotheses at entry `(i, j)`** of a unit with lines `z`, activations `act` and weights `wt`: `Row4OK`
 at row `i` of `act`'s values and row `j` of `wt`'s, and the peel's rows exist (`peelRows4`, which `devFp4Sm120`'s
-useful value reads; where it fails the useful value is `none`). Their forming's noise atoms need none (`atoms4OK`). -/
+useful value reads; where it fails the useful value is `none`). -/
 structure Pc4EntryOK (ops : RowOps) {m n k : ℕ} (z : Lines4 m n k) (act wt : Codes) (i : Fin m) (j : Fin n) :
     Prop where
   rowA : Row4OK ops k (wordsVal m k act i)

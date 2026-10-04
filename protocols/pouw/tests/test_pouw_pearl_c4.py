@@ -80,6 +80,13 @@ def test_block_scales():
     assert s == 128 and r == P.f32_bits(0.5)
 
 
+def test_nvfp4_blocks_keep_the_sign_of_minus_zero():
+    """`fp32.mul(−0, r)` is −0, so a −0 word's code is 0x8 and a +0 word's 0x0. The Lean's `nvf4Block` pins the same
+    block (`DeviceFp4Gamma.nvf4Block_signedZero`)."""
+    d = [0x80000000, P.f32_bits(1.0)] + [0] * 13 + [0x80000000]
+    assert F.quantize(F.NVFP4, d) == ([8, 7] + [0] * 13 + [8], [0x23])
+
+
 def test_lines_are_turboshake_nibbles():
     seed = bytes(range(32))
     raw = turboshake128(seed + bytes([2]) + (5).to_bytes(4, "little"), F.D_LINE, 16)
