@@ -169,4 +169,6 @@ import FlockSoundness.Discharge.Hidden
 import FlockSoundness.Discharge.ZkCoins
 import FlockSoundness.Discharge.PrivateCircuit
 import FlockSoundness.Discharge.Composed
+import FlockSoundness.Discharge.ZkHidden
 import FlockSoundness.Discharge.ZkReg
+import FlockSoundness.Discharge.ZkPubIn
