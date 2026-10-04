@@ -14,8 +14,11 @@ Definition modules (`DEFINITION_IMPORTS`), so that the registry directory holds 
     lifted.py's record rules    -> verity_vllm/program/lifting/workload.py (GP-01's workload, the lag a record attests, the use document)
 
 A move keeps every name, body and docstring; no Definition is touched, so no Definition id or descriptor digest moves.  Every
-importer in the repository is rewritten (`from M import x`, `import M as A` with `A.x`, relative imports), and dotted and path
-references in text files follow; there are no re-export shims.
+importer in the repository is rewritten (`from M import x`, `import M as A` with `A.x`, relative imports, function-local ones
+too); there are no re-export shims.  Dotted and path references follow in comments, docstrings, Markdown and the test
+allowlists; a Python string literal follows only when it is exactly a moved module or name (`pipeline/cli.py`'s command
+table), and any other literal that names one is left as it is and listed (`left ...`): a string can be data a digest reads,
+as a `Vocabulary`'s notes are.
 
 Rerunnable: on a tree where the split is already applied it changes nothing; on a later `main` it applies the same split to
 whatever the modules hold then, and fails loudly (exit 2, naming the module and the name) where it cannot: a moved name the
