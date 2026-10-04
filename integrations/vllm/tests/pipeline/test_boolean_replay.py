@@ -90,20 +90,26 @@ def test_a_call_without_a_boolean_version_is_not_evaluated_by_name(tmp_path) -> 
 
 
 def test_a_picks_stated_peak_bounds_what_its_evaluation_allocates(tmp_path) -> None:
+    """A process's first evaluation after the prewarm also imports and traces, once (about 7 MB here), which `PEAK_MARGIN`
+    absorbs; which test ran first in the worker decides whether this one sees it, so each evaluation is measured."""
     import tracemalloc
 
     nodes, r = _row(bind(b1.SiluMul, I=1024), Array(2048, W16))
     ev = BR.BooleanRows(nodes, 0)
     ev.prewarm([r])
     gu = np.random.default_rng(5).integers(0, 1 << 16, 2048).astype(np.uint16)
-    tracemalloc.start()
-    try:
-        base = tracemalloc.get_traced_memory()[0]
-        ev(_Index({"out": "act"}), r, {}, [gu])
-        held = tracemalloc.get_traced_memory()[1] - base
-    finally:
-        tracemalloc.stop()
-    assert held <= ev.peak_bytes(r) / BR.PEAK_MARGIN
+
+    def held() -> int:
+        tracemalloc.start()
+        try:
+            base = tracemalloc.get_traced_memory()[0]
+            ev(_Index({"out": "act"}), r, {}, [gu])
+            return tracemalloc.get_traced_memory()[1] - base
+        finally:
+            tracemalloc.stop()
+
+    assert held() <= ev.peak_bytes(r)
+    assert held() <= ev.peak_bytes(r) / BR.PEAK_MARGIN
     nodes, r = _row(bind(b1.Gemm, K=4, N=2), Array(4, W16), Array(2, Array(4, W16)))
     assert BR.BooleanRows(nodes, 0).peak_bytes(r) == 0                   # declined before it allocates
 

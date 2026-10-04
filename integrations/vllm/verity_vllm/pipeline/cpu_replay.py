@@ -145,8 +145,10 @@ def tensor_root(raw: np.ndarray, chunk: int) -> bytes:
     return scheme.fold([scheme.pos_leaf(mv[o:o + chunk]) for o in range(0, len(mv), chunk)])
 
 
-def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any) -> tuple[str, np.ndarray | None, str | None, bool]:
-    """(source, the tensor's bytes when they open against its tensor root, why not, whether the bytes were read at all)."""
+def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str, int] | None = None
+              ) -> tuple[str, np.ndarray | None, str | None, bool]:
+    """(source, the tensor's bytes when they open against its tensor root, why not, whether the bytes were read at all).  ``tp``
+    ({"world", "rank"}): a TP rank's registered tensors are its shards, composed by `weights_of_record.compose`'s shard rule."""
     from verity_vllm.check import weights_of_record as WR
 
     name, dt, shape, nb = tree["names"][i]
@@ -155,7 +157,7 @@ def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any) -> tuple[str,
     else:
         src = "checkpoint"
         try:
-            words, _note = WR.compose(name, list(shape), WORDS[dt][0], ck)
+            words, _note = WR.compose(name, list(shape), WORDS[dt][0], ck, **({"world": int(tp["world"]), "rank": int(tp["rank"])} if tp else {}))
         except (KeyError, ValueError) as e:
             return src, None, f"not composed from the checkpoint: {e}"[:200], False
         raw = np.ascontiguousarray(words).reshape(-1).view(np.uint8)
@@ -166,16 +168,17 @@ def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any) -> tuple[str,
     return src, raw, None, True
 
 
-def open_weights(bundle: Path, tree: dict[str, Any], root_of_record: str | None, ck: Any, *, threads: int = 8
-                 ) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
-    """The registered tensors in the widths the replay reads, each opened against the committed weights root, and the weights check."""
+def open_weights(bundle: Path, tree: dict[str, Any], root_of_record: str | None, ck: Any, *, threads: int = 8,
+                 tp: dict[str, int] | None = None) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+    """The registered tensors in the widths the replay reads, each opened against the committed weights root, and the weights check;
+    ``tp``: those of a TP rank (`_open_one`)."""
     t0 = time.perf_counter()
     names = tree["names"]
     roots = [bytes.fromhex(r) for r in tree["tensor_roots"]]
     folded = scheme.weights_root(bytes.fromhex(tree["geo_digest"]), scheme.names_digest(names), roots).hex()
     servable = [i for i, (_n, dt, _s, _b) in enumerate(names) if dt in WORDS]
     with ThreadPoolExecutor(max(1, threads)) as pool:
-        opened = list(pool.map(lambda i: (i, *_open_one(bundle, tree, i, ck)), servable))
+        opened = list(pool.map(lambda i: (i, *_open_one(bundle, tree, i, ck, tp)), servable))
     words: dict[str, np.ndarray] = {}
     mismatched, unopened, by_src = [], [], {"checkpoint": 0, "bundle": 0}
     for i, src, raw, why, read in opened:

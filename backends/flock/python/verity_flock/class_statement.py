@@ -617,6 +617,10 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         except subprocess.TimeoutExpired:
             return {"all_pass": False, "cases": 0, "failed": [], "finished": False, "timed_out": True, "exit_code": None,
                     "wall_s": round(time.monotonic() - t0, 3)}
+        # all of it, also when the case finishes with a failed verdict: a session that fails inside it (a GPU allocation) says why
+        # only here
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"selftest-{selftest if isinstance(selftest, str) else 'all'}.err").write_text(r.stderr)
         lines = [ln for ln in r.stdout.splitlines() if ln.startswith(("SELFTEST", "NEG"))]
         neg = [json.loads(ln.split("\t", 1)[1]) for ln in lines if ln.startswith("NEG")]
         head = next((json.loads(ln.split("\t", 1)[1]) for ln in lines if ln.startswith("SELFTEST")), None)
