@@ -496,7 +496,8 @@ def test_a_head_with_two_merge_bases_carries_no_grant_and_needs_every_one(tmp_pa
     """Red team of #955: a head merging #30's commit (which `main` merged too) into the reviewed head while keeping the reviewed
     tree drops #30's pins.  Its merge bases with `main` are both the reviewed head's base and #30's commit; `git merge-base`
     printed the first (the newer), against which the head changes what the reviewed one did, so the grant carried and the train
-    reverted #30's pins.  `git merge` diffs against all of them: neither the grant nor the rules may read one."""
+    reverted #30's pins.  `git merge` diffs against all of them: the grant doesn't carry, and the rules, reading the tree the
+    merge writes, see the pins it reverts."""
     from research.store.local import LocalStore
 
     _store_remote(tmp_path, monkeypatch)
@@ -534,8 +535,8 @@ def test_a_head_with_two_merge_bases_carries_no_grant_and_needs_every_one(tmp_pa
     assert sorted(listed) == sorted([_git(main, "rev-parse", "main^1"), theirs])
     assert _git(main, "merge-base", tip, new) == listed[0] == _git(main, "rev-parse", "main^1"), "the base the grant would carry over"
     bases = ", ".join(b[:12] for b in listed)
-    assert (f"research merge: {new[:12]} has 2 merge bases with {tip[:12]} ({bases}), so no one diff says what merging it changes: "
-            f"it needs every grant the rules name until {tip[:12]} is merged into it again") in out
+    merged = _git(main, "merge-tree", "--write-tree", tip, new)
+    assert json.loads(_git(main, "show", f"{merged}:other/lean-audit.json"))["pins"] == {"O.t": {"type_hash": "old"}}
     assert (f"research merge: grant statement-reviewer on pr:20@{old} doesn't carry to {new[:12]}: {new[:12]} has 2 merge bases "
             f"with {tip[:12]} ({bases}), so no one diff says what merging it changes; merging {tip[:12]} into it again gives it "
             f"one") in out

@@ -22,14 +22,15 @@ failure.  Once the queue lands trains it replaces the
 merge request (until then `main` moves only by the coordinator's trains, so ask on Slack too).  Draft state is ignored: agents open PRs as drafts, and
 the ready label is what says one is done.  The hold label keeps a PR out whatever else holds.  The owner is the lane its body names
 on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
-`main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs: a role for changed files
+`main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs, read from what merging
+it into `main` would land (`main`'s tree against the one `git merge-tree` writes; a head that conflicts needs every grant): a role for changed files
 under listed paths (`merge_requires`' syntax, `!` patterns included), or for a change to listed sections of any `lean-audit.json`
 (`pins`, `reads`), and who gives each (`by`, which `status` prints with the label command to a PR waiting on it).  A grant is a
 store label `grant = {role}` on the target `pr:{number}@{head sha}`.  It carries to a new head of the PR that only restacks it or
 merges `main` into it: one whose change against `main` is the granted head's, every file from the same bytes to the same bytes, its
 `lean-audit.json` change included (`carry`, Daniel's ruling of 2 Oct); the queue prints the head each grant carried from, or why one
 didn't.  Any other push needs new grants, and so does a head whose history git can't compare (no merge base with `main`, or
-several: then the rules can't tell what it changes either, and it needs every grant they name).  A `lean-audit.json` change needs no
+several: no one diff against one says what it changes).  A `lean-audit.json` change needs no
 grant when a `lean_review` label on the target, or carried to it the same way, names the audit.json of an `audit.py --update`
 (`--moved` for a move) that printed that whole change as the same statements (`reviewed`).  Grants and ready are read after
 pulling the target's labels (for a carry, every head's) from the store's remote; when that pull can't happen (no remote here, one
@@ -219,27 +220,29 @@ class Rules:
 
     def needs(self, repo: Path, base: str, head: str, reviews: Callable[[], list[dict]] = list,
               log: Callable[[str], None] = lambda s: None) -> set[str]:
-        """The roles whose grants the change `base`...`head` (from their merge base) needs.  A `lean_audit` role isn't needed for a
+        """The roles whose grants merging `head` into `base` needs: judged on what would land, `base`'s tree against the tree `git
+        merge-tree` writes for the merge, so `base`'s own changes since `head` forked never count, whatever merge bases they share
+        (several, after a criss-cross, merge as a virtual base, as `git merge` does).  A `lean_audit` role isn't needed for a
         lean-audit.json whose change one of the `audit.py --update` reports from `reviews()` printed whole as the same statements
-        (`reviewed`): Daniel's ruling (AGENTS.md "Lean") that a guarantee that only moved needs no statement reviewer.  A head with
-        several merge bases with `base` (`merge_bases`) needs every role, with a line saying why: no one diff says what merging
-        it changes, and a wait (the queue) or a refusal of that ref (a train) is how both callers hold a PR back."""
+        (`reviewed`): Daniel's ruling (AGENTS.md "Lean") that a guarantee that only moved needs no statement reviewer.  A head
+        that doesn't merge cleanly needs every role, with a line saying why: no tree says what merging it changes, and a wait (the
+        queue) or a refusal of that ref (a train) is how both callers hold a PR back."""
         from .merge import rule_touches
 
-        mbs = _out(repo, "merge-base", "--all", base, head).split()
-        if len(mbs) > 1:
-            log(f"research queue: {head[:12]} has {len(mbs)} merge bases with {_named(base)} ({', '.join(m[:12] for m in mbs)}), so "
-                f"no one diff says what merging it changes: it needs every grant the rules name until {_named(base)} is merged into it "
-                f"again")
+        r = _git(repo, "merge-tree", "--write-tree", "--no-messages", base, head, check=False)
+        if r.returncode:
+            why = "conflicts with it" if r.returncode == 1 else f"can't be merged into it ({(r.stderr or r.stdout).strip()[-200:]})"
+            log(f"research queue: {head[:12]} {why}, so no tree says what merging it into {_named(base)} changes: it needs every "
+                f"grant the rules name until it merges cleanly")
             return {r.role for r in self.grants}
-        mb = mbs[0]
-        changed = [p for p in _git(repo, "diff", "--name-only", "-z", "--ignore-submodules=none", mb, head).stdout.split("\0") if p]
+        merged = r.stdout.split("\n", 1)[0]
+        changed = [p for p in _git(repo, "diff", "--name-only", "-z", "--ignore-submodules=none", base, merged).stdout.split("\0") if p]
         roles = {r.role for r in self.grants if r.paths and rule_touches(list(r.paths), changed)}
         audits = [p for p in changed if p == "lean-audit.json" or p.endswith("/lean-audit.json")]
         reports = None
         for r in (r for r in self.grants if r.lean_audit and r.role not in roles):
             for p in audits:
-                old, new = ({s: _section(repo, rev, p, s) for s in r.lean_audit} for rev in (mb, head))
+                old, new = ({s: _section(repo, rev, p, s) for s in r.lean_audit} for rev in (base, merged))
                 if old == new:
                     continue
                 reports = reviews() if reports is None else reports

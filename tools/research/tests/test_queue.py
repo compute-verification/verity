@@ -790,6 +790,29 @@ def test_a_change_under_a_name_git_would_quote_needs_its_grants(world):
     assert rules.needs(world.dev, "origin/main", world.change({"integrations/vllm/café.py": "x\n"})) == {"vllm-coordinator"}
 
 
+def test_the_rules_read_what_merging_a_head_with_two_merge_bases_lands(world):
+    """#1041 and #1062: a head stacked on a PR that `main` merged after the head had merged `main` has two merge bases with it;
+    a diff from either counts `main`'s own `integrations/vllm/` changes, so the queue asked for a vllm-coordinator grant the
+    change didn't need.  A head that conflicts with `main` still needs every grant."""
+    rules = Rules.parse(RULES)
+    side = world.change({"s.txt": "stacked on\n"})
+    _move_main(world, {"integrations/vllm/v.py": "main's\n"})
+    head = _merge_main(world, world.change({"x.txt": "x\n"}, base=side))
+    _git(world.dev, "checkout", "-q", "--detach", "origin/main")
+    _git(world.dev, "merge", "-q", "--no-ff", "--no-edit", side)
+    _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
+    _move_main(world, {"integrations/vllm/w.py": "main's later\n"})
+    assert len(_git(world.dev, "merge-base", "--all", "origin/main", head).split()) == 2
+    assert rules.needs(world.dev, "origin/main", head) == set()
+    assert rules.needs(world.dev, "origin/main", _merge_main(world, world.change({"integrations/vllm/v.py": "x\n"}, base=head))) \
+        == {"vllm-coordinator"}
+    _move_main(world, {"a.txt": "main's a\n"})
+    said = []
+    assert rules.needs(world.dev, "origin/main", world.change({"a.txt": "its a\n"}, base=head), log=said.append) == \
+        {g.role for g in rules.grants}
+    assert said and "conflicts with it" in said[0]
+
+
 def test_the_carry_says_what_the_new_head_merged(world):
     """`main`'s tip, an earlier `main` (no longer called a merge of `main`), or commits that cancel out."""
     from research.queue import carry
