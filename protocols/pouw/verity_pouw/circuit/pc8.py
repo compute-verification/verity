@@ -15,7 +15,8 @@ port) has no circuit here.  The hiding Programs are `pc4`'s (``Shape.hidden``): 
 place of C̃ and U, and the rows are C-Flock-committed ports (`PORTS`), with fp32 input rows, fp8-p rows (A′_i ‖ P_A,i,
 B̃_j ‖ P_B,j; `leaves`) and each row's ``ok`` row, and the anchored inputs public input regions.  ``Shape.row_k`` cuts
 each row unit along k into a head, a form per segment of row_k positions and a tail (`rowk`), so that a row unit fits
-C-Flock's block at every served k; off, nothing here changes.
+C-Flock's block at every served k, and ``Shape.tile_sub`` each tile unit into sub-tiles (`tilesub`); off, nothing here
+changes.
 
 ``DEV`` names a device record (`pearl_c_device.DEVICES`): its E4M3 k32 atom (`HopperE4m3QgmmaDot32` on the H100,
 `BlackwellE4m3QmmaDot32` on sm_120) and its promotion period G.  The peel's BF16 k16 step is `HopperBF16WgmmaDot16` on
@@ -327,8 +328,9 @@ def templates(k: int, tile: tuple[int, int] = TILE, dev: str = "sm120",
 @dataclass(frozen=True)
 class Shape:
     """M rows of A and N rows of B at depth k on device ``dev``, cut into tiles of ``tile`` (the scheme's is 64 x 64);
-    ``hidden``, the hiding Programs; ``row_k``, each row unit cut into k / row_k segments (`rowk`; None, today's Programs).
-    `anchors.TileAnchors` reads its units' ports and its anchors' derivations."""
+    ``hidden``, the hiding Programs; ``row_k``, each row unit cut into k / row_k segments (`rowk`); ``tile_sub``, each tile
+    unit cut into sub-tiles of (a, b) words (`tilesub`); None, today's Programs.  `anchors.TileAnchors` reads its units'
+    ports and its anchors' derivations."""
 
     m: int
     k: int
@@ -337,8 +339,9 @@ class Shape:
     dev: str = "sm120"
     hidden: bool = False
     row_k: int | None = None
-    ports = pc4.RowK(PORTS, "PORTS8")
-    derivations = pc4.RowK(DERIVATIONS, "DERIVATIONS8")
+    tile_sub: tuple[int, int] | None = None
+    ports = pc4.Cut(PORTS, "PORTS8")
+    derivations = pc4.Cut(DERIVATIONS, "DERIVATIONS8")
     seeds: ClassVar[dict] = SEEDS
 
     def check(self) -> None:
@@ -352,6 +355,9 @@ class Shape:
         if self.row_k is not None:
             from . import rowk
             rowk.check8(self)
+        if self.tile_sub is not None:
+            from . import tilesub
+            tilesub.check(self)
 
 
 def _weight_units(B, k: int, dev: str, b, eb, fa, fb, g, row_k: int | None = None):
@@ -363,11 +369,11 @@ def _weight_units(B, k: int, dev: str, b, eb, fa, fb, g, row_k: int | None = Non
 
 
 def _call_units(B, k: int, tile: tuple[int, int], dev: str, a, ea, fa, fb, bc, pb, hidden: bool = False,
-                row_k: int | None = None):
+                row_k: int | None = None, sub: tuple[int, int] | None = None):
     """The call's units: (C̃, U, ok), or under hiding (the tile digests by tile row and column, ok); with ``row_k``, each
-    A row's unit cut into `rowk`'s pieces."""
-    tm, tn = tile
-    tp = templates(k, tile, dev, hidden)
+    A row's unit cut into `rowk`'s pieces, and with ``sub`` each tile's into `tilesub`'s sub-tiles and digest units."""
+    tm, tn = sub or tile
+    tp = templates(k, sub or tile, dev, hidden and sub is None)
     m, n = len(a), len(bc)
     if row_k is None:
         rows = B.batch(tp["row_a"], a, ea, fa, fb, axes=(0, 0, None, None))
@@ -379,6 +385,9 @@ def _call_units(B, k: int, tile: tuple[int, int], dev: str, a, ea, fa, fb, bc, p
     blocks = lambda x, h, t: x.reshape(Array(h, Array(t, x.type.elem)))            # noqa: E731
     acs, pas, bcs, pbs = blocks(ac, ms, tm), blocks(pa, ms, tm), blocks(bc, ns, tn), blocks(pb, ns, tn)
     tiles = [B.batch(tp["tile"], acs[rs], bcs, pas[rs], pbs, axes=(None, 0, None, 0)) for rs in range(ms)]
+    if hidden and sub is not None:
+        from . import tilesub
+        return tilesub.digests(B, tiles, m, n, tile, sub), ok
     if hidden:
         return array_of([array_of([tiles[rs][cs] for cs in range(ns)]) for rs in range(ms)]), ok
     cw, uw = (array_of([array_of([tiles[i // tm][j // tn][f][i % tm][j % tn] for j in range(n)]) for i in range(m)])
@@ -463,6 +472,9 @@ def weight(shape: Shape) -> SpecializedDefinition:
 
 def call(shape: Shape) -> SpecializedDefinition:
     shape.check()
+    if shape.tile_sub is not None:
+        from . import tilesub
+        return tilesub.root8(shape, "call")
     if shape.row_k is not None:
         from . import rowk
         return rowk.root8(shape, "call")
@@ -472,6 +484,9 @@ def call(shape: Shape) -> SpecializedDefinition:
 
 def check(shape: Shape) -> SpecializedDefinition:
     shape.check()
+    if shape.tile_sub is not None:
+        from . import tilesub
+        return tilesub.root8(shape, "check")
     if shape.row_k is not None:
         from . import rowk
         return rowk.root8(shape, "check")
@@ -486,13 +501,16 @@ _ROLE_OF = {id(Pc8RowBDef): "row_b", id(Pc8RowADef): "row_a", id(Pc8TileDef): "t
 
 
 def _role_of() -> dict[int, str]:
-    from . import rowk
-    return _ROLE_OF | rowk.ROLE_OF
+    from . import rowk, tilesub
+    return _ROLE_OF | rowk.ROLE_OF | tilesub.ROLE_OF
 
 
 def query(shape: Shape, side: str = "check") -> dict[str, Any]:
-    """`Q_template_instances` over the side's unit templates (`ROLES`, or with ``row_k`` `rowk.ROLES`), in the order its
-    root body first uses them."""
+    """`Q_template_instances` over the side's unit templates (`ROLES`, or with a cut `rowk.ROLES` and `tilesub.ROLES`), in
+    the order its root body first uses them."""
+    if shape.tile_sub is not None:
+        from . import tilesub
+        return PO.template_instances_query(tilesub.unit_templates8(shape, side))
     if shape.row_k is not None:
         from . import rowk
         return PO.template_instances_query(rowk.unit_templates8(shape, side))

@@ -27,7 +27,7 @@ from verity.ml.scalar import BitAnd, SelectBf16
 from verity_pouw.circuit import leaves as L
 from verity_pouw.circuit import pc4, pc8, plan, rowk
 from verity_pouw.circuit.anchors import ANCHORED, Derivation, TileAnchors, public_ports
-from verity_pouw.protocol import DomainError, Tile
+from verity_pouw.protocol import DomainError
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c4 as F
 from verity_pouw.schemes import pearl_kw as P
@@ -156,25 +156,6 @@ def test_pearl_c4_pieces_give_the_whole_rows_outputs(side):
 
 # ---- the roots --------------------------------------------------------------------------------------------------------
 
-def _inputs8(dev: str, k: int, m: int, n: int):
-    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=DEVICES[dev])
-    ctx = V8.ctx_of(f"pc8-rowk-{dev}", (m, k, n), 3, 9)
-    a, b = V8.rows_f32(f"pc8-rowk-{dev}", "A", m, k), V8.rows_f32(f"pc8-rowk-{dev}", "B", n, k)
-    noise = s.noise(ctx)
-    ops = s.encode(ctx, noise, a, b, Tile(tuple(range(m)), tuple(range(n))))
-    fa, fb = C._basis(noise.seed_b, 0, k, C.LINE_NORM_V1), C._basis(noise.seed_b, 1, k, C.LINE_NORM_V1)
-    words = lambda rows: [w for r in rows for w in C.parse_f32_row(r, k)]  # noqa: E731
-    return (words(a), _flat(ops.e_a), words(b), _flat(ops.e_b), _flat(fa), _flat(fb),
-            _flat(C.gram(noise.seed_b, k, C.LINE_NORM_V1, s.device)))
-
-
-def _inputs4(k: int, m: int, n: int):
-    a = [w for i in range(m) for w in V4.row_codes("pc4-rowk", "A", i, k)]
-    b = [w for j in range(n) for w in V4.row_codes("pc4-rowk", "B", j, k)]
-    ea, eb = (_flat(F.line(SEED, role, i) for i in range(c)) for role, c in ((F.ROLE_EA, m), (F.ROLE_EB, n)))
-    return a, ea, b, eb, _flat(F.basis(SEED, F.ROLE_FA, k)), _flat(F.basis(SEED, F.ROLE_FB, k)), _flat(F.gram(F.NVFP4, SEED, k))
-
-
 def _shapes():
     out = [pc8.Shape(2, k, 2, tile=(1, 1), dev=dev, row_k=ks) for dev, k, ks in CUTS8]
     return out + [pc4.Shape(2, K4, 2, tile=(1, 1), row_k=KS4)]
@@ -195,7 +176,7 @@ def test_the_cut_roots_give_todays_outputs(shape, hidden):
     weight's committed rows), plain and hiding."""
     mod, cut = _mod(shape), replace(shape, hidden=hidden)
     today = replace(cut, row_k=None)
-    a, ea, b, eb, fa, fb, g = _inputs8(shape.dev, shape.k, 2, 2) if mod is pc8 else _inputs4(shape.k, 2, 2)
+    a, ea, b, eb, fa, fb, g = CF.inputs8(shape.dev, shape.k, 2, 2) if mod is pc8 else CF.inputs4(shape.k, 2, 2)
     w = evaluate(mod.weight(today), b, eb, fa, fb, g)
     assert evaluate(mod.weight(cut), b, eb, fa, fb, g) == w
     n, k = shape.n, shape.k
