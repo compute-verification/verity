@@ -898,7 +898,8 @@ def ContinuousAudit : Prop :=
 
 /-! ### The background-rebuild exclusion (`Pous.Protocol.Accounting.Rebuild`)
 
-Added on 3 Oct 2026. Statement reviewer: not yet named; a new pin, which also needs a red-team grant before merge. -/
+Added on 3 Oct 2026. Statement reviewer: @lean (`bc-19c498a8`), granted at `f6aaddc36` on 4 Oct 2026, 06:16Z (Slack
+post ts 1791094669.362169); the red team granted the same head. -/
 
 /-- **Under the verifier's cap on an audit's duration: no graded audit lasts long enough to re-encode a whole band
 segment from `W` alone**, with no state about `Π₂`. It is the deployment condition of `BandGradedMeetsFamily`
