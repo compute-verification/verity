@@ -98,12 +98,6 @@ theorem eval_mkK (i₀ i₁ : ℕ) (h₀ : i₀ < nE) (h₁ : i₁ < nE) :
 
 /-! ### The layout's level-0 indices -/
 
-set_option linter.unusedSimpArgs false in
-/-- Close a goal about the pads layout's indices by unfolding them to arithmetic. -/
-local macro "lay_omega" : tactic =>
-  `(tactic| (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc,
-    Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE,
-    Zk.PadLayout.hab] at *; omega))
 
 theorem lgOod_lt (hE : (layOf Tz st).hab = nE) (i : ℕ) (hi : i < (layOf Tz st).nOod0) :
     (layOf Tz st).lgOod i < nE := by
@@ -125,10 +119,10 @@ theorem honestAt_lgOod (i : ℕ) (hi : i < (layOf Tz st).nOod0) :
       ∑ y ∈ Finset.range (2 ^ (Tz.S.m - 7)), eqAt (oodPoint Tz st c r i) y * wordOf zw y := by
   unfold honestAt
   dsimp only
-  rw [ite_eq_right (by lay_omega), ite_eq_right (by lay_omega), ite_eq_right (by lay_omega),
-    ite_eq_right (by lay_omega), ite_eq_right (by lay_omega), ite_eq_right (by lay_omega),
-    ite_eq_right (by lay_omega), ite_eq_right (by lay_omega),
-    ite_eq_left (by lay_omega), show (layOf Tz st).lgOod i - (layOf Tz st).lgOod 0 = i by lay_omega]
+  rw [ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)),
+    ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)),
+    ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)),
+    ite_eq_left (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), show (layOf Tz st).lgOod i - (layOf Tz st).lgOod 0 = i by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)]
 
 /-- Lane round `j`'s message coordinates. -/
 theorem honestAt_lgMsg (j t : ℕ) (hj : j < Tz.sch.k0) (ht : t < 4) :
@@ -138,11 +132,11 @@ theorem honestAt_lgMsg (j t : ℕ) (hj : j < Tz.sch.k0) (ht : t < 4) :
       if t % 2 = 0 then (coords execArith x).1 else (coords execArith x).2 := by
   unfold honestAt
   dsimp only
-  rw [ite_eq_right (by lay_omega), ite_eq_right (by lay_omega), ite_eq_right (by lay_omega),
-    ite_eq_right (by lay_omega), ite_eq_right (by lay_omega), ite_eq_right (by lay_omega),
-    ite_eq_right (by lay_omega), ite_eq_right (by lay_omega), ite_eq_right (by lay_omega),
-    ite_eq_left (by lay_omega),
-    show (layOf Tz st).lgMsg j t - (layOf Tz st).lgMsg 0 0 = 4 * j + t by lay_omega,
+  rw [ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)),
+    ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)),
+    ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)),
+    ite_eq_left (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)),
+    show (layOf Tz st).lgMsg j t - (layOf Tz st).lgMsg 0 0 = 4 * j + t by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega),
     show (4 * j + t) / 4 = j by omega, show (4 * j + t) % 4 = t by omega]
 
 theorem honestAt_lgMsg_fst (j : ℕ) (hj : j < Tz.sch.k0) :
@@ -169,11 +163,11 @@ theorem honestAt_lgE (i : Fin 2) :
     intro t ht
     unfold honestAt
     dsimp only
-    rw [ite_eq_right (by lay_omega), ite_eq_right (by lay_omega), ite_eq_right (by lay_omega),
-      ite_eq_right (by lay_omega), ite_eq_right (by lay_omega), ite_eq_right (by lay_omega),
-      ite_eq_right (by lay_omega), ite_eq_right (by lay_omega), ite_eq_right (by lay_omega),
-      ite_eq_right (by lay_omega), ite_eq_left (by lay_omega),
-      show (layOf Tz st).lgE i t - (layOf Tz st).lgE 0 0 = 2 * i.val + t by lay_omega,
+    rw [ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)),
+      ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)),
+      ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)),
+      ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_left (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)),
+      show (layOf Tz st).lgE i t - (layOf Tz st).lgE 0 0 = 2 * i.val + t by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega),
       show (2 * i.val + t) / 2 = i.val by omega, show (2 * i.val + t) % 2 = t by omega]
     interval_cases t <;> rfl
   rw [key 0 (by omega), key 1 (by omega)]
