@@ -9,6 +9,10 @@ from research import disk, remote
 
 SRC = str(Path(remote.__file__).resolve().parents[1])
 TB = 1000 * disk.GB
+#: `research disk-hold`'s entry point on a filesystem reported empty: on this host's own disk, past 80% full, the command
+#: under test is held until it falls to 75%, and the test waits as long
+EMPTY_DISK = ("import shutil, sys; shutil.disk_usage = lambda p: (100, 0, 100); "
+              "from research import disk; sys.exit(disk.main(sys.argv[1:]))")
 
 
 def _disk(used_tb: list[float]):
@@ -29,7 +33,7 @@ def test_it_admits_at_once_up_to_80_percent_and_holds_past_it_until_75():
 
 
 def test_the_command_runs_in_its_place_once_admitted(tmp_path):
-    out = subprocess.run([sys.executable, "-m", "research", "disk-hold", "--gb", "0", "--path", str(tmp_path), "--",
+    out = subprocess.run([sys.executable, "-c", EMPTY_DISK, "--gb", "0", "--path", str(tmp_path), "--",
                           sys.executable, "-c", "print('ran')"], capture_output=True, text=True, env={"PYTHONPATH": SRC})
     assert out.returncode == 0 and out.stdout.strip() == "ran"
     assert subprocess.run([sys.executable, "-m", "research", "disk-hold", "--gb", "0", "--path", str(tmp_path)],
