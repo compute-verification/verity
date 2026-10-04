@@ -3,8 +3,9 @@ loads it for the children it forks and for its own process, and `sitecustomize` 
 
 Each open of one of the suite's test modules (a `test_*.py` under `VERITY_SUITE_DIR`), or of a repository file outside the suite's
 inputs (`VERITY_SUITE_ALLOW`, relative to `VERITY_SUITE_ROOT`), is appended at once to `VERITY_SUITE_READS` as a line
-`R|O<tab>module<tab>path`. The module is the test module `VERITY_SUITE_MODULE` names: the guard sets it while one is collected or
-its tests run, and a child inherits it. One write per open, so a forked child that ends through `os._exit` loses nothing.
+`R|O<tab>module<tab>path[<tab>test]`. The module is the test module `VERITY_SUITE_MODULE` names: the guard sets it while one is
+collected or its tests run, and a child inherits it; the test is the node id `VERITY_SUITE_TEST` names while one runs. One write
+per open, so a forked child that ends through `os._exit` loses nothing.
 
 It also traces what a per-test key narrowed to the files the tests use (`suites.py`, `Traced`) must hold, each once per process:
 - `F` a repository file opened or loaded as a shared library, outside the interpreter's environment and this tracer; a cached
@@ -108,20 +109,20 @@ class Reads:
             return "X", event
         return None
 
-    def write(self, kind: str, module: str, rel: str) -> None:
+    def write(self, kind: str, module: str, rel: str, test: str = "") -> None:
         if not self.log:
             return
         self.busy = True
         try:
             fd = os.open(self.log, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
             try:
-                os.write(fd, f"{kind}\t{module}\t{rel}\n".encode())
+                os.write(fd, (f"{kind}\t{module}\t{rel}" + (f"\t{test}" if test else "") + "\n").encode())
             finally:
                 os.close(fd)
         finally:
             self.busy = False
 
-    def seen(self, event: str, args: tuple, module: str) -> None:
+    def seen(self, event: str, args: tuple, module: str, test: str = "") -> None:
         if self.busy:
             return
         if event == "open" and args and not isinstance(args[0], int):
@@ -130,7 +131,7 @@ class Reads:
             except TypeError:
                 return
             if (hit := self.classify(path)) is not None:
-                self.write(hit[0], module, hit[1])
+                self.write(hit[0], module, hit[1], test if hit[0] == "O" else "")
         try:
             hit = self.trace(event, args)
         except (TypeError, ValueError):
@@ -141,5 +142,5 @@ class Reads:
 
     def install(self) -> None:
         """Trace this process (a child a test started): every open, attributed to the module it inherited."""
-        module = os.environ.get("VERITY_SUITE_MODULE", "*")
-        sys.addaudithook(lambda event, args: self.seen(event, args, module))
+        module, test = os.environ.get("VERITY_SUITE_MODULE", "*"), os.environ.get("VERITY_SUITE_TEST", "")
+        sys.addaudithook(lambda event, args: self.seen(event, args, module, test))
