@@ -66,8 +66,9 @@ def call_boundaries_cmd(row: Any) -> list[str] | None:
                    "--gate-out", f"{row.d}/call_boundaries.json", "--out", boundary_path(row))
 
 
-def plan(row: Any) -> None:
-    """The plan stage; a FAIL stops the row (exit 15)."""
+def plan(row: Any, *, required: bool = True) -> None:
+    """The plan stage; a FAIL stops the row (exit 15) when it is `required`, else it leaves no plan and the Commit derives what the plan
+    would have held (the plan a Build task ends with, `SingleRow.run`)."""
     d, out = row.d, path(row)
     row.tl("stage.plan", "start")
     t0 = int(time.time())
@@ -87,7 +88,11 @@ def plan(row: Any) -> None:
     ok = "PASS" if rc == 0 and os.path.isfile(out) else "FAIL"
     row.verdict("plan", ok, f"rc={rc} wall={wall}s {_tail(f'{d}/plan.log')}")
     row.tl("stage.plan", "end", ("ok", ok), ("wall_s", wall))
-    if ok != "PASS":
+    if ok != "PASS" and not required:
+        if os.path.exists(out):
+            os.remove(out)
+        row.log("PLAN FAIL -> no plan: the Commit derives its producer facts")
+    elif ok != "PASS":
         row.log("PLAN FAIL -> stop")
         row.tl("row", "end", ("ok", "false"), ("stopped_at", "plan"))
         raise Stop(15)

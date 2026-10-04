@@ -130,6 +130,37 @@ def maskWordsOf (st : Stmt) : List ℕ :=
   | some r => (List.range (2 ^ st.nbl)).flatMap fun b =>
       (List.range (2 ^ (r.slotLog - 7))).map fun j => b * 2 ^ (st.c.kLog - 7) + r.start / 128 + j
 
+/-- Column `i` is in the first mask range's word-aligned span, decidably (`Inner/Holds.lean`'s `MaskCol`). -/
+def maskColB (st : Stmt) (i : ℕ) : Bool :=
+  match st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) with
+  | none => false
+  | some r => decide (r.start / 128 ≤ i / 128 ∧ i / 128 < r.start / 128 + 2 ^ (r.slotLog - 7))
+
+/-- **Δ avoids the mask slot**: no pair of Δ (`da`, `db`) has a row or a column in the mask range's span. A condition on
+the parsed statement, which the honest prover checks on the statement it builds: `HmRow.check` does not imply it, since
+`Net.ofRows` bounds no output group's column, so a wire's source can lie in the mask range. -/
+def deltaAvoidsMask (st : Stmt) : Bool :=
+  (st.da.toList ++ st.db.toList).all fun p => !maskColB st p.1 && !maskColB st p.2
+
+/-- Every cell of every region (`regionsOf`, the in-block address of each region bit) lies outside the mask range. -/
+def regionCellsOff (st : Stmt) : Bool :=
+  (regionsOf st).all fun R => (List.range (2 ^ R.free.length)).all fun i => !maskColB st (R.inBlock i)
+
+/-- Every region differs from every mask-slot word at an in-block word bit it fixes: some bit `i + 7 < k_log`, not free,
+whose fixed value is not bit `i` of the word. -/
+def regionWordsOff (st : Stmt) : Bool :=
+  st.regions.toList.all fun reg => (maskWordsOf st).all fun x =>
+    (List.range (st.c.kLog - 7)).any fun i => !reg.free.contains (i + 7) &&
+      ((reg.mask >>> (i + 7)) % 2 == 1 && (reg.fixed >>> (i + 7)) % 2 == 1) != x.testBit i
+
+/-- **The regions avoid the mask slot**, by cell and by word: `HmRow.check` does not imply it, since `Circuit.outRegion`
+and `HmRow.regions`' tail region sit at an output group's column, which `Net.ofRows` does not bound. -/
+def regionsAvoidMask (st : Stmt) : Bool := regionCellsOff st && regionWordsOff st
+
+/-- **The statement avoids the mask slot**: its Δ (`deltaAvoidsMask`) and its regions (`regionsAvoidMask`). A condition on
+the parsed statement, which the honest prover checks on the statement it builds. -/
+def avoidsMask (st : Stmt) : Bool := deltaAvoidsMask st && regionsAvoidMask st
+
 /-- **A region's public bit at witness index `idx`** (`regionValue`): bit `i` of the region's bytes at block `b`, `i` the
 index's free bits and `b` its block bits. Only its values inside the region's subcube matter: a region claim's `eq`
 weight vanishes off it (`regionPoint` fixes the other coordinates). -/

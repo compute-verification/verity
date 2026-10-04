@@ -1,3 +1,4 @@
+import FlockSoundness.Discharge.Composed.Sound
 import FlockSoundness.Discharge.Composed.Base
 import FlockSoundness.Discharge.Composed.Coined
 import FlockSoundness.Discharge.Composed.Headline
@@ -6,11 +7,19 @@ import FlockSoundness.Discharge.Composed.Geometry
 import FlockSoundness.Discharge.Composed.Pads
 import FlockSoundness.Discharge.Composed.Inner
 import FlockSoundness.Discharge.Composed.Inner.Holds
+import FlockSoundness.Discharge.Composed.Inner.Zerocheck
+import FlockSoundness.Discharge.Composed.Inner.ZerocheckMasked
+import FlockSoundness.Discharge.Composed.Inner.ZerocheckReplay
+import FlockSoundness.Discharge.Composed.Inner.Lincheck
+import FlockSoundness.Discharge.Composed.Inner.RingSwitch
+import FlockSoundness.Discharge.Composed.Inner.ZerocheckGlue
+import FlockSoundness.Discharge.Composed.Inner.LincheckReplay
 import FlockSoundness.Discharge.Composed.Setup
 import FlockSoundness.Discharge.Composed.Refine
 
 /-!
 # One `--zk` sampled session: soundness and zero knowledge composed
 
-The headline is in `Composed/Headline.lean`; the soundness half's pieces in `Composed/Defs.lean`, the draw's `Coined` tables in `Composed/Coined.lean`.
+The soundness half is in `Composed/Sound.lean`, its pieces in `Composed/Defs.lean`; the composed headline in
+`Composed/Headline.lean`, the draw's `Coined` tables in `Composed/Coined.lean`.
 -/
