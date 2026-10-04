@@ -7,9 +7,9 @@ set_option Elab.async false
 /-!
 # The widened headlines with R11b's message half discharged
 
-`HdecCor`'s corollaries at the widened scope: `flock_headline_exec_decW` is `flock_headline_execW` with `hdec` replaced
-by `decodesOn_exec`'s hypotheses, `flock_headline_exec_hidden_decW` is `flock_headline_exec_hiddenW` with `hdec` replaced
-by `decodesOn_execH`'s. The decoders read no row's shape, so the hypotheses that replace `hdec` are `HdecCor`'s.
+`HdecCor`'s corollaries at the widened scope: `flock_headline_exec_decW` is `flock_headline_execW` with `hdec`
+replaced by `decodesOn_exec`'s hypotheses, `flock_headline_exec_hidden_decW` is `flock_headline_exec_hiddenW` with
+`hdec` replaced by `decodesOn_execH`'s. The decoders read no row's shape, so the hypotheses that replace `hdec` are `HdecCor`'s.
 -/
 
 namespace FlockSoundness.Discharge.ScopeW

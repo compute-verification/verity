@@ -54,7 +54,8 @@ structure HmRowsP (lay : Layout P plan tab decode) where
   bcAt : (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) → lay.Pos → Fin 128 → Fin 8 →
     Fin (2 ^ (Audit.Partition.tabOf plan tab S R u).S.m)
   bc_registered : ∀ S R u, u ∈ S → ∀ M, Binding.Sat plan tab S R u M → ∀ g ∈ P.io u, isRow (lay.pos g) →
-    H512 (K512.leafPrefix ++ bytesAt (Binding.wit plan tab S R u M) (bcAt S R u (lay.pos g))) = lay.regLeaf R (lay.pos g)
+    H512 (K512.leafPrefix ++ bytesAt (Binding.wit plan tab S R u M) (bcAt S R u (lay.pos g))) =
+      lay.regLeaf R (lay.pos g)
   other_registered : ∀ S R u, u ∈ S → ∀ M, Binding.Sat plan tab S R u M → ∀ g ∈ P.io u, ¬ isRow (lay.pos g) →
     (other (lay.pos g)).leaf (lay.row S R u M (lay.pos g)) (lay.salt S R u M (lay.pos g)) = lay.regLeaf R (lay.pos g)
 
@@ -118,8 +119,8 @@ open FlockSoundness.Discharge.Layout (BitVal widthOf)
 
 variable (rd : Layout.Readers C plan tab) (place : ∀ S R u, u ∈ S → UnitPlace P (Partition.tabOf plan tab S R u).S u)
 
-/-- **The readers' rows under their own schemas**: `Layout.Readers.rows` with the encoding `enc q` and extractor `pair q`
-of each commit string. -/
+/-- **The readers' rows under their own schemas**: `Layout.Readers.rows` with the encoding `enc q` and extractor
+`pair q` of each commit string. -/
 noncomputable def rowsP (enc : rd.Pos → BitVal rd.W → List UInt8)
     (pair : rd.Pos → BitVal rd.W → BitVal rd.W → List UInt8 × List UInt8)
     (hpair : ∀ q v v', v ≠ v' → enc q v = enc q v' → Collides (pair q v v'))

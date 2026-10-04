@@ -132,8 +132,9 @@ noncomputable def keyRowsHW
       BcSiteH (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (hkeys : KeysRow c hU (portRowW c)) :
     HmRowsP (keyLayoutHW hparse outs popOf ho hW houts) :=
-  rowsP (keyReadersHW hparse outs popOf) (keyPlaceH hparse outs) (encW c hU n) (pairW c hU n) pairW_spec
-    Layout.bitCode Layout.bitCode_inj (keyProgHW_copies hparse outs popOf ho hW houts)
+  rowsP (keyReadersHW hparse outs popOf) (keyPlaceH hparse outs) (encW c n (Fin (keyN c hU n)))
+    (pairW c n (Fin (keyN c hU n))) pairW_spec Layout.bitCode Layout.bitCode_inj
+    (keyProgHW_copies hparse outs popOf ho hW houts)
     (keyProgHW_bcPinned hparse outs popOf hsite) (keyProgHW_valPinned hparse outs popOf ho hW houts hkeys)
 
 /-- **`HmRowComputes` at `keyProg`'s rows, at the widened scope** (`hHm` for `keyRowsHW`): at every drawn unit's

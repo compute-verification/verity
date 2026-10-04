@@ -84,7 +84,8 @@ theorem flock_headline_execW
         StrictCR.ksAvgStrict (planAt ht dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ)) +
         ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).linkBoundE
-          (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (planAt ht dj x₀) (Integrate.tabAt ht dj x₀)
+          (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (planAt ht dj x₀)
+          (Integrate.tabAt ht dj x₀)
           ((rsAtW hU ht hc dj x₀ hpub hpt hscope (Reg := Reg)).binding
         (rsAtW_computes hU ht hc dj x₀ hpub hpt hscope)) k Rw M ρ t' :=
   (Placed.keyProg c hU n).flock_headline_live_on (Layout.outsOf c hU n) σs ks hks St hS Kd pop Lb src hA3

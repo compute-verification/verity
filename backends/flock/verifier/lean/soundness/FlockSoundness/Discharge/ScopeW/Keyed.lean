@@ -40,13 +40,14 @@ noncomputable def keyedRowsW (outs : Finset (Fin (keyN c hU n))) (ho : c.outNet 
     (houts : OutsOut c hU n outs) (hkeys : KeysRow c hU (portRowW c)) :
     HmRowsP (keyedLayout hparse outs saltCol popOf) :=
   rowsP (keyReaders (portRowW c) hparse outs saltCol popOf (outBitOf c hU n outs popOf)) (keyPlace hparse outs)
-    (encW c hU n) (pairW c hU n) pairW_spec bitCode bitCode_inj
+    (encW c n (Fin (keyN c hU n))) (pairW c n (Fin (keyN c hU n))) pairW_spec bitCode bitCode_inj
     (Layout.keyProg_copies hparse outs saltCol popOf _)
     (Layout.keyProg_bcPinned hparse outs saltCol popOf _ hsite)
     (Layout.keyProg_valPinned hparse outs saltCol popOf _ hkeys (Const.constCols_keyProg hU hparse outs)
       (Zero.zeroCols_keyProg hU hparse outs) (Layout.keyProg_hout hparse ho hsite houts))
 
-/-- **`keyedRowsW` at the returned outputs' bits** (`outsOf`), `KeysRow` from the parse: `Layout.keyedRowsOuts`' form. -/
+/-- **`keyedRowsW` at the returned outputs' bits** (`outsOf`), `KeysRow` from the parse: `Layout.keyedRowsOuts`'
+form. -/
 noncomputable def keyedRowsOutsW {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     (hc : HmRow.parse tags bytes tables = .ok c) (h1 : c.unit.inGroups.size = 1) (hpr : PortReads c hU)
     (ho : c.outNet = c.unitNet)
@@ -56,8 +57,8 @@ noncomputable def keyedRowsOutsW {tags : Tags} {bytes : ByteArray} {tables : Lis
   keyedRowsW hparse saltCol (outsOf c hU n) ho hsite (outsOut_outsOf c hU n) (keysRow_of_parse hc h1 hpr)
 
 /-- **`HmRowComputes` at `keyedRowsOutsW`'s rows** (`hHm`), at the `hm96` slots' salt columns: in a satisfying witness
-of a drawn unit's table, each row port's `b ‖ c` at the unit's site is the commit string of `rowEncOf` of the row's value
-under its port's schema, at every row of the four shapes (`hW`, which `scopeOkW_ports` gives). -/
+of a drawn unit's table, each row port's `b ‖ c` at the unit's site is the commit string of `rowEncOf` of the row's
+value under its port's schema, at every row of the four shapes (`hW`, which `scopeOkW_ports` gives). -/
 theorem keyedRowsOutsW_computes {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     (hc : HmRow.parse tags bytes tables = .ok c) (h1 : c.unit.inGroups.size = 1) (hpr : PortReads c hU)
     (ho : c.outNet = c.unitNet) (hW : ∀ p ∈ c.ports.toList, rowShapeW p = true)

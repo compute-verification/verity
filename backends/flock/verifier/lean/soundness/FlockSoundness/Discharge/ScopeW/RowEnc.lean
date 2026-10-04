@@ -104,26 +104,24 @@ theorem rowPairOf_spec (p : Port) {v v' : BitVal W} (hv : v ≠ v') (h : rowEncO
     · simp only [h2, Bool.false_eq_true, ↓reduceIte] at h
       exact absurd (rowEnc_inj h) hv
 
-/-! ## At `keyProg`'s commit strings -/
+/-! ## At a program's commit strings -/
 
-open FlockSoundness.Discharge.Layout (keyN)
+variable (c : Flock.Circuit) (n : ℕ) (G : Type)
 
-variable (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
-
-/-- **Each commit string's encoding** at `keyProg`'s readers: its row's schema's (`rowEncOf` of its port) at a row;
-`Layout.rowEnc` at a single gate, which is no row. -/
-def encW : (Fin n × Fin c.ports.size) ⊕ Fin (keyN c hU n) → BitVal W → List UInt8
+/-- **Each commit string's encoding** at readers of rows `(unit, port)` and single gates `G` (`keyProg`'s,
+`keyProgP`'s): its row's schema's (`rowEncOf` of its port) at a row; `Layout.rowEnc` at a single gate, which is no row. -/
+def encW : (Fin n × Fin c.ports.size) ⊕ G → BitVal W → List UInt8
   | .inl (_, p) => rowEncOf c.ports[p]
   | .inr _ => rowEnc
 
 /-- Each commit string's extractor at equal encodings (`rowPairOf`). -/
-def pairW : (Fin n × Fin c.ports.size) ⊕ Fin (keyN c hU n) → BitVal W → BitVal W → List UInt8 × List UInt8
+def pairW : (Fin n × Fin c.ports.size) ⊕ G → BitVal W → BitVal W → List UInt8 × List UInt8
   | .inl (_, p) => rowPairOf c.ports[p]
   | .inr _ => fun v v' => (rowEnc v, rowEnc v')
 
-variable {c hU n} in
-theorem pairW_spec : ∀ (q : (Fin n × Fin c.ports.size) ⊕ Fin (keyN c hU n)) (v v' : BitVal W), v ≠ v' →
-    encW c hU n q v = encW c hU n q v' → Collides (pairW c hU n q v v')
+variable {c n G} in
+theorem pairW_spec : ∀ (q : (Fin n × Fin c.ports.size) ⊕ G) (v v' : BitVal W), v ≠ v' →
+    encW c n G q v = encW c n G q v' → Collides (pairW c n G q v v')
   | .inl (_, p), _, _, hv, h => rowPairOf_spec c.ports[p] hv h
   | .inr _, _, _, hv, h => absurd (rowEnc_inj h) hv
 
