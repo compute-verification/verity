@@ -277,7 +277,7 @@ def test_a_registered_output_row_is_on_both_sides(staged):
 def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):
     """`verify` sets up every table's statement through the same check (§16.12): with two tables, table 1's drawn statement
     (units 4-7) is refused when the verifier's program moves unit 5's read, and under the honest reads setup passes and the
-    session fails only on its missing proofs."""
+    session meets the refusal of its form, two tables without `--zk` (§16.15), which only a statement that sets up meets."""
     sess = staged.dir / "session"
     sess.mkdir(exist_ok=True)
     (sess / "session.json").write_text("{}")
@@ -291,7 +291,8 @@ def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):
         assert line["accepted"] is False
         return line["why"]
 
-    assert why(staged.dir / "own.json").startswith("session files: "), "setup passes: the session has no proofs"
+    assert why(staged.dir / "own.json") == ("refused: 2 tables in a session without --zk: a statement form the soundness proof "
+                                            "does not cover"), "setup passes"
     moved = _own(staged, "own-moved-5", lambda ps: ps["cs"]["reads"].__setitem__(5, 10))
     assert why(moved) == f"setup: registered reads: port cs: unit 5 reads position {POSITIONS[5]}, and the verifier's program reads 10"
 
@@ -311,8 +312,9 @@ def rope(tmp_path_factory):
 
 def test_a_session_verified_with_registered_reads_is_held_to_them(rope):
     """`verify` builds every table's statement through the same check on the public-output statement too: the fixture's
-    honest session, proved by upstream over a registered statement, is accepted under its own reads file and refused under
-    one that moves every position."""
+    honest session, proved by upstream over a registered statement, sets up under its own reads file, where it meets the
+    refusal of its form, a shared-row public file (§16.15), which only a statement that sets up meets, and is refused at setup
+    under one that moves every position."""
     program, _ = _program()
     assert canonical_json(encode_program(program)) == (rope / "stage" / "program.json").read_bytes()
     bound = ["--partition", str(rope / "stage" / "partition.json"), "--program", str(rope / "stage" / "program.json")]
@@ -326,7 +328,8 @@ def test_a_session_verified_with_registered_reads_is_held_to_them(rope):
         return line
 
     ok = verify("honest", rope / "registered" / "own.json")
-    assert ok["accepted"] is True and ok["partition"]["units"] == "derived", ok
+    assert ok["accepted"] is False and ok["why"] == ("refused: a shared-row public file (header shared_rows): a statement form "
+                                                     "the soundness proof does not cover"), ok
     root = json.loads((rope / "registered" / "own.json").read_text())["ports"]["cs"]["root"]
     assert ok["registered"] == {"cs": {"value": VALUE, "root": root}}
     moved = verify("honest", rope / "vectors" / "wrong-position" / "registered.json")

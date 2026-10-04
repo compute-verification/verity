@@ -1,11 +1,12 @@
 """Public input ports (PROTOCOL.md §16.10): the Lean verifier reads a hidden-output statement whose unit reads a public
 input port (RoPE's `cs`, its cos/sin table) from in regions, as the Rust prover writes it, on its recorded CPU selftest
 sessions, with the public words in one aligned block of the unit's leaf group and in two, and holds the public file's words to
-the verifier's own recomputation (`--public-inputs F`).
+the verifier's own recomputation (`--public-inputs F`). Public input ports are a form the soundness proof does not cover
+(§16.15), so once the statement sets up `verify` refuses every session of it for that.
 
 It is the one test in `check` of public input ports against the prover's sessions: check's agreement step replays only
-upstream's pinned builds, none of which has them. So it catches a verifier that disagrees with the prover on the in regions,
-on Δ without the public leaves' copies or on the public file's tail, which no statement-only test sees, and it runs each
+upstream's pinned builds, none of which has them. So it catches a verifier that disagrees with the prover on the in regions
+or on the public file's tail (the statement's Hello is the prover's), which no statement-only test sees, and it runs each
 refusal of the port's condition (only the verifier's own recomputation, named by seed and derivation, is public) on a real
 statement. Each case sets up the statement once (seconds); the cases run in parallel workers.
 
@@ -39,6 +40,7 @@ STATEMENT = "verity/flock-circuit+seed-injection"
 CASES = {"honest": True, "public_input_claim_false": False, "output_claim_false": False, "digest_claim_false": False,
          "output_row_committed_false": False}
 OWN_REFUSAL = "is not the verifier's own recomputation (seed rope/positions, derivation verity/rope/neox-bf16/cos-sin/v1)"
+FORM_REFUSAL = "refused: public input ports (--public-inputs): a statement form the soundness proof does not cover"
 
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
 
@@ -107,10 +109,10 @@ def test_the_files_name_the_ports_recomputation(store):
 
 @pytest.mark.parametrize("layout", ["one-block", "two-blocks"])
 @pytest.mark.parametrize("case", list(CASES))
-def test_it_gives_the_provers_sessions_their_verdicts(stores, layout, case, tmp_path):
+def test_it_refuses_the_provers_sessions(stores, layout, case, tmp_path):
     """Each session under the verifier's own recomputation of its public file's words, with the public words in one aligned
-    block and in two: a false public word's session is rejected by the proof, never by the session parameters, once the
-    verifier's file says the same word."""
+    block and in two: the statement sets up, a false public word's too once the verifier's file says the same word, and
+    the session meets the refusal of its form."""
     store = stores[layout]
     rec = store / "records-cpu"
     subprocess.run([sys.executable, str(VERIFIER / "selftest_records.py"), str(rec), str(tmp_path)], check=True,
@@ -123,8 +125,7 @@ def test_it_gives_the_provers_sessions_their_verdicts(stores, layout, case, tmp_
     p = subprocess.run([str(BIN), "verify", "--statement", STATEMENT, "--circuit", str(store / "stage" / "circuit.txt"),
                         "--public", str(pub), "--public-inputs", str(own), "--session", str(s)], capture_output=True, text=True)
     [v] = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
-    assert v["accepted"] == CASES[case], v["why"]
-    assert case == "honest" or not v["why"].startswith(("S2", "setup")), v["why"]
+    assert (v["accepted"], v["why"]) == (False, FORM_REFUSAL), v
 
 
 def _missing(d, tmp):

@@ -127,9 +127,9 @@ def test_a_typed_statement_with_other_row_nets_is_refused(rope, name, what):
 RUST_SESSIONS = "art:48f286b4"
 
 
-def test_it_gives_the_rust_provers_sessions_their_verdicts(tmp_path):
-    """On `flock-circuit`'s own recorded sessions for a flat class, the verifier gives every case its expected verdict: the
-    honest ones accepted (so its statement digest and Σ are the prover's) and every negative refused."""
+def test_it_refuses_the_rust_provers_sessions(tmp_path):
+    """A typed statement is a form the soundness proof does not cover (§16.15): on `flock-circuit`'s own recorded sessions
+    for a flat class, the statement sets up and the verifier refuses every case with that reason, the 3 honest ones too."""
     import sys  # noqa: PLC0415
 
     sys.path.insert(0, str(LEAN.parent))
@@ -143,10 +143,12 @@ def test_it_gives_the_rust_provers_sessions_their_verdicts(tmp_path):
     subprocess.run([sys.executable, str(LEAN.parent / "selftest_records.py"), str(root / "records"), str(tmp_path / "s")],
                    check=True, capture_output=True)
     sessions = sorted(p for p in (tmp_path / "s").iterdir() if (p / "case.json").exists())
-    p = subprocess.run([str(BIN), "verify", "--statement", "verity/flock-circuit/types@210d32e1+seed-injection",
+    statement = "verity/flock-circuit/types@210d32e1+seed-injection"
+    p = subprocess.run([str(BIN), "verify", "--statement", statement,
                         "--circuit", str(root / "stage" / "circuit.txt"), "--public", str(root / "stage" / "pub-4.bin"),
                         "--session", *map(str, sessions)], capture_output=True, text=True)
     got = {Path(v["session"]).name: v for v in (json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT "))}
     want = {s.name: json.loads((s / "case.json").read_text())["expect"] == "accept" for s in sessions}
-    assert {n: got[n]["accepted"] for n in want} == want, {n: got[n]["why"] for n in want if got[n]["accepted"] != want[n]}
+    refused = f"refused: {statement}, a typed statement: a statement form the soundness proof does not cover"
+    assert {n: (got[n]["accepted"], got[n]["why"]) for n in want} == {n: (False, refused) for n in want}
     assert sum(want.values()) == 3 and len(want) == 19
