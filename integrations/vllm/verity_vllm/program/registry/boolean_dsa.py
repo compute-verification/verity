@@ -10,11 +10,18 @@ Definitions (the bodies are `dsa`'s, written once over `dsa.Ops`), so each one's
 The callees are core's Boolean FP32 pieces (`verity.ml.boolean`'s `elementwise`, `attention`, `cast`, `mufu`, `scalar`) and
 `gemm.HopperE4m3QgmmaDot32_v2`; a constant word is constant bits and `-x` one NOT gate on x's sign bit (`F32Neg_v1`).  Each callee is
 its word Definition on every word, NaN payloads included.  No table or lookup gate.
+
+Each composite is one traced circuit (`flat`): its body over those callees, compiled (`verity.evaluation.bits.compile`) and its
+gates traced again (`trace.trace`), so a constant operand is folded and a value its calls share (the log2f polynomial's ``t``,
+the scale every quantized element divides by, a row's mean) is computed once (`Q_word`'s no-recompute rule).
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
+
+from verity.evaluation import bits as BS
 from verity.ir import boolean as BL
-from verity.ir.defs import bind
+from verity.ir.defs import CompositeDefinition, bind
 from verity.ir.refs import Coll, concat
 from verity.ir.types import Array, Tuple
 from verity.ml.boolean import attention as BA
@@ -85,12 +92,50 @@ def bit_ops(B) -> D.Ops:
                  lambda x: Coll(F32, concat([x.refs.slice(0, 31), B.call(BL.NOT, x[31]).refs])))
 
 
+def replay(c: BS.Compiled, C, args: list) -> list:
+    """The compiled body ``c``'s gates on ``C`` over the forms ``args`` (its parameter leaves), its calls inlined: its return's
+    forms."""
+    W = [ZERO, ONE, *args] + [None] * (c.size - 2 - len(args))
+    for step in c.steps:
+        if step[0] == "gates":
+            for kind, out, a, b in step[1]:
+                for o, x, y in zip(out.tolist(), a.tolist(), b.tolist()):
+                    W[o] = C.AND(W[x], W[y]) if kind == 0 else W[x] ^ W[y] if kind == 1 else NOT(W[x])
+        elif step[0] == "call":
+            _, child, members, base, w = step
+            for m, row in enumerate(members.tolist()):
+                W[base + m * w:base + (m + 1) * w] = replay(child, C, [W[i] for i in row])
+        else:
+            raise TypeError(f"{c.target}: a scan is not inlined")
+    return [W[i] for i in c.ret_idx.tolist()]
+
+
+def flat(name: str, version: int, statics: Sequence[str], signature: Callable, body: Callable, word,
+         lifted: Sequence[str] = ()) -> CompositeDefinition:
+    """The Boolean Definition ``name_v{version}{statics}`` whose circuit is ``body`` (over Boolean Definitions, as `EW.on_bits`
+    takes it, its ``lifted`` statics Boolean Definitions read as their word views) compiled and traced as one circuit per binding
+    (`EW.specialized`), its word view ``word`` at the same statics."""
+    inner = EW.on_bits(name, version, statics, signature, body, word, register=False, lifted=lifted)
+
+    def build(S):
+        c = BS.compile(bind(inner, **{k: getattr(S, k) for k in statics}))
+        widths = BL.elements(signature(S)[1])
+        ends = [sum(widths[:i + 1]) for i in range(len(widths))]
+
+        def run(C, *elements):
+            out = replay(c, C, [f for e in elements for f in e])
+            return [out[e - w:e] for w, e in zip(widths, ends)]
+        return run
+
+    return EW.specialized(name, version, statics, build, signature, doc=body.__doc__ or "", word=inner.word)
+
+
 def _scale(B, S, amax):
     """`DsaUe8m0Scale_v1`'s body on bits."""
     return D.ue8m0_scale(bit_ops(B), amax)
 
 
-DsaUe8m0ScaleV2 = EW.on_bits("DsaUe8m0Scale", 2, [], lambda S: ((("amax", F32),), F32), _scale, D.DsaUe8m0Scale)
+DsaUe8m0ScaleV2 = flat("DsaUe8m0Scale", 2, [], lambda S: ((("amax", F32),), F32), _scale, D.DsaUe8m0Scale)
 
 
 def _quant(B, S, x):
@@ -98,7 +143,7 @@ def _quant(B, S, x):
     return D.ue8m0_quant(bit_ops(B), [x[i] for i in range(S.N)], DsaUe8m0ScaleV2, E4M3)
 
 
-DsaUe8m0QuantV2 = EW.on_bits("DsaUe8m0Quant", 2, ["N"], lambda S: ((("x", Array(S.N, F32)),), Tuple(Array(S.N, E4M3), F32)), _quant,
+DsaUe8m0QuantV2 = flat("DsaUe8m0Quant", 2, ["N"], lambda S: ((("x", Array(S.N, F32)),), Tuple(Array(S.N, E4M3), F32)), _quant,
                              D.DsaUe8m0Quant)
 
 
@@ -107,7 +152,7 @@ def _k_row(B, S, k, w, b, cs):
     return D.k_slot(bit_ops(B), S, k, w, b, cs, bind(DsaUe8m0QuantV2, N=S.D), F32)
 
 
-DsaIndexerKRowV2 = EW.on_bits(
+DsaIndexerKRowV2 = flat(
     "DsaIndexerKRow", 2, ["D", "ROPE", "EPS"],
     lambda S: ((("k", Array(S.D, BF16)), ("w", Array(S.D, F32)), ("b", Array(S.D, F32)), ("cs", Array(S.ROPE, BF16))),
                Tuple(Array(S.D, E4M3), F32)),
@@ -119,7 +164,7 @@ def _q_head(B, S, q, cs, w):
     return D.q_head(bit_ops(B), S, q, cs, w, bind(DsaUe8m0QuantV2, N=S.D), F32)
 
 
-DsaIndexerQHeadV2 = EW.on_bits(
+DsaIndexerQHeadV2 = flat(
     "DsaIndexerQHead", 2, ["D", "ROPE", "NH"],
     lambda S: ((("q", Array(S.D, BF16)), ("cs", Array(S.ROPE, BF16)), ("w", BF16)), Tuple(Array(S.D, E4M3), F32)), _q_head,
     D.DsaIndexerQHead)
@@ -130,7 +175,7 @@ def _q(B, S, q, cs, w):
     return D.heads(B, bind(DsaIndexerQHeadV2, D=S.D, ROPE=S.ROPE, NH=S.H), S.H, S.D, q, cs, w, E4M3, F32)
 
 
-DsaIndexerQV2 = EW.on_bits(
+DsaIndexerQV2 = flat(
     "DsaIndexerQ", 2, ["H", "D", "ROPE"],
     lambda S: ((("q", Array(S.H, Array(S.D, BF16))), ("cs", Array(S.ROPE, BF16)), ("w", Array(S.H, BF16))),
                Tuple(Array(S.H, Array(S.D, E4M3)), Array(S.H, F32))),
@@ -142,7 +187,7 @@ def _logit(B, S, q, w, k, ks):
     return D.mqa_logit(bit_ops(B), S.H, S.D, q, w, k, ks)
 
 
-DsaMqaLogitV2 = EW.on_bits(
+DsaMqaLogitV2 = flat(
     "DsaMqaLogit", 2, ["H", "D"],
     lambda S: ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.D, E4M3)), ("ks", F32)), F32),
     _logit, D.DsaMqaLogit)
@@ -153,7 +198,7 @@ def _logits(B, S, q, w, k, ks):
     return B.batch(bind(DsaMqaLogitV2, H=S.H, D=S.D), q, w, k, ks, axes=(None, None, 0, 0))
 
 
-DsaMqaLogitsV2 = EW.on_bits(
+DsaMqaLogitsV2 = flat(
     "DsaMqaLogits", 2, ["N", "H", "D"],
     lambda S: ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.N, Array(S.D, E4M3))),
                 ("ks", Array(S.N, F32))), Array(S.N, F32)),
