@@ -11,6 +11,7 @@ from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_
 from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import _C_op
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, _untransposed, aten
+from verity_vllm.program.registry.fp8 import weight_blocks
 
 
 # -- [R15 fp8] the block-scaled FP8 linear: dynamic per-token-group activation quant + the blockwise CUTLASS scaled GEMM -----------------
@@ -96,19 +97,20 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
 
 class CutlassScaledMmFp8BlockRule(InPlaceRule):
     """`_C.cutlass_scaled_mm(out! bf16 [.., N], a e4m3 [.., K], b = W.T ([K, N] view of e4m3 W [N, K]), a_scales f32 [.., K/G],
-    b_scales = Ws.T ([K/G, N/G] view of f32 Ws [N/G, K/G]), bias None)` -> `scaled_mm_fp8_block{K,N,G}` per token row (the active target's
-    `fp8_scale_construction`: ScaledMmFp8BlockSharedScale_v1 by default, ScaledMmFp8Block_v1 per-coordinate); `out` is rebound.  W and Ws are prescribed weight Inputs (the checkpoint's e4m3 words and f32 block scales); `a` / `a_scales` are the
+    b_scales = Ws.T ([K/G, cdiv(N, G)] view of f32 Ws [cdiv(N, G), K/G]: N may end mid-block, `fp8.weight_blocks`), bias None)` ->
+    `scaled_mm_fp8_block{K,N,G}` per token row (the active target's `fp8_scale_construction`: ScaledMmFp8BlockSharedScale_v1 by
+    default, ScaledMmFp8Block_v1 per-coordinate); `out` is rebound.  W and Ws are prescribed weight Inputs (the checkpoint's e4m3 words and f32 block scales); `a` / `a_scales` are the
     values `PerTokenGroupFp8Quant[vllm]` computed.  Binds the BLOCK-scaled shapes only: a per-tensor / per-token scaled_mm (scales [M,1] /
     [1,N] / 0-d) is another kernel (`ScaledMmFp8_v1` of registry.fp8, R14 QZ) and is refused here, named."""
     modes = frozenset({"profile"})
     info = RuleInfo("CutlassScaledMmFp8Block[vllm]", 1, "in-place-binding",
-                    applies_to="_C.cutlass_scaled_mm(Tensor! out, a e4m3, b e4m3 [K, N], a_scales f32 [.., K/G], b_scales f32 [K/G, N/G], bias None)",
+                    applies_to="_C.cutlass_scaled_mm(Tensor! out, a e4m3, b e4m3 [K, N], a_scales f32 [.., K/G], b_scales f32 [K/G, cdiv(N, G)], bias None)",
                     preconditions=("the active target's tensor-core family is hopper (cc 9.x): the Definition is that family's blockwise CUTLASS "
                                    "kernel, and `_C.cutlass_scaled_mm` on another target runs another kernel under the same op and kernel class",
                                    "a is a float8_e4m3fn value [.., K]; out an unwritten bf16 allocation [.., N]",
-                                   "b is a transposed view of an e4m3 [N, K] matrix; b_scales a transposed view of an f32 [N/G, K/G] matrix, G = 128",
+                                   "b is a transposed view of an e4m3 [N, K] matrix; b_scales a transposed view of an f32 [cdiv(N, G), K/G] matrix, G = 128",
                                    "a_scales is an f32 value [.., K/G] (the group scales the quant rule computed)", "bias is None",
-                                   "K % G == 0 and N % G == 0"),
+                                   "K % G == 0 (N need not be: the last weight block may be partial)"),
                     evidence_domain="structural; numerics: ScaledMmFp8Block_v1 (exact-model-tested on the H100 against the blockwise _C.cutlass_scaled_mm, both dispatch "
                                     "variants) and ScaledMmFp8BlockSharedScale_v1, its function restated")
 
@@ -144,11 +146,12 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
             return f"scales are {ctx.dtype_of(a_s)} / {ctx.dtype_of(b_s)}, not float32"
         if ash_s is None or bsh_s is None or ash_s == ash[:-1] + (1,) or bsh_s in ((1, N), (N,), (), (1,)):
             return (f"numerics_unregistered: per-tensor / per-token scales a_scales {ash_s}, b_scales {bsh_s} -- the FastAccum per-tensor kernel "
-                    f"(ScaledMmFp8_v1, registry.fp8) is not bound by this rule; this rule binds the blockwise kernel (a_scales [.., K/128], b_scales [K/128, N/128])")
-        if K % G or N % G:
-            return f"numerics_unregistered: K={K}, N={N} not multiples of the block {G} (vLLM pads such layers; not modelled)"
-        if ash_s != ash[:-1] + (K // G,) or bsh_s != (K // G, N // G):
-            return f"scale shapes a_scales {ash_s} (want [.., {K // G}]), b_scales {bsh_s} (want [{K // G}, {N // G}]) are not the 128x128 block layout"
+                    f"(ScaledMmFp8_v1, registry.fp8) is not bound by this rule; this rule binds the blockwise kernel (a_scales [.., K/128], b_scales [K/128, cdiv(N, 128)])")
+        if K % G:
+            return f"numerics_unregistered: K={K} is not a multiple of the block {G} (the activation groups would end mid-group)"
+        NB = weight_blocks(N, G)
+        if ash_s != ash[:-1] + (K // G,) or bsh_s != (K // G, NB):
+            return f"scale shapes a_scales {ash_s} (want [.., {K // G}]), b_scales {bsh_s} (want [{K // G}, {NB}]) are not the 128x128 block layout"
         if osh != ash[:-1] + (N,):
             return f"out {osh} vs a {ash} x b {bsh}"
         if ctx.weight_of(b) is None or ctx.weight_of(b_s) is None:
@@ -160,7 +163,7 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
         K, N = shape(ctx, b)
         G = FP8_QUANT_PINS["group_size"]
         w = _untransposed(ctx, b, K, N, ctx.hint_name(node) + "/w")
-        ws = _untransposed(ctx, b_s, K // G, N // G, ctx.hint_name(node) + "/ws")
+        ws = _untransposed(ctx, b_s, K // G, weight_blocks(N, G), ctx.hint_name(node) + "/ws")
         ctx.bind_weight_role(b, self, "fp8_w", K=K, N=N)
         ctx.bind_weight_role(b_s, self, "fp8_ws", K=K, N=N, G=G)
         rows, lead = rows_of(ctx.coll(a))

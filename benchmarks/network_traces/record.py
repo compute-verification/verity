@@ -31,12 +31,21 @@ its GPU to the lease's end.
 - `server.log`, and at the end `trace.json` (the calibration format, `verity_network_warden.calibration`) and
   `summary.json`.
 
+**Exit status.** 0 when the chunk ran to its deadline. A SIGTERM (an eviction: the lease reclaimed the GPU) stops it;
+the job still converts what it recorded, sets `ended.evicted` in `meta.json`, and exits 143, so that a queue requeues
+the chunk rather than counting it done.
+
 **`convert`** rebuilds `trace.json` from those files, and drops what isn't honest timing of an idle GPU:
-- a chunk whose heartbeat or event loop stalled longer than `--freeze-ms` was frozen (SIGSTOP, a paused scope), and the
-  whole chunk is void (with `--freeze-scope window`, only the windows the stall overlaps and the next);
+- a heartbeat or event-loop stall longer than `--freeze-ms` (SIGSTOP, a paused scope, a saturated host) drops the
+  windows it overlaps and the next one, where the backlog it left drains; a stall longer than `--freeze-rest-ms` drops
+  every window from its first to the chunk's end. On node 1's chunks (`art:bd8f7261`) Llama-8B's next window after a
+  stall had TTFT p99 6.5 s, and the first window kept after one had TTFT p50/p99 93.7/798 ms against quiet windows'
+  92.7/797; the stalls followed by a kept window were 1.2-3.3 s long, so nothing shows a longer one drains as fast.
+  `--freeze-scope chunk` is the old rule, for sensitivity: any such stall voids the whole chunk;
 - a window is dropped when another process computed on our GPU, when the rest of the NUMA node kept more than
-  `--max-others-busy` of its CPUs busy or co-tenants more than `--max-affinity-busy` of the job's own, when a sample
-  came over `--freeze-ms` late or none came after it, or when one of its requests failed;
+  `--max-others-busy` of its CPUs busy or co-tenants more than `--max-cotenant-busy` of the job's own (its cpuset's
+  busy share less our processes' CPU time; `--cpu-rule total` counts our use too, against `--max-affinity-busy`), when
+  a sample came over `--freeze-ms` late or none came after it, or when one of its requests failed;
 - the chunk is cut at dropped windows into contiguous segments, one configuration each.
 
 **`merge`** joins chunks' traces into one for the calibration tool.
@@ -80,7 +89,9 @@ ROLES = {"unsloth/Llama-3.2-1B": "LLAMA32_1B", "Qwen/Qwen2.5-0.5B": "QWEN05"}
 OFFLINE = {"bi-eager": False, "commit": True}
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE_CAPACITY = 100, 600, 4096, 1 << 16
 SAMPLE_S, HEARTBEAT_S = 2.0, 0.01
-FREEZE_MS, MAX_OTHERS_BUSY, MAX_AFFINITY_BUSY, TAIL_MS = 1000.0, 0.5, 0.9, 10_000
+FREEZE_MS, MAX_OTHERS_BUSY, MAX_AFFINITY_BUSY, MAX_COTENANT_BUSY, TAIL_MS = 1000.0, 0.5, 0.9, 0.9, 10_000
+FREEZE_REST_MS = 5000.0  # a longer stall drops the rest of its chunk (`convert` in the module docstring)
+CPU_RULES, FREEZE_SCOPES = ("cotenants", "total"), ("window", "chunk")
 STALL_S = 120  # an offline engine step or finalize this long is hung: every thread's stack goes to stderr and the job exits
 
 clock = time.monotonic
@@ -612,7 +623,9 @@ def run(args: argparse.Namespace) -> int:
             ended = offline_replay(eng, com, reqs, t0, deadline - 20, requests, steps, commits)
         else:
             ended = asyncio.run(replay(port, served, reqs, t0, deadline - 20, requests, stall))
-    except SystemExit:
+    except SystemExit as e:
+        if e.code != 143:
+            raise
         ended["stopped_ms"] = ms(clock() - meta.get("t0_mono", clock()))
     finally:
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
@@ -624,16 +637,20 @@ def run(args: argparse.Namespace) -> int:
         for f in (requests, samples, steps, commits):
             if f is not None:
                 f.close()
+    # Only SIGTERM sets stopped_ms: before the replay (`evicted`), or in it, where it stops sending.
+    ended["evicted"] = ended["stopped_ms"] is not None
     meta["ended"] = ended
     (out / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
     convert(out)
-    return 0
+    return 143 if ended["evicted"] else 0
 
 
 def build_trace(records: Sequence[dict], samples: Sequence[dict], *, name: str, windows: int, labels: dict | None = None,
                 stopped_ms: float | None = None, ingress: str = "text", freeze_ms: float = FREEZE_MS,
                 max_others_busy: float = MAX_OTHERS_BUSY, max_affinity_busy: float = MAX_AFFINITY_BUSY,
-                freeze_scope: str = "chunk") -> tuple[list[dict], dict]:
+                freeze_scope: str = "window", freeze_rest_ms: float = FREEZE_REST_MS, cpu_rule: str = "cotenants",
+                max_cotenant_busy: float = MAX_COTENANT_BUSY,
+                affinity_cpus: int | None = None) -> tuple[list[dict], dict]:
     """The calibration configurations of one chunk, and what was kept and dropped.
 
     `records` are `requests.jsonl`'s and `samples` `samples.jsonl`'s, both with times in ms from t0 (`t_ms` for a sample,
@@ -645,14 +662,33 @@ def build_trace(records: Sequence[dict], samples: Sequence[dict], *, name: str, 
     - ingress: ⌈bytes/B⌉ frames at its send time, where bytes is a text prompt's 4·prompt_len + 512 (`ingress="text"`,
       the rebuilt traces' rule) or the token-id JSON body sent (`"body"`).
 
-    A frozen chunk (a heartbeat or event-loop stall over `freeze_ms` from t0 to `TAIL_MS` after the last window, while its
-    last responses stream) gives no configuration: a stopped process stops its heartbeat too. With `freeze_scope="window"`
-    a stall drops only the windows it overlaps and the one after, while the backlog it left drains. A window is dropped
-    when a sample overlapping it saw a foreign process on the GPU, the watched CPUs' other users busier than
-    `max_others_busy`, the job's own CPUs busier than `max_affinity_busy` (co-tenants on its cpuset), or came over
-    `freeze_ms` late while the heartbeat ran (the host stalled the monitor), when it ends after the last sample (the
-    monitor stopped), or when a request sent in it failed; each run of kept windows is one configuration, its times
-    rebased to its first window."""
+    A heartbeat or event-loop stall over `freeze_ms` (a stopped process stops its heartbeat too) drops the windows it
+    overlaps and the one after, while the backlog it left drains, and one over `freeze_rest_ms` every window from its
+    first to the chunk's end. With `freeze_scope="chunk"` a stall from t0 to `TAIL_MS` after the last window, while its
+    last responses stream, freezes the chunk: it gives no configuration. A window is dropped when a sample overlapping
+    it saw a foreign process on the GPU, the watched CPUs' other users busier than `max_others_busy`, co-tenants busier
+    than the job's CPU rule allows, or came over `freeze_ms` late while the heartbeat ran (the host stalled the
+    monitor), when it ends after the last sample (the monitor stopped), or when a request sent in it failed; each run of
+    kept windows is one configuration, its times rebased to its first window.
+
+    The job's CPU rule: with `cpu_rule="cotenants"`, others' share of the job's `affinity_cpus` CPUs, the sample's
+    `affinity_busy` less `own_cores / affinity_cpus` (our processes' CPU time), over `max_cotenant_busy`. Serving that
+    saturates its own CPUs is that deployment's honest timing; others taking them is not. Without `affinity_cpus` our use
+    can't be told apart, and all of it counts. With `cpu_rule="total"`, `affinity_busy` itself over `max_affinity_busy`."""
+    if cpu_rule not in CPU_RULES:
+        raise ValueError(f"cpu_rule is one of {CPU_RULES}, not {cpu_rule!r}")
+    if freeze_scope not in FREEZE_SCOPES:
+        raise ValueError(f"freeze_scope is one of {FREEZE_SCOPES}, not {freeze_scope!r}")
+
+    def cotenants(s: dict) -> float:
+        own = s["own_cores"] / affinity_cpus if affinity_cpus else 0.0
+        return max(0.0, s.get("affinity_busy", 0.0) - own)
+
+    def crowded(s: dict) -> str | None:
+        if cpu_rule == "total":
+            return "job's CPUs saturated" if s.get("affinity_busy", 0.0) > max_affinity_busy else None
+        return "co-tenants on the job's CPUs" if cotenants(s) > max_cotenant_busy else None
+
     window_ms = WINDOW_BUCKETS * BUCKET_MS
     if stopped_ms is not None:
         windows = min(windows, max(0, int(stopped_ms // window_ms)))
@@ -666,11 +702,10 @@ def build_trace(records: Sequence[dict], samples: Sequence[dict], *, name: str, 
         why = ("foreign GPU process" if s["foreign_pids"] else
                "stalled" if stall > freeze_ms else
                "NUMA node busy" if s["others_busy"] > max_others_busy else
-               "job's CPUs saturated" if s.get("affinity_busy", 0.0) > max_affinity_busy else
-               "monitor late" if gap > freeze_ms else None)
+               crowded(s) or ("monitor late" if gap > freeze_ms else None))
         if why:
             lo, hi = s["t_ms"] - max(1000 * s["dt_s"], stall), s["t_ms"]
-            last = int(hi // window_ms) + (why == "stalled")
+            last = windows - 1 if stall > freeze_rest_ms else int(hi // window_ms) + (stall > freeze_ms)
             for w in range(max(0, int(lo // window_ms)), min(windows - 1, last) + 1):
                 dropped.setdefault(w, why)
     for w in range(int(max((s["t_ms"] for s in measured), default=0.0) // window_ms), windows):
@@ -713,7 +748,7 @@ def build_trace(records: Sequence[dict], samples: Sequence[dict], *, name: str, 
     ttft = [r["chunks"][0][0] - r["send_ms"] for r in kept if r["ok"]]
     itl = [b[0] - a[0] for r in kept if r["ok"] for a, b in zip(r["chunks"], r["chunks"][1:])]
     summary = {
-        "name": name, "windows_planned": windows, "frozen": frozen,
+        "name": name, "windows_planned": windows, "frozen": frozen, "freeze_scope": freeze_scope,
         "windows_kept": sum(hi - lo for lo, hi in segments), "segments": segments,
         "windows_dropped": {str(k): v for k, v in sorted(dropped.items())},
         "requests": len(kept), "requests_failed": sum(not r["ok"] for r in kept),
@@ -724,6 +759,7 @@ def build_trace(records: Sequence[dict], samples: Sequence[dict], *, name: str, 
         "sample_gap_ms_max": max(gaps, default=0.0),
         "others_busy": percentiles([s["others_busy"] for s in measured], (50, 99)),
         "affinity_busy": percentiles([s.get("affinity_busy", 0.0) for s in measured], (50, 99)),
+        "cpu_rule": cpu_rule, "cotenant_busy": percentiles([cotenants(s) for s in measured], (50, 99)),
         "load1": percentiles([s["load"][0] for s in measured], (50, 99)),
         "own_cores": percentiles([s["own_cores"] for s in measured], (50, 99)),
         "sm_mhz": percentiles([s["sm_mhz"] for s in measured], (1, 50)),
@@ -755,13 +791,16 @@ def convert(out: Path, **rules) -> dict:
         summary = {"frozen": False, "windows_planned": 0, "windows_kept": 0, "error": "the job ended before t0"}
         (out / "summary.json").write_text(json.dumps(summary, indent=1))
         return summary
+    if not (out / "requests.jsonl").exists():
+        raise FileNotFoundError(f"{out / 'requests.jsonl'}: missing, though `run` creates it before t0; restore it (an evicted "
+                                f"run file's run-files.evicted.json names its artifact) rather than convert every window as idle")
     samples = [s | {"t_ms": ms(s["mono"] - meta["t0_mono"])} for s in read_lines(out / "samples.jsonl")]
     run_id = meta["env"].get("RESEARCH_RUN_ID") or out.name
     labels = {"mode": meta["mode"], "model": meta["model"], "mix": meta["mix"], "host": meta["host"],
               "gpu": meta["gpu"]["name"], "gpu_uuid": meta["gpu"]["uuid"], "run": run_id}
     configs, summary = build_trace(read_lines(out / "requests.jsonl"), samples, name=f"{meta['mode']}/{run_id}",
                                    windows=meta["windows"], labels=labels, stopped_ms=(meta.get("ended") or {}).get("stopped_ms"),
-                                   **rules)
+                                   affinity_cpus=len(meta.get("affinity") or ()) or None, **rules)
     summary |= {"labels": labels, "startup_s": meta.get("startup_s"), "ended": meta.get("ended")}
     (out / "trace.json").write_text(json.dumps(trace_doc(configs), separators=(",", ":")))
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
@@ -804,8 +843,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     c.add_argument("--ingress-bytes", choices=("text", "body"), default="text")
     c.add_argument("--freeze-ms", type=float, default=FREEZE_MS)
     c.add_argument("--max-others-busy", type=float, default=MAX_OTHERS_BUSY)
+    c.add_argument("--cpu-rule", choices=CPU_RULES, default="cotenants",
+                   help="drop a window when co-tenants took over --max-cotenant-busy of the job's CPUs (cotenants), or "
+                        "when they were over --max-affinity-busy busy, the job's own use included (total)")
+    c.add_argument("--max-cotenant-busy", type=float, default=MAX_COTENANT_BUSY)
     c.add_argument("--max-affinity-busy", type=float, default=MAX_AFFINITY_BUSY)
-    c.add_argument("--freeze-scope", choices=("chunk", "window"), default="chunk")
+    c.add_argument("--freeze-scope", choices=FREEZE_SCOPES, default="window",
+                   help="a stall over --freeze-ms drops the windows it overlaps and the next (window), or voids the "
+                        "whole chunk (chunk, the old rule, for sensitivity)")
+    c.add_argument("--freeze-rest-ms", type=float, default=FREEZE_REST_MS,
+                   help="with --freeze-scope window, a stall over this drops the rest of its chunk")
     m = sub.add_parser("merge", help="join chunks' traces into one")
     m.add_argument("out", type=Path)
     m.add_argument("inputs", nargs="+", type=Path)
@@ -815,7 +862,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.cmd == "convert":
         for d in args.dirs:
             s = convert(d, ingress=args.ingress_bytes, freeze_ms=args.freeze_ms, max_others_busy=args.max_others_busy,
-                        max_affinity_busy=args.max_affinity_busy, freeze_scope=args.freeze_scope)
+                        max_affinity_busy=args.max_affinity_busy, freeze_scope=args.freeze_scope,
+                        freeze_rest_ms=args.freeze_rest_ms, cpu_rule=args.cpu_rule,
+                        max_cotenant_busy=args.max_cotenant_busy)
             print(f"{d}: kept {s['windows_kept']}/{s['windows_planned']} windows, frozen={s['frozen']}")
         return 0
     args.out.write_text(json.dumps(merge(args.inputs), separators=(",", ":")))
