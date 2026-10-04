@@ -341,14 +341,10 @@ def environment() -> dict:
 
 
 def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
-    """Its directory, its dependencies' directories, and its declared inputs; a declared input that is a workspace package
-    brings that package's dependencies too."""
-    paths = {suite.path, *closure(suite, pkgs), *suite.inputs}
-    by_path = {p: n for n, p in pkgs.items()}
-    for p in suite.inputs:
-        if p in by_path:
-            paths.update(closure(Suite(by_path[p], p, (by_path[p],), ()), pkgs))
-    return sorted(paths)
+    """Its directory, its dependencies' directories, and its declared inputs. A declared workspace package is its directory
+    alone: the guard allows what this returns, so a test that reads that package's own dependencies fails until they are
+    declared too."""
+    return sorted({suite.path, *closure(suite, pkgs), *suite.inputs})
 
 
 def _under(path: str, prefixes: list[str]) -> bool:
@@ -359,7 +355,7 @@ def touched(suites: list[Suite], pkgs: dict[str, str], rev: str, tree: str, lock
     """The suites whose key the change from ``rev`` to ``tree`` moves by path: a changed file under their inputs (the repository's
     own suite keys on all of them) or in the runner, or a changed resolution in `uv.lock`. What their tests read beside the key
     (`used`) is left out, so a suite this skips can still miss its cached pass."""
-    files = _git("diff", "--name-only", rev, tree).split()
+    files = _git("diff", "--no-renames", "--name-only", rev, tree).split()      # a rename names its source too
     if any(f in RUNNER for f in files):
         return list(suites)
     before = lock

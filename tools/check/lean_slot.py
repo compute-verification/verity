@@ -5,7 +5,8 @@ A Lean audit builds its packages against Mathlib on every core it gets, so a nod
 a cap of 4, kept by hand and overrun). The steward sets the cap in SLOTS (`/workspace/research/locks/lean-slots`; LEAN_SLOTS
 overrides), one pool per line, which it may rewrite at any time:
 
-    NAME N      # e.g. `check 2` (check's lean-audit step) and `audit 2` (`audit.py --build` run by hand)
+    NAME N      # e.g. `check 2` (check's lean-audit step), `audit 2` (`audit.py --build` run by hand) and `build 2`
+                # (`lean_changed.py --records`, the fast path)
 
 A request takes a slot of its pool (--pool, else LEAN_SLOT_POOL, else `audit`), or of pool `any` when SLOTS doesn't list its
 own; SLOTS listing neither refuses it, naming the fix. Slot I of pool P is a `flock` on `lean-P-I.lock` beside SLOTS, I < N.
@@ -22,7 +23,8 @@ else RESEARCH_LANE, else whoever holds the check slot this runs in (slot.py's `c
 JSON object (`status_doc`), which `check.py --slots` reads from every machine. Stdlib only: it runs before uv.
 
 From Python (`audit.py --build`): `hold(pool)` takes a slot for the calling process and returns its descriptor, which the
-process keeps open until it exits (None: no cap here, or a slot is held already).
+process keeps open until it exits (None: no cap here, or a slot is held already); `hold(pool, or_any=False)` never takes
+pool `any`'s.
 """
 from __future__ import annotations
 
@@ -72,11 +74,13 @@ def parse(text: str) -> dict[str, int]:
     return pools
 
 
-def resolve(pools: dict[str, int], pool: str) -> tuple[str, int]:
-    """The pool a request for ``pool`` takes from, and its slot count."""
-    for p in (pool, ANY):
+def resolve(pools: dict[str, int], pool: str, or_any: bool = True) -> tuple[str, int]:
+    """The pool a request for ``pool`` takes from (``or_any``: pool `any` when SLOTS doesn't list it), and its slot count."""
+    for p in (pool, ANY) if or_any else (pool,):
         if p in pools:
             return p, pools[p]
+    if not or_any:
+        raise Refused(f"{SLOTS} lists no pool {pool!r}, the only one this request takes; the steward adds `{pool} N` there")
     raise Refused(f"{SLOTS} lists neither pool {pool!r} nor {ANY!r}; the steward adds `{pool} N` or `{ANY} N` there "
                   f"(or pass --pool / LEAN_SLOT_POOL naming one of {', '.join(sorted(pools)) or 'none'})")
 
@@ -144,11 +148,12 @@ def asker(by: str | None = None) -> dict:
 
 
 def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc), sleep=time.sleep,
-         log=lambda s: print(s, file=sys.stderr, flush=True)) -> tuple[str, int, int]:
-    """Wait for a slot of ``pool`` (SLOTS exists); return the pool it came from, its index and the descriptor holding it."""
+         log=lambda s: print(s, file=sys.stderr, flush=True), or_any: bool = True) -> tuple[str, int, int]:
+    """Wait for a slot of ``pool`` (SLOTS exists; `resolve`); return the pool it came from, its index and the descriptor
+    holding it."""
     d = SLOTS.parent
     pools = parse(SLOTS.read_text())
-    name, n = resolve(pools, pool)
+    name, n = resolve(pools, pool, or_any)
     ticket, tfd = SLOT.join(d, who=asker(by), line=line_name(name))
     told, since = None, 0
     try:
@@ -187,7 +192,8 @@ def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc
 
 
 def hold(pool: str | None = None, by: str | None = None, **kw) -> int | None:
-    """Take a slot for this process (see the module docstring); its descriptor, which the caller keeps open, or None."""
+    """Take a slot for this process (see the module docstring; ``kw`` goes to `wait`); its descriptor, which the caller keeps
+    open, or None."""
     if os.environ.get(HELD) or not SLOTS.exists():
         return None
     name, i, fd = wait(pool or os.environ.get("LEAN_SLOT_POOL") or DEFAULT_POOL, by, **kw)
