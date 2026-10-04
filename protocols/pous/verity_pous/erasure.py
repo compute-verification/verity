@@ -2,7 +2,8 @@
 
 With its disks unplugged, a prover holds only volatile memory, and a fresh fill of all of it at one instant leaves room
 for nothing else: secure erasure, the full-utilization case of a proof of memory utilization.  `ErasureVerifier`
-enforces the accept rule of the Lean model's `SecureErasureMeets` (`cursor/pous-lean-secure-erasure-3cf5`):
+enforces the accept rule of the Lean model's secure-erasure game (`Pous.eraseWins`,
+`lean/Pous/Protocol/Model/SecureErasure.lean`, which `Pous.Guarantees.SecureErasureMeets` bounds):
 
 1. **A fresh key.**  `K = fill_key(source, M, s)`, derived from the verifier's own fresh secret, is the fill challenge.
 2. **The fill.**  The prover fills its `M` bytes with `F_K` (`KeyedFill`) and returns `h`.  The fill passes iff
@@ -63,7 +64,11 @@ PAGE_TWEAK_BYTES = 40
 """A page's tweak, `K ‖ u64(page)` little-endian."""
 
 DIGEST_PRIME = (1 << 127) - 1
+"""The digest's field, `GF(2^127 − 1)`."""
+
 DIGEST_WORD_BYTES = 15
+"""A digest word: 15 bytes little-endian, below `DIGEST_PRIME`, so two different words are different field elements."""
+
 DIGEST_BYTES = 16
 
 
@@ -80,29 +85,30 @@ def _feistel(page_bytes: int) -> Feistel10:
     return Feistel10(page_bytes, PAGE_DOMAIN)
 
 
-def _words(chunks: Iterable[bytes], size: int) -> Iterator[int]:
-    """`size` bytes as 15-byte little-endian words, the last one zero-padded."""
+def _pages(chunks: Iterable[bytes], size: int, page_bytes: int) -> Iterator[bytes]:
+    """`size` bytes, given in order in chunks of any length, as pages of `page_bytes`, the last one cut at `size`."""
     buf, total = b"", 0
     for chunk in chunks:
         total += len(chunk)
         buf += chunk
-        whole = len(buf) - len(buf) % DIGEST_WORD_BYTES
-        for k in range(0, whole, DIGEST_WORD_BYTES):
-            yield int.from_bytes(buf[k:k + DIGEST_WORD_BYTES], "little")
-        buf = buf[whole:]
+        while len(buf) >= page_bytes:
+            yield buf[:page_bytes]
+            buf = buf[page_bytes:]
     if total != size:
         raise ValueError(f"the digest is over {size} bytes, not {total}")
     if buf:
-        yield int.from_bytes(buf, "little")
+        yield buf
 
 
 class KeyedFill:
     """`F_K` over `size` bytes, and `Digest_K`.
 
     Page `p` is `Feistel10(page_bytes, PAGE_DOMAIN).forward(0, K ‖ u64(p))` as `page_bytes` little-endian bytes, the
-    last page cut at `size`.  `Digest_K(x) = Σ_j x_j · r^(L−j+1) mod 2^127 − 1` over the `L` 15-byte little-endian
-    words `x_1..x_L` of `x` (the last zero-padded), with `r = K.uniform(2^127 − 1, "digest")`, as 16 little-endian
-    bytes: two different `size`-byte strings collide for at most `L` of the `2^127 − 1` keys."""
+    last page cut at `size`.  `Digest_K` is the Lean model's `Pous.Digest.digest g z xs` over `GF(2^127 − 1)`, with
+    `xs` the `R` pages as blocks of `W = ⌈page_bytes / 15⌉` 15-byte little-endian words (each page zero-padded to
+    `15·W` bytes) and `(g, z) = K.uniform(2^127 − 1, "digest-g" | "digest-z")`: `Σ_r P_g(x_r) · z^r` with
+    `P_g(x) = Σ_j x_j · g^(W−1−j)`, as 16 little-endian bytes.  Two different `size`-byte strings collide for at most
+    a `((W − 1) + (R − 1)) / (2^127 − 1)` fraction of the keys (`Pous.Guarantees.DigestAU`)."""
 
     def __init__(self, key: Key, size: int, page_bytes: int = PAGE_BYTES) -> None:
         if size < 1:
@@ -110,7 +116,7 @@ class KeyedFill:
         if page_bytes < 2 or page_bytes % 2:
             raise ValueError("a page is an even number of bytes, at least 2")
         self.key, self.size, self.page_bytes = key, size, page_bytes
-        self._r = key.uniform(DIGEST_PRIME, "digest")
+        self.digest_key = (key.uniform(DIGEST_PRIME, "digest-g"), key.uniform(DIGEST_PRIME, "digest-z"))
         self._pages: dict[int, bytes] = {}
         self._digest: bytes | None = None
 
@@ -145,10 +151,15 @@ class KeyedFill:
 
     def digest_of(self, chunks: Iterable[bytes]) -> bytes:
         """`Digest_K` of `size` bytes, given in order in chunks of any length."""
-        h = 0
-        for word in _words(chunks, self.size):
-            h = (h + word) * self._r % DIGEST_PRIME
-        return h.to_bytes(DIGEST_BYTES, "little")
+        g, z = self.digest_key
+        width = -(-self.page_bytes // DIGEST_WORD_BYTES) * DIGEST_WORD_BYTES
+        total, zr = 0, 1
+        for page in _pages(chunks, self.size, self.page_bytes):
+            page, h = page.ljust(width, b"\0"), 0
+            for k in range(0, width, DIGEST_WORD_BYTES):
+                h = (h * g + int.from_bytes(page[k:k + DIGEST_WORD_BYTES], "little")) % DIGEST_PRIME
+            total, zr = (total + h * zr) % DIGEST_PRIME, zr * z % DIGEST_PRIME
+        return total.to_bytes(DIGEST_BYTES, "little")
 
     def digest(self) -> bytes:
         """`Digest_K(F_K)`."""

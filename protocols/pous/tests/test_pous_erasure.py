@@ -422,16 +422,20 @@ def _feistel_page(key: bytes, p: int, page_bytes: int) -> bytes:
 
 
 def test_the_fill_and_its_digest_follow_the_spec():
-    """Each page is the Feistel of the spec, the last cut at `M`, and the digest is the polynomial of the spec in
-    `r = K.uniform(2^127 − 1, "digest")` over 15-byte words, the last zero-padded."""
+    """Each page is the Feistel of the spec, the last cut at `M`, and the digest is `Pous.Digest.digest g z xs` of the
+    spec: `Σ_r P_g(x_r) z^r` with `P_g(x) = Σ_j x_j g^(W−1−j)`, each 64-byte page `W = 5` 15-byte words, zero-padded,
+    and `(g, z)` from `K`."""
     key = fill_key(b"spec", 1000, 8)
     f = KeyedFill(key, 1000, 64)
     pages = [_feistel_page(key.value, p, 64) for p in range(16)]
     data = b"".join(pages)[:1000]
     assert b"".join(f.chunks()) == data and [f.at(i) for i in range(1000)] == list(data)
-    words = [int.from_bytes(data[k:k + 15], "little") for k in range(0, 1000, 15)]
-    r = key.uniform(DIGEST_PRIME, "digest")
-    h = sum(w * pow(r, len(words) - j, DIGEST_PRIME) for j, w in enumerate(words)) % DIGEST_PRIME
+    g, z = key.uniform(DIGEST_PRIME, "digest-g"), key.uniform(DIGEST_PRIME, "digest-z")
+    assert f.digest_key == (g, z)
+    blocks = [[int.from_bytes(page.ljust(75, b"\0")[k:k + 15], "little") for k in range(0, 75, 15)]
+              for page in (data[k:k + 64] for k in range(0, 1000, 64))]
+    h = sum(sum(x * pow(g, 4 - j, DIGEST_PRIME) for j, x in enumerate(b)) * pow(z, r, DIGEST_PRIME)
+            for r, b in enumerate(blocks)) % DIGEST_PRIME
     assert f.digest() == h.to_bytes(16, "little") == f.digest_of([data[:7], data[7:500], b"", data[500:]])
     for n in (999, 1001):
         with pytest.raises(ValueError, match="the digest is over 1000 bytes"):
@@ -445,5 +449,5 @@ def test_pinned_vectors():
     assert key.value.hex() == "14d2cc7dfba794e706534bce4a4df190154a11cf0a288b328a38d3c59a248827"
     assert hashlib.sha256(b"".join(f.chunks())).hexdigest() == \
         "5e27541aad42ca2c6a71dd86f89927153e0892050d43bc5f6cedd40149c425da"
-    assert f.digest().hex() == "143354e0f115a8c14c0c6e6dc3186955"
+    assert f.digest().hex() == "1891fa1131e6ba6c0042a644d7f99969"
     assert spot_indices(spot_key(b"vector", key), 8, 1000) == (209, 866, 228, 687, 735, 808, 655, 621)

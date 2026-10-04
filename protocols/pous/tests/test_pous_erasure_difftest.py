@@ -1,17 +1,20 @@
-"""Differential tests: `verity_pous.erasure.ErasureVerifier` against the accept rule of the Lean model's
-`SecureErasureMeets`, evaluated by Lean (`tests/lean/PousErasureCheck.lean`).
+"""Differential tests: `verity_pous.erasure.ErasureVerifier` against the Lean model's secure-erasure accept rule,
+`Pous.eraseWins` (`lean/Pous/Protocol/Model/SecureErasure.lean`), evaluated by Lean (`tests/lean/PousErasureCheck.lean`)
+with the fill check's digest `Pous.Digest.digest` (`lean/Pous/Protocol/Model/Digest.lean`).
 
 `pous_erasure_cases.py` draws 12,000 cases, each a prover's script for the fill and every read: right, wrong (a flipped
 or cut digest, a flipped byte, a byte off by a multiple of 256) or no answer, after a delay at, one nanosecond past, or
 anywhere around the deadline, over a transport that gives up at the deadline or delivers late answers anyway.  Lean
-evaluated its accept rule on every case once, and `fixtures/lean_erasure_verdicts.json` pins the verdicts with the
-digests of the cases and of the Lean files they came from, so a change to either fails here until the fixture is
-regenerated (`uv run python tests/pous_erasure_cases.py`).  The verifier runs on every case here, through `run_erasure`
-on an injected clock, and must reach Lean's verdict on each.  Each mutant of `erasure.py`'s accept decisions must reach
-a different verdict on some case.  `VERITY_POUS_LEAN=1` reruns Lean on the cases (about a second with the toolchain).
+evaluated `eraseWins` on every case once, computing the digest the fill must have itself, and
+`fixtures/lean_erasure_verdicts.json` pins the verdicts with the digests of the cases (the prover's digest bytes among
+them, from `KeyedFill`) and of the Lean files that define the rule, so a change to either fails here until the fixture
+is regenerated (`uv run python tests/pous_erasure_cases.py`, about 20 s).  The verifier runs on every case here, through
+`run_erasure` on an injected clock, and must reach Lean's verdict on each: on the accepted cases that also says
+`KeyedFill`'s digest is `Pous.Digest.digest`.  Each mutant of `erasure.py`'s accept decisions must reach a different
+verdict on some case.  `VERITY_POUS_LEAN=1` rebuilds the Lean modules and reruns Lean on the cases.
 
-The Lean rule is the lanes' contract, written in the check itself until `cursor/pous-lean-secure-erasure-3cf5` lands
-its definitions: `pous_erasure_cases.LEAN_FILES` and `LEAN_COMMAND` are where the check binds them.
+Lean's game has no clock, so the check reads a missed deadline as an answer no digest or block is; that reading is the
+one rule the check writes itself.
 """
 
 from __future__ import annotations
@@ -142,7 +145,7 @@ def test_every_mutant_disagrees_with_lean(cases, name, monkeypatch):
 
 
 @pytest.mark.skipif(os.environ.get("VERITY_POUS_LEAN") != "1",
-                    reason="reruns Lean's rule on the cases, about a second with the toolchain: set VERITY_POUS_LEAN=1")
+                    reason="reruns Lean on the cases, about 20 s with the toolchain: set VERITY_POUS_LEAN=1")
 def test_lean_reaches_the_pinned_verdicts(cases):
     """Lean, run now on the cases, prints the pinned verdicts."""
     assert cases_mod.lean_verdicts([line(c) for c in cases]) == FIXTURE["verdicts"]

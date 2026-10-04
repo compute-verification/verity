@@ -1,19 +1,21 @@
 """The secure-erasure difftest's cases (`test_pous_erasure_difftest.py`): each one a prover's script, the verifier
-`verity_pous.erasure.ErasureVerifier` run on it, and its line for Lean's accept rule (`lean/PousErasureCheck.lean`).
+`verity_pous.erasure.ErasureVerifier` run on it, and its line for the Lean model's accept rule, `Pous.eraseWins`
+(`tests/lean/PousErasureCheck.lean`).
 
 A case fixes the audit (`M`, `s`, the page size, `T_fill`, `T_read`, the verifier's secret) and what the prover does
 at each step: answer right, answer wrong, or not answer, after a delay on the verifier's clock.  `run` drives the
 verifier through `run_erasure` with the prover computing `F_K` from the fill challenge, over a transport that either
 gives up at each deadline or delivers a late answer anyway (`eager`).  `line` writes the same case as Lean reads it:
 
-    Tfill Tread s M expected fAnswered fDigest fTime r F_0 … F_(M−1) (i a v t)×r
+    Tfill Tread s M pageBytes g z fAnswered fTime n d_1 … d_n F_0 … F_(M−1) (i a v t)×s
 
-with each digest as the integer of `0x01 ‖ bytes` (so that bytes of different lengths stay different), the `r = s`
-reads at the indices the verifier draws (`spot_indices`), and a missing answer as `a = 0`.
+with `(g, z)` the digest key, `d` the `n` bytes of the prover's digest, `F` the fill, the `s` reads at the indices the
+verifier draws (`spot_indices`), and a missing answer as `a = 0`.  The digest the fill must have is not in the line:
+Lean computes it, with `Pous.Digest.digest`.
 
-`uv run python tests/pous_erasure_cases.py` (from `protocols/pous`, with Lean's toolchain, elan, on the PATH) runs
-Lean on every line and rewrites `fixtures/lean_erasure_verdicts.json` with Lean's verdicts and the digests of the cases
-and of the Lean files it read.
+`uv run python tests/pous_erasure_cases.py` (from `protocols/pous`, with Lean's toolchain, elan, on the PATH) builds
+the Lean modules the check imports, runs it on every line, and rewrites `fixtures/lean_erasure_verdicts.json` with
+Lean's verdicts and the digests of the cases and of the Lean files that define the rule.
 """
 
 from __future__ import annotations
@@ -41,13 +43,12 @@ from verity_pous.primitives import KECCAK_F_NS
 HERE = Path(__file__).resolve().parent
 FIXTURE = HERE / "fixtures" / "lean_erasure_verdicts.json"
 LEAN_CHECK = HERE / "lean" / "PousErasureCheck.lean"
-LEAN_FILES = (LEAN_CHECK,)
-"""The Lean files whose definitions the verdicts come from, pinned by digest in the fixture.  BINDING: once
-`cursor/pous-lean-secure-erasure-3cf5` lands, its module joins this list."""
 LEAN_PACKAGE = HERE.parent / "lean"
-LEAN_COMMAND = ("lean", "--run", str(LEAN_CHECK))
-"""How to run the check, from `lean/` so that elan picks the package's toolchain.  BINDING: once the check imports the
-Lean lane's module, it runs inside the package, `lake env lean --run`, after `lake build` of that module."""
+LEAN_MODULES = ("Pous.Protocol.Model.SecureErasure", "Pous.Protocol.Model.Digest")
+"""The modules whose definitions the check evaluates: `eraseWins` and the game's types, and `Digest.digest`."""
+LEAN_FILES = (LEAN_CHECK, *(LEAN_PACKAGE / (m.replace(".", "/") + ".lean") for m in LEAN_MODULES))
+"""The Lean files that define the verdicts, pinned by digest in the fixture: a change to the rule fails the difftest
+until the verdicts are regenerated."""
 
 SEED = "pous-erasure-difftest/v1"
 COUNT = 12_000
@@ -138,17 +139,13 @@ def truth(case: Case) -> tuple[KeyedFill, tuple[int, ...]]:
                                                                    case.size)
 
 
-def _nat(b: bytes) -> int:
-    return int.from_bytes(b"\x01" + b, "big")
-
-
 def line(case: Case) -> str:
     fill, indices = truth(case)
     memory = b"".join(fill.chunks())
-    expected = fill.digest()
     f = case.fill
-    out = [case.fill_deadline, case.read_deadline, case.spot_reads, case.size, _nat(expected), int(f.kind != DROP),
-           _nat(answer(f, expected, wrong_digest)) if f.kind != DROP else 0, f.delay, len(case.reads), *memory]
+    digest = answer(f, fill.digest(), wrong_digest) if f.kind != DROP else b""
+    out = [case.fill_deadline, case.read_deadline, case.spot_reads, case.size, case.page_bytes, *fill.digest_key,
+           int(f.kind != DROP), f.delay, len(digest), *digest, *memory]
     for i, step in zip(indices, case.reads, strict=True):
         out += [i, int(step.kind != DROP), answer(step, memory[i], wrong_byte) if step.kind != DROP else 0, step.delay]
     return " ".join(map(str, out))
@@ -202,9 +199,10 @@ def lean_files_digests() -> dict[str, str]:
 
 
 def lean_verdicts(lines: list[str]) -> str:
-    """Lean's verdicts on `lines`: one `0` or `1` per line."""
-    out = subprocess.run(LEAN_COMMAND, input="\n".join(lines) + "\n", capture_output=True, text=True,
-                         cwd=LEAN_PACKAGE, check=True).stdout.strip()
+    """Lean's verdicts on `lines`, one `0` or `1` per line: the check run in the Lean package, on its modules built."""
+    subprocess.run(("lake", "build", *LEAN_MODULES), cwd=LEAN_PACKAGE, check=True, capture_output=True)
+    out = subprocess.run(("lake", "env", "lean", "--run", str(LEAN_CHECK)), input="\n".join(lines) + "\n",
+                         capture_output=True, text=True, cwd=LEAN_PACKAGE, check=True).stdout.strip()
     if len(out) != len(lines) or set(out) - {"0", "1"}:
         raise RuntimeError(f"Lean printed {out[:80]!r}, not {len(lines)} verdicts")
     return out
