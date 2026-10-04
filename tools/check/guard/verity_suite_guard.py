@@ -6,7 +6,8 @@ It records every repository file the tests open outside the suite's inputs (`VER
 `VERITY_SUITE_REPORT` when the session ends. `suites.py` fails a suite that read outside its inputs or wrote no report: a
 cached pass is only sound when everything the tests read is part of the key. Opens go through Python's audit hook (`open`
 events), installed when pytest loads this module, before any conftest: it sees every file Python opens, imports included, but
-nothing a subprocess opens.
+nothing a subprocess opens. A Python a test starts traces its own opens (`child/`), and `suites.py` fails the suite on those
+outside the inputs too, naming the test (`VERITY_SUITE_TEST`, set while one runs).
 
 It also records what `suites.py` keeps beside a pass and checks before reusing it: which of the metadata files in
 `VERITY_SUITE_WATCH` the tests opened, the installed distributions whose modules were imported (from site-packages), and the
@@ -59,6 +60,7 @@ _counts = {"passed": 0, "failed": 0, "error": 0, "skipped": 0}
 _slow: list[tuple[str, float]] = []
 _suite = os.path.join(os.path.realpath(os.getcwd()), "")         # suites.py runs pytest from the suite's directory
 _current = "*"                                                   # the test module being collected or run
+_test = ""                                                       # the node id of the test running, if one is
 _reads: dict[str, set[str]] = {}                                 # test module (or "*") -> other test modules it opened
 _outcomes: dict[str, float | None] = {}                          # node id -> call seconds, None once a phase did not pass
 _failed: set[str] = set()
@@ -83,7 +85,7 @@ _tracer = _child_reads() if _ACTIVE else None
 def _audit(event: str, args: tuple) -> None:
     if os.getpid() != _pid:                          # a fork of this process: what it reads must reach the file now
         if _forked is not None:
-            _forked.seen(event, args, _current)
+            _forked.seen(event, args, _current, _test)
         return
     try:
         hit = _tracer.trace(event, args) if _tracer is not None else None
@@ -171,10 +173,16 @@ def pytest_make_collect_report(collector):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_protocol(item, nextitem):
-    before = _enter(_module_of(item.path))
+    global _test
+    before, _test = _enter(_module_of(item.path)), item.nodeid
+    if _ACTIVE:
+        os.environ["VERITY_SUITE_TEST"] = item.nodeid
     try:
         yield
     finally:
+        _test = ""
+        if _ACTIVE:
+            os.environ.pop("VERITY_SUITE_TEST", None)
         _leave(before)
 
 
