@@ -1,7 +1,7 @@
 """`research keeper`: standing campaign targets on a Nebius node, set and stopped from any VM over ssh. The node's side is
 pods/nebius/keeper.py (`vy-keeper`, ticked every minute by vy-keeper.timer), whose docstring says what a tick does.
 
-  research keeper set NAME --on MACHINE --project P --n N --until UTC [--gpus G] [--max-min M] [--seed-from S] [--owner WHO]
+  research keeper set NAME --on MACHINE --project P --n N --until UTC --max-min M [--gpus G] [--seed-from S] [--owner WHO]
                       [--source GITDIR] [--env K=V ...] [--tool T] [--campaign C] [research run flags ...] -- CMD... {seed}
   research keeper stop NAME --on MACHINE [--cancel] [--reason TEXT] [--by WHO]
   research keeper status [NAME] --on MACHINE [--json]
@@ -9,7 +9,7 @@ pods/nebius/keeper.py (`vy-keeper`, ticked every minute by vy-keeper.timer), who
 `set` ships the research package and the --source tree as `research run --on` does, and writes the target on the node: keep N
 chunks of CMD live (running, or waiting for their lease) until UTC, at most 48 h ahead, each with `{seed}` replaced by the next
 seed of the target's counter. Every chunk is a recorded `research run` on that machine, its workload under `gpu-lease G --wait
---preemptible [--max-min M]`, so a waiter can always take its GPUs back (a preempted chunk's place goes to a new seed). Setting a
+--preemptible --max-min M`, so a waiter can always take its GPUs back (a preempted chunk's place goes to a new seed). Setting a
 NAME again replaces its values and re-arms it after a stop or a pause (3 failed chunks in a row); its seed counter carries on.
 `stop` starts no more chunks; `--cancel` also sends SIGTERM to the live chunks' workloads, recorded as manual cancels.
 """
@@ -88,7 +88,8 @@ def cmd_set(argv: list[str]) -> int:
     ap.add_argument("--n", type=int, required=True, help="the chunks to keep live, running or waiting for their lease")
     ap.add_argument("--until", required=True, metavar="UTC", help=f"start none after this (e.g. 2026-10-05T12:00Z; at most {MAX_AHEAD_H} h ahead)")
     ap.add_argument("--gpus", type=int, default=1, help="each chunk's GPUs (default 1)")
-    ap.add_argument("--max-min", type=int, default=None, metavar="M", help="each chunk's lease ends it after M minutes (gpu-lease --max-min)")
+    ap.add_argument("--max-min", type=int, required=True, metavar="M",
+                    help="each chunk's lease ends it M minutes after its grant (gpu-lease --max-min)")
     ap.add_argument("--seed-from", type=int, default=None, metavar="S", help="raise the seed counter to S (it never goes down)")
     ap.add_argument("--owner", default=os.environ.get("RESEARCH_LANE"), help="the lane the target is (default $RESEARCH_LANE)")
     ap.add_argument("--source", default=None, metavar="GITDIR", help="the tree each chunk runs from (shipped as `research run --on` ships it)")
