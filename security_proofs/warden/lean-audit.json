@@ -1,0 +1,18 @@
+{
+ "roots": ["NetTiming"],
+ "exempt": {
+  "CheckAxioms": "the #print axioms list (`lake env lean CheckAxioms.lean`)"
+ },
+ "pins": {},
+ "dependencies": {
+  "LeanSearchClient": "10aad9bd3954ead737fba8bd3b55709e5171edda2656068ad330158e6ad622c9",
+  "Qq": "7e75bb83a56f636baeb8e63ef3d44e1ac8b33e2ed4bf187462e0cc9bbdb55adf",
+  "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
+  "batteries": "f636c26b816c1a1021a770fafa410e7a4dde75a6ede520dc3babaa69f4c1ac6d",
+  "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
+  "mathlib": "895db2c5b33b7b16cd79ce30b6cd085844b909a8ea5aa33c46901b5ff4112fc5",
+  "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
+  "proofwidgets": "4edab11dd995fc9c2cbf6c1e03d9a99e1f77e91b6b904838c87c7dad86c9c323",
+  "toolchain": "fa5ee1e723185f882e3c9db196e42d9d59f5e1c689eb6ab4bf502b37424885dc"
+ }
+}
