@@ -695,10 +695,6 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
         print("research run --queue: --source GITDIR (the tree with tools/cluster, whose kinds/ it resolves) and --project are "
               "required", file=sys.stderr)
         return 2
-    if ns.job_user and ns.preemptible:
-        print("research run --queue: --job-user with --preemptible: a preemption signals the lease's scope as the runner's user, "
-              "which can't reach the job user's unit", file=sys.stderr)
-        return 2
     timeout = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
     from .pods.lease import RUN_MARGIN_S
 

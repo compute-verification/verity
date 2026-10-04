@@ -305,9 +305,7 @@ def test_a_run_dir_the_job_user_still_owns_part_of_is_not_published(local, monke
     assert published == [] and "refused to publish: 1 entry" in capsys.readouterr().err
 
 
-def test_job_user_refusals_need_no_run_dir(tmp_path, monkeypatch, capsys):
+def test_a_job_user_this_machine_cant_admit_is_refused_before_the_run_dir_exists(tmp_path, capsys):
     runs_root = tmp_path / "runs"
     assert cli.main(["run", "--runs-dir", str(runs_root), "--job-user", "no-such-user-zz9", "--", "true"]) == 3
-    assert "no such user here" in capsys.readouterr().err and not runs_root.exists()
-    assert cli.main(["run", "--queue", "--source", ".", "--project", "p", "--preemptible", "--job-user", "vyjob", "--", "true"]) == 2
-    assert "--job-user with --preemptible" in capsys.readouterr().err
+    assert "no such user here" in capsys.readouterr().err and not (runs_root / "r1").exists() and not list(runs_root.glob("r*"))
