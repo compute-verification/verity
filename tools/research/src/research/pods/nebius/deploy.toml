@@ -231,6 +231,46 @@ nodes = ["vy-nebius-1"]
 run = ["systemd:vy-alert-sink"]
 owner = "infra"
 
+# node 1's monitors (research/monitors.py): `python3 -m research.monitors` from these files alone, each pass a new process, so
+# an install takes effect at the next pass (test_monitors checks that these files import every node-side check)
+
+[[file]]
+path = "/usr/local/lib/vy-monitoring/research/__init__.py"
+src = "tools/research/src/research/__init__.py"
+nodes = ["vy-nebius-1"]
+
+[[file]]
+path = "/usr/local/lib/vy-monitoring/research/monitors.py"
+src = "tools/research/src/research/monitors.py"
+nodes = ["vy-nebius-1"]
+
+[[file]]
+path = "/usr/local/lib/vy-monitoring/research/pods/__init__.py"
+src = "tools/research/src/research/pods/__init__.py"
+nodes = ["vy-nebius-1"]
+
+[[file]]
+path = "/usr/local/lib/vy-monitoring/research/pods/nebius/resource_probe.py"
+src = "tools/research/src/research/pods/nebius/resource_probe.py"
+nodes = ["vy-nebius-1"]
+
+[[file]]
+path = "/usr/local/lib/vy-monitoring/research/pods/nebius/n1_alerts.py"
+src = "tools/research/src/research/pods/nebius/n1_alerts.py"
+nodes = ["vy-nebius-1"]
+
+[[file]]
+path = "/etc/systemd/system/vy-monitors.service"
+src = "tools/research/src/research/pods/nebius/monitoring/vy-monitors.service"
+nodes = ["vy-nebius-1"]
+run = ["systemd:vy-monitors.timer"]
+
+[[file]]
+path = "/etc/systemd/system/vy-monitors.timer"
+src = "tools/research/src/research/pods/nebius/monitoring/vy-monitors.timer"
+nodes = ["vy-nebius-1"]
+run = ["systemd:vy-monitors.timer"]
+
 [[file]]
 path = "/workspace/research/console/verity_console.py"
 src = "tools/research/console/verity_console.py"

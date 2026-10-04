@@ -221,6 +221,11 @@ loop or script goes into the repository and the manifest before it runs; a backu
 --by WHO --apply` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
 A Lean build kept from node 1's credentials (the Lean cache's daily one) runs in `vy-lean-sandbox` (`lean_sandbox.py`).
 
+A monitor (`research/monitors.py`: id, owner, severity, a check with stable finding keys, the action) is what wakes someone.
+`research monitors list|check [ID]|run --by WHO` lists, runs once, or keeps state and writes one alert note per incident
+opened and one line when it clears. Node 1's `vy-monitors.timer` runs the node-side ones (node 2 over ssh only while its fill
+says `timed False`); `research monitors relay` runs the relay-side ones and posts opens and clears in `#agent-alerts`.
+
 An unlisted or foreign machine is refused before anything is contacted. The
 tool ships as a content-addressed source snapshot under `<root>/tool/` and
 runs via `PYTHONPATH`; no pip, no credentials on the machine. The machine

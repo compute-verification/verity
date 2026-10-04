@@ -229,6 +229,20 @@ def test_ask_tags_one_owner_with_its_user_group_and_carries_no_footer(fake, regi
     assert run(capsys, "ask", "--as", "pous-worker-3", "--to", "@infra", "--text", "x")[0] == 2      # workers aren't on Slack
 
 
+def test_a_post_that_went_out_stands_when_its_permalink_fails(capsys):
+    """A caller that retries on a raise (the monitors' relay) would otherwise post it twice."""
+    class Api:
+        dry_run = False
+
+        def call(self, method, **kw):
+            if method == "chat.getPermalink":
+                raise slack.SlackError("chat.getPermalink: HTTP 429 (rate limited; retry after 1 s)")
+            return {"ok": True, "ts": "1700000000.000100"}
+
+    assert slack._post(Api(), ALERTS, "infra", "hello") == "1700000000.000100"
+    assert capsys.readouterr().out == "1700000000.000100 -\n"
+
+
 def test_ask_without_a_group_id_uses_plain_text_and_the_body_can_come_from_a_file(fake, registry, capsys, tmp_path):
     body = tmp_path / "ask.md"
     body.write_text("a frontend for the pous panel: spec in PR 12")
